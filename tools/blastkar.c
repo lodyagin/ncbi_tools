@@ -47,8 +47,17 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.75 $
+ * $Revision: 6.78 $
  * $Log: blastkar.c,v $
+ * Revision 6.78  2001/12/13 14:30:49  madden
+ * Add BLASTKAR_SMALL_FLOAT to prevent floating point exception for very small floats
+ *
+ * Revision 6.77  2001/09/05 20:32:21  dondosha
+ * Fixed uninitialized variable bug
+ *
+ * Revision 6.76  2001/08/23 21:19:05  dondosha
+ * Improvements for lambda and K computation when all scores are multiples of a common factor
+ *
  * Revision 6.75  2001/02/20 18:31:28  egorov
  * Added protection agains freeing zero pointer
  *
@@ -1138,7 +1147,7 @@ BLAST_MatrixDestruct(BLAST_MatrixPtr blast_matrix)
     if (blast_matrix == NULL)
         return NULL;
     
-    /* We may have 2 different matrixes in there */
+    /* We may have 2 different matrices in there */
     
     if(blast_matrix->original_matrix && 
        blast_matrix->original_matrix != blast_matrix->matrix) {
@@ -2978,13 +2987,14 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
 	Nlm_FloatHi	K;			/* local copy of K */
 	Nlm_FloatHi	ratio;
 	int		i, j;
-	BLAST_Score	range, lo, hi, first, last;
+	BLAST_Score	range, lo, hi, first, last, d;
 	register Nlm_FloatHi	sum;
-	Nlm_FloatHi	Sum, av, oldsum, oldsum2;
+	Nlm_FloatHi	Sum, av, oldsum, oldsum2, score_avg;
 	int		iter;
 	Nlm_FloatHi	sumlimit;
 	Nlm_FloatHi	PNTR p, PNTR ptrP, PNTR ptr1, PNTR ptr2, PNTR ptr1e;
 	Nlm_FloatHi	etolami, etolam;
+        Boolean         bi_modal_score = FALSE;
 
 	if (lambda <= 0. || H <= 0.) {
 		return -1.;
@@ -2997,15 +3007,31 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
 	low = sfp->obs_min;
 	high = sfp->obs_max;
 	range = high - low;
+	p = &sfp->sprob[low];
+
+        /* Look for the greatest common divisor ("delta" in Appendix of PNAS 87 of
+           Karlin&Altschul (1990) */
+    	for (i = 1, d = -low; i <= range && d > 1; ++i)
+           if (p[i])
+              d = Nlm_Gcd(d, i);
+        
+        high /= d;
+        low /= d;
+        lambda *= d;
+
+	range = high - low;
 
 	av = H/lambda;
 	etolam = exp((Nlm_FloatHi)lambda);
+
 	if (low == -1 || high == 1) {
-		if (high == 1)
-			K = av;
-		else
-			K = (sfp->score_avg * sfp->score_avg) / av;
-		return K * (1.0 - 1./etolam);
+           if (high == 1)
+              K = av;
+           else {
+              score_avg = sfp->score_avg / d;
+              K = (score_avg * score_avg) / av;
+           }
+           return K * (1.0 - 1./etolam);
 	}
 
 	sumlimit = BLAST_KARLIN_K_SUMLIMIT_DEFAULT;
@@ -3025,59 +3051,61 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
 
 	Sum = 0.;
 	lo = hi = 0;
-	p = &sfp->sprob[low];
 	P0[0] = sum = oldsum = oldsum2 = 1.;
-    for (j = 0; j < iter && sum > sumlimit; Sum += sum /= ++j) {
-        first = last = range;
-		lo += low;
-		hi += high;
-        for (ptrP = P0+(hi-lo); ptrP >= P0; *ptrP-- =sum) {
-            ptr1 = ptrP - first;
-            ptr1e = ptrP - last;
-            ptr2 = p + first;
-            for (sum = 0.; ptr1 >= ptr1e; )
-                sum += *ptr1--  *  *ptr2++;
-            if (first)
-                --first;
-            if (ptrP - P0 <= range)
-                --last;
+
+        if (p[0] + p[range*d] == 1.) {
+           /* There are only two scores (e.g. DNA comparison matrix */
+           bi_modal_score = TRUE;
+           sumlimit *= 0.01;
         }
-		etolami = Nlm_Powi((Nlm_FloatHi)etolam, lo - 1);
-        for (sum = 0., i = lo; i != 0; ++i) {
-			etolami *= etolam;
-            sum += *++ptrP * etolami;
-		}
-        for (; i <= hi; ++i)
-            sum += *++ptrP;
-		oldsum2 = oldsum;
-		oldsum = sum;
-    }
 
-	/* Terms of geometric progression added for correction */
-	ratio = oldsum / oldsum2;
-	if (ratio >= (1.0 - sumlimit*0.001)) {
-		K = -1.;
-		goto CleanUp;
-	}
-	sumlimit *= 0.01;
-	while (sum > sumlimit) {
-		oldsum *= ratio;
-		Sum += sum = oldsum / ++j;
-	}
+        for (j = 0; j < iter && sum > sumlimit; Sum += sum /= ++j) {
+           first = last = range;
+           lo += low;
+           hi += high;
+           for (ptrP = P0+(hi-lo); ptrP >= P0; *ptrP-- =sum) {
+              ptr1 = ptrP - first;
+              ptr1e = ptrP - last;
+              ptr2 = p + first;
+              for (sum = 0.; ptr1 >= ptr1e; )
+                 sum += *ptr1--  *  *ptr2++;
+              if (first)
+                 --first;
+              if (ptrP - P0 <= range)
+                 --last;
+           }
+           etolami = Nlm_Powi((Nlm_FloatHi)etolam, lo - 1);
+           for (sum = 0., i = lo; i != 0; ++i) {
+              etolami *= etolam;
+              sum += *++ptrP * etolami;
+           }
+           for (; i <= hi; ++i)
+              sum += *++ptrP;
+           oldsum2 = oldsum;
+           oldsum = sum;
+        }
+        
+        if (!bi_modal_score) {
+           /* Terms of geometric progression added for correction */
+           ratio = oldsum / oldsum2;
+           if (ratio >= (1.0 - sumlimit*0.001)) {
+              K = -1.;
+              goto CleanUp;
+           }
+           sumlimit *= 0.01;
+           while (sum > sumlimit) {
+              oldsum *= ratio;
+              Sum += sum = oldsum / ++j;
+           }
+        }
 
-/* Look for the greatest common divisor ("delta" in Appendix of PNAS 87 of
-Karlin&Altschul (1990) */
-    	for (i = 1, j = -low; i <= range && j > 1; ++i)
-        	if (p[i])
-            		j = Nlm_Gcd(j, i);
-
-	if (j*etolam > 0.05) 
+	if (etolam > 0.05) 
 	{
-		etolami = Nlm_Powi((Nlm_FloatHi)etolam, -j);
-    		K = j*exp((Nlm_FloatHi)-2.0*Sum) / (av*(1.0 - etolami));
+           etolami = 1 / etolam;
+           K = exp((Nlm_FloatHi)-2.0*Sum) / (av*(1.0 - etolami));
 	}
 	else
-	    K = -j*exp((Nlm_FloatHi)-2.0*Sum) / (av*Nlm_Expm1(-j*(Nlm_FloatHi)lambda));
+           K = -exp((Nlm_FloatHi)-2.0*Sum) / (av*Nlm_Expm1(-(Nlm_FloatHi)lambda));
 
 CleanUp:
 #ifndef BLAST_KARLIN_K_STACKP
@@ -3097,7 +3125,7 @@ BlastKarlinLambdaBis(BLAST_ScoreFreqPtr sfp)
 {
 	register Nlm_FloatHi	PNTR sprob;
 	Nlm_FloatHi	lambda, up, newval;
-	BLAST_Score	i, low, high;
+	BLAST_Score	i, low, high, d;
 	int		j;
 	register Nlm_FloatHi	sum, x0, x1;
 
@@ -3110,6 +3138,16 @@ BlastKarlinLambdaBis(BLAST_ScoreFreqPtr sfp)
 		return -1.;
 
 	sprob = sfp->sprob;
+
+        /* Find greatest common divisor of all scores */
+    	for (i = 1, d = -low; i <= high-low && d > 1; ++i) {
+           if (sprob[i+low] != 0)
+              d = Nlm_Gcd(d, i);
+        }
+
+        high = high / d;
+        low = low / d;
+
 	up = BLAST_KARLIN_LAMBDA0_DEFAULT;
 	for (lambda=0.; ; ) {
 		up *= 2;
@@ -3117,11 +3155,11 @@ BlastKarlinLambdaBis(BLAST_ScoreFreqPtr sfp)
 		x1 = Nlm_Powi((Nlm_FloatHi)x0, low - 1);
 		if (x1 > 0.) {
 			for (sum=0., i=low; i<=high; ++i)
-				sum += sprob[i] * (x1 *= x0);
+				sum += sprob[i*d] * (x1 *= x0);
 		}
 		else {
 			for (sum=0., i=low; i<=high; ++i)
-				sum += sprob[i] * exp(up * i);
+				sum += sprob[i*d] * exp(up * i);
 		}
 		if (sum >= 1.0)
 			break;
@@ -3134,20 +3172,20 @@ BlastKarlinLambdaBis(BLAST_ScoreFreqPtr sfp)
 		x1 = Nlm_Powi((Nlm_FloatHi)x0, low - 1);
 		if (x1 > 0.) {
 			for (sum=0., i=low; i<=high; ++i)
-				sum += sprob[i] * (x1 *= x0);
+				sum += sprob[i*d] * (x1 *= x0);
 		}
 		else {
 			for (sum=0., i=low; i<=high; ++i)
-				sum += sprob[i] * exp(newval * i);
+				sum += sprob[i*d] * exp(newval * i);
 		}
 		if (sum > 1.0)
 			up = newval;
 		else
 			lambda = newval;
 	}
-	return (lambda + up) / 2.;
+	return (lambda + up) / (2. * d);
 }
-
+
 /******************* Fast Lambda Calculation Subroutine ************************
 	Version 1.0	May 16, 1991
 	Program by:	Stephen Altschul
@@ -3162,7 +3200,7 @@ BlastKarlinLambdaNR(BLAST_ScoreFreqPtr sfp)
 	BLAST_Score	low;			/* Lowest score (must be negative)  */
 	BLAST_Score	high;			/* Highest score (must be positive) */
 	int		j;
-	BLAST_Score	i;
+	BLAST_Score	i, d;
 	Nlm_FloatHi PNTR	sprob;
 	Nlm_FloatHi	lambda0, sum, slope, temp, x0, x1, amt;
 
@@ -3176,9 +3214,17 @@ BlastKarlinLambdaNR(BLAST_ScoreFreqPtr sfp)
 
 	lambda0 = BLAST_KARLIN_LAMBDA0_DEFAULT;
 
+	sprob = sfp->sprob;
+        /* Find greatest common divisor of all scores */
+    	for (i = 1, d = -low; i <= high-low && d > 1; ++i) {
+           if (sprob[i+low] != 0)
+              d = Nlm_Gcd(d, i);
+        }
+
+        high = high / d;
+        low = low / d;
 	/* Calculate lambda */
 
-	sprob = sfp->sprob;
 	for (j=0; j<20; ++j) { /* limit of 20 should never be close-approached */
 		sum = -1.0;
 		slope = 0.0;
@@ -3188,8 +3234,8 @@ BlastKarlinLambdaNR(BLAST_ScoreFreqPtr sfp)
 		x1 = Nlm_Powi((Nlm_FloatHi)x0, low - 1);
 		if (x1 == 0.)
 			break;
-		for (i=low; i<=high; ++i) {
-			sum += (temp = sprob[i] * (x1 *= x0));
+		for (i=low; i<=high; i++) {
+			sum += (temp = sprob[i*d] * (x1 *= x0));
 			slope += temp * i;
 		}
 		lambda0 -= (amt = sum/slope);
@@ -3199,7 +3245,7 @@ BlastKarlinLambdaNR(BLAST_ScoreFreqPtr sfp)
 			to the ever-present, zero-valued solution?
 			*/
 			if (lambda0 > BLAST_KARLIN_LAMBDA_ACCURACY_DEFAULT)
-				return lambda0;
+				return lambda0 / d;
 			break;
 		}
 	}
@@ -3342,6 +3388,11 @@ BlastKarlinEtoS(Nlm_FloatHi	E,	/* Expect value */
 }
 
 
+/* Smallest float that might not cause a floating point exception in
+	S = (BLAST_Score) (ceil( log((Nlm_FloatHi)(K * searchsp / E)) / Lambda ));
+below.
+*/
+#define BLASTKAR_SMALL_FLOAT 1.0e-297
 BLAST_Score LIBCALL
 BlastKarlinEtoS_simple(Nlm_FloatHi	E,	/* Expect value */
 	BLAST_KarlinBlkPtr	kbp,
@@ -3358,6 +3409,8 @@ BlastKarlinEtoS_simple(Nlm_FloatHi	E,	/* Expect value */
 	{
 		return BLAST_SCORE_MIN;
 	}
+
+	E = MAX(E, BLASTKAR_SMALL_FLOAT);
 
 	S = (BLAST_Score) (ceil( log((Nlm_FloatHi)(K * searchsp / E)) / Lambda ));
 	return S;

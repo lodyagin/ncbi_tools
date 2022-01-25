@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.10 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -51,6 +51,11 @@
 
 #ifdef OS_MAC
 #include <Events.h>
+#endif
+
+#ifdef OS_UNIX
+#include <sys/times.h>
+#include <limits.h>
 #endif
 
 /* ml to std code modified from original in medutil.c */
@@ -354,6 +359,18 @@ NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
 {
   CONN            conn;
   PubmedEntryPtr  pep;
+#ifdef OS_UNIX
+  Boolean         logtimes;
+  clock_t         starttime;
+  clock_t         stoptime;
+  struct tms      timebuf;
+#endif
+
+  if (uid < 1) return NULL;
+
+#ifdef OS_UNIX
+  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+#endif
 
   conn = PMFetchOpenConnection ("PubMed", uid);
 
@@ -361,7 +378,20 @@ NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
 
   QUERY_SendQuery (conn);
 
+#ifdef OS_UNIX
+  if (logtimes) {
+    starttime = times (&timebuf);
+  }
+#endif
+
   pep = PubMedWaitForReply (conn);
+
+#ifdef OS_UNIX
+  if (logtimes) {
+    stoptime = times (&timebuf);
+    printf ("PubMedWaitForReply %ld\n", (long) (stoptime - starttime));
+  }
+#endif
 
   return pep;
 }
@@ -374,6 +404,18 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
 {
   CONN         conn;
   SeqEntryPtr  sep;
+#ifdef OS_UNIX
+  Boolean      logtimes;
+  clock_t      starttime;
+  clock_t      stoptime;
+  struct tms   timebuf;
+#endif
+
+  if (StringHasNoText (db) || uid < 1) return NULL;
+
+#ifdef OS_UNIX
+  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+#endif
 
   conn = PMFetchOpenConnection (db, uid);
 
@@ -381,7 +423,20 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
 
   QUERY_SendQuery (conn);
 
+#ifdef OS_UNIX
+  if (logtimes) {
+    starttime = times (&timebuf);
+  }
+#endif
+
   sep = PubSeqWaitForReply (conn);
+
+#ifdef OS_UNIX
+  if (logtimes) {
+    stoptime = times (&timebuf);
+    printf ("PubSeqWaitForReply %ld\n", (long) (stoptime - starttime));
+  }
+#endif
 
   return sep;
 }

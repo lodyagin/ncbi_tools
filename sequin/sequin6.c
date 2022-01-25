@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.56 $
+* $Revision: 6.58 $
 *
 * File Description: 
 *
@@ -178,6 +178,9 @@ static ENUM_ALIST(subsource_note_subtype_alist)
   {"Country",               23},
   {"Segment",               24},
   {"Endogenous-virus-name", 25},
+  {"Transgenic",            26},
+  {"Environmental-sample",  27},
+  {"Isolation-source",      28},
   {"Note",                 255},
 END_ENUM_ALIST
 
@@ -2030,7 +2033,10 @@ static void ApplyBioFeatToRaw (Uint2 entityID, SeqEntryPtr sep, SeqEntryPtr tmp,
   bsp = (BioseqPtr) nsep->data.ptrvalue;
   if (bsp == NULL) return;
   if (bsp->repr == Seq_repr_raw) {
+    RealApplyBioFeatToAll (entityID, nsep, nsep, afp, FALSE);
+    /*
     RealApplyBioFeatToAll (entityID, sep, nsep, afp, FALSE);
+    */
   }
 }
 

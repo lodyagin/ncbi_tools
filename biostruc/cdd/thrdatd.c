@@ -1,4 +1,4 @@
-/* $Id: thrdatd.c,v 1.20 2001/04/26 17:23:37 thiessen Exp $
+/* $Id: thrdatd.c,v 1.21 2001/09/18 16:12:21 thiessen Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.20 $
+* $Revision: 1.21 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdatd.c,v $
+* Revision 1.21  2001/09/18 16:12:21  thiessen
+* plug memory leaks
+*
 * Revision 1.20  2001/04/26 17:23:37  thiessen
 * fix bug in updating aligned residue types
 *
@@ -1323,6 +1326,7 @@ free(cxe);
 free(sgo->si);					/* In sgo; type Seg_Ord */
 free(sgo->so);
 free(sgo->to);
+free(sgo);
 /* printf("freed sgo\n"); */
 
 free(pvl->p);					/* In pvl; type Rnd_Smp */
@@ -1339,6 +1343,8 @@ free(tts->bw);					/* In tts; type Thd_Tst */
 free(tts->ib);
 free(tts);
 /* printf("freed tts\n"); */
+
+free(tdg);
 
 return(1);  /* successful completion */
 }

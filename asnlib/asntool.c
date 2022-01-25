@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *   Main routine for asntool.  Uses the ASN.1 library routines to perform
@@ -43,6 +43,9 @@
 *
 *
 * $Log: asntool.c,v $
+* Revision 6.13  2001/10/11 14:39:08  ostell
+* added support for XMLModulePrefix
+*
 * Revision 6.12  2001/07/07 00:46:15  juran
 * A vain attempt to plug serious memory leakage.
 *
@@ -126,7 +129,7 @@ extern void AsnTxtReadValFile PROTO((AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr ai
 extern void AsnBinReadValFile PROTO((AsnTypePtr atp, AsnIoPtr aip, AsnIoPtr aipout,
 				     AsnIoPtr encode, AsnIoPtr xaipout));
 
-#define NUMARGS 24
+#define NUMARGS 25
 
 Args asnargs[NUMARGS] = {
 	{"ASN.1 Module File",NULL,NULL,NULL,FALSE,'m',ARG_FILE_IN,0.0,0,NULL},
@@ -155,7 +158,8 @@ Args asnargs[NUMARGS] = {
    {"Bit twiddle for optional zero value base slots","F",NULL,NULL,TRUE,'Z',ARG_BOOLEAN,0.0,0,NULL},
    {"In generated .c, forces name of #included asn header", NULL, NULL, NULL, TRUE, 'K', ARG_STRING, 0.0, 0, NULL},
    {"Register type with object manager", NULL, NULL, NULL, TRUE, 'J', ARG_STRING, 0.0, 0, NULL},
-   {"Label for registered type", NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL}
+   {"Label for registered type", NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},
+   {"XML module prefix for DOCTYPE", NULL, NULL, NULL, TRUE, 'P', ARG_STRING, 0.0, 0, NULL}
    /*-- not used now {"Asnload directory [for parsetrees]", NULL, NULL, NULL, TRUE, 'd', ARG_FILE_IN, 0.0, 0, NULL}, -----------*/
 
 };
@@ -175,7 +179,7 @@ Int2 Main (void)
 	, B_argCodeFileName = 16, D_argCodeGenDebugLevel = 17
 	, S_argDebugFileName = 18, I_argExtraIncludeName = 19
 	, Z_argBitTwiddle = 20, K_argLoadName = 21
-	, J_objMgrEntry = 22, L_objMgrLabel = 23;
+	, J_objMgrEntry = 22, L_objMgrLabel = 23, P_argXMLmodulePrefix = 24;
 
 	AsnIoPtr aip = NULL,
 		aipout = NULL,
@@ -195,10 +199,13 @@ Int2 Main (void)
     /* never abort on error, but show it */
     ErrSetFatalLevel(SEV_MAX);
     ErrSetMessageLevel(SEV_MIN);
+    asnargs[P_argXMLmodulePrefix].defaultvalue = (const char *)AsnGetXMLmodulePrefix();
 
     if (! GetArgs("AsnTool 4", NUMARGS, asnargs))
 	return 1;
     ErrClear();
+
+    AsnSetXMLmodulePrefix((CharPtr)(asnargs[P_argXMLmodulePrefix].strvalue));
 
 	if (! GetArgs("AsnTool 4", NUMARGS, asnargs))
 		return 1;

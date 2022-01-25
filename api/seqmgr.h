@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.37 $
+* $Revision: 6.41 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,18 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.41  2001/11/15 18:15:48  kans
+* set bsp->omdp at creation, SeqMgrDeleteIndexesInRecord sets omdp->bulkIndexFree
+*
+* Revision 6.40  2001/10/02 21:46:51  kans
+* added SeqEntryAsnOut (JO)
+*
+* Revision 6.39  2001/10/01 11:30:38  kans
+* added LockFarComponentsEx, which allows far feature products and locations to be locked as well as far seg or delta components
+*
+* Revision 6.38  2001/09/12 18:26:08  kans
+* added bspIndex to bspextra, made SeqMgrGetBioseqContext much more efficient for large sets
+*
 * Revision 6.37  2001/04/26 19:48:47  kans
 * added SeqMgrGetFeatureByLabel, bspextra->featsByLabel
 *
@@ -341,6 +353,13 @@ NLM_EXTERN Boolean LIBCALL SeqMgrDeleteFromBioseqIndex PROTO((BioseqPtr bsp));
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqMgrReplaceInBioseqIndex PROTO((BioseqPtr bsp));
 
+/*****************************************************************************
+*
+*   SeqMgrDeleteIndexesInRecord (sep)
+*   	Bulk removal of SeqId index on entire entity prior to its deletion
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL SeqMgrDeleteIndexesInRecord (SeqEntryPtr sep);
 
 
 
@@ -865,6 +884,7 @@ typedef struct bioseqextra {
 
   Int4                min;            /* used for finding best protein feature */
   Uint2               bspItemID;      /* for bioseq explore functions */
+  Uint2               bspIndex;       /* for bioseq explore functions */
   Int2                blocksize;      /* size of SMFeatBlock.data array to avoid wasting space */
                                       /* additional fields to map between genome record and parts,
                                          genomic DNA and mRNA, and mRNA and protein */
@@ -937,6 +957,9 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqMgrFindSeqAlignByID PROTO((Uint2 entityID, Uin
 *
 *   LockFarComponents takes a top SeqEntryPtr and locks the far Bioseq components of
 *     any segmented or delta sequences.  It turns a ValNode list of locked BioseqPtrs.
+*   LockFarComponentsEx takes a top SeqEntryPtr and locks far Bioseqs that are either
+*     components of any segmented or delta sequences, pointed to by feature locations,
+*     or pointed to by feature products.  It turns a ValNode list of locked BioseqPtrs.
 *   UnlockFarComponents takes the ValNode list of locked BioseqPtrs, unlocks each
 *     Bioseq, frees the ValNode list, and returns NULL.
 *
@@ -944,8 +967,28 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqMgrFindSeqAlignByID PROTO((Uint2 entityID, Uin
 
 NLM_EXTERN ValNodePtr LockFarComponents (SeqEntryPtr sep);
 
+NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products);
+
 NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist);
 
+/*****************************************************************************
+*
+*   SeqEntryAsnOut (SeqEntryPtr sep, SeqIdPtr sip, Int2 retcode, AsnIoPtr aipout)
+*
+*      Takes top level SeqEntryPtr (sep) in memory, finds the Bioseq for sip,
+*         then writes the relevant part of the SeqEntry into aipout depending
+*         on retcode.. The SeqEntry in memory is unchanged.
+*
+*      retcode sets maximum complexity to return by values:
+*         0 = return the whole blob
+*         1 = return just the Bioseq and relevant descriptors and features
+*         2 = return containing Seg-set if any
+*         3 = return containing Nuc-prot set if any
+*         4 = return containing Pub-set if any (this no longer used really)
+*
+******************************************************************************/
+NLM_EXTERN Boolean SeqEntryAsnOut (SeqEntryPtr sep, SeqIdPtr sip,
+                                    Int2 retcode, AsnIoPtr aipout);
 
 #ifdef __cplusplus
 }
@@ -959,3 +1002,4 @@ NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist);
 #endif
 
 #endif
+

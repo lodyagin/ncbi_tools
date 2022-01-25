@@ -1,4 +1,4 @@
-/* $Id: impatool.c,v 6.9 2000/07/26 16:54:07 lewisg Exp $
+/* $Id: impatool.c,v 6.10 2001/12/28 18:01:54 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,12 @@ Author: Alejandro Schaffer
 
 Contents: utility routines for IMPALA.
 
- $Revision: 6.9 $
+ $Revision: 6.10 $
 
  $Log: impatool.c,v $
+ Revision 6.10  2001/12/28 18:01:54  dondosha
+ Modified sorting routines to break ties by score when E-value is (mis)-reported as 0.0 due to underflow in BlastKarlinStoE_simple
+
  Revision 6.9  2000/07/26 16:54:07  lewisg
  add LIBCALLs
 
@@ -536,11 +539,19 @@ static void pro_bbsort(SWResults **qs, Int4 i, Int4 j)
     for (x = j; x > i; x--) {
       for (y = i; y < x; y++) {
 	if ((qs[y]->eValue < qs[y+1]->eValue) ||
-            ((qs[y]->eValue == qs[y+1]->eValue) &&
+	    ((qs[y]->eValue == qs[y+1]->eValue) &&
+             (0.0 == qs[y]->eValue) &&
+             (qs[y]->score > qs[y+1]->score)) ||
+            ((qs[y]->eValue == qs[y+1]->eValue) && 
+             ((0.0 != qs[y]->eValue) || (qs[y]->score == qs[y+1]->score)) &&
              (qs[y]->subject_index < qs[y+1]->subject_index)) ||
             ((qs[y]->eValue == qs[y+1]->eValue) &&
              (qs[y]->subject_index == qs[y+1]->subject_index) &&
-               (qs[y]->eValueThisAlign < qs[y+1]->eValueThisAlign))) {
+               (qs[y]->eValueThisAlign < qs[y+1]->eValueThisAlign)) ||
+            ((qs[y]->eValue == qs[y+1]->eValue) &&
+             (qs[y]->subject_index == qs[y+1]->subject_index) &&
+               (qs[y]->eValueThisAlign == qs[y+1]->eValueThisAlign) &&
+	     (qs[y]->scoreThisAlign > qs[y+1]-> scoreThisAlign))) {
 	  /*swap pointers for inverted adjacent elements*/
 	  sp = qs[y];
 	  qs[y] = qs[y+1]; 
@@ -591,6 +602,7 @@ static void pro_quicksort(SWResults **qs, Int4 i, Int4 j)
     Int4 lf, rt;  /*left and right fingers into the array*/
     Nlm_FloatHi partitionEvalue; /*Evalue to partition around*/
     Int4  secondaryPartitionValue; /*for breaking ties*/
+    Int4 scorePartitionValue; /*for breaking ties with 0.0 eValue*/
     Nlm_FloatHi tertiaryPartitionValue; /*for breaking ties*/
     SWResults * tp; /*temporary pointer for swapping*/
     if (j-i <= SORT_THRESHOLD) {
@@ -606,17 +618,24 @@ static void pro_quicksort(SWResults **qs, Int4 i, Int4 j)
     partitionEvalue = qs[i]->eValue;
     secondaryPartitionValue = qs[i]->subject_index;
     tertiaryPartitionValue = qs[i]->eValueThisAlign;
+    scorePartitionValue = qs[i]->score;
     /*partititon around partitionEvalue = qs[i]*/
     while (lf <= rt) {
       while ((qs[lf]->eValue >  partitionEvalue)  ||
+              ((qs[lf]->eValue == partitionEvalue) && (0.0 == qs[lf]->eValue)
+                && (qs[lf]->score < scorePartitionValue)) ||
               ((qs[lf]->eValue == partitionEvalue) &&
+               ((0.0 != qs[lf]->eValue) || (qs[lf]->score == scorePartitionValue)) &&
                (qs[lf]->subject_index > secondaryPartitionValue)) ||
 	      ((qs[lf]->eValue == partitionEvalue) &&
                (qs[lf]->subject_index == secondaryPartitionValue) &&
                (qs[lf]->eValueThisAlign > tertiaryPartitionValue)))
 	lf++;
       while ((qs[rt]->eValue <  partitionEvalue)  ||
+              ((qs[rt]->eValue == partitionEvalue) && (0.0 == qs[rt]->eValue)
+               && (qs[rt]->score > scorePartitionValue)) ||
               ((qs[rt]->eValue == partitionEvalue) &&
+	       ((0.0 != qs[rt]->eValue) || (qs[rt]->score == scorePartitionValue)) &&
                (qs[rt]->subject_index < secondaryPartitionValue)) ||
 	      ((qs[rt]->eValue == partitionEvalue) &&
                (qs[rt]->subject_index == secondaryPartitionValue) &&

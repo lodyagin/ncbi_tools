@@ -1,13 +1,19 @@
-/* dotplot.h*/
+/* dotviewer.h*/
 
 #ifndef _DOTVIEWER_
 #define _DOTVIEWER_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
   /****************************************************************************
 
       INCLUDE SECTION                                                                       
    ***************************************************************************/
+#include <ncbi.h>
+#include <accentr.h>
 #include <vibrant.h>
 #include <picture.h>
 #include <picturep.h>
@@ -23,30 +29,34 @@
 #include <salpstat.h>
 #include <seqmgr.h>
 #include <seqgraph.h>
-#include <salpstat.h>
 #include <actutils.h>
 #include <alignmgr.h>
-#include <actutils.h>
 #include <dotseq.h>
 
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-
+ 
 /****************************************************************************
 
       DEFINES SECTION                                                                 
  ***************************************************************************/
+  /* scoop defines */
+#define SCP_IDENTITY     0
+#define SCP_CONTAINS     1
+#define SCP_ISCONTAINED  2
+#define SCP_DOVETAIL     3
+#define SCP_HALFTAIL1    4
+#define SCP_HALFTAIL2    5
+#define SCP_MIDDLE       6
+#define SCP_REPEATS      7
+#define SCP_LARGE  1000
+#define SCP_FUZZ  50
+  /* scoop defines - end*/
 
-#define REGISTER_RunDotPlot  ObjMgrProcLoad (OMPROC_EDIT, "RunDotPlot", "RunDotPlot", OBJ_MAX, 0, OBJ_VIBRANT_PICTURE, 0, NULL, Run_DotPlot, PROC_PRIORITY_HIGHEST);
-#define REGISTER_RunDiagPlot  ObjMgrProcLoad (OMPROC_EDIT, "RunDiagPlot", "RunDiagPlot", OBJ_MAX, 0, OBJ_VIBRANT_PICTURE, 0, NULL, Run_DiagPlot, PROC_PRIORITY_HIGHEST);
+#define REGISTER_DiagsDisplay  ObjMgrProcLoad (OMPROC_EDIT, "DOT_DiagsDisplay", "DOT_DiagsDisplay", OBJ_MAX, 0, OBJ_VIBRANT_PICTURE, 0, NULL, DOT_RegDiagsDisplay, PROC_PRIORITY_HIGHEST);
 
 
  /****************************************************************************
 
-      DATA STRUCTURE SECTION                                                               
+      DATA STRUCTURE SECTION                                                                
  ***************************************************************************/
 
 /*******************************************************
@@ -83,42 +93,83 @@ typedef struct dot_paramsinfo
   TexT       tree_limit;
 } DOTparamsinfo, PNTR DOTparamsinfoPtr;
 
+/* scoop typedefs */
+typedef struct scp_repeat {
+   Int4   from1;
+   Int4   to1;
+   Int4   from2;
+   Int4   to2;
+   Uint1  strand2;
+   struct scp_repeat PNTR next;
+} SCP_Rpt, PNTR SCP_RptPtr;
 
+typedef struct scp_result {
+   Int4         relationship;
+   Int4         len1;
+   Int4         len2;
+   Int4         numsaps;
+   SeqAlignPtr  PNTR saps;
+   Int4         numlarge_outliers;
+   SeqAlignPtr  PNTR large_outliers;
+   Int4         numsmall_outliers;
+   SeqAlignPtr  PNTR small_outliers;
+   SCP_RptPtr   repeats;
+} SCP_Result, PNTR SCP_ResultPtr;
+
+typedef struct scp_n {
+   Int4  n1;
+   Int4  n2;
+   Int4  n3;
+   Int4  n4;
+   Int4  n5;
+} SCP_n, PNTR SCP_nPtr;
+/* scoop typedefs - end */
 
 /*******************************************************
 * storage for  alignment display                       *
 ********************************************************/
 
 typedef struct saln {
+  Uint1 show;
   Int4 q_start;
   Int4 q_stop;
   Int4 s_start;
   Int4 s_stop;
-  Int4 primID;
+  Int1 class;
+  SeqAlignPtr sap;
+  Uint2 entityID;
+  Uint2 itemID;
+  Uint2 primID;
+  struct saln PNTR next;
 } DOTAln, PNTR DOTAlnPtr;
 
 typedef struct algn{
-  Int4  xlen;
-  Int4  ylen;
-  Int4  xstart;
-  Int4  ystart;
-  Int4  Fh;
-  WindoW  w;
-  VieweR  v;
+  Uint2    entityID;
+  Uint2    itemID;
+  Int4     xlen;
+  Int4     ylen;
+  Int4     xstart;
+  Int4     ystart;
+  Int4     Fh;
+  WindoW   w;
+  VieweR   v;
   SeqAlignPtr sap;
-  SegmenT pict;
-  SegmenT seg1;
-  PopuP scale;
-  Int4  scaleValue;
-  Int4  scaleIndex;
-  Boolean showLabels;
-  Boolean do_scale;
-  PrompT      Infopanel;
-  CharPtr title;
+  SegmenT     pict;
+  SegmenT     seg1;
+  PopuP    scale;
+  Int4     scaleValue;
+  Int4     scaleIndex;
+  Boolean  showLabels;
+  Boolean  do_scale;
+  PrompT   Infopanel;
+  CharPtr  title;
+  CharPtr  name1, name2;
   SeqIdPtr  sip;
-  Int4  HORZ_MARGIN;
-  Int4  VERT_MARGIN;
-  Int4  index; /* num. of alignments */
+  Int4Ptr  PNTR matrix; /* dna matrix */
+  Boolean     is_na; 
+  Int4     HORZ_MARGIN;
+  Int4     VERT_MARGIN;
+  Int4     index; /* num. of alignments */
   DOTAlnPtr    PNTR  Alnlist;
 } DOTAlignInfo, PNTR DOTAlignInfoPtr;
 
@@ -156,17 +207,17 @@ typedef struct algn{
 ********************************************************/
 typedef struct seqviewr{
   Boolean   do_scale;
-  PopuP     scale;
+  PopuP     scale, showp;
   Int4      scaleIndex;
   Int4      scaleValue;
   GrouP     Labels;
   Boolean   showLabels;
   PoinT     old_pt;
-  Int2     old_primID;
+  Int2      old_primID;
+  Uint2     highlight;
   SegmenT   pict1;
   SegmenT   pict2;
-  SegmenT   seg1;
-  DOTAlnPtr   salp;
+  DOTAlnPtr salp;
   VieweR    v1;
   VieweR    v2;
   WindoW    w;
@@ -182,6 +233,7 @@ typedef struct dotvibdata{
   WindoW ChildWin;
   Int4   curr_slen;
   Int4   curr_qlen;
+  Int4   xlen, ylen;
   PaneL  panel;
   Boolean showGrid;
   Boolean     showDotPlot;
@@ -193,7 +245,13 @@ typedef struct dotvibdata{
   /* Alignment options */
   Boolean     Blast2Seq_show;
   MenU        displayOpts1;
-  ChoicE        displayOpts2;
+  ChoicE      displayOpts2;
+  GrouP       Ggoto;
+  Int4        ystart, xstart, ystop, xstop;
+  CharPtr     xname;
+  CharPtr     yname;
+   Uint1Ptr    seq1, seq2; 
+  Uint1       strand1, strand2;
   DOTAlignInfoPtr alp;
   /* second window elements */
   DOTSeqViewrPtr sv;
@@ -294,6 +352,7 @@ typedef struct selectdata{
   Int4      s_start;
   Int4      q_stop;
   Int4      s_stop;
+  Int4      xstart, xstop, ystart, ystop;
   Int4      qlen;
   Int4      slen;
   RecT      rcS;  
@@ -312,16 +371,24 @@ typedef struct selectdata{
 
       FUNCTION DECLARATIONS                                                               
  ***************************************************************************/
+NLM_EXTERN Int2 LIBCALLBACK DOT_RegDiagsDisplay(Pointer data);
+NLM_EXTERN Boolean DOT_MakeMainViewer(DOTMainDataPtr vdp, DOTAlignInfoPtr alp);
+NLM_EXTERN Boolean DOT_AlignPlotGivenSeqAlign(SeqAlignPtr sap);
+NLM_EXTERN Boolean DOT_AlignPlotGivenScp(SCP_ResultPtr scp);
 
-Int2 LIBCALLBACK Run_DotPlot (Pointer data);
-Int2 LIBCALLBACK Run_DiagPlot (Pointer data);
+extern DOTAlignInfoPtr DOT_AlignInfoNew();
+extern Boolean DOT_FillAlignInfoPointer (DOTAlignInfoPtr alp);
+extern Int4    DOT_GetValue(TexT t);
 
-extern void DOT_MakeMainViewer(DOTMainDataPtr vdp, SeqAlignPtr sap);
-extern void DOT_AlignPlotGivenSeqAlign(SeqAlignPtr sap);
+/* scoop declarations */
+NLM_EXTERN SCP_ResultPtr SCP_CompareOrderOrganizeBioseqs(BioseqPtr bsp1, BioseqPtr bsp2, SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, Int4 wordsize, Int4 hitlist_size);
+
+extern void SCP_OrganizeAlnsInSet(SeqAlignPtr sap, Int4 fuzz, SCP_ResultPtr scp, Int4 n);
+/* scoop declarations - end */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* ndef _DOTVIEWER_ */
+#endif /* _DOTVIEWER_ */
 

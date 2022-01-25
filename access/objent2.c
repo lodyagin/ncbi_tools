@@ -31,7 +31,7 @@ objent2AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.10 at May 11, 2001  2:35 PM
+*    Generated using ASNCODE Revision: 6.13 at Nov 26, 2001  8:44 AM
 *    Manual addition to swap bytes in id list if IS_LITTLE_ENDIAN
 *
 **************************************************/
@@ -4414,6 +4414,7 @@ Entrez2DbInfoFree(Entrez2DbInfoPtr ptr)
    MemFree(ptr -> db_descr);
    AsnGenericUserSeqOfFree(ptr -> fields, (AsnOptFreeFunc) Entrez2FieldInfoFree);
    AsnGenericUserSeqOfFree(ptr -> links, (AsnOptFreeFunc) Entrez2LinkInfoFree);
+   AsnGenericUserSeqOfFree(ptr -> docsum_fields, (AsnOptFreeFunc) Entrez2DocsumFieldInfoFree);
    return MemFree(ptr);
 }
 
@@ -4521,6 +4522,20 @@ Entrez2DbInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == DB_INFO_docsum_field_count) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> docsum_field_count = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ENTREZ2_DB_INFO_docsum_fields) {
+      ptr -> docsum_fields = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Entrez2DocsumFieldInfoAsnRead, (AsnOptFreeFunc) Entrez2DocsumFieldInfoFree);
+      if (isError && ptr -> docsum_fields == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -4592,6 +4607,9 @@ Entrez2DbInfoAsnWrite(Entrez2DbInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    av.intvalue = ptr -> link_count;
    retval = AsnWrite(aip, ENTREZ2_DB_INFO_link_count,  &av);
    AsnGenericUserSeqOfAsnWrite(ptr -> links, (AsnWriteFunc) Entrez2LinkInfoAsnWrite, aip, ENTREZ2_DB_INFO_links, ENTREZ2_DB_INFO_links_E);
+   av.intvalue = ptr -> docsum_field_count;
+   retval = AsnWrite(aip, DB_INFO_docsum_field_count,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> docsum_fields, (AsnWriteFunc) Entrez2DocsumFieldInfoAsnWrite, aip, ENTREZ2_DB_INFO_docsum_fields, ENTREZ2_DB_INFO_docsum_fields_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -4743,6 +4761,20 @@ Entrez2FieldInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> hierarchy_avail = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ENTREZ2_FIELD_INFO_is_rangable) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_rangable = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == FIELD_INFO_is_truncatable) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_truncatable = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -4816,6 +4848,10 @@ Entrez2FieldInfoAsnWrite(Entrez2FieldInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, ENTREZ2_FIELD_INFO_single_token,  &av);
    av.boolvalue = ptr -> hierarchy_avail;
    retval = AsnWrite(aip, FIELD_INFO_hierarchy_avail,  &av);
+   av.boolvalue = ptr -> is_rangable;
+   retval = AsnWrite(aip, ENTREZ2_FIELD_INFO_is_rangable,  &av);
+   av.boolvalue = ptr -> is_truncatable;
+   retval = AsnWrite(aip, FIELD_INFO_is_truncatable,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -5030,6 +5066,182 @@ erret:
 
 /**************************************************
 *
+*    Entrez2DocsumFieldInfoNew()
+*
+**************************************************/
+NLM_EXTERN 
+Entrez2DocsumFieldInfoPtr LIBCALL
+Entrez2DocsumFieldInfoNew(void)
+{
+   Entrez2DocsumFieldInfoPtr ptr = MemNew((size_t) sizeof(Entrez2DocsumFieldInfo));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Entrez2DocsumFieldInfoFree()
+*
+**************************************************/
+NLM_EXTERN 
+Entrez2DocsumFieldInfoPtr LIBCALL
+Entrez2DocsumFieldInfoFree(Entrez2DocsumFieldInfoPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> field_name);
+   MemFree(ptr -> field_description);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Entrez2DocsumFieldInfoAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Entrez2DocsumFieldInfoPtr LIBCALL
+Entrez2DocsumFieldInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   Entrez2DocsumFieldInfoPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objent2AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Entrez2DocsumFieldInfo ::= (self contained) */
+      atp = AsnReadId(aip, amp, ENTREZ2_DOCSUM_FIELD_INFO);
+   } else {
+      atp = AsnLinkType(orig, ENTREZ2_DOCSUM_FIELD_INFO);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = Entrez2DocsumFieldInfoNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == DOCSUM_FIELD_INFO_field_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> field_name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == FIELD_INFO_field_description) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> field_description = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == DOCSUM_FIELD_INFO_field_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> field_type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Entrez2DocsumFieldInfoFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Entrez2DocsumFieldInfoAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Entrez2DocsumFieldInfoAsnWrite(Entrez2DocsumFieldInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objent2AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ENTREZ2_DOCSUM_FIELD_INFO);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> field_name != NULL) {
+      av.ptrvalue = ptr -> field_name;
+      retval = AsnWrite(aip, DOCSUM_FIELD_INFO_field_name,  &av);
+   }
+   if (ptr -> field_description != NULL) {
+      av.ptrvalue = ptr -> field_description;
+      retval = AsnWrite(aip, FIELD_INFO_field_description,  &av);
+   }
+   av.intvalue = ptr -> field_type;
+   retval = AsnWrite(aip, DOCSUM_FIELD_INFO_field_type,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    Entrez2DocsumNew()
 *
 **************************************************/
@@ -5057,18 +5269,7 @@ Entrez2DocsumFree(Entrez2DocsumPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
-   MemFree(ptr -> caption);
-   MemFree(ptr -> title);
-   MemFree(ptr -> short_citation);
-   MemFree(ptr -> language);
-   MemFree(ptr -> create_date);
-   MemFree(ptr -> update_date);
-   MemFree(ptr -> author);
-   MemFree(ptr -> source);
-   MemFree(ptr -> volume);
-   MemFree(ptr -> pages);
-   MemFree(ptr -> pub_type);
-   MemFree(ptr -> record_status);
+   AsnGenericUserSeqOfFree(ptr -> docsum_data, (AsnOptFreeFunc) Entrez2DocsumDataFree);
    return MemFree(ptr);
 }
 
@@ -5127,137 +5328,11 @@ Entrez2DocsumAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> uid = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == ENTREZ2_DOCSUM_secondary_uid) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
+   if (atp == ENTREZ2_DOCSUM_docsum_data) {
+      ptr -> docsum_data = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Entrez2DocsumDataAsnRead, (AsnOptFreeFunc) Entrez2DocsumDataFree);
+      if (isError && ptr -> docsum_data == NULL) {
          goto erret;
       }
-      ptr -> secondary_uid = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_caption) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> caption = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_title) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> title = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_short_citation) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> short_citation = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_entrez_date) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> entrez_date = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_language) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> language = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_create_date) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> create_date = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_update_date) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> update_date = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_seqlen) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> seqlen = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_author) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> author = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_source) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> source = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_volume) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> volume = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_pages) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> pages = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_pub_type) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> pub_type = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_record_status) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> record_status = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_no_abstract) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> no_abstract = av.boolvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_translated_title) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> translated_title = av.boolvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_no_authors) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> no_authors = av.boolvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == ENTREZ2_DOCSUM_taxid) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> taxid = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -5313,68 +5388,174 @@ Entrez2DocsumAsnWrite(Entrez2DocsumPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 
    av.intvalue = ptr -> uid;
    retval = AsnWrite(aip, ENTREZ2_DOCSUM_uid,  &av);
-   av.intvalue = ptr -> secondary_uid;
-   retval = AsnWrite(aip, ENTREZ2_DOCSUM_secondary_uid,  &av);
-   if (ptr -> caption != NULL) {
-      av.ptrvalue = ptr -> caption;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_caption,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> docsum_data, (AsnWriteFunc) Entrez2DocsumDataAsnWrite, aip, ENTREZ2_DOCSUM_docsum_data, ENTREZ2_DOCSUM_docsum_data_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
    }
-   if (ptr -> title != NULL) {
-      av.ptrvalue = ptr -> title;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_title,  &av);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Entrez2DocsumDataNew()
+*
+**************************************************/
+NLM_EXTERN 
+Entrez2DocsumDataPtr LIBCALL
+Entrez2DocsumDataNew(void)
+{
+   Entrez2DocsumDataPtr ptr = MemNew((size_t) sizeof(Entrez2DocsumData));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Entrez2DocsumDataFree()
+*
+**************************************************/
+NLM_EXTERN 
+Entrez2DocsumDataPtr LIBCALL
+Entrez2DocsumDataFree(Entrez2DocsumDataPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
    }
-   if (ptr -> short_citation != NULL) {
-      av.ptrvalue = ptr -> short_citation;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_short_citation,  &av);
+   MemFree(ptr -> field_name);
+   MemFree(ptr -> field_value);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Entrez2DocsumDataAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Entrez2DocsumDataPtr LIBCALL
+Entrez2DocsumDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   Entrez2DocsumDataPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objent2AsnLoad()) {
+         return NULL;
+      }
    }
-   av.intvalue = ptr -> entrez_date;
-   retval = AsnWrite(aip, ENTREZ2_DOCSUM_entrez_date,  &av);
-   if (ptr -> language != NULL) {
-      av.ptrvalue = ptr -> language;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_language,  &av);
+
+   if (aip == NULL) {
+      return NULL;
    }
-   if (ptr -> create_date != NULL) {
-      av.ptrvalue = ptr -> create_date;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_create_date,  &av);
+
+   if (orig == NULL) {         /* Entrez2DocsumData ::= (self contained) */
+      atp = AsnReadId(aip, amp, ENTREZ2_DOCSUM_DATA);
+   } else {
+      atp = AsnLinkType(orig, ENTREZ2_DOCSUM_DATA);
    }
-   if (ptr -> update_date != NULL) {
-      av.ptrvalue = ptr -> update_date;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_update_date,  &av);
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
    }
-   av.intvalue = ptr -> seqlen;
-   retval = AsnWrite(aip, ENTREZ2_DOCSUM_seqlen,  &av);
-   if (ptr -> author != NULL) {
-      av.ptrvalue = ptr -> author;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_author,  &av);
+
+   ptr = Entrez2DocsumDataNew();
+   if (ptr == NULL) {
+      goto erret;
    }
-   if (ptr -> source != NULL) {
-      av.ptrvalue = ptr -> source;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_source,  &av);
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
    }
-   if (ptr -> volume != NULL) {
-      av.ptrvalue = ptr -> volume;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_volume,  &av);
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == ENTREZ2_DOCSUM_DATA_field_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> field_name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
    }
-   if (ptr -> pages != NULL) {
-      av.ptrvalue = ptr -> pages;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_pages,  &av);
+   if (atp == ENTREZ2_DOCSUM_DATA_field_value) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> field_value = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
    }
-   if (ptr -> pub_type != NULL) {
-      av.ptrvalue = ptr -> pub_type;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_pub_type,  &av);
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
    }
-   if (ptr -> record_status != NULL) {
-      av.ptrvalue = ptr -> record_status;
-      retval = AsnWrite(aip, ENTREZ2_DOCSUM_record_status,  &av);
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Entrez2DocsumDataFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Entrez2DocsumDataAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Entrez2DocsumDataAsnWrite(Entrez2DocsumDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objent2AsnLoad()) {
+         return FALSE;
+      }
    }
-   av.boolvalue = ptr -> no_abstract;
-   retval = AsnWrite(aip, ENTREZ2_DOCSUM_no_abstract,  &av);
-   av.boolvalue = ptr -> translated_title;
-   retval = AsnWrite(aip, ENTREZ2_DOCSUM_translated_title,  &av);
-   av.boolvalue = ptr -> no_authors;
-   retval = AsnWrite(aip, ENTREZ2_DOCSUM_no_authors,  &av);
-   av.intvalue = ptr -> taxid;
-   retval = AsnWrite(aip, ENTREZ2_DOCSUM_taxid,  &av);
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ENTREZ2_DOCSUM_DATA);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> field_name != NULL) {
+      av.ptrvalue = ptr -> field_name;
+      retval = AsnWrite(aip, ENTREZ2_DOCSUM_DATA_field_name,  &av);
+   }
+   if (ptr -> field_value != NULL) {
+      av.ptrvalue = ptr -> field_value;
+      retval = AsnWrite(aip, ENTREZ2_DOCSUM_DATA_field_value,  &av);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

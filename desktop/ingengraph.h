@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/26/01
 *
-* $Revision: 6.1 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -49,6 +49,7 @@
 extern "C" {
 #endif
 
+#include <seqmgr.h>
 #include <ncbi.h>
 #include <vibrant.h> 
 #include <picture.h> 
@@ -59,8 +60,8 @@ extern "C" {
 #include <gather.h>
 #include <seqport.h>
 #include <sqnutils.h>
-#include <alignmgr.h>
-
+#include <alignmgr2.h>
+#include <jsavlt.h>
 
 /******************************************************
  *
@@ -97,6 +98,7 @@ extern "C" {
 #define Ing_TBDL    119
 #define Ing_SEQIDLISTFORSPIDEY 120
 #define Ing_SEQIDLISTFORBLAST 121
+#define Ing_DOTMATRIX 122
 
 /******************************************************
  *
@@ -113,12 +115,22 @@ typedef struct gvpopfeat{/*data structure used to populate features viewer*/
   SegmenT   seg2;
   Uint1Ptr  PNTR pClr;
   Boolean    showLabels;
+  Boolean    bSaved;
+  Boolean    bTrim;
   Uint4      nSegs; /* number of subsegments below Current segment */
   Uint4      nPrims;  /* prim counter */
   Uint4      nLevel3; /* level 3 segments counter */
   Uint4      nLevel2; /* level 2 segments counter */
   Uint4      nLevel1; /* level 1 segments counter */
-  ValNodePtr PopRowsList;/* track features */
+  ValNodePtr  PopRowsList;
+  ValNodePtr  vnp_top10; /* used to trim linked list */
+  ValNodePtr  vnp_last;
+  ValNodePtr  group1;
+  ValNodePtr  group1_last;
+  ValNodePtr  group2;
+  ValNodePtr  group2_last;
+  ValNodePtr  group3;
+  ValNodePtr  group3_last;
   Int4      nPopRows;      /* feature row counter */
   Int4      yBase;
   Int4      scaleX;         
@@ -133,6 +145,7 @@ typedef struct gvgraphdata{
 	/*font size*/
 	Int2 cxChar;
 	Int2 cyChar;
+  FonT hFnt;
 	/*values used to draw the rulers*/
 	Int2 SegBoxHeight;
 	Int2 SegRulerTick;
@@ -149,27 +162,48 @@ typedef struct gvpopnames{/*used to populate the Segments in Viewer*/
   Uint1Ptr        seqbuf;
   Int4            scaleX;
   Uint1           comp;
+  Boolean         bRegister;
+  Uint2           procID;
+  Uint2           userKey;
+  OMMessageFunc   messagefunc;
+  Pointer         data;
   SeqLocPtr       slp;
   BioseqPtr       bsp;
   ValNodePtr      slp_list;
   Boolean         bPopSlp;
   Boolean         bShowGC;
+  Boolean         bLabels;
+  Boolean         bTop;
   Int4            idx;
   Int4            left, right;
   IngGraphDataPtr GrData;
 } IngExploreSegs, PNTR IngExploreSegsPtr;
 
 
+  typedef struct ing_trackaligns{
+    ValNodePtr  hidelist;
+    ValNodePtr  showlist;
+    CharPtr PNTR namelist;
+    CharPtr PNTR hnamelist;
+    Boolean      update;
+    Int4         showindex;
+    Int4         hideindex;
+  } IngTrackAligns, PNTR IngTrackAlignsPtr;
+
 
   typedef struct ingseqannotdata{
-    Int4         index;
-    CharPtr PNTR names;
-    SeqLocPtr    slp;
-    ValNodePtr   vnp;
+    Int4         sindex;
+    Int4         hindex;
+    ValNodePtr   aln_hidelist;
+    ValNodePtr   aln_showlist;
+    CharPtr PNTR aln_namelist;
+    CharPtr PNTR aln_hnamelist;
+    IngTrackAlignsPtr tap;
   }IngSeqAnnotData;
   
 
 
+  
   typedef struct ing_entitylist{
     ValNode *Sips;               /* list of sips in SeqEntry */
     Uint2    entityID;
@@ -188,7 +222,7 @@ typedef struct gvpopnames{/*used to populate the Segments in Viewer*/
     MenU      Feat;
     GrouP     Goto;
     IteM      labels;
-    IteM      genesorexons;
+    IteM      mrnaorexons;
     IteM      GC;
   } IngWinData, PNTR IngWinDataPtr;
 
@@ -207,20 +241,15 @@ typedef struct ing_genomeviewer{
   SegmenT     pictBottom;
   VieweR      vZoom;
   SegmenT     pictZoom;
-  SegmenT     segbox;
-  SegmenT     segArrow;
-  SegmenT     seglabel;
-  SegmenT     segGCRect;
-  SegmenT     segORFRect;
-  PrompT      featInfo[3];
+  PrompT      featInfo[4];
   CharPtr     defline;
+  CharPtr     defline2;
   GrouP       deflineg;
   PopuP       pageControl;
   Uint2       sel_entityID;
   Uint2       sel_itemID;
   GrouP       Buttons;
   IteM        item_usenetwork;
-  IngGraphData GrData;
   Boolean     update;
   Boolean     bOverviewSelected;
   /*data to display*/
@@ -243,15 +272,18 @@ typedef struct ing_genomeviewer{
   IngEntityPtr entity_list;
   Int4        numseqs;
   Int4        ZoomedVal;
-  Int4        last_feat_position;
+  Int4        last_feat_position_top;
+  Int4        last_feat_position_bottom;
+  Int2        TopHeight;
   Int4        xposition;
-  Int2        cxChar;
   Char        title[50];
   Boolean     bLabels;
-  Boolean     bGenes;
+  Boolean     isExons;
   Boolean     user_defined;
-  SeqLocPtr   slp;
-
+  SeqLocPtr   slp;  
+  IngGraphData GrData;
+  IngTrackAligns talign;
+  IngWinDataPtr d_Win;
   /* variables for imported features -- from sequence analysis */
   Boolean     bDustExists;
   Boolean     bOrfExists;
@@ -259,7 +291,6 @@ typedef struct ing_genomeviewer{
   Pointer     data;
   Uint1Ptr    seqbuf;
   Uint1       comp; 
-  IngWinDataPtr d_Win;
   LisT bsp_list;          /* listbox of bsps */
   SeqIdPtr    cur_sip;
   Int2        cur_target;
@@ -282,18 +313,18 @@ typedef struct ing_genomeviewer{
 
 
 
-Boolean IngfeatDefFilter[FEATDEF_MAX];/* filter parameter for SeqMgrExploreFeatures() */
+extern Boolean IngfeatDefFilter[FEATDEF_MAX];/* filter parameter for SeqMgrExploreFeatures() */
 
-Boolean IngfeatDefTrack2[FEATDEF_MAX];/* used by Ing_AddToOverviewPage()  when scale is greater than COMPRESS_SCALE */
+extern Boolean IngfeatDefTrack2[FEATDEF_MAX];/* used by Ing_AddToOverviewPage()  when scale is greater than COMPRESS_SCALE */
 
-Uint1   IngfeatDefTrack[FEATDEF_MAX];/* track features 1=exists 2=exists and is visible */
+extern Uint1   IngfeatDefTrack[FEATDEF_MAX];/* track features 1=exists 2=exists and is visible */
 
 /*******************************************************************************
 
 	Static Function Declarations
 
 *******************************************************************************/
-extern void Ing_AddGCRect(SegmenT seg, BioseqPtr bsp, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint1Ptr seq, Int4 left, Int4 top, Int4 right, Int4 bottom, Int4 scaleX,  Uint1 strand, Boolean needs_label, Int4 idx, Boolean bShowGC);
+extern void Ing_AddGCRect(SegmenT seg, SeqIdPtr sip, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint1Ptr seq, Int4 left, Int4 top, Int4 right, Int4 bottom, Int4 scaleX,  Uint1 strand, Boolean needs_label, Boolean clickable, Int4 idx, Boolean bShowGC);
 
 extern SegmenT Ing_PopulateSequinGraphic(SegmenT seg, BioseqPtr bsp, Uint2 entityID, Uint2 itemID, Int4 scaleX);
 
@@ -301,23 +332,21 @@ extern void Ing_AddRuler(SegmenT seg, Int4 height, Int4 xstart,Int4 xstop, Int4 
 
 extern void Ing_InitGrData(IngGraphDataPtr gdp);
 
-extern Uint4 Ing_PopFeaturesPage(BioseqPtr bsp, SegmenT pictBottom, Int4 left, Int4 right, Uint1Ptr PNTR pClr, Int4 scaleX, Int4 start_row, Boolean Labels, Boolean bGenes);
-extern Uint4 Ing_PopOverviewPage(BioseqPtr bsp, SegmenT pictTop, Int4 left, Int4 right, Uint1Ptr PNTR pClr, Int4 maxScaleX);
+extern Uint4 Ing_PopDetailedPage(BioseqPtr bsp, SegmenT pictBottom, Int4 left, Int4 right, Uint1Ptr PNTR pClr, Int4 scaleX, Int4 start_row, Boolean Labels, Boolean isExons, IngTrackAlignsPtr tap);
+extern Uint4 Ing_PopOverviewPage(BioseqPtr bsp, SegmenT pictTop, Int4 left, Int4 right, Uint1Ptr PNTR pClr, Int4 maxScaleX, IngTrackAlignsPtr tap);
 
 extern Uint1Ptr PNTR Ing_BuildColorTable(void);
   extern Uint1Ptr PNTR Ing_FreeColorTable(Uint1Ptr PNTR pClr);
 
 extern Uint1Ptr  Ing_PutColor(Uint1 r, Uint1 g, Uint1 b);
 
-extern void Ing_GetSeqLocations(IngGenomeViewerPtr igvp, BioseqPtr bsp);
-
-  extern Boolean LIBCALLBACK Ing_ExploreSegments(SeqLocPtr slp, SeqMgrSegmentContextPtr context);
+extern Boolean LIBCALLBACK Ing_ExploreSegments(SeqLocPtr slp, SeqMgrSegmentContextPtr context);
 
 extern void Ing_InitfeatDefFilter(void);
-extern void Ing_SearchAli(SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
+extern void Ing_SearchAli(SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);  
 extern Uint8 Ing_BigEncodeIdxFeat (Uint4 val1,Uint4 val2);
 extern void  Ing_BigDecodeIdxFeat (Uint8 index_g, Uint4Ptr val1, Uint4Ptr val2);
-extern void Ing_PopOverviewRuler(IngGenomeViewerPtr igvp, BioseqPtr bsp);
+extern Boolean Ing_PopOverviewRuler(VieweR vRuler1, SegmenT pictRuler1, BioseqPtr bsp, IngGraphData GrData, Int4 from, Int4 to, Uint1Ptr seqbuf, Int4 scaleX);
 extern Int4 Ing_GetValue (TexT t);
 
 

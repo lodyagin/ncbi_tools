@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager interface for module NCBI-Seq
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objseq.h,v $
+* Revision 6.5  2001/10/02 21:47:54  kans
+* added hooks for writing extra descriptors or features (JO)
+*
 * Revision 6.4  1999/09/27 17:48:38  kans
 * using GatherIndex structure
 *
@@ -284,6 +287,11 @@ NLM_EXTERN Int2 LIBCALL SeqAnnotLabel PROTO((SeqAnnotPtr sap, CharPtr buffer, In
 NLM_EXTERN Boolean     LIBCALL SeqAnnotSetAsnWrite PROTO((SeqAnnotPtr sap, AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 
+/** SeqAnnotSetExtraCheck looks for extra Features from SeqEntryAsnOut
+    and adds them to the stream when the annot pointer is NULL
+*********/
+NLM_EXTERN Boolean LIBCALL SeqAnnotSetExtraCheck (AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element);
+
 
 /*****************************************************************************
 *
@@ -467,6 +475,8 @@ typedef struct op_objseq {
 
 /* types for AsnIoOption OP_NCBIOBJSEQ */
 #define BIOSEQ_CHECK_ID 1    /* match Op_objseq.sip */
+#define CHECK_EXTRA_DESC 2   /* used by SeqEntryAsnOut */
+#define CHECK_EXTRA_FEAT 3   /* used by SeqEntryAsnOut */
 
 /*****************************************************************************
 *
@@ -548,6 +558,11 @@ NLM_EXTERN SeqDescPtr LIBCALL SeqDescAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp
 NLM_EXTERN SeqDescPtr LIBCALL SeqDescFree PROTO((SeqDescPtr anp));
 NLM_EXTERN Int2 LIBCALL SeqDescLabel PROTO((SeqDescPtr vnp, CharPtr buffer, Int2 buflen, Boolean content));
 
+/** SeqDescrExtraCheck looks for extra Descriptors from SeqEntryAsnOut
+    and adds them to the stream when the descr pointer is NULL
+*********/
+NLM_EXTERN Boolean LIBCALL SeqDescrExtraCheck (AsnIoPtr aip, AsnTypePtr atp);
+
 /*****************************************************************************
 *
 *   Pubdesc, Numbering, MolInfo, BioSource types defined in objpubd.h
@@ -566,4 +581,5 @@ NLM_EXTERN Int2 LIBCALL SeqDescLabel PROTO((SeqDescPtr vnp, CharPtr buffer, Int2
 #endif
 
 #endif
+
 

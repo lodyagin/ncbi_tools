@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.13 $
+* $Revision: 6.30 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -43,7 +43,6 @@
 
 #include <ncbi.h>
 #include <objall.h>
-#include <seqport.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -56,205 +55,59 @@
 extern "C" {
 #endif
 
-/* choices of format, mode, and style */
+/* choices of format, mode, style, and bit flags */
 
 typedef enum {
   GENBANK_FMT = 1,
   EMBL_FMT,
-  DDBJ_FMT,
   GENPEPT_FMT,
   EMBLPEPT_FMT,
-  DDBJPEPT_FMT,
   FTABLE_FMT
 } FmtType;
 
 typedef enum {
   RELEASE_MODE = 1,
+  ENTREZ_MODE,
   SEQUIN_MODE,
   DUMP_MODE
 } ModType;
 
 typedef enum {
   NORMAL_STYLE = 1,
+  SEGMENTED_STYLE,
   MASTER_STYLE,
   CONTIG_STYLE
 } StlType;
 
-/* internal block type identifiers */
+#define CREATE_HTML_FLATFILE    1
+#define SHOW_CONTIG_FEATURES    2
+#define SHOW_CONTIG_SOURCES     4
+#define SHOW_FAR_TRANSLATION    8
+#define LOCK_FAR_COMPONENTS    16
+#define LOCK_FAR_LOCATIONS     32
+#define LOCK_FAR_PRODUCTS      64
 
-typedef enum {
-  LOCUS_BLOCK = 1,
-  DEFLINE_BLOCK,
-  ACCESSION_BLOCK,
-  VERSION_BLOCK,
-  PID_BLOCK,
-  DBSOURCE_BLOCK,
-  DATE_BLOCK,
-  KEYWORDS_BLOCK,
-  SEGMENT_BLOCK,
-  SOURCE_BLOCK,
-  ORGANISM_BLOCK,
-  REFERENCE_BLOCK,
-  COMMENT_BLOCK,
-  FEATHEADER_BLOCK,
-  SOURCEFEAT_BLOCK,
-  FEATURE_BLOCK,
-  BASECOUNT_BLOCK,
-  ORIGIN_BLOCK,
-  SEQUENCE_BLOCK,
-  CONTIG_BLOCK,
-  SLASH_BLOCK
-} BlockType;
+typedef unsigned long FlgType;
 
-#define ASN2GB_BASE_BLOCK \
-  Uint2             entityID;  \
-  Uint2             itemID;    \
-  Uint2             itemtype;  \
-  Int4              section;   \
-  Int4              paragraph; \
-  BlockType         blocktype; \
-  CharPtr           string;    \
+NLM_EXTERN Boolean SeqEntryToGnbk (
+  SeqEntryPtr sep,
+  SeqLocPtr slp,
+  FmtType format,
+  ModType mode,
+  StlType style,
+  FlgType flags,
+  FILE *fp
+);
 
-/* base block structure for most paragraph types */
-
-typedef struct asn2gb_base_block {
-  ASN2GB_BASE_BLOCK
-} BaseBlock, PNTR BaseBlockPtr;
-
-/* version block includes VERSION and NID sections */
-/* organism block includes SOURCE and ORGANISM sections */
-/* source (feat) block should be the same as the organism block */
-
-/* references are grouped by published, unpublished, and cit-subs */
-
-typedef enum {
-  REF_CAT_PUB = 1,
-  REF_CAT_UNP,
-  REF_CAT_SUB
-} RefType;
-
-typedef struct reference_block {
-  ASN2GB_BASE_BLOCK
-  Int4              pmid;
-  Int4              muid;
-  CharPtr           uniquestr;
-  Int2              serial;
-  RefType           category;
-  Boolean           sites;
-} ReferenceBlock, PNTR ReferenceBlockPtr;
-
-/* featdeftype allows specific feature classes to be identified */
-
-typedef struct feature_block {
-  ASN2GB_BASE_BLOCK
-  Uint1             featdeftype;
-} FeatureBlock, PNTR FeatureBlockPtr;
-
-/* sequences are broken up into paragraphs and use the section's SeqPort */
-
-typedef struct sequence_block {
-  ASN2GB_BASE_BLOCK
-  Int4              start;
-  Int4              stop;
-} SequenceBlock, PNTR SequenceBlockPtr;
-
-
-/* structure for single segment or pop/phy/mut set component */
-
-typedef struct asn2gbsection {
-
-  /* data identifiers for individual accession report */
-
-  BioseqPtr          target;
-  BioseqPtr          bsp;
-  SeqLocPtr          slp;
-  Uint2              seg;
-  Int2               numsegs;
-  Int4               from;
-  Int4               to;
-
-  /* SeqPort for section's sequence */
-
-  SeqPortPtr         spp;
-
-  /* local array pointing to all blocks in this section */
-
-  BaseBlockPtr       PNTR blockArray;
-  Int4               numBlocks;
-
-  /* referenceks for feature citation matching, serial number assignment */
-
-  ReferenceBlockPtr  PNTR referenceArray;
-  Int2               numReferences;
-
-} Asn2gbSection, PNTR Asn2gbSectionPtr;
-
-
-/* master pointer returned to application */
-
-typedef struct asn2gb_job {
-
-  /* data identifiers for sequence or sequences to report */
-
-  Uint2               entityID;
-  BioseqPtr           bsp;
-  BioseqSetPtr        bssp;
-  SeqLocPtr           slp;
-
-  /* flags for customizing type of report */
-
-  FmtType             format;
-  ModType             mode;
-  StlType             style;
-
-  Boolean             keepSeqPortOpen;
-
-  /* each accession report from LOCUS to // is a single section */
-
-  Asn2gbSectionPtr    PNTR sectionArray;
-  Int4                numSections;
-
-  /* master array pointing to all blocks in all sections */
-
-  BaseBlockPtr        PNTR paragraphArray;
-  Int4                numParagraphs;
-
-  /* sorted array to get paragraphs for entityID/itemtype/itemID */
-
-  BaseBlockPtr        PNTR paragraphByIDs;
-
-} Asn2gbJob, PNTR Asn2gbJobPtr;
-
-
-
-/*
-  asn2gnbk_setup creates a structure laying out the flatfile structure.
-
-    Of the first three parameters (bsp, bssp, slp), only one should not be NULL.
-    If bsp is passed in, that is the target bioseq.  (If it is segmented, then
-    the report currently shows multiple segments.)  If bssp is passed in, it is
-    expected to be a population/phylogenetic/mutation study, and all records are
-    shown, but with no segment numbers.  slp is not yet implemented.
-
-  asn2gnbk_format creates a string for a given paragraph.
-
-  asn2gnbk_cleanup frees the structure and all components.
-*/
-
-NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (BioseqPtr bsp, BioseqSetPtr bssp,
-                                        SeqLocPtr slp, FmtType format,
-                                        ModType mode, StlType style);
-
-NLM_EXTERN CharPtr asn2gnbk_format (Asn2gbJobPtr ajp, Int4 paragraph);
-
-NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (Asn2gbJobPtr ajp);
-
-/*
-   SeqEntryToGnbk calls asn2gnbk_setup, _format, and _cleanup internally.
-*/
-
-NLM_EXTERN Boolean SeqEntryToGnbk (SeqEntryPtr sep, FmtType format,
-                                   ModType mode, StlType style, FILE *fp);
+NLM_EXTERN Boolean BioseqToGnbk (
+  BioseqPtr bsp,
+  SeqLocPtr slp,
+  FmtType format,
+  ModType mode,
+  StlType style,
+  FlgType flags,
+  FILE *fp
+);
 
 
 #ifdef __cplusplus

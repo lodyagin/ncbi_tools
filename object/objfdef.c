@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -1267,8 +1267,28 @@ protref:    if (prp->name != NULL)
 					if (label == NULL)
 						label = typelabel;
 				}
-				else if (StringICmp("misc_feature", ifp->key))
-					label = typelabel;
+				else if (StringICmp("misc_feature", ifp->key)) {
+					for (gbp = sfp->qual; label == NULL && gbp != NULL; gbp = gbp->next) {
+						if (StringICmp ("standard_name", gbp->qual) == 0) {
+							label = gbp->val;
+						}
+					}
+					for (gbp = sfp->qual; label == NULL && gbp != NULL; gbp = gbp->next) {
+						if (StringICmp ("function", gbp->qual) == 0) {
+							label = gbp->val;
+						}
+					}
+					for (gbp = sfp->qual; label == NULL && gbp != NULL; gbp = gbp->next) {
+						if (StringICmp ("number", gbp->qual) == 0) {
+							label = gbp->val;
+						}
+					}
+					for (gbp = sfp->qual; label == NULL && gbp != NULL; gbp = gbp->next) {
+						label = gbp->val;
+					}
+					if (label == NULL)
+						label = typelabel;
+				}
 			}
 			break;
 		case SEQFEAT_REGION:

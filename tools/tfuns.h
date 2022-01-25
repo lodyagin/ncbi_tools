@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <ncbi.h>
+#include <toasn3.h>
 
 typedef struct wholefeat {
 	Int2 count;

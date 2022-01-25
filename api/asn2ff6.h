@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -51,6 +51,12 @@
 /*************************************
 *
 * $Log: asn2ff6.h,v $
+* Revision 6.5  2001/12/05 18:13:59  cavanaug
+* Changes for new LOCUS line format
+*
+* Revision 6.4  2001/07/24 15:12:37  beloslyu
+* change the var.name in prototype from new to New to avoid the conflict with c++
+*
 * Revision 6.3  2000/06/05 17:51:58  tatiana
 * increase size of feature arrays to Int4
 *
@@ -175,7 +181,7 @@ the first character is a space and CheckBufferState returns a buffer with
 #define ASN2FF_GB_MAX 79
 #define NEWLINE '\n'
 #define ASN2FF_STD_BUF 35
-#define MAX_LOCUS_NAME_LEN 10
+#define MAX_LOCUS_NAME_LEN 16
 #define MAX_ACCESSION_LEN 25
 #define REP_NUM_OF_SEQ_DESC 22
 
@@ -222,7 +228,7 @@ NLM_EXTERN void do_loc_errors PROTO ((CharPtr front, CharPtr details));
 NLM_EXTERN void do_no_loc_errors PROTO ((CharPtr front, CharPtr details));
 NLM_EXTERN Boolean GBQualPresent PROTO ((CharPtr ptr, GBQualPtr gbqual));
 NLM_EXTERN CharPtr MakeAnAccession PROTO ((CharPtr new_buf, SeqIdPtr sip, Int2 buflen));
-NLM_EXTERN Boolean GetNAFeatKey PROTO ((Boolean new, CharPtr PNTR buffer, SeqFeatPtr sfp, SeqFeatPtr out));
+NLM_EXTERN Boolean GetNAFeatKey PROTO ((Boolean New, CharPtr PNTR buffer, SeqFeatPtr sfp, SeqFeatPtr out));
 NLM_EXTERN CharPtr GetGBSourceLine PROTO ((GBBlockPtr gb));
 NLM_EXTERN CharPtr FlatOrganelle PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN Int4 GetNumOfSeqBlks PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));

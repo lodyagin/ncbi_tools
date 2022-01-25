@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -523,8 +523,20 @@ erret:
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqFeatSetAsnWrite (SeqFeatPtr sfp, AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element)
 {
+	return SeqFeatSetAsnWriteExtra(sfp, aip, set, element, (ValNodePtr) NULL);
+}
+
+/*****************************************************************************
+*
+*   SeqFeatSetAsnWriteExtra(sfp, aip, set, element, extras)
+*      this is to accomodate extra features from SeqEntryAsnOut()
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL SeqFeatSetAsnWriteExtra (SeqFeatPtr sfp, AsnIoPtr aip,
+				    AsnTypePtr set, AsnTypePtr element, ValNodePtr extras)
+{
 	AsnTypePtr atp;
-	SeqFeatPtr oldsfp;
+	SeqFeatPtr oldsfp, tsfp;
     Boolean retval = FALSE;
 	Int2 ctr = 0;
 
@@ -540,7 +552,10 @@ NLM_EXTERN Boolean LIBCALL SeqFeatSetAsnWrite (SeqFeatPtr sfp, AsnIoPtr aip, Asn
 	atp = AsnLinkType(element, SEQ_FEAT);   /* link local tree */
     if (atp == NULL)
         return FALSE;
+
 	oldsfp = sfp;
+	if (extras != NULL)   /* this is an extra set of feats */
+		oldsfp = (SeqFeatPtr)(extras->data.ptrvalue);
 
     if (! AsnOpenStruct(aip, set, (Pointer)oldsfp))
         goto erret;
@@ -558,6 +573,14 @@ NLM_EXTERN Boolean LIBCALL SeqFeatSetAsnWrite (SeqFeatPtr sfp, AsnIoPtr aip, Asn
 			ctr = 0;
 		}
 
+    }
+
+    while (extras != NULL)
+    {
+	tsfp = (SeqFeatPtr)(extras->data.ptrvalue);
+	if (! SeqFeatAsnWrite(tsfp, aip, atp))
+		goto erret;
+	extras = extras->next;
     }
 
     if (! AsnCloseStruct(aip, set, (Pointer)oldsfp))
@@ -5643,6 +5666,7 @@ erret:
 	first = SubSourceSetFree(first);
     goto ret;
 }
+
 
 
 

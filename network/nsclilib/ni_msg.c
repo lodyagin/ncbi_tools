@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *   This file consists mostly of functions for creating, destroying, reading,
@@ -138,6 +138,9 @@
 *
 * RCS Modification History:
 * $Log: ni_msg.c,v $
+* Revision 6.2  2001/08/29 18:00:01  juran
+* Under Carbon, define missing POSIX macros in terms of Mac counterparts.
+*
 * Revision 6.1  1999/07/30 19:11:09  vakatov
 * Use "strerror()" instead of "sys_errlist[]"
 *
@@ -187,6 +190,10 @@ static char *  _this_file = __FILE__;
 #include <ncbi.h>
 #include "ni_msg.h"
 #include "ni_asn.h"   /* produced by ASNTOOL */
+
+#if TARGET_API_MAC_CARBON
+#define O_NDELAY kO_NDELAY
+#endif
 
 /* macros */
 #if defined(NETP_INET_NEWT) || defined(NETP_INET_WSOCK)

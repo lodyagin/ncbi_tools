@@ -27,7 +27,7 @@ Args myargs[NUMARG] = {
 	{"Output Filename for Quality Scores (DNA sequences only)","scores.ql", NULL,NULL,TRUE,'y',ARG_FILE_OUT,0.0,0,NULL},
 	{"Far Genomic Contig function for Quality Scores","F",NULL,NULL,TRUE,'f',ARG_BOOLEAN,0.0,0,NULL},
 	{"Remote fetching", "F", NULL, NULL, FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
-	{"Gap is -1", "F", NULL, NULL, FALSE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
+	{"Print Quality Score Gap as -1, false prints as 0", "F", NULL, NULL, FALSE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 static void PrintQualProc (CharPtr buf, Uint4 buflen, Pointer userdata)

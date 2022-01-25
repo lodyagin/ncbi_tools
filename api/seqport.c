@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.69 $
+* $Revision: 6.71 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.71  2001/10/12 21:55:20  kans
+* convert nucleotide X to N
+*
+* Revision 6.70  2001/09/13 13:12:12  madden
+* Use local variable in InitNa2toIUPAC, InitNa4toIUPAC, and InitNa2toNa4 to make MT-safe
+*
 * Revision 6.69  2001/06/21 14:46:18  kans
 * set spp->eos = TRUE when returning SEQPORT_VIRT from SeqPortGetResidue (JO)
 *
@@ -396,6 +402,7 @@ static void InitNa2toIUPAC (void)
   Int2  base [4], index, j;
   Char  convert [4] = {'A', 'C', 'G', 'T'};
   Int4  ret;
+  Uint1Ptr Na2toIUPAC_local = NULL;
 
   ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
   if (ret) {
@@ -404,22 +411,23 @@ static void InitNa2toIUPAC (void)
   }
 
   if (Na2toIUPAC == NULL) {
-    Na2toIUPAC = MemNew (sizeof (Uint1) * 1024);
+    Na2toIUPAC_local = MemNew (sizeof (Uint1) * 1024);
 
-    if (Na2toIUPAC != NULL) {
+    if (Na2toIUPAC_local != NULL) {
       for (base [0] = 0; base [0] < 4; (base [0])++) {
         for (base [1] = 0; base [1] < 4; (base [1])++) {
           for (base [2] = 0; base [2] < 4; (base [2])++) {
             for (base [3] = 0; base [3] < 4; (base [3])++) {
               index = 4 * (base [0] * 64 + base [1] * 16 + base [2] * 4 + base [3]);
               for (j = 0; j < 4; j++) {
-                Na2toIUPAC [index + j] = convert [(base [j])];
+                Na2toIUPAC_local [index + j] = convert [(base [j])];
               }
             }
           }
         }
       }
     }
+    Na2toIUPAC = Na2toIUPAC_local;
   }
 
   NlmMutexUnlock (seqport_mutex);
@@ -474,6 +482,7 @@ static void InitNa4toIUPAC (void)
   Char  convert [16] = {'N', 'A', 'C', 'M', 'G', 'R', 'S', 'V',
                         'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'};
   Int4  ret;
+  Uint1Ptr Na4toIUPAC_local = NULL;
 
   ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
   if (ret) {
@@ -482,18 +491,19 @@ static void InitNa4toIUPAC (void)
   }
 
   if (Na4toIUPAC == NULL) {
-    Na4toIUPAC = MemNew (sizeof (Uint1) * 512);
+    Na4toIUPAC_local = MemNew (sizeof (Uint1) * 512);
 
-    if (Na4toIUPAC != NULL) {
+    if (Na4toIUPAC_local != NULL) {
       for (base [0] = 0; base [0] < 16; (base [0])++) {
         for (base [1] = 0; base [1] < 16; (base [1])++) {
           index = 2 * (base [0] * 16 + base [1]);
           for (j = 0; j < 2; j++) {
-            Na4toIUPAC [index + j] = convert [(base [j])];
+            Na4toIUPAC_local [index + j] = convert [(base [j])];
           }
         }
       }
     }
+    Na4toIUPAC = Na4toIUPAC_local;
   }
 
   NlmMutexUnlock (seqport_mutex);
@@ -548,6 +558,7 @@ static void InitNa2toNa4 (void)
   Uint1  convert [16] = {17,  18,  20,  24,  33,  34,  36,  40,
                          65,  66,  68,  72, 129, 130, 132, 136};
   Int4   ret;
+  Uint1Ptr Na2toNa4_local = NULL;
 
   ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
   if (ret) {
@@ -556,18 +567,19 @@ static void InitNa2toNa4 (void)
   }
 
   if (Na2toNa4 == NULL) {
-    Na2toNa4 = MemNew (sizeof (Uint1) * 512);
+    Na2toNa4_local = MemNew (sizeof (Uint1) * 512);
 
-    if (Na2toNa4 != NULL) {
+    if (Na2toNa4_local != NULL) {
       for (pair [0] = 0; pair [0] < 16; (pair [0])++) {
         for (pair [1] = 0; pair [1] < 16; (pair [1])++) {
           index = 2 * (pair [0] * 16 + pair [1]);
           for (j = 0; j < 2; j++) {
-            Na2toNa4 [index + j] = convert [(pair [j])];
+            Na2toNa4_local [index + j] = convert [(pair [j])];
           }
         }
       }
     }
+    Na2toNa4 = Na2toNa4_local;
   }
 
   NlmMutexUnlock (seqport_mutex);
@@ -4210,6 +4222,8 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
   }
   tbl->basesToIdx [(int) 'U'] = BASE_T;
   tbl->basesToIdx [(int) 'u'] = BASE_T;
+  tbl->basesToIdx [(int) 'X'] = BASE_N;
+  tbl->basesToIdx [(int) 'x'] = BASE_N;
 
   /* also map ncbi4na alphabet to BaseCode */
   for (i = 0; i < 16; i++) {
@@ -5375,6 +5389,8 @@ NLM_EXTERN SeqSearchPtr SeqSearchNew (
   }
   tbl->letterToIdx [(int) 'U'] = tbl->letterToIdx [(int) 'T'];
   tbl->letterToIdx [(int) 'u'] = tbl->letterToIdx [(int) 'T'];
+  tbl->letterToIdx [(int) 'X'] = tbl->letterToIdx [(int) 'N'];
+  tbl->letterToIdx [(int) 'x'] = tbl->letterToIdx [(int) 'N'];
 
   /* initialize table to convert character to complement character */
 

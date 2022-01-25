@@ -3,6 +3,9 @@
 *   -- all common routines for main programs in this directory
 *
 * $Log: utilpars.c,v $
+* Revision 6.2  2001/12/06 17:00:41  kans
+* TextSave takes size_t, not Int2, otherwise titin protein tries to allocate negative number
+*
 * Revision 6.1  2000/10/26 16:45:23  kans
 * ValidAminoAcid also checks single letter abbreviation
 *
@@ -137,7 +140,7 @@ ParFlat_AA1_to_AA3
 *
 *                                                              3-26-93
 *****************************************************************************/
-NLM_EXTERN CharPtr TextSave(CharPtr text, Int2 len)
+NLM_EXTERN CharPtr TextSave(CharPtr text, size_t len)
 {
    CharPtr str = NULL;
 

@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Taxon1
-*    Generated using ASNCODE Revision: 6.8 at Dec 16, 1999 10:55 AM
+*    Generated using ASNCODE Revision: 6.12 at Sep 28, 2001 11:31 AM
 *
 **************************************************/
 
@@ -42,6 +42,9 @@ typedef ValNode Taxon1Req;
 #define Taxon1Req_getorgmod 15
 #define Taxon1Req_fini 16
 #define Taxon1Req_id4gi 17
+#define Taxon1Req_taxachildren 18
+#define Taxon1Req_taxalineage 19
+#define Taxon1Req_maxtaxid 20
 
 
 NLM_EXTERN Taxon1ReqPtr LIBCALL Taxon1ReqFree PROTO ((Taxon1ReqPtr ));
@@ -88,6 +91,10 @@ typedef ValNode Taxon1Resp;
 #define Taxon1Resp_getorgmod 16
 #define Taxon1Resp_fini 17
 #define Taxon1Resp_id4gi 18
+#define Taxon1Resp_taxabyid 19
+#define Taxon1Resp_taxachildren 20
+#define Taxon1Resp_taxalineage 21
+#define Taxon1Resp_maxtaxid 22
 
 
 NLM_EXTERN Taxon1RespPtr LIBCALL Taxon1RespFree PROTO ((Taxon1RespPtr ));
@@ -159,6 +166,26 @@ NLM_EXTERN Taxon1DataPtr LIBCALL Taxon1DataFree PROTO ((Taxon1DataPtr ));
 NLM_EXTERN Taxon1DataPtr LIBCALL Taxon1DataNew PROTO (( void ));
 NLM_EXTERN Taxon1DataPtr LIBCALL Taxon1DataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL Taxon1DataAsnWrite PROTO (( Taxon1DataPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    Taxon2Data
+*
+**************************************************/
+typedef struct struct_Taxon2_data {
+   struct struct_Org_ref PNTR   org;
+   ValNodePtr   blast_name;
+   Uint1   is_uncultured;
+   Uint1   is_species_level;
+} Taxon2Data, PNTR Taxon2DataPtr;
+
+
+NLM_EXTERN Taxon2DataPtr LIBCALL Taxon2DataFree PROTO ((Taxon2DataPtr ));
+NLM_EXTERN Taxon2DataPtr LIBCALL Taxon2DataNew PROTO (( void ));
+NLM_EXTERN Taxon2DataPtr LIBCALL Taxon2DataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Taxon2DataAsnWrite PROTO (( Taxon2DataPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }

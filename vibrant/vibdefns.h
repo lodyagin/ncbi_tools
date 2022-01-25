@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *       Vibrant alias definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibdefns.h,v $
+* Revision 6.8  2001/09/10 17:34:21  bazhin
+* Added function Nlm_SetTextCursorBlinkRate(Nlm_TexT t, Nlm_Int2 msec).
+*
 * Revision 6.7  1999/04/06 14:23:25  lewisg
 * add opengl replacement for viewer3d
 *
@@ -314,6 +317,7 @@ extern "C" {
 #define SetTextEditable Nlm_SetTextEditable
 #define SetTextCursorPos Nlm_SetTextCursorPos
 #define GetTextCursorPos Nlm_GetTextCursorPos
+#define SetTextCursorBlinkRate Nlm_SetTextCursorBlinkRate
 
 #define StaticPrompt Nlm_StaticPrompt
 

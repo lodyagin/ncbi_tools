@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnfeat.h66";
-static AsnValxNode avnx[186] = {
+static char * asnfilename = "asnfeat.h67";
+static AsnValxNode avnx[189] = {
     {2,NULL,0,0.0,NULL } ,
     {20,"other" ,0,0.0,&avnx[2] } ,
     {20,"family" ,1,0.0,&avnx[3] } ,
@@ -194,8 +194,11 @@ static AsnValxNode avnx[186] = {
     {20,"country" ,23,0.0,&avnx[181] } ,
     {20,"segment" ,24,0.0,&avnx[182] } ,
     {20,"endogenous-virus-name" ,25,0.0,&avnx[183] } ,
+    {20,"transgenic" ,26,0.0,&avnx[184] } ,
+    {20,"environmental-sample" ,27,0.0,&avnx[185] } ,
+    {20,"isolation-source" ,28,0.0,&avnx[186] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"experimental" ,1,0.0,&avnx[185] } ,
+    {20,"experimental" ,1,0.0,&avnx[188] } ,
     {20,"not-experimental" ,2,0.0,NULL } };
 
 static AsnType atx[233] = {
@@ -420,7 +423,7 @@ static AsnType atx[233] = {
   {0, "ext" ,128,9,0,1,0,0,0,0,NULL,&atx[157],NULL,0,&atx[219]} ,
   {0, "cit" ,128,10,0,1,0,0,0,0,NULL,&atx[220],NULL,0,&atx[221]} ,
   {416, "Pub-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[8]} ,
-  {0, "exp-ev" ,128,11,0,1,0,0,0,0,NULL,&atx[79],&avnx[184],0,&atx[222]} ,
+  {0, "exp-ev" ,128,11,0,1,0,0,0,0,NULL,&atx[79],&avnx[187],0,&atx[222]} ,
   {0, "xref" ,128,12,0,1,0,0,0,0,NULL,&atx[27],&atx[223],0,&atx[227]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[224],NULL,0,NULL} ,
   {422, "SeqFeatXref" ,1,0,0,0,0,0,0,0,NULL,&atx[30],&atx[225],0,&atx[76]} ,
@@ -434,7 +437,7 @@ static AsnType atx[233] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[84],NULL,0,NULL} };
 
 static AsnModule ampx[8] = {
-  { "NCBI-Seqfeat" , "asnfeat.h66",&atx[0],NULL,&ampx[1],0,0} ,
+  { "NCBI-Seqfeat" , "asnfeat.h67",&atx[0],NULL,&ampx[1],0,0} ,
   { "NCBI-Rsite" , NULL,&atx[152],NULL,&ampx[2],0,0} ,
   { "NCBI-RNA" , NULL,&atx[121],NULL,&ampx[3],0,0} ,
   { "NCBI-Gene" , NULL,&atx[16],NULL,&ampx[4],0,0} ,

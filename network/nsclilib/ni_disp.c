@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 4.9 $
+* $Revision: 4.10 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -268,6 +268,9 @@
 *
 * RCS Modification History:
 * $Log: ni_disp.c,v $
+* Revision 4.10  2001/09/17 20:09:38  lavr
+* Added conditional compilation for config parameter HAVE_SOCKLEN_T
+*
 * Revision 4.9  2001/04/13 14:59:40  kans
 * header for dup on Mac
 *
@@ -1824,10 +1827,14 @@ NLM_EXTERN NI_HandPtr NI_ServiceGet(NI_DispatcherPtr disp, CharPtr svc, Uint2 sv
 NLM_EXTERN NI_HandPtr NI_ServiceRequest(NI_ReqPtr req)
 {
     NI_HandPtr          sconnhp;
-#ifdef NETP_INET_MACTCP
-    Int4                sconnlen;
+#ifdef HAVE_SOCKLEN_T
+    socklen_t           sconnlen;
 #else
+#  ifdef NETP_INET_MACTCP
+    Int4                sconnlen;
+#  else
     int                 sconnlen;
+#  endif
 #endif
     struct sockaddr_in  sconnaddr;
     NIMsgPtr            mp, imp;
@@ -2514,6 +2521,11 @@ DispatchConnect(NI_DispatcherPtr disp, CharPtr host, CharPtr service, int timeou
     Char                t_service[64];
     int                 status;
     Int4                connectStartTime;
+#ifdef HAVE_SOCKLEN_T
+    socklen_t           socklen;
+#else
+    int                 socklen;
+#endif
 
     if (disp == NULL)
         return NULL;
@@ -2639,10 +2651,10 @@ DispatchConnect(NI_DispatcherPtr disp, CharPtr host, CharPtr service, int timeou
             /* select() can be performed where the corresponding "write"     */
             /* file descriptor will be enabled once the connect()ion has been*/
             /* established                                                   */
-            status = sizeof(serv_addr);
+            socklen = sizeof(serv_addr);
             if (sokselectw(dHP->sok, timeout) == 0
 #ifdef OS_UNIX
-                && getpeername(dHP->sok,(struct sockaddr *) &serv_addr, &status) == 0
+                && getpeername(dHP->sok,(struct sockaddr *) &serv_addr, &socklen) == 0
 #endif
                 ) {
                 dHP->state = NI_CONNECTED;
@@ -3400,7 +3412,11 @@ int sokselectw(int fd, int seconds)
     {
 #ifdef OS_UNIX
         int err;
-        int optlen;
+#  ifdef HAVE_SOCKLEN_T
+        socklen_t optlen;
+#  else
+        int       optlen;
+#  endif
 
         optlen = sizeof(int);
         if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *) &err, &optlen) >= 0 &&

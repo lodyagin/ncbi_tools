@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.26 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -1241,7 +1241,7 @@ static void ChangeCannedMessage (PopuP p)
       SetStatus (ffp->exception, TRUE);
       break;
     case 3 :
-      SetTitle (ffp->exceptText, "reasons cited in publication");
+      SetTitle (ffp->exceptText, "reasons given in citation");
       SetStatus (ffp->exception, TRUE);
       break;
     case 4 :
@@ -1252,6 +1252,9 @@ static void ChangeCannedMessage (PopuP p)
       SetTitle (ffp->exceptText, "trans splicing");
       SetStatus (ffp->exception, TRUE);
       break;
+    case 6 :
+      SetTitle (ffp->exceptText, "artificial frameshift");
+      SetStatus (ffp->exception, TRUE);
     default :
       break;
   }
@@ -1300,6 +1303,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
   GrouP    f;
   GrouP    g;
   Boolean  hasQuals;
+  Boolean  indexerVersion;
   Char     just;
   GrouP    k;
   GrouP    m;
@@ -1354,6 +1358,10 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     r = HiddenGroup (f, 7, 0, NULL);
     StaticPrompt (r, "Flags", 0, popupMenuHeight, programFont, 'l');
     ffp->partial = CheckBox (r, "Partial", NULL);
+    indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
+    if (! indexerVersion) {
+      Disable (ffp->partial);
+    }
     if (ffp->pseudo == NULL) {
       ffp->pseudo = CheckBox (r, "Pseudo", NULL);
       pseudo = ffp->pseudo; /* allows pseudo control on earlier feature-specific page */
@@ -1377,13 +1385,15 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       SetObjectExtra (canned, (Pointer) ffp, NULL);
       PopupItem (canned, " ");
       PopupItem (canned, "RNA editing");
-      PopupItem (canned, "reasons cited in publication");
+      PopupItem (canned, "reasons given in citation");
       PopupItem (canned, "ribosomal slippage");
       PopupItem (canned, "trans splicing");
+      PopupItem (canned, "artificial frameshift");
       if (sfp != NULL && sfp->excpt) {
         if (StringICmp (sfp->except_text, "RNA editing") == 0) {
           SetValue (canned, 2);
-        } else if (StringICmp (sfp->except_text, "reasons cited in publication") == 0) {
+        } else if (StringICmp (sfp->except_text, "reasons given in citation") == 0 ||
+                   StringICmp (sfp->except_text, "reasons cited in publication") == 0) {
           SetValue (canned, 3);
         } else if (StringICmp (sfp->except_text, "ribosomal slippage") == 0) {
           SetValue (canned, 4);
@@ -1393,6 +1403,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
           SetValue (canned, 5);
         } else if (StringICmp (sfp->except_text, "trans-splicing") == 0) {
           SetValue (canned, 5);
+        } else if (StringICmp (sfp->except_text, "artificial frameshift") == 0) {
+          SetValue (canned, 6);
         }
       } else {
         SetValue (canned, 1);

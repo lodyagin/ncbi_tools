@@ -49,6 +49,7 @@ void tax1_fini(void);
  */
 
 Taxon1DataPtr tax1_getbyid(Int4 tax_id);
+Taxon2DataPtr tax1m_getbyid(Int4 tax_id);
 
 /*----------------------------------------------
  * Get organism by OrgRef
@@ -65,6 +66,7 @@ Taxon1DataPtr tax1_getbyid(Int4 tax_id);
  *    If merge != 0 this function updates inp_orgRef structure.
  */
 Taxon1DataPtr tax1_lookup(OrgRefPtr inp_orgRef, int merge);
+Taxon2DataPtr tax1m_lookup(OrgRefPtr inp_orgRef, int merge);
 
 /*-----------------------------------------------
  * Get tax_id by OrgRef
@@ -107,6 +109,7 @@ Int4 tax1_findAllTaxIdByName(CharPtr orgname, Int4 **Ids); /* standalone version
  * OrgRefFree function for returned pointer.
  */
 OrgRefPtr tax1_getOrgRef(Int4 tax_id, int* is_species, CharPtr div, CharPtr embl_cde);
+OrgRefPtr tax1m_getOrgRef(Int4 tax_id, int* is_species, int* is_uncultured, CharPtr* blast_name);
 
 /*---------------------------------------------
  * Set mode for synonyms in OrgRef
@@ -174,6 +177,16 @@ Boolean tax1_isAlive(void);
  *       0      if no data or error
  */
 Int4 tax1_getTaxId4GI(Int4 gi);
+
+/***************************************************
+ * Get pointer to "blast" name
+ * Returns: the pointer on first blast name at or above this node in the lineage
+ * NOTE:
+ * This function does not make a copy of "blast" name, so, caller can not use
+ * MemFree function for returned pointer.
+ */
+CharPtr tax1m_getBlastName(Int4 tax_id);
+
 
 #ifdef __cplusplus
 /* { */ }

@@ -34,6 +34,15 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.90  2001/09/06 20:27:10  dondosha
+* threshold_first removed from options
+*
+* Revision 1.89  2001/08/31 14:31:30  dondosha
+* Correction to previous change needed for Mac
+*
+* Revision 1.88  2001/08/30 17:53:05  dondosha
+* Fixed memory leak in Blast3GetDbinfo
+*
 * Revision 1.87  2001/05/02 19:42:48  egorov
 * Make the NetBlastGetMatrix() external
 *
@@ -705,7 +714,7 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
 		parameters->Cutoff2_cutoff2 = ValNodeAddInt(NULL, Cutoff2_cutoff2_score, options->cutoff_s2);
 	}
 	parameters->hitlist_size = options->hitlist_size;
-	parameters->first_threshold = options->threshold_first;
+	parameters->first_threshold = options->threshold_second;
 	parameters->second_threshold = options->threshold_second;
 	parameters->nucl_penalty = options->penalty;
 	parameters->nucl_reward = options->reward;
@@ -1500,9 +1509,10 @@ Blast3GetDbinfo(BlastNet3Hptr bl3hptr)
         SubmitRequest(bl3hptr, request, &response, NULL, TRUE);
         BlastRequestFree (request);
 	if (response == NULL || response->choice != BlastResponse_db_info)
-		return NULL;
+           return (BlastDbinfoPtr) BlastResponseFree(response);
 
 	dbinfo = (BlastDbinfoPtr) response->data.ptrvalue;
+        MemFree(response);
 
 	return dbinfo;
 }
@@ -2576,7 +2586,6 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
             options = BLASTOptionNew(program, TRUE);
         } else {
                 options = BLASTOptionNew(program, (Boolean) parameters->gapped_alignment);
-                options->threshold_first = parameters->first_threshold;
                 options->threshold_second = parameters->second_threshold;
                 if (parameters->Cutoff_cutoff)
                 {

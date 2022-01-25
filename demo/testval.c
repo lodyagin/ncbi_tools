@@ -23,7 +23,7 @@ Args myargs[NUMARG] = {
 	{"Patch invalid sequence residues?","F",NULL,NULL,TRUE,'p',ARG_BOOLEAN,0.0,0,NULL},
 	{"Lowest severity of error to show","3","0","4",FALSE,'q',ARG_INT,0.0,0,NULL},
 	{"ASN.1 spec level to filter","0","0","3",FALSE,'l',ARG_INT,0.0,0,NULL},
-	{"Use SeqMgr indexing?","F",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
+	{"Use SeqMgr indexing?","T",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
 	{"Validate alignments?","F",NULL,NULL,TRUE,'a',ARG_BOOLEAN,0.0,0,NULL}};
 
 CharPtr AsnIoGets PROTO((AsnIoPtr aip));  /* from asnio.h */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.34 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.36  2001/11/15 18:47:13  kans
+* fix to unindexed get next descriptor
+*
+* Revision 6.35  2001/11/15 18:34:52  kans
+* added GetNextDescriptorUnindexed, requires AssignIDsInEntity be called first
+*
 * Revision 6.34  2001/07/06 17:27:38  kans
 * AssignIDs does not clear deleteme flag
 *
@@ -6755,6 +6761,61 @@ NLM_EXTERN Boolean LIBCALL GatherObjectsInEntity (Uint2 entityID, Uint2 datatype
 {
   if (callback == NULL) return FALSE;
   return VisitEntity (entityID, datatype, dataptr, FALSE, callback, userdata, objMgrFilter);
+}
+
+/*****************************************************************************
+*
+*   GetNextDescriptorUnindexed (bsp, choice, curr)
+*   	After AssignIDsInEntity, gets next descriptor up the set hierarchy.
+*
+*****************************************************************************/
+
+NLM_EXTERN SeqDescrPtr GetNextDescriptorUnindexed (
+  BioseqPtr bsp,
+  Uint1 choice,
+  SeqDescrPtr curr
+)
+
+{
+  BioseqSetPtr   bssp = NULL;
+  ObjValNodePtr  ovp;
+  SeqDescrPtr    sdp;
+
+  if (bsp == NULL || choice == 0) return NULL;
+
+  if (curr == NULL) {
+    sdp = bsp->descr;
+    curr = sdp;
+  } else {
+    sdp = curr->next;
+  }
+  while (sdp != NULL) {
+    if (sdp->choice == choice) return sdp;
+    sdp = sdp->next;
+  }
+
+  if (curr == NULL || curr->extended == 0) return NULL;
+  ovp = (ObjValNodePtr) curr;
+  if (ovp->idx.parenttype == OBJ_BIOSEQ) {
+    bsp = (BioseqPtr) ovp->idx.parentptr;
+    if (bsp == NULL) return NULL;
+    if (bsp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+    bssp = (BioseqSetPtr) ovp->idx.parentptr;
+  } else if (ovp->idx.parenttype == OBJ_BIOSEQSET) {
+    bssp = (BioseqSetPtr) ovp->idx.parentptr;
+    if (bssp == NULL) return NULL;
+    if (bssp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+    bssp = (BioseqSetPtr) ovp->idx.parentptr;
+  } else return NULL;
+
+  while (bssp != NULL) {
+    for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {
+      if (sdp->choice == choice) return sdp;
+     }
+     if (bssp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+     bssp = (BioseqSetPtr) bsp->idx.parentptr;
+  }
+  return NULL;
 }
 
 typedef struct getptrforid {

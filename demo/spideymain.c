@@ -28,13 +28,25 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.1 $
+* $Revision: 6.5 $
 *
 * File Description: main functions for running Spidey as a standalone 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spideymain.c,v $
+* Revision 6.5  2001/11/05 16:13:55  wheelan
+* bug fix in multiple alignment code; changed call to SPI_PrintMult..
+*
+* Revision 6.4  2001/10/04 12:36:45  wheelan
+* added bigintron option
+*
+* Revision 6.3  2001/08/24 13:45:48  wheelan
+* changed printing options
+*
+* Revision 6.2  2001/07/10 16:45:53  wheelan
+* changes to produce multiple alignments upon request
+*
 * Revision 6.1  2001/05/24 16:27:41  wheelan
 * initial checkin
 *
@@ -50,8 +62,8 @@
 
 #define MYARGGENFILE   0
 #define MYARGMRNAFILE  1
-#define MYARGOUTFILE   2
-#define MYARGPRALIGN   3
+#define MYARGPRALIGN   2
+#define MYARGOUTFILE   3
 #define MYARGALNFILE   4
 #define MYARGGILIST    5
 #define MYARGNUMMOD    6
@@ -71,15 +83,17 @@
 /*#define MYARGACEDB     19*/
 #define MYARGFROM      19 
 #define MYARGTO        20
+#define MYARGMULT      21
+#define MYARGXL        22
 
-#define NUMARGS        21
+#define NUMARGS        23
 
 Args myargs[NUMARGS] = {
    {"Input file -- genomic sequence(s)", NULL, NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
    {"Input file -- mRNA sequence(s)", NULL, NULL, NULL, FALSE, 'm', ARG_FILE_IN, 0.0, 0, NULL},
-   {"Output file", "stdout", NULL, NULL, TRUE, 'o', ARG_STRING, 0.0, 0, NULL},
-   {"Print alignment?", "F", NULL, NULL, TRUE, 'p', ARG_BOOLEAN, 0.0, 0, NULL},
-   {"Alignment file", "spidey.aln", NULL, NULL, TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
+   {"Print alignment? 0=summary+alignments, 1=summary, 2=alignments, 3=summary&alignments in different files", "0", NULL, NULL, TRUE, 'p', ARG_INT, 0.0, 0, NULL},
+   {"Output file 1 (summary or summary+aln)", "stdout", NULL, NULL, TRUE, 'o', ARG_STRING, 0.0, 0, NULL},
+   {"Output file 2 (alignments)", "spidey.aln", NULL, NULL, TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
    {"Input file is a GI list", "F", NULL, NULL, TRUE, 'G', ARG_BOOLEAN, 0.0, 0, NULL},
    {"Number of gene models", "1", NULL, NULL, TRUE, 'n', ARG_INT, 0.0, 0, NULL},
    {"Organism (genomic sequence) v=vertebrate,\nd = drosophila, p = plant, c = C. elegans", "v", NULL, NULL, TRUE, 'r', ARG_STRING, 0.0, 0, NULL},
@@ -98,6 +112,8 @@ Args myargs[NUMARGS] = {
    /*{"ACEDB format", "F", NULL, NULL, TRUE, 'A', ARG_BOOLEAN, 0.0, 0, NULL},*/
    {"Start of genomic interval desired (from)", "0", NULL, NULL, TRUE, 'F', ARG_INT, 0.0, 0, NULL},
    {"Stop of genomic interval desired (to)", "0", NULL, NULL, TRUE, 'T', ARG_INT, 0.0, 0, NULL},
+   {"Make a multiple alignment of all input mRNAs", "F", NULL, NULL, TRUE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
+   {"Use extra-large intron sizes", "F", NULL, NULL, TRUE, 'X', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 static void SPI_FindAllNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
@@ -134,6 +150,9 @@ Int2 Main()
    SPI_bsinfoPtr      spim_head;
    SPI_bsinfoPtr      spim_prev;
    SPI_OptionsPtr     spot;
+   SPI_RegionInfoPtr  srip;
+   SPI_RegionInfoPtr  srip_head;
+   SPI_RegionInfoPtr  srip_prev;
    CharPtr            str;
    CharPtr            txt;
 
@@ -348,28 +367,41 @@ Int2 Main()
       }
    }
    spim = spim_head;
+   spot = (SPI_OptionsPtr)MemNew(sizeof(SPI_Options));
+   spot->printaln = myargs[MYARGPRALIGN].intvalue;
    txt = myargs[MYARGOUTFILE].strvalue;
    ofp = FileOpen(txt, "w");
-   if (ofp == NULL)
+   if (ofp == NULL && spot->printaln != 3)
    {
       ErrPostEx(SEV_ERROR, 0, 0, "Unable to open output file\n");
       return -1;
    }
+   if (spot->printaln >= 2)
+   {
+      txt = myargs[MYARGALNFILE].strvalue;
+      ofp2 = FileOpen(txt, "a");
+      if (ofp2 == NULL)
+      {
+         ErrPostEx(SEV_ERROR, 0, 0, "Unable to open output file 2\n");
+         return -1;
+      }
+   } else
+      ofp2 = NULL;
    ErrSetMessageLevel(SEV_MAX);
-   spot = (SPI_OptionsPtr)MemNew(sizeof(SPI_Options));
    spot->firstpasseval = myargs[MYARG1STEVAL].floatvalue;
    spot->secpasseval = myargs[MYARG2NDEVAL].floatvalue;
    spot->thirdpasseval = myargs[MYARG3RDEVAL].floatvalue;
    spot->numreturns = myargs[MYARGNUMMOD].intvalue;
    spot->idcutoff = myargs[MYARGIDCUT].intvalue;
    spot->lencutoff = myargs[MYARGLENCUT].intvalue;
-   spot->printaln = (Boolean)myargs[MYARGPRALIGN].intvalue;
    spot->interspecies = (Boolean)myargs[MYARGSPEC].intvalue;
    spot->printasn = (Boolean)myargs[MYARGASN].intvalue;
    spot->fetchcds = (Boolean)myargs[MYARGGETCDS].intvalue;
    /*spot->ace = (Boolean)myargs[MYARGACEDB].intvalue;*/
    spot->from = myargs[MYARGFROM].intvalue;
    spot->to = myargs[MYARGTO].intvalue;
+   spot->makemult = (Boolean)myargs[MYARGMULT].intvalue;
+   spot->bigintron = (Boolean)myargs[MYARGXL].intvalue;
    txt = myargs[MYARGORG].strvalue;
    if (!StringICmp(txt, "d") || !StringICmp(txt, "D"))
       spot->organism = SPI_FLY;
@@ -379,12 +411,6 @@ Int2 Main()
       spot->organism = SPI_CELEGANS;
    else
       spot->organism = SPI_VERTEBRATE;
-   if (spot->printaln)
-   {
-      txt = myargs[MYARGALNFILE].strvalue;
-      ofp2 = FileOpen(txt, "a");
-   } else
-      ofp2 = NULL;
    sap = NULL;
    if (spot->printasn)
       spot->sap_head = &sap;
@@ -392,11 +418,12 @@ Int2 Main()
    if (txt != NULL)
       spot->draftfile = StringSave(txt);*/
    h_head = h_prev = NULL;
+   srip_head = srip_prev = NULL;
    while (spim != NULL)
    {
       spot->lcaseloc = spim->lcaseloc;
       if (spot->draftfile == NULL)
-         SPI_AlnSinglemRNAToGen(spig_head, spim, ofp, ofp2, spot);
+         srip = SPI_AlnSinglemRNAToGen(spig_head, spim, ofp, ofp2, spot);
       else
       {
          hptr = SPI_AlnSinglemRNAToPieces(spig_head, spim, ofp, ofp2, spot);
@@ -407,8 +434,24 @@ Int2 Main()
          } else
             h_head = h_prev = hptr;
       }
+      if (srip != NULL)
+      {
+         if (srip_head != NULL)
+         {
+            srip_prev->next = srip;
+            srip_prev = srip;
+         } else
+            srip_head = srip_prev = srip;
+      }
       spim = spim->next;
    }
+   if (spot->makemult)
+   {
+      SPI_MakeMultipleAlignment(srip_head);
+      SPI_PrintMultipleAlignment(srip_head, FALSE, spig_head->bsp, ofp);
+      SPI_RegionListFree(srip_head);
+   } else
+      SPI_RegionListFree(srip_head);
    /* create the ASN.1 output, if requested; need to use the continuous alignment */
    /* that was generated */
    if (spot->printasn && *(spot->sap_head) != NULL && spot->draftfile == NULL)

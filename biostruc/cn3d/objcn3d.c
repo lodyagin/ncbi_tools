@@ -32,7 +32,7 @@ objcn3dAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cn3d
-*    Generated using ASNCODE Revision: 6.10 at Jun 21, 2001 10:32 AM
+*    Generated using ASNCODE Revision: 6.12 at Oct 17, 2001 12:45 PM
 *
 **************************************************/
 
@@ -232,6 +232,7 @@ Cn3dUserAnnotationsFree(Cn3dUserAnnotationsPtr ptr)
       return NULL;
    }
    AsnGenericUserSeqOfFree(ptr -> annotations, (AsnOptFreeFunc) Cn3dUserAnnotationFree);
+   Cn3dViewSettingsFree(ptr -> view);
    return MemFree(ptr);
 }
 
@@ -290,6 +291,13 @@ Cn3dUserAnnotationsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CN3D_USER_ANNOTATIONS_view) {
+      ptr -> view = Cn3dViewSettingsAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -342,6 +350,11 @@ Cn3dUserAnnotationsAsnWrite(Cn3dUserAnnotationsPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    AsnGenericUserSeqOfAsnWrite(ptr -> annotations, (AsnWriteFunc) Cn3dUserAnnotationAsnWrite, aip, CN3D_USER_ANNOTATIONS_annotations, CN3D_USER_ANNOTATIONS_annotations_E);
+   if (ptr -> view != NULL) {
+      if ( ! Cn3dViewSettingsAsnWrite(ptr -> view, aip, CN3D_USER_ANNOTATIONS_view)) {
+         goto erret;
+      }
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -912,6 +925,194 @@ erret:
 
 /**************************************************
 *
+*    Cn3dBackboneLabelStyleNew()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dBackboneLabelStylePtr LIBCALL
+Cn3dBackboneLabelStyleNew(void)
+{
+   Cn3dBackboneLabelStylePtr ptr = MemNew((size_t) sizeof(Cn3dBackboneLabelStyle));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Cn3dBackboneLabelStyleFree()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dBackboneLabelStylePtr LIBCALL
+Cn3dBackboneLabelStyleFree(Cn3dBackboneLabelStylePtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Cn3dBackboneLabelStyleAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dBackboneLabelStylePtr LIBCALL
+Cn3dBackboneLabelStyleAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   Cn3dBackboneLabelStylePtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Cn3dBackboneLabelStyle ::= (self contained) */
+      atp = AsnReadId(aip, amp, CN3D_BACKBONE_LABEL_STYLE);
+   } else {
+      atp = AsnLinkType(orig, CN3D_BACKBONE_LABEL_STYLE);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = Cn3dBackboneLabelStyleNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CN3D_BACKBONE_LABEL_STYLE_spacing) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> spacing = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_BACKBONE_LABEL_STYLE_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_BACKBONE_LABEL_STYLE_number) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> number = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_BACKBONE_LABEL_STYLE_termini) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> termini = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_BACKBONE_LABEL_STYLE_white) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> white = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Cn3dBackboneLabelStyleFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Cn3dBackboneLabelStyleAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Cn3dBackboneLabelStyleAsnWrite(Cn3dBackboneLabelStylePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CN3D_BACKBONE_LABEL_STYLE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> spacing;
+   retval = AsnWrite(aip, CN3D_BACKBONE_LABEL_STYLE_spacing,  &av);
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, CN3D_BACKBONE_LABEL_STYLE_type,  &av);
+   av.intvalue = ptr -> number;
+   retval = AsnWrite(aip, CN3D_BACKBONE_LABEL_STYLE_number,  &av);
+   av.boolvalue = ptr -> termini;
+   retval = AsnWrite(aip, CN3D_BACKBONE_LABEL_STYLE_termini,  &av);
+   av.boolvalue = ptr -> white;
+   retval = AsnWrite(aip, CN3D_BACKBONE_LABEL_STYLE_white,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    Cn3dStyleSettingsNew()
 *
 **************************************************/
@@ -939,6 +1140,7 @@ Cn3dStyleSettingsFree(Cn3dStyleSettingsPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
+   MemFree(ptr -> name);
    Cn3dBackboneStyleFree(ptr -> protein_backbone);
    Cn3dBackboneStyleFree(ptr -> nucleotide_backbone);
    Cn3dGeneralStyleFree(ptr -> protein_sidechains);
@@ -950,6 +1152,8 @@ Cn3dStyleSettingsFree(Cn3dStyleSettingsPtr ptr)
    Cn3dGeneralStyleFree(ptr -> strand_objects);
    Cn3dColorFree(ptr -> virtual_disulfide_color);
    Cn3dColorFree(ptr -> background_color);
+   Cn3dBackboneLabelStyleFree(ptr -> protein_labels);
+   Cn3dBackboneLabelStyleFree(ptr -> nucleotide_labels);
    return MemFree(ptr);
 }
 
@@ -1001,6 +1205,13 @@ Cn3dStyleSettingsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
+   if (atp == CN3D_STYLE_SETTINGS_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == CN3D_STYLE_SETTINGS_protein_backbone) {
       ptr -> protein_backbone = Cn3dBackboneStyleAsnRead(aip, atp);
       if (aip -> io_failure) {
@@ -1155,6 +1366,27 @@ Cn3dStyleSettingsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> strand_thickness = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CN3D_STYLE_SETTINGS_protein_labels) {
+      ptr -> protein_labels = Cn3dBackboneLabelStyleAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_STYLE_SETTINGS_nucleotide_labels) {
+      ptr -> nucleotide_labels = Cn3dBackboneLabelStyleAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_STYLE_SETTINGS_ion_labels) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> ion_labels = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1206,6 +1438,10 @@ Cn3dStyleSettingsAsnWrite(Cn3dStyleSettingsPtr ptr, AsnIoPtr aip, AsnTypePtr ori
       goto erret;
    }
 
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, CN3D_STYLE_SETTINGS_name,  &av);
+   }
    if (ptr -> protein_backbone != NULL) {
       if ( ! Cn3dBackboneStyleAsnWrite(ptr -> protein_backbone, aip, CN3D_STYLE_SETTINGS_protein_backbone)) {
          goto erret;
@@ -1283,9 +1519,135 @@ Cn3dStyleSettingsAsnWrite(Cn3dStyleSettingsPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    retval = AsnWrite(aip, CN3D_STYLE_SETTINGS_strand_width,  &av);
    av.intvalue = ptr -> strand_thickness;
    retval = AsnWrite(aip, CN3D_STYLE_SETTINGS_strand_thickness,  &av);
+   if (ptr -> protein_labels != NULL) {
+      if ( ! Cn3dBackboneLabelStyleAsnWrite(ptr -> protein_labels, aip, CN3D_STYLE_SETTINGS_protein_labels)) {
+         goto erret;
+      }
+   }
+   if (ptr -> nucleotide_labels != NULL) {
+      if ( ! Cn3dBackboneLabelStyleAsnWrite(ptr -> nucleotide_labels, aip, CN3D_STYLE_SETTINGS_nucleotide_labels)) {
+         goto erret;
+      }
+   }
+   av.boolvalue = ptr -> ion_labels;
+   retval = AsnWrite(aip, CN3D_STYLE_SETTINGS_ion_labels,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Cn3dStyleSettingsSetFree()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dStyleSettingsSetPtr LIBCALL
+Cn3dStyleSettingsSetFree(Cn3dStyleSettingsSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) Cn3dStyleSettingsFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    Cn3dStyleSettingsSetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dStyleSettingsSetPtr LIBCALL
+Cn3dStyleSettingsSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   Cn3dStyleSettingsSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Cn3dStyleSettingsSet ::= (self contained) */
+      atp = AsnReadId(aip, amp, CN3D_STYLE_SETTINGS_SET);
+   } else {
+      atp = AsnLinkType(orig, CN3D_STYLE_SETTINGS_SET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Cn3dStyleSettingsAsnRead, (AsnOptFreeFunc) Cn3dStyleSettingsFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Cn3dStyleSettingsSetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Cn3dStyleSettingsSetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Cn3dStyleSettingsSetAsnWrite(Cn3dStyleSettingsSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CN3D_STYLE_SETTINGS_SET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) Cn3dStyleSettingsAsnWrite, aip, atp, CN3D_STYLE_SETTINGS_SET_E);
    retval = TRUE;
 
 erret:
@@ -2129,6 +2491,686 @@ Cn3dUserAnnotationAsnWrite(Cn3dUserAnnotationPtr ptr, AsnIoPtr aip, AsnTypePtr o
    AsnGenericUserSeqOfAsnWrite(ptr -> residues, (AsnWriteFunc) Cn3dObjectLocationAsnWrite, aip, CN3D_USER_ANNOTATION_residues, CN3D_USER_ANNOTATION_residues_E);
    av.boolvalue = ptr -> is_on;
    retval = AsnWrite(aip, CN3D_USER_ANNOTATION_is_on,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Cn3dGLMatrixNew()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dGLMatrixPtr LIBCALL
+Cn3dGLMatrixNew(void)
+{
+   Cn3dGLMatrixPtr ptr = MemNew((size_t) sizeof(Cn3dGLMatrix));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Cn3dGLMatrixFree()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dGLMatrixPtr LIBCALL
+Cn3dGLMatrixFree(Cn3dGLMatrixPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Cn3dGLMatrixAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dGLMatrixPtr LIBCALL
+Cn3dGLMatrixAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   Cn3dGLMatrixPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Cn3dGLMatrix ::= (self contained) */
+      atp = AsnReadId(aip, amp, CN3D_GL_MATRIX);
+   } else {
+      atp = AsnLinkType(orig, CN3D_GL_MATRIX);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = Cn3dGLMatrixNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CN3D_GL_MATRIX_m0) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m0 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m1) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m1 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m2) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m2 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m3) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m3 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m4) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m4 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m5) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m5 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m6) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m6 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m7) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m7 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m8) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m8 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m9) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m9 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m10) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m10 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m11) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m11 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m12) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m12 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m13) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m13 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m14) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m14 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_GL_MATRIX_m15) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> m15 = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Cn3dGLMatrixFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Cn3dGLMatrixAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Cn3dGLMatrixAsnWrite(Cn3dGLMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CN3D_GL_MATRIX);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.realvalue = ptr -> m0;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m0,  &av);
+   av.realvalue = ptr -> m1;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m1,  &av);
+   av.realvalue = ptr -> m2;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m2,  &av);
+   av.realvalue = ptr -> m3;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m3,  &av);
+   av.realvalue = ptr -> m4;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m4,  &av);
+   av.realvalue = ptr -> m5;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m5,  &av);
+   av.realvalue = ptr -> m6;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m6,  &av);
+   av.realvalue = ptr -> m7;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m7,  &av);
+   av.realvalue = ptr -> m8;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m8,  &av);
+   av.realvalue = ptr -> m9;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m9,  &av);
+   av.realvalue = ptr -> m10;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m10,  &av);
+   av.realvalue = ptr -> m11;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m11,  &av);
+   av.realvalue = ptr -> m12;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m12,  &av);
+   av.realvalue = ptr -> m13;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m13,  &av);
+   av.realvalue = ptr -> m14;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m14,  &av);
+   av.realvalue = ptr -> m15;
+   retval = AsnWrite(aip, CN3D_GL_MATRIX_m15,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Cn3dVectorNew()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dVectorPtr LIBCALL
+Cn3dVectorNew(void)
+{
+   Cn3dVectorPtr ptr = MemNew((size_t) sizeof(Cn3dVector));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Cn3dVectorFree()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dVectorPtr LIBCALL
+Cn3dVectorFree(Cn3dVectorPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Cn3dVectorAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dVectorPtr LIBCALL
+Cn3dVectorAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   Cn3dVectorPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Cn3dVector ::= (self contained) */
+      atp = AsnReadId(aip, amp, CN3D_VECTOR);
+   } else {
+      atp = AsnLinkType(orig, CN3D_VECTOR);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = Cn3dVectorNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CN3D_VECTOR_x) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> x = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_VECTOR_y) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> y = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_VECTOR_z) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> z = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Cn3dVectorFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Cn3dVectorAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Cn3dVectorAsnWrite(Cn3dVectorPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CN3D_VECTOR);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.realvalue = ptr -> x;
+   retval = AsnWrite(aip, CN3D_VECTOR_x,  &av);
+   av.realvalue = ptr -> y;
+   retval = AsnWrite(aip, CN3D_VECTOR_y,  &av);
+   av.realvalue = ptr -> z;
+   retval = AsnWrite(aip, CN3D_VECTOR_z,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Cn3dViewSettingsNew()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dViewSettingsPtr LIBCALL
+Cn3dViewSettingsNew(void)
+{
+   Cn3dViewSettingsPtr ptr = MemNew((size_t) sizeof(Cn3dViewSettings));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Cn3dViewSettingsFree()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dViewSettingsPtr LIBCALL
+Cn3dViewSettingsFree(Cn3dViewSettingsPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   Cn3dGLMatrixFree(ptr -> matrix);
+   Cn3dVectorFree(ptr -> rotation_center);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Cn3dViewSettingsAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Cn3dViewSettingsPtr LIBCALL
+Cn3dViewSettingsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   Cn3dViewSettingsPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Cn3dViewSettings ::= (self contained) */
+      atp = AsnReadId(aip, amp, CN3D_VIEW_SETTINGS);
+   } else {
+      atp = AsnLinkType(orig, CN3D_VIEW_SETTINGS);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = Cn3dViewSettingsNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CN3D_VIEW_SETTINGS_camera_distance) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> camera_distance = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_VIEW_SETTINGS_camera_angle_rad) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> camera_angle_rad = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_VIEW_SETTINGS_camera_look_at_X) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> camera_look_at_X = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_VIEW_SETTINGS_camera_look_at_Y) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> camera_look_at_Y = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_VIEW_SETTINGS_camera_clip_near) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> camera_clip_near = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_VIEW_SETTINGS_camera_clip_far) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> camera_clip_far = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_VIEW_SETTINGS_matrix) {
+      ptr -> matrix = Cn3dGLMatrixAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CN3D_VIEW_SETTINGS_rotation_center) {
+      ptr -> rotation_center = Cn3dVectorAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Cn3dViewSettingsFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Cn3dViewSettingsAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Cn3dViewSettingsAsnWrite(Cn3dViewSettingsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcn3dAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CN3D_VIEW_SETTINGS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.realvalue = ptr -> camera_distance;
+   retval = AsnWrite(aip, CN3D_VIEW_SETTINGS_camera_distance,  &av);
+   av.realvalue = ptr -> camera_angle_rad;
+   retval = AsnWrite(aip, CN3D_VIEW_SETTINGS_camera_angle_rad,  &av);
+   av.realvalue = ptr -> camera_look_at_X;
+   retval = AsnWrite(aip, CN3D_VIEW_SETTINGS_camera_look_at_X,  &av);
+   av.realvalue = ptr -> camera_look_at_Y;
+   retval = AsnWrite(aip, CN3D_VIEW_SETTINGS_camera_look_at_Y,  &av);
+   av.realvalue = ptr -> camera_clip_near;
+   retval = AsnWrite(aip, CN3D_VIEW_SETTINGS_camera_clip_near,  &av);
+   av.realvalue = ptr -> camera_clip_far;
+   retval = AsnWrite(aip, CN3D_VIEW_SETTINGS_camera_clip_far,  &av);
+   if (ptr -> matrix != NULL) {
+      if ( ! Cn3dGLMatrixAsnWrite(ptr -> matrix, aip, CN3D_VIEW_SETTINGS_matrix)) {
+         goto erret;
+      }
+   }
+   if (ptr -> rotation_center != NULL) {
+      if ( ! Cn3dVectorAsnWrite(ptr -> rotation_center, aip, CN3D_VIEW_SETTINGS_rotation_center)) {
+         goto erret;
+      }
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

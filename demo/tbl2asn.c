@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.18 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -55,8 +55,9 @@
 #include <subutil.h>
 #include <toasn3.h>
 #include <valid.h>
-#include <asn2ff.h>
+#include <asn2gnbk.h>
 #include <explore.h>
+#include <simple.h>
 
 static FILE* OpenOneFile (
   CharPtr directory,
@@ -168,7 +169,7 @@ static void FlatfileOneFile (
   if (fp == NULL) return;
 
   oldErrSev = ErrSetMessageLevel (SEV_MAX);
-  SeqEntryToFlat (sep, fp, GENBANK_FMT, SEQUIN_MODE);
+  SeqEntryToGnbk (sep, NULL, GENBANK_FMT, ENTREZ_MODE, NORMAL_STYLE, 0, fp);
   ErrSetMessageLevel (oldErrSev);
 
   FileClose (fp);
@@ -403,6 +404,7 @@ static void CorrectFeatureSeqIds (
 
 typedef struct orgstuff {
   CharPtr  taxname;
+  CharPtr  common;
   CharPtr  lineage;
   CharPtr  division;
   Uint1    gcode;
@@ -412,59 +414,79 @@ typedef struct orgstuff {
 
 static OrgStuff commonOrgStuff [] = {
   {
-    "Saccharomyces cerevisiae",
+    "Saccharomyces cerevisiae", "baker's yeast",
     "Eukaryota; Fungi; Ascomycota; Saccharomycetes; Saccharomycetales; Saccharomycetaceae; Saccharomyces",
     "PLN", 1, 3, 4932
   },
   {
-    "Drosophila melanogaster",
+    "Drosophila melanogaster", "fruit fly",
     "Eukaryota; Metazoa; Arthropoda; Tracheata; Hexapoda; Insecta; Pterygota; Neoptera; Endopterygota; Diptera; Brachycera; Muscomorpha; Ephydroidea; Drosophilidae; Drosophila",
     "INV", 1, 5, 7227
   },
   {
-    "Homo sapiens",
+    "Homo sapiens", "human",
     "Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi; Mammalia; Eutheria; Primates; Catarrhini; Hominidae; Homo",
     "PRI", 1, 2, 9606
   },
   {
-    "Escherichia coli",
+    "Escherichia coli", "",
     "Bacteria; Proteobacteria; gamma subdivision; Enterobacteriaceae; Escherichia",
     "BCT", 11, 0, 562
   },
   {
-    "Helicobacter pylori",
+    "Helicobacter pylori", "",
     "Bacteria; Proteobacteria; epsilon subdivision; Helicobacter group; Helicobacter",
     "BCT", 11, 0, 210
   },
   {
-    "Arabidopsis thaliana",
+    "Arabidopsis thaliana", "thale cress",
     "Eukaryota; Viridiplantae; Embryophyta; Tracheophyta; Spermatophyta; Magnoliophyta; eudicotyledons; core eudicots; Rosidae; eurosids II; Brassicales; Brassicaceae; Arabidopsis",
     "PLN", 1, 1, 3702
   },
   {
-    "Mus musculus",
+    "Mus musculus", "house mouse",
     "Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi; Mammalia; Eutheria; Rodentia; Sciurognathi; Muridae; Murinae; Mus",
     "ROD", 1, 2, 10090
   },
   {
-    "Rattus norvegicus",
+    "Rattus norvegicus", "Norway rat",
     "Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi; Mammalia; Eutheria; Rodentia; Sciurognathi; Muridae; Murinae; Rattus",
     "ROD", 1, 2, 10116
   },
   {
-    "Danio rerio",
+    "Danio rerio", "zebrafish",
     "Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi; Actinopterygii; Neopterygii; Teleostei; Euteleostei; Ostariophysi; Cypriniformes; Cyprinidae; Rasborinae; Danio",
     "VRT", 1, 2, 7955
   },
   {
-    "Zea mays",
+    "Zea mays", "",
     "Eukaryota; Viridiplantae; Embryophyta; Tracheophyta; Spermatophyta; Magnoliophyta; Liliopsida; Poales; Poaceae; Zea",
     "PLN", 1, 1, 4577
   },
   {
-    "Caenorhabditis elegans",
+    "Caenorhabditis elegans", "",
     "Eukaryota; Metazoa; Nematoda; Chromadorea; Rhabditida; Rhabditoidea; Rhabditidae; Peloderinae; Caenorhabditis",
     "INV", 1, 5, 6239
+  },
+  {
+    "Caenorhabditis briggsae", "",
+    "Eukaryota; Metazoa; Nematoda; Chromadorea; Rhabditida; Rhabditoidea; Rhabditidae; Peloderinae; Caenorhabditis",
+    "INV", 1, 5, 6238
+  },
+  {
+    "Anopheles gambiae", "African malaria mosquito",
+    "Eukaryota; Metazoa; Arthropoda; Tracheata; Hexapoda; Insecta; Pterygota; Neoptera; Endopterygota; Diptera; Nematocera; Culicoidea; Anopheles",
+    "INV", 1, 5, 7165
+  },
+  {
+    "Anopheles gambiae str. PEST", "African malaria mosquito",
+    "Eukaryota; Metazoa; Arthropoda; Tracheata; Hexapoda; Insecta; Pterygota; Neoptera; Endopterygota; Diptera; Nematocera; Culicoidea; Anopheles",
+    "INV", 1, 5, 180454
+  },
+  {
+    "Tetrahymena thermophila", "",
+    "Eukaryota; Alveolata; Ciliophora; Oligohymenophorea; Hymenostomatida; Tetrahymenina; Tetrahymena",
+    "INV", 6, 4, 5911
   },
   {
     NULL, NULL, NULL, 0, 0, 0
@@ -495,6 +517,7 @@ static void AddMissingSourceInfo (BioSourcePtr biop)
   ObjectIdPtr  oip;
   OrgNamePtr   onp;
   OrgRefPtr    orp;
+  OrfStuffPtr  osp;
 
   if (biop == NULL) return;
   orp = biop->org;
@@ -505,18 +528,22 @@ static void AddMissingSourceInfo (BioSourcePtr biop)
   /* look for entry of organisms in commonOrgStuff table */
 
   for (idx = 0; commonOrgStuff [idx].taxname != NULL; idx++) {
-    if (StringICmp (orp->taxname, commonOrgStuff [idx].taxname) == 0) {
+    osp = &(commonOrgStuff [idx]);
+    if (StringICmp (orp->taxname, osp->taxname) == 0) {
+      if (StringHasNoText (orp->common) && (! StringHasNoText (osp->common))) {
+        orp->common = StringSave (osp->common);
+      }
       if (onp->gcode == 0) {
-        onp->gcode = commonOrgStuff [idx].gcode;
+        onp->gcode = osp->gcode;
       }
       if (onp->mgcode == 0) {
-        onp->mgcode = commonOrgStuff [idx].mgcode;
+        onp->mgcode = osp->mgcode;
       }
       if (StringHasNoText (onp->div)) {
-        onp->div = StringSave (commonOrgStuff [idx].division);
+        onp->div = StringSave (osp->division);
       }
       if (StringHasNoText (onp->lineage)) {
-        onp->lineage = StringSave (commonOrgStuff [idx].lineage);
+        onp->lineage = StringSave (osp->lineage);
       }
       if (! HasTaxon (orp)) {
         db = ValNodeNew (NULL);
@@ -525,7 +552,7 @@ static void AddMissingSourceInfo (BioSourcePtr biop)
           if (dbt != NULL) {
             oip = ObjectIdNew ();
             if (oip != NULL) {
-              oip->id = commonOrgStuff [idx].taxID;
+              oip->id = osp->taxID;
               dbt->db = StringSave ("taxon");
               dbt->tag = oip;
               db->data.ptrvalue = (Pointer) dbt;
@@ -760,12 +787,14 @@ static void ProcessOneNuc (
 {
   BioSourcePtr  biop = NULL;
   SeqFeatPtr    cds;
+  GBBlockPtr    gbp;
   Int2          genCode;
   MolInfoPtr    mip;
   Boolean       mito;
   OrgNamePtr    onp;
   OrgRefPtr     orp;
   SeqEntryPtr   sep;
+  SeqHistPtr    shp;
   SqnTagPtr     stp = NULL;
   CharPtr       str;
   CharPtr       ttl = NULL;
@@ -834,6 +863,23 @@ static void ProcessOneNuc (
     }
   }
 
+  if (stp != NULL) {
+    gbp = ParseTitleIntoGenBank (stp, NULL);
+    if (gbp != NULL && gbp->extra_accessions != NULL) {
+      SeqDescrAddPointer (&(bsp->descr), Seq_descr_genbank, (Pointer) gbp);
+    } else {
+      gbp = GBBlockFree (gbp);
+    }
+
+    shp = ParseTitleIntoSeqHist (stp, NULL);
+    if (shp != NULL && shp->replace_ids != NULL) {
+      bsp->hist = SeqHistFree (bsp->hist);
+      bsp->hist = shp;
+    } else {
+      shp = SeqHistFree (shp);
+    }
+  }
+
   if (findorf) {
     cds = AnnotateBestOrf (bsp, genCode, altstart, stp);
     if (cds != NULL) {
@@ -896,6 +942,83 @@ static void ProcessOneAnnot (
       PromoteXrefs (sfp, bsp, entityID);
     }
   }
+}
+
+static void ReplaceOnePeptide (
+  SimpleSeqPtr ssp,
+  Boolean conflict
+)
+
+{
+  Uint1         aa;
+  ByteStorePtr  bs;
+  BioseqPtr     bsp;
+  SeqFeatPtr    cds;
+  CdRegionPtr   crp;
+  SeqFeatPtr    prt;
+  SeqIntPtr     sintp;
+  SeqIdPtr      sip;
+  SeqLocPtr     slp;
+  CharPtr       str1, str2;
+
+  if (ssp == NULL || ssp->numid < 1) return;
+
+  sip = MakeSeqID (ssp->id [0]);
+  bsp = BioseqFind (sip);
+  SeqIdFree (sip);
+  if (bsp == NULL || bsp->repr != Seq_repr_raw) return;
+
+  /* remove trailing X and * */
+
+  bs = ssp->seq;
+  BSSeek (bs, -1, SEEK_END);
+  aa = (Uint1) BSGetByte (bs);
+  while ((aa == 'X' || aa == '*') && ssp->seqlen > 0) {
+    BSSeek (bs, -1, SEEK_END);
+    BSDelete (bs, 1);
+    BSSeek (bs, -1, SEEK_END);
+    aa = (Uint1) BSGetByte (bs);
+  }
+  ssp->seqlen = BSLen (bs);
+
+  str1 = BSMerge (ssp->seq, NULL);
+  str2 = BSMerge (bsp->seq_data, NULL);
+
+  if (StringCmp (str1, str2) != 0) {
+
+    /* swap sequence byte stores */
+
+    bs = bsp->seq_data;
+    bsp->seq_data = ssp->seq;
+    ssp->seq = bs;
+    bsp->length = BSLen (bsp->seq_data);
+    bsp->seq_data_type = Seq_code_ncbieaa;
+
+    cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+    if (cds != NULL) {
+      crp = (CdRegionPtr) cds->data.value.ptrvalue;
+
+      /* conditionally set CDS conflict flag, suppress validator complaint */
+
+      if (crp != NULL && conflict) {
+        crp->conflict = TRUE;
+      }
+    }
+
+    prt = SeqMgrGetBestProteinFeature (bsp, NULL);
+    if (prt != NULL) {
+      slp = prt->location;
+      if (slp != NULL && slp->choice == SEQLOC_INT) {
+        sintp = (SeqIntPtr) slp->data.ptrvalue;
+        if (sintp != NULL) {
+          sintp->to = bsp->length - 1;
+        }
+      }
+    }
+  }
+
+  MemFree (str1);
+  MemFree (str2);
 }
 
 static Uint2 ProcessOneAsn (
@@ -988,6 +1111,7 @@ static void ProcessOneRecord (
   SeqDescrPtr sdphead,
   Boolean findorf,
   Boolean altstart,
+  Boolean conflict,
   Boolean validate,
   Boolean flatfile
 )
@@ -1002,6 +1126,7 @@ static void ProcessOneRecord (
   SeqAnnotPtr   sap;
   SeqDescrPtr   sdp;
   SeqEntryPtr   sep;
+  SimpleSeqPtr  ssp;
 
   fp = OpenOneFile (directory, base, suffix);
   if (fp == NULL) return;
@@ -1027,6 +1152,29 @@ static void ProcessOneRecord (
 
         sap = (SeqAnnotPtr) dataptr;
         ProcessOneAnnot (sap, entityID, accn);
+
+      } else {
+        ObjMgrFree (datatype, dataptr);
+      }
+    }
+    FileClose (fp);
+  }
+
+  /* read one or more feature tables from .pep file */
+
+  fp = OpenOneFile (directory, base, ".pep");
+  if (fp != NULL) {
+
+    /* indexing needed to find CDS from protein product to set conflict flag */
+
+    SeqMgrIndexFeatures (entityID, NULL);
+
+    while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, TRUE)) != NULL) {
+      if (datatype == OBJ_FASTA) {
+
+        ssp = (SimpleSeqPtr) dataptr;
+        ReplaceOnePeptide (ssp, conflict);
+        SimpleSeqFree (ssp);
 
       } else {
         ObjMgrFree (datatype, dataptr);
@@ -1156,8 +1304,9 @@ static Boolean TemplateOverwriteRisk (
 #define n_argOrgName    7
 #define c_argFindOrf    8
 #define m_argAltStart   9
-#define v_argValidate  10
-#define b_argGenBank   11
+#define k_argConflict  10
+#define v_argValidate  11
+#define b_argGenBank   12
 
 Args myargs [] = {
   {"Path to files", NULL, NULL, NULL,
@@ -1180,6 +1329,8 @@ Args myargs [] = {
     TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Allow alternative starts", "F", NULL, NULL,
     TRUE, 'm', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Set conflict on mismatch", "F", NULL, NULL,
+    TRUE, 'k', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Validate", "F", NULL, NULL,
     TRUE, 'v', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Generate GenBank file", "F", NULL, NULL,
@@ -1189,7 +1340,7 @@ Args myargs [] = {
 Int2 Main (void)
 
 {
-  Boolean         altstart, fastaset, findorf, flatfile, validate;
+  Boolean         altstart, conflict, fastaset, findorf, flatfile, validate;
   CharPtr         base, directory, results, suffix, accn, organism, ptr, tmplate;
   Pointer         dataptr;
   Uint2           datatype;
@@ -1255,6 +1406,7 @@ Int2 Main (void)
   organism = (CharPtr) myargs [n_argOrgName].strvalue;
   findorf = (Boolean) myargs [c_argFindOrf].intvalue;
   altstart = (Boolean) myargs [m_argAltStart].intvalue;
+  conflict = (Boolean) myargs [k_argConflict].intvalue;
   validate = (Boolean) myargs [v_argValidate].intvalue;
   flatfile = (Boolean) myargs [b_argGenBank].intvalue;
 
@@ -1347,7 +1499,7 @@ Int2 Main (void)
       *ptr = '\0';
     }
     ProcessOneRecord (sbp, pdp, src, directory, results, base, sfx, fastaset, accn,
-                      organism, sdphead, findorf, altstart, validate, flatfile);
+                      organism, sdphead, findorf, altstart, conflict, validate, flatfile);
   } else {
 
     /* get list of all files in source directory */
@@ -1363,7 +1515,7 @@ Int2 Main (void)
             *ptr = '\0';
             Message (MSG_POST, "Processing %s\n", base);
             ProcessOneRecord (sbp, pdp, src, directory, results, base, suffix, fastaset, NULL,
-                              organism, sdphead, findorf, altstart, validate, flatfile);
+                              organism, sdphead, findorf, altstart, conflict, validate, flatfile);
           }
         }
       }

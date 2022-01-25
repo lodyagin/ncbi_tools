@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.17 $
+* $Revision: 6.23 $
 *
 * File Description:
 *
@@ -39,6 +39,24 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.23  2001/11/12 19:54:53  kans
+* do not allocate year, protect against buffer overflow by -1 value
+*
+* Revision 6.22  2001/11/08 14:26:38  kans
+* some protection in relaxed lookup, but server is not handling maxuid parameter in EntrezCreateBooleanRequest
+*
+* Revision 6.21  2001/10/23 18:57:38  kans
+* EntrezAddToBooleanRequest has new key parameter
+*
+* Revision 6.20  2001/09/28 15:55:17  kans
+* for docsum, extract first author, separate year from month
+*
+* Revision 6.19  2001/09/10 19:20:06  kans
+* fixed for new entrez2 spec
+*
+* Revision 6.18  2001/08/03 23:01:50  kans
+* import/export primary author dialog
+*
 * Revision 6.17  2001/05/30 15:10:53  kans
 * removed medarch and medutil includes
 *
@@ -364,6 +382,7 @@ typedef struct pubdescform {
   Int2          currentPage;
   Int2          tabnumber;
   Int2          pub_choice;
+  Int2          Author_Page;
   Int2          Attribute_Page;
   Int2          Location_Page;
   Boolean       is_feat;
@@ -2057,7 +2076,8 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
                         Uint1 pub_status, Int2 pub_choice,
                         Boolean flagPubDelta,
                         Boolean flagSerial,
-                        PubdescEditProcsPtr pepp)
+                        PubdescEditProcsPtr pepp,
+                        PubdescFormPtr pfp)
 {
   ButtoN                b;
   GrouP                 c;
@@ -2199,6 +2219,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     {
       ppp->AuthGroup[0] = m2;
       ppp->author_list = CreateAuthorDialog (m2, 3, -1);
+      pfp->Author_Page = thispage;
     }
     else
     {
@@ -2612,6 +2633,11 @@ static void SetPubdescImportExportItems (PubdescFormPtr pfp)
       SafeSetTitle (exportItm, "Export Pubdesc...");
       SafeEnable (importItm);
       SafeEnable (exportItm);
+    } else if (pfp->currentPage == pfp->Author_Page) {
+      SafeSetTitle (importItm, "Import Authors...");
+      SafeSetTitle (exportItm, "Export Authors...");
+      SafeEnable (importItm);
+      SafeEnable (exportItm);
     } else if (pfp->is_feat && pfp->currentPage == pfp->Location_Page) {
       SafeSetTitle (importItm, "Import SeqLoc...");
       SafeSetTitle (exportItm, "Export SeqLoc...");
@@ -2725,6 +2751,12 @@ static Boolean ImportPubdescForm (ForM f, CharPtr filename)
           }
         }
       }
+    } else if (pfp->currentPage == pfp->Author_Page) {
+      ppp = (PubdescPagePtr) GetObjectExtra (pfp->data);
+      if (ppp == NULL) return FALSE;
+      if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
+        return ImportDialog (ppp->author_list, path);
+      }
     } else if (pfp->is_feat && pfp->currentPage == pfp->Location_Page) {
       return ImportDialog (pfp->location, filename);
     }
@@ -2739,6 +2771,7 @@ static Boolean ExportPubdescForm (ForM f, CharPtr filename)
   Char            path [PATH_MAX];
   PubdescPtr      pdp;
   PubdescFormPtr  pfp;
+  PubdescPagePtr  ppp;
 #ifdef WIN_MAC
   FILE            *fp;
 #endif
@@ -2766,6 +2799,12 @@ static Boolean ExportPubdescForm (ForM f, CharPtr filename)
           pdp = PubdescFree (pdp);
           return TRUE;
         }
+      }
+    } else if (pfp->currentPage == pfp->Author_Page) {
+      ppp = (PubdescPagePtr) GetObjectExtra (pfp->data);
+      if (ppp == NULL) return FALSE;
+      if (path [0] != '\0' || GetOutputFileName (path, sizeof (path), NULL)) {
+        return ExportDialog (ppp->author_list, path);
       }
     } else if (pfp->is_feat && pfp->currentPage == pfp->Location_Page) {
       return ExportDialog (pfp->location, filename);
@@ -2914,7 +2953,7 @@ extern ForM CreatePubdescDescForm (Int2 left, Int2 top,
           pub_status,
           pub_choice,
           flagPubDelta, flagSerial,
-          pepp);
+          pepp, pfp);
     pfp->Attribute_Page = 0;
     pfp->Location_Page = 0;
 
@@ -3085,7 +3124,7 @@ extern ForM CreatePubdescFeatForm (Int2 left, Int2 top,
           pub_status,
           pub_choice,
           flagPubDelta, flagSerial,
-          pepp);
+          pepp, pfp);
 
     s = HiddenGroup (h, -1, 0, NULL);
     CreateCommonFeatureGroup (s, (FeatureFormPtr) pfp, sfp, FALSE, FALSE);
@@ -4388,14 +4427,21 @@ static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text)
   Int4                    i = 0;   
   ByteStorePtr bs = uids_bs;
   Int2             count = BSLen(bs)/ sizeof(uid); 
-  CharPtr count_str;
+  CharPtr count_str, sumStr = NULL;
 
   Entrez2DocsumPtr      dsp;
   Entrez2DocsumListPtr  e2dl;
   Entrez2RequestPtr     e2rp;
   Entrez2ReplyPtr       e2ry;
+  Entrez2DocsumDataPtr  e2ddp;
 
-  CharPtr author="", title="", source="", volume="", pages="", sumStr="", year_str;
+  CharPtr author="No Author Available",
+          title="No Title Available",
+          source="No Source Available",
+          volume="No Volume Available",
+          pages="No Page Available",
+          year_str="No Year Available",
+          tmp = NULL;
   Int2 size = 0, year = -1;
 
   /* no citation hit returned */
@@ -4428,9 +4474,9 @@ static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text)
     BSRead (bs, &uid, sizeof (Uint4));
 
     /*not familiar with this function yet.*/
-    e2rp = EntrezCreateDocSumRequest ("Medline", uid, 0, NULL, NULL);
+    e2rp = EntrezCreateDocSumRequest ("PubMed", uid, 0, NULL, NULL);
     
-    /*  e2rp = EntrezCreateDocSumRequest ("Medline", uid, num, uids, NULL); */
+    /*  e2rp = EntrezCreateDocSumRequest ("PubMed", uid, num, uids, NULL); */
     if (e2rp == NULL) return;
     
     e2ry =  EntrezSynchronousQuery(e2rp);
@@ -4441,54 +4487,34 @@ static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text)
     
     for (dsp = e2dl->list; dsp != NULL; dsp = dsp->next)
       {
-	if(dsp->author){
-	  author = dsp->author; 
- 	  size += StringLen(author);
-	}
-	else {
-	  author = StringSave("No Author Available");
-	}
-
-    	if(dsp->title) {
-	  title = dsp->title;  
-	  size += StringLen(title);
-	}
-	else {
-	  title = StringSave("No title Available");
-	}
-
-	if(dsp->source) {
-	  source = dsp->source;
-	  size += StringLen(source);
-	}
-	else {
-	  source = StringSave("No source Available");
-	}
-
-	if(dsp->volume) {
-	  volume = dsp->volume;
-	  size += StringLen(volume);
-	}
-	else {
-	  volume = StringSave("No volume Available");
-	}
-
-	if(dsp->pages) {
-	  pages = dsp->pages;
-	  size += StringLen(pages);
-	}
-	else {
-	  pages = StringSave("Page Infor.  not Available");
-	}
-
-	if(dsp->create_date) {
-	  year_str = dsp->create_date;
-	  size += StringLen(year_str);
-	}
-	else {
-	  year_str = StringSave("Year Infor.  not Available");
-	}
-
+        for (e2ddp = dsp->docsum_data; e2ddp != NULL; e2ddp = e2ddp->next) {
+          if (StringHasNoText (e2ddp->field_value)) continue;
+          if (StringICmp (e2ddp->field_name, "Authors") == 0) {
+            author = e2ddp->field_value;
+            if (author != NULL) {
+              tmp = StringChr (author, ',');
+              if (tmp != NULL) {
+                *tmp = '\0';
+              }
+            }
+          } else if (StringICmp (e2ddp->field_name, "Title") == 0) {
+            title = e2ddp->field_value;
+          } else if (StringICmp (e2ddp->field_name, "Source") == 0) {
+            source = e2ddp->field_value;
+          } else if (StringICmp (e2ddp->field_name, "Volume") == 0) {
+            volume = e2ddp->field_value;
+          } else if (StringICmp (e2ddp->field_name, "Pages") == 0) {
+            pages = e2ddp->field_value;
+          } else if (StringICmp (e2ddp->field_name, "PubDate") == 0) {
+            year_str = e2ddp->field_value;
+            if (year_str != NULL) {
+              tmp = StringChr (year_str, ' ');
+              if (tmp != NULL) {
+                *tmp = '\0';
+              }
+            }
+          }
+        }
 
 	size =  StringLen(author)+ StringLen(title)+ StringLen(source)+  StringLen(volume)+ StringLen(pages);
 
@@ -4516,53 +4542,60 @@ static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text)
 
 
 
+
 /*non-PROTOtyped local functions*/
 static  void AddAuthor(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
+  if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
   }
-  EntrezAddToBooleanRequest (e2rp, NULL, 0, "AUTH", term, 0, 0, NULL, NULL, FALSE, FALSE);
+  EntrezAddToBooleanRequest (e2rp, NULL, 0, "AUTH", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
 
 static  void AddJournal(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
+  if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
   }
-  EntrezAddToBooleanRequest (e2rp, NULL, 0, "JOUR", term, 0, 0, NULL, NULL, FALSE, FALSE);
+  EntrezAddToBooleanRequest (e2rp, NULL, 0, "JOUR", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
 
 static  void AddVolume(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
+  if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
   }
-  EntrezAddToBooleanRequest (e2rp, NULL, 0, "VOLUME",term, 0, 0, NULL, NULL, FALSE, FALSE);
+  EntrezAddToBooleanRequest (e2rp, NULL, 0, "VOLUME",term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
 
 static  void AddPage(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
+  if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
   }
-  EntrezAddToBooleanRequest (e2rp, NULL, 0, "PAGE",term, 0, 0, NULL, NULL, FALSE, FALSE);
+  EntrezAddToBooleanRequest (e2rp, NULL, 0, "PAGE",term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
 
 static  void AddYear(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
+  if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
   }
-  EntrezAddToBooleanRequest (e2rp, NULL, 0, "DP", term, 0, 0, NULL, NULL, FALSE, FALSE);
+  EntrezAddToBooleanRequest (e2rp, NULL, 0, "DP", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
 
 static  void AddAll(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
+  if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
   }
-  EntrezAddToBooleanRequest (e2rp, NULL, 0, "ALL",term, 0, 0, NULL, NULL, FALSE, FALSE);
+  EntrezAddToBooleanRequest (e2rp, NULL, 0, "ALL",term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
 
 
@@ -4581,11 +4614,10 @@ static  void AddAll(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 *****************************************************************************/
 static void FormDefaultQuery (Entrez2RequestPtr e2rp, CitArtInPressPtr caipp) {
 
-  CharPtr                 year;
+  Char  year [16];
  
   if (caipp->year != -1) {
-    year = MemNew(5);
-    sprintf(year, "%d", caipp->year); 
+    sprintf(year, "%d", (int) caipp->year); 
   }
 
   /* add all available fields as indicated by rank*/
@@ -4613,7 +4645,7 @@ static void FormDefaultQuery (Entrez2RequestPtr e2rp, CitArtInPressPtr caipp) {
     }     
 
     if (caipp->rank > 6) {  /* add jour_title */
-      AddJournal(e2rp,  caipp->jour_title, TRUE);  /* add first term*/
+      AddJournal(e2rp,  caipp->jour_title, FALSE);  /* NOT first term*/
     }
     
     if (caipp->rank == 9) {       /* add vol and year */
@@ -4631,8 +4663,6 @@ static void FormDefaultQuery (Entrez2RequestPtr e2rp, CitArtInPressPtr caipp) {
       }		       
     }   /* end rank 8*/ 		     
   }  
-
-  year = (CharPtr) MemFree(year);
 }	
 
 
@@ -4686,7 +4716,7 @@ static void SendQuery (ButtoN b)
 
   if (choice == 1) {               /* precess default query*/
 
-    e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "Medline", NULL, 0, 0, NULL, 20, 0);
+    e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", NULL, 0, 0, NULL, 20, 0);
 
     FormDefaultQuery (e2rp,  caipp);
     
@@ -4706,11 +4736,11 @@ static void SendQuery (ButtoN b)
     /* debug:  assuming this is a well-formed query string, let the add func. parse it*/
     if ( GetStatus (cufp->Extra_Term) ) {
       GetTitle (cufp->extra_term_text, new_term, sizeof (f_auth));
-      e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "Medline", new_term, 0, 0, NULL, 20, 0); 
+      e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", new_term, 0, 0, NULL, 20, 0); 
       is_first_term = FALSE;
     }
     else{
-      e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "Medline", NULL, 0, 0, NULL, 20, 0);
+      e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", NULL, 0, 0, NULL, 20, 0);
     }
 
     if ( GetStatus (cufp->First_Author) ) {
@@ -5370,7 +5400,7 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
 
   /*debug:  don't need the default query? */
 
-  SendQuery(cufp->action);
+  /* SendQuery(cufp->action); */
 }
 
 

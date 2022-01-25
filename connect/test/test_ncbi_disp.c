@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_disp.c,v 6.6 2001/03/20 22:14:08 lavr Exp $
+/*  $Id: test_ncbi_disp.c,v 6.9 2001/11/29 22:20:52 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,15 @@
  *
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_disp.c,v $
+ * Revision 6.9  2001/11/29 22:20:52  lavr
+ * Flow control trace messages added
+ *
+ * Revision 6.8  2001/09/24 20:35:34  lavr
+ * +Test for SERV_Reset()
+ *
+ * Revision 6.7  2001/07/18 17:44:18  lavr
+ * Added parameter to switch to local test
+ *
  * Revision 6.6  2001/03/20 22:14:08  lavr
  * Second test added to list service by server type (yet #if 0'ed out)
  *
@@ -62,22 +71,33 @@
 int main(int argc, const char* argv[])
 {
     const char* service = argc > 1 ? argv[1] : "io_bounce";
+    int/*bool*/ local = argc > 2;
     const SSERV_Info* info;
     int n_found = 0;
     SERV_ITER iter;
 
     CORE_SetLOGFILE(stderr, 0/*false*/);
-    CORE_LOGF(eLOG_Note, ("Looking for service `%s'", service));
-
-    if ((iter = SERV_OpenSimple(service)) != 0) {
+    CORE_LOGF(eLOG_Note, ("Looking for service `%s' (%s)", service,
+                          local ? "locally" : "randomly"));
+    CORE_LOG(eLOG_Trace, "Opening service mapper");
+    if ((local &&
+         (iter = SERV_Open(service, fSERV_Any, SERV_LOCALHOST, 0)) != 0) ||
+        (!local && (iter = SERV_OpenSimple(service)) != 0)) {
+        CORE_LOG(eLOG_Trace, "Service mapper has been successfully opened");
         while ((info = SERV_GetNextInfo(iter)) != 0) {
             char* info_str = SERV_WriteInfo(info);
             CORE_LOGF(eLOG_Note, ("Service `%s' = %s", service, info_str));
             n_found++;
         }
+        CORE_LOG(eLOG_Trace, "Resetting service mapper");
+        SERV_Reset(iter);
+        CORE_LOG(eLOG_Trace, "Service mapper has been reset");
+        if (n_found && !(info = SERV_GetNextInfo(iter)))
+            CORE_LOG(eLOG_Fatal, "Service not found after reset");
+        CORE_LOG(eLOG_Trace, "Closing service mapper");
         SERV_Close(iter);
     }
-    
+
     if (n_found != 0)
         CORE_LOGF(eLOG_Note, ("Test complete: %d server(s) found", n_found));
     else

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.24 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *
@@ -1338,22 +1338,26 @@ extern CharPtr NameStdPtrToAuthorSpreadsheetString (NameStdPtr nsp);
 extern CharPtr NameStdPtrToAuthorSpreadsheetString (NameStdPtr nsp)
 
 {
-  Char   first [64];
-  Char   frstinits [16];
-  Char   initials [16];
+  Char   first [256];
+  Char   frstinits [64];
+  Char   initials [64];
   Int2   j;
-  Char   last [64];
-  Char   str [128];
-  Char   suffix [16];
+  Char   last [256];
+  Char   middle [128];
+  Char   str [512];
+  Char   suffix [64];
 
   if (nsp == NULL) return NULL;
   str [0] = '\0';
   StringNCpy_0 (first, nsp->names [1], sizeof (first));
+  TrimSpacesAroundString (first);
   StringNCpy_0 (initials, nsp->names [4], sizeof (initials));
   StripPeriods (initials);
   TrimLeadingSpaces (initials);
   StringNCpy_0 (last, nsp->names [0], sizeof (last));
   TrimLeadingSpaces (last);
+  StringNCpy_0 (middle, nsp->names [2], sizeof (middle));
+  TrimLeadingSpaces (middle);
   if (StringCmp (initials, "al") == 0 &&
       StringCmp (last, "et") == 0 &&
       first [0] == '\0') {
@@ -1384,7 +1388,7 @@ extern CharPtr NameStdPtrToAuthorSpreadsheetString (NameStdPtr nsp)
   }
   StringCat (str, "\t");
   j = 0;
-  while (initials [j] != '\0' && initials [j] == frstinits [j]) {
+  while (initials [j] != '\0' && TO_UPPER (initials [j]) == TO_UPPER (frstinits [j])) {
     j++;
   }
   if (initials [j] != '\0') {
@@ -1407,6 +1411,8 @@ extern CharPtr NameStdPtrToAuthorSpreadsheetString (NameStdPtr nsp)
     StringCat (str, " ");
     */
   }
+  StringCat (str, "\t");
+  StringCat (str, middle);
   StringCat (str, "\n");
   return StringSave (str);
 }
@@ -1473,16 +1479,16 @@ extern NameStdPtr AuthorSpreadsheetStringToNameStdPtr (CharPtr txt)
 {
   Char        ch;
   CharPtr     first;
-  Char        initials [16];
+  Char        initials [64];
   Int2        j;
   Int2        k;
   Char        last;
   Int2        len;
   NameStdPtr  nsp;
-  Char        periods [32];
+  Char        periods [128];
   CharPtr     str;
-  Char        str1 [16];
-  Char        suffix [20];
+  Char        str1 [64];
+  Char        suffix [80];
 
   if (txt == NULL) return NULL;
   nsp = NameStdNew ();
@@ -1614,6 +1620,11 @@ extern NameStdPtr AuthorSpreadsheetStringToNameStdPtr (CharPtr txt)
   if (StringCmp (nsp->names [0], "et al") == 0) {
     nsp->names [0] = MemFree (nsp->names [0]);
     nsp->names [0] = StringSave ("et al.");
+  }
+  nsp->names [2] = ExtractTagListColumn (txt, 4);
+  TrimLeadingSpaces (nsp->names [2]);
+  if (StringHasNoText (nsp->names [2])) {
+    nsp->names [2] = MemFree (nsp->names [2]);
   }
   return nsp;
 }
@@ -1861,6 +1872,72 @@ static void AuthorDialogMessage (DialoG d, Int2 mssg)
   }
 }
 
+static Boolean ReadAuthorDialog (DialoG d, CharPtr filename)
+
+{
+  AuthorDialogPtr  adp;
+  AsnIoPtr         aip;
+  AuthListPtr      alp;
+  Char             path [PATH_MAX];
+
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  adp = (AuthorDialogPtr) GetObjectExtra (d);
+  if (adp != NULL) {
+    if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
+      aip = AsnIoOpen (path, "r");
+      if (aip != NULL) {
+        alp = AuthListAsnRead (aip, NULL);
+        AsnIoClose (aip);
+        if (alp != NULL) {
+          PointerToDialog (adp->dialog, (Pointer) alp);
+          alp = AuthListFree (alp);
+          Update ();
+          return TRUE;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
+static Boolean WriteAuthorDialog (DialoG d, CharPtr filename)
+
+{
+  AuthorDialogPtr  adp;
+  AsnIoPtr         aip;
+  AuthListPtr      alp;
+  Char             path [PATH_MAX];
+#ifdef WIN_MAC
+  FILE            *f;
+#endif
+
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  adp = (AuthorDialogPtr) GetObjectExtra (d);
+  if (adp != NULL) {
+    if (path [0] != '\0' || GetOutputFileName (path, sizeof (path), NULL)) {
+#ifdef WIN_MAC
+      f = FileOpen (path, "r");
+      if (f != NULL) {
+        FileClose (f);
+      } else {
+        FileCreate (path, "TEXT", "ttxt");
+      }
+#endif
+      aip = AsnIoOpen (path, "w");
+      if (aip != NULL) {
+        alp = DialogToPointer (adp->dialog);
+        AuthListAsnWrite (alp, aip, NULL);
+        AsnIoClose (aip);
+        alp = AuthListFree (alp);
+        return TRUE;
+      }
+    }
+  }
+  return FALSE;
+}
+
 extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
 
 {
@@ -1880,6 +1957,8 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
     adp->todialog = AuthListPtrToAuthorDialog;
     adp->fromdialog = AuthorDialogToAuthListPtr;
     adp->testdialog = NULL;
+    adp->importdialog = ReadAuthorDialog;
+    adp->exportdialog = WriteAuthorDialog;
     adp->dialogmessage = AuthorDialogMessage;
 
     adp->strGrp = HiddenGroup (p, -1, 0, NULL);

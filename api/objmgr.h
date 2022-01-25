@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.29 $
+* $Revision: 6.31 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.31  2001/11/19 15:26:19  kans
+* added ObjMgrDeleteAllInRecord, still need to bail in ObjMgrDelete if bulkIndexFree, then call from BioseqFree and BioseqSetFree
+*
+* Revision 6.30  2001/11/15 18:15:48  kans
+* set bsp->omdp at creation, SeqMgrDeleteIndexesInRecord sets omdp->bulkIndexFree
+*
 * Revision 6.29  2001/05/31 22:58:25  kans
 * added ObjMgrReapOne, DEFAULT_MAXOBJ, autoclean reaps and frees one entity at a time, as needed
 *
@@ -439,6 +445,7 @@ typedef struct objmgrdata {
 	Boolean dirty;             /* updated without a save? */
 	Boolean being_freed;       /* in-process of being freed, set by ObjMgrDel */
 	Boolean free;
+	Boolean bulkIndexFree;     /* used to suppress individual SeqMgrDeleteFromBioseqIndex */
 	OMUserDataPtr userdata;    /* for user supplied data */
 	Uint2 options;             /* options set with bit flags, defined below */
 	Uint2 lastDescrItemID;     /* for new seqmgr extra bioseq exploration functions */
@@ -940,6 +947,7 @@ NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindByData PROTO((ObjMgrPtr omp, Pointer 
 NLM_EXTERN Int4 LIBCALL ObjMgrLookup PROTO((ObjMgrPtr omp, Pointer data));
 NLM_EXTERN Boolean LIBCALL ObjMgrAdd PROTO((Uint2 type, Pointer data));
 NLM_EXTERN Boolean LIBCALL ObjMgrDelete PROTO((Uint2 type, Pointer data));
+NLM_EXTERN Boolean LIBCALL ObjMgrDeleteAllInRecord (void);
 NLM_EXTERN Boolean LIBCALL ObjMgrConnect PROTO((Uint2 type, Pointer data, Uint2 parenttype, Pointer parentdata));
 NLM_EXTERN Boolean LIBCALL ObjMgrConnectFunc PROTO((ObjMgrPtr omp, Uint2 type, Pointer data, Uint2 parenttype, Pointer parentdata));
 

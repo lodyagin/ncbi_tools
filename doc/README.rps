@@ -24,7 +24,7 @@ system.
 
 The CD-Search databases for RPS-BLAST can be found at:
 
- ftp://ftp.ncbi.nlm.nih.gov/pub/mmdb/cdd/
+ ftp://ftp.ncbi.nih.gov/pub/mmdb/cdd/
 
 It is necessary to untar the archive and run copymat and formatdb. 
 It is not necessary to run makemat on the databases from this
@@ -184,9 +184,11 @@ task.
 Arguments to RPS Blast
 
    -i  query sequence file (required)
+   -d  RPS BLAST Database [File In]
    -p  if query sequence protein (if FALSE 6 frame franslation will be
                                   conducted as in blastx program)
-   -P  database of profiles (required)
+   -P  0 for multiple hits 1-pass, 1 for single hit 1-pass [Integer]
+    default = 0
    -o  output file (optional)
        default = stdout
    -e  Expectation value threshold  (E), (optional, same as for BLAST)

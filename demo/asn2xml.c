@@ -1,6 +1,6 @@
 /*****************************************************************************
 *
-* $Id: asn2xml.c,v 1.1 2001/03/05 16:50:05 beloslyu Exp $
+* $Id: asn2xml.c,v 1.2 2001/08/10 18:56:42 kans Exp $
 *
 *   asn2xml.c
 *
@@ -19,14 +19,16 @@
 *
 *****************************************************************************/
 #include <seqport.h>
+#include <objsub.h>
 
-#define NUMARG 5
+#define NUMARG 6
 Args myargs[NUMARG] = {
 	{"Filename for asn.1 input","stdin",NULL,NULL,FALSE,'i',ARG_FILE_IN,0.0,0,NULL},
 	{"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
+	{"Input is a Seq-submit","F", NULL ,NULL ,TRUE,'s',ARG_BOOLEAN,0.0,0,NULL},
 	{"Input asnfile in binary mode","T",NULL,NULL,TRUE,'b',ARG_BOOLEAN,0.0,0,NULL},
 	{"Filename for XML output","stdout", NULL,NULL,TRUE,'o',ARG_FILE_OUT,0.0,0,NULL},
-        {"Log errors to file named:",NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL}};
+    {"Log errors to file named:",NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL}};
 
 /*****************************************************************************
 *
@@ -51,6 +53,10 @@ Int2 Main(void)
 					/* (and sequence parse trees)   */
 	if (! SeqEntryLoad())
 		ErrShow();
+	if (! SubmitAsnLoad())
+		ErrShow();
+	if (! SeqCodeSetLoad())
+		ErrShow();
 				    /* get pointer to all loaded ASN.1 modules */
 	amp = AsnAllModPtr();
 	if (amp == NULL)
@@ -61,6 +67,8 @@ Int2 Main(void)
 
 	if (myargs[1].intvalue)
 		atp = AsnFind("Seq-entry");
+	else if (myargs[2].intvalue)
+		atp = AsnFind("Seq-submit");
 	else
 		atp = AsnFind("Bioseq-set");    /* get the initial type pointers */
 	if (atp == NULL)
@@ -78,7 +86,7 @@ Int2 Main(void)
 
 					/* open the ASN.1 input file in the right mode */
 
-	if ((aipin = AsnIoOpen (myargs[0].strvalue, myargs[2].intvalue?"rb":"r"))
+	if ((aipin = AsnIoOpen (myargs[0].strvalue, myargs[3].intvalue?"rb":"r"))
           == NULL)
 	{
 		ErrPostEx(SEV_ERROR,0,0, "Can't open %s", myargs[0].strvalue);
@@ -88,22 +96,22 @@ Int2 Main(void)
 
 					/* open the ASN.1 output file in the right mode */
 
-	if (myargs[3].strvalue != NULL)   /* output desired? */
+	if (myargs[4].strvalue != NULL)   /* output desired? */
 	{
 		ftype = "wx";
 
-		if ((aipout = AsnIoOpen (myargs[3].strvalue, ftype)) == NULL)
+		if ((aipout = AsnIoOpen (myargs[4].strvalue, ftype)) == NULL)
 		{
-			ErrPostEx(SEV_ERROR,0,0, "Can't open %s", myargs[3].strvalue);
+			ErrPostEx(SEV_ERROR,0,0, "Can't open %s", myargs[4].strvalue);
 			ErrShow();
 			return 1;
 		}
 	}
 
                                 /* log errors instead of die */
-	if (myargs[4].strvalue != NULL)
+	if (myargs[5].strvalue != NULL)
 	{
-		if (! ErrSetLog (myargs[4].strvalue))
+		if (! ErrSetLog (myargs[5].strvalue))
 		{
 			ErrShow();
 			return 1;

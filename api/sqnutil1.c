@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.149 $
+* $Revision: 6.219 $
 *
 * File Description: 
 *
@@ -511,6 +511,7 @@ NLM_EXTERN void SaveSeqEntryObjMgrData (SeqEntryPtr target, ObjMgrDataPtr PNTR o
 }
 
 extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp);
+extern void ObjMgrRecordOmdpByEntityID (Uint2 entityID, ObjMgrDataPtr omdp);
 NLM_EXTERN void RestoreSeqEntryObjMgrData (SeqEntryPtr target, ObjMgrDataPtr omdptop, ObjMgrData PNTR omdataptr)
 
 {
@@ -536,6 +537,7 @@ NLM_EXTERN void RestoreSeqEntryObjMgrData (SeqEntryPtr target, ObjMgrDataPtr omd
     omdpnew->free = omdataptr->free;
     omdpnew->options = omdataptr->options;
     ObjMgrRemoveEntityIDFromRecycle (omdpnew->EntityID, omp);
+    ObjMgrRecordOmdpByEntityID (omdpnew->EntityID, omdpnew);
   }
   omdpnew->userdata = omdataptr->userdata;
 }
@@ -888,7 +890,8 @@ NLM_EXTERN void RenormalizeNucProtSets (SeqEntryPtr sep, Boolean relink)
         sep->data.ptrvalue = seqentry->data.ptrvalue;
         seqentry->data.ptrvalue = NULL;
         bssp->seq_set = NULL;
-        SeqEntryFree (seqentry);
+        bssp->seqentry = NULL;
+        MemFree (seqentry);
         BioseqSetFree (bssp);
 
         sap = NULL;
@@ -1687,7 +1690,7 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                 if (i > 0 && protseq [i - 1] == '*') {
                   protseq [i - 1] = '\0';
                 }
-                bs = BSNew (1000);
+                bs = BSNew ((Int4) (i + 2));
                 if (bs != NULL) {
                   ptr = protseq;
                   /*
@@ -2205,7 +2208,6 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
                "transl_except parsing failed, %s, drop the transl_except", pos);
     return FALSE;
   }
-  diff = SeqLocStop(cbp->loc) - SeqLocStart(cbp->loc);
   sintp = cbp->loc->data.ptrvalue;
   if (sintp == NULL) return FALSE;
   if (sintp->from > sintp->to) {
@@ -2215,8 +2217,14 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
   }
   sintp->strand = SeqLocStrand (sfp->location);
   strand = sintp->strand;
+  diff = SeqLocStop(cbp->loc) - SeqLocStart(cbp->loc); /* SeqLocStop/Start does not do what you think */
+  /*
   if ((diff != 2 && (strand != Seq_strand_minus)) ||
       (diff != -2 && (strand == Seq_strand_minus))) {
+    pos_range = TRUE;
+  }
+  */
+  if (diff != 2) {
     pos_range = TRUE;
   }
   if (num_errs > 0 || pos_range) {
@@ -2243,6 +2251,227 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
     lastcbp->next = cbp;
   }
   return TRUE;
+}
+
+static Boolean CodonsAlreadyInOrder (tRNAPtr trp)
+
+{
+  Int2  i, j;
+
+  if (trp == NULL) return TRUE;
+  for (i = 0, j = 1; i < 5; i++, j++) {
+    if (trp->codon [i] > trp->codon [j]) return FALSE;
+  }
+  return TRUE;
+}
+
+static int LIBCALLBACK SortCodons (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  Uint1  codon1, codon2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  codon1 = *((Uint1Ptr) ptr1);
+  codon2 = *((Uint1Ptr) ptr2);
+  if (codon1 > codon2) {
+    return 1;
+  } else if (codon1 < codon2) {
+    return -1;
+  }
+  return 0;
+}
+
+static void UniqueCodons (tRNAPtr trp)
+
+{
+  Int2   i, j;
+  Uint2  last = 255, next;
+
+  if (trp == NULL) return;
+
+  for (i = 0, j = 0; i < 6; i++) {
+    next = trp->codon [i];
+    if (next != last) {
+      trp->codon [j] = next;
+      last = next;
+      j++;
+    }
+  }
+  while (j < 6) {
+    trp->codon [j] = 255;
+    j++;
+  }
+}
+
+static CharPtr  codonLetterExpand [] =
+{
+  "?", "A", "C", "AC",
+  "G", "AG", "CG", "ACG",
+  "T", "AT", "CT", "ACT",
+  "GT", "AGT", "CGT", "ACGT",
+  NULL
+};
+
+NLM_EXTERN Boolean ParseDegenerateCodon (tRNAPtr trp, Uint1Ptr codon)
+
+{
+  Uint1    ch;
+  Uint1    chrToInt [256];
+  Int2     i, j;
+  Uint1    idx;
+  CharPtr  intToChr = "?ACMGRSVTWYHKDBN";
+  CharPtr  ptr, str;
+
+  if (trp == NULL || codon == NULL) return FALSE;
+
+  for (i = 0; i < 2; i++) {
+    ch = codon [i];
+    if (ch != 'A' && ch != 'C' && ch != 'G' && ch != 'T') return FALSE;
+  }
+
+  for (i = 0; i < 256; i++) {
+    chrToInt [i] = 0;
+  }
+  for (i = 1; i < 16; i++) {
+    ch = intToChr [i];
+    chrToInt [(int) ch] = i;
+  }
+
+  idx = chrToInt [(int) codon [2]];
+  if (idx > 15) return FALSE;
+
+  str = codonLetterExpand [idx];
+  ptr = str;
+  ch = *ptr;
+  j = 0;
+  codon [3] = '\0';
+  while (ch != '\0' && j < 6) {
+    codon [2] = ch;
+    trp->codon [j] = IndexForCodon (codon, Seq_code_iupacna);
+    ptr++;
+    ch = *ptr;
+    j++;
+  }
+
+  return TRUE;
+}
+
+static void CleanupTrna (SeqFeatPtr sfp, tRNAPtr trp)
+
+{
+  Uint1           aa = 0;
+  Char            codon [16];
+  Uint1           from = 0;
+  Int2            i;
+  Int2            j;
+  Boolean         justTrnaText;
+  Boolean         okayToFree = TRUE;
+  SeqMapTablePtr  smtp;
+  CharPtr         str;
+  Uint1           trpcodon [6];
+
+  /* look for tRNA-OTHER with actual amino acid in comment */
+
+  if (trp == NULL) return;
+
+  if (sfp != NULL && sfp->comment != NULL && trp->codon [0] == 255) {
+    if (StringNICmp (sfp->comment, "codon recognized: ", 18) == 0) {
+      StringNCpy_0 (codon, sfp->comment + 18, sizeof (codon));
+      if (StringLen (codon) > 3 && codon [3] == ';') {
+        codon [3] = '\0';
+        okayToFree = FALSE;
+      }
+      if (StringLen (codon) == 3) {
+        for (i = 0; i < 3; i++) {
+          if (codon [i] == 'U') {
+            codon [i] = 'T';
+          }
+        }
+        if (ParseDegenerateCodon (trp, (Uint1Ptr) codon)) {
+          if (okayToFree) {
+            sfp->comment = MemFree (sfp->comment);
+          } else {
+            str = StringSave (sfp->comment + 22);
+            TrimSpacesAroundString (str);
+            sfp->comment = MemFree (sfp->comment);
+            if (StringHasNoText (str)) {
+              str = MemFree (str);
+            }
+            sfp->comment = str;
+          }
+        }
+      }
+    }
+  }
+
+  if (! CodonsAlreadyInOrder (trp)) {
+    HeapSort ((VoidPtr) &(trp->codon), 6, sizeof (Uint1), SortCodons);
+  }
+  UniqueCodons (trp);
+
+  /* now always switch iupacaa to ncbieaa (was just for selenocysteine) */
+
+  if (trp->aatype == 1 /* && trp->aa == 'U' */) {
+    trp->aatype = 2;
+  }
+
+  if (sfp == NULL || sfp->comment == NULL) return;
+
+  if (trp->aatype == 2) {
+    aa = trp->aa;
+  } else {
+    switch (trp->aatype) {
+      case 0 :
+        from = 0;
+        break;
+      case 1 :
+        from = Seq_code_iupacaa;
+        break;
+      case 2 :
+        from = Seq_code_ncbieaa;
+        break;
+      case 3 :
+        from = Seq_code_ncbi8aa;
+        break;
+      case 4 :
+        from = Seq_code_ncbistdaa;
+        break;
+      default:
+        break;
+    }
+    smtp = SeqMapTableFind (Seq_code_ncbieaa, from);
+    if (smtp != NULL) {
+      aa = SeqMapTableConvert (smtp, trp->aa);
+    }
+  }
+  if (aa != 'X') {
+    if (aa == ParseTRnaString (sfp->comment, &justTrnaText, trpcodon)) {
+      if (justTrnaText) {
+        for (j = 0; j < 6; j++) {
+          if (trp->codon [j] == 255) {
+            trp->codon [j] = trpcodon [j];
+          }
+        }
+        if (StringCmp (sfp->comment, "fMet") != 0) {
+          sfp->comment = MemFree (sfp->comment);
+        }
+      }
+    }
+    return;
+  }
+  aa = ParseTRnaString (sfp->comment, &justTrnaText, trpcodon);
+  if (aa == 0) return;
+  trp->aa = aa;
+  if (justTrnaText) {
+    for (j = 0; j < 6; j++) {
+      if (trp->codon [j] == 255) {
+        trp->codon [j] = trpcodon [j];
+      }
+    }
+    if (StringCmp (sfp->comment, "fMet") != 0) {
+      sfp->comment = MemFree (sfp->comment);
+    }
+  }
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL GetBestProteinFeatureUnindexed (SeqLocPtr product)
@@ -2439,20 +2668,30 @@ static Boolean HandledGBQualOnCDS (SeqFeatPtr sfp, GBQualPtr gbq, ValNodePtr PNT
   return FALSE;
 }
 
-static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
+static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq, Boolean isEmblOrDdbj)
 
 {
   Uint1      aa;
+  BioseqPtr  bsp;
+  Uint1      codon [6];
+  Int4       from;
   Boolean    is_fMet = FALSE;
   Int2       j;
+  Boolean    justTrnaText;
   size_t     len;
   CharPtr    name;
+  CharPtr    ptr;
   RnaRefPtr  rrp;
+  SeqIntPtr  sintp;
+  SeqIdPtr   sip;
   CharPtr    str;
+  Char       tmp [64];
+  Int4       to;
   tRNAPtr    trp;
+  long int   val;
 
   if (StringICmp (gbq->qual, "product") == 0 ||
-      StringICmp (gbq->qual, "standard_name") == 0) {
+      (StringICmp (gbq->qual, "standard_name") == 0 && (! isEmblOrDdbj) )) {
     rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
     if (rrp == NULL) return FALSE;
     if (rrp->type == 0) {
@@ -2460,7 +2699,7 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
     }
     if (rrp->type == 3 && rrp->ext.choice == 1) {
       name = (CharPtr) rrp->ext.value.ptrvalue;
-      aa = ParseTRnaString (name, NULL);
+      aa = ParseTRnaString (name, &justTrnaText, codon);
       if (aa != 0) {
         is_fMet = (Boolean) (StringStr (name, "fMet") != NULL);
         rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
@@ -2469,6 +2708,11 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
           trp->aatype = 2;
           for (j = 0; j < 6; j++) {
             trp->codon [j] = 255;
+          }
+          if (justTrnaText) {
+            for (j = 0; j < 6; j++) {
+              trp->codon [j] = codon [j];
+            }
           }
           trp->aa = aa;
           rrp->ext.choice = 2;
@@ -2488,6 +2732,7 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
               }
             }
           }
+          CleanupTrna (sfp, trp);
         }
       }
     }
@@ -2498,7 +2743,7 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
     if (rrp->type == 3 && rrp->ext.choice == 2) {
       trp = (tRNAPtr) rrp->ext.value.ptrvalue;
       if (trp != NULL && trp->aatype == 2) {
-        if (trp->aa == ParseTRnaString (gbq->val, NULL)) {
+        if (trp->aa == ParseTRnaString (gbq->val, NULL, NULL)) {
           return TRUE;
         }
       }
@@ -2519,7 +2764,7 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
       if (sfp->comment == NULL) {
         sfp->comment = gbq->val;
         gbq->val = NULL;
-      } else {
+      } else if (StringStr (gbq->val, sfp->comment) == NULL) {
         len = StringLen (sfp->comment) + StringLen (gbq->val) + 5;
         str = MemNew (sizeof (Char) * len);
         StringCpy (str, sfp->comment);
@@ -2538,6 +2783,92 @@ static Boolean HandledGBQualOnRNA (SeqFeatPtr sfp, GBQualPtr gbq)
       rrp->ext.choice = 1;
       rrp->ext.value.ptrvalue = StringSave (gbq->val);
       return TRUE;
+    }
+  } else if (StringICmp (gbq->qual, "anticodon") == 0) {
+    rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+    if (rrp == NULL) return FALSE;
+    if (rrp->type == 0) {
+      rrp->type = 255;
+    }
+    if (rrp->type == 3 && rrp->ext.choice == 0) {
+      trp = (tRNAPtr) MemNew (sizeof (tRNA));
+      if (trp != NULL) {
+        rrp->ext.choice = 2;
+        rrp->ext.value.ptrvalue = trp;
+        for (j = 0; j < 6; j++) {
+          trp->codon [j] = 255;
+        }
+      }
+    }
+    if (rrp->type == 3 && rrp->ext.choice == 2) {
+      trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+      if (trp != NULL) {
+        StringNCpy_0 (tmp, gbq->val, sizeof (tmp));
+        ptr = StringStr (tmp, "(");
+        if (ptr != NULL) {
+          ptr = StringStr (ptr + 1, "pos");
+          if (ptr != NULL) {
+            ptr = StringStr (ptr + 3, ":");
+          }
+        }
+        if (ptr != NULL) {
+          str = ptr + 1;
+          ptr = StringStr (str, "..");
+          if (ptr != NULL) {
+            *ptr = '\0';
+            if (sscanf (str, "%ld", &val) == 1) {
+              from = val - 1;
+              str = ptr + 2;
+              ptr = StringStr (str, ",");
+              if (ptr != NULL) {
+                *ptr = '\0';
+                if (sscanf (str, "%ld", &val) == 1) {
+                  to = val - 1;
+                  sip = SeqLocId (sfp->location);
+                  if (sip != NULL) {
+                    bsp = BioseqFind (sip);
+                    if (bsp != NULL) {
+                      if (from >= 0 && from < bsp->length - 1) {
+                        if (to >= 0 && to < bsp->length - 1) {
+                          sintp = SeqIntNew ();
+                          if (sintp != NULL) {
+                            if (from > to) {
+                              sintp->from = to;
+                              sintp->to = from;
+                              sintp->strand = Seq_strand_minus;
+                            } else {
+                              sintp->from = from;
+                              sintp->to = to;
+                              sintp->strand = Seq_strand_plus;
+                            }
+                            sintp->id = SeqIdStripLocus (SeqIdDup (SeqIdFindBest (bsp->id, 0)));
+                            trp->anticodon = ValNodeAddPointer (NULL, SEQLOC_INT, (Pointer) sintp);
+                            if (trp->aatype == 0 && trp->aa == 0) {
+                              ptr = StringStr (ptr + 1, "aa:");
+                              if (ptr != NULL) {
+                                str = ptr + 3;
+                                ptr = StringStr (str, ")");
+                                if (ptr != NULL) {
+                                  *ptr = '\0';
+                                  trp->aa = ParseTRnaString (str, NULL, NULL);
+                                  if (trp->aa != 0) {
+                                    trp->aatype = 2;
+                                  }
+                                }
+                              }
+                            }
+                            return TRUE;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
   return FALSE;
@@ -2560,6 +2891,8 @@ static Boolean HandledGBQualOnProt (SeqFeatPtr sfp, GBQualPtr gbq)
     choice = 3;
   } else if (StringICmp (gbq->qual, "standard_name") == 0) {
     choice = 4;
+  } else if (StringICmp (gbq->qual, "label") == 0) {
+    choice = 5;
   }
   if (choice == 1 || choice == 4) {
     vnp = prp->name;
@@ -2578,8 +2911,10 @@ static Boolean HandledGBQualOnProt (SeqFeatPtr sfp, GBQualPtr gbq)
   } else if (choice == 3) {
     ValNodeCopyStr (&(prp->ec), 0, gbq->val);
     return TRUE;
+  } else if (choice == 5) {
+    return FALSE; /* keep label gbqual only */
   }
-  return TRUE; /* gbquals not appropriate on protein features */
+  return TRUE; /* all other gbquals not appropriate on protein features */
 }
 
 static Boolean HandledGBQualOnImp (SeqFeatPtr sfp, GBQualPtr gbq)
@@ -2656,6 +2991,7 @@ static CharPtr CombineSplitQual (CharPtr origval, CharPtr newval)
   size_t   len;
   CharPtr  str = NULL;
 
+  if (StringStr (origval, newval) != NULL) return origval;
   len = StringLen (origval) + StringLen (newval) + 5;
   str = MemNew (sizeof (Char) * len);
   if (str == NULL) return origval;
@@ -2669,6 +3005,75 @@ static CharPtr CombineSplitQual (CharPtr origval, CharPtr newval)
   /* free original string, knowing return value will replace it */
   MemFree (origval);
   return str;
+}
+
+static void CleanupRptUnit (GBQualPtr gbq)
+
+{
+  Char     ch;
+  size_t   len;
+  CharPtr  ptr;
+  CharPtr  str;
+  CharPtr  tmp;
+
+  if (gbq == NULL) return;
+  if (StringHasNoText (gbq->val)) return;
+  len = StringLen (gbq->val) * 2 + 1;
+  str = MemNew (sizeof (Char) * len);
+  if (str == NULL) return;
+  ptr = str;
+  tmp = gbq->val;
+  ch = *tmp;
+  while (ch != '\0') {
+    while (ch == '(' || ch == ')' || ch == ',') {
+      *ptr = ch;
+      ptr++;
+      tmp++;
+      ch = *tmp;
+    }
+    while (IS_WHITESP (ch)) {
+      tmp++;
+      ch = *tmp;
+    }
+    while (IS_DIGIT (ch)) {
+      *ptr = ch;
+      ptr++;
+      tmp++;
+      ch = *tmp;
+    }
+    if (ch == '.' || ch == '-') {
+      while (ch == '.' || ch == '-') {
+        tmp++;
+        ch = *tmp;
+      }
+      *ptr = '.';
+      ptr++;
+      *ptr = '.';
+      ptr++;
+    }
+    while (IS_WHITESP (ch)) {
+      tmp++;
+      ch = *tmp;
+    }
+    while (IS_DIGIT (ch)) {
+      *ptr = ch;
+      ptr++;
+      tmp++;
+      ch = *tmp;
+    }
+    while (IS_WHITESP (ch)) {
+      tmp++;
+      ch = *tmp;
+    }
+    if (ch == '\0' || ch == '(' || ch == ')' || ch == ',' || ch == '.' || IS_WHITESP (ch) || IS_DIGIT (ch)) {
+    } else {
+      MemFree (str);
+      return;
+    }
+  }
+  *ptr = '\0';
+  gbq->val = MemFree (gbq->val);
+  gbq->val = str;
 }
 
 static Boolean StringIsJustQuotes (CharPtr str)
@@ -2689,7 +3094,7 @@ static Boolean StringIsJustQuotes (CharPtr str)
   return TRUE;
 }
 
-static void CleanupFeatureGBQuals (SeqFeatPtr sfp)
+static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
 
 {
   ValNodePtr      afterMe = NULL;
@@ -2772,14 +3177,19 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp)
         oip = ObjectIdNew ();
         oip->str = StringSave (ptr);
         db->tag = oip;
+        vnp->next = sfp->dbxref;
+        sfp->dbxref = vnp;
       } else {
+        /*
         db->db = StringSave ("?");
         oip = ObjectIdNew ();
         oip->str = StringSave (tag);
         db->tag = oip;
+        vnp->next = sfp->dbxref;
+        sfp->dbxref = vnp;
+        */
+        unlink = FALSE;
       }
-      vnp->next = sfp->dbxref;
-      sfp->dbxref = vnp;
     } else if (StringICmp (gbq->qual, "gdb_xref") == 0) {
       vnp = ValNodeNew (NULL);
       db = DbtagNew ();
@@ -2792,7 +3202,7 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp)
       sfp->dbxref = vnp;
     } else if (sfp->data.choice == SEQFEAT_GENE && HandledGBQualOnGene (sfp, gbq)) {
     } else if (sfp->data.choice == SEQFEAT_CDREGION && HandledGBQualOnCDS (sfp, gbq, &afterMe)) {
-    } else if (sfp->data.choice == SEQFEAT_RNA && HandledGBQualOnRNA (sfp, gbq)) {
+    } else if (sfp->data.choice == SEQFEAT_RNA && HandledGBQualOnRNA (sfp, gbq, isEmblOrDdbj)) {
     } else if (sfp->data.choice == SEQFEAT_PROT && HandledGBQualOnProt (sfp, gbq)) {
     } else if (sfp->data.choice == SEQFEAT_IMP && HandledGBQualOnImp (sfp, gbq)) {
     } else if (StringICmp (gbq->qual, "rpt_type") == 0) {
@@ -2831,6 +3241,9 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp)
       /* not legal on anything but CDS, so remove it */
     } else {
       unlink = FALSE;
+    }
+    if (rpt_unit != NULL) {
+      CleanupRptUnit (rpt_unit);
     }
     if (unlink) {
       *(prevqual) = gbq->next;
@@ -2945,26 +3358,25 @@ static void CleanupDuplicateGBQuals (GBQualPtr PNTR prevgbq)
 
 /* this identifies gbquals that should have been placed into special fields */
 
-#define NUM_ILLEGAL_QUALS 15
+#define NUM_ILLEGAL_QUALS 14
 
 /* StringICmp use of TO_UPPER means translation should go before transl_XXX */
 
 static CharPtr illegalGbqualList [NUM_ILLEGAL_QUALS] = {
-  "allele",
   "anticodon",
   "citation",
-  "codon",
   "codon_start",
-  "cons_splice",
   "db_xref",
-  "frequency",
+  "evidence",
+  "exception",
   "gene",
   "note",
-  "PCR_conditions",
   "protein_id",
-  "translation",
+  "pseudo",
+  "transcript_id",
   "transl_except",
   "transl_table",
+  "translation",
 };
 
 static Int2 QualifierIsIllegal (CharPtr qualname)
@@ -3028,6 +3440,21 @@ static GBQualPtr SortIllegalGBQuals (GBQualPtr list)
   }
   GbqualLink (&legal, illegal);
   return legal;
+}
+
+static Boolean IsSubString (CharPtr str1, CharPtr str2)
+
+{
+  Char    ch;
+  size_t  len1, len2;
+
+  len1 = StringLen (str1);
+  len2 = StringLen (str2);
+  if (len1 >= len2) return FALSE;
+  if (StringNICmp (str1, str2, len1) != 0) return FALSE;
+  ch = str2 [len1];
+  if (IS_ALPHANUM (ch)) return FALSE;
+  return TRUE;
 }
 
 static int LIBCALLBACK SortByOrgModSubtype (VoidPtr ptr1, VoidPtr ptr2)
@@ -3116,7 +3543,16 @@ static void CleanOrgModList (OrgModPtr PNTR ompp)
       if (HasNoText (omp->subname)) {
         unlink = TRUE;
       } else if (last->subtype == omp->subtype &&
-                 StringICmp (last->subname, omp->subname) == 0) {
+                 StringICmp (last->subname, omp->subname) == 0 ||
+                 (last->subtype == ORGMOD_other &&
+                  StringStr (last->subname, omp->subname) != NULL)) {
+        unlink = TRUE;
+      } else if (last->subtype == omp->subtype &&
+                 last->subtype == ORGMOD_other &&
+                 IsSubString (last->subname, omp->subname)) {
+        last->subname = MemFree (last->subname);
+        last->subname = omp->subname;
+        omp->subname = NULL;
         unlink = TRUE;
       }
     } else {
@@ -3214,16 +3650,35 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
   while (ssp != NULL) {
     next = ssp->next;
     unlink= FALSE;
-    if (ssp->subtype != 14 && ssp->subtype != 15) {
+    if (ssp->subtype != SUBSRC_germline &&
+        ssp->subtype != SUBSRC_rearranged &&
+        ssp->subtype != SUBSRC_transgenic &&
+        ssp->subtype != SUBSRC_environmental_sample) {
       CleanVisString (&(ssp->name));
     }
     CleanVisString (&(ssp->attrib));
     if (last != NULL) {
-      if (HasNoText (ssp->name) && ssp->subtype != 14 && ssp->subtype != 15) {
+      if (HasNoText (ssp->name) &&
+          ssp->subtype != SUBSRC_germline &&
+          ssp->subtype != SUBSRC_rearranged &&
+          ssp->subtype != SUBSRC_transgenic &&
+          ssp->subtype != SUBSRC_environmental_sample) {
         unlink = TRUE;
       } else if (last->subtype == ssp->subtype &&
-                 (ssp->subtype == 14 || ssp->subtype == 15 ||
-                  StringICmp (last->name, ssp->name) == 0)) {
+                 (ssp->subtype == SUBSRC_germline ||
+                  ssp->subtype == SUBSRC_rearranged ||
+                  ssp->subtype == SUBSRC_transgenic ||
+                  ssp->subtype == SUBSRC_environmental_sample ||
+                  StringICmp (last->name, ssp->name) == 0) ||
+                  (last->subtype == SUBSRC_other &&
+                   StringStr (last->name, ssp->name) != NULL)) {
+        unlink = TRUE;
+      } else if (last->subtype == ssp->subtype &&
+                 last->subtype == SUBSRC_other &&
+                 IsSubString (last->name, ssp->name)) {
+        last->name = MemFree (last->name);
+        last->name = ssp->name;
+        ssp->name = NULL;
         unlink = TRUE;
       }
     } else {
@@ -3243,15 +3698,44 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
 
 /* if string starts with given prefix, return pointer to remaining text */
 
-static CharPtr StringHasPrefix (CharPtr str, CharPtr pref, size_t len, Boolean novalneeded)
+static CharPtr StringHasPrefix (CharPtr str, CharPtr pref, Boolean novalneeded, Boolean skippref)
 
 {
+  Char     ch;
+  size_t   len;
+  Char     tmp [64];
   CharPtr  val;
 
   if (StringHasNoText (str) || StringHasNoText (pref)) return NULL;
-  if (StringNICmp (str, pref, len) != 0) return NULL;
-  val = str + len;
+  len = StringLen (pref);
+  StringNCpy_0 (tmp, pref, sizeof (tmp));
+  if (StringNICmp (str, tmp, len) != 0) {
+    /* try after replacing dash with underscore */
+    val = tmp;
+    ch = *val;
+    while (ch != '\0') {
+      if (ch == '-') {
+        *val = '_';
+      }
+      val++;
+      ch = *val;
+    }
+    if (StringNICmp (str, tmp, len) != 0) return NULL;
+  }
+  if (skippref) {
+    val = str + len;
+  } else {
+    val = str;
+  }
   if (novalneeded || StringHasNoText (val)) return NULL;
+  ch = *(str + len);
+  if (ch != '=' && ch != ' ' && ch != '\0') return NULL;
+  ch = *val;
+  while (ch == '=' || ch == ' ') {
+    val++;
+    ch = *val;
+  }
+  if (StringHasNoText (val)) return NULL;
   return val;
 }
 
@@ -3268,7 +3752,6 @@ static void OrpModToOrgMod (ValNodePtr PNTR vnpp, OrgModPtr PNTR ompp)
 
 {
   Int2        i;
-  size_t      len;
   ValNodePtr  next;
   OrgModPtr   omp;
   CharPtr     str;
@@ -3282,8 +3765,7 @@ static void OrpModToOrgMod (ValNodePtr PNTR vnpp, OrgModPtr PNTR ompp)
     str = (CharPtr) vnp->data.ptrvalue;
     val = NULL;
     for (i = 0; unstructured_orgmod_list [i] != NULL; i++) {
-      len = StringLen (unstructured_orgmod_list [i]);
-      val = StringHasPrefix (str, unstructured_orgmod_list [i], len, FALSE);
+      val = StringHasPrefix (str, unstructured_orgmod_list [i], FALSE, TRUE);
       if (val != NULL) break;
     }
     if (val != NULL) {
@@ -3308,16 +3790,15 @@ static CharPtr unstructured_subsource_list [] = {
   "?", "chromosome", "map", "clone", "subclone", "haplotype",
   "genotype", "sex", "cell-line", "cell-type", "tissue-type",
   "clone-lib", "dev-stage", "frequency", "germline", "rearranged",
-  "lab-host", "pop-variant", "tissue-lib", "plasmid",
-  "transposon", "ins-seq", "plastid", "country",
-  "segment", "endogenous-virus", NULL
+  "lab-host", "pop-variant", "tissue-lib", "plasmid", "transposon",
+  "ins-seq", "plastid", "country", "segment", "endogenous-virus",
+  "transgenic", "environmental-sample", "isolation-source", NULL
 };
 
 static void OrpModToSubSource (ValNodePtr PNTR vnpp, SubSourcePtr PNTR sspp)
 
 {
   Int2          i;
-  size_t        len;
   ValNodePtr    next;
   SubSourcePtr  ssp;
   CharPtr       str;
@@ -3331,9 +3812,12 @@ static void OrpModToSubSource (ValNodePtr PNTR vnpp, SubSourcePtr PNTR sspp)
     str = (CharPtr) vnp->data.ptrvalue;
     val = NULL;
     for (i = 0; unstructured_subsource_list [i] != NULL; i++) {
-      len = StringLen (unstructured_subsource_list [i]);
-      val = StringHasPrefix (str, unstructured_subsource_list [i], len,
-                             (Boolean) (i == 14 || i == 15));
+      val = StringHasPrefix (str, unstructured_subsource_list [i],
+                             (Boolean) (i == SUBSRC_germline ||
+                                        i == SUBSRC_rearranged ||
+                                        i == SUBSRC_transgenic ||
+                                        i == SUBSRC_environmental_sample),
+                             TRUE);
       if (val != NULL) break;
     }
     if (val != NULL) {
@@ -3351,6 +3835,69 @@ static void OrpModToSubSource (ValNodePtr PNTR vnpp, SubSourcePtr PNTR sspp)
       vnpp = &(vnp->next);
     }
     vnp = next;
+  }
+}
+
+static void GbqualToOrpMod (GBQualPtr PNTR prevgbq, ValNodePtr PNTR vnpp)
+
+{
+  GBQualPtr  gbq;
+  Int2       i;
+  size_t     len;
+  GBQualPtr  next;
+  CharPtr    str;
+  Boolean    unlink;
+  CharPtr    val;
+
+  if (prevgbq == NULL) return;
+  gbq = *prevgbq;
+  while (gbq != NULL) {
+    next = gbq->next;
+    unlink = FALSE;
+    str = gbq->qual;
+    if (str != NULL) {
+      val = NULL;
+      for (i = 0; unstructured_orgmod_list [i] != NULL; i++) {
+        val = StringHasPrefix (str, unstructured_orgmod_list [i], FALSE, FALSE);
+        if (val != NULL) break;
+      }
+      if (val == NULL) {
+        for (i = 0; unstructured_subsource_list [i] != NULL; i++) {
+          val = StringHasPrefix (str, unstructured_subsource_list [i],
+                                 (Boolean) (i == SUBSRC_germline ||
+                                            i == SUBSRC_rearranged ||
+                                            i == SUBSRC_transgenic ||
+                                            i == SUBSRC_environmental_sample),
+                                 FALSE);
+          if (val != NULL) break;
+        }
+      }
+      if (val == NULL) {
+        val = StringHasPrefix (str, "sub-clone", FALSE, FALSE);
+        if (val != NULL) {
+          val = "subclone";
+        }
+      }
+      if (val != NULL) {
+        len = StringLen (gbq->val);
+        str = MemNew (sizeof (Char) * (len + 64));
+        if (str != NULL) {
+          StringCpy (str, val);
+          StringCat (str, "=");
+          StringCat (str, gbq->val);
+          ValNodeAddStr (vnpp, 0, str);
+          unlink = TRUE; 
+        }
+      }
+    }
+    if (unlink) {
+      *prevgbq = gbq->next;
+      gbq->next = NULL;
+      GBQualFree (gbq);
+    } else {
+      prevgbq = (GBQualPtr PNTR) &(gbq->next);
+    }
+    gbq = next;
   }
 }
 
@@ -3525,8 +4072,8 @@ static void CleanupDuplicateCits (ValNodePtr PNTR prevvnp)
     nextvnp = vnp->next;
     unlink = FALSE;
     if (last != NULL) {
-      PubLabel (last, label1, 127, OM_LABEL_CONTENT);
-      PubLabel (vnp, label2, 127, OM_LABEL_CONTENT);
+      PubLabelUnique (last, label1, 127, OM_LABEL_CONTENT, TRUE);
+      PubLabelUnique (vnp, label2, 127, OM_LABEL_CONTENT, TRUE);
       if (StringICmp (label1, label2) == 0) {
         unlink = TRUE;
       }
@@ -3629,25 +4176,73 @@ static void TrimLeadingSpaces (CharPtr str)
   }
 }
 
-static CharPtr NameStdPtrToTabbedString (NameStdPtr nsp)
+static void ExtractSuffixFromInitials (NameStdPtr nsp)
 
 {
-  Char   first [64];
-  Char   frstinits [16];
-  Char   initials [16];
+  Char     ch;
+  Boolean  has_period = FALSE;
+  size_t   len;
+  CharPtr  str;
+
+  str = nsp->names [4];
+  ch = *str;
+  while (ch != '\0') {
+    if (ch == '.') {
+      has_period = TRUE;
+    }
+    str++;
+    ch = *str;
+  }
+  if (! has_period) return;
+  str = nsp->names [4];
+  len = StringLen (str);
+  if (len >= 4 && StringCmp (str +  len - 3, "III") == 0) {
+    str [len - 3] = '\0';
+    nsp->names [5] = StringSave ("III");
+  } else if (len >= 5 && StringCmp (str +  len - 4, "III.") == 0) {
+    str [len - 4] = '\0';
+    nsp->names [5] = StringSave ("III");
+  } else if (len >= 3 && StringCmp (str +  len - 2, "Jr") == 0) {
+    str [len - 2] = '\0';
+    nsp->names [5] = StringSave ("Jr");
+  } else if (len >= 4 && StringCmp (str +  len - 3, "2nd") == 0) {
+    str [len - 3] = '\0';
+    nsp->names [5] = StringSave ("II");
+  } else if (len >= 3 && StringCmp (str +  len - 2, "IV") == 0) {
+    str [len - 2] = '\0';
+    nsp->names [5] = StringSave ("IV");
+  } else if (len >= 4 && StringCmp (str +  len - 3, "IV.") == 0) {
+    str [len - 3] = '\0';
+    nsp->names [5] = StringSave ("IV");
+  }
+}
+
+static CharPtr NameStdPtrToTabbedString (NameStdPtr nsp, Boolean fixInitials)
+
+{
+  Char   first [256];
+  Char   frstinits [64];
+  Char   initials [64];
   Int2   j;
-  Char   last [64];
-  Char   str [128];
-  Char   suffix [16];
+  Char   last [256];
+  Char   middle [128];
+  Char   str [512];
+  Char   suffix [64];
 
   if (nsp == NULL) return NULL;
+  if (nsp->names [5] == NULL && nsp->names [4] != NULL) {
+    ExtractSuffixFromInitials (nsp);
+  }
   str [0] = '\0';
   StringNCpy_0 (first, nsp->names [1], sizeof (first));
+  TrimSpacesAroundString (first);
   StringNCpy_0 (initials, nsp->names [4], sizeof (initials));
   StripPeriods (initials);
   TrimLeadingSpaces (initials);
   StringNCpy_0 (last, nsp->names [0], sizeof (last));
   TrimLeadingSpaces (last);
+  StringNCpy_0 (middle, nsp->names [2], sizeof (middle));
+  TrimLeadingSpaces (middle);
   if (StringCmp (initials, "al") == 0 &&
       StringCmp (last, "et") == 0 &&
       first [0] == '\0') {
@@ -3668,6 +4263,7 @@ static CharPtr NameStdPtrToTabbedString (NameStdPtr nsp)
     }
   }
   */
+  frstinits [0] = '\0';
   FirstNameToInitials (first, frstinits, sizeof (frstinits) - 1);
   StripPeriods (first);
   TrimLeadingSpaces (first);
@@ -3679,16 +4275,22 @@ static CharPtr NameStdPtrToTabbedString (NameStdPtr nsp)
     */
   }
   StringCat (str, "\t");
-  j = 0;
-  while (initials [j] != '\0' && initials [j] == frstinits [j]) {
-    j++;
-  }
-  if (initials [j] != '\0') {
-    StringCat (str, initials + j);
-  } else {
-    /*
-    StringCat (str, " ");
-    */
+  if (fixInitials) {
+    j = 0;
+    while (initials [j] != '\0' && TO_UPPER (initials [j]) == TO_UPPER (frstinits [j])) {
+      j++;
+    }
+    if (initials [j] != '\0') {
+      StringCat (str, initials + j);
+    } else {
+      /*
+      StringCat (str, " ");
+      */
+    }
+  } else if (initials [0] != '\0') {
+    StringCat (str, initials);
+  } else if (frstinits [0] != '\0') {
+    StringCat (str, frstinits);
   }
   StringCat (str, "\t");
   StringCat (str, last);
@@ -3703,6 +4305,8 @@ static CharPtr NameStdPtrToTabbedString (NameStdPtr nsp)
     StringCat (str, " ");
     */
   }
+  StringCat (str, "\t");
+  StringCat (str, middle);
   StringCat (str, "\n");
   return StringSave (str);
 }
@@ -3744,21 +4348,21 @@ static CharPtr XtractTagListColumn (CharPtr source, Int2 col)
   return str;
 }
 
-static NameStdPtr TabbedStringToNameStdPtr (CharPtr txt)
+static NameStdPtr TabbedStringToNameStdPtr (CharPtr txt, Boolean fixInitials)
 
 {
   Char        ch;
   CharPtr     first;
-  Char        initials [16];
+  Char        initials [64];
   Int2        j;
   Int2        k;
   Char        last;
   Int2        len;
   NameStdPtr  nsp;
-  Char        periods [32];
+  Char        periods [128];
   CharPtr     str;
-  Char        str1 [16];
-  Char        suffix [20];
+  Char        str1 [64];
+  Char        suffix [80];
 
   if (txt == NULL) return NULL;
   nsp = NameStdNew ();
@@ -3769,7 +4373,10 @@ static NameStdPtr TabbedStringToNameStdPtr (CharPtr txt)
   StripPeriods (first);
   nsp->names [1] = StringSave (first);
   TrimLeadingSpaces (nsp->names [1]);
-  FirstNameToInitials (first, str1, sizeof (str1) - 1);
+  str1 [0] = '\0';
+  if (fixInitials) {
+    FirstNameToInitials (first, str1, sizeof (str1) - 1);
+  }
   str = XtractTagListColumn (txt, 1);
   StringNCat (str1, str, sizeof (str1) - 1);
   MemFree (str);
@@ -3832,6 +4439,10 @@ static NameStdPtr TabbedStringToNameStdPtr (CharPtr txt)
               }
     }
   }
+  if (k > 0 && periods [k - 1] != '.') {
+    periods [k] = '.';
+    k++;
+  }
   periods [k] = '\0';
   nsp->names [4] = StringSave (periods);
   TrimLeadingSpaces (nsp->names [4]);
@@ -3891,17 +4502,53 @@ static NameStdPtr TabbedStringToNameStdPtr (CharPtr txt)
     nsp->names [0] = MemFree (nsp->names [0]);
     nsp->names [0] = StringSave ("et al.");
   }
+  nsp->names [2] = XtractTagListColumn (txt, 4);
+  TrimLeadingSpaces (nsp->names [2]);
+  if (StringHasNoText (nsp->names [2])) {
+    nsp->names [2] = MemFree (nsp->names [2]);
+  }
   return nsp;
 }
 
-static void NormalizeAuthors (AuthListPtr alp)
+static AffilPtr CleanAffil (AffilPtr afp)
+
+{
+  if (afp == NULL) return NULL;
+  CleanVisString (&(afp->affil));
+  CleanVisString (&(afp->div));
+  CleanVisString (&(afp->city));
+  CleanVisString (&(afp->sub));
+  CleanVisString (&(afp->country));
+  CleanVisString (&(afp->street));
+  CleanVisString (&(afp->email));
+  CleanVisString (&(afp->fax));
+  CleanVisString (&(afp->phone));
+  CleanVisString (&(afp->postal_code));
+  if (afp->affil == NULL &&
+      afp->div == NULL &&
+      afp->city == NULL &&
+      afp->sub == NULL &&
+      afp->country == NULL &&
+      afp->street == NULL &&
+      afp->email == NULL &&
+      afp->fax == NULL &&
+      afp->phone == NULL &&
+      afp->postal_code == NULL) {
+    afp = MemFree (afp);
+  }
+  return afp;
+}
+
+static void NormalizeAuthors (AuthListPtr alp, Boolean fixInitials)
 
 {
   AuthorPtr    ap;
+  CharPtr      initials;
   ValNodePtr   names;
   NameStdPtr   nsp;
   PersonIdPtr  pid;
   CharPtr      str;
+  Boolean      upcaseinits = FALSE;
   /*
   Char         ch;
   CharPtr      initials;
@@ -3912,6 +4559,9 @@ static void NormalizeAuthors (AuthListPtr alp)
   CharPtr      periods;
   */
 
+  if (alp == NULL) return;
+  alp->affil = CleanAffil (alp->affil);
+
 #ifndef SUPPRESS_TRIVIAL_FLATFILE_DIFFERENCES
   if (alp == NULL || alp->choice != 1) return;
   for (names = alp->names; names != NULL; names = names->next) {
@@ -3921,9 +4571,23 @@ static void NormalizeAuthors (AuthListPtr alp)
       if (pid != NULL && pid->choice == 2) {
         nsp = pid->data;
         if (nsp != NULL /* && nsp->names [4] != NULL */) {
-          str = NameStdPtrToTabbedString (nsp);
+          initials = nsp->names [4];
+          if (StringLen (initials) > 0) {
+            if (IS_UPPER (initials [0])) {
+              upcaseinits = TRUE;
+            }
+          }
+          str = NameStdPtrToTabbedString (nsp, fixInitials);
           pid->data = NameStdFree (nsp);
-          nsp = TabbedStringToNameStdPtr (str);
+          nsp = TabbedStringToNameStdPtr (str, fixInitials);
+          if (upcaseinits) {
+            initials = nsp->names [4];
+            if (StringLen (initials) > 0) {
+              if (IS_LOWER (initials [0])) {
+                initials [0] = TO_UPPER (initials [0]);
+              }
+            }
+          }
           pid->data = nsp;
           MemFree (str);
 #if 0
@@ -4035,7 +4699,7 @@ static Boolean empty_citgen(CitGenPtr  cit)
 	return TRUE;
 }
 
-static void NormalizeAPub (ValNodePtr vnp, Boolean stripSerial)
+static void NormalizeAPub (ValNodePtr vnp, Boolean stripSerial, Boolean fixInitials)
 
 {
   AffilPtr     affil;
@@ -4055,13 +4719,14 @@ static void NormalizeAPub (ValNodePtr vnp, Boolean stripSerial)
   switch (vnp->choice) {
     case PUB_Gen :
       cgp = (CitGenPtr) vnp->data.ptrvalue;
-      NormalizeAuthors (cgp->authors);
+      NormalizeAuthors (cgp->authors, fixInitials);
       if (stripSerial) {
         cgp->serial_number = -1; /* but does not remove if empty */
       }
       if (StringNICmp (cgp->cit, "unpublished", 11) == 0) {
+        cgp->cit [0] = 'U';
 #ifndef SUPPRESS_TRIVIAL_FLATFILE_DIFFERENCES
-        cgp->date = DateFree (cgp->date); /* remove date if unpublished */
+        /* cgp->date = DateFree (cgp->date); */ /* remove date if unpublished */
         if (cgp->journal == NULL) {
           cgp->volume = MemFree (cgp->volume);
           cgp->issue = MemFree (cgp->issue);
@@ -4069,10 +4734,11 @@ static void NormalizeAPub (ValNodePtr vnp, Boolean stripSerial)
         }
 #endif
       }
+      TrimSpacesAroundString (cgp->cit);
       break;
     case PUB_Sub :
       csp = (CitSubPtr) vnp->data.ptrvalue;
-      NormalizeAuthors (csp->authors);
+      NormalizeAuthors (csp->authors, fixInitials);
       alp = csp->authors;
       imp = csp->imp;
       if (alp != NULL && alp->affil == NULL && imp != NULL && imp->pub != NULL) {
@@ -4106,23 +4772,23 @@ static void NormalizeAPub (ValNodePtr vnp, Boolean stripSerial)
       break;
     case PUB_Article :
       cap = (CitArtPtr) vnp->data.ptrvalue;
-      NormalizeAuthors (cap->authors);
+      NormalizeAuthors (cap->authors, fixInitials);
       break;
     case PUB_Book :
       cbp = (CitBookPtr) vnp->data.ptrvalue;
-      NormalizeAuthors (cbp->authors);
+      NormalizeAuthors (cbp->authors, fixInitials);
       break;
     case PUB_Man :
       cbp = (CitBookPtr) vnp->data.ptrvalue;
       if (cbp->othertype == 2 && cbp->let_type == 3) {
-        NormalizeAuthors (cbp->authors);
+        NormalizeAuthors (cbp->authors, fixInitials);
       }
       break;
     case PUB_Patent :
       cpp = (CitPatPtr) vnp->data.ptrvalue;
-      NormalizeAuthors (cpp->authors);
-      NormalizeAuthors (cpp->applicants);
-      NormalizeAuthors (cpp->assignees);
+      NormalizeAuthors (cpp->authors, fixInitials);
+      NormalizeAuthors (cpp->applicants, fixInitials);
+      NormalizeAuthors (cpp->assignees, fixInitials);
       break;
     default :
       break;
@@ -4135,24 +4801,40 @@ static void NormalizePubdesc (PubdescPtr pdp, Boolean stripSerial, ValNodePtr PN
   Char             buf1 [121];
   Char             buf2 [121];
   CitGenPtr        cgp;
+  Boolean          fixInitials = TRUE;
+  Boolean          hasArt = FALSE;
+  Boolean          hasUid = FALSE;
   ValNodePtr       next;
   ValNodePtr PNTR  prev;
   ValNodePtr       vnp;
 
   if (pdp == NULL) return;
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == PUB_Muid || vnp->choice == PUB_PMid) {
+      if (vnp->data.intvalue > 0) {
+        hasUid = TRUE;
+      }
+    } else if (vnp->choice == PUB_Article) {
+      hasArt = TRUE;
+    }
+  }
+  if (hasArt && hasUid) {
+    fixInitials = FALSE;
+  }
   prev = &(pdp->pub);
   vnp = pdp->pub;
   if (vnp != NULL && vnp->next == NULL && vnp->choice == PUB_Gen) {
     cgp = (CitGenPtr) vnp->data.ptrvalue;
     buf1 [0] = '\0';
     PubLabelUnique (vnp, buf1, sizeof (buf1) - 1, OM_LABEL_CONTENT, TRUE);
-    NormalizeAuthors (cgp->authors);
+    NormalizeAuthors (cgp->authors, fixInitials);
     if (stripSerial) {
       cgp->serial_number = -1;
     }
     if (StringNICmp (cgp->cit, "unpublished", 11) == 0) {
+      cgp->cit [0] = 'U';
 #ifndef SUPPRESS_TRIVIAL_FLATFILE_DIFFERENCES
-      cgp->date = DateFree (cgp->date); /* remove date if unpublished */
+      /* cgp->date = DateFree (cgp->date); */ /* remove date if unpublished */
       if (cgp->journal == NULL) {
         cgp->volume = MemFree (cgp->volume);
         cgp->issue = MemFree (cgp->issue);
@@ -4160,6 +4842,7 @@ static void NormalizePubdesc (PubdescPtr pdp, Boolean stripSerial, ValNodePtr PN
       }
 #endif
     }
+    TrimSpacesAroundString (cgp->cit);
     buf2 [0] = '\0';
     PubLabelUnique (vnp, buf2, sizeof (buf2) - 1, OM_LABEL_CONTENT, TRUE);
     if (StringCmp (buf1, buf2) != 0) {
@@ -4172,7 +4855,7 @@ static void NormalizePubdesc (PubdescPtr pdp, Boolean stripSerial, ValNodePtr PN
     next = vnp->next;
     buf1 [0] = '\0';
     PubLabelUnique (vnp, buf1, sizeof (buf1) - 1, OM_LABEL_CONTENT, TRUE);
-    NormalizeAPub (vnp, stripSerial);
+    NormalizeAPub (vnp, stripSerial, fixInitials);
     if (vnp->choice == PUB_Gen && empty_citgen ((CitGenPtr) vnp->data.ptrvalue)) {
       *prev = vnp->next;
       vnp->next = NULL;
@@ -4190,199 +4873,6 @@ static void NormalizePubdesc (PubdescPtr pdp, Boolean stripSerial, ValNodePtr PN
   }
 }
 
-static Boolean CodonsAlreadyInOrder (tRNAPtr trp)
-
-{
-  Int2  i, j;
-
-  if (trp == NULL) return TRUE;
-  for (i = 0, j = 1; i < 5; i++, j++) {
-    if (trp->codon [i] > trp->codon [j]) return FALSE;
-  }
-  return TRUE;
-}
-
-static int LIBCALLBACK SortCodons (VoidPtr ptr1, VoidPtr ptr2)
-
-{
-  Uint1  codon1, codon2;
-
-  if (ptr1 == NULL || ptr2 == NULL) return 0;
-  codon1 = *((Uint1Ptr) ptr1);
-  codon2 = *((Uint1Ptr) ptr2);
-  if (codon1 > codon2) {
-    return 1;
-  } else if (codon1 < codon2) {
-    return -1;
-  }
-  return 0;
-}
-
-static void UniqueCodons (tRNAPtr trp)
-
-{
-  Int2   i, j;
-  Uint2  last = 255, next;
-
-  if (trp == NULL) return;
-
-  for (i = 0, j = 0; i < 6; i++) {
-    next = trp->codon [i];
-    if (next != last) {
-      trp->codon [j] = next;
-      last = next;
-      j++;
-    }
-  }
-  while (j < 6) {
-    trp->codon [j] = 255;
-    j++;
-  }
-}
-
-static CharPtr  codonLetterExpand [] =
-{
-  "?", "A", "C", "AC",
-  "G", "AG", "CG", "ACG",
-  "T", "AT", "CT", "ACT",
-  "GT", "AGT", "CGT", "ACGT",
-  NULL
-};
-
-static Boolean ParseDegenerateCodon (tRNAPtr trp, Uint1Ptr codon)
-
-{
-  Uint1    ch;
-  Uint1    chrToInt [256];
-  Int2     i, j;
-  Uint1    idx;
-  CharPtr  intToChr = "?ACMGRSVTWYHKDBN";
-  CharPtr  ptr, str;
-
-  if (trp == NULL || codon == NULL) return FALSE;
-
-  for (i = 0; i < 2; i++) {
-    ch = codon [i];
-    if (ch != 'A' && ch != 'C' && ch != 'G' && ch != 'T') return FALSE;
-  }
-
-  for (i = 0; i < 256; i++) {
-    chrToInt [i] = 0;
-  }
-  for (i = 1; i < 16; i++) {
-    ch = intToChr [i];
-    chrToInt [(int) ch] = i;
-  }
-
-  idx = chrToInt [(int) codon [2]];
-  if (idx > 15) return FALSE;
-
-  str = codonLetterExpand [idx];
-  ptr = str;
-  ch = *ptr;
-  j = 0;
-  codon [3] = '\0';
-  while (ch != '\0' && j < 6) {
-    codon [2] = ch;
-    trp->codon [j] = IndexForCodon (codon, Seq_code_iupacna);
-    ptr++;
-    ch = *ptr;
-    j++;
-  }
-
-  return TRUE;
-}
-
-static void CleanupTrna (SeqFeatPtr sfp, tRNAPtr trp)
-
-{
-  Uint1           aa = 0;
-  Char            codon [16];
-  Uint1           from = 0;
-  Int2            i;
-  Boolean         justTrnaText;
-  SeqMapTablePtr  smtp;
-
-  /* look for tRNA-OTHER with actual amino acid in comment */
-
-  if (trp == NULL) return;
-
-  if (sfp != NULL && sfp->comment != NULL && trp->codon [0] == 255) {
-    if (StringNICmp (sfp->comment, "codon recognized: ", 18) == 0) {
-      StringNCpy_0 (codon, sfp->comment + 18, sizeof (codon));
-      if (StringLen (codon) == 3) {
-        for (i = 0; i < 3; i++) {
-          if (codon [i] == 'U') {
-            codon [i] = 'T';
-          }
-        }
-        if (ParseDegenerateCodon (trp, (Uint1Ptr) codon)) {
-          sfp->comment = MemFree (sfp->comment);
-        }
-      }
-    }
-  }
-
-  if (! CodonsAlreadyInOrder (trp)) {
-    HeapSort ((VoidPtr) &(trp->codon), 6, sizeof (Uint1), SortCodons);
-  }
-  UniqueCodons (trp);
-
-  /* now always switch iupacaa to ncbieaa (was just for selenocysteine) */
-
-  if (trp->aatype == 1 /* && trp->aa == 'U' */) {
-    trp->aatype = 2;
-  }
-
-  if (sfp == NULL || sfp->comment == NULL) return;
-
-  if (trp->aatype == 2) {
-    aa = trp->aa;
-  } else {
-    switch (trp->aatype) {
-      case 0 :
-        from = 0;
-        break;
-      case 1 :
-        from = Seq_code_iupacaa;
-        break;
-      case 2 :
-        from = Seq_code_ncbieaa;
-        break;
-      case 3 :
-        from = Seq_code_ncbi8aa;
-        break;
-      case 4 :
-        from = Seq_code_ncbistdaa;
-        break;
-      default:
-        break;
-    }
-    smtp = SeqMapTableFind (Seq_code_ncbieaa, from);
-    if (smtp != NULL) {
-      aa = SeqMapTableConvert (smtp, trp->aa);
-    }
-  }
-  if (aa != 'X') {
-    if (aa == ParseTRnaString (sfp->comment, &justTrnaText)) {
-      if (justTrnaText) {
-        if (StringCmp (sfp->comment, "fMet") != 0) {
-          sfp->comment = MemFree (sfp->comment);
-        }
-      }
-    }
-    return;
-  }
-  aa = ParseTRnaString (sfp->comment, &justTrnaText);
-  if (aa == 0) return;
-  trp->aa = aa;
-  if (justTrnaText) {
-    if (StringCmp (sfp->comment, "fMet") != 0) {
-      sfp->comment = MemFree (sfp->comment);
-    }
-  }
-}
-
 static Boolean KeywordAlreadyInList (ValNodePtr head, CharPtr kwd)
 
 {
@@ -4397,15 +4887,67 @@ static Boolean KeywordAlreadyInList (ValNodePtr head, CharPtr kwd)
   return FALSE;
 }
 
+static Boolean CopyGeneXrefToGeneFeat (GeneRefPtr grp, GeneRefPtr grx)
+
+{
+  if (grp == NULL || grx == NULL) return FALSE;
+  if (grx->db != NULL) {
+    ValNodeLink (&(grp->db), grx->db);
+    grx->db = NULL;
+  }
+  if (grx->locus == NULL && grx->allele == NULL &&
+      grx->desc == NULL && grx->maploc == NULL &&
+      grx->db == NULL && grx->syn == NULL) return TRUE;
+  return FALSE;
+}
+
+static void HandleXrefOnGene (SeqFeatPtr sfp)
+
+{
+  GeneRefPtr           grp;
+  GeneRefPtr           grx;
+  SeqFeatXrefPtr       next;
+  SeqFeatXrefPtr PNTR  prev;
+  SeqFeatXrefPtr       xref;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE) return;
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (grp == NULL) return;
+   prev = &(sfp->xref);
+  xref = sfp->xref;
+  while (xref != NULL) {
+    next = xref->next;
+    if (xref->data.choice == SEQFEAT_GENE) {
+      grx = (GeneRefPtr) xref->data.value.ptrvalue;
+      if (CopyGeneXrefToGeneFeat (grp, grx)) {
+        *(prev) = next;
+        xref->next = NULL;
+        SeqFeatXrefFree (xref);
+      } else {
+        prev = &(xref->next);
+      }
+    } else {
+      prev = &(xref->next);
+    }
+    xref = next;
+  }
+}
+
 static void CopyProtXrefToProtFeat (ProtRefPtr prp, ProtRefPtr prx)
 
 {
   ValNodePtr       curr;
+  size_t           len;
   ValNodePtr       next;
   ValNodePtr PNTR  prev;
   CharPtr          str;
 
   if (prp == NULL || prx == NULL) return;
+
+  if (prx->db != NULL) {
+    ValNodeLink (&(prp->db), prx->db);
+    prx->db = NULL;
+  }
 
   prev = &(prx->name);
   curr = prx->name;
@@ -4422,6 +4964,23 @@ static void CopyProtXrefToProtFeat (ProtRefPtr prp, ProtRefPtr prx)
       prev = &(curr->next);
     }
     curr = next;
+  }
+
+  if (prp->desc == NULL) {
+    prp->desc = prx->desc;
+    prx->desc = NULL;
+  } else if (prx->desc != NULL) {
+    if (StringCmp (prx->desc, prp->desc) != 0) {
+      len = StringLen (prp->desc) + StringLen (prx->desc) + 6;
+      str = MemNew (len);
+      if (str != NULL) {
+        StringCpy (str, prp->desc);
+        StringCat (str, "; ");
+        StringCat (str, prx->desc);
+        prp->desc = MemFree (prp->desc);
+        prp->desc = str;
+      }
+    }
   }
 
   prev = &(prx->ec);
@@ -4493,14 +5052,50 @@ static void HandleXrefOnCDS (SeqFeatPtr sfp)
   }
 }
 
+static CharPtr siteList [] = {
+  "", "active", "binding", "cleavage", "inhibit", "modifi",
+  "glycosylation", "myristoylation", "mutagenized", "metal-binding",
+  "phosphorylation", "acetylation", "amidation", "methylation",
+  "hydroxylation", "sulfatation", "oxidative-deamination",
+  "pyrrolidone-carboxylic-acid", "gamma-carboxyglutamic-acid",
+  "blocked", "lipid-binding", "np-binding", "DNA-binding",
+  "signal-peptide", "transit-peptide", "transmembrane-region", NULL
+};
+
+static void StrStripSpaces (
+  CharPtr str
+)
+
+{
+  CharPtr  new_str;
+
+  if (str == NULL) return;
+
+  new_str = str;
+  while (*str != '\0') {
+    *new_str++ = *str;
+    if (*str == ' ' || *str == '\t' || *str == '(') {
+      for (str++; *str == ' ' || *str == '\t'; str++) continue;
+      if (*str == ')' || *str == ',') {
+        new_str--;
+      }
+    } else {
+      str++;
+    }
+  }
+  *new_str = '\0';
+}
+
 static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodePtr PNTR publist)
 
 {
   Uint1         aa;
   BioSourcePtr  biop;
   Char          ch;
+  Uint1         codon [6];
   GeneRefPtr    grp;
   ImpFeatPtr    ifp;
+  Boolean       is_fMet = FALSE;
   Int2          j;
   Boolean       justTrnaText;
   size_t        len;
@@ -4509,10 +5104,16 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
   OrgRefPtr     orp;
   PubdescPtr    pdp;
   ProtRefPtr    prp;
+  CharPtr       ptr;
   RnaRefPtr     rrp;
   CharPtr       str;
   CharPtr       suff;
+  CharPtr       temp;
+  Char          tmp [64];
+  Boolean       trimming_junk;
   tRNAPtr       trp;
+  CharPtr       val;
+  ValNodePtr    vnp;
 
   if (sfp == NULL) return;
   CleanVisString (&(sfp->comment));
@@ -4521,18 +5122,68 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
   CleanDoubleQuote (sfp->comment);
   switch (sfp->data.choice) {
     case SEQFEAT_BOND :
-    case SEQFEAT_SITE :
     case SEQFEAT_PSEC_STR :
     case SEQFEAT_COMMENT:
       return;
+    case SEQFEAT_SITE :
+      for (j = 0; siteList [j] != NULL; j++) {
+        StringNCpy_0 (tmp, siteList [j], sizeof (tmp));
+        len = StringLen (tmp);
+        if (StringNICmp (sfp->comment, tmp, len) == 0) {
+          if (sfp->data.value.intvalue == 0 || sfp->data.value.intvalue == 255) {
+            sfp->data.value.intvalue = j;
+            if (StringHasNoText (sfp->comment + len) || StringICmp (sfp->comment + len, " site") == 0) {
+              sfp->comment = MemFree (sfp->comment);
+            }
+          }
+        } else {
+          val = tmp;
+          ch = *val;
+          while (ch != '\0') {
+            if (ch == '-') {
+              *val = ' ';
+            }
+            val++;
+            ch = *val;
+          }
+          if (StringNICmp (sfp->comment, tmp, len) == 0) {
+            if (sfp->data.value.intvalue == 0 || sfp->data.value.intvalue == 255) {
+              sfp->data.value.intvalue = j;
+              if (StringHasNoText (sfp->comment + len) || StringICmp (sfp->comment + len, " site") == 0) {
+                sfp->comment = MemFree (sfp->comment);
+              }
+            }
+          }
+        }
+      }
+      break;
     default :
       break;
   }
   if (sfp->data.value.ptrvalue == NULL) return;
+
+  orp = NULL;
+  switch (sfp->data.choice) {
+    case SEQFEAT_ORG :
+      orp = (OrgRefPtr) sfp->data.value.ptrvalue;
+      break;
+    case SEQFEAT_BIOSRC :
+      biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+      orp = biop->org;
+    default :
+      break;
+  }
+  if (orp != NULL && sfp->qual != NULL) {
+    GbqualToOrpMod (&(sfp->qual), &(orp->mod));
+  }
+
   orp = NULL;
   switch (sfp->data.choice) {
     case SEQFEAT_GENE :
       grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+      if (sfp->xref != NULL) {
+        HandleXrefOnGene (sfp);
+      }
       CleanVisString (&(grp->locus));
       CleanVisString (&(grp->allele));
       CleanVisString (&(grp->desc));
@@ -4545,6 +5196,15 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
       CleanDoubleQuoteList (grp->syn);
       grp->db = ValNodeSort (grp->db, SortDbxref);
       CleanupDuplicateDbxrefs (&(grp->db));
+      if (grp->locus != NULL && grp->syn != NULL) {
+        vnp = grp->syn;
+        str = (CharPtr) vnp->data.ptrvalue;
+        if (StringCmp (grp->locus, str) == 0) {
+          grp->syn = vnp->next;
+          vnp->next = NULL;
+          ValNodeFreeData (vnp);
+        }
+      }
       break;
     case SEQFEAT_ORG :
       orp = (OrgRefPtr) sfp->data.value.ptrvalue;
@@ -4599,7 +5259,8 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
           name = (CharPtr) rrp->ext.value.ptrvalue;
           len = StringLen (name);
           if (len > 5) {
-            if (StringNICmp (name + len - 5, " rRNA", 5) == 0) {
+            if (len > 14 && StringNICmp (name + len - 14, " ribosomal rRNA", 14) == 0) {
+            } else if (StringNICmp (name + len - 5, " rRNA", 5) == 0) {
               str = MemNew (len + 10);
               if (str != NULL) {
                 StringNCpy (str, name, len - 5);
@@ -4611,8 +5272,9 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
           }
         } else if (rrp->type == 3) {
           name = (CharPtr) rrp->ext.value.ptrvalue;
-          aa = ParseTRnaString (name, &justTrnaText);
+          aa = ParseTRnaString (name, &justTrnaText, codon);
           if (aa != 0) {
+            is_fMet = (Boolean) (StringStr (name, "fMet") != NULL);
             rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
             trp = (tRNAPtr) MemNew (sizeof (tRNA));
             if (trp != NULL) {
@@ -4620,9 +5282,28 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
               for (j = 0; j < 6; j++) {
                 trp->codon [j] = 255;
               }
+              if (justTrnaText) {
+                for (j = 0; j < 6; j++) {
+                  trp->codon [j] = codon [j];
+                }
+              }
               trp->aa = aa;
               rrp->ext.choice = 2;
               rrp->ext.value.ptrvalue = (Pointer) trp;
+              CleanupTrna (sfp, trp);
+            }
+            if (is_fMet) {
+              if (sfp->comment == NULL) {
+                sfp->comment = StringSave ("fMet");
+              } else {
+                len = StringLen (sfp->comment) + StringLen ("fMet") + 5;
+                str = MemNew (sizeof (Char) * len);
+                StringCpy (str, sfp->comment);
+                StringCat (str, "; ");
+                StringCat (str, "fMet");
+                sfp->comment = MemFree (sfp->comment);
+                sfp->comment = str;
+              }
             }
           }
         }
@@ -4630,7 +5311,7 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
         trp = (tRNAPtr) rrp->ext.value.ptrvalue;
         CleanupTrna (sfp, trp);
       } else if (rrp->type == 3 && (! StringHasNoText (sfp->comment))) {
-        aa = ParseTRnaString (sfp->comment, &justTrnaText);
+        aa = ParseTRnaString (sfp->comment, &justTrnaText, NULL);
         if (aa != 0) {
           trp = (tRNAPtr) MemNew (sizeof (tRNA));
           if (trp != NULL) {
@@ -4642,18 +5323,28 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
             rrp->ext.choice = 2;
             rrp->ext.value.ptrvalue = (Pointer) trp;
             if (justTrnaText) {
-              if (StringCmp (sfp->comment, "fMet") != 0) {
+              if (StringCmp (sfp->comment, "fMet") != 0 &&
+                  StringCmp (sfp->comment, "fMet tRNA") != 0 &&
+                  StringCmp (sfp->comment, "fMet-tRNA") != 0) {
                 sfp->comment = MemFree (sfp->comment);
+              } else {
+                sfp->comment = MemFree (sfp->comment);
+                sfp->comment = StringSave ("fMet");
               }
             }
           }
         }
       }
-      if (rrp->ext.choice == 0 && sfp->comment != NULL && rrp->type != 3 &&
-          rrp->type != 1 /* until precursor_RNA can have /product */) {
+      if (rrp->ext.choice == 0 && sfp->comment != NULL && rrp->type == 4) {
         len = StringLen (sfp->comment);
-        if (len > 5 && len < 20) {
-          if (StringNICmp (sfp->comment + len - 3, "RNA", 3) == 0) {
+        if (len > 15 && len < 20) {
+          if (StringNICmp (sfp->comment + len - 15, "S ribosomal RNA", 15) == 0) {
+            rrp->ext.choice = 1;
+            rrp->ext.value.ptrvalue = sfp->comment;
+            sfp->comment = NULL;
+          }
+        } else if (len > 6 && len < 20) {
+          if (StringNICmp (sfp->comment + len - 6, "S rRNA", 6) == 0) {
             rrp->ext.choice = 1;
             rrp->ext.value.ptrvalue = sfp->comment;
             sfp->comment = NULL;
@@ -4673,11 +5364,21 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
           str = StringStr (name, " ribosomal");
           if (str != NULL) {
             suff = str + 10;
+            ch = *suff;
+            if (ch != '\0' && ch != ' ') {
+              suff = NULL;
+              str = NULL;
+            }
           }
           if (str == NULL) {
             str = StringStr (name, " rRNA");
             if (str != NULL) {
               suff = str + 5;
+              ch = *suff;
+              if (ch != '\0' && ch != ' ') {
+                suff = NULL;
+                str = NULL;
+              }
             }
           }
           if (suff != NULL && StringNICmp (suff, " RNA", 4) == 0) {
@@ -4725,6 +5426,115 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
           }
           if (ch == 's' && StringCmp (name, "s ribosomal RNA") == 0) {
             *name = 'S';
+          }
+        }
+        StrStripSpaces ((CharPtr) rrp->ext.value.ptrvalue);
+        name = (CharPtr) rrp->ext.value.ptrvalue;
+        len = StringLen (name);
+        if (len > 17) {
+          if (StringNICmp (name + len - 17, "ribosomal RNA RNA", 17) == 0) {
+            *(name + len - 4) = '\0';
+          }
+        }
+        trimming_junk = TRUE;
+        while (trimming_junk) {
+          StrStripSpaces ((CharPtr) rrp->ext.value.ptrvalue);
+          name = (CharPtr) rrp->ext.value.ptrvalue;
+          ptr = StringStr (name, "ribosomal ribosomal");
+          if (ptr != NULL) {
+            suff = ptr + 19;
+            *(ptr + 10) = '\0';
+            temp = MemNew (StringLen (name) + StringLen (suff) + 2);
+            TrimSpacesAroundString (suff);
+            StringCpy (temp, name);
+            if (suff [0] != ' ' && suff [0] != '\0') {
+              StringCat (temp, " ");
+            }
+            StringCat (temp, suff);
+            rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+            rrp->ext.value.ptrvalue = (Pointer) temp;
+          } else {
+            ptr = StringStr (name, "RNA RNA");
+            if (ptr != NULL) {
+              suff = ptr + 7;
+              *(ptr + 4) = '\0';
+              temp = MemNew (StringLen (name) + StringLen (suff) + 2);
+              TrimSpacesAroundString (suff);
+              StringCpy (temp, name);
+              if (suff [0] != ' ' && suff [0] != '\0') {
+                StringCat (temp, " ");
+              }
+              StringCat (temp, suff);
+              rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+              rrp->ext.value.ptrvalue = (Pointer) temp;
+            } else {
+              ptr = StringStr (name, "ribosomal RNA ribosomal");
+              if (ptr != NULL) {
+                suff = ptr + 23;
+                *(ptr + 14) = '\0';
+                temp = MemNew (StringLen (name) + StringLen (suff) + 2);
+                TrimSpacesAroundString (suff);
+                StringCpy (temp, name);
+                if (suff [0] != ' ' && suff [0] != '\0') {
+                  StringCat (temp, " ");
+                }
+                StringCat (temp, suff);
+                rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+                rrp->ext.value.ptrvalue = (Pointer) temp;
+              } else {
+                ptr = StringStr (name, "ribosomal rRNA");
+                if (ptr != NULL) {
+                  suff = ptr + 14;
+                  *(ptr + 10) = '\0';
+                  temp = MemNew (StringLen (name) + StringLen (" RNA") + StringLen (suff) + 2);
+                  TrimSpacesAroundString (suff);
+                  StringCpy (temp, name);
+                  StringCat (temp, " RNA");
+                  if (suff [0] != ' ' && suff [0] != '\0') {
+                    StringCat (temp, " ");
+                  }
+                  StringCat (temp, suff);
+                  rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+                  rrp->ext.value.ptrvalue = (Pointer) temp;
+                } else {
+                  ptr = StringStr (name, "RNA rRNA");
+                  if (ptr != NULL) {
+                    suff = ptr + 8;
+                    *(ptr + 3) = '\0';
+                    temp = MemNew (StringLen (name) + StringLen (suff) + 2);
+                    TrimSpacesAroundString (suff);
+                    StringCpy (temp, name);
+                    if (suff [0] != ' ' && suff [0] != '\0') {
+                      StringCat (temp, " ");
+                    }
+                    StringCat (temp, suff);
+                    rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+                    rrp->ext.value.ptrvalue = (Pointer) temp;
+                  } else {
+                    trimming_junk = FALSE;
+                  }
+                }
+              }
+            }
+          }
+        }
+        TrimSpacesAroundString ((CharPtr) rrp->ext.value.ptrvalue);
+      }
+      /*
+      if (rrp->type == 2 && rrp->ext.choice == 0 && sfp->comment != NULL) {
+        rrp->ext.choice = 1;
+        rrp->ext.value.ptrvalue = sfp->comment;
+        sfp->comment = NULL;
+      }
+      */
+      if (rrp->type == 2 && rrp->ext.choice == 0 && sfp->comment != NULL) {
+        len = StringLen (sfp->comment);
+        if (len > 5) {
+          if (StringNICmp (sfp->comment + len - 4, " RNA", 4) == 0 ||
+              StringNICmp (sfp->comment + len - 5, " mRNA", 5) == 0) {
+            rrp->ext.choice = 1;
+            rrp->ext.value.ptrvalue = sfp->comment;
+            sfp->comment = NULL;
           }
         }
       }
@@ -4856,7 +5666,7 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNo
         CleanVisStringList (&(gbp->keywords));
       }
       CleanVisStringJunk (&(gbp->source));
-      CleanVisString (&(gbp->origin));
+      CleanVisStringJunk (&(gbp->origin));
       CleanVisString (&(gbp->date));
       CleanVisString (&(gbp->div));
       CleanVisString (&(gbp->taxonomy));
@@ -4907,6 +5717,8 @@ static void CleanupDescriptorStrings (ValNodePtr sdp, Boolean stripSerial, ValNo
     CleanVisString (&(orp->common));
     CleanVisStringList (&(orp->mod));
     CleanVisStringList (&(orp->syn));
+    orp->db = ValNodeSort (orp->db, SortDbxref);
+    CleanupDuplicateDbxrefs (&(orp->db));
     onp = orp->orgname;
     while (onp != NULL) {
       CleanVisString (&(onp->attrib));
@@ -5037,9 +5849,12 @@ static void CheckForSwissProtID (SeqEntryPtr sep, Pointer mydata, Int4 index, In
         case SEQID_DDBJ :
         case SEQID_PRF :
         case SEQID_PDB :
+        case SEQID_TPE:
+        case SEQID_TPD:
           *stripSerial = FALSE;
           break;
         case SEQID_GENBANK :
+        case SEQID_TPG:
           tsip = (TextSeqIdPtr) sip->data.ptrvalue;
           if (tsip != NULL) {
             if (StringLen (tsip->accession) == 6) {
@@ -5089,10 +5904,53 @@ static void CheckForEmblDdbjID (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
 static void CleanupSeqLoc (SeqLocPtr slp)
 
 {
+  SeqLocPtr  last;
   SeqLocPtr  loc;
+  SeqIntPtr  sintp;
+  Int4       swp;
 
   if (slp == NULL) return;
+
+  /* from < to for all intervals */
+  loc = SeqLocFindNext (slp, NULL);
+  while (loc != NULL) {
+    if (loc->choice == SEQLOC_INT) {
+      sintp = (SeqIntPtr) loc->data.ptrvalue;
+      if (sintp != NULL) {
+        if (sintp->from > sintp->to) {
+          swp = sintp->from;
+          sintp->from = sintp->to;
+          sintp->to = swp;
+        }
+      }
+    }
+    loc = SeqLocFindNext (slp, loc);
+  }
+
   if (slp->choice != SEQLOC_MIX) return;
+  loc = (SeqLocPtr) slp->data.ptrvalue;
+  if (loc == NULL) return;
+
+  if (loc->next != NULL) {
+    /* check for null NULL at beginning */
+    if (loc->choice == SEQLOC_NULL) {
+      slp->data.ptrvalue = (Pointer) loc->next;
+      loc->next = NULL;
+      ValNodeFree (loc);
+    }
+    /* check for null NULL at end */
+    loc = (SeqLocPtr) slp->data.ptrvalue;
+    last = NULL;
+    while (loc->next != NULL) {
+      last = loc;
+      loc = loc->next;
+    }
+    if (loc->choice == SEQLOC_NULL && last != NULL) {
+      last->next = NULL;
+      ValNodeFree (loc);
+    }
+  }
+
   loc = (SeqLocPtr) slp->data.ptrvalue;
   if (loc == NULL || loc->next != NULL) return;
   /* here seqloc_mix points to a single location element, so no need for seqloc_mix parent */
@@ -5107,10 +5965,12 @@ static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publi
   BioSourcePtr  biop;
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
+  CodeBreakPtr  cbp;
   CdRegionPtr   crp;
   Char          div [10];
   GBBlockPtr    gbp;
   Boolean       hasNulls;
+  SeqIdPtr      id;
   ImpFeatPtr    ifp;
   Boolean       isEmblOrDdbj = FALSE;
   OrgNamePtr    onp;
@@ -5118,12 +5978,19 @@ static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publi
   Boolean       partial5;
   Boolean       partial3;
   ValNodePtr    psp;
+  RnaRefPtr     rrp;
+  Uint1         rrptype;
   SeqAnnotPtr   sap = NULL;
   ValNodePtr    sdp = NULL;
   SeqFeatPtr    sfp;
+  SeqIntPtr     sintp;
+  SeqIdPtr      sip;
+  SeqLocPtr     slp;
   CharPtr       str;
+  Uint1         strand;
   Boolean       stripSerial = TRUE;
   SeqEntryPtr   tmp;
+  tRNAPtr       trp;
 
   if (sep == NULL) return;
   SeqEntryExplore (sep, (Pointer) &stripSerial, CheckForSwissProtID);
@@ -5159,33 +6026,63 @@ static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publi
         crp = NULL;
         if (sfp->data.choice == SEQFEAT_IMP) {
           ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
-          if (ifp != NULL && ifp->loc != NULL) {
-            str = StringStr (ifp->loc, "replace");
-            if (str != NULL) {
-              AddReplaceQual (sfp, str);
-              ifp->loc = MemFree (ifp->loc);
+          if (ifp != NULL) {
+            if (ifp->loc != NULL) {
+              str = StringStr (ifp->loc, "replace");
+              if (str != NULL) {
+                AddReplaceQual (sfp, str);
+                ifp->loc = MemFree (ifp->loc);
+              }
+            }
+            if (StringCmp (ifp->key, "CDS") == 0) {
+              if (! isEmblOrDdbj) {
+                sfp->data.value.ptrvalue = ImpFeatFree (ifp);
+                sfp->data.choice = SEQFEAT_CDREGION;
+                crp = CdRegionNew ();
+                sfp->data.value.ptrvalue = crp;
+                sfp->idx.subtype = FEATDEF_CDS;
+              }
+            } else if (StringCmp (ifp->key, "allele") == 0 ||
+                       StringCmp (ifp->key, "mutation") == 0) {
+              ifp->key = MemFree (ifp->key);
+              ifp->key = StringSave ("variation");
+              sfp->idx.subtype = FEATDEF_variation;
+            } else if (StringHasNoText (ifp->loc)) {
+              rrptype = 0;
+              if (StringCmp (ifp->key, "precursor_RNA") == 0) {
+                rrptype = 1;
+              } else if (StringCmp (ifp->key, "mRNA") == 0) {
+                rrptype = 2;
+              } else if (StringCmp (ifp->key, "tRNA") == 0) {
+                rrptype = 3;
+              } else if (StringCmp (ifp->key, "rRNA") == 0) {
+                rrptype = 4;
+              } else if (StringCmp (ifp->key, "snRNA") == 0) {
+                rrptype = 5;
+              } else if (StringCmp (ifp->key, "scRNA") == 0) {
+                rrptype = 6;
+              } else if (StringCmp (ifp->key, "snoRNA") == 0) {
+                rrptype = 7;
+              } else if (StringCmp (ifp->key, "misc_RNA") == 0) {
+                rrptype = 255;
+              }
+              if (rrptype != 0) {
+                sfp->data.value.ptrvalue = ImpFeatFree (ifp);
+                sfp->data.choice = SEQFEAT_RNA;
+                rrp = RnaRefNew ();
+                sfp->data.value.ptrvalue = rrp;
+                rrp->type = rrptype;
+                sfp->idx.subtype = FindFeatDefType (sfp);
+              }
             }
           }
-          if (ifp != NULL && StringCmp (ifp->key, "CDS") == 0 && (! isEmblOrDdbj)) {
-            sfp->data.value.ptrvalue = ImpFeatFree (ifp);
-            sfp->data.choice = SEQFEAT_CDREGION;
-            crp = CdRegionNew ();
-            sfp->data.value.ptrvalue = crp;
-            sfp->idx.subtype = FEATDEF_CDS;
-          } else if (ifp != NULL &&
-                     (StringCmp (ifp->key, "allele") == 0 ||
-                     StringCmp (ifp->key, "mutation") == 0)) {
-            ifp->key = MemFree (ifp->key);
-            ifp->key = StringSave ("variation");
-            sfp->idx.subtype = FEATDEF_variation;
-          }
         }
-        CleanupFeatureGBQuals (sfp);
-        if (crp != NULL && crp->frame == 0) {
+        if (crp != NULL && crp->frame == 0 && (! sfp->pseudo)) {
           crp->frame = GetFrameFromLoc (sfp->location);
         }
         sfp->qual = SortFeatureGBQuals (sfp->qual);
         CleanupDuplicateGBQuals (&(sfp->qual));
+        CleanupFeatureGBQuals (sfp, isEmblOrDdbj);
         sfp->qual = SortIllegalGBQuals (sfp->qual);
         CleanupFeatureStrings (sfp, stripSerial, publist);
         sfp->dbxref = ValNodeSort (sfp->dbxref, SortDbxref);
@@ -5196,6 +6093,48 @@ static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publi
           CleanupDuplicateCits ((ValNodePtr PNTR) &(psp->data.ptrvalue));
         }
         CleanupSeqLoc (sfp->location);
+        strand = SeqLocStrand (sfp->location);
+        id = SeqLocId (sfp->location);
+        if (sfp->data.choice == SEQFEAT_CDREGION) {
+          crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+          if (crp != NULL) {
+            for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+              CleanupSeqLoc (cbp->loc);
+              if (strand == Seq_strand_minus && id != NULL) {
+                slp = cbp->loc;
+                if (slp != NULL && slp->choice == SEQLOC_INT) {
+                  sip = SeqLocId (slp);
+                  if (sip != NULL && SeqIdComp (id, sip) == SIC_YES) {
+                    sintp = (SeqIntPtr) slp->data.ptrvalue;
+                    if (sintp != NULL) {
+                      sintp->strand = Seq_strand_minus;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else if (sfp->data.choice == SEQFEAT_RNA) {
+          rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+          if (rrp != NULL && rrp->ext.choice == 2) {
+            trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+            if (trp != NULL && trp->anticodon != NULL) {
+              CleanupSeqLoc (trp->anticodon);
+              if (strand == Seq_strand_minus && id != NULL) {
+                slp = trp->anticodon;
+                if (slp != NULL && slp->choice == SEQLOC_INT) {
+                  sip = SeqLocId (slp);
+                  if (sip != NULL && SeqIdComp (id, sip) == SIC_YES) {
+                    sintp = (SeqIntPtr) slp->data.ptrvalue;
+                    if (sintp != NULL) {
+                      sintp->strand = Seq_strand_minus;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
         hasNulls = LocationHasNullsBetween (sfp->location);
         sfp->partial = (sfp->partial || partial5 || partial3 || hasNulls);
@@ -5254,6 +6193,11 @@ static void ReplaceCitOnFeat (CitGenPtr cgp, ValNodePtr publist)
       if (nxt != NULL && nxt->choice == 2) {
         cgp->cit = MemFree (cgp->cit);
         cgp->cit = StringSaveNoNull ((CharPtr) nxt->data.ptrvalue);
+        if (cgp->cit != NULL) {
+          if (StringNICmp (cgp->cit, "unpublished", 11) == 0) {
+            cgp->cit [0] = 'U';
+          }
+        }
       }
       return;
     }
@@ -5368,9 +6312,199 @@ static void GetMuidPmidPairs (PubdescPtr pdp, Pointer userdata)
   ValNodeAddInt ((ValNodePtr PNTR) userdata, 0, pmid);
 }
 
+static void FlattenPubSet (ValNodePtr PNTR prev)
+
+{
+  ValNodePtr  next;
+  ValNodePtr  ppr;
+  ValNodePtr  vnp;
+
+  if (prev == NULL || *prev == NULL) return;
+  ppr = *prev;
+  while (ppr != NULL) {
+    next = ppr->next;
+
+    if (ppr->choice == PUB_Equiv) {
+      vnp = (ValNodePtr) ppr->data.ptrvalue;
+      if (vnp != NULL && vnp->next == NULL) {
+        ppr->choice = vnp->choice;
+        switch (vnp->choice) {
+          case PUB_Muid :
+          case PUB_PMid :
+            ppr->data.intvalue = vnp->data.intvalue;
+            break;
+          default :
+            ppr->data.ptrvalue = vnp->data.ptrvalue;
+            break;
+        }
+        ValNodeFree (vnp);
+      }
+    }
+
+    ppr = next;
+  }
+} 
+
+static void FlattenDupInPubSet (ValNodePtr PNTR prev)
+
+{
+  ValNodePtr  next;
+  ValNodePtr  nxt;
+  ValNodePtr  ppr;
+  ValNodePtr  vnp;
+
+  if (prev == NULL || *prev == NULL) return;
+  ppr = *prev;
+  while (ppr != NULL) {
+    next = ppr->next;
+
+    if (ppr->choice == PUB_Equiv) {
+      vnp = (ValNodePtr) ppr->data.ptrvalue;
+      if (vnp != NULL) {
+        nxt = vnp->next;
+        if (nxt != NULL && nxt->next == NULL && vnp->choice == nxt->choice) {
+          switch (vnp->choice) {
+            case PUB_Muid :
+            case PUB_PMid :
+              if (vnp->data.intvalue == nxt->data.intvalue) {
+                vnp->next = ValNodeFree (nxt);
+              }
+              break;
+            default :
+              break;
+          }
+        }
+      }
+    }
+
+    ppr = next;
+  }
+} 
+
+static void FlattenPubdesc (PubdescPtr pdp, Pointer userdata)
+
+{
+  FlattenPubSet (&(pdp->pub));
+}
+
+static void FlattenSfpCit (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  ValNodePtr  psp;
+
+  psp = sfp->cit;
+  if (psp == NULL) return;
+  FlattenDupInPubSet ((ValNodePtr PNTR) &(psp->data.ptrvalue));
+  FlattenPubSet ((ValNodePtr PNTR) &(psp->data.ptrvalue));
+}
+
+static void GetCitGenLabels (PubdescPtr pdp, Pointer userdata)
+
+{
+  Char             buf [121];
+  CitGenPtr        cgp;
+  ValNodePtr PNTR  labellist;
+  ValNodePtr       vnp;
+ 
+  if (pdp == NULL) return;
+  labellist = (ValNodePtr PNTR) userdata;
+  if (labellist == NULL) return;
+
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice != PUB_Gen) continue;
+    cgp = (CitGenPtr) vnp->data.ptrvalue;
+    if (cgp == NULL) continue;
+    if (cgp->cit == NULL && cgp->journal == NULL &&
+        cgp->date == NULL && cgp->serial_number) continue;
+    PubLabelUnique (vnp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT, TRUE);
+    ValNodeCopyStr (labellist, 0, buf);
+  }
+}
+
+static void ReplaceShortCitGenOnFeat (CitGenPtr cgp, ValNodePtr labellist)
+
+{
+  Char        buf [128];
+  Char        ch;
+  size_t      len1;
+  size_t      len2;
+  CharPtr     ptr;
+  CharPtr     str;
+  CharPtr     tmp;
+  ValNodePtr  vnp;
+
+  for (vnp = labellist; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    len1 = StringLen (cgp->cit);
+    if (len1 < 2 || len1 > 120) continue;
+    StringCpy (buf, cgp->cit);
+    ptr = StringStr (buf, "Unpublished");
+    if (ptr != NULL) {
+      ptr += 11;
+      *ptr = '\0';
+      tmp = StringStr (cgp->cit, "Unpublished");
+      if (tmp != NULL) {
+        tmp += 11;
+        ch = *tmp;
+        while (ch == ' ') {
+          tmp++;
+          ch = *tmp;
+        }
+        StringCat (buf, tmp);
+      }
+    }
+    len1 = StringLen (buf);
+    if (buf [len1 - 1] != '>') continue;
+    len1--;
+    len2 = StringLen (str);
+    if (len1 >= len2) continue;
+    if (StringNCmp (str, buf, len1) == 0) {
+      cgp->cit = MemFree (cgp->cit);
+      cgp->cit = StringSaveNoNull (str);
+      if (cgp->cit != NULL) {
+        if (StringNICmp (cgp->cit, "unpublished", 11) == 0) {
+          cgp->cit [0] = 'U';
+        }
+      }
+      return;
+    }
+  }
+}
+
+static void UpdateShortFeatCits (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  CitGenPtr   cgp;
+  ValNodePtr  ppr;
+  ValNodePtr  psp;
+  ValNodePtr  vnp;
+
+  psp = sfp->cit;
+  if (psp != NULL && psp->data.ptrvalue) {
+    for (ppr = (ValNodePtr) psp->data.ptrvalue; ppr != NULL; ppr = ppr->next) {
+      vnp = NULL;
+      if (ppr->choice == PUB_Gen) {
+        vnp = ppr;
+      } else if (ppr->choice == PUB_Equiv) {
+        for (vnp = (ValNodePtr) ppr->data.ptrvalue;
+             vnp != NULL && vnp->choice != PUB_Gen;
+             vnp = vnp->next) continue;
+      }
+      if (vnp != NULL && vnp->choice == PUB_Gen) {
+        cgp = (CitGenPtr) vnp->data.ptrvalue;
+        if (cgp != NULL && (! StringHasNoText (cgp->cit))) {
+          ReplaceShortCitGenOnFeat (cgp, (ValNodePtr) userdata);
+        }
+      }
+    }
+  }
+}
+
 NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
 
 {
+  ValNodePtr   labellist = NULL;
   ValNodePtr   pairlist = NULL;
   ValNodePtr   publist = NULL;
   SeqEntryPtr  oldscope;
@@ -5378,6 +6512,12 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
   /* HandleXrefOnCDS call to GetBestProteinFeatureUnindexed now scoped within record */
 
   oldscope = SeqEntrySetScope (sep);
+
+  /* removed unnecessarily nested Pub-equivs */
+
+  VisitPubdescsInSep (sep, NULL, FlattenPubdesc);
+  VisitFeaturesInSep (sep, NULL, FlattenSfpCit);
+
   BasicSeqEntryCleanupInternal (sep, &publist);
   if (publist != NULL) {
     VisitFeaturesInSep (sep, (Pointer) publist, ChangeCitsOnFeats);
@@ -5391,6 +6531,12 @@ NLM_EXTERN void BasicSeqEntryCleanup (SeqEntryPtr sep)
     VisitFeaturesInSep (sep, (Pointer) pairlist, ChangeFeatCitsToPmid);
   }
   ValNodeFree (pairlist);
+
+  VisitPubdescsInSep (sep, (Pointer) &labellist, GetCitGenLabels);
+  if (labellist != NULL) {
+    VisitFeaturesInSep (sep, (Pointer) labellist, UpdateShortFeatCits);
+  }
+  ValNodeFree (labellist);
 
   SeqEntrySetScope (oldscope);
 }
@@ -5548,6 +6694,9 @@ NLM_EXTERN SeqIdPtr SeqIdStripLocus (SeqIdPtr sip)
       case SEQID_EMBL :
       case SEQID_DDBJ :
       case SEQID_OTHER :
+      case SEQID_TPG:
+      case SEQID_TPE:
+      case SEQID_TPD:
         tip = (TextSeqIdPtr) sip->data.ptrvalue;
         if (tip != NULL) {
           if (! HasNoText (tip->accession)) {
@@ -6255,14 +7404,12 @@ NLM_EXTERN SeqIdPtr MakeUniqueSeqID (CharPtr prefix)
 	return NULL;
 }
 
-#define NUM_ORDER 16
-
 NLM_EXTERN SeqIdPtr SeqIdFindWorst (SeqIdPtr sip)
 
 {
-  Uint1  order [NUM_ORDER];
+  Uint1  order [NUM_SEQID];
 
-  SeqIdBestRank (order, NUM_ORDER);
+  SeqIdBestRank (order, NUM_SEQID);
   order [SEQID_LOCAL] = 10;
   order [SEQID_GENBANK] = 5;
   order [SEQID_EMBL] = 5;
@@ -6271,6 +7418,9 @@ NLM_EXTERN SeqIdPtr SeqIdFindWorst (SeqIdPtr sip)
   order [SEQID_DDBJ] = 5;
   order [SEQID_PRF] = 5;
   order [SEQID_PDB] = 5;
+  order [SEQID_TPG] = 5;
+  order [SEQID_TPE] = 5;
+  order [SEQID_TPD] = 5;
   order [SEQID_PATENT] = 10;
   order [SEQID_OTHER] = 8;
   order [SEQID_GENERAL] = 15;
@@ -6278,7 +7428,7 @@ NLM_EXTERN SeqIdPtr SeqIdFindWorst (SeqIdPtr sip)
   order [SEQID_GIBBMT] = 15;
   order [SEQID_GIIM] = 20;
   order [SEQID_GI] = 20;
-  return SeqIdSelect (sip, order, NUM_ORDER);
+  return SeqIdSelect (sip, order, NUM_SEQID);
 }
 
 NLM_EXTERN SeqFeatPtr CreateNewFeature (SeqEntryPtr sep, SeqEntryPtr placeHere,

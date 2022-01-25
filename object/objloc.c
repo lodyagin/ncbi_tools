@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objloc.c,v $
+* Revision 6.6  2001/08/06 20:07:26  ostell
+* added SEQID_TPG, TPE, TPD types
+*
 * Revision 6.5  2001/01/31 15:24:20  kans
 * PatentSeqId.seqid is now an Int4 (JO)
 *
@@ -287,6 +290,9 @@ NLM_EXTERN Boolean LIBCALL SeqLocAsnLoad (void)
     13 = ddbj Textseq-id    -- ddbj
 	14 = prf Textseq-id ,         -- PRF SEQDB
 	15 = pdb PDB-seq-id          -- PDB sequence
+    16 = tpg Textseq-id ,         -- Third Party Annot/Seq Genbank
+    17 = tpe Textseq-id ,         -- Third Party Annot/Seq EMBL
+    18 = tpd Textseq-id }         -- Third Party Annot/Seq DDBJ
 *
 *****************************************************************************/
 /*****************************************************************************
@@ -321,6 +327,9 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdFree (SeqIdPtr anp)
         case SEQID_OTHER:     /* other */
         case SEQID_DDBJ:
 		case SEQID_PRF:
+	case SEQID_TPG:
+	case SEQID_TPE:
+	case SEQID_TPD:
             TextSeqIdFree((TextSeqIdPtr)pnt);
             break;
         case SEQID_PATENT:      /* patent seq id */
@@ -435,6 +444,18 @@ NLM_EXTERN Boolean LIBCALL SeqIdAsnWrite (SeqIdPtr anp, AsnIoPtr aip, AsnTypePtr
         case SEQID_PDB:      /* pdb   */
             writetype = SEQ_ID_pdb;
             func = (AsnWriteFunc) PDBSeqIdAsnWrite;
+            break;
+        case SEQID_TPG:      /* tpg   */
+            writetype = SEQ_ID_tpg;
+            func = (AsnWriteFunc) TextSeqIdAsnWrite;
+            break;
+        case SEQID_TPE:      /* tpe   */
+            writetype = SEQ_ID_tpe;
+            func = (AsnWriteFunc) TextSeqIdAsnWrite;
+            break;
+        case SEQID_TPD:      /* tpd   */
+            writetype = SEQ_ID_tpd;
+            func = (AsnWriteFunc) TextSeqIdAsnWrite;
             break;
     }
     if (writetype != NULL)
@@ -566,6 +587,21 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         choice = SEQID_PDB;
         func = (AsnReadFunc) PDBSeqIdAsnRead;
     }
+    else if (atp == SEQ_ID_tpg)
+    {
+        choice = SEQID_TPG;
+        func = (AsnReadFunc) TextSeqIdAsnRead;
+    }
+    else if (atp == SEQ_ID_tpe)
+    {
+        choice = SEQID_TPE;
+        func = (AsnReadFunc) TextSeqIdAsnRead;
+    }
+    else if (atp == SEQ_ID_tpd)
+    {
+        choice = SEQID_TPD;
+        func = (AsnReadFunc) TextSeqIdAsnRead;
+    }
     else
         goto erret;
 
@@ -641,6 +677,9 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdDup (SeqIdPtr oldid)
 		case SEQID_OTHER:
 		case SEQID_DDBJ:
 		case SEQID_PRF:
+		case SEQID_TPG:
+		case SEQID_TPE:
+		case SEQID_TPD:
 			at = (TextSeqIdPtr)oldid->data.ptrvalue;
             bt = TextSeqIdNew();
 			if (bt == NULL) return NULL;

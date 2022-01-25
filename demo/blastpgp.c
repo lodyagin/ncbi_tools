@@ -1,4 +1,4 @@
-/* $Id: blastpgp.c,v 6.97 2001/07/03 20:50:33 madden Exp $ */
+/* $Id: blastpgp.c,v 6.104 2001/10/12 14:55:41 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -24,8 +24,29 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.97 $ 
+ * $Revision: 6.104 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.104  2001/10/12 14:55:41  dondosha
+ * Changed description of the -t option
+ *
+ * Revision 6.103  2001/08/29 19:06:37  madden
+ * added variable posComputationcalled in Main, added parameter posComputationCalled to PGPrintPosMatrix
+ *
+ * Revision 6.102  2001/08/28 17:34:35  madden
+ * Add -m 9 as tabular output with comments
+ *
+ * Revision 6.101  2001/07/30 16:27:42  dondosha
+ * Do not call PGPOutTextMessages with XML output option
+ *
+ * Revision 6.100  2001/07/25 19:40:15  dondosha
+ * Multiply hitlist_size by 2 when going to next query if when tweak_parameters set
+ *
+ * Revision 6.99  2001/07/24 18:16:55  madden
+ * Set error_return when freeing
+ *
+ * Revision 6.98  2001/07/09 19:37:31  kans
+ * return 0 instead of NULL to fix Mac compiler error
+ *
  * Revision 6.97  2001/07/03 20:50:33  madden
  * Commented out call to PrintTabularOutputHeader
  *
@@ -447,7 +468,7 @@ static Args myargs [] = {
       "0", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 4 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = Tabular output", /* 5 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = Tabular output, \n9 = Tabular output with comments", /* 5 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "Output File for Alignment", /* 6 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -521,7 +542,7 @@ static Args myargs [] = {
       NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
     {"Use lower case filtering of FASTA sequence",    /* 41 */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
-    { "Tweak Lambda, K, and score matrix for each match", /*42*/
+    { "Use composition based statistics", /*42*/
       "T", NULL, NULL, FALSE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
 #ifdef YES_TO_DECLINE_TO_ALIGN
     { "Cost to decline alignment (disabled when 0)", /* 43 */
@@ -683,7 +704,7 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
 
     if(myargs[5].intvalue == 7) {
         bop->is_xml_output = TRUE;
-    } else if (myargs[5].intvalue != 8) {
+    } else if (myargs[5].intvalue != 8 && myargs[5].intvalue != 9) {
         PGPGetPrintOptions(options->gapped_calculation, &bop->align_options, 
                            &bop->print_options);
     }
@@ -852,7 +873,7 @@ Boolean PGPReadNextQuerySequence(PGPBlastOptionsPtr bop)
     
     if (bop->query_bsp == NULL) {
         ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
-        return NULL;
+        return 0;
     }    
     
     if(bop->believe_query) {
@@ -965,7 +986,8 @@ Boolean  PGPFormatFooter(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search)
 }
 
 Boolean PGPrintPosMatrix(CharPtr filename, posSearchItems *posSearch, 
-                         compactSearchItems *compactSearch)
+                         compactSearchItems *compactSearch, 
+                         Boolean posComputationCalled)
 {
     FILE *fp;
     
@@ -976,7 +998,7 @@ Boolean PGPrintPosMatrix(CharPtr filename, posSearchItems *posSearch,
     }
 
     /* a diagnostic, partly an option with -Q. */
-    outputPosMatrix(posSearch, compactSearch, fp); 
+    outputPosMatrix(posSearch, compactSearch, fp, posComputationCalled); 
     FileClose(fp);
 
     return TRUE;
@@ -1054,8 +1076,8 @@ SeqAlignPtr PGPSeedSearch(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search,
                                 bop->seedSearch, bop->options->ethresh, 
                                 myargs[34].floatvalue, posSearch, 
                                 &seqloc, TRUE, &info_vnp);
-    
-    PGPOutTextMessages(info_vnp, bop->outfp);
+    if (!bop->is_xml_output)
+       PGPOutTextMessages(info_vnp, bop->outfp);
     ValNodeFreeData(info_vnp);
     
     if (search->error_return) {
@@ -1063,7 +1085,7 @@ SeqAlignPtr PGPSeedSearch(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search,
        for (vnp = search->error_return; vnp; vnp = vnp->next) {
           BlastDestroyErrorMessage((BlastErrorMsgPtr)vnp->data.ptrvalue);
        }
-       ValNodeFree(search->error_return);
+       search->error_return = ValNodeFree(search->error_return);
     }
     *seqloc_duplicate = seqloc;
     head = convertValNodeListToSeqAlignList(seedReturn, lastSeqAligns, 
@@ -1107,7 +1129,6 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
     BlastPruneSapStructPtr prune;
     BLAST_MatrixPtr matrix;
     Int4Ptr PNTR txmatrix;
-    Boolean tabular_output = (myargs[5].intvalue == 8);
     BioseqPtr query_bsp;
 
     if(head == NULL) {
@@ -1115,13 +1136,12 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
         return;
     }
     
-    if (tabular_output) {
+    if (myargs[5].intvalue == 8 || myargs[5].intvalue == 9) {
        query_bsp = (bop->believe_query) ? bop->query_bsp : bop->fake_bsp;
-/*
-       PrintTabularOutputHeader(bop->blast_database, query_bsp, NULL, 
+	if (myargs[5].intvalue == 9)
+       		PrintTabularOutputHeader(bop->blast_database, query_bsp, NULL, 
                                 "blastp", thisPassNum, bop->believe_query,
                                 bop->outfp);
-*/
        BlastPrintTabulatedResults(head, query_bsp, NULL, 
                                   bop->number_of_alignments,
                                   "blastp", FALSE,
@@ -1299,6 +1319,7 @@ Int2 Main (void)
     Boolean  alreadyRecovered = FALSE;
     Boolean  freqCheckpoint = FALSE;
     Boolean  alignCheckpoint = FALSE;
+    Boolean  posComputationCalled = FALSE;
     Boolean  checkReturn = FALSE;
     Boolean  next_query = FALSE;
     Boolean tabular_output;
@@ -1368,7 +1389,7 @@ Int2 Main (void)
             search->positionBased = FALSE;
         
         global_fp = bop->outfp;
-        tabular_output = (myargs[5].intvalue == 8);
+        tabular_output = (myargs[5].intvalue == 8 || myargs[5].intvalue == 9);
 
         if(!bop->is_xml_output && !tabular_output) {   
             PGPFormatHeader(bop);
@@ -1395,6 +1416,7 @@ Int2 Main (void)
                 copyPosFreqs(posSearch->posFreqs,search->sbp->posFreqs, compactSearch->qlength, compactSearch->alphabetSize);
             } else {
                 search->sbp->posMatrix = BposComputation(posSearch, search, compactSearch, myargs[39].strvalue, myargs[28].strvalue, &(search->error_return)); 
+		posComputationCalled = TRUE;
                 if (NULL == search->sbp->posMatrix)
                     checkReturn = FALSE;
                 else
@@ -1407,7 +1429,7 @@ Int2 Main (void)
                for (vnp = search->error_return; vnp; vnp = vnp->next) {
                   BlastDestroyErrorMessage((BlastErrorMsgPtr)vnp->data.ptrvalue);
                }
-               ValNodeFree(search->error_return);
+               search->error_return = ValNodeFree(search->error_return);
             }
             if (!checkReturn) {
                 ErrPostEx(SEV_FATAL, 0, 0, "blast: Error recovering from checkpoint");
@@ -1416,7 +1438,7 @@ Int2 Main (void)
         
             /* Print out Pos matrix if necessary */
             if (myargs[38].strvalue != NULL)
-                PGPrintPosMatrix(myargs[38].strvalue, posSearch, compactSearch);
+                PGPrintPosMatrix(myargs[38].strvalue, posSearch, compactSearch, posComputationCalled);
         }
         
         do {  /*AAS*/
@@ -1555,16 +1577,18 @@ Int2 Main (void)
                                         (bop->options->isPatternSearch && 
                                          (1== thisPassNum)), 
                                         &(search->error_return), 1.0); /*AAS*/
+		    posComputationCalled = TRUE;
                     if (search->error_return) {
                        BlastErrorPrint(search->error_return);
                        for (vnp = search->error_return; vnp; vnp = vnp->next) {
                           BlastDestroyErrorMessage((BlastErrorMsgPtr)vnp->data.ptrvalue);
                        }
-                       ValNodeFree(search->error_return);
+                       search->error_return = ValNodeFree(search->error_return);
                     }
                 } else {
                     search->sbp->posMatrix = 
                         WposComputation(compactSearch, head, search->sbp->posFreqs); 
+		    posComputationCalled = TRUE;
                 }
 #if 0
                 /* DEBUG Printing of the matrix */
@@ -1596,7 +1620,7 @@ Int2 Main (void)
                 /* Print out pos matrix if necessary */
                 if (ALL_ROUNDS && (myargs[38].strvalue != NULL))
                     PGPrintPosMatrix(myargs[38].strvalue, posSearch, 
-                                     compactSearch);
+                                     compactSearch, posComputationCalled);
             }
             
         } while (( 0 == search->pbp->maxNumPasses || thisPassNum < (search->pbp->maxNumPasses)) && (! (search->posConverged)));
@@ -1634,7 +1658,8 @@ Int2 Main (void)
         
         next_query = FALSE;
         next_query = PGPReadNextQuerySequence(bop);
-        
+        if (bop->options->tweak_parameters)
+           bop->options->hitlist_size *= 2;   
     } while (next_query);       /* End of main do {} while (); loop */
 
     ReadDBBioseqFetchDisable();

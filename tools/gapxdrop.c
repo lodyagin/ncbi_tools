@@ -32,8 +32,17 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.58 $
+/* $Revision: 6.61 $
 * $Log: gapxdrop.c,v $
+* Revision 6.61  2001/08/27 18:56:26  madden
+* Fix OOFGapXEditBlockToSeqAlign if alignment overruns end of query
+*
+* Revision 6.60  2001/07/23 13:47:17  dondosha
+* Added LIBCALL to GapXEditScriptDelete declaration
+*
+* Revision 6.59  2001/07/19 22:13:31  dondosha
+* Made GapXEditScriptDelete public for use in mblast.c
+*
 * Revision 6.58  2001/04/25 13:25:47  madden
 * Do not memset tback
 *
@@ -1452,7 +1461,7 @@ GapXEditScriptNew(GapXEditScriptPtr old)
 	return new;
 }
 
-static GapXEditScriptPtr
+GapXEditScriptPtr LIBCALL
 GapXEditScriptDelete(GapXEditScriptPtr old)
 {
 	GapXEditScriptPtr next;
@@ -2770,8 +2779,11 @@ SeqAlignPtr LIBCALL OOFGapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqI
             seq_int2->from = get_current_pos(&start2, curr->num*curr->op_type);
             seq_int2->to = start2 - 1;
 
-            if(seq_int2->to >= query_length) {/* Possible with frame shifts */
-                seq_int2->to = query_length -1;
+		/* Chop off three bases and one residue at a time.
+			Why does this happen, seems like a bug?
+		*/
+            while (seq_int2->to >= query_length) {/* Possible with frame shifts */
+                seq_int2->to -= 3;
                 seq_int1->to--;
             }
 

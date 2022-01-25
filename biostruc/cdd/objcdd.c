@@ -5,8 +5,8 @@
 #include <objsset.h>
 #include <objmmdb1.h>
 #include <objmmdb3.h>
-#include <objcdd.h>
 #include <objcn3d.h>
+#include <objcdd.h>
 
 static Boolean loaded = FALSE;
 
@@ -35,7 +35,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.10 at Jun 14, 2001  4:37 PM
+*    Generated using ASNCODE Revision: 6.12 at Oct 17, 2001  2:17 PM
 *
 **************************************************/
 
@@ -715,7 +715,6 @@ CddAsnWrite(CddPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1379,6 +1378,180 @@ erret:
 
 /**************************************************
 *
+*    CddRepeatNew()
+*
+**************************************************/
+NLM_EXTERN 
+CddRepeatPtr LIBCALL
+CddRepeatNew(void)
+{
+   CddRepeatPtr ptr = MemNew((size_t) sizeof(CddRepeat));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    CddRepeatFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddRepeatPtr LIBCALL
+CddRepeatFree(CddRepeatPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqLocFree(ptr -> location);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    CddRepeatAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddRepeatPtr LIBCALL
+CddRepeatAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CddRepeatPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddRepeat ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_REPEAT);
+   } else {
+      atp = AsnLinkType(orig, CDD_REPEAT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = CddRepeatNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CDD_REPEAT_count) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> count = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_REPEAT_location) {
+      ptr -> location = SeqLocAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_REPEAT_avglen) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> avglen = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CddRepeatFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CddRepeatAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddRepeatAsnWrite(CddRepeatPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CDD_REPEAT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> count;
+   retval = AsnWrite(aip, CDD_REPEAT_count,  &av);
+   if (ptr -> location != NULL) {
+      if ( ! SeqLocAsnWrite(ptr -> location, aip, CDD_REPEAT_location)) {
+         goto erret;
+      }
+   }
+   av.intvalue = ptr -> avglen;
+   retval = AsnWrite(aip, CDD_REPEAT_avglen,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    CddDescrFree()
 *
 **************************************************/
@@ -1426,6 +1599,9 @@ CddDescrFree(ValNodePtr anp)
       break;
    case CddDescr_source_id:
       CddIdSetFree(anp -> data.ptrvalue);
+      break;
+   case CddDescr_repeats:
+      CddRepeatFree(anp -> data.ptrvalue);
       break;
    }
    return MemFree(anp);
@@ -1546,6 +1722,10 @@ CddDescrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       choice = CddDescr_source_id;
       func = (AsnReadFunc) CddIdSetAsnRead;
    }
+   else if (atp == CDD_DESCR_repeats) {
+      choice = CddDescr_repeats;
+      func = (AsnReadFunc) CddRepeatAsnRead;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -1648,6 +1828,10 @@ CddDescrAsnWrite(CddDescrPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case CddDescr_source_id:
       writetype = CDD_DESCR_source_id;
       func = (AsnWriteFunc) CddIdSetAsnWrite;
+      break;
+   case CddDescr_repeats:
+      writetype = CDD_DESCR_repeats;
+      func = (AsnWriteFunc) CddRepeatAsnWrite;
       break;
    }
    if (writetype != NULL) {

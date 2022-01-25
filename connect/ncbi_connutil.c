@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.21 2001/05/31 21:30:57 vakatov Exp $
+/*  $Id: ncbi_connutil.c,v 6.24 2001/12/04 15:56:28 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * Author:  Denis Vakatov
+ * Author:  Denis Vakatov, Anton Lavrentiev
  *
  * File Description:
  *   Auxiliary API, mostly CONN-, URL-, and MIME-related
@@ -31,6 +31,16 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.24  2001/12/04 15:56:28  lavr
+ * Use strdup() instead of explicit strcpy(malloc(...), ...)
+ *
+ * Revision 6.23  2001/09/24 20:27:00  lavr
+ * Message corrected: "Adjusted path too long"
+ *
+ * Revision 6.22  2001/09/10 21:14:58  lavr
+ * Added functions: StringToHostPort()
+ *                  HostPortToString()
+ *
  * Revision 6.21  2001/05/31 21:30:57  vakatov
  * MIME_ParseContentTypeEx() -- a more accurate parsing
  *
@@ -104,12 +114,19 @@
  */
 
 #include "ncbi_priv.h"
-#include <connect/ncbi_socket.h>
+#include <connect/ncbi_ansi_ext.h>
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_connutil.h>
-#include <connect/ncbi_ansi_ext.h>
+#include <connect/ncbi_socket.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+
+
+#define MAX_IP_ADDR_LEN  16 /* sizeof("255.255.255.255") */
+#ifndef   MAXHOSTNAMELEN
+#  define MAXHOSTNAMELEN 64
+#endif
 
 
 static const char* s_GetValue(const char* service, const char* param,
@@ -302,7 +319,7 @@ extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
 
     if (strlen(info->host) + strlen(info->path) + 16 > sizeof(info->path)) {
         CORE_LOG(eLOG_Error,
-                 "[ConnNetInfo_AdjustForHttpProxy]  Too long adjusted path");
+                 "[ConnNetInfo_AdjustForHttpProxy]  Adjusted path too long");
         assert(0);
         return 0/*false*/;
     }
@@ -329,8 +346,7 @@ extern void ConnNetInfo_SetUserHeader(SConnNetInfo* info,
 {
     if (info->http_user_header)
         free((void*) info->http_user_header);
-    info->http_user_header = user_header ?
-        strcpy((char*) malloc(strlen(user_header) + 1), user_header) : 0;
+    info->http_user_header = user_header ? strdup(user_header) : 0;
 }
 
 
@@ -1041,4 +1057,70 @@ extern int/*bool*/ MIME_ParseContentType
     }
 
     return 1/*true*/;
+}
+
+
+
+/****************************************************************************
+ * Reading and writing [host][:port] addresses
+ */
+
+extern const char* StringToHostPort(const char*     str,
+                                    unsigned int*   host,
+                                    unsigned short* port)
+{
+    char abuf[MAXHOSTNAMELEN];
+    unsigned short p;
+    unsigned int h;
+    const char* s;
+    size_t alen;
+    int n = 0;
+
+    *host = 0;
+    *port = 0;
+    for (s = str; *s; s++) {
+        if (isspace((unsigned char)(*s)) || *s == ':')
+            break;
+    }
+    if ((alen = (size_t)(s - str)) > sizeof(abuf) - 1)
+        return str;
+    if (alen) {
+        strncpy(abuf, str, alen);
+        abuf[alen] = '\0';
+        if (!(h = SOCK_gethostbyname(abuf)))
+            return str;
+    } else
+        h = 0;
+    if (*s == ':') {
+        if (sscanf(++s, "%hu%n", &p, &n) < 1 ||
+            (s[n] && !isspace((unsigned char) s[n])))
+            return alen ? 0 : str;
+    } else
+        p = 0;
+    *host = h;
+    *port = p;
+    return s + n;
+}
+
+
+extern size_t HostPortToString(unsigned int   host,
+                               unsigned short port,
+                               char*          buf,
+                               size_t         buflen)
+{
+    char abuf[MAX_IP_ADDR_LEN + 10/*:port*/];
+    size_t n;
+
+    if (!buf || !buflen)
+        return 0;
+    if (!host || SOCK_ntoa(host, abuf, sizeof(abuf)) != 0)
+        *abuf = 0;
+    sprintf(abuf + strlen(abuf), ":%hu", port);
+    n = strlen(abuf);
+    assert(n < sizeof(abuf));
+    if (n >= buflen)
+        n = buflen - 1;
+    memcpy(buf, abuf, n);
+    buf[n] = 0;
+    return n;
 }

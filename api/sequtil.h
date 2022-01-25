@@ -29,13 +29,22 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.32 $
+* $Revision: 6.35 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.35  2001/09/28 22:42:49  vakatov
+* Renamed "new" to "x_new" -- to avoid clash with the C++ "operator new"
+*
+* Revision 6.34  2001/09/28 14:31:01  madden
+* Added functions BSCompressDNANew and GenericCompressDNAEx for long sequences with ambiguity
+*
+* Revision 6.33  2001/08/07 18:12:05  kans
+* added macros for EMBL and DDBJ TPA and TPA_PROT prefixes
+*
 * Revision 6.32  2001/07/03 21:42:02  kans
 * added macros and accession prefixes for TPA (third-party annotation) records
 *
@@ -439,6 +448,8 @@ NLM_EXTERN Boolean Convert4NaRandom(Uint1 from, Uint1 PNTR to);
 *****************************************************************************/
 NLM_EXTERN ByteStorePtr BSCompressDNA(ByteStorePtr from, Int4 len, 
                                   Uint4Ptr PNTR lbytes);
+NLM_EXTERN ByteStorePtr BSCompressDNANew(ByteStorePtr from, Int4 len, 
+                                  Uint4Ptr PNTR lbytes);
   /* To be removed */
 NLM_EXTERN ByteStorePtr BSCompressDNAOld(ByteStorePtr from, Int4 len, 
                                      Uint4Ptr PNTR lbytes);
@@ -467,6 +478,14 @@ NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from,
                                   CompressRWFunc read_func, 
                                   CompressRWFunc write_func,
                                   Uint4Ptr PNTR lbytes);
+
+NLM_EXTERN Boolean GenericCompressDNAEx(VoidPtr from, 
+                                  VoidPtr to,
+                                  Uint4 length,
+                                  CompressRWFunc read_func, 
+                                  CompressRWFunc write_func,
+                                  Uint4Ptr PNTR lbytes,
+                                  Boolean x_new);
 
 /*****************************************************************************
 *
@@ -1097,6 +1116,10 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 
 #define ACCN_NCBI_TPA 48
 #define ACCN_NCBI_TPA_PROT 49
+#define ACCN_EMBL_TPA 50
+#define ACCN_EMBL_TPA_PROT 51
+#define ACCN_DDBJ_TPA 52
+#define ACCN_DDBJ_TPA_PROT 53
 
 
 /* Some accessions prefix can be either protein or nucleotide 
@@ -1113,7 +1136,7 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 /*
  Accession definitively points to a protein record 
 */
-#define ACCN_IS_PROT(c) (((c)==ACCN_SWISSPROT) ||  ( (c)==ACCN_NCBI_PROT) || ((c)== ACCN_EMBL_PROT) || ((c)== ACCN_DDBJ_PROT) || ((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_IS_PROTEIN) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_NCBI_TPA_PROT))
+#define ACCN_IS_PROT(c) (((c)==ACCN_SWISSPROT) ||  ( (c)==ACCN_NCBI_PROT) || ((c)== ACCN_EMBL_PROT) || ((c)== ACCN_DDBJ_PROT) || ((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_IS_PROTEIN) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_EMBL_TPA_PROT) || ((c)== ACCN_DDBJ_TPA_PROT))
 
 /*
   Accession definitively points to a nucleotide record 
@@ -1134,9 +1157,9 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 */
 #define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) || ((c)== ACCN_REFSEQ_mRNA_PREDICTED) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_REFSEQ_GENOMIC) || (((c)&65535)== ACCN_REFSEQ) )
 
-#define ACCN_IS_TPA(c) (((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT))
+#define ACCN_IS_TPA(c) (((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_EMBL_TPA) || ((c)== ACCN_EMBL_TPA_PROT) || ((c)== ACCN_DDBJ_TPA) || ((c)== ACCN_DDBJ_TPA_PROT))
 
-#define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)))
+#define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)) || ((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT))
 
 /*
   Macro to detect EMBL accession numbers  (can also belong to another DB)

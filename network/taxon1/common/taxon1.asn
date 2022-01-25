@@ -1,4 +1,4 @@
---$Revision: 6.2 $
+--$Revision: 6.5 $
 --**********************************************************************
 --
 --  NCBI Taxonomy Server
@@ -32,8 +32,10 @@ Taxon1-req ::= CHOICE {
 	lookup		Org-ref,  	-- lookup by data
 	getorgmod	Taxon1-info,  	-- lookup for OrgMod
 	fini    	NULL,    	-- close the server
-	id4gi		INTEGER}  	-- get Org-ref by TaxonID
-
+	id4gi		INTEGER,  	-- get taxid by gi
+	taxachildren	INTEGER,	-- get children
+	taxalineage     INTEGER,        -- get extended lineage for org
+	maxtaxid        NULL}           -- get max taxid
 
 Taxon1-resp ::= CHOICE {
 	error		Taxon1-error,	-- sent on any error
@@ -53,7 +55,11 @@ Taxon1-resp ::= CHOICE {
 	lookup  	Taxon1-data,
 	getorgmod	SET OF Taxon1-info,  
 	fini    	NULL,
-	id4gi           INTEGER}
+	id4gi           INTEGER,
+	taxabyid	Taxon2-data,
+	taxachildren	SEQUENCE OF Taxon1-name,
+	taxalineage	SEQUENCE OF Taxon1-name,
+	maxtaxid        INTEGER}
 
 Taxon1-info ::= SEQUENCE {
 	ival1	INTEGER,
@@ -78,7 +84,13 @@ Taxon1-error ::= SEQUENCE {
 Taxon1-data ::= SEQUENCE {
 	org Org-ref OPTIONAL,    -- Org-ref with Org-name and db filled in
 	div VisibleString ,  -- GenBank division
-	embl-code VisibleString ,     -- 2 letter EMBL code
+	embl-code VisibleString OPTIONAL,     -- 2 letter EMBL code
+	is-species-level BOOLEAN }   -- species level or below
+
+Taxon2-data ::= SEQUENCE {
+	org Org-ref OPTIONAL,    -- Org-ref with Org-name and db filled in
+	blast-name SEQUENCE OF VisibleString OPTIONAL,  -- inherited blast name
+	is-uncultured BOOLEAN ,     -- belongs to environmental bin
 	is-species-level BOOLEAN }   -- species level or below
 
 END

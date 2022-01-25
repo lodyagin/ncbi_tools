@@ -36,7 +36,7 @@
  * $
  */
 
-/* $Header: /am/src/NCBI/vault.ncbi/distrib/connect/mitsock/IdleInternal.h,v 1.2 2001/05/15 16:54:46 juran Exp $ */
+/* $Header: /am/src/NCBI/vault.ncbi/distrib/connect/mitsock/IdleInternal.h,v 1.1 2001/11/07 22:38:21 juran Exp $ */
 
 /*
  * Internal.h -- internal header file

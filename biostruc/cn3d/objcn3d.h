@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cn3d
-*    Generated using ASNCODE Revision: 6.10 at Jun 21, 2001 10:32 AM
+*    Generated using ASNCODE Revision: 6.12 at Oct 17, 2001 12:45 PM
 *
 **************************************************/
 
@@ -50,6 +50,7 @@ NLM_EXTERN Boolean LIBCALL Cn3dStyleDictionaryAsnWrite PROTO (( Cn3dStyleDiction
 **************************************************/
 typedef struct struct_Cn3d_user_annotations {
    struct struct_Cn3d_user_annotation PNTR   annotations;
+   struct struct_Cn3d_view_settings PNTR   view;
 } Cn3dUserAnnotations, PNTR Cn3dUserAnnotationsPtr;
 
 
@@ -87,6 +88,10 @@ NLM_EXTERN Boolean LIBCALL Cn3dUserAnnotationsAsnWrite PROTO (( Cn3dUserAnnotati
 #define Cn3d_color_scheme_weighted_variety 10
 #define Cn3d_color_scheme_information_content 11
 #define Cn3d_color_scheme_fit 12
+#define Cn3d_color_scheme_temperature 13
+#define Cn3d_color_scheme_hydrophobicity 14
+#define Cn3d_color_scheme_charge 15
+#define Cn3d_color_scheme_rainbow 16
 
 
 
@@ -153,10 +158,42 @@ NLM_EXTERN Boolean LIBCALL Cn3dGeneralStyleAsnWrite PROTO (( Cn3dGeneralStylePtr
 
 /**************************************************
 *
+*    Cn3dBackboneLabelStyle
+*
+**************************************************/
+typedef struct struct_Cn3d_backbone_label_style {
+   Int4   spacing;
+   Uint2   type;
+   /* following #defines are for enumerated type, not used by object loaders */
+#define Cn3d_backbone_label_style_type_one_letter 1
+#define Cn3d_backbone_label_style_type_three_letter 2
+
+   Uint2   number;
+   /* following #defines are for enumerated type, not used by object loaders */
+#define Cn3d_backbone_label_style_number_none 0
+#define Cn3d_backbone_label_style_number_sequential 1
+#define Cn3d_backbone_label_style_number_pdb 2
+
+   Uint1   termini;
+   Uint1   white;
+} Cn3dBackboneLabelStyle, PNTR Cn3dBackboneLabelStylePtr;
+
+
+NLM_EXTERN Cn3dBackboneLabelStylePtr LIBCALL Cn3dBackboneLabelStyleFree PROTO ((Cn3dBackboneLabelStylePtr ));
+NLM_EXTERN Cn3dBackboneLabelStylePtr LIBCALL Cn3dBackboneLabelStyleNew PROTO (( void ));
+NLM_EXTERN Cn3dBackboneLabelStylePtr LIBCALL Cn3dBackboneLabelStyleAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Cn3dBackboneLabelStyleAsnWrite PROTO (( Cn3dBackboneLabelStylePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
 *    Cn3dStyleSettings
 *
 **************************************************/
 typedef struct struct_Cn3d_style_settings {
+   struct struct_Cn3d_style_settings PNTR next;
+   CharPtr   name;
    struct struct_Cn3d_backbone_style PNTR   protein_backbone;
    struct struct_Cn3d_backbone_style PNTR   nucleotide_backbone;
    struct struct_Cn3d_general_style PNTR   protein_sidechains;
@@ -179,6 +216,9 @@ typedef struct struct_Cn3d_style_settings {
    Int4   helix_radius;
    Int4   strand_width;
    Int4   strand_thickness;
+   struct struct_Cn3d_backbone_label_style PNTR   protein_labels;
+   struct struct_Cn3d_backbone_label_style PNTR   nucleotide_labels;
+   Uint1   ion_labels;
 } Cn3dStyleSettings, PNTR Cn3dStyleSettingsPtr;
 
 
@@ -186,6 +226,26 @@ NLM_EXTERN Cn3dStyleSettingsPtr LIBCALL Cn3dStyleSettingsFree PROTO ((Cn3dStyleS
 NLM_EXTERN Cn3dStyleSettingsPtr LIBCALL Cn3dStyleSettingsNew PROTO (( void ));
 NLM_EXTERN Cn3dStyleSettingsPtr LIBCALL Cn3dStyleSettingsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL Cn3dStyleSettingsAsnWrite PROTO (( Cn3dStyleSettingsPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    Cn3dStyleSettingsSet
+*
+**************************************************/
+typedef struct struct_Cn3dStyleSettings Cn3dStyleSettingsSet;
+typedef struct struct_Cn3dStyleSettings PNTR Cn3dStyleSettingsSetPtr;
+#define Cn3dStyleSettingsSetNew() Cn3dStyleSettingsNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN Cn3dStyleSettingsSetPtr LIBCALL Cn3dStyleSettingsSetFree PROTO ((Cn3dStyleSettingsSetPtr ));
+NLM_EXTERN Cn3dStyleSettingsSetPtr LIBCALL Cn3dStyleSettingsSetNew PROTO (( void ));
+NLM_EXTERN Cn3dStyleSettingsSetPtr LIBCALL Cn3dStyleSettingsSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Cn3dStyleSettingsSetAsnWrite PROTO (( Cn3dStyleSettingsSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
 
 
 
@@ -284,6 +344,81 @@ NLM_EXTERN Cn3dUserAnnotationPtr LIBCALL Cn3dUserAnnotationFree PROTO ((Cn3dUser
 NLM_EXTERN Cn3dUserAnnotationPtr LIBCALL Cn3dUserAnnotationNew PROTO (( void ));
 NLM_EXTERN Cn3dUserAnnotationPtr LIBCALL Cn3dUserAnnotationAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL Cn3dUserAnnotationAsnWrite PROTO (( Cn3dUserAnnotationPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    Cn3dGLMatrix
+*
+**************************************************/
+typedef struct struct_Cn3d_GL_matrix {
+   FloatHi   m0;
+   FloatHi   m1;
+   FloatHi   m2;
+   FloatHi   m3;
+   FloatHi   m4;
+   FloatHi   m5;
+   FloatHi   m6;
+   FloatHi   m7;
+   FloatHi   m8;
+   FloatHi   m9;
+   FloatHi   m10;
+   FloatHi   m11;
+   FloatHi   m12;
+   FloatHi   m13;
+   FloatHi   m14;
+   FloatHi   m15;
+} Cn3dGLMatrix, PNTR Cn3dGLMatrixPtr;
+
+
+NLM_EXTERN Cn3dGLMatrixPtr LIBCALL Cn3dGLMatrixFree PROTO ((Cn3dGLMatrixPtr ));
+NLM_EXTERN Cn3dGLMatrixPtr LIBCALL Cn3dGLMatrixNew PROTO (( void ));
+NLM_EXTERN Cn3dGLMatrixPtr LIBCALL Cn3dGLMatrixAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Cn3dGLMatrixAsnWrite PROTO (( Cn3dGLMatrixPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    Cn3dVector
+*
+**************************************************/
+typedef struct struct_Cn3d_vector {
+   FloatHi   x;
+   FloatHi   y;
+   FloatHi   z;
+} Cn3dVector, PNTR Cn3dVectorPtr;
+
+
+NLM_EXTERN Cn3dVectorPtr LIBCALL Cn3dVectorFree PROTO ((Cn3dVectorPtr ));
+NLM_EXTERN Cn3dVectorPtr LIBCALL Cn3dVectorNew PROTO (( void ));
+NLM_EXTERN Cn3dVectorPtr LIBCALL Cn3dVectorAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Cn3dVectorAsnWrite PROTO (( Cn3dVectorPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    Cn3dViewSettings
+*
+**************************************************/
+typedef struct struct_Cn3d_view_settings {
+   FloatHi   camera_distance;
+   FloatHi   camera_angle_rad;
+   FloatHi   camera_look_at_X;
+   FloatHi   camera_look_at_Y;
+   FloatHi   camera_clip_near;
+   FloatHi   camera_clip_far;
+   struct struct_Cn3d_GL_matrix PNTR   matrix;
+   struct struct_Cn3d_vector PNTR   rotation_center;
+} Cn3dViewSettings, PNTR Cn3dViewSettingsPtr;
+
+
+NLM_EXTERN Cn3dViewSettingsPtr LIBCALL Cn3dViewSettingsFree PROTO ((Cn3dViewSettingsPtr ));
+NLM_EXTERN Cn3dViewSettingsPtr LIBCALL Cn3dViewSettingsNew PROTO (( void ));
+NLM_EXTERN Cn3dViewSettingsPtr LIBCALL Cn3dViewSettingsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Cn3dViewSettingsAsnWrite PROTO (( Cn3dViewSettingsPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }

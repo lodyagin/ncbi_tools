@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.133 $
+* $Revision: 6.151 $
 *
 * File Description: 
 *
@@ -57,6 +57,7 @@
 #include <salsap.h>
 #include <saledit.h>
 #include <salign.h>
+#include <salptool.h>
 #include <subutil.h>
 #include <pobutil.h>
 #include <tfuns.h>
@@ -69,6 +70,8 @@
 #include <explore.h>
 #include <alignval.h>
 #include <alignmgr.h>
+#include <alignmgr2.h>
+#include <aliparse.h>
 
 #define REGISTER_UPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Update Segmented Set","UpdateSegSet",0,0,0,0,NULL,UpdateSegSet,PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -86,7 +89,7 @@
 
 #define REGISTER_REMOVE_MESSEDUP ObjMgrProcLoadEx (OMPROC_FILTER,"Repair Messed Up Sets","RepairMessedUpSets",0,0,0,0,NULL,RepairMessedUpRecord,PROC_PRIORITY_DEFAULT, "Indexer")
 
-#define REGISTER_UPDATE_SEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER, "Update SeqAlign","UpdateSeqAlign",OBJ_SEQALIGN,0,OBJ_SEQALIGN,0,NULL,UpdateSeqAlign,PROC_PRIORITY_DEFAULT, "Indexer")
+#define REGISTER_UPDATE_SEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER, "Update SeqAlign","UpdateSeqAlign",OBJ_SEQALIGN,0,OBJ_SEQALIGN,0,NULL,NewUpdateSeqAlign,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_CONVERTSEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Convert SeqAlign","ConvertSeqAlign",0,0,0,0,NULL,ConvertToTrueMultipleAlignment,PROC_PRIORITY_DEFAULT, "Alignment")
 
@@ -163,6 +166,9 @@ static Int2 LIBCALLBACK CacheAccnsToDisk (Pointer data);
 
 #define REGISTER_REFGENEUSER_DESC_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit RefGene UserTrack Desc","RefGene Tracking",OBJ_SEQDESC,Seq_descr_user,OBJ_SEQDESC,Seq_descr_user,NULL,RefGeneUserGenFunc,PROC_PRIORITY_DEFAULT)
 extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
+
+#define REGISTER_TPAASSEMBLYUSER_DESC_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Assembly User Desc","TPA Assembly",OBJ_SEQDESC,Seq_descr_user,OBJ_SEQDESC,Seq_descr_user,NULL,AssemblyUserGenFunc,PROC_PRIORITY_DEFAULT)
+extern Int2 LIBCALLBACK AssemblyUserGenFunc (Pointer data);
 
 static void AddBspToSegSet (BioseqPtr segseq, BioseqPtr bsp)
 
@@ -907,11 +913,14 @@ static Int2 LIBCALLBACK ConvertToTrueMultipleAlignment (Pointer data)
 {
   OMProcControlPtr  ompcp;
   SeqAlignPtr       salp, sap, next;
+  SeqAnnotPtr       sanp;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
   switch (ompcp->input_itemtype) {
     case OBJ_SEQALIGN :
+      break;
+    case OBJ_SEQANNOT :
       break;
     case 0 :
       return OM_MSG_RET_ERROR;
@@ -919,9 +928,26 @@ static Int2 LIBCALLBACK ConvertToTrueMultipleAlignment (Pointer data)
       return OM_MSG_RET_ERROR;
   }
   if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
-  sap = (SeqAlignPtr) ompcp->input_data;
+  sap = NULL;
+  if (ompcp->input_itemtype == OBJ_SEQALIGN)
+     sap = (SeqAlignPtr) ompcp->input_data;
+  else
+  {
+     sanp = (SeqAnnotPtr) ompcp->input_data;
+     if (sanp->type == 2)
+        sap = (SeqAlignPtr)(sanp->data);
+  }
   if (sap == NULL) return OM_MSG_RET_ERROR;
-
+  salp = sap;
+  while (salp != NULL)
+  {
+     if (salp->saip != NULL)
+     {
+        SeqAlignIndexFree(salp->saip);
+        salp->saip = NULL;
+     }
+     salp = salp->next;
+  }
   if (! AlnMgrIndexSeqAlign (sap)) return OM_MSG_RET_ERROR;
 
   salp = AlnMgrGetSubAlign (sap, NULL, 0, -1);
@@ -944,16 +970,300 @@ static Int2 LIBCALLBACK ConvertToTrueMultipleAlignment (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+static void SqnSeqAlignDeleteInSeqEntryCallBack (SeqEntryPtr sep, Pointer mydata,
+                                          Int4 index, Int2 indent)
+{
+  BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
+  SeqAnnotPtr        sap,
+                     pre;
+  BoolPtr            dirtyp;
+  
+  if (sep != NULL && sep->data.ptrvalue && mydata != NULL) {
+     dirtyp = (BoolPtr)mydata;
+     if (IS_Bioseq(sep)) {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+        if (bsp!=NULL) {
+           sap=bsp->annot;
+           pre=NULL;
+           while (sap) {
+              if (sap->type == 2) {
+                 if (pre==NULL) {
+                    bsp->annot = sap->next;
+                    sap->next=NULL;
+                    sap = SeqAnnotFree (sap);
+                    if (bsp->annot)
+                       sap=bsp->annot->next;
+                 }
+                 else {
+                    pre=sap->next;
+                    sap->next=NULL;
+                    sap = SeqAnnotFree (sap);
+                    if (pre)
+                       sap=pre->next;
+                 }
+                 *dirtyp=TRUE;
+              }
+              else {
+                 pre=sap;
+                 sap=sap->next;
+              }
+           }
+        }
+     }
+     else if(IS_Bioseq_set(sep)) {
+        bssp = (BioseqSetPtr)sep->data.ptrvalue;
+        if (bssp!=NULL) {
+           sap=bssp->annot;
+           pre=NULL;
+           while (sap) {
+              if (sap->type == 2) {
+                 if (pre==NULL) {
+                    bssp->annot = sap->next;
+                    sap->next=NULL;
+                    sap = SeqAnnotFree (sap);
+                    if (bssp->annot)
+                       sap=bssp->annot->next;
+                 }
+                 else {
+                    pre=sap->next;
+                    sap->next=NULL;
+                    sap = SeqAnnotFree (sap);
+                    if (pre)
+                       sap=pre->next;
+                 }
+                 *dirtyp=TRUE;
+              }
+              else {
+                 pre=sap;
+                 sap=sap->next;
+              }
+           }
+        }
+     }
+  }
+}
+
+static Int2 LIBCALLBACK NewUpdateSeqAlign (Pointer data)
+
+{
+  AlignFileDataPtr  afdp;
+  Char              path [PATH_MAX];
+  FILE              *fp;
+  OMProcControlPtr  ompcp;
+  SeqAlignPtr       salp=NULL,
+                    salpnew;
+  SeqAnnotPtr       sap=NULL,
+                    sapcopy;
+  SeqEntryPtr       sep=NULL,
+                    sepnew=NULL;
+  Uint2             entityID,
+                    itemID;
+  MsgAnswer         ans;
+  SeqSubmitPtr      ssp;
+  Boolean           ok = TRUE, 
+                    dirty = FALSE;
+  ErrInfoPtr        eip;
+  CharPtr           msg;
+  Char              str [256];
+  FILE              *tmpFp;
+  Char              tmpPath [PATH_MAX];
+   
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+
+  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
+
+  switch(ompcp->input_itemtype)
+    {
+    case OBJ_BIOSEQ :
+      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
+      break;
+    case OBJ_BIOSEQSET :
+      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
+      break;
+    case OBJ_SEQENTRY :
+      sep = ompcp->input_data;
+      break;
+    case OBJ_SEQSUB :
+      ssp = ompcp->input_data;
+      if(ssp->datatype==1)
+         sep = (SeqEntryPtr)ssp->data;
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (sep==NULL)
+     return OM_MSG_RET_ERROR;
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  if (entityID < 1)
+     return OM_MSG_RET_ERROR;
+
+  if (newAlignReader) {
+    if (GetInputFileName (path, sizeof (path), NULL, "TEXT")) {
+      fp = FileOpen (path, "r");
+      if (fp != NULL) {
+        afdp = Ali_Read (fp);
+        FileClose (fp);
+        if (afdp != NULL) {
+	  if (afdp->errors != NULL) {
+	    TmpNam (tmpPath);
+	    tmpFp = FileOpen (tmpPath, "w");
+	    
+	    for (eip = afdp->errors; eip != NULL; eip = eip->next) {
+	      size_t   len;
+	      if (eip->info == NULL) {
+		fprintf (tmpFp, "ERROR: eip->info is NULL\n");
+		continue;
+	      }
+
+	      /* Ignore "No source info" errors for updates */
+
+	      if ((eip->errNum == ERR_DEFLINE_NODEFS) ||
+		  (eip->errNum == ERR_GLOBAL_DEFLINE_NODEFS) ||
+		  (eip->errNum == ERR_MULTI_DEFLINE_NODEFS))
+		continue;
+
+	      len = StringLen (eip->info) + 60;
+	      msg = MemNew (len);
+	      if (msg == NULL) continue;
+	      if (eip->level == LEVEL_MULTI) {
+		StringCpy (msg, "MULTIPLE ERRORS:");
+	      } else if (eip->level == LEVEL_ERROR) {
+		StringCpy (msg, "ERROR:");
+	      } else if (eip->level == LEVEL_WARNING) {
+		StringCpy (msg, "WARNING:");
+	      } else if (eip->level == LEVEL_INFO) {
+		  StringCpy (msg, "INFO:");
+	      }
+	      if (eip->rowNum != 0) {
+		sprintf (str, " [Line %ld]", (long) eip->rowNum);
+		StringCat (msg, str);
+	      }
+	      if (eip->info != NULL) {
+		  StringCat (msg, " ");
+		  StringCat (msg, eip->info);
+	      }
+	      fprintf (tmpFp, "%s\n\n", msg);
+	      MemFree (msg);
+	      }
+	    FileClose (tmpFp);
+	    LaunchGeneralTextViewer (tmpPath, "Sequence Alignment Update Errors");
+	    FileRemove (tmpPath);
+	  }
+          sepnew = ALI_ConvertToNCBIData (afdp);
+          Ali_Free (afdp);
+          afdp = NULL;
+        }
+      }
+    }
+  } else {
+    sepnew = ReadAnyAlignment (FALSE, NULL);
+  }
+  if (sepnew) {
+     salpnew = (SeqAlignPtr) FindSeqAlignInSeqEntry (sepnew, OBJ_SEQALIGN);
+     if (salpnew) {
+        ok = ValidateSeqAlignandACCInSeqEntry (sepnew, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE);
+        if (ok) {
+           salp = (SeqAlignPtr) FindSeqAlignInSeqEntry (sep, OBJ_SEQALIGN);
+           if (salp) {
+              ans = Message (MSG_OKC, "Do you wish to replace (OK) or add (Cancel) the alignment in your SeqEntry?");
+              if (ans == ANS_OK)
+              {
+                 SeqEntryExplore (sep, &dirty, SqnSeqAlignDeleteInSeqEntryCallBack);
+              }
+           }
+           sap=SeqAnnotForSeqAlign(salpnew);
+           sapcopy = (SeqAnnotPtr) AsnIoMemCopy (sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
+           SeqAlignAddInSeqEntry (sep, sapcopy);
+           sap->data=NULL;
+           MemFree(sap);
+           ObjMgrSetDirtyFlag (entityID, TRUE);
+           itemID = GetItemIDGivenPointer (entityID, OBJ_SEQENTRY, (Pointer) sep);
+           ObjMgrSendMsg (OM_MSG_UPDATE, entityID, itemID, OBJ_SEQENTRY);
+        }
+     }
+     ObjMgrFree (OBJ_SEQENTRY, (Pointer)sepnew);
+     sepnew=NULL;
+  }
+  return OM_MSG_RET_OK;
+}
+
+typedef struct sqn_bsp {
+   BioseqPtr  bsp;
+   struct sqn_bsp PNTR next;
+} SQNBsp, PNTR SQNBspPtr;
+
+static void SQNGetBioseqs(SeqEntryPtr sep, Pointer userdata, Int4 index, Int2 indent)
+{
+   SQNBspPtr  sbp;
+
+   if (sep == NULL || sep->data.ptrvalue == NULL || userdata == NULL)
+      return;
+   sbp = (SQNBspPtr)userdata;
+   if (IS_Bioseq(sep))
+   {
+      if (sbp->bsp == NULL)
+         sbp->bsp = (BioseqPtr)(sep->data.ptrvalue);
+      else
+      {
+         while (sbp->next != NULL)
+         {
+            sbp = sbp->next;
+         }
+         sbp->next = (SQNBspPtr)MemNew(sizeof(SQNBsp));
+         sbp->next->bsp = (BioseqPtr)(sep->data.ptrvalue);
+      }
+   }
+}
+
+static void SQNGetBioseqsProt(SeqEntryPtr sep, Pointer userdata, Int4 index, Int2 indent)
+{
+   BioseqPtr  bsp;
+   SQNBspPtr  sbp;
+
+   if (sep == NULL || sep->data.ptrvalue == NULL || userdata == NULL)
+      return;
+   sbp = (SQNBspPtr)userdata;
+   if (IS_Bioseq(sep))
+      bsp = (BioseqPtr)(sep->data.ptrvalue);
+   if (IS_Bioseq(sep) && ISA_aa(bsp->mol))
+   {
+      if (sbp->bsp == NULL)
+         sbp->bsp = (BioseqPtr)(sep->data.ptrvalue);
+      else
+      {
+         while (sbp->next != NULL)
+         {
+            sbp = sbp->next;
+         }
+         sbp->next = (SQNBspPtr)MemNew(sizeof(SQNBsp));
+         sbp->next->bsp = (BioseqPtr)(sep->data.ptrvalue);
+      }
+   }
+}
+
 static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
 
 {
   BioseqPtr         bsp;
   BioseqSetPtr      bssp;
+  Int4              chlen;
   SeqAnnotPtr       curr;
+  Int4              endsfixed;
   ObjectIdPtr       oip;
   OMProcControlPtr  ompcp;
+  SeqAlignPtr       salp;
+  SeqAlignPtr       salp_head;
+  SeqAlignPtr       salp_mult;
+  SeqAlignPtr       salp_prev;
+  SeqAlignPtr       salp_tmp;
   SeqAnnotPtr       sap;
   SeqAnnotPtr PNTR  sapp;
+  SQNBspPtr         sbp;
+  SQNBspPtr         sbp_prev;
   SeqEntryPtr       sep;
   UserFieldPtr      ufp;
   UserObjectPtr     uop;
@@ -973,8 +1283,54 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
   if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
   sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
   if (sep == NULL) return OM_MSG_RET_ERROR;
-  sap = SeqEntryToSeqAlign (sep, Seq_mol_na);
-  if (sap != NULL && sap->type == 2) {
+  sbp = (SQNBspPtr)MemNew(sizeof(SQNBsp));
+  SeqEntryExplore(sep, sbp, SQNGetBioseqs);
+  bsp = sbp->bsp;
+  sbp_prev = sbp;
+  sbp = sbp->next;
+  MemFree(sbp_prev);
+  salp_head = salp_prev = NULL;
+  endsfixed = 0;
+  while (sbp != NULL)
+  {
+    salp = Sequin_GlobalAlignTwoSeq(bsp, sbp->bsp, &chlen);
+    if (chlen > endsfixed)
+       endsfixed = chlen;
+    if (salp != NULL && salp_head != NULL)
+    {
+       salp_prev->next = salp;
+       salp_prev = salp;
+    } else if (salp != NULL)
+       salp_head = salp_prev = salp;
+    sbp_prev = sbp;
+    sbp = sbp->next;
+    MemFree(sbp_prev);
+  }
+  if (endsfixed > 0)
+  {
+    Message(MSG_OK, "The first sequence does not extend to both ends, so as much as %d nt%s on the ends %s not been algorithmically aligned.\nIf the ends do not look correctly aligned, and a good alignment is needed in those areas,\nchoose a sequence that extends to the desired end and put that first, then realign.", endsfixed, endsfixed > 1?"s":"", endsfixed > 1?"have":"has");
+  }
+  if (salp_head != NULL)
+  {
+    salp_tmp = salp_head;
+    while (salp_tmp != NULL)
+    {
+       if (salp_tmp->saip != NULL)
+       {
+          SeqAlignIndexFree(salp_tmp->saip);
+          salp_tmp->saip = NULL;
+       }
+       salp_tmp = salp_tmp->next;
+    }
+    AlnMgr2IndexSeqAlign(salp_head);
+    salp_mult = AlnMgr2GetSubAlign(salp_head, 0, -1, 0);
+    salp_mult->dim = AlnMgr2GetNumRows(salp_head);
+    salp_mult->type = SAT_PARTIAL;
+    SeqAlignSetFree(salp_head);
+    sap = SeqAnnotForSeqAlign(salp_mult);
+  } else
+    sap = NULL;
+  if (sap != NULL) {
 
     oip = ObjectIdNew ();
     oip->str = StringSave ("Hist Seqalign");
@@ -1024,11 +1380,20 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntryProt (Pointer data)
 {
   BioseqPtr         bsp;
   BioseqSetPtr      bssp;
+  Int4              chlen;
   SeqAnnotPtr       curr;
+  Int4              endsfixed;
   ObjectIdPtr       oip;
   OMProcControlPtr  ompcp;
+  SeqAlignPtr       salp;
+  SeqAlignPtr       salp_head;
+  SeqAlignPtr       salp_mult;
+  SeqAlignPtr       salp_prev;
+  SeqAlignPtr       salp_tmp;
   SeqAnnotPtr       sap;
   SeqAnnotPtr PNTR  sapp;
+  SQNBspPtr         sbp;
+  SQNBspPtr         sbp_prev;
   SeqEntryPtr       sep;
   UserFieldPtr      ufp;
   UserObjectPtr     uop;
@@ -1048,8 +1413,52 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntryProt (Pointer data)
   if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
   sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
   if (sep == NULL) return OM_MSG_RET_ERROR;
-  sap = SeqEntryToSeqAlign (sep, Seq_mol_aa);
-  if (sap != NULL && sap->type == 2) {
+  sbp = (SQNBspPtr)MemNew(sizeof(SQNBsp));
+  SeqEntryExplore(sep, sbp, SQNGetBioseqsProt);
+  bsp = sbp->bsp;
+  sbp_prev = sbp;
+  sbp = sbp->next;
+  MemFree(sbp_prev);
+  salp_head = salp_prev = NULL;
+  endsfixed = 0;
+  while (sbp != NULL)
+  {
+    salp = Sequin_GlobalAlignTwoSeq(bsp, sbp->bsp, &chlen);
+    if (chlen > endsfixed)
+       endsfixed = chlen;
+    if (salp_head != NULL && salp != NULL)
+    {
+       salp_prev->next = salp;
+       salp_prev = salp;
+    } else if (salp != NULL)
+       salp_head = salp_prev = salp;
+    sbp_prev = sbp;
+    sbp = sbp->next;
+    MemFree(sbp_prev);
+  }
+  if (endsfixed > 1)
+    Message(MSG_OK, "The first sequence does not extend to both ends, so as much as %d nt%s on the ends %s not been algorithmically aligned.\nIf the ends do not look correctly aligned, and a good alignment is needed in those areas,\nchoose a sequence that extends to the desired end and put that first, then realign.", endsfixed, endsfixed > 1?"s":"", endsfixed > 1?"have":"has");
+  if (salp_head != NULL)
+  {
+    salp_tmp = salp_head;
+    while (salp_tmp != NULL)
+    {
+       if (salp_tmp->saip != NULL)
+       {
+          SeqAlignIndexFree(salp_tmp->saip);
+          salp_tmp->saip = NULL;
+       }
+       salp_tmp = salp_tmp->next;
+    }
+    AlnMgr2IndexSeqAlign(salp_head);
+    salp_mult = AlnMgr2GetSubAlign(salp_head, 0, -1, 0);
+    salp_mult->dim = AlnMgr2GetNumRows(salp_head);
+    salp_mult->type = SAT_PARTIAL;
+    SeqAlignSetFree(salp_head);
+    sap = SeqAnnotForSeqAlign(salp_mult);
+  } else
+    sap = NULL;
+  if (sap != NULL) {
 
     oip = ObjectIdNew ();
     oip->str = StringSave ("Hist Seqalign");
@@ -4831,6 +5240,7 @@ extern void SetupSequinFilters (void)
     REGISTER_CLEAR_SEQENTRYSCOPE;
     REGISTER_SEQUIN_CACHE_ACCN;
     REGISTER_SEQUIN_GI_TO_ACCN;
+    REGISTER_TPAASSEMBLYUSER_DESC_EDIT;
     REGISTER_REFGENEUSER_DESC_EDIT;
     REGISTER_PROT_IDS_TO_GENE_SYN;
     REGISTER_DESCRIPTOR_PROPAGATE;
@@ -5012,6 +5422,7 @@ static ENUM_ALIST(source_modifiers_fld_alist)
   {"Dosage",                 20},
   {"Ecotype",                27},
   {"Endogenous-virus-name", 125},
+  {"Environmental-sample",  127},
   {"Forma",                  25},
   {"Forma-specialis",        26},
   {"Frequency",             113},
@@ -5021,6 +5432,7 @@ static ENUM_ALIST(source_modifiers_fld_alist)
   {"Haplotype",             105},
   {"Ins-seq-name",          121},
   {"Isolate",                17},
+  {"Isolation-source",      128},
   {"Lab-host",              116},
   {"Lineage",               203},
   {"Map",                   102},
@@ -5051,6 +5463,7 @@ static ENUM_ALIST(source_modifiers_fld_alist)
   {"Teleomorph",             30},
   {"Tissue-lib",            118},
   {"Tissue-type",           110},
+  {"Transgenic",            126},
   {"Transposon-name",       120},
   {"Type",                    4},
   {"Variety",                 6},
@@ -5335,12 +5748,95 @@ typedef struct lclidlist {
   struct lclidlist PNTR right;
 } LclIdList, PNTR LclIdListPtr;
 
+/********************************************************************
+*
+* SeqLocReplaceLocalID
+*   replaces the Seq-Id in a Seq-Loc (slp) with a new Seq-Id (new_sip)
+*   only if the Seq-Id is a local one.
+*
+**********************************************************************/
+
+static SeqLocPtr SeqLocReplaceLocalID (SeqLocPtr slp,
+				       SeqIdPtr  new_sip)
+{
+  SeqLocPtr        curr;
+  PackSeqPntPtr    pspp;
+  SeqIntPtr        target_sit;
+  SeqPntPtr        spp;
+  SeqIdPtr         currId;
+
+  switch (slp->choice) {
+     case SEQLOC_PACKED_INT :
+     case SEQLOC_MIX :
+     case SEQLOC_EQUIV :
+        curr = NULL;
+        while ((curr = SeqLocFindNext (slp, curr)) != NULL) {
+           curr = SeqLocReplaceLocalID (curr, new_sip);
+        }
+        break;
+     case SEQLOC_PACKED_PNT :
+        pspp = (PackSeqPntPtr) slp->data.ptrvalue;
+        if ((pspp != NULL) && (pspp->id->choice == SEQID_LOCAL)) {
+          SeqIdFree (pspp->id);
+          pspp->id = SeqIdDup (new_sip);
+        }
+        break;
+     case SEQLOC_EMPTY :
+     case SEQLOC_WHOLE :
+        currId = (SeqIdPtr) slp->data.ptrvalue;
+	if (currId->choice == SEQID_LOCAL)
+	  {
+	    SeqIdFree (currId);
+	    slp->data.ptrvalue = (Pointer) SeqIdDup (new_sip);
+	  }
+        break;
+     case SEQLOC_INT :
+        target_sit = (SeqIntPtr) slp->data.ptrvalue;
+	if (target_sit->id->choice == SEQID_LOCAL)
+	  {
+	    SeqIdFree (target_sit->id);
+	    target_sit->id = SeqIdDup (new_sip);
+	  }
+        break;
+     case SEQLOC_PNT :
+        spp = (SeqPntPtr)slp->data.ptrvalue;
+	if (spp->id->choice == SEQID_LOCAL)
+	  {
+	    SeqIdFree(spp->id);
+	    spp->id = SeqIdDup(new_sip);
+	  }
+        break;
+     default :
+        break;
+  }
+  return slp;
+}
+
+static void ReplaceLocalIdOnLoc_callback (SeqFeatPtr sfp, Pointer userdata)
+{
+  SeqIdPtr sip;
+
+  sip = (SeqIdPtr) userdata;
+  if (sfp->location != NULL) 
+    SeqLocReplaceLocalID (sfp->location, sip);
+}
+
+static void ReplaceLocalIdOnProduct_callback (SeqFeatPtr sfp, Pointer userdata)
+{
+  SeqIdPtr sip;
+
+  sip = (SeqIdPtr) userdata;
+  if (sfp->location != NULL) 
+    SeqLocReplaceLocalID (sfp->product, sip);
+}
+
 static void ReplaceLocalID (BioseqPtr bsp, SeqIdPtr sip, CharPtr key, Int2 count)
 
 {
-  ObjectIdPtr  oip;
-  Char         str [64];
-  Char         tmp [70];
+  ObjectIdPtr   oip;
+  Char          str [64];
+  Char          tmp [70];
+  BioseqSetPtr  bssp;
 
   if (bsp == NULL || sip == NULL || StringHasNoText (key)) return;
   oip = (ObjectIdPtr) sip->data.ptrvalue;
@@ -5350,6 +5846,25 @@ static void ReplaceLocalID (BioseqPtr bsp, SeqIdPtr sip, CharPtr key, Int2 count
   oip->str = MemFree (oip->str);
   oip->str = StringSave (tmp);
   SeqMgrReplaceInBioseqIndex (bsp);
+
+  /* Replace the local ID on all the features of the bioseq */
+
+  VisitFeaturesOnBsp (bsp, (Pointer) sip, ReplaceLocalIdOnLoc_callback);
+
+  if (bsp->idx.parenttype == OBJ_BIOSEQSET)
+    {
+      bssp = (BioseqSetPtr) bsp->idx.parentptr;
+      if ((bssp != NULL) && (bssp->_class == 1))
+	{
+	  if (ISA_na(bsp->mol))
+	    VisitFeaturesOnSet (bssp, (Pointer) sip,
+				ReplaceLocalIdOnLoc_callback);
+	  else if (ISA_aa(bsp->mol))
+	    VisitFeaturesOnSet (bssp, (Pointer) sip,
+				ReplaceLocalIdOnProduct_callback);
+	}
+    }
+
 }
 
 static void BuildLclTree (LclIdListPtr PNTR head, BioseqPtr bsp, CharPtr x, SeqIdPtr sip)

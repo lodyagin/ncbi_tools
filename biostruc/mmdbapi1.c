@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.41 $
+* $Revision: 6.42 $
 *
 * File Description: 
 *
@@ -44,6 +44,9 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
+* Revision 6.42  2001/11/19 16:31:14  kans
+* force load cdd object loader
+*
 * Revision 6.41  2001/01/26 15:06:39  lewisg
 * use entrez2 to retrieve structures
 *
@@ -283,6 +286,7 @@ NLM_EXTERN void VnpHeapSort PROTO ((ValNodePtr PNTR vnp, int (LIBCALLBACK *compa
   /* this should be #include <utilpub.h> but this conflicts with mmdbdata.h. fix this. lyg */
 #include <mmdbapi.h>
 #include <mmdbapi1.h>
+#include <objcdd.h>
 #include <matrix.h>
 #include "prunebsc.h"  
 
@@ -1228,7 +1232,7 @@ BiostrucPtr LIBCALL FetchBS(CharPtr pcFetch,  Int2 iType, Int4 mdlLvl,
 printf("MaxModels=%d ModelLevel=%d\n",(int) maxModels,(int) mdlLvl);
 #endif
 	/* load the parse trees */
-	if (! (objmmdb1AsnLoad() && objmmdb2AsnLoad() && objmmdb3AsnLoad() ))
+	if (! (objmmdb1AsnLoad() && objmmdb2AsnLoad() && objmmdb3AsnLoad() && objcddAsnLoad() ))
 	  {
 	    	ErrPostEx(SEV_FATAL,0,0, "Internal - objmmdbNAsnLoad() Failure");
 		return NULL;

@@ -1,4 +1,4 @@
-/*  $Id: ncbi_util.c,v 6.9 2001/04/24 21:24:59 lavr Exp $
+/*  $Id: ncbi_util.c,v 6.16 2001/08/28 17:49:45 thiessen Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,28 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_util.c,v $
+ * Revision 6.16  2001/08/28 17:49:45  thiessen
+ * oops, sorry - incorrect fix; reverted
+ *
+ * Revision 6.15  2001/08/28 17:21:22  thiessen
+ * need ncbiconf.h for NCBI_CXX_TOOLKIT
+ *
+ * Revision 6.14  2001/08/09 16:25:06  lavr
+ * Remove last (unneeded) parameter from LOG_Reset()
+ * Added: fLOG_OmitNoteLevel format flag handling
+ *
+ * Revision 6.13  2001/07/30 14:41:37  lavr
+ * Added: CORE_SetLOGFormatFlags()
+ *
+ * Revision 6.12  2001/07/26 15:13:02  lavr
+ * Always do stream flush after message output (previously was in DEBUG only)
+ *
+ * Revision 6.11  2001/07/25 20:27:23  lavr
+ * Included header files rearranged
+ *
+ * Revision 6.10  2001/07/25 19:12:57  lavr
+ * Added date/time stamp for message logging
+ *
  * Revision 6.9  2001/04/24 21:24:59  lavr
  * Make log flush in DEBUG mode
  *
@@ -63,11 +85,16 @@
  */
 
 #include "ncbi_priv.h"
-
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <errno.h>
+#ifndef NCBI_CXX_TOOLKIT
+#  include <ncbistd.h>
+#  include <ncbitime.h>
+#else
+#  include <ctype.h>
+#  include <errno.h>
+#  include <stdlib.h>
+#  include <string.h>
+#  include <time.h>
+#endif
 
 
 /* Static function pre-declarations to avoid C++ compiler warnings
@@ -145,6 +172,17 @@ extern int/*bool*/ CORE_SetLOGFILE_NAME(const char* filename)
 }
 
 
+static TLOG_FormatFlags s_LogFormatFlags = fLOG_Default;
+
+extern TLOG_FormatFlags CORE_SetLOGFormatFlags(TLOG_FormatFlags flags)
+{
+    TLOG_FormatFlags old_flags = s_LogFormatFlags;
+
+    s_LogFormatFlags = flags;
+    return old_flags;
+}
+
+
 extern char* LOG_ComposeMessage
 (const SLOG_Handler* call_data,
  TLOG_FormatFlags    format_flags)
@@ -154,9 +192,10 @@ extern char* LOG_ComposeMessage
     static const char s_RawData_End[] =
         "\n#################### [END] Raw Data\n";
 
-    char* str;
+    char* str, datetime[32];
 
     /* Calculated length of ... */
+    size_t datetime_len  = 0;
     size_t level_len     = 0;
     size_t file_line_len = 0;
     size_t module_len    = 0;
@@ -166,9 +205,9 @@ extern char* LOG_ComposeMessage
 
     /* Adjust formatting flags */
     if (call_data->level == eLOG_Trace) {
-        format_flags = fLOG_Full;
+        format_flags |= fLOG_Full;
     } else if (format_flags == fLOG_Default) {
-#if defined(NDEBUG)
+#ifdef NDEBUG
         format_flags = fLOG_Short;
 #else
         format_flags = fLOG_Full;
@@ -176,7 +215,27 @@ extern char* LOG_ComposeMessage
     }
 
     /* Pre-calculate total message length */
-    if ((format_flags & fLOG_Level) != 0) {
+    if ((format_flags & fLOG_DateTime) != 0) {
+        struct tm* tm;
+#ifdef NCBI_CXX_TOOLKIT
+        time_t t = time(0);
+#  ifdef HAVE_LOCALTIME_R
+        struct tm temp;
+        localtime_r(&t, &temp);
+        tm = &temp;
+#  else /*HAVE_LOCALTIME_R*/
+        tm = localtime(&t);
+#  endif/*HAVE_LOCALTIME_R*/
+#else /*NCBI_CXX_TOOLKIT*/
+        struct tm temp;
+        GetDayTime(&temp);
+        tm = &temp;
+#endif/*NCBI_CXX_TOOLKIT*/
+        datetime_len = strftime(datetime, sizeof(datetime), "%D %T ", tm);
+    }
+    if ((format_flags & fLOG_Level) != 0  &&
+        (call_data->level != eLOG_Note ||
+         !(format_flags & fLOG_OmitNoteLevel))) {
         level_len = strlen(LOG_LevelStr(call_data->level)) + 2;
     }
     if ((format_flags & fLOG_Module) != 0  &&
@@ -206,8 +265,8 @@ extern char* LOG_ComposeMessage
     }
 
     /* Allocate memory for the resulting message */
-    total_len =
-        file_line_len + module_len + level_len + message_len + data_len;
+    total_len = datetime_len + file_line_len + module_len + level_len +
+        message_len + data_len;
     str = (char*) malloc(total_len + 1);
     if ( !str ) {
         assert(0);
@@ -216,8 +275,11 @@ extern char* LOG_ComposeMessage
 
     /* Compose the message */
     str[0] = '\0';
+    if ( datetime_len ) {
+        strcpy(str, datetime);
+    }
     if ( file_line_len ) {
-        sprintf(str, "\"%s\", line %d: ",
+        sprintf(str + strlen(str), "\"%s\", line %d: ",
                 call_data->file, (int) call_data->line);
     }
     if ( module_len ) {
@@ -280,12 +342,10 @@ static void s_LOG_FileHandler(void* user_data, SLOG_Handler* call_data)
     assert(call_data);
 
     if ( fp ) {
-        char* str = LOG_ComposeMessage(call_data, fLOG_Default);
+        char* str = LOG_ComposeMessage(call_data, s_LogFormatFlags);
         if ( str ) {
             fprintf(fp, "%s\n", str);
-#ifndef NDEBUG
             fflush(fp);
-#endif
             free(str);
         }
     }
@@ -309,12 +369,12 @@ extern void LOG_ToFILE
 {
     if ( fp ) {
         if ( auto_close ) {
-            LOG_Reset(lg, fp, s_LOG_FileHandler, s_LOG_FileCleanup, 1/*true*/);
+            LOG_Reset(lg, fp, s_LOG_FileHandler, s_LOG_FileCleanup);
         } else {
-            LOG_Reset(lg, fp, s_LOG_FileHandler, 0, 1/*true*/);
+            LOG_Reset(lg, fp, s_LOG_FileHandler, 0/*no cleaning up*/);
         }
     } else {
-        LOG_Reset(lg, 0, 0, 0, 1/*true - cleanup*/);
+        LOG_Reset(lg, 0/*data*/, 0/*handler*/, 0/*cleanup*/);
     }
 }
 

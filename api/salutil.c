@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -659,6 +659,7 @@ NLM_EXTERN SeqEntryPtr StringToSeqEntry (CharPtr str, SeqIdPtr sip, Int4 length_
          ch = TO_UPPER (ch); 
          if ( ISA_na (mol_type) ) {
                 if (ch == 'U') ch = 'T';
+                if (ch == 'X') ch = 'N';
                 if ( StringChr ("EFIJLOPQXZ-.*", ch) == NULL ) { 
                        BSPutByte ( bs, (Int2) ch );
                        bsp->length++;

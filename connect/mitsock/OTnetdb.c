@@ -14,8 +14,13 @@
  *
  * RCS Modification History:
  * $Log: OTnetdb.c,v $
- * Revision 1.2  2001/05/08 15:37:37  juran
- * Phil Churchill's 2001-05-07 changes.Remove debugging.Use Idle().
+ * Revision 1.3  2001/11/07 22:45:02  juran
+ * Phil Churchill's 2001-05-07 changes.
+ * Remove debugging.
+ * Use Idle().
+ *
+ * Revision 1.2  ??  juran
+ * Minor edits.
  *
  * Revision 1.1  2001/04/03 20:35:27  juran
  * Phil Churchill's MIT-derived OT sockets library.  No changes prior to initial check-in.
@@ -51,10 +56,12 @@
  *		inet_ntoa
  *		inet_addr
  */
- 
-#include <Stdio.h>
-#include <String.h>
-#include <Types.h>
+
+#include <stdio.h>
+#include <stdlib.h>				// malloc
+#include <string.h>
+
+#include <MacTypes.h>
 #include <Resources.h>
 #include <Errors.h>
 #include <OSUtils.h>
@@ -63,7 +70,6 @@
 
 #include <netdb.h>
 #include <neterrno.h>
-#include <stdlib.h>				// malloc
 #include "SocketsInternal.h"
 #include "a_inet.h"
 

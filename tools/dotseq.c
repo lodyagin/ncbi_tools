@@ -25,10 +25,27 @@
 *
 * File Name:  dotseq.c
 *
+* Author:  Fasika Aklilu
 *
+* Version Creation Date:   8/9/01
+*
+* $Revision: 6.8 $
+*
+* File Description: computes local alignments for dot matrix
+*
+* Modifications:  
+* --------------------------------------------------------------------------
+* Date     Name        Description of modification
+* -------  ----------  -----------------------------------------------------
 
-$Revision: 6.6 $
+$Revision: 6.8 $
 $Log: dotseq.c,v $
+Revision 6.8  2001/08/09 17:21:08  kans
+include alignmgr.h to avoid Mac compile error
+
+Revision 6.7  2001/08/09 16:31:49  aklilu
+added revision
+
 Revision 6.6  2001/01/19 20:11:31  kans
 minor changes to work with MacOS X compiler (contributed by William Van Etten)
 
@@ -38,12 +55,14 @@ commented out printf
 Revision 6.4  2000/08/07 13:29:23  sicotte
 Fix printf (long) casts
 
-Revision 6.3  2000/07/26 18:23:09  sicotte
-added DOT_SPI_FindBestAlnByDotPlotEx, to return rejected alignments
+Revision 6.3  2000/07/26 18:23:09  aklilu
+added DOT_SPI_FindBestAlnByDotPlotEx, to return best alignments
 
 
 */
+
 #include <dotseq.h>
+#include <alignmgr.h>
 
 /****************************************************************************
 
@@ -103,7 +122,7 @@ static Boolean DOT_ComputeDotPlot (DOTMainDataPtr mip);
 
 ____________________________________________________________________*/
 
-static Int4Ptr PNTR   DOT_DNAScoringMatrix(Int4 mismatch, Int4 reward,Int4 alsize){
+extern Int4Ptr PNTR   DOT_DNAScoringMatrix(Int4 mismatch, Int4 reward,Int4 alsize){
   Int4Ptr PNTR alignMatrix;
   Int4 i,j,k;
   Int4 nbase1,nbase2;
@@ -114,7 +133,7 @@ static Int4Ptr PNTR   DOT_DNAScoringMatrix(Int4 mismatch, Int4 reward,Int4 alsiz
      then use the ncbi translation tools 
      */
   if(alsize !=4 && alsize!=16) {
-    ErrPostEx(SEV_WARNING,0,0,"DNAScoringMatrix: No ambiguity codes for alphabet size=%ld\n",alsize);
+    ErrPostEx(SEV_WARNING,0,0,"DNAScoringMatrix: No ambiguity codes for alphabet size=%d\n",alsize);
   }
   alignMatrix= (Int4Ptr PNTR) Calloc(alsize*(alsize+1),
                                      MAX(sizeof(Int4),sizeof(Int4Ptr)));
@@ -277,7 +296,7 @@ static void DOT_TrimBinTree (Avl_TreePtr tree, Int4Ptr cutoff)
   Purpose : Create new hit node.
 
 ____________________________________________________________________*/
-static DOTDiagPtr DOT_NewHitNode(DOTMainDataPtr mip, Int4 q_start, Int4 s_start, Int4 length, Int4 score)
+static DOTDiagPtr DOT_NewHitNode(DOTMainDataPtr mip, Int4 q_left, Int4 s_left, Int4 length, Int4 score)
 {
   DOTDiagPtr          node;
 
@@ -287,15 +306,8 @@ static DOTDiagPtr DOT_NewHitNode(DOTMainDataPtr mip, Int4 q_start, Int4 s_start,
       return NULL;
     }
   node->score=score;
-  if (mip->qstrand == Seq_strand_plus)
-    node->q_start = mip->q_start + q_start;  
-  else
-    node->q_start = mip->q_start-q_start;
-  
-  if (mip->sstrand==Seq_strand_plus)
-    node->s_start = mip->s_start + s_start;
-  else
-    node->s_start = mip->s_start - s_start;
+  node->q_start = mip->q_start + q_left;  
+  node->s_start = mip->s_start + s_left;
 
   node->length = length;
   node->rdmKey=RandomNum();
@@ -376,7 +388,7 @@ static Int4 CompareDiags(Pointer n1, Pointer n2)
   Purpose : Create new history node.
 
 ____________________________________________________________________*/
-static DOTHistPtr DOT_NewHistNode(Int4 diag, Int4 q_pos)
+DOTHistPtr DOT_NewHistNode(Int4 diag, Int4 q_pos)
 {
   DOTHistPtr node;
 
@@ -534,7 +546,6 @@ static Int2 DOT_ExtendNuc (DOTMainDataPtr mip, Uint1Ptr queryseq, Uint1Ptr subje
   Int4             score, sum, length;
   Int4             s_left, q_left, s_right, s_diff, q_right;
   Int4Ptr PNTR     matrix;
-  Int4             q_start, s_start;
   Int4             ex_threshold=0,x,X;
  
   matrix = mip->matrix;
@@ -640,18 +651,19 @@ static Int2 DOT_ExtendNuc (DOTMainDataPtr mip, Uint1Ptr queryseq, Uint1Ptr subje
         return -1; 
       
       s_diff = s_off-q_off;
-      q_start = q_beg- queryseq;
+
+      q_left = q_beg- queryseq;
       length = q_end - q_beg;
-      s_start = q_start+s_diff;
+      s_left = q_left+s_diff;
       
       /* update node */
      if (node!=NULL)
        {
          node->diag_constant = diag;
-         node->q_stop= q_start+length; 
+         node->q_stop= q_left + length; 
        }
      
-     DOT_SaveHit (mip, score, q_start, s_start, length);
+     DOT_SaveHit (mip, score, q_left, s_left, length);
      return 0;
    /*  } */
 /*   else  */
@@ -1161,7 +1173,7 @@ static Int2 DOT_ComputeHits(DOTMainDataPtr mip)
 }
 
 
-/*_______________________________________________(DOT_SortProc)_____________
+/*_________________________________________(DOT_SortProc)_____________
 
   Purpose : Sort proc -by score, by q_start, by s_start.
 
@@ -1229,8 +1241,7 @@ static void DOT_ScoreCount (DOTMainDataPtr mip, DOTDiagPtr PNTR hitlist, Int4 in
 
   while (i<index)
     {
-      Score=hitlist[i]->score;
-      if (score>Score)
+      if (score>(Score=hitlist[i]->score))
         {
           score=Score;
           unique++;
@@ -1252,8 +1263,7 @@ static void DOT_ScoreCount (DOTMainDataPtr mip, DOTDiagPtr PNTR hitlist, Int4 in
   
   while (i<index)
     {
-      Score=hitlist[i]->score;
-      if (score>Score)
+      if (score>(Score=hitlist[i]->score))
         {
           score=Score;
           score_array[j]=i;
@@ -1345,7 +1355,7 @@ static Boolean DOT_GetPResidues (DOTMainDataPtr mip, Boolean is_byLoc)
     }
  else
    {
-     qspp = SeqPortNew (mip->qbsp, mip->q_start, mip->q_stop, 0,  Seq_code_ncbistdaa);
+     qspp = SeqPortNew (mip->qbsp, MIN(mip->q_start, mip->q_stop), MAX(mip->q_start, mip->q_stop), 0,  Seq_code_ncbistdaa);
      sspp = SeqPortNew (mip->sbsp, mip->s_start, mip->s_stop, 0, Seq_code_ncbistdaa);
    }
  
@@ -1451,8 +1461,8 @@ static Boolean DOT_GetNResidues (DOTMainDataPtr mip, Boolean is_byLoc)
     }
   else
     {
-      qspp = SeqPortNew (mip->qbsp, mip->q_start, mip->q_stop-1, 0, Seq_code_ncbi2na); 
-      sspp = SeqPortNew (mip->sbsp, mip->s_start, mip->s_stop-1, 0, Seq_code_ncbi2na);
+      qspp = SeqPortNew (mip->qbsp, MIN(mip->q_start, mip->q_stop), MAX(mip->q_start, mip->q_stop), 0, Seq_code_ncbi2na); 
+      sspp = SeqPortNew (mip->sbsp, mip->s_start, mip->s_stop, 0, Seq_code_ncbi2na);
     }
 
   if (qspp == NULL || sspp == NULL)
@@ -1516,20 +1526,28 @@ static Boolean DOT_GetNResidues (DOTMainDataPtr mip, Boolean is_byLoc)
 ____________________________________________________________________*/
 static Boolean DOT_GetSeqsbyLoc (DOTMainDataPtr mip)
 {
-  SeqIdPtr         ssip, qsip, sId, qId;
+   SeqIdPtr         ssip, qsip, sId, qId; 
+  Char         q_idbuf[42]={""}, s_idbuf[42]={""};
 
+/*   mip->sname = (CharPtr)MemNew(42*sizeof(Char)); */
+/*   mip->qname = (CharPtr)MemNew(42*sizeof(Char)); */
+/*
+  FastaId (mip->qbsp, idbuf, 32);
+  sprintf (mip->qname, "%s",idbuf);
+  FastaId (mip->sbsp, idbuf, 32);
+  sprintf (mip->sname, "%s",idbuf);
+  */
+/*   qsip = SeqLocId(mip->qslp); */
+/*   qId = SeqIdFindBestAccession(qsip); */
+/*   ssip = SeqLocId(mip->sslp); */
+/*   sId = SeqIdFindBestAccession(ssip); */
+  SeqIdWrite(mip->qbsp->id, q_idbuf,PRINTID_FASTA_SHORT, 41);
+  SeqIdWrite(mip->sbsp->id, s_idbuf,PRINTID_FASTA_SHORT, 41);
+  mip->qname=StringSave(q_idbuf);
+  mip->sname=StringSave(s_idbuf);
 
-  mip->sname = (CharPtr)MemNew(41*sizeof(Char));
-  mip->qname = (CharPtr)MemNew(41*sizeof(Char));
-  qsip = SeqLocId(mip->qslp);
-  qId = SeqIdFindBestAccession(qsip);
-  ssip = SeqLocId(mip->sslp);
-  sId = SeqIdFindBestAccession(ssip);
-  SeqIdWrite(qId, mip->qname,PRINTID_TEXTID_ACCESSION, 41);
-  SeqIdWrite(sId, mip->sname,PRINTID_TEXTID_ACCESSION, 41);
+ /*  printf ("\nLengths: \n %s(query_seq):%d\n %s(subject_seq):%d\n", mip->qname, mip->qlen, mip->sname, mip->slen); */
 
-
-  /* printf ("\nLengths: \n %s(query_seq):%ld\n %s(subject_seq):%ld\n", mip->qname, (long)mip->qlen, (long)mip->sname, (long)mip->slen); */
 
  
  if (is_na)
@@ -1553,7 +1571,7 @@ ____________________________________________________________________*/
 Boolean DOT_GetSeqs (DOTMainDataPtr mip, Boolean is_zoom)
 {
   SeqIdPtr         ssip, qsip;
-
+  Char             q_idbuf[42]={""}, s_idbuf[42]={""};
 
 
  if (is_zoom)
@@ -1563,10 +1581,17 @@ Boolean DOT_GetSeqs (DOTMainDataPtr mip, Boolean is_zoom)
    }
  else
    {
-     mip->sname = (CharPtr)MemNew(41*sizeof(Char));
-     mip->qname = (CharPtr)MemNew(41*sizeof(Char));
-     SeqIdWrite(SeqIdFindBestAccession(mip->qbsp->id), mip->qname,PRINTID_TEXTID_ACCESSION, 41);
-     SeqIdWrite(SeqIdFindBestAccession(mip->sbsp->id), mip->sname,PRINTID_TEXTID_ACCESSION, 41);
+/*      mip->sname = (CharPtr)MemNew(42*sizeof(Char)); */
+/*      mip->qname = (CharPtr)MemNew(42*sizeof(Char)); */
+     SeqIdWrite(mip->qbsp->id, q_idbuf,PRINTID_FASTA_SHORT, 41); 
+     SeqIdWrite(mip->sbsp->id, s_idbuf,PRINTID_FASTA_SHORT, 41); 
+     mip->qname=StringSave(q_idbuf);
+     mip->sname=StringSave(s_idbuf);
+
+    /*  FastaId (mip->qbsp, idbuf, 32); */
+/*      sprintf (mip->qname, "%s",idbuf); */
+/*      FastaId (mip->sbsp, idbuf, 32); */
+/*      sprintf (mip->sname, "%s",idbuf); */
    }
  
  if (is_na)
@@ -1636,7 +1661,7 @@ Int2 DOT_FreeMainInfoPtrEx (DOTMainDataPtr mip)
 
   DOT_FreeMainInfo(mip);
 
-  if (mip->is_na) 
+  if (mip->is_na && mip->matrix) 
     Free(mip->matrix);
   if (mip->qslp) SeqLocFree(mip->qslp);
   if (mip->sslp) SeqLocFree(mip->sslp);
@@ -1696,15 +1721,15 @@ static void DOT_InitTheRest(DOTMainDataPtr mip, Int4 word_size,Int4 tree_limit)
 
 ____________________________________________________________________*/
 
-extern DOTMainDataPtr DOT_InitMainInfo (DOTMainDataPtr mip, BioseqPtr qbsp, BioseqPtr sbsp, Int4 word_size, Int4 tree_limit, Int4 qstart, Int4 qstop, Int4 sstart, Int4 sstop)
+extern DOTMainDataPtr DOT_InitMainInfo (DOTMainDataPtr mip, BioseqPtr qbsp, BioseqPtr sbsp, Int4 word_size, Int4 tree_limit, Int4 q_left, Int4 q_right, Int4 s_left, Int4 s_right)
 {
   Int4   slen;
   Int4   qlen;
   
-  mip->q_start=qstart;
-  mip->q_stop=qstop;
-  mip->s_start=sstart;
-  mip->s_stop=sstop;
+  mip->q_start=q_left;
+  mip->q_stop=q_right;
+  mip->s_start=s_left;
+  mip->s_stop=s_right;
   mip->qbsp=qbsp;
   mip->sbsp=sbsp;
   mip->sstrand = Seq_strand_plus;
@@ -1721,6 +1746,159 @@ extern DOTMainDataPtr DOT_InitMainInfo (DOTMainDataPtr mip, BioseqPtr qbsp, Bios
   return mip;
 }
 
+static BioseqPtr DOT_GetBioseqGivenSeqLoc (SeqLocPtr slp, Uint2 entityID)
+
+{
+  BioseqPtr    bsp=NULL;
+  SeqEntryPtr  sep=NULL;
+  SeqIdPtr     sip=NULL;
+  SeqLocPtr    tmp=NULL;
+
+  if (slp == NULL) return NULL;
+  bsp = NULL;
+  sip = SeqLocId (slp);
+  if (sip != NULL) {
+    bsp = BioseqFind (sip);
+  } else {
+    tmp = SeqLocFindNext (slp, NULL);
+    if (tmp != NULL) {
+      sip = SeqLocId (tmp);
+      if (sip != NULL) {
+        bsp = BioseqFind (sip);
+        if (bsp != NULL) {
+          sep = SeqMgrGetSeqEntryForData (bsp);
+          entityID = ObjMgrGetEntityIDForChoice (sep);
+          bsp = GetBioseqGivenSeqLoc (slp, entityID);
+        }
+      }
+    }
+  }
+  return bsp;
+}
+
+
+static BioseqPtr DOT_GetBioseqReferencedByAnnot (SeqAnnotPtr sap, Uint2 entityID)
+
+{
+  SeqAlignPtr   align;
+  BioseqPtr     bsp;
+  DenseDiagPtr  ddp;
+  DenseSegPtr   dsp;
+  SeqFeatPtr    feat;
+  SeqGraphPtr   graph;
+  SeqIdPtr      sip;
+  SeqLocPtr     slp;
+  StdSegPtr     ssp;
+  SeqLocPtr     tloc;
+
+  if (sap == NULL) return NULL;
+  switch (sap->type) {
+    case 1 :
+      feat = (SeqFeatPtr) sap->data;
+      while (feat != NULL) {
+        slp = feat->location;
+        if (slp != NULL) {
+          bsp = DOT_GetBioseqGivenSeqLoc (slp, entityID);
+          if (bsp != NULL) return bsp;
+        }
+        feat = feat->next;
+      }
+      break;
+    case 2 :
+      align = (SeqAlignPtr) sap->data;
+      while (align != NULL) {
+        if (align->segtype == 1) {
+          ddp = (DenseDiagPtr) align->segs;
+          if (ddp != NULL) {
+            for (sip = ddp->id; sip != NULL; sip = sip->next) {
+              bsp = BioseqFind (sip);
+              if (bsp != NULL) return bsp;
+            }
+          }
+        } else if (align->segtype == 2) {
+          dsp = (DenseSegPtr) align->segs;
+          if (dsp != NULL) {
+            for (sip = dsp->ids; sip != NULL; sip = sip->next) {
+              bsp = BioseqFind (sip);
+              if (bsp != NULL) return bsp;
+            }
+          }
+        } else if (align->segtype == 3) {
+          ssp = (StdSegPtr) align->segs;
+          if (ssp != NULL && ssp->loc != NULL) {
+            for (tloc = ssp->loc; tloc != NULL; tloc = tloc->next) {
+              bsp = BioseqFind (SeqLocId (tloc));
+              if (bsp != NULL) return bsp;
+            }
+          }
+        }
+        align = align->next;
+      }
+      break;
+    case 3 :
+      graph = (SeqGraphPtr) sap->data;
+      while (graph != NULL) {
+        slp = graph->loc;
+        if (slp != NULL) {
+          bsp = DOT_GetBioseqGivenSeqLoc (slp, entityID);
+          if (bsp != NULL) return bsp;
+        }
+        graph = graph->next;
+      }
+      break;
+    default :
+      break;
+  }
+  return NULL;
+}
+
+/*____________________________(DOT_AttachSeqAnnotToSeqEntry)_____
+
+
+  Purpose : Attach SeqAnnot structure to SeqEntry 
+________________________________________________________________*/
+
+extern Uint2 DOT_AttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap, BioseqPtr bsp)
+
+{
+  Int2           genCode;
+  SeqEntryPtr    oldscope;
+  OMProcControl  ompc;
+  SeqEntryPtr    sep;
+  SeqFeatPtr     sfp = NULL;
+
+  if (sap == NULL) return entityID;
+  if (bsp==NULL)
+    bsp = DOT_GetBioseqReferencedByAnnot (sap, entityID);
+
+  if (bsp == NULL) return entityID;
+  
+  
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  if (sap->type == 1) {
+    sfp = (SeqFeatPtr) sap->data;
+    sep = SeqMgrGetSeqEntryForData(bsp);
+/*     sep = GetBestTopParentForData (entityID, bsp); */
+    genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
+    SetEmptyGeneticCodes (sap, genCode);
+  } 
+  MemSet ((Pointer) &ompc, 0, sizeof (OMProcControl));
+  ompc.input_entityID = entityID;
+  ompc.input_itemID = GetItemIDGivenPointer (entityID, OBJ_BIOSEQ, (Pointer) bsp);
+  ompc.input_itemtype = OBJ_BIOSEQ;
+  ompc.output_itemtype = OBJ_SEQANNOT;
+  ompc.output_data = (Pointer) sap;
+  if (! AttachDataForProc (&ompc, FALSE)) {
+    Message (MSG_ERROR, "DOT_AttachSeqAnnotToSeqEntry failed");
+  } else if (sfp != NULL) {
+    PromoteXrefs (sfp, bsp, entityID);
+  }
+
+return entityID;
+}
+
+
 /*____________________________________________(DOT_InitMainInfobyLoc)____________
 
 
@@ -1730,7 +1908,7 @@ ____________________________________________________________________*/
 
 static DOTMainDataPtr DOT_InitMainInfobyLoc (DOTMainDataPtr mip, SeqLocPtr slp1, SeqLocPtr slp2, Int4 word_size, Int4 tree_limit)
 {
-  Int4   slen, sslp_start, qslp_start;
+  Int4   slen;
   Int4   qlen, temp;
   SeqLocPtr qslp, sslp;
   BioseqPtr qbsp, sbsp;
@@ -1745,8 +1923,7 @@ static DOTMainDataPtr DOT_InitMainInfobyLoc (DOTMainDataPtr mip, SeqLocPtr slp1,
   mip->qstrand = SeqLocStrand(qslp);
   mip->sstrand = SeqLocStrand(sslp);
 
-  qslp_start=SeqLocStart(qslp);
-  sslp_start=SeqLocStart(sslp);
+
   mip->qbsp = BioseqFind(SeqLocId(qslp));
   mip->sbsp = BioseqFind(SeqLocId(sslp));
 
@@ -1758,10 +1935,10 @@ static DOTMainDataPtr DOT_InitMainInfobyLoc (DOTMainDataPtr mip, SeqLocPtr slp1,
 
   
   /* mip start and stop are in bioseq coordinates */
-  mip->q_start=GetOffsetInBioseq (qslp, mip->qbsp, SEQLOC_START);
-  mip->s_start=GetOffsetInBioseq (sslp, mip->sbsp, SEQLOC_START);
-  mip->q_stop=GetOffsetInBioseq (qslp, mip->qbsp, SEQLOC_STOP);
-  mip->s_stop=GetOffsetInBioseq (sslp, mip->sbsp, SEQLOC_STOP);
+  mip->q_start = GetOffsetInBioseq (qslp, mip->qbsp, SEQLOC_LEFT_END);
+  mip->s_start = GetOffsetInBioseq (sslp, mip->sbsp, SEQLOC_LEFT_END);
+  mip->q_stop = GetOffsetInBioseq (qslp, mip->qbsp, SEQLOC_RIGHT_END);
+  mip->s_stop = GetOffsetInBioseq (sslp, mip->sbsp, SEQLOC_RIGHT_END);
 
 
   mip->qslp=qslp;
@@ -1800,17 +1977,9 @@ static Boolean DOT_ComputeDotPlot (DOTMainDataPtr mip)
 
   Purpose : Sarah's function to find the best alignment.
 
-   as a set of diagonals. There can be missing segments.
 ____________________________________________________________________*/
 
-/*
-  The Ex function Also returns the rejected SeqAligns.
- */
-SeqAlignPtr DOT_SPI_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2, Int4 wordsize, Int4 num_hits) {
-    return DOT_SPI_FindBestAlnByDotPlotEx(slp1, slp2, wordsize, num_hits,NULL,NULL);
-}
-
-SeqAlignPtr DOT_SPI_FindBestAlnByDotPlotEx(SeqLocPtr slp1, SeqLocPtr slp2, Int4 wordsize, Int4 num_hits,SeqAlignPtr PNTR overlaps_m, SeqAlignPtr PNTR overlaps_s)
+SeqAlignPtr DOT_SPI_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2, Int4 wordsize, Int4 num_hits)
 {
    DOTDiagPtr      ddp;
    DenseSegPtr     dsp;
@@ -1877,8 +2046,8 @@ SeqAlignPtr DOT_SPI_FindBestAlnByDotPlotEx(SeqLocPtr slp1, SeqLocPtr slp2, Int4 
    if (sap_head == NULL)
       return NULL;
    AlnMgrIndexSeqAlign(sap_head);
-   AlnMgrMakeMultipleByScoreExEx(sap_head,0,NULL,overlaps_m,overlaps_s);
-   AlnMgrDeleteHiddenEx(sap_head, FALSE,FALSE);
+   AlnMgrMakeMultipleByScore(sap_head);
+   AlnMgrDeleteHidden(sap_head, FALSE);
    sap = (SeqAlignPtr)(sap_head->segs);
    sap_head->segs = NULL;
    SeqAlignFree(sap_head);

@@ -1,4 +1,4 @@
-/* $Id: kappa.c,v 6.18 2001/07/09 15:12:47 shavirin Exp $ 
+/* $Id: kappa.c,v 6.20 2001/12/28 18:02:33 dondosha Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,15 @@ Author: Alejandro Schaffer
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.18 $
+ $Revision: 6.20 $
 
  $Log: kappa.c,v $
+ Revision 6.20  2001/12/28 18:02:33  dondosha
+ Keep score and scoreThisAlign for each local alignment, so as to allow tie-breaking by score
+
+ Revision 6.19  2001/07/26 12:52:25  madden
+ Fix memory leaks
+
  Revision 6.18  2001/07/09 15:12:47  shavirin
  Functions BLbasicSmithWatermanScoreOnly() and BLSmithWatermanFindStart()
  used to calculate Smith-waterman alignments on low level become external.
@@ -230,7 +236,7 @@ static Nlm_FloatHi SWHeapReplaceItem(SWResults * OneMatchAligns, SWheapRecord *H
     MemFree(oldAlignments->reverseAlignScript);
     thisAlignment = oldAlignments;
     oldAlignments = oldAlignments->next;
-    SeqIdFree(thisAlignment->subject_id);
+    SeqIdSetFree(thisAlignment->subject_id);
 
     MemFree(thisAlignment);
   }
@@ -333,6 +339,8 @@ void segResult(BioseqPtr bsp, Uint1 * inputString, Uint1 * resultString, Int4 le
     if (seg_slp) {
         BlastMaskTheResidues(resultString,length,21,seg_slp,FALSE, 0);
     }
+
+    seg_slp = SeqLocSetFree(seg_slp);
 }
 
 
@@ -790,7 +798,7 @@ static SeqAlignPtr newConvertSWalignsToSeqAligns(SWResults * SWAligns,
 		     curSW->seqStart);
         nextEditBlock->discontinuous = discontinuous;
         nextSeqAlign = GapXEditBlockToSeqAlign(nextEditBlock, curSW->subject_id, query_id);
-        nextSeqAlign->score = addScoresToSeqAlign(curSW->score, 
+        nextSeqAlign->score = addScoresToSeqAlign(curSW->scoreThisAlign, 
                                                   curSW->eValueThisAlign, curSW->Lambda, curSW->logK);
         
         nextEditBlock = GapXEditBlockDelete(nextEditBlock);
@@ -804,7 +812,7 @@ static SeqAlignPtr newConvertSWalignsToSeqAligns(SWResults * SWAligns,
         oldSW = curSW;
         curSW = curSW->next;
 
-        SeqIdFree(oldSW->subject_id);
+        SeqIdSetFree(oldSW->subject_id);
         MemFree(oldSW);
     }
 
@@ -1461,6 +1469,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
    SWResults *OneMatchSWAligns; /*keeps sequence alignments for a single match,
 				  used when in state SWPurging*/
    Nlm_FloatHi bestEvalue, newEvalue; /*Evalue for best and newest Smith_Waterman alignment*/
+   Int4 bestScore, newScore; /*scores for best and newest alignment*/
    BLAST_Score score; /*score of optimal local alignment*/
    Int4 *alignScript, *reverseAlignScript; 
    /*edit script that describes pairwise alignment*/
@@ -1687,9 +1696,11 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 			   reverseAlignScript , &finalQueryEnd, 
 			   &finalMatchEnd, &alignScript,
 			   gap_align, queryStart - 1, FALSE); 
-           if (0 == reverseAlignScript[0])
+           if (0 == reverseAlignScript[0]) {
 	     newEvalue = BlastKarlinStoE_simple(XdropAlignScore,kbp, 
 						search->searchsp_eff);
+             newScore = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / localScalingFactor);
+	   }
 	   else
 	     skipThis = TRUE;
 
@@ -1699,6 +1710,8 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	   }
 	   if (newEvalue < bestEvalue)
 	     bestEvalue = newEvalue;
+	   if (newScore > bestScore)
+	     bestScore = newScore;
 	 }
        }
        else {
@@ -1767,9 +1780,11 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 			   gap_align, queryStart - 1, FALSE); 
 	     newEvalue = BlastKarlinStoE_simple(XdropAlignScore,kbp, 
 					      search->searchsp_eff);
-	     if (0 == reverseAlignScript[0])
+	     if (0 == reverseAlignScript[0]) {
 	       newEvalue = BlastKarlinStoE_simple(XdropAlignScore,kbp, 
 						  search->searchsp_eff);
+               newScore = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / localScalingFactor);
+	     }
 	     else
 	       skipThis = TRUE;
 
@@ -1779,6 +1794,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	     }
            }
 	   bestEvalue = newEvalue;
+	   bestScore = newScore;
 	 }
        }
 
@@ -1824,7 +1840,8 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	 newSW->queryStart = queryStart;
 	 newSW->queryEnd = queryStart + finalQueryEnd;
 	 newSW->reverseAlignScript = reverseAlignScript;
-	 newSW->score = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / localScalingFactor);
+	 newSW->score = bestScore;
+	 newSW->scoreThisAlign = newScore;
 	 newSW->eValue = bestEvalue;
 	 newSW->eValueThisAlign = newEvalue;
 	 newSW->isFirstAlignment = (!foundFirstAlignment);
@@ -1975,7 +1992,6 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      MemFree(scoreArray);
      MemFree(return_sfp);
    }
-
    return(results);
 }
 

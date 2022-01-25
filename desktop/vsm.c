@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -988,6 +988,7 @@ static void VSMDragAndDrop(VSMWinPtr vsmwp, Uint2 entityID, Uint2 itemID, Uint2 
 
 	if (entityID == 0)   /* going into desktop */
 	{
+		ObjMgrSendMsg(OM_MSG_UPDATE, ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype);
 		ObjMgrRegister(ompc.input_itemtype, ompc.input_data);
 		return;
 	}

@@ -67,10 +67,10 @@ ID1SeqEntryGet(Int4 gi, Int2 retcode)
 		if((sep=ID1ArchSeqEntryGet(gi,NULL,0,&status,retcode)) != NULL){
 			break;
 		} else {
-			if(status == 1 /** override **/){
+			if(status & GI_IS_OVERRIDEN /** override **/){
 				ErrPostEx(SEV_INFO,0,0,"Sequence is withdrawn");
 				goto DONE;
-			} else if(status == 2 /*** confidential ***/){
+			} else if(status &  GI_IS_CONFIDENTIAL /*** confidential ***/){
 				ErrPostEx(SEV_INFO,0,0,"Sequence is not yet available");
                                 goto DONE;
 			} else {

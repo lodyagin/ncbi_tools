@@ -1,4 +1,4 @@
-/* $Id: qrpsb.c,v 1.5 2001/05/31 22:04:46 bauer Exp $
+/* $Id: qrpsb.c,v 1.6 2001/11/13 19:45:47 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 11/27/2000
 *
-* $Revision: 1.5 $
+* $Revision: 1.6 $
 *
 * File Description:
 *         WWW-RPS BLAST using the BLAST queue
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: qrpsb.c,v $
+* Revision 1.6  2001/11/13 19:45:47  bauer
+* restricted number of automated queue re-checks
+*
 * Revision 1.5  2001/05/31 22:04:46  bauer
 * changes to accomodate new type of Smart accessions
 *
@@ -1663,8 +1666,11 @@ void QRPSBWait(CharPtr rid, Int4 iGraphMode, Int4 iPairMode, Int4 HowLong, Nlm_F
   printf("<BODY BGCOLOR=#FFFFFF>\n");
   printf("<A HREF=\"blast_form.map\">\n");
   printf("<IMG SRC=\"%scdsearch.gif\" BORDER=0 ISMAP></A>\n",URLcgi);
-  printf("<meta http-equiv=\"refresh\" content=\"%d; url=%s%s?RID=%s&GRAPH=%d&PAIR=%d&EXPECT=%f&NHITS=%d\">\n",
-         HowLong,URLcgi,QRPSBNAME,rid,iGraphMode,iPairMode,expect,nhits);
+  HowLong += 5;
+  if (HowLong <= 60) {
+    printf("<meta http-equiv=\"refresh\" content=\"%d; url=%s%s?RID=%s&GRAPH=%d&PAIR=%d&EXPECT=%f&NHITS=%d&WAIT=%d\">\n",
+           HowLong,URLcgi,QRPSBNAME,rid,iGraphMode,iPairMode,expect,nhits,HowLong);
+  }
   printf("<br>\n");
   printf("<h2>Waiting for BLAST-queue to finish</H2>\n",rid);
   printf("<FORM ACTION=\"%s\" METHOD=POST" ">\n", QRPSBNAME);
@@ -1672,10 +1678,15 @@ void QRPSBWait(CharPtr rid, Int4 iGraphMode, Int4 iPairMode, Int4 HowLong, Nlm_F
   printf("<INPUT TYPE=\"HIDDEN\" name=\"PAIR\" value=\"%d\">\n",iPairMode);
   printf("<INPUT TYPE=\"HIDDEN\" name=\"EXPECT\" value=\"%f\">\n",expect);
   printf("<INPUT TYPE=\"HIDDEN\" name=\"NHITS\" value=\"%d\">\n",nhits);
+  printf("<INPUT TYPE=\"HIDDEN\" name=\"WAIT\" value=\"%d\">\n",HowLong);
   printf("Retrieve CD-Search request # ");
   printf("<INPUT type=\"TEXT\" name=\"RID\" value=\"%s\" maxlength=40 size=25>\n", rid);
-  printf("<INPUT TYPE=\"submit\" VALUE=\"Check\">\n");
-  
+  if (HowLong > 60) {
+    printf("<h4>Page will not refresh automatically,</H4>\n");
+    printf("<INPUT TYPE=\"submit\" VALUE=\"Click Here to check again!\">\n");
+  } else {
+    printf("<INPUT TYPE=\"submit\" VALUE=\"Check\">\n");
+  }
   printf("</FORM>\n");
   printf("</BODY>\n");
   printf("</HTML>\n");
@@ -1740,6 +1751,7 @@ Int2 Main (void)
   Int4                iGraphMode      = 2;
   Int4                iPairMode       = 2;
   Int4                iBGram          = -1;
+  Int4                iHowLong        = 5;
   FILE                *infp, *fp;
     
 /*---------------------------------------------------------------------------*/
@@ -1861,6 +1873,11 @@ Int2 Main (void)
     myargs[13].intvalue = (Int4) atoi(www_arg);
     myargs[14].intvalue = (Int4) atoi(www_arg);
   }
+  if ((indx = WWWFindName(www_info,"WAIT")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info, indx);
+     iHowLong = (Int4) atoi(www_arg);
+     if (iHowLong < 5) iHowLong = 5;
+  }
   number_of_descriptions = myargs[13].intvalue;  
   number_of_alignments = myargs[14].intvalue;  
   options->hitlist_size = MAX(number_of_descriptions, number_of_alignments);
@@ -1905,7 +1922,7 @@ Int2 Main (void)
       return(1);
     }
     if (Qstatus > 0) {
-      QRPSBWait(rid,iGraphMode,iPairMode,5,options->expect_value, options->hitlist_size);
+      QRPSBWait(rid,iGraphMode,iPairMode,iHowLong,options->expect_value, options->hitlist_size);
       exit(0);
     }
     if (!sap) sap = (SeqAnnotPtr) BLASTGetSeqAnnotByRID(rid);

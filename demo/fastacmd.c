@@ -1,4 +1,4 @@
-/* $Id: fastacmd.c,v 6.15 2000/10/16 20:47:35 madden Exp $
+/* $Id: fastacmd.c,v 6.18 2001/12/18 13:01:52 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.15 $
+* $Revision: 6.18 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.18  2001/12/18 13:01:52  camacho
+* Added new flag -D to dump blast database in FASTA format
+*
+* Revision 6.17  2001/12/10 19:17:32  camacho
+* Added option to allow fastacmd to use Ctrl-As as defline separators.
+*
+* Revision 6.16  2001/10/19 19:46:26  camacho
+* Added new feature to dump FASTA files from blast databases, added support for the new database format
+*
 * Revision 6.15  2000/10/16 20:47:35  madden
 * Add -o option to write output to file
 *
@@ -102,39 +111,43 @@
 #include <tofasta.h>
 #include <readdb.h>
 
-#define NUMARG 7
+#define NUMARG sizeof(myargs)/sizeof(myargs[0])
 
-static Args myargs [NUMARG] = {
+static Args myargs [] = {
     { "Database", 
       NULL, NULL, NULL, TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
     { "Search string: GIs, accessions and locuses may be used delimited\n"
-      "      by comma or space)",
+      "      by comma.",
       NULL, NULL, NULL, TRUE, 's', ARG_STRING, 0.0, 0, NULL},
     { "Input file wilth GIs/accessions/locuses for batch retrieval",
       NULL, NULL, NULL, TRUE, 'i', ARG_STRING, 0.0, 0, NULL},
-    { "Retrieve duplicated accessions",
+    { "Retrieve duplicate accessions",
       "F", NULL, NULL, TRUE, 'a', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Line length for sequence", 
       "80", NULL, NULL, TRUE, 'l', ARG_INT, 0.0, 0, NULL},
     { "Definition line should contain target gi only",
       "F", NULL, NULL, TRUE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Output file", 
-      "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL}
+      "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
+    { "Use Ctrl-A's as non-redundant defline separator", 
+      "F", NULL, NULL, TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
+    { "Dump the entire database in fasta format", 
+      "F", NULL, NULL, TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 Int2 Main (void)
 {
     CharPtr	database, searchstr, batchfile;
     Int4	linelen;
-    Boolean	dupl, target;
+    Boolean	dupl, target, use_ctrlAs, dump_all;
     FILE *outfp;
 
     if (! GetArgs ("fastacmd", NUMARG, myargs)) {
-	return (1);
+	     return (1);
     }
 
     if( !ErrSetLogfile ("stderr", ELOG_APPEND) ) {
-	exit(1);
+	     exit(1);
     }
 
     database = myargs[0].strvalue;
@@ -143,10 +156,12 @@ Int2 Main (void)
     dupl = myargs[3].intvalue;
     linelen = myargs[4].intvalue;
     target = myargs[5].intvalue;
+    use_ctrlAs = myargs[7].intvalue;
+    dump_all = myargs[8].intvalue;
 
     outfp = FileOpen(myargs[6].strvalue, "w");
 
-    Fastacmd_Search_ex (searchstr, database, batchfile, dupl, linelen, outfp, target);
+    Fastacmd_Search_ex (searchstr, database, batchfile, dupl, linelen, outfp, target, use_ctrlAs, dump_all);
 
     FileClose(outfp);
 

@@ -1,7 +1,7 @@
 #ifndef NCBI_SOCKET__H
 #define NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.13 2001/05/21 15:11:46 ivanov Exp $
+/*  $Id: ncbi_socket.h,v 6.15 2001/12/03 21:33:48 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -70,6 +70,8 @@
  *  SOCK_SetReadOnWriteAPI
  *  SOCK_SetReadOnWrite
  *
+ *  SOCK_IsServerSide
+ *
  * Data logging:
  *
  *  SOCK_SetDataLoggingAPI
@@ -83,6 +85,12 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.h,v $
+ * Revision 6.15  2001/12/03 21:33:48  vakatov
+ * + SOCK_IsServerSide()
+ *
+ * Revision 6.14  2001/09/10 16:10:41  vakatov
+ * SOCK_gethostbyname() -- special cases "0.0.0.0" and "255.255.255.255"
+ *
  * Revision 6.13  2001/05/21 15:11:46  ivanov
  * Added (with Denis Vakatov) automatic read on write data from the socket
  * (stall protection).
@@ -471,6 +479,12 @@ extern void SOCK_SetReadOnWriteAPI(ESwitch on_off);
 extern void SOCK_SetReadOnWrite(SOCK sock, ESwitch on_off);
 
 
+/* Return non-zero value if socket "sock" was created by LSOCK_Accept().
+ * Return zero otherwise.
+ */
+extern int/*bool*/ SOCK_IsServerSide(SOCK sock);
+
+
 
 /******************************************************************************
  *  AUXILIARY network-specific functions (added for the portability reasons)
@@ -505,6 +519,7 @@ extern unsigned int SOCK_htonl
  * specified host (or local host, if hostname is passed as NULL),
  * which can be either domain name or an IP address in
  * dotted notation (e.g. "123.45.67.89\0"). Return 0 on error.
+ * NOTE: "0.0.0.0" and "255.255.255.255" are considered not valid.
  */
 extern unsigned int SOCK_gethostbyname
 (const char* hostname  /* [in]  return current host address if hostname is 0 */

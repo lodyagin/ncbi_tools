@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objfeat.h,v $
+* Revision 6.10  2001/10/02 21:47:54  kans
+* added hooks for writing extra descriptors or features (JO)
+*
 * Revision 6.9  2000/09/28 11:40:19  ostell
 * added endogenous_virus (19) to MolInfo.genome
 *
@@ -305,6 +308,9 @@ NLM_EXTERN Boolean LIBCALL SeqFeatDataAsnRead PROTO((AsnIoPtr aip, AsnTypePtr or
 NLM_EXTERN Boolean    LIBCALL SeqFeatSetAsnWrite PROTO((SeqFeatPtr anp, AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element));
 
+/** used only SeqAnnotAsnWriteExtra **/
+NLM_EXTERN Boolean    LIBCALL SeqFeatSetAsnWriteExtra PROTO((SeqFeatPtr anp, AsnIoPtr aip,
+					AsnTypePtr set, AsnTypePtr element, ValNodePtr extras));
 /*****************************************************************************
 *
 *   CodeBreak
@@ -694,3 +700,4 @@ NLM_EXTERN TxinitPtr LIBCALL TxinitFree PROTO((TxinitPtr txp));
 #endif
 
 #endif
+

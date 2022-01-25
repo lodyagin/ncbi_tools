@@ -1,7 +1,7 @@
 #ifndef NCBI_UTIL__H
 #define NCBI_UTIL__H
 
-/*  $Id: ncbi_util.h,v 6.7 2001/05/17 18:10:22 vakatov Exp $
+/*  $Id: ncbi_util.h,v 6.10 2001/08/09 16:23:34 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,6 +42,15 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_util.h,v $
+ * Revision 6.10  2001/08/09 16:23:34  lavr
+ * Added: fLOG_OmitNoteLevel to log message format flags
+ *
+ * Revision 6.9  2001/07/30 14:39:47  lavr
+ * Do not include date/time in default logging (for ncbidiag.cpp compatibility)
+ *
+ * Revision 6.8  2001/07/25 19:12:31  lavr
+ * Added date/time stamp for message logging
+ *
  * Revision 6.7  2001/05/17 18:10:22  vakatov
  * Moved the logging macros from <ncbi_core.h> to <ncbi_util.h>.
  * Logging::  always call the logger if severity is eLOG_Fatal.
@@ -157,9 +166,25 @@ extern int/*bool*/ CORE_SetLOGFILE_NAME
  );
 
 
+typedef enum {
+    fLOG_Default  = 0x0, /* "fLOG_Short" if NDEBUG, else "fLOG_Full"        */
+
+    fLOG_Level    = 0x1,
+    fLOG_Module   = 0x2,
+    fLOG_FileLine = 0x4, /* (must always be printed for "eLOG_Trace" level) */
+    fLOG_DateTime = 0x8,
+    fLOG_OmitNoteLevel = 0x4000 /* Do not add "NOTE:" if eLOG_Note is level */
+} ELOG_Format;
+typedef unsigned int TLOG_FormatFlags;  /* binary OR of "ELOG_FormatFlags"  */
+#define fLOG_Short  (fLOG_Level)
+#define fLOG_Full   (fLOG_Level | fLOG_Module | fLOG_FileLine)
+
+extern TLOG_FormatFlags CORE_SetLOGFormatFlags(TLOG_FormatFlags);
+
+
 /* Compose message using the "call_data" info.
  * Full format:
- *     "<file>", line <line>: [<module>] <level>: <message>
+ *     mm/dd/yy HH:MM:SS "<file>", line <line>: [<module>] <level>: <message>
  *     \n----- [BEGIN] Raw Data (<raw_size> bytes) -----\n
  *     <raw_data>
  *     \n----- [END] Raw Data -----\n
@@ -167,17 +192,6 @@ extern int/*bool*/ CORE_SetLOGFILE_NAME
  *
  * NOTE:  the returned string must be deallocated using "free()".
  */
-typedef unsigned int TLOG_FormatFlags;  /* binary OR of "ELOG_FormatFlags" */
-typedef enum {
-    fLOG_Default = 0x0,  /* "fLOG_Short" if NDEBUG, else "fLOG_Full" */
-    fLOG_Short   = 0x1,
-    fLOG_Full    = 0x7,
-
-    fLOG_Level    = 0x1,
-    fLOG_Module   = 0x2,
-    fLOG_FileLine = 0x4  /* (must always be printed for "eLOG_Trace" level) */
-} ELOG_Format;
-
 extern char* LOG_ComposeMessage
 (const SLOG_Handler* call_data,
  TLOG_FormatFlags    format_flags  /* which fields of "call_data" to use */

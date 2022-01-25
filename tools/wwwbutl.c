@@ -1,4 +1,4 @@
-/* $Id: wwwbutl.c,v 6.25 2001/02/16 15:53:17 dondosha Exp $
+/* $Id: wwwbutl.c,v 6.27 2001/09/06 20:24:34 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 6.25 $
+* $Revision: 6.27 $
 *
 * File Description:
 *         WWW BLAST/PSI/PHI utilities
 *
 * $Log: wwwbutl.c,v $
+* Revision 6.27  2001/09/06 20:24:34  dondosha
+* Removed threshold_first
+*
+* Revision 6.26  2001/07/20 19:56:04  dondosha
+* Scale cutoff_s2 for megablast if match reward not 1
+*
 * Revision 6.25  2001/02/16 15:53:17  dondosha
 * Cosmetic change
 *
@@ -1175,12 +1181,6 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     }
 
     if((chptr = WWWGetValueByName(theInfo->info, 
-	    "THRESHOLD_1")) != NULL &&
-	    (StringStr(chptr, "default") == NULL)) {
-	options->threshold_first = atoi(chptr);
-    } 
-
-    if((chptr = WWWGetValueByName(theInfo->info, 
 	    "THRESHOLD_2")) != NULL &&
 	    (StringStr(chptr, "default") == NULL)) {
 	options->threshold_second = atoi(chptr);
@@ -1415,7 +1415,7 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
             if (is_megablast) {
                if (options->wordsize < 8)
                   options->wordsize = 8;
-               options->cutoff_s2 = options->wordsize;
+               options->cutoff_s2 = options->wordsize*options->reward;
                options->wordsize += 4;
             }
         }

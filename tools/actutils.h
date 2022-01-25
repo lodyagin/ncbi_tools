@@ -1,4 +1,4 @@
-/* $Id: actutils.h,v 6.8 2000/09/06 18:06:04 sicotte Exp $
+/* $Id: actutils.h,v 6.10 2001/09/04 13:47:13 wheelan Exp $
  *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.h,v $
+* Revision 6.10  2001/09/04 13:47:13  wheelan
+* made several functions extern
+*
+* Revision 6.9  2001/07/13 14:17:54  wheelan
+* moved Sqn_GlobalAlign2Seq and associated functions here
+*
 * Revision 6.8  2000/09/06 18:06:04  sicotte
 * Add End gaps for sequin updates
 *
@@ -72,6 +78,8 @@
 #include <sqnutils.h>
 #include <bandalgn.h>
 #include <needleman.h>
+#include <dotseq.h>
+#include <edutil.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -189,6 +197,12 @@ NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignMergeTwoPairwiseEx(SeqAlignPtr sap_global,S
 NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignLocalToGlobal(SeqAlignPtr sap);
 NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignMergeTwoPairwise(SeqAlignPtr sap_global,SeqAlignPtr salp1,SeqAlignPtr salp2,Int4 which_master);
 NLM_EXTERN Int4 AlnMgrSeqAlignMergePairwiseSet(SeqAlignPtr PNTR sap_ptr);
+NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
+NLM_EXTERN void ACT_GetNthSeqRangeInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
+NLM_EXTERN SeqAlignPtr ACT_FindPiece(BioseqPtr bsp1, BioseqPtr bsp2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2, Uint1 strand, Int4 which_side);
+NLM_EXTERN void SQN_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 strand);
+NLM_EXTERN SeqAlignPtr ACT_CleanUpAlignments(SeqAlignPtr sap, Int4 len1, Int4 len2);
+
 
 
 #ifdef __cplusplus

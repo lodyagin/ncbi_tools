@@ -264,7 +264,7 @@ The defaults are set to read a binary update file into stdin and output xml from
 
 gzcat update.aso | asn2xml > update.xml
 
-The binary ASN.1 files can be found in the ncbi ftp directory at ncbi.nlm.nih.gov/ncbi-asn1
+The binary ASN.1 files can be found in the ncbi ftp directory at ftp.ncbi.nih.gov/ncbi-asn1
 Be sure to transfer them in binary format. Note that these files include GenBank in ASN.1,
 as well as other sources such as RefSeq, PIR, PDB, etc. SWISSPROT is not included since it
 is no longer distributable in the public domain.

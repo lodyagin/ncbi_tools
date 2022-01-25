@@ -27,9 +27,9 @@
 *
 * Author:  Fasika Aklilu
 *
-* Version Creation Date:   7/5/00
+* Version Creation Date:   8/8/01
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: dotvibrant.c,v $
+* Revision 6.13  2001/10/15 18:18:37  wheelan
+* adapted to new alignment manager
+*
+* Revision 6.12  2001/08/08 22:41:31  aklilu
+* added revision
+*
 * Revision 6.11  2000/10/31 22:39:14  vakatov
 * Get rid of the erroneous casts to HANDLE in the Nlm_Enable/Disable calls
 *
@@ -58,10 +64,10 @@ fixed (long) cast in sprintf and fprintf
 *
 * ==========================================================================
 */
-
 /* dotvibrant.c */
 
 #include <dotviewer.h>
+#include <alignmgr2.h>
 
 
  /****************************************************************************
@@ -75,6 +81,17 @@ fixed (long) cast in sprintf and fprintf
 
 #define dot_SEQVIEW 1
 #define dot_FEATVIEW 2
+#define dotaln_BEST 1
+#define dotaln_OUTLYING_LARGE 2
+#define dotaln_OUTLYING_SMALL 3
+#define dotaln_GENERAL 4
+#define dot_plot 1
+#define align_plot 2
+
+
+#define SHOW_MATCHES 1
+#define SHOW_MISMATCHES 2
+
  /****************************************************************************
 
      GLOBAL VARIABLES                                                             
@@ -86,23 +103,29 @@ static Int4  zoomScaleVal [MAXZOOMSCALEVAL] = {
   1L, 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 20L,
   30L, 40L, 50L, 60L, 70L, 80L, 90L, 100L, 200L, 500L, 1000L
 };
-static PrimitivE prim_prev=NULL;
+
+Uint2  prev_primID = 0;
 
  /****************************************************************************
 
       FUNCTION DECLARATIONS                                                               
  ***************************************************************************/
 
-static void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, Int4 scale);
-static void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, Int4 scale, Int4 Fh);
-static void DOT_StartDotPlotWithParams (DOTVibDataPtr vdp, BioseqPtr qbsp, BioseqPtr sbsp);
-static Boolean DOT_StartDotPlot (BioseqPtr qbsp, BioseqPtr sbsp);
-static Int4 DOT_GetValue (TexT t);
+static void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, Int4 scale, SeqIdPtr sip);
+static void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, Int4 scale, Int4 Fh, SeqIdPtr sip);
 static void DOT_VCrossHairs (RecT rcP, DOTVibDataPtr vdp, Int4 VFrom,Int4 HFrom);
 static void DOT_HCrossHairs (RecT rcP, DOTVibDataPtr vdp, Int4 VFrom,Int4 HFrom);
 static void DOT_QViewerClickProc(VieweR v, SegmenT seg, PoinT pt);
 static void DOT_SViewerClickProc(VieweR v, SegmenT seg, PoinT pt);
 static void DOT_ExitAlign(DOTAlignInfoPtr alp);
+static DOTAlnPtr DOT_FindAlignment(DOTVibDataPtr vdp, Uint2 primID);
+static Uint1Ptr DOT_GetNthSeqFromAlign (SeqAlignPtr sap, Int4 n);
+static void DOT_SetColor(SegmenT  seg1, Int1 code, Boolean is_autopanel);
+
+/* scoop declarations */
+extern void SCP_OrganizeAlnsInSet(SeqAlignPtr sap, Int4 fuzz, SCP_ResultPtr scp, Int4 n);
+static int LIBCALLBACK SCP_CompareSpins(VoidPtr ptr1, VoidPtr ptr2);
+static void SCP_GetNthSeqRangeInSASet(SeqAlignPtr PNTR saparray, Int4 numsaps, Int4 n, Int4Ptr start, Int4Ptr stop);
 
 /*_________________________________________(DOT_Compression)_____
 
@@ -154,20 +177,18 @@ void DOT_SetupMenus ()
 ____________________________________________________________________*/
 void DOT_DrawXGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4 HFrom, Int4 HTo, Int4 comp, Boolean GRID)
 {
-  Int4         x, y, y2, offset, start, end;
+  Int4         x, y, y2, offset=0, start, end;
   Int4         scale_pos, pos, Hseq_pos;
   Char         scale_buf[15] = {""};	/*scale value*/
-  Boolean      Decrement = FALSE;
   
-  
-  if (vdp->mip->qstrand == Seq_strand_minus)
-    Decrement=TRUE;
 
-  if (vdp->curr_qlen <50)
-    return;
+  offset=vdp->xstart;
+ 
+  /* draw the axis no matter how short the length */
+/*    if (vdp->curr_qlen <50) */
+/*     return; */
  
   pos = 100;
-  offset=vdp->mip->q_start;
  /* select the font type */
   SelectFont(vdp->Fnt);
 
@@ -181,20 +202,19 @@ void DOT_DrawXGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4
     {
 
       Red();
-      sprintf(scale_buf, "%ld", (long)vdp->mip->q_stop);
+      sprintf(scale_buf, "%d", vdp->xstop);
       MoveTo (rcP.left+ HTo +10 ,rcP.top-5);
       PaintString (scale_buf);
     }
 
   HTo += HFrom;
   
-/*   if (!Decrement) */
- /*    { */
-      for (scale_pos = HFrom; scale_pos <= HTo; scale_pos++)
+
+      for (scale_pos = HFrom+1; scale_pos <= HTo+1; scale_pos++)
         {
           
           /*  draw 0 on axis */
-          if (scale_pos == 0) 
+          if (scale_pos == 1) 
             { 
               Black();
               x =  rcP.left;
@@ -203,7 +223,7 @@ void DOT_DrawXGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4
               LineTo (x,y-20);
               Blue();
               MoveTo(x,y -25);
-              sprintf(scale_buf, "%ld", (long)offset);
+              sprintf(scale_buf, "%d", offset);
               PaintString (scale_buf);
               
               
@@ -212,7 +232,7 @@ void DOT_DrawXGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4
             {
               if (!(scale_pos % pos))
                 {
-                  Hseq_pos = (!Decrement)?((scale_pos)*comp)+offset:offset - ((scale_pos)*comp);
+                  Hseq_pos = (scale_pos*comp)+offset;
                   
                   x = rcP.left + scale_pos-HFrom;
                   y = MAX(rupdate.top, rcP.top);
@@ -232,7 +252,7 @@ void DOT_DrawXGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4
                   y = rcP.top-10;
                   MoveTo (x, y);
                   LineTo (x,y-10);
-                  sprintf(scale_buf, "%ld", (long)Hseq_pos);
+                  sprintf(scale_buf, "%d", Hseq_pos);
                   x = rcP.left + scale_pos -HFrom - (StringWidth(scale_buf)/2);
                   y = rcP.top -25;
                   if (x>rcP.left)
@@ -276,21 +296,19 @@ void DOT_DrawXGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4
 ____________________________________________________________________*/
 static void DOT_DrawYGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4 HFrom, Int4 VTo, Int4 comp, Boolean GRID)
 {
-  Int4         x, y, x2, offset;
+  Int4         x, y, x2, offset=0;
   Int4         scale_pos, pos, Vseq_pos;
   Char         scale_buf[15] = {""};	/*scale value*/
   Int4         fh;
   Boolean      Decrement = FALSE;
   
-
-  if (vdp->mip->sstrand == Seq_strand_minus)
-    Decrement = TRUE;
-
-  if (vdp->curr_slen <50)
-    return;
+  offset=vdp->ystart;
+  
+  /* draw the axis no matter how short the length */
+/*   if (vdp->curr_slen <50) */
+/*     return; */
 
   pos = 100;
-  offset=vdp->mip->s_start;
 
   SelectFont(vdp->Fnt);
   fh = FontHeight();
@@ -302,19 +320,18 @@ static void DOT_DrawYGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFro
 
   if (vdp->curr_slen - VFrom == VTo)
     {
-  
       /* write the sequence length */
       Red();
-      sprintf(scale_buf, "%ld", (long)vdp->mip->s_stop);
+      sprintf(scale_buf, "%d", vdp->ystop);
       MoveTo (rcP.left-10 -(StringWidth(scale_buf)/2),rcP.top+ VTo +10 + (fh/2)); 
       PaintString (scale_buf);
     }
 
   VTo += VFrom;
 
-  for (scale_pos = VFrom; scale_pos <= VTo; scale_pos++)
+  for (scale_pos = VFrom+1; scale_pos <= VTo+1; scale_pos++)
     {
-      if (scale_pos == 0) 
+      if (scale_pos == 1) 
         {
           Black();
           x =  rcP.left-10;
@@ -322,7 +339,7 @@ static void DOT_DrawYGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFro
           MoveTo (x, y);
           LineTo (x-10,y);
           Blue();
-          sprintf(scale_buf, "%ld", (long)offset);
+          sprintf(scale_buf, "%d", offset);
           MoveTo(rcP.left-25-StringWidth(scale_buf),y+fh-4);
           PaintString (scale_buf);
         } 
@@ -348,7 +365,7 @@ static void DOT_DrawYGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFro
           x = rcP.left -10;
           MoveTo (x, y);
           LineTo (x-10,y);
-          sprintf(scale_buf, "%ld", (long)Vseq_pos);
+          sprintf(scale_buf, "%d", Vseq_pos);
           x = rcP.left -25 - StringWidth(scale_buf);
           y = rcP.top-VFrom + scale_pos+ (fh/2);
            
@@ -429,7 +446,7 @@ static void DOT_AddRectMargins (RectPtr r, DOTVibDataPtr vdp)
   Purpose : Change cutoff function for threshold-ramp, window1.
 
 ____________________________________________________________________*/
-void DOT_ChangeMainViewerCutoff (BaR b, GraphiC g, Int2 new, Int2 old) 
+static void DOT_ChangeMainViewerCutoff (BaR b, GraphiC g, Int2 new, Int2 old) 
 {
   DOTVibDataPtr vdp;
   WindoW     w, temport;
@@ -515,20 +532,22 @@ Purpose : Draw function for window1.
 
 ____________________________________________________________________*/
 
-void DOT_DisplayHits (PaneL p)
+static void DOT_DisplayHits (PaneL p)
 {
 
   Int4           i, x, y, x2, y2, index;
   RecT           rcP, rupd, rcS, rcs, dr, rcR, rcP_off;
   Int4           Xscore, Yscore, comp, stop;
   Uint1Ptr PNTR  scores;
-  DOTVibDataPtr    vdp;
-  DOTMainDataPtr   mip;
+  DOTVibDataPtr    vdp=NULL;
+  DOTMainDataPtr   mip=NULL;
   DOTSelDataPtr      data;
   WindoW         w;
   BaR            Vsb, Hsb;
   Int4           VFrom, HFrom, VTo, HTo, cutoff;
-  Int4           main_left, main_top, main_bottom, main_right;
+  Boolean        x_axis_incr;
+  Boolean        query_on_minus = FALSE;
+  Boolean        q_hitonplus, s_hitonplus;
   Int4           q_start, s_start, length;
   Int4           s_stop, q_stop, ycomp, xcomp;
   Int4           swdt, shgt;
@@ -538,6 +557,9 @@ void DOT_DisplayHits (PaneL p)
   Int2           dx, dy;
   DOTAlnPtr      PNTR alnL;
   DOTAlnPtr      aln;
+  Int4           q_left, q_right;
+  Int4           s_top, s_bottom;
+
   
   w = (WindoW)ParentWindow(p);
   rupd = updateRect;
@@ -554,10 +576,8 @@ void DOT_DisplayHits (PaneL p)
   
   comp = vdp->comp;
   
-
   DOT_AddRectMargins (&rcP, vdp);
-  DOT_UpdateLRBT (rupd, rcP, &Left, &Right, &Bottom, &Top);
-  
+  DOT_UpdateLRBT (rupd, rcP, &Left, &Right, &Bottom, &Top); 
   mip = vdp->mip;
   data = (DOTSelDataPtr)vdp->data;
   if (vdp->selectMode == dot_FEATVIEW)
@@ -579,12 +599,12 @@ void DOT_DisplayHits (PaneL p)
       
       xcomp=vdp->originalcomp-comp;
       ycomp=xcomp;
-      
-      rcS.left=rcs.left-HFrom;
-      rcS.right=rcs.right-HFrom;
-      rcS.top=rcs.top-VFrom;
-      rcS.bottom=rcs.bottom-VFrom;
-      
+ 
+      rcS.left=rcs.left-dx;
+      rcS.right=rcs.right-dx;
+      rcS.top=rcs.top-dy;
+      rcS.bottom=rcs.bottom-dy;
+   
       rcR.left = Left;
       rcR.right = Right;      
       rcR.top = Top;
@@ -601,49 +621,87 @@ void DOT_DisplayHits (PaneL p)
         }
     }
     }
-  
-  
   DOT_DrawXGrids(rupd, rcP, vdp, VFrom, HFrom, HTo, comp, vdp->showGrid);
   DOT_DrawYGrids(rupd, rcP, vdp, VFrom, HFrom, VTo, comp, vdp->showGrid);
   
-  if (vdp->showDotPlot)
+  if (vdp->showDotPlot && mip)
     {
       hitlist = mip->hitlist;
       if (mip->unique<=1)
         stop = mip->index;
       else
         stop = DOT_LoopStop (vdp);
-      
+
+      if (vdp->strand1 == Seq_strand_minus)
+        query_on_minus = TRUE;
+
       for (i = 0; i<stop ; i++)
         {       
           length = hitlist[i]->length;
-          q_start = ABS(mip->q_start-hitlist[i]->q_start);
-          s_start = ABS(mip->s_start-hitlist[i]->s_start);
-            
-          q_start = (q_start/comp)-HFrom;
-          s_start = (s_start/comp)-VFrom;
-          length = length/comp;
-          
-          x = rcP.left + q_start;
-          x2 = x+ length;
+
+          if (query_on_minus)
+            q_start = mip->q_stop - hitlist[i]->q_start;
+          else
+            q_start = hitlist[i]->q_start - mip->q_start;
+          s_start = hitlist[i]->s_start - mip->s_start;
+          q_start = ((int)q_start/comp)-HFrom;
+          s_start = ((int)s_start/comp)-VFrom;
+          length = (int)length/comp; 
+
+          if (query_on_minus){
+            x = rcP.left + q_start;
+            x2 = x - length;
+            q_left = x2;
+            q_right = x;
+          }
+          else {
+            x = rcP.left + q_start;
+            x2 = x + length;
+            q_left = x;
+            q_right = x2;
+          }
 
           y = rcP.top +  s_start;
-          y2 = y + length;
-         
-          if (y > Bottom || y2 < Top || x > Right || x2 < Left)
+          y2 = y + length; 
+          
+          if (y > Bottom || y2 < Top  || q_left > Right || q_right < Left) 
             continue; /* outside of drawing Rgn */
           
+          if (query_on_minus){ 
+            if (q_left < rcP.left)
+              { 
+                y2 = y2 - (rcP.left - q_left);
+                q_left = rcP.left; 
+              } 
+          }
+          else { 
+            if (q_left < rcP.left) { 
+              y = y - (rcP.left - q_left); 
+              q_left = rcP.left;
+            }
+          }
+
+          if (y < rcP.top) {
+            q_left = q_left - (rcP.top - y);
+            y = rcP.top; 
+          } 
+ 
           if (y < rcP.top) 
             {
-              x = x+(rcP.top-y);
-              y=rcP.top;
+              q_left = q_left + (rcP.top-y);
+              y = rcP.top;
+            } 
+          
+          if (q_left < rcP.left)
+            { 
+              y = y+(rcP.left-q_left);  
+              q_left = rcP.left; 
             }
           
-          if (x< rcP.left)
-            {
-              y = y+(rcP.left-x); 
-              x = rcP.left;
-            }
+          if (query_on_minus)
+            x2 = q_left; 
+          else  
+            x = q_left;
           
           MoveTo(x, y);
           LineTo(x2, y2);
@@ -651,62 +709,101 @@ void DOT_DisplayHits (PaneL p)
         }
     }
 
-  if (vdp->showALIGN) /* overlay Blast hits */
+  if (vdp->showALIGN && vdp->alp) /* overlay Blast hits */
     {
       Red();
       alnL = vdp->alp->Alnlist;
       stop = vdp->alp->index;
-      main_left = rcP.left + mip->q_start;
-      main_right = main_left + mip->qlen;
-      main_top = rcP.top + mip->s_start;
-      main_bottom = main_top + mip->slen;
-      
       for (i = 0; i<stop; i++)
         {
-
-          /* you should get aln->stops instead of using the lengths*/
           aln = alnL[i];
-          length = aln->q_stop - aln->q_start;
-          q_start = (aln->q_start/comp)-HFrom;
-          s_start = (aln->s_start/comp)-VFrom;
+
+          q_start=ABS(vdp->xstart - aln->q_start);
+          s_start=ABS(vdp->ystart - aln->s_start);
+          q_start=q_start/comp - HFrom;
+          s_start=s_start/comp - VFrom;
+          length = ABS(aln->q_stop - aln->q_start)+1;
           length = length/comp;
-          
-          x = rcP.left +  q_start;
-          y = rcP.top +  s_start;
-          
-          x2 = x+ length-1;
-          y2 = y+ length-1;
-          
-          if (y > main_bottom || y2 < main_top || x > main_right || x2 < main_left)
-            continue; /* outside of drawing Rgn */
-          
-          if (y < rcP.top) 
-            {
-              x = x+(rcP.top-y);
-              y=rcP.top;
+
+          if (vdp->strand1==Seq_strand_minus){
+            q_hitonplus=FALSE;
+            x = rcP.left + q_start;
+            x2 = x - length;
+            q_left = x2;
+            q_right = x;
+          }
+          else{
+            q_hitonplus=TRUE;
+            x = rcP.left + q_start;
+            x2 = x + length;
+            q_left = x;
+            q_right = x2;
+          }
+
+          if (vdp->strand2==Seq_strand_minus){
+            s_hitonplus=FALSE;
+            y = rcP.top + s_start;
+            y2 = y - length;
+            s_top = y2;
+            s_bottom = y;
+          }
+          else {
+            s_hitonplus=TRUE;
+            y=rcP.top+s_start;
+            y2=y+length;
+            s_top = y;
+            s_bottom = y2;
+          }
+         
+          if (q_left > Right || q_right < Left ||
+              s_top > Bottom || s_bottom < Top)
+            continue;
+
+          if (q_hitonplus==s_hitonplus){
+            if (x<rcP.left)
+              {
+                y=y+(rcP.left-x);
+                x=rcP.left;
+              }
+            if (y < rcP.top) 
+              {
+                x = x+(rcP.top-y);
+                y=rcP.top;
+              }
+          }
+          else{
+            if (q_hitonplus){ /* s is minus */
+              if (x< rcP.left)
+                {
+                  y = y-(rcP.left-x); 
+                  x = rcP.left;
+                }
             }
-          
-          if (x< rcP.left)
-            {
-              y = y+(rcP.left-x); 
-              x = rcP.left;
+            else { /* q is on minus strand */
+              if (x2< rcP.left)
+                {
+                  y2=y2-(rcP.left-x2);
+                  x2 = rcP.left;
+                }
             }
-          
-          if (x2>main_right)
-            {
-              y2=y2-(x2-main_right);
-              x2=main_right;
+            if (s_hitonplus){ /* q is minus */
+              if (y < rcP.top) 
+                {
+                  x = x-(rcP.top-y);
+                  y=rcP.top;
+                }
             }
-          
-          if (y2>main_bottom)
-            {
-              x2 = x2-(y2-main_bottom);
-              y2=main_bottom;
+            else {/* s is on minus strand */
+              if (y2 < rcP.top) 
+                {
+                  x2=x2-(rcP.top-y2);
+                  y2=rcP.top;
+                }
             }
-          
+          }
+          DOT_SetColor(NULL, aln->class, TRUE);
           MoveTo(x, y);
           LineTo(x2, y2);
-          
         }
       Black();
     }
@@ -726,12 +823,12 @@ ____________________________________________________________________*/
 static void DOT_SetCurrSeqlen (DOTVibDataPtr vdp)
 {
   Int4 comp;
- 
+  
   comp = vdp->comp;
 
-  vdp->curr_slen = (vdp->mip->slen)/comp;
-  vdp->curr_qlen = (vdp->mip->qlen)/comp;
- 
+    vdp->curr_slen = (vdp->ylen)/comp;
+    vdp->curr_qlen = (vdp->xlen)/comp;
+
 }
 
 
@@ -915,6 +1012,7 @@ static void DOT_UpdateMainPanel(DOTVibDataPtr vdp, Boolean update_all)
   WindoW     temport;
   RecT       rc;
   DOTSelDataPtr  data;
+  Int4           dx, dy;
 
   data=(DOTSelDataPtr)vdp->data;
 
@@ -931,8 +1029,14 @@ static void DOT_UpdateMainPanel(DOTVibDataPtr vdp, Boolean update_all)
           InvalRect(&data->old_rcS);
           data->rm_lastselected=FALSE;
         }
-      InsetRect(&data->rcS, -1, -1);
-      InvalRect (&data->rcS);
+      dx=data->H_pos-vdp->sdp.HFrom;
+      dy=data->V_pos-vdp->sdp.VFrom;
+      rc.left=data->rcS.left-dx;
+      rc.right=data->rcS.right-dx;
+      rc.top=data->rcS.top-dy;
+      rc.bottom=data->rcS.bottom-dy;
+      InsetRect(&rc, -1, -1);
+      InvalRect (&rc);
     }
   else
     {
@@ -1070,7 +1174,7 @@ static void DOT_SetUpWin(WindoW w, PaneL p, DOTVibDataPtr vdp)
   AdjustPrnt (vdp->panel, &rcP, FALSE);
 
   viewersize=MIN(rcP.right-rcP.left,rcP.bottom-rcP.top)-vdp->HORZ_MARGIN;
-  len=MAX(vdp->mip->qlen, vdp->mip->slen);
+  len=MAX(vdp->xlen, vdp->ylen);
   vdp->comp=DOT_Compression(len, viewersize);
   vdp->originalcomp=vdp->comp;
  
@@ -1120,11 +1224,15 @@ static void  DOT_CloseSequenceWindow (ButtoN b)
   if (vdp2->sv->salp)
     MemFree(vdp2->sv->salp);
   if (vdp2->sv) MemFree(vdp2->sv);
-
-  DOT_FreeMainInfo(vdp2->mip);
-  if (vdp2->mip) MemFree(vdp2->mip);
+  if (vdp2->mip){
+    DOT_FreeMainInfo(vdp2->mip);
+    if (vdp2->mip) MemFree(vdp2->mip);
+  }
   if (vdp2) MemFree(vdp2);
-  vdp->ChildWin=Remove (vdp->ChildWin);
+  Remove (vdp->ChildWin);
+  vdp->ChildWin=NULL;
+
+  prev_primID = 0;
 }
 
 
@@ -1139,6 +1247,7 @@ static void DOT_FreeFeatPointers(DOTRowPtr drp)
   DOTFeatPtr dfp_temp=NULL, dfp=NULL;
 
   dfp=drp->dfp;
+  if (dfp == NULL) return;
   dfp_temp=dfp;
   dfp=dfp->next;
   while(dfp != NULL)
@@ -1247,7 +1356,7 @@ static WindoW DOT_ClearLastWindow(WindoW w, Boolean is_sequence)
 
 ____________________________________________________________________*/
 
-void DOT_ModeProc(ChoicE i)
+static void DOT_ModeProc(ChoicE i)
 {
   WindoW      w, temport;
   RecT        rcP;
@@ -1413,10 +1522,10 @@ static void DOT_SelectFrameProc (PaneL p)
   Purpose : Draw x-axis function for viewer1, window2.
 
 ____________________________________________________________________*/
-void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, Int4 scale)
+void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, Int4 scale, SeqIdPtr sip)
 {
   Int4         pos, xlen, x, y, scale_pos, i, j, bigtick, midtick, smalltick;
-  Char         scale_buf[15] = {""};	/*scale value*/
+  Char         scale_buf[15] = {""}, title[50]={""};	/*scale value*/
   Boolean      Decrement=FALSE;
 
 
@@ -1434,10 +1543,14 @@ void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, I
 
   xlen=ABS(xstop-xstart);
 
+  /* axis label */ 
+/*   SeqIdWrite(sip, title ,PRINTID_TEXTID_ACCESSION, 41); */
+/*   AddLabel(seg2,r.left+xlen/2, height+25, title, SMALL_TEXT, 0, UPPER_CENTER, 0); */
+
   AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-  AddLine(seg2, r.left, height+10, r.left+xlen, height+10, FALSE,-1);
+  AddLine(seg2, r.left, height+10, r.left+xlen, height+10, FALSE,0);
 /*   AddLine(seg2, r.left, height-ylen, r.left+xlen, height-ylen, FALSE, -1); */
-  sprintf(scale_buf, "%ld", (long)xstop);
+  sprintf(scale_buf, "%d", xstop);
   AddAttribute(seg2, COLOR_ATT, RED_COLOR, 0,0,0,0);
   AddLabel(seg2, r.left+xlen+10*scale, height+5, scale_buf, SMALL_TEXT, 0, MIDDLE_RIGHT, 0);
   
@@ -1453,7 +1566,7 @@ void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, I
               y = height+10;
               AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
               AddLine(seg2, x, y, x, y+bigtick, FALSE,-1);
-              sprintf(scale_buf, "%ld", (long)scale_pos);
+              sprintf(scale_buf, "%d", scale_pos);
               AddAttribute(seg2, COLOR_ATT, BLUE_COLOR, 0,0,0,0);
               AddLabel(seg2, x, y+15*scale, scale_buf, SMALL_TEXT, 0, UPPER_CENTER, 0);
               
@@ -1463,7 +1576,7 @@ void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, I
               x = r.left + i;
               y = height+10;
               AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-              AddLine(seg2, x, y, x, y+midtick, FALSE,-1);
+              AddLine(seg2, x, y, x, y+midtick, FALSE,0);
               
             }
           else if (!(scale_pos % (pos/10)))
@@ -1471,7 +1584,7 @@ void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, I
               x = r.left + i;
               y = height+10;
               AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-              AddLine(seg2, x, y, x, y+smalltick, FALSE,-1);
+              AddLine(seg2, x, y, x, y+smalltick, FALSE,0);
             }
         }
     }
@@ -1485,8 +1598,8 @@ void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, I
                   x = r.left + i;
                   y = height+10;
                   AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-                  AddLine(seg2, x, y, x, y+bigtick, FALSE,-1);
-                  sprintf(scale_buf, "%ld", (long)j);
+                  AddLine(seg2, x, y, x, y+bigtick, FALSE,0);
+                  sprintf(scale_buf, "%d", j);
                   AddAttribute(seg2, COLOR_ATT, BLUE_COLOR, 0,0,0,0);
                   AddLabel(seg2, x, y+15*scale, scale_buf, SMALL_TEXT, 0, UPPER_CENTER, 0);
                   
@@ -1496,7 +1609,7 @@ void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, I
                   x = r.left + i;
                   y = height+10;
                   AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-                  AddLine(seg2, x, y, x, y+midtick, FALSE,-1);
+                  AddLine(seg2, x, y, x, y+midtick, FALSE,0);
                   
                 }
               else if (!(scale_pos % (pos/10)))
@@ -1504,7 +1617,7 @@ void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, I
                   x = r.left + i;
                   y = height+10;
                   AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-                  AddLine(seg2, x, y, x, y+smalltick, FALSE,-1);
+                  AddLine(seg2, x, y, x, y+smalltick, FALSE,0);
                 }
         }
     }
@@ -1518,11 +1631,11 @@ void DOT_DrawXAxis(SegmenT seg2, RecT  r, Int4 height, Int4 xstart,Int4 xstop, I
   Purpose : Draw y-axis function for viewer1, window2.
 
 ____________________________________________________________________*/
-void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, Int4 scale, Int4 Fh)
+void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, Int4 scale, Int4 Fh, SeqIdPtr sip)
 {
   Int4         smalltick, midtick, bigtick;
   Int4         pos, ylen, x, y, scale_pos, i, j, Fh_2,Fh_4; 
-  Char         scale_buf[15] = {""};	/*scale value*/
+  Char         scale_buf[15] = {""}, title[50]={""};	/*scale value*/
   Boolean      Decrement = FALSE;
 
 
@@ -1543,10 +1656,13 @@ void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, 
 
   ylen=ABS(ystop-ystart);
 
+/*   SeqIdWrite(sip, title ,PRINTID_TEXTID_ACCESSION, 41); */
+/*   AddLabel(seg2, height - ylen/2, r.left - 20, title, SMALL_TEXT, 0, MIDDLE_CENTER, 0); */
+ 
   AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-  AddLine(seg2, r.left-10, height, r.left-10, height-ylen, FALSE,-1);
+  AddLine(seg2, r.left-10, height, r.left-10, height-ylen, FALSE, 0);
 
-  sprintf(scale_buf, "%ld", (long)ystop);
+  sprintf(scale_buf, "%d", ystop);
   AddAttribute(seg2, COLOR_ATT, RED_COLOR, 0,0,0,0);
   AddLabel(seg2, r.left-10, height-ylen-10*scale, scale_buf, SMALL_TEXT, 0, MIDDLE_CENTER, 0);
 
@@ -1560,9 +1676,9 @@ void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, 
               x = r.left-10;
               y = height-i/* +VFrom */;
               AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-              AddLine(seg2, x, y, x-bigtick, y, FALSE,-1);
+              AddLine(seg2, x, y, x-bigtick, y, FALSE, 0);
               
-              sprintf(scale_buf, "%ld", (long)scale_pos);
+              sprintf(scale_buf, "%d", scale_pos);
               y = y-Fh_2;
               AddAttribute(seg2, COLOR_ATT, BLUE_COLOR, 0,0,0,0);
               AddLabel(seg2, x-15*scale, y, scale_buf, SMALL_TEXT, 0, MIDDLE_LEFT, 0);
@@ -1573,7 +1689,7 @@ void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, 
               x = r.left-10;
               y = height-i/* +VFrom */;
               AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-              AddLine(seg2, x, y, x-midtick, y, FALSE,-1);
+              AddLine(seg2, x, y, x-midtick, y, FALSE,0);
               
             }
           else if (!(scale_pos % (pos/10)))
@@ -1581,7 +1697,7 @@ void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, 
               x = r.left-10;
               y = height-i/* +VFrom */;
               AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-              AddLine(seg2, x, y, x-smalltick, y, FALSE,-1);
+              AddLine(seg2, x, y, x-smalltick, y, FALSE,0);
             }
           
         }
@@ -1596,9 +1712,9 @@ void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, 
               x = r.left-10;
               y = height-i/* +VFrom */;
               AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-              AddLine(seg2, x, y, x-bigtick, y, FALSE,-1);
+              AddLine(seg2, x, y, x-bigtick, y, FALSE,0);
               
-              sprintf(scale_buf, "%ld", (long)j);
+              sprintf(scale_buf, "%d", j);
               y = y-Fh_2;
               AddAttribute(seg2, COLOR_ATT, BLUE_COLOR, 0,0,0,0);
               AddLabel(seg2, x-15*scale, y, scale_buf, SMALL_TEXT, 0, MIDDLE_LEFT, 0);
@@ -1609,7 +1725,7 @@ void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, 
               x = r.left-10;
               y = height-i/* +VFrom */;
               AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-              AddLine(seg2, x, y, x-midtick, y, FALSE,-1);
+              AddLine(seg2, x, y, x-midtick, y, FALSE,0);
               
             }
           else if (!(scale_pos % (pos/10)))
@@ -1617,13 +1733,10 @@ void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, 
               x = r.left-10;
               y = height-i/* +VFrom */;
               AddAttribute(seg2, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
-              AddLine(seg2, x, y, x-smalltick, y, FALSE,-1);
-            }
-          
+              AddLine(seg2, x, y, x-smalltick, y, FALSE,0);
+            }     
         }
     }
-
-
 }
 
 
@@ -1634,69 +1747,299 @@ void DOT_DrawYAxis(SegmenT seg2, RecT  r, Int4 height, Int4 ystart, Int4 ystop, 
 
 ____________________________________________________________________*/
 
-static Boolean LIBCALLBACK DOT_SVDisplayDiags(DOTVibDataPtr vdp2, DOTSelDataPtr data)
+static Boolean DOT_SVDisplayDiags(DOTVibDataPtr vdp2, DOTSelDataPtr data)
 {
   RecT               rcP;
   DOTDiagPtr         PNTR hitlist;
   DOTVibDataPtr        vdp;
   VieweR             v;
-  SegmenT            seg1, seg2, seg3;
+  SegmenT            seg1, seg2, seg3, seg4;
+  PrimitivE          prim;
   Char               buffer[50];
   Int4               stop, cutoff=0, q_start, s_start, length;
-  Int4               x, y, x2, y2;
-  Int4               i, s_stop, q_stop;
+  Int4               x, y, x2, y2, tmp, Right_limit, Bottom_limit;
+  Int4               i, j, s_stop, q_stop;
   Int4               p_VFrom, p_HFrom;
   Int4               width, height, primID;
-  Int4               r_width, r_ht, temp, x_start, y_start, x_stop, y_stop;
-
+  Int4               r_width, r_ht, x_start, y_start, x_stop, y_stop;
+  Int4               right, left, top, bottom;
+  Int4               Right, Left, Top, Bottom;
+  Int4               lb_boundary, tr_boundary;
+  Int4               right_end, bottom_end;
+  Int4               diag, aln_diag;
+  Int4               q_left, q_right;
+  Int4               s_top, s_bottom;
+  Boolean            q_hitonplus=FALSE, s_hitonplus=FALSE;
+  Boolean            lt_fixed=FALSE, rb_fixed=FALSE;
+  Boolean            lb_fixed=FALSE, rt_fixed=FALSE;
+  Boolean            query_on_minus = FALSE;
+  DOTAlnPtr PNTR     alnL, aln;
 
   seg1=CreateSegment(vdp2->sv->pict1, 1, 0); /* diags */
   seg2=CreateSegment(vdp2->sv->pict1, 2, 0); /* axis */
   seg3=CreateSegment(vdp2->sv->pict1, 3, 0); /* diag coordinates */
-
   v=vdp2->sv->v1;
-  vdp2->sv->seg1=seg1; /* diags */
 
   GetPosition(v, &rcP); 
   InsetRect(&rcP, 4, 4);
   vdp = data->vdp;
-
   width = rcP.right-rcP.left;
   height = rcP.bottom-rcP.top-2*(vdp2->VERT_MARGIN*vdp2->sv->scaleValue);
-
   p_VFrom=vdp->sdp.VFrom;
   p_HFrom=vdp->sdp.HFrom;
-
   /* Rect Parameters */
   rcP.left+=2*(vdp2->HORZ_MARGIN*vdp2->sv->scaleValue);
-
-  hitlist = vdp2->mip->hitlist;
-  if (vdp2->mip->unique<=1)
-    stop=vdp2->mip->index;
-  else
-    stop=DOT_LoopStop (vdp2);
-  
-  DOT_DrawXAxis(seg2, rcP, height, data->q_start, data->q_stop, vdp2->sv->scaleValue);
-  DOT_DrawYAxis(seg2, rcP, height, data->s_start, data->s_stop, vdp2->sv->scaleValue, vdp2->Fh);
-
+  DOT_DrawXAxis(seg2, rcP, height, data->q_start, data->q_stop, vdp2->sv->scaleValue, (vdp2->mip?vdp2->mip->qbsp->id:vdp2->alp->sip));
+  DOT_DrawYAxis(seg2, rcP, height, data->s_start, data->s_stop, vdp2->sv->scaleValue, vdp2->Fh, (vdp2->mip?vdp2->mip->sbsp->id:vdp2->alp->sip->next));
   AddAttribute(seg1, COLOR_ATT, BLACK_COLOR, 0, 0, 0, 0);
 
 
-  for (i = 0; i<stop ; i++)
-       {  
-   
-         length = hitlist[i]->length-1;
-         x_start =  ABS(data->q_start- hitlist[i]->q_start);
-         y_start =   ABS(data->s_start-  hitlist[i]->s_start);
+  Left=MIN(data->q_start, data->q_stop);
+  Right=MAX(data->q_start, data->q_stop);
+  Top=MIN(data->s_start, data->s_stop);
+  Bottom=MAX(data->s_start, data->s_stop);
+  right_end=rcP.left+(Right-Left);
+  bottom_end=height-(Bottom-Top);
 
-         x = rcP.left + x_start;
-         x2 = x+ length;
+  if (vdp2->mip && vdp2->showDotPlot){
+    hitlist = vdp2->mip->hitlist;
+    if (vdp2->mip->unique<=1)
+      stop=vdp2->mip->index;
+    else
+      stop=DOT_LoopStop (vdp2);
+    
+    if (vdp2->strand1 == Seq_strand_minus)
+      query_on_minus = TRUE;
+    
+    for (i = 0; i<stop ; i++)
+      {  
+         length = hitlist[i]->length-1;
+         if (query_on_minus) 
+           x_start = data->q_stop - hitlist[i]->q_start;
+         else
+           x_start =  hitlist[i]->q_start - data->q_start;
+         y_start =   ABS(data->s_start-  hitlist[i]->s_start);
+         if (query_on_minus){ 
+           x = rcP.left + x_start; 
+           x2 = x - length; 
+         } 
+         else { 
+           x = rcP.left + x_start;
+           x2 = x + length;
+         } 
+         
+         /* in dot matrix subject is always on plus */
          y = height- y_start;
          y2 = y - length;
 
-         AddLine(seg1, x, y, x2, y2, FALSE,(Uint2) i+1);
+         prim = AddLine(seg1, x, y, x2, y2, FALSE,(Uint2)i + 1);
+         if (prev_primID == (i + 1))
+           HighlightPrimitive(v, seg1, prim, FRAME_PRIMITIVE);
        }
+  }
 
+  if (vdp2->alp && vdp2->showALIGN){
+    seg4=seg1;
+    AddAttribute(seg4, COLOR_ATT, RED_COLOR, 0, 0, 0, 0);
+    
+    alnL=vdp2->alp->Alnlist;
+    stop = vdp2->alp->index;
+    for (j = 0; j<stop; j++)
+      {
+        aln = alnL[j];
+        q_start=aln->q_start-Left;
+        s_start=aln->s_start-Top;
+        length=aln->q_stop-aln->q_start;
+
+        if (vdp2->strand1 == Seq_strand_minus){
+          q_hitonplus=FALSE;
+          x = rcP.left+q_start;
+          x2 = x - length;
+          q_left = x2;
+          q_right = x;
+        }
+        else{
+          q_hitonplus=TRUE;
+          x = rcP.left + q_start;
+          x2 = x + length;
+          q_left = x;
+          q_right = x2;
+        }
+
+        if (vdp2->strand2 == Seq_strand_minus){
+          s_hitonplus=FALSE;
+          y = height - s_start;
+          y2 = y + length;
+          s_top = y2;
+          s_bottom = y;
+        }
+        else{
+          s_hitonplus=TRUE;
+          y = height - s_start;
+          y2 = y - length;
+          s_top = y;
+          s_bottom = y2;
+        }
+        
+        lt_fixed = rb_fixed = lb_fixed = rt_fixed = FALSE;
+        if (q_left > right_end || q_right < rcP.left ||
+            s_top < bottom_end || s_bottom > height)
+          continue;
+
+        if (q_hitonplus==s_hitonplus){
+          diag=Bottom-Right;
+          aln_diag=s_start-q_start;
+          if (x<rcP.left){
+            if (y>height){
+              if (rcP.left-x < y-height/* aln_diag < diag */){
+                x=x+(y-height);
+                y=height;
+              }
+              else{
+                y=y-(rcP.left-x);
+                x=rcP.left;
+              }
+            }
+            else{
+              y=y-(rcP.left-x);
+              x=rcP.left;
+            }
+            lt_fixed=TRUE;
+          }
+          if (x2>right_end){
+            if (y2<bottom_end){
+              if (x2-right_end < bottom_end-y2/* aln_diag > diag */){
+                x2=x2-(bottom_end-y2);
+                y2=bottom_end;
+              }
+              else{
+                y2=y2+(x2-right_end);
+                x2=right_end;
+              }
+            }
+            else {
+              y2=y2+(x2-right_end);
+              x2=right_end;
+            }
+            rb_fixed=TRUE;
+          }
+          
+            if (y>height && !lt_fixed){
+              x=x+(y-height);
+              y=height;
+            }
+            if (y2<bottom_end && !rb_fixed){
+              x2=x2-(bottom_end-y2);
+              y2=bottom_end;
+            }
+          }
+          else{
+            if (q_hitonplus){/* s must be minus */
+/*               if ( x > right_end || x2 < rcP.left || y2 <bottom_end || y>height) */
+/*                 continue; */
+              diag=Bottom-Left;
+              aln_diag=s_start-q_start;
+              if (x<rcP.left){
+                if (y<bottom_end){
+                  if (rcP.left-x < bottom_end-y/* aln_diag < diag */){
+                    x=x+(bottom_end-y);
+                    y=bottom_end;
+                  }
+                  else{
+                    y=y+(rcP.left-x);
+                    x=rcP.left;
+                  }
+                }
+                else{
+                  y=y+(rcP.left-x);
+                  x=rcP.left;
+                }
+                lb_fixed=TRUE;
+              }
+              if (x2>right_end){
+                if (y2>height){
+                  if (x2-right_end < y2-height/* aln_diag > diag */){
+                    x2=x2-(y2-height);
+                    y2=height;
+                  }
+                  else{
+                    y2=y2-(x2-right_end);
+                    x2=right_end;
+                  }
+                }
+                else{
+                  y2=y2-(x2-right_end);
+                  x2=right_end;
+                }
+                rt_fixed=TRUE;
+              }
+              if (y<bottom_end && !lb_fixed){
+                x=x+(bottom_end-y);
+                y=bottom_end;
+              }
+              if (y2>height && !rt_fixed){
+                x2=x2-(y2-height);
+                y2=height;
+              }
+            }
+            else if (s_hitonplus){/* q must be minus*/
+/*               if (y2 >height || y <bottom_end || x2<rcP.left || x>right_end) */
+/*                 continue; */
+              diag=Bottom-Left;
+              aln_diag=s_start-q_start;
+              if (x> right_end){
+                if (y>height){
+                  if (x-right_end < y-height/* aln_diag < diag */){
+                    x=x-(y-height);
+                    y=height;
+                  }
+                  else{
+                    y=y-(x-right_end);
+                    x=right_end;
+                  }
+                }
+                else{
+                  y=y-(x-right_end);
+                  x=right_end;
+                }
+                lt_fixed=TRUE;
+              }
+              if(x2<rcP.left){
+                if (y2<bottom_end){
+                  if (rcP.left-x2 < bottom_end-y2/* aln_diag > diag */){
+                    x2=x2+(bottom_end-y2);
+                    y2=bottom_end;
+                  }
+                  else{
+                    y2=y2+(rcP.left-x2);
+                    x2=rcP.left;
+                  }
+                }
+                else {
+                  y2=y2+(rcP.left-x2);
+                  x2=rcP.left;
+                }
+                rb_fixed=TRUE;
+              }
+              if (y>height && !lt_fixed){
+                x=x-(y-height);
+                y=height;
+              }
+              if (y2<bottom_end && !rb_fixed){
+                x2=x2+(bottom_end-y2);
+                y2=bottom_end;
+              }
+              
+            }
+          }
+          DOT_SetColor(seg4, aln->class, FALSE);
+          prim=AddLine(seg4, x, y, x2, y2, FALSE, 0);
+          SetPrimitiveIDs(prim,aln->entityID,aln->itemID, OBJ_SEQALIGN, aln->primID);
+          if (prev_primID == aln->primID)
+            HighlightPrimitive(v, seg1, prim, FRAME_PRIMITIVE);
+      }
+  }
+  
   return TRUE;
 }
 
@@ -1719,7 +2062,7 @@ static Int4 DOT_WorldtoScreen(Int4 wPos, Int4 chw_2)
   Purpose : Draw scale of aligned seqs, viewer2, window2.
 
 ____________________________________________________________________*/
-void DOT_DrawScale (SegmenT sbSeg, DOTMainDataPtr mip, RecT  r, Int4 margin,Int4 res_cnt, Int4 bloc_cnt, Int4 Fh, Int4 q_pos, Int4 s_pos, Int4 chw_2, Int4 chw_4)
+void DOT_DrawScale (SegmenT sbSeg, Uint1 strand1, Uint1 strand2, RecT  r, Int4 margin,Int4 res_cnt, Int4 bloc_cnt, Int4 Fh, Int4 q_pos, Int4 s_pos, Int4 chw_2, Int4 chw_4)
 {
   Char      Buf[15]={""};
   Int4      x, x2,y1, y2, y3, y4, y5, y6, y7, y8;
@@ -1735,8 +2078,8 @@ void DOT_DrawScale (SegmenT sbSeg, DOTMainDataPtr mip, RecT  r, Int4 margin,Int4
   AddAttribute(sbSeg, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
   AddLine(sbSeg, x, y2, x, y3, FALSE, 0);
 
-  pos=(mip->qstrand==Seq_strand_plus)?res_cnt+q_pos:ABS(q_pos-res_cnt); 
-  sprintf(Buf,"%d",(int)pos);
+  pos=(strand1==Seq_strand_plus)?res_cnt+q_pos:ABS(q_pos-res_cnt); 
+  sprintf(Buf,"%d",pos);
   x2=x-StringWidth(Buf)/2;
 
   AddAttribute(sbSeg, COLOR_ATT, BLUE_COLOR, 0,0,0,0);
@@ -1748,8 +2091,8 @@ void DOT_DrawScale (SegmenT sbSeg, DOTMainDataPtr mip, RecT  r, Int4 margin,Int4
   AddAttribute(sbSeg, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
   AddLine(sbSeg, x, y6, x, y5, FALSE, 0);
 
-  pos=(mip->sstrand==Seq_strand_plus)?res_cnt+s_pos:ABS(s_pos-res_cnt);
-  sprintf(Buf,"%d",(int)pos);
+  pos=(strand2==Seq_strand_plus)?res_cnt+s_pos:ABS(s_pos-res_cnt);
+  sprintf(Buf,"%d",pos);
   x-=StringWidth(Buf)/2;
 
   AddAttribute(sbSeg, COLOR_ATT, BLUE_COLOR, 0,0,0,0);
@@ -1768,29 +2111,29 @@ static void DOT_HlSeq(SegmenT sbSeg, RecT  rcP, Int4 margin, Int4 wPos, Int4 blo
   Int4  x1, x2, y1;
 
 
-  bloc_beg=wPos-bloc_pos;
-  begin=MAX(bloc_beg, hit_start);
+  bloc_beg = wPos-bloc_pos;
+  begin = MAX(bloc_beg, hit_start);
   
-  end=MIN(wPos,hit_stop);
-  len=end-begin;
-  xpos=DOT_WorldtoScreen(begin, chw_2);
+  end = MIN(wPos,hit_stop);
+  len = end - begin + 1;
+  xpos = DOT_WorldtoScreen(begin, chw_2);
  
-  x1= rcP.left+margin+xpos;
-  x2= x1+len*chw_2;
-  y1 = 5*Fh;
+  x1= rcP.left + margin + xpos;
+  x2= x1 + len * chw_2;
+  y1 = 5 * Fh;
 
   AddAttribute(sbSeg, COLOR_ATT, RED_COLOR, 0,0,0,0);
- AddLine(sbSeg, x1, y1, x2, y1, FALSE,0); 
+  AddLine(sbSeg, x1, y1, x2, y1, FALSE,0); 
 
 }
 
-/*________________________________________(DOT_HlMatch)_____________
+/*________________________________________(DOT_Highlight)_____________
 
   Purpose : Highlight matched residues, viewer2, window2.
 
 ____________________________________________________________________
 */
-static void DOT_HlMatch(SegmenT sbSeg, RecT  rcP, Int4 margin, Int4 wPos, Int4 Fh, Int4 chw_2)
+static void DOT_Highlight(SegmenT sbSeg, RecT  rcP, Int4 margin, Int4 wPos, Int4 Fh, Int4 chw_2, Boolean match)
 {
   Int4  xpos, x1, x2, y1, y2;
 
@@ -1801,7 +2144,10 @@ static void DOT_HlMatch(SegmenT sbSeg, RecT  rcP, Int4 margin, Int4 wPos, Int4 F
   y1 = 6*Fh;
   y2 = 4*Fh;
 
-  AddAttribute(sbSeg, COLOR_ATT, CYAN_COLOR, 0,0,0,0);
+  if (match)
+    AddAttribute(sbSeg, COLOR_ATT, YELLOW_COLOR,0,0,0,0);
+  else
+    AddAttribute(sbSeg, COLOR_ATT, CYAN_COLOR, 0,0,0,0);
   AddRectangle (sbSeg, x1, y1, x2, y2, 0, TRUE, 0);
 }
 
@@ -1841,58 +2187,59 @@ static void DOT_UpdatePt (void)
 ____________________________________________________________________*/
 static void DOT_FillNewSeqBufs (DOTVibDataPtr vdp, DOTVibDataPtr vdp2, Boolean is_zoom)
 {
-
   Int4      qlen, slen, i;
-  Uint1Ptr  qseq, sseq, q, s, qBuf, sBuf;
-  DOTSelDataPtr data;
-  DOTMainDataPtr mip1, mip2;
-  
+  Int4      q_start, s_start;
+  Int4      q_left, q_right;
+  Uint1Ptr  qseq=NULL, sseq=NULL, q=NULL, s=NULL, qBuf=NULL, sBuf=NULL;
+  DOTSelDataPtr data=NULL;
+  DOTMainDataPtr mip1=NULL, mip2=NULL;
+  DOTAlignInfoPtr alp=NULL;
+
 
   data=(DOTSelDataPtr)vdp->data;
   mip1 =  vdp->mip;
   mip2 =  vdp2->mip;
-  
+
   qlen=mip2->qlen;
   slen=mip2->slen;
   qseq = mip1->qseq;
   sseq = mip1->sseq;
-
+  q_left=mip1->q_start;
+  q_right = mip1->q_start + mip1->qlen - 1;
+  s_start = mip1->s_start;
   if (is_zoom)
     {
-      mip2->qseq=MemFree(mip2->qseq);
       mip2->sseq=MemFree(mip2->sseq);
+      mip2->qseq=MemFree(mip2->qseq);
     }
-
+  
+  
   /* get sequence position relative to the vdp sequence buffer */
+  if (vdp2->strand1 == Seq_strand_minus)
+    q_start = ABS(q_right - data->q_stop)/*  + q_left */;
+  else
+    q_start = ABS(q_left - data->q_start);
 
-  q = qseq+ABS(data->q_start-mip1->q_start);
-  s = sseq+ABS(data->s_start-mip1->s_start);
+  q = qseq+ q_start;
+  s = sseq+ ABS(s_start - data->s_start);
 
 
   if (!(qBuf = (Uint1Ptr) MemNew (sizeof(Uint1)*(qlen)))) return;
   if (!(sBuf = (Uint1Ptr) MemNew (sizeof(Uint1)*(slen)))) return;
-  
-   mip2->qseq=qBuf; 
-   mip2->sseq=sBuf; 
-
-
+  mip2->sseq=sBuf;
+  mip2->qseq=qBuf;
   i=0;
   while(i< qlen)
-    {  
-      
+    {        
       *qBuf=*q;
-
       i++;
       q++;
       qBuf++;
     }
-
   i=0;
   while(i< slen)
     {  
-      
       *sBuf=*s;
-
       i++;
       s++;
       sBuf++;
@@ -1909,24 +2256,50 @@ static void DOT_InitCInfo(DOTVibDataPtr vdp, DOTVibDataPtr vdp2, DOTSelDataPtr d
 {
   Char       colBuf[12]={""};
   Int4       i;
-  DOTMainDataPtr mip1, mip2;
+  Int4       q_left, q_right;
+  DOTMainDataPtr mip1=NULL, mip2=NULL;
+  BioseqPtr  qbsp, sbsp;
+  
 
-  /* set up second window parameters */
-  mip1 =  vdp->mip;
-  mip2=(DOTMainDataPtr) MemNew (sizeof(DOTMainData));
-
+  /* set up second window parameters */  
   vdp2->sv=(DOTSeqViewrPtr)MemNew(sizeof(DOTSeqViewr));
   vdp2->Fnt = vdp->Fnt;
   vdp2->HORZ_MARGIN=vdp->HORZ_MARGIN;
   vdp2->VERT_MARGIN=vdp->VERT_MARGIN;
-  
-  mip2=DOT_InitMainInfo (mip2, mip1->qbsp, mip1->sbsp, mip1->word_size, mip1->tree_limit, data->q_start, data->q_stop, data->s_start, data->s_stop);
+  vdp2->alp=vdp->alp;
 
-  vdp2->sdp.TrampPos=75;
-  mip2->qname=mip1->qname;
-  mip2->sname=mip1->sname;
-  mip2->matrix = mip1->matrix;
-
+  mip1 =  vdp->mip;
+  if (mip1){
+    qbsp = mip1->qbsp;
+    sbsp = mip1->sbsp;
+    mip2=(DOTMainDataPtr) MemNew (sizeof(DOTMainData));
+    mip2=DOT_InitMainInfo (mip2, qbsp, sbsp, mip1->word_size, mip1->tree_limit, data->q_start, data->q_stop, data->s_start, data->s_stop);
+    if (mip2->qslp)
+      SeqLocFree(mip2->qslp);
+    mip2->qslp = SeqLocIntNew(data->q_start, data->q_stop, vdp->strand1, qbsp->id);
+    if (mip2->sslp)
+      SeqLocFree(mip2->sslp);
+    mip2->sslp = SeqLocIntNew(data->s_start, data->s_start, vdp->strand2, sbsp->id);
+    mip2->qlen=data->qlen;
+    mip2->slen=data->slen;
+    vdp2->sdp.TrampPos=75;
+    mip2->matrix = mip1->matrix;
+    mip2->qstrand = mip1->qstrand;
+    vdp2->mip= mip2;
+  }
+  else {
+    vdp2->mip=NULL;
+  }
+  vdp2->xstart=data->q_start;
+  vdp2->ystart=data->s_start;
+  vdp2->xstop=data->q_stop;
+  vdp2->ystop=data->s_stop;
+  vdp2->xlen=data->qlen;
+  vdp2->ylen=data->slen;
+  vdp2->strand1=vdp->strand1;
+  vdp2->strand2=vdp->strand2;
+  vdp2->xname=vdp->xname;
+  vdp2->yname=vdp->yname;
   /* sequence viewer initiatize */
 
   vdp2->sv->do_scale=TRUE;
@@ -1934,43 +2307,17 @@ static void DOT_InitCInfo(DOTVibDataPtr vdp, DOTVibDataPtr vdp2, DOTSelDataPtr d
   vdp2->sv->showLabels=FALSE;
   vdp2->sv->old_primID=-1;
 
-  /* update with every new select */
-  mip2->sstrand = mip1->sstrand;
-  mip2->qstrand = mip1->qstrand;
 
   vdp2->curr_slen=data->slen;
   vdp2->curr_qlen=data->qlen;
-  mip2->qlen=data->qlen;
-  mip2->slen=data->slen;
   vdp2->data=data;
  
   /* hits info */
 
   vdp2->Fh=vdp->Fh;
   vdp2->charw=vdp->charw;
-  
-  vdp2->mip= mip2;
-
 }
 
-/*________________________________________(DOT_SVCleanupProc)_____________
-
-  Purpose : Cleanup proc for window2.
-
-____________________________________________________________________*/
-/*
-static void LIBCALLBACK DOT_SVCleanupProc(GraphiC g, VoidPtr data)
-{
-  DOTVibDataPtr vdp;
-
-	vdp=(DOTVibDataPtr)data;
-	
-	if (vdp) DOT_FreeMainInfo(vdp->mip);
-   MemFree(vdp->mip);
-   MemFree(vdp);
-}
-
-*/
 
 /*________________________________________(Init_bufs)_____________
 
@@ -1995,33 +2342,53 @@ static void Init_bufs(CharPtr qBuf, CharPtr sBuf, Int4 size)
   Purpose : Draw function for viewer2 of second window.
 
 ____________________________________________________________________*/
+
 static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
 {
   RecT       rc;
   DOTVibDataPtr vdp;
   DOTSelDataPtr  data;
   DOTMainDataPtr mip1, mip2;
-  SegmenT    pict2,nmSeg,hlSeg,clSeg, sbSeg;
+  SegmenT    pict2;
+  SegmenT    nmSeg;
+  SegmenT    hlSeg;
+  SegmenT    clSeg;
+  SegmenT    sbSeg;
   Boolean    match=FALSE;
-  Uint1Ptr   q, s, end;
+  Uint1Ptr   q;
+  Uint1Ptr   s;
+  Uint1Ptr   end;
+  Uint1Ptr   seq_aln1=NULL, seq_aln2=NULL;
   Int4       a,b,c, pos;
-  Boolean    ambig=FALSE;
+  Boolean    ambig=FALSE, is_na;
   Boolean    get_barposition=TRUE;
-  Int4       i, k, spaces, prot_threshold=0, bloc_cntr, res_cnt, bloc_size;
-  Int4       x, y, x2, y2, q_ahead, s_ahead, qavail, savail;
-  Int4       vis_2, buf_len,bufsize, sglen;
-  Int4       xstart, xstop, ystart, ystop, hit_start, hit_stop, q_pos, s_pos;
+  Int4       i, k, spaces;
+  Int4       prot_threshold=0, bloc_cntr;
+  Int4       res_cnt, bloc_size;
+  Int4       x, y, x2, y2, q_ahead;
+  Int4       s_ahead, qavail, savail;
+  Int4       vis_2, buf_len;
+  Int4       bufsize, sglen, diff1, diff2;
+  Int4       xstart, xstop, ystart, ystop;
+  Int4       hit_start, hit_stop, q_pos, s_pos;
   Int4       V2Height, Fh, margin;
-  Int4       xdiff_left,xdiff_right,ydiff_left,ydiff_right,width,height;
+  Int4       xdiff_left,xdiff_right;
+  Int4       ydiff_left,ydiff_right;
+  Int4       width,height;
   Int4       chw_2, chw_4;
-  Int4       qbufstart, qbufstop, sbufstart, sbufstop;
+  Int4       qbufstart, qbufstop;
+  Int4       sbufstart, sbufstop;
   BaR        vsb;
   CharPtr    qBuf;
   CharPtr    sBuf;
   CharPtr PNTR residue_names;
   Int4Ptr PNTR matrix;
+  Uint1      strand1, strand2;
   Int4       num_cls, num_segs, seg_len;
   Int4       q_start, q_stop, s_start, s_stop;      
+  Boolean    query_on_minus = FALSE;
+  Uint1      highlight;
+
 
   data=(DOTSelDataPtr)vdp2->data;
   if (data==NULL) return;
@@ -2029,121 +2396,136 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
   if (vdp==NULL)  return;
   mip1= vdp->mip;
   mip2= vdp2->mip;
-
-  margin=MAX((StringWidth(mip1->qname)), (StringWidth(mip1->sname)))+10;
-
+  margin=MAX((StringWidth(vdp2->xname)), (StringWidth(vdp2->yname)))+10;
   GetPosition(vdp2->sv->v2, &rc);
   Fh=vdp2->Fh;
   vis_2=VIS_LEN/2;
-  matrix=mip1->matrix;
+
+  highlight = vdp2->sv->highlight;
+
+  if (vdp2->strand1 == Seq_strand_minus)
+    query_on_minus = TRUE;
+
   x = rc.left;
   y = 5*Fh; /* on top -cartesian */
   y2 = y -Fh;
   x2 = x + margin;
-
   chw_2=vdp2->charw/2;
   chw_4=vdp2->charw/4;
-
   pict2=vdp2->sv->pict2;
-
-  if (mip1->is_na)
-    residue_names=na_names;
-  else
-    residue_names=aa_names;
-  
   width=ABS(data->q_stop-data->q_start);
   height=ABS(data->s_stop-data->s_start);
 
-/*   if (salp->q_start<salp->stop) */
-/*     { */
-/*       qbufstart=ABS(salp->q_start-data->q_start); */
-/*       sbufstart=ABS(salp->s_start-data->s_start); */
-/*       sbufstop=ABS(salp->s_stop-data->s_start); */
+  /* in selected region coordinates */
+  if (salp->show == dot_plot){
+    matrix=mip1->matrix;
+    is_na=mip1->is_na;
+    if (mip1->is_na)
+      residue_names=na_names;
+    else
+      residue_names=aa_names;
 
-  /* convert from sequence to buffer coordinates */
-  q_start = ABS(data->q_start - salp->q_start);
-  q_stop = ABS(data->q_start - salp->q_stop);
-  s_start = ABS(data->s_start - salp->s_start);
-  s_stop = ABS(data->s_start - salp->s_stop);
+    strand1=mip1->qstrand;
+    strand2=mip1->sstrand;
 
-  xdiff_left=q_start;
-  xdiff_right=width-q_stop;
-  ydiff_left=s_start;
-  ydiff_right=height-s_stop;
-
-  if (xdiff_left<ydiff_left)
-    {
-      xstart=0;
-      ystart=ydiff_left-xdiff_left;
+    if (query_on_minus) {
+      q_start = data->q_stop - salp->q_start;
+      q_stop = data->q_stop - salp->q_stop;
     }
-  else
-    {
-      ystart=0;
-      xstart=xdiff_left-ydiff_left;
+    else {
+      q_start = salp->q_start - data->q_start;
+      q_stop = salp->q_stop - data->q_start;
     }
-  
-  if (xdiff_right<ydiff_right)
-    {
-      xstop=q_stop+xdiff_right;
-      ystop=s_stop+xdiff_right;
-    }
-  else
-    {
-      xstop=q_stop+ydiff_right;
-      ystop=s_stop+ydiff_right;
-    }
+    s_start = ABS(data->s_start - salp->s_start);
+    s_stop = ABS(data->s_start - salp->s_stop);
 
-  if ((xstop-xstart)!=(ystop-ystart))/* these should be equal*/
-    return;
-
-  buf_len=xstop-xstart;
-  hit_start=q_start-xstart;
-  hit_start+=hit_start/10;
-  hit_stop=q_stop-xstart;
+    xdiff_left = MIN(q_start, q_stop);
+    xdiff_right = width - MAX(q_stop, q_start);
+    ydiff_left = s_start;
+    ydiff_right = height-s_stop;
+    if (xdiff_left<ydiff_left)
+      {
+        xstart=0;
+        ystart=ydiff_left-xdiff_left;
+      }
+    else
+      {
+        ystart=0;
+        xstart=xdiff_left-ydiff_left;
+      }
+    
+    if (xdiff_right<ydiff_right)
+      {
+        xstop= MAX(q_stop, q_start)+xdiff_right;
+        ystop=s_stop+xdiff_right;
+      }
+    else
+      {
+        xstop=MAX(q_stop, q_start)+ydiff_right;
+        ystop=s_stop+ydiff_right;
+      }
+    
+    if ((xstop-xstart)!=(ystop-ystart))/* these should be equal*/
+      return;
+    
+    data->xstart=xstart;
+    data->xstop=xstop;
+    data->ystart=ystart;
+    data->ystop=ystop;
+    
+    buf_len=xstop-xstart+1;
+    hit_start=q_start-xstart;
+    hit_start+=hit_start/10;
+    hit_stop=q_stop-xstart;
+    if (query_on_minus) 
+      q_pos = data->q_stop - xstart; 
+    else
+      q_pos = data->q_start + xstart;
+    s_pos = data->s_start + ystart;
+    s=vdp2->mip->qseq + xstart; 
+    q=vdp2->mip->sseq + ystart; 
+  }
+  else if (salp->show == align_plot){
+    matrix=vdp2->alp->matrix;
+    is_na=vdp2->alp->is_na; 
+    if (vdp2->alp->is_na)
+      residue_names=na_names; 
+    else 
+      residue_names=aa_names; 
+    strand1=AlnMgr2GetNthStrand(salp->sap, 1);
+    strand2=AlnMgr2GetNthStrand(salp->sap, 2);
+    q_pos=salp->q_start + 1;
+    s_pos=salp->s_start + 1;
+    hit_start=0;
+    hit_stop=ABS(salp->q_stop-salp->q_start);
+    seq_aln1=DOT_GetNthSeqFromAlign(salp->sap, 1);
+    seq_aln2=DOT_GetNthSeqFromAlign(salp->sap, 2);
+    if (seq_aln1==NULL || seq_aln2==NULL)
+      return;
+    q=seq_aln1;
+    s=seq_aln2;
+    buf_len=ABS(salp->q_stop-salp->q_start)+1;
+  }
+  end=s+buf_len-1;
   hit_stop+=hit_stop/10;
-
-  
-  q_pos=(mip1->qstrand==Seq_strand_plus)?data->q_start+xstart:data->q_start-xstart;
-  s_pos=(mip1->qstrand==Seq_strand_plus)?data->s_start+ystart:data->s_start-ystart;
-
-  s=mip2->sseq+ystart;
-  q=mip2->qseq+xstart;
-  end=s+buf_len;
-  
-  /* length of sequence attached to a seg */
   seg_len=(rc.right-rc.left)/vdp2->charw;
-
-  /* total num of segs */
   num_segs=buf_len/seg_len;
   if (seg_len%buf_len)
     num_segs++;
   if (num_segs==0)
-      num_segs=1; /* you need at least one */
-      
-
-  /* num of seg clusters */
+      num_segs=1;
   num_cls=num_segs/5;
   if (5%num_segs)
     num_cls++;
   if (num_cls==0)
-      num_cls=1; /* you need at least one */
-
+      num_cls=1;
   bufsize=seg_len+(seg_len/10)+2;
-
   qBuf=(CharPtr)MemNew(sizeof(Char)*bufsize);
   sBuf=(CharPtr)MemNew(sizeof(Char)*bufsize);
-  Init_bufs(qBuf,sBuf,seg_len);
-
-  bufsize=seg_len+(seg_len/10)+1;
-   
-
-/*   Ambiguous=(is_na)?(*q > 3 || *s > 3):(*q >24 || *s >24 || *q<1 || *s<1 ); */
-
   i=0;
   a=0;b=0;c=0;
   spaces=0;res_cnt=0;bloc_cntr=0;bloc_size=1;
   k=1;
-  
   for (a=0; a<num_cls; a++)
     {
       clSeg=CreateSegment(pict2,a+1,0);
@@ -2151,8 +2533,7 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
         {
           sglen=seg_len;
           sbSeg=CreateSegment(clSeg,b+1,0);
-          Init_bufs(qBuf,sBuf,seg_len);
-   
+          Init_bufs(qBuf,sBuf,seg_len);   
           for(c=0; c<sglen;c++)
             {
               if (!(i<buf_len))
@@ -2167,7 +2548,7 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
                   goto end;
                 }
 
-              if (mip1->is_na)
+              if (is_na)
                 {
                   if (*q > 3 || *s > 3)
                     ambig=TRUE;
@@ -2207,11 +2588,14 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
               qBuf[c]=*residue_names[(int)*q];
               sBuf[c]=*residue_names[(int)*s];
               
-              if (match)
+              if (match == TRUE)
                 {
-                  DOT_HlMatch(sbSeg, rc, margin, i, Fh, chw_2);
+                  if (highlight == SHOW_MATCHES)
+                    DOT_Highlight(sbSeg, rc, margin, i, Fh, chw_2, match);
                   match=FALSE;
                 }
+              else if (highlight == SHOW_MISMATCHES)
+                DOT_Highlight(sbSeg, rc, margin, i, Fh, chw_2, match);
               
             skip:
 
@@ -2230,10 +2614,10 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
                   
                   bloc_cntr++; 
                   res_cnt=i-bloc_cntr;
-                  DOT_DrawScale(sbSeg, vdp2->mip, rc, margin, res_cnt, bloc_cntr, Fh, q_pos, s_pos, chw_2, chw_4);
+                  DOT_DrawScale(sbSeg, strand1, strand2, rc, margin, res_cnt, bloc_cntr, Fh, q_pos, s_pos, chw_2, chw_4);
                   if (hit_start<=i && i<(hit_stop+BLOCK_SIZE))
                     {
-                      DOT_HlSeq(sbSeg, rc, margin, i, BLOCK_SIZE, hit_start, hit_stop, Fh,chw_2);
+                      DOT_HlSeq(sbSeg, rc, margin, i, BLOCK_SIZE, hit_start, hit_stop, Fh, chw_2);
                       if (get_barposition)
                         {
                           pos=DOT_WorldtoScreen(i,chw_2);
@@ -2259,9 +2643,6 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
           AddLabel(sbSeg, x2+pos, y, qBuf , SMALL_TEXT, 0, UPPER_RIGHT, 0);
           AddAttribute(sbSeg, COLOR_ATT, BLACK_COLOR, 0,0,0,0);
           AddLabel(sbSeg, x2+pos, y2, sBuf , SMALL_TEXT, 0, UPPER_RIGHT, 0);
- 
-
-          
         }
     }
 
@@ -2269,13 +2650,16 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
 
   nmSeg=CreateSegment(pict2, num_cls+1, 0);
   AddAttribute(nmSeg, COLOR_ATT, MAGENTA_COLOR, 0,0,0,0);
-  AddLabel(nmSeg, x, y, mip1->qname, SMALL_TEXT, 0, UPPER_RIGHT, 0);
-  AddLabel(nmSeg, x, y2, mip1->sname, SMALL_TEXT, 0, UPPER_RIGHT, 0);
+  AddLabel(nmSeg, x, y, vdp2->xname, SMALL_TEXT, 0, UPPER_RIGHT, 0);
+  AddLabel(nmSeg, x, y2, vdp2->yname, SMALL_TEXT, 0, UPPER_RIGHT, 0);
     
 
-  qBuf=(CharPtr)MemFree(qBuf);
-  sBuf=(CharPtr)MemFree(sBuf);
-
+  MemFree(qBuf);
+  MemFree(sBuf);
+  if (seq_aln1)
+    MemFree(seq_aln1);
+  if (seq_aln2)
+    MemFree(seq_aln2);
   return;
     
 }
@@ -2299,28 +2683,30 @@ static Boolean DOT_SVPopulateSequenceViewer(DOTVibDataPtr vdp2)
 
   ResetViewer(vdp2->sv->v2);
   vdp2->sv->pict2=DeletePicture(vdp2->sv->pict2);
+  Update();
+
   vdp2->sv->pict2=CreatePicture();
   GetPosition(vdp2->sv->v2, &rc);
 
   salp=vdp2->sv->salp;
-
   if (salp==NULL)
     {
       AddAttribute(vdp2->sv->pict2, COLOR_ATT, RED_COLOR, 0,0,0,0);
       AddLabel(vdp2->sv->pict2, rc.left, rc.bottom-rc.top, "- CLICK on a diagonal to view the aligned sequence -", SMALL_TEXT, 0, UPPER_RIGHT, 0);
        
       /*reset infopanel2 title*/
-
       SetTitle(vdp2->Infopanel, vdp2->iInfo);
+      Disable(vdp2->Ggoto);
     }
   else
     {
       DOT_SVDisplaySequence(vdp2, salp);
 
-       /*reset infopanel2 title*/
+      /*reset infopanel2 title*/
+      sprintf(infoBuf, "Selected.. %s(x-axis) [%d..%d] vs. %s(y-axis) [%d..%d]", vdp2->xname, salp->q_start + 1, salp->q_stop + 1, vdp2->yname, salp->s_start + 1, salp->s_stop + 1);
 
-      sprintf(infoBuf, "Selected ..  %s (horizontal) [%ld..%ld]   vs.\n             %s (vertical) [%ld..%ld]", vdp2->mip->qname, /* data->q_start+ */(long)salp->q_start, /* data->q_start+ */(long)salp->q_stop-1, vdp2->mip->sname, /* data->s_start+ */(long)salp->s_start, /* data->s_start+ */(long)salp->s_stop-1);
       SetTitle(vdp2->Infopanel,infoBuf);
+      Enable(vdp2->Ggoto);
     }
   
   
@@ -2340,25 +2726,33 @@ DOTAlnPtr DOT_SVFindHit(DOTVibDataPtr vdp2, Int4 primID)
 {
   DOTAlnPtr  salp;
   Int4     index, s_start, q_start, q_stop, len;
-  
+  Boolean  query_on_minus = FALSE;
+
+
   if (primID<1 || primID>vdp2->mip->index)
     return NULL;
 
-  if (vdp2->sv->salp == NULL)
-    salp=(DOTAlnPtr)MemNew(sizeof(DOTAln));
-  else
-    salp=vdp2->sv->salp;
-
+  salp=(DOTAlnPtr)MemNew(sizeof(DOTAln));
+  salp->show=dot_plot;
   index=primID-1;
   q_start=vdp2->mip->hitlist[index]->q_start;
   s_start=vdp2->mip->hitlist[index]->s_start;
-  len=vdp2->mip->hitlist[index]->length;
+  len=vdp2->mip->hitlist[index]->length-1;
+  if (vdp2->strand1 == Seq_strand_minus)
+    query_on_minus = TRUE;
 
-  salp->q_start=q_start;
-  salp->q_stop=(vdp2->mip->qstrand == Seq_strand_plus)?q_start+len:q_start-len;
-  salp->s_start=s_start;
-  salp->s_stop=(vdp2->mip->sstrand==Seq_strand_plus)?s_start+len:s_start-len;
-  salp->primID=(Uint2)primID;
+  if (query_on_minus) { 
+    salp->q_start = vdp2->xstart + ABS(vdp2->xstop - q_start);
+    salp->q_stop = salp->q_start - len;
+  }
+  else {
+    salp->q_start = q_start;
+    salp->q_stop = q_start + len;
+  }
+
+  salp->s_start = s_start;
+  salp->s_stop = s_start + len;
+  salp->primID = (Uint2)primID;
   
   return salp;
 }
@@ -2385,6 +2779,27 @@ static Boolean DOT_SVGetDiag (Uint2 segID, Uint2 primID, VoidPtr userdata)
   userdata=(Pointer)salp;
   return TRUE;
 }
+/*________________________________________(DOT_DeSelectAll)_____________
+
+   Purpose : Deselect all primitives.
+
+____________________________________________________________________*/
+static Boolean DOT_DeSelectAll(SegmenT seg, PrimitivE prim, Uint2 segID,  Uint2 primID, Uint2 primCt, VoidPtr userdata)
+{
+  Int1  highlight;
+  VieweR  v;
+
+  if (primID) {
+    v = (VieweR) userdata;
+    GetPrimDrawAttribute (prim, NULL, NULL, NULL, NULL, NULL, &highlight);
+    if (highlight != PLAIN_PRIMITIVE) 
+      HighlightPrimitive (v, seg, prim, PLAIN_PRIMITIVE);
+  }
+
+  return TRUE;
+}
+
+
 /*________________________________________(DOT_SVClickProc)_____________
 
    Purpose : Click proc for viewer1 of second window.
@@ -2393,64 +2808,53 @@ ____________________________________________________________________*/
 static void DOT_SVClickProc(VieweR v, SegmenT seg, PoinT pt)
 {
   DOTVibDataPtr  vdp2;
-  SegmenT     new_seg;
-  PrimitivE   old_prim, new_prim;
-  Uint2       primCT, primID=0, segID;
-  Int1        highlight;
+  PrimitivE     prim=NULL;
+  Uint2         primID = 0, entityID=0, itemID=0, itemtype=0;
+  Int1          highlight=0;
+  Int2          handled=0;
   DOTAlnPtr     salp=NULL;
+  SegmenT       seg1 = NULL;
 
   vdp2=(DOTVibDataPtr)GetObjectExtra((WindoW)ParentWindow(v));
-  new_seg=FindSegment(v, pt, &segID, &primID, &primCT);
-  if (!(new_seg == vdp2->sv->seg1)) 
-    new_seg=NULL;
-
-
-  if (vdp2->sv->old_primID>=0) /* previous selection exists */
+  if(!vdp2) return;
+  seg1 = FindSegPrim(v, pt, NULL, NULL, &prim);
+  if (seg1 != NULL)
     {
+      GetPrimitiveIDs(prim, &entityID, &itemID, &itemtype, &primID);
+    if (primID != 0)
+      {
+        GetPrimDrawAttribute (prim, NULL, NULL, NULL, NULL, NULL, &highlight);
+        if (highlight == PLAIN_PRIMITIVE) {
+          ExploreSegment (seg1, (Pointer)v, DOT_DeSelectAll);
+          HighlightPrimitive (v, seg, prim, FRAME_PRIMITIVE);
 
-      if (new_seg==NULL)
-        {
-          new_seg=FindSegment(v, vdp2->sv->old_pt, &segID, &primID, &primCT);
-          old_prim = GetPrimitive (new_seg, vdp2->sv->old_primID);
-          GetPrimDrawAttribute (old_prim, NULL, NULL, NULL, NULL, NULL, &highlight);
-          if (highlight != PLAIN_PRIMITIVE) 
-            HighlightPrimitive (v, seg, old_prim, PLAIN_PRIMITIVE);
-          vdp2->sv->old_primID=-1;
-
-          goto end;
+          if (entityID && itemID && itemtype) { /* alignment */
+            salp=DOT_FindAlignment(vdp2, primID);
+          }
+          else { /* dot matrix hit */
+            salp = DOT_SVFindHit(vdp2, primID);
+          }
+          prev_primID = primID;
         }
-          old_prim = GetPrimitive (new_seg, vdp2->sv->old_primID);
-          GetPrimDrawAttribute (old_prim, NULL, NULL, NULL, NULL, NULL, &highlight);
-          if (highlight != PLAIN_PRIMITIVE) 
-            HighlightPrimitive (v, seg, old_prim, PLAIN_PRIMITIVE);
-
-    }
-  
-  if (new_seg!=NULL)
-    {
-      vdp2->sv->old_primID=primID;
-      vdp2->sv->old_pt=pt;
-      
-      new_prim = GetPrimitive (new_seg, primID);
-      GetPrimDrawAttribute (new_prim, NULL, NULL, NULL, NULL, NULL, &highlight);
-      
-      if (highlight != PLAIN_PRIMITIVE) 
-        {
-          HighlightPrimitive (v, new_seg, new_prim, PLAIN_PRIMITIVE);
-          salp=NULL;
-        } 
-      else 
-        {
-          HighlightPrimitive (v, new_seg, new_prim, FRAME_PRIMITIVE);
-          salp = DOT_SVFindHit(vdp2, primID);
+        else {
+          ExploreSegment (seg1, (Pointer)v, DOT_DeSelectAll);
+          salp = NULL;
+          prev_primID = 0;
         }
-     }
- end:
+      }
+  }
+  else {
+    ExploreSegment (seg, (Pointer)v, DOT_DeSelectAll);
+    salp = NULL;
+    prev_primID = 0;
+  }
+  if (vdp2->sv->salp) 
+    MemFree(vdp2->sv->salp);
   vdp2->sv->salp=salp;
   DOT_SVPopulateSequenceViewer (vdp2);
-
 }
 
+  
 
 /*________________________________________(DOT_SVPopulateDiagViewer)_____________
 
@@ -2469,6 +2873,8 @@ static Boolean DOT_SVPopulateDiagViewer(DOTVibDataPtr vdp2)
   
   ResetViewer(vdp2->sv->v1);
   vdp2->sv->pict1=DeletePicture(vdp2->sv->pict1);
+  Update();
+
   vdp2->sv->pict1=CreatePicture();
    
   if (DOT_SVDisplayDiags(vdp2, data)==FALSE)
@@ -2478,7 +2884,7 @@ static Boolean DOT_SVPopulateDiagViewer(DOTVibDataPtr vdp2)
     {
       for (index=1; index<MAXZOOMSCALEVAL; index++) 
         {
-          sprintf (str, "%ld", (long) (zoomScaleVal [index]));
+          sprintf (str, "%d", (long) (zoomScaleVal [index]));
           PopupItem (vdp2->sv->scale, str);
         }
       SetValue (vdp2->sv->scale, vdp2->sv->scaleIndex);
@@ -2490,6 +2896,10 @@ static Boolean DOT_SVPopulateDiagViewer(DOTVibDataPtr vdp2)
 
  
   AttachPicture(vdp2->sv->v1, vdp2->sv->pict1, INT4_MIN, INT4_MAX, LOWER_RIGHT,  vdp2->sv->scaleValue , vdp2->sv->scaleValue , NULL);
+  if (vdp2->showDotPlot && vdp2->showALIGN){/* not clickable*/
+    ArrowCursor();
+    return TRUE;
+  }
   SetViewerProcs (vdp2->sv->v1, DOT_SVClickProc, NULL, NULL, NULL);
   ArrowCursor();
   return TRUE;
@@ -2502,7 +2912,7 @@ static Boolean DOT_SVPopulateDiagViewer(DOTVibDataPtr vdp2)
   Purpose : Change threshold for diag using threshold ramp.
 
 ____________________________________________________________________*/
-void DOT_ChangeSequenceViewerCutoff (BaR b, GraphiC g, Int2 new, Int2 old) 
+static void DOT_ChangeSequenceViewerCutoff (BaR b, GraphiC g, Int2 new, Int2 old) 
 {
   DOTVibDataPtr vdp2;
   WindoW     w;
@@ -2540,6 +2950,8 @@ static void DOT_SVChangeScale (PopuP p)
           vdp2->sv->scaleValue = 1;
         }
 
+/*       AttachPicture(vdp2->sv->v1, vdp2->sv->pict1, INT4_MIN, INT4_MAX, LOWER_RIGHT,  vdp2->sv->scaleValue , vdp2->sv->scaleValue , NULL); */
+/*       SetViewerProcs (vdp2->sv->v1, DOT_SVClickProc, NULL, NULL, NULL); */
       DOT_SVPopulateDiagViewer (vdp2);
     }
 }
@@ -2573,8 +2985,8 @@ static void DOT_SVCalculateScaling (DOTVibDataPtr vdp2)
   Int4   index, r_hgt, r_wdt, w_hgt, w_wdt, scale;
   double f1, f2;
 
-  w_hgt=vdp2->mip->slen+(vdp2->mip->slen*0.15);
-  w_wdt=vdp2->mip->qlen+(vdp2->mip->qlen*0.15);
+  w_hgt=vdp2->ylen+(vdp2->ylen*0.15);
+  w_wdt=vdp2->xlen+(vdp2->xlen*0.15);
 
   GetPosition(vdp2->sv->v1, &r);
   r_hgt=r.bottom-r.top;
@@ -2687,8 +3099,8 @@ ____________________________________________________________________*/
 static void DOT_ResizeSequenceWindow(WindoW w)
 {
   Int4     lmargin;
-  RecT     rcDlg,rcV1,rcV2, rcVsb,rcHsb;
-  Int2     height,width,gap,vsbWidth,in,hsbHeight,V1Height,V2Height;
+  RecT     rcDlg,rcV1,rcV2, rcVsb,rcHsb, rcGoto;
+  Int2     height,width,gap,vsbWidth,in,hsbHeight,V1Height,V2Height, goHeight;
   BaR      vsb,hsb;
   DOTVibDataPtr vdp2;
   Boolean  is_visible1, is_visible2;
@@ -2704,6 +3116,7 @@ static void DOT_ResizeSequenceWindow(WindoW w)
   SafeHide(vdp2->sv->v1);
   SafeHide(vdp2->sv->v2);
   SafeHide(vdp2->Infopanel);
+  SafeHide(vdp2->Ggoto);
   Update();
   
   vsb = GetSlateVScrollBar ((SlatE) vdp2->sv->v1);
@@ -2713,6 +3126,8 @@ static void DOT_ResizeSequenceWindow(WindoW w)
   GetPosition(vdp2->sv->v2,&rcV2);
   GetPosition(vsb,&rcVsb);
   GetPosition(hsb,&rcHsb);
+  GetPosition(vdp2->Ggoto, &rcGoto);
+
 
   gap=2;
   in=vdp2->Fh;
@@ -2721,13 +3136,16 @@ static void DOT_ResizeSequenceWindow(WindoW w)
   hsbHeight=rcHsb.bottom-rcHsb.top;
   V1Height=rcV1.bottom-rcV1.top;
   V2Height=9*vdp2->Fh;
-  
+  goHeight= rcGoto.bottom-rcGoto.top;
+
   /*new sizes for the viewers*/	
   rcV1.left=lmargin;
   rcV1.right=width-gap-vsbWidth-rcV1.left;
   rcV2.bottom=height-gap-in-hsbHeight;
   rcV2.top=rcV2.bottom-V2Height;
-  rcV1.bottom=rcV2.top-gap-hsbHeight;
+  rcGoto.bottom=rcV2.top-gap;
+  rcGoto.top=rcGoto.bottom-goHeight;
+  rcV1.bottom=rcGoto.top-gap-hsbHeight;
   rcV2.left=lmargin;
   rcV2.right=width-gap-vsbWidth-rcV2.left;
   
@@ -2738,6 +3156,8 @@ static void DOT_ResizeSequenceWindow(WindoW w)
   SetPosition(vdp2->sv->v2,&rcV2);
   AdjustPrnt (vdp2->sv->v2, &rcV2, FALSE);
 
+  SetPosition(vdp2->Ggoto, &rcGoto);
+  AdjustPrnt(vdp2->Ggoto, &rcGoto, FALSE);
   
   if ((rcV1.left<rcV1.right)&&(rcV1.top<rcV1.bottom))
     is_visible1=TRUE;
@@ -2759,6 +3179,7 @@ static void DOT_ResizeSequenceWindow(WindoW w)
   SafeShow(vdp2->sv->v1);
   SafeShow(vdp2->sv->v2);
   SafeShow(vdp2->Infopanel);
+  SafeShow(vdp2->Ggoto);
   ArrowCursor();
   RestorePort(temport);
   Update();
@@ -2910,7 +3331,7 @@ Int4	   yBase, xMargin;
 Char     str[50]; 
 
 
- sprintf(str, "%s (%ld - %ld)", pfp->dfp_cur->label, (long)pfp->dfp_cur->left, (long)pfp->dfp_cur->right); 
+ sprintf(str, "%s (%d - %d)", pfp->dfp_cur->label, pfp->dfp_cur->left, pfp->dfp_cur->right); 
  AddAttribute(pfp->TopParentSeg, COLOR_ATT, BLACK_COLOR, 0, 0, 0, 0);
  yBase = (-1)*pfp->nfeats*pfp->fontHeight;
  xMargin=5;
@@ -3002,7 +3423,7 @@ DOTPopFeatPtr         pfp=NULL;
 }
 
 
-static Boolean  DOT_DeletePrims(SegmenT seg, PrimitivE prim, Uint2 segID,
+static Boolean DOT_DeletePrims(SegmenT seg, PrimitivE prim, Uint2 segID,
                            Uint2 primID, Uint2 primCt, VoidPtr userdata)
 {
   
@@ -3116,7 +3537,7 @@ static void DOT_QViewerClickProc(VieweR v, SegmenT seg, PoinT pt)
       
       DOT_PlaceCursors(v, seg, flp->segQCursor, flp->featindex, flp->query_drp, dfp->left, flp->fontHt, &(flp->vert_Qpos), TRUE, i);
       SetViewerProcs (v, DOT_QViewerClickProc, NULL, NULL, NULL);
-      sprintf(infoBuf, "Hairs .. X-axis (%s) [%ld]  vs.  Y-axis (%s) [%ld]", flp->mip->qname, (long)data->q_start, flp->mip->sname, (long)data->s_start);
+      sprintf(infoBuf, "Hairs .. %s (x-axis)[%d]  vs.  %s (y-axis)[%d]", flp->mip->qname, data->q_start, flp->mip->sname, data->s_start);
       SetTitle(data->vdp->Infopanel,infoBuf);
       DOT_UpdateMainPanel(data->vdp, TRUE);
     }
@@ -3169,7 +3590,7 @@ static void DOT_SViewerClickProc(VieweR v, SegmenT seg, PoinT pt)
 
       DOT_PlaceCursors(v, seg, flp->segSCursor, flp->featindex, flp->subject_drp, dfp->left, flp->fontHt, &(flp->vert_Spos), TRUE, i);
       SetViewerProcs (v, DOT_SViewerClickProc, NULL, NULL, NULL);
-      sprintf(infoBuf, "Hairs .. X-axis (%s) [%ld]  vs.  Y-axis (%s) [%ld]", flp->mip->qname, (long)data->q_start, flp->mip->sname, (long)data->s_start);
+      sprintf(infoBuf, "Hairs .. %s (x-axis)[%d]  vs.  %s (y-axis)[%d]", flp->mip->qname, data->q_start, flp->mip->sname, data->s_start);
       SetTitle(data->vdp->Infopanel,infoBuf);
       DOT_UpdateMainPanel(data->vdp, TRUE);
     }
@@ -3183,7 +3604,7 @@ static void DOT_PlaceFeat(DOTFeatListPtr flp, SegmenT seg, Int4 yBase, DOTFeatPt
   Char     str[50]; 
   Int4     xMargin;
   
-  sprintf(str, "%s (%ld,%ld,%ld)", dfp->label, (long)dfp->left, (long)dfp->right, (long)ABS(dfp->right-dfp->left)); 
+  sprintf(str, "%s (%d,%d,%d)", dfp->label, dfp->left, dfp->right, ABS(dfp->right-dfp->left)); 
   AddAttribute(seg, COLOR_ATT, BLACK_COLOR, 0, 0, 0, 0);
   xMargin=5;
     
@@ -3402,7 +3823,7 @@ static WindoW DOT_BuildFeatGUI (DOTFeatListPtr flp)
   GrouP   subg1, subg2, g;
   PrompT  pr1, pr2;
   Int2   Margins;
-  Char   str[20];
+  Char   str[255];
 
 	if (!flp) return(NULL);
 
@@ -3415,7 +3836,7 @@ static WindoW DOT_BuildFeatGUI (DOTFeatListPtr flp)
 
    m1 = PulldownMenu (FeatWin, "Options");
    CommandItem(m1, "Hide ..", DOT_HideFeatDlgItem);
-   CommandItem(m1, "Quit", DOT_CloseFeatWindow);
+   CommandItem(m1, "Close", DOT_CloseFeatWindow);
 
 	mip= flp->mip;
 
@@ -3423,8 +3844,8 @@ static WindoW DOT_BuildFeatGUI (DOTFeatListPtr flp)
 	g=HiddenGroup(FeatWin,2,0,NULL);
 
    subg1=HiddenGroup(g, 0, 2, NULL);
-   sprintf(str, "%s(X-axis)", mip->qname);
-   flp->QInfo=StaticPrompt (subg1, str , 0, 0, systemFont, 'l');
+   sprintf(str, "%s(x-axis)", mip->qname);
+   flp->QInfo=StaticPrompt (subg1, str , 0, 0 , systemFont, 'l');
 	v1=CreateViewer(subg1, 150 , 200, TRUE, TRUE);	
 	seg1=CreatePicture();
    
@@ -3432,7 +3853,7 @@ static WindoW DOT_BuildFeatGUI (DOTFeatListPtr flp)
 
 	/*viewer for close up of features*/
    subg2=HiddenGroup(g, 0, 2, NULL);
-   sprintf(str, "%s(Y-axis)", mip->sname);
+   sprintf(str, "%s(y-axis)", mip->sname);
    flp->SInfo= StaticPrompt (subg2, str , 0, 0, systemFont, 'l');
    v2 = CreateViewer(subg2, 150,200,TRUE,TRUE);
    seg2 = CreatePicture();
@@ -3454,6 +3875,156 @@ static WindoW DOT_BuildFeatGUI (DOTFeatListPtr flp)
 	return(FeatWin);	
 }
 
+typedef struct dot_goto{
+  TexT   txt;
+  ButtoN highlight;
+} DOTGoto, PNTR DOTGotoPtr;
+
+static void DOT_GotoProc(ButtoN b, TexT txt, Int4 value)
+{
+  DOTSelDataPtr data;
+  DOTVibDataPtr vdp2=NULL;
+  Int4       pos=0, margin, q_start, s_start;
+  Int4       xstart, xstop, ystart, ystop;
+  Int4       Qstart, Sstart;
+  RecT       rc;
+  DOTAlnPtr  salp;
+
+
+  vdp2=(DOTVibDataPtr)GetObjectExtra(ParentWindow(b));
+  if(!vdp2) return;
+  data= vdp2->data;
+  salp = vdp2->sv->salp;
+  if (salp->show == dot_plot){
+    xstart = data->q_start+data->xstart;
+    xstop = data->q_start+data->xstop;
+    ystart = data->s_start+data->ystart;
+    ystop = data->s_start+data->ystop;
+    Qstart = data->q_start;
+    Sstart = data->s_start;
+  }
+  else {
+    xstart = salp->q_start;
+    xstop = salp->q_stop;
+    ystart = salp->s_start;
+    ystop = salp->s_stop;
+    Qstart = salp->q_start;
+    Sstart = salp->s_start;
+  }
+
+  pos=DOT_GetValue(txt);
+  if (1 == value){
+    if (pos<xstart)
+      pos=xstart;
+    if (pos>xstop)
+      pos=xstop;
+    q_start=pos-Qstart;
+    q_start=q_start+q_start/10;
+    pos=DOT_WorldtoScreen(q_start,vdp2->charw/2);
+  }
+  else if (2 == value){
+    if (pos<ystart)
+      pos=ystart;
+    if (pos>ystop)
+      pos=ystop;
+    s_start=pos-Sstart;
+    s_start=s_start+s_start/10;
+    pos=DOT_WorldtoScreen(s_start,vdp2->charw/2);
+  }
+
+  GetPosition(vdp2->sv->v2, &rc);
+  margin=MAX((StringWidth(vdp2->xname)), (StringWidth(vdp2->yname)))+10;
+  vdp2->sv->barp=pos+rc.left+margin;
+  AttachPicture(vdp2->sv->v2, vdp2->sv->pict2, vdp2->sv->barp, INT4_MIN, UPPER_CENTER, 1, 1, NULL);
+}
+
+static void DOT_TopProc(ButtoN b)
+{
+  DOTGotoPtr   gtp;
+
+  gtp = (DOTGotoPtr)GetObjectExtra(b);
+  DOT_GotoProc(b, gtp->txt, 1);
+}
+
+static void DOT_BottomProc(ButtoN b)
+{
+  DOTGotoPtr   gtp;
+
+  gtp = (DOTGotoPtr)GetObjectExtra(b);
+  DOT_GotoProc(b, gtp->txt, 2);
+}
+
+/*_______________________________________________(DOT_SVSwitchDisplay)___
+
+  Purpose : Change Display between Dotplot and Blast hits
+
+____________________________________________________________________*/
+
+
+static void DOT_SVSwitchDisplay(PopuP p)
+
+{
+  DOTVibDataPtr       vdp2=NULL;
+  WindoW              w;
+  Int4                value;
+  DOTGotoPtr          gtp=NULL;
+  
+
+  gtp = (DOTGotoPtr) GetObjectExtra(p);
+  w=(WindoW)ParentWindow(p);
+  vdp2=(DOTVibDataPtr)GetObjectExtra(w);
+  if (!vdp2 || !vdp2->alp) return;
+
+  SetTitle(gtp->txt, "");
+  value=GetValue(p);
+  
+  if (value==1) /* dot plot */
+    {
+      vdp2->showDotPlot=TRUE;
+      vdp2->showALIGN=FALSE;
+    }
+  else if (value==2) /* blast aligns */
+    {
+      vdp2->showDotPlot=FALSE;
+      vdp2->showALIGN=TRUE;
+    }
+  else if (value==3) /* both */
+    {
+      vdp2->showDotPlot=TRUE;
+      vdp2->showALIGN=TRUE;
+    }
+
+  DOT_SVPopulateDiagViewer(vdp2);
+  if (vdp2->sv->salp){
+    MemFree(vdp2->sv->salp);
+    vdp2->sv->salp=NULL;
+  }
+  DOT_SVPopulateSequenceViewer(vdp2);
+
+}
+
+static void DOT_HighlightProc(ButtoN b)
+{
+  DOTVibDataPtr vdp2 = NULL;
+  DOTGotoPtr    gtp = NULL;
+
+  gtp = (DOTGotoPtr) GetObjectExtra(b);
+  vdp2 = (DOTVibDataPtr)GetObjectExtra(ParentWindow(b));
+  if (!vdp2 || !gtp) return;
+  
+  if (vdp2->sv->highlight == SHOW_MISMATCHES) {
+    vdp2->sv->highlight = SHOW_MATCHES;
+    SetTitle (gtp->highlight, "Show Mismatches");
+  }
+  else {
+    vdp2->sv->highlight = SHOW_MISMATCHES;
+    SetTitle (gtp->highlight, "Show Matches");
+  }
+  DOT_SVPopulateSequenceViewer(vdp2);
+
+}
+
+
 /*________________________________________(DOT_SVBuildDiagViewer)_____________
 
   Purpose : Creates viewers for second window.
@@ -3463,51 +4034,55 @@ ____________________________________________________________________*/
 static WindoW DOT_SVBuildDiagViewer(DOTVibDataPtr vdp2)
 {
   WindoW    wSequence;
-  GrouP     g, s, s2, s3, s4;
+  GrouP     g, g2, s, s2, s3, s4;
   PrompT    pr1, pr2; 
   VieweR    v1,v2;
+  ButtoN    b;
   RecT      rc;
   SegmenT   pict1,pict2;
   Int2      Margins, pixwidth; 
   MenU      menu; 
   BaR       hsb;
   Char      zoombuf[]={"Decrease scale to zoom in .."};
-
+  Char      str1[41]={""}, str2[41]={""};
+  DOTGotoPtr   gtp;
+  DOTMainDataPtr mip;
+  Char      title[60]={""};
 
 	if (!vdp2) return(NULL);   
 
 	Margins=10*stdCharWidth;
-	wSequence = DocumentWindow(Margins,Margins ,-10, -10, "Selected Region", NULL, DOT_ResizeSequenceWindow);
-/*    menu = PulldownMenu (wSequence, "Display"); */
-/*    CommandItem (menu, "Close", DOT_CloseSequenceWindow);  */ 
-  
+   sprintf(title, "%s", vdp2->xname);
+   StringCat(title, "  vs. ");
+   StringCat(title, vdp2->yname);
+	wSequence = DocumentWindow(Margins,Margins ,-10, -10, title, NULL, DOT_ResizeSequenceWindow);
 	if (!wSequence) return(NULL);
-	
    GetPosition (wSequence,&rc);
-   pixwidth=600; /* some approximate value */
-
+   pixwidth=1200; /* some approximate value */
    /* first top group */
-
-   s = HiddenGroup (wSequence,1, 3, NULL);
-
+   s = HiddenGroup (wSequence,1, 4, NULL);
    /*threshold bar*/
-
    s3 = HiddenGroup (s,5, 0, NULL);
-   pr2=StaticPrompt (s3, "Threshold-Ramp:", 0, 10,vdp2->Fnt, 'l');
-   pr1=StaticPrompt (s3, "  20%", 0, 0, vdp2->Fnt, 'l');
+   pr2=StaticPrompt (s3, "Threshold-Ramp:", 0, 3*vdp2->Fh/2,vdp2->Fnt, 'l');
+   pr1=StaticPrompt (s3, "  20%", 0, 3*vdp2->Fh/2, vdp2->Fnt, 'l');
    vdp2->sdp.ScrollBar = ScrollBar (s3, 15, 5, DOT_ChangeSequenceViewerCutoff);
-   pr1=StaticPrompt (s3, "100%", 0, 0, vdp2->Fnt, 'l');
-   PushButton(s3, "Quit", DOT_CloseSequenceWindow);
+   pr1=StaticPrompt (s3, "100%", 0, 3*vdp2->Fh/2, vdp2->Fnt, 'l');
+   PushButton(s3, "Close", DOT_CloseSequenceWindow);
    SetObjectExtra(vdp2->sdp.ScrollBar, vdp2, NULL);
-   
    CorrectBarMax (vdp2->sdp.ScrollBar, 80); /* 100% */
    CorrectBarValue (vdp2->sdp.ScrollBar, 60);/* 100% */
-   
    /* second top group */
+   s2 = HiddenGroup (s, 0, 2, NULL);
+   if (vdp2->mip && vdp2->alp){
+     s4=HiddenGroup (s2, 4, 0, NULL);
 
-   s2 = HiddenGroup (s,0 ,2, NULL);
-/*    SetGroupSpacing(s2, 3,0); */
-   s4=HiddenGroup (s2, 2, 0, NULL);
+   }
+   else{
+     s4=HiddenGroup(s2, 2, 0, NULL);
+   }
+   SetGroupMargins(s4, 10, 10);
+   SetGroupSpacing(s4, 10,10);
+
    pr1 = StaticPrompt (s4, zoombuf, StringWidth(zoombuf)+10 , popupMenuHeight, vdp2->Fnt, 'l');
 #ifdef WIN_MAC
    vdp2->sv->scale = PopupList (s4, TRUE, DOT_SVChangeScale);
@@ -3516,16 +4091,52 @@ static WindoW DOT_SVBuildDiagViewer(DOTVibDataPtr vdp2)
 #ifndef WIN_MAC
    vdp2->sv->scale = PopupList (s4, FALSE, DOT_SVChangeScale);
 #endif
+   if (vdp2->mip)
+     vdp2->showDotPlot=TRUE;
+   if (vdp2->alp){
+     vdp2->showALIGN=TRUE;
+   }
+   if (vdp2->mip && vdp2->alp){
+/*      pr1 = StaticPrompt (s4, "", StringWidth(zoombuf)+10 , popupMenuHeight, vdp2->Fnt, 'l'); */
+     vdp2->sv->showp=PopupList (s4, FALSE, DOT_SVSwitchDisplay);
+     PopupItem (vdp2->sv->showp, "- dot plot -");
+     PopupItem (vdp2->sv->showp, "- blast -");
+     PopupItem (vdp2->sv->showp, "- both -");
+     SetValue (vdp2->sv->showp, 1);
+   }
    sprintf(vdp2->iInfo,"Diag not selected");
-   vdp2->Infopanel= StaticPrompt (s2, vdp2->iInfo, pixwidth, vdp2->Fh, vdp2->Fnt, 'l');
+   vdp2->Infopanel= StaticPrompt (s2, vdp2->iInfo, pixwidth, 3*vdp2->Fh/2, vdp2->Fnt, 'l');
    SetObjectExtra (vdp2->sv->scale, vdp2, NULL);
 	v1=CreateViewer(s,600,500,TRUE,TRUE);
 	pict1=CreatePicture();
-
-
    /* bottom group */
-
 	g=HiddenGroup(wSequence,0,2,NULL);
+   g2=HiddenGroup(g, 8, 0, NULL);
+   SetGroupMargins(g2, 10, 10);
+   SetGroupSpacing(g2, 10, 10);
+   gtp=(DOTGotoPtr)MemNew(sizeof(DOTGoto));
+   SetObjectExtra (vdp2->sv->showp, (Pointer) gtp, NULL);
+   vdp2->Ggoto=g2;
+   mip=vdp2->mip;
+   StaticPrompt (g2, "    -Goto-", 0, 3*vdp2->Fh/2, vdp2->Fnt, 'l');
+   gtp->txt = DialogText (g2, "", (Int2)4, NULL);
+   StaticPrompt (g2, "  on  ", 0, 3*vdp2->Fh/2, vdp2->Fnt, 'l');
+   MemSet((Pointer)title, '\0', sizeof(title));
+   sprintf(title, "  Top  ");
+   b=PushButton (g2, title, DOT_TopProc);
+   StaticPrompt (g2, " or ", 0, 3*vdp2->Fh/2, vdp2->Fnt, 'l');
+   SetObjectExtra(b, (Pointer)gtp, StdCleanupExtraProc);
+
+   MemSet((Pointer)title, '\0', sizeof(title));
+   sprintf(title, "  Bottom  ");
+   b=PushButton (g2, title, DOT_BottomProc);
+   SetObjectExtra(b, (Pointer)gtp, NULL);
+   StaticPrompt (g2, "  sequence       ", 0, 3*vdp2->Fh/2, vdp2->Fnt, 'l');
+   gtp->highlight = PushButton (g2, "Show Mismatches", DOT_HighlightProc);
+   vdp2->sv->highlight = SHOW_MATCHES;
+   SetObjectExtra(gtp->highlight, (Pointer)gtp, NULL);
+   Disable(g2);
+
 	v2=CreateViewer(g,600,150,FALSE,TRUE);
 	pict2=CreatePicture();
 
@@ -3581,14 +4192,14 @@ static void DOT_UpdateDataRects (DOTSelDataPtr data, RecT rc, DOTVibDataPtr vdp,
     
   data->rcP.left=rc.left;
   data->rcP.top=rc.top;
-  data->rcP.right=rc.left+width;
-  data->rcP.bottom=rc.top+height;
+  data->rcP.right=rc.left+width+2;
+  data->rcP.bottom=rc.top+height+2;
 
   /* update the size of selected rect */
   if (updateSelectedRect)
     {
-      xstart=ABS(data->q_start-vdp->mip->q_start);
-      ystart=ABS(data->s_start-vdp->mip->s_start);      
+      xstart=ABS(data->q_start-vdp->xstart);
+      ystart=ABS(data->s_start-vdp->ystart);      
       comp=vdp->comp;
       dx=data->H_pos-HFrom;
       dy=data->V_pos-VFrom;
@@ -3611,6 +4222,54 @@ static void DOT_InitFeatIndex(DOTFeatIndexPtr fdindex)
       fdindex[i].show=TRUE;
     }
 }
+
+/*________________________________________(DOT_MsgFunc)_____________
+
+  Purpose : Message Callback for the 2nd window.
+
+____________________________________________________________________*/
+static Int2 LIBCALLBACK DOT_MsgFunc (OMMsgStructPtr ommsp)
+{
+  DOTVibDataPtr vdp2 = NULL;
+  OMUserDataPtr      omudp;
+
+
+
+  omudp = (OMUserDataPtr)(ommsp->omuserdata);
+  vdp2 = (DOTVibDataPtr)omudp->userdata.ptrvalue;
+
+  switch (ommsp->message)
+    {
+    case OM_MSG_DEL:
+      break;
+    case OM_MSG_CREATE:
+      break;
+    case OM_MSG_UPDATE:
+      break;
+    case OM_MSG_SELECT:
+      
+     break;
+   case OM_MSG_DESELECT:
+     break;
+    case OM_MSG_CACHED:
+      break;
+    case OM_MSG_UNCACHED:
+      break;
+    case OM_MSG_TO_CLIPBOARD: 
+      break;
+    case OM_MSG_SETCOLOR:
+      break;
+    case OM_MSG_FLUSH:
+      break;
+    default:
+      break;
+    }
+
+  return OM_MSG_RET_OK;
+    
+}
+
+
 /*________________________________________(DOT_ClickProc)_____________
 
   Purpose : Click proc for main window - no action.
@@ -3716,20 +4375,22 @@ static void DOT_DragProc (PaneL p, PoinT pt)
 }
 
 
-/*________________________________________(DOT_ReleaseProc)_____________
+/*__________________________(DOT_ReleaseProc)_____________
 
   Purpose : Release Proc for main window - calls up second window.
 
-____________________________________________________________________*/
+________________________________________________________*/
 static void DOT_ReleaseProc(PaneL p, PoinT pt)
 {
   DOTSelDataPtr   data;
   MenU        menu, gmenu;
   Int4        VFrom, HFrom, sFeatscount, qFeatscount;
   DOTVibDataPtr  vdp2=NULL, vdp=NULL;
-  DOTMainDataPtr mip1;
+  DOTMainDataPtr mip1=NULL;
+  DOTAlignInfoPtr alp=NULL;
   DOTFeatListPtr     flp;
   DOTDiagPtr  PNTR hitlist;
+  Boolean     xaxis_incr=TRUE, yaxis_incr=TRUE;
   RecT        rc, rcP;
   Int4        width, height, index, xscale, yscale, scale, Y_pos;
   Int2        dx, dy;
@@ -3756,6 +4417,7 @@ static void DOT_ReleaseProc(PaneL p, PoinT pt)
     }
   curpnt = pt;
   mip1 = vdp->mip;
+  alp=vdp->alp;
 
   VFrom  = vdp->sdp.VFrom; 
   HFrom = vdp->sdp.HFrom;
@@ -3769,9 +4431,10 @@ static void DOT_ReleaseProc(PaneL p, PoinT pt)
         vdp2=(DOTVibDataPtr) MemNew (sizeof(DOTVibData));
       else
         {
+          vdp2 = (DOTVibDataPtr)GetObjectExtra(vdp->ChildWin);
           vdp->ChildWin=DOT_ClearLastWindow(vdp->ChildWin, TRUE);
-          data->selected=TRUE;
         }
+/*       if (vdp2==NULL) return; */
 
       InvertMode();
       DOT_SelectFrameProc(p);
@@ -3780,122 +4443,90 @@ static void DOT_ReleaseProc(PaneL p, PoinT pt)
       dy=VFrom-data->V_pos;
       
       /* previous rect coordinates */
-      
       data->old_rcS.left=data->rcS.left-dx;
       data->old_rcS.right=data->rcS.right-dx;
       data->old_rcS.top=data->rcS.top-dy;
       data->old_rcS.bottom=data->rcS.bottom-dy;
-      
       /* new rect coordinates on parent window */
-      
       data->rcS.left = fstpnt.x;
       data->rcS.top = fstpnt.y;
       data->rcS.right = curpnt.x;
-      data->rcS.bottom = curpnt.y;
-      
+      data->rcS.bottom = curpnt.y;      
       data->H_pos=HFrom;
-      data->V_pos=VFrom;
-      
+      data->V_pos=VFrom;      
   /* map selected region to sequence(world) coordinates 
      plus or minus one to account for errors when rounding off */
 
-  if (mip1->qstrand == Seq_strand_plus)
-    {
-      data->q_start = MAX((fstpnt.x  - rc.left  + (HFrom-1))*vdp->comp, 0) + mip1->q_start;
-      data->q_stop = MIN(((curpnt.x - rc.left +(HFrom+1))*vdp->comp)+mip1->q_start, mip1->q_stop);
-    }
-  else
-    {
-      data->q_start = mip1->q_start - MAX((fstpnt.x  - rc.left  + (HFrom-1))*vdp->comp, 0);
-      data->q_stop = MAX(mip1->q_start-((curpnt.x - rc.left +(HFrom+1))*vdp->comp), mip1->q_stop);
-    }
-
-  if (mip1->sstrand == Seq_strand_plus)
-    {
-      data->s_start = MAX((fstpnt.y  - rc.top   + (VFrom-1))*vdp->comp, 0) + mip1->s_start;
-      data->s_stop = MIN(((curpnt.y - rc.top +(VFrom+1))*vdp->comp)+mip1->s_start, mip1->s_stop);
-    }
-  else
-    {
-      data->s_start= mip1->s_start - MAX((fstpnt.y - rc.top + (VFrom-1))*vdp->comp, 0);
-      data->s_stop=MAX(mip1->s_start-((curpnt.y - rc.top + (VFrom+1))*vdp->comp), mip1->s_stop);
-    }
-
-  data->qlen=ABS(data->q_stop-data->q_start)+1;
-  data->slen=ABS(data->s_stop-data->s_start)+1;
-
-  /* create new sequence buffers */
-  DOT_InitCInfo(vdp, vdp2, data);
-  DOT_FillNewSeqBufs(vdp, vdp2, FALSE);
-
-  /* compute, store and sort hits*/
-  if (DOT_BuildHitList(vdp2->mip, TRUE, TRUE)<0)
-    {
-      data->selected=FALSE;
-      data->rm_lastselected =TRUE;
-      SetTitle(vdp->Infopanel, vdp->iInfo);
-      DOT_UpdateMainPanel(vdp, FALSE);
-      Beep();
-      return;/* no hits */
-    }
-
-
-    /*reset infopanel*/
-
-  sprintf(infoBuf, "Selected ..   %s (horizontal) [%ld..%ld]   vs.   %s (vertical) [%ld..%ld]", mip1->qname, (long)data->q_start, (long)data->q_stop, mip1->sname, (long)data->s_start, (long)data->s_stop);
-  SetTitle(vdp->Infopanel,infoBuf);
-
-  DOT_UpdateMainPanel(vdp, FALSE);
-
+      data->q_start = MAX((fstpnt.x  - rc.left  + HFrom - 1)*vdp->comp, 0) + vdp->xstart;
+      data->q_stop = MIN(((curpnt.x - rc.left +(HFrom+1))*vdp->comp)+vdp->xstart, vdp->xstop);
  
-
-      /* create second window */
-  vdp->ChildWin=DOT_SVBuildDiagViewer(vdp2);
-
-    }
-  else
-    {
-
-      InvertMode();
-      DOT_SelectLineProc(p);
- 
+      data->s_start = MAX((fstpnt.y  - rc.top   + (VFrom-1))*vdp->comp, 0) + vdp->ystart;
+      data->s_stop = MIN(((curpnt.y - rc.top +(VFrom+1))*vdp->comp)+vdp->ystart, vdp->ystop);
       
+      data->qlen=ABS(data->q_stop-data->q_start)+1;
+      data->slen=ABS(data->s_stop-data->s_start)+1;
+
+      /* create new sequence buffers */
+      DOT_InitCInfo(vdp, vdp2, data);
+
+      if (vdp2->mip){
+        DOT_FillNewSeqBufs(vdp, vdp2, FALSE);
+/*         DOT_GetSeqs(vdp2->mip, TRUE); */
+        if (DOT_BuildHitList(vdp2->mip, TRUE, TRUE)<0)
+          {
+            data->selected=FALSE;
+            data->rm_lastselected =TRUE;
+            SetTitle(vdp->Infopanel, vdp->iInfo);
+            DOT_UpdateMainPanel(vdp, FALSE);
+            Beep();
+            return;/* no hits */
+          }
+      }
+    /*reset infopanel*/
+      
+      sprintf(infoBuf, "Selected ..   %s (horizontal) [%d..%d]   vs.   %s (vertical) [%d..%d]", vdp->xname, data->q_start, data->q_stop, vdp->yname, data->s_start, data->s_stop);
+      SetTitle(vdp->Infopanel,infoBuf);
+      DOT_UpdateMainPanel(vdp, FALSE);
+      
+      /* create second window */
+
+      vdp->ChildWin=DOT_SVBuildDiagViewer(vdp2);
+
+    }
+  else if (vdp->selectMode == dot_FEATVIEW && vdp->mip)
+    {
+      InvertMode();
+      DOT_SelectLineProc(p);     
       dx=HFrom-data->H_pos;
       dy=VFrom-data->V_pos;
-      
       /* previous hair coordinates */
-      
       data->old_rcS.left=data->rcS.left-dx;
       data->old_rcS.right=data->rcS.right-dx;
       data->old_rcS.top=data->rcS.top-dy;
       data->old_rcS.bottom=data->rcS.bottom-dy;
-      
       /* new hair coordinates on parent window */
-      
       data->rcS.left = curpnt.x;
       data->rcS.top = curpnt.y;
       data->rcS.right = curpnt.x;
       data->rcS.bottom = curpnt.y;
-      
       data->H_pos=HFrom;
       data->V_pos=VFrom;
-
-      if (mip1->qstrand == Seq_strand_plus)
+      if (vdp->strand1 == Seq_strand_plus)
         {
-          data->q_start = MIN(MAX((curpnt.x - rc.left +(HFrom))*vdp->comp, 0)+mip1->q_start, mip1->q_stop);
+          data->q_start = MIN(MAX((curpnt.x - rc.left +(HFrom))*vdp->comp, 0)+vdp->xstart, vdp->xstop);
         }
       else
         {
-          data->q_start = MAX(mip1->q_start-((curpnt.x - rc.left +(HFrom))*vdp->comp), mip1->q_stop);
+          data->q_start = MAX(vdp->xstart-((curpnt.x - rc.left +(HFrom))*vdp->comp), vdp->xstop);
         }
       
-      if (mip1->sstrand == Seq_strand_plus)
+      if (vdp->strand2==Seq_strand_plus)
         {
-          data->s_start = MIN(MAX((curpnt.y - rc.top +(VFrom))*vdp->comp, 0)+mip1->s_start, mip1->s_stop);
+          data->s_start = MIN(MAX((curpnt.y - rc.top +(VFrom))*vdp->comp, 0)+ vdp->ystart, vdp->ystop);
         }
       else
         {
-          data->s_start = MAX(mip1->s_start-((curpnt.y - rc.top + (VFrom))*vdp->comp), mip1->s_stop);
+          data->s_start = MAX(vdp->ystart-((curpnt.y - rc.top + (VFrom))*vdp->comp), vdp->ystop);
         }
 
       DOT_UpdateMainPanel(vdp, TRUE);
@@ -3927,7 +4558,7 @@ static void DOT_ReleaseProc(PaneL p, PoinT pt)
       
       DOT_UpdateFeatViewer(flp, flp->Query, flp->segQuery, flp->segQName, flp->segQCursor, DOT_QViewerClickProc, flp->query_drp, ((DOTSelDataPtr)flp->data)->q_start, &(flp->vert_Qpos));
       DOT_UpdateFeatViewer(flp, flp->Subject, flp->segSubject, flp->segSName, flp->segSCursor, DOT_SViewerClickProc, flp->subject_drp, ((DOTSelDataPtr)flp->data)->s_start, &(flp->vert_Spos));
-      sprintf(infoBuf, "Hairs .. X-axis (%s) [%ld]  vs.  Y-axis (%s) [%ld]", mip1->qname, (long)data->q_start, mip1->sname, (long)data->s_start);
+      sprintf(infoBuf, "Hairs .. X-axis (%s) [%d]  vs.  Y-axis (%s) [%d]", vdp->xname, data->q_start, vdp->yname, data->s_start);
       SetTitle(vdp->Infopanel,infoBuf);
       
     }
@@ -3973,6 +4604,7 @@ static void DOT_InitDataStruct (DOTVibDataPtr vdp)
 Purpose : Increase compression of main window display.
 
 ____________________________________________________________________*/
+
 static void DOT_ReduceSizeProc (IteM i) 
 {
   WindoW      w, temport;
@@ -4178,7 +4810,7 @@ static void DOT_FeatAnalysisProc(ButtoN b)
  Purpose: Get int value of input TexT
 
 _______________________________________________________________________*/
-Int4 DOT_GetValue (TexT t)
+extern Int4 DOT_GetValue (TexT t)
 {
   Char str[20];
   Int4 val;
@@ -4260,8 +4892,10 @@ void DOT_QuitProg(ButtoN b)
   w=ParentWindow(b);
   pip=(DOTparamsinfoPtr)GetObjectExtra(b);
   vdp2=(DOTVibDataPtr)GetObjectExtra(w);
-  DOT_FreeMainInfo(vdp2->mip);
-  if (vdp2->mip) MemFree(vdp2->mip);
+  if (vdp2->mip){
+    DOT_FreeMainInfo(vdp2->mip);
+    if (vdp2->mip) MemFree(vdp2->mip);
+  }
   if (vdp2) MemFree(vdp2);
   if (pip) MemFree(pip);
   Remove(w);
@@ -4297,8 +4931,8 @@ void DOT_StartDOTPLOT(ButtoN b)
   mip->q_stop=DOT_GetValue(pip->xstop);
   mip->s_start=DOT_GetValue(pip->ystart);
   mip->s_stop=DOT_GetValue(pip->ystop);
-  mip->qlen=mip->q_stop-mip->q_start;
-  mip->slen=mip->s_stop-mip->s_start;
+  mip->qlen = (mip->q_stop-mip->q_start) + 1;
+  mip->slen = (mip->s_stop-mip->s_start) + 1;
   mip->word_size = DOT_GetValue(pip->word_size);
   mip->tree_limit = DOT_GetValue(pip->tree_limit);
   mip->first_pass=TRUE;
@@ -4338,10 +4972,10 @@ void DOT_SetupParamsWindow(DOTVibDataPtr vdp, Boolean is_startup, Boolean is_nuc
     {
       g=HiddenGroup(w, 1, 3, NULL);
       mainzoomg = NormalGroup(g, 1, 2, "Zoom Parameters", systemFont, NULL);
-      sprintf(str1, "%ld", (long)mip->q_start);
-      sprintf(str2, "%ld", (long)mip->s_start);
-      sprintf(str3, "%ld", (long)mip->q_stop);
-      sprintf(str4, "%ld", (long)mip->s_stop);
+      sprintf(str1, "%d", mip->q_start);
+      sprintf(str2, "%d", mip->s_start);
+      sprintf(str3, "%d", mip->q_stop);
+      sprintf(str4, "%d", mip->s_stop);
       zoomg1=HiddenGroup(mainzoomg, 3, 1, NULL);
       StaticPrompt(zoomg1, "x-axis:", 0, 0, systemFont, 'l');
       pip->xstart = DialogText(zoomg1, str1, 5, NULL);
@@ -4355,12 +4989,12 @@ void DOT_SetupParamsWindow(DOTVibDataPtr vdp, Boolean is_startup, Boolean is_nuc
     g=HiddenGroup(w, 1, 2, NULL);
 
   g1 = NormalGroup(g, 1, 2, "Parameters", systemFont, NULL);
-  sprintf(str1, "%ld", (long)mip->word_size);
-  sprintf(str2, "%ld", (long)mip->tree_limit);
+  sprintf(str1, "%d", mip->word_size);
+  sprintf(str2, "%d", mip->tree_limit);
   if (is_nuc)
-    sprintf(str3, "(4 - 11):");
+    sprintf(str3, "(4 - 11):", NULL);
   else
-    sprintf(str3, "(1, 2 or 3):");
+    sprintf(str3, "(1, 2 or 3):", NULL);
 
   p1=HiddenGroup(g1, 3, 1, NULL);
   StaticPrompt(p1, "Word size ", 0, 0, systemFont, 'l');
@@ -4418,6 +5052,75 @@ static void DOT_ParametersProc (IteM i)
 }
 
 
+/*_________________________________________(DOT_GetNthSeqFromAlign)_____
+
+  Purpose : Fill nucleotide sequence buffers.
+
+____________________________________________________________________*/
+
+static Uint1Ptr DOT_GetNthSeqFromAlign (SeqAlignPtr sap, Int4 n)
+{
+  BioseqPtr        bsp=NULL;
+  SeqIdPtr         sip=NULL;
+  SeqPortPtr       spp;
+  Uint1Ptr         seq, temp_seq;
+  Uint1            strand;
+  Int4             offset, x;  
+  Int4             start=0, stop=0;
+  Int4             len, buf_len;
+  Int2             ctr, i;    
+  Uint1Ptr         buffer;
+  Int4Ptr    PNTR  matrix;
+  
+  sip=AlnMgr2GetNthSeqIdPtr(sap, n);
+  bsp=BioseqLockById(sip); 
+  strand=AlnMgr2GetNthStrand(sap, n);
+  AlnMgr2GetNthSeqRangeInSA(sap, n, &start, &stop);
+  len=AlnMgr2GetAlnLength(sap, FALSE);
+ /* initialize buffers */
+  buffer=(Uint1Ptr) MemNew (sizeof(Uint1)*101); 
+  MemSet((Pointer)buffer, '\0', sizeof(Char)*101);
+  temp_seq = NULL;
+  if (!(seq = (Uint1Ptr) MemNew (sizeof(Uint1)*(len)))) goto error;
+  if (ISA_aa (bsp->mol)) 
+    {
+      spp = SeqPortNew (bsp, start, stop, strand, Seq_code_ncbi2na); 
+    }
+  else if (ISA_na(bsp->mol)) 
+    {
+      spp = SeqPortNew (bsp, start, stop, strand, Seq_code_ncbistdaa); 
+    }
+  if (spp == NULL)
+    {
+      ErrPostEx (SEV_ERROR, 0, 0, "%s", "DOT- Failed on SeqPortNew");
+      goto error;
+    }
+  temp_seq =  seq;
+  do 
+    {
+      ctr = SeqPortRead(spp, buffer, 100);
+      
+      if (ctr > 0) 
+        {  
+          i = 0;
+          buf_len = ctr;
+          while (buf_len > 0)
+            {
+              *temp_seq = (Uint1)buffer[i];
+              temp_seq++;
+              i++;  
+              buf_len--;
+            }
+        }
+    } while (ctr != SEQPORT_EOF * -1);
+  SeqPortFree(spp);
+  if (buffer) MemFree(buffer);
+  BioseqUnlock(bsp);
+  return seq;
+ error:
+  BioseqUnlock(bsp);
+  return NULL;
+}
 /*_______________________________________________(DOT_DoZoom)___
 
   Purpose : Zoom into a specific region of sequence.
@@ -4450,8 +5153,8 @@ void DOT_DoZoom(ButtoN b)
   mip->q_stop=DOT_GetValue(zip->xstop);
   mip->s_start=DOT_GetValue(zip->ystart);
   mip->s_stop=DOT_GetValue(zip->ystop);
-  mip->qlen=mip->q_stop-mip->q_start;
-  mip->slen=mip->s_stop-mip->s_start;
+  mip->qlen=mip->q_stop-mip->q_start + 1;
+  mip->slen=mip->s_stop-mip->s_start + 1;
   mip->first_pass = TRUE;
   mip->cutoff_score=0;  
 
@@ -4500,18 +5203,14 @@ void DOT_SetupZoomWindow(DOTVibDataPtr vdp)
 
   if (!(zip=(DOTparamsinfoPtr)MemNew(sizeof(DOTparamsinfo)))) return;
   mip=vdp->mip;
-
-
   w = FixedWindow(-50, -25, -1, -1, "Zoom", StdCloseWindowProc);
   SetObjectExtra(w, (Pointer)vdp, NULL);
-  
   maingroup=HiddenGroup(w, -1, 2, NULL);
-
   g = NormalGroup(maingroup, 1, 2, "Zoom Parameters", systemFont, NULL);
-  sprintf(str1, "%ld", (long)mip->q_start);
-  sprintf(str2, "%ld", (long)mip->s_start);
-  sprintf(str3, "%ld", (long)mip->q_stop);
-  sprintf(str4, "%ld", (long)mip->s_stop);
+  sprintf(str1, "%d", mip->q_start);
+  sprintf(str2, "%d", mip->s_start);
+  sprintf(str3, "%d", mip->q_stop);
+  sprintf(str4, "%d", mip->s_stop);
   zoomg=HiddenGroup(g, 3, 2, NULL);
   StaticPrompt(zoomg, "x-axis:", 0, 0, systemFont, 'l');
   zip->xstart = DialogText(zoomg, str1, 5, NULL);
@@ -4584,146 +5283,420 @@ static void DOT_DisplayOptsProc(ChoicE i)
   DOT_UpdateMainPanel(vdp, TRUE);
   
 }
-/*____________________________________________(DOT_InitAlnIPtr)_____________
+
+
+/*____________________________________________(DOT_AlignInfoNew)_____________
 
 
   Purpose : Initialize DOTAlignInfoPtr.
 
 ____________________________________________________________________*/
-void DOT_InitAlnIPtr (DOTAlignInfoPtr alp)
+extern DOTAlignInfoPtr DOT_AlignInfoNew (void)
 {
-
+  DOTAlignInfoPtr alp;
+  
+  alp=(DOTAlignInfoPtr)MemNew(sizeof(DOTAlignInfo));
   alp->VERT_MARGIN=50;
   alp->HORZ_MARGIN=80;
   alp->do_scale=TRUE;
   alp->showLabels=FALSE;
-
   alp->Fh=FontHeight();
-
+  return alp;
 }
-/*___________________________(AlnMgrGetNextLine)_______
+/*___________________________(AlnMgr2GetNextLine)_______
 
 
   Purpose : Get starts and stops for a seq_align.
 
 ____________________________________________________________________*/
-static Boolean AlnMgrGetNextLine(SeqAlignPtr sap, AlnMsgPtr amp1, AlnMsgPtr amp2, Int4Ptr x1, Int4Ptr y1, Int4Ptr x2, Int4Ptr y2, Int4Ptr n) 
+static Boolean AlnMgr2GetNextLine(SeqAlignPtr sap, AlnMsg2Ptr amp1, AlnMsg2Ptr amp2, Int4Ptr x1, Int4Ptr y1, Int4Ptr x2, Int4Ptr y2, Int4Ptr n) 
 { 
   Boolean  retval; 
   
   if (sap == NULL || amp1 == NULL || amp2 == NULL || x1 == NULL || y1 == NULL || x2 == NULL || y2 == NULL ||n == NULL) 
     return FALSE;
   amp1->row_num = 1; 
-  retval = AlnMgrGetNextAlnBit(sap, amp1);
+  retval = AlnMgr2GetNextAlnBit(sap, amp1);
   if (retval == FALSE) 
     return FALSE; 
-  if (amp1->gap == 0) 
+  if (amp1->type == AM_SEQ) 
     { 
-      *x1 = amp1->from_b; 
-      *x2 = amp1->to_b; 
+      *x1 = amp1->from_row; 
+      *x2 = amp1->to_row; 
     } else 
       { 
         if (*x2 == 0) 
-          AlnMgrGetNthSeqRangeInSA(sap, 1, x2, NULL); 
+          AlnMgr2GetNthSeqRangeInSA(sap, 1, x2, NULL); 
         *x1 = *x2;
       } 
   amp2->row_num = 2;
-  retval = AlnMgrGetNextAlnBit(sap, amp2);
+  retval = AlnMgr2GetNextAlnBit(sap, amp2);
   if (retval == FALSE) 
     return FALSE; 
-  if (amp2->gap == 0) 
+  if (amp2->type == AM_SEQ) 
     { 
-      *y1 = amp2->from_b;
-      *y2 = amp2->to_b; 
+      *y1 = amp2->from_row;
+      *y2 = amp2->to_row; 
     } else 
       { 
         if (*y2 == 0) 
-          AlnMgrGetNthSeqRangeInSA(sap, 2, y2, NULL); 
+          AlnMgr2GetNthSeqRangeInSA(sap, 2, y2, NULL); 
         *y1 = *y2;
       } 
   *n++;
   return TRUE; 
 } 
 
-/*____________________________________________(DOT_GetSeqAln)___________
+/*____________________________________________(DOT_GetAlign)___________
 
 
   Purpose : Get seq_align coordinates, store as DOTAlnList array.
 
 ____________________________________________________________________*/
-static Boolean DOT_GetSeqAln (DOTAlignInfoPtr alp)
+static Boolean DOT_GetAlign (DOTAlignInfoPtr alp)
 { 
-  AlnMsgPtr    amp1, amp2;
+  AlnMsg2Ptr    amp1, amp2;
   OMProcControlPtr ompcp;
   BioseqPtr    bsp1, bsp2;
-  SeqAlignPtr  sap, salp;
+  SeqAlignPtr  sap=NULL, salp=NULL, sap_tmp=NULL;
   SeqIdPtr     sip1, sip2;
-  DOTAlnPtr      Aln;
-  Boolean      more=FALSE, saved=FALSE;
-  Int4         x1, y1, x2, y2, numlines, n, i;
-  Int4         xlen, ylen;
+  DOTAlnPtr    Aln;
+  Boolean      saved=FALSE;
+  Int4         x1, y1, x2, y2, numlines=0, n=0, i=0;
+  Int4         xlen=0, ylen=0;
+  Uint1         q_strand, s_strand;
   
-  
+   if (alp==NULL || alp->sap==NULL)
+  {
+    ArrowCursor();
+    return(FALSE);
+  }
   sap=alp->sap;
 
-
-  numlines = AlnMgrGetNumSegments(sap); 
-  /* query */
-  sip1=AlnMgrGetNthSeqIdPtr(sap, 1); 
-  sip2=AlnMgrGetNthSeqIdPtr(sap, 2); 
-  bsp1=BioseqLockById(sip1); 
-  bsp2=BioseqLockById(sip2); 
-  alp->xlen=bsp1->length;  
-  alp->ylen=bsp2->length; 
-
-  amp1 = AlnMsgNew(); 
-  amp2 = AlnMsgNew(); 
-  amp1->to_m = amp2->to_m = -1; 
-  
-  alp->Alnlist=(DOTAlnPtr PNTR) MemNew(sizeof(DOTAlnPtr)*numlines);
-  
-  n = x1 = x2 = y1 = y2 = i =xlen=ylen=0; 
-  if (sap->segtype==SAS_DISC)
+ if (sap->segtype==SAS_DISC)
     { 
-      salp=(SeqAlignPtr)sap->segs; 
-       
+      salp=(SeqAlignPtr)sap->segs;      
     } 
   else 
     {
       salp=sap; 
     } 
-
+  alp->sip=AlnMgr2GetNthSeqIdPtr(salp, 1);
+  alp->sip->next=AlnMgr2GetNthSeqIdPtr(salp, 2);
+  alp->title = NULL;
+  sap_tmp=salp;
+  while (sap_tmp){
+    numlines +=AlnMgr2GetNumSegs(sap_tmp);
+    sap_tmp=sap_tmp->next;
+  }
+  amp1 = AlnMsgNew2(); 
+  amp2 = AlnMsgNew2();
+  amp1->from_aln = amp2->from_aln = 0;
+  amp1->to_aln = amp2->to_aln = -1;  
+  amp1->row_num = 1;
+  amp2->row_num = 2;
+  alp->Alnlist=(DOTAlnPtr PNTR) MemNew(sizeof(DOTAlnPtr)*numlines);
+  n = x1 = x2 = y1 = y2 = i =xlen=ylen=0; 
   while (salp)
     {
-      while (more = AlnMgrGetNextLine(salp, amp1, amp2, &x1, &y1, &x2, &y2, &n)) 
+      q_strand = AlnMgr2GetNthStrand(salp, 1);
+      s_strand = AlnMgr2GetNthStrand(salp, 2);
+      while (AlnMgr2GetNextAlnBit(salp, amp1) && AlnMgr2GetNextAlnBit(salp, amp2))
         { 
-          saved=TRUE;
-          Aln=(DOTAlnPtr)MemNew(sizeof(DOTAln));
-          Aln->q_start=x1;
-          Aln->q_stop=x2;
-          Aln->s_start=y1;
-          Aln->s_stop=y2;
-          Aln->primID=n;
-          alp->Alnlist[i]=Aln;
-          i++;
-
+          if (amp1->type == AM_SEQ && amp2->type == AM_SEQ){
+            saved=TRUE;
+            Aln=(DOTAlnPtr)MemNew(sizeof(DOTAln));
+            Aln->sap=salp;
+            
+            if (q_strand == Seq_strand_minus){
+              Aln->q_start = x2;
+              Aln->q_stop = x1;
+            }
+            else {
+              Aln->q_start=x1;
+              Aln->q_stop=x2;
+            }
+            if (s_strand == Seq_strand_minus){
+              Aln->s_start = y2;
+              Aln->s_stop = y1;
+            }
+            else {
+              Aln->s_start=y1;
+              Aln->s_stop=y2;
+            }
+            Aln->primID=i+1;
+            Aln->entityID=salp->idx.entityID;
+            Aln->itemID=salp->idx.itemID;
+            Aln->class=dotaln_GENERAL;
+            alp->Alnlist[i]=Aln;
+            i++;
+          }
         }
-      amp1 = AlnMsgReNew(amp1);
-      amp2 = AlnMsgReNew(amp2);
-      amp1->to_m = amp2->to_m = -1;
+      AlnMsgReNew2(amp1);
+      AlnMsgReNew2(amp2);
+      amp1->to_aln = amp2->to_aln = -1;
       salp=salp->next;
     }
+  
   if (!saved)
     {
-      ErrPostEx(SEV_WARNING, 0, 0, "Invalid SeqAlign format");
+      ErrPostEx(SEV_ERROR, 0, 0, "no alignments found");
       return (FALSE);
     }
   alp->index=i;
-  AlnMsgFree(amp1);
-  AlnMsgFree(amp2);
-  SeqAlignFree(sap);
+  AlnMsgFree2(amp1);
+  AlnMsgFree2(amp2);
+
+  bsp1=BioseqLockById(alp->sip); 
+  bsp2=BioseqLockById(alp->sip->next); 
+  alp->xstart=0;
+  alp->xlen=bsp1->length;  
+  alp->ystart=0;
+  alp->ylen=bsp2->length; 
+  BioseqUnlock(bsp1);
+  BioseqUnlock(bsp2);
   return (TRUE);
 } 
+
+/*___________________________(DOT_FillEachAlign)___________
+
+
+  Purpose : Fill Align structure from SeqAlignPtr PNTR
+
+__________________________________________________________*/
+static DOTAlnPtr DOT_FillEachAlign(DOTAlnPtr aln_list, SeqAlignPtr PNTR saps, Int4Ptr start, Int4 numsaps, Int4 class)
+{
+  Int4         i = 0;
+  Int4         j = 0;
+  AlnMsg2Ptr    amp1, amp2;
+  DOTAlnPtr    Aln = NULL, Aln_head = NULL, aln_end = NULL, Aln_next = NULL;
+  Uint1        q_strand, s_strand;
+
+
+  amp1 = AlnMsgNew2(); 
+  amp2 = AlnMsgNew2(); 
+  amp1->from_aln = amp2->from_aln = 0;
+  amp1->to_aln = amp2->to_aln = -1; 
+  amp1->row_num = 1;
+  amp2->row_num = 2;
+  numsaps+=*start;
+  if (aln_list){
+    aln_end=aln_list;
+    while (aln_end->next != NULL)
+      aln_end=aln_end->next;
+  }
+
+  if (numsaps > 0)
+    {
+      for(i=*start; i<numsaps; i++){
+        q_strand = AlnMgr2GetNthStrand(saps[i-*start], 1);
+        s_strand = AlnMgr2GetNthStrand(saps[i-*start], 2);
+        while(AlnMgr2GetNextAlnBit(saps[i-*start], amp1) && AlnMgr2GetNextAlnBit(saps[i-*start], amp2)) 
+          { 
+            if (amp1->type == AM_SEQ && amp2->type == AM_SEQ) {
+              Aln=(DOTAlnPtr)MemNew(sizeof(DOTAln));
+              Aln->sap=saps[i-*start];
+              if (q_strand == Seq_strand_minus) {
+                Aln->q_start = amp1->to_row;
+                Aln->q_stop = amp1->from_row;
+              }
+              else {
+                Aln->q_start = amp1->from_row;
+                Aln->q_stop = amp1->to_row;
+              }
+              if (s_strand == Seq_strand_minus) {
+                Aln->s_start = amp2->to_row;
+                Aln->s_stop = amp2->from_row;
+              }
+              else {
+                Aln->s_start = amp2->from_row;
+                Aln->s_stop = amp2->to_row;
+              }
+              Aln->primID=j+1;
+              Aln->entityID=saps[i-*start]->idx.entityID;
+              Aln->itemID=saps[i-*start]->idx.itemID;
+              Aln->class=class;
+              if (Aln_head){
+                Aln_next->next=Aln;
+                Aln_next=Aln_next->next;
+              }
+              else {
+                Aln_head=Aln_next=Aln;
+              }
+              j++;
+            }
+          }
+      
+        AlnMsgReNew2(amp1);
+        AlnMsgReNew2(amp2);
+        amp1->row_num = 1;
+        amp2->row_num = 2;
+      }
+    }
+
+  AlnMsgFree2(amp1);
+  AlnMsgFree2(amp2);
+
+  *start+=j;
+
+  if (aln_list)
+    aln_end->next=Aln_head;
+  else 
+    aln_list=Aln_head;
+
+  return aln_list;
+}
+/*____________________________________________(DOT_IndexAlnlist)___________
+
+
+  Purpose : index linked list of alignment coordinates into an array
+
+____________________________________________________________________*/
+static DOTAlnPtr PNTR DOT_IndexAlnlist(DOTAlnPtr aln_head, Int4Ptr index)
+{
+  DOTAlnPtr PNTR Alnlist=NULL;
+  DOTAlnPtr aln_next;
+  Int4      i=0;
+
+  if (!aln_head || !index)
+    return NULL;
+
+  if(!(Alnlist=(DOTAlnPtr PNTR) MemNew(sizeof(DOTAlnPtr)* (*index)))){
+    return NULL;
+  }
+  if (*index == 0 && aln_head) {
+    i = 0;
+    while (aln_head) {
+      Alnlist[i] = aln_head;
+      aln_head = aln_head->next;
+      i++;
+    }
+    *index = i;
+    return Alnlist;
+  }
+
+  for (i=0; i<*index; i++){
+    Alnlist[i]=aln_head;
+    aln_head=aln_head->next;
+  }
+  return Alnlist;
+}
+/*____________________________________________(DOT_FillAlignInfoPointer)___________
+
+
+  Purpose : Get seq_align coordinates, store as DOTAlnList array.
+
+____________________________________________________________________*/
+extern Boolean DOT_FillAlignInfoPointer (DOTAlignInfoPtr alp)
+{ 
+  AlnMsg2Ptr    amp1, amp2;  
+  DOTAlnPtr    PNTR Alnlist=NULL;
+  DOTAlnPtr    aln_list=NULL;
+  OMProcControlPtr ompcp;
+  BioseqPtr    bsp1, bsp2;
+  SeqAlignPtr  sap=NULL, salp=NULL, sap_tmp=NULL;
+  Boolean      saved=FALSE;
+  Int4         numsaps = 0, numlines = 0;
+  Int4         i=0, n=0;
+  Int4         xstart=0, xstop=0;
+  Int4         ystart=0, ystop=0;
+  Char         q_idbuf[42]={""}, s_idbuf[42]={""};
+  AMAlignIndex2Ptr amaip=NULL;
+  Int4         alncount=0;
+
+  if (alp==NULL){
+    ArrowCursor();
+    return(FALSE);
+  }
+  sap=alp->sap;
+  if (!sap) return FALSE;
+  if (sap->saip != NULL && sap->saip->indextype == INDEX_PARENT){
+    amaip=(AMAlignIndex2Ptr)sap->saip;
+    if (!amaip) return FALSE;
+    salp=(SeqAlignPtr)sap->segs;
+  }
+  else {
+    amaip=NULL;
+    salp=sap;
+  } 
+
+  n = AlnMgr2GetNumRows(salp);
+  if (n <= 0){
+    ArrowCursor();
+       return(FALSE);
+  }
+  if (n > 2){
+    ErrPostEx(SEV_ERROR, 0, 0, "alignment contains greater than two rows");
+    SeqIdSetFree(alp->sip);
+    ArrowCursor();
+    return FALSE;
+  }
+  alp->sip=AlnMgr2GetNthSeqIdPtr(salp, 1);
+  alp->sip->next=AlnMgr2GetNthSeqIdPtr(salp, 2);
+  
+  SeqIdWrite(alp->sip, q_idbuf,PRINTID_FASTA_SHORT, 41);
+  SeqIdWrite(alp->sip->next, s_idbuf,PRINTID_FASTA_SHORT, 41);
+  alp->name1=StringSave(q_idbuf);
+  alp->name2=StringSave(s_idbuf);
+  bsp1=BioseqLockById(alp->sip);
+  bsp2=BioseqLockById(alp->sip->next);
+
+  if (ISA_aa (bsp1->mol) && ISA_aa (bsp2->mol)) 
+    {
+      alp->is_na = FALSE;
+    }
+  else if (ISA_na(bsp1->mol) && ISA_na (bsp2->mol)) 
+    {
+      alp->is_na = TRUE;
+      alp->matrix=(Int4Ptr PNTR)DOT_DNAScoringMatrix(-3, 1, 4);
+    }
+  else
+    goto error;
+
+   sap_tmp=salp;
+   while (sap_tmp){
+     sap_tmp=sap_tmp->next;
+     numsaps++;
+   }
+
+  amp1 = AlnMsgNew2(); 
+  amp2 = AlnMsgNew2(); 
+  amp1->to_aln = amp2->to_aln = -1; 
+  if (amaip){
+    aln_list = DOT_FillEachAlign(aln_list, amaip->saps, &alncount, numsaps,  1);
+    saved=TRUE;
+  }
+  else {
+    aln_list = DOT_FillEachAlign(aln_list, &salp, &alncount, numsaps, 1);
+    saved=TRUE;
+  }
+
+  if (!saved)
+    {
+       ErrPostEx(SEV_WARNING, 0, 0, "Invalid SeqAlign format");
+       return (FALSE);
+  }
+  numlines = alncount;
+  Alnlist = DOT_IndexAlnlist(aln_list, &numlines);
+  if (!Alnlist) goto error;
+  alp->Alnlist=Alnlist;
+  AlnMgr2GetNthSeqRangeInSA(salp, 1, &xstart, &xstop);
+  AlnMgr2GetNthSeqRangeInSA(salp, 2, &ystart, &ystop);
+  alp->xstart=xstart;
+  alp->xlen=xstop-xstart+1;
+  alp->ystart=ystart;
+  alp->ylen=ystop-ystart+1;
+  alp->index=numlines;
+
+  ArrowCursor();
+  BioseqUnlock(bsp1);
+  BioseqUnlock(bsp2);
+  return TRUE;
+ error:
+  BioseqUnlock(bsp1);
+  BioseqUnlock(bsp2);
+  return FALSE;
+}
 
 /*____________________________________________(DOT_FillAlignInfoPointer)___________
 
@@ -4731,128 +5704,226 @@ static Boolean DOT_GetSeqAln (DOTAlignInfoPtr alp)
   Purpose : Get seq_align coordinates, store as DOTAlnList array.
 
 ____________________________________________________________________*/
-static Boolean DOT_FillAlignInfoPointer (DOTAlignInfoPtr alp)
+extern Boolean DOT_Prob_FillAlignInfoPointer (DOTAlignInfoPtr alp)
 { 
-  AlnMsgPtr    amp1, amp2;
+  AlnMsg2Ptr    amp1, amp2;  
+  DOTAlnPtr    PNTR Alnlist=NULL;
+  DOTAlnPtr    aln_list=NULL;
   OMProcControlPtr ompcp;
   BioseqPtr    bsp1, bsp2;
   SeqAlignPtr  sap=NULL, salp=NULL, sap_tmp=NULL;
-  SeqIdPtr     sip1, sip2;
-  DOTAlnPtr      Aln;
-  Boolean      more=FALSE, saved=FALSE;
-  Int4         x1=0, y1=0, x2=0, y2=0, numlines=0, n=0, i;
-  Int4         xlen=0, ylen=0, xmin=0, xmax=0, ymin=0, ymax=0;
-  Char      text1[42];
-  Char      text2[42];
+  Boolean      saved=FALSE;
+  Int4         numsaps = 0, numlines = 0;
+  Int4         i=0, n=0;
+  Int4         xstart=0, xstop=0;
+  Int4         ystart=0, ystop=0;
+  Char         q_idbuf[42]={""}, s_idbuf[42]={""};
+  AMAlignIndex2Ptr amaip=NULL;
+  Int4         alncount=0;
 
+  if (alp==NULL){
+    ArrowCursor();
+    return(FALSE);
+  }
+  sap=alp->sap;
+  if (!sap) return FALSE;
+  
+  if (sap->segtype==SAS_DISC){  
+    salp=(SeqAlignPtr)sap->segs;  
+  }  
+  else { 
+    salp=sap; 
+  } 
+  if (sap->saip == NULL)
+    AlnMgr2IndexLite(sap);
+  amaip = (AMAlignIndex2Ptr)sap->saip;
+  
+  n = AlnMgr2GetNumRows(salp);
+  if (n <= 0){
+    ArrowCursor();
+       return(FALSE);
+  }
+  if (n > 2){
+    ErrPostEx(SEV_ERROR, 0, 0, "alignment contains greater than two rows");
+    SeqIdSetFree(alp->sip);
+    ArrowCursor();
+    return FALSE;
+  }
+  alp->sip=AlnMgr2GetNthSeqIdPtr(amaip->saps[0], 1);
+  alp->sip->next=AlnMgr2GetNthSeqIdPtr(amaip->saps[0], 2);
+  
+  SeqIdWrite(alp->sip, q_idbuf,PRINTID_FASTA_SHORT, 41);
+  SeqIdWrite(alp->sip->next, s_idbuf,PRINTID_FASTA_SHORT, 41);
+  alp->name1=StringSave(q_idbuf);
+  alp->name2=StringSave(s_idbuf);
+  bsp1=BioseqLockById(alp->sip);
+  bsp2=BioseqLockById(alp->sip->next);
+  if (bsp2 == NULL){
+    if (bsp1 != NULL)
+      BioseqUnlock(bsp1);
+  }
+  if (ISA_aa (bsp1->mol) && ISA_aa (bsp2->mol)) 
+    {
+      alp->is_na = FALSE;
+    }
+  else if (ISA_na(bsp1->mol) && ISA_na (bsp2->mol)) 
+    {
+      alp->is_na = TRUE;
+      alp->matrix=(Int4Ptr PNTR)DOT_DNAScoringMatrix(-3, 1, 4);
+    }
+  else
+    goto error;
+
+  amp1 = AlnMsgNew2(); 
+  amp2 = AlnMsgNew2(); 
+  amp1->to_aln = amp2->to_aln = -1; 
+  if (amaip){
+    aln_list = DOT_FillEachAlign(aln_list, amaip->saps, &alncount, amaip->numsaps,  1);
+    saved=TRUE;
+  }
+
+  if (!saved)
+    {
+       ErrPostEx(SEV_WARNING, 0, 0, "no alignments saved");
+       return (FALSE);
+  }
+  numlines = alncount;
+  Alnlist = DOT_IndexAlnlist(aln_list, &numlines);
+  if (!Alnlist) goto error;
+  alp->Alnlist=Alnlist;
+  alp->index=numlines;
+
+  if (sap->segtype == SAS_DISC){
+    alp->xstart = 1;
+    alp->xlen = bsp1->length;
+    alp->ystart = 1;
+    alp->ylen = bsp2->length;
+  }
+  else {
+    AlnMgr2GetNthSeqRangeInSA(salp, 1, &xstart, &xstop);
+    AlnMgr2GetNthSeqRangeInSA(salp, 2, &ystart, &ystop);
+    alp->xstart=xstart;
+    alp->xlen=xstop-xstart+1;
+    alp->ystart=ystart;
+    alp->ylen=ystop-ystart+1;
+  }
+
+  ArrowCursor();
+  BioseqUnlock(bsp1);
+  BioseqUnlock(bsp2);
+  return TRUE;
+ error:
+  BioseqUnlock(bsp1);
+  BioseqUnlock(bsp2);
+  return FALSE;
+}
+
+static SeqIdPtr DOT_GetNthSeqIdFromScp(SCP_ResultPtr scp, Int2 n)
+{
+  SeqIdPtr sip;
+  SeqAlignPtr PNTR saps;
+
+  
+  if (scp->saps != NULL)
+    saps=scp->saps;
+  else if (scp->large_outliers !=NULL)
+    saps=scp->large_outliers;
+  else if (scp->small_outliers !=NULL)
+    saps=scp->small_outliers;
+  else
+    return NULL;
+
+  return(AlnMgr2GetNthSeqIdPtr(saps[0], n));  
+
+}
+
+
+/*____________________________________________(DOT_FillFromScp)___________
+
+
+  Purpose : Get seq_align coordinates, store as DOTAlnList array.
+
+____________________________________________________________________*/
+static Boolean DOT_FillFromScp (DOTAlignInfoPtr alp, SCP_ResultPtr scp)
+{ 
+  BioseqPtr    bsp1=NULL, bsp2=NULL;
+  DOTAlnPtr    PNTR Alnlist=NULL;
+  DOTAlnPtr    aln_list =NULL;
+  Char         text1[42];
+  Char         text2[42];
+  Int4         start=0;
+  Boolean      saved=FALSE;
+  Char         q_idbuf[42]={""}, s_idbuf[42]={""};
 
   if (alp==NULL)
   {
     ArrowCursor();
     return(FALSE);
   }
-  
-  sap=alp->sap;
-  if (sap->segtype==SAS_DISC)
-    { 
-      salp=(SeqAlignPtr)sap->segs; 
-       
-    } 
-  else 
+  if (scp->saps == NULL && scp->small_outliers ==NULL && scp->large_outliers==NULL) return (FALSE);
+
+  alp->sip = DOT_GetNthSeqIdFromScp(scp, 1);
+  alp->sip->next = DOT_GetNthSeqIdFromScp(scp, 2);
+  SeqIdWrite(alp->sip, q_idbuf,PRINTID_FASTA_SHORT, 41);
+  SeqIdWrite(alp->sip->next, s_idbuf,PRINTID_FASTA_SHORT, 41);
+  alp->name1=StringSave(q_idbuf);
+  alp->name2=StringSave(s_idbuf);
+  bsp1=BioseqLockById(alp->sip);
+  bsp2=BioseqLockById(alp->sip->next);
+
+  if (bsp2 == NULL){
+    if (bsp1 != NULL)
+      BioseqUnlock(bsp1);
+  }
+
+  if (ISA_aa (bsp1->mol) && ISA_aa (bsp2->mol)) 
     {
-      salp=sap; 
-    } 
-
-  alp->sip = AlnMgrGetUniqueSeqs(salp, &n);
-   if (n == 0)
-     {
-       ArrowCursor();
-       return(FALSE);
-     }
-   if (n > 2)
-   {
-      ErrPostEx(SEV_ERROR, 0, 0, "Can't display diags for more than 2 sequences");
-      SeqIdSetFree(alp->sip);
-      ArrowCursor();
-      return FALSE;
-   }
-   if (alp->sip->next == NULL)
-      sip2 = alp->sip;
-   else
-      sip2 = alp->sip->next;
-   alp->title = (CharPtr)MemNew(50*sizeof(Char));
-   SeqIdWrite(alp->sip, alp->title, PRINTID_FASTA_SHORT, 41);
-   SeqIdWrite(sip2, text2, PRINTID_FASTA_SHORT, 41);
-   StringCat(alp->title, " vs ");
-   StringCat(alp->title, text2);
-   
-
-   sap_tmp=salp;
-   while (sap_tmp){
-     numlines +=AlnMgrGetNumSegments(sap_tmp);
-     sap_tmp=sap_tmp->next;
-   }
-
-  amp1 = AlnMsgNew(); 
-  amp2 = AlnMsgNew(); 
-  amp1->to_m = amp2->to_m = -1; 
-  
-  alp->Alnlist=(DOTAlnPtr PNTR) MemNew(sizeof(DOTAlnPtr)*numlines);
-  
-  n = x1 = x2 = y1 = y2 = i =xlen=ylen=0; 
-
-  while (salp)
-    {
-      while (more = AlnMgrGetNextLine(salp, amp1, amp2, &x1, &y1, &x2, &y2, &n)) 
-        { 
-          saved=TRUE;
-          Aln=(DOTAlnPtr)MemNew(sizeof(DOTAln));
-          
-          Aln->q_start=x1;
-          Aln->q_stop=x2;
-          Aln->s_start=y1;
-          Aln->s_stop=y2;
-          Aln->primID=i+1;
-          alp->Alnlist[i]=Aln;
-          i++;
-
-          if (xmin>x1)
-            xmin=x1;
-          
-          if (xmax<x2)
-            xmax=x2;
-          
-          if (ymin>y1)
-            ymin=y1;
-          
-          if (ymax<y2)
-            ymax=y2;
-        }
-      amp1 = AlnMsgReNew(amp1);
-      amp2 = AlnMsgReNew(amp2);
-      amp1->to_m = amp2->to_m = -1;
-      salp=salp->next;
+      alp->is_na = FALSE;
     }
+  else if (ISA_na(bsp1->mol) && ISA_na (bsp2->mol)) 
+    {
+      alp->is_na = TRUE;
+      alp->matrix=(Int4Ptr PNTR)DOT_DNAScoringMatrix(-3, 1, 4);
+    }
+  else
+    goto error;
 
+  if (scp->saps){
+    aln_list = DOT_FillEachAlign(aln_list, scp->saps, &start, scp->numsaps, 1);
+    saved=TRUE;
+  }
+  if (scp->large_outliers){
+/*     start= scp->numsaps; */
+    aln_list = DOT_FillEachAlign(aln_list, scp->large_outliers, &start, scp->numlarge_outliers, 2);
+    saved=TRUE;
+  }
+  if (scp->small_outliers){
+/*     start= scp->numsaps+scp->numlarge_outliers; */
+    aln_list = DOT_FillEachAlign(aln_list, scp->small_outliers, &start, scp->numsmall_outliers, 3);
+    saved=TRUE;
+  }
   if (!saved)
     {
-       ErrPostEx(SEV_WARNING, 0, 0, "Invalid SeqAlign format");
-       return (FALSE);
-  }
-/*    AlnMgrGetNthSeqRangeInSA(salp, 1, &x1, &x2);  */
-   alp->xlen = xmax - xmin + 1; 
-   alp->xstart=xmin;
-/*    AlnMgrGetNthSeqRangeInSA(salp, 2, &y1, &y2); */
-   alp->ylen = ymax - ymin + 1; 
-   alp->ystart=ymin;
-   alp->index=i;
-   AlnMsgFree(amp1);
-   AlnMsgFree(amp2);
-   SeqAlignFree(sap);
+      ErrPostEx(SEV_WARNING, 0, 0, "no alignments saved");
+      goto error;
+    }
+  Alnlist = DOT_IndexAlnlist(aln_list, &start);
+  if (!Alnlist) goto error;
+  alp->Alnlist=Alnlist;
+  alp->xstart=1;
+  alp->xlen=scp->len1;
+  alp->ystart=1;
+  alp->ylen=scp->len2;
+  alp->index=start;
    ArrowCursor();
+   BioseqUnlock(bsp1);
+   BioseqUnlock(bsp2);
    return TRUE;
+ error:
+   BioseqUnlock(bsp1);
+   BioseqUnlock(bsp2);
+   return (FALSE);
 } 
-
 /*_______________________________________________(DOT_DoBlast)___
 
   Purpose : Calls Blast2Seq.
@@ -4872,10 +5943,8 @@ static FloatHi DOT_get_eval(Int4 exp)
   return eval;
 }
 
-
 static void DOT_DoBlast (ButtoN b)
 {
-
   BLAST_OptionsBlkPtr options;
   SeqAlignPtr         sap, sap_final;
   DOTVibDataPtr       vdp;
@@ -4885,16 +5954,24 @@ static void DOT_DoBlast (ButtoN b)
   BioseqPtr           bsp1, bsp2;
   Int4                e;
   Int2                i;
-  CharPtr             text;
+  Int2                progval;
+  Uint2               entityID=0;
+  CharPtr             text=NULL;
   Boolean             is_local;
-   Char                 eval[8];
+  Char                eval[11]={""};
+  Char                str[20]={""};
+  SeqEntryPtr         sep;
+  SeqAnnotPtr         sanp;
+  SCP_ResultPtr       scp=NULL;
+  DOTMainDataPtr      mip=NULL;
 
 
   WatchCursor();
-  w=(WindoW)ParentWindow(b);
-  vdp=(DOTVibDataPtr)GetObjectExtra(w);
-  if (vdp==NULL)
-    goto end;
+  w = (WindoW)ParentWindow(b);
+  vdp = (DOTVibDataPtr)GetObjectExtra(w);
+  if (vdp == NULL)  goto end;
+  mip = vdp->mip;
+  if (mip == NULL) goto end;
 
   Remove(w);
 
@@ -4904,94 +5981,33 @@ static void DOT_DoBlast (ButtoN b)
   bsp1 = bip->bsp1;
   bsp2 = bip->bsp2;
 
+  progval = GetValue (bip->progname);
+  if (progval == 1) 
+    StringCpy(str, "blastn");
+  else 
+    StringCpy(str, "blastp");
+
   i = GetValue(bip->localorglobal);
-  if (i==1)
-    is_local=TRUE;
-  else
-    is_local=FALSE;
-
-
-  i = GetValue(bip->progname);
   if (i == 1)
-    text = StringSave("blastn");
-  else if (i == 2)
-    text = StringSave("blastp");
-  else if (i == 3)
-    text = StringSave("blastx");
-  else if (i == 4)
-    text = StringSave("tblastn");
-  else if (i == 5)
-    text = StringSave("tblastx");
+    is_local = TRUE;
   else
-    goto end;
-  
-  options = BLASTOptionNew(text, TRUE);
-  
-  i = GetValue(bip->gapped);
-  if (i == 1)
-    {
-      options->gapped_calculation = TRUE;
-    } else if (i == 2)
-      {
-        options = BLASTOptionNew(text, FALSE);
-        options->gapped_calculation = FALSE;
-      } else
-        goto end;
-  
-  GetTitle(bip->eval, eval, 14);
-  if (eval != NULL)
-    {
-      e = atoi(eval);
-      options->expect_value = DOT_get_eval(e);
-    }
-  
-  GetTitle(bip->wordsize, eval, 5);
-  if (eval != NULL)
-    options->wordsize = atoi(eval);
-  if (GetStatus(bip->maskrep) == TRUE)
-    {
-      if (GetStatus(bip->masksimple) == TRUE)
-        options->filter_string = StringSave("m L;R");
-      else
-        options->filter_string = StringSave("m R");
-    } else if (GetStatus(bip->masksimple) == TRUE)
-      options->filter_string = StringSave("m L");
- 
-   sap = BlastTwoSequences(bsp1, bsp2, text, options);
-   MemFree(options);
-   BLASTOptionDelete(options);
-   ArrowCursor();
+    is_local = FALSE;
 
    if (vdp->alp){ /* previous alignment*/
-     vdp->alp->pict=NULL;
+     vdp->alp->pict = NULL;
      DOT_ExitAlign(vdp->alp);
-     vdp->showALIGN=FALSE;
+     vdp->showALIGN = FALSE;
    }
-
-   if (sap == NULL)
-     {
-       ErrPostEx(SEV_WARNING, 0, 0, "No BLAST hits found");
-       goto end;
-     }
    
-   if (!AlnMgrIndexSeqAlign(sap)) goto end;
-   if (!AlnMgrMakeMultipleByScore(sap)) goto end;
-     
-   AlnMgrDeleteHidden(sap, FALSE);
-
- 
-   sap_final = sap;
-
-   bip=MemFree(bip);
-   w=Remove(w);
-   
-
+   scp = SCP_CompareOrderOrganizeBioseqs(bsp1, bsp2, mip->qslp, mip->sslp, str, mip->word_size, mip->tree_limit);
+   Remove(w);
    vdp->showALIGN=TRUE;
    SetValue(vdp->displayOpts2, 2);
-   vdp->alp=(DOTAlignInfoPtr)MemNew(sizeof(DOTAlignInfo));
-   vdp->alp->sap=sap_final;
-   DOT_InitAlnIPtr(vdp->alp);
-   if (!DOT_GetSeqAln (vdp->alp))
+   vdp->alp=DOT_AlignInfoNew();
+   vdp->alp->sap=NULL;
+   vdp->alp->entityID=scp->saps[0]->idx.entityID;
+   vdp->alp->itemID=scp->saps[0]->idx.itemID;
+   if (!DOT_FillFromScp(vdp->alp, scp))
      {
        vdp->alp->pict=NULL;
        DOT_ExitAlign(vdp->alp);
@@ -4999,7 +6015,6 @@ static void DOT_DoBlast (ButtoN b)
      }
 
    DOT_UpdateMainPanel(vdp, TRUE);
-
    end:
    if (text) MemFree(text);
    ArrowCursor();
@@ -5021,13 +6036,13 @@ static void DOT_CancelBlast (ButtoN b)
 
 void DOT_SetupBlastWindow(DOTVibDataPtr vdp)
 {
-   DOTblastinfoPtr  bip;
-   DOTMainDataPtr   mip;
+   DOTblastinfoPtr   bip;
+   DOTMainDataPtr    mip;
    ButtoN            b;
    ButtoN            b1;
    GrouP             maingroup, topg, globalg, localg, gapsg, eANDwg;
    GrouP             submitg, maskg, blastg, bottomg, g1, g2, g3;
-   CharPtr           title;
+   Char              title[255]={""};
    WindoW            w;
    
 
@@ -5037,24 +6052,25 @@ void DOT_SetupBlastWindow(DOTVibDataPtr vdp)
 
    bip->bsp1 = mip->qbsp;
    bip->bsp2 = mip->sbsp;
-   title = StringCat(mip->qname, " vs ");
-   title = StringCat(title, mip->sname);
+   StringCat(title, mip->qname);
+   StringCat(title, " vs. ");
+   StringCat(title, mip->sname);
    w = FixedWindow(-50, -25, -1, -1, title, StdCloseWindowProc);
    SetObjectExtra(w, vdp, NULL);
 
    maingroup = HiddenGroup(w, 1, 4, NULL);  
    StaticPrompt(maingroup, "Blast2Seqs Options ..", 0, popupMenuHeight, systemFont, 'l');
-
    topg = HiddenGroup (maingroup, -1, 2, NULL);
    blastg = NormalGroup(topg, 1,1, "Blast Program",  systemFont,NULL);
    bip->progname = HiddenGroup(blastg, 5, 0, NULL);
    RadioButton(bip->progname, "blastn");
    RadioButton(bip->progname, "blastp");
-   RadioButton(bip->progname, "blastx");
-   RadioButton(bip->progname, "tblastn");
-   RadioButton(bip->progname, "tblastx");
+/*    RadioButton(bip->progname, "blastx"); */
+/*    RadioButton(bip->progname, "tblastn"); */
+/*    RadioButton(bip->progname, "tblastx"); */
    SetValue(bip->progname, 1);
 
+   /*
    globalg = NormalGroup(topg,1, 1, "Alignment Type",  systemFont,NULL);
    bip->localorglobal = HiddenGroup(globalg, 2, 1, NULL);
    RadioButton(bip->localorglobal, "Local");
@@ -5076,11 +6092,16 @@ void DOT_SetupBlastWindow(DOTVibDataPtr vdp)
    SetStatus(bip->maskrep, FALSE);
    bip->masksimple = CheckBox(maskg, "Mask Simple Sequence", NULL);
    SetStatus(bip->masksimple, TRUE);
+   */
+
+   bottomg=HiddenGroup(maingroup, 1, 2, NULL);
+
+   localg = NormalGroup(bottomg, 1, 3, "Local Alignment Options", systemFont, NULL);
 
    g3 = NormalGroup(localg, 1,1, "",  systemFont,NULL);
    eANDwg = HiddenGroup(g3, 2, 2, NULL);
-   StaticPrompt(eANDwg, "E-value:  e-", 0, 0, systemFont, 'l');
-   bip->eval = DialogText(eANDwg, "1", 5, NULL);
+   StaticPrompt(eANDwg, "hitlist:  e-", 0, 0, systemFont, 'l');
+   bip->eval = DialogText(eANDwg, "10", 5, NULL);
    StaticPrompt(eANDwg, "wordsize:", 0, 0, systemFont, 'l');
    bip->wordsize = DialogText(eANDwg, "11", 5, NULL);
 
@@ -5106,12 +6127,9 @@ static void DOT_Blast2SeqProc (IteM i)
   
   w= (WindoW)ParentWindow(i);
   vdp=(DOTVibDataPtr)GetObjectExtra(w);
-
   if (vdp==NULL) return;
-
   Enable(vdp->displayOpts1);
   DOT_SetupBlastWindow(vdp); 
-  
 }
 
 /*________________________________________(DOT_FreeAlnList)_____________
@@ -5153,6 +6171,8 @@ static void DOT_ExitAlign(DOTAlignInfoPtr alp){
   
   if (alp->pict)
     DeletePicture(alp->pict);
+  if (alp->is_na && alp->matrix)
+    Free(alp->matrix);
 
   if (alp) MemFree(alp);
 
@@ -5163,7 +6183,7 @@ static void DOT_ExitAlign(DOTAlignInfoPtr alp){
 
 ____________________________________________________________________*/
 
-static void DOT_QuitMainWindow (IteM i)
+static void DOT_CloseMainWindow (IteM i)
 
 {
   WindoW  w;
@@ -5175,10 +6195,10 @@ static void DOT_QuitMainWindow (IteM i)
   data=(DOTSelDataPtr)vdp->data;
   if (data) MemFree(data);
 
-  if (vdp->mip->qname) MemFree(vdp->mip->qname);
-  if (vdp->mip->sname) MemFree(vdp->mip->sname);
-
-  DOT_FreeMainInfoPtrEx(vdp->mip);
+  if (vdp->xname) MemFree(vdp->xname);
+  if (vdp->yname) MemFree(vdp->yname);
+  if (vdp->mip)
+    DOT_FreeMainInfoPtrEx(vdp->mip);
 
   if (vdp->alp)
     {
@@ -5188,7 +6208,13 @@ static void DOT_QuitMainWindow (IteM i)
     }
   if (vdp) MemFree(vdp);
   
-  QuitProgram ();
+  Remove(w);
+}
+
+static void DOT_ExitProgram(IteM i)
+{
+  DOT_CloseMainWindow(i);
+  QuitProgram();
 }
 /*________________________________________(DOT_GridProc)_____________
 
@@ -5226,54 +6252,62 @@ static void DOT_CreateWindowDetails (WindoW w, DOTVibDataPtr vdp)
 {
   GrouP          g, g1, g2;
   Int4           index, maxzoom, wvals;
-  Char           str[15];
+  Char           str[15], PNTR qname, PNTR sname;
+  Int4           q_start, q_stop, s_start, s_stop;
   RecT           rc;
   ButtoN         blastButton;
   BaR 			  vsb;
   BaR 			  hsb;
-  Int4           Xpixels, Ypixels, pixwidth;
+  Int4           Xpixels, Ypixels, pixwidth, ychar;
   DOTSelDataPtr      data;
-  DOTMainDataPtr     mip;
-  PrompT         pr1, pr2;
+  DOTMainDataPtr     mip=NULL;
+  DOTAlignInfoPtr    alp=NULL;
+  PrompT             pr1, pr2;
 
   
-  mip=vdp->mip;
-
+  if (vdp->mip)
+    mip=vdp->mip;
+  if (vdp->alp)
+    alp=vdp->alp;
   ObjectRect(w, &rc);
   pixwidth=rc.right-rc.left-10;
-  
   g=HiddenGroup(w, 0, 3, NULL); 
-  SetGroupSpacing(g, 0, 20);
-
+  SetGroupSpacing(g, 10, 20);
   g1=HiddenGroup(g, 7, 0, NULL);
-
   g2=HiddenGroup (g,4, 0, NULL);  
   SetGroupSpacing(g2, 3, 0);
-  
-  pr2=StaticPrompt (g2, "Threshold-Ramp:", 0, 10, vdp->Fnt, 'l');
-  pr1=StaticPrompt (g2, "  20%", 0, 0, vdp->Fnt, 'l');
+  pr2=StaticPrompt (g2, "Threshold-Ramp:", 0, 3*vdp->Fh/2, vdp->Fnt, 'l');
+  pr1=StaticPrompt (g2, "  20%", 0, 3*vdp->Fh/2, vdp->Fnt, 'l');
   vdp->sdp.ScrollBar = ScrollBar (g2, 15, 5, DOT_ChangeMainViewerCutoff);
-  pr1=StaticPrompt (g2, "100%", 0, 0, vdp->Fnt, 'l');
-  
-  sprintf(vdp->iInfo, "%s (horizontal) [%ld..%ld]  vs.   %s (vertical) [%ld..%ld]", mip->qname, (long)mip->q_start, (long)mip->q_stop, mip->sname, (long)mip->s_start, (long)mip->s_stop);
-  
+  pr1=StaticPrompt (g2, "100%", 0, 3*vdp->Fh/2, vdp->Fnt, 'l');
+  if(mip){
+    qname=mip->qname;
+    sname=mip->sname;
+    q_start=mip->q_start;
+    s_start=mip->s_start;
+    q_stop=mip->q_stop;
+    s_stop=mip->s_start;
+  }
+  else if (alp){
+    qname=alp->name1;
+    sname=alp->name2;
+    q_start=1;
+    s_start=1;
+    q_stop=alp->xlen;
+    s_stop=alp->ylen;
+  }
+  sprintf(vdp->iInfo, "%s (x-axis)[%d..%d]  vs.   %s (y-axis)[%d..%d]", qname, q_start, q_stop, sname, s_start, s_stop); 
   vdp->Infopanel= StaticPrompt (g, vdp->iInfo, pixwidth, popupMenuHeight, vdp->Fnt, 'l');  
   SetObjectExtra(vdp->sdp.ScrollBar, vdp, NULL);
-
   CorrectBarMax (vdp->sdp.ScrollBar, 80); /* 100% */
   CorrectBarValue (vdp->sdp.ScrollBar, 60);/* 100% */
-
   /* Main Panel*/
- Xpixels = 600;
- Ypixels = 600;
-
-
- vdp->panel = AutonomousPanel (w, Xpixels, Ypixels, DOT_DisplayHits,  DOT_VscrlProc, DOT_HscrlProc , 0, NULL, NULL);
-      
- DOT_SetUpWin (w, vdp->panel, vdp);
- DOT_InitDataStruct(vdp);
- SetPanelClick (vdp->panel, DOT_ClickProc, DOT_DragProc, NULL, DOT_ReleaseProc);
-
+  Xpixels = 600;
+  Ypixels = 600;
+  vdp->panel = AutonomousPanel (w, Xpixels, Ypixels, DOT_DisplayHits,  DOT_VscrlProc, DOT_HscrlProc , 0, NULL, NULL);
+  DOT_SetUpWin (w, vdp->panel, vdp);
+  DOT_InitDataStruct(vdp);
+  SetPanelClick (vdp->panel, DOT_ClickProc, DOT_DragProc, NULL, DOT_ReleaseProc);
 
 }
 
@@ -5432,20 +6466,24 @@ static void DOT_InitVibData(DOTVibDataPtr vdp)
   vdp->showDotPlot=TRUE;
 
   DOT_InitFont(vdp);
-  vdp->charw=MaxCharWidth();
-  vdp->Fh=FontHeight();
+  SelectFont(vdp->Fnt);
+/*   vdp->charw=MaxCharWidth(); */
+/*   vdp->Fh=FontHeight(); */
+  /* temporarily while being called from ingenue */
+  vdp->charw = 15;
+  vdp->Fh = 17;
   vdp->VERT_MARGIN = 50;
   vdp->HORZ_MARGIN = 80;
   vdp->selectMode = 1;
 
 }
-/*________________________________________(DOT_OpenSeqAlignASN)_____________
+/*________________________________________(DOT_OpenSeqAnnotFile)_____________
 
 
   Purpose : Open a seqannot file with a seqalign and update the viewer.
 
 ____________________________________________________________________*/
-static void DOT_OpenSeqAlignASN(IteM i)
+static void DOT_OpenSeqAnnotFile(IteM i)
 {
   DOTVibDataPtr vdp;
   FILE*         afile;
@@ -5469,24 +6507,28 @@ static void DOT_OpenSeqAlignASN(IteM i)
           } 
           dataptr = ReadAsnFastaOrFlatFile (afile, &datatype, NULL, FALSE, FALSE, TRUE, FALSE);
           if (!dataptr){     
-            ErrPostEx(SEV_FATAL, 0, 0, "no seqalign found");
-              return;
+            ErrPostEx(SEV_FATAL, 0, 0, "bad seqannot file");
+              goto end;
           }
           sanp = (SeqAnnotPtr)(dataptr);
           sap = (SeqAlignPtr)(sanp->data);
           if (!sap){     
-            ErrPostEx(SEV_FATAL, 0, 0, "no seqalign found");
-              return;
+            ErrPostEx(SEV_FATAL, 0, 0, "bad seqannot file");
+              goto end;
           } 
-          AlnMgrIndexSeqAlign(sap);
-          Enable(vdp->displayOpts1);
-          if (vdp->alp){ /* previous alignment*/
+          if (sap->saip != NULL)
+            AMAlignIndex2Free2(sap);
+          sap->saip=NULL;
+          AlnMgr2IndexLite(sap);
+          AlnMgr2SortAlnSetByNthRowPos(sap, 1);
+
+          Enable((HANDLE)vdp->displayOpts1);
+          if (vdp->alp){ /* discard previous alignment*/
             vdp->alp->pict=NULL;
             DOT_ExitAlign(vdp->alp);
           }
-          alp=(DOTAlignInfoPtr)MemNew(sizeof(DOTAlignInfo));
+          alp=DOT_AlignInfoNew();
           alp->sap = sap;
-          DOT_InitAlnIPtr(alp);
           if (!DOT_FillAlignInfoPointer(alp)){
             vdp->showALIGN=FALSE;
             goto end;
@@ -5494,7 +6536,6 @@ static void DOT_OpenSeqAlignASN(IteM i)
           vdp->alp=alp;
           vdp->showALIGN=TRUE;
           SetValue(vdp->displayOpts2, 2);
-
         }
 
     end:
@@ -5512,7 +6553,7 @@ static void DOT_OpenSeqAlignASN(IteM i)
 
 ____________________________________________________________________*/
 
-extern void DOT_MakeMainViewer (DOTMainDataPtr mip, SeqAlignPtr sap)
+NLM_EXTERN Boolean DOT_MakeMainViewer (DOTMainDataPtr mip, DOTAlignInfoPtr alp)
 {
   WindoW         w;
   Int2           margins;
@@ -5521,36 +6562,68 @@ extern void DOT_MakeMainViewer (DOTMainDataPtr mip, SeqAlignPtr sap)
   Int4           n;
   ChoicE         ch;
   DOTVibDataPtr  vdp;
-  DOTAlignInfoPtr alp;
-  Char           title[50];
+  SeqAlignPtr    sap=NULL;
+  Char           title[60]={""};
 
+  if (!mip && !alp) return FALSE;
   vdp=(DOTVibDataPtr)MemNew(sizeof(DOTVibData));
-
-  /* cgeck this on Patrick's code */
+  if (!vdp) return FALSE;
+  DOT_InitVibData(vdp);
   margins = 4*stdCharWidth;
-  sprintf(title, "%s", mip->qname);
-  StringCat(title, "  vs  ");
-  StringCat(title, mip->sname);
-
+  if (mip){
+    vdp->mip=mip;
+    vdp->xlen=mip->qlen;
+    vdp->ylen=mip->slen;
+    vdp->xstart=mip->q_start;
+    vdp->ystart=mip->s_start;
+    vdp->xstop=mip->q_stop;
+    vdp->ystop=mip->s_stop;
+    vdp->xname=mip->qname;
+    vdp->yname=mip->sname;
+    vdp->strand1=mip->qstrand;
+    vdp->strand2=mip->sstrand;
+    vdp->showDotPlot=TRUE;
+  } else if (alp){
+    sap=alp->sap;
+    vdp->alp=alp;
+    if(!mip){
+      vdp->xlen=alp->xlen;
+      vdp->ylen=alp->ylen;
+      vdp->xstart=alp->xstart;
+      vdp->ystart=alp->ystart;
+      vdp->xstop=alp->xstart+alp->xlen-1;
+      vdp->ystop=alp->ystart+alp->ylen-1;
+      vdp->xname=alp->name1;
+      vdp->yname=alp->name2;
+      vdp->strand1=AlnMgr2GetNthStrand(alp->sap, 1);
+      vdp->strand2=AlnMgr2GetNthStrand(alp->sap, 2);
+    }
+    vdp->showALIGN=TRUE;
+  }
+  sprintf(title, "%s", vdp->xname);
+  StringCat(title, "  vs. ");
+  StringCat(title, vdp->yname);
 #ifdef WIN_MAC
   DOT_SetupMenus ();
 #endif
   w = DocumentWindow (margins, margins, 800, 800, title, StdCloseWindowProc,   DOT_ResizeMainWindow);
-
 #ifndef WIN_MAC
-  DOT_SetupMenus ();
+  DOT_SetupMenus (); 
 #endif
-
   SetObjectExtra(w, (Pointer)vdp, NULL);
   m1 = PulldownMenu (w, "File"); 
 /*   CommandItem (m1, "New analysis", DOT_NewAnalysis);  */
-  i=CommandItem(m1, "Open ASN SeqAlign...", DOT_OpenSeqAlignASN);
-  CommandItem (m1, "Quit",DOT_QuitMainWindow); 
-  
+  i=CommandItem(m1, "Alignment (SeqAnnot) File...", DOT_OpenSeqAnnotFile);
+  Disable(i);
+  CommandItem (m1, "Close",DOT_CloseMainWindow); 
+  SeparatorItem(m1);
+  i = CommandItem (m1, "Exit",DOT_ExitProgram); 
+#ifndef DOT_STANDALONE
+  Disable(i);
+#endif
   m2 = PulldownMenu (w, "Options"); 
   vdp->displayOpts1=SubMenu(m2,"Display");
-  if (!sap)
-      Disable(vdp->displayOpts1);
+  if (!sap) Disable((HANDLE)vdp->displayOpts1);
   vdp->displayOpts2=ChoiceGroup (vdp->displayOpts1, DOT_DisplayOptsProc);
   ChoiceItem (vdp->displayOpts2, "Dots ONLY");
   ChoiceItem (vdp->displayOpts2, "Dots & Aligns"); 
@@ -5563,6 +6636,7 @@ extern void DOT_MakeMainViewer (DOTMainDataPtr mip, SeqAlignPtr sap)
   ChoiceItem (ch, "hide");
   SeparatorItem(m2);
   s2=SubMenu(m2,"Select Mode");
+  Disable(s2);
   ch=ChoiceGroup (s2, DOT_ModeProc);
   ChoiceItem (ch, "Sequence"); 
   ChoiceItem (ch, "Features");
@@ -5570,6 +6644,7 @@ extern void DOT_MakeMainViewer (DOTMainDataPtr mip, SeqAlignPtr sap)
   SeparatorItem(m2);
   i = CommandItem (m2, "Parameters ..", DOT_ParametersProc); 
   SetObjectExtra(i, vdp, NULL);
+  Disable(i);
   m3 = PulldownMenu(w, "Resize");
   i = CommandItem (m3, "Reduce", DOT_ReduceSizeProc); 
   i = CommandItem (m3, "Enlarge", DOT_EnlargeSizeProc); 
@@ -5577,144 +6652,41 @@ extern void DOT_MakeMainViewer (DOTMainDataPtr mip, SeqAlignPtr sap)
   i = CommandItem (m3, "Zoom into region..", DOT_ZoomProc); 
   SetObjectExtra(i, vdp, NULL);
   m4 = PulldownMenu (w, "Analysis"); 
-  CommandItem(m4, "Blast2Seq ..", DOT_Blast2SeqProc);
-  SetValue(ch, 1); 
-  
-
+  i = CommandItem(m4, "Blast2Seq ..", DOT_Blast2SeqProc);
+  if (!mip && alp)
+    Disable(i);
   vdp->MainWin = w;
-  vdp->mip= mip;
-  if (sap){
-    alp=(DOTAlignInfoPtr)MemNew(sizeof(DOTAlignInfo));
-    alp->sap = sap;
-    DOT_InitAlnIPtr(alp);
-    if (!DOT_FillAlignInfoPointer(alp)){
-      DOT_FreeMainInfoPtrEx(vdp->mip);
-      QuitProgram();
-    }
-    vdp->alp=alp;
-    vdp->showALIGN=TRUE;
-    SetValue(vdp->displayOpts2, 2);
-
-  }
-  DOT_InitVibData(vdp);
   DOT_CreateWindowDetails(w, vdp);
   RealizeWindow(w);
   Show (w);
   ProcessEvents();
-}
-
-
-
-/*________________________________________(DOT_AlnDisplayDiags)_____________
- 
- Purpose : Draw function for seq alignments.
-
-____________________________________________________________________*/
-
-Boolean LIBCALLBACK DOT_AlnDisplayDiags(DOTAlignInfoPtr alp)
-{
-  RecT               rcP;
-  DOTAlnPtr    PNTR    alnL;
-  DOTAlnPtr            aln;
-  DOTVibDataPtr        vdp;
-  VieweR             v;
-  SegmenT            seg1, seg2, seg3;
-  Char               buffer[50];
-  Int4               index, x, y, x2, y2, i, length;
-  Int4               q_start, q_stop, s_start, s_stop;
-  Int4               width, height, primID;
-  Int4               r_width, r_ht;
-
-
-  seg1=CreateSegment(alp->pict, 1, 0); /* diags */
-  seg2=CreateSegment(alp->pict, 2, 0); /* axis */
-  seg3=CreateSegment(alp->pict, 3, 0); /* diag labels*/
-  v=alp->v;  alp->seg1=seg1; /* diags */
-
-  GetPosition(v, &rcP); 
-  InsetRect(&rcP, 4, 4);
-
-  width = rcP.right-rcP.left;
-  height = rcP.bottom-rcP.top-2*(alp->HORZ_MARGIN*alp->scaleValue);
-
-  /* Rect Parameters */
-  rcP.left+=2*(alp->HORZ_MARGIN*alp->scaleValue);
-
-  index = alp->index;
-  alnL = alp->Alnlist;
-  
-  
-  DOT_DrawXAxis(seg2, rcP, height, alp->xstart, alp->xlen+alp->xstart, alp->scaleValue);
-  DOT_DrawYAxis(seg2, rcP, height, alp->ystart, alp->ylen+alp->ystart, alp->scaleValue, alp->Fh);
-
-  AddAttribute(seg1, COLOR_ATT, BLACK_COLOR, 0, 0, 0, 0);
-
-  for (i = 0; i<index ; i++)
-       {  
-
-         aln=alnL[i];
-         length= aln->q_stop - aln->q_start;
-         q_start = rcP.left + aln->q_start;
-         s_start = height - aln->s_start;
-         
-         q_stop = q_start + length;
-         s_stop = s_start - length;
-
-         if ( alp->showLabels )
-           {
-             x=aln->q_start;
-             y=aln->s_start;
-             sprintf(buffer, "(%ld,%ld,%ld)", (long)x, (long)y, (long)length);
-             AddLabel(seg3, q_start+7, s_start, buffer, SMALL_TEXT, 0, UPPER_RIGHT, 0);
-           }
-
-
-         AddLine(seg1, q_start, s_start, q_stop, s_stop, FALSE,(Uint2) aln->primID);
-       }
-
   return TRUE;
 }
 
 
-/*________________________________________(DOT_AlnCalculateScaling)________
-
-
-  Purpose : Calculate approximate scale for alignment display.
-
-____________________________________________________________________*/
-static void DOT_AlnCalculateScaling (DOTAlignInfoPtr alp)
-
+static void DOT_SetColor(SegmenT  seg1, Int1 code, Boolean is_autopanel)
 {
-  RecT   r, world;
-  Int4   index, r_hgt, r_wdt, w_hgt, w_wdt, scale;
-  double f1, f2;
 
-  
-
-  w_hgt=alp->xlen+(alp->xlen*0.15);
-  w_wdt=alp->ylen+(alp->ylen*0.15);
-
-  GetPosition(alp->v, &r);
-  r_hgt=r.bottom-r.top;
-  r_wdt=r.right-r.left;
-
-  f1=(float)w_hgt/r_hgt;
-  f2=(float)w_wdt/r_wdt;
-
-  scale=MAX(ceil(f1), ceil(f2));
-
-  for (index=1; index<MAXZOOMSCALEVAL; index++) 
-    {
-      if (zoomScaleVal [index]>= scale)
-        {
-          alp->scaleValue=zoomScaleVal[index];
-          alp->scaleIndex=index;
-          return;
-        }
-    }
-
-  alp->scaleValue=zoomScaleVal[MAXZOOMSCALEVAL-1];
-  alp->scaleIndex=MAXZOOMSCALEVAL-1;
+  if (!is_autopanel){
+  if (code==dotaln_BEST)
+    AddAttribute(seg1, COLOR_ATT, RED_COLOR, 0, 0, 0, 0);
+  if (code==dotaln_OUTLYING_LARGE)
+    AddAttribute(seg1, COLOR_ATT, BLUE_COLOR, 0, 0, 0, 0);
+  if (code==dotaln_OUTLYING_SMALL)
+    AddAttribute(seg1, COLOR_ATT, GREEN_COLOR, 0, 0, 0, 0);
+  if (code==dotaln_GENERAL)
+    AddAttribute(seg1, COLOR_ATT, BLACK_COLOR, 0, 0, 0, 0);
+  }
+  else{
+  if (code==dotaln_BEST)
+    Red();
+  if (code==dotaln_OUTLYING_LARGE)
+    Blue();
+  if (code==dotaln_OUTLYING_SMALL)
+    Green();
+  if (code==dotaln_GENERAL)
+    Black();
+  }
 
 }
 
@@ -5734,527 +6706,491 @@ static Boolean DOT_DeselectPrim (SegmenT seg, PrimitivE prim, Uint2 segID,Uint2 
   return TRUE;
 }
 
-static DOTAlnPtr DOT_FindAlignment(DOTAlignInfoPtr alp, Uint2 primID)
+static DOTAlnPtr DOT_FindAlignment(DOTVibDataPtr vdp2, Uint2 primID)
 {
-  DOTAlnPtr aln;
+  DOTAlnPtr aln, salp;
   DOTAlnPtr PNTR alnL;
-  Int4      index, j;
+  Int4      q_start, q_stop, s_start, s_stop;
+  Int4      width, height;
+  DOTSelDataPtr data;
+  Int4      Left,Right,Top,Bottom,left,right,top,bottom;
+  Boolean   lt_fixed=FALSE, rb_fixed=FALSE;
 
-  if (!alp->Alnlist) return NULL;
 
-  alnL=alp->Alnlist;
-  index=alp->index;
-      
-  for(j = 0; j < index; j++) 
-    {
-      aln=alnL[j];
-      if (aln->primID==primID && primID==j+1) return(aln);
-    }
-      
-  return NULL;
+  if (!vdp2->alp && !vdp2->alp->Alnlist) return NULL;
+  salp=(DOTAlnPtr)MemNew(sizeof(DOTAln));
+  salp->show=align_plot;
+  data=vdp2->data;
+  alnL=vdp2->alp->Alnlist;
+  aln=alnL[primID-1];
+  salp->sap=aln->sap;
+  salp->q_start=aln->q_start;
+  salp->q_stop=aln->q_stop;
+  salp->s_start=aln->s_start;
+  salp->s_stop=aln->s_stop;
+  salp->primID=(Uint2)primID;
+
+  return salp;
 }
 
 
-
-static void DOT_AlignClickProc(VieweR v, SegmenT seg, PoinT pt)
-{
-  DOTAlignInfoPtr  alp;
-  PrimitivE  prim;
-  Uint2       primID=0;
-  Int1        highlight;
-  DOTAlnPtr   Aln=NULL;
-  Char        title[100], str[50];
-
-  alp=(DOTAlignInfoPtr)GetObjectExtra((WindoW)ParentWindow(v));
-/*   ExploreSegment (seg, (Pointer)&v, DOT_DeselectPrim);  */
-  if (FindSegPrim(v, pt, NULL, NULL, &prim)){
-     GetPrimitiveIDs(prim, NULL, NULL, NULL, &primID);
-     if (prim_prev!=NULL){
-       GetPrimDrawAttribute (prim_prev, NULL, NULL, NULL, NULL, NULL, &highlight);
-       if (highlight != PLAIN_PRIMITIVE) 
-         HighlightPrimitive (v, seg, prim_prev, PLAIN_PRIMITIVE);
-     }
-     if (primID!=0)
-        {
-          Aln=DOT_FindAlignment(alp, primID);
-          if (!Aln)
-            goto end;
-          else{
-            MemSet((Pointer)title, '\0', sizeof(title));
-            StringCat(title, " X-axis[");
-            sprintf(str, "%ld", (long)Aln->q_start);
-            StringCat(title, str);
-            StringCat(title, "-");
-            sprintf(str, "%ld", (long)Aln->q_stop);
-            StringCat(title, str);
-            StringCat(title, "]     Y-axis[");
-            sprintf(str, "%ld", (long)Aln->s_start);
-            StringCat(title, str);
-            StringCat(title, "-");
-            sprintf(str, "%ld", (long)Aln->s_stop);
-            StringCat(title, str);
-            StringCat(title, "]");
-            SetTitle(alp->Infopanel, title);
-            GetPrimDrawAttribute (prim, NULL, NULL, NULL, NULL, NULL, &highlight);
-            if (highlight == PLAIN_PRIMITIVE) 
-              HighlightPrimitive (v, seg, prim, FRAME_PRIMITIVE);
-
-            prim_prev=prim;
-          }
-        }
-      else
-        {
-        end:
-          SetTitle(alp->Infopanel, "");
-          prim_prev=NULL;
-        }
-  }
-      
-}
-/*________________________________________(DOT_PopulateAlnViewer)_____________
-
-
-  Purpose : Calls draw function for alignment display.
-
-____________________________________________________________________*/
-static Boolean DOT_PopulateAlnViewer(DOTAlignInfoPtr alp)
-{
-  Int4       scale, index;
-  Char       str[16];
-  DOTSelDataPtr  data;
-  BaR        vsb;
-
-  
-  ResetViewer(alp->v);
-  alp->pict=DeletePicture(alp->pict);
-  alp->pict=CreatePicture();
-   
-  if (DOT_AlnDisplayDiags(alp)==FALSE)
-    return FALSE;
-
-  /* initialize scale value*/
-  
-  if (alp->do_scale) 
-    {
-
-      for (index=1; index<MAXZOOMSCALEVAL; index++) 
-        {
-          sprintf (str, "%ld", (long) (zoomScaleVal [index]));
-          PopupItem (alp->scale, str);
-        }
-      SetValue (alp->scale, alp->scaleIndex);
-      alp->do_scale = FALSE;
-
-    }
-
-  SafeShow(alp->scale);
-
-  AttachPicture(alp->v, alp->pict, INT4_MIN, INT4_MAX, LOWER_RIGHT,  alp->scaleValue , alp->scaleValue , NULL);
-  SetViewerProcs (alp->v, DOT_AlignClickProc, NULL, NULL, NULL);
-  ArrowCursor();
-  return TRUE;
-}
-
-/*________________________________________(DOT_AlnChangeScale)_____________
-
-
-  Purpose : Change scale function for alignment function.
-
-____________________________________________________________________*/
-static void DOT_AlnChangeScale (PopuP p)
-
-{
-  DOTAlignInfoPtr   alp;
-  Int4       index;
-
-  alp = (DOTAlignInfoPtr) GetObjectExtra (p);
-  if (alp != NULL) 
-    {
-      index = GetValue (alp->scale);
-      if (index <= MAXZOOMSCALEVAL && index > 0) 
-        {
-          alp->scaleValue = zoomScaleVal [index];
-        } 
-      else 
-        {
-          alp->scaleValue = 1;
-        }
-
-      DOT_PopulateAlnViewer (alp);
-    }
-}
-
-
-/*________________________________________(DOT_CloseAlnWindow)_____________
-
-
-  Purpose : Close function alignment window.
-
-____________________________________________________________________*/
-static void  DOT_QuitAlnWindow (IteM i)
-{
-  WindoW  alnw;
-  DOTAlignInfoPtr alp;
-
-  alnw=ParentWindow(i);
-
-  alp=(DOTAlignInfoPtr)GetObjectExtra(alnw);
-  DOT_ExitAlign(alp);
-  alnw=Remove (alnw);
-  QuitProgram();
-}
-/*________________________________________(DOT_ResizeAlnViewer)_____________
-
-
-  Purpose : Resize function for alignment window.
-
-____________________________________________________________________*/
-
-static void DOT_ResizeAlnWindow(WindoW w)
-{
-
-  DOTAlignInfoPtr alp;
-  RecT     rcDlg,rcV, rcVsb, rcHsb;
-  Int2     height, width, gap, vsbWidth, hsbHeight, lmargin;
-  BaR      vsb, hsb;
-  WindoW   temport;
-  
-  
-
-  alp=(DOTAlignInfoPtr)GetObjectExtra(w);
-  temport=SavePort(w);
-  ObjectRect(w,&rcDlg);
-  width= rcDlg.right-rcDlg.left;
-  height= rcDlg.bottom-rcDlg.top;
-  
-  SafeHide(alp->v);
-  SafeHide(alp->Infopanel);
-  Update();
-
-  vsb = GetSlateVScrollBar ((SlatE) alp->v);
-  hsb = GetSlateHScrollBar ((SlatE) alp->v);
-
-  GetPosition(alp->v,&rcV);
-  GetPosition(vsb,&rcVsb);
-  GetPosition(hsb,&rcHsb);
-  
-  gap=2;
-  lmargin=10;
-  
-  vsbWidth=rcVsb.right-rcVsb.left;
-  hsbHeight=rcHsb.bottom-rcHsb.top;
-  
-  /*new sizes for the viewers*/	
-  rcV.left=lmargin;
-  rcV.right=width-gap-vsbWidth-rcV.left;
-  rcV.bottom=height-gap-hsbHeight;
-  
-  
-  /*set the new sizes*/
-  SetPosition(alp->v,&rcV);
-  AdjustPrnt (alp->v, &rcV, FALSE);
-
-  if (Visible (alp->v) && AllParentsVisible (alp->v)) 
-    {
-      ViewerWasResized(alp->v);
-    }
-
-  if (alp->do_scale!=TRUE){
-    DOT_PopulateAlnViewer (alp);
-  }
-  SafeShow(alp->v);
-  SafeShow(alp->Infopanel);
-  ArrowCursor();
-  RestorePort(temport);
-  Update();
-
-}
-
-/*________________________________________(DOT_BuildAlnViewer)_____________
-
-
-  Purpose : Creates alignment window.
-
-____________________________________________________________________*/
-
-Boolean DOT_BuildAlnViewer(DOTAlignInfoPtr alp)
-{
-  WindoW    alnw;
-  GrouP     s, s2;
-  PrompT    pr1; 
-  Int2      Margins; 
-  MenU      menu; 
-  BaR       hsb;
-  Char      zoombuf[]={"Decrease scale to zoom in .."};
-  Char      coordbuf[]={"                                       "};
-  Char      title1[50], title2[50], text[100];
-
-
-
-  if (!alp) return(FALSE);
-  MemSet((Pointer)text, '\0', sizeof(text));
-  StringCat(text, " X-axis:");
-  SeqIdWrite(alp->sip, title1, PRINTID_FASTA_SHORT, 41);
-  StringCat(text, title1);
-  StringCat(text, "     Y-axis:");
-  SeqIdWrite(alp->sip->next, title2, PRINTID_FASTA_SHORT, 41);
-  StringCat(text, title2);
-  
-	Margins=10*stdCharWidth;
-	alnw = DocumentWindow(Margins,Margins ,-10, -10, alp->title, StdCloseWindowProc, DOT_ResizeAlnWindow);
-   menu = PulldownMenu (alnw, "Display");
-   CommandItem (menu, "Quit", DOT_QuitAlnWindow); 
-
-	if (!alnw) return(FALSE);
- 
-   s = HiddenGroup (alnw,0, 4, NULL);
-
-   StaticPrompt (s, text,StringWidth(text)+10 , popupMenuHeight, programFont, 'l');
-   alp->Infopanel= StaticPrompt (s, coordbuf,StringWidth(coordbuf)+10 , 0, programFont, 'l');
-
-   s2 = HiddenGroup (s,3 ,0, NULL);
-   SetGroupSpacing(s2, 3,0);
-   pr1 = StaticPrompt (s2, zoombuf, StringWidth(zoombuf)+10 , popupMenuHeight, programFont, 'l');
-#ifdef WIN_MAC
-   alp->scale = PopupList (s2, TRUE, DOT_AlnChangeScale);
-#endif
-
-#ifndef WIN_MAC
-   alp->scale = PopupList (s2, FALSE, DOT_AlnChangeScale);
-#endif
-
-   SetObjectExtra (alp->scale, alp, NULL);
- 	/* viewer */
-   alp->w=alnw;
-	alp->v=CreateViewer(s,600,500,TRUE,TRUE);
-	alp->pict=CreatePicture();
-   
-   SetObjectExtra (alnw, (Pointer) alp, NULL);
-   RealizeWindow(alnw);
-   DOT_ResizeAlnWindow(alnw);
-
-   /* calculate scale values */
-   DOT_AlnCalculateScaling(alp);
-
-	/*populate the viewer : seq aligns*/
-   if (DOT_PopulateAlnViewer(alp)==FALSE)
-     goto end;
-
-   return TRUE;	
-
- end:
-   
-   ErrPostEx (SEV_WARNING, 0, 0, "%s", "BuildAlnViewer failed");
-   return FALSE;
-
-}
-
-
-
-/*____________________________________________(Start_AlignPlot)_____________
-
-
-  Purpose : Start function for Alignment Display.
-
-____________________________________________________________________*/
-Boolean Start_AlignPlot (DOTAlignInfoPtr alp)
-{
-  
-  DOT_InitAlnIPtr(alp);
-  if (!DOT_GetSeqAln (alp))
-     {
-       alp->pict=NULL;
-       DOT_ExitAlign(alp);
-       return FALSE;
-     }
-  if (!DOT_BuildAlnViewer(alp))
-    return FALSE;
-  return TRUE;
-}
-/*____________________________________________(Run_DiagPlot)_____________
+/*____________________________________________(DOT_AlignPlotGivenSeqAlign)_____________
 
 
   Purpose : Run alignment display given seqalignpointer
 
 ____________________________________________________________________*/
-extern void DOT_AlignPlotGivenSeqAlign(SeqAlignPtr sap)
+NLM_EXTERN Boolean DOT_AlignPlotGivenSeqAlign(SeqAlignPtr sap)
 {
   DOTAlignInfoPtr alp;
 
-  alp=(DOTAlignInfoPtr)MemNew(sizeof(DOTAlignInfo));
+  alp=DOT_AlignInfoNew();
   alp->sap = sap;
-  DOT_InitAlnIPtr(alp);
+  alp->entityID = sap->idx.entityID;
   if (!DOT_FillAlignInfoPointer(alp)){
     MemFree(alp);
-    QuitProgram();
+    return FALSE;
   }
-  if (!DOT_BuildAlnViewer(alp))
-    return;
-  Show(alp->w);
-  ProcessEvents();
-  return;
+
+  if (!DOT_MakeMainViewer(NULL, alp))
+    return FALSE;
+  return TRUE;
 }
+/*____________________________________________(DOT_AlignPlotGivenScp)_____________
 
-/*____________________________________________(Run_DiagPlot)_____________
 
-
-  Purpose : Registered function for Alignment Display.
+  Purpose : Run alignment display given seqalignpointer
 
 ____________________________________________________________________*/
-Int2 LIBCALLBACK Run_DiagPlot (Pointer data)
+NLM_EXTERN Boolean DOT_AlignPlotGivenScp(SCP_ResultPtr scp)
 {
-  DOTAlignInfoPtr          alp;
-   OMProcControlPtr  ompcp;
-   OMUserDataPtr     omudp;
-   Uint2             userkey;
-   SeqAlignPtr       sap;
+  DOTAlignInfoPtr alp;
 
-   sap = NULL;
-   ompcp = (OMProcControlPtr)data;
-   if (ompcp == NULL || ompcp->proc == NULL)
-   {
-       ErrPostEx(SEV_ERROR, 0, 0, "Align- Run_DiagPlot with NULL ompcp");
-       return OM_MSG_RET_ERROR;
+  alp=DOT_AlignInfoNew();
+  alp->sap=NULL;
+  alp->entityID=scp->saps[0]->idx.entityID;
+  alp->itemID=1;
+  if (!DOT_FillFromScp(alp, scp)){
+    MemFree(alp);
+    return FALSE;
+/*     QuitProgram(); */
+  }
+  if (!DOT_MakeMainViewer(NULL, alp))
+    return FALSE;
+  return TRUE;
+}
+
+/*_______________________________(DOT_RegDiagsDisplay)_____
+
+
+  Purpose : Registered function for Dot Diag display.
+
+_________________________________________________________*/
+
+NLM_EXTERN Int2 LIBCALLBACK DOT_RegDiagsDisplay(Pointer data)
+{
+  OMProcControlPtr    ompcp = NULL;
+  SeqAlignPtr         sap = NULL;
+  
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) {
+    ErrPostEx (SEV_ERROR, 0, 0, "Data NULL [1]");
+    return OM_MSG_RET_ERROR;
+  }
+  
+  switch (ompcp->input_itemtype) {
+  case OBJ_SEQALIGN :
+    sap = (SeqAlignPtr) ompcp->input_data;
+    break;
+  case 0 :
+    return OM_MSG_RET_ERROR;
+  default :
+    return OM_MSG_RET_ERROR;
+  }
+  
+  if (sap == NULL) {
+    ErrPostEx (SEV_ERROR, 0, 0, "Input Data is NULL or is not a seqalign");
+    return OM_MSG_RET_ERROR;
+  }
+
+  if (!DOT_AlignPlotGivenSeqAlign(sap))
+    return OM_MSG_RET_ERROR;
+  else 
+    return OM_MSG_RET_DONE;
+
+}
+
+
+/*_______________________________(Scoop Functions)_____
+
+
+  Purpose : Run Blast 2 Seqs and sort results into high scoring, large outlying and small outlying alignments.
+
+_________________________________________________________*/
+
+
+NLM_EXTERN SCP_ResultPtr SCP_CompareOrderOrganizeBioseqs(BioseqPtr bsp1, BioseqPtr bsp2, SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, Int4 wordsize, Int4 hitlist_size)
+{
+   Int4                 i;
+   BLAST_OptionsBlkPtr  options;
+   SeqAlignPtr          sap;
+   SeqAlignPtr          sap_head;
+   SeqAlignPtr          sap_prev;
+   SCP_ResultPtr        scp;
+   SCP_ResultPtr        scp_large;
+   SCP_ResultPtr        scp_small;
+   Int4                 start;
+   Int4                 stop;
+   SeqAnnotPtr          sanp;
+   SeqEntryPtr          sep;
+   Uint2                entityID=0, itemID=0;
+
+   if (bsp1 == NULL || bsp2 == NULL)
+      return NULL;
+   options = BLASTOptionNew(progname, FALSE);
+   options->filter_string = StringSave("m L;R");
+   options->expect_value = 10;
+   /* Fasika's changes */
+
+   options->hitlist_size = hitlist_size;
+   options->wordsize = wordsize;
+   if (slp1 !=NULL && slp2 !=NULL){
+     sap = BlastTwoSequencesByLoc(slp1, slp2, progname, options);
    }
-   if (ompcp->input_itemtype != OBJ_SEQALIGN)
-   {
-      ErrPostEx(SEV_ERROR, 0, 0, "Align- Must start Run_DiagPlot with a seqalign");
-      return OM_MSG_RET_ERROR;
+   else {
+     sap = BlastTwoSequences(bsp1, bsp2, progname, options);
    }
-   sap = ompcp->input_data;
-   if (sap == NULL)
+
+   sep = SeqMgrGetSeqEntryForData (bsp1);
+   entityID = ObjMgrGetEntityIDForChoice(sep);
+   sanp = SeqAnnotForSeqAlign (sap);
+   if (sanp == NULL) return NULL;
+   entityID =DOT_AttachSeqAnnotToSeqEntry(entityID, sanp, bsp1);
+   SeqMgrIndexFeatures (entityID, (Pointer)bsp1);
+   itemID =GatherItemIDByData(entityID, OBJ_BIOSEQ, (Pointer)bsp1);
+   /* end of Fasika's changes */
+
+   AlnMgr2IndexLite(sap);
+   scp = (SCP_ResultPtr)MemNew(sizeof(SCP_Result));
+   scp->len1=bsp1->length;
+   scp->len2=bsp2->length;
+   SCP_OrganizeAlnsInSet(sap, SCP_FUZZ, scp, 1);
+   BLASTOptionDelete(options);
+   fprintf(stdout, "Sequence 1 length: %d\n", bsp1->length);
+   fprintf(stdout, "Sequence 2 length: %d\n", bsp2->length);
+   SCP_GetNthSeqRangeInSASet(scp->saps, scp->numsaps, 1, &start, &stop);
+   fprintf(stdout, "The best alignments cover from %d to %d of sequence 1\n", start, stop);
+   scp_large = scp_small = NULL;
+   if (scp->numlarge_outliers > 0)
    {
-      ErrPostEx(SEV_ERROR, 0, 0, "Align- NULL seqalign in Run_DiagPlot");
-      return OM_MSG_RET_ERROR;
-   }
-   if (sap->saip == NULL)
-   {
-      if (!AlnMgrIndexSeqAlign(sap))
+      sap_head = sap_prev = scp->large_outliers[0];
+      for (i=1; i<scp->numlarge_outliers; i++)
       {
-         ErrPostEx(SEV_ERROR, 0, 0, "Align- Can't index input seqalign");
-         return OM_MSG_RET_ERROR;
+         sap_prev->next = scp->large_outliers[i];
+         sap_prev = sap_prev->next;
+      }
+      sap = SeqAlignNew();
+      sap->segtype = SAS_DISC;
+      sap->segs = (Pointer)(sap_head);
+      AlnMgr2IndexLite(sap);
+      scp_large = (SCP_ResultPtr)MemNew(sizeof(SCP_Result));
+      SCP_OrganizeAlnsInSet(sap, SCP_FUZZ, scp_large, 1);
+      SCP_GetNthSeqRangeInSASet(scp_large->saps, scp_large->numsaps, 1, &start, &stop);
+      fprintf(stdout, "Large repeats cover from %d to %d of sequence 1\n", start, stop);
+   }
+   if (scp->numsmall_outliers > 0)
+   {
+      sap_head = sap_prev = scp->small_outliers[0];
+      for (i=1; i<scp->numsmall_outliers; i++)
+      {
+         sap_prev->next = scp->small_outliers[i];
+         sap_prev = sap_prev->next;
+      }
+      sap = SeqAlignNew();
+      sap->segtype = SAS_DISC;
+      sap->segs = (Pointer)(sap_head);
+      AlnMgr2IndexLite(sap);
+      scp_small = (SCP_ResultPtr)MemNew(sizeof(SCP_Result));
+      SCP_OrganizeAlnsInSet(sap, SCP_FUZZ, scp_small, 1);
+      SCP_GetNthSeqRangeInSASet(scp_small->saps, scp_small->numsaps, 1, &start, &stop);
+      fprintf(stdout, "Small repeats cover from %d to %d of sequence 1\n", start, stop);
+   }
+   return scp;
+}
+
+extern void SCP_OrganizeAlnsInSet(SeqAlignPtr sap, Int4 fuzz, SCP_ResultPtr scp, Int4 n)
+{
+   AMAlignIndex2Ptr  amaip;
+   Boolean          conflict;
+   Int4             curr;
+   Int4             i;
+   Int4             indextype;
+   SeqAlignPtr      large=NULL;
+   SeqAlignPtr      large_outliers=NULL;
+   SeqAlignPtr      keep=NULL;
+   SeqAlignPtr      keepers=NULL;
+   SeqAlignPtr      salp=NULL;
+   SeqAlignPtr      salp_head=NULL;
+   SeqAlignPtr      salp_prev=NULL;
+   SeqAlignPtr      small=NULL;
+   SeqAlignPtr      small_outliers=NULL;
+   SCP_nPtr         PNTR spin=NULL;
+   Int4             start;
+   Int4             stop;
+   Int4             strand;
+
+   if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
+      return;
+   if (n > 2)
+      return;
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   indextype = amaip->alnstyle;
+   /* make sure that everything is on the plus strand of the nth sequence */
+   for (i=0; i<amaip->numsaps; i++)
+   {
+      salp = amaip->saps[i];
+      AssignIDsInEntity(1, OBJ_SEQALIGN, (Pointer)salp);
+      strand = AlnMgr2GetNthStrand(salp, n);
+      if (strand == Seq_strand_minus)
+      {
+         SAIndex2Free2(salp->saip);
+         salp->saip = NULL;
+         salp->next = NULL;
+         SeqAlignListReverseStrand(salp);
+         AlnMgr2IndexSingleChildSeqAlign(salp);
       }
    }
-   userkey = OMGetNextUserKey();
-   omudp = ObjMgrAddUserData(sap->idx.entityID, ompcp->proc->procid, OMPROC_VIEW, userkey);
-   alp=(DOTAlignInfoPtr)MemNew(sizeof(DOTAlignInfo));
-   omudp->userdata.ptrvalue = (Pointer)alp;
-   alp->sap = sap;
-   if (!Start_AlignPlot(alp))
-      return OM_MSG_RET_ERROR;
-   Show(alp->w);
-   return OM_MSG_RET_OK;
+   /* spin structure: n1 = which alignment, n2 = start on first row, n3 =
+      alignment length on 1st row, n4 = start on 2nd row, n5 = 2nd strand */
+   spin = (SCP_nPtr PNTR)MemNew((amaip->numsaps)*sizeof(SCP_nPtr));
+   for (i=0; i<amaip->numsaps; i++)
+   {
+      spin[i] = (SCP_nPtr)MemNew(sizeof(SCP_n));
+      salp = amaip->saps[i];
+      spin[i]->n1 = i;
+      AlnMgr2GetNthSeqRangeInSA(salp, n, &start, &stop);
+      spin[i]->n3 = stop - start;
+      spin[i]->n2 = start;
+      AlnMgr2GetNthSeqRangeInSA(salp, 3-n, &start, &stop);
+      spin[i]->n4 = start;
+      strand = AlnMgr2GetNthStrand(salp, 3-n);
+      if (strand == Seq_strand_minus)
+         spin[i]->n5 = -1;
+      else
+         spin[i]->n5 = 1;
+   }
+   HeapSort((Pointer)spin, (size_t)(amaip->numsaps), sizeof(SCP_nPtr), SCP_CompareSpins);
+   strand = spin[0]->n5;
+   for (i=1; i<amaip->numsaps; i++)
+   {
+      if (spin[i]->n5 != strand)
+      {
+         salp = amaip->saps[spin[i]->n1];
+         salp->next = NULL;
+         SeqAlignFree(salp);
+         amaip->saps[spin[i]->n1] = NULL;
+         spin[i]->n1 = -1;
+      }
+   }
+   large_outliers = small_outliers = keepers = NULL;
+   scp->numsaps++;
+   salp = amaip->saps[spin[0]->n1];
+   salp->next = NULL;
+   keepers = keep = salp;
+   for (curr=0; curr<amaip->numsaps; curr++)
+   {
+      if (spin[curr]->n1 != -1)
+      {
+         for (i=curr+1; i<amaip->numsaps; i++)
+         {
+            if (spin[i]->n1 != -1)
+            {
+               conflict = FALSE;
+            /* check first for conflict on first row */
+               if (spin[i]->n2 + spin[i]->n3 - 1 > spin[curr]->n2 + fuzz)
+               {
+                  if (spin[i]->n2 < spin[curr]->n2)
+                     conflict = TRUE;
+               }
+               if (spin[i]->n2 < spin[curr]->n2 + spin[curr]->n3 - 1 - fuzz)
+               {
+                  if (spin[i]->n2 + spin[i]->n3 - 1 > spin[curr]->n2 + spin[curr]->n3 - 1)
+                     conflict = TRUE;
+               }
+               if (spin[i]->n2 >= spin[curr]->n2)
+               {
+                  if (spin[i]->n2 + spin[i]->n3 - 1 <= spin[curr]->n2 + spin[curr]->n3 - 1)
+                     conflict = TRUE;
+               }
+            /* then check for conflict and consistency on second row */
+               if (spin[i]->n2 + spin[i]->n3 - 1 < spin[curr]->n2 + fuzz)
+               {
+                  if (strand == 1)
+                  {
+                     if (spin[i]->n4 + spin[i]->n3 - 1 > spin[curr]->n4 + fuzz)
+                        conflict = TRUE;
+                  } else if (strand == -1)
+                  {
+                     if (spin[curr]->n4 + spin[curr]->n3 - 1 - fuzz > spin[i]->n4)
+                        conflict = TRUE;
+                  }
+               } else
+               {
+                  if (strand == 1)
+                  {
+                     if (spin[i]->n4 < spin[curr]->n4 + spin[curr]->n3 - fuzz)
+                        conflict = TRUE;
+                  } else if (strand == -1)
+                  {
+                     if (spin[i]->n4 + spin[i]->n3 - 1 - fuzz > spin[curr]->n4)
+                        conflict = TRUE;
+                  }
+               }
+               if (conflict)
+               {
+                  salp = amaip->saps[spin[i]->n1];
+                  salp->next = NULL;
+                  if (spin[i]->n3 >= SCP_LARGE)
+                  {
+                     scp->numlarge_outliers++;
+                     if (large_outliers != NULL)
+                     {
+                        large->next = salp;
+                        large = salp;
+                     } else
+                        large_outliers = large = salp;
+                  } else
+                  {
+                     scp->numsmall_outliers++;
+                     if (small_outliers != NULL)
+                     {
+                        small->next = salp;
+                        small = salp;
+                     } else
+                        small_outliers = small = salp;
+                  }
+                  amaip->saps[spin[i]->n1] = NULL;
+                  spin[i]->n1 = -1;
+               }
+            }
+         }
+      }
+   }
+   for (i=1; i<amaip->numsaps; i++)
+   {
+      if (spin[i]->n1 != -1)
+      {
+         scp->numsaps++;
+         salp = amaip->saps[spin[i]->n1];
+         salp->next = NULL;
+         if (keepers == NULL)
+            keepers = keep = salp;
+         else
+         {
+            keep->next = salp;
+            keep = salp;
+         }
+      }
+   }
+   scp->small_outliers = (SeqAlignPtr PNTR)MemNew((scp->numsmall_outliers)*sizeof(SeqAlignPtr));
+   small = small_outliers;
+   i = 0;
+   while (small != NULL)
+   {
+      scp->small_outliers[i] = small;
+      i++;
+      small = small->next;
+   }
+   scp->large_outliers = (SeqAlignPtr PNTR)MemNew((scp->numlarge_outliers)*sizeof(SeqAlignPtr));
+   large = large_outliers;
+   i = 0;
+   while (large != NULL)
+   {
+      scp->large_outliers[i] = large;
+      i++;
+      large = large->next;
+   }
+   scp->saps = (SeqAlignPtr PNTR)MemNew((scp->numsaps)*sizeof(SeqAlignPtr));
+   keep = keepers;
+   i = 0;
+   while (keep != NULL)
+   {
+      scp->saps[i] = keep;
+      i++;
+      keep = keep->next;
+   }
 
+   salp_head = salp_prev = NULL;
+   for (i=0; i<amaip->numsaps; i++)
+   {
+      MemFree(spin[i]);
+      if (amaip->saps[i] != NULL)
+      {
+         amaip->saps[i]->next = NULL;
+         if (salp_prev != NULL)
+         {
+            salp_prev->next = amaip->saps[i];
+            salp_prev = salp_prev->next;
+         } else
+            salp_head = salp_prev = amaip->saps[i];
+      }
+   }
+   sap->segs = (Pointer)(salp_head);
+   AMAlignIndexFree(sap->saip);
+   sap->saip = NULL;
+   AlnMgrIndexLite(sap);
+   MemFree(spin);
 }
 
-
-/*____________________________________________(DOT_StartDotPlot)_____________
-
-
-  Purpose : Start up Dot Plot, called by Registered function Run_DotPlot.
-
-____________________________________________________________________*/
-Boolean DOT_StartDotPlot (BioseqPtr qbsp, BioseqPtr sbsp)
+static int LIBCALLBACK SCP_CompareSpins(VoidPtr ptr1, VoidPtr ptr2)
 {
+   SCP_nPtr  spin1;
+   SCP_nPtr  spin2;
 
-  DOTMainDataPtr mip;
- 
-
-
-  if (!(mip = (DOTMainDataPtr) MemNew (sizeof(DOTMainData)))) return FALSE;
-
-  DOT_CreateAndStore(mip, qbsp, sbsp, 0, qbsp->length, 0, sbsp->length, 0, 0, TRUE);
-
-  DOT_MakeMainViewer(mip, NULL);
-
-  return TRUE;
-
+   spin1 = *((SCP_nPtr PNTR) ptr1);
+   spin2 = *((SCP_nPtr PNTR) ptr2);
+   if (spin1 == NULL || spin2 == NULL)
+      return 0;
+   if (spin1->n3 > spin2->n3)
+      return -1;
+   if (spin1->n3 < spin2->n3)
+      return 1;
+   if (spin1->n2 < spin2->n2)
+      return -1;
+   if (spin1->n2 > spin2->n2)
+      return 1;
+   return 0;
 }
 
-
-/*____________________________________________(DOT_StartDotPlotWithParams)_____________
-
-
-  Purpose : Start up Dot Plot with a user input parameters window.
-
-____________________________________________________________________*/
-
-
-
-static void DOT_StartDotPlotWithParams (DOTVibDataPtr vdp, BioseqPtr qbsp, BioseqPtr sbsp)
+static void SCP_GetNthSeqRangeInSASet(SeqAlignPtr PNTR saparray, Int4 numsaps, Int4 n, Int4Ptr start, Int4Ptr stop)
 {
-
-  if (vdp==NULL) return;
-
-  vdp->mip=DOT_InitMainInfo(vdp->mip, qbsp, sbsp, 8, 10000,0, qbsp->length-1, 0, sbsp->length-1);
-
-  DOT_SetupParamsWindow(vdp, TRUE, vdp->mip->is_na);
-/*   ProcessEvents(); */
-
-}
-
-
-/*____________________________________________(Run_DotPlot)_____________
-
-
-  Purpose : Registered function for Dot Plot display.
-
-____________________________________________________________________*/
-Int2 LIBCALLBACK Run_DotPlot (Pointer data)
-{
-/*   DOTMainDataPtr       mip; */
-  BioseqPtr         qbsp, sbsp;
-  SeqEntryPtr       sep;
-  SeqAlignPtr         sap;
-  OMProcControlPtr  ompcp;
-  OMUserDataPtr     omudp;
-  SelStructPtr      ssp;
-  Uint2             userkey;
-
-
-  ompcp = (OMProcControlPtr) data;
-
-  /* checks */
-
-  if (ompcp == NULL || ompcp->proc == NULL) 
-    {
-      ErrPostEx(SEV_ERROR, 0, 0, "DOT- Run_DotPlot with NULL ompcp");
-      return OM_MSG_RET_ERROR;
-    }
+   Int4         i;
+   SeqAlignPtr  salp;
+   Int4         start_tmp;
+   Int4         stop_tmp;
+   Int4         tmp1;
+   Int4         tmp2;
   
-  if (ompcp->input_itemtype == OBJ_BIOSEQ)
-    {
-      
-      /* get data */
-      ssp = ObjMgrGetSelected ();
-
-      if (ssp == NULL || ssp->itemtype != OBJ_BIOSEQ || ssp->next == NULL || ssp->next->itemtype != OBJ_BIOSEQ)
-        {
-
-          ErrPostEx(SEV_ERROR, 0, 0, "DOT- Must select two bioseqs");
-          return OM_MSG_RET_ERROR;
-        }
-
-      userkey = OMGetNextUserKey(); 
-      omudp = ObjMgrAddUserData(0, ompcp->proc->procid, OMPROC_EDIT, userkey);
-
-  /* get the bsp from the passed in data */
-      
-      if (!(qbsp = (BioseqPtr)GetPointerForIDs (ssp->entityID, ssp->itemID, OBJ_BIOSEQ)) || (sbsp = (BioseqPtr)GetPointerForIDs (ssp->next->entityID, ssp->next->itemID, OBJ_BIOSEQ))) 
-        {
-          Message(MSG_ERROR, "DOT- Error in retrieving bioseqs");
-          return OM_MSG_RET_ERROR;
-        }
-      
-      DOT_StartDotPlot (qbsp, sbsp);
-      /* you can also call DOT_StartDotPlotWithParams(DOTMainDataPtr mip, BioseqPtr qbsp, BioseqPtr sbsp); */
-      
-    }
-  else
-    {
-      ErrPostEx(SEV_ERROR, 0, 0, "DOT- Must select item");
-      return OM_MSG_RET_ERROR;
-    }
-
-  return OM_MSG_RET_OK;
+   start_tmp = stop_tmp = -1;
+   for (i=0; i<numsaps; i++)
+   {
+      salp = saparray[i];
+      if (n > salp->dim)
+      {
+         if (start)
+            *start = -1;
+         if (stop)
+            *stop = -1;
+         return;
+      }
+      AlnMgrGetNthSeqRangeInSA(salp, n, &tmp1, &tmp2);
+      if (tmp1 < start_tmp || start_tmp == -1)
+         start_tmp = tmp1;
+      if (tmp2 > stop_tmp)
+         stop_tmp = tmp2;
+   }
+   if (start)
+      *start = start_tmp;
+   if (stop)
+      *stop = stop_tmp;
 }

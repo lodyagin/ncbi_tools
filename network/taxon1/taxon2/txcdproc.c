@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/15/97
 *
-* $Revision: 1.8 $
+* $Revision: 1.12 $
 *
 * File Description: 
 *       API for Taxonomy service
@@ -44,6 +44,18 @@
 *
 * RCS Modification History:
 * $Log: txcdproc.c,v $
+* Revision 1.12  2001/09/28 15:53:15  soussov
+* tax1e_maxTaxId() added
+*
+* Revision 1.11  2001/09/18 16:55:38  soussov
+* switching to the new ASN
+*
+* Revision 1.10  2001/09/18 14:42:26  soussov
+* Fixes error processing in case of reconnection
+*
+* Revision 1.9  2001/09/17 22:27:34  soussov
+* ErrPost call added if nothing was read from the service
+*
 * Revision 1.8  2001/06/13 21:23:19  soussov
 * makes purify happy
 *
@@ -143,7 +155,7 @@ static Taxon1RespPtr NetTaxArchReadAsn(void)
 
     taxbp = Taxon1RespAsnRead(asnin, NULL);
 
-    if (ErrFetch(&err))
+    if ((taxbp == NULL) || ErrFetch(&err))
     {
         ErrPost (CTX_UNKNOWN, 1, "Null message read from server");
     }
@@ -648,14 +660,14 @@ Int4 tax_getIdByName(char* sname, char* qualif, Int1 id)
     return tax_id;
 }
 
-static Taxon1InfoPtr s_getlineage(Int4 tax_id)
+static Taxon1NamePtr s_getlineage(Int4 tax_id)
 {
     Taxon1ReqPtr taxrp;
     Taxon1RespPtr taxbp;
-    Taxon1InfoPtr tnp;
+    Taxon1NamePtr tnp;
 
     if((taxrp= ValNodeNew(NULL)) == NULL) return NULL;
-    taxrp->choice= Taxon1Req_getlineage;
+    taxrp->choice= Taxon1Req_taxalineage;
     taxrp->data.intvalue= tax_id;
     Taxon1ReqAsnWrite(taxrp, asnout, NULL);
     AsnIoReset(asnout);
@@ -663,7 +675,7 @@ static Taxon1InfoPtr s_getlineage(Int4 tax_id)
 
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
-    if(taxbp->choice != Taxon1Resp_getlineage) {
+    if(taxbp->choice != Taxon1Resp_taxalineage) {
 	report_service_error("txc_getLineage", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
@@ -677,12 +689,12 @@ static Taxon1InfoPtr s_getlineage(Int4 tax_id)
 }
 
 
-static Taxon1InfoPtr getlineage(Int4 tax_id)
+static Taxon1NamePtr getlineage(Int4 tax_id)
 {
     Int4 i;
     short erract;
     ErrDesc err;
-    Taxon1InfoPtr tnp = NULL;
+    Taxon1NamePtr tnp = NULL;
 
     if(tax_track) tax_time1= clock();
     for (i= TAXARCH_SERV_RETRIES; i >= 0; --i) {
@@ -709,8 +721,8 @@ static Taxon1InfoPtr getlineage(Int4 tax_id)
 TXC_TreeNodePtr* txc_getLineage(Int4 lin_id, Int4Ptr lin_len)
 {
     TXC_TreeNodePtr* lin;
-    Int4 n= 0, i, k;
-    Taxon1InfoPtr tnp, tnp_list= (lin_id > 0)? getlineage(lin_id) : NULL;
+    Int4 n= 0, i, k, k1;
+    Taxon1NamePtr tnp, tnp_list= (lin_id > 0)? getlineage(lin_id) : NULL;
 
     if(lin_len != NULL) *lin_len= 0;
 
@@ -722,7 +734,7 @@ TXC_TreeNodePtr* txc_getLineage(Int4 lin_id, Int4Ptr lin_len)
 	/* no memory, just free tnp_list */
 	for(i= 0; i < n; i++) {
 	    tnp= tnp_list->next;
-	    Taxon1InfoFree(tnp_list);
+	    Taxon1NameFree(tnp_list);
 	    tnp_list= tnp;
 	}
 	return NULL;
@@ -730,13 +742,18 @@ TXC_TreeNodePtr* txc_getLineage(Int4 lin_id, Int4Ptr lin_len)
 
     for(i= 0; i < n; i++) {
 	tnp= tnp_list->next;
-	k= StringLen(tnp_list->sval);
-	if((lin[i]= MemNew(k+10)) != NULL) {
-	    lin[i]->tax_id= tnp_list->ival1;
-	    lin[i]->flags= tnp_list->ival2;
-	    StringCpy(lin[i]->node_label, tnp_list->sval);
+	k= StringLen(tnp_list->oname);
+	k1= tnp_list->uname? (StringLen(tnp_list->uname) + 2) : 0;
+	if((lin[i]= MemNew(k+k1+10)) != NULL) {
+	    lin[i]->tax_id= tnp_list->taxid;
+	    lin[i]->flags= tnp_list->cde | TXC_STHIDE;
+	    memcpy(lin[i]->node_label, tnp_list->oname, k+1);
+	    if(k1) {
+		memcpy(lin[i]->node_label + (k+1), tnp_list->uname, k1 - 1);
+		lin[i]->flags^= TXC_STHIDE;
+	    }
 	}
-	Taxon1InfoFree(tnp_list);
+	Taxon1NameFree(tnp_list);
 	tnp_list= tnp;
     }
 	    
@@ -744,14 +761,14 @@ TXC_TreeNodePtr* txc_getLineage(Int4 lin_id, Int4Ptr lin_len)
     return lin;
 }
 		
-static Taxon1InfoPtr s_getchildren(Int4 tax_id)
+static Taxon1NamePtr s_getchildren(Int4 tax_id)
 {
     Taxon1ReqPtr taxrp;
     Taxon1RespPtr taxbp;
-    Taxon1InfoPtr tnp;
+    Taxon1NamePtr tnp;
 
     if((taxrp= ValNodeNew(NULL)) == NULL) return NULL;
-    taxrp->choice= Taxon1Req_getchildren;
+    taxrp->choice= Taxon1Req_taxachildren;
     taxrp->data.intvalue= tax_id;
     Taxon1ReqAsnWrite(taxrp, asnout, NULL);
     AsnIoReset(asnout);
@@ -759,7 +776,7 @@ static Taxon1InfoPtr s_getchildren(Int4 tax_id)
 
     if((taxbp= NetTaxArchReadAsn()) == NULL) return NULL;
     
-    if(taxbp->choice != Taxon1Resp_getchildren) {
+    if(taxbp->choice != Taxon1Resp_taxachildren) {
 	report_service_error("txc_getChildren", taxbp);
 	Taxon1RespFree(taxbp);
 	return NULL;
@@ -773,12 +790,12 @@ static Taxon1InfoPtr s_getchildren(Int4 tax_id)
 }
 
 
-static Taxon1InfoPtr getchildren(Int4 tax_id)
+static Taxon1NamePtr getchildren(Int4 tax_id)
 {
     Int4 i;
     short erract;
     ErrDesc err;
-    Taxon1InfoPtr tnp = NULL;
+    Taxon1NamePtr tnp = NULL;
 
     for (i= TAXARCH_SERV_RETRIES; i >= 0; --i) {
         ErrGetOpts(&erract, NULL);
@@ -799,8 +816,8 @@ static Taxon1InfoPtr getchildren(Int4 tax_id)
 TXC_TreeNodePtr* txc_getChildren(Int4 node_id, Int4Ptr nof_children)
 {
     TXC_TreeNodePtr* lin;
-    Int4 n= 0, i, k;
-    Taxon1InfoPtr tnp, tnp_list= getchildren(node_id);
+    Int4 n= 0, i, k, k1;
+    Taxon1NamePtr tnp, tnp_list= getchildren(node_id);
 
     if(nof_children != NULL) *nof_children= 0;
 
@@ -812,7 +829,7 @@ TXC_TreeNodePtr* txc_getChildren(Int4 node_id, Int4Ptr nof_children)
 	/* no memory, just free tnp_list */
 	for(i= 0; i < n; i++) {
 	    tnp= tnp_list->next;
-	    Taxon1InfoFree(tnp_list);
+	    Taxon1NameFree(tnp_list);
 	    tnp_list= tnp;
 	}
 	return NULL;
@@ -820,13 +837,27 @@ TXC_TreeNodePtr* txc_getChildren(Int4 node_id, Int4Ptr nof_children)
 
     for(i= 0; i < n; i++) {
 	tnp= tnp_list->next;
-	k= ((tnp_list->ival2 & TXC_SUFFIX) != 0)? 0 : StringLen(tnp_list->sval);
-	if((lin[i]= MemNew(k+10)) != NULL) {
-	    lin[i]->tax_id= tnp_list->ival1;
-	    lin[i]->flags= tnp_list->ival2;
-	    if(k > 0) StringCpy(lin[i]->node_label, tnp_list->sval);
+	if(tnp_list->cde == 0) {
+	    k= 0;
+	    k1= 0;
 	}
-	Taxon1InfoFree(tnp_list);
+	else {
+	    k= StringLen(tnp_list->oname);
+	    k1= tnp_list->uname? (StringLen(tnp_list->uname) + 2) : 0;
+	}
+	if((lin[i]= MemNew(k+k1+10)) != NULL) {
+	    lin[i]->tax_id= tnp_list->taxid;
+	    lin[i]->flags= k? (tnp_list->cde | TXC_STHIDE) : 0;
+	    if(k) {
+		memcpy(lin[i]->node_label, tnp_list->oname, k+1);
+		if(k1) {
+		    memcpy(lin[i]->node_label + (k+1), tnp_list->uname, k1 - 1);
+		    lin[i]->flags^= TXC_STHIDE;
+		}
+	    }
+	    
+	}
+	Taxon1NameFree(tnp_list);
 	tnp_list= tnp;
     }
 	    
@@ -1149,16 +1180,20 @@ static Boolean GenericReestablishNet(CharPtr svcName, Boolean showErrs)
 
     if (!myNetInit())
     {
-        sprintf (buf, "%s get failed; re-contacting dispatcher", svcName);
-        MonitorStrValue(mon, buf);
+	if(mon) {
+	    sprintf (buf, "%s get failed; re-contacting dispatcher", svcName);
+	    MonitorStrValue(mon, buf);
+	}
         retval = FALSE;
         if (ForceNetInit())
         { /* successfully established contact w/dispatcher */
-            sprintf (buf, "%s get failed; re-requesting %s service",
-                     svcName, svcName);
-            MonitorStrValue(mon, buf);
-            retval = myNetInit();
-        }
+	    if(mon) {
+		sprintf (buf, "%s get failed; re-requesting %s service",
+			 svcName, svcName);
+		MonitorStrValue(mon, buf);
+	    }
+	    retval = myNetInit();
+	}
         else {
             ErrPost(CTX_UNKNOWN, 1, "Unable to re-contact dispatcher");
             if (showErrs) {
@@ -1167,7 +1202,7 @@ static Boolean GenericReestablishNet(CharPtr svcName, Boolean showErrs)
         }
     }
 
-    MonitorFree(mon);
+    if(mon) MonitorFree(mon);
 
     if (! retval )
     {
@@ -1368,4 +1403,53 @@ static Int4 getTaxId4GI(Int4 gi)
 Int4 tax_getTaxId4GI(Int4 gi)
 {
     return getTaxId4GI(gi);
+}
+
+static Int4 s_maxTaxId()
+{
+    Taxon1ReqPtr taxrp;
+    Taxon1RespPtr taxbp;
+    Int4 tax_id;
+
+    if((taxrp= ValNodeNew(NULL)) == NULL) return 0;
+    taxrp->choice= Taxon1Req_maxtaxid;
+    Taxon1ReqAsnWrite(taxrp, asnout, NULL);
+    AsnIoReset(asnout);
+    Taxon1ReqFree(taxrp);
+
+    if((taxbp= NetTaxArchReadAsn()) == NULL) return 0;
+    
+    if(taxbp->choice != Taxon1Resp_maxtaxid) {
+	report_service_error("tax1e_maxTaxId", taxbp);
+	Taxon1RespFree(taxbp);
+	return 0;
+    }
+
+    tax_id= taxbp->data.intvalue;
+    Taxon1RespFree(taxbp);
+
+    return tax_id;
+}
+
+Int4 tax1e_maxTaxId()
+{
+    Int4 i;
+    short erract;
+    ErrDesc err;
+    Int4 tax_id= 0;
+
+    for (i= TAXARCH_SERV_RETRIES; i >= 0; --i) {
+        ErrGetOpts(&erract, NULL);
+        ErrSetOpts(ERR_IGNORE, 0);
+        ErrFetch(&err);
+
+        tax_id = s_maxTaxId();
+
+        ErrSetOpts(erract, 0);
+        if (!ErrFetch(&err))  break; /* success */
+	
+	if(!ReestablishNetTaxArch()) break;
+    }
+
+    return tax_id;
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *		system dependent header
@@ -44,6 +44,9 @@
 * replace ncbilcl.r6k with ncbilcl.ibm  cpsosa@us.ibm.com
 *
 * $Log: ncbilcl.ibm,v $
+* Revision 6.2  2001/09/17 20:14:49  lavr
+* Added macro: HAVE_SOCKLEN_T
+*
 * Revision 6.1  2001/06/15 16:52:11  beloslyu
 * AIX support
 *
@@ -176,5 +179,10 @@ added Log line
 /*      Macros Defining Limits                                          */
 /*----------------------------------------------------------------------*/
 #define MAXALLOC	0x40000000 /* Largest permissible memory request */
+
+/*----------------------------------------------------------------------*/
+/*      Miscelaneous                                                    */
+/*----------------------------------------------------------------------*/
+#define HAVE_SOCKLEN_T  1
 
 #endif

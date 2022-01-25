@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.h,v $
+* Revision 6.11  2001/11/15 18:34:52  kans
+* added GetNextDescriptorUnindexed, requires AssignIDsInEntity be called first
+*
 * Revision 6.10  2000/01/06 00:54:50  kans
 * added useSeqMgrIndexes field to GatherScope and InternalGCC structures, will implement indexed feature table exploration tomorrow
 *
@@ -614,6 +617,19 @@ NLM_EXTERN Boolean DeleteMarkedObjects (Uint2 entityID, Uint2 datatype, Pointer 
 *****************************************************************************/
 
 NLM_EXTERN Pointer LIBCALL GetPointerForIDs (Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+
+/*****************************************************************************
+*
+*   GetNextDescriptorUnindexed (bsp, choice, curr)
+*   	After AssignIDsInEntity, gets next descriptor up the set hierarchy.
+*
+*****************************************************************************/
+
+NLM_EXTERN SeqDescrPtr GetNextDescriptorUnindexed (
+  BioseqPtr bsp,
+  Uint1 choice,
+  SeqDescrPtr curr
+);
 
 
 #ifdef __cplusplus

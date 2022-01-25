@@ -1,5 +1,5 @@
 These binaries were compiled from the source distribution found at
-ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbi.tar.gz
+ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.gz
 using the Mac OS X Developer Tools with the following steps.
 
 launch the terminal application
@@ -91,6 +91,9 @@ diff before/ncbi/corelib/ncbilcl.fbd after/ncbi/corelib/ncbilcl.dwn
 > *       version for Darwin 1.2.*
 43,45c43,45
 < * $Log: readme.macosx,v $
+< * Revision 6.2  2001/12/12 20:37:50  beloslyu
+< * change the name of ftp site to ftp.ncbi.nih.gov
+< *
 < * Revision 6.1  2001/01/19 20:31:18  kans
 < * initial checkin
 < *
@@ -98,6 +101,9 @@ diff before/ncbi/corelib/ncbilcl.fbd after/ncbi/corelib/ncbilcl.dwn
 < * port to FreeBSD 4.1
 ---
 > * $Log: readme.macosx,v $
+> * Revision 6.2  2001/12/12 20:37:50  beloslyu
+> * change the name of ftp site to ftp.ncbi.nih.gov
+> *
 > * Revision 6.1  2001/01/19 20:31:18  kans
 > * initial checkin
 > *
@@ -121,9 +127,9 @@ diff before/ncbi/corelib/ncbilcl.fbd after/ncbi/corelib/ncbilcl.dwn
 
 diff before/ncbi/platform/freebsd.ncbi.mk after/ncbi/platform/darwin.ncbi.mk
 2c2
-< # $Id: readme.macosx,v 6.1 2001/01/19 20:31:18 kans Exp $
+< # $Id: readme.macosx,v 6.2 2001/12/12 20:37:50 beloslyu Exp $
 ---
-> # $Id: readme.macosx,v 6.1 2001/01/19 20:31:18 kans Exp $
+> # $Id: readme.macosx,v 6.2 2001/12/12 20:37:50 beloslyu Exp $
 4c4,5
 < # That platform is not supported. Tested on FreeBSD 4.1-RELEASE
 ---

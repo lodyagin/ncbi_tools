@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.13  2001/11/05 20:25:34  madden
+* Fix (by Karl Sirotkin) for underscores (e.g., struct_BlastDefLine to struct_Blast_def_line)
+*
 * Revision 6.12  2001/06/28 02:14:40  juran
 * Fixed log message.
 * Testing how new MacCVS Pro handles multi-line comments.
@@ -132,7 +135,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.12 $";
+static char     RCS_Rev [] = "$Revision: 6.13 $";
 
 /*******************
  * Interator structure
@@ -1637,7 +1640,7 @@ AsnCode_SETOF_base_or_user (AsnIterPtr iter, Int2 base_or_user)
 	    Char local_buf[60];
 
 	    AsnCodeCleanName (atpb -> type->name,
-			      local_buf, CLEAN_FOR_OBJ_NAME, iter -> acip -> maxDefineLength);
+			      local_buf, CLEAN_FOR_SLOT, iter -> acip -> maxDefineLength);
 	    sprintf (iter->buf, "typedef struct struct_%s %s;\n",
 		     local_buf, iter->stack->outer->obj_name);
 	    AsnIterTakeBuf (iter);

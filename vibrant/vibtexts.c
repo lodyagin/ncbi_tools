@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.10  2001/09/10 17:58:28  bazhin
+* Removed odd lines from SetTextCursorBlinkRate() function.
+*
+* Revision 6.9  2001/09/10 17:34:10  bazhin
+* Added function Nlm_SetTextCursorBlinkRate(Nlm_TexT t, Nlm_Int2 msec).
+*
 * Revision 6.8  2001/05/14 20:29:04  juran
 * Redesign Mac clipboard support.
 *
@@ -3921,3 +3927,19 @@ extern void Nlm_InitTexts (void)
   scrollTextProcs->loseFocus = Nlm_TextLoseFocus;
 }
 
+extern void Nlm_SetTextCursorBlinkRate(Nlm_TexT t, Nlm_Int2 msec)
+{
+#ifdef WIN_MOTIF
+    Nlm_TextTool h;
+    Arg          args[2];
+
+    if(t == NULL || msec < 0)
+        return;
+    h = Nlm_GetTextHandle(t);
+    if(h == NULL)
+        return;
+    XtSetArg(args[0], XmNblinkRate, msec);
+    XtSetValues(h, args, 1);
+#endif
+    return;
+}

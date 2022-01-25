@@ -1,4 +1,4 @@
-/* $Id: posit2.c,v 6.6 2001/05/04 19:16:00 shavirin Exp $
+/* $Id: posit2.c,v 6.7 2001/11/14 13:57:13 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,12 +32,15 @@ Author: Alejandro Schaffer
 
 Contents: utilities for makematrices.
 
-$Revision: 6.6 $
+$Revision: 6.7 $
 
 *****************************************************************************/
 
 /*
  * $Log: posit2.c,v $
+ * Revision 6.7  2001/11/14 13:57:13  madden
+ * Add warning if (maxScore - minScore) >= scoreRange
+ *
  * Revision 6.6  2001/05/04 19:16:00  shavirin
  * Corrected error reporting functions.
  *
@@ -96,6 +99,9 @@ static BLAST_ScoreFreqPtr fillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_F
     }
     return_sfp->obs_min = minScore;
     return_sfp->obs_max = maxScore;
+    if ((maxScore - minScore) >= scoreRange) {
+      ErrPostEx(SEV_WARNING, 0, 0, "maxScore is %d, minScore is %d difference is >= allowed score range %d", maxScore, minScore, scoreRange);
+    }
     for (i = 0; i < scoreRange; i++)
         scoreArray[i] = 0.0;
     return_sfp->sprob = &(scoreArray[-minScore]); /*center around 0*/

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.24 $
+* $Revision: 1.36 $
 *
 * File Description: 
 *
@@ -41,6 +41,11 @@
 
 #include <ent2api.h>
 #include <urlquery.h>
+
+#ifdef OS_UNIX
+#include <sys/times.h>
+#include <limits.h>
+#endif
 
 #define ENTREZ_TOOL_PROPERTY "Entrez2Tool"
 #define ENTREZ_TOOL_VERSION 1
@@ -230,8 +235,18 @@ NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
   CONN             conn;
   Entrez2ReplyPtr  e2ry;
   CharPtr          tempcookie = NULL;
+#ifdef OS_UNIX
+  Boolean          logtimes;
+  clock_t          starttime;
+  clock_t          stoptime;
+  struct tms       timebuf;
+#endif
 
   if (e2rq == NULL) return NULL;
+
+#ifdef OS_UNIX
+  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+#endif
 
   conn = EntrezOpenConnection ();
 
@@ -251,9 +266,23 @@ NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
 
   QUERY_SendQuery (conn);
 
+#ifdef OS_UNIX
+  if (logtimes) {
+    starttime = times (&timebuf);
+  }
+#endif
+
   e2ry = EntrezWaitForReply (conn);
 
-  if (e2ry != NULL && e2cookie == NULL && e2ry->cookie != NULL) {
+#ifdef OS_UNIX
+  if (logtimes) {
+    stoptime = times (&timebuf);
+    printf ("EntrezWaitForReply %ld\n", (long) (stoptime - starttime));
+  }
+#endif
+
+  if (e2ry != NULL && e2ry->cookie != NULL) {
+    e2cookie = MemFree (e2cookie);
     e2cookie = StringSave (e2ry->cookie);
   }
 
@@ -318,7 +347,8 @@ NLM_EXTERN Entrez2ReplyPtr EntrezReadReply (
     QUERY_AsnIoConnClose (aicp);
   }
 
-  if (e2ry != NULL && e2cookie == NULL && e2ry->cookie != NULL) {
+  if (e2ry != NULL && e2ry->cookie != NULL) {
+    e2cookie = MemFree (e2cookie);
     e2cookie = StringSave (e2ry->cookie);
   }
 
@@ -348,6 +378,8 @@ static Entrez2RequestPtr CreateRequest (
   vnp->next = NULL;
 
   e2rq->request = vnp;
+
+  e2rq->cookie = StringSaveNoNull (e2cookie);
 
   return e2rq;
 }
@@ -465,8 +497,8 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
   if (e2rq == NULL) return NULL;
 
   if (! StringHasNoText (query_string)) {
-    EntrezAddToBooleanRequest (e2rq, query_string, 0, NULL, NULL, 0, 0,
-                               NULL, NULL, TRUE, TRUE);
+    EntrezAddToBooleanRequest (e2rq, query_string, 0, NULL, NULL, NULL,
+                               0, 0, NULL, NULL, TRUE, TRUE);
   }
 
   return e2rq;
@@ -478,6 +510,7 @@ NLM_EXTERN void EntrezAddToBooleanRequest (
   Int4 op,
   CharPtr field,
   CharPtr term,
+  CharPtr key,
   Int4 uid,
   Int4 num,
   Int4Ptr uids,
@@ -519,6 +552,9 @@ NLM_EXTERN void EntrezAddToBooleanRequest (
     e2bt->do_not_translate = do_not_translate;
 
     ValNodeAddPointer (&(e2be->exp), Entrez2BooleanElement_term, (Pointer) e2bt);
+
+  } else if (! StringHasNoText (key)) {
+    ValNodeCopyStr (&(e2be->exp), Entrez2BooleanElement_key, key);
 
   } else {
 
@@ -840,5 +876,338 @@ NLM_EXTERN Uint4 EntrezGetUIDforSeqIdString (
   Entrez2BooleanReplyFree (e2br);
 
   return uid;
+}
+
+/* result validation function */
+
+static int LIBCALLBACK SortVnpByStr (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  CharPtr     str1;
+  CharPtr     str2;
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      str1 = (CharPtr) vnp1->data.ptrvalue;
+      str2 = (CharPtr) vnp2->data.ptrvalue;
+      if (str1 != NULL && str2 != NULL) {
+        return StringICmp (str1, str2);
+      }
+    }
+  }
+  return 0;
+}
+NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
+  Entrez2InfoPtr e2ip,
+  ValNodePtr PNTR head
+)
+
+{
+  Char                       buf [128];
+  Char                       ch;
+  CharPtr                    db;
+  Int2                       dbcount;
+  CharPtr                    dsf;
+  Int2                       dsfcount;
+  Entrez2DbInfoPtr           e2db;
+  Entrez2DocsumFieldInfoPtr  e2dsp;
+  Entrez2FieldInfoPtr        e2fip;
+  Entrez2LinkInfoPtr         e2lip;
+  CharPtr                    fld;
+  Int2                       fldcount;
+  Boolean                    hasLowCase;
+  CharPtr                    last;
+  size_t                     len1;
+  size_t                     len2;
+  CharPtr                    lnk;
+  Int2                       lnkcount;
+  ValNodePtr                 menuhead = NULL;
+  Boolean                    notAlphNum;
+  Boolean                    rsult = TRUE;
+  CharPtr                    str;
+  Char                       tmpdb [32];
+  Char                       tmpdsf [32];
+  Char                       tmpfld [32];
+  Char                       tmplnk [32];
+  ValNodePtr                 vnp;
+
+  if (head != NULL) {
+    *head = NULL;
+  }
+  if (e2ip == NULL) return FALSE;
+
+  if (e2ip->db_count < 1 || e2ip->db_info == NULL) {
+    sprintf (buf, "Entrez2 has no databases");
+    ValNodeCopyStr (head, 0, buf);
+    return FALSE;
+  }
+
+  dbcount = 0;
+  for (e2db = e2ip->db_info; e2db != NULL; e2db = e2db->next) {
+    dbcount++;
+
+    db = e2db->db_name;
+    if (StringHasNoText (db)) {
+      rsult = FALSE;
+      if (StringHasNoText (e2db->db_menu)) {
+        sprintf (tmpdb, "%d", (int) dbcount);
+        db = tmpdb;
+        sprintf (buf, "Database %d has no name", (int) dbcount);
+        ValNodeCopyStr (head, 0, buf);
+      } else {
+        db = e2db->db_menu;
+        sprintf (buf, "Database %s (%d) has no name", db, (int) dbcount);
+        ValNodeCopyStr (head, 0, buf);
+      }
+    }
+
+    if (StringHasNoText (e2db->db_menu)) {
+      sprintf (buf, "Database %s has no menu name", db);
+      ValNodeCopyStr (head, 0, buf);
+      rsult = FALSE;
+    }
+    if (StringHasNoText (e2db->db_descr)) {
+      sprintf (buf, "Database %s has no description", db);
+      ValNodeCopyStr (head, 0, buf);
+      rsult = FALSE;
+    }
+
+    if (e2db->doc_count < 1) {
+      sprintf (buf, "Database %s has no documents", db);
+      ValNodeCopyStr (head, 0, buf);
+      rsult = FALSE;
+    }
+    if (e2db->field_count < 1 || e2db->fields == NULL) {
+      sprintf (buf, "Database %s has no fields", db);
+      ValNodeCopyStr (head, 0, buf);
+      rsult = FALSE;
+    }
+    if (e2db->link_count < 1 || e2db->links == NULL) {
+      if (StringICmp (db, "books") != 0) {
+        sprintf (buf, "Database %s has no links", db);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+    }
+    if (e2db->docsum_field_count < 1 || e2db->docsum_fields == NULL) {
+      sprintf (buf, "Database %s has no docsum fields", db);
+      ValNodeCopyStr (head, 0, buf);
+      rsult = FALSE;
+    }
+
+    fldcount = 0;
+    for (e2fip = e2db->fields; e2fip != NULL; e2fip = e2fip->next) {
+      fldcount++;
+
+      fld = e2fip->field_name;
+      if (StringHasNoText (fld)) {
+        rsult = FALSE;
+        if (StringHasNoText (e2fip->field_menu)) {
+          sprintf (tmpfld, "%d", (int) dbcount);
+          fld = tmpfld;
+          sprintf (buf, "Database %s field %d has no name", db, (int) fldcount);
+          ValNodeCopyStr (head, 0, buf);
+        } else {
+          fld = e2fip->field_menu;
+          sprintf (buf, "Database %s field %s (%d) has no name", db, fld, (int) fldcount);
+          ValNodeCopyStr (head, 0, buf);
+        }
+      } else {
+        if (StringCmp (fld, "SLEN") == 0 ||
+            StringCmp (fld, "MLWT") == 0 ||
+            StringCmp (fld, "PMID") == 0 ||
+            StringCmp (fld, "LLID") == 0 ||
+            StringCmp (fld, "UID") == 0) {
+          if (! e2fip->is_numerical) {
+            sprintf (buf, "Database %s field %s does not have is_numerical set", db, fld);
+            ValNodeCopyStr (head, 0, buf);
+            rsult = FALSE;
+          }
+        }
+      }
+      if (StringLen (fld) > 4) {
+        sprintf (buf, "Database %s field %s name is > 4 characters long", db, fld);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+
+      hasLowCase = FALSE;
+      notAlphNum = FALSE;
+      str = fld;
+      ch = *str;
+      while (ch != '\0') {
+        if (IS_LOWER (ch)) {
+          hasLowCase = TRUE;
+        } else if (! (IS_ALPHANUM (ch))) {
+          notAlphNum = TRUE;
+        }
+        str++;
+        ch = *str;
+      }
+      if (hasLowCase) {
+        sprintf (buf, "Database %s field %s has lower case letters", db, fld);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+      if (notAlphNum) {
+        sprintf (buf, "Database %s field %s has non-alphanumeric characters", db, fld);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+
+      if (StringHasNoText (e2fip->field_menu)) {
+        sprintf (buf, "Database %s field %s has no menu name", db, fld);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      } else {
+        ValNodeCopyStr (&menuhead, 0, e2fip->field_menu);
+        if (StringStr (e2fip->field_menu, "Date") != NULL) {
+          if (! e2fip->is_date) {
+            sprintf (buf, "Database %s field %s does not have is_date set", db, fld);
+            ValNodeCopyStr (head, 0, buf);
+            rsult = FALSE;
+          }
+        } else if (StringICmp (e2fip->field_menu, "Mesh") == 0) {
+          sprintf (buf, "Database %s field-menu %s should be MeSH Terms", db, e2fip->field_menu);
+          ValNodeCopyStr (head, 0, buf);
+          rsult = FALSE;
+        }
+      }
+      if (StringHasNoText (e2fip->field_descr)) {
+        sprintf (buf, "Database %s field %s has no description", db, fld);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+    }
+    if (e2db->field_count != fldcount) {
+      sprintf (buf, "Database %s field count %ld does not match fldcount %d", db, (long) e2db->field_count, (int) fldcount);
+      ValNodeCopyStr (head, 0, buf);
+      rsult = FALSE;
+    }
+
+    lnkcount = 0;
+    for (e2lip = e2db->links; e2lip != NULL; e2lip = e2lip->next) {
+      lnkcount++;
+
+      lnk = e2lip->link_name;
+      if (StringHasNoText (lnk)) {
+        rsult = FALSE;
+        if (StringHasNoText (e2lip->link_menu)) {
+          sprintf (tmplnk, "%d", (int) lnkcount);
+          lnk = tmplnk;
+          sprintf (buf, "Database %s link %d has no name", db, (int) lnkcount);
+          ValNodeCopyStr (head, 0, buf);
+        } else {
+          lnk = e2lip->link_menu;
+          sprintf (buf, "Database %s link %s (%d) has no name", db, lnk, (int) lnkcount);
+          ValNodeCopyStr (head, 0, buf);
+        }
+      }
+
+      if (StringHasNoText (e2lip->link_menu)) {
+        sprintf (buf, "Database %s link %s has no menu name", db, lnk);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+      if (StringHasNoText (e2lip->link_descr)) {
+        sprintf (buf, "Database %s link %s has no description", db, lnk);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+      if (StringHasNoText (e2lip->db_to)) {
+        sprintf (buf, "Database %s link %s has no target database", db, lnk);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+    }
+    if (e2db->link_count != lnkcount) {
+      sprintf (buf, "Database %s link count %ld does not match lnkcount %d", db, (long) e2db->link_count, (int) lnkcount);
+      ValNodeCopyStr (head, 0, buf);
+      rsult = FALSE;
+    }
+
+    dsfcount = 0;
+    for (e2dsp = e2db->docsum_fields; e2dsp != NULL; e2dsp = e2dsp->next) {
+      dsfcount++;
+
+      dsf = e2dsp->field_name;
+      if (StringHasNoText (fld)) {
+        rsult = FALSE;
+        if (StringHasNoText (e2dsp->field_description)) {
+          sprintf (tmpdsf, "%d", (int) dsfcount);
+          dsf = tmpdsf;
+          sprintf (buf, "Database %s link %d has no name", db, (int) dsfcount);
+          ValNodeCopyStr (head, 0, buf);
+        } else {
+          dsf = e2dsp->field_description;
+          sprintf (buf, "Database %s link %s (%d) has no name", db, dsf, (int) dsfcount);
+          ValNodeCopyStr (head, 0, buf);
+        }
+      }
+
+      if (StringHasNoText (e2dsp->field_description)) {
+        sprintf (buf, "Database %s docsum %s has no description", db, dsf);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+      if (e2dsp->field_type < 0) {
+        sprintf (buf, "Database %s docsum %s field type not indicated", db, dsf);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+
+    }
+    if (e2db->docsum_field_count != dsfcount) {
+      sprintf (buf, "Database %s docsum count %ld does not match lnkcount %d", db, (long) e2db->docsum_field_count, (int) dsfcount);
+      ValNodeCopyStr (head, 0, buf);
+      rsult = FALSE;
+    }
+  }
+
+  if (e2ip->db_count != dbcount) {
+    sprintf (buf, "Database count %ld does not match dbcount %d", (long) e2ip->db_count, (int) dbcount);
+    ValNodeCopyStr (head, 0, buf);
+    rsult = FALSE;
+  }
+
+  menuhead = ValNodeSort (menuhead, SortVnpByStr);
+  last = NULL;
+  for (vnp = menuhead; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    if (last != NULL) {
+      if (StringICmp (last, str) == 0 && StringCmp (last, str) != 0) {
+        sprintf (buf, "Menu names %s and %s differ in capitalization", last, str);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      } else {
+        len1 = StringLen (last);
+        len2 = StringLen (str);
+        if (len1 < len2) {
+          if (StringNICmp (last, str, len1) == 0) {
+            if (StringICmp (last, "Gene Map") == 0 && StringICmp (str, "Gene Map Disorder") == 0) {
+            } else if (StringICmp (last, "Title") == 0 && StringICmp (str, "Title/Abstract") == 0) {
+            } else {
+              sprintf (buf, "Menu names %s and %s may be unintended variants", last, str);
+              ValNodeCopyStr (head, 0, buf);
+              rsult = FALSE;
+            }
+          }
+        }
+      }
+    } else if (StringICmp (str, "Title Word") == 0) {
+      sprintf (buf, "Menu name Title Word should be replaced by Title");
+      ValNodeCopyStr (head, 0, buf);
+      rsult = FALSE;
+    }
+    last = str;
+  }
+  ValNodeFreeData (menuhead);
+
+  return rsult;
 }
 

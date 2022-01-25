@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.10 at Jun 14, 2001  4:37 PM
+*    Generated using ASNCODE Revision: 6.12 at Oct 17, 2001  2:17 PM
 *
 **************************************************/
 
@@ -178,6 +178,25 @@ NLM_EXTERN GlobalIdPtr LIBCALL GlobalIdNew PROTO (( void ));
 NLM_EXTERN GlobalIdPtr LIBCALL GlobalIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL GlobalIdAsnWrite PROTO (( GlobalIdPtr , AsnIoPtr, AsnTypePtr));
 
+
+
+/**************************************************
+*
+*    CddRepeat
+*
+**************************************************/
+typedef struct struct_Cdd_repeat {
+   Int4   count;
+   ValNodePtr   location;
+   Int4   avglen;
+} CddRepeat, PNTR CddRepeatPtr;
+
+
+NLM_EXTERN CddRepeatPtr LIBCALL CddRepeatFree PROTO ((CddRepeatPtr ));
+NLM_EXTERN CddRepeatPtr LIBCALL CddRepeatNew PROTO (( void ));
+NLM_EXTERN CddRepeatPtr LIBCALL CddRepeatAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddRepeatAsnWrite PROTO (( CddRepeatPtr , AsnIoPtr, AsnTypePtr));
+
 typedef ValNodePtr CddDescrPtr;
 typedef ValNode CddDescr;
 #define CddDescr_othername 1
@@ -191,6 +210,7 @@ typedef ValNode CddDescr;
 #define CddDescr_update_date 9
 #define CddDescr_scrapbook 10
 #define CddDescr_source_id 11
+#define CddDescr_repeats 12
 
 
 NLM_EXTERN CddDescrPtr LIBCALL CddDescrFree PROTO ((CddDescrPtr ));

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.45 $
+* $Revision: 6.51 $
 *
 * File Description: 
 *
@@ -47,6 +47,24 @@
 *
 =======
 * $Log: asn2ff4.c,v $
+* Revision 6.51  2001/10/02 16:13:15  yaschenk
+* GetSeqIdForGI returns SeqIdDup() - needs freeing
+*
+* Revision 6.50  2001/09/06 19:15:19  yaschenk
+* removing memory leak - AsnIoMemCopy is done twice
+*
+* Revision 6.49  2001/09/05 23:31:34  tatiana
+*  synonym is added to Genestruct with choice 1
+*
+* Revision 6.48  2001/08/07 16:49:41  kans
+* use NUM_SEQID, added third party annotation SeqIDs to one more place
+*
+* Revision 6.47  2001/08/07 15:51:08  kans
+* use NUM_SEQID, added third party annotation seqids
+*
+* Revision 6.46  2001/07/18 14:50:13  kans
+* gather features with gsc.useSeqMgrIndexes if genpept, raw, indexing requested, and IndexedGetDescrForDiv to speed up finding division
+*
 * Revision 6.45  2001/06/26 20:41:16  kans
 * FlatLocPoint as last resort prints gi|#####
 *
@@ -412,33 +430,36 @@ NLM_EXTERN CharPtr FlatLocHalfCaret
 NLM_EXTERN Boolean FlatLocPoint (SeqIdPtr pointIdPtr, SeqIdPtr this_sidp, CharPtr piecebuf, Int4 point, IntFuzzPtr pointfuzzPtr)
 /* FLATLOC_CONTEXT_LOC is removed 08.31.95 */
 {
-	SeqIdPtr use_id;
+	SeqIdPtr use_id,free_seqid=NULL;
 	Char buf_space[MAX_CHAR_LOCATION +1], halfbuf_space[MAX_CHAR_LOCATION +1];
 	CharPtr buf, halfbuf, temp;
 	static Boolean order_initialized = FALSE;
-	static Uint1 order[18];
+	static Uint1 order[NUM_SEQID];
 	ObjectIdPtr ob;
 	
 if ( ! order_initialized){
 	int dex;
-	for (dex=0; dex < 18; dex ++)
+	for (dex=0; dex < NUM_SEQID; dex ++)
 		order[dex] = 255;
 	order_initialized = TRUE;
 		order[SEQID_GENBANK ] = 1;
 		order[SEQID_EMBL ] = 2;
 		order[SEQID_DDBJ ] = 3;
 		order[SEQID_LOCAL ] =4;
-		order[SEQID_GI ] =13;
-		order[SEQID_GIBBSQ ] =6;
-		order[SEQID_GIBBMT ] =7;
-		order[SEQID_PRF ] =8;
-		order[SEQID_PDB ] =9;
-		order[SEQID_PIR ] =10;
-		order[SEQID_SWISSPROT ] =11;
-		order[SEQID_PATENT ] =12;
 		order[SEQID_OTHER ] =5;
-		order[SEQID_GENERAL ] =14;
-		order[SEQID_GIIM ] =15;
+		order[SEQID_TPG ] = 6;
+		order[SEQID_TPE ] = 7;
+		order[SEQID_TPD ] = 8;
+		order[SEQID_GIBBSQ ] =9;
+		order[SEQID_GIBBMT ] =10;
+		order[SEQID_PRF ] =11;
+		order[SEQID_PDB ] =12;
+		order[SEQID_PIR ] =13;
+		order[SEQID_SWISSPROT ] =14;
+		order[SEQID_PATENT ] =15;
+		order[SEQID_GI ] =16;
+		order[SEQID_GENERAL ] =17;
+		order[SEQID_GIIM ] =18;
 }
 
 	buf = buf_space;
@@ -450,7 +471,7 @@ if ( ! order_initialized){
 	if (pointIdPtr) {
 		if ( ! SeqIdIn ( pointIdPtr, this_sidp)){
 			if (pointIdPtr->choice == SEQID_GI) {
-				use_id = GetSeqIdForGI(pointIdPtr->data.intvalue);
+				free_seqid = use_id = GetSeqIdForGI(pointIdPtr->data.intvalue); /** returns SeqIdDup **/
 			} else {
 				use_id = pointIdPtr;
 			}
@@ -480,6 +501,7 @@ if ( ! order_initialized){
 	FlatLocHalf(halfbuf, point+1, pointfuzzPtr);
 	temp = StringMove(temp, halfbuf);
 	StringMove(piecebuf, buf);
+	if(free_seqid) SeqIdFree(free_seqid);
 	return TRUE;
 }
 
@@ -491,28 +513,31 @@ NLM_EXTERN Boolean FlatLocCaret
 	CharPtr buf, halfbuf, temp;
 	SeqIdPtr use_id;
 	static Boolean order_initialized = FALSE;
-	static Uint1 order[18];
+	static Uint1 order[NUM_SEQID];
 	
 if ( ! order_initialized){
 	int dex;
-	for (dex=0; dex < 18; dex ++)
+	for (dex=0; dex < NUM_SEQID; dex ++)
 		order[dex] = 255;
 	order_initialized = TRUE;
 		order[SEQID_GENBANK ] = 1;
 		order[SEQID_EMBL ] = 2;
 		order[SEQID_DDBJ ] = 3;
 		order[SEQID_LOCAL ] =4;
-		order[SEQID_GI ] =13;
-		order[SEQID_GIBBSQ ] =6;
-		order[SEQID_GIBBMT ] =7;
-		order[SEQID_PRF ] =8;
-		order[SEQID_PDB ] =9;
-		order[SEQID_PIR ] =10;
-		order[SEQID_SWISSPROT ] =11;
-		order[SEQID_PATENT ] =12;
 		order[SEQID_OTHER ] =5;
-		order[SEQID_GENERAL ] =14;
-		order[SEQID_GIIM ] =15;
+		order[SEQID_TPG ] = 6;
+		order[SEQID_TPE ] = 7;
+		order[SEQID_TPD ] = 8;
+		order[SEQID_GIBBSQ ] =9;
+		order[SEQID_GIBBMT ] =10;
+		order[SEQID_PRF ] =11;
+		order[SEQID_PDB ] =12;
+		order[SEQID_PIR ] =13;
+		order[SEQID_SWISSPROT ] =14;
+		order[SEQID_PATENT ] =15;
+		order[SEQID_GI ] =16;
+		order[SEQID_GENERAL ] =17;
+		order[SEQID_GIIM ] =18;
 }
 
 	buf = &(buf_space[0]);
@@ -526,7 +551,7 @@ if ( ! order_initialized){
 			use_id = pointIdPtr;
                         bs = BioseqFind(use_id);
 			if ( bs ){
-				use_id = SeqIdSelect ( bs -> id, order,18);
+				use_id = SeqIdSelect ( bs -> id, order,NUM_SEQID);
 			}
 			SeqIdWrite( use_id, buf, PRINTID_TEXTID_ACC_VER, MAX_CHAR_LOCATION);
 			temp = StringMove (temp, buf);
@@ -2079,7 +2104,7 @@ static void GeneRefInfoToGsp (GeneStructPtr gsp, GeneRefPtr grp, SeqFeatPtr sfp)
 		if (gsp->gene != NULL && 
 			StringCmp(gsp->gene->data.ptrvalue, grp->locus) != 0) {
 			if (syn != NULL) {
-				vsyn = ValNodeCopyStr(&(vsyn), 0, syn->data.ptrvalue);
+				vsyn = ValNodeCopyStr(&(vsyn), 1, syn->data.ptrvalue);
 				gsp->gene->next=vsyn;
 			}
 			return;
@@ -2091,7 +2116,7 @@ static void GeneRefInfoToGsp (GeneStructPtr gsp, GeneRefPtr grp, SeqFeatPtr sfp)
 		gsp->gene = ValNodeCopyStr(&(gsp->gene), 0, grp->desc);
 	}
 	if (syn != NULL) {
-			vsyn = ValNodeCopyStr(&(vsyn), 0, syn->data.ptrvalue);
+			vsyn = ValNodeCopyStr(&(vsyn), 1, syn->data.ptrvalue);
 		if (gsp->gene == NULL) {
 			gsp->gene = vsyn;
 		} else {
@@ -2210,8 +2235,8 @@ NLM_EXTERN void MatchNAGeneToFeat (Boolean non_strict, OrganizeFeatPtr ofp, Sort
 		if (grp != NULL) {
 			gsp = p->gsp;
 		/*	GetDBXrefFromGene(grp, sfp);*/
-			gsp->grp = AsnIoMemCopy(grp, 
-			(AsnReadFunc) GeneRefAsnRead, (AsnWriteFunc) GeneRefAsnWrite);
+	/********		gsp->grp = AsnIoMemCopy(grp, 
+	(AsnReadFunc) GeneRefAsnRead, (AsnWriteFunc) GeneRefAsnWrite); ****/ /*** it is redone in GeneRefInfoToGsp (EY) */
 			GeneRefInfoToGsp(gsp, grp, best_gene_feat);  /*copy GeRefInfo to GeneStruct */
 			GetGeneQuals(sfp, gsp); /* copy quals info to GenStruct */
 			return;
@@ -2583,6 +2608,9 @@ NLM_EXTERN void OrganizeSeqFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		}
 	}
 	ofp->show_gene = ajp->show_gene;
+	if (ajp->format == GENPEPT_FMT && bsp->repr == Seq_repr_raw && ajp->useSeqMgrIndexes) {
+		gsc.useSeqMgrIndexes = TRUE;
+	}
 	GatherEntity(ajp->entityID, ofp, get_feats, &gsc);
 	if (slp) {
 		SeqLocFree(slp);

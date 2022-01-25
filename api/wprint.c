@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.55 $
+* $Revision: 6.61 $
 *
 * File Description: 
 *
@@ -45,6 +45,24 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.61  2001/12/06 17:00:41  kans
+ * TextSave takes size_t, not Int2, otherwise titin protein tries to allocate negative number
+ *
+ * Revision 6.60  2001/12/06 12:36:41  kans
+ * switch from viewer.cgi to viewer.fcgi
+ *
+ * Revision 6.59  2001/11/27 18:45:16  kans
+ * fixed FLYBASE capitalization, added niaEST
+ *
+ * Revision 6.58  2001/10/02 17:39:29  yaschenk
+ * Removing memory leaks
+ *
+ * Revision 6.57  2001/08/06 23:59:45  kans
+ * added third party annotation SeqID support
+ *
+ * Revision 6.56  2001/08/06 22:13:13  kans
+ * using NUM_SEQID, added TPA ids to arrays
+ *
  * Revision 6.55  2001/04/23 22:40:04  tatiana
  * estimated size increased in www_featkey()
  *
@@ -376,11 +394,12 @@ static Char link_mgd[MAX_WWWBUF];
 static Char link_fly_fban[MAX_WWWBUF];
 static Char link_fly_fbgn[MAX_WWWBUF];
 static Char link_cdd[MAX_WWWBUF];
+static Char link_niaest[MAX_WWWBUF];
 
 #define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
 
 #define DEF_LINK_ACE  "http://www.ncbi.nlm.nih.gov/AceView/hs.cgi?"
-#define DEF_LINK_SEQ  "http://www.ncbi.nlm.nih.gov/entrez/viewer.cgi?"
+#define DEF_LINK_SEQ  "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
 #define DEF_LINK_MUID  "/entrez/utils/qmap.cgi?"
 
 #define DEF_LINK_TAX "/htbin-post/Taxonomy/wgetorg?"
@@ -421,6 +440,7 @@ static Char link_cdd[MAX_WWWBUF];
 #define DEF_LINK_RGD "http://rgd.mcw.edu/query/query.cgi?id="
 
 #define DEF_LINK_CDD "http://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="
+#define DEF_LINK_NIAEST "http://lgsun.grc.nia.nih.gov/cgi-bin/pro3?sname1="
 
 /* now other data bases are linked to Entrez. may be changed later 
 static char *link_epd = 
@@ -514,6 +534,8 @@ NLM_EXTERN void LIBCALL init_www(void)
 		link_fly_fban, MAX_WWWBUF);
 	GetAppParam("NCBI", "WWWENTREZ", "LINK_CDD", DEF_LINK_CDD, 
 		link_cdd, MAX_WWWBUF);
+	GetAppParam("NCBI", "WWWENTREZ", "LINK_NIAEST", DEF_LINK_NIAEST, 
+		link_niaest, MAX_WWWBUF);
 
 }
 
@@ -795,9 +817,10 @@ NLM_EXTERN Boolean LIBCALL www_dbsource(CharPtr str, Boolean first, Uint1 choice
 			link = link_seq;
 			prefix = "<a href=%sval=%s>";
 		} else if (choice == SEQID_EMBL || choice == SEQID_GENBANK || 
-			choice == SEQID_DDBJ || choice == SEQID_GIBBSQ || 
+				choice == SEQID_DDBJ || choice == SEQID_GIBBSQ || 
 				choice == SEQID_GIBBMT || choice == SEQID_GI || 
-					choice == SEQID_GIIM || SEQID_OTHER)  {
+				choice == SEQID_GIIM || choice == SEQID_OTHER ||
+				choice == SEQID_TPG || choice == SEQID_TPE || choice == SEQID_TPD)  {
 			link = link_seq;
 			prefix = "<a href=%sval=%s>";
 		} else {
@@ -811,7 +834,7 @@ NLM_EXTERN Boolean LIBCALL www_dbsource(CharPtr str, Boolean first, Uint1 choice
 			while (*p == ' ') {
 				p++;
 			}
-			text = TextSave(str, (Int2)(p-str));
+			text = TextSave(str, p-str);
 			if (first == FALSE) {
 				ff_AddString(", ");
 			}
@@ -930,7 +953,7 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 	Int2 id1, id2;
 	
 	if (www) {
-		while ((p= StringStr(str, "FlyBase:")) != NULL) {
+		while ((p= StringStr(str, "FLYBASE:")) != NULL) {
 			nothing = FALSE;
 			p += StringLen("FlyBase:");
 			l = StringLen(link_fly);
@@ -1306,6 +1329,25 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 			ff_AddString(p);
 			AddLink("</a>");
 		} 
+		if (( p = StringStr(str, "niaEST:")) != NULL) {
+			nothing = FALSE;
+			p += StringLen("niaEST:");
+			l = StringLen(link_niaest) + StringLen(p);
+			prefix = "<a href=%s%s&val=1>"; 
+			ll = StringLen(prefix); 
+			s = (CharPtr)MemNew(l + ll);
+			ss = (CharPtr)MemNew(p-str+1);
+			StringNCpy(ss, str, p-str);
+			ff_AddString(ss);
+			MemFree(ss);
+			while (*p == ' ')
+				p++;
+			sprintf(s, prefix, link_niaest, p);
+			AddLink(s);
+			MemFree(s);
+			ff_AddString(p);
+			AddLink("</a>");
+		} 
 		if (nothing) {
 			ff_AddString(str);
 		}
@@ -1582,6 +1624,15 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 				case SEQID_GI:
 					ff_AddString("gi: ");
 					break; 
+				case SEQID_TPG:
+					ff_AddString("genbank third party accession ");
+					break; 
+				case SEQID_TPE:
+					ff_AddString("embl third party accession ");
+					break; 
+				case SEQID_TPD:
+					ff_AddString("ddbj third party accession ");
+					break; 
 				default:
 					acc = NULL;
 					break; 
@@ -1749,7 +1800,10 @@ static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 	255,  /* 12 = gi */
 	10, /* 13 = ddbj */
 	10, /* 14 = prf */
-	12  /* 15 = pdb */
+	12, /* 15 = pdb */
+        10,  /* 16 = tpg */
+        10,  /* 17 = tpe */
+        10   /* 18 = tpd */
     };
 	
 	Int2	l, ll;
@@ -2083,6 +2137,7 @@ NLM_EXTERN void LIBCALL www_PrintComment (CharPtr string, Boolean identifier, Ui
 			p += StringLen("was derived from ");
 			s = TextSave(string, p-string);
 			ff_AddString(s);
+			MemFree(s);
 			prefix = "<a href=%sval=%s>";
 			lpref = StringLen(link_seq)+ StringLen(prefix);
 			for (; isspace(*p); p++) ;
@@ -2153,6 +2208,7 @@ NLM_EXTERN void LIBCALL www_PrintComment (CharPtr string, Boolean identifier, Ui
 	}
 	www_str = www_featloc(string);
 	ff_AddStringWithTildes(www_str);
+	MemFree(www_str);
 	ff_EndPrint();
 	return;
 }	/* PrintComment */

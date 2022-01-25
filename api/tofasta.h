@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.16 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.16  2001/08/31 15:29:54  kans
+* added CreateDefLineEx to ignore existing title descriptor, force generation of protein title computationally
+*
+* Revision 6.15  2001/08/17 13:27:26  kans
+* ClearProteinTitlesInNucProts, do not do it for outside protein databases
+*
 * Revision 6.14  2001/06/25 23:47:48  kans
 * added InstantiateProteinTitles and ClearProteinTitles
 *
@@ -362,6 +368,7 @@ NLM_EXTERN Boolean FastaId PROTO((BioseqPtr bsp, CharPtr buf, Int2 buflen));
 NLM_EXTERN Boolean FastaDefLine PROTO((BioseqPtr bsp, CharPtr buf, Int2 buflen, CharPtr accession, CharPtr organism, Uint1 tech));
 
 NLM_EXTERN Boolean CreateDefLine PROTO((ItemInfoPtr dip, BioseqPtr bsp, CharPtr buf, Int2 buflen, Uint1 tech, CharPtr accession, CharPtr organism));
+NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Int2 buflen, Uint1 tech, CharPtr accession, CharPtr organism, Boolean ignoreTitle);
 /*****************************************************************************
 *
 *   FastaSeqPort(bsp, is_na, do_virtual)
@@ -415,7 +422,7 @@ NLM_EXTERN void ClearGenBankKeywords (Uint2 entityID, Pointer ptr);
 *
 *****************************************************************************/
 NLM_EXTERN void InstantiateProteinTitles (Uint2 entityID, Pointer ptr);
-NLM_EXTERN void ClearProteinTitles (Uint2 entityID, Pointer ptr);
+NLM_EXTERN void ClearProteinTitlesInNucProts (Uint2 entityID, Pointer ptr);
 
 
 #ifdef __cplusplus

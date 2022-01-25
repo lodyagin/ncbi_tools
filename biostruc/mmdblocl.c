@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  14 January 97  
 *
-* $Id: mmdblocl.c,v 6.5 1999/05/11 23:28:25 kimelman Exp $
+* $Id: mmdblocl.c,v 6.6 2001/12/12 20:43:38 beloslyu Exp $
 *
 * File Description: Used to provide Biostruc data to MMDB-API when
 *  MMDB files are on a local filesystem in standard MMDB ftp-site format.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: mmdblocl.c,v $
+* Revision 6.6  2001/12/12 20:43:38  beloslyu
+* change the name of ftp site to ftp.ncbi.nih.gov
+*
 * Revision 6.5  1999/05/11 23:28:25  kimelman
 * 1. no pubstruct by default
 * 2. define 'extern' info
@@ -87,7 +90,7 @@
 /* This file abstracts the calls to Network Entrez that were previously          */
 /* embedded in mmdbapi1.c  Linking with this file forces local MMDB storage      */
 /* Local MMDB storage is defined as that distributed on the MMDB FTP site at     */
-/* ftp://ncbi.nlm.nih.gov/pub/mmdb/mmdb/Biostruc                                 */
+/* ftp://ftp.ncbi.nih.gov/pub/mmdb/mmdb/Biostruc                                 */
 /* which contains MMDB ASN.1 files of the form 12345.val and an index "mmdb.idx" */
 /* This is set up so that one can mirror the MMDB database from the ftp site.    */
 

@@ -31,6 +31,9 @@
 *
 *
 * $Log: txcommon.h,v $
+* Revision 1.5  2001/09/18 16:55:38  soussov
+* switching to the new ASN
+*
 * Revision 1.4  1999/12/20 17:05:16  soussov
 * taxid4gi added
 *
@@ -80,9 +83,10 @@
 #define TXC_INH_DIV 0x4000000
 #define TXC_INH_GC  0x8000000
 #define TXC_INH_MGC 0x10000000
-/* the following two flags is the same (it is not bug) */
+/* the following flags are the same (it is not bug) */
 #define TXC_SUFFIX  0x20000000
 #define TXC_UPDATED 0x20000000
+#define TXC_UNCULTURED 0x20000000
 
 #define TXC_GBHIDE  0x40000000
 #define TXC_STHIDE  0x80000000

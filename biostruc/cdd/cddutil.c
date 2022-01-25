@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.43 2001/05/24 15:02:22 kans Exp $
+/* $Id: cddutil.c,v 1.45 2001/11/15 15:35:13 kans Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.43 $
+* $Revision: 1.45 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.45  2001/11/15 15:35:13  kans
+* changed strdup to StringSave for Mac
+*
+* Revision 1.44  2001/11/13 19:51:52  bauer
+* support for annotation transfer in alignment reindexing
+*
 * Revision 1.43  2001/05/24 15:02:22  kans
 * included salpacc for Mac compiler
 *
@@ -311,6 +317,8 @@ void LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval)
     case CddDescr_status:
       vnp->data.intvalue = (Int4) iIval;
       break;
+    case CddDescr_scrapbook:
+      vnp->data.ptrvalue = (ValNodePtr) pThis;
     default:
       vnp->data.ptrvalue = pThis;
       break;
@@ -374,6 +382,56 @@ Boolean LIBCALL CddHasConsensus(CddPtr pcdd)
   oidp = sip->data.ptrvalue; if (!oidp) return(FALSE);
   if (StringCmp(oidp->str,"consensus")==0) return (TRUE);
   return(FALSE);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* fix CD file names and accessions / Character Arrays must be allocated     */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddRegularizeFileName(CharPtr cIn, CharPtr cAcc, CharPtr cFn,
+                                   CharPtr cEx)
+{
+  CharPtr   cWhere;
+  
+  if (Nlm_StrStr(cIn, cEx) != 0) {
+    Nlm_StrCpy(cFn,cIn);
+    Nlm_StrNCpy(cAcc,cIn,Nlm_StrLen(cIn)-Nlm_StrLen(cEx));
+    cAcc[Nlm_StrLen(cIn)-Nlm_StrLen(cEx)] = '\0';
+  } else {
+    Nlm_StrCpy(cAcc,cIn);
+    Nlm_StrCpy(cFn,cIn);
+    if (cEx[0] == '.') {
+      Nlm_StrCat(cFn,cEx);
+    }
+    else {
+      Nlm_StrCat(cFn,".");
+      Nlm_StrCat(cFn,cEx);
+    }
+  }
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* retrieve the accession of a CD as a character string                      */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+CharPtr LIBCALL CddGetAccession(CddPtr pcdd)
+{
+  CharPtr     cAccession = NULL;
+  ValNodePtr  vnp;
+  GlobalIdPtr pGid;
+
+  if (!pcdd) return NULL;
+  vnp = pcdd->id;
+  while (vnp) {
+    if (vnp->choice == CddId_gid) {
+      pGid = (GlobalIdPtr) vnp->data.ptrvalue;
+      cAccession = StringSave (pGid->accession);
+    }
+    vnp = vnp->next;
+  }
+  return cAccession;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -1234,6 +1292,7 @@ void LIBCALL CddDenDiagCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bs
     Char                cseqFileName[PATH_MAX];
     FILE                *fp;
     Boolean             bHasConsensus;
+    CharPtr             cAccession;
     
     bHasConsensus = CddHasConsensus(pcdd);
     
@@ -1355,7 +1414,7 @@ void LIBCALL CddDenDiagCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bs
     pcdd->posfreq = (MatrixPtr) MatrixNew();
     pcdd->posfreq->ncolumns = compactSearch->qlength;
     pcdd->posfreq->nrows = compactSearch->alphabetSize;
-    pcdd->posfreq->scale_factor = 10000;
+    pcdd->posfreq->scale_factor = POSFREQ_SCALE;
     pcdd->posfreq->row_labels = LetterHead;    
     ColumnHead = NULL;
     for (index = 0; index<compactSearch->qlength;index++) {
@@ -1389,13 +1448,14 @@ void LIBCALL CddDenDiagCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bs
 /*---------------------------------------------------------------------------*/
 /* Construct name for checkpoint file                                        */
 /*---------------------------------------------------------------------------*/
-    strcpy(ckptFileName,pcdd->name);
+    cAccession = CddGetAccession(pcdd);
+    strcpy(ckptFileName,cAccession);
     strcat(ckptFileName,CKPTEXT);
-
     CddposTakeCheckpoint(posSearch, compactSearch, ckptFileName, &error_return);
-    strcpy(cseqFileName,pcdd->name);
+    strcpy(cseqFileName,cAccession);
     strcat(cseqFileName,CSEQEXT);
-  
+    MemFree(cAccession);
+
     fp = FileOpen(cseqFileName, "w");
     if (NULL == fp) {
       BlastConstructErrorMessage("CddDenDiagCposComputation", "Could not open fasta file", 1, &error_return);
@@ -1434,6 +1494,7 @@ void LIBCALL CddCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
     Char                ckptFileName[PATH_MAX];
     Char                cseqFileName[PATH_MAX];
     FILE                *fp;
+    CharPtr             cAccession;
 
     numalign = CddCountSeqAligns(listOfSeqAligns, &numseq);
     posSearch = (posSearchItems *) MemNew(1*sizeof(posSearchItems));
@@ -1549,7 +1610,7 @@ void LIBCALL CddCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
     pcdd->posfreq = (MatrixPtr) MatrixNew();
     pcdd->posfreq->ncolumns = compactSearch->qlength;
     pcdd->posfreq->nrows = compactSearch->alphabetSize;
-    pcdd->posfreq->scale_factor = 10000;
+    pcdd->posfreq->scale_factor = POSFREQ_SCALE;
     pcdd->posfreq->row_labels = LetterHead;    
     ColumnHead = NULL;
     for (index = 0; index<compactSearch->qlength;index++) {
@@ -1583,12 +1644,15 @@ void LIBCALL CddCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
 /*---------------------------------------------------------------------------*/
 /* Construct name for checkpoint file                                        */
 /*---------------------------------------------------------------------------*/
-    strcpy(ckptFileName,pcdd->name);
+    cAccession = CddGetAccession(pcdd);
+    strcpy(ckptFileName,cAccession);
     strcat(ckptFileName,CKPTEXT);
 
     CddposTakeCheckpoint(posSearch, compactSearch, ckptFileName, &error_return);
-    strcpy(cseqFileName,pcdd->name);
+    strcpy(cseqFileName,cAccession);
     strcat(cseqFileName,CSEQEXT);
+  
+    MemFree(cAccession);
   
     fp = FileOpen(cseqFileName, "w");
     if (NULL == fp) {
@@ -1964,7 +2028,7 @@ CddExpAlignPtr SeqAlignToCddExpAlign(SeqAlignPtr salp, SeqEntryPtr sep)
 /*---------------------------------------------------------------------------*/
 CddExpAlignPtr InvertCddExpAlign(CddExpAlignPtr pCDea, SeqEntryPtr sep)
 {
-  BioseqPtr      bsp2;
+  BioseqPtr      bsp;
   CddExpAlignPtr pCDeaNew;
   Int4           i;
  
@@ -1973,8 +2037,8 @@ CddExpAlignPtr InvertCddExpAlign(CddExpAlignPtr pCDea, SeqEntryPtr sep)
   pCDeaNew->ids = SeqIdDup(pCDea->ids->next);
   pCDeaNew->ids->next = SeqIdDup(pCDea->ids);
   pCDeaNew->bIdAlloc = TRUE;
-  bsp2 = CddRetrieveBioseqById(pCDea->ids->next, sep);
-  CddExpAlignAlloc(pCDeaNew, bsp2->length);
+  bsp = CddRetrieveBioseqById(pCDea->ids->next, sep);
+  CddExpAlignAlloc(pCDeaNew, bsp->length);
   for (i=0;i<pCDea->length;i++) {
     if (pCDea->adata[i] != -1) {
       pCDeaNew->adata[pCDea->adata[i]] = i;
@@ -3134,6 +3198,7 @@ void LIBCALL CddCposComp(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp, CddPtr pcdd
     Char                ckptFileName[PATH_MAX];
     Char                cseqFileName[PATH_MAX];
     FILE                *fp;
+    CharPtr             cAccession;
 
     CddCposCompPart1(listOfSeqAligns, bsp, &compactSearch, &LetterHead, &posSearch);
 
@@ -3142,7 +3207,7 @@ void LIBCALL CddCposComp(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp, CddPtr pcdd
     pcdd->posfreq = (MatrixPtr) MatrixNew();
     pcdd->posfreq->ncolumns = compactSearch.qlength;
     pcdd->posfreq->nrows = compactSearch.alphabetSize;
-    pcdd->posfreq->scale_factor = 10000;
+    pcdd->posfreq->scale_factor = POSFREQ_SCALE;
     pcdd->posfreq->row_labels = LetterHead;    
     ColumnHead = NULL;
     for (index = 0; index<compactSearch.qlength;index++) {
@@ -3176,12 +3241,15 @@ void LIBCALL CddCposComp(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp, CddPtr pcdd
 /*---------------------------------------------------------------------------*/
 /* Construct name for checkpoint file                                        */
 /*---------------------------------------------------------------------------*/
-    strcpy(ckptFileName,pcdd->name);
+    cAccession = CddGetAccession(pcdd);
+    strcpy(ckptFileName,cAccession);
     strcat(ckptFileName,CKPTEXT);
 
     CddposTakeCheckpoint(&posSearch, &compactSearch, ckptFileName, &error_return);
-    strcpy(cseqFileName,pcdd->name);
+    strcpy(cseqFileName,cAccession);
     strcat(cseqFileName,CSEQEXT);
+
+    MemFree(cAccession);
   
     fp = FileOpen(cseqFileName, "w");
     if (NULL == fp) {
@@ -3378,7 +3446,9 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
   char*                   Output;   /*order of res-types needed for threading*/
   Boolean*                Coverage; /* for making sure all columns are filled*/
   Seq_Mtf*                pssm;
+  CharPtr                 cAccession;
 
+  cAccession = CddGetAccession(pcdd);
   if (pcdd) {
     bHasConsensus = CddHasConsensus(pcdd);
   } else {                                        /* determine from seqalign */
@@ -3395,7 +3465,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
     else if (SumAInf > 39) iPseudo = 2;
     else iPseudo = 1;
     MemFree(AInf);
-    if (pcdd) printf("%s AInf:%6.1f PseudoCt: %d\n",pcdd->name,SumAInf, iPseudo);
+    if (pcdd) printf("%s AInf:%6.1f PseudoCt: %d\n",cAccession,SumAInf, iPseudo);
   }
   if (NULL == matrix_name) {
     static CharPtr defaultMatrix = "BLOSUM62";
@@ -3448,7 +3518,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
 /* Construct name for checkpoint file and write out (if in a CD context)     */
 /*---------------------------------------------------------------------------*/
   if (pcdd) {
-    strcpy(ckptFileName,pcdd->name);
+    strcpy(ckptFileName,cAccession);
     strcat(ckptFileName,CKPTEXT);
     if (NULL != ckptFileName)
       posTakeCheckpoint(posSearch, compactSearch, ckptFileName, NULL);
@@ -3472,7 +3542,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
 /* also, write out the PSSM as an ASCII-formatted MATRIX file, for use with  */
 /* copymat                                                                   */
 /*---------------------------------------------------------------------------*/
-    strcpy(mtrxFileName,pcdd->name);
+    strcpy(mtrxFileName,cAccession);
     strcat(mtrxFileName,MTRXEXT);
     CddtakeMatrixCheckpoint(compactSearch,posSearch,search->sbp,mtrxFileName,
                             NULL,FALSE,1.0);
@@ -3489,7 +3559,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
     pcdd->posfreq = (MatrixPtr) MatrixNew();
     pcdd->posfreq->ncolumns = compactSearch->qlength;
     pcdd->posfreq->nrows = compactSearch->alphabetSize;
-    pcdd->posfreq->scale_factor = 10000;
+    pcdd->posfreq->scale_factor = POSFREQ_SCALE;
     pcdd->posfreq->row_labels = LetterHead;    
     ColumnHead = NULL;
     for (index = 0; index<compactSearch->qlength;index++) {
@@ -3548,7 +3618,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
   }
 
   if (bspOut && pcdd) {
-    strcpy(cseqFileName,pcdd->name);
+    strcpy(cseqFileName,cAccession);
     strcat(cseqFileName,CSEQEXT);
     fp = FileOpen(cseqFileName, "w");
     if (NULL == fp) {
@@ -3561,6 +3631,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
 /*---------------------------------------------------------------------------*/
 /* clean up                                                                  */
 /*---------------------------------------------------------------------------*/
+  MemFree(cAccession);
   posSearch->NumSequences = posSearch->posNumSequences;
   posSearch->QuerySize = alignLength;
   CddposFreeMemory(posSearch);
@@ -3683,6 +3754,143 @@ CddPtr LIBCALL CddFreeCarefully(CddPtr pcdd)
     pcdd->distance = MemFree(pcdd->distance);
   }
   return MemFree(pcdd);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void CddRelocateSeqLoc(SeqLocPtr location, SeqIdPtr sip, Int4 *ali)
+{
+  SeqIntPtr     sintp;
+  SeqPntPtr     spp;
+  PackSeqPntPtr pspp;
+  SeqLocPtr     slp;
+  Int4          i;
+  
+  if (!location) return;
+  switch (location->choice) {
+    case SEQLOC_NULL:
+    case SEQLOC_FEAT:
+    case SEQLOC_BOND:
+      break;
+    case SEQLOC_EMPTY:
+    case SEQLOC_WHOLE:
+      SeqIdFree(location->data.ptrvalue);
+      location->data.ptrvalue = (SeqIdPtr) SeqIdDup(sip);
+    case SEQLOC_INT:
+      sintp = (SeqIntPtr) location->data.ptrvalue;
+      SeqIdFree(sintp->id);
+      sintp->id = SeqIdDup(sip);
+      sintp->from = ali[sintp->from];
+      sintp->to   = ali[sintp->to];
+      break;
+    case SEQLOC_PNT:
+      spp = location->data.ptrvalue;
+      SeqIdFree(spp->id);
+      spp->id = (SeqIdPtr) SeqIdDup(sip);
+      spp->point = ali[spp->point];
+      break;
+    case SEQLOC_PACKED_PNT:
+      pspp = location->data.ptrvalue;
+      while (pspp) {
+        SeqIdFree(pspp->id);
+        pspp->id = (SeqIdPtr) SeqIdDup(sip);
+	for (i=0;i<pspp->used;i++) {
+          pspp->pnts[i] = ali[pspp->pnts[i]];	
+	}
+        pspp = pspp->next;
+      }
+      break;
+    case SEQLOC_PACKED_INT:
+    case SEQLOC_MIX:
+    case SEQLOC_EQUIV:
+      slp = (SeqLocPtr)location->data.ptrvalue;
+      while (slp) {
+        CddRelocateSeqLoc(slp,sip,ali);
+        slp = slp->next;
+      }      
+    default:
+      break;
+  }
+}
+
+static SeqIdPtr CddFindSeqIdInAlignAnnot(AlignAnnotPtr oldannot)
+{
+  SeqLocPtr location;
+  location = oldannot->location;
+  return SeqLocId(location);
+}
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* transfer alignment annotations from the current master to another         */
+/* sequence (before reindexing the alignment to this new master)             */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddTransferAlignAnnot(AlignAnnotPtr oldannot,
+                                            SeqIdPtr newMaster,
+					    SeqAlignPtr salp,
+					    BioseqSetPtr bssp)
+{
+  CddExpAlignPtr    pCDeaO= NULL, pCDeaN = NULL, pCDeaON = NULL;
+  SeqLocPtr         slp;
+  SeqIdPtr          oldMaster, sip;
+  Boolean           bOldIsTop = FALSE;
+  Boolean           bNewIsTop = FALSE;
+  DenseDiagPtr      ddp;
+  SeqAlignPtr       salpThis;
+  BioseqPtr         bsp;
+  AlignAnnotPtr     aap;
+  
+  slp = (SeqLocPtr) oldannot->location;
+  oldMaster = CddFindSeqIdInAlignAnnot(oldannot);
+  ddp = salp->segs;
+  sip = SeqIdDup(ddp->id);  SeqIdFree(sip->next);
+  if (CddSameSip(oldMaster,sip)) bOldIsTop = TRUE;
+  if (CddSameSip(newMaster,sip)) bNewIsTop = TRUE;
+  SeqIdFree(sip);
+  salpThis = salp; while (salpThis) {
+    ddp = salpThis->segs;
+    if (CddSameSip(oldMaster,ddp->id->next)) {
+      if (bNewIsTop) {
+        pCDeaON = SeqAlignToCddExpAlign(salpThis,bssp->seq_set);
+	break;
+      } else {
+        pCDeaO = SeqAlignToCddExpAlign(salpThis,bssp->seq_set);
+	if (pCDeaN) break;
+      }
+    }
+    if (CddSameSip(newMaster,ddp->id->next)) {
+      if (bOldIsTop) {
+        pCDeaON = SeqAlignToCddExpAlign(salpThis,bssp->seq_set);
+        break;
+      } else {
+        pCDeaN = SeqAlignToCddExpAlign(salpThis,bssp->seq_set);
+	if (pCDeaO) break;
+      }
+    }
+    salpThis = salpThis->next;
+  }
+  if (!pCDeaON) {                                     /* no direct relation */
+    bsp = CddRetrieveBioseqById(oldMaster,bssp->seq_set);
+    pCDeaON = CddReindexExpAlign(pCDeaO, bsp->length, pCDeaN, 0, 1);
+    if (bNewIsTop) {
+    
+    }
+  }
+  if (bNewIsTop) {                             /* need to revert alignment  */
+    pCDeaON = InvertCddExpAlign(pCDeaON,bssp->seq_set);
+  }
+  aap = oldannot; while (aap) {
+    slp = aap->location;
+    while (slp) {
+      CddRelocateSeqLoc(slp,newMaster,pCDeaON->adata);
+      slp = slp->next;
+    }
+    aap = aap->next;
+  }
 }
 
 

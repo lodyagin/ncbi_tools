@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:
 *  This system-independent header supposedly works "as is"
@@ -47,6 +47,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistd.h,v $
+* Revision 6.8  2001/09/27 21:38:57  vakatov
+* Vice-versa fix to R6.7:  define "NDEBUG" if "_DEBUG" is not defined
+*
+* Revision 6.7  2001/08/28 21:01:02  vakatov
+* Define "_DEBUG" if "NDEBUG" is not defined
+*
 * Revision 6.6  2000/02/25 16:45:58  vakatov
 * Redesigned to really share "ncbi_*.[ch]" etc. between the C and
 * the C++ toolkits, and even to use them in a "standalone" fashion
@@ -80,6 +86,10 @@
 */
 #ifndef _NCBISTD_
 #define _NCBISTD_
+
+#if !defined(NDEBUG)  &&  !defined(_DEBUG)
+#  define NDEBUG
+#endif
 
 #include <ncbilcl.h>
 #include <ncbiopt.h>

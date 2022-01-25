@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.28 $
+* $Revision: 6.30 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -180,6 +180,7 @@ NLM_EXTERN void CDECL  ValidErr VPROTO((ValidStructPtr vsp, int severity, int co
 
 /*****************************************************************
 *  get the approximate sequence coordinate for an alignment segment
+*  sip == NULL -> get alignment coordinate
 *****************************************************************/
 static Int4 valmsggetseqpos(SeqAlignPtr sap, Int4 segment, SeqIdPtr sip)
 {
@@ -196,11 +197,20 @@ static Int4 valmsggetseqpos(SeqAlignPtr sap, Int4 segment, SeqIdPtr sip)
    SeqLocPtr     slp;
    StdSegPtr     ssp;
 
-   if (sap == NULL || sap->segs == NULL || segment == 0 || sip == NULL)
+   if (sap == NULL || sap->segs == NULL || segment == 0)
       return -1;
    if (sap->segtype == SAS_DENSEG)
    {
       dsp = (DenseSegPtr)sap->segs;
+      if (sip == NULL)
+      {
+         pos = 0;
+         for (c=0; c<segment; c++)
+         {
+            pos += dsp->lens[c];
+         }
+         return pos;
+      }
       sip_tmp = dsp->ids;
       i = 0;
       found = FALSE;
@@ -226,12 +236,16 @@ static Int4 valmsggetseqpos(SeqAlignPtr sap, Int4 segment, SeqIdPtr sip)
    } else if (sap->segtype == SAS_DENDIAG)
    {
       ddp = (DenseDiagPtr)sap->segs;
+      pos = 0;
       for (c=0; c<segment; c++)
       {
+         pos += ddp->len;
          ddp = ddp->next;
          if (ddp == NULL)
             return -1;
       }
+      if (sip == NULL)
+         return pos;
       sip_tmp = ddp->id;
       i = 0;
       found = FALSE;
@@ -251,12 +265,16 @@ static Int4 valmsggetseqpos(SeqAlignPtr sap, Int4 segment, SeqIdPtr sip)
    } else if (sap->segtype == SAS_STD)
    {
       ssp = (StdSegPtr)(sap->segs);
+      pos = 0;
       for (c=0; c<segment; c++)
       {
+         pos += SeqLocLen(ssp->loc);
          ssp = ssp->next;
          if (ssp == NULL)
             return -1;
       }
+      if (sip == NULL)
+         return pos;
       slp = ssp->loc;
       while (!found && slp!=NULL)
       {
@@ -274,6 +292,15 @@ static Int4 valmsggetseqpos(SeqAlignPtr sap, Int4 segment, SeqIdPtr sip)
       psp = (PackSegPtr)(sap->segs);
       if (segment > psp->numseg)
          return -1;
+      if (sip == NULL)
+      {
+         pos = 0;
+         for (c=0; c<segment; c++)
+         {
+            pos += psp->lens[c];
+         }
+         return pos;
+      }
       sip_tmp = psp->ids;
       i = 0;
       found = FALSE;
@@ -413,9 +440,10 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       break;
 
     case Err_Segment_Gap:
+      pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Segs");
-      sprintf(string2, "Segment %ld contains only gaps.  Each segment must contain at least one actual sequence -- look for columns with all gaps and delete them.\n", (long) Intvalue); 
+      sprintf(string2, "Segment %ld (near alignment position %ld) contains only gaps.  Each segment must contain at least one actual sequence -- look for columns with all gaps and delete them.\n", (long) Intvalue, (long) pos);
       break;
 
     case Err_Segs_Dim_One:

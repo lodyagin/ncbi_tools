@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2001-03-21
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description:
 *		header for supporting Carbon calls in pre-Carbon targets
@@ -75,6 +75,47 @@
 #if !TARGET_API_MAC_CARBON
 # define EnableMenuItem(theMenu, item)             EnableItem(theMenu, item)
 # define DisableMenuItem(theMenu, item)            DisableItem(theMenu, item)
+#endif  // TARGET_API_MAC_CARBON
+
+// CarbonForwardCompat.h
+
+// Problem:
+// Carbon has certain platform requirements (e.g. PowerPC processor) that eliminate 
+// the possibility of certain conditions (e.g. code segments, 24-bit address mode)
+// which required (or at least invited) special treatments (e.g. UnloadSeg(), StripAddress()),
+// which, because the conditions requiring (or inviting) them can't occur in Carbon,
+// are unsupported in Carbon.
+// This makes some sense, but it makes trouble where it is desired to support Carbon *and*
+// the legacy technologies.
+
+// Solution:
+// Where possible, define macros such that calling code will work in all circumstances
+// with little or no modification, without resorting to preprocessor directives in the code.
+
+// This file must be included AFTER ConditionalMacros.h.  To make life simple,
+// we include it.
+
+#if TARGET_API_MAC_CARBON
+# define StripAddress(addr)  (addr)
+# define GetPortAndCall_(function, arg)           \
+	do {                                          \
+		GrafPtr port_;                            \
+		GetPort(&port_);                          \
+		function(GetWindowFromPort(port_), (arg));  \
+	} while (0)
+# ifdef __cplusplus
+#  include <QuickDraw.h>
+#  include "MacWindows.h"
+inline void InvalRect(Rect *rect)   { GetPortAndCall_(InvalWindowRect, rect); }
+inline void InvalRgn(RgnHandle rgn) { GetPortAndCall_(InvalWindowRgn,  rgn);  }
+inline void ValidRect(Rect *rect)   { GetPortAndCall_(ValidWindowRect, rect); }
+inline void ValidRgn(RgnHandle rgn) { GetPortAndCall_(ValidWindowRgn,  rgn);  }
+# else  // __cplusplus
+#  define InvalRect(rect)  GetPortAndCall_(InvalWindowRect, (rect))
+#  define InvalRgn(rgn)    GetPortAndCall_(InvalWindowRgn,  (rgn ))
+#  define ValidRect(rect)  GetPortAndCall_(ValidWindowRect, (rect))
+#  define ValidRgn(rgn)    GetPortAndCall_(ValidWindowRgn,  (rgn ))
+# endif  // __cplusplus
 #endif  // TARGET_API_MAC_CARBON
 
 #endif

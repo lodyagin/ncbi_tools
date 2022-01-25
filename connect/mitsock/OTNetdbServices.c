@@ -45,29 +45,31 @@
 
 #include <InternetConfig.h>			//MacOS internet config interfaces
 #include <TextUtils.h>				// p2cstr
+
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <SocketsInternal.h>
-#include <errno.h>
+
+#include "SocketsInternal.h"
 #include "netdb.h"
 
 
 //  prototypes
-UInt32 ifAddr(void);
+static UInt32 ifAddr(void);
 static void endservent (void);
 
 
 /* Globals for {get,end}hostent() */
-ICServices *gServices=NULL;
-ICInstance gConfig;
-int gServiceIndex;
+static ICServices *gServices=NULL;
+static ICInstance gConfig;
+static int gServiceIndex;
 
 
 /* Constants for servents */
-const char *prot_none="reserved";
-const char *prot_tcp="tcp";
-const char *prot_udp="udp";
-const char *not_an_alias=NULL; /* IC doesn't do aliases, so we use an empty list. */
+static const char *prot_none="reserved";
+static const char *prot_tcp="tcp";
+static const char *prot_udp="udp";
+static const char *not_an_alias=NULL; /* IC doesn't do aliases, so we use an empty list. */
 
 
 /* ifAddr

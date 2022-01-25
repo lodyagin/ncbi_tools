@@ -1,7 +1,7 @@
 #ifndef _TOASN3_
 #define _TOASN3_
 
-/*  $Id: toasn3.h,v 6.8 2001/06/05 21:23:43 vakatov Exp $
+/*  $Id: toasn3.h,v 6.10 2001/10/23 12:48:31 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -202,6 +202,7 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
 /* from move_cds (S. Bazhin) */
 
 Uint2 move_cds(SeqEntryPtr sep);
+Uint2 move_cds_ex (SeqEntryPtr sep, Boolean doPseudo);
 
 /* more functions moved from Sequin, placed in toporg.c */
 
@@ -218,6 +219,10 @@ extern void ConvertFullLenPubFeatToDesc (SeqEntryPtr sep);
 /* SeriousSeqEntryCleanup combines many of the above cleanups */
 
 extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge);
+
+/* SeriousSeqEntryCleanupBulk does not clean up pseudo products, instead posting a message */
+
+extern void SeriousSeqEntryCleanupBulk (SeqEntryPtr sep);
 
 
 #ifdef __cplusplus

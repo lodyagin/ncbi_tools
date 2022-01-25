@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -48,6 +48,9 @@
 * 02-24-94 Schuler     AsnTypeStringToHex moved here (from asntypes.h)
 *
 * $Log: asn.h,v $
+* Revision 6.8  2001/10/11 14:39:08  ostell
+* added support for XMLModulePrefix
+*
 * Revision 6.7  2000/12/12 15:56:08  ostell
 * added support BigInt
 *
@@ -423,6 +426,9 @@ NLM_EXTERN AsnOptionPtr LIBCALL AsnIoOptionGet PROTO((AsnIoPtr aip, Int2 ao_clas
 NLM_EXTERN AsnOptionPtr LIBCALL AsnOptionNew PROTO((AsnOptionPtr PNTR aopp, Int2 ao_class, Int2 type, DataVal av, AsnOptFreeFunc freefunc));
 NLM_EXTERN void LIBCALL AsnOptionFree PROTO((AsnOptionPtr PNTR aopp, Int2 ao_class, Int2 type));
 NLM_EXTERN AsnOptionPtr LIBCALL AsnOptionGet PROTO((AsnOptionPtr head, Int2 ao_class, Int2 type, AsnOptionPtr last));
+NLM_EXTERN Boolean LIBCALL AsnSetXMLmodulePrefix (CharPtr prefix);
+NLM_EXTERN Boolean LIBCALL AsnSetXMLmodulePrefixToDefault (void);
+NLM_EXTERN CharPtr LIBCALL AsnGetXMLmodulePrefix (void);
 
     /*** calculate hash value from ASN.1 ***/
 NLM_EXTERN Uint4 LIBCALL  AsnIoHash (Pointer from, AsnWriteFunc writefunc);

@@ -1,4 +1,4 @@
-/* $Id: blastall.c,v 6.97 2001/07/05 15:40:33 madden Exp $
+/* $Id: blastall.c,v 6.105 2001/12/17 20:23:44 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,30 @@
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.105  2001/12/17 20:23:44  madden
+ * comment out DO_NOT_SUPPRESS_BLAST_OP
+ *
+ * Revision 6.104  2001/09/06 20:24:34  dondosha
+ * Removed threshold_first
+ *
+ * Revision 6.103  2001/08/28 17:34:34  madden
+ * Add -m 9 as tabular output with comments
+ *
+ * Revision 6.102  2001/08/28 16:23:12  madden
+ * Do not suppress args
+ *
+ * Revision 6.101  2001/07/27 21:47:35  dondosha
+ * Fixed dummy variable declaration for call to StringToInt8
+ *
+ * Revision 6.100  2001/07/26 18:21:04  dondosha
+ * Dummy variable type correction
+ *
+ * Revision 6.99  2001/07/20 13:31:23  dondosha
+ * Undeclared variable correction
+ *
+ * Revision 6.98  2001/07/19 22:05:47  dondosha
+ * Made db_length option a string, to convert to Int8 value
+ *
  * Revision 6.97  2001/07/05 15:40:33  madden
  * Comment out DO_NOT_SUPPRESS_BLAST_OP for release
  *
@@ -512,7 +536,7 @@ BlastGetMaskingLoc(FILE *infp, FILE *outfp, CharPtr instructions)
 }
 
 /*
-#define DO_NOT_SUPPRESS_BLAST_OP 
+#define DO_NOT_SUPPRESS_BLAST_OP
 */
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
@@ -526,7 +550,7 @@ static Args myargs [] = {
       "stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 3 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular", /* 4 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular, \n9 tabular with comment lines", /* 4 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "BLAST report Output File", /* 5 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -567,7 +591,7 @@ static Args myargs [] = {
     { "Word size, default if zero", /* 23 */
       "0", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},
     { "Effective length of the database (use zero for the real size)", /* 24 */
-      "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},
+      "0", NULL, NULL, FALSE, 'z', ARG_STRING, 0.0, 0, NULL},
     { "Number of best hits from a region to keep (off by default, if used a value of 100 is recommended)", /* 25 */
       "0", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
     { "0 for multiple hits 1-pass, 1 for single hit 1-pass, 2 for 2-pass", /* 26 */
@@ -689,6 +713,7 @@ Int2 Main (void)
     Boolean done = TRUE;
     int (LIBCALLBACK *handle_results)(VoidPtr srch);       
     Int4 from = 0, to = -1;
+    const char *dummystr;
 
 #ifdef BLAST_CS_API
     BlastNet3Hptr    bl3hp;
@@ -850,7 +875,6 @@ Int2 Main (void)
         options->reward = myargs[12].intvalue;
     } else {
         if (myargs[15].intvalue != 0) {
-            options->threshold_first = myargs[15].intvalue;
             options->threshold_second = myargs[15].intvalue;
         }
     }
@@ -868,8 +892,7 @@ Int2 Main (void)
        options->cutoff_s = options->wordsize;
     }
 
-    if (myargs[24].floatvalue != 0)
-        options->db_length = (Int8) myargs[24].floatvalue;
+    options->db_length = StringToInt8(myargs[24].strvalue, &dummystr);
     
     options->hsp_range_max  = myargs[25].intvalue;
     if (options->hsp_range_max != 0)
@@ -1275,13 +1298,17 @@ Int2 Main (void)
         if (slp)
            query_bsp = NULL;
 
+        if (getenv("POST_BLAST_CLUSTER_HITS") != NULL)
+           BlastClusterHitsFromSeqAlign(seqalign, blast_program, blast_database, 
+                                        options, 0.9, 1.6, 0.5, TRUE);
+
         if (seqalign) {
-           if (align_view == 8) {
-/*
-              PrintTabularOutputHeader(blast_database, query_bsp, slp, 
+           if (align_view == 8 || align_view == 9) {
+	      if (align_view == 9)
+              	PrintTabularOutputHeader(blast_database, query_bsp, slp, 
                                        blast_program, 0, believe_query,
                                        global_fp);
-*/
+
               BlastPrintTabulatedResults(seqalign, query_bsp, slp, 
                                          number_of_alignments,
                                          blast_program, 

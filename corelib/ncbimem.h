@@ -32,7 +32,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   	prototypes for ncbi memory functions
@@ -40,6 +40,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.h,v $
+* Revision 6.6  2001/07/26 16:37:45  beloslyu
+* OS_UNIX_DARWIN can use mmap
+*
 * Revision 6.5  2000/03/08 17:55:49  vakatov
 * Use Int8 for the file size.
 * Also, get rid of the WIN16 code, do other cleanup.
@@ -220,7 +223,7 @@ NLM_EXTERN void* Nlm_CallocViaMalloc(size_t n_elem, size_t item_size);
 #define HandLock    Nlm_HandLock
 #define HandUnlock  Nlm_HandUnlock
 
-#if (defined(OS_UNIX_SYSV) || defined(OS_UNIX_SUN) || defined(OS_UNIX_OSF1) || defined(OS_UNIX_LINUX) || defined(OS_UNIX_AIX)) && !defined(OS_UNIX_ULTRIX)
+#if (defined(OS_UNIX_SYSV) || defined(OS_UNIX_SUN) || defined(OS_UNIX_OSF1) || defined(OS_UNIX_LINUX) || defined(OS_UNIX_AIX) || defined(OS_UNIX_DARWIN)) && !defined(OS_UNIX_ULTRIX)
 #define MMAP_AVAIL
 #endif
 

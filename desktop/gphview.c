@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.44 $
+* $Revision: 6.45 $
 *
 * File Description:
 *
@@ -2776,7 +2776,9 @@ static void ShowMap (BioseqViewPtr bvp, Boolean show)
     EnableDisableLegendItem (bvp, FALSE);
     SafeHide (bvp->findGeneGrp);
     SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
     SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
     SafeHide (bvp->clickMe);
   }
 }
@@ -2801,7 +2803,9 @@ static void ShowCompressed (BioseqViewPtr bvp, Boolean show)
     EnableDisableLegendItem (bvp, FALSE);
     SafeHide (bvp->findGeneGrp);
     SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
     SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
     SafeHide (bvp->clickMe);
   }
 }
@@ -2826,7 +2830,9 @@ static void ShowGraphical (BioseqViewPtr bvp, Boolean show)
     EnableDisableLegendItem (bvp, FALSE);
     SafeHide (bvp->findGeneGrp);
     SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
     SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
     SafeHide (bvp->clickMe);
   }
 }
@@ -2851,7 +2857,9 @@ static void ShowAlignment (BioseqViewPtr bvp, Boolean show)
     EnableDisableLegendItem (bvp, FALSE);
     SafeHide (bvp->findGeneGrp);
     SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
     SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
     SafeHide (bvp->clickMe);
   }
 }
@@ -2877,7 +2885,9 @@ static void ShowSalsa (BioseqViewPtr bvp, Boolean show)
     EnableDisableLegendItem (bvp, FALSE);
     SafeHide (bvp->findGeneGrp);
     SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
     SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
     SafeHide (bvp->clickMe);
   }
 }
@@ -2902,7 +2912,9 @@ static void ShowDesktop (BioseqViewPtr bvp, Boolean show)
     EnableDisableLegendItem (bvp, FALSE);
     SafeHide (bvp->findGeneGrp);
     SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
     SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
     SafeHide (bvp->clickMe);
   }
 }

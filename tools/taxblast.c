@@ -1,4 +1,4 @@
-/* $Id: taxblast.c,v 6.10 2001/06/21 19:34:28 shavirin Exp $
+/* $Id: taxblast.c,v 6.12 2001/12/13 21:48:51 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,19 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.12  2001/12/13 21:48:51  camacho
+* Fixed retrieval of maximum taxonomy id to properly populate the
+* RDBTaxLookup structure.
+*
+* Revision 6.11  2001/07/11 15:24:02  shavirin
+* Fixed minor problem when tax_id is unrecognizable.
+*
 * Revision 6.10  2001/06/21 19:34:28  shavirin
 * Fixed problem in the function FDBTaxCallback().
 *
@@ -479,9 +486,9 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap)
         tax_id = 0;
         if((gis[0] = TXBGetTargetGi(sap, &tax_id, &accession)) == -1) {
             if(tax_id == 0) {
-                ErrPostEx(SEV_ERROR, 0, 0,"Failure to extract gi "
-                          "from SeqAlign\n");
-                return NULL;
+                ErrPostEx(SEV_WARNING, 0, 0,"Failure to extract gi/tax_id "
+                          "from SeqAlign. Accession =%s", 
+                          accession == NULL? "unknown" : accession);
             } else {
                 taxoffs[count] = tax_id;
                 hitobj->accs[count] = accession; /* Memory was allocated */
@@ -1756,6 +1763,13 @@ Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id)
     tnames->tax_id = tax_id;
     tax_lookup->tax_array[tax_id] = tnames;
 
+#ifdef DEBUG
+    printf("FDBTaxCallback(%d): %s,%s,%s,%c%c%c\n",
+            tnames->tax_id,tnames->sci_name,tnames->common_name,
+            tnames->blast_name,tnames->s_king[0],tnames->s_king[1],
+            tnames->s_king[2]);
+#endif
+
     return TRUE;
 }
 static Int4 getTotalTaxIdCount(TreeCursorPtr cursor)
@@ -1796,7 +1810,8 @@ RDBTaxLookupPtr RDTaxLookupInit(void)
     tax1e_invokeChildren(-1); 
     
     tax_lookup = MemNew(sizeof(RDBTaxLookup));
-    tax_lookup->all_taxid_count = getTotalTaxIdCount(NULL);
+    /*tax_lookup->all_taxid_count = getTotalTaxIdCount(NULL);*/
+    tax_lookup->all_taxid_count = tax1e_maxTaxId();
     
     tax_lookup->tax_array = MemNew(sizeof(RDBTaxNamesPtr)*tax_lookup->all_taxid_count);
 

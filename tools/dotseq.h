@@ -19,19 +19,35 @@
 *  Government disclaim all warranties, express or implied, including
 *  warranties of performance, merchantability or fitness for any particular
 *  purpose.
-*
+
 * ===========================================================================
 *
 * File Name:  dotseq.h
 *
+* Author:  Fasika Aklilu
+*
+* Version Creation Date:   8/9/01
+*
+* $Revision: 6.4 $
+*
+* File Description: computes local alignments for dot matrix
+*
+* Modifications:  
+* --------------------------------------------------------------------------
+* Date     Name        Description of modification
+* -------  ----------  -----------------------------------------------------
 
-$Revision: 6.3 $
+$Revision: 6.4 $
 $Log: dotseq.h,v $
+Revision 6.4  2001/08/09 16:33:18  aklilu
+added revision
+
 Revision 6.3  2000/07/26 18:23:10  sicotte
 added DOT_SPI_FindBestAlnByDotPlotEx, to return rejected alignments
 
 
 */
+
 #ifndef _DOTSEQ_
 #define _DOTSEQ_
 
@@ -47,12 +63,12 @@ extern "C" {
 #include <tofasta.h>
 #include <seqport.h>
 #include <sequtil.h>
+#include <sqnutils.h>
 #include <blastpri.h>
 #include <explore.h>
 #include <seqmgr.h>
 #include <lookup.h>
 #include <jsavlt.h>
-#include <alignmgr.h>
 
  /****************************************************************************
 
@@ -73,8 +89,8 @@ extern "C" {
 
 
   typedef struct hs_diag {
-    Int4 q_start;
-    Int4 s_start;
+    Int4 q_start; /* left most value on the graph */
+    Int4 s_start; /* left most value on the graph */
     Int4 length;
     Int4 score;
     Int4 rdmKey;
@@ -106,10 +122,10 @@ extern "C" {
     BioseqPtr   sbsp; /* subject bioseq */
     SeqLocPtr   qslp; /* query seqloc pointer */
     SeqLocPtr   sslp; /* subject seqloc pointer */
-    Int4        q_start;  /* start position on query bioseq */
-    Int4        q_stop;   /* stop position on query bioseq */
-    Int4        s_start;  /* start position on subject bioseq */
-    Int4        s_stop;/* start position on subject bioseq */
+    Int4        q_start;  /* left position on query bioseq */
+    Int4        q_stop;   /* right position on query bioseq */
+    Int4        s_start;  /* left position on subject bioseq */
+    Int4        s_stop;/* right position on subject bioseq */
     Uint1Ptr    qseq; /* query sequence buffer */
     Uint1Ptr    sseq; /* subject sequence buffer */
     CharPtr     qname; /* query accession */
@@ -176,7 +192,9 @@ Int2 DOT_FreeHitsArray (DOTDiagPtr PNTR hitlist, Int4 index);
 Boolean DOT_GetSeqs (DOTMainDataPtr mip, Boolean is_zoom);
 extern DOTMainDataPtr DOT_InitMainInfo (DOTMainDataPtr mip, BioseqPtr qbsp, BioseqPtr sbsp, Int4 word_size, Int4 tree_limit, Int4 qstart, Int4 qstop, Int4 sstart, Int4 sstop);
 SeqAlignPtr DOT_SPI_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2, Int4 wordsize, Int4 num_hits);
-SeqAlignPtr DOT_SPI_FindBestAlnByDotPlotEx(SeqLocPtr slp1, SeqLocPtr slp2, Int4 wordsize, Int4 num_hits,SeqAlignPtr PNTR overlaps_m, SeqAlignPtr PNTR overlaps_s);
+extern Uint2 DOT_AttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap, BioseqPtr bsp);
+extern Int4Ptr PNTR DOT_DNAScoringMatrix(Int4 mismatch, Int4 reward,Int4 alsize);
+
 #ifdef __cplusplus
 }
 #endif

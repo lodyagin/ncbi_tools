@@ -10,6 +10,8 @@
 #include <sqnutils.h>
 #include <satutil.h>
 #include <alignmgr.h>
+#include <alignmgr2.h>
+#include <spidey.h>
 
 #define MIN_SEG_SIZE 10 /* used by MergeTwoDspBySIM4 , check_align_match_diagnol<-ModFilterDenseSegAlign<-ModifyAlignList<-SeqAlignConsistentDiagFilter */
 
@@ -1957,46 +1959,173 @@ static SeqIdPtr SeqIdReplaceID (SeqIdPtr head, SeqIdPtr pre, SeqIdPtr sip, SeqId
   return head;
 }
 
-static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, Int4 length, Int4 threshold)
+static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, BioseqPtr bsp1, BioseqPtr bsp2, Int4 threshold, CharPtr PNTR message, BoolPtr nonly)
 {
-  SeqAlignPtr  tmp, 
-               ret=NULL;
-  Int4         len;
-  DenseDiagPtr ddp, 
-               ddptmp;
+   AMFreqPtr         afp;
+   Int4              alln;
+   AMAlignIndex2Ptr  amaip;
+   Int4              beg;
+   Int4              ctr;
+   Int4              end;
+   Boolean           found;
+   Int4              gaps;
+   Int4              i;
+   Int4              j;
+   Int4              last;
+   Int4              len;
+   Int4              n;
+   Int4              nctr;
+   Char              newstr[256];
+   Int4              mismatches;
+   Uint1             res;
+   SeqAlignPtr       sap;
+   SeqAlignPtr       sap_new;
+   SeqAlignPtr       sap_new2;
+   SeqAlignPtr       sap_orig;
+   SeqPortPtr        spp;
+   Int4              start1;
+   Int4              start2;
+   Int4              stop1;
+   Int4              stop2;
+   Uint1             strand;
 
-  if (salp == NULL)
-     return ret;
-  if (salp->segtype==2) {
-     for (tmp=salp; tmp!=NULL; tmp=tmp->next)
-     {
-        len = SeqAlignLength(salp);
-        if (100*((float)len/(float)length) >= threshold)
-           break;
-     }
-     if (tmp!=NULL) {
-        ret = (SeqAlignPtr) AsnIoMemCopy (tmp, (AsnReadFunc) SeqAlignAsnRead, (AsnWriteFunc) SeqAlignAsnWrite);  
-     }
-  }
-  else if (salp->segtype ==1) {
-     for (tmp=salp; tmp!=NULL; tmp=tmp->next)
-     {
-        for (ddp=salp->segs; ddp!=NULL; ddp=ddp->next) {
-           if (100*((float)ddp->len/(float)length) >= threshold)
-              break; 
-        }
-        if (ddp) {
-           ddptmp = (DenseDiagPtr) AsnIoMemCopy (ddp,  (AsnReadFunc) DenseDiagAsnRead, (AsnWriteFunc) DenseDiagAsnWrite);
-           if (ddptmp) {
-              ret = SeqAlignNew();
-              ret->segtype=1;
-              ret->segs=ddptmp;
-           }
-           break;
-        }
-     }
-  }
-  return ret;
+   if (salp == NULL)
+      return NULL;
+   sap = NULL;
+   if (salp->next != NULL)
+   {
+      sap_orig = SeqAlignDup(salp);
+      AlnMgr2IndexLite(salp);
+      AlnMgr2SortAlnSetByNthRowPos(salp, 1);
+      SPI_RemoveInconsistentAlnsFromSet(salp, 10, 1, SPI_LEFT);
+      amaip = (AMAlignIndex2Ptr)(salp->saip);
+      last = 0;
+      sap_new = NULL;
+      for (i=0; i<amaip->numsaps-1; i++)
+      {
+         amaip->saps[i]->next = NULL;
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, &start1, &stop1);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &start2, &stop2);
+         strand = AlnMgr2GetNthStrand(amaip->saps[i], 1);
+         if (strand == Seq_strand_minus)
+         {
+            if (start1 <= stop2)
+               AlnMgr2TruncateSeqAlign(amaip->saps[i], stop2+1, start1, 1);
+            SeqAlignFree(amaip->saps[i]->next);
+            amaip->saps[i]->next = NULL;
+         } else
+         {
+            if (stop1 >= start2)
+               AlnMgr2TruncateSeqAlign(amaip->saps[i], start1, start2-1, 1);
+            SeqAlignFree(amaip->saps[i]->next);
+            amaip->saps[i]->next = NULL;
+         }
+      }
+      amaip->saps[amaip->numsaps-1]->next = NULL;
+      for (i=0; i<amaip->numsaps-1; i++)
+      {
+         if (sap_new == NULL)
+            sap_new = SeqAlignDup(amaip->saps[i]);
+         sap_new2 = AlnMgr2MergeTwoAlignments(sap_new, amaip->saps[i+1]);
+         if (sap_new2 == NULL)
+            sap_new = amaip->saps[i];
+         else
+         {
+            SeqAlignFree(sap_new);
+            sap_new = sap_new2;
+            sap_new2 = NULL;
+         }
+      }
+      AlnMgr2IndexSingleChildSeqAlign(sap_new);
+      if (AlnMgr2GetAlnLength(sap_orig, FALSE) >= AlnMgr2GetAlnLength(sap_new, FALSE))
+      {
+         SeqAlignFree(sap_new);
+         sap_new = SeqAlignDup(sap_orig);
+      }
+      salp = sap_new;
+   }
+   sap = salp;
+   AlnMgr2IndexSingleChildSeqAlign(sap);
+   AlnMgr2ExtendToCoords(sap, 0, -1, 1);
+   AlnMgr2GetNthSeqRangeInSA(sap, 1, &start1, &stop1);
+   len = stop1 - start1 + 1; /* the actual length of sequence1 covered by aln */
+   afp = AlnMgr2ComputeFreqMatrix(sap, 0, -1, 0);
+   gaps = 0;
+   mismatches = n = 0;
+   alln = 0;
+   for (i=0; i<afp->len; i++)
+   {
+      if (afp->freq[5][i] > 0)
+         alln++;
+      found = FALSE;
+      for (j=0; !found && j<afp->size; j++)
+      {
+         if (afp->freq[0][i] > 0)
+         {
+            gaps++;
+            found = TRUE;
+         } else if (afp->freq[j][i] == 1 && afp->freq[5][i] == 0)
+         {
+            mismatches++;
+            found = TRUE;
+         } else if (afp->freq[j][i] == 1 && afp->freq[5][i] == 1)
+         {
+            n++;
+            found = TRUE;
+         }
+      }
+   }
+   if (alln > 0 && (gaps>0 || mismatches>0 || n > 0))
+   {
+      spp = SeqPortNew(bsp1, 0, bsp1->length-1, Seq_strand_plus, Seq_code_ncbi4na);
+      beg = end = 0;
+      ctr = 0;
+      nctr = 0;
+      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF)
+      {
+         if (res != 1 && res != 2 && res != 4 && res != 8)
+         {
+            if (beg == ctr)
+               beg++;
+            else
+            {
+               end++;
+               nctr++;
+            }
+         } else
+            end = 0;
+         ctr++;
+      }
+      nctr = nctr - end;
+      if (beg > 0 || end > 0)
+      {
+         sprintf(newstr, "The local sequence has %d terminal N%s. ", beg+end, beg+end!=1?"s":"");
+         StringCat(*message, newstr);
+      }
+      if (nctr > 0)
+      {
+         sprintf(newstr, "The local sequence has %d internal N%s. ", nctr, nctr!=1?"s":"");
+         StringCat(*message, newstr);
+      }
+      SeqPortFree(spp);
+   }
+   if ((*message[0] != '\0') && len == bsp1->length && gaps == 0 && mismatches == 0)
+   {
+      *nonly = TRUE;
+      return sap;
+   } else
+      *nonly = FALSE;
+   if (len < bsp1->length)
+   {
+      sprintf(newstr, "%sThe alignment to the database sequence does not cover all of the local sequence. ", *message[0]=='\0'?"":"\n");
+      StringCat(*message, newstr);
+   }
+   if (gaps > 0 || mismatches > 0 || n > 0)
+   {
+      sprintf(newstr, "%sThe alignment to the database sequence has %d gap%s, %d mismatch%s, and %d N-mismatch%s. ", afp->len<bsp1->length?"\n":"", gaps, (gaps!=1?"s":""), mismatches, (mismatches!=1?"es":""), n, (n!=1?"es":""));
+      StringCat(*message, newstr);
+   }
+   return sap;
 }
 
 static void SeqAlignStartUpdate (SeqAlignPtr salp, SeqIdPtr target_sip, Int4 offset, Int4 len, Uint1 strand)
@@ -2136,7 +2265,10 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   Char                strLog[50];
   BioseqPtr           bsp1, bsp2;
   Int4                start1, start2, stop1, stop2;
+  CharPtr             errstr;
+  Boolean             nonly;
 
+  errstr = NULL;
   if (salp!=NULL) {
      if (salp->segtype == 2) {
         dsp = (DenseSegPtr) salp->segs;
@@ -2192,29 +2324,25 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  bsp2 = BioseqLockById(dbsip);
                  if ( bsp1 != NULL && bsp2 != NULL && bsp1->length > 0 && bsp2->length > 0) {
                  options = BLASTOptionNew("blastn", TRUE);
-/*
-                 options->penalty = -5; 
-                 options->cutoff_s = totlenlcl; 
-*/
-                 options->filter_string = "";
+                 options->filter_string = StringSave("m L;R");
                  seqalign = BlastTwoSequences (bsp1, bsp2, "blastn", options);
-                 len = bsp2->length;
-                 BioseqUnlock(bsp1);
-                 BioseqUnlock(bsp2);
-                 bestsalp = SeqAlignBestHit (seqalign, bsp1->length, 99);
-                 if (bestsalp) 
+                 if (errstr != NULL)
+                    MemFree(errstr);
+                 errstr = (CharPtr)MemNew(1000*sizeof(Char));
+                 bestsalp = SeqAlignBestHit (seqalign, bsp1, bsp2, 100, &errstr, &nonly);
+                 if (errstr[0] == '\0' || nonly) 
                  {
                     SeqIdWrite (dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
-                    ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank. \n Do you wish to replace it?", strLog);
+                    ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank. \nDo you wish to replace it?", strLog);
                     if (ans != ANS_CANCEL) 
                     {
                        offset = SeqAlignStart(bestsalp, 1)-SeqAlignStart(bestsalp, 0);
                        if ((SeqAlignStrand(bestsalp, 0)==Seq_strand_minus && SeqAlignStrand(bestsalp, 1) != Seq_strand_minus) || (SeqAlignStrand(bestsalp, 1)==Seq_strand_minus && SeqAlignStrand(bestsalp, 0) != Seq_strand_minus))
                        {
                           strand=Seq_strand_minus;
-                          AlnMgrIndexSingleChildSeqAlign(bestsalp);
-                          AlnMgrGetNthSeqRangeInSA(bestsalp, 1, &start1, &stop1);
-                          AlnMgrGetNthSeqRangeInSA(bestsalp, 2, &start2, &stop2);
+                          AlnMgr2IndexSingleChildSeqAlign(bestsalp);
+                          AlnMgr2GetNthSeqRangeInSA(bestsalp, 1, &start1, &stop1);
+                          AlnMgr2GetNthSeqRangeInSA(bestsalp, 2, &start2, &stop2);
                           len = stop2 + start1;
                        } else
                           strand=Seq_strand_plus;
@@ -2232,10 +2360,9 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  }
                  else {
                     SeqIdWrite (dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
-                    ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank.\n However, the local version is not identical to the database version.\n Do you wish to replace it anyway ?\n If you cancel, the alignment of the local and the database versions \nof \"%s\" will be saved in the error file \"error.log\"", strLog, strLog);
+                    ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank.\n However, the local version is not identical to the most recent database version.\n %s \nDo you wish to replace it anyway ?\n If you cancel, the alignment of the local and the database versions \nof \"%s\" will be saved in the error file \"error.log\"", strLog, errstr, strLog);
                     if (ans != ANS_CANCEL) 
                     {
-                       bestsalp = seqalign;
                        offset = SeqAlignStart(bestsalp, 1)-SeqAlignStart(bestsalp, 0);
                        if (SeqAlignStrand(bestsalp, 0)==Seq_strand_minus || SeqAlignStrand(bestsalp, 1)==Seq_strand_minus)
                           strand=Seq_strand_minus;
@@ -2252,7 +2379,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                        found = TRUE;
                     }
                     else {
-                       showtextalign_fromalign (seqalign, "error.log", NULL);
+                       showtextalign_fromalign (bestsalp, "error.log", NULL);
                     }
                     sip->next = next;
                  }
@@ -2285,7 +2412,6 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   }
   return vnp;  
 }
-
 
 static Boolean check_dbid_seqalign (SeqAlignPtr salp)
 {

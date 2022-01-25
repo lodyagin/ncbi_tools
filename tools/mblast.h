@@ -32,8 +32,20 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.35 $ 
+/* $Revision: 6.39 $ 
 * $Log: mblast.h,v $
+* Revision 6.39  2002/01/04 22:29:02  dondosha
+* Changed diagonal distance for hsp inclusion check from 10 to 6
+*
+* Revision 6.38  2001/12/28 20:38:40  dondosha
+* Moved Mega BLAST related parameters into a separate structure
+*
+* Revision 6.37  2001/11/13 18:20:33  dondosha
+* Use GapxEditScript structure instead of edit_script_t in higher level function calls
+*
+* Revision 6.36  2001/09/18 16:49:25  dondosha
+* Removed unneeded functions, eliminated mbutils.h header
+*
 * Revision 6.35  2001/06/13 21:40:54  dondosha
 * Moved GetGisFromFile declaration from mblast.h to blast.h
 *
@@ -153,7 +165,6 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 #include <ncbithr.h>
 #include <gapxdrop.h>
 #include <dust.h>
-#include <mbutils.h>
 #include <mbalign.h>
 
 
@@ -161,7 +172,7 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 extern "C" {
 #endif
 
-#define MB_DIAG_CLOSE 10
+#define MB_DIAG_CLOSE 6
 #define MB_DIAG_NEAR 30
 
 #define MB_HSP_CLOSE(q1, q2, s1, s2, c) \
@@ -202,7 +213,7 @@ BioseqMegaBlastEngineByLoc PROTO((SeqLocPtr slp, CharPtr progname, CharPtr datab
                             int (LIBCALLBACK *results_callback)PROTO((VoidPtr Ptr))));
 
 SeqAlignPtr PNTR
-BioseqMegaBlastEngineCore PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int4Ptr *pos_matrix));
+BioseqMegaBlastEngineCore PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options));
 
 BlastSearchBlkPtr BlastFillQueryOffsets PROTO((BlastSearchBlkPtr search, SeqLocPtr query_slp, Int4 wordsize));
 
@@ -275,7 +286,7 @@ void
 BlastSortUniqHspArray PROTO((BLAST_HitListPtr hitlist));
 
 void
-MegaBlastFillHspGapInfo PROTO((BLAST_HSPPtr hsp, edit_script_t PNTR ed_script));
+MegaBlastFillHspGapInfo PROTO((BLAST_HSPPtr hsp, GapXEditScriptPtr esp));
 
 GapXEditScriptPtr
 MBToGapXEditScript PROTO((edit_script_t PNTR ed_script));
@@ -313,6 +324,9 @@ MegaBlastSaveCurrentHitlist PROTO((BlastSearchBlkPtr search));
 
 FloatLo 
 MegaBlastGetHspPercentIdentity PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp));
+
+MegaBlastParameterBlkPtr
+MegaBlastParameterBlkNew PROTO((BLAST_OptionsBlkPtr options));
 
 #ifdef __cplusplus
 }

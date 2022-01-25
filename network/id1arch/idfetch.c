@@ -25,6 +25,18 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.21  2001/11/02 14:24:44  kans
+ made Fasta style SeqId args multi-line for Mac window
+
+ Revision 1.20  2001/11/02 12:36:20  kans
+ now using public Entrez2 server
+
+ Revision 1.19  2001/09/28 15:56:04  kans
+ look for extra and title fields in Entrez2 docsum
+
+ Revision 1.18  2001/09/10 21:09:36  kans
+ changed to use new Entrez2DocsumDataPtr - still need to get example of field_name keys
+
  Revision 1.17  2001/02/12 21:57:11  butanaev
  Made 3 retries to EntrezSynchronousQuery() when the NULL is returned.
 
@@ -114,80 +126,8 @@
  *
  * Modified by Eugene Yaschenko for ID1 Server
  *
- *
- * RCS Modification History:
- * $Log: idfetch.c,v $
- * Revision 1.17  2001/02/12 21:57:11  butanaev
- * Made 3 retries to EntrezSynchronousQuery() when the NULL is returned.
- *
- * Revision 1.16  2001/02/08 16:13:46  yaschenk
- * fixing wrong check for missing version in _PIR and SP
- *
- * Revision 1.15  2000/10/06 22:59:44  yaschenk
- * strncpy not setting \0 bug
- *
- * Revision 1.14  2000/08/10 15:17:38  butanaev
- * Updated -t 7 mode: strings like 'gi|3|emb|A00003.1|A00003' retreived from
- * Entrez2DocsumPtr->caption.
- *
- * Revision 1.13  2000/08/03 17:01:23  kans
- * included ni_lib.h for Mac, removed Mac compiler warnings
- *
- * Revision 1.12  2000/08/02 16:55:28  yaschenk
- * increasing buffer size to 1000
- *
- * Revision 1.11  2000/08/02 16:17:00  butanaev
- * Added:
- * -t 7         - to retrieve Entrez DocSums
- * -Q filename  - to read Entrez query from the file
- *
- * Revision 1.2  2000/06/01 18:05:35  butanaev
- * Fixed numerous bugs with control flow...
- *
- * Revision 1.1  2000/06/01 16:48:22  butanaev
- * New functionality:
- * -G parameter, which previously accepted the list of gi's,
- * now accepts gi,accession,accession.version,fasta seqid,
- * which can be mixed.
- *
- * -q parameter generates the list out of Entrez query
- *   when -q is used -d has special meaning:
- *   -d n - run query against Nucleotide database
- *   -d p - run query against Protein database
- *
- * -n parameter limits the output to the list of gi's
- *
- * Revision 1.6  2000/05/24 17:30:42  yaschenk
- * make parameter list look better
- *
- * Revision 1.5  2000/05/23 15:42:08  yaschenk
- * adding quality score display
- *
- * Revision 1.4  2000/03/31 18:35:58  yaschenk
- * Adding Jonathan's logic for FF and FASTA
- *
- * Revision 1.3  2000/03/30 20:43:51  yaschenk
- * adding AsnIoReset between Entries
- *
- * Revision 1.2  1999/11/02 18:27:43  yaschenk
- * adding -G parameter to idfetch
- *
- * Revision 1.1  1998/12/28 17:56:29  yaschenk
- * preparing idfetch to go to production
- *
- * Revision 1.1  1997/05/29 14:34:07  sirotkin
- * syncing sampson from mutant for procs. taking source from sampson. this is now current
- *
- * Revision 4.0  1995/07/26  13:55:55  ostell
- * force revision to 4.0
- *
- * Revision 1.3  1995/06/21  14:14:29  kans
- * replaced asn2ff_entrez with SeqEntryToFlat
- *
- * Revision 1.2  1995/05/17  17:59:15  epstein
- * add RCS log revision history
- *
  */
+
 #include <ncbi.h>
 #include <objsset.h>
 #include <accid1.h>
@@ -226,7 +166,7 @@ Args myargs[] = {
 2 - get SeqIds\n\t\t\t\
 3 - get gi historyn (sequence change only)\n\t\t\t\
 4 - get gi revision history (any change to asn.1)\n", "0","0","4",TRUE,'i',ARG_INT,0.0,0,NULL},
-	{"GI id for single Entity to dump" ,"0","1","99999999",TRUE,'g',ARG_INT,0.0,0,NULL},
+	{"GI id for single Entity to dump" ,"0","0","99999999",TRUE,'g',ARG_INT,0.0,0,NULL},
 	{"File with list of gi's, accessions, accession.version's, fasta seqid's to dump",NULL,NULL,NULL,TRUE,'G',ARG_FILE_IN,0.0,0,NULL},
 	{"Max complexity:\t\
 0 - get the whole blob\n\t\t\t\
@@ -236,7 +176,11 @@ Args myargs[] = {
 4 - get the minimal pub-set containing the bioseq of interest\n" ,"0","0","4",TRUE,'c',ARG_INT,0.0,0,NULL},
  	{"flaTtened SeqId, format: \n		\'type(name,accession,release,version)\'\n			as \'5(HUMHBB)\' or \n		type=accession, or \n		type:number ",
 		NULL,NULL,NULL,TRUE,'f',ARG_STRING,0.0,0,NULL},
- 	{"Fasta style SeqId ENCLOSED IN QUOTES: lcl|int or str bbs|int bbm|int gb|acc|loc emb|acc|loc pir|acc|name sp|acc|name pat|country|patent|seq gi|int dbj|acc|loc prf|acc|name pdb|entry|chain  ",
+ 	{"Fasta style SeqId ENCLOSED IN QUOTES:\n\t\t\t\
+lcl|int or str bbs|int bbm|int gb|acc|loc\n\t\t\t\
+emb|acc|loc pir|acc|name sp|acc|name\n\t\t\t\
+pat|country|patent|seq gi|int dbj|acc|loc\n\t\t\t\
+prf|acc|name pdb|entry|chain",
 	NULL,NULL,NULL,TRUE,'s',ARG_STRING,0.0,0,NULL},
         {"Log file", NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT,0.0,0,NULL},
         {"Generate gi list by entrez query", NULL,NULL,NULL,TRUE,'q',ARG_STRING,0.0,0,NULL},
@@ -308,6 +252,11 @@ Int2 Main()
 
   if(! SeqEntryLoad())
     ErrShow();
+
+  EntrezSetProgramName("IDFETCH");
+  /* EntrezSetServer("www.ncbi.nlm.nih.gov", 80,
+                  "/entrez/utils/entrez2server.fcgi");
+  */
 
   if(myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
   {
@@ -820,9 +769,8 @@ static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids)
   Entrez2DocsumListPtr  e2dl;
   Entrez2RequestPtr     e2rq;
   Entrez2ReplyPtr       e2ry;
+  Entrez2DocsumDataPtr  e2ddp;
   CharPtr db;
-  int old;
-  int count;
   Boolean result;
 
   if(num == 0)
@@ -843,13 +791,17 @@ static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids)
   for (dsp = e2dl->list; dsp != NULL; dsp = dsp->next)
   {
     char *title = "";
-    char *caption = "";
-    if(dsp->title)
-      title = dsp->title;
-    if(dsp->caption)
-      caption = dsp->caption;
+    char *extra = "";
+    for (e2ddp = dsp->docsum_data; e2ddp != NULL; e2ddp = e2ddp->next) {
+      if (StringHasNoText (e2ddp->field_value)) continue;
+      if (StringICmp (e2ddp->field_name, "Title") == 0) {
+        title = e2ddp->field_value;
+      } else if (StringICmp (e2ddp->field_name, "Extra") == 0) {
+        extra = e2ddp->field_value;
+      }
+    }
 
-    fprintf(fp,">%s %s\n", caption, title);
+    fprintf(fp,">%s %s\n", extra, title);
 
   }
 
@@ -1095,10 +1047,6 @@ static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
   Entrez2IdListPtr e2idlist;
 
   *uids = NULL;
-
-  EntrezSetProgramName("BLAST API");
-  EntrezSetServer("www.ncbi.nlm.nih.gov", 80,
-                  "/entrez/utils/entrez2server.fcgi");
 
   e2rq = EntrezCreateBooleanRequest(!count_only, FALSE,
                                     is_na? "Nucleotide" : "Protein",

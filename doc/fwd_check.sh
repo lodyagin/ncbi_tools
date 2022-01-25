@@ -1,6 +1,6 @@
 #! /bin/sh
-# $Id: fwd_check.sh,v 1.4 2000/03/20 22:21:12 vakatov Exp $
-# Author:  Denis Vakatov (vakatov@ncbi,nlm.nih.gov)
+# $Id: fwd_check.sh,v 1.5 2001/12/12 20:36:26 beloslyu Exp $
+# Author:  Denis Vakatov (vakatov@ncbi.nlm.nih.gov)
 #
 # Check for the status of FWDAEMON on the dispatching NCBI servers
 

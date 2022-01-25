@@ -30,20 +30,26 @@ static Int2 PREF_COMMON= 0;
 
 static int my_timer= 0;
 
+typedef struct t_nameList {
+    struct t_nameList* next;
+    char* name;
+} NameList, *NameListPtr;
+
 static struct t_or_buff {
-  Int4 tax_id;
-  OrgRefPtr p_org_ref;
-  int timer;
-  char div[16];
-  char embl[4];
-  int is_species;
+    Int4 tax_id;
+    OrgRefPtr p_org_ref;
+    int timer;
+    int is_uncultured;
+    int is_species;
+    int has_modif;
+    NameListPtr blast_name;
 } or_buff[BUFF_SIZE];
 
-static CharPtr DB_PATH= "TAXCLIENT_OS";
+static CharPtr DB_PATH= "TAX_OS";
 
 static Boolean we_want_synonyms= 0;
 
-static OrgRefPtr getFromBuff(Int4 id, int* is_sp, CharPtr div, CharPtr embl);
+static OrgRefPtr getFromBuff(Int4 id, int* is_sp, int* is_uncult, NameListPtr* bnl);
 static void loadInBuff(Int4 id);
 static void bldOrgRefOut(OrgRefPtr dst, OrgRefPtr src, Int4 tax_id);
 
@@ -85,6 +91,7 @@ static void initBuff(void)
     for(i= 0; i < BUFF_SIZE; i++) {
 	or_buff[i].tax_id= 0;
 	or_buff[i].p_org_ref= NULL;
+	or_buff[i].blast_name= NULL;
     }
 }
 
@@ -153,6 +160,20 @@ int InitTaxDB(void)
  *
  **************************************************************************/
 
+static void free_blast_name(NameListPtr   blast_name)
+{
+    if(blast_name != NULL) {
+	NameListPtr t;
+
+	do {
+	    t= blast_name->next;
+	    MemFree(blast_name);
+	    blast_name= t;
+	}
+	while(blast_name);
+    }   
+}
+
 int CloseTaxDB(void)
 {
     int i;
@@ -165,6 +186,9 @@ int CloseTaxDB(void)
 	for(i= 0; i < BUFF_SIZE; i++) {
 	    if(or_buff[i].p_org_ref != NULL) {
 		OrgRefFree(or_buff[i].p_org_ref);
+		if(or_buff[i].blast_name != NULL) {
+		    free_blast_name(or_buff[i].blast_name);
+		}
 	    }
 	}
     }
@@ -300,7 +324,7 @@ Int4 tax1_join(Int4 taxid1, Int4 taxid2)
     tree_closeCursor(cursor2);
     return aid;
 }
-	
+
 
 /***************************************************
  * Get tax_id by organism name
@@ -591,14 +615,14 @@ CharPtr tax1_getGCName(Int2 gc_id)
     return tax_getGCName(gc_id);
 }
 
-OrgRefPtr tax1_getOrgRef(Int4 tax_id, int* is_species, CharPtr div, CharPtr embl_cde)
+static OrgRefPtr s_tax1_getOrgRef(Int4 tax_id, int* is_species, int* is_uncultured, NameListPtr* blast_name)
 {
     OrgRefPtr orp;
 
     tax_id= getLiveId(tax_id);
     if(tax_id == 0) return NULL;
 
-    if((orp= getFromBuff(tax_id, is_species, div, embl_cde)) != NULL) {
+    if((orp= getFromBuff(tax_id, is_species, is_uncultured, blast_name)) != NULL) {
 	/* OrgRef is already in buffer */
 	return orp;
     }
@@ -607,9 +631,71 @@ OrgRefPtr tax1_getOrgRef(Int4 tax_id, int* is_species, CharPtr div, CharPtr embl
     loadInBuff(tax_id);
     unlockBuff();
 
-    return getFromBuff(tax_id, is_species, div, embl_cde);
+    return getFromBuff(tax_id, is_species, is_uncultured, blast_name);
 }
 
+OrgRefPtr tax1m_getOrgRef(Int4 tax_id, int* is_species, int* is_uncultured, CharPtr* blast_name)
+{
+    NameListPtr blast_name_list= NULL;
+    OrgRefPtr orp= s_tax1_getOrgRef(tax_id, is_species, is_uncultured, &blast_name_list);
+    if((blast_name_list != NULL) && (blast_name != NULL)) {
+	*blast_name= StringSave(blast_name_list->name);
+    }
+    return orp;
+}
+
+OrgRefPtr tax1_getOrgRef(Int4 tax_id, int* is_species, CharPtr div, CharPtr embl_cde)
+{
+    OrgRefPtr orp= s_tax1_getOrgRef(tax_id, is_species, NULL, NULL);
+    if(embl_cde != NULL) *embl_cde= '\0';
+    if((div != NULL) && (orp != NULL) && (orp->orgname != NULL) && (orp->orgname->div != NULL)) {
+	StringCpy(div, orp->orgname->div);
+    }
+    
+    return orp;
+}
+
+static ValNodePtr make_blast_name(NameListPtr bl)
+{
+    ValNodePtr list= NULL;
+    ValNodePtr header= NULL;
+
+    while(bl != NULL) {
+	list= ValNodeNew(list);
+	list->data.ptrvalue= StringSave(bl->name);
+	if(header == NULL) header= list;
+	bl= bl->next;
+    }
+    return header;
+}
+
+Taxon2DataPtr tax1m_getbyid(Int4 tax_id)
+{
+    Taxon2DataPtr res;
+    OrgRefPtr db_orgRef;
+    int is_species;
+    int is_uncultured;
+    NameListPtr bl;
+
+    if(tax_id <= 0) return NULL;
+    db_orgRef= s_tax1_getOrgRef(tax_id, &is_species, &is_uncultured, &bl);
+    if(db_orgRef == NULL) return NULL; /* nothing found */
+
+    res= Taxon2DataNew();
+    /* make new orgref */
+    res->org= OrgRefNew();
+    res->org->db= NULL;
+    res->org->orgname= NULL;
+    res->is_species_level= is_species;
+    res->is_uncultured= is_uncultured;
+    res->blast_name= make_blast_name(bl);
+
+    /* fill-up orgref based on db_orgRef */
+    bldOrgRefOut(res->org, db_orgRef, getLiveId(tax_id));
+    return res;
+}
+
+/* the old version of the same function */
 Taxon1DataPtr tax1_getbyid(Int4 tax_id)
 {
     Taxon1DataPtr res;
@@ -617,22 +703,18 @@ Taxon1DataPtr tax1_getbyid(Int4 tax_id)
     int is_species;
 
     if(tax_id <= 0) return NULL;
-    res= Taxon1DataNew();
-    res->div= MemNew(16);
-    res->embl_code= MemNew(4);
-    db_orgRef= tax1_getOrgRef(tax_id, &is_species, res->div, NULL/*res->embl_code*/);
-    res->embl_code[0]= '\0';
-    if(db_orgRef == NULL) {
-	Taxon1DataFree(res);
-	return NULL;
-    }
+    db_orgRef= s_tax1_getOrgRef(tax_id, &is_species, NULL, NULL);
+    if(db_orgRef == NULL) return NULL; /* nothing found */
 
+    res= Taxon1DataNew();
     /* make new orgref */
     res->org= OrgRefNew();
     res->org->db= NULL;
     res->org->orgname= NULL;
     res->is_species_level= is_species;
-
+    res->embl_code= NULL;
+    res->div= (db_orgRef->orgname != NULL)? StringSave(db_orgRef->orgname->div) : NULL;
+    
     /* fill-up orgref based on db_orgRef */
     bldOrgRefOut(res->org, db_orgRef, getLiveId(tax_id));
     return res;
@@ -862,18 +944,27 @@ static ValNodePtr bldSynValNodes(TaxNamePtr syn, Int2 n)
  *
  **************************************************************************/
 
-static CharPtr bldLineage(TreeCursorPtr cursor)
+static CharPtr bldLineage(TreeCursorPtr cursor, int* is_uncultured, NameListPtr* blast_name)
 {
     TXC_TreeNodePtr tnp;
     Uint2 s;
     TreeNodeId nid= tree_getId(cursor);
     CharPtr lineage= NULL;
     CharPtr tmp, t;
-    Int2 rank;
+    Int2 rank= 0;
     
 
     while(tree_parent(cursor)) {
 	if((tnp= tree_getNodeData(cursor, &s)) != NULL) {
+	    if(tnp->tax_id < 2) break;
+	    if(tnp->flags & TXC_UNCULTURED) *is_uncultured= 1;
+	    if((tnp->flags & TXC_STHIDE) == 0) { /* we do have a blast name here */
+		NameListPtr node= MemNew(sizeof(NameList));
+		node->name= tnp->node_label + (StringLen(tnp->node_label) + 1);
+		node->next= NULL;
+		*blast_name= node;
+		blast_name= &(node->next);
+	    }
 	    rank= tnp->flags & 0xFF;
 	    if(rank > SpeciesRank) {
 		if(lineage != NULL) {
@@ -881,7 +972,6 @@ static CharPtr bldLineage(TreeCursorPtr cursor)
 		}
 		continue;
 	    }
-	    if(tnp->tax_id < 2) break;
 
 	    if((tnp->flags & TXC_GBHIDE) == 0) {
 		s= StringLen(tnp->node_label);
@@ -923,7 +1013,8 @@ static ValNodePtr bldDBId(Int4 id)
     return dbnode;
 }
 
-static OrgNamePtr bldOrgName(TreeCursorPtr cursor, int* is_species_out, CharPtr div, CharPtr embl)
+static OrgNamePtr bldOrgName(TreeCursorPtr cursor, int* is_species_out, 
+			     int* is_uncultured, NameListPtr* blast_name)
 {
     OrgNamePtr onp;
     Uint2 s;
@@ -939,6 +1030,15 @@ static OrgNamePtr bldOrgName(TreeCursorPtr cursor, int* is_species_out, CharPtr 
 
     if(tnp == NULL) return NULL;
 
+    *is_uncultured= ((tnp->flags & TXC_UNCULTURED) != 0)? 1 : 0;
+    if((tnp->flags & TXC_STHIDE) == 0) { /* we do have a blast name here */
+	NameListPtr node= MemNew(sizeof(NameList));
+	node->name= tnp->node_label + (StringLen(tnp->node_label) + 1);
+	node->next= NULL;
+	*blast_name= node;
+	blast_name= &(node->next);
+    }
+
     onp= OrgNameNew();
 
     rank_id= tnp->flags & 0xFF;
@@ -947,8 +1047,7 @@ static OrgNamePtr bldOrgName(TreeCursorPtr cursor, int* is_species_out, CharPtr 
     div_id= (tnp->flags >> 8) & 0x3F;
     onp->gcode= (tnp->flags >> (8+6)) & 0x3F;
     onp->mgcode= (tnp->flags >> (8+6+6)) & 0x3F;
-    onp->lineage= bldLineage(cursor);
-    if(embl != NULL) *embl= '\0';
+    onp->lineage= bldLineage(cursor, is_uncultured, blast_name);
 	   
     is_species= (rank_id >= SpeciesRank)? 1 : 0;
     /* correct level by lineage if node has no rank */
@@ -970,7 +1069,7 @@ static OrgNamePtr bldOrgName(TreeCursorPtr cursor, int* is_species_out, CharPtr 
 
     if(tax_getDivision(div_id, &div_abbr, NULL)) {
 	onp->div= StringSave(div_abbr);
-	StringCpy(div, div_abbr);
+	/* StringCpy(div, div_abbr);*/
     }
     *is_species_out= is_species;
 
@@ -1035,7 +1134,7 @@ static OrgNamePtr bldOrgName(TreeCursorPtr cursor, int* is_species_out, CharPtr 
 }
 
 
-static Boolean bldOrgRef(Int4 id, OrgRefPtr orp, int* is_species, CharPtr div, CharPtr embl)
+static Boolean bldOrgRef(Int4 id, OrgRefPtr orp, int* is_species, int* is_uncult, NameListPtr* bnl)
 {
     TreeCursorPtr cursor= tree_openCursor(tax_tree, NULL, NULL);
     TaxNamePtr nameList;
@@ -1044,7 +1143,8 @@ static Boolean bldOrgRef(Int4 id, OrgRefPtr orp, int* is_species, CharPtr div, C
     if((cursor == NULL) || (!tc2_toNode(cursor, id))) return FALSE;
 
     *is_species= 0;
-    *div= *embl= '\0';
+    *is_uncult= 0;
+    *bnl= NULL;
 
     n= tax_getOrgNames(id, &nameList);
 
@@ -1078,7 +1178,7 @@ static Boolean bldOrgRef(Int4 id, OrgRefPtr orp, int* is_species, CharPtr div, C
 
     orp->mod= NULL;
     orp->db= bldDBId(id);
-    orp->orgname= bldOrgName(cursor, is_species, div, embl);
+    orp->orgname= bldOrgName(cursor, is_species, is_uncult, bnl);
     
 
     tree_closeCursor(cursor);
@@ -1104,18 +1204,24 @@ static void loadInBuff(Int4 id)
     }
 
     if(k >= 0) {
-	if(or_buff[k].p_org_ref != NULL) OrgRefFree(or_buff[k].p_org_ref);
+	if(or_buff[k].p_org_ref != NULL) {
+	    OrgRefFree(or_buff[k].p_org_ref);
+	    free_blast_name(or_buff[k].blast_name);
+	}
+	    
 	or_buff[k].tax_id= id;
 	or_buff[k].p_org_ref= OrgRefNew();
 	or_buff[k].timer= ++my_timer;
-	if(!bldOrgRef(id, or_buff[k].p_org_ref, &or_buff[k].is_species, or_buff[k].div, or_buff[k].embl)) {
+	or_buff[k].blast_name= NULL;
+	if(!bldOrgRef(id, or_buff[k].p_org_ref, &or_buff[k].is_species, 
+		      &or_buff[k].is_uncultured, &(or_buff[k].blast_name))) {
 	    OrgRefFree(or_buff[k].p_org_ref);
 	    or_buff[k].tax_id= 0;
 	}
     }
 }
 
-static OrgRefPtr getFromBuff(Int4 id, int* is_sp, CharPtr div, CharPtr embl)
+static OrgRefPtr getFromBuff(Int4 id, int* is_sp, int* is_uncult, NameListPtr* bnl)
 {
     int i;
     OrgRefPtr orp= NULL;
@@ -1127,8 +1233,8 @@ static OrgRefPtr getFromBuff(Int4 id, int* is_sp, CharPtr div, CharPtr embl)
 	    or_buff[i].timer= ++my_timer;
 	    orp= or_buff[i].p_org_ref;
 	    if(is_sp != NULL) *is_sp= or_buff[i].is_species;
-	    if(div != NULL) StringCpy(div, or_buff[i].div);
-	    if(embl != NULL) StringCpy(embl, ""/*or_buff[i].embl*/);
+	    if(is_uncult != NULL) *is_uncult= or_buff[i].is_uncultured;
+	    if(bnl != NULL) *bnl= or_buff[i].blast_name;
 	    break;
 	}
     }
@@ -1383,6 +1489,89 @@ static void populateReplaced(OrgRefPtr orp, CharPtr oldName)
     }
 }
 
+Taxon2DataPtr tax1m_lookup(OrgRefPtr inp_orgRef, int merge)
+{
+    Taxon2DataPtr res;
+    Int4 tax_id;
+    OrgRefPtr db_orgRef;
+    int is_species;
+    int is_uncultured;
+    NameListPtr bl;
+    Boolean need_search_name= TRUE;
+    CharPtr hit_name;
+
+    tax_id= tax1_getTaxIdByOrgRef(inp_orgRef);
+    if(tax_id <= 0) return NULL;
+    db_orgRef= s_tax1_getOrgRef(tax_id, &is_species, &is_uncultured, &bl);
+    if(db_orgRef == NULL) return NULL;
+
+    res= Taxon2DataNew();
+    res->is_species_level= is_species;
+    res->is_uncultured= is_uncultured;
+    res->blast_name= make_blast_name(bl);
+
+    /* populate search name if necessary */
+    if(inp_orgRef->taxname != NULL) {
+	if((db_orgRef->taxname != NULL) && (StringICmp(inp_orgRef->taxname, db_orgRef->taxname) == 0)) {
+	    need_search_name= FALSE;
+	}
+	else if((db_orgRef->common != NULL) && (StringICmp(inp_orgRef->taxname, db_orgRef->common) == 0)) {
+	    need_search_name= FALSE;
+	}
+    }
+
+    if(need_search_name && (inp_orgRef->common != NULL)) {
+	if((db_orgRef->taxname != NULL) && (StringICmp(inp_orgRef->common, db_orgRef->taxname) == 0)) {
+	    need_search_name= FALSE;
+	}
+	else if((db_orgRef->common != NULL) && (StringICmp(inp_orgRef->common, db_orgRef->common) == 0)) {
+	    need_search_name= FALSE;
+	}
+    }
+
+    if(need_search_name && (inp_orgRef->orgname != NULL)) {
+	/* check if search name already exists */
+	OrgModPtr omp;
+
+	for(omp= inp_orgRef->orgname->mod; omp != NULL; omp= omp->next) {
+	    if(omp->subtype == 254) {
+		need_search_name= FALSE;
+		break;
+	    }
+	}
+    }
+
+    hit_name= NULL;
+    if(need_search_name) {
+	if((inp_orgRef->taxname != NULL) && (inp_orgRef->taxname[0] != '\0')) {
+	    hit_name= StringSave(inp_orgRef->taxname);
+	}
+	else if((inp_orgRef->common != NULL) && (inp_orgRef->common[0] != '\0')) {
+	    hit_name= StringSave(inp_orgRef->common);
+	}
+    }
+
+    if(merge) {
+	/* we have to merge old orgref with the new one */
+	res->org= inp_orgRef;
+	/* clean-up old information */
+	if(inp_orgRef->taxname != NULL) MemFree(inp_orgRef->taxname);
+	if(inp_orgRef->common != NULL) MemFree(inp_orgRef->common);
+	if(inp_orgRef->syn != NULL) ValNodeFreeData(inp_orgRef->syn);
+	if(inp_orgRef->orgname != NULL) cleanOrgName(tax_id, inp_orgRef->orgname);
+    }
+    else {
+	/* make new orgref */
+	res->org= OrgRefNew();
+	res->org->db= NULL;
+	res->org->orgname= NULL;
+    }
+    /* fill-up orgref based on db_orgRef */
+    bldOrgRefOut(res->org, db_orgRef, tax_id);
+    if(need_search_name && (hit_name != NULL)) populateReplaced(res->org, hit_name);
+    return res;
+}
+
 Taxon1DataPtr tax1_lookup(OrgRefPtr inp_orgRef, int merge)
 {
     Taxon1DataPtr res;
@@ -1394,17 +1583,13 @@ Taxon1DataPtr tax1_lookup(OrgRefPtr inp_orgRef, int merge)
 
     tax_id= tax1_getTaxIdByOrgRef(inp_orgRef);
     if(tax_id <= 0) return NULL;
-    res= Taxon1DataNew();
-    res->div= MemNew(16);
-    res->embl_code= MemNew(4);
-    db_orgRef= tax1_getOrgRef(tax_id, &is_species, res->div, NULL /*res->embl_code*/);
-    res->embl_code[0]= '\0';
-    if(db_orgRef == NULL) {
-	Taxon1DataFree(res);
-	return NULL;
-    }
+    db_orgRef= s_tax1_getOrgRef(tax_id, &is_species, NULL, NULL);
+    if(db_orgRef == NULL) return NULL;
 
+    res= Taxon1DataNew();
     res->is_species_level= is_species;
+    res->embl_code= NULL;
+    res->div= (db_orgRef->orgname != NULL)? StringSave(db_orgRef->orgname->div) : NULL;
 
     /* populate search name if necessary */
     if(inp_orgRef->taxname != NULL) {
@@ -1775,7 +1960,7 @@ Int4 tax1e_needUpdate(OrgRefPtr inp_orgRef)
 
     if(tax_id != storedTaxId(inp_orgRef)) return 1;
     
-    db_orgRef= tax1_getOrgRef(tax_id, NULL, NULL, NULL /*res->embl_code*/);
+    db_orgRef= s_tax1_getOrgRef(tax_id, NULL, NULL, NULL /*res->embl_code*/);
     if(db_orgRef == NULL) {
 	return -2;
     }
@@ -1797,4 +1982,33 @@ Boolean tax1_isAlive(void)
 Int4 tax1_getTaxId4GI(Int4 gi)
 {
     return tax_getTaxId4GI(gi);
+}
+
+/***************************************************
+ * Get pointer to "blast" name
+ * Returns: the pointer on first blast name at or above this node in the lineage
+ * NOTE:
+ * This function does not make a copy of "blast" name, so, caller can not use
+ * MemFree function for returned pointer.
+ */
+CharPtr tax1m_getBlastName(Int4 tax_id)
+{
+    CharPtr res= NULL;
+    TreeCursorPtr cursor= tree_openCursor(tax_tree, NULL, NULL);
+
+    if(tc2_toNode(cursor, tax_id)) {
+	TXC_TreeNodePtr tnp;
+	Uint2 s;
+	do{
+	    tnp= tree_getNodeData(cursor, &s);
+	    if((tnp != NULL) && ((tnp->flags & TXC_STHIDE) == 0)) { /* we do have a blast name here */
+		res= tnp->node_label + (StringLen(tnp->node_label) + 1);
+		break;
+	    }
+	}
+	while(tree_parent(cursor));
+    }
+
+    tree_closeCursor(cursor);
+    return res;
 }

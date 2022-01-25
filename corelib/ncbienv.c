@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.22 $
+* $Revision: 6.25 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,13 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.25  2001/08/02 14:44:10  vakatov
+* [OSF1]  NLM_XOPEN_SOURCE_500:: Kludge-fix for the weak-minded native
+* preprocessor
+*
+* Revision 6.24  2001/08/01 16:15:38  vakatov
+* Rollback to R6.22
+*
 * Revision 6.22  2001/05/25 17:58:27  vakatov
 * [MAC] OpenConfigFile() -- replaced C++ style comments by the C-style ones
 *
@@ -473,11 +480,22 @@ static Nlm_Boolean Nlm_CacheAppParam_ST(Nlm_Boolean value)
 
 
 #ifdef OS_UNIX
+
+/* This is a special kludge for OSF1 native compiler which apparently
+ * cannot handle (_XOPEN_SOURCE == 500) when _XOPEN_SOURCE is defined
+ * to nothing
+ */
+#if (_XOPEN_SOURCE == 500)
+#  define NLM_XOPEN_SOURCE_500 1
+#else
+#  define NLM_XOPEN_SOURCE_500 0
+#endif
+
 #define NLM_POSIX1B \
     (_POSIX1B || _POSIX1C || \
     (_POSIX_C_SOURCE - 0 >= 199309L) || \
     defined(_POSIX_PTHREAD_SEMANTICS) || \
-    (defined(OS_UNIX_AIX)  &&  (_XOPEN_SOURCE==500)  &&  !defined(_UNIX95)))
+    (defined(OS_UNIX_AIX)  &&  NLM_XOPEN_SOURCE_500  &&  !defined(_UNIX95)))
 
 #ifndef LOGNAME_MAX
 #  if defined(MAXLOGNAME)

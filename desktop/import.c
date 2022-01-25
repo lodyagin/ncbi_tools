@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.27 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -1879,6 +1879,7 @@ static ENUM_ALIST(molinfo_biomol_alist)
   {"Genomic-mRNA",          10},
   {"cRNA",                  11},
   {"Small nucleolar RNA",   12},
+  {"Transcribed RNA",       13},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -1895,6 +1896,7 @@ static ENUM_ALIST(molinfo_biomol_nuc_alist)
   {"Genomic-mRNA",          10},
   {"cRNA",                  11},
   {"Small nucleolar RNA",   12},
+  {"Transcribed RNA",       13},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -2568,6 +2570,7 @@ typedef struct gbblockpage {
   ButtoN        htgsDraft;
   ButtoN        htgsFulltop;
   ButtoN        htgsActivefin;
+  ButtoN        htgsCancelled;
   DialoG        kywds;
   DialoG        xaccns;
   DialoG        entryDate;
@@ -2586,6 +2589,7 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
   GenBankPagePtr  gpp;
   ValNodePtr      head;
   Boolean         isActivefin = FALSE;
+  Boolean         isCancelled = FALSE;
   Boolean         isDraft = FALSE;
   Boolean         isFulltop = FALSE;
   CharPtr         str;
@@ -2603,7 +2607,8 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
       str = (CharPtr) vnp->data.ptrvalue;
       if (StringICmp (str, "HTGS_DRAFT") != 0 &&
           StringICmp (str, "HTGS_FULLTOP") != 0 &&
-          StringICmp (str, "HTGS_ACTIVEFIN") != 0) {
+          StringICmp (str, "HTGS_ACTIVEFIN") != 0 &&
+          StringICmp (str, "HTGS_CANCELLED") != 0) {
         ValNodeCopyStr (&head, 0, str);
       }
     }
@@ -2619,11 +2624,14 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
         isFulltop = TRUE;
       } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_ACTIVEFIN") == 0) {
         isActivefin = TRUE;
+      } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_CANCELLED") == 0) {
+        isCancelled = TRUE;
       }
     }
     SafeSetStatus (gpp->htgsDraft, isDraft);
     SafeSetStatus (gpp->htgsFulltop, isFulltop);
     SafeSetStatus (gpp->htgsActivefin, isActivefin);
+    SafeSetStatus (gpp->htgsCancelled, isCancelled);
   }
 }
 
@@ -2633,6 +2641,7 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
   GBBlockPtr      gbp;
   GenBankPagePtr  gpp;
   Boolean         noActivefin;
+  Boolean         noCancelled;
   Boolean         noDraft;
   Boolean         noFulltop;
   ValNodePtr      vnp;
@@ -2683,6 +2692,17 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
           ValNodeCopyStr (&(gbp->keywords), 0, "HTGS_ACTIVEFIN");
         }
       }
+      if (GetStatus (gpp->htgsCancelled)) {
+        noCancelled = TRUE;
+        for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+          if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_CANCELLED") == 0) {
+            noCancelled = FALSE;
+          }
+        }
+        if (noCancelled) {
+          ValNodeCopyStr (&(gbp->keywords), 0, "HTGS_CANCELLED");
+        }
+      }
     }
   }
   return (Pointer) gbp;
@@ -2699,6 +2719,7 @@ static void DeleteKeywordProc (ButtoN b)
     SafeSetStatus (gpp->htgsDraft, FALSE);
     SafeSetStatus (gpp->htgsFulltop, FALSE);
     SafeSetStatus (gpp->htgsActivefin, FALSE);
+    SafeSetStatus (gpp->htgsCancelled, FALSE);
   }
 }
 
@@ -2804,10 +2825,11 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
       gpp->kywds = CreateVisibleStringDialog (f2, 3, -1, 15);
     }
     if (internal || genome || (gbp != NULL && gbp->keywords != NULL)) {
-      f5 = HiddenGroup (f2, 3, 0, NULL);
+      f5 = HiddenGroup (f2, 2, 0, NULL);
       gpp->htgsDraft = CheckBox (f5, "HTGS_DRAFT", NULL);
       gpp->htgsFulltop = CheckBox (f5, "HTGS_FULLTOP", NULL);
       gpp->htgsActivefin = CheckBox (f5, "HTGS_ACTIVEFIN", NULL);
+      gpp->htgsCancelled = CheckBox (f5, "HTGS_CANCELLED", NULL);
     }
     if (internal) {
       b = PushButton (m, "Delete All Keywords", DeleteKeywordProc);

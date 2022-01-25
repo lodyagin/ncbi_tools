@@ -1,7 +1,7 @@
 #ifndef NCBI_CORE__H
 #define NCBI_CORE__H
 
-/*  $Id: ncbi_core.h,v 6.11 2001/06/19 20:16:18 lavr Exp $
+/*  $Id: ncbi_core.h,v 6.13 2001/09/27 22:29:35 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,6 +62,12 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core.h,v $
+ * Revision 6.13  2001/09/27 22:29:35  vakatov
+ * Always define "NDEBUG" if "_DEBUG" is not defined (mostly for the C Toolkit)
+ *
+ * Revision 6.12  2001/08/09 16:22:51  lavr
+ * Remove last (unneeded) parameter from LOG_Reset()
+ *
  * Revision 6.11  2001/06/19 20:16:18  lavr
  * Added #include <connect/ncbi_types.h>
  *
@@ -103,6 +109,11 @@
 
 #include <connect/ncbi_types.h>
 
+
+/* Run-time debugging */
+#if !defined(NDEBUG)  &&  !defined(_DEBUG)
+#  define NDEBUG
+#endif
 #include <assert.h>
 #if defined(NDEBUG)
 #  define verify(expr)  (void)(expr)
@@ -311,8 +322,7 @@ extern void LOG_Reset
 (LOG          lg,         /* created by LOG_Create() */
  void*        user_data,  /* new user data */
  FLOG_Handler handler,    /* new handler */
- FLOG_Cleanup cleanup,    /* new cleanup */
- int/*bool*/  do_cleanup  /* call old cleanup (if any) for the old data */
+ FLOG_Cleanup cleanup     /* new cleanup */
  );
 
 

@@ -31,8 +31,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.14 $
+/* $Revision: 6.15 $
 * $Log: gapxdrop.h,v $
+* Revision 6.15  2001/07/19 22:13:32  dondosha
+* Made GapXEditScriptDelete public for use in mblast.c
+*
 * Revision 6.14  2000/11/30 21:37:39  madden
 * Roll back before GapXDropSetAlignMask changes
 *
@@ -257,6 +260,7 @@ GapXEditBlockPtr LIBCALL SimpleIntervalToGapXEditBlock PROTO((Int4 start1, Int4 
 
 GapXEditBlockPtr LIBCALL GapXEditBlockNew PROTO((Int4 start1, Int4 start2));
 GapXEditBlockPtr LIBCALL GapXEditBlockDelete PROTO((GapXEditBlockPtr edit_block));
+GapXEditScriptPtr LIBCALL GapXEditScriptDelete PROTO((GapXEditScriptPtr esp));
 
 Boolean LIBCALL PerformNtGappedAlignment PROTO((GapAlignBlkPtr gap_align));
 

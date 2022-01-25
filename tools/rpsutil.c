@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.42 2001/07/09 13:12:03 madden Exp $
+/* $Id: rpsutil.c,v 6.44 2001/12/21 20:41:13 bauer Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.42 $
+* $Revision: 6.44 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.44  2001/12/21 20:41:13  bauer
+* changed string parsing for Pfam in RPSBgetCddHits to deal with longer Deflines
+*
+* Revision 6.43  2001/07/13 18:41:20  kans
+* protect against NULL cdd->ShortName in sprintf statement
+*
 * Revision 6.42  2001/07/09 13:12:03  madden
 * Removed unused variables
 *
@@ -1548,7 +1554,7 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
         if (StrCmp(dbname,"Pfam") == 0) {
           cdhThis->ShortName = SaveUntilChar(title, &tmp, ',');
 	  if (tmp)
-          	cdhThis->Definition = SaveUntilChar(tmp+1, &tmp, ',');
+          	cdhThis->Definition = SaveUntilChar(tmp+1, &tmp, '.');
         } else if (StrCmp(dbname,"Smart") == 0) {  
           if (StrNCmp(cdhThis->CDDid,"smart0",6) == 0) { /*new style accession*/
             cdhThis->ShortName = SaveUntilChar(title, &tmp, ',');
@@ -2042,11 +2048,13 @@ NLM_EXTERN void AnnotateRegionsFromCDD (
           AddFieldToCddUserObject (uop, "evalue", NULL, 0, cdd->evalue);
           AddFieldToCddUserObject (uop, "bit_score", NULL, 0, cdd->bit_score);
         }
-        len = StringLen (cdd->ShortName) + 10;
-        str = MemNew (len);
-        if (str != NULL) {
-          sprintf (str, "%s", cdd->ShortName);
-          sfp->comment = str;
+        if (cdd->ShortName != NULL) {
+          len = StringLen (cdd->ShortName) + 10;
+          str = MemNew (len);
+          if (str != NULL) {
+            sprintf (str, "%s", cdd->ShortName);
+            sfp->comment = str;
+          }
         }
 
         /* create CDD db_xref */

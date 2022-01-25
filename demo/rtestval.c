@@ -5,7 +5,7 @@
 *       check for stop codons
 *       Check for and fix non 3.0 asn spec things
 *
-* $Id: rtestval.c,v 1.2 2001/01/02 21:18:14 kans Exp $
+* $Id: rtestval.c,v 1.3 2001/11/21 21:58:01 kans Exp $
 *
 *****************************************************************************/
 #include <accid1.h>
@@ -26,7 +26,7 @@ Args myargs[NUMARG] = {
 	{"Patch invalid sequence residues?","F",NULL,NULL,TRUE,'p',ARG_BOOLEAN,0.0,0,NULL},
 	{"Lowest severity of error to show","3","0","4",FALSE,'q',ARG_INT,0.0,0,NULL},
 	{"ASN.1 spec level to filter","0","0","3",FALSE,'l',ARG_INT,0.0,0,NULL},
-	{"Use SeqMgr indexing?","F",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
+	{"Use SeqMgr indexing?","T",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
 	{"Validate alignments?","F",NULL,NULL,TRUE,'a',ARG_BOOLEAN,0.0,0,NULL},
 	{"Use remote Fetch?","F",NULL,NULL,TRUE,'f',ARG_BOOLEAN,0.0,0,NULL}};
 

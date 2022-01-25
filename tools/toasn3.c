@@ -18,6 +18,7 @@
 #include <sqnutils.h>
 #include <explore.h>
 #include <edutil.h>
+#include <subutil.h>
 
 static char *this_file = "toasn3";
 #ifdef THIS_FILE
@@ -98,13 +99,31 @@ static ORGMOD check_tech[TOTAL_TECH] = {
 static void CheckGeneticCode(SeqEntryPtr sep);
 
 static Int2 FindStr(CharPtr PNTR array, Int2 array_num, CharPtr str) {
+	Char ch;
 	Int2 i;
+	size_t len;
+	Char tmp [64];
+	CharPtr val;
 	
 	for (i = 0; i < array_num; i++) {
 		if (array[i] == NULL) {
 			continue;
 		}
-		if (StringNCmp(str, array[i], StringLen(array[i])) == 0) {
+		StringNCpy_0 (tmp, array[i], sizeof (tmp));
+		len = StringLen (tmp);
+		if (StringNCmp(str, tmp, len) == 0) {
+			return i;
+		}
+		val = tmp;
+		ch = *val;
+		while (ch != '\0') {
+			if (ch == '-') {
+				*val = ' ';
+			}
+			val++;
+			ch = *val;
+		}
+		if (StringNCmp(str, tmp, len) == 0) {
 			return i;
 		}
 	}
@@ -651,6 +670,27 @@ static void FixOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
 /*****************************************************************************
 *
+*   HasSiteRef(sfp, userdata)
+*   	Checks for Site-ref ImpFeat before unnecessarily rearranging pub descriptors
+*****************************************************************************/
+static void HasSiteRef (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  BoolPtr     foundP;
+  ImpFeatPtr  ifp;
+
+  foundP = (BoolPtr) userdata;
+  if (sfp->cit == NULL) return;
+  if (sfp->data.choice != SEQFEAT_IMP) return;
+  ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+  if (ifp == NULL) return;
+  if (StringCmp(ifp->key, "Site-ref") == 0) {
+    *foundP = TRUE;
+  }
+}
+
+/*****************************************************************************
+*
 *   SeqEntryPubsAsn4(sep)
 *   	Converts pubs to asn.1 spec 4.0 within SeqEntryPtr
 *****************************************************************************/
@@ -661,6 +701,7 @@ Int4 SeqEntryPubsAsn4 (SeqEntryPtr sep)
 	ValNodePtr vnp = NULL, publist= NULL, tmp, v;
 	PubdescPtr		pubdesc;
 	ValNodePtr		descr = NULL;
+	Boolean foundSitRef = FALSE;
 	
 	if (!IS_Bioseq(sep)) {
 		bioset = (BioseqSetPtr) (sep->data.ptrvalue); /* top level set */
@@ -669,7 +710,10 @@ Int4 SeqEntryPubsAsn4 (SeqEntryPtr sep)
 	SeqEntryExplore(sep, &vnp, ChangeCitQual);
 	vnp_psp_free(vnp); 
 	
-	SeqEntryExplore(sep, NULL, NewPubs);
+	VisitFeaturesInSep (sep, (Pointer) &foundSitRef, HasSiteRef);
+	if (foundSitRef) {
+		SeqEntryExplore(sep, NULL, NewPubs);
+	}
 	SeqEntryExplore(sep, NULL, DeleteSites);
 
 /* move pubs in set to the top level */
@@ -1138,6 +1182,55 @@ static Boolean is_equiv(SeqEntryPtr sep)
 	return TRUE; 
 }
 
+static void RestoreUpdateDatePos (SeqEntryPtr sep, Int2 update_date_pos)
+
+{
+  BioseqSetPtr  bssp;
+  ValNodePtr    descr;
+  ValNodePtr    vnp;
+
+  if (update_date_pos < 0) return;
+  if (! IS_Bioseq_set (sep)) return;
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp == NULL) return;
+
+  vnp = ValNodeExtractList (&(bssp->descr), Seq_descr_update_date);
+  if (vnp == NULL) return;
+  if (update_date_pos == 0) {
+    vnp->next = bssp->descr;
+    bssp->descr = vnp;
+  } else {
+    descr = bssp->descr;
+    while (update_date_pos > 1) {
+      descr = descr->next;
+      update_date_pos--;
+    }
+    if (descr != NULL) {
+      vnp->next = descr->next;
+      descr->next = vnp;
+    } else {
+      bssp->descr = ValNodeLink (&(bssp->descr), vnp);
+    }
+  }
+}
+
+static Int2 GetUpdateDatePos (SeqEntryPtr sep)
+
+{
+  BioseqSetPtr  bssp;
+  Int2          i;
+  ValNodePtr    vnp;
+
+  if (! IS_Bioseq_set (sep)) return -1;
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp == NULL) return -1;
+
+  for (vnp = bssp->descr, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+    if (vnp->choice == Seq_descr_update_date) return i;
+  }
+  return -1;
+}
+
 /*****************************************************************************
 *   SeqEntryToAsn3Ex(sep)
 *   	Converts a SeqEntry with old OrgRefs to SeqEntry with Biosource
@@ -1168,6 +1261,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 	BSMap bs;
 	ValNodePtr mult = NULL;
 	Int4 retval = INFO_ASNOLD, ret;
+	Int2 update_date_pos;
 	
 	ta.had_biosource = FALSE;
 	ta.had_molinfo = FALSE;
@@ -1181,6 +1275,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 	if (sep == NULL) {
 		return ERR_INPUT;
 	}
+	update_date_pos = GetUpdateDatePos (sep);
 	RemoveEmptyTitleAndPubGenAsOnlyPub (sep);
 	if (source_correct) {
 		SeqEntryExplore(sep, (Pointer)(&porg), CorrectSourceFeat);
@@ -1231,6 +1326,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 		CheckGeneticCode(sep);
 		NormalizeSegSeqMolInfo (sep);
 		toasn3_free(&ta);
+		RestoreUpdateDatePos (sep, update_date_pos);
 		if(qm.name != NULL)
 		{
 			MemFree(qm.name);
@@ -1297,6 +1393,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 	CheckGeneticCode(sep);
 	NormalizeSegSeqMolInfo (sep);
 	toasn3_free(&ta);
+	RestoreUpdateDatePos (sep, update_date_pos);
 	if(qm.name)
 		qm.name=MemFree(qm.name);
 	return retval;
@@ -2033,8 +2130,8 @@ Int4 FixNucProtSet(SeqEntryPtr sep)
 			sfp = SeqFeatNew();
 	    	sfp->location = ValNodeNew(NULL);
 	    	sfp->location->choice = SEQLOC_WHOLE;
-			sip = SeqIdDup(bsp->id);
-	    	sfp->location->data.ptrvalue = sip ;
+			sip = SeqIdStripLocus (SeqIdDup (SeqIdFindBest (bsp->id, 0)));
+	    	sfp->location->data.ptrvalue = sip;
 			sfp->data.choice = SEQFEAT_BIOSRC;
 			sfp->data.value.ptrvalue = 
 				AsnIoMemCopy(bs, (AsnReadFunc) BioSourceAsnRead, 
@@ -4268,7 +4365,7 @@ SEQLOC_STOP);
                 noLeft = (noLeftFeat || noLeftGene);
                 noRight = (noRightFeat || noRightGene);
                 SetSeqLocPartial (gene->location, noLeft, noRight);
-                sfp->partial = (gene->partial || noLeft || noRight);
+                gene->partial = (gene->partial || noLeft || noRight);
               }
             }
           
@@ -4430,7 +4527,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 	ValNodePtr tmp1, tmp2;
 	Uint2 retval;
 	Int2 i;
-	Boolean lfree = FALSE;
+	Boolean lfree = FALSE, partial5, partial3;
 	CharPtr p, q;
 	GBQualPtr qu, qunext;
 	
@@ -4468,6 +4565,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 		} else {
 			if (OutOfFramePeptideButEmblOrDdbj (f1, best_cds))
 				continue;
+			CheckSeqLocForPartial (f1->location, &partial5, &partial3);
 			slp = dnaLoc_to_aaLoc(best_cds, f1->location, TRUE, &frame, FALSE);
 			if (slp == NULL) {
 			p = SeqLocPrint(f1->location);
@@ -4477,11 +4575,12 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 			MemFree(q);
 				continue;
 			}
+			SetSeqLocPartial (slp, partial5, partial3);
 			ifp = (ImpFeatPtr) f1->data.value.ptrvalue;
 			sfp = SeqFeatNew();
 			sfp->location = slp;
 
-			sfp->partial = f1->partial;
+			sfp->partial = (Boolean) (f1->partial || partial5 || partial3);
 			sfp->excpt = f1->excpt;
 			sfp->exp_ev = f1->exp_ev;
 			sfp->pseudo = f1->pseudo;
@@ -4554,8 +4653,9 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 					MemFree(sfp->comment);
 				sfp->comment = StringSave(f1->title);
 			}
+			CheckSeqLocForPartial (f1->location, &partial5, &partial3);
 			sfp->excpt = f1->excpt;
-			sfp->partial = f1->partial;
+			sfp->partial = (Boolean) (f1->partial || partial5 || partial3);
 			sfp->exp_ev = f1->exp_ev;
 			sfp->pseudo = f1->pseudo;
 			if(sfp->location)
@@ -4571,6 +4671,7 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 				MemFree(q);
 				continue;
 			}
+			SetSeqLocPartial (sfp->location, partial5, partial3);
 			if(f1->comment != NULL)
 				MemFree(f1->comment);
 			f1->comment = StringSave("FeatureToBeDeleted");
@@ -4637,10 +4738,12 @@ static void GetCdRegionsWithPeptides (SeqEntryPtr sep, Pointer data, Int4 index,
 				} else if (StringCmp(ifp->key, "misc_feature") == 0 
 						&& sfp->comment != NULL) {
 					if ((i = FindStr(feat_site, num_site, sfp->comment)) != -1){
-						tmp = ValNodeNew(NULL);
-						tmp->choice = SEQFEAT_SITE;
-						tmp->data.ptrvalue = sfp;
-						sfap->pept = tie_next(sfap->pept, tmp);
+						if (i >= 23 && i <= 25) {
+							tmp = ValNodeNew(NULL);
+							tmp->choice = SEQFEAT_SITE;
+							tmp->data.ptrvalue = sfp;
+							sfap->pept = tie_next(sfap->pept, tmp);
+						}
 					} else if ((i = 
 							FindStr(feat_bond, num_bond, sfp->comment)) != -1){
 						tmp = ValNodeNew(NULL);
@@ -5232,6 +5335,7 @@ static void StripTitleFromProteinProducts (SeqEntryPtr sep, Pointer mydata,
 
 {
   BioseqPtr   bsp;
+  SeqIdPtr    sip;
   ValNodePtr  vnp;
 
   if (sep == NULL) return;
@@ -5239,6 +5343,9 @@ static void StripTitleFromProteinProducts (SeqEntryPtr sep, Pointer mydata,
   bsp = (BioseqPtr) sep->data.ptrvalue;
   if (bsp == NULL) return;
   if (! ISA_aa (bsp->mol)) return;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER) return;
+  }
   vnp = ValNodeExtract (&(bsp->descr), Seq_descr_title);
   if (vnp == NULL) return;
   ValNodeFreeData (vnp);
@@ -5301,11 +5408,18 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
   ssp = *sspp;
   while (ssp != NULL) {
     next = ssp->next;
-    if (ssp->subtype != 14 && ssp->subtype != 15) {
+    if (ssp->subtype != SUBSRC_germline &&
+        ssp->subtype != SUBSRC_rearranged &&
+        ssp->subtype != SUBSRC_transgenic &&
+        ssp->subtype != SUBSRC_environmental_sample) {
       CleanVisString (&(ssp->name));
     }
     CleanVisString (&(ssp->attrib));
-    if (TASNStringHasNoText (ssp->name) && ssp->subtype != 14 && ssp->subtype != 15) {
+    if (TASNStringHasNoText (ssp->name) &&
+        ssp->subtype != SUBSRC_germline &&
+        ssp->subtype != SUBSRC_rearranged &&
+        ssp->subtype != SUBSRC_transgenic &&
+        ssp->subtype != SUBSRC_environmental_sample) {
       *prev = ssp->next;
       ssp->next = NULL;
       SubSourceFree (ssp);
@@ -5651,6 +5765,7 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
 typedef struct bool_bioseq_set {
     Uint2        found;
     BioseqSetPtr bssp;
+    Boolean      doPseudo;
 } BoolBioseqSet, PNTR BoolBioseqSetPtr;
 
 /**********************************************************/
@@ -5727,7 +5842,8 @@ static void move_cds_within_nucprot(SeqEntryPtr sep, Pointer mydata, Int4 index,
       prevsfp = (Pointer PNTR) &(sap->data);
       while (sfp != NULL) {
         nextsfp = sfp->next;
-        if (sfp->data.choice == SEQFEAT_CDREGION) {
+        if (sfp->data.choice == SEQFEAT_CDREGION && (! sfp->pseudo) &&
+            (sfp->product != NULL || SeqLocLen (sfp->location) >= 6)) {
           *(prevsfp) = sfp->next;
           sfp->next = NULL;
           bbsp->found++;
@@ -5757,7 +5873,7 @@ static void move_cds_within_nucprot(SeqEntryPtr sep, Pointer mydata, Int4 index,
  *      Moves cdregion features to nuc-prot set level
  *
  **********************************************************/
-Uint2 move_cds(SeqEntryPtr sep)
+Uint2 move_cds_ex (SeqEntryPtr sep, Boolean doPseudo)
 {
     BioseqSetPtr     bssp;
     Uint2            found;
@@ -5778,10 +5894,16 @@ Uint2 move_cds(SeqEntryPtr sep)
     if (bssp->_class != 1) return 0;
     bbsp.found = 0;
     bbsp.bssp = bssp;
+    bbsp.doPseudo = doPseudo;
     for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
     	SeqEntryExplore (sep, (Pointer) &bbsp, move_cds_within_nucprot);
     }
     return(bbsp.found);
+}
+
+Uint2 move_cds(SeqEntryPtr sep)
+{
+  return move_cds_ex (sep, TRUE);
 }
 
 static Boolean MoveDbxrefs (GatherContextPtr gcp)

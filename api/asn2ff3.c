@@ -35,6 +35,45 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.104  2001/11/29 18:29:38  kans
+* added FANTOM_DB to list of legal db_xrefs, incremented DBNUM
+*
+* Revision 6.103  2001/11/12 19:32:38  kans
+* updated mRNAEvidenceComment
+*
+* Revision 6.102  2001/10/25 12:45:45  kans
+* Get3LetterSymbol was using table->num instead of table_3aa->num
+*
+* Revision 6.101  2001/10/15 17:08:44  kans
+* updated legal db_xref list to collaboration + RefSeq
+*
+* Revision 6.100  2001/10/15 13:57:22  kans
+* added BDGP_INS and SoyBase as legal db_xrefs
+*
+* Revision 6.99  2001/10/02 17:39:50  yaschenk
+* Removing memory leaks
+*
+* Revision 6.98  2001/09/06 20:31:24  yaschenk
+* removing memory leak - seqid returned by GetSeqIdForGI() needs to be freed
+*
+* Revision 6.97  2001/09/05 23:37:42  tatiana
+* ribosomal slippage added to /note
+*
+* Revision 6.96  2001/09/05 23:32:39  tatiana
+* supressed comparison of note to gene->synonym
+*
+* Revision 6.95  2001/08/22 22:35:07  kans
+* added ProductIsLocal for /translation
+*
+* Revision 6.94  2001/08/07 16:49:41  kans
+* use NUM_SEQID, added third party annotation SeqIDs to one more place
+*
+* Revision 6.93  2001/08/03 20:36:16  kans
+* implemented ASN2GNBK_PRINT_UNKNOWN_ORG test to suppress unwanted mode diffs for asn2gnbk QA
+*
+* Revision 6.92  2001/07/12 17:12:49  kans
+* biop->genome range checks in AddBioSourceToGBQual to prevent crashes
+*
 * Revision 6.91  2001/07/08 21:18:50  kans
 * if ssp->subtype is 0, use ? as tag in note
 *
@@ -546,6 +585,7 @@
 #include <edutil.h>
 #include <gather.h>
 #include <explore.h>
+#include <sqnutils.h>
 
 #define METHOD_concept_transl_a 6
 
@@ -618,6 +658,7 @@ ORGMOD orgmod_subtype[34] = {
 	{"old_lineage", 253}, {"old_name", 254}, {"note", 255}, { NULL, 0 }
 };
 
+/*
 CharPtr dbtag[DBNUM] = {
   "PIDe", "PIDd", "PIDg", "PID", "FLYBASE",
   "GDB", "MIM", "SGD", "SWISS-PROT", "CK",
@@ -625,7 +666,52 @@ CharPtr dbtag[DBNUM] = {
   "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR",
   "GI", "RiceGenes", "UniGene", "LocusID", "dbSNP",
   "RATMAP", "RGD", "CDD", "UniSTS", "InterimID", "COG", "GO", "niaEST",
-  "GeneID", 
+  "GeneID", "BDGP_INS", "SoyBase",
+  };
+*/
+
+CharPtr dbtag[DBNUM] = {
+  "PIDe", "PIDd", "PIDg", "PID",
+  "ATCC",
+  "ATCC(in host)",
+  "ATCC(dna)",
+  "BDGP_EST",
+  "BDGP_INS",
+  "CDD",
+  "CK",
+  "COG",
+  "dbEST",
+  "dbSNP",
+  "dbSTS",
+  "ENSEMBL",
+  "ESTLIB",
+  "FANTOM_DB",
+  "FLYBASE",
+  "GDB",
+  "GeneID",
+  "GI",
+  "GO",
+  "InterimID",
+  "LocusID",
+  "MaizeDB",
+  "MGD",
+  "MGI",
+  "MIM",
+  "niaEST",
+  "PIR",
+  "PSEUDO",
+  "RATMAP",
+  "RiceGenes",
+  "REMTREMBL",
+  "RGD",
+  "RZPD",
+  "SGD",
+  "SoyBase",
+  "SPTREMBL",
+  "SWISS-PROT",
+  "taxon",
+  "UniGene",
+  "UniSTS",
   };
 
 
@@ -704,7 +790,8 @@ static Boolean CheckSeqIdChoice(SeqIdPtr sip)
 	
 	for (si = sip; si; si=si->next) {
 		ch = si->choice;
-		if (ch == SEQID_GI || ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ) {
+		if (ch == SEQID_GI || ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ ||
+			ch == SEQID_TPG || ch == SEQID_TPE || ch == SEQID_TPD) {
 			return TRUE;
 		}
 	}
@@ -718,7 +805,8 @@ static SeqIdPtr GetSeqIdChoice(SeqIdPtr sip)
 	
 	for (si = sip; si; si=si->next) {
 		ch = si->choice;
-		if (ch == SEQID_GI || ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ || ch == SEQID_OTHER) {
+		if (ch == SEQID_GI || ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ ||
+			ch == SEQID_OTHER || ch == SEQID_TPG || ch == SEQID_TPE || ch == SEQID_TPD) {
 			return si;
 		}
 	}
@@ -733,7 +821,8 @@ static Boolean CheckSeqIdAccVer(SeqIdPtr sip)
 	
 	for (si = sip; si; si=si->next) {
 		ch = si->choice;
-		if (ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ || ch == SEQID_OTHER) {
+		if (ch == SEQID_GENBANK || ch == SEQID_EMBL || ch == SEQID_DDBJ || ch == SEQID_OTHER ||
+			ch == SEQID_TPG || ch == SEQID_TPE || ch == SEQID_TPD) {
 			tsip = si->data.ptrvalue;
 			if (tsip->accession != NULL && tsip->version >= 1) {
 				return TRUE;
@@ -936,7 +1025,7 @@ static CharPtr Get3LetterSymbol (Uint1 seq_code, SeqCodeTablePtr table, Uint1 re
 		table_3aa=SeqCodeTableFind (Seq_code_iupacaa3);
 		if (ptr != NULL && *ptr != '\0' && table_3aa != NULL)
 		{
-			for (index=0; index < (int) table->num; index++)
+			for (index=0; index < (int) table_3aa->num; index++)
 			{
 				if (StringCmp(ptr, (table_3aa->names) [index]) == 0)
 				{
@@ -1562,11 +1651,15 @@ static void PutTranslationLast(SeqFeatPtr sfp)
 	return;
 }	/* PutTranslationLast */
 
+static CharPtr mrnaevtext1 = "Derived by automated computational analysis";
+static CharPtr mrnaevtext2 = "using gene prediction method:";
+static CharPtr mrnaevtext3 = "Supporting evidence includes similarity to:";
+
 NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
 {
     ObjectIdPtr		oip;
 	UserFieldPtr	ufp, u, uu;
-	CharPtr			method, ptr, ne_name;
+	CharPtr			method = NULL, ptr, ne_name;
 	static Char		temp[20];
 	Int2			ptrlen=0, np=0, nd=0, nm=0, ne=0;
 	Boolean			is_evidence = FALSE;
@@ -1574,7 +1667,7 @@ NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
 
 	if (uop == NULL) return NULL;
 	if ((oip = uop->type) == NULL) return NULL;
-	if (StringCmp(oip->str, "TranscriptModelGeneration") != 0) return NULL;
+	if (StringCmp(oip->str, "ModelEvidence") != 0) return NULL;
 	for (ufp=uop->data; ufp; ufp=ufp->next) {
 		oip = ufp->label;
 		if (StringCmp(oip->str, "Method") == 0) {
@@ -1582,24 +1675,18 @@ NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
 				method = StringSave((CharPtr) ufp->data.ptrvalue);
 			}
 		}
-		if (StringCmp(oip->str, "Supporting mRNA, protein, and motif")==0) {
+		if (StringCmp(oip->str, "mRNA")==0) {
 			is_evidence = TRUE;
 			for (u = (UserFieldPtr) ufp->data.ptrvalue;u; u=u->next) {
 				for (uu = (UserFieldPtr) u->data.ptrvalue; uu; uu=uu->next) {
 				oip = uu->label;
-				if (StringCmp(oip->str, "protein accession") == 0) {
-					np++;
-				}
-				if (StringCmp(oip->str, "mRNA accession") == 0) {
+				if (StringCmp(oip->str, "accession") == 0) {
 					nm++;
-				}
-				if (StringCmp(oip->str, "Locus_id") == 0) {
-					Locus_id = uu->data.intvalue;
 				}
 				}
 			}
 		}
-		if (StringCmp(oip->str, "Supporting EST")==0) {
+		if (StringCmp(oip->str, "EST")==0) {
 			is_evidence = TRUE;
 			for (u = (UserFieldPtr) ufp->data.ptrvalue;u; u=u->next) {
 				for (uu = (UserFieldPtr) u->data.ptrvalue;uu; uu=uu->next) {
@@ -1614,14 +1701,7 @@ NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
 			}
 		}
 	}
-	if (add) {
-		ptrlen = (StringLen("derived by automated computational analysis using gene prediction method: ") + StringLen(method) + 1);
-	} else {
-/*		ptrlen = (StringLen("using gene prediction method: ") + StringLen(method) + 1);*/
-	}
-	if (is_evidence) {
-	 ptrlen += StringLen(" Supporting evidence includes similarity to: ") + 1;
-	}
+	ptrlen = StringLen (mrnaevtext1) + StringLen (mrnaevtext2) + StringLen (mrnaevtext3) + StringLen (method) + 25;
 	if (np > 0) {
 		ptrlen += StringLen("proteins") + 5;
 	}
@@ -1634,12 +1714,13 @@ NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
 	if (ne > 0) {
 		ptrlen += StringLen("ESTs") + StringLen(ne_name) + 10;
 	}
-	ptrlen += StringLen("See details in AceView") + 8;
 	ptr = (CharPtr) MemNew(ptrlen) + 1;
 	if (add) {
-		sprintf(ptr, "derived by automated computational analysis using gene prediction method: %s.", method);
-	} else {
-/*		sprintf(ptr, " using gene prediction method: %s.", method);*/
+		if (method != NULL) {
+			sprintf (ptr, "%s %s %s.", mrnaevtext1, mrnaevtext1, method);
+		} else {
+			sprintf (ptr, "%s.", mrnaevtext1);
+		}
 	}
 	if (is_evidence) {
 		if (add)  StringCat(ptr, " ");
@@ -1658,7 +1739,11 @@ NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
 	if (nm > 0) {
 		if (np > 0 || nd > 0)
 	 	StringCat(ptr, ",");
-	 sprintf(temp, " %d mRNAs", nm);
+	 if (nm > 1) {
+		 sprintf(temp, " %d mRNAs", nm);
+	 } else {
+		 sprintf(temp, " %d mRNA", nm);
+	 }
 	 StringCat(ptr, temp);
 	}
 	if (ne > 0) {
@@ -1667,8 +1752,6 @@ NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
 	 sprintf(temp, " %d %s ESTs", ne, ne_name);
 	 StringCat(ptr, temp);
 	}
-	 sprintf(temp, " See details in AceView:%d", Locus_id);
-	 StringCat(ptr, temp);
 	return ptr;
 }
 
@@ -2512,6 +2595,29 @@ static void  GatherProductGeneInfo (Asn2ffJobPtr ajp, SeqFeatPtr sfp_in, GBEntry
 *		-1 an error
 **************************************************************************/
 
+static Boolean ProductIsLocal (Uint2 entityID, SeqLocPtr product)
+
+{
+  BioseqPtr    bsp;
+  SeqEntryPtr  sep, oldscope;
+  SeqIdPtr     sip = NULL;
+  SeqLocPtr    slp;
+
+  slp = SeqLocFindNext (product, NULL);
+  while (slp != NULL && sip == NULL) {
+    sip = SeqLocId (slp);
+    slp = SeqLocFindNext (product, slp);
+  }
+  if (sip == NULL) return FALSE;
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL) return FALSE;
+  oldscope = SeqEntrySetScope (sep);
+  bsp = BioseqFind (sip);
+  SeqEntrySetScope (oldscope);
+  if (bsp != NULL) return TRUE;
+  return FALSE;
+}
+
 NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr sfp_in, SeqFeatPtr PNTR sfpp_out, SortStructPtr gp)
 {
 	BioseqPtr bsp=gbp->bsp, pbsp=NULL;
@@ -2659,7 +2765,7 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 				sprintf(buf_ptr, "1"); 
 			sfp_out->qual = AddGBQual(sfp_out->qual, "codon_start", buf_ptr);
 		}
-		if (product && (! ajp->genome_view)) {
+		if (product && (! ajp->genome_view) && (ProductIsLocal (ajp->entityID, product))) {
 			byte_sp = ProteinFromCdRegion(sfp_in, FALSE);
 
 			if (product) {
@@ -2690,6 +2796,8 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 		if (sfp_in->excpt) {
 			if (StringCmp("ribosomal slippage", sfp_in->except_text) == 0 ||
 				StringCmp("ribosome slippage", sfp_in->except_text) == 0) {
+				sfp_out->qual = AddGBQual(sfp_out->qual, 
+									"note", sfp_in->except_text);
 				sfp_out->excpt = FALSE;
 			} else if (StringCmp("trans splicing", sfp_in->except_text) == 0 ||
 						StringCmp("trans-splicing", sfp_in->except_text) == 0) {
@@ -2930,8 +3038,14 @@ NLM_EXTERN Int2 ValidateNAImpFeat (SeqFeatPtr sfp)
 		if (index == -1) {
 			retval = -2;
 		} else {
+			status = GBFeatKeyQualValid(sfp->cit, index, &sfp->qual, 
+						ASN2FF_SHOW_ERROR_MSG, ASN2FF_VALIDATE_FEATURES);
+#ifdef ASN2GNBK_PRINT_UNKNOWN_ORG
+			if (index == 46 && status == GB_FEAT_ERR_NONE) {
 				status = GBFeatKeyQualValid(sfp->cit, index, &sfp->qual, 
-							ASN2FF_SHOW_ERROR_MSG, ASN2FF_VALIDATE_FEATURES);
+							ASN2FF_SHOW_ERROR_MSG, TRUE);
+			}
+#endif
 			if (status == GB_FEAT_ERR_NONE) {
 				retval = 1;
 			} else if (status == GB_FEAT_ERR_REPAIRABLE) {
@@ -3245,9 +3359,11 @@ NLM_EXTERN void ComposeGBQuals (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr
 		if (status > 0)
 			SaveNoteToCharPtrStack(nsp, NULL, ptr);
 		ptr=NULL;
+/* gene synonym appears as db-xref
 		if (is_NC) {
 			Add_gene_id(gsp, sfp_out); 
 		}
+*/
 	}
 	if (nsp && nsp->note[0])
 	{
@@ -3572,6 +3688,7 @@ NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, Boolean is_NTorNG)
 		if (sip->choice == SEQID_GI && is_NTorNG) {
 			if ((new_id = GetSeqIdForGI(sip->data.intvalue)) != NULL) {
 				SeqIdWrite(new_id, buf, PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);
+				SeqIdFree(new_id); /*** need to free it !!! (EY) ***/
 			} else {
 				sprintf(buf, "%ld", sip->data.intvalue);
 			}
@@ -3586,17 +3703,6 @@ NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, Boolean is_NTorNG)
 				sfp_out->qual = AddGBQual(sfp_out->qual, "protein_id", buf);
 			}
 		}
-		/*
-		if (new_id == NULL && sip->choice == SEQID_GI) {
-			new_id = GetSeqIdForGI (sip->data.intvalue);
-			if (new_id != NULL) {
-				SeqIdWrite(new_id, buf, PRINTID_TEXTID_ACC_VER,
-														MAX_ACCESSION_LEN+1);
-				sfp_out->qual = AddGBQual(sfp_out->qual, "protein_id", buf);
-				SeqIdFree (new_id);
-			}
-		}
-		*/
 	}
 	if (p_bsp == NULL) {
 		gi = GetGINumFromSip(sip);
@@ -3752,6 +3858,9 @@ NLM_EXTERN Boolean get_prot_feats (GatherContextPtr gcp)
 *	Int2 CompareStringWithGsp (GeneStructPtr gsp, CharPtr string)
 *
 *	gsp: GeneStructPtr containing the gene information,
+*	gene->synonym in is store in gsp->gene with choice 1 (GetGeneRefInfo)
+*	it is not compared to note string 
+*
 *	string: a CharPtr with (possibly) relevant gene information
 *		(i.e., gene name, allele, product etc.).
 *
@@ -3770,6 +3879,9 @@ NLM_EXTERN Int2 CompareStringWithGsp (GeneStructPtr gsp, CharPtr string)
 
 	for (vnp=gsp->gene; vnp; vnp=vnp->next)
 	{
+		if (vnp->choice == 1) {
+			continue;
+		}
 		ascii_len = Sgml2AsciiLen(vnp->data.ptrvalue);
 		start = ascii = MemNew((size_t) (10+ascii_len));
 		ascii = Sgml2Ascii(vnp->data.ptrvalue, ascii, ascii_len+1);
@@ -3826,6 +3938,7 @@ NLM_EXTERN void GetDBXrefFromGene (GeneRefPtr grp, SeqFeatPtr sfp)
 				sprintf(buffer, "%s%ld", dbase, (long) dbtp->tag->id);
 				sfp->qual = AddGBQual(sfp->qual, "db_xref", buffer);
 			}
+			MemFree(dbase);
 	    }
 	}
 
@@ -4317,11 +4430,11 @@ NLM_EXTERN GBQualPtr AddBioSourceToGBQual (Asn2ffJobPtr ajp, NoteStructPtr nsp, 
 		return gbqual;
 	if (biosp->genome) {
 		i = biosp->genome;
-		if (i > 1) {
+		if (i > 1 && i < 20) {
 			val = organelleQual [i];
 			if (val != NULL) {
 				gbqual = AddGBQual (gbqual, "organelle", val);
-			} else {
+			} else if (i < num_genome) {
 				qual = genome[i];
 				if (qual && (GBQualNameValid(qual)) != -1) {
 					if (i == 8) {  /*extrachrom*/

@@ -30,11 +30,20 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.62 $
+   $Revision: 6.65 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.65  2001/11/06 15:24:20  dondosha
+   Roll back previous change - it was not needed
+
+   Revision 6.64  2001/11/05 22:14:49  dondosha
+   Allow stdin as input
+
+   Revision 6.63  2001/11/02 19:27:45  camacho
+   Fixed problem that would corrupt the BlastDefLine structures for the new database format
+
    Revision 6.62  2001/07/12 19:35:51  madden
    Set alias_file_name
 
@@ -496,7 +505,6 @@ Int2 Main(void)
     FILE *fd;
     CharPtr next_db = NULL;
     Boolean multiple_inputs = FALSE;
-    BlastDefLinePtr bdp = NULL;
     
     /* get arguments */
 
@@ -627,17 +635,11 @@ Int2 Main(void)
                  error_msg = MemFree(error_msg);
              }
              
-             if(options->version > FORMATDB_VER_TEXT) {
-                 bdp = FDBGetDefAsnFromBioseq(bsp);
-             
-                 if(dump_args[12].intvalue && options->parse_mode) {
-                     FDBUpdateTaxIdInBdp(bdp);
-                 }
-             }
-
-             FDBAddBioseq(fdbp, bsp, bdp);             
+             /* the BlastDefLine structure will be built in
+              * FDBAddSequence => FDLCreateAsnDF from the bsp's id
+              * and title */
+             FDBAddBioseq(fdbp, bsp, NULL);             
              SeqEntryFree(sep);
-             BlastDefLineSetFree(bdp);
           }
           
           FileClose(fd);

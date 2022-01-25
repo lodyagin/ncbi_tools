@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  Object manager interface for module NCBI-Seqloc
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objloc.h,v $
+* Revision 6.3  2001/08/06 20:07:26  ostell
+* added SEQID_TPG, TPE, TPD types
+*
 * Revision 6.2  2001/01/31 15:24:20  kans
 * PatentSeqId.seqid is now an Int4 (JO)
 *
@@ -128,6 +131,10 @@ NLM_EXTERN Boolean	LIBCALL SeqLocAsnLoad PROTO((void));
     13 = ddbj Textseq-id
 	14 = prf Textseq-id ,         -- PRF SEQDB
 	15 = pdb PDB-seq-id          -- PDB sequence
+    16 = tpg Textseq-id ,         -- Third Party Annot/Seq Genbank
+    17 = tpe Textseq-id ,         -- Third Party Annot/Seq EMBL
+    18 = tpd Textseq-id }         -- Third Party Annot/Seq DDBJ
+
 
 	WARNING: Some routines in sequtil.c (e.g. SeqIdPrint, SeqIdParse)
         and tofasta.c  use
@@ -136,7 +143,7 @@ NLM_EXTERN Boolean	LIBCALL SeqLocAsnLoad PROTO((void));
 *
 *****************************************************************************/
 
-#define NUM_SEQID 16     /* total number of SeqId types */
+#define NUM_SEQID 19     /* total number of SeqId types */
 
 #define SEQID_NOT_SET ( (Uint1)0)
 #define SEQID_LOCAL ( (Uint1)1)
@@ -157,6 +164,10 @@ NLM_EXTERN Boolean	LIBCALL SeqLocAsnLoad PROTO((void));
 #define SEQID_DDBJ ((Uint1)13)
 #define SEQID_PRF ((Uint1)14)
 #define SEQID_PDB ((Uint1)15)
+
+#define SEQID_TPG ((Uint1)16)
+#define SEQID_TPE ((Uint1)17)
+#define SEQID_TPD ((Uint1)18)
 
 NLM_EXTERN Boolean	 LIBCALL SeqIdAsnWrite PROTO((SeqIdPtr anp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN SeqIdPtr LIBCALL SeqIdAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));

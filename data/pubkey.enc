@@ -1,4 +1,4 @@
--- $Revision: 6.0 $
+-- $Revision: 6.1 $
 -- What follows is the public encryption key to be used in NCBI Network
 -- services, effective 18 May 1994.
 -- 
@@ -6,7 +6,7 @@
 -- (1) It will appear in the "data" directory on Entrez CD-ROMs release 11.0
 --     and higher
 -- (2) Beginning in June of 1994, it will appear within the NCBI toolbox
---     on ncbi.nlm.nih.gov:/toolbox/ncbi_tools
+--     on ftp.ncbinih.gov:/toolbox/ncbi_tools
 -- (3) As a last resort, if you wish to confirm this information, call
 --     (301)496-2475 and ask for "NCBI network services".
 

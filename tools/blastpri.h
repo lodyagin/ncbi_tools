@@ -32,8 +32,29 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.83 $ 
+/* $Revision: 6.90 $ 
 * $Log: blastpri.h,v $
+* Revision 6.90  2002/01/04 20:16:12  dondosha
+* Correction for single strand blastx with OOF gapping
+*
+* Revision 6.89  2001/11/13 18:17:27  dondosha
+* Added BlastNtWordUngappedExtend for use in Mega BLAST
+*
+* Revision 6.88  2001/10/12 15:22:49  dondosha
+* Added prototype for BLASTPostSearchLogic
+*
+* Revision 6.87  2001/09/07 14:46:44  dondosha
+* Roll back removal of threshold_first from functions and structures
+*
+* Revision 6.86  2001/09/06 20:24:34  dondosha
+* Removed threshold_first
+*
+* Revision 6.85  2001/08/20 21:13:41  dondosha
+* Added two declarations for clustering hits
+*
+* Revision 6.84  2001/07/31 16:42:40  dondosha
+* Added function FastaCheckDna
+*
 * Revision 6.83  2001/06/15 16:38:46  dondosha
 * Correction to previous changes
 *
@@ -733,7 +754,7 @@ void BlastSaveCurrentHsp PROTO((BlastSearchBlkPtr search, BLAST_Score score, Int
 void BlastSaveCurrentHspGapped PROTO((BlastSearchBlkPtr search, BLAST_Score
 				      score, Int4 q_offset, Int4 s_offset, Int4
 				      q_length, Int4 s_length, Int2 context,
-				      edit_script_t *esp));
+				      GapXEditScriptPtr esp));
 
 void BlastNtSaveCurrentHsp PROTO((BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, Int4 s_offset, Int4 length, Int2 context, Int4 query_gap_start, Int4 subject_gap_start));
 
@@ -741,6 +762,7 @@ CharPtr FormatBlastParameters PROTO((BlastSearchBlkPtr search));
 
 
 SeqAlignPtr LIBCALL BioseqBlastEngineCore PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int4Ptr *pos_matrix));
+SeqAlignPtr LIBCALL BioseqBlastEngineCoreEx PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int4Ptr *pos_matrix, Boolean partial));
 
 Uint1Ptr GetSequenceWithDenseSeg PROTO((DenseSegPtr dsp, Boolean query, Int4Ptr start, Int4Ptr length));
 
@@ -871,7 +893,7 @@ BlastMakeCopyQueryDNAP PROTO((BlastSequenceBlkPtr PNTR bsbpp_in));
 void LIBCALL BlastFreeQueryDNAP PROTO((BlastSequenceBlkPtr PNTR bsbpp));
 
     BlastSequenceBlkPtr PNTR LIBCALL
-BlastCreateQueryDNAP PROTO((BLASTContextStructPtr context, Int4 length));
+BlastCreateQueryDNAP PROTO((BlastSearchBlkPtr search, Int4 length));
 
 /* -----------------------------------------------------------------
    This function will filter given SeqAlignPtr for overlaping
@@ -903,6 +925,17 @@ void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp
 void
 BlastProcessGiLists PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                            BlastDoubleInt4Ptr gi_list, Int4Ptr gi_list_size));
+Boolean FastaCheckDna PROTO((CharPtr seq));
+BLASTHSPSegmentPtr BLASTHSPSegmentFromSeqAlign PROTO((SeqAlignPtr sap));
+SeqAlignPtr BlastClusterHitsFromSeqAlign PROTO((SeqAlignPtr seqalign, CharPtr prog_name, CharPtr database, BLAST_OptionsBlkPtr options, FloatHi length_thresh, FloatHi score_thresh, FloatHi overlap_thresh, Boolean two_sided));
+SeqAlignPtr RedoAlignmentCore PROTO((BlastSearchBlkPtr search,   
+  BLAST_OptionsBlkPtr options, Int4 hitlist_count, Boolean adjustParameters,
+  Boolean SmithWaterman));
+void BLASTResultFreeHsp PROTO((BLASTResultHitlistPtr result));
+SeqAlignPtr BLASTPostSearchLogic PROTO((BlastSearchBlkPtr search,BLAST_OptionsBlkPtr options));
+Boolean
+BlastNtWordUngappedExtend PROTO((BlastSearchBlkPtr search, Int4 q_off, 
+                                 Int4 s_off, Int4 cutoff));
 
 #ifdef __cplusplus
 }

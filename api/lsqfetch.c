@@ -37,6 +37,9 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.11  2001/09/21 20:02:04  kans
+* allow U and u to be DNA in CheckDnaResidue for the BLAST guys, even though it is amino acid Selenocysteine in most places
+*
 * Revision 6.10  2001/03/13 16:48:58  kans
 * fixes to saving path, binary search results
 *
@@ -68,6 +71,9 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.11  2001/09/21 20:02:04  kans
+* allow U and u to be DNA in CheckDnaResidue for the BLAST guys, even though it is amino acid Selenocysteine in most places
+*
 * Revision 6.10  2001/03/13 16:48:58  kans
 * fixes to saving path, binary search results
 *
@@ -178,7 +184,7 @@ NLM_EXTERN Boolean CheckDnaResidue(CharPtr seq_ptr, Int4 ck_len, Int4Ptr pnon_DN
 	{
 		if(IS_ALPHA(seq_ptr[i]))
 		{
-             		if(StrChr("ACGTNacgtn", seq_ptr[i])==NULL)
+             		if(StrChr("ACGTUNacgtun", seq_ptr[i])==NULL)
                			++non_DNA;
 			++len;
 		}

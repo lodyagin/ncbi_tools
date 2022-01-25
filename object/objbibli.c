@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager for module NCBI-Biblio
 *
@@ -41,6 +41,9 @@
 * 07-19-93 Ostell      Support for ASN30 added
 *
 * $Log: objbibli.c,v $
+* Revision 6.5  2001/10/09 15:57:38  kans
+* AuthListMatch does StringICmp if both are structured last names, StringNICmp otherwise
+*
 * Revision 6.4  2000/01/18 19:40:51  ostell
 * added support for PubStatusDate, ArticleIds
 *
@@ -3285,7 +3288,7 @@ NLM_EXTERN Int2 LIBCALL CitJourMatch (CitJourPtr a, CitJourPtr b)
 *****************************************************************************/
 NLM_EXTERN Int2 LIBCALL AuthListMatch(AuthListPtr a, AuthListPtr b, Boolean all)
 {
-	Int2 retval = 1, i;
+	Int2 retval = 1, lastnames = 0, i;
 	size_t len, tlen;
 	Char name[2][256];
 	ValNodePtr vnp[2];
@@ -3318,9 +3321,10 @@ NLM_EXTERN Int2 LIBCALL AuthListMatch(AuthListPtr a, AuthListPtr b, Boolean all)
 				if (pip->choice == 2)   /* std */
 				{
 					nsp = (NameStdPtr)pip->data;
-					if (nsp->names[0] != NULL)   /* last name */
+					if (nsp->names[0] != NULL) {  /* last name */
 						StringMove(name[i], nsp->names[0]);
-					else if (nsp->names[3] != NULL)  /* full name */
+						lastnames++;
+					} else if (nsp->names[3] != NULL)  /* full name */
 						StringMove(name[i], nsp->names[0]);
 				}
 				else if (pip->choice > 2)
@@ -3340,7 +3344,11 @@ NLM_EXTERN Int2 LIBCALL AuthListMatch(AuthListPtr a, AuthListPtr b, Boolean all)
 			else
 				return (Int2) 1;
 		}
-		retval = (Int2)StringNICmp(name[0], name[1], tlen);
+		if (lastnames == 2) {
+			retval = (Int2)StringICmp(name[0], name[1]);
+		} else {
+			retval = (Int2)StringNICmp(name[0], name[1], tlen);
+		}
 		if (retval < 0)
 			return (Int2) -1;
 		else if (retval > 0)

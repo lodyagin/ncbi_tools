@@ -1,12 +1,12 @@
 #
-# $Id: solaris.ncbi.mk,v 1.15 2001/06/12 21:11:56 vakatov Exp $
+# $Id: solaris.ncbi.mk,v 1.18 2001/09/17 18:11:53 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = sol
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_CC = cc -xildoff
 NCBI_CFLAGS1 = -c -Xa
-NCBI_LDFLAGS1 = -fast
-NCBI_OPTFLAG = -fast
+NCBI_LDFLAGS1 = -fast -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+NCBI_OPTFLAG = -fast -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 # following 2 lines are temporary; J. Epstein, 8/11/97
 NCBI_INCDIR = /netopt/ncbi_tools/ver0.0/ncbi/include
 NCBI_LIBDIR = /netopt/ncbi_tools/ver0.0/ncbi/lib
@@ -66,13 +66,13 @@ NCBI_DBUGEXTRA = -g
 
 #
 #FastCGI library for Sun C compilers ver 4.2 and ver 5.0
-LIBFASTCGI=-lfcgi`sh -c 'CC -V 2>&1'|cut -f4 -d' '`
+LIBFASTCGI=-lfcgi
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
 
 # uncomment OPENGL_TARGETS to build OpenGL apps; do not change
 # OPENGL_NCBI_LIBS! However, may need to set
 # OPENGL_INCLUDE and OPENGL_LIBS to suit local environment
-OPENGL_TARGETS = Cn3D
+# OPENGL_TARGETS = Cn3D
 OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
 OPENGL_INCLUDE =
 OPENGL_LIBS = -lGL -lGLU

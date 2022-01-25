@@ -25,6 +25,9 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.40  2001/07/19 22:05:47  dondosha
+* Made db_length option a string, to convert to Int8 value
+*
 * Revision 6.39  2001/06/21 21:49:26  dondosha
 * Destroy all error returns
 *
@@ -304,7 +307,7 @@ static Args myargs [] = {
   { "alignment output file",
 	"stdout", NULL, NULL, FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},/* 4 */
   { "theor. db size (zero is real size)", 
-	"0", NULL, NULL, FALSE, 'd', ARG_INT, 0.0, 0, NULL},/* 5 */
+	"0", NULL, NULL, FALSE, 'd', ARG_STRING, 0.0, 0, NULL},/* 5 */
   { "SeqAnnot output file",
 	NULL, NULL, NULL, TRUE, 'a', ARG_FILE_OUT, 0.0, 0, NULL},/* 6 */
   { "Cost to open a gap (zero invokes default behavior)",
@@ -373,6 +376,7 @@ Int2 Main (void)
         int (LIBCALLBACK *handle_results)PROTO((VoidPtr search)) = NULL;
         Boolean entrez_lookup = FALSE;
         CharPtr query_accver = NULL, subject_accver = NULL;
+        const char *dummystr;
 
         if (! GetArgs ("bl2seq", NUMARG, myargs))
         {
@@ -526,7 +530,7 @@ Int2 Main (void)
                 options->reward = myargs[13].intvalue;
         }
 
-	options->db_length = myargs[5].intvalue;
+	options->db_length = StringToInt8(myargs[5].strvalue, &dummystr);
 
 	options->discontinuous = FALSE;
 

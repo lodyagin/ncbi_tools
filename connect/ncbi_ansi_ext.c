@@ -1,4 +1,4 @@
-/*  $Id: ncbi_ansi_ext.c,v 6.7 2000/12/28 21:27:52 lavr Exp $
+/*  $Id: ncbi_ansi_ext.c,v 6.8 2001/12/04 15:57:22 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_ansi_ext.c,v $
+ * Revision 6.8  2001/12/04 15:57:22  lavr
+ * Tiny style adjustement
+ *
  * Revision 6.7  2000/12/28 21:27:52  lavr
  * ANSI C++ compliant use of malloc (explicit casting of result)
  *
@@ -63,7 +66,7 @@
 extern char* strdup(const char* str)
 {
     size_t size = strlen(str) + 1;
-    return (char *)memcpy(malloc(size), str, size);
+    return (char*) memcpy(malloc(size), str, size);
 }
 
 

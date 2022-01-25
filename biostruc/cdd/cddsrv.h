@@ -1,4 +1,4 @@
-/* $Id: cddsrv.h,v 1.6 2001/05/31 22:04:46 bauer Exp $
+/* $Id: cddsrv.h,v 1.7 2001/11/13 19:48:48 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 9/20/1999
 *
-* $Revision: 1.6 $
+* $Revision: 1.7 $
 *
 * File Description:
 *         header file for the CD-server CGI-bin
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddsrv.h,v $
+* Revision 1.7  2001/11/13 19:48:48  bauer
+* add cCDDfname for cddumper
+*
 * Revision 1.6  2001/05/31 22:04:46  bauer
 * changes to accomodate new type of Smart accessions
 *
@@ -91,9 +94,9 @@
 
 #define MMDB_UNIXCOMPRESSED
 
-#define MMDBCALL "http://www.ncbi.nlm.nih.gov/Structure/mmdb/mmdbsrv.cgi?uid="
+#define MMDBCALL   "http://www.ncbi.nlm.nih.gov/Structure/mmdb/mmdbsrv.cgi?uid="
 #define ENTREZCALL "http://www.ncbi.nlm.nih.gov/entrez/utils/qmap.cgi?db=Protein&form=6&Dopt=g&uid="
-#define WRPSBCALL "wrpsb.cgi?DATALIB=oasis_sap&INPUT_TYPE=access&GRAPH=2&FILTER=T&SEQUENCE="
+#define WRPSBCALL  "wrpsb.cgi?DATALIB=oasis_sap&INPUT_TYPE=access&GRAPH=2&FILTER=T&SEQUENCE="
 
 /*---------------------------------------------------------------------------*/
 /* Structures to hold summary and description information in linked lists    */
@@ -165,6 +168,7 @@ static Boolean Chain;
 static Char    SlaveChain[2];
 static Char    MasterChain[2];
 static Char    cCDDid[PATH_MAX];
+static Char    cCDDfname[PATH_MAX];
 static Char    CDDdescr[PATH_MAX];
 static Char    database[PATH_MAX];
 static Char    PUBcgi[PATH_MAX];

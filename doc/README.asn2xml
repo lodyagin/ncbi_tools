@@ -1,14 +1,14 @@
 README.asn2xml : This file
-Binary: ftp://ftp.ncbi.nlm.nih.gov/toolbox/xml/asn2xml/
-Source: ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
-NCBI XML DTDs: ftp://ftp.ncbi.nlm.nih.gov/toolbox/xml/xmlspecs/
+Binary: ftp://ftp.ncbi.nih.gov/toolbox/xml/asn2xml/
+Source: ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
+NCBI XML DTDs: ftp://ftp.ncbi.nih.gov/toolbox/xml/xmlspecs/
 
 Program Description: asn2xml converts the sequence data in ASN.1 to
 sequence encoding in IUPAC for XML through an internal object loader.
 
 BASIC INSTRUCTIONS:
 1. Obtain GenBank ASN.1 data file at
-ftp://ftp.ncbi.nlm.nih.gov/ncbi-asn1/
+ftp://ftp.ncbi.nih.gov/ncbi-asn1/
 
 /ncbi-asn1/daily/ directory: ASN.1 Cumulative Update: gbcu.aso.gz
 /ncbi-asn1/daily-nc/ directory: contains individual files for each day's
@@ -21,7 +21,7 @@ Additional documentation:
 /ncbi-asn1/README.asn1.daily
 
 2. Download the appropriate asn2xml binary for your platform
-ftp://ncbi.nlm.nih.gov/toolbox/xml/asn2xml/
+ftp://ftp.ncbi.nih.gov/toolbox/xml/asn2xml/
 	 asn2xml.ibmaix.tar.Z         AIX  4.3.3
      asn2xml.alphaOSF1.tar.Z      OSF1 V5.1
      asn2xml.linux.tar.Z          Intel x86/Linux
@@ -51,11 +51,11 @@ asn2xml 1.0   arguments:
 Example:
 (Efficient method)
 
-ftp://ftp.ncbi.nlm.nih.gov/ncbi-asn1/daily-nc/nc0305.aso.gz
+ftp://ftp.ncbi.nih.gov/ncbi-asn1/daily-nc/nc0305.aso.gz
 gunzip -c nc0305.aso.gz | asn2xml -l error.log > nc0305.xml
 
 or
-ftp://ftp.ncbi.nlm.nih.gov/ncbi-asn1/daily-nc/nc0305.aso.gz
+ftp://ftp.ncbi.nih.gov/ncbi-asn1/daily-nc/nc0305.aso.gz
 gunzip nc0305.aso.gz
 asn2xml -i nc0305.aso -o nc0305.xml2 -l error3.log
 
@@ -70,5 +70,5 @@ binary ASN.1 file. The uncompressed XML can be extremely big, you
 have been warned. Note, the ASN.1 contains more than the GenBank files;
 it includes other databases like PDB and RefSeq, gaps of HTG records, and
 shows the quality scores of HTG records. For further, read
-ftp://ftp.ncbi.nlm.nih.gov/ncbi-asn1/README.asn1
+ftp://ftp.ncbi.nih.gov/ncbi-asn1/README.asn1
 

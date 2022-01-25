@@ -1,4 +1,4 @@
-/* $Id: posit.h,v 6.22 2001/04/03 19:38:24 madden Exp $
+/* $Id: posit.h,v 6.23 2001/08/29 19:05:03 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,14 @@ Author: Alejandro Schaffer
 
 Contents: header file for position-based BLAST.
 
-$Revision: 6.22 $
+$Revision: 6.23 $
 
 *****************************************************************************/
 /*
 * $Log: posit.h,v $
+* Revision 6.23  2001/08/29 19:05:03  madden
+* added parameter posComputationCalled in outputPosComputation
+*
 * Revision 6.22  2001/04/03 19:38:24  madden
 * Changed IDENTITY_PERCENTAGE to 0.94, Added to output of -Q option in outputPosMatrix
 *
@@ -234,7 +237,7 @@ typedef struct compactSearchItems {
 } compactSearchItems;
   
 
-void LIBCALL outputPosMatrix PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch, FILE *matrixfp));
+void LIBCALL outputPosMatrix PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch, FILE *matrixfp, Boolean posComputationCalled));
 
 Int4Ptr * LIBCALL CposComputation PROTO((posSearchItems *posSearch, BlastSearchBlkPtr search, compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns, Char *ckptFileName, Boolean patternSearchStart, ValNodePtr * error_return,
  Nlm_FloatHi weightExponent));

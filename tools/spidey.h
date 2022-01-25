@@ -28,13 +28,43 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.1 $
+* $Revision: 6.11 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.h,v $
+* Revision 6.11  2001/12/18 18:00:18  wheelan
+* add strand
+*
+* Revision 6.10  2001/11/20 12:13:28  wheelan
+* made SPI_GetProteinFrommRNA EXTERN
+*
+* Revision 6.9  2001/11/05 16:14:53  wheelan
+* added option to print multiple alignment to a file
+*
+* Revision 6.8  2001/10/04 12:34:07  wheelan
+* added bigintron option
+*
+* Revision 6.7  2001/10/03 14:19:29  wheelan
+* include new alignment manager
+*
+* Revision 6.6  2001/09/04 13:46:37  wheelan
+* made SPI_RemoveInconsistentAlnsFromSet and SPI_flip_sa_list extern
+*
+* Revision 6.5  2001/08/24 13:44:35  wheelan
+* changed printaln to Int4
+*
+* Revision 6.4  2001/08/06 16:49:25  wheelan
+* changed revcompthresh parameter to 55 from 65
+*
+* Revision 6.3  2001/07/11 17:57:07  wheelan
+* added typedefs for multiple alignments
+*
+* Revision 6.2  2001/07/10 16:44:42  wheelan
+* added functions to make a multiple alignment
+*
 * Revision 6.1  2001/05/24 16:27:58  wheelan
 * initial checkin
 *
@@ -46,7 +76,7 @@
 #define _SPIDEY_
 
 #include <ncbi.h>
-#include <alignmgr.h>
+#include <alignmgr2.h>
 #include <actutils.h>
 #include <dotseq.h>
 
@@ -70,7 +100,7 @@ extern "C" {
 
 #define SPI_MAXGAP  4 /* maximum gap allowed in SPI_ExtendAlnAlg */
 
-#define SPI_REVCOMPTHRESH  65 /* minimum allowed % of splice sites present */
+#define SPI_REVCOMPTHRESH  55 /* minimum allowed % of splice sites present */
                               /* If model is < minimum, then the reverse   */
                               /* complement will be checked.               */
 #define SPI_COVERDIFF  15 /* amount the %coverage is allowed to drop in the */
@@ -93,9 +123,11 @@ extern "C" {
 
 #define SPI_INTRONSIZE  35000 /* used only to decide whether an mRNA may have fallen */
                               /* off a contig */
+#define SPI_INTRONSIZEXL  120000 /* if spot->bigintron TRUE, use this */
 
 #define SPI_BIGINTRON  100000 /* max size of 1st and last introns, if 1st and last exons */
                               /* have to be found by SPI_FindPiece. */
+#define SPI_BIGINTRONXL  240000 /* if spot->bigintron TRUE, use this */
 
 #define SPI_PADDING  0 /* how much each region is padded on each side */
 
@@ -125,8 +157,12 @@ extern "C" {
 #define SPI_REVERSE         1
 #define SPI_NOTREVERSED     2
 
+#define SPI_MULT     1
+#define SPI_NOTMULT  2
+
 #define SPI_LINE 60 /* line length for text alignment output -- must be more than SPI_PSPLICE */
 #define SPI_PSPLICE 10 /* length of genomic sequence to print before and after each exon */
+#define SPI_SPACER 12 /* space at the beginning of each printed alignment line */
 
 #define SPI_NUMCOLS  8 /* number of columns in the tab-delimited file of position info for draft */
 
@@ -211,6 +247,11 @@ typedef struct spi_seq {
    Int4       start;
 } SPI_Seq, PNTR SPI_SeqPtr;
 
+typedef struct spi_mult {
+   SeqAlignPtr  PNTR exons;
+   Int4         numexons;
+} SPI_Mult, PNTR SPI_MultPtr;
+
 typedef struct spi_reginfo {
    Boolean      revcomp;
    Int4         gstart;
@@ -224,6 +265,7 @@ typedef struct spi_reginfo {
    Int4         polyAtail; /* length of polyA(+) tail that doesn't align */
    Boolean      fallsoff; /* this mRNA may fall off the end of the genomic sequence */
    SPI_UTRInfo  utr; /* if this is a CDS, UTR %ids are here */
+   SPI_MultPtr  smu;
    struct spi_reginfo PNTR next;
 } SPI_RegionInfo, PNTR SPI_RegionInfoPtr;
 
@@ -335,7 +377,7 @@ typedef struct spi_options {
    Int4                  numreturns;
    Int4                  idcutoff;
    Int4                  lencutoff;
-   Boolean               printaln;
+   Int4                  printaln;
    Boolean               interspecies;
    Boolean               printasn;
    SeqAlignPtr           PNTR sap_head;
@@ -347,6 +389,9 @@ typedef struct spi_options {
    SPI_ProgressCallback  callback;
    Int4                  from; /* to restrict genomic interval */
    Int4                  to;   /* " */
+   Boolean               makemult; /* make a multiple alignment from numerous returns? */
+   Boolean               bigintron;
+   Uint1                 strand; /* to restrict the search to one genomic strand */
 } SPI_Options, PNTR SPI_OptionsPtr;
 
 typedef struct spi_n {
@@ -358,9 +403,18 @@ typedef struct spi_n {
    Int4  n6;
 } SPI_n, PNTR SPI_nPtr;
 
+typedef struct spi_block {
+   SeqAlignPtr  sap;
+   Int4         from_g;
+   Int4         to_g;
+   struct spi_block PNTR next;
+} SPI_Block, PNTR SPI_BlockPtr;
 
 NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsinfoPtr spim, FILE *ofp, FILE *ofp2, SPI_OptionsPtr spot);
 NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, SPI_bsinfoPtr spim, FILE *ofp, FILE *ofp2, SPI_OptionsPtr spot);
+NLM_EXTERN void SPI_MakeMultipleAlignment(SPI_RegionInfoPtr srip_head);
+NLM_EXTERN void SPI_PrintMultipleAlignment(SPI_RegionInfoPtr srip, Boolean html, BioseqPtr bsp, FILE * ofp);
+NLM_EXTERN void SPI_RegionListFree (SPI_RegionInfoPtr srip);
 
 /*************************************************************************************
 *  
@@ -382,12 +436,54 @@ NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, 
 *
 *************************************************************************************/
 NLM_EXTERN SPI_mRNAPtr SPI_AlignmRNAToGenomic(BioseqPtr bsp_genomic, BioseqPtr bsp_mrna, SPI_OptionsPtr spot);
+
+/***************************************************************************
+*
+*  SPI_flip_sa_list takes the head of a list of seqaligns and switches
+*  the first and second row of every alignment (alignments should all have
+*  two rows). Then, the indexes are freed and the alignments are reindexed.
+*
+***************************************************************************/
+NLM_EXTERN void SPI_flip_sa_list (SeqAlignPtr sap);
+
+/***************************************************************************
+*
+*  SPI_RemoveInconsistentAlnsFromSet is a greedy algorithm that first
+*  sorts the alignments by score, then takes the highest-scoring
+*  alignment and compares it to the next-highest-scoring alignment, which
+*  is deleted if it is contained; on subsequent loops each next-highest-
+*  scoring alignment is compared to the set of alignments that have
+*  been kept. The alignments can be sorted along the first or
+*  second sequence; the alignments will be reversed so that they are
+*  all on the plus strand of the sequence to be examined.
+*  The input alignment must be indexed at least at the LITE level;
+*  conflicting child alignments will be deleted, not hidden, by this
+*  function.  This function assumes that all children have the same two
+*  rows. The 'compact' parameter tells the function whether to try to
+*  keep alignments that are more to the left in genomic coordinates, or
+*  more to the right.
+*
+***************************************************************************/
+NLM_EXTERN void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, Int4 n, Int4 compact);
+
 NLM_EXTERN void SPI_bsinfoFreeList (SPI_bsinfoPtr spi);
 NLM_EXTERN void SPI_mRNAFree (SPI_mRNAPtr smp);
 NLM_EXTERN SPI_OptionsPtr SPI_OptionsNew(void);
 NLM_EXTERN void SPI_OptionsFree (SPI_OptionsPtr spot);
 NLM_EXTERN void SPI_is_donor (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score, Int4 org);
 NLM_EXTERN void SPI_is_acceptor (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score, Int4 org);
+
+/***************************************************************************
+*
+*  SPI_GetProteinFrommRNA takes an mRNA bioseq and returns a string
+*  which is the best protein translation of the mRNA. First, the function
+*  looks to see whether there are any annotated CDSs, and if so, it uses
+*  the translation of the annotated CDS. If not, the function translates
+*  the mRNA in all 3 reading frames and looks for the frame with the
+*  longest protein, then returns that protein.
+*
+***************************************************************************/
+NLM_EXTERN CharPtr SPI_GetProteinFrommRNA(BioseqPtr bsp_mrna, Int4Ptr start);
 
 #ifdef __cplusplus
 }

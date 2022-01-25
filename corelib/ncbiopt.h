@@ -1,7 +1,7 @@
 #ifndef _NCBIOPT_
 #define _NCBIOPT_
 
-/*  $Id: ncbiopt.h,v 6.7 2001/03/15 21:23:12 vakatov Exp $
+/*  $Id: ncbiopt.h,v 6.9 2001/08/09 19:21:29 juran Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,12 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbiopt.h,v $
+* Revision 6.9  2001/08/09 19:21:29  juran
+* Wrap the inclusion of <stdint.h> in #ifdef __MWERKS__.
+*
+* Revision 6.8  2001/08/09 18:55:28  juran
+* Include <stdint.h> to avoid macro redefinition errors.
+*
 * Revision 6.7  2001/03/15 21:23:12  vakatov
 * [OS_UNIX_AIX] #define Int8 long long  (was just "long").
 * Fix by the Ruth Isserlin & Christopher Hogue, chogue@mdsproteomics.com
@@ -94,6 +100,14 @@
  *      Visual  C++ 5.0
  *      Borland C++ 4.5 (Int8 is not supported, so gets substituted by Int4)
  */
+
+/*
+// Avoid errors when stdint.h tries to 'redefine' standard macros that we've corrupted,
+// by including it first.
+*/
+#ifdef __MWERKS__
+#include <stdint.h>
+#endif
 
 #if !defined(Int8) || !defined(Uint8) || !defined(Int8Ptr) || !defined(Uint8Ptr)
 

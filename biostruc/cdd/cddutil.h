@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.24 2001/05/23 21:18:06 bauer Exp $
+/* $Id: cddutil.h,v 1.25 2001/11/13 19:51:52 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.24 $
+* $Revision: 1.25 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.25  2001/11/13 19:51:52  bauer
+* support for annotation transfer in alignment reindexing
+*
 * Revision 1.24  2001/05/23 21:18:06  bauer
 * added functions for alignment block structure control
 *
@@ -125,6 +128,8 @@ extern "C" {
 #define CSEQEXT ".csq"
 #define MTRXEXT ".mtx"
 
+#define POSFREQ_SCALE 1000000
+
 #define Xscore (-1)
 
 /* column order of residue-types after PSSM is calculated from CD's */
@@ -206,6 +211,7 @@ void    LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIva
 Int4    LIBCALL CddGetStatus(CddPtr pcdd);
 Boolean LIBCALL SeqAlignHasConsensus(SeqAlignPtr salp);
 Boolean LIBCALL CddHasConsensus(CddPtr pcdd);
+void    LIBCALL CddRegularizeFileName(CharPtr cIn, CharPtr cAcc, CharPtr cFn, CharPtr cEx);
 
 /*---------------------------------------------------------------------------*/
 /* report Errors in processing and exit immediately                          */
@@ -307,6 +313,16 @@ void LIBCALL CddReindexMSLDenSegMaster(SeqAlignPtr salp, Int4 offset);
 void LIBCALL CddReindexMSLDenDiagMaster(SeqAlignPtr salp, Int4 offset);
 
 /*---------------------------------------------------------------------------*/
+/* Transfer alignment annotation between sequences in the alignment          */
+/*---------------------------------------------------------------------------*/
+static SeqIdPtr CddFindSeqIdInSeqLoc(SeqLocPtr location);
+static SeqIdPtr CddFindSeqIdInAlignAnnot(AlignAnnotPtr oldannot);
+void   LIBCALL  CddTransferAlignAnnot(AlignAnnotPtr oldannot,
+                                      SeqIdPtr newMaster,
+				      SeqAlignPtr salp,
+				      BioseqSetPtr bssp);
+
+/*---------------------------------------------------------------------------*/
 /* reindex a Seqalign to a new "Master"                                      */
 /*---------------------------------------------------------------------------*/
 SeqAlignPtr LIBCALL CddReindexSeqAlign(SeqAlignPtr salp, SeqIdPtr sipMaster,
@@ -323,6 +339,7 @@ SeqAlignPtr LIBCALL CddCopyMSLDenDiag(SeqAlignPtr salp);
 CddExpAlignPtr CddExpAlignNew();
 CddExpAlignPtr CddExpAlignFree(CddExpAlignPtr pCDea);
 void           CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength);
+CddExpAlignPtr CddExpAlignRevert(CddExpAlignPtr pCDea, Int4 iLength);
 CddExpAlignPtr CddReindexExpAlign(CddExpAlignPtr pCDea1, Int4 newlength, CddExpAlignPtr pCDea2, Int4 iOuter, Int4 iInner);
 SeqAlignPtr    CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter);
 Int2   LIBCALL CddGetProperBlocks(CddPtr pcdd, Boolean modify, Int4Ptr *iBreakAfter);

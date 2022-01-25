@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.18  2001/09/25 13:20:56  lavr
+* SERVICE_CreateConnectorEx() - number of args adjusted
+*
+* Revision 6.17  2001/08/16 18:07:04  kans
+* protect against calling CONN_Read or CONN_Write with NULL conn parameter
+*
 * Revision 6.16  2001/06/07 20:17:34  kans
 * in QUERY_OpenServiceQuery, pass service to ConnNetInfo_Create
 *
@@ -186,7 +192,7 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
       info->timeout->usec = 0;
   }
 
-  connector = SERVICE_CreateConnectorEx (service, fSERV_Any, info);
+  connector = SERVICE_CreateConnectorEx (service, fSERV_Any, info, 0);
   status = CONN_Create (connector, &conn);
   if (status != eIO_Success) {
     ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in CONN_Create");
@@ -265,6 +271,7 @@ static Nlm_Int2 LIBCALL AsnIoConnWrite (Pointer ptr, Nlm_CharPtr buf, Nlm_Uint2 
 	AsnIoConnPtr  aicp;
 
 	aicp = (AsnIoConnPtr) ptr;
+	if (aicp == NULL || aicp->conn == NULL) return 0;
 	CONN_Write (aicp->conn, (const void *) buf, (size_t) count, &bytes);
 	return (Nlm_Int2) bytes;
 }
@@ -276,6 +283,7 @@ static Nlm_Int2 LIBCALL AsnIoConnRead (Pointer ptr, CharPtr buf, Nlm_Uint2 count
 	AsnIoConnPtr  aicp;
 
 	aicp = (AsnIoConnPtr) ptr;
+	if (aicp == NULL || aicp->conn == NULL) return 0;
 	CONN_Read (aicp->conn, (Pointer) buf, (Int4) count, &bytes, eIO_Plain);
 	return (Nlm_Int2) bytes;
 }

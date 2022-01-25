@@ -32,7 +32,7 @@ objtax1AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Taxon1
-*    Generated using ASNCODE Revision: 6.8 at Dec 16, 1999 10:55 AM
+*    Generated using ASNCODE Revision: 6.12 at Sep 28, 2001 11:31 AM
 *
 **************************************************/
 
@@ -241,6 +241,27 @@ Taxon1ReqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.intvalue = av.intvalue;
    }
+   else if (atp == TAXON1_REQ_taxachildren) {
+      choice = Taxon1Req_taxachildren;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == TAXON1_REQ_taxalineage) {
+      choice = Taxon1Req_taxalineage;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == TAXON1_REQ_maxtaxid) {
+      choice = Taxon1Req_maxtaxid;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -369,6 +390,18 @@ Taxon1ReqAsnWrite(Taxon1ReqPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case Taxon1Req_id4gi:
       av.intvalue = anp->data.intvalue;
       retval = AsnWrite(aip, TAXON1_REQ_id4gi, &av);
+      break;
+   case Taxon1Req_taxachildren:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, TAXON1_REQ_taxachildren, &av);
+      break;
+   case Taxon1Req_taxalineage:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, TAXON1_REQ_taxalineage, &av);
+      break;
+   case Taxon1Req_maxtaxid:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, TAXON1_REQ_maxtaxid, &av);
       break;
    }
    if (writetype != NULL) {
@@ -614,6 +647,15 @@ Taxon1RespFree(ValNodePtr anp)
    case Taxon1Resp_getorgmod:
       AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1InfoFree);
       break;
+   case Taxon1Resp_taxabyid:
+      Taxon2DataFree(anp -> data.ptrvalue);
+      break;
+   case Taxon1Resp_taxachildren:
+      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1NameFree);
+      break;
+   case Taxon1Resp_taxalineage:
+      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1NameFree);
+      break;
    }
    return MemFree(anp);
 }
@@ -796,6 +838,33 @@ Taxon1RespAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.intvalue = av.intvalue;
    }
+   else if (atp == TAXON1_RESP_taxabyid) {
+      choice = Taxon1Resp_taxabyid;
+      func = (AsnReadFunc) Taxon2DataAsnRead;
+   }
+   else if (atp == TAXON1_RESP_taxachildren) {
+      choice = Taxon1Resp_taxachildren;
+      anp -> data.ptrvalue =
+      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Taxon1NameAsnRead,             (AsnOptFreeFunc) Taxon1NameFree);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+   else if (atp == TAXON1_RESP_taxalineage) {
+      choice = Taxon1Resp_taxalineage;
+      anp -> data.ptrvalue =
+      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Taxon1NameAsnRead,             (AsnOptFreeFunc) Taxon1NameFree);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+   else if (atp == TAXON1_RESP_maxtaxid) {
+      choice = Taxon1Resp_maxtaxid;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -919,6 +988,20 @@ Taxon1RespAsnWrite(Taxon1RespPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case Taxon1Resp_id4gi:
       av.intvalue = anp->data.intvalue;
       retval = AsnWrite(aip, TAXON1_RESP_id4gi, &av);
+      break;
+   case Taxon1Resp_taxabyid:
+      writetype = TAXON1_RESP_taxabyid;
+      func = (AsnWriteFunc) Taxon2DataAsnWrite;
+      break;
+   case Taxon1Resp_taxachildren:
+      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) Taxon1NameAsnWrite, aip, TAXON1_RESP_taxachildren, TAXON1_RESP_taxachildren_E);
+      break;
+   case Taxon1Resp_taxalineage:
+      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) Taxon1NameAsnWrite, aip, TAXON1_RESP_taxalineage, TAXON1_RESP_taxalineage_E);
+      break;
+   case Taxon1Resp_maxtaxid:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, TAXON1_RESP_maxtaxid, &av);
       break;
    }
    if (writetype != NULL) {
@@ -1461,6 +1544,189 @@ Taxon1DataAsnWrite(Taxon1DataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    av.boolvalue = ptr -> is_species_level;
    retval = AsnWrite(aip, TAXON1_DATA_is_species_level,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Taxon2DataNew()
+*
+**************************************************/
+NLM_EXTERN 
+Taxon2DataPtr LIBCALL
+Taxon2DataNew(void)
+{
+   Taxon2DataPtr ptr = MemNew((size_t) sizeof(Taxon2Data));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Taxon2DataFree()
+*
+**************************************************/
+NLM_EXTERN 
+Taxon2DataPtr LIBCALL
+Taxon2DataFree(Taxon2DataPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   OrgRefFree(ptr -> org);
+   AsnGenericBaseSeqOfFree(ptr -> blast_name ,ASNCODE_PTRVAL_SLOT);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Taxon2DataAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Taxon2DataPtr LIBCALL
+Taxon2DataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   Taxon2DataPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objtax1AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Taxon2Data ::= (self contained) */
+      atp = AsnReadId(aip, amp, TAXON2_DATA);
+   } else {
+      atp = AsnLinkType(orig, TAXON2_DATA);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = Taxon2DataNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == TAXON2_DATA_org) {
+      ptr -> org = OrgRefAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == TAXON2_DATA_blast_name) {
+      ptr -> blast_name = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+      if (isError && ptr -> blast_name == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == TAXON2_DATA_is_uncultured) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_uncultured = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == TAXON2_DATA_is_species_level) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_species_level = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Taxon2DataFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Taxon2DataAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Taxon2DataAsnWrite(Taxon2DataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objtax1AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, TAXON2_DATA);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> org != NULL) {
+      if ( ! OrgRefAsnWrite(ptr -> org, aip, TAXON2_DATA_org)) {
+         goto erret;
+      }
+   }
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> blast_name ,ASNCODE_PTRVAL_SLOT, aip, TAXON2_DATA_blast_name, TAXON2_DATA_blast_name_E);
+   av.boolvalue = ptr -> is_uncultured;
+   retval = AsnWrite(aip, TAXON2_DATA_is_uncultured,  &av);
+   av.boolvalue = ptr -> is_species_level;
+   retval = AsnWrite(aip, TAXON2_DATA_is_species_level,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

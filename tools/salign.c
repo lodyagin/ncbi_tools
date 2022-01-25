@@ -1932,8 +1932,11 @@ NLM_EXTERN SeqAnnotPtr LIBCALL SeqEntryToSeqAlign (SeqEntryPtr sep, Uint1 bsp_mo
 
   salp = SeqEntryAlignToMasterFunc (sep, NULL, bsp_mol, PRG_ANYALIGN);
   sap = SeqAnnotForSeqAlign (salp);
+/* this doesn't seem to produce a valid alignment and nobody knows what
+it's for anyway, so we'll comment it out and see who complains -- 8/8/01 SW
   if (ISA_aa(bsp_mol)) {
      sap = aaSeqAnnot_to_dnaSeqAnnotFunc (&sap, salp, NULL, NULL);
   }
+*/
   return sap;
 }

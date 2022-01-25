@@ -613,7 +613,7 @@ Pub-set ::= CHOICE {
 
 END
 
---$Revision: 6.0 $
+--$Revision: 6.1 $
 --**********************************************************************
 --
 --  NCBI Sequence location and identifier elements
@@ -651,7 +651,11 @@ Seq-id ::= CHOICE {
     gi INTEGER ,             -- GenInfo Integrated Database
     ddbj Textseq-id ,        -- DDBJ
     prf Textseq-id ,         -- PRF SEQDB
-    pdb PDB-seq-id }         -- PDB sequence
+    pdb PDB-seq-id ,         -- PDB sequence
+    tpg Textseq-id ,         -- Third Party Annot/Seq Genbank
+    tpe Textseq-id ,         -- Third Party Annot/Seq EMBL
+    tpd Textseq-id }         -- Third Party Annot/Seq DDBJ
+
 
 Patent-seq-id ::= SEQUENCE {
     seqid INTEGER ,         -- number of sequence in patent
@@ -733,7 +737,7 @@ Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
 END
     
 
---$Revision: 6.3 $
+--$Revision: 6.4 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -835,6 +839,7 @@ MolInfo ::= SEQUENCE {
         genomic-mRNA (10) ,      -- reported a mix of genomic and cdna sequence
         cRNA (11) ,              -- viral RNA genome copy intermediate
         snoRNA (12) ,            -- small nucleolar RNA
+        transcribed-RNA (13) ,   -- transcribed RNA other than existing classes
         other (255) } DEFAULT unknown ,
     tech INTEGER {
         unknown (0) ,
@@ -1495,7 +1500,7 @@ PDB-replace ::= SEQUENCE {
 
 END
 
---$Revision: 6.6 $
+--$Revision: 6.7 $
 --**********************************************************************
 --
 --  NCBI Sequence Feature elements
@@ -1974,6 +1979,9 @@ SubSource ::= SEQUENCE {
         country (23) ,
         segment (24) ,
         endogenous-virus-name (25) ,
+        transgenic (26) ,
+        environmental-sample (27) ,
+        isolation-source (28) ,
         other (255) } ,
     name VisibleString ,
     attrib VisibleString OPTIONAL }    -- attribution/source of this name
@@ -2314,7 +2322,7 @@ Contact-info ::= SEQUENCE {      -- who to contact to discuss the submission
 
 END
 
---$Revision: 1.4 $
+--$Revision: 1.11 $
 --**********************************************************************
 --
 --  Definitions for Cn3D-specific data (rendering settings,
@@ -2378,7 +2386,12 @@ Cn3d-color-scheme ::= ENUMERATED {  -- available color schemes (not all
     variety (9),
     weighted-variety (10),
     information-content (11),
-    fit (12)
+    fit (12),
+    -- other schemes
+    temperature (13),
+    hydrophobicity (14),
+    charge (15),
+    rainbow (16)
 }
 
 -- RGB triplet, interpreted (after division by the scale-factor) as floating
@@ -2401,15 +2414,31 @@ Cn3d-backbone-style ::= SEQUENCE {  -- style blob for backbones only
     user-color Cn3d-color
 }
 
-Cn3d-general-style ::= SEQUENCE {   -- style blob for everything else
+Cn3d-general-style ::= SEQUENCE {   -- style blob for other objects
     is-on BOOLEAN,
     style Cn3d-drawing-style,
     color-scheme Cn3d-color-scheme,
     user-color Cn3d-color
 }
 
+Cn3d-backbone-label-style ::= SEQUENCE { -- style blob for backbone labels
+    spacing INTEGER,        -- zero means none
+    type ENUMERATED {
+        one-letter (1),
+        three-letter (2)
+    },
+    number ENUMERATED {
+        none (0),
+        sequential (1),     -- from 1, by residues present, to match sequence
+        pdb (2)             -- use number assigned by PDB
+    },
+    termini BOOLEAN,
+    white BOOLEAN           -- all white, or (if false) color of alpha carbon
+}
+
 -- rendering settings for Cn3D (mirrors StyleSettings class)
 Cn3d-style-settings ::= SEQUENCE {
+    name VisibleString OPTIONAL,                -- a name (for favorites)
     protein-backbone Cn3d-backbone-style,       -- backbone styles
     nucleotide-backbone Cn3d-backbone-style,
     protein-sidechains Cn3d-general-style,      -- styles for other stuff
@@ -2432,8 +2461,15 @@ Cn3d-style-settings ::= SEQUENCE {
     tube-worm-radius INTEGER,
     helix-radius INTEGER,
     strand-width INTEGER,
-    strand-thickness INTEGER
+    strand-thickness INTEGER,
+    -- backbone labels (no labels if not present)
+    protein-labels Cn3d-backbone-label-style OPTIONAL,
+    nucleotide-labels Cn3d-backbone-label-style OPTIONAL,
+    -- ion labels
+    ion-labels BOOLEAN OPTIONAL
 }
+
+Cn3d-style-settings-set ::= SET OF Cn3d-style-settings
 
 Cn3d-style-table-id ::= INTEGER
 
@@ -2479,12 +2515,42 @@ Cn3d-user-annotation ::= SEQUENCE {
     is-on BOOLEAN   -- whether this annotation is to be turned on in Cn3D
 }
 
+-- a GL-ordered transformation matrix
+Cn3d-GL-matrix ::= SEQUENCE {
+    m0  REAL, m1  REAL, m2  REAL, m3  REAL,
+    m4  REAL, m5  REAL, m6  REAL, m7  REAL,
+    m8  REAL, m9  REAL, m10 REAL, m11 REAL,
+    m12 REAL, m13 REAL, m14 REAL, m15 REAL
+}
+
+-- a floating point 3d vector
+Cn3d-vector ::= SEQUENCE {
+    x REAL,
+    y REAL,
+    z REAL
+}
+
+-- parameters used to set up the camera in Cn3D
+Cn3d-view-settings ::= SEQUENCE {
+    camera-distance REAL,       -- camera on +Z axis this distance from origin
+    camera-angle-rad REAL,      -- camera angle
+    camera-look-at-X REAL,      -- X,Y of point in Z=0 plane camera points at
+    camera-look-at-Y REAL,
+    camera-clip-near REAL,      -- distance of clipping planes from camera
+    camera-clip-far REAL,
+    matrix Cn3d-GL-matrix,      -- transformation of objects in the scene
+    rotation-center Cn3d-vector -- center of rotation of whole scene
+}
+
 -- The list of annotations for a given CDD/mime. If residue regions overlap
 -- between annotations that are turned on, the last annotation in this list
 -- that contains these residues will be used as the display style for these
 -- residues.
+--   Also contains the current viewpoint, so that user's camera angle
+-- can be stored and reproduced, for illustrations, on-line figures, etc.
 Cn3d-user-annotations ::= SEQUENCE {
-    annotations SEQUENCE OF Cn3d-user-annotation
+    annotations SEQUENCE OF Cn3d-user-annotation OPTIONAL,
+    view Cn3d-view-settings OPTIONAL
 }
 
 END
@@ -2622,7 +2688,7 @@ FeatDefGroupSet ::= SEQUENCE {
 END
 
     
---$Revision: 6.6 $
+--$Revision: 6.10 $
 --****************************************************************
 --
 --  NCBI MIME type (chemical/ncbi-asn1-ascii and chemical/ncbi-asn1-binary)
@@ -2635,6 +2701,7 @@ BEGIN
 
 EXPORTS Ncbi-mime-asn1;
 IMPORTS Biostruc, Biostruc-annot-set FROM MMDB
+    Cdd FROM NCBI-Cdd
 	Seq-entry FROM NCBI-Seqset
 	Seq-annot FROM NCBI-Sequence
     Medline-entry FROM NCBI-Medline
@@ -2642,11 +2709,30 @@ IMPORTS Biostruc, Biostruc-annot-set FROM MMDB
 
 Ncbi-mime-asn1 ::= CHOICE {
 	entrez	Entrez-general,			-- just a structure
-	alignstruc	Biostruc-align,	-- structures & sequences & alignments
+    alignstruc  Biostruc-align,     -- structures & sequences & alignments
 	alignseq	Biostruc-align-seq,	-- sequence alignment
-	strucseq    Biostruc-seq,	-- structure & sequences
-	strucseqs   Biostruc-seqs	-- structure & sequences & alignments
+    strucseq    Biostruc-seq,       -- structure & sequences
+    strucseqs   Biostruc-seqs,      -- structure & sequences & alignments
+    general     Biostruc-seqs-aligns-cdd    -- all-purpose "grab bag"
 	-- others may be added here in the future
+}
+
+-- generic bundle of sequence and alignment info
+Bundle-seqs-aligns ::= SEQUENCE {
+    sequences SET OF Seq-entry OPTIONAL,        -- sequences
+    seqaligns SET OF Seq-annot OPTIONAL,        -- sequence alignments
+    strucaligns Biostruc-annot-set OPTIONAL,    -- structure alignments
+    imports SET OF Seq-annot OPTIONAL,          -- imports (updates in Cn3D)
+    style-dictionary Cn3d-style-dictionary OPTIONAL,    -- Cn3D stuff
+    user-annotations Cn3d-user-annotations OPTIONAL
+}
+
+Biostruc-seqs-aligns-cdd ::= SEQUENCE {
+    seq-align-data CHOICE {
+        bundle Bundle-seqs-aligns,          -- either seqs + alignments
+        cdd Cdd                             -- or CDD (which contains these)
+    },
+    structures SET OF Biostruc OPTIONAL     -- structures
 }
 
 Biostruc-align ::= SEQUENCE {

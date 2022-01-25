@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.101 $
+* $Revision: 6.112 $
 *
 * File Description: 
 *
@@ -842,6 +842,47 @@ NLM_EXTERN Boolean SeqLocBadSortOrder (BioseqPtr bsp, SeqLocPtr slp)
   return FALSE;
 }
 
+NLM_EXTERN Boolean SeqLocMixedStrands (BioseqPtr bsp, SeqLocPtr slp)
+
+{
+  SeqLocRangePtr  curr;
+  SeqLocRangePtr  head;
+  SeqLocRangePtr  last;
+  Uint1           strand;
+
+  if (bsp == NULL || slp == NULL) return FALSE;
+  if (SeqLocCheck (slp) == SEQLOCCHECK_WARNING) return FALSE;
+  /*
+  if (SeqLocId (slp) == NULL) return FALSE;
+  */
+  head = CollectRanges (bsp, slp);
+  if (head == NULL) return FALSE;
+  if (head->next == NULL) {
+    SeqLocRangeFree (head);
+    return FALSE;
+  }
+  last = head;
+  strand = last->strand;
+  curr = head->next;
+  while (curr != NULL) {
+    if (curr->strand == Seq_strand_minus) {
+      if (strand == Seq_strand_plus || strand == Seq_strand_unknown) {
+        SeqLocRangeFree (head);
+        return TRUE;
+      }
+    } else {
+      if (strand == Seq_strand_minus) {
+        SeqLocRangeFree (head);
+        return TRUE;
+      }
+    }
+    last = curr;
+    curr = curr->next;
+  }
+  SeqLocRangeFree (head);
+  return FALSE;
+}
+
 static void ConvertToFeatsCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent, Boolean toProts)
 
 {
@@ -1280,9 +1321,9 @@ static CharPtr sqntag_biosrc_subsource_list [] = {
   "?", "chromosome", "map", "clone", "subclone", "haplotype",
   "genotype", "sex", "cell-line", "cell-type", "tissue-type",
   "clone-lib", "dev-stage", "frequency", "germline", "rearranged",
-  "lab-host", "pop-variant", "tissue-lib", "plasmid-name",
-  "transposon-name", "ins-seq-name", "plastid-name", "country",
-  "segment", "endogenous-virus-name", NULL
+  "lab-host", "pop-variant", "tissue-lib", "plasmid-name", "transposon-name",
+  "ins-seq-name", "plastid-name", "country", "segment", "endogenous-virus-name",
+  "transgenic", "environmental-sample", "isolation-source", NULL
 };
 
 NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
@@ -1584,6 +1625,140 @@ NLM_EXTERN ProtRefPtr ParseTitleIntoProtRef (
   }
 
   return prp;
+}
+
+NLM_EXTERN GBBlockPtr ParseTitleIntoGenBank (
+  SqnTagPtr stp,
+  GBBlockPtr gbp
+)
+
+{
+  Char     ch;
+  CharPtr  last;
+  CharPtr  ptr;
+  CharPtr  str;
+  CharPtr  tmp;
+
+  if (stp == NULL) return gbp;
+
+  if (gbp == NULL) {
+    gbp = GBBlockNew ();
+    if (gbp == NULL) return gbp;
+  }
+
+  str = SqnTagFind (stp, "secondary-accession");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "secondary-accessions");
+  }
+  if (str != NULL) {
+    tmp = StringSave (str);
+    last = tmp;
+    ptr = last;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == ',') {
+        *ptr = '\0';
+        if (! StringHasNoText (last)) {
+          TrimSpacesAroundString (last);
+          ValNodeCopyStr (&(gbp->extra_accessions), 0, last);
+        }
+        ptr++;
+        last = ptr;
+        ch = *ptr;
+      } else {
+        ptr++;
+        ch = *ptr;
+      }
+    }
+    if (! StringHasNoText (last)) {
+      TrimSpacesAroundString (last);
+      ValNodeCopyStr (&(gbp->extra_accessions), 0, last);
+    }
+    MemFree (tmp);
+  }
+
+  return gbp;
+}
+
+static void AddStringToSeqHist (
+  SeqHistPtr shp,
+  CharPtr str
+)
+
+{
+  Char          prefix [20];
+  SeqIdPtr      sip;
+  TextSeqIdPtr  tsip;
+  Uint4         whichdb;
+
+  if (shp == NULL || StringHasNoText (str)) return;
+  sip = ValNodeAdd (&(shp->replace_ids));
+  if (sip == NULL) return;
+  tsip = TextSeqIdNew ();
+  StringNCpy_0 (prefix, str, sizeof (prefix));
+  whichdb = WHICH_db_accession (prefix);
+  if (ACCN_IS_EMBL (whichdb)) {
+    sip->choice = SEQID_EMBL;
+  } else if (ACCN_IS_DDBJ (whichdb)) {
+    sip->choice = SEQID_DDBJ;
+  } else {
+    sip->choice = SEQID_GENBANK;
+  }
+  sip->data.ptrvalue = (Pointer) tsip;
+  tsip->accession = StringSave (str);
+}
+
+NLM_EXTERN SeqHistPtr ParseTitleIntoSeqHist (
+  SqnTagPtr stp,
+  SeqHistPtr shp
+)
+
+{
+  Char     ch;
+  CharPtr  last;
+  CharPtr  ptr;
+  CharPtr  str;
+  CharPtr  tmp;
+
+  if (stp == NULL) return shp;
+
+  if (shp == NULL) {
+    shp = SeqHistNew ();
+    if (shp == NULL) return shp;
+  }
+
+  str = SqnTagFind (stp, "secondary-accession");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "secondary-accessions");
+  }
+  if (str != NULL) {
+    tmp = StringSave (str);
+    last = tmp;
+    ptr = last;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == ',') {
+        *ptr = '\0';
+        if (! StringHasNoText (last)) {
+          TrimSpacesAroundString (last);
+          AddStringToSeqHist (shp, last);
+        }
+        ptr++;
+        last = ptr;
+        ch = *ptr;
+      } else {
+        ptr++;
+        ch = *ptr;
+      }
+    }
+    if (! StringHasNoText (last)) {
+      TrimSpacesAroundString (last);
+      AddStringToSeqHist (shp, last);
+    }
+    MemFree (tmp);
+  }
+
+  return shp;
 }
 
 /* PHRAP file reading functions */
@@ -2723,6 +2898,12 @@ static ByteStorePtr ReadFlatFileDNA (FILE *fp, BoolPtr protPtr, Boolean forceNuc
             } else if (ch == 'u') {
               ch = 't';
             }
+          } else {
+            if (ch == 'X') {
+              ch = 'N';
+            } else if (ch == 'x') {
+              ch = 'n';
+            }
           }
           *q = ch;
           q++;
@@ -2931,6 +3112,7 @@ NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str)
     }
   }
   if (StringICmp ("fMet", tmp) == 0) return (Uint1) 'M';
+  if (StringICmp ("OTHER", tmp) == 0) return (Uint1) 'X';
   return 0;
 }
 
@@ -2956,6 +3138,7 @@ NLM_EXTERN Uint1 FindTrnaAA (CharPtr str)
     }
   }
   if (StringICmp ("fMet", tmp) == 0) return (Uint1) 'M';
+  if (StringICmp ("OTHER", tmp) == 0) return (Uint1) 'X';
   return 0;
 }
 
@@ -2977,34 +3160,68 @@ NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str)
     }
   }
   if (StringICmp ("fMet", tmp) == 0) return aaList [35];
+  if (StringICmp ("OTHER", tmp) == 0) return aaList [52];
   return NULL;
 }
 
-NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText)
+NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr cdP)
 
 {
   Uint1       aa;
+  Char        ch;
+  Char        codon [16];
   Uint1       curraa;
   ValNodePtr  head;
+  Int2        i;
   Boolean     justt = TRUE;
   CharPtr     str;
+  tRNA        tr;
   ValNodePtr  vnp;
 
   if (justTrnaText != NULL) {
     *justTrnaText = FALSE;
   }
+  if (cdP != NULL) {
+    for (i = 0; i < 6; i++) { 
+      cdP [i] = 255;
+    }
+  }
   if (StringHasNoText (strx)) return 0;
+
+  MemSet ((Pointer) &tr, 0, sizeof (tRNA));
+  for (i = 0; i < 6; i++) {
+    tr.codon [i] = 255;
+  }
+
   aa = 0;
   head = TokenizeTRnaString (strx);
   for (vnp = head; (aa == 0 || aa == 'A') && vnp != NULL; vnp = vnp->next) {
     str = (CharPtr) vnp->data.ptrvalue;
     curraa = FindTrnaAA (str);
     if (curraa != 0) {
-      aa = curraa;
+      if (aa == 0) {
+        aa = curraa;
+      }
     } else if (StringICmp ("tRNA", str) != 0 &&
                StringICmp ("transfer", str) != 0 &&
                StringICmp ("RNA", str) != 0) {
-      justt = FALSE;
+      if (cdP != NULL && StringLen (str) == 3) {
+        StringCpy (codon, str);
+        for (i = 0; i < 3; i++) {
+          if (codon [i] == 'U') {
+            codon [i] = 'T';
+          }
+        }
+        if (ParseDegenerateCodon (&tr, (Uint1Ptr) codon)) {
+          for (i = 0; i < 6; i++) { 
+            cdP [i] = tr.codon [i];
+          }
+        } else {
+          justt = FALSE;
+        }
+      } else {
+        justt = FALSE;
+      }
     }
   }
   for (; vnp != NULL; vnp = vnp->next) {
@@ -3014,10 +3231,37 @@ NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText)
     } else if (StringICmp ("tRNA", str) != 0 &&
                StringICmp ("transfer", str) != 0 &&
                StringICmp ("RNA", str) != 0) {
-      justt = FALSE;
+      if (cdP != NULL && StringLen (str) == 3) {
+        StringCpy (codon, str);
+        for (i = 0; i < 3; i++) {
+          if (codon [i] == 'U') {
+            codon [i] = 'T';
+          }
+        }
+        if (ParseDegenerateCodon (&tr, (Uint1Ptr) codon)) {
+          for (i = 0; i < 6; i++) { 
+            cdP [i] = tr.codon [i];
+          }
+        } else {
+          justt = FALSE;
+        }
+      } else {
+        justt = FALSE;
+      }
     }
   }
   ValNodeFreeData (head);
+  if (justt) {
+    str = strx;
+    ch = *str;
+    while (ch != '\0') {
+      if (IS_DIGIT (ch)) {
+        justt = FALSE;
+      }
+      str++;
+      ch = *str;
+    }
+  }
   if (justTrnaText != NULL) {
     *justTrnaText = justt;
   }
@@ -3122,6 +3366,12 @@ NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx)
       i += j + k;
     }
     StringNCpy_0 (tmp, str + k, sizeof (tmp));
+    if (StringNICmp (tmp, "tRNA", 4) == 0) {
+      tmp [0] = ' ';
+      tmp [1] = ' ';
+      tmp [2] = ' ';
+      tmp [3] = ' ';
+    }
     SqnTrimSpacesAroundString (tmp);
     if (! HasNoText (tmp)) {
       ValNodeCopyStr (&head, 0, tmp);
@@ -3199,9 +3449,9 @@ static CharPtr subSourceList [] = {
   "", "Chromosome", "Map", "Clone", "Subclone", "Haplotype",
   "Genotype", "Sex", "Cell-line", "Cell-type", "Tissue-type",
   "Clone-lib", "Dev-stage", "Frequency", "Germline", "Rearranged",
-  "Lab-host", "Pop-variant", "Tissue-lib", "Plasmid-name",
-  "Transposon-name", "Ins-seq-name", "Plastid-name", "Country",
-  "Segment", "Endogenous-virus-name", NULL
+  "Lab-host", "Pop-variant", "Tissue-lib", "Plasmid-name", "Transposon-name",
+  "Ins-seq-name", "Plastid-name", "Country", "Segment", "Endogenous-virus-name",
+  "Transgenic", "Environmental-sample", "Isolation-source", NULL
 };
 
 static OrgNamePtr GetOrMakeOnp (OrgRefPtr orp)
@@ -3651,15 +3901,15 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
 
 {
   Uint1           aa;
+  Uint1           codon [6];
   CdRegionPtr     crp;
-  Uint1           curraa;
   DbtagPtr        db;
   GBQualPtr       gbq;
   GeneRefPtr      grp;
-  ValNodePtr      head;
   ImpFeatPtr      ifp = NULL;
   Boolean         isGeneSyn = FALSE;
   Int2            j;
+  Boolean         justTrnaText;
   GBQualPtr       last;
   size_t          len;
   int             num;
@@ -3902,36 +4152,27 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
           for (j = 0; j < 6; j++) {
             trna->codon [j] = 255;
           }
-          head = TokenizeTRnaString (val);
-          aa = 0;
-          for (vnp = head; (aa == 0 || aa == 'A') && vnp != NULL; vnp = vnp->next) {
-            str = (CharPtr) vnp->data.ptrvalue;
-            if (StringLen (str) == 5 && str [0] == '(' && str [4] == ')') {
-              trna->codon [0] = ParseCodon (str);
-            } else {
-              curraa = FindTrnaAA (str);
-              if (curraa != 0) {
-                aa = curraa;
+          aa = ParseTRnaString (val, &justTrnaText, codon);
+          if (aa != 0) {
+            if (justTrnaText) {
+              for (j = 0; j < 6; j++) {
+                trna->codon [j] = codon [j];
               }
             }
-          }
-          if (aa == 0) {
-            aa = 'X';
-          }
-          trna->aa = aa;
-          ValNodeFreeData (head);
-          if (aa == 'M') {
-            if (StringStr (val, "fMet") != NULL) {
-              if (sfp->comment == NULL) {
-                sfp->comment = StringSave ("fMet");
-              } else {
-                len = StringLen (sfp->comment) + StringLen ("fMet") + 5;
-                str = MemNew (sizeof (Char) * len);
-                StringCpy (str, sfp->comment);
-                StringCat (str, "; ");
-                StringCat (str, "fMet");
-                sfp->comment = MemFree (sfp->comment);
-                sfp->comment = str;
+            trna->aa = aa;
+            if (aa == 'M') {
+              if (StringStr (val, "fMet") != NULL) {
+                if (sfp->comment == NULL) {
+                  sfp->comment = StringSave ("fMet");
+                } else {
+                  len = StringLen (sfp->comment) + StringLen ("fMet") + 5;
+                  str = MemNew (sizeof (Char) * len);
+                  StringCpy (str, sfp->comment);
+                  StringCat (str, "; ");
+                  StringCat (str, "fMet");
+                  sfp->comment = MemFree (sfp->comment);
+                  sfp->comment = str;
+                }
               }
             }
           }

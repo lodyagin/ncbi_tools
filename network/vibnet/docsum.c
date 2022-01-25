@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.52 $
+* $Revision: 6.53 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.53  2001/11/02 12:51:01  kans
+* add EntrezDocSum time log if environment variable set on UNIX
+*
 * Revision 6.52  2001/02/15 18:06:55  kans
 * FileToString fixed for PC
 *
@@ -686,14 +689,35 @@ static CharPtr FetchDocSum (DoC d, Int2 item, Pointer ptr)
   SummFormPtr  sfp;
   CharPtr      str;
   Int4         uid;
+#ifdef OS_UNIX
+  Boolean      logtimes;
+  Int4         starttime;
+  Int4         stoptime;
+#endif
 
   sfp = (SummFormPtr) GetObjectExtra (d);
   failed = SetDefaultFailureMessage (sfp, item, "\r\t");
   if (sfp == NULL || sfp->uids == NULL || sfp->state == NULL) return failed;
   if (item < 1) return failed;
   uid = sfp->uids [item - 1];
+
+#ifdef OS_UNIX
+  logtimes = (Boolean) ((getenv ("NCBI_LOG_SYNC_QUERY_TIMES")) != NULL);
+  if (logtimes) {
+    starttime = ComputerTime ();
+  }
+#endif
+
   dsp = EntrezDocSum (sfp->currDb, uid);
   if (dsp == NULL) return failed;
+
+#ifdef OS_UNIX
+  if (logtimes) {
+    stoptime = ComputerTime ();
+    printf ("EntrezDocSum %ld\n", (long) (stoptime - starttime));
+  }
+#endif
+
   if (dsp->caption == NULL && dsp->title == NULL && dsp->extra == NULL) {
     DocSumFree (dsp);
     return failed;

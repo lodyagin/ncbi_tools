@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.82 $
+* $Revision: 6.92 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,36 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.92  2001/12/05 18:18:32  kans
+* for protein defline organism, check stop list before looking for overlapping source feature of parent CDS
+*
+* Revision 6.91  2001/10/12 21:55:21  kans
+* convert nucleotide X to N
+*
+* Revision 6.90  2001/10/09 15:28:04  kans
+* CreateDefLine adds TPA: prefix if third-party annotation record
+*
+* Revision 6.89  2001/08/31 15:29:53  kans
+* added CreateDefLineEx to ignore existing title descriptor, force generation of protein title computationally
+*
+* Revision 6.88  2001/08/17 13:56:18  kans
+* clear proteins only in NPS
+*
+* Revision 6.87  2001/08/17 13:27:26  kans
+* ClearProteinTitlesInNucProts, do not do it for outside protein databases
+*
+* Revision 6.86  2001/08/16 18:38:09  kans
+* ClearProtTitlesProc checks for ISA_aa (bsp->mol)
+*
+* Revision 6.85  2001/08/07 17:22:52  kans
+* added support for third party annotation SeqIDs
+*
+* Revision 6.84  2001/08/06 22:13:12  kans
+* using NUM_SEQID, added TPA ids to arrays
+*
+* Revision 6.83  2001/07/29 16:57:16  kans
+* MakeCompleteChromTitle adds the word segment unless it or DNA or RNA is in the ssp->name - additional logic may be desired later
+*
 * Revision 6.82  2001/06/25 23:47:47  kans
 * added InstantiateProteinTitles and ClearProteinTitles
 *
@@ -533,7 +563,10 @@ static Uint1 na_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
 	120,  /* 12 = gi */
 	20, /* 13 = ddbj */
 	255, /* 14 = prf */
-	30  /* 15 = pdb */
+	30, /* 15 = pdb */
+        20,  /* 16 = tpg */
+        20,  /* 17 = tpe */
+        20   /* 18 = tpd */
     };
 
 static Uint1 aa_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
@@ -552,7 +585,10 @@ static Uint1 aa_order[NUM_SEQID] = {   /* order of nucleic acid deflines */
 	120,  /* 12 = gi */
 	60, /* 13 = ddbj */
 	70, /* 14 = prf */
-	50  /* 15 = pdb */
+	50, /* 15 = pdb */
+        60,  /* 16 = tpg */
+        60,  /* 17 = tpe */
+        60   /* 18 = tpd */
     };
 
 #define FASTA_BUFFER_LEN 25000
@@ -701,6 +737,10 @@ void SeqEntryFasta (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 				case SEQID_GENBANK:
 				case SEQID_EMBL:
 				case SEQID_DDBJ:
+				case SEQID_OTHER:
+				case SEQID_TPG:
+				case SEQID_TPE:
+				case SEQID_TPD:
 					tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
 					if (tsip->accession != NULL)
 						mfp->accession = tsip->accession;
@@ -1689,6 +1729,7 @@ static Boolean FastaReadSequenceInternalEx
             byte_from = TO_UPPER (byte_from);
                 
             if (is_na && byte_from == 'U') byte_from = 'T';
+            if (is_na && byte_from == 'X') byte_from = 'N';
                 
             if((uch = SeqMapTableConvert(smtp, byte_from)) != 
                INVALID_RESIDUE && byte_from != '-') {
@@ -2982,7 +3023,7 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 comple
 	SubSourcePtr  ssp;
 	CharPtr       name = NULL, chr = NULL, orgnl = NULL,
 	              seg = NULL, pls = NULL, def = NULL;
-	Int2          deflen = 60; /* starts with space for all fixed text */
+	Int2          deflen = 70; /* starts with space for all fixed text */
 	Char          ch;
 	Boolean       plasmid;
 	Uint1         genome;
@@ -3109,6 +3150,12 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 comple
 	}
 	if (seg != NULL) {
 		StringCat (def, " ");
+		if (StringStr (seg, "DNA") == NULL &&
+		    StringStr (seg, "RNA") == NULL &&
+		    StringStr (seg, "segment") == NULL &&
+		    StringStr (seg, "Segment") == NULL) {
+		  StringCat (def, "segment ");
+		}
 		StringCat(def, seg);
 		StringCat (def, completeseq);
 		ch = *def;
@@ -3129,6 +3176,17 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 comple
 	return def;
 }
 
+static Boolean NotSpecialTaxName (CharPtr taxname)
+
+{
+  if (StringHasNoText (taxname)) return TRUE;
+  if (StringICmp (taxname, "synthetic construct") == 0) return FALSE;
+  if (StringICmp (taxname, "artificial sequence") == 0) return FALSE;
+  if (StringStr (taxname, "vector") != NULL) return FALSE;
+  if (StringStr (taxname, "Vector") != NULL) return FALSE;
+  return TRUE;
+}
+
 /*****************************************************************************
 *
 *   CreateDefLine(iip, bsp, buf, buflen, tech)
@@ -3140,9 +3198,9 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 comple
 *		ItemInfoPtr iip is used in flat file generator to keep entityId, itemId
 *		and itemtype
 *****************************************************************************/
-NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Int2 buflen, Uint1 tech, CharPtr accession, CharPtr organism)
+NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Int2 buflen, Uint1 tech, CharPtr accession, CharPtr organism, Boolean ignoreTitle)
 {
-	ValNodePtr vnp;
+	ValNodePtr vnp = NULL;
 	CharPtr tmp = NULL, title = NULL;
 	PdbBlockPtr pbp;
 	PatentSeqIdPtr psip;
@@ -3157,7 +3215,7 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 		"LOW-PASS SEQUENCE SAMPLING",
 		"WORKING DRAFT SEQUENCE",
 		"*** SEQUENCING IN PROGRESS ***" };
-	Boolean htg_tech = FALSE, htgs_draft = FALSE, is_nc = FALSE;
+	Boolean htg_tech = FALSE, htgs_draft = FALSE, is_nc = FALSE, is_tpa = FALSE;
 	MolInfoPtr mip;
 	GBBlockPtr gbp = NULL;
 	SeqIdPtr sip;
@@ -3173,13 +3231,22 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	if ((bsp == NULL) || (buf == NULL) || buflen == 0) return FALSE;
 
 	for (sip = bsp->id; sip != NULL; sip = sip->next) {
-		if (sip->choice == SEQID_OTHER) {
-			tsip = (TextSeqIdPtr) sip->data.ptrvalue;
-			if (tsip != NULL && tsip->accession != NULL) {
-				if (StringNICmp (tsip->accession, "NC_", 3) == 0) {
-					is_nc = TRUE;
+		switch (sip->choice) {
+			case SEQID_OTHER :
+				tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+				if (tsip != NULL && tsip->accession != NULL) {
+					if (StringNICmp (tsip->accession, "NC_", 3) == 0) {
+						is_nc = TRUE;
+					}
 				}
-			}
+				break;
+			case SEQID_TPG :
+			case SEQID_TPE :
+			case SEQID_TPD :
+				is_tpa = TRUE;
+				break;
+			default :
+				break;
 		}
 	}
 
@@ -3202,7 +3269,9 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 			gbp = (GBBlockPtr) vnp->data.ptrvalue;
 		}
 	}
-	vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_title);
+	if (! ignoreTitle) {
+		vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_title);
+	}
 	if (vnp != NULL) {
 		title = StringSaveNoNull((CharPtr)vnp->data.ptrvalue);
 	}
@@ -3237,6 +3306,11 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	}
 /* some titles may have zero length */
 	if (title != NULL && *title != '\0') {
+		if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
+			diff = LabelCopy (buf, "TPA: ", buflen);
+			buflen -= diff;
+			buf += diff;
+		}
 		diff = LabelCopy(buf, title, buflen);
 		                        /* remove trailing blanks and periods */
 		tmp = buf + diff - 1;   /* point at last character */
@@ -3287,15 +3361,17 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 							taxname = orp->taxname;
 						}
 					}
-					sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
-					if (sfp != NULL) {
-						src = SeqMgrGetOverlappingSource (sfp->location, &fcontext);
-						if (src != NULL) {
-							biop = (BioSourcePtr) src->data.value.ptrvalue;
-							if (biop != NULL) {
-								orp = biop->org;
-								if (orp != NULL) {
-									taxname = orp->taxname;
+					if (taxname == NULL || NotSpecialTaxName (taxname)) {
+						sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
+						if (sfp != NULL) {
+							src = SeqMgrGetOverlappingSource (sfp->location, &fcontext);
+							if (src != NULL) {
+								biop = (BioSourcePtr) src->data.value.ptrvalue;
+								if (biop != NULL) {
+									orp = biop->org;
+									if (orp != NULL) {
+										taxname = orp->taxname;
+									}
 								}
 							}
 						}
@@ -3316,6 +3392,11 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 					diff = LabelCopy(buf, title, buflen);
 				}
 				*/
+				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
+					diff = LabelCopy (buf, "TPA: ", buflen);
+					buflen -= diff;
+					buf += diff;
+				}
 				diff = LabelCopy(buf, title, buflen);
 				if (organism == NULL && taxname != NULL) {
 					organism = taxname;
@@ -3327,6 +3408,11 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 				}
 				if (title == NULL) {
 					title = UseOrgMods(bsp);
+				}
+				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
+					diff = LabelCopy (buf, "TPA: ", buflen);
+					buflen -= diff;
+					buf += diff;
 				}
 				if (title != NULL) {
 					diff = LabelCopy(buf, title, buflen);
@@ -3348,6 +3434,11 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 			title = UseOrgMods(bsp);
 			organism = NULL;
 			if (title != NULL) {
+				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
+					diff = LabelCopy (buf, "TPA: ", buflen);
+					buflen -= diff;
+					buf += diff;
+				}
 				diff = LabelCopy(buf, title, buflen);
 				buflen -= diff;
 				buf += diff;
@@ -3426,6 +3517,11 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 			title = UseOrgMods(bsp);
 			organism = NULL;
 			if (title != NULL) {
+				if (is_tpa && StringNICmp (title, "TPA: ", 5) != 0) {
+					diff = LabelCopy (buf, "TPA: ", buflen);
+					buflen -= diff;
+					buf += diff;
+				}
 				diff = LabelCopy(buf, title, buflen);
 				buflen -= diff;
 				buf += diff;
@@ -3469,6 +3565,12 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 	}
         MemFree(title);
 	return TRUE;
+}
+
+NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, Int2 buflen, Uint1 tech, CharPtr accession, CharPtr organism)
+
+{
+  return CreateDefLineEx (iip, bsp, buf, buflen, tech, accession, organism, FALSE);
 }
 
 /*****************************************************************************
@@ -3719,9 +3821,14 @@ static void ClearProtTitlesProc (BioseqPtr bsp, Pointer userdata)
 {
   ObjValNodePtr  ovp;
   SeqDescrPtr    sdp;
+  SeqIdPtr       sip;
 
   if (bsp == NULL) return;
   if (! ISA_aa (bsp->mol)) return;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER) return;
+  }
+
   for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
     if (sdp->choice == Seq_descr_title) {
       if (sdp->extended != 0) {
@@ -3732,7 +3839,14 @@ static void ClearProtTitlesProc (BioseqPtr bsp, Pointer userdata)
   }
 }
 
-NLM_EXTERN void ClearProteinTitles (Uint2 entityID, Pointer ptr)
+static void ClearProtTitlesNPS (BioseqSetPtr bssp, Pointer userdata)
+
+{
+  if (bssp->_class != BioseqseqSet_class_nuc_prot) return;
+  VisitBioseqsInSet (bssp, NULL, ClearProtTitlesProc);
+}
+
+NLM_EXTERN void ClearProteinTitlesInNucProts (Uint2 entityID, Pointer ptr)
 
 {
   SeqEntryPtr  sep;
@@ -3742,7 +3856,7 @@ NLM_EXTERN void ClearProteinTitles (Uint2 entityID, Pointer ptr)
   }
   if (entityID == 0) return;
   sep = GetTopSeqEntryForEntityID (entityID);
-  VisitBioseqsInSep (sep, NULL, ClearProtTitlesProc);
+  VisitSetsInSep (sep, NULL, ClearProtTitlesNPS);
   DeleteMarkedObjects (entityID, 0, NULL);
 }
 
@@ -3751,9 +3865,19 @@ static void AddProtTitles (BioseqPtr bsp, Pointer userdata)
 {
   Char         buf [512];
   SeqDescrPtr  sdp;
+  SeqIdPtr     sip;
   CharPtr      str;
 
   if (bsp == NULL) return;
+  if (! ISA_aa (bsp->mol)) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_PIR ||
+        sip->choice == SEQID_SWISSPROT ||
+        sip->choice == SEQID_PATENT ||
+        sip->choice == SEQID_PRF ||
+        sip->choice == SEQID_PDB) return;
+  }
 
   for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
     if (sdp->choice == Seq_descr_title) return;

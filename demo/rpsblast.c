@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.37 2001/07/03 20:50:33 madden Exp $
+/* $Id: rpsblast.c,v 6.38 2001/08/28 17:45:01 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,14 +29,14 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
-* Revision 6.37  2001/07/03 20:50:33  madden
-* Commented out call to PrintTabularOutputHeader
+* Revision 6.38  2001/08/28 17:45:01  madden
+* Add -m 9 as tabular output with comments
 *
 * Revision 6.36  2001/06/27 16:20:00  dondosha
 * Enabled tabular output for RPS Blast
@@ -175,7 +175,7 @@ static Args myargs [] = {
      "T", NULL,NULL,TRUE, 'p', ARG_BOOLEAN, 0.0,0,NULL},
     { "Expectation value (E)",        /* 3 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular output", /* 4 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tabular output, \n9 = tabular output with comments", /* 4 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "Output File for Alignment", /* 5 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -339,6 +339,11 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
        rpsbop->is_xml_output = TRUE;
     else if (myargs[4].intvalue == 8)
        rpsbop->is_tabular = TRUE;
+    else if (myargs[4].intvalue == 8 || myargs[4].intvalue == 9)
+    {
+       rpsbop->is_tabular = TRUE;
+       rpsbop->is_tabular_comments = TRUE;
+    }
     else
        PGPGetPrintOptions(options->gapped_calculation, 
                           &rpsbop->align_options, &rpsbop->print_options);
@@ -614,11 +619,10 @@ static Boolean LIBCALLBACK RPSResultsCallback(BioseqPtr query_bsp,
                        query_bsp, other_returns, 0, NULL);
        AsnIoClose(aip);
     } else if (rpsbop->is_tabular) {
-/*
-       PrintTabularOutputHeader(rpsbop->rps_database, query_bsp, NULL, 
+	if (rpsbop->is_tabular_comments)
+       		PrintTabularOutputHeader(rpsbop->rps_database, query_bsp, NULL, 
                                 "rps-blast", 0, rpsbop->believe_query,
                                 rpsbop->outfp);
-*/
        BlastPrintTabulatedResults(seqalign, query_bsp, NULL, 
                                   rpsbop->number_of_alignments,
                                   rpsbop->query_is_protein ? 

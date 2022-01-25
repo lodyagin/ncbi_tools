@@ -1,18 +1,18 @@
 
 That document contains the Frequently Asked Questions with Answers
 to the NCBI toolkit.
-It is available at ftp://ncbi.nlm.nih.gov/toolbox/FAQ.html
+It is available at ftp://ftp.ncbi.nih.gov/toolbox/FAQ.html
 
 In case of any questions don't hesitate to ask us at
 	mailto:toolbox@ncbi.nlm.nih.gov
 
 Q. Where can I download the binaries of NCBI toolkit?
 A. The binaries of NCBI toolkit may be downloaded at:
-	BLAST:		ftp://ncbi.nlm.nih.gov/blast/executables/
-	SEQUIN:		ftp://ncbi.nlm.nih.gov/sequin/
-	FA2HTGS:	ftp://ncbi.nlm.nih.gov/fa2htgs/
-	ENTREZ:		ftp://ncbi.nlm.nih.gov/entrez/
-	CN3D:		ftp://ncbi.nlm.nih.gov/cn3d/
+	BLAST:		ftp://ftp.ncbi.nih.gov/blast/executables/
+	SEQUIN:		ftp://ftp.ncbi.nih.gov/sequin/
+	FA2HTGS:	ftp://ftp.ncbi.nih.gov/fa2htgs/
+	ENTREZ:		ftp://ftp.ncbi.nih.gov/entrez/
+	CN3D:		ftp://ftp.ncbi.nih.gov/cn3d/
 
 Currently NCBI prepares the binaries for the following platforms:
 	IBM       -- AIX 4.3.3
@@ -28,21 +28,21 @@ Currently NCBI prepares the binaries for the following platforms:
 
 Q. Where can I download the sources of NCBI toolkit?
 A. The sources of NCBI toolkit for Unix are located at:
-	ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
+	ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
 The sources of NCBI toolkit for Windows are located at:
-	ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbiz.exe
+	ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbiz.exe
 And the sources of NCBI toolkit for Mac are located at:
-	ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbi.hqx
+	ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.hqx
 
 Q. How to find the version of the toolkit?
 A. The source of the ToolKit for Unix, which is located at
-	ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
+	ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
 should have the file ncbi/VERSION with the date of the building.
 
 Q. How to build NCBI toolkit on Unix?
-A. Read the file ftp://ncbi.nlm.nih.gov/toolbox/readme.unx
+A. Read the file ftp://ftp.ncbi.nih.gov/toolbox/readme.unx
    You should take the sources of NCBI tookit at:
-	ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
+	ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
 	put the archive to the new empty directory:
 	mkdir toolkit
 	cd toolkit

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.19 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *
@@ -45,6 +45,18 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.23  2001/11/29 18:29:38  kans
+ * added FANTOM_DB to list of legal db_xrefs, incremented DBNUM
+ *
+ * Revision 6.22  2001/10/15 17:08:44  kans
+ * updated legal db_xref list to collaboration + RefSeq
+ *
+ * Revision 6.21  2001/10/15 13:57:22  kans
+ * added BDGP_INS and SoyBase as legal db_xrefs
+ *
+ * Revision 6.20  2001/09/06 18:55:52  tatiana
+ * *** empty log message ***
+ *
  * Revision 6.19  2001/03/17 00:51:14  tatiana
  * GeneID added to dbxref array, DBNUM increased
  *
@@ -159,6 +171,18 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.23  2001/11/29 18:29:38  kans
+* added FANTOM_DB to list of legal db_xrefs, incremented DBNUM
+*
+* Revision 6.22  2001/10/15 17:08:44  kans
+* updated legal db_xref list to collaboration + RefSeq
+*
+* Revision 6.21  2001/10/15 13:57:22  kans
+* added BDGP_INS and SoyBase as legal db_xrefs
+*
+* Revision 6.20  2001/09/06 18:55:52  tatiana
+* *** empty log message ***
+*
 * Revision 6.19  2001/03/17 00:51:14  tatiana
 * GeneID added to dbxref array, DBNUM increased
 *
@@ -303,7 +327,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 34
+#define DBNUM 44
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));
@@ -376,7 +400,7 @@ NLM_EXTERN Boolean GetCdregionGeneXrefInfo PROTO ((Asn2ffJobPtr ajp, SeqFeatPtr 
 NLM_EXTERN void GetGeneRefInfo PROTO ((GeneStructPtr gsp, NoteStructPtr nsp, GeneRefPtr grp));
 NLM_EXTERN void GetDBXrefFromGene PROTO ((GeneRefPtr grp, SeqFeatPtr sfp));
 NLM_EXTERN Int2 CompareStringWithGsp PROTO ((GeneStructPtr gsp, CharPtr string));
-NLM_EXTERN Boolean CheckNAFeat PROTO ((Boolean new, BioseqPtr bsp, SeqFeatPtr sfp));
+NLM_EXTERN Boolean CheckNAFeat PROTO ((Boolean is_new, BioseqPtr bsp, SeqFeatPtr sfp));
 NLM_EXTERN Boolean CheckAndGetNAFeatLoc PROTO ((BioseqPtr bsp, CharPtr PNTR buffer, SeqFeatPtr sfp, Boolean loc_return));
 NLM_EXTERN void GetAAFeatLoc PROTO ((BioseqPtr bsp, CharPtr PNTR buffer, SeqFeatPtr sfp, Boolean use_product));
 NLM_EXTERN CharPtr GetGBSourceLine PROTO ((GBBlockPtr gb));

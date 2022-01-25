@@ -1,4 +1,4 @@
-/* $Id: megablast.c,v 6.75 2001/07/03 20:50:33 madden Exp $
+/* $Id: megablast.c,v 6.83 2001/12/28 20:42:16 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,30 @@
 ************************************************************************** 
  * $Revision 6.13$ *  
  * $Log: megablast.c,v $
+ * Revision 6.83  2001/12/28 20:42:16  dondosha
+ * Added options related to discontiguous words
+ *
+ * Revision 6.82  2001/11/15 12:37:26  dondosha
+ * Error in previous commit - comma in wrong place
+ *
+ * Revision 6.81  2001/11/14 23:37:18  dondosha
+ * Added parameters for ungapped and non-greedy gapped x-dropoffs
+ *
+ * Revision 6.80  2001/09/06 15:40:54  dondosha
+ * Uncommented call to PrintTabularOutputHeader
+ *
+ * Revision 6.79  2001/08/08 22:38:16  dondosha
+ * Added protection against endpoints beyond end of sequence for -D0 and -D1 outputs
+ *
+ * Revision 6.78  2001/07/27 21:47:36  dondosha
+ * Fixed dummy variable declaration for call to StringToInt8
+ *
+ * Revision 6.77  2001/07/26 18:22:29  dondosha
+ * Changed the effective length argument from float to string
+ *
+ * Revision 6.76  2001/07/20 18:47:21  dondosha
+ * Scale cutoff_s2 if match reward not 1
+ *
  * Revision 6.75  2001/07/03 20:50:33  madden
  * Commented out call to PrintTabularOutputHeader
  *
@@ -307,6 +331,7 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
    CharPtr query_buffer, title;
    CharPtr subject_buffer;
    Int4 query_length, q_start, q_end, q_shift=0, s_shift=0;
+   Int4 subject_end;
    Int4 hsp_index;
    Boolean numeric_sip_type = FALSE;
    BLAST_HSPPtr hsp; 
@@ -321,11 +346,15 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
       return 0;
    }
 
-   readdb_get_descriptor(search->rdfp, search->subject_id, &sip,
-			 &subject_descr);
+   if (search->rdfp)
+      readdb_get_descriptor(search->rdfp, search->subject_id, &sip,
+                            &subject_descr);
+   else 
+      sip = SeqIdSetDup(search->subject_info->sip);
+   
    if (sip->choice != SEQID_GENERAL ||
        StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
-      if (search->pbp->megablast_full_deflines) {
+      if (search->pbp->mb_params->full_seqids) {
          subject_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
          SeqIdWrite(sip, subject_buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
       } else
@@ -349,11 +378,17 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
 
    /* Only for the two sequences case, get offset shift if subject 
       is a subsequence */
-   if (!search->rdfp && search->query_slp->next)
+   if (!search->rdfp && search->query_slp->next) {
        s_shift = SeqLocStart(search->query_slp->next);
+       subject_end = SeqLocStop(search->query_slp->next);
+   } else {
+      s_shift = 0;
+      subject_end = 
+         readdb_get_sequence_length(search->rdfp, search->subject_id);
+   }
    /* Get offset shift if query is a subsequence */
    q_shift = SeqLocStart(search->query_slp);
-   
+
    for (hsp_index=0; hsp_index<search->current_hitlist->hspcnt; hsp_index++) {
       hsp = search->current_hitlist->hsp_array[hsp_index];
       if (hsp==NULL || (search->pbp->cutoff_e > 0 && 
@@ -370,6 +405,8 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
       hsp->context = context & 1;      
       query_length = search->query_context_offsets[context+1] -
          search->query_context_offsets[context] - 1;
+      hsp->subject.end = hsp->subject.offset + hsp->subject.length;
+
       if (hsp->context) {
 	 hsp->query.end = query_length - hsp->query.offset;
 	 hsp->query.offset = 
@@ -377,14 +414,22 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
 	 context_sign = '-'; 
       } else {
 	 hsp->query.end = (++hsp->query.offset) + hsp->query.length - 1;
+         if (hsp->query.end > query_length) {
+            hsp->subject.end -= (hsp->query.end - query_length);
+            hsp->query.end = query_length;
+         }
 	 context_sign = '+';  
       }
-
+      
+      if (hsp->subject.end > subject_end) {
+         hsp->query.end -= (hsp->subject.end - subject_end);
+         hsp->subject.end = subject_end;
+      }
       hsp->subject.offset++;
       
       query_buffer = NULL;
       if (query_id->choice == SEQID_LOCAL && 
-          search->pbp->megablast_full_deflines) {
+          search->pbp->mb_params->full_seqids) {
          BioseqPtr query_bsp = BioseqLockById(query_id);
          title = StringSave(BioseqGetTitle(query_bsp));
          if (title)
@@ -398,7 +443,7 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
          BioseqUnlock(query_bsp);
       } else {
          query_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
-         if (!search->pbp->megablast_full_deflines)
+         if (!search->pbp->mb_params->full_seqids)
             SeqIdWrite(query_id, query_buffer, PRINTID_TEXTID_ACCESSION,
                        BUFFER_LENGTH);
          else 
@@ -479,13 +524,17 @@ MegaBlastPrintSegments(VoidPtr ptr)
       return 0;
    }
 
-   subject_seq = search->subject->sequence_start;
+   subject_seq = search->subject->sequence_start + 1;
 
 
-   readdb_get_descriptor(search->rdfp, search->subject_id, &sip, &subject_descr);
+   if (search->rdfp)
+      readdb_get_descriptor(search->rdfp, search->subject_id, &sip, &subject_descr);
+   else 
+      sip = SeqIdSetDup(search->subject_info->sip);
+
    if (sip->choice != SEQID_GENERAL ||
        StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
-      if (search->pbp->megablast_full_deflines) { 
+      if (search->pbp->mb_params->full_seqids) { 
          subject_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
          SeqIdWrite(sip, subject_buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
       } else
@@ -549,7 +598,7 @@ MegaBlastPrintSegments(VoidPtr ptr)
 	 q_end = hsp->query.offset + 1;
       }
       s_start = hsp->subject.offset + 1;
-      s_end = hsp->subject.end;
+      s_end = hsp->subject.offset + hsp->subject.length;
 
       /* Adjust offsets if query is a subsequence, only for first query */
       if (context < 2) {
@@ -561,7 +610,7 @@ MegaBlastPrintSegments(VoidPtr ptr)
       s_end += s_shift;
 
       if (query_id->choice == SEQID_LOCAL && 
-          search->pbp->megablast_full_deflines) {
+          search->pbp->mb_params->full_seqids) {
          BioseqPtr query_bsp = BioseqLockById(query_id);
          title = StringSave(BioseqGetTitle(query_bsp));
          if (title)
@@ -575,7 +624,7 @@ MegaBlastPrintSegments(VoidPtr ptr)
          BioseqUnlock(query_bsp);
       } else {
          query_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
-         if (!search->pbp->megablast_full_deflines)
+         if (!search->pbp->mb_params->full_seqids)
             SeqIdWrite(query_id, query_buffer, PRINTID_TEXTID_ACCESSION,
                        BUFFER_LENGTH);
          else 
@@ -641,7 +690,7 @@ MegaBlastPrintSegments(VoidPtr ptr)
 	    StringCat(buffer, tmp_buffer);
 	 }
       }
-      if (100*total_ident < align_length*search->pbp->perc_identity) {
+      if (100*total_ident < align_length*search->pbp->mb_params->perc_identity) {
          GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
          continue;
       }
@@ -701,7 +750,7 @@ static Args myargs [] = {
   { "Word size (length of best perfect match)", 
         "28", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},      /* 17 */
   { "Effective length of the database (use zero for the real size)", 
-        "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},     /* 18 */
+        "0", NULL, NULL, FALSE, 'z', ARG_STRING, 0.0, 0, NULL},     /* 18 */
   { "Maximal number of positions for a hash value (set to 0 to ignore)",
         "0", NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},       /* 19 */
   { "Query strands to search against database: 3 is both, 1 is top, 2 is bottom",
@@ -729,7 +778,11 @@ static Args myargs [] = {
   { "Location on query sequence",                             
         NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},    /* 31 */
   { "Multiple Hits window size (zero for single hit algorithm)",   /* 32 */
-        "0", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL}
+        "0", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL},
+  { "X dropoff value for ungapped extension",
+	"10", NULL, NULL, FALSE, 'y', ARG_INT, 0.0, 0, NULL},      /* 33 */
+  { "X dropoff value for dynamic programming gapped extension",
+	"50", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL}       /* 34 */
 };
 
 #define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
@@ -764,6 +817,7 @@ Int2 Main (void)
 	SeqLocPtr last_mask, mask_slp;
 	Boolean done, first_seq = TRUE, hits_found;
 	CharPtr masked_query_file;
+        const char *dummystr;
 
         if (! GetArgs ("megablast", NUMARG, myargs))
 	   return (1);
@@ -827,7 +881,12 @@ Int2 Main (void)
 	options->hitlist_size = MAX(number_of_descriptions, number_of_alignments);
 
 	if (myargs[6].intvalue != 0)
-		options->gap_x_dropoff = myargs[6].intvalue;
+           options->gap_x_dropoff = myargs[6].intvalue;
+	if (myargs[33].intvalue != 0)
+           options->dropoff_2nd_pass = myargs[33].intvalue;
+        if (myargs[34].intvalue != 0)
+           options->gap_x_dropoff_final = myargs[34].intvalue;
+
 	if (StringICmp(myargs[5].strvalue, "T") == 0)
 	   options->filter_string = StringSave("D");
 	else
@@ -839,7 +898,7 @@ Int2 Main (void)
 	options->gap_open = myargs[23].intvalue;
 	options->gap_extend = myargs[24].intvalue;
 
-	if (options->reward % 2 == 0 && 
+	if (options->gap_open == 0 && options->reward % 2 == 0 && 
 	    options->gap_extend == options->reward / 2 - options->penalty)
 	   /* This is the default value */
 	   options->gap_extend = 0;
@@ -848,16 +907,15 @@ Int2 Main (void)
 	options->db_genetic_code = 1; /* Default; it's not needed here anyway */
 	options->number_of_cpus = myargs[13].intvalue;
 	if (myargs[17].intvalue != 0)
-		options->wordsize = myargs[17].intvalue + 4;
+           options->wordsize = myargs[17].intvalue;
         if (myargs[25].intvalue == 0)
-           options->cutoff_s2 = options->wordsize - 4;
+           options->cutoff_s2 = options->wordsize*options->reward;
         else 
            options->cutoff_s2 = myargs[25].intvalue;
 
-	options->cutoff_s = options->wordsize;
+	options->cutoff_s = (options->wordsize + 4)*options->reward;
 
-	if (myargs[18].floatvalue != 0)
-		options->db_length = (Int8) myargs[18].floatvalue;
+        options->db_length = StringToInt8(myargs[18].strvalue, &dummystr);
 
 	options->perform_culling = FALSE;
 	/* Kludge */
@@ -865,7 +923,7 @@ Int2 Main (void)
 
 	options->strand_option = myargs[20].intvalue;
         options->window_size = myargs[32].intvalue;
-        
+
         print_options = 0;
         align_options = 0;
         align_options += TXALIGN_COMPRESS;
@@ -970,6 +1028,7 @@ Int2 Main (void)
 	   done = TRUE;
 	   SeqMgrHoldIndexing(TRUE);
 	   mask_slp = last_mask = NULL;
+   
 	   while ((sepp[num_bsps]=FastaToSeqEntryForDb(infp, query_is_na, NULL,
 						       believe_query, prefix, &ctr, 
 						       &mask_slp)) != NULL) {
@@ -1029,12 +1088,10 @@ Int2 Main (void)
 						     dummy_callback, NULL, NULL, 0,
 						     MegaBlastPrintSegments);
 	   else if (myargs[12].intvalue==MBLAST_ALIGN_INFO) {
-/*
               PrintTabularOutputHeader(blast_database, 
-                                  (num_bsps==1) ? query_bsp_array[0] : NULL,
-                                  NULL, "megablast", 0, believe_query,
-                                  global_fp);
-*/
+                                       (num_bsps==1) ? query_bsp_array[0] : NULL,
+                                       NULL, "megablast", 0, believe_query,
+                                       global_fp);
 	      seqalign_array = BioseqMegaBlastEngine(query_bsp_array, blast_program,
 						     blast_database, options,
 						     &other_returns, &error_returns,
@@ -1230,6 +1287,7 @@ Int2 Main (void)
 	   MemFree(seqalign_array);
            options->query_lcase_mask = 
               SeqLocSetFree(options->query_lcase_mask);
+
 	   /* Freeing SeqEntries can be very expensive, do this only if 
 	      this is not the last iteration of search */
 	   if (!done) { 

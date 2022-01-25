@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.18 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,23 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.23  2001/12/28 20:46:21  dondosha
+* 1. Mega BLAST related parameters moved into a separate structure
+* 2. Environment variables for discontiguous words, etc. changed to options
+* 3. Extension from discontiguous word with length 18 implemented
+*
+* Revision 6.22  2001/12/04 17:13:08  dondosha
+* Made number of stacks for megablast word processing depend on query and database
+*
+* Revision 6.21  2001/11/13 18:22:13  dondosha
+* Added another discontiguous model definition for Mega BLAST
+*
+* Revision 6.20  2001/10/12 21:32:46  dondosha
+* Added discontiguous word capability to megablast
+*
+* Revision 6.19  2001/07/20 18:57:07  dondosha
+* Added and changed some megablast related defines
+*
 * Revision 6.18  2000/07/10 17:17:37  dondosha
 * Use several stacks in MegaBlast to speed up search for small word sizes
 *
@@ -200,7 +217,107 @@ typedef struct orig_lookup_position {
 
 #define PV_ARRAY_FACTOR 0.5	/* The fraction of sites that must have at least one hit to not use PV_ARRAY. */
 
+/* Largest query length for which diagonal array is to be used in megablast */
+#define MAX_DIAG_ARRAY 100000
+
+#ifdef WORD_MODEL_MAX
+/*   1,110,110,110,110,111 - 12 of 16 */
+/*   1,110,010,110,110,111 - 11 of 16 */
+/* 111,010,110,010,110,111 - 12 of 18 */
+/* 111,010,100,110,010,111 - 11 of 18 */
+#define MASK1       0x0000003f
+#define MASK2       0x00000f00
+#define MASK3       0x0003c000
+#define MASK4_12    0x00f00000
+#define MASK4_11    0x00300000
+#define MASK5       0xfc000000
+#define MASK1_18    0x00000003
+#define MASK2_12_18 0x000000f0
+#define MASK2_11_18 0x00000030
+#define MASK3_12_18 0x00000c00
+#define MASK3_11_18 0x00003c00
+#define MASK4_12_18 0x000f0000
+#define MASK4_11_18 0x000c0000
+#define MASK5_18    0x00c00000
+#define MASK6_18    0xfc000000
+/* 12 of 16 */
+#define GET_WORD_INDEX_12_16(n) (((n)&MASK1) | (((n)&MASK2)>>2) | (((n)&MASK3)>>4) | (((n)&MASK4_12)>>6) | (((n)&MASK5)>>8))
+/* 11 of 16 */
+#define GET_WORD_INDEX_11_16(n) (((n)&MASK1) | (((n)&MASK2)>>2) | (((n)&MASK3)>>4) | (((n)&MASK4_11)>>6) | (((n)&MASK5)>>10))
+/* 12 of 18 */
+#define GET_WORD_INDEX_12_18(n) ((((n)&MASK1_18)<<4) | (((n)&MASK2_12_18)<<2) | ((n)&MASK3_12_18) | (((n)&MASK4_12_18)>>4) | (((n)&MASK5_18)>>6) | (((n)&MASK6_18)>>8))
+/* 11 of 18 */
+#define GET_WORD_INDEX_11_18(n) ((((n)&MASK1_18)<<4) | (((n)&MASK2_11_18)<<2) | (((n)&MASK3_11_18)>>2) | (((n)&MASK4_11_18)>>6) | (((n)&MASK5_18)>>8) | (((n)&MASK6_18)>>10))
+#define GET_WORD_INDEX(n,b,c) (((~b&~c)&GET_WORD_INDEX_12_16(n)) | ((b&~c)&GET_WORD_INDEX_11_16(n)) | ((~b&c)&GET_WORD_INDEX_12_18(n)) | ((b&c)&GET_WORD_INDEX_11_18(n)))
+#define MASK_EXTRA 0x0000000f
+#endif
+
+/* 1111,01011010,1111 */
+#ifdef WORD_MODEL_MAX_INFO
+#define MASK1 0x000000ff
+#define MASK2 0x00000c00
+#define MASK3 0x0003c000
+#define MASK4 0x00300000
+#define MASK5 0xff000000
+#define GET_WORD_INDEX(n,b,c) (((n)&MASK1) | (((n)&MASK2)>>2) | (((n)&MASK3)>>4) | (((n)&MASK4)>>6) | (((n)&MASK5)>>8))
+#endif
+
+/* 110,110,111,110,110,1 */
+#ifdef WORD_MODEL_COD_12
+#define MASK1    0x00000003
+#define MASK2    0x000000f0
+#define MASK3    0x000ffc00
+#define MASK4    0x03c00000
+#define MASK5    0xf0000000
+#define MASK3_11 0x00003c00
+#define MASK4_11 0x000f0000
+#define MASK5_11 0x03c00000
+#define MASK6    0xf0000000
+#define GET_WORD_INDEX_11(n) (((n)&MASK1) | (((n)&MASK2)>>2) | (((n)&MASK3_11)>>4) | (((n)&MASK4_11)>>6) | (((n)&MASK5_11)>>8) | (((n)&MASK6)>>10))
+#define GET_WORD_INDEX_12(n) (((n)&MASK1) | (((n)&MASK2)>>2) | (((n)&MASK3)>>4) | (((n)&MASK4)>>6) | (((n)&MASK5)>>8))
+#define GET_WORD_INDEX(n,b,c) (((~b)&GET_WORD_INDEX_12(n)) | ((b)&GET_WORD_INDEX_11(n)))
+#endif
+
+/* DEFAULT DEFINITIONS HERE */
+/*    111,110,110,110,110,1 - 12 of 16 */ 
+/*    110,110,110,110,110,1 - 11 of 16 */
+/* 10,110,110,110,110,110,1 - 12 of 18 */
+/* 10,110,110,010,110,110,1 - 11 of 18 */
+#ifndef MASK1
+#define MASK1    0x00000003
+#define MASK2    0x000000f0
+#define MASK3    0x00003c00
+#define MASK4    0x000f0000
+#define MASK5_12 0xffc00000 
+#define MASK5_11 0x03c00000
+#define MASK6    0xf0000000
+
+#define MASK1_18    0x0000000f
+#define MASK2_18    0x000003c0
+#define MASK3_11_18 0x00003000
+#define MASK3_12_18 0x0000f000
+#define MASK4_18    0x003c0000
+#define MASK5_18    0x0f000000
+#define MASK6_18    0xc0000000
+
+/* 12 of 16 */
+#define GET_WORD_INDEX_12_16(n) (((n)&MASK1) | (((n)&MASK2)>>2) | (((n)&MASK3)>>4) | (((n)&MASK4)>>6) | (((n)&MASK5_12)>>8))
+/* 11 of 16 */
+#define GET_WORD_INDEX_11_16(n) (((n)&MASK1) | (((n)&MASK2)>>2) | (((n)&MASK3)>>4) | (((n)&MASK4)>>6) | (((n)&MASK5_11)>>8) | (((n)&MASK6)>>10))
+/* 12 of 18 */
+#define GET_WORD_INDEX_12_18(n) ((((n)&MASK1_18)<<2) | ((n)&MASK2_18) | (((n)&MASK3_12_18)>>2) | (((n)&MASK4_18)>>4) | (((n)&MASK5_18)>>6) | (((n)&MASK6)>>8))
+/* 11 of 18 */
+#define GET_WORD_INDEX_11_18(n) ((((n)&MASK1_18)<<2) | ((n)&MASK2_18) | (((n)&MASK3_11_18)>>2) | (((n)&MASK4_18)>>6) | (((n)&MASK5_18)>>8) | (((n)&MASK6_18)>>10))
+#define GET_WORD_INDEX(n,b,c) (((~b&~c)&GET_WORD_INDEX_12_16(n)) | ((b&~c)&GET_WORD_INDEX_11_16(n)) | ((~b&c)&GET_WORD_INDEX_12_18(n)) | ((b&c)&GET_WORD_INDEX_11_18(n)))
+#define MASK_EXTRA 0x00000003
+#endif
+
+#ifndef MASK_EXTRA
+#define MASK_EXTRA 0
+#endif
+
 /* Define LookupPosition (ie a hit_info) such that it can be loaded into a register */
+
 typedef Uint4 ModLookupPosition;
 typedef Uint4 *ModLookupPositionPtr;
 
@@ -215,9 +332,6 @@ typedef struct mod_lt_entry {
     ModLookupPosition entries[3]; /* first postion */
 } ModLAEntry, PNTR ModLAEntryPtr;
 #endif
-
-#define MB_NUM_STACKS 5
-#define MBSTACK_SIZE 1000
 
 typedef struct megablast_stack {
    Int4 diag, level, length;
@@ -234,6 +348,7 @@ typedef struct megablast_lookup_table {
    Int4Ptr stack_index; /* Current number of elements in each stack */   
    Int4Ptr stack_size;  /* Available memory for each stack */
    MbStackPtr PNTR estack; /* Array of stacks for most recent hits */
+   Int4 num_stacks;
 } MbLookupTable, PNTR MbLookupTablePtr;
 
 typedef struct lookup_table {

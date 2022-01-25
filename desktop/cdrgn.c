@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.42 $
+* $Revision: 6.46 $
 *
 * File Description: 
 *
@@ -2733,6 +2733,102 @@ static Boolean UpdateProteinName (GatherContextPtr gcp)
   return TRUE;
 }
 
+static void LookForRefTrack (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
+
+{
+  BoolPtr        is_refseqP;
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  if (sdp->choice != Seq_descr_user) return;
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "RefGeneTracking") != 0) return;
+  is_refseqP = (BoolPtr) userdata;
+  *is_refseqP = TRUE;
+}
+
+static Boolean SeeIfProtTitleNeedsFixing (BioseqPtr bsp, Uint2 entityID)
+
+{
+  MsgAnswer          ans = ANS_YES;
+  BioseqSetPtr       bssp;
+  CharPtr            buf;
+  size_t             buflen = 1001;
+  SeqMgrDescContext  dcontext;
+  ItemInfo           ii;
+  Boolean            indexerVersion;
+  Boolean            is_refseq = FALSE;
+  MolInfoPtr         mip;
+  Boolean            rsult = FALSE;
+  SeqDescrPtr        sdp;
+  SeqEntryPtr        sep;
+  Uint1              tech;
+  CharPtr            title;
+  ValNodePtr         vnp;
+
+  if (bsp == NULL || (! ISA_aa (bsp->mol))) return FALSE;
+  vnp = BioseqGetSeqDescr (bsp, Seq_descr_title, NULL);
+  if (vnp == NULL) return FALSE;
+  if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+    bssp = (BioseqSetPtr) bsp->idx.parentptr;
+    while (bssp != NULL && bssp->_class != BioseqseqSet_class_nuc_prot) {
+      if (bssp->idx.parenttype == OBJ_BIOSEQSET) {
+        bssp = (BioseqSetPtr) bssp->idx.parentptr;
+      } else {
+        bssp = NULL;
+      }
+    }
+    if (bssp != NULL && bssp->_class == BioseqseqSet_class_nuc_prot) {
+      title = (CharPtr) vnp->data.ptrvalue;
+      tech = 0;
+      sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+      if (sdp != NULL) {
+        mip = (MolInfoPtr) sdp->data.ptrvalue;
+        if (mip != NULL) {
+          tech = mip->tech;
+        }
+      }
+      buf = MemNew (sizeof (Char) * (buflen + 1));
+      MemSet ((Pointer) (&ii), 0, sizeof (ItemInfo));
+      if (buf != NULL && CreateDefLineEx (&ii, bsp, buf, buflen, tech, NULL, NULL, TRUE)) {
+        if (StringICmp (buf, title) != 0) {
+          indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
+          if (! indexerVersion) {
+            ans = Message (MSG_YN, "Do you want to remove and recreate inconsistent title?");
+          } else {
+            sep = GetTopSeqEntryForEntityID (entityID);
+            VisitDescriptorsInSep (sep, (Pointer) &is_refseq, LookForRefTrack);
+            if (! is_refseq) {
+              /* refseq wants to automatically fix, genbank wants to wait for AutoDef */
+              ans = ANS_NO;
+            }
+          }
+          if (ans == ANS_YES) {
+            vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+            vnp->data.ptrvalue = StringSave (buf);
+            rsult = TRUE;
+            /*
+            if (vnp->extended != 0) {
+              ovp = (ObjValNodePtr) vnp;
+              ovp->idx.deleteme = TRUE;
+              DeleteMarkedObjects (entityID, 0, NULL);
+              rsult = TRUE;
+            }
+            */
+          }
+        }
+      }
+      MemFree (buf);
+    }
+  }
+  return rsult;
+}
+
 extern void CdRgnFeatFormActnProc (ForM f)
 
 {
@@ -2754,7 +2850,7 @@ extern void CdRgnFeatFormActnProc (ForM f)
   SeqFeatPtr    sfp;
   SeqIdPtr      sip;
   SeqLocPtr     slp;
-  BioseqPtr     target;
+  BioseqPtr     target = NULL;
   PartialTrio   trio;
   ValNodePtr    vnp;
 
@@ -2988,6 +3084,12 @@ extern void CdRgnFeatFormActnProc (ForM f)
     }
     ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID,
                    cfp->input_itemID, cfp->input_itemtype);
+    if (target != NULL) {
+      if (SeeIfProtTitleNeedsFixing (target, cfp->input_entityID)) {
+        ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID,
+                       cfp->input_itemID, cfp->input_itemtype);
+      }
+    }
   }
 }
 
@@ -4173,6 +4275,27 @@ extern ForM CreateProtForm (Int2 left, Int2 top, CharPtr title,
   return (ForM) w;
 }
 
+static void ProtFeatFormActnProc (ForM f)
+
+{
+  BioseqPtr    bsp;
+  ProtFormPtr  pfp;
+  SeqFeatPtr   sfp;
+
+  StdFeatFormActnProc (f);
+  pfp = (ProtFormPtr) GetObjectExtra (f);
+  if (pfp == NULL) return;
+  sfp = SeqMgrGetDesiredFeature (pfp->input_entityID, NULL,
+                                 pfp->input_itemID, 0, NULL, NULL);
+  if (sfp == NULL) return;
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp == NULL) return;
+  if (SeeIfProtTitleNeedsFixing (bsp, pfp->input_entityID)) {
+    ObjMgrSendMsg (OM_MSG_UPDATE, pfp->input_entityID,
+                   pfp->input_itemID, pfp->input_itemtype);
+  }
+}
+
 extern Int2 LIBCALLBACK ProtGenFunc (Pointer data)
 
 {
@@ -4225,7 +4348,7 @@ extern Int2 LIBCALLBACK ProtGenFunc (Pointer data)
   }
   sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
   w = (WindoW) CreateProtForm (-50, -33, "Protein", sfp, sep,
-                               StdFeatFormActnProc);
+                               ProtFeatFormActnProc);
   pfp = (ProtFormPtr) GetObjectExtra (w);
   if (pfp != NULL) {
     pfp->input_entityID = ompcp->input_entityID;

@@ -1,4 +1,4 @@
-/*  $Id: pgppop.c,v 6.66 2001/01/16 17:15:54 hurwitz Exp $
+/*  $Id: pgppop.c,v 6.67 2001/10/03 00:15:47 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.66 $
+* $Revision: 6.67 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: pgppop.c,v $
+* Revision 6.67  2001/10/03 00:15:47  vakatov
+* Replaced some ASSERTs by VERIFYs
+*
 * Revision 6.66  2001/01/16 17:15:54  hurwitz
 * modified DDV_GetBspCoordGivenDispCoord
 *
@@ -4140,7 +4143,7 @@ NLM_EXTERN DDVRulerDescrPtr DDV_RulerDescrFree(DDVRulerDescrPtr pRulerDescr) {
 *  returns NULL for successful completion.
 *
 *******************************************************************************/
-  ASSERT(MemFree(pRulerDescr) == NULL);
+  VERIFY(MemFree(pRulerDescr) == NULL);
   return(NULL);
 }
 

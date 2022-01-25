@@ -1,4 +1,4 @@
-/* $Id: mmdbsrv.c,v 6.27 2001/01/25 23:02:56 lewisg Exp $
+/* $Id: mmdbsrv.c,v 6.28 2001/12/12 20:43:38 beloslyu Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 6 January 1997
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description:
 *        MMDB WWW-server 
 *
 * $Log: mmdbsrv.c,v $
+* Revision 6.28  2001/12/12 20:43:38  beloslyu
+* change the name of ftp site to ftp.ncbi.nih.gov
+*
 * Revision 6.27  2001/01/25 23:02:56  lewisg
 * get rid of content-disp, add mdlLvl and maxModels args
 *
@@ -193,7 +196,7 @@ This describes what you need to run MMDBSRV:
 ...mmdb/vastdata/
 
 These contain the MMDB data on your local filesystem,
-as obtained from ftp://ncbi.nlm.nih.gov/mmdb/mmdbdata  
+as obtained from ftp://ftp.ncbi.nih.gov/mmdb/mmdbdata  
 and updated regularly by MIRROR.  You can 
 put them in the CGI-BIN or HTTP (HTML) directories
 if you prefer. If you wish to implement a local
@@ -207,7 +210,7 @@ http://123.456.789.10/cgi-bin/mmdb/
 
 The first contains the compiled mmdbsrv program and the
 config file, obtained from 
-ftp://ncbi.nlm.nih.gov/mmdb/www/mmdbsrv
+ftp://ftp.ncbi.nih.gov/mmdb/www/mmdbsrv
 The second will contain the log files written out.
 The third needs sshead.txt, sscode.txt, sstail.txt
 NOTE - you must edit "sstail.txt"
@@ -223,12 +226,12 @@ The first contains the html files to launch mmdbsrv,
 arrow.gif, strucsum.gif and any other gif files, and the
 associated MMDB help files struchelp.html, cn3d.html,
 strucinstall.html, vast.html, etc.  Master copies are kept
-at ftp://ncbi.nlm.nih.gov/mmdb/www/http
+at ftp://ftp.ncbi.nih.gov/mmdb/www/http
 You must hand edit or use scripts or SED to change links from 
 NCBI's to your own in all these HTML files.
 
 The second contains the GIF library as obtained from
-the NCBI ftp site ftp://ncbi.nlm.nih.gov/mmdb/mmdbgifs
+the NCBI ftp site ftp://ftp.ncbi.nih.gov/mmdb/mmdbgifs
 
 6] Your WWW-Server - make it aware of the following 
 new MIME-types:
@@ -379,7 +382,7 @@ static Char MAILto[256];
 static Char MAILTO[PATH_MAX];
 static Char ARROW[PATH_MAX];
 
-static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.27 2001/01/25 23:02:56 lewisg Exp $";
+static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.28 2001/12/12 20:43:38 beloslyu Exp $";
 
 /*****************************************************
  * WWWPrintFileData looks in the current CGI-BIN directory 

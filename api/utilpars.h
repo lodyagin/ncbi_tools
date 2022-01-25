@@ -2,6 +2,9 @@
 *   utilpars.h:
 *
 * $Log: utilpars.h,v $
+* Revision 6.1  2001/12/06 17:00:41  kans
+* TextSave takes size_t, not Int2, otherwise titin protein tries to allocate negative number
+*
 * Revision 6.0  1997/08/25 18:08:18  madden
 * Revision changed to 6.0
 *
@@ -38,7 +41,7 @@
 
 /*************************************************************************/
 
-NLM_EXTERN CharPtr TextSave PROTO((CharPtr text, Int2 len));
+NLM_EXTERN CharPtr TextSave PROTO((CharPtr text, size_t len));
 /*  -- allocates a null terminated string and copies len characters into
        it starting at text.
     -- returns a pointer to the allocated string. If len is 0 returns NULL 

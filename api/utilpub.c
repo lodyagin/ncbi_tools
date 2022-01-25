@@ -760,12 +760,38 @@ NLM_EXTERN void FreePubStruct(PubStructPtr psp)
 	return;
 }
 
+static Boolean GetPMFromPub(ValNodePtr v, Int4Ptr m, Int4Ptr p)
+{
+
+	*m = 0;
+	*p = 0;
+	switch (v->choice) {
+		case PUB_Muid:
+		  	*m = v->data.intvalue;
+		  	return TRUE;
+		case PUB_PMid:
+		  	*p = v->data.intvalue;
+		  	return TRUE;
+		case PUB_Equiv:
+			for (v = v->data.ptrvalue; v; v = v->next) {
+				  if (v->choice == PUB_Muid) { 
+					  *m = v->data.intvalue;
+				  }
+				  if (v->choice == PUB_PMid) { 
+					  *p = v->data.intvalue;
+				  }
+			}
+		  	break;
+	}
+	return (*m != 0 || *p != 0);
+}
+
 NLM_EXTERN Int2 PubLabelMatch (ValNodePtr pub1, ValNodePtr pub2)
 {
 	ValNodePtr m1, m2;
 	CitGenPtr g1, g2;
 	size_t len;
-	Int2 res;
+	Int4 am, bm, ap, bp;
 	
 	if ((m1 = MinimizePub(pub1)) == NULL) {
 		return -1;
@@ -774,47 +800,19 @@ NLM_EXTERN Int2 PubLabelMatch (ValNodePtr pub1, ValNodePtr pub2)
 		PubFree(m1);
 		return -1;
 	}
-	if (m1->choice == PUB_Muid) {
-		if (m2->choice != PUB_Muid) {
-			PubFree(m2);
-			ValNodeFree(m1);
+	if (GetPMFromPub(m1, &am, &ap) &&  GetPMFromPub(m2, &bm, &bp)) {
+		PubFree(m2);
+		PubFree(m1);
+		if (ap != 0 && ap == bp) {
+			return 0;
+		} else if (am != 0 && am == bm) {
+			return 0;
+		} else {
+			/* ERROR */
 			return -1;
 		}
-		if (m1->data.intvalue == m2->data.intvalue) {
-			res = 0;
-			if (m1->data.intvalue == 0) {
-				if (PubMatch(pub1, pub2) != 0) {
-					res = -1;
-				}
-			}
-			ValNodeFree(m1);
-			ValNodeFree(m2);
-			return res;
-		}
-		ValNodeFree(m1);
-		ValNodeFree(m2);
-		return -1;
-	} else if (m1->choice == PUB_PMid) {
-		if (m2->choice != PUB_PMid) {
-			PubFree(m2);
-			ValNodeFree(m1);
-			return -1;
-		}
-		if (m1->data.intvalue == m2->data.intvalue) {
-			res = 0;
-			if (m1->data.intvalue == 0) {
-				if (PubMatch(pub1, pub2) != 0) {
-					res = -1;
-				}
-			}
-			ValNodeFree(m1);
-			ValNodeFree(m2);
-			return res;
-		}
-		ValNodeFree(m1);
-		ValNodeFree(m2);
-		return -1;
-	} else if (m1->choice == PUB_Gen) {
+	}
+	if (m1->choice == PUB_Gen) {
 		if (m2->choice != PUB_Gen) {
 			PubFree(m1);
 			ValNodeFree(m2);
@@ -850,8 +848,8 @@ NLM_EXTERN Int2 PubLabelMatch (ValNodePtr pub1, ValNodePtr pub2)
 			return 0;
 		}
 	}
-			PubFree(m1);
-			PubFree(m2);
+	PubFree(m1);
+	PubFree(m2);
 	return -1;
 }
 
@@ -884,7 +882,7 @@ static CharPtr  space_save(CharPtr str)
 
 NLM_EXTERN ValNodePtr MinimizePub(ValNodePtr pub)
 {
-	ValNodePtr  v, min_pub = NULL;
+	ValNodePtr  v, min_pub = NULL, epub, apub;
 	Char buffer[BUFLEN+1];
 	CitGenPtr	cit_gen, gen;
 	
@@ -893,26 +891,52 @@ NLM_EXTERN ValNodePtr MinimizePub(ValNodePtr pub)
 	}
 	if (pub->choice == PUB_Equiv) {
 		for (v = pub->data.ptrvalue; v != NULL; v= v->next) {
-			if (v->choice == PUB_Muid || v->choice == PUB_PMid) {
-				min_pub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,
+			if (v->choice == PUB_Muid) {
+				if (min_pub == NULL) {
+					min_pub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,
 											(AsnWriteFunc) PubAsnWrite);
-				return min_pub;
+				} else {
+					epub = ValNodeNew(NULL);
+					epub->choice = PUB_Equiv;
+					apub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,
+											(AsnWriteFunc) PubAsnWrite);
+					min_pub->next = apub;
+					epub->data.ptrvalue = min_pub;
+					return epub;
+				}
+			}
+			if (v->choice == PUB_PMid) {
+				if (min_pub == NULL) {
+					min_pub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,
+											(AsnWriteFunc) PubAsnWrite);
+				} else {
+					epub = ValNodeNew(NULL);
+					epub->choice = PUB_Equiv;
+					apub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,
+											(AsnWriteFunc) PubAsnWrite);
+					min_pub->next = apub;
+					epub->data.ptrvalue = min_pub;
+					return epub;
+				}
 			}
 		}
 		v = pub->data.ptrvalue;
 	} else {
 		v = pub;
 	}
-	if (v->choice == PUB_Muid || v->choice == PUB_PMid) {
-		min_pub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,
-			(AsnWriteFunc) PubAsnWrite);
+	if (min_pub != NULL) {
 			return min_pub;
 	}
 	if (v->choice == PUB_Gen) {
 		gen = v->data.ptrvalue;
-		if (gen->serial_number != -1) {
+		if (gen->serial_number != -1 && v->next != NULL) {
 			v = v->next;
 		}		
+	}
+	if (v->choice == PUB_Muid || v->choice == PUB_PMid) {
+		min_pub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,
+											(AsnWriteFunc) PubAsnWrite);
+		return min_pub;
 	}
 	if ((PubLabelUnique(v, buffer, BUFLEN, OM_LABEL_CONTENT, TRUE)) == 0) {
 		min_pub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,

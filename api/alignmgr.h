@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.71 $
+* $Revision: 6.72 $
 *
 * File Description: SeqAlign indexing and messaging functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.h,v $
+* Revision 6.72  2001/07/10 11:12:27  wheelan
+* added AlnMgrIndexIndexedChain
+*
 * Revision 6.71  2001/03/08 17:07:11  wheelan
 * added AlnMgrGetParent and structure to support it
 *
@@ -523,6 +526,14 @@ NLM_EXTERN Boolean AlnMgrIndexSingleChildSeqAlign(SeqAlignPtr sap);
 *
 ********************************************************************************/
 NLM_EXTERN Boolean AlnMgrReIndexSeqAlign(SeqAlignPtr sap);
+
+/***************************************************************************
+*
+*  AlnMgrIndexIndexedChain takes a linked list of indexed seqaligns and
+*  indexes them as a set.
+*
+***************************************************************************/
+NLM_EXTERN SeqAlignPtr AlnMgrIndexIndexedChain(SeqAlignPtr sap);
 
 /********************************************************************************
 *

@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.10 at May 11, 2001  2:35 PM
+*    Generated using ASNCODE Revision: 6.13 at Nov 26, 2001  8:44 AM
 *
 **************************************************/
 
@@ -478,6 +478,8 @@ typedef struct struct_Entrez2_db_info {
    struct struct_Entrez2_field_info PNTR   fields;
    Int4   link_count;
    struct struct_Entrez2_link_info PNTR   links;
+   Int4   docsum_field_count;
+   struct struct_Entrez2_docsum_field_info PNTR   docsum_fields;
 } Entrez2DbInfo, PNTR Entrez2DbInfoPtr;
 
 
@@ -503,6 +505,8 @@ typedef struct struct_Entrez2_field_info {
    Uint1   is_numerical;
    Uint1   single_token;
    Uint1   hierarchy_avail;
+   Uint1   is_rangable;
+   Uint1   is_truncatable;
 } Entrez2FieldInfo, PNTR Entrez2FieldInfoPtr;
 
 
@@ -537,31 +541,33 @@ NLM_EXTERN Boolean LIBCALL Entrez2LinkInfoAsnWrite PROTO (( Entrez2LinkInfoPtr ,
 
 /**************************************************
 *
+*    Entrez2DocsumFieldInfo
+*
+**************************************************/
+typedef struct struct_Entrez2_docsum_field_info {
+   struct struct_Entrez2_docsum_field_info PNTR next;
+   CharPtr   field_name;
+   CharPtr   field_description;
+   Int4   field_type;
+} Entrez2DocsumFieldInfo, PNTR Entrez2DocsumFieldInfoPtr;
+
+
+NLM_EXTERN Entrez2DocsumFieldInfoPtr LIBCALL Entrez2DocsumFieldInfoFree PROTO ((Entrez2DocsumFieldInfoPtr ));
+NLM_EXTERN Entrez2DocsumFieldInfoPtr LIBCALL Entrez2DocsumFieldInfoNew PROTO (( void ));
+NLM_EXTERN Entrez2DocsumFieldInfoPtr LIBCALL Entrez2DocsumFieldInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Entrez2DocsumFieldInfoAsnWrite PROTO (( Entrez2DocsumFieldInfoPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
 *    Entrez2Docsum
 *
 **************************************************/
 typedef struct struct_Entrez2_docsum {
    struct struct_Entrez2_docsum PNTR next;
    Int4   uid;
-   Int4   secondary_uid;
-   CharPtr   caption;
-   CharPtr   title;
-   CharPtr   short_citation;
-   Int4   entrez_date;
-   CharPtr   language;
-   CharPtr   create_date;
-   CharPtr   update_date;
-   Int4   seqlen;
-   CharPtr   author;
-   CharPtr   source;
-   CharPtr   volume;
-   CharPtr   pages;
-   CharPtr   pub_type;
-   CharPtr   record_status;
-   Uint1   no_abstract;
-   Uint1   translated_title;
-   Uint1   no_authors;
-   Int4   taxid;
+   struct struct_Entrez2_docsum_data PNTR   docsum_data;
 } Entrez2Docsum, PNTR Entrez2DocsumPtr;
 
 
@@ -569,6 +575,25 @@ NLM_EXTERN Entrez2DocsumPtr LIBCALL Entrez2DocsumFree PROTO ((Entrez2DocsumPtr )
 NLM_EXTERN Entrez2DocsumPtr LIBCALL Entrez2DocsumNew PROTO (( void ));
 NLM_EXTERN Entrez2DocsumPtr LIBCALL Entrez2DocsumAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL Entrez2DocsumAsnWrite PROTO (( Entrez2DocsumPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    Entrez2DocsumData
+*
+**************************************************/
+typedef struct struct_Entrez2_docsum_data {
+   struct struct_Entrez2_docsum_data PNTR next;
+   CharPtr   field_name;
+   CharPtr   field_value;
+} Entrez2DocsumData, PNTR Entrez2DocsumDataPtr;
+
+
+NLM_EXTERN Entrez2DocsumDataPtr LIBCALL Entrez2DocsumDataFree PROTO ((Entrez2DocsumDataPtr ));
+NLM_EXTERN Entrez2DocsumDataPtr LIBCALL Entrez2DocsumDataNew PROTO (( void ));
+NLM_EXTERN Entrez2DocsumDataPtr LIBCALL Entrez2DocsumDataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Entrez2DocsumDataAsnWrite PROTO (( Entrez2DocsumDataPtr , AsnIoPtr, AsnTypePtr));
 
 
 

@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.86 $
+* $Revision: 6.93 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,28 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.93  2001/12/18 13:01:51  camacho
+* Added new flag -D to dump blast database in FASTA format
+*
+* Revision 6.92  2001/12/10 19:17:13  camacho
+* Added option to allow fastacmd to use Ctrl-As as defline separators.
+*
+* Revision 6.91  2001/11/09 19:05:35  dondosha
+* ReadDBFreeSharedInfo and ReadDBOpenMHdrAndSeqFiles made static in readdb.c
+*
+* Revision 6.90  2001/11/02 18:30:12  dondosha
+* Added prototypes for readdb_get_sequence_number, PrintDbInformationWithRID
+*
+* Revision 6.89  2001/10/19 13:40:31  camacho
+* Updated the DI_Record structure and moved some function prototypes to allow their use by fdfilter
+*
+* Revision 6.88  2001/10/01 18:43:37  camacho
+* Added BlastDBToFasta function
+* Added readdb_get_header_ex function
+*
+* Revision 6.87  2001/10/01 18:37:32  camacho
+* readdb.h
+*
 * Revision 6.86  2001/07/12 19:27:45  madden
 * Add alias_file_name to Options
 *
@@ -723,6 +745,7 @@ containing the headers, and the sequence file. */
 		date;	/* Date and time database was prepared. */
 	Int4 num_seqs, /* Number of sequences in the database. */
 	      formatdb_ver;	/* Version of formatdb used. */
+	BlastDefLinePtr blast_deflinep;  /* when not NULL, points to the first defline of the seq*/
 	Int4 	start,	/* 1st ordinal id in this file. */
 		stop;	/* last ordinal id in this file. */
 	Int8 totlen;	/* Total length of database. */
@@ -746,6 +769,8 @@ if there is no mem-mapping or it failed. */
 	Int2	            filebit;   /* bit corresponding to the DB file */
 	Int2		    aliasfilebit;/* bit corresponding to the DB alias file */
 	OIDListPtr	    oidlist;   /* structure containing a list of ordinal ID's. */
+    Int4            membership_bit; /* membership bit read from .[pn]al file for
+                                       structured asn deflines */
 	Int4		    sparse_idx;/* Sparse indexes indicator */
         Char                full_filename[PATH_MAX]; /* Full path for the file */
         ReadDBSharedInfoPtr shared_info;
@@ -779,14 +804,8 @@ NLM_EXTERN Nlm_MemMapPtr EA_MemMapInit(const Nlm_Char PNTR name, Boolean readonl
 /****************************************************************************/
 /* FINCTION DEFINITIONS */
 /****************************************************************************/
-/*
-  Open the sequence and header files for memory mapping 
-*/
-Boolean ReadDBOpenMHdrAndSeqFiles PROTO((ReadDBFILEPtr rdfp));
 /* Deallocate the memory mapping of header and sequence files */
 ReadDBFILEPtr ReadDBCloseMHdrAndSeqFiles PROTO((ReadDBFILEPtr rdfp));
-/* Free the memory allocated for shared information */
-ReadDBFILEPtr ReadDBFreeSharedInfo PROTO((ReadDBFILEPtr rdfp));
 
 /* 
 Intitialize the readdb structure using the database "filename".
@@ -921,6 +940,15 @@ Get the ID's and headers for a sequence.
 */
 Boolean LIBCALL
 readdb_get_header PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, Uint4Ptr header_index , SeqIdPtr PNTR id, CharPtr PNTR description));
+
+/* 
+Get the ID's, headers, taxid, memberships, and links for a sequence.
+*/
+Boolean LIBCALL 
+readdb_get_header_ex PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, 
+                           Uint4Ptr header_index, SeqIdPtr PNTR id, 
+                           CharPtr PNTR description, Int4 PNTR taxid, 
+                           ValNodePtr PNTR memberships, ValNodePtr PNTR links));
 
 /* 
  Get the Int4Ptr to ambiguity buffer
@@ -1148,6 +1176,7 @@ NLM_EXTERN Boolean BLASTFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf,
 Print a summary of the database used.
 */
 Boolean LIBCALL PrintDbInformation PROTO((CharPtr database, Boolean is_aa, Int4 line_length, FILE *outfp, Boolean html));
+Boolean LIBCALL PrintDbInformationWithRID PROTO((CharPtr database, Boolean is_aa, Int4 line_length, FILE *outfp, Boolean html, CharPtr rid));
 
 Boolean LIBCALL PrintDbInformationBasic PROTO((CharPtr database, Boolean is_aa, Int4 line_length, CharPtr definition, Int4 number_seqs, Int8 total_length, FILE *outfp, Boolean html));
 
@@ -1156,13 +1185,30 @@ Boolean FDBAddSeqEntry(FormatDBPtr fdbp, SeqEntryPtr sep);
 /* ID1 dump stuff */
 
 typedef	struct di_record {
-    Int4	oid, gi, taxid, owner, div, len, hash;
+    Int4    oid;
+    Int4    gi;
+    Int4    taxid;
+    Int4    owner;
+    Char    div[3];
+    Int4    len;
+    Int4    hash;
+    Int4    date;
 	Int4	gi_threshold; /* for 'month' subset */
 } DI_Record, *DI_RecordPtr;
 
 Boolean	ScanDIFile(CharPtr difilename, CharPtr subset,
 	Boolean(*callback)(DI_RecordPtr direc, VoidPtr data), VoidPtr data,
 	FILE *out, Int4 gi_threshold);
+
+/* These functions determine the criteria for the membership bits */
+Boolean is_EST_HUMAN(DI_Record direc);
+Boolean is_EST_MOUSE(DI_Record direc);
+Boolean is_EST_OTHERS(DI_Record direc);
+Boolean is_SWISSPROT(DI_Record direc);
+Boolean is_MONTH(DI_Record direc);
+Boolean is_PDB(DI_Record direc);
+Boolean is_REFSEQ(DI_Record direc);
+Boolean is_CONTIG(DI_Record direc);
 
 typedef	struct updateindex_struct {
     FILE	*cifile;/* CommonIndex file */
@@ -1178,7 +1224,10 @@ Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out);
 Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database,
-	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, Boolean use_target);
+	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, 
+	Boolean use_target, Boolean use_ctrlAs, Boolean dump_db);
+Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 line_length, 
+		    Boolean use_ctrlAs);
 
 Int4 LIBCALL readdb_MakeGiFileBinary PROTO((CharPtr input_file, CharPtr
 					    output_file));
@@ -1198,6 +1247,8 @@ Boolean FD_CreateAliasFile PROTO((CharPtr title, CharPtr basename,
 
 /* simple function to make alias file give FDB_optionsPtr, alias file is only made if appropriate. */
 Boolean FD_MakeAliasFile PROTO((FDB_optionsPtr options));
+Int4 LIBCALL 
+readdb_get_sequence_number PROTO((ReadDBFILEPtr rdfp, Int4 first_seq, Int4 offset));
 
 #ifdef __cplusplus
 }

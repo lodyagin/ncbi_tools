@@ -29,6 +29,9 @@ o                            PUBLIC DOMAIN NOTICE
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.10  2001/11/30 16:57:11  wheelan
+* removed line numbers from FASTA+GAP dumping
+*
 * Revision 6.9  1999/11/24 21:24:29  vakatov
 * Fixed for the C++ and/or MSVC DLL compilation
 *
@@ -2606,7 +2609,7 @@ NLM_EXTERN void showfastagap_fromalign (SeqAlignPtr salp, Int4 line, FILE *f)
         to = offset -1;
         goOn = (Boolean) (to > from);
         while (goOn) {
-           fprintf(f, "%5d  ", from);
+/*           fprintf(f, "%5d  ", from); no more line numbers! SW 11/01 */
            bufp = ReadBufferFromSap (strp, buffer, salp, sip, from, to, &ncar);
            fprintf(f, "%s\n", bufp);
            strp+= ncar;

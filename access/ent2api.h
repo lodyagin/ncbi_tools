@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.17 $
+* $Revision: 1.20 $
 *
 * File Description: 
 *
@@ -180,6 +180,7 @@ NLM_EXTERN void EntrezAddToBooleanRequest (
   Int4 op,
   CharPtr field,
   CharPtr term,
+  CharPtr key,
   Int4 uid,
   Int4 num,
   Int4Ptr uids,
@@ -288,6 +289,13 @@ NLM_EXTERN Entrez2LinkCountListPtr EntrezExtractLinkCountReply (
 NLM_EXTERN Uint4 EntrezGetUIDforSeqIdString (
   CharPtr db,
   CharPtr seq_id_string
+);
+
+/* result validation function */
+
+NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
+  Entrez2InfoPtr e2ip,
+  ValNodePtr PNTR head
 );
 
 /* sample synchronous query code:

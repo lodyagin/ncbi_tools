@@ -51,7 +51,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.38 $
+* $Revision: 6.44 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +67,26 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.44  2001/12/28 20:46:21  dondosha
+* 1. Mega BLAST related parameters moved into a separate structure
+* 2. Environment variables for discontiguous words, etc. changed to options
+* 3. Extension from discontiguous word with length 18 implemented
+*
+* Revision 6.43  2001/12/27 18:12:33  dondosha
+* Fixed a bug caused by lack of Int4 to Int8 cast
+*
+* Revision 6.42  2001/12/10 22:54:27  dondosha
+* Correction for determining the number of stacks to use in megablast
+*
+* Revision 6.41  2001/12/04 17:13:08  dondosha
+* Made number of stacks for megablast word processing depend on query and database
+*
+* Revision 6.40  2001/10/12 21:32:46  dondosha
+* Added discontiguous word capability to megablast
+*
+* Revision 6.39  2001/07/20 19:22:37  dondosha
+* Added pv_array for megablast
+*
 * Revision 6.38  2000/09/29 22:17:42  dondosha
 * Check if memory allocation fails in MegaBlastBuildLookupTable
 *
@@ -821,12 +841,18 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    Int4 query_length = search->context[search->first_context].query->length;
    register Uint1Ptr seq, pos;
    register Int4 index;
-   register Int4 ecode;
+   register Int4 ecode, ecode1, extra_code;
    register Int4 mask;
    Uint1 val, nuc_mask = 0xfc, at_hash_mask = 0x10;
    MbLookupTablePtr mb_lt;
    Int4 masked_word_count = 0;
+   PV_ARRAY_TYPE *pv_array=NULL;
+   Int4 pv_shift, pv_array_bts, pv_size;
+   Boolean discontiguous_word = FALSE;
+   Int2 word_length, extra_length, word_weight;
+   Int4 weight11 = 0, template18 = 0, last_offset;
    
+
    if (lookup == NULL)
       return FALSE;
 
@@ -835,15 +861,30 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
     
    mb_lt = (MbLookupTablePtr) MemNew(sizeof(MbLookupTable));
     
-   if (lookup->wordsize<3) 
+   /* Increment lookup->wordsize, since it is now equal to (wordsize - 3)/4 */
+   if (++lookup->wordsize < 3) 
       mb_lt->width = 2;
    else
       mb_lt->width = 3;
    mb_lt->lpm = lookup->wordsize * READDB_COMPRESSION_RATIO;
-   /* KLUDGE!!! */
-   mb_lt->max_positions = search->pbp->block_width; 
+
+   mb_lt->max_positions = search->pbp->mb_params->max_positions; 
    mb_lt->hashsize = (1<<(8*mb_lt->width)); 
-   mask = mb_lt->mask = (1 << (8*mb_lt->width - 2)) - 1;
+
+   if (search->pbp->mb_params->disc_word) {
+      discontiguous_word = TRUE;
+      word_length = READDB_COMPRESSION_RATIO*(mb_lt->width+1);
+      extra_length = search->pbp->mb_params->template_length - word_length;
+      word_weight = search->pbp->mb_params->word_weight;
+      if (word_weight == 11)
+         weight11 = 0xffffffff;
+      if (extra_length > 0)
+         template18 = 0xffffffff;
+      mask = (1 << (8*(mb_lt->width+1) - 2)) - 1;
+   } else {
+      word_length = READDB_COMPRESSION_RATIO*mb_lt->width;
+      mask = mb_lt->mask = (1 << (8*mb_lt->width - 2)) - 1;
+   }
 
    if ((mb_lt->hashtable = (Int4Ptr) 
         MemNew(mb_lt->hashsize*sizeof(Int4))) == NULL) {
@@ -858,31 +899,87 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    }
 
    seq = search->context[search->first_context].query->sequence_start;
-   pos = search->context[search->first_context].query->sequence;
+   pos = seq + word_length;
+
    ecode = 0;
-   for (index = 1; index < mb_lt->width*READDB_COMPRESSION_RATIO; ++index) {
-      ecode = (ecode << 2) + (Int4) (*++seq);
-      if (*seq & at_hash_mask) /* Will extend through this residue */
-	 *seq &= 0x0f;
+
+   if (discontiguous_word) {
+      if (template18) {
+         register Uint1 val1, val2;
+         last_offset = query_length - extra_length;
+         for (index = 1; index <= last_offset; index++) {
+            val = *++seq;
+            if ((val & nuc_mask) != 0) { /* ambiguity, gap or masked residue */
+               if (*seq & at_hash_mask) /* Will extend through this residue */
+                  *seq &= 0x0f;
+               ecode = 0;
+               pos = seq + word_length;
+               extra_code = 0;
+            } else {
+               /* get next base */
+               ecode = ((ecode & mask) << 2) + val;
+               if (seq >= pos) {
+                  val1 = *(seq+1);
+                  val2 = *(seq+2);
+                  if (((val1&nuc_mask) == 0) && ((val2&nuc_mask) == 0)) {
+                     extra_code = (Int4) ((val1<<2) | val2);
+                     ecode1 = GET_WORD_INDEX(ecode,weight11,template18) | 
+                        (extra_code & MASK_EXTRA);
+                     if (mb_lt->hashtable[ecode1] == 0)
+                        lookup->num_unique_pos_added++;
+                     mb_lt->next_pos[index] = mb_lt->hashtable[ecode1];
+                     mb_lt->hashtable[ecode1] = index;
+                  }
+               }
+            }
+         }
+         /* Modify the last 2 residues if they are masked only for lookup */
+         for (index = 0; index < extra_length; index++) {
+            if (*++seq & at_hash_mask)
+               *seq &= 0x0f;
+         }
+      } else { /* Template length 16 */
+         for (index = 1; index <= query_length; index++) {
+            val = *++seq;
+            if ((val & nuc_mask) != 0) { /* ambiguity, gap or masked residue */
+               ecode = 0;
+               pos = seq + word_length;
+               if (*seq & at_hash_mask) /* Will extend through this residue */
+                  *seq &= 0x0f;
+            } else {
+               /* get next base */
+               ecode = ((ecode & mask) << 2) + val;
+               if (seq >= pos) {
+                  ecode1 = GET_WORD_INDEX(ecode,weight11,0);
+                  if (mb_lt->hashtable[ecode1] == 0)
+                     lookup->num_unique_pos_added++;
+                  mb_lt->next_pos[index] = mb_lt->hashtable[ecode1];
+                  mb_lt->hashtable[ecode1] = index;
+               }
+            }
+         }
+      }
+   } else { /* Contiguous word */
+      for (index = 1; index <= query_length; index++) {
+         val = *++seq;
+         if ((val & nuc_mask) != 0) { /* ambiguity, gap or masked residue */
+            ecode = 0;
+            pos = seq + word_length;
+            if (*seq & at_hash_mask) /* Will extend through this residue */
+               *seq &= 0x0f;
+         } else {
+            /* get next base */
+            ecode = ((ecode & mask) << 2) + val;
+            if (seq >= pos) {
+               if (mb_lt->hashtable[ecode] == 0)
+                  lookup->num_unique_pos_added++;
+               mb_lt->next_pos[index] = mb_lt->hashtable[ecode];
+               mb_lt->hashtable[ecode] = index;
+            }
+         }
+      }
    }
 
-   while (index <= query_length) {
-      val = *++seq;
-      if ((val & nuc_mask) != 0) { /* ambiguity, gap or masked residue */
-	 ecode = 0;
-	 pos = seq + READDB_COMPRESSION_RATIO*mb_lt->width;
-	 if (*seq & at_hash_mask) /* Will extend through this residue */
-	    *seq &= 0x0f;
-      } else {
-	 /* get next base */
-	 ecode = ((ecode & mask) << 2) + val;
-	 if (seq >= pos) {
-	    mb_lt->next_pos[index] = mb_lt->hashtable[ecode];
-	    mb_lt->hashtable[ecode] = index;
-	 }
-      }
-      index++;
-   }
    /* Now remove the hash entries that have too many positions */
    if (mb_lt->max_positions>0) {
       for (ecode=0; ecode<mb_lt->hashsize; ecode++) {
@@ -900,16 +997,61 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
 		   4*mb_lt->width);
 	 
    }
-   mb_lt->mask = (1 << (mb_lt->width*8 - 8)) - 1;
-   mb_lt->stack_index = (Int4Ptr) MemNew(MB_NUM_STACKS*sizeof(Int4));
-   mb_lt->stack_size = (Int4Ptr) Malloc(MB_NUM_STACKS*sizeof(Int4));
-   mb_lt->estack = (MbStackPtr PNTR) Malloc(MB_NUM_STACKS*sizeof(MbStackPtr));
-   for (index=0; index<MB_NUM_STACKS; index++) {
-      mb_lt->estack[index] = 
-	 (MbStackPtr) Malloc(MBSTACK_SIZE*sizeof(MbStack));
-      mb_lt->stack_size[index] = MBSTACK_SIZE;
-   }
 
+   if (discontiguous_word)
+      mb_lt->mask = (1 << mb_lt->width*8) - 1;
+   else
+      mb_lt->mask = (1 << (mb_lt->width*8 - 8)) - 1;
+      
+   /* Stacks are allocated for word size >= 12, or if query length is too long,
+      otherwise will use diagonal array (ewp and ewp_params structures) */
+   if (query_length > MAX_DIAG_ARRAY || mb_lt->lpm >= 12) {
+      Int8 total_len, av_search_space;
+      Int4 total_num, av_len, stack_size, num_stacks;
+      if (search->dblen > 0 && search->dbseq_num > 0) {
+         total_len = search->dblen;
+         total_num = search->dbseq_num;
+      } else {
+         readdb_get_totals_ex(search->rdfp, &total_len, &total_num, TRUE);
+      }
+      if (total_num > 0)
+         av_len = total_len / total_num;
+      else
+         av_len = 1000;
+      av_search_space = 
+         ((Int8) search->context[search->first_context].query->length) * av_len;
+      num_stacks = MIN(1 + (Int4) sqrt(av_search_space)/100, 500);
+      stack_size = 5000/num_stacks;
+      mb_lt->stack_index = (Int4Ptr) MemNew(num_stacks*sizeof(Int4));
+      mb_lt->stack_size = (Int4Ptr) Malloc(num_stacks*sizeof(Int4));
+      mb_lt->estack = (MbStackPtr PNTR) Malloc(num_stacks*sizeof(MbStackPtr));
+      for (index=0; index<num_stacks; index++) {
+         mb_lt->estack[index] = 
+            (MbStackPtr) Malloc(stack_size*sizeof(MbStack));
+         mb_lt->stack_size[index] = stack_size;
+      }
+      mb_lt->num_stacks = num_stacks;
+   } 
+
+   /* For 12-mer based lookup table need to make presense bit array much 
+      smaller, so it stays in cache, even though this allows for collisions */
+   pv_shift = (mb_lt->width < 3) ? 0 : 5;
+
+   pv_array_bts = PV_ARRAY_BTS + pv_shift;
+
+   if (lookup->num_unique_pos_added < 
+       (PV_ARRAY_FACTOR*(mb_lt->hashsize>>pv_shift))) {
+      pv_size = mb_lt->hashsize>>pv_array_bts;
+      /* Size measured in PV_ARRAY_TYPE's */
+      pv_array = MemNew(pv_size*PV_ARRAY_BYTES);
+
+      for (index=0; index<mb_lt->hashsize; index++) {
+         if (mb_lt->hashtable[index] != 0)
+            pv_array[index>>pv_array_bts] |= 
+               (((PV_ARRAY_TYPE) 1)<<(index&PV_ARRAY_MASK));
+      }
+      lookup->pv_array = pv_array;
+   }
    lookup->mb_lt = mb_lt;
    return TRUE;
 }
@@ -926,12 +1068,12 @@ MegaBlastLookupTableDestruct(LookupTablePtr lookup)
    if (lookup->mb_lt->next_pos)
       MemFree(lookup->mb_lt->next_pos);
    if (lookup->mb_lt->estack) {
-      for (index=0; index<MB_NUM_STACKS; index++)
+      for (index=0; index<lookup->mb_lt->num_stacks; index++)
 	 MemFree(lookup->mb_lt->estack[index]);
       MemFree(lookup->mb_lt->estack);
+      MemFree(lookup->mb_lt->stack_index);
+      MemFree(lookup->mb_lt->stack_size);
    }
-   MemFree(lookup->mb_lt->stack_index);
-   MemFree(lookup->mb_lt->stack_size);
    lookup->mb_lt = MemFree(lookup->mb_lt);
    return lookup;
 }
@@ -947,13 +1089,14 @@ LookupTablePtr MegaBlastLookupTableDup(LookupTablePtr lookup)
 
    new_lookup->mb_lt = 
       (MbLookupTablePtr) MemDup(lookup->mb_lt, sizeof(MbLookupTable));
-   new_lookup->mb_lt->stack_index = (Int4Ptr) MemNew(MB_NUM_STACKS*sizeof(Int4));
+   new_lookup->mb_lt->stack_index = (Int4Ptr) MemNew(lookup->mb_lt->num_stacks*sizeof(Int4));
    new_lookup->mb_lt->stack_size = (Int4Ptr) MemDup(lookup->mb_lt->stack_size,
-						    MB_NUM_STACKS*sizeof(Int4));
-   new_lookup->mb_lt->estack = (MbStackPtr PNTR) Malloc(MB_NUM_STACKS*sizeof(MbStackPtr));
-   for (index=0; index<MB_NUM_STACKS; index++) 
-      new_lookup->mb_lt->estack[index] = 
-	 (MbStackPtr) Malloc(MBSTACK_SIZE*sizeof(MbStack));
-
+						    lookup->mb_lt->num_stacks*sizeof(Int4));
+   if (lookup->mb_lt->estack) {
+      new_lookup->mb_lt->estack = (MbStackPtr PNTR) Malloc(lookup->mb_lt->num_stacks*sizeof(MbStackPtr));
+      for (index=0; index<lookup->mb_lt->num_stacks; index++) 
+         new_lookup->mb_lt->estack[index] = 
+            (MbStackPtr) Malloc(lookup->mb_lt->stack_size[index]*sizeof(MbStack));
+   }
    return new_lookup;
 }

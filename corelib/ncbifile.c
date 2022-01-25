@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,9 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.23  2001/08/29 17:33:15  juran
+* Cleanup.
+*
 * Revision 6.22  2001/04/26 16:47:40  juran
 * Refactored CreateDir to quash warnings.
 *
@@ -515,84 +518,7 @@ static OSErr MacCreateDirectory(const char *inPathname)
 	return err;
 }
 
-#if 0
-/* This function takes an absolute pathname and returns the volume reference number. */
-
-static short Nlm_MacGetVRefNum (Nlm_CharPtr pathname, OSErr *errptr)
-
-{
-  OSErr           err;
-  //Nlm_Char        filename [FILENAME_MAX];
-  Nlm_Char        path [256];
-  HParamBlockRec  pbh;
-  Nlm_CharPtr     ptr;
-
-#if 0
-#else
-  Nlm_StringNCpy_0(path, pathname, sizeof(path));
-  ptr = Nlm_StringRChr (path, (int) DIRDELIMCHR);
-  if (ptr != NULL) {
-    ptr++;
-    //Nlm_StringNCpy_0(filename, ptr, sizeof(filename));
-    *ptr = '\0';
-    Nlm_CtoPstr ((Nlm_CharPtr) path);
-    memset (&pbh, 0, sizeof (HParamBlockRec));
-    pbh.volumeParam.ioNamePtr = (StringPtr) path;
-    pbh.volumeParam.ioVolIndex = -1;
-    err = PBHGetVInfoSync (&pbh);
-    if (errptr != NULL) {
-      *errptr = err;
-    }
-    return pbh.volumeParam.ioVRefNum;
-  } else {
-    if (errptr != NULL) {
-      *errptr = noErr;
-    }
-    return 0;
-  }
 #endif
-}
-
-/*	This function takes a relative pathname and a volume reference number,
- *	and returns the directory ID.
- *	
- *	However, I believe it will return the parent directory's ID if the trailing colon
- *	is omitted.
- */
-
-static long Nlm_MacGetDirID (Nlm_CharPtr pathname, short newVRefNum, OSErr *errptr)
-
-{
-  OSErr           err;
-  Nlm_Char        path [256];
-  CInfoPBRec      pbc;
-  Nlm_CharPtr     ptr;
-
-  memset (&pbc, 0, sizeof (CInfoPBRec));
-  Nlm_StringNCpy_0(path, pathname, sizeof(path));
-  ptr = Nlm_StringRChr (path, (int) DIRDELIMCHR);
-  if (ptr != NULL) {
-    ptr++;
-    Nlm_StringNCpy_0(path, pathname, sizeof(path));
-    *ptr = '\0';
-    Nlm_CtoPstr ((Nlm_CharPtr) path);
-    pbc.dirInfo.ioNamePtr = (StringPtr) path;
-    pbc.dirInfo.ioVRefNum = newVRefNum;
-    err = PBGetCatInfo (&pbc, FALSE);
-    if (errptr != NULL) {
-      *errptr = err;
-    }
-    return pbc.dirInfo.ioDrDirID;
-  } else {
-    if (errptr != NULL) {
-      *errptr = noErr;
-    }
-    return 0;
-  }
-}
-
-#endif
-#endif  /* 0 */
 
 /*****************************************************************************
 *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.34 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
@@ -80,7 +80,9 @@ typedef struct bioseqviewdata {
   GrouP           scaleControlGrp;
   GrouP           findGeneGrp;
   GrouP           docTxtControlGrp;
+  GrouP           baseCtgControlGrp;
   GrouP           modeControlGrp;
+  GrouP           newGphControlGrp;
   GrouP           pnlParentGrp;
 
   GrouP           udvParentGrp;
@@ -113,6 +115,11 @@ typedef struct bioseqviewdata {
   PopuP           numControl;
 
   PopuP           ffModeCtrl;
+
+  PopuP           newGphStyle;
+  PopuP           newGphFilter;
+  PopuP           newGphScale;
+  PopuP           newGphLayout;
 
   ValNodePtr      slp_list;
   ValNodePtr      g_list;

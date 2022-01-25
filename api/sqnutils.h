@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.73 $
+* $Revision: 6.79 $
 *
 * File Description: 
 *
@@ -165,6 +165,7 @@ NLM_EXTERN void SetSeqLocPartial (SeqLocPtr location, Boolean partial5, Boolean 
 NLM_EXTERN void FreeAllFuzz (SeqLocPtr location);
 NLM_EXTERN Boolean LocationHasNullsBetween (SeqLocPtr location);
 NLM_EXTERN Boolean SeqLocBadSortOrder (BioseqPtr bsp, SeqLocPtr slp);
+NLM_EXTERN Boolean SeqLocMixedStrands (BioseqPtr bsp, SeqLocPtr slp);
 
 /* GetBioseqGivenSeqLoc returns a segmented bioseq if the SeqLoc is to the parts */
 
@@ -174,6 +175,11 @@ NLM_EXTERN BioseqPtr GetBioseqGivenIDs (Uint2 entityID, Uint2 itemID, Uint2 item
 NLM_EXTERN Uint2 GetItemIDGivenPointer (Uint2 entityID, Uint2 itemtype, Pointer lookfor);
 
 NLM_EXTERN Uint2 FindFeatFromFeatDefType (Uint2 subtype);
+NLM_EXTERN Uint1 FindFeatDefTypeFromKey (CharPtr key);
+NLM_EXTERN CharPtr FindKeyFromFeatDefType (Uint1 type, Boolean forGBFF);
+
+NLM_EXTERN Uint1 CodonToGcIndex (CharPtr codon);
+NLM_EXTERN CharPtr GcIndextoCodon (Uint1 index);
 
 /* finds bioseq from (cds) product, gets largest protein feature packaged on it */
 
@@ -232,6 +238,16 @@ NLM_EXTERN ProtRefPtr ParseTitleIntoProtRef (
   ProtRefPtr prp
 );
 
+NLM_EXTERN GBBlockPtr ParseTitleIntoGenBank (
+  SqnTagPtr stp,
+  GBBlockPtr gbp
+);
+
+NLM_EXTERN SeqHistPtr ParseTitleIntoSeqHist (
+  SqnTagPtr stp,
+  SeqHistPtr shp
+);
+
 /* UseLocalAsnloadDataAndErrMsg transiently sets paths to asnload, data, and errmsg
   if they are packaged in the same directory as the executing program. */
 
@@ -252,9 +268,10 @@ NLM_EXTERN void DeleteMultipleTitles (SeqEntryPtr sep, Pointer mydata, Int4 inde
 
 NLM_EXTERN Uint1 FindTrnaAA (CharPtr str);
 NLM_EXTERN Uint1 FindTrnaAA3 (CharPtr str);
-NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText);
+NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr codon);
 NLM_EXTERN CharPtr FindTrnaAAIndex (CharPtr str);
 NLM_EXTERN ValNodePtr TokenizeTRnaString (CharPtr strx);
+NLM_EXTERN Boolean ParseDegenerateCodon (tRNAPtr trp, Uint1Ptr codon);
 NLM_EXTERN Boolean SerialNumberInString (CharPtr str);
 
 /* for sorting and uniquing valnode list by (charptr) data.ptrvalue */

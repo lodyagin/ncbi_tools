@@ -116,6 +116,21 @@ $^   BadSeqIdFormat, 31
 A nucleotide sequence identifier should be 1 letter plus 5 digits or 2 letters
 plus 6 digits, and a protein sequence identifer should be 3 letters plus 5 digits.
 
+$^   PartsOutOfOrder, 32
+The parts inside a segmented set should correspond to the seq_ext of the segmented
+bioseq.  A difference will affect how the flatfile is displayed.
+
+$^   BadSecondaryAccn, 33
+A secondary accession usually indicates a record replaced or subsumed by the current
+record.  In this case, the current accession and secondary are the same.
+
+$^   ZeroGiNumber, 34
+GI numbers are assigned to sequences by NCBI's sequence tracking database.  0 is not
+a legal value for a gi number.
+
+$^   RnaDnaConflict, 35
+The MolInfo biomol field is inconsistent with the Bioseq molecule type field.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -194,6 +209,11 @@ Unassigned SubSource subtype.
 $^   BadOrgMod, 18
 Unassigned OrgMod subtype.
 
+$^   InconsistentProteinTitle, 19
+An instantiated protein title descriptor should normally be the same as the
+automatically generated title.  This may be a curated exception, or it may
+be out of synch with the current annotation.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -209,6 +229,10 @@ remaining author names.
 $^   MissingPubInfo, 4
 The publication is missing essential information, such as title or
 authors.
+
+$^   UnnecessaryPubEquiv, 5
+A nested Pub-equiv is not normally expected in a publication.  This may prevent
+proper display of all publication information.
 
 $$ SEQ_PKG, 4
 
@@ -456,6 +480,41 @@ The location has identical adjacent intervals, e.g., a duplicate exon reference.
 
 $^   PolyAsiteNotPoint, 49
 A polyA_site should be at a single nucleotide position.
+
+$^   ImpFeatBadLoc, 50
+An import feature loc field does not equal the feature location.  This should be
+corrected, and then the loc field should be cleared.
+
+$^   LocOnSegmentedBioseq, 51
+Feature locations traditionally go on the individual parts of a segmented bioseq, not
+on the segmented sequence itself.  These features are invisible in asn2ff reports, and
+are now being flagged for correction.
+
+$^   UnnecessaryCitPubEquiv, 52
+A set of citations on a feature should not normally have a nested Pub-equiv construct.
+This may prevent proper matching to the correct publication.
+
+$^   ImpCDShasTranslation, 53
+A CDS that has known translation errors cannot have a /translation qualifier.
+
+$^   ImpCDSnotPseudo, 54
+A CDS that has known translation errors must be marked as pseudo to suppress the
+translation.
+
+$^   MissingMRNAproduct, 55
+The mRNA feature points to a cDNA product that is not packaged in the record.
+This is an error in the genomic product set.
+
+$^   AbuttingIntervals, 56
+The start of one interval is next to the stop of another.  A single interval
+may be desirable in this case.
+
+$^   CollidingGeneNames, 57
+Two gene features should not have the same name.
+
+$^   MultiIntervalGene, 58
+A gene feature on a single Bioseq should have a single interval spanning everything
+considered to be under that gene.
 
 $$ SEQ_ALIGN, 6
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.29 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -50,68 +50,71 @@
 extern EnumFieldAssoc  orgmod_subtype_alist [];
 ENUM_ALIST(orgmod_subtype_alist)
   {" ",                 0},
-  {"Strain",            2},
-  {"Substrain",         3},
-  {"Type",              4},
-  {"Subtype",           5},
-  {"Variety",           6},
-  {"Serotype",          7},
-  {"Serogroup",         8},
-  {"Serovar",           9},
-  {"Cultivar",         10},
-  {"Pathovar",         11},
-  {"Chemovar",         12},
-  {"Biovar",           13},
-  {"Biotype",          14},
-  {"Group",            15},
-  {"Subgroup",         16},
-  {"Isolate",          17},
-  {"Common",           18},
   {"Acronym",          19},
-  {"Dosage",           20},
-  {"Natural-host",     21},
-  {"Sub-species",      22},
-  {"Specimen-voucher", 23},
+  {"Anamorph",         29},
   {"Authority",        24},
+  {"Biotype",          14},
+  {"Biovar",           13},
+  {"Breed",            31},
+  {"Chemovar",         12},
+  {"Common",           18},
+  {"Dosage",           20},
+  {"Cultivar",         10},
+  {"Ecotype",          27},
   {"Forma",            25},
   {"Forma-specialis",  26},
-  {"Ecotype",          27},
-  {"Synonym",          28},
-  {"Anamorph",         29},
-  {"Teleomorph",       30},
-  {"Breed",            31},
+  {"Group",            15},
+  {"Isolate",          17},
+  {"Natural-host",     21},
   {"Old Lineage",     253},
   {"Old Name",        254},
+  {"Pathovar",         11},
+  {"Serogroup",         8},
+  {"Serotype",          7},
+  {"Serovar",           9},
+  {"Specimen-voucher", 23},
+  {"Strain",            2},
+  {"Subgroup",         16},
+  {"Sub-species",      22},
+  {"Substrain",         3},
+  {"Subtype",           5},
+  {"Synonym",          28},
+  {"Teleomorph",       30},
+  {"Type",              4},
+  {"Variety",           6},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  subsource_subtype_alist [];
 ENUM_ALIST(subsource_subtype_alist)
   {" ",                      0},
-  {"Chromosome",             1},
-  {"Map",                    2},
-  {"Clone",                  3},
-  {"Subclone",               4},
-  {"Haplotype",              5},
-  {"Genotype",               6},
-  {"Sex",                    7},
   {"Cell-line",              8},
   {"Cell-type",              9},
-  {"Tissue-type",           10},
+  {"Chromosome",             1},
+  {"Clone",                  3},
   {"Clone-lib",             11},
-  {"Dev-stage",             12},
-  {"Frequency",             13},
-  {"Germline",              14},
-  {"Rearranged",            15},
-  {"Lab-host",              16},
-  {"Pop-variant",           17},
-  {"Tissue-lib",            18},
-  {"Plasmid-name",          19},
-  {"Transposon-name",       20},
-  {"Ins-seq-name",          21},
-  {"Plastid-name",          22},
   {"Country",               23},
-  {"Segment",               24},
+  {"Dev-stage",             12},
   {"Endogenous-virus-name", 25},
+  {"Environmental-sample",  27},
+  {"Frequency",             13},
+  {"Genotype",               6},
+  {"Germline",              14},
+  {"Haplotype",              5},
+  {"Ins-seq-name",          21},
+  {"Isolation-source",      28},
+  {"Lab-host",              16},
+  {"Map",                    2},
+  {"Plasmid-name",          19},
+  {"Plastid-name",          22},
+  {"Pop-variant",           17},
+  {"Segment",               24},
+  {"Sex",                    7},
+  {"Subclone",               4},
+  {"Rearranged",            15},
+  {"Tissue-lib",            18},
+  {"Tissue-type",           10},
+  {"Transgenic",            26},
+  {"Transposon-name",       20},
 END_ENUM_ALIST
 
 static ENUM_ALIST(biosource_genome_alist)
@@ -1657,11 +1660,19 @@ static Pointer SubsourceDialogToSubSourcePtr (DialoG d)
         if (tmp != NULL && sscanf (tmp, "%d", &val) == 1 && val != 0) {
           MemFree (tmp);
           tmp = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
-          if ((val == 14 || val == 15) && StringHasNoText (tmp)) {
+          if ((val == SUBSRC_germline ||
+               val == SUBSRC_rearranged ||
+               val == SUBSRC_transgenic ||
+               val == SUBSRC_environmental_sample) &&
+              StringHasNoText (tmp)) {
             MemFree (tmp);
             tmp = StringSave ("");
           }
-          if (! StringHasNoText (tmp) || val == 14 || val == 15) {
+          if ((! StringHasNoText (tmp)) ||
+              val == SUBSRC_germline ||
+              val == SUBSRC_rearranged ||
+              val == SUBSRC_transgenic ||
+              val == SUBSRC_environmental_sample) {
             ssp = SubSourceNew ();
             if (ssplast == NULL) {
               head = ssp;

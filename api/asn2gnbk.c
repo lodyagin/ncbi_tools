@@ -29,11 +29,11 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.201 $
+* $Revision: 6.329 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
 * ==========================================================================
 */
@@ -55,7 +55,7 @@
 #include <gbfeat.h>
 #include <gbftdef.h>
 #include <edutil.h>
-#include <asn2gnbk.h>
+#include <asn2gnbp.h>
 
 #ifdef WIN_MAC
 #if __profile__
@@ -72,82 +72,140 @@
 #define TILDE_EXPAND     2
 #define TILDE_OLD_EXPAND 3
 
-static Boolean s_NewLocusLine = FALSE;
+/* flags set by mode to customize behavior */
+
+typedef struct asn2gbflags {
+  Boolean             suppressLocalID;
+  Boolean             validateFeats;
+  Boolean             ignorePatPubs;
+  Boolean             dropShortAA;
+  Boolean             avoidLocusColl;
+  Boolean             iupacaaOnly;
+  Boolean             dropBadCitGens;
+  Boolean             noAffilOnUnpub;
+  Boolean             dropIllegalQuals;
+  Boolean             checkQualSyntax;
+  Boolean             needRequiredQuals;
+  Boolean             needOrganismQual;
+  Boolean             needAtLeastOneRef;
+  Boolean             citArtIsoJta;
+  Boolean             dropBadDbxref;
+  Boolean             useEmblMolType;
+  Boolean             hideBankItComment;
+  Boolean             checkCDSproductID;
+  Boolean             forGbRelease;
+} Asn2gbFlags, PNTR Asn2gbFlagsPtr;
+
+/* internal Asn2gbSect structure has fields on top of Asn2gbSect fields */
+
+typedef struct int_Asn2gbSect {
+  Asn2gbSect  asp;
+  SeqPortPtr  spp;
+} IntAsn2gbSect, PNTR IntAsn2gbSectPtr;
+
+/* internal asn2gbjob structure has fields on top of Asn2gbJob fields */
+
+typedef struct int_asn2gb_job {
+  Asn2gbJob      ajp;
+  FmtType        format;
+  Asn2gbFlags    flags;
+  Boolean        showFarTransl;
+  Boolean        transientSeqPort;
+  Boolean        masterStyle;
+  Boolean        newSourceOrg;
+  ValNodePtr     lockedBspList;
+} IntAsn2gbJob, PNTR IntAsn2gbJobPtr;
 
 /* structure for storing working parameters while building asn2gb_job structure */
 
 typedef struct asn2gbwork {
-  Asn2gbJobPtr  ajp;
-  Uint2         entityID;
+  IntAsn2gbJobPtr  ajp;
+  Uint2            entityID;
 
-  FmtType       format;
-  ModType       mode;
-  StlType       style;
+  FmtType          format;
+  StlType          style;
 
-  ValNodePtr    pubhead;    /* for collecting publications */
-  ValNodePtr    srchead;    /* for collecting biosources */
+  ValNodePtr       pubhead;    /* for collecting publications */
+  ValNodePtr       srchead;    /* for collecting biosources */
 
   /* linked lists of paragraphs, sections, blocks */
 
-  ValNodePtr    sectionList;
-  ValNodePtr    blockList;    /* reset for each new section */
+  ValNodePtr       sectionList;
+  ValNodePtr       blockList;    /* reset for each new section */
 
   /* most recent node of linked lists, for quickly adding next node */
 
-  ValNodePtr    lastsection;
-  ValNodePtr    lastblock;    /* reset for each new section */
+  ValNodePtr       lastsection;
+  ValNodePtr       lastblock;    /* reset for each new section */
 
-  Int4          currsection;
+  Int4             currsection;
 
   /* section fields needed for populating blocks */
 
-  BioseqPtr     target;
-  BioseqPtr     parent;
-  BioseqPtr     bsp;
-  SeqLocPtr     slp;
-  Uint2         seg;
-  Int4          numsegs;
-  Int4          from;
-  Int4          to;
+  Asn2gbSectPtr    asp;
 
-  Char          basename [SEQID_MAX_LEN];
+  BioseqPtr        target;
+  BioseqPtr        parent;
+  BioseqPtr        bsp;
+  SeqLocPtr        slp;
+  Uint2            seg;
+  Int4             numsegs;
+  Int4             from;
+  Int4             to;
 
-  SeqFeatPtr    lastsfp;
-  SeqAnnotPtr   lastsap;
-  Int4          lastleft;
-  Int4          lastright;
+  Boolean          contig;
+  Boolean          showconfeats;
+  Boolean          showconsource;
 
-  SeqSubmitPtr  ssp;
-  Boolean       hup;
+  Boolean          citSubsFirst;
+  Boolean          hideGeneFeats;
+  Boolean          newLocusLine;
+
+  Boolean          isGPS;
+  Boolean          copyGpsCdsUp;
+  Boolean          copyGpsGeneDown;
+
+  Char             basename [SEQID_MAX_LEN];
+
+  SeqFeatPtr       lastsfp;
+  SeqAnnotPtr      lastsap;
+  Int4             lastleft;
+  Int4             lastright;
+
+  Boolean          firstfeat;
+
+  SeqSubmitPtr     ssp;
+  Boolean          hup;
+
+  Boolean          failed;
 } Asn2gbWork, PNTR Asn2gbWorkPtr;
 
 /* array for assigning biosource and feature data fields to qualifiers */
 /* should be allocated to MAX (ASN2GNBK_TOTAL_SOURCE, ASN2GNBK_TOTAL_FEATUR) */
 
 typedef union qualval {
-  CharPtr       str;
-  Boolean       bool;
-  Int4          num;
-  ValNodePtr    vnp;
-  GBQualPtr     gbq;
-  OrgModPtr     omp;
-  SubSourcePtr  ssp;
-  CodeBreakPtr  cbp;
-  SeqLocPtr     slp;
-  SeqIdPtr      sip;
-  tRNAPtr       trp;
+  CharPtr        str;
+  Boolean        bool;
+  Int4           num;
+  ValNodePtr     vnp;
+  GBQualPtr      gbq;
+  OrgModPtr      omp;
+  SubSourcePtr   ssp;
+  CodeBreakPtr   cbp;
+  SeqLocPtr      slp;
+  SeqIdPtr       sip;
+  tRNAPtr        trp;
+  UserObjectPtr  uop;
 } QualVal, PNTR QualValPtr;
 
 /* structure passed to individual paragraph format functions */
 
 typedef struct asn2gbformat {
-  Asn2gbJobPtr      ajp;
-  Asn2gbSectionPtr  asp;
-  QualValPtr        qvp;
+  IntAsn2gbJobPtr ajp;
+  Asn2gbSectPtr   asp;
+  QualValPtr      qvp;
 
-  FmtType           format;
-  ModType           mode;
-  StlType           style;
+  FmtType         format;
 } Asn2gbFormat, PNTR Asn2gbFormatPtr;
 
 
@@ -160,18 +218,18 @@ typedef struct comment_block {
   Boolean           first;
 } CommentBlock, PNTR CommentBlockPtr;
 
-/* internal reference block has fields on top of ReferenceBlock fields */
+/* internal reference block has fields on top of RefBlock fields */
 
 typedef struct int_ref_block {
-  ReferenceBlock    rb;
-  DatePtr           date;     /* internal sorting use only */
-  SeqLocPtr         loc;      /* final location on target bioseq */
-  CharPtr           authstr;  /* author string */
-  Uint2             index;    /* index if feature on target bioseq */
-  Boolean           justuids; /* gibb pub with uids and Figure, etc. */
-  CharPtr           fig;      /* figure string from equivalent gibb pub */
-  CharPtr           maploc;   /* maploc string from equivalent gibb pub */
-  Boolean           poly_a;   /* poly_a field from equivalent gibb pub */
+  RefBlock   rb;
+  DatePtr    date;     /* internal sorting use only */
+  SeqLocPtr  loc;      /* final location on target bioseq */
+  CharPtr    authstr;  /* author string */
+  Uint2      index;    /* index if feature on target bioseq */
+  Boolean    justuids; /* gibb pub with uids and Figure, etc. */
+  CharPtr    fig;      /* figure string from equivalent gibb pub */
+  CharPtr    maploc;   /* maploc string from equivalent gibb pub */
+  Boolean    poly_a;   /* poly_a field from equivalent gibb pub */
 } IntRefBlock, PNTR IntRefBlockPtr;
 
 /* internal source block has fields on top of BaseBlock fields */
@@ -196,23 +254,710 @@ typedef struct int_src_block {
   Int4              right;
 } IntSrcBlock, PNTR IntSrcBlockPtr;
 
-/* internal feature block has fields on top of FeatureBlock fields */
+/* internal feature block has fields on top of FeatBlock fields */
 
 typedef struct int_feat_block {
-  FeatureBlock      fb;
-  Boolean           mapToNuc;
-  Boolean           mapToProt;
-  Boolean           isCDS;     /* set if using IntCdsBlock */
+  FeatBlock  fb;
+  Boolean     mapToNuc;
+  Boolean     mapToProt;
+  Boolean     mapToGen;
+  Boolean     mapToMrna;
+  Boolean     isCDS;     /* set if using IntCdsBlock */
+  Boolean     firstfeat;
 } IntFeatBlock, PNTR IntFeatBlockPtr;
 
 /* internal cds block has fields on top of IntFeatBlock fields */
 
 typedef struct int_cds_block {
-  IntFeatBlock      ifb;
-  FeatureBlock      fb;
-  CharPtr           fig;    /* figure string from pub */
-  CharPtr           maploc; /* maploc string from pub */
+  IntFeatBlock  ifb;
+  FeatBlock     fb;
+  CharPtr       fig;    /* figure string from pub */
+  CharPtr       maploc; /* maploc string from pub */
 } IntCdsBlock, PNTR IntCdsBlockPtr;
+
+
+/* enumerated qualifier category definitions */
+
+typedef enum {
+  Qual_class_ignore = 0,
+  Qual_class_string,
+  Qual_class_sgml,
+  Qual_class_boolean,
+  Qual_class_int,
+  Qual_class_evidence,
+  Qual_class_valnode,
+  Qual_class_EC_valnode,
+  Qual_class_xtraprds,
+  Qual_class_quote,
+  Qual_class_EC_quote,
+  Qual_class_noquote,
+  Qual_class_label,
+  Qual_class_number,
+  Qual_class_paren,
+  Qual_class_region,
+  Qual_class_replace,
+  Qual_class_consplice,
+  Qual_class_site,
+  Qual_class_L_R_B,
+  Qual_class_rpt,
+  Qual_class_organelle,
+  Qual_class_orgmod,
+  Qual_class_subsource,
+  Qual_class_code_break,
+  Qual_class_anti_codon,
+  Qual_class_codon,
+  Qual_class_method,
+  Qual_class_pubset,
+  Qual_class_db_xref,
+  Qual_class_seq_id,
+  Qual_class_seq_loc,
+  Qual_class_its,
+  Qual_class_sec_str,
+  Qual_class_trna_codons,
+  Qual_class_translation,
+  Qual_class_protnames,
+  Qual_class_illegal,
+  Qual_class_note,
+  Qual_class_rpt_unit,
+  Qual_class_product,
+  Qual_class_model_ev
+}  QualType;
+
+/* source 'feature' */
+
+/* some qualifiers will require additional content verification not
+   explicitly indicated by the class type */
+
+typedef enum {
+  SCQUAL_acronym = 1,
+  SCQUAL_anamorph,
+  SCQUAL_authority,
+  SCQUAL_biotype,
+  SCQUAL_biovar,
+  SCQUAL_breed,
+  SCQUAL_cell_line,
+  SCQUAL_cell_type,
+  SCQUAL_chemovar,
+  SCQUAL_chromosome,
+  SCQUAL_citation,
+  SCQUAL_clone,
+  SCQUAL_clone_lib,
+  SCQUAL_common,
+  SCQUAL_common_name,
+  SCQUAL_country,
+  SCQUAL_cultivar,
+  SCQUAL_db_xref,
+  SCQUAL_dev_stage,
+  SCQUAL_dosage,
+  SCQUAL_ecotype,
+  SCQUAL_endogenous_virus_name,
+  SCQUAL_environmental_sample,
+  SCQUAL_extrachrom,
+  SCQUAL_focus,
+  SCQUAL_forma,
+  SCQUAL_forma_specialis,
+  SCQUAL_frequency,
+  SCQUAL_genotype,
+  SCQUAL_germline,
+  SCQUAL_group,
+  SCQUAL_haplotype,
+  SCQUAL_ins_seq_name,
+  SCQUAL_isolate,
+  SCQUAL_isolation_source,
+  SCQUAL_lab_host,
+  SCQUAL_label,
+  SCQUAL_macronuclear,
+  SCQUAL_map,
+  SCQUAL_note,
+  SCQUAL_old_lineage,
+  SCQUAL_old_name,
+  SCQUAL_organism,
+  SCQUAL_organelle,
+  SCQUAL_orgmod_note,
+  SCQUAL_pathovar,
+  SCQUAL_plasmid_name,
+  SCQUAL_plastid_name,
+  SCQUAL_pop_variant,
+  SCQUAL_rearranged,
+  SCQUAL_segment,
+  SCQUAL_seqfeat_note,
+  SCQUAL_sequenced_mol,
+  SCQUAL_serogroup,
+  SCQUAL_serotype,
+  SCQUAL_serovar,
+  SCQUAL_sex,
+  SCQUAL_spec_or_nat_host,
+  SCQUAL_specimen_voucher,
+  SCQUAL_strain,
+  SCQUAL_sub_clone,
+  SCQUAL_sub_group,
+  SCQUAL_sub_species,
+  SCQUAL_sub_strain,
+  SCQUAL_sub_type,
+  SCQUAL_subsource_note,
+  SCQUAL_synonym,
+  SCQUAL_teleomorph,
+  SCQUAL_tissue_lib,
+  SCQUAL_tissue_type,
+  SCQUAL_transgenic,
+  SCQUAL_transposon_name,
+  SCQUAL_type,
+  SCQUAL_unstructured,
+  SCQUAL_usedin,
+  SCQUAL_variety,
+  SCQUAL_zero_orgmod,
+  SCQUAL_one_orgmod,
+  SCQUAL_zero_subsrc,
+  ASN2GNBK_TOTAL_SOURCE
+}  SourceType;
+
+/* ordering arrays for qualifiers and note components */
+
+static Uint1 source_qual_order [] = {
+  SCQUAL_organism,
+
+  SCQUAL_organelle,
+
+  SCQUAL_strain,
+  SCQUAL_sub_strain,
+  SCQUAL_variety,
+  SCQUAL_serotype,
+  SCQUAL_serovar,
+  SCQUAL_cultivar,
+  SCQUAL_isolate,
+  SCQUAL_isolation_source,
+  SCQUAL_spec_or_nat_host,
+  SCQUAL_sub_species,
+  SCQUAL_specimen_voucher,
+
+  SCQUAL_db_xref,
+
+  SCQUAL_chromosome,
+  SCQUAL_map,
+  SCQUAL_clone,
+  SCQUAL_sub_clone,
+  SCQUAL_haplotype,
+  SCQUAL_sex,
+  SCQUAL_cell_line,
+  SCQUAL_cell_type,
+  SCQUAL_tissue_type,
+  SCQUAL_clone_lib,
+  SCQUAL_dev_stage,
+  SCQUAL_frequency,
+
+  SCQUAL_germline,
+  SCQUAL_rearranged,
+  SCQUAL_transgenic,
+  SCQUAL_environmental_sample,
+
+  SCQUAL_lab_host,
+  SCQUAL_pop_variant,
+  SCQUAL_tissue_lib,
+
+  SCQUAL_plasmid_name,
+  SCQUAL_transposon_name,
+  SCQUAL_ins_seq_name,
+
+  SCQUAL_country,
+
+  SCQUAL_focus,
+
+  SCQUAL_note,
+
+  SCQUAL_sequenced_mol,
+  SCQUAL_label,
+  SCQUAL_usedin,
+  SCQUAL_citation,
+  0
+};
+
+static Uint1 source_desc_note_order [] = {
+  SCQUAL_seqfeat_note,
+  SCQUAL_orgmod_note,
+  SCQUAL_subsource_note,
+
+  SCQUAL_type,
+  SCQUAL_sub_type,
+  SCQUAL_serogroup,
+  SCQUAL_pathovar,
+  SCQUAL_chemovar,
+  SCQUAL_biovar,
+  SCQUAL_biotype,
+  SCQUAL_group,
+  SCQUAL_sub_group,
+  SCQUAL_common,
+  SCQUAL_acronym,
+  SCQUAL_dosage,
+
+  SCQUAL_authority,
+  SCQUAL_forma,
+  SCQUAL_forma_specialis,
+  SCQUAL_ecotype,
+  SCQUAL_synonym,
+  SCQUAL_anamorph,
+  SCQUAL_teleomorph,
+  SCQUAL_breed,
+
+  SCQUAL_genotype,
+  SCQUAL_plastid_name,
+
+  SCQUAL_segment,
+  SCQUAL_endogenous_virus_name,
+
+  SCQUAL_common_name,
+
+  SCQUAL_zero_orgmod,
+  SCQUAL_one_orgmod,
+  SCQUAL_zero_subsrc,
+
+  /* SCQUAL_old_lineage, */
+
+  /* SCQUAL_old_name, */
+  0
+};
+
+static Uint1 source_feat_note_order [] = {
+  SCQUAL_unstructured,
+
+  SCQUAL_type,
+  SCQUAL_sub_type,
+  SCQUAL_serogroup,
+  SCQUAL_pathovar,
+  SCQUAL_chemovar,
+  SCQUAL_biovar,
+  SCQUAL_biotype,
+  SCQUAL_group,
+  SCQUAL_sub_group,
+  SCQUAL_common,
+  SCQUAL_acronym,
+  SCQUAL_dosage,
+
+  SCQUAL_authority,
+  SCQUAL_forma,
+  SCQUAL_forma_specialis,
+  SCQUAL_ecotype,
+  SCQUAL_synonym,
+  SCQUAL_anamorph,
+  SCQUAL_teleomorph,
+  SCQUAL_breed,
+
+  SCQUAL_genotype,
+  SCQUAL_plastid_name,
+
+  SCQUAL_segment,
+  SCQUAL_endogenous_virus_name,
+
+  SCQUAL_seqfeat_note,
+  SCQUAL_orgmod_note,
+  SCQUAL_subsource_note,
+
+  SCQUAL_common_name,
+
+  SCQUAL_zero_orgmod,
+  SCQUAL_one_orgmod,
+  SCQUAL_zero_subsrc,
+
+  /* SCQUAL_old_lineage, */
+
+  /* SCQUAL_old_name, */
+  0
+};
+
+typedef struct sourcequal {
+  CharPtr     name;
+  Uint1       qualclass;
+} SourceQual, PNTR SourceQualPtr;
+
+static SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
+  { "",                     Qual_class_ignore    },
+  { "acronym",              Qual_class_orgmod    },
+  { "anamorph",             Qual_class_orgmod    },
+  { "authority",            Qual_class_orgmod    },
+  { "biotype",              Qual_class_orgmod    },
+  { "biovar",               Qual_class_orgmod    },
+  { "breed",                Qual_class_orgmod    },
+  { "cell_line",            Qual_class_subsource },
+  { "cell_type",            Qual_class_subsource },
+  { "chemovar",             Qual_class_orgmod    },
+  { "chromosome",           Qual_class_subsource },
+  { "citation",             Qual_class_pubset    },
+  { "clone",                Qual_class_subsource },
+  { "clone_lib",            Qual_class_subsource },
+  { "common",               Qual_class_orgmod    },
+  { "common",               Qual_class_string    },
+  { "country",              Qual_class_subsource },
+  { "cultivar",             Qual_class_orgmod    },
+  { "db_xref",              Qual_class_db_xref   },
+  { "dev_stage",            Qual_class_subsource },
+  { "dosage",               Qual_class_orgmod    },
+  { "ecotype",              Qual_class_orgmod    },
+  { "endogenous_virus",     Qual_class_subsource },
+  { "environmental_sample", Qual_class_subsource },
+  { "extrachromosomal",     Qual_class_boolean   },
+  { "focus",                Qual_class_boolean   },
+  { "forma",                Qual_class_orgmod    },
+  { "forma_specialis",      Qual_class_orgmod    },
+  { "frequency",            Qual_class_subsource },
+  { "genotype",             Qual_class_subsource },
+  { "germline",             Qual_class_subsource },
+  { "group",                Qual_class_orgmod    },
+  { "haplotype",            Qual_class_subsource },
+  { "insertion_seq",        Qual_class_subsource },
+  { "isolate",              Qual_class_orgmod    },
+  { "isolation_source",     Qual_class_subsource },
+  { "lab_host",             Qual_class_subsource },
+  { "label",                Qual_class_label     },
+  { "macronuclear",         Qual_class_boolean   },
+  { "map",                  Qual_class_subsource },
+  { "note",                 Qual_class_note      },
+  { "old_lineage",          Qual_class_orgmod    },
+  { "old_name",             Qual_class_orgmod    },
+  { "organism",             Qual_class_string    },
+  { "organelle",            Qual_class_organelle },
+  { "orgmod_note",          Qual_class_orgmod    },
+  { "pathovar",             Qual_class_orgmod    },
+  { "plasmid",              Qual_class_subsource },
+  { "plastid",              Qual_class_subsource },
+  { "pop_variant",          Qual_class_subsource },
+  { "rearranged",           Qual_class_subsource },
+  { "segment",              Qual_class_subsource },
+  { "seqfeat_note",         Qual_class_string    },
+  { "sequenced_mol",        Qual_class_quote     },
+  { "serogroup",            Qual_class_orgmod    },
+  { "serotype",             Qual_class_orgmod    },
+  { "serovar",              Qual_class_orgmod    },
+  { "sex",                  Qual_class_subsource },
+  { "specific_host",        Qual_class_orgmod    },
+  { "specimen_voucher",     Qual_class_orgmod    },
+  { "strain",               Qual_class_orgmod    },
+  { "sub_clone",            Qual_class_subsource },
+  { "subgroup",             Qual_class_orgmod    },
+  { "sub_species",          Qual_class_orgmod    },
+  { "sub_strain",           Qual_class_orgmod    },
+  { "subtype",              Qual_class_orgmod    },
+  { "subsource_note",       Qual_class_subsource },
+  { "synonym",              Qual_class_orgmod    },
+  { "teleomorph",           Qual_class_orgmod    },
+  { "tissue_lib",           Qual_class_subsource },
+  { "tissue_type",          Qual_class_subsource },
+  { "transgenic",           Qual_class_subsource },
+  { "transposon",           Qual_class_subsource },
+  { "type",                 Qual_class_orgmod    },
+  { "unstructured",         Qual_class_valnode   },
+  { "usedin",               Qual_class_quote     },
+  { "variety",              Qual_class_orgmod    },
+  { "?",                    Qual_class_orgmod    },
+  { "?",                    Qual_class_orgmod    },
+  { "?",                    Qual_class_subsource },
+};
+
+static Int2 subSourceToSourceIdx [30] = {
+  SCQUAL_zero_subsrc,
+  SCQUAL_chromosome,
+  SCQUAL_map,
+  SCQUAL_clone,
+  SCQUAL_sub_clone,
+  SCQUAL_haplotype,
+  SCQUAL_genotype,
+  SCQUAL_sex,
+  SCQUAL_cell_line,
+  SCQUAL_cell_type,
+  SCQUAL_tissue_type,
+  SCQUAL_clone_lib,
+  SCQUAL_dev_stage,
+  SCQUAL_frequency,
+  SCQUAL_germline,
+  SCQUAL_rearranged,
+  SCQUAL_lab_host,
+  SCQUAL_pop_variant,
+  SCQUAL_tissue_lib,
+  SCQUAL_plasmid_name,
+  SCQUAL_transposon_name,
+  SCQUAL_ins_seq_name,
+  SCQUAL_plastid_name,
+  SCQUAL_country,
+  SCQUAL_segment,
+  SCQUAL_endogenous_virus_name,
+  SCQUAL_transgenic,
+  SCQUAL_environmental_sample,
+  SCQUAL_isolation_source,
+  SCQUAL_subsource_note
+};
+
+typedef enum {
+  FTQUAL_allele = 1,
+  FTQUAL_anticodon,
+  FTQUAL_bound_moiety,
+  FTQUAL_cds_product,
+  FTQUAL_citation,
+  FTQUAL_clone,
+  FTQUAL_coded_by,
+  FTQUAL_codon,
+  FTQUAL_codon_start,
+  FTQUAL_cons_splice,
+  FTQUAL_db_xref,
+  FTQUAL_direction,
+  FTQUAL_EC_number,
+  FTQUAL_evidence,
+  FTQUAL_exception,
+  FTQUAL_exception_note,
+  FTQUAL_figure,
+  FTQUAL_frequency,
+  FTQUAL_function,
+  FTQUAL_gene,
+  FTQUAL_gene_desc,
+  FTQUAL_gene_allele,
+  FTQUAL_gene_map,
+  FTQUAL_gene_syn,
+  FTQUAL_gene_note,
+  FTQUAL_gene_xref,
+  FTQUAL_heterogen,
+  FTQUAL_illegal_qual,
+  FTQUAL_insertion_seq,
+  FTQUAL_label,
+  FTQUAL_map,
+  FTQUAL_maploc,
+  FTQUAL_mod_base,
+  FTQUAL_modelev,
+  FTQUAL_note,
+  FTQUAL_number,
+  FTQUAL_organism,
+  FTQUAL_partial,
+  FTQUAL_PCR_conditions,
+  FTQUAL_phenotype,
+  FTQUAL_product,
+  FTQUAL_product_quals,
+  FTQUAL_prot_activity,
+  FTQUAL_prot_comment,
+  FTQUAL_prot_EC_number,
+  FTQUAL_prot_note,
+  FTQUAL_prot_method,
+  FTQUAL_prot_conflict,
+  FTQUAL_prot_desc,
+  FTQUAL_prot_missing,
+  FTQUAL_prot_name,
+  FTQUAL_prot_names,
+  FTQUAL_protein_id,
+  FTQUAL_pseudo,
+  FTQUAL_region,
+  FTQUAL_region_name,
+  FTQUAL_replace,
+  FTQUAL_rpt_family,
+  FTQUAL_rpt_type,
+  FTQUAL_rpt_unit,
+  FTQUAL_rrna_its,
+  FTQUAL_sec_str_type,
+  FTQUAL_selenocysteine,
+  FTQUAL_seqfeat_note,
+  FTQUAL_site,
+  FTQUAL_site_type,
+  FTQUAL_standard_name,
+  FTQUAL_transcript_id,
+  FTQUAL_transl_except,
+  FTQUAL_transl_table,
+  FTQUAL_translation,
+  FTQUAL_transposon,
+  FTQUAL_trna_aa,
+  FTQUAL_trna_codons,
+  FTQUAL_usedin,
+  FTQUAL_xtra_prod_quals,
+  ASN2GNBK_TOTAL_FEATUR
+}  FtQualType;
+
+/* ordering arrays for qualifiers and note components */
+
+static Uint1 feat_qual_order [] = {
+  FTQUAL_partial,
+  FTQUAL_gene,
+
+  FTQUAL_product,
+
+  FTQUAL_prot_EC_number,
+  FTQUAL_prot_activity,
+
+  FTQUAL_standard_name,
+  FTQUAL_coded_by,
+
+  FTQUAL_prot_name,
+  FTQUAL_region_name,
+  FTQUAL_site_type,
+  FTQUAL_sec_str_type,
+  FTQUAL_heterogen,
+
+  FTQUAL_note, FTQUAL_citation,
+
+  FTQUAL_number,
+
+  FTQUAL_pseudo,
+
+  FTQUAL_codon_start,
+
+  FTQUAL_anticodon,
+  FTQUAL_bound_moiety,
+  FTQUAL_clone,
+  FTQUAL_cons_splice,
+  FTQUAL_direction,
+  FTQUAL_function,
+  FTQUAL_evidence,
+  FTQUAL_exception,
+  FTQUAL_frequency,
+  FTQUAL_EC_number,
+  FTQUAL_gene_map,
+  FTQUAL_gene_allele,
+  FTQUAL_allele,
+  FTQUAL_map,
+  FTQUAL_mod_base,
+  FTQUAL_PCR_conditions,
+  FTQUAL_phenotype,
+  FTQUAL_rpt_family,
+  FTQUAL_rpt_type,
+  FTQUAL_rpt_unit,
+  FTQUAL_insertion_seq,
+  FTQUAL_transposon,
+  FTQUAL_usedin,
+
+  FTQUAL_illegal_qual,
+
+  FTQUAL_replace,
+
+  FTQUAL_transl_except,
+  FTQUAL_transl_table,
+  FTQUAL_codon,
+  FTQUAL_organism,
+  FTQUAL_label,
+  FTQUAL_cds_product,
+  FTQUAL_protein_id,
+  FTQUAL_transcript_id,
+  FTQUAL_db_xref, FTQUAL_gene_xref,
+  FTQUAL_translation,
+  0
+};
+
+/*
+prot_names after seqfeat_note - gi|4210642|emb|AJ005084.1|HBVAJ5084
+prot_conflict after prot_desc - gi|61183|emb|V01135.1|PIVM02
+figure after prot_desc - gi|400553|gb|S64006.1|
+seqfeat_note after prot_desc - gi|431713|gb|L20354.1|STVPATPOLB
+  but prot_desc after seqfeat_note - AF252556.1
+prot_names after figure - gi|234022|gb|S56149.1|S56149
+seqfeat_note after prot_conflict after figure - gi|234046|gb|S51392.1|S51392
+prot_method after prot_comment (descriptor) after prot_note after prot_desc
+region after seqfeat_note - gi|6554164|gb|AF043644.3|AF043644
+prot_desc after prot_names - gi|6581069|gb|AF202541.1|AF202541 - cannot do !!!
+gene_syn after gene_desc - gi|3386543|gb|AF079528.1|AF079528
+pseudo after note - gi|6598562|gb|AC006419.3|AC006419
+*/
+
+static Uint1 feat_note_order [] = {
+  FTQUAL_gene_desc,
+  FTQUAL_gene_syn,
+  FTQUAL_trna_codons,
+  FTQUAL_prot_desc,
+  FTQUAL_prot_note,
+  FTQUAL_prot_comment,
+  FTQUAL_prot_method,
+  FTQUAL_figure,
+  FTQUAL_maploc,
+  FTQUAL_prot_conflict,
+  FTQUAL_prot_missing,
+  FTQUAL_seqfeat_note,
+  FTQUAL_exception_note,
+  FTQUAL_region,
+  FTQUAL_selenocysteine,
+  FTQUAL_prot_names,
+  FTQUAL_site,
+  FTQUAL_rrna_its,
+  FTQUAL_xtra_prod_quals,
+  FTQUAL_modelev,
+  0
+};
+
+typedef struct featurqual {
+  CharPtr     name;
+  Uint1       qualclass;
+} FeaturQual, PNTR FeaturQualPtr;
+
+static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
+  { "",               Qual_class_ignore       },
+  { "allele",         Qual_class_quote        },
+  { "anticodon",      Qual_class_anti_codon   },
+  { "bound_moiety",   Qual_class_quote        },
+  { "product",        Qual_class_string       },
+  { "citation",       Qual_class_pubset       },
+  { "clone",          Qual_class_quote        },
+  { "coded_by",       Qual_class_seq_loc      },
+  { "codon",          Qual_class_codon        },
+  { "codon_start",    Qual_class_int          },
+  { "cons_splice",    Qual_class_consplice    },
+  { "db_xref",        Qual_class_db_xref      },
+  { "direction",      Qual_class_L_R_B        },
+  { "EC_number",      Qual_class_EC_quote     },
+  { "evidence",       Qual_class_evidence     },
+  { "exception",      Qual_class_string       },
+  { "exception_note", Qual_class_string       },
+  { "figure",         Qual_class_string       },
+  { "frequency",      Qual_class_quote        },
+  { "function",       Qual_class_quote        },
+  { "gene",           Qual_class_sgml         },
+  { "gene_desc",      Qual_class_string       },
+  { "allele",         Qual_class_string       },
+  { "map",            Qual_class_string       },
+  { "gene_syn",       Qual_class_valnode      },
+  { "gene_note",      Qual_class_string       },
+  { "db_xref",        Qual_class_db_xref      },
+  { "heterogen",      Qual_class_string       },
+  { "illegal",        Qual_class_illegal      },
+  { "insertion_seq",  Qual_class_quote        },
+  { "label",          Qual_class_label        },
+  { "map",            Qual_class_quote        },
+  { "maploc",         Qual_class_string       },
+  { "mod_base",       Qual_class_noquote      },
+  { "model_evidence", Qual_class_model_ev     },
+  { "note",           Qual_class_note         },
+  { "number",         Qual_class_number       },
+  { "organism",       Qual_class_quote        },
+  { "partial",        Qual_class_boolean      },
+  { "PCR_conditions", Qual_class_quote        },
+  { "phenotype",      Qual_class_quote        },
+  { "product",        Qual_class_product      },
+  { "product",        Qual_class_quote        },
+  { "function",       Qual_class_valnode      },
+  { "prot_comment",   Qual_class_string       },
+  { "EC_number",      Qual_class_EC_valnode   },
+  { "prot_note",      Qual_class_string       },
+  { "prot_method",    Qual_class_method       },
+  { "prot_conflict",  Qual_class_string       },
+  { "prot_desc",      Qual_class_string       },
+  { "prot_missing",   Qual_class_string       },
+  { "name",           Qual_class_string       },
+  { "prot_names",     Qual_class_protnames    },
+  { "protein_id",     Qual_class_seq_id       },
+  { "pseudo",         Qual_class_boolean      },
+  { "region",         Qual_class_region       },
+  { "region_name",    Qual_class_string       },
+  { "replace",        Qual_class_replace      },
+  { "rpt_family",     Qual_class_quote        },
+  { "rpt_type",       Qual_class_rpt          },
+  { "rpt_unit",       Qual_class_rpt_unit     },
+  { "rrna_its",       Qual_class_its          },
+  { "sec_str_type",   Qual_class_sec_str      },
+  { "selenocysteine", Qual_class_string       },
+  { "seqfeat_note",   Qual_class_string       },
+  { "site",           Qual_class_site         },
+  { "site_type",      Qual_class_site         },
+  { "standard_name",  Qual_class_quote        },
+  { "transcript_id",  Qual_class_seq_id       },
+  { "transl_except",  Qual_class_code_break   },
+  { "transl_table",   Qual_class_int          },
+  { "translation",    Qual_class_translation  },
+  { "transposon",     Qual_class_quote        },
+  { "trna_aa",        Qual_class_ignore       },
+  { "trna_codons",    Qual_class_trna_codons  },
+  { "usedin",         Qual_class_paren        },
+  { "xtra_products",  Qual_class_xtraprds     }
+};
+
+static Boolean AllowedValQual (Uint2 featureKey, FtQualType qualKey);
 
 
 /* ********************************************************************** */
@@ -320,9 +1065,7 @@ static void AddValNodeString (
 /*                           preceded and followed by white space.   */
 /*                                                                   */
 
-static Boolean s_isWholeWordSubstr (CharPtr searchStr,
-				    CharPtr foundStr,
-				    CharPtr subStr)
+static Boolean s_isWholeWordSubstr (CharPtr searchStr, CharPtr foundStr, CharPtr subStr)
 {
   Char previousChar;
   Char nextChar;
@@ -334,7 +1077,7 @@ static Boolean s_isWholeWordSubstr (CharPtr searchStr,
       previousChar = *(--foundStr);
       foundStr++;
       if (!isspace(previousChar))
-	return FALSE;
+        return FALSE;
     }
 
   /* Check for case where the substring is found */
@@ -372,9 +1115,7 @@ static Boolean s_isWholeWordSubstr (CharPtr searchStr,
 
 #define VALNODE_STRING 0
 
-static Int4 s_ValNodeListStrstr (ValNodePtr valNodeList,
-				 CharPtr    searchString,
-				 Boolean    wholeWord)
+static Int4 s_ValNodeListStrstr (ValNodePtr valNodeList, CharPtr searchString, Boolean wholeWord)
 {
   Boolean    found = FALSE;
   ValNodePtr vNode;
@@ -391,49 +1132,49 @@ static Int4 s_ValNodeListStrstr (ValNodePtr valNodeList,
     {
       nodeNum++;
       if (vNode->choice == VALNODE_STRING)
-	{
-	  vNodeStr = (CharPtr) vNode->data.ptrvalue;
+        {
+          vNodeStr = (CharPtr) vNode->data.ptrvalue;
 
-	  /* Is searchstring a substring of the node's string? */
+          /* Is searchstring a substring of the node's string? */
 
-	  if ((foundStr = StringStr(vNodeStr,searchString)) != NULL)
-	    {
-	      /* If whole word checking is turned */
-	      /* on make sure that the substring  */
-	      /* matches a whole word (or words). */
+          if ((foundStr = StringStr(vNodeStr,searchString)) != NULL)
+            {
+              /* If whole word checking is turned */
+              /* on make sure that the substring  */
+              /* matches a whole word (or words). */
 
-	      if ( (wholeWord == TRUE) &&
-		   (s_isWholeWordSubstr(vNodeStr, foundStr, searchString)
-		    == FALSE))
-		continue;
+              if ( (wholeWord == TRUE) &&
+                   (s_isWholeWordSubstr(vNodeStr, foundStr, searchString)
+                    == FALSE))
+                continue;
 
-	      /* Found a substring so break */
+              /* Found a substring so break */
 
-	      found = TRUE;
-	      break;
-	    }
+              found = TRUE;
+              break;
+            }
 
-	  /* Is node string a substring of the search string? */
+          /* Is node string a substring of the search string? */
 
-	  else if ((foundStr = StringStr(searchString, vNodeStr)) != NULL)
-	    {
+          else if ((foundStr = StringStr(searchString, vNodeStr)) != NULL)
+            {
 
-	      /* If whole word checking is turned */
-	      /* on make sure that the substring  */
-	      /* matches a whole word (or words). */
+              /* If whole word checking is turned */
+              /* on make sure that the substring  */
+              /* matches a whole word (or words). */
 
-	      if ( (wholeWord == TRUE) &&
-		   (s_isWholeWordSubstr(searchString, foundStr, vNodeStr)
-		    == FALSE))
-		continue;
+              if ( (wholeWord == TRUE) &&
+                   (s_isWholeWordSubstr(searchString, foundStr, vNodeStr)
+                    == FALSE))
+                continue;
 
-	      /* Found a substring -- save it's number and break */
+              /* Found a substring -- save it's number and break */
 
-	      found = TRUE;
-	      nodeNum = -nodeNum;
-	      break;
-	    }
-	}
+              found = TRUE;
+              nodeNum = -nodeNum;
+              break;
+            }
+        }
     }
 
   /* If we found a node, return it */
@@ -451,8 +1192,7 @@ static Int4 s_ValNodeListStrstr (ValNodePtr valNodeList,
 /*            adds the ability to delete the first node by passing in  */
 /*            a pointer to a pointer.                                  */
 
-static Nlm_Boolean s_ValNodeListDelete (ValNodePtr PNTR headPtr,
-					Nlm_Int2        item)
+static Nlm_Boolean s_ValNodeListDelete (ValNodePtr PNTR headPtr, Nlm_Int2 item)
 
 {
   ValNodePtr   prev;
@@ -472,11 +1212,11 @@ static Nlm_Boolean s_ValNodeListDelete (ValNodePtr PNTR headPtr,
     {
       prev = NodeListFind (*headPtr, (Nlm_Int2)(item - 1), FALSE);
       if (prev == NULL)
-	return FALSE;
-      
+        return FALSE;
+
       deleteNode = prev->next;
       if (deleteNode == NULL)
-	return FALSE;
+        return FALSE;
       prev->next = deleteNode->next;
     }
 
@@ -492,23 +1232,23 @@ static Nlm_Boolean s_ValNodeListDelete (ValNodePtr PNTR headPtr,
       /* prefix needs to be removed.       */
 
       if (*headPtr != NULL)
-	{
-	  vNodeStr = (CharPtr) (*headPtr)->data.ptrvalue;
-	  if (StringNCmp (vNodeStr, "; ", 2) == 0)
-	    {
-	      tempStr = (CharPtr) MemNew(StringLen(vNodeStr+2));
-	      StringCpy (tempStr, vNodeStr + 2);
-	      StringCpy (vNodeStr, tempStr);
-	      MemFree(tempStr);
-	    }
-	}
-    }      
+        {
+          vNodeStr = (CharPtr) (*headPtr)->data.ptrvalue;
+          if (StringNCmp (vNodeStr, "; ", 2) == 0)
+            {
+              tempStr = (CharPtr) MemNew(StringLen(vNodeStr+2));
+              StringCpy (tempStr, vNodeStr + 2);
+              StringCpy (vNodeStr, tempStr);
+              MemFree(tempStr);
+            }
+        }
+    }
 
   /* Physically delete the node */
 
   Nlm_MemFree (deleteNode->data.ptrvalue);
   Nlm_MemFree (deleteNode);
-  
+
   /* Return successfully */
 
   return TRUE;
@@ -518,10 +1258,13 @@ static Nlm_Boolean s_ValNodeListDelete (ValNodePtr PNTR headPtr,
 /*                                  but first checks to make sure     */
 /*                                  that it's not redundant.          */
 
-static void s_AddValNodeString_NoRedund (ValNodePtr PNTR head,
-					 CharPtr         prefix,
-					 CharPtr         string,
-					 CharPtr         suffix)
+static void s_AddValNodeString_NoRedund (
+  ValNodePtr PNTR head,
+  CharPtr prefix,
+  CharPtr string,
+  CharPtr suffix
+)
+
 {
   Int4 isRedund;
 
@@ -529,7 +1272,7 @@ static void s_AddValNodeString_NoRedund (ValNodePtr PNTR head,
     isRedund = s_ValNodeListStrstr(*head, string+5,TRUE);
   else
     isRedund = s_ValNodeListStrstr(*head, string, TRUE);
-    
+
   /* If the new string is a substring of an */
   /* already existing string, don't add it. */
 
@@ -549,20 +1292,20 @@ static void s_AddValNodeString_NoRedund (ValNodePtr PNTR head,
 
   /*
       if (*head == NULL)
-	AddValNodeString (head, NULL, string, suffix);
+        AddValNodeString (head, NULL, string, suffix);
       else
-	AddValNodeString (head, prefix, string, suffix);
-    }		      
+        AddValNodeString (head, prefix, string, suffix);
+    }
   */
 
   /* If no redundancies, just add the string */
 
-  else if (isRedund == 0) 
+  else if (isRedund == 0)
     AddValNodeString (head, prefix, string, suffix);
 
   /* bailing on isRedund < 0 was suppress sfp->comment in gi|7715975|gb|AF203972| */
 
-  else 
+  else
     AddValNodeString (head, prefix, string, suffix);
 
 }
@@ -651,12 +1394,11 @@ static void s_StringCleanup (CharPtr str)
     }
   }
   *q = '\0';
-  
+
 }
 
 static Int2 gb_StartPrint (
   FmtType format,
-  Boolean call_init_buff,
   Int2 gb_init_indent,
   Int2 gb_cont_indent,
   CharPtr gb_label,
@@ -669,10 +1411,6 @@ static Int2 gb_StartPrint (
 
 {
   Int2  result = 0;
-
-  if (call_init_buff) {
-    init_buff ();
-  }
 
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
 
@@ -714,10 +1452,10 @@ static void s_ReplaceTildesWithSpaces (CharPtr someString)
   while (*someString != '\0')
     {
       if ((*someString == '~') &&
-	  (!IS_DIGIT(*(someString+1))) &&
-	  (!((*(someString+1) == ' ') && IS_DIGIT(*(someString+2)))) &&
-	  (!((*(someString+1) == '(') && IS_DIGIT(*(someString+2)))))
-	*someString = ' ';
+          (!IS_DIGIT(*(someString+1))) &&
+          (!((*(someString+1) == ' ') && IS_DIGIT(*(someString+2)))) &&
+          (!((*(someString+1) == '(') && IS_DIGIT(*(someString+2)))))
+        *someString = ' ';
       someString++;
     }
 }
@@ -735,28 +1473,28 @@ static void s_ExpandTildes (CharPtr someString)
   CharPtr startOfString;
 
   startOfString = someString;
-  
+
   /* Loop through the string checking each character */
 
   while (*someString != '\0')
     {
       if (*someString == '~')
-	{
+        {
 
-	  /* Handle single tilde */
+          /* Handle single tilde */
 
-	  if (*(someString+1) != '~')
-	    *someString = '\n';
+          if (*(someString+1) != '~')
+            *someString = '\n';
 
-	  /* Handle double tilde */
+          /* Handle double tilde */
 
-	  else
-	    {
-	      someString++;
-	      *someString = '\0';
-	      StringCat(startOfString,someString+1);
-	    }
-	}
+          else
+            {
+              someString++;
+              *someString = '\0';
+              StringCat(startOfString,someString+1);
+            }
+        }
       someString++;
     }
 }
@@ -819,7 +1557,7 @@ static void gb_AddString (
   }
 
   /* convertQuotes retains double quotes in the prefix and suffix */
-  
+
   if (convertQuotes) {
     strptr = convertHere;
     ch = *strptr;
@@ -895,14 +1633,45 @@ static CharPtr gb_MergeString (
   return ff_MergeString ();
 }
 
+static CharPtr asn2gb_PrintDate (
+  DatePtr dp
+)
+
+{
+  Char    buf [30];
+  size_t  len;
+
+  if (dp == NULL) return NULL;
+
+  if (DatePrint (dp, buf)) {
+    if (StringICmp (buf, "Not given") != 0) {
+      len = StringLen (buf);
+      if (len > 0) {
+        if (buf [len - 1] == '\n') {
+          if (buf [len - 2] == '.') {
+            buf [len - 2] = '\0';
+          } else {
+            buf [len - 1] = '\0';
+          }
+        }
+      }
+      return StringSave (buf);
+    }
+  }
+
+  return NULL;
+}
+
 static CharPtr month_names [] = {
   "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+  "??"
 };
 
 static CharPtr DateToGB (
   CharPtr buf,
-  DatePtr dp
+  DatePtr dp,
+  Boolean citSub
 )
 
 {
@@ -925,18 +1694,30 @@ static CharPtr DateToGB (
     month = (Int2) dp->data [2];
     day = (Int2) dp->data [3];
 
-    if (month < 1) {
-      month = 1;
-    }
-    if (day < 1) {
-      day = 1;
+    if (citSub) {
+      if (month < 1 || month > 12) {
+        month = 13;
+      }
+      if (day < 1 || day > 31) {
+        day = 0;
+      }
+    } else {
+      if (month < 1 || month > 12) {
+        month = 1;
+      }
+      if (day < 1 || day > 31) {
+        day = 1;
+      }
     }
 
-    if (day < 10) {
+    if (day < 1) {
+      sprintf (buf, "??-%s-%ld",
+               month_names [month-1], (long) year);
+    } else if (day < 10) {
       sprintf (buf, "0%ld-%s-%ld",
                (long) day, month_names [month-1], (long) year);
     } else {
-      sprintf(buf, "%ld-%s-%ld", 
+      sprintf(buf, "%ld-%s-%ld",
                (long) day, month_names [month-1], (long) year);
     }
   }
@@ -961,6 +1742,58 @@ static CharPtr DefaultFormatBlock (
 
   return StringSaveNoNull (bbp->string);
 }
+
+/* superset of http://www.ncbi.nlm.nih.gov/collab/db_xref.html and RefSeq db_xrefs */
+
+static CharPtr legalDbXrefs [] = {
+  "PIDe", "PIDd", "PIDg", "PID",
+  "ATCC",
+  "ATCC(in host)",
+  "ATCC(dna)",
+  "BDGP_EST",
+  "BDGP_INS",
+  "CDD",
+  "CK",
+  "COG",
+  "dbEST",
+  "dbSNP",
+  "dbSTS",
+  "ENSEMBL",
+  "ESTLIB",
+  "FANTOM_DB",
+  "FLYBASE",
+  "GDB",
+  "GeneID",
+  "GI",
+  "GO",
+  "InterimID",
+  "LocusID",
+  "MaizeDB",
+  "MGD",
+  "MGI",
+  "MIM",
+  "niaEST",
+  "PIR",
+  "PSEUDO",
+  "RATMAP",
+  "RiceGenes",
+  "REMTREMBL",
+  "RGD",
+  "RZPD",
+  "SGD",
+  "SoyBase",
+  "SPTREMBL",
+  "SWISS-PROT",
+  "taxon",
+  "UniGene",
+  "UniSTS",
+  NULL
+};
+
+static CharPtr legalRefSeqDbXrefs [] = {
+  "WormBase",
+  NULL
+};
 
 static CharPtr organellePrefix [] = {
   NULL,
@@ -991,7 +1824,12 @@ static CharPtr FormatSourceBlock (
 )
 
 {
+  CharPtr            acr = NULL;
+  Boolean            addPeriod = TRUE;
+  IntAsn2gbJobPtr    ajp;
+  CharPtr            ana = NULL;
   BioSourcePtr       biop = NULL;
+  CharPtr            com = NULL;
   CharPtr            common = NULL;
   SeqMgrDescContext  dcontext;
   SeqMgrFeatContext  fcontext;
@@ -1000,15 +1838,22 @@ static CharPtr FormatSourceBlock (
   ValNodePtr         head = NULL;
   CharPtr            lineage = NULL;
   ValNodePtr         mod = NULL;
+  OrgModPtr          omp = NULL;
   OrgNamePtr         onp;
   CharPtr            organelle = NULL;
   OrgRefPtr          orp;
   SeqDescrPtr        sdp;
+  CharPtr            second = NULL;
   SeqFeatPtr         sfp;
   CharPtr            str;
+  CharPtr            syn = NULL;
   CharPtr            taxname = NULL;
+  CharPtr            tel = NULL;
+  ValNodePtr         vnp;
 
   if (afp == NULL || bbp == NULL) return NULL;
+  ajp = afp->ajp;
+  if (ajp == NULL) return NULL;
 
   if (! StringHasNoText (bbp->string)) return StringSave (bbp->string);
 
@@ -1030,6 +1875,7 @@ static CharPtr FormatSourceBlock (
   if (gbp != NULL) {
     common = gbp->source;
   }
+
   if (biop != NULL) {
     genome = biop->genome;
     if (genome <= 19) {
@@ -1043,6 +1889,53 @@ static CharPtr FormatSourceBlock (
       onp = orp->orgname;
       if (onp != NULL) {
         lineage = onp->lineage;
+        omp = onp->mod;
+
+        if (ajp->newSourceOrg) {
+          for (omp = onp->mod; omp != NULL; omp = omp->next) {
+            switch (omp->subtype) {
+              case ORGMOD_common :
+                com = omp->subname;
+                break;
+              case ORGMOD_acronym :
+                acr = omp->subname;
+                break;
+              case ORGMOD_synonym :
+                syn = omp->subname;
+                break;
+              case ORGMOD_anamorph :
+                ana = omp->subname;
+                break;
+              case ORGMOD_teleomorph :
+                tel = omp->subname;
+                break;
+              default :
+                break;
+            }
+          }
+        }
+      }
+      vnp = orp->syn;
+      if (vnp != NULL) {
+        second = (CharPtr) vnp->data.ptrvalue;
+      }
+      if (StringHasNoText (second)) {
+        second = ana;
+      }
+      if (StringHasNoText (second)) {
+        second = tel;
+      }
+      if (StringHasNoText (second)) {
+        second = common;
+      }
+      if (StringHasNoText (second)) {
+        second = syn;
+      }
+      if (StringHasNoText (second)) {
+        second = acr;
+      }
+      if (StringHasNoText (second)) {
+        second = com;
       }
     }
   }
@@ -1050,7 +1943,7 @@ static CharPtr FormatSourceBlock (
   /* If the organelle prefix is already on the */
   /* name, don't add it.                       */
 
-  if (StringNCmp(organelle, taxname, StringLen(organelle)) == 0)
+  if (StringNCmp (organelle, taxname, StringLen (organelle)) == 0)
     organelle = "";
 
   if (StringHasNoText (common)) {
@@ -1068,26 +1961,40 @@ static CharPtr FormatSourceBlock (
 
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
 
-    AddValNodeString (&head, NULL, common, NULL);
-    while (mod != NULL) {
-      str = (CharPtr) mod->data.ptrvalue;
-      if (! StringHasNoText (str)) {
-        AddValNodeString (&head, " ", str, NULL);
+    if (ajp->newSourceOrg) {
+
+      if (! StringHasNoText (organelle)) {
+        AddValNodeString (&head, NULL, common, " ");
       }
-      mod = mod->next;
+      AddValNodeString (&head, NULL, taxname, NULL);
+      if (! StringHasNoText (second)) {
+        AddValNodeString (&head, " (", second, ")");
+      }
+      addPeriod = FALSE;
+
+    } else {
+
+      AddValNodeString (&head, NULL, common, NULL);
+      while (mod != NULL) {
+        str = (CharPtr) mod->data.ptrvalue;
+        if (! StringHasNoText (str)) {
+          AddValNodeString (&head, " ", str, NULL);
+        }
+        mod = mod->next;
+      }
     }
 
     str = MergeValNodeStrings (head);
 
-    gb_StartPrint (afp->format, TRUE, 0, 12, "SOURCE", 13, 5, 5, "OS", TRUE);
-    gb_AddString (NULL, str, NULL, TRUE, FALSE, TILDE_TO_SPACES);
+    gb_StartPrint (afp->format, 0, 12, "SOURCE", 13, 5, 5, "OS", TRUE);
+    gb_AddString (NULL, str, NULL, addPeriod, FALSE, TILDE_TO_SPACES);
 
     ValNodeFreeData (head);
     MemFree (str);
 
   } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
 
-    gb_StartPrint (afp->format, TRUE, 0, 12, "SOURCE", 13, 5, 5, "OS", TRUE);
+    gb_StartPrint (afp->format, 0, 12, "SOURCE", 13, 5, 5, "OS", TRUE);
     gb_AddString (organelle, taxname, NULL, FALSE, FALSE, TILDE_TO_SPACES);
     gb_AddString (" (", common, ")", FALSE, FALSE, TILDE_TO_SPACES);
   }
@@ -1105,16 +2012,20 @@ static CharPtr FormatOrganismBlock (
 {
   BioSourcePtr       biop = NULL;
   CharPtr            common = NULL;
+  DbtagPtr           dbt;
   SeqMgrDescContext  dcontext;
   SeqMgrFeatContext  fcontext;
   Uint1              genome;
   CharPtr            lineage = NULL;
+  ObjectIdPtr        oip;
   OrgNamePtr         onp;
   CharPtr            organelle = NULL;
   OrgRefPtr          orp;
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp;
+  Int4               taxid = -1;
   CharPtr            taxname = NULL;
+  ValNodePtr         vnp;
 
   if (afp == NULL || bbp == NULL) return NULL;
 
@@ -1144,13 +2055,23 @@ static CharPtr FormatOrganismBlock (
       if (onp != NULL) {
         lineage = onp->lineage;
       }
+      for (vnp = orp->db; vnp != NULL; vnp = vnp->next) {
+        dbt = (DbtagPtr) vnp->data.ptrvalue;
+        if (dbt == NULL) continue;
+        if (StringCmp (dbt->db, "taxon") == 0) {
+          oip = dbt->tag;
+          if (oip != NULL) {
+            taxid = oip->id;
+          }
+        }
+      }
     }
   }
 
   /* If the organelle prefix is already on the */
   /* name, don't add it.                       */
 
-  if (StringNCmp(organelle, taxname, StringLen(organelle)) == 0)
+  if (StringNCmp (organelle, taxname, StringLen (organelle)) == 0)
     organelle = "";
 
   if (StringHasNoText (common)) {
@@ -1168,22 +2089,30 @@ static CharPtr FormatOrganismBlock (
 
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
 
-    gb_StartPrint (afp->format, FALSE, 2, 12, "ORGANISM", 13, 5, 5, "OC", FALSE);
+    gb_StartPrint (afp->format, 2, 12, "ORGANISM", 13, 5, 5, "OC", FALSE);
+    ff_AddString (organelle);
+    if (StringNICmp (taxname, "Unknown", 7) != 0) {
+      www_organism (taxname, taxid);
+    } else {
+      ff_AddString (taxname);
+    }
+    /*
     gb_AddString (organelle, taxname, NULL, FALSE, FALSE, TILDE_TO_SPACES);
+    */
     ff_EndPrint();
 
-    gb_StartPrint (afp->format, FALSE, 12, 12, NULL, 0, 5, 5, "OC", FALSE);
+    gb_StartPrint (afp->format, 12, 12, NULL, 0, 5, 5, "OC", FALSE);
     gb_AddString (NULL, lineage, NULL, TRUE, FALSE, TILDE_TO_SPACES);
     ff_EndPrint();
 
   } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
 
-    gb_StartPrint (afp->format, FALSE, 12, 12, NULL, 0, 5, 5, "OC", FALSE);
+    gb_StartPrint (afp->format, 12, 12, NULL, 0, 5, 5, "OC", FALSE);
     gb_AddString (NULL, lineage, NULL, TRUE, FALSE, TILDE_TO_SPACES);
     ff_EndPrint();
   }
 
-  return gb_MergeString (FALSE);
+  return ff_print_string_mem (gb_MergeString (FALSE));
 }
 
 /* format references section */
@@ -1261,6 +2190,7 @@ static CharPtr MakeSingleAuthorString (
 
 {
   Char     ch;
+  Char     dummy [10];
   size_t   len;
   CharPtr  ptr;
   CharPtr  str;
@@ -1272,7 +2202,6 @@ static CharPtr MakeSingleAuthorString (
 
   /* !!! temporary to suppress diff !!! */
   {
-  Char dummy [10];
   if (StringLen (name) <= 6 &&
       (StringNICmp (name, "et al", 5) == 0 || StringNICmp (name, "et,al", 5) == 0)) {
     if (StringCmp (prefix, " and ") == 0) {
@@ -1657,329 +2586,329 @@ static Int2 FixPages (
 )
 
 {
-	Boolean dash=TRUE, first_alpha;
-	Char firstbegin[MAX_PAGE_DIGITS];
-	Char secondbegin[MAX_PAGE_DIGITS];
-	Char firstend[MAX_PAGE_DIGITS];
-	Char secondend[MAX_PAGE_DIGITS];
-	Char temp[MAX_PAGE_DIGITS];
-	CharPtr alphabegin, numbegin, alphaend, numend, ptr, in=in_pages;
-	Int2 diff, index, retval=0;
-	Int2 length_nb, length_ab, length_ne, length_ae;
-	Int4 num1=0, num2=0;
+  Boolean dash=TRUE, first_alpha;
+  Char firstbegin[MAX_PAGE_DIGITS];
+  Char secondbegin[MAX_PAGE_DIGITS];
+  Char firstend[MAX_PAGE_DIGITS];
+  Char secondend[MAX_PAGE_DIGITS];
+  Char temp[MAX_PAGE_DIGITS];
+  CharPtr alphabegin, numbegin, alphaend, numend, ptr, in=in_pages;
+  Int2 diff, index, retval=0;
+  Int2 length_nb, length_ab, length_ne, length_ae;
+  Int4 num1=0, num2=0;
 
-	if (in_pages == NULL) return retval;
+  if (in_pages == NULL) return retval;
 
-	while (*in != '\0')
-	{			/* Check for digits in input*/
-		if (IS_DIGIT(*in))
-			break;
-		in++;
-	}
+  while (*in != '\0')
+  {      /* Check for digits in input*/
+    if (IS_DIGIT(*in))
+      break;
+    in++;
+  }
 
-	if (*in == '\0' || (in != in_pages && *(in-1) == ' '))
-	{		/* if all letters (i.e. roman numerals), put out. */
-		out_pages = StringCpy(out_pages, in_pages);
-		return retval;
-	}
+  if (*in == '\0' || (in != in_pages && *(in-1) == ' '))
+  {    /* if all letters (i.e. roman numerals), put out. */
+    out_pages = StringCpy(out_pages, in_pages);
+    return retval;
+  }
 
-	in = in_pages;
-	if (IS_DIGIT(*in))
-	{			/* Do digits come first? */
-		first_alpha = FALSE;
-		index=0;
-		while (IS_DIGIT(*in) || *in == ' ')
-		{
-			firstbegin[index] = *in;
-			if (*in != ' ')
-				index++;
-			in++;
-			if (*in == '-')
-				break;
+  in = in_pages;
+  if (IS_DIGIT(*in))
+  {      /* Do digits come first? */
+    first_alpha = FALSE;
+    index=0;
+    while (IS_DIGIT(*in) || *in == ' ')
+    {
+      firstbegin[index] = *in;
+      if (*in != ' ')
+        index++;
+      in++;
+      if (*in == '-')
+        break;
 
-		}
-		firstbegin[index] = '\0';
-		index=0;
-		if (*in != '-')
-		{		/* After digits look for letters. */
-			while (IS_ALPHA(*in)  || *in == ' ')
-			{
-				secondbegin[index] = *in;
-				index++;
-				in++;
-				if (*in == '-')
-					break;
-			}
-		}
-		secondbegin[index] = '\0';
-		if (*in == '-')		/* if dash is not present, note */
-			in++;
-		else
-			dash=FALSE;
-		index=0;
-		while (IS_DIGIT(*in) || *in == ' ')
-		{			/* Look for digits.	*/
-			firstend[index] = *in;
-			if (*in != ' ')
-				index++;
-			in++;
-		}
-		firstend[index] = '\0';
-		index=0;
-		if (*in != '\0')
-		{			/* Look for letters again. */
-			while (IS_ALPHA(*in)  || *in == ' ')
-			{
-				secondend[index] = *in;
-				index++;
-				in++;
-			}
-		}
-		secondend[index] = '\0';
-	}
-	else
-	{			/* Do letters come first? */
-		first_alpha = TRUE;
-		index=0;
-		while (IS_ALPHA(*in) || *in == ' ')
-		{
-			firstbegin[index] = *in;
-			index++;
-			in++;
-			if (*in == '-')
-				break;
-		}
-		firstbegin[index] = '\0';
-		index=0;
-		if (*in != '-')
-		{		/* After letters look for digits. 	*/
-			while (IS_DIGIT(*in)  || *in == ' ')
-			{
-				secondbegin[index] = *in;
-				if (*in != ' ')
-					index++;
-				in++;
-				if (*in == '-')
-					break;
-			}
-		}
-		secondbegin[index] = '\0';
-		if (*in == '-')		/* Note if dash is missing. */
-			in++;
-		else
-			dash=FALSE;
-		index=0;
-		while (IS_ALPHA(*in) || *in == ' ')
-		{		/* Look for letters again. */
-			firstend[index] = *in;
-			index++;
-			in++;
-		}
-		firstend[index] = '\0';
-		index=0;
-		if (*in != '\0')
-		{		/* Any digits here? */
-			while (IS_DIGIT(*in)  || *in == ' ')
-			{
-				secondend[index] = *in;
-				if (*in != ' ')
-					index++;
-				in++;
-			}
-		}
-		secondend[index] = '\0';
-	}
+    }
+    firstbegin[index] = '\0';
+    index=0;
+    if (*in != '-')
+    {    /* After digits look for letters. */
+      while (IS_ALPHA(*in)  || *in == ' ')
+      {
+        secondbegin[index] = *in;
+        index++;
+        in++;
+        if (*in == '-')
+          break;
+      }
+    }
+    secondbegin[index] = '\0';
+    if (*in == '-')    /* if dash is not present, note */
+      in++;
+    else
+      dash=FALSE;
+    index=0;
+    while (IS_DIGIT(*in) || *in == ' ')
+    {      /* Look for digits.  */
+      firstend[index] = *in;
+      if (*in != ' ')
+        index++;
+      in++;
+    }
+    firstend[index] = '\0';
+    index=0;
+    if (*in != '\0')
+    {      /* Look for letters again. */
+      while (IS_ALPHA(*in)  || *in == ' ')
+      {
+        secondend[index] = *in;
+        index++;
+        in++;
+      }
+    }
+    secondend[index] = '\0';
+  }
+  else
+  {      /* Do letters come first? */
+    first_alpha = TRUE;
+    index=0;
+    while (IS_ALPHA(*in) || *in == ' ')
+    {
+      firstbegin[index] = *in;
+      index++;
+      in++;
+      if (*in == '-')
+        break;
+    }
+    firstbegin[index] = '\0';
+    index=0;
+    if (*in != '-')
+    {    /* After letters look for digits.   */
+      while (IS_DIGIT(*in)  || *in == ' ')
+      {
+        secondbegin[index] = *in;
+        if (*in != ' ')
+          index++;
+        in++;
+        if (*in == '-')
+          break;
+      }
+    }
+    secondbegin[index] = '\0';
+    if (*in == '-')    /* Note if dash is missing. */
+      in++;
+    else
+      dash=FALSE;
+    index=0;
+    while (IS_ALPHA(*in) || *in == ' ')
+    {    /* Look for letters again. */
+      firstend[index] = *in;
+      index++;
+      in++;
+    }
+    firstend[index] = '\0';
+    index=0;
+    if (*in != '\0')
+    {    /* Any digits here? */
+      while (IS_DIGIT(*in)  || *in == ' ')
+      {
+        secondend[index] = *in;
+        if (*in != ' ')
+          index++;
+        in++;
+      }
+    }
+    secondend[index] = '\0';
+  }
 
-	if (first_alpha)
-	{
-		alphabegin = firstbegin;
-		numbegin = secondbegin;
-		alphaend = firstend;
-		numend = secondend;
-	}
-	else
-	{
-		numbegin = firstbegin;
-		alphabegin = secondbegin;
-		numend = firstend;
-		alphaend = secondend;
-	}
+  if (first_alpha)
+  {
+    alphabegin = firstbegin;
+    numbegin = secondbegin;
+    alphaend = firstend;
+    numend = secondend;
+  }
+  else
+  {
+    numbegin = firstbegin;
+    alphabegin = secondbegin;
+    numend = firstend;
+    alphaend = secondend;
+  }
 
-	length_nb = StringLen(numbegin);
-	length_ab = StringLen(alphabegin);
-	length_ne = StringLen(numend);
-	length_ae = StringLen(alphaend);
+  length_nb = StringLen(numbegin);
+  length_ab = StringLen(alphabegin);
+  length_ne = StringLen(numend);
+  length_ae = StringLen(alphaend);
 
-	/* If no dash, but second letters or numbers present, reject. */
-	if (dash == FALSE)
-	{
-		if (length_ne != 0 || length_ae != 0)
-			retval = -1;
-	}
-	/* Check for situations like "AAA-123" or "222-ABC". */
-	if (dash == TRUE)
-	{
-		if (length_ne == 0 && length_ab == 0)
-			retval = -1;
-		else if (length_ae == 0 && length_nb == 0)
-			retval = -1;
-	}
+  /* If no dash, but second letters or numbers present, reject. */
+  if (dash == FALSE)
+  {
+    if (length_ne != 0 || length_ae != 0)
+      retval = -1;
+  }
+  /* Check for situations like "AAA-123" or "222-ABC". */
+  if (dash == TRUE)
+  {
+    if (length_ne == 0 && length_ab == 0)
+      retval = -1;
+    else if (length_ae == 0 && length_nb == 0)
+      retval = -1;
+  }
 
-	/* The following expands "F502-512" into "F502-F512" and
-	checks, for entries like "12a-12c" that a > c.  "12aa-12ab",
-	"125G-137A", "125-G137" would be rejected. */
-	if (retval == 0)
-	{
-		if (length_ab > 0)
-		{
-			if (length_ae > 0) 	
-			{ 
-				if (StringCmp(alphabegin, alphaend) != 0)
-				{
-					if (length_ab != 1 || length_ae != 1)
-						retval = -1;
-					else if (*alphabegin > *alphaend)
-						retval = -1;
-				}
-			}
-			else
-			{
-				alphaend = alphabegin;
-				length_ae = length_ab;
-			}
-		} 
-		else if (length_ae > 0) 
-			retval = -1;
-	}
+  /* The following expands "F502-512" into "F502-F512" and
+  checks, for entries like "12a-12c" that a > c.  "12aa-12ab",
+  "125G-137A", "125-G137" would be rejected. */
+  if (retval == 0)
+  {
+    if (length_ab > 0)
+    {
+      if (length_ae > 0)
+      {
+        if (StringCmp(alphabegin, alphaend) != 0)
+        {
+          if (length_ab != 1 || length_ae != 1)
+            retval = -1;
+          else if (*alphabegin > *alphaend)
+            retval = -1;
+        }
+      }
+      else
+      {
+        alphaend = alphabegin;
+        length_ae = length_ab;
+      }
+    }
+    else if (length_ae > 0)
+      retval = -1;
+  }
 
-/* The following expands "125-37" into "125-137".	*/
-	if (retval == 0)
-	{
-		if (length_nb > 0)
-		{
-			if (length_ne > 0)
-			{
-				diff = length_nb - length_ne;
-				if (diff > 0)
-				{
-					index=0;
-					while (numend[index] != '\0')
-					{
-						temp[index+diff] = numend[index];
-						index++;
-					}
-					temp[index+diff] = numend[index];
-					for (index=0; index<diff; index++)
-						temp[index] = numbegin[index];
-					index=0;
-					while (temp[index] != '\0')
-					{
-						numend[index] = temp[index];
-						index++;
-					}
-					numend[index] = temp[index];
-				}
-			}
-			else
-			{
-				numend = numbegin;
-				length_ne = length_nb;
-			}
-		
-		}
-		else if (length_ne > 0)
-			retval = -1;
-	/* Check that the first number is <= the second (expanded) number. */
-		if (retval == 0)
-		{
-	/*		sscanf(numbegin, "%ld", &num_type);
-			num1 = (Int4) num_type;
-			sscanf(	numend, "%ld", &num_type);
-			num2 = (Int4) num_type;
-	*/
-			num1 = (Int4) atol(numbegin);
-			num2 = (Int4) atol(numend);
-			if (num2 < num1)
-				retval = -1;
-		}
-	}
+/* The following expands "125-37" into "125-137".  */
+  if (retval == 0)
+  {
+    if (length_nb > 0)
+    {
+      if (length_ne > 0)
+      {
+        diff = length_nb - length_ne;
+        if (diff > 0)
+        {
+          index=0;
+          while (numend[index] != '\0')
+          {
+            temp[index+diff] = numend[index];
+            index++;
+          }
+          temp[index+diff] = numend[index];
+          for (index=0; index<diff; index++)
+            temp[index] = numbegin[index];
+          index=0;
+          while (temp[index] != '\0')
+          {
+            numend[index] = temp[index];
+            index++;
+          }
+          numend[index] = temp[index];
+        }
+      }
+      else
+      {
+        numend = numbegin;
+        length_ne = length_nb;
+      }
 
-	if (retval == -1)
-	{
-		out_pages = StringCpy(out_pages, in_pages);
-	}
-	else
-	{
-		ptr = out_pages;
-	/* Place expanded and validated page numbers into "out_pages". */
-		if (first_alpha)
-		{
-			while (*alphabegin != '\0')
-			{
-				*ptr = *alphabegin;
-				alphabegin++;
-				ptr++;
-			}
-			while (*numbegin != '\0')
-			{
-				*ptr = *numbegin;
-				numbegin++;
-				ptr++;
-			}
-			if (dash == TRUE)
-			{
-				*ptr = '-';
-				ptr++;
-				while (*alphaend != '\0')
-				{
-					*ptr = *alphaend;
-					alphaend++;
-					ptr++;
-				}
-				while (*numend != '\0')
-				{
-					*ptr = *numend;
-					numend++;
-					ptr++;
-				}
-			}
-			*ptr = '\0';
-		}
-		else 
-		{
-			while (*numbegin != '\0')
-			{
-				*ptr = *numbegin;
-				numbegin++;
-				ptr++;
-			}
-			while (*alphabegin != '\0')
-			{
-				*ptr = *alphabegin;
-				alphabegin++;
-				ptr++;
-			}
-			if (dash == TRUE)
-			{
-				*ptr = '-';
-				ptr++;
-				while (*numend != '\0')
-				{
-					*ptr = *numend;
-					numend++;
-					ptr++;
-				}
-				while (*alphaend != '\0')
-				{
-					*ptr = *alphaend;
-					alphaend++;
-					ptr++;
-				}
-			}
-			*ptr = '\0';
-		}
-	}
-	return retval;
+    }
+    else if (length_ne > 0)
+      retval = -1;
+  /* Check that the first number is <= the second (expanded) number. */
+    if (retval == 0)
+    {
+  /*    sscanf(numbegin, "%ld", &num_type);
+      num1 = (Int4) num_type;
+      sscanf(  numend, "%ld", &num_type);
+      num2 = (Int4) num_type;
+  */
+      num1 = (Int4) atol(numbegin);
+      num2 = (Int4) atol(numend);
+      if (num2 < num1)
+        retval = -1;
+    }
+  }
+
+  if (retval == -1)
+  {
+    out_pages = StringCpy(out_pages, in_pages);
+  }
+  else
+  {
+    ptr = out_pages;
+  /* Place expanded and validated page numbers into "out_pages". */
+    if (first_alpha)
+    {
+      while (*alphabegin != '\0')
+      {
+        *ptr = *alphabegin;
+        alphabegin++;
+        ptr++;
+      }
+      while (*numbegin != '\0')
+      {
+        *ptr = *numbegin;
+        numbegin++;
+        ptr++;
+      }
+      if (dash == TRUE)
+      {
+        *ptr = '-';
+        ptr++;
+        while (*alphaend != '\0')
+        {
+          *ptr = *alphaend;
+          alphaend++;
+          ptr++;
+        }
+        while (*numend != '\0')
+        {
+          *ptr = *numend;
+          numend++;
+          ptr++;
+        }
+      }
+      *ptr = '\0';
+    }
+    else
+    {
+      while (*numbegin != '\0')
+      {
+        *ptr = *numbegin;
+        numbegin++;
+        ptr++;
+      }
+      while (*alphabegin != '\0')
+      {
+        *ptr = *alphabegin;
+        alphabegin++;
+        ptr++;
+      }
+      if (dash == TRUE)
+      {
+        *ptr = '-';
+        ptr++;
+        while (*numend != '\0')
+        {
+          *ptr = *numend;
+          numend++;
+          ptr++;
+        }
+        while (*alphaend != '\0')
+        {
+          *ptr = *alphaend;
+          alphaend++;
+          ptr++;
+        }
+      }
+      *ptr = '\0';
+    }
+  }
+  return retval;
 }
 
 /* !!! still need to add StripParanthesis equivalent !!! */
@@ -1992,45 +2921,46 @@ static void DoSup (
 )
 
 {
-	size_t   len;
-	CharPtr  str;
-	CharPtr  temp;
+  size_t   len;
+  CharPtr  str;
+  CharPtr  temp;
 
-	len = StringLen (issue) + StringLen (part_sup) + StringLen (part_supi) + 25;
-	str = MemNew (sizeof (Char) * len);
-	if (str == NULL) return;
-	temp = str;
+  len = StringLen (issue) + StringLen (part_sup) + StringLen (part_supi) + 25;
+  str = MemNew (sizeof (Char) * len);
+  if (str == NULL) return;
+  temp = str;
 
-	if (! StringHasNoText (part_sup)) {
-		*temp = ' ';
-		temp++;
-		temp = StringMove (temp, part_sup);
-	}
-	if (StringHasNoText (issue) && StringHasNoText (part_supi)) {
-		ValNodeCopyStr (head, 0, str);
-		MemFree (str);
-		return;
-	}
-	*temp = ' ';
-	temp++;
-	*temp = '(';
-	temp++;
-	if (! StringHasNoText (issue)) {
-		temp = StringMove (temp, issue);
-	}
-	if (! StringHasNoText (part_supi)) {
-		*temp = ' ';
-		temp++;
-		temp = StringMove (temp, part_supi);
-	}
-	*temp = ')';
-	temp++;
-	ValNodeCopyStr (head, 0, str);
-	MemFree (str);
+  if (! StringHasNoText (part_sup)) {
+    *temp = ' ';
+    temp++;
+    temp = StringMove (temp, part_sup);
+  }
+  if (StringHasNoText (issue) && StringHasNoText (part_supi)) {
+    ValNodeCopyStr (head, 0, str);
+    MemFree (str);
+    return;
+  }
+  *temp = ' ';
+  temp++;
+  *temp = '(';
+  temp++;
+  if (! StringHasNoText (issue)) {
+    temp = StringMove (temp, issue);
+  }
+  if (! StringHasNoText (part_supi)) {
+    *temp = ' ';
+    temp++;
+    temp = StringMove (temp, part_supi);
+  }
+  *temp = ')';
+  temp++;
+  ValNodeCopyStr (head, 0, str);
+  MemFree (str);
 }
 
 static CharPtr FormatCitJour (
   FmtType format,
+  Boolean citArtIsoJta,
   CitJourPtr cjp
 )
 
@@ -2053,6 +2983,19 @@ static CharPtr FormatCitJour (
 
   ttl = cjp->title;
   if (ttl == NULL) return NULL;
+
+  /* always use iso_jta title if present */
+
+  while (ttl != NULL && ttl->choice != Cit_title_iso_jta) {
+    ttl = ttl->next;
+  }
+
+  /* release mode requires iso_jta title */
+
+  if (ttl == NULL) {
+    if (citArtIsoJta) return NULL;
+    ttl = cjp->title;
+  }
 
   imp = cjp->imp;
   if (imp == NULL) return NULL;
@@ -2169,93 +3112,155 @@ static CharPtr MakeAffilStr (
   return rsult;
 }
 
-/*
-NLM_EXTERN CharPtr format_book (Uint1 format, ValNodePtr the_pub, Boolean make_index)
+static CharPtr GetAffil (
+  AffilPtr afp
+)
 
 {
-	AffilPtr afp;
-	char year[5];
-	CharPtr book_tit=NULL;
-	CitBookPtr cb;
-	CharPtr retval = NULL, temp;
-	DatePtr dp;
-	ImprintPtr ip;
-	int aflen=0;
-	Boolean embl_format = FALSE;
-	CharPtr p;
-	Boolean first_std=TRUE;
-	
-	if (format == EMBL_FMT || format == PSEUDOEMBL_FMT ||
-					format == EMBLPEPT_FMT) {
-		embl_format = TRUE;
-	}
-	year[0] = '\0';
-	if (the_pub == NULL)
-		return NULL;
-	cb = (CitBookPtr) the_pub -> data.ptrvalue;
-	if (cb == NULL)
-		return NULL;
-	if ( cb -> othertype != 0){
-		return NULL;
-	}
-	ip = cb -> imp;
-	dp = ip -> date;
-	if ( dp -> data[0] == 1) {
-		sprintf(year,"%ld",(long) ( 1900+dp -> data[1]));
-	} else {
-		StringNCpy( (CharPtr) year, (CharPtr) dp -> str, (size_t) 4);
-		year[4] = '\0';
-	}
-	if (cb->title)
-		book_tit = StringSave(cb -> title -> data.ptrvalue);
-	if ( ip -> pub){
-		afp = ip -> pub;
-		aflen = StringLen(afp -> affil)+ 5;
-		if ( afp -> choice == 2){
-			aflen += 3 + StringLen(afp -> div);
-			aflen += 3 + StringLen(afp -> street);
-			aflen += 3 + StringLen(afp -> city);
-			aflen += 3 + StringLen(afp -> sub);
-			aflen += 3 + StringLen(afp -> country);
-		}
-	} else{
-		aflen = 22;
-	}
-	if (ip->prepub == 2) 
-		aflen += 10;
+  Boolean need_comma=FALSE;
+  CharPtr string=NULL, temp, ptr;
+  Char ch;
+  Int2 aflen=15;
 
-	temp = retval = MemNew( (size_t) (30+StringLen( book_tit)+StringLen( year) + aflen) );
-		
-	for ( p = book_tit; *p; p++){
-		*p = TO_UPPER(*p);
-	}
-	temp = StringMove(temp, "Book: ");
-	temp = StringMove(temp, book_tit);
-			temp = StringMove(temp, ".");
-	if ( ip -> pub){
-		afp = ip -> pub;
-		*temp = ' ';
-		temp++;
-		temp = makeaffil(afp, temp, &first_std);
-	}
-	if (year[0] != '\0') {
-		if (! first_std)
-			temp = StringMove(temp," (");
-		else
-			temp = StringMove(temp, "(");
-		temp = StringMove(temp, year);
-		temp = StringMove(temp, ")");
-	}
-	if (ip->prepub == 2) {
-		temp = StringMove(temp, ", In press");
-	}
-	if (book_tit)
-		MemFree(book_tit);
+  if (afp == NULL) return NULL;
+  if (afp) {
+    if (afp -> choice == 1){
+      if (afp -> affil){
+        aflen += StringLen(afp -> affil);
+      }
+    }else if (afp -> choice == 2){
+      aflen += StringLen (afp -> affil) +
+      StringLen (afp -> div) +
+      StringLen (afp -> city) +
+      StringLen (afp -> sub) +
+      StringLen (afp -> street) +
+      StringLen (afp -> country) + StringLen(afp->postal_code);
+    }
 
-	return retval;
+    temp = string = MemNew(aflen);
 
-}	
-*/
+    if ( afp -> choice == 1){
+       if (afp -> affil){
+        ptr = afp->affil;
+        while ((*temp = *ptr) != '\0')
+        {
+          temp++; ptr++;
+        }
+       }
+    }else if (afp -> choice == 2){
+
+      if( afp -> div) {
+        if (need_comma)
+        {
+          *temp = ','; temp++;
+          *temp = ' '; temp++;
+        }
+        ptr = afp->div;
+        while ((*temp = *ptr) != '\0')
+        {
+          temp++; ptr++;
+        }
+        need_comma = TRUE;
+      }
+
+      if(afp -> affil) {
+        if (need_comma)
+        {
+          *temp = ','; temp++;
+          *temp = ' '; temp++;
+        }
+        ptr = afp->affil;
+        while ((*temp = *ptr) != '\0')
+        {
+          temp++; ptr++;
+        }
+        need_comma = TRUE;
+      }
+
+      if(afp -> street) {
+        if (need_comma)
+        {
+          *temp = ','; temp++;
+          *temp = ' '; temp++;
+        }
+        ptr = afp->street;
+        while ((*temp = *ptr) != '\0')
+        {
+          temp++; ptr++;
+        }
+        need_comma = TRUE;
+      }
+
+      if( afp -> city) {
+        if (need_comma)
+        {
+          *temp = ','; temp++;
+          *temp = ' '; temp++;
+        }
+        ptr = afp->city;
+        while ((*temp = *ptr) != '\0')
+        {
+          temp++; ptr++;
+        }
+        need_comma = TRUE;
+      }
+
+      if( afp -> sub) {
+        if (need_comma)
+        {
+          *temp = ','; temp++;
+          *temp = ' '; temp++;
+        }
+        ptr = afp->sub;
+        while ((*temp = *ptr) != '\0')
+        {
+          temp++; ptr++;
+        }
+        need_comma = TRUE;
+      }
+
+      if( afp -> postal_code){
+        *temp = ' ';
+        temp++;
+        ptr = afp->postal_code;
+        while ((*temp = *ptr) != '\0')
+        {
+          temp++; ptr++;
+        }
+      }
+
+      if( afp -> country){
+        if (need_comma)
+        {
+          *temp = ','; temp++;
+          *temp = ' '; temp++;
+        }
+        ptr = afp->country;
+        while ((*temp = *ptr) != '\0')
+        {
+          temp++; ptr++;
+        }
+        need_comma = TRUE;
+      }
+    }
+    temp++;
+    *temp = '\0';
+  }
+
+    /* convert double quotes to single quotes */
+
+    ptr = string;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == '\"') {
+        *ptr = '\'';
+      }
+      ptr++;
+      ch = *ptr;
+    }
+
+  return string;
+}
 
 static CharPtr FormatCitBookArt (
   FmtType format,
@@ -2376,7 +3381,7 @@ static CharPtr FormatCitBookArt (
     str = MakeAffilStr (afp);
     if (str != NULL) {
       ValNodeCopyStr (&head, 0, str);
-    ValNodeCopyStr (&head, 0, " ");
+      ValNodeCopyStr (&head, 0, " ");
       MemFree (str);
     }
   }
@@ -2427,7 +3432,7 @@ static CharPtr FormatCitBook (
   dp = ip -> date;
   year[0] = '\0';
 
-  if ( dp -> data[0] == 1) 
+  if ( dp -> data[0] == 1)
     sprintf(year,"%ld",(long) ( 1900+dp -> data[1]));
   else
     {
@@ -2455,14 +3460,14 @@ static CharPtr FormatCitBook (
   } else{
     aflen = 22;
   }
-  if (ip->prepub == 2) 
+  if (ip->prepub == 2)
     aflen += 10;
 
   /* Create a Char String big enough to hold */
   /* the title, year, and affiliation.       */
-  
+
   temp = retval = MemNew( (size_t) (30+StringLen( bookTitle)+StringLen( year) + aflen) );
-  
+
   /* Convert the title to upper case and */
   /* add it to the string.               */
 
@@ -2489,9 +3494,9 @@ static CharPtr FormatCitBook (
   if (year[0] != '\0')
     {
       if (affilStr != NULL)
-	temp = StringMove(temp," (");
+        temp = StringMove(temp," (");
       else
-	temp = StringMove(temp, "(");
+        temp = StringMove(temp, "(");
       temp = StringMove(temp, year);
       temp = StringMove(temp, ")");
     }
@@ -2505,9 +3510,9 @@ static CharPtr FormatCitBook (
 
   if (bookTitle)
     MemFree(bookTitle);
-  
+
   return retval;
-  
+
 }
 
 static CharPtr FormatThesis (
@@ -2589,6 +3594,7 @@ static CharPtr FormatThesis (
 
 static CharPtr FormatCitArt (
   FmtType format,
+  Boolean citArtIsoJta,
   CitArtPtr cap
 )
 
@@ -2603,7 +3609,7 @@ static CharPtr FormatCitArt (
     case 1 :
       cjp = (CitJourPtr) cap->fromptr;
       if (cjp != NULL) {
-        rsult = FormatCitJour (format, cjp);
+        rsult = FormatCitJour (format, citArtIsoJta, cjp);
       }
       break;
     case 2 :
@@ -2688,14 +3694,14 @@ static CharPtr FormatCitPat (
   } else {
     ValNodeCopyStr (&head, 0, " ");
   }
-  
+
   /* Date */
 
   date [0] = '\0';
   if (cpp->date_issue != NULL) {
-    DateToGB (date, cpp->date_issue);
+    DateToGB (date, cpp->date_issue, FALSE);
   } else if (cpp->app_date != NULL) {
-    DateToGB (date, cpp->app_date);
+    DateToGB (date, cpp->app_date, FALSE);
   }
   if (! StringHasNoText (date)) {
     ValNodeCopyStr (&head, 0, date);
@@ -2720,13 +3726,13 @@ static CharPtr FormatCitPat (
       /* non-blank, put them on a new line.   */
 
       if ((! StringHasNoText (afp->affil)) ||
-	  (! StringHasNoText (afp->street)) ||
-	  (! StringHasNoText (afp->div)) ||
-	  (! StringHasNoText (afp->city)) ||
-	  (! StringHasNoText (afp->sub)) ||
-	  (! StringHasNoText (afp->country)))
-	ValNodeCopyStr (&head, 0, "\n");
-	
+          (! StringHasNoText (afp->street)) ||
+          (! StringHasNoText (afp->div)) ||
+          (! StringHasNoText (afp->city)) ||
+          (! StringHasNoText (afp->sub)) ||
+          (! StringHasNoText (afp->country)))
+        ValNodeCopyStr (&head, 0, "\n");
+
       /* Write out the affiliation fields */
 
       if (! StringHasNoText (afp->affil)) {
@@ -2766,26 +3772,47 @@ static CharPtr FormatCitPat (
 
 static CharPtr FormatCitGen (
   FmtType format,
-  ModType mode,
+  Boolean dropBadCitGens,
+  Boolean noAffilOnUnpub,
   CitGenPtr cgp
 )
 
 {
-  Char        ch;
-  DatePtr     dp;
-  ValNodePtr  head = NULL;
-  CharPtr     inpress = NULL;
-  CharPtr     journal = NULL;
-  Char        pages [128];
-  CharPtr     prefix = NULL;
-  CharPtr     ptr;
-  CharPtr     rsult = NULL;
-  Char        year [8];
+  CharPtr      affil = NULL;
+  AuthListPtr  alp = NULL;
+  Char         ch;
+  DatePtr      dp;
+  ValNodePtr   head = NULL;
+  CharPtr      inpress = NULL;
+  CharPtr      journal = NULL;
+  Char         pages [128];
+  CharPtr      prefix = NULL;
+  CharPtr      ptr;
+  CharPtr      rsult = NULL;
+  Char         year [8];
 
   if (cgp == NULL) return NULL;
 
   if (cgp->journal == NULL && StringNICmp (cgp->cit, "unpublished", 11) == 0) {
-    return StringSave ("Unpublished");
+    if (noAffilOnUnpub) {
+      return StringSave ("Unpublished");
+    }
+
+    alp = cgp->authors;
+    if (alp != NULL) {
+      affil = GetAffil (alp->affil);
+      if (! StringHasNoText (affil)) {
+        rsult = MemNew ((size_t) StringLen (affil) + (size_t) StringLen (cgp->cit) + 15);
+        StringCpy (rsult, "Unpublished ");
+        StringCat (rsult, affil);
+        TrimSpacesAroundString (rsult);
+        return rsult;
+      }
+    }
+
+    rsult = StringSave (cgp->cit);
+    TrimSpacesAroundString (rsult);
+    return rsult;
   }
 
   year [0] = '\0';
@@ -2819,12 +3846,12 @@ static CharPtr FormatCitGen (
                StringNICmp (cgp->cit, "in press", 8) == 0 ||
                StringNICmp (cgp->cit, "to be published", 15) == 0) {
 
-	  if (mode == DUMP_MODE || journal != NULL) {
-	    inpress = cgp->cit;
-	  } else {
-	    inpress = "Unpublished";
-	  }
-    } else if (mode == DUMP_MODE && journal == NULL) {
+      if ((! dropBadCitGens) || journal != NULL) {
+        inpress = cgp->cit;
+      } else {
+        inpress = "Unpublished";
+      }
+    } else if ((! dropBadCitGens) && journal == NULL) {
       journal = cgp->cit;
     }
   }
@@ -2866,155 +3893,6 @@ static CharPtr FormatCitGen (
   return rsult;
 }
 
-static CharPtr GetAffil (
-  AffilPtr afp
-)
-
-{
-	Boolean need_comma=FALSE;
-	CharPtr string=NULL, temp, ptr;
-	Char ch;
-	Int2 aflen=15;
-
-	if (afp) {
-		if (afp -> choice == 1){
-			if (afp -> affil){
-				aflen += StringLen(afp -> affil);
-			}
-		}else if (afp -> choice == 2){
-			aflen += StringLen (afp -> affil) + 
-			StringLen (afp -> div) + 
-			StringLen (afp -> city) + 
-			StringLen (afp -> sub) + 
-			StringLen (afp -> street) + 
-			StringLen (afp -> country) + StringLen(afp->postal_code);
-		}
-
-		temp = string = MemNew(aflen);
-
-		if ( afp -> choice == 1){
-			 if (afp -> affil){
-				ptr = afp->affil;
-				while ((*temp = *ptr) != '\0')
-				{
-					temp++; ptr++;
-				}
-			 }
-		}else if (afp -> choice == 2){
-
-			if( afp -> div) { 
-				if (need_comma)
-				{
-					*temp = ','; temp++;
-					*temp = ' '; temp++;
-				}
-				ptr = afp->div;
-				while ((*temp = *ptr) != '\0')
-				{
-					temp++; ptr++;
-				}
-				need_comma = TRUE;
-			}
-
-			if(afp -> affil) { 
-				if (need_comma)
-				{
-					*temp = ','; temp++;
-					*temp = ' '; temp++;
-				}
-				ptr = afp->affil;
-				while ((*temp = *ptr) != '\0')
-				{
-					temp++; ptr++;
-				}
-				need_comma = TRUE;
-			}
-
-			if(afp -> street) { 
-				if (need_comma)
-				{
-					*temp = ','; temp++;
-					*temp = ' '; temp++;
-				}
-				ptr = afp->street;
-				while ((*temp = *ptr) != '\0')
-				{
-					temp++; ptr++;
-				}
-				need_comma = TRUE;
-			}
-
-			if( afp -> city) { 
-				if (need_comma)
-				{
-					*temp = ','; temp++;
-					*temp = ' '; temp++;
-				}
-				ptr = afp->city;
-				while ((*temp = *ptr) != '\0')
-				{
-					temp++; ptr++;
-				}
-				need_comma = TRUE;
-			}
-
-			if( afp -> sub) { 
-				if (need_comma)
-				{
-					*temp = ','; temp++;
-					*temp = ' '; temp++;
-				}
-				ptr = afp->sub;
-				while ((*temp = *ptr) != '\0')
-				{
-					temp++; ptr++;
-				}
-				need_comma = TRUE;
-			}
-
-			if( afp -> postal_code){
-				*temp = ' '; 
-				temp++;
-				ptr = afp->postal_code;
-				while ((*temp = *ptr) != '\0')
-				{
-					temp++; ptr++;
-				}
-			}	
-
-			if( afp -> country){
-				if (need_comma)
-				{
-					*temp = ','; temp++;
-					*temp = ' '; temp++;
-				}
-				ptr = afp->country;
-				while ((*temp = *ptr) != '\0')
-				{
-					temp++; ptr++;
-				}
-				need_comma = TRUE;
-			}	
-		}
-		temp++;
-		*temp = '\0';
-	}
-
-    /* convert double quotes to single quotes */
-
-    ptr = string;
-    ch = *ptr;
-    while (ch != '\0') {
-      if (ch == '\"') {
-        *ptr = '\'';
-      }
-      ptr++;
-      ch = *ptr;
-    }
-
-	return string;
-}
-
 static CharPtr FormatCitSub (
   FmtType format,
   CitSubPtr csp
@@ -3033,7 +3911,7 @@ static CharPtr FormatCitSub (
 
   date [0] = '\0';
   if (csp->date != NULL) {
-    DateToGB (date, csp->date);
+    DateToGB (date, csp->date, TRUE);
   }
   if (StringHasNoText (date)) {
     StringCpy (date, "??-???-????");
@@ -3069,7 +3947,9 @@ static CharPtr FormatCitSub (
 
 static CharPtr GetPubJournal (
   FmtType format,
-  ModType mode,
+  Boolean dropBadCitGens,
+  Boolean noAffilOnUnpub,
+  Boolean citArtIsoJta,
   PubdescPtr pdp,
   CitSubPtr csp,
   SeqIdPtr  seqidp
@@ -3099,7 +3979,7 @@ static CharPtr GetPubJournal (
               break; /* skip just serial number */
             }
           }
-          journal = FormatCitGen (format, mode, cgp);
+          journal = FormatCitGen (format, dropBadCitGens, noAffilOnUnpub, cgp);
         }
         break;
       case PUB_Sub :
@@ -3113,14 +3993,14 @@ static CharPtr GetPubJournal (
         if (mep != NULL) {
           cap = mep->cit;
           if (cap != NULL) {
-            journal = FormatCitArt (format, cap);
+            journal = FormatCitArt (format, citArtIsoJta, cap);
           }
         }
         break;
       case PUB_Article :
         cap = (CitArtPtr) vnp->data.ptrvalue;
         if (cap != NULL) {
-          journal = FormatCitArt (format, cap);
+          journal = FormatCitArt (format, citArtIsoJta, cap);
         }
         break;
       case PUB_Book :
@@ -3223,9 +4103,9 @@ static CharPtr FormatReferenceBlock (
 )
 
 {
-  Asn2gbJobPtr       ajp;
+  IntAsn2gbJobPtr    ajp;
   AuthListPtr        alp;
-  Asn2gbSectionPtr   asp;
+  Asn2gbSectPtr      asp;
   BioseqPtr          bsp;
   Char               buf [150];
   CitArtPtr          cap;
@@ -3238,6 +4118,7 @@ static CharPtr FormatReferenceBlock (
   Int2               i;
   ImprintPtr         imp;
   IntRefBlockPtr     irp;
+  size_t             len;
   SeqLocPtr          loc = NULL;
   Int4               muid;
   Boolean            needsPeriod;
@@ -3247,7 +4128,7 @@ static CharPtr FormatReferenceBlock (
   PubdescPtr         pdp = NULL;
   Int4               pmid;
   CharPtr            prefix;
-  ReferenceBlockPtr  rbp;
+  RefBlockPtr        rbp;
   SubmitBlockPtr     sbp;
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp = NULL;
@@ -3262,7 +4143,7 @@ static CharPtr FormatReferenceBlock (
   ValNodePtr         vnp;
 
   if (afp == NULL || bbp == NULL) return NULL;
-  rbp = (ReferenceBlockPtr) bbp;
+  rbp = (RefBlockPtr) bbp;
   ajp = afp->ajp;
   if (ajp == NULL) return NULL;
   asp = afp->asp;
@@ -3306,10 +4187,9 @@ static CharPtr FormatReferenceBlock (
 
   /* print serial number */
 
-  gb_StartPrint (afp->format, TRUE, 0, 12, "REFERENCE", 13, 5, 5, "RN", TRUE);
+  gb_StartPrint (afp->format, 0, 12, "REFERENCE", 13, 5, 5, "RN", TRUE);
 
-  if (afp->format ==
-   GENBANK_FMT || afp->format == GENPEPT_FMT) {
+  if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
     sprintf (buf, "%d", (int) rbp->serial);
   } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
     sprintf (buf, "[%d]", (int) rbp->serial);
@@ -3320,17 +4200,28 @@ static CharPtr FormatReferenceBlock (
   /* print base range */
 
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-    TabToColumn (16);
-  } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
-    ff_EndPrint ();
 
-    ff_StartPrint (5, 5, ASN2FF_EMBL_MAX, "RP");
+    if (rbp->sites != 3) {
+      TabToColumn (16);
+    }
+  } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
+
+    if (rbp->sites == 0) {
+      ff_EndPrint ();
+      ff_StartPrint (5, 5, ASN2FF_EMBL_MAX, "RP");
+    }
   }
 
-  if (rbp->sites) {
+  if (rbp->sites == 1 || rbp->sites == 2) {
 
-    gb_AddString (NULL, "(sites)", NULL, FALSE, FALSE, TILDE_TO_SPACES);
+    if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
+      gb_AddString (NULL, "(sites)", NULL, FALSE, FALSE, TILDE_TO_SPACES);
+    }
     ff_EndPrint ();
+
+  } else if (rbp->sites == 3) {
+
+      ff_EndPrint ();
 
   } else {
 
@@ -3392,21 +4283,27 @@ static CharPtr FormatReferenceBlock (
 
   /* print author list */
 
-  gb_StartPrint (afp->format, FALSE, 2, 12, "AUTHORS", 13, 5, 5, "RA", FALSE);
+  gb_StartPrint (afp->format, 2, 12, "AUTHORS", 13, 5, 5, "RA", FALSE);
 
   str = NULL;
 
   alp = GetAuthListPtr (pdp, csp);
   if (alp != NULL) {
     str = GetAuthorsString (afp->format, alp);
+    TrimSpacesAroundString (str);
   }
 
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
     suffix = NULL;
     trailingPeriod = TRUE;
   } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
-    suffix = ";";
     trailingPeriod = FALSE;
+    len = StringLen (str);
+    if (len > 0 && str [len - 1] != '.') {
+      suffix = ".;";
+    } else {
+      suffix = ";";
+    }
   }
 
   gb_AddString (NULL, str, suffix, trailingPeriod, FALSE, TILDE_TO_SPACES);
@@ -3433,11 +4330,23 @@ static CharPtr FormatReferenceBlock (
     }
   }
 
-  if (! StringHasNoText (str)) {
-    gb_StartPrint (afp->format, FALSE, 2, 12, "TITLE", 13, 5, 5, "RT", FALSE);
+  if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
+    if (! StringHasNoText (str)) {
+      gb_StartPrint (afp->format, 2, 12, "TITLE", 13, 5, 5, "RT", FALSE);
 
-    gb_AddString (prefix, str, suffix, FALSE, FALSE, TILDE_TO_SPACES);
+      gb_AddString (prefix, str, suffix, FALSE, FALSE, TILDE_TO_SPACES);
 
+      ff_EndPrint ();
+    }
+  } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
+    gb_StartPrint (afp->format, 2, 12, "TITLE", 13, 5, 5, "RT", FALSE);
+    if (! StringHasNoText (str)) {
+
+      gb_AddString (prefix, str, suffix, FALSE, FALSE, TILDE_TO_SPACES);
+
+    } else {
+      ff_AddChar (';');
+    }
     ff_EndPrint ();
   }
 
@@ -3445,13 +4354,16 @@ static CharPtr FormatReferenceBlock (
 
   /* print journal */
 
-  gb_StartPrint (afp->format, FALSE, 2, 12, "JOURNAL", 13, 5, 5, "RL", FALSE);
+  gb_StartPrint (afp->format, 2, 12, "JOURNAL", 13, 5, 5, "RL", FALSE);
 
-  str = GetPubJournal (afp->format, afp->mode, pdp, csp, bsp->id);
+  str = GetPubJournal (afp->format, ajp->flags.dropBadCitGens,
+                       ajp->flags.noAffilOnUnpub, ajp->flags.citArtIsoJta,
+                       pdp, csp, bsp->id);
   if (str == NULL) {
     str = StringSave ("Unpublished");
   }
   StrStripSpaces (str);
+  TrimSpacesAroundString (str);
 
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
     needsPeriod = FALSE;
@@ -3471,7 +4383,7 @@ static CharPtr FormatReferenceBlock (
 
   muid = GetMuid (pdp);
   if (muid > 0) {
-    gb_StartPrint (afp->format, FALSE, 2, 12, "MEDLINE", 13, 5, 5, "RX", FALSE);
+    gb_StartPrint (afp->format, 2, 12, "MEDLINE", 13, 5, 5, "RX", FALSE);
 
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
       www_muid (muid);
@@ -3486,7 +4398,7 @@ static CharPtr FormatReferenceBlock (
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
     pmid = GetPmid (pdp);
     if (pmid > 0) {
-      gb_StartPrint (afp->format, FALSE, 3, 12, "PUBMED", 13, 5, 5, "RX", FALSE);
+      gb_StartPrint (afp->format, 3, 12, "PUBMED", 13, 5, 5, "RX", FALSE);
 
       www_muid (pmid);
 
@@ -3509,7 +4421,7 @@ static CharPtr FormatReferenceBlock (
         }
       }
       if (notFound) {
-        gb_StartPrint (afp->format, FALSE, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
+        gb_StartPrint (afp->format, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
         gb_AddString (NULL, pdp->comment, NULL, FALSE, TRUE, TILDE_EXPAND);
         ff_EndPrint ();
         prefix = NULL;
@@ -3522,9 +4434,15 @@ static CharPtr FormatReferenceBlock (
         gibbsq = sip->data.intvalue;
       }
     }
-    if (gibbsq > 0) {
+    csp = NULL;
+    for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice == PUB_Sub) {
+        csp = (CitSubPtr) vnp->data.ptrvalue;
+      }
+    }
+    if (gibbsq > 0 /* && csp == NULL */) {
       sprintf (buf, "GenBank staff at the National Library of Medicine created this entry [NCBI gibbsq %ld] from the original journal article.", (long) gibbsq);
-      gb_StartPrint (afp->format, FALSE, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
+      gb_StartPrint (afp->format, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
       gb_AddString (NULL, buf, NULL, FALSE, FALSE, TILDE_EXPAND);
       ff_EndPrint ();
       prefix = NULL;
@@ -3537,14 +4455,14 @@ static CharPtr FormatReferenceBlock (
       }
       if (! StringHasNoText (str)) {
         sprintf (buf, "This sequence comes from %s", str);
-        gb_StartPrint (afp->format, FALSE, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
+        gb_StartPrint (afp->format, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
         gb_AddString (NULL, buf, NULL, TRUE, TRUE, TILDE_EXPAND);
         ff_EndPrint ();
         prefix = NULL;
       }
 
       if (pdp->poly_a || irp->poly_a) {
-        gb_StartPrint (afp->format, FALSE, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
+        gb_StartPrint (afp->format, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
         gb_AddString (NULL, "Polyadenylate residues occurring in the figure were omitted from the sequence.", NULL, TRUE, TRUE, TILDE_EXPAND);
         ff_EndPrint ();
         prefix = NULL;
@@ -3556,7 +4474,7 @@ static CharPtr FormatReferenceBlock (
       }
       if (! StringHasNoText (str)) {
         sprintf (buf, "Map location: %s", str);
-        gb_StartPrint (afp->format, FALSE, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
+        gb_StartPrint (afp->format, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
         gb_AddString (NULL, buf, NULL, TRUE, TRUE, TILDE_EXPAND);
         ff_EndPrint ();
         prefix = NULL;
@@ -3574,7 +4492,7 @@ static CharPtr FormatReferenceBlock (
             if (imp != NULL) {
               crp = imp->retract;
               if (crp != NULL && crp->type == 3) {
-                gb_StartPrint (afp->format, FALSE, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
+                gb_StartPrint (afp->format, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
                 gb_AddString (NULL, "Erratum:", NULL, FALSE, FALSE, TILDE_TO_SPACES);
                 gb_AddString ("[", crp->exp, "]", FALSE, TRUE, TILDE_EXPAND);
                 ff_EndPrint ();
@@ -3587,7 +4505,7 @@ static CharPtr FormatReferenceBlock (
         csp = (CitSubPtr) vnp->data.ptrvalue;
         if (csp != NULL) {
           if (! StringHasNoText (csp->descr)) {
-            gb_StartPrint (afp->format, FALSE, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
+            gb_StartPrint (afp->format, 2, 12, prefix, 13, 5, 5, NULL, FALSE);
             gb_AddString (NULL, csp->descr, NULL, FALSE, TRUE, TILDE_EXPAND);
             ff_EndPrint ();
             prefix = NULL;
@@ -3598,7 +4516,7 @@ static CharPtr FormatReferenceBlock (
 
   }
 
-  return gb_MergeString (FALSE);
+  return ff_print_string_mem (gb_MergeString (FALSE));
 }
 
 static CharPtr FormatCommentBlock (
@@ -3692,9 +4610,9 @@ static CharPtr FormatCommentBlock (
   if (title == NULL) return NULL;
 
   if (cbp->first) {
-    gb_StartPrint (afp->format, TRUE, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+    gb_StartPrint (afp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
   } else {
-    gb_StartPrint (afp->format, TRUE, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+    gb_StartPrint (afp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
   }
 
   str = StringSave (title);
@@ -3775,7 +4693,7 @@ static Boolean FlatVirtLoc (
   return FALSE;
 }
 
-static Uint1    order [18];
+static Uint1    order [NUM_SEQID];
 static Boolean  order_initialized = FALSE;
 
 static CharPtr lim_str [5] = { "", ">","<", ">", "<" };
@@ -3800,7 +4718,7 @@ static void FlatLocSeqId (
     was_lock = TRUE;
   }
   if (bsp != NULL) {
-    use_id = SeqIdSelect (bsp->id, order, 18);
+    use_id = SeqIdSelect (bsp->id, order, NUM_SEQID);
   } else if (sip->choice == SEQID_GI) {
     use_id = GetSeqIdForGI (sip->data.intvalue);
   }
@@ -4222,11 +5140,11 @@ static void DoFlatLoc (
       case SEQLOC_PACKED_INT :
         found_null = FALSE;
         for (next_loc = (SeqLocPtr) slp->data.ptrvalue;
-	     next_loc != NULL;
-	     next_loc = next_loc->next) {
-          if (next_loc->choice == SEQLOC_NULL || 
-	      FlatVirtLoc (bsp, next_loc)     ||
-	      LocationHasNullsBetween (slp))
+         next_loc != NULL;
+         next_loc = next_loc->next) {
+          if (next_loc->choice == SEQLOC_NULL ||
+          FlatVirtLoc (bsp, next_loc)     ||
+          LocationHasNullsBetween (slp))
             found_null = TRUE;
         }
         if (found_null) {
@@ -4255,7 +5173,7 @@ static void DoFlatLoc (
 static CharPtr FlatLoc (
   BioseqPtr bsp,
   SeqLocPtr location,
-  StlType style
+  Boolean masterStyle
 )
 
 {
@@ -4263,30 +5181,34 @@ static CharPtr FlatLoc (
   SeqLocPtr   loc;
   Boolean     noLeft;
   Boolean     noRight;
+  Uint1       num = 1;
   CharPtr     str;
 
   if (bsp == NULL || location == NULL) return NULL;
 
   if (! order_initialized) {
-    order[SEQID_GENBANK ] = 1;
-    order[SEQID_EMBL ] = 2;
-    order[SEQID_DDBJ ] = 3;
-    order[SEQID_LOCAL ] = 4;
-    order[SEQID_GI ] = 5;
-    order[SEQID_GIBBSQ ] = 6;
-    order[SEQID_GIBBMT ] = 7;
-    order[SEQID_PRF ] = 8;
-    order[SEQID_PDB ] = 9;
-    order[SEQID_PIR ] = 10;
-    order[SEQID_SWISSPROT ] = 11;
-    order[SEQID_PATENT ] = 12;
-    order[SEQID_OTHER ] = 13;
-    order[SEQID_GENERAL ] = 14;
-    order[SEQID_GIIM ] = 15;
+    order [SEQID_GENBANK] = num++;
+    order [SEQID_EMBL] = num++;
+    order [SEQID_DDBJ] = num++;
+    order [SEQID_LOCAL] = num++;
+    order [SEQID_OTHER] = num++;
+    order [SEQID_TPG] = num++;
+    order [SEQID_TPE] = num++;
+    order [SEQID_TPD] = num++;
+    order [SEQID_GIBBSQ] = num++;
+    order [SEQID_GIBBMT] = num++;
+    order [SEQID_PRF] = num++;
+    order [SEQID_PDB] = num++;
+    order [SEQID_PIR] = num++;
+    order [SEQID_SWISSPROT] = num++;
+    order [SEQID_PATENT] = num++;
+    order [SEQID_GI] = num++;;
+    order [SEQID_GENERAL] = num++;
+    order [SEQID_GIIM] = num++;
     order_initialized = TRUE;
   }
 
-  if (style == MASTER_STYLE) {
+  if (masterStyle) {
 
     /* map location from parts to segmented bioseq */
 
@@ -4312,536 +5234,6 @@ static CharPtr FlatLoc (
   return str;
 }
 
-/* enumerated qualifier category definitions */
-
-typedef enum {
-  Qual_class_ignore = 0,
-  Qual_class_string,
-  Qual_class_sgml,
-  Qual_class_boolean,
-  Qual_class_int,
-  Qual_class_evidence,
-  Qual_class_valnode,
-  Qual_class_xtraprds,
-  Qual_class_quote,
-  Qual_class_noquote,
-  Qual_class_paren,
-  Qual_class_region,
-  Qual_class_replace,
-  Qual_class_L_R_B,
-  Qual_class_organelle,
-  Qual_class_orgmod,
-  Qual_class_subsource,
-  Qual_class_code_break,
-  Qual_class_anti_codon,
-  Qual_class_codon,
-  Qual_class_method,
-  Qual_class_pubset,
-  Qual_class_db_xref,
-  Qual_class_seq_id,
-  Qual_class_seq_loc,
-  Qual_class_its,
-  Qual_class_trna_codons,
-  Qual_class_translation,
-  Qual_class_protnames,
-  Qual_class_illegal,
-  Qual_class_note
-}  QualType;
-
-/* source 'feature' */
-
-/* some qualifiers will require additional content verification not
-   explicitly indicated by the class type */
-
-typedef enum {
-  SOURCE_acronym = 1,
-  SOURCE_anamorph,
-  SOURCE_authority,
-  SOURCE_biotype,
-  SOURCE_biovar,
-  SOURCE_breed,
-  SOURCE_cell_line,
-  SOURCE_cell_type,
-  SOURCE_chemovar,
-  SOURCE_chromosome,
-  SOURCE_citation,
-  SOURCE_clone,
-  SOURCE_clone_lib,
-  SOURCE_common,
-  SOURCE_common_name,
-  SOURCE_country,
-  SOURCE_cultivar,
-  SOURCE_db_xref,
-  SOURCE_dev_stage,
-  SOURCE_dosage,
-  SOURCE_ecotype,
-  SOURCE_endogenous_virus_name,
-  SOURCE_extrachrom,
-  SOURCE_focus,
-  SOURCE_forma,
-  SOURCE_forma_specialis,
-  SOURCE_frequency,
-  SOURCE_genotype,
-  SOURCE_germline,
-  SOURCE_group,
-  SOURCE_haplotype,
-  SOURCE_ins_seq_name,
-  SOURCE_isolate,
-  SOURCE_lab_host,
-  SOURCE_label,
-  SOURCE_macronuclear,
-  SOURCE_map,
-  SOURCE_note,
-  SOURCE_old_lineage,
-  SOURCE_old_name,
-  SOURCE_organism,
-  SOURCE_organelle,
-  SOURCE_orgmod_note,
-  SOURCE_pathovar,
-  SOURCE_plasmid_name,
-  SOURCE_plastid_name,
-  SOURCE_pop_variant,
-  SOURCE_rearranged,
-  SOURCE_segment,
-  SOURCE_seqfeat_note,
-  SOURCE_sequenced_mol,
-  SOURCE_serogroup,
-  SOURCE_serotype,
-  SOURCE_serovar,
-  SOURCE_sex,
-  SOURCE_spec_or_nat_host,
-  SOURCE_specimen_voucher,
-  SOURCE_strain,
-  SOURCE_sub_clone,
-  SOURCE_sub_group,
-  SOURCE_sub_species,
-  SOURCE_sub_strain,
-  SOURCE_sub_type,
-  SOURCE_subsource_note,
-  SOURCE_synonym,
-  SOURCE_teleomorph,
-  SOURCE_tissue_lib,
-  SOURCE_tissue_type,
-  SOURCE_transposon_name,
-  SOURCE_type,
-  SOURCE_unstructured,
-  SOURCE_usedin,
-  SOURCE_variety,
-  SOURCE_zero_orgmod,
-  SOURCE_one_orgmod,
-  SOURCE_zero_subsrc,
-  ASN2GNBK_TOTAL_SOURCE
-}  SourceType;
-
-/* ordering arrays for qualifiers and note components */
-
-static Uint1 relmode_source_qual_order [] = {
-  SOURCE_organism,
-
-  SOURCE_organelle,
-
-  SOURCE_strain,
-  SOURCE_sub_strain,
-  SOURCE_variety,
-  SOURCE_serotype,
-  SOURCE_cultivar,
-  SOURCE_isolate,
-  SOURCE_spec_or_nat_host,
-  SOURCE_sub_species,
-  SOURCE_specimen_voucher,
-
-  SOURCE_db_xref,
-
-  SOURCE_chromosome,
-  SOURCE_map,
-  SOURCE_clone,
-  SOURCE_sub_clone,
-  SOURCE_haplotype,
-  SOURCE_sex,
-  SOURCE_cell_line,
-  SOURCE_cell_type,
-  SOURCE_tissue_type,
-  SOURCE_clone_lib,
-  SOURCE_dev_stage,
-  SOURCE_frequency,
-
-  SOURCE_germline,
-  SOURCE_rearranged,
-
-  SOURCE_lab_host,
-  SOURCE_pop_variant,
-  SOURCE_tissue_lib,
-
-  SOURCE_plasmid_name,
-  SOURCE_transposon_name,
-  SOURCE_ins_seq_name,
-
-  SOURCE_country,
-
-  SOURCE_focus,
-
-  SOURCE_note,
-
-  SOURCE_sequenced_mol,
-  SOURCE_label,
-  SOURCE_usedin,
-  SOURCE_citation,
-  0
-};
-
-static Uint1 relmode_source_desc_note_order [] = {
-  SOURCE_seqfeat_note,
-  SOURCE_orgmod_note,
-  SOURCE_subsource_note,
-
-  SOURCE_type,
-  SOURCE_sub_type,
-  SOURCE_serogroup,
-  SOURCE_serovar,
-  SOURCE_pathovar,
-  SOURCE_chemovar,
-  SOURCE_biovar,
-  SOURCE_biotype,
-  SOURCE_group,
-  SOURCE_sub_group,
-  SOURCE_common,
-  SOURCE_common_name,
-  SOURCE_acronym,
-  SOURCE_dosage,
-
-  SOURCE_authority,
-  SOURCE_forma,
-  SOURCE_forma_specialis,
-  SOURCE_ecotype,
-  SOURCE_synonym,
-  SOURCE_anamorph,
-  SOURCE_teleomorph,
-  SOURCE_breed,
-
-  SOURCE_genotype,
-  SOURCE_plastid_name,
-
-  SOURCE_segment,
-  SOURCE_endogenous_virus_name,
-
-  SOURCE_zero_orgmod,
-  SOURCE_one_orgmod,
-  SOURCE_zero_subsrc,
-
-  /* SOURCE_old_lineage, */
-
-  /* SOURCE_old_name, */
-  0
-};
-
-static Uint1 relmode_source_feat_note_order [] = {
-  SOURCE_unstructured,
-
-  SOURCE_type,
-  SOURCE_sub_type,
-  SOURCE_serogroup,
-  SOURCE_serovar,
-  SOURCE_pathovar,
-  SOURCE_chemovar,
-  SOURCE_biovar,
-  SOURCE_biotype,
-  SOURCE_group,
-  SOURCE_sub_group,
-  SOURCE_common,
-  SOURCE_common_name,
-  SOURCE_acronym,
-  SOURCE_dosage,
-
-  SOURCE_authority,
-  SOURCE_forma,
-  SOURCE_forma_specialis,
-  SOURCE_ecotype,
-  SOURCE_synonym,
-  SOURCE_anamorph,
-  SOURCE_teleomorph,
-  SOURCE_breed,
-
-  SOURCE_genotype,
-  SOURCE_plastid_name,
-
-  SOURCE_segment,
-  SOURCE_endogenous_virus_name,
-
-  SOURCE_seqfeat_note,
-  SOURCE_orgmod_note,
-  SOURCE_subsource_note,
-
-  SOURCE_zero_orgmod,
-  SOURCE_one_orgmod,
-  SOURCE_zero_subsrc,
-
-  /* SOURCE_old_lineage, */
-
-  /* SOURCE_old_name, */
-  0
-};
-
-static Uint1 seqmode_source_qual_order [] = {
-  SOURCE_organism,
-
-  SOURCE_organelle,
-
-  SOURCE_strain,
-  SOURCE_sub_strain,
-  SOURCE_variety,
-  SOURCE_serotype,
-  SOURCE_cultivar,
-  SOURCE_isolate,
-  SOURCE_spec_or_nat_host,
-  SOURCE_sub_species,
-  SOURCE_specimen_voucher,
-
-  SOURCE_db_xref,
-
-  SOURCE_chromosome,
-  SOURCE_map,
-  SOURCE_clone,
-  SOURCE_sub_clone,
-  SOURCE_haplotype,
-  SOURCE_sex,
-  SOURCE_cell_line,
-  SOURCE_cell_type,
-  SOURCE_tissue_type,
-  SOURCE_clone_lib,
-  SOURCE_dev_stage,
-  SOURCE_frequency,
-
-  SOURCE_germline,
-  SOURCE_rearranged,
-
-  SOURCE_lab_host,
-  SOURCE_pop_variant,
-  SOURCE_tissue_lib,
-
-  SOURCE_plasmid_name,
-  SOURCE_transposon_name,
-  SOURCE_ins_seq_name,
-
-  SOURCE_country,
-
-  SOURCE_focus,
-
-  SOURCE_note,
-
-  SOURCE_sequenced_mol,
-  SOURCE_label,
-  SOURCE_usedin,
-  SOURCE_citation,
-  0
-};
-
-static Uint1 seqmode_source_desc_note_order [] = {
-  SOURCE_seqfeat_note,
-  SOURCE_orgmod_note,
-  SOURCE_subsource_note,
-
-  SOURCE_type,
-  SOURCE_sub_type,
-  SOURCE_serogroup,
-  SOURCE_serovar,
-  SOURCE_pathovar,
-  SOURCE_chemovar,
-  SOURCE_biovar,
-  SOURCE_biotype,
-  SOURCE_group,
-  SOURCE_sub_group,
-  SOURCE_common,
-  SOURCE_common_name,
-  SOURCE_acronym,
-  SOURCE_dosage,
-
-  SOURCE_authority,
-  SOURCE_forma,
-  SOURCE_forma_specialis,
-  SOURCE_ecotype,
-  SOURCE_synonym,
-  SOURCE_anamorph,
-  SOURCE_teleomorph,
-  SOURCE_breed,
-
-  SOURCE_genotype,
-  SOURCE_plastid_name,
-
-  SOURCE_segment,
-  SOURCE_endogenous_virus_name,
-
-  SOURCE_zero_orgmod,
-  SOURCE_one_orgmod,
-  SOURCE_zero_subsrc,
-
-  /* SOURCE_old_lineage, */
-
-  /* SOURCE_old_name, */
-  0
-};
-
-static Uint1 seqmode_source_feat_note_order [] = {
-  SOURCE_unstructured,
-
-  SOURCE_type,
-  SOURCE_sub_type,
-  SOURCE_serogroup,
-  SOURCE_serovar,
-  SOURCE_pathovar,
-  SOURCE_chemovar,
-  SOURCE_biovar,
-  SOURCE_biotype,
-  SOURCE_group,
-  SOURCE_sub_group,
-  SOURCE_common,
-  SOURCE_common_name,
-  SOURCE_acronym,
-  SOURCE_dosage,
-
-  SOURCE_authority,
-  SOURCE_forma,
-  SOURCE_forma_specialis,
-  SOURCE_ecotype,
-  SOURCE_synonym,
-  SOURCE_anamorph,
-  SOURCE_teleomorph,
-  SOURCE_breed,
-
-  SOURCE_genotype,
-  SOURCE_plastid_name,
-
-  SOURCE_segment,
-  SOURCE_endogenous_virus_name,
-
-  SOURCE_seqfeat_note,
-  SOURCE_orgmod_note,
-  SOURCE_subsource_note,
-
-  SOURCE_zero_orgmod,
-  SOURCE_one_orgmod,
-  SOURCE_zero_subsrc,
-
-  /* SOURCE_old_lineage, */
-
-  /* SOURCE_old_name, */
-  0
-};
-
-typedef struct sourcequal {
-  CharPtr     name;
-  Uint1       qualclass;
-} SourceQual, PNTR SourceQualPtr;
-
-static SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
-  { "",                 Qual_class_ignore    },
-  { "acronym",          Qual_class_orgmod    },
-  { "anamorph",         Qual_class_orgmod    },
-  { "authority",        Qual_class_orgmod    },
-  { "biotype",          Qual_class_orgmod    },
-  { "biovar",           Qual_class_orgmod    },
-  { "breed",            Qual_class_orgmod    },
-  { "cell_line",        Qual_class_subsource },
-  { "cell_type",        Qual_class_subsource },
-  { "chemovar",         Qual_class_orgmod    },
-  { "chromosome",       Qual_class_subsource },
-  { "citation",         Qual_class_pubset    },
-  { "clone",            Qual_class_subsource },
-  { "clone_lib",        Qual_class_subsource },
-  { "common",           Qual_class_orgmod    },
-  { "common",           Qual_class_string    },
-  { "country",          Qual_class_subsource },
-  { "cultivar",         Qual_class_orgmod    },
-  { "db_xref",          Qual_class_db_xref   },
-  { "dev_stage",        Qual_class_subsource },
-  { "dosage",           Qual_class_orgmod    },
-  { "ecotype",          Qual_class_orgmod    },
-  { "endogenous_virus", Qual_class_subsource },
-  { "extrachromosomal", Qual_class_boolean   },
-  { "focus",            Qual_class_boolean   },
-  { "forma",            Qual_class_orgmod    },
-  { "forma_specialis",  Qual_class_orgmod    },
-  { "frequency",        Qual_class_subsource },
-  { "genotype",         Qual_class_subsource },
-  { "germline",         Qual_class_subsource },
-  { "group",            Qual_class_orgmod    },
-  { "haplotype",        Qual_class_subsource },
-  { "insertion_seq",    Qual_class_subsource },
-  { "isolate",          Qual_class_orgmod    },
-  { "lab_host",         Qual_class_subsource },
-  { "label",            Qual_class_noquote   },
-  { "macronuclear",     Qual_class_boolean   },
-  { "map",              Qual_class_subsource },
-  { "note",             Qual_class_note      },
-  { "old_lineage",      Qual_class_orgmod    },
-  { "old_name",         Qual_class_orgmod    },
-  { "organism",         Qual_class_string    },
-  { "organelle",        Qual_class_organelle },
-  { "orgmod_note",      Qual_class_orgmod    },
-  { "pathovar",         Qual_class_orgmod    },
-  { "plasmid",          Qual_class_subsource },
-  { "plastid",          Qual_class_subsource },
-  { "pop_variant",      Qual_class_subsource },
-  { "rearranged",       Qual_class_subsource },
-  { "segment",          Qual_class_subsource },
-  { "seqfeat_note",     Qual_class_string    },
-  { "sequenced_mol",    Qual_class_quote     },
-  { "serogroup",        Qual_class_orgmod    },
-  { "serotype",         Qual_class_orgmod    },
-  { "serovar",          Qual_class_orgmod    },
-  { "sex",              Qual_class_subsource },
-  { "specific_host",    Qual_class_orgmod    },
-  { "specimen_voucher", Qual_class_orgmod    },
-  { "strain",           Qual_class_orgmod    },
-  { "sub_clone",        Qual_class_subsource },
-  { "subgroup",         Qual_class_orgmod    },
-  { "sub_species",      Qual_class_orgmod    },
-  { "sub_strain",       Qual_class_orgmod    },
-  { "subtype",          Qual_class_orgmod    },
-  { "subsource_note",   Qual_class_subsource },
-  { "synonym",          Qual_class_orgmod    },
-  { "teleomorph",       Qual_class_orgmod    },
-  { "tissue_lib",       Qual_class_subsource },
-  { "tissue_type",      Qual_class_subsource },
-  { "transposon",       Qual_class_subsource },
-  { "type",             Qual_class_orgmod    },
-  { "unstructured",     Qual_class_valnode   },
-  { "usedin",           Qual_class_quote     },
-  { "variety",          Qual_class_orgmod    },
-  { "?",                Qual_class_orgmod    },
-  { "?",                Qual_class_orgmod    },
-  { "?",                Qual_class_subsource },
-};
-
-static Int2 subSourceToSourceIdx [27] = {
-  SOURCE_zero_subsrc,
-  SOURCE_chromosome,
-  SOURCE_map,
-  SOURCE_clone,
-  SOURCE_sub_clone,
-  SOURCE_haplotype,
-  SOURCE_genotype,
-  SOURCE_sex,
-  SOURCE_cell_line,
-  SOURCE_cell_type,
-  SOURCE_tissue_type,
-  SOURCE_clone_lib,
-  SOURCE_dev_stage,
-  SOURCE_frequency,
-  SOURCE_germline,
-  SOURCE_rearranged,
-  SOURCE_lab_host,
-  SOURCE_pop_variant,
-  SOURCE_tissue_lib,
-  SOURCE_plasmid_name,
-  SOURCE_transposon_name,
-  SOURCE_ins_seq_name,
-  SOURCE_plastid_name,
-  SOURCE_country,
-  SOURCE_segment,
-  SOURCE_endogenous_virus_name,
-  SOURCE_subsource_note
-};
-
 static void SubSourceToQualArray (
   SubSourcePtr ssp,
   QualValPtr qvp
@@ -4856,9 +5248,9 @@ static void SubSourceToQualArray (
   while (ssp != NULL) {
     subtype = ssp->subtype;
     if (subtype == 255) {
-      subtype = 26;
+      subtype = 29;
     }
-    if (subtype < 27) {
+    if (subtype < 30) {
       idx = subSourceToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         if (qvp [idx].ssp == NULL) {
@@ -4871,41 +5263,41 @@ static void SubSourceToQualArray (
 }
 
 static Int2 orgModToSourceIdx [35] = {
-  SOURCE_zero_orgmod,
-  SOURCE_one_orgmod,
-  SOURCE_strain,
-  SOURCE_sub_strain,
-  SOURCE_type,
-  SOURCE_sub_type,
-  SOURCE_variety,
-  SOURCE_serotype,
-  SOURCE_serogroup,
-  SOURCE_serovar,
-  SOURCE_cultivar,
-  SOURCE_pathovar,
-  SOURCE_chemovar,
-  SOURCE_biovar,
-  SOURCE_biotype,
-  SOURCE_group,
-  SOURCE_sub_group,
-  SOURCE_isolate,
-  SOURCE_common,
-  SOURCE_acronym,
-  SOURCE_dosage,
-  SOURCE_spec_or_nat_host,
-  SOURCE_sub_species,
-  SOURCE_specimen_voucher,
-  SOURCE_authority,
-  SOURCE_forma,
-  SOURCE_forma_specialis,
-  SOURCE_ecotype,
-  SOURCE_synonym,
-  SOURCE_anamorph,
-  SOURCE_teleomorph,
-  SOURCE_breed,
-  SOURCE_old_lineage,
-  SOURCE_old_name,
-  SOURCE_orgmod_note
+  SCQUAL_zero_orgmod,
+  SCQUAL_one_orgmod,
+  SCQUAL_strain,
+  SCQUAL_sub_strain,
+  SCQUAL_type,
+  SCQUAL_sub_type,
+  SCQUAL_variety,
+  SCQUAL_serotype,
+  SCQUAL_serogroup,
+  SCQUAL_serovar,
+  SCQUAL_cultivar,
+  SCQUAL_pathovar,
+  SCQUAL_chemovar,
+  SCQUAL_biovar,
+  SCQUAL_biotype,
+  SCQUAL_group,
+  SCQUAL_sub_group,
+  SCQUAL_isolate,
+  SCQUAL_common,
+  SCQUAL_acronym,
+  SCQUAL_dosage,
+  SCQUAL_spec_or_nat_host,
+  SCQUAL_sub_species,
+  SCQUAL_specimen_voucher,
+  SCQUAL_authority,
+  SCQUAL_forma,
+  SCQUAL_forma_specialis,
+  SCQUAL_ecotype,
+  SCQUAL_synonym,
+  SCQUAL_anamorph,
+  SCQUAL_teleomorph,
+  SCQUAL_breed,
+  SCQUAL_old_lineage,
+  SCQUAL_old_name,
+  SCQUAL_orgmod_note
 };
 
 static void OrgModToQualArray (
@@ -4950,7 +5342,7 @@ static CharPtr organelleQual [] = {
   "/organelle=\"plastid\"",
   "/macronuclear",
   NULL,
-  "/plasmid", 
+  "/plasmid",
   "/transposon",
   "/insertion_seq",
   "/organelle=\"plastid:cyanelle\"",
@@ -4968,7 +5360,7 @@ static Boolean StringIsJustQuotes (
 )
 
 {
-  Nlm_Uchar  ch;	/* to use 8bit characters in multibyte languages */
+  Nlm_Uchar  ch;    /* to use 8bit characters in multibyte languages */
 
   if (str != NULL) {
     ch = *str;
@@ -4990,8 +5382,8 @@ static CharPtr FormatSourceFeatBlock (
 
 {
   Boolean            add_period;
-  Asn2gbJobPtr       ajp;
-  Asn2gbSectionPtr   asp;
+  IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
   BioSourcePtr       biop = NULL;
   BioseqPtr          bsp;
   Char               buf [80];
@@ -5011,6 +5403,7 @@ static CharPtr FormatSourceFeatBlock (
   SeqLocPtr          location = NULL;
   CharPtr            notestr;
   Uint1Ptr           notetbl = NULL;
+  Boolean            okay;
   ObjectIdPtr        oip;
   OrgModPtr          omp;
   OrgNamePtr         onp = NULL;
@@ -5057,13 +5450,13 @@ static CharPtr FormatSourceFeatBlock (
 
   if (biop == NULL) return NULL;
 
-  gb_StartPrint (afp->format, TRUE, 5, 21, NULL, 0, 5, 21, "FT", FALSE);
+  gb_StartPrint (afp->format, 5, 21, NULL, 0, 5, 21, "FT", FALSE);
   ff_AddString ("source");
   TabToColumn (22);
 
   location = isp->loc;
 
-  str = FlatLoc (bsp, location, afp->style);
+  str = FlatLoc (bsp, location, ajp->masterStyle);
   if (get_www ()) {
     wwwbuf = www_featloc (str);
     ff_AddString (wwwbuf);
@@ -5079,16 +5472,24 @@ static CharPtr FormatSourceFeatBlock (
     /* common = orp->common; */
   }
   if (StringHasNoText (taxname)) {
-    taxname = "Unknown.";
+    if (ajp->flags.needOrganismQual) {
+      taxname = "unknown";
+      common = orp->common;
+#ifdef ASN2GNBK_PRINT_UNKNOWN_ORG
+    } else {
+      taxname = "unknown";
+      common = orp->common;
+#endif
+    }
   }
 
   /* populate qualifier table from biosource fields */
 
-  qvp [SOURCE_organism].str = taxname;
-  qvp [SOURCE_common_name].str = common;
+  qvp [SCQUAL_organism].str = taxname;
+  qvp [SCQUAL_common_name].str = common;
 
   if (biop->is_focus) {
-    qvp [SOURCE_focus].bool = TRUE;
+    qvp [SCQUAL_focus].bool = TRUE;
   }
 
   SubSourceToQualArray (biop->subtype, qvp);
@@ -5100,56 +5501,47 @@ static CharPtr FormatSourceFeatBlock (
     }
 
     if (! is_desc) {
-      qvp [SOURCE_unstructured].vnp = orp->mod;
+      qvp [SCQUAL_unstructured].vnp = orp->mod;
     }
-    qvp [SOURCE_db_xref].vnp = orp->db;
+    qvp [SCQUAL_db_xref].vnp = orp->db;
   }
 
   /* organelle currently prints /mitochondrion, /virion, etc. */
 
-  qvp [SOURCE_organelle].num = biop->genome;
+  qvp [SCQUAL_organelle].num = biop->genome;
 
   /* some qualifiers are flags in genome and names in subsource, print once with name */
 
-  if (qvp [SOURCE_ins_seq_name].ssp != NULL &&
-      qvp [SOURCE_organelle].num == GENOME_insertion_seq) {
-    qvp [SOURCE_organelle].num = 0;
+  if (qvp [SCQUAL_ins_seq_name].ssp != NULL &&
+      qvp [SCQUAL_organelle].num == GENOME_insertion_seq) {
+    qvp [SCQUAL_organelle].num = 0;
   }
-  if (qvp [SOURCE_plasmid_name].ssp != NULL &&
-      qvp [SOURCE_organelle].num == GENOME_plasmid) {
-    qvp [SOURCE_organelle].num = 0;
+  if (qvp [SCQUAL_plasmid_name].ssp != NULL &&
+      qvp [SCQUAL_organelle].num == GENOME_plasmid) {
+    qvp [SCQUAL_organelle].num = 0;
   }
   /* AF095904.1
-  if (qvp [SOURCE_plastid_name].ssp != NULL &&
-      qvp [SOURCE_organelle].num == GENOME_plastid) {
-    qvp [SOURCE_organelle].num = 0;
+  if (qvp [SCQUAL_plastid_name].ssp != NULL &&
+      qvp [SCQUAL_organelle].num == GENOME_plastid) {
+    qvp [SCQUAL_organelle].num = 0;
   }
   */
-  if (qvp [SOURCE_transposon_name].ssp != NULL &&
-      qvp [SOURCE_organelle].num == GENOME_transposon) {
-    qvp [SOURCE_organelle].num = 0;
+  if (qvp [SCQUAL_transposon_name].ssp != NULL &&
+      qvp [SCQUAL_organelle].num == GENOME_transposon) {
+    qvp [SCQUAL_organelle].num = 0;
   }
 
   if (sfp != NULL) {
-    qvp [SOURCE_seqfeat_note].str = sfp->comment;
+    qvp [SCQUAL_seqfeat_note].str = sfp->comment;
   }
 
   /* now print qualifiers from table */
 
-  if (afp->mode == RELEASE_MODE) {
-    qualtbl = relmode_source_qual_order;
-    if (is_desc) {
-      notetbl = relmode_source_desc_note_order;
-    } else {
-      notetbl = relmode_source_feat_note_order;
-    }
+  qualtbl = source_qual_order;
+  if (is_desc) {
+    notetbl = source_desc_note_order;
   } else {
-    qualtbl = seqmode_source_qual_order;
-    if (is_desc) {
-      notetbl = seqmode_source_desc_note_order;
-    } else {
-      notetbl = seqmode_source_feat_note_order;
-    }
+    notetbl = source_feat_note_order;
   }
 
   for (i = 0, idx = qualtbl [i]; idx != 0; i++, idx = qualtbl [i]) {
@@ -5211,7 +5603,10 @@ static CharPtr FormatSourceFeatBlock (
           lastssptype = ssp->subtype;
         }
         while (ssp != NULL && ssp->subtype == lastssptype) {
-          if (ssp->subtype == SUBSRC_germline || ssp->subtype == SUBSRC_rearranged) {
+          if (ssp->subtype == SUBSRC_germline ||
+              ssp->subtype == SUBSRC_rearranged ||
+              ssp->subtype == SUBSRC_transgenic ||
+              ssp->subtype == SUBSRC_environmental_sample) {
             NewContLine ();
             sprintf (buf, "/%s", asn2gnbk_source_quals [idx].name);
             gb_AddString (buf, NULL, NULL, FALSE, TRUE, TILDE_TO_SPACES);
@@ -5223,10 +5618,6 @@ static CharPtr FormatSourceFeatBlock (
             NewContLine ();
             sprintf (buf, "/%s=\"", asn2gnbk_source_quals [idx].name);
             gb_AddString (buf, ssp->name, "\"", FALSE, TRUE, TILDE_TO_SPACES);
-          } else if (ssp->subtype == SUBSRC_germline ||
-                     ssp->subtype == SUBSRC_rearranged) {
-            NewContLine ();
-            gb_AddString ("/", asn2gnbk_source_quals [idx].name, NULL, FALSE, TRUE, TILDE_TO_SPACES);
           }
           ssp = ssp->next;
         }
@@ -5241,6 +5632,9 @@ static CharPtr FormatSourceFeatBlock (
       case Qual_class_noquote :
         break;
 
+      case Qual_class_label :
+        break;
+
       case Qual_class_db_xref :
         for (vnp = qvp [idx].vnp; vnp != NULL; vnp = vnp->next) {
           buf [0] = '\0';
@@ -5248,19 +5642,37 @@ static CharPtr FormatSourceFeatBlock (
           if (dbt != NULL && (! StringHasNoText (dbt->db))) {
             oip = dbt->tag;
             if (oip != NULL) {
-              /* if release mode, drop unknown dbtag */
-              if (! StringHasNoText (oip->str)) {
-                if (StringLen (dbt->db) + StringLen (oip->str) < 80) {
-                  sprintf (buf, "%s:%s", dbt->db, oip->str);
+
+              okay = TRUE;
+              if (ajp->flags.dropBadDbxref) {
+                /* if RELEASE_MODE, drop unknown dbtag */
+                okay = FALSE;
+                for (j = 0; legalDbXrefs [j] != NULL; j++) {
+                  if (StringCmp (dbt->db, legalDbXrefs [j]) == 0) {
+                    okay = TRUE;
+                  }
                 }
-              } else {
-                sprintf (buf, "%s:%ld", dbt->db, (long) oip->id);
+              }
+
+              if (okay) {
+                if (! StringHasNoText (oip->str)) {
+                  if (StringLen (dbt->db) + StringLen (oip->str) < 80) {
+                    sprintf (buf, "%s:%s", dbt->db, oip->str);
+                  }
+                } else {
+                  sprintf (buf, "%s:%ld", dbt->db, (long) oip->id);
+                }
               }
             }
           }
           if (! StringHasNoText (buf)) {
             NewContLine ();
+            ff_AddString ("/db_xref=\"");
+            www_db_xref (buf);
+            ff_AddString ("\"");
+            /*
             gb_AddString ("/db_xref=\"", buf, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+            */
           }
         }
         break;
@@ -5289,10 +5701,10 @@ static CharPtr FormatSourceFeatBlock (
               if (! StringHasNoText (qvp [jdx].str)) {
                 s_AddValNodeString_NoRedund (&head, prefix, qvp [jdx].str, NULL);
                 add_period = FALSE;
-                /* prefix = "; "; */
                 prefix = "\n";
               }
               break;
+
             case Qual_class_orgmod :
               omp = qvp [jdx].omp;
               if (lastomptype == 0 && omp != NULL) {
@@ -5300,23 +5712,27 @@ static CharPtr FormatSourceFeatBlock (
               }
               while (omp != NULL && omp->subtype == lastomptype) {
                 if (! StringHasNoText (omp->subname)) {
-                  if (jdx == SOURCE_orgmod_note) {
+                  if (jdx == SCQUAL_orgmod_note) {
                     sprintf (buf, "%s", prefix);
                   } else {
                     sprintf (buf, "%s%s: ", prefix, asn2gnbk_source_quals [jdx].name);
                   }
-		  
+
                   str = StringSave (omp->subname);
                   add_period = s_RemovePeriodFromEnd (str);
-                  if (jdx == SOURCE_orgmod_note) {
+                  if (jdx == SCQUAL_orgmod_note) {
                     s_AddValNodeString_NoRedund (&head, buf, str, NULL);
                   } else {
                     AddValNodeString (&head, buf, str, NULL);
                   }
                   MemFree (str);
 
-                  if (jdx == SOURCE_orgmod_note) {
-                    prefix = "\n";
+                  if (jdx == SCQUAL_orgmod_note) {
+                    if (add_period) {
+                      prefix = ".\n";
+                    } else {
+                      prefix = "\n";
+                    }
                   } else {
                     prefix = "; ";
                   }
@@ -5331,23 +5747,27 @@ static CharPtr FormatSourceFeatBlock (
               }
               while (ssp != NULL && ssp->subtype == lastssptype) {
                 if (! StringHasNoText (ssp->name)) {
-                  if (jdx == SOURCE_subsource_note) {
+                  if (jdx == SCQUAL_subsource_note) {
                     sprintf (buf, "%s", prefix);
                   } else {
                     sprintf (buf, "%s%s: ", prefix, asn2gnbk_source_quals [jdx].name);
                   }
-		  
+
                   str = StringSave (ssp->name);
                   add_period = s_RemovePeriodFromEnd (str);
-                  if (jdx == SOURCE_subsource_note) {
+                  if (jdx == SCQUAL_subsource_note) {
                     s_AddValNodeString_NoRedund (&head, buf, str, NULL);
                   } else {
                     AddValNodeString (&head, buf, str, NULL);
                   }
                   MemFree (str);
 
-                  if (jdx == SOURCE_subsource_note) {
-                    prefix = "\n";
+                  if (jdx == SCQUAL_subsource_note) {
+                    if (add_period) {
+                      prefix = ".\n";
+                    } else {
+                      prefix = "\n";
+                    }
                   } else {
                     prefix = "; ";
                   }
@@ -5378,8 +5798,8 @@ static CharPtr FormatSourceFeatBlock (
 
 
 #ifdef ASN2GNBK_STRIP_NOTE_PERIODS
-	  if (! IsEllipsis (notestr))
-	    s_RemovePeriodFromEnd (notestr);
+          if (! IsEllipsis (notestr))
+            s_RemovePeriodFromEnd (notestr);
 #endif
 
           gb_AddString (NULL, "/note=\"", NULL, FALSE, FALSE, TILDE_IGNORE);
@@ -5403,447 +5823,42 @@ static CharPtr FormatSourceFeatBlock (
 
   /* and then deal with the various note types separately (not in order table) */
 
-  return gb_MergeString (TRUE);
+  return ff_print_string_mem (gb_MergeString (TRUE));
 }
-
-static CharPtr featurekeys [] = {
-  "???" ,
-  "gene" ,
-  "Org" ,
-  "CDS" ,
-  "Protein" ,
-  "precursor_RNA" ,
-  "mRNA" ,
-  "tRNA" ,
-  "rRNA" ,
-  "snRNA" ,
-  "scRNA" ,
-  "misc_RNA" ,
-  "Cit" ,
-  "Xref" ,
-  "Imp" ,
-  "allele" ,
-  "attenuator" ,
-  "C_region" ,
-  "CAAT_signal" ,
-  "CDS" ,
-  "conflict" ,
-  "D-loop" ,
-  "D_segment" ,
-  "enhancer" ,
-  "exon" ,
-  "GC_signal" ,
-  "iDNA" ,
-  "intron" ,
-  "J_segment" ,
-  "LTR" ,
-  "mat_peptide" ,
-  "misc_binding" ,
-  "misc_difference" ,
-  "misc_feature" ,
-  "misc_recomb" ,
-  "misc_RNA" ,
-  "misc_signal" ,
-  "misc_structure" ,
-  "modified_base" ,
-  "mutation" ,
-  "N_region" ,
-  "old_sequence" ,
-  "polyA_signal" ,
-  "polyA_site" ,
-  "precursor_RNA" ,
-  "prim_transcript" ,
-  "primer_bind" ,
-  "promoter" ,
-  "protein_bind" ,
-  "RBS" ,
-  "repeat_region" ,
-  "repeat_unit" ,
-  "rep_origin" ,
-  "S_region" ,
-  "satellite" ,
-  "sig_peptide" ,
-  "source" ,
-  "stem_loop" ,
-  "STS" ,
-  "TATA_signal" ,
-  "terminator" ,
-  "transit_peptide" ,
-  "unsure" ,
-  "V_region" ,
-  "V_segment" ,
-  "variation" ,
-  "virion" ,
-  "3'clip" ,
-  "3'UTR" ,
-  "5'clip" ,
-  "5'UTR" ,
-  "-10_signal" ,
-  "-35_signal" ,
-  "Site-ref" ,
-  "misc_feature" ,
-  "misc_feature" ,
-  "Bond" ,
-  "misc_feature" ,
-  "Rsite" ,
-  "User" ,
-  "TxInit" ,
-  "Num" ,
-  "SecStr" ,
-  "NonStdRes" ,
-  "Het" ,
-  "Src" ,
-  "preprotein" ,
-  "mat_peptide" ,
-  "sig_peptide" ,
-  "transit_peptide"
-};
-
-typedef enum {
-  FEATUR_anticodon = 1,
-  FEATUR_bound_moiety,
-  FEATUR_cds_product,
-  FEATUR_citation,
-  FEATUR_clone,
-  FEATUR_coded_by,
-  FEATUR_codon,
-  FEATUR_codon_start,
-  FEATUR_cons_splice,
-  FEATUR_db_xref,
-  FEATUR_direction,
-  FEATUR_EC_number,
-  FEATUR_evidence,
-  FEATUR_exception,
-  FEATUR_figure,
-  FEATUR_frequency,
-  FEATUR_function,
-  FEATUR_gene,
-  FEATUR_gene_desc,
-  FEATUR_gene_allele,
-  FEATUR_gene_map,
-  FEATUR_gene_syn,
-  FEATUR_gene_note,
-  FEATUR_gene_xref,
-  FEATUR_illegal_qual,
-  FEATUR_label,
-  FEATUR_map,
-  FEATUR_maploc,
-  FEATUR_mod_base,
-  FEATUR_note,
-  FEATUR_number,
-  FEATUR_organism,
-  FEATUR_partial,
-  FEATUR_PCR_conditions,
-  FEATUR_phenotype,
-  FEATUR_product,
-  FEATUR_product_quals,
-  FEATUR_prot_activity,
-  FEATUR_prot_comment,
-  FEATUR_prot_note,
-  FEATUR_prot_method,
-  FEATUR_prot_conflict,
-  FEATUR_prot_desc,
-  FEATUR_prot_missing,
-  FEATUR_prot_names,
-  FEATUR_protein_id,
-  FEATUR_pseudo,
-  FEATUR_region,
-  FEATUR_replace,
-  FEATUR_rpt_family,
-  FEATUR_rpt_type,
-  FEATUR_rpt_unit,
-  FEATUR_rrna_its,
-  FEATUR_selenocysteine,
-  FEATUR_seqfeat_note,
-  FEATUR_site,
-  FEATUR_standard_name,
-  FEATUR_transcript_id,
-  FEATUR_transl_except,
-  FEATUR_transl_table,
-  FEATUR_translation,
-  FEATUR_trna_aa,
-  FEATUR_trna_codons,
-  FEATUR_usedin,
-  FEATUR_xtra_prod_quals,
-  ASN2GNBK_TOTAL_FEATUR
-}  FeaturType;
-
-/* ordering arrays for qualifiers and note components */
-
-static Uint1 relmode_feat_qual_order [] = {
-  FEATUR_partial,
-  FEATUR_gene,
-
-  FEATUR_EC_number,
-  FEATUR_prot_activity,
-
-  FEATUR_note, FEATUR_citation,
-
-  FEATUR_number,
-
-  FEATUR_product,
-
-  FEATUR_pseudo,
-
-  FEATUR_anticodon,
-  FEATUR_bound_moiety,
-  FEATUR_clone,
-  FEATUR_codon,
-  FEATUR_cons_splice,
-  FEATUR_direction,
-  FEATUR_evidence,
-  FEATUR_exception,
-  FEATUR_frequency,
-  FEATUR_function,
-  FEATUR_gene_map,
-  FEATUR_gene_allele,
-  FEATUR_map,
-  FEATUR_mod_base,
-  FEATUR_organism,
-  FEATUR_PCR_conditions,
-  FEATUR_phenotype,
-  FEATUR_rpt_family,
-  FEATUR_rpt_type,
-  FEATUR_rpt_unit,
-  FEATUR_standard_name,
-  FEATUR_usedin,
-
-  /* FEATUR_illegal_qual, */
-
-  FEATUR_replace,
-
-  FEATUR_codon_start,
-  FEATUR_transl_except,
-  FEATUR_transl_table,
-  FEATUR_label,
-  FEATUR_cds_product,
-  FEATUR_protein_id,
-  FEATUR_db_xref, FEATUR_gene_xref,
-  FEATUR_translation,
-  0
-};
-
-/*
-gene_syn after gene_desc - gi|3386543|gb|AF079528.1|AF079528
-*/
-
-static Uint1 relmode_feat_note_order [] = {
-  FEATUR_gene_desc,
-  FEATUR_gene_syn,
-  FEATUR_trna_codons,
-  FEATUR_prot_desc,
-  FEATUR_prot_note,
-  FEATUR_prot_comment,
-  FEATUR_prot_method,
-  FEATUR_figure,
-  FEATUR_maploc,
-  FEATUR_prot_conflict,
-  FEATUR_prot_missing,
-  FEATUR_seqfeat_note,
-  FEATUR_region,
-  FEATUR_selenocysteine,
-  FEATUR_prot_names,
-  FEATUR_site,
-  FEATUR_rrna_its,
-  FEATUR_xtra_prod_quals,
-  0
-};
-
-/*
-pseudo after note - gi|6598562|gb|AC006419.3|AC006419
-*/
-
-static Uint1 seqmode_feat_qual_order [] = {
-  FEATUR_partial,
-  FEATUR_gene,
-
-  FEATUR_EC_number,
-  FEATUR_prot_activity,
-
-  FEATUR_note, FEATUR_citation,
-
-  FEATUR_number,
-
-  FEATUR_product,
-
-  FEATUR_pseudo,
-
-  FEATUR_anticodon,
-  FEATUR_bound_moiety,
-  FEATUR_clone,
-  FEATUR_codon,
-  FEATUR_cons_splice,
-  FEATUR_direction,
-  FEATUR_evidence,
-  FEATUR_exception,
-  FEATUR_frequency,
-  FEATUR_function,
-  FEATUR_gene_map,
-  FEATUR_gene_allele,
-  FEATUR_map,
-  FEATUR_mod_base,
-  FEATUR_organism,
-  FEATUR_PCR_conditions,
-  FEATUR_phenotype,
-  FEATUR_rpt_family,
-  FEATUR_rpt_type,
-  FEATUR_rpt_unit,
-  FEATUR_standard_name,
-  FEATUR_usedin,
-
-  FEATUR_illegal_qual,
-
-  FEATUR_replace,
-
-  FEATUR_codon_start,
-  FEATUR_transl_except,
-  FEATUR_transl_table,
-  FEATUR_label,
-  FEATUR_cds_product,
-  FEATUR_protein_id,
-  FEATUR_db_xref, FEATUR_gene_xref,
-  FEATUR_translation,
-  0
-};
-
-/*
-prot_names after seqfeat_note - gi|4210642|emb|AJ005084.1|HBVAJ5084
-prot_conflict after prot_desc - gi|61183|emb|V01135.1|PIVM02
-figure after prot_desc - gi|400553|gb|S64006.1|
-seqfeat_note after prot_desc - gi|431713|gb|L20354.1|STVPATPOLB
-  but prot_desc after seqfeat_note - AF252556.1
-prot_names after figure - gi|234022|gb|S56149.1|S56149
-seqfeat_note after prot_conflict after figure - gi|234046|gb|S51392.1|S51392
-prot_method after prot_comment (descriptor) after prot_note after prot_desc
-region after seqfeat_note - gi|6554164|gb|AF043644.3|AF043644
-prot_desc after prot_names - gi|6581069|gb|AF202541.1|AF202541 - cannot do !!!
-gene_syn after gene_desc - gi|3386543|gb|AF079528.1|AF079528
-*/
-
-static Uint1 seqmode_feat_note_order [] = {
-  FEATUR_gene_desc,
-  FEATUR_gene_syn,
-  FEATUR_trna_codons,
-  FEATUR_prot_desc,
-  FEATUR_prot_note,
-  FEATUR_prot_comment,
-  FEATUR_prot_method,
-  FEATUR_figure,
-  FEATUR_maploc,
-  FEATUR_prot_conflict,
-  FEATUR_prot_missing,
-  FEATUR_seqfeat_note,
-  FEATUR_region,
-  FEATUR_selenocysteine,
-  FEATUR_prot_names,
-  FEATUR_site,
-  FEATUR_rrna_its,
-  FEATUR_xtra_prod_quals,
-  0
-};
-
-typedef struct featurqual {
-  CharPtr     name;
-  Uint1       qualclass;
-} FeaturQual, PNTR FeaturQualPtr;
-
-static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
-  { "",               Qual_class_ignore       },
-  { "anticodon",      Qual_class_anti_codon   },
-  { "bound_moiety",   Qual_class_quote        },
-  { "product",        Qual_class_string       },
-  { "citation",       Qual_class_pubset       },
-  { "clone",          Qual_class_quote        },
-  { "coded_by",       Qual_class_seq_loc      },
-  { "codon",          Qual_class_codon        },
-  { "codon_start",    Qual_class_int          },
-  { "cons_splice",    Qual_class_noquote      },
-  { "db_xref",        Qual_class_db_xref      },
-  { "direction",      Qual_class_L_R_B        },
-  { "EC_number",      Qual_class_valnode      },
-  { "evidence",       Qual_class_evidence     },
-  { "exception",      Qual_class_string       },
-  { "figure",         Qual_class_string       },
-  { "frequency",      Qual_class_quote        },
-  { "function",       Qual_class_quote        },
-  { "gene",           Qual_class_sgml         },
-  { "gene_desc",      Qual_class_string       },
-  { "allele",         Qual_class_string       },
-  { "map",            Qual_class_string       },
-  { "gene_syn",       Qual_class_valnode      },
-  { "gene_note",      Qual_class_string       },
-  { "db_xref",        Qual_class_db_xref      },
-  { "illegal",        Qual_class_illegal      },
-  { "label",          Qual_class_noquote      },
-  { "map",            Qual_class_quote        },
-  { "maploc",         Qual_class_string       },
-  { "mod_base",       Qual_class_noquote      },
-  { "note",           Qual_class_note         },
-  { "number",         Qual_class_noquote      },
-  { "organism",       Qual_class_quote        },
-  { "partial",        Qual_class_boolean      },
-  { "PCR_conditions", Qual_class_quote        },
-  { "phenotype",      Qual_class_quote        },
-  { "product",        Qual_class_string       },
-  { "product",        Qual_class_quote        },
-  { "function",       Qual_class_valnode      },
-  { "prot_comment",   Qual_class_string       },
-  { "prot_note",      Qual_class_string       },
-  { "prot_method",    Qual_class_method       },
-  { "prot_conflict",  Qual_class_string       },
-  { "prot_desc",      Qual_class_string       },
-  { "prot_missing",   Qual_class_string       },
-  { "prot_names",     Qual_class_protnames    },
-  { "protein_id",     Qual_class_seq_id       },
-  { "pseudo",         Qual_class_boolean      },  
-  { "region",         Qual_class_region       },
-  { "replace",        Qual_class_replace      },
-  { "rpt_family",     Qual_class_quote        },
-  { "rpt_type",       Qual_class_paren        },
-  { "rpt_unit",       Qual_class_paren        },
-  { "rrna_its",       Qual_class_its          },
-  { "selenocysteine", Qual_class_string       },
-  { "seqfeat_note",   Qual_class_string       },
-  { "site",           Qual_class_string       },
-  { "standard_name",  Qual_class_quote        },
-  { "transcript_id",  Qual_class_seq_id       },
-  { "transl_except",  Qual_class_code_break   },
-  { "transl_table",   Qual_class_int          },
-  { "translation",    Qual_class_translation  },
-  { "trna_aa",        Qual_class_ignore       },
-  { "trna_codons",    Qual_class_trna_codons  },
-  { "usedin",         Qual_class_paren        },
-  { "xtra_products",  Qual_class_xtraprds     }
-};
 
 typedef struct qualfeatur {
   CharPtr     name;
   Uint1       featurclass;
 } QualFeatur, PNTR QualFeaturPtr;
 
-#define NUM_GB_QUALS 20
+#define NUM_GB_QUALS 25
 
 static QualFeatur qualToFeature [NUM_GB_QUALS] = {
-  { "bound_moiety",   FEATUR_bound_moiety   },
-  { "clone",          FEATUR_clone          },
-  { "cons_splice",    FEATUR_cons_splice    },
-  { "direction",      FEATUR_direction      },
-  { "frequency",      FEATUR_frequency      },
-  { "function",       FEATUR_function       },
-  { "label",          FEATUR_label          },
-  { "map",            FEATUR_map            },
-  { "mod_base",       FEATUR_mod_base       },
-  { "number",         FEATUR_number         },
-  { "organism",       FEATUR_organism       },
-  { "PCR_conditions", FEATUR_PCR_conditions },
-  { "phenotype",      FEATUR_phenotype      },
-  { "product",        FEATUR_product_quals  },
-  { "replace",        FEATUR_replace        },
-  { "rpt_family",     FEATUR_rpt_family     },
-  { "rpt_type",       FEATUR_rpt_type       },
-  { "rpt_unit",       FEATUR_rpt_unit       },
-  { "standard_name",  FEATUR_standard_name  },
-  { "usedin",         FEATUR_usedin         }
+  { "allele",         FTQUAL_allele         },
+  { "bound_moiety",   FTQUAL_bound_moiety   },
+  { "clone",          FTQUAL_clone          },
+  { "codon",          FTQUAL_codon          },
+  { "cons_splice",    FTQUAL_cons_splice    },
+  { "direction",      FTQUAL_direction      },
+  { "EC_number",      FTQUAL_EC_number      },
+  { "frequency",      FTQUAL_frequency      },
+  { "function",       FTQUAL_function       },
+  { "insertion_seq",  FTQUAL_insertion_seq  },
+  { "label",          FTQUAL_label          },
+  { "map",            FTQUAL_map            },
+  { "mod_base",       FTQUAL_mod_base       },
+  { "number",         FTQUAL_number         },
+  { "organism",       FTQUAL_organism       },
+  { "PCR_conditions", FTQUAL_PCR_conditions },
+  { "phenotype",      FTQUAL_phenotype      },
+  { "product",        FTQUAL_product_quals  },
+  { "replace",        FTQUAL_replace        },
+  { "rpt_family",     FTQUAL_rpt_family     },
+  { "rpt_type",       FTQUAL_rpt_type       },
+  { "rpt_unit",       FTQUAL_rpt_unit       },
+  { "standard_name",  FTQUAL_standard_name  },
+  { "transposon",     FTQUAL_transposon     },
+  { "usedin",         FTQUAL_usedin         }
 };
 
 static Int2 GbqualToFeaturIndex (
@@ -5874,24 +5889,19 @@ static Int2 GbqualToFeaturIndex (
   return 0;
 }
 
-#define NUM_ILLEGAL_QUALS 19
+#define NUM_ILLEGAL_QUALS 14
 
 static FeaturQual illegalGbqualList [NUM_ILLEGAL_QUALS] = {
-  { "allele",         Qual_class_quote   },
   { "anticodon",      Qual_class_noquote },
   { "citation",       Qual_class_noquote },
-  { "codon",          Qual_class_noquote },
   { "codon_start",    Qual_class_noquote },
-  { "cons_splice",    Qual_class_noquote },
   { "db_xref",        Qual_class_quote   },
-  { "EC_number",      Qual_class_quote   },
   { "evidence",       Qual_class_noquote },
   { "exception",      Qual_class_quote   },
-  { "frequency",      Qual_class_quote   },
   { "gene",           Qual_class_quote   },
   { "note",           Qual_class_quote   },
   { "protein_id",     Qual_class_quote   },
-  { "pseudo",         Qual_class_noquote },  
+  { "pseudo",         Qual_class_noquote },
   { "transcript_id",  Qual_class_quote   },
   { "transl_except",  Qual_class_noquote },
   { "transl_table",   Qual_class_noquote },
@@ -5959,32 +5969,39 @@ static CharPtr evidenceText [] = {
   NULL, "experimental", "not_experimental"
 };
 
+static CharPtr secStrText [] = {
+  NULL, "helix", "sheet", "turn"
+};
+
+static CharPtr  oops = "?";
+
 static CharPtr SeqCodeNameGet (
   SeqCodeTablePtr table,
   Uint1 residue
 )
 
 {
-  Uint1   index;
-  CharPtr  retval = "?";
+  Uint1  index;
 
   if (table != NULL) {
     index = residue - table->start_at;
     if (index >= 0 && index < table->num) {
-      retval = (table->names) [index];
+      return (table->names) [index];
     }
   }
 
-  return retval;
+  return oops;
 }
 
 static CharPtr Get3LetterSymbol (
+  IntAsn2gbJobPtr  ajp,
   Uint1 seq_code,
   SeqCodeTablePtr table,
   Uint1 residue
 )
 
 {
+  Uint1            code = Seq_code_ncbieaa;
   Int2             index;
   Uint1            new_residue;
   CharPtr          ptr;
@@ -5997,9 +6014,15 @@ static CharPtr Get3LetterSymbol (
     return retval;
   }
 
-  if (seq_code != Seq_code_ncbieaa) {
+  if (ajp->flags.iupacaaOnly) {
+    code = Seq_code_iupacaa;
+  } else {
+    code = Seq_code_ncbieaa;
+  }
+
+  if (seq_code != code) {
     /* if code and seq_code are identical, then smtp is NULL?? */
-    smtp = SeqMapTableFind (seq_code, Seq_code_ncbieaa);
+    smtp = SeqMapTableFind (code, seq_code);
     new_residue = SeqMapTableConvert (smtp, residue);
   } else {
     new_residue = residue;
@@ -6013,7 +6036,7 @@ static CharPtr Get3LetterSymbol (
     ptr = SeqCodeNameGet (table, residue);
     table_3aa=SeqCodeTableFind  (Seq_code_iupacaa3);
     if (ptr != NULL && table_3aa != NULL) {
-      for (index=0; index < (int) table->num; index++) {
+      for (index=0; index < (int) table_3aa->num; index++) {
         if (StringCmp(ptr, (table_3aa->names) [index]) == 0) {
           retval = (table_3aa->symbols) [index];
           return retval;
@@ -6026,44 +6049,62 @@ static CharPtr Get3LetterSymbol (
   return retval;
 }
 
+static Boolean MatchCit (
+  ValNodePtr ppr,
+  RefBlockPtr rbp
+)
+
+{
+  Char        buf [121];
+  size_t      len;
+  Int4        uid;
+  ValNodePtr  vnp;
+
+  if (ppr == NULL || rbp == NULL) return FALSE;
+  switch (ppr->choice) {
+    case PUB_Muid :
+      uid = ppr->data.intvalue;
+      if (rbp->muid == uid) return TRUE;
+      break;
+    case PUB_PMid :
+      uid = ppr->data.intvalue;
+      if (rbp->pmid == uid) return TRUE;
+      break;
+    case PUB_Equiv :
+      for (vnp = (ValNodePtr) ppr->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
+        if (MatchCit (vnp, rbp)) return TRUE;
+      }
+      break;
+    default :
+      PubLabelUnique (ppr, buf, sizeof (buf) - 1, OM_LABEL_CONTENT, TRUE);
+      len = StringLen (buf);
+      if (len > 0 && buf [len - 1] == '>') {
+        buf [len - 1] = '\0';
+        len--;
+      }
+      len = MIN (len, StringLen (rbp->uniquestr));
+      if (StringNICmp (rbp->uniquestr, buf, len) == 0) return TRUE;
+      break;
+  }
+  return FALSE;
+}
+
 static Int2 MatchRef (
   ValNodePtr ppr,
-  ReferenceBlockPtr PNTR rbpp,
+  RefBlockPtr PNTR rbpp,
   Int2 numReferences
 )
 
 {
-  Char               buf [121];
-  Int2               j;
-  size_t             len;
-  ReferenceBlockPtr  rbp;
-  Int4               uid;
+  Int2         j;
+  RefBlockPtr  rbp;
 
   if (ppr == NULL || rbpp == NULL) return 0;
 
   for (j = 0; j < numReferences; j++) {
     rbp = rbpp [j];
     if (rbp == NULL) continue;
-    switch (ppr->choice) {
-      case PUB_Muid :
-        uid = ppr->data.intvalue;
-        if (rbp->muid == uid) return j + 1;
-        break;
-      case PUB_PMid :
-        uid = ppr->data.intvalue;
-        if (rbp->pmid == uid) return j + 1;
-        break;
-      default :
-        PubLabelUnique (ppr, buf, sizeof (buf) - 1, OM_LABEL_CONTENT, TRUE);
-        len = StringLen (buf);
-        if (len > 0 && buf [len - 1] == '>') {
-          buf [len - 1] = '\0';
-          len--;
-        }
-        len = MIN (len, StringLen (rbp->uniquestr));
-        if (StringNICmp (rbp->uniquestr, buf, len) == 0) return j + 1;
-        break;
-    }
+    if (MatchCit (ppr, rbp)) return j + 1;
   }
   return 0;
 }
@@ -6072,111 +6113,111 @@ static Int2 MatchRef (
 
 static Boolean LookForFuzz (SeqLocPtr head)
 {
-	Boolean retval=FALSE;
-	IntFuzzPtr ifp;
-	PackSeqPntPtr pspp;
-	SeqIntPtr sip;
-	SeqLocPtr slp;
-	SeqPntPtr spp;
+  Boolean retval=FALSE;
+  IntFuzzPtr ifp;
+  PackSeqPntPtr pspp;
+  SeqIntPtr sip;
+  SeqLocPtr slp;
+  SeqPntPtr spp;
 
-	if (head == NULL)
-		return retval;
+  if (head == NULL)
+    return retval;
 
-	slp=NULL;
-	while ((slp = SeqLocFindNext(head, slp)) != NULL)
-	{
-		switch (slp->choice)
-		{
-			case SEQLOC_INT:
-				sip = (SeqIntPtr)(slp->data.ptrvalue);
-				ifp = sip->if_from;
-				if (ifp != NULL)
-				{
-					if (ifp->choice == 4)
-					{
-						if (ifp->a != 0)
-							retval=TRUE;
-					}
-					else
-						retval = TRUE;	
-				}
-				ifp = sip->if_to;
-				if (ifp != NULL)
-				{
-					if (ifp->choice == 4)
-					{
-						if (ifp->a != 0)
-							retval=TRUE;
-					}
-					else
-						retval = TRUE;	
-				}
-				break;
-			case SEQLOC_PNT:
-				spp = (SeqPntPtr)(slp->data.ptrvalue);
-				ifp = spp->fuzz;
-				if (ifp != NULL)
-				{
-					if (ifp->choice == 4)
-					{
-						if (ifp->a != 0)
-							retval=TRUE;
-					}
-					else
-						retval = TRUE;	
-				}
-				break;
-			case SEQLOC_PACKED_PNT:
-				pspp = (PackSeqPntPtr)(slp->data.ptrvalue);
-				ifp = pspp->fuzz;
-				if (ifp != NULL)
-				{
-					if (ifp->choice == 4)
-					{
-						if (ifp->a != 0)
-							retval=TRUE;
-					}
-					else
-						retval = TRUE;	
-				}
-				break;
-			default:
-				break;
-		}
-		if (retval == TRUE)
-			break;
-	}
-	return retval;
+  slp=NULL;
+  while ((slp = SeqLocFindNext(head, slp)) != NULL)
+  {
+    switch (slp->choice)
+    {
+      case SEQLOC_INT:
+        sip = (SeqIntPtr)(slp->data.ptrvalue);
+        ifp = sip->if_from;
+        if (ifp != NULL)
+        {
+          if (ifp->choice == 4)
+          {
+            if (ifp->a != 0)
+              retval=TRUE;
+          }
+          else
+            retval = TRUE;
+        }
+        ifp = sip->if_to;
+        if (ifp != NULL)
+        {
+          if (ifp->choice == 4)
+          {
+            if (ifp->a != 0)
+              retval=TRUE;
+          }
+          else
+            retval = TRUE;
+        }
+        break;
+      case SEQLOC_PNT:
+        spp = (SeqPntPtr)(slp->data.ptrvalue);
+        ifp = spp->fuzz;
+        if (ifp != NULL)
+        {
+          if (ifp->choice == 4)
+          {
+            if (ifp->a != 0)
+              retval=TRUE;
+          }
+          else
+            retval = TRUE;
+        }
+        break;
+      case SEQLOC_PACKED_PNT:
+        pspp = (PackSeqPntPtr)(slp->data.ptrvalue);
+        ifp = pspp->fuzz;
+        if (ifp != NULL)
+        {
+          if (ifp->choice == 4)
+          {
+            if (ifp->a != 0)
+              retval=TRUE;
+          }
+          else
+            retval = TRUE;
+        }
+        break;
+      default:
+        break;
+    }
+    if (retval == TRUE)
+      break;
+  }
+  return retval;
 }
 
 static CharPtr siteList [] = {
   NULL,
-  "active site",
-  "binding site",
-  "cleavage site",
-  "inhibit site",
-  "modified site",
-  "glycosylation site",
-  "myristoylation site",
-  "mutagenized site",
-  "metal-binding site",
-  "phosphorylation site",
-  "acetylation site",
-  "amidation site",
-  "methylation site",
-  "hydroxylation site",
-  "sulfatation site",
-  "oxidative-deamination site",
-  "pyrrolidone-carboxylic-acid site",
-  "gamma-carboxyglutamic-acid site",
-  "blocked site",
-  "lipid-binding site",
-  "np-binding site",
-  "DNA binding site",
-  "signal-peptide site",
-  "transit-peptide site",
-  "transmembrane-region site",
-  "unclassified site"
+  "active",
+  "binding",
+  "cleavage",
+  "inhibit",
+  "modified",
+  "glycosylation",
+  "myristoylation",
+  "mutagenized",
+  "metal-binding",
+  "phosphorylation",
+  "acetylation",
+  "amidation",
+  "methylation",
+  "hydroxylation",
+  "sulfatation",
+  "oxidative-deamination",
+  "pyrrolidone-carboxylic-acid",
+  "gamma-carboxyglutamic-acid",
+  "blocked",
+  "lipid-binding",
+  "np-binding",
+  "DNA binding",
+  "signal-peptide",
+  "transit-peptide",
+  "transmembrane-region",
+  "unclassified"
 };
 
 static CharPtr conflict_msg =
@@ -6199,14 +6240,14 @@ static void s_DisplayQVP(QualValPtr qvp, Uint1Ptr notetbl)
   for (j = 0, jdx = notetbl [j]; jdx != 0; j++, jdx = notetbl [j])
     {
       if (((int) qvp[jdx].str != 0x1000000) &&
-	  ((int) qvp[jdx].str != 0x1) && 
-	  ((int) qvp[jdx].str != 0xb) && 
-	  (qvp[jdx].str != NULL))
-	fprintf(stderr, "%d\t%-25s %s\n", j, asn2gnbk_featur_quals[jdx].name,
-		qvp[jdx].str);
+      ((int) qvp[jdx].str != 0x1) &&
+      ((int) qvp[jdx].str != 0xb) &&
+      (qvp[jdx].str != NULL))
+    fprintf(stderr, "%d\t%-25s %s\n", j, asn2gnbk_featur_quals[jdx].name,
+        qvp[jdx].str);
       else
-	fprintf(stderr, "%d\t%-25s %s\n", j, asn2gnbk_featur_quals[jdx].name,
-		"NULL");
+    fprintf(stderr, "%d\t%-25s %s\n", j, asn2gnbk_featur_quals[jdx].name,
+        "NULL");
     }
 }
 
@@ -6227,768 +6268,737 @@ static Boolean NotInGeneSyn (
   return TRUE;
 }
 
-static CharPtr FormatFeatureBlock (
-  Asn2gbFormatPtr afp,
-  BaseBlockPtr bbp
+typedef struct valqualstruc {
+  Uint2       featdef;
+  FtQualType  ftqual;
+} ValQual, PNTR ValQualPtr;
+
+/*
+   WARNING - This list MUST be kept sorted in FEATDEF order as the primary
+   key, and within a FEATDEF group sorted by FTQUAL as the secondary key
+*/
+
+static ValQual legalGbqualList [] = {
+
+  {FEATDEF_GENE ,  FTQUAL_allele},
+  {FEATDEF_GENE ,  FTQUAL_function},
+  {FEATDEF_GENE ,  FTQUAL_label},
+  {FEATDEF_GENE ,  FTQUAL_map},
+  {FEATDEF_GENE ,  FTQUAL_phenotype},
+  {FEATDEF_GENE ,  FTQUAL_product},
+  {FEATDEF_GENE ,  FTQUAL_standard_name},
+  {FEATDEF_GENE ,  FTQUAL_usedin},
+
+  {FEATDEF_CDS ,  FTQUAL_allele},
+  {FEATDEF_CDS ,  FTQUAL_codon},
+  {FEATDEF_CDS ,  FTQUAL_label},
+  {FEATDEF_CDS ,  FTQUAL_map},
+  {FEATDEF_CDS ,  FTQUAL_number},
+  {FEATDEF_CDS ,  FTQUAL_standard_name},
+  {FEATDEF_CDS ,  FTQUAL_usedin},
+
+  {FEATDEF_PROT ,  FTQUAL_product},
+
+  {FEATDEF_preRNA ,  FTQUAL_allele},
+  {FEATDEF_preRNA ,  FTQUAL_function},
+  {FEATDEF_preRNA ,  FTQUAL_label},
+  {FEATDEF_preRNA ,  FTQUAL_map},
+  {FEATDEF_preRNA ,  FTQUAL_product},
+  {FEATDEF_preRNA ,  FTQUAL_standard_name},
+  {FEATDEF_preRNA ,  FTQUAL_usedin},
+
+  {FEATDEF_mRNA ,  FTQUAL_allele},
+  {FEATDEF_mRNA ,  FTQUAL_function},
+  {FEATDEF_mRNA ,  FTQUAL_label},
+  {FEATDEF_mRNA ,  FTQUAL_map},
+  {FEATDEF_mRNA ,  FTQUAL_product},
+  {FEATDEF_mRNA ,  FTQUAL_standard_name},
+  {FEATDEF_mRNA ,  FTQUAL_usedin},
+
+  {FEATDEF_tRNA ,  FTQUAL_function},
+  {FEATDEF_tRNA ,  FTQUAL_label},
+  {FEATDEF_tRNA ,  FTQUAL_map},
+  {FEATDEF_tRNA ,  FTQUAL_product},
+  {FEATDEF_tRNA ,  FTQUAL_standard_name},
+  {FEATDEF_tRNA ,  FTQUAL_usedin},
+
+  {FEATDEF_rRNA ,  FTQUAL_function},
+  {FEATDEF_rRNA ,  FTQUAL_label},
+  {FEATDEF_rRNA ,  FTQUAL_map},
+  {FEATDEF_rRNA ,  FTQUAL_product},
+  {FEATDEF_rRNA ,  FTQUAL_standard_name},
+  {FEATDEF_rRNA ,  FTQUAL_usedin},
+
+  {FEATDEF_snRNA ,  FTQUAL_function},
+  {FEATDEF_snRNA ,  FTQUAL_label},
+  {FEATDEF_snRNA ,  FTQUAL_map},
+  {FEATDEF_snRNA ,  FTQUAL_product},
+  {FEATDEF_snRNA ,  FTQUAL_standard_name},
+  {FEATDEF_snRNA ,  FTQUAL_usedin},
+
+  {FEATDEF_scRNA ,  FTQUAL_function},
+  {FEATDEF_scRNA ,  FTQUAL_label},
+  {FEATDEF_scRNA ,  FTQUAL_map},
+  {FEATDEF_scRNA ,  FTQUAL_product},
+  {FEATDEF_scRNA ,  FTQUAL_standard_name},
+  {FEATDEF_scRNA ,  FTQUAL_usedin},
+
+  {FEATDEF_otherRNA ,  FTQUAL_function},
+  {FEATDEF_otherRNA ,  FTQUAL_label},
+  {FEATDEF_otherRNA ,  FTQUAL_map},
+  {FEATDEF_otherRNA ,  FTQUAL_product},
+  {FEATDEF_otherRNA ,  FTQUAL_standard_name},
+  {FEATDEF_otherRNA ,  FTQUAL_usedin},
+
+  {FEATDEF_attenuator ,  FTQUAL_label},
+  {FEATDEF_attenuator ,  FTQUAL_map},
+  {FEATDEF_attenuator ,  FTQUAL_phenotype},
+  {FEATDEF_attenuator ,  FTQUAL_usedin},
+
+  {FEATDEF_C_region ,  FTQUAL_label},
+  {FEATDEF_C_region ,  FTQUAL_map},
+  {FEATDEF_C_region ,  FTQUAL_product},
+  {FEATDEF_C_region ,  FTQUAL_standard_name},
+  {FEATDEF_C_region ,  FTQUAL_usedin},
+
+  {FEATDEF_CAAT_signal ,  FTQUAL_label},
+  {FEATDEF_CAAT_signal ,  FTQUAL_map},
+  {FEATDEF_CAAT_signal ,  FTQUAL_usedin},
+
+  {FEATDEF_Imp_CDS ,  FTQUAL_codon},
+  {FEATDEF_Imp_CDS ,  FTQUAL_EC_number},
+  {FEATDEF_Imp_CDS ,  FTQUAL_function},
+  {FEATDEF_Imp_CDS ,  FTQUAL_label},
+  {FEATDEF_Imp_CDS ,  FTQUAL_map},
+  {FEATDEF_Imp_CDS ,  FTQUAL_number},
+  {FEATDEF_Imp_CDS ,  FTQUAL_product},
+  {FEATDEF_Imp_CDS ,  FTQUAL_standard_name},
+  {FEATDEF_Imp_CDS ,  FTQUAL_usedin},
+
+  {FEATDEF_conflict ,  FTQUAL_label},
+  {FEATDEF_conflict ,  FTQUAL_map},
+  {FEATDEF_conflict ,  FTQUAL_replace},
+  {FEATDEF_conflict ,  FTQUAL_usedin},
+
+  {FEATDEF_D_loop ,  FTQUAL_label},
+  {FEATDEF_D_loop ,  FTQUAL_map},
+  {FEATDEF_D_loop ,  FTQUAL_usedin},
+
+  {FEATDEF_D_segment ,  FTQUAL_label},
+  {FEATDEF_D_segment ,  FTQUAL_map},
+  {FEATDEF_D_segment ,  FTQUAL_product},
+  {FEATDEF_D_segment ,  FTQUAL_standard_name},
+  {FEATDEF_D_segment ,  FTQUAL_usedin},
+
+  {FEATDEF_enhancer ,  FTQUAL_label},
+  {FEATDEF_enhancer ,  FTQUAL_map},
+  {FEATDEF_enhancer ,  FTQUAL_standard_name},
+  {FEATDEF_enhancer ,  FTQUAL_usedin},
+
+  {FEATDEF_exon ,  FTQUAL_allele},
+  {FEATDEF_exon ,  FTQUAL_EC_number},
+  {FEATDEF_exon ,  FTQUAL_function},
+  {FEATDEF_exon ,  FTQUAL_label},
+  {FEATDEF_exon ,  FTQUAL_map},
+  {FEATDEF_exon ,  FTQUAL_number},
+  {FEATDEF_exon ,  FTQUAL_product},
+  {FEATDEF_exon ,  FTQUAL_standard_name},
+  {FEATDEF_exon ,  FTQUAL_usedin},
+
+  {FEATDEF_GC_signal ,  FTQUAL_label},
+  {FEATDEF_GC_signal ,  FTQUAL_map},
+  {FEATDEF_GC_signal ,  FTQUAL_usedin},
+
+  {FEATDEF_iDNA ,  FTQUAL_function},
+  {FEATDEF_iDNA ,  FTQUAL_label},
+  {FEATDEF_iDNA ,  FTQUAL_map},
+  {FEATDEF_iDNA ,  FTQUAL_number},
+  {FEATDEF_iDNA ,  FTQUAL_standard_name},
+  {FEATDEF_iDNA ,  FTQUAL_usedin},
+
+  {FEATDEF_intron ,  FTQUAL_allele},
+  {FEATDEF_intron ,  FTQUAL_cons_splice},
+  {FEATDEF_intron ,  FTQUAL_function},
+  {FEATDEF_intron ,  FTQUAL_label},
+  {FEATDEF_intron ,  FTQUAL_map},
+  {FEATDEF_intron ,  FTQUAL_number},
+  {FEATDEF_intron ,  FTQUAL_standard_name},
+  {FEATDEF_intron ,  FTQUAL_usedin},
+
+  {FEATDEF_J_segment ,  FTQUAL_label},
+  {FEATDEF_J_segment ,  FTQUAL_map},
+  {FEATDEF_J_segment ,  FTQUAL_product},
+  {FEATDEF_J_segment ,  FTQUAL_standard_name},
+  {FEATDEF_J_segment ,  FTQUAL_usedin},
+
+  {FEATDEF_LTR ,  FTQUAL_function},
+  {FEATDEF_LTR ,  FTQUAL_label},
+  {FEATDEF_LTR ,  FTQUAL_map},
+  {FEATDEF_LTR ,  FTQUAL_standard_name},
+  {FEATDEF_LTR ,  FTQUAL_usedin},
+
+  {FEATDEF_mat_peptide ,  FTQUAL_EC_number},
+  {FEATDEF_mat_peptide ,  FTQUAL_function},
+  {FEATDEF_mat_peptide ,  FTQUAL_label},
+  {FEATDEF_mat_peptide ,  FTQUAL_map},
+  {FEATDEF_mat_peptide ,  FTQUAL_product},
+  {FEATDEF_mat_peptide ,  FTQUAL_standard_name},
+  {FEATDEF_mat_peptide ,  FTQUAL_usedin},
+
+  {FEATDEF_misc_binding ,  FTQUAL_bound_moiety},
+  {FEATDEF_misc_binding ,  FTQUAL_function},
+  {FEATDEF_misc_binding ,  FTQUAL_label},
+  {FEATDEF_misc_binding ,  FTQUAL_map},
+  {FEATDEF_misc_binding ,  FTQUAL_usedin},
+
+  {FEATDEF_misc_difference ,  FTQUAL_clone},
+  {FEATDEF_misc_difference ,  FTQUAL_label},
+  {FEATDEF_misc_difference ,  FTQUAL_map},
+  {FEATDEF_misc_difference ,  FTQUAL_phenotype},
+  {FEATDEF_misc_difference ,  FTQUAL_replace},
+  {FEATDEF_misc_difference ,  FTQUAL_standard_name},
+  {FEATDEF_misc_difference ,  FTQUAL_usedin},
+
+  {FEATDEF_misc_feature ,  FTQUAL_function},
+  {FEATDEF_misc_feature ,  FTQUAL_label},
+  {FEATDEF_misc_feature ,  FTQUAL_map},
+  {FEATDEF_misc_feature ,  FTQUAL_number},
+  {FEATDEF_misc_feature ,  FTQUAL_phenotype},
+  {FEATDEF_misc_feature ,  FTQUAL_product},
+  {FEATDEF_misc_feature ,  FTQUAL_standard_name},
+  {FEATDEF_misc_feature ,  FTQUAL_usedin},
+
+  {FEATDEF_misc_recomb ,  FTQUAL_label},
+  {FEATDEF_misc_recomb ,  FTQUAL_map},
+  {FEATDEF_misc_recomb ,  FTQUAL_organism},
+  {FEATDEF_misc_recomb ,  FTQUAL_standard_name},
+  {FEATDEF_misc_recomb ,  FTQUAL_usedin},
+
+  {FEATDEF_misc_signal ,  FTQUAL_function},
+  {FEATDEF_misc_signal ,  FTQUAL_label},
+  {FEATDEF_misc_signal ,  FTQUAL_map},
+  {FEATDEF_misc_signal ,  FTQUAL_phenotype},
+  {FEATDEF_misc_signal ,  FTQUAL_standard_name},
+  {FEATDEF_misc_signal ,  FTQUAL_usedin},
+
+  {FEATDEF_misc_structure ,  FTQUAL_function},
+  {FEATDEF_misc_structure ,  FTQUAL_label},
+  {FEATDEF_misc_structure ,  FTQUAL_map},
+  {FEATDEF_misc_structure ,  FTQUAL_standard_name},
+  {FEATDEF_misc_structure ,  FTQUAL_usedin},
+
+  {FEATDEF_modified_base ,  FTQUAL_frequency},
+  {FEATDEF_modified_base ,  FTQUAL_label},
+  {FEATDEF_modified_base ,  FTQUAL_map},
+  {FEATDEF_modified_base ,  FTQUAL_mod_base},
+  {FEATDEF_modified_base ,  FTQUAL_usedin},
+
+  {FEATDEF_N_region ,  FTQUAL_label},
+  {FEATDEF_N_region ,  FTQUAL_map},
+  {FEATDEF_N_region ,  FTQUAL_product},
+  {FEATDEF_N_region ,  FTQUAL_standard_name},
+  {FEATDEF_N_region ,  FTQUAL_usedin},
+
+  {FEATDEF_old_sequence ,  FTQUAL_label},
+  {FEATDEF_old_sequence ,  FTQUAL_map},
+  {FEATDEF_old_sequence ,  FTQUAL_replace},
+  {FEATDEF_old_sequence ,  FTQUAL_usedin},
+
+  {FEATDEF_polyA_signal ,  FTQUAL_label},
+  {FEATDEF_polyA_signal ,  FTQUAL_map},
+  {FEATDEF_polyA_signal ,  FTQUAL_usedin},
+
+  {FEATDEF_polyA_site ,  FTQUAL_label},
+  {FEATDEF_polyA_site ,  FTQUAL_map},
+  {FEATDEF_polyA_site ,  FTQUAL_usedin},
+
+  {FEATDEF_prim_transcript ,  FTQUAL_allele},
+  {FEATDEF_prim_transcript ,  FTQUAL_function},
+  {FEATDEF_prim_transcript ,  FTQUAL_label},
+  {FEATDEF_prim_transcript ,  FTQUAL_map},
+  {FEATDEF_prim_transcript ,  FTQUAL_standard_name},
+  {FEATDEF_prim_transcript ,  FTQUAL_usedin},
+
+  {FEATDEF_primer_bind ,  FTQUAL_label},
+  {FEATDEF_primer_bind ,  FTQUAL_map},
+  {FEATDEF_primer_bind ,  FTQUAL_PCR_conditions},
+  {FEATDEF_primer_bind ,  FTQUAL_standard_name},
+  {FEATDEF_primer_bind ,  FTQUAL_usedin},
+
+  {FEATDEF_promoter ,  FTQUAL_function},
+  {FEATDEF_promoter ,  FTQUAL_label},
+  {FEATDEF_promoter ,  FTQUAL_map},
+  {FEATDEF_promoter ,  FTQUAL_phenotype},
+  {FEATDEF_promoter ,  FTQUAL_standard_name},
+  {FEATDEF_promoter ,  FTQUAL_usedin},
+
+  {FEATDEF_protein_bind ,  FTQUAL_bound_moiety},
+  {FEATDEF_protein_bind ,  FTQUAL_function},
+  {FEATDEF_protein_bind ,  FTQUAL_label},
+  {FEATDEF_protein_bind ,  FTQUAL_map},
+  {FEATDEF_protein_bind ,  FTQUAL_standard_name},
+  {FEATDEF_protein_bind ,  FTQUAL_usedin},
+
+  {FEATDEF_RBS ,  FTQUAL_label},
+  {FEATDEF_RBS ,  FTQUAL_map},
+  {FEATDEF_RBS ,  FTQUAL_standard_name},
+  {FEATDEF_RBS ,  FTQUAL_usedin},
+
+  {FEATDEF_repeat_region ,  FTQUAL_function},
+  {FEATDEF_repeat_region ,  FTQUAL_insertion_seq},
+  {FEATDEF_repeat_region ,  FTQUAL_label},
+  {FEATDEF_repeat_region ,  FTQUAL_map},
+  {FEATDEF_repeat_region ,  FTQUAL_rpt_family},
+  {FEATDEF_repeat_region ,  FTQUAL_rpt_type},
+  {FEATDEF_repeat_region ,  FTQUAL_rpt_unit},
+  {FEATDEF_repeat_region ,  FTQUAL_standard_name},
+  {FEATDEF_repeat_region ,  FTQUAL_transposon},
+  {FEATDEF_repeat_region ,  FTQUAL_usedin},
+
+  {FEATDEF_repeat_unit ,  FTQUAL_function},
+  {FEATDEF_repeat_unit ,  FTQUAL_label},
+  {FEATDEF_repeat_unit ,  FTQUAL_map},
+  {FEATDEF_repeat_unit ,  FTQUAL_rpt_family},
+  {FEATDEF_repeat_unit ,  FTQUAL_rpt_type},
+  {FEATDEF_repeat_unit ,  FTQUAL_usedin},
+
+  {FEATDEF_rep_origin ,  FTQUAL_direction},
+  {FEATDEF_rep_origin ,  FTQUAL_label},
+  {FEATDEF_rep_origin ,  FTQUAL_map},
+  {FEATDEF_rep_origin ,  FTQUAL_standard_name},
+  {FEATDEF_rep_origin ,  FTQUAL_usedin},
+
+  {FEATDEF_S_region ,  FTQUAL_label},
+  {FEATDEF_S_region ,  FTQUAL_map},
+  {FEATDEF_S_region ,  FTQUAL_product},
+  {FEATDEF_S_region ,  FTQUAL_standard_name},
+  {FEATDEF_S_region ,  FTQUAL_usedin},
+
+  {FEATDEF_satellite ,  FTQUAL_label},
+  {FEATDEF_satellite ,  FTQUAL_map},
+  {FEATDEF_satellite ,  FTQUAL_rpt_family},
+  {FEATDEF_satellite ,  FTQUAL_rpt_type},
+  {FEATDEF_satellite ,  FTQUAL_rpt_unit},
+  {FEATDEF_satellite ,  FTQUAL_standard_name},
+  {FEATDEF_satellite ,  FTQUAL_usedin},
+
+  {FEATDEF_sig_peptide ,  FTQUAL_function},
+  {FEATDEF_sig_peptide ,  FTQUAL_label},
+  {FEATDEF_sig_peptide ,  FTQUAL_map},
+  {FEATDEF_sig_peptide ,  FTQUAL_product},
+  {FEATDEF_sig_peptide ,  FTQUAL_standard_name},
+  {FEATDEF_sig_peptide ,  FTQUAL_usedin},
+
+  {FEATDEF_stem_loop ,  FTQUAL_function},
+  {FEATDEF_stem_loop ,  FTQUAL_label},
+  {FEATDEF_stem_loop ,  FTQUAL_map},
+  {FEATDEF_stem_loop ,  FTQUAL_standard_name},
+  {FEATDEF_stem_loop ,  FTQUAL_usedin},
+
+  {FEATDEF_STS ,  FTQUAL_label},
+  {FEATDEF_STS ,  FTQUAL_map},
+  {FEATDEF_STS ,  FTQUAL_standard_name},
+  {FEATDEF_STS ,  FTQUAL_usedin},
+
+  {FEATDEF_TATA_signal ,  FTQUAL_label},
+  {FEATDEF_TATA_signal ,  FTQUAL_map},
+  {FEATDEF_TATA_signal ,  FTQUAL_usedin},
+
+  {FEATDEF_terminator ,  FTQUAL_label},
+  {FEATDEF_terminator ,  FTQUAL_map},
+  {FEATDEF_terminator ,  FTQUAL_standard_name},
+  {FEATDEF_terminator ,  FTQUAL_usedin},
+
+  {FEATDEF_transit_peptide ,  FTQUAL_function},
+  {FEATDEF_transit_peptide ,  FTQUAL_label},
+  {FEATDEF_transit_peptide ,  FTQUAL_map},
+  {FEATDEF_transit_peptide ,  FTQUAL_product},
+  {FEATDEF_transit_peptide ,  FTQUAL_standard_name},
+  {FEATDEF_transit_peptide ,  FTQUAL_usedin},
+
+  {FEATDEF_unsure ,  FTQUAL_label},
+  {FEATDEF_unsure ,  FTQUAL_map},
+  {FEATDEF_unsure ,  FTQUAL_replace},
+  {FEATDEF_unsure ,  FTQUAL_usedin},
+
+  {FEATDEF_V_region ,  FTQUAL_label},
+  {FEATDEF_V_region ,  FTQUAL_map},
+  {FEATDEF_V_region ,  FTQUAL_product},
+  {FEATDEF_V_region ,  FTQUAL_standard_name},
+  {FEATDEF_V_region ,  FTQUAL_usedin},
+
+  {FEATDEF_V_segment ,  FTQUAL_label},
+  {FEATDEF_V_segment ,  FTQUAL_map},
+  {FEATDEF_V_segment ,  FTQUAL_product},
+  {FEATDEF_V_segment ,  FTQUAL_standard_name},
+  {FEATDEF_V_segment ,  FTQUAL_usedin},
+
+  {FEATDEF_variation ,  FTQUAL_allele},
+  {FEATDEF_variation ,  FTQUAL_frequency},
+  {FEATDEF_variation ,  FTQUAL_label},
+  {FEATDEF_variation ,  FTQUAL_map},
+  {FEATDEF_variation ,  FTQUAL_phenotype},
+  {FEATDEF_variation ,  FTQUAL_product},
+  {FEATDEF_variation ,  FTQUAL_replace},
+  {FEATDEF_variation ,  FTQUAL_standard_name},
+  {FEATDEF_variation ,  FTQUAL_usedin},
+
+  {FEATDEF_3clip ,  FTQUAL_allele},
+  {FEATDEF_3clip ,  FTQUAL_function},
+  {FEATDEF_3clip ,  FTQUAL_label},
+  {FEATDEF_3clip ,  FTQUAL_map},
+  {FEATDEF_3clip ,  FTQUAL_standard_name},
+  {FEATDEF_3clip ,  FTQUAL_usedin},
+
+  {FEATDEF_3UTR ,  FTQUAL_allele},
+  {FEATDEF_3UTR ,  FTQUAL_function},
+  {FEATDEF_3UTR ,  FTQUAL_label},
+  {FEATDEF_3UTR ,  FTQUAL_map},
+  {FEATDEF_3UTR ,  FTQUAL_standard_name},
+  {FEATDEF_3UTR ,  FTQUAL_usedin},
+
+  {FEATDEF_5clip ,  FTQUAL_allele},
+  {FEATDEF_5clip ,  FTQUAL_function},
+  {FEATDEF_5clip ,  FTQUAL_label},
+  {FEATDEF_5clip ,  FTQUAL_map},
+  {FEATDEF_5clip ,  FTQUAL_standard_name},
+  {FEATDEF_5clip ,  FTQUAL_usedin},
+
+  {FEATDEF_5UTR ,  FTQUAL_allele},
+  {FEATDEF_5UTR ,  FTQUAL_function},
+  {FEATDEF_5UTR ,  FTQUAL_label},
+  {FEATDEF_5UTR ,  FTQUAL_map},
+  {FEATDEF_5UTR ,  FTQUAL_standard_name},
+  {FEATDEF_5UTR ,  FTQUAL_usedin},
+
+  {FEATDEF_10_signal ,  FTQUAL_label},
+  {FEATDEF_10_signal ,  FTQUAL_map},
+  {FEATDEF_10_signal ,  FTQUAL_standard_name},
+  {FEATDEF_10_signal ,  FTQUAL_usedin},
+
+  {FEATDEF_35_signal ,  FTQUAL_label},
+  {FEATDEF_35_signal ,  FTQUAL_map},
+  {FEATDEF_35_signal ,  FTQUAL_standard_name},
+  {FEATDEF_35_signal ,  FTQUAL_usedin},
+
+  {FEATDEF_REGION ,  FTQUAL_function},
+  {FEATDEF_REGION ,  FTQUAL_label},
+  {FEATDEF_REGION ,  FTQUAL_map},
+  {FEATDEF_REGION ,  FTQUAL_number},
+  {FEATDEF_REGION ,  FTQUAL_phenotype},
+  {FEATDEF_REGION ,  FTQUAL_product},
+  {FEATDEF_REGION ,  FTQUAL_standard_name},
+  {FEATDEF_REGION ,  FTQUAL_usedin},
+
+  {FEATDEF_mat_peptide_aa ,  FTQUAL_label},
+  {FEATDEF_mat_peptide_aa ,  FTQUAL_map},
+  {FEATDEF_mat_peptide_aa ,  FTQUAL_product},
+  {FEATDEF_mat_peptide_aa ,  FTQUAL_standard_name},
+  {FEATDEF_mat_peptide_aa ,  FTQUAL_usedin},
+
+  {FEATDEF_sig_peptide_aa ,  FTQUAL_label},
+  {FEATDEF_sig_peptide_aa ,  FTQUAL_map},
+  {FEATDEF_sig_peptide_aa ,  FTQUAL_product},
+  {FEATDEF_sig_peptide_aa ,  FTQUAL_standard_name},
+  {FEATDEF_sig_peptide_aa ,  FTQUAL_usedin},
+
+  {FEATDEF_transit_peptide_aa ,  FTQUAL_label},
+  {FEATDEF_transit_peptide_aa ,  FTQUAL_map},
+  {FEATDEF_transit_peptide_aa ,  FTQUAL_product},
+  {FEATDEF_transit_peptide_aa ,  FTQUAL_standard_name},
+  {FEATDEF_transit_peptide_aa ,  FTQUAL_usedin},
+
+  {FEATDEF_snoRNA ,  FTQUAL_function},
+  {FEATDEF_snoRNA ,  FTQUAL_label},
+  {FEATDEF_snoRNA ,  FTQUAL_map},
+  {FEATDEF_snoRNA ,  FTQUAL_product},
+  {FEATDEF_snoRNA ,  FTQUAL_standard_name},
+  {FEATDEF_snoRNA ,  FTQUAL_usedin}
+
+};
+
+/* comparison of ValQual's -- first compare featdef then ftqual */
+#define COMPARE_VALQUAL(av,aq,bv,bq) ( ((av)-(bv)) ? ((av)-(bv)) : ((aq)-(bq)) )
+
+/* Returns TRUE if {featureKey, qualKey} exists in legalGbqualList */
+
+static Boolean AllowedValQual (Uint2 featureKey, FtQualType qualKey)
+
+{
+  Int2 L, R, mid;
+
+  L = 0;
+  R = sizeof (legalGbqualList) / sizeof (ValQual) - 1;
+  while (L < R) {
+    mid = (L + R) / 2;
+    if (COMPARE_VALQUAL (legalGbqualList [mid].featdef,
+       legalGbqualList [mid].ftqual,
+       featureKey, qualKey) < 0)
+      L = mid + 1;
+    else
+      R = mid;
+  }
+  if (COMPARE_VALQUAL (legalGbqualList [R].featdef,
+           legalGbqualList [R].ftqual,
+           featureKey, qualKey)) {
+    return 0;
+  }
+  return 1;
+}
+
+
+static CharPtr validRptString [] = {
+  "tandem", "inverted", "flanking", "terminal", "direct", "dispersed", "other", NULL
+};
+
+static CharPtr validLRBString [] = {
+  "LEFT", "RIGHT", "BOTH", NULL
+};
+
+static CharPtr validConsSpliceString [] = {
+  "(5'site:YES, 3'site:YES)",
+  "(5'site:YES, 3'site:NO)",
+  "(5'site:YES, 3'site:ABSENT)",
+  "(5'site:NO, 3'site:YES)",
+  "(5'site:NO, 3'site:NO)",
+  "(5'site:NO, 3'site:ABSENT)",
+  "(5'site:ABSENT, 3'site:YES)",
+  "(5'site:ABSENT, 3'site:NO)",
+  "(5'site:ABSENT, 3'site:ABSENT)",
+  NULL
+};
+
+static CharPtr validExceptionString [] = {
+  "RNA editing", "reasons given in citation", NULL
+};
+
+static Boolean StringInStringList (CharPtr testString, CharPtr PNTR stringList) {
+  Int2 i;
+  i = 0;
+  while (stringList [i] != NULL) {
+    if (StringICmp (testString, stringList [i]) == 0)
+      return 1;
+    i++;
+  }
+  return 0;
+}
+
+/*
+Return values are:
+ 0: no problem - Accession is in proper format
+-1: Accession did not start with a letter (or two letters)
+-2: Accession did not contain five numbers (or six numbers after 2 letters)
+-3: the original Accession number to be validated was NULL
+-4: the original Accession number is too long (>10)
+*/
+
+static Int2 ValidateAccession (
+  CharPtr accession
 )
 
 {
-  Uint1              aa;
+  Char     ch;
+  Int2     numAlpha = 0;
+  Int2     numDigits = 0;
+  Int2     numUndersc = 0;
+  CharPtr  str;
+
+  if (accession == NULL || accession [0] == '\0') return -3;
+
+  if (StringLen (accession) >= 10) return -4;
+
+  if (accession [0] < 'A' || accession [0] > 'Z') return -1;
+
+  str = accession;
+  ch = *str;
+  while (IS_ALPHA (ch)) {
+    numAlpha++;
+    str++;
+    ch = *str;
+  }
+  while (ch == '_') {
+    numUndersc++;
+    str++;
+    ch = *str;
+  }
+  while (IS_DIGIT (ch)) {
+    numDigits++;
+    str++;
+    ch = *str;
+  }
+  if (ch != '\0' && ch != ' ') return -2;
+
+  if (numUndersc > 1) return -2;
+
+  if (numUndersc == 0) {
+    if (numAlpha == 1 && numDigits == 5) return 0;
+    if (numAlpha == 2 && numDigits == 6) return 0;
+    if (numAlpha == 3 && numDigits == 5) return 0;
+  } else if (numUndersc == 1) {
+    if (numAlpha != 2 || numDigits != 6) return -2;
+    if (accession [0] == 'N' || accession [0] == 'X') {
+      if (accession [1] == 'M' ||
+          accession [1] == 'C' ||
+          accession [1] == 'T' ||
+          accession [1] == 'P' ||
+          accession [1] == 'G' ||
+          accession [1] == 'R') {
+        return 0;
+      }
+    }
+  }
+
+  return -2;
+}
+
+static CharPtr mrnaevtext1 = "Derived by automated computational analysis";
+static CharPtr mrnaevtext2 = "using gene prediction method:";
+static CharPtr mrnaevtext3 = "Supporting evidence includes similarity to:";
+
+static CharPtr GetStrFormRNAEvidence (
+  UserObjectPtr uop
+)
+
+{
+  size_t        len;
+  CharPtr       method = NULL;
+  Int2          nm = 0;
+  ObjectIdPtr   oip;
+  CharPtr       str = NULL;
+  Char          tmp [20];
+  UserFieldPtr  u, ufp, uu;
+
+  if (uop == NULL) return NULL;
+  oip = uop->type;
+  if (oip == NULL) return NULL;
+  if (StringCmp (oip->str, "ModelEvidence") != 0) return NULL;
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (oip == NULL || ufp->data.ptrvalue == NULL) continue;
+    if (StringCmp (oip->str, "Method") == 0) {
+      method = StringSaveNoNull ((CharPtr) ufp->data.ptrvalue);
+    }
+    if (StringCmp (oip->str, "mRNA") == 0) {
+      for (u = (UserFieldPtr) ufp->data.ptrvalue; u != NULL; u = u->next) {
+        if (u->data.ptrvalue == NULL) continue;
+        for (uu = (UserFieldPtr) u->data.ptrvalue; uu != NULL; uu = uu->next) {
+          oip = uu->label;
+          if (oip == NULL) continue;
+          if (StringCmp (oip->str, "accession") == 0) {
+            nm++;
+          }
+        }
+      }
+    }
+  }
+
+  len = StringLen (mrnaevtext1) + StringLen (mrnaevtext2) + StringLen (mrnaevtext3) + StringLen (method) + 30;
+  str = (CharPtr) MemNew (len);
+  if (str == NULL) return NULL;
+
+  if (method != NULL) {
+    sprintf (str, "%s %s %s.", mrnaevtext1, mrnaevtext1, method);
+  } else {
+    sprintf (str, "%s.", mrnaevtext1);
+  }
+  if (nm > 0) {
+    StringCat (str, " ");
+    StringCat (str, mrnaevtext3);
+    if (nm > 1) {
+      sprintf (tmp, " %d mRNAs", (int) nm);
+    } else {
+      sprintf (tmp, " %d mRNA", (int) nm);
+    }
+    StringCat (str, tmp);
+  }
+
+  return str;
+}
+
+
+/* FormatFeatureblockQuals should not be called directly,
+   except from FormatFeatureBlock.  It performs no input
+   validation.  (perhaps it should?) */
+
+static void FormatFeatureBlockQuals (
+  IntAsn2gbJobPtr  ajp,
+  Asn2gbFormatPtr  afp,
+  Asn2gbSectPtr    asp,
+  BioseqPtr        bsp,
+  Uint1            featdeftype,
+  ValNodePtr       gene_syn,
+  CharPtr          lasttype,
+  SeqLocPtr        location,
+  BioseqPtr        prod,
+  CharPtr          protein_pid_g,
+  QualValPtr       qvp,
+  Int4             left,
+  Int4             right,
+  Uint1            strand,
+  SeqFeatPtr       sfp,
+  BioseqPtr        target,
+  Boolean          is_other,
+  Boolean          is_gps
+)
+
+{
   Boolean            add_period;
-  Asn2gbJobPtr       ajp;
   CharPtr            ascii;
   Int2               ascii_len;
-  Asn2gbSectionPtr   asp;
   Boolean            at_end = FALSE;
-  BioseqPtr          bsp;
-  Char               buf [80];
+  Char               buf[80];
   Choice             cbaa;
   CodeBreakPtr       cbp;
-  SeqFeatPtr         cds;
   Char               ch;
   Uint1              choice;
-  CdRegionPtr        crp;
-  SeqMgrDescContext  dcontext;
+  Uint1              code = Seq_code_ncbieaa;
+  ValNodePtr         dbx;
+  ValNodePtr         dbxrefs = NULL;
+  Int4               gi;
+  ValNodePtr         head;
+  Boolean            hadProtDesc = FALSE;
   DbtagPtr           dbt;
   Int4               exp_ev;
-  SeqMgrFeatContext  fcontext;
-  Uint1              featdeftype;
-  Uint1              from;
   GBQualPtr          gbq;
-  SeqMgrFeatContext  gcontext;
-  ValNodePtr         gcp;
-  SeqFeatPtr         gene = NULL;
-  ValNodePtr         gene_syn = NULL;
-  GeneRefPtr         grp;
-  Boolean            hadProtDesc;
-  ValNodePtr         head;
   Int2               i;
-  IntCdsBlockPtr     icp;
   Uint1              idx;
-  IntFeatBlockPtr    ifp;
-  ValNodePtr         illegal = NULL;
-  ImpFeatPtr         imp = NULL;
   Boolean            isTRNA;
   Int2               j;
   Uint1              jdx;
-  CharPtr            key;
-  CharPtr            lasttype;
+  Boolean            keep;
   Int4               len;
-  SeqLocPtr          loc = NULL;
-  SeqLocPtr          location = NULL;
-  MolInfoPtr         mip;
+  SeqLocPtr          newloc;
   CharPtr            notestr;
-  Uint1Ptr           notetbl = NULL;
   Char               numbuf [32];
   Int2               numcodons;
   ObjectIdPtr        oip;
-  SeqEntryPtr        oldscope;
-  Uint2              partial;
-  SeqMgrFeatContext  pcontext;
+  Boolean            okay;
+  Boolean            only_digits;
   ValNodePtr         ppr;
   CharPtr            prefix;
-  BioseqPtr          prod = NULL;
-  SeqFeatPtr         prot;
-  Boolean            protein = FALSE;
-  Char               protein_pid_g [32];
   CharPtr            protein_seq = NULL;
-  ProtRefPtr         prp;
-  Boolean            pseudo = FALSE;
   CharPtr            ptr;
-  Int2               qualclass;
-  Uint1Ptr           qualtbl = NULL;
-  QualValPtr         qvp;
   Uint1              residue;
-  RnaRefPtr          rrp;
   SeqCodeTablePtr    sctp;
-  SeqDescrPtr        sdp;
-  SeqEntryPtr        sep;
+  Int4               sec_str;
   Uint1              seqcode;
   Char               seqid [50];
-  SeqFeatPtr         sfp;
-  Uint1              shift;
   SeqIntPtr          sintp;
   SeqIdPtr           sip;
-  Int2               siteidx;
   SeqLocPtr          slp;
-  SeqMapTablePtr     smtp;
+  Boolean            split;
   SeqPortPtr         spp;
   CharPtr            start;
   CharPtr            str;
   Boolean            suppress_period;
-  BioseqPtr          target;
   CharPtr            tmp;
   tRNAPtr            trna;
+  UserObjectPtr      uop;
   ValNodePtr         vnp;
-  CharPtr            wwwbuf;
 
-  if (afp == NULL || bbp == NULL) return NULL;
-  asp = afp->asp;
-  if (asp == NULL) return NULL;
-  target = asp->target;
-  bsp = asp->bsp;
-  if (target == NULL || bsp == NULL) return NULL;
-  ajp = afp->ajp;
-  if (ajp == NULL) return NULL;
-  qvp = afp->qvp;
-  if (qvp == NULL) return NULL;
 
-  protein_pid_g [0] = '\0';
-
-  /* all features in this list are known to be valid for the designated mode */
-
-  sfp = SeqMgrGetDesiredFeature (bbp->entityID, NULL, bbp->itemID, 0, NULL, &fcontext);
-  if (sfp == NULL) return NULL;
-
-  /* may need to map location between aa and dna */
-
-  ifp = (IntFeatBlockPtr) bbp;
-  if (ifp->mapToNuc) {
-
-    /* map mat_peptide, etc., to nucleotide coordinates */
-
-    sip = SeqLocId (sfp->location);
-    prod = BioseqFind (sip);
-    cds = SeqMgrGetCDSgivenProduct (prod, NULL);
-    location = aaFeatLoc_to_dnaFeatLoc (cds, sfp->location);
-    loc = location;
-
-  } else if (ifp->mapToProt) {
-  } else {
-
-    /* no aa-dna or dna-aa mapping, just use location */
-
-    location = sfp->location;
-  }
-  if (location == NULL) return NULL;
-
-  featdeftype = fcontext.featdeftype;
-  if (featdeftype < FEATDEF_GENE || featdeftype >= FEATDEF_MAX) {
-    featdeftype = FEATDEF_BAD;
-  }
-  key = featurekeys [featdeftype];
-
-  /* deal with unmappable impfeats */
-
-  if (featdeftype == FEATDEF_BAD && fcontext.seqfeattype == SEQFEAT_IMP) {
-    imp = (ImpFeatPtr) sfp->data.value.ptrvalue;
-    if (imp != NULL) {
-      key = imp->key;
-    }
-  }
-
-  gb_StartPrint (afp->format, TRUE, 5, 21, NULL, 0, 5, 21, "FT", FALSE);
-  ff_AddString (key);
-  TabToColumn (22);
-
-  if (imp == NULL || StringHasNoText (imp->loc)) {
-    str = FlatLoc (target, location, afp->style);
-  } else {
-    str = StringSave (imp->loc);
-  }
-  if (get_www ()) {
-    wwwbuf = www_featloc (str);
-    ff_AddString (wwwbuf);
-    MemFree (wwwbuf);
-  } else {
-    ff_AddString (str);
-  }
-  MemFree (str);
-
-  /* populate qualifier table from feature fields */
-
-  /*
-  if (sfp->partial == TRUE)
-    sfp->partial = FlatAnnotPartial(sfp, use_product);
-  */
-
-  if (sfp->partial) {
-    partial = SeqLocPartialCheck (location);
-    if (partial == SLP_COMPLETE /* || partial > SLP_OTHER */ ) {
-      qvp [FEATUR_partial].bool = TRUE;
-    }
-    if (LookForFuzz (location)) {
-      qvp [FEATUR_partial].bool = FALSE;
-    }
-    if (imp != NULL) {
-      if (StringChr (imp->loc, '<') != NULL || StringChr (imp->loc, '>') != NULL) {
-        qvp [FEATUR_partial].bool = FALSE;
-      }
-    }
-  }
-
-  if (sfp->pseudo) {
-    pseudo = TRUE;
-  }
-
-  if (fcontext.seqfeattype == SEQFEAT_GENE) {
-    grp = (GeneRefPtr) sfp->data.value.ptrvalue;
-    if (grp != NULL) {
-      if (! StringHasNoText (grp->locus)) {
-        qvp [FEATUR_gene].str = grp->locus;
-        qvp [FEATUR_gene_desc].str = grp->desc;
-        qvp [FEATUR_gene_syn].vnp = grp->syn;
-      } else if (! StringHasNoText (grp->desc)) {
-        qvp [FEATUR_gene].str = grp->desc;
-        qvp [FEATUR_gene_syn].vnp = grp->syn;
-      } else if (grp->syn != NULL) {
-        vnp = grp->syn;
-        qvp [FEATUR_gene].str = (CharPtr) vnp->data.ptrvalue;
-        vnp = vnp->next;
-        qvp [FEATUR_gene_syn].vnp = vnp;
-      }
-      qvp [FEATUR_gene_map].str = grp->maploc;
-      qvp [FEATUR_gene_allele].str = grp->allele;
-      qvp [FEATUR_gene_xref].vnp = grp->db;
-      if (grp->pseudo) {
-        pseudo = TRUE;
-      }
-    }
-
-  } else {
-
-    grp = SeqMgrGetGeneXref (sfp);
-    if (grp != NULL) {
-      qvp [FEATUR_gene_xref].vnp = grp->db;
-    }
-    if (grp == NULL) {
-      sep = GetTopSeqEntryForEntityID (ajp->entityID);
-      oldscope = SeqEntrySetScope (sep);
-      gene = SeqMgrGetOverlappingGene (location, &gcontext);
-      SeqEntrySetScope (oldscope);
-      if (gene != NULL) {
-        qvp [FEATUR_gene_note].str = gene->comment;
-        grp = (GeneRefPtr) gene->data.value.ptrvalue;
-        if (gene->pseudo) {
-          pseudo = TRUE;
-        }
-        qvp [FEATUR_gene_xref].vnp = grp->db;
-      }
-    }
-    if (grp != NULL && grp->pseudo) {
-      pseudo = TRUE;
-    }
-    if (grp != NULL && (! SeqMgrGeneIsSuppressed (grp)) &&
-        (fcontext.featdeftype != FEATDEF_repeat_region || gene == NULL)) {
-      if (! StringHasNoText (grp->locus)) {
-        qvp [FEATUR_gene].str = grp->locus;
-        gene_syn = grp->syn;
-      } else if (! StringHasNoText (grp->desc)) {
-        qvp [FEATUR_gene].str = grp->desc;
-        gene_syn = grp->syn;
-      } else if (grp->syn != NULL) {
-        vnp = grp->syn;
-        qvp [FEATUR_gene].str = (CharPtr) vnp->data.ptrvalue;
-        vnp = vnp->next;
-        gene_syn = vnp;
-      }
-    }
-
-    /* specific fields set here */
-
-    switch (fcontext.seqfeattype) {
-      case SEQFEAT_CDREGION :
-        crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-        if (crp != NULL) {
-          qvp [FEATUR_codon_start].num = crp->frame;
-          if (qvp [FEATUR_codon_start].num == 0) {
-            qvp [FEATUR_codon_start].num = 1;
-          }
-          qvp [FEATUR_transl_except].cbp = crp->code_break;
-          for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
-            seqcode = 0;
-            sctp = NULL;
-            cbaa = cbp->aa;
-            switch (cbaa.choice) {
-              case 1 :
-                seqcode = Seq_code_ncbieaa;
-                break;
-              case 2 :
-                seqcode = Seq_code_ncbi8aa;
-                break;
-              case 3 :
-                seqcode = Seq_code_ncbistdaa;
-                break;
-              default :
-                break;
-            }
-            if (seqcode != 0) {
-              sctp = SeqCodeTableFind (seqcode);
-              if (sctp != NULL) {
-                residue = cbaa.value.intvalue;
-                if (residue != 42) {
-                  if (seqcode != Seq_code_ncbieaa) {
-                    smtp = SeqMapTableFind (seqcode, Seq_code_ncbieaa);
-                    residue = SeqMapTableConvert (smtp, residue);
-                  }
-                  if (residue == 'U') {
-                    qvp [FEATUR_selenocysteine].str = "selenocysteine";
-                  }
-                }
-              }
-            }
-          }
-
-          gcp = crp->genetic_code;
-          if (gcp != NULL) {
-            for (vnp = gcp->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
-              if (vnp->choice == 2 && vnp->data.intvalue != 0) {
-                qvp [FEATUR_transl_table].num = vnp->data.intvalue;
-              }
-            }
-
-            /* suppress table 1 */
-
-            if (qvp [FEATUR_transl_table].num == 1) {
-              qvp [FEATUR_transl_table].num = 0;
-            }
-          }
-
-          if (sfp->product != NULL && SeqLocLen (sfp->product) != 0) {
-            protein = TRUE;
-          }
-          if (crp->conflict && (protein || (! sfp->excpt))) {
-            if (protein) {
-              qvp [FEATUR_prot_conflict].str = conflict_msg;
-            } else {
-              /*
-              qvp [FEATUR_prot_missing].str = no_protein_msg;
-              */
-            }
-          }
-        }
-
-        prp = SeqMgrGetProtXref (sfp);
-        if (prp == NULL) {
-          sip = SeqLocId (sfp->product);
-          qvp [FEATUR_protein_id].sip = sip;
-          prod = BioseqFind (sip);
-          if (prod != NULL) {
-            for (sip = prod->id; sip != NULL; sip = sip->next) {
-              if (sip->choice == SEQID_GI) {
-                sprintf (protein_pid_g, "PID:g%ld", (long) sip->data.intvalue);
-              }
-            }
-            sdp = SeqMgrGetNextDescriptor (prod, NULL, Seq_descr_comment, &dcontext);
-            if (sdp != NULL && dcontext.level == 0) {
-              if (! StringHasNoText ((CharPtr) sdp->data.ptrvalue)) {
-                qvp [FEATUR_prot_comment].str = (CharPtr) sdp->data.ptrvalue;
-              }
-            }
-            sdp = SeqMgrGetNextDescriptor (prod, NULL, Seq_descr_molinfo, &dcontext);
-            if (sdp != NULL && dcontext.level == 0) {
-              mip = (MolInfoPtr) sdp->data.ptrvalue;
-              if (mip != NULL && mip->tech > 1 &&
-                  mip->tech != MI_TECH_concept_trans &&
-                  mip->tech != MI_TECH_concept_trans_a) {
-                str = StringForSeqTech (mip->tech);
-                if (! StringHasNoText (str)) {
-                  qvp [FEATUR_prot_method].str = str;
-                }
-              }
-            }
-            prot = SeqMgrGetBestProteinFeature (prod, &pcontext);
-            if (prot != NULL) {
-              prp = (ProtRefPtr) prot->data.value.ptrvalue;
-              if (prp != NULL && prp->processed < 2) {
-                qvp [FEATUR_prot_note].str = prot->comment;
-              }
-            }
-          }
-        }
-
-        if (prp != NULL) {
-          vnp = prp->name;
-          if (vnp != NULL && (! StringHasNoText ((CharPtr) vnp->data.ptrvalue))) {
-            qvp [FEATUR_cds_product].str = (CharPtr) vnp->data.ptrvalue;
-            vnp = vnp->next;
-            qvp [FEATUR_prot_names].vnp = vnp;
-          }
-          qvp [FEATUR_prot_desc].str = prp->desc;
-          qvp [FEATUR_prot_activity].vnp = prp->activity;
-          qvp [FEATUR_EC_number].vnp = prp->ec;
-        }
-
-        if (! pseudo) {
-          qvp [FEATUR_translation].bool = TRUE;
-        }
-
-        if (ifp->isCDS) {
-          icp = (IntCdsBlockPtr) ifp;
-          qvp [FEATUR_figure].str = icp->fig;
-          qvp [FEATUR_maploc].str = icp->maploc;
-        }
-        break;
-      case SEQFEAT_PROT :
-        prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-        if (prp != NULL) {
-          vnp = prp->name;
-          if (vnp != NULL && (! StringHasNoText ((CharPtr) vnp->data.ptrvalue))) {
-            qvp [FEATUR_product].str = (CharPtr) vnp->data.ptrvalue;
-            vnp = vnp->next;
-            qvp [FEATUR_prot_names].vnp = vnp;
-          }
-          qvp [FEATUR_prot_desc].str = prp->desc;
-          qvp [FEATUR_prot_activity].vnp = prp->activity;
-          qvp [FEATUR_EC_number].vnp = prp->ec;
-        }
-        break;
-      case SEQFEAT_RNA :
-        rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
-        if (rrp != NULL) {
-          if (rrp->pseudo) {
-            pseudo = TRUE;
-          }
-          if (rrp->type == 3) {
-            if (rrp->ext.choice == 2) {
-              trna = (tRNAPtr) rrp->ext.value.ptrvalue;
-              if (trna != NULL) {
-                aa = 0;
-                if (trna->aatype == 2) {
-                  aa = trna->aa;
-                } else {
-                  from = 0;
-                  switch (trna->aatype) {
-                    case 0 :
-                      from = 0;
-                      break;
-                    case 1 :
-                      from = Seq_code_iupacaa;
-                      break;
-                    case 2 :
-                      from = Seq_code_ncbieaa;
-                      break;
-                    case 3 :
-                      from = Seq_code_ncbi8aa;
-                      break;
-                    case 4 :
-                      from = Seq_code_ncbistdaa;
-                      break;
-                    default:
-                      break;
-                  }
-                  smtp = SeqMapTableFind (Seq_code_ncbieaa, from);
-                  if (smtp != NULL) {
-                    aa = SeqMapTableConvert (smtp, trna->aa);
-                    if (aa == 255 && from == Seq_code_iupacaa && trna->aa == 'U') {
-                      aa = 'U';
-                    }
-                  }
-                }
-                if (aa > 0 && aa != 255) {
-                  if (aa <= 74) {
-                    shift = 0;
-                  } else if (aa > 79) {
-                    shift = 2;
-                  } else {
-                    shift = 1;
-                  } 
-                  idx = aa - (64 + shift);
-                  if (idx > 0 && idx < 25) {
-                    str = trnaList [idx];
-                    qvp [FEATUR_product].str = str;
-                    if (StringNICmp (str, "tRNA-", 5) == 0) {
-                      qvp [FEATUR_trna_aa].str = str + 5;
-                    }
-                  }
-                }
-                qvp [FEATUR_anticodon].slp = trna->anticodon;
-                qvp [FEATUR_trna_codons].trp = trna;
-              }
-            }
-          } else {
-            if (rrp->ext.choice == 1) {
-              str = (CharPtr) rrp->ext.value.ptrvalue;
-              qvp [FEATUR_product].str = str;
-
-              /*
-              if (rrp->type == 255 && (! StringHasNoText (str))) {
-                if        (StringICmp (str, "internal transcribed spacer 1") == 0 ||
-                           StringICmp (str, "internal transcribed spacer ITS1") == 0 ||
-                           StringICmp (str, "ITS1") == 0) {
-                  qvp [FEATUR_rrna_its].str = "ITS1";
-                } else if (StringICmp (str, "internal transcribed spacer 2") == 0 ||
-                           StringICmp (str, "internal transcribed spacer ITS2") == 0 ||
-                           StringICmp (str, "ITS2") == 0) {
-                  qvp [FEATUR_rrna_its].str = "ITS2";
-                } else if (StringICmp (str, "internal transcribed spacer 3") == 0 ||
-                           StringICmp (str, "internal transcribed spacer ITS3") == 0 ||
-                           StringICmp (str, "ITS3") == 0) {
-                  qvp [FEATUR_rrna_its].str = "ITS3";
-                }
-              }
-              */
-            }
-          }
-        }
-        break;
-      case SEQFEAT_REGION :
-        qvp [FEATUR_region].str = (CharPtr) sfp->data.value.ptrvalue;
-        break;
-      case SEQFEAT_COMMENT :
-        break;
-      case SEQFEAT_SITE :
-        siteidx = (Int2) sfp->data.value.intvalue;
-        if (siteidx == 255) {
-          siteidx = 26;
-        }
-        if (siteidx > 0 && siteidx < 27) {
-          qvp [FEATUR_site].str = siteList [siteidx];
-        }
-        break;
-      default :
-        break;
-    }
-  }
-
-  /* common fields set here */
-
-  if (fcontext.featdeftype == FEATDEF_repeat_region) {
-    pseudo = FALSE;
-  }
-
-  qvp [FEATUR_seqfeat_note].str = sfp->comment;
-
-  qvp [FEATUR_pseudo].bool = pseudo;
-
-  qvp [FEATUR_evidence].num = sfp->exp_ev;
-
-  /* exception currently legal only on CDS */
-
-  if (fcontext.seqfeattype == SEQFEAT_CDREGION) {
-    qvp [FEATUR_exception].str = sfp->except_text;
-
-    if (sfp->excpt && qvp [FEATUR_exception].str == NULL) {
-      if (qvp [FEATUR_seqfeat_note].str != NULL) {
-
-        /* if no /exception text, use text in comment, remove from /note */
-
-        qvp [FEATUR_exception].str = qvp [FEATUR_seqfeat_note].str;
-        qvp [FEATUR_seqfeat_note].str = NULL;
-      } else {
-        qvp [FEATUR_exception].str = "No explanation supplied";
-      }
-    }
-  }
-
-  qvp [FEATUR_db_xref].vnp = sfp->dbxref;
-  qvp [FEATUR_citation].vnp = sfp->cit;
-
-  /* /product same as sfp->comment will suppress /note */
-
-  if (! StringHasNoText (qvp [FEATUR_product].str) &&
-      StringICmp (sfp->comment, qvp [FEATUR_product].str) == 0) {
-    qvp [FEATUR_seqfeat_note].str = NULL;
-  }
-  /* case sensitive AJ011317.1 */
-  if (! StringHasNoText (qvp [FEATUR_cds_product].str) &&
-      StringCmp (sfp->comment, qvp [FEATUR_cds_product].str) == 0) {
-    qvp [FEATUR_seqfeat_note].str = NULL;
-  }
-
-  /* /gene same as sfp->comment will suppress /note */
-  /* case sensitive -gi|6572973|gb|AF195052.1|AF195052 */
-
-  if (! StringHasNoText (qvp [FEATUR_gene].str) &&
-      StringCmp (sfp->comment, qvp [FEATUR_gene].str) == 0) {
-    qvp [FEATUR_seqfeat_note].str = NULL;
-  }
-
-  /* gene /note same as sfp->comment will suppress /note - U92435.1 says do not do this */
-
-  /*
-  if (! StringHasNoText (qvp [FEATUR_gene_note].str) &&
-      StringICmp (sfp->comment, qvp [FEATUR_gene_note].str) == 0) {
-    qvp [FEATUR_seqfeat_note].str = NULL;
-  }
-  */
-
-  /* if site sfp->comment contains site name, suppress site in /note */
-
-  if (! StringHasNoText (qvp [FEATUR_site].str) &&
-      StringStr (sfp->comment, qvp [FEATUR_site].str) != NULL) {
-    qvp [FEATUR_site].str = NULL;
-  }
-
-  /* /EC_number same as sfp->comment will suppress /note */
-
-  for (vnp = qvp [FEATUR_EC_number].vnp; vnp != NULL; vnp = vnp->next) {
-    str = (CharPtr) vnp->data.ptrvalue;
-    if ((! StringHasNoText (str)) &&
-        StringICmp (sfp->comment, str) == 0) {
-      qvp [FEATUR_seqfeat_note].str = NULL;
-    }
-  }
-
-
-  /* now go through gbqual list */
-
-  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
-    idx = GbqualToFeaturIndex (gbq->qual);
-    if (idx > 0 && idx < ASN2GNBK_TOTAL_FEATUR) {
-      if (qvp [idx].gbq == NULL) {
-        if (idx == FEATUR_product_quals) {
-          if (qvp [FEATUR_product].str == NULL) {
-            qvp [FEATUR_product].str = gbq->val;
-          } else if (qvp [FEATUR_xtra_prod_quals].gbq == NULL) {
-            /* chain will include remaining product gbquals */
-            qvp [FEATUR_xtra_prod_quals].gbq = gbq;
-          }
-        } else {
-          qvp [idx].gbq = gbq;
-        }
-      }
-
-    } else if (idx == 0) {
-
-      qualclass = IllegalGbqualToClass (gbq->qual);
-      tmp = StringSave (gbq->val);
-      if (tmp != NULL) {
-        str = MemNew (sizeof (Char) * (StringLen (gbq->val) + StringLen (tmp) + 10));
-        if (str != NULL) {
-          if (qualclass == Qual_class_quote) {
-	        if (StringIsJustQuotes (tmp)) {
-              sprintf (buf, "/%s", gbq->qual);
-	        } else {
-              ptr = tmp;
-              ch = *ptr;
-              while (ch != '\0') {
-                if (ch == '"') {
-                  *ptr = '\'';
-                }
-                ptr++;
-                ch = *ptr;
-              }
-              sprintf (str, "/%s=\"%s\"", gbq->qual, tmp);
-	        }
-            ValNodeCopyStr (&illegal, 0, str);
-          } else if (qualclass == Qual_class_noquote) {
-	        if (StringIsJustQuotes (tmp)) {
-              sprintf (str, "/%s", gbq->qual);
-	        } else {
-              sprintf (str, "/%s=%s", gbq->qual, tmp);
-	        }
-            ValNodeCopyStr (&illegal, 0, str);
-          }
-          MemFree (str);
-        }
-        MemFree (tmp);
-      }
-    }
-  }
-
-  /* illegal qualifiers are copied and formatted in valnode chain */
-
-  qvp [FEATUR_illegal_qual].vnp = illegal;
-
-  /* remove protein description that equals the gene name, case sensitive */
-
-  if (StringCmp (qvp [FEATUR_gene].str, qvp [FEATUR_prot_desc].str) == 0) {
-    qvp [FEATUR_prot_desc].str = NULL;
-  }
-
-  /* remove protein description that equals the cds product, case sensitive */
-
-  if (StringCmp (qvp [FEATUR_cds_product].str, qvp [FEATUR_prot_desc].str) == 0) {
-    qvp [FEATUR_prot_desc].str = NULL;
-  }
-
-  /* remove comment contained in prot_desc - gi|4530123|gb|AF071539.1|AF071539 */
-
-  if (StringStr (qvp [FEATUR_prot_desc].str, qvp [FEATUR_seqfeat_note].str) != NULL) {
-    qvp [FEATUR_seqfeat_note].str = NULL;
-  }
-
-  /* remove protein description that equals the standard name */
-
-  if (qvp [FEATUR_standard_name].gbq != NULL && qvp [FEATUR_prot_desc].str != NULL) {
-    gbq = qvp [FEATUR_standard_name].gbq;
-    lasttype = gbq->qual;
-    while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
-      if (StringICmp (gbq->val, qvp [FEATUR_prot_desc].str) == 0) {
-        qvp [FEATUR_prot_desc].str = NULL;
-      }
-      gbq = gbq->next;
-    }
-  }
-
-  /* remove protein description that equals a gene synonym - case insensitive AF109216.1 */
-
-  for (vnp = gene_syn; vnp != NULL; vnp = vnp->next) {
-    str = (CharPtr) vnp->data.ptrvalue;
-    if ((! StringHasNoText (str)) &&
-        StringCmp (str, qvp [FEATUR_prot_desc].str) == 0) {
-      qvp [FEATUR_prot_desc].str = NULL;
-    }
-  }
-
-  /* remove comment that equals a gene synonym */
-
-  for (vnp = gene_syn; vnp != NULL; vnp = vnp->next) {
-    str = (CharPtr) vnp->data.ptrvalue;
-    if ((! StringHasNoText (str)) &&
-        StringICmp (str, qvp [FEATUR_seqfeat_note].str) == 0) {
-      qvp [FEATUR_seqfeat_note].str = NULL;
-    }
-  }
-
-  /* remove protein comment descriptor that equals the protein note */
-
-  if (StringCmp (qvp [FEATUR_prot_note].str, qvp [FEATUR_prot_comment].str) == 0) {
-    qvp [FEATUR_prot_comment].str = NULL;
-  }
-
-  /* suppress cds comment if a subset of protein note - AF002218.1 */
-
-  if (StringStr (qvp [FEATUR_prot_note].str, qvp [FEATUR_seqfeat_note].str) != NULL) {
-    qvp [FEATUR_seqfeat_note].str = NULL;
-  }
-
-  /* suppress selenocysteine note if already in comment */
-
-  if (StringStr (sfp->comment, "selenocysteine") != NULL) {
-    qvp [FEATUR_selenocysteine].str = NULL;
-  }
-
-  /* now print qualifiers from table */
-
-  if (afp->mode == RELEASE_MODE) {
-    qualtbl = relmode_feat_qual_order;
-    notetbl = relmode_feat_note_order;
-  } else {
-    qualtbl = seqmode_feat_qual_order;
-    notetbl = seqmode_feat_note_order;
-  }
-
-#ifdef DISPLAY_STRINGS
-  s_DisplayQVP(qvp, notetbl);
-#endif
-
-  /* Strip duplicate notes */
-
-  if ((StringCmp(qvp[FEATUR_product].str,
-		 qvp[FEATUR_seqfeat_note].str) == 0)) {
-    qvp[FEATUR_seqfeat_note].str = NULL;
-  }
-
-  if ((qvp[FEATUR_standard_name].gbq != NULL) &&
-      (qvp[FEATUR_standard_name].gbq->val != NULL)) {
-    if ((StringCmp(qvp[FEATUR_seqfeat_note].str,
-		   qvp[FEATUR_standard_name].gbq->val) == 0)) {
-      qvp[FEATUR_seqfeat_note].str = NULL;
-    }
-  }
-
-  /* Display strings for debugging purposes */
-
-#ifdef DISPLAY_STRINGS
-  s_DisplayQVP(qvp,qualtbl);
-#endif
-
-
-  /* Build the flat file */
-
-  for (i = 0, idx = qualtbl [i]; idx != 0; i++, idx = qualtbl [i]) {
+  for (i = 0, idx = feat_qual_order [i]; idx != 0; i++, idx = feat_qual_order [i]) {
 
     lasttype = NULL;
     switch (asn2gnbk_featur_quals [idx].qualclass) {
@@ -7002,6 +7012,15 @@ static CharPtr FormatFeatureBlock (
           NewContLine ();
           gb_AddString (buf, qvp [idx].str, "\"", FALSE, TRUE, TILDE_TO_SPACES);
         }
+        break;
+
+      case Qual_class_product :
+        if (StringHasNoText (qvp [idx].str) ||
+            (ajp->flags.dropIllegalQuals &&
+             (! AllowedValQual (featdeftype, FTQUAL_product)))) break;
+        sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
+        NewContLine ();
+        gb_AddString (buf, qvp [idx].str, "\"", FALSE, TRUE, TILDE_TO_SPACES);
         break;
 
       case Qual_class_sgml :
@@ -7028,9 +7047,17 @@ static CharPtr FormatFeatureBlock (
 
       case Qual_class_int :
         if (qvp [idx].num > 0) {
-          sprintf (numbuf, "/%s=%ld", asn2gnbk_featur_quals [idx].name, (long) qvp [idx].num);
-          NewContLine ();
-          ff_AddString (numbuf);
+          if (idx == FTQUAL_transl_table) {
+            NewContLine ();
+            sprintf (numbuf, "/%s=", asn2gnbk_featur_quals [idx].name);
+            ff_AddString (numbuf);
+            sprintf (numbuf, "%ld", (long) qvp [idx].num);
+            www_gcode (numbuf);
+          } else {
+            sprintf (numbuf, "/%s=%ld", asn2gnbk_featur_quals [idx].name, (long) qvp [idx].num);
+            NewContLine ();
+            ff_AddString (numbuf);
+          }
         }
         break;
 
@@ -7054,9 +7081,75 @@ static CharPtr FormatFeatureBlock (
         }
         break;
 
+      /* !!! Eric wonders if this EC code works */
+      case Qual_class_EC_valnode :
+        for (vnp = qvp [idx].vnp; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          okay = TRUE;
+
+          if (str == NULL) continue;
+
+          if (ajp->flags.dropIllegalQuals) {
+            tmp = str;
+            while (*tmp != '\0' && *tmp == '\"')
+              tmp++;
+            for (; *tmp != '\0' && *tmp != '\"'; tmp++) {
+              if (!IS_DIGIT(*tmp) && *tmp != '.' && *tmp != '-') {
+                okay = FALSE;
+              }
+            }
+          }
+          if (!okay) continue;
+          sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
+          NewContLine ();
+          gb_AddString (buf, str, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+        }
+        break;
+
+      case Qual_class_EC_quote :
+        gbq = qvp [idx].gbq;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (lasttype == NULL) {
+          lasttype = gbq->qual;
+        }
+        while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
+          okay = TRUE;
+          if (gbq->val == NULL) {
+            okay = FALSE;
+          }
+
+          if (ajp->flags.dropIllegalQuals && okay) {
+            tmp = gbq->val;
+            while (*tmp != '\0' && *tmp == '\"')
+              tmp++;
+            for (; *tmp != '\0' && *tmp != '\"'; tmp++) {
+              if (!IS_DIGIT(*tmp) && *tmp != '.' && *tmp != '-') {
+                okay = FALSE;
+              }
+            }
+          }
+
+          if (StringHasNoText (gbq->val)) {
+            okay = FALSE;
+          }
+
+          if (okay) {
+            sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
+            NewContLine ();
+            if (StringIsJustQuotes (gbq->val)) {
+              gb_AddString (buf, NULL, "\"", FALSE, TRUE, TILDE_IGNORE);
+            } else {
+              gb_AddString (buf, gbq->val, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+            }
+          }
+          gbq = gbq->next;
+        }
+        break;
+
       case Qual_class_quote :
         gbq = qvp [idx].gbq;
-        if (lasttype == NULL && gbq != NULL) {
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
         while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
@@ -7075,7 +7168,66 @@ static CharPtr FormatFeatureBlock (
 
       case Qual_class_noquote :
         gbq = qvp [idx].gbq;
-        if (lasttype == NULL && gbq != NULL) {
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (lasttype == NULL) {
+          lasttype = gbq->qual;
+        }
+        while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
+          if (! StringHasNoText (gbq->val)) {
+            sprintf (buf, "/%s=", asn2gnbk_featur_quals [idx].name);
+            NewContLine ();
+            gb_AddString (buf, gbq->val, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+          }
+          gbq = gbq->next;
+        }
+        break;
+
+      case Qual_class_label :
+        gbq = qvp [idx].gbq;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (lasttype == NULL) {
+          lasttype = gbq->qual;
+        }
+        while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
+          if (! StringHasNoText (gbq->val)) {
+            if (ajp->flags.checkQualSyntax) { /* single token, not just numeric */
+              str = gbq->val;
+              ch = *str;
+              only_digits = TRUE;
+              while (ch != '\0') {
+                if (IS_WHITESP (ch)) break; /* only single token allowed */
+                if (! IS_DIGIT (ch)) {
+                  only_digits = FALSE;
+                }
+                str++;
+                ch = *str;
+              }
+              if (only_digits) break; /* must not be just numeric */
+            }
+            sprintf (buf, "/%s=", asn2gnbk_featur_quals [idx].name);
+            NewContLine ();
+            gb_AddString (buf, gbq->val, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+          }
+          gbq = gbq->next;
+        }
+        break;
+
+      case Qual_class_number :
+        gbq = qvp [idx].gbq;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+
+        if (ajp->flags.checkQualSyntax) {
+          str = gbq->val;
+
+          if ( StringHasNoText (str) )
+            break;
+          while (!IS_WHITESP (*str) && *str != '\0')
+            str++;
+          if (! StringHasNoText (str) )
+            break;
+        }
+
+        if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
         while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
@@ -7090,7 +7242,8 @@ static CharPtr FormatFeatureBlock (
 
       case Qual_class_paren :
         gbq = qvp [idx].gbq;
-        if (lasttype == NULL && gbq != NULL) {
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
         while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
@@ -7126,12 +7279,87 @@ static CharPtr FormatFeatureBlock (
         }
         break;
 
-      case Qual_class_region :
+      case Qual_class_rpt :
+        gbq = qvp [idx].gbq;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+
+        if (lasttype == NULL) {
+          lasttype = gbq->qual;
+        }
+        while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
+          if (! StringHasNoText (gbq->val)) {
+            tmp = StringSave (gbq->val);
+            str = tmp;
+            len = StringLen (str);
+            if (len > 1 && *str == '(' && str [len - 1] == ')' &&
+                StringChr (str, ',') != NULL) {
+              str++;
+              while (! StringHasNoText (str)) {
+                ptr = StringChr (str, ',');
+                if (ptr == NULL) {
+                  ptr = StringChr (str, ')');
+                }
+                if (ptr != NULL) {
+                  *ptr = '\0';
+                  ptr++;
+                }
+                if ((! ajp->flags.checkQualSyntax) || (StringInStringList (str, validRptString))) {
+                  sprintf (buf, "/%s=", asn2gnbk_featur_quals [idx].name);
+                  NewContLine ();
+                  gb_AddString (buf, str, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+                }
+                str = ptr;
+              }
+            } else {
+              if ((! ajp->flags.checkQualSyntax) || (StringInStringList (str, validRptString))) {
+                sprintf (buf, "/%s=", asn2gnbk_featur_quals [idx].name);
+                NewContLine ();
+                gb_AddString (buf, str, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+              }
+            }
+            MemFree (tmp);
+          }
+          gbq = gbq->next;
+        }
+        break;
+
+      case Qual_class_rpt_unit :
+        gbq = qvp [idx].gbq;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (lasttype == NULL) {
+          lasttype = gbq->qual;
+        }
+        if (gbq->val == NULL) break;
+
+        if (ajp->flags.checkQualSyntax) { /* must be of the form 123..4567 or a single-token label */
+          Nlm_StrNCpy(buf, gbq->val, sizeof(buf));
+          TrimSpacesAroundString (buf);
+
+          /* first check for a alphanumeric token */
+          str = buf;
+          while (IS_ALPHANUM(*str)) str++;
+          if (*str != '\0') { /* wasn't pure alphanumeric; now check for xxx..yyy */
+            str = buf;
+            while (IS_DIGIT(*str)) str++; /* xxx */
+            if (*str == '\0' /* must be something after the xxx */
+                || StringLen (str) < 3  /* need at least 2 '.'s and a digit*/
+                || str[0] != '.' || str[1] != '.') break;
+            str+=2;
+            while (IS_DIGIT(*str)) str++;
+            if (*str != '\0') break;  /* mustn't be anything after the yyy */
+          }
+        }
+
+        str = gbq->val;
+        sprintf (buf, "/%s=", asn2gnbk_featur_quals [idx].name);
+        NewContLine ();
+        gb_AddString (buf, str, NULL, FALSE, TRUE, TILDE_TO_SPACES);
         break;
 
       case Qual_class_replace :
         gbq = qvp [idx].gbq;
-        if (lasttype == NULL && gbq != NULL) {
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
         while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
@@ -7148,9 +7376,15 @@ static CharPtr FormatFeatureBlock (
         }
         break;
 
-      case Qual_class_L_R_B :
+      case Qual_class_consplice :
         gbq = qvp [idx].gbq;
-        if (lasttype == NULL && gbq != NULL) {
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+
+        if (ajp->flags.checkQualSyntax && (! StringInStringList (gbq->val, validConsSpliceString)) ) {
+          break;
+        }
+
+        if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
         while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
@@ -7160,6 +7394,55 @@ static CharPtr FormatFeatureBlock (
             gb_AddString (buf, gbq->val, NULL, FALSE, TRUE, TILDE_TO_SPACES);
           }
           gbq = gbq->next;
+        }
+        break;
+
+      case Qual_class_site :
+        if (! StringHasNoText (qvp [idx].str)) {
+          NewContLine ();
+          sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
+          gb_AddString (buf, qvp [idx].str, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+        }
+        break;
+
+      case Qual_class_L_R_B :
+        gbq = qvp [idx].gbq;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+
+        if (ajp->flags.checkQualSyntax && (! StringInStringList (gbq->val, validLRBString)) ) {
+          break;
+        }
+
+        if (lasttype == NULL) {
+          lasttype = gbq->qual;
+        }
+        while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
+          if (! StringHasNoText (gbq->val)) {
+            sprintf (buf, "/%s=", asn2gnbk_featur_quals [idx].name);
+            NewContLine ();
+            gb_AddString (buf, gbq->val, NULL, FALSE, TRUE, TILDE_TO_SPACES);
+          }
+          gbq = gbq->next;
+        }
+        break;
+
+      case Qual_class_sec_str :
+        sec_str = qvp [idx].num;
+        if (sec_str > 0 && sec_str <= 3) {
+          sprintf (numbuf, "/%s=\"%s\"", asn2gnbk_featur_quals [idx].name, secStrText [sec_str]);
+          NewContLine ();
+          ff_AddString (numbuf);
+        }
+        break;
+
+      case Qual_class_seq_loc :
+        slp = qvp [idx].slp;
+        if (slp != NULL) {
+          sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
+          NewContLine ();
+          str = FlatLoc (target, slp, ajp->masterStyle);
+          gb_AddString (buf, str, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+          MemFree (str);
         }
         break;
 
@@ -7187,10 +7470,23 @@ static CharPtr FormatFeatureBlock (
             if (sctp != NULL) {
               slp = NULL;
               while ((slp = SeqLocFindNext (cbp->loc, slp)) != NULL) {
-                str = FlatLoc (target, slp, afp->style);
+                str = NULL;
+                if (ajp->ajp.slp != NULL) {
+                  sip = SeqIdParse ("lcl|dummy");
+                  split = FALSE;
+                  newloc = SeqLocCopyRegion (sip, slp, bsp, left, right, strand, &split);
+                  SeqIdFree (sip);
+                  if (newloc != NULL) {
+                    SeqLocReplaceID (newloc, SeqLocId (ajp->ajp.slp));
+                    str = FlatLoc (target, newloc, ajp->masterStyle);
+                    SeqLocFree (newloc);
+                  }
+                } else {
+                  str = FlatLoc (target, slp, ajp->masterStyle);
+                }
                 if (str != NULL) {
                   residue = cbaa.value.intvalue;
-                  ptr = Get3LetterSymbol (seqcode, sctp, residue);
+                  ptr = Get3LetterSymbol (ajp, seqcode, sctp, residue);
                   if (ptr == NULL) {
                     ptr = "OTHER";
                   }
@@ -7207,11 +7503,22 @@ static CharPtr FormatFeatureBlock (
         break;
 
       case Qual_class_anti_codon :
-        slp = qvp [FEATUR_anticodon].slp;
+        slp = qvp [FTQUAL_anticodon].slp;
+        newloc = NULL;
+        if (ajp->ajp.slp != NULL) {
+          sip = SeqIdParse ("lcl|dummy");
+          split = FALSE;
+          newloc = SeqLocCopyRegion (sip, slp, bsp, left, right, strand, &split);
+          SeqIdFree (sip);
+          slp = newloc;
+          if (newloc != NULL) {
+            SeqLocReplaceID (newloc, SeqLocId (ajp->ajp.slp));
+          }
+        }
         if (slp != NULL && slp->choice == SEQLOC_INT) {
           sintp = (SeqIntPtr) slp->data.ptrvalue;
           if (sintp != NULL) {
-            str = qvp [FEATUR_trna_aa].str;
+            str = qvp [FTQUAL_trna_aa].str;
             if (! StringHasNoText (str)) {
               sprintf (buf, "/anticodon=(pos:%ld..%ld,aa:%s)",
                        (long) sintp->from + 1, (long) sintp->to + 1, str);
@@ -7220,9 +7527,25 @@ static CharPtr FormatFeatureBlock (
             }
           }
         }
+        if (newloc != NULL) {
+          SeqLocFree (newloc);
+        }
         break;
 
       case Qual_class_codon :
+        gbq = qvp [idx].gbq;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (lasttype == NULL) {
+          lasttype = gbq->qual;
+        }
+        while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
+          if (! StringHasNoText (gbq->val)) {
+            sprintf (buf, "/%s=", asn2gnbk_featur_quals [idx].name);
+            NewContLine ();
+            gb_AddString (buf, gbq->val, NULL, FALSE, FALSE, TILDE_TO_SPACES);
+          }
+          gbq = gbq->next;
+        }
         break;
 
       case Qual_class_pubset :
@@ -7246,20 +7569,56 @@ static CharPtr FormatFeatureBlock (
           if (dbt != NULL && (! StringHasNoText (dbt->db))) {
             oip = dbt->tag;
             if (oip != NULL) {
-              /* if release mode, drop unknown dbtag */
-              if (! StringHasNoText (oip->str)) {
-                if (StringLen (dbt->db) + StringLen (oip->str) < 80) {
-                  sprintf (buf, "%s:%s", dbt->db, oip->str);
+
+              okay = TRUE;
+              if (ajp->flags.dropBadDbxref) {
+                /* if RELEASE_MODE, drop unknown dbtag */
+                okay = FALSE;
+                for (j = 0; legalDbXrefs [j] != NULL; j++) {
+                  if (StringCmp (dbt->db, legalDbXrefs [j]) == 0) {
+                    okay = TRUE;
+                  }
                 }
-              } else {
-                sprintf (buf, "%s:%ld", dbt->db, (long) oip->id);
+                if (! okay) {
+                  if (is_gps || is_other) {
+                    for (j = 0; legalRefSeqDbXrefs [j] != NULL; j++) {
+                      if (StringCmp (dbt->db, legalRefSeqDbXrefs [j]) == 0) {
+                        okay = TRUE;
+                      }
+                    }
+                  }
+                }
+              }
+
+              if (okay) {
+                if (! StringHasNoText (oip->str)) {
+                  if (StringLen (dbt->db) + StringLen (oip->str) < 80) {
+                    sprintf (buf, "%s:%s", dbt->db, oip->str);
+                  }
+                } else {
+                  sprintf (buf, "%s:%ld", dbt->db, (long) oip->id);
+                }
               }
             }
           }
           if (! StringHasNoText (buf)) {
             if (StringICmp (buf, protein_pid_g) != 0) {
-              NewContLine ();
-              gb_AddString ("/db_xref=\"", buf, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+              keep = TRUE;
+              for (dbx = dbxrefs; dbx != NULL; dbx = dbx->next) {
+                if (StringICmp ((CharPtr) dbx->data.ptrvalue, buf) == 0) {
+                  keep = FALSE;
+                }
+              }
+              if (keep) {
+                NewContLine ();
+                ff_AddString ("/db_xref=\"");
+                www_db_xref (buf);
+                ff_AddString ("\"");
+                /*
+                gb_AddString ("/db_xref=\"", buf, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+                */
+                ValNodeCopyStr (&dbxrefs, 0, buf);
+              }
             }
           }
         }
@@ -7268,18 +7627,29 @@ static CharPtr FormatFeatureBlock (
       case Qual_class_seq_id :
         sip = qvp [idx].sip;
         if (sip != NULL) {
+          /* should always be found above for protein_id or transcript_id
           prod = BioseqFind (sip);
+          */
           if (prod != NULL) {
             choice = 0;
             for (sip = prod->id; sip != NULL; sip = sip->next) {
               if (sip->choice == SEQID_GENBANK ||
                   sip->choice == SEQID_EMBL ||
-                  sip->choice == SEQID_DDBJ) {
+                  sip->choice == SEQID_DDBJ ||
+                  sip->choice == SEQID_OTHER ||
+                  sip->choice == SEQID_TPG ||
+                  sip->choice == SEQID_TPE ||
+                  sip->choice == SEQID_TPD) {
                 choice = sip->choice;
                 if (SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
                   sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
                   NewContLine ();
+                  ff_AddString (buf);
+                  www_protein_id (seqid);
+                  ff_AddString ("\"");
+                  /*
                   gb_AddString (buf, seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+                  */
                 }
               }
             }
@@ -7289,14 +7659,28 @@ static CharPtr FormatFeatureBlock (
                 if (choice != 0) {
                   sprintf (seqid, "PID:g%ld", (long) sip->data.intvalue);
                   NewContLine ();
-                  gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE,
-		  TILDE_TO_SPACES);
+                  gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
                 }
                 */
+                if (choice == 0) {
+                  sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
+                  sprintf (seqid, "%ld", (long) sip->data.intvalue);
+                  NewContLine ();
+                  ff_AddString (buf);
+                  www_protein_id (seqid);
+                  ff_AddString ("\"");
+                  /*
+                  gb_AddString (buf, seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+                  */
+                }
                 sprintf (seqid, "GI:%ld", (long) sip->data.intvalue);
                 NewContLine ();
-                gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE,
-			      TILDE_TO_SPACES);
+                ff_AddString ("/db_xref=\"");
+                www_db_xref (seqid);
+                ff_AddString ("\"");
+                /*
+                gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+                */
               } else if (sip->choice == SEQID_GENERAL) {
                 dbt = (DbtagPtr) sip->data.ptrvalue;
                 if (dbt != NULL && StringCmp (dbt->db, "PID") == 0) {
@@ -7306,19 +7690,74 @@ static CharPtr FormatFeatureBlock (
                     if (! StringHasNoText (oip->str)) {
                       sprintf (seqid, "PID:%s", oip->str);
                       NewContLine ();
-                      gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE,
-		      TILDE_TO_SPACES);
+                      gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
                     }
                   }
                   */
                 }
               }
             }
+          } else {
+            if (sip->choice == SEQID_GI) {
+              gi = sip->data.intvalue;
+              sip = GetSeqIdForGI (gi);
+              if (sip != NULL && SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
+                if ((! ajp->flags.dropIllegalQuals) || ValidateAccession (seqid)) {
+                  sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
+                  NewContLine ();
+                  ff_AddString (buf);
+                  www_protein_id (seqid);
+                  ff_AddString ("\"");
+                  /*
+                  gb_AddString (buf, seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+                  */
+                }
+              } else if (! ajp->flags.dropIllegalQuals) {
+                sprintf (seqid, "%ld", (long) gi);
+                sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
+                NewContLine ();
+                ff_AddString (buf);
+                www_protein_id (seqid);
+                ff_AddString ("\"");
+                /*
+                gb_AddString (buf, seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+                */
+              }
+
+              sprintf (seqid, "GI:%ld", (long) gi);
+              NewContLine ();
+              ff_AddString ("/db_xref=\"");
+              www_db_xref (seqid);
+              ff_AddString ("\"");
+              /*
+              gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+              */
+            } else if (SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
+              if ((! ajp->flags.dropIllegalQuals) || ValidateAccession (seqid)) {
+                sprintf (buf, "/%s=\"", asn2gnbk_featur_quals [idx].name);
+                NewContLine ();
+                ff_AddString (buf);
+                www_protein_id (seqid);
+                ff_AddString ("\"");
+                /*
+                gb_AddString (buf, seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+                */
+              }
+
+              gi = GetGIForSeqId (sip);
+              if (gi > 0) {
+                sprintf (seqid, "GI:%ld", (long) gi);
+                NewContLine ();
+                ff_AddString ("/db_xref=\"");
+                www_db_xref (seqid);
+                ff_AddString ("\"");
+                /*
+                gb_AddString ("/db_xref=\"", seqid, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+                */
+              }
+            }
           }
         }
-        break;
-
-      case Qual_class_trna_codons :
         break;
 
       case Qual_class_translation :
@@ -7331,9 +7770,14 @@ static CharPtr FormatFeatureBlock (
               }
               str = (CharPtr) MemNew ((size_t) (len + 1) * sizeof (Char));
               protein_seq = str;
-              spp = SeqPortNewByLoc (sfp->product, Seq_code_ncbieaa);
+              if (ajp->flags.iupacaaOnly) {
+                code = Seq_code_iupacaa;
+              } else {
+                code = Seq_code_ncbieaa;
+              }
+              spp = SeqPortNewByLoc (sfp->product, code);
               if (spp != NULL) {
-                spp->do_virtual = TRUE;
+                SeqPortSet_do_virtual (spp, TRUE);
                 while ((residue = SeqPortGetResidue (spp)) != SEQPORT_EOF) {
                   if (! (IS_residue (residue))) continue;
                   if (residue == INVALID_RESIDUE) {
@@ -7399,67 +7843,68 @@ static CharPtr FormatFeatureBlock (
         isTRNA = TRUE;
 
 #ifdef DISPLAY_STRINGS
-        s_DisplayQVP(qvp,notetbl);
+        s_DisplayQVP (qvp, feat_note_order);
 #endif
-        for (j = 0, jdx = notetbl [j]; jdx != 0; j++, jdx = notetbl [j]) {
+        for (j = 0, jdx = feat_note_order [j]; jdx != 0; j++, jdx = feat_note_order [j]) {
           switch (asn2gnbk_featur_quals [jdx].qualclass) {
+
             case Qual_class_string :
               if (! StringHasNoText (qvp [jdx].str)) {
-                if (jdx == FEATUR_figure) {
-		  if (!IsEllipsis (qvp [jdx].str)) 
-		    s_RemovePeriodFromEnd (qvp [jdx].str);
+                if (jdx == FTQUAL_figure) {
+                  if (!IsEllipsis (qvp [jdx].str))
+                    s_RemovePeriodFromEnd (qvp [jdx].str);
                   sprintf (buf, "This sequence comes from %s", qvp [jdx].str);
                   s_AddValNodeString_NoRedund (&head, prefix, buf, NULL);
                   add_period = FALSE;
-                } else if (jdx == FEATUR_maploc) {
-		  if (!IsEllipsis (qvp [jdx].str))
-		    s_RemovePeriodFromEnd (qvp [jdx].str);
+                } else if (jdx == FTQUAL_maploc) {
+                  if (!IsEllipsis (qvp [jdx].str))
+                    s_RemovePeriodFromEnd (qvp [jdx].str);
                   sprintf (buf, "Map location %s", qvp [jdx].str);
                   s_AddValNodeString_NoRedund (&head, prefix, buf, NULL);
                   add_period = FALSE;
-                } else if (jdx == FEATUR_seqfeat_note) {
+                } else if (jdx == FTQUAL_seqfeat_note) {
                   str = StringSave (qvp [jdx].str);
-		  TrimSpacesAndJunkFromEnds (str, TRUE);
-		  if (! IsEllipsis (str)) 
-		    add_period = s_RemovePeriodFromEnd (str);
-		  /*  NOTE -- The following function call cleans up some strings
-		      (i.e., U34661 & U31565) but should be commented back
-		      in only if the problem can't be fixed upstream of here
+                  TrimSpacesAndJunkFromEnds (str, TRUE);
+                  if (! IsEllipsis (str))
+                    add_period = s_RemovePeriodFromEnd (str);
+                  /*  NOTE -- The following function call cleans up some strings
+                      (i.e., U34661 & U31565) but should be commented back
+                      in only if the problem can't be fixed upstream of here
 
-		  s_StringCleanup(str);
+                  s_StringCleanup(str);
 
-		  */
+                  */
                   s_AddValNodeString_NoRedund (&head, prefix, str, NULL);
                   MemFree (str);
                   if (hadProtDesc) {
                     suppress_period = TRUE;
                   }
-                } else if (jdx == FEATUR_prot_note) {
+                } else if (jdx == FTQUAL_prot_note) {
                   str = StringSave (qvp [jdx].str);
                   TrimSpacesAndJunkFromEnds (str, TRUE);
-		  if (! IsEllipsis (str))
-		    s_RemovePeriodFromEnd (str);
+                  if (! IsEllipsis (str))
+                    s_RemovePeriodFromEnd (str);
                   s_AddValNodeString_NoRedund (&head, prefix, str, NULL);
                   MemFree (str);
                   add_period = FALSE;
-                } else if (jdx == FEATUR_prot_desc) {
+                } else if (jdx == FTQUAL_prot_desc) {
                   str = StringSave (qvp [jdx].str);
                   TrimSpacesAndJunkFromEnds (str, TRUE);
-		  if (! IsEllipsis (str))
-		    add_period = s_RemovePeriodFromEnd (str);
+                  if (! IsEllipsis (str))
+                    add_period = s_RemovePeriodFromEnd (str);
                   s_AddValNodeString_NoRedund (&head, prefix, str, NULL);
                   MemFree (str);
                   hadProtDesc = TRUE; /* gi|347886|gb|M96268.1|ECOUBIA */
                 } else {
-		  if (! IsEllipsis (qvp [jdx].str))
-		    s_RemovePeriodFromEnd (qvp [jdx].str);
-                  s_AddValNodeString_NoRedund (&head, prefix,
-					       qvp [jdx].str, NULL);
+                  if (! IsEllipsis (qvp [jdx].str))
+                    s_RemovePeriodFromEnd (qvp [jdx].str);
+                  s_AddValNodeString_NoRedund (&head, prefix, qvp [jdx].str, NULL);
                   add_period = FALSE;
                 }
                 prefix = "; ";
               }
               break;
+
             case Qual_class_method :
               if (! StringHasNoText (qvp [jdx].str)) {
                 if (head == NULL) {
@@ -7467,12 +7912,12 @@ static CharPtr FormatFeatureBlock (
                 } else {
                   prefix = "; Method: ";
                 }
-                s_AddValNodeString_NoRedund (&head, prefix,
-					     qvp [jdx].str, NULL);
+                s_AddValNodeString_NoRedund (&head, prefix, qvp [jdx].str, NULL);
                 prefix = "; ";
                 add_period = FALSE;
               }
               break;
+
             case Qual_class_valnode :
               for (vnp = qvp [jdx].vnp; vnp != NULL; vnp = vnp->next) {
                 str = (CharPtr) vnp->data.ptrvalue;
@@ -7483,6 +7928,7 @@ static CharPtr FormatFeatureBlock (
                 }
               }
               break;
+
             case Qual_class_region :
               if (! StringHasNoText (qvp [jdx].str)) {
                 if (head == NULL) {
@@ -7490,20 +7936,32 @@ static CharPtr FormatFeatureBlock (
                 } else {
                   prefix = "; Region: ";
                 }
-                s_AddValNodeString_NoRedund (&head, prefix,
-					     qvp [jdx].str, NULL);
+#ifdef ASN2GNBK_STRIP_NOTE_PERIODS
+                AddValNodeString (&head, prefix, qvp [jdx].str, NULL);
+#else
+                s_AddValNodeString_NoRedund (&head, prefix, qvp [jdx].str, NULL);
+#endif
                 prefix = "; ";
                 add_period = FALSE;
               }
               break;
+
+            case Qual_class_site :
+              if (! StringHasNoText (qvp [jdx].str)) {
+                s_AddValNodeString_NoRedund (&head, prefix, qvp [jdx].str, " site");
+                add_period = FALSE;
+                prefix = "\n";
+              }
+              break;
+
             case Qual_class_protnames :
               /* process gene sgml for check against subsequent protein names */
               start = NULL;
-              if (! StringHasNoText (qvp [FEATUR_gene].str)) {
-                ascii_len = Sgml2AsciiLen (qvp [FEATUR_gene].str);
+              if (! StringHasNoText (qvp [FTQUAL_gene].str)) {
+                ascii_len = Sgml2AsciiLen (qvp [FTQUAL_gene].str);
                 start = ascii = MemNew ((size_t) (10 + ascii_len));
                 if (start != NULL) {
-                  ascii = Sgml2Ascii (qvp [FEATUR_gene].str, ascii, ascii_len + 1);
+                  ascii = Sgml2Ascii (qvp [FTQUAL_gene].str, ascii, ascii_len + 1);
                 }
               }
               for (vnp = qvp [jdx].vnp; vnp != NULL; vnp = vnp->next) {
@@ -7512,8 +7970,8 @@ static CharPtr FormatFeatureBlock (
                   /* case sensitive - gi|4973426|gb|AF148501.1|AF148501 */
                   /* check with and without sgml conversion */
                   if (StringCmp (start, str) != 0 &&
-                      StringCmp (qvp [FEATUR_gene].str, str) != 0) {
-                    if (! StringStr (qvp [FEATUR_prot_desc].str, str)) {
+                      StringCmp (qvp [FTQUAL_gene].str, str) != 0) {
+                    if (! StringStr (qvp [FTQUAL_prot_desc].str, str)) {
                       if (NotInGeneSyn (str, gene_syn)) {
                         s_AddValNodeString_NoRedund (&head, prefix, str, NULL);
                         prefix = "; ";
@@ -7525,6 +7983,7 @@ static CharPtr FormatFeatureBlock (
               }
               MemFree (start);
               break;
+
             case Qual_class_xtraprds :
               gbq = qvp [jdx].gbq;
               if (lasttype == NULL && gbq != NULL) {
@@ -7532,8 +7991,8 @@ static CharPtr FormatFeatureBlock (
               }
               while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
                 if (! StringHasNoText (gbq->val)) {
-                  if (StringCmp(gbq->val,qvp[FEATUR_gene].str) != 0 &&
-                      StringCmp(gbq->val,qvp[FEATUR_product].str) != 0) {
+                  if (StringCmp(gbq->val,qvp[FTQUAL_gene].str) != 0 &&
+                      StringCmp(gbq->val,qvp[FTQUAL_product].str) != 0) {
                     if (!isTRNA || !StringStr (gbq->val, "RNA")) {
                       s_AddValNodeString_NoRedund (&head, prefix,
                            gbq->val, NULL);
@@ -7556,31 +8015,40 @@ static CharPtr FormatFeatureBlock (
                 }
               }
               break;
+
             case Qual_class_trna_codons :
               trna = qvp [jdx].trp;
               if (trna) {
-                numcodons = ComposeCodonsRecognizedString (trna, numbuf,
-							   sizeof (numbuf));
+                numcodons = ComposeCodonsRecognizedString (trna, numbuf, sizeof (numbuf));
                 if (numcodons < 1 || StringHasNoText (numbuf)) {
                 } else if (numcodons == 1) {
-		  isTRNA = TRUE;
+                  isTRNA = TRUE;
                   sprintf (buf, "codon recognized: %s", numbuf);
-                  if (StringStr (qvp [FEATUR_seqfeat_note].str, buf) == NULL) {
-                    s_AddValNodeString_NoRedund (&head, prefix,
-						 "codon recognized: ",
-						 numbuf);
+                  if (StringStr (qvp [FTQUAL_seqfeat_note].str, buf) == NULL) {
+                    s_AddValNodeString_NoRedund (&head, prefix, "codon recognized: ", numbuf);
                     prefix = "; ";
                   }
                 } else {
-		  isTRNA = TRUE;
-                  s_AddValNodeString_NoRedund (&head, prefix,
-					       "codons recognized: ",
-					       numbuf);
+                  isTRNA = TRUE;
+                  s_AddValNodeString_NoRedund (&head, prefix, "codons recognized: ", numbuf);
                   prefix = "; ";
                   add_period = FALSE;
                 }
               }
               break;
+
+            case Qual_class_model_ev :
+              uop = qvp [jdx].uop;
+              if (uop != NULL) {
+                str = GetStrFormRNAEvidence (uop);
+                if (! StringHasNoText (str)) {
+                  s_AddValNodeString_NoRedund (&head, prefix, str, NULL);
+                  prefix = "; ";
+                  add_period = FALSE;
+                }
+              }
+              break;
+
             default :
               break;
           }
@@ -7596,8 +8064,8 @@ static CharPtr FormatFeatureBlock (
           }
 
 #ifdef ASN2GNBK_STRIP_NOTE_PERIODS
-	  if (! IsEllipsis (notestr))
-	    s_RemovePeriodFromEnd (notestr);
+          if (! IsEllipsis (notestr))
+            s_RemovePeriodFromEnd (notestr);
 #endif
 
 
@@ -7614,7 +8082,1055 @@ static CharPtr FormatFeatureBlock (
     }
   }
 
-  /* and then deal with the various note types separately (not in order table) */
+  ValNodeFreeData (dbxrefs);
+}
+
+static void RecordUserObjectsInQVP (
+  UserObjectPtr uop,
+  Pointer userdata
+)
+
+{
+  ObjectIdPtr  oip;
+  QualValPtr   qvp;
+
+  if (uop == NULL || userdata == NULL) return;
+  qvp = (QualValPtr) userdata;
+  oip = uop->type;
+  if (oip == NULL) return;
+  if (StringCmp (oip->str, "ModelEvidence") == 0) {
+    qvp [FTQUAL_modelev].uop = uop;
+  }
+}
+
+static CharPtr FormatFeatureBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
+
+{
+  Uint1              aa;
+  IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
+  BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
+  Char               buf [80];
+  Choice             cbaa;
+  CodeBreakPtr       cbp;
+  BioseqPtr          cdna;
+  SeqFeatPtr         cds;
+  Char               ch;
+  Uint1              code = Seq_code_ncbieaa;
+  CdRegionPtr        crp;
+  SeqMgrDescContext  dcontext;
+  SeqMgrFeatContext  fcontext;
+  Uint1              featdeftype;
+  Uint1              from;
+  GBQualPtr          gbq;
+  SeqMgrFeatContext  gcontext;
+  ValNodePtr         gcp;
+  SeqFeatPtr         gene = NULL;
+  ValNodePtr         gene_syn = NULL;
+  Int4               gi = 0;
+  GeneRefPtr         grp;
+  IntCdsBlockPtr     icp;
+  Uint1              idx;
+  IntFeatBlockPtr    ifp;
+  ValNodePtr         illegal = NULL;
+  ImpFeatPtr         imp = NULL;
+  Boolean            is_gps = FALSE;
+  Boolean            is_other = FALSE;
+  CharPtr            key;
+  CharPtr            lasttype;
+  Int4               left = -1;
+  SeqLocPtr          loc = NULL;
+  SeqLocPtr          location = NULL;
+  SeqLocPtr          locforgene = NULL;
+  SeqMgrFeatContext  mcontext;
+  MolInfoPtr         mip;
+  SeqFeatPtr         mrna;
+  SeqLocPtr          newloc;
+  Boolean            noLeft;
+  Boolean            noRight;
+  SeqEntryPtr        oldscope;
+  Uint2              partial;
+  SeqMgrFeatContext  pcontext;
+  BioseqPtr          prod = NULL;
+  SeqFeatPtr         prot;
+  Boolean            protein = FALSE;
+  Char               protein_pid_g [32];
+  ProtRefPtr         prp;
+  Boolean            pseudo = FALSE;
+  CharPtr            ptr;
+  Int2               qualclass;
+  QualValPtr         qvp;
+  Uint1              residue;
+  Int4               right = -1;
+  RnaRefPtr          rrp;
+  SeqCodeTablePtr    sctp;
+  SeqDescrPtr        sdp;
+  SeqEntryPtr        sep;
+  Uint1              seqcode;
+  SeqFeatPtr         sfp;
+  Uint1              shift;
+  SeqIdPtr           sip;
+  Int2               siteidx;
+  SeqMapTablePtr     smtp;
+  Boolean            split;
+  CharPtr            str;
+  Uint1              strand = Seq_strand_unknown;
+  BioseqPtr          target;
+  CharPtr            tmp;
+  tRNAPtr            trna;
+  BioseqPtr          unlockme = NULL;
+  ValNodePtr         vnp;
+  CharPtr            wwwbuf;
+
+  if (afp == NULL || bbp == NULL) return NULL;
+  asp = afp->asp;
+  if (asp == NULL) return NULL;
+  target = asp->target;
+  bsp = asp->bsp;
+  if (target == NULL || bsp == NULL) return NULL;
+  ajp = afp->ajp;
+  if (ajp == NULL) return NULL;
+  qvp = afp->qvp;
+  if (qvp == NULL) return NULL;
+
+  protein_pid_g [0] = '\0';
+
+  /* all features in this list are known to be valid for the designated mode */
+
+  sfp = SeqMgrGetDesiredFeature (bbp->entityID, NULL, bbp->itemID, 0, NULL, &fcontext);
+  if (sfp == NULL) return NULL;
+
+  /* may need to map location between aa and dna */
+
+  ifp = (IntFeatBlockPtr) bbp;
+  if (ifp->mapToNuc) {
+
+    /* map mat_peptide, etc., to nucleotide coordinates */
+
+    sip = SeqLocId (sfp->location);
+    prod = BioseqFind (sip);
+    cds = SeqMgrGetCDSgivenProduct (prod, NULL);
+    CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
+    location = aaFeatLoc_to_dnaFeatLoc (cds, sfp->location);
+    SetSeqLocPartial (location, noLeft, noRight);
+    locforgene = location;
+    loc = location;
+
+  } else if (ifp->mapToProt) {
+
+    /* map CDS to protein product coordinates */
+
+    sip = SeqLocId (sfp->product);
+    prod = BioseqFind (sip);
+    cds = SeqMgrGetCDSgivenProduct (prod, NULL);
+    location = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, NULL, FALSE);
+    SetSeqLocPartial (location, FALSE, FALSE);
+    locforgene = sfp->location;
+    loc = location;
+
+  } else if (ifp->mapToGen) {
+
+    /* map CDS from cDNA to genomic Bioseq */
+
+    cdna = BioseqFindFromSeqLoc (sfp->location);
+    mrna = SeqMgrGetRNAgivenProduct (cdna, &mcontext);
+    CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
+    location = productLoc_to_locationLoc (mrna, sfp->location);
+    SetSeqLocPartial (location, noLeft, noRight);
+    locforgene = location;
+    loc = location;
+
+  } else if (ifp->mapToMrna) {
+
+    /* map gene from genomic to cDNA Bioseq */
+
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    location = CreateWholeInterval (sep);
+    SetSeqLocPartial (location, FALSE, FALSE);
+    locforgene = location;
+    loc = location;
+
+  } else {
+
+    /* no aa-dna or dna-aa mapping, just use location */
+
+    location = sfp->location;
+    locforgene = sfp->location;
+  }
+  if (location == NULL) return NULL;
+
+  sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
+  if (sep == NULL && IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
+      is_gps = TRUE;
+    }
+  }
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER) {
+      is_other = TRUE;
+    } else if (sip->choice == SEQID_GI) {
+      gi = (Int4) sip->data.intvalue;
+    }
+  }
+
+  featdeftype = fcontext.featdeftype;
+  if (featdeftype < FEATDEF_GENE || featdeftype >= FEATDEF_MAX) {
+    featdeftype = FEATDEF_BAD;
+  }
+  key = FindKeyFromFeatDefType (featdeftype, TRUE);
+
+  if (afp->format == GENPEPT_FMT && ISA_aa (bsp->mol)) {
+    if (featdeftype == FEATDEF_REGION) {
+      key = "Region";
+    } else if (featdeftype == FEATDEF_SITE) {
+      key = "Site";
+    }
+  }
+
+  /* deal with unmappable impfeats */
+
+  if (featdeftype == FEATDEF_BAD && fcontext.seqfeattype == SEQFEAT_IMP) {
+    imp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+    if (imp != NULL) {
+      key = imp->key;
+    }
+  }
+
+  gb_StartPrint (afp->format, 5, 21, NULL, 0, 5, 21, "FT", ifp->firstfeat);
+  if (ajp->ajp.slp != NULL) {
+    ff_AddString (key);
+  } else {
+    www_featkey (key, gi, fcontext.entityID, fcontext.itemID);
+  }
+  TabToColumn (22);
+
+  if (imp == NULL || StringHasNoText (imp->loc)) {
+    if (ajp->ajp.slp != NULL) {
+      sip = SeqIdParse ("lcl|dummy");
+      left = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_LEFT_END);
+      right = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_RIGHT_END);
+      strand = SeqLocStrand (ajp->ajp.slp);
+      split = FALSE;
+      newloc = SeqLocCopyRegion (sip, location, bsp, left, right, strand, &split);
+      SeqIdFree (sip);
+      if (newloc == NULL) return NULL;
+      SeqLocReplaceID (newloc, SeqLocId (ajp->ajp.slp));
+      str = FlatLoc (target, newloc, ajp->masterStyle);
+      SeqLocFree (newloc);
+    } else {
+      str = FlatLoc (target, location, ajp->masterStyle);
+    }
+  } else {
+    str = StringSave (imp->loc);
+  }
+  if (get_www ()) {
+    wwwbuf = www_featloc (str);
+    ff_AddString (wwwbuf);
+    MemFree (wwwbuf);
+  } else {
+    ff_AddString (str);
+  }
+  MemFree (str);
+
+  /* populate qualifier table from feature fields */
+
+  /*
+  if (sfp->partial == TRUE)
+    sfp->partial = FlatAnnotPartial(sfp, use_product);
+  */
+
+  if (sfp->partial) {
+    partial = SeqLocPartialCheck (location);
+    if (partial == SLP_COMPLETE /* || partial > SLP_OTHER */ ) {
+      qvp [FTQUAL_partial].bool = TRUE;
+    }
+    if (LookForFuzz (location)) {
+      qvp [FTQUAL_partial].bool = FALSE;
+    }
+    if (imp != NULL) {
+      if (StringChr (imp->loc, '<') != NULL || StringChr (imp->loc, '>') != NULL) {
+        qvp [FTQUAL_partial].bool = FALSE;
+      }
+    }
+
+    /* a few features cannot show /partial in RELEASE_MODE - later no features will */
+
+    if (ajp->flags.checkQualSyntax) {
+      switch (featdeftype) {
+      case FEATDEF_conflict:
+      case FEATDEF_mutation:
+      case FEATDEF_N_region:
+      case FEATDEF_polyA_site:
+        qvp [FTQUAL_partial].bool = FALSE;
+        break;
+      default:
+        break;
+      }
+    }
+  }
+  if (ifp->mapToProt) {
+    qvp [FTQUAL_partial].bool = FALSE;
+  }
+
+  if (sfp->pseudo) {
+    pseudo = TRUE;
+  }
+
+  if (fcontext.seqfeattype == SEQFEAT_GENE) {
+    grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+    if (grp != NULL) {
+      if (! StringHasNoText (grp->locus)) {
+        qvp [FTQUAL_gene].str = grp->locus;
+        qvp [FTQUAL_gene_desc].str = grp->desc;
+        qvp [FTQUAL_gene_syn].vnp = grp->syn;
+      } else if (! StringHasNoText (grp->desc)) {
+        qvp [FTQUAL_gene].str = grp->desc;
+        qvp [FTQUAL_gene_syn].vnp = grp->syn;
+      } else if (grp->syn != NULL) {
+        vnp = grp->syn;
+        qvp [FTQUAL_gene].str = (CharPtr) vnp->data.ptrvalue;
+        vnp = vnp->next;
+        qvp [FTQUAL_gene_syn].vnp = vnp;
+      }
+      qvp [FTQUAL_gene_map].str = grp->maploc;
+      qvp [FTQUAL_gene_allele].str = grp->allele;
+      qvp [FTQUAL_gene_xref].vnp = grp->db;
+      if (grp->pseudo) {
+        pseudo = TRUE;
+      }
+    }
+
+  } else {
+
+    grp = SeqMgrGetGeneXref (sfp);
+    if (grp != NULL) {
+      qvp [FTQUAL_gene_xref].vnp = grp->db;
+    }
+    if (grp == NULL) {
+      sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
+      oldscope = SeqEntrySetScope (sep);
+      gene = SeqMgrGetOverlappingGene (locforgene, &gcontext);
+      SeqEntrySetScope (oldscope);
+      if (gene != NULL) {
+        qvp [FTQUAL_gene_note].str = gene->comment;
+        grp = (GeneRefPtr) gene->data.value.ptrvalue;
+        if (gene->pseudo) {
+          pseudo = TRUE;
+        }
+        qvp [FTQUAL_gene_xref].vnp = grp->db;
+      }
+    }
+    if (grp != NULL && grp->pseudo) {
+      pseudo = TRUE;
+    }
+    if (grp != NULL && (! SeqMgrGeneIsSuppressed (grp)) &&
+        (fcontext.featdeftype != FEATDEF_repeat_region || gene == NULL)) {
+      if (! StringHasNoText (grp->locus)) {
+        qvp [FTQUAL_gene].str = grp->locus;
+        gene_syn = grp->syn;
+      } else if (! StringHasNoText (grp->desc)) {
+        qvp [FTQUAL_gene].str = grp->desc;
+        gene_syn = grp->syn;
+      } else if (grp->syn != NULL) {
+        vnp = grp->syn;
+        qvp [FTQUAL_gene].str = (CharPtr) vnp->data.ptrvalue;
+        vnp = vnp->next;
+        gene_syn = vnp;
+      }
+    }
+    if (fcontext.seqfeattype != SEQFEAT_CDREGION &&
+        fcontext.seqfeattype != SEQFEAT_RNA) {
+      qvp [FTQUAL_gene_xref].vnp = NULL;
+    }
+
+    /* specific fields set here */
+
+    switch (fcontext.seqfeattype) {
+      case SEQFEAT_CDREGION :
+        if (! ifp->mapToProt) {
+          crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+          if (crp != NULL) {
+
+            qvp [FTQUAL_codon_start].num = crp->frame;
+            if (qvp [FTQUAL_codon_start].num == 0) {
+              qvp [FTQUAL_codon_start].num = 1;
+            }
+            qvp [FTQUAL_transl_except].cbp = crp->code_break;
+            for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+              seqcode = 0;
+              sctp = NULL;
+              cbaa = cbp->aa;
+              switch (cbaa.choice) {
+                case 1 :
+                  seqcode = Seq_code_ncbieaa;
+                  break;
+                case 2 :
+                  seqcode = Seq_code_ncbi8aa;
+                  break;
+                case 3 :
+                  seqcode = Seq_code_ncbistdaa;
+                  break;
+                default :
+                  break;
+              }
+              if (seqcode != 0) {
+                sctp = SeqCodeTableFind (seqcode);
+                if (sctp != NULL) {
+                  residue = cbaa.value.intvalue;
+                  if (residue != 42) {
+                    if (seqcode != Seq_code_ncbieaa) {
+                      smtp = SeqMapTableFind (seqcode, Seq_code_ncbieaa);
+                      residue = SeqMapTableConvert (smtp, residue);
+                    }
+                    if (residue == 'U') {
+                      qvp [FTQUAL_selenocysteine].str = "selenocysteine";
+                    }
+                  }
+                }
+              }
+            }
+
+            gcp = crp->genetic_code;
+            if (gcp != NULL) {
+              for (vnp = gcp->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
+                if (vnp->choice == 2 && vnp->data.intvalue != 0) {
+                  qvp [FTQUAL_transl_table].num = vnp->data.intvalue;
+                }
+              }
+
+              /* suppress table 1 */
+
+              if (qvp [FTQUAL_transl_table].num == 1) {
+                qvp [FTQUAL_transl_table].num = 0;
+              }
+            }
+
+            if (sfp->product != NULL && SeqLocLen (sfp->product) != 0) {
+              protein = TRUE;
+            }
+            if (crp->conflict && (protein || (! sfp->excpt))) {
+              if (protein) {
+                qvp [FTQUAL_prot_conflict].str = conflict_msg;
+              } else {
+                /*
+                qvp [FTQUAL_prot_missing].str = no_protein_msg;
+                */
+              }
+            }
+          }
+
+          prp = SeqMgrGetProtXref (sfp);
+          if (prp == NULL) {
+            sip = SeqLocId (sfp->product);
+            qvp [FTQUAL_protein_id].sip = sip;
+
+            sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
+
+            /* by default only show /translation if product bioseq is within entity */
+
+            oldscope = SeqEntrySetScope (sep);
+            prod = BioseqFind (sip);
+            SeqEntrySetScope (oldscope);
+
+            if (prod == NULL && ajp->showFarTransl) {
+
+              /* but flag can override and force far /translation */
+
+              prod = BioseqLockById (sip);
+              unlockme = prod;
+            }
+
+            if (prod != NULL) {
+              for (sip = prod->id; sip != NULL; sip = sip->next) {
+                if (sip->choice == SEQID_GI) {
+                  sprintf (protein_pid_g, "PID:g%ld", (long) sip->data.intvalue);
+                }
+              }
+              sdp = SeqMgrGetNextDescriptor (prod, NULL, Seq_descr_comment, &dcontext);
+              if (sdp != NULL && dcontext.level == 0) {
+                if (! StringHasNoText ((CharPtr) sdp->data.ptrvalue)) {
+                  qvp [FTQUAL_prot_comment].str = (CharPtr) sdp->data.ptrvalue;
+                }
+              }
+              sdp = SeqMgrGetNextDescriptor (prod, NULL, Seq_descr_molinfo, &dcontext);
+              if (sdp != NULL && dcontext.level == 0) {
+                mip = (MolInfoPtr) sdp->data.ptrvalue;
+                if (mip != NULL && mip->tech > 1 &&
+                    mip->tech != MI_TECH_concept_trans &&
+                    mip->tech != MI_TECH_concept_trans_a) {
+                  str = StringForSeqTech (mip->tech);
+                  if (! StringHasNoText (str)) {
+                    qvp [FTQUAL_prot_method].str = str;
+                  }
+                }
+              }
+              prot = SeqMgrGetBestProteinFeature (prod, &pcontext);
+              if (prot != NULL) {
+                prp = (ProtRefPtr) prot->data.value.ptrvalue;
+                if (prp != NULL && prp->processed < 2) {
+                  qvp [FTQUAL_prot_note].str = prot->comment;
+                }
+              }
+            }
+          }
+
+          if (prp != NULL) {
+            vnp = prp->name;
+            if (vnp != NULL && (! StringHasNoText ((CharPtr) vnp->data.ptrvalue))) {
+              qvp [FTQUAL_cds_product].str = (CharPtr) vnp->data.ptrvalue;
+              vnp = vnp->next;
+              qvp [FTQUAL_prot_names].vnp = vnp;
+            }
+            qvp [FTQUAL_prot_desc].str = prp->desc;
+            qvp [FTQUAL_prot_activity].vnp = prp->activity;
+            qvp [FTQUAL_prot_EC_number].vnp = prp->ec;
+          }
+
+          if (! pseudo) {
+            if (prod != NULL) {
+              qvp [FTQUAL_translation].bool = TRUE;
+            }
+          }
+
+          if (ifp->isCDS) {
+            icp = (IntCdsBlockPtr) ifp;
+            qvp [FTQUAL_figure].str = icp->fig;
+            qvp [FTQUAL_maploc].str = icp->maploc;
+          }
+        } else {
+          qvp [FTQUAL_coded_by].slp = sfp->location;
+
+          crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+          if (crp != NULL) {
+            gcp = crp->genetic_code;
+            if (gcp != NULL) {
+              for (vnp = gcp->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
+                if (vnp->choice == 2 && vnp->data.intvalue != 0) {
+                  qvp [FTQUAL_transl_table].num = vnp->data.intvalue;
+                }
+              }
+
+              /* suppress table 1 */
+
+              if (qvp [FTQUAL_transl_table].num == 1) {
+                qvp [FTQUAL_transl_table].num = 0;
+              }
+            }
+          }
+        }
+        break;
+      case SEQFEAT_PROT :
+        prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+        if (prp != NULL) {
+          vnp = prp->name;
+          if (vnp != NULL && (! StringHasNoText ((CharPtr) vnp->data.ptrvalue))) {
+            qvp [FTQUAL_product].str = (CharPtr) vnp->data.ptrvalue;
+            vnp = vnp->next;
+            qvp [FTQUAL_prot_names].vnp = vnp;
+          }
+          if (afp->format != GENPEPT_FMT) {
+            qvp [FTQUAL_prot_desc].str = prp->desc;
+          } else {
+            qvp [FTQUAL_prot_name].str = prp->desc;
+          }
+          if (afp->format != GENPEPT_FMT || prp->processed != 2) {
+            qvp [FTQUAL_prot_activity].vnp = prp->activity;
+          }
+          qvp [FTQUAL_prot_EC_number].vnp = prp->ec;
+        }
+        break;
+      case SEQFEAT_RNA :
+        rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+        if (rrp != NULL) {
+          if (rrp->pseudo) {
+            pseudo = TRUE;
+          }
+          if (rrp->type == 2) {
+            sip = SeqLocId (sfp->product);
+            if (sip != NULL) {
+              /* currently for RefSeq records only, not in GenBank release */
+              if (is_other) {
+                qvp [FTQUAL_transcript_id].sip = sip;
+              }
+              prod = BioseqFind (sip);
+            }
+          }
+          if (rrp->type == 3) {
+            if (rrp->ext.choice == 1) {
+              /* amino acid could not be parsed into structured form */
+              if (! ajp->flags.dropIllegalQuals) {
+                str = (CharPtr) rrp->ext.value.ptrvalue;
+                qvp [FTQUAL_product].str = str;
+              } else {
+                qvp [FTQUAL_product].str = "tRNA-OTHER";
+              }
+            } else if (rrp->ext.choice == 2) {
+              trna = (tRNAPtr) rrp->ext.value.ptrvalue;
+              if (trna != NULL) {
+                aa = 0;
+                if (trna->aatype == 2) {
+                  aa = trna->aa;
+                } else {
+                  from = 0;
+                  switch (trna->aatype) {
+                    case 0 :
+                      from = 0;
+                      break;
+                    case 1 :
+                      from = Seq_code_iupacaa;
+                      break;
+                    case 2 :
+                      from = Seq_code_ncbieaa;
+                      break;
+                    case 3 :
+                      from = Seq_code_ncbi8aa;
+                      break;
+                    case 4 :
+                      from = Seq_code_ncbistdaa;
+                      break;
+                    default:
+                      break;
+                  }
+                  if (ajp->flags.iupacaaOnly) {
+                    code = Seq_code_iupacaa;
+                  } else {
+                    code = Seq_code_ncbieaa;
+                  }
+                  smtp = SeqMapTableFind (code, from);
+                  if (smtp != NULL) {
+                    aa = SeqMapTableConvert (smtp, trna->aa);
+                    if (aa == 255 && from == Seq_code_iupacaa && trna->aa == 'U') {
+                      aa = 'U';
+                    }
+                  }
+                }
+                if (ajp->flags.iupacaaOnly) {
+                  smtp = SeqMapTableFind (Seq_code_iupacaa, Seq_code_ncbieaa);
+                  if (smtp != NULL) {
+                    aa = SeqMapTableConvert (smtp, trna->aa);
+                  } else {
+                    aa = 'X';
+                  }
+                }
+                if (aa > 0 && aa != 255) {
+                  if (aa <= 74) {
+                    shift = 0;
+                  } else if (aa > 79) {
+                    shift = 2;
+                  } else {
+                    shift = 1;
+                  }
+                  idx = aa - (64 + shift);
+                  if (idx > 0 && idx < 25) {
+                    str = trnaList [idx];
+                    qvp [FTQUAL_product].str = str;
+                    if (StringNICmp (str, "tRNA-", 5) == 0) {
+                      qvp [FTQUAL_trna_aa].str = str + 5;
+                    }
+                  }
+                }
+                qvp [FTQUAL_anticodon].slp = trna->anticodon;
+                qvp [FTQUAL_trna_codons].trp = trna;
+              }
+            }
+          } else {
+            if (rrp->ext.choice == 1) {
+              str = (CharPtr) rrp->ext.value.ptrvalue;
+              qvp [FTQUAL_product].str = str;
+
+              /*
+              if (rrp->type == 255 && (! StringHasNoText (str))) {
+                if        (StringICmp (str, "internal transcribed spacer 1") == 0 ||
+                           StringICmp (str, "internal transcribed spacer ITS1") == 0 ||
+                           StringICmp (str, "ITS1") == 0) {
+                  qvp [FTQUAL_rrna_its].str = "ITS1";
+                } else if (StringICmp (str, "internal transcribed spacer 2") == 0 ||
+                           StringICmp (str, "internal transcribed spacer ITS2") == 0 ||
+                           StringICmp (str, "ITS2") == 0) {
+                  qvp [FTQUAL_rrna_its].str = "ITS2";
+                } else if (StringICmp (str, "internal transcribed spacer 3") == 0 ||
+                           StringICmp (str, "internal transcribed spacer ITS3") == 0 ||
+                           StringICmp (str, "ITS3") == 0) {
+                  qvp [FTQUAL_rrna_its].str = "ITS3";
+                }
+              }
+              */
+            }
+          }
+        }
+        break;
+      case SEQFEAT_REGION :
+        if (afp->format == GENPEPT_FMT && featdeftype == FEATDEF_REGION && ISA_aa (bsp->mol)) {
+          qvp [FTQUAL_region_name].str = (CharPtr) sfp->data.value.ptrvalue;
+        } else {
+          qvp [FTQUAL_region].str = (CharPtr) sfp->data.value.ptrvalue;
+        }
+        break;
+      case SEQFEAT_COMMENT :
+        break;
+      case SEQFEAT_SITE :
+        siteidx = (Int2) sfp->data.value.intvalue;
+        if (siteidx == 255) {
+          siteidx = 26;
+        }
+        if (siteidx > 0 && siteidx < 27) {
+          if (afp->format == GENPEPT_FMT && ISA_aa (bsp->mol)) {
+            qvp [FTQUAL_site_type].str = siteList [siteidx];
+          } else {
+            qvp [FTQUAL_site].str = siteList [siteidx];
+          }
+        }
+        break;
+      case SEQFEAT_PSEC_STR :
+        qvp [FTQUAL_sec_str_type].num = sfp->data.value.intvalue;
+        break;
+      case SEQFEAT_HET :
+        qvp [FTQUAL_heterogen].str = (CharPtr) sfp->data.value.ptrvalue;
+        break;
+      default :
+        break;
+    }
+  }
+
+  /* common fields set here */
+
+  VisitUserObjectsInUop (sfp->ext, (Pointer) qvp, RecordUserObjectsInQVP);
+
+  if (fcontext.featdeftype == FEATDEF_repeat_region) {
+    pseudo = FALSE;
+  }
+
+  qvp [FTQUAL_seqfeat_note].str = sfp->comment;
+
+  qvp [FTQUAL_pseudo].bool = pseudo;
+
+  /* if RELEASE_MODE, check list of features that can have /pseudo */
+
+  if (ajp->flags.dropIllegalQuals && pseudo  &&
+      (fcontext.seqfeattype == SEQFEAT_RNA || fcontext.seqfeattype == SEQFEAT_IMP) ) {
+    switch (featdeftype) {
+
+    case  FEATDEF_allele:
+    case  FEATDEF_attenuator:
+    case  FEATDEF_CAAT_signal:
+    case  FEATDEF_conflict:
+    case  FEATDEF_D_loop:
+    case  FEATDEF_enhancer:
+    case  FEATDEF_GC_signal:
+    case  FEATDEF_iDNA:
+    case  FEATDEF_intron:
+    case  FEATDEF_LTR:
+    case  FEATDEF_misc_binding:
+    case  FEATDEF_misc_difference:
+    case  FEATDEF_misc_recomb:
+    case  FEATDEF_misc_RNA:
+    case  FEATDEF_misc_signal:
+    case  FEATDEF_misc_structure:
+    case  FEATDEF_modified_base:
+    case  FEATDEF_mutation:
+    case  FEATDEF_old_sequence:
+    case  FEATDEF_polyA_signal:
+    case  FEATDEF_polyA_site:
+    case  FEATDEF_precursor_RNA:
+    case  FEATDEF_prim_transcript:
+    case  FEATDEF_primer_bind:
+    case  FEATDEF_protein_bind:
+    case  FEATDEF_RBS:
+    case  FEATDEF_repeat_region:
+    case  FEATDEF_repeat_unit:
+    case  FEATDEF_rep_origin:
+    case  FEATDEF_satellite:
+    case  FEATDEF_stem_loop:
+    case  FEATDEF_STS:
+    case  FEATDEF_TATA_signal:
+    case  FEATDEF_terminator:
+    case  FEATDEF_unsure:
+    case  FEATDEF_variation:
+    case  FEATDEF_3clip:
+    case  FEATDEF_3UTR:
+    case  FEATDEF_5clip:
+    case  FEATDEF_5UTR:
+      qvp [FTQUAL_pseudo].bool = FALSE;
+        break;
+    default:
+        break;
+    }
+  }
+
+  if (afp->format != GENPEPT_FMT) {
+    qvp [FTQUAL_evidence].num = sfp->exp_ev;
+  }
+
+  /* exception currently legal only on CDS */
+
+  if ((! ajp->flags.dropIllegalQuals) || fcontext.seqfeattype == SEQFEAT_CDREGION) {
+    qvp [FTQUAL_exception].str = sfp->except_text;
+
+    if (sfp->excpt && qvp [FTQUAL_exception].str == NULL) {
+      if (qvp [FTQUAL_seqfeat_note].str != NULL) {
+        if (ajp->flags.dropIllegalQuals &&
+            (! StringInStringList (qvp [FTQUAL_seqfeat_note].str, validExceptionString))) {
+        /* !!! if ajp->flags.dropIllegalQuals, check CDS list to avoid losing note !!! */
+          qvp [FTQUAL_exception].str = NULL;
+        } else {
+          /* if no /exception text, use text in comment, remove from /note */
+
+          qvp [FTQUAL_exception].str = qvp [FTQUAL_seqfeat_note].str;
+          qvp [FTQUAL_seqfeat_note].str = NULL;
+        }
+      } else {
+        qvp [FTQUAL_exception].str = "No explanation supplied";
+      }
+
+      /* !!! if ajp->flags.dropIllegalQuals, check CDS list here as well !!! */
+      if (ajp->flags.dropIllegalQuals &&
+          (! StringInStringList (qvp [FTQUAL_seqfeat_note].str, validExceptionString)) ) {
+        qvp [FTQUAL_exception].str = NULL;
+      }
+    }
+    if (ajp->flags.dropIllegalQuals &&
+        (! StringInStringList (qvp [FTQUAL_exception].str, validExceptionString))) {
+      qvp [FTQUAL_exception_note].str = qvp [FTQUAL_exception].str;
+      qvp [FTQUAL_exception].str = NULL;
+    }
+  } else {
+    qvp [FTQUAL_exception_note].str = sfp->except_text;
+  }
+  if (StringHasNoText (qvp [FTQUAL_exception].str)) {
+    qvp [FTQUAL_exception].str = NULL;
+  }
+  if (StringHasNoText (qvp [FTQUAL_exception_note].str)) {
+    qvp [FTQUAL_exception_note].str = NULL;
+  }
+
+  qvp [FTQUAL_db_xref].vnp = sfp->dbxref;
+  qvp [FTQUAL_citation].vnp = sfp->cit;
+
+  /* /product same as sfp->comment will suppress /note */
+
+  if (! StringHasNoText (qvp [FTQUAL_product].str) &&
+      StringICmp (sfp->comment, qvp [FTQUAL_product].str) == 0) {
+    qvp [FTQUAL_seqfeat_note].str = NULL;
+  }
+  /* case sensitive AJ011317.1 */
+  if (! StringHasNoText (qvp [FTQUAL_cds_product].str) &&
+      StringCmp (sfp->comment, qvp [FTQUAL_cds_product].str) == 0) {
+    qvp [FTQUAL_seqfeat_note].str = NULL;
+  }
+
+  /* /gene same as sfp->comment will suppress /note */
+  /* case sensitive -gi|6572973|gb|AF195052.1|AF195052 */
+
+  if (! StringHasNoText (qvp [FTQUAL_gene].str) &&
+      StringCmp (sfp->comment, qvp [FTQUAL_gene].str) == 0) {
+    qvp [FTQUAL_seqfeat_note].str = NULL;
+  }
+
+  /* gene /note same as sfp->comment will suppress /note - U92435.1 says do not do this */
+
+  /*
+  if (! StringHasNoText (qvp [FTQUAL_gene_note].str) &&
+      StringICmp (sfp->comment, qvp [FTQUAL_gene_note].str) == 0) {
+    qvp [FTQUAL_seqfeat_note].str = NULL;
+  }
+  */
+
+  /* if site sfp->comment contains site name, suppress site in /note */
+
+  if (! StringHasNoText (qvp [FTQUAL_site].str) &&
+      StringStr (sfp->comment, qvp [FTQUAL_site].str) != NULL) {
+    qvp [FTQUAL_site].str = NULL;
+  }
+
+  /* /EC_number same as sfp->comment will suppress /note */
+
+  for (vnp = qvp [FTQUAL_prot_EC_number].vnp; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if ((! StringHasNoText (str)) &&
+        StringICmp (sfp->comment, str) == 0) {
+      qvp [FTQUAL_seqfeat_note].str = NULL;
+    }
+  }
+
+
+  /* now go through gbqual list */
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    idx = GbqualToFeaturIndex (gbq->qual);
+    if (idx > 0 && idx < ASN2GNBK_TOTAL_FEATUR) {
+      if (qvp [idx].gbq == NULL) {
+        if (idx == FTQUAL_product_quals) {
+          if (qvp [FTQUAL_product].str == NULL) {
+            qvp [FTQUAL_product].str = gbq->val;
+          } else if (qvp [FTQUAL_xtra_prod_quals].gbq == NULL) {
+            /* chain will include remaining product gbquals */
+            qvp [FTQUAL_xtra_prod_quals].gbq = gbq;
+          }
+        } else {
+          qvp [idx].gbq = gbq;
+        }
+      }
+
+    } else if (idx == 0) {
+
+      qualclass = IllegalGbqualToClass (gbq->qual);
+      if (qualclass == 0) {
+        qualclass = Qual_class_quote;
+      }
+      tmp = StringSave (gbq->val);
+      if (tmp != NULL) {
+        str = MemNew (sizeof (Char) * (StringLen (gbq->val) + StringLen (tmp) + 10));
+        if (str != NULL) {
+          if (qualclass == Qual_class_quote) {
+            if (StringIsJustQuotes (tmp)) {
+              sprintf (buf, "/%s", gbq->qual);
+            } else {
+              ptr = tmp;
+              ch = *ptr;
+              while (ch != '\0') {
+                if (ch == '"') {
+                  *ptr = '\'';
+                }
+                ptr++;
+                ch = *ptr;
+              }
+              sprintf (str, "/%s=\"%s\"", gbq->qual, tmp);
+            }
+            ValNodeCopyStr (&illegal, 0, str);
+          } else if (qualclass == Qual_class_noquote || qualclass == Qual_class_label) {
+            if (StringIsJustQuotes (tmp)) {
+              sprintf (str, "/%s", gbq->qual);
+            } else {
+              sprintf (str, "/%s=%s", gbq->qual, tmp);
+            }
+            ValNodeCopyStr (&illegal, 0, str);
+          }
+          MemFree (str);
+        }
+        MemFree (tmp);
+      }
+    }
+  }
+
+  /* illegal qualifiers are copied and formatted in valnode chain */
+
+  if (! ajp->flags.dropIllegalQuals) {
+    qvp [FTQUAL_illegal_qual].vnp = illegal;
+  }
+
+  /* remove protein description that equals the gene name, case sensitive */
+
+  if (StringCmp (qvp [FTQUAL_gene].str, qvp [FTQUAL_prot_desc].str) == 0) {
+    qvp [FTQUAL_prot_desc].str = NULL;
+  }
+
+  /* remove protein description that equals the cds product, case sensitive */
+
+  if (StringCmp (qvp [FTQUAL_cds_product].str, qvp [FTQUAL_prot_desc].str) == 0) {
+    qvp [FTQUAL_prot_desc].str = NULL;
+  }
+
+  /* remove comment contained in prot_desc - gi|4530123|gb|AF071539.1|AF071539 */
+
+  if (StringStr (qvp [FTQUAL_prot_desc].str, qvp [FTQUAL_seqfeat_note].str) != NULL) {
+    qvp [FTQUAL_seqfeat_note].str = NULL;
+  }
+
+  /* remove protein description that equals the standard name */
+
+  if (qvp [FTQUAL_standard_name].gbq != NULL && qvp [FTQUAL_prot_desc].str != NULL) {
+    gbq = qvp [FTQUAL_standard_name].gbq;
+    lasttype = gbq->qual;
+    while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
+      if (StringICmp (gbq->val, qvp [FTQUAL_prot_desc].str) == 0) {
+        qvp [FTQUAL_prot_desc].str = NULL;
+      }
+      gbq = gbq->next;
+    }
+  }
+
+  /* remove protein description that equals a gene synonym - case insensitive AF109216.1 */
+
+  for (vnp = gene_syn; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if ((! StringHasNoText (str)) &&
+        StringCmp (str, qvp [FTQUAL_prot_desc].str) == 0) {
+      qvp [FTQUAL_prot_desc].str = NULL;
+    }
+  }
+
+  /* remove comment that equals a gene synonym */
+
+  if (afp->format != GENPEPT_FMT && (! ifp->mapToProt)) {
+    for (vnp = gene_syn; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if ((! StringHasNoText (str)) &&
+          StringICmp (str, qvp [FTQUAL_seqfeat_note].str) == 0) {
+        qvp [FTQUAL_seqfeat_note].str = NULL;
+      }
+    }
+  }
+
+  /* remove protein comment descriptor that equals the protein note */
+
+  if (StringCmp (qvp [FTQUAL_prot_note].str, qvp [FTQUAL_prot_comment].str) == 0) {
+    qvp [FTQUAL_prot_comment].str = NULL;
+  }
+
+  /* suppress cds comment if a subset of protein note - AF002218.1 */
+
+  if (StringStr (qvp [FTQUAL_prot_note].str, qvp [FTQUAL_seqfeat_note].str) != NULL) {
+    qvp [FTQUAL_seqfeat_note].str = NULL;
+  }
+
+  /* suppress selenocysteine note if already in comment */
+
+  if (StringStr (sfp->comment, "selenocysteine") != NULL) {
+    qvp [FTQUAL_selenocysteine].str = NULL;
+  }
+
+  /* now print qualifiers from table */
+
+#ifdef DISPLAY_STRINGS
+  s_DisplayQVP(qvp, feat_note_order);
+#endif
+
+  /* Strip duplicate notes */
+
+  if ((StringCmp(qvp[FTQUAL_product].str,
+         qvp[FTQUAL_seqfeat_note].str) == 0)) {
+    qvp[FTQUAL_seqfeat_note].str = NULL;
+  }
+
+  if ((qvp[FTQUAL_standard_name].gbq != NULL) &&
+      (qvp[FTQUAL_standard_name].gbq->val != NULL)) {
+    if ((StringCmp(qvp[FTQUAL_seqfeat_note].str,
+           qvp[FTQUAL_standard_name].gbq->val) == 0)) {
+      qvp[FTQUAL_seqfeat_note].str = NULL;
+    }
+  }
+
+  /* Display strings for debugging purposes */
+
+#ifdef DISPLAY_STRINGS
+  s_DisplayQVP(qvp, feat_qual_order);
+#endif
+
+
+  /* Build the flat file */
+  FormatFeatureBlockQuals (ajp, afp, asp, bsp, featdeftype, gene_syn,
+                           lasttype, location, prod,
+                           protein_pid_g, qvp,
+                           left, right, strand,
+                           sfp, target, is_other, is_gps);
+
+  /* ??? and then deal with the various note types separately (not in order table) ??? */
 
   /* free aa-dna or dna-aa mapped location */
 
@@ -7622,7 +9138,9 @@ static CharPtr FormatFeatureBlock (
 
   ValNodeFreeData (illegal);
 
-  return gb_MergeString (TRUE);
+  BioseqUnlock (unlockme);
+
+  return ff_print_string_mem (gb_MergeString (TRUE));
 }
 
 static CharPtr FormatBasecountBlock (
@@ -7631,8 +9149,8 @@ static CharPtr FormatBasecountBlock (
 )
 
 {
-  Asn2gbJobPtr      ajp;
-  Asn2gbSectionPtr  asp;
+  IntAsn2gbJobPtr   ajp;
+  Asn2gbSectPtr     asp;
   Int4              base_count [5];
   BioseqPtr         bsp;
   Char              buf [80];
@@ -7666,13 +9184,14 @@ static CharPtr FormatBasecountBlock (
     code = Seq_code_ncbieaa;
   }
 
-  if (ajp->slp != NULL) {
-    spp = SeqPortNewByLoc (ajp->slp, code);
-    len = SeqLocLen (ajp->slp);
+  if (ajp->ajp.slp != NULL) {
+    spp = SeqPortNewByLoc (ajp->ajp.slp, code);
+    len = SeqLocLen (ajp->ajp.slp);
   } else {
     spp = SeqPortNew (bsp, 0, -1, 0, code);
     len = bsp->length;
   }
+  if (spp == NULL) return NULL;
   if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
     SeqPortSet_do_virtual (spp, TRUE);
   }
@@ -7718,17 +9237,15 @@ static CharPtr FormatBasecountBlock (
 
   SeqPortFree (spp);
 
-  init_buff ();
-
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
 
     if (base_count [4] == 0) {
       sprintf (buf, "%7ld a%7ld c%7ld g%7ld t",
-               (long) base_count [0], (long) base_count [1], 
+               (long) base_count [0], (long) base_count [1],
                (long) base_count [2], (long) base_count [3]);
     } else {
       sprintf (buf, "%7ld a%7ld c%7ld g%7ld t%7ld others",
-               (long) base_count [0], (long) base_count [1], 
+               (long) base_count [0], (long) base_count [1],
                (long) base_count [2], (long) base_count [3],
                (long) base_count [4]);
     }
@@ -7737,14 +9254,14 @@ static CharPtr FormatBasecountBlock (
 
     sprintf (buf, "Sequence %ld BP; %ld A; %ld C; %ld G; %ld T; %ld other;",
              (long) len,
-             (long) base_count [0], (long) base_count [1], 
+             (long) base_count [0], (long) base_count [1],
              (long) base_count [2], (long) base_count [3],
              (long) base_count [4]);
 
     PrintXX ();
   }
 
-  gb_StartPrint (afp->format, FALSE, 0, 0, "BASE COUNT", 13, 5, 5, "SQ", FALSE);
+  gb_StartPrint (afp->format, 0, 0, "BASE COUNT", 13, 5, 5, "SQ", FALSE);
 
   gb_AddString (NULL, buf, NULL, FALSE, FALSE, TILDE_TO_SPACES);
 
@@ -7760,6 +9277,19 @@ static void PrintSeqLine (
 
 {
   Char  pos [16];
+
+#ifdef WIN_MAC
+  /* !!! To eliminate spurious diffs when comparing with Sequin exported GenBank format on Mac !!! */
+
+  {
+    size_t  len;
+
+    len = StringLen (buf);
+    if (len > 0 && buf [len - 1] == ' ') {
+      buf [len - 1] = '\0';
+    }
+  }
+#endif
 
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
 
@@ -7787,8 +9317,8 @@ static CharPtr FormatSequenceBlock (
 )
 
 {
-  Asn2gbJobPtr      ajp;
-  Asn2gbSectionPtr  asp;
+  IntAsn2gbJobPtr   ajp;
+  Asn2gbSectPtr     asp;
   Byte              bases [400];
   Int2              blk;
   BioseqPtr         bsp;
@@ -7798,47 +9328,52 @@ static CharPtr FormatSequenceBlock (
   Int2              count;
   Int2              ctr;
   Int2              i;
+  IntAsn2gbSectPtr  iasp;
   Boolean           is_na;
   Int2              lin;
   Int4              pos;
   Uint1             residue;
-  SequenceBlockPtr  sbp;
+  SeqBlockPtr       sbp;
   SeqPortPtr        spp;
   Int4              start;
   Int4              stop;
 
   if (afp == NULL || bbp == NULL) return NULL;
-  sbp = (SequenceBlockPtr) bbp;
+  sbp = (SeqBlockPtr) bbp;
   ajp = afp->ajp;
   if (ajp == NULL) return NULL;
 
   asp = afp->asp;
   if (asp == NULL) return NULL;
+  iasp = (IntAsn2gbSectPtr) asp;
   bsp = (asp->bsp);
   if (bsp == NULL) return NULL;
 
-  spp = asp->spp;
+  spp = iasp->spp;
   if (spp == NULL) {
 
     /* if first time, create SeqPort for this section */
 
     if (ISA_aa (bsp->mol)) {
-      code = Seq_code_ncbieaa;
+      if (ajp->flags.iupacaaOnly) {
+        code = Seq_code_iupacaa;
+      } else {
+        code = Seq_code_ncbieaa;
+      }
     }
 
-    if (ajp->slp != NULL) {
-      spp = SeqPortNewByLoc (ajp->slp, code);
+    if (ajp->ajp.slp != NULL) {
+      spp = SeqPortNewByLoc (ajp->ajp.slp, code);
     } else {
       spp = SeqPortNew (bsp, 0, -1, 0, code);
     }
+    if (spp == NULL) return NULL;
     if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
       SeqPortSet_do_virtual (spp, TRUE);
     }
 
-    asp->spp = spp;
+    iasp->spp = spp;
   }
-
-  init_buff ();
 
   start = sbp->start;
   stop = sbp->stop;
@@ -7858,8 +9393,17 @@ static CharPtr FormatSequenceBlock (
 
   ctr = (Int2) MIN ((Int4) (stop - pos), (Int4) sizeof (bases));
   ctr = SeqPortRead (spp, bases, ctr);
+
   i = 0;
-  residue = (Uint1) bases [i];
+
+  if (ctr < 0) {
+    residue = -ctr;
+  } else if (ctr < 1) {
+    residue = SEQPORT_EOF;
+  } else {
+    residue = (Uint1) bases [i];
+  }
+
   while (pos < stop && residue != SEQPORT_EOF) {
 
     if (residue == INVALID_RESIDUE) {
@@ -7917,39 +9461,41 @@ static CharPtr FormatSequenceBlock (
     PrintSeqLine (afp->format, buf, start, start + cnt);
   }
 
-  if (! ajp->keepSeqPortOpen) {
-    asp->spp = SeqPortFree (asp->spp);
+  if (ajp->transientSeqPort) {
+    iasp->spp = SeqPortFree (iasp->spp);
   }
 
   return gb_MergeString (FALSE);
 }
 
-  static Uint1 fasta_order[NUM_SEQID] = { 
+  static Uint1 fasta_order [NUM_SEQID] = {
     33, /* 0 = not set */
     20, /* 1 = local Object-id */
-    15,  /* 2 = gibbsq */
-    16,  /* 3 = gibbmt */
+    15, /* 2 = gibbsq */
+    16, /* 3 = gibbmt */
     30, /* 4 = giim Giimport-id */
     10, /* 5 = genbank */
     10, /* 6 = embl */
     10, /* 7 = pir */
     10, /* 8 = swissprot */
-    15,  /* 9 = patent */
+    15, /* 9 = patent */
     20, /* 10 = other TextSeqId */
     20, /* 11 = general Dbtag */
-    255,  /* 12 = gi */
+    255, /* 12 = gi */
     10, /* 13 = ddbj */
     10, /* 14 = prf */
-    12  /* 15 = pdb */
+    12, /* 15 = pdb */
+    10, /* 16 = tpg */
+    10, /* 17 = tpe */
+    10  /* 18 = tpd */
   };
 
-static void PrintGenome (SeqLocPtr slp_head,
-			 CharPtr   prefix)
+static void PrintGenome (SeqLocPtr slp_head, CharPtr prefix)
 {
   Char         buf[14], val[166];
   Boolean      first = TRUE;
   SeqLocPtr    slp;
-  Int4 	       from, to, start, stop;
+  Int4         from, to, start, stop;
   SeqIdPtr     sid, newid;
   BioseqPtr    bsp = NULL;
   SeqEntryPtr  sep = NULL;
@@ -7957,12 +9503,12 @@ static void PrintGenome (SeqLocPtr slp_head,
 
 #ifdef ENABLE_ENTREZ
   SeqLocPtr    sslp;
-  Int4 	       beg, end, lcur, lprev;
-  Int4	       uid;
+  Int4         beg, end, lcur, lprev;
+  Int4         uid;
   Boolean      is_network;
 #endif
-  
-  
+
+
   for (slp = slp_head; slp; slp = slp->next) {
     from = to = 0;
     sid = SeqLocId(slp);
@@ -7990,56 +9536,56 @@ static void PrintGenome (SeqLocPtr slp_head,
         bsp = BioseqLockById (&vn);
       }
       if (bsp && (bsp->seq_ext_type == 1 || bsp->seq_ext_type)) {
-	lcur = lprev = 0;
-	for (sslp = slp_head; sslp; sslp = sslp->next) {
-	  lprev = lcur;
-	  lcur += SeqLocLen(sslp);
-	  beg = SeqLocStart(sslp);
-	  end = SeqLocStop(sslp);
-	  sid = SeqLocId(sslp);
-	  if (from > lcur || to < lprev) {
-	    continue;
-	  }
-	  if (from > lprev) { /* first */
-	    start = beg + from - lprev;
-	  } else {
-	    start = beg;  /* middle */
-	  }
-	  if (to > lcur) {  /* middle */
-	    stop = end;
-	  } else {
-	    stop = beg + to - lprev;
-	  }
-	  if (first) {
-	    first = FALSE;
-	  } else {
-	    ff_AddChar(',');
-	  }
-	  if (sid->choice == SEQID_GI) {
-	    newid = GetSeqIdForGI(sid->data.intvalue);
-	    if (newid == NULL) {
-	      newid = sid;
-	    }
-	  } else {
-	    newid = sid;
-	  }
-	  SeqIdWrite(SeqIdSelect(newid, fasta_order, NUM_SEQID),
-		     buf, PRINTID_TEXTID_ACC_VER, 13);
+        lcur = lprev = 0;
+        for (sslp = slp_head; sslp; sslp = sslp->next) {
+          lprev = lcur;
+          lcur += SeqLocLen(sslp);
+          beg = SeqLocStart(sslp);
+          end = SeqLocStop(sslp);
+          sid = SeqLocId(sslp);
+          if (from > lcur || to < lprev) {
+            continue;
+          }
+          if (from > lprev) { /* first */
+            start = beg + from - lprev;
+          } else {
+            start = beg;  /* middle */
+          }
+          if (to > lcur) {  /* middle */
+            stop = end;
+          } else {
+            stop = beg + to - lprev;
+          }
+          if (first) {
+            first = FALSE;
+          } else {
+            ff_AddChar(',');
+          }
+          if (sid->choice == SEQID_GI) {
+            newid = GetSeqIdForGI(sid->data.intvalue);
+            if (newid == NULL) {
+              newid = sid;
+            }
+          } else {
+            newid = sid;
+          }
+          SeqIdWrite(SeqIdSelect(newid, fasta_order, NUM_SEQID),
+                     buf, PRINTID_TEXTID_ACC_VER, 13);
 
-	  if (SeqLocStrand(slp) == Seq_strand_minus) {
-	    ff_AddString("complement(");
-	  }
-	  ff_AddString(buf);
-	  if (SeqLocStrand(slp) == Seq_strand_minus) {
-	    sprintf(val,":%ld..%ld)",(long) start+1, (long) stop+1 );
-	  } else {
-	    sprintf(val,":%ld..%ld",(long) start+1, (long) stop+1 );
-	  }
-	  ff_AddString(val);
-	  p1 += StringLen(val);
-	  p2 += StringLen(val);
-	}
-	continue;
+          if (SeqLocStrand(slp) == Seq_strand_minus) {
+            ff_AddString("complement(");
+          }
+          ff_AddString(buf);
+          if (SeqLocStrand(slp) == Seq_strand_minus) {
+            sprintf(val,":%ld..%ld)",(long) start+1, (long) stop+1 );
+          } else {
+            sprintf(val,":%ld..%ld",(long) start+1, (long) stop+1 );
+          }
+          ff_AddString(val);
+          p1 += StringLen(val);
+          p2 += StringLen(val);
+        }
+        continue;
       }
       newid = sid;
 #else
@@ -8048,13 +9594,16 @@ static void PrintGenome (SeqLocPtr slp_head,
     } else {
       newid = sid;
     }
+    if (prefix != NULL) {
+      ff_AddString (prefix);
+    }
     if (first) {
       first = FALSE;
     } else {
       ff_AddChar(',');
     }
     SeqIdWrite(SeqIdSelect(newid, fasta_order, NUM_SEQID),
-	       buf, PRINTID_TEXTID_ACC_VER, 13);
+               buf, PRINTID_TEXTID_ACC_VER, 13);
 
     ff_AddString( buf);
     if (SeqLocStrand(slp) == Seq_strand_minus) {
@@ -8074,13 +9623,13 @@ static CharPtr FormatContigBlock (
 )
 
 {
-  Asn2gbSectionPtr  asp;
-  BioseqPtr         bsp;
-  DeltaSeqPtr       dsp;
-  SeqLitPtr         litp;
-  CharPtr           prefix = NULL;
-  SeqLocPtr         slp_head = NULL;
-  Char              val [20];
+  Asn2gbSectPtr  asp;
+  BioseqPtr      bsp;
+  DeltaSeqPtr    dsp;
+  SeqLitPtr      litp;
+  CharPtr        prefix = NULL;
+  SeqLocPtr      slp_head = NULL;
+  Char           val [20];
 
   if (afp == NULL || bbp == NULL) return NULL;
 
@@ -8141,17 +9690,17 @@ static CharPtr FormatContigBlock (
 
 /* functions to record sections or blocks in linked lists */
 
-static Asn2gbSectionPtr Asn2gbAddSection (
+static Asn2gbSectPtr Asn2gbAddSection (
   Asn2gbWorkPtr awp
 )
 
 {
-  Asn2gbSectionPtr  asp;
-  ValNodePtr        vnp;
+  Asn2gbSectPtr  asp;
+  ValNodePtr     vnp;
 
   if (awp == NULL) return NULL;
 
-  asp = (Asn2gbSectionPtr) MemNew (sizeof (Asn2gbSection));
+  asp = (Asn2gbSectPtr) MemNew (sizeof (IntAsn2gbSect));
   if (asp == NULL) return NULL;
 
   vnp = ValNodeAddPointer (&(awp->lastsection), 0, asp);
@@ -8202,19 +9751,19 @@ static CharPtr strd [4] = {
   "   ", "ss-", "ds-", "ms-"
 };
 
-static CharPtr gnbk_mol [9] = {
-  "    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "uRNA", "scRNA", " AA "
+static CharPtr gnbk_mol [14] = {
+  "    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "uRNA", "scRNA", " AA ", "DNA ", "DNA ", "RNA ", "snoRNA", "RNA "
 };
 
-/* this looks wrong */
+/* EMBL_FMT in RELEASE_MODE or ENTREZ_MODE, otherwise use gnbk_mol */
 
-static CharPtr embl_mol [8] = {
-  "xxx", "DNA", "RNA", "RNA", "RNA", "RNA", "RNA", "AA "
+static CharPtr embl_mol [14] = {
+  "xxx", "DNA", "RNA", "RNA", "RNA", "RNA", "RNA", "RNA", "AA ", "DNA", "DNA", "RNA", "RNA", "RNA"
 };
 
-static CharPtr embl_divs [17] = {
+static CharPtr embl_divs [18] = {
   "FUN", "INV", "MAM", "ORG", "PHG", "PLN", "PRI", "PRO", "ROD"
-  "SYN", "UNA", "VRL", "VRT", "PAT", "EST", "STS", "HUM"
+  "SYN", "UNA", "VRL", "VRT", "PAT", "EST", "STS", "HUM", "HTC"
 };
 
 static DatePtr GetBestDate (
@@ -8240,9 +9789,7 @@ static DatePtr GetBestDate (
 /*                                                        */
 /*--------------------------------------------------------*/
 
-static Boolean s_IsSeperatorNeeded(CharPtr baseString,
-				   Int4    baseLength,
-				   Int2    suffixLength)
+static Boolean s_IsSeperatorNeeded(CharPtr baseString, Int4 baseLength, Int2 suffixLength)
 {
   Char lastChar;
   Char nextToLastChar;
@@ -8281,8 +9828,7 @@ static Boolean s_IsSeperatorNeeded(CharPtr baseString,
 /*                                                        */
 /*--------------------------------------------------------*/
 
-static Boolean s_LocusAddSuffix(CharPtr       locus,
-				Asn2gbWorkPtr awp)
+static Boolean s_LocusAddSuffix (CharPtr locus, Asn2gbWorkPtr awp)
 {
   size_t  buflen;
   Char    ch;
@@ -8310,7 +9856,7 @@ static Boolean s_LocusAddSuffix(CharPtr       locus,
   sprintf(segCountStr,"%d",awp->numsegs);
   segCountStrLen = StringLen(segCountStr);
   segSuffix[0] = '\0';
-  
+
   if (s_IsSeperatorNeeded(locus,buflen,segCountStrLen) == TRUE)
     sprintf(segSuffix,"S%0*d",segCountStrLen,awp->seg);
   else
@@ -8344,23 +9890,23 @@ static Boolean s_LocusAdjustLength(CharPtr locus, Int2 maxLength)
   /* form HSU00001, then make sure that if      */
   /* there is trimming the HS gets trimmed off  */
   /* as a unit, never just the 'H'.             */
-  
+
   trimCount = buflen - maxLength;
   if (trimCount == 1)
     if (IS_ALPHA(locus[0]) != 0 &&
-	IS_ALPHA(locus[1]) != 0 &&
-	IS_ALPHA(locus[2]) != 0 &&
-	IS_DIGIT(locus[3]) != 0 &&
-	IS_DIGIT(locus[4]) != 0 &&
-	IS_DIGIT(locus[5]) != 0 &&
-	IS_DIGIT(locus[6]) != 0 &&
-	IS_DIGIT(locus[7]) != 0 &&
-	locus[8] == 'S' &&
-	locus[9] == '\0')
+        IS_ALPHA(locus[1]) != 0 &&
+        IS_ALPHA(locus[2]) != 0 &&
+        IS_DIGIT(locus[3]) != 0 &&
+        IS_DIGIT(locus[4]) != 0 &&
+        IS_DIGIT(locus[5]) != 0 &&
+        IS_DIGIT(locus[6]) != 0 &&
+        IS_DIGIT(locus[7]) != 0 &&
+        locus[8] == 'S' &&
+        locus[9] == '\0')
       trimCount++;
-  
+
   /* Left truncate the sequence id */
-  
+
   StringCpy(buftmp, &locus[trimCount]);
   StringCpy(locus, buftmp);
 
@@ -8374,256 +9920,22 @@ static Boolean s_LocusAdjustLength(CharPtr locus, Int2 maxLength)
 /*                                                        */
 /*--------------------------------------------------------*/
 
-static void AddLocusBlock (
-  Asn2gbWorkPtr awp
+static DatePtr GetBestDateForBsp (
+  BioseqPtr bsp
 )
 
 {
-  BaseBlockPtr       bbp;
   DatePtr            best_date = NULL;
-  BioSourcePtr       biop;
-  BioseqPtr          bsp;
-  Char               date [40];
   SeqMgrDescContext  dcontext;
-  Char               div [10];
   DatePtr            dp;
   EMBLBlockPtr       ebp;
-  SeqMgrFeatContext  fcontext;
   GBBlockPtr         gbp;
-  Int2               imol;
-  Int2               istrand;
-  Char               len [15];
-  Int4               length;
-  Char               locus [41];
-  MolInfoPtr         mip;
-  Char               mol [30];
-  OrgNamePtr         onp;
-  Uint1              origin;
-  OrgRefPtr          orp;
-  BioseqPtr          parent;
   PdbBlockPtr        pdp;
   PdbRepPtr          prp;
   SeqDescrPtr        sdp;
-  SeqFeatPtr         sfp;
-  SeqIdPtr           sip;
   SPBlockPtr         spp;
-  Uint1              tech;
-  Uint1              topology;
 
-  if (awp == NULL) return;
-  bsp = awp->bsp;
-  if (bsp == NULL) return;
-
-  bbp = Asn2gbAddBlock (awp, LOCUS_BLOCK, sizeof (BaseBlock));
-  if (bbp == NULL) return;
-
-  mol [0] = '\0';
-  len [0] = '\0';
-  div [0] = '\0';
-  date [0] = '\0';
-
-  /* locus id */
-
-  sip = NULL;
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice == SEQID_GENBANK ||
-        sip->choice == SEQID_EMBL ||
-        sip->choice == SEQID_DDBJ ||
-        sip->choice == SEQID_OTHER) break;
-  }
-  if (sip == NULL) {
-    sip = SeqIdFindBest (bsp->id, SEQID_GENBANK);
-  }
-  SeqIdWrite (sip, locus, PRINTID_TEXTID_LOCUS, sizeof (locus) - 1);
-
-  /* more complicated code to get parent locus, if segmented, goes here */
-
-  if (awp->slp != NULL) {
-    length = SeqLocLen (awp->slp);
-  } else {
-    length = bsp->length;
-  }
-
-  mip = NULL;
-  tech = MI_TECH_standard;
-  origin = 0;
-  imol = bsp->mol;
-  if (imol > Seq_mol_aa) {
-    imol = 0;
-  }
-  istrand = bsp->strand;
-  if (istrand > Seq_strand_both) {
-    istrand = Seq_strand_unknown;
-  }
-
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
-  if (sdp != NULL) {
-    bbp->entityID = dcontext.entityID;
-    bbp->itemID = dcontext.itemID;
-    bbp->itemtype = OBJ_SEQDESC;
-
-    mip = (MolInfoPtr) sdp->data.ptrvalue;
-    if (mip != NULL) {
-      if (mip->biomol <= MOLECULE_TYPE_PEPTIDE) {
-        imol = (Int2) mip->biomol;
-      }
-      tech = mip->tech;
-    }
-  }
-
-  /* check inst.mol if mol-type is not-set or genomic */
-
-  if (imol < Seq_mol_rna) {
-    imol = bsp->mol;
-    if (imol == Seq_mol_aa) {
-      imol = MOLECULE_TYPE_PEPTIDE;
-    } else if (imol == Seq_mol_na) {
-      imol = 0;
-    }
-  }
-
-  /* if ds-DNA don't show ds */
-
-  if (imol == Seq_mol_dna && istrand == Seq_strand_minus) {
-    istrand = Seq_strand_unknown;
-  }
-
-  /* ss=any RNA don't show ss */
-
-  if (imol > Seq_mol_rna && istrand == Seq_strand_plus) {
-    istrand = Seq_strand_unknown;
-  }
-
-  topology = bsp->topology;
-  if (awp->slp != NULL) {
-    topology = TOPOLOGY_LINEAR;
-  }
-
-  /* length, topology, and molecule type */
-
-  if (awp->format == GENBANK_FMT) {
-
-    if (topology == TOPOLOGY_CIRCULAR) {
-      sprintf (len, "%7ld bp", (long) length);
-      sprintf (mol, "%s%-4s  circular", strd [istrand], gnbk_mol [imol]);
-    } else {
-      sprintf (len, "%7ld bp", (long) length);
-      sprintf (mol, "%s%-4s          ", strd [istrand], gnbk_mol [imol]);
-    }
-
-  } else if (awp->format == GENPEPT_FMT) {
-
-    sprintf (len, "%7ld aa", (long) length);
-
-  } else if (awp->format == EMBL_FMT) {
-
-    if (imol < MOLECULE_TYPE_PEPTIDE) {
-      if (topology == TOPOLOGY_CIRCULAR) {
-        sprintf (mol, "circular %s", embl_mol [imol]);
-        sprintf (len, "%7ld BP.", (long) length);
-      } else {
-        sprintf (mol, "%s", embl_mol [imol]);
-        sprintf (len, "%7ld BP.", (long) length);
-      }
-    }
-  }
-
-  /* division */
-
-  biop = NULL;
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
-  if (sdp != NULL) {
-    biop = (BioSourcePtr) sdp->data.ptrvalue;
-  } else {
-    sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0, &fcontext);
-    if (sfp != NULL) {
-      biop = (BioSourcePtr) sfp->data.value.ptrvalue;
-    }
-  }
-  if (biop != NULL) {
-    origin = biop->origin;
-    orp = biop->org;
-    if (orp != NULL) {
-      onp = orp->orgname;
-      if (onp != NULL) {
-        StringNCpy_0 (div, onp->div, sizeof (div));
-      }
-    }
-  }
-
-  switch (tech) {
-    case MI_TECH_est :
-      StringCpy (div, "EST");
-      break;
-    case MI_TECH_sts :
-      StringCpy (div, "STS");
-      break;
-    case MI_TECH_survey :
-      StringCpy (div, "GSS");
-      break;
-    case MI_TECH_htgs_0 :
-    case MI_TECH_htgs_1 :
-    case MI_TECH_htgs_2 :
-      StringCpy (div, "HTG");
-      break;
-    default :
-      break;
-  }
-
-  if (origin == 5) {
-    StringCpy (div, "SYN");
-  }
-
-  sip = SeqIdFindBest (bsp->id, SEQID_PATENT);
-  if (sip != NULL && sip->choice == SEQID_PATENT) {
-    StringCpy (div, "PAT");
-  }
-
-  /* more complicated code for division, if necessary, goes here */
-
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_genbank, &dcontext);
-  while (sdp != NULL) {
-    gbp = (GBBlockPtr) sdp->data.ptrvalue;
-    if (gbp != NULL) {
-      if (StringHasNoText (div) && gbp->div != NULL) {
-        StringCpy (div, gbp->div);
-      }
-      else if (StringCmp(gbp->div, "PAT") == 0 || 
-	       StringCmp(gbp->div, "SYN") == 0 ) {
-        StringCpy (div, gbp->div);
-      }
-    }
-    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_genbank, &dcontext);
-  }
-
-  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
-
-    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_embl, &dcontext);
-    if (sdp != NULL) {
-      ebp = (EMBLBlockPtr) sdp->data.ptrvalue;
-      if (ebp != NULL) {
-        if (ebp->div == 255) {
-          if (mip == NULL) {
-            StringCpy (div, "HUM");
-          }
-        } else if (ebp->div < 16)  {
-          StringCpy (div, embl_divs [ebp->div]);
-        }
-      }
-    }
-
-    if (StringHasNoText (div)) {
-      StringCpy (div, "UNA");
-    }
-  }
-
-  /* empty division field if unable to find anything */
-
-  if (StringHasNoText (div)) {
-    StringCpy (div, "   ");
-  }
-
-  /* date */
+  if (bsp == NULL) return NULL;
 
   dp = NULL;
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_update_date, &dcontext);
@@ -8701,81 +10013,464 @@ static void AddLocusBlock (
     }
   }
 
+  return best_date;
+}
+
+static Boolean SegHasParts (
+  BioseqPtr bsp
+)
+
+{
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   sep;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_seg) return FALSE;
+  sep = bsp->seqentry;
+  if (sep == NULL) return FALSE;
+  sep = sep->next;
+  if (sep == NULL || (! IS_Bioseq_set (sep))) return FALSE;
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp != NULL && bssp->_class == BioseqseqSet_class_parts) return TRUE;
+  return FALSE;
+}
+
+static Boolean DeltaLitOnly (
+  BioseqPtr bsp
+)
+
+{
+  ValNodePtr  vnp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
+  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 1) return FALSE;
+  }
+  return TRUE;
+}
+
+static void AddLocusBlock (
+  Asn2gbWorkPtr awp
+)
+
+{
+  IntAsn2gbJobPtr    ajp;
+  BaseBlockPtr       bbp;
+  DatePtr            best_date = NULL;
+  BioSourcePtr       biop;
+  Int2               bmol = 0;
+  BioseqPtr          bsp;
+  SeqFeatPtr         cds;
+  Char               date [40];
+  SeqMgrDescContext  dcontext;
+  Char               div [10];
+  BioseqPtr          dna;
+  CharPtr            ebmol;
+  EMBLBlockPtr       ebp;
+  SeqMgrFeatContext  fcontext;
+  GBBlockPtr         gbp;
+  Boolean            genome_view;
+  Int2               imol = 0;
+  Int2               istrand;
+  Char               len [15];
+  Int4               length;
+  Char               locus [41];
+  MolInfoPtr         mip;
+  Char               mol [30];
+  OrgNamePtr         onp;
+  Uint1              origin;
+  OrgRefPtr          orp;
+  BioseqPtr          parent;
+  SeqDescrPtr        sdp;
+  SeqFeatPtr         sfp;
+  SeqIdPtr           sip;
+  Uint1              tech;
+  Uint1              topology;
+
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
+
+  bbp = Asn2gbAddBlock (awp, LOCUS_BLOCK, sizeof (BaseBlock));
+  if (bbp == NULL) return;
+
+  mol [0] = '\0';
+  len [0] = '\0';
+  div [0] = '\0';
+  date [0] = '\0';
+
+  genome_view = FALSE;
+  if (bsp->repr == Seq_repr_seg && (! SegHasParts (bsp))) {
+    genome_view = TRUE;
+  }
+  if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
+    genome_view = TRUE;
+  }
+
+  /* locus id */
+
+  sip = NULL;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_GENBANK ||
+        sip->choice == SEQID_EMBL ||
+        sip->choice == SEQID_DDBJ ||
+        sip->choice == SEQID_OTHER) break;
+    if (sip->choice == SEQID_PIR ||
+        sip->choice == SEQID_SWISSPROT ||
+        sip->choice == SEQID_PRF ||
+        sip->choice == SEQID_PDB) break;
+    if (sip->choice == SEQID_TPG ||
+        sip->choice == SEQID_TPE ||
+        sip->choice == SEQID_TPD) break;
+  }
+  if (sip == NULL) {
+    sip = SeqIdFindBest (bsp->id, SEQID_GENBANK);
+  }
+
+  if (genome_view) {
+    SeqIdWrite (sip, locus, PRINTID_TEXTID_ACCESSION, sizeof (locus) - 1);
+  } else {
+    SeqIdWrite (sip, locus, PRINTID_TEXTID_LOCUS, sizeof (locus) - 1);
+  }
+
+  /* more complicated code to get parent locus, if segmented, goes here */
+
+  if (awp->slp != NULL) {
+    length = SeqLocLen (awp->slp);
+  } else {
+    length = bsp->length;
+  }
+
+  mip = NULL;
+  tech = MI_TECH_standard;
+  origin = 0;
+  bmol = bsp->mol;
+  if (bmol > Seq_mol_aa) {
+    bmol = 0;
+  }
+  istrand = bsp->strand;
+  if (istrand > Seq_strand_both) {
+    istrand = Seq_strand_unknown;
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+  if (sdp != NULL) {
+    bbp->entityID = dcontext.entityID;
+    bbp->itemID = dcontext.itemID;
+    bbp->itemtype = OBJ_SEQDESC;
+
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip != NULL) {
+      if (mip->biomol <= MOLECULE_TYPE_TRANSCRIBED_RNA) {
+        imol = (Int2) mip->biomol;
+      }
+      tech = mip->tech;
+    }
+  }
+
+  /* check inst.mol if mol-type is not-set or genomic */
+
+  if (imol <= MOLECULE_TYPE_GENOMIC) {
+    if (bmol == Seq_mol_aa) {
+      imol = MOLECULE_TYPE_PEPTIDE;
+    } else if (bmol == Seq_mol_na) {
+      imol = 0;
+    } else if (bmol == Seq_mol_rna) {
+      imol = 2;
+    }
+  }
+
+  /* if ds-DNA don't show ds */
+
+  if (bmol == Seq_mol_dna && istrand == Seq_strand_minus) {
+    istrand = Seq_strand_unknown;
+  }
+
+  /* ss=any RNA don't show ss */
+
+  if (bmol > Seq_mol_rna && istrand == Seq_strand_plus) {
+    istrand = Seq_strand_unknown;
+  }
+
+  topology = bsp->topology;
+  if (awp->slp != NULL) {
+    topology = TOPOLOGY_LINEAR;
+  }
+
+  /* length, topology, and molecule type */
+
+  if (awp->format == GENBANK_FMT) {
+
+    if (awp->newLocusLine) {
+
+      sprintf (len, "%ld bp", (long) length);
+      sprintf (mol, "%s%-4s", strd [istrand], gnbk_mol [imol]);
+
+    } else {
+
+      if (topology == TOPOLOGY_CIRCULAR) {
+        sprintf (len, "%7ld bp", (long) length);
+        sprintf (mol, "%s%-4s  circular", strd [istrand], gnbk_mol [imol]);
+      } else {
+        sprintf (len, "%7ld bp", (long) length);
+        sprintf (mol, "%s%-4s          ", strd [istrand], gnbk_mol [imol]);
+      }
+    }
+
+  } else if (awp->format == GENPEPT_FMT) {
+
+    if (awp->newLocusLine) {
+      sprintf (len, "%ld aa", (long) length);
+    } else {
+      sprintf (len, "%7ld aa", (long) length);
+    }
+
+  } else if (awp->format == EMBL_FMT) {
+
+    if (imol < MOLECULE_TYPE_PEPTIDE) {
+      if (ajp->flags.useEmblMolType) {
+        ebmol = embl_mol [imol];
+      } else {
+        ebmol = gnbk_mol [imol];
+      }
+
+      if (topology == TOPOLOGY_CIRCULAR) {
+        sprintf (mol, "circular %s", ebmol);
+        sprintf (len, "%ld BP.", (long) length);
+      } else {
+        sprintf (mol, "%s", ebmol);
+        sprintf (len, "%ld BP.", (long) length);
+      }
+    }
+  }
+
+  /* division */
+
+  biop = NULL;
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp != NULL) {
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+  } else {
+    sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0, &fcontext);
+    if (sfp != NULL) {
+      biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+    } else if (ISA_aa (bsp->mol)) {
+
+      /* if protein with no sources, get sources applicable to DNA location of CDS */
+
+      cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
+      if (cds != NULL) {
+        sfp = SeqMgrGetOverlappingSource (cds->location, &fcontext);
+        if (sfp != NULL) {
+          biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+        } else {
+          dna = BioseqFindFromSeqLoc (cds->location);
+          if (dna != NULL) {
+            sdp = SeqMgrGetNextDescriptor (dna, NULL, Seq_descr_source, &dcontext);
+            if (sdp != NULL) {
+              biop = (BioSourcePtr) sdp->data.ptrvalue;
+            }
+          }
+        }
+      }
+    }
+  }
+  if (biop != NULL) {
+    origin = biop->origin;
+    orp = biop->org;
+    if (orp != NULL) {
+      onp = orp->orgname;
+      if (onp != NULL) {
+        StringNCpy_0 (div, onp->div, sizeof (div));
+      }
+    }
+  }
+
+  switch (tech) {
+    case MI_TECH_est :
+      StringCpy (div, "EST");
+      break;
+    case MI_TECH_sts :
+      StringCpy (div, "STS");
+      break;
+    case MI_TECH_survey :
+      StringCpy (div, "GSS");
+      break;
+    case MI_TECH_htgs_0 :
+    case MI_TECH_htgs_1 :
+    case MI_TECH_htgs_2 :
+      StringCpy (div, "HTG");
+      break;
+    case MI_TECH_htc :
+      StringCpy (div, "HTC");
+      break;
+    default :
+      break;
+  }
+
+  if (origin == 5) {
+    StringCpy (div, "SYN");
+  }
+
+  sip = SeqIdFindBest (bsp->id, SEQID_PATENT);
+  if (sip != NULL && sip->choice == SEQID_PATENT) {
+    StringCpy (div, "PAT");
+  }
+
+  /* more complicated code for division, if necessary, goes here */
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_genbank, &dcontext);
+  while (sdp != NULL) {
+    gbp = (GBBlockPtr) sdp->data.ptrvalue;
+    if (gbp != NULL) {
+      if (StringHasNoText (div) && gbp->div != NULL) {
+        StringCpy (div, gbp->div);
+      }
+      else if (StringCmp(gbp->div, "PAT") == 0 ||
+               StringCmp(gbp->div, "SYN") == 0 ) {
+        StringCpy (div, gbp->div);
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_genbank, &dcontext);
+  }
+
+  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
+
+    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_embl, &dcontext);
+    if (sdp != NULL) {
+      ebp = (EMBLBlockPtr) sdp->data.ptrvalue;
+      if (ebp != NULL) {
+        if (ebp->div == 255) {
+          if (mip == NULL) {
+            StringCpy (div, "HUM");
+          }
+        } else if (ebp->div < 18)  {
+          StringCpy (div, embl_divs [ebp->div]);
+        }
+      }
+    }
+
+    if (StringHasNoText (div)) {
+      StringCpy (div, "UNA");
+    }
+  }
+
+  /* empty division field if unable to find anything */
+
+  if (StringHasNoText (div)) {
+    StringCpy (div, "   ");
+  }
+
+  /* contig style (old genome_view flag) forces CON division */
+
+  if (awp->contig) {
+    StringCpy (div, "CON");
+  }
+
+  if (genome_view) {
+    StringCpy (div, "CON");
+  }
+
+  /* date */
+
+  best_date = GetBestDateForBsp (bsp);
+
+  if (best_date == NULL) {
+
+    /* if bsp is product of CDS or mRNA feature, get date from sfp->location bsp */
+
+    sfp = NULL;
+    if (ISA_na (bsp->mol)) {
+      sfp = SeqMgrGetRNAgivenProduct (bsp, NULL);
+    } else if (ISA_aa (bsp->mol)) {
+      sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
+    }
+    if (sfp != NULL) {
+      parent = BioseqFindFromSeqLoc (sfp->location);
+      if (parent != NULL) {
+        best_date = GetBestDateForBsp (parent);
+      }
+    }
+  }
+
   /* convert best date */
 
   if (best_date != NULL) {
-    DateToGB (date, best_date);
+    DateToGB (date, best_date, FALSE);
   }
   if (StringHasNoText (date)) {
     StringCpy (date, "01-JAN-1900");
   }
-
-  init_buff ();
 
   if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
 
     /* Create the proper locus name */
 
     parent = awp->parent;
-    if (parent->repr == Seq_repr_seg)
-      {
-	
-	if (! StringHasNoText (awp->basename))
-	  {
-	    StringCpy(locus,awp->basename);
-	    s_LocusAddSuffix(locus, awp);
-	  }
+    if (parent->repr == Seq_repr_seg) {
+
+      if (! StringHasNoText (awp->basename)) {
+        StringCpy (locus, awp->basename);
+        s_LocusAddSuffix (locus, awp);
       }
+    }
 
     /* Print the "LOCUS_NEW" line, if requested */
 
-    if (s_NewLocusLine == TRUE)
-      {
-	ff_StartPrint (0, 0, ASN2FF_GB_MAX, NULL);
-	ff_AddString ("LOCUS");
-	TabToColumn (13);
-	parent = awp->parent;
-	
-	if (parent->repr == Seq_repr_seg)
-	  s_LocusAdjustLength(locus,19);
+    if (awp->newLocusLine) {
+      ff_StartPrint (0, 0, ASN2FF_GB_MAX, NULL);
+      ff_AddString ("LOCUS");
+      TabToColumn (13);
+      parent = awp->parent;
 
-	ff_AddString (locus);
-	TabToColumn (47 - StringLen (len));
-	ff_AddString (len);
-	TabToColumn (48);
-	ff_AddString (mol);
-	TabToColumn (65);
-	ff_AddString (div);
-	TabToColumn (69);
-	ff_AddString (date);
+      if (parent->repr == Seq_repr_seg)
+        s_LocusAdjustLength (locus,16);
+
+      ff_AddString (locus);
+      TabToColumn (44 - StringLen (len));
+      ff_AddString (len);
+      TabToColumn (45);
+      ff_AddString (mol);
+      TabToColumn (56);
+      if (topology == TOPOLOGY_CIRCULAR) {
+        ff_AddString ("circular");
+      } else {
+        ff_AddString ("linear  ");
       }
+      TabToColumn (65);
+      ff_AddString (div);
+      TabToColumn (69);
+      ff_AddString (date);
+    }
 
     /* Else print the "LOCUS" line */
 
-    else
-      {
-	ff_StartPrint (0, 0, ASN2FF_GB_MAX, NULL);
-	ff_AddString ("LOCUS");
-	TabToColumn (13);
-	
-	if (parent->repr == Seq_repr_seg)
-	  s_LocusAdjustLength(locus,10);
-	
-	ff_AddString (locus);
-	TabToColumn (33 - StringLen (len));
-	ff_AddString (len);
-	TabToColumn (34);
-	ff_AddString (mol);
-	TabToColumn (53);
-	ff_AddString (div);
-	TabToColumn (63);
-	ff_AddString (date);
-      }
+    else {
+
+      ff_StartPrint (0, 0, ASN2FF_GB_MAX, NULL);
+      ff_AddString ("LOCUS");
+      TabToColumn (13);
+
+      if (parent->repr == Seq_repr_seg)
+        s_LocusAdjustLength (locus,10);
+
+      ff_AddString (locus);
+      TabToColumn (33 - StringLen (len));
+      ff_AddString (len);
+      TabToColumn (34);
+      ff_AddString (mol);
+      TabToColumn (53);
+      ff_AddString (div);
+      TabToColumn (63);
+      ff_AddString (date);
+    }
 
   } else if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
 
     ff_StartPrint (5, 0, ASN2FF_EMBL_MAX, "ID");
     ff_AddString (locus);
+      TabToColumn (16);
     if (awp->hup) {
       ff_AddString (" confidential; ");
     } else {
@@ -8785,7 +10480,7 @@ static void AddLocusBlock (
     ff_AddString ("; ");
 
     /* conditional code to make div "UNA" goes here */
-  
+
     ff_AddString (div);
     ff_AddString ("; ");
     ff_AddString (len);
@@ -8835,7 +10530,7 @@ static void AddDeflineBlock (
     bbp->itemID = ii.itemID;
     bbp->itemtype = ii.itemtype;
 
-    gb_StartPrint (awp->format, TRUE, 0, 12, "DEFINITION", 13, 5, 5, "DE", TRUE);
+    gb_StartPrint (awp->format, 0, 12, "DEFINITION", 13, 5, 5, "DE", TRUE);
 
     gb_AddString (NULL, buf, NULL, TRUE, TRUE, TILDE_IGNORE);
 
@@ -8843,43 +10538,6 @@ static void AddDeflineBlock (
   }
 
   MemFree (buf);
-}
-
-/*
-Return values are:
- 0: no problem - Accession is in proper format
--1: Accession did not start with a letter (or two letters)
--2: Accession did not contain five numbers (or six numbers after 2 letters)
--3: the original Accession number to be validated was NULL
-*/
-
-static Int2 ValidateAccession (
-  CharPtr accession
-)
-
-{
-  Int2  count;
-
-  if (accession == NULL || accession [0] == '\0') return -3;
-
-  if (accession [0] < 'A' || accession [0] > 'Z') return -1;
-
-  for (count=1; count < 5; count++) {
-    if (! IS_DIGIT (accession [count])) break;
-  }
-
-  if (count == 5 && (accession [count + 1] == '\0' || accession [count + 1] == ' ')) {
-    return 0;
-  }
-
-  if (IS_ALPHA (accession [1])) {
-    if (accession [1] < 'A' || accession [1] > 'Z') return -1;
-    for (count = 2; count < 7; count++) {
-      if (! IS_DIGIT (accession [count])) break;
-    }
-    if (count == 7 && (accession [count + 1] == '\0' || accession [count + 1] == ' ')) return 0;
-  }
-  return -2;
 }
 
 /* !!! this definitely needs more work to support all classes, use proper SeqId !!! */
@@ -8890,12 +10548,14 @@ static void AddAccessionBlock (
 
 {
   SeqIdPtr           accn = NULL;
+  IntAsn2gbJobPtr    ajp;
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
   Char               buf [41];
   SeqMgrDescContext  dcontext;
   EMBLBlockPtr       ebp;
   ValNodePtr         extra_access;
+  CharPtr            flatloc;
   GBBlockPtr         gbp;
   SeqIdPtr           gi = NULL;
   ValNodePtr         head = NULL;
@@ -8908,6 +10568,8 @@ static void AddAccessionBlock (
   CharPtr            xtra;
 
   if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
   bsp = awp->bsp;
   if (bsp == NULL) return;
 
@@ -8920,6 +10582,17 @@ static void AddAccessionBlock (
       case SEQID_EMBL :
       case SEQID_DDBJ :
       case SEQID_OTHER :
+        accn = sip;
+        break;
+      case SEQID_PIR :
+      case SEQID_SWISSPROT :
+      case SEQID_PRF :
+      case SEQID_PDB :
+        accn = sip;
+        break;
+      case SEQID_TPG :
+      case SEQID_TPE :
+      case SEQID_TPD :
         accn = sip;
         break;
       case SEQID_LOCAL :
@@ -8946,11 +10619,19 @@ static void AddAccessionBlock (
   bbp = Asn2gbAddBlock (awp, ACCESSION_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
-  gb_StartPrint (awp->format, TRUE, 0, 12, "ACCESSION", 13, 5, 5, "AC", TRUE);
+  gb_StartPrint (awp->format, 0, 12, "ACCESSION", 13, 5, 5, "AC", TRUE);
 
   if (awp->hup && accn != NULL) {
     gb_AddString (NULL, ";", NULL, FALSE, FALSE, TILDE_TO_SPACES);
+
+  } else if (ajp->ajp.slp != NULL) {
+
+    flatloc =  FlatLoc (bsp, ajp->ajp.slp, ajp->masterStyle);
+    gb_AddString (buf, " REGION: ", flatloc, FALSE, FALSE, TILDE_TO_SPACES);
+    MemFree (flatloc);
+
   } else {
+
     gb_AddString (NULL, buf, NULL, FALSE, FALSE, TILDE_TO_SPACES);
   }
 
@@ -8960,43 +10641,45 @@ static void AddAccessionBlock (
     separator = ";";
   }
 
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, 0, &dcontext);
-  while (sdp != NULL) {
+  if (ajp->ajp.slp == NULL) {
+    sdp = SeqMgrGetNextDescriptor (bsp, NULL, 0, &dcontext);
+    while (sdp != NULL) {
 
-    extra_access = NULL;
+      extra_access = NULL;
 
-    switch (dcontext.seqdesctype) {
-      case Seq_descr_genbank :
-        gbp = (GBBlockPtr) sdp->data.ptrvalue;
-        if (gbp != NULL) {
-          extra_access = gbp->extra_accessions;
-        }
-        break;
-      case Seq_descr_embl :
-        ebp = (EMBLBlockPtr) sdp->data.ptrvalue;
-        if (ebp != NULL) {
-          extra_access = ebp->extra_acc;
-        }
-        break;
-      default :
-        break;
-    }
-
-    if (extra_access != NULL) {
-      bbp->entityID = dcontext.entityID;
-      bbp->itemID = dcontext.itemID;
-      bbp->itemtype = OBJ_SEQDESC;
-    }
-
-    for (vnp = extra_access; vnp != NULL; vnp = vnp->next) {
-      xtra = (CharPtr) vnp->data.ptrvalue;
-      if (ValidateAccession (xtra) == 0) {
-        ValNodeCopyStr (&head, 0, separator);
-        ValNodeCopyStr (&head, 0, xtra);
+      switch (dcontext.seqdesctype) {
+        case Seq_descr_genbank :
+          gbp = (GBBlockPtr) sdp->data.ptrvalue;
+          if (gbp != NULL) {
+            extra_access = gbp->extra_accessions;
+          }
+          break;
+        case Seq_descr_embl :
+          ebp = (EMBLBlockPtr) sdp->data.ptrvalue;
+          if (ebp != NULL) {
+            extra_access = ebp->extra_acc;
+          }
+          break;
+        default :
+          break;
       }
-    }
 
-    sdp = SeqMgrGetNextDescriptor (bsp, sdp, 0, &dcontext);
+      if (extra_access != NULL) {
+        bbp->entityID = dcontext.entityID;
+        bbp->itemID = dcontext.itemID;
+        bbp->itemtype = OBJ_SEQDESC;
+      }
+
+      for (vnp = extra_access; vnp != NULL; vnp = vnp->next) {
+        xtra = (CharPtr) vnp->data.ptrvalue;
+        if (ValidateAccession (xtra) == 0) {
+          ValNodeCopyStr (&head, 0, separator);
+          ValNodeCopyStr (&head, 0, xtra);
+        }
+      }
+
+      sdp = SeqMgrGetNextDescriptor (bsp, sdp, 0, &dcontext);
+    }
   }
 
   str = MergeValNodeStrings (head);
@@ -9019,7 +10702,7 @@ static void AddVersionBlock (
   BioseqPtr     bsp;
   Char          buf [41];
   Int4          gi = -1;
-   SeqIdPtr      sip;
+  SeqIdPtr      sip;
   Char          version [64];
 
   if (awp == NULL) return;
@@ -9037,12 +10720,27 @@ static void AddVersionBlock (
       case SEQID_OTHER :
         accn = sip;
         break;
+      case SEQID_PIR :
+      case SEQID_SWISSPROT :
+      case SEQID_PRF :
+      case SEQID_PDB :
+        accn = sip;
+        break;
+      case SEQID_TPG :
+      case SEQID_TPE :
+      case SEQID_TPD :
+        accn = sip;
+        break;
       default :
         break;
     }
   }
 
   /* if (gi < 1 && accn == NULL) return; */
+
+  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
+    if (gi < 1) return;
+  }
 
   bbp = Asn2gbAddBlock (awp, VERSION_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
@@ -9058,80 +10756,739 @@ static void AddVersionBlock (
 
     gb_AddString (NULL, version, NULL, FALSE, FALSE, TILDE_TO_SPACES);
 
-	ff_EndPrint();
-	needEndPrint = FALSE;
+    ff_EndPrint();
+    needEndPrint = FALSE;
   }
   */
 
   version [0] = '\0';
+
+  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
+    sprintf (version, "g%ld", (long) gi);
+
+    gb_StartPrint (awp->format, 0, 12, "VERSION", 13, 5, 5, "NI", TRUE);
+
+    gb_AddString (NULL, version, NULL, FALSE, FALSE, TILDE_TO_SPACES);
+
+    ff_EndPrint();
+
+    bbp->string = gb_MergeString (FALSE);
+
+    return;
+  }
 
   if (accn != NULL) {
 
     buf [0] = '\0';
     SeqIdWrite (accn, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf) - 1);
 
-    if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
-      if (gi > 0) {
-        sprintf (version, "%s  GI:%ld", buf, (long) gi);
-      } else {
-        sprintf (version, "%s", buf);
-      }
-    } else if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
-      if (gi > 0) {
-        sprintf (version, "%s.%ld", buf, (long) gi);
-      } else {
-        sprintf (version, "%s", buf);
-      }
+    if (gi > 0) {
+      sprintf (version, "%s  GI:%ld", buf, (long) gi);
+    } else {
+      sprintf (version, "%s", buf);
     }
 
-    gb_StartPrint (awp->format, TRUE, 0, 12, "VERSION", 13, 5, 5, "SV", TRUE);
+    gb_StartPrint (awp->format, 0, 12, "VERSION", 13, 5, 5, "SV", TRUE);
 
     gb_AddString (NULL, version, NULL, FALSE, FALSE, TILDE_TO_SPACES);
 
-	ff_EndPrint();
+    ff_EndPrint();
 
   } else if (gi > 0) {
 
-    gb_StartPrint (awp->format, TRUE, 0, 0, "VERSION", 13, 5, 5, "SV", TRUE);
+    gb_StartPrint (awp->format, 0, 0, "VERSION", 13, 5, 5, "SV", TRUE);
 
-    if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
-      sprintf (version, "  GI:%ld", (long) gi);
-    } else if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
-    /*
-      sprintf (version, ".%ld", (long) gi);
-    */
-    }
+    sprintf (version, "  GI:%ld", (long) gi);
 
     gb_AddString (NULL, version, NULL, FALSE, FALSE, TILDE_TO_SPACES);
 
-	ff_EndPrint();
+    ff_EndPrint();
 
   } else {
 
-    gb_StartPrint (awp->format, TRUE, 0, 0, "VERSION", 0, 5, 5, "SV", TRUE);
+    gb_StartPrint (awp->format, 0, 0, "VERSION", 0, 5, 5, "SV", TRUE);
 
-	ff_EndPrint();
+    ff_EndPrint();
   }
 
   bbp->string = gb_MergeString (FALSE);
 }
 
-/* no longer displaying PID */
+/* only displaying PID in GenPept format */
 
-/*
 static void AddPidBlock (Asn2gbWorkPtr awp)
 
 {
   BaseBlockPtr  bbp;
+  BioseqPtr     bsp;
+  Int4          gi = -1;
+  SeqIdPtr      sip;
+  Char          version [64];
 
   if (awp == NULL) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_GI :
+        gi = sip->data.intvalue;
+        break;
+      default :
+        break;
+    }
+  }
+
+  if (gi < 1) return;
 
   bbp = Asn2gbAddBlock (awp, PID_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
-  bbp->string = StringSave ("PID\n");
+  gb_StartPrint (awp->format, 0, 12, "PID", 13, 5, 5, NULL, TRUE);
+
+  sprintf (version, "g%ld", (long) gi);
+  gb_AddString (NULL, version, NULL, FALSE, FALSE, TILDE_TO_SPACES);
+
+  ff_EndPrint();
+
+  bbp->string = gb_MergeString (FALSE);
 }
-*/
+
+
+static Uint1 dbsource_fasta_order [NUM_SEQID] = {
+  33, /* 0 = not set */
+  20, /* 1 = local Object-id */
+  15, /* 2 = gibbsq */
+  16, /* 3 = gibbmt */
+  30, /* 4 = giim Giimport-id */
+  10, /* 5 = genbank */
+  10, /* 6 = embl */
+  10, /* 7 = pir */
+  10, /* 8 = swissprot */
+  15, /* 9 = patent */
+  18, /* 10 = other TextSeqId */
+  20, /* 11 = general Dbtag */
+  31, /* 12 = gi */
+  10, /* 13 = ddbj */
+  10, /* 14 = prf */
+  12, /* 15 = pdb */
+  10, /* 16 = tpg */
+  10, /* 17 = tpe */
+  10  /* 18 = tpd */
+};
+
+static void AddToUniqueSipList (
+  ValNodePtr PNTR list,
+  SeqIdPtr sip
+)
+
+{
+  ValNodePtr  vnp;
+
+  if (list == NULL || sip == NULL) return;
+  for (vnp = *list; vnp != NULL; vnp = vnp->next) {
+    if (SeqIdMatch (sip, (SeqIdPtr) vnp->data.ptrvalue)) return;
+  }
+  ValNodeAddPointer (list, 0, (Pointer) sip);
+}
+
+static Boolean WriteDbsourceID (
+  SeqIdPtr sip,
+  CharPtr str
+)
+
+{
+  DbtagPtr      db;
+  CharPtr       dt;
+  Int4          gi;
+  ObjectIdPtr   oip;
+  CharPtr       pfx;
+  PDBSeqIdPtr   psip = NULL;
+  CharPtr       prefix;
+  Boolean       rsult = FALSE;
+  CharPtr       sfx;
+  CharPtr       suffix;
+  Char          tmp [32];
+  TextSeqIdPtr  tsip = NULL;
+
+  if (sip == NULL || str == NULL) return FALSE;
+  *str = '\0';
+  switch (sip->choice) {
+    case SEQID_LOCAL :
+      oip = (ObjectIdPtr) sip->data.ptrvalue;
+      if (oip == NULL) return FALSE;
+      if (! StringHasNoText (oip->str)) {
+        StringCat (str, oip->str);
+        return TRUE;
+      } else if (oip->id > 0) {
+        sprintf (tmp, "%ld", (long) oip->id);
+        StringCat (str, tmp);
+        return TRUE;
+      }
+      return FALSE;
+    case SEQID_GI :
+      gi = (Int4) sip->data.intvalue;
+      if (gi == 0) return FALSE;
+      sprintf (tmp, "gi: %ld", (long) gi);
+      StringCat (str, tmp);
+      return TRUE;
+    case SEQID_GENERAL :
+      db = (DbtagPtr) sip->data.ptrvalue;
+      if (db == NULL) return FALSE;
+      /* !!! still need to implement this !!! */
+      return FALSE;
+    case SEQID_GENBANK :
+    case SEQID_EMBL :
+    case SEQID_DDBJ :
+    case SEQID_OTHER :
+    case SEQID_PIR :
+    case SEQID_SWISSPROT :
+    case SEQID_PRF :
+      tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+      if (tsip == NULL) return FALSE;
+      break;
+    case SEQID_PDB :
+      psip = (PDBSeqIdPtr) sip->data.ptrvalue;
+      if (psip == NULL) return FALSE;
+      break;
+    default :
+      break;
+  }
+  prefix = " ";
+  suffix = NULL;
+  switch (sip->choice) {
+    case SEQID_EMBL :
+      StringCat (str, "embl ");
+      suffix = ",";
+      break;
+    case SEQID_OTHER :
+      StringCat (str, "REFSEQ: ");
+      break;
+    case SEQID_SWISSPROT :
+      StringCat (str, "swissprot: ");
+      suffix = ",";
+      break;
+    case SEQID_PIR :
+      StringCat (str, "pir: ");
+      break;
+    case SEQID_PRF :
+      StringCat (str, "prf: ");
+      break;
+    case SEQID_PDB :
+      StringCat (str, "pdb: ");
+      suffix = ",";
+      break;
+    default :
+      break;
+  }
+  pfx = NULL;
+  sfx = NULL;
+  if (tsip != NULL) {
+    if (! StringHasNoText (tsip->name)) {
+      StringCat (str, sfx);
+      StringCat (str, pfx);
+      StringCat (str, "locus ");
+      StringCat (str, tsip->name);
+      sfx = suffix;
+      pfx = prefix;
+      rsult = TRUE;
+    }
+    if (! StringHasNoText (tsip->accession)) {
+      StringCat (str, sfx);
+      StringCat (str, pfx);
+      StringCat (str, "accession ");
+      StringCat (str, tsip->accession);
+      sfx = suffix;
+      pfx = prefix;
+      rsult = TRUE;
+    }
+    if (tsip->version > 0) {
+      sprintf (tmp, ".%d", (int) tsip->version);
+      StringCat (str, tmp);
+      sfx = suffix;
+      pfx = prefix;
+    }
+    if (! StringHasNoText (tsip->release)) {
+      StringCat (str, pfx);
+      StringCat (str, "release ");
+      StringCat (str, tsip->release);
+      sfx = suffix;
+      pfx = prefix;
+    }
+    if (sip->choice == SEQID_SWISSPROT || sip->choice == SEQID_PIR || sip->choice == SEQID_PRF) {
+      StringCat (str, ";");
+    }
+    return rsult;
+  }
+  if (psip != NULL) {
+    if (! StringHasNoText (psip->mol)) {
+      StringCat (str, "molecule ");
+      StringCat (str, psip->mol);
+      sfx = suffix;
+      pfx = prefix;
+      rsult = TRUE;
+    }
+    if (psip->chain > 0) {
+      StringCat (str, sfx);
+      StringCat (str, pfx);
+      sprintf (tmp, "chain %d", (int) psip->chain);
+      StringCat (str, tmp);
+      sfx = suffix;
+      pfx = prefix;
+      rsult = TRUE;
+    }
+    if (psip->rel != NULL) {
+      StringCat (str, sfx);
+      StringCat (str, pfx);
+      StringCat (str, "release ");
+      dt = asn2gb_PrintDate (psip->rel);
+      StringCat (str, dt);
+      MemFree (dt);
+      sfx = suffix;
+      pfx = prefix;
+      rsult = TRUE;
+    }
+    StringCat (str, ";");
+    return rsult;
+  }
+  return rsult;
+}
+
+static void AddSPBlock (
+  BioseqPtr bsp
+)
+
+{
+  CharPtr            acc;
+  DbtagPtr           db;
+  SeqMgrDescContext  dcontext;
+  Boolean            first;
+  ObjectIdPtr        oip;
+  SeqDescrPtr        sdp;
+  SeqIdPtr           sid;
+  SPBlockPtr         spb;
+  CharPtr            string;
+  TextSeqIdPtr       tid;
+  ValNodePtr         vnp;
+
+  if (bsp == NULL) return;
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_sp, &dcontext);
+  if (sdp == NULL) return;
+  spb = (SPBlockPtr) sdp->data.ptrvalue;
+  if (spb == NULL) return;
+
+  NewContLine ();
+  if (spb->_class == 1) {
+    ff_AddString ("class: standard.");
+    NewContLine ();
+  } else if (spb->_class == 2) {
+    ff_AddString ("class: preliminary.");
+    NewContLine ();
+  }
+
+  if (spb->extra_acc) {
+    ff_AddString("extra accessions:");
+    for (vnp = spb->extra_acc; vnp != NULL; vnp = vnp->next) {
+      ff_AddString ((CharPtr) vnp->data.ptrvalue);
+      ff_AddString (",");
+    }
+  }
+
+  if (spb->imeth) {
+    ff_AddString ("seq starts with Met");
+  }
+
+  if (spb->plasnm != NULL) {
+    ff_AddString("plasmid:");
+    for (vnp = spb->plasnm; vnp != NULL; vnp = vnp->next) {
+      ff_AddString ((CharPtr) vnp->data.ptrvalue);
+      ff_AddString (",");
+    }
+  }
+
+  if (spb->created) {
+    string = PrintDate (spb->created);
+    ff_AddString ("created: ");
+    ff_AddString (string);
+    MemFree (string);
+  }
+
+  if (spb->sequpd) {
+    string = PrintDate (spb->sequpd);
+    ff_AddString ("sequence updated: ");
+    ff_AddString (string);
+    MemFree (string);
+  }
+
+  if (spb->annotupd) {
+    string = PrintDate (spb->annotupd);
+    ff_AddString ("annotation updated: ");
+    ff_AddString (string);
+    MemFree (string);
+  }
+
+  if (spb->seqref) {
+    ff_AddString ("xrefs: ");
+    first = TRUE;
+    for (sid = spb->seqref; sid != NULL; sid = sid->next) {
+      acc = NULL;
+      if (first == FALSE) {
+        ff_AddString (", ");
+      }
+      first = FALSE;
+      if (sid->choice == SEQID_GI) {
+        ff_AddString ("gi: ");
+        acc = (CharPtr) MemNew (10);
+        sprintf (acc, "%ld", (long) sid->data.intvalue);
+      } else {
+        tid = (TextSeqIdPtr) sid->data.ptrvalue;
+        if (tid != NULL) {
+          acc = tid->accession;
+        }
+      }
+      if (acc != NULL) {
+        switch (sid->choice) {
+          case SEQID_GENBANK:
+            ff_AddString ("genbank accession ");
+            break; 
+          case SEQID_EMBL:
+            ff_AddString ("embl accession ");
+            break; 
+          case SEQID_PIR:
+            ff_AddString ("pir locus ");
+            break; 
+          case SEQID_SWISSPROT:
+            ff_AddString ("swissprot accession ");
+            break; 
+          case SEQID_DDBJ:
+            ff_AddString ("ddbj accession ");
+            break; 
+          case SEQID_PRF:
+            ff_AddString ("prf accession ");
+            break; 
+          case SEQID_GI:
+            ff_AddString ("gi: ");
+            break; 
+          case SEQID_TPG:
+            ff_AddString ("genbank third party accession ");
+            break; 
+          case SEQID_TPE:
+            ff_AddString ("embl third party accession ");
+            break; 
+          case SEQID_TPD:
+            ff_AddString ("ddbj third party accession ");
+            break; 
+          default:
+            acc = NULL;
+            break; 
+        }
+        ff_AddString (acc);
+      }
+    }
+  }
+
+  first = TRUE;
+  for (vnp = spb->dbref; vnp != NULL; vnp = vnp->next) {
+    db = (DbtagPtr) vnp->data.ptrvalue;
+    if (db == NULL) continue;
+    oip = db->tag;
+    if (oip == NULL) continue;
+    if (first) {
+      NewContLine ();
+      ff_AddString ("xrefs (non-sequence databases): ");
+      first = FALSE;
+    } else {
+      ff_AddString (", ");
+    }
+    ff_AddString (db->db);
+    if (oip->str != NULL) {
+      ff_AddString (" ");        
+      ff_AddString (oip->str);
+    } else if (oip->id > 0) {
+      ff_AddString (" ");
+      ff_AddInteger ("%ld", (long) oip->id);
+    }
+  }
+}
+
+static void AddPIRBlock (
+  BioseqPtr bsp
+)
+
+{
+  CharPtr            acc;
+  SeqMgrDescContext  dcontext;
+  Boolean            first;
+  CharPtr            prefix = NULL;
+  SeqDescrPtr        sdp;
+  SeqIdPtr           sid;
+  PirBlockPtr        pbp;
+  TextSeqIdPtr       tid;
+
+  if (bsp == NULL) return;
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_pir, &dcontext);
+  if (sdp == NULL) return;
+  pbp = (PirBlockPtr) sdp->data.ptrvalue;
+  if (pbp == NULL) return;
+
+  if (pbp->host != NULL) {
+    NewContLine ();
+    gb_AddString ("host:", pbp->host, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+
+  if (pbp->source != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("source: ", pbp->source, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+
+  if (pbp->summary != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("summary: ", pbp->summary, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+
+  if (pbp->genetic != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("genetic: ", pbp->genetic, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+
+  if (pbp->includes != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("includes: ", pbp->includes, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+
+  if (pbp->placement != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("placement: ", pbp->placement, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+
+  if (pbp->superfamily != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("superfamily: ", pbp->superfamily, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+
+  if (pbp->cross_reference != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("xref: ", pbp->cross_reference, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+
+  if (pbp->date != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("PIR dates: ", pbp->date, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+
+  if (pbp->had_punct) {
+    ff_AddString (prefix);
+    NewContLine ();
+    ff_AddString ("punctuation in sequence");
+    prefix = ";";
+  }
+
+  if (pbp->seqref) {
+    ff_AddString (prefix);
+    NewContLine ();
+    ff_AddString ("xrefs: ");
+    first = TRUE;
+    for (sid = pbp->seqref; sid != NULL; sid = sid->next) {
+      acc = NULL;
+      if (first == FALSE) {
+        ff_AddString (", ");
+      }
+      first = FALSE;
+      if (sid->choice == SEQID_GI) {
+        ff_AddString ("gi: ");
+        acc = (CharPtr) MemNew (10);
+        sprintf (acc, "%ld", (long) sid->data.intvalue);
+      } else {
+        tid = (TextSeqIdPtr) sid->data.ptrvalue;
+        if (tid != NULL) {
+          acc = tid->accession;
+        }
+      }
+      if (acc != NULL) {
+        switch (sid->choice) {
+          case SEQID_GENBANK:
+            ff_AddString ("genbank ");
+            break; 
+          case SEQID_EMBL:
+            ff_AddString ("embl ");
+            break; 
+          case SEQID_PIR:
+            ff_AddString ("pir ");
+            break; 
+          case SEQID_SWISSPROT:
+            ff_AddString ("swissprot ");
+            break; 
+          case SEQID_DDBJ:
+            ff_AddString ("ddbj ");
+            break; 
+          case SEQID_PRF:
+            ff_AddString ("prf ");
+            break; 
+          case SEQID_GI:
+            ff_AddString ("gi: ");
+            break; 
+          default:
+            acc = NULL;
+            break; 
+        }
+        ff_AddString (acc);
+      }
+    }
+  }
+  ff_AddString (".");
+}
+
+static void AddPRFBlock (
+  BioseqPtr bsp
+)
+
+{
+  SeqMgrDescContext  dcontext;
+  PrfExtSrcPtr       extra;
+  CharPtr            prefix = NULL;
+  SeqDescrPtr        sdp;
+  PrfBlockPtr        prf;
+
+  if (bsp == NULL) return;
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_prf, &dcontext);
+  if (sdp == NULL) return;
+  prf = (PrfBlockPtr) sdp->data.ptrvalue;
+  if (prf == NULL) return;
+
+  extra = prf->extra_src;
+  if (extra != NULL) {
+
+    if (extra->host != NULL) {
+      NewContLine ();
+      gb_AddString ("host:", extra->host, NULL, FALSE, TRUE, TILDE_IGNORE);
+      prefix = ";";
+    }
+
+    if (extra->part != NULL) {
+      ff_AddString (prefix);
+      NewContLine ();
+      gb_AddString ("part: ", extra->part, NULL, FALSE, TRUE, TILDE_IGNORE);
+      prefix = ";";
+    }
+    if (extra->state != NULL) {
+      ff_AddString (prefix);
+      NewContLine ();
+      gb_AddString ("state: ", extra->state, NULL, FALSE, TRUE, TILDE_IGNORE);
+      prefix = ";";
+    }
+    if (extra->strain != NULL) {
+      ff_AddString (prefix);
+      NewContLine ();
+      gb_AddString ("strain: ", extra->strain, NULL, FALSE, TRUE, TILDE_IGNORE);
+      prefix = ";";
+    }
+    if (extra->taxon != NULL) {
+      ff_AddString (prefix);
+      NewContLine ();
+      gb_AddString ("taxonomy: ", extra->taxon, NULL, FALSE, TRUE, TILDE_IGNORE);
+      prefix = ";";
+    }
+
+    ff_AddString (".");
+  }
+}
+
+static void AddPDBBlock (
+  BioseqPtr bsp
+)
+
+{
+  SeqMgrDescContext  dcontext;
+  CharPtr            dt;
+  CharPtr            prefix = NULL;
+  SeqDescrPtr        sdp;
+  PdbBlockPtr        pdb;
+  PdbRepPtr          replace;
+  CharPtr            str;
+  ValNodePtr         vnp;
+
+  if (bsp == NULL) return;
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_pdb, &dcontext);
+  if (sdp == NULL) return;
+  pdb = (PdbBlockPtr) sdp->data.ptrvalue;
+  if (pdb == NULL) return;
+
+  if (pdb->deposition != NULL) {
+    NewContLine ();
+    dt = asn2gb_PrintDate (pdb->deposition);
+    gb_AddString ("deposition: ", dt, NULL, FALSE, TRUE, TILDE_IGNORE);
+    MemFree (dt);
+    prefix = ";";
+  }
+  if (pdb->pdbclass != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("class: ", pdb->pdbclass, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+  if (pdb->source != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString (NULL, "source: ", NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = NULL;
+    for (vnp = pdb->source; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      gb_AddString (prefix, str, NULL, FALSE, TRUE, TILDE_IGNORE);
+      prefix = ", ";
+    }
+    prefix = ";";
+  }
+  if (pdb->exp_method != NULL) {
+    ff_AddString (prefix);
+    NewContLine ();
+    gb_AddString ("Non X-ray method: ", pdb->exp_method, NULL, FALSE, TRUE, TILDE_IGNORE);
+    prefix = ";";
+  }
+  replace = pdb->replace;
+  if (replace != NULL) {
+    if (replace->ids != NULL) {
+      ff_AddString (prefix);
+      NewContLine ();
+      gb_AddString (NULL, "ids replaced: ", NULL, FALSE, TRUE, TILDE_IGNORE);
+      prefix = NULL;
+      for (vnp = replace->ids; vnp != NULL; vnp = vnp->next) {
+        str = (CharPtr) vnp->data.ptrvalue;
+        if (StringHasNoText (str)) continue;
+        gb_AddString (prefix, str, NULL, FALSE, TRUE, TILDE_IGNORE);
+        prefix = ", ";
+      }
+      prefix = ";";
+    }
+    if (replace->date != NULL) {
+      ff_AddString (prefix);
+      NewContLine ();
+      dt = asn2gb_PrintDate (replace->date);
+      gb_AddString ("replacement date: ", dt, NULL, FALSE, TRUE, TILDE_IGNORE);
+      MemFree (dt);
+      prefix = ";";
+    }
+  }
+
+  ff_AddString (".");
+}
 
 static void AddDbsourceBlock (
   Asn2gbWorkPtr awp
@@ -9139,13 +11496,136 @@ static void AddDbsourceBlock (
 
 {
   BaseBlockPtr  bbp;
+  BioseqPtr     bsp;
+  SeqFeatPtr    cds;
+  DbtagPtr      db;
+  Boolean       first = TRUE;
+  SeqIdPtr      id;
+  ValNodePtr    list = NULL;
+  BioseqPtr     nuc;
+  SeqIdPtr      sip;
+  SeqLocPtr     slp;
+  Char          str [256];
+  Boolean       unknown = TRUE;
+  ValNodePtr    vnp;
 
   if (awp == NULL) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
 
   bbp = Asn2gbAddBlock (awp, DBSOURCE_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
-  bbp->string = StringSave ("DBSOURCE\n");
+  gb_StartPrint (awp->format, 0, 12, "DBSOURCE", 13, 5, 5, NULL, TRUE);
+
+  sip = SeqIdSelect (bsp->id, dbsource_fasta_order, NUM_SEQID);
+
+  if (sip != NULL) {
+
+    switch (sip->choice) {
+      case SEQID_PIR :
+      case SEQID_SWISSPROT :
+      case SEQID_PRF :
+      case SEQID_PDB :
+        if (WriteDbsourceID (sip, str)) {
+          www_dbsource (str, TRUE, sip->choice);
+          unknown = FALSE;
+        }
+        break;
+      case SEQID_GENERAL :
+        db = sip->data.ptrvalue;
+        if (db == NULL) {
+          break;
+        }
+        if (StringNCmp (db->db, "PIDe", 4) != 0 &&
+            StringNCmp (db->db, "PIDd", 4) != 0 &&
+            StringNCmp (db->db, "PID", 3) != 0) {
+          break;
+        }
+        /* if (ChoicePID) found, continue on to next set of cases */
+      case SEQID_EMBL :
+      case SEQID_GENBANK :
+      case SEQID_DDBJ :
+      case SEQID_GIBBSQ :
+      case SEQID_GIBBMT :
+      case SEQID_OTHER :
+      case SEQID_TPG :
+      case SEQID_TPE :
+      case SEQID_TPD :
+      case SEQID_GI :
+      case SEQID_GIIM :
+        cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+        if (cds != NULL) {
+          nuc = BioseqFindFromSeqLoc (cds->location);
+          if (nuc != NULL) {
+            slp = SeqLocFindNext (cds->location, NULL);
+            while (slp != NULL) {
+              sip = SeqLocId (slp);
+              AddToUniqueSipList (&list, sip);
+              slp = SeqLocFindNext (cds->location, slp);
+            }
+            for (vnp = list; vnp != NULL; vnp = vnp->next) {
+              id = (SeqIdPtr) vnp->data.ptrvalue;
+              nuc = BioseqFindCore (id);
+              sip = NULL;
+              if (nuc != NULL) {
+                sip = SeqIdSelect (nuc->id, dbsource_fasta_order, NUM_SEQID);
+              } else if (id != NULL && id->choice == SEQID_GI) {
+                sip = GetSeqIdForGI (id->data.intvalue);
+              }
+              if (sip == NULL) {
+                sip = id;
+              }
+              if (sip != NULL) {
+                if (WriteDbsourceID (sip, str)) {
+                  if (! first) {
+                    NewContLine ();
+                    TabToColumn (13);
+                  }
+                  www_dbsource (str, TRUE, sip->choice);
+                  first = FALSE;
+                  unknown = FALSE;
+                }
+              }
+            }
+            ValNodeFree (list);
+          }
+        } else {
+          if (WriteDbsourceID (sip, str)) {
+            www_dbsource (str, TRUE, sip->choice);
+            unknown = FALSE;
+          }
+        }
+        break;
+      default :
+        break;
+    }
+
+    switch (sip->choice) {
+      case SEQID_PIR :
+        AddPIRBlock (bsp);
+        break;
+      case SEQID_SWISSPROT :
+        AddSPBlock (bsp);
+        break;
+      case SEQID_PRF :
+        AddPRFBlock (bsp);
+        break;
+      case SEQID_PDB :
+        AddPDBBlock (bsp);
+        break;
+      default :
+        break;
+    }
+  }
+
+  if (unknown) {
+    gb_AddString (NULL, "UNKNOWN", NULL, FALSE, FALSE, TILDE_TO_SPACES);
+  }
+
+  ff_EndPrint();
+
+  bbp->string = ff_print_string_mem (gb_MergeString (FALSE));
 }
 
 static void AddDateBlock (
@@ -9170,22 +11650,34 @@ static void AddDateBlock (
   date [0] = '\0';
 
   dp = NULL;
-  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_update_date, &dcontext);
-  if (sdp == NULL) {
-    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_create_date, &dcontext);
-  }
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_create_date, &dcontext);
   if (sdp != NULL) {
     dp = (DatePtr) sdp->data.ptrvalue;
   }
   if (dp != NULL) {
-    DateToGB (date, dp);
+    DateToGB (date, dp, FALSE);
   }
   if (StringHasNoText (date)) {
     StringCpy (date, "01-JAN-1900");
   }
 
-  init_buff ();
   PrintXX ();
+  ff_StartPrint (5, 5, ASN2FF_EMBL_MAX, "DT");
+  ff_AddString (date);
+
+  bbp->string = gb_MergeString (TRUE);
+
+  bbp = Asn2gbAddBlock (awp, DATE_BLOCK, sizeof (BaseBlock));
+  if (bbp == NULL) return;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_update_date, &dcontext);
+  if (sdp != NULL) {
+    dp = (DatePtr) sdp->data.ptrvalue;
+  }
+  if (dp != NULL) {
+    DateToGB (date, dp, FALSE);
+  }
+
   ff_StartPrint (5, 5, ASN2FF_EMBL_MAX, "DT");
   ff_AddString (date);
 
@@ -9207,7 +11699,7 @@ static CharPtr GSS_kw_array [TOTAL_GSSKW] = {
   "GSS", "trapped exon"
 };
 static CharPtr STS_kw_array[TOTAL_STSKW] = {
-  "STS", "STS(sequence tagged site)", "STS (sequence tagged site)", 
+  "STS", "STS(sequence tagged site)", "STS (sequence tagged site)",
   "STS sequence", "sequence tagged site"
 };
 
@@ -9292,6 +11784,7 @@ static void AddKeywordsBlock (
   PirBlockPtr        pir;
   PrfBlockPtr        prf;
   SeqDescrPtr        sdp;
+  SeqIdPtr           sip;
   SPBlockPtr         sp;
   CharPtr            str;
   ValNodePtr         vnp;
@@ -9302,6 +11795,12 @@ static void AddKeywordsBlock (
 
   bbp = (BaseBlockPtr) Asn2gbAddBlock (awp, KEYWORDS_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_TPG || sip->choice == SEQID_TPE || sip->choice == SEQID_TPD) {
+      ValNodeCopyStr (&head, 0, "THIRD PARTY ANNOTATION");
+    }
+  }
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
   if (sdp != NULL) {
@@ -9340,6 +11839,7 @@ static void AddKeywordsBlock (
           ValNodeCopyStr (&head, 0, "HTG; HTGS_PHASE0");
           break;
         case MI_TECH_htc :
+          ValNodeCopyStr (&head, 0, "HTC");
           break;
         default :
           break;
@@ -9408,7 +11908,7 @@ static void AddKeywordsBlock (
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, 0, &dcontext);
   }
 
-  gb_StartPrint (awp->format, TRUE, 0, 12, "KEYWORDS", 13, 5, 5, "KW", TRUE);
+  gb_StartPrint (awp->format, 0, 12, "KEYWORDS", 13, 5, 5, "KW", TRUE);
 
   str = MergeValNodeStrings (head);
 
@@ -9439,7 +11939,7 @@ static void AddSegmentBlock (
 
   sprintf (buf, "%d of %ld", (int) awp->seg, (long) awp->numsegs);
 
-  gb_StartPrint (awp->format, TRUE, 0, 12, "SEGMENT", 13, 5, 5, "XX", FALSE);
+  gb_StartPrint (awp->format, 0, 12, "SEGMENT", 13, 5, 5, "XX", FALSE);
 
   gb_AddString (NULL, buf, NULL, FALSE, TRUE, TILDE_TO_SPACES);
 
@@ -9499,7 +11999,9 @@ static void AddOrganismBlock (
 {
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
+  SeqFeatPtr         cds;
   SeqMgrDescContext  dcontext;
+  BioseqPtr          dna;
   SeqMgrFeatContext  fcontext;
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp;
@@ -9522,34 +12024,57 @@ static void AddOrganismBlock (
       bbp->entityID = fcontext.entityID;
       bbp->itemID = fcontext.itemID;
       bbp->itemtype = OBJ_SEQFEAT;
+    } else if (ISA_aa (bsp->mol)) {
+
+      /* if protein with no sources, get sources applicable to DNA location of CDS */
+
+      cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
+      if (cds != NULL) {
+        sfp = SeqMgrGetOverlappingSource (cds->location, &fcontext);
+        if (sfp != NULL) {
+          bbp->entityID = fcontext.entityID;
+          bbp->itemID = fcontext.itemID;
+          bbp->itemtype = OBJ_SEQFEAT;
+        } else {
+          dna = BioseqFindFromSeqLoc (cds->location);
+          if (dna != NULL) {
+            sdp = SeqMgrGetNextDescriptor (dna, NULL, Seq_descr_source, &dcontext);
+            if (sdp != NULL) {
+              bbp->entityID = dcontext.entityID;
+              bbp->itemID = dcontext.itemID;
+              bbp->itemtype = OBJ_SEQDESC;
+            }
+          }
+        }
+      }
     }
   }
 }
 
-static ReferenceBlockPtr AddPub (
+static RefBlockPtr AddPub (
   Asn2gbWorkPtr awp,
   ValNodePtr PNTR head,
   PubdescPtr pdp
 )
 
 {
-  Char               buf [121];
-  CitArtPtr          cap;
-  CitBookPtr         cbp;
-  CitGenPtr          cgp;
-  CitJourPtr         cjp;
-  CitPatPtr          cpp;
-  CitSubPtr          csp;
-  DatePtr            dp = NULL;
-  Boolean            justuids = TRUE;
-  ImprintPtr         imp = NULL;
-  IntRefBlockPtr     irp;
-  ReferenceBlockPtr  rbp;
-  ValNodePtr         vnp;
+  Char            buf [121];
+  CitArtPtr       cap;
+  CitBookPtr      cbp;
+  CitGenPtr       cgp;
+  CitJourPtr      cjp;
+  CitPatPtr       cpp;
+  CitSubPtr       csp;
+  DatePtr         dp = NULL;
+  Boolean         justuids = TRUE;
+  ImprintPtr      imp = NULL;
+  IntRefBlockPtr  irp;
+  RefBlockPtr     rbp;
+  ValNodePtr      vnp;
 
   if (awp == NULL || head == NULL || pdp == NULL) return NULL;
 
-  rbp = (ReferenceBlockPtr) MemNew (sizeof (IntRefBlock));
+  rbp = (RefBlockPtr) MemNew (sizeof (IntRefBlock));
   if (rbp == NULL) return NULL;
   rbp->blocktype = REFERENCE_BLOCK;
   rbp->section = awp->currsection;
@@ -9709,8 +12234,8 @@ static ReferenceBlockPtr AddPub (
 
   /* check for sites reftype */
 
-  if (pdp->reftype == 1) {
-    rbp->sites = TRUE;
+  if (pdp->reftype != 0) {
+    rbp->sites = pdp->reftype;
   }
 
   if (rbp->muid == 0 && rbp->pmid == 0) {
@@ -9729,9 +12254,9 @@ static ReferenceBlockPtr AddPub (
       }
     }
 
-	if (PubLabelUnique (vnp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT, TRUE) > 0) {
-	  rbp->uniquestr = StringSaveNoNull (buf);
-	}
+    if (PubLabelUnique (vnp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT, TRUE) > 0) {
+      rbp->uniquestr = StringSaveNoNull (buf);
+    }
   }
 
   irp = (IntRefBlockPtr) rbp;
@@ -9752,31 +12277,34 @@ static ReferenceBlockPtr AddPub (
 
 static int LIBCALLBACK SortReferences (
   VoidPtr ptr1,
-  VoidPtr ptr2
+  VoidPtr ptr2,
+  Boolean serialFirst
 )
 
 {
-  int                compare;
-  IntRefBlockPtr     irp1;
-  IntRefBlockPtr     irp2;
-  ReferenceBlockPtr  rbp1;
-  ReferenceBlockPtr  rbp2;
-  Int2               status;
-  ValNodePtr         vnp1;
-  ValNodePtr         vnp2;
+  int             compare;
+  IntRefBlockPtr  irp1;
+  IntRefBlockPtr  irp2;
+  RefBlockPtr     rbp1;
+  RefBlockPtr     rbp2;
+  Int2            status;
+  ValNodePtr      vnp1;
+  ValNodePtr      vnp2;
 
   if (ptr1 == NULL || ptr2 == NULL) return 0;
   vnp1 = *((ValNodePtr PNTR) ptr1);
   vnp2 = *((ValNodePtr PNTR) ptr2);
   if (vnp1 == NULL || vnp2 == NULL) return 0;
-  rbp1 = (ReferenceBlockPtr) vnp1->data.ptrvalue;
-  rbp2 = (ReferenceBlockPtr) vnp2->data.ptrvalue;
+  rbp1 = (RefBlockPtr) vnp1->data.ptrvalue;
+  rbp2 = (RefBlockPtr) vnp2->data.ptrvalue;
   if (rbp1 == NULL || rbp2 == NULL) return 0;
 
-  if (rbp1->serial > rbp2->serial) {
-    return 1;
-  } else if (rbp1->serial < rbp2->serial) {
-    return -1;
+  if (serialFirst) {
+    if (rbp1->serial > rbp2->serial) {
+      return 1;
+    } else if (rbp1->serial < rbp2->serial) {
+      return -1;
+    }
   }
 
   /* usual first sort by published, unpublished, and cit-subs */
@@ -9823,9 +12351,9 @@ static int LIBCALLBACK SortReferences (
 
   /* put sites after pubs that refer to all or a range of bases */
 
-  if (rbp2->sites) {
+  if (rbp1->sites > 0) {
     return 1;
-  } else if (rbp1->sites) {
+  } else if (rbp2->sites > 0) {
     return -1;
   }
 
@@ -9869,7 +12397,33 @@ static int LIBCALLBACK SortReferences (
     }
   }
 
+  if (! serialFirst) {
+    if (rbp1->serial > rbp2->serial) {
+      return 1;
+    } else if (rbp1->serial < rbp2->serial) {
+      return -1;
+    }
+  }
+
   return 0;
+}
+
+static int LIBCALLBACK SortReferencesA (
+  VoidPtr ptr1,
+  VoidPtr ptr2
+)
+
+{
+  return SortReferences (ptr1, ptr2, FALSE);
+}
+
+static int LIBCALLBACK SortReferencesB (
+  VoidPtr ptr1,
+  VoidPtr ptr2
+)
+
+{
+  return SortReferences (ptr1, ptr2, TRUE);
 }
 
 static void GetRefsOnBioseq (
@@ -9890,7 +12444,7 @@ static void GetRefsOnBioseq (
   Int2               numivals;
   Boolean            okay;
   PubdescPtr         pdp;
-  ReferenceBlockPtr  rbp;
+  RefBlockPtr        rbp;
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp;
   SeqInt             sint;
@@ -9921,7 +12475,7 @@ static void GetRefsOnBioseq (
 
     okay = TRUE;
     for (vnp = awp->pubhead; vnp != NULL && okay; vnp = vnp->next) {
-      rbp = (ReferenceBlockPtr) vnp->data.ptrvalue;
+      rbp = (RefBlockPtr) vnp->data.ptrvalue;
       if (rbp != NULL) {
         if (rbp->entityID == dcontext.entityID &&
             rbp->itemID == dcontext.itemID &&
@@ -10054,34 +12608,43 @@ static Boolean LIBCALLBACK GetRefsOnSeg (
   return TRUE;
 }
 
-static void AddReferenceBlock (
-  Asn2gbWorkPtr awp,
-  Asn2gbSectionPtr asp
+static Boolean AddReferenceBlock (
+  Asn2gbWorkPtr awp
 )
 
 {
-  Asn2gbJobPtr       ajp;
+  IntAsn2gbJobPtr    ajp;
+  AuthListPtr        alp;
+  Asn2gbSectPtr      asp;
   BioseqPtr          bsp;
+  SeqFeatPtr         cds;
+  Boolean            combine;
+  SeqMgrFeatContext  context;
+  CitSubPtr          csp;
+  BioseqPtr          dna;
   Boolean            excise;
   ValNodePtr         head = NULL;
   Int2               i;
   IntRefBlockPtr     irp;
   IntRefBlockPtr     lastirp;
-  ReferenceBlockPtr  lastrbp;
+  RefBlockPtr        lastrbp;
   ValNodePtr         next;
   Int2               numReferences;
   ValNodePtr         PNTR prev;
-  ReferenceBlockPtr  rbp;
-  ReferenceBlockPtr  PNTR referenceArray;
+  RefBlockPtr        rbp;
+  RefBlockPtr        PNTR referenceArray;
+  SubmitBlockPtr     sbp;
   SeqLocPtr          slp;
   BioseqPtr          target;
   ValNodePtr         vnp;
 
-  if (awp == NULL || asp == NULL) return;
+  if (awp == NULL) return FALSE;
   ajp = awp->ajp;
-  if (ajp == NULL) return;
+  if (ajp == NULL) return FALSE;
+  asp = awp->asp;
+  if (asp == NULL) return FALSE;
   bsp = awp->bsp;
-  if (bsp == NULL) return;
+  if (bsp == NULL) return FALSE;
 
   /* collect publications on bioseq */
 
@@ -10097,32 +12660,58 @@ static void AddReferenceBlock (
     target = awp->target;
   }
 
+  if (awp->pubhead == NULL && ISA_aa (bsp->mol)) {
+
+    /* if protein with no pubs, get pubs applicable to DNA location of CDS */
+
+    cds = SeqMgrGetCDSgivenProduct (bsp, &context);
+    if (cds != NULL) {
+      dna = BioseqFindFromSeqLoc (cds->location);
+      if (dna != NULL) {
+        GetRefsOnBioseq (awp, dna, dna, context.left, context.right);
+        target = dna;
+      }
+    }
+  }
+
   head = awp->pubhead;
   awp->pubhead = NULL;
 
-  if (head == NULL) return;
+  if (head == NULL && awp->ssp == NULL) return FALSE;
 
-  /* sort by existing serial, then pub/unpub/sites/sub, then date */
+  /* sort by pub/unpub/sites/sub, then date, finally existing serial */
 
-  head = SortValNode (head, SortReferences);
+  head = SortValNode (head, SortReferencesA);
 
   if (awp->ssp != NULL) {
 
     /* add seq-submit citation */
 
-    rbp = (ReferenceBlockPtr) MemNew (sizeof (IntRefBlock));
+    rbp = (RefBlockPtr) MemNew (sizeof (IntRefBlock));
     if (rbp != NULL) {
+      irp = (IntRefBlockPtr) rbp;
 
       rbp->blocktype = REFERENCE_BLOCK;
       rbp->section = awp->currsection;
       rbp->serial = INT2_MAX;
       rbp->category = REF_CAT_SUB;
 
-      rbp->entityID = ajp->entityID;
+      rbp->entityID = ajp->ajp.entityID;
       rbp->itemID = 1;
       rbp->itemtype = OBJ_SEQSUB_CIT;
 
-      if (awp->format == DDBJ_FMT || awp->format == DDBJPEPT_FMT) {
+      sbp = awp->ssp->sub;
+      if (sbp != NULL) {
+        csp = sbp->cit;
+        if (csp != NULL) {
+          alp = GetAuthListPtr (NULL, csp);
+          if (alp != NULL) {
+            irp->authstr = GetAuthorsString (awp->format, alp);
+          }
+        }
+      }
+
+      if (awp->citSubsFirst) {
 
         /* for DDBJ, add seq-submit citation to beginning of list */
 
@@ -10150,8 +12739,9 @@ static void AddReferenceBlock (
   lastrbp = NULL;
   while (vnp != NULL) {
     excise = FALSE;
+    combine = TRUE;
     next = vnp->next;
-    rbp = (ReferenceBlockPtr) vnp->data.ptrvalue;
+    rbp = (RefBlockPtr) vnp->data.ptrvalue;
     if (lastrbp != NULL) {
       lastirp = (IntRefBlockPtr) lastrbp;
       if (rbp != NULL) {
@@ -10177,6 +12767,18 @@ static void AddReferenceBlock (
         }
       }
     }
+    if (rbp != NULL) {
+      irp = (IntRefBlockPtr) rbp;
+      if (irp->justuids) {
+        /* do not allow justuids reference to appear by itself - S79174.1 */
+        excise = TRUE;
+        /* justuids should still combine, even if no authors - S67070.1 */
+      } else if (StringHasNoText (irp->authstr)) {
+        /* do not allow no author reference to appear by itself - U07000.1 */
+        excise = TRUE;
+        combine = FALSE;
+      }
+    }
     if (excise) {
       *prev = vnp->next;
       vnp->next = NULL;
@@ -10185,21 +12787,24 @@ static void AddReferenceBlock (
 
       irp = (IntRefBlockPtr) rbp;
       lastirp = (IntRefBlockPtr) lastrbp;
-      if (lastirp != NULL) {
-        slp = SeqLocMerge (target, lastirp->loc, irp->loc, FALSE, TRUE, FALSE);
-        lastirp->loc = SeqLocFree (lastirp->loc);
-        lastirp->loc = slp;
-      }
-      if (irp != NULL && lastirp != NULL) {
-        /* if (irp->justuids && (! lastirp->justuids)) { */
-          if (lastirp->fig == NULL) {
-            lastirp->fig = StringSaveNoNull (irp->fig);
+      if (combine) {
+        if (lastirp != NULL) {
+          slp = SeqLocMerge (target, lastirp->loc, irp->loc, FALSE, TRUE, FALSE);
+          lastirp->loc = SeqLocFree (lastirp->loc);
+          lastirp->loc = slp;
+        }
+        if (irp != NULL && lastirp != NULL) {
+          if ((rbp->muid == lastrbp->muid && rbp->muid != 0) ||
+              (rbp->pmid == lastrbp->pmid && rbp->pmid != 0)) {
+            if (lastirp->fig == NULL) {
+              lastirp->fig = StringSaveNoNull (irp->fig);
+            }
+            if (lastirp->maploc == NULL) {
+              lastirp->maploc = StringSaveNoNull (irp->maploc);
+            }
+            lastirp->poly_a = irp->poly_a;
           }
-          if (lastirp->maploc == NULL) {
-            lastirp->maploc = StringSaveNoNull (irp->maploc);
-          }
-          lastirp->poly_a = irp->poly_a;
-        /* } */
+        }
       }
 
       /* and remove duplicate reference */
@@ -10221,10 +12826,16 @@ static void AddReferenceBlock (
     vnp = next;
   }
 
+  /* resort by existing serial, then pub/unpub/sites/sub, then date */
+
+  head = SortValNode (head, SortReferencesB);
+
+  if (head == NULL) return FALSE;
+
   /* assign serial numbers */
 
   for (vnp = head, i = 1; vnp != NULL; vnp = vnp->next, i++) {
-    rbp = (ReferenceBlockPtr) vnp->data.ptrvalue;
+    rbp = (RefBlockPtr) vnp->data.ptrvalue;
     if (rbp != NULL) {
       rbp->serial = i;
     }
@@ -10236,7 +12847,7 @@ static void AddReferenceBlock (
   asp->numReferences = numReferences;
 
   if (numReferences > 0) {
-    referenceArray = (ReferenceBlockPtr PNTR) MemNew (sizeof (ReferenceBlockPtr) * (numReferences + 1));
+    referenceArray = (RefBlockPtr PNTR) MemNew (sizeof (RefBlockPtr) * (numReferences + 1));
     asp->referenceArray = referenceArray;
 
     if (referenceArray != NULL) {
@@ -10244,7 +12855,7 @@ static void AddReferenceBlock (
       /* fill in reference array */
 
       for (vnp = head, i = 0; vnp != NULL && i < numReferences; vnp = vnp->next, i++) {
-        referenceArray [i] = (ReferenceBlockPtr) vnp->data.ptrvalue;
+        referenceArray [i] = (RefBlockPtr) vnp->data.ptrvalue;
       }
     }
   }
@@ -10253,7 +12864,7 @@ static void AddReferenceBlock (
 
   ValNodeLink (&(awp->lastblock), head);
   vnp = awp->lastblock;
-  if (vnp == NULL) return;
+  if (vnp == NULL) return FALSE;
   while (vnp->next != NULL) {
     vnp = vnp->next;
   }
@@ -10262,35 +12873,8 @@ static void AddReferenceBlock (
   if (awp->blockList == NULL) {
     awp->blockList = vnp;
   }
-}
 
-static CharPtr PrintDate (
-  DatePtr dp
-)
-
-{
-  Char    buf [30];
-  size_t  len;
-
-  if (dp == NULL) return NULL;
-
-  if (DatePrint (dp, buf)) {
-    if (StringICmp (buf, "Not given") != 0) {
-      len = StringLen (buf);
-      if (len > 0) {
-        if (buf [len - 1] == '\n') {
-          if (buf [len - 2] == '.') {
-            buf [len - 2] = '\0';
-          } else {
-            buf [len - 1] = '\0';
-          }
-        }
-      }
-      return StringSave (buf);
-    }
-  }
-
-  return NULL;
+  return TRUE;
 }
 
 static void AddHistCommentString (
@@ -10309,7 +12893,7 @@ static void AddHistCommentString (
 
   if (dp == NULL || ids == NULL || prefix == NULL || suffix == NULL) return;
 
-  strd = PrintDate (dp);
+  strd = asn2gb_PrintDate (dp);
   if (strd == NULL) {
     strd = StringSave ("?");
   }
@@ -10424,29 +13008,124 @@ static void AddHTGSCommentString (
 
   str = MergeValNodeStrings (head);
 
-  gb_AddString (NULL, str, NULL, TRUE, FALSE, TILDE_EXPAND);
+  gb_AddString (NULL, str, NULL, TRUE, TRUE, TILDE_EXPAND);
 
   MemFree (str);
   ValNodeFreeData (head);
 }
 
-static CharPtr reftxt0 = "The reference sequence was derived from ";
-static CharPtr reftxt1 = "PROVISIONAL REFSEQ: This record has not yet been subject to final NCBI review. ";
-static CharPtr reftxt2 = "REVIEWED REFSEQ: This record has been curated by NCBI staff. ";
-static CharPtr reftxt3 = "PREDICTED REFSEQ: The mRNA record is supported by experimental evidence; however, the coding sequence is predicted. ";
+static CharPtr GetMolInfoCommentString (
+  BioseqPtr bsp,
+  MolInfoPtr mip
+)
 
-static CharPtr GetStrForUserObject (
+{
+  Boolean  is_aa;
+  CharPtr  str = NULL;
+
+  if (bsp == NULL || mip == NULL) return NULL;
+
+  is_aa = ISA_aa (bsp->mol);
+  switch (mip->completeness) {
+    case 1 :
+      str = "COMPLETENESS: full length";
+      break;
+    case 2 :
+      str = "COMPLETENESS: not full length";
+      break;
+    case 3 :
+      if (is_aa) {
+        str = "COMPLETENESS: incomplete on the amino end";
+      } else {
+        str = "COMPLETENESS: incomplete on the 5' end";
+      }
+      break;
+    case 4 :
+      if (is_aa) {
+        str = "COMPLETENESS: incomplete on the carboxy end";
+      } else {
+        str = "COMPLETENESS: incomplete on the 3' end";
+      }
+      break;
+    case 5 :
+      str = "COMPLETENESS: incomplete on both ends";
+      break;
+    case 6 :
+      if (is_aa) {
+        str = "COMPLETENESS: complete on the amino end";
+      } else {
+        str = "COMPLETENESS: complete on the 5' end";
+      }
+      break;
+    case 7 :
+      if (is_aa) {
+        str = "COMPLETENESS: complete on the carboxy end";
+      } else {
+        str = "COMPLETENESS: complete on the 3' end";
+      }
+      break;
+    default :
+      str = "COMPLETENESS: unknown";
+      break;
+  }
+
+  return str;
+}
+
+static CharPtr GetStrForBankit (
   UserObjectPtr uop
 )
 
 {
+  CharPtr       bic = NULL, uvc = NULL, ptr;
   ObjectIdPtr   oip;
-  UserFieldPtr  ufp, tmp, u, urf;
-  CharPtr       ptr = NULL, st;
+  UserFieldPtr  ufp;
+
+  if (uop == NULL) return NULL;
+  if ((oip = uop->type) == NULL) return NULL;
+  if (StringCmp (oip->str, "Submission") != 0) return NULL;
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (StringCmp(oip->str, "UniVecComment") == 0) {
+      uvc = ufp->data.ptrvalue;
+    } else if (StringCmp(oip->str, "AdditionalComment") == 0) {
+      bic = ufp->data.ptrvalue;
+    }
+  }
+
+  if (uvc == NULL || bic == NULL) return NULL;
+
+  ptr = (CharPtr) MemNew (StringLen (uvc) + StringLen (bic) + 45);
+  if (uvc != NULL && bic != NULL) {
+    sprintf (ptr, "Vector Explanation: %s~Bankit Comment: %s", uvc, bic);
+  } else if (uvc != NULL) {
+    sprintf (ptr, "Vector Explanation: %s", uvc);
+  } else if (bic != NULL) {
+    sprintf (ptr, "Bankit Comment: %s", bic);
+  }
+
+  return ptr;
+}
+
+static CharPtr reftxt0 = "The reference sequence was derived from ";
+static CharPtr reftxt1 = "PROVISIONAL REFSEQ: This record has not yet been subject to final NCBI review. ";
+static CharPtr reftxt2 = "PREDICTED REFSEQ: The mRNA record is supported by experimental evidence; however, the coding sequence is predicted. ";
+static CharPtr reftxt3 = "VALIDATED REFSEQ: This record has undergone preliminary review of the sequence, but has not yet been subject to final NCBI review. ";
+static CharPtr reftxt4 = "REVIEWED REFSEQ: This record has been curated by ";
+
+static CharPtr GetStrForRefTrack (
+  UserObjectPtr uop
+)
+
+{
+  CharPtr       curator = NULL, ptr = NULL, st;
+  ObjectIdPtr   oip;
+  UserFieldPtr  ufp, tmp, u, urf = NULL;
   Int2          i = 0;
   Char          p [41];
   Int2          review = 0,len;
-	
+
   if (uop == NULL) return NULL;
   if ((oip = uop->type) == NULL) return NULL;
   if (StringCmp (oip->str, "RefGeneTracking") != 0) return NULL;
@@ -10460,15 +13139,24 @@ static CharPtr GetStrForUserObject (
       st = (CharPtr) ufp->data.ptrvalue;
       if (StringCmp (st, "Provisional") == 0) {
         review = 1;
-      } else if (StringCmp (st, "Reviewed") == 0) {
-        review = 2;
       } else if (StringCmp (st, "Predicted") == 0) {
+        review = 2;
+      } else if (StringCmp (st, "Validated") == 0) {
         review = 3;
+      } else if (StringCmp (st, "Reviewed") == 0) {
+        review = 4;
+      }
+    } else if (StringCmp (oip->str, "Collaborator") == 0) {
+      st = (CharPtr) ufp->data.ptrvalue;
+      if (! StringHasNoText (st)) {
+        curator = st;
       }
     }
   }
   if (urf && urf->choice == 11) {
-    for (tmp = urf->data.ptrvalue; tmp != NULL; tmp = tmp->next, i++) continue;
+    for (tmp = urf->data.ptrvalue; tmp != NULL; tmp = tmp->next) {
+      i++;
+    }
     if (review == 1) {
       ptr = (CharPtr) MemNew ( StringLen (reftxt1) + len + 18*i + 1);
       StringCpy (ptr, reftxt1);
@@ -10478,6 +13166,14 @@ static CharPtr GetStrForUserObject (
     } else if (review == 3) {
       ptr = (CharPtr) MemNew ( StringLen (reftxt3) + len + 18*i + 1);
       StringCpy (ptr, reftxt3);
+    } else if (review == 4) {
+      if (curator == NULL) {
+        curator = "NCBI staff";
+      }
+      ptr = (CharPtr) MemNew ( StringLen (reftxt4) + StringLen (curator) + len + 18*i + 1);
+      StringCpy (ptr, reftxt4);
+      StringCat (ptr, curator);
+      StringCat (ptr, ". ");
     } else {
       ptr = (CharPtr) MemNew ( StringLen ("REFSEQ: ") + len + 18*i + 1);
       StringCpy (ptr, "REFSEQ: ");
@@ -10502,14 +13198,71 @@ static CharPtr GetStrForUserObject (
   return ptr;
 }
 
+static CharPtr reftxt5 = "GENOME ANNOTATION REFSEQ:  This model reference sequence was predicted from NCBI contig";
+static CharPtr reftxt6 = "by automated computational analysis";
+static CharPtr reftxt7 = "using gene prediction method:";
+static CharPtr reftxt8 = "~Also see:~    Documentation of NCBI's Annotation Process~    Evidence Viewer - alignments supporting this model";
+
+static CharPtr GetAnnotationComment (
+  BioseqPtr bsp
+)
+
+{
+  SeqMgrDescContext  dcontext;
+  CharPtr            method = NULL;
+  CharPtr            name = NULL;
+  ObjectIdPtr        oip;
+  SeqDescrPtr        sdp;
+  CharPtr            str = NULL;
+  UserFieldPtr       ufp;
+  UserObjectPtr      uop;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL) {
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop != NULL) {
+      oip = uop->type;
+      if (oip != NULL) {
+        if (StringCmp(oip->str, "ModelEvidence") == 0) {
+          for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+            oip = ufp->label;
+            if (oip == NULL) continue;
+            if (StringCmp(oip->str, "Contig Name") == 0) {
+              name = (CharPtr) ufp->data.ptrvalue;
+            } else if (StringCmp(oip->str, "Method") == 0) {
+              method = (CharPtr) ufp->data.ptrvalue;
+            }
+          }
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+  if (name == NULL || method == NULL) return NULL;
+  str = MemNew (StringLen (reftxt5) + StringLen (reftxt6) + StringLen (reftxt7) +
+                StringLen (reftxt8) + StringLen (name) + StringLen (method) + 10);
+  if (str == NULL) return NULL;
+  if (method != NULL) {
+    sprintf (str, "%s %s %s %s %s.%s", reftxt5, name, reftxt6, reftxt7, method, reftxt8);
+  } else {
+    sprintf (str, "%s %s %s.%s", reftxt5, name, reftxt6, reftxt8);
+  }
+  return str;
+}
+
+static CharPtr reftxt9 = "GENOME ANNOTATION REFSEQ:  NCBI contigs are derived from assembled genomic sequence data. They may include both draft and finished sequence.";
+static CharPtr tpaString = "THIRD PARTY ANNOTATION DATABASE: This entry contains annotation of previously submitted data.";
+
 static void AddCommentBlock (
   Asn2gbWorkPtr awp
 )
 
 {
+  IntAsn2gbJobPtr    ajp;
   BioseqPtr          bsp;
   Char               buf [128];
   CommentBlockPtr    cbp = NULL;
+  Boolean            didRefTrack = FALSE;
   DbtagPtr           dbt;
   SeqMgrDescContext  dcontext;
   SeqMgrFeatContext  fcontext;
@@ -10517,23 +13270,96 @@ static void AddCommentBlock (
   CommentBlockPtr    gsdbcbp = NULL;
   Int4               gsdbid = 0;
   SeqHistPtr         hist;
+  Boolean            is_other = FALSE;
   MolInfoPtr         mip;
   BioseqPtr          parent;
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp;
   SeqIdPtr           sip;
   CharPtr            str;
+  TextSeqIdPtr       tsip;
   UserObjectPtr      uop;
 
   if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
   bsp = awp->bsp;
   if (bsp == NULL) return;
 
-  /* first show GSDB sequence identifier */
-
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice == SEQID_GENERAL) {
+    if (sip->choice == SEQID_OTHER) {
+      tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+
+      if (tsip != NULL) {
+        is_other = TRUE;
+        if (StringNCmp(tsip->accession, "NT", 2) == 0) {
+
+          cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+          if (cbp != NULL) {
+
+            cbp->first = first;
+            first = FALSE;
+
+            if (cbp->first) {
+              gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+            } else {
+              gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+            }
+
+            gb_AddString (NULL, reftxt9, NULL, TRUE, FALSE, TILDE_EXPAND);
+
+            cbp->string = gb_MergeString (TRUE);
+          }
+
+        } else if (StringNCmp(tsip->accession, "XP_", 3) == 0 || StringNCmp(tsip->accession, "XM_", 3) == 0) {
+
+          str = GetAnnotationComment (bsp);
+          if (str != NULL) {
+
+            cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+            if (cbp != NULL) {
+
+              cbp->first = first;
+              first = FALSE;
+
+              if (cbp->first) {
+                gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+              } else {
+                gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+              }
+
+              gb_AddString (NULL, str, NULL, TRUE, FALSE, TILDE_EXPAND);
+
+              cbp->string = gb_MergeString (TRUE);
+            }
+          }
+        }
+      }
+
+    } else if (sip->choice == SEQID_TPG || sip->choice == SEQID_TPE || sip->choice == SEQID_TPD) {
+
+      cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+      if (cbp != NULL) {
+
+        cbp->first = first;
+        first = FALSE;
+
+        if (cbp->first) {
+          gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+        } else {
+          gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+        }
+
+        gb_AddString (NULL, tpaString, NULL, TRUE, FALSE, TILDE_EXPAND);
+
+        cbp->string = gb_MergeString (TRUE);
+      }
+
+    } else if (sip->choice == SEQID_GENERAL) {
       dbt = (DbtagPtr) sip->data.ptrvalue;
+
+      /* show GSDB sequence identifier */
+
       if (dbt != NULL && StringCmp (dbt->db, "GSDB") == 0 && dbt->tag != NULL) {
         gsdbcbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
         if (gsdbcbp != NULL) {
@@ -10551,37 +13377,67 @@ static void AddCommentBlock (
   /* RefSeq results in allocated comment string */
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
-  if (sdp != NULL) {
+  while (sdp != NULL) {
 
     uop = (UserObjectPtr) sdp->data.ptrvalue;
     if (uop != NULL) {
 
-      str = GetStrForUserObject (uop);
-      if (str != NULL) {
+      if (! ajp->flags.hideBankItComment) {
+        str = GetStrForBankit (uop);
+        if (str != NULL) {
 
-        cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-        if (cbp != NULL) {
+          cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+          if (cbp != NULL) {
 
-          /*
-          cbp->entityID = dcontext.entityID;
-          cbp->itemID = dcontext.itemID;
-          cbp->itemtype = OBJ_SEQDESC;
-          */
-          cbp->first = first;
-          first = FALSE;
+            cbp->entityID = dcontext.entityID;
+            cbp->itemID = dcontext.itemID;
+            cbp->itemtype = OBJ_SEQDESC;
+            cbp->first = first;
+            first = FALSE;
 
-          if (cbp->first) {
-            gb_StartPrint (awp->format, TRUE, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
-          } else {
-            gb_StartPrint (awp->format, TRUE, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+            if (cbp->first) {
+              gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+            } else {
+              gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+            }
+
+            gb_AddString (NULL, str, NULL, TRUE, FALSE, TILDE_EXPAND);
+
+            cbp->string = gb_MergeString (TRUE);
           }
+          MemFree (str);
+        }
+      }
 
-          gb_AddString (NULL, str, NULL, TRUE, FALSE, TILDE_EXPAND);
+      if (! didRefTrack) {
+        str = GetStrForRefTrack (uop);
+        if (str != NULL) {
 
-          cbp->string = gb_MergeString (TRUE);
+          cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+          if (cbp != NULL) {
+
+            cbp->entityID = dcontext.entityID;
+            cbp->itemID = dcontext.itemID;
+            cbp->itemtype = OBJ_SEQDESC;
+            cbp->first = first;
+            first = FALSE;
+
+            if (cbp->first) {
+              gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+            } else {
+              gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+            }
+
+            gb_AddString (NULL, str, NULL, TRUE, FALSE, TILDE_EXPAND);
+
+            cbp->string = gb_MergeString (TRUE);
+          }
+          MemFree (str);
+          didRefTrack = TRUE;
         }
       }
     }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
   }
 
   /* Seq-hist results in allocated comment string */
@@ -10597,9 +13453,9 @@ static void AddCommentBlock (
         first = FALSE;
 
         if (cbp->first) {
-          gb_StartPrint (awp->format, TRUE, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+          gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
         } else {
-          gb_StartPrint (awp->format, TRUE, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+          gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
         }
 
         AddHistCommentString ("[WARNING] On", "this sequence was replaced by a newer version",
@@ -10617,9 +13473,9 @@ static void AddCommentBlock (
         first = FALSE;
 
         if (cbp->first) {
-          gb_StartPrint (awp->format, TRUE, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+          gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
         } else {
-          gb_StartPrint (awp->format, TRUE, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+          gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
         }
 
         AddHistCommentString ("On", "this sequence version replaced",
@@ -10635,13 +13491,15 @@ static void AddCommentBlock (
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_comment, &dcontext);
   while (sdp != NULL) {
-    cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-    if (cbp != NULL) {
-      cbp->entityID = dcontext.entityID;
-      cbp->itemID = dcontext.itemID;
-      cbp->itemtype = OBJ_SEQDESC;
-      cbp->first = first;
-      first = FALSE;
+    if (sdp->data.ptrvalue != NULL) {
+      cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+      if (cbp != NULL) {
+        cbp->entityID = dcontext.entityID;
+        cbp->itemID = dcontext.itemID;
+        cbp->itemtype = OBJ_SEQDESC;
+        cbp->first = first;
+        first = FALSE;
+      }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_comment, &dcontext);
   }
@@ -10661,13 +13519,15 @@ static void AddCommentBlock (
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_region, &dcontext);
   while (sdp != NULL) {
-    cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-    if (cbp != NULL) {
-      cbp->entityID = dcontext.entityID;
-      cbp->itemID = dcontext.itemID;
-      cbp->itemtype = OBJ_SEQDESC;
-      cbp->first = first;
-      first = FALSE;
+    if (sdp->data.ptrvalue != NULL) {
+      cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+      if (cbp != NULL) {
+        cbp->entityID = dcontext.entityID;
+        cbp->itemID = dcontext.itemID;
+        cbp->itemtype = OBJ_SEQDESC;
+        cbp->first = first;
+        first = FALSE;
+      }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_region, &dcontext);
   }
@@ -10678,30 +13538,86 @@ static void AddCommentBlock (
   if (sdp != NULL) {
 
     mip = (MolInfoPtr) sdp->data.ptrvalue;
-    if (mip != NULL && (mip->tech == MI_TECH_htgs_0 ||
-                        mip->tech == MI_TECH_htgs_1 ||
-                        mip->tech == MI_TECH_htgs_2)) {
+    if (mip != NULL) {
+      if (mip->completeness != 0 && is_other) {
 
-      cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-      if (cbp != NULL) {
+        str = GetMolInfoCommentString (bsp, mip);
 
-        /*
-        cbp->entityID = dcontext.entityID;
-        cbp->itemID = dcontext.itemID;
-        cbp->itemtype = OBJ_SEQDESC;
-        */
-        cbp->first = first;
-        first = FALSE;
+        if (str != NULL) {
+          cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+          if (cbp != NULL) {
 
-        if (cbp->first) {
-          gb_StartPrint (awp->format, TRUE, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
-        } else {
-          gb_StartPrint (awp->format, TRUE, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+            cbp->entityID = dcontext.entityID;
+            cbp->itemID = dcontext.itemID;
+            cbp->itemtype = OBJ_SEQDESC;
+            cbp->first = first;
+            first = FALSE;
+
+            if (cbp->first) {
+              gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+            } else {
+              gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+            }
+
+            gb_AddString (NULL, str, NULL, TRUE, FALSE, TILDE_EXPAND);
+
+            cbp->string = gb_MergeString (TRUE);
+          }
         }
 
-        AddHTGSCommentString (bsp, mip);
+      }
+      if (mip->tech == MI_TECH_htgs_0 ||
+          mip->tech == MI_TECH_htgs_1 ||
+          mip->tech == MI_TECH_htgs_2) {
 
-        cbp->string = gb_MergeString (TRUE);
+        cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+        if (cbp != NULL) {
+
+          /*
+          cbp->entityID = dcontext.entityID;
+          cbp->itemID = dcontext.itemID;
+          cbp->itemtype = OBJ_SEQDESC;
+          */
+          cbp->first = first;
+          first = FALSE;
+
+          if (cbp->first) {
+            gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+          } else {
+            gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+          }
+
+          AddHTGSCommentString (bsp, mip);
+
+          cbp->string = gb_MergeString (TRUE);
+        }
+
+      } else {
+        str = StringForSeqTech (mip->tech);
+        if (! StringHasNoText (str)) {
+
+          cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+          if (cbp != NULL) {
+
+            /*
+            cbp->entityID = dcontext.entityID;
+            cbp->itemID = dcontext.itemID;
+            cbp->itemtype = OBJ_SEQDESC;
+            */
+            cbp->first = first;
+            first = FALSE;
+
+            if (cbp->first) {
+              gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+            } else {
+              gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+            }
+
+            gb_AddString ("Method: ", str, NULL, TRUE, FALSE, TILDE_EXPAND);
+
+            cbp->string = gb_MergeString (TRUE);
+          }
+        }
       }
     }
   }
@@ -10737,9 +13653,9 @@ static void AddCommentBlock (
     }
 
     if (gsdbcbp->first) {
-      gb_StartPrint (awp->format, TRUE, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
+      gb_StartPrint (awp->format, 0, 12, "COMMENT", 13, 5, 5, "CC", TRUE);
     } else {
-      gb_StartPrint (awp->format, TRUE, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
+      gb_StartPrint (awp->format, 0, 12, NULL, 13, 5, 5, "CC", FALSE);
     }
 
     /* CheckEndPunctuation, ConvertDoubleQuotes, and ExpandTildes already taken into account */
@@ -10764,7 +13680,7 @@ static void AddFeatHeaderBlock (
 
   if (awp->format == FTABLE_FMT) return;
 
-  gb_StartPrint (awp->format, TRUE, 0, 12, "FEATURES", 22, 5, 0, "FH", TRUE);
+  gb_StartPrint (awp->format, 0, 12, "FEATURES", 22, 5, 0, "FH", TRUE);
 
   if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
     ff_AddString ("Key");
@@ -10779,61 +13695,6 @@ static void AddFeatHeaderBlock (
 
   bbp->string = gb_MergeString (TRUE);
 }
-
-/*
-static int SourceCompare (
-  BioSourcePtr biop1,
-  BioSourcePtr biop2
-)
-
-{
-  int           compare;
-  OrgModPtr     omp1, omp2;
-  OrgNamePtr    onp1, onp2;
-  OrgRefPtr     orp1, orp2;
-  SubSourcePtr  ssp1, ssp2;
-
-  if (biop1 == NULL || biop2 == NULL) return 0;
-  if (biop1->is_focus && (! biop2->is_focus)) return 1;
-  if (biop2->is_focus && (! biop1->is_focus)) return -1;
-
-  orp1 = biop1->org;
-  orp2 = biop2->org;
-  if (orp1 == NULL || orp2 == NULL) return 0;
-
-  compare = StringICmp (orp1->taxname, orp2->taxname);
-  if (compare != 0) return compare;
-
-  onp1 = orp1->orgname;
-  onp2 = orp2->orgname;
-  if (onp1 != NULL && onp2 == NULL) return 1;
-  if (onp2 != NULL && onp1 == NULL) return -1;
-
-  for (omp1 = onp1->mod, omp2 = onp2->mod;
-       omp1 != NULL && omp2 != NULL;
-       omp1 = omp1->next, omp2 = omp2->next) {
-    if (omp1->subtype < omp2->subtype) return 1;
-    if (omp2->subtype < omp1->subtype) return -1;
-    compare = StringICmp (omp1->subname, omp2->subname);
-    if (compare != 0) return compare;
-  }
-  if (omp1 != NULL && omp2 == NULL) return 1;
-  if (omp2 != NULL && omp1 == NULL) return -1;
-
-  for (ssp1 = biop1->subtype, ssp2 = biop2->subtype;
-       ssp1 != NULL && ssp2 != NULL;
-       ssp1 = ssp1->next, ssp2 = ssp2->next) {
-    if (ssp1->subtype < ssp2->subtype) return 1;
-    if (ssp2->subtype < ssp1->subtype) return -1;
-    compare = StringICmp (ssp1->name, ssp2->name);
-    if (compare != 0) return compare;
-  }
-  if (ssp1 != NULL && ssp2 == NULL) return 1;
-  if (ssp2 != NULL && ssp1 == NULL) return -1;
-
-  return 0;
-}
-*/
 
 static Uint2 ComputeSourceHash (
   CharPtr key,
@@ -10916,7 +13777,7 @@ static BaseBlockPtr AddSource (
       } else if (subtype == 255) {
         subtype = 25;
       }
-      if (subtype < 26) {
+      if (subtype < 35) {
         idx = orgModToSourceIdx [subtype];
         if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
           str = asn2gnbk_source_quals [idx].name;
@@ -10936,9 +13797,9 @@ static BaseBlockPtr AddSource (
   for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
     subtype = ssp->subtype;
     if (subtype == 255) {
-      subtype = 24;
+      subtype = 29;
     }
-    if (subtype < 25) {
+    if (subtype < 30) {
       idx = subSourceToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         str = asn2gnbk_source_quals [idx].name;
@@ -11064,7 +13925,7 @@ static int LIBCALLBACK SortSourcesByPos (
   if (isp1->right > isp2->right) {
     return 1;
   } else if (isp1->right < isp2->right) {
-    return -1; 
+    return -1;
   }
 
   return 0;
@@ -11112,6 +13973,7 @@ static void GetSourcesOnBioseq (
   SeqMgrDescContext  dcontext;
   SeqMgrFeatContext  fcontext;
   Boolean            hasNulls;
+  Boolean            loop = FALSE;
   Int2               idx;
   IntSrcBlockPtr     isp;
   Int4Ptr            ivals;
@@ -11122,6 +13984,7 @@ static void GetSourcesOnBioseq (
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp;
   SeqInt             sint;
+  SeqIdPtr           sip;
   Int4               start;
   Int4               stop;
   ValNode            vn;
@@ -11142,8 +14005,18 @@ static void GetSourcesOnBioseq (
   vn.data.ptrvalue = (Pointer) &sint;
   vn.next = NULL;
 
+  /* if SWISS-PROT, may have multiple source descriptors */
+
+  if (ISA_aa (bsp->mol)) {
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      if (sip->choice == SEQID_SWISSPROT) {
+        loop = TRUE;
+      }
+    }
+  }
+
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
-  if (sdp != NULL) {
+  while (sdp != NULL) {
 
     /* check if descriptor on part already added on segmented bioseq */
 
@@ -11175,66 +14048,71 @@ static void GetSourcesOnBioseq (
         isp->is_descriptor = TRUE;
       }
     }
+
+    /* if SWISS-PROT, loop through multiple source descriptors */
+
+    if (loop) {
+      sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_source, &dcontext);
+    } else {
+      sdp = NULL;
+    }
   }
 
   SeqIdFree (sint.id);
 
-  /* features are indexed on parent if segmented */
+  if ((! awp->contig) || awp->showconsource) {
 
-  bsp = awp->parent;
+    /* features are indexed on parent if segmented */
 
-  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0, &fcontext);
-  while (sfp != NULL) {
-    ivals = fcontext.ivals;
-    numivals = fcontext.numivals;
-    if (ivals != NULL && numivals > 0) {
+    bsp = awp->parent;
 
-      idx = (numivals - 1) * 2;
-      start = ivals [idx];
-      stop = ivals [idx + 1];
-      if (stop >= from && stop <= to) {
+    sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0, &fcontext);
+    while (sfp != NULL) {
+      ivals = fcontext.ivals;
+      numivals = fcontext.numivals;
+      if (ivals != NULL && numivals > 0) {
 
-        biop = (BioSourcePtr) sfp->data.value.ptrvalue;
-        bbp = AddSource (awp, &(awp->srchead), biop, sfp->comment);
-        if (bbp != NULL) {
+        idx = (numivals - 1) * 2;
+        start = ivals [idx];
+        stop = ivals [idx + 1];
+        if (stop >= from && stop <= to) {
 
-          bbp->entityID = fcontext.entityID;
-          bbp->itemID = fcontext.itemID;
-          bbp->itemtype = OBJ_SEQFEAT;
+          biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+          bbp = AddSource (awp, &(awp->srchead), biop, sfp->comment);
+          if (bbp != NULL) {
 
-          isp = (IntSrcBlockPtr) bbp;
-          if (sfp->location != NULL && sfp->location->choice == SEQLOC_PNT)
-	    {
-	      isp->loc = AsnIoMemCopy ((Pointer) sfp->location,
-				       (AsnReadFunc) SeqLocAsnRead,
-				       (AsnWriteFunc) SeqLocAsnWrite);
-	    }
-	  else if (s_isFuzzyLoc (sfp->location))
-	    {
-	      isp->loc = AsnIoMemCopy ((Pointer) sfp->location,
-				       (AsnReadFunc) SeqLocAsnRead,
-				       (AsnWriteFunc) SeqLocAsnWrite);
-	    }
-	  else if (SeqLocId(sfp->location) == NULL)
-	      isp->loc = AsnIoMemCopy ((Pointer) sfp->location,
-				       (AsnReadFunc) SeqLocAsnRead,
-				       (AsnWriteFunc) SeqLocAsnWrite);
-	  else
-	    {
-	      CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
-	      hasNulls = LocationHasNullsBetween (sfp->location);
-	      isp->loc = SeqLocMerge (target, sfp->location, NULL,
-				      FALSE, TRUE, hasNulls);
-	      SetSeqLocPartial (isp->loc, noLeft, noRight);
-	    }
-          isp->left = fcontext.left;
-          isp->right = fcontext.right;
-          isp->comment = sfp->comment;
+            bbp->entityID = fcontext.entityID;
+            bbp->itemID = fcontext.itemID;
+            bbp->itemtype = OBJ_SEQFEAT;
+
+            isp = (IntSrcBlockPtr) bbp;
+            if (sfp->location != NULL && sfp->location->choice == SEQLOC_PNT) {
+              isp->loc = AsnIoMemCopy ((Pointer) sfp->location,
+                                       (AsnReadFunc) SeqLocAsnRead,
+                                       (AsnWriteFunc) SeqLocAsnWrite);
+            } else if (s_isFuzzyLoc (sfp->location)) {
+              isp->loc = AsnIoMemCopy ((Pointer) sfp->location,
+                                      (AsnReadFunc) SeqLocAsnRead,
+                                      (AsnWriteFunc) SeqLocAsnWrite);
+            } else if (SeqLocId(sfp->location) == NULL) {
+              isp->loc = AsnIoMemCopy ((Pointer) sfp->location,
+                                       (AsnReadFunc) SeqLocAsnRead,
+                                       (AsnWriteFunc) SeqLocAsnWrite);
+            } else {
+              CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
+              hasNulls = LocationHasNullsBetween (sfp->location);
+              isp->loc = SeqLocMerge (target, sfp->location, NULL, FALSE, TRUE, hasNulls);
+              SetSeqLocPartial (isp->loc, noLeft, noRight);
+            }
+            isp->left = fcontext.left;
+            isp->right = fcontext.right;
+            isp->comment = sfp->comment;
+          }
         }
       }
-    }
 
-    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_BIOSRC, 0, &fcontext);
+      sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_BIOSRC, 0, &fcontext);
+    }
   }
 }
 
@@ -11374,31 +14252,26 @@ static Boolean isIdenticalSource (IntSrcBlockPtr isp1, IntSrcBlockPtr isp2)
       dbt1 = (DbtagPtr) vnp1->data.ptrvalue;
       dbt2 = (DbtagPtr) vnp2->data.ptrvalue;
 
-      if ((dbt1 != NULL) && (dbt2 != NULL))
-	{
-	  if (dbt1->db != dbt2->db)
-	    return FALSE;
+      if ((dbt1 != NULL) && (dbt2 != NULL)) {
+        if (dbt1->db != dbt2->db)
+          return FALSE;
 
-	  oip1 = dbt1->tag;
-	  oip2 = dbt2->tag;
-	  if ((oip1 != NULL) && (oip2 != NULL))
-	    {
-	      if (oip1->str != NULL)
-		{
-		  if (StringICmp(oip1->str, oip2->str) != 0)
-		    return FALSE;
-		}
-	      else 
-		{
-		  if (oip1->id != oip2->id)
-		    return FALSE;
-		}
-	    }
-	  else if (oip1 != NULL)
-	    return FALSE;
-	  else if (oip2 != NULL)
-	    return FALSE;
-	}
+        oip1 = dbt1->tag;
+        oip2 = dbt2->tag;
+        if ((oip1 != NULL) && (oip2 != NULL)) {
+          if (oip1->str != NULL) {
+            if (StringICmp(oip1->str, oip2->str) != 0)
+              return FALSE;
+          } else  {
+            if (oip1->id != oip2->id)
+              return FALSE;
+          }
+        }
+        else if (oip1 != NULL)
+          return FALSE;
+        else if (oip2 != NULL)
+          return FALSE;
+      }
       else if (dbt1 != NULL)
         return FALSE;
       else if (dbt2 != NULL)
@@ -11422,26 +14295,32 @@ static void AddSourceFeatBlock (
 )
 
 {
-  BaseBlockPtr    bbp;
-  BioseqPtr       bsp;
-  SeqLocPtr       duploc;
-  Boolean         excise;
-  ValNodePtr      head = NULL;
-  IntSrcBlockPtr  isp;
-  IntSrcBlockPtr  lastisp;
-  IntSrcBlockPtr  descrIsp;
-  ValNodePtr      next;
-  ValNodePtr      PNTR prev;
-  SeqInt          sint;
-  SeqLocPtr       slp;
-  CharPtr         str;
-  BioseqPtr       target;
-  ValNode         vn;
-  ValNodePtr      vnp;
-  CharPtr         wwwbuf;
-  Boolean         descHasFocus = FALSE;
+  IntAsn2gbJobPtr    ajp;
+  BaseBlockPtr       bbp;
+  BioseqPtr          bsp;
+  SeqFeatPtr         cds;
+  SeqMgrFeatContext  context;
+  BioseqPtr          dna;
+  SeqLocPtr          duploc;
+  Boolean            excise;
+  ValNodePtr         head = NULL;
+  IntSrcBlockPtr     isp;
+  IntSrcBlockPtr     lastisp;
+  IntSrcBlockPtr     descrIsp;
+  ValNodePtr         next;
+  ValNodePtr         PNTR prev;
+  SeqInt             sint;
+  SeqLocPtr          slp;
+  CharPtr            str;
+  BioseqPtr          target;
+  ValNode            vn;
+  ValNodePtr         vnp;
+  CharPtr            wwwbuf;
+  Boolean            descHasFocus = FALSE;
 
   if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
   bsp = awp->bsp;
   if (bsp == NULL) return;
 
@@ -11459,10 +14338,23 @@ static void AddSourceFeatBlock (
     target = awp->target;
   }
 
+  if (awp->srchead == NULL && ISA_aa (bsp->mol)) {
+
+    /* if protein with no sources, get sources applicable to DNA location of CDS */
+
+    cds = SeqMgrGetCDSgivenProduct (bsp, &context);
+    if (cds != NULL) {
+      dna = BioseqFindFromSeqLoc (cds->location);
+      if (dna != NULL) {
+        GetSourcesOnBioseq (awp, dna, dna, context.left, context.right);
+        target = dna;
+      }
+    }
+  }
+
   head = awp->srchead;
   awp->srchead = NULL;
 
-  /* if (head == NULL) return; */
   if (head == NULL) {
     sint.from = 0;
     sint.to = bsp->length - 1;
@@ -11475,11 +14367,11 @@ static void AddSourceFeatBlock (
     vn.data.ptrvalue = (Pointer) &sint;
     vn.next = NULL;
 
-    gb_StartPrint (awp->format, TRUE, 5, 21, NULL, 0, 5, 21, "FT", FALSE);
+    gb_StartPrint (awp->format, 5, 21, NULL, 0, 5, 21, "FT", FALSE);
     ff_AddString ("source");
     TabToColumn (22);
 
-    str = FlatLoc (bsp, &vn, awp->style);
+    str = FlatLoc (bsp, &vn, (Boolean) (awp->style == MASTER_STYLE));
     if (get_www ()) {
       wwwbuf = www_featloc (str);
       ff_AddString (wwwbuf);
@@ -11489,7 +14381,17 @@ static void AddSourceFeatBlock (
     }
     MemFree (str);
 
-    str = gb_MergeString (TRUE);
+    if (ajp->flags.needOrganismQual) {
+      NewContLine ();
+      gb_AddString ("/organism=\"", "unknown", "\"", FALSE, TRUE, TILDE_TO_SPACES);
+#ifdef ASN2GNBK_PRINT_UNKNOWN_ORG
+    } else {
+      NewContLine ();
+      gb_AddString ("/organism=\"", "unknown", "\"", FALSE, TRUE, TILDE_TO_SPACES);
+#endif
+    }
+
+    str = ff_print_string_mem (gb_MergeString (TRUE));
 
     bbp = (BaseBlockPtr) Asn2gbAddBlock (awp, SOURCEFEAT_BLOCK, sizeof (IntSrcBlock));
     if (bbp != NULL) {
@@ -11621,7 +14523,7 @@ static void GetFeatsOnCdsProduct (
 )
 
 {
-  FeatureBlockPtr    fbp;
+  FeatBlockPtr       fbp;
   IntFeatBlockPtr    ifp;
   Int4               lastleft;
   Int4               lastright;
@@ -11643,7 +14545,7 @@ static void GetFeatsOnCdsProduct (
 
   prt = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &pcontext);
   while (prt != NULL) {
-    
+
     if (pcontext.featdeftype == FEATDEF_REGION ||
         pcontext.featdeftype == FEATDEF_SITE ||
         pcontext.featdeftype == FEATDEF_mat_peptide_aa ||
@@ -11670,7 +14572,7 @@ static void GetFeatsOnCdsProduct (
 
         if (! suppress) {
 
-          fbp = (FeatureBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntFeatBlock));
+          fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntFeatBlock));
           if (fbp != NULL) {
 
             fbp->entityID = pcontext.entityID;
@@ -11680,6 +14582,10 @@ static void GetFeatsOnCdsProduct (
             ifp = (IntFeatBlockPtr) fbp;
             ifp->mapToNuc = TRUE;
             ifp->mapToProt = FALSE;
+            ifp->mapToGen = FALSE;
+            ifp->mapToMrna = FALSE;
+            ifp->firstfeat = awp->firstfeat;
+            awp->firstfeat = FALSE;
           }
         }
 
@@ -11714,42 +14620,71 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
 )
 
 {
+  IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
   Asn2gbWorkPtr      awp;
   BioseqPtr          bsp;
+  SeqFeatPtr         cds;
+  SeqMgrFeatContext  cdscontext;
   SeqMgrDescContext  dcontext;
-  FeatureBlockPtr    fbp;
+  FeatBlockPtr       fbp;
   SeqLocPtr          firstslp;
+  GBQualPtr          gbq;
+  SeqFeatPtr         gene;
+  GeneRefPtr         grp;
+  Boolean            juststop = FALSE;
   IntCdsBlockPtr     icp;
   Int2               idx;
   IntFeatBlockPtr    ifp;
   Int4Ptr            ivals;
+  Int2               j;
   SeqAnnotPtr        lastsap;
   SeqFeatPtr         lastsfp;
   SeqLocPtr          lastslp;
   Int2               numivals;
+  Boolean            okay;
+  SeqEntryPtr        oldscope;
   BioseqPtr          parent;
+  Boolean            partial5;
+  Boolean            partial3;
+  ValNodePtr         ppr;
   PubdescPtr         pdp;
+  Boolean            pseudo = FALSE;
   SeqDescrPtr        sdp;
+  SeqEntryPtr        sep;
   SeqIdPtr           sip;
   SeqLocPtr          slp;
   Int4               start;
   Int4               stop;
+  ValNodePtr         vnp;
 
   if (sfp == NULL || fcontext == NULL) return FALSE;
   awp = (Asn2gbWorkPtr) fcontext->userdata;
   if (awp == NULL) return FALSE;
+  ajp = awp->ajp;
+  if (ajp == NULL) return FALSE;
+  asp = awp->asp;
+  if (asp == NULL) return FALSE;
+  bsp = asp->bsp;
+  if (bsp == NULL) return FALSE;
 
   if (fcontext->featdeftype == FEATDEF_PUB ||
       fcontext->featdeftype == FEATDEF_NON_STD_RESIDUE ||
       fcontext->featdeftype == FEATDEF_BIOSRC ||
-      fcontext->featdeftype == FEATDEF_HET ||
       fcontext->featdeftype == FEATDEF_RSITE ||
       fcontext->featdeftype == FEATDEF_SEQ) return TRUE;
 
+  if (ajp->flags.validateFeats &&
+      (fcontext->featdeftype == FEATDEF_BAD ||
+       fcontext->featdeftype == FEATDEF_virion)) {
+    return TRUE;
+  }
+
+  if (ISA_na (bsp->mol) && fcontext->featdeftype == FEATDEF_HET) return TRUE;
+
   /* DDBJ does not want to show gene features */
 
-  if (fcontext->seqfeattype == SEQFEAT_GENE &&
-      (awp->format == DDBJ_FMT || awp->format == DDBJPEPT_FMT)) return TRUE;
+  if (fcontext->seqfeattype == SEQFEAT_GENE && awp->hideGeneFeats) return TRUE;
 
   /* suppress comment features that are full length */
 
@@ -11833,7 +14768,126 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
     }
   }
 
-  /* !!! if RELEASE_MODE, verify that features have all mandatory qualifiers !!! */
+  /* if RELEASE_MODE, verify that features have all mandatory qualifiers */
+
+  if (ajp->flags.needRequiredQuals) {
+    okay = FALSE;
+
+    switch (fcontext->featdeftype) {
+
+    case FEATDEF_CDS:
+      if (ajp->flags.checkCDSproductID) {
+        /* non-pseudo CDS must have /product */
+        if (sfp->pseudo) {
+          pseudo = TRUE;
+        }
+        grp = SeqMgrGetGeneXref (sfp);
+        if (grp == NULL) {
+          sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
+          oldscope = SeqEntrySetScope (sep);
+          gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
+          SeqEntrySetScope (oldscope);
+          if (gene != NULL) {
+            grp = (GeneRefPtr) gene->data.value.ptrvalue;
+            if (gene->pseudo) {
+              pseudo = TRUE;
+            }
+          }
+        }
+        if (grp != NULL && grp->pseudo) {
+          pseudo = TRUE;
+        }
+        if (sfp->location != NULL) {
+          if (CheckSeqLocForPartial (sfp->location, &partial5, &partial3)) {
+            if (partial5 && (! partial3)) {
+              if (SeqLocLen (sfp->location) <= 5) {
+                juststop = TRUE;
+              }
+            }
+          }
+        }
+        if (pseudo || juststop) {
+          okay = TRUE;
+        } else if (sfp->product != NULL) {
+          sip = SeqLocId (sfp->product);
+          if (sip != NULL && sip->choice == SEQID_GI && sip->data.intvalue > 0) {
+            okay = TRUE;
+          }
+        }
+      } else {
+        okay = TRUE;
+      }
+      break;
+
+    case FEATDEF_conflict:
+      /* conflict requires a publication printable on the segment */
+      vnp = sfp->cit;
+
+      if (vnp != NULL && asp->referenceArray != NULL) {
+        for (ppr = vnp->data.ptrvalue; ppr != NULL; ppr = ppr->next) {
+          j = MatchRef (ppr, asp->referenceArray, asp->numReferences);
+          if (j > 0) {
+            okay = TRUE;
+            break;
+          }
+        }
+      }
+      break;
+
+    case FEATDEF_GENE:
+      /* gene requires /gene */
+      grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+      if (grp != NULL) {
+        if (! StringHasNoText (grp->locus)) {
+          okay = TRUE;
+        } else if (! StringHasNoText (grp->desc)) {
+          okay = TRUE;
+        } else {
+          vnp = grp->syn;
+          if (vnp != NULL) {
+            if (! StringHasNoText (vnp->data.ptrvalue)) {
+              okay = TRUE;
+            }
+          }
+        }
+      }
+      break;
+
+    case FEATDEF_protein_bind:
+    case FEATDEF_misc_binding:
+      /* protein_bind or misc_binding require FTQUAL_bound_moiety */
+      gbq = sfp->qual;
+      while (gbq != NULL) {
+        if (StringICmp (gbq->qual, "bound_moiety") == 0 && (! StringHasNoText (gbq->val))) {
+          okay = TRUE;
+          break;
+        }
+        gbq = gbq->next;
+      }
+      break;
+
+    case FEATDEF_modified_base:
+      /* modified_base requires FTQUAL_mod_base */
+      gbq = sfp->qual;
+      while (gbq != NULL) {
+        if (StringICmp (gbq->qual, "mod_base") == 0 && (! StringHasNoText (gbq->val))) {
+          okay = TRUE;
+          break;
+        }
+        gbq = gbq->next;
+      }
+      break;
+
+    default:
+      if (fcontext->featdeftype >= FEATDEF_GENE && fcontext->featdeftype < FEATDEF_MAX) {
+        okay = TRUE;
+      }
+      break;
+    }
+
+    if (okay == FALSE) return TRUE;
+
+  }
 
   awp->lastsfp = sfp;
   awp->lastsap = fcontext->sap;
@@ -11841,9 +14895,9 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   awp->lastright = fcontext->right;
 
   if (fcontext->seqfeattype == SEQFEAT_CDREGION) {
-    fbp = (FeatureBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
+    fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
   } else {
-    fbp = (FeatureBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntFeatBlock));
+    fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntFeatBlock));
   }
   if (fbp == NULL) return TRUE;
 
@@ -11854,6 +14908,38 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   ifp = (IntFeatBlockPtr) fbp;
   ifp->mapToNuc = FALSE;
   ifp->mapToProt = FALSE;
+  ifp->mapToGen = FALSE;
+  ifp->mapToMrna = FALSE;
+  ifp->firstfeat = awp->firstfeat;
+  awp->firstfeat = FALSE;
+
+  /* optionally map CDS from cDNA onto genomic */
+
+  if (awp->isGPS && ISA_na (bsp->mol) && awp->copyGpsCdsUp &&
+      fcontext->featdeftype == FEATDEF_mRNA) {
+    sip = SeqLocId (sfp->product);
+    bsp = BioseqFind (sip);
+    if (bsp != NULL && ISA_na (bsp->mol)) {
+      cds = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &cdscontext);
+      if (cds != NULL) {
+        fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
+        if (fbp != NULL) {
+
+          fbp->entityID = cdscontext.entityID;
+          fbp->itemID = cdscontext.itemID;
+          fbp->itemtype = OBJ_SEQFEAT;
+          fbp->featdeftype = cdscontext.featdeftype;
+          ifp = (IntFeatBlockPtr) fbp;
+          ifp->mapToNuc = FALSE;
+          ifp->mapToProt = FALSE;
+          ifp->mapToGen = TRUE;
+          ifp->mapToMrna = FALSE;
+          ifp->firstfeat = awp->firstfeat;
+          awp->firstfeat = FALSE;
+        }
+      }
+    }
+  }
 
   if (fcontext->seqfeattype != SEQFEAT_CDREGION) return TRUE;
 
@@ -11969,7 +15055,16 @@ static void AddFeatureBlock (
 )
 
 {
-  BioseqPtr  bsp;
+  BioseqPtr          bsp;
+  SeqFeatPtr         cds;
+  SeqMgrDescContext  dcontext;
+  SeqMgrFeatContext  fcontext;
+  FeatBlockPtr       fbp;
+  SeqFeatPtr         gene;
+  IntFeatBlockPtr    ifp;
+  MolInfoPtr         mip;
+  SeqFeatPtr         mrna;
+  SeqDescrPtr        sdp;
 
   if (awp == NULL) return;
   bsp = awp->parent;
@@ -11980,7 +15075,66 @@ static void AddFeatureBlock (
   awp->lastleft = 0;
   awp->lastright = 0;
 
+  /* optionally map gene from genomic onto cDNA */
+
+  if (awp->isGPS && ISA_na (bsp->mol) && awp->copyGpsGeneDown) {
+    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+    if (sdp != NULL && sdp->choice == Seq_descr_molinfo) {
+      mip = (MolInfoPtr) sdp->data.ptrvalue;
+      if (mip != NULL) {
+        if (mip->biomol == MOLECULE_TYPE_MRNA) {
+          mrna = SeqMgrGetRNAgivenProduct (bsp, NULL);
+          if (mrna != NULL) {
+            gene = SeqMgrGetOverlappingGene (mrna->location, &fcontext);
+            if (gene != NULL && gene->data.choice == SEQFEAT_GENE) {
+
+              fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
+              if (fbp != NULL) {
+
+                fbp->entityID = fcontext.entityID;
+                fbp->itemID = fcontext.itemID;
+                fbp->itemtype = OBJ_SEQFEAT;
+                fbp->featdeftype = fcontext.featdeftype;
+                ifp = (IntFeatBlockPtr) fbp;
+                ifp->mapToNuc = FALSE;
+                ifp->mapToProt = FALSE;
+                ifp->mapToGen = FALSE;
+                ifp->mapToMrna = TRUE;
+                ifp->isCDS = TRUE;
+                ifp->firstfeat = awp->firstfeat;
+                awp->firstfeat = FALSE;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   SeqMgrExploreFeatures (bsp, (Pointer) awp, GetFeatsOnBioseq, awp->slp, NULL, NULL);
+
+  if (awp->format == GENPEPT_FMT && ISA_aa (bsp->mol)) {
+    cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
+    if (cds != NULL && cds->data.choice == SEQFEAT_CDREGION) {
+
+      fbp = (FeatBlockPtr) Asn2gbAddBlock (awp, FEATURE_BLOCK, sizeof (IntCdsBlock));
+      if (fbp != NULL) {
+
+        fbp->entityID = fcontext.entityID;
+        fbp->itemID = fcontext.itemID;
+        fbp->itemtype = OBJ_SEQFEAT;
+        fbp->featdeftype = fcontext.featdeftype;
+        ifp = (IntFeatBlockPtr) fbp;
+        ifp->mapToNuc = FALSE;
+        ifp->mapToProt = TRUE;
+        ifp->mapToGen = FALSE;
+        ifp->mapToMrna = FALSE;
+        ifp->isCDS = TRUE;
+        ifp->firstfeat = awp->firstfeat;
+        awp->firstfeat = FALSE;
+      }
+    }
+  }
 
   if (bsp->repr == Seq_repr_seg) {
 
@@ -12042,9 +15196,18 @@ static void AddOriginBlock (
     ff_StartPrint (0, 12, ASN2FF_GB_MAX, NULL);
 
     ff_AddString ("ORIGIN");
-    TabToColumn (13);
+
+#ifndef WIN_MAC
+      /* !!! To eliminate spurious diffs when comparing with Sequin exported GenBank format on Mac !!! */
+
+      TabToColumn (13);
+#endif
 
     if (! StringHasNoText (buf)) {
+#ifdef WIN_MAC
+      TabToColumn (13);
+#endif
+
       gb_AddString (NULL, buf, NULL, TRUE, FALSE, TILDE_TO_SPACES);
     }
   }
@@ -12059,11 +15222,11 @@ static void AddSequenceBlock (
 )
 
 {
-  BioseqPtr         bsp;
-  Int4              len;
-  SequenceBlockPtr  sbp;
-  Int4              start;
-  Int4              stop;
+  BioseqPtr    bsp;
+  Int4         len;
+  SeqBlockPtr  sbp;
+  Int4         start;
+  Int4         stop;
 
   if (awp == NULL) return;
   bsp = awp->bsp;
@@ -12078,7 +15241,7 @@ static void AddSequenceBlock (
   /* populate individual sequence blocks for given range */
 
   for (start = 0; start < len; start += BASES_PER_BLOCK) {
-    sbp = (SequenceBlockPtr) Asn2gbAddBlock (awp, SEQUENCE_BLOCK, sizeof (SequenceBlock));
+    sbp = (SeqBlockPtr) Asn2gbAddBlock (awp, SEQUENCE_BLOCK, sizeof (SeqBlock));
     if (sbp == NULL) continue;
 
     sbp->entityID = bsp->idx.entityID;
@@ -12119,7 +15282,7 @@ static void AddSlashBlock (
   bbp = Asn2gbAddBlock (awp, SLASH_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
-  gb_StartPrint (awp->format, TRUE, 0, 0, NULL, 0, 0, 0, NULL, FALSE);
+  gb_StartPrint (awp->format, 0, 0, NULL, 0, 0, 0, NULL, FALSE);
 
   gb_AddString (NULL, "//", NULL, FALSE, FALSE, TILDE_IGNORE);
 
@@ -12133,9 +15296,7 @@ static void AddSlashBlock (
 /*                                                        */
 /*--------------------------------------------------------*/
 
-static Boolean s_LocusGetBaseName (BioseqPtr parent,
-				   BioseqPtr segment,
-				   CharPtr   baseName)
+static Boolean s_LocusGetBaseName (BioseqPtr parent, BioseqPtr segment, CharPtr baseName)
 {
   Char          parentName[SEQID_MAX_LEN];
   Char          segName[SEQID_MAX_LEN];
@@ -12149,13 +15310,16 @@ static Boolean s_LocusGetBaseName (BioseqPtr parent,
   Int2          segNameLen;
 
   /* Get the parent Sequence ID */
-  
+
   parentName [0] = '\0';
   sip = NULL;
   for (sip = parent->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_GENBANK ||
-	sip->choice == SEQID_EMBL ||
-	sip->choice == SEQID_DDBJ) break;
+        sip->choice == SEQID_EMBL ||
+        sip->choice == SEQID_DDBJ) break;
+    if (sip->choice == SEQID_TPG ||
+        sip->choice == SEQID_TPE ||
+        sip->choice == SEQID_TPD) break;
   }
 
   if (sip != NULL) {
@@ -12166,17 +15330,21 @@ static Boolean s_LocusGetBaseName (BioseqPtr parent,
   }
 
   if (StringHasNoText (parentName)) {
-    StringCpy (parentName, baseName);
+    StringNCpy_0 (parentName, baseName, sizeof (parentName));
   }
 
   /* Get segment id */
 
   segName [0] = '\0';
+  segNameLen = 0;
   sip = NULL;
   for (sip = segment->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_GENBANK ||
-	sip->choice == SEQID_EMBL ||
-	sip->choice == SEQID_DDBJ) break;
+        sip->choice == SEQID_EMBL ||
+        sip->choice == SEQID_DDBJ) break;
+    if (sip->choice == SEQID_TPG ||
+        sip->choice == SEQID_TPE ||
+        sip->choice == SEQID_TPD) break;
     }
 
   if (sip != NULL) {
@@ -12190,7 +15358,7 @@ static Boolean s_LocusGetBaseName (BioseqPtr parent,
   /* If there's no "SEG_" prefix, then */
   /* just use the parent ID.           */
 
-  StringNCpy(prefix,parentName,4);
+  StringNCpy_0 (prefix,parentName,sizeof (prefix));
   prefix[4] = '\0';
   if (StringCmp(prefix,"SEG_") != 0)
     {
@@ -12205,21 +15373,22 @@ static Boolean s_LocusGetBaseName (BioseqPtr parent,
 
   /* ... And calculate a base name */
 
-  if ((segName[segNameLen-1] == '1') &&
+  if (segNameLen > 0 &&
+      (segName[segNameLen-1] == '1') &&
       (StringLen(parentName) == segNameLen) &&
       (parentName[segNameLen-1] == segName[segNameLen-1]))
     {
       deleteChars = 1;
       for (i = segNameLen-2; i >= 0; i--)
-	if (parentName[i] == '0')
-	  deleteChars++;
-	else
-	  break;
+    if (parentName[i] == '0')
+      deleteChars++;
+    else
+      break;
       newLength = segNameLen - deleteChars;
-      StringNCpy(parentName,segName,newLength);
+      StringNCpy (parentName,segName,newLength); /* not StringNCpy_0 */
       parentName[newLength] = '\0';
     }
-  
+
   /* Return the base name in the basename parameter */
 
   StringCpy(baseName,parentName);
@@ -12238,25 +15407,38 @@ static void DoOneSection (
   Uint2 seg,
   Int4 from,
   Int4 to,
+  Boolean contig,
   Asn2gbWorkPtr awp
 )
 
 {
-  Asn2gbSectionPtr     asp;
+  IntAsn2gbJobPtr      ajp;
+  Asn2gbSectPtr        asp;
   SeqMgrBioseqContext  bcontext;
   BaseBlockPtr         PNTR blockArray;
+  Boolean              hasRefs;
   Int4                 i;
+  IntAsn2gbSectPtr     iasp;
   Int4                 numBlocks;
   Int4                 numsegs = 0;
+  SeqIdPtr             sip;
   ValNodePtr           vnp;
 
   if (target == NULL || parent == NULL || bsp == NULL || awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
 
-  if (seg == 0)
+  if (ajp->flags.suppressLocalID) {
+    sip = SeqIdSelect (bsp->id, fasta_order, NUM_SEQID);
+    if (sip == NULL || sip->choice == SEQID_LOCAL) return;
+  }
+
+  if (seg == 0) {
     awp->basename[0] = '\0';
-  else if (seg == 1)
+  } else if (seg == 1) {
     s_LocusGetBaseName (parent, bsp, awp->basename);
-    
+  }
+
   asp = Asn2gbAddSection (awp);
   if (asp == NULL) return;
 
@@ -12266,6 +15448,8 @@ static void DoOneSection (
 
   /* set working data fields */
 
+  awp->asp = asp;
+
   awp->target = target;
   awp->parent = parent;
   awp->bsp = bsp;
@@ -12274,6 +15458,9 @@ static void DoOneSection (
   awp->numsegs = numsegs;
   awp->from = from;
   awp->to = to;
+  awp->contig = contig;
+
+  awp->firstfeat = TRUE;
 
   /* initialize empty blockList for this section */
 
@@ -12290,7 +15477,8 @@ static void DoOneSection (
   asp->from = from;
   asp->to = to;
 
-  asp->spp = NULL;
+  iasp = (IntAsn2gbSectPtr) asp;
+  iasp->spp = NULL;
 
   asp->blockArray = NULL;
   asp->numBlocks = 0;
@@ -12311,12 +15499,13 @@ static void DoOneSection (
       AddDeflineBlock (awp);
       AddAccessionBlock (awp);
 
-      if (ISA_na (bsp->mol)) {
-        AddVersionBlock (awp);
+      if (ISA_aa (bsp->mol)) {
+        AddPidBlock (awp);
       }
 
+      AddVersionBlock (awp);
+
       if (ISA_aa (bsp->mol)) {
-        /* AddPidBlock (awp); */
         AddDbsourceBlock (awp);
       }
 
@@ -12330,7 +15519,7 @@ static void DoOneSection (
 
       if (ISA_aa (bsp->mol)) {
         /* AddPidBlock (awp); */
-        AddDbsourceBlock (awp);
+        /* AddDbsourceBlock (awp); */
       }
 
       AddDateBlock (awp);
@@ -12347,18 +15536,30 @@ static void DoOneSection (
     AddSourceBlock (awp);
     AddOrganismBlock (awp);
 
-    AddReferenceBlock (awp, asp);
+    /* !!! RELEASE_MODE should check return value of AddReferenceBlock !!! */
+
+    hasRefs = AddReferenceBlock (awp);
+    if (! hasRefs) {
+      if (ajp->flags.needAtLeastOneRef) {
+        awp->failed = TRUE;
+      }
+    }
     AddCommentBlock (awp);
 
     AddFeatHeaderBlock (awp);
     AddSourceFeatBlock (awp);
 
-    if (awp->style == CONTIG_STYLE) {
+    if (contig) {
+      if (awp->showconfeats) {
+        AddFeatureBlock (awp);
+      }
       AddContigBlock (awp);
     } else {
       AddFeatureBlock (awp);
 
-      AddBasecountBlock (awp);
+      if (ISA_na (bsp->mol)) {
+        AddBasecountBlock (awp);
+      }
       AddOriginBlock (awp);
 
       AddSequenceBlock (awp);
@@ -12452,7 +15653,7 @@ static Boolean LIBCALLBACK Asn2Seg (
     to = bsp->length - 1;
   }
 
-  DoOneSection (bsp, parent, bsp, /* slp */ NULL, context->index, from, to, awp);
+  DoOneSection (bsp, parent, bsp, /* slp */ NULL, context->index, from, to, FALSE, awp);
 
   BioseqUnlock (bsp);
 
@@ -12461,25 +15662,62 @@ static Boolean LIBCALLBACK Asn2Seg (
 
 static void DoOneBioseq (
   BioseqPtr bsp,
-  Asn2gbWorkPtr awp
+  Pointer userdata
 )
 
 {
-  Asn2gbJobPtr          ajp;
+  IntAsn2gbJobPtr       ajp;
+  Asn2gbWorkPtr         awp;
   SeqMgrSegmentContext  context;
+  Boolean               contig = FALSE;
   Int4                  from;
   BioseqPtr             parent;
+  Boolean               segmented = FALSE;
   Int4                  to;
 
-  if (bsp == NULL || awp == NULL) return;
+  if (bsp == NULL) return;
+  awp = (Asn2gbWorkPtr) userdata;
+  if (awp == NULL) return;
   ajp = awp->ajp;
   if (ajp == NULL) return;
+
+  /* return if molecule not right for format */
+
+  if (ISA_na (bsp->mol)) {
+    if (ajp->format == GENPEPT_FMT || ajp->format == EMBLPEPT_FMT) return;
+  } else if (ISA_aa (bsp->mol)) {
+    if (ajp->format == GENBANK_FMT || ajp->format == EMBL_FMT) return;
+  }
+
+  if (awp->style == SEGMENTED_STYLE) {
+    segmented = TRUE;
+  }
+  if (awp->style == CONTIG_STYLE) {
+    contig = TRUE;
+  }
+  if (bsp->repr == Seq_repr_seg && awp->style == NORMAL_STYLE) {
+
+    /* if bsp followed by parts set, then do not default to contig style */
+
+    if (SegHasParts (bsp)) {
+      segmented = TRUE;
+      contig = FALSE;
+    } else {
+      segmented = FALSE;
+      contig = TRUE;
+    }
+  }
+  if (bsp->repr == Seq_repr_delta && awp->style == NORMAL_STYLE) {
+    if (! DeltaLitOnly (bsp)) {
+      contig = TRUE;
+    }
+  }
 
   if (bsp->repr == Seq_repr_seg) {
 
     /* this is a segmented bioseq */
 
-    if (awp->style == NORMAL_STYLE) {
+    if (segmented) {
 
       /* show all segments individually */
 
@@ -12493,7 +15731,7 @@ static void DoOneBioseq (
       from = 0;
       to = bsp->length - 1;
 
-      DoOneSection (parent, parent, bsp, ajp->slp, 0, from, to, awp);
+      DoOneSection (parent, parent, bsp, ajp->ajp.slp, 0, from, to, contig, awp);
     }
 
   } else if (bsp->repr == Seq_repr_raw ||
@@ -12518,17 +15756,55 @@ static void DoOneBioseq (
       to = bsp->length - 1;
     }
 
-    DoOneSection (parent, parent, bsp, ajp->slp, 0, from, to, awp);
+    DoOneSection (parent, parent, bsp, ajp->ajp.slp, 0, from, to, contig, awp);
   }
 }
 
-static void DoPopPhyMutSet (
+static void DoBioseqSetList (
+  SeqEntryPtr seq_set,
+  Asn2gbWorkPtr awp
+)
+
+{
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   sep;
+
+  if (seq_set == NULL || awp == NULL) return;
+
+  /* iterate rather than recurse unless multiple nested sets > nuc-prot */
+
+  for (sep = seq_set; sep != NULL; sep = sep->next) {
+
+    if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp == NULL) continue;
+
+      if (bssp->_class == BioseqseqSet_class_genbank ||
+          bssp->_class == BioseqseqSet_class_mut_set ||
+          bssp->_class == BioseqseqSet_class_pop_set ||
+          bssp->_class == BioseqseqSet_class_phy_set ||
+          bssp->_class == BioseqseqSet_class_eco_set ||
+          bssp->_class == BioseqseqSet_class_gen_prod_set) {
+
+        /* if popset within genbank set, for example, recurse */
+
+        DoBioseqSetList (bssp->seq_set, awp);
+        return;
+      }
+    }
+
+    /* at most nuc-prot set, so do main bioseqs that fit the format */
+
+    VisitSequencesInSep (sep, (Pointer) awp, VISIT_MAINS, DoOneBioseq);
+  }
+}
+
+static void DoOneBioseqSet (
   SeqEntryPtr sep,
   Asn2gbWorkPtr awp
 )
 
 {
-  BioseqPtr     bsp;
   BioseqSetPtr  bssp;
 
   if (sep == NULL || awp == NULL) return;
@@ -12537,31 +15813,24 @@ static void DoPopPhyMutSet (
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
 
-    /* now also handles upcoming eco-set and gen-prod-set */
-
-    if (bssp->_class == 7 ||
-        bssp->_class == 13 ||
-        bssp->_class == 14 ||
-        bssp->_class == 15 ||
-        bssp->_class == 16 ||
+    if (bssp->_class == BioseqseqSet_class_genbank ||
+        bssp->_class == BioseqseqSet_class_mut_set ||
+        bssp->_class == BioseqseqSet_class_pop_set ||
+        bssp->_class == BioseqseqSet_class_phy_set ||
+        bssp->_class == BioseqseqSet_class_eco_set ||
         bssp->_class == BioseqseqSet_class_gen_prod_set) {
 
       /* this is a pop/phy/mut/eco set, catenate separate reports */
 
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        DoPopPhyMutSet (sep, awp);
-      }
+      DoBioseqSetList (bssp->seq_set, awp);
+
       return;
     }
   }
 
-  /* at most nuc-prot set, so get first bioseq */
+  /* at most nuc-prot set, so do main bioseqs that fit the format */
 
-  sep = FindNthBioseq (sep, 1);
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    DoOneBioseq (bsp, awp);
-  }
+  VisitSequencesInSep (sep, (Pointer) awp, VISIT_MAINS, DoOneBioseq);
 }
 
 /* ********************************************************************** */
@@ -12596,49 +15865,135 @@ static int LIBCALLBACK SortParagraphByIDProc (
   return 0;
 }
 
+typedef struct modeflags {
+  Boolean  flags [19];
+} ModeFlags, PNTR ModeFlagsPtr;
+
+static ModeFlags flagTable [] = {
+
+  /* RELEASE_MODE */
+  {TRUE, TRUE, TRUE, TRUE, TRUE,
+   TRUE, TRUE, TRUE, TRUE, TRUE,
+   TRUE, TRUE, TRUE, TRUE, TRUE,
+   TRUE, TRUE, TRUE, TRUE},
+
+  /* ENTREZ_MODE */
+  {FALSE, TRUE, TRUE, TRUE, TRUE,
+   TRUE, TRUE, TRUE, TRUE, TRUE,
+   TRUE, TRUE, TRUE, TRUE, TRUE,
+   TRUE, TRUE, FALSE, FALSE},
+
+  /* SEQUIN_MODE */
+  {FALSE, FALSE, FALSE, FALSE, FALSE,
+   FALSE, FALSE, TRUE, FALSE, FALSE,
+   FALSE, FALSE, FALSE, FALSE, FALSE,
+   FALSE, FALSE, FALSE, FALSE},
+
+  /* DUMP_MODE */
+  {FALSE, FALSE, FALSE, FALSE, FALSE,
+   FALSE, FALSE, FALSE, FALSE, FALSE,
+   FALSE, FALSE, FALSE, FALSE, FALSE,
+   FALSE, FALSE, FALSE, FALSE}
+};
+
+static void SetFlagsFromMode (
+  IntAsn2gbJobPtr  ajp,
+  ModType mode
+)
+
+{
+  BoolPtr       bp;
+  ModeFlagsPtr  mfp;
+
+  if (ajp == NULL) return;
+  if (! (mode >= RELEASE_MODE && mode <= DUMP_MODE)) {
+    mode = DUMP_MODE;
+  }
+  mfp = &(flagTable [(int) (mode - 1)]);
+  bp = &(mfp->flags [0]);
+
+  ajp->flags.suppressLocalID = *(bp++);
+  ajp->flags.validateFeats = *(bp++);
+  ajp->flags.ignorePatPubs = *(bp++);
+  ajp->flags.dropShortAA = *(bp++);
+  ajp->flags.avoidLocusColl = *(bp++);
+
+  ajp->flags.iupacaaOnly = *(bp++);
+  ajp->flags.dropBadCitGens = *(bp++);
+  ajp->flags.noAffilOnUnpub = *(bp++);
+  ajp->flags.dropIllegalQuals = *(bp++);
+  ajp->flags.checkQualSyntax = *(bp++);
+
+  ajp->flags.needRequiredQuals = *(bp++);
+  ajp->flags.needOrganismQual = *(bp++);
+  ajp->flags.needAtLeastOneRef = *(bp++);
+  ajp->flags.citArtIsoJta = *(bp++);
+  ajp->flags.dropBadDbxref = *(bp++);
+
+  ajp->flags.useEmblMolType = *(bp++);
+  ajp->flags.hideBankItComment = *(bp++);
+  ajp->flags.checkCDSproductID = *(bp++);
+  ajp->flags.forGbRelease = *(bp++);
+}
+
 NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   BioseqPtr bsp,
   BioseqSetPtr bssp,
   SeqLocPtr slp,
   FmtType format,
   ModType mode,
-  StlType style
+  StlType style,
+  FlgType flags
 )
 
 {
-  Asn2gbJobPtr      ajp = NULL;
-  Asn2gbSectionPtr  asp;
-  Asn2gbWork        aw;
-  BaseBlockPtr      bbp;
-  BaseBlockPtr      PNTR blockArray;
-  Uint2             entityID = 0;
-  Int4              i;
-  Int4              j;
-  Int4              k;
-  Int4              numBlocks;
-  Int4              numSections;
-  ObjMgrDataPtr     omdp;
-  BaseBlockPtr      PNTR paragraphArray;
-  BaseBlockPtr      PNTR paragraphByIDs;
-  Int4              numParagraphs;
-  Asn2gbSectionPtr  PNTR sectionArray;
-  SubmitBlockPtr    sbp;
-  SeqEntryPtr       sep;
-  SeqSubmitPtr      ssp;
-  ValNodePtr        vnp;
+  IntAsn2gbJobPtr  ajp = NULL;
+  Asn2gbSectPtr    asp;
+  Asn2gbWork       aw;
+  BaseBlockPtr     bbp;
+  BaseBlockPtr     PNTR blockArray;
+  Uint2            entityID = 0;
+  Int4             i;
+  Int4             j;
+  Int4             k;
+  Boolean          lockFarComp;
+  Boolean          lockFarLocs;
+  Boolean          lockFarProd;
+  Int4             numBlocks;
+  Int4             numSections;
+  ObjMgrDataPtr    omdp;
+  BaseBlockPtr     PNTR paragraphArray;
+  BaseBlockPtr     PNTR paragraphByIDs;
+  Int4             numParagraphs;
+  Asn2gbSectPtr    PNTR sectionArray;
+  SubmitBlockPtr   sbp;
+  SeqEntryPtr      sep;
+  SeqIntPtr        sintp;
+  SeqSubmitPtr     ssp;
+  BioseqSetPtr     topbssp;
+  ValNodePtr       vnp;
 
-  if (bssp != NULL) {
-
-    entityID = ObjMgrGetEntityIDForPointer (bssp);
-
-  } else {
-
-    if (bsp == NULL && slp != NULL) {
-      bsp = BioseqFindFromSeqLoc (slp);
-    }
+  if (slp != NULL) {
+    bsp = BioseqFindFromSeqLoc (slp);
     if (bsp == NULL) return NULL;
 
+    /* if location is whole, generate normal bioseq report */
+
+    if (slp->choice == SEQLOC_WHOLE) {
+      slp = NULL;
+    } else if (slp->choice == SEQLOC_INT) {
+      sintp = (SeqIntPtr) slp->data.ptrvalue;
+      if (sintp != NULL && sintp->from == 0 && sintp->to == bsp->length - 1) {
+        slp = NULL;
+      }
+    }
+  }
+
+  if (bsp != NULL) {
+    bssp = NULL;
     entityID = ObjMgrGetEntityIDForPointer (bsp);
+  } else if (bssp != NULL) {
+    entityID = ObjMgrGetEntityIDForPointer (bssp);
   }
 
   if (entityID == 0) return NULL;
@@ -12647,32 +16002,47 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
     SeqMgrIndexFeatures (entityID, NULL);
   }
 
-  ajp = (Asn2gbJobPtr) MemNew (sizeof (Asn2gbJob));
+  ajp = (IntAsn2gbJobPtr) MemNew (sizeof (IntAsn2gbJob));
   if (ajp == NULL) return NULL;
+
+  init_buff ();
 
   asn2ff_set_output (NULL, "\n");
 
-  ajp->entityID = entityID;
-  ajp->bsp = bsp;
-  ajp->bssp = bssp;
+  ajp->ajp.entityID = entityID;
+  ajp->ajp.bsp = bsp;
+  ajp->ajp.bssp = bssp;
   if (slp != NULL) {
-    ajp->slp = AsnIoMemCopy ((Pointer) slp,
-                             (AsnReadFunc) SeqLocAsnRead,
-                             (AsnWriteFunc) SeqLocAsnWrite);
-  /*
-  } else if (bsp != NULL) {
-    sep = SeqMgrGetSeqEntryForData (bsp);
-    ajp->slp = CreateWholeInterval (sep);
-  */
+    ajp->ajp.slp = AsnIoMemCopy ((Pointer) slp,
+                                 (AsnReadFunc) SeqLocAsnRead,
+                                 (AsnWriteFunc) SeqLocAsnWrite);
   } else {
-    ajp->slp = NULL;
+    ajp->ajp.slp = NULL;
   }
 
   ajp->format = format;
-  ajp->mode = mode;
-  ajp->style = style;
 
-  ajp->keepSeqPortOpen = FALSE;
+  SetFlagsFromMode (ajp, mode);
+
+  ajp->showFarTransl = (Boolean) ((flags & SHOW_FAR_TRANSLATION) != 0);
+  ajp->transientSeqPort = (Boolean) ((flags & FREE_SEQPORT_EACH_TIME) != 0);
+
+  ajp->masterStyle = (Boolean) (style == MASTER_STYLE);
+  if (format == GENBANK_FMT || format == GENPEPT_FMT) {
+    ajp->newSourceOrg = (Boolean) ((flags & USE_NEW_SOURCE_ORG) != 0);
+  }
+
+  lockFarComp = (Boolean) ((flags & LOCK_FAR_COMPONENTS) != 0);
+  lockFarLocs = (Boolean) ((flags & LOCK_FAR_LOCATIONS) != 0);
+  lockFarProd = (Boolean) ((flags & LOCK_FAR_PRODUCTS) != 0);
+
+  if (lockFarComp || lockFarLocs || lockFarProd) {
+
+    /* lock all bioseqs in advance, including remote genome components */
+
+    sep = GetTopSeqEntryForEntityID (entityID);
+    ajp->lockedBspList = LockFarComponentsEx (sep, lockFarComp, lockFarLocs, lockFarProd);
+  }
 
   MemSet ((Pointer) (&aw), 0, sizeof (Asn2gbWork));
   aw.ajp = ajp;
@@ -12682,13 +16052,35 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   aw.lastsection = NULL;
 
   aw.currsection = 0;
+  aw.showconfeats = (Boolean) ((flags & SHOW_CONTIG_FEATURES) != 0);
+  aw.showconsource = (Boolean) ((flags & SHOW_CONTIG_SOURCES) != 0);
+
+  aw.newLocusLine = (Boolean) ((flags & USE_OLD_LOCUS_LINE) == 0);
+
+  aw.isGPS = FALSE;
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep != NULL && IS_Bioseq_set (sep)) {
+    topbssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (topbssp != NULL && topbssp->_class == BioseqseqSet_class_gen_prod_set) {
+      aw.isGPS = TRUE;
+      aw.copyGpsCdsUp = (Boolean) ((flags & COPY_GPS_CDS_UP) != 0);
+      aw.copyGpsGeneDown = (Boolean) ((flags & COPY_GPS_GENE_DOWN) != 0);
+    }
+  }
+
+  if ((Boolean) (flags & DDJB_VARIANT_FORMAT) != 0) {
+    aw.citSubsFirst = TRUE;
+    aw.hideGeneFeats = TRUE;
+    ajp->newSourceOrg = FALSE;
+  }
 
   aw.format = format;
-  aw.mode = mode;
   aw.style = style;
 
   aw.hup = FALSE;
   aw.ssp = NULL;
+
+  aw.failed = FALSE;
 
   omdp = ObjMgrGetData (entityID);
   if (omdp != NULL && omdp->datatype == OBJ_SEQSUB) {
@@ -12707,7 +16099,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
     /* handle all components of a pop/phy/mut/eco set */
 
     sep = SeqMgrGetSeqEntryForData (bssp);
-    DoPopPhyMutSet (sep, &aw);
+    DoOneBioseqSet (sep, &aw);
 
   } else {
 
@@ -12718,23 +16110,25 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
 
   /* check for failure to populate anything */
 
-  numSections = ValNodeLen (aw.sectionList);
-  ajp->numSections = numSections;
+  if (ajp->flags.needAtLeastOneRef && aw.failed) return asn2gnbk_cleanup ((Asn2gbJobPtr) ajp);
 
-  if (numSections == 0) return ajp;
+  numSections = ValNodeLen (aw.sectionList);
+  ajp->ajp.numSections = numSections;
+
+  if (numSections == 0) return asn2gnbk_cleanup ((Asn2gbJobPtr) ajp);
 
   /* allocate section array for this job */
 
-  sectionArray = (Asn2gbSectionPtr PNTR) MemNew (sizeof (Asn2gbSectionPtr) * (numSections + 1));
-  ajp->sectionArray = sectionArray;
+  sectionArray = (Asn2gbSectPtr PNTR) MemNew (sizeof (Asn2gbSectPtr) * (numSections + 1));
+  ajp->ajp.sectionArray = sectionArray;
 
-  if (sectionArray == NULL) return ajp;
+  if (sectionArray == NULL) return asn2gnbk_cleanup ((Asn2gbJobPtr) ajp);
 
   /* fill in section and paragraph arrays */
 
   numParagraphs = 0;
   for (vnp = aw.sectionList, i = 0; vnp != NULL && i < numSections; vnp = vnp->next, i++) {
-    asp = (Asn2gbSectionPtr) vnp->data.ptrvalue;
+    asp = (Asn2gbSectPtr) vnp->data.ptrvalue;
     sectionArray [i] = asp;
     if (asp != NULL) {
       numParagraphs += asp->numBlocks;
@@ -12743,16 +16137,16 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
 
   /* allocate paragraph array pointing to all blocks in all sections */
 
-  ajp->numParagraphs = numParagraphs;
-  if (numParagraphs == 0) return ajp;
+  ajp->ajp.numParagraphs = numParagraphs;
+  if (numParagraphs == 0) return asn2gnbk_cleanup ((Asn2gbJobPtr) ajp);
 
   paragraphArray = (BaseBlockPtr PNTR) MemNew (sizeof (BaseBlockPtr) * (numParagraphs + 1));
-  ajp->paragraphArray = paragraphArray;
+  ajp->ajp.paragraphArray = paragraphArray;
 
   paragraphByIDs = (BaseBlockPtr PNTR) MemNew (sizeof (BaseBlockPtr) * (numParagraphs + 1));
-  ajp->paragraphByIDs = paragraphByIDs;
+  ajp->ajp.paragraphByIDs = paragraphByIDs;
 
-  if (paragraphArray == NULL || paragraphByIDs == NULL) return ajp;
+  if (paragraphArray == NULL || paragraphByIDs == NULL) return asn2gnbk_cleanup ((Asn2gbJobPtr) ajp);
 
   k = 0;
   for (i = 0; i < numSections; i++) {
@@ -12783,7 +16177,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
 
   ValNodeFree (aw.sectionList);
 
-  return ajp;
+  return (Asn2gbJobPtr) ajp;
 }
 
 typedef CharPtr (*FormatProc) (Asn2gbFormatPtr afp, BaseBlockPtr bbp);
@@ -12833,6 +16227,7 @@ static void PrintFtableIntervals (
 }
 
 static void PrintFtableLocAndQuals (
+  IntAsn2gbJobPtr ajp,
   ValNodePtr PNTR head,
   BioseqPtr target,
   SeqFeatPtr sfp,
@@ -12925,9 +16320,18 @@ static void PrintFtableLocAndQuals (
         for (sip = prod->id; sip != NULL; sip = sip->next) {
           if (sip->choice == SEQID_GENBANK ||
               sip->choice == SEQID_EMBL ||
-              sip->choice == SEQID_DDBJ) {
+              sip->choice == SEQID_DDBJ ||
+              sip->choice == SEQID_OTHER ||
+              sip->choice == SEQID_TPG ||
+              sip->choice == SEQID_TPE ||
+              sip->choice == SEQID_TPD) {
             if (SeqIdWrite (sip, str, PRINTID_TEXTID_ACC_VER, sizeof (str)) != NULL) {
               sprintf (tmp, "\t\t\tprotein_id\t%s\n", str);
+              ValNodeCopyStr (head, 0, tmp);
+            }
+          } else if (sip->choice == SEQID_LOCAL && (! ajp->flags.suppressLocalID)) {
+            if (SeqIdWrite (sip, str, PRINTID_TEXTID_ACC_VER, sizeof (str)) != NULL) {
+              sprintf (tmp, "\t\t\tprotein_id\tlcl|%s\n", str);
               ValNodeCopyStr (head, 0, tmp);
             }
           }
@@ -13000,12 +16404,13 @@ NLM_EXTERN CharPtr asn2gnbk_format (
 
 {
   Asn2gbFormat       af;
-  Asn2gbSectionPtr   asp;
+  Asn2gbSectPtr      asp;
   BaseBlockPtr       bbp;
   BlockType          blocktype;
   SeqMgrFeatContext  fcontext;
   FormatProc         fmt;
   ValNodePtr         head;
+  IntAsn2gbJobPtr    iajp;
   Char               id [42];
   size_t             max;
   QualValPtr         qv;
@@ -13018,7 +16423,8 @@ NLM_EXTERN CharPtr asn2gnbk_format (
 
   /* qv must hold MAX (ASN2GNBK_TOTAL_SOURCE, ASN2GNBK_TOTAL_FEATUR) */
 
-  if (ajp == NULL || ajp->sectionArray == NULL || ajp->paragraphArray == NULL) return NULL;
+  iajp = (IntAsn2gbJobPtr) ajp;
+  if (iajp == NULL || ajp->sectionArray == NULL || ajp->paragraphArray == NULL) return NULL;
   if (paragraph < 0 || paragraph >= ajp->numParagraphs) return NULL;
 
   bbp = ajp->paragraphArray [paragraph];
@@ -13037,14 +16443,12 @@ NLM_EXTERN CharPtr asn2gnbk_format (
   qv = MemNew (sizeof (QualVal) * (max + 5));
   if (qv == NULL) return NULL;
 
-  af.ajp = ajp;
+  af.ajp = (IntAsn2gbJobPtr) ajp;
   af.asp = asp;
   af.qvp = qv;
-  af.format = ajp->format;
-  af.mode = ajp->mode;
-  af.style = ajp->style;
+  af.format = iajp->format;
 
-  if (ajp->format != FTABLE_FMT) {
+  if (iajp->format != FTABLE_FMT) {
     fmt = asn2gnbk_fmt_functions [(int) blocktype];
     if (fmt == NULL) return NULL;
     str = fmt (&af, bbp);
@@ -13067,7 +16471,7 @@ NLM_EXTERN CharPtr asn2gnbk_format (
         sfp = SeqMgrGetDesiredFeature (bbp->entityID, NULL, bbp->itemID, 0, NULL, &fcontext);
         if (sfp != NULL) {
           head = NULL;
-          PrintFtableLocAndQuals (&head, target, sfp, &fcontext);
+          PrintFtableLocAndQuals (af.ajp, &head, target, sfp, &fcontext);
           str = MergeValNodeStrings (head);
           ValNodeFreeData (head);
         }
@@ -13089,22 +16493,25 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
 )
 
 {
-  Asn2gbSectionPtr   asp;
-  BaseBlockPtr       bbp;
-  BaseBlockPtr       PNTR blockArray;
-  Int4               i;
-  IntCdsBlockPtr     icp;
-  IntFeatBlockPtr    ifp;
-  IntRefBlockPtr     irp;
-  Int4               j;
-  Int4               numBlocks;
-  Int4               numSections;
-  ReferenceBlockPtr  rrp;
-  Asn2gbSectionPtr   PNTR sectionArray;
+  Asn2gbSectPtr     asp;
+  BaseBlockPtr      bbp;
+  BaseBlockPtr      PNTR blockArray;
+  Int4              i;
+  IntAsn2gbJobPtr   iajp;
+  IntAsn2gbSectPtr  iasp;
+  IntCdsBlockPtr    icp;
+  IntFeatBlockPtr   ifp;
+  IntRefBlockPtr    irp;
+  Int4              j;
+  Int4              numBlocks;
+  Int4              numSections;
+  RefBlockPtr       rrp;
+  Asn2gbSectPtr     PNTR sectionArray;
 
-  if (ajp == NULL) return NULL;
+  iajp = (IntAsn2gbJobPtr) ajp;
+  if (iajp == NULL) return NULL;
 
-  SeqLocFree (ajp->slp);
+  SeqLocFree (iajp->ajp.slp);
 
   numSections = ajp->numSections;
   sectionArray = ajp->sectionArray;
@@ -13114,6 +16521,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
     for (i = 0; i < numSections; i++) {
       asp = sectionArray [i];
       if (asp != NULL) {
+        iasp = (IntAsn2gbSectPtr) asp;
 
         numBlocks = asp->numBlocks;
         blockArray = asp->blockArray;
@@ -13126,7 +16534,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
               MemFree (bbp->string);
 
               if (bbp->blocktype == REFERENCE_BLOCK) {
-                rrp = (ReferenceBlockPtr) bbp;
+                rrp = (RefBlockPtr) bbp;
                 MemFree (rrp->uniquestr);
                 irp = (IntRefBlockPtr) rrp;
                 DateFree (irp->date);
@@ -13151,7 +16559,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
         }
         MemFree (asp->blockArray);
         MemFree (asp->referenceArray);
-        SeqPortFree (asp->spp);
+        SeqPortFree (iasp->spp);
       }
     }
   }
@@ -13160,15 +16568,24 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
   MemFree (ajp->paragraphArray);
   MemFree (ajp->paragraphByIDs);
 
-  MemFree (ajp);
+  if (iajp->lockedBspList != NULL) {
+    UnlockFarComponents (iajp->lockedBspList);
+  }
+
+  free_buff ();
+
+  MemFree (iajp);
+
   return NULL;
 }
 
 NLM_EXTERN Boolean SeqEntryToGnbk (
   SeqEntryPtr sep,
+  SeqLocPtr slp,
   FmtType format,
   ModType mode,
   StlType style,
+  FlgType flags,
   FILE *fp
 )
 
@@ -13176,33 +16593,66 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
   Asn2gbJobPtr  ajp;
   BioseqPtr     bsp = NULL;
   BioseqSetPtr  bssp = NULL;
-  Uint2         entityID;
   Int4          i;
+  Boolean       is_html;
   Int4          numParagraphs;
   CharPtr       str;
+#ifdef WIN_MAC
+#if __profile__
   ValNodePtr    bsplist = NULL;
+  Uint2         entityID;
+  Boolean       lockFarComp;
+  Boolean       lockFarLocs;
+  Boolean       lockFarProd;
+#endif
+#endif
 
-  if (sep == NULL || fp == NULL) return FALSE;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (fp == NULL) return FALSE;
+  if (sep == NULL && slp == NULL) return FALSE;
+  if (sep != NULL) {
+    if (IS_Bioseq (sep)) {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+    } else if (IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    }
   }
 
-  entityID = ObjMgrGetEntityIDForPointer (sep->data.ptrvalue);
-  if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
-    SeqMgrIndexFeatures (entityID, NULL);
+#ifdef WIN_MAC
+#if __profile__
+  /* this allows profiling of just the formatter, without feature indexing, on the Mac */
+
+  if (sep != NULL) {
+    entityID = ObjMgrGetEntityIDForPointer (sep->data.ptrvalue);
+    if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+      SeqMgrIndexFeatures (entityID, NULL);
+    }
   }
 
-  /* lock all bioseqs in advance, including remote genome components */
+  lockFarComp = (Boolean) ((flags & LOCK_FAR_COMPONENTS) != 0);
+  lockFarLocs = (Boolean) ((flags & LOCK_FAR_LOCATIONS) != 0);
+  lockFarProd = (Boolean) ((flags & LOCK_FAR_PRODUCTS) != 0);
 
-  bsplist = LockFarComponents (sep);
+  if (lockFarComp || lockFarLocs || lockFarProd) {
+    flags = flags ^ (LOCK_FAR_COMPONENTS | LOCK_FAR_LOCATIONS | LOCK_FAR_PRODUCTS);
+    bsplist = LockFarComponentsEx (sep, lockFarComp, lockFarLocs, lockFarProd);
+  }
 
-  ajp = asn2gnbk_setup (bsp, bssp, NULL, format, mode, style);
+  ProfilerSetStatus (TRUE);
+#endif
+#endif
+
+  is_html = (Boolean) ((flags & CREATE_HTML_FLATFILE) != 0);
+  if (is_html) {
+    init_www ();
+  }
+
+  ajp = asn2gnbk_setup (bsp, bssp, slp, format, mode, style, flags);
 
   if (ajp != NULL) {
 
-    ajp->keepSeqPortOpen = TRUE;
+    if (is_html) {
+      head_www (fp, sep);
+    }
 
     numParagraphs = ajp->numParagraphs;
     for (i = 0; i < numParagraphs; i++) {
@@ -13216,870 +16666,44 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
     }
 
     asn2gnbk_cleanup (ajp);
+
+    if (is_html) {
+      tail_www (fp);
+    }
   }
 
-  /* unlock all pre-locked bioseqs, including remote genome components */
+  if (is_html) {
+    fini_www ();
+  }
 
-  bsplist = UnlockFarComponents (bsplist);
+#ifdef WIN_MAC
+#if __profile__
+  ProfilerSetStatus (FALSE);
+
+  UnlockFarComponents (bsplist);
+#endif
+#endif
 
   return TRUE;
 }
 
-
-/* ********************************************************************** */
-
-#define TEST_MODULE_ASN2GNBK
-
-#ifdef TEST_MODULE_ASN2GNBK
-
-NLM_EXTERN Boolean SeqEntryToFlat (
-  SeqEntryPtr sep,
-  FILE *fp,
-  Uint1 format,
-  Uint1 mode
-);
-
-extern void SeriousSeqEntryCleanup (
-  SeqEntryPtr sep,
-  SeqEntryFunc taxfun,
-  SeqEntryFunc taxmerge
-);
-
-/*
-static void SummarizeQuals (
-  void
-)
-
-{
-  FILE  *fp;
-  Int2  i;
-  Int2  j;
-  Int2  k;
-
-  fp = FileOpen ("QualSummary", "w");
-  if (fp == NULL) return;
-
-  for (i = 0; i < ParFlat_TOTAL_GBQUAL; i++) {
-    fprintf (fp, "%s\n", ParFlat_GBQual_names[i].name);
-    for (j = 0; j < ParFlat_TOTAL_GBFEAT; j++) {
-      for (k = 0; k < ParFlat_GBFeat [j].opt_num; k++) {
-        if (ParFlat_GBFeat [j].opt_qual [k] == i) {
-          fprintf (fp, "  opt %s\n", ParFlat_GBFeat [j].key);
-        }
-      }
-      for (k = 0; k < ParFlat_GBFeat [j].mand_num; k++) {
-        if (ParFlat_GBFeat [j].mand_qual [k] == i) {
-          fprintf (fp, "  mnd %s\n", ParFlat_GBFeat [j].key);
-        }
-      }
-    }
-    fprintf (fp, "\n");
-  }
-
-  FileClose (fp);
-}
-*/
-
-static Int2 HandleSingleRecord (
-  CharPtr inputFile,
-  CharPtr outputFile,
-  FmtType format,
-  ModType mode,
-  StlType style
-)
-
-{
-  BioseqPtr     bsp;
-  BioseqSetPtr  bssp;
-  Pointer       dataptr;
-  Uint2         datatype;
-  Uint2         entityID;
-  FILE          *fp;
-  SeqEntryPtr   sep;
-
-  fp = FileOpen (inputFile, "r");
-  if (fp == NULL) {
-    Message (MSG_FATAL, "FileOpen failed for input file '%s'", inputFile);
-    return 1;
-  }
-
-  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, FALSE, FALSE);
-
-  FileClose (fp);
-
-  entityID = ObjMgrRegister (datatype, dataptr);
-  if (datatype == OBJ_SEQSUB || datatype == OBJ_SEQENTRY ||
-        datatype == OBJ_BIOSEQ || datatype == OBJ_BIOSEQSET) {
-
-#ifdef WIN_MAC
-#if __profile__
-    ProfilerSetStatus (TRUE);
-#endif
-#endif
-    entityID = SeqMgrIndexFeatures (entityID, NULL);
-#ifdef WIN_MAC
-#if __profile__
-    ProfilerSetStatus (FALSE);
-#endif
-#endif
-
-    sep = GetTopSeqEntryForEntityID (entityID);
-
-    if (sep == NULL) {
-      sep = SeqEntryNew ();
-      if (sep != NULL) {
-        if (datatype == OBJ_BIOSEQ) {
-          bsp = (BioseqPtr) dataptr;
-          sep->choice = 1;
-          sep->data.ptrvalue = bsp;
-          SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
-        } else if (datatype == OBJ_BIOSEQSET) {
-          bssp = (BioseqSetPtr) dataptr;
-          sep->choice = 2;
-          sep->data.ptrvalue = bssp;
-          SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) bssp, sep);
-        } else {
-          sep = SeqEntryFree (sep);
-        }
-      }
-      sep = GetTopSeqEntryForEntityID (entityID);
-    }
-
-    if (sep != NULL) {
-      FileRemove (outputFile);
-#ifdef WIN_MAC
-      FileCreate (outputFile, "TEXT", "ttxt");
-#endif
-      fp = FileOpen (outputFile, "w");
-      SeqEntryToGnbk (sep, format, mode, style, fp);
-      FileClose (fp);
-    }
-  } else {
-    Message (MSG_FATAL, "Datatype %d not recognized", (int) datatype);
-  }
-  ObjMgrFree (datatype, dataptr);
-
-  return 0;
-}
-
-static void SaveSeqEntry (
-  SeqEntryPtr sep,
-  CharPtr filename
-)
-
-{
-  AsnIoPtr  aop;
-
-  if (sep == NULL) return;
-  aop = AsnIoOpen (filename, "w");
-  if (aop != NULL) {
-    SeqEntryAsnWrite (sep, aop, NULL);
-  }
-  AsnIoClose (aop);
-}
-
-static void SaveAsn2gnbk (
-  SeqEntryPtr sep,
-  CharPtr filename,
-  FmtType format,
-  ModType mode,
-  StlType style
-)
-
-{
-  FILE  *fp;
-
-  if (sep == NULL) return;
-  fp = FileOpen (filename, "w");
-  if (fp != NULL) {
-    SeqEntryToGnbk (sep, format, mode, style, fp);
-  }
-  FileClose (fp);
-}
-
-static void DoOneFlatComponent (
-  SeqEntryPtr sep,
-  Pointer userdata
-)
-
-{
-  FILE  *fp;
-
-  fp = (FILE*) userdata;
-  SeqEntryToFlat (sep, fp, 0, 8);
-}
-
-static void SaveAsn2ff (
-  SeqEntryPtr sep,
-  CharPtr filename
-)
-
-{
-  FILE  *fp;
-
-  if (sep == NULL) return;
-  fp = FileOpen (filename, "w");
-  if (fp != NULL) {
-    VisitElementsInSep (sep, (Pointer) fp, DoOneFlatComponent);
-  }
-  FileClose (fp);
-}
-
-typedef struct hasgidata {
-  Int4     gi;
-  CharPtr  accn;
-  Boolean  found;
-} HasGiData, PNTR HasGiPtr;
-
-static void LookForGi (
-  SeqEntryPtr sep,
-  Pointer mydata,
-  Int4 index,
-  Int2 indent
-)
-
-{
-  BioseqPtr     bsp;
-  HasGiPtr      hgp;
-  SeqIdPtr      sip;
-  TextSeqIdPtr  tsip;
-
-  if (sep == NULL) return;
-  if (! IS_Bioseq (sep)) return;
-  bsp = (BioseqPtr) sep->data.ptrvalue;
-  if (bsp == NULL) return;
-  hgp = (HasGiPtr) mydata;
-  if (hgp == NULL) return;
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    switch (sip->choice) {
-      case SEQID_GI :
-        if (sip->data.intvalue == hgp->gi) {
-          hgp->found = TRUE;
-          return;
-        }
-        break;
-      case SEQID_GENBANK :
-      case SEQID_EMBL :
-      case SEQID_PIR :
-      case SEQID_SWISSPROT :
-      case SEQID_OTHER :
-      case SEQID_DDBJ :
-      case SEQID_PRF :
-        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
-        if (tsip != NULL && hgp->accn!= NULL &&
-            StringICmp (tsip->accession, hgp->accn) == 0) {
-          hgp->found = TRUE;
-          return;
-        }
-        break;
-      default :
-        break;
-    }
-  }
-}
-
-static Boolean SeqEntryHasGi (
-  SeqEntryPtr sep,
-  Int4 gi,
-  CharPtr accn
-)
-
-{
-  HasGiData  hgd;
-
-  if (sep == NULL || (gi < 1 && StringHasNoText (accn))) return FALSE;
-  hgd.gi = gi;
-  hgd.accn = accn;
-  hgd.found = FALSE;
-  SeqEntryExplore (sep, (Pointer) (&hgd), LookForGi);
-  return hgd.found;
-}
-
-static void CompareFlatFiles (
-  CharPtr path1,
-  CharPtr path2,
-  CharPtr path3,
-  SeqEntryPtr sep,
-  FILE* fp,
+NLM_EXTERN Boolean BioseqToGnbk (
+  BioseqPtr bsp,
+  SeqLocPtr slp,
   FmtType format,
   ModType mode,
   StlType style,
-  Boolean batch,
-  Boolean diff,
-  Boolean gbdjoin
+  FlgType flags,
+  FILE *fp
 )
 
 {
-#ifdef OS_UNIX
-  Char    buf [256];
-  Char    cmmd [256];
-  size_t  ct;
-  FILE    *fpo;
+  SeqEntryPtr  sep = NULL;
 
-  if (batch) {
-
-    SeriousSeqEntryCleanup (sep, NULL, NULL);
-
-    SaveAsn2gnbk (sep, path2, format, mode, style);
-
-    SaveAsn2ff (sep, path1);
-
-  } else if (diff) {
-
-    SaveAsn2ff (sep, path1);
-
-    SeriousSeqEntryCleanup (sep, NULL, NULL);
-
-    SaveAsn2ff (sep, path2);
-
+  if (bsp == NULL && slp == NULL) return FALSE;
+  if (bsp != NULL) {
+    sep = SeqMgrGetSeqEntryForData (bsp);
   }
-
-  if (gbdjoin) {
-#ifdef PROC_I80X86
-    sprintf (cmmd, "gbdjoin -o %s -n %s -d reports", path1, path2);
-#else
-    sprintf (cmmd, "/netopt/genbank/subtool/bin/gbdjoin -o %s -n %s -d reports", path1, path2);
-#endif
-    system (cmmd);
-
-    sprintf (cmmd, "rm %s; rm %s", path1, path2);
-    system (cmmd);
-  } else {
-    sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path1, path1, path1);
-    system (cmmd);
-
-    sprintf (cmmd, "sort %s | uniq -c > %s.suc; rm %s", path2, path2, path2);
-    system (cmmd);
-
-    sprintf (cmmd, "diff %s.suc %s.suc > %s", path1, path2, path3);
-    system (cmmd);
-
-    sprintf (cmmd, "cat %s", path3);
-    fpo = popen (cmmd, "r");
-    if (fpo != NULL) {
-      while ((ct = fread (buf, 1, sizeof (buf), fpo)) > 0) {
-        fwrite (buf, 1, ct, fp);
-        fflush (stdout);
-      }
-      pclose (fpo);
-    }
-
-    sprintf (cmmd, "rm %s.suc; rm %s.suc; rm %s", path1, path2, path3);
-    system (cmmd);
-  }
-
-#else
-  SeqEntryToGnbk (sep, format, mode, style, fp);
-#endif
+  return SeqEntryToGnbk (sep, slp, format, mode, style, flags, fp);
 }
-
-static void CheckOrder (
-  SeqFeatPtr sfp,
-  Pointer userdata
-)
-
-{
-  BioseqPtr  bsp;
-#ifdef ASN2GNBK_IGNORE_OUT_OF_ORDER
-  BoolPtr    bp;
-#endif
-#ifdef ASN2GNBK_REPAIR_OUT_OF_ORDER
-  SeqLocPtr  gslp;
-  Boolean    hasNulls;
-  Boolean    noLeft;
-  Boolean    noRight;
-#endif
-
-  /* ignore order of bonds in heterogen features from PDB */
-
-  if (sfp->data.choice == SEQFEAT_HET) return;
-
-  bsp = BioseqFindFromSeqLoc (sfp->location);
-  if (bsp != NULL && SeqLocBadSortOrder (bsp, sfp->location)) {
-#ifdef ASN2GNBK_IGNORE_OUT_OF_ORDER
-    bp = (BoolPtr) userdata;
-    *bp = TRUE;
-#endif
-#ifdef ASN2GNBK_REPAIR_OUT_OF_ORDER
-    hasNulls = LocationHasNullsBetween (sfp->location);
-    gslp = SeqLocMerge (bsp, sfp->location, NULL, FALSE, FALSE, hasNulls);
-    if (gslp != NULL) {
-      CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
-      sfp->location = SeqLocFree (sfp->location);
-      sfp->location = gslp;
-      if (bsp->repr == Seq_repr_seg) {
-        gslp = SegLocToParts (bsp, sfp->location);
-        sfp->location = SeqLocFree (sfp->location);
-        sfp->location = gslp;
-      }
-      FreeAllFuzz (sfp->location);
-      SetSeqLocPartial (sfp->location, noLeft, noRight);
-    }
-#endif
-  }
-}
-
-static Int2 HandleMultipleRecords (
-  CharPtr inputFile,
-  CharPtr outputFile,
-  Boolean binary,
-  Boolean compressed,
-  FmtType format,
-  ModType mode,
-  StlType style,
-  Int4 gi,
-  CharPtr accn,
-  Boolean batch,
-  Boolean diff,
-  Boolean gbdjoin,
-  FILE *logfp
-)
-
-{
-  AsnIoPtr      aip;
-  AsnModulePtr  amp;
-  AsnTypePtr    atp, atp_bss, atp_se;
-  BioseqPtr     bsp;
-  Char          buf [41];
-  FILE          *fp;
-  SeqEntryPtr   fsep;
-  Boolean       hasgi;
-  Char          longest [41];
-  Int4          numrecords = 0;
-  FILE          *ofp;
-  Boolean       outOfOrder;
-  Char          path1 [PATH_MAX];
-  Char          path2 [PATH_MAX];
-  Char          path3 [PATH_MAX];
-  SeqEntryPtr   sep;
-  time_t        starttime, stoptime, worsttime;
-  Char          tmp [32];
-#ifdef OS_UNIX
-  Char          cmmd [256];
-  CharPtr       gzcatprog;
-  int           ret;
-  Boolean       usedPopen = FALSE;
-#endif
-
-  if (StringHasNoText (inputFile)) return 1;
-
-#ifndef OS_UNIX
-  if (compressed) {
-    Message (MSG_ERROR, "Can only decompress on-the-fly on UNIX machines");
-    return 1;
-  }
-#endif
-
-  amp = AsnAllModPtr ();
-  if (amp == NULL) {
-    Message (MSG_FATAL, "Unable to load AsnAllModPtr");
-    return 1;
-  }
-
-  atp_bss = AsnFind ("Bioseq-set");
-  if (atp_bss == NULL) {
-    Message (MSG_FATAL, "Unable to find ASN.1 type Bioseq-set");
-    return 1;
-  }
-
-  atp_se = AsnFind ("Bioseq-set.seq-set.E");
-  if (atp_se == NULL) {
-    Message (MSG_FATAL, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
-    return 1;
-  }
-
-#ifdef OS_UNIX
-  if (compressed) {
-    gzcatprog = getenv ("NCBI_UNCOMPRESS-BINARY");
-    if (gzcatprog != NULL) {
-      sprintf (cmmd, "%s %s", gzcatprog, inputFile);
-    } else {
-      ret = system ("gzcat -h >/dev/null 2>&1");
-      if (ret == 0) {
-        sprintf (cmmd, "gzcat %s", inputFile);
-      } else if (ret == -1) {
-        Message (MSG_FATAL, "Unable to fork or exec gzcat in ScanBioseqSetRelease");
-        return;
-      } else {
-        Message (MSG_FATAL, "Unable to find gzcat in ScanBioseqSetRelease - please edit your PATH environment variable");
-        return;
-      }
-    }
-    fp = popen (cmmd, binary? "rb" : "r");
-    usedPopen = TRUE;
-  } else {
-    fp = FileOpen (inputFile, binary? "rb" : "r");
-  }
-#else
-  fp = FileOpen (inputFile, binary? "rb" : "r");
-#endif
-  if (fp == NULL) {
-    Message (MSG_ERROR, "FileOpen failed for input file '%s'", inputFile);
-    return 1;
-  }
-
-  aip = AsnIoNew (binary? ASNIO_BIN_IN : ASNIO_TEXT_IN, fp, NULL, NULL, NULL);
-  if (aip == NULL) {
-    Message (MSG_ERROR, "AsnIoNew failed for input file '%s'", inputFile);
-    return 1;
-  }
-
-  ofp = FileOpen (outputFile, "w");
-  if (ofp == NULL) {
-    AsnIoClose (aip);
-    Message (MSG_FATAL, "FileOpen failed for output file '%s'", outputFile);
-    return 1;
-  }
-
-  TmpNam (path1);
-  TmpNam (path2);
-  TmpNam (path3);
-
-  atp = atp_bss;
-
-  longest [0] = '\0';
-  worsttime = 0;
-
-  while ((atp = AsnReadId (aip, amp, atp)) != NULL) {
-    if (atp == atp_se) {
-      sep = SeqEntryAsnRead (aip, atp);
-
-      fsep = FindNthBioseq (sep, 1);
-      if (fsep != NULL && fsep->choice == 1) {
-        bsp = (BioseqPtr) fsep->data.ptrvalue;
-        if (bsp != NULL) {
-          SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
-          if (SeqEntryHasNucs (sep)) {
-            fprintf (ofp, "%s\n", buf);
-          } else {
-            fprintf (ofp, "%s -- ignored\n", buf);
-          }
-#ifdef OS_UNIX
-          printf ("%s\n", buf);
-#endif
-          if (logfp != NULL) {
-            fprintf (logfp, "%s\n", buf);
-            fflush (logfp);
-          }
-        }
-      }
-
-      hasgi = SeqEntryHasGi (sep, gi, accn);
-      if (hasgi) {
-        if (accn == NULL) {
-          sprintf (tmp, "%ld", (long) gi);
-          accn = tmp;
-        }
-        sprintf (buf, "%s.before", accn);
-        SaveSeqEntry (sep, buf);
-        sprintf (buf, "%s.gbff.before", accn);
-        SaveAsn2ff (sep, buf);
-        SeriousSeqEntryCleanup (sep, NULL, NULL);
-        sprintf (buf, "%s.after", accn);
-        SaveSeqEntry (sep, buf);
-        sprintf (buf, "%s.gbff.after", accn);
-        SaveAsn2ff (sep, buf);
-        FileClose (ofp);
-        AsnIoClose (aip);
-        return 0;
-      }
-      outOfOrder = FALSE;
-      VisitFeaturesInSep (sep, (Pointer) &outOfOrder, CheckOrder);
-      if ((! outOfOrder) && gi == 0 &&
-          StringHasNoText (accn) && SeqEntryHasNucs (sep)) {
-        starttime = GetSecs ();
-        CompareFlatFiles (path1, path2, path3, sep, ofp,
-                          format, mode, style,
-                          batch, diff, gbdjoin);
-        stoptime = GetSecs ();
-        if (stoptime - starttime > worsttime) {
-          worsttime = stoptime - starttime;
-          StringCpy (longest, buf);
-        }
-        numrecords++;
-      }
-      SeqEntryFree (sep);
-    } else {
-      AsnReadVal (aip, atp, NULL);
-    }
-  }
-
-  FileClose (ofp);
-
-  AsnIoFree (aip, FALSE);
-
-#ifdef OS_UNIX
-  if (usedPopen) {
-    pclose (fp);
-  } else {
-    FileClose (fp);
-  }
-#else
-  FileClose (fp);
-#endif
-
-  if (logfp != NULL && (! StringHasNoText (longest))) {
-    fprintf (logfp, "Longest processing time %ld seconds on %s\n",
-             (long) worsttime, longest);
-    fprintf (logfp, "Total number of records %ld\n", (long) numrecords);
-    fflush (logfp);
-  }
-
-  return 0;
-}
-
-/* Args structure contains command-line arguments */
-
-#define i_argInputFile   0
-#define o_argOutputFile  1
-#define f_argFormat      2
-#define m_argMode        3
-#define s_argStyle       4
-#define t_argBatch       5
-#define d_argDiffFF      6
-#define j_argGbdjoin     7
-#define b_argBinary      8
-#define c_argCompressed  9
-#define l_argLogFile    10
-#define g_argGiToSave   11
-#define a_argAccnToSave 12
-#define r_argRemote     13
-#define n_argLocusNew   14
-
-Args myargs [] = {
-  {"Input File Name", "stdin", NULL, NULL,
-    FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
-  {"Output File Name", "stdout", NULL, NULL,
-    FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
-  {"Format (1 GenBank, 2 EMBL, 3 Feature Table)", "1", NULL, NULL,
-    TRUE, 'f', ARG_INT, 0.0, 0, NULL},
-  {"Mode (1 Release, 2 Sequin, 3 Dump)", "2", NULL, NULL,
-    TRUE, 'm', ARG_INT, 0.0, 0, NULL},
-  {"Style (1 Normal, 2 Master, 3 Contig)", "1", NULL, NULL,
-    TRUE, 's', ARG_INT, 0.0, 0, NULL},
-  {"Batch Compare Asn2gnbk to Asn2ff", "F", NULL, NULL,
-    TRUE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Batch Diff SeriousSeqEntryCleanup with Asn2ff", "F", NULL, NULL,
-    FALSE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Batch Use Gbdjoin for Diffs", "F", NULL, NULL,
-    FALSE, 'j', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Bioseq-set is Binary", "T", NULL, NULL,
-    TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Bioseq-set is Compressed", "F", NULL, NULL,
-    TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Log file", NULL, NULL, NULL,
-    TRUE, 'l', ARG_FILE_OUT, 0.0, 0, NULL},
-  {"GI to save", NULL, NULL, NULL,
-    TRUE, 'g', ARG_STRING, 0.0, 0, NULL},
-  {"Accession to save", NULL, NULL, NULL,
-    TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
-  {"Remote fetching", "F", NULL, NULL,
-    FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"New Locus Line", "F", NULL, NULL,
-    FALSE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},
-};
-
-
-#include <accid1.h>
-#include <lsqfetch.h>
-
-Int2 Main (
-  void
-)
-
-{
-  CharPtr  accn = NULL;
-  Boolean  batch = FALSE;
-  Boolean  binary = FALSE;
-  Boolean  compressed = FALSE;
-  Boolean  diff = FALSE;
-  FmtType  format;
-  Boolean  gbdjoin = FALSE;
-  Int4     gi = 0;
-  CharPtr  logfile = NULL;
-  FILE     *logfp = NULL;
-  ModType  mode;
-  Char     path [PATH_MAX];
-  CharPtr  progname;
-  Int2     rsult = 0;
-  time_t   starttime, stoptime;
-  StlType  style;
-  long     val;
-
-  /* standard setup */
-
-  ErrSetFatalLevel (SEV_MAX);
-  ErrClearOptFlags (EO_SHOW_USERSTR);
-  UseLocalAsnloadDataAndErrMsg ();
-  ErrPathReset ();
-
-  if (! AllObjLoad ()) {
-    Message (MSG_FATAL, "AllObjLoad failed");
-    return 1;
-  }
-  if (! SubmitAsnLoad ()) {
-    Message (MSG_FATAL, "SubmitAsnLoad failed");
-    return 1;
-  }
-  if (! FeatDefSetLoad ()) {
-    Message (MSG_FATAL, "FeatDefSetLoad failed");
-    return 1;
-  }
-  if (! SeqCodeSetLoad ()) {
-    Message (MSG_FATAL, "SeqCodeSetLoad failed");
-    return 1;
-  }
-  if (! GeneticCodeTableLoad ()) {
-    Message (MSG_FATAL, "GeneticCodeTableLoad failed");
-    return 1;
-  }
-
-  ProgramPath (path, sizeof (path));
-  progname = StringRChr (path, DIRDELIMCHR);
-  if (progname != NULL) {
-    progname++;
-  } else {
-    progname = "asn2gnbk";
-  }
-
-  /* process command line arguments */
-
-  if (! GetArgs (progname, sizeof (myargs) / sizeof (Args), myargs)) {
-    return 0;
-  }
-
-  if (myargs [t_argBatch].intvalue) {
-    batch = TRUE;
-  } else {
-    batch = FALSE;
-  }
-
-  if (myargs [d_argDiffFF].intvalue) {
-    diff = TRUE;
-  } else {
-    diff = FALSE;
-  }
-
-  if (myargs [j_argGbdjoin].intvalue) {
-    gbdjoin = TRUE;
-  } else {
-    gbdjoin = FALSE;
-  }
-
-  if (gbdjoin) {
-    if ((! batch) && (! diff)) {
-      diff = TRUE;
-    }
-  }
-
-  if (myargs [b_argBinary].intvalue) {
-    binary = TRUE;
-  } else {
-    binary = FALSE;
-  }
-
-  if (myargs [c_argCompressed].intvalue) {
-    compressed = TRUE;
-  } else {
-    compressed = FALSE;
-  }
-
-  if (! StringHasNoText (myargs [g_argGiToSave].strvalue)) {
-    if (sscanf (myargs [g_argGiToSave].strvalue, "%ld", &val) == 1) {
-      gi = (Int4) val;
-    }
-  }
-
-  if (! StringHasNoText (myargs [a_argAccnToSave].strvalue)) {
-    accn = myargs [a_argAccnToSave].strvalue;
-  }
-
-  switch (myargs [f_argFormat].intvalue) {
-    case 1 :
-      format = GENBANK_FMT;
-      break;
-    case 2 :
-      format = EMBL_FMT;
-      break;
-    case 3 :
-      format = FTABLE_FMT;
-      break;
-    default :
-      format = GENBANK_FMT;
-      break;
-  }
-
-  switch (myargs [m_argMode].intvalue) {
-    case 1 :
-      mode = RELEASE_MODE;
-      break;
-    case 2 :
-      mode = SEQUIN_MODE;
-      break;
-    case 3 :
-      mode = DUMP_MODE;
-      break;
-    default :
-      mode = RELEASE_MODE;
-      break;
-  }
-
-  switch (myargs [s_argStyle].intvalue) {
-    case 1 :
-      style = NORMAL_STYLE;
-      break;
-    case 2 :
-      style = MASTER_STYLE;
-      break;
-    case 3 :
-      style = CONTIG_STYLE;
-      break;
-    default :
-      style = NORMAL_STYLE;
-      break;
-  }
-
-  if (myargs [r_argRemote].intvalue) {
-    ID1BioseqFetchEnable ("asn2gnbk", FALSE);
-    LocalSeqFetchInit (FALSE);
-  }
-
-  if ( myargs [n_argLocusNew].intvalue )
-    s_NewLocusLine = TRUE;
-  else
-    s_NewLocusLine = FALSE;
-
-  logfile = (CharPtr) myargs [l_argLogFile].strvalue;
-  if (! StringHasNoText (logfile)) {
-    logfp = FileOpen (logfile, "w");
-  }
-  starttime = GetSecs ();
-
-  if (batch || diff || gbdjoin || gi != 0 || accn != NULL) {
-    rsult = HandleMultipleRecords (myargs [i_argInputFile].strvalue,
-                                   myargs [o_argOutputFile].strvalue,
-                                   binary, compressed,
-                                   format, mode, style, gi,
-                                   accn, batch, diff, gbdjoin, logfp);
-  } else {
-    rsult = HandleSingleRecord (myargs [i_argInputFile].strvalue,
-                                myargs [o_argOutputFile].strvalue,
-                                format, mode, style);
-  }
-
-  stoptime = GetSecs ();
-  if (logfp != NULL) {
-    fprintf (logfp, "Finished in %ld seconds\n",
-             (long) (stoptime - starttime));
-    FileClose (logfp);
-  }
-
-  if (myargs [r_argRemote].intvalue) {
-    LocalSeqFetchDisable ();
-    ID1BioseqFetchDisable ();
-  }
-
-  return rsult;
-}
-#endif /* TEST_MODULE_ASN2GNBK */
 

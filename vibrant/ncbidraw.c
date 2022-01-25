@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,10 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.29  2001/08/29 21:14:10  juran
+* Move Carbon forward-compatibility to MoreCarbonAccessors.h.
+* Call InvalRgn instead of InvalWindowRegion.
+*
 * Revision 6.28  2001/04/05 19:45:50  juran
 * Carbon fixes.
 *
@@ -310,18 +314,6 @@ Nlm_Boolean  Nlm_nowPrinting = FALSE;
 
 #ifdef WIN_MAC
 # include "MoreCarbonAccessors.h"
-# if TARGET_API_MAC_CARBON
-#  define GetPortAndCall(function, arg)           \
-	do {                                          \
-		GrafPtr port_;                            \
-		GetPort(&port_);                          \
-		function(GetWindowFromPort(port_), (arg));  \
-	} while (0)
-#  define InvalRect(rect)  GetPortAndCall(InvalWindowRect, (rect))
-#  define InvalRgn(rgn)    GetPortAndCall(InvalWindowRgn,  (rgn ))
-#  define ValidRect(rect)  GetPortAndCall(ValidWindowRect, (rect))
-#  define ValidRgn(rgn)    GetPortAndCall(ValidWindowRgn,  (rgn ))
-# endif
 #endif
 
 #ifdef WIN_MAC
@@ -4203,11 +4195,9 @@ extern void Nlm_ScrollRect (Nlm_RectPtr r, Nlm_Int2 dx, Nlm_Int2 dy)
   Nlm_RectTool  rtool;
 
   if (r != NULL) {
-    GrafPtr port;
-    GetPort(&port);
     Local__RecTToRectTool (r, &rtool);
     ScrollRect (&rtool, dx, dy, (Nlm_RgnTool) Nlm_scrollRgn);
-    InvalWindowRgn (GetWindowFromPort(port), (Nlm_RgnTool) Nlm_scrollRgn);
+    InvalRgn ((Nlm_RgnTool) Nlm_scrollRgn);
   }
 #endif
 #ifdef WIN_MSWIN

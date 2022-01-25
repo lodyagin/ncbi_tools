@@ -1,4 +1,4 @@
-/* $Id: cddposutil.c,v 1.14 2001/02/06 20:54:43 hurwitz Exp $
+/* $Id: cddposutil.c,v 1.15 2001/12/31 13:47:06 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 12/21/1999
 *
-* $Revision: 1.14 $
+* $Revision: 1.15 $
 *
 * File Description: CDD utilities involving position-specific scoring 
 *                   matrices (PSSMs)
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddposutil.c,v $
+* Revision 1.15  2001/12/31 13:47:06  bauer
+* made block_width a local variable in CddSetUpSearchInternalByLoc to deal with changes in blast data structures
+*
 * Revision 1.14  2001/02/06 20:54:43  hurwitz
 * added a couple asserts
 *
@@ -96,6 +99,7 @@
 #include <cddutil.h>
 #include <mblast.h>
 #include <profiles.h>
+/* #include <blastdef.h> */
 
 #define GAP_CHAR 0
 #define GAP_HERE -1
@@ -1206,7 +1210,7 @@ static Int2 LIBCALL CddSetUpSearchInternalByLoc
 	Int2 retval, status;
 	Int4 effective_query_length, query_length, full_query_length,
 		index, length, length_adjustment=0, last_length_adjustment, min_query_length;
-	Int4 array_size, max_length;
+	Int4 array_size, max_length, block_width;
 	Int4Ptr open, extend;
 	Nlm_FloatHiPtr lambda, K, H;
 	Nlm_FloatHi avglen;
@@ -1609,9 +1613,9 @@ static Int2 LIBCALL CddSetUpSearchInternalByLoc
 	search->pbp->perform_culling = options->perform_culling;
 	search->pbp->hsp_range_max = options->hsp_range_max;
         /* This assures that search->pbp->max_pieces is at least one wide. */
-        search->pbp->block_width = MIN(query_length, options->block_width);
-        if (search->pbp->block_width > 0)
-                search->pbp->max_pieces = query_length/search->pbp->block_width;
+        block_width = MIN(query_length, options->block_width);
+        if (block_width > 0)
+                search->pbp->max_pieces = query_length/block_width;
 
 	search->sbp->query_length = query_length;
 

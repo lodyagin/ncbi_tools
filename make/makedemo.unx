@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.57 2001/03/05 16:58:53 beloslyu Exp $
+#	$Id: makedemo.unx,v 6.59 2001/08/07 16:55:04 beloslyu Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.37 $
+* $Revision: 6.45 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,30 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.45  2001/12/11 16:50:41  kans
+* added TpaAssembly user object creation functions
+*
+* Revision 6.44  2001/11/09 19:51:42  kans
+* fix in FindModelEvidenceField
+*
+* Revision 6.43  2001/11/09 15:12:21  kans
+* moved collaborator to separate function per user object
+*
+* Revision 6.42  2001/11/09 13:21:08  kans
+* added collaborator field to reftrack user object
+*
+* Revision 6.41  2001/11/09 12:54:47  kans
+* added model evidence user object functions
+*
+* Revision 6.40  2001/10/12 21:55:20  kans
+* convert nucleotide X to N
+*
+* Revision 6.39  2001/07/30 19:54:14  kans
+* forgot to set dbt->db to taxon
+*
+* Revision 6.38  2001/07/29 16:23:58  kans
+* added AddOrganismToEntryEx to allow entry of taxonID
+*
 * Revision 6.37  2001/02/14 23:58:42  kans
 * handle BioseqseqSet_class_eco_set
 *
@@ -1883,6 +1907,7 @@ NLM_EXTERN Boolean AddBasesToByteStore (ByteStorePtr bsp, CharPtr the_bases)
 	{
 		*tmp = TO_UPPER(*tmp);
 		if (*tmp == 'U') *tmp = 'T';
+		if (*tmp == 'X') *tmp = 'N';
 		residue = dnaconv[*tmp];
 		if (residue > 2) {
 			*bu++ = residue;
@@ -2318,7 +2343,7 @@ NLM_EXTERN Boolean AddOrganismToEntry (
  	return TRUE;
 }
 
-NLM_EXTERN Boolean AddOrganismToEntryNew (
+NLM_EXTERN Boolean AddOrganismToEntryEx (
 	NCBISubPtr submission,
 	SeqEntryPtr entry ,
 	CharPtr scientific_name ,
@@ -2328,13 +2353,17 @@ NLM_EXTERN Boolean AddOrganismToEntryNew (
 	CharPtr synonym1,
 	CharPtr synonym2,
 	CharPtr synonym3,
-	CharPtr taxonomy)
+	CharPtr taxonomy,
+	Int4 taxid)
+
 {
 	ValNodePtr vnp;
 	BioSourcePtr bio;
 	OrgRefPtr orp;
 	OrgModPtr orm;
 	OrgNamePtr onp = NULL;
+	DbtagPtr dbt;
+	ObjectIdPtr oip;
 	
 	if ((submission == NULL) || (entry == NULL))
 		return FALSE;
@@ -2379,7 +2408,38 @@ NLM_EXTERN Boolean AddOrganismToEntryNew (
 	bio->org = orp;
 	vnp->data.ptrvalue = (Pointer)bio;
 
+	if (taxid > 0) {
+		dbt = DbtagNew ();
+		if (dbt != NULL) {
+			oip = ObjectIdNew ();
+			if (oip != NULL) {
+				dbt->db = StringSave ("taxon");
+				dbt->tag = oip;
+				oip->id = taxid;
+				ValNodeAddPointer (&orp->db, 0, (Pointer) dbt);
+			}
+		}
+	}
+
  	return TRUE;
+}
+
+NLM_EXTERN Boolean AddOrganismToEntryNew (
+	NCBISubPtr submission,
+	SeqEntryPtr entry ,
+	CharPtr scientific_name ,
+	CharPtr common_name ,
+	CharPtr virus_name ,
+	CharPtr strain ,
+	CharPtr synonym1,
+	CharPtr synonym2,
+	CharPtr synonym3,
+	CharPtr taxonomy)
+{
+	return AddOrganismToEntryEx (submission, entry, scientific_name,
+                                 common_name, virus_name, strain,
+                                 synonym1, synonym2, synonym3,
+                                 taxonomy, 0);
 }
 
 NLM_EXTERN Boolean SetGeneticCodeForEntry (
@@ -4284,6 +4344,45 @@ NLM_EXTERN void AddStatusToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr st
   curr->data.ptrvalue = (Pointer) StringSave (status);
 }
 
+NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr collaborator)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+
+  if (uop == NULL || collaborator == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "RefGeneTracking") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Collaborator") == 0) {
+      break;
+    }
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("Collaborator");
+    curr->label = oip;
+    curr->choice = 1; /* visible string */
+
+    /* link status at beginning of list */
+
+    curr->next = uop->data;
+    uop->data = curr;
+  }
+
+  if (curr == NULL || curr->choice != 1) return;
+
+  /* replace any existing collaborator indication */
+
+  curr->data.ptrvalue = MemFree (curr->data.ptrvalue);
+
+  curr->data.ptrvalue = (Pointer) StringSave (collaborator);
+}
+
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
                                                       CharPtr accn, Int4 gi,
                                                       Boolean sequenceChange,
@@ -4667,5 +4766,311 @@ NLM_EXTERN void AddToGeneOntologyUserObject (
     last->next = ufp;
     last = ufp;
   }
+}
+
+/* model evidence user object */
+
+NLM_EXTERN UserObjectPtr CreateModelEvidenceUserObject (
+  CharPtr method,
+  CharPtr contigParent
+)
+
+{
+ UserFieldPtr    curr;
+  ObjectIdPtr    oip;
+  UserFieldPtr   prev = NULL;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("ModelEvidence");
+  uop->type = oip;
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("Method");
+  curr->label = oip;
+  curr->choice = 1; /* visible string */
+  curr->data.ptrvalue = (Pointer) StringSave (method);
+
+  uop->data = curr;
+  prev = curr;
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("Contig Name");
+  curr->label = oip;
+  curr->choice = 1; /* visible string */
+  curr->data.ptrvalue = (Pointer) StringSave (contigParent);
+
+  prev->next = curr;
+
+  return uop;
+}
+
+static UserFieldPtr FindEvidenceField (
+  UserObjectPtr uop,
+  CharPtr type,
+  Boolean create
+)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+
+  if (uop == NULL || type == NULL) return NULL;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "ModelEvidence") != 0) return NULL;
+
+  /* search for mRNA or EST field */
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, type) == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL && create) {
+
+    /* create new top-level field */
+
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave (type);
+    curr->label = oip;
+    curr->choice = 11; /* user fields */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+      
+    }
+  }
+
+  if (curr == NULL) return NULL;
+  if (curr->choice == 1 || curr->choice == 11) return curr;
+
+  return NULL;
+}
+
+NLM_EXTERN UserFieldPtr FindModelEvidenceField (
+  UserObjectPtr uop,
+  CharPtr type
+)
+
+{
+  return FindEvidenceField (uop, type, FALSE);
+}
+
+static UserFieldPtr FindAccnBlock (
+  UserFieldPtr group,
+  CharPtr accn
+)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+  UserFieldPtr  ufp;
+
+  if (group == NULL || group->choice != 11 || accn == NULL) return NULL;
+
+  for (curr = (UserFieldPtr) group->data.ptrvalue; curr != NULL; curr = curr->next) {
+    if (curr->choice == 11) {
+      for (ufp = (UserFieldPtr) curr->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
+        oip = ufp->label;
+        if (oip != NULL && StringICmp (oip->str, "accession") == 0) {
+          if (StringICmp ((CharPtr) ufp->data.ptrvalue, accn) == 0) {
+            return curr;
+          }
+        }
+      }
+    }
+    prev = curr;
+  }
+
+  /* create new top-level field */
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->id = 0;
+  curr->label = oip;
+  curr->choice = 11; /* user fields */
+
+  /* link new set at end of list */
+
+  if (prev != NULL) {
+    prev->next = curr;
+  } else {
+    group->data.ptrvalue = curr;    
+  }
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("accession");
+  ufp->label = oip;
+  ufp->choice = 1; /* visible string */
+  ufp->data.ptrvalue = (Pointer) StringSave (accn);
+
+  if (curr->data.ptrvalue == NULL) {
+    curr->data.ptrvalue = (Pointer) ufp;
+  } else {
+    for (prev = (UserFieldPtr) curr->data.ptrvalue; prev->next != NULL; prev = prev->next) continue;
+    prev->next = ufp;
+  }
+
+  return curr;
+}
+
+static UserFieldPtr FindIntParamBlock (
+  UserFieldPtr curr,
+  CharPtr type,
+  Boolean create
+)
+
+{
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+  UserFieldPtr  ufp;
+
+  if (curr == NULL || type == NULL) return NULL;
+
+  prev = NULL;
+  for (ufp = (UserFieldPtr) curr->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (oip != NULL && StringICmp (oip->str, type) == 0) {
+      break;
+    }
+    prev = ufp;
+  }
+
+  if (ufp == NULL && create) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave (type);
+    ufp->label = oip;
+    ufp->choice = 2; /* int */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = ufp;
+    } else {
+      curr->data.ptrvalue = ufp;      
+    }
+  }
+
+  if (ufp == NULL || ufp->choice != 2) return NULL;
+
+  return ufp;
+}
+
+NLM_EXTERN void AddMrnaOrESTtoModelEvidence (
+  UserObjectPtr uop,
+  CharPtr type,
+  CharPtr accn,
+  Int4 length,
+  Int4 gaplen
+)
+
+{
+  UserFieldPtr  curr;
+  UserFieldPtr  group;
+  ObjectIdPtr   oip;
+  UserFieldPtr  ufp;
+
+  if (uop == NULL || type == NULL || accn == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "ModelEvidence") != 0) return;
+
+  group = FindEvidenceField (uop, type, TRUE);
+  if (group == NULL) return;
+
+  curr = FindAccnBlock (group, accn);
+  if (curr == NULL) return;
+
+  if (length > 0) {
+    ufp = FindIntParamBlock (curr, "exon count", TRUE);
+    if (ufp == NULL) return;
+    (ufp->data.intvalue)++;
+
+    ufp = FindIntParamBlock (curr, "exon length", TRUE);
+    if (ufp == NULL) return;
+    ufp->data.intvalue += length;
+  }
+
+  if (gaplen > 0) {
+    ufp = FindIntParamBlock (curr, "gap count", TRUE);
+    if (ufp == NULL) return;
+    (ufp->data.intvalue)++;
+
+    ufp = FindIntParamBlock (curr, "gap length", TRUE);
+    if (ufp == NULL) return;
+    ufp->data.intvalue += gaplen;
+  }
+}
+
+/* third party accession list user object manipulation */
+
+NLM_EXTERN UserObjectPtr CreateTpaAssemblyUserObject (void)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("TpaAssembly");
+  uop->type = oip;
+
+  return uop;
+}
+
+NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (UserObjectPtr uop, CharPtr accn)
+
+{
+  UserFieldPtr  curr;
+  UserFieldPtr  prev = NULL;
+  ObjectIdPtr   oip;
+  UserFieldPtr  ufp;
+
+  if (uop == NULL || accn == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "TpaAssembly") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    prev = curr;
+  }
+
+  curr = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->id = 0;
+  curr->label = oip;
+  curr->choice = 11; /* user fields */
+
+  /* link new set at end of list */
+
+  if (prev != NULL) {
+    prev->next = curr;
+  } else {
+    uop->data = curr;
+  }
+
+  if (curr == NULL || curr->choice != 11) return;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("accession");
+  ufp->label = oip;
+  ufp->choice = 1; /* visible string */
+  ufp->data.ptrvalue = (Pointer) StringSave (accn);
+
+  curr->data.ptrvalue = (Pointer) ufp;
 }
 

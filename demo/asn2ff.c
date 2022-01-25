@@ -26,7 +26,7 @@ Args myargs[] = {
 	{"Input asnfile in binary mode","F",NULL,NULL,TRUE,'b',ARG_BOOLEAN,0.0,0,NULL},
 	{"Output Filename","stdout", NULL,NULL,TRUE,'o',ARG_FILE_OUT,0.0,0,NULL},
 	{"Show Sequence?","T", NULL ,NULL ,TRUE,'h',ARG_BOOLEAN,0.0,0,NULL},
-    {"Log errors to file named:",NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
+	{"Log errors to file named:",NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
 	{"Output Format?: b for GenBank, p for GenPept, e for EMBL, s for PseudoEMBL, x for   GenBankSelect, z for EMBLPEPT",
 	"b", NULL,NULL,TRUE,'f',ARG_STRING,0.0,0,NULL},
 	{"Output mode?: r for release, d for dump, s for Sequin, c for Chromoscope, k for dir-sub-debug, l for dir-sub, e for revise, p for partial report","r", NULL ,NULL ,TRUE,'m',ARG_STRING,0.0,0,NULL},
@@ -56,6 +56,7 @@ Args myargs[] = {
 	{"Use VERSION?","T",NULL,NULL,TRUE,'V',ARG_BOOLEAN,0.0,0,NULL},
 	{"Show Bankit comments?","F",NULL,NULL,TRUE,'C',ARG_BOOLEAN,0.0,0,NULL},
 	{"For GenBank Release?","F",NULL,NULL,TRUE,'R',ARG_BOOLEAN,0.0,0,NULL},
+	{"New LOCUS line format?","F",NULL,NULL,TRUE,'L',ARG_BOOLEAN,0.0,0,NULL}
 	};
 
 
@@ -300,6 +301,11 @@ Int2 Main(void)
 	}
 	if (myargs[27].intvalue) {
 		ajp->forgbrel = TRUE;
+	}
+	if (myargs[28].intvalue) {
+		ajp->new_locus_fmt = TRUE;
+	} else {
+		ajp->new_locus_fmt = FALSE;
 	}
 	useSeqMgrIndexes = (Boolean)(myargs[24].intvalue);
 	/* get pointer to all loaded ASN.1 modules */

@@ -31,6 +31,9 @@
 *
 *
 * $Log: parttree.c,v $
+* Revision 1.13  2001/09/18 16:55:38  soussov
+* switching to the new ASN
+*
 * Revision 1.12  2001/06/13 21:23:19  soussov
 * makes purify happy
 *
@@ -225,7 +228,13 @@ Boolean tax_ptree_addNode(TreePtr ptree, Int4 tax_id)
     
 	/* add nodes begining with this point */
 	do {
-	    s= 9 + StringLen(lineage[i]->node_label);
+	    if((lineage[i]->flags & TXC_STHIDE) != 0) {
+		s= 9 + StringLen(lineage[i]->node_label);
+	    }
+	    else {
+		s= StringLen(lineage[i]->node_label);
+		s+= StringLen(lineage[i]->node_label + (s+1)) + 10;
+	    } 
 	    nid= tree_addChild(cursor, lineage[i], s);
 	    tree_toNode(cursor, nid);
 	    if((i == 0) && (tax_id != lineage[0]->tax_id)) {
@@ -311,7 +320,13 @@ Boolean tax_ptree_addChildren(TreeCursorPtr cursor)
 	    if(my_node != NULL) {
 		for(i= 0; i < nof_children; i++) {
 		    if((child[i] != NULL) && (child[i]->tax_id == my_node->tax_id)) {
-			s= 9 + StringLen(child[i]->node_label);
+			if((child[i]->flags & TXC_STHIDE) != 0) {
+			    s= 9 + StringLen(child[i]->node_label);
+			}
+			else {
+			    s= StringLen(child[i]->node_label);
+			    s+= StringLen(child[i]->node_label + (s+1)) + 10;
+			} 
 			tree_updateNodeData(cursor, child[i], s);
 			child[i]= MemFree(child[i]);
 			break;
@@ -351,7 +366,13 @@ Boolean tax_ptree_addChildren(TreeCursorPtr cursor)
 		    
     for(i= 0; i < nof_children; i++) {
 	if(child[i] != NULL) {
-	    s= 9 + StringLen(child[i]->node_label);
+	    if((child[i]->flags & TXC_STHIDE) != 0) {
+		s= 9 + StringLen(child[i]->node_label);
+	    }
+	    else {
+		s= StringLen(child[i]->node_label);
+		s+= StringLen(child[i]->node_label + (s+1)) + 10;
+	    } 
 	    tree_addChild(cursor, child[i], s);
 	    child[i]= MemFree(child[i]);
 	}
@@ -385,7 +406,7 @@ Boolean tax_ptree_addSubtree(TreeCursorPtr cursor)
 		    
     for(i= 0; i < nof_children; i++) {
 	if(child[i] != NULL) {
-	    if((child[i]->flags & TXC_SUFFIX) != 0) {
+	    if(child[i]->flags == 0) {
 		tax_ptree_toTaxId(cursor, child[i]->tax_id, FALSE);
 #if 0
 		tree_root(cursor);
@@ -393,7 +414,13 @@ Boolean tax_ptree_addSubtree(TreeCursorPtr cursor)
 #endif
 	    }
 	    else {
-		s= 9 + StringLen(child[i]->node_label);
+		if((child[i]->flags & TXC_STHIDE) != 0) {
+		    s= 9 + StringLen(child[i]->node_label);
+		}
+		else {
+		    s= StringLen(child[i]->node_label);
+		    s+= StringLen(child[i]->node_label + (s+1)) + 10;
+		} 
 		tree_addChild(cursor, child[i], s);
 	    }
 	    child[i]= MemFree(child[i]);

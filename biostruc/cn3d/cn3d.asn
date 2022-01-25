@@ -1,4 +1,4 @@
---$Revision: 1.4 $
+--$Revision: 1.11 $
 --**********************************************************************
 --
 --  Definitions for Cn3D-specific data (rendering settings,
@@ -62,7 +62,12 @@ Cn3d-color-scheme ::= ENUMERATED {  -- available color schemes (not all
     variety (9),
     weighted-variety (10),
     information-content (11),
-    fit (12)
+    fit (12),
+    -- other schemes
+    temperature (13),
+    hydrophobicity (14),
+    charge (15),
+    rainbow (16)
 }
 
 -- RGB triplet, interpreted (after division by the scale-factor) as floating
@@ -85,15 +90,31 @@ Cn3d-backbone-style ::= SEQUENCE {  -- style blob for backbones only
     user-color Cn3d-color
 }
 
-Cn3d-general-style ::= SEQUENCE {   -- style blob for everything else
+Cn3d-general-style ::= SEQUENCE {   -- style blob for other objects
     is-on BOOLEAN,
     style Cn3d-drawing-style,
     color-scheme Cn3d-color-scheme,
     user-color Cn3d-color
 }
 
+Cn3d-backbone-label-style ::= SEQUENCE { -- style blob for backbone labels
+    spacing INTEGER,        -- zero means none
+    type ENUMERATED {
+        one-letter (1),
+        three-letter (2)
+    },
+    number ENUMERATED {
+        none (0),
+        sequential (1),     -- from 1, by residues present, to match sequence
+        pdb (2)             -- use number assigned by PDB
+    },
+    termini BOOLEAN,
+    white BOOLEAN           -- all white, or (if false) color of alpha carbon
+}
+
 -- rendering settings for Cn3D (mirrors StyleSettings class)
 Cn3d-style-settings ::= SEQUENCE {
+    name VisibleString OPTIONAL,                -- a name (for favorites)
     protein-backbone Cn3d-backbone-style,       -- backbone styles
     nucleotide-backbone Cn3d-backbone-style,
     protein-sidechains Cn3d-general-style,      -- styles for other stuff
@@ -116,8 +137,15 @@ Cn3d-style-settings ::= SEQUENCE {
     tube-worm-radius INTEGER,
     helix-radius INTEGER,
     strand-width INTEGER,
-    strand-thickness INTEGER
+    strand-thickness INTEGER,
+    -- backbone labels (no labels if not present)
+    protein-labels Cn3d-backbone-label-style OPTIONAL,
+    nucleotide-labels Cn3d-backbone-label-style OPTIONAL,
+    -- ion labels
+    ion-labels BOOLEAN OPTIONAL
 }
+
+Cn3d-style-settings-set ::= SET OF Cn3d-style-settings
 
 Cn3d-style-table-id ::= INTEGER
 
@@ -163,12 +191,42 @@ Cn3d-user-annotation ::= SEQUENCE {
     is-on BOOLEAN   -- whether this annotation is to be turned on in Cn3D
 }
 
+-- a GL-ordered transformation matrix
+Cn3d-GL-matrix ::= SEQUENCE {
+    m0  REAL, m1  REAL, m2  REAL, m3  REAL,
+    m4  REAL, m5  REAL, m6  REAL, m7  REAL,
+    m8  REAL, m9  REAL, m10 REAL, m11 REAL,
+    m12 REAL, m13 REAL, m14 REAL, m15 REAL
+}
+
+-- a floating point 3d vector
+Cn3d-vector ::= SEQUENCE {
+    x REAL,
+    y REAL,
+    z REAL
+}
+
+-- parameters used to set up the camera in Cn3D
+Cn3d-view-settings ::= SEQUENCE {
+    camera-distance REAL,       -- camera on +Z axis this distance from origin
+    camera-angle-rad REAL,      -- camera angle
+    camera-look-at-X REAL,      -- X,Y of point in Z=0 plane camera points at
+    camera-look-at-Y REAL,
+    camera-clip-near REAL,      -- distance of clipping planes from camera
+    camera-clip-far REAL,
+    matrix Cn3d-GL-matrix,      -- transformation of objects in the scene
+    rotation-center Cn3d-vector -- center of rotation of whole scene
+}
+
 -- The list of annotations for a given CDD/mime. If residue regions overlap
 -- between annotations that are turned on, the last annotation in this list
 -- that contains these residues will be used as the display style for these
 -- residues.
+--   Also contains the current viewpoint, so that user's camera angle
+-- can be stored and reproduced, for illustrations, on-line figures, etc.
 Cn3d-user-annotations ::= SEQUENCE {
-    annotations SEQUENCE OF Cn3d-user-annotation
+    annotations SEQUENCE OF Cn3d-user-annotation OPTIONAL,
+    view Cn3d-view-settings OPTIONAL
 }
 
 END

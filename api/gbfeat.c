@@ -3,9 +3,12 @@
 *   -- all routines for checking genbank feature table
 *   -- all extern variables are in gbftglob.c
 *                                                                  10-11-93
-$Revision: 6.7 $
+$Revision: 6.8 $
 *
 * $Log: gbfeat.c,v $
+* Revision 6.8  2001/12/06 17:00:41  kans
+* TextSave takes size_t, not Int2, otherwise titin protein tries to allocate negative number
+*
 * Revision 6.7  2001/06/08 20:09:53  bazhin
 * From now on "absent" is a legal value for /cons_splice qualifier.
 *
@@ -353,13 +356,13 @@ NLM_EXTERN int SplitMultiValQual(GBQualPtr PNTR gbqp,
 		   "Splited qualifier %s", curq->qual); 
 		buf = bptr;
 		bptr++;
-		curq->val = TextSave(bptr, (Int2)(ptr-bptr));
+		curq->val = TextSave(bptr, ptr-bptr);
 		bptr = ptr + 1;
 		curq->next = NULL;
 		while ((ptr = StringChr(bptr, ',')) != NULL) {
 			tmp = GBQualNew();
 			tmp->qual = StringSave(curq->qual);
-			tmp->val = TextSave(bptr, (Int2)(ptr-bptr));
+			tmp->val = TextSave(bptr, ptr-bptr);
 			curq = tie_qual(curq, tmp);
 			bptr = ptr + 1;
 		} 
@@ -697,7 +700,7 @@ NLM_EXTERN int CkQualPosaa(GBQualPtr PNTR head_gbqp, GBQualPtr gbqp,
                    ++str;
 
                if ((eptr = StringChr(str, ')')) != NULL) {
-                  aa = TextSave(str, (Int2)(eptr-str));
+                  aa = TextSave(str, eptr-str);
                   
                   
                  retval = CkQualPosSeqaa(head_gbqp,  gbqp, preq,
@@ -812,7 +815,7 @@ NLM_EXTERN void ConvertEmbedQual(CharPtr value)
                                                    && *bptr != '\0'; bptr++)
                  continue;
 
-             qualname = TextSave(ptr, (Int2)(bptr-ptr));
+             qualname = TextSave(ptr, bptr-ptr);
 
              val = GBQualNameValid(qualname);
              if (val >= 0)
@@ -849,7 +852,7 @@ NLM_EXTERN CharPtr ScanEmbedQual(CharPtr value)
                                                    && *bptr != '\0'; bptr++)
                  continue;
 
-             qual = TextSave(ptr, (Int2)(bptr-ptr));
+             qual = TextSave(ptr, bptr-ptr);
 
              val = GBQualNameValid(qual);
 
@@ -927,7 +930,7 @@ NLM_EXTERN int CkQualText (GBQualPtr PNTR head_gbqp,  GBQualPtr gbqp,
 /* ERROR  here  sets retval*/
    }
 
-      value = TextSave(bptr, (Int2)(eptr-bptr));
+      value = TextSave(bptr, eptr-bptr);
 /* Some check must be done for illegal characters in gbpq->val
       for (s = value; *s != '\0'; s++) {
       	if (!IS_WHITESP(*s) && !IS_ALPHANUM(*s) && *s != '\"') {
@@ -1009,7 +1012,7 @@ NLM_EXTERN int CkQualSeqaa (GBQualPtr PNTR head_gbqp, GBQualPtr gbqp,
                 ++str;
 
             if ((eptr = StringChr(str, ')')) != NULL) {
-               aa = TextSave(str, (Int2)(eptr-str));
+               aa = TextSave(str, eptr-str);
                
                  retval = CkQualPosSeqaa(head_gbqp,  gbqp, preq,
                     error_msgs, perform_corrections,  aa, eptr);
@@ -1090,7 +1093,7 @@ NLM_EXTERN int CkQualMatchToken
        str++;
 
    if (*str == '\0') {
-      msg = TextSave(bptr, (Int2)(eptr-bptr));
+      msg = TextSave(bptr, eptr-bptr);
 
       if (MatchArrayStringIcase(array_string, totalstr, msg) == -1) {
         if (error_msgs){ 
@@ -1301,7 +1304,7 @@ NLM_EXTERN int CkQualTokenType (GBQualPtr PNTR head_gbqp,  GBQualPtr gbqp,
 
    if (*str == '\0') {
 /*------single token found ----*/
-      token = TextSave(bptr, (Int2)(eptr-bptr));
+      token = TextSave(bptr, eptr-bptr);
 
       bptr = token;
 

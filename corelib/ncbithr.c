@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.29 2001/01/19 20:23:34 kans Exp $ */
+/* $Id: ncbithr.c,v 6.32 2001/12/14 21:09:20 ivanov Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,15 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.32  2001/12/14 21:09:20  ivanov
+* Enable threads under WIN32 in MT-configurations
+*
+* Revision 6.31  2001/11/09 14:18:06  ivanov
+* Fixed error in the preprocessor command
+*
+* Revision 6.30  2001/11/08 21:57:19  ivanov
+* Changed NlmCPUNumber() (under UNIX)
+*
 * Revision 6.29  2001/01/19 20:23:34  kans
 * support for OS_UNIX_DARWIN (contributed by William Van Etten)
 *
@@ -266,6 +275,9 @@
 
 #ifdef WIN32
 #include <windows.h>
+#if defined(_MT)
+#   undef NCBI_NOTHREADS_AVAIL
+#endif
 #endif
 
 
@@ -2538,12 +2550,10 @@ NLM_EXTERN Int4 NlmCPUNumber(void)
   SYSTEM_INFO sysInfo;
   GetSystemInfo(&sysInfo);
   return sysInfo.dwNumberOfProcessors;
-#elif defined(OS_UNIX_SYSV) && defined(SYSPROC_SPARC)  /* SPARC Solaris */
-  return  sysconf(_SC_NPROCESSORS_ONLN);
-#elif defined(OS_UNIX_SYSV) && defined(PROC_I80X86)  /* Intel Solaris */
-  return  sysconf(_SC_NPROCESSORS_ONLN);
-#elif  defined(PROC_MIPS) && defined(_SC_NPROC_ONLN)
+#elif defined(_SC_NPROC_ONLN)
   return sysconf(_SC_NPROC_ONLN);
+#elif defined(_SC_NPROCESSORS_ONLN)
+  return sysconf(_SC_NPROCESSORS_ONLN);
 #else
   return -1;
 #endif

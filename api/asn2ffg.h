@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.16 $
-* $Revision: 6.16 $
+* $Revision: 6.17 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
@@ -46,6 +46,9 @@
 /*************************************
 *
  * $Log: asn2ffg.h,v $
+ * Revision 6.17  2001/12/05 18:14:05  cavanaug
+ * Changes for new LOCUS line format
+ *
  * Revision 6.16  2000/06/05 17:51:41  tatiana
  * increase size of feature arrays to Int4
  *
@@ -427,6 +430,7 @@ typedef struct asn2ff_job {
                                Pointer user_data);
 	Int4 (*ajp_print_index)(struct asn2ff_job *ajp, Pointer user_data);
 	Int4 (*ajp_count_index)(struct asn2ff_job *ajp, Int4 num, Pointer user_data);
+	Boolean new_locus_fmt;	/* TRUE if utilizing the new format for the LOCUS line */
 } Asn2ffJob, PNTR Asn2ffJobPtr;
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.103 $
+* $Revision: 6.109 $
 *
 * File Description: 
 *
@@ -62,6 +62,7 @@
 #include <accentr.h>
 #include <accutils.h>
 #include <explore.h>
+#include <aliparse.h>
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -1025,21 +1026,25 @@ static CharPtr noSrcInTitleWarning =
 static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
 
 {
+  AlignFileDataPtr  afdp;
   BioseqSetPtr   bssp;
   Char           ch;
+  ErrInfoPtr     eip;
   Uint1          format;
   FILE           *fp;
   ValNodePtr     head;
+  CharPtr        msg;
   ObjMgrDataPtr  omdptop;
   ObjMgrData     omdata;
   Uint2          parenttype;
   Pointer        parentptr;
   PhylipPagePtr  ppp;
   Char           path [PATH_MAX];
+  ParsedInfoPtr  pip;
   CharPtr        ptr;
   RecT           r;
   ValNodePtr     sdp;
-  SeqEntryPtr    sep;
+  SeqEntryPtr    sep = NULL;
   Int2           seqtitles;
   Int2           seqtotals;
   Char           str [256];
@@ -1094,7 +1099,59 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
             break;
         }
         if (format > 0) {
-          sep = ReadLocalAlignment (format, path);
+          sep = NULL;
+          if (newAlignReader) {
+            fp = FileOpen (path, "r");
+            if (fp != NULL) {
+              afdp = Ali_Read (fp);
+              FileClose (fp);
+              if (afdp != NULL) {
+                pip = afdp->info;
+                if (pip != NULL) {
+                  if (pip->contigOrInter == ALI_CONTIGUOUS && ppp->format == SEQ_FMT_INTERLEAVE) {
+                    AppendText (ppp->doc, "ERROR: Interleaved specified, Contiguous read\n\n", &faParFmt, &faColFmt, programFont);
+                  } else if (pip->contigOrInter == ALI_INTERLEAVED && ppp->format == SEQ_FMT_CONTIGUOUS) {
+                    AppendText (ppp->doc, "ERROR: Contiguous specified, Interleaved read\n\n", &faParFmt, &faColFmt, programFont);
+                  }
+                }
+                for (eip = afdp->errors; eip != NULL; eip = eip->next) {
+                  size_t   len;
+                  if (eip->info == NULL) {
+                    AppendText (ppp->doc, "eip->info is NULL\n\n", &faParFmt, &faColFmt, systemFont);
+                    continue;
+                  }
+                  len = StringLen (eip->info) + 60;
+                  msg = MemNew (len);
+                  if (msg == NULL) continue;
+                  if (eip->level == LEVEL_MULTI) {
+                    StringCpy (msg, "MULTIPLE ERRORS:");
+                  } else if (eip->level == LEVEL_ERROR) {
+                    StringCpy (msg, "ERROR:");
+                  } else if (eip->level == LEVEL_WARNING) {
+                    StringCpy (msg, "WARNING:");
+                  } else if (eip->level == LEVEL_INFO) {
+                    StringCpy (msg, "INFO:");
+                  }
+                  if (eip->rowNum != 0) {
+                    sprintf (str, " [Line %ld]", (long) eip->rowNum);
+                    StringCat (msg, str);
+                  }
+                  if (eip->info != NULL) {
+                    StringCat (msg, " ");
+                    StringCat (msg, eip->info);
+                  }
+                  StringCat (msg, "\n\n");
+                  AppendText (ppp->doc, msg, &faParFmt, &faColFmt, programFont);
+                  MemFree (msg);
+                }
+                sep = ALI_ConvertToNCBIData (afdp);
+                Ali_Free (afdp);
+                afdp = NULL;
+              }
+            }
+          } else {
+            sep = ReadLocalAlignment (format, path);
+          }
           if (sep !=NULL) 
           {
             ppp->sep = sep;
@@ -1135,7 +1192,7 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
                   ttl = SeqEntryGetTitle (tmp);
                   */
                   ttl = NULL;
-                  SeqEntryExplore (sep, (Pointer) (&ttl), FindFirstTitle);
+                  SeqEntryExplore (tmp, (Pointer) (&ttl), FindFirstTitle);
                   if (ttl != NULL) {
                     if (bssp->_class == BioseqseqSet_class_phy_set) {
                       if (StringISearch (ttl, "[org=") != NULL ||
@@ -6153,7 +6210,7 @@ static void DownloadProc (ButtoN b)
     }
   }
   if (uid > 0) {
-    sep = EntrezSeqEntryGet (uid, -2);
+    sep = EntrezSeqEntryGet (uid, 0);
     /* EntrezFini (); */
     if (sep == NULL) {
       ArrowCursor ();
@@ -6345,7 +6402,7 @@ extern void DownloadAndUpdateProc (ButtoN b)
   ArrowCursor ();
   Update ();
   if (uid > 0) {
-    sep = EntrezSeqEntryGet (uid, -2);
+    sep = EntrezSeqEntryGet (uid, 0);
     /* EntrezFini (); */
     if (sep == NULL) {
       Message (MSG_OK, "Unable to find this record in the database.");

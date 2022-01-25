@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager for module NCBI-Pub
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objpub.c,v $
+* Revision 6.4  2001/11/20 14:50:54  kans
+* PubLabelUnique return immediately if PMID or MUID, already unique
+*
 * Revision 6.3  2000/06/15 19:13:28  yaschenk
 * PubAsnWrite should not fail when pmid is stripped
 *
@@ -1348,11 +1351,13 @@ NLM_EXTERN Int2 LIBCALL PubLabelUnique (ValNodePtr pub, CharPtr buf, Int2 buflen
 			sprintf(tbuf, "NLM%ld", (long)(pub->data.intvalue));
 			diff = LabelCopy(buf, tbuf, buflen);
 			buflen -= diff;
+			return (len - buflen); /* already unique */
 			break;
 		case PUB_PMid:
 			sprintf(tbuf, "PM%ld", (long)(pub->data.intvalue));
 			diff = LabelCopy(buf, tbuf, buflen);
 			buflen -= diff;
+			return (len - buflen); /* already unique */
 			break;
 		case PUB_Equiv:
 			for (i = 0; i < 5; i++)

@@ -29,7 +29,7 @@
  *
  * Version Creation Date:   7/15/95
  *
- * $Revision: 6.28 $
+ * $Revision: 6.35 $
  *
  * File Description: 
  *
@@ -39,6 +39,27 @@
  * -------  ----------  -----------------------------------------------------
  *
  * $Log: asn2ff2.c,v $
+ * Revision 6.35  2001/11/09 20:20:41  kans
+ * new GENOME ANNOTATION REFSEQ text
+ *
+ * Revision 6.34  2001/11/09 15:31:47  kans
+ * bail on evidence user object missing name or method
+ *
+ * Revision 6.33  2001/11/09 15:29:19  kans
+ * display curator for reviewed refseq
+ *
+ * Revision 6.32  2001/11/09 14:45:49  kans
+ * added VALIDATED REFSEQ message
+ *
+ * Revision 6.31  2001/11/09 13:38:58  kans
+ * changed from TranscriptModelGeneration to ModelEvidence user object
+ *
+ * Revision 6.30  2001/10/02 19:16:32  yaschenk
+ * Removing memory leaks
+ *
+ * Revision 6.29  2001/08/07 15:51:08  kans
+ * use NUM_SEQID, added third party annotation seqids
+ *
  * Revision 6.28  2000/12/27 19:43:20  kans
  * empty comment could lead to original dsp->vnp being freed twice, corrupting memory on Mac
  *
@@ -196,10 +217,9 @@ static ValNodePtr GetDBSourceForNuclDB PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp)
 
 static Boolean has_comment;
 
-#define NUM_ORDER 16
 /*---------- order for other id FASTA_LONG (copied from SeqIdWrite) ------- */
  
-static Uint1 fasta_order[NUM_ORDER] = {
+static Uint1 fasta_order[NUM_SEQID] = {
 33, /* 0 = not set */
 20, /* 1 = local Object-id */
 15,  /* 2 = gibbsq */
@@ -215,7 +235,10 @@ static Uint1 fasta_order[NUM_ORDER] = {
 31,  /* 12 = gi */
 10, /* 13 = ddbj */
 10, /* 14 = prf */
-12  /* 15 = pdb */
+12, /* 15 = pdb */
+10,  /* 16 = tpg */
+10,  /* 17 = tpe */
+10   /* 18 = tpd */
 };
 
 static ComStructPtr ComStructNew(void)
@@ -519,7 +542,7 @@ static CharPtr GetStrForUserObject(UserObjectPtr uop)
 {
     ObjectIdPtr		oip;
 	UserFieldPtr	ufp, tmp, u, urf;
-	CharPtr			ptr=NULL, st;
+	CharPtr			curator = NULL, ptr=NULL, st;
 	Int2			i=0, acclen;
 	CharPtr			p = NULL, pp;
 	Int2			review = 0, len;
@@ -540,23 +563,37 @@ static CharPtr GetStrForUserObject(UserObjectPtr uop)
 				review = 2;
 			} else if (StringCmp(st, "Predicted") == 0) {
 				review = 3;
+			} else if (StringCmp(st, "Validated") == 0) {
+				review = 4;
+			}
+		} else if (StringCmp (oip->str, "Collaborator") == 0) {
+			st = (CharPtr) ufp->data.ptrvalue;
+			if (! StringHasNoText (st)) {
+				curator = st;
 			}
 		}
 	}
 	if (urf && urf->choice == 11) {
 		for (tmp=urf->data.ptrvalue; tmp; tmp=tmp->next, i++) ;
 		if (review == 2) {
+			if (curator == NULL) {
+				curator = "NCBI staff";
+			}
 			ptr = (CharPtr) MemNew(
-			StringLen("REVIEWED REFSEQ: This record has been curated by NCBI staff. ") + len + 18*i + 1);
-		sprintf(ptr, "REVIEWED REFSEQ: This record has been curated by NCBI staff. ");
+			StringLen("REVIEWED REFSEQ: This record has been curated by . ") + StringLen (curator) + len + 18*i + 1);
+			sprintf(ptr, "REVIEWED REFSEQ: This record has been curated by %s. ", curator);
 		} else if (review == 1) {
 			ptr = (CharPtr) MemNew(
 			StringLen("PROVISIONAL REFSEQ: This record has not yet been subject to final NCBI review. ") + len + 18*i + 1);
-		sprintf(ptr, "PROVISIONAL REFSEQ: This record has not yet been subject to final NCBI review. ");
+			sprintf(ptr, "PROVISIONAL REFSEQ: This record has not yet been subject to final NCBI review. ");
 		} else if (review == 3) {
 			ptr = (CharPtr) MemNew(
 			StringLen("PREDICTED REFSEQ: The mRNA record is supported by experimental evidence; however, the coding sequence is predicted. ") + len + 18*i + 1);
-		sprintf(ptr, "PREDICTED REFSEQ: The mRNA record is supported by experimental evidence; however, the coding sequence is predicted. ");
+			sprintf(ptr, "PREDICTED REFSEQ: The mRNA record is supported by experimental evidence; however, the coding sequence is predicted. ");
+		} else if (review == 4) {
+			ptr = (CharPtr) MemNew(
+			StringLen("VALIDATED REFSEQ: This record has undergone preliminary review of the sequence, but has not yet been subject to final NCBI review. ") + len + 18*i + 1);
+			sprintf(ptr, "VALIDATED REFSEQ: This record has undergone preliminary review of the sequence, but has not yet been subject to final NCBI review. ");
 		} else {
 			ptr = (CharPtr) MemNew( StringLen("REFSEQ: ") + len + 18*i + 1);
 			sprintf(ptr, "REFSEQ: ");
@@ -565,6 +602,7 @@ static CharPtr GetStrForUserObject(UserObjectPtr uop)
 			pp = (CharPtr) MemNew(len + 1);
 			sprintf(pp, "The reference sequence was derived from ");
 			StringCat(ptr, pp);
+			MemFree(pp);
 		}
 		for (tmp=urf->data.ptrvalue; tmp; tmp=tmp->next) {
 			for (u = tmp->data.ptrvalue; u; u=u->next) {
@@ -627,6 +665,7 @@ static CharPtr GetStrForMap(DbtagPtr dbtag)
 
 static CharPtr GetEvidence(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
+	CharPtr		retval=NULL;
 	SeqDescrPtr		descr;
 	UserObjectPtr	uop=NULL;
     ObjectIdPtr		oip;
@@ -637,16 +676,27 @@ static CharPtr GetEvidence(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		return NULL;
 	}
 	tvnp = GatherDescrListByChoice(ajp, gbp, Seq_descr_user); 
-	for (ds_vnp= tvnp;
-				ds_vnp; ds_vnp=ds_vnp->next) {
+	for (ds_vnp= tvnp; ds_vnp;) {
 		dsp = (DescrStructPtr) ds_vnp->data.ptrvalue;
-		if ((vnp = dsp->vnp) == NULL)
-			continue;
-		uop = (UserObjectPtr) vnp->data.ptrvalue;
-		return (mRNAEvidenceComment(uop, FALSE));
+		if(vnp = dsp->vnp){
+			if(!retval){
+				uop = (UserObjectPtr) vnp->data.ptrvalue;
+				retval=mRNAEvidenceComment(uop, FALSE);
+			}
+			MemFree(vnp);
+		}
+		MemFree(dsp);
+		vnp=ds_vnp;
+		ds_vnp=ds_vnp->next;
+		MemFree(vnp);
 	}
-	return NULL;
+	return retval;
 }
+
+static CharPtr genanreftext1 = "GENOME ANNOTATION REFSEQ:  This model reference sequence was predicted from NCBI contig";
+static CharPtr genanreftext2 = "by automated computational analysis";
+static CharPtr genanreftext3 = "using gene prediction method:";
+static CharPtr genanreftext4 = "~Also see:~    Documentation of NCBI's Annotation Process~    Evidence Viewer - alignments supporting this model";
 
 static CharPtr GetAnnotationComment(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
@@ -654,7 +704,7 @@ static CharPtr GetAnnotationComment(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	UserObjectPtr	uop=NULL;
     ObjectIdPtr		oip;
 	UserFieldPtr	ufp, tmp, u, urf;
-	CharPtr 		retval = NULL, name, method;
+	CharPtr 		retval = NULL, name = NULL, method = NULL;
 	
 	ValNodePtr tvnp, ds_vnp, vnp;
 	DescrStructPtr dsp;
@@ -672,10 +722,10 @@ static CharPtr GetAnnotationComment(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	}
 	if (uop == NULL) return retval;
 	if ((oip = uop->type) == NULL) return retval;
-	if (StringCmp(oip->str, "TranscriptModelGeneration") != 0) return retval;
+	if (StringCmp(oip->str, "ModelEvidence") != 0) return retval;
 	for (ufp=uop->data; ufp; ufp=ufp->next) {
 		oip = ufp->label;
-		if (StringCmp(oip->str, "contig name") == 0) {
+		if (StringCmp(oip->str, "Contig Name") == 0) {
 			name = (CharPtr) ufp->data.ptrvalue;
 		}
 		if (StringCmp(oip->str, "Method") == 0) {
@@ -684,8 +734,13 @@ static CharPtr GetAnnotationComment(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			}
 		}
 	}
-	retval = MemNew(StringLen("GENOME ANNOTATION REFSEQ:  This reference sequence was derived by automated computational analysis of NCBI genomic sequence contig using gene prediction method: ") + StringLen(name) + StringLen(method) + 5);
-	sprintf(retval, "GENOME ANNOTATION REFSEQ:  This reference sequence was derived by automated computational analysis of NCBI genomic sequence contig %s using gene prediction method: %s", name, method);
+	if (name == NULL) return NULL;
+	retval = MemNew(StringLen(genanreftext1) + StringLen(genanreftext2) + StringLen(genanreftext3) + StringLen(genanreftext4) + StringLen(name) + StringLen(method) + 15);
+	if (method != NULL) {
+		sprintf(retval, "%s %s %s %s %s. %s", genanreftext1, name, genanreftext2, genanreftext3, method, genanreftext4);
+	} else {
+		sprintf(retval, "%s %s %s. %s", genanreftext1, name, genanreftext2, genanreftext4);
+	}
 	return retval;
 	
 }
@@ -906,12 +961,14 @@ NLM_EXTERN Int2 GB_GetSeqDescrComms(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			gbp->comm = tie_next_comm(gbp->comm, csp);
 			gbp->comm_num++;
 		}
+		/*
 		if ((strd = GetEvidence(ajp, gbp)) != NULL) {
 			csp = ComStructNew();
 			csp->string =StringSave( strd);
 			gbp->comm = tie_next_comm(gbp->comm, csp);
 			gbp->comm_num++;
 		}
+		*/
 	}
 
 	GetCommentByChoice(ajp, gbp, Seq_descr_user);
@@ -1322,7 +1379,7 @@ NLM_EXTERN void PrintDBSourceLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	ff_StartPrint(0, 12, ASN2FF_GB_MAX, NULL);
 	ff_AddString("DBSOURCE");
 	TabToColumn(13);
-	sid = SeqIdSelect(gbp->bsp->id, fasta_order, NUM_ORDER);
+	sid = SeqIdSelect(gbp->bsp->id, fasta_order, NUM_SEQID);
 	if (sid && ((sid->choice == SEQID_PIR) ||
                 (sid->choice == SEQID_SWISSPROT) ||
                 (sid->choice == SEQID_PDB) ||
@@ -1343,6 +1400,9 @@ than the individual parts of a segmented set, at least in Swiss-prot. */
 			(sid->choice == SEQID_GIBBSQ) || 
 			(sid->choice == SEQID_GIBBMT) || 
             (sid->choice == SEQID_OTHER) ||
+			(sid->choice == SEQID_TPG) || 
+			(sid->choice == SEQID_TPE) || 
+			(sid->choice == SEQID_TPD) || 
 			(sid->choice == SEQID_GI) || 
 			(sid->choice == SEQID_GIIM || (ChoicePID(sid) == TRUE))))  {
 		vnp = GetDBSourceForNuclDB(ajp, gbp);
@@ -1443,7 +1503,7 @@ itself. */
 	if (list == NULL) {
 		if ((bsp = ajp->asn2ffwep->seg) != NULL)
 		{
-			sid = SeqIdSelect(bsp->id, fasta_order, NUM_ORDER);
+			sid = SeqIdSelect(bsp->id, fasta_order, NUM_SEQID);
 			if (sid->choice == SEQID_GIBBMT) 
 				ValNodeAddPointer(&list, 0, bsp->id);	
 		}
@@ -1457,7 +1517,7 @@ bsp->id.  If no bsp, keep the id that was found above by SeqLocId. */
 		id = vnp->data.ptrvalue;
 		bsp = BioseqFindCore(id);
 		if (bsp) {
-			sid = SeqIdSelect(bsp->id, fasta_order, NUM_ORDER);
+			sid = SeqIdSelect(bsp->id, fasta_order, NUM_SEQID);
 			vnp->data.ptrvalue = sid;
 		} else if (id && id->choice == SEQID_GI) {
 			if ((sid = GetSeqIdForGI(id->data.intvalue)) != NULL)
@@ -1874,9 +1934,7 @@ NLM_EXTERN ValNodePtr GatherDescrListByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, 
 	if (vnp && vnp->data.ptrvalue) {
 		return ds_vnp;
 	}
-	/*
 	ValNodeFree(vnp0);
-	*/
 	ValNodeFreeData(ds_vnp);
 	return NULL;
 }

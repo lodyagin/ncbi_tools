@@ -23,7 +23,7 @@
 /* POSIX says that <sys/types.h> must be included (by the caller) before
    <regex.h>.  */
 
-#ifdef VMS
+#if defined(VMS) || defined(__MACOS__)
 /* VMS doesn't have `size_t' in <sys/types.h>, even though POSIX says it
    should be there.  */
 #include <stddef.h>

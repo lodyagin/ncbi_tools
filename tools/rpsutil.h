@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.15 2001/06/29 18:07:07 madden Exp $
+/* $Id: rpsutil.h,v 6.16 2001/08/28 17:45:34 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.16  2001/08/28 17:45:34  madden
+* Add is_tabular_comments field to options
+*
 * Revision 6.15  2001/06/29 18:07:07  madden
 * Add function RPSInitEx that passes in BLAST_OptionsBlkPtr
 *
@@ -179,6 +182,7 @@ typedef struct _rps_blast_options {
     FILE *outfp;                /* Output file opened descriptor */
     CharPtr out_filename;       /* Output filename */
    Boolean is_tabular;
+   Boolean is_tabular_comments;
 } RPSBlastOptions, PNTR RPSBlastOptionsPtr;
 
 /* Definitions of multi-threaded batch RPS Blast search */    

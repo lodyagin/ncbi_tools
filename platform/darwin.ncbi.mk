@@ -1,5 +1,5 @@
 #
-# $Id: darwin.ncbi.mk,v 1.4 2001/06/12 21:11:56 vakatov Exp $
+# $Id: darwin.ncbi.mk,v 1.5 2001/07/26 16:40:50 beloslyu Exp $
 #
 # Tested on Darwin localhost 1.2 Darwin Kernel Version 1.2: Wed Aug 30 23:32:53 PDT 2000;
 # root:xnu/xnu-103.obj~1/RELEASE_PPC  Power Macintosh powerpc
@@ -7,9 +7,9 @@
 NCBI_DEFAULT_LCL = dwn
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_CC = cc -pipe
-NCBI_CFLAGS1 = -c
+NCBI_CFLAGS1 = -c -g -no-cpp-precomp
 NCBI_LDFLAGS1 = -O2
-NCBI_OPTFLAG = -O2
+NCBI_OPTFLAG = -O3
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin
 NCBI_BIN_COPY = /home/coremake/ncbi/bin
 NCBI_INCDIR = /home/coremake/ncbi/include

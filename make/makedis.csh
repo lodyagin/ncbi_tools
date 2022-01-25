@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.62 2001/06/15 16:56:17 beloslyu Exp $
+# $Id: makedis.csh,v 1.65 2001/08/07 21:00:59 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -64,6 +64,8 @@ set os=`uname -s`
 
 #by default any Unix has Motif installed. In case of Linux do a check later.
 set HAVE_MOTIF=1
+#we will try to build OpenGL version of vibrant
+set HAVE_OGL=1
 
 switch ($os)
 case SunOS:
@@ -89,10 +91,15 @@ case SunOS:
 		endif
 		breaksw
 	endsw
-	if (! -d /usr/openwin/include/GL) then
-		echo Failed to find OpenGL library, will not build X11 apps
-		#set HAVE_MOTIF=0
-	endif
+	set HAVE_OGL=0
+	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
+		/usr/include/X11 /usr/openwin/include )
+		if (-d $i/GL) then
+			set HAVE_OGL=1
+			echo OpenGL found at $i/GL
+			break
+		endif
+	end
 	breaksw
 case IRIX*:
 	switch (`uname -r`)
@@ -115,6 +122,15 @@ case IRIX*:
 	breaksw
 case OSF1:
 	set platform=alphaOSF1
+	set HAVE_MOTIF=0
+	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
+		/usr/include/X11 )
+		if (-d $i/Xm) then
+			set HAVE_MOTIF=1
+			echo Motif found at $i/Xm
+			break
+		endif
+	end
 	breaksw
 case Linux:
 	switch (`uname -m`)
@@ -132,6 +148,16 @@ case Linux:
 		if (-d $i/Xm) then
 			set HAVE_MOTIF=1
 			echo Motif found at $i/Xm
+			break
+		endif
+	end
+	#check do we have OpenGL installed
+	set HAVE_OGL=0
+	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
+		/usr/include/X11 /usr/openwin/include )
+		if (-d $i/GL) then
+			set HAVE_OGL=1
+			echo OpenGL found at $i/GL
 			break
 		endif
 	end
@@ -223,7 +249,7 @@ mv makeall.unx makefile
 
 # if $OPENGL_TARGETS (in <platform>.ncbi.mk) is defined, 
 # then add the appropriate flags, libraries, and binaries for OpenGL apps
-if ("$?OPENGL_TARGETS" == "1") then
+if ("$?OPENGL_TARGETS" == "1" && "$HAVE_OGL" == "1" ) then
     set OGL_NCBI_LIBS="$OPENGL_NCBI_LIBS"
     set OGL_INCLUDE="$OPENGL_INCLUDE"
     set OGL_LIBS="$OPENGL_LIBS"
@@ -254,9 +280,12 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		$OGL_NCBI_LIBS \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\")
-	set DEMO_VIB=(LIB4=-lvibrant \
-		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
-		VIBFLAG=\"$NCBI_VIBFLAG\")
+	#By default we don't need to build demo programs with vibrant lib
+	#set DEMO_VIB=(LIB4=-lvibrant \
+	#	VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
+	#	VIBFLAG=\"$NCBI_VIBFLAG\")
+	set DEMO_VIB=()
+
 	set NET_VIB=(BLIB31=libvibnet.a \
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \

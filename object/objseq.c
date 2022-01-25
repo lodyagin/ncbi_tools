@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.15 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -90,6 +90,13 @@ static char *this_file = __FILE__;
 #include <asnseq.h>        /* the AsnTool header */
 #include <objmgr.h>
 #include <sequtil.h>
+
+static Boolean SeqDescrAsnWriteExtra (ValNodePtr anp, AsnIoPtr aip, AsnTypePtr orig,
+					Boolean anp_not_null);
+static Boolean SeqAnnotSetAsnWriteExtra (SeqAnnotPtr sap, AsnIoPtr aip, AsnTypePtr set,
+					 AsnTypePtr element, Boolean sap_not_null);
+static Boolean SeqAnnotAsnWriteExtra (SeqAnnotPtr sap, AsnIoPtr aip, AsnTypePtr orig,
+						  ValNodePtr extras);
 
 /*****************************************************************************
 *
@@ -609,14 +616,27 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqNew (void)
 *****************************************************************************/
 NLM_EXTERN BioseqPtr LIBCALL BioseqFree (BioseqPtr bsp)
 {
+	Boolean top = FALSE;
+
     if (bsp == NULL)
         return bsp;
+
+	if (bsp->idx.parentptr == NULL || bsp->idx.parenttype == OBJ_SEQSUB) {
+		if (bsp->seqentry != NULL) {
+			SeqMgrDeleteIndexesInRecord (bsp->seqentry);
+			top = TRUE;
+		}
+	}
 
 	if (! SeqMgrDelete(SM_BIOSEQ, (Pointer)bsp))
 	    ErrPostEx(SEV_ERROR, 0,0, "BioseqFree: pointer not registered");
 
     SeqIdSetFree(bsp->id);
 	BioseqFreeComponents(bsp);
+
+	if (top) {
+		ObjMgrDeleteAllInRecord ();
+	}
 
 	return (BioseqPtr)MemFree(bsp);
 }
@@ -730,6 +750,10 @@ NLM_EXTERN Boolean LIBCALL BioseqAsnWrite (BioseqPtr bsp, AsnIoPtr aip, AsnTypeP
     {
         if (! SeqDescrAsnWrite(bsp->descr, aip, BIOSEQ_descr)) goto erret;
     }
+    else
+    {
+        if (! SeqDescrExtraCheck(aip, BIOSEQ_descr)) goto erret;
+    }
 
 	if (! BioseqInstAsnWrite(bsp, aip, BIOSEQ_inst)) goto erret;
 
@@ -737,6 +761,10 @@ NLM_EXTERN Boolean LIBCALL BioseqAsnWrite (BioseqPtr bsp, AsnIoPtr aip, AsnTypeP
     {
         if (! SeqAnnotSetAsnWrite(bsp->annot, aip, BIOSEQ_annot, BIOSEQ_annot_E))
             goto erret;
+    }
+    else   /* look for extra features from SeqEntryAsnOut() */
+    {
+        if (! SeqAnnotSetExtraCheck(aip, BIOSEQ_annot, BIOSEQ_annot_E)) goto erret;
     }
 
     if (! AsnCloseStruct(aip, atp, (Pointer)bsp)) goto erret;
@@ -1348,6 +1376,7 @@ NLM_EXTERN SeqDescPtr LIBCALL SeqDescFree (SeqDescPtr anp)
 	return anp;
 }
 
+
 /*****************************************************************************
 *
 *   SeqDescrAsnWrite(anp, aip, atp)
@@ -1357,9 +1386,38 @@ NLM_EXTERN SeqDescPtr LIBCALL SeqDescFree (SeqDescPtr anp)
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqDescrAsnWrite (ValNodePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 {
+	return SeqDescrAsnWriteExtra(anp, aip, orig, TRUE);
+}
+
+/*****************************************************************************
+*
+*   SeqDescrExtraCheck(aip, atp)
+*   	atp is the current type (if identifier of a parent struct)
+*       if atp == NULL, then assumes it stands alone (SeqDescr ::=)
+*       checks for extra descriptors from SeqEntryAsnOut, when descr is NULL
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL SeqDescrExtraCheck (AsnIoPtr aip, AsnTypePtr orig)
+{
+	return SeqDescrAsnWriteExtra((ValNodePtr)NULL, aip, orig, FALSE);
+}
+/*****************************************************************************
+*
+*   SeqDescrAsnWriteExtra(anp, aip, atp, anp_not_null)
+*   	atp is the current type (if identifier of a parent struct)
+*       if atp == NULL, then assumes it stands alone (SeqDescr ::=)
+*       either anp or extras from SeqEntryAsnOut can be written
+*       if anp_not_null, means anp cannot be NULL
+*
+*****************************************************************************/
+static Boolean SeqDescrAsnWriteExtra (ValNodePtr anp, AsnIoPtr aip, AsnTypePtr orig,
+					Boolean anp_not_null)
+{
 	AsnTypePtr atp;
-    ValNodePtr oldanp;
-    Boolean retval = FALSE;
+    ValNodePtr oldanp = NULL, tanp;
+    Boolean retval = FALSE, had_extra = FALSE, had_anp = FALSE;
+	AsnOptionPtr aopp;
+	ValNodePtr extras = NULL;
 
 	if (! loaded)
 	{
@@ -1370,16 +1428,38 @@ NLM_EXTERN Boolean LIBCALL SeqDescrAsnWrite (ValNodePtr anp, AsnIoPtr aip, AsnTy
 	if (aip == NULL)
 		return FALSE;
 
+	if (anp != NULL) had_anp = TRUE;
+	aopp = AsnIoOptionGet(aip, OP_NCBIOBJSEQ, CHECK_EXTRA_DESC, NULL);
+	if (aopp != NULL)
+	{
+		had_extra = TRUE;
+		extras = (ValNodePtr)(aopp->data.ptrvalue);
+	}
+	else if ((anp == NULL) && (! anp_not_null))  /* nothing to write */
+		return TRUE;
+
 	if (! ProgMon("Write SeqDescr"))
 		return FALSE;
 
 	atp = AsnLinkType(orig, SEQ_DESCR);   /* link local tree */
     if (atp == NULL) return FALSE;
 
-	if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+	if (anp_not_null)
+		oldanp = anp;
+	else if (extras != NULL)
+		oldanp = (ValNodePtr)(extras->data.ptrvalue);
 
-	oldanp = anp;
+	if (oldanp == NULL)
+		{ AsnNullValueMsg(aip, atp); goto erret; }
+
     if (! AsnOpenStruct(aip, atp, (Pointer)oldanp)) goto erret; /* SET OF */
+
+    while (extras != NULL)    /* extras first */
+    {
+	tanp = (ValNodePtr)(extras->data.ptrvalue);
+	if (! SeqDescAsnWrite(tanp, aip, SEQ_DESCR_E)) goto erret;
+	extras = extras->next;
+    }
 
     while (anp != NULL)
     {
@@ -1389,6 +1469,10 @@ NLM_EXTERN Boolean LIBCALL SeqDescrAsnWrite (ValNodePtr anp, AsnIoPtr aip, AsnTy
     if (! AsnCloseStruct(aip, atp, oldanp)) goto erret;
     retval = TRUE;
 erret:
+	if (had_extra)
+	{
+		AsnIoOptionFree(aip, OP_NCBIOBJSEQ, CHECK_EXTRA_DESC);
+	}
 	AsnUnlinkType(orig);       /* unlink local tree */
 	return retval;
 }
@@ -2662,6 +2746,25 @@ NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotFree (SeqAnnotPtr sap)
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqAnnotAsnWrite (SeqAnnotPtr sap, AsnIoPtr aip, AsnTypePtr orig)
 {
+	return SeqAnnotAsnWriteExtra(sap, aip, orig, (ValNodePtr)NULL);
+}
+
+/*****************************************************************************
+*
+*   SeqAnnotAsnWriteExtra(sap, aip, atp, extras)
+*   	atp is the current type (if identifier of a parent struct)
+*       if atp == NULL, then assumes it stands alone (SeqAnnot ::=)
+*       if extras != NULL
+*           assumes sap has no data ptr
+*           assumes extras is a ValNode chain pointing to SeqFeats from
+*              SeqEntryAsnOut()
+*       else
+*           ignores extras and writes the SeqAnnot
+*
+*****************************************************************************/
+static Boolean SeqAnnotAsnWriteExtra (SeqAnnotPtr sap, AsnIoPtr aip, AsnTypePtr orig,
+						  ValNodePtr extras)
+{
 	DataVal av;
 	AsnTypePtr atp;
     Boolean retval = FALSE;
@@ -2715,7 +2818,15 @@ NLM_EXTERN Boolean LIBCALL SeqAnnotAsnWrite (SeqAnnotPtr sap, AsnIoPtr aip, AsnT
     switch (sap->type)
     {
         case 1:
-            if (! SeqFeatSetAsnWrite((SeqFeatPtr)sap->data, aip, SEQ_ANNOT_data_ftable, SEQ_ANNOT_data_ftable_E)) goto erret;
+	    if (extras != NULL)  /* from SeqEntryAsnOut */
+	    {
+		if (! SeqFeatSetAsnWriteExtra((SeqFeatPtr)sap->data, aip, SEQ_ANNOT_data_ftable,
+					      SEQ_ANNOT_data_ftable_E, extras)) goto erret;
+	    }
+	    else
+	    {
+		if (! SeqFeatSetAsnWrite((SeqFeatPtr)sap->data, aip, SEQ_ANNOT_data_ftable, SEQ_ANNOT_data_ftable_E)) goto erret;
+	    }
             break;
         case 2:
             if (! SeqAlignSetAsnWrite((SeqAlignPtr)sap->data, aip, SEQ_ANNOT_data_align, SEQ_ANNOT_data_align_E)) goto erret;
@@ -2865,9 +2976,38 @@ erret:
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqAnnotSetAsnWrite (SeqAnnotPtr sap, AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element)
 {
+	return SeqAnnotSetAsnWriteExtra(sap, aip, set, element, TRUE);
+}
+
+/*****************************************************************************
+*
+*   SeqAnnotSetExtraCheck(aip, set, element)
+*   	atp is the current type (if identifier of a parent struct)
+*       if atp == NULL, then assumes it stands alone (SeqAnnot ::=)
+*       called to check for extra features from SeqEntryAsnOut when sap is NULL
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL SeqAnnotSetExtraCheck (AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element)
+{
+	return SeqAnnotSetAsnWriteExtra((SeqAnnotPtr)NULL, aip, set, element, FALSE);
+}
+
+/*****************************************************************************
+*
+*   SeqAnnotSetAsnWriteExtra(sap, aip, set, element, sap_not_null)
+*   	atp is the current type (if identifier of a parent struct)
+*       if atp == NULL, then assumes it stands alone (SeqAnnot ::=)
+*
+*****************************************************************************/
+static Boolean SeqAnnotSetAsnWriteExtra (SeqAnnotPtr sap, AsnIoPtr aip, AsnTypePtr set,
+					 AsnTypePtr element, Boolean sap_not_null)
+{
 	AsnTypePtr atp;
-	SeqAnnotPtr oldsap;
-    Boolean retval = FALSE;
+	SeqAnnotPtr oldsap = NULL, tsap = NULL;
+    Boolean retval = FALSE, had_sap = FALSE, had_extra = FALSE;
+	AsnOptionPtr aopp;
+	ValNodePtr extras = NULL;
+	SeqAnnot sa;
 
 	if (! loaded)
 	{
@@ -2878,12 +3018,28 @@ NLM_EXTERN Boolean LIBCALL SeqAnnotSetAsnWrite (SeqAnnotPtr sap, AsnIoPtr aip, A
 	if (aip == NULL)
 		return FALSE;
 
+	aopp = AsnIoOptionGet(aip, OP_NCBIOBJSEQ, CHECK_EXTRA_FEAT, NULL);
+	if (aopp != NULL)
+	{
+		had_extra = TRUE;
+		extras = aopp->data.ptrvalue;
+		tsap = &sa;
+		MemSet(tsap, 0, sizeof(SeqAnnot));
+		tsap->type = 1;  /* feature table */
+	}
+	else if ((sap == NULL) && (! sap_not_null))  /* nothing to write */
+		return TRUE;
+		
 	atp = AsnLinkType(element, SEQ_ANNOT);   /* link local tree */
     if (atp == NULL) return FALSE;
 
-	if (sap == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+	if (sap_not_null)
+		oldsap = sap;
+	else
+		oldsap = tsap;
 
-	oldsap = sap;
+	if (oldsap == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
     if (! AsnOpenStruct(aip, set, (Pointer)oldsap)) goto erret;
 
     while (sap != NULL)
@@ -2891,9 +3047,17 @@ NLM_EXTERN Boolean LIBCALL SeqAnnotSetAsnWrite (SeqAnnotPtr sap, AsnIoPtr aip, A
         if (! SeqAnnotAsnWrite(sap, aip, atp)) goto erret;
         sap = sap->next;
     }
+
+    if (tsap != NULL)
+    {
+	if (! SeqAnnotAsnWriteExtra(tsap, aip, atp, extras)) goto erret;
+    }
+
     if (! AsnCloseStruct(aip, set, (Pointer)oldsap)) goto erret;
     retval = TRUE;
 erret:
+	if (had_extra)
+		AsnIoOptionFree(aip, OP_NCBIOBJSEQ, CHECK_EXTRA_FEAT);
 	AsnUnlinkType(element);       /* unlink local tree */
 	return retval;
 }
@@ -4524,4 +4688,5 @@ erret:
     adp = AlignDefFree(adp);
     goto ret;
 }
+
 

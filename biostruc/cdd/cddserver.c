@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.24 2001/06/20 20:50:50 bauer Exp $
+/* $Id: cddserver.c,v 1.26 2001/11/13 19:46:53 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.24 $
+* $Revision: 1.26 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.26  2001/11/13 19:46:53  bauer
+* Biostrucs now read from file, support for new mmdbsrv
+*
+* Revision 1.25  2001/10/01 18:14:24  bauer
+* minor changes in logic
+*
 * Revision 1.24  2001/06/20 20:50:50  bauer
 * fixed a problem with gi's for PDB-derived sequences
 *
@@ -111,19 +117,17 @@
 * ==========================================================================
 */
 
-
-#include <stdio.h>
 #include <ncbi.h>
-#include <accentr.h>
+#include <stdio.h>
 #include <lsqfetch.h>
 #include <netentr.h>
 #include <www.h>
 #include <sys/resource.h>
 #include <asn.h>
+#include <accpubseq.h>
 #include <accutils.h>
 #include <mmdbapi.h>
 #include <mmdbapi1.h>
-/* #include <asnmime.h> */
 #include <objmime.h>
 #include <strimprt.h>
 #include <objcdd.h>
@@ -935,7 +939,7 @@ static Int4 ConvertMMDBUID(CharPtr pcString)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-/* Check if 
+/* Check if  */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 static Boolean CddUseThisMMDBid(ValNodePtr location, CddSumPtr pcds)
@@ -967,7 +971,8 @@ static Boolean CddUseThisMMDBid(ValNodePtr location, CddSumPtr pcds)
 /*---------------------------------------------------------------------------*/
 static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
                                CharPtr QueryAlign, Boolean bHasPdb,
-			       CharPtr dbversion, Int2 iPDB, Uint2 pwidth)
+			             CharPtr dbversion, Int2 iPDB, Uint2 pwidth,
+                               Int4 iQueryGi, CharPtr QueryName)
 {
   Uint4                disp_format;
   Char                 tableName[PATH_MAX]; 
@@ -1047,7 +1052,7 @@ static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
 /*---------------------------------------------------------------------------*/
 /* if necessary, write out menu for alignment redrawing                      */
 /*---------------------------------------------------------------------------*/
-  if (QuerySeq && QueryAlign) {
+  if ((QuerySeq || iQueryGi != -1) && QueryAlign) {
 
     fprintf(table, "<TABLE BORDER=0 CELLPADDING=3 CELLSPACING=0>\n");
     fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><H2><FONT COLOR=#000000>CD:</FONT></H2></TD><TD VALIGN=TOP NOWRAP BGCOLOR=#FFFFCC><H2><A HREF=\"%scddsrv.cgi?uid=%s&version=%s\">%s</A><FONT size=-1>, &nbsp; CD-Search result with query-sequence added</FONT></H2></TD></TR>\n",
@@ -1096,8 +1101,10 @@ static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
     fprintf(table, "<FORM METHOD=\"POST\" ACTION=\"%scddsrv.cgi\">\n",URLBase);
     fprintf(table, "<INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%s\">\n", cCDDid);
     fprintf(table, "<INPUT TYPE=\"HIDDEN\" NAME=\"version\" VALUE=\"%s\">\n", dbversion);
-    fprintf(table, "<INPUT TYPE=\"HIDDEN\" NAME=\"query\" VALUE=\"%s\">\n", QuerySeq);
-    fprintf(table, "<INPUT TYPE=\"HIDDEN\" NAME=\"aln\" VALUE=\"%s\">\n", QueryAlign);
+    if (QuerySeq) fprintf(table, "<INPUT TYPE=\"HIDDEN\" NAME=\"query\" VALUE=\"%s\">\n", QuerySeq);
+    if (QueryAlign) fprintf(table, "<INPUT TYPE=\"HIDDEN\" NAME=\"aln\" VALUE=\"%s\">\n", QueryAlign);
+    if (QueryName) fprintf(table, "<INPUT TYPE=\"HIDDEN\" NAME=\"querynm\" VALUE=\"%s\">\n", QueryName);
+    if (iQueryGi != -1) fprintf(table, "<INPUT TYPE=\"HIDDEN\",NAME=\"qerygi\" VALUE=\"%d\">\n",iQueryGi);
     fprintf(table, "<INPUT TYPE=\"SUBMIT\" VALUE=\"Redisplay Alignment\"> showing\n");
     fprintf(table, "<SELECT NAME=\"maxaln\">\n");
     fprintf(table, "<OPTION VALUE=\"5\"> up to   5\n");
@@ -1197,7 +1204,8 @@ static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
 /*---------------------------------------------------------------------------*/
 Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
                            CharPtr QuerySeq, CharPtr QueryAlign, CharPtr dbversion,
-			   CddPtr pcdd, Boolean bHasPdb, FloatHi tbit, Uint2 pwidth)
+			         CddPtr pcdd, Boolean bHasPdb, FloatHi tbit, Uint2 pwidth,
+                           Int4 iQueryGi, CharPtr QueryName)
 {
   Uint4       size = FileLength(CDDalign);
   Uint4       uCAVoptions = 0;
@@ -1226,7 +1234,7 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
 /*---------------------------------------------------------------------------*/
 /* if necessary, write out menu for alignment redrawing                      */
 /*---------------------------------------------------------------------------*/
-  if (QuerySeq && QueryAlign) {
+  if ((QuerySeq || iQueryGi != -1) && QueryAlign) {
 
     printf("<TABLE BORDER=0 CELLPADDING=3 CELLSPACING=0>\n");
     printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><H2><FONT COLOR=#000000>CD:</FONT></H2></TD><TD VALIGN=TOP NOWRAP BGCOLOR=#FFFFCC><H2><A HREF=\"%scddsrv.cgi?uid=%s&version=%s\">%s</A><FONT size=-1>, &nbsp; CD-Search result with query-sequence added</FONT></H2></TD></TR>\n",
@@ -1275,8 +1283,10 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
     printf("<FORM METHOD=\"POST\" ACTION=\"%scddsrv.cgi\">\n",URLBase);
     printf("<INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%s\">\n", cCDDid);
     printf("<INPUT TYPE=\"HIDDEN\" NAME=\"version\" VALUE=\"%s\">\n", dbversion);
-    printf("<INPUT TYPE=\"HIDDEN\" NAME=\"query\" VALUE=\"%s\">\n", QuerySeq);
-    printf("<INPUT TYPE=\"HIDDEN\" NAME=\"aln\" VALUE=\"%s\">\n", QueryAlign);
+    if (QuerySeq) printf("<INPUT TYPE=\"HIDDEN\" NAME=\"query\" VALUE=\"%s\">\n", QuerySeq);
+    if (QueryAlign) printf("<INPUT TYPE=\"HIDDEN\" NAME=\"aln\" VALUE=\"%s\">\n", QueryAlign);
+    if (QueryName) printf("<INPUT TYPE=\"HIDDEN\" NAME=\"querynm\" VALUE=\"%s\">\n", QueryName);
+    if (iQueryGi != -1) printf("<INPUT TYPE=\"HIDDEN\" NAME=\"querygi\" VALUE=\"%d\">\n",iQueryGi);
     printf("<INPUT TYPE=\"SUBMIT\" VALUE=\"Redisplay Alignment\"> showing\n");
     printf("<SELECT NAME=\"maxaln\">\n");
     printf("<OPTION VALUE=\"5\"> up to   5\n");
@@ -1361,7 +1371,8 @@ Int2 Main()
 {
   AsnIoPtr                 paiFile;
   AsnIoMemPtr              aimp;
-  BioseqPtr                bsp, bspQuery;
+  BioseqPtr                bsp, bspQuery      = NULL;
+  BioseqPtr                bspRet;
   BioseqSetPtr             bssp;
   BiostrucAlignPtr         pbsaStruct;
   BiostrucAlignSeqPtr      pbsaSeq;
@@ -1383,6 +1394,7 @@ Int2 Main()
   CharPtr                  www_arg, cPart;
   CharPtr                  QuerySeq           = NULL;
   CharPtr                  QueryAlign         = NULL;
+  CharPtr                  QueryName          = NULL;
   DenseDiagPtr             ddp;
   DenseDiagPtr             ddpQuery, ddpQTail;
   Int4Ptr                  iGiList            = NULL;
@@ -1397,7 +1409,7 @@ Int2 Main()
   SeqAnnotPtr              psaCAlignHead      = NULL;
   SeqEntryPtr              sep, sequences     = NULL;
   SeqEntryPtr              sepQuery           = NULL;
-  SeqIdPtr                 sip, sipNew, sipQuery;
+  SeqIdPtr                 sip, sipNew, sipQuery, sipRet;
   SeqIdPtr                 sipMaster          = NULL;
   SeqIntPtr                sintp;
   ValNodePtr               pvnGi              = NULL;
@@ -1432,7 +1444,7 @@ Int2 Main()
   Int2                     iPDB               = 0;
   Int2                     iSeqStrMode        = NOALIGN; 
   Int4                     i3dRepIndex        = 1;
-  Int4                     Gi, i;
+  Int4                     Gi, i, iQueryGi    = -1;
   Int4                     iCddSize           = 0;
   Int4                     iIndex;
   Int4                     iMaxAln            = 0;
@@ -1452,9 +1464,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* Yanli's fix for making binary reading work                                */
 /*---------------------------------------------------------------------------*/
-  objmmdb1AsnLoad();
-  objmmdb2AsnLoad();
-  objmmdb3AsnLoad();
+  objmmdb1AsnLoad(); objmmdb2AsnLoad(); objmmdb3AsnLoad();
 
 /*---------------------------------------------------------------------------*/
 /* this sets up the unix time limit                                          */
@@ -1467,6 +1477,12 @@ Int2 Main()
 /* retrieve names for directories etc.                                       */
 /*---------------------------------------------------------------------------*/
   if (!CddGetParams()) CddHtmlError("Couldn't read from config file...");
+
+/*---------------------------------------------------------------------------*/
+/* Get ready for sequence retrieval                                          */
+/*---------------------------------------------------------------------------*/
+  if (!PUBSEQBioseqFetchEnable("cddsrv", TRUE))
+    CddHtmlError("Unable to enable PUBSEQBioseqFetch");
 
 /*---------------------------------------------------------------------------*/
 /* Begin processing www information block                                    */
@@ -1528,22 +1544,45 @@ Int2 Main()
 #ifdef DEBUG
   printf(" DEBUG: CDD data searched in: %s\n",CDDalign);
 #endif 
-  
 
 /*---------------------------------------------------------------------------*/
 /* changed reading of the CD asn.1 to BINARY, 6/12/00, as v1.00 is near      */
 /*---------------------------------------------------------------------------*/
   pcdd = (CddPtr) CddReadFromFile(CDDalign,TRUE);
-/*  aip = AsnIoOpen(CDDalign,"rb");  */
-/*  pcdd = CddAsnRead(aip,NULL);     */
-/*  AsnIoClose(aip);                 */
   if (!pcdd) CddHtmlError("Could not access CDD data!");
   bHasConsensus = CddHasConsensus(pcdd);
 
 /*---------------------------------------------------------------------------*/
 /* retrieve data required for using cddserver as a rps-blast output formatter*/
 /*---------------------------------------------------------------------------*/
-  if ((indx = WWWFindName(www_info,"query")) >= 0) {
+  if ((indx = WWWFindName(www_info,"querynm")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info, indx);
+    QueryName = strdup(www_arg);
+  }
+  if ((indx = WWWFindName(www_info,"querygi")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info,indx);
+    iQueryGi = (Int4) atoi(www_arg);
+    sipRet = (SeqIdPtr) ValNodeNew(NULL);
+    sipRet->choice = SEQID_GI;
+    sipRet->data.intvalue = iQueryGi;
+    bspRet = BioseqLockById(sipRet);
+    if (!bspRet) CddHtmlError("Could not retrieve query sequence!");
+    sipQuery = (SeqIdPtr) ValNodeNew(NULL);
+    sipQuery->choice = SEQID_LOCAL;
+    oidp = ObjectIdNew();
+    if (QueryName) {
+      oidp->str = strdup(QueryName);
+    } else {
+      oidp->str = strdup("query");
+    }
+    sipQuery->data.ptrvalue = oidp;
+    sipQuery->next = NULL;
+    bspQuery = (BioseqPtr) BioseqCopy(sipQuery,sipRet,0,bspRet->length-1,0,FALSE);
+    BioseqUnlock(bspRet);
+    sepQuery = SeqEntryNew();
+    sepQuery->choice = 1;
+    sepQuery->data.ptrvalue = bspQuery;    
+  } else if ((indx = WWWFindName(www_info,"query")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info,indx);
     if((sepQuery=FastaToSeqBuffEx(www_arg, &outptr,FALSE,NULL,FALSE))==NULL)
       CddHtmlError("Can not convert FASTA formatted sequence!");
@@ -1552,12 +1591,17 @@ Int2 Main()
     bspQuery = (BioseqPtr) sepQuery->data.ptrvalue;
     sipQuery = bspQuery->id;
     oidp = ObjectIdNew();
-    oidp->str = MemNew(6*sizeof(Char));
-    strcpy(oidp->str,"query");
-    oidp->str[5]='\0';
-     MemFree(sipQuery->data.ptrvalue);
+    if (QueryName) {
+      oidp->str = strdup(QueryName);
+    } else {
+      oidp->str = strdup("query");
+    }
+    MemFree(sipQuery->data.ptrvalue);
+    sipQuery->choice = SEQID_LOCAL;
     sipQuery->data.ptrvalue = oidp;
     sipQuery->next = NULL;
+  }
+  if (bspQuery) {
 /*---------------------------------------------------------------------------*/
 /* add query sequence to the linked list of bioseqs in the CD                */
 /*---------------------------------------------------------------------------*/
@@ -1940,7 +1984,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* check whether the 3D representative is needed and included in the Gi list */
 /*---------------------------------------------------------------------------*/
-  if (iPDB < 2 && !UseThisGi(i3dRepIndex,pvnGis)) {
+  if (i < 2 && !UseThisGi(i3dRepIndex,pvnGis)) {
     nGi ++;
     pvnGi = ValNodeAddInt(&pvnGis, 0, i3dRepIndex);
   }
@@ -2041,7 +2085,7 @@ Int2 Main()
 /* If HTML display is selected, call Patrick's Function and exit             */
 /*---------------------------------------------------------------------------*/
   if ((iPDB > 1 && !bUseCddAlignView) || iPDB == 5) {
-    CddDumpAlignAsHtml(salpCopy, pcdd, QuerySeq, QueryAlign, bHasPdb,dbversion,iPDB,pwidth);
+    CddDumpAlignAsHtml(salpCopy, pcdd, QuerySeq, QueryAlign, bHasPdb,dbversion,iPDB,pwidth,iQueryGi,QueryName);
   }
 
 /*---------------------------------------------------------------------------*/
@@ -2059,14 +2103,12 @@ Int2 Main()
   psaCAlignHead->desc = pcdd->seqannot->desc;
   psaCAlignHead->type = pcdd->seqannot->type;
  
-
-  if (!EntrezInit("Cn3D", FALSE, &is_network))
-    CddHtmlError("Unable to start Entrez");
-	OpenMMDBAPI((POWER_VIEW /* ^ FETCH_ENTREZ */), NULL);
+  OpenMMDBAPI((POWER_VIEW /* ^ FETCH_ENTREZ */), NULL);
+  if (!MMDBInit()) CddHtmlError("MMDB Initialization failed");
 
   pcdsThis = pcds;
   while (pcdsThis) {
-    if (pcdsThis->bIsPdb) {
+    if (pcdsThis->bIsPdb && iPDB < 2) {
       pcdsThis->iMMDBId = ConvertMMDBUID(pcdsThis->cPdbId);
     }
     pcdsThis=pcdsThis->next;
@@ -2085,13 +2127,13 @@ Int2 Main()
 /* if no PDB structure is available, the alignment is dumped as HTML by def. */
 /*---------------------------------------------------------------------------*/
     iPDB = 2;
-    CddDumpAlignAsHtml(salpCopy, pcdd, QuerySeq, QueryAlign, bHasPdb, dbversion, iPDB, pwidth);
+    CddDumpAlignAsHtml(salpCopy, pcdd, QuerySeq, QueryAlign, bHasPdb, dbversion, iPDB, pwidth,iQueryGi,QueryName);
   }
 
 /*---------------------------------------------------------------------------*/
 /* retrieve Master structure in the case of a single-structure CD            */
 /*---------------------------------------------------------------------------*/
-  if (bMode && bHasPdb) { 
+  if (bMode && bHasPdb && iPDB < 2) { 
     if (!bHasConsensus) {
       strcpy(szName,pcds->cPdbId);
     } else {
@@ -2103,7 +2145,7 @@ Int2 Main()
         pcdsThis = pcdsThis->next;
       }
     }
-    pbsMaster = FetchBiostrucPDB(szName,iModelComplexity,1);
+    pbsMaster = (BiostrucPtr) MMDBBiostrucGet(ConvertMMDBUID(szName),iModelComplexity,1);
     if (!pbsMaster) CddHtmlError("Unable to load Master structure!");
     if (bChain) {
       if (!bHasConsensus) strcpy(chain,pcds->cChainId);
@@ -2121,13 +2163,13 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* retrieve slave structures in the case of a multi-structure CD             */
 /*---------------------------------------------------------------------------*/
-  if (iSeqStrMode == CDDSEVSTRUC) {
+  if (iSeqStrMode == CDDSEVSTRUC && iPDB < 2) {
     pcdsThis = pcds->next;
     while (pcdsThis) {
       if (pcdsThis->bIsPdb && !pcdsThis->bIs3dRep) {
         strcpy(szName,pcdsThis->cPdbId);
         if (!pbsSlaveHead) {
-          pbsSlaveHead = FetchBiostrucPDB(szName,iModelComplexity,1);
+          pbsSlaveHead = (BiostrucPtr) MMDBBiostrucGet(ConvertMMDBUID(szName),iModelComplexity,1);
           if (!pbsSlaveHead) CddHtmlError("Unable to load slave structure!");
           if (bChain) {
             strcpy(chain,pcdsThis->cChainId);
@@ -2139,7 +2181,7 @@ Int2 Main()
           }
           pbsSlaveTail = pbsSlaveHead;
         } else {
-		      pbsSlave = FetchBiostrucPDB(szName,iModelComplexity, 1);
+          pbsSlave = (BiostrucPtr) MMDBBiostrucGet(ConvertMMDBUID(szName),iModelComplexity, 1);
           if (!pbsSlave) CddHtmlError("Unable to load slave structure!");
           if (bChain) {
             strcpy(chain,pcdsThis->cChainId);
@@ -2319,7 +2361,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 #ifdef USE_CAV
   if (iSeqStrMode == CDDSEQUONLY && bUseCddAlignView) {
-    if (!CddInvokeAlignView(pvnNcbi,CDDalign,iPDB,QuerySeq,QueryAlign,dbversion,pcdd,bHasPdb,tbit,pwidth)) 
+    if (!CddInvokeAlignView(pvnNcbi,CDDalign,iPDB,QuerySeq,QueryAlign,dbversion,pcdd,bHasPdb,tbit,pwidth,iQueryGi,QueryName)) 
       CddHtmlError("Could not display alignment");
     return 0;  
   }
@@ -2360,6 +2402,7 @@ Int2 Main()
   CloseMMDBAPI();
   MMDBFini();
   VASTFini();
+  PUBSEQFini();
   RemoveTempFiles();   
   return 0;
 }

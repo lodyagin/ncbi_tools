@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.37 $
+* $Revision: 6.43 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,24 @@
 *
 *
 * $Log: objmgr.c,v $
+* Revision 6.43  2001/12/13 13:59:14  kans
+* ObjMgrSendMsg clears feature indexes if OM_MSG_UPDATE
+*
+* Revision 6.42  2001/11/30 12:19:47  kans
+* ObjMgrDelete bails if omdp->bulkIndexFree
+*
+* Revision 6.41  2001/11/19 15:27:52  kans
+* minor fix to ObjMgrDeleteAllInRecord
+*
+* Revision 6.40  2001/11/19 15:26:19  kans
+* added ObjMgrDeleteAllInRecord, still need to bail in ObjMgrDelete if bulkIndexFree, then call from BioseqFree and BioseqSetFree
+*
+* Revision 6.39  2001/11/15 18:15:48  kans
+* set bsp->omdp at creation, SeqMgrDeleteIndexesInRecord sets omdp->bulkIndexFree
+*
+* Revision 6.38  2001/10/02 12:22:57  kans
+* ObjMgrRecordOmdpByEntityID for quick access to top omdp by entity
+*
 * Revision 6.37  2001/05/31 22:58:25  kans
 * added ObjMgrReapOne, DEFAULT_MAXOBJ, autoclean reaps and frees one entity at a time, as needed
 *
@@ -269,6 +287,7 @@ static char *this_file = __FILE__;
 #include <objsset.h>       /* temporary for caching functions */
 #include <ncbithr.h>       /* for thread safe functions */
 #include <sequtil.h>
+#include <explore.h>       /* for SeqMgrClearFeatureIndexes */
 
 /***
 #define DEBUG_OBJMGR
@@ -392,12 +411,68 @@ NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrGetDataStruct (ObjMgrPtr omp, Uint2 entit
 	return ObjMgrFindByEntityID (omp, entityID, &prev);
 }
 
+/* cache to avoid linear search of all objects in ObjMgrFindByEntityID */
+
+#define TOP_ID_STACK_SIZE  100
+
+static Uint2 topEntityIDs [TOP_ID_STACK_SIZE];
+static ObjMgrDataPtr topOMDPs [TOP_ID_STACK_SIZE];
+static Int2  topIDStackPt = 0;
+
+extern void ObjMgrRecordOmdpByEntityID (Uint2 entityID, ObjMgrDataPtr omdp);
+extern void ObjMgrRecordOmdpByEntityID (Uint2 entityID, ObjMgrDataPtr omdp)
+
+{
+	Int2  i;
+
+	if (entityID < 1) return;
+
+	/* check for preexisting entry, update */
+
+	for (i = 0; i < topIDStackPt; i++) {
+		if (entityID == topEntityIDs [i]) {
+			topOMDPs [i] = omdp; /* record in stack */
+			if (omdp == NULL) { /* remove if null */
+				if (topIDStackPt > i + 1) {
+					topIDStackPt--;
+					topEntityIDs [i] = topEntityIDs [topIDStackPt];
+					topOMDPs [i] = topOMDPs [topIDStackPt];
+				} else {
+					topIDStackPt--;
+				}
+			}
+			return;
+		}
+	}
+
+	/* add if not found */
+
+	if (omdp == NULL) return;
+	if (topIDStackPt < TOP_ID_STACK_SIZE) {
+		topEntityIDs [topIDStackPt] = entityID;
+		topOMDPs [topIDStackPt] = omdp;
+		topIDStackPt++;
+	}
+}
 
 static ObjMgrDataPtr NEAR ObjMgrFindByEntityID (ObjMgrPtr omp, Uint2 entityID, ObjMgrDataPtr PNTR prev)
 {
 	ObjMgrDataPtr omdp, prevptr=NULL;
 	ObjMgrDataPtr PNTR omdpp;
 	Int4 i, imax;
+
+	/* check cache first to avoid linear search through all objects */
+
+	for (i = 0; i < topIDStackPt; i++) {
+		if (entityID == topEntityIDs [i]) {
+			omdp = topOMDPs [i];
+			if (omdp != NULL && omdp->parentptr == NULL && omdp->EntityID == entityID) {
+				if (prev != NULL)
+					*prev = prevptr;
+				return omdp;
+			}
+		}
+	}
 
 	imax = omp->currobj;
 	omdpp = omp->datalist;
@@ -513,6 +588,7 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrAddEntityID (ObjMgrPtr omp, ObjMgrDataPtr omdp)
 
 	/* omdp->EntityID = ++(omp->HighestEntityID); */
 	omdp->EntityID = ObjMgrNextAvailEntityID (omp);
+	ObjMgrRecordOmdpByEntityID (omdp->EntityID, omdp);
 
 #ifdef DEBUG_OBJMGR
 	ObjMgrDump(NULL, "ObjMgrAddEntityID-A");
@@ -1099,6 +1175,7 @@ static Boolean NEAR ObjMgrAddFunc (ObjMgrPtr omp, Uint2 type, Pointer data)
 	Int4 i, imin, imax;
 	Boolean retval = FALSE;
 	unsigned long tmp, datai;
+	BioseqPtr bsp;
 #ifdef DEBUG_OBJMGR
 	FILE * fp;
 
@@ -1176,6 +1253,14 @@ static Boolean NEAR ObjMgrAddFunc (ObjMgrPtr omp, Uint2 type, Pointer data)
 	omdp->dataptr = data;  /* fill in the values */
 	omdp->datatype = type;
 	omdp->touch = ObjMgrTouchCnt();   /* stamp with time */
+
+	if (type == OBJ_BIOSEQ) {
+		bsp = (BioseqPtr) data;
+		if (bsp != NULL) {
+			/* used for feature indexing, rapid delete from SeqID index */
+			bsp->omdp = (Pointer) omdp;
+		}
+	}
 
 #ifdef DEBUG_OBJMGR
 	FileClose(fp);
@@ -1560,6 +1645,8 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 	omdpp = omp->datalist;
 	omdp = omdpp[i];    /* emptys always at end */
 
+	if (omdp == NULL) goto erret;
+
 	if (omdp->EntityID != 0)
 	{
 		ObjMgrSendMsgFunc(omp, omdp, OM_MSG_DEL, omdp->EntityID, 0, 0, 0, 0, 0, NULL);
@@ -1593,6 +1680,11 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 		omdp->freeextra ((Pointer) omdp);
 	}
 
+	if (omdp->bulkIndexFree) {
+		ObjMgrUnlock(); /* if bulk free, delete at end of BioseqFree or BioseqSetFree */
+		return TRUE;
+	}
+
 	MemSet((Pointer)omdp, 0, sizeof(ObjMgrData));
 	if (omp->currobj)
 		omp->currobj--;
@@ -1615,6 +1707,57 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 erret:
 	ObjMgrUnlock();
 	return retval;
+}
+
+/*****************************************************************************
+*
+*   ObjMgrDeleteAllInRecord()
+*   	deletes all omdp entries in a record
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL ObjMgrDeleteAllInRecord (
+  void
+)
+
+{
+  Int4                i, j, k, num;
+  ObjMgrDataPtr       omdp;
+  ObjMgrDataPtr PNTR  omdpp;
+  ObjMgrPtr           omp;
+  ObjMgrDataPtr PNTR  tmp;
+
+  omp = ObjMgrWriteLock ();
+
+  if (omp != NULL) {
+    omdpp = omp->datalist;
+    if (omdpp != NULL) {
+
+      num = omp->currobj;
+      tmp = (ObjMgrDataPtr PNTR) MemNew (sizeof (ObjMgrDataPtr) * (size_t) (num + 1));
+      if (tmp != NULL) {
+
+        for (i = 0, j = 0, k = 0; i < num; i++) {
+          omdp = omdpp [i];
+          if (omdp != NULL && omdp->bulkIndexFree) {
+            MemSet ((Pointer) omdp, 0, sizeof (ObjMgrData));
+            tmp [k] = omdp;
+            k++;
+          } else {
+            omdpp [j] = omdpp [i];
+            j++;
+          }
+        }
+        omp->currobj = j;
+        MemMove (omdpp + j, tmp, sizeof (ObjMgrDataPtr) * (size_t) k);
+      }
+
+      MemFree (tmp);
+    }
+  }
+
+  ObjMgrUnlock ();
+
+  return TRUE;
 }
 
 /*****************************************************************************
@@ -1662,8 +1805,10 @@ NLM_EXTERN Boolean LIBCALL ObjMgrAddToClipBoard (Uint2 entityID, Pointer ptr)
 			}
 			/* if (omdp->EntityID == 0)
 				omdp->EntityID = ++(omp->HighestEntityID); */
-			if (omdp->EntityID == 0)
+			if (omdp->EntityID == 0) {
 				omdp->EntityID = ObjMgrNextAvailEntityID (omp);
+				ObjMgrRecordOmdpByEntityID (omdp->EntityID, omdp);
+			}
 		}
 	}
 	else
@@ -4247,6 +4392,9 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg(Uint2 msg, Uint2 entityID, Uint2 itemID
 	ObjMgrDataPtr omdp;
 	Boolean retval = FALSE;
 
+	if (msg == OM_MSG_UPDATE) {
+		SeqMgrClearFeatureIndexes (entityID, NULL);
+	}
 	omp = ObjMgrReadLock();
 	omdp = ObjMgrFindByEntityID(omp, entityID, NULL);
 	if (omdp != NULL)

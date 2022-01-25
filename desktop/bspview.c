@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.83 $
+* $Revision: 6.88 $
 *
 * File Description: 
 *
@@ -65,6 +65,7 @@
 #include <blast.h>
 #include <blastpri.h>
 #include <explore.h>
+#include <asn2graphic.h>
 /*
 #include <udviewer.h>
 #include <udvdef.h>
@@ -1325,7 +1326,9 @@ static void BioseqPtrToBioseqForm (ForM f, Pointer data)
           SeqEntryExplore (sep, (Pointer) (&allRawOrSeg), CheckForCookedBioseqs);
           */
           if (allRawOrSeg) {
-            SeqMgrIndexFeatures (entityID, NULL);
+            if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+              SeqMgrIndexFeatures (entityID, NULL);
+            }
           }
         }
         BioseqLock (bsp);
@@ -1971,6 +1974,62 @@ static void ChangeScale (PopuP p)
   }
 }
 
+static void ChangeNewStyle (PopuP p)
+
+{
+  BioseqViewFormPtr  bfp;
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (p);
+  if (bfp != NULL) {
+    bfp->bvd.moveToOldPos = TRUE;
+    PointerToForm (bfp->form, bfp->bvd.bsp);
+    Update ();
+    AdjustDynamicGraphicViewer (&(bfp->bvd));
+  }
+}
+
+static void ChangeNewFilter (PopuP p)
+
+{
+  BioseqViewFormPtr  bfp;
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (p);
+  if (bfp != NULL) {
+    bfp->bvd.moveToOldPos = TRUE;
+    PointerToForm (bfp->form, bfp->bvd.bsp);
+    Update ();
+    AdjustDynamicGraphicViewer (&(bfp->bvd));
+  }
+}
+
+static void ChangeNewScale (PopuP p)
+
+{
+  BioseqViewFormPtr  bfp;
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (p);
+  if (bfp != NULL) {
+    bfp->bvd.moveToOldPos = TRUE;
+    PointerToForm (bfp->form, bfp->bvd.bsp);
+    Update ();
+    AdjustDynamicGraphicViewer (&(bfp->bvd));
+  }
+}
+
+static void ChangeNewLayout (PopuP p)
+
+{
+  BioseqViewFormPtr  bfp;
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (p);
+  if (bfp != NULL) {
+    bfp->bvd.moveToOldPos = TRUE;
+    PointerToForm (bfp->form, bfp->bvd.bsp);
+    Update ();
+    AdjustDynamicGraphicViewer (&(bfp->bvd));
+  }
+}
+
 static void ChangeSalsaControls (PopuP p)
 
 {
@@ -2465,6 +2524,8 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
   SeqViewFetchAlignsProc  makeAlignBtn = NULL;
   SeqViewControlsProc  makeControls = NULL;
   Int2                 mssg;
+  Boolean              newGraphicalViewer = FALSE;
+  Boolean              newLayoutOverride = FALSE;
   Int2                 numStyles;
   Int2                 pixheight;
   Int2                 pixwidth;
@@ -2766,12 +2827,14 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
       PopupItem (bfp->bvd.ffModeCtrl, "Release");
       SetValue (bfp->bvd.ffModeCtrl, 1);
     }
-      StaticPrompt (bfp->bvd.docTxtControlGrp, "Sequence", 0, popupMenuHeight, programFont, 'l');
-      v = PopupList (bfp->bvd.docTxtControlGrp, TRUE, ChangeBioseqSequenceStyle);
-      SetObjectExtra (v, bfp, NULL);
-      PopupItem (v, "Bases");
-      PopupItem (v, "CONTIG");
-      SetValue (v, 2);
+    bfp->bvd.baseCtgControlGrp = HiddenGroup (bfp->bvd.docTxtControlGrp, 2, 0, NULL);
+    StaticPrompt (bfp->bvd.baseCtgControlGrp, "Sequence", 0, popupMenuHeight, programFont, 'l');
+    v = PopupList (bfp->bvd.baseCtgControlGrp, TRUE, ChangeBioseqSequenceStyle);
+    SetObjectExtra (v, bfp, NULL);
+    PopupItem (v, "Bases");
+    PopupItem (v, "CONTIG");
+    SetValue (v, 2);
+    Hide (bfp->bvd.baseCtgControlGrp);
     Hide (bfp->bvd.docTxtControlGrp);
 
     s = HiddenGroup (h, -4, 0, NULL);
@@ -2798,9 +2861,49 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     z = PushButton (bfp->bvd.findGeneGrp, "Find by Gene or Product", ShowGeneList);
     SetObjectExtra (z, (Pointer) &(bfp->bvd), NULL);
 
+    bfp->bvd.newGphControlGrp = HiddenGroup (h, -8, 0, NULL);
+
+#ifdef NEW_GRAPHICAL_VIEWER
+    newGraphicalViewer = TRUE;
+    newLayoutOverride = TRUE;
+#endif
+    if (GetAppProperty ("NewSequinGraphicalViewer") != NULL) {
+      newGraphicalViewer = TRUE;
+    }
+    if (GetAppProperty ("NewSequinLayoutOverride") != NULL) {
+      newLayoutOverride = TRUE;
+    }
+
+    if (newGraphicalViewer) {
+      StaticPrompt (bfp->bvd.newGphControlGrp, "Style", 0, popupMenuHeight, programFont, 'l');
+      bfp->bvd.newGphStyle = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewStyle);
+      SetObjectExtra (bfp->bvd.newGphStyle, bfp, NULL);
+      PopupItems (bfp->bvd.newGphStyle, GetAppearanceNameList ());
+      SetValue (bfp->bvd.newGphStyle, 1);
+
+      StaticPrompt (bfp->bvd.newGphControlGrp, "Filter", 0, popupMenuHeight, programFont, 'l');
+      bfp->bvd.newGphFilter = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewFilter);
+      SetObjectExtra (bfp->bvd.newGphFilter, bfp, NULL);
+      PopupItems (bfp->bvd.newGphFilter, GetFilterNameList ());
+      SetValue (bfp->bvd.newGphFilter, 1);
+
+      if (newLayoutOverride) {
+        StaticPrompt (bfp->bvd.newGphControlGrp, "Layout", 0, popupMenuHeight, programFont, 'l');
+        bfp->bvd.newGphLayout = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewLayout);
+        SetObjectExtra (bfp->bvd.newGphLayout, bfp, NULL);
+        PopupItems (bfp->bvd.newGphLayout, GetLayoutNameList ());
+        SetValue (bfp->bvd.newGphLayout, 1);
+      }
+
+      StaticPrompt (bfp->bvd.newGphControlGrp, "Scale", 0, popupMenuHeight, programFont, 'l');
+      bfp->bvd.newGphScale = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewScale);
+      SetObjectExtra (bfp->bvd.newGphScale, bfp, NULL);
+    }
+
     Hide (bfp->bvd.styleControlGrp);
     Hide (bfp->bvd.scaleControlGrp);
     Hide (bfp->bvd.findGeneGrp);
+    Hide (bfp->bvd.newGphControlGrp);
 
     if (b != NULL) {
       GetPosition (bfp->bvd.scale, &r2);

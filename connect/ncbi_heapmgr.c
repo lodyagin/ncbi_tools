@@ -1,4 +1,4 @@
-/*  $Id: ncbi_heapmgr.c,v 6.11 2001/07/03 20:24:03 lavr Exp $
+/*  $Id: ncbi_heapmgr.c,v 6.13 2001/07/31 15:07:58 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -110,6 +110,15 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_heapmgr.c,v $
+ * Revision 6.13  2001/07/31 15:07:58  lavr
+ * Added paranoia log message: freeing a block in a NULL heap
+ *
+ * Revision 6.12  2001/07/13 20:09:27  lavr
+ * If remaining space in a block is equal to block header,
+ * do not leave this space as a padding of the block been allocated,
+ * but instead form a new block consisting only of the header.
+ * The block becomes a subject for a later garbage collecting.
+ *
  * Revision 6.11  2001/07/03 20:24:03  lavr
  * Added function: HEAP_Copy()
  *
@@ -117,7 +126,7 @@
  * Typo fixed
  *
  * Revision 6.9  2001/06/19 22:22:56  juran
- * Heed warning:  Make s_HEAP_Take() static.
+ * Heed warning:  Make s_HEAP_Take() static
  *
  * Revision 6.8  2001/06/19 19:12:01  lavr
  * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
@@ -313,7 +322,7 @@ static SHEAP_Block* s_HEAP_Take(SHEAP_Block* b, TNCBI_Size size)
         CORE_LOG(eLOG_Warning, "Heap Take: Block is too small");
         return 0;
     }
-    if (b->size > size + sizeof(*b)) {
+    if (b->size >= size + sizeof(*b)) {
         SHEAP_Block* n = (SHEAP_Block*) ((char*) b + size);
 
         n->flag = HEAP_FREE | last;
@@ -397,8 +406,11 @@ void HEAP_Free(HEAP heap, SHEAP_Block* ptr)
 {
     SHEAP_Block* b, *p = 0;
 
-    if (!heap || !ptr)
+    if (!heap || !ptr) {
+        if (ptr)
+            CORE_LOG(eLOG_Warning, "Heap Free: Cannot free in NULL heap");
         return;
+    }
 
     if (!heap->chunk) {
         CORE_LOG(eLOG_Warning, "Heap Free: Heap is read-only");
@@ -443,7 +455,7 @@ SHEAP_Block* HEAP_Walk(HEAP heap, const SHEAP_Block* p)
         ((char*) p >= heap->base && (char*) p < heap->base + heap->size)) {
         b = (SHEAP_Block*) (p ? (char*) p + p->size : heap->base);
         if ((char*) b < heap->base + heap->size) {
-            if (b->size > sizeof(*b) &&
+            if (b->size >= sizeof(*b) &&
                 b->size == (TNCBI_Size) HEAP_ALIGN(b->size) &&
                 (char*) b + b->size <= heap->base + heap->size &&
                 (HEAP_ISFREE(b) || HEAP_ISUSED(b))) {

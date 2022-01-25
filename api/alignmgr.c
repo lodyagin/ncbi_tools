@@ -28,13 +28,25 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.174 $
+* $Revision: 6.178 $
 *
 * File Description: SeqAlign indexing and messaging functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.c,v $
+* Revision 6.178  2001/11/09 17:22:34  wheelan
+* fixed bug in TruncateSeqAlign
+*
+* Revision 6.177  2001/08/07 14:39:34  wheelan
+* added am_cleanupsalp
+*
+* Revision 6.176  2001/07/10 16:44:01  wheelan
+* added AlnMgrMakeFakeMultipleEx for AlnMgrIndexIndexedSet
+*
+* Revision 6.175  2001/07/10 11:12:23  wheelan
+* added AlnMgrIndexIndexedChain
+*
 * Revision 6.174  2001/05/30 12:13:58  wheelan
 * AlnMsgNew and AlnMsgReNew initialize from_m and to_m
 *
@@ -601,6 +613,7 @@ static Boolean am_merge_after_edit (SeqAlignPtr sap);
 static Boolean am_same_ids(SeqIdPtr sip1, SeqIdPtr sip2);
 static AMmsmsPtr AlnMgrConstructOverlaps(AMmsmsPtr ams_head);
 static Boolean AlnMgrJaggedIndex(SeqAlignPtr sap, AMmsmsPtr ams_head, AMmsmsPtr *ams_mhead, Int4 numrows);
+static Boolean AlnMgrMakeFakeMultipleEx(SeqAlignPtr sap, Boolean forcestraightms);
 
 
 
@@ -968,6 +981,38 @@ NLM_EXTERN Boolean AlnMgrIndexSeqAlign(SeqAlignPtr sap)
    }
    return TRUE;
 }
+
+/***************************************************************************
+*
+*  AlnMgrIndexIndexedChain takes a linked list of indexed seqaligns and
+*  indexes them as a set.
+*
+***************************************************************************/
+NLM_EXTERN SeqAlignPtr AlnMgrIndexIndexedChain(SeqAlignPtr sap)
+{
+   SAIndexPtr   saip;
+   SeqAlignPtr  sap_new;
+
+   if (sap == NULL || sap->saip == NULL || sap->saip->indextype == INDEX_PARENT)
+      return NULL;
+   sap_new = SeqAlignNew();
+   sap_new->segtype = SAS_DISC;
+   sap_new->segs = (Pointer)(sap);
+   if (!AlnMgrIndexParentSA(sap_new))
+      return NULL;
+   if (!AlnMgrMakeFakeMultipleEx(sap_new, TRUE))
+      return NULL;
+   sap = (SeqAlignPtr)(sap_new->segs);
+   while (sap != NULL)
+   {
+      saip = (SAIndexPtr)(sap->saip);
+      saip->parent = sap_new;
+      sap = sap->next;
+   }
+   return sap_new;
+}
+
+
 
 /**********************************************************************
 *
@@ -5079,6 +5124,11 @@ NLM_EXTERN Int4 AlnMgrMapBioseqToSeqAlignEx(SeqAlignPtr sap, Int4 pos, Int4 row_
 ***********************************************************************/
 NLM_EXTERN Boolean AlnMgrMakeFakeMultiple(SeqAlignPtr sap)
 {
+   return AlnMgrMakeFakeMultipleEx(sap, FALSE);
+}
+
+static Boolean AlnMgrMakeFakeMultipleEx(SeqAlignPtr sap, Boolean forcestraightms)
+{
    AMAlignDatPtr    amadp;
    AMAlignIndexPtr  amaip;
    Int4             i;
@@ -5224,7 +5274,7 @@ NLM_EXTERN Boolean AlnMgrMakeFakeMultiple(SeqAlignPtr sap)
             {
                amaip->saps[j] = amadp->saps[j];
             }
-            if (amaip->numsaps < amaip->numbsqs)
+            if (forcestraightms || amaip->numsaps < amaip->numbsqs)
             {
                amaip->ids = SeqIdSetFree(amaip->ids);
                amaip->ids = AlnMgrPropagateSeqIdsBySapList(amaip);
@@ -6440,7 +6490,7 @@ NLM_EXTERN Boolean AlnMgrTruncateSAP(SeqAlignPtr sap, Int4 start, Int4 stop, Int
             DenseSegFree(dsp);
             SeqAlignFree(sap1);
             AlnMgrIndexSingleChildSeqAlign(sap);
-            return FALSE;
+            return TRUE;
          } else if (mstop > stop)
          {
             from = AlnMgrMapBioseqToSeqAlign(sap, stop+1, row, NULL);
@@ -7367,6 +7417,12 @@ NLM_EXTERN Uint4 AlnMgrGetMasterGapStartForSeg(SeqAlignPtr sap, Int4 which_gap, 
 
    saip = (SAIndexPtr)(sap->saip);
    dsp = (DenseSegPtr)(sap->segs);
+   if (which_gap >= saip->ssdp[saip->master-1]->numunsect)
+   {
+      if (aligncoord)
+         *aligncoord = dsp->lens[dsp->numseg-1];
+      return saip->aligncoords[dsp->numseg-1];
+   }
    if (aligncoord)
       *aligncoord = dsp->lens[saip->ssdp[saip->master-1]->unsect[which_gap]];
    return saip->aligncoords[saip->ssdp[saip->master-1]->unsect[which_gap]];
@@ -8727,6 +8783,67 @@ static void am_fix_empty_columns(SeqAlignPtr sap)
    }
 }
 
+/* a little kludge function to tide us over until the new */
+/* alignment manager arrives. */
+
+static SeqAlignPtr am_cleanupsalp(SeqAlignPtr salp)
+{
+   Int4         badseg;
+   DenseSegPtr  dsp;
+   DenseSegPtr  dsp_new;
+   Boolean      found;
+   Int4         i;
+   Int4         j;
+   Int4         n;
+
+   dsp = (DenseSegPtr)(salp->segs);
+   badseg = 0;
+   for (i=0; i<dsp->numseg; i++)
+   {
+      found = FALSE;
+      for (j=0; found==FALSE && j<dsp->dim; j++)
+      {
+         if (dsp->starts[dsp->dim*i + j] != -1)
+            found = TRUE;
+      }
+      if (!found)
+         badseg++;
+   }
+   if (badseg == 0)
+      return salp;
+   dsp_new = DenseSegNew();
+   dsp_new->numseg = dsp->numseg-badseg;
+   dsp_new->dim = dsp->dim;
+   dsp_new->ids = dsp->ids;
+   dsp->ids = NULL;
+   dsp_new->lens = (Int4Ptr)MemNew(dsp_new->numseg*sizeof(Int4));
+   dsp_new->starts = (Int4Ptr)MemNew(dsp_new->numseg*dsp_new->dim*sizeof(Int4));
+   dsp_new->strands = (Uint1Ptr)MemNew(dsp_new->numseg*dsp_new->dim*sizeof(Int4));
+   n = 0;
+   for (i=0; i<dsp->numseg; i++)
+   {
+      found = FALSE;
+      for (j=0; found==FALSE && j<dsp->dim; j++)
+      {
+         if (dsp->starts[dsp->dim*i + j] != -1)
+            found = TRUE;
+      }
+      if (found)
+      {
+         for (j=0; j<dsp->dim; j++)
+         {
+            dsp_new->starts[dsp->dim*n+j] = dsp->starts[dsp->dim*i+j];
+            dsp_new->strands[dsp->dim*n+j] = dsp->strands[dsp->dim*i+j];
+         }
+         dsp_new->lens[n] = dsp->lens[i];
+         n++;
+      }
+   }
+   DenseSegFree(dsp);
+   salp->segs = (Pointer)dsp_new;
+   return salp;
+}
+
 /***************************************************************************
 *
 *  AlnMgrGetSubAlign returns a flattened multiple or pairwise alignment
@@ -8801,6 +8918,7 @@ NLM_EXTERN SeqAlignPtr AlnMgrGetSubAlign(SeqAlignPtr sap, SeqIdPtr which_master,
       salp->segtype = SAS_DENSEG;
       salp->segs = (Pointer)dsp;
       AlnMsgFree(amp);
+      salp = am_cleanupsalp(salp);
       return salp;
    } else if (i == AM_PARENT)
    {
@@ -8864,6 +8982,7 @@ NLM_EXTERN SeqAlignPtr AlnMgrGetSubAlign(SeqAlignPtr sap, SeqIdPtr which_master,
          }
          AlnMsgFree(amp);
          salp->segs = (Pointer)dsp;
+         salp = am_cleanupsalp(salp);
          return salp;
       } else if (sap->type == SAT_PARTIAL || (sap->type == SAT_MASTERSLAVE && amaip->mstype == AM_SEGMENTED_MASTERSLAVE))
       {
@@ -8957,6 +9076,7 @@ NLM_EXTERN SeqAlignPtr AlnMgrGetSubAlign(SeqAlignPtr sap, SeqIdPtr which_master,
          }
          MemFree(trackarray);
          AlnMsgFree(amp);
+         salp = am_cleanupsalp(salp);
          return salp_head;
       } else if (sap->type == SAT_DIAGS)
       {

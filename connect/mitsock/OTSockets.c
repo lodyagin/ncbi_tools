@@ -36,7 +36,7 @@
  * $
  */
 
-/* $Header: /am/src/NCBI/vault.ncbi/distrib/connect/mitsock/OTSockets.c,v 1.2 2001/05/08 15:40:10 juran Exp $ */
+/* $Header: /am/src/NCBI/vault.ncbi/distrib/connect/mitsock/OTSockets.c,v 1.5 2001/11/21 22:51:40 juran Exp $ */
 
 /* 
  *
@@ -48,9 +48,10 @@
  */
  
 #include <errno.h>
-#include <neterrno.h>
 #include <stdlib.h>				// malloc, free
 #include <string.h>				// memcpy, memset
+
+#include <neterrno.h>
 #include "SocketsInternal.h"
 
 static OTNotifyUPP gSocketNotifyUPP = NULL;
@@ -303,14 +304,14 @@ int fcntl(int sockFD, int command, int flags)
     case F_GETFL:
       /* return whether the socket is nonblocking */
       if(OTIsNonBlocking(gSockets[sockFD]->ref))
-        newFlags |= O_NONBLOCK;
+        newFlags |= kO_NONBLOCK;
         
       /* Should add O_ASYNC support here */
       break;
       
 	case F_SETFL:
 		/* set whether the socket is non-blocking */
-		if(flags & O_NONBLOCK){
+		if(flags & kO_NONBLOCK){
 			OTSetNonBlocking(gSockets[sockFD]->ref);
 		}
 		else{
@@ -366,7 +367,7 @@ int setsockopt(
 
 	sp = gSockets[sockFD];
 
-	if ( sp != NULL)
+	if ( sp != NULL) /* warn if this unimplemented function is called */
 		return( EBADF);
 
 	/*

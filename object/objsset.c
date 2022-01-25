@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager for module NCBI-Seqset
 *
@@ -41,6 +41,15 @@
 *
 *
 * $Log: objsset.c,v $
+* Revision 6.4  2001/11/30 12:20:18  kans
+* ObjMgrDeleteAllInRecord called when freeing top bsp or bssp
+*
+* Revision 6.3  2001/11/16 19:31:09  kans
+* BioseqFree and BioseqSetFree on top-level object call SeqMgrDeleteIndexesInRecord
+*
+* Revision 6.2  2001/08/07 17:22:27  kans
+* added third party annotation SeqIDs to FindBestBioseqLabel
+*
 * Revision 6.1  1998/08/24 18:28:11  kans
 * removed solaris -v -fd warnings
 *
@@ -143,6 +152,10 @@ static void FindBestBioseqLabel (SeqEntryPtr sep, Pointer data, Int4 index, Int2
 			case SEQID_GENBANK:
 			case SEQID_EMBL:
 			case SEQID_DDBJ:
+			case SEQID_OTHER:
+			case SEQID_TPG:
+			case SEQID_TPE:
+			case SEQID_TPD:
 				has_gb = TRUE;
 			case SEQID_PIR:
 			case SEQID_SWISSPROT:
@@ -378,13 +391,26 @@ NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetNew (void)
 *****************************************************************************/
 NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetFree (BioseqSetPtr bsp)
 {
+	Boolean top = FALSE;
+
     if (bsp == NULL)
         return bsp;
+
+	if (bsp->idx.parentptr == NULL || bsp->idx.parenttype == OBJ_SEQSUB) {
+		if (bsp->seqentry != NULL) {
+			SeqMgrDeleteIndexesInRecord (bsp->seqentry);
+			top = TRUE;
+		}
+	}
 
 	if (! SeqMgrDelete(SM_BIOSEQSET, (Pointer)bsp))
 	    ErrPostEx(SEV_ERROR, 0,0, "BioseqSetFree: pointer not registered");
 
 	BioseqSetFreeComponents(bsp, TRUE);
+
+	if (top) {
+		ObjMgrDeleteAllInRecord ();
+	}
 
 	return (BioseqSetPtr)MemFree(bsp);
 }

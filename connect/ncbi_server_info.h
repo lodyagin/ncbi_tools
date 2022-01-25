@@ -1,7 +1,7 @@
 #ifndef NCBI_SERVER_INFO__H
 #define NCBI_SERVER_INFO__H
 
-/*  $Id: ncbi_server_info.h,v 6.24 2001/06/19 19:09:35 lavr Exp $
+/*  $Id: ncbi_server_info.h,v 6.28 2001/09/25 14:47:49 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,18 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ncbi_server_info.h,v $
+ * Revision 6.28  2001/09/25 14:47:49  lavr
+ * TSERV_Flags reverted to 'int'
+ *
+ * Revision 6.27  2001/09/24 20:22:31  lavr
+ * TSERV_Flags changed from 'int' to 'unsigned int'
+ *
+ * Revision 6.26  2001/09/19 15:57:27  lavr
+ * Server descriptor flag "L=" documented more precisely
+ *
+ * Revision 6.25  2001/09/10 21:16:27  lavr
+ * FIREWALL server type added, documented
+ *
  * Revision 6.24  2001/06/19 19:09:35  lavr
  * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
  *
@@ -131,7 +143,8 @@ typedef enum {
     fSERV_Standalone = 0x2,
     fSERV_HttpGet    = 0x4,
     fSERV_HttpPost   = 0x8,
-    fSERV_Http       = fSERV_HttpGet | fSERV_HttpPost
+    fSERV_Http       = fSERV_HttpGet | fSERV_HttpPost,
+    fSERV_Firewall   = 0x10
 } ESERV_Type;
 
 #define fSERV_Any           0
@@ -184,6 +197,10 @@ typedef struct {
 #define SERV_HTTP_ARGS(ui)      ((char*) (ui) + (ui)->args)
 } SSERV_HttpInfo;
 
+typedef struct {
+    ESERV_Type     type;        /* type of original server */
+} SSERV_FirewallInfo;
+
 
 /* Generic NCBI server meta-address
  */
@@ -191,6 +208,7 @@ typedef union {
     SSERV_NcbidInfo      ncbid;
     SSERV_StandaloneInfo standalone;
     SSERV_HttpInfo       http;
+    SSERV_FirewallInfo   firewall;
 } USERV_Info;
 
 typedef struct {
@@ -212,23 +230,29 @@ typedef struct {
 /* Constructors for the various types of NCBI server meta-addresses
  */
 SSERV_Info* SERV_CreateNcbidInfo
-(unsigned int   host,           /* network byte order */
- unsigned short port,           /* host byte order    */
+(unsigned int   host,           /* network byte order                        */
+ unsigned short port,           /* host byte order                           */
  const char*    args
  );
 
 SSERV_Info* SERV_CreateStandaloneInfo
-(unsigned int   host,           /* network byte order */
- unsigned short port            /* host byte order    */
+(unsigned int   host,           /* network byte order                        */
+ unsigned short port            /* host byte order                           */
  );
 
 SSERV_Info* SERV_CreateHttpInfo
-(ESERV_Type     type,           /* verified, must be one of fSERV_Http* */
- unsigned int   host,           /* network byte order */
- unsigned short port,           /* host byte order    */
+(ESERV_Type     type,           /* verified, must be one of fSERV_Http*      */
+ unsigned int   host,           /* network byte order                        */
+ unsigned short port,           /* host byte order                           */
  const char*    path,
  const char*    args
  );
+
+SSERV_Info* SERV_CreateFirewallInfo
+(unsigned int   host,           /* original server's host in net byte order  */
+ unsigned short port,           /* original server's port in host byte order */
+ ESERV_Type     type            /* type of original server, wrapped into     */
+);
 
 
 /* Dump server info to a string.
@@ -241,7 +265,7 @@ char* SERV_WriteInfo(const SSERV_Info* info);
 /* Server specification consists of the following:
  * TYPE [host][:port] [server-specific_parameters] [tags]
  *
- * TYPE := { STANDALONE | NCBID | HTTP | HTTP_GET | HTTP_POST }
+ * TYPE := { STANDALONE | NCBID | HTTP | HTTP_GET | HTTP_POST | FIREWALL }
  *
  * Host should be specified as either an IP address (in dotted notation),
  * or as a host name (using domain notation if necessary).
@@ -261,6 +285,14 @@ char* SERV_WriteInfo(const SSERV_Info* info);
  *                   path[?args] (here brackets denote the optional part).
  *                   Note that no spaces allowed within this parameter.
  *
+ *    FIREWALL servers: Servers of this type are converted real servers of
+ *                      the above types, when only accessible via FIREWALL
+ *                      mode of NCBI dispatcher. The purpose of this fake
+ *                      server type is just to let the client know that
+ *                      the service exists. Additional parameter the original
+ *                      type of the server before conversion. Note that servers
+ *                      of type FIREWALL cannot be configured in LBSMD.
+ *
  * Tags may follow in no particular order but no more than one instance
  * of each flag is allowed:
  *
@@ -271,8 +303,9 @@ char* SERV_WriteInfo(const SSERV_Info* info);
  *    Local server:
  *       L=no           (default)
  *       L=yes
- *           Local servers are accessible only by direct clients of LBSMD,
- *           i.e. such servers cannot be accessed by means of DISPD.
+ *           Local servers are accessible only by local clients (from within
+ *           the Intranet) or direct clients of LBSMD, and are not accessible
+ *           by the outside users (i.e. via network dispatching).
  *
  *    Stateful server:
  *       S=no           (default)

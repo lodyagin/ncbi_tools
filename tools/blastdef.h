@@ -30,8 +30,29 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.122 $ 
+/* $Revision: 6.129 $ 
 * $Log: blastdef.h,v $
+* Revision 6.129  2001/12/28 20:38:39  dondosha
+* Moved Mega BLAST related parameters into a separate structure
+*
+* Revision 6.128  2001/12/28 18:01:26  dondosha
+* Added field scoreThisAlign to SWResults to allow more tie-breaking options
+*
+* Revision 6.127  2001/12/14 22:05:40  madden
+* Changed version and release date
+*
+* Revision 6.126  2001/09/11 14:28:31  madden
+* Added timed_out Boolean to SearchBlk
+*
+* Revision 6.125  2001/09/07 14:46:44  dondosha
+* Roll back removal of threshold_first from functions and structures
+*
+* Revision 6.124  2001/09/06 20:24:34  dondosha
+* Removed threshold_first
+*
+* Revision 6.123  2001/08/06 12:50:51  madden
+* Change release date
+*
 * Revision 6.122  2001/07/12 19:50:24  madden
 * Changed release date
 *
@@ -772,8 +793,8 @@ extern "C" {
 #endif
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.1"
-#define BLAST_RELEASE_DATE "Jul-12-2001"
+#define BLAST_ENGINE_VERSION "2.2.2"
+#define BLAST_RELEASE_DATE "Jan-08-2002"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -983,7 +1004,27 @@ typedef struct _blast_optionsblk {
         VoidPtr  output;             /* Output stream to put results to */
 	FloatHi	scalingFactor;	     /* scaling factor used when constructing pssm for rpsblast. */ 
 	Int4	total_hsp_limit;	/* total number of HSP's that will be processed to SeqAligns, zero means no limit. */
+        Boolean mb_one_base_step; /* Scan every base of the database */
+        Int2 mb_template_length;  /* Length of the discontiguous word */
+        Boolean mb_use_dyn_prog;  /* Use dynamic programming gapped extension in
+                                     megablast with affine gap scores */ 
       } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
+
+typedef struct _mb_parameter_blk_ {
+   Boolean no_traceback;    /* No traceback in greedy extension */
+   Boolean is_neighboring;  /* Is this a neighboring task? */ 
+   Boolean full_seqids;     /* Print full seqids in tabular output? */
+   FloatLo perc_identity;   /* Identity percentage cut-off */
+   Int4    max_positions;   /* Maximal number of positions in query of a given word */
+   Boolean disc_word;       /* Use a discontiguous word template to find initial 
+                               matches */
+   Boolean one_base_step;   /* Form words for every position in the database
+                               sequence (default is every 4th position) */
+   Int2    word_weight;     /* Number of identical nucleotides in a word match */
+   Int2    template_length; /* Length of a discontiguous word template */
+   Boolean use_dyn_prog;    /* Use dynamic programming extension for affine gap
+                               scores */
+} MegaBlastParameterBlk, PNTR MegaBlastParameterBlkPtr;
 
 /****************************************************************************
 
@@ -1051,7 +1092,6 @@ typedef struct _blast_parameterblk {
 			pseudoCountConst;
 	Int4 cpu_limit;	/* timeout total. */
         Int4    hsp_range_max,          /* maximum hits for a range */
-                block_width,            /* width of a block */
 		max_pieces;		/* Max number of pieces allowed (query_length/block_width) */
 	Boolean perform_culling;	/* determines whether culling should be used or not.
 					If not, then hsp_range_max, block_width, and max_pieces are ignored. */
@@ -1062,19 +1102,15 @@ typedef struct _blast_parameterblk {
 	Int4		hsp_num_max;	/* maximum number of HSP's allowed.  Zero indicates no limit. */
         Boolean   use_best_align;   /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
 	Boolean no_check_score;
-        Boolean is_megablast_search;  /* Is this a MegaBlast search? */
-        Boolean         no_traceback;    /* No traceback in MegaBLAST extension */
+        MegaBlastParameterBlkPtr mb_params;  /* Is this a MegaBlast search? */
         CharPtr filter_string;  /* String specifying the type of filtering and filter options. - used with Translated RPS Blast */
         Boolean is_rps_blast;      /* If this RPS Blast ? */
         SeqLocPtr  query_lcase_mask; /* Masking of input DNA regions */
-        Boolean is_neighboring;    /* Is this a neighboring task? */ 
 	Boolean		explode_seqids;	/* make one SeqAlign for every gi on a
 					   redundant sequence. */
-        Boolean megablast_full_deflines;
         Boolean         is_ooframe;  /* Use Out-Of-Frame gapping algorithm */
         Int4            shift_pen;  /* Out-Of-Frame shift penalty */
         Int4    longest_intron;     /* the length of longest intron for linking HSPs */
-        FloatLo  perc_identity;     /* Identity percentage cut-off */
 	FloatHi	scalingFactor;	     /* scaling factor used when constructing pssm for rpsblast. */ 
 	Int4	total_hsp_limit;	/* total number of HSP's that will be processed to SeqAligns, zero means no limit. */
         } BLAST_ParameterBlk, PNTR BLAST_ParameterBlkPtr;
@@ -1407,6 +1443,7 @@ typedef struct SWResults {
     Int4 queryEnd;
     Int4 *reverseAlignScript;
     BLAST_Score score;
+    BLAST_Score scoreThisAlign;
     Nlm_FloatHi eValue;
     Nlm_FloatHi eValueThisAlign;
     Nlm_FloatHi Lambda;
@@ -1566,6 +1603,8 @@ a field is allocated, then it's bit is non-zero.
       Specifies that the query sequence was invalid (e.g., XXXXXXXXXXXXXXXXXXXXXX).
       */
     Boolean query_invalid;
+    /* Specifies that the search timed out (i.e., cpu time limit was reached). */
+    Boolean timed_out;
     /*
       The BLASTContextStructPtr is an array and each element contains
       information about the query sequence and the frame number.

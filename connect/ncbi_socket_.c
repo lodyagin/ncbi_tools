@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket_.c,v 6.1 2000/02/25 16:27:09 vakatov Exp $
+/*  $Id: ncbi_socket_.c,v 6.3 2001/07/14 20:22:17 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,8 +38,14 @@
 
 #if defined(OS_UNIX)
 #  define NCBI_OS_UNIX 1
-#  if !defined(HAVE_GETHOSTBYNAME_R)  &&  defined(OS_UNIX_SOL)
-#    define HAVE_GETHOSTBYNAME_R 1
+#  if !defined(HAVE_GETHOSTBYNAME_R)
+#    if   defined(OS_UNIX_SOL)
+#      define HAVE_GETHOSTBYNAME_R 5
+#      define HAVE_GETHOSTBYADDR_R 7
+#    elif defined(OS_UNIX_LINUX)
+#      define HAVE_GETHOSTBYNAME_R 6
+#      define HAVE_GETHOSTBYADDR_R 8
+#    endif
 #  endif
 #elif defined(OS_MSWIN)
 #  define NCBI_OS_MSWIN 1

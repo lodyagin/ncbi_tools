@@ -626,7 +626,8 @@
 \par }\pard \sb240\widctlpar\adjustright {1) Download the software toolkit, build it, and make the demo programs. Print the ".c" files for the demos and look them over. Print the ".asn" files from the \\asn directory and look them over. Print the ".h" files from the \\object directory. Print "sequtil.h" and "seqport.h" from \\api. Print "accentr.h" from \\cdromlib. Go back and read the rest of the documentation.
 \par }\pard \sb240\widctlpar\adjustright {2) Read the documentation by scanning the sections after the introductions in each chapter. Then return in detail to what interests you.
 \par }\pard\plain \s2\sb240\keep\keepn\widctlpar\outlinelevel1\adjustright \b\f16\fs28\cgrid {{\*\bkmkstart _Toc294430707}{\*\bkmkstart _Toc300649103}Contacting NCBI{\*\bkmkend _Toc294430707}{\*\bkmkend _Toc300649103}
-\par }\pard\plain \sb240\widctlpar\adjustright \f16\fs20\cgrid {You can download the software tools (all versions) by anonymous ftp to ncbi.nlm.nih.gov
+\par }\pard\plain \sb240\widctlpar\adjustright \f16\fs20\cgrid {You can
+download the software tools (all versions) by anonymous ftp to ftp.ncbi.nih.gov
 \par cd toolbox\\ncbi_tools
 \par }\pard \widctlpar\adjustright {bin
 \par }\pard \widctlpar\adjustright {get ncbi.tar.Z\tab \tab (compressed UNIX tar file)

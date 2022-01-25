@@ -33,7 +33,7 @@ ASN.1 as the common source for other formats such as the GenBank
 report. Once a source database file has been formatted by formatdb it
 is not needed by BLAST. Please note that if you are going to apply
 periodic updates to your BLAST databases using fmerge
-(ftp://ncbi.nlm.nih.gov/blast/fmerge/README), you will need to keep the
+(ftp://ftp.ncbi.nih.gov/blast/fmerge/README), you will need to keep the
 source database file.
 
 If you are having problems formatting a BLAST databases please scroll
@@ -182,7 +182,7 @@ A.) Note on -o option:
 
 It is always advantageous to use the '-o' option if the database
 identifiers are in the format specified at
-ftp://ncbi.nlm.nih.gov/blast/db/README.  If the database identifiers
+ftp://ftp.ncbi.nih.gov/blast/db/README.  If the database identifiers
 are in this parseable format,  formatdb produces additional indices
 allowing retrieval from the databases by identifier. The databases on
 the NCBI FTP site contain parseable identifiers. It is sufficient if
@@ -370,6 +370,72 @@ LENGTH 640724
 One can search this by invoking (for example):
 
 blastall -p blastp -d zebrafish -i MYQUERY -o MYOUTPUT
+
+NOTE: One may wish to prepare the alias file in one directory, but move it
+to a different production directory that does not contain the real database.
+In that case you may use the '-n' option to specify a path to the real
+database in the production environment.  In the example below the -n option is 
+used to specify that the nr database can really be found at a relative path
+of ../../newest_blast/blast
+
+formatdb -i nr -n ../../newest_blast/blast/nr -p T -L zebrafish -F zebrafish.gi -t "My zebrafish database"
+
+and the alias file will be:
+
+#
+# Alias file created Wed Nov 28 13:55:41 2001
+#
+#
+TITLE My zebrafish database
+#
+DBLIST ../../newest_blast/blast/nr
+#
+GILIST zebrafish.gi
+#
+#OIDLIST
+#
+NSEQ 1836
+LENGTH 640724
+
+
+Notes on Version 4 of the BLAST databases
+-----------------------------------------
+
+Version 4 of the BLAST databases address some important
+shortcomings of the current (version 4) databases:
+
+1.) Version 3 does not handle ambiguity characters correctly if a 
+database sequence is longer than about 16 million bases which may 
+lead to incorrect results.  The new version does.
+
+2.) Version 3 only allows one volume of a BLAST database to
+contain at most about 4 billion bases.  The new databases allows that to
+be much larger.
+
+
+
+
+The new databases keep the sequence descriptors in a structured format
+(ASN.1) and some new information has been put into those fields.  The new
+information is:
+
+1.) taxid.  This integer specifies the taxonomy of the sequence and will
+allow greater flexibility in how taxonomic information is presented in a
+future version of BLAST.
+
+2.) link bits.  These specify whether LinkOut information about the database
+sequence is available and permits the additon of a gif with a link to the relevant page.
+in a future version of BLAST.
+
+3.) membership bits.  These specify that a given gi in a database also belongs to
+a subset database.  An example of this relationship is the EST's database.  Est
+contains all EST's, but also comprises est_human, est_mouse and est_others; with
+the new membership bit it will be possible to search any of the subset est databases
+with only the main est database and two other small files (an alias file and an "oidlist").
+This can reduce the amount of disk-space and memory needed by half in this case.
+It is expected that the proper alias file and oidlist for searching such subsets will
+be made available on the NCBI FTP site in mid January.
+
 
 
 FASTA Defline Format
@@ -648,7 +714,7 @@ VREVCSEQAETGPCRAMISRWYFDVTEGKCAPFFYGGCGGNRNNFDTEEYCMAVCGSA
 DISCLAIMER: The internal structure of the BLAST databases is subject
 to change with little or no notice.  The readdb API should be
 used to extract data from the BLAST databases.  Readdb is part
-of the the NCBI toolkit (ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/),
+of the the NCBI toolkit (ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/),
 readdb.h contains a list of supported function calls.  
 
 Last updated April 02 2001

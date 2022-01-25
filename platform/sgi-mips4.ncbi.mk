@@ -1,5 +1,5 @@
 #
-# $Id: sgi-mips4.ncbi.mk,v 1.6 2001/06/12 21:11:56 vakatov Exp $
+# $Id: sgi-mips4.ncbi.mk,v 1.8 2001/09/13 18:14:52 lewisg Exp $
 #
 # The SGI IRIX 6.* in 64-bit mode
 #
@@ -11,8 +11,8 @@ NCBI_SYBLIBS = -L$(NCBI_SYBASE)/lib -lsybdb
 NCBI_SYBLIBS_STATIC = $(NCBI_SYBASE)/lib/libsybdb.a
 NCBI_SYBFLAG = -I$(NCBI_SYBASE)/include -L$(NCBI_SYBASE)/lib
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = -O
-NCBI_OPTFLAG = -O
+NCBI_LDFLAGS1 = -O3 -LNO:opt=0 -OPT:wrap_around_unsafe_opt=OFF:IEEE_arithmetic=1
+NCBI_OPTFLAG = -O3 -LNO:opt=0 -OPT:wrap_around_unsafe_opt=OFF:IEEE_arithmetic=1
 NCBI_INCDIR = /usr/ncbi/ncbi/include/NCBI
 NCBI_LIBDIR = /usr/ncbi/ncbi/lib
 NCBI_ALTLIB =  /usr/ncbi/ncbi/altlib
@@ -46,7 +46,7 @@ NETENTREZVERSION = 2.02c2ASN1SPEC6
 # uncomment OPENGL_TARGETS to build OpenGL apps; do not change
 # OPENGL_NCBI_LIBS! However, may need to set
 # OPENGL_INCLUDE and OPENGL_LIBS to suit local environment
-OPENGL_TARGETS = Cn3D
+# OPENGL_TARGETS = Cn3D
 OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
 OPENGL_INCLUDE =
 OPENGL_LIBS = -lGL -lGLU

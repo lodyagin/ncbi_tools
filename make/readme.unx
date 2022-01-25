@@ -14,7 +14,7 @@ Building the NCBI toolkit
 -----------------------------
 
 1) Take the sources of NCBI tookit at
-	ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
+	ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
 Extract this file to some empty directory, for example "toolkit" :
 	mkdir toolkit
 	cd toolkit
@@ -23,14 +23,9 @@ Extract this file to some empty directory, for example "toolkit" :
 The platform-dependent config files are located in directory ncbi/platform/
 and you can modify them or make your own ports to different platforms.
 
-2) you will see files in ncbi/make:
+2) you will see the file in ncbi/make:
 
-   (i) ./ncbi/make/showmake.csh
-  
-       This file should show you what make would do, without actually doing
-	   the make.
-
-   (ii) ./ncbi/make/makedis.csh
+   (i) ./ncbi/make/makedis.csh
 
        This file should actually do the make.
 
@@ -60,7 +55,7 @@ Karl Sirotkin Fri Jul 24 16:50:19 EDT 1998
 
 
 4) There is some useful information about NCBI toolkit located at:
-	ftp://ftp.ncbi.nlm.nih.gov/toolbox/FAQ.html
+	ftp://ftp.ncbi.nih.gov/toolbox/FAQ.html
 	
 5) Here is sample scenario to build NCBI toolkit on DEC Alpha with OSF/1
 I'm using bash as login shell
@@ -72,12 +67,12 @@ OSF1 annie V4.0 878 alpha
 bash-2.00$ PS1='\h|\w|\!> '
 annie|/work|502> mkdir toolbox
 annie|/work|503> cd toolbox
-annie|/work/toolbox|504> ftp ncbi.nlm.nih.gov
-Connected to ncbi.nlm.nih.gov.
-220-Welcome to the NCBI FTP Server (ncbi.nlm.nih.gov)
+annie|/work/toolbox|504> ftp ftp.ncbi.nih.gov
+Connected to ftp.ncbi.nih.gov.
+220-Welcome to the NCBI FTP Server (ftp.ncbi.nih.gov)
 220-
 220 ncbi FTP server (Version wu-2.5.0(1p1) Sat Aug 28 10:35:19 EDT 1999) ready.
-Name (ncbi.nlm.nih.gov:coremake): ftp
+Name (ftp.ncbi.nih.gov:coremake): ftp
 331 Guest login ok, send your complete e-mail address as password.
 Password:
 230 Guest login ok, access restrictions apply.
@@ -1008,5 +1003,5 @@ Good luck!
 
 
 =======================================================================	
- $Id: readme.unx,v 6.15 2000/10/17 05:02:24 beloslyu Exp $
+ $Id: readme.unx,v 6.17 2001/12/12 20:37:50 beloslyu Exp $
 =======================================================================	

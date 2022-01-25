@@ -30,7 +30,7 @@
 #include <tofasta.h>
 #include <sqnutils.h>
 
-#define NUMARG 33
+#define NUMARG 34
 Args myargs[NUMARG] = {
    {"Filename for fasta input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
    {"Filename for Seq-submit template","template.sub",NULL,NULL,FALSE,'t',ARG_FILE_IN,0.0,0,NULL},
@@ -65,6 +65,7 @@ Args myargs[NUMARG] = {
    {"Filename for phrap contig order",NULL,NULL,NULL,TRUE,'L',ARG_FILE_IN,0.0,0,NULL},
    {"htgs_fulltop keyword","F", NULL ,NULL ,TRUE,'f',ARG_BOOLEAN,0.0,0,NULL},
    {"htgs_activefin keyword","F", NULL ,NULL ,TRUE,'v',ARG_BOOLEAN,0.0,0,NULL},
+   {"htgs_cancelled keyword","F", NULL ,NULL ,TRUE,'q',ARG_BOOLEAN,0.0,0,NULL},
 };
 
 /*------------- MakeAc2GBSeqId() -----------------------*/
@@ -528,7 +529,7 @@ Int2 Main(void)
    ValNodePtr vnp, vnp2, PNTR prevpnt, next;
    Boolean   temp_org, temp_comment, lastwasraw, coordsOnMaster,
       htgsDraft, usedelta = FALSE, do_contig, left_end, right_end,
-      htgsFulltop, htgsActivefin;
+      htgsFulltop, htgsActivefin, htgsCancelled;
    Int2 index = 0;
    ValNodePtr rescuedsgps = NULL, rescuedcontigs = NULL, fragmentgroups = NULL;
    ValNodePtr seqlitlist = NULL;
@@ -581,6 +582,7 @@ Int2 Main(void)
    contig_table = myargs [30].strvalue;
    htgsFulltop = (Boolean) myargs[31].intvalue;
    htgsActivefin = (Boolean) myargs[32].intvalue;
+   htgsCancelled = (Boolean) myargs[33].intvalue;
 
    dumsp6 [0] = '\0';
    dumt7 [0] = '\0';
@@ -1078,6 +1080,10 @@ Int2 Main(void)
    }
    if (htgsActivefin) {
       keywords [currkeyword] = "HTGS_ACTIVEFIN";
+      currkeyword++;
+   }
+   if (htgsCancelled) {
+      keywords [currkeyword] = "HTGS_CANCELLED";
       currkeyword++;
    }
    if (currkeyword > 0) {

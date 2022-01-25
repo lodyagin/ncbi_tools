@@ -28,13 +28,97 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.4 $
+* $Revision: 6.33 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.c,v $
+* Revision 6.33  2001/12/18 18:00:01  wheelan
+* bug fix for NULL segs in RemoveTeenyAln
+*
+* Revision 6.32  2001/12/13 12:28:51  wheelan
+* fixed bug in multiple printing, bug in ConnectAln
+*
+* Revision 6.31  2001/12/10 15:58:04  wheelan
+* fixed dereferencing of null variable in ConnectAln
+*
+* Revision 6.30  2001/12/10 14:42:36  wheelan
+* bug fix in ConnectAln -- no more using freed pointers
+*
+* Revision 6.29  2001/12/05 12:29:37  wheelan
+* changed to version 1.2
+*
+* Revision 6.28  2001/11/30 12:15:03  wheelan
+* subtle but very important bug fix in SPI_GetNthSeqRangeInSASet
+*
+* Revision 6.27  2001/11/20 12:13:24  wheelan
+* made SPI_GetProteinFrommRNA EXTERN
+*
+* Revision 6.26  2001/11/05 16:17:11  wheelan
+* added option to print multiple alignment to a file
+*
+* Revision 6.25  2001/11/02 14:00:52  wheelan
+* fixed memory access errors in splice printing code
+*
+* Revision 6.24  2001/10/26 13:12:07  wheelan
+* changes to polyA handling, plus bulletproofing
+*
+* Revision 6.23  2001/10/18 15:45:56  wheelan
+* bug fix in ConnectAln
+*
+* Revision 6.22  2001/10/18 15:12:22  wheelan
+* fixed polyAtail alignment problems, fixed score calculation
+*
+* Revision 6.21  2001/10/17 16:16:21  wheelan
+* changes in region sorting plus mrna model gap handling
+*
+* Revision 6.20  2001/10/08 17:16:44  wheelan
+* bug fix in revcmp, made cds 1-based coords, fixed polyA bug
+*
+* Revision 6.19  2001/10/04 12:36:21  wheelan
+* implemented bigintron option; made SPI_ConnectAln run through twice to pick up more pieces
+*
+* Revision 6.18  2001/10/03 18:09:54  wheelan
+* changed AM_LITE define for new alnmgr
+*
+* Revision 6.17  2001/10/03 14:19:53  wheelan
+* change names of all alignmgr calls, plus add profile-making code
+*
+* Revision 6.15  2001/09/07 12:15:25  wheelan
+* small fix for reverse complement translation
+*
+* Revision 6.14  2001/09/07 12:05:17  wheelan
+* moved protein translation for convenient use on web
+*
+* Revision 6.13  2001/09/07 11:47:32  wheelan
+* fixed coordinates and translation for reverse complement cases
+*
+* Revision 6.12  2001/09/04 13:46:47  wheelan
+* made SPI_RemoveInconsistentAlnsFromSet and SPI_flip_sa_list extern
+*
+* Revision 6.11  2001/08/24 23:27:15  wheelan
+* removed unwanted semicolon
+*
+* Revision 6.10  2001/08/24 13:45:20  wheelan
+* better region sorting (better scores), plus different printing options added
+*
+* Revision 6.9  2001/08/20 21:28:34  wheelan
+* improved relative scoring of initial regions, added seqid types
+*
+* Revision 6.8  2001/07/20 10:31:10  wheelan
+* fixed uninitialized variable plus another polyA mistake
+*
+* Revision 6.7  2001/07/19 18:22:36  wheelan
+* better handling of polyA tails
+*
+* Revision 6.6  2001/07/11 17:56:53  wheelan
+* added more functions to deal with making multiple alignments
+*
+* Revision 6.5  2001/07/10 16:44:53  wheelan
+* added functions to make a multiple alignment
+*
 * Revision 6.4  2001/07/06 10:27:21  wheelan
 * fixed minor things pointed out by D. Vakatov
 *
@@ -53,11 +137,14 @@
 
 #include <spidey.h>
 
+static int LIBCALLBACK SPI_CompareAlnPosForMult(VoidPtr ptr1, VoidPtr ptr2);
+static Boolean spi_overlaps(SeqAlignPtr sap, SPI_BlockPtr sbp);
 static void SPI_BeautifySMP(SPI_RegionInfoPtr srip);
 static void SPI_RemoveOutsideBounds(SeqAlignPtr sap, SPI_OptionsPtr spot);
 static void SPI_PadRegions(SPI_RegionInfoPtr srip, Int4 bsplen);
 static void SPI_TossRegions(SPI_RegionInfoPtr PNTR srip, SPI_OptionsPtr spot);
 static int LIBCALLBACK SPI_CompareInitialRegions(VoidPtr ptr1, VoidPtr ptr2);
+static int LIBCALLBACK SPI_compare_aln_score(VoidPtr ptr1, VoidPtr ptr2);
 static void SPI_SortRegionsByScore(SPI_RegionInfoPtr PNTR srip, SPI_OptionsPtr spot);
 static int LIBCALLBACK SPI_CompareRegions(VoidPtr ptr1, VoidPtr ptr2);
 static void SPI_PrintAce(FILE *ofp, SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr bsp_mrna, Boolean is_cds);
@@ -67,16 +154,18 @@ static void spi_print_mismatch_line(FILE *ofp, Int4 exonnum, Int4 start, Int4 le
 static SeqAlignPtr SPI_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps);
 static void SPI_ExtendAlnRight(SeqAlignPtr sap, Int4 which_row, Int4 start, Int4 stop);
 static SPI_mRNAToHerdPtr SPI_GetHerdInfo(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrna, SPI_OptionsPtr spot);
-static SPI_RegionInfoPtr SPI_FindWindows(SeqAlignPtr sap);
+static SPI_RegionInfoPtr SPI_FindWindows(SeqAlignPtr sap, SPI_OptionsPtr spot);
 static int LIBCALLBACK SPI_compare_aln_score(VoidPtr ptr1, VoidPtr ptr2);
-static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4 num, SPI_RegionInfoPtr PNTR head_srip);
-static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 num, SeqAlignPtr sap);
-static Int2 SPI_is_consistent(SPI_IvalPtr siip, SPI_RegionInfoPtr srip);
+static SPI_RegionInfoPtr SPI_SortRegions(SPI_RegionInfoPtr srip_head);
+static int LIBCALLBACK SPI_SortSrips(VoidPtr ptr1, VoidPtr ptr2);
+static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4 num, SPI_RegionInfoPtr PNTR head_srip, SPI_OptionsPtr spot);
+static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 num, SeqAlignPtr sap, SPI_OptionsPtr spot);
+static Int2 SPI_is_consistent(SPI_IvalPtr siip, SPI_RegionInfoPtr srip, SPI_OptionsPtr spot);
 static int LIBCALLBACK SPI_compare_genomic_loc(VoidPtr ptr1, VoidPtr ptr2);
 static void SPI_ExcludeOverlaps(SPI_IvalPtr PNTR siip_list, Int4 num, SPI_RegionInfoPtr srip);
 static void SPI_AlignInWindows(SPI_RegionInfoPtr PNTR head_srip, BioseqPtr bsp_genomic, BioseqPtr bsp_mrna, SPI_OptionsPtr spot);
 static void SPI_DoAln(SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr bsp_mrna, SPI_OptionsPtr spot);
-static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionInfoPtr srip, Boolean do_ends);
+static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionInfoPtr srip, Boolean do_ends, Boolean firsttime);
 static SeqAlignPtr SPI_ProcessNewAlns(SeqAlignPtr sap);
 static Int4 SPI_IsItPolyA(SeqIdPtr sip);
 static SeqAlignPtr SPI_FillInIntron(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start1, Int4 stop1, Int4 start2, Int4 stop2, Uint1 strand2, SPI_OptionsPtr spot);
@@ -93,12 +182,10 @@ static void SPI_GetAcceptorScore(BioseqPtr bsp, Int4 pos1, Int4 pos2, Uint1 stra
 static Int4 spi_get_overlap (SeqAlignPtr sap1, SeqAlignPtr sap2);
 static void SPI_AddToAln(SeqAlignPtr sap, Int4 offset, Int2 which_end, Uint1 strand);
 static SeqAlignPtr SPI_MergeAlignments(SeqAlignPtr sap1, SeqAlignPtr sap2);
-static void SPI_flip_sa_list (SeqAlignPtr sap);
 static SeqAlignPtr SPI_FillInLastmRNAHoles(SeqAlignPtr sap, SeqIdPtr sip_genomic, SeqIdPtr sip_mrna, Int4 start_g, Int4 stop_g, Int4 start_m, Int4 stop_m, Uint1 strand);
 static SeqAlignPtr SPI_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2);
 static int LIBCALLBACK SPI_comp_aln_pos(VoidPtr ptr1, VoidPtr ptr2);
 static void SPI_RegionFree (SPI_RegionInfoPtr srip);
-static void SPI_RegionListFree (SPI_RegionInfoPtr srip);
 static void SPI_FreeExonProf(SPI_ExonProfPtr epp);
 static void SPI_FreeExonProfList(SPI_ExonProfPtr epp);
 static void SPI_GetDonorSpliceInfo (Int4 org, Int4Ptr spllen, Int4Ptr boundary);
@@ -123,7 +210,6 @@ static SeqAlignPtr SPI_GetNthSAByRow(SeqAlignPtr sap, Int4 row, Int4 n);
 static SPI_FragSplPtr SPI_GetPossibleSites(SeqAlignPtr sap, BioseqPtr bsp_genomic, SPI_OptionsPtr spot, Boolean donor, Int4 ovl);
 static void SPI_FragSplFree(SPI_FragSplPtr fsp);
 static SeqLocPtr SPI_SeqLocListDup(SeqLocPtr slp);
-static void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, Int4 n, Int4 compact);
 static int LIBCALLBACK SPI_CompareSpins(VoidPtr ptr1, VoidPtr ptr2);
 static void SPI_OrderInternally(SPI_FragHerdPtr sfhp);
 static int LIBCALLBACK SPI_CompareAlnPos(VoidPtr ptr1, VoidPtr ptr2);
@@ -131,11 +217,16 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
 static void SPI_FillInUTRInfo(SPI_RegionInfoPtr srip_cds, SPI_RegionInfoPtr srip_mrna, Int4 len, Int4 exonstart, Int4 exonstop);
 static Boolean LIBCALLBACK SPI_GetCDS(SeqFeatPtr sfp, SeqMgrFeatContextPtr context);
 static void SPI_ShiftAlignment(SeqAlignPtr sap, Int4 offset, Int4 row);
-static CharPtr SPI_GetProteinFrommRNA(BioseqPtr bsp_mrna, Int4Ptr start);
 static Boolean LIBCALLBACK SPI_GetCDSFeat(SeqFeatPtr sfp, SeqMgrFeatContextPtr context);
 static Int4 SPI_FindLongestProt(CharPtr seq, Int4Ptr pos);
 static Boolean SPI_GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, CharPtr PNTR id);
 static void SPI_CheckSplicesForRevComp(SPI_RegionInfoPtr srip, SPI_OptionsPtr spot, BioseqPtr bsp_genomic, BioseqPtr bsp_mrna);
+static ACTProfilePtr SPI_ProfileNew(Boolean nuc);
+static ACTProfilePtr SPI_ProfileFree(ACTProfilePtr app);
+static ACTProfilePtr SPI_ProfileSetFree(ACTProfilePtr app);
+static void SPI_BuildProfile(SeqLocPtr slp, ACTProfilePtr PNTR app, Int4Ptr count, Int4 length);
+static FloatHi SPI_ScoreProfile(BioseqPtr bsp, Int4 pos, Uint1 strand, ACTProfilePtr app);
+static ACTProfilePtr SPI_MakeProfileFromSA(SeqAlignPtr sap);
 
 
 /***************************************************************************
@@ -214,7 +305,7 @@ NLM_EXTERN SPI_mRNAPtr SPI_AlignmRNAToGenomic(BioseqPtr bsp_genomic, BioseqPtr b
       for (i=0; i<srip->smp->numexons; i++)
       {
          saparray[i] = SeqAlignDup(srip->smp->saps[i]);
-         AlnMgrIndexSingleChildSeqAlign(saparray[i]);
+         AlnMgr2IndexSingleChildSeqAlign(saparray[i]);
       }
       srip->smp->continuous = SPI_CreateContinuousAln(srip->smp->saps, srip->smp->numexons);
       for (i=0; i<srip->smp->numexons; i++)
@@ -231,11 +322,12 @@ NLM_EXTERN SPI_mRNAPtr SPI_AlignmRNAToGenomic(BioseqPtr bsp_genomic, BioseqPtr b
       parent = SeqAlignNew();
       parent->segtype = SAS_DISC;
       parent->segs = (Pointer)(srip->smp->saps[0]);
-      AlnMgrIndexLite(parent);
+      AlnMgr2IndexLite(parent);
       srip->smp->parent = parent;
-      srip->smp->polyAtail = srip->polyAtail;
+      srip->polyAtail = srip->smp->polyAtail;
       srip->smp->fallsoff = srip->fallsoff;
-      srip->smp->protein = SPI_GetProteinFrommRNA(spim->bsp, &srip->smp->transstart);
+      if (srip->smp->protein == NULL)
+         srip->smp->protein = SPI_GetProteinFrommRNA(spim->bsp, &srip->smp->transstart);
       srip->smp = NULL; /* so that smp doesn't get freed */
       srip = srip->next;
    }
@@ -323,7 +415,7 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
       BLASTOptionDelete(options);
       return NULL;
    }
-   if (!AlnMgrIndexLite(sap))
+   if (!AlnMgr2IndexLite(sap))
    {
       if (standalone)
          SPI_PrintResult(ofp, ofp2, NULL, spig->bsp, spim->bsp, spot, FALSE);
@@ -339,22 +431,22 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
    /* now make sure that everything is on the plus strand of the genomic sequence */
    while (salp != NULL)
    {
-      strand = AlnMgrGetNthStrand(salp, 1);
+      strand = AlnMgr2GetNthStrand(salp, 1);
       if (strand == Seq_strand_minus)
       {
          salp_tmp = salp->next;
          salp->next = NULL;
-         SAIndexFree(salp->saip);
+         SAIndex2Free2(salp->saip);
          salp->saip = NULL;
          salp = SeqAlignListReverseStrand(salp);
-         AlnMgrIndexSingleChildSeqAlign(salp);
+         AlnMgr2IndexSingleChildSeqAlign(salp);
          salp->next = salp_tmp;
       }
       salp = salp->next;
    }
    SPI_RemoveOutsideBounds(sap, spot);
    BLASTOptionDelete(options);
-   srip = SPI_FindWindows(sap);
+   srip = SPI_FindWindows(sap, spot);
    /*SPI_TossRegions(&srip, spot);*/
    SPI_PadRegions(srip, spig->bsp->length);
    /* once the windows are found, throw out the original alignment */
@@ -381,7 +473,10 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
       {
          spot->printheader = FALSE;
          if (spot->fetchcds)
+         {
             srip_cds = SPI_GetResultsForCDS(srip_tmp, spim->bsp, spot);
+            SPI_BeautifySMP(srip_cds);
+         }
          if (srip_cds != NULL && spot->ace == FALSE)
          {
             spot->printheader = TRUE;
@@ -393,7 +488,7 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
             spot->printheader = FALSE;
          else
             spot->printheader = TRUE;
-         if (srip_tmp != NULL)
+         if (srip_tmp != NULL && srip_tmp->smp->protein == NULL)
             srip_tmp->smp->protein = SPI_GetProteinFrommRNA(spim->bsp, &srip_tmp->smp->transstart);
          if (spot->ace == FALSE)
          {
@@ -422,7 +517,10 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
             sap_tmp2->next = sap_tmp;
          }
       }
-      SPI_RegionListFree(srip);
+      if (spot->makemult == FALSE)
+         SPI_RegionListFree(srip);
+      else
+         return srip;
    } else
    {
       if (srip_cds != NULL)
@@ -438,6 +536,698 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
 
 /***************************************************************************
 *
+*  SPI_CompareAlnPosForMult is the callback for the HeapSort in
+*  SPI_MakeMultipleAlignment. It simply puts the alignments in order
+*  along the genomic sequence, from least to greatest if the alignments
+*  are on the plus strand, greatest to least otherwise.
+*
+***************************************************************************/
+static int LIBCALLBACK SPI_CompareAlnPosForMult(VoidPtr ptr1, VoidPtr ptr2)
+{
+   Int4         from1;
+   Int4         from2;
+   SeqAlignPtr  sap1;
+   SeqAlignPtr  sap2;
+   Uint1        strand;
+   Int4         to1;
+   Int4         to2;
+
+   sap1 = *((SeqAlignPtr PNTR)ptr1);
+   sap2 = *((SeqAlignPtr PNTR)ptr2);
+   strand = AlnMgr2GetNthStrand(sap1, 1);
+   AlnMgr2GetNthSeqRangeInSA(sap1, 1, &from1, &to1);
+   AlnMgr2GetNthSeqRangeInSA(sap2, 1, &from2, &to2);
+   if (strand == Seq_strand_minus)
+   {
+      if (from1 < from2)
+         return 1;
+      if (from2 < from1)
+         return -1;
+      if (to1 < to2)
+         return 1;
+      if (to2 < to1)
+         return -1;
+   } else
+   {
+      if (from1 < from2)
+         return -1;
+      if (from2 < from1)
+         return 1;
+      if (to1 < to2)
+         return -1;
+      if (to2 < to1)
+         return 1;
+   }
+   return 0;
+}
+
+/***************************************************************************
+*
+*  SPI_OrderBlocksPlus is a callback for SPI_MakeMultipleAlignment. It
+*  is used to order the blocks along the genomic sequence when the genomic
+*  strand is plus.
+*
+***************************************************************************/
+static int LIBCALLBACK SPI_OrderBlocksPlus(VoidPtr ptr1, VoidPtr ptr2)
+{
+   SPI_BlockPtr  sbp1;
+   SPI_BlockPtr  sbp2;
+
+   sbp1 = *((SPI_BlockPtr PNTR)ptr1);
+   sbp2 = *((SPI_BlockPtr PNTR)ptr2);
+   if (sbp1->from_g < sbp2->from_g)
+      return -1;
+   if (sbp2->from_g < sbp1->from_g)
+      return 1;
+   if (sbp1->to_g < sbp2->to_g)
+      return -1;
+   if (sbp1->to_g > sbp2->to_g)
+      return 1;
+   return 0;
+}
+
+/***************************************************************************
+*
+*  SPI_OrderBlocksMinus is a callback for SPI_MakeMultipleAlignment. It
+*  is used to order the blocks along the genomic sequence when the genomic
+*  strand is minus.
+*
+***************************************************************************/
+static int LIBCALLBACK SPI_OrderBlocksMinus(VoidPtr ptr1, VoidPtr ptr2)
+{
+   SPI_BlockPtr  sbp1;
+   SPI_BlockPtr  sbp2;
+
+   sbp1 = *((SPI_BlockPtr PNTR)ptr1);
+   sbp2 = *((SPI_BlockPtr PNTR)ptr2);
+   if (sbp1->from_g < sbp2->from_g)
+      return 1;
+   if (sbp2->from_g < sbp1->from_g)
+      return -1;
+   if (sbp1->to_g < sbp2->to_g)
+      return 1;
+   if (sbp1->to_g > sbp2->to_g)
+      return -1;
+   return 0;
+}
+
+/***************************************************************************
+*
+*  SPI_CompareSecondRow is the HeapSort callback for SPI_RearrangeAlns;
+*  it orders two seqaligns in lexical order of the seqid of their second
+*  row. (All seqaligns involved have only two rows anyway).
+*
+***************************************************************************/
+static int LIBCALLBACK SPI_CompareSecondRow(VoidPtr ptr1, VoidPtr ptr2)
+{
+   Int4         ret;
+   SeqAlignPtr  sap1;
+   SeqAlignPtr  sap2;
+   SeqIdPtr     sip1;
+   SeqIdPtr     sip2;
+
+   sap1 = *((SeqAlignPtr PNTR)ptr1);
+   sap2 = *((SeqAlignPtr PNTR)ptr2);
+   sip1 = AlnMgr2GetNthSeqIdPtr(sap1, 2);
+   sip2 = AlnMgr2GetNthSeqIdPtr(sap2, 2);
+   ret = SAM_OrderSeqID(sip1, sip2);
+   SeqIdFree(sip1);
+   SeqIdFree(sip2);
+   return ret;
+}
+
+/***************************************************************************
+*
+*  SPI_RearrangeAlns arranges the alignments in a linked list in lexical
+*  order of their second seqid, so that all blocks will have their
+*  rows in the same order.
+*
+***************************************************************************/
+static SeqAlignPtr SPI_RearrangeAlns(SeqAlignPtr sap_head)
+{
+   Int4         i;
+   Int4         j;
+   SeqAlignPtr  sap;
+   SeqAlignPtr  PNTR saparray;
+
+   i = 0;
+   sap = sap_head;
+   while (sap != NULL)
+   {
+      i++;
+      sap = sap->next;
+   }
+   if (i == 1)
+      return sap_head;
+   saparray = (SeqAlignPtr PNTR)MemNew(i*sizeof(SeqAlignPtr));
+   sap = sap_head;
+   i = 0;
+   while (sap != NULL)
+   {
+      saparray[i] = sap;
+      i++;
+      sap = sap->next;
+   }
+   HeapSort(saparray, i, sizeof(SeqAlignPtr), SPI_CompareSecondRow);
+   for (j=0; j<i-1; j++)
+   {
+      saparray[j]->next = saparray[j+1];
+   }
+   saparray[i-1]->next = NULL;
+   sap = saparray[0];
+   MemFree(saparray);
+   return sap;
+}
+
+/***************************************************************************
+*
+*  SPI_MakeMultipleAlignment takes all exons returned from all mRNAs, all
+*  regions, and makes multiple alignments out of them (after grouping them
+*  into blocks. All blocks will not necessarily contain all mRNAs.
+*
+***************************************************************************/
+NLM_EXTERN void SPI_MakeMultipleAlignment(SPI_RegionInfoPtr srip_head)
+{
+   SPI_BlockPtr       PNTR blockarray;
+   Int4               i;
+   Int4               j;
+   Int4               minus;
+   Int4               numblocks;
+   Int4               numsmps;
+   Int4               plus;
+   SeqAlignPtr        sap;
+   SeqAlignPtr        sap_head;
+   SeqAlignPtr        sap_prev;
+   SeqAlignPtr        sap_tmp;
+   SeqAlignPtr        PNTR saparray;
+   SPI_BlockPtr       sbp;
+   SPI_BlockPtr       sbp_head;
+   SPI_BlockPtr       sbp_prev;
+   SPI_MultPtr        smu;
+   SPI_RegionInfoPtr  srip;
+   Uint1              strand;
+   Uint1              strand_tmp;
+   SeqAlignPtr        sub_sap;
+
+   if (srip_head->next == NULL)  /* only one alignment here */
+      return;
+   i = 0;
+   sap_head = sap_prev = NULL;
+   numsmps = 0;
+   minus = plus = 0;
+   srip = srip_head;
+   while (srip != NULL)
+   {
+      if (srip->smp != NULL)
+      {
+         if (srip->smp->strand == Seq_strand_minus)
+            minus++;
+         else
+            plus++;
+         for (j=0; j<srip->smp->numexons; j++)
+         {
+            sap = SeqAlignDup(srip->smp->saps[j]);
+            AlnMgr2IndexSingleChildSeqAlign(sap);
+            if (sap_head != NULL)
+            {
+               sap_prev->next = sap;
+               sap_prev = sap;
+            } else
+               sap_head = sap_prev = sap;
+            i++;
+         }
+         numsmps++;
+      }
+      srip = srip->next;
+   }
+   if (numsmps <= 1)
+   {
+      SeqAlignSetFree(sap_head);
+      return;
+   }
+   if (minus > plus)
+      strand = Seq_strand_minus;
+   else
+      strand = Seq_strand_plus;
+   saparray = (SeqAlignPtr PNTR)MemNew(i*sizeof(SeqAlignPtr));
+   sap = sap_head;
+   for (j=0; j<i; j++)
+   {
+      strand_tmp = AlnMgr2GetNthStrand(sap, 1);
+      if ((strand_tmp == Seq_strand_minus && strand != Seq_strand_minus) || (strand_tmp != Seq_strand_minus && strand == Seq_strand_minus))
+      {
+         sap_tmp = sap->next;
+         sap->next = NULL;
+         SeqAlignListReverseStrand(sap);
+         sap->next = sap_tmp;
+      }
+      saparray[j] = sap;
+      sap = sap->next;
+   }
+   HeapSort(saparray, i, sizeof(SeqAlignPtr), SPI_CompareAlnPosForMult);
+   for (j=0; j<i; j++)
+   {
+      saparray[j]->next = NULL;
+   }
+   sbp_head = sbp_prev = NULL;
+   for (j=0; j<i; j++)
+   {
+      if (sbp_head == NULL)
+      {
+         sbp = (SPI_BlockPtr)MemNew(sizeof(SPI_Block));
+         AlnMgr2GetNthSeqRangeInSA(saparray[j], 1, &sbp->from_g, &sbp->to_g);
+         sbp->sap = saparray[j];
+         saparray[j] = NULL;
+         sbp_head = sbp_prev = sbp;
+      } else
+      {
+         if (spi_overlaps(saparray[j], sbp))
+         {
+            sap_tmp = sbp->sap;
+            while (sap_tmp->next != NULL)
+            {
+               sap_tmp = sap_tmp->next;
+            }
+            sap_tmp->next = saparray[j];
+            saparray[j] = NULL;
+         } else
+         {
+            sbp = (SPI_BlockPtr)MemNew(sizeof(SPI_Block));
+            AlnMgr2GetNthSeqRangeInSA(saparray[j], 1, &sbp->from_g, &sbp->to_g);
+            sbp->sap = saparray[j];
+            saparray[j] = NULL;
+            sbp_prev->next = sbp;
+            sbp_prev = sbp;
+         }
+      }
+   }
+   MemFree(saparray);
+   sbp = sbp_head;
+   numblocks = 0;
+   while (sbp)
+   {
+      numblocks++;
+      sbp->sap = SPI_RearrangeAlns(sbp->sap);
+      AlnMgr2IndexIndexedChain(sbp->sap);
+      sub_sap = AlnMgr2GetSubAlign(sbp->sap, 0, -1, 0);
+      SeqAlignSetFree(sbp->sap);
+      sbp->sap = sub_sap;
+      if (strand == Seq_strand_minus)
+         sbp->sap = SeqAlignListReverseStrand(sbp->sap);
+      AlnMgr2IndexSingleChildSeqAlign(sub_sap);
+      sbp = sbp->next;
+   }
+   blockarray = (SPI_BlockPtr PNTR)MemNew(numblocks*sizeof(SPI_BlockPtr));
+   sbp = sbp_head;
+   j = 0;
+   while (sbp != NULL)
+   {
+      blockarray[j] = sbp;
+      j++;
+      sbp = sbp->next;
+   }
+   if (strand == Seq_strand_minus)
+      HeapSort(blockarray, numblocks, sizeof(SPI_BlockPtr), SPI_OrderBlocksMinus);
+   else
+      HeapSort(blockarray, numblocks, sizeof(SPI_BlockPtr), SPI_OrderBlocksPlus);
+   saparray = (SeqAlignPtr PNTR)MemNew(numblocks*sizeof(SeqAlignPtr));
+   for (j=0; j<numblocks; j++)
+   {
+      saparray[j] = blockarray[j]->sap;
+      MemFree(blockarray[j]);
+   }
+   MemFree(blockarray);
+   smu = (SPI_MultPtr)MemNew(sizeof(SPI_Mult));
+   smu->exons = saparray;
+   smu->numexons = numblocks;
+   srip_head->smu = smu;
+}
+
+/***************************************************************************
+*
+*  SPI_WriteAlnLine prints out the specified row of an alignment, between
+*  the alignment coordinates specified. It allocates the charptr itself;
+*  this must be freed later by the calling function.
+*
+***************************************************************************/
+static CharPtr SPI_WriteAlnLine(Int4 row, Int4 from, Int4 to, SeqAlignPtr sap)
+{
+   AlnMsg2Ptr   amp;
+   BioseqPtr   bsp;
+   Uint1       buf[SPI_LINE+2];
+   Int4        ctr;
+   Int4        i;
+   Boolean     more;
+   Int4        n;
+   SeqIdPtr    sip;
+   SeqPortPtr  spp;
+   CharPtr     string;
+
+   n = AlnMgr2GetNumRows(sap);
+   if (row > n || row < 1)
+      return NULL;
+   string = (CharPtr)MemNew((SPI_LINE+2)*sizeof(Char));
+   for (n=0; n<(SPI_LINE+2); n++)
+   {
+      string[n] = '\0';
+   }
+   sip = AlnMgr2GetNthSeqIdPtr(sap, row);
+   bsp = BioseqLockById(sip);
+   amp = AlnMsgNew2();
+   amp->row_num = row;
+   amp->from_aln = from;
+   amp->to_aln = to;
+   if (amp->to_aln < 0)
+      amp->to_aln = -1;
+   n = 0;
+   while ((more = AlnMgr2GetNextAlnBit(sap, amp)) == TRUE)
+   {
+      if (amp->to_row - amp->from_row > amp->to_aln - amp->from_aln) /* kludge */
+      {
+         if (amp->strand == Seq_strand_minus)
+            amp->from_row = amp->to_row - (amp->to_aln - amp->from_aln);
+         else
+            amp->to_row = amp->from_row + (amp->to_aln - amp->from_aln);
+      }
+      if (amp->type == AM_SEQ)
+      {
+         spp = SeqPortNew(bsp, amp->from_row, amp->to_row, amp->strand, Seq_code_iupacna);
+         ctr = SeqPortRead(spp, buf, (amp->to_row - amp->from_row + 1));
+         SeqPortFree(spp);
+         for (i=n; i<n+ctr; i++)
+         {
+            string[i] = buf[i-n];
+         }
+         n += ctr;
+      } else
+      {
+         for (i=n; i<(n+amp->to_row-amp->from_row+1); i++)
+         {
+            string[i] = '-';
+         }
+         n += amp->to_row-amp->from_row+1;
+      }
+   }
+   AlnMsgFree2(amp);
+   SeqIdFree(sip);
+   return string;
+}
+
+/***************************************************************************
+*
+*  SPI_MapRowCoords finds the first non-gap character in a row and
+*  returns its sequence position. If the row consists only of gaps, it
+*  returns -1. If direction is RIGHT, the function searches upwards in
+*  alignment coordinates; otherwise it searches the other direction.
+*
+***************************************************************************/
+static Int4 SPI_MapRowCoords(SeqAlignPtr sap, Int4 from, Int4 to, Int4 row, Uint1 direction)
+{
+   Int4  pos;
+
+   if (direction == SPI_RIGHT)
+   {
+      pos = AlnMgr2MapSeqAlignToBioseq(sap, from, row);
+      from++;
+      while (pos < 0 && from <= to)
+      {
+         pos = AlnMgr2MapSeqAlignToBioseq(sap, from, row);
+         from++;
+      }
+   } else
+   {
+      pos = AlnMgr2MapSeqAlignToBioseq(sap, to, row);
+      to--;
+      while (pos < 0 && to >= from)
+      {
+         pos = AlnMgr2MapSeqAlignToBioseq(sap, to, row);
+         to--;
+      }
+   }
+   if (pos < 0)
+      return -1;
+   return pos;
+}
+
+/***************************************************************************
+*
+*  spi_get_num_places calculates the number of digits in a number, for
+*  display neatness purposes.
+*
+***************************************************************************/
+static Int4 spi_get_num_places(Int4 num)
+{
+   FloatHi  f;
+   Int4     i;
+   Int4     x;
+
+   x = 10;
+   for (i=1; i<21; i++)
+   {
+      f = (FloatHi)num/(FloatHi)x;
+      if (f < 1)
+      {
+         if (num < 0)
+            return (i+1);
+         else
+            return i;
+      }
+      x = x*10;
+   }
+   if (num < 0)
+      i++;
+   return i;
+}
+
+/***************************************************************************
+*
+*  SPI_IsItMult looks over the alignments in smu->exons to see whether
+*  there are any aligments with dim > 2; if so, it returns SPI_MULT, and
+*  if not, it returns SPI_NOTMULT.
+*
+***************************************************************************/
+static Int4 SPI_IsItMult(SPI_MultPtr smu)
+{
+   Int4  i;
+
+   if (smu == NULL)
+      return SPI_NOTMULT;
+   for (i=0; i<smu->numexons; i++)
+   {
+      if (AlnMgr2GetNumRows(smu->exons[i]) > 2)
+         return SPI_MULT;
+   }
+   return SPI_NOTMULT;
+}
+
+/***************************************************************************
+*
+*  SPI_PrintMultipleAlignment prints a text or html report of the alignment
+*  computed by SPI_MakeMultipleAlignment.
+*
+***************************************************************************/
+NLM_EXTERN void SPI_PrintMultipleAlignment(SPI_RegionInfoPtr srip, Boolean html, BioseqPtr bsp, FILE * ofp)
+{
+   Char         accsite[SPI_PSPLICE+2];
+   Int4         c;
+   Int4Ptr      coord;
+   Int4         ctr;
+   Int4         d;
+   Char         don[SPI_PSPLICE+2];
+   Int4         from;
+   Int4         i;
+   Int4         j;
+   Int4         len;
+   Boolean      local;
+   Int4         n;
+   Int4         ret;
+   SeqAlignPtr  sap;
+   SeqIdPtr     sip;
+   SPI_MultPtr  smu;
+   Int4         spacer;
+   SeqPortPtr   spp;
+   Uint1        strand;
+   CharPtr      PNTR stringptr;
+   Char         textid[42];
+   Int4         to;
+
+   if (srip == NULL || srip->smu == NULL)
+      return;
+   smu = srip->smu;
+   if (ofp == NULL)
+   {
+      local = TRUE;
+      ofp = FileOpen("stdout", "w");
+   } else
+      local = FALSE;
+   fprintf(ofp, "\n\n");
+   if (html)
+      fprintf(ofp, "<h1><center>");
+   fprintf(ofp, "Multiple Alignments\n");
+   ret = SPI_IsItMult(smu);
+   if (ret == SPI_NOTMULT)
+   {
+      fprintf(ofp, "None of the alignments in the set appears to be a multiple alignment.\n");
+      return;
+   }
+   if (html)
+   {
+      fprintf(ofp, "<br></center></h1>\n");
+      fprintf(ofp, "<table cellspacing=\"8\" cellpadding=\"5\" border=\"0\" width=\"600\">\n");
+   }
+   spacer = SPI_SPACER;
+   for (i=0; i<smu->numexons; i++)
+   {
+      sap = smu->exons[i];
+      n = AlnMgr2GetNumRows(sap);
+      if (html)
+      {
+         fprintf(ofp, "<tr><td bgcolor=%s width=\"600\">", (i%2)?"#FFFFFF":"#FFFFCC");
+         fprintf(ofp, "<a name=Block%d></a><h4>Block %d\n</h4><pre>", i+1, i+1);
+      } else
+         fprintf(ofp, "Block %d\n", i+1);
+      for (j=0; j<n; j++)
+      {
+         if (j > 0)
+            sip = AlnMgr2GetNthSeqIdPtr(sap, j+1);
+         else
+            sip = bsp->id;
+         SeqIdWrite(sip, textid, PRINTID_FASTA_LONG, 41);
+         AlnMgr2GetNthSeqRangeInSA(sap, j+1, &from, &to);
+         strand = AlnMgr2GetNthStrand(sap, j+1);
+         if (html)
+            fprintf(ofp, "<font color=%s>%s: %d to %d</font> %s\n", (j==0)?"#336699":"#800080", textid, from+1, to+1, (strand == Seq_strand_minus)?"<font color=#FF0033>minus strand</font>":"");
+         else
+            fprintf(ofp, "%s: %d to %d %s\n", textid, from+1, to+1, (strand == Seq_strand_minus)?"minus strand":"");
+         if (j > 0)
+            SeqIdFree(sip);
+      }
+      fprintf(ofp, "\n");
+      len = AlnMgr2GetAlnLength(sap, FALSE);
+      /* get donor and acceptor sites */
+      strand = AlnMgr2GetNthStrand(sap, 1);
+      AlnMgr2GetNthSeqRangeInSA(sap, 1, &from, &to);
+      if (strand == Seq_strand_minus)
+      {
+         spp = SeqPortNew(bsp, to+1, MIN(bsp->length-1, to+SPI_PSPLICE), Seq_strand_minus, Seq_code_iupacna);
+         ctr = MIN(bsp->length-1, to+SPI_PSPLICE)-(to+1)+1;
+      } else
+      {
+         spp = SeqPortNew(bsp, MAX(0, from-SPI_PSPLICE), from-1, Seq_strand_plus, Seq_code_iupacna);
+         ctr = from-1-MAX(0, from-SPI_PSPLICE)+1;
+      }
+      ctr = SeqPortRead(spp, (Uint1Ptr)accsite, ctr);
+      accsite[ctr] = '\0';
+      SeqPortFree(spp);
+      if (strand == Seq_strand_minus)
+      {
+         spp = SeqPortNew(bsp, MAX(0, from-SPI_PSPLICE), from-1, Seq_strand_minus, Seq_code_iupacna);
+         ctr = from-1-MAX(0, from-SPI_PSPLICE)+1;
+      } else
+      {
+         spp = SeqPortNew(bsp, to+1, MIN(to+SPI_PSPLICE, bsp->length-1), Seq_strand_plus, Seq_code_iupacna);
+         ctr = MIN(to+SPI_PSPLICE, bsp->length-1)-(to+1)+1;
+      }
+      ctr = SeqPortRead(spp, (Uint1Ptr)don, ctr);
+      don[ctr] = '\0';
+      SeqPortFree(spp);
+      StringLower(accsite);
+      StringLower(don);
+      fprintf(ofp, "%s<-flank\n", accsite);
+      stringptr = (CharPtr PNTR)MemNew(n*sizeof(CharPtr));
+      coord = (Int4Ptr)MemNew(n*sizeof(Int4));
+      for (c=0; c<len; c+=SPI_LINE-10)
+      {
+         for (j=0; j<n; j++)
+         {
+            stringptr[j] = SPI_WriteAlnLine(j+1, c, MIN(c+SPI_LINE-10-1, len-1), sap);
+            coord[j] = SPI_MapRowCoords(sap, c, MIN(c+SPI_LINE-10-1, len-1), j+1, SPI_RIGHT);
+            if (coord[j] >= 0)
+               coord[j]++;
+         }
+         for (j=0; j<n; j++)
+         {
+            if (html)
+               fprintf(ofp, "<font color=%s>", (j==0)?"#336699":"#800080");
+            fprintf(ofp, "%d", coord[j]);
+            if (html)
+               fprintf(ofp, "</font>");
+            d = spi_get_num_places(coord[j]);
+            for (d; d<spacer; d++)
+            {
+               fprintf(ofp, " ");
+            }
+            if (j == 0)
+               fprintf(ofp, "%s", stringptr[j]);
+            else
+            {
+               for (ctr=0; ctr<MIN(SPI_LINE-10, len-c); ctr++)
+               {
+                  if (stringptr[j][ctr] == stringptr[0][ctr])
+                     fprintf(ofp, ".");
+                  else
+                  {
+                     if (html && stringptr[0][ctr] != '-' && stringptr[j][ctr] != '-')
+                        fprintf(ofp, "<font color=#FF0033>");
+                     fprintf(ofp, "%c", stringptr[j][ctr]);
+                     if (html && stringptr[0][ctr] != '-' && stringptr[j][ctr] != '-')
+                        fprintf(ofp, "</font>");
+                  }
+               }
+            }
+            fprintf(ofp, "\n");
+            if (j > 0)
+               MemFree(stringptr[j]);
+         }
+         MemFree(stringptr[0]);
+         if (c+SPI_LINE-10 < len)
+            fprintf(ofp, "\n");
+      }
+      for (j=0; j<ctr+spacer-7; j++)
+      {
+         fprintf(ofp, " ");
+      }
+      fprintf(ofp, "flank->%s\n\n", don);
+      if (html)
+         fprintf(ofp, "<a href=#TOP>Top</a>\n");
+      MemFree(stringptr);
+      MemFree(coord);
+      if (html)
+         fprintf(ofp, "</pre></td></tr>\n");
+   }
+   if (html)
+      fprintf(ofp, "</table>");
+   if (local)
+      FileClose(ofp);
+}
+
+/***************************************************************************
+*
+*  spi_overlaps decides whether a new seqalign overlaps the already
+*  established range of a block. If it does, the coordinates are checked
+*  to see if it extends that range; if so, the block range is widened.
+*  If there is no overlap, the function returns FALSE.
+*
+***************************************************************************/
+static Boolean spi_overlaps(SeqAlignPtr sap, SPI_BlockPtr sbp)
+{
+   Int4  from;
+   Int4  to;
+
+   AlnMgr2GetNthSeqRangeInSA(sap, 1, &from, &to);
+   if ((from <= sbp->from_g && to >= sbp->from_g) || (from <= sbp->to_g && to >= sbp->to_g))
+   {
+      if (from < sbp->from_g)
+         sbp->from_g = from;
+      if (to > sbp->to_g)
+         sbp->to_g = to;
+      return TRUE;
+   }
+   return FALSE;
+}
+
+/***************************************************************************
+*
 *  SPI_BeautifySMP converts all coordinates to 1-based from 0-based, and
 *  runs through the mRNA to see whether any mRNA is missing; if so, it
 *  flags that alignment with holes=TRUE.
@@ -445,12 +1235,22 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
 ***************************************************************************/
 static void SPI_BeautifySMP(SPI_RegionInfoPtr srip)
 {
+   BioseqPtr    bsp;
    Int4         i;
+   SeqIdPtr     sip;
    SPI_mRNAPtr  smp;
 
    while (srip != NULL)
    {
       smp = srip->smp;
+      if (srip->polyAtail == 0 && smp->numexons > 1)
+      {
+         sip = AlnMgr2GetNthSeqIdPtr(smp->saps[0], 2);
+         bsp = BioseqLockById(sip);
+         srip->polyAtail = SPI_IsItPolyA(sip);
+         BioseqUnlock(bsp);
+         SeqIdFree(sip);
+      }
       smp->holes = FALSE;
       if (smp->strand == Seq_strand_minus)
       {
@@ -502,7 +1302,7 @@ static void SPI_RemoveOutsideBounds(SeqAlignPtr sap, SPI_OptionsPtr spot)
    {
       salp_next = salp->next;
       salp->next = NULL;
-      AlnMgrGetNthSeqRangeInSA(salp, 1, &start, &stop);
+      AlnMgr2GetNthSeqRangeInSA(salp, 1, &start, &stop);
       if (start >= spot->from || stop <= spot->to)
       {
          if (salp_head != NULL)
@@ -688,6 +1488,23 @@ static void SPI_SortRegionsByScore(SPI_RegionInfoPtr PNTR srip, SPI_OptionsPtr s
          }
       }
    }
+   srip_tmp = srip_prev = srip_head;
+   i = 1;
+   srip_tmp = srip_tmp->next; /* know we need the first one at least */
+   while (srip_tmp != NULL)
+   {
+      if (i+1>spot->numreturns) /* this guy is one too many */
+      {
+         srip_prev->next = NULL;
+         SPI_RegionListFree(srip_tmp);
+         srip_tmp = NULL;
+      } else
+      {
+         srip_prev = srip_tmp;
+         srip_tmp = srip_tmp->next;
+         i++;
+      }
+   }
    *srip = srip_head;
    MemFree(srip_array);
 }
@@ -809,7 +1626,7 @@ static void SPI_PrintAce(FILE *ofp, SPI_RegionInfoPtr srip, BioseqPtr bsp_genomi
 ***************************************************************************/
 static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr bsp_mrna, SPI_OptionsPtr spot, Boolean isitCDS)
 {
-   AlnMsgPtr        amp;
+   AlnMsg2Ptr        amp;
    Boolean          begin;
    BioseqPtr        bsp;
    Char             buf[61];
@@ -856,138 +1673,167 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
    Int4             tmp;
    CharPtr          tmpstring;
 
-   if (ofp == NULL || bsp_genomic == NULL || bsp_mrna == NULL)
+   if (bsp_genomic == NULL || bsp_mrna == NULL)
+      return;
+   if (spot->printaln != 3 && ofp == NULL)
+      return;
+   if (spot->printaln >= 2 && ofp2 == NULL)
       return;
    if (srip != NULL && srip->revcomp)
       BioseqRevComp(bsp_mrna);
-   if (spot->printheader)
-      fprintf(ofp, "--SPIDEY version 1.0--\n");
    FastaDefLine (bsp_genomic, text1, 200, NULL, NULL, 0);
    SeqIdWrite(bsp_genomic->id, textid1, PRINTID_FASTA_LONG, 41);
-   fprintf(ofp, "Genomic: %s ", textid1);
-   fprintf(ofp, "%s, ", text1);
-   fprintf(ofp, "%d bp\n", bsp_genomic->length);
    FastaDefLine (bsp_mrna, text2, 200, NULL, NULL, 0);
    SeqIdWrite(bsp_mrna->id, textid2, PRINTID_FASTA_LONG, 41);
-   if (isitCDS)
+   if (spot->printaln != 2)
    {
-      tmpstring = StringSave("CDS");
-      fprintf(ofp, "CDS: %s", textid2);
-   } else
-   {
-      tmpstring = StringSave("mRNA");
-      fprintf(ofp, "mRNA: %s ", textid2);
-   }
-   fprintf(ofp, "%s, ", text2);
-   if (isitCDS)
-   {
-      fprintf(ofp, "%d - %d\n", srip->mstart, srip->mstop);
-      offset = srip->mstart; /* this is where the CDS starts */
-   } else
-   {
-      fprintf(ofp, "%d bp\n", bsp_mrna->length);
-      offset = 0;
-   }
-   if (srip == NULL || srip->smp == NULL)
-   {
-      fprintf(ofp, "No alignment found.\n\n");
-      fflush(ofp);
-      return;
-   }
-   if (srip->smp->strand == Seq_strand_minus)
-      fprintf(ofp, "Strand: minus");
-   else
-      fprintf(ofp, "Strand: plus");
-   if (srip->revcomp)
-      fprintf(ofp, "  Reverse complement\n");
-   else
-      fprintf(ofp, "\n");
-   fprintf(ofp, "Number of exons: %d\n", srip->smp->numexons);
-   splice = 0;
-   for (i=0; i<srip->smp->numexons; i++)
-   {
-      if (srip->smp->strand == Seq_strand_minus)
-         c = srip->smp->numexons - i - 1;
-      else
-         c = i;
-      splice += srip->smp->splicedon[i];
-      if (srip->revcomp)
-         fprintf(ofp, "Exon %d: %d-%d (gen)  %d-%d (%s)  id %.1f%%  gaps %d  splice site (d  a): %d  %d", i+1, srip->smp->gstarts[c], srip->smp->gstops[c], bsp_mrna->length-srip->smp->mstarts[c], bsp_mrna->length-srip->smp->mstops[c], tmpstring, srip->smp->exonid[c], srip->smp->exongaps[c], srip->smp->splicedon[c], srip->smp->spliceacc[c]);
-      else
-         fprintf(ofp, "Exon %d: %d-%d (gen)  %d-%d (%s)  id %.1f%%  gaps %d  splice site (d  a): %d  %d", i+1, srip->smp->gstarts[c], srip->smp->gstops[c], srip->smp->mstarts[c], srip->smp->mstops[c], tmpstring, srip->smp->exonid[c], srip->smp->exongaps[c], srip->smp->splicedon[c], srip->smp->spliceacc[c]);
-      if (i > 0 && i<srip->smp->numexons-1 && srip->smp->splicedon[c] == 0 && srip->smp->spliceacc[c] == 0)
-         fprintf(ofp, "   uncertain\n");
-      else
-         fprintf(ofp, "\n");
-   }
-   fprintf(ofp, "Number of splice sites: %d\n", splice);
-   fprintf(ofp, "%s coverage: %d%%\n", tmpstring, srip->smp->mRNAcoverage);
-   fprintf(ofp, "overall percent identity: %.1f%%\n", (FloatHi)(100) - srip->smp->mismatch);
-   if (srip->smp->missingends == SPI_BOTH)
-      text = StringSave("both");
-   else if (srip->smp->missingends == SPI_NEITHER)
-      text = StringSave("neither");
-   else if (srip->smp->missingends == SPI_LEFT)
-      text = StringSave("left");
-   else if (srip->smp->missingends == SPI_RIGHT)
-      text = StringSave("right");
-   else
-      text = StringSave("error");
-   fprintf(ofp, "Missing %s ends: %s ", tmpstring, text);
-   if (srip->fallsoff)
-      fprintf(ofp, " -- may fall off end");
-   fprintf(ofp, "\n");
-   if (!isitCDS) /* print poly(A) tail information for mRNAs */
-   {
-      if (srip->polyAtail > 0)
-         fprintf(ofp, "Non-aligning poly(A)+ tail length: %d\n", srip->polyAtail);
-      else
+      if (spot->printheader)
+         fprintf(ofp, "--SPIDEY version 1.2--\n");
+      fprintf(ofp, "Genomic: %s ", textid1);
+      fprintf(ofp, "%s, ", text1);
+      fprintf(ofp, "%d bp\n", bsp_genomic->length);
+      if (isitCDS)
       {
-         srip->polyAtail = SPI_IsItPolyA(bsp_mrna->id);
-         if (srip->polyAtail >= SPI_MINPOLYASIZE)
-            fprintf(ofp, "Aligning poly(A)+ tail length: %d\n", srip->polyAtail);
-      }
-   } else /* print UTR %id information for CDSs */
-   {
-      if (srip->strand != Seq_strand_minus)
-      {
-         if (srip->utr.left != -1)
-            fprintf(ofp, "5' UTR id %.1f%%\n", srip->utr.left);
-         if (srip->utr.right != -1)
-            fprintf(ofp, "3' UTR id %.1f%%\n", srip->utr.right);
+         tmpstring = StringSave("CDS");
+         fprintf(ofp, "CDS: %s", textid2);
       } else
       {
-         if (srip->utr.right != -1)
-            fprintf(ofp, "5' UTR id %.1f%%\n", srip->utr.right);
-         if (srip->utr.left != -1)
-            fprintf(ofp, "3' UTR id %.1f%%\n", srip->utr.left);
+         tmpstring = StringSave("mRNA");
+         fprintf(ofp, "mRNA: %s ", textid2);
       }
-      if (srip->gstart == 1)
-         fprintf(ofp, "5' partial\n");
-      if (srip->gstop == 1)
-         fprintf(ofp, "3' partial\n");
+      fprintf(ofp, "%s, ", text2);
+      if (isitCDS)
+      {
+         fprintf(ofp, "%d - %d\n", srip->mstart, srip->mstop);
+         offset = srip->mstart; /* this is where the CDS starts */
+      } else
+      {
+         fprintf(ofp, "%d bp\n", bsp_mrna->length);
+         offset = 0;
+      }
+      if (srip == NULL || srip->smp == NULL)
+      {
+         fprintf(ofp, "No alignment found.\n\n");
+         fflush(ofp);
+         return;
+      }
+      if (srip->smp->strand == Seq_strand_minus)
+         fprintf(ofp, "Strand: minus");
+      else
+         fprintf(ofp, "Strand: plus");
+      if (srip->revcomp)
+         fprintf(ofp, "  Reverse complement\n");
+      else
+         fprintf(ofp, "\n");
+      fprintf(ofp, "Number of exons: %d\n", srip->smp->numexons);
+      splice = 0;
+      for (i=0; i<srip->smp->numexons; i++)
+      {
+         if (srip->smp->strand == Seq_strand_minus)
+            c = srip->smp->numexons - i - 1;
+         else
+            c = i;
+         splice += srip->smp->splicedon[i];
+         if (srip->revcomp)
+            fprintf(ofp, "Exon %d: %d-%d (gen)  %d-%d (%s)  id %.1f%%  gaps %d  splice site (d  a): %d  %d", i+1, srip->smp->gstarts[c], srip->smp->gstops[c], bsp_mrna->length-srip->smp->mstarts[c]+1, bsp_mrna->length-srip->smp->mstops[c]+1, tmpstring, srip->smp->exonid[c], srip->smp->exongaps[c], srip->smp->splicedon[c], srip->smp->spliceacc[c]);
+         else
+            fprintf(ofp, "Exon %d: %d-%d (gen)  %d-%d (%s)  id %.1f%%  gaps %d  splice site (d  a): %d  %d", i+1, srip->smp->gstarts[c], srip->smp->gstops[c], srip->smp->mstarts[c], srip->smp->mstops[c], tmpstring, srip->smp->exonid[c], srip->smp->exongaps[c], srip->smp->splicedon[c], srip->smp->spliceacc[c]);
+         if (i > 0 && i<srip->smp->numexons-1 && srip->smp->splicedon[c] == 0 && srip->smp->spliceacc[c] == 0)
+            fprintf(ofp, "   uncertain\n");
+         else
+            fprintf(ofp, "\n");
+      }
+      fprintf(ofp, "Number of splice sites: %d\n", splice);
+      fprintf(ofp, "%s coverage: %d%%\n", tmpstring, srip->smp->mRNAcoverage);
+      fprintf(ofp, "overall percent identity: %.1f%%\n", (FloatHi)(100) - srip->smp->mismatch);
+      if (srip->smp->missingends == SPI_BOTH)
+         text = StringSave("both");
+      else if (srip->smp->missingends == SPI_NEITHER)
+         text = StringSave("neither");
+      else if (srip->smp->missingends == SPI_LEFT)
+         text = StringSave("left");
+      else if (srip->smp->missingends == SPI_RIGHT)
+         text = StringSave("right");
+      else
+         text = StringSave("error");
+      fprintf(ofp, "Missing %s ends: %s ", tmpstring, text);
+      if (srip->fallsoff)
+         fprintf(ofp, " -- may fall off end");
+      fprintf(ofp, "\n");
+      if (!isitCDS) /* print poly(A) tail information for mRNAs */
+      {
+         if (srip->polyAtail > 0)
+            fprintf(ofp, "Non-aligning poly(A)+ tail length: %d\n", srip->polyAtail);
+         else if (srip->polyAtail < 0)
+               fprintf(ofp, "Aligning poly(A)+ tail length: %d\n", -srip->polyAtail);
+      } else /* print UTR %id information for CDSs */
+      {
+         if (srip->strand != Seq_strand_minus)
+         {
+            if (srip->utr.left != -1)
+               fprintf(ofp, "5' UTR id %.1f%%\n", srip->utr.left);
+            if (srip->utr.right != -1)
+               fprintf(ofp, "3' UTR id %.1f%%\n", srip->utr.right);
+         } else
+         {
+            if (srip->utr.right != -1)
+               fprintf(ofp, "5' UTR id %.1f%%\n", srip->utr.right);
+            if (srip->utr.left != -1)
+               fprintf(ofp, "3' UTR id %.1f%%\n", srip->utr.left);
+         }
+         if (srip->gstart == 1)
+            fprintf(ofp, "5' partial\n");
+         if (srip->gstop == 1)
+            fprintf(ofp, "3' partial\n");
+      }
+      fprintf(ofp, "\n");
+      fflush(ofp);
    }
-   fprintf(ofp, "\n");
-   fflush(ofp);
    p = NULL;
-   if (spot->printaln && ofp2 != NULL)  /* print alignment too */
+   if (spot->printaln != 1)  /* print alignment too */
    {
+      if (spot->printaln == 0)
+         ofp2 = ofp;
       p = srip->smp->protein;
       pos = srip->smp->transstart;
       epp_curr = srip->smp->epp;
+      if (isitCDS && spot->printaln == 2)
+         tmpstring = StringSave("CDS");
+      else if (spot->printaln == 2)
+         tmpstring = StringSave("mRNA");
       fprintf(ofp2, "Genomic: %s %s\n", textid1, text1);
       fprintf(ofp2, "%s: %s %s\n", tmpstring, textid2, text2);
-      amp = AlnMsgNew();
+      if (spot->printaln > 0)
+      {
+         if (srip == NULL || srip->smp == NULL)
+         {
+            fprintf(ofp2, "No alignment found.\n\n");
+            fflush(ofp2);
+            return;
+         }
+         if (srip->smp->strand == Seq_strand_minus)
+            fprintf(ofp2, "Strand: minus");
+         else
+            fprintf(ofp2, "Strand: plus");
+         if (srip->revcomp)
+            fprintf(ofp2, "  Reverse complement\n");
+         else
+            fprintf(ofp2, "\n");
+         fprintf(ofp2, "Number of exons: %d\n", srip->smp->numexons);
+      }
+      amp = AlnMsgNew2();
+      sap = NULL;
       for (i=0; i<srip->smp->numexons; i++)
       {
+         if (sap != NULL)
+            SeqAlignFree(sap);
+         sap = NULL;
          if (srip->strand == Seq_strand_minus)
          {
             c = srip->smp->numexons - i - 1;
-            sap = srip->smp->saps[c];
+            sap = SeqAlignDup(srip->smp->saps[c]);
             SeqAlignListReverseStrand(sap);
-            SAIndexFree(sap->saip);
-            sap->saip = NULL;
-            AlnMgrIndexSingleChildSeqAlign(sap);
+            AlnMgr2IndexSingleChildSeqAlign(sap);
             starts = srip->smp->gstops;
             stops = srip->smp->gstarts;
             epp_curr = srip->smp->epp;
@@ -997,7 +1843,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
             }
             if (epp_curr != NULL && epp_curr->exonnum == c+1)  /* need to change the mismatch positions now */
             {
-               l = AlnMgrGetAlnLength(sap, FALSE);
+               l = AlnMgr2GetAlnLength(sap, FALSE);
                for (j=0; j<epp_curr->nummismatches; j++)
                {
                   epp_curr->mismatches[j] = l - epp_curr->mismatches[j] - 1;
@@ -1021,13 +1867,17 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
             }
          }
          if (srip->revcomp)
-            fprintf(ofp2, "Exon %d: %d-%d (gen)  %d-%d (%s)\n", i+1, starts[c], stops[c], bsp_mrna->length-srip->smp->mstarts[c], bsp_mrna->length-srip->smp->mstops[c], tmpstring);
+            fprintf(ofp2, "Exon %d: %d-%d (gen)  %d-%d (%s)\n", i+1, starts[c], stops[c], bsp_mrna->length-srip->smp->mstarts[c]+1, bsp_mrna->length-srip->smp->mstops[c]+1, tmpstring);
          else
             fprintf(ofp2, "Exon %d: %d-%d (gen)  %d-%d (%s)\n", i+1, starts[c], stops[c], srip->smp->mstarts[c], srip->smp->mstops[c], tmpstring);
-         sap = srip->smp->saps[c];
-         strand = AlnMgrGetNthStrand(sap, 1);
-         len = AlnMgrGetAlnLength(sap, FALSE);
-         AlnMgrGetNthSeqRangeInSA(sap, 1, &gstart, NULL);
+         if (sap == NULL)
+         {
+            sap = SeqAlignDup(srip->smp->saps[c]);
+            AlnMgr2IndexSingleChildSeqAlign(sap);
+         }
+         strand = AlnMgr2GetNthStrand(sap, 1);
+         len = AlnMgr2GetAlnLength(sap, FALSE);
+         AlnMgr2GetNthSeqRangeInSA(sap, 1, &gstart, NULL);
          end = FALSE;
          ng = FALSE;
          term = FALSE;
@@ -1053,16 +1903,16 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
                   /* retrieve mismatch information, print the line of vertical bars */
                   spi_print_mismatch_line(ofp2, c+1, l, len-1, epp_curr, gstart);
                }
-               amp = AlnMsgReNew(amp);
-               amp->from_m = l;
+               AlnMsgReNew2(amp);
+               amp->from_aln = l;
                if (l != 0)
                {
                   if (l+SPI_LINE-1 >= len-1)
                   {
                      end = TRUE;
-                     amp->to_m = -1;
+                     amp->to_aln = -1;
                   } else
-                     amp->to_m = l+SPI_LINE-1;
+                     amp->to_aln = l+SPI_LINE-1;
                } else
                {
                   if (begin == FALSE)
@@ -1074,7 +1924,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
                      if (l+SPI_LINE-1-10 >= len-1)
                         end = TRUE;
                   }
-                  amp->to_m = MIN(SPI_LINE-1-10, len-1);
+                  amp->to_aln = MIN(SPI_LINE-1-10, len-1);
                }
                amp->row_num = j;
                done = FALSE;
@@ -1084,36 +1934,36 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
                counter = 0;
                if (j == 2)
                  begin = FALSE;
-               while ((Boolean)(more = AlnMgrGetNextAlnBit(sap, amp)))
+               while ((Boolean)(more = AlnMgr2GetNextAlnBit(sap, amp)))
                {
-                  if (j == 1 && amp->gap == 0)
-                     counter += amp->to_b - amp->from_b + 1;
+                  if (j == 1 && amp->type == AM_SEQ)
+                     counter += amp->to_row - amp->from_row + 1;
                   if (j == 2)
                   {
-                     if (minline == -1 && amp->gap == 0)
-                        minline = amp->from_b;
+                     if (minline == -1 && amp->type == AM_SEQ)
+                        minline = amp->from_row;
                      if (maxline == -1)
-                        maxline = amp->to_b;
-                      /*  maxline = AlnMgrMapRowCoords(sap, amp->to_m, 2, NULL);*/
+                        maxline = amp->to_row;
+                      /*  maxline = AlnMgr2MapSeqAlignToBioseq(sap, amp->to_aln, 2);*/
                   }
                   if (l==0 && j==1 && !done && gstart > 10)  /* print splice site */
                   {
-                     if (amp->from_b != 0 && amp->from_b != bsp_genomic->length-1)
+                     if (amp->from_row != 0 && amp->from_row != bsp_genomic->length-1)
                      {
                         if (amp->strand != Seq_strand_minus)
                         {
-                           if (amp->from_b < 10)
+                           if (amp->from_row < 10)
                               start = 0;
                            else
-                              start = amp->from_b - 10;
-                           stop = amp->from_b - 1;
+                              start = amp->from_row - 10;
+                           stop = amp->from_row - 1;
                         } else
                         {
-                           if (amp->to_b + 10 < bsp_genomic->length-1)
-                              stop = amp->to_b + 10;
+                           if (amp->to_row + 10 < bsp_genomic->length-1)
+                              stop = amp->to_row + 10;
                            else
                               stop = bsp_genomic->length-1;
-                           start = amp->to_b+1;
+                           start = amp->to_row+1;
                         }
                         spp = SeqPortNew(bsp_genomic, start, stop, amp->strand, Seq_code_iupacna);
                         ctr = SeqPortRead(spp, (Uint1Ptr)buf, 10);
@@ -1129,9 +1979,9 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
                      done = TRUE;
                      is_splice = TRUE;
                   }
-                  if (amp->gap == 0)
+                  if (amp->type == AM_SEQ)
                   {
-                     spp = SeqPortNew(bsp, amp->from_b, amp->to_b, amp->strand, Seq_code_iupacna);
+                     spp = SeqPortNew(bsp, amp->from_row, amp->to_row, amp->strand, Seq_code_iupacna);
                      ctr = SeqPortRead(spp, (Uint1Ptr)buf, SPI_LINE);
                      if (ctr > 0)
                         buf[ctr] = '\0';
@@ -1139,14 +1989,14 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
                      SeqPortFree(spp);
                   } else /* print dashes for gaps */
                   {
-                     for (ctr=0; ctr<(amp->to_b - amp->from_b+1); ctr++)
+                     for (ctr=0; ctr<(amp->to_row - amp->from_row+1); ctr++)
                      {
                         fprintf(ofp2, "-");
                      }
                   }
-                  if (j==1 && end && counter >= amp->to_m - amp->from_m)
+                  if (j==1 && end && counter >= amp->to_aln - amp->from_aln)
                   {
-                     AlnMgrGetNthSeqRangeInSA(sap, 1, &start, &stop);
+                     AlnMgr2GetNthSeqRangeInSA(sap, 1, &start, &stop);
                      if (strand != Seq_strand_minus)
                      {
                         if (stop > bsp_genomic->length - 11)
@@ -1175,7 +2025,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
                         endstr = StringSave(&buf[ctr]);
 	                 SeqPortFree(spp);
                   }
-                  if (pos <= maxline && amp->gap == 0 && p != NULL && j == 2) /* at least part of this is coding --   */
+                  if (pos <= maxline && amp->type == AM_SEQ && p != NULL && j == 2) /* at least part of this is coding --   */
                   {                                     /* print the protein sequence underneath*/
                      if (is_splice)
                      {
@@ -1195,7 +2045,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
                         }
                         start_prot = FALSE;
                      }
-                     if (pos >= amp->from_b-1 && pos <= amp->to_b)
+                     if (pos >= amp->from_row-1 && pos <= amp->to_row)
                      {
                         ng = TRUE;
                         if (pos == minline-1)
@@ -1225,9 +2075,9 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
                            pos+=3;
                         }
                      }
-                  } else if (j == 2 && amp->gap == 1 && p != NULL && pos>=minline && pos <= maxline)
+                  } else if (j == 2 && amp->type == AM_SEQ && p != NULL && pos>=minline && pos <= maxline)
                   {
-                     for (s=0; s<(amp->to_b - amp->from_b+1); s++)
+                     for (s=0; s<(amp->to_row - amp->from_row+1); s++)
                      {
                         prot[r] = ' ';
                         r++;
@@ -1249,7 +2099,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
             MemFree(endstr);
          }
       }
-      AlnMsgFree(amp);
+      AlnMsgFree2(amp);
    }
    if (srip->revcomp)
       BioseqRevComp(bsp_mrna);
@@ -1266,7 +2116,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
 ***************************************************************************/
 static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, SPI_OptionsPtr spot, BioseqPtr bsp_genomic, BioseqPtr bsp_mrna)
 {
-   AlnMsgPtr        amp;
+   AlnMsg2Ptr        amp;
    BioseqPtr        bsp;
    Char             buf[61];
    Int4             ctr;
@@ -1297,7 +2147,7 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
 
    if (ofp == NULL || herd == NULL || bsp_genomic == NULL || bsp_mrna == NULL)
       return;
-   fprintf(ofp, "--SPIDEY version 1.0--\n");
+   fprintf(ofp, "--SPIDEY version 1.2--\n");
    FastaDefLine (bsp_genomic, text1, 200, NULL, NULL, 0);
    SeqIdWrite(bsp_genomic->id, textid1, PRINTID_FASTA_LONG, 41);
    fprintf(ofp, "Genomic: %s ", textid1);
@@ -1356,7 +2206,7 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
       epp_curr = herd->epp;
       fprintf(ofp2, "Genomic: %s %s\n", textid1, text1);
       fprintf(ofp2, "mRNA: %s %s\n", textid2, text2);
-      amp = AlnMsgNew();
+      amp = AlnMsgNew2();
       for (i=0; i<herd->numpieces; i++)
       {
          starts = herd->gstarts;
@@ -1368,9 +2218,9 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
          }
          fprintf(ofp2, "Fragment %d Exon %d: %d-%d (gen)  %d-%d (mRNA)\n", herd->fragments[i], herd->exons[i], starts[i], stops[i], herd->mstarts[i], herd->mstops[i]);
          sap = herd->saps[i];
-         strand = AlnMgrGetNthStrand(sap, 1);
-         len = AlnMgrGetAlnLength(sap, FALSE);
-         AlnMgrGetNthSeqRangeInSA(sap, 1, &gstart, NULL);
+         strand = AlnMgr2GetNthStrand(sap, 1);
+         len = AlnMgr2GetAlnLength(sap, FALSE);
+         AlnMgr2GetNthSeqRangeInSA(sap, 1, &gstart, NULL);
          end = FALSE;
          for (l=0; l<len; l+= SPI_LINE)
          {
@@ -1388,44 +2238,44 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
                   bsp = bsp_mrna;
                   spi_print_mismatch_line(ofp2, i+1, l, len-1, epp_curr, gstart);
                }
-               amp = AlnMsgReNew(amp);
-               amp->from_m = l;
+               AlnMsgReNew2(amp);
+               amp->from_aln = l;
                if (l != 0)
                {
                   if (l+SPI_LINE-1 >= len-1)
                   {
                      end = TRUE;
-                     amp->to_m = -1;
+                     amp->to_aln = -1;
                   } else
-                     amp->to_m = l+SPI_LINE-1;
+                     amp->to_aln = l+SPI_LINE-1;
                } else
                {
                   if (l+SPI_LINE-1 >= len-1)
                      end = TRUE;
-                  amp->to_m = MIN(SPI_LINE-1-10, len-1);
+                  amp->to_aln = MIN(SPI_LINE-1-10, len-1);
                }
                amp->row_num = j;
                done = FALSE;
-               while ((Boolean)(more = AlnMgrGetNextAlnBit(sap, amp)))
+               while ((Boolean)(more = AlnMgr2GetNextAlnBit(sap, amp)))
                {
                   if (l==0 && j==1 && !done)  /* print splice site */
                   {
-                     if (amp->from_b != 0 && amp->from_b != bsp_genomic->length-1)
+                     if (amp->from_row != 0 && amp->from_row != bsp_genomic->length-1)
                      {
                         if (amp->strand != Seq_strand_minus)
                         {
-                           if (amp->from_b < 10)
+                           if (amp->from_row < 10)
                               start = 0;
                            else
-                              start = amp->from_b - 10;
-                           stop = amp->from_b - 1;
+                              start = amp->from_row - 10;
+                           stop = amp->from_row - 1;
                         } else
                         {
-                           if (amp->to_b + 10 < bsp_genomic->length-1)
-                              stop = amp->to_b + 10;
+                           if (amp->to_row + 10 < bsp_genomic->length-1)
+                              stop = amp->to_row + 10;
                            else
                               stop = bsp_genomic->length-1;
-                           start = amp->to_b+1;
+                           start = amp->to_row+1;
                         }
                         spp = SeqPortNew(bsp_genomic, start, stop, amp->strand, Seq_code_iupacna);
                         ctr = SeqPortRead(spp, (Uint1Ptr)buf, 10);
@@ -1440,9 +2290,9 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
                      fprintf(ofp2, "          "); /* 10 spaces for splice site */
                      done = TRUE;
                   }
-                  if (amp->gap == 0)
+                  if (amp->type == AM_SEQ)
                   {
-                     spp = SeqPortNew(bsp, amp->from_b, amp->to_b, amp->strand, Seq_code_iupacna);
+                     spp = SeqPortNew(bsp, amp->from_row, amp->to_row, amp->strand, Seq_code_iupacna);
                      ctr = SeqPortRead(spp, (Uint1Ptr)buf, SPI_LINE);
                      if (ctr > 0)
                         buf[ctr] = '\0';
@@ -1450,14 +2300,14 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
                      SeqPortFree(spp);
                   } else
                   {
-                     for (ctr=0; ctr<(amp->to_b - amp->from_b+1); ctr++)
+                     for (ctr=0; ctr<(amp->to_row - amp->from_row+1); ctr++)
                      {
                         fprintf(ofp2, "-");
                      }
                   }
                   if (j==1 && end)
                   {
-                     AlnMgrGetNthSeqRangeInSA(sap, 1, &start, &stop);
+                     AlnMgr2GetNthSeqRangeInSA(sap, 1, &start, &stop);
                      if (strand != Seq_strand_minus)
                      {
                         if (stop > bsp_genomic->length - 11)
@@ -1497,7 +2347,7 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
             MemFree(endstr);
          }
       }
-      AlnMsgFree(amp);
+      AlnMsgFree2(amp);
    }
 }
 
@@ -1577,13 +2427,13 @@ static SeqAlignPtr SPI_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
    
    for (i=0; i<numsaps-1; i++)
    {
-      AlnMgrGetNthSeqRangeInSA(saps[i], 1, &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(saps[i+1], 1, &start2, &stop2);
+      AlnMgr2GetNthSeqRangeInSA(saps[i], 1, &start1, &stop1);
+      AlnMgr2GetNthSeqRangeInSA(saps[i+1], 1, &start2, &stop2);
       if (start2 - stop1 > 1)  /* genomic gap */
          SPI_ExtendAlnRight(saps[i], 1, stop1+1, start2-1);
-      AlnMgrGetNthSeqRangeInSA(saps[i], 2, &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(saps[i+1], 2, &start2, &stop2);
-      strand = AlnMgrGetNthStrand(saps[i], 2);
+      AlnMgr2GetNthSeqRangeInSA(saps[i], 2, &start1, &stop1);
+      AlnMgr2GetNthSeqRangeInSA(saps[i+1], 2, &start2, &stop2);
+      strand = AlnMgr2GetNthStrand(saps[i], 2);
       if (strand == Seq_strand_minus)
       {
          if (stop2 - start1 > 1)
@@ -1606,7 +2456,7 @@ static SeqAlignPtr SPI_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
    dsp->numseg = numseg;
    dsp->starts = (Int4Ptr)MemNew(2*numseg*sizeof(Int4));
    dsp->lens = (Int4Ptr)MemNew(numseg*sizeof(Int4));
-   dsp->strands = (Uint1Ptr)MemNew(2*numseg*sizeof(Int4));
+   dsp->strands = (Uint1Ptr)MemNew(2*numseg*sizeof(Uint1));
    n1 = n2 = 0;
    for (i=0; i<numsaps; i++)
    {
@@ -1630,7 +2480,7 @@ static SeqAlignPtr SPI_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
    salp->segtype = SAS_DENSEG;
    salp->dim = 2;
    salp->segs = (Pointer)(dsp);
-   AlnMgrIndexSingleChildSeqAlign(salp);
+   AlnMgr2IndexSingleChildSeqAlign(salp);
    return salp;
 }
 
@@ -1691,9 +2541,9 @@ static void SPI_ExtendAlnRight(SeqAlignPtr sap, Int4 which_row, Int4 start, Int4
       if (dsp->strands[which_row-1] == Seq_strand_minus)
          dsp->starts[(dsp->dim)*(dsp->numseg-1) + which_row - 1] = stop;
    }
-   SAIndexFree(sap->saip);
+   SAIndex2Free2(sap->saip);
    sap->saip = NULL;
-   AlnMgrIndexSingleChildSeqAlign(sap);
+   AlnMgr2IndexSingleChildSeqAlign(sap);
 }
 
 /***************************************************************************
@@ -1741,7 +2591,7 @@ static void SPI_ExtendAlnRight(SeqAlignPtr sap, Int4 which_row, Int4 start, Int4
 ***************************************************************************/
 NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, SPI_bsinfoPtr spim, FILE *ofp, FILE *ofp2, SPI_OptionsPtr spot)
 {
-   AMAlignIndexPtr      amaip;
+   AMAlignIndex2Ptr      amaip;
    Int4                 c;
    CharPtr              field[SPI_NUMCOLS];
    FILE                 *fp;
@@ -1895,8 +2745,8 @@ NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, 
    SeqLocFree(slp1);
    SeqLocFree(slp2);
    BLASTOptionDelete(options);
-   AlnMgrIndexLite(sap1);
-   AlnMgrIndexLite(sap2);
+   AlnMgr2IndexLite(sap1);
+   AlnMgr2IndexLite(sap2);
    sap = NULL;
    if (sap1 != NULL && sap2 != NULL)
    {
@@ -1908,9 +2758,9 @@ NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, 
       salp->next = (SeqAlignPtr)(sap2->segs);
       sap2->segs = NULL;
       SeqAlignFree(sap2);
-      AMAlignIndexFree(sap1->saip);
+      AMAlignIndex2Free2(sap1->saip);
       sap1->saip = NULL;
-      AlnMgrIndexLite(sap1);
+      AlnMgr2IndexLite(sap1);
       sap = sap1;
    } else if (sap1 == NULL)
       sap = sap2;
@@ -1919,10 +2769,10 @@ NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, 
    if (sap == NULL)
       return NULL;
    SPI_flip_sa_list((SeqAlignPtr)(sap->segs));
-   AlnMgrSortAlnSetByNthRowPos(sap, 1);
+   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
    c = 0;
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 1, &start, &stop);
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 1, &start, &stop);
    for (i=0; i<sfhp->numfrags && c<amaip->numsaps; i++)
    {
       salp_tmp = salp_prev = NULL;
@@ -1937,15 +2787,15 @@ NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, 
          }
          c++;
          if (c<amaip->numsaps)
-            AlnMgrGetNthSeqRangeInSA(amaip->saps[c], 1, &start, &stop);
+            AlnMgr2GetNthSeqRangeInSA(amaip->saps[c], 1, &start, &stop);
       }
       if (salp_tmp != NULL)
       {
-         AlnMgrIndexLite(salp_tmp);
+         AlnMgr2IndexLite(salp_tmp);
          SPI_RemoveInconsistentAlnsFromSet(salp_tmp, SPI_TEENYEXON, 1, SPI_LEFT);
          sfhp->sfparray[i]->sap = salp_tmp;
          /* change all alignments to be on the plus strand of the mRNA */
-         strand = AlnMgrGetNthStrand((SeqAlignPtr)(salp_tmp->segs), 2);
+         strand = AlnMgr2GetNthStrand((SeqAlignPtr)(salp_tmp->segs), 2);
          if (strand == Seq_strand_minus)
             SeqAlignListReverseStrand((SeqAlignPtr)(salp_tmp->segs));
       }
@@ -1991,7 +2841,7 @@ NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, 
 ***************************************************************************/
 static SPI_mRNAToHerdPtr SPI_GetHerdInfo(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrna, SPI_OptionsPtr spot)
 {
-   AMAlignIndexPtr      amaip;
+   AMAlignIndex2Ptr      amaip;
    Int4                 b;
    Int4                 c;
    SPI_ExonHerdInfoPtr  ehi;
@@ -2023,8 +2873,8 @@ static SPI_mRNAToHerdPtr SPI_GetHerdInfo(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrn
       sfp = sfhp->sfparray[i];
       if (sfp->sap != NULL)
       {
-         amaip = (AMAlignIndexPtr)(sfp->sap->saip);
-         strand = AlnMgrGetNthStrand(amaip->saps[0], 1);
+         amaip = (AMAlignIndex2Ptr)(sfp->sap->saip);
+         strand = AlnMgr2GetNthStrand(amaip->saps[0], 1);
          if (strand == Seq_strand_minus)
          {
             k = amaip->numsaps-1;
@@ -2101,7 +2951,7 @@ static SPI_mRNAToHerdPtr SPI_GetHerdInfo(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrn
    {
       herd->splicedon[i] = ehi->donor;
       herd->spliceacc[i] = ehi->acceptor;
-      herd->strands[i] = AlnMgrGetNthStrand(ehi->sap, 1);
+      herd->strands[i] = AlnMgr2GetNthStrand(ehi->sap, 1);
       herd->saps[i] = ehi->sap;
       smp_fake->saps[0] = ehi->sap;
       last = mis;
@@ -2195,16 +3045,16 @@ static SPI_mRNAToHerdPtr SPI_GetHerdInfo(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrn
    end = bsp_mrna->length - 1 - sfhp->polyAtail;
    if (herd->mstarts[0] > 0 && herd->mstarts[0] < SPI_TEENYEXON)
    {
-      strand = AlnMgrGetNthStrand(herd->saps[0], 1);
+      strand = AlnMgr2GetNthStrand(herd->saps[0], 1);
       if (strand == Seq_strand_minus)
       {
          salp = (SeqAlignPtr)(herd->saps[0]);
          salp_tmp = salp->next;
          salp->next = NULL;
-         SAIndexFree(salp->saip);
+         SAIndex2Free2(salp->saip);
          salp->saip = NULL;
          SeqAlignListReverseStrand(salp);
-         AlnMgrIndexSingleChildSeqAlign(salp);
+         AlnMgr2IndexSingleChildSeqAlign(salp);
          salp->next = salp_tmp;
       }
       sfp = sfhp->sfparray[herd->sfpnum[0]];
@@ -2231,26 +3081,26 @@ static SPI_mRNAToHerdPtr SPI_GetHerdInfo(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrn
          salp = (SeqAlignPtr)(herd->saps[0]);
          salp_tmp = salp->next;
          salp->next = NULL;
-         SAIndexFree(salp->saip);
+         SAIndex2Free2(salp->saip);
          salp->saip = NULL;
          SeqAlignListReverseStrand(salp);
-         AlnMgrIndexSingleChildSeqAlign(salp);
+         AlnMgr2IndexSingleChildSeqAlign(salp);
          salp->next = salp_tmp;
       }
    }
    /* now check the end */
    if (herd->mstops[herd->numpieces-1] > end - SPI_TEENYEXON && herd->mstops[herd->numpieces-1] != end)
    {
-      strand = AlnMgrGetNthStrand(herd->saps[herd->numpieces-1], 1);
+      strand = AlnMgr2GetNthStrand(herd->saps[herd->numpieces-1], 1);
       if (strand == Seq_strand_minus)
       {
          salp = (SeqAlignPtr)(herd->saps[herd->numpieces-1]);
          salp_tmp = salp->next;
          salp->next = NULL;
-         SAIndexFree(salp->saip);
+         SAIndex2Free2(salp->saip);
          salp->saip = NULL;
          SeqAlignListReverseStrand(salp);
-         AlnMgrIndexSingleChildSeqAlign(salp);
+         AlnMgr2IndexSingleChildSeqAlign(salp);
          salp->next = salp_tmp;
       }
       sfp = sfhp->sfparray[herd->sfpnum[herd->numpieces-1]];
@@ -2277,10 +3127,10 @@ static SPI_mRNAToHerdPtr SPI_GetHerdInfo(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrn
          salp = (SeqAlignPtr)(herd->saps[herd->numpieces-1]);
          salp_tmp = salp->next;
          salp->next = NULL;
-         SAIndexFree(salp->saip);
+         SAIndex2Free2(salp->saip);
          salp->saip = NULL;
          SeqAlignListReverseStrand(salp);
-         AlnMgrIndexSingleChildSeqAlign(salp);
+         AlnMgr2IndexSingleChildSeqAlign(salp);
          salp->next = salp_tmp;
       }
    }
@@ -2326,9 +3176,9 @@ static SPI_mRNAToHerdPtr SPI_GetHerdInfo(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrn
 *  will be chosen and the alignment will be refined in those windows.
 *
 ***************************************************************************/
-static SPI_RegionInfoPtr SPI_FindWindows(SeqAlignPtr sap)
+static SPI_RegionInfoPtr SPI_FindWindows(SeqAlignPtr sap, SPI_OptionsPtr spot)
 {
-   AMAlignIndexPtr    amaip;
+   AMAlignIndex2Ptr    amaip;
    FloatHi            bit_score;
    FloatHi            evalue;
    Int4               i;
@@ -2340,9 +3190,7 @@ static SPI_RegionInfoPtr SPI_FindWindows(SeqAlignPtr sap)
 
    if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
       return NULL;
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   if (amaip->numbsqs > 2)
-      return NULL;
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
    spip_list = (SPI_AlnInfoPtr PNTR)MemNew((amaip->numsaps)*sizeof(SPI_AlnInfoPtr));
    for (i=0; i<amaip->numsaps; i++)
    {
@@ -2350,12 +3198,12 @@ static SPI_RegionInfoPtr SPI_FindWindows(SeqAlignPtr sap)
       spip_list[i] = (SPI_AlnInfoPtr)MemNew(sizeof(SPI_AlnInfo));
       spip_list[i]->sap = salp;
       salp->next = NULL;
-      GetScoreAndEvalue(salp, &score, &bit_score, &evalue, &number);
-      spip_list[i]->bit_score = score;
+      spip_list[i]->bit_score = AlnMgr2ComputeScoreForSeqAlign(salp);
    }
    HeapSort(spip_list, i, sizeof(SPI_AlnInfoPtr), SPI_compare_aln_score);
    srip_head = NULL;
-   srip_head = SPI_AssembleRegions(spip_list, amaip->numsaps, &srip_head);
+   srip_head = SPI_AssembleRegions(spip_list, amaip->numsaps, &srip_head, spot);
+   srip_head = SPI_SortRegions(srip_head);
    for (i=0; i<amaip->numsaps; i++)
    {
       spip_list[i]->sap = NULL;
@@ -2395,6 +3243,71 @@ static int LIBCALLBACK SPI_compare_aln_score(VoidPtr ptr1, VoidPtr ptr2)
 
 /***************************************************************************
 *
+*  SPI_SortRegions takes a linked list of new regions (no alignments) and
+*  makes sure that they are in order by score, to ensure that the first
+*  region analyzed is the region with the most potential.
+*
+***************************************************************************/
+static SPI_RegionInfoPtr SPI_SortRegions(SPI_RegionInfoPtr srip_head)
+{
+   Int4               i;
+   Int4               j;
+   SPI_RegionInfoPtr  srip;
+   SPI_RegionInfoPtr  PNTR sriparray;
+
+   srip = srip_head;
+   i = 0;
+   while (srip != NULL)
+   {
+      i++;
+      srip = srip->next;
+   }
+   sriparray = (SPI_RegionInfoPtr PNTR)MemNew(i*sizeof(SPI_RegionInfoPtr));
+   i = 0;
+   srip = srip_head;
+   while (srip != NULL)
+   {
+      sriparray[i] = srip;
+      i++;
+      srip = srip->next;
+   }
+   HeapSort(sriparray, i, sizeof(SPI_RegionInfoPtr), SPI_SortSrips);
+   for (j=0; j<i-1; j++)
+   {
+      sriparray[j]->next = sriparray[j+1];
+   }
+   sriparray[i-1]->next = NULL;
+   srip = sriparray[0];
+   MemFree(sriparray);
+   return srip;
+}
+
+/***************************************************************************
+*
+*  SPI_SortSrips is the HeapSort callback for SPI_SortRegions. It simply
+*  orders the regions by score.
+*
+***************************************************************************/
+static int LIBCALLBACK SPI_SortSrips(VoidPtr ptr1, VoidPtr ptr2)
+{
+   SPI_RegionInfoPtr  srip1;
+   SPI_RegionInfoPtr  srip2;
+
+   srip1 = *((SPI_RegionInfoPtr PNTR)ptr1);
+   srip2 = *((SPI_RegionInfoPtr PNTR)ptr2);
+   if (srip1->score > srip2->score)
+      return -1;
+   if (srip2->score > srip1->score)
+      return 1;
+   if (srip1->coverage > srip2->coverage)
+      return -1;
+   if (srip2->coverage > srip1->coverage)
+      return 1;
+   return 0;
+}
+
+/***************************************************************************
+*
 *  SPI_AssembleRegions is a recursive function which clusters the
 *  alignments into consistent, nonoverlapping windows. On the first pass,
 *  all the alignments are sent to the function SPI_GetRegionForSAP, and
@@ -2410,7 +3323,7 @@ static int LIBCALLBACK SPI_compare_aln_score(VoidPtr ptr1, VoidPtr ptr2)
 *  inconsistent with other alignments in that region.
 *
 ***************************************************************************/
-static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4 num, SPI_RegionInfoPtr PNTR head_srip)
+static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4 num, SPI_RegionInfoPtr PNTR head_srip, SPI_OptionsPtr spot)
 {
    FloatHi            bit_score;
    FloatHi            evalue;
@@ -2445,7 +3358,7 @@ static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4
    if (!found)
       return *head_srip;
    sap = spip_list[i]->sap;
-   AlnMgrGetNthSeqRangeInSA(sap, 1, &start, &stop);
+   AlnMgr2GetNthSeqRangeInSA(sap, 1, &start, &stop);
    srip_tmp = *head_srip;
    lim_left = -1;
    lim_right = -1;
@@ -2470,7 +3383,7 @@ static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4
    {
       if (spip_list[j]->used == 0)
       {
-         AlnMgrGetNthSeqRangeInSA(spip_list[j]->sap, 1, &start, &stop);
+         AlnMgr2GetNthSeqRangeInSA(spip_list[j]->sap, 1, &start, &stop);
         /* if this unused alignment is in the same interval as the one */
         /* being looked at, put it in the array */
          if (start > lim_left && (stop < lim_right || lim_right == -1))
@@ -2481,10 +3394,10 @@ static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4
             siip->n = j;
             siip->gstart = start;
             siip->gstop = stop;
-            AlnMgrGetNthSeqRangeInSA(spip_list[j]->sap, 2, &siip->mstart, &siip->mstop);
-            siip->strand = AlnMgrGetNthStrand(spip_list[j]->sap, 2);
+            AlnMgr2GetNthSeqRangeInSA(spip_list[j]->sap, 2, &siip->mstart, &siip->mstop);
+            siip->strand = AlnMgr2GetNthStrand(spip_list[j]->sap, 2);
             siip->sap = spip_list[j]->sap;
-            GetScoreAndEvalue(siip->sap, &siip->score, &bit_score, &evalue, &number);
+            siip->score = AlnMgr2ComputeScoreForSeqAlign(siip->sap);
             if (siip_head != NULL)
             {
                siip_prev->next = siip;
@@ -2504,7 +3417,7 @@ static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4
    }
    /* send the array of unused alignments to SPI_GetRegionForSAP to */
    /* weed out inconsistent alignments                              */
-   srip = SPI_GetRegionForSAP(siip_list, n, sap);
+   srip = SPI_GetRegionForSAP(siip_list, n, sap, spot);
    if (srip != NULL)
    {
       if (*head_srip == NULL)
@@ -2536,7 +3449,7 @@ static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4
    }
    MemFree(siip_list);
    /* recursive call to self*/
-   srip = SPI_AssembleRegions(spip_list, num, head_srip);
+   srip = SPI_AssembleRegions(spip_list, num, head_srip, spot);
    return srip;
 }
 
@@ -2550,7 +3463,7 @@ static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4
 *  each SPI_Ival as used, not used, or impossible.
 *
 ***************************************************************************/
-static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 num, SeqAlignPtr sap)
+static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 num, SeqAlignPtr sap, SPI_OptionsPtr spot)
 {
    Boolean            done;
    Boolean            found;
@@ -2577,22 +3490,21 @@ static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 nu
       return NULL;
    /* make a new region with this alignment */
    srip = (SPI_RegionInfoPtr)MemNew(sizeof(SPI_RegionInfo));
-   AlnMgrGetNthSeqRangeInSA(sap, 1, &srip->gstart, &srip->gstop);
-   AlnMgrGetNthSeqRangeInSA(sap, 2, &srip->mstart, &srip->mstop);
+   AlnMgr2GetNthSeqRangeInSA(sap, 1, &srip->gstart, &srip->gstop);
+   AlnMgr2GetNthSeqRangeInSA(sap, 2, &srip->mstart, &srip->mstop);
    srip->coverage = abs(srip->mstop - srip->mstart) + 1;
    srip->score = siip_list[n]->score;
-   srip->strand = AlnMgrGetNthStrand(sap, 2);
+   srip->strand = AlnMgr2GetNthStrand(sap, 2);
    /* search to the right for consistent alignments */
    done = FALSE;
    for (i=n+1; i<num && !done; i++)
    {
-      j = SPI_is_consistent(siip_list[i], srip);
+      j = SPI_is_consistent(siip_list[i], srip, spot);
       if (j == SPI_CONSISTENT)
       {
          srip->coverage = abs(siip_list[i]->mstop - siip_list[i]->mstart) + srip->coverage + 1;
          siip_list[i]->used = 1;
-         if (siip_list[i]->score > srip->score)
-            srip->score = siip_list[i]->score;
+         srip->score += siip_list[i]->score;
       } else if (j == SPI_IMPOSSIBLE)
          siip_list[i]->used = -1;
       else if (j == SPI_DONE1)
@@ -2606,13 +3518,12 @@ static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 nu
    done = FALSE;
    for (i=n-1; i>=0 && !done; i--)
    {
-      j = SPI_is_consistent(siip_list[i], srip);
+      j = SPI_is_consistent(siip_list[i], srip, spot);
       if (j == SPI_CONSISTENT)
       {
          srip->coverage = abs(siip_list[i]->mstop - siip_list[i]->mstart) + srip->coverage + 1;
          siip_list[i]->used = 1;
-         if (siip_list[i]->score > srip->score)
-            srip->score = siip_list[i]->score;
+         srip->score += siip_list[i]->score;
       } else if (j == SPI_IMPOSSIBLE)
          siip_list[i]->used = -1;
       else if (j == SPI_DONE1)
@@ -2638,18 +3549,24 @@ static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 nu
 *  genomic coordinates are labeled unknown.
 *
 ***************************************************************************/
-static Int2 SPI_is_consistent(SPI_IvalPtr siip, SPI_RegionInfoPtr srip)
+static Int2 SPI_is_consistent(SPI_IvalPtr siip, SPI_RegionInfoPtr srip, SPI_OptionsPtr spot)
 {
+   Int4  intronsize;
+
    if (siip == NULL || srip == NULL)
       return 0;
    if ((siip->strand == Seq_strand_minus && srip->strand != Seq_strand_minus) || (srip->strand == Seq_strand_minus && siip->strand != Seq_strand_minus))
       return SPI_UNKNOWN;
+   if (spot->bigintron == TRUE)
+      intronsize = SPI_INTRONSIZEXL;
+   else
+      intronsize = SPI_INTRONSIZE;
    /* first look for overlaps -- exclude these from the set       */
    /* since we search outward from a core hit, there shouldn't be */
    /* any overlaps anyway.                                        */
    if (siip->gstart > srip->gstart + SPI_FUZZ && siip->gstart < srip->gstop - SPI_FUZZ)
       return SPI_IMPOSSIBLE;
-   if (siip->gstart > srip->gstop - SPI_FUZZ && siip->gstart < srip->gstop + SPI_INTRONSIZE)
+   if (siip->gstart > srip->gstop - SPI_FUZZ && siip->gstart < srip->gstop + intronsize)
    {
       if (siip->strand == Seq_strand_minus)
       {
@@ -2670,7 +3587,7 @@ static Int2 SPI_is_consistent(SPI_IvalPtr siip, SPI_RegionInfoPtr srip)
          } else
             return SPI_UNKNOWN;
       }
-   } else if (siip->gstop <= srip->gstart && siip->gstop > srip->gstart - SPI_INTRONSIZE)
+   } else if (siip->gstop <= srip->gstart + SPI_FUZZ && siip->gstop > srip->gstart - intronsize)
    {
       if (siip->strand == Seq_strand_minus)
       {
@@ -2753,6 +3670,7 @@ static void SPI_ExcludeOverlaps(SPI_IvalPtr PNTR siip_list, Int4 num, SPI_Region
 static void SPI_AlignInWindows(SPI_RegionInfoPtr PNTR head_srip, BioseqPtr bsp_genomic, BioseqPtr bsp_mrna, SPI_OptionsPtr spot)
 {
    Int4               nalign;
+   Int4               score;
    SPI_RegionInfoPtr  srip;
    SPI_RegionInfoPtr  srip_head;
    SPI_RegionInfoPtr  srip_next;
@@ -2762,8 +3680,9 @@ static void SPI_AlignInWindows(SPI_RegionInfoPtr PNTR head_srip, BioseqPtr bsp_g
    if (head_srip == NULL || *head_srip == NULL)
       return;
    srip = *head_srip;
+   score = srip->coverage;
    nalign = 0;
-   while (srip != NULL && nalign < spot->numreturns)
+   while (srip != NULL && (nalign < spot->numreturns || srip->coverage >= score/2))
    {
       SPI_DoAln(srip, bsp_genomic, bsp_mrna, spot);
       if (srip->smp != NULL)
@@ -2867,7 +3786,7 @@ static void SPI_DoAln(SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr b
       ErrPostEx(SEV_ERROR, 0, 0, "Error in SPI_DoAln\n");
       return;
    }
-   if (!AlnMgrIndexLite(sap))
+   if (!AlnMgr2IndexLite(sap))
       return;
    /* flip alignments so genomic sequence is the first row */
    SPI_flip_sa_list((SeqAlignPtr)(sap->segs));
@@ -2876,11 +3795,11 @@ static void SPI_DoAln(SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr b
    SPI_RemoveInconsistentAlnsFromSet(sap, 2*SPI_TEENYEXON, 1, SPI_LEFT);
    if (spot->interspecies == FALSE) /* extend to both ends of mRNA */
    {
-      if (!SPI_ConnectAln(sap, spot, srip, TRUE))
+      if (!SPI_ConnectAln(sap, spot, srip, TRUE, TRUE))
          return;
    } else /* for interspecies alignments, don't try to extend to the ends */
    {
-      if (!SPI_ConnectAln(sap, spot, srip, FALSE))
+      if (!SPI_ConnectAln(sap, spot, srip, FALSE, TRUE))
          return;
    }
    if (spot->callback != NULL)
@@ -2910,9 +3829,9 @@ static void SPI_DoAln(SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr b
 *  tail; if so, the tail is left unaligned.
 *
 ***************************************************************************/
-static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionInfoPtr srip, Boolean do_ends)
+static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionInfoPtr srip, Boolean do_ends, Boolean firsttime)
 {
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    BioseqPtr        bsp1;
    BioseqPtr        bsp2;
    Int4             currstart2;
@@ -2921,9 +3840,15 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
    Int4             gap2;
    Int4             i;
    Boolean          internal;
+   Int4             j;
+   Int4             len1;
+   Int4             len2;
+   SeqAlignPtr      newsaps;
+   SeqAlignPtr      newsaps_prev;
    Int4             prevstop1;
    Int4             prevstop2;
    SeqAlignPtr      sap_new;
+   SeqAlignPtr      sap_prev;
    SeqAlignPtr      sap_tmp;
    SeqIdPtr         sip1;
    SeqIdPtr         sip2;
@@ -2935,15 +3860,18 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
    Int4             stop2;
    Uint1            strand1;
    Uint1            strand2;
+   Int4             tail;
 
    if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
       return FALSE;
-   AlnMgrSortAlnSetByNthRowPos(sap, 1);
-   amaip = (AMAlignIndexPtr)(sap->saip);
+   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   if (amaip->numsaps < 1)
+      return FALSE;
    if (amaip->numsaps == 1 && !do_ends)
       return TRUE;
-   sip1 = AlnMgrGetNthSeqIdPtr(amaip->saps[0], 1);
-   sip2 = AlnMgrGetNthSeqIdPtr(amaip->saps[0], 2);
+   sip1 = AlnMgr2GetNthSeqIdPtr(amaip->saps[0], 1);
+   sip2 = AlnMgr2GetNthSeqIdPtr(amaip->saps[0], 2);
    bsp1 = BioseqLockById(sip1);
    if (bsp1 == NULL)
       return FALSE;
@@ -2953,8 +3881,8 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
       BioseqUnlock(bsp1);
       return FALSE;
    }
-   strand1 = AlnMgrGetNthStrand(amaip->saps[0], 1);
-   strand2 = AlnMgrGetNthStrand(amaip->saps[0], 2);
+   strand1 = AlnMgr2GetNthStrand(amaip->saps[0], 1);
+   strand2 = AlnMgr2GetNthStrand(amaip->saps[0], 2);
    if (do_ends)
    {
       prevstop1 = prevstop2 = -1;
@@ -2962,23 +3890,24 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
          prevstop2 = bsp2->length-1;
    } else
    {
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 1, &prevstop1, NULL);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 1, &prevstop1, NULL);
       prevstop1--;
       if (strand2 == Seq_strand_minus)
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 2, NULL, &prevstop2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 2, NULL, &prevstop2);
          prevstop2++;
       } else
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 2, &prevstop2, NULL);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 2, &prevstop2, NULL);
          prevstop2--;
       }
    }
    internal = FALSE;
+   newsaps = newsaps_prev = NULL;
    for (i=0; i<amaip->numsaps; i++)
    {
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 1, &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, &start2, &stop2);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, &start1, &stop1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &start2, &stop2);
       /* make the mRNA a little 'smaller' to force overlaps between adjacent exons */
       start2 = start2 + 2;
       stop2 = stop2 - 2;
@@ -2992,17 +3921,48 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
          if (gap1 < (gap2 - 2*SPI_FUZZ) && gap1 > SPI_FUZZ)
          {
             if (internal == TRUE && i<amaip->numsaps-1 && spot->interspecies == FALSE)
-               return FALSE; /* gap in mRNA but not genomic - probably not the right region */
-            else if (internal == FALSE)    /* mRNA continues past beginning of genomic sequence */
+            {
+               /* gap in mRNA but not genomic - possibly not the right region */
+               len1 = AlnMgr2GetAlnLength(amaip->saps[i-1], FALSE);
+               len2 = AlnMgr2GetAlnLength(amaip->saps[i], FALSE);
+               if (len1 > len2)
+               {
+                  SeqAlignFree(amaip->saps[i]);
+                  amaip->saps[i] = NULL;
+                  j = i+1;
+                  /* reset the boundaries */
+                  stop1 = prevstop1;
+                  start2 = stop2 = prevstop2;
+               } else
+               {
+                  SeqAlignFree(amaip->saps[i-1]);
+                  amaip->saps[i-1] = NULL;
+                  j = i;
+               }
+               for (j; j<amaip->numsaps; j++)
+               {
+                  amaip->saps[j-1] = amaip->saps[j];
+                  amaip->saps[j] = NULL;
+               }
+               for (j=0; j<amaip->numsaps-1; j++)
+               {
+                  amaip->saps[j]->next  = amaip->saps[j+1];
+               }
+               amaip->numsaps--;
+               amaip->saps[amaip->numsaps-1]->next = NULL;
+               i--;
+            } else if (internal == FALSE)    /* mRNA continues past beginning of genomic sequence */
             {
                sap_new = SPI_FindPiece(sip1, sip2, prevstop2, currstart2, strand2, start1, SPI_LEFT, spot);
                sap_new = SPI_ProcessNewAlns(sap_new);
-               sap_tmp = (SeqAlignPtr)(sap->segs);
-               while (sap_tmp->next != NULL)
+               if (sap_new != NULL && newsaps == NULL)
+                  newsaps = newsaps_prev = sap_new;
+               else if (sap_new != NULL)
+                  newsaps_prev->next = sap_new;
+               while (sap_new != NULL && newsaps_prev->next != NULL)
                {
-                  sap_tmp = sap_tmp->next;
+                  newsaps_prev = newsaps_prev->next;
                }
-               sap_tmp->next = sap_new;
             }
          } else if ((gap2-2*SPI_FUZZ <= gap1) && (gap1 <= gap2 + 2*SPI_FUZZ) && gap1 > SPI_FUZZ) /* same size gaps */
          {
@@ -3015,42 +3975,59 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
             sap_new = SPI_ProcessNewAlns(sap_new);
             SeqLocFree(slp1);
             SeqLocFree(slp2);
-            sap_tmp = (SeqAlignPtr)(sap->segs);
-            while (sap_tmp->next != NULL)
+            if (sap_new != NULL && newsaps == NULL)
+               newsaps = newsaps_prev = sap_new;
+            else if (sap_new != NULL)
+               newsaps_prev->next = sap_new;
+            while (sap_new != NULL && newsaps_prev->next != NULL)
             {
-               sap_tmp = sap_tmp->next;
+               newsaps_prev = newsaps_prev->next;
             }
-            sap_tmp->next = sap_new;
          } else if (gap1 >= SPI_FUZZ && gap2 >= SPI_FUZZ) /* gaps are different sizes -- intron? */
          {
             if (internal)
             {
                sap_new = SPI_FillInIntron(sip1, sip2, prevstop1, start1, prevstop2, currstart2, strand2, spot);
                sap_new = SPI_ProcessNewAlns(sap_new);
-               sap_tmp = (SeqAlignPtr)(sap->segs);
-               while (sap_tmp->next != NULL)
+               if (sap_new != NULL && newsaps == NULL)
+                  newsaps = newsaps_prev = sap_new;
+               else if (sap_new != NULL)
+                  newsaps_prev->next = sap_new;
+               while (sap_new != NULL && newsaps_prev->next != NULL)
                {
-                  sap_tmp = sap_tmp->next;
+                  newsaps_prev = newsaps_prev->next;
                }
-               sap_tmp->next = sap_new;
             } else /* first or last part of mRNA hasn't matched */
             {
                if (strand2 == Seq_strand_minus && do_ends) /* last exon -- check for polyA */
                {
                   srip->polyAtail = SPI_IsItPolyA(sip2);
                   if (srip->polyAtail >= SPI_MINPOLYASIZE) 
-                     prevstop2 = prevstop2 - srip->polyAtail; /* don't align tail */
-                  else
+                  {
+                     if (srip->polyAtail < prevstop2)
+                        prevstop2 = prevstop2 - srip->polyAtail; /* don't align tail */
+                     else
+                     {
+                        if (prevstop2 >= SPI_MINPOLYASIZE)
+                        {
+                           srip->polyAtail = prevstop2;
+                           prevstop2 = 0;
+                        } else
+                           srip->polyAtail = 0;
+                     }
+                  } else
                      srip->polyAtail = 0;
                }
                sap_new = SPI_FindPiece(sip1, sip2, prevstop2, currstart2, strand2, start1, SPI_LEFT, spot);
                sap_new = SPI_ProcessNewAlns(sap_new);
-               sap_tmp = (SeqAlignPtr)(sap->segs);
-               while (sap_tmp->next != NULL)
+               if (sap_new != NULL && newsaps == NULL)
+                  newsaps = newsaps_prev = sap_new;
+               else if (sap_new != NULL)
+                  newsaps_prev->next = sap_new;
+               while (sap_new != NULL && newsaps_prev->next != NULL)
                {
-                  sap_tmp = sap_tmp->next;
+                  newsaps_prev = newsaps_prev->next;
                }
-               sap_tmp->next = sap_new;
             }
          }
       }
@@ -3061,6 +4038,14 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
       else
          prevstop2 = stop2;
    }
+   sap_tmp = amaip->saps[0];
+   for (j=1; j<amaip->numsaps; j++)
+   {
+      sap_tmp->next = amaip->saps[j];
+      sap_tmp = amaip->saps[j];
+   }
+   sap_tmp->next = newsaps;
+   sap->segs = (Pointer)(amaip->saps[0]);
    if (do_ends)
    {
       if (strand2 != Seq_strand_minus) /* last exon -- check for polyA */
@@ -3073,6 +4058,10 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
             srip->polyAtail = 0;
             end2 = bsp2->length-1;
          }
+         if (srip->polyAtail != 0 && prevstop2 > end2)
+            srip->polyAtail = srip->polyAtail - (prevstop2-end2+1);
+         if (srip->polyAtail < SPI_MINPOLYASIZE)
+            srip->polyAtail = 0;
       } else
          end2 = -1;
       if (spi_isa_gap(end2, prevstop2, strand2))
@@ -3080,11 +4069,41 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
          sap_new = SPI_FindPiece(sip1, sip2, prevstop2, end2, strand2, prevstop1, SPI_RIGHT, spot);
          sap_new = SPI_ProcessNewAlns(sap_new);
          sap_tmp = (SeqAlignPtr)(sap->segs);
-         while (sap_tmp->next != NULL)
+         while (sap_tmp != NULL && sap_tmp->next != NULL)
          {
             sap_tmp = sap_tmp->next;
          }
          sap_tmp->next = sap_new;
+      }
+   }
+   sap_tmp = (SeqAlignPtr)(sap->segs);
+   /* check whether last exon is all polya */
+   tail = SPI_IsItPolyA(sip2);
+   if (strand2 == Seq_strand_minus)
+   {
+      AlnMgr2GetNthSeqRangeInSA(sap_tmp, 2, &start2, &stop2);
+      if (stop2 < SPI_TEENYEXON + tail)
+      {
+         sap->segs = (Pointer)(sap_tmp->next);
+         sap_tmp->next = NULL;
+         SeqAlignFree(sap_tmp);
+      }
+   } else
+   {
+      sap_prev = NULL;
+      while (sap_tmp->next != NULL)
+      {
+         sap_prev = sap_tmp;
+         sap_tmp = sap_tmp->next;
+      }
+      AlnMgr2GetNthSeqRangeInSA(sap_tmp, 2, &start2, &stop2);
+      if (bsp2->length - 1 - start2 < SPI_TEENYEXON + tail)
+      {
+         if (sap_prev != NULL)
+            sap_prev->next = NULL;
+         SeqAlignFree(sap_tmp);
+         if (sap_prev == NULL)
+            sap->segs = NULL;
       }
    }
    sap_tmp = (SeqAlignPtr)(sap->segs);
@@ -3109,6 +4128,8 @@ static Boolean SPI_ConnectAln(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionIn
    BioseqUnlock (bsp2);
    SeqIdFree(sip1);
    SeqIdFree(sip2);
+   if (firsttime) /* reconnect to pick up last pieces */
+      SPI_ConnectAln(sap, spot, srip, do_ends, FALSE);
    return TRUE;
 }
 
@@ -3128,7 +4149,7 @@ static SeqAlignPtr SPI_ProcessNewAlns(SeqAlignPtr sap)
    sap_head = SeqAlignNew();
    sap_head->segtype = SAS_DISC;
    sap_head->segs = (Pointer)sap;
-   AlnMgrIndexLite(sap_head);
+   AlnMgr2IndexLite(sap_head);
    SPI_RemoveInconsistentAlnsFromSet(sap_head, SPI_TEENYEXON, 1, SPI_LEFT);
    sap = (SeqAlignPtr)(sap_head->segs);
    sap_head->segs = NULL;
@@ -3243,14 +4264,14 @@ static SeqAlignPtr SPI_FillInIntron(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start1, I
    sap = BlastTwoSequencesByLoc(slp2, slp1, "blastn", options);
    SeqLocFree(slp1);
    SeqLocFree(slp2);
-   AlnMgrIndexLite(sap);
+   AlnMgr2IndexLite(sap);
    if (sap != NULL)
    {
       SPI_flip_sa_list((SeqAlignPtr)(sap->segs));
-      AMAlignIndexFree(sap->saip);
+      AMAlignIndex2Free2(sap->saip);
       sap->saip = NULL;
    }
-   AlnMgrIndexLite(sap);
+   AlnMgr2IndexLite(sap);
    SPI_RemoveInconsistentAlnsFromSet(sap, SPI_TEENYEXON/2, 1, SPI_LEFT);
    BLASTOptionDelete(options);
    sap = SPI_FillInLastmRNAHoles(sap, sip1, sip2, start1, stop1, start, stop, strand2);
@@ -3318,7 +4339,7 @@ static Int4 SPI_GetNthSeqLenInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr numsaps)
       num++;
       if (n > salp->dim)
          return 0;
-      AlnMgrGetNthSeqRangeInSA(salp, n, &start_tmp, &stop_tmp);
+      AlnMgr2GetNthSeqRangeInSA(salp, n, &start_tmp, &stop_tmp);
       len += (stop_tmp - start_tmp + 1);
       salp = salp->next;
    }
@@ -3338,6 +4359,7 @@ static Int4 SPI_GetNthSeqLenInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr numsaps)
 ***************************************************************************/
 static void SPI_GetNthSeqRangeInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop)
 {
+   Int4         numrows;
    SeqAlignPtr  salp;
    Int4         start_tmp;
    Int4         stop_tmp;
@@ -3350,7 +4372,8 @@ static void SPI_GetNthSeqRangeInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr start, In
    start_tmp = stop_tmp = -1;
    while (salp != NULL)
    {
-      if (n > salp->dim)
+      numrows = AlnMgr2GetNumRows(salp);
+      if (n > numrows)
       {
          if (start)
             *start = -1;
@@ -3358,7 +4381,7 @@ static void SPI_GetNthSeqRangeInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr start, In
             *stop = -1;
          return;
       }
-      AlnMgrGetNthSeqRangeInSA(salp, n, &tmp1, &tmp2);
+      AlnMgr2GetNthSeqRangeInSA(salp, n, &tmp1, &tmp2);
       if (tmp1 < start_tmp || start_tmp == -1)
          start_tmp = tmp1;
       if (tmp2 > stop_tmp)
@@ -3390,6 +4413,7 @@ static void SPI_GetNthSeqRangeInSASet(SeqAlignPtr sap, Int4 n, Int4Ptr start, In
 ***************************************************************************/
 static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int4 stop_m, Uint1 strand, Int4 start_g, Int2 which_end, SPI_OptionsPtr spot)
 {
+   Int4                 bigintron;
    BioseqPtr            bsp1;
    Int4                 gstart;
    Int4                 gstop;
@@ -3406,6 +4430,10 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
 
    if (sip1 == NULL || sip2 == NULL)
       return NULL;
+   if (spot->bigintron)
+      bigintron = SPI_BIGINTRONXL;
+   else
+      bigintron = SPI_BIGINTRON;
    if ((strand == Seq_strand_minus && start_m - stop_m < 7) || (strand != Seq_strand_minus && stop_m - start_m < 7))
       return NULL;
    if (start_m < 0)
@@ -3424,7 +4452,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
       {
          if (start_m - stop_m > start_g + 2*SPI_FUZZ)
             return NULL;
-         start = MAX(0, start_g - SPI_BIGINTRON);
+         start = MAX(0, start_g - bigintron);
          slp1 = SeqLocIntNew(MAX(start, spot->from), MIN(start_g, spot->to), Seq_strand_plus, sip1);
          slp2 = SeqLocIntNew(stop_m, start_m, strand, sip2);
          options = BLASTOptionNew("blastn", FALSE);
@@ -3442,13 +4470,13 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
          sap = BlastTwoSequencesByLoc(slp2, slp1, "blastn", options);
          if (sap == NULL)
             return NULL;
-         AlnMgrIndexLite(sap);
+         AlnMgr2IndexLite(sap);
          SeqLocFree(slp1);
          SeqLocFree(slp2);
          SPI_flip_sa_list((SeqAlignPtr)(sap->segs));
-         AMAlignIndexFree(sap->saip);
+         AMAlignIndex2Free2(sap->saip);
          sap->saip = NULL;
-         AlnMgrIndexLite(sap);
+         AlnMgr2IndexLite(sap);
          SPI_RemoveInconsistentAlnsFromSet(sap, SPI_TEENYEXON/2, 1, SPI_RIGHT);
          SPI_GetNthSeqRangeInSASet(sap, 1, &gstart, &gstop);
          SPI_GetNthSeqRangeInSASet(sap, 2, &mstart, &mstop);
@@ -3466,7 +4494,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
                sap_new = sap_new2;
                while (sap_new2 != NULL)
                {
-                  AlnMgrIndexSingleChildSeqAlign(sap_new2);
+                  AlnMgr2IndexSingleChildSeqAlign(sap_new2);
                   sap_new2 = sap_new2->next;
                }
             } else
@@ -3481,7 +4509,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
       {
          if (stop_m - start_m > start_g + 2*SPI_FUZZ)
             return NULL;
-         start = MAX(0, start_g - SPI_BIGINTRON);
+         start = MAX(0, start_g - bigintron);
          slp1 = SeqLocIntNew(MAX(start, spot->from), MIN(start_g, spot->to), Seq_strand_plus, sip1);
          slp2 = SeqLocIntNew(start_m, stop_m, strand, sip2);
          options = BLASTOptionNew("blastn", FALSE);
@@ -3499,13 +4527,13 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
          sap = BlastTwoSequencesByLoc(slp2, slp1, "blastn", options);
          if (sap == NULL)
             return NULL;
-         AlnMgrIndexLite(sap);
+         AlnMgr2IndexLite(sap);
          SPI_flip_sa_list((SeqAlignPtr)(sap->segs));
-         AMAlignIndexFree(sap->saip);
+         AMAlignIndex2Free2(sap->saip);
          SeqLocFree(slp1);
          SeqLocFree(slp2);
          sap->saip = NULL;
-         AlnMgrIndexLite(sap);
+         AlnMgr2IndexLite(sap);
          SPI_RemoveInconsistentAlnsFromSet(sap, SPI_TEENYEXON/2, 1, SPI_RIGHT);
          SPI_GetNthSeqRangeInSASet(sap, 1, &gstart, &gstop);
          SPI_GetNthSeqRangeInSASet(sap, 2, &mstart, &mstop);
@@ -3523,7 +4551,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
                sap_new = sap_new2;
                while (sap_new2 != NULL)
                {
-                  AlnMgrIndexSingleChildSeqAlign(sap_new2); 
+                  AlnMgr2IndexSingleChildSeqAlign(sap_new2); 
                   sap_new2 = sap_new2->next;
                }
             } else
@@ -3546,7 +4574,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
       {
          if (start_m - stop_m > bsp1->length - start_g - 2*SPI_FUZZ)
             return NULL;
-         stop = MIN(bsp1->length-1, start_g + SPI_BIGINTRON);
+         stop = MIN(bsp1->length-1, start_g + bigintron);
          slp1 = SeqLocIntNew(MAX(start_g, spot->from), MIN(stop, spot->to), Seq_strand_plus, sip1);
          slp2 = SeqLocIntNew(stop_m, start_m, strand, sip2);
          options = BLASTOptionNew("blastn", FALSE);
@@ -3564,13 +4592,13 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
          sap = BlastTwoSequencesByLoc(slp2, slp1, "blastn", options);
          if (sap == NULL)
             return NULL;
-         AlnMgrIndexLite(sap);
+         AlnMgr2IndexLite(sap);
          SeqLocFree(slp1);
          SeqLocFree(slp2);
          SPI_flip_sa_list((SeqAlignPtr)(sap->segs));
-         AMAlignIndexFree(sap->saip);
+         AMAlignIndex2Free2(sap->saip);
          sap->saip = NULL;
-         AlnMgrIndexLite(sap);
+         AlnMgr2IndexLite(sap);
          SPI_RemoveInconsistentAlnsFromSet(sap, SPI_TEENYEXON/2, 1, SPI_LEFT);
          SPI_GetNthSeqRangeInSASet(sap, 1, &gstart, &gstop);
          SPI_GetNthSeqRangeInSASet(sap, 2, &mstart, &mstop);
@@ -3588,7 +4616,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
                sap_new = sap_new2;
                while (sap_new2 != NULL)
                {
-                  AlnMgrIndexSingleChildSeqAlign(sap_new2); 
+                  AlnMgr2IndexSingleChildSeqAlign(sap_new2); 
                   sap_new2 = sap_new2->next;
                }
             } else
@@ -3603,7 +4631,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
       {
          if (stop_m - start_m > bsp1->length - start_g - 2*SPI_FUZZ)
             return NULL;
-         stop = MIN(bsp1->length-1, start_g + SPI_BIGINTRON);
+         stop = MIN(bsp1->length-1, start_g + bigintron);
          slp1 = SeqLocIntNew(MAX(start_g, spot->from), MIN(stop, spot->to), Seq_strand_plus, sip1);
          slp2 = SeqLocIntNew(start_m, stop_m, strand, sip2);
          options = BLASTOptionNew("blastn", FALSE);
@@ -3621,13 +4649,13 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
          sap = BlastTwoSequencesByLoc(slp2, slp1, "blastn", options);
          if (sap == NULL)
             return NULL;
-         AlnMgrIndexLite(sap);
+         AlnMgr2IndexLite(sap);
          SPI_flip_sa_list((SeqAlignPtr)(sap->segs));
-         AMAlignIndexFree(sap->saip);
+         AMAlignIndex2Free2(sap->saip);
          SeqLocFree(slp1);
          SeqLocFree(slp2);
          sap->saip = NULL;
-         AlnMgrIndexLite(sap);
+         AlnMgr2IndexLite(sap);
          SPI_RemoveInconsistentAlnsFromSet(sap, SPI_TEENYEXON/2, 1, SPI_LEFT);
          SPI_GetNthSeqRangeInSASet(sap, 1, &gstart, &gstop);
          SPI_GetNthSeqRangeInSASet(sap, 2, &mstart, &mstop);
@@ -3645,7 +4673,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
                sap_new = sap_new2;
                while (sap_new2 != NULL)
                {
-                  AlnMgrIndexSingleChildSeqAlign(sap_new2); 
+                  AlnMgr2IndexSingleChildSeqAlign(sap_new2); 
                   sap_new2 = sap_new2->next;
                }
             } else
@@ -3682,7 +4710,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
 ***************************************************************************/
 static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI_RegionInfoPtr srip)
 {
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    Int4             b;
    BioseqPtr        bsp;
    Int4             c;
@@ -3692,6 +4720,7 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
    Int4             gstop1;
    Int4             gstop2;
    Int4             i;
+   Int4             intronsize;
    Int4             len;
    Int4             len1;
    Int4             len2;
@@ -3711,10 +4740,19 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
 
    if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
       return NULL;
-   AlnMgrSortAlnSetByNthRowPos(sap, 1);
+   if (spot->bigintron)
+      intronsize = SPI_INTRONSIZEXL;
+   else
+      intronsize = SPI_INTRONSIZE;
+   AlnMgr2SortAlnSetByNthRowPos(sap, 1);
    SPI_RemoveTeenyAlns(sap, SPI_TEENYEXON);
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   strand = AlnMgrGetNthStrand(amaip->saps[0], 2);
+   if (sap->segs == NULL)
+   {
+      SeqAlignFree(sap);
+      return NULL;
+   }
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   strand = AlnMgr2GetNthStrand(amaip->saps[0], 2);
    /* first allocate a new SPI_mRNA structure to hold all the information */
    smp = (SPI_mRNAPtr)MemNew(sizeof(SPI_mRNA));
    smp->numexons = amaip->numsaps;
@@ -3729,41 +4767,41 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
    smp->gstops = (Int4Ptr)MemNew((smp->numexons)*sizeof(Int4));
    smp->strand = strand;
    /* make sure the alignment doesn't leave out little bits on the ends */
-   sip = AlnMgrGetNthSeqIdPtr(amaip->saps[0], 2);
+   sip = AlnMgr2GetNthSeqIdPtr(amaip->saps[0], 2);
    bsp = BioseqLockById(sip);
    len1 = bsp->length;
    len1 = len1 - srip->polyAtail;
    BioseqUnlock(bsp);
    SeqIdFree(sip);
-   sip = AlnMgrGetNthSeqIdPtr(amaip->saps[0], 1);
+   sip = AlnMgr2GetNthSeqIdPtr(amaip->saps[0], 1);
    bsp = BioseqLockById(sip);
    len2 = bsp->length;
    BioseqUnlock(bsp);
    SeqIdFree(sip);
    if (strand != Seq_strand_minus)
    {
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 1, &gstart1, &gstop1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 2, &mstart1, &mstop1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 1, &gstart1, &gstop1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 2, &mstart1, &mstop1);
       if (mstart1 > 0 && mstart1 <= SPI_ENDFUZZ && gstart1 >= mstart1)
          SPI_AddToAln(amaip->saps[0], mstart1, SPI_LEFT, strand);
       else if (mstart1 > 0 && mstart1 <= SPI_ENDFUZZ && gstart1 < mstart1)
          SPI_AddToAln(amaip->saps[0], gstart1, SPI_LEFT, strand);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 2, &mstart2, &mstop2);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 1, &gstart2, &gstop2);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 2, &mstart2, &mstop2);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 1, &gstart2, &gstop2);
       if (len1 - mstop2-1 > 0 && len1 - mstop2-1 <= SPI_ENDFUZZ && len2-gstop2 >= len1-mstop2)
          SPI_AddToAln(amaip->saps[amaip->numsaps-1], len1-mstop2-1, SPI_RIGHT, strand);
       else if (len1-mstop2-1 > 2 && len1 - mstop2-1 <= SPI_ENDFUZZ && len1-mstop2 > len2 - gstop2)
          SPI_AddToAln(amaip->saps[amaip->numsaps-1], len2-gstop2-1, SPI_RIGHT, strand);
    } else
    {
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 1, &gstart1, &gstop1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 2, &mstart2, &mstop2);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 1, &gstart1, &gstop1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 2, &mstart2, &mstop2);
       if (len1 - mstop2-1 > 0 && len1 - mstop2-1 <= 2*SPI_TEENYEXON && gstart1 >= (len1 - mstop2 - 1))
          SPI_AddToAln(amaip->saps[0], len1-mstop2-1, SPI_LEFT, strand);
       else if (len1 - mstop2-1 > 0 && len1 - mstop2-1 <= 2*SPI_TEENYEXON && gstart1 < (len1 - mstop2 - 1))
          SPI_AddToAln(amaip->saps[0], gstart1, SPI_LEFT, strand);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 2, &mstart1, &mstop1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 1, &gstart2, &gstop2);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 2, &mstart1, &mstop1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[amaip->numsaps-1], 1, &gstart2, &gstop2);
       if (mstart1 > 0 && mstart1 <= SPI_TEENYEXON && len2 - gstop2 -1> mstart1)
          SPI_AddToAln(amaip->saps[amaip->numsaps-1], mstart1, SPI_RIGHT, strand);
       else if (mstart1 > 0 && mstart1 <= SPI_TEENYEXON && len2 - gstop2 -1<= mstart1)
@@ -3779,10 +4817,10 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
    {
       amaip->saps[i]->next = NULL;
       amaip->saps[i+1]->next = NULL;
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 1, &gstart1, &gstop1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 1, &gstart2, &gstop2);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, &mstart1, &mstop1);
-      AlnMgrGetNthSeqRangeInSA(amaip->saps[i+1], 2, &mstart2, &mstop2);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, &gstart1, &gstop1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &gstart2, &gstop2);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &mstart1, &mstop1);
+      AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, &mstart2, &mstop2);
       if (gstart2 >= gstop1 - SPI_EXONMERGESIZE && gstart2 <= gstop1 + SPI_EXONMERGESIZE)
       {
          if ((mstart2 >= mstop1 - SPI_EXONMERGESIZE && mstart2 <= mstop1 + SPI_EXONMERGESIZE) ||  (mstart1 >= mstop2 - SPI_EXONMERGESIZE && mstart1 <= mstop2 + SPI_EXONMERGESIZE))
@@ -3857,7 +4895,7 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
       if (c > max)
          max = c;
    }
-   sip = AlnMgrGetNthSeqIdPtr(smp->saps[0], 1);
+   sip = AlnMgr2GetNthSeqIdPtr(smp->saps[0], 1);
    bsp = BioseqLockById(sip);
    len2 = bsp->length;
    BioseqUnlock(bsp);
@@ -3878,15 +4916,15 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
    }
    if (srip->strand == Seq_strand_minus)
    {
-      if ((smp->missingends == SPI_RIGHT || smp->missingends == SPI_BOTH) && smp->gstarts[0] < SPI_INTRONSIZE)
+      if ((smp->missingends == SPI_RIGHT || smp->missingends == SPI_BOTH) && smp->gstarts[0] < intronsize)
          srip->fallsoff = TRUE;
-      if ((smp->missingends == SPI_LEFT || smp->missingends == SPI_BOTH) && smp->gstops[smp->numexons-1] > len2 - SPI_INTRONSIZE)
+      if ((smp->missingends == SPI_LEFT || smp->missingends == SPI_BOTH) && smp->gstops[smp->numexons-1] > len2 - intronsize)
          srip->fallsoff = TRUE;
    } else
    {
-      if ((smp->missingends == SPI_LEFT  || smp->missingends == SPI_BOTH) && smp->gstops[smp->numexons-1] > len2 - SPI_INTRONSIZE)
+      if ((smp->missingends == SPI_LEFT  || smp->missingends == SPI_BOTH) && smp->gstops[smp->numexons-1] > len2 - intronsize)
          srip->fallsoff = TRUE;
-      if ((smp->missingends == SPI_RIGHT || smp->missingends == SPI_BOTH) && smp->gstarts[0] < SPI_INTRONSIZE)
+      if ((smp->missingends == SPI_RIGHT || smp->missingends == SPI_BOTH) && smp->gstarts[0] < intronsize)
          srip->fallsoff = TRUE;
    }
    smp->mRNAcoverage = (100*len)/len1;
@@ -3931,11 +4969,11 @@ static Int4 SPI_GetExonInfo(SPI_mRNAPtr smp, Int4 n, Int4Ptr start, Int4Ptr stop
    SPI_TinyInfoPtr  spit_head;
    SPI_TinyInfoPtr  spit_prev;
 
-   AlnMgrGetNthSeqRangeInSA(smp->saps[n], 2, start, stop);
+   AlnMgr2GetNthSeqRangeInSA(smp->saps[n], 2, start, stop);
    smp->mstarts[n] = *start;
    smp->mstops[n] = *stop;
-   AlnMgrGetNthSeqRangeInSA(smp->saps[n], 1, &smp->gstarts[n], &smp->gstops[n]);
-   app_head = ACT_MakeProfileFromSA(smp->saps[n]);
+   AlnMgr2GetNthSeqRangeInSA(smp->saps[n], 1, &smp->gstarts[n], &smp->gstops[n]);
+   app_head = SPI_MakeProfileFromSA(smp->saps[n]);
    smp->exongaps[n] = 0;
    mismatch = 0;
    app = app_head;
@@ -3955,7 +4993,7 @@ static Int4 SPI_GetExonInfo(SPI_mRNAPtr smp, Int4 n, Int4Ptr start, Int4Ptr stop
                {*/
                   mismatch += 1;
                   found = TRUE;
-                  if (spot->printaln) /* if it's going to be printed, save up the mismatches */
+                  if (spot->printaln != 1) /* if it's going to be printed, save up the mismatches */
                   {
                      spit = (SPI_TinyInfoPtr)MemNew(sizeof(SPI_TinyInfo));
                      spit->n = counter;
@@ -3976,12 +5014,12 @@ static Int4 SPI_GetExonInfo(SPI_mRNAPtr smp, Int4 n, Int4Ptr start, Int4Ptr stop
       }
       app = app->next;
    }
-   ACT_ProfileSetFree(app_head);
+   SPI_ProfileSetFree(app_head);
    smp->exonid[n] = (FloatHi)(100) - ((FloatHi)(100*mismatch))/(FloatHi)(*stop - *start + 1);
    *mis += mismatch;
    /* if there are mismatches, and the alignment is going to be printed, then */
    /* create an ExonProf structure to hold the mismatch positions.            */
-   if (spot->printaln && spit_head != NULL)
+   if (spot->printaln != 1 && spit_head != NULL)
    {
       spit = spit_head;
       i = 0;
@@ -4106,10 +5144,10 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
    Uint1       strand;
    Int4        tmp;
 
-   strand = AlnMgrGetNthStrand(sap1, 2);
-   AlnMgrGetNthSeqRangeInSA(sap1, 1, &start1, &stop1);
-   AlnMgrGetNthSeqRangeInSA(sap2, 1, &start2, &stop2);
-   sip = AlnMgrGetNthSeqIdPtr(sap1, 1);
+   strand = AlnMgr2GetNthStrand(sap1, 2);
+   AlnMgr2GetNthSeqRangeInSA(sap1, 1, &start1, &stop1);
+   AlnMgr2GetNthSeqRangeInSA(sap2, 1, &start2, &stop2);
+   sip = AlnMgr2GetNthSeqIdPtr(sap1, 1);
    bsp = BioseqLockById(sip);
    if (strand == Seq_strand_minus)
    {
@@ -4132,8 +5170,8 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
    {
       SPI_ExtendAlnAlg(sap2, -ovl, SPI_LEFT, strand);
       SPI_ExtendAlnAlg(sap1, -ovl, SPI_RIGHT, strand);
-      AlnMgrGetNthSeqRangeInSA(sap1, 1, &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(sap2, 1, &start2, &stop2);
+      AlnMgr2GetNthSeqRangeInSA(sap1, 1, &start1, &stop1);
+      AlnMgr2GetNthSeqRangeInSA(sap2, 1, &start2, &stop2);
       if (strand == Seq_strand_minus)
       {
          gstart = stop1;
@@ -4217,8 +5255,8 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
             }
          }
       }
-      AlnMgrGetNthSeqRangeInSA(sap1, 2, &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(sap2, 2, &start2, &stop2);
+      AlnMgr2GetNthSeqRangeInSA(sap1, 2, &start1, &stop1);
+      AlnMgr2GetNthSeqRangeInSA(sap2, 2, &start2, &stop2);
       maxsc = 0;
       /* for the SPI_NUMSITES best donor sites, get the corresponding acceptor */
       /* site score and record how much each alignment would be changed if     */
@@ -4317,8 +5355,8 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
       BioseqUnlock(bsp);
    } else
    {
-      AlnMgrGetNthSeqRangeInSA(sap1, 2, &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(sap2, 2, &start2, &stop2);
+      AlnMgr2GetNthSeqRangeInSA(sap1, 2, &start1, &stop1);
+      AlnMgr2GetNthSeqRangeInSA(sap2, 2, &start2, &stop2);
       if (strand == Seq_strand_minus)
          pos = stop2;
       else
@@ -4394,7 +5432,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
    {
       if (pos < stop2)
       {
-         if (AlnMgrTruncateSAP(sap2, start2, pos, 2))
+         if (AlnMgr2TruncateSeqAlign(sap2, start2, pos, 2))
          {
             sap2->next->next = NULL;
             SeqAlignFree(sap2->next);
@@ -4406,7 +5444,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
          return;
       else if (start1 < pos + 1)
       {
-         if (AlnMgrTruncateSAP(sap1, pos+1, stop1, 2))
+         if (AlnMgr2TruncateSeqAlign(sap1, pos+1, stop1, 2))
          {
             sap1->next->next = NULL;
             SeqAlignFree(sap1->next);
@@ -4422,7 +5460,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
    {
       if (pos < stop1)
       {
-         if (AlnMgrTruncateSAP(sap1, start1, pos, 2))
+         if (AlnMgr2TruncateSeqAlign(sap1, start1, pos, 2))
          {
             sap1->next->next = NULL;
             SeqAlignFree(sap1->next);
@@ -4434,7 +5472,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
          return;
       else if (start2 < pos + 1)
       {
-         if (AlnMgrTruncateSAP(sap2, pos+1, stop2, 2))
+         if (AlnMgr2TruncateSeqAlign(sap2, pos+1, stop2, 2))
          {
             sap2->next->next = NULL;
             SeqAlignFree(sap2->next);
@@ -4458,7 +5496,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
 static void SPI_RemoveTeenyAlns(SeqAlignPtr sap, Int4 len)
 {
    Int4             alnlen;
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    Int4             i;
    SeqAlignPtr      sap_head;
    SeqAlignPtr      sap_prev;
@@ -4466,11 +5504,11 @@ static void SPI_RemoveTeenyAlns(SeqAlignPtr sap, Int4 len)
    if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
       return;
    sap_head = sap_prev = NULL;
-   amaip = (AMAlignIndexPtr)(sap->saip);
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
    for (i=0; i<amaip->numsaps; i++)
    {
       amaip->saps[i]->next = NULL;
-      alnlen = AlnMgrGetAlnLength(amaip->saps[i], FALSE);
+      alnlen = AlnMgr2GetAlnLength(amaip->saps[i], FALSE);
       if (alnlen >= len)
       {
          if (sap_head != NULL)
@@ -4483,9 +5521,10 @@ static void SPI_RemoveTeenyAlns(SeqAlignPtr sap, Int4 len)
          SeqAlignFree(amaip->saps[i]);
    }
    sap->segs = (Pointer)(sap_head);
-   AMAlignIndexFree(amaip);
+   AMAlignIndex2Free2(amaip);
    sap->saip = NULL;
-   AlnMgrIndexLite(sap);
+   if (sap->segs != NULL)
+      AlnMgr2IndexLite(sap);
 }
 
 /***************************************************************************
@@ -4518,10 +5557,10 @@ static void SPI_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 s
 
    if (sap == NULL || ovl == 0 || ovl >= 20-SPI_MAXGAP)
       return;
-   AlnMgrGetNthSeqRangeInSA(sap, 1, &start1, &stop1);
-   AlnMgrGetNthSeqRangeInSA(sap, 2, &start2, &stop2);
-   sip1 = AlnMgrGetNthSeqIdPtr(sap, 1);
-   sip2 = AlnMgrGetNthSeqIdPtr(sap, 2);
+   AlnMgr2GetNthSeqRangeInSA(sap, 1, &start1, &stop1);
+   AlnMgr2GetNthSeqRangeInSA(sap, 2, &start2, &stop2);
+   sip1 = AlnMgr2GetNthSeqIdPtr(sap, 1);
+   sip2 = AlnMgr2GetNthSeqIdPtr(sap, 2);
    bsp1 = BioseqLockById(sip1);
    bsp2 = BioseqLockById(sip2);
    if (which_side == SPI_LEFT)
@@ -4584,9 +5623,9 @@ static void SPI_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 s
             dsp_new->starts[1] = start2 - ovl;
          sap->segs = (Pointer)dsp_new;
          DenseSegFree(dsp);
-         SAIndexFree(sap->saip);
+         SAIndex2Free2(sap->saip);
          sap->saip = NULL;
-         AlnMgrIndexSingleChildSeqAlign(sap);
+         AlnMgr2IndexSingleChildSeqAlign(sap);
       } else
          SPI_AddToAln(sap, ovl, SPI_LEFT, strand);
    } else if (which_side == SPI_RIGHT)
@@ -4649,9 +5688,9 @@ static void SPI_ExtendAlnAlg(SeqAlignPtr sap, Int4 ovl, Int4 which_side, Uint1 s
          dsp_new->starts[2*dsp->numseg+1] = -1;
          sap->segs = (Pointer)dsp_new;
          DenseSegFree(dsp);
-         SAIndexFree(sap->saip);
+         SAIndex2Free2(sap->saip);
          sap->saip = NULL;
-         AlnMgrIndexSingleChildSeqAlign(sap);
+         AlnMgr2IndexSingleChildSeqAlign(sap);
       } else
          SPI_AddToAln(sap, ovl, SPI_RIGHT, strand);
    }
@@ -4718,9 +5757,9 @@ static Int4 spi_get_overlap (SeqAlignPtr sap1, SeqAlignPtr sap2)
    Int4   stop2;
    Uint1  strand;
 
-   strand = AlnMgrGetNthStrand (sap1, 2);
-   AlnMgrGetNthSeqRangeInSA (sap1, 2, &start1, &stop1);
-   AlnMgrGetNthSeqRangeInSA (sap2, 2, &start2, &stop2);
+   strand = AlnMgr2GetNthStrand (sap1, 2);
+   AlnMgr2GetNthSeqRangeInSA (sap1, 2, &start1, &stop1);
+   AlnMgr2GetNthSeqRangeInSA (sap2, 2, &start2, &stop2);
    if (strand == Seq_strand_minus)
       overlap = stop2 - start1 + 1;
    else
@@ -4768,9 +5807,9 @@ static void SPI_AddToAln(SeqAlignPtr sap, Int4 offset, Int2 which_end, Uint1 str
          starts = (Int4Ptr)MemNew(2*(dsp->numseg+1)*sizeof(Int4));
          lens = (Int4Ptr)MemNew((dsp->numseg+1)*sizeof(Int4));
          strands = (Uint1Ptr)MemNew(2*(dsp->numseg+1)*sizeof(Uint1));
-         AlnMgrGetNthSeqRangeInSA(sap, 1, &i, &j);
+         AlnMgr2GetNthSeqRangeInSA(sap, 1, &i, &j);
          starts[0] = i - offset;
-         AlnMgrGetNthSeqRangeInSA(sap, 1, &i, &j);
+         AlnMgr2GetNthSeqRangeInSA(sap, 1, &i, &j);
          if (strand == Seq_strand_minus)
             starts[1] = j + 1;
          else
@@ -4806,9 +5845,9 @@ static void SPI_AddToAln(SeqAlignPtr sap, Int4 offset, Int2 which_end, Uint1 str
          starts = (Int4Ptr)MemNew(2*(dsp->numseg+1)*sizeof(Int4));
          lens = (Int4Ptr)MemNew((dsp->numseg+1)*sizeof(Int4));
          strands = (Uint1Ptr)MemNew(2*(dsp->numseg+1)*sizeof(Uint1));
-         AlnMgrGetNthSeqRangeInSA(sap, 1, &i, &j);
+         AlnMgr2GetNthSeqRangeInSA(sap, 1, &i, &j);
          starts[2*(dsp->numseg)-1] = i+1;
-         AlnMgrGetNthSeqRangeInSA(sap, 2, &i, &j);
+         AlnMgr2GetNthSeqRangeInSA(sap, 2, &i, &j);
          if (strand == Seq_strand_minus)
            starts[2*(dsp->numseg)] = i - offset;
          else
@@ -4834,9 +5873,9 @@ static void SPI_AddToAln(SeqAlignPtr sap, Int4 offset, Int2 which_end, Uint1 str
       }
    }
    /* free the old index and reindex the alignment */
-   SAIndexFree(sap->saip);
+   SAIndex2Free2(sap->saip);
    sap->saip = NULL;
-   AlnMgrIndexSingleChildSeqAlign(sap);
+   AlnMgr2IndexSingleChildSeqAlign(sap);
 }
 
 /***************************************************************************
@@ -4870,29 +5909,29 @@ static SeqAlignPtr SPI_MergeAlignments(SeqAlignPtr sap1, SeqAlignPtr sap2)
    Int4Ptr      starts;
    Uint1Ptr     strands;
 
-   AlnMgrGetNthSeqRangeInSA(sap1, 1, &gstart1, &gstop1);
-   AlnMgrGetNthSeqRangeInSA(sap2, 1, &gstart2, &gstop2);
+   AlnMgr2GetNthSeqRangeInSA(sap1, 1, &gstart1, &gstop1);
+   AlnMgr2GetNthSeqRangeInSA(sap2, 1, &gstart2, &gstop2);
    glen = mlen = 0;
    if (gstart2 <= gstop1)
    {
-      AlnMgrTruncateSAP(sap1, gstart1, gstart2-1, 1);
+      AlnMgr2TruncateSeqAlign(sap1, gstart1, gstart2-1, 1);
       gstop1 = gstart2-1;
    }
-   AlnMgrGetNthSeqRangeInSA(sap1, 2, &mstart1, &mstop1);
-   AlnMgrGetNthSeqRangeInSA(sap2, 2, &mstart2, &mstop2);
+   AlnMgr2GetNthSeqRangeInSA(sap1, 2, &mstart1, &mstop1);
+   AlnMgr2GetNthSeqRangeInSA(sap2, 2, &mstart2, &mstop2);
    if (mstop2 > mstop1)
    {
       if (mstart2 <= mstop1)
-         AlnMgrTruncateSAP(sap2, mstop1+1, mstop2, 2);
+         AlnMgr2TruncateSeqAlign(sap2, mstop1+1, mstop2, 2);
    } else
    {
       if (mstart1 <= mstop2)
-         AlnMgrTruncateSAP(sap2, mstart2, mstart1-1, 2);
+         AlnMgr2TruncateSeqAlign(sap2, mstart2, mstart1-1, 2);
    }
-   AlnMgrGetNthSeqRangeInSA(sap1, 1, &gstart1, &gstop1);
-   AlnMgrGetNthSeqRangeInSA(sap2, 1, &gstart2, &gstop2);
-   AlnMgrGetNthSeqRangeInSA(sap1, 2, &mstart1, &mstop1);
-   AlnMgrGetNthSeqRangeInSA(sap2, 2, &mstart2, &mstop2);
+   AlnMgr2GetNthSeqRangeInSA(sap1, 1, &gstart1, &gstop1);
+   AlnMgr2GetNthSeqRangeInSA(sap2, 1, &gstart2, &gstop2);
+   AlnMgr2GetNthSeqRangeInSA(sap1, 2, &mstart1, &mstop1);
+   AlnMgr2GetNthSeqRangeInSA(sap2, 2, &mstart2, &mstop2);
    glen = gstart2 - gstop1 - 1;
    if (mstop2 > mstop1)
       mlen = mstart2 - mstop1 - 1;
@@ -4952,9 +5991,9 @@ static SeqAlignPtr SPI_MergeAlignments(SeqAlignPtr sap1, SeqAlignPtr sap2)
    dsp2->strands = strands;
    dsp2->lens = lens;
    dsp2->numseg = j;
-   SAIndexFree(sap2->saip);
+   SAIndex2Free2(sap2->saip);
    sap2->saip = NULL;
-   AlnMgrIndexSingleChildSeqAlign(sap2);
+   AlnMgr2IndexSingleChildSeqAlign(sap2);
    return (sap2);
 }
 
@@ -4965,7 +6004,7 @@ static SeqAlignPtr SPI_MergeAlignments(SeqAlignPtr sap1, SeqAlignPtr sap2)
 *  two rows). Then, the indexes are freed and the alignments are reindexed.
 *
 ***************************************************************************/
-static void SPI_flip_sa_list (SeqAlignPtr sap)
+NLM_EXTERN void SPI_flip_sa_list (SeqAlignPtr sap)
 {
    DenseSegPtr  dsp;
    Int4         i;
@@ -5000,9 +6039,9 @@ static void SPI_flip_sa_list (SeqAlignPtr sap)
       }
       if (sap->saip != NULL) /* free indexes, reindex */
       {
-         SAIndexFree(sap->saip);
+         SAIndex2Free2(sap->saip);
          sap->saip = NULL;
-         AlnMgrIndexSingleChildSeqAlign(sap);
+         AlnMgr2IndexSingleChildSeqAlign(sap);
       }
       sap = sap->next;
    }
@@ -5020,7 +6059,7 @@ static void SPI_flip_sa_list (SeqAlignPtr sap)
 ***************************************************************************/
 static SeqAlignPtr SPI_FillInLastmRNAHoles(SeqAlignPtr sap, SeqIdPtr sip_genomic, SeqIdPtr sip_mrna, Int4 start_g, Int4 stop_g, Int4 start_m, Int4 stop_m, Uint1 strand)
 {
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    Int4             currstart2;
    Int4             end2;
    Int4             gap1;
@@ -5043,7 +6082,7 @@ static SeqAlignPtr SPI_FillInLastmRNAHoles(SeqAlignPtr sap, SeqIdPtr sip_genomic
    start1 = stop1 = start2 = stop2 = 0;
    if (sap != NULL)
    {
-      amaip = (AMAlignIndexPtr)(sap->saip);
+      amaip = (AMAlignIndex2Ptr)(sap->saip);
       HeapSort(amaip->saps, amaip->numsaps, sizeof(SeqAlignPtr), SPI_comp_aln_pos);
       prevstop1 = start_g;
       if (strand == Seq_strand_minus)
@@ -5053,8 +6092,8 @@ static SeqAlignPtr SPI_FillInLastmRNAHoles(SeqAlignPtr sap, SeqIdPtr sip_genomic
       internal = FALSE;
       for (i=0; i<amaip->numsaps; i++)
       {
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 1, &start1, &stop1);
-         AlnMgrGetNthSeqRangeInSA(amaip->saps[i], 2, &start2, &stop2);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, &start1, &stop1);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &start2, &stop2);
          if (strand == Seq_strand_minus)
             currstart2 = stop2;
          else
@@ -5227,7 +6266,7 @@ static SeqAlignPtr SPI_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2)
    }
    if (sap_head == NULL)
       return NULL;
-   AlnMgrIndexLite(sap_head);
+   AlnMgr2IndexLite(sap_head);
    SPI_RemoveInconsistentAlnsFromSet(sap_head, SPI_TEENYEXON, 1, SPI_LEFT);
    sap = (SeqAlignPtr)(sap_head->segs);
    sap_head->segs = NULL;
@@ -5269,8 +6308,8 @@ static int LIBCALLBACK SPI_comp_aln_pos(VoidPtr ptr1, VoidPtr ptr2)
    {
       sap1 = *((SeqAlignPtr PNTR) ptr1);
       sap2 = *((SeqAlignPtr PNTR) ptr2);
-      AlnMgrGetNthSeqRangeInSA(sap1, 1, &start1, &stop1);
-      AlnMgrGetNthSeqRangeInSA(sap2, 1, &start2, &stop2);
+      AlnMgr2GetNthSeqRangeInSA(sap1, 1, &start1, &stop1);
+      AlnMgr2GetNthSeqRangeInSA(sap2, 1, &start2, &stop2);
       if (stop1 < start2)
          return -1;
       else if (stop2 < start1)
@@ -5311,7 +6350,7 @@ static void SPI_RegionFree (SPI_RegionInfoPtr srip)
 
 NLM_EXTERN void SPI_mRNAFree (SPI_mRNAPtr smp)
 {
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    Int4             i;
 
    if (smp == NULL)
@@ -5334,7 +6373,7 @@ NLM_EXTERN void SPI_mRNAFree (SPI_mRNAPtr smp)
    if (smp->parent != NULL)
    {
       smp->parent->segs = NULL;
-      amaip = (AMAlignIndexPtr)(smp->parent->saip);
+      amaip = (AMAlignIndex2Ptr)(smp->parent->saip);
       amaip->saps = NULL;
       SeqAlignFree(smp->parent);
    }
@@ -5367,7 +6406,7 @@ static void SPI_FreeExonProfList(SPI_ExonProfPtr epp)
    }
 }
 
-static void SPI_RegionListFree (SPI_RegionInfoPtr srip)
+NLM_EXTERN void SPI_RegionListFree (SPI_RegionInfoPtr srip)
 {
    SPI_RegionInfoPtr  srip_tmp;
 
@@ -5423,8 +6462,8 @@ static void SPI_GetDonorSpliceInfo (Int4 org, Int4Ptr spllen, Int4Ptr boundary)
       *boundary = 10;
    } else if (org == SPI_PLANT)
    {
-      *spllen = 15;
-      *boundary = 10;
+      *spllen = 9;
+      *boundary = 8;
    } else if (org == SPI_CELEGANS)
    {
       *spllen = 15;
@@ -5570,9 +6609,9 @@ static void SPI_is_donor_fly (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 static void SPI_is_donor_plant (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 {
    Int4     acgtn[5] = {0, 0, 0, 0, 0};
-   FloatHi  d[15][5] = {
-               {0.3155, 0.2180, 0.1591, 0.3072, 0.25},
-               {0.3037, 0.2288, 0.1805, 0.2869, 0.25},
+   FloatHi  d[9][5] = {
+        /*       {0.3155, 0.2180, 0.1591, 0.3072, 0.25},
+               {0.3037, 0.2288, 0.1805, 0.2869, 0.25},*/
                {0.3563, 0.3526, 0.1840, 0.1068, 0.25},
                {0.6559, 0.1103, 0.0765, 0.1571, 0.25},
                {0.0887, 0.0328, 0.7876, 0.0907, 0.25},
@@ -5581,18 +6620,18 @@ static void SPI_is_donor_plant (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score
                {0.6607, 0.0452, 0.1195, 0.1744, 0.25},
                {0.5407, 0.1394, 0.0546, 0.2650, 0.25},
                {0.1975, 0.0929, 0.5193, 0.1901, 0.25},
-               {0.2368, 0.1405, 0.1040, 0.5182, 0.25},
-               {0.3019, 0.1798, 0.1182, 0.3998, 0.25},
+               {0.2368, 0.1405, 0.1040, 0.5182, 0.25}};
+          /*     {0.3019, 0.1798, 0.1182, 0.3998, 0.25},
                {0.2711, 0.1962, 0.0950, 0.4374, 0.25},
                {0.2497, 0.2506, 0.0889, 0.4105, 0.25},
-               {0.2519, 0.2189, 0.1112, 0.4177, 0.25}};
+               {0.2519, 0.2189, 0.1112, 0.4177, 0.25}};*/
    Int4     j;
    FloatHi  prob_seqgsite;
    FloatHi  prob_seq;
 
    if (sequence == NULL || score == NULL)
       return;
-   if (seqlen < 15)
+   if (seqlen < 9)
    {
       *score = 0;
       return;
@@ -6070,7 +7109,7 @@ static void SPI_OrderPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrna)
       if (sfp->sap != NULL)
       {
          if (sfp->sap->saip == NULL)
-            AlnMgrIndexLite(sfp->sap);
+            AlnMgr2IndexLite(sfp->sap);
          SPI_GetNthSeqRangeInSASet(sfp->sap, 2, &sfi->mrnastart, &sfi->mrnastop);
       } else
          sfi->mrnastart = sfi->mrnastop = -1;
@@ -6199,7 +7238,7 @@ static int LIBCALLBACK SPI_CompareFragInfo(VoidPtr ptr1, VoidPtr ptr2)
 ***************************************************************************/
 static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, BioseqPtr bsp_mrna, SPI_OptionsPtr spot)
 {
-   AMAlignIndexPtr      amaip;
+   AMAlignIndex2Ptr      amaip;
    Int4                 c;
    Int4                 curr;
    Boolean              done;
@@ -6256,7 +7295,7 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
    {
       if (sfhp->sfparray[i]->sap != NULL)
       {
-         if ((AlnMgrGetNthStrand(sfhp->sfparray[i]->sap, 1)) == Seq_strand_minus)
+         if ((AlnMgr2GetNthStrand(sfhp->sfparray[i]->sap, 1)) == Seq_strand_minus)
          {
             minus = TRUE;
             salp = (SeqAlignPtr)(sfhp->sfparray[i]->sap->segs);
@@ -6264,16 +7303,16 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
             {
                salp_tmp = salp->next;
                salp->next = NULL;
-               SAIndexFree(salp->saip);
+               SAIndex2Free2(salp->saip);
                salp->saip = NULL;
                SeqAlignListReverseStrand(salp);
-               AlnMgrIndexSingleChildSeqAlign(salp);
+               AlnMgr2IndexSingleChildSeqAlign(salp);
                salp->next = salp_tmp;
                salp = salp_tmp;
             }
          } else
             minus = FALSE;
-         if (!SPI_ConnectAln(sfhp->sfparray[i]->sap, spot, NULL, FALSE))
+         if (!SPI_ConnectAln(sfhp->sfparray[i]->sap, spot, NULL, FALSE, TRUE))
          {
             SeqAlignSetFree(sfhp->sfparray[i]->sap);
             sfhp->sfparray[i]->sap = NULL;
@@ -6285,10 +7324,10 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
             {
                salp_tmp = salp->next;
                salp->next = NULL;
-               SAIndexFree(salp->saip);
+               SAIndex2Free2(salp->saip);
                salp->saip = NULL;
                SeqAlignListReverseStrand(salp);
-               AlnMgrIndexSingleChildSeqAlign(salp);
+               AlnMgr2IndexSingleChildSeqAlign(salp);
                salp->next = salp_tmp;
                salp = salp_tmp;
             }
@@ -6315,7 +7354,7 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
          if ((gapsize = spi_isa_gap(start2, prevstart, Seq_strand_plus)) >= SPI_TEENYEXON)
          {
             /* first look in the same piece and the ones that are supposed to be adjacent */
-            strand = AlnMgrGetNthStrand(sfpcurr->sap, 1);
+            strand = AlnMgr2GetNthStrand(sfpcurr->sap, 1);
             if (strand == Seq_strand_minus)
             {
                minus = TRUE;
@@ -6324,10 +7363,10 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                {
                   salp_tmp = salp->next;
                   salp->next = NULL;
-                  SAIndexFree(salp->saip);
+                  SAIndex2Free2(salp->saip);
                   salp->saip = NULL;
                   SeqAlignListReverseStrand(salp);
-                  AlnMgrIndexSingleChildSeqAlign(salp);
+                  AlnMgr2IndexSingleChildSeqAlign(salp);
                   salp->next = salp_tmp;
                   salp = salp_tmp;
                }   
@@ -6344,7 +7383,7 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                SPI_GetNthSeqRangeInSASet(sap_new1, 2, &start2, &stop2);
                sap_new1->next = (SeqAlignPtr)(sfpcurr->sap->segs);
                sfpcurr->sap->segs = (Pointer)(sap_new1);
-               AlnMgrReIndexSeqAlign(sfpcurr->sap);
+               AlnMgr2ReIndexSeqAlign(sfpcurr->sap);
                SPI_RemoveInconsistentAlnsFromSet(sfpcurr->sap, SPI_TEENYEXON, 2, SPI_LEFT);
             }
             if ((spi_isa_gap(start2, prevstart, Seq_strand_plus)) > SPI_TEENYEXON)
@@ -6363,7 +7402,7 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                   if (sfpnearby[n]->sap != NULL)
                   {
                      found = TRUE;
-                     strand = AlnMgrGetNthStrand(sfpnearby[n]->sap, 1);
+                     strand = AlnMgr2GetNthStrand(sfpnearby[n]->sap, 1);
                      if (strand == Seq_strand_minus)
                      {
                         salp = (SeqAlignPtr)(sfpnearby[n]->sap->segs);
@@ -6371,10 +7410,10 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                         {
                            salp_tmp = salp->next;
                            salp->next = NULL;
-                           SAIndexFree(salp->saip);
+                           SAIndex2Free2(salp->saip);
                            salp->saip = NULL;
                            SeqAlignListReverseStrand(salp);
-                           AlnMgrIndexSingleChildSeqAlign(salp);
+                           AlnMgr2IndexSingleChildSeqAlign(salp);
                            salp->next = salp_tmp;
                            salp = salp_tmp;
                         }
@@ -6385,9 +7424,9 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                         {
                            sap_new1->next = (SeqAlignPtr)(sfpnearby[n]->sap->segs);
                            sfpnearby[n]->sap->segs = (Pointer)sap_new1;
-                           AMAlignIndexFree(sfpnearby[n]->sap->saip);
+                           AMAlignIndex2Free2(sfpnearby[n]->sap->saip);
                            sfpnearby[n]->sap->saip = NULL;
-                           AlnMgrIndexLite(sfpnearby[n]->sap);
+                           AlnMgr2IndexLite(sfpnearby[n]->sap);
                            SPI_RemoveInconsistentAlnsFromSet(sfpnearby[n]->sap, SPI_TEENYEXON, 2, SPI_LEFT);
                         }
                         salp = (SeqAlignPtr)(sfpnearby[n]->sap->segs);
@@ -6395,10 +7434,10 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                         {
                            salp_tmp = salp->next;
                            salp->next = NULL;
-                           SAIndexFree(salp->saip);
+                           SAIndex2Free2(salp->saip);
                            salp->saip = NULL;
                            SeqAlignListReverseStrand(salp);
-                           AlnMgrIndexSingleChildSeqAlign(salp);
+                           AlnMgr2IndexSingleChildSeqAlign(salp);
                            salp->next = salp_tmp;
                            salp = salp_tmp;
                         }
@@ -6411,9 +7450,9 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                         {
                            sap_new1->next = (SeqAlignPtr)(sfpnearby[n]->sap->segs);
                            sfpnearby[n]->sap->segs = (Pointer)sap_new1;
-                           AMAlignIndexFree(sfpnearby[n]->sap->saip);
+                           AMAlignIndex2Free2(sfpnearby[n]->sap->saip);
                            sfpnearby[n]->sap->saip = NULL;
-                           AlnMgrIndexLite(sfpnearby[n]->sap);
+                           AlnMgr2IndexLite(sfpnearby[n]->sap);
                            SPI_RemoveInconsistentAlnsFromSet(sfpnearby[n]->sap, SPI_TEENYEXON, 2, SPI_LEFT);
                         }
                      }
@@ -6432,9 +7471,9 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                         sap_new1 = SPI_FillInIntron(bsp_contig->id, bsp_mrna->id, sfpnearby[n]->start, sfpnearby[n]->stop, start2, prevstart, Seq_strand_minus, spot);
                      if (sap_new1 != NULL)
                      {
-                        AMAlignIndexFree(sap_new1->saip);
+                        AMAlignIndex2Free2(sap_new1->saip);
                         sap_new1->saip = NULL;
-                        AlnMgrIndexLite(sap_new1);
+                        AlnMgr2IndexLite(sap_new1);
                         sfpnearby[n]->sap = sap_new1;
                         SPI_RemoveInconsistentAlnsFromSet(sfpnearby[n]->sap, SPI_TEENYEXON, 2, SPI_LEFT);
                      }
@@ -6499,10 +7538,10 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                SPI_flip_sa_list(sap_b1);
                if (sap_b1 != NULL)
                {
-                  AlnMgrSortAlnSetByNthRowPos(sap_b1, 1);
+                  AlnMgr2SortAlnSetByNthRowPos(sap_b1, 1);
                   c = 0;
-                  amaip = (AMAlignIndexPtr)(sap_b1->saip);
-                  AlnMgrGetNthSeqRangeInSA(amaip->saps[0], 1, &start_b, &stop_b);
+                  amaip = (AMAlignIndex2Ptr)(sap_b1->saip);
+                  AlnMgr2GetNthSeqRangeInSA(amaip->saps[0], 1, &start_b, &stop_b);
                   for (i=0; i<orderedstart && c<amaip->numsaps; i++)
                   {
                      salp_tmp = salp_prev = NULL;
@@ -6518,18 +7557,18 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                         }
                         c++;
                         if (c<amaip->numsaps)
-                           AlnMgrGetNthSeqRangeInSA(amaip->saps[c], 1, &start_b, &stop_b);
+                           AlnMgr2GetNthSeqRangeInSA(amaip->saps[c], 1, &start_b, &stop_b);
                      }
                      if (salp_tmp != NULL)
                      {
-                        AlnMgrIndexLite(salp_tmp);
+                        AlnMgr2IndexLite(salp_tmp);
                         SPI_RemoveInconsistentAlnsFromSet(salp_tmp, SPI_FUZZ, 2, SPI_LEFT);
                         SeqAlignSetFree(sfp->sap);
                         sfp->sap = salp_tmp;
-                        if (!SPI_ConnectAln(sfp->sap, spot, NULL, FALSE))
+                        if (!SPI_ConnectAln(sfp->sap, spot, NULL, FALSE, TRUE))
                            return FALSE;
                         /* change all alignments to be on the plus strand of the mRNA */
-                        strand = AlnMgrGetNthStrand((SeqAlignPtr)(salp_tmp->segs), 2);
+                        strand = AlnMgr2GetNthStrand((SeqAlignPtr)(salp_tmp->segs), 2);
                         if (strand == Seq_strand_minus)
                            SeqAlignListReverseStrand((SeqAlignPtr)(salp_tmp->segs));
                      }
@@ -6847,7 +7886,7 @@ static Int4 SPI_GetNearbyFrags(SPI_FragPtr sfptarget, Int4 n, SPI_FragPtr ** ptr
    if (j == 0)
       return 0;
    sfpnearby = (SPI_FragPtr PNTR)MemNew(j*sizeof(SPI_FragPtr));
-   for (i=0, sfp = sfp_head; i<j, sfp!=NULL; i++, sfp = sfp->next)
+   for (i=0, sfp = sfp_head; i<j && sfp!=NULL; i++, sfp = sfp->next)
    {
       sfpnearby[i] = sfp;
    }
@@ -6887,7 +7926,7 @@ static void SPI_AdjustSplicesInPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_genomi
       if (sfhp->sfparray[i]->sap != NULL && ((SeqAlignPtr)(sfhp->sfparray[i]->sap->segs))->next != NULL)
       {
          salp_tmp = (SeqAlignPtr)(sfhp->sfparray[i]->sap->segs);
-         srip->strand = AlnMgrGetNthStrand(salp_tmp, 1);
+         srip->strand = AlnMgr2GetNthStrand(salp_tmp, 1);
          if (srip->strand == Seq_strand_minus)
          {
             minus = TRUE;
@@ -6896,17 +7935,17 @@ static void SPI_AdjustSplicesInPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_genomi
             {
                salp_tmp = salp->next;
                salp->next = NULL;
-               SAIndexFree(salp->saip);
+               SAIndex2Free2(salp->saip);
                salp->saip = NULL;
                SeqAlignListReverseStrand(salp);
-               AlnMgrIndexSingleChildSeqAlign(salp);
+               AlnMgr2IndexSingleChildSeqAlign(salp);
                salp->next = salp_tmp;
                salp = salp_tmp;
             }
          } else
             minus = FALSE;
          if (sfhp->sfparray[i]->sap->saip == NULL)
-            AlnMgrIndexLite(sfhp->sfparray[i]->sap);
+            AlnMgr2IndexLite(sfhp->sfparray[i]->sap);
          smp = SPI_AdjustForSplice(sfhp->sfparray[i]->sap, spot, srip);
          sfhp->sfparray[i]->smp = smp;
          if (srip->strand == Seq_strand_minus) /* the exons will be in the wrong order now */
@@ -6925,10 +7964,10 @@ static void SPI_AdjustSplicesInPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_genomi
             {
                salp_tmp = salp->next;
                salp->next = NULL;
-               SAIndexFree(salp->saip);
+               SAIndex2Free2(salp->saip);
                salp->saip = NULL;
                SeqAlignListReverseStrand(salp);
-               AlnMgrIndexSingleChildSeqAlign(salp);
+               AlnMgr2IndexSingleChildSeqAlign(salp);
                salp->next = salp_tmp;
                salp = salp_tmp;
             }
@@ -6989,10 +8028,10 @@ static void SPI_AdjustEndsOfPieces(SPI_FragPtr sfp1, SPI_FragPtr sfp2, BioseqPtr
    
    sap1 = SPI_GetNthSAByRow(sfp1->sap, 2, -1);
    sap2 = SPI_GetNthSAByRow(sfp2->sap, 2, 1);
-   AlnMgrGetNthSeqRangeInSA(sap1, 2, &start1, &stop1);
-   AlnMgrGetNthSeqRangeInSA(sap2, 2, &start2, &stop2);
-   strand1 = AlnMgrGetNthStrand(sap1, 1);
-   strand2 = AlnMgrGetNthStrand(sap2, 1);
+   AlnMgr2GetNthSeqRangeInSA(sap1, 2, &start1, &stop1);
+   AlnMgr2GetNthSeqRangeInSA(sap2, 2, &start2, &stop2);
+   strand1 = AlnMgr2GetNthStrand(sap1, 1);
+   strand2 = AlnMgr2GetNthStrand(sap2, 1);
    fsp1 = NULL;
    fsp2 = NULL;
    if (start2 - stop1 <= SPI_TEENYEXON) /* make mRNA continuous, nonoverlapping */
@@ -7059,13 +8098,13 @@ static void SPI_AdjustEndsOfPieces(SPI_FragPtr sfp1, SPI_FragPtr sfp2, BioseqPtr
    if (strand1 == Seq_strand_minus)
    {
       sap1->next = NULL;
-      SAIndexFree(sap1->saip);
+      SAIndex2Free2(sap1->saip);
       sap1->saip = NULL;
       SeqAlignListReverseStrand(sap1);
-      AlnMgrIndexSingleChildSeqAlign(sap1);
+      AlnMgr2IndexSingleChildSeqAlign(sap1);
       if (pos < stop1)
       {
-         if (AlnMgrTruncateSAP(sap1, start1, pos, 2))
+         if (AlnMgr2TruncateSeqAlign(sap1, start1, pos, 2))
          {
             sap1->next->next = NULL;
             SeqAlignFree(sap1->next);
@@ -7074,15 +8113,15 @@ static void SPI_AdjustEndsOfPieces(SPI_FragPtr sfp1, SPI_FragPtr sfp2, BioseqPtr
       } else if (pos > stop1)
          SPI_AddToAln(sap1, pos - stop1, SPI_LEFT, strand1);
       sap1->next = NULL;
-      SAIndexFree(sap1->saip);
+      SAIndex2Free2(sap1->saip);
       sap1->saip = NULL;
       SeqAlignListReverseStrand(sap1);
-      AlnMgrIndexSingleChildSeqAlign(sap1);
+      AlnMgr2IndexSingleChildSeqAlign(sap1);
    } else
    {
       if (pos < stop1)
       {
-         if (AlnMgrTruncateSAP(sap1, start1, pos, 2))
+         if (AlnMgr2TruncateSeqAlign(sap1, start1, pos, 2))
          {
             sap1->next->next = NULL;
             SeqAlignFree(sap1->next);
@@ -7129,13 +8168,13 @@ static void SPI_AdjustEndsOfPieces(SPI_FragPtr sfp1, SPI_FragPtr sfp2, BioseqPtr
    if (strand2 == Seq_strand_minus)
    {
       sap2->next = NULL;
-      SAIndexFree(sap2->saip);
+      SAIndex2Free2(sap2->saip);
       sap2->saip = NULL;
       SeqAlignListReverseStrand(sap2);
-      AlnMgrIndexSingleChildSeqAlign(sap2);
+      AlnMgr2IndexSingleChildSeqAlign(sap2);
       if (start2 < pos + 1)
       {
-         if (AlnMgrTruncateSAP(sap2, pos+1, stop2, 2))
+         if (AlnMgr2TruncateSeqAlign(sap2, pos+1, stop2, 2))
          {
             sap2->next->next = NULL;
             SeqAlignFree(sap2->next);
@@ -7144,15 +8183,15 @@ static void SPI_AdjustEndsOfPieces(SPI_FragPtr sfp1, SPI_FragPtr sfp2, BioseqPtr
       } else if (start2 > pos + 1)
          SPI_AddToAln(sap2, start2-pos-1, SPI_RIGHT, strand2);
       sap2->next = NULL;
-      SAIndexFree(sap2->saip);
+      SAIndex2Free2(sap2->saip);
       sap2->saip = NULL;
       SeqAlignListReverseStrand(sap2);
-      AlnMgrIndexSingleChildSeqAlign(sap2);
+      AlnMgr2IndexSingleChildSeqAlign(sap2);
    } else
    {
       if (start2 < pos + 1)
       {
-         if (AlnMgrTruncateSAP(sap2, pos+1, stop2, 2))
+         if (AlnMgr2TruncateSeqAlign(sap2, pos+1, stop2, 2))
          {
             sap2->next->next = NULL;
             SeqAlignFree(sap2->next);
@@ -7182,7 +8221,7 @@ static void SPI_AdjustEndsOfPieces(SPI_FragPtr sfp1, SPI_FragPtr sfp2, BioseqPtr
 static SeqAlignPtr SPI_GetNthSAByRow(SeqAlignPtr sap, Int4 row, Int4 n)
 {
 /* n = 1 is first alignment, n = -1 is last alignment */
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    Int4             i;
    SeqAlignPtr      sap_place;
    SeqAlignPtr      PNTR saparray;
@@ -7190,7 +8229,7 @@ static SeqAlignPtr SPI_GetNthSAByRow(SeqAlignPtr sap, Int4 row, Int4 n)
 
    if (sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
       return NULL;
-   amaip = (AMAlignIndexPtr)(sap->saip);
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
    if (n > amaip->numsaps)
       return NULL;
    saparray = (SeqAlignPtr PNTR)MemNew(amaip->numsaps*sizeof(SeqAlignPtr));
@@ -7200,7 +8239,7 @@ static SeqAlignPtr SPI_GetNthSAByRow(SeqAlignPtr sap, Int4 row, Int4 n)
       saparray[i] = amaip->saps[i];
    }
    amaip->saps = saparray;
-   AlnMgrSortAlnSetByNthRowPos(sap, row);
+   AlnMgr2SortAlnSetByNthRowPos(sap, row);
    if (n > 0)
       sap_place = amaip->saps[n-1];
    else
@@ -7240,9 +8279,9 @@ static SPI_FragSplPtr SPI_GetPossibleSites(SeqAlignPtr sap, BioseqPtr bsp_genomi
    Int4            stop;
    Uint1           strand;
    
-   strand = AlnMgrGetNthStrand(sap, 1);
+   strand = AlnMgr2GetNthStrand(sap, 1);
    fsp = (SPI_FragSplPtr)MemNew(sizeof(SPI_FragSpl));
-   AlnMgrGetNthSeqRangeInSA(sap, 1, &start, &stop);
+   AlnMgr2GetNthSeqRangeInSA(sap, 1, &start, &stop);
    if (donor)
       SPI_GetDonorSpliceInfo(spot->organism, &spllen, &boundary);
    else
@@ -7352,9 +8391,9 @@ static SeqLocPtr SPI_SeqLocListDup(SeqLocPtr slp)
 *  more to the right.
 *
 ***************************************************************************/
-static void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, Int4 n, Int4 compact)
+NLM_EXTERN void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, Int4 n, Int4 compact)
 {
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    Boolean          conflict;
    Int4             curr;
    Int4             i;
@@ -7371,20 +8410,20 @@ static void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, Int4 n
       return;
    if (n > 2)
       return;
-   amaip = (AMAlignIndexPtr)(sap->saip);
-   indextype = amaip->mstype;
+   amaip = (AMAlignIndex2Ptr)(sap->saip);
+   indextype = amaip->alnstyle;
    /* make sure that everything is on the plus strand of the nth sequence */
    for (i=0; i<amaip->numsaps; i++)
    {
       salp = amaip->saps[i];
-      strand = AlnMgrGetNthStrand(salp, n);
+      strand = AlnMgr2GetNthStrand(salp, n);
       if (strand == Seq_strand_minus)
       {
-         SAIndexFree(salp->saip);
+         SAIndex2Free2(salp->saip);
          salp->saip = NULL;
          salp->next = NULL;
          SeqAlignListReverseStrand(salp);
-         AlnMgrIndexSingleChildSeqAlign(salp);
+         AlnMgr2IndexSingleChildSeqAlign(salp);
       }
    }
    /* spin structure: n1 = which alignment, n2 = start on first row, n3 =
@@ -7395,12 +8434,12 @@ static void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, Int4 n
       spin[i] = (SPI_nPtr)MemNew(sizeof(SPI_n));
       salp = amaip->saps[i];
       spin[i]->n1 = i;
-      AlnMgrGetNthSeqRangeInSA(salp, n, &start, &stop);
+      AlnMgr2GetNthSeqRangeInSA(salp, n, &start, &stop);
       spin[i]->n3 = stop - start;
       spin[i]->n2 = start;
-      AlnMgrGetNthSeqRangeInSA(salp, 3-n, &start, &stop);
+      AlnMgr2GetNthSeqRangeInSA(salp, 3-n, &start, &stop);
       spin[i]->n4 = start;
-      strand = AlnMgrGetNthStrand(salp, 3-n);
+      strand = AlnMgr2GetNthStrand(salp, 3-n);
       if (strand == Seq_strand_minus)
          spin[i]->n5 = -1;
       else
@@ -7512,13 +8551,13 @@ static void SPI_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap, Int4 fuzz, Int4 n
       }
    }
    sap->segs = (Pointer)(salp_head);
-   if (indextype == AM_LITE)
+   if (indextype == AM2_LITE)
    {
-      AMAlignIndexFree(sap->saip);
+      AMAlignIndex2Free2(sap->saip);
       sap->saip = NULL;
-      AlnMgrIndexLite(sap);
+      AlnMgr2IndexLite(sap);
    } else
-      AlnMgrReIndexSeqAlign(sap);
+      AlnMgr2ReIndexSeqAlign(sap);
    MemFree(spin);
 }
 
@@ -7567,7 +8606,7 @@ static int LIBCALLBACK SPI_CompareSpins(VoidPtr ptr1, VoidPtr ptr2)
 ***************************************************************************/
 static void SPI_OrderInternally(SPI_FragHerdPtr sfhp)
 {
-   AMAlignIndexPtr  amaip;
+   AMAlignIndex2Ptr  amaip;
    Int4             i;
    Int4             j;
    SeqAlignPtr      salp;
@@ -7577,18 +8616,18 @@ static void SPI_OrderInternally(SPI_FragHerdPtr sfhp)
    {
       if (sfhp->sfparray[i]->sap != NULL)
       {
-         amaip = (AMAlignIndexPtr)(sfhp->sfparray[i]->sap->saip);
+         amaip = (AMAlignIndex2Ptr)(sfhp->sfparray[i]->sap->saip);
          salp = (SeqAlignPtr)(sfhp->sfparray[i]->sap->segs);
          while (salp != NULL)
          {
-            strand = AlnMgrGetNthStrand(salp, 2);
+            strand = AlnMgr2GetNthStrand(salp, 2);
             if (strand == Seq_strand_minus)
             {
-               SAIndexFree(salp->saip);
+               SAIndex2Free2(salp->saip);
                salp->saip = NULL;
                salp->next = NULL;
                SeqAlignListReverseStrand(salp);
-               AlnMgrIndexSingleChildSeqAlign(salp);
+               AlnMgr2IndexSingleChildSeqAlign(salp);
             }
             salp = salp->next;
          }
@@ -7624,8 +8663,8 @@ static int LIBCALLBACK SPI_CompareAlnPos(VoidPtr ptr1, VoidPtr ptr2)
    sap2 = *((SeqAlignPtr PNTR) ptr2);
    if (sap1 == NULL || sap2 == NULL)
       return 0;
-   AlnMgrGetNthSeqRangeInSA(sap1, 2, &start1, NULL);
-   AlnMgrGetNthSeqRangeInSA(sap2, 2, &start2, NULL);
+   AlnMgr2GetNthSeqRangeInSA(sap1, 2, &start1, NULL);
+   AlnMgr2GetNthSeqRangeInSA(sap2, 2, &start2, NULL);
    if (start1 <= start2)
       return -1;
    else if (start2 > start1)
@@ -7743,7 +8782,7 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
          smp->saps[0] = SeqAlignDup(srip_mrna->smp->saps[start_cds]);
          if (smp->fallsoff == SPI_NEITHER || smp->fallsoff == SPI_RIGHT)
          {
-            if (AlnMgrTruncateSAP(smp->saps[0], smp->mstarts[0] + offset, srip_mrna->smp->mstops[start_cds], 2))
+            if (AlnMgr2TruncateSeqAlign(smp->saps[0], smp->mstarts[0] + offset, srip_mrna->smp->mstops[start_cds], 2))
             {
                SeqAlignFree(smp->saps[0]->next);
                smp->saps[0]->next = NULL;
@@ -7752,7 +8791,7 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
          smp->saps[smp->numexons-1] = SeqAlignDup(srip_mrna->smp->saps[stop_cds]);
          if (smp->fallsoff == SPI_NEITHER || smp->fallsoff == SPI_LEFT)
          {
-            if (AlnMgrTruncateSAP(smp->saps[smp->numexons-1], srip_mrna->smp->mstarts[stop_cds], smp->mstops[smp->numexons-1]+offset, 2))
+            if (AlnMgr2TruncateSeqAlign(smp->saps[smp->numexons-1], srip_mrna->smp->mstarts[stop_cds], smp->mstops[smp->numexons-1]+offset, 2))
             {
                SeqAlignFree(smp->saps[smp->numexons-1]->next);
                smp->saps[smp->numexons-1]->next = NULL;
@@ -7767,7 +8806,7 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
          smp->saps[0] = SeqAlignDup(srip_mrna->smp->saps[start_cds]);
          if (smp->fallsoff != SPI_BOTH)
          {
-            if (AlnMgrTruncateSAP(smp->saps[0], smp->mstarts[0] + offset, smp->mstops[0] + offset, 2))
+            if (AlnMgr2TruncateSeqAlign(smp->saps[0], smp->mstarts[0] + offset, smp->mstops[0] + offset, 2))
             {
                SeqAlignFree(smp->saps[0]->next);
                smp->saps[0]->next = NULL;
@@ -7782,12 +8821,12 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
       smp->mstops = (Int4Ptr)MemNew((smp->numexons)*sizeof(Int4));
       for (i=0; i<smp->numexons; i++)
       {
-         AlnMgrIndexSingleChildSeqAlign(smp->saps[i]);
+         AlnMgr2IndexSingleChildSeqAlign(smp->saps[i]);
          len += SPI_GetExonInfo(smp, i, &b, &c, &mis, spot);
-         SAIndexFree(smp->saps[i]->saip);
+         SAIndex2Free2(smp->saps[i]->saip);
          smp->saps[i]->saip = NULL;
       /*   SPI_ShiftAlignment(smp->saps[i], -offset, 2);*/
-         AlnMgrIndexSingleChildSeqAlign(smp->saps[i]);
+         AlnMgr2IndexSingleChildSeqAlign(smp->saps[i]);
       }
       MemFree(smp->mstarts);
       MemFree(smp->mstops);
@@ -7862,7 +8901,7 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
          smp->saps[0] = SeqAlignDup(srip_mrna->smp->saps[start_cds]);
          if (smp->fallsoff == SPI_NEITHER || smp->fallsoff == SPI_LEFT)
          {
-            if (AlnMgrTruncateSAP(smp->saps[0], smp->mstarts[0] + offset, smp->mstops[0] + offset, 2))
+            if (AlnMgr2TruncateSeqAlign(smp->saps[0], smp->mstarts[0] + offset, smp->mstops[0] + offset, 2))
             {
                SeqAlignFree(smp->saps[0]->next);
                smp->saps[0]->next = NULL;
@@ -7871,7 +8910,7 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
          smp->saps[smp->numexons-1] = SeqAlignDup(srip_mrna->smp->saps[smp->numexons-1+start_cds]);
          if (smp->fallsoff == SPI_NEITHER || smp->fallsoff == SPI_RIGHT)
          {
-            if (AlnMgrTruncateSAP(smp->saps[smp->numexons-1], smp->mstarts[smp->numexons-1] + offset, srip_mrna->smp->mstops[smp->numexons-1+start_cds], 2))
+            if (AlnMgr2TruncateSeqAlign(smp->saps[smp->numexons-1], smp->mstarts[smp->numexons-1] + offset, srip_mrna->smp->mstops[smp->numexons-1+start_cds], 2))
             {
                SeqAlignFree(smp->saps[smp->numexons-1]->next);
                smp->saps[smp->numexons-1]->next = NULL;
@@ -7886,7 +8925,7 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
          smp->saps[0] = SeqAlignDup(srip_mrna->smp->saps[start_cds]);
          if (smp->fallsoff != SPI_BOTH)
          {
-            if (AlnMgrTruncateSAP(smp->saps[0], smp->mstarts[0] + offset, smp->mstops[0] + offset, 2))
+            if (AlnMgr2TruncateSeqAlign(smp->saps[0], smp->mstarts[0] + offset, smp->mstops[0] + offset, 2))
             {
                SeqAlignFree(smp->saps[0]->next);
                smp->saps[0]->next = NULL;
@@ -7901,12 +8940,12 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
       smp->mstops = (Int4Ptr)MemNew((smp->numexons)*sizeof(Int4));
       for (i=0; i<smp->numexons; i++)
       {
-         AlnMgrIndexSingleChildSeqAlign(smp->saps[i]);
+         AlnMgr2IndexSingleChildSeqAlign(smp->saps[i]);
          len += SPI_GetExonInfo(smp, i, &b, &c, &mis, spot);
-         SAIndexFree(smp->saps[i]->saip);
+         SAIndex2Free2(smp->saps[i]->saip);
          smp->saps[i]->saip = NULL;
    /*      SPI_ShiftAlignment(smp->saps[i], -offset, 2);*/
-         AlnMgrIndexSingleChildSeqAlign(smp->saps[i]);
+         AlnMgr2IndexSingleChildSeqAlign(smp->saps[i]);
       }
       MemFree(smp->mstarts);
       MemFree(smp->mstops);
@@ -7924,7 +8963,7 @@ static SPI_RegionInfoPtr SPI_GetResultsForCDS(SPI_RegionInfoPtr srip_mrna, Biose
    sap->segtype = SAS_DISC;
    sap->segs = (Pointer)(smp->saps[0]);
    sap->dim = 2;
-   AlnMgrIndexLite(sap);
+   AlnMgr2IndexLite(sap);
    smp->parent = sap;
    srip_cds->strand = srip_mrna->strand;
    /* fill in srip_cds->mstart and mstop with the CDS boundaries for printing */
@@ -8018,9 +9057,9 @@ static void SPI_FillInUTRInfo(SPI_RegionInfoPtr srip_cds, SPI_RegionInfoPtr srip
    {
       sap_tmp = SeqAlignDup(srip_mrna->smp->saps[exonstart]);
       mismatch_misc = 0;
-      if (AlnMgrTruncateSAP(sap_tmp, srip_cds->mstart, srip_cds->mstop, 2))
+      if (AlnMgr2TruncateSeqAlign(sap_tmp, srip_cds->mstart, srip_cds->mstop, 2))
       {
-         app1 = ACT_MakeProfileFromSA(sap_tmp->next);
+         app1 = SPI_MakeProfileFromSA(sap_tmp->next);
          app2 = app1;
          while (app2 != NULL)
          {
@@ -8143,7 +9182,7 @@ static void SPI_ShiftAlignment(SeqAlignPtr sap, Int4 offset, Int4 row)
 *  longest protein, then returns that protein.
 *
 ***************************************************************************/
-static CharPtr SPI_GetProteinFrommRNA(BioseqPtr bsp_mrna, Int4Ptr start)
+NLM_EXTERN CharPtr SPI_GetProteinFrommRNA(BioseqPtr bsp_mrna, Int4Ptr start)
 {
    ByteStorePtr  bs;
    CharPtr       c1;
@@ -8316,7 +9355,7 @@ static Boolean SPI_GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, CharPtr PNTR 
          sprintf(*id, "%d", oip->id);
       }
       break;
-   case SEQID_GENBANK: case SEQID_EMBL: case SEQID_PIR:
+   case SEQID_GENBANK: case SEQID_EMBL: case SEQID_PIR: case SEQID_TPG: case SEQID_TPE: case SEQID_TPD:
    case SEQID_SWISSPROT: case SEQID_DDBJ: case SEQID_PRF:
    case SEQID_OTHER:
       textsip = (TextSeqIdPtr)sip->data.ptrvalue;
@@ -8389,6 +9428,15 @@ static void SPI_CheckSplicesForRevComp(SPI_RegionInfoPtr srip_head, SPI_OptionsP
          BioseqRevComp(bsp_mrna);
          ErrSetMessageLevel(SEV_MAX);
          SPI_AlignInWindows(&revcmp, bsp_genomic, bsp_mrna, spot);
+         if (revcmp != NULL && revcmp->smp != NULL)
+         {
+            SPI_BeautifySMP(revcmp);
+            if (revcmp != NULL && revcmp->smp != NULL)
+            {
+               MemFree(revcmp->smp->protein);
+               revcmp->smp->protein = SPI_GetProteinFrommRNA(bsp_mrna, &revcmp->smp->transstart);
+            }
+         }
          BioseqRevComp(bsp_mrna);
          if (revcmp != NULL && revcmp->smp != NULL)
          {
@@ -8424,3 +9472,311 @@ static void SPI_CheckSplicesForRevComp(SPI_RegionInfoPtr srip_head, SPI_OptionsP
       c++;
    }
 }
+
+static ACTProfilePtr SPI_ProfileNew(Boolean nuc)
+{
+   ACTProfilePtr  app;
+   FloatHiPtr     PNTR freq;
+
+   app = (ACTProfilePtr)MemNew(sizeof(ACTProfile));
+   if (nuc)
+   {
+      freq = (FloatHiPtr PNTR)MemNew(ACT_NUCLEN*sizeof(FloatHiPtr));
+      app->freq = freq;
+      app->nuc = TRUE;
+   } else
+   {
+      freq = (FloatHiPtr PNTR)MemNew(ACT_PROTLEN*sizeof(FloatHiPtr));
+      app->freq = freq;
+      app->nuc = FALSE;
+   }
+   return app;
+}
+
+static ACTProfilePtr SPI_ProfileFree(ACTProfilePtr app)
+{
+   Int4  i;
+   Int4  j;
+
+   if (app == NULL)
+      return NULL;
+   if (app->nuc)
+      j = ACT_NUCLEN;
+   else
+      j = ACT_PROTLEN;
+   for (i=0; i<j; i++)
+   {
+      MemFree(app->freq[i]);
+   }
+   MemFree(app->freq);
+   app->next = NULL;
+   MemFree(app);
+   return NULL;
+}
+
+static ACTProfilePtr SPI_ProfileSetFree(ACTProfilePtr app)
+{
+   ACTProfilePtr  app_next;
+
+   while (app != NULL)
+   {
+      app_next = app->next;
+      app->next = NULL;
+      SPI_ProfileFree(app);
+      app = app_next;
+   }
+   return NULL;
+}
+
+static void SPI_BuildProfile(SeqLocPtr slp, ACTProfilePtr PNTR app, Int4Ptr count, Int4 length)
+{
+   Int4        i;
+   Int4        len;
+   Uint1       res;
+   SeqPortPtr  spp;
+
+   if (app == NULL)
+      return;
+   if (slp == NULL)
+   {
+      if (*count == 0)
+         (*app)->numseq++;
+      *count = *count+length;
+      if ((*app)->len <= *count)
+      {
+         *count = 0;
+         *app = (*app)->next;
+      }
+      return;
+   }
+   len = SeqLocLen(slp);
+   if (len <= 0)
+      return;
+   if ((*app)->len == 0)
+   {
+      (*app)->len = len;
+      if ((*app)->nuc)
+      {
+         for (i=0; i<ACT_NUCLEN; i++)
+         {
+            (*app)->freq[i] = (FloatHiPtr)MemNew((*app)->len*sizeof(FloatHi));
+         }
+      } else
+      {
+         for (i=0; i<ACT_PROTLEN; i++)
+         {
+            (*app)->freq[i] = (FloatHiPtr)MemNew((*app)->len*sizeof(FloatHi));
+         }
+      }
+   } else
+   {
+      if (len > (*app)->len) /* seqloc is longer than the */
+         return;          /* existing profile -- don't add it     */
+   }
+   if ((*app)->nuc)
+      spp = SeqPortNewByLoc(slp, Seq_code_ncbi4na);
+   else
+      spp = SeqPortNewByLoc(slp, Seq_code_ncbistdaa);
+   if (spp == NULL)
+      return;
+   if (*count == 0)
+     (*app)->numseq++;
+   i=0;
+   if ((*app)->nuc == FALSE)
+   {
+      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i+*count<((*app)->len))
+      {
+         (*app)->freq[res][i+*count]++;
+         i++;
+      }
+   } else
+   {
+      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i+*count<((*app)->len))
+      {
+         if (res == 1)
+         {
+            (*app)->freq[0][i+*count]++;
+         } else if (res == 2)
+         {
+            (*app)->freq[1][i+*count]++;
+         } else if (res == 4)
+         {
+            (*app)->freq[2][i+*count]++;
+         } else if (res == 8)
+         {
+            (*app)->freq[3][i+*count]++;
+         } else
+         {
+            (*app)->freq[4][i+*count]++;
+         }
+         i++;
+      }
+   }
+   SeqPortFree(spp);
+   if (len+*count == (*app)->len)
+   {
+      *app = (*app)->next;
+      *count = 0;
+   } else
+      *count = *count + len;
+   return;
+}
+
+static FloatHi SPI_ScoreProfile(BioseqPtr bsp, Int4 pos, Uint1 strand, ACTProfilePtr app)
+{
+   Int4        i;
+   Uint1       res;
+   FloatHi     retval;
+   SeqPortPtr  spp;
+
+   retval = 0;
+   if (bsp == NULL || app == NULL || pos < 0)
+      return retval;
+   if (pos + app->len-1 >= bsp->length)
+      return retval;
+   if (ISA_na(bsp->mol))
+   {
+      spp = SeqPortNew(bsp, pos, pos+app->len-1, strand, Seq_code_ncbi4na);
+      if (spp == NULL)
+         return retval;
+      i = 0;
+      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i<app->len)
+      {
+         if (res == 1)
+         {
+            retval += app->freq[0][i];
+         } else if (res == 2)
+         {
+            retval += app->freq[1][i];
+         } else if (res == 4)
+         {
+            retval += app->freq[2][i];
+         } else if (res == 8)
+         {
+            retval += app->freq[3][i];
+         } else
+         {
+            retval += app->freq[4][i];
+         }
+         i++;
+      }
+      retval = retval / app->len;
+      return retval;
+   } else
+   {
+      spp = SeqPortNew(bsp, pos, pos+app->len-1, strand, Seq_code_ncbistdaa);
+      if (spp == NULL)
+         return retval;
+      i = 0;
+      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF && i<app->len)
+      {
+         retval += app->freq[res][i];
+         i++;
+      }
+      retval = retval / app->len;
+      return retval;
+   }
+}
+
+static ACTProfilePtr SPI_MakeProfileFromSA(SeqAlignPtr sap)
+{
+   AMAlignIndex2Ptr  amaip;
+   AlnMsg2Ptr       amp;
+   ACTProfilePtr    app;
+   ACTProfilePtr    app_head;
+   ACTProfilePtr    app_prev;
+   BioseqPtr        bsp;
+   Int4             count;
+   Int4             i;
+   Int4             j;
+   Boolean          more;
+   Int4             n;
+   Boolean          nuc;
+   Int4             numseg;
+   Int4             numrows;
+   SeqIdPtr         sip;
+   SeqLocPtr        slp;
+   Int4             start;
+   Int4             stop;
+
+   if (sap == NULL)
+      return NULL;
+   if (sap->saip == NULL)
+      return NULL;
+   if (sap->saip->indextype == INDEX_PARENT)
+   {
+      amaip = (AMAlignIndex2Ptr)(sap->saip);
+      if (amaip->alnstyle == AM2_LITE)
+         return NULL;
+   }
+   sip = AlnMgr2GetNthSeqIdPtr(sap, 1);
+   bsp = BioseqLockById(sip);
+   if (bsp == NULL)
+      return NULL;
+   if (ISA_na(bsp->mol))
+      nuc = TRUE;
+   else
+      nuc = FALSE;
+   BioseqUnlockById(sip);
+   sip = SeqIdFree(sip);
+   amp = AlnMsgNew2();
+   amp->to_aln = -1;
+   amp->row_num = 1;
+   app_head = NULL;
+   numseg = AlnMgr2GetNumSegs(sap);
+   for (i=0; i<numseg; i++)
+   {
+      app = SPI_ProfileNew(nuc);
+      AlnMgr2GetNthSegmentRange(sap, i+1, &start, &stop);
+      app->len = stop - start + 1;
+      if (nuc)
+      {
+        for (j=0; j<ACT_NUCLEN; j++)
+        {
+           app->freq[j] = (FloatHiPtr)MemNew(app->len*sizeof(FloatHi));
+        }
+      } else
+      {
+        for (j=0; j<ACT_PROTLEN; j++)
+        {
+           app->freq[j] = (FloatHiPtr)MemNew(app->len*sizeof(FloatHi));
+        }
+      }
+      if (app_head != NULL)
+      {
+        app_prev->next = app;
+        app_prev = app;
+      } else
+        app_head = app_prev = app;
+   }
+   numrows = AlnMgr2GetNumRows(sap);
+   for (i=1; i<=numrows; i++)
+   {
+      app = app_head;
+      for (n=0; n<numseg; n++)
+      {
+         AlnMsgReNew2(amp);
+         AlnMgr2GetNthSegmentRange(sap, n+1, &amp->from_aln, &amp->to_aln);
+         amp->row_num = i;
+         sip = AlnMgr2GetNthSeqIdPtr(sap, i);
+         bsp = BioseqLockById(sip);
+         count = 0;
+         while ((Boolean) (more = AlnMgr2GetNextAlnBit(sap, amp)) && app != NULL)
+         {
+            if (amp->type == AM_SEQ && bsp != NULL)
+            {
+               slp = SeqLocIntNew(amp->from_row, amp->to_row, amp->strand, sip);
+               SPI_BuildProfile(slp, &app, &count, 0);
+               SeqLocFree(slp);
+            } else if (amp->type == AM_GAP)
+               SPI_BuildProfile(NULL, &app, &count, (amp->to_row - amp->from_row + 1));
+         }
+         BioseqUnlockById(sip);
+         sip = SeqIdFree(sip);
+      }
+   }
+   AlnMsgFree2(amp);
+   return app_head;
+}
+
+

@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.6 2001/06/21 19:42:18 shavirin Exp $
+/* $Id: txalign.h,v 6.7 2001/07/23 20:20:12 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,9 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.7  2001/07/23 20:20:12  dondosha
+* Made replace_bytestore_data function public for use in web blast2seq
+*
 * Revision 6.6  2001/06/21 19:42:18  shavirin
 * Moved here definitions related to Taxonomy names.
 *
@@ -627,6 +630,8 @@ NLM_EXTERN void OOFDisplayTraceBack2(Int4Ptr a, CharPtr dna, CharPtr pro,
 
 BlastDefLinePtr FDGetDeflineAsnFromBioseq(BioseqPtr bsp);
 RDBTaxNamesPtr FDGetTaxNamesFromBioseq(BioseqPtr bsp, Int4 taxid);
+
+NLM_EXTERN Boolean replace_bytestore_data PROTO((BioseqPtr bsp, ValNodePtr bs_list, Uint1 frame));
 
 #ifdef __cplusplus
 }

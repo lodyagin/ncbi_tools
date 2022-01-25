@@ -2,11 +2,21 @@
 #define _MBALIGN_H_
 
 #include <ncbi.h>
-#include <mbutils.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef Uint4 edit_op_t; /* 32 bits */
+typedef struct {
+    edit_op_t *op;                  /* array of edit operations */
+    Uint4 size, num;         /* size of allocation, number in use */
+    edit_op_t last;                 /* most recent operation added */
+} edit_script_t;
+
+edit_script_t *edit_script_free(edit_script_t *es);
+edit_script_t *edit_script_new();
+edit_script_t *edit_script_append(edit_script_t *es, edit_script_t *et);
 
 enum {
     EDIT_OP_MASK = 0x3,
@@ -25,14 +35,9 @@ enum {         /* half of the (fixed) match score */
 #define ICEIL(x,y) ((((x)-1)/(y))+1)
 
 /* ----- pool allocator ----- */
-typedef struct three {
+typedef struct _three_val_ {
     Int4 I, C, D;
 } ThreeVal, PNTR ThreeValPtr;
-
-typedef struct space_struct {
-    ThreeValPtr space_array;
-    Int4 used, size;
-} space_type, *space_ptr;
 
 typedef struct mb_space_struct {
     ThreeValPtr space_array;
@@ -44,15 +49,10 @@ typedef struct mb_space_struct {
 
 #define EDIT_OPC(op) (op & EDIT_OP_MASK)
 
-space_ptr new_space(Int4 MAX_D);
 MBSpacePtr new_mb_space();
-void refresh_space(space_ptr sp);
-void free_space(space_ptr sp);
 void refresh_mb_space(MBSpacePtr sp);
 void free_mb_space(MBSpacePtr sp);
-ThreeValPtr get_space(space_ptr S, Int4 amount);
 ThreeValPtr get_mb_space(MBSpacePtr S, Int4 amount);
-Int4 get_last(Int4 **flast_d, Int4 d, Int4 diag, Int4 *row1);
 
 typedef struct greedy_align_mem {
    Int4Ptr PNTR flast_d;
@@ -68,7 +68,7 @@ MegaBlastGreedyAlign PROTO((const UcharPtr s1, Int4 len1,
 			     Boolean reverse, Int4 xdrop_threshold, 
 			     Int4 match_cost, Int4 mismatch_cost,
 			     Int4Ptr e1, Int4Ptr e2, GreedyAlignMemPtr abmp, 
-			     edit_script_t *S));
+			     edit_script_t *S, Uint1 rem));
 Int4 
 MegaBlastAffineGreedyAlign PROTO((const UcharPtr s1, Int4 len1,
 				  const UcharPtr s2, Int4 len2,
@@ -77,7 +77,7 @@ MegaBlastAffineGreedyAlign PROTO((const UcharPtr s1, Int4 len1,
 				  Int4 gap_open, Int4 gap_extend,
 				  Int4Ptr e1, Int4Ptr e2, 
 				  GreedyAlignMemPtr abmp, 
-				  edit_script_t *S));
+				  edit_script_t *S, Uint1 rem));
 
 
 

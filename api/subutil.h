@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.32 $
+* $Revision: 6.39 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,27 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.39  2001/12/12 16:01:47  kans
+* added MOLECULE_TYPE_TRANSCRIBED_RNA, SUBSRC_transgenic, SUBSRC_environmental_sample, and SUBSRC_isolation_source
+*
+* Revision 6.38  2001/12/11 16:50:41  kans
+* added TpaAssembly user object creation functions
+*
+* Revision 6.37  2001/12/10 13:47:44  kans
+* added MOLECULE_TYPE defines for CRNA and SNORNA
+*
+* Revision 6.36  2001/11/09 15:12:21  kans
+* moved collaborator to separate function per user object
+*
+* Revision 6.35  2001/11/09 13:21:08  kans
+* added collaborator field to reftrack user object
+*
+* Revision 6.34  2001/11/09 12:54:47  kans
+* added model evidence user object functions
+*
+* Revision 6.33  2001/07/29 16:23:58  kans
+* added AddOrganismToEntryEx to allow entry of taxonID
+*
 * Revision 6.32  2001/01/25 19:55:14  kans
 * added AddGenBankSetToSubmission for patents and other bulk submissions of unrelated sequences
 *
@@ -608,6 +629,9 @@ NLM_EXTERN SeqLitPtr AddLiteralToDeltaSeq (
 #define MOLECULE_TYPE_PEPTIDE 8
 #define MOLECULE_TYPE_OTHER_GENETIC_MATERIAL 9
 #define MOLECULE_TYPE_GENOMIC_MRNA_MIX 10
+#define MOLECULE_TYPE_CRNA 11
+#define MOLECULE_TYPE_SNORNA 12
+#define MOLECULE_TYPE_TRANSCRIBED_RNA 13
 
 #define TOPOLOGY_LINEAR 1
 #define TOPOLOGY_CIRCULAR 2
@@ -712,6 +736,21 @@ NLM_EXTERN Boolean AddOrganismToEntryNew (
            ** codes at end of this file. You should call
            ** AddOrganismToEntryNew() before calling
            ** SetGeneticCodeForEntry() **/
+
+NLM_EXTERN Boolean AddOrganismToEntryEx (
+	NCBISubPtr submission,
+	SeqEntryPtr entry ,
+	CharPtr scientific_name ,
+	CharPtr common_name ,
+	CharPtr virus_name ,
+	CharPtr strain ,
+	CharPtr synonym1,
+	CharPtr synonym2,
+	CharPtr synonym3,
+	CharPtr taxonomy,
+	Int4 taxid );
+
+           /** AddOrganismToEntryEx() allows taxonID to be entered **/
 
 NLM_EXTERN Boolean SetGeneticCodeForEntry (
 	NCBISubPtr submission,
@@ -818,6 +857,9 @@ NLM_EXTERN Boolean AddGenomeToEntry (
 #define SUBSRC_country 23
 #define SUBSRC_segment 24
 #define SUBSRC_endogenous_virus_name 25
+#define SUBSRC_transgenic 26
+#define SUBSRC_environmental_sample 27
+#define SUBSRC_isolation_source 28
 #define SUBSRC_other 255
 
 /*********************************************
@@ -1492,6 +1534,7 @@ NLM_EXTERN Boolean AddPhrapGraphToSeqLit (
 /* internal functions for reference gene project */
 NLM_EXTERN UserObjectPtr CreateRefGeneTrackUserObject (void);
 NLM_EXTERN void AddStatusToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr status);
+NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr collaborator);
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
                                                       CharPtr accn, Int4 gi,
                                                       Boolean sequenceChange,
@@ -1522,6 +1565,32 @@ NLM_EXTERN void AddToGeneOntologyUserObject (
   Int4 goid,
   Int4 pmid,
   CharPtr evidence
+);
+
+/* model evidence user object */
+NLM_EXTERN UserObjectPtr CreateModelEvidenceUserObject (
+  CharPtr method,
+  CharPtr contigParent
+);
+NLM_EXTERN void AddMrnaOrESTtoModelEvidence (
+  UserObjectPtr uop,
+  CharPtr type,
+  CharPtr accn,
+  Int4 length,
+  Int4 gaplen
+);
+NLM_EXTERN UserFieldPtr FindModelEvidenceField (
+  UserObjectPtr uop,
+  CharPtr type
+);
+
+/* third party accession list user object manipulation */
+NLM_EXTERN UserObjectPtr CreateTpaAssemblyUserObject (
+  void
+);
+NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (
+  UserObjectPtr uop,
+  CharPtr accn
 );
 
 

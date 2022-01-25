@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   11/13/92
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: drawing.c,v $
+* Revision 6.14  2001/12/13 14:51:31  kans
+* DrawSegment calls SetPrimAttribute only if it will be drawing
+*
 * Revision 6.13  2000/10/25 20:47:17  vakatov
 * Rollback R6.10 (still may need add. fix for MS-Windows) [w/ V.Chetvernin]
 *
@@ -3219,7 +3222,6 @@ extern void Nlm_DrawSegment (SegPPtr seg, Nlm_DrawInfoPtr drawinfoPtr )
   if (seg != NULL && drawinfoPtr != NULL) {
     drawinfo = *drawinfoPtr;
     drawinfo.primattrib = &blackAttPData;
-	 SetPrimAttribute ( (Nlm_PrimDrawContext)&drawinfo, (Uint1)0xFF );
     if (seg->base.code == SEGMENT || seg->base.code == PICTURE) {
       if (seg->seg.maxscale == 0 || 
           seg->seg.maxscale >= 
@@ -3229,6 +3231,7 @@ extern void Nlm_DrawSegment (SegPPtr seg, Nlm_DrawInfoPtr drawinfoPtr )
              (seg->seg.box.top >= drawinfo.scale.worldWindow.bottom) &&
              (seg->seg.box.bottom <= drawinfo.scale.worldWindow.top) ){
           if (seg->seg.visible) {
+             SetPrimAttribute ( (Nlm_PrimDrawContext)&drawinfo, (Uint1)0xFF );
             if ( !drawinfo.checked ) {
               if ((seg->seg.box.left >= drawinfo.scale.worldWindow16.left) &&
                 (seg->seg.box.right <= drawinfo.scale.worldWindow16.right) &&

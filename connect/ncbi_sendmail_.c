@@ -1,4 +1,4 @@
-/*  $Id: ncbi_sendmail_.c,v 6.2 2001/03/06 04:30:17 lavr Exp $
+/*  $Id: ncbi_sendmail_.c,v 6.3 2001/07/25 19:21:06 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,9 +38,6 @@
 
 #if defined(OS_UNIX)
 #  define NCBI_OS_UNIX 1
-#  if !defined(HAVE_GETHOSTBYNAME_R)  &&  defined(OS_UNIX_SOL)
-#    define HAVE_GETHOSTBYNAME_R 1
-#  endif
 #elif defined(OS_MSWIN)
 #  define NCBI_OS_MSWIN 1
 #elif defined(OS_MAC)

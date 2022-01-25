@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.64 $
+* $Revision: 6.71 $
 *
 * File Description: 
 *
@@ -148,6 +148,7 @@ extern Boolean  indexerVersion;
 extern CharPtr  genomeCenter;
 
 extern Boolean  leaveAsOldAsn;
+extern Boolean  newAlignReader;
 
 #ifdef WIN_MAC
 extern Boolean  termListUp;
@@ -395,10 +396,11 @@ extern void ParseInProteinsInOrder (IteM i);
 extern void AutoParseFeatureTableProc (IteM i);
 
 extern void RecomputeSuggest (IteM i);
-extern void RetranslateCdRegions (IteM i);
+extern void RetranslateCdRegionsNoStop (IteM i);
+extern void RetranslateCdRegionsDoStop (IteM i);
 extern void CorrectCDSGenCodes (IteM i);
 /* extern void CorrectCDSStartCodon (IteM i); */
-extern Boolean RetranslateOneCDS (SeqFeatPtr sfp, Uint2 entityID);
+/* extern Boolean RetranslateOneCDS (SeqFeatPtr sfp, Uint2 entityID, Boolean include_stop); */
 
 extern void GenerateAutoDefLinesNoMods (IteM i);
 extern void GenerateAutoDefLinesWithMods (IteM i);
@@ -437,6 +439,9 @@ extern void ConvertCDSet (IteM i);
 
 extern void FindStringProc (IteM i);
 extern void FindFlatfileProc (IteM i);
+extern void FindGeneProc (IteM i);
+extern void FindProtProc (IteM i);
+extern void FindPosProc (IteM i);
 
 extern Boolean SaveSeqSubmitProc (BaseFormPtr bfp, Boolean saveAs);
 
@@ -469,6 +474,9 @@ extern void FastaNucDirectToSeqEdProc (IteM i);
 extern void RemoveAlignment (IteM i);
 extern void RemoveGraph (IteM i);
 extern void RemoveProteins (IteM i);
+
+extern SeqAlignPtr Sqn_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
+extern SeqAlignPtr Sequin_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, Int4Ptr endsfixed);
 
 
 #ifndef WIN_MAC

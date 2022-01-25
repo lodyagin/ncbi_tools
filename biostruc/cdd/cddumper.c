@@ -1,4 +1,4 @@
-/* $Id: cddumper.c,v 1.11 2001/05/23 21:18:06 bauer Exp $
+/* $Id: cddumper.c,v 1.12 2001/11/13 19:52:56 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 10/30/2000
 *
-* $Revision: 1.11 $
+* $Revision: 1.12 $
 *
 * File Description: CD-dumper, rebuilt from scrap parts       
 *         
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddumper.c,v $
+* Revision 1.12  2001/11/13 19:52:56  bauer
+* biostrucs from file
+*
 * Revision 1.11  2001/05/23 21:18:06  bauer
 * added functions for alignment block structure control
 *
@@ -86,9 +89,9 @@
 #include "cddsrv.h"
 #include "cddutil.h"
 
-#define NUMARGS 21
+#define NUMARGS 23
 static Args myargs[NUMARGS] = {
-  {"Cd-Name",                                                /*0*/
+  {"Cd-Accession",                                           /*0*/
    "RHO",      NULL,NULL,FALSE,'c',ARG_STRING, 0.0,0,NULL},
   {"Extension for ASN.1 output file name",                   /*1*/
    "acd",      NULL,NULL,FALSE,'a',ARG_STRING, 0.0,0,NULL},
@@ -98,29 +101,29 @@ static Args myargs[NUMARGS] = {
    "F",        NULL,NULL,FALSE,'k',ARG_BOOLEAN,0.0,0,NULL},
   { "Source Identifier",                                     /*4*/
     NULL,      NULL,NULL,TRUE, 's',ARG_STRING, 0.0,0,NULL},
-  { "Convert Dense Diag to multiple Alignment",              /*5*/
+  { "Convert Dense Diag to true multiple Alignment",         /*5*/
    "F",        NULL,NULL,FALSE,'m',ARG_BOOLEAN,0.0,0,NULL},
   { "File extension for tree file",                          /*6*/
    "act",      NULL,NULL,FALSE,'t',ARG_STRING, 0.0,0,NULL},
   { "Reference file extension",                              /*7*/
    "REF",      NULL,NULL,FALSE,'r',ARG_STRING, 0.0,0,NULL},
-  { "Status flag for CDD",                                   /*8*/
+  { "Status flag for CDD (1=finished,2=pending,3=oAsIs",     /*8*/
     "2",       NULL,NULL,FALSE,'f',ARG_INT,    0.0,0,NULL},
   { "Calculate a consensus sequence",                        /*9*/
    "F",        NULL,NULL,FALSE,'C',ARG_BOOLEAN,0.0,0,NULL},
-  { "Pseudocount constant",                                 /*10*/
+  { "Pseudocount constant (integers 1-10)",                 /*10*/
    "-1",       NULL,NULL,FALSE,'p',ARG_INT,    0.0,0,NULL},
-  { "Use this real-ind file",                               /*11*/
+  { "Use this real-ind file to import alignment",           /*11*/
     NULL,      NULL,NULL,TRUE, 'i',ARG_STRING, 0.0,0,NULL},
-  { "Update this existing CD",                              /*12*/
+  { "Update this existing CD (local file name)",            /*12*/
    NULL,       NULL,NULL,TRUE, 'u',ARG_STRING, 0.0,0,NULL},
   { "Binary input CD",                                      /*13*/
    "F",        NULL,NULL,FALSE,'e',ARG_BOOLEAN,0.0,0,NULL},
-  { "New name for CD in case of update",                    /*14*/
+  { "New accession for CD in case of update",               /*14*/
     NULL,      NULL,NULL,TRUE, 'n',ARG_STRING, 0.0,0,NULL},
   { "Parse new name from real-ind file",                    /*15*/
     "T",       NULL,NULL,FALSE,'N',ARG_BOOLEAN,0.0,0,NULL},
-  { "Scoring Matrix",                                       /*16*/
+  { "Scoring Matrix (PAM30, BLOSUM62, ..)",                 /*16*/
     "BLOSUM62",NULL,NULL,FALSE,'M',ARG_STRING, 0.0,0,NULL},
   { "Make this PDB-derived sequence the new master",        /*17*/
     NULL,      NULL,NULL,TRUE, 'R',ARG_STRING, 0.0,0,NULL},
@@ -129,8 +132,11 @@ static Args myargs[NUMARGS] = {
   { "trim Bioseqs",                                         /*19*/
     "T",       NULL,NULL,FALSE,'T',ARG_BOOLEAN,0.0,0,NULL},
   { "trim SeqAligns if not an oAsIs CD",                    /*20*/
-    "T",       NULL,NULL,FALSE,'A',ARG_BOOLEAN,0.0,0,NULL}
-    
+    "T",       NULL,NULL,FALSE,'A',ARG_BOOLEAN,0.0,0,NULL},
+  { "retrieve superposition data from PubVast",             /*21*/
+    "T",       NULL,NULL,FALSE,'v',ARG_BOOLEAN,0.0,0,NULL},
+  { "Parse short name from description, move to name field",/*22*/
+    "F",       NULL,NULL,TRUE,'P', ARG_BOOLEAN,0.0,0,NULL}
 };
 
 /*---------------------------------------------------------------------------*/
@@ -290,7 +296,7 @@ static Int4 ConvertMMDBUID(CharPtr pcString)
   iUID = 0;
   pcTemp = StringSave(pcString);
   CleanSpaces(pcTemp);
-	iUID = MMDBEvalPDB(pcTemp);
+  iUID = MMDBEvalPDB(pcTemp);
   MemFree(pcTemp);
   return iUID; 
 }
@@ -1072,7 +1078,7 @@ static void CddIdentifyFsids(CddSumPtr pcds)
   
   iMMDBid = pcds->iMMDBId;
   strcpy(szName,pcds->cPdbId);
-  pbsXtra = FetchBiostrucPDB(szName,iModelComplexity,1);
+  pbsXtra = (BiostrucPtr) MMDBBiostrucGet(ConvertMMDBUID(szName),iModelComplexity,1);
   strcpy(chain,pcds->cChainId);
   if (chain[0] != ' ') {
     pbsTemp = (BiostrucPtr)PruneBiostruc(pbsXtra,chain);
@@ -1086,7 +1092,7 @@ static void CddIdentifyFsids(CddSumPtr pcds)
   while (pcdsThis) {
     if (pcdsThis->bIsPdb) {
       strcpy(szName,pcdsThis->cPdbId);
-      pbsXtra = FetchBiostrucPDB(szName,iModelComplexity,1);
+      pbsXtra = (BiostrucPtr) MMDBBiostrucGet(ConvertMMDBUID(szName),iModelComplexity,1);
       strcpy(chain,pcdsThis->cChainId);
       if (chain[0] != ' ') {
         pbsTemp = (BiostrucPtr)PruneBiostruc(pbsXtra,chain);
@@ -1705,6 +1711,7 @@ Int2 Main()
   CddSumPtr                pcds = NULL;
   CddTreePtr               pcddt;
   CharPtr                  cCategory, pcTest;
+  CharPtr                  cDescStr, cDescNew;
   DbtagPtr                 dbtp;
   GlobalIdPtr              pGid;
   ObjectIdPtr              oidp;
@@ -1713,7 +1720,7 @@ Int2 Main()
   SeqAlignPtr              salpThis;
   SeqAnnotPtr              psaCAlignHead;
   SeqEntryPtr              sepNew;
-  SeqEntryPtr              oldhead, newhead, septemp, oldtail, newtail, remainder;
+  SeqEntryPtr              oldhead, newhead, septemp, oldtail, newtail, remaind;
   SeqIdPtr                 sip_master, sipTrunc;
   SeqIntPtr                sintp;
   TrianglePtr              pTri = NULL;
@@ -1742,13 +1749,14 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
   if (!ID1BioseqFetchEnable("cddump",TRUE))
     CddSevError("Unable to initialize ID1");
+  if (!MMDBInit()) CddHtmlError("MMDB Initialization failed");
   if ( !EntrezInit("Cddump", FALSE, &is_network))
     CddSevError("Unable to start Entrez");
 
 /*---------------------------------------------------------------------------*/
 /* assign CD-Id                                                              */
 /*---------------------------------------------------------------------------*/
-  strcpy(cCDDid,myargs[0].strvalue);
+  CddRegularizeFileName(myargs[0].strvalue,cCDDid,cCDDfname,myargs[1].strvalue);
 
 /*---------------------------------------------------------------------------*/
 /* read in an existing CD if necessary/possible                              */
@@ -1765,10 +1773,8 @@ Int2 Main()
     bssp          = (BioseqSetPtr) pcdd->sequences->data.ptrvalue;
     pbsaSeq       = BiostrucAlignSeqNew();
     pbsaSeq->sequences = bssp->seq_set;
-    strcpy(cCDDid, pcdd->name);
     if (myargs[14].strvalue) {
       strcpy(cCDDid, myargs[14].strvalue);
-      pcdd->name = myargs[14].strvalue;
     }
   }
 
@@ -1839,7 +1845,6 @@ Int2 Main()
       CddLoadBSAnnotSets(pcds, &nPdb, &iSeqStrMode, salpHead, pbsaStruct);    
 
       CloseMMDBAPI();
-      MMDBFini();
       VASTFini();
     }
 
@@ -1968,9 +1973,6 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* this part includes modifications which are part of a CD update as well    */
 /*---------------------------------------------------------------------------*/
-
-  pcdd->name = strdup(cCDDid);
-
   pvnId = ValNodeNew(NULL);
   pGid = (GlobalIdPtr) GlobalIdNew();
   pGid->accession = strdup(cCDDid);
@@ -2015,7 +2017,7 @@ Int2 Main()
 	if (CddSameSip(bspThis->id, sip_master)) {
 	  newhead = septemp;
 	  newtail = septemp;
-	  remainder = septemp->next;
+	  remaind = septemp->next;
           break;	
 	}
 	else oldtail = septemp;
@@ -2024,7 +2026,7 @@ Int2 Main()
     }
     bssp->seq_set = newhead;
     newtail->next = oldhead;
-    oldtail->next = remainder;    
+    oldtail->next = remaind;    
   }
 
 /*---------------------------------------------------------------------------*/
@@ -2168,6 +2170,40 @@ Int2 Main()
       pcdd->seqannot->data = (SeqAlignPtr)CddMSLDenDiagToMULDenDiag(pcdd->seqannot->data);
     }
 
+/*---------------------------------------------------------------------------*/
+/* assign a CD-name automatically if not yet present in the CD               */
+/*---------------------------------------------------------------------------*/
+    if (!pcdd->name) {
+      pcdd->name = strdup(cCDDid);
+    }
+    if (myargs[22].intvalue) {
+      if (Nlm_StrNCmp(pcdd->name,"pfam0",5) == 0 ||
+          Nlm_StrNCmp(pcdd->name,"smart0",6) == 0 || 
+	  Nlm_StrNCmp(pcdd->name,"LOAD_",5) == 0) {
+        vnp = pcdd->description;
+        while (vnp) {
+          if (vnp->choice == CddDescr_comment) {
+	    if (Nlm_StrCmp(vnp->data.ptrvalue,"linked to 3D-structure") != 0) {
+	      cDescStr = StringSave(vnp->data.ptrvalue);
+              break;
+	    }
+          }
+          vnp = vnp->next;
+        }
+        cDescNew = Nlm_StrStr(cDescStr,",");
+        if (cDescNew) {
+          if (Nlm_StrLen(cDescNew) > 2) {
+	    vnp->data.ptrvalue = cDescNew + 2;
+            Nlm_StrTok(cDescStr,",");
+            pcdd->name = cDescStr;
+          }
+        }
+      }
+    }
+
+/*---------------------------------------------------------------------------*/
+/* Write the finished CD out to disk                                         */
+/*---------------------------------------------------------------------------*/
     strcpy(cOutFile,cCDDid);
     strcat(cOutFile,".");
     strcat(cOutFile,myargs[1].strvalue);
@@ -2197,5 +2233,6 @@ Int2 Main()
 /*  pcdd        = (CddPtr) CddFreeCarefully(pcdd); */
   pcddeschead = CddDescFree(pcddeschead);
   pcds        = CddSumFree(pcds);
+  MMDBFini();
   return 0;
 }

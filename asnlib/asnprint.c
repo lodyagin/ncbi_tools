@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.15  2001/10/11 14:39:08  ostell
+* added support for XMLModulePrefix
+*
 * Revision 6.14  2001/03/28 01:25:38  juran
 * Removed unused variable.
 *
@@ -384,8 +387,8 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 			}
 			MakeXMLPublicName(pname, tname);
 			xmlname = GetXMLname(atp2);
-			sprintf(tbuf, "<!DOCTYPE %s PUBLIC \"-//NCBI//%s/EN\" \"%s.dtd\">",
-				xmlname, pname, tname);
+			sprintf(tbuf, "<!DOCTYPE %s PUBLIC \"-//NCBI//%s/EN\" \"%s%s.dtd\">",
+				xmlname, pname, AsnGetXMLmodulePrefix(), tname);
 			AsnPrintCharBlock(tbuf, aip);
 			AsnPrintNewLine(aip);
 		}
@@ -1161,7 +1164,10 @@ NLM_EXTERN void AsnPrintNewLine (AsnIoPtr aip)
 			aip->offset = tmp - (CharPtr)aip->buf;
 		}
 		else
+		{
+			aip->no_newline = FALSE;   /* reset to normal */
 			return;
+		}
 	}
 		
 	if (! (aip->type & ASNIO_CARRIER))           /* really printing */
@@ -1223,6 +1229,7 @@ NLM_EXTERN void AsnPrintNewLine (AsnIoPtr aip)
 		aip->linepos = tpos;
 		aip->offset += tpos;
 	}
+	aip->no_newline = FALSE;   /* reset to normal */
 	return;
 }
 /*****************************************************************************
@@ -1752,7 +1759,7 @@ NLM_EXTERN void AsnPrintModuleXMLInc (AsnModulePtr amp, CharPtr name)
 	Char buf[200], buf2[200];
 	FILE * fp;
 	Int2 i;
-	static char * f1 = "\n<!ENTITY %% %s_module PUBLIC \"-//NCBI//%s Module//EN\" \"%s.mod\">\n";
+	static char * f1 = "\n<!ENTITY %% %s_module PUBLIC \"-//NCBI//%s Module//EN\" \"%s%s.mod\">\n";
 	static char * f2 = "%%%s_module;\n";
 
 	ml.num = 0;
@@ -1767,7 +1774,7 @@ NLM_EXTERN void AsnPrintModuleXMLInc (AsnModulePtr amp, CharPtr name)
         fprintf(fp, "  This file is used to put them together.\n");
 	fprintf(fp, "-->\n");
 
-	fprintf(fp, f1, "NCBI_Entity", "NCBI Entity", "NCBI_Entity");
+	fprintf(fp, f1, "NCBI_Entity", "NCBI Entity",AsnGetXMLmodulePrefix(),  "NCBI_Entity");
 	fprintf(fp, f2, "NCBI_Entity");
 
 	for (i = 0; i < ml.num; i++)
@@ -1775,7 +1782,7 @@ NLM_EXTERN void AsnPrintModuleXMLInc (AsnModulePtr amp, CharPtr name)
 		ptr = MakeXMLModuleName(ml.amps[i], buf);
 		ptr = MakeXMLPublicName(buf2, buf);
 		
-		fprintf(fp, f1, buf, buf2, buf);
+		fprintf(fp, f1, buf, buf2, AsnGetXMLmodulePrefix(), buf);
 		fprintf(fp, f2, buf);
 	}
 

@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.33 2001/07/09 14:17:55 madden Exp $
+/* $Id: txalign.c,v 6.43 2001/12/13 21:05:38 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,44 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.33 $
+* $Revision: 6.43 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.43  2001/12/13 21:05:38  madden
+* Comment out hyperlink to wgetorg for new db format
+*
+* Revision 6.42  2001/12/10 22:34:24  dondosha
+* Bug fix for Traces html links
+*
+* Revision 6.41  2001/11/14 17:53:21  camacho
+* One more minor fix to Tx_PrintDefLine.
+*
+* Revision 6.40  2001/11/09 22:07:39  camacho
+* Fixed Tx_PrintDefLine to properly format 1-line descriptions in the
+* default blast output for the new database format.
+*
+* Revision 6.39  2001/10/29 20:39:53  camacho
+* Fixed memory leak
+*
+* Revision 6.38  2001/10/12 15:35:38  dondosha
+* Added printing of cluster sequences deflines in ShowAlignNodeText2Ex
+*
+* Revision 6.37  2001/10/05 17:49:30  dondosha
+* Fixed bug in strand reporting for bl2seq
+*
+* Revision 6.36  2001/08/03 19:45:53  egorov
+* Change size of title_length and related variables to Int4
+*
+* Revision 6.35  2001/08/01 16:03:06  madden
+* Only call SeqAlignSegsStr for first alignment for each db sequence
+*
+* Revision 6.34  2001/07/23 20:20:11  dondosha
+* Made replace_bytestore_data function public for use in web blast2seq
+*
 * Revision 6.33  2001/07/09 14:17:55  madden
 * Fix memory leak
 *
@@ -637,7 +668,7 @@ static void FreeByteStoreList (ValNodePtr bs_list)
 	ValNodeFree(bs_list);
 }
 
-static Boolean replace_bytestore_data (BioseqPtr bsp, ValNodePtr bs_list, Uint1 frame)
+NLM_EXTERN Boolean replace_bytestore_data (BioseqPtr bsp, ValNodePtr bs_list, Uint1 frame)
 {
 	ByteStorePtr b_store;
 	Uint1 code;
@@ -1351,10 +1382,9 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 				{
                                    db_tag = (DbtagPtr) sip->data.ptrvalue;
                                    if(db_tag->db) {
-                                      if (StringCmp(db_tag->db, "THC") == 0) {
-                                         oip = db_tag->tag;
-                                         if(oip->id != 0)
-                                         {
+                                      oip = db_tag->tag;
+                                      if(oip->id != 0) {
+                                         if (StringCmp(db_tag->db, "THC") == 0) {
                                             sprintf(HTML_buffer, "<a name = THC%ld></a><a href=\"http://www.tigr.org/docs/tigr-scripts/hgi_scripts/thc_report.spl?est=THC%ld&report_type=n\">", (long) oip->id, (long) oip->id);
                                             
                                             html_len = StringLen(HTML_buffer);
@@ -1363,8 +1393,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
                                             pos += print_label_to_buffer_all_ex(docbuf+pos, tdp->label, tdp->pos, 
 					    		tdp->strand, FALSE, TRUE, label_size, num_size, show_strand, strip_semicolon);
                                             load = TRUE;
-                                         }
-                                      } else if (!StringICmp(db_tag->db, "TI")) {
+                                         } else if (!StringICmp(db_tag->db, "TI")) {
                                             sprintf(HTML_buffer, "<a name = TI%ld></a><a href=\"http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?val=%ld&cmd=retrieve&dopt=fasta\">", (long) oip->id, (long) oip->id);
                                             
                                             html_len = StringLen(HTML_buffer);
@@ -1373,6 +1402,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
                                             pos += print_label_to_buffer_all_ex(docbuf+pos, tdp->label, tdp->pos, 
 					    		tdp->strand, FALSE, TRUE, label_size, num_size, show_strand, strip_semicolon);
                                             load = TRUE;
+                                         }
                                       }
                                    }
                                 }
@@ -3301,12 +3331,13 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
                                 aso.align_len = 0;
                             }
 
-                            {{
+                            aso.segs = NULL;
+			    if (aso.follower == FALSE)
+                            {
                                 SeqAlignPtr sap;
                                 size_t size = 0;
                                 size_t used = 0;
                                 
-                                aso.segs = NULL;
                                 for (sap = align; sap != NULL; sap = sap->next) {
                                     if (SeqIdMatch(TxGetSubjectIdFromSeqAlign(align), TxGetSubjectIdFromSeqAlign(sap))) {
                                         if (aso.segs != NULL) {
@@ -3322,10 +3353,55 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
                                      */
                                     aso.segs = StringSave("");
                                 }
-                            }}
+                            }
                             fmt_score_func(&aso);
+    {
+       BioseqPtr bsp;
+       SeqIdPtr sip, sip_head;
+       Char buffer[BUFFER_LENGTH+1]/*, line[BUFFER_LENGTH+1]*/;
+       Int4 buf_len, gi, index;
+       CharPtr title;
+       Char HTML_dopt[8], HTML_database[11];
+       Char HTML_buffer[BUFFER_LENGTH+1]; 
+
+       sip_head = align->master;
+       if (sip_head) {
+          for (sip=sip_head, index=0; sip; sip = sip->next, index++); 
+          fprintf(fp, " Other sequences in the cluster (%d total)\n", index);
+          for (sip = sip_head; sip; sip = sip->next) {
+             /* SeqIds of other sequences in a cluster are printed here */
+             bsp = BioseqLockById(sip);
+             SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+             buf_len = StrLen(buffer);
+             title = (CharPtr) Malloc((num-buf_len+1)*sizeof(Char));
+             sprintf(title, "%.*s", num-buf_len, BioseqGetTitle(bsp));
+                
+             if (ISA_na(bsp->mol)) {
+                StringCpy(HTML_dopt, "GenBank");
+                StringCpy(HTML_database, "Nucleotide");
+             } else {
+                StringCpy(HTML_dopt, "GenPept");
+                StringCpy(HTML_database, "Protein");
+             }
+             
+             if (bsp->id->choice == SEQID_GI) {
+                gi = bsp->id->data.intvalue;
+                sprintf(HTML_buffer, 
+             "<a href=\"%s?cmd=Retrieve&db=%s&list_uids=%08ld&dopt=%s\" %s>", 
+             NEW_ENTREZ_HREF, HTML_database, (long) gi, HTML_dopt,
+	     option & TXALIGN_TARGET_IN_LINKS ? "TARGET=\"EntrezView\"" : "");
+                fprintf(fp, "    + %s%s </a> %s\n", HTML_buffer, buffer, title);
+             } else {
+                fprintf(fp, "    + %s </a> %s\n", buffer, title);
+             }
+             BioseqUnlock(bsp);
+          }
+          fprintf(fp, "\n\n");
+       }
+    }
+
+                            aso.segs = (CharPtr) MemFree(aso.segs);
                         }
-                        aso.segs = (CharPtr) MemFree(aso.segs);
                     }
                     if(bsp != NULL)
                         BioseqUnlock(bsp);
@@ -3911,6 +3987,11 @@ make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbnam
         dbtmp = dbname;
     }
     
+    if (sip->choice == SEQID_GI)
+       gi = sip->data.intvalue;
+    else 
+       gi = -1;
+
     bsp = BioseqLockById(sip);
     if (bsp)
 	sip = bsp->id;
@@ -3945,9 +4026,8 @@ make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbnam
 	gnl[0] = NULLB;
     }
 
-    gi = -1;
     bestid = SeqIdFindBest(sip, SEQID_GI);
-    if (bestid && bestid->choice == SEQID_GI)
+    if (gi < 0 && bestid && bestid->choice == SEQID_GI)
     {
 	gi = bestid->data.intvalue;
     }
@@ -4064,7 +4144,6 @@ Tx_PrintDefLine(BlastDefLinePtr bdsp, CharPtr buffer, Int4 length)
 	StringNCpy(buffer, bdsp->title, length);
 
 	total_length = StringLen(buffer);
-	ptr = buffer+total_length;
 
 	if (total_length >= length)
 		return TRUE;
@@ -4073,6 +4152,7 @@ Tx_PrintDefLine(BlastDefLinePtr bdsp, CharPtr buffer, Int4 length)
 	bdsp_tmp = bdsp->next;
 	while (bdsp_tmp)
 	{
+        ptr = buffer+total_length;
 		SeqIdWrite(bdsp_tmp->seqid, seqid_buf, PRINTID_FASTA_LONG, BUFFER_LENGTH);
 		*ptr = ' ';
 		*(ptr+1) = '>';
@@ -4084,7 +4164,7 @@ Tx_PrintDefLine(BlastDefLinePtr bdsp, CharPtr buffer, Int4 length)
 		ptr = buffer+total_length;
 		*ptr = ' ';
 		StringNCpy(ptr+1, bdsp_tmp->title, length-total_length-1);
-		total_length += StringLen(bdsp->title);
+		total_length += StringLen(bdsp_tmp->title);
 		if (total_length >= length)
 			break;
 
@@ -4105,7 +4185,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
     Char buffer[BUFFER_LENGTH+1], buffer1[BUFFER_LENGTH+1], eval_buff[10], bit_score_buff[10]; 
     Char HTML_buffer[BUFFER_LENGTH+1], HTML_database[32], HTML_dopt[16], id_buffer[BUFFER_LENGTH+1];
     Char *ptr, *ptr_start, *eval_buff_ptr, *bit_score_buff_ptr;
-    Int2 pos, title_length, title_allocated, titleIdAllocated;
+    Int4 pos, title_length, title_allocated, titleIdAllocated;
     Nlm_FloatHi bit_score, evalue;
     Int4 gi = 0, number, score;
     SeqIdPtr bestid, gi_list, subject_id, sip_list=NULL, last_id;
@@ -4988,12 +5068,14 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
         fprintf(asop->fp, " ");
     }
 
+#if 0
     if(taxid >=0 && asop->html_hot_link == TRUE && make_link == TRUE) {
         fprintf(asop->fp, 
                 "<a href=\"http://www.ncbi.nlm.nih.gov/htbin-post"
                 "/Taxonomy/wgetorg?id=%d\">"
                 "<FONT color=\"red\">T</FONT></a> ", taxid);
     }
+#endif
 
     /* Subtract 10 off the lines length as the ID is not printed
        with ffprint functions. */
@@ -5007,7 +5089,7 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
 }
 
 
-static Boolean TX_PrintDeflinesWithAsn(BlastDefLinePtr bdsp, 
+static Boolean TX_PrintDeflinesWithAsn(BlastDefLinePtr PNTR bdsp, 
                                        AlignStatOptionPtr asop) 
 {
     Boolean  first = TRUE;
@@ -5023,11 +5105,11 @@ static Boolean TX_PrintDeflinesWithAsn(BlastDefLinePtr bdsp,
 
     if((gilist = ScorePtrUseThisGi(asop->sp)) != NULL)
     {
-        bdsp = FilterAsn1DefLine(bdsp, gilist);
-	gilist = SeqIdSetFree(gilist);
+        *bdsp = FilterAsn1DefLine(*bdsp, gilist);
+        gilist = SeqIdSetFree(gilist);
     }
     
-    for (tbdsp = bdsp; tbdsp != NULL; tbdsp = tbdsp->next) {
+    for (tbdsp = *bdsp; tbdsp != NULL; tbdsp = tbdsp->next) {
         
         if(first) {
             fprintf(asop->fp, ">");
@@ -5084,7 +5166,8 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
         /* Is the defline and sip allocated? */
 
         if((bdsp =  FDGetDeflineAsnFromBioseq(bsp)) != NULL) {
-            TX_PrintDeflinesWithAsn(bdsp, asop);
+            TX_PrintDeflinesWithAsn(&bdsp, asop);
+            bdsp = BlastDefLineSetFree(bdsp);
         } else {
             allocated = FALSE;
             gilist = ScorePtrUseThisGi(sp);
@@ -5164,10 +5247,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
             dline_buf = (CharPtr) MemFree(dline_buf);
         }
 
-        fprintf(asop->fp, "          Length = %ld\n\n", (long) BioseqGetLen(bsp));
-
-        if(bdsp != NULL)
-            BlastDefLineSetFree(bdsp);
+        fprintf(asop->fp, "          Length = %ld\n", (long) BioseqGetLen(bsp));
     }
 
     if (asop->no_entrez == TRUE && 
@@ -5230,7 +5310,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
        ff_AddString(warning_msg);
        NewContLine();
     }
-    
+    ff_EndPrint();
     eval_buff_ptr = eval_buff;
 #ifdef OS_MAC
     if (evalue < 1.0e-180) {
@@ -5318,7 +5398,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
                 bit_score_buff, (long) score);
     }
 
-    ff_AddString(buffer);
+    fprintf(asop->fp, "%s", buffer);
 
     if (number == 1)
         sprintf(buffer, "Expect = %s", eval_buff_ptr);
@@ -5327,8 +5407,8 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     else
         sprintf(buffer, "Expect(%ld+) = %s", (long) number, eval_buff_ptr);
 
-    ff_AddString(buffer);
-    NewContLine();
+    fprintf(asop->fp, "%s\n", buffer);
+    ff_StartPrint(0, 0, (Int2)(asop->line_len+asop->indent_len), NULL);
     if (asop->align_len > 0) {
         percent_identical = (Int4) ((100*asop->identical + 0.5)/ (asop->align_len));
         percent_positive = (Int4) ((100*asop->positive + 0.5)/ (asop->align_len));
@@ -5360,7 +5440,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
             ff_AddString(buffer);
             NewContLine();
         } else if (asop->m_strand != Seq_strand_unknown && asop->t_strand != Seq_strand_unknown) {
-            if (asop->m_strand == Seq_strand_minus)
+            if (asop->m_strand != asop->t_strand)
                 sprintf(buffer, " Strand = Plus / Minus");
             else
                 sprintf(buffer, " Strand = Plus / Plus");

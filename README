@@ -13,7 +13,7 @@ The documentation lags considerably behind the software and we must make any
 changes required by our data production needs. Nontheless, many people have
 found it a useful and stable basis for a number of tools and applications.
 
-The toolkit is available by anonymous ftp from ncbi.nlm.nih.gov
+The toolkit is available by anonymous ftp from ftp.ncbi.nih.gov
 
 cd toolbox
 cd ncbi_tools

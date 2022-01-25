@@ -29,13 +29,46 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.90 $
+* $Revision: 6.101 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.101  2001/11/29 14:04:29  kans
+* reverted GetThePointForOffset, deal with trans-splicing in feature indexing left/right extreme calculation itself
+*
+* Revision 6.100  2001/11/14 13:55:45  kans
+* added BN accession
+*
+* Revision 6.99  2001/11/08 13:49:45  kans
+* GetThePointForOffset on left or right end now handles trans-spliced mixed strands properly - still need to fix SeqLocMerge
+*
+* Revision 6.98  2001/10/23 14:04:18  kans
+* added BM and BL accession prefixes
+*
+* Revision 6.97  2001/09/28 22:42:49  vakatov
+* Renamed "new" to "x_new" -- to avoid clash with the C++ "operator new"
+*
+* Revision 6.96  2001/09/28 14:31:00  madden
+* Added functions BSCompressDNANew and GenericCompressDNAEx for long sequences with ambiguity
+*
+* Revision 6.95  2001/09/20 18:53:28  kans
+* changed SeqLocCompare matrices to handle artificial frameshifts
+*
+* Revision 6.94  2001/08/07 18:12:05  kans
+* added macros for EMBL and DDBJ TPA and TPA_PROT prefixes
+*
+* Revision 6.93  2001/08/06 22:13:12  kans
+* using NUM_SEQID, added TPA ids to arrays
+*
+* Revision 6.92  2001/08/06 20:07:53  ostell
+* added support for SEQID_TPG, TPE, TPD types
+*
+* Revision 6.91  2001/08/01 17:56:24  kans
+* in SeqLocGetSegLens on mix or equiv, ctr += changed to ctr = to avoid multiple increments
+*
 * Revision 6.90  2001/07/03 21:42:01  kans
 * added macros and accession prefixes for TPA (third-party annotation) records
 *
@@ -588,7 +621,9 @@ static Boolean InitNaI2Table(void);
 #define RES_OFFSET(x) x & 0xFFFFFF 
 #define RES_VALUE(x)  x>>28 
 #define RES_LEN(x)    (x>>24) & 0xF
+#define RES_LEN_NEW(x)    (x>>16) & 0xFFF
 #define LEN_STEP_MASK 0x1000000
+#define LEN_STEP_MASK_NEW 0x10000
 
 static NumberingPtr stdnum = NULL;  /* std Numbering object (start at 1) */
 
@@ -1387,7 +1422,8 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA (ByteStorePtr from, Int4 len,
 {
   Int4      i, am_num;
   Uint4Ptr  am_buff;
-  Uint1     char_to, row_len, j;
+  Uint1     char_to;
+  Int4     row_len, j;
   SeqMapTablePtr smtp;
 
   if(from == NULL || len <=0)
@@ -1405,7 +1441,7 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA (ByteStorePtr from, Int4 len,
   
   for(i = 0; i < am_num; i++) {
     char_to = (Uint1)RES_VALUE(am_buff[i]);
-    row_len = (Uint1)RES_LEN(am_buff[i]); 
+    row_len = (Int4)RES_LEN(am_buff[i]); 
     
     BSSeek(from, RES_OFFSET(am_buff[i]), SEEK_SET);
     for(j = 0; j <= row_len; j++)  
@@ -1425,9 +1461,12 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA (ByteStorePtr from, Int4 len,
 NLM_EXTERN Boolean RebuildDNA_4na (Uint1Ptr buffer, Int4 length, Uint4Ptr lbytes)
      
 {
-    Int4      i, amb_num;
+    Boolean	new = FALSE;
+    Int4        i;
+    Uint4 	amb_num;
     Uint4Ptr  amb_buff;
-    Uint1     char_l, char_r, row_len;
+    Uint1     char_l, char_r;
+    Int4      row_len;
     Uint1     C_Mask[] = {0x0F, 0xF0};
     Int4      j, position = 0, pos =0 , rem =0 , index;
     
@@ -1439,25 +1478,43 @@ NLM_EXTERN Boolean RebuildDNA_4na (Uint1Ptr buffer, Int4 length, Uint4Ptr lbytes
     
     amb_num  = *lbytes;
     amb_buff = lbytes + 1;
+
+    /* Check if highest order bit set. */
+    if (amb_num & 0x80000000)
+    {
+	new = TRUE;
+	amb_num &= 0x7FFFFFFF;
+    }
     
     for(i = 0; i < amb_num; i++) {
 
-        char_r    = (Uint1)(RES_VALUE(amb_buff[i]));
-        row_len   = (Uint1)(RES_LEN(amb_buff[i])); 
-        position  =         RES_OFFSET(amb_buff[i]);
+	if (new)
+	{
+       		char_r    = (Uint1)(RES_VALUE(amb_buff[i]));
+       		row_len   = (Int4)(RES_LEN_NEW(amb_buff[i])); 
+        	position  =         amb_buff[i+1];
+	}
+	else
+	{
+       		char_r    = (Uint1)(RES_VALUE(amb_buff[i]));
+       		row_len   = (Int4)(RES_LEN(amb_buff[i])); 
+        	position  =         RES_OFFSET(amb_buff[i]);
+	}
         
         pos = position/2;
         rem = position%2;  /* 0 or 1 */
         char_l = char_r << 4;
         
         for(index = pos, j =0; j <=row_len; j++) {
+           
+           	buffer[index] = (buffer[index] & C_Mask[rem]) + (rem ? char_r : char_l);
+            	rem = !rem;
             
-            buffer[index] = (buffer[index] & C_Mask[rem]) + 
-                (rem ? char_r : char_l);
-            rem = !rem;
-            
-            if(!rem) index++;
-        }
+            	if(!rem) index++;
+    	}
+
+	if (new) /* for new format we have 8 bytes for each element. */
+		i++;
     }
     
     return TRUE;
@@ -1570,6 +1627,42 @@ NLM_EXTERN ByteStorePtr BSCompressDNA(ByteStorePtr from, Int4 len,
 
 /*****************************************************************************
 *
+*   BSCompressDNANew(bytestoreptr, len, lbytes)
+*       converts a ncbi4na bytestore into ncbi2na
+*       returns pointer to ambiguity storage
+*       lbytes[0] == length of this storage
+*       frees old bytestore
+*       returns pointer to new one, or NULL on fail.
+*       len is residues
+*
+*	This function stores the ambiguity code in 8 bytes so
+*	that there is no cutoff for sequences greater than 16 million bps.
+*	as there is for BSCompressDNA.
+*
+*****************************************************************************/
+NLM_EXTERN ByteStorePtr BSCompressDNANew(ByteStorePtr from, Int4 len, 
+                              Uint4Ptr PNTR lbytes)
+{
+  ByteStorePtr to;
+  to = BSNew((Uint4)len/4+1);
+
+  BSSeek(from, 0, 0);
+  BSSeek(to, 0, 0);
+  
+  if(!GenericCompressDNAEx((VoidPtr) from, (VoidPtr) to, 
+                         (Uint4)len,
+                         BSCompressRead, 
+                         BSCompressWrite, 
+                         lbytes, TRUE)) {
+    return NULL;
+  }
+  
+  BSFree(from);
+  return to;
+}
+
+/*****************************************************************************
+*
 *   GenericCompressDNA()
 *       converts from VoidPtr "from" in 4na encoding to 
 *       VoidPtr "to" in 2Na encoding
@@ -1593,6 +1686,17 @@ NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from,
                            CompressRWFunc write_func,
                            Uint4Ptr PNTR lbytes)
 {
+	return GenericCompressDNAEx(from, to, seq_len, read_func, write_func, lbytes, FALSE);
+}
+
+NLM_EXTERN Boolean GenericCompressDNAEx(VoidPtr from, 
+                           VoidPtr to,
+                           Uint4 seq_len,
+                           CompressRWFunc read_func, 
+                           CompressRWFunc write_func,
+                           Uint4Ptr PNTR lbytes,
+                           Boolean x_new)
+{
   Int4 total_read, chunk_used, seq_offset;
   Int4 in_index = 0, out_index = 0;
   Uint1Ptr out_buff, in_buff;
@@ -1601,9 +1705,10 @@ NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from,
   Uint1 bitctr_to, byte_to, byte_from, bitctr_from, residue_from;
   Uint1 lshift_to[5] = {0, 0, 2, 4, 6 };
   
-  Uint1    row_len =0, last_ambchar = INVALID_RESIDUE;
+  Int4     row_len =0;
+  Uint1    last_ambchar = INVALID_RESIDUE;
   Uint4Ptr ambchar;
-  Int4     ambsize = BSC_BUFF_CHUNK;
+  Int4     ambsize = 2*(BSC_BUFF_CHUNK/2); /* we need this to be a multiple of two for the new format. */
   
   if(from == NULL) /* Invalid ByteStore format */
     return FALSE;
@@ -1623,7 +1728,7 @@ NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from,
   byte_to = 0;
   bitctr_from = 0;
 
-  ambchar = (Uint4Ptr) MemNew(sizeof(Uint4)*(ambsize + 1)); /* all plus one */
+  ambchar = (Uint4Ptr) Nlm_Malloc(sizeof(Uint4)*(ambsize + 1)); /* all plus one */
   *ambchar = 0;
   
   seq_offset = chunk_used = in_index = total_read = 0;
@@ -1656,8 +1761,8 @@ NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from,
       
       /* We have to handle invalid residues in a good way */
       
-      if(*ambchar >= (Uint4)ambsize) { /* Reallocating buffer if necessary */
-        ambsize += BSC_BUFF_CHUNK; 
+      if(*ambchar >= (Uint4)(ambsize-1)) { /* Reallocating buffer if necessary */
+        ambsize += 2*(BSC_BUFF_CHUNK/2); /* we need this to be a multiple of two for the new format. */
         ambchar = (Uint4Ptr) Realloc(ambchar, (ambsize+1)*sizeof(Uint4));
       }
       
@@ -1666,31 +1771,64 @@ NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from,
        * First interer in array will be length of array 
        */
       
-      if(last_ambchar != residue_from || row_len == 15) {
-        (*ambchar)++;
-        ambchar[*ambchar] = 0;
-        ambchar[*ambchar] += residue_from;
-        ambchar[*ambchar] <<= 28;
-        ambchar[*ambchar] += seq_offset;
+      if (x_new && seq_len >= 0xFFFFFF)
+      {
+      	if(last_ambchar != residue_from || row_len == 0xFFF) {
+	 if ((*ambchar) == 0)
+       	 	(*ambchar)++;
+	 else
+	  	(*ambchar) += 2;
+       	 ambchar[*ambchar] = 0;
+       	 ambchar[*ambchar] += residue_from;
+       	 ambchar[*ambchar] <<= 28;
+	/* Put the seq_offset in the 2nd integer. */
+       	 ambchar[(*ambchar)+1] = seq_offset;
 
-        last_ambchar = residue_from;
-        row_len = 0;
-        /*  printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
+       	 last_ambchar = residue_from;
+       	 row_len = 0;
+       	 /*  printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
             residue_from, row_len, total_len-len, 
             RES_VALUE(ambchar[*ambchar]),
             RES_LEN(ambchar[*ambchar]), 
             RES_OFFSET(ambchar[*ambchar])); */  
-      } else {
-        (ambchar[*ambchar]) += LEN_STEP_MASK;
-        row_len++;         
+      	} else {
+       	 (ambchar[*ambchar]) += LEN_STEP_MASK_NEW;
+       	 row_len++;         
         /* printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
            residue_from, row_len, total_len-len, 
            RES_VALUE(ambchar[*ambchar]),
            RES_LEN(ambchar[*ambchar]), 
            RES_OFFSET(ambchar[*ambchar]));  */  
+      	}
       }
+      else
+      {
+      	if(last_ambchar != residue_from || row_len == 15) {
+       	 (*ambchar)++;
+       	 ambchar[*ambchar] = 0;
+       	 ambchar[*ambchar] += residue_from;
+       	 ambchar[*ambchar] <<= 28;
+       	 ambchar[*ambchar] += seq_offset;
+
+       	 last_ambchar = residue_from;
+       	 row_len = 0;
+       	 /*  printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
+            residue_from, row_len, total_len-len, 
+            RES_VALUE(ambchar[*ambchar]),
+            RES_LEN(ambchar[*ambchar]), 
+            RES_OFFSET(ambchar[*ambchar])); */  
+      	} else {
+       	 (ambchar[*ambchar]) += LEN_STEP_MASK;
+       	 row_len++;         
+        /* printf("Ambchar = %u(%u)(%u) : %u %u %u\n", 
+           residue_from, row_len, total_len-len, 
+           RES_VALUE(ambchar[*ambchar]),
+           RES_LEN(ambchar[*ambchar]), 
+           RES_OFFSET(ambchar[*ambchar]));  */  
+      	}
+       }
     } else {
-      last_ambchar = INVALID_RESIDUE; /* reset of last residue */
+      	last_ambchar = INVALID_RESIDUE; /* reset of last residue */
     }
     byte_tmp <<= lshift_to[bitctr_to];
     byte_to |= byte_tmp;
@@ -1729,6 +1867,11 @@ NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from,
     MemFree(ambchar);
     *lbytes = NULL;
   } else {
+    if (x_new && seq_len >= 0xFFFFFF) 
+    {
+       	(*ambchar)++;
+	*ambchar += 0x80000000;
+    }
     *lbytes = (Uint4Ptr)ambchar;
   }
   MemFree(in_buff);
@@ -2717,7 +2860,10 @@ NLM_EXTERN Int2 SeqIdBestRank (Uint1Ptr buf, Int2 num)
 	51,  /* 12 = gi */
 	60, /* 13 = ddbj */
 	60, /* 14 = prf */
-	60  /* 15 = pdb */
+	60, /* 15 = pdb */
+        60,  /* 16 = tpg */
+        60,  /* 17 = tpe */
+        60   /* 18 = tpd */
     };
 
 	if (buf == NULL) return NUM_SEQID;
@@ -2837,7 +2983,7 @@ NLM_EXTERN SeqIdPtr SeqIdSelect (SeqIdPtr sip, Uint1Ptr order, Int2 num)
 }
 
 	static char * delim = "|";
-	static char * txtid [16] = {		  /* FASTA_LONG formats */
+	static char * txtid [19] = {		  /* FASTA_LONG formats */
 		"???" ,		/* not-set = ??? */
 		"lcl",		/* local = lcl|integer or string */
 		"bbs",     /* gibbsq = bbs|integer */
@@ -2853,7 +2999,10 @@ NLM_EXTERN SeqIdPtr SeqIdSelect (SeqIdPtr sip, Uint1Ptr order, Int2 num)
 		"gi",		/* gi = gi|integer */
 		"dbj",		/* ddbj = dbj|accession|locus */
 		"prf",		/* prf = prf|accession|name */
-		"pdb" };	/* pdb = pdb|entry name (string)|chain id (char) */
+		"pdb",		/* pdb = pdb|entry name (string)|chain id (char) */
+		"tpg",          /* tpg = tpg|accession|name */
+		"tpe",          /* tpe = tpe|accession|name */
+		"tpd"};         /* tpd = tpd|accession|name */
 
 /*****************************************************************************
 *
@@ -2932,7 +3081,10 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 	255,  /* 12 = gi */
 	10, /* 13 = ddbj */
 	10, /* 14 = prf */
-	12  /* 15 = pdb */
+	12,  /* 15 = pdb */
+        10,  /* 16 = tpg */
+        10,  /* 17 = tpe */
+        10   /* 18 = tpd */
     };
 	static Uint1 general_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
  	33, /* 0 = not set */
@@ -2950,7 +3102,10 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 	255,  /* 12 = gi */
 	10, /* 13 = ddbj */
 	10, /* 14 = prf */
-	12  /* 15 = pdb */
+	12,  /* 15 = pdb */
+        10,  /* 16 = tpg */
+        10,  /* 17 = tpe */
+        10   /* 18 = tpd */
     };
     Boolean useGeneral = FALSE;
     TextSeqIdPtr tsip;
@@ -3042,6 +3197,9 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 			case SEQID_SWISSPROT:
 			case SEQID_PRF:
 			case SEQID_OTHER:
+			case SEQID_TPG:
+			case SEQID_TPE:
+			case SEQID_TPD:
     	        tsip = (TextSeqIdPtr)sip->data.ptrvalue;
 				if ((format == PRINTID_TEXTID_LOCUS) && (tsip->name != NULL)) {
 					Nlm_LabelCopyNext(&tmp, tsip->name, &buflen);
@@ -3100,6 +3258,9 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
         case SEQID_EMBL:
 	case SEQID_DDBJ:
 	case SEQID_OTHER:
+	case SEQID_TPG:
+	case SEQID_TPE:
+	case SEQID_TPD:
            tsip = (TextSeqIdPtr)(sip->data.ptrvalue);
 	   if (((tsip->version > 0) && (tsip->release == NULL)) && SHOWVERSION)
 		version = tsip->version;  /* show versions */
@@ -3234,7 +3395,7 @@ Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
       break;
    case SEQID_GENBANK: case SEQID_EMBL: case SEQID_PIR: 
    case SEQID_SWISSPROT: case SEQID_DDBJ: case SEQID_PRF: 
-   case SEQID_OTHER:
+   case SEQID_OTHER: case SEQID_TPG: case SEQID_TPE: case SEQID_TPD:
       textsip = (TextSeqIdPtr)sip->data.ptrvalue;
       if (textsip->accession) {
          id_len = StringLen(textsip->accession);
@@ -3317,7 +3478,10 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
 	1,  /* 12 = gi */
 	2, /* 13 = ddbj */
 	2, /* 14 = prf */
-	2  /* 15 = pdb */
+	2,  /* 15 = pdb */
+        2,  /* 16 = tpg */
+        2,  /* 17 = tpe */
+        2,  /* 18 = tpd */
 	};
 
 	if ((buf == NULL) || (*buf == '\0'))
@@ -3433,6 +3597,9 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
         	case SEQID_DDBJ:
 			case SEQID_PRF:
     	    case SEQID_OTHER:
+	    case SEQID_TPG:
+	    case SEQID_TPE:
+            case SEQID_TPD:
 				if ((*tokens[0] == '\0') && (*tokens[1] == '\0'))
 					goto erret;
 	            tsip = TextSeqIdNew();
@@ -3623,11 +3790,17 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
 			case SEQID_GENBANK:          /* these could be confused */
 			case SEQID_EMBL:
 			case SEQID_DDBJ:
+			case SEQID_TPG:
+			case SEQID_TPE:
+			case SEQID_TPD:
 				switch (b->choice)
 				{
 					case SEQID_GENBANK:   /* its ok */
 					case SEQID_EMBL:
 					case SEQID_DDBJ:
+					case SEQID_TPG:
+					case SEQID_TPE:
+					case SEQID_TPD:
 						break;  
 					default:
 						return SIC_DIFF;
@@ -3698,6 +3871,9 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
 		case SEQID_SWISSPROT:
 		case SEQID_PRF:
 		case SEQID_OTHER:
+		case SEQID_TPG:
+		case SEQID_TPE:
+		case SEQID_TPD:
 
             at = (TextSeqIdPtr)a->data.ptrvalue;
             bt = (TextSeqIdPtr)b->data.ptrvalue;
@@ -4491,7 +4667,7 @@ NLM_EXTERN Int4 SeqLocGetSegLens (SeqLocPtr slp, Int4Ptr lens, Int4 ctr, Boolean
 			slp2 = (SeqLocPtr)slp->data.ptrvalue;
 			while (slp2 != NULL)
 			{
-				ctr += SeqLocGetSegLens(slp2, lens, ctr, gaps);
+				ctr = SeqLocGetSegLens(slp2, lens, ctr, gaps);
 				slp2 = slp2->next;
 			}
             break;
@@ -4732,10 +4908,10 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
 		{ 4,4,4,4,4 }};
 	static Uint1 rettable2 [5][5] = {	  /* for developing return values */
 		{ 0,1,4,1,4 } ,					  /* when b is longer than a */
-		{ 1,1,4,1,4 } ,
+		{ 1,1,4,1,1 } ,
 		{ 4,4,2,2,4 } ,
 		{ 1,1,4,3,4 } ,
-		{ 4,4,4,4,4 }};
+		{ 4,1,4,4,4 }};
 
     if ((a == NULL) || (b == NULL))
         return retval;
@@ -7786,6 +7962,16 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccessionEx(CharPtr accession, Uint4 versi
                         sip->choice = SEQID_EMBL;
                     } else if (ACCN_IS_DDBJ(status)) {
                         sip->choice = SEQID_DDBJ;
+                    } else if (ACCN_IS_TPA(status)) {
+                    	if (status == ACCN_NCBI_TPA || status == ACCN_NCBI_TPA_PROT) {
+                        	sip->choice = SEQID_TPG;
+                    	} else if (status == ACCN_EMBL_TPA || status == ACCN_EMBL_TPA_PROT) {
+                        	sip->choice = SEQID_TPE;
+                    	} else if (status == ACCN_DDBJ_TPA || status == ACCN_DDBJ_TPA_PROT) {
+                        	sip->choice = SEQID_TPD;
+                    	} else { /* default TPA */
+                        	sip->choice = SEQID_TPG;
+                    	}
                     } else /* default */
                         sip->choice = SEQID_GENBANK;
                 }
@@ -8329,7 +8515,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"AW") == 0) || 
 	      (StringICmp(temp,"BE") == 0) || 
 	      (StringICmp(temp,"BF") == 0) || 
-	      (StringICmp(temp,"BI") == 0) ) {             /* NCBI EST */
+	      (StringICmp(temp,"BI") == 0) || 
+	      (StringICmp(temp,"BM") == 0) ) {             /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"AC") == 0)) {      /* NCBI HTGS */
               retcode = ACCN_NCBI_HTGS;
@@ -8353,16 +8540,19 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_PATENT;
           } else if((StringICmp(temp,"BC")==0)) {         /* NCBI long cDNA project : MGC */
               retcode = ACCN_NCBI_cDNA;
-          } else if((StringICmp(temp,"BK")==0)) {         /* NCBI third-party annotation */
+          } else if((StringICmp(temp,"BK")==0) ||         /* NCBI third-party annotation */
+                    (StringICmp(temp,"BL") == 0)) {
               retcode = ACCN_NCBI_TPA;
+          } else if ((StringICmp(temp,"BN") == 0)) {      /* EMBL third-party annotation */
+              retcode = ACCN_EMBL_TPA;
           } else if ((StringICmp(temp,"AJ") == 0) ||
-                     (StringICmp(temp,"AM") == 0)) {     /* EMBL's direct submission */
+                     (StringICmp(temp,"AM") == 0)) {     /* EMBL direct submission */
               retcode = ACCN_EMBL_DIRSUB;
-          } else if ((StringICmp(temp,"AL") == 0)) {      /* EMBL's genome project data*/
+          } else if ((StringICmp(temp,"AL") == 0)) {      /* EMBL genome project data */
               retcode = ACCN_EMBL_GENOME;
-          } else if ((StringICmp(temp,"AN") == 0)) {      /* EMBL's CON division */
+          } else if ((StringICmp(temp,"AN") == 0)) {      /* EMBL CON division */
               retcode = ACCN_EMBL_CON;
-          } else if ((StringICmp(temp,"AX") == 0)) {      /* EMBL's patent division */
+          } else if ((StringICmp(temp,"AX") == 0)) {      /* EMBL patent division */
               retcode = ACCN_EMBL_PATENT;
           } else if ((StringICmp(temp,"AT") == 0) || 
                      (StringICmp(temp,"AU") == 0) ||

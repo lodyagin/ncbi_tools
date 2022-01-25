@@ -31,6 +31,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objmime.c,v $
+* Revision 6.11  2001/11/21 16:38:23  thiessen
+* move cn3d stuff into bundle
+*
+* Revision 6.10  2001/11/21 14:25:41  thiessen
+* remove BisotrucOrId
+*
+* Revision 6.9  2001/11/20 15:59:34  thiessen
+* add imports to BundleSeqsAligns
+*
+* Revision 6.8  2001/11/16 14:54:26  thiessen
+* add new general type
+*
 * Revision 6.7  2001/06/21 14:44:29  thiessen
 * add new user annotations
 *
@@ -122,6 +134,9 @@ NcbiMimeAsn1Free(ValNodePtr anp)
    case NcbiMimeAsn1_strucseqs:
       BiostrucSeqsFree(anp -> data.ptrvalue);
       break;
+   case NcbiMimeAsn1_general:
+      BiostrucSeqsAlignsCddFree(anp -> data.ptrvalue);
+      break;
    }
    return MemFree(anp);
 }
@@ -197,6 +212,10 @@ NcbiMimeAsn1AsnRead(AsnIoPtr aip, AsnTypePtr orig)
    else if (atp == NCBI_MIME_ASN1_strucseqs) {
       choice = NcbiMimeAsn1_strucseqs;
       func = (AsnReadFunc) BiostrucSeqsAsnRead;
+   }
+   else if (atp == NCBI_MIME_ASN1_general) {
+      choice = NcbiMimeAsn1_general;
+      func = (AsnReadFunc) BiostrucSeqsAlignsCddAsnRead;
    }
    anp->choice = choice;
    if (func != NULL)
@@ -278,6 +297,10 @@ NcbiMimeAsn1AsnWrite(NcbiMimeAsn1Ptr anp, AsnIoPtr aip, AsnTypePtr orig)
    case NcbiMimeAsn1_strucseqs:
       writetype = NCBI_MIME_ASN1_strucseqs;
       func = (AsnWriteFunc) BiostrucSeqsAsnWrite;
+      break;
+   case NcbiMimeAsn1_general:
+      writetype = NCBI_MIME_ASN1_general;
+      func = (AsnWriteFunc) BiostrucSeqsAlignsCddAsnWrite;
       break;
    }
    if (writetype != NULL) {
@@ -1521,3 +1544,548 @@ erret:
    return retval;
 }
 
+/**************************************************
+*
+*    BiostrucSeqsAlignsCddNew()
+*
+**************************************************/
+NLM_EXTERN
+BiostrucSeqsAlignsCddPtr LIBCALL
+BiostrucSeqsAlignsCddNew(void)
+{
+   BiostrucSeqsAlignsCddPtr ptr = MemNew((size_t) sizeof(BiostrucSeqsAlignsCdd));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    BiostrucSeqsAlignsCddFree()
+*
+**************************************************/
+NLM_EXTERN
+BiostrucSeqsAlignsCddPtr LIBCALL
+BiostrucSeqsAlignsCddFree(BiostrucSeqsAlignsCddPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqAlignData_seq_align_dataFree(ptr -> SeqAlignData_seq_align_data);
+   AsnGenericUserSeqOfFree(ptr -> structures, (AsnOptFreeFunc) BiostrucFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SeqAlignData_seq_align_dataFree()
+*
+**************************************************/
+static
+SeqAlignData_seq_align_dataPtr LIBCALL
+SeqAlignData_seq_align_dataFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case SeqAlignData_seq_align_data_bundle:
+      BundleSeqsAlignsFree(anp -> data.ptrvalue);
+      break;
+   case SeqAlignData_seq_align_data_cdd:
+      CddFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    BiostrucSeqsAlignsCddAsnRead()
+*
+**************************************************/
+NLM_EXTERN
+BiostrucSeqsAlignsCddPtr LIBCALL
+BiostrucSeqsAlignsCddAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   BiostrucSeqsAlignsCddPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmimeAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* BiostrucSeqsAlignsCdd ::= (self contained) */
+      atp = AsnReadId(aip, amp, BIOSTRUC_SEQS_ALIGNS_CDD);
+   } else {
+      atp = AsnLinkType(orig, BIOSTRUC_SEQS_ALIGNS_CDD);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = BiostrucSeqsAlignsCddNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SEQS_ALIGNS_CDD_seq_align_data) {
+      ptr -> SeqAlignData_seq_align_data = SeqAlignData_seq_align_dataAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SEQS_ALIGNS_CDD_structures) {
+      ptr -> structures = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) BiostrucAsnRead, (AsnOptFreeFunc) BiostrucFree);
+      if (isError && ptr -> structures == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = BiostrucSeqsAlignsCddFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SeqAlignData_seq_align_dataAsnRead()
+*
+**************************************************/
+static
+SeqAlignData_seq_align_dataPtr LIBCALL
+SeqAlignData_seq_align_dataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! objmimeAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SeqAlignData_seq_align_data ::= (self contained) */
+      atp = AsnReadId(aip, amp, SEQS_ALIGNS_CDD_seq_align_data);
+   } else {
+      atp = AsnLinkType(orig, SEQS_ALIGNS_CDD_seq_align_data);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == CDD_seq_align_data_bundle) {
+      choice = SeqAlignData_seq_align_data_bundle;
+      func = (AsnReadFunc) BundleSeqsAlignsAsnRead;
+   }
+   else if (atp == ALIGNS_CDD_seq_align_data_cdd) {
+      choice = SeqAlignData_seq_align_data_cdd;
+      func = (AsnReadFunc) CddAsnRead;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    BiostrucSeqsAlignsCddAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL
+BiostrucSeqsAlignsCddAsnWrite(BiostrucSeqsAlignsCddPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmimeAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, BIOSTRUC_SEQS_ALIGNS_CDD);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> SeqAlignData_seq_align_data != NULL) {
+      if ( ! SeqAlignData_seq_align_dataAsnWrite(ptr -> SeqAlignData_seq_align_data, aip, SEQS_ALIGNS_CDD_seq_align_data)) {
+         goto erret;
+      }
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> structures, (AsnWriteFunc) BiostrucAsnWrite, aip, SEQS_ALIGNS_CDD_structures, SEQS_ALIGNS_CDD_structures_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    SeqAlignData_seq_align_dataAsnWrite()
+*
+**************************************************/
+static Boolean LIBCALL
+SeqAlignData_seq_align_dataAsnWrite(SeqAlignData_seq_align_dataPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmimeAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, SEQS_ALIGNS_CDD_seq_align_data);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case SeqAlignData_seq_align_data_bundle:
+      writetype = CDD_seq_align_data_bundle;
+      func = (AsnWriteFunc) BundleSeqsAlignsAsnWrite;
+      break;
+   case SeqAlignData_seq_align_data_cdd:
+      writetype = ALIGNS_CDD_seq_align_data_cdd;
+      func = (AsnWriteFunc) CddAsnWrite;
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    BundleSeqsAlignsNew()
+*
+**************************************************/
+NLM_EXTERN
+BundleSeqsAlignsPtr LIBCALL
+BundleSeqsAlignsNew(void)
+{
+   BundleSeqsAlignsPtr ptr = MemNew((size_t) sizeof(BundleSeqsAligns));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    BundleSeqsAlignsFree()
+*
+**************************************************/
+NLM_EXTERN
+BundleSeqsAlignsPtr LIBCALL
+BundleSeqsAlignsFree(BundleSeqsAlignsPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericChoiceSeqOfFree(ptr -> sequences, (AsnOptFreeFunc) SeqEntryFree);
+   AsnGenericUserSeqOfFree(ptr -> seqaligns, (AsnOptFreeFunc) SeqAnnotFree);
+   BiostrucAnnotSetFree(ptr -> strucaligns);
+   AsnGenericUserSeqOfFree(ptr -> imports, (AsnOptFreeFunc) SeqAnnotFree);
+   Cn3dStyleDictionaryFree(ptr -> style_dictionary);
+   Cn3dUserAnnotationsFree(ptr -> user_annotations);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    BundleSeqsAlignsAsnRead()
+*
+**************************************************/
+NLM_EXTERN
+BundleSeqsAlignsPtr LIBCALL
+BundleSeqsAlignsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   BundleSeqsAlignsPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmimeAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* BundleSeqsAligns ::= (self contained) */
+      atp = AsnReadId(aip, amp, BUNDLE_SEQS_ALIGNS);
+   } else {
+      atp = AsnLinkType(orig, BUNDLE_SEQS_ALIGNS);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = BundleSeqsAlignsNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == BUNDLE_SEQS_ALIGNS_sequences) {
+      ptr -> sequences = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqEntryAsnRead, (AsnOptFreeFunc) SeqEntryFree);
+      if (isError && ptr -> sequences == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BUNDLE_SEQS_ALIGNS_seqaligns) {
+      ptr -> seqaligns = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqAnnotAsnRead, (AsnOptFreeFunc) SeqAnnotFree);
+      if (isError && ptr -> seqaligns == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BUNDLE_SEQS_ALIGNS_strucaligns) {
+      ptr -> strucaligns = BiostrucAnnotSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BUNDLE_SEQS_ALIGNS_imports) {
+      ptr -> imports = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqAnnotAsnRead, (AsnOptFreeFunc) SeqAnnotFree);
+      if (isError && ptr -> imports == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SEQS_ALIGNS_style_dictionary) {
+      ptr -> style_dictionary = Cn3dStyleDictionaryAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SEQS_ALIGNS_user_annotations) {
+      ptr -> user_annotations = Cn3dUserAnnotationsAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = BundleSeqsAlignsFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    BundleSeqsAlignsAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL
+BundleSeqsAlignsAsnWrite(BundleSeqsAlignsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmimeAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, BUNDLE_SEQS_ALIGNS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> sequences, (AsnWriteFunc) SeqEntryAsnWrite, aip, BUNDLE_SEQS_ALIGNS_sequences, BUNDLE_SEQS_ALIGNS_sequences_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> seqaligns, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BUNDLE_SEQS_ALIGNS_seqaligns, BUNDLE_SEQS_ALIGNS_seqaligns_E);
+   if (ptr -> strucaligns != NULL) {
+      if ( ! BiostrucAnnotSetAsnWrite(ptr -> strucaligns, aip, BUNDLE_SEQS_ALIGNS_strucaligns)) {
+         goto erret;
+      }
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> imports, (AsnWriteFunc) SeqAnnotAsnWrite, aip, BUNDLE_SEQS_ALIGNS_imports, BUNDLE_SEQS_ALIGNS_imports_E);
+   if (ptr -> style_dictionary != NULL) {
+      if ( ! Cn3dStyleDictionaryAsnWrite(ptr -> style_dictionary, aip, SEQS_ALIGNS_style_dictionary)) {
+         goto erret;
+      }
+   }
+   if (ptr -> user_annotations != NULL) {
+      if ( ! Cn3dUserAnnotationsAsnWrite(ptr -> user_annotations, aip, SEQS_ALIGNS_user_annotations)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}

@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket.c,v 6.32 2001/06/20 21:26:18 vakatov Exp $
+/*  $Id: ncbi_socket.c,v 6.38 2001/12/03 21:35:32 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,34 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.c,v $
+ * Revision 6.38  2001/12/03 21:35:32  vakatov
+ * + SOCK_IsServerSide()
+ * SOCK_Reconnect() - check against reconnect of server-side socket to its peer
+ *
+ * Revision 6.37  2001/11/07 19:00:11  vakatov
+ * LSOCK_Accept() -- minor adjustments
+ *
+ * Revision 6.36  2001/08/31 16:00:58  vakatov
+ * [MSWIN] "setsockopt()" -- Start using SO_REUSEADDR on MS-Win.
+ * [MAC]   "setsockopt()" -- Do not use it on MAC whatsoever (as it is not
+ *         implemented in the M.I.T. socket emulation lib).
+ *
+ * Revision 6.35  2001/08/29 17:32:56  juran
+ * Define POSIX macros missing from Universal Interfaces 3.4
+ * in terms of the 'proper' constants.
+ * Complain about unsupported platforms at compile-time, not runtime.
+ *
+ * Revision 6.34  2001/07/11 16:16:39  vakatov
+ * Fixed comments for HAVE_GETHOSTBYNAME_R, HAVE_GETHOSTBYADDR_R; other
+ * minor (style and messages) fixes
+ *
+ * Revision 6.33  2001/07/11 00:54:35  vakatov
+ * SOCK_gethostbyname() and SOCK_gethostbyaddr() -- now can work with
+ * gethostbyname_r() with 6 args and gethostbyaddr_r() with 8 args
+ * (in addition to those with 5 and 7 args, repectively).
+ * [NCBI_OS_IRIX] s_Select() -- no final ASSERT() if built on IRIX.
+ * SOCK_gethostbyaddr() -- added missing CORE_UNLOCK.
+ *
  * Revision 6.32  2001/06/20 21:26:18  vakatov
  * As per A.Grichenko/A.Lavrentiev report:
  *   SOCK_Shutdown() -- typo fixed (use "how" rather than "x_how").
@@ -71,7 +99,8 @@
  * Cleaned up after R6.23 (and get rid of the C++ style comments)
  *
  * Revision 6.23  2001/04/03 20:30:15  juran
- * Changes to work with OT sockets.  Not all of pjc's changes are here -- I will test them shortly.
+ * Changes to work with OT sockets.
+ * Not all of pjc's changes are here -- I will test them shortly.
  *
  * Revision 6.22  2001/03/29 21:15:36  lavr
  * More accurate length calculation in 'SOCK_gethostbyaddr'
@@ -164,14 +193,22 @@
 #endif
 
 
-/* Uncomment this (or specify "-DHAVE_GETHOSTBYNAME_R=1") only if:
+/* Uncomment this (or specify "-DHAVE_GETHOSTBY***_R=") only if:
  * 0) you are compiling this outside of the NCBI C or C++ Toolkits
  *    (USE_NCBICONF is not #define'd), and
  * 1) your platform has "gethostbyname_r()", and
  * 2) you are going to use this API code in multi-thread application, and
  * 3) "gethostbyname()" gets called somewhere else in your code
  */
-/* #define HAVE_GETHOSTBYNAME_R 1 */
+
+/*   Solaris: */
+/* #define HAVE_GETHOSTBYNAME_R 5 */
+/* #define HAVE_GETHOSTBYADDR_R 7 */
+
+/*   Linux, IRIX: */
+/* #define HAVE_GETHOSTBYNAME_R 6 */
+/* #define HAVE_GETHOSTBYADDR_R 8 */
+
 
 
 /* Platform-specific system headers
@@ -281,6 +318,10 @@ typedef int TSOCK_Handle;
 
 #elif defined(NCBI_OS_MAC)
 
+#  if TARGET_API_MAC_CARBON
+#    define O_NONBLOCK kO_NONBLOCK
+#  endif
+
 typedef int TSOCK_Handle;
 #  define SOCK_INVALID        (-1)
 #  ifndef SOCK_ERRNO
@@ -342,6 +383,8 @@ typedef struct SOCK_tag {
     unsigned int id;        /* the internal ID (see also "s_ID_Counter") */
     size_t       n_read;
     size_t       n_written;
+
+    int/*bool*/  is_server_side; /* was created by LSOCK_Accept() */
 } SOCK_struct;
 
 
@@ -372,7 +415,7 @@ static void s_DoLogData
             (unsigned int) sock->id,
             (event == eIO_Read) ? "read" : "written",
             (unsigned long) ((event == eIO_Read) ?
-            sock->n_read : sock->n_written));
+                             sock->n_read : sock->n_written));
     CORE_DATA(data, size, message);
 }
 
@@ -514,16 +557,8 @@ static int/*bool*/ s_SetNonblock(TSOCK_Handle sock, int/*bool*/ nonblock)
                   nonblock ?
                   fcntl(sock, F_GETFL, 0) | O_NONBLOCK :
                   fcntl(sock, F_GETFL, 0) & (int) ~O_NONBLOCK) != -1);
-/*	removed 2/22/01 pjc
-#elif defined(NCBI_OS_MAC)
-    return (fcntl(sock, F_SETFL,
-                  nonblock ?
-                  fcntl(sock, F_GETFL, 0) | O_NDELAY :
-                  fcntl(sock, F_GETFL, 0) & (int) ~O_NDELAY) != -1);
- */
 #else
-    assert(0);
-    return 0/*false*/;
+#	error "Unsupported platform"
 #endif
 }
 
@@ -534,7 +569,7 @@ static EIO_Status s_Select(TSOCK_Handle          sock,
                            EIO_Event             event,
                            const struct timeval* timeout)
 {
-    int n_dfs;
+    int n_fds;
     fd_set fds, *r_fds, *w_fds;
 
     /* just checking */
@@ -556,21 +591,27 @@ static EIO_Status s_Select(TSOCK_Handle          sock,
             tmout = *timeout;
         FD_ZERO(&fds);       FD_ZERO(&e_fds);
         FD_SET(sock, &fds);  FD_SET(sock, &e_fds);
-        n_dfs = select(SOCK_NFDS(sock), r_fds, w_fds, &e_fds,
+        n_fds = select(SOCK_NFDS(sock), r_fds, w_fds, &e_fds,
                        timeout ? &tmout : 0);
-        assert(-1 <= n_dfs  &&  n_dfs <= 2);
-        if ((n_dfs < 0  &&  SOCK_ERRNO != SOCK_EINTR)  ||
+        assert(-1 <= n_fds  &&  n_fds <= 2);
+        if ((n_fds < 0  &&  SOCK_ERRNO != SOCK_EINTR)  ||
             FD_ISSET(sock, &e_fds)) {
             return eIO_Unknown;
         }
-    } while (n_dfs < 0);
+    } while (n_fds < 0);
 
     /* timeout has expired */
-    if (n_dfs == 0)
+    if (n_fds == 0)
         return eIO_Timeout;
 
-    /* success;  can i/o now */
+#if !defined(NCBI_OS_IRIX)
+    /* funny thing -- on IRIX, it may set "n_fds" to e.g. 1, and
+     * forget to set the bit in "fds" and/or "e_fds"!
+     */
     assert(FD_ISSET(sock, &fds));
+#endif
+
+    /* success;  can i/o now */
     return eIO_Success;
 }
 
@@ -598,16 +639,22 @@ extern EIO_Status LSOCK_Create(unsigned short port,
         return eIO_Unknown;
     }
 
-#ifdef NCBI_OS_UNIX
+    /* Let more than one "bind()" use the same address.
+     *
+     * It was confirmed(?) that at least under Solaris 2.5 this precaution:
+     * 1) makes the address to be released immediately after the process
+     *    termination;
+     * 2) still issue EADDINUSE error on the attempt to bind() to the
+     *    same address being in-use by a living process(if SOCK_STREAM).
+     */
+#if defined(NCBI_OS_UNIX)  ||  defined(NCBI_OS_MSWIN)
+    /* setsockopt() is not implemented for MAC (in MIT socket emulation lib) */
     {{
-        /* Let more than one "bind()" to use the same address.
-         * It was affirmed(?) that at least under Solaris 2.5 this precaution:
-         * 1) makes the address to be released immediately after the process
-         *    termination
-         * 2) still issue EADDINUSE error on the attempt to bind() to the
-         *    same address being in-use by a living process(if SOCK_STREAM)
-         */
+#  if defined(NCBI_OS_MSWIN)
+        BOOL reuse_addr = TRUE;
+#  else
         int reuse_addr = 1;
+#  endif
         if (setsockopt(x_lsock, SOL_SOCKET, SO_REUSEADDR, 
                        (const char*) &reuse_addr, sizeof(reuse_addr)) != 0) {
             CORE_LOG_ERRNO(SOCK_ERRNO, eLOG_Error,
@@ -676,7 +723,7 @@ extern EIO_Status LSOCK_Accept(LSOCK           lsock,
         typedef int       SOCK_socklen_t;
 #endif
         struct sockaddr_in addr;
-	SOCK_socklen_t addrlen = sizeof(struct sockaddr);
+        SOCK_socklen_t addrlen = (SOCK_socklen_t) sizeof(addr);
         if ((x_sock = accept(lsock->sock, (struct sockaddr*) &addr, &addrlen))
             == SOCK_INVALID) {
             CORE_LOG_ERRNO(SOCK_ERRNO, eLOG_Error,
@@ -700,6 +747,7 @@ extern EIO_Status LSOCK_Accept(LSOCK           lsock,
     (*sock)->log_data = eDefault;
     (*sock)->r_on_w   = eDefault;
     (*sock)->id = ++s_ID_Counter * 1000;
+    (*sock)->is_server_side = 1/*true*/;
     return eIO_Success;
 }
 
@@ -782,10 +830,10 @@ static EIO_Status s_Connect(SOCK            sock,
     /* Get address of the remote host (assume the same host if it is NULL) */
     assert(host  ||  sock->host);
     x_host = host ? SOCK_gethostbyname(host) : sock->host;
-    if (!x_host) {
+    if ( !x_host ) {
         if ( CORE_GetLOG() ) {
             char str[128];
-            sprintf(str, "[SOCK::s_Connect]  Failed SOCK_gethostaddr(%.64s)",
+            sprintf(str, "[SOCK::s_Connect]  Failed SOCK_gethostbyname(%.64s)",
                     host ? host : "");
             CORE_LOG(eLOG_Error, str);
         }
@@ -895,6 +943,8 @@ static EIO_Status s_Close(SOCK sock)
     }
 
     /* Set the close()'s linger period be equal to the close timeout */
+#if defined(NCBI_OS_UNIX)  ||  defined(NCBI_OS_MSWIN)
+    /* setsockopt() is not implemented for MAC (in MIT socket emulation lib) */
     if ( sock->c_timeout ) {
         struct linger lgr;
         lgr.l_onoff  = 1;
@@ -902,9 +952,10 @@ static EIO_Status s_Close(SOCK sock)
         if (setsockopt(sock->sock, SOL_SOCKET, SO_LINGER, 
                        (char*) &lgr, sizeof(lgr)) != 0) {
             CORE_LOG_ERRNO(SOCK_ERRNO, eLOG_Warning,
-                           "[SOCK::s_Close]  Failed setsockopt()");
+                           "[SOCK::s_Close]  Failed setsockopt(SO_LINGER)");
         }
     }
+#endif
 
     /* Shutdown in both directions */
     if (SOCK_Shutdown(sock, eIO_Write) != eIO_Success) {
@@ -1268,6 +1319,16 @@ extern EIO_Status SOCK_Reconnect(SOCK            sock,
         s_Close(sock);
     }
 
+    /* Special treatment for server-side socket */
+    if ( sock->is_server_side ) {
+        if (!host  ||  !port) {
+            CORE_LOG(eLOG_Error, "[SOCK_Reconnect]  Attempt to reconnect "
+                     "server-side socket as client one to its peer address");
+            return eIO_InvalidArg;
+        }
+        sock->is_server_side = 0/*false*/;
+    }
+
     /* Connect */
     sock->id++;
     return s_Connect(sock, host, port, timeout);
@@ -1337,8 +1398,8 @@ extern EIO_Status SOCK_Wait(SOCK            sock,
         }
         if (sock->r_status == eIO_Closed) {
             CORE_LOGF(eLOG_Warning,
-                     ("[SOCK_Wait(Read)]  Attempt to wait on %s socket",
-                      sock->is_eof ? "closed" : "shutdown"));
+                      ("[SOCK_Wait(Read)]  Attempt to wait on %s socket",
+                       sock->is_eof ? "closed" : "shutdown"));
             return eIO_Closed;
         }
         break;
@@ -1360,8 +1421,8 @@ extern EIO_Status SOCK_Wait(SOCK            sock,
         }
         if (sock->r_status == eIO_Closed) {
             CORE_LOGF(eLOG_Note,
-                     ("[SOCK_Wait(RW)]  Attempt to wait on %s socket",
-                      sock->is_eof ? "closed" : "R-shutdown"));
+                      ("[SOCK_Wait(RW)]  Attempt to wait on %s socket",
+                       sock->is_eof ? "closed" : "R-shutdown"));
             event = eIO_Write;
             break;
         }
@@ -1560,6 +1621,12 @@ extern void SOCK_SetReadOnWrite(SOCK sock, ESwitch on_off)
 }
 
 
+extern int/*bool*/ SOCK_IsServerSide(SOCK sock)
+{
+    return sock->is_server_side;
+}
+
+
 extern int SOCK_gethostname(char*  name,
                             size_t namelen)
 {
@@ -1614,7 +1681,7 @@ extern unsigned int SOCK_gethostbyname(const char* hostname)
 
     verify(s_Initialized  ||  SOCK_InitializeAPI() == eIO_Success);
 
-    if (!hostname) {
+    if ( !hostname ) {
         if (SOCK_gethostname(buf, sizeof(buf)) != 0)
             return 0;
         hostname = buf;
@@ -1622,27 +1689,38 @@ extern unsigned int SOCK_gethostbyname(const char* hostname)
 
     host = inet_addr(hostname);
     if (host == htonl(INADDR_NONE)) {
-        struct hostent* hp;
+        struct hostent* he;
 #if defined(HAVE_GETHOSTBYNAME_R)
-        struct hostent x_hp;
-        char x_buf[1024];
-        int  x_err;
-        
-        hp = gethostbyname_r(hostname, &x_hp, x_buf, sizeof(x_buf), &x_err);
-        if ( hp )
-            memcpy(&host, hp->h_addr, sizeof(host));
-        else
-            host = 0;
+        struct hostent x_he;
+        char           x_buf[1024];
+        int            x_err;
+#  if (HAVE_GETHOSTBYNAME_R == 5)
+        he = gethostbyname_r(hostname, &x_he, x_buf, sizeof(x_buf),
+                             &x_err);
+#  elif (HAVE_GETHOSTBYNAME_R == 6)
+        if (gethostbyname_r(hostname, &x_he, x_buf, sizeof(x_buf),
+                            &he, &x_err) != 0) {
+            assert(he == 0);
+            he = 0;
+        }
+#  else
+#    error "Unknown HAVE_GETHOSTBYNAME_R value"
+#  endif
 #else
         CORE_LOCK_WRITE;
-        hp = gethostbyname(hostname);
-        if ( hp )
-            memcpy(&host, hp->h_addr, sizeof(host));
-        else
+        he = gethostbyname(hostname);
+#endif
+        if ( he ) {
+            memcpy(&host, he->h_addr, sizeof(host));
+        } else {
             host = 0;
+        }
+
+#if !defined(HAVE_GETHOSTBYNAME_R)
         CORE_UNLOCK;
 #endif
     }
+
     return host;
 }
 
@@ -1653,28 +1731,43 @@ extern char* SOCK_gethostbyaddr(unsigned int host,
 {
     verify(s_Initialized  ||  SOCK_InitializeAPI() == eIO_Success);
 
-    if (host && name && namelen) {
-        struct hostent* hp;
+    if (host  &&  name  &&  namelen) {
+        struct hostent* he;
 #if defined(HAVE_GETHOSTBYADDR_R)
-        struct hostent x_hp;
-        char x_buf[1024];
-        int x_errno;
+        struct hostent x_he;
+        char           x_buf[1024];
+        int            x_errno;
 
-        hp = gethostbyaddr_r((char*) &host, sizeof(host), AF_INET,
-                             &x_hp, x_buf, sizeof(x_buf), &x_errno);
-        if (!hp || strlen(hp->h_name) > namelen - 1)
-            return 0;
-        strncpy(name, hp->h_name, namelen - 1);
+#  if (HAVE_GETHOSTBYADDR_R == 7)
+        he = gethostbyaddr_r((char*) &host, sizeof(host), AF_INET, &x_he,
+                             x_buf, sizeof(x_buf), &x_errno);
+#  elif (HAVE_GETHOSTBYADDR_R == 8)
+        if (gethostbyaddr_r((char*) &host, sizeof(host), AF_INET, &x_he,
+                            x_buf, sizeof(x_buf), &he, &x_errno) != 0) {
+            assert(he == 0);
+            he = 0;
+        }
+#  else
+#    error "Unknown HAVE_GETHOSTBYADDR_R value"
+#  endif
 #else
         CORE_LOCK_WRITE;
-        hp = gethostbyaddr((char*) &host, sizeof(host), AF_INET);
-        if (!hp || strlen(hp->h_name) > namelen - 1)
+        he = gethostbyaddr((char*) &host, sizeof(host), AF_INET);
+#endif
+
+        if (!he  ||  strlen(he->h_name) > namelen - 1) {
+#if !defined(HAVE_GETHOSTBYADDR_R)
+            CORE_UNLOCK;
+#endif
             return 0;
-        strncpy(name, hp->h_name, namelen - 1);
+        }
+        strncpy(name, he->h_name, namelen - 1);
+#if !defined(HAVE_GETHOSTBYADDR_R)
         CORE_UNLOCK;
 #endif
-        name[namelen - 1] = 0;
+        name[namelen - 1] = '\0';
         return name;
     }
+
     return 0;
 }

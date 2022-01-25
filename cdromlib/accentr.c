@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: accentr.c,v 6.6 2000/01/12 20:17:12 vakatov Exp $
+ * RCS $Id: accentr.c,v 6.9 2001/09/04 23:28:55 juran Exp $
  *
  * Author:  Ostell
  *
@@ -47,43 +47,52 @@
  * 05-19-95 Schuler     Added rcs Log directive for automatic insertion of
  *                      modification comments.
  *
- * Revision $Log: accentr.c,v $
- * Revision Revision 6.6  2000/01/12 20:17:12  vakatov
- * Revision Get rid of the LIBCALL specifier at EntrezSeqEntryGet()
- * Revision
- * Revision Revision 6.5  1999/01/06 14:18:35  grisha
- * Revision add defines to switch ID0/ID1 usage
- * Revision
- * Revision Revision 6.4  1998/12/08 20:38:47  kans
- * Revision EntrezGIForSeqIdFunc aborts on local, other, general, gi, notset before connecting to Entrez network server
- * Revision
- * Revision Revision 6.3  1998/06/12 19:19:06  kans
- * Revision fixed unix compiler warnings
- * Revision
- * Revision Revision 6.2  1998/02/23 17:59:38  kans
- * Revision mesh and taxonomy hierarchy modes both call NetEntHierarchyGet(term,db,fld)
- * Revision
- * Revision Revision 6.1  1997/09/19 13:16:19  kans
- * Revision removed or ifdef unused variables
- * Revision
- * Revision Revision 6.0  1997/08/25 18:12:26  madden
- * Revision Revision changed to 6.0
- * Revision
- * Revision Revision 5.38  1997/07/28 13:30:35  ostell
- * Revision Moved GetUniGeneIDForSeqId() to seqmgr.c
- * Revision
- * Revision Revision 5.37  1997/07/09 19:25:57  kuzio
- * Revision kludge for corn; and tidied NCBICG
- * Revision
- * Revision Revision 5.36  1997/06/26 21:55:10  vakatov
- * Revision [PC] DLL'd "ncbicdr.lib", "ncbiacc.lib", "ncbinacc.lib" and "ncbicacc.lib"
- * Revision
- * Revision Revision 5.35  1997/05/22 20:35:44  epstein
- * Revision add error strings when fetching Medline and Sequence entries, to identify which UID encountered the problem
- * Revision
- * Revision Revision 5.34  1997/04/18 16:01:08  shavirin
- * Revision Removed annoying compiler messages "Statement not reached"
- * Revision
+ * $Log: accentr.c,v $
+ * Revision 6.9  2001/09/04 23:28:55  juran
+ * Always assume network access in Mac OS.
+ *
+ * Revision 6.8  2001/08/16 19:40:33  kans
+ * reverted to not assume network - UNIX still does cdrom access compile - and cleaned up junk in log instructions
+ *
+ * Revision 6.7  2001/08/15 20:57:07  juran
+ * Always assume network access.
+ *
+ * Revision 6.6  2000/01/12 20:17:12  vakatov
+ * Get rid of the LIBCALL specifier at EntrezSeqEntryGet()
+ *
+ * Revision 6.5  1999/01/06 14:18:35  grisha
+ * add defines to switch ID0/ID1 usage
+ *
+ * Revision 6.4  1998/12/08 20:38:47  kans
+ * EntrezGIForSeqIdFunc aborts on local, other, general, gi, notset before connecting to Entrez network server
+ *
+ * Revision 6.3  1998/06/12 19:19:06  kans
+ * fixed unix compiler warnings
+ *
+ * Revision 6.2  1998/02/23 17:59:38  kans
+ * mesh and taxonomy hierarchy modes both call NetEntHierarchyGet(term,db,fld)
+ *
+ * Revision 6.1  1997/09/19 13:16:19  kans
+ * removed or ifdef unused variables
+ *
+ * Revision 6.0  1997/08/25 18:12:26  madden
+ * changed to 6.0
+ *
+ * Revision 5.38  1997/07/28 13:30:35  ostell
+ * Moved GetUniGeneIDForSeqId() to seqmgr.c
+ *
+ * Revision 5.37  1997/07/09 19:25:57  kuzio
+ * kludge for corn; and tidied NCBICG
+ *
+ * Revision 5.36  1997/06/26 21:55:10  vakatov
+ * [PC] DLL'd "ncbicdr.lib", "ncbiacc.lib", "ncbinacc.lib" and "ncbicacc.lib"
+ *
+ * Revision 5.35  1997/05/22 20:35:44  epstein
+ * add error strings when fetching Medline and Sequence entries, to identify which UID encountered the problem
+ *
+ * Revision 5.34  1997/04/18 16:01:08  shavirin
+ * Removed annoying compiler messages "Statement not reached"
+ *
  * Revision 5.33  1997/03/17  16:26:23  brandon
  * added PMEntrezDetailedInfo
  *
@@ -280,13 +289,18 @@
  * ==========================================================================
  */
 
-#define REVISION_STR "$Revision: 6.6 $"
+#define REVISION_STR "$Revision: 6.9 $"
 
 #include <accentr.h>
 #include <seqmgr.h>
 #include <sequtil.h>
 
 #include <cdconfig.h>
+/* Must not assume network - unused cdromlib stuff is still tangled in */
+/* Okay to assume network in Mac OS. */
+#ifdef __MACOS__
+#define _NETENT_
+#endif
 #ifdef _NETENT_
 #include <netentr.h>      /* support network access */
 #else

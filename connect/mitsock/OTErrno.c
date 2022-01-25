@@ -14,8 +14,9 @@
  *
  * RCS Modification History:
  * $Log: OTErrno.c,v $
- * Revision 1.2  2001/05/08 15:36:59  juran
- * Phil Churchill's 2001-05-07 changes.Use errno instead of errno_long.
+ * Revision 1.2  2001/11/07 22:37:43  juran
+ * Phil Churchill's 2001-05-07 changes.
+ * Use errno instead of errno_long.
  *
  * Revision 1.1  2001/04/03 20:35:25  juran
  * Phil Churchill's MIT-derived OT sockets library.  No changes prior to initial check-in.

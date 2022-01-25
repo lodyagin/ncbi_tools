@@ -114,7 +114,7 @@ OSStatus IdleAddEventHandler(IdleEventHandlerUPP eventHandlerUPP, UInt16 mask, U
   /* Add to linked list */
   handler->prev = gLastEventHandler;
   handler->next = nil;
-  gLastEventHandler->next = handler;
+  if (gLastEventHandler != NULL) gLastEventHandler->next = handler;
   
   /* repoint the last event handler */
   if(gFirstEventHandler == nil)

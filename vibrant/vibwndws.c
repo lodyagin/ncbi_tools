@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.41 $
+* $Revision: 6.43 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.43  2001/11/26 21:25:04  juran
+* Define type AERefCon as SInt32 for AE handler prototypes.
+* It may need to be UInt32 for pre-3.4 Universal Interfaces under Carbon, or something.
+*
+* Revision 6.42  2001/08/29 17:35:38  juran
+* Universal Interfaces 3.4 changes:
+* AE handler refCon is an SInt32.
+* convertClipboardFlag doesn't exist under Carbon.
+*
 * Revision 6.41  2001/05/14 20:50:09  juran
 * Remove Mac clipboard code -- the scrap is updated whenever it's used.
 *
@@ -705,6 +714,8 @@ AEEventHandlerUPP HandleAEOpenDocPtr;
 AEEventHandlerUPP HandleAEQuitAppPtr;
 AEEventHandlerUPP HandleAEAnswerPtr;
 #endif
+typedef SInt32 AERefCon;
+//typedef UInt32 AERefCon;
 #endif
 
 #ifdef WIN_MSWIN
@@ -5155,14 +5166,14 @@ Nlm_RegisterResultProc (Nlm_ResultProc resultProc)
 }
 
 #ifdef WIN_MAC
-static pascal OSErr HandleAEQuitApp (const AppleEvent *event, AppleEvent *reply, UInt32 ref)
+static pascal OSErr HandleAEQuitApp (const AppleEvent *event, AppleEvent *reply, AERefCon ref)
 
 {
   Nlm_QuitProgram ();
   return noErr;
 }
 
-static pascal OSErr HandleAEIgnore (const AppleEvent *event, AppleEvent *reply, UInt32 ref)
+static pascal OSErr HandleAEIgnore (const AppleEvent *event, AppleEvent *reply, AERefCon ref)
 
 {
   return noErr;
@@ -5203,7 +5214,7 @@ static void ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
   *dst = '\0';
 }
 
-static pascal OSErr HandleAEOpenDoc (const AppleEvent *event, AppleEvent *reply, UInt32 ref)
+static pascal OSErr HandleAEOpenDoc (const AppleEvent *event, AppleEvent *reply, AERefCon ref)
 
 {
   register OSErr stat;
@@ -5269,7 +5280,7 @@ static pascal OSErr HandleAEOpenDoc (const AppleEvent *event, AppleEvent *reply,
   return noErr;
 }
 
-static pascal OSErr HandleAEAnswer (const AppleEvent *event, AppleEvent *reply, UInt32 ref)
+static pascal OSErr HandleAEAnswer (const AppleEvent *event, AppleEvent *reply, AERefCon ref)
 
 {
   register OSErr stat;
@@ -5363,11 +5374,13 @@ static void Nlm_HandleEvent (void)
       if (mess == suspendResumeMessage) {
         if (Nlm_currentEvent.message & resumeFlag) {
           // Resume
+#if !TARGET_API_MAC_CARBON
           if (Nlm_currentEvent.message & convertClipboardFlag) {
             // 2001-05-14:  JDJ
             // We always convert the clipboard.
             // If it turns out that pasting is noticeably slow, I'll change it.
           }
+#endif
         } else {
           // Suspend
         }

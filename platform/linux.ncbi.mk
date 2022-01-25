@@ -1,11 +1,14 @@
 #
-# $Id: linux.ncbi.mk,v 1.21 2001/06/12 21:11:56 vakatov Exp $
+# $Id: linux.ncbi.mk,v 1.23 2001/09/13 18:14:52 lewisg Exp $
 #
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
 #warning, the flags -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64 will allow
 #you to work with large (>4Gb) files only if you have glibc version >= 2.1
-NCBI_CC = gcc -pipe -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
+#NCBI_CC = gcc -pipe -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
+#it appears the flags above do not working anymore with newer libc,
+#the new flags should work. Dima. 08/23/01
+NCBI_CC = gcc -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O2
 NCBI_OPTFLAG = -O2
@@ -33,7 +36,7 @@ NETENTREZVERSION = 2.02c2ASN1SPEC6
 # uncomment OPENGL_TARGETS to build OpenGL apps; do not change
 # OPENGL_NCBI_LIBS! However, may need to set
 # OPENGL_INCLUDE and OPENGL_LIBS to suit local environment
-OPENGL_TARGETS = Cn3D
+# OPENGL_TARGETS = Cn3D
 OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
 OPENGL_INCLUDE = -I/usr/X11R6/include
 OPENGL_LIBS = -L/usr/X11R6/lib -lGL -lGLU

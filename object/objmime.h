@@ -31,6 +31,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objmime.h,v $
+* Revision 6.11  2001/11/21 16:38:23  thiessen
+* move cn3d stuff into bundle
+*
+* Revision 6.10  2001/11/21 14:25:41  thiessen
+* remove BisotrucOrId
+*
+* Revision 6.9  2001/11/20 15:59:34  thiessen
+* add imports to BundleSeqsAligns
+*
+* Revision 6.8  2001/11/16 14:54:26  thiessen
+* add new general type
+*
 * Revision 6.7  2001/06/21 14:44:29  thiessen
 * add new user annotations
 *
@@ -77,6 +89,7 @@ typedef ValNode NcbiMimeAsn1;
 #define NcbiMimeAsn1_alignseq 3     /* yanli added */
 #define NcbiMimeAsn1_strucseq 4     /* yanli added */
 #define NcbiMimeAsn1_strucseqs 5    /* yanli added */
+#define NcbiMimeAsn1_general 6      /* paul */
 
 
 NLM_EXTERN NcbiMimeAsn1Ptr LIBCALL NcbiMimeAsn1Free PROTO ((NcbiMimeAsn1Ptr ));
@@ -224,6 +237,65 @@ NLM_EXTERN Boolean LIBCALL BiostrucSeqsAsnWrite PROTO (( BiostrucSeqsPtr , AsnIo
 #define Entrez_style_embl 11
 #define Entrez_style_pdb 12
 #define Entrez_style_kinemage 13
+
+
+/**************************************************
+*
+*    BiostrucSeqsAlignsCdd
+*
+**************************************************/
+typedef struct struct_Biostruc_seqs_aligns_cdd {
+   ValNodePtr   SeqAlignData_seq_align_data;
+   struct struct_Biostruc PNTR   structures;
+} BiostrucSeqsAlignsCdd, PNTR BiostrucSeqsAlignsCddPtr;
+
+
+NLM_EXTERN BiostrucSeqsAlignsCddPtr LIBCALL BiostrucSeqsAlignsCddFree PROTO ((BiostrucSeqsAlignsCddPtr ));
+NLM_EXTERN BiostrucSeqsAlignsCddPtr LIBCALL BiostrucSeqsAlignsCddNew PROTO (( void ));
+NLM_EXTERN BiostrucSeqsAlignsCddPtr LIBCALL BiostrucSeqsAlignsCddAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BiostrucSeqsAlignsCddAsnWrite PROTO (( BiostrucSeqsAlignsCddPtr , AsnIoPtr, AsnTypePtr));
+
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+typedef ValNodePtr SeqAlignData_seq_align_dataPtr;
+typedef ValNode SeqAlignData_seq_align_data;
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+#define SeqAlignData_seq_align_data_bundle 1
+#define SeqAlignData_seq_align_data_cdd 2
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+static SeqAlignData_seq_align_dataPtr LIBCALL SeqAlignData_seq_align_dataFree PROTO ((SeqAlignData_seq_align_dataPtr ));
+static SeqAlignData_seq_align_dataPtr LIBCALL SeqAlignData_seq_align_dataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+static Boolean LIBCALL SeqAlignData_seq_align_dataAsnWrite PROTO (( SeqAlignData_seq_align_dataPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    BundleSeqsAligns
+*
+**************************************************/
+typedef struct struct_Bundle_seqs_aligns {
+   ValNodePtr   sequences;
+   struct struct_Seq_annot PNTR   seqaligns;
+   struct struct_Biostruc_annot_set PNTR   strucaligns;
+   struct struct_Seq_annot PNTR   imports;
+   struct struct_Cn3d_style_dictionary PNTR   style_dictionary;
+   struct struct_Cn3d_user_annotations PNTR   user_annotations;
+} BundleSeqsAligns, PNTR BundleSeqsAlignsPtr;
+
+
+NLM_EXTERN BundleSeqsAlignsPtr LIBCALL BundleSeqsAlignsFree PROTO ((BundleSeqsAlignsPtr ));
+NLM_EXTERN BundleSeqsAlignsPtr LIBCALL BundleSeqsAlignsNew PROTO (( void ));
+NLM_EXTERN BundleSeqsAlignsPtr LIBCALL BundleSeqsAlignsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BundleSeqsAlignsAsnWrite PROTO (( BundleSeqsAlignsPtr , AsnIoPtr, AsnTypePtr));
+
 
 #ifdef __cplusplus
 /* { */ }

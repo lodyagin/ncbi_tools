@@ -1,7 +1,7 @@
 #ifndef NCBI_CONNUTIL__H
 #define NCBI_CONNUTIL__H
 
-/*  $Id: ncbi_connutil.h,v 6.15 2001/06/01 16:01:58 vakatov Exp $
+/*  $Id: ncbi_connutil.h,v 6.18 2001/09/28 20:45:26 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,7 +26,7 @@
  *
  * ===========================================================================
  *
- * Author:  Denis Vakatov
+ * Author:  Denis Vakatov, Anton Lavrentiev
  *
  * File Description:
  *   Auxiliary API to:
@@ -58,8 +58,22 @@
  *       CONN_StripToPattern()
  *       SOCK_StripToPattern()
  *
+ *    6.Convert "[host][:port]" from verbal into binary form and vice versa:
+ *       StringToHostPort()
+ *       HostPortToString()
+ *
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.h,v $
+ * Revision 6.18  2001/09/28 20:45:26  lavr
+ * SConnNetInfo::max_try equal to 0 is now treated the same way as equal to 1
+ *
+ * Revision 6.17  2001/09/19 15:58:37  lavr
+ * Cut trailing blanks in blank lines
+ *
+ * Revision 6.16  2001/09/10 21:14:47  lavr
+ * Added functions: StringToHostPort()
+ *                  HostPortToString()
+ *
  * Revision 6.15  2001/06/01 16:01:58  vakatov
  * MIME_ParseContentTypeEx() -- extended description
  *
@@ -153,7 +167,7 @@ typedef struct {
     char           args[1024];       /* service: args(e.g. for a CGI script) */
     EReqMethod     req_method;       /* method to use in the request         */
     STimeout*      timeout;          /* ptr to i/o tmo (infinite if NULL)    */
-    unsigned int   max_try;          /* max. # of attempts to establish conn */
+    unsigned int   max_try;          /* max. # of attempts to connect (>= 1) */
     char           http_proxy_host[64];  /* hostname of HTTP proxy server    */
     unsigned short http_proxy_port;      /* port #   of HTTP proxy server    */
     char           proxy_host[64];   /* host of CERN-like firewall proxy srv */
@@ -165,47 +179,47 @@ typedef struct {
 
     /* the following field(s) are for the internal use only! */
     int/*bool*/    http_proxy_adjusted;
-    STimeout       tmo;              /* Default storage for finite timeout   */
+    STimeout       tmo;              /* default storage for finite timeout   */
 } SConnNetInfo;
 
 
 /* Defaults and the registry entry names for "SConnNetInfo" fields
  */
 #define DEF_CONN_REG_SECTION      "CONN"
-                                  
+
 #define REG_CONN_HOST             "HOST"
 #define DEF_CONN_HOST             "www.ncbi.nlm.nih.gov"
-                                  
+
 #define REG_CONN_PORT             "PORT"
 #define DEF_CONN_PORT             80
-                                  
+
 #define REG_CONN_PATH             "PATH"
 #define DEF_CONN_PATH             "/Service/dispd.cgi"
-                                  
+
 #define REG_CONN_ARGS             "ARGS"
 #define DEF_CONN_ARGS             ""
 
 #define REG_CONN_REQ_METHOD       "REQ_METHOD"
 #define DEF_CONN_REQ_METHOD       "POST"
-                                  
+
 #define REG_CONN_TIMEOUT          "TIMEOUT"
 #define DEF_CONN_TIMEOUT          30.0
-                                  
+
 #define REG_CONN_MAX_TRY          "MAX_TRY"
 #define DEF_CONN_MAX_TRY          3
-                                  
+
 #define REG_CONN_HTTP_PROXY_HOST  "HTTP_PROXY_HOST"
 #define DEF_CONN_HTTP_PROXY_HOST  ""
-                                  
+
 #define REG_CONN_HTTP_PROXY_PORT  "HTTP_PROXY_PORT"
 #define DEF_CONN_HTTP_PROXY_PORT  80
-                                  
+
 #define REG_CONN_PROXY_HOST       "PROXY_HOST"
 #define DEF_CONN_PROXY_HOST       ""
-                                  
+
 #define REG_CONN_DEBUG_PRINTOUT   "DEBUG_PRINTOUT"
 #define DEF_CONN_DEBUG_PRINTOUT   ""
-                                  
+
 #define REG_CONN_STATELESS        "STATELESS"
 #define DEF_CONN_STATELESS        ""
 
@@ -522,6 +536,34 @@ extern int/*bool*/ MIME_ParseContentType
 (const char*     str,      /* the HTTP "Content-Type:" header to parse */
  EMIME_SubType*  subtype,  /* can be NULL */
  EMIME_Encoding* encoding  /* can be NULL */
+ );
+
+
+/* Read (skipping leading blanks) "[host][:port]" from a string.
+ * On success, return the advanced pointer past the host/port read.
+ * If no host/port detected, return 'str'.
+ * On format error, return 0.
+ * If host and/or port fragments are missing,
+ * then corresponding 'host'/'port' value returned as 0.
+ * Note that 'host' returned is in network byte order,
+ * unlike 'port', which always comes out in host (native) byte order.
+ */
+extern const char* StringToHostPort
+(const char*     str,   /* must not be NULL */
+ unsigned int*   host,  /* must not be NULL */
+ unsigned short* port   /* must not be NULL */
+ );
+
+
+/* Print host:port into provided buffer string, not to exceed 'buflen' size.
+ * Suppress printing host if parameter 'host' is zero.
+ * Return the number of bytes printed.
+ */
+extern size_t HostPortToString
+(unsigned int   host,
+ unsigned short port,
+ char*          buf,
+ size_t         buflen
  );
 
 

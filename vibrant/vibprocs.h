@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.19  2001/09/10 17:34:33  bazhin
+* Added function Nlm_SetTextCursorBlinkRate(Nlm_TexT t, Nlm_Int2 msec).
+*
 * Revision 6.18  2000/08/01 15:57:32  kans
 * separate lines for Nlm_HANDLE on all platforms, even if two are currently the same, and no space between # and define in case some compilers complain
 *
@@ -522,6 +525,7 @@ void      Nlm_ClearText PROTO((Nlm_TexT t));
 size_t    Nlm_TextLength PROTO((Nlm_TexT t));
 void      Nlm_SelectText PROTO((Nlm_TexT t, Nlm_Int2 begin, Nlm_Int2 end));
 void      Nlm_SetTextEditable PROTO((Nlm_TexT t, Nlm_Boolean editable));
+void      Nlm_SetTextCursorBlinkRate PROTO((Nlm_TexT t, Nlm_Int2 msec));
 
 /* return the new insertion position in the text(it may differ from "pos"
  * if an error occured or "pos" is out of limits)

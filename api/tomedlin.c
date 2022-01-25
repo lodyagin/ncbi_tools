@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 10/15/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.8 $
 *
 * File Description:  conversion to medlars format
 *
@@ -40,6 +40,15 @@
 *
 *
 * $Log: tomedlin.c,v $
+* Revision 6.8  2001/10/29 20:37:06  kans
+* MakeAuthorString for structured authors
+*
+* Revision 6.7  2001/10/22 13:37:12  kans
+* break up huge author list
+*
+* Revision 6.6  2001/10/15 12:24:05  kans
+* MedlineEntryToDataFile breaks up long mesh, substance, and xref lists
+*
 * Revision 6.5  1999/10/26 20:17:04  kans
 * allocate separate string for abstract since some may be very long
 *
@@ -186,6 +195,7 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
   AuthListPtr     authors = NULL;
   CitArtPtr       cit;
   CitJourPtr      citjour;
+  Int2            count;
   DatePtr         date = NULL;
   ValNodePtr      gene;
   Int2            i;
@@ -247,28 +257,50 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
       authors = cit->authors;
       if (authors != NULL && (authors->choice == 2 || authors->choice == 3)) {
         names = authors->names;
+        count = 0;
         while (names != NULL) {
+          if (count >= 20) {
+            rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
+            ClearString ();
+            count = 0;
+          }
           AddString ("AU  -\t");
           AddString (names->data.ptrvalue);
           AddString ("\n");
           names = names->next;
+          count++;
         }
       }
+      rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
+      ClearString ();
       title = cit->title;
+      count = 0;
       while (title != NULL) {
+        if (count >= 20) {
+          rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
+          ClearString ();
+          count = 0;
+        }
         if (title->choice == 1) {
           AddString ("TI  -\t");
           AddString (title->data.ptrvalue);
           AddString ("\n");
         }
         title = title->next;
+        count++;
       }
+      rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
+      ClearString ();
     }
 
-    rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
-    ClearString ();
     mesh = mep->mesh;
+    count = 0;
     while (mesh != NULL) {
+      if (count >= 20) {
+        rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
+        ClearString ();
+        count = 0;
+      }
       AddString ("MH  -\t");
       if (mesh->mp) {
         AddString ("*");
@@ -290,11 +322,18 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
       }
       AddString ("\n");
       mesh = mesh->next;
+      count++;
     }
     rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
     ClearString ();
     substance = mep->substance;
+    count = 0;
     while (substance != NULL) {
+      if (count >= 20) {
+        rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
+        ClearString ();
+        count = 0;
+      }
       AddString ("RN  -\t");
       switch (substance->type) {
         case 0:
@@ -320,6 +359,7 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
       }
       AddString ("\n");
       substance = substance->next;
+      count++;
     }
     rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
     ClearString ();
@@ -331,7 +371,13 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
       gene = gene->next;
     }
     xref = mep->xref;
+    count = 0;
     while (xref != NULL) {
+      if (count >= 20) {
+        rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
+        ClearString ();
+        count = 0;
+      }
       AddString ("SI  -\t");
       switch (xref->choice) {
         case 1:
@@ -380,6 +426,7 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
       AddString (xref->data.ptrvalue);
       AddString ("\n");
       xref = xref->next;
+      count++;
     }
     rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
     ClearString ();
@@ -684,14 +731,67 @@ static CharPtr CleanAuthorString (CharPtr auth)
   return str;
 }
 
+static CharPtr MakeAuthorString (
+  CharPtr name,
+  CharPtr initials,
+  CharPtr suffix
+)
+
+{
+  Char     ch;
+  size_t   len;
+  CharPtr  ptr;
+  CharPtr  str;
+  CharPtr  tmp;
+
+  if (name == NULL) return NULL;
+
+  len = StringLen (name) + StringLen (initials) * 3 + StringLen (suffix);
+  str = MemNew (sizeof (Char) * (len + 4));
+  if (str == NULL) return NULL;
+
+  tmp = str;
+
+  ptr = initials;
+  if (! StringHasNoText (initials)) {
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == '-') {
+        *tmp = '-';
+        tmp++;
+      } else if (ch != '.') {
+        *tmp = ch;
+        tmp++;
+        *tmp = '.';
+        tmp++;
+        *tmp = ' ';
+        tmp++;
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    *tmp = '\0';
+  }
+
+  tmp = StringMove (tmp, name);
+  if (! StringHasNoText (suffix)) {
+    tmp = StringMove (tmp, " ");
+    tmp = StringMove (tmp, suffix);
+  }
+
+  return str;
+}
+
 NLM_EXTERN MedlinePtr ParseMedline (MedlineEntryPtr mep)
 
 {
   AffilPtr         affil;
+  AuthorPtr        ap;
   AuthListPtr      authors;
   CharPtr          chptr;
   CitArtPtr        cit;
   CitJourPtr       citjour;
+  CharPtr          curr;
   DatePtr          date;
   ValNodePtr       gene;
   ImprintPtr       imp;
@@ -699,10 +799,11 @@ NLM_EXTERN MedlinePtr ParseMedline (MedlineEntryPtr mep)
   MedlineMeshPtr   mesh;
   MedlinePtr       mPtr = NULL;
   ValNodePtr       names;
+  NameStdPtr       nsp;
+  PersonIdPtr      pid;
   ValNodePtr       qual;
   Char             str [32];
   MedlineRnPtr     substance;
-  CharPtr          this;
   ValNodePtr       title;
 
   buffer = MemNew (BUFSIZE);
@@ -770,23 +871,45 @@ NLM_EXTERN MedlinePtr ParseMedline (MedlineEntryPtr mep)
         }
         authors = cit->authors;
         if (authors != NULL) {
-          if (authors->choice == 2 || authors->choice == 3) {
+          if (authors->choice == 1 || authors->choice == 2 || authors->choice == 3) {
             names = authors->names;
             while (names != NULL) {
               last = mPtr->authors;
+              curr = NULL;
+              if (authors->choice == 1) {
+                ap = (AuthorPtr) names->data.ptrvalue;
+                if (ap != NULL) {
+                  pid = ap->name;
+                  if (pid != NULL) {
+                    if (pid->choice == 2) {
+                      nsp = (NameStdPtr) pid->data;
+                      if (nsp != NULL) {
+                        if (! StringHasNoText (nsp->names [0])) {
+                          curr = MakeAuthorString (nsp->names [0], nsp->names [4], nsp->names [5]);
+                        } else if (! StringHasNoText (nsp->names [3])) {
+                          curr = MakeAuthorString (nsp->names [3], NULL, NULL);
+                        }
+                      }
+                    } else if (pid->choice == 3 || pid->choice == 4) {
+                      curr = MakeAuthorString ((CharPtr) pid->data, NULL, NULL);
+                    }
+                  }
+                }
+              } else if (authors->choice == 2 || authors->choice == 3) {
+                curr = CleanAuthorString ((CharPtr) names->data.ptrvalue);
+              }
               if (last != NULL) {
-                this = CleanAuthorString ((CharPtr) names->data.ptrvalue);
                 if (names->next != NULL) {
                   mPtr->authors = StrngAppend (last, (CharPtr) ", ",
-                                                (CharPtr) this, (CharPtr) NULL);
+                                                (CharPtr) curr, (CharPtr) NULL);
                 } else {
                   mPtr->authors = StrngAppend (last, (CharPtr) " & ",
-                                                (CharPtr) this, (CharPtr) NULL);
+                                                (CharPtr) curr, (CharPtr) NULL);
                 }
                 last = MemFree (last);
-                this = MemFree (this);
+                curr = MemFree (curr);
               } else {
-                mPtr->authors = CleanAuthorString ((CharPtr) names->data.ptrvalue);
+                mPtr->authors = curr;
               }
               names = names->next;
             }

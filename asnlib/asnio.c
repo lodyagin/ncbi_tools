@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   Routines for AsnIo objects.  This code has some machine dependencies.
@@ -45,6 +45,9 @@
 * 01-31-94 Schuler     Changed ErrGetOpts/ErrSetOpts to ErrSaveOptions/ErrRestoreOptions
 *
 * $Log: asnio.c,v $
+* Revision 6.10  2001/10/11 14:39:08  ostell
+* added support for XMLModulePrefix
+*
 * Revision 6.9  2001/03/13 13:11:46  ostell
 * made AsnIoBSOpen() and AsnIoMemOpen() XML aware
 *
@@ -195,6 +198,28 @@ NLM_EXTERN AsnIoPtr LIBCALL  AsnIoOpen (CharPtr file_name, CharPtr mode)
 		aip->fname = StringSave(file_name);
 
 	return aip;
+}
+
+static CharPtr AsnXMLModuleDefaultPrefix = "\0";
+static CharPtr AsnXMLModulePrefix = "\0";
+
+NLM_EXTERN Boolean LIBCALL AsnSetXMLmodulePrefix (CharPtr prefix)
+{
+	static CharPtr zero = "\0";
+	AsnXMLModulePrefix = prefix;
+	if (prefix == NULL)
+		AsnXMLModulePrefix = zero;
+	return TRUE;
+}
+NLM_EXTERN Boolean LIBCALL AsnSetXMLmodulePrefixToDefault (void)
+{
+	AsnXMLModulePrefix = AsnXMLModuleDefaultPrefix;
+	return TRUE;
+}
+
+NLM_EXTERN CharPtr LIBCALL AsnGetXMLmodulePrefix (void)
+{
+	return AsnXMLModulePrefix;
 }
 
 /*****************************************************************************

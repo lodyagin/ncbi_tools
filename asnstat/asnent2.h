@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnent2.h19";
-static AsnValxNode avnx[10] = {
+static char * asnfilename = "asnent2.h11";
+static AsnValxNode avnx[14] = {
     {20,"and" ,1,0.0,&avnx[1] } ,
     {20,"or" ,2,0.0,&avnx[2] } ,
     {20,"butnot" ,3,0.0,&avnx[3] } ,
@@ -20,9 +20,13 @@ static AsnValxNode avnx[10] = {
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
-    {2,NULL,0,0.0,NULL } };
+    {2,NULL,0,0.0,NULL } ,
+    {20,"string" ,1,0.0,&avnx[11] } ,
+    {20,"int" ,2,0.0,&avnx[12] } ,
+    {20,"float" ,3,0.0,&avnx[13] } ,
+    {20,"date-pubmed" ,4,0.0,NULL } };
 
-static AsnType atx[192] = {
+static AsnType atx[188] = {
   {401, "Entrez2-dt" ,1,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[2]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {402, "Entrez2-db-id" ,1,0,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[4]} ,
@@ -108,11 +112,11 @@ static AsnType atx[192] = {
   {0, "tool" ,128,2,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[83]} ,
   {0, "cookie" ,128,3,0,1,0,0,0,0,NULL,&atx[3],NULL,0,NULL} ,
   {420, "Entrez2-reply" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[85],0,&atx[86]} ,
-  {0, "reply" ,128,0,0,0,0,0,0,0,NULL,&atx[86],NULL,0,&atx[187]} ,
+  {0, "reply" ,128,0,0,0,0,0,0,0,NULL,&atx[86],NULL,0,&atx[183]} ,
   {421, "E2Reply" ,1,0,0,0,0,0,0,0,NULL,&atx[30],&atx[87],0,&atx[89]} ,
   {0, "error" ,128,0,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[88]} ,
-  {0, "get-info" ,128,1,0,0,0,0,0,0,NULL,&atx[89],NULL,0,&atx[120]} ,
-  {422, "Entrez2-info" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[90],0,&atx[121]} ,
+  {0, "get-info" ,128,1,0,0,0,0,0,0,NULL,&atx[89],NULL,0,&atx[130]} ,
+  {422, "Entrez2-info" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[90],0,&atx[131]} ,
   {0, "db-count" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[91]} ,
   {0, "build-date" ,128,1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,&atx[92]} ,
   {0, "db-info" ,128,2,0,0,0,0,0,0,NULL,&atx[31],&atx[93],0,NULL} ,
@@ -123,9 +127,9 @@ static AsnType atx[192] = {
   {0, "db-descr" ,128,2,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[98]} ,
   {0, "doc-count" ,128,3,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[99]} ,
   {0, "field-count" ,128,4,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[100]} ,
-  {0, "fields" ,128,5,0,0,0,0,0,0,NULL,&atx[31],&atx[101],0,&atx[111]} ,
+  {0, "fields" ,128,5,0,0,0,0,0,0,NULL,&atx[31],&atx[101],0,&atx[113]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[102],NULL,0,NULL} ,
-  {430, "Entrez2-field-info" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[103],0,&atx[114]} ,
+  {430, "Entrez2-field-info" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[103],0,&atx[116]} ,
   {0, "field-name" ,128,0,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[104]} ,
   {0, "field-menu" ,128,1,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[105]} ,
   {0, "field-descr" ,128,2,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[106]} ,
@@ -133,91 +137,87 @@ static AsnType atx[192] = {
   {0, "is-date" ,128,4,0,1,0,0,0,0,NULL,&atx[26],NULL,0,&atx[108]} ,
   {0, "is-numerical" ,128,5,0,1,0,0,0,0,NULL,&atx[26],NULL,0,&atx[109]} ,
   {0, "single-token" ,128,6,0,1,0,0,0,0,NULL,&atx[26],NULL,0,&atx[110]} ,
-  {0, "hierarchy-avail" ,128,7,0,1,0,0,0,0,NULL,&atx[26],NULL,0,NULL} ,
-  {0, "link-count" ,128,6,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[112]} ,
-  {0, "links" ,128,7,0,0,0,0,0,0,NULL,&atx[31],&atx[113],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[114],NULL,0,NULL} ,
-  {431, "Entrez2-link-info" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[115],0,&atx[130]} ,
-  {0, "link-name" ,128,0,0,0,0,0,0,0,NULL,&atx[5],NULL,0,&atx[116]} ,
-  {0, "link-menu" ,128,1,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[117]} ,
-  {0, "link-descr" ,128,2,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[118]} ,
-  {0, "db-to" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[119]} ,
+  {0, "hierarchy-avail" ,128,7,0,1,0,0,0,0,NULL,&atx[26],NULL,0,&atx[111]} ,
+  {0, "is-rangable" ,128,8,0,1,0,0,0,0,NULL,&atx[26],NULL,0,&atx[112]} ,
+  {0, "is-truncatable" ,128,9,0,1,0,0,0,0,NULL,&atx[26],NULL,0,NULL} ,
+  {0, "link-count" ,128,6,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[114]} ,
+  {0, "links" ,128,7,0,0,0,0,0,0,NULL,&atx[31],&atx[115],0,&atx[122]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[116],NULL,0,NULL} ,
+  {431, "Entrez2-link-info" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[117],0,&atx[125]} ,
+  {0, "link-name" ,128,0,0,0,0,0,0,0,NULL,&atx[5],NULL,0,&atx[118]} ,
+  {0, "link-menu" ,128,1,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[119]} ,
+  {0, "link-descr" ,128,2,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[120]} ,
+  {0, "db-to" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[121]} ,
   {0, "data-size" ,128,4,0,1,0,0,0,0,NULL,&atx[1],NULL,0,NULL} ,
-  {0, "eval-boolean" ,128,2,0,0,0,0,0,0,NULL,&atx[121],NULL,0,&atx[125]} ,
-  {423, "Entrez2-boolean-reply" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[122],0,&atx[126]} ,
-  {0, "count" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[123]} ,
-  {0, "uids" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[124]} ,
+  {0, "docsum-field-count" ,128,8,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[123]} ,
+  {0, "docsum-fields" ,128,9,0,0,0,0,0,0,NULL,&atx[31],&atx[124],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[125],NULL,0,NULL} ,
+  {432, "Entrez2-docsum-field-info" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[126],0,&atx[129]} ,
+  {0, "field-name" ,128,0,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[127]} ,
+  {0, "field-description" ,128,1,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[128]} ,
+  {0, "field-type" ,128,2,0,0,0,0,0,0,NULL,&atx[129],NULL,0,NULL} ,
+  {433, "Entrez2-docsum-field-type" ,1,0,0,0,0,0,0,0,NULL,&atx[1],&avnx[10],0,&atx[140]} ,
+  {0, "eval-boolean" ,128,2,0,0,0,0,0,0,NULL,&atx[131],NULL,0,&atx[135]} ,
+  {423, "Entrez2-boolean-reply" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[132],0,&atx[136]} ,
+  {0, "count" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[133]} ,
+  {0, "uids" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[134]} ,
   {0, "query" ,128,2,0,1,0,0,0,0,NULL,&atx[12],NULL,0,NULL} ,
-  {0, "get-docsum" ,128,3,0,0,0,0,0,0,NULL,&atx[126],NULL,0,&atx[151]} ,
-  {424, "Entrez2-docsum-list" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[127],0,&atx[153]} ,
-  {0, "count" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[128]} ,
-  {0, "list" ,128,1,0,0,0,0,0,0,NULL,&atx[31],&atx[129],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[130],NULL,0,NULL} ,
-  {432, "Entrez2-docsum" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[131],0,&atx[158]} ,
-  {0, "uid" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[132]} ,
-  {0, "secondary-uid" ,128,1,0,1,0,0,0,0,NULL,&atx[1],NULL,0,&atx[133]} ,
-  {0, "caption" ,128,2,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[134]} ,
-  {0, "title" ,128,3,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[135]} ,
-  {0, "short-citation" ,128,4,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[136]} ,
-  {0, "entrez-date" ,128,5,0,0,0,0,0,0,NULL,&atx[0],NULL,0,&atx[137]} ,
-  {0, "language" ,128,6,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[138]} ,
-  {0, "create-date" ,128,7,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[139]} ,
-  {0, "update-date" ,128,8,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[140]} ,
-  {0, "seqlen" ,128,9,0,1,0,0,0,0,NULL,&atx[1],NULL,0,&atx[141]} ,
-  {0, "author" ,128,10,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[142]} ,
-  {0, "source" ,128,11,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[143]} ,
-  {0, "volume" ,128,12,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[144]} ,
-  {0, "pages" ,128,13,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[145]} ,
-  {0, "pub-type" ,128,14,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[146]} ,
-  {0, "record-status" ,128,15,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[147]} ,
-  {0, "no-abstract" ,128,16,0,1,0,0,0,0,NULL,&atx[26],NULL,0,&atx[148]} ,
-  {0, "translated-title" ,128,17,0,1,0,0,0,0,NULL,&atx[26],NULL,0,&atx[149]} ,
-  {0, "no-authors" ,128,18,0,1,0,0,0,0,NULL,&atx[26],NULL,0,&atx[150]} ,
-  {0, "taxid" ,128,19,0,1,0,0,0,0,NULL,&atx[1],NULL,0,NULL} ,
-  {0, "get-term-pos" ,128,4,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[152]} ,
-  {0, "get-term-list" ,128,5,0,0,0,0,0,0,NULL,&atx[153],NULL,0,&atx[163]} ,
-  {425, "Entrez2-term-list" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[154],0,&atx[164]} ,
-  {0, "pos" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[155]} ,
-  {0, "num" ,128,1,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[156]} ,
-  {0, "list" ,128,2,0,0,0,0,0,0,NULL,&atx[31],&atx[157],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[158],NULL,0,NULL} ,
-  {433, "Entrez2-term" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[159],0,&atx[184]} ,
-  {0, "term" ,128,0,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[160]} ,
-  {0, "txid" ,128,1,0,1,0,0,0,0,NULL,&atx[1],NULL,0,&atx[161]} ,
-  {0, "count" ,128,2,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[162]} ,
+  {0, "get-docsum" ,128,3,0,0,0,0,0,0,NULL,&atx[136],NULL,0,&atx[147]} ,
+  {424, "Entrez2-docsum-list" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[137],0,&atx[149]} ,
+  {0, "count" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[138]} ,
+  {0, "list" ,128,1,0,0,0,0,0,0,NULL,&atx[31],&atx[139],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[140],NULL,0,NULL} ,
+  {434, "Entrez2-docsum" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[141],0,&atx[144]} ,
+  {0, "uid" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[142]} ,
+  {0, "docsum-data" ,128,1,0,0,0,0,0,0,NULL,&atx[31],&atx[143],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[144],NULL,0,NULL} ,
+  {435, "Entrez2-docsum-data" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[145],0,&atx[154]} ,
+  {0, "field-name" ,128,0,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[146]} ,
+  {0, "field-value" ,128,1,0,0,0,0,0,0,NULL,&atx[3],NULL,0,NULL} ,
+  {0, "get-term-pos" ,128,4,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[148]} ,
+  {0, "get-term-list" ,128,5,0,0,0,0,0,0,NULL,&atx[149],NULL,0,&atx[159]} ,
+  {425, "Entrez2-term-list" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[150],0,&atx[160]} ,
+  {0, "pos" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[151]} ,
+  {0, "num" ,128,1,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[152]} ,
+  {0, "list" ,128,2,0,0,0,0,0,0,NULL,&atx[31],&atx[153],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[154],NULL,0,NULL} ,
+  {436, "Entrez2-term" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[155],0,&atx[180]} ,
+  {0, "term" ,128,0,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[156]} ,
+  {0, "txid" ,128,1,0,1,0,0,0,0,NULL,&atx[1],NULL,0,&atx[157]} ,
+  {0, "count" ,128,2,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[158]} ,
   {0, "is-leaf-node" ,128,3,0,1,0,0,0,0,NULL,&atx[26],NULL,0,NULL} ,
-  {0, "get-term-hierarchy" ,128,6,0,0,0,0,0,0,NULL,&atx[164],NULL,0,&atx[173]} ,
-  {426, "Entrez2-hier-node" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[165],0,&atx[174]} ,
-  {0, "cannonical-form" ,128,0,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[166]} ,
-  {0, "lineage-count" ,128,1,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[167]} ,
-  {0, "lineage" ,128,2,0,1,0,0,0,0,NULL,&atx[31],&atx[168],0,&atx[169]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[158],NULL,0,NULL} ,
-  {0, "child-count" ,128,3,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[170]} ,
-  {0, "children" ,128,4,0,0,0,0,0,0,NULL,&atx[31],&atx[171],0,&atx[172]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[158],NULL,0,NULL} ,
+  {0, "get-term-hierarchy" ,128,6,0,0,0,0,0,0,NULL,&atx[160],NULL,0,&atx[169]} ,
+  {426, "Entrez2-hier-node" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[161],0,&atx[170]} ,
+  {0, "cannonical-form" ,128,0,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[162]} ,
+  {0, "lineage-count" ,128,1,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[163]} ,
+  {0, "lineage" ,128,2,0,1,0,0,0,0,NULL,&atx[31],&atx[164],0,&atx[165]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[154],NULL,0,NULL} ,
+  {0, "child-count" ,128,3,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[166]} ,
+  {0, "children" ,128,4,0,0,0,0,0,0,NULL,&atx[31],&atx[167],0,&atx[168]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[154],NULL,0,NULL} ,
   {0, "is-ambiguous" ,128,5,0,1,0,0,0,0,NULL,&atx[26],NULL,0,NULL} ,
-  {0, "get-links" ,128,7,0,0,0,0,0,0,NULL,&atx[174],NULL,0,&atx[178]} ,
-  {427, "Entrez2-link-set" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[175],0,&atx[180]} ,
-  {0, "ids" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[176]} ,
-  {0, "data-size" ,128,1,0,1,0,0,0,0,NULL,&atx[1],NULL,0,&atx[177]} ,
+  {0, "get-links" ,128,7,0,0,0,0,0,0,NULL,&atx[170],NULL,0,&atx[174]} ,
+  {427, "Entrez2-link-set" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[171],0,&atx[176]} ,
+  {0, "ids" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[172]} ,
+  {0, "data-size" ,128,1,0,1,0,0,0,0,NULL,&atx[1],NULL,0,&atx[173]} ,
   {0, "data" ,128,2,0,1,0,0,0,0,NULL,&atx[10],NULL,0,NULL} ,
-  {0, "get-linked" ,128,8,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[179]} ,
-  {0, "get-link-counts" ,128,9,0,0,0,0,0,0,NULL,&atx[180],NULL,0,NULL} ,
-  {428, "Entrez2-link-count-list" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[181],0,&atx[94]} ,
-  {0, "link-type-count" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[182]} ,
-  {0, "links" ,128,1,0,0,0,0,0,0,NULL,&atx[31],&atx[183],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[184],NULL,0,NULL} ,
-  {434, "Entrez2-link-count" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[185],0,NULL} ,
-  {0, "link-type" ,128,0,0,0,0,0,0,0,NULL,&atx[5],NULL,0,&atx[186]} ,
+  {0, "get-linked" ,128,8,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[175]} ,
+  {0, "get-link-counts" ,128,9,0,0,0,0,0,0,NULL,&atx[176],NULL,0,NULL} ,
+  {428, "Entrez2-link-count-list" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[177],0,&atx[94]} ,
+  {0, "link-type-count" ,128,0,0,0,0,0,0,0,NULL,&atx[1],NULL,0,&atx[178]} ,
+  {0, "links" ,128,1,0,0,0,0,0,0,NULL,&atx[31],&atx[179],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[180],NULL,0,NULL} ,
+  {437, "Entrez2-link-count" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[181],0,NULL} ,
+  {0, "link-type" ,128,0,0,0,0,0,0,0,NULL,&atx[5],NULL,0,&atx[182]} ,
   {0, "link-count" ,128,1,0,0,0,0,0,0,NULL,&atx[1],NULL,0,NULL} ,
-  {0, "dt" ,128,1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,&atx[188]} ,
-  {0, "server" ,128,2,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[189]} ,
-  {0, "msg" ,128,3,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[190]} ,
-  {0, "key" ,128,4,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[191]} ,
+  {0, "dt" ,128,1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,&atx[184]} ,
+  {0, "server" ,128,2,0,0,0,0,0,0,NULL,&atx[3],NULL,0,&atx[185]} ,
+  {0, "msg" ,128,3,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[186]} ,
+  {0, "key" ,128,4,0,1,0,0,0,0,NULL,&atx[3],NULL,0,&atx[187]} ,
   {0, "cookie" ,128,5,0,1,0,0,0,0,NULL,&atx[3],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Entrez2" , "asnent2.h19",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Entrez2" , "asnent2.h11",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -328,23 +328,23 @@ static AsnModulePtr amp = ampx;
 
 #define ENTREZ2_REPLY &at[84]
 #define ENTREZ2_REPLY_reply &at[85]
-#define ENTREZ2_REPLY_dt &at[187]
-#define ENTREZ2_REPLY_server &at[188]
-#define ENTREZ2_REPLY_msg &at[189]
-#define ENTREZ2_REPLY_key &at[190]
-#define ENTREZ2_REPLY_cookie &at[191]
+#define ENTREZ2_REPLY_dt &at[183]
+#define ENTREZ2_REPLY_server &at[184]
+#define ENTREZ2_REPLY_msg &at[185]
+#define ENTREZ2_REPLY_key &at[186]
+#define ENTREZ2_REPLY_cookie &at[187]
 
 #define E2REPLY &at[86]
 #define E2REPLY_error &at[87]
 #define E2REPLY_get_info &at[88]
-#define E2REPLY_eval_boolean &at[120]
-#define E2REPLY_get_docsum &at[125]
-#define E2REPLY_get_term_pos &at[151]
-#define E2REPLY_get_term_list &at[152]
-#define E2REPLY_get_term_hierarchy &at[163]
-#define E2REPLY_get_links &at[173]
-#define E2REPLY_get_linked &at[178]
-#define E2REPLY_get_link_counts &at[179]
+#define E2REPLY_eval_boolean &at[130]
+#define E2REPLY_get_docsum &at[135]
+#define E2REPLY_get_term_pos &at[147]
+#define E2REPLY_get_term_list &at[148]
+#define E2REPLY_get_term_hierarchy &at[159]
+#define E2REPLY_get_links &at[169]
+#define E2REPLY_get_linked &at[174]
+#define E2REPLY_get_link_counts &at[175]
 
 #define ENTREZ2_INFO &at[89]
 #define ENTREZ2_INFO_db_count &at[90]
@@ -352,41 +352,41 @@ static AsnModulePtr amp = ampx;
 #define ENTREZ2_INFO_db_info &at[92]
 #define ENTREZ2_INFO_db_info_E &at[93]
 
-#define ENTREZ2_BOOLEAN_REPLY &at[121]
-#define ENTREZ2_BOOLEAN_REPLY_count &at[122]
-#define ENTREZ2_BOOLEAN_REPLY_uids &at[123]
-#define ENTREZ2_BOOLEAN_REPLY_query &at[124]
+#define ENTREZ2_BOOLEAN_REPLY &at[131]
+#define ENTREZ2_BOOLEAN_REPLY_count &at[132]
+#define ENTREZ2_BOOLEAN_REPLY_uids &at[133]
+#define ENTREZ2_BOOLEAN_REPLY_query &at[134]
 
-#define ENTREZ2_DOCSUM_LIST &at[126]
-#define ENTREZ2_DOCSUM_LIST_count &at[127]
-#define ENTREZ2_DOCSUM_LIST_list &at[128]
-#define ENTREZ2_DOCSUM_LIST_list_E &at[129]
+#define ENTREZ2_DOCSUM_LIST &at[136]
+#define ENTREZ2_DOCSUM_LIST_count &at[137]
+#define ENTREZ2_DOCSUM_LIST_list &at[138]
+#define ENTREZ2_DOCSUM_LIST_list_E &at[139]
 
-#define ENTREZ2_TERM_LIST &at[153]
-#define ENTREZ2_TERM_LIST_pos &at[154]
-#define ENTREZ2_TERM_LIST_num &at[155]
-#define ENTREZ2_TERM_LIST_list &at[156]
-#define ENTREZ2_TERM_LIST_list_E &at[157]
+#define ENTREZ2_TERM_LIST &at[149]
+#define ENTREZ2_TERM_LIST_pos &at[150]
+#define ENTREZ2_TERM_LIST_num &at[151]
+#define ENTREZ2_TERM_LIST_list &at[152]
+#define ENTREZ2_TERM_LIST_list_E &at[153]
 
-#define ENTREZ2_HIER_NODE &at[164]
-#define HIER_NODE_cannonical_form &at[165]
-#define ENTREZ2_HIER_NODE_lineage_count &at[166]
-#define ENTREZ2_HIER_NODE_lineage &at[167]
-#define ENTREZ2_HIER_NODE_lineage_E &at[168]
-#define ENTREZ2_HIER_NODE_child_count &at[169]
-#define ENTREZ2_HIER_NODE_children &at[170]
-#define ENTREZ2_HIER_NODE_children_E &at[171]
-#define ENTREZ2_HIER_NODE_is_ambiguous &at[172]
+#define ENTREZ2_HIER_NODE &at[160]
+#define HIER_NODE_cannonical_form &at[161]
+#define ENTREZ2_HIER_NODE_lineage_count &at[162]
+#define ENTREZ2_HIER_NODE_lineage &at[163]
+#define ENTREZ2_HIER_NODE_lineage_E &at[164]
+#define ENTREZ2_HIER_NODE_child_count &at[165]
+#define ENTREZ2_HIER_NODE_children &at[166]
+#define ENTREZ2_HIER_NODE_children_E &at[167]
+#define ENTREZ2_HIER_NODE_is_ambiguous &at[168]
 
-#define ENTREZ2_LINK_SET &at[174]
-#define ENTREZ2_LINK_SET_ids &at[175]
-#define ENTREZ2_LINK_SET_data_size &at[176]
-#define ENTREZ2_LINK_SET_data &at[177]
+#define ENTREZ2_LINK_SET &at[170]
+#define ENTREZ2_LINK_SET_ids &at[171]
+#define ENTREZ2_LINK_SET_data_size &at[172]
+#define ENTREZ2_LINK_SET_data &at[173]
 
-#define ENTREZ2_LINK_COUNT_LIST &at[180]
-#define COUNT_LIST_link_type_count &at[181]
-#define ENTREZ2_LINK_COUNT_LIST_links &at[182]
-#define ENTREZ2_LINK_COUNT_LIST_links_E &at[183]
+#define ENTREZ2_LINK_COUNT_LIST &at[176]
+#define COUNT_LIST_link_type_count &at[177]
+#define ENTREZ2_LINK_COUNT_LIST_links &at[178]
+#define ENTREZ2_LINK_COUNT_LIST_links_E &at[179]
 
 #define ENTREZ2_DB_INFO &at[94]
 #define ENTREZ2_DB_INFO_db_name &at[95]
@@ -396,9 +396,12 @@ static AsnModulePtr amp = ampx;
 #define ENTREZ2_DB_INFO_field_count &at[99]
 #define ENTREZ2_DB_INFO_fields &at[100]
 #define ENTREZ2_DB_INFO_fields_E &at[101]
-#define ENTREZ2_DB_INFO_link_count &at[111]
-#define ENTREZ2_DB_INFO_links &at[112]
-#define ENTREZ2_DB_INFO_links_E &at[113]
+#define ENTREZ2_DB_INFO_link_count &at[113]
+#define ENTREZ2_DB_INFO_links &at[114]
+#define ENTREZ2_DB_INFO_links_E &at[115]
+#define DB_INFO_docsum_field_count &at[122]
+#define ENTREZ2_DB_INFO_docsum_fields &at[123]
+#define ENTREZ2_DB_INFO_docsum_fields_E &at[124]
 
 #define ENTREZ2_FIELD_INFO &at[102]
 #define ENTREZ2_FIELD_INFO_field_name &at[103]
@@ -409,42 +412,38 @@ static AsnModulePtr amp = ampx;
 #define ENTREZ2_FIELD_INFO_is_numerical &at[108]
 #define ENTREZ2_FIELD_INFO_single_token &at[109]
 #define FIELD_INFO_hierarchy_avail &at[110]
+#define ENTREZ2_FIELD_INFO_is_rangable &at[111]
+#define FIELD_INFO_is_truncatable &at[112]
 
-#define ENTREZ2_LINK_INFO &at[114]
-#define ENTREZ2_LINK_INFO_link_name &at[115]
-#define ENTREZ2_LINK_INFO_link_menu &at[116]
-#define ENTREZ2_LINK_INFO_link_descr &at[117]
-#define ENTREZ2_LINK_INFO_db_to &at[118]
-#define ENTREZ2_LINK_INFO_data_size &at[119]
+#define ENTREZ2_LINK_INFO &at[116]
+#define ENTREZ2_LINK_INFO_link_name &at[117]
+#define ENTREZ2_LINK_INFO_link_menu &at[118]
+#define ENTREZ2_LINK_INFO_link_descr &at[119]
+#define ENTREZ2_LINK_INFO_db_to &at[120]
+#define ENTREZ2_LINK_INFO_data_size &at[121]
 
-#define ENTREZ2_DOCSUM &at[130]
-#define ENTREZ2_DOCSUM_uid &at[131]
-#define ENTREZ2_DOCSUM_secondary_uid &at[132]
-#define ENTREZ2_DOCSUM_caption &at[133]
-#define ENTREZ2_DOCSUM_title &at[134]
-#define ENTREZ2_DOCSUM_short_citation &at[135]
-#define ENTREZ2_DOCSUM_entrez_date &at[136]
-#define ENTREZ2_DOCSUM_language &at[137]
-#define ENTREZ2_DOCSUM_create_date &at[138]
-#define ENTREZ2_DOCSUM_update_date &at[139]
-#define ENTREZ2_DOCSUM_seqlen &at[140]
-#define ENTREZ2_DOCSUM_author &at[141]
-#define ENTREZ2_DOCSUM_source &at[142]
-#define ENTREZ2_DOCSUM_volume &at[143]
-#define ENTREZ2_DOCSUM_pages &at[144]
-#define ENTREZ2_DOCSUM_pub_type &at[145]
-#define ENTREZ2_DOCSUM_record_status &at[146]
-#define ENTREZ2_DOCSUM_no_abstract &at[147]
-#define ENTREZ2_DOCSUM_translated_title &at[148]
-#define ENTREZ2_DOCSUM_no_authors &at[149]
-#define ENTREZ2_DOCSUM_taxid &at[150]
+#define ENTREZ2_DOCSUM_FIELD_INFO &at[125]
+#define DOCSUM_FIELD_INFO_field_name &at[126]
+#define FIELD_INFO_field_description &at[127]
+#define DOCSUM_FIELD_INFO_field_type &at[128]
 
-#define ENTREZ2_TERM &at[158]
-#define ENTREZ2_TERM_term &at[159]
-#define ENTREZ2_TERM_txid &at[160]
-#define ENTREZ2_TERM_count &at[161]
-#define ENTREZ2_TERM_is_leaf_node &at[162]
+#define ENTREZ2_DOCSUM_FIELD_TYPE &at[129]
 
-#define ENTREZ2_LINK_COUNT &at[184]
-#define ENTREZ2_LINK_COUNT_link_type &at[185]
-#define ENTREZ2_LINK_COUNT_link_count &at[186]
+#define ENTREZ2_DOCSUM &at[140]
+#define ENTREZ2_DOCSUM_uid &at[141]
+#define ENTREZ2_DOCSUM_docsum_data &at[142]
+#define ENTREZ2_DOCSUM_docsum_data_E &at[143]
+
+#define ENTREZ2_DOCSUM_DATA &at[144]
+#define ENTREZ2_DOCSUM_DATA_field_name &at[145]
+#define ENTREZ2_DOCSUM_DATA_field_value &at[146]
+
+#define ENTREZ2_TERM &at[154]
+#define ENTREZ2_TERM_term &at[155]
+#define ENTREZ2_TERM_txid &at[156]
+#define ENTREZ2_TERM_count &at[157]
+#define ENTREZ2_TERM_is_leaf_node &at[158]
+
+#define ENTREZ2_LINK_COUNT &at[180]
+#define ENTREZ2_LINK_COUNT_link_type &at[181]
+#define ENTREZ2_LINK_COUNT_link_count &at[182]

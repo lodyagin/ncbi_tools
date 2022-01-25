@@ -44,6 +44,15 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.5  2001/12/12 17:38:38  kans
+* added new subsource qualifiers, four now have empty name
+*
+* Revision 6.4  2001/12/07 13:49:34  kans
+* workingBuffer needs to be large enough for terminal null byte
+*
+* Revision 6.3  2001/08/06 22:13:12  kans
+* using NUM_SEQID, added TPA ids to arrays
+*
 * Revision 6.2  2000/11/03 20:36:00  kans
 * FindReplaceInEntity replaces FindInEntity and FindInEntityX - complete redesign, no longer using AsnExpOptExplore because of the difficulty of replacing with a larger string (TF + JK)
 *
@@ -96,6 +105,7 @@
 #include <objsub.h>
 #include <gather.h>
 #include <sqnutils.h>
+#include <subutil.h>
 #include <findrepl.h>
 
 /* internal structure passed to callbacks */
@@ -299,7 +309,7 @@ static Boolean FindReplString (
   else
     buffSize = searchLen;
 
-  workingBuffer = (CharPtr) MemNew (buffSize);
+  workingBuffer = (CharPtr) MemNew (buffSize + 2);
   if (workingBuffer == NULL)
     return FALSE;
 
@@ -895,7 +905,10 @@ static void FindReplBioSource (
   if (biop != NULL) {
     orp = biop->org;
     for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
-      if (ssp->subtype != 14 && ssp->subtype != 15) {
+      if (ssp->subtype != SUBSRC_germline &&
+          ssp->subtype != SUBSRC_rearranged &&
+          ssp->subtype != SUBSRC_transgenic &&
+          ssp->subtype != SUBSRC_environmental_sample) {
         FindReplString (&(ssp->name), fsp);
       }
       FindReplString (&(ssp->attrib), fsp);
@@ -1082,6 +1095,9 @@ static void FindReplSeqId (
     case SEQID_OTHER :
     case SEQID_DDBJ :
     case SEQID_PRF :
+    case SEQID_TPG :
+    case SEQID_TPE :
+    case SEQID_TPD :
       FindReplTextSeqId((TextSeqIdPtr) sip->data.ptrvalue, fsp);
       break;
     case SEQID_PATENT :

@@ -1,6 +1,6 @@
 	
 			README for stand-alone BLAST
-			   (last updated 7/5/2001)
+			   (last updated 12/18/2001)
 
 
 
@@ -9,10 +9,10 @@ setting up stand-alone BLAST, command-line options for stand-alone BLAST,
 and a release history of the different versions.
 
 BLAST binaries are provided for IRIX6.2, Solaris2.6 (Sparc) Solaris2.7 (Intel), 
-DEC OSF1 (ver. 5.1), LINUX/Intel, HPUX, MacIntosh, and Win32 systems.
+DEC OSF1 (ver. 4.0D), LINUX/Intel, HPUX, MacIntosh, and Win32 systems.
 We will attempt to produce binaries for other platforms upon request.
 
-Stand-alone binaries are available from ftp://ncbi.nlm.nih.gov/blast/executables/
+Stand-alone binaries are available from ftp://ftp.ncbi.nih.gov/blast/executables/
 
 Please remember to FTP in binary mode.
 
@@ -53,14 +53,14 @@ with any file of FASTA formatted protein or nucleotide sequences. If you
 are interested in creating your own database files you should refer to
 the sections "Non-redundant defline syntax" and "Appendix 1: Sequence
 Identifier Syntax" of the README in the BLAST database directory
-(ftp://ncbi.nlm.nih.gov/blast/db/). You can also refer to the FASTA
+(ftp://ftp.ncbi.nih.gov/blast/db/). You can also refer to the FASTA
 description available from the BLAST search pages 
 (http://www.ncbi.nlm.nih.gov/BLAST/fasta.html). 
 
 However, for a testing purposes you should download one of the NCBI
 databases and run a search against it.
 
-In the BLAST database FTP directory (ftp://ncbi.nlm.nih.gov/blast/db/)
+In the BLAST database FTP directory (ftp://ftp.ncbi.nih.gov/blast/db/)
 you will find the downloadable BLAST database files.  For your first
 search we recommend downloading something relatively small like
 ecoli.nt.Z (1349 Kb).  This is a FASTA formatted file of nucleotide
@@ -68,7 +68,7 @@ sequences which is also compressed.  Once uncompressed, you will need to
 format the database using the 'formatdb' program which comes with your
 Standalone BLAST executable. The list of arguments for this program and
 all other BLAST programs are located at the end of the README in the
-Standalone BLAST FTP directory (ftp://ncbi.nlm.nih.gov/blast/executable/). Or 
+Standalone BLAST FTP directory (ftp://ftp.ncbi.nih.gov/blast/executable/). Or 
 you can get these arguments by running each of the BLAST programs (formatdb, 
 blastall etc.) with a single hyphen as the argument (Example: formatdb -). For
 this document we are just going to show you the basic commands for formatting 
@@ -108,7 +108,7 @@ BLAST directory.
 
 Now you are ready to create your own databases and run BLAST searches.
 For more information you should refer to the Standalone BLAST README (
-ftp://ncbi.nlm.nih.gov/blast/executable/) and the BLAST literature. 
+ftp://ftp.ncbi.nih.gov/blast/executable/) and the BLAST literature. 
 This will give you some idea of all the programs BLAST supports and the
 use of different parameters for increasing or decreasing the stringency
 of your results.
@@ -159,14 +159,14 @@ own BLAST databases. This can be done with any file of FASTA formatted
 protein or nucleotide sequences. If you are interested in creating your
 own database you should refer to the sections "Non-redundant defline
 syntax" and "Appendix 1: Sequence Identifier Syntax" of the README in
-the BLAST database directory (ftp://ncbi.nlm.nih.gov/blast/db/). You can
+the BLAST database directory (ftp://ftp.ncbi.nih.gov/blast/db/). You can
 also refer to the FASTA description available from the BLAST search
 pages (http://www.ncbi.nlm.nih.gov/BLAST/fasta.html). 
 
 However, for a testing purposes you should download one of the NCBI
 databases and run a search against it.
 
-In the BLAST database FTP directory ftp://ncbi.nlm.nih.gov/blast/db/
+In the BLAST database FTP directory ftp://ftp.ncbi.nih.gov/blast/db/
 you will find the downloadable BLAST database files. For your first
 search we recommend downloading something relatively small like
 ecoli.nt.Z (1349 Kb).  This is a FASTA formatted file of nucleotide
@@ -178,7 +178,7 @@ Once uncompressed, you will now need to format the database using the
 'formatdb' program which comes with your Standalone BLAST executable.
 The list of arguments for this program and all other BLAST programs are
 located at the end of the README in the Standalone BLAST FTP directory
-(ftp://ncbi.nlm.nih.gov/blast/executable/). Or you can get these
+(ftp://ftp.ncbi.nih.gov/blast/executable/). Or you can get these
 arguments by running each of the BLAST programs (formatdb, blastall
 etc.) with a single hyphen as the argument (Example: formatdb -). For
 this document we are just going to show you the basic commands for
@@ -215,7 +215,7 @@ blastall -p blastn -d ecoli.nt -i test.txt -o test.out
 This should generate a results file called test.out in the Standalone
 BLAST directory. Now you are ready to create your own databases and run
 BLAST searches. For more information you should refer to the Standalone
-BLAST README ( ftp://ncbi.nlm.nih.gov/blast/executable/) and the BLAST
+BLAST README ( ftp://ftp.ncbi.nih.gov/blast/executable/) and the BLAST
 literature.  This will give you some idea of all the programs BLAST
 supports and the use of different parameters for increasing or
 decreasing the stringency of your results.
@@ -999,16 +999,63 @@ References
      and statistics for multiple high-scoring segments in molecu-
      lar sequences. Proc. Natl. Acad. Sci. USA 90:5873-7.
 
+     Schaffer, Alejandro A., L. Aravind, Thomas L. Madden, Sergei Shavirin
+     John L. Spouge, Yuri I. Wolf, Eugene V. Koonin, and Stephen F. Altschul (2001),
+     Improving PSI-BLAST Protein Database Search Sensitivity with Composition-Based 
+     Statistics and Other Refinements.  Nucleic Acids Res. 29:2994-3005.
 
 Release History
 ---------------
+
+Notes for 2.2.2 release:
+
+Enhancements:
+
+1.) Version 4 of the BLAST databases is now fully supported.  This version
+has some enhancements described in README.formatdb and fixes some problems
+described below.  Use the "-A" option on formatdb to produce the new database
+version.  The BLAST binaries for release 2.2.2 are entirely compatiable with
+both the current and the new version of the BLAST databases.  Old BLAST binaries
+are not necessarily compatiable with the new database format.
+
+2.) Fastacmd will dump out an entire BLAST database in FASTA format if the
+new -D option is used.
+
+3.) Fastacmd will separate definition lines from different GI's that have
+been merged together in nr (as they all have the same sequence) by control-A's.
+if the new -c option is used.
+
+
+Bug fixes:
+
+1.) A problem has been fixed that caused tblastn searches to miss some protein matches,
+if the database sequence was longer than 15 million bases.
+
+2.) The old (current) version of the BLAST databases has a "rollover" problem if
+the total number of bases in a single volume is greater than 4294967295.  The new
+database verison (#4) allows eight bytes for this.
+
+3.) The old (current) version of the BLAST database format does not handle ambiguity
+characters in a nucleotide database sequence if it is over 16 million characters long.
+The new version of the the BLAST database does.
+
+4.) A performance problem that caused a mutexes to be acquired too often for 
+multi-threaded runs with four or more CPU's has been fixed.  Thanks to Haruna
+Cofer of SGI for help in finding the cause.
+
+5.) A problem that caused ungapped blastp/blastx/tblastn/tblastx to crash on
+certain matrices (e.g., pam10) has been fixed.
+
+6.) Some blastpgp problems with using the -B (for reading a master-slave alignment) and
+reading checkpoint files (-C) have been resolved.
+
 
 Notes for 2.2.1 release:
 
 Enhancements:
 
 1.) BLAST and PSI-BLAST improvements as described in 
-Schaffer et al., Nucleic Acids Research 2001 Jul 15;29(14).
+Schaffer et al., Nucleic Acids Research 2001 Jul 15;29(14):2994-3005.
 These include improvements the use of composition-based statistics
 and improvements to the edge-correction effects.  Composition-based 
 statistics were initially implemented in release 2.1.1, but the 

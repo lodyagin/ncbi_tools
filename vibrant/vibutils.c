@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.40 $
+* $Revision: 6.41 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,8 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.41  2001/11/01 14:25:53  kans
+* use times function for UNIX ComputerTime
+*
 * Revision 6.40  2001/05/17 17:52:34  juran
-* Implement Nlm_ClipPrintingRect() for Carbon.General cleanup -- heed all warnings.
+* Implement Nlm_ClipPrintingRect() for Carbon.
+* General cleanup -- heed all warnings.
 *
 * Revision 6.39  2001/05/16 23:44:31  juran
 * Segregate Nlm_PrintingRect() into four functions, implement for Carbon.
@@ -356,6 +360,11 @@ either.
 #  define PM_USE_SESSION_APIS 0
 #  include <PMApplication.h>
 # endif
+#endif
+
+#ifdef WIN_MOTIF
+#include <sys/times.h>
+#include <limits.h>
 #endif
 
 #ifdef WIN_MAC
@@ -1547,7 +1556,8 @@ extern Nlm_Int4 Nlm_ComputerTime (void)
   return (GetCurrentTime ());
 #endif
 #ifdef WIN_MOTIF
-  return (Nlm_Int4) (time (NULL));
+  struct tms buffer;
+  return (Nlm_Int4) times (&buffer);
 #endif
 }
 

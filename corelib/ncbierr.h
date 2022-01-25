@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.h,v 6.6 2001/02/08 22:27:04 vakatov Exp $
+* $Id: ncbierr.h,v 6.7 2001/07/12 21:58:03 vakatov Exp $
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -44,6 +44,9 @@
 *                       of functions from int to ErrSev to eliminate warnings
 *
 * $Log: ncbierr.h,v $
+* Revision 6.7  2001/07/12 21:58:03  vakatov
+* Introduced #NLM_NO_TRACE (define it if you need to prohibit macro #TRACE)
+*
 * Revision 6.6  2001/02/08 22:27:04  vakatov
 * + Nlm_CallErrHandlerOnly() -- to allow processing of posted
 * err.messages by the hook only.
@@ -357,7 +360,7 @@ NLM_EXTERN void LIBCALL Nlm_AbnormalExitPure PROTO((int));
 
 #ifdef _DEBUG
 
-#ifndef TRACE
+#if !defined(TRACE)  &&  !defined(NLM_NO_TRACE)
 #define TRACE	Nlm_Trace
 #endif
 #ifndef ASSERT
@@ -376,7 +379,7 @@ NLM_EXTERN void LIBCALL Nlm_AbnormalExitPure PROTO((int));
 
 #else /* ! _DEBUG */
 
-#ifndef TRACE
+#if !defined(TRACE)  &&  !defined(NLM_NO_TRACE)
 #define TRACE	1 ? (void)0 : Nlm_Trace
 #endif
 #ifndef ASSERT

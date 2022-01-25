@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.106 $
-* $Revision: 6.106 $
+* $Revision: 6.113 $
+* $Revision: 6.113 $
 *
 * File Description:  files that go with "asn2ff"
 *
@@ -492,7 +492,7 @@ static Boolean is_contig(BioseqPtr bsp)
 NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid,  Uint1 format, Uint1 display, Int4 from, Int4 to, Uint1 strand)
 {
 	Boolean				rsult=FALSE;
-	Asn2ffJobPtr		ajp;
+	Asn2ffJobPtr		ajp=NULL;
 	BioseqPtr 			bsp;
 	BioseqSetPtr		bssp;
 	SeqLocPtr 			slp = NULL;
@@ -505,20 +505,6 @@ NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid, 
 	if (sep == NULL) {
 		return FALSE;
 	}
-	if(format == GENPEPT_FMT) {
-	    if(Template_load == FALSE) {
-		    PrintTemplateSetLoad("asn2ff.prt");
-		    Template_load = TRUE;
-	    }
-	    Spop = StdPrintOptionsNew(NULL);
-	    if(Spop != NULL) {
-		    Spop->newline = "~";
-		    Spop->indent = "";
-	    } else {
-		    ErrPostStr(SEV_FATAL, 0, 0, "StdPrintOptionsNew failed");
-		    return FALSE;
-	    }
-    }
 	
 	if (seqid == NULL) {  /*should never happen */
 		if (IS_Bioseq(sep)) {
@@ -530,7 +516,7 @@ NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid, 
 							RELEASE_MODE, seqid, FF_TOP_CONTIG));
 			}
 			return (SeqEntryToFlatEx(sep, fp, format, 
-							RELEASE_MODE, seqid, FF_TOP_COMPLETE));
+							RELEASE_MODE, seqid, FF_REGULAR));
 		} else {
     		if ((bssp = (BioseqSetPtr) sep->data.ptrvalue) == NULL) {
 				return rsult;
@@ -570,8 +556,24 @@ NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid, 
 		sl.next=NULL;
 		slp_region=&sl;
 	}
+	if(format == GENPEPT_FMT) {
+		if(Template_load == FALSE) {
+		    PrintTemplateSetLoad("asn2ff.prt");
+		    Template_load = TRUE;
+		}
+		Spop = StdPrintOptionsNew(NULL);
+		if(Spop != NULL) {
+		    Spop->newline = "~";
+		    Spop->indent = "";
+		} else {
+		    ErrPostStr(SEV_FATAL, 0, 0, "StdPrintOptionsNew failed");
+		    return FALSE;
+		}
+	}
+
 	ajp = Asn2ffJobCreate(sep, NULL, slp_region, fp, format, RELEASE_MODE, Spop);
 	if (ajp == NULL) {
+		if(Spop) StdPrintOptionsFree(Spop);
 		return FALSE;
 	}
 	ajp->show_version = TRUE;
@@ -614,6 +616,8 @@ NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid, 
 	} else {
 		rsult = SeqEntryToFlatAjp(ajp, sep, fp, format, RELEASE_MODE);
 	}
+	if(ajp) MemFree(ajp);
+	if(Spop) StdPrintOptionsFree(Spop);
 	return rsult;
 }
 
@@ -3165,10 +3169,14 @@ NLM_EXTERN void asn2ff_cleanup(Asn2ffJobPtr ajp)
     ComStructPtr    s;
     ComStructPtr    snext;
     OrganizeFeatPtr ofp;
+
+#if 0 /***have no idea why this is needed (EY) ***/
 	
 	if (get_www()) {
 		return;
 	}
+#endif
+
     if(ajp->asn2ffwep != NULL)
     {
         for(gbp = ajp->asn2ffwep->gbp; gbp != NULL; gbp = next)
@@ -3353,8 +3361,17 @@ void CheckSeqPort (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start)
 void GetMolInfo (Asn2ffJobPtr ajp, CharPtr buffer, GBEntryPtr gbp)
 {
 	static CharPtr strand [4]= { "   ", "ss-", "ds-","ms-"};
+
+	/* WARNING : The mol[] table was originally designed to convert
+	   MolInfo->biomol values <= 8 in the ASN.1 spec to molecule type strings.
+	   The addition of snoRNA with biomol value 12 breaks this design.
+	   Also, the new LOCUS line format requires larger molecule type
+	   strings, since the space for that field has been increased from 4 to 6.
+	   Hence new_locus_mol, utilized if ajp->new_locus_fmt is set. */
 	
 	static CharPtr mol [9] = {"    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "uRNA", "scRNA", " AA "};
+
+	static CharPtr new_locus_mol [10] = {"      ", "DNA   ", "RNA   ", "mRNA  ", "rRNA  ", "tRNA  ", "uRNA  ", "scRNA ", " AA   ", "snoRNA"};
 
 	static CharPtr embl_mol [8] = {"xxx", "DNA", "RNA", "RNA", "RNA", "RNA", "RNA", "AA "};
 
@@ -3384,6 +3401,8 @@ void GetMolInfo (Asn2ffJobPtr ajp, CharPtr buffer, GBEntryPtr gbp)
 		mfp = (MolInfoPtr)vnp->data.ptrvalue;
 		if (mfp->biomol <= 8) {
 			imol = (Int2) (mfp->biomol);
+		} else if (mfp->biomol == 12 && ajp->new_locus_fmt) {
+			imol = 9;
 		}
 	} else {
 		for (vnp = bsp->descr; vnp; vnp = vnp->next) {
@@ -3395,7 +3414,7 @@ void GetMolInfo (Asn2ffJobPtr ajp, CharPtr buffer, GBEntryPtr gbp)
 			}
 		}
 	}
-	if (imol < 2) {  /* check inst.mol if mol-type is not-set or genomic */
+	if (imol < 2) {  /* check Seq-inst.mol if mol-type is not-set or genomic */
 		imol = bsp->mol;
 		if (imol == 3)
 			imol = 8;
@@ -3417,11 +3436,21 @@ void GetMolInfo (Asn2ffJobPtr ajp, CharPtr buffer, GBEntryPtr gbp)
 	
 	if (ajp->format == GENBANK_FMT || ajp->format == SELECT_FMT) {
 		if (bsp->topology == 2) {
+		  if (ajp->new_locus_fmt == TRUE) {
+			sprintf(buffer, "%12ld bp %s%-6s  circular", 
+				(long) length, strand[istrand], new_locus_mol[imol]);
+		  } else {
 			sprintf(buffer, "%7ld bp %s%-4s  circular", 
-							(long) length, strand[istrand], mol[imol]);
-		} else {
-			sprintf(buffer, "%7ld bp %s%-4s          ", 
 				(long) length, strand[istrand], mol[imol]);
+		  }
+		} else {
+		  if (ajp->new_locus_fmt == TRUE) {
+			sprintf(buffer, "%12ld bp %s%-6s  linear  ", 
+				(long) length, strand[istrand], new_locus_mol[imol]);
+		  } else {
+ 			sprintf(buffer, "%7ld bp %s%-4s          ", 
+ 				(long) length, strand[istrand], mol[imol]);
+		  }
 		}
 	} else if (ajp->format == GENPEPT_FMT) {
 			sprintf(buffer, "%7ld aa", (long) length);
@@ -3496,7 +3525,7 @@ Boolean CheckXrefLine (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 void PrintLocusLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
 	BioseqPtr bsp;
-	Char buffer[30];
+	Char buffer[34];	/* Gack, what a hack! */
 
 	if (gbp == NULL)
 		return;
@@ -3535,10 +3564,19 @@ void PrintLocusLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		ff_AddString( gbp->locus);
 		GetMolInfo(ajp, buffer, gbp);
 		ff_AddString( buffer);
-		TabToColumn(53);
+
+		if (ajp->new_locus_fmt)
+		  TabToColumn(65);
+		else
+		  TabToColumn(53);
 		ff_AddString(gbp->div);
-		TabToColumn(63);
+
+		if (ajp->new_locus_fmt)
+		  TabToColumn(69);
+		else
+		  TabToColumn(63);
 		ff_AddString(gbp->date);
+
 		ff_EndPrint();
 	}
 }
@@ -3836,10 +3874,8 @@ ValNodePtr GetKeywordLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		mfp = (MolInfoPtr) block->data.ptrvalue;
 			switch (mfp->tech) {
 				case MI_TECH_htc:
-					if (ajp->forgbrel == FALSE) {
-						keyword = ValNodeNew(NULL);
-						keyword->data.ptrvalue = StringSave("HTC");
-					}
+					keyword = ValNodeNew(NULL);
+					keyword->data.ptrvalue = StringSave("HTC");
 				break;
 				case MI_TECH_htgs_0:
 					keyword = ValNodeNew(NULL);
@@ -4787,6 +4823,8 @@ void PrintSeqBlk (Asn2ffJobPtr ajp, GBEntryPtr gbp)
         }
         if (last ==  LAST)
                 PrintTerminator();
+
+	MemFree(dsp);
 }
 
 void PrintPubsByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
@@ -5092,7 +5130,7 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 				if ((residue=SeqPortGetResidue(spp)) == SEQPORT_EOF) {
                     break;
                }
-/*********/
+/*
 				if (ajp->only_one) {
 					if (residue == SEQPORT_VIRT) {
 						*ptr = '\0';
@@ -5103,7 +5141,7 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 						continue;
 					}
 				}
-/**********/		
+*/		
 				if ( !IS_residue(residue) && residue != INVALID_RESIDUE) {
 					if (residue != SEQPORT_EOF) {
 						inner_index--;
@@ -5384,6 +5422,7 @@ static void PrintSeqRegion (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 		if (!IS_residue(residue) && residue != INVALID_RESIDUE) {
 			continue;
 		}
+/*
 		if (ajp->only_one) {
 			if (residue == SEQPORT_VIRT) {
 				*ptr = '\0';
@@ -5393,6 +5432,7 @@ static void PrintSeqRegion (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 				continue;
 			}
 		}
+*/
 		if (residue == INVALID_RESIDUE) {
 			residue = (Uint1) 'X';
 		}

@@ -32,7 +32,7 @@ fdlobjAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-BlastDL
-*    Generated using ASNCODE Revision: 6.10 at Apr 2, 2001 10:56 AM
+*    Generated using ASNCODE Revision: 6.12 at Nov 2, 2001  5:01 PM
 *
 **************************************************/
 

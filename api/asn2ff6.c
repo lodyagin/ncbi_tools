@@ -29,13 +29,25 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.61 $
+* $Revision: 6.65 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.65  2001/12/05 18:13:53  cavanaug
+* Changes for new LOCUS line format
+*
+* Revision 6.64  2001/08/21 17:33:33  kans
+* snoRNA can show /product
+*
+* Revision 6.63  2001/08/07 15:51:08  kans
+* use NUM_SEQID, added third party annotation seqids
+*
+* Revision 6.62  2001/07/18 14:50:13  kans
+* gather features with gsc.useSeqMgrIndexes if genpept, raw, indexing requested, and IndexedGetDescrForDiv to speed up finding division
+*
 * Revision 6.61  2001/07/03 20:01:41  kans
 * AddGBQual ASN2GNBK_STRIP_NOTE_PERIODS trim trailing tilde first
 *
@@ -328,11 +340,10 @@
 #include <sqnutils.h>
 
 #define BUF_EXT_LENGTH 4
-#define NUM_ORDER 16
 
 /*---------- order for other id FASTA_LONG (copied from SeqIdWrite) ------- */
 
-static Uint1 fasta_order[NUM_ORDER] = {  
+static Uint1 fasta_order[NUM_SEQID] = {  
 33, /* 0 = not set */
 20, /* 1 = local Object-id */
 15,  /* 2 = gibbsq */
@@ -348,7 +359,10 @@ static Uint1 fasta_order[NUM_ORDER] = {
 32,  /* 12 = gi */
 10, /* 13 = ddbj */
 10, /* 14 = prf */
-12  /* 15 = pdb */
+12, /* 15 = pdb */
+10,  /* 16 = tpg */
+10,  /* 17 = tpe */
+10   /* 18 = tpd */
 };
 
 
@@ -903,6 +917,7 @@ NLM_EXTERN Boolean GetNAFeatKey(Boolean is_new, CharPtr PNTR buffer, SeqFeatPtr 
 			case 4:
 			case 5:
 			case 6:
+			case 7:
 			case 255:
 				if (rrp ->ext.choice == 1 && sfp_out) {
 					 str = rrp->ext.value.ptrvalue;
@@ -1478,6 +1493,90 @@ NLM_EXTERN Int4 GetNumOfSeqBlks (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 *	09-05-96
 *************************************************************************/
 
+static void IndexedGetDescrForDiv (BioseqPtr bsp, DivStructPtr PNTR dspp)
+
+{
+	SeqMgrDescContext context;
+	ValNodePtr tmp;
+	DivStructPtr	dsp;
+	BioSourcePtr bsr;
+	MolInfoPtr mol;
+	CharPtr gb_div=NULL;
+	GBBlockPtr gb;
+
+	dsp = *dspp;
+	tmp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &context);
+			if (tmp != NULL) {
+				if (tmp->data.ptrvalue != NULL) {
+					mol = (MolInfoPtr) tmp->data.ptrvalue;
+					if (mol->tech != 0) {
+						if (dsp->tech == 0) {
+							dsp->tech = mol->tech;
+						} else if (mol->tech != dsp->tech) {
+							dsp->was_err = TRUE;
+							if (dsp->err_post) {
+								ErrPostEx(SEV_WARNING, 0, 0, 
+								"Different Molinfo in one entry: %d|%d", 
+									mol->tech, dsp->tech);
+							}
+							dsp->tech = mol->tech;
+						}
+						dsp->techID = context.itemID;
+						dsp->techtype = OBJ_SEQDESC;
+						*dspp = dsp;
+					}
+				}
+			}
+
+	tmp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
+			while (tmp != NULL && dsp->orgdiv == NULL) {
+				bsr = (BioSourcePtr) tmp->data.ptrvalue;
+				if (bsr && bsr->org) {
+					if (bsr->org->orgname && bsr->org->orgname->div) {
+						gb_div = bsr->org->orgname->div;
+						if (dsp->orgdiv == NULL) {
+							dsp->orgdiv = gb_div;
+						} else if (StringCmp(gb_div, dsp->orgdiv) != 0) {
+							dsp->was_err = TRUE;
+							if (dsp->err_post) {
+								ErrPostEx(SEV_WARNING, 0, 0, 
+							"Different Taxonomy divisions in one entry: %s|%s", 
+									gb_div, dsp->orgdiv);
+							}
+							dsp->orgdiv = gb_div;
+						}
+						dsp->biosrc = bsr;
+						dsp->orgID = context.itemID;
+						dsp->orgtype = OBJ_SEQDESC;
+						*dspp = dsp;
+					}
+				}
+				tmp = SeqMgrGetNextDescriptor (bsp, tmp, Seq_descr_source, &context);
+			}
+
+	tmp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_genbank, &context);
+			if (tmp != NULL) {
+				gb = (GBBlockPtr) tmp->data.ptrvalue;
+				if (gb->div) {
+					gb_div = gb->div;
+					if (dsp->gbdiv == NULL) {
+						dsp->gbdiv = gb_div;
+					} else if (StringCmp(gb_div, dsp->gbdiv) != 0) {
+						dsp->was_err = TRUE;
+						if (dsp->err_post) {
+							ErrPostEx(SEV_WARNING, 0, 0, 
+							"Different GBBlock divisions in one entry: %s|%s", 
+								gb_div, dsp->gbdiv);
+						}
+						dsp->gbdiv = gb_div;
+					}
+					dsp->gbID = context.itemID;
+					dsp->gbtype = OBJ_SEQDESC;
+					*dspp = dsp;
+				}
+			}
+}
+
 static Boolean GetDescrForDiv (GatherContextPtr gcp)
 {
 /* find only one (closest to the target!) vnp with given choice */
@@ -1569,7 +1668,7 @@ static Boolean GetDescrForDiv (GatherContextPtr gcp)
 *	1 - return division code OK
 *	2 - return division code but errors were found
 **************************************************************************/
-NLM_EXTERN Int2 BioseqGetGBDivCode(BioseqPtr bsp, CharPtr buf, Int2 buflen, Boolean err_post)
+static Int2 BioseqGetGBDivCodeEx (BioseqPtr bsp, CharPtr buf, Int2 buflen, Boolean err_post, Boolean useFeatureIndexing)
 {
 	GatherScope gsc;
 	SeqLocPtr slp = NULL;
@@ -1607,7 +1706,11 @@ NLM_EXTERN Int2 BioseqGetGBDivCode(BioseqPtr bsp, CharPtr buf, Int2 buflen, Bool
 	slp->data.ptrvalue = (SeqIdPtr) SeqIdDup (SeqIdFindBest (bsp->id, 0));
 	gsc.target = slp;
 
-	GatherEntity(bspID, &dsp, GetDescrForDiv, &gsc);
+	if (useFeatureIndexing) {
+		IndexedGetDescrForDiv (bsp, &dsp);
+	} else {
+		GatherEntity(bspID, &dsp, GetDescrForDiv, &gsc);
+	}
 	
 	SeqLocFree(slp);
 	orgdiv = dsp->orgdiv;
@@ -1665,6 +1768,13 @@ NLM_EXTERN Int2 BioseqGetGBDivCode(BioseqPtr bsp, CharPtr buf, Int2 buflen, Bool
 	}
 	return 0;
 }
+
+NLM_EXTERN Int2 BioseqGetGBDivCode(BioseqPtr bsp, CharPtr buf, Int2 buflen, Boolean err_post)
+
+{
+	return BioseqGetGBDivCodeEx (bsp, buf, buflen, err_post, FALSE);
+}
+
 
 /*============================================================================*\
  * Function:
@@ -2463,7 +2573,7 @@ static CharPtr CheckLocusLength (Boolean error_msgs, CharPtr locus, Int2 locus_m
 			flat2asn_delete_locus_user_string();
 			flat2asn_install_locus_user_string(buffer);
 			ErrPostStr(SEV_INFO, ERR_LOCUS_ChangedLocusName, 
-				"Locusname length is more than 10, locusname is truncated");
+				"Locusname length is more than 16, locusname is truncated");
 		}
 	}
 
@@ -2593,13 +2703,13 @@ static CharPtr GetDivision(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 				return buffer;
 			}
 		}
-		BioseqGetGBDivCode(bsp, buffer, buflen, FALSE);
+		BioseqGetGBDivCodeEx (bsp, buffer, buflen, FALSE, ajp->useSeqMgrIndexes);
 		if (buffer[0] == NULLB) {
 			StringNCpy_0(buffer, "   ", buflen);
 		}
 		return buffer;
 	}
-	BioseqGetGBDivCode(bsp, buffer, buflen, FALSE);
+	BioseqGetGBDivCodeEx (bsp, buffer, buflen, FALSE, ajp->useSeqMgrIndexes);
 	if (buffer[0] == NULLB) {
 		StringNCpy_0(buffer, "   ", buflen);
 	}
@@ -2659,7 +2769,7 @@ CharPtr ValidateLocus(Asn2ffJobPtr ajp, BioseqPtr bsp, CharPtr base_locus, Int2 
 	Int2 /*UNUSED*/base_locus_max, buf_index, exp, length, num_of_digits;
 	ObjectIdPtr ob;
 	SeqIdPtr best_id, id;
-	static Uint1 rel_order[18];
+	static Uint1 rel_order[NUM_SEQID];
 
 	if (! order_init)
 	{
@@ -2672,7 +2782,7 @@ CharPtr ValidateLocus(Asn2ffJobPtr ajp, BioseqPtr bsp, CharPtr base_locus, Int2 
 	if (ASN2FF_AVOID_LOCUS_COLL || ASN2FF_REPORT_LOCUS_COLL)
 	{	/* Check for LOCUS collisions with Karl's algorithm */
 		id = bsp->id;
-		best_id = SeqIdSelect( id, rel_order,18);
+		best_id = SeqIdSelect( id, rel_order,NUM_SEQID);
 		if (best_id != NULL) {
 			if (best_id -> choice == SEQID_GENERAL){ /* always! */
 
@@ -2895,20 +3005,26 @@ CharPtr MakeBaseAccession (BioseqPtr bsp)
 	if (bsp == NULL)
 		return NULL;
 	isip = bsp->id;
-	sip = SeqIdSelect(isip, fasta_order, NUM_ORDER);
+	sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
 	if (sip && (sip->choice == SEQID_GENBANK || 
 		sip->choice == SEQID_EMBL || 
 		sip->choice == SEQID_PIR || 
 		sip->choice == SEQID_SWISSPROT || 
 		sip->choice == SEQID_DDBJ || 
 		sip->choice == SEQID_PRF ||
-		sip->choice == SEQID_OTHER))
+		sip->choice == SEQID_OTHER ||
+		sip->choice == SEQID_TPG ||
+		sip->choice == SEQID_TPE ||
+		sip->choice == SEQID_TPD))
 	{
 		tsip = (TextSeqIdPtr) sip->data.ptrvalue;
 		switch (sip->choice) {
 			case SEQID_GENBANK:
 			case SEQID_EMBL:
 			case SEQID_DDBJ:
+			case SEQID_TPG:
+			case SEQID_TPE:
+			case SEQID_TPD:
 			case SEQID_PIR:
 			case SEQID_SWISSPROT:
 				status = ValidateAccession(buf_acc, tsip->accession);
@@ -2925,8 +3041,8 @@ CharPtr MakeBaseAccession (BioseqPtr bsp)
 *	MakeBaseLocus takes a Asn2ffJobPtr and a CharPtr (base_locus)
 *	and returns a CharPtr which is the new base_locus.  Checking is 
 *	done to assure suitability of the new base locus name (i.e., 
-*	no more than 9 characters for less than 10 segments and no more
-*	than 8 characters for 10 or more segments).
+*	no more than 15 characters for less than 10 segments and no more
+*	than 14 characters for 10 or more segments).
 *
 ***************************************************************************/
 
@@ -2962,14 +3078,17 @@ CharPtr MakeBaseLocusAwp (Asn2ffJobPtr ajp, CharPtr base_locus)
 	awp = ajp->asn2ffwep;
 	bbsp = awp->seg; /* segmented Bioseq in segmented set */
 	if (bbsp) {
-		bsip = SeqIdSelect(bbsp->id, fasta_order, NUM_ORDER);
+		bsip = SeqIdSelect(bbsp->id, fasta_order, NUM_SEQID);
 	}
 	if (bsip && (bsip->choice == SEQID_GENBANK || 
 				bsip->choice == SEQID_EMBL ||
 				bsip->choice == SEQID_DDBJ ||
 				bsip->choice == SEQID_SWISSPROT ||
 				bsip->choice == SEQID_PIR || 
-				bsip->choice == SEQID_OTHER)) {
+				bsip->choice == SEQID_OTHER || 
+				bsip->choice == SEQID_TPG || 
+				bsip->choice == SEQID_TPE || 
+				bsip->choice == SEQID_TPD)) {
 		btsip = (TextSeqIdPtr) bsip->data.ptrvalue;
 	}
 	if (btsip && StringLen(btsip->name) > 0) {
@@ -2982,7 +3101,7 @@ CharPtr MakeBaseLocusAwp (Asn2ffJobPtr ajp, CharPtr base_locus)
 		    if (ptr[length-1] == '1') {
 		       bsp = awp->gbp->bsp;
 		       isip = bsp->id;
-		       sip = SeqIdSelect(isip, fasta_order, NUM_ORDER);
+		       sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
 		       if (sip &&
 		       	(name=((TextSeqIdPtr)sip->data.ptrvalue)->name) != NULL) {
 		          name_len = StringLen(name);
@@ -3023,13 +3142,16 @@ CharPtr MakeBaseLocusAwp (Asn2ffJobPtr ajp, CharPtr base_locus)
 	for (gbp = awp->gbp; gbp; gbp=gbp->next) {
 		bsp = gbp->bsp;
 		isip = bsp->id;
-		sip = SeqIdSelect(isip, fasta_order, NUM_ORDER);
+		sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
 		if (sip && (sip->choice == SEQID_GENBANK || 
 					sip->choice == SEQID_EMBL ||
 					sip->choice == SEQID_DDBJ ||
 					sip->choice == SEQID_SWISSPROT ||
+					sip->choice == SEQID_OTHER || 
 					sip->choice == SEQID_PIR || 
-					sip->choice == SEQID_OTHER)) {
+					sip->choice == SEQID_TPG || 
+					sip->choice == SEQID_TPE || 
+					sip->choice == SEQID_TPD)) {
 			tsip = (TextSeqIdPtr) sip->data.ptrvalue;
 		}
 		if (tsip && tsip->name && StringLen(tsip->name) > 0) {
@@ -3045,7 +3167,7 @@ CharPtr MakeBaseLocusAwp (Asn2ffJobPtr ajp, CharPtr base_locus)
 /* No option left but to take the first locus name.*/
 	bsp = awp->gbp->bsp;
 	isip = bsp->id;
-	sip = SeqIdSelect(isip, fasta_order, NUM_ORDER);
+	sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
 	if (sip && sip->choice == SEQID_LOCAL) {
 		obj = (ObjectIdPtr) sip->data.ptrvalue;
 		if ( obj->str == NULL) {
@@ -3060,7 +3182,10 @@ CharPtr MakeBaseLocusAwp (Asn2ffJobPtr ajp, CharPtr base_locus)
 				sip->choice == SEQID_PRF ||
 				sip->choice == SEQID_PDB ||
 				sip->choice == SEQID_OTHER ||
-				sip->choice == SEQID_PIR )) {
+				sip->choice == SEQID_PIR || 
+				sip->choice == SEQID_TPG || 
+				sip->choice == SEQID_TPE || 
+				sip->choice == SEQID_TPD)) {
 		tsip = (TextSeqIdPtr)sip->data.ptrvalue;
 		base_locus = StringCpy(base_locus, tsip->name);
 	}
@@ -3080,6 +3205,9 @@ static Boolean ValidateVersion(SeqIdPtr sid, Asn2ffJobPtr ajp)
 	case SEQID_EMBL:
 	case SEQID_DDBJ:
 	case SEQID_OTHER:
+	case SEQID_TPG:
+	case SEQID_TPE:
+	case SEQID_TPD:
 		tsip = (TextSeqIdPtr) sid->data.ptrvalue;
 		if (tsip->version == 0 || tsip->version == INT2_MIN) {
 			return FALSE;
@@ -3113,12 +3241,17 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 			if ((bsp = BioseqFindFromSeqLoc(ajp->slp)) != NULL) {
 				CharPtr flatloc;
 
-				isip = SeqIdSelect(gbp->bsp->id, fasta_order, NUM_ORDER);
+				isip = SeqIdSelect(gbp->bsp->id, fasta_order, NUM_SEQID);
 				if (isip == NULL)
 					isip = gbp->bsp->id;
 				SeqIdWrite(isip, 
 					buf_acc, PRINTID_TEXTID_ACCESSION, MAX_ACCESSION_LEN);
-				sprintf(gbp->locus, "%-10s", buf_acc);
+
+				if (ajp->new_locus_fmt == TRUE)
+				  sprintf(gbp->locus, "%-16s", buf_acc);
+				else
+				  sprintf(gbp->locus, "%-10s", buf_acc);
+				
 				flatloc =  FlatLoc(bsp, ajp->slp);
 				sprintf(gbp->accession, "%s REGION: %s", buf_acc, flatloc);
 				flatloc = MemFree(flatloc);
@@ -3150,13 +3283,18 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 				StringNCpy_0(gbp->div, buffer, 4);
 				MemFree(buffer);
 			}
-			isip = SeqIdSelect(gbp->bsp->id, fasta_order, NUM_ORDER);
+			isip = SeqIdSelect(gbp->bsp->id, fasta_order, NUM_SEQID);
 			if (isip == NULL)
 				isip = gbp->bsp->id;
 			SeqIdWrite(isip, buf_acc, 
 					PRINTID_TEXTID_ACCESSION, MAX_ACCESSION_LEN+1);
 			StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
-			sprintf(gbp->locus, "%-10s", buf_acc); 
+
+			if (ajp->new_locus_fmt == TRUE)
+			  sprintf(gbp->locus, "%-16s", buf_acc); 
+			else
+			  sprintf(gbp->locus, "%-10s", buf_acc); 
+
 			if (ajp->show_version) {
 				SeqIdWrite(isip, buf_acc, 
 					PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);
@@ -3184,7 +3322,7 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 			MemFree(buffer);
 		}
 		num_seg = gbp->num_seg; 
-		sip = SeqIdSelect(isip, fasta_order, NUM_ORDER);
+		sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
 		if (sip == NULL) {
 			sip = isip;
 		}
@@ -3193,6 +3331,9 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 	    	case SEQID_EMBL:
 	    	case SEQID_DDBJ:
 	    	case SEQID_OTHER:
+			case SEQID_TPG:
+			case SEQID_TPE:
+			case SEQID_TPD:
 				tsip = (TextSeqIdPtr) sip->data.ptrvalue;
 				if ((ValidateAccession(buf_acc, tsip->accession)) < 0) {
 					if (base_a != NULL) {
@@ -3208,9 +3349,15 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 					buf_acc, MAX_ACCESSION_LEN+1);
 				if (sip->choice == SEQID_OTHER 
 						&& StringNCmp(tsip->accession, "NT_", 3) == 0) {
-					sprintf(gbp->locus, "%-10s", buf_acc);
+					if (ajp->new_locus_fmt == TRUE)
+					  sprintf(gbp->locus, "%-16s", buf_acc);
+					else
+					  sprintf(gbp->locus, "%-10s", buf_acc);
 				} else {
-					sprintf(gbp->locus, "%-10s", buf_locus);
+					if (ajp->new_locus_fmt == TRUE)
+					  sprintf(gbp->locus, "%-16s", buf_locus);
+					else
+					  sprintf(gbp->locus, "%-10s", buf_locus);
 				}
 				num_seg--;
 			if (ajp->show_version) {
@@ -3236,7 +3383,12 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 				buf_locus = ValidateLocus(ajp, bsp, base_locus, 
 				total_segs, num_seg,buf_locus,  buf_acc, buf_acc); 
 				StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
-				sprintf(gbp->locus, "%-10s", buf_locus); 
+
+				if (ajp->new_locus_fmt == TRUE)
+				  sprintf(gbp->locus, "%-16s", buf_locus); 
+				else
+				  sprintf(gbp->locus, "%-10s", buf_locus); 
+
 				num_seg--;
 				break;
 		   case SEQID_GI:
@@ -3244,7 +3396,12 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 			buf_locus = ValidateLocus(ajp, bsp, base_locus, 
 					total_segs, num_seg, buf_locus, buf_acc, buf_acc); 
 			StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
-			sprintf(gbp->locus, "%-10s", buf_locus); 
+
+			if (ajp->new_locus_fmt == TRUE)
+			  sprintf(gbp->locus, "%-16s", buf_locus); 
+			else
+			  sprintf(gbp->locus, "%-10s", buf_locus); 
+
 			num_seg--;
 			break;
 
@@ -3269,9 +3426,15 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 			StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
 			if (sip->choice == SEQID_OTHER 
 					&& StringNCmp(tsip->accession, "NT_", 3) == 0) {
-				sprintf(gbp->locus, "%-10s", buf_acc);
+				if (ajp->new_locus_fmt == TRUE)
+				  sprintf(gbp->locus, "%-16s", buf_acc);
+				else
+				  sprintf(gbp->locus, "%-10s", buf_acc);
 			} else {
-				sprintf(gbp->locus, "%-10s", buf_locus);
+				if (ajp->new_locus_fmt == TRUE)
+				  sprintf(gbp->locus, "%-16s", buf_locus);
+				else
+				  sprintf(gbp->locus, "%-10s", buf_locus);
 			}
 			num_seg--;
 			
@@ -3282,7 +3445,11 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 				total_segs, num_seg, buf_locus, buf_acc, buf_acc); 
 			StringNCpy_0(gbp->accession, buf_acc,
 													 MAX_ACCESSION_LEN+1);
-			sprintf(gbp->locus, "%-10s", buf_locus); 
+			if (ajp->new_locus_fmt == TRUE)
+			  sprintf(gbp->locus, "%-10s", buf_locus); 
+			else
+			  sprintf(gbp->locus, "%-16s", buf_locus); 
+
 			num_seg--;
 			break;
 		}
@@ -3542,7 +3709,7 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 		   		|| bsp->repr == Seq_repr_const|| bsp->repr == Seq_repr_delta
 		   		|| 	(is_www && bsp->repr == Seq_repr_virtual))) {
 						if (ASN2FF_LOCAL_ID == FALSE) {
-							sip = SeqIdSelect(bsp->id, fasta_order, NUM_ORDER);
+							sip = SeqIdSelect(bsp->id, fasta_order, NUM_SEQID);
 							if (sip && sip->choice != SEQID_LOCAL) {
 								gbep = CreateGBEntry(awp, bsp, gcp->entityID, 
 									gcp->itemID, gcp->thistype);
@@ -3575,7 +3742,7 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 								if (ASN2FF_LOCAL_ID == FALSE) {
 									isip = bsp->id;
 									sip = SeqIdSelect(isip, 
-										fasta_order, NUM_ORDER);
+										fasta_order, NUM_SEQID);
 									if (sip && sip->choice != SEQID_LOCAL) {
 										gbep = CreateGBEntry(awp, bsp, 
 											gcp->entityID, gcp->itemID, 
@@ -3609,7 +3776,7 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 						if (CompareToAwpList(bsp, awp) == FALSE) {
 						if (ASN2FF_LOCAL_ID == FALSE) {
 							isip = bsp->id;
-							sip = SeqIdSelect(isip, fasta_order, NUM_ORDER);
+							sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
 							if (sip && sip->choice != SEQID_LOCAL) {
 								gbep = CreateGBEntry(awp, bsp, gcp->entityID, 
 											gcp->itemID, gcp->thistype);

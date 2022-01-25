@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.c,v $
+* Revision 6.23  2001/10/03 00:15:47  vakatov
+* Replaced some ASSERTs by VERIFYs
+*
 * Revision 6.22  2000/05/31 21:05:38  kans
 * suppress all source features
 *
@@ -1403,7 +1406,7 @@ NLM_EXTERN MsaTxtDispPtr UDV_MsaTxtDispFree(MsaTxtDispPtr pTxtDisp) {
 *  returns NULL for successful completion.
 *******************************************************************************/
   ASSERT(pTxtDisp != NULL);
-  ASSERT(MemFree(pTxtDisp) == NULL);
+  VERIFY(MemFree(pTxtDisp) == NULL);
   return(NULL);
 }
 

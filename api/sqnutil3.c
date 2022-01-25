@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.6 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -948,4 +948,392 @@ static Int4 LoopSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct,
   LoopSeqEntryToAsn3 (sep, TRUE, FALSE, taxfun, taxmerge);
 
 */
+
+typedef struct featdefNameStruct {
+  Uint1    type;
+  CharPtr  name;
+} FeatdefNameData, PNTR FeatdefNamePtr;
+
+static FeatdefNameData featdefWithName [] = {
+  { FEATDEF_10_signal ,          "-10_signal"         },
+  { FEATDEF_35_signal ,          "-35_signal"         },
+  { FEATDEF_3clip ,              "3'clip"             },
+  { FEATDEF_3UTR ,               "3'UTR"              },
+  { FEATDEF_5clip ,              "5'clip"             },
+  { FEATDEF_5UTR ,               "5'UTR"              },
+  { FEATDEF_attenuator ,         "attenuator"         },
+  { FEATDEF_BOND ,               "Bond"               },
+  { FEATDEF_CAAT_signal ,        "CAAT_signal"        },
+  { FEATDEF_CDS ,                "CDS"                },
+  { FEATDEF_PUB ,                "Cit"                },
+  { FEATDEF_COMMENT ,            "Comment"            },
+  { FEATDEF_conflict ,           "conflict"           },
+  { FEATDEF_C_region ,           "C_region"           },
+  { FEATDEF_D_loop ,             "D-loop"             },
+  { FEATDEF_D_segment ,          "D_segment"          },
+  { FEATDEF_enhancer ,           "enhancer"           },
+  { FEATDEF_exon ,               "exon"               },
+  { FEATDEF_GC_signal ,          "GC_signal"          },
+  { FEATDEF_GENE ,               "Gene"               },
+  { FEATDEF_HET ,                "Het"                },
+  { FEATDEF_iDNA ,               "iDNA"               },
+  { FEATDEF_IMP ,                "Imp"                },
+  { FEATDEF_Imp_CDS ,            "Imp_CDS"            },
+  { FEATDEF_intron ,             "intron"             },
+  { FEATDEF_J_segment ,          "J_segment"          },
+  { FEATDEF_LTR ,                "LTR"                },
+  { FEATDEF_mat_peptide_aa ,     "mat_peptide"        },
+  { FEATDEF_mat_peptide ,        "mat_peptide_nt"     },
+  { FEATDEF_misc_binding ,       "misc_binding"       },
+  { FEATDEF_misc_difference ,    "misc_difference"    },
+  { FEATDEF_misc_feature ,       "misc_feature"       },
+  { FEATDEF_misc_recomb ,        "misc_recomb"        },
+  { FEATDEF_otherRNA ,           "misc_RNA"           },
+  { FEATDEF_misc_signal ,        "misc_signal"        },
+  { FEATDEF_misc_structure ,     "misc_structure"     },
+  { FEATDEF_modified_base ,      "modified_base"      },
+  { FEATDEF_mRNA ,               "mRNA"               },
+  { FEATDEF_NON_STD_RESIDUE ,    "NonStdRes"          },
+  { FEATDEF_NUM ,                "Num"                },
+  { FEATDEF_N_region ,           "N_region"           },
+  { FEATDEF_old_sequence ,       "old_sequence"       },
+  { FEATDEF_polyA_signal ,       "polyA_signal"       },
+  { FEATDEF_polyA_site ,         "polyA_site"         },
+  { FEATDEF_preRNA ,             "precursor_RNA"      },
+  { FEATDEF_preprotein ,         "preprotein"         },
+  { FEATDEF_primer_bind ,        "primer_bind"        },
+  { FEATDEF_prim_transcript ,    "prim_transcript"    },
+  { FEATDEF_promoter ,           "promoter"           },
+  { FEATDEF_PROT ,               "Protein"            },
+  { FEATDEF_protein_bind ,       "protein_bind"       },
+  { FEATDEF_RBS ,                "RBS"                },
+  { FEATDEF_REGION ,             "Region"             },
+  { FEATDEF_repeat_region ,      "repeat_region"      },
+  { FEATDEF_repeat_unit ,        "repeat_unit"        },
+  { FEATDEF_rep_origin ,         "rep_origin"         },
+  { FEATDEF_rRNA ,               "rRNA"               },
+  { FEATDEF_RSITE ,              "Rsite"              },
+  { FEATDEF_satellite ,          "satellite"          },
+  { FEATDEF_scRNA ,              "scRNA"              },
+  { FEATDEF_PSEC_STR ,           "SecStr"             },
+  { FEATDEF_sig_peptide_aa ,     "sig_peptide"        },
+  { FEATDEF_sig_peptide ,        "sig_peptide_nt"     },
+  { FEATDEF_SITE ,               "Site"               },
+  { FEATDEF_site_ref ,           "Site-ref"           },
+  { FEATDEF_snoRNA ,             "snoRNA"             },
+  { FEATDEF_snRNA ,              "snRNA"              },
+  { FEATDEF_source ,             "source"             },
+  { FEATDEF_BIOSRC ,             "Src"                },
+  { FEATDEF_stem_loop ,          "stem_loop"          },
+  { FEATDEF_STS ,                "STS"                },
+  { FEATDEF_S_region ,           "S_region"           },
+  { FEATDEF_TATA_signal ,        "TATA_signal"        },
+  { FEATDEF_terminator ,         "terminator"         },
+  { FEATDEF_transit_peptide_aa , "transit_peptide"    },
+  { FEATDEF_transit_peptide ,    "transit_peptide_nt" },
+  { FEATDEF_tRNA ,               "tRNA"               },
+  { FEATDEF_TXINIT ,             "TxInit"             },
+  { FEATDEF_unsure ,             "unsure"             },
+  { FEATDEF_USER ,               "User"               },
+  { FEATDEF_variation ,          "variation"          },
+  { FEATDEF_virion ,             "virion"             },
+  { FEATDEF_V_region ,           "V_region"           },
+  { FEATDEF_V_segment ,          "V_segment"          },
+  { FEATDEF_SEQ ,                "Xref"               }
+};
+
+NLM_EXTERN Uint1 FindFeatDefTypeFromKey (CharPtr key)
+
+{
+  Int2  L, R, mid;
+
+  if (key == NULL || *key == '\0') return FEATDEF_BAD;
+
+  L = 0;
+  R = (sizeof (featdefWithName) / sizeof (FeatdefNameData)) - 1;
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    if (StringICmp (featdefWithName [mid].name, key) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (StringICmp (featdefWithName [R].name, key) == 0) {
+    return featdefWithName [R].type;
+  }
+
+  return FEATDEF_BAD;
+}
+
+static CharPtr featurekeys [] = {
+  "???" ,
+  "Gene" ,
+  "Org" ,
+  "CDS" ,
+  "Protein" ,
+  "precursor_RNA" ,
+  "mRNA" ,
+  "tRNA" ,
+  "rRNA" ,
+  "snRNA" ,
+  "scRNA" ,
+  "misc_RNA" ,
+  "Cit" ,
+  "Xref" ,
+  "Imp" ,
+  "allele" ,
+  "attenuator" ,
+  "C_region" ,
+  "CAAT_signal" ,
+  "CDS" ,
+  "conflict" ,
+  "D-loop" ,
+  "D_segment" ,
+  "enhancer" ,
+  "exon" ,
+  "GC_signal" ,
+  "iDNA" ,
+  "intron" ,
+  "J_segment" ,
+  "LTR" ,
+  "mat_peptide" ,
+  "misc_binding" ,
+  "misc_difference" ,
+  "misc_feature" ,
+  "misc_recomb" ,
+  "misc_RNA" ,
+  "misc_signal" ,
+  "misc_structure" ,
+  "modified_base" ,
+  "mutation" ,
+  "N_region" ,
+  "old_sequence" ,
+  "polyA_signal" ,
+  "polyA_site" ,
+  "precursor_RNA" ,
+  "prim_transcript" ,
+  "primer_bind" ,
+  "promoter" ,
+  "protein_bind" ,
+  "RBS" ,
+  "repeat_region" ,
+  "repeat_unit" ,
+  "rep_origin" ,
+  "S_region" ,
+  "satellite" ,
+  "sig_peptide" ,
+  "source" ,
+  "stem_loop" ,
+  "STS" ,
+  "TATA_signal" ,
+  "terminator" ,
+  "transit_peptide" ,
+  "unsure" ,
+  "V_region" ,
+  "V_segment" ,
+  "variation" ,
+  "virion" ,
+  "3'clip" ,
+  "3'UTR" ,
+  "5'clip" ,
+  "5'UTR" ,
+  "-10_signal" ,
+  "-35_signal" ,
+  "Site-ref" ,
+  "Region" ,
+  "Comment" ,
+  "Bond" ,
+  "Site" ,
+  "Rsite" ,
+  "User" ,
+  "TxInit" ,
+  "Num" ,
+  "SecStr" ,
+  "NonStdRes" ,
+  "Het" ,
+  "Src" ,
+  "Protein" ,
+  "mat_peptide" ,
+  "sig_peptide" ,
+  "transit_peptide",
+  "snoRNA"
+};
+
+NLM_EXTERN CharPtr FindKeyFromFeatDefType (Uint1 type, Boolean forGBFF)
+
+{
+  CharPtr  key;
+
+  if (type < FEATDEF_GENE || type >= FEATDEF_MAX) {
+    type = FEATDEF_BAD;
+  }
+  key = featurekeys [type];
+
+  if (forGBFF) {
+    if (type == FEATDEF_GENE) {
+      key = "gene";
+    } else if (type == FEATDEF_REGION || type == FEATDEF_COMMENT || type == FEATDEF_SITE) {
+      key = "misc_feature";
+    }
+  }
+
+  return key;
+}
+
+/* tRNA codon index to codon string lookup table functions */
+
+typedef struct gcCodonStruct {
+  Uint1    index;
+  CharPtr  codon;
+} GcCodonData, PNTR GcCodonPtr;
+
+static CharPtr    gcCodonStrings = NULL;
+static GcCodonPtr codonGcIndex = NULL;
+
+/* mapping from NCBI2na to codon codes */
+
+static Uint1 codon_xref [4] = {
+  2,  /* A */
+  1,  /* C */
+  3,  /* G */
+  0   /* T */
+};
+
+static int LIBCALLBACK SortCodonByString (
+  VoidPtr vp1,
+  VoidPtr vp2
+)
+
+{
+  int         compare;
+  GcCodonPtr  gcp1 = vp1;
+  GcCodonPtr  gcp2 = vp2;
+
+  if (gcp1 == NULL || gcp2 == NULL) return 0;
+
+  compare = StringICmp (gcp1->codon, gcp2->codon);
+  if (compare > 0) {
+    return 1;
+  } else if (compare < 0) {
+    return -1;
+  }
+
+  return 0;
+}
+
+static void InitGcCodons (void)
+
+{
+  Uint1           codon [4], index;
+  GcCodonPtr      codonGcIdx;
+  CharPtr         gcCodonStr;
+  Int2            i, j, k;
+  int             idx, offset;
+  CharPtr         ptr;
+  Uint1           residue;
+  SeqMapTablePtr  smtp;
+
+  if (codonGcIndex != NULL && gcCodonStrings != NULL) return;
+
+  gcCodonStr = (CharPtr) MemNew (sizeof (Char) * 256);
+  if (gcCodonStr == NULL) return;
+  codonGcIdx = (GcCodonPtr) MemNew (sizeof (GcCodonData) * 64);
+  if (codonGcIdx == NULL) return;
+
+  smtp = SeqMapTableFind (Seq_code_iupacna, Seq_code_ncbi2na);
+  if (smtp == NULL) return;
+
+  for (idx = 0; idx < 64; idx++) {
+    index = (Uint1) idx;
+
+    for (i = 0, j = 16; i < 3; i++, j /= 4) {
+      residue = (Uint1) ((Int2) index / j);
+      index -= (Uint1) (residue * j);
+      for (k = 0; k < 4; k++) {
+        if (codon_xref [k] == residue) {
+          residue = (Uint1) k;
+          break;
+        }
+      }
+      residue = SeqMapTableConvert (smtp, residue);
+      codon [i] = residue;
+    }
+    codon [3] = 0;
+
+    offset = 4 * idx;
+    ptr = gcCodonStr + offset;
+    StringCpy (ptr, (CharPtr) codon);
+
+    codonGcIdx [idx].index = (Uint1) idx;
+    codonGcIdx [idx].codon = ptr;
+  }
+
+  HeapSort (codonGcIdx, (size_t) 64, sizeof (GcCodonData), SortCodonByString);
+
+  gcCodonStrings = gcCodonStr;
+  codonGcIndex = codonGcIdx;
+}
+
+NLM_EXTERN Uint1 CodonToGcIndex (CharPtr codon)
+
+{
+  Char  ch;
+  Int2  i, L, R, mid;
+  Char  tmp [4];
+
+  if (codonGcIndex == NULL) {
+    InitGcCodons ();
+  }
+  if (codonGcIndex == NULL) return 255;
+  if (StringLen (codon) != 3) return 255;
+  StringNCpy_0 (tmp, codon, sizeof (tmp));
+
+  for (i = 0; i < 3; i++) {
+    ch = tmp [i];
+    ch = TO_UPPER (ch);
+    if (ch == 'U') {
+       ch = 'T';
+    }
+    tmp [i] = ch;
+  }
+
+  L = 0;
+  R = 63;
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    if (StringICmp (codonGcIndex [mid].codon, tmp) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (StringICmp (codonGcIndex [R].codon, tmp) == 0) {
+    return codonGcIndex [R].index;
+  }
+
+  return 255;
+}
+
+NLM_EXTERN CharPtr GcIndextoCodon (Uint1 index)
+
+{
+  int      offset;
+  CharPtr  ptr;
+
+  if (gcCodonStrings == NULL) {
+    InitGcCodons ();
+  }
+  if (gcCodonStrings == NULL) return NULL;
+  if (index > 63) return NULL;
+
+  offset = 4 * index;
+  ptr = gcCodonStrings + offset;
+
+  return ptr;
+}
 

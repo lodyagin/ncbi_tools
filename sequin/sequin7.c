@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.86 $
+* $Revision: 6.89 $
 *
 * File Description: 
 *
@@ -4680,6 +4680,12 @@ extern void ConvertCDSet (IteM i)
   ProcessCDSet (i, CONVERT_CDSET);
 }
 
+#define FIND_ASN   1
+#define FIND_FLAT  2
+#define FIND_GENE  3
+#define FIND_PROT  4
+#define FIND_POS   5
+
 typedef struct findform {
   FORM_MESSAGE_BLOCK
   TexT            findTxt;
@@ -4689,6 +4695,7 @@ typedef struct findform {
   ButtoN          doSeqIdLocal;
   ButtoN          findAllBtn;
   ButtoN          replaceAllBtn;
+  Int2            type;
 } FindForm, PNTR FindFormPtr;
 
 extern CharPtr CompressSpaces (CharPtr str)
@@ -4952,6 +4959,80 @@ static void ReplaceAllProc (ButtoN b)
   CommonFindReplaceProc (b, TRUE, TRUE);
 }
 
+static void FindByLabelOrPosProc (ButtoN b)
+
+{
+  Boolean            already;
+  BioseqPtr          bsp;
+  SeqMgrFeatContext  context;
+  FindFormPtr        ffp;
+  CharPtr            findme;
+  SelStructPtr       sel;
+  SeqEntryPtr        sep = NULL;
+  SeqFeatPtr         sfp = NULL;
+  Int4               val;
+
+  ffp = (FindFormPtr) GetObjectExtra (b);
+  if (ffp == NULL) return;
+
+  if (ffp->input_itemID == 0) {
+    sep = GetTopSeqEntryForEntityID (ffp->input_entityID);
+  } else {
+    bsp = GetBioseqGivenIDs (ffp->input_entityID, ffp->input_itemID, ffp->input_itemtype);
+    if (bsp == NULL) return;
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    if (bsp->repr == Seq_repr_seg) {
+      sep = GetBestTopParentForData (ffp->input_entityID, bsp);
+    }
+  }
+  if (sep == NULL) return;
+
+  findme = SaveStringFromText (ffp->findTxt);
+  ObjMgrDeSelect (0, 0, 0, 0, NULL);
+  CompressSpaces (findme);
+
+  switch (ffp->type) {
+    case FIND_GENE :
+      sfp = SeqMgrGetFeatureByLabel (bsp, findme, SEQFEAT_GENE, 0, &context);
+      break;
+    case FIND_PROT :
+      sfp = SeqMgrGetFeatureByLabel (bsp, findme, SEQFEAT_CDREGION, 0, &context);
+      break;
+    case FIND_POS :
+      if (StrToLong (findme, &val)) {
+        if (val > 0 && val <= bsp->length) {
+          val--;
+          sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &context);
+          while (sfp != NULL) {
+            if (context.left >= val) break;
+            sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
+          }
+        }
+      }
+      break;
+    default :
+      break;
+  }
+
+  MemFree (findme);
+
+  if (sfp == NULL) return;
+
+  already = FALSE;
+  for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
+    if (sel->entityID == context.entityID &&
+        sel->itemID == context.itemID &&
+        sel->itemtype == OBJ_SEQFEAT) {
+      already = TRUE;
+    }
+  }
+  if (! already) {
+    ObjMgrAlsoSelect (context.entityID, context.itemID, OBJ_SEQFEAT, 0, NULL);
+  }
+
+  Remove (ffp->form);
+}
+
 static void ClearFindTextProc (ButtoN b)
 
 {
@@ -4998,7 +5079,7 @@ static void FindFormMessage (ForM f, Int2 mssg)
 
 static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
                             Uint2 entityID, Uint2 itemID, Uint2 itemtype,
-                            Boolean flatfile)
+                            Int2 type)
 
 {
   ButtoN             b;
@@ -5006,7 +5087,7 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
   GrouP              g;
   FindFormPtr        ffp;
   GrouP              j;
-  GrouP              q;
+  GrouP              q = NULL;
   StdEditorProcsPtr  sepp;
   WindoW             w;
 
@@ -5020,6 +5101,7 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
     ffp->input_entityID = entityID;
     ffp->input_itemID = itemID;
     ffp->input_itemtype = itemtype;
+    ffp->type = type;
 
 #ifndef WIN_MAC
     CreateStdEditorFormMenus (w);
@@ -5038,30 +5120,44 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
     StaticPrompt (g, "Find", 0, dialogTextHeight, programFont, 'l');
     ffp->findTxt = DialogText (g, "", 25, FindTextProc);
     SetObjectExtra (ffp->findTxt, ffp, NULL);
-    if (! flatfile) {
+    if (type == FIND_ASN) {
       StaticPrompt (g, "Replace", 0, dialogTextHeight, programFont, 'l');
       ffp->replaceTxt = DialogText (g, "", 25, NULL);
       SetObjectExtra (ffp->replaceTxt, ffp, NULL);
     }
 
-    q = HiddenGroup (w, 3, 0, NULL);
-    ffp->caseCounts = CheckBox (q, "Case Sensitive", NULL);
-    ffp->wholeWord = CheckBox (q, "Entire Word", NULL);
-    if (indexerVersion) {
-      ffp->doSeqIdLocal = CheckBox (q, "SeqID LOCAL", NULL);
+    if (type == FIND_ASN || type == FIND_FLAT) {
+      q = HiddenGroup (w, 3, 0, NULL);
+      ffp->caseCounts = CheckBox (q, "Case Sensitive", NULL);
+      ffp->wholeWord = CheckBox (q, "Entire Word", NULL);
+      if (indexerVersion && type == FIND_ASN) {
+        ffp->doSeqIdLocal = CheckBox (q, "SeqID LOCAL", NULL);
+      }
     }
 
     c = HiddenGroup (w, 4, 0, NULL);
     SetGroupSpacing (c, 10, 2);
-    if (! flatfile) {
+    if (type == FIND_ASN) {
       ffp->findAllBtn = DefaultButton (c, "Find All", FindAllProc);
       SetObjectExtra (ffp->findAllBtn, ffp, NULL);
       Disable (ffp->findAllBtn);
       ffp->replaceAllBtn = PushButton (c, "Replace All", ReplaceAllProc);
       SetObjectExtra (ffp->replaceAllBtn, ffp, NULL);
       Disable (ffp->replaceAllBtn);
-    } else {
+    } else if (type == FIND_FLAT) {
       ffp->findAllBtn = DefaultButton (c, "Find All", FindFlatProc);
+      SetObjectExtra (ffp->findAllBtn, ffp, NULL);
+      Disable (ffp->findAllBtn);
+    } else if (type == FIND_GENE) {
+      ffp->findAllBtn = DefaultButton (c, "Find Gene", FindByLabelOrPosProc);
+      SetObjectExtra (ffp->findAllBtn, ffp, NULL);
+      Disable (ffp->findAllBtn);
+    } else if (type == FIND_PROT) {
+      ffp->findAllBtn = DefaultButton (c, "Find Protein", FindByLabelOrPosProc);
+      SetObjectExtra (ffp->findAllBtn, ffp, NULL);
+      Disable (ffp->findAllBtn);
+    } else if (type == FIND_POS) {
+      ffp->findAllBtn = DefaultButton (c, "Find by Position", FindByLabelOrPosProc);
       SetObjectExtra (ffp->findAllBtn, ffp, NULL);
       Disable (ffp->findAllBtn);
     }
@@ -5069,7 +5165,7 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
     SetObjectExtra (b, ffp, NULL);
     PushButton (c, "Cancel", StdCancelButtonProc);
 
-    AlignObjects (ALIGN_CENTER, (HANDLE) j, (HANDLE) q, (HANDLE) c, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) j, (HANDLE) c, (HANDLE) q, NULL);
 
     RealizeWindow (w);
     Select (ffp->findTxt);
@@ -5090,7 +5186,7 @@ extern void FindStringProc (IteM i)
 #endif
   if (bfp != NULL) {
     w = CreateFindForm (-90, -66, "Find", bfp->input_entityID,
-                        bfp->input_itemID, bfp->input_itemtype, FALSE);
+                        bfp->input_itemID, bfp->input_itemtype, FIND_ASN);
     Show (w);
     Select (w);
   }
@@ -5109,7 +5205,64 @@ extern void FindFlatfileProc (IteM i)
 #endif
   if (bfp != NULL) {
     w = CreateFindForm (-90, -66, "Flat File Find", bfp->input_entityID,
-                        bfp->input_itemID, bfp->input_itemtype, TRUE);
+                        bfp->input_itemID, bfp->input_itemtype, FIND_FLAT);
+    Show (w);
+    Select (w);
+  }
+}
+
+extern void FindGeneProc (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  ForM         w;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp != NULL) {
+    w = CreateFindForm (-90, -66, "Find", bfp->input_entityID,
+                        bfp->input_itemID, bfp->input_itemtype, FIND_GENE);
+    Show (w);
+    Select (w);
+  }
+}
+
+extern void FindProtProc (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  ForM         w;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp != NULL) {
+    w = CreateFindForm (-90, -66, "Find", bfp->input_entityID,
+                        bfp->input_itemID, bfp->input_itemtype, FIND_PROT);
+    Show (w);
+    Select (w);
+  }
+}
+
+extern void FindPosProc (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  ForM         w;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp != NULL) {
+    w = CreateFindForm (-90, -66, "Find", bfp->input_entityID,
+                        bfp->input_itemID, bfp->input_itemtype, FIND_POS);
     Show (w);
     Select (w);
   }
@@ -5860,7 +6013,9 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
   /* MoveCdsGBQualProductToName (sep); */ /* move cds gbqual product to prot-ref.name */
   /* MoveFeatGBQualsToFields (sep); */ /* move feature partial, exception to fields */
   if (indexerVersion) {
+    /*
     StripTitleFromProtsInNucProts (sep);
+    */
     move_cds (sep); /* move CDS features to nuc-prot set */
   }
   /* ExtendGeneFeatIfOnMRNA (0, sep); */ /* gene on mRNA is full length */
@@ -5929,6 +6084,8 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
     entityID = ObjMgrGetEntityIDForChoice (sep);
     ObjMgrSetDirtyFlag (entityID, TRUE);
   }
+
+  EntryMergeDupBioSources (sep); /* do before and after SE2A3 */
 
   rsult = DoSeqEntryToAsn3 (sep, strip, correct, force, dotaxon, mon);
 /*#ifdef USE_TAXON*/

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.37 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
@@ -1207,6 +1207,7 @@ static void ShowFlatFile (BioseqViewPtr bvp, Boolean show)
     } else {
       SafeShow (bvp->doc);
     }
+    SafeShow (bvp->baseCtgControlGrp);
     SafeShow (bvp->docTxtControlGrp);
     SafeShow (bvp->modeControlGrp);
     SafeShow (bvp->clickMe);
@@ -1223,7 +1224,9 @@ static void ShowFlatFile (BioseqViewPtr bvp, Boolean show)
     EnableDisableLegendItem (bvp, FALSE);
     SafeHide (bvp->findGeneGrp);
     SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
     SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
     SafeHide (bvp->clickMe);
   }
 }
@@ -1240,6 +1243,7 @@ static void ShowFastaOrAsn (BioseqViewPtr bvp, Boolean show)
     }
     SafeHide (bvp->modeControlGrp);
     SafeShow (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
     SafeHide (bvp->clickMe);
   } else {
     SafeHide (bvp->text);
@@ -1254,7 +1258,9 @@ static void ShowFastaOrAsn (BioseqViewPtr bvp, Boolean show)
     EnableDisableLegendItem (bvp, FALSE);
     SafeHide (bvp->findGeneGrp);
     SafeHide (bvp->docTxtControlGrp);
+    SafeHide (bvp->baseCtgControlGrp);
     SafeHide (bvp->modeControlGrp);
+    SafeHide (bvp->newGphControlGrp);
     SafeHide (bvp->clickMe);
   }
 }

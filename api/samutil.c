@@ -1,4 +1,4 @@
-/*   $Id: samutil.c,v 1.73 2001/05/25 19:05:36 vakatov Exp $
+/*   $Id: samutil.c,v 1.75 2001/10/03 00:15:47 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,25 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.c,v 1.73 2001/05/25 19:05:36 vakatov Exp $
+* File Name:  $Id: samutil.c,v 1.75 2001/10/03 00:15:47 vakatov Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.73 $
+* $Revision: 1.75 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: samutil.c,v $
+* Revision 1.75  2001/10/03 00:15:47  vakatov
+* Replaced some ASSERTs by VERIFYs
+*
+* Revision 1.74  2001/08/07 17:22:52  kans
+* added support for third party annotation SeqIDs
+*
 * Revision 1.73  2001/05/25 19:05:36  vakatov
 * Nested comment typo fixed
 *
@@ -889,7 +895,8 @@ NLM_EXTERN Int4 SAM_OrderSeqID(SeqId *sip1, SeqId *sip2)
     if((sip1->choice == SEQID_GENBANK ||
         sip1->choice == SEQID_EMBL || sip1->choice == SEQID_DDBJ) && 
         (sip2->choice == SEQID_GENBANK || sip2->choice == SEQID_EMBL ||
-        sip2->choice == SEQID_DDBJ)) goto check;
+        sip2->choice == SEQID_DDBJ || sip2->choice == SEQID_TPG ||
+        sip2->choice == SEQID_TPE || sip2->choice == SEQID_TPD)) goto check;
     goto nocheck;
     
 check:
@@ -914,6 +921,9 @@ check:
     case SEQID_GENBANK:
     case SEQID_PIR:
     case SEQID_SWISSPROT:
+    case SEQID_TPG:
+    case SEQID_TPE:
+    case SEQID_TPD:
         SeqIdWrite (sip1, Buf1, PRINTID_FASTA_SHORT, SAM_SIPBUF);
         SeqIdWrite (sip2, Buf2, PRINTID_FASTA_SHORT, SAM_SIPBUF);
         retval = StrCmp(Buf1, Buf2);
@@ -1354,9 +1364,9 @@ NLM_EXTERN void DDE_Verify(DDE_InfoPtr pEditInfo) {
     pRuler2 = DDE_ReMakeRulerForRow(pEditInfo->pPopList, i, 0);
     /* make sure the 2 RulerDescr's match */
     ASSERT(DDE_AreIdenticalRulers(pRuler1, pRuler2));
-    ASSERT(ValNodeFreeData(pRuler2) == NULL);
+    VERIFY(ValNodeFreeData(pRuler2) == NULL);
   }
-  ASSERT(ValNodeFreeData(pRuler1) == NULL);
+  VERIFY(ValNodeFreeData(pRuler1) == NULL);
 
 #endif
 }
@@ -2339,7 +2349,7 @@ NLM_EXTERN Boolean DDE_RestoreRowOrder(DDE_StackPtr pStack, Boolean Save) {
     }
   }
 
-  ASSERT(MemFree(pVisibleCopy) == NULL);
+  VERIFY(MemFree(pVisibleCopy) == NULL);
 
   /* add pStack->pEdit to the stack */
   if (Save) {

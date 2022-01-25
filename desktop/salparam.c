@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.51 $
+* $Revision: 6.52 $
 *
 * File Description: 
 *
@@ -55,6 +55,7 @@
 #include <dlogutil.h>
 #include <biosrc.h>
 #include <satutil.h>
+#include <alignmgr2.h>
 
 #define OBJ_VIRT 254
 
@@ -1958,6 +1959,58 @@ static Boolean FindBspFromItem (GatherContextPtr gcp)
   return TRUE;
 }
 
+/* weird little kludge so that FASTA+GAP exports can contain */
+/* leading/trailing gaps to include the entirety of all */
+/* sequences */
+static SeqAlignPtr ExtendToAllSeq(SeqAlignPtr origsap)
+{
+   MsgAnswer    ans;
+   BioseqPtr    bsp;
+   Int4         i;
+   Int4         n;
+   Int4         pad;
+   SeqAlignPtr  sap;
+   SeqAlignPtr  sap_new;
+   SeqIdPtr     sip;
+   Int4         start;
+   Int4         stop;
+
+   if (origsap == NULL)
+      return NULL;
+   sap = SeqAlignBoolSegToDenseSeg(origsap);
+   AlnMgr2IndexSingleChildSeqAlign(sap);
+   n = AlnMgr2GetNumRows(sap);
+   pad = 0;
+   for (i=0; i<n; i++)
+   {
+      sip = AlnMgr2GetNthSeqIdPtr(sap, i+1);
+      bsp = BioseqLockById(sip);
+      AlnMgr2GetNthSeqRangeInSA(sap, i+1, &start, &stop);
+      pad += start;
+      pad += bsp->length - 1 - stop;
+      BioseqUnlock(bsp);
+      SeqIdFree(sip);
+   }
+   if (pad == 0)
+   {
+      SeqAlignFree(sap);
+      return origsap;
+   }
+   ans = Message(MSG_OKC, "This alignment does not contain the entirety of all of your sequences.\nDo you want to pad the alignment by %d nucleotides and gaps\nso that all sequences start with 1 and end with their last residue?", pad);
+   if (ans == ANS_CANCEL)
+   {
+      SeqAlignFree(sap);
+      return origsap;
+   } else
+   {
+      sap_new = AlnMgr2PadConservatively(sap);
+      SeqAlignFree(sap);
+      sap = SeqAlignDenseSegToBoolSeg(sap_new);
+      SeqAlignFree(sap_new);
+      return sap;
+   }
+}
+
 extern void ExportTextFunc (ButtoN b)
 {
   WindoW           wdialog;
@@ -2034,6 +2087,7 @@ extern void ExportTextFunc (ButtoN b)
         }
         else if (adp->align_format == SALSA_FASTGAP) {
            salp = (SeqAlignPtr)adp->sap_align->data;
+           salp = ExtendToAllSeq(salp);
            showfastagap_fromalign (salp, 60, fout);
         }
         else if (adp->align_format == SALSA_PHYLIP) {

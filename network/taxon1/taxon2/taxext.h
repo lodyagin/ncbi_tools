@@ -31,6 +31,9 @@
 *
 *
 * $Log: taxext.h,v $
+* Revision 1.4  2001/09/28 15:53:15  soussov
+* tax1e_maxTaxId() added
+*
 * Revision 1.3  1999/03/26 19:18:46  soussov
 * fixed bug in tax1e_needUpdate
 *
@@ -109,5 +112,10 @@ CharPtr tax1e_getTaxName(TreeCursorPtr cursor);
   
 */
 Int4 tax1e_needUpdate(OrgRefPtr inp_orgRef);
+
+/*-------------------------------------
+  get max taxid
+*/
+Int4 tax1e_maxTaxId();
 
 #endif

@@ -1,4 +1,4 @@
-/* $Id: posit.c,v 6.55 2001/04/09 13:00:09 madden Exp $
+/* $Id: posit.c,v 6.58 2001/12/11 14:48:54 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +30,19 @@
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.55 $ 
+  $Revision: 6.58 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.58  2001/12/11 14:48:54  madden
+ * Fix for ABW (reset Xcount to zero in some cases)
+ *
+ * Revision 6.57  2001/08/29 19:04:48  madden
+ * added parameter posComputationCalled to outputPosComputation, extra printing added in revision 6.54 is suppressed if posComputationCalled is FALSE
+ *
+ * Revision 6.56  2001/08/06 18:09:13  madden
+ * Corrected handling of X in posCancel by adding usage of Xcount
+ *
  * Revision 6.55  2001/04/09 13:00:09  madden
  * Fixed error in posComputeExtents; adjustment of interval sizes when the query contained an X had been asymmetric.
  *
@@ -762,6 +771,7 @@ void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * com
   Int4 state; /*state of checking for a match*/
   Int4 intervalLength, matchStart; /*Length and start of a matching region*/
   Int4 matchNumber; /*number of characters matching*/
+  Int4 Xcount; /*number of X's in interval*/
 
   posSearch->posUseSequences =  (Boolean *) MemNew((posSearch->posNumSequences + 1) * sizeof(Boolean));
    if (NULL == posSearch->posUseSequences)
@@ -788,6 +798,7 @@ void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * com
     c = 0;
     matchStart = 0;
     intervalLength = 0;
+    Xcount = 0;
     matchNumber = 0;
     while (c < compactSearch->qlength) {
       if (posSearch->posDescMatrix[j][c].used) {
@@ -804,20 +815,25 @@ void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * com
 	  if (posSearch->posDescMatrix[j][c].used &&
 	      (posSearch->posDescMatrix[0][c].letter == posSearch->posDescMatrix[j][c].letter))
 	    matchNumber++;
-	  }
+	}
+	else {
+	  if (POS_COUNTING == state)
+	    Xcount++;
+	}
       }
       else {
 	if (state == POS_COUNTING) {
 	  if ((intervalLength > 0) && (matchNumber == intervalLength))
-	    posCancel(posSearch,compactSearch,0,j,matchStart,intervalLength);
+	    posCancel(posSearch,compactSearch,0,j,matchStart,intervalLength+Xcount);
 	  state = POS_RESTING;
+	  Xcount = 0;
 	}
       }
       c++;
     }
     if (state == POS_COUNTING) /*at end of sequence i*/
       if ((intervalLength > 0) && (matchNumber == intervalLength))
-	posCancel(posSearch,compactSearch,0,j,matchStart,intervalLength);
+	posCancel(posSearch,compactSearch,0,j,matchStart,intervalLength+Xcount);
   }
   
   for (k=1; k <= posSearch->posNumSequences -1; k++){
@@ -832,6 +848,7 @@ void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * com
       c = 0;
       matchStart = 0;
       intervalLength = 0;
+      Xcount = 0;
       matchNumber = 0;
       while (c < compactSearch->qlength) {
 	if (posSearch->posDescMatrix[i][c].used ||
@@ -850,20 +867,25 @@ void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * com
 		posSearch->posDescMatrix[j][c].used &&
 		(posSearch->posDescMatrix[i][c].letter == posSearch->posDescMatrix[j][c].letter))
 	      matchNumber++;
-	    }
+	  }
+	  else {
+	    if (POS_COUNTING == state)
+	      Xcount++;
+	  }
 	}
 	else {
 	  if (state == POS_COUNTING) {
 	    if ((intervalLength > 0) && ((((Nlm_FloatHi) matchNumber)/intervalLength) >= IDENTITY_RATIO))
-	      posCancel(posSearch,compactSearch,i,j,matchStart,intervalLength);
+	      posCancel(posSearch,compactSearch,i,j,matchStart,intervalLength+Xcount);
 	    state = POS_RESTING;
+	    Xcount = 0;
 	  }
 	}
 	c++;
       }
       if (state == POS_COUNTING) /*at end of sequence i*/
 	if ((intervalLength > 0) && ((((Nlm_FloatHi) matchNumber)/intervalLength) >= IDENTITY_RATIO))
-	  posCancel(posSearch,compactSearch,i,j,matchStart,intervalLength);
+	  posCancel(posSearch,compactSearch,i,j,matchStart,intervalLength+Xcount);
     }
   }
 }
@@ -1762,7 +1784,7 @@ Uint1 LIBCALL ResToInt(Char input)
 
 
 /*Print out the position-specific matrix*/
-void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *compactSearch, FILE *matrixfp)
+void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *compactSearch, FILE *matrixfp, Boolean posComputationCalled)
 {
    Uint1Ptr q; /*query sequence*/
    Int4 i; /*loop indices*/
@@ -1836,12 +1858,19 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
    printf("\n\n");
 #endif
    if (NULL != matrixfp) {
-     fprintf(matrixfp,"\nLast position-specific scoring matrix computed, weighted observed percentages rounded down, information per position, and relative weight of gapless real matches to pseudocounts\n");
+     if (posComputationCalled) {
+       fprintf(matrixfp,"\nLast position-specific scoring matrix computed, weighted observed percentages rounded down, information per position, and relative weight of gapless real matches to pseudocounts\n");
+     }
+     else {
+       fprintf(matrixfp,"\nLast position-specific scoring matrix computed\n");
+     }
      fprintf(matrixfp,"         ");
      for (c = 0; c< EFFECTIVE_ALPHABET; c++)
        fprintf(matrixfp,"  %c",getRes((Char) charOrder[c]));
-     for (c = 0; c< EFFECTIVE_ALPHABET; c++)
-       fprintf(matrixfp,"   %c",getRes((Char) charOrder[c]));
+     if (posComputationCalled) {
+       for (c = 0; c< EFFECTIVE_ALPHABET; c++)
+	 fprintf(matrixfp,"   %c",getRes((Char) charOrder[c]));
+     }
      for(i=0; i < length; i++) {
        fprintf(matrixfp,"\n%5ld %c   ", (long) (i + 1), getRes(q[i]));
        /*fprintf(matrixfp,"\n          ");*/
@@ -1850,17 +1879,19 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
 	   fprintf(matrixfp,"-I ");
 	 else
 	   fprintf(matrixfp,"%2ld ", (long) posSearch->posMatrix[i][charOrder[c]]);
-       for (c = 0; c < EFFECTIVE_ALPHABET; c++) 
-	 if(posSearch->posMatrix[i][charOrder[c]] != BLAST_SCORE_MIN)
-	   fprintf(matrixfp, "%4d", (Int4) posit_rounddown(100 * posSearch->posMatchWeights[i][charOrder[c]]));
-       fprintf(matrixfp," %5.2lf", posSearch->posInformation[i]); 
-       if ((posSearch->posCount[i] > 1) && (Xchar != q[i]))
-	 fprintf(matrixfp," %.2lf", countsFunction(posSearch->posSigma[i],
-                 posSearch->posIntervalSizes[i]) * 
+       if (posComputationCalled) {
+	 for (c = 0; c < EFFECTIVE_ALPHABET; c++) 
+	   if(posSearch->posMatrix[i][charOrder[c]] != BLAST_SCORE_MIN)
+	     fprintf(matrixfp, "%4d", (Int4) posit_rounddown(100 * posSearch->posMatchWeights[i][charOrder[c]]));
+	 fprintf(matrixfp," %5.2lf", posSearch->posInformation[i]); 
+	 if ((posSearch->posCount[i] > 1) && (Xchar != q[i]))
+	   fprintf(matrixfp," %.2lf", countsFunction(posSearch->posSigma[i],
+		     posSearch->posIntervalSizes[i]) * 
                  posSearch->posGaplessColumnWeights[i]/
                  compactSearch->pseudoCountConst);
-       else
-	 fprintf(matrixfp,"    0.00");
+	 else
+	   fprintf(matrixfp,"    0.00");
+       }
      }
      fprintf(matrixfp,"\n\n");
      fprintf(matrixfp,"                      K         Lambda\n");
