@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.44 $
+* $Revision: 1.45 $
 *
 * File Description: 
 *
@@ -1123,11 +1123,13 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
         }
       }
 
+      /*
       if (StringHasNoText (e2lip->link_menu)) {
         sprintf (buf, "Database %s link %s has no menu name", db, lnk);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
       }
+      */
       if (StringHasNoText (e2lip->link_descr)) {
         sprintf (buf, "Database %s link %s has no description", db, lnk);
         ValNodeCopyStr (head, 0, buf);

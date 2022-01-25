@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.151 $
+* $Revision: 6.152 $
 *
 * File Description: 
 *
@@ -137,7 +137,6 @@ static void FreeUdpFields (UpsDataPtr udp);
 
 extern void SubmitToNCBI (IteM i);
 extern void QuitProc (void);
-extern void PrepareToUpdateSequences (UpsDataPtr udp);
 extern void NewUpdateSequence (IteM i);
 extern void NewFeaturePropagate (IteM i);
 extern void FixCdsAfterPropagate (IteM i);
@@ -5285,7 +5284,7 @@ static Boolean CheckForIDCollision (
 static CharPtr convPubDescMssg =
 "Do you wish to convert publications to apply only to the appropriate ranges?";
 
-extern void PrepareToUpdateSequences (UpsDataPtr udp)
+static void PrepareToUpdateSequences (UpsDataPtr udp)
 {
   Uint2        entityID;
   ForM         f;
@@ -5678,6 +5677,41 @@ extern void NewUpdateSequence (IteM i)
   udp->input_itemtype = bfp->input_itemtype;
   udp->oldbsp         = bsp;
   udp->newbsp         = nbsp;
+  udp->fp             = NULL;
+  udp->isSet          = FALSE;
+  udp->useGUI         = TRUE;
+  udp->convertPubs    = CONVERTPUBS_NOT_SET;
+
+  /* Do the updating of the sequences */
+
+  PrepareToUpdateSequences (udp);
+}
+
+extern void UpdateSeqAfterDownload (
+  BaseFormPtr bfp,
+  BioseqPtr oldbsp,
+  BioseqPtr newbsp
+);
+extern void UpdateSeqAfterDownload (
+  BaseFormPtr bfp,
+  BioseqPtr oldbsp,
+  BioseqPtr newbsp
+)
+
+{
+  UpsDataPtr  udp;
+
+  /* Create data ptr */
+
+  udp = (UpsDataPtr) MemNew (sizeof (UpsData));
+  if (udp == NULL)
+    return;
+
+  udp->input_entityID = bfp->input_entityID;
+  udp->input_itemID   = bfp->input_itemID;
+  udp->input_itemtype = bfp->input_itemtype;
+  udp->oldbsp         = oldbsp;
+  udp->newbsp         = newbsp;
   udp->fp             = NULL;
   udp->isSet          = FALSE;
   udp->useGUI         = TRUE;

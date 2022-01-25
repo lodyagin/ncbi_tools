@@ -1,4 +1,4 @@
-/* $Id: cddsrv.h,v 1.14 2002/10/09 20:31:14 bauer Exp $
+/* $Id: cddsrv.h,v 1.15 2002/12/05 19:15:12 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 9/20/1999
 *
-* $Revision: 1.14 $
+* $Revision: 1.15 $
 *
 * File Description:
 *         header file for the CD-server CGI-bin
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddsrv.h,v $
+* Revision 1.15  2002/12/05 19:15:12  bauer
+* fixed lint warning
+*
 * Revision 1.14  2002/10/09 20:31:14  bauer
 * increased max. number of CDART neighbors, and other additions
 *
@@ -100,7 +103,7 @@
 
 /*---------------------------------------------------------------------------*/
 /* Options for iMode in cddsrv. Determines whether a summary is produced or  */
-/* whether alignment information is generated
+/* whether alignment information is generated                                */
 /*---------------------------------------------------------------------------*/
 #define CDDSUMMARY      0
 #define CDDALIGNMENT    1

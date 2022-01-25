@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *               system dependent header
@@ -39,6 +39,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.msw,v $
+* Revision 6.4  2002/11/22 20:05:04  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 6.3  1999/11/26 21:23:01  vakatov
 * Use pragma to get rid of annoying warnings when compiling for DLL
 *
@@ -284,6 +287,8 @@ typedef unsigned short USHORT;
 typedef unsigned char  UCHAR;
 
 #endif /* COMP_BOR */
+
+#define HAVE_STRDUP 1
 
 
 /*----------------------------------------------------------------------*/

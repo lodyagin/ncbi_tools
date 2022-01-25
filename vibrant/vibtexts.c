@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.11  2002/12/04 22:35:11  johnson
+* WIN_MSWIN: replace UNIX '\n' with DOS "\r\n" in Nlm_SetScrollText
+*
 * Revision 6.10  2001/09/10 17:58:28  bazhin
 * Removed odd lines from SetTextCursorBlinkRate() function.
 *
@@ -1776,6 +1779,10 @@ static void Nlm_SetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
   Nlm_Uint4     len;
   Nlm_RecT      r;
 #endif
+#ifdef WIN_MSWIN
+  Nlm_Uint4	count;
+  Nlm_CharPtr	tmp, newTitle;
+#endif
 
   tempPort = Nlm_SavePortIfNeeded (t, savePort);
   h = Nlm_GetTextHandle ((Nlm_TexT) t);
@@ -1794,7 +1801,30 @@ static void Nlm_SetScrollText (Nlm_GraphiC t, Nlm_Int2 item,
 #endif
 #ifdef WIN_MSWIN
   allowTextCallback = FALSE;
-  SetWindowText (h, title);
+  
+  /* count number of newlines */
+  tmp = title;
+  count = 0;
+  for (tmp = title; *tmp; ++tmp) {
+      if (*tmp == '\n')
+	  ++count;
+  }
+
+  if (count == 0)
+    SetWindowText (h, title);
+  else { /* replace UNIX <lf> with DOS <cr><lf> */
+    newTitle = (Nlm_CharPtr) MemNew(strlen(title)+count+1);
+    tmp = newTitle;
+    for (count=0; count < strlen(title); ++count) {
+	if (title[count] == '\n' && (count == 0 || title[count-1] != '\r'))
+	    *tmp++ = '\r';
+	*tmp++ = title[count];
+    }
+    *tmp = '\0';
+    SetWindowText (h, newTitle);
+    MemFree(newTitle);
+  }
+
   allowTextCallback = TRUE;
 #endif
 #ifdef WIN_MOTIF

@@ -30,8 +30,11 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.142 $ 
+/* $Revision: 6.143 $ 
 * $Log: blastdef.h,v $
+* Revision 6.143  2002/11/22 23:28:43  dondosha
+* Use array of structures instead of array of pointers for initial offset pairs
+*
 * Revision 6.142  2002/11/16 17:12:55  madden
 * Change version and date
 *
@@ -1386,7 +1389,7 @@ typedef struct _blast_hitlist {
         	/* added -cfj */
         LinkHelpStruct *lh_helper;
         Int4 lh_helper_size;
-        MegaBlastExactMatchPtr PNTR exact_match_array; /* Array to hold initial
+        MegaBlastExactMatchPtr exact_match_array; /* Array to hold initial
                                                           exact match hits */
         Int4 exact_match_max;
 	} BLAST_HitList, PNTR BLAST_HitListPtr;

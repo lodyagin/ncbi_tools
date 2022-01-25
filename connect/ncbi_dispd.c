@@ -1,4 +1,4 @@
-/*  $Id: ncbi_dispd.c,v 6.49 2002/11/01 20:14:07 lavr Exp $
+/*  $Id: ncbi_dispd.c,v 6.51 2002/12/10 22:11:50 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -123,7 +123,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 static int/*bool*/ s_ParseHeader(const char* header, void *data,
-                          int/*bool, ignored*/ server_error)
+                                 int/*ignored*/ server_error)
 {
     SERV_Update((SERV_ITER) data, header);
     return 1/*header parsed okay*/;
@@ -137,16 +137,14 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
     static const char platform[] = "platform";
     SConnNetInfo *net_info = ((SDISPD_Data*) iter->data)->net_info;
     CONNECTOR conn = 0;
-    const char *argval;
-    char  node[256];
+    const char *arch;
     char* s;
     CONN c;
 
     /* Dispatcher CGI arguments (sacrifice some if they all do not fit) */
-    if ((argval = CORE_GetPlatform()) != 0 && *argval)
-        ConnNetInfo_PreOverrideArg(net_info, platform, argval);
-    if ((argval = SOCK_gethostbyaddr(0, node, sizeof(node))) != 0 && *argval)
-        ConnNetInfo_PreOverrideArg(net_info, address, argval);
+    if ((arch = CORE_GetPlatform()) != 0 && *arch)
+        ConnNetInfo_PreOverrideArg(net_info, platform, arch);
+    ConnNetInfo_PreOverrideArg(net_info, address, net_info->client_host);
     if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->service)) {
         ConnNetInfo_DeleteArg(net_info, platform);
         if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->service)) {
@@ -165,6 +163,15 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
                                        :"Client-Mode: STATEFUL_CAPABLE\r\n") &&
         ConnNetInfo_OverrideUserHeader(net_info,
                                        "Dispatch-Mode: INFORMATION_ONLY\r\n")){
+        ConnNetInfo_OverrideUserHeader
+            (net_info, "User-Agent: NCBIServiceDispatcher/"
+             DISP_PROTOCOL_VERSION
+#ifdef NCBI_CXX_TOOLKIT
+             " (C++ Toolkit)"
+#else
+             " (C Toolkit)"
+#endif
+             "\r\n");
         /* All the rest in the net_info structure is fine with us */
         conn = HTTP_CreateConnectorEx(net_info, fHCC_SureFlush, s_ParseHeader,
                                       0/*adjust*/, iter/*data*/, 0/*cleanup*/);
@@ -179,8 +186,8 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
         assert(0);
         return 0/*failed*/;
     }
-    CONN_Flush(c);
     /* This will also send all the HTTP data, and trigger header callback */
+    CONN_Flush(c);
     CONN_Close(c);
     return ((SDISPD_Data*) iter->data)->n_node != 0;
 }
@@ -375,6 +382,12 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_dispd.c,v $
+ * Revision 6.51  2002/12/10 22:11:50  lavr
+ * Stamp HTTP packets with "User-Agent:" header tag and DISP_PROTOCOL_VERSION
+ *
+ * Revision 6.50  2002/11/19 19:21:40  lavr
+ * Use client_host from net_info instead of obtaining it explicitly
+ *
  * Revision 6.49  2002/11/01 20:14:07  lavr
  * Expand hostname buffers to hold up to 256 chars
  *

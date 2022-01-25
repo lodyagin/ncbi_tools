@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.37 2002/10/09 20:31:13 bauer Exp $
+/* $Id: cddserver.c,v 1.38 2002/11/25 19:01:20 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.37 $
+* $Revision: 1.38 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.38  2002/11/25 19:01:20  bauer
+* retrieve query sequence from BLAST queue in alignment formatting
+*
 * Revision 1.37  2002/10/09 20:31:13  bauer
 * increased max. number of CDART neighbors, and other additions
 *
@@ -175,6 +178,7 @@
 #include "dart.h"
 #include <objcn3d.h>
 #include "cdtrkapi.h"
+#include <qblastnet.h>
 
 #undef DEBUG
 #undef NOCN3D4
@@ -1886,7 +1890,12 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
 
   uCAVoptions = CAV_TEXT;
   if (iPDB == 2) uCAVoptions = CAV_HTML;
-  else if (iPDB == 4) uCAVoptions = CAV_FASTA;
+  else if (iPDB == 4) {
+    uCAVoptions = CAV_FASTA;
+    uCAVoptions |= CAV_LEFTTAILS;
+    uCAVoptions |= CAV_RIGHTTAILS;
+    uCAVoptions |= CAV_FASTA_LOWERCASE;
+  }
   if (tbit <= 0.0) uCAVoptions |= CAV_SHOW_IDENTITY;
 /*  uCAVoptions |= CAV_ANNOT_BOTTOM; */
   if (QuerySeq || iQueryGi != -1) {
@@ -1913,7 +1922,7 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
   MemFree(buf);
   if (iPDB != 2) printf("</PRE>\n");
   
-  if (pevidence) {
+  if (pevidence && iPDB != 4) {
     printf("<TABLE BORDER=\"0\" cellspacing=\"0\" cellpadding=\"2\" width=\"100%%\" bgcolor=\"#FFFFFF\">\n");
     printf("<TR><TD CLASS=\"medium1\" VALIGN=\"TOP\" NOWRAP><B>Feature %d:</B></TD><TD CLASS=\"medium1\" VALIGN=TOP>%s</TD></TR>\n",
            iFeatNum+1,aap->description);
@@ -2287,7 +2296,7 @@ Int2 Main()
   CddSumPtr                pcdsThis           = NULL;
   CharPtr                  Name;
   CharPtr                  outptr             = NULL;
-  CharPtr                  www_arg, cPart;
+  CharPtr                  www_arg, cPart, blast_program, blast_database;
   CharPtr                  QuerySeq           = NULL;
   CharPtr                  QueryAlign         = NULL;
   CharPtr                  QueryName          = NULL;
@@ -2300,7 +2309,7 @@ Int2 Main()
   PDBSeqIdPtr              pdb_seq_id;
   ScorePtr                 psc;
   ValNodePtr               psadsad = NULL;
-  SeqAlignPtr              salpHead;
+  SeqAlignPtr              salpHead, salpTemp;
   SeqAlignPtr              salpTail;
   SeqAlignPtr              salpCopy, salpFlat;
   SeqAlignPtr              salpQuery          = NULL;
@@ -2315,6 +2324,7 @@ Int2 Main()
   ValNodePtr               pvnGi              = NULL;
   ValNodePtr               pvnGis             = NULL;
   ValNodePtr               txids              = NULL;
+  ValNodePtr               other_returns, error_returns;
   WWWInfoPtr               www_info;
   Boolean                  bSelect            = FALSE;
   Boolean                  bAtom              = FALSE;
@@ -2339,6 +2349,7 @@ Int2 Main()
   Char                     dbversion[6];
   Char                     szName[5];
   Char                     errmsg[1024];
+  Int2                     Qstatus;
   Int2                     iPDB               = 2;
   Int2                     iSeqStrMode        = CDDSEQUONLY; 
   Int4                     i3dRepIndex        = 1;
@@ -2542,6 +2553,21 @@ Int2 Main()
     if(sepQuery->choice != 1) CddHtmlError("Conversion from FASTA failed!");
     QuerySeq = StringSave(www_arg);
     bspQuery = (BioseqPtr) sepQuery->data.ptrvalue;
+    sipQuery = bspQuery->id;
+    oidp = ObjectIdNew();
+    if (QueryName) {
+      oidp->str = StringSave(QueryName);
+    } else {
+      oidp->str = StringSave("query");
+    }
+    MemFree(sipQuery->data.ptrvalue);
+    sipQuery->choice = SEQID_LOCAL;
+    sipQuery->data.ptrvalue = oidp;
+    sipQuery->next = NULL;
+  } else if ((indx = WWWFindName(www_info, "queryrid")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info,indx);
+    Qstatus = (Int2) QBlastGetResults(www_arg,&salpTemp,&bspQuery,&blast_program,&blast_database,&other_returns, &error_returns);
+    if (Qstatus != 0) CddHtmlError("Could not retrieve query sequence from BLAST queue!");
     sipQuery = bspQuery->id;
     oidp = ObjectIdNew();
     if (QueryName) {

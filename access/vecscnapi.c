@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/13/00
 *
-* $Revision: 1.7 $
+* $Revision: 1.8 $
 *
 * File Description: 
 *
@@ -76,7 +76,7 @@ NLM_EXTERN CONN VecScreenOpenConnection (
 )
 
 {
-  return QUERY_OpenUrlQuery ("ray.nlm.nih.gov", 6224, "/VecScreen/vecscreenQB.cgi",
+  return QUERY_OpenUrlQuery ("yar.nlm.nih.gov", 6224, "/VecScreen/vecscreenQB.cgi",
                              query, "vecscreenapp",
                              30, eMIME_T_NcbiData, eMIME_Fasta, eENCOD_Url,
                              fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);

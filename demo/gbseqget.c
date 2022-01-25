@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/4/02
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description:  Demo to fetch by accession, write GBSet XML
 *
@@ -53,7 +53,11 @@
 #include <pmfapi.h>
 #include <asn2gnbp.h>
 
-static CharPtr ReadALine (CharPtr str, size_t size, FILE *fp)
+static CharPtr ReadALine (
+  CharPtr str,
+  size_t size,
+  FILE *fp
+)
 
 {
   Char     ch;
@@ -75,10 +79,18 @@ static CharPtr ReadALine (CharPtr str, size_t size, FILE *fp)
   return rsult;
 }
 
-static void ProcessAccession (CharPtr accn, XtraPtr extra, Boolean only_new)
+static void ProcessAccession (
+  CharPtr accn,
+  XtraPtr extra,
+  Boolean only_new,
+  Boolean get_var,
+  Boolean do_nuc,
+  Boolean do_prot
+)
 
 {
   Char         ch;
+  Int4         flags = 0;
   Int4         gi = 0;
   Char         id [41];
   Boolean      is_numeric = TRUE;
@@ -134,11 +146,20 @@ static void ProcessAccession (CharPtr accn, XtraPtr extra, Boolean only_new)
   }
   if (gi < 1) return;
 
-  sep = PubSeqSynchronousQuery (gi, 0, 0);
+  if (get_var) {
+    flags = 1;
+  }
+  sep = PubSeqSynchronousQuery (gi, 0, flags);
   if (sep == NULL) return;
 
-  SeqEntryToGnbk (sep, NULL, GENBANK_FMT, ENTREZ_MODE, SEGMENT_STYLE,
-                  SHOW_FAR_TRANSLATION, LOCK_FAR_COMPONENTS, extra, NULL);
+  if (do_nuc) {
+    SeqEntryToGnbk (sep, NULL, GENBANK_FMT, ENTREZ_MODE, SEGMENT_STYLE,
+                    SHOW_FAR_TRANSLATION, LOCK_FAR_COMPONENTS, extra, NULL);
+  }
+  if (do_prot) {
+    SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, ENTREZ_MODE, SEGMENT_STYLE,
+                    SHOW_FAR_TRANSLATION, LOCK_FAR_COMPONENTS, extra, NULL);
+  }
 
   SeqEntryFree (sep);
 }
@@ -146,6 +167,8 @@ static void ProcessAccession (CharPtr accn, XtraPtr extra, Boolean only_new)
 #define i_argInputFile  0
 #define o_argOutputFile 1
 #define n_argNewRecords 2
+#define v_argVariations 3
+#define m_argMolecule   4
 
 Args myargs [] = {
   {"Input File Name", "stdin", NULL, NULL,
@@ -154,6 +177,10 @@ Args myargs [] = {
     FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
   {"New Records Only", "F", NULL, NULL,
     TRUE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Fetch SNP Variations", "F", NULL, NULL,
+    TRUE, 'v', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Molecule (n Nucleotide, p Protein, b Both)", "n", NULL, NULL,
+    FALSE, 'm', ARG_STRING, 0.0, 0, NULL},
 };
 
 NLM_EXTERN void AsnPrintNewLine PROTO((AsnIoPtr aip));
@@ -163,10 +190,13 @@ Int2 Main (void)
 {
   AsnIoPtr    aip;
   AsnTypePtr  atp;
+  Boolean     do_nuc = FALSE;
+  Boolean     do_prot = FALSE;
   XtraPtr     extra;
   FILE        *fp;
   GBSeq       gbsq;
   GBSet       gbst;
+  Boolean     get_var;
   Char        line [256];
   Boolean     only_new;
   CharPtr     str;
@@ -224,6 +254,19 @@ Int2 Main (void)
   }
 
   only_new = (Boolean) myargs [n_argNewRecords].intvalue;
+  get_var = (Boolean) myargs [v_argVariations].intvalue;
+
+  str = myargs [m_argMolecule].strvalue;
+  if (StringICmp (str, "n") == 0) {
+    do_nuc = TRUE;
+  } else if (StringICmp (str, "p") == 0) {
+    do_prot = TRUE;
+  } else if (StringICmp (str, "b") == 0) {
+    do_nuc = TRUE;
+    do_prot = TRUE;
+  } else {
+    do_nuc = TRUE;
+  }
 
   PubSeqFetchEnable ();
 
@@ -241,7 +284,7 @@ Int2 Main (void)
   str = ReadALine (line, sizeof (line), fp);
   while (str != NULL) {
     if (! StringHasNoText (str)) {
-      ProcessAccession (str, extra, only_new);
+      ProcessAccession (str, extra, only_new, get_var, do_nuc, do_prot);
     }
     str = ReadALine (line, sizeof (line), fp);
   }

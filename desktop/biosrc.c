@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.37 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
@@ -228,9 +228,9 @@ typedef struct genbiopage {
   GrouP           orgGrp [5];
   GrouP           modGrp [5];
   GrouP           miscGrp [5];
-  TexT            gbacr;
-  TexT            gbana;
-  TexT            gbsyn;
+  PrompT          gbacr;
+  PrompT          gbana;
+  PrompT          gbsyn;
   CharPtr         origTaxName;
   Boolean         stripOldName;
   EnumFieldAssoc  PNTR genomeAlist;
@@ -1154,6 +1154,7 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
 
 {
   BioSourcePtr   biop;
+  Char           buf [256];
   Char           ch;
   CharPtr        chptr;
   FILE           *f;
@@ -1263,7 +1264,8 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
             onp->lineage = SaveStringFromTextAndStripNewlines (gbp->lineage);
           }
           onp->mod = DialogToPointer (gbp->orgmod);
-          if (! TextHasNoText (gbp->gbacr)) {
+          GetTitle (gbp->gbacr, buf, sizeof (buf) - 1);
+          if (! StringHasNoText (buf)) {
             mod = OrgModNew ();
             if (onp->mod == NULL) {
               onp->mod = mod;
@@ -1276,10 +1278,11 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
             }
             if (mod != NULL) {
               mod->subtype = 32;
-              mod->subname = SaveStringFromTextAndStripNewlines (gbp->gbacr);
+              mod->subname = StringSave (buf);
             }
           }
-          if (! TextHasNoText (gbp->gbana)) {
+          GetTitle (gbp->gbana, buf, sizeof (buf) - 1);
+          if (! StringHasNoText (buf)) {
             mod = OrgModNew ();
             if (onp->mod == NULL) {
               onp->mod = mod;
@@ -1292,10 +1295,11 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
             }
             if (mod != NULL) {
               mod->subtype = 33;
-              mod->subname = SaveStringFromTextAndStripNewlines (gbp->gbana);
+              mod->subname = StringSave (buf);
             }
           }
-          if (! TextHasNoText (gbp->gbsyn)) {
+          GetTitle (gbp->gbsyn, buf, sizeof (buf) - 1);
+          if (! StringHasNoText (buf)) {
             mod = OrgModNew ();
             if (onp->mod == NULL) {
               onp->mod = mod;
@@ -1308,7 +1312,7 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
             }
             if (mod != NULL) {
               mod->subtype = 34;
-              mod->subname = SaveStringFromTextAndStripNewlines (gbp->gbsyn);
+              mod->subname = StringSave (buf);
             }
           }
           if (! TextHasNoText (gbp->orgcomment)) {
@@ -2126,21 +2130,12 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     g = HiddenGroup (gbp->modGrp [2], 2, 0, NULL);
     SetGroupSpacing (g, 3, 10);
 
-    if (GetAppProperty ("ReadOnlyDbTags") == NULL) {
-      StaticPrompt (g, "Assigned Acronym", 0, stdLineHeight, programFont, 'l');
-      gbp->gbacr = DialogText (g, "", 15, NULL);
-      StaticPrompt (g, "Assigned Anamorph", 0, stdLineHeight, programFont, 'l');
-      gbp->gbana = DialogText (g, "", 15, NULL);
-      StaticPrompt (g, "Assigned Synonym", 0, stdLineHeight, programFont, 'l');
-      gbp->gbsyn = DialogText (g, "", 15, NULL);
-    } else {
-      StaticPrompt (g, "Assigned Acronym", 0, stdLineHeight, programFont, 'l');
-      gbp->gbacr = (TexT) StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
-      StaticPrompt (g, "Assigned Anamorph", 0, stdLineHeight, programFont, 'l');
-      gbp->gbana = (TexT) StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
-      StaticPrompt (g, "Assigned Synonym", 0, stdLineHeight, programFont, 'l');
-      gbp->gbsyn = (TexT) StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
-    }
+    StaticPrompt (g, "Assigned Acronym", 0, stdLineHeight, programFont, 'l');
+    gbp->gbacr = StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
+    StaticPrompt (g, "Assigned Anamorph", 0, stdLineHeight, programFont, 'l');
+    gbp->gbana = StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
+    StaticPrompt (g, "Assigned Synonym", 0, stdLineHeight, programFont, 'l');
+    gbp->gbsyn = StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
 
     Hide (gbp->modGrp [2]);
 

@@ -32,8 +32,17 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.212 $
+* $Revision: 6.215 $
 * $Log: blastool.c,v $
+* Revision 6.215  2002/12/04 23:32:49  camacho
+* Do not set use_this_gi with nucleotide dbs (redundant)
+*
+* Revision 6.214  2002/11/26 23:02:34  madden
+* Make ErrorMessage optional in ParseBlastOptions
+*
+* Revision 6.213  2002/11/21 21:28:27  camacho
+* Mask the entire volume if no gis in rdfp->gilist belong to rdfp
+*
 * Revision 6.212  2002/11/08 20:52:01  dondosha
 * After the traceback, reduce hitlist size back to the original
 *
@@ -2181,6 +2190,12 @@ blast_double_int_oid_compare(VoidPtr v1, VoidPtr v2)
 		return -1;
 	if (h1->ordinal_id > h2->ordinal_id)
 		return 1;
+    if (h1->start == h2->start) { /* break the tie with gis */
+        if (h1->gi < h2->gi)
+            return -1;
+        if (h1->gi > h2->gi)
+            return 1;
+    }
 
 	return 0;
 }
@@ -2443,7 +2458,7 @@ Boolean IntersectDoubleInt4ListWithOIDLists(
    intersected with the oidlists created from the gifiles.
 */
 static
-void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain) 
+void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain, ValNodePtr *err_ret) 
 {
     ReadDBFILEPtr  rdfp = NULL;
     BlastDoubleInt4Ptr	list=NULL, global_list = NULL;
@@ -2469,7 +2484,7 @@ void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain)
                 }
             }
             ngis = index;
-   
+
             tmp_list = CombineDoubleInt4Lists(global_list, total_num_gis, 
                                               list, ngis);
             if (tmp_list) {
@@ -2480,6 +2495,24 @@ void MergeDbGiFilesWithOIDLists(ReadDBFILEPtr rdfp_chain)
                 total_num_gis += ngis;
             }
             list = MemFree(list);
+        }
+
+        /* rdfp->gifile exists, but its gis don't belong to this rdfp, so
+         * restrict this entire rdfp (mask all of its sequences) */
+        if (FileLength(rdfp->gifile) > 0 && ngis == 0) {
+            Int4 maxoid = rdfp->stop - rdfp->start;
+            Char buf[256];
+
+            rdfp->oidlist = (OIDListPtr) MemNew(sizeof(OIDList));
+            rdfp->oidlist->total = maxoid + 1;
+            rdfp->oidlist->list = (Uint4Ptr)
+                MemNew(sizeof(Uint4)*(maxoid/MASK_WORD_SIZE + 2));
+            rdfp->oidlist->memory = rdfp->oidlist->list;
+            sprintf(buf,"No gis in %s were found in %s database. Restricting "
+                    "the entire database", rdfp->gifile,
+                    FileNameFind(rdfp->filename));
+            BlastConstructErrorMessage("MergeDbGiFilesWithOIDLists", buf, 
+                    SEV_WARNING, err_ret);
         }
     }
     
@@ -2742,7 +2775,7 @@ BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
         oidlist_forall_rdfp = TRUE;
 
     /* Create individual oidlists for those databases which have gi lists */
-    MergeDbGiFilesWithOIDLists(search->rdfp);
+    MergeDbGiFilesWithOIDLists(search->rdfp, &search->error_return);
 
     if (gi_list)
         bglp = CombineDoubleInt4Lists(gi_list, gi_list_size, NULL, 0);
@@ -4053,7 +4086,8 @@ Boolean BlastParseInputString(CharPtr string,
 	if (*chptr != '-') {   /* Check for the option sign */
 	    sprintf(message, "Invalid input string started from \"%s\"", 
 		    chptr);
-	    *ErrorMessage = StringSave(message);
+	    if (ErrorMessage)
+	    	*ErrorMessage = StringSave(message);
 	    return FALSE;
 	} else {
 	    chptr++;
@@ -4064,7 +4098,8 @@ Boolean BlastParseInputString(CharPtr string,
 	if((index = BlastGetLetterIndex(letters, *chptr)) < 0) {
 	    sprintf(message, "Character \'%c\' is not a valid option", 
 		    *chptr);
-	    *ErrorMessage = StringSave(message);
+	    if (ErrorMessage)
+	    	*ErrorMessage = StringSave(message);
 	    return FALSE;
 	}
 

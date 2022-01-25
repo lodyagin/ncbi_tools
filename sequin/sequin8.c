@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.202 $
+* $Revision: 6.204 $
 *
 * File Description: 
 *
@@ -59,6 +59,7 @@
 #include <blast.h>
 
 #define DEFLINE_MAX_LEN          380
+#define TEXT_MAX_LEN             64
 #define DEFLINE_MAX_GENENAME_LEN 64
 
 typedef struct evidenceformdata {
@@ -6275,7 +6276,7 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
   CharPtr            ptr;
   SubSourcePtr       ssp;
   Char               str [128];
-  Char               text [64];
+  Char               text [TEXT_MAX_LEN];
 
   if (stringsPtr != NULL && biop != NULL) {
     orp = biop->org;
@@ -6290,7 +6291,7 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
             } else {
               text [0] = '\0';
               str [0] = '\0';
-              StringNCpy_0 (text, mod->subname, sizeof (text));
+              StringNCpy_0 (text, mod->subname, TEXT_MAX_LEN);
               for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
                 if (ap->value == mod->subtype) {
                   StringNCpy_0 (str, ap->name, sizeof (str));
@@ -6315,10 +6316,10 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
       if (ssp->subtype < 29 && subsource_rank [ssp->subtype] > 0 && ssp->subtype != SUBSRC_transgenic) {
         text [0] = '\0';
         str [0] = '\0';
-        StringNCpy_0 (text, ssp->name, sizeof (text));
+        StringNCpy_0 (text, ssp->name, TEXT_MAX_LEN);
         for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
           if (ap->value == ssp->subtype) {
-            StringNCpy_0 (str, ap->name, sizeof (str));
+            StringNCpy_0 (str, ap->name, TEXT_MAX_LEN);
             ptr = StringStr (str, "-name");
             if (ptr != NULL) {
               *ptr = '\0';
@@ -6488,7 +6489,7 @@ static void AutoDef_AddProtein (DefFeatsPtr dfp,
     if (featNum > 1)
       StringCat (str, "s");
     else if (! StringHasNoText (dfp->allelename)) {
-      StringNCpy_0 (text, dfp->allelename, sizeof (text));
+      StringNCpy_0 (text, dfp->allelename, TEXT_MAX_LEN);
       StringCat (str, ", ");
       StringCat (str, text);
       StringCat (str, " allele");
@@ -6534,7 +6535,7 @@ static void AutoDef_AddGene (DefFeatsPtr dfp,
     if (featNum > 1)
       StringCat (str, "s");
     if (featNum < 2 && (! StringHasNoText (dfp->allelename))) {
-      StringNCpy_0 (text, dfp->allelename, sizeof (text));
+      StringNCpy_0 (text, dfp->allelename, TEXT_MAX_LEN);
       StringCat (str, ", ");
       StringCat (str, text);
       StringCat (str, " allele");
@@ -6768,7 +6769,7 @@ static void AutoDef_AddmRNA (DefFeatsPtr dfp,
     if (featNum > 1)
       StringCat (str, "s");
     if (featNum < 2 && (! StringHasNoText (dfp->allelename))) {
-      StringNCpy_0 (text, dfp->allelename, sizeof (text));
+      StringNCpy_0 (text, dfp->allelename, TEXT_MAX_LEN);
       StringCat (str, ", ");
       StringCat (str, text);
       StringCat (str, " allele");
@@ -6800,7 +6801,7 @@ static void AutoDef_AddPseudoGene (DefFeatsPtr dfp,
       StringCat (str, "s");
     }
     if (featNum < 2 && (! StringHasNoText (dfp->allelename))) {
-      StringNCpy_0 (text, dfp->allelename, sizeof (text));
+      StringNCpy_0 (text, dfp->allelename, TEXT_MAX_LEN);
       StringCat (str, ", ");
       StringCat (str, text);
       StringCat (str, " allele");
@@ -6901,7 +6902,7 @@ static void AutoDef_AddExon (DefFeatsPtr dfp,
 	  StringCat (str, text);
 	  StringCat (str, ") gene,");
 	  if (! StringHasNoText (dfp->allelename)) {
-	    StringNCpy_0 (text, dfp->allelename, sizeof (text));
+	    StringNCpy_0 (text, dfp->allelename, TEXT_MAX_LEN);
 	    StringCat (str, " ");
 	    StringCat (str, text);
 	    StringCat (str, " allele,");
@@ -7110,13 +7111,13 @@ static void AutoDef_AddEnding (CharPtr      str,
   if (biop != NULL) {
     orgnelle [0] = '\0';
     switch (biop->genome) {
+    case GENOME_apicoplast :
     case GENOME_chloroplast :
     case GENOME_chromoplast :
     case GENOME_kinetoplast :
     case GENOME_mitochondrion :
     case GENOME_plastid :
     case GENOME_cyanelle :
-    case GENOME_apicoplast :
     case GENOME_leucoplast :
     case GENOME_proplastid :
       if (mitocount > 1)
@@ -7179,7 +7180,7 @@ static void FinishAutoDefProc (Uint2        entityID,
   SeqFeatPtr    sfp;
   Char          str [DEFLINE_MAX_LEN];
   ValNodePtr    ttl;
-  Char          text [64];
+  Char          text [TEXT_MAX_LEN];
   ValNodePtr    vnp;
 
   /* Check configuration parameters to */
@@ -7425,11 +7426,11 @@ static void MergeAltSpliceCDSs (ValNodePtr head)
 
 static void AutoDef_SetGroupingFlags (ValNodePtr vnp)
 {
-  Boolean            change;
-  DefFeatsPtr        dfp;
-  Int2               group;
-  DefFeatsPtr        nextdfp;
-  DefFeatsPtr        penult;
+  Boolean       change;
+  DefFeatsPtr   dfp;
+  Int2          group;
+  DefFeatsPtr   nextdfp;
+  DefFeatsPtr   penult;
 
   group = 0;
   penult = NULL;
@@ -7690,6 +7691,7 @@ static void AutoDefProc (Uint2       entityID,
   SeqIdPtr           sip;
   SeqLocPtr          slp;
   SubSourcePtr       ssp;
+  ValNodePtr         syn;
   Char               taxName [196];
   ValNodePtr         ttl;
   ValNodePtr         strings;
@@ -7703,10 +7705,11 @@ static void AutoDefProc (Uint2       entityID,
   if (sep == NULL)
     return;
 
-  /* If we have a Bioseq Set then recurse */
-  /* until we get a Bioseq.               */
-
   if (target == NULL && seg == NULL) {
+
+    /* If we have a Bioseq Set then recurse */
+    /* until we get a Bioseq.               */
+
     if (IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
       if (bssp == NULL)
@@ -7720,6 +7723,9 @@ static void AutoDefProc (Uint2       entityID,
         return;
       }
     }
+
+    /* If we have a segmented bioseq then recursively */
+    /* call this function on each segment.            */
 
     nsep = FindNucSeqEntry (sep);
     if (nsep != NULL) {
@@ -7901,17 +7907,29 @@ static void AutoDefProc (Uint2       entityID,
           grp = (GeneRefPtr) xref->data.value.ptrvalue;
         if (grp != NULL) {
           dfp->genename = (CharPtr) grp->locus;
-          if ((! StringHasNoText (grp->locus)) &&
+          if (StringHasNoText (dfp->genename)) {
+            dfp->genename = (CharPtr) grp->desc;
+          }
+          if (StringHasNoText (dfp->genename)) {
+            syn = grp->syn;
+            if (syn != NULL) {
+              dfp->genename = (CharPtr) syn->data.ptrvalue;
+            }
+          }
+          if (StringHasNoText (dfp->genename)) {
+            dfp->genename = (CharPtr) grp->locus_tag;
+          }
+          if ((! StringHasNoText (dfp->genename)) &&
 	      (! StringHasNoText (grp->allele))) {
             lenallele = StringLen (grp->allele);
-            lenlocus = StringLen (grp->locus);
+            lenlocus = StringLen (dfp->genename);
             if (lenallele > lenlocus &&
-		StringNICmp (grp->locus, grp->allele, lenlocus) == 0)
+		StringNICmp (dfp->genename, grp->allele, lenlocus) == 0)
               sprintf (allele, "%s", grp->allele);
             else if (StringNCmp (grp->allele, "-", 1) == 0)
-              sprintf (allele, "%s%s", grp->locus, grp->allele);
+              sprintf (allele, "%s%s", dfp->genename, grp->allele);
 	    else
-              sprintf (allele, "%s-%s", grp->locus, grp->allele);
+              sprintf (allele, "%s-%s", dfp->genename, grp->allele);
             dfp->allelename = StringSave (allele);
           }
           if (grp->pseudo)

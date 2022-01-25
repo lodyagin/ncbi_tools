@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.31  2002/11/20 16:00:03  johnson
+* Revamped CpG routines; now equivalent to "strict" human CpG mapviewer track
+*
 * Revision 6.30  2002/06/11 15:25:12  johnson
 * two minor bug fixes to CpG functions
 *
@@ -134,10 +137,11 @@ static void StateTableSearch (TextFsaPtr tbl, CharPtr txt, Int2Ptr state, Int4 p
 static Boolean am_isa_gap(Int4 start, Int4 prevstop, Uint1 strand);
 static void am_fix_strand(SeqAlignPtr sap, Uint1 strand1, Uint1 strand2);
 
+#define CG_MINLEN 500 /*minimum length for CpG island; should be equivalent to mapviewer track setting! */
 
 /*-----------------------------------------------------------------------------
-  Pre : locked nucleotide bioseq ptr
-  Post: entire sequence loaded into memory in iupacna format
+  PRE : locked nucleotide bioseq ptr
+  POST: entire sequence loaded into memory in iupacna format
 -----------------------------------------------------------------------------*/
 static CharPtr LoadSequence(BioseqPtr bsp)
 {
@@ -146,6 +150,11 @@ static CharPtr LoadSequence(BioseqPtr bsp)
     Int4 readCount;
 
     buf = (CharPtr) MemNew(bsp->length * sizeof(Char));
+    if (!buf) {
+        ErrPostStr(SEV_ERROR, 0,0, "Error allocating memory for sequence!");
+        return NULL;
+    }
+
     spp = SeqPortNew(bsp, 0, bsp->length-1, Seq_strand_unknown,
                      Seq_code_iupacna);
 
@@ -160,8 +169,8 @@ static CharPtr LoadSequence(BioseqPtr bsp)
 }
 
 /*-----------------------------------------------------------------------------
-  Pre : sequence, position to be added, cgIsland information
-  Post: cgIsle adjusted according to the nucleotide at position i
+  PRE : sequence, position to be added, cgIsland information
+  POST: cgIsle adjusted according to the nucleotide at position i & i-1
 -----------------------------------------------------------------------------*/
 static void AddPosition(CharPtr seq, Int4 i, ACT_CGInfoPtr cgIsle)
 {
@@ -178,17 +187,34 @@ static void AddPosition(CharPtr seq, Int4 i, ACT_CGInfoPtr cgIsle)
 }
 
 /*-----------------------------------------------------------------------------
-  Pre : sequence, length of sequence, start of window
-  Post: cgInfo filled with stats (#a's, c's, etc.) for window (start ->
-  start + window size)
+  PRE : sequence, position to be removed, cgIsland information
+  POST: cgIsle adjusted according to the nucleotide at position i & i-1
 -----------------------------------------------------------------------------*/
-static void CalcWindowStats(CharPtr seq, Int4 seqLength, Int4 start,
-                     ACT_CGInfoPtr cgIsle)
+static void RemovePosition(CharPtr seq, Int4 i, ACT_CGInfoPtr cgIsle)
+{
+    switch(seq[i]) {
+    case 'A': cgIsle->a--; break;
+    case 'C': cgIsle->c--; break;
+    case 'G': cgIsle->g--;
+        if (i > 0 && seq[i-1] == 'C')
+            cgIsle->cg--;
+        break;
+    case 'T': cgIsle->t--; break;
+    case 'N': cgIsle->n--; break;
+    }
+}
+
+/*-----------------------------------------------------------------------------
+  PRE : sequence, length of sequence, (ptr to) cgIsle structure with to &
+  from fields filled in
+  POST: cgInfo filled with stats (#a's, c's, etc.) for window (to ->|
+  from)
+-----------------------------------------------------------------------------*/
+static void CalcWindowStats(CharPtr seq, ACT_CGInfoPtr cgIsle)
 {
     Int4 i;
 
-    cgIsle->from = start;
-    cgIsle->to = MIN(start + CG_WINDOWSIZE, seqLength) - 1;
+    cgIsle->a = cgIsle->t = cgIsle->g = cgIsle->c = cgIsle->cg = 0;
     cgIsle->length = cgIsle->to - cgIsle->from + 1;
 
     for (i = cgIsle->from; i <= cgIsle->to; i++)
@@ -196,122 +222,141 @@ static void CalcWindowStats(CharPtr seq, Int4 seqLength, Int4 start,
 }
 
 /*-----------------------------------------------------------------------------
-  Pre : CGIsle structure filled
-  Post: whether or not we consider this to be a CpG island
+  PRE : island structure filled
+  POST: whether or not we consider this to be a CpG island
 -----------------------------------------------------------------------------*/
-static Boolean IsIsland(ACT_CGInfoPtr cgIsle)
+static Boolean IsIsland(ACT_CGInfoPtr isle)
 {
-    return (100*(cgIsle->c + cgIsle->g) > 50*cgIsle->length &&
-            100 * cgIsle->cg * cgIsle->length > 60 * cgIsle->c * cgIsle->g);
+    Uint4 len = isle->to-isle->from+1;
+
+    return (100*(isle->c + isle->g) > 50*len &&
+            100* isle->cg*len > 60* isle->c*isle->g);
 }
 
 
 /*-----------------------------------------------------------------------------
-  Pre : sequence, length of sequence, CGIsle structure filled with info
-  about current window
-  Post: whether or not we found a cgIsland further down the sequence that
-  meets the mimimum criteria; if so, cgIsle is set to that window
+  PRE : sequence, length of sequence, win->from field filled in
+  POST: whether or not we found a window further down the sequence that
+  meets the mimimum criteria; if so, 'win' is set to that window
 -----------------------------------------------------------------------------*/
-static Boolean SlideToHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr cgIsle)
+static Boolean SlideToHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr win)
 {
-    Boolean found;
+    Boolean inIsland, done;
 
-    if (cgIsle->from > cgIsle->to) /* flag that we've hit the end */
+    win->to = win->from + CG_WINDOWSIZE - 1;
+
+    if (win->to >= seqLength)
         return FALSE;
 
-    found = IsIsland(cgIsle);
+    CalcWindowStats(seq, win);
 
-    while (cgIsle->to < (seqLength-1) && !found) {
+    inIsland = FALSE;
+    done = FALSE;
+
+    while (win->to < seqLength && !IsIsland(win)) {
         /* remove 1 nt from left side */
-        switch(seq[cgIsle->from]) {
-        case 'A': cgIsle->a--; break;
-        case 'C': cgIsle->c--; break;
-        case 'G': cgIsle->g--;
-            if (cgIsle->from > 0 && seq[cgIsle->from-1] == 'C')
-                cgIsle->cg--;
-            break;
-        case 'T': cgIsle->t--; break;
-        case 'N': cgIsle->n--; break;
-        }
+        RemovePosition(seq, win->from, win);
 
         /* advance */
-        cgIsle->to++;
-        cgIsle->from++;
+        ++win->from;
+        ++win->to;
 
-        /* add 1 nt onto right side */
-        AddPosition(seq, cgIsle->to, cgIsle);
+        if (win->to < seqLength) {
+            /* add 1 nt onto right side */
+            AddPosition(seq, win->to, win);
+        }
+    }
+    
+    return IsIsland(win);
+}
 
-        if (IsIsland(cgIsle))
-            found = TRUE;
+/*-----------------------------------------------------------------------------
+  PRE : sequence, length of sequence, window that meets the GC & CpG criteria
+  POST: whether or not the island can be extended to reach at least the
+  minimum length; if so, isle is set to that window
+-----------------------------------------------------------------------------*/
+static Boolean ExtendHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr isle)
+{
+    ACT_CGInfoPtr win = (ACT_CGInfoPtr) MemNew(sizeof(ACT_CGInfo));
+    memcpy(win, isle, sizeof(ACT_CGInfo));
+
+    //jump by 200bp increments
+    while (win->to + CG_WINDOWSIZE < seqLength && IsIsland(win)) {
+        win->from += CG_WINDOWSIZE;
+        win->to += CG_WINDOWSIZE;
+        CalcWindowStats(seq, win);
     }
 
-    return found;
+    //if we overshot, slide back by 1bp increments
+    while (!IsIsland(win)) {
+        RemovePosition(seq, win->to, win);
+        --win->from;
+        --win->to;
+        AddPosition(seq, win->from, win);
+    }
+
+    //trim ends of entire island until we're above criteria again
+    isle->to = win->to;
+    CalcWindowStats(seq, isle);
+    while(!IsIsland(isle) && (isle->from < isle->to)) {
+        RemovePosition(seq, isle->to, isle);
+        RemovePosition(seq, isle->from, isle);
+        --isle->to;
+        ++isle->from;
+    }
+
+    free(win);
+
+    if (isle->from >= isle->to) {//in case we trimmed to nothing
+        isle->to = isle->from;
+        return FALSE;
+    }
+    return (isle->to - isle->from + 1 > CG_MINLEN);
 }
 
 /*-----------------------------------------------------------------------------
-  Pre : sequence, length of sequence, CGIsle structure filled with info
-  about current window --> which is, in fact, a CpG island
-  Post: whether or not we found a cgIsland further down the sequence that
-  meets the mimimum criteria; if so, cgIsle is set to that window
------------------------------------------------------------------------------*/
-static void ExtendHit(CharPtr seq, Int4 seqLength, ACT_CGInfoPtr cgIsle)
-{
-    ACT_CGInfo lastGood;
-
-    lastGood = *cgIsle;
-    cgIsle->to++;
-
-    while (cgIsle->to < seqLength &&
-           cgIsle->to < (lastGood.to+CG_WINDOWSIZE)) {
-        cgIsle->length = cgIsle->to - cgIsle->from + 1;
-        AddPosition(seq, cgIsle->to, cgIsle);
-        if (IsIsland(cgIsle))
-            lastGood = *cgIsle;
-        cgIsle->to++;
-    };
-
-    /* overshot */
-    *cgIsle = lastGood;
-}
-
-/*-----------------------------------------------------------------------------
-  Pre : locked nucleotide bioseq ptr
-  Post: 
+  PRE : locked nucleotide bioseq ptr
+  POST: linked list of CpG islands (if any).  Uses algorithm from Takai and
+  Jones, Proc Natl Acad Sci U S A 2002 Mar 19;99(6):3740-5.
+  Cutoffs used in the "strict" human CpG map viewer track as of 11/20/02:
+  CG_WINDOWSIZE=200, CG_MINLEN=500, CpG obs/exp >= 0.6, G+C >= 0.5
 -----------------------------------------------------------------------------*/
 NLM_EXTERN ACT_CGInfoPtr ACT_FindCpG(BioseqPtr bsp)
 {
-    CharPtr buf;
-    ACT_CGInfoPtr cgHead, cgIsle;
+    CharPtr seq;
+    ACT_CGInfoPtr cgHead, isle;
 
-    if (bsp == NULL)
+    if (bsp == NULL || bsp->length < CG_WINDOWSIZE)
         return NULL;
     if (bsp->mol == Seq_mol_aa) {
         Message(SEV_WARNING, "Must use nucleotide sequence\n");
         return NULL;
     }
 
-    buf = LoadSequence(bsp);
+    if (!(seq = LoadSequence(bsp)))
+        return NULL;/* error message displayed in LoadSequence */
+
 
     cgHead = NULL;
+    isle = (ACT_CGInfoPtr) MemNew(sizeof(ACT_CGInfo));
+  
+    isle->from = 0;
 
-    cgIsle = (ACT_CGInfoPtr) MemNew(sizeof(ACT_CGInfo));
-    CalcWindowStats(buf, bsp->length, 0, cgIsle);
-
-    while (SlideToHit(buf, bsp->length, cgIsle)) {
-        ExtendHit(buf, bsp->length, cgIsle);
-        cgIsle->next = cgHead;
-        cgHead = cgIsle;
-        printf("CpG: %d to %d, Confidence: %d\n", cgHead->from, cgHead->to, 100 * cgIsle->cg * cgIsle->length/(cgIsle->c * cgIsle->g));
-
-        cgIsle = (ACT_CGInfoPtr) MemNew(sizeof(ACT_CGInfo));
-        CalcWindowStats(buf, bsp->length, cgHead->to+1, cgIsle);
+    while (SlideToHit(seq, bsp->length, isle)) {
+        if (ExtendHit(seq, bsp->length, isle)) {
+            isle->next = cgHead;
+            cgHead = isle;
+            isle = (ACT_CGInfoPtr) MemNew(sizeof(ACT_CGInfo));
+            isle->to = cgHead->to;
+        }
+        isle->from = isle->to + 1;
     }
 
-    free(cgIsle);
-    free(buf);
-
+    free(isle);
+    free(seq);
     return cgHead;
 }
+
 /*NLM_EXTERN ACT_CGInfoPtr ACT_FindCpG(BioseqPtr bsp)
 {
    ACT_CGInfoPtr    acg;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.35 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *
@@ -733,6 +733,18 @@ static CharPtr TrimBracketsFromString (CharPtr str)
     if (ch == '[') {
       ptr++;
       ch = *ptr;
+      while (ch != '\0' && ch != ']' && ch != '"') {
+        ptr++;
+        ch = *ptr;
+      }
+      if (ch == '"') {
+        ptr++;
+        ch = *ptr;
+        while (ch != '\0' && ch != '"') {
+          ptr++;
+          ch = *ptr;
+        }
+      }
       while (ch != '\0' && ch != ']') {
         ptr++;
         ch = *ptr;
@@ -907,6 +919,7 @@ static void ProcessOneAnnot (
 {
   BioseqPtr   bsp;
   Int2        genCode;
+  ValNodePtr  generalIDs;
   SeqFeatPtr  sfp;
   SeqIdPtr    sip;
 
@@ -926,8 +939,12 @@ static void ProcessOneAnnot (
   if (! StringHasNoText (accn)) {
     sip = SeqIdFromAccession (accn, 0, NULL);
     if (sip != NULL) {
+      generalIDs = ValNodeExtractList (&(bsp->id), SEQID_GENERAL);
       bsp->id = SeqIdSetFree (bsp->id);
       bsp->id = sip;
+      if (generalIDs != NULL) {
+        ValNodeLink (&(bsp->id), generalIDs);
+      } 
       SeqMgrReplaceInBioseqIndex (bsp);
       VisitFeaturesOnBsp (bsp, (Pointer) bsp->id, CorrectFeatureSeqIds);
     }
@@ -1229,6 +1246,46 @@ static Uint2 ProcessDeltaSet (
   return entityID;
 }
 
+static SeqAnnotPtr NewGraphSeqAnnot (CharPtr name, SeqGraphPtr sgp)
+
+{
+  SeqAnnotPtr  sap = NULL;
+
+  if (sgp == NULL) return NULL;
+  sap = SeqAnnotNew ();
+  if (sap == NULL) return NULL;
+
+  if (! StringHasNoText (name)) {
+    ValNodeAddPointer (&(sap->desc), Annot_descr_name, StringSave (name));
+  }
+  sap->type = 3;
+  sap->data = (Pointer) sgp;
+
+  return sap;
+}
+
+static CharPtr ReadALine (CharPtr str, size_t size, FILE *fp)
+
+{
+  Char     ch;
+  CharPtr  ptr;
+  CharPtr  rsult;
+
+  if (str == NULL || size < 1 || fp == NULL) return NULL;
+  *str = '\0';
+  rsult = FileGets (str, size, fp);
+  if (rsult != NULL) {
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0' && ch != '\n' && ch != '\r') {
+      ptr++;
+      ch = *ptr;
+    }
+    *ptr = '\0';
+  }
+  return rsult;
+}
+
 static void ProcessOneRecord (
   SubmitBlockPtr sbp,
   PubdescPtr pdp,
@@ -1252,15 +1309,22 @@ static void ProcessOneRecord (
 {
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
+  Char          buf [256];
   Pointer       dataptr;
   Uint2         datatype, entityID;
   DatePtr       dp;
   FILE          *fp;
+  Boolean       goOn;
+  SeqGraphPtr   lastsgp;
   ErrSev        msev;
+  CharPtr       ptr;
   SeqAnnotPtr   sap;
   SeqDescrPtr   sdp;
   SeqEntryPtr   sep;
+  SeqGraphPtr   sgp;
+  SeqIdPtr      sip;
   SimpleSeqPtr  ssp;
+  CharPtr       str;
 
   fp = OpenOneFile (directory, base, suffix);
   if (fp == NULL) return;
@@ -1322,6 +1386,57 @@ static void ProcessOneRecord (
     }
     FileClose (fp);
   }
+
+  /* read one or more quality score blocks from .qvl file */
+
+  fp = OpenOneFile (directory, base, ".qvl");
+  if (fp != NULL) {
+
+    goOn = TRUE;
+    while (goOn) {
+      str = ReadALine (buf, sizeof (buf), fp);
+      if (str == NULL) {
+        goOn = FALSE;
+      } else if (! StringHasNoText (str)) {
+        if (str [0] == '>') {
+          ptr = StringChr (str, ' ');
+          if (ptr != NULL) {
+            *ptr = '\0';
+          }
+          sip = MakeSeqID (str + 1);
+          bsp = BioseqFind (sip);
+          if (bsp != NULL) {
+            sgp = ReadPhrapQuality (fp, bsp);
+            if (sgp != NULL) {
+              for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+                if (sap->type == 3) {
+                  for (lastsgp = sap->data; lastsgp->next != NULL; lastsgp = lastsgp->next) {
+                    continue;
+                  }
+                  lastsgp->next = sgp;
+                  break;
+                }
+              }
+              if (sap == NULL) {
+                if (bsp->annot != NULL) {
+                  for (sap = bsp->annot; sap->next != NULL; sap = sap->next) {
+                    continue;
+                  }
+                  sap->next = NewGraphSeqAnnot ("Graphs", sgp);
+                } else {
+                  bsp->annot = NewGraphSeqAnnot ("Graphs", sgp);
+                }
+              }
+            }
+          }
+          SeqIdFree (sip);
+        }
+      }
+    }
+    FileClose (fp);
+  }
+
+  /* finish processing */
 
   sep = GetTopSeqEntryForEntityID (entityID);
   if (sep != NULL) {
@@ -1647,7 +1762,7 @@ Int2 Main (void)
   /* process one or more records */
 
   if (! StringHasNoText (base)) {
-    ptr = StringStr (base, ".");
+    ptr = StringRChr (base, '.');
     if (ptr != NULL) {
       StringNCpy_0 (sfx, ptr, sizeof (sfx));
       *ptr = '\0';

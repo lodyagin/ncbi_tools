@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.256 $
+* $Revision: 6.258 $
 *
 * File Description: 
 *
@@ -2500,6 +2500,7 @@ static void CleanupTrna (SeqFeatPtr sfp, tRNAPtr trp)
     if (aa == 0 && curraa != 0) {
       aa = curraa;
       trp->aa = curraa;
+      trp->aatype = Seq_code_ncbieaa;
     }
     if (aa != 0 && aa == curraa) {
       if (justTrnaText) {
@@ -2518,6 +2519,7 @@ static void CleanupTrna (SeqFeatPtr sfp, tRNAPtr trp)
   aa = ParseTRnaString (sfp->comment, &justTrnaText, trpcodon, TRUE);
   if (aa == 0) return;
   trp->aa = aa;
+  trp->aatype = Seq_code_ncbieaa;
   if (justTrnaText) {
     for (j = 0; j < 6; j++) {
       if (trp->codon [j] == 255) {
@@ -5816,6 +5818,19 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
             rrp->ext.value.ptrvalue = sfp->comment;
             sfp->comment = NULL;
           }
+        }
+      }
+      if (rrp->type == 255 && rrp->ext.choice == 1) {
+        name = (CharPtr) rrp->ext.value.ptrvalue;
+        if (StringICmp (name, "its1") == 0) {
+          rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+          rrp->ext.value.ptrvalue = StringSave ("internal transcribed spacer 1");
+        } else if (StringICmp (name, "its2") == 0) {
+          rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+          rrp->ext.value.ptrvalue = StringSave ("internal transcribed spacer 2");
+        } else if (StringICmp (name, "its3") == 0) {
+          rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+          rrp->ext.value.ptrvalue = StringSave ("internal transcribed spacer 3");
         }
       }
       break;

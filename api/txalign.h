@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.14 2002/10/17 16:57:50 jianye Exp $
+/* $Id: txalign.h,v 6.15 2002/12/11 16:24:51 jianye Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,9 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.15  2002/12/11 16:24:51  jianye
+* added structure linkout
+*
 * Revision 6.14  2002/10/17 16:57:50  jianye
 * added option for get sequence feature
 *
@@ -669,6 +672,7 @@ NLM_EXTERN Boolean checkLinkoutType(BlastDefLinePtr bdfl, Uint1 linkoutType);
 
 /* return bdlp containing the sip from a chain of bdlp*/
 NLM_EXTERN BlastDefLinePtr getBlastDefLineForSeqId(BlastDefLinePtr bdlp, SeqIdPtr sip);
+Boolean PairwiseSeqAlignHasLinkout(SeqAlignPtr sap, Uint1 linkoutType);
 
 #ifdef __cplusplus
 }

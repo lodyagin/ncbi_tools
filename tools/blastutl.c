@@ -30,12 +30,40 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.398 $
+$Revision: 6.407 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.407  2002/12/09 17:22:16  dondosha
+* When alignment jumps beyond a strand boundary, keep the part of it where initial word is
+*
+* Revision 6.406  2002/12/04 23:32:50  camacho
+* Do not set use_this_gi with nucleotide dbs (redundant)
+*
+* Revision 6.405  2002/12/04 18:42:22  camacho
+* Minor change to previous commit
+*
+* Revision 6.404  2002/12/04 18:38:58  camacho
+* Use correct effective search space in B2SPssmMultipleQueries
+*
+* Revision 6.403  2002/12/04 17:08:33  camacho
+* Minor change to B2SPssmCleanUpSearch
+*
+* Revision 6.402  2002/11/27 15:41:51  dondosha
+* Added -t, -g and -n megablast options to parse_blast_options
+*
+* Revision 6.401  2002/11/26 23:02:07  madden
+* Add w option to parse_blast_options (OOF for blastx)
+*
+* Revision 6.400  2002/11/25 19:57:30  dondosha
+* Further fix to the HSP limit (-H) megablast option
+*
+* Revision 6.399  2002/11/22 23:31:43  dondosha
+* 1. Use array of structures instead of array of pointers for initial offset pairs;
+* 2. Sort the HSP array when maximal number of HSPs is reached for a sequence
+*
 * Revision 6.398  2002/11/13 23:23:53  dondosha
 * Correction for getting number of identities in tblastn
 *
@@ -1762,6 +1790,10 @@ BlastGetAllowedGis (BlastSearchBlkPtr search, Int4 ordinal_id, SeqIdPtr PNTR seq
            /*ErrPostEx(SEV_ERROR, 0, 0, "Database mask cannot be used without CommonIndex");*/
             return NULL;
         }
+
+        /* kludge: only protein databases are non-redundant */
+        if (readdb_is_prot(search->rdfp) == FALSE)
+            return NULL;
         
         bdfp = NULL; bdfp_head = NULL;
         if(rdfp->formatdb_ver > FORMATDB_VER_TEXT) {
@@ -2541,9 +2573,9 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
 	sip = SeqLocId(slp);
 	subject_bsp = BioseqLockById(sip);
 
-        /* Save subject sequence location for tabulated output */
-        if (search->handle_results && SeqLocLen(slp) < subject_bsp->length)
-           search->query_slp->next = slp;
+    /* Save subject sequence location for tabulated output */
+    if (search->handle_results && SeqLocLen(slp) < subject_bsp->length)
+       search->query_slp->next = slp;
 
 	status = BlastTwoSequencesCoreEx(search, subject_bsp, subject_seq,
 					 subject_length);
@@ -3123,7 +3155,7 @@ Boolean LIBCALL B2SPssmCleanUpSearch(BlastSearchBlkPtr search,
     BLAST_ScorePtr *posMatrix = search->sbp->posMatrix;
     Nlm_FloatHiPtr *posFreqs = search->sbp->posFreqs;
 
-    if (!matrix || !posMatrix || !posFreqs)
+    if (!matrix)
         return FALSE;
     
     if (matrix->matrix == NULL) { 
@@ -3229,9 +3261,18 @@ SeqAlignPtr * LIBCALL B2SPssmMultipleQueries(SeqLocPtr pssm_slp,
         return NULL;
     }
 
-    /* Iterate over seqlocs in target_seqs*/
-    for (i = 0; i < ntargets; i++)
+
+    /* Iterate over seqlocs in target_seqs, using effective search space in
+     * rpsblast style */
+    for (i = 0; i < ntargets; i++) {
+        Int8 dblen = (options->db_length != 0) ? 
+                        options->db_length : SeqLocLen(pssm_slp);
+        Int4 nseqs = (options->dbseq_num != 0) ?  options->dbseq_num : 1;
+
+        search->searchsp_eff  = BLASTCalculateSearchSpace(options, nseqs, 
+                dblen, SeqLocLen(target_seqs[i]));
         sa_array[i] = B2SPssmOnTheFlyByLoc(search, target_seqs[i]);
+    }
 
     /* Clean up */
     B2SPssmCleanUpSearch(search, matrix);
@@ -6100,8 +6141,8 @@ BlastHitListNew(BlastSearchBlkPtr search)
         }
 
         if (search->pbp->mb_params) {
-           hitlist->exact_match_array = (MegaBlastExactMatchPtr PNTR) 
-              MemNew(hitlist->hspmax*sizeof(MegaBlastExactMatchPtr));
+           hitlist->exact_match_array = (MegaBlastExactMatchPtr) 
+              MemNew(hitlist->hspmax*sizeof(MegaBlastExactMatch));
            hitlist->exact_match_max = hitlist->hspmax;
         }
 
@@ -6634,9 +6675,8 @@ Boolean
 parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options, 
                     CharPtr PNTR error_message, CharPtr PNTR database, 
                     Int4Ptr descriptions, Int4Ptr alignments)
-
 {
-    	CharPtr opt_str = "GErqeWdyXZPAIvbYzcFsSpf", *values;
+    	CharPtr opt_str = "GErqeWdyXZPAIvbYzcFsSpfwtgn", *values;
 	Int4 index;
 
 	if (options == NULL)
@@ -6721,24 +6761,24 @@ parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options,
 
 	/* -P multiple hits/two-pass. */
 
-	index = BlastGetLetterIndex(opt_str, 'P');
-	if(values[index] != NULL) {
-		if (atoi(values[index]) == 0)
-		{
-			options->two_pass_method  = FALSE;
-            		options->multiple_hits_only  = TRUE;
-		}
-		else if (atoi(values[index]) == 1)
-		{
-			options->two_pass_method  = FALSE;
-            		options->multiple_hits_only  = FALSE;
-		}
-		else
-		{
-			options->two_pass_method  = TRUE;
-            		options->multiple_hits_only  = FALSE;
-		}
-	}
+        index = BlastGetLetterIndex(opt_str, 'P');
+        if(values[index] != NULL) {
+           if (atoi(values[index]) == 0) 
+           {
+                 options->two_pass_method  = FALSE;
+                 options->multiple_hits_only  = TRUE;
+           }
+           else if (atoi(values[index]) == 1)
+           {
+                 options->two_pass_method  = FALSE;
+                 options->multiple_hits_only  = FALSE;
+           }
+           else
+	   {
+                 options->two_pass_method  = TRUE;
+                 options->multiple_hits_only  = FALSE;
+           }
+        }
 
 	/* -A window size. */
 
@@ -6811,11 +6851,46 @@ parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options,
         if (values[index] != NULL)
            options->perc_identity = (FloatLo) atof(values[index]);
 
-	/* -f  gap open cost */
+	/* -f  threshold for hits */
 
 	index = BlastGetLetterIndex(opt_str, 'f');
 	if(values[index] != NULL) {
 	    options->threshold_second = atoi(values[index]);
+	}
+
+	/* -w  Frame shift penalty (OOF algorithm for blastx) */
+
+	index = BlastGetLetterIndex(opt_str, 'w');
+	if(values[index] != NULL) {
+	    options->shift_pen = atoi(values[index]);
+	    options->is_ooframe = TRUE;
+	}
+
+	/* -t  Discontiguous word template length for megablast;
+               Longest intron length for sum statistics in tblastn */
+
+	index = BlastGetLetterIndex(opt_str, 't');
+	if(values[index] != NULL) {
+           if (options->is_megablast_search)
+              options->mb_template_length = atoi(values[index]);
+           else 
+              options->longest_intron = 
+                 MAX(atoi(values[index]), MAX_INTRON_LENGTH);
+	}
+
+	/* -g  Scan every base of the database for megablast */
+
+	index = BlastGetLetterIndex(opt_str, 'g');
+	if(values[index] != NULL) {
+	    options->mb_one_base_step = (TO_UPPER(*values[index]) == 'T');
+	}
+
+	/* -n  Use dynamic programming algorithm in megablast for gapped 
+               extensions instead of greedy algorithm */
+
+	index = BlastGetLetterIndex(opt_str, 'n');
+	if(values[index] != NULL) {
+	    options->mb_use_dyn_prog = (TO_UPPER(*values[index]) == 'T');
 	}
 
 	values = MemFree(values);
@@ -8350,8 +8425,7 @@ BlastNtGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subj
                            search->query_context_offsets[search->first_context+1] - 1;
                         if (gap_align->query_start / query_length != 
                             (gap_align->query_stop - 1) / query_length) {
-                           if (query_length - gap_align->query_start > 
-                               gap_align->query_stop - query_length) {
+                           if (gap_align->q_start < query_length) {
                               gap_align->subject_stop -= 
                                  (gap_align->query_stop - query_length + 1);
                               gap_align->query_stop = query_length - 1;
@@ -8926,6 +9000,17 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
     
     HeapSort(hsp_array,new_hspcnt,sizeof(BLAST_HSPPtr), score_compare_hsps);
     
+    /* Remove extra HSPs if there is a user proveded limit on the number 
+       of HSPs per database sequence */
+    if (search->pbp->hsp_num_max > new_hspcnt) {
+       for (index=new_hspcnt; index<search->pbp->hsp_num_max; ++index) {
+          hsp_array[index]->gap_info = 
+             GapXEditBlockDelete(hsp_array[index]->gap_info);
+          hsp_array[index] = MemFree(hsp_array[index]);
+       }
+       new_hspcnt = MIN(new_hspcnt, search->pbp->hsp_num_max);
+    }
+
     if (do_traceback) {
         for (index=0; index<new_hspcnt; index++) {
             hsp = hsp_array[index];
@@ -10136,6 +10221,7 @@ BlastNtSaveCurrentHspGapped(BlastSearchBlkPtr search, BLAST_Score score,
 	BLAST_Score highscore, lowscore;
 	Int4 hspcnt, hspmax, index, new_index, high_index, old_index, low_index;
         Int4 new_hspmax;
+
 	current_hitlist = search->current_hitlist;
 	hsp_array = current_hitlist->hsp_array;
 	hspcnt = current_hitlist->hspcnt;
@@ -10145,8 +10231,12 @@ BlastNtSaveCurrentHspGapped(BlastSearchBlkPtr search, BLAST_Score score,
 	if (hspcnt >= hspmax && current_hitlist->do_not_reallocate == FALSE)
 	{
            new_hspmax = 2*current_hitlist->hspmax;
-           if (search->pbp->hsp_num_max)
-              new_hspmax = MIN(new_hspmax, search->pbp->hsp_num_max);
+           if (search->pbp->hsp_num_max && search->last_context <= 1)
+              /* The HSP limit can only be applied here in case of a 
+                 single query sequence; even then, save twice as many HSPs
+                 so far, to accommodate for possible inclusion check 
+                 failures and score changes because of ambiguities */
+              new_hspmax = MIN(new_hspmax, 2*search->pbp->hsp_num_max);
            if (new_hspmax > current_hitlist->hspmax) {
 		hsp_array = (BLAST_HSPPtr PNTR) Realloc(hsp_array, current_hitlist->hspmax*2*sizeof(BLAST_HSPPtr));
 		if (hsp_array == NULL)
@@ -10165,6 +10255,11 @@ BlastNtSaveCurrentHspGapped(BlastSearchBlkPtr search, BLAST_Score score,
                         "Sequence %ld: reached max %ld HSPs",
                         search->subject_id, (long) hspmax);*/
               current_hitlist->do_not_reallocate = TRUE; 
+           }
+           if (current_hitlist->do_not_reallocate) {
+              /* HSPs must be now sorted */ 
+              HeapSort(hsp_array, hspcnt, sizeof(BLAST_HSPPtr), 
+                       score_compare_hsps);
            }
 	}
 
@@ -10289,9 +10384,6 @@ BlastNtSaveCurrentHsp(BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset
 		{
 			ErrPostEx(SEV_WARNING, 0, 0, "UNABLE to reallocate in BlastSaveCurrentHsp for ordinal id %ld, continuing with fixed array of %ld HSP's", (long) search->subject_id, (long) hspmax);
 			current_hitlist->do_not_reallocate = TRUE; 
-			
-			/* The HSP's are not yet sorted. */
-			HeapSort(hsp_array, hspcnt, sizeof(BLAST_HSPPtr), score_compare_hsps);
 		} 
 		else
 		{
@@ -10302,13 +10394,17 @@ BlastNtSaveCurrentHsp(BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset
 			hspmax = current_hitlist->hspmax;
 			hsp_array = hsp_array_new;
 			/* Prohibit future allocations. */
-			if (search->pbp->hsp_num_max != 0 && current_hitlist->hspmax >= search->pbp->hsp_num_max)
+			if (search->pbp->hsp_num_max != 0 && current_hitlist->hspmax >= 2*search->pbp->hsp_num_max)
 			{
 				ErrPostEx(SEV_WARNING, 0, 0, "Reached max %ld HSPs in BlastSaveCurrentHsp, continuing with this limit",
 					(long) hspmax);
 				current_hitlist->do_not_reallocate = TRUE; 
 			}
 		}
+                if (current_hitlist->do_not_reallocate) {
+                   HeapSort(hsp_array, hspcnt, sizeof(BLAST_HSPPtr), 
+                            score_compare_hsps);
+                }
 	}
 
 	new_hsp = (BLAST_HSPPtr) MemNew(sizeof(BLAST_HSP));
@@ -11526,11 +11622,8 @@ Int2 BlastNewFindWordsEx(LookupTablePtr lookup, BLAST_ScorePtr PNTR posMatrix,
             for (index1 = 0; index1 < num_of_cols; index1++) {
                 words = array[index1];
                 score = 0;
-                for (index2 = 0; index2 < wordsize; index2++) {
-                    
+                for (index2 = 0; index2 < wordsize; index2++)
                     score += posMatrix[offset + index2][*(words+index2)];
-                    
-                }	
                 if (score >= threshold) {
                     lookup_add(lookup, (CharPtr) words, offset + wordsize - 1,
                                context_index);

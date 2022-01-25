@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_PRIV__H
 #define CONNECT___NCBI_PRIV__H
 
-/*  $Id: ncbi_priv.h,v 6.6 2002/09/19 18:08:31 lavr Exp $
+/*  $Id: ncbi_priv.h,v 6.9 2002/12/05 21:43:00 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,12 +33,11 @@
  *
  *********************************
  * Critical section (basic multi-thread synchronization):
- *    private:    g_CORE_MT_Lock
- *    macro:      CORE_LOCK_WRITE, CORE_LOCK_READ, CORE_UNLOCK
+ *    private global:  g_CORE_MT_Lock
+ *    macros:          CORE_LOCK_WRITE, CORE_LOCK_READ, CORE_UNLOCK
  * Tracing and logging:
- *    private:    g_CORE_Log
- *    macro:      CORE_LOG(), CORE_DATA(),
- *                CORE_LOG_SYS_ERRNO(), CORE_LOG_ERRNO()
+ *    private global:  g_CORE_Log
+ *    macros:          CORE_LOG[F](), CORE_DATA[F](), CORE_LOG[F]_ERRNO()
  *
  */
 
@@ -112,41 +111,36 @@ extern const char* g_CORE_Sprintf(const char* fmt, ...)
     } \
 } while (0)
 
-#define CORE_LOG_SYS_ERRNO(level, message)  do { \
+#define CORE_LOG_ERRNO(level, x_errno, message)  do { \
     if (g_CORE_Log  ||  level == eLOG_Fatal) { \
         CORE_LOCK_READ; \
-        LOG_WRITE_ERRNO(g_CORE_Log, level, message); \
+        LOG_WRITE_ERRNO_EX(g_CORE_Log, level, message, x_errno, 0); \
         CORE_UNLOCK; \
     } \
 } while (0)
 
-#define CORE_LOGF_SYS_ERRNO(level, fmt_args)  do { \
+#define CORE_LOGF_ERRNO(level, x_errno, fmt_args)  do { \
     if (g_CORE_Log  ||  level == eLOG_Fatal) { \
         CORE_LOCK_READ; \
-        LOG_WRITE_ERRNO(g_CORE_Log, level, g_CORE_Sprintf fmt_args); \
+        LOG_WRITE_ERRNO_EX(g_CORE_Log, level, g_CORE_Sprintf fmt_args, \
+                           x_errno, 0); \
         CORE_UNLOCK; \
     } \
 } while (0)
 
-#define CORE_LOG_ERRNO(x_errno, level, message)  do { \
+#define CORE_LOG_ERRNO_EX(level, x_errno, x_descr, message)  do { \
     if (g_CORE_Log  ||  level == eLOG_Fatal) { \
-        char buf[2048]; \
-        int xx_errno = x_errno; \
         CORE_LOCK_READ; \
-        LOG_WRITE(g_CORE_Log, level, \
-                  MessagePlusErrno(message, xx_errno, "", buf, sizeof(buf))); \
+        LOG_WRITE_ERRNO_EX(g_CORE_Log, level, message, x_errno, x_descr); \
         CORE_UNLOCK; \
     } \
 } while (0)
 
-#define CORE_LOGF_ERRNO(x_errno, level, fmt_args)  do { \
+#define CORE_LOGF_ERRNO_EX(level, x_errno, x_descr, fmt_args)  do { \
     if (g_CORE_Log  ||  level == eLOG_Fatal) { \
-        char buf[2048]; \
-        int xx_errno = x_errno; \
         CORE_LOCK_READ; \
-        LOG_WRITE(g_CORE_Log, level, \
-                  MessagePlusErrno(g_CORE_Sprintf fmt_args,\
-                  xx_errno, "", buf, sizeof(buf))); \
+        LOG_WRITE_ERRNO_EX(g_CORE_Log, level, g_CORE_Sprintf fmt_args, \
+                           x_errno, x_descr); \
         CORE_UNLOCK; \
     } \
 } while (0)
@@ -189,6 +183,15 @@ extern char* g_CORE_RegistryGET
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_priv.h,v $
+ * Revision 6.9  2002/12/05 21:43:00  lavr
+ * Swap level and errno in CORE_LOG[F]_ERRNO(); add CORE_LOG[F]_ERRNO_EX()
+ *
+ * Revision 6.8  2002/12/04 21:00:43  lavr
+ * -CORE_LOG[F]_SYS_ERRNO()
+ *
+ * Revision 6.7  2002/12/04 19:51:40  lavr
+ * Enable MessageWithErrno() to print error description
+ *
  * Revision 6.6  2002/09/19 18:08:31  lavr
  * Header file guard macro changed; log moved to end
  *

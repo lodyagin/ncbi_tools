@@ -1,4 +1,4 @@
-/*  $Id: ncbi_util.c,v 6.22 2002/10/11 19:52:10 lavr Exp $
+/*  $Id: ncbi_util.c,v 6.24 2002/12/04 21:00:53 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -111,7 +111,7 @@ extern int/*bool*/ CORE_SetLOGFILE_NAME(const char* filename)
 {
     FILE* fp = fopen(filename, "a");
     if ( !fp ) {
-        CORE_LOG_SYS_ERRNO(eLOG_Error, filename);
+        CORE_LOGF_ERRNO(eLOG_Error, errno, ("Cannot open \"%s\"", filename));
         return 0/*false*/;
     }
 
@@ -415,7 +415,7 @@ extern char* MessagePlusErrno
         }
 
         for (len = 1, mod = 1;  (x_errno / mod) > 9;  len++, mod *= 10)
-        	continue;
+            continue;
         if ( neg )
             len++;
 
@@ -495,6 +495,12 @@ extern const char* CORE_GetPlatform(void)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_util.c,v $
+ * Revision 6.24  2002/12/04 21:00:53  lavr
+ * -CORE_LOG[F]_SYS_ERRNO()
+ *
+ * Revision 6.23  2002/12/04 19:51:12  lavr
+ * No change
+ *
  * Revision 6.22  2002/10/11 19:52:10  lavr
  * Log moved to end
  *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/16/93
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *		system dependent header
@@ -42,6 +42,9 @@
 *
 *
 * $Log: ncbilcl.sin,v $
+* Revision 6.3  2002/11/22 20:05:05  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 6.2  2000/04/12 19:29:47  vakatov
 * Switched the default thread lib from "Solaris native"(-lthread) to
 * "POSIX"(-lpthread)
@@ -86,6 +89,8 @@
 #define MPROC_AVAIL
 #define SYSV_IPC_AVAIL	/* System V Interprocess Communication available */
 #define SYSV_STREAMS_AVAIL	/* System V STREAMS module available */
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
 
 #ifdef MPROC_AVAIL
 /* For Solaris, _REENTRANT must be defined when compiling all modules or none*/

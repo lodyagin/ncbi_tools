@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -49,10 +49,11 @@ static ENUM_ALIST(name_suffix_alist)
   {" ",    0},
   {"Jr.",  1},
   {"Sr.",  2},
-  {"III",  3},
-  {"IV",   4},
-  {"V",    5},
-  {"VI",   6},
+  {"II",   3},
+  {"III",  4},
+  {"IV",   5},
+  {"V",    6},
+  {"VI",   7},
 END_ENUM_ALIST
 
 typedef struct contactpage {

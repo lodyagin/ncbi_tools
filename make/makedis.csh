@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.79 2002/11/06 18:57:08 beloslyu Exp $
+# $Id: makedis.csh,v 1.81 2002/12/03 15:23:52 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -314,8 +314,8 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
-		VIB=\"Psequin Nentrez udv ddv blastcl3 blast.REAL \
-		idfetch asn2xml asn2gb entrez2 $OGL_TARGETS\") 
+		VIB=\"Psequin Nentrez udv ddv blastcl3 \
+		idfetch asn2xml asn2gb entrez2 gbseqget $OGL_TARGETS\") 
 else if ( "$HAVE_MAC" == 1 ) then
 	set ALL_VIB=(LIB30=libncbicn3d.a \
 		LIB28=libvibgif.a \
@@ -335,8 +335,8 @@ else if ( "$HAVE_MAC" == 1 ) then
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
-		VIB=\"Psequin udv ddv blastcl3 blast.REAL \
-                idfetch asn2xml asn2gb entrez2\") 
+		VIB=\"Psequin udv ddv blastcl3 \
+                idfetch asn2xml asn2gb entrez2 gbseqget\") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -437,7 +437,7 @@ else
    echo "may be found in the appropriate documentation files in ./ncbi/doc/" >> ../VERSION
    echo "uname -a ouput is: `uname -a`" >> ../VERSION
    foreach i ( Nentrez Psequin asn2ff asn2xml asn2gb asndhuff asntool bl2seq \
-	blast.REAL blastall blastcl3 blastclust blastpgp cdscan checksub \
+	blastall blastcl3 blastclust blastpgp cdscan checksub \
 	copymat ddv demo_regexp demo_regexp_grep dosimple entrcmd entrez \
 	errhdr fa2htgs fastacmd findspl fmerge formatdb getfeat getmesh \
 	getpub getseq gil2bin idfetch impala indexpub makemat makeset \

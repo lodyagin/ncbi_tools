@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.149 2002/11/14 18:18:07 beloslyu Exp $
+#	$Id: makenet.unx,v 6.151 2002/12/02 20:51:45 dondosha Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -505,7 +505,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf testent2 entrez2 spidey dotmatrix ingenue condense
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf gbseqget testent2 entrez2 spidey dotmatrix ingenue condense
 
 .WAIT:
 	echo Waiting...go
@@ -649,6 +649,7 @@ copy :
 	$(SRCCOPY) ../demo/rtestval.c .
 	$(SRCCOPY) ../demo/asn2ff.c .
 	$(SRCCOPY) ../demo/asn2gb.c .
+	$(SRCCOPY) ../demo/gbseqget.c .
 	$(SRCCOPY) ../demo/testent2.c .
 	$(SRCCOPY) ../demo/entrez2.c .
 	$(SRCCOPY) ../demo/condense.c .
@@ -1152,6 +1153,10 @@ asn2gb :	asn2gb.c
 asn2gb_psf :	asn2gb.c
 	$(CC) -DINTERNAL_NCBI_ASN2GB -g -o asn2gb_psf $(LDFLAGS) asn2gb.c $(LIB42) -lnlmzip $(LIB23) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT) $(OTHERLIBS)
 
+# gbseqget program (gbseqget)
+gbseqget :	gbseqget.c
+	$(CC) -g -o gbseqget $(LDFLAGS) gbseqget.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
 # Entrez2 service test program (testent2)
 testent2 :	testent2.c
 	$(CC) -g -o testent2 $(LDFLAGS) testent2.c $(LIB23) $(LIB22) $(LIB20) $(LIB2) $(LIB1) $(OTHERLIBS)
@@ -1365,20 +1370,11 @@ session : $(SRCSESSION) $(BSRVNETCLILIB)
 salogif.o:	salogif.c
 	$(CC) $(CFLAGS) salogif.c
 
-wwwbutl.o:	wwwbutl.c
-	 $(CC) $(CFLAGS) wwwbutl.c
-
-wwwblast.o:	wwwblast.c
-	$(CC) $(CFLAGS) wwwblast.c
-
 xmlblast.o:	xmlblast.c
 	$(CC) $(CFLAGS) xmlblast.c
 
 bxmlobj.o:	bxmlobj.c
 	$(CC) $(CFLAGS) bxmlobj.c
-
-blast.REAL:	wwwblast.o salogif.o wwwbutl.o xmlblast.o bxmlobj.o $(THREAD_OBJ)
-	$(CC) $(LDFLAGS) wwwblast.o salogif.o wwwbutl.o xmlblast.o bxmlobj.o $(THREAD_OBJ) -o blast.REAL -lvibgif $(LIB20) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # test_ncbi_socket
 

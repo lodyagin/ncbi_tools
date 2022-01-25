@@ -35,6 +35,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.115  2002/11/30 20:18:27  kans
+* added GOA to list of legal db_xrefs
+*
+* Revision 6.114  2002/11/27 22:25:17  kans
+* added AceView/WormGenes, NextDB, and WorfDB to legal db_xrefs
+*
 * Revision 6.113  2002/07/12 17:34:35  kans
 * WormBase is now legal dbxref for all records, not just RefSeq
 *
@@ -699,6 +705,7 @@ CharPtr dbtag[DBNUM] = {
 
 CharPtr dbtag[DBNUM] = {
   "PIDe", "PIDd", "PIDg", "PID",
+  "AceView/WormGenes",
   "ATCC",
   "ATCC(in host)",
   "ATCC(dna)",
@@ -719,6 +726,7 @@ CharPtr dbtag[DBNUM] = {
   "GeneID",
   "GI",
   "GO",
+  "GOA",
   "IFO",
   "IMGT/LIGM",
   "IMGT/HLA",
@@ -730,6 +738,7 @@ CharPtr dbtag[DBNUM] = {
   "MGD",
   "MGI",
   "MIM",
+  "NextDB",
   "niaEST",
   "PIR",
   "PSEUDO",
@@ -745,6 +754,7 @@ CharPtr dbtag[DBNUM] = {
   "taxon",
   "UniGene",
   "UniSTS",
+  "WorfDB",
   "WormBase",
   };
 

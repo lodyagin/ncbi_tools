@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.80 $
+* $Revision: 6.81 $
 *
 * File Description: 
 *
@@ -480,7 +480,7 @@ extern Boolean SequinEntrezInit (CharPtr appl_id, Boolean no_warnings, BoolPtr i
 extern void JustRegisterSeqEntry (BaseFormPtr bfp, Boolean freeit);
 extern void JustRegisterSeqEntryBtn (ButtoN b);
 extern void AddSubmitBlockToSeqEntry (ForM f);
-extern void SqnReadAlignView (BioseqPtr target_bsp, SeqEntryPtr source_sep);
+extern void SqnReadAlignView (BaseFormPtr bfp, BioseqPtr target_bsp, SeqEntryPtr source_sep);
 extern void DownloadAndUpdateProc (ButtoN b);
 
 extern void FastaNucDirectToSeqEdProc (IteM i);

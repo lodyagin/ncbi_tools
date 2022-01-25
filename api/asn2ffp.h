@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.28 $
+* $Revision: 6.30 $
 *
 * File Description: 
 *
@@ -45,6 +45,12 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.30  2002/11/30 20:18:27  kans
+ * added GOA to list of legal db_xrefs
+ *
+ * Revision 6.29  2002/11/27 22:25:17  kans
+ * added AceView/WormGenes, NextDB, and WorfDB to legal db_xrefs
+ *
  * Revision 6.28  2002/07/12 17:34:35  kans
  * WormBase is now legal dbxref for all records, not just RefSeq
  *
@@ -186,6 +192,12 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.30  2002/11/30 20:18:27  kans
+* added GOA to list of legal db_xrefs
+*
+* Revision 6.29  2002/11/27 22:25:17  kans
+* added AceView/WormGenes, NextDB, and WorfDB to legal db_xrefs
+*
 * Revision 6.28  2002/07/12 17:34:35  kans
 * WormBase is now legal dbxref for all records, not just RefSeq
 *
@@ -357,7 +369,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 51
+#define DBNUM 55
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));

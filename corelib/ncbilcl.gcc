@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *		system dependent header
@@ -42,6 +42,9 @@
 * 06-11-93 Schuler     Added INLINE macro.
 *
 * $Log: ncbilcl.gcc,v $
+* Revision 6.2  2002/11/22 20:05:04  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 6.1  1999/06/01 15:41:28  beloslyu
 * changes to work on Solaris 2.6 (SunOS is not supported any more)
 *
@@ -78,6 +81,8 @@ added Log line
 /*----------------------------------------------------------------------*/
 #define SYSV_IPC_AVAIL	/* System V Interprocess Communication available */
 #define SYSV_STREAMS_AVAIL	/* System V STREAMS module available */
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

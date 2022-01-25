@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.20 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.22  2002/11/21 20:35:41  kans
+* forgot to call ConnNetInfo_Destroy if bailing due to NULL connector
+*
+* Revision 6.21  2002/11/21 19:46:32  kans
+* if connector is NULL, do not call CONN_Create
+*
 * Revision 6.20  2002/08/07 18:45:17  lavr
 * Change from deprecated to current EIO_ReadMethod enums
 *
@@ -164,6 +170,11 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   }
 
   connector = HTTP_CreateConnector(info, user_header, flags);
+  if (connector == NULL) {
+    ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in HTTP_CreateConnector");
+    ConnNetInfo_Destroy(info);
+    return NULL;
+  }
   status = CONN_Create(connector, &conn);
   if (status != eIO_Success) {
     ErrPostEx(SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in CONN_Create");
@@ -199,6 +210,11 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
   }
 
   connector = SERVICE_CreateConnectorEx (service, fSERV_Any, info, 0);
+  if (connector == NULL) {
+    ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in SERVICE_CreateConnectorEx");
+    ConnNetInfo_Destroy (info);
+    return NULL;
+  }
   status = CONN_Create (connector, &conn);
   if (status != eIO_Success) {
     ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in CONN_Create");

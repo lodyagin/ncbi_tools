@@ -1,6 +1,6 @@
 	
 			README for stand-alone BLAST
-			   (last updated 08/26/2002)
+			   (last updated 11/19/2002)
 
 
 
@@ -1023,6 +1023,33 @@ References
 
 Release History
 ---------------
+
+Notes for 2.2.5 release (11/15/02):
+
+Enhancements:
+
+1.) Fastacmd now prints the length of the longest sequence
+when used with the -I option.
+
+2.) It is now possible to specify a range restriction on the query for
+an rpsblast search, use the -L option.
+
+
+Bug fixes:
+
+1.) A problem that caused bl2seq to not show the ID of the query has
+been fixed.
+
+2.) A problem that caused formatdb to not properly work on the nr protein FASTA file
+has been fixed.
+
+3.) A problem that caused blastall or blastpgp to print too many alignments when
+used with XML mode has been fixed.
+
+4.) The -P option was accidentally deleted from the blast binaries in the 2.2.4 release
+and has been restored.  The -P option can be used to specify whether one or
+two hits should be found before an extension, the default is two hits.
+
 
 Notes for 2.2.4 release (08/26/02):
 

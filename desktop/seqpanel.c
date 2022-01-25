@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.10 2002/11/15 14:56:55 lebedev Exp $
+/* $Id: seqpanel.c,v 6.11 2002/12/02 16:00:10 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -300,14 +300,15 @@ static void PopulateSeqView (BioseqViewPtr bvp)
   bvp->CharHeight = FontHeight ();
   bvp->CharWidth  = CharWidth ('A');
   bvp->LineHeight = bvp->CharHeight + bvp->LineSpace;
-  
-  CorrectBarValue (GetSlateVScrollBar ((SlatE)bvp->seqView), 0);
 
+  CorrectBarValue (GetSlateVScrollBar ((SlatE)bvp->seqView), 0);
   ResizeSeqView (bvp);  
+
+  Select (bvp->seqView);
   ObjectRect (bvp->seqView, &r);
   InsetRect (&r, 2, 2);
   InvalRect  (&r);
-  
+
   SetPanelClick(bvp->seqView, onSeqViewClick, NULL, NULL, onSeqViewRelease);
 }
 

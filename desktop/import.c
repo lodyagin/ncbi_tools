@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.34 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
@@ -562,7 +562,6 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
   GrouP              g;
   GrouP              h;
   ImprtFormPtr       ifp;
-  ImpFeatPtr         imp;
   GrouP              s;
   StdEditorProcsPtr  sepp;
   WindoW             w;
@@ -600,11 +599,10 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
 
     ifp->sep = sep;
     importFormTabs [0] = NULL;
-    if (title != NULL && *title != '\0') {
-      importFormTabs [0] = title;
-    } else {
-      importFormTabs [0] = "misc_feature";
+    if (title == NULL || *title == '\0') {
+      title = "misc_feature";
     }
+    importFormTabs [0] = title;
     ifp->foldertabs = CreateFolderTabs (g, importFormTabs, IMPORT_PAGE,
                                         0, 0, SYSTEM_FOLDER_TAB,
                                         ChangeImportPage, (Pointer) ifp);
@@ -616,16 +614,23 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
     SetGroupSpacing (s, 3, 10);
     allowPeptideFeats = FALSE;
     allowProductGBQual = FALSE;
-    if (sfp != NULL && sfp->data.choice == SEQFEAT_IMP) {
-      imp = (ImpFeatPtr) sfp->data.value.ptrvalue;
-      if (imp != NULL) {
-        if (StringICmp (imp->key, "mat_peptide") == 0 ||
-            StringICmp (imp->key, "sig_peptide") == 0 ||
-            StringICmp (imp->key, "transit_peptide") == 0) {
-          allowPeptideFeats = TRUE;
-          allowProductGBQual = TRUE;
-        }
-      }
+    if (StringICmp (title, "mat_peptide") == 0 ||
+        StringICmp (title, "sig_peptide") == 0 ||
+        StringICmp (title, "transit_peptide") == 0) {
+      allowPeptideFeats = TRUE;
+      allowProductGBQual = TRUE;
+    } else if (StringICmp (title, "misc_RNA") == 0 ||
+        StringICmp (title, "C_region") == 0 ||
+        StringICmp (title, "D_segment") == 0 ||
+        StringICmp (title, "exon") == 0 ||
+        StringICmp (title, "J_segment") == 0 ||
+        StringICmp (title, "misc_feature") == 0 ||
+        StringICmp (title, "N_region") == 0 ||
+        StringICmp (title, "S_region") == 0 ||
+        StringICmp (title, "V_region") == 0 ||
+        StringICmp (title, "V_segment") == 0 ||
+        StringICmp (title, "variation") == 0) {
+      allowProductGBQual = TRUE;
     }
     ifp->data = CreateImportDialog (s, NULL, ifp, allowPeptideFeats);
     x = HiddenGroup (s, -1, 0, NULL);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *
@@ -51,20 +51,21 @@
 #include <gbftdef.h>
 #include <edutil.h>
 
-#define NUMBER_OF_SUFFIXES    7
+#define NUMBER_OF_SUFFIXES    8
 
 static CharPtr name_suffix_labels [] = {
-  " ", "Jr.", "Sr.", "III", "IV", "V", "VI", NULL
+  " ", "Jr.", "Sr.", "II", "III", "IV", "V", "VI", NULL
 };
 
 static ENUM_ALIST(name_suffix_alist)
   {" ",    0},
   {"Jr.",  1},
   {"Sr.",  2},
-  {"III",  3},
-  {"IV",   4},
-  {"V",    5},
-  {"VI",   6},
+  {"II",   3},
+  {"III",  4},
+  {"IV",   5},
+  {"V",    6},
+  {"VI",   7},
 END_ENUM_ALIST
 
 Uint2 author_types [] = {

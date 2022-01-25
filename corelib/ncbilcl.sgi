@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *		system dependent header
@@ -42,6 +42,9 @@
 *
 *
 * $Log: ncbilcl.sgi,v $
+* Revision 6.4  2002/11/22 20:05:04  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 6.3  1998/07/28 15:41:05  vakatov
 * Fix R6.2:  more precisely, use _POSIX_THREADS instead of _POSIX1C
 *
@@ -88,6 +91,8 @@ added Log line
 #ifdef MPROC_AVAIL
 #define SGI_MPROC_AVAIL	/* SGI IRIX multiprocessing is available */
 #endif
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

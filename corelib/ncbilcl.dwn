@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,9 @@
 * -------  ----------    ---------------------------------------------------
 *
 * $Log: ncbilcl.dwn,v $
+* Revision 6.4  2002/11/22 20:05:04  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 6.3  2002/01/22 16:34:54  kans
 * contributor contact information copied from obsolete readme.macosx file
 *
@@ -101,6 +104,8 @@
 #ifdef _POSIX_THREADS
 #define POSIX_THREADS_AVAIL
 #endif
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
 
 /*----------------------------------------------------------------------*/
 /*      Missing ANSI-isms                                               */

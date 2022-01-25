@@ -38,9 +38,16 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.175 $
+ * $Revision: 6.177 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.177  2002/11/25 19:57:29  dondosha
+ * Further fix to the HSP limit (-H) megablast option
+ *
+ * Revision 6.176  2002/11/22 23:30:34  dondosha
+ * 1. Use array of structures instead of array of pointers for initial offset pairs;
+ * 2. Scan subject sequence to the last byte (it wasn't!) when looking for words
+ *
  * Revision 6.175  2002/11/06 22:26:49  dondosha
  * Calculate number of identities at the same time when doing reevaluation for ambiguities
  *
@@ -840,7 +847,6 @@ start_timer;
 	do_the_blast_run(search);
 
        if (!search->pbp->mb_params->no_traceback) {
-
           search->sbp->kbp_gap[search->first_context] = search->sbp->kbp[search->first_context];
          
           search->pbp->gap_open = options->gap_open;
@@ -858,8 +864,7 @@ start_timer;
              BlastStopAwakeThread(search->thr_info);
              return NULL;
           }
-
-	}
+       }
 
 start_timer;
         num_queries = search->last_context / 2 + 1;
@@ -1853,7 +1858,7 @@ MegaBlastSequenceAddSequence (BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequenc
 static Boolean
 MegaBlastSaveExactMatch(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off) 
 {
-   MegaBlastExactMatchPtr PNTR match_array;
+   MegaBlastExactMatchPtr match_array;
    Int4 num, num_avail;
 
    if (!search || !search->wfp || !search->wfp->lookup || 
@@ -1868,8 +1873,8 @@ MegaBlastSaveExactMatch(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off)
       if (search->current_hitlist->do_not_reallocate) 
          return FALSE;
       num_avail *= 2;
-      match_array = (MegaBlastExactMatchPtr PNTR) 
-         Realloc(match_array, num_avail*sizeof(MegaBlastExactMatchPtr));
+      match_array = (MegaBlastExactMatchPtr) 
+         Realloc(match_array, num_avail*sizeof(MegaBlastExactMatch));
       if (!match_array) {
          ErrPostEx(SEV_WARNING, 0, 0, "UNABLE to reallocate in MegaBlastSaveExactMatch for ordinal id %ld, continuing with fixed array of %ld HSP's", (long) search->subject_id, num_avail);
          search->current_hitlist->do_not_reallocate = TRUE;
@@ -1879,11 +1884,9 @@ MegaBlastSaveExactMatch(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off)
          search->current_hitlist->exact_match_array = match_array;
       }
    }
-   match_array[num] = 
-      (MegaBlastExactMatchPtr) Malloc(sizeof(MegaBlastExactMatch));
-   
-   match_array[num]->q_off = q_off;
-   match_array[num]->s_off = s_off;
+
+   match_array[num].q_off = q_off;
+   match_array[num].s_off = s_off;
    search->current_hitlist->hspcnt++;
    return TRUE;
 }
@@ -1968,7 +1971,7 @@ MegaBlastWordFinder_disc(BlastSearchBlkPtr search, LookupTablePtr lookup)
 
    s_off += 4;
    if (template_length == 16) {
-      while (s_off<subj_length) {
+      while (s_off<=subj_length) {
          ecode = ((ecode & mask) << 8) + *++subject;
          if (template_type == TEMPL_11_16)
             ecode1 = GET_WORD_INDEX_11_16(ecode) & no_bit0;
@@ -1996,7 +1999,7 @@ MegaBlastWordFinder_disc(BlastSearchBlkPtr search, LookupTablePtr lookup)
          ecode2 = (crc>>hash_shift) & hash_mask;
 #endif
          if (pv_array) {
-            while ((s_off < subj_length) && ((pv_array[ecode1>>pv_array_bts]&
+            while ((s_off <= subj_length) && ((pv_array[ecode1>>pv_array_bts]&
                      (((PV_ARRAY_TYPE) 1)<<(ecode1&PV_ARRAY_MASK))) == 0)
                    && (!use_two_templates || ((pv_array[ecode2>>pv_array_bts]&
                      (((PV_ARRAY_TYPE) 1)<<(ecode2&PV_ARRAY_MASK))) == 0))) {
@@ -2028,7 +2031,7 @@ MegaBlastWordFinder_disc(BlastSearchBlkPtr search, LookupTablePtr lookup)
 #endif
                s_off += 4;
             } 
-            if (s_off >= subj_length)
+            if (s_off > subj_length)
                break;
          }
          for (q_off = lookup->mb_lt->hashtable[ecode1]; q_off>0;
@@ -2048,7 +2051,7 @@ MegaBlastWordFinder_disc(BlastSearchBlkPtr search, LookupTablePtr lookup)
 
    } else { /* template length > 16 */
       extra_code = 0;
-      while (s_off<subj_length) {
+      while (s_off<=subj_length) {
          ecode = ((ecode & mask) << 8) + *++subject;
          switch (template_type) {
          case TEMPL_11_18: 
@@ -2127,7 +2130,7 @@ MegaBlastWordFinder_disc(BlastSearchBlkPtr search, LookupTablePtr lookup)
 #endif
          }
          if (pv_array) {
-            while ((s_off < subj_length) && ((pv_array[ecode1>>pv_array_bts]&
+            while ((s_off <= subj_length) && ((pv_array[ecode1>>pv_array_bts]&
                      (((PV_ARRAY_TYPE) 1)<<(ecode1&PV_ARRAY_MASK))) == 0)
                    && (!use_two_templates || ((pv_array[ecode2>>pv_array_bts]&
                         (((PV_ARRAY_TYPE) 1)<<(ecode2&PV_ARRAY_MASK))) == 0))) {
@@ -2211,7 +2214,7 @@ MegaBlastWordFinder_disc(BlastSearchBlkPtr search, LookupTablePtr lookup)
                }
                s_off += 4;
             } 
-            if (s_off >= subj_length)
+            if (s_off > subj_length)
                break;
          }
          for (q_off = lookup->mb_lt->hashtable[ecode1]; q_off>0;
@@ -2229,7 +2232,7 @@ MegaBlastWordFinder_disc(BlastSearchBlkPtr search, LookupTablePtr lookup)
          s_off += 4;
       }
    }
-   
+
    if (!lookup->mb_lt->estack)
       BlastExtendWordExit(search);
 
@@ -2318,7 +2321,7 @@ MegaBlastWordFinder_disc_1b(BlastSearchBlkPtr search, LookupTablePtr lookup)
    bit = 3;
    s_off++;
    if (template_length == word_length) {
-      while (s_off<subj_length) {
+      while (s_off<=subj_length) {
          if (bit == 3) subject++;
          ecode = ((ecode & mask30b) << 2) | (((*subject)>>(2*bit)) & mask2b);
          if (template_type == TEMPL_11_16)
@@ -2355,7 +2358,7 @@ MegaBlastWordFinder_disc_1b(BlastSearchBlkPtr search, LookupTablePtr lookup)
          bit = (bit - 1) & mask2b;
          
          if (pv_array) {
-            while ((s_off < subj_length) && ((pv_array[ecode1>>pv_array_bts]&
+            while ((s_off <= subj_length) && ((pv_array[ecode1>>pv_array_bts]&
                       (((PV_ARRAY_TYPE) 1)<<(ecode1&PV_ARRAY_MASK))) == 0)
                    && (!use_two_templates || ((pv_array[ecode2>>pv_array_bts]&
                         (((PV_ARRAY_TYPE) 1)<<(ecode2&PV_ARRAY_MASK))) == 0))) {
@@ -2395,7 +2398,7 @@ MegaBlastWordFinder_disc_1b(BlastSearchBlkPtr search, LookupTablePtr lookup)
                bit = (bit - 1) & mask2b;
                s_off++;
             } 
-            if (s_off >= subj_length)
+            if (s_off > subj_length)
                break;
          }
          for (q_off = lookup->mb_lt->hashtable[ecode1]; q_off>0;
@@ -2417,7 +2420,7 @@ MegaBlastWordFinder_disc_1b(BlastSearchBlkPtr search, LookupTablePtr lookup)
       Uint1 bitval;
       Int4 tmpval;
       extra_code = 0;
-      while (s_off<subj_length) {
+      while (s_off<=subj_length) {
          if (bit == 3) subject++;
          ecode = ((ecode & mask30b) << 2) | (((*subject)>>(2*bit)) & mask2b);
          seqptr = subject;
@@ -2498,7 +2501,7 @@ MegaBlastWordFinder_disc_1b(BlastSearchBlkPtr search, LookupTablePtr lookup)
          }
          bit = (bit - 1) & mask2b;
          if (pv_array) {
-            while ((s_off < subj_length) && ((pv_array[ecode1>>pv_array_bts]&
+            while ((s_off <= subj_length) && ((pv_array[ecode1>>pv_array_bts]&
                       (((PV_ARRAY_TYPE) 1)<<(ecode1&PV_ARRAY_MASK))) == 0)
                    && (!use_two_templates || ((pv_array[ecode2>>pv_array_bts]&
                         (((PV_ARRAY_TYPE) 1)<<(ecode2&PV_ARRAY_MASK))) == 0))) {
@@ -2583,7 +2586,7 @@ MegaBlastWordFinder_disc_1b(BlastSearchBlkPtr search, LookupTablePtr lookup)
                bit = (bit - 1) & mask2b;
                s_off++;
             } 
-            if (s_off >= subj_length)
+            if (s_off > subj_length)
                break;
          }
          for (q_off = lookup->mb_lt->hashtable[ecode1]; q_off>0;
@@ -2601,7 +2604,6 @@ MegaBlastWordFinder_disc_1b(BlastSearchBlkPtr search, LookupTablePtr lookup)
          s_off++;
       }
    }
-
    if (!lookup->mb_lt->estack)
       BlastExtendWordExit(search);
 
@@ -2631,13 +2633,14 @@ MegaBlastWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
    Int4 min_hit_size;
    PV_ARRAY_TYPE *pv_array = lookup->pv_array;
    Int4 pv_array_bts;
-
+   
    if (search->pbp->mb_params->disc_word) {
       if (search->pbp->mb_params->one_base_step)
          return MegaBlastWordFinder_disc_1b(search, lookup);
       else
          return MegaBlastWordFinder_disc(search, lookup);
    }
+
 
    min_hit_size = lookup->mb_lt->lpm;
    if (search->pbp->window_size > 0)
@@ -2663,7 +2666,7 @@ MegaBlastWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
    }
 
    s_off += 4;
-   while (s_off<subj_length) {
+   while (s_off<=subj_length) {
       if (pv_array) {
          ecode = ((ecode & mask) << 8) + *++subject;
          while ((s_off < subj_length) && ((pv_array[ecode>>pv_array_bts]&
@@ -2671,7 +2674,7 @@ MegaBlastWordFinder(BlastSearchBlkPtr search, LookupTablePtr lookup)
             ecode = ((ecode & mask) << 8) + *++subject;
             s_off += 4;
          } 
-         if (s_off >= subj_length)
+         if (s_off > subj_length)
             break;
       } else {
          ecode = ((ecode & mask) << 8) + *++subject;
@@ -2726,10 +2729,21 @@ Int2 MegaBlastGappedAlign(BlastSearchBlkPtr search)
    if (hspcnt == 0) 
      return 0;
 
-   e_hsp_array = search->current_hitlist->exact_match_array;
    /* Make current hitlist available for rewriting of extended hsps 
       without freeing the hsp_array since it's used in this function */
    search->current_hitlist->hspcnt = 0;
+
+#if LOOKUP_DRIVER_TEST
+   return 0;
+#endif
+
+   e_hsp_array = (MegaBlastExactMatchPtr PNTR) 
+      Malloc(hspcnt*sizeof(MegaBlastExactMatchPtr));
+   for (index=0; index < hspcnt; index++) {
+      e_hsp_array[index] = 
+         &(search->current_hitlist->exact_match_array[index]);
+   }
+
    if (use_dyn_prog || (search->rdfp && search->subject->length > MB_MAX_LENGTH_TO_UNPACK)) {
       subject0 = search->subject->sequence;
    } else {
@@ -2809,8 +2823,9 @@ Int2 MegaBlastGappedAlign(BlastSearchBlkPtr search)
                                      e_hsp->s_off);
          }
       }
-      e_hsp_array[index] = MemFree(e_hsp);
    }
+
+   MemFree(e_hsp_array);
    return 0;
 }
 
@@ -3668,6 +3683,24 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search, Int4 sequence_numbe
    if (current_hitlist->hspcnt > 1)
       BlastSortUniqHspArray(current_hitlist);
 
+   
+   if (search->pbp->hsp_num_max && 
+       search->pbp->hsp_num_max < search->current_hitlist->hspcnt && 
+       !search->pbp->mb_params->use_dyn_prog && search->last_context <= 1) {
+      /* Number of HSPs to be saved is restricted by user;
+         delete extra HSPs unless gapped alignments are done later, or
+         there are multiple query sequences - then this is done elsewhere.
+      */
+      for (index=search->pbp->hsp_num_max; 
+           index < search->current_hitlist->hspcnt; ++index) {
+         current_hitlist->hsp_array[index]->gap_info = 
+            GapXEditBlockDelete(current_hitlist->hsp_array[index]->gap_info);
+         current_hitlist->hsp_array[index] = 
+            MemFree(current_hitlist->hsp_array[index]);
+      }
+      search->current_hitlist->hspcnt = search->pbp->hsp_num_max;
+   }
+   
    return 0;
 }
 
@@ -3850,16 +3883,33 @@ MegaBlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 
            result_hitlist = mb_results[query_index];
            if (!result_hitlist) {
-              result_hitlist = mb_results[query_index] =
-                 BLASTResultHitlistNew(MIN_HSP_ARRAY_SIZE);
-              result_hitlist->hspcnt = 1;
               hsp_array_sizes[query_index] = MIN_HSP_ARRAY_SIZE;
-              /* This is the first HSP for this query, so it is the best one */
+              if (search->pbp->hsp_num_max && 
+                  search->pbp->hsp_num_max < MIN_HSP_ARRAY_SIZE)
+                 hsp_array_sizes[query_index] = search->pbp->hsp_num_max;  
+              result_hitlist = mb_results[query_index] =
+                 BLASTResultHitlistNew(hsp_array_sizes[query_index]);
+              result_hitlist->hspcnt = 1;
+              /* This is the first HSP for this query, so it is the 
+                 best one */
               result_hitlist->best_evalue = hsp->evalue;
               result_hitlist->high_score = hsp->score;
            } else if (result_hitlist->hspcnt == hsp_array_sizes[query_index]) { 
               if (!do_not_reallocate[query_index]) {
                  new_size = 2*hsp_array_sizes[query_index];
+                 if (search->pbp->hsp_num_max && 
+                     search->pbp->hsp_num_max < new_size && !use_dyn_prog) {
+                    /* Number of HSPs to be saved is restricted by user;
+                       stop at this limit if gapped alignment has already
+                       been completed */
+                    new_size = search->pbp->hsp_num_max;
+                    if (new_size <= hsp_array_sizes[query_index]) {
+                       hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
+                       do_not_reallocate[query_index] = TRUE;
+                       continue;
+                    }
+                 }
+
                  if (!(hsp_array = Realloc(result_hitlist->hsp_array,
                            new_size*sizeof(BLASTResultHsp)))) {
                     ErrPostEx(SEV_WARNING, 0, 0, 

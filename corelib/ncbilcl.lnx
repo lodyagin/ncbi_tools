@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.lnx,v $
+* Revision 6.8  2002/11/22 20:05:04  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 6.7  2002/11/06 21:23:47  ucko
 * Handle non-i386 platforms.
 * Enable large file support here, to ensure consistency.
@@ -113,6 +116,8 @@
 #define _POSIX_SOURCE	1
 #define _POSIX_C_SOURCE 199309L
 #define _XOPEN_SOURCE	500
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
 
 /* Only effective on glibc 2.1 and newer. */
 #define _LARGEFILE_SOURCE 1
@@ -125,7 +130,6 @@
 
 /* good for the EGCS C/C++ compiler on Linux(e.g. putenv(), tempnam() proto) */
 #define _SVID_SOURCE 1
-
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

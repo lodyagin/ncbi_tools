@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.111 $
+* $Revision: 6.112 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.112  2002/11/27 18:58:46  kans
+* FindProtDefLine, called from CreateDefLineEx, adds unnamed protein product as last resort
+*
 * Revision 6.111  2002/11/14 16:20:26  kans
 * added FindNMDefLine for default NM_ defline if no title instantiated
 *
@@ -2941,6 +2944,9 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 				}
 			}
 		}
+	}
+	if (title == NULL) {
+	  title = StringSave ("unnamed protein product");
 	}
 	return title;
 }

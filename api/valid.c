@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.332 $
+* $Revision: 6.334 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.c,v $
+* Revision 6.334  2002/11/27 20:56:35  kans
+* empty pir/swissprot/prf seqid block gives reject error
+*
+* Revision 6.333  2002/11/25 22:06:52  kans
+* added ERR_SEQ_FEAT_RnaProductMismatch in CheckRnaProductType
+*
 * Revision 6.332  2002/11/15 18:20:44  kans
 * implemented ERR_SEQ_FEAT_BadProductSeqId test
 *
@@ -2999,6 +3005,13 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
             SeqIdWrite (bsp->id, buf1, PRINTID_FASTA_LONG, sizeof (buf1) - 1);
             ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_BadSeqIdFormat, "Missing accession for %s", buf1);
           }
+        }
+      }
+      if (tsip != NULL && StringHasNoText (tsip->accession) &&
+          StringHasNoText (tsip->name) && ISA_aa (bsp->mol)) {
+        if (sip1->choice == SEQID_PIR || sip1->choice == SEQID_SWISSPROT || sip1->choice == SEQID_PRF) {
+          SeqIdWrite (bsp->id, buf1, PRINTID_FASTA_LONG, sizeof (buf1) - 1);
+          ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_BadSeqIdFormat, "Missing identifier for %s", buf1);
         }
       }
       accn_count++;
@@ -6351,6 +6364,37 @@ static void CheckTrnaCodons (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
   }
 }
 
+static void CheckRnaProductType (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPtr sfp, RnaRefPtr rrp)
+
+{
+  BioseqPtr          bsp;
+  SeqMgrDescContext  context;
+  MolInfoPtr         mip;
+  SeqDescrPtr        sdp;
+
+  if (vsp == NULL || gcp == NULL || sfp == NULL || rrp == NULL) return;
+  bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (bsp == NULL) return;
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &context);
+  if (sdp == NULL) return;
+  mip = (MolInfoPtr) sdp->data.ptrvalue;
+  if (mip == NULL) return;
+  switch (rrp->type) {
+    case 2 : /* mRNA */
+      if (mip->biomol == MOLECULE_TYPE_MRNA) return;
+      break;
+    case 3 : /* tRNA */
+      if (mip->biomol == MOLECULE_TYPE_TRNA) return;
+      break;
+    case 4 : /* rRNA */
+      if (mip->biomol == MOLECULE_TYPE_SNRNA) return;
+      break;
+    default :
+      return;
+  }
+  ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_RnaProductMismatch, "Type of RNA does not match MolInfo of product Bioseq");
+}
+
 static BioseqSetPtr GetParentNPS (BioseqPtr bsp)
 {
   BioseqSetPtr    bssp;
@@ -7138,6 +7182,9 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
     }
     if (rrp->type == 0) {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RNAtype0, "RNA type 0 (unknown) not supported");
+    }
+    if (sfp->product != NULL) {
+      CheckRnaProductType (vsp, gcp, sfp, rrp);
     }
     break;
   case 6:                      /* Pub */

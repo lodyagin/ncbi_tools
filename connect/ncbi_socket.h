@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKET__H
 #define CONNECT___NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.23 2002/11/01 20:12:06 lavr Exp $
+/*  $Id: ncbi_socket.h,v 6.25 2002/12/05 21:44:50 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -53,7 +53,7 @@
  *  
  * I/O Socket (handle SOCK):
  *
- *  SOCK_Create (see also LSOCK_Accept)
+ *  SOCK_Create[Ex] (see also LSOCK_Accept)
  *  SOCK_Reconnect
  *  SOCK_Shutdown
  *  SOCK_Close
@@ -270,6 +270,15 @@ extern EIO_Status LSOCK_GetOSHandle
 /* [CLIENT-side]  Connect client to another(server-side, listening) socket
  * (socket() + connect() [+ select()])
  */
+extern EIO_Status SOCK_CreateEx
+(const char*     host,    /* [in]  host to connect to                     */
+ unsigned short  port,    /* [in]  port to connect to                     */
+ const STimeout* timeout, /* [in]  the connect timeout (infinite if NULL) */
+ SOCK*           sock,    /* [out] handle of the created socket           */
+ ESwitch         do_log   /* [in]  whether to do logging on this socket   */
+ );
+
+/* SOCK_CreateEx(host, port, timeout, sock, eDefault) */
 extern EIO_Status SOCK_Create
 (const char*     host,    /* [in]  host to connect to                     */
  unsigned short  port,    /* [in]  port to connect to                     */
@@ -566,6 +575,12 @@ extern char* SOCK_gethostbyaddr
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.h,v $
+ * Revision 6.25  2002/12/05 21:44:50  lavr
+ * Retire SOCK_Create() as a macro; reinstate as a regular call
+ *
+ * Revision 6.24  2002/12/04 16:53:12  lavr
+ * Introduce SOCK_CreateEx()
+ *
  * Revision 6.23  2002/11/01 20:12:06  lavr
  * Specifically state which IP/name manip. routines do emtpy output buffer
  *

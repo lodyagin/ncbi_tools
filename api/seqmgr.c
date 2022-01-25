@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.195 $
+* $Revision: 6.197 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.197  2002/12/03 23:09:03  kans
+* added TestFeatOverlap
+*
+* Revision 6.196  2002/11/21 16:28:50  kans
+* fixed test for INTERVAL_OVERLAP
+*
 * Revision 6.195  2002/11/04 21:11:58  kans
 * SIMPLE_OVERLAP check now is more inclusive
 *
@@ -7600,8 +7606,7 @@ static Int4 TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
 
     /* requires overlap between at least one pair of intervals */
 
-    if ((feat->left <= left && feat->right > left) ||
-        (feat->left < right && feat->right >= right)) {
+    if (feat->right >= left && feat->left <= right) {
       sfp = feat->sfp;
       if (sfp != NULL) {
         a = SeqLocFindNext (slp, NULL);
@@ -7609,7 +7614,7 @@ static Int4 TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
           b = SeqLocFindNext (sfp->location, NULL);
           while (b != NULL) {
             if (SeqLocCompare (a, b) != SLC_NO_MATCH) {
-              diff = (left - feat->left) + (feat->right - right);
+              diff = ABS (left - feat->left) + ABS (feat->right - right);
               return diff;
             }
             b = SeqLocFindNext (sfp->location, b);
@@ -7919,6 +7924,31 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
   }
 
   return NULL;
+}
+
+NLM_EXTERN Int4 TestFeatOverlap (SeqFeatPtr sfpA, SeqFeatPtr sfpB, Int2 overlapType)
+
+{
+  Int4           diff;
+  SMFeatItemPtr  sfipA, sfipB;
+
+  if (sfpA == NULL || sfpB == NULL) return -1;
+  sfipA = SeqMgrFindSMFeatItemPtr (sfpA);
+  sfipB = SeqMgrFindSMFeatItemPtr (sfpB);
+  if (sfipA == NULL || sfipB == NULL) return -1;
+
+  diff = TestForOverlap (sfipB, sfpA->location, sfipA->left, sfipA->right,
+                         overlapType, sfipA->numivals, sfipA->ivals);
+  if (diff < 0) return -1;
+
+  if (sfipB->strand == sfipA->strand ||
+      (sfipA->strand == Seq_strand_unknown && sfipB->strand != Seq_strand_minus) ||
+      (sfipB->strand == Seq_strand_unknown && sfipA->strand != Seq_strand_minus) ||
+      sfipA->strand == Seq_strand_both) {
+    return diff;
+  }
+
+  return -1;
 }
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingGene (SeqLocPtr slp, SeqMgrFeatContext PNTR context)

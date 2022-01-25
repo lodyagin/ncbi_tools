@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.22 2002/10/29 00:46:41 lavr Exp $
+# $Id: install.sh,v 1.24 2002/12/10 14:51:22 lavr Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -92,7 +92,7 @@ makedir "$srcdir"/object
 makedir "$srcdir"/sequin
 makedir "$srcdir"/tools
 makedir "$srcdir"/vibrant
-for i in '' 'MT' ; do
+for i in '' 'DLL' ; do
   makedir "$dbgdir$i" -p
   makedir "$libdir$i" -p
 done
@@ -207,14 +207,14 @@ cp -p "$bd"/network/vibnet/*.h            "$incdir"
 
 
 # Object files
-for i in '' 'MT' ; do
+for i in '' 'DLL' ; do
   cp -p "$bd"/make/msvc_prj/corelib/ncbimain/"Debug$i"/ncbimain.obj   "$dbgdir$i"
   cp -p "$bd"/make/msvc_prj/corelib/ncbi/"Debug$i"/ncbithr.obj        "$dbgdir$i"
   cp -p "$bd"/make/msvc_prj/corelib/ncbimain/"Release$i"/ncbimain.obj "$libdir$i"
   cp -p "$bd"/make/msvc_prj/corelib/ncbi/"Release$i"/ncbithr.obj      "$libdir$i"
 done
 
-for i in '' 'MT' ; do
+for i in '' 'DLL' ; do
   # Debug libs
   cp -p `find $buiddir -name '*.lib' | grep "Debug$i/"` "$dbgdir$i"
 
@@ -224,7 +224,7 @@ done
 
 
 # Executables
-cp -p `find $buiddir -name '*.exe' | grep "ReleaseMT/"` "$bindir"
+cp -p `find $buiddir -name '*.exe' | grep "ReleaseDLL/"` "$bindir"
 
 
 # Data
@@ -241,8 +241,8 @@ done
 
 
 # Fill mirror dirs
-cp -p "${dbgdir}MT"/*.* "$dbgdir_a"
-cp -p "${libdir}MT"/*.* "$libdir_a"
+cp -p "${dbgdir}DLL"/*.* "$dbgdir_a"
+cp -p "${libdir}DLL"/*.* "$libdir_a"
 
 
 exit 0

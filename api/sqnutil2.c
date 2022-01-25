@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.137 $
+* $Revision: 6.139 $
 *
 * File Description: 
 *
@@ -1265,6 +1265,16 @@ NLM_EXTERN SqnTagPtr SqnTagParse (CharPtr ttl)
       *ptr = '\0';
       ptr++;
       stp->val [num_tags] = ptr;
+      if (*ptr == '"') {
+        ptr++;
+        stp->val [num_tags] = ptr;
+        tmp = StringChr (ptr, '"');
+        if (tmp != NULL) {
+          *tmp = '\0';
+          tmp++;
+          ptr = tmp;
+        }
+      }
       tmp = StringChr (ptr, ']');
       if (tmp != NULL) {
         *tmp = '\0';
@@ -3958,6 +3968,7 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
   GBQualPtr       gbq;
   GeneRefPtr      grp;
   ImpFeatPtr      ifp = NULL;
+  Boolean         isGeneDesc = FALSE;
   Boolean         isGeneSyn = FALSE;
   Boolean         isLocusTag = FALSE;
   Int2            j;
@@ -3988,6 +3999,9 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
     if (StringNCmp (qual, "gene_syn", 8) == 0) {
       qnum = GBQUAL_gene;
       isGeneSyn = TRUE;
+    } else if (StringNCmp (qual, "gene_desc", 9) == 0) {
+      qnum = GBQUAL_gene;
+      isGeneDesc = TRUE;
     } else if (StringNCmp (qual, "locus_tag", 9) == 0) {
       qnum = GBQUAL_gene;
       isLocusTag = TRUE;
@@ -4106,6 +4120,8 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       if (grp == NULL) return;
       if (isGeneSyn) {
         ValNodeCopyStr (&(grp->syn), 0, val);
+      } else if (isGeneDesc) {
+        grp->desc = StringSave (val);
       } else if (isLocusTag) {
         grp->locus_tag = StringSave (val);
       } else if (grp->locus == NULL) {
@@ -4169,6 +4185,8 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       if (grp != NULL) {
         if (isGeneSyn) {
           ValNodeCopyStr (&(grp->syn), 0, val);
+        } else if (isGeneDesc) {
+          grp->desc = StringSave (val);
         } else if (isLocusTag) {
           grp->locus_tag = StringSave (val);
         } else if (grp->locus == NULL) {

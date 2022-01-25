@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *       system dependent header
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.alf,v $
+* Revision 6.3  2002/11/22 20:05:04  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 6.2  1999/03/17 15:37:21  vakatov
 * Set the default(<ncbistd.h>) "Nlm_Int4" to "int" rather tnan "long";
 * the same for "Nlm_Uint4";  modifyed the concerned "ncbilcl.*" files
@@ -78,7 +81,8 @@
 #ifndef POSIX_THREADS_AVAIL
 #define POSIX_THREADS_AVAIL
 #endif
-
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

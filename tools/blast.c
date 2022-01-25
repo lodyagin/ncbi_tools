@@ -1,4 +1,4 @@
-/* $Id: blast.c,v 6.375 2002/11/13 18:03:10 dondosha Exp $
+/* $Id: blast.c,v 6.379 2002/12/10 23:13:22 bealer Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,9 +47,26 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.375 $
+ * $Revision: 6.379 $
  *
  * $Log: blast.c,v $
+ * Revision 6.379  2002/12/10 23:13:22  bealer
+ * Fix do_the_blast_run and BlastGetDbChunk to calculate beginning and ending
+ * sequence numbers correctly.
+ * Fix BlastGetDbChunk to use precise start and end points, not nearest
+ * multiples of 32.
+ * Fix do_the_blast_run and BlastGetDbChunk to handle mixed oidlist / real db
+ * multiple database scenarios.
+ *
+ * Revision 6.378  2002/12/04 22:39:51  bealer
+ * Undo previous set of changes.
+ *
+ * Revision 6.377  2002/11/25 19:53:34  bealer
+ * Remove extraneous commented code.
+ *
+ * Revision 6.376  2002/11/25 19:50:26  bealer
+ * Prevent extra work by BlastGetDbChunk when OID lists are used.
+ *
  * Revision 6.375  2002/11/13 18:03:10  dondosha
  * Correction in BlastReevaluateWithAmbiguities
  *
@@ -2936,81 +2953,96 @@ Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop,
     Boolean done=FALSE;
     Int4 ordinal_id;
     OIDListPtr virtual_oidlist = NULL;
-
     *id_list_number = 0;
     
     NlmMutexLockEx(&thr_info->db_mutex);
     if (thr_info->realdb_done) {
         if (virtual_oidlist = BlastGetVirtualOIDList(rdfp)) {
-            /* Virtual database.   Create id_list using mask file */
-            Uint4	mask;
-            Int4	maskindex, base, i;
-            Boolean	cont;
-            Int4	oidindex;
-            Int4	total_mask = virtual_oidlist->total/MASK_WORD_SIZE + 1;
+	    /* Virtual database.   Create id_list using mask file */
+	    Int4 gi_end       = 0;
+	    
+	    thr_info->final_db_seq = MIN(thr_info->final_db_seq, virtual_oidlist->total);
+	    
+	    gi_end = thr_info->final_db_seq;
 
-            if (thr_info->gi_current < total_mask) {
-
-                oidindex = 0;
-                maskindex = thr_info->gi_current;
-                base = thr_info->gi_current * MASK_WORD_SIZE;
-                cont = TRUE;
-
-                while (cont) {
-                    /* for each long-word mask */
-                    mask = Nlm_SwapUint4(virtual_oidlist->list[maskindex]);
-
-                    i = 0;
-                    while (mask) {
-                        if (mask & (((Uint4)0x1)<<(MASK_WORD_SIZE-1))) {
-                            id_list[oidindex++] = base + i;
-                        }
-                        mask <<= 1;
-                        i++;
-                    }
-                    maskindex++;
-                    base += MASK_WORD_SIZE;
-                    if (maskindex >= total_mask || 
-                        oidindex > thr_info->db_chunk_size) {
-                        cont = FALSE;
-                    }
-                }
-                thr_info->gi_current = maskindex;
-                *id_list_number = oidindex;
-                BlastTickProc(thr_info->gi_current, thr_info);
-            } else {
-                done = TRUE;
-            }
-
-        } else {
-            done = TRUE;
+	    if (thr_info->gi_current < gi_end) {
+		Int4 oidindex  = 0;
+		Int4 gi_start  = thr_info->gi_current;
+		Int4 bit_start = gi_start % MASK_WORD_SIZE;
+		Int4 gi;
+		
+		for(gi = gi_start; (gi < gi_end) && (oidindex < thr_info->db_chunk_size);) {
+		    Int4 bit_end = ((gi_end - gi) < MASK_WORD_SIZE) ? (gi_end - gi) : MASK_WORD_SIZE;
+		    Int4 bit;
+		    
+		    Uint4 mask_index = gi / MASK_WORD_SIZE;
+		    Uint4 mask_word  = Nlm_SwapUint4(virtual_oidlist->list[mask_index]);
+		    
+		    if ( mask_word ) {
+			for(bit = bit_start; bit<bit_end; bit++) {
+			    Uint4 bitshift = (MASK_WORD_SIZE-1)-bit;
+			    
+			    if ((mask_word >> bitshift) & 1) {
+				id_list[ oidindex++ ] = (gi - bit_start) + bit;
+			    }
+			}
+		    }
+		    
+		    gi += bit_end - bit_start;
+		    bit_start = 0;
+		}
+		
+		thr_info->gi_current = gi;
+		*id_list_number = oidindex;
+		BlastTickProc(thr_info->gi_current/32, thr_info);
+	    } else {
+		done = TRUE;
+	    }
+	    
+	} else {
+	    done = TRUE;
         }
     } else {
-        /* we have real database with start/stop specified */
-        if (thr_info->db_mutex) {
+	int real_readdb_entries;
+	int total_readdb_entries;
+	int final_real_seq;
 
+	real_readdb_entries  = readdb_get_num_entries_total_real(rdfp);
+	total_readdb_entries = readdb_get_num_entries_total(rdfp);
+	final_real_seq       = MIN( real_readdb_entries, thr_info->final_db_seq );
+	
+	/* we have real database with start/stop specified */
+        if (thr_info->db_mutex) {
             /* Emit a tick if needed. */
             BlastTickProc(thr_info->db_chunk_last, thr_info);
             *start = thr_info->db_chunk_last;
-            if (thr_info->db_chunk_last < thr_info->final_db_seq) {
+            if (thr_info->db_chunk_last < final_real_seq) {
                 *stop = MIN((thr_info->db_chunk_last + 
-                    thr_info->db_chunk_size), thr_info->final_db_seq);
+                    thr_info->db_chunk_size), final_real_seq);
             } else {/* Already finished. */
                 *stop = thr_info->db_chunk_last;
-                thr_info->realdb_done = TRUE;
+
+		/* Change parameters for oidlist processing. */
+                thr_info->realdb_done  = TRUE;
             }
             thr_info->db_chunk_last = *stop;
         } else {
-            if (*stop != thr_info->final_db_seq) {
+            if (*stop != final_real_seq) {
                 done = FALSE;
                 *start = thr_info->last_db_seq;
-                *stop = thr_info->final_db_seq;
+                *stop  = final_real_seq;
             } else {
                 thr_info->realdb_done = TRUE;
-                done = TRUE;
+		
+		if (total_readdb_entries == real_readdb_entries) {
+		    done = TRUE;
+		} else {
+		    thr_info->gi_current = final_real_seq;
+		}
             }
         }
     }
+    
     NlmMutexUnlock(thr_info->db_mutex);
     return done;
 }
@@ -3035,13 +3067,13 @@ do_gapped_blast_search(VoidPtr ptr)
     Int2 status=0;
     Int4 index, index1, start=0, stop=0, id_list_length;
     Int4Ptr id_list=NULL;
-
-	search = (BlastSearchBlkPtr) ptr;
-	if (search->thr_info->blast_gi_list || BlastGetVirtualOIDList(search->rdfp))
+    
+    search = (BlastSearchBlkPtr) ptr;
+    if (search->thr_info->blast_gi_list || BlastGetVirtualOIDList(search->rdfp))
     {
-        id_list = MemNew((search->thr_info->db_chunk_size+33)*sizeof(Int4));
+	id_list = MemNew((search->thr_info->db_chunk_size+33)*sizeof(Int4));
     }
-
+    
     if (NlmThreadsAvailable() && search->pbp->process_num > 1)
         NlmThreadAddOnExit(do_on_exit_func, ptr);
 
@@ -3049,7 +3081,7 @@ do_gapped_blast_search(VoidPtr ptr)
     while (BlastGetDbChunk(search->rdfp, &start, &stop, id_list, 
                            &id_list_length, search->thr_info) != TRUE)
     {
-        if (id_list)
+        if (id_list && id_list_length)
         {
             for (index=0; index<id_list_length; index++)
             {
@@ -3073,7 +3105,7 @@ do_gapped_blast_search(VoidPtr ptr)
                 if (time_out_boolean == TRUE)
                     break;	
             }
-        } else {
+        } else if (!search->thr_info->realdb_done) {
             for (index=start; index<stop; index++)
             {
                 if ((status = BLASTPerformSearchWithReadDb(search, index)) != 0)
@@ -3225,41 +3257,55 @@ do_the_blast_run(BlastSearchBlkPtr search)
     ReadDBFILEPtr rdfp;
     TNlmThread PNTR thread_array;
     VoidPtr status=NULL;
+    int num_entries_total;
+    int num_entries_total_real;
+    int start_seq;
+    int end_seq;
     
     if (search == NULL)
         return;
     
-    search->thr_info->db_chunk_size = BLAST_DB_CHUNK_SIZE;
+    num_entries_total      = readdb_get_num_entries_total     (search->rdfp);
+    num_entries_total_real = readdb_get_num_entries_total_real(search->rdfp);
     
-#if 0    
-    readdb_get_totals(search->rdfp, &total_length, &num_seq);	
-#else
-    num_seq = search->dbseq_num;
-#endif
-    search->thr_info->db_incr = num_seq / BLAST_NTICKS;
-    search->thr_info->last_db_seq = search->pbp->first_db_seq;  /* The 1st sequence to compare against. */
-    search->thr_info->final_db_seq = readdb_get_num_entries_total_real(search->rdfp);
-    /* If last sequence number provided in options, assign it, 
-       but do a sanity check */
-    if (search->pbp->final_db_seq > 0 && 
-        search->pbp->final_db_seq < search->thr_info->final_db_seq)
-       search->thr_info->final_db_seq = search->pbp->final_db_seq;
+    /* Set 'done with read db' according to whether real databases are present */
     
-    search->thr_info->db_chunk_last = search->pbp->first_db_seq;
-    
-    if (search->thr_info->blast_gi_list || BlastGetVirtualOIDList(search->rdfp))
-        search->thr_info->gi_current = 0;
-
-    /* guess if we need to search any real database */
-    if (search->thr_info->final_db_seq == 0) {
-        /* that means that we have only mask and no real database should be searched */
-        search->thr_info->realdb_done = TRUE;
+    if (num_entries_total_real) {
+	search->thr_info->realdb_done = FALSE;
     } else {
-        /* otherwise, we need to start searching all real databases */
-        search->thr_info->realdb_done = FALSE;
+	search->thr_info->realdb_done = TRUE;
     }
     
-   if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
+    /* Make sure first, last sequence indices are in-range (0, NUM-1) */
+    
+    /* NOTE: search->pbp->final_seq is an 'inclusive' range, but the */
+    /* search->thr_info versions are not. */
+    
+    if (search->pbp->final_db_seq > 0) {
+	end_seq = MIN(search->pbp->final_db_seq + 1, num_entries_total);
+    } else {
+	end_seq = num_entries_total;
+    }
+    
+    start_seq = MAX(0, MIN(search->pbp->first_db_seq, end_seq));
+    
+    /* Set BlastGetDbChunk()'s pointers and counters */
+    
+    search->thr_info->last_db_seq       =
+	search->thr_info->gi_current    =
+	search->thr_info->db_chunk_last = start_seq;
+    
+    search->thr_info->final_db_seq = end_seq;
+    
+    /* Chunk size */
+    search->thr_info->db_chunk_size = BLAST_DB_CHUNK_SIZE;
+    
+    /* Tick control */
+    num_seq = search->dbseq_num;
+    search->thr_info->db_incr = num_seq / BLAST_NTICKS;
+    
+
+    if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
         rdfp = search->rdfp;
         number_of_entries = INT4_MAX;
         /* Look for smallest database. */

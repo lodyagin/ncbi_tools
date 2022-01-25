@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.91 $
+* $Revision: 6.93 $
 *
 * File Description: 
 *
@@ -66,10 +66,11 @@ static ENUM_ALIST(name_suffix_alist)
   {" ",    0},
   {"Jr.",  1},
   {"Sr.",  2},
-  {"III",  3},
-  {"IV",   4},
-  {"V",    5},
-  {"VI",   6},
+  {"II",   4},
+  {"III",  5},
+  {"IV",   6},
+  {"V",    7},
+  {"VI",   8},
 END_ENUM_ALIST
 
 static ENUM_ALIST(target_field_alist)
@@ -4863,10 +4864,12 @@ static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
               SafeSetTitle (sbfp->lastname, txt);
               MemFree (txt);
               txt = ExtractTagListColumn (str, 3);
-	      SetEnumPopupByName (sbfp->suffix, name_suffix_alist, txt);
-	      /*
+              if (! StringHasNoText (txt)) {
+                SetEnumPopupByName (sbfp->suffix, name_suffix_alist, txt);
+              }
+              /*
               SafeSetTitle (sbfp->suffix, txt);
-	      */
+              */
               MemFree (txt);
               MemFree (str);
             }
@@ -5045,10 +5048,12 @@ static void SubmitBlockPtrToSubmitForm (ForM f, Pointer data)
                 SafeSetTitle (sbfp->lastname, txt);
                 MemFree (txt);
                 txt = ExtractTagListColumn (str, 3);
-		SetEnumPopupByName (sbfp->suffix, name_suffix_alist, txt);
-		/*
+                if (! StringHasNoText (txt)) {
+                  SetEnumPopupByName (sbfp->suffix, name_suffix_alist, txt);
+                }
+                /*
                 SafeSetTitle (sbfp->suffix, txt);
-		*/
+                */
                 MemFree (txt);
                 MemFree (str);
               }
@@ -5282,7 +5287,9 @@ static Boolean ReadContactPage (ForM f, CharPtr filename)
                   SafeSetTitle (sbfp->lastname, txt);
                   MemFree (txt);
                   txt = ExtractTagListColumn (str, 3);
-		  SetEnumPopupByName (sbfp->suffix, name_suffix_alist, txt);
+                  if (! StringHasNoText (txt)) {
+                    SetEnumPopupByName (sbfp->suffix, name_suffix_alist, txt);
+                  }
                   MemFree (txt);
                   MemFree (str);
                 }

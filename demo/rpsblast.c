@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.46 2002/10/17 20:36:00 camacho Exp $
+/* $Id: rpsblast.c,v 6.47 2002/11/29 20:13:13 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.46 $
+* $Revision: 6.47 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.47  2002/11/29 20:13:13  camacho
+* Fix incorrect parameter to FastaToSeqEntryForDb
+*
 * Revision 6.46  2002/10/17 20:36:00  camacho
 * Disallow -L option for tblastn
 *
@@ -618,9 +621,9 @@ static SeqEntryPtr LIBCALLBACK RPSGetNextSeqEntry(SeqLocPtr PNTR slp, VoidPtr da
     }
     
     if(myargs[23].intvalue) {
-        sep = FastaToSeqEntryForDb (infp, !myargs[2].intvalue, NULL, myargs[18].intvalue, NULL, NULL, slp);
+        sep = FastaToSeqEntryForDb (infp, !myargs[2].intvalue, NULL, myargs[14].intvalue, NULL, NULL, slp);
     } else {
-        sep = FastaToSeqEntryEx (infp, !myargs[2].intvalue, NULL, myargs[18].intvalue);
+        sep = FastaToSeqEntryEx (infp, !myargs[2].intvalue, NULL, myargs[14].intvalue);
     }
     
     if(sep == NULL) {            /* Probably last FASTA entry */

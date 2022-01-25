@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.16 $
+* $Revision: 1.17 $
 *
 * File Description: 
 *
@@ -143,13 +143,13 @@ NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
 
 NLM_EXTERN Boolean PubMedAsynchronousQuery (
   Int4 uid,
-  QUEUE* queue,
+  QUEUE* q,
   QueryResultProc resultproc,
   VoidPtr userdata
 );
 
 NLM_EXTERN Int4 PubMedCheckQueue (
-  QUEUE* queue
+  QUEUE* q
 );
 
 NLM_EXTERN PubmedEntryPtr PubMedReadReply (
@@ -161,13 +161,13 @@ NLM_EXTERN Boolean PubSeqAsynchronousQuery (
   Int4 uid,
   Int2 retcode,
   Int4 flags,
-  QUEUE* queue,
+  QUEUE* q,
   QueryResultProc resultproc,
   VoidPtr userdata
 );
 
 NLM_EXTERN Int4 PubSeqCheckQueue (
-  QUEUE* queue
+  QUEUE* q
 );
 
 NLM_EXTERN SeqEntryPtr PubSeqReadReply (
@@ -179,13 +179,13 @@ NLM_EXTERN Boolean GiRevHistAsynchronousQuery (
   Int4 uid,
   Int4 num,
   Int4Ptr uids,
-  QUEUE* queue,
+  QUEUE* q,
   QueryResultProc resultproc,
   VoidPtr userdata
 );
 
 NLM_EXTERN Int4 GiRevHistCheckQueue (
-  QUEUE* queue
+  QUEUE* q
 );
 
 NLM_EXTERN CharPtr GiRevHistReadReply (
@@ -195,13 +195,13 @@ NLM_EXTERN CharPtr GiRevHistReadReply (
 
 NLM_EXTERN Boolean AccnRevHistAsynchronousQuery (
   CharPtr accn,
-  QUEUE* queue,
+  QUEUE* q,
   QueryResultProc resultproc,
   VoidPtr userdata
 );
 
 NLM_EXTERN Int4 AccnRevHistCheckQueue (
-  QUEUE* queue
+  QUEUE* q
 );
 
 NLM_EXTERN Int4 AccnRevHistReadReply (

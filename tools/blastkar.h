@@ -32,8 +32,11 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.28 $ 
+/* $Revision: 6.29 $ 
 * $Log: blastkar.h,v $
+* Revision 6.29  2002/12/04 13:28:37  madden
+* Add effective length parameters
+*
 * Revision 6.28  2002/09/03 14:21:50  camacho
 * Changed type of karlinK from FloatHi to Nlm_FloatHi
 *
@@ -389,6 +392,10 @@ protein alphabet (e.g., ncbistdaa etc.), FALSE for nt. alphabets. */
 /**** Andy's modification ****/
 	Int4    	query_length;   /* the length of the query. */
 /**** end Andy's modification ****/
+	Int4	length_adjustment; /* length to trim query/db sequence by. */
+	Int4	effective_query_length; /* shortened query length. */
+	Int8	effective_db_length;	/* trimmed db length */
+	Int8	effective_search_sp;	/* product of above two */
 	} BLAST_ScoreBlk, PNTR BLAST_ScoreBlkPtr;
 
 /* Used for communicating between BLAST and other applications. */

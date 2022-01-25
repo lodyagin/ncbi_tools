@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,9 @@
 * -------  ----------    ---------------------------------------------------
 *
 * $Log: ncbilcl.fbd,v $
+* Revision 1.2  2002/11/22 20:05:04  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 1.1  2000/10/31 15:42:41  beloslyu
 * port to FreeBSD 4.1
 *
@@ -64,6 +67,8 @@
 /*----------------------------------------------------------------------*/
 #define SYSV_IPC_AVAIL	/* System V Interprocess Communication available */
 #define _POSIX_C_SOURCE 199309L
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

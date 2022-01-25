@@ -81,6 +81,7 @@ Int2 Ali_SeqLineGetType(CharPtr seqLine,
   Int4    nuclCount;
   Int4    miscCount;
   FloatLo percentNucl;
+  FloatLo percentMisc;
   Char    commonNucls[20];
   Char    miscChars[5];
 
@@ -107,10 +108,11 @@ Int2 Ali_SeqLineGetType(CharPtr seqLine,
       (StringChr (seqLine, '*')))
     return ALI_PROTEIN;
 
-  /* Is it definitely a Nucleotide sequence? */
-  /* See if we have a high percentage of the */
-  /* most common nucleotide chars.           */
-
+  /* All others are technically ambiguous, but */
+  /* if we have a high enough percentage of    */
+  /* common nucleotides, then it is probably a */
+  /* nucleotide sequence.                      */
+  
   nuclCount = 0;
   miscCount = 0;
   sprintf (commonNucls, "ATCGNXatcgnx");
@@ -129,8 +131,15 @@ Int2 Ali_SeqLineGetType(CharPtr seqLine,
       miscCount++;
   }
 
-  if (miscCount == StringLen (seqLine))
+  /* If we have a high percentage of misc chars then */
+  /* we don't have enough data to make a decision.   */
+
+  percentMisc = ((FloatLo) miscCount) / ((FloatLo) StringLen (seqLine));
+  if ((percentMisc * 100) > 80)
     return ALI_AMBIGUOUS;
+
+  /* Else, if a high percentage are common nucleotide */
+  /* characters then it is a nucleotide line.         */
 
   percentNucl = ((FloatLo) nuclCount + (FloatLo) miscCount) / 
                 (FloatLo) StringLen (seqLine);

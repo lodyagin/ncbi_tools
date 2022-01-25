@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.168 $
+* $Revision: 6.170 $
 *
 * File Description: 
 *
@@ -6556,19 +6556,41 @@ extern void ResolveExistingLocalIDs (IteM i)
 extern void SetSourceFocus (IteM i);
 extern void ClearSourceFocus (IteM i);
 
-static void TouchFocus (SeqDescrPtr sdp, Pointer userdata)
-
+static Boolean LIBCALLBACK SetDescriptorFocus (BioseqPtr bsp,
+					SeqMgrBioseqContextPtr bContext)
 {
-  BioSourcePtr  biop;
-  BoolPtr       bptr;
-  Boolean       is_focus;
+  SeqMgrFeatContext fContext;
+  SeqMgrDescContext dContext;
+  static Int4       count = 0;
+  BioSourcePtr      biop;
+  Boolean           is_focus;
+  SeqDescrPtr       sdp;
 
-  if (sdp->choice != Seq_descr_source) return;
-  bptr = (BoolPtr) userdata;
-  is_focus = *bptr;
-  biop = (BioSourcePtr) sdp->data.ptrvalue;
-  if (biop == NULL) return;
-  biop->is_focus = is_focus;
+  /* Only set the focus when the Bioseq has */
+  /* a source feature in addition to the    */
+  /* source descriptor.                     */
+
+  if (NULL == SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_BIOSRC, 0,
+				    &fContext))
+    return TRUE;
+
+  /* Set the focus on all of the Bioseq's */
+  /* source descriptors.                  */
+
+  is_focus = (Boolean) bContext->userdata;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dContext);
+  while (NULL != sdp) {
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+    if (biop == NULL)
+      return TRUE;
+    biop->is_focus = is_focus;
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_source, &dContext);
+  }
+
+  /* Return true to continue on to next Bioseq */
+    
+  return TRUE;
 }
 
 static void CommonSourceFocus (IteM i, Boolean setfocus)
@@ -6587,7 +6609,8 @@ static void CommonSourceFocus (IteM i, Boolean setfocus)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
   flag = setfocus;
-  VisitDescriptorsInSep (sep, (Pointer) &flag, TouchFocus);
+  SeqMgrExploreBioseqs (0, sep->data.ptrvalue, (Pointer) &flag,
+			SetDescriptorFocus, TRUE, TRUE, TRUE);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }

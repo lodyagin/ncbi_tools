@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: ncbilcl.cpp,v $
+* Revision 6.1  2002/11/22 20:05:04  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 6.0  1997/08/25 18:15:51  madden
 * Revision changed to 6.0
 *
@@ -73,6 +76,8 @@ added Log line
 /*----------------------------------------------------------------------*/
 #define SYSV_IPC_AVAIL
 #define SYSV_STREAMS_AVAIL
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

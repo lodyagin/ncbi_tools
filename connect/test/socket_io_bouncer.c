@@ -1,4 +1,4 @@
-/*  $Id: socket_io_bouncer.c,v 6.5 2002/08/12 15:10:43 lavr Exp $
+/*  $Id: socket_io_bouncer.c,v 6.7 2002/12/04 19:50:31 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,8 +31,10 @@
  *
  */
 
+#include "../ncbi_ansi_ext.h"
 #include <connect/ncbi_socket.h>
 #include <stdio.h>
+#include <stdlib.h>
 /* This header must go last */
 #include "test_assert.h"
 
@@ -105,9 +107,10 @@ int main(int argc, const char* argv[])
 #define MIN_PORT 5001
     unsigned short port = 0;
     int n_cycle = 100;
+    const char* env;
 
     /* logging */
-    s_LogFile = fopen("socket_io_bouncer.log", "a+");
+    s_LogFile = fopen("socket_io_bouncer.log", "ab");
     assert(s_LogFile);
 
     /* cmd.-line args */
@@ -135,6 +138,12 @@ int main(int argc, const char* argv[])
         return 1;
     }
 
+    if ((env = getenv("CONN_DEBUG_PRINTOUT")) != 0 &&
+        (strcasecmp(env, "true") == 0 || strcasecmp(env, "1") == 0 ||
+         strcasecmp(env, "data") == 0 || strcasecmp(env, "all") == 0)) {
+        SOCK_SetDataLoggingAPI(eOn);
+    }
+
     /* run */
     s_DoServer(port, n_cycle);
 
@@ -148,6 +157,12 @@ int main(int argc, const char* argv[])
 /*
  * --------------------------------------------------------------------------
  * $Log: socket_io_bouncer.c,v $
+ * Revision 6.7  2002/12/04 19:50:31  lavr
+ * #include "../ncbi_ansi_ext.h" instead of <string.h> to define strcasecmp()
+ *
+ * Revision 6.6  2002/12/04 17:00:18  lavr
+ * Open log file in append mode; toggle logging from the environment
+ *
  * Revision 6.5  2002/08/12 15:10:43  lavr
  * Use persistent SOCK_Write()
  *

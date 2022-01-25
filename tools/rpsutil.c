@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.56 2002/10/30 16:35:38 camacho Exp $
+/* $Id: rpsutil.c,v 6.57 2002/11/27 22:23:09 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.56 $
+* $Revision: 6.57 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.57  2002/11/27 22:23:09  camacho
+* Fix to allow multiple sequences to be searched
+*
 * Revision 6.56  2002/10/30 16:35:38  camacho
 * If rpsinfo->query_slp is uninitialized, assume whole query is searched
 *
@@ -1888,6 +1891,7 @@ static VoidPtr RPSEngineThread(VoidPtr data)
 
         SeqAlignSetFree(seqalign);
         search = BlastSearchBlkDestruct(search);
+        rpsinfo_local->query_slp = query_slp = NULL;
         
         if(!rpsbop->believe_query)
             fake_bsp = BlastDeleteFakeBioseq(fake_bsp);

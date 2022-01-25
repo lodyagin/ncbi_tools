@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.45 2002/10/10 20:38:19 bauer Exp $
+/* $Id: cddutil.h,v 1.47 2002/12/03 14:36:31 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.45 $
+* $Revision: 1.47 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.47  2002/12/03 14:36:31  bauer
+* added CddMSLMixedToMSLDenDiag
+*
+* Revision 1.46  2002/11/22 21:35:23  bauer
+* added SeqAnnotReadFromFile and preservation of scores in DenseSeg to DenseDiag conversion
+*
 * Revision 1.45  2002/10/10 20:38:19  bauer
 * changes to accomodate new spec items
 * - old-root node
@@ -403,6 +409,7 @@ Int4 cdd_evidence_style[] =
 /*---------------------------------------------------------------------------*/
 Boolean    LIBCALL CddWriteToFile(CddPtr pcdd, CharPtr cFile, Boolean bBin);
 CddPtr     LIBCALL CddReadFromFile(CharPtr cFile, Boolean bBin);
+SeqAnnotPtr LIBCALL SeqAnnotReadFromFile(CharPtr cFile, Boolean bBin);
 
 Boolean    LIBCALL CddTreeWriteToFile(CddTreePtr pcddt, CharPtr cFile, Boolean bBin);
 CddTreePtr LIBCALL CddTreeReadFromFile(CharPtr cFile, Boolean bBin);
@@ -461,6 +468,7 @@ SeqAnnotPtr LIBCALL CddFindMMDBIdInBioseq(BioseqPtr bsp, Int4 *iMMDBid);
 /*---------------------------------------------------------------------------*/
 /* Cdd specific sequence alignment format converters                         */
 /*---------------------------------------------------------------------------*/
+SeqAlignPtr LIBCALL CddMSLMixedToMSLDenDiag(SeqAlignPtr salp);
 SeqAlignPtr LIBCALL CddMSLDenDiagToMSLDenSeg(SeqAlignPtr salp);
 SeqAlignPtr LIBCALL CddMSLDenSegToMSLDenDiag(SeqAlignPtr salp);
 SeqAlignPtr LIBCALL CddMSLDenDiagToMULDenDiag(SeqAlignPtr salp);
@@ -583,20 +591,21 @@ SeqAlignPtr LIBCALL CddCopyMSLDenDiag(SeqAlignPtr salp);
 /*---------------------------------------------------------------------------*/
 /* Utility functions for Alignment Reindexing and pairwise comparisons       */
 /*---------------------------------------------------------------------------*/
-CddExpAlignPtr CddExpAlignNew();
-CddExpAlignPtr CddExpAlignFree(CddExpAlignPtr pCDea);
-void           CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength);
-CddExpAlignPtr CddExpAlignRevert(CddExpAlignPtr pCDea, Int4 iLength);
-CddExpAlignPtr CddReindexExpAlign(CddExpAlignPtr pCDea1, Int4 newlength, CddExpAlignPtr pCDea2, Int4 iOuter, Int4 iInner);
-SeqAlignPtr    CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter);
-Int2   LIBCALL CddGetProperBlocks(CddPtr pcdd, Boolean modify, Int4Ptr *iBreakAfter);
-FloatHi        CddGetPairId(TrianglePtr pTri, Int4 idx1, Int4 idx2);
-static Boolean HitYet(Int4Ptr retlist, Int4 index, Int4 i);
-Int4Ptr        CddMostDiverse(TrianglePtr pTri, Int4 length, Int4 maxdiv);
-Int4Ptr        CddMostSimilarToQuery(ScorePtr psc, Int4 length);
-BioseqPtr      CddRetrieveBioseqById(SeqIdPtr sip, SeqEntryPtr sep);
-TrianglePtr    CddCalculateTriangle(CddPtr pcdd);
-ScorePtr       CddCalculateQuerySim(CddPtr pcdd, SeqAlignPtr salp);
+CddExpAlignPtr         CddExpAlignNew();
+CddExpAlignPtr         CddExpAlignFree(CddExpAlignPtr pCDea);
+void                   CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength);
+CddExpAlignPtr         CddExpAlignRevert(CddExpAlignPtr pCDea, Int4 iLength);
+CddExpAlignPtr         CddReindexExpAlign(CddExpAlignPtr pCDea1, Int4 newlength, CddExpAlignPtr pCDea2, Int4 iOuter, Int4 iInner);
+CddExpAlignPtr LIBCALL SeqAlignToCddExpAlign(SeqAlignPtr salp, SeqEntryPtr sep);
+SeqAlignPtr            CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter);
+Int2           LIBCALL CddGetProperBlocks(CddPtr pcdd, Boolean modify, Int4Ptr *iBreakAfter);
+FloatHi                CddGetPairId(TrianglePtr pTri, Int4 idx1, Int4 idx2);
+static Boolean         HitYet(Int4Ptr retlist, Int4 index, Int4 i);
+Int4Ptr                CddMostDiverse(TrianglePtr pTri, Int4 length, Int4 maxdiv);
+Int4Ptr                CddMostSimilarToQuery(ScorePtr psc, Int4 length);
+BioseqPtr              CddRetrieveBioseqById(SeqIdPtr sip, SeqEntryPtr sep);
+TrianglePtr            CddCalculateTriangle(CddPtr pcdd);
+ScorePtr               CddCalculateQuerySim(CddPtr pcdd, SeqAlignPtr salp);
 
 /*---------------------------------------------------------------------------*/
 /* rips out and returns a PDBSeqId from a SeqId                              */

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -472,6 +472,8 @@ NLM_EXTERN Boolean LIBCALL SeqMgrGetBioseqContext (
 *   SeqMgrGetFeatureInIndex gets an arbitrary feature indexed by the array
 *   SeqMgrGetAllOverlappingFeatures returns all features that overlap with the
 *     indicated overlap specificity
+*   TestFeatOverlap checks to see if feature A is in feature B with the
+*     indicated overlap specificity, -1 return value on failure
 *
 *****************************************************************************/
 
@@ -514,6 +516,12 @@ NLM_EXTERN Int2 LIBCALL SeqMgrGetAllOverlappingFeatures (
   Int2 overlapType,
   Pointer userdata,
   SeqMgrFeatExploreProc userfunc
+);
+
+NLM_EXTERN Int4 TestFeatOverlap (
+  SeqFeatPtr sfpA,
+  SeqFeatPtr sfpB,
+  Int2 overlapType
 );
 
 /* the following functions are not frequently called by applications */

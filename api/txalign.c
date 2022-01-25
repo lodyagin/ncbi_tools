@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.70 2002/11/12 22:37:35 dondosha Exp $
+/* $Id: txalign.c,v 6.71 2002/12/11 16:24:34 jianye Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,16 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.70 $
+* $Revision: 6.71 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.71  2002/12/11 16:24:34  jianye
+* added structure linkout
+*
 * Revision 6.70  2002/11/12 22:37:35  dondosha
 * Compute number of identities from sequence data when formatting, not relying on the score set in seqalign
 *
@@ -483,7 +486,6 @@
 #include <salpstat.h>
 #include <fdlKludge.h>
 
-
 #define BUFFER_LENGTH 2048
 #define MIN_INS_SPACE 50
 #define MAX_GI_NUM    10
@@ -498,6 +500,8 @@
 
 /* Used in make_dumpgnl_links, set in getreq.cpp or getreqcmd.cpp */
 const char *RID_glb;
+const char *CDD_RID_glb;
+const char *Entrez_Query_Term ;
 /*Indicate if db contains sequence with gi*/
 Boolean DbHasGi=FALSE;
 
@@ -523,10 +527,7 @@ typedef struct _txdfline_struct {
 		segs_used;
 } TxDfLineStruct, *TxDfLineStructPtr;
 
-/* url for linkout*/
-static CharPtr linkoutURL[total_linkout]={"<a href=\"http://www.ncbi.nlm.nih.gov/LocusLink/list.cgi?Q=%d%s\"><img border=0 height=16 width=16 src=\"/blast/images/L.gif\" alt=\"LocusLink info\"></a>", /* 0, linkout_locuslink*/
-					  "<a href=\"http://www.ncbi.nlm.nih.gov/UniGene/query.cgi?ORG=%s&TEXT=@gi(%d)\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>", /* 1, linkout_unigen*/
-					  "<a href=\"http://www.ncbi.nlm.nih.gov/%s %d\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>"/* 2, linkout_structure*/};
+
 
 /*fill string with num spaces and null-end the string*/
 static void makeEmptyString(CharPtr str, Int4 num){
@@ -597,25 +598,96 @@ NLM_EXTERN Boolean checkLinkoutType(BlastDefLinePtr bdfl, Uint1 linkoutType){
 /* return bdlp containing the sip from a chain of bdlp. Return the first bdlp if sip is null*/
 BlastDefLinePtr getBlastDefLineForSeqId(BlastDefLinePtr bdlp, SeqIdPtr sip){
   BlastDefLinePtr temp;
-  
+  Boolean found=FALSE;
   temp=bdlp;
+ 
   while(temp){
     if(temp->seqid){
       if(SeqIdMatch(temp->seqid, sip)){
+	found=TRUE;
 	break;
       }
     }
     temp=temp->next;
   }
-
+  if(!found){
+    temp=bdlp;
+  }
   return temp;
 }
+/*add linkout for defline. It adds the linkout for the first sip that has a linkout*/
+static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){   
+    BlastDefLinePtr bdlp, bdlpTemp;
+    CharPtr taxName, unigeneName;
+    Boolean hasLinkout=FALSE;
+    Int4 gi, firstGi=GetGIForSeqId(sip);
+    Char molType[8]={""};
+    RDBTaxNamesPtr rnp;
+
+    if(bsp){
+      bdlp=FDGetDeflineAsnFromBioseq(bsp);     
+      if(bdlp){
+	if(ISA_aa(bsp->mol)){
+	  sprintf(molType, "[pgi]");
+	}
+	else if(ISA_na(bsp->mol)){
+	  sprintf(molType, "[ngi]");
+	}
+
+	/*add space in front of linkout*/
+	fprintf(fp, " ");
+	bdlpTemp=bdlp;
+	while(bdlpTemp){
+	  if(checkLinkoutType(bdlpTemp, linkout_locuslink)){
+	    hasLinkout=TRUE;
+	    gi=GetGIForSeqId(bdlpTemp->seqid);
+	    fprintf(fp, URL_LocusLink, gi, molType);
+	    break;
+	  }
+	  bdlpTemp=bdlpTemp->next;
+	}
+	bdlpTemp=bdlp;
+	while(bdlpTemp){ 	
+	  if(checkLinkoutType(bdlpTemp, linkout_unigene)){
+         
+	    hasLinkout=TRUE;
+	    gi=GetGIForSeqId(bdlpTemp->seqid);
+	    rnp=FDGetTaxNamesFromBioseq(bsp, bdlpTemp->taxid);
+	    if(rnp&&rnp->sci_name){
+	      unigeneName=getNameInitials(rnp->sci_name);
+	      if(unigeneName){
+		fprintf(fp, URL_Unigene, unigeneName, gi);
+	      }
+	      MemFree(unigeneName);
+	    }
+	    
+	    RDBTaxNamesFree(rnp);
+	    break;
+	  }
+	  bdlpTemp=bdlpTemp->next;
+	}
+	bdlpTemp=bdlp;
+	while(bdlpTemp){
+	  if(checkLinkoutType(bdlpTemp, linkout_structure)){
+	    hasLinkout=TRUE;
+	    gi=GetGIForSeqId(bdlpTemp->seqid);
+	    fprintf(fp, URL_Structure, RID_glb, firstGi, gi, CDD_RID_glb, "onegroup", StringCmp(Entrez_Query_Term, "") ? Entrez_Query_Term:"none");
+	    break;
+	  }
+	  bdlpTemp=bdlpTemp->next;
+	}
+      }
+      BlastDefLineSetFree(bdlp);
+    }
+}
+
+
 /*print linkout for bsp.  If sip is not null, the linkout is for that sip (ie., the case for nonredundant blast db*/
-static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){   
+static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, SeqIdPtr firstSip, FILE* fp){   
     BlastDefLinePtr bdlp, actualBdlp;
     CharPtr taxName, unigeneName;
     Boolean hasLinkout=FALSE;
-    Int4 gi;
+    Int4 gi, firstGi;
     Char molType[8]={""};
     RDBTaxNamesPtr rnp;
 
@@ -623,6 +695,8 @@ static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
       bdlp=FDGetDeflineAsnFromBioseq(bsp);
       actualBdlp=getBlastDefLineForSeqId(bdlp, sip);
       if(actualBdlp){
+	firstGi=GetGIForSeqId(firstSip);
+
 	gi=GetGIForSeqId(bsp->id);
 	if(ISA_aa(bsp->mol)){
 	  sprintf(molType, "[pgi]");
@@ -636,7 +710,7 @@ static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 	
 	if(checkLinkoutType(actualBdlp, linkout_locuslink)){
 	  hasLinkout=TRUE;
-	  fprintf(fp, linkoutURL[0], gi, molType);
+	  fprintf(fp, URL_LocusLink, gi, molType);
 	}
 	 
 	
@@ -646,17 +720,17 @@ static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 	  if(rnp&&rnp->sci_name){
 	    unigeneName=getNameInitials(rnp->sci_name);
 	    if(unigeneName){
-	      fprintf(fp, linkoutURL[1], unigeneName, gi);
+	      fprintf(fp, URL_Unigene, unigeneName, gi);
 	    }
 	    MemFree(unigeneName);
 	  }
 	 
 	  RDBTaxNamesFree(rnp);
 	}
-	/*	if(checkLinkoutType(actualBdlp, linkout_structure)){
+	if(checkLinkoutType(actualBdlp, linkout_structure)){
 	  hasLinkout=TRUE;
-	  fprintf(fp, linkoutURL[2], RID_glb, gi);
-	  }*/
+	  fprintf(fp, URL_Structure, RID_glb, firstGi, gi, CDD_RID_glb, "onepair", StringCmp(Entrez_Query_Term, "") ? Entrez_Query_Term:"none");
+	}
       }
       BlastDefLineSetFree(bdlp);
     }
@@ -4537,10 +4611,18 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
     /*AAS*/
     if (!(options & TXALIGN_DO_NOT_PRINT_TITLE)) {
         if ((mode == FIRST_PASS) || (mode == NOT_FIRST_PASS_REPEATS)) {
+	  if(options&TXALIGN_SHOW_LINKOUT&&options&TXALIGN_HTML){
+	    if(PairwiseSeqAlignHasLinkout(seqalign, linkout_structure)){
+	    
+	      fprintf(outfp, URL_Structure_Overview,  RID_glb, 0, 0, CDD_RID_glb, "overview", StringCmp(Entrez_Query_Term, "") ? Entrez_Query_Term:"none");
+	     
+	    }
+	  }
             NewContLine();
+	    
             NewContLine();
             TabToColumn((Int2)(titleIdAllocated));
-           
+	   
             ff_AddString("Score    E");
             NewContLine();
             ff_AddString("Sequences producing significant alignments:");
@@ -5025,9 +5107,9 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 	  fprintf(outfp, "%s", ptr);
 	  /*add link out*/
 	 
-	  if(options&TXALIGN_SHOW_LINKOUT){
+	  if(options&TXALIGN_SHOW_LINKOUT&&options&TXALIGN_HTML){
 	    bsp=BioseqLockById(txsp->id);
-	    addLinkoutForBioseq(bsp, txsp->id, outfp);
+	    addLinkoutForDefline(bsp, txsp->id, outfp);
 	    BioseqUnlock(bsp);
 	  }
 	  fprintf(outfp, "\n"); 
@@ -5253,7 +5335,7 @@ NLM_EXTERN Boolean FormatScoreFromSeqAlign
 }
 
 static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
-                                  SeqIdPtr sip, CharPtr defline, Int4 taxid)
+                                  SeqIdPtr sip, CharPtr defline, Int4 taxid, SeqIdPtr firstSip)
 {
     Char HTML_database[32], HTML_dopt[16], id_buffer[BUFFER_LENGTH+1];
     Char buffer[BUFFER_LENGTH+1];
@@ -5385,12 +5467,12 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
     }
 
     /*add link out*/
-    if(asop->txalign_options&TXALIGN_SHOW_LINKOUT){
+    if(asop->txalign_options&TXALIGN_SHOW_LINKOUT&&asop->txalign_options&TXALIGN_HTML){
       bsp=BioseqLockById(sip);
       if(bsp){
 	SeqIdPtr sipGi;
 	Char fastaLongIdBuf[BUFFER_LENGTH];
-	addLinkoutForBioseq(bsp, sip, asop->fp);
+	addLinkoutForBioseq(bsp, sip, firstSip, asop->fp);
 
 	sipGi=SeqIdFindBest(bsp->id, SEQID_GI);
 	if(sipGi&&bsp->length> LENGTH_TO_SHOW_DOWNLOAD&&ISA_na(asop->bsp->mol)){
@@ -5434,6 +5516,7 @@ static Boolean TX_PrintDeflinesWithAsn(BlastDefLinePtr PNTR bdsp,
     BlastDefLinePtr tbdsp;
     Int4 len, i;
     SeqIdPtr gilist;
+    SeqIdPtr firstSip=NULL;
 
     if(bdsp == NULL || asop == NULL)
         return FALSE;
@@ -5451,6 +5534,7 @@ static Boolean TX_PrintDeflinesWithAsn(BlastDefLinePtr PNTR bdsp,
         if(first) {
 	  SeqIdPtr bestid;
 	  bestid = SeqIdFindBest(tbdsp->seqid, SEQID_GI);
+	  firstSip=bestid;
 	  if(bestid->choice == SEQID_GI&&asop->html_hot_link&&(asop->txalign_options&TXALIGN_GET_SEQUENCE)){
 	    fprintf(asop->fp,  "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment', 'getSeqGi', this.checked)\">", bestid->data.intvalue);
 	  }
@@ -5468,7 +5552,7 @@ static Boolean TX_PrintDeflinesWithAsn(BlastDefLinePtr PNTR bdsp,
             tbdsp->title[i-1] = NULLB;
         
         FSFPrintOneDefline(asop, ISA_na(bsp->mol), tbdsp->seqid, 
-                           tbdsp->title, tbdsp->taxid);
+                           tbdsp->title, tbdsp->taxid, firstSip);
     }
     return TRUE;
 }
@@ -5495,7 +5579,9 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     BlastDefLinePtr bdsp = NULL;
     CharPtr warning_msg = NULL;
     Char fastaLongIdBuf[BUFFER_LENGTH+1];
+    SeqIdPtr firstSip=NULL;
     Int4 num_ident;
+
 
     sp = asop->sp;
     bsp = asop->bsp;
@@ -5568,6 +5654,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
                     if(first) {
 		      SeqIdPtr bestid;
 		      bestid = SeqIdFindBest(bsp->id, SEQID_GI);
+		      firstSip=bestid;
 		      if(bestid->choice == SEQID_GI&&asop->html_hot_link&&(asop->txalign_options&TXALIGN_GET_SEQUENCE)){
 			fprintf(asop->fp,  "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%ld\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment', 'getSeqGi', this.checked)\">", bestid->data.intvalue);
 		      }
@@ -5583,7 +5670,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
                         defline[i-1] = NULLB;
 
                     FSFPrintOneDefline(asop, ISA_na(bsp->mol), sip, defline, 
-                                       -1);
+                                       -1, firstSip);
                     sip =SeqIdSetFree(sip);
                 }
 
@@ -6632,4 +6719,34 @@ BlastDefLinePtr FDGetDeflineAsnFromBioseq(BioseqPtr bsp)
        be NULL */
     
     return bdsp;    
+}
+
+Boolean PairwiseSeqAlignHasLinkout(SeqAlignPtr sap, Uint1 linkoutType){
+  Boolean status=FALSE;
+  SeqAlignPtr temp;
+
+  temp=sap;
+  while(temp&&!status){
+    SeqIdPtr sip=TxGetSubjectIdFromSeqAlign(temp);
+    BioseqPtr bsp=BioseqLockById(sip);
+    BlastDefLinePtr bdlp, bdlptemp;
+    if(bsp){
+      bdlp=FDGetDeflineAsnFromBioseq(bsp);
+      if(bdlp){
+        bdlptemp=bdlp;
+        while(bdlptemp&&!status){
+          if(checkLinkoutType(bdlptemp, linkoutType)){
+            status=TRUE;
+          }
+          bdlptemp=bdlptemp->next;
+        }
+        
+        BlastDefLineSetFree(bdlp);
+      }
+      BioseqUnlockById(sip);
+    }
+    temp=temp->next;
+    
+  }
+  return status;
 }

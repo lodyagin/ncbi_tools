@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.78 2002/10/22 14:54:27 bauer Exp $
+/* $Id: cddutil.c,v 1.80 2002/12/03 14:36:31 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.78 $
+* $Revision: 1.80 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.80  2002/12/03 14:36:31  bauer
+* added CddMSLMixedToMSLDenDiag
+*
+* Revision 1.79  2002/11/22 21:35:23  bauer
+* added SeqAnnotReadFromFile and preservation of scores in DenseSeg to DenseDiag conversion
+*
 * Revision 1.78  2002/10/22 14:54:27  bauer
 * fixed date format in XML dumper
 *
@@ -334,15 +340,28 @@ CddPtr LIBCALL CddReadFromFile(CharPtr cFile, Boolean bBin)
   CddPtr   pcdd;
   
   if (bBin) {
-     aip = AsnIoOpen(cFile,"rb");
-     pcdd = CddAsnRead(aip,NULL);
+    aip = AsnIoOpen(cFile,"rb");
   } else {
-     aip = AsnIoOpen(cFile,"r");
-     pcdd = CddAsnRead(aip,NULL);
+    aip = AsnIoOpen(cFile,"r");
   }
-
+  pcdd = CddAsnRead(aip,NULL);
   AsnIoClose(aip);
   return(pcdd);
+}
+
+SeqAnnotPtr LIBCALL SeqAnnotReadFromFile(CharPtr cFile, Boolean bBin)
+{
+  AsnIoPtr    aip = NULL;
+  SeqAnnotPtr sap;
+
+  if (bBin) {
+    aip = AsnIoOpen(cFile,"rb");
+  } else {
+    aip = AsnIoOpen(cFile,"r");
+  }
+  sap = SeqAnnotAsnRead(aip, NULL);
+  AsnIoClose(aip);
+  return(sap);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -1355,6 +1374,129 @@ BioseqPtr LIBCALL CddExtractBioseq(SeqEntryPtr sep, SeqIdPtr sip)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* Create a Dense-Diag seqalign from a Discontinuous SeqAlign                */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+SeqAlignPtr LIBCALL CddMSLMixedToMSLDenDiag(SeqAlignPtr salp)
+{
+  SeqAlignPtr         salpSub, salpnew, salphead, salptail;
+  DenseDiagPtr        ddp, ddphead, ddptail;
+  DenseSegPtr         dsp;
+  Int4                i, s1, s2;
+  ScorePtr            scp, scpHead, scpTail, scpThis;
+
+  if (!salp) return(NULL);
+  salphead = NULL;
+  salptail = NULL;
+  while (salp) {
+    if (salp->segtype) {
+      if (salp->segtype != SAS_DISC && salp->segtype != SAS_DENSEG) {
+        CddSevError("CddMSLDiscToMSLDenDiag: Wrong segtype specified!");
+      }
+    }
+    if (salp->dim) {
+      if (salp->dim != 2) {
+        CddSevError("CddMSLDiscToMSLDenDiag: Expect alignments of dimension 2!");
+      }
+    }
+    ddphead = NULL;
+    ddptail = NULL;
+
+    if (salp->segtype == SAS_DISC) {
+      salpSub = salp->segs;
+      while (salpSub) {
+        if (salpSub->segtype != SAS_DENSEG)
+          CddSevError("CddMSLDiscToMSLDenDiag: Wrong segtype in Sub-Alignment!");
+        if (salpSub->dim && salpSub->dim !=2)
+          CddSevError("CddMSLDiscToMSLDenDiag: Wrong dimension in Sub-Alignment!");
+        dsp = salpSub->segs;
+        for (i=0;i<dsp->numseg;i++) {
+          s1 = dsp->starts[i*2];
+          s2 = dsp->starts[i*2+1]; 
+          if (s1 >=0 && s2>= 0) {
+            ddp = DenseDiagNew();
+	    ddp->starts = MemNew(2*sizeof(Int4));
+	    ddp->starts[0] = s1;
+	    ddp->starts[1] = s2;
+	    ddp->len=dsp->lens[i];
+            ddp->id = dsp->ids;
+	    ddp->dim = 2;
+            if (!ddphead) {
+	      ddphead = ddp;
+	      ddptail = ddp;
+	      ddptail->next = NULL;
+	    } else {
+	      ddptail->next = ddp;
+	      ddptail = ddp;
+	      ddptail->next = NULL;
+	    }
+          }
+        }
+        salpSub = salpSub->next;  
+      }
+    } else { /* segtype is plain SAS_DENSEG */
+      dsp = salp->segs;
+      ddphead = NULL;
+      ddptail = NULL;
+      for (i=0;i<dsp->numseg;i++) {
+        s1 = dsp->starts[i*2];
+        s2 = dsp->starts[i*2+1]; 
+        if (s1 >=0 && s2>= 0) {
+          ddp = DenseDiagNew();
+	  ddp->starts = MemNew(2*sizeof(Int4));
+	  ddp->starts[0] = s1;
+	  ddp->starts[1] = s2;
+	  ddp->len=dsp->lens[i];
+          ddp->id = dsp->ids;
+	  ddp->dim = 2;
+          if (!ddphead) {
+	    ddphead = ddp;
+	    ddptail = ddp;
+	    ddptail->next = NULL;
+	  } else {
+	    ddptail->next = ddp;
+	    ddptail = ddp;
+	    ddptail->next = NULL;
+	  }
+        }
+      }
+    }
+    salpnew = SeqAlignNew();
+    salpnew->type = SAT_PARTIAL;
+    salpnew->segtype = SAS_DENDIAG;
+    salpnew->dim = 2;
+    salpnew->segs = ddphead;
+    scp = salp->score; scpHead = NULL;
+    while (scp) {
+      scpThis = ScoreNew();
+      scpThis->id = ObjectIdDup(scp->id);
+      scpThis->choice = scp->choice;
+      scpThis->value = scp->value;
+      if (!scpHead) {
+        scpHead = scpThis;
+      } else {
+        scpTail->next = scpThis;
+      }
+      scpTail = scpThis;
+      scp = scp->next;
+    }
+    salpnew->score = scpHead;
+    if (!salphead) {
+      salphead = salpnew;
+      salptail = salpnew;
+      salptail->next = NULL;
+    } else {
+      salptail->next = salpnew;
+      salptail = salpnew;
+      salptail->next = NULL;
+    }
+    salp = salp->next;
+  }
+  return(salphead);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* Create a Dense-Diag seqalign from a Dense-Seg SeqAlign                    */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -1364,6 +1506,7 @@ SeqAlignPtr LIBCALL CddMSLDenSegToMSLDenDiag(SeqAlignPtr salp)
   DenseDiagPtr        ddp, ddphead, ddptail;
   DenseSegPtr         dsp;
   Int4                i, s1, s2;
+  ScorePtr            scp, scpHead, scpTail, scpThis;
 
 
   if (!salp) return(NULL);
@@ -1410,6 +1553,21 @@ SeqAlignPtr LIBCALL CddMSLDenSegToMSLDenDiag(SeqAlignPtr salp)
     salpnew->segtype = SAS_DENDIAG;
     salpnew->dim = 2;
     salpnew->segs = ddphead;
+    scp = salp->score; scpHead = NULL;
+    while (scp) {
+      scpThis = ScoreNew();
+      scpThis->id = ObjectIdDup(scp->id);
+      scpThis->choice = scp->choice;
+      scpThis->value = scp->value;
+      if (!scpHead) {
+        scpHead = scpThis;
+      } else {
+        scpTail->next = scpThis;
+      }
+      scpTail = scpThis;
+      scp = scp->next;
+    }
+    salpnew->score = scpHead;
     if (!salphead) {
       salphead = salpnew;
       salptail = salpnew;
@@ -1425,7 +1583,9 @@ SeqAlignPtr LIBCALL CddMSLDenSegToMSLDenDiag(SeqAlignPtr salp)
 }
 
 /*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* make a DenseSeg Alignment-Set turning each diag into a separate alignment */
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 SeqAlignPtr LIBCALL CddMSLDenDiagToMSLDenSeg(SeqAlignPtr salp)
 {
@@ -2703,7 +2863,7 @@ void CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength)
 /*---------------------------------------------------------------------------*/
 /* Convert a SeqAlign (pairwise, DenseDiag) into an ExplicitAlignmentObject  */
 /*---------------------------------------------------------------------------*/
-CddExpAlignPtr SeqAlignToCddExpAlign(SeqAlignPtr salp, SeqEntryPtr sep)
+CddExpAlignPtr LIBCALL SeqAlignToCddExpAlign(SeqAlignPtr salp, SeqEntryPtr sep)
 {
   CddExpAlignPtr   pCDea;
   BioseqPtr        bsp1;

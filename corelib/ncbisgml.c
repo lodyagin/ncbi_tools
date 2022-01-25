@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,12 @@
 *
 *
 * $Log: ncbisgml.c,v $
+* Revision 6.4  2002/12/09 14:40:37  kans
+* fixed NUM_SGML_ENTITY, sgml_bb_array
+*
+* Revision 6.3  2002/12/06 20:12:40  kans
+* Nlm_LoadSgmlTableFromLocalArray populates sgml arrays if sgmlbb.ent file is unavailable
+*
 * Revision 6.2  2002/10/03 16:22:04  kans
 * changed fgets to Nlm_FileGets
 *
@@ -82,7 +88,7 @@ static char * _this_file = __FILE__;
 
 static char **sgml_entity;
 static char **sgml_ascii;
-static int num_sgml_entity;
+static int num_sgml_entity = 0;
 
 
 /*****************************************************************************
@@ -90,6 +96,87 @@ static int num_sgml_entity;
 *   SgmlLoadTable()
 *
 *****************************************************************************/
+#define NUM_SGML_ENTITY 52
+
+typedef struct sgml_bb {
+  char * entity;
+  char * ascii;
+} Sgml_Bb;
+
+static Sgml_Bb sgml_bb_array [NUM_SGML_ENTITY] = {
+  {"gt", ">"},
+  {"lt", "<"},
+  {"amp", "&"},
+  {"agr", "alpha"},
+  {"Agr", "Alpha"},
+  {"bgr", "beta"},
+  {"Bgr", "Beta"},
+  {"ggr", "gamma"},
+  {"Ggr", "Gamma"},
+  {"dgr", "delta"},
+  {"Dgr", "Delta"},
+  {"egr", "epsilon"},
+  {"Egr", "Epsilon"},
+  {"zgr", "zeta"},
+  {"Zgr", "Zeta"},
+  {"eegr", "eta"},
+  {"EEgr", "Eta"},
+  {"thgr", "theta"},
+  {"THgr", "Theta"},
+  {"igr", "iota"},
+  {"Igr", "Iota"},
+  {"kgr", "kappa"},
+  {"Kgr", "Kappa"},
+  {"lgr", "lambda"},
+  {"Lgr", "Lambda"},
+  {"mgr", "mu"},
+  {"Mgr", "Mu"},
+  {"ngr", "nu"},
+  {"Ngr", "Nu"},
+  {"xgr", "xi"},
+  {"Xgr", "Xi"},
+  {"ogr", "omicron"},
+  {"Ogr", "Omicron"},
+  {"pgr", "pi"},
+  {"Pgr", "Pi"},
+  {"rgr", "rho"},
+  {"Rgr", "Rho"},
+  {"sgr", "sigma"},
+  {"Sgr", "Sigma"},
+  {"sfgr", "s"},
+  {"tgr", "tau"},
+  {"Tgr", "Tau"},
+  {"ugr", "upsilon"},
+  {"Ugr", "Upsilon"},
+  {"phgr", "phi"},
+  {"PHgr", "Phi"},
+  {"khgr", "chi"},
+  {"KHgr", "Chi"},
+  {"psgr", "psi"},
+  {"PSgr", "Psi"},
+  {"ohgr", "omega"},
+  {"OHgr", "Omega"}
+};
+
+static int Nlm_LoadSgmlTableFromLocalArray (void)
+
+{
+	int i, x;
+
+	x = NUM_SGML_ENTITY;
+
+	sgml_entity = (char**) MemNew(x * sizeof(char*));
+	sgml_ascii  = (char**) MemNew(x * sizeof(char*));
+
+	for (i = 0; i < x; i++)
+	{
+		sgml_entity[i] = StrSave(sgml_bb_array [i].entity);
+		sgml_ascii[i] = StrSave(sgml_bb_array [i].ascii);
+	}
+	num_sgml_entity = x;
+	return x;
+}
+
 NLM_EXTERN int LIBCALL  Nlm_SgmlLoadTable (void)
 {
 	char buf[80], *p1, *p2;
@@ -104,7 +191,7 @@ NLM_EXTERN int LIBCALL  Nlm_SgmlLoadTable (void)
     strncat(buf,"sgmlbb.ent",sizeof buf);
 
 	if ((fp = FileOpen(buf,"r")) ==NULL)
-		return FALSE;
+		return Nlm_LoadSgmlTableFromLocalArray ();
 	
 	if (!Nlm_FileGets(buf,sizeof buf,fp))
 	{

@@ -1,4 +1,4 @@
-/* $Id: fastacmd.c,v 6.26 2002/08/12 12:40:55 camacho Exp $
+/* $Id: fastacmd.c,v 6.27 2002/11/21 21:35:54 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.27  2002/11/21 21:35:54  camacho
+* Make sure the proper exit code is returned
+*
 * Revision 6.26  2002/08/12 12:40:55  camacho
 * Fix for unresolved symbol in Win32 build
 *
@@ -188,6 +191,7 @@ Int2 Main (void)
     CharPtr seqlocstr;
     Uint1 strand;
     Char buf[256] = { '\0' };
+    Int2 rv;
 
     StringCpy(buf, "fastacmd ");
     StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf));
@@ -224,11 +228,11 @@ Int2 Main (void)
         return 1;
     }
 
-    Fastacmd_Search_ex (searchstr, database, is_prot, batchfile, dupl,
+    rv = Fastacmd_Search_ex (searchstr, database, is_prot, batchfile, dupl,
             linelen, outfp, target, use_ctrlAs, dump_all, seqlocstr, strand,
             taxonomy_info, dbinfo_only);
 
     FileClose(outfp);
 
-    return 0;
+    return rv;
 }

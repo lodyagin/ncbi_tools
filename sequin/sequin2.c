@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.121 $
+* $Revision: 6.123 $
 *
 * File Description: 
 *
@@ -61,6 +61,7 @@
 #include <vsm.h>
 #include <accentr.h>
 #include <accutils.h>
+#include <pmfapi.h>
 #include <explore.h>
 #include <aliparse.h>
 #ifdef WIN_MOTIF
@@ -6216,8 +6217,8 @@ static void DownloadProc (ButtoN b)
   }
   sep = NULL;
   uid = 0;
+  /*
   if (! EntrezIsInited ()) {
-    /* EntrezBioseqFetchEnable ("Sequin", TRUE); */
     if (! SequinEntrezInit ("Sequin", FALSE, NULL)) {
       Remove (w);
       Show (startupForm);
@@ -6226,6 +6227,7 @@ static void DownloadProc (ButtoN b)
       return;
     }
   }
+  */
   if (GetValue (ffp->accntype) == 1) {
     /*
     sip = ValNodeNew (NULL);
@@ -6256,7 +6258,7 @@ static void DownloadProc (ButtoN b)
     }
   }
   if (uid > 0) {
-    sep = EntrezSeqEntryGet (uid, 0);
+    sep = PubSeqSynchronousQuery (uid, 0, 0);
     /* EntrezFini (); */
     if (sep == NULL) {
       ArrowCursor ();
@@ -6429,14 +6431,15 @@ extern void DownloadAndUpdateProc (ButtoN b)
   }
   sep = NULL;
   uid = 0;
+  /*
   if (! EntrezIsInited ()) {
-    /* EntrezBioseqFetchEnable ("Sequin", TRUE); */
     if (! SequinEntrezInit ("Sequin", FALSE, NULL)) {
       Remove (ParentWindow (b));
       ArrowCursor ();
       return;
     }
   }
+  */
   if (GetValue (ffp->accntype) == 1) {
     uid = AccessionToGi (str);
   } else {
@@ -6448,7 +6451,7 @@ extern void DownloadAndUpdateProc (ButtoN b)
   ArrowCursor ();
   Update ();
   if (uid > 0) {
-    sep = EntrezSeqEntryGet (uid, 0);
+    sep = PubSeqSynchronousQuery (uid, 0, 0);
     /* EntrezFini (); */
     if (sep == NULL) {
       Message (MSG_OK, "Unable to find this record in the database.");
@@ -6462,7 +6465,7 @@ extern void DownloadAndUpdateProc (ButtoN b)
     }
   }
 
-  SqnReadAlignView (updateTargetBspKludge, sep);
+  SqnReadAlignView ((BaseFormPtr) ffp, updateTargetBspKludge, sep);
 }
 
 static void CancelFetchProc (ButtoN b)

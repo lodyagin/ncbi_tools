@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/16/93
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.sol,v $
+* Revision 6.10  2002/11/22 20:05:05  lavr
+* Configure HAVE_STRDUP and HAVE_STRCASECMP
+*
 * Revision 6.9  2002/07/11 19:26:31  ivanov
 * Added macro HAVE_MADVISE
 *
@@ -99,6 +102,8 @@
 #define MPROC_AVAIL
 #define SYSV_IPC_AVAIL	/* System V Interprocess Communication available */
 #define SYSV_STREAMS_AVAIL	/* System V STREAMS module available */
+#define HAVE_STRCASECMP 1
+#define HAVE_STRDUP 1
 
 #ifdef MPROC_AVAIL
 /* For Solaris, _REENTRANT must be defined when compiling all modules or none*/

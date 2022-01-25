@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.h,v $
+* Revision 6.11  2002/11/21 15:24:31  johnson
+* changed 'queue' vars to 'q' to avoid stl conflict
+*
 * Revision 6.10  2001/06/07 20:07:41  kans
 * added QUERY_OpenServiceQuery
 *
@@ -190,7 +193,7 @@ typedef struct SQueueTag* QUEUE;  /* queue handle */
   Records connection, completion routine, and user data in queue.
 */
 NLM_EXTERN void QUERY_AddToQueue (
-  QUEUE* queue,
+  QUEUE* q,
   CONN conn,
   QueryResultProc resultproc,
   Nlm_VoidPtr userdata,
@@ -204,14 +207,14 @@ NLM_EXTERN void QUERY_AddToQueue (
   while, typically with a timer.
 */
 NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
-  QUEUE* queue
+  QUEUE* q
 );
 
 /*
   Forces all connections to be closed, removes all queries from queue.
 */
 NLM_EXTERN void QUERY_CloseQueue (
-  QUEUE* queue
+  QUEUE* q
 );
 
 #ifdef OS_MAC

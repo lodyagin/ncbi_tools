@@ -4,7 +4,7 @@
 
 # TARGTYPE "Win32 (x86) Generic Project" 0x010a
 
-CFG=all - Win32 DebugMT
+CFG=all - Win32 DebugDLL
 !MESSAGE This is not a valid makefile. To build this project using NMAKE,
 !MESSAGE use the Export Makefile command and run
 !MESSAGE 
@@ -13,11 +13,11 @@ CFG=all - Win32 DebugMT
 !MESSAGE You can specify a configuration when running NMAKE
 !MESSAGE by defining the macro CFG on the command line. For example:
 !MESSAGE 
-!MESSAGE NMAKE /f "all.mak" CFG="all - Win32 DebugMT"
+!MESSAGE NMAKE /f "all.mak" CFG="all - Win32 DebugDLL"
 !MESSAGE 
 !MESSAGE Possible choices for configuration are:
 !MESSAGE 
-!MESSAGE "all - Win32 DebugMT" (based on "Win32 (x86) Generic Project")
+!MESSAGE "all - Win32 DebugDLL" (based on "Win32 (x86) Generic Project")
 !MESSAGE 
 
 # Begin Project
@@ -26,23 +26,23 @@ CFG=all - Win32 DebugMT
 # PROP Scc_LocalPath ""
 MTL=midl.exe
 
-!IF  "$(CFG)" == "all - Win32 DebugMT"
+!IF  "$(CFG)" == "all - Win32 DebugDLL"
 
 # PROP BASE Use_MFC 0
 # PROP BASE Use_Debug_Libraries 1
-# PROP BASE Output_Dir "DebugMT"
-# PROP BASE Intermediate_Dir "DebugMT"
+# PROP BASE Output_Dir "DebugDLL"
+# PROP BASE Intermediate_Dir "DebugDLL"
 # PROP BASE Target_Dir ""
 # PROP Use_MFC 0
 # PROP Use_Debug_Libraries 1
-# PROP Output_Dir "DebugMT"
-# PROP Intermediate_Dir "DebugMT"
+# PROP Output_Dir "DebugDLL"
+# PROP Intermediate_Dir "DebugDLL"
 # PROP Target_Dir ""
 
 !ENDIF 
 
 # Begin Target
 
-# Name "all - Win32 DebugMT"
+# Name "all - Win32 DebugDLL"
 # End Target
 # End Project

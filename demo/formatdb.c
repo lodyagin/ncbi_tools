@@ -30,11 +30,17 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.72 $
+   $Revision: 6.74 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.74  2002/12/13 13:44:50  camacho
+   Use FDBOptionsNew to create options structure
+
+   Revision 6.73  2002/12/02 22:43:42  camacho
+   Added warning message when no sequences are found when creating alias files
+
    Revision 6.72  2002/11/06 21:27:46  ucko
    Make 4294967295 explicitly unsigned to avoid warnings.
 
@@ -347,7 +353,7 @@ Args dump_args[] = {
     { "Base name for BLAST files", /* 8 */
       NULL, NULL, NULL, TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
     { "Database volume size in millions of letters", /* 9 */
-      "0", "0", "2147483647", TRUE, 'v', ARG_INT, 0.0, 0, NULL},
+      "0", "0", NULL, TRUE, 'v', ARG_INT, 0.0, 0, NULL},
     { "Create indexes limited only to accessions - sparse", /* 10 */
       "F", NULL, NULL, TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Verbose: check for non-unique string ids in the database", /* 11 */
@@ -364,69 +370,24 @@ Args dump_args[] = {
      NULL, NULL,NULL,TRUE,'B',ARG_FILE_OUT, 0.0,0,NULL},
 };
 
-/*#define db_title	(const CharPtr) dump_args[0].strvalue 
-  #define db_file		(const CharPtr) dump_args[1].strvalue 
-  #define LogFileName	(const CharPtr) dump_args[2].strvalue  
-  #define is_protein	dump_args[3].intvalue
-  #define parse_mode	dump_args[4].intvalue
-  #define isASN		dump_args[5].intvalue
-  #define asnbin		dump_args[6].intvalue
-  #define is_seqentry	dump_args[7].intvalue
-  #define base_name	(CharPtr) dump_args[8].strvalue */
-
-static FDB_optionsPtr FDB_CreateCLOptions(void)
-{
-    FDB_optionsPtr options;
-    Char buf[256] = { '\0' };
-    
-    options = MemNew(sizeof(FDB_options));
-    
-    StringCpy(buf, "formatdb ");
-    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf));
-    if ( !GetArgs (buf, NUMARG, dump_args) )
-        return NULL;
-    
-    if ( !ErrSetLog (dump_args[2].strvalue) ) { /* Logfile */
-        ErrShow();
-    } else {
-        ErrSetOpts (ERR_CONTINUE, ERR_LOG_ON);
-    }
-
-    UseLocalAsnloadDataAndErrMsg ();
-    
-    if (!SeqEntryLoad())
-        return NULL;
-
-    ErrSetMessageLevel(SEV_WARNING);
-    
-    options->db_title = StringSave(dump_args[0].strvalue);
-    options->db_file = StringSave(dump_args[1].strvalue);
-    options->LogFileName = StringSave(dump_args[2].strvalue);
-    options->is_protein = dump_args[3].intvalue; 
-    options->parse_mode = dump_args[4].intvalue; 
-    options->isASN = dump_args[5].intvalue; 
-    options->asnbin = dump_args[6].intvalue; 
-    options->is_seqentry = dump_args[7].intvalue;
-    options->base_name = StringSave(dump_args[8].strvalue);
-    options->dump_info = FALSE;
-    options->sparse_idx = dump_args[10].intvalue;
-    options->test_non_unique = dump_args[11].intvalue;
-    options->bases_in_volume = 1000000 * dump_args[9].intvalue;
-    options->total_num_of_seqs = 0;
-    options->alias_file = StringSave(dump_args[13].strvalue);
-    options->gi_file = StringSave(dump_args[14].strvalue);
-    options->gi_file_bin = StringSave(dump_args[15].strvalue);
-
-
-    if(dump_args[12].intvalue)
-        options->version = FORMATDB_VER;
-    else 
-        options->version = FORMATDB_VER_TEXT;
-    
-    return options;
-}
-
-/* main() */
+enum {
+    title_arg,
+    input_arg,
+    logfile_arg,
+    is_prot_arg,
+    parse_arg,
+    asn_arg,
+    asnbin_arg,
+    seqentry_arg,
+    basename_arg,
+    dbsize_arg,
+    sparce_arg,
+    nonunique_arg,
+    asn1_deflines_arg,
+    aliasfilename_arg,
+    gifile_arg,
+    bin_gifile_arg
+};
 
 static Int4 GetGiFromSeqId(SeqIdPtr sip)
 {
@@ -531,17 +492,46 @@ Int2 Main(void)
     FILE *fd;
     CharPtr next_db = NULL;
     Boolean multiple_inputs = FALSE;
+    Char buf[256] = { '\0' };
     
     /* get arguments */
-
-    if((options = FDB_CreateCLOptions()) == NULL)
+    StringCpy(buf, "formatdb ");
+    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf));
+    if (!GetArgs(buf, NUMARG, dump_args))
         return 1;
 
-    if (options->bases_in_volume == 0)
-        options->bases_in_volume = 4294967295U;
-    if (options->sequences_in_volume == 0)
-        options->sequences_in_volume = 10000000; /* empiric value */
+    if (!SeqEntryLoad())
+        return NULL;
+
     
+    if (!ErrSetLog(dump_args[logfile_arg].strvalue))
+        ErrShow();
+    else
+        ErrSetOpts(ERR_CONTINUE, ERR_LOG_ON);
+    UseLocalAsnloadDataAndErrMsg();
+    ErrSetMessageLevel(SEV_WARNING);
+    
+    options = FDBOptionsNew(dump_args[input_arg].strvalue,
+                            dump_args[is_prot_arg].intvalue,
+                            dump_args[title_arg].strvalue,
+                            dump_args[asn_arg].intvalue,
+                            dump_args[asnbin_arg].intvalue,
+                            dump_args[seqentry_arg].intvalue,
+                            dump_args[sparce_arg].intvalue,
+                            dump_args[nonunique_arg].intvalue,
+                            dump_args[parse_arg].intvalue,
+                            dump_args[basename_arg].strvalue,
+                            dump_args[aliasfilename_arg].strvalue,
+                            dump_args[dbsize_arg].intvalue*1000000, 0,
+                            dump_args[asn1_deflines_arg].intvalue ?
+                                FORMATDB_VER : FORMATDB_VER_TEXT ,
+                            FALSE);
+    if (options == NULL)
+        return 1;
+
+    options->gi_file = StringSave(dump_args[gifile_arg].strvalue);
+    options->gi_file_bin = StringSave(dump_args[bin_gifile_arg].strvalue);
+
     options->db_file = StringTokMT(options->db_file, " ", &next_db);
     if (next_db) {
        if (!options->base_name) {
@@ -603,18 +593,21 @@ Int2 Main(void)
                 }
 		rdfp = readdb_destruct(rdfp);
 		gi_list = MemFree(gi_list);
+        if (number_of_letters == 0 || number_of_sequences == 0)
+            ErrPostEx(SEV_WARNING, 0, 0, "No gis from %s were found in the %s "
+                    "database", options->gi_file, options->db_file);
 	}
         FD_CreateAliasFileEx(options->db_title, options->alias_file, 0, 
                                options->is_protein, basename, 
                                0, 0, number_of_letters, number_of_sequences,
 			       NULL, options->gi_file);
-    	FDB_FreeCLOptions(options);
+    	FDBOptionsFree(options);
 	return 0;
     }
     else if (options->gi_file_bin && options->gi_file)
     {
 	readdb_MakeGiFileBinary(options->gi_file, options->gi_file_bin);
-    	FDB_FreeCLOptions(options);
+    	FDBOptionsFree(options);
 	return 0;
     }
 	
@@ -755,7 +748,7 @@ Int2 Main(void)
     }
 #endif    
 
-    FDB_FreeCLOptions(options);
+    FDBOptionsFree(options);
 
     return 0;
     

@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_service.c,v $  $Revision: 6.12 $  $Date: 2002/10/04 15:33:42 $
+/*  $RCSfile: ni_service.c,v $  $Revision: 6.13 $  $Date: 2002/11/26 17:00:11 $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ni_service.c,v $
+ * Revision 6.13  2002/11/26 17:00:11  lavr
+ * Recognize "SOME" and "DATA" as keyword values of "SRV_DEBUG_PRINTOUT"
+ *
  * Revision 6.12  2002/10/04 15:33:42  lavr
  * Few cosmetic changes
  *
@@ -233,8 +236,11 @@ static NI_HandPtr s_GenericGetService
                    str, sizeof(str), "");
     if (*str  &&  (StringICmp(str, "1"   ) == 0 ||
                    StringICmp(str, "true") == 0 ||
-                   StringICmp(str, "yes" ) == 0))
-        net_info->debug_printout = 1/*true*/;
+                   StringICmp(str, "yes" ) == 0 ||
+                   StringICmp(str, "some") == 0))
+        net_info->debug_printout = eDebugPrintout_Some;
+    if (*str  &&   StringICmp(str, "data") == 0)
+        net_info->debug_printout = eDebugPrintout_Data;
 
     /* whether to prohibit the use of local LBSMD */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_NO_LB_DIRECT,

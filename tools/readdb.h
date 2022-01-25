@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.120 $
+* $Revision: 6.122 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,15 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.122  2002/12/13 13:43:25  camacho
+* Changes to set links and membership bits in formatdb API
+*
+* Revision 6.121  2002/11/25 17:23:28  camacho
+* 1) Changed file access to blast taxonomy databases: only 2 files are loaded
+*    for an entire chain of rdfp's.
+* 2) Fixed memory leak in FindBlastDBFile.
+* 3) Protect NlmOpenMFILE against NULL argument.
+*
 * Revision 6.120  2002/10/25 16:49:45  camacho
 * Added Michael Kimelman's FDBAddSequence2
 *
@@ -638,13 +647,18 @@ belong to the same sequence. */
 #define READDB_NO_SEQ_FILE         0x00000010
 #define READDB_KEEP_HDR_AND_SEQ    0x00000020
 
-/* Choices for how much to initialize on startup in readdb_new_internal. */
-#define READDB_NEW_DO_ALL (Uint1) 1 /* attempt to memory map all files. */
-#define READDB_NEW_DO_REPORT (Uint1) 2 /* Only open the nin or pin files for a database report. */
-#define READDB_NEW_DO_SEARCH (Uint1) 4 /* Only open the nin (or pin) and nsq 
-					  (or psq) files for a search. */
-#define READDB_NEW_INDEX (Uint1) 8 /* Open only index (nin or pin) files for
-				      memory mapping */
+/*** Choices for how much to initialize on startup in readdb_new_internal. ***/
+
+/* attempt to memory map all files. */
+#define READDB_NEW_DO_ALL               ((Uint1) (1<<0))
+/* Only open the nin or pin files for a database report. */
+#define READDB_NEW_DO_REPORT            ((Uint1) (1<<1))
+/* Only open the nin (or pin) and nsq (or psq) files for a search. */
+#define READDB_NEW_DO_SEARCH            ((Uint1) (1<<2))
+/* Open only index (nin or pin) files for memory mapping */
+#define READDB_NEW_INDEX                ((Uint1) (1<<3))
+/* Same as above and memory map blast taxonomy db files */
+#define READDB_NEW_DO_TAXDB             ((Uint1) (1<<4))
 
 /* The following variables are shared by formatdb and readdb. */
 /* version of formatdb.
@@ -769,6 +783,11 @@ typedef struct read_db_shared_info {
 /* -- Here is set of definitions used with taxonomy info database ----- */
 /* ---------------------------------------------------------------------*/
 
+/* The following #define allows for the creation of taxonomy databases along
+ * with the blast databases. Please note that the code to create the blast
+ * databases is NOT thread-safe! */
+/*#define FDB_TAXONOMYDB*/
+
 typedef	struct _RDBTaxId {
     Uint4 taxid;
     Uint4 offset;
@@ -800,9 +819,11 @@ typedef Boolean (*TaxCallbackFunc) (RDBTaxLookupPtr tax_lookup, Int4 tax_id);
       Taxonomy blast database 
       ----  */
 
+#define BLAST_TAXDB_FILENAME "taxdb"
+
 /* Initialize taxonomy lookup database. returns NULL if failure or
    this database do not exists */
-RDBTaxInfoPtr  RDBTaxInfoInit(CharPtr base_filename, Boolean is_prot);
+RDBTaxInfoPtr  RDBTaxInfoInit();
 
 /* Free memory, unmap files etc. related to the taxonomy database */
 void RDBTaxInfoClose(RDBTaxInfoPtr tip);
@@ -1170,13 +1191,44 @@ typedef struct FASTALookup {
     Int4    used;           /* Number of Uint4 used      */
 } FASTALookup, PNTR FASTALookupPtr;
 
+typedef struct _gilist {
+    Int4    count, allocated;
+    Int4Ptr gis;
+} GiList, *GiListPtr;
+
+/* Structure that holds the link information as read from the file */
+typedef struct _linkinfo {
+    Int4 bit_number;    /* indicates the position in links bit array */
+    GiListPtr gi_list;  /* update links bit array for gis in this list */
+} LinkInfo, *LinkInfoPtr;
+
+/* This structure is populated after combining all gi lists for the various
+ * link bits to be set (according to the .formatdbrc config file). There is
+ * only one instance of this structure when creating a blast database */
+typedef struct _gi_linkbit_list {
+    Int4Ptr         gi;         /* gi to update */
+    ValNodePtr PNTR link_bit;   /* linked list of integers, indicating bit to
+                                   set */
+    Int4            count, allocated; 
+} GiLinkBitList, *GiLinkBitListPtr;
+
+/* Structure that holds the membership information */
+typedef Boolean (*GMCriteriaFunc) (VoidPtr direc);
+
+typedef struct _membinfo {
+    Int4 bit_number;    /* indicates the position in the membership bit array */
+    GMCriteriaFunc *criteria; /* function pointer that is invoked to
+                                 determine wheather certain sequence
+                                 belongs to the membership represented by
+                                 this bit_number */
+} MembInfo, *MembInfoPtr;
+
 typedef struct _FDB_options {
     Int4  version;   /* Version of the database created by formatdb program
 	    	 	currently supported are 3 - FORMATDB_VER_TEXT and
 	    	 	4 - FORMATDB_VER - for ASN.1 structured deflines */
     CharPtr db_title;    /* Title for the database to be created */
     CharPtr db_file;     /* Name for input data file - 'IN' name */
-    CharPtr LogFileName; /* Used only in formatdb.c */
     Int4 is_protein;     /* Is this protein database ? */
     Int4 parse_mode;     /* Do we assume, that deflines are started from 
                              valid SeqIds ? */
@@ -1208,6 +1260,11 @@ typedef struct _FDB_options {
    CharPtr	alias_file, /* name of alias file to be generated. */
 		gi_file,	/* Gi file to be used in processing. */
 		gi_file_bin;	/* Gi file to be used in processing. */
+
+   GiLinkBitListPtr linkbit_listp; /* list of gis and the bits to set */
+   ValNodePtr    memb_tblp;     /* Linked list of MembInfo structures */
+   VoidPtr       memb_argp;     /* Argument to criteria function in MembInfo
+                                   structure */
 
 } FDB_options, PNTR FDB_optionsPtr;
     
@@ -1261,6 +1318,43 @@ typedef struct formatdb
 
 /* Function prototypes for formatdb library*/
 
+/* --------------------- FDBOptionsNew ----------------------------
+   Purpose: Creates formatdb options structure with parameters from
+            the argument list.
+   Returns: Pointer to initialized structure.
+   Notes: If alias_file_name is provided, the function FDB_MakeAlias
+          should be called after FDBClose. (FIXME)
+   ---------------------------------------------------------------- */
+FDB_optionsPtr FDBOptionsNew(
+        CharPtr input, /* [in] name of input file */
+        Boolean is_prot, /* [in] input contains protein sequences? */
+        CharPtr title,  /* [in] title to give this database */
+        Boolean is_asn, /* [in] true if input is in ASN.1 */
+        Boolean is_asn_bin, /* [in] true if ASN.1 input is binary */
+        Boolean is_seqentry, /* [in] true of input is a seqentry */
+        Boolean sparse_idx, /* [in] should sparce ISAM indices be used? */
+        Boolean test_non_unique, /* [in] test for repeated string identifiers
+                                    in database */
+        Boolean parse_deflines, /* [in] input contains parseable deflines? */
+        CharPtr basename, /* [in] name for the database to create */
+        CharPtr alias_file_name, /* [in] name for the alias file to create */
+        Int8 bases_per_volume, /* [in] max num of residues/bases per volume */
+        Int4 seqs_per_volume, /* [in] max num of sequences per volume */
+        Int4 version, /* [in] database version */
+        Boolean dump_info); /* [in] should basename.[pn]di be created? */
+
+/* --------------------- FDBOptionsFree ---------------------------
+   Purpose: Frees the memory allocated for the formatdb options structure.
+   Returns: NULL
+   ---------------------------------------------------------------- */
+FDB_optionsPtr FDBOptionsFree(FDB_optionsPtr options);
+
+/* The next 4 functions are for production database dump ({id,rs}dump_blast) */
+GiLinkBitListPtr FDBLoadLinksTable(void);
+GiLinkBitListPtr FDBDestroyLinksTable(GiLinkBitListPtr list);
+ValNodePtr FDBLoadMembershipsTable(void);
+ValNodePtr FDBDestroyMembershipsTable(ValNodePtr tbl);
+
 FormatDBPtr	FormatDBInit(FDB_optionsPtr options);
 
 Int2 FDBAddSequence (FormatDBPtr fdbp,  BlastDefLinePtr bdp, 
@@ -1291,7 +1385,10 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
 Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp);
 Int2 FormatDBClose(FormatDBPtr fdbp);
 
-void FDB_FreeCLOptions(FDB_optionsPtr options);
+
+Boolean FDBAddLinksInformation(BlastDefLinePtr bdp,GiLinkBitListPtr links_tblp);
+Boolean FDBAddMembershipInformation(BlastDefLinePtr bdp, ValNodePtr memb_tblp, 
+                                    VoidPtr criteria_arg);
 
 Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp);
 
@@ -1326,7 +1423,15 @@ typedef	struct di_record {
 	Int4	gi_threshold;   /* for 'month' subset */
 } DI_Record, *DI_RecordPtr;
 
-typedef Boolean (*GMCriteriaFunc) (DI_Record direc);
+/******** genmask structures and functions *********/
+
+/* genmask scans the *.[pn]di files and sets membership bits according to the
+   criteria specified by the GMCriteria function (see typedef above). This is
+   one example of how to set the membership bits in the new database format.
+   Note that the MembInfo structure has a criteria function pointer that
+   returns a boolean value and takes a void ptr as an argument to allow
+   flexibility in specifying the criteria to belong to a particular
+   membership. */
 
 typedef struct {
     Int4           count, allocated;
@@ -1341,22 +1446,26 @@ Boolean	ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
 
 CharPtr FDFGetAccessionFromSeqIdChain(SeqIdPtr seqid_list);
 
-/* These functions determine the criteria for the membership bits */
-Boolean is_EST_HUMAN(DI_Record direc);
-Boolean is_EST_MOUSE(DI_Record direc);
-Boolean is_EST_OTHERS(DI_Record direc);
-Boolean is_SWISSPROT(DI_Record direc);
-Boolean is_MONTH(DI_Record direc);
-Boolean is_PDB(DI_Record direc);
-Boolean is_REFSEQ_GENOMIC(DI_Record direc);
-Boolean is_REFSEQ_RNA(DI_Record direc);
-Boolean is_REFSEQ_PROTEIN(DI_Record direc);
-Boolean is_CONTIG(DI_Record direc);
-Boolean is_WGS_ANOPHELES(DI_Record direc);
-Boolean is_WGS_RICE(DI_Record direc);
-Boolean is_WGS_MOUSE(DI_Record direc);
-Boolean is_WGS_ANTHRAX(DI_Record direc);
+/* These functions determine the criteria for the membership bits for genmask.
+   Only protein sequences have memberships because they are in non-redundant
+   databases */
+Boolean is_EST_HUMAN(VoidPtr di_record);
+Boolean is_EST_MOUSE(VoidPtr di_record);
+Boolean is_EST_OTHERS(VoidPtr di_record);
+Boolean is_SWISSPROT(VoidPtr di_record);
+Boolean is_MONTH(VoidPtr di_record);
+Boolean is_PDB(VoidPtr di_record);
+Boolean is_REFSEQ_GENOMIC(VoidPtr di_record);
+Boolean is_REFSEQ_RNA(VoidPtr di_record);
+Boolean is_REFSEQ_PROTEIN(VoidPtr di_record);
+Boolean is_CONTIG(VoidPtr di_record);
+Boolean is_WGS_ANOPHELES(VoidPtr di_record);
+Boolean is_WGS_RICE(VoidPtr di_record);
+Boolean is_WGS_MOUSE(VoidPtr di_record);
+Boolean is_WGS_ANTHRAX(VoidPtr di_record);
 
+#if 0
+/* The common index is deprecated  - camacho 09/02/2002 */
 typedef	struct updateindex_struct {
     FILE	*cifile;/* CommonIndex file */
     Int2	shift;	/* database shift in mask */
@@ -1366,6 +1475,7 @@ typedef	struct updateindex_struct {
 
 Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
 		FILE *fout, CharPtr difile, Int4 gi_threshold);
+#endif
 
 /* Fastacmd API */
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.368 $
+* $Revision: 6.372 $
 *
 * File Description: 
 *
@@ -125,7 +125,7 @@ static char *time_of_compilation = "now";
 #endif
 #endif
 
-#define SEQ_APP_VER "4.16"
+#define SEQ_APP_VER "4.25"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -5618,11 +5618,12 @@ static void SqnReadAlignViewEx (BioseqPtr target_bsp, SeqEntryPtr source_sep, In
 }
 
 
-extern void PrepareToUpdateSequences (
+extern void UpdateSeqAfterDownload (
+  BaseFormPtr bfp,
   BioseqPtr oldbsp,
   BioseqPtr newbsp
 );
-extern void SqnReadAlignView (BioseqPtr target_bsp, SeqEntryPtr source_sep)
+extern void SqnReadAlignView (BaseFormPtr bfp, BioseqPtr target_bsp, SeqEntryPtr source_sep)
 
 {
   BioseqPtr  nbsp;
@@ -5634,15 +5635,17 @@ extern void SqnReadAlignView (BioseqPtr target_bsp, SeqEntryPtr source_sep)
   nbsp = FindNucBioseq (source_sep);
   if (nbsp == NULL) return;
 
-  PrepareToUpdateSequences (target_bsp, nbsp);
+  UpdateSeqAfterDownload (bfp, target_bsp, nbsp);
 }
 
 
+/*
 static void DoUpdateSeq (IteM i, Uint2 import_format)
 
 {
   BaseFormPtr  bfp;
   BioseqPtr    bsp;
+  BioseqPtr    nbsp;
   SeqEntryPtr  sep;
   SeqEntryPtr  source_sep = NULL;
 
@@ -5667,8 +5670,11 @@ static void DoUpdateSeq (IteM i, Uint2 import_format)
      default: 
         break; 
   }  
-  SqnReadAlignView (bsp, source_sep);
+  nbsp = FindNucBioseq (source_sep);
+  if (nbsp == NULL) return;
+  UpdateSeqAfterDownload (bfp, bsp, nbsp);
 }
+*/
 
 extern void NewUpdateSequence (
   IteM i
@@ -7089,7 +7095,7 @@ static Boolean UpdateWithAln (GatherContextPtr gcp)
             /*
             SqnReadAlignViewEx (updateTargetBspKludge, sep, PRGALIGNALL);
             */
-            SqnReadAlignView (updateTargetBspKludge, sep);
+            SqnReadAlignView (bfp, updateTargetBspKludge, sep);
           }
           BioseqUnlockById (sip);
         }
@@ -9664,6 +9670,12 @@ static void ReadSettings (void)
     }
   }
   */
+
+  if (GetSequinAppParam ("SETTINGS", "EDITGBSOURCEQUALS", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      SetAppProperty ("EditGBSourceQuals", (void *) 1024);
+    }
+  }
 }
 
 static void DoQuit (ButtoN b)

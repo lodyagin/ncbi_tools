@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.47 $
+* $Revision: 6.48 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -1102,6 +1102,9 @@ Int2 Main (
   } else if (StringICmp (str, "y") == 0) {
     do_tiny_seq = TRUE;
     format = GENBANK_FMT;
+  } else if (StringICmp (str, "z") == 0) {
+    do_gbseq = TRUE;
+    format = GENPEPT_FMT;
   } else {
     format = GENBANK_FMT;
   }

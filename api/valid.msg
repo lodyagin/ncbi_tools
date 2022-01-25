@@ -553,6 +553,10 @@ $^   BadProductSeqId, 60
 The feature product refers to a database ID that has a locus name but no accession.
 This is probably an error in parsing of a submission.
 
+$^   RnaProductMismatch, 61
+The RNA feature product type does not correspond to the RNA feature type.  These
+need to be consistent.
+
 $$ SEQ_ALIGN, 6
 
 $^   SeqIdProblem, 1
