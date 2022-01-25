@@ -250,7 +250,7 @@ static DatePtr GetPubDate (ValNodePtr pub)
 }
 
 static PubStructPtr CreatePubStruct(PubdescPtr pdp, ValNodePtr pub,
-Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 {
 	PubStructPtr psp = NULL;
 	PubdescPtr descr=NULL;
@@ -357,7 +357,7 @@ static void AddPubBsp (PubStructPtr psp, BioseqPtr bsp)
 	return;
 }
 
-NLM_EXTERN ValNodePtr StorePub(BioseqPtr bsp, ValNodePtr vnp, ValNodePtr pub, SeqFeatPtr sfp, Int2 start, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+NLM_EXTERN ValNodePtr StorePub(BioseqPtr bsp, ValNodePtr vnp, ValNodePtr pub, SeqFeatPtr sfp, Int2 start, Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 {
 	PubdescPtr pdp, descr = NULL;
 	PubStructPtr psp;

@@ -3,6 +3,9 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.26  2006/09/06 21:47:55  kans
+* added slot for mobile_element qualifier
+*
 * Revision 6.25  2005/10/19 16:56:17  kans
 * added new source qualifiers, expanded array of optional qualifiers
 *
@@ -226,8 +229,9 @@
 #define GBQUAL_identified_by     97
 #define GBQUAL_lat_lon           98
 #define GBQUAL_PCR_primers       99
+#define GBQUAL_mobile_element   100
 
-#define ParFlat_TOTAL_GBQUAL    100
+#define ParFlat_TOTAL_GBQUAL    101
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2

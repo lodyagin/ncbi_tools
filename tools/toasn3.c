@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.88 2005/06/10 20:37:47 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.92 2006/08/22 16:13:51 kans Exp $";
 
 /*****************************************************************************
 *
@@ -32,9 +32,6 @@ static char *this_module ="toasn3";
 #undef THIS_MODULE
 #endif
 #define THIS_MODULE this_module
-
-Boolean had_biosource = FALSE;
-static SeqFeatPtr list;
 
 #define num_bond 5
 static CharPtr feat_bond[num_bond] = {NULL, "disulfide bond", "thiolester bond", "xlink bond", "thioether bond"};
@@ -703,10 +700,8 @@ static void HasSiteRef (SeqFeatPtr sfp, Pointer userdata)
 Int4 SeqEntryPubsAsn4 (SeqEntryPtr sep)
 {
 	BioseqSetPtr bioset = NULL;
-	CharPtr lineage = NULL;
 	ValNodePtr vnp = NULL, publist= NULL, tmp, v;
 	PubdescPtr		pubdesc;
-	ValNodePtr		descr = NULL;
 	Boolean foundSitRef = FALSE;
 	
 	if (!IS_Bioseq(sep)) {
@@ -1258,7 +1253,6 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 	OrgFixPtr ofp = NULL;
 	MolFixPtr mfp = NULL;
 	CharPtr porg = NULL;
-	Boolean multiple = FALSE;
 	QualMap qm;
 	BSMap bs;
 	ValNodePtr mult = NULL;
@@ -1409,7 +1403,6 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
 
 Boolean CheckLocWhole(BioseqPtr bsp, SeqLocPtr slp)
 {
-	Boolean whole = FALSE;
 	SeqIntPtr sip;
 	
 	if (slp == NULL)
@@ -1550,8 +1543,7 @@ Int4 BSComparison(BioSourcePtr one, BioSourcePtr two)
 	OrgModPtr omp1, omp2;
 	SubSourcePtr ssp1, ssp2;
 	CharPtr name1 = NULL, name2 = NULL;
-	CharPtr subname1 = NULL, subname2 = NULL;
-	Int4		i, id1 = -1, id2 = -1, retval = -1;
+	Int4		i, retval = -1;
 	
 	if (one == NULL || two == NULL)
 		return -1;
@@ -1623,7 +1615,7 @@ Int4 BSComparisonEx(BioSourcePtr one, BioSourcePtr two, Boolean clone)
 	SubSourcePtr ssp1, ssp2;
 	CharPtr name1 = NULL, name2 = NULL;
 	CharPtr subname1 = NULL, subname2 = NULL;
-	Int4		i, id1 = -1, id2 = -1, retval = -1;
+	Int4		i, retval = -1;
 	
 	if (one == NULL || two == NULL)
 		return -1;
@@ -1758,7 +1750,7 @@ void CheckQuals(BioSourcePtr bsp, GBQualPtr qsfp)
 {
 	GBQualPtr 	q;
 	static Char	msg[51];
-	Int2		i;
+	Uint1		i;
 	SubSourcePtr ssp;
 	OrgModPtr	omp = NULL;
 	OrgNamePtr	onp;
@@ -2202,7 +2194,6 @@ Int4 FixNucProtSet(SeqEntryPtr sep)
 *****************************************************************************/
 void CheckBS (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
-	BioseqPtr	bsp = NULL;
 	BioseqSetPtr	bssp, tmp;
 	SeqEntryPtr	 	segsep, parts;
 	BSMapPtr		bmp;
@@ -2389,7 +2380,6 @@ void count_join(SeqFeatPtr f1, SeqFeatPtr f2)
 {
 	Int2	comp, nq1, nq2;
 	GBQualPtr q1, q2;
-	Boolean nmatch = FALSE;
 	static Char msg1[51], msg2[51];
 	
 	comp = seq_loc_compare(f1->location, f2->location);
@@ -2540,7 +2530,7 @@ void CountSourceFeat (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	Int2		count=0;
 	Int4		len;
 	ValNodePtr	vnp;
-	SeqFeatPtr	sfp = NULL, f, ff;
+	SeqFeatPtr	f, ff;
 	SeqAnnotPtr	sap, ap;
 	BioseqPtr	bsp = NULL;
 	ImpFeatPtr	imp;
@@ -3094,177 +3084,6 @@ static Boolean CompareTranslation(ByteStorePtr bsp, CharPtr qval)
 			return TRUE;
 }
 
-static Boolean check_gcode (GatherContextPtr gcp)
-{
-	SeqFeatPtr 		sfp, f;
-	CdRegionPtr 	cds;
-	BioseqPtr 		bsp;
-	SeqAnnotPtr     ap;
-	ValNodePtr 		gc_vnp, vnp, vnpnext;
-	DbtagPtr 		db;
-	GeneticCodePtr 	grp;
-	Uint1 			gcpvalue;
-	CharPtr			protein_seq = NULL;
-	ByteStorePtr	byte_sp;
-	MolInfoPtr		mfp;
-	
-	
-	gc_vnp = gcp->userdata;
-	switch (gcp->thistype) {
-		case OBJ_SEQFEAT:
-			sfp = (SeqFeatPtr) (gcp->thisitem);
-			if (sfp->data.choice != SEQFEAT_CDREGION) {
-				return TRUE;
-			}
-			cds = sfp->data.value.ptrvalue;
-			grp = cds->genetic_code;
-			if (sfp->product != NULL) {
-/*  remove all PID dbxref  */
-				for (vnp=sfp->dbxref; vnp; vnp=vnpnext) {
-					vnpnext = vnp->next;
-					db = vnp->data.ptrvalue;
-					if (db->db) {
-						if (StringNCmp(db->db, "PID", 3) == 0) {
-							sfp->dbxref = remove_node(sfp->dbxref, vnp);
-						}
-					}
-				}
-/* change SeqId GENERAL dbtag in ProtRef */
-				vnp = SeqLocId(sfp->product);
-				FixPIDDbtag(&vnp);
-/*  change PID in protein SeqID GENERAL dbtag  */
-				bsp = BioseqFind(SeqLocId(sfp->product));
-				if (bsp != NULL) {
-					FixPIDDbtag(&(bsp->id));
-/* change SeqId GENERAL dbtag in ProtRef */
-					for (ap = bsp->annot; ap; ap = ap ->next) {
-						if (ap->type != 1) {
-							continue;
-						}
-						for (f = ap->data; f; f = f->next) {
-							if (f->data.choice != SEQFEAT_PROT) {
-								continue;
-							}
-							vnp = SeqLocId(f->location);
-							FixPIDDbtag(&vnp);
-						}
-					}
-				}
-			}
-			cds = sfp->data.value.ptrvalue;
-/* check the translation */
-			if (sfp->product) {
-				protein_seq = GetProduct(sfp->product, sfp->location);
-				byte_sp = ProteinFromCdRegion(sfp, FALSE);
-				if (cds->conflict == TRUE) {
-					if (CompareTranslation(byte_sp, protein_seq)) {
-						cds->conflict = FALSE;
-					} else if (bsp != NULL) {
-						for (vnp = bsp->descr; vnp != NULL; vnp = vnp->next) {
-							if (vnp->choice == Seq_descr_molinfo) {
-								break;
-							}
-						}
-						if (vnp != NULL) {
-							mfp = vnp->data.ptrvalue;
-							mfp->tech = 13; /* _concept_transl_a */
-						}
-					}
-				}
-				if (protein_seq)
-					MemFree(protein_seq);
-				if (byte_sp)
-					BSFree(byte_sp);
-			}
-/* remove asn2ff_generated comments */
-			sfp = StripCDSComment(sfp);
-
-/* check genetic code */
-			if (GBQualPresent("pseudo", sfp->qual) == TRUE) {
-				break;
-			}						
-			if (cds && gc_vnp) {
-				grp = cds->genetic_code;
-				if (grp == NULL) {
-					gcpvalue = 1;
-				} else {
-					vnp = grp->data.ptrvalue;
-					gcpvalue = vnp->data.intvalue;
-				}
-				if (gcpvalue != gc_vnp->data.intvalue) {
-					CharPtr	str=SeqLocPrint(sfp->location);
-					ErrPostEx(SEV_ERROR, ERR_TAXONOMY_GeneticCode, 
-	"Genetic code from Taxonomy server is different from the one in CDS %s: %d|%d", str, gc_vnp->data.intvalue, gcpvalue);
-					MemFree(str);
-				}
-			}
-			break;
-		default:
-			break;
-	}
-	return TRUE;
-}
-
-/***************************************************************************
-*	This function is twofold
-*	1 - checks genetic code with Taxonomy dbase
-*	checks db_xref and removes them all if product is present
-*	changes PIDe to PID in dbtag
-****************************************************************************/
-/*
-static void CheckGeneticCode(SeqEntryPtr sep)
-{
-	ValNodePtr vnp = NULL;
-	GatherScope gs;
-	BioSourcePtr biop;
-	Int2 code;
-	ValNodePtr gc_vnp;
-	Uint2	entityID;	   
-	Uint1 focus;
-
-	if (sep == NULL) {
-		return;
-	}
-
-	entityID = ObjMgrGetEntityIDForChoice(sep);
-  	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-	focus = FocusSeqEntry(sep, &gs);
-	MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
-	gs.ignore[OBJ_SEQDESC] = FALSE;
-	GatherSeqEntry (sep, &vnp, get_src, &gs);
-	if (focus == FOCUS_INITIALIZED) {
-		gs.target = SeqLocFree(gs.target);
-	}
-	if (vnp == NULL) {
-		ErrPostStr(SEV_WARNING, ERR_SOURCE_NotFound, "BioSource not found");
-		return;
-	}
-	biop = vnp->data.ptrvalue;
-	code = BioSourceToGeneticCode(biop);
-	ValNodeFree(vnp);
-	if (code <= 0) {
-		ErrPostStr(SEV_WARNING, ERR_SOURCE_GeneticCode, "Genetic code in BioSource not found");
-		gc_vnp = NULL;
-	} else {
-		gc_vnp = ValNodeNew(NULL);
-		gc_vnp->data.intvalue = code;
-	}
-	MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
-	gs.ignore[OBJ_SEQDESC] = TRUE;
-	gs.ignore[OBJ_SEQANNOT] = FALSE;
-	gs.ignore[OBJ_SEQFEAT] = FALSE;
-
-	GatherSeqEntry (sep, gc_vnp, check_gcode, &gs);
-	if (focus == FOCUS_INITIALIZED) {
-		gs.target = SeqLocFree(gs.target);
-	}
-	if (gc_vnp)
-		ValNodeFree(gc_vnp);
-	
-	return;
-}
-*/
-
 static void CheckGCode (SeqFeatPtr sfp, Pointer userdata)
 
 {
@@ -3325,8 +3144,8 @@ static void CheckGCode (SeqFeatPtr sfp, Pointer userdata)
 				}
 			}
 			cds = sfp->data.value.ptrvalue;
-/* check the translation */
-			if (sfp->product) {
+/* check the translation - skip if conflict flag not set */
+			if (sfp->product && cds->conflict) {
 				protein_seq = GetProduct(sfp->product, sfp->location);
 				byte_sp = ProteinFromCdRegion(sfp, FALSE);
 				if (cds->conflict == TRUE) {
@@ -3374,6 +3193,12 @@ static void CheckGCode (SeqFeatPtr sfp, Pointer userdata)
 			}
 }
 
+/***************************************************************************
+*	This function is twofold
+*	1 - checks genetic code with Taxonomy dbase
+*	checks db_xref and removes them all if product is present
+*	changes PIDe to PID in dbtag
+****************************************************************************/
 static void CheckGeneticCode (SeqEntryPtr sep)
 
 {
@@ -3576,7 +3401,7 @@ Boolean ImpFeatToCdregion(SeqFeatPtr sfp)
 		} else if (StringCmp(q->qual, "codon_start") == 0) {
 			frame = (Uint1) atoi(q->val);
 			sfp->qual = remove_qual(sfp->qual, q);
-			crp->frame = frame; 
+			crp->frame = (Uint1)frame; 
 		} else if (StringCmp(q->qual, "exception") == 0) {
 			sfp->excpt = TRUE; 
 		}
@@ -3584,7 +3409,7 @@ Boolean ImpFeatToCdregion(SeqFeatPtr sfp)
 	}
 	if (frame == -1) {
 		frame = GetFrameFromLoc(sfp->location);
-		crp->frame = frame; 
+		crp->frame = (Uint1)frame; 
 	}
 	
 	return TRUE;	
@@ -3851,11 +3676,12 @@ void EntryChangeGBSource (SeqEntryPtr sep)
 	OrgRefPtr 		orp=NULL;
 	BioSourcePtr 	biosp;
 	CharPtr 		source=NULL, s, div = NULL;
-	ValNodePtr 		vnp = NULL, v;
+	ValNodePtr 		v;
 	/*
 	GatherScope 	gs;
 	Uint2			entityID;	   
 	Uint1 			focus;
+	ValNodePtr 		vnp = NULL;
 	*/
 	Int2			len=0;
 	
@@ -6075,7 +5901,7 @@ static void move_cds_within_nucprot(SeqEntryPtr sep, Pointer mydata, Int4 index,
           *(prevsfp) = sfp->next;
           sfp->next = NULL;
           bbsp->found++;
-          ErrPostEx(SEV_WARNING, 0, 0, "Moving cdregion from na Bioseq.annot to Bioseq-set.annot.");
+          /* ErrPostEx(SEV_WARNING, 0, 0, "Moving cdregion from na Bioseq.annot to Bioseq-set.annot."); */
           put_cds_on_nps (bbsp->bssp, sfp);
         } else {
           prevsfp = (Pointer PNTR) &(sfp->next);

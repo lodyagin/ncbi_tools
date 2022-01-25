@@ -37,6 +37,11 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.31  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.30  2004/10/27 20:07:14  kans
 * LsqFetch_AsnIoOpen to suppress missing file warning, similar to LsqFetch_FileOpen
 *
@@ -1187,7 +1192,8 @@ static FastaIndexPtr ReadFastaIndex (
   Char           ch;
   FastaIndexPtr  fip;
   FILE           *fp;
-  Int4           idx, len;
+  Int4           idx;
+  Int8           len;
   CharPtr        last, ptr, tmp;
   Boolean        outOfOrder;
   Char           path [PATH_MAX];

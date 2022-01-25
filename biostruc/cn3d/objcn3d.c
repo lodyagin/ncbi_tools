@@ -159,7 +159,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 Cn3dStyleDictionaryAsnWrite(Cn3dStyleDictionaryPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -324,7 +323,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 Cn3dUserAnnotationsAsnWrite(Cn3dUserAnnotationsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1570,7 +1568,6 @@ NLM_EXTERN
 Cn3dStyleSettingsSetPtr LIBCALL
 Cn3dStyleSettingsSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1626,7 +1623,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 Cn3dStyleSettingsSetAsnWrite(Cn3dStyleSettingsSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -2266,7 +2262,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 Cn3dObjectLocationAsnWrite(Cn3dObjectLocationPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

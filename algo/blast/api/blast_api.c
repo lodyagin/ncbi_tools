@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.33 2006/04/26 12:44:37 madden Exp $
+/* $Id: blast_api.c,v 1.41 2006/09/15 13:12:43 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -81,6 +81,7 @@ s_BlastRPSInfoInit(BlastRPSInfo **ppinfo, Nlm_MemMap **rps_mmap,
    char buffer[PATH_MAX];
    ReadDBFILEPtr rdfp;
    char *tmp_dbname;
+   Uint4 version;
 
    info = (BlastRPSInfo *)malloc(sizeof(BlastRPSInfo));
    if (info == NULL)
@@ -102,14 +103,17 @@ s_BlastRPSInfoInit(BlastRPSInfo **ppinfo, Nlm_MemMap **rps_mmap,
       ErrPostEx(SEV_FATAL, 1, 0, "Cannot map RPS BLAST lookup file");
 
    info->lookup_header = (BlastRPSLookupFileHeader *)lut_mmap->mmp_begin;
-   if (info->lookup_header->magic_number != RPS_MAGIC_NUM) {
-       if (Nlm_SwitchUint4(info->lookup_header->magic_number)==RPS_MAGIC_NUM) {
-           ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST lookup file was created "
+   version = info->lookup_header->magic_number; 
+   if (version != RPS_MAGIC_NUM && version != RPS_MAGIC_NUM_28) {
+
+      version = Nlm_SwitchUint4(version);
+      if (version == RPS_MAGIC_NUM || version == RPS_MAGIC_NUM_28) {
+         ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST lookup file was created "
                            "on an incompatible platform");
-       }
-       else {
-           ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST lookup file is corrupt");
-       }
+      }
+      else {
+         ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST lookup file is corrupt");
+      }
    }
 
    sprintf(filename, "%s.rps", (char *)pathname);
@@ -118,14 +122,17 @@ s_BlastRPSInfoInit(BlastRPSInfo **ppinfo, Nlm_MemMap **rps_mmap,
       ErrPostEx(SEV_FATAL, 1, 0, "Cannot map RPS BLAST profile file");
 
    info->profile_header = (BlastRPSProfileHeader *)pssm_mmap->mmp_begin;
-   if (info->profile_header->magic_number != RPS_MAGIC_NUM) {
-       if (Nlm_SwitchUint4(info->profile_header->magic_number)==RPS_MAGIC_NUM) {
-           ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST profile file was created "
+   version = info->profile_header->magic_number;
+   if (version != RPS_MAGIC_NUM && version != RPS_MAGIC_NUM_28) {
+
+      version = Nlm_SwitchUint4(version);
+      if (version == RPS_MAGIC_NUM || version == RPS_MAGIC_NUM_28) {
+         ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST profile file was created "
                            "on an incompatible platform");
-       }
-       else {
-           ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST profile file is corrupt");
-       }
+      }
+      else {
+         ErrPostEx(SEV_FATAL, 1, 0, "RPS BLAST profile file is corrupt");
+      }
    }
 
    num_db_seqs = info->profile_header->num_profiles;
@@ -366,8 +373,8 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
         if (!tf_data) {
             SPHIPatternSearchBlk* pattern_blk = NULL;
             if (Blast_ProgramIsPhiBlast(kProgram)) {
-                PHIPatternSpaceCalc(query_info, diagnostics);
                 pattern_blk = (SPHIPatternSearchBlk*) lookup_wrap->lut;
+                pattern_blk->num_patterns_db = diagnostics->ungapped_stat->lookup_hits;
             }
 
             if ((status = Blast_RunTracebackSearch(kProgram, query, 
@@ -419,6 +426,78 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                             seq_src, &diagnostics, extra_returns);
 
     return status;
+}
+
+/** GET_MATRIX_PATH callback to find the path to a specified matrix.
+ * Looks first in current directory, then one specified by
+ * .ncbirc, then in local data directory, then env
+ * variables.
+ * @param matrix_name name of the matrix (e.g., BLOSUM50) [in]
+ * @param is_prot protein matrix if TRUE [in]
+ * @return path to matrix if found, or NULL.
+ */
+static char*
+s_BlastFindMatrixPath(const char* matrix_name, Boolean is_prot)
+{
+     char* matrix_path = NULL;  /* return value. */
+     char buf_path[PATH_MAX];  /* Used for path without matrix filename. */
+     char buf_full[PATH_MAX];  /* used for full path with filename. */
+     char* ptr = NULL;
+
+     if (matrix_name == NULL)
+       return NULL;
+
+     /* current directory */
+     if (Nlm_FileLength((char*) matrix_name) > 0)
+     {
+         char buf_path_2[PATH_MAX];
+         Nlm_ProgramPath(buf_path, PATH_MAX);
+         ptr = StringRChr (buf_path, DIRDELIMCHR);
+         if (ptr != NULL)
+             *ptr = '\0';
+         sprintf(buf_path_2, "%s%s", buf_path, DIRDELIMSTR);
+         matrix_path = StringSave(buf_path_2);
+         return matrix_path;
+     }
+     
+     /* local data directory. */
+     sprintf(buf_full, "data%s%s", DIRDELIMSTR, matrix_name);
+     if (Nlm_FileLength(buf_full) > 0)
+     {
+         char buf_path_2[PATH_MAX];
+         Nlm_ProgramPath(buf_path, PATH_MAX);
+         ptr = StringRChr (buf_path, DIRDELIMCHR);
+         if (ptr != NULL)
+             *ptr = '\0';
+         sprintf(buf_path_2, "%s%sdata%s", buf_path, DIRDELIMSTR, DIRDELIMSTR);
+         matrix_path = StringSave(buf_path_2);
+         return matrix_path;
+     }
+
+     if(FindPath("ncbi", "ncbi", "data", buf_path, PATH_MAX)) {
+            sprintf(buf_full, "%s%s", buf_path, matrix_name);
+            if(FileLength(buf_full) > 0) {
+                matrix_path = StringSave(buf_path);
+                return matrix_path;
+            } else {
+                 char alphabet_type[3];     /* aa or nt */
+                 if (is_prot)
+                      Nlm_StringNCpy(alphabet_type, "aa", 2);
+                 else
+                      Nlm_StringNCpy(alphabet_type, "nt", 2);
+                 alphabet_type[2] = NULLB;
+
+                 sprintf(buf_full, "%s%s%s%s", buf_path,
+                          alphabet_type, DIRDELIMSTR, matrix_name);
+                 if(FileLength(buf_full) > 0)
+                 {
+                    matrix_path = StringSave(buf_path);
+                    return matrix_path;
+                 }
+            }
+     }
+
+     return NULL;
 }
 
 Int2 
@@ -511,7 +590,7 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     status = 
         BLAST_MainSetUp(kProgram, query_options, score_options, query, 
                         query_info, scale_factor, &lookup_segments, &mask_loc,
-                        &sbp, &core_msg);
+                        &sbp, &core_msg, s_BlastFindMatrixPath);
     if (core_msg)
     {
        extra_returns->error = Blast_MessageToSBlastMessage(core_msg, query_seqloc, query_info, options->believe_query);
@@ -560,8 +639,14 @@ Blast_RunSearch(SeqLoc* query_seqloc,
           }
     }
 
-    if ((status = LookupTableWrapInit(query, lookup_options, 
-                        lookup_segments, sbp, &lookup_wrap, rps_info)))
+    status = LookupTableWrapInit(query, lookup_options, 
+                        lookup_segments, sbp, &lookup_wrap, rps_info, &core_msg);
+    if (core_msg)
+    {
+          extra_returns->error = Blast_MessageToSBlastMessage(core_msg, query_seqloc, query_info, options->believe_query);
+          core_msg = Blast_MessageFree(core_msg);
+    }
+    if (status)
         return status;
 
     /* For PHI BLAST, save information about pattern occurrences in
@@ -570,7 +655,13 @@ Blast_RunSearch(SeqLoc* query_seqloc,
         SPHIPatternSearchBlk* pattern_blk = 
             (SPHIPatternSearchBlk*) lookup_wrap->lut;
         Blast_SetPHIPatternInfo(kProgram, pattern_blk, query, lookup_segments, 
-                                query_info);
+                                query_info, &core_msg);
+        if (core_msg)
+        {
+             extra_returns->error = Blast_MessageToSBlastMessage(core_msg, query_seqloc, query_info, options->believe_query);
+             core_msg = Blast_MessageFree(core_msg);
+        }
+
     }
     /* Only need for the setup of lookup table. */
     lookup_segments = BlastSeqLocFree(lookup_segments);
@@ -626,7 +717,11 @@ Blast_DatabaseSearch(SeqLoc* query_seqloc, char* db_name,
 
     if (seq_src == NULL) {
         SBlastMessageWrite(&extra_returns->error, SEV_WARNING,
-                           "Initialization of subject sequences source failed", NULL, options->believe_query);
+                           "Initialization of subject sequences source failed",
+                           NULL, options->believe_query);
+    } else if (BlastSeqSrcGetNumSeqs(seq_src) == 0) {
+        SBlastMessageWrite(&extra_returns->error, SEV_WARNING,
+                           "Database is empty", NULL, options->believe_query);
     } else {
         char* error_str = BlastSeqSrcGetInitError(seq_src);
         if (error_str)

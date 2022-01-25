@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -59,12 +59,12 @@ extern Boolean do_cut (PaneL pnl, EditAlignDataPtr adp, SelStructPtr ssp, Boolea
 extern Boolean do_paste (PaneL pnl, EditAlignDataPtr adp, SeqIdPtr targetid);
 extern void do_copy (IteM i);
 
-extern void to_update_prompt (PaneL pnl, SelStructPtr ssp, SeqAlignPtr salp, ValNodePtr sqlocs, Boolean sel, Uint2 choice);
+extern void to_update_prompt (PaneL pnl, SelStructPtr ssp, SeqAlignPtr salp, ValNodePtr sqlocs, Boolean sel, Uint1 choice);
 extern void update_edititem (PaneL pnl);
 extern void update_translateitem (PaneL pnl, ValNodePtr seqfeathead, ValNodePtr feathead);
 extern void update_codonstartbt (PaneL pnl, ValNodePtr seqfeathead, ValNodePtr feathead);
 
-extern Uint1 locate_point (PoinT pt, RecT rp, Uint2 *item_id, Uint2 *the_entity_id, Uint2 *item_type, Uint2 *item_subtype, Int4 *position, Int2 *line, EditAlignDataPtr adp);
+extern Uint1 locate_point (PoinT pt, RecT rp, Uint4 *item_id, Uint2 *the_entity_id, Uint2 *item_type, Uint2 *item_subtype, Int4 *position, Int2 *line, EditAlignDataPtr adp);
 extern void on_click (PaneL pnl, PoinT pt);
 extern void on_drag (PaneL pnl, PoinT pt);
 extern void on_hold (PaneL pnl, PoinT pt);

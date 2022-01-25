@@ -1,4 +1,4 @@
-/*  $Id: ddvclick.c,v 1.65 2000/07/25 20:30:23 hurwitz Exp $
+/*  $Id: ddvclick.c,v 1.66 2006/07/13 17:11:42 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   09/20/99
 *
-* $Revision: 1.65 $
+* $Revision: 1.66 $
 *
 * File Description: mouse management code for DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvclick.c,v $
+* Revision 1.66  2006/07/13 17:11:42  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 1.65  2000/07/25 20:30:23  hurwitz
 * bug fixes: panel update when file is closed, double-click launches UDV from DDE, seqName agrees in status line and left col
 *
@@ -971,7 +974,8 @@ static void DDV_SendBSPSelectMsg_OLD(DdvMainPtr dmp,Int4 bsp_coord,Int4 SeqAlign
 Int4        first_bsp_coord, bsp_pos;
 Uint1       direction;/*use to tell ObjMgr the direction of the mouse (left,right)*/
 SeqLocPtr   slp;/*to send an AlsoSelectMsg*/
-Uint2       bsp_eID,bsp_iID;
+Uint2       bsp_eID;
+Uint4       bsp_iID;
 Boolean     bDeselectAll=TRUE;
 DdvMainWinPtr dmwp;
 
@@ -1081,7 +1085,8 @@ static void DDV_SendBSPSelectMsg(DdvMainPtr dmp,
   Int4           bsp_coord_start, bsp_coord_stop, ParaGLine_Num, col;
   Uint1          direction;/*used to tell ObjMgr the direction of the mouse (left,right)*/
   SeqLocPtr      slp;/*to send an AlsoSelectMsg*/
-  Uint2          bsp_eID, bsp_iID;
+  Uint2          bsp_eID;
+  Uint4          bsp_iID;
   Boolean        bDeselectAll=TRUE;
   ParaGPtr       pgp;
   DdvMainWinPtr  dmwp;
@@ -1239,7 +1244,8 @@ Int4           from_row, to_row, from_col, to_col;
 Uint1          uWhere;
 ParaGPtr       cur_pgp=NULL;
 SeqLocPtr      slp;
-Uint2          bsp_eID,bsp_iID;
+Uint2          bsp_eID;
+Uint4          bsp_iID;
 Boolean        bDeselectAll=TRUE,bIsAlreadyFullSel;
 Int4           BlockIndex, Col, NumBlocks;
 Boolean        LeftBoundary, IsUnAligned;
@@ -2248,7 +2254,8 @@ ParaGPtr     cur_pgp=NULL;
 Int4         bsp_coord, SeqAlign_coord;
 Int4         Disp_coord, Line_num,ParaGLine_Num;/*to get the coordinates*/
 Uint1        uWhere; /*where the use clicked (seq, feat, name,...)*/
-Uint2        bsp_eID, bsp_iID;
+Uint2        bsp_eID;
+Uint4        bsp_iID;
 Int4         VPos, Shift, SavedVPos, SavedHPos, BlockIndex, NumBlocks;
 Boolean      IsUnAligned;
 MsaParaGPopListPtr  mpplp;
@@ -2540,7 +2547,8 @@ static void DDV_MoveCaretLR(DdvMainPtr dmp,Int4 decal_Hscroll,
 	Boolean bMoveRight,BaR hsb,Int4 old_Hpos,Int4 from_col,Int4 to_col)
 {
 DDVUpdateMSGPtr dump;
-Uint2           bsp_eID, bsp_iID;
+Uint2           bsp_eID;
+Uint4           bsp_iID;
 Int4            shift, new_from_col, new_to_col;
 
 	dump=(DDVUpdateMSGPtr)MemNew(sizeof(DDVUpdateMSG));
@@ -2617,7 +2625,8 @@ static void DDV_MoveCaretUD(DdvMainPtr dmp,Int4 decal_Vscroll,
 	Boolean bMoveDown,BaR vsb,Int4 old_Vpos,Int4 from_row,Int4 to_row)
 {
 DDVUpdateMSGPtr dump;
-Uint2           bsp_eID, bsp_iID;
+Uint2           bsp_eID;
+Uint4           bsp_iID;
 Int4            shift;
 
 	dump=(DDVUpdateMSGPtr)MemNew(sizeof(DDVUpdateMSG));

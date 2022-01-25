@@ -30,7 +30,7 @@
  */
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: smith_waterman.c,v 1.3 2005/12/19 15:37:33 gertz Exp $";
+    "$Id: smith_waterman.c,v 1.4 2006/06/29 16:50:07 gertz Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_std.h>
@@ -40,8 +40,8 @@ static char const rcsid[] =
 /** A structure used internally by the Smith-Waterman algorithm to
  * represent gaps */
 typedef struct SwGapInfo {
-    int noGap;
-    int gapExists;
+    int noGap;         /**< score if opening a gap */
+    int gapExists;     /**< score if continuing a gap */
 } SwGapInfo;
 
 

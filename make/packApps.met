@@ -1,7 +1,7 @@
 property pBuildFolderName : "Sequin Folder"
 property pFolders2Copy : {"data", "errmsg", "doc:images"}
 property pFolders2Pack : {"data", "errmsg", "images"}
-property pApps2Pack : {"asn2gb", "Entrez2", "Sequin", "tbl2asn"}
+property pApps2Pack : {"Entrez2", "Sequin"}
 
 
 with timeout of 600 seconds

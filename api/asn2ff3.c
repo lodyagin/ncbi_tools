@@ -35,6 +35,11 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.119  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.118  2003/07/22 16:18:27  kans
 * added ZFIN as legal db_xref
 *
@@ -4622,7 +4627,7 @@ NLM_EXTERN GBQualPtr AddBioSourceToGBQual (Asn2ffJobPtr ajp, NoteStructPtr nsp, 
 *	This code prints out an ImpFeat in GenBank and HTML format.
 *
 ****************************************************************************/
-NLM_EXTERN Int2 PrintImpFeatEx (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp, Int4 gi, Int2 entityID, Int2 itemID)
+NLM_EXTERN Int2 PrintImpFeatEx (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp, Int4 gi, Int2 entityID, Uint4 itemID)
 {
 	CharPtr flatloc_ptr, key, loc;
 	GBQualPtr gbqp;

@@ -29,7 +29,7 @@ typedef struct pubstruct {
 	DatePtr date;		/* need for CompareByDate */
 	Int2	choice; /* 1 - PUB_Gen (unpublished), 2 - PUB_Sub, -1 - other */
 	Uint2	entityID;
-	Uint2   itemID;
+	Uint4   itemID;
 	Uint2	itemtype;
 	Boolean no_free;
 } PubStruct, PNTR PubStructPtr;
@@ -38,7 +38,7 @@ NLM_EXTERN ValNodePtr tie_next PROTO((ValNodePtr head, ValNodePtr next));
 
 NLM_EXTERN ValNodePtr StoreNAPubCit PROTO((ValNodePtr PubOnCit, BioseqPtr bsp, SeqFeatPtr sfp));
 
-NLM_EXTERN ValNodePtr StorePub PROTO((BioseqPtr bsp, ValNodePtr vnp, ValNodePtr pub, SeqFeatPtr sfp, Int2 start, Uint2 entityID, Uint2 itemId, Uint2 itemtype));
+NLM_EXTERN ValNodePtr StorePub PROTO((BioseqPtr bsp, ValNodePtr vnp, ValNodePtr pub, SeqFeatPtr sfp, Int2 start, Uint2 entityID, Uint4 itemId, Uint2 itemtype));
 
 NLM_EXTERN void UniquePubs PROTO((ValNodePtr PNTR vnpp));
 

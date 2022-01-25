@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-BlastOutput
-*    Generated using ASNCODE Revision: 6.14 at Jul 12, 2002  2:02 PM
+*    Generated using ASNCODE Revision: 6.16 at Sep 15, 2006  1:53 PM
 *
 **************************************************/
 
@@ -121,7 +121,7 @@ NLM_EXTERN Boolean LIBCALL IterationAsnWrite PROTO (( IterationPtr , AsnIoPtr, A
 typedef struct struct_Statistics {
    Uint4 OBbits__;
    Int4   db_num;
-   Int4   db_len;
+   Int8   db_len;
    Int4   hsp_len;
    FloatHi   eff_space;
    FloatHi   kappa;

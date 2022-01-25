@@ -29,13 +29,18 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.c,v $
+* Revision 6.25  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.24  2002/03/14 16:40:03  kans
 * SeqMgrIndexFeaturesEx takes dorevfeats, SeqMgrExploreFeaturesRev and featsByRev added for asn2gb
 *
@@ -389,13 +394,13 @@ Parameters: index_g; value to decode in 'val1' and 'val2'
 *******************************************************************************/
 
 NLM_EXTERN void  UDV_DecodeIdxFeat (Uint4 index_g, Uint2Ptr val1,
-									   Uint2Ptr val2)
+									   Uint4Ptr val2)
 {
 Uint2Ptr  index_g2;
 
 	index_g2 = (Uint2Ptr) (&index_g);
 	if (val1) *val1 = (Uint2) index_g2 [0];
-	if (val2) *val2 = (Uint2) index_g2 [1];
+	if (val2) *val2 = index_g2 [1];
 }
 
 /*******************************************************************************
@@ -408,13 +413,13 @@ Parameters: index_g; value to decode in 'val1' and 'val2'
 
 *******************************************************************************/
 
-NLM_EXTERN void  UDV_BigDecodeIdxFeat (Uint8 index_g, Uint2Ptr val1, Uint2Ptr val2,
+NLM_EXTERN void  UDV_BigDecodeIdxFeat (Uint8 index_g, Uint4Ptr val1, Uint2Ptr val2,
 	Uint2Ptr val3, Uint2Ptr val4)
 {
 Uint2Ptr  index_g2;
 
 	index_g2 = (Uint2Ptr) (&index_g);
-	if (val1) *val1 = (Uint2) index_g2 [0];
+	if (val1) *val1 = index_g2 [0];
 	if (val2) *val2 = (Uint2) index_g2 [1];
 	if (val3) *val3 = (Uint2) index_g2 [2];
 	if (val4) *val4 = (Uint2) index_g2 [3];
@@ -957,7 +962,7 @@ SeqAnnotPtr sap;
 				which create/(re)populate ParaG structure (CreateParaGList)*/
 				if (pgp->pFeatList==NULL) {
 					pgp->pFeatList = ValNodeAddBigInt(&pgp->pFeatList,0,
-							UDV_BigEncodeIdxFeat ((Uint2) context->itemID,
+							UDV_BigEncodeIdxFeat ( context->itemID,
 								(Uint2) context->index,(Uint2)PosFeat-decal,(Uint2)0));
 					if (!pgp->pFeatList) return TRUE;
 				}
@@ -974,13 +979,13 @@ SeqAnnotPtr sap;
 					/*mem alloc only if it's needed*/
 					if (bTrouve) {
 						vnp2->data.bigintvalue=UDV_BigEncodeIdxFeat(
-								(Uint2) context->itemID,
+								 context->itemID,
 								(Uint2) context->index,
 								(Uint2)(PosFeat-decal),(Uint2)0);
 					}
 					else{
 						vnp4=ValNodeAddBigInt(&vnp3,0,
-							UDV_BigEncodeIdxFeat ((Uint2) context->itemID,
+							UDV_BigEncodeIdxFeat ( context->itemID,
 								(Uint2) context->index,
 								(Uint2)PosFeat-decal,(Uint2)0));
 						if (!vnp4)return TRUE;

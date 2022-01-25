@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/*  $Id: ncbi_connutil.h,v 6.56 2006/04/21 14:41:19 lavr Exp $
+/*  $Id: ncbi_connutil.h,v 6.59 2006/08/14 19:08:41 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -78,12 +78,6 @@
  *       SOCK_StripToPattern()
  *       BUF_StripToPattern()
  *
- *    7.CRC32
- *       CRC32_Update()
- *
- *    8.Miscellaneous
- *       CONNUTIL_GetUsername()
- *       CONNUTIL_GetVMPageSize()
  */
 
 #include <connect/ncbi_buffer.h>
@@ -151,6 +145,7 @@ typedef struct {
     int/*bool*/    firewall;         /* to use firewall/relay in connects    */
     int/*bool*/    lb_disable;       /* to disable local load-balancing      */
     const char*    http_user_header; /* user header to add to HTTP request   */
+    const char*    http_referer;     /* default referrer (when not spec'd)   */
 
     /* the following field(s) are for the internal use only -- don't touch!  */
     int/*bool*/    http_proxy_adjusted;
@@ -208,6 +203,9 @@ typedef struct {
 #define REG_CONN_HTTP_USER_HEADER "HTTP_USER_HEADER"
 #define DEF_CONN_HTTP_USER_HEADER 0
 
+#define REG_CONN_HTTP_REFERER     "HTTP_REFERER"
+#define DEF_CONN_HTTP_REFERER     0
+
 /* Environment/registry keys that are not kept in SConnNetInfo */
 #define REG_CONN_SERVICE_NAME     "SERVICE_NAME"
 #define REG_CONN_LOCAL_DISABLE    "LOCAL_DISABLE"
@@ -249,6 +247,7 @@ extern NCBI_XCONNECT_EXPORT const char* ConnNetInfo_GetValue
  *  firewall          FIREWALL
  *  lb_disable        LB_DISABLE
  *  http_user_header  HTTP_USER_HEADER  "\r\n" if missing is appended
+ *  http_referer      HTTP_REFERER      may be assigned automatically
  *
  * A value of the field NAME is first looked for in the environment variable
  * of the form service_CONN_NAME; then in the current corelib registry,
@@ -725,36 +724,6 @@ size_t HostPortToString
 (unsigned int, unsigned short, char*, size_t);
 
 
-/* Calculate/Update CRC32
- * Return the checksum updated according to the contents of the block
- * pointed to by "ptr" and having "count" bytes in it.
- */
-extern NCBI_XCONNECT_EXPORT unsigned int CRC32_Update
-(unsigned int checksum,  /* Checksum to update (start with 0) */
- const void*  ptr,       /* Block of data                     */
- size_t       count      /* Size of data                      */
- );
-
-
-/* Obtain and store current user's name in the buffer provided.
- * Return 0 when the user name cannot be determined.
- * Otherwise, return "buf".
- * Note that resultant strlen(buf) is always guaranteed to be less
- * than "bufsize", extra non-fit characters discarded.
- * Both "buf" and "bufsize" must not be zeros.
- */
-extern NCBI_XCONNECT_EXPORT const char* CONNUTIL_GetUsername
-(char*        buf,       /* Pointer to buffer to store the user name at */
- size_t       bufsize    /* Size of buffer in bytes                     */
- );
-
-
-/* Obtain virtual memory page size.
- * Return 0 if the page size cannot be determined.
- */
-extern NCBI_XCONNECT_EXPORT size_t CONNUTIL_GetVMPageSize(void);
-
-
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
@@ -766,6 +735,15 @@ extern NCBI_XCONNECT_EXPORT size_t CONNUTIL_GetVMPageSize(void);
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.h,v $
+ * Revision 6.59  2006/08/14 19:08:41  lavr
+ * HTTP_REFERER documented as may have added automatically
+ *
+ * Revision 6.58  2006/06/15 02:43:59  lavr
+ * GetUsername, GetVMPageSize, CRC32 moved from here to ncbi_util.h
+ *
+ * Revision 6.57  2006/06/07 20:03:46  lavr
+ * +SConnNetInfo::http_referer
+ *
  * Revision 6.56  2006/04/21 14:41:19  lavr
  * REG_CONN_SERVICE_NAME added
  *

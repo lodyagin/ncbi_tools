@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.128 $
+* $Revision: 6.130 $
 *
 * File Description:
 *
@@ -2349,7 +2349,7 @@ static void DrawFeatureAndLabel (
       break;
   }
   if (StringHasNoText (label)) return;
-  LabelCopy (shortLabel, label, sizeof (shortLabel));
+  LabelCopy (shortLabel, label, sizeof (shortLabel)-1);
   SelectFont (AIP->LabelFont);
   textWidthBP = StringWidth (shortLabel) * vContext->viewScale;
   switch (FIP->LabelLoc) {
@@ -2975,8 +2975,6 @@ static Boolean SeqAlignContentLabel(SeqAlignPtr sap, SeqIdPtr notThisSID, CharPt
     return FALSE;
   return TRUE;
 }
-
-#define _DEBUG
 
 static void AccumIvals(Int1* accumulator, Int4 accumBegin, Int4 accumLen, RelevantFeatureItemPtr RFIP);
 Int4  CountIvals(Int1* accumulator, Int4 accumLen);

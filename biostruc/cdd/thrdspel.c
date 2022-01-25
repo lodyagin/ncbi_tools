@@ -1,4 +1,4 @@
-/* $Id: thrdspel.c,v 1.3 2001/04/25 15:43:29 hurwitz Exp $
+/* $Id: thrdspel.c,v 1.4 2006/07/13 17:07:27 bollin Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdspel.c,v $
+* Revision 1.4  2006/07/13 17:07:27  bollin
+* removed unused variables
+*
 * Revision 1.3  2001/04/25 15:43:29  hurwitz
 * initial check-in of Anna's code to fix problem of duplicate alignments with different scores
 *
@@ -73,8 +76,7 @@ int spel(Cxl_Los** cpl, Cur_Aln* sai, Cur_Loc* sli, int cs, Seg_Gsm* spe,
 /*--------------------------------------------------------*/
 
 int	nsc;		/* Number of core segments */
-int	i,j,k;		/* Counters */
-int	r1,r2;		/* Residue indices in core motif */
+int	i,j;		/* Counters */
 int	s1,s2;		/* Segment indices */
 Cxl_Los *cl;	/* Pointer to contact list of the current segment */
 int	gs;		/* Profile energy sum */

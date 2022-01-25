@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.462 $
+* $Revision: 6.470 $
 *
 * File Description:
 *
@@ -1489,8 +1489,6 @@ static Boolean PromoteAlignIDsProc (GatherObjectPtr gop)
         PromoteSeqIdList (psp->ids, TRUE, FALSE);
       }
       break;
-    case SAS_COMPSEQ :
-      break;
     default :
       break;
   }
@@ -2077,7 +2075,7 @@ static void MergeCDSCallback (BioseqPtr bsp, Pointer userdata)
   Int4              left = -1, right = -1;
   SeqLocPtr         cover_loc;
   Boolean           partial_left = FALSE, partial_right = FALSE;
-  Uint2             strand;
+  Uint1             strand;
   
   if (bsp == NULL)
   {
@@ -2594,7 +2592,7 @@ static SeqLocPtr BuildProtLoc (SeqFeatPtr overlapping_cds, SeqLocPtr slp, Int4Pt
 /*---------------------------------------------------------------------*/
 
 static void FeatConvertImpToPeptide (SeqFeatPtr  sfp,
-				     Int2        toFeatSubType,
+				     Uint1        toFeatSubType,
 				     Uint2       entityID)
 {
   ImpFeatPtr ifp;
@@ -3964,7 +3962,17 @@ static ValNodePtr ValNodeAppend (ValNodePtr list, ValNodePtr second_list)
   return list;
 }
 
-extern ValNodePtr BuildFeatureDialogList (Boolean list_most_used_first)
+static void FindFeatureTypeCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  BoolPtr type_list;
+  
+  if (sfp == NULL || userdata == NULL) return;
+  
+  type_list = (BoolPtr) userdata;
+  type_list[sfp->idx.subtype] = TRUE;
+}
+
+extern ValNodePtr BuildFeatureDialogList (Boolean list_most_used_first, SeqEntryPtr sep)
 {
   ValNodePtr  feature_choice_list = NULL;
   ValNodePtr  import_feature_list = NULL;
@@ -3974,13 +3982,28 @@ extern ValNodePtr BuildFeatureDialogList (Boolean list_most_used_first)
   Uint1       key;
   CharPtr     label = NULL;
   Char        str [256];
+  Boolean     feature_type_list[256];
+  Boolean     only_most_used = TRUE;
+  Int4        i;
+
+  if (sep == NULL) {
+      for (i = 0; i < 255; i++) {
+          feature_type_list[i] = TRUE;
+      }
+  } else {
+      for (i = 0; i < 255; i++) {
+          feature_type_list[i] = FALSE;
+      }
+      VisitFeaturesInSep (sep, feature_type_list, FindFeatureTypeCallback);
+  }
 
   curr = FeatDefFindNext (NULL, &key, &label, FEATDEF_ANY, TRUE);
   while (curr != NULL) {
     if (key == FEATDEF_BAD
         || key == FEATDEF_Imp_CDS
         || key == FEATDEF_source
-        || key == FEATDEF_ORG)
+        || key == FEATDEF_ORG
+        || !feature_type_list[key])
     {
       curr = FeatDefFindNext (curr, &key, &label, FEATDEF_ANY, TRUE);
       continue;
@@ -4034,10 +4057,15 @@ extern ValNodePtr BuildFeatureDialogList (Boolean list_most_used_first)
           || curr->featdef_key == FEATDEF_GENE
           || curr->featdef_key == FEATDEF_intron
           || curr->featdef_key == FEATDEF_mRNA
-          || curr->featdef_key == FEATDEF_rRNA)
+          || curr->featdef_key == FEATDEF_rRNA
+          || curr->featdef_key == FEATDEF_PROT)
       {
         ValNodeAddPointer (&most_used_feature_list, curr->featdef_key, 
                            StringSave (curr->typelabel));
+      }
+      else
+      {
+        only_most_used = FALSE;
       }
     }
     
@@ -4053,9 +4081,16 @@ extern ValNodePtr BuildFeatureDialogList (Boolean list_most_used_first)
   least_liked_feature_list = SortValNode (least_liked_feature_list,
                                           CompareFeatureValNodeStrings);
 
-  feature_choice_list = ValNodeAppend (most_used_feature_list, feature_choice_list);
-  feature_choice_list = ValNodeAppend (feature_choice_list, least_liked_feature_list);
-  feature_choice_list = ValNodeAppend (feature_choice_list, import_feature_list);
+  if (most_used_feature_list != NULL && only_most_used) {
+    feature_choice_list = ValNodeFreeData (feature_choice_list);
+    feature_choice_list = most_used_feature_list;
+    least_liked_feature_list = ValNodeFreeData(least_liked_feature_list);
+    import_feature_list = ValNodeFreeData(least_liked_feature_list);
+  } else {
+    feature_choice_list = ValNodeAppend (most_used_feature_list, feature_choice_list);
+    feature_choice_list = ValNodeAppend (feature_choice_list, least_liked_feature_list);
+    feature_choice_list = ValNodeAppend (feature_choice_list, import_feature_list);
+  }
   
   return feature_choice_list;
 }
@@ -4160,9 +4195,10 @@ static ValNodePtr FeatureSelectionRemap (ValNodePtr orig_list)
 }
 
 extern DialoG 
-FeatureSelectionDialog 
+FeatureSelectionDialogEx 
 (GrouP                    h,
  Boolean                  allow_multi,
+ SeqEntryPtr              sep,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata)
 {
@@ -4170,7 +4206,7 @@ FeatureSelectionDialog
   ValNodePtr  feature_choice_list, vnp, vnp_next, vnp_prev;
   Boolean     found_import = FALSE;
 
-  feature_choice_list = BuildFeatureDialogList (TRUE);
+  feature_choice_list = BuildFeatureDialogList (TRUE, sep);
   
   if (!allow_multi)
   {
@@ -4209,6 +4245,16 @@ FeatureSelectionDialog
                                 change_notify, change_userdata, allow_multi, FALSE,
                                 allow_multi ? FeatureSelectionRemap : NULL);
   return dlg;
+}
+
+extern DialoG 
+FeatureSelectionDialog 
+(GrouP                    h,
+ Boolean                  allow_multi,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  return FeatureSelectionDialogEx(h, allow_multi, NULL, change_notify, change_userdata);
 }
 
 extern CharPtr SourceQualValNodeName (ValNodePtr vnp)
@@ -4491,7 +4537,7 @@ GetSourceQualQualValueFromBiop
  SourceQualDescPtr sqdp,
  FilterSetPtr      fsp)
 {
-  CharPtr            str = NULL;
+  CharPtr            str = NULL, tmp_str;
   OrgModPtr          mod;
   SubSourcePtr       ssp;
   
@@ -4505,13 +4551,22 @@ GetSourceQualQualValueFromBiop
     if (biop->org != NULL && biop->org->orgname != NULL)
     {
       mod = biop->org->orgname->mod;
-      while (mod != NULL && str == NULL)
+      while (mod != NULL)
       {
         if (mod->subtype == sqdp->subtype
             && !StringHasNoText (mod->subname)
             && OrgModSpecialMatch (mod, fsp))
         {
-          str = StringSave (mod->subname);
+          if (str == NULL) {
+            str = StringSave (mod->subname);
+          } else {
+            tmp_str = (CharPtr) MemNew ((StringLen (str) + StringLen (mod->subname) + 3) * sizeof (Char));
+            StringCpy (tmp_str, str);
+            StringCat (tmp_str, "; ");
+            StringCat (tmp_str, mod->subname);
+            str = MemFree (str);
+            str = tmp_str;
+          }
         }
         mod = mod->next;
       }
@@ -4520,13 +4575,22 @@ GetSourceQualQualValueFromBiop
   else
   {
     ssp = biop->subtype;
-    while (ssp != NULL && str == NULL)
+    while (ssp != NULL)
     {
       if (ssp->subtype == sqdp->subtype
           && !StringHasNoText (ssp->name)
           && SubSrcSpecialMatch (ssp, fsp))
       {
-        str = StringSave (ssp->name);
+          if (str == NULL) {
+            str = StringSave (ssp->name);
+          } else {
+            tmp_str = (CharPtr) MemNew ((StringLen (str) + StringLen (ssp->name) + 3) * sizeof (Char));
+            StringCpy (tmp_str, str);
+            StringCat (tmp_str, "; ");
+            StringCat (tmp_str, ssp->name);
+            str = MemFree (str);
+            str = tmp_str;
+          }
       }
       ssp = ssp->next;
     }
@@ -6242,7 +6306,7 @@ static void StripFieldNameFromText(CharPtr text,
 {
   CharPtr src, dst;
   CharPtr field_name = NULL;
-  Int4    field_name_len;
+  Uint4    field_name_len;
   
   if (StringHasNoText (text) || field_name_func == NULL)
   {
@@ -7985,6 +8049,7 @@ static CharPtr GetRNASubtypeName (ValNodePtr vnp)
 static DialoG RNASubtypeSelectionDialog
 (GrouP                    h,
  Boolean                  allow_multi,
+ SeqEntryPtr              sep,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata)
 {
@@ -12135,23 +12200,260 @@ extern DialoG ParseFieldDestDialog
 #define PARSE_FIELD_SRC_TAXNAME          4
 #define PARSE_FIELD_SRC_COMMENT          5
 #define PARSE_FIELD_BANKIT_COMMENT       6
-#define MAX_PARSE_FIELD                  6
+#define PARSE_FIELD_STRUCTURED_COMMENT   7
+#define MAX_PARSE_FIELD                  7
 
 static CharPtr parse_src_field_list [] = 
 {
-  "Definition Line", "GenBank Flatfile", "Local ID", "Organism Name", "Comment", "Bankit Comment"  
+  "Definition Line", "GenBank Flatfile", "Local ID", "Organism Name", "Comment", "Bankit Comment", "Structured Comment"
 };
 
 static int num_parse_src_fields = sizeof (parse_src_field_list) / sizeof (CharPtr);
 
+typedef struct parsefieldsrc 
+{
+  Int4    parse_field;
+  CharPtr comment_field;
+} ParseFieldSrcData, PNTR ParseFieldSrcPtr;
+
+static ParseFieldSrcPtr ParseFieldSrcFree (ParseFieldSrcPtr pfsp)
+{
+  if (pfsp != NULL) {
+    pfsp->comment_field = MemFree (pfsp->comment_field);
+    pfsp = MemFree (pfsp);
+  }
+  return pfsp;
+}
+
+typedef struct parsefieldsrcdlg
+{
+  DIALOG_MESSAGE_BLOCK
+  DialoG     parse_field;
+  PopuP      comment_field;
+  ValNodePtr comment_field_list;
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;      
+} ParseFieldSrcDlgData, PNTR ParseFieldSrcDlgPtr;
+
+static void CleanupParseFieldSrcDialog (GraphiC g, VoidPtr data)
+{
+  ParseFieldSrcDlgPtr dlg;
+
+  dlg = (ParseFieldSrcDlgPtr) data;
+  if (dlg != NULL) {
+    dlg->comment_field_list = ValNodeFreeData(dlg->comment_field_list);
+  }
+  StdCleanupExtraProc (g, data);
+}
+
+static void ResetParseFieldSourceDialog (ParseFieldSrcDlgPtr dlg)
+{
+  if (dlg == NULL) {
+      return;
+  }
+  SendMessageToDialog (dlg->parse_field, VIB_MSG_INIT);
+  SetValue (dlg->comment_field, 0);
+  Hide (dlg->comment_field);
+}
+
+static void ParseFieldSourceDialogMessage (DialoG d, Int2 mssg)
+
+{
+  ParseFieldSrcDlgPtr dlg;
+
+  dlg = (ParseFieldSrcDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    switch (mssg) {
+      case VIB_MSG_INIT :
+        /* reset list */
+        ResetParseFieldSourceDialog (dlg);
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+static void ParseFieldChange (Pointer userdata) 
+{
+  ParseFieldSrcDlgPtr dlg;
+  ValNodePtr          vnp;
+  
+  dlg = (ParseFieldSrcDlgPtr) userdata;
+  if (dlg == NULL) return;
+   
+  vnp = DialogToPointer (dlg->parse_field);
+  if (vnp == NULL || vnp->data.intvalue != PARSE_FIELD_STRUCTURED_COMMENT) {
+    Hide (dlg->comment_field);
+  } else {
+    Show (dlg->comment_field);
+  }
+  
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }  
+}
+
+static Int4 FindCommentFieldPosition (CharPtr comment_field, ValNodePtr comment_list)
+{
+  Int4       pos = 1;
+  ValNodePtr vnp;
+  
+  if (StringHasNoText (comment_field) || comment_list == NULL) {
+    return 0;
+  }
+  
+  vnp = comment_list;
+  while (vnp != NULL && StringCmp (comment_field, vnp->data.ptrvalue) != 0) {
+    vnp = vnp->next;
+    pos++;
+  }
+  if (vnp == NULL) {
+    pos = 0;
+  }
+  return pos;
+}
+
+static void DataToParseFieldSrcDialog(DialoG d, Pointer data)
+{
+  ParseFieldSrcDlgPtr dlg;
+  ParseFieldSrcPtr    pfsp;
+  ValNode             vn;
+
+  dlg = (ParseFieldSrcDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    pfsp = (ParseFieldSrcPtr) data;
+    if (pfsp == NULL) {
+      ResetParseFieldSourceDialog (dlg);
+    } else {
+      vn.data.intvalue = pfsp->parse_field;
+      vn.next = NULL;
+      vn.choice = 0;
+      PointerToDialog (dlg->parse_field, &vn);
+      SetValue (dlg->comment_field, FindCommentFieldPosition (pfsp->comment_field, dlg->comment_field_list));
+    }
+  }
+  ParseFieldChange (dlg);     
+}
+
+static Pointer ParseFieldSrcDialogToData(DialoG d)
+{
+  ParseFieldSrcDlgPtr dlg;
+  ParseFieldSrcPtr    pfsp;
+  ValNodePtr          vnp;
+  Int4                field_pos;
+
+  dlg = (ParseFieldSrcDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+  
+  pfsp = (ParseFieldSrcPtr) MemNew (sizeof (ParseFieldSrcData));
+  vnp = DialogToPointer (dlg->parse_field);
+  if (vnp != NULL) {
+    pfsp->parse_field = vnp->data.intvalue;
+    vnp = ValNodeFree (vnp);
+  }
+  pfsp->comment_field = NULL;
+  if (pfsp->parse_field == PARSE_FIELD_STRUCTURED_COMMENT) {
+    field_pos = GetValue (dlg->comment_field);
+    if (field_pos > 0) {
+      vnp = dlg->comment_field_list;
+      field_pos --;
+      while (field_pos > 0 && vnp != NULL) {
+        vnp = vnp->next;
+        field_pos --;
+      }
+      if (vnp != NULL) {
+        pfsp->comment_field = StringSave (vnp->data.ptrvalue);
+      }
+    }
+  }
+  return pfsp;
+}
+
+static void AddCommentFieldName (SeqDescrPtr sdp, Pointer userdata)
+{
+  UserObjectPtr uop;
+  ObjectIdPtr   oip;
+  UserFieldPtr  ufp;
+  ValNodePtr    vnp;
+  Boolean       found;
+  ValNodePtr PNTR comment_field_list = (ValNodePtr PNTR) userdata;
+  
+  if (comment_field_list == NULL 
+      || sdp->choice != Seq_descr_user 
+      || sdp->extended == 0
+      || sdp->data.ptrvalue == NULL) {
+    return;
+  }
+
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  oip = uop->type;
+  if (oip != NULL && StringCmp (oip->str, "StructuredComment") == 0)
+  {
+    for (ufp = uop->data; ufp != NULL; ufp = ufp->next)
+    {
+      oip = ufp->label;
+      if (oip != NULL && !StringHasNoText (oip->str))
+      {
+        found = FALSE;
+        vnp = *comment_field_list;
+        while (vnp != NULL && !found) {
+          if (StringCmp (vnp->data.ptrvalue, oip->str) == 0) {
+            found = TRUE;
+          }
+          vnp = vnp->next;
+        }
+        if (!found) {
+          ValNodeAddPointer (comment_field_list, 0, StringSave (oip->str));
+        }
+      }
+    }
+  }
+}
+
 extern DialoG ParseFieldSourceDialog
 (GrouP                    h,
+ SeqEntryPtr              sep,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata)
 {
-  return FeatureFieldSelectionDialog (h, FALSE,
-                                      num_parse_src_fields, parse_src_field_list, 
-                                      change_notify, change_userdata);
+  ParseFieldSrcDlgPtr dlg;
+  GrouP               p;
+  ValNodePtr          vnp;
+  
+  dlg = (ParseFieldSrcDlgPtr) MemNew (sizeof (ParseFieldSrcDlgData));
+  if (dlg == NULL) 
+  {
+    return NULL;
+  }
+  
+  p = HiddenGroup (h, 2, 0, NULL);
+
+  SetObjectExtra (p, dlg, CleanupParseFieldSrcDialog);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = DataToParseFieldSrcDialog;
+  dlg->fromdialog = ParseFieldSrcDialogToData;
+  dlg->dialogmessage = ParseFieldSourceDialogMessage;
+  dlg->testdialog = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->parse_field = FeatureFieldSelectionDialog (p, FALSE,
+                                                  num_parse_src_fields, parse_src_field_list, 
+                                                  ParseFieldChange, dlg);
+
+  dlg->comment_field = PopupList (p, TRUE, NULL);
+  
+  // Add to comment_field list all user fields found in SeqEntry sep
+  VisitDescriptorsInSep (sep, &(dlg->comment_field_list), AddCommentFieldName);
+  for (vnp = dlg->comment_field_list; vnp != NULL; vnp = vnp->next) {
+    PopupItem (dlg->comment_field, vnp->data.ptrvalue);
+  }
+    
+  return (DialoG) p;  
 }
 
 typedef struct sampledialog
@@ -12167,10 +12469,10 @@ typedef struct sampledialog
   SetSamplePtr       ssp;
 } SampleDialogData, PNTR SampleDialogPtr;
 
-static void TruncateStringAfterTwoLines (CharPtr str, Int4 char_per_line)
+static void TruncateStringAfterTwoLines (CharPtr str, Uint4 char_per_line)
 {
   CharPtr cp;
-  Int4    string_len;
+  Uint4    string_len;
   
   if (StringHasNoText (str))
   {
@@ -13234,7 +13536,8 @@ typedef struct parseaction
   TextPortionPtr tp;
   FilterSetPtr   fsp;
   Int4           src_field;
-
+  CharPtr        comment_field;
+  
   SeqDescrPtr    sdp;
   SeqFeatPtr     sfp;
   SeqEntryPtr    biop_sep;
@@ -13460,6 +13763,48 @@ static void ParseActionCommentFeature (SeqFeatPtr sfp, Pointer userdata)
   DoParseAction (sfp->comment, paop);
 }
 
+
+static void ParseActionStructuredComment(SeqDescrPtr sdp, Pointer userdata)
+{
+  ParseActionOpPtr paop;
+  UserObjectPtr    uop;
+  ObjectIdPtr      oip;
+  UserFieldPtr     ufp;
+  
+  if (sdp == NULL || userdata == NULL || sdp->data.ptrvalue == NULL)
+  {
+    return;
+  }
+  
+  paop = (ParseActionOpPtr) userdata;
+  if (paop == NULL || paop->parse_action_data == NULL || paop->parse_action == NULL)
+  {
+    return;
+  }
+
+  if (sdp->choice == Seq_descr_comment)
+  {
+    DoParseAction (sdp->data.ptrvalue, paop);
+  }
+  else if (sdp->choice == Seq_descr_user && sdp->extended != 0)
+  {
+    /* Bankit Comments */
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    oip = uop->type;
+    if (oip != NULL && StringCmp (oip->str, "Submission") == 0)
+    {
+      for (ufp = uop->data; ufp != NULL; ufp = ufp->next)
+      {
+        oip = ufp->label;
+        if (oip != NULL && StringCmp (oip->str, "AdditionalComment") == 0)
+        {
+          DoParseAction (ufp->data.ptrvalue, paop);
+        }
+      }
+    }
+  }
+}
+
 static void SetSourceAndTitle (ParseActionPtr pap, SeqDescrPtr sdp, SeqAnnotPtr sap)
 {
   SeqFeatPtr sfp;
@@ -13561,6 +13906,25 @@ static ParseSourceInfoPtr ParseSourceInfoFree (ParseSourceInfoPtr psip)
   return psip;
 }
 
+static ParseSourceInfoPtr ParseSourceInfoCopy (ParseSourceInfoPtr psip)
+{
+  ParseSourceInfoPtr pcopy = NULL;
+  
+  if (psip != NULL) 
+  {
+    pcopy = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+    if (pcopy != NULL) {
+      pcopy->bsp = psip->bsp;
+      pcopy->sfp = psip->sfp;
+      pcopy->sdp = psip->sdp;
+      pcopy->sip = psip->sip;
+      pcopy->dest_list = NULL;
+      pcopy->parse_src_txt = NULL;
+    }
+  }
+  return pcopy;
+}
+
 static ValNodePtr ParseSourceListFree (ValNodePtr vnp)
 {
   if (vnp != NULL)
@@ -13576,6 +13940,7 @@ static ValNodePtr ParseSourceListFree (ValNodePtr vnp)
 typedef struct parsesource
 {
   Int4           src_field;
+  CharPtr        comment_field;
   FilterSetPtr   fsp;
   ParseFieldPtr  dst_field_data;
   ValNodePtr     source_list; /* ptrvalue points to ParseSourceInfo struct */
@@ -13962,6 +14327,76 @@ GetCommentSourcesForBioseq
   GetBankitCommentSourcesForBioseq (bsp, fsp, tp, source_list);
 }
 
+static void 
+GetStructuredCommentSourcesForBioseq 
+(BioseqPtr       bsp,
+ FilterSetPtr    fsp, 
+ TextPortionPtr  tp,
+ CharPtr         comment_field,
+ ValNodePtr PNTR source_list)
+{
+  SeqDescrPtr        sdp;
+  UserObjectPtr      uop;
+  ObjectIdPtr        oip;
+  UserFieldPtr       ufp;
+  SeqMgrDescContext  dcontext;
+  CharPtr            found_loc = NULL, parse_src_txt;
+  Int4               found_len;
+  ParseSourceInfoPtr psip;
+  
+  if (bsp == NULL || source_list == NULL)
+  {
+    return;
+  }
+  
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL)
+  {  
+    if (sdp->extended != 0
+        && sdp->data.ptrvalue != NULL) {
+      uop = (UserObjectPtr) sdp->data.ptrvalue;
+      oip = uop->type;
+      if (oip != NULL && StringCmp (oip->str, "StructuredComment") == 0)
+      {
+        for (ufp = uop->data; ufp != NULL; ufp = ufp->next)
+        {
+          oip = ufp->label;
+          if (oip != NULL && StringCmp (oip->str, comment_field) == 0
+              && (fsp == NULL
+                  || fsp->ccp == NULL
+                  || DoesStringMatchConstraint (sdp->data.ptrvalue, fsp->ccp->string_constraint)))
+          {
+            FindTextPortionInString (ufp->data.ptrvalue, tp, &found_loc, &found_len);
+            if (found_loc != NULL)
+            {
+              parse_src_txt = (CharPtr) MemNew (sizeof (Char) + (found_len + 1));
+              StringNCpy (parse_src_txt, found_loc, found_len);
+              parse_src_txt [found_len] = 0;
+      
+              psip = (ParseSourceInfoPtr) MemNew (sizeof (ParseSourceInfoData));
+              if (psip != NULL)
+              {
+                psip->bsp = bsp;
+                psip->sdp = sdp;
+                psip->sfp = NULL;
+                psip->sip = NULL;
+                psip->dest_list = NULL;
+                psip->parse_src_txt = parse_src_txt;
+                ValNodeAddPointer (source_list, 0, psip);
+              }
+              else
+              {
+                parse_src_txt = MemFree (parse_src_txt);
+              }
+            }
+          }
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_comment, &dcontext);
+  }
+}
+
 static void FindParseSourceBioseqCallback (BioseqPtr bsp, Pointer userdata)
 {
   ParseSourcePtr     psp;
@@ -13992,11 +14427,89 @@ static void FindParseSourceBioseqCallback (BioseqPtr bsp, Pointer userdata)
     case PARSE_FIELD_SRC_COMMENT:
       GetCommentSourcesForBioseq (bsp, psp->fsp, psp->tp, &(psp->source_list));
       break;
+    case PARSE_FIELD_STRUCTURED_COMMENT:
+      GetStructuredCommentSourcesForBioseq(bsp, psp->fsp, psp->tp, psp->comment_field, &(psp->source_list));
+      break;
     case PARSE_FIELD_BANKIT_COMMENT:
       GetBankitCommentSourcesForBioseq (bsp, psp->fsp, psp->tp, &(psp->source_list));
       break;
   }
 }
+
+
+static void StripFromParsedField (ParseSourceInfoPtr psip, TextPortionPtr tp, Int4 parse_field_type, CharPtr comment_field)
+{
+  CharPtr       str_found;
+  BioSourcePtr  biop = NULL;
+  UserObjectPtr uop;
+  ObjectIdPtr   oip;
+  UserFieldPtr  ufp;
+  
+  if (psip == NULL || tp == NULL) {
+    return;
+  }
+  switch (parse_field_type) {
+    case PARSE_FIELD_SRC_DEFLINE:
+    case PARSE_FIELD_SRC_COMMENT:
+      if (psip->sdp != NULL) {
+        str_found = ReplaceStringForParse(psip->sdp->data.ptrvalue, tp);
+        str_found = MemFree (str_found);
+      }
+      break;
+    case PARSE_FIELD_SRC_TAXNAME:
+      if (psip->sdp != NULL) {
+        biop = psip->sdp->data.ptrvalue;
+      } else if (psip->sfp != NULL) {
+        biop = psip->sfp->data.value.ptrvalue;
+      }
+      if (biop != NULL && biop->org != NULL) {
+        str_found = ReplaceStringForParse (biop->org->taxname, tp);
+        str_found = MemFree (str_found);
+      }
+      break;
+    case PARSE_FIELD_STRUCTURED_COMMENT:
+      if (psip->sdp != NULL
+          && psip->sdp->extended != 0
+          && psip->sdp->data.ptrvalue != NULL) {
+        uop = (UserObjectPtr) psip->sdp->data.ptrvalue;
+        oip = uop->type;
+        if (oip != NULL && StringCmp (oip->str, "StructuredComment") == 0)
+        {
+          for (ufp = uop->data; ufp != NULL; ufp = ufp->next)
+          {
+            oip = ufp->label;
+            if (oip != NULL && StringCmp (oip->str, comment_field) == 0)
+            {
+              str_found = ReplaceStringForParse (ufp->data.ptrvalue, tp);
+              str_found = MemFree (str_found);
+            }
+          }
+        }
+      }
+      break;
+    case PARSE_FIELD_BANKIT_COMMENT:
+      if (psip->sdp != NULL
+          && psip->sdp->extended != 0
+          && psip->sdp->data.ptrvalue != NULL) {
+        uop = (UserObjectPtr) psip->sdp->data.ptrvalue;
+        oip = uop->type;
+        if (oip != NULL && StringCmp (oip->str, "Submission") == 0)
+        {
+          for (ufp = uop->data; ufp != NULL; ufp = ufp->next)
+          {
+            oip = ufp->label;
+            if (oip != NULL && StringCmp (oip->str, "AdditionalComment") == 0)
+            {
+              str_found = ReplaceStringForParse (ufp->data.ptrvalue, tp);
+              str_found = MemFree (str_found);
+            }
+          }
+        }
+      }
+      break;
+  }
+}      
+
 
 static void GetBioSourceDestinationsForBioseq (BioseqPtr bsp, ValNodePtr PNTR dest_list)
 {
@@ -14841,9 +15354,11 @@ static Boolean
 FindParseActionPairList 
 (SeqEntryPtr   sep, 
  Int4          src_field,
+ CharPtr       comment_field,
  ParseFieldPtr dst_field_data,
  FilterSetPtr  fsp,
- TextPortionPtr tp)
+ TextPortionPtr tp,
+ Boolean        remove_from_parsed)
 {
   ParseSourceData    psd;
   ValNodePtr         vnp;
@@ -14851,10 +15366,12 @@ FindParseActionPairList
   GetSamplePtr       gsp;
   ExistingTextPtr    etp;
   Boolean            rval = FALSE;
+  ValNodePtr         source_list_for_removal = NULL;
   
   psd.fsp = fsp;
   psd.source_list = NULL;
   psd.src_field = src_field;
+  psd.comment_field = comment_field;
   psd.dst_field_data = dst_field_data;
   psd.fsp = fsp;
   psd.tp = tp;
@@ -14867,7 +15384,10 @@ FindParseActionPairList
   {
     if (vnp->data.ptrvalue == NULL) continue;
     psip = (ParseSourceInfoPtr) vnp->data.ptrvalue;
-    FindDestinationsForParseSourceInfo (psip, dst_field_data);
+    if (remove_from_parsed) {
+        ValNodeAddPointer (&source_list_for_removal, 0, ParseSourceInfoCopy (psip));
+    }
+    FindDestinationsForParseSourceInfo (psip, dst_field_data);    
   }
 
   /* now compare the lists, to check for destinations appearing for multiple sources */
@@ -14877,6 +15397,7 @@ FindParseActionPairList
     if (ANS_CANCEL == Message (MSG_OKC, "Some destinations have multiple sources - these will be combined."))
     {
       psd.source_list = ParseSourceListFree (psd.source_list);
+      source_list_for_removal = ParseSourceListFree (source_list_for_removal);
       return FALSE;
     }
         
@@ -14902,12 +15423,22 @@ FindParseActionPairList
       psip = (ParseSourceInfoPtr) vnp->data.ptrvalue;
       ParsePairListItem (psip, src_field, dst_field_data, tp, etp);
     }
+    
+    /* remove from sources */
+    for (vnp = source_list_for_removal; vnp != NULL; vnp = vnp->next)
+    {
+      if (vnp->data.ptrvalue == NULL) continue;
+      psip = (ParseSourceInfoPtr) vnp->data.ptrvalue;
+      StripFromParsedField (psip, tp, src_field, comment_field);      
+    }      
+    
     rval = TRUE;
   }
   
   etp = MemFree (etp);
   
   psd.source_list = ParseSourceListFree (psd.source_list);
+  source_list_for_removal = ParseSourceListFree (source_list_for_removal);
   return rval;
 }
 
@@ -15149,7 +15680,7 @@ typedef struct featureselremconform
   ButtoN  leave_original_feature_btn;  /* checkbox for conversion only */
   
   /* used for convert callback */
-  Uint2      featdef_to;
+  Uint1      featdef_to;
   CharPtr    featname_to;
   Boolean    ask_for_transcript_id_removal;
   Boolean    do_remove_transcript_ids;
@@ -15599,7 +16130,7 @@ static void
 ConvertToBondSiteOrRegion 
 (SeqFeatPtr sfp, 
  Int4       site_or_bond_type,
- Uint2      toFeat)
+ Uint1      toFeat)
 {
   SeqFeatPtr         cds;
   BioseqPtr          bsp;
@@ -15766,8 +16297,8 @@ static void AddDuplicateFeature (SeqFeatPtr sfp_orig, ValNodePtr PNTR feat_list)
 static void ConvertFeatureCallback (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
 {
   FeatureSelRemConvFormPtr   mrfp;
-  Uint2                 fromFeat;
-  Uint2                 toFeat;
+  Uint1                 fromFeat;
+  Uint1                 toFeat;
 
   mrfp = (FeatureSelRemConvFormPtr) userdata;
   
@@ -15892,7 +16423,7 @@ static void RemoveProteinProducts (ValNodePtr bsplist, Uint2 entityID, SeqEntryP
   MsgAnswer  ans;
   ValNodePtr tmp;
   BioseqPtr  bsp;
-  Uint2      itemID;
+  Uint4      itemID;
   OMProcControl  ompc;
   
   if (bsplist == NULL) 
@@ -15930,7 +16461,7 @@ static void RemoveCDNANucProtProducts (ValNodePtr bssplist, Uint2 entityID)
   MsgAnswer     ans;
   ValNodePtr    tmp;
   BioseqSetPtr  bssp;
-  Uint2         itemID;
+  Uint4         itemID;
   OMProcControl ompc;
 
   if (bssplist == NULL)
@@ -15968,7 +16499,7 @@ static Boolean FeatureRemoveOrConvertAction (Pointer userdata)
   SeqEntryPtr           sep;
   ValNodePtr            feature_type_list, vnp;
   Int4                  window_action;
-  Int2                  feat_def_choice;
+  Uint1                 feat_def_choice;
   RemoveFeatureData     rfd;
   OrigFeatPtr           ofp;
   SeqFeatPtr            sfp;
@@ -16089,6 +16620,7 @@ static void FeatureRemoveOrConvert (IteM i, Int4 first_action)
   FeatureSelRemConvFormPtr mrfp;
   WindoW              w;
   GrouP               h, k, n;
+  SeqEntryPtr         sep;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -16104,6 +16636,8 @@ static void FeatureRemoveOrConvert (IteM i, Int4 first_action)
   SetObjectExtra (w, mrfp, CleanupFeatureSelRemConvForm);
   mrfp->form = (ForM) w;
   mrfp->input_entityID = bfp->input_entityID;
+  
+  sep = GetTopSeqEntryForEntityID(bfp->input_entityID);
   
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
@@ -16123,14 +16657,14 @@ static void FeatureRemoveOrConvert (IteM i, Int4 first_action)
 
   n = HiddenGroup (h, 0, 0, NULL);
   mrfp->remove_grp = HiddenGroup (n, 0, 1, NULL);
-  mrfp->feature_select =  FeatureSelectionDialog (mrfp->remove_grp, TRUE,
+  mrfp->feature_select =  FeatureSelectionDialogEx (mrfp->remove_grp, TRUE, sep,
                                                   FeatureRemoveChangeNotify, 
                                                   mrfp);
   
   mrfp->convert_grp = HiddenGroup (n, 2, 0, NULL);
   k = HiddenGroup (mrfp->convert_grp, 0, 2, NULL);
   mrfp->from_prompt = StaticPrompt (k, "From", 0, dialogTextHeight, systemFont, 'l');
-  mrfp->feature_select_from =  FeatureSelectionDialog (k, FALSE,
+  mrfp->feature_select_from =  FeatureSelectionDialogEx (k, FALSE, sep,
                                                   FeatureRemoveChangeNotify, 
                                                   mrfp);
   AlignObjects (ALIGN_CENTER, (HANDLE) mrfp->from_prompt, (HANDLE) mrfp->feature_select_from, NULL);
@@ -16175,7 +16709,7 @@ static Boolean SelectFeatureAction (Pointer userdata)
   FilterSetPtr          fsp;
   SeqEntryPtr           sep;
   ValNodePtr            feature_type_list, vnp;
-  Int2                  feat_def_choice;
+  Uint1                 feat_def_choice;
   
   if (userdata == NULL) return FALSE;
   
@@ -16219,6 +16753,7 @@ extern void SelectFeatures (IteM i)
   FeatureSelRemConvFormPtr mrfp;
   WindoW                   w;
   GrouP                    h;
+  SeqEntryPtr              sep;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -16234,11 +16769,12 @@ extern void SelectFeatures (IteM i)
   SetObjectExtra (w, mrfp, CleanupFeatureSelRemConvForm);
   mrfp->form = (ForM) w;
   mrfp->input_entityID = bfp->input_entityID;
+  sep = GetTopSeqEntryForEntityID(bfp->input_entityID);
   
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
-  mrfp->feature_select =  FeatureSelectionDialog (h, TRUE,
+  mrfp->feature_select =  FeatureSelectionDialogEx (h, TRUE, sep,
                                                   FeatureRemoveChangeNotify, 
                                                   mrfp);
     
@@ -16269,6 +16805,7 @@ typedef struct parseform
   DialoG  source_field;
   DialoG  destination_field;
   DialoG  accept_cancel;
+  ButtoN  remove_from_parsed;
   
   ParseFieldPtr   dst_field_data;
   GetSamplePtr    gsp;
@@ -16518,7 +17055,7 @@ ParseToFeaturesOnBioseq
  SetFeatureFieldString set_string_func,
  ApplyValuePtr         avp,
  Int4                  parse_field_type,
- Uint2                 feature_subtype)
+ Uint1                 feature_subtype)
 {
   SeqFeatPtr        sfp;
   SeqMgrFeatContext fcontext;
@@ -16607,7 +17144,7 @@ ParseToFeatures
 (SeqEntryPtr   sep,
  ApplyValuePtr avp, 
  Int4          parse_field_type,
- Uint2         feature_subtype)
+ Uint1         feature_subtype)
 {
   SetFeatureFieldString set_string_func = NULL;
   ParseFeaturesData     pfd;
@@ -17171,8 +17708,9 @@ static Boolean ParseTextAction (Pointer data)
   Char                path [PATH_MAX];
   ParseActionLogData  pald;
   ParseActionData     pad;
-  ValNodePtr          list_vnp;
   Boolean             rval = FALSE;
+  ParseFieldSrcPtr pfsp;
+  Boolean             remove_from_parsed = FALSE;
 
   mp = (ParseFormPtr) data;
   if (mp == NULL)
@@ -17186,16 +17724,19 @@ static Boolean ParseTextAction (Pointer data)
     return FALSE;
   }
 
-  list_vnp = DialogToPointer (mp->source_field);
-  if (list_vnp == NULL 
-      || list_vnp->data.intvalue < PARSE_FIELD_SRC_DEFLINE 
-      || list_vnp->data.intvalue > MAX_PARSE_FIELD)
+  pfsp = DialogToPointer (mp->source_field);
+  if (pfsp == NULL 
+      || pfsp->parse_field < PARSE_FIELD_SRC_DEFLINE 
+      || pfsp->parse_field > MAX_PARSE_FIELD
+      || (pfsp->parse_field == PARSE_FIELD_STRUCTURED_COMMENT && StringHasNoText (pfsp->comment_field)))
   {
-    ValNodeFree (list_vnp);
+    pfsp = ParseFieldSrcFree (pfsp);
     return FALSE;
   }
-  pad.src_field = list_vnp->data.intvalue;
-  list_vnp = ValNodeFree (list_vnp);
+  pad.src_field = pfsp->parse_field;
+  pad.comment_field = pfsp->comment_field;
+  pfsp->comment_field = NULL;
+  pfsp = ParseFieldSrcFree (pfsp);
   
   pad.tp = DialogToPointer (mp->text_portion);
   pad.fsp = NULL;
@@ -17241,7 +17782,11 @@ static Boolean ParseTextAction (Pointer data)
         WatchCursor ();
         Update ();
         
-        rval = FindParseActionPairList (sep, pad.src_field, mp->dst_field_data, pad.fsp, pad.tp);
+        if (Enabled(mp->remove_from_parsed)) {
+            remove_from_parsed = GetStatus(mp->remove_from_parsed);
+        }
+        
+        rval = FindParseActionPairList (sep, pad.src_field, pad.comment_field, mp->dst_field_data, pad.fsp, pad.tp, remove_from_parsed);
         ObjMgrSetDirtyFlag (mp->input_entityID, TRUE);
         ObjMgrSendMsg (OM_MSG_UPDATE, mp->input_entityID, 0, 0);
         ArrowCursor ();
@@ -17264,6 +17809,7 @@ static Boolean ParseTextAction (Pointer data)
   }
   
   pad.tp = TextPortionFree (pad.tp);
+  pad.comment_field = MemFree (pad.comment_field);
   FilterSetFree (pad.fsp);
   return rval;
 }
@@ -17307,8 +17853,9 @@ static void ParseFormClearText (Pointer data)
 
 static void ParseChangeNotify (Pointer userdata)
 {
-  ParseFormPtr mp;
-  ValNodePtr     err_list;
+  ParseFormPtr     mp;
+  ValNodePtr       err_list;
+  ParseFieldSrcPtr pfsp;
 
   mp = (ParseFormPtr) userdata;
   if (mp == NULL) return;
@@ -17329,6 +17876,16 @@ static void ParseChangeNotify (Pointer userdata)
     DisableAcceptCancelDialogAccept (mp->accept_cancel);
   }
   ValNodeFree (err_list);
+  
+  /* only allow remove_from_parsed if not parsing from flatfile or local ID */
+  pfsp = DialogToPointer (mp->source_field);
+  if (pfsp != NULL 
+      && (pfsp->parse_field == PARSE_FIELD_SRC_GENBANK_FLATFILE
+          || pfsp->parse_field == PARSE_FIELD_SRC_LOCAL_ID)) {
+      Disable (mp->remove_from_parsed);
+  } else {
+      Enable (mp->remove_from_parsed);
+  }
 }
 
 static void ParseText (Uint2 input_entityID, Int4 from_field, Int4 to_field)
@@ -17336,11 +17893,14 @@ static void ParseText (Uint2 input_entityID, Int4 from_field, Int4 to_field)
   ParseFormPtr   mp;
   WindoW         w;
   GrouP          h, g1, g2, g3;
-  ValNode        vn;
   ParseFieldData pd;
+  SeqEntryPtr    sep;
+  ParseFieldSrcData pfsd;
 
   mp = (ParseFormPtr) MemNew (sizeof (ParseFormData));
   if (mp == NULL) return;
+  
+  sep = GetTopSeqEntryForEntityID (input_entityID);
   
   w = FixedWindow (-50, -33, -10, -10, "Parse Text", StdCloseWindowProc); 
   SetObjectExtra (w, mp, CleanupParseForm); 
@@ -17360,25 +17920,28 @@ static void ParseText (Uint2 input_entityID, Int4 from_field, Int4 to_field)
   
   g2 = HiddenGroup (h, 2, 0, NULL);
   StaticPrompt (g2, "From", 0, dialogTextHeight, systemFont, 'l');
-  mp->source_field = ParseFieldSourceDialog (g2, ParseChangeNotify, mp);
+  mp->source_field = ParseFieldSourceDialog (g2, sep, ParseChangeNotify, mp);
   
   g3 = HiddenGroup (h, 2, 0, NULL);
   StaticPrompt (g3, "And place in", 0, dialogTextHeight, systemFont, 'l');
   mp->destination_field = ParseFieldDestDialog (g3, ParseChangeNotify, mp);
   
+  mp->remove_from_parsed = CheckBox (h, "Remove from parsed field", NULL);  
+  
   mp->accept_cancel = AcceptCancelDialog (h, ParseTextAction, NULL, ParseFormClear, ParseFormClearText, (Pointer)mp, w);  
   AlignObjects (ALIGN_CENTER, (HANDLE) g1,
                               (HANDLE) g2,
                               (HANDLE) g3,
+                              (HANDLE) mp->remove_from_parsed,
                               (HANDLE) mp->accept_cancel,
                               NULL);
   Show (w); 
   
   if (from_field > 0)
   {
-    vn.data.intvalue = from_field;
-    vn.next = NULL;
-    PointerToDialog (mp->source_field, &vn);
+    pfsd.parse_field = from_field;
+    pfsd.comment_field = NULL;
+    PointerToDialog (mp->source_field, &pfsd);
   }
   if (to_field > 0)
   {
@@ -17479,8 +18042,8 @@ typedef struct feated
   /* for strand */
   PopuP  from_strand;
   PopuP  to_strand;
-  Boolean from_strand_val;
-  Boolean to_strand_val;
+  Uint1  from_strand_val;
+  Uint1  to_strand_val;
 
   GrouP  action_grps [NUM_FEAT_ED_ACTIONS];
   ButtoN action_btns [NUM_FEAT_ED_ACTIONS];
@@ -18004,6 +18567,7 @@ static GrouP FeatureEditorActionGroup (GrouP h, FeatEdPtr mp, Int4 first_action)
 {
   GrouP g, k, n = NULL;
   PrompT p1;
+  SeqEntryPtr sep;
   
   if (mp == NULL)
   {
@@ -18011,8 +18575,9 @@ static GrouP FeatureEditorActionGroup (GrouP h, FeatEdPtr mp, Int4 first_action)
   }
   g = HiddenGroup (h, -1, 0, NULL);
 
+  sep = GetTopSeqEntryForEntityID(mp->input_entityID);
   p1 = StaticPrompt (g, "For", 0, dialogTextHeight, systemFont, 'l');
-  mp->feature_select = FeatureSelectionDialog (g, TRUE, FeatEdChangeNotify, mp);
+  mp->feature_select = FeatureSelectionDialogEx (g, TRUE, sep, FeatEdChangeNotify, mp);
   
   k = HiddenGroup (g, -1, 0, NULL);
   mp->action_choice_grp = HiddenGroup (g, NUM_FEAT_ED_ACTIONS, 0, ChangeFeatureEditorActionGroup);
@@ -18653,7 +19218,7 @@ FeatureEditorDoOneAction
 {
   Int4            exception_choice;
   ValNodePtr      vnp;
-  Uint2           feat_def_choice;
+  Uint1           feat_def_choice;
   ApplyValueData  avd;
   GetSamplePtr    gsp;
   MsgAnswer       ans;
@@ -18777,8 +19342,8 @@ FeatureEditorDoOneAction
                                              NULL, 0, feat_def_choice, 0, mp);
         break;
       case FEAT_ED_STRAND:
-        mp->from_strand_val = GetValue (mp->from_strand);
-        mp->to_strand_val = GetValue (mp->to_strand);
+        mp->from_strand_val = (Uint1) GetValue (mp->from_strand);
+        mp->to_strand_val = (Uint1) GetValue (mp->to_strand);
         OperateOnSeqEntryConstrainedObjects (sep, fsp, 
                                              DoStrandFeatureProc,
                                              NULL, 0, feat_def_choice, 0, mp);
@@ -19532,7 +20097,7 @@ static ValNodePtr BuildCDSetList (Uint2 entityID, ChoiceConstraintPtr  ccp)
   return bd.cdset_list;
 }
 
-static SeqFeatPtr BuildOneNewCDSGeneProtFeature (CDSetPtr cdsp, Uint2 choice)
+static SeqFeatPtr BuildOneNewCDSGeneProtFeature (CDSetPtr cdsp, Uint1 choice)
 {
   BioseqPtr bsp = NULL;
   SeqLocPtr slp = NULL, slp_tmp;
@@ -19848,7 +20413,7 @@ typedef Boolean (*Nlm_TestAECRChoiceProc) PROTO((Pointer));
 typedef DialoG  (*Nlm_AECRMakeDlgProc) PROTO ((GrouP, Int4, Nlm_ChangeNotifyProc, Pointer, Uint2));
 typedef DialoG  (*Nlm_SampleDialogProc) PROTO ((GrouP, Uint2));
 typedef DialoG  (*Nlm_FieldListDlgProc) PROTO ((GrouP, Boolean, Nlm_ChangeNotifyProc, Pointer));
-typedef DialoG  (*Nlm_SubtypeListDlgProc) PROTO ((GrouP, Boolean, Nlm_ChangeNotifyProc, Pointer));
+typedef DialoG  (*Nlm_SubtypeListDlgProc) PROTO ((GrouP, Boolean, SeqEntryPtr, Nlm_ChangeNotifyProc, Pointer));
 
 #define AECR_APPLY   1
 #define AECR_EDIT    2
@@ -20961,6 +21526,7 @@ static DialoG SimpleAECRDialogEx
 {
   SimpleAECRDlgPtr dlg;
   GrouP            p, g1;
+  SeqEntryPtr      sep;
   
   dlg = (SimpleAECRDlgPtr) MemNew (sizeof (SimpleAECRDlgData));
   if (dlg == NULL)
@@ -20988,6 +21554,8 @@ static DialoG SimpleAECRDialogEx
   
   dlg->subtype_list = NULL;
   
+  sep = GetTopSeqEntryForEntityID(entityID);
+  
   if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP || action_choice == AECR_PARSE)
   {
     if (subtypelist_dlg_proc == NULL)
@@ -21004,7 +21572,7 @@ static DialoG SimpleAECRDialogEx
     
     if (subtypelist_dlg_proc != NULL)
     {
-      dlg->subtype_list = (subtypelist_dlg_proc) (g1, TRUE, change_notify, change_userdata);
+      dlg->subtype_list = (subtypelist_dlg_proc) (g1, TRUE, sep, change_notify, change_userdata);
     }
     dlg->field_list = fieldlist_dlg_proc (g1, FALSE, 
                                           change_notify, 
@@ -21038,7 +21606,7 @@ static DialoG SimpleAECRDialogEx
     {
       if (subtypelist_dlg_proc != NULL)
       {
-        dlg->subtype_list = (subtypelist_dlg_proc) (g1, TRUE, change_notify, change_userdata);
+        dlg->subtype_list = (subtypelist_dlg_proc) (g1, TRUE, sep, change_notify, change_userdata);
       }
       dlg->field_list = fieldlist_dlg_proc (g1, TRUE, 
                                             change_notify, 
@@ -21048,7 +21616,7 @@ static DialoG SimpleAECRDialogEx
     {
       if (subtypelist_dlg_proc != NULL)
       {
-        dlg->subtype_list = (subtypelist_dlg_proc) (g1, TRUE, 
+        dlg->subtype_list = (subtypelist_dlg_proc) (g1, TRUE, sep,
                                                     SimpleAECRDialogChangeNotify,
                                                     dlg);
       }
@@ -22212,6 +22780,70 @@ static DialoG SourceQualAECRDialog
   return (DialoG) p;
 }
 
+typedef struct multiqual
+{
+  Boolean           multi_found;
+  SourceQualDescPtr sqdp;
+  FilterSetPtr      fsp;
+} MultiQualData, PNTR MultiQualPtr;
+
+static void CheckForMultipleQuals (BioSourcePtr biop, Pointer userdata)
+{
+  MultiQualPtr mqp;
+  Boolean      found_one = FALSE;
+  OrgModPtr    mod;
+  SubSourcePtr       ssp;
+  
+  if (biop == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  mqp = (MultiQualPtr) userdata;
+  if (mqp->sqdp == NULL || mqp->multi_found) return;
+
+  if (mqp->sqdp->isOrgMod)
+  {
+    if (biop->org != NULL && biop->org->orgname != NULL)
+    {
+      mod = biop->org->orgname->mod;
+      while (mod != NULL && !mqp->multi_found)
+      {
+        if (mod->subtype == mqp->sqdp->subtype
+            && !StringHasNoText (mod->subname)
+            && OrgModSpecialMatch (mod, mqp->fsp))
+        {
+          if (found_one) {
+            mqp->multi_found = TRUE;
+          } else {
+            found_one = TRUE;
+          }
+        }
+        mod = mod->next;
+      }
+    }
+  }
+  else
+  {
+    ssp = biop->subtype;
+    while (ssp != NULL && !mqp->multi_found)
+    {
+      if (ssp->subtype == mqp->sqdp->subtype
+          && !StringHasNoText (ssp->name)
+          && SubSrcSpecialMatch (ssp, mqp->fsp))
+      {
+        if (found_one) {
+          mqp->multi_found = TRUE;
+        } else {
+          found_one = TRUE;
+        }
+      }
+      ssp = ssp->next;
+    }
+  }
+}
+
+
 static Boolean 
 SourceQualQualApplyEditConvertRemoveAction
 (ApplyEditConvertRemovePtr   ap,
@@ -22235,6 +22867,9 @@ SourceQualQualApplyEditConvertRemoveAction
   GetSamplePtr              gsp;
   Boolean                   rval = TRUE;
   ValNodePtr                vnp;
+  MultiQualData             mqd;
+  CharPtr                   field_name = NULL;
+  MsgAnswer                 ans;
   
   sep = GetTopSeqEntryForEntityID (ap->input_entityID);
   if (sp == NULL
@@ -22248,6 +22883,7 @@ SourceQualQualApplyEditConvertRemoveAction
   {
     return FALSE;
   }
+  
   WatchCursor ();
   Update ();
   
@@ -22255,6 +22891,36 @@ SourceQualQualApplyEditConvertRemoveAction
   
   if (action_choice == AECR_CONVERT || action_choice == AECR_SWAP || action_choice == AECR_PARSE)
   {
+    /* check for multiple sources */
+    mqd.fsp = fsp;
+    mqd.multi_found = FALSE;
+    mqd.sqdp = sp->field_list->data.ptrvalue;
+    VisitBioSourcesInSep (sep, &mqd, CheckForMultipleQuals);
+    if (!mqd.multi_found && action_choice == AECR_SWAP) {
+      mqd.sqdp = sp->field_list_to->data.ptrvalue;
+      VisitBioSourcesInSep (sep, &mqd, CheckForMultipleQuals);
+    }
+    if (mqd.multi_found) {
+      if (name_field_func != NULL) {  
+        if (action_choice == AECR_SWAP && mqd.sqdp == sp->field_list_to->data.ptrvalue) {
+          field_name = name_field_func(sp->field_list_to);
+        } else {
+          field_name = name_field_func(sp->field_list);
+        }
+      }
+      if (field_name != NULL) {
+        ans = Message (MSG_OKC, "One or more BioSources has multiple source quals.  These will be combined.  Do you want to continue?");
+      } else {
+        ans = Message (MSG_OKC, "One or more BioSources has multiple %s source quals.  These will be combined.  Do you want to continue?", field_name);
+      }
+      field_name = MemFree (field_name);
+      if (ans == ANS_CANCEL) {
+        FilterSetFree (fsp);
+        ArrowCursor();
+        Update();
+        return FALSE;
+      }
+    }
     cfd.src_field_list = sp->field_list;
     cfd.dst_field_list = sp->field_list_to;
     cfd.etp = NULL;
@@ -23020,7 +23686,7 @@ static DialoG ApplyRNAQualDialog
   g1 = HiddenGroup (p, 2, 0, NULL);
   StaticPrompt (g1, "RNA Type", 0, dialogTextHeight, systemFont, 'l');
   StaticPrompt (g1, "RNA Field", 0, dialogTextHeight, systemFont, 'l');
-  dlg->subtype_list = RNASubtypeSelectionDialog (g1, TRUE, 
+  dlg->subtype_list = RNASubtypeSelectionDialog (g1, TRUE, NULL,
                                                  RNAQualChangeNotify,
                                                  dlg);
   dlg->field_list = RNAAddFieldSelectionDialog (g1, FALSE, 
@@ -23704,6 +24370,7 @@ static DialoG GBQualRemoveDialog
 {
   RemoveGBQualDlgPtr dlg;
   GrouP              p, g1;
+  SeqEntryPtr        sep;
   
   dlg = (RemoveGBQualDlgPtr) MemNew (sizeof (RemoveGBQualDlgData));
   if (dlg == NULL)
@@ -23723,11 +24390,12 @@ static DialoG GBQualRemoveDialog
   dlg->change_notify = change_notify;
   dlg->change_userdata = change_userdata;
   dlg->entityID = entityID;
+  sep = GetTopSeqEntryForEntityID(entityID);
   
   g1 = HiddenGroup (p, 2, 0, NULL);
   StaticPrompt (g1, "Feature", 0, dialogTextHeight, systemFont, 'l');
   StaticPrompt (g1, "Qualifier", 0, dialogTextHeight, systemFont, 'l');
-  dlg->subtype_list = FeatureSelectionDialog (g1, TRUE, 
+  dlg->subtype_list = FeatureSelectionDialogEx (g1, TRUE, sep,
                                                  change_notify,
                                                  change_userdata);
   dlg->list_or_txt_grp = HiddenGroup (g1, 2, 0, GBQualChangeNotify);
@@ -23761,7 +24429,7 @@ GBQualListDialog
   {
     return SimpleAECRDialog (h, action_choice, change_notify, change_userdata,
                              NULL, ValNodeSimpleDataFree,
-                             GBQualSelectionDialog, FeatureSelectionDialog, NULL,
+                             GBQualSelectionDialog, FeatureSelectionDialogEx, NULL,
                              "Qualifier", "Feature", TRUE, entityID);
   }
 }
@@ -24060,7 +24728,7 @@ static CharPtr GetGBQualSampleName (ValNodePtr vnp)
     return NULL;
   }
   
-  feature_list = BuildFeatureDialogList (FALSE);
+  feature_list = BuildFeatureDialogList (FALSE, NULL);
   num_feature_choices = ValNodeLen (feature_list);
   
   feature_subtype = (vnp->data.intvalue - 1) / NumEditQualifiers;
@@ -24134,7 +24802,7 @@ static DialoG GetGBQualSample (GrouP h, Uint2 entityID)
   /* construct list of Features and GBQualifiers */
   ssd.field_list = NULL;
 
-  feature_list = BuildFeatureDialogList (FALSE);
+  feature_list = BuildFeatureDialogList (FALSE, NULL);
   
   for (f_vnp = feature_list; f_vnp != NULL; f_vnp = f_vnp->next)
   {
@@ -24557,7 +25225,7 @@ typedef struct combinecds
   Int4                right_end;
   Boolean             partial5;
   Boolean             partial3;  
-  Uint2               strand;
+  Uint1               strand;
   SeqFeatPtr          first_cds;
   
   /* for product name for master CDS */
@@ -24571,7 +25239,7 @@ static void GetCombinedCDSLocationCallback (SeqFeatPtr sfp, Pointer userdata)
   CombineCDSPtr     ccp;
   Int4              start, stop;
   Boolean           partial5, partial3;
-  Uint2             strand;
+  Uint1             strand;
   SeqMgrFeatContext fcontext;
 
   if (sfp == NULL 
@@ -25043,7 +25711,7 @@ static void MapToProteinSequence(ButtoN b)
   FilterSetPtr    fsp;
   LogInfoPtr      lip;
   ValNodePtr      feature_type_list, vnp;
-  Int2            feat_def_choice;
+  Uint1           feat_def_choice;
   
   mtpp = (MapToProteinPtr) GetObjectExtra (b);
   if (mtpp == NULL) {
@@ -25089,6 +25757,7 @@ extern void MapFeaturesToProteinSequence(IteM i)
   WindoW             w;
   MapToProteinPtr    mtpp;
   PrompT             p;
+  SeqEntryPtr        sep;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -25100,6 +25769,7 @@ extern void MapFeaturesToProteinSequence(IteM i)
   mtpp = (MapToProteinPtr) MemNew (sizeof (MapToProteinData));
   if (mtpp == NULL) return;
   mtpp->input_entityID = bfp->input_entityID;
+  sep = GetTopSeqEntryForEntityID(bfp->input_entityID);
   w = MovableModalWindow (-50, -33, -10, -10,
                           "Map to Protein Sequence",
                           StdCloseWindowProc);
@@ -25109,7 +25779,7 @@ extern void MapFeaturesToProteinSequence(IteM i)
   g = HiddenGroup (w, -1, 0, NULL);
   p = StaticPrompt (g, "Move features to protein of type", 0, dialogTextHeight, systemFont, 'l');
 
-  mtpp->feature_selection = FeatureSelectionDialog (g, TRUE, NULL, NULL);
+  mtpp->feature_selection = FeatureSelectionDialogEx (g, TRUE, sep, NULL, NULL);
   mtpp->constraints = FilterGroup (g, TRUE, FALSE, FALSE, FALSE, "Where feature text");
   AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) mtpp->feature_selection, (HANDLE) mtpp->constraints, NULL);
 

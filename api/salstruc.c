@@ -29,6 +29,11 @@
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.16  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.15  2005/11/22 21:56:23  bollin
 * made function for deleting locations from alignments extern
 *
@@ -447,7 +452,7 @@ NLM_EXTERN EditAlignDataPtr SetupDataPanel (EditAlignDataPtr adp)
 
   if ( adp->item_id != NULL ) MemFree (adp->item_id);
   adp->item_id = NULL;
-  adp->item_id = (Uint2Ptr)MemNew ((size_t) (lg * sizeof(Uint2)));
+  adp->item_id = (Uint4Ptr)MemNew ((size_t) (lg * sizeof(Uint4)));
   for (j=0; j<MAXLineWindow; j++) adp->item_id[j] = 0;
 
   if ( adp->seqEntity_id != NULL ) MemFree (adp->seqEntity_id);
@@ -829,7 +834,7 @@ static void GetPerCol (EditAlignDataPtr adp, Int4 hoffset)
 /*********************************************************************
 ***  is_feature_to_buffer
 *********************************************************************/
-NLM_EXTERN SelEdStructPtr is_feature_to_buffer (ValNodePtr vnphead, Uint2 bspitemID, Uint2 entityID, Int4 from, Int4 drw_width, SeqAlignPtr salp, Uint2 seqedit, ValNodePtr sqloc_list)
+NLM_EXTERN SelEdStructPtr is_feature_to_buffer (ValNodePtr vnphead, Uint4 bspitemID, Uint2 entityID, Int4 from, Int4 drw_width, SeqAlignPtr salp, Uint2 seqedit, ValNodePtr sqloc_list)
 {
   SelEdStructPtr  cds;
   SeqIdPtr        sip;
@@ -1161,7 +1166,7 @@ static SelStructPtr get_firstline (SelEdStructPtr sesp1, SelStructPtr buffer)
   return buf;
 }
 
-static Boolean has_complement (ValNodePtr params, Uint2 entityID, Uint2 itemID)
+static Boolean has_complement (ValNodePtr params, Uint2 entityID, Uint4 itemID)
 {
   ValNodePtr  vnp;
   SeqParamPtr prm;
@@ -1176,7 +1181,7 @@ static Boolean has_complement (ValNodePtr params, Uint2 entityID, Uint2 itemID)
   return FALSE;
 }
 
-static Boolean rf_on (ValNodePtr params, Uint2 entityID, Uint2 itemID, Uint2 rf)
+static Boolean rf_on (ValNodePtr params, Uint2 entityID, Uint4 itemID, Uint2 rf)
 {
   ValNodePtr  vnp;
   SeqParamPtr prm;
@@ -1209,7 +1214,8 @@ static void arrange_buffer (EditAlignDataPtr adp)
   Int4            to = adp->bufferlength-1;
   Int4            length = adp->bufferlength;
   Int2            index = 1;
-  Uint2           itemID, entityID;
+  Uint4           itemID;
+  Uint2           entityID;
   Int2            j, k;
 
   SeqAlignPtr     salp = (SeqAlignPtr) adp->sap_align->data;
@@ -1884,7 +1890,7 @@ static CharPtr restrict_todiff (CharPtr str1, CharPtr str0)
 /************************************************
 ****  get_master sequence  
 ************************************************/
-NLM_EXTERN CharPtr get_master (ValNodePtr linebuff, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+NLM_EXTERN CharPtr get_master (ValNodePtr linebuff, Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 {
   ValNodePtr      vnp;
   TextAlignBufPtr tap;
@@ -2110,7 +2116,7 @@ NLM_EXTERN ValNodePtr AddFeatFunc (SelEdStructPtr feat, ValNodePtr *featlist, Ui
   ValNodePtr       vnp = NULL;
   Int4             featstart, pspstart, pspnextstart;
   Int1             insert;
-  Uint2            itemID;
+  Uint4            itemID;
 
   if (feat == NULL) 
          return *featlist;
@@ -2295,7 +2301,8 @@ static Boolean slpfeatcollfunc(GatherContextPtr gcp)
   CdRegionPtr    crp;
   Char           label[101];
   Int4           start, stop;
-  Uint2          eID, iID, bspID;
+  Uint2          eID, bspID;
+  Uint4          iID;
   Uint2          feat_subtype;   /*types defined by objfdef.h*/
   Int2           label_size;
   Uint1          strand;
@@ -2396,7 +2403,7 @@ static Boolean slpfeatcollfunc(GatherContextPtr gcp)
 *   csop: the option for gathering the features
 *   
 ******************************************************************/
-NLM_EXTERN ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat, Uint2 seq_entityID, Uint2 bsp_itemID, Uint1 *featOrder, Boolean all_feat)
+NLM_EXTERN ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat, Uint2 seq_entityID, Uint4 bsp_itemID, Uint1 *featOrder, Boolean all_feat)
 {
   CollectSeqOption cs_option;
   GatherScope      gs;
@@ -2513,7 +2520,8 @@ NLM_EXTERN void ShowAlignmentText (FILE *fout, EditAlignDataPtr adp, SelStructPt
   Int4            width;
   Int4            widthtmp;
   Int4            from; 
-  Uint2           itemID, entityID, itemtype;
+  Uint4           itemID; 
+  Uint2           entityID, itemtype;
   Int2            numberalignline = 0;
   Int2            index = 0;
   Int2            j, k;

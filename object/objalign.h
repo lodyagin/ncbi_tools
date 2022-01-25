@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager interface for module NCBI-Seqalign
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objalign.h,v $
+* Revision 6.8  2006/07/28 16:07:48  kans
+* added new fields due to spec change
+*
 * Revision 6.7  2002/01/10 14:35:18  dondosha
 * Added GenericSeqAlignSetAsnWrite to allow writing seqalign set without a parent asn type
 *
@@ -168,6 +171,7 @@ NLM_EXTERN SeqAlignIndexPtr LIBCALL SeqAlignIndexFree (SeqAlignIndexPtr saip);
         global (1) ,
         diags (2) ,
         partial (3) ,           -- mapping pieces together
+		disc (4) ,
         other (255) } ,
     segtype = type of segs structure
         not-set 0
@@ -176,7 +180,7 @@ NLM_EXTERN SeqAlignIndexPtr LIBCALL SeqAlignIndexFree (SeqAlignIndexPtr saip);
         std 3
 		packed 4
 		disc 5      SeqAlignSet is used
-	compseq 6       used by colombe 
+		spliced 6
 *   
 *
 *****************************************************************************/
@@ -193,7 +197,7 @@ NLM_EXTERN SeqAlignIndexPtr LIBCALL SeqAlignIndexFree (SeqAlignIndexPtr saip);
 #define SAS_STD 3
 #define SAS_PACKED 4
 #define SAS_DISC 5
-#define SAS_COMPSEQ 6
+#define SAS_SPLICED 6
 
 
 typedef struct seqalign {
@@ -204,6 +208,8 @@ typedef struct seqalign {
     Pointer segs;
     struct seqalign PNTR next;
 	SeqLocPtr bounds;      /* sequence of SeqLocPtr */
+	ValNodePtr   id;
+	struct struct_User_object PNTR   ext;
     SeqIdPtr master;   /* for SAT_MASTERSLAVE */
     SeqAlignIndexPtr saip;  /* for added Alignment Indexing structures */
 	GatherIndex idx;      /* internal gather/objmgr tracking fields */
@@ -312,6 +318,132 @@ NLM_EXTERN StdSegPtr LIBCALL StdSegNew PROTO((void));
 NLM_EXTERN Boolean   LIBCALL StdSegAsnWrite PROTO((StdSegPtr ssp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN StdSegPtr LIBCALL StdSegAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN StdSegPtr LIBCALL StdSegFree PROTO((StdSegPtr ssp));
+
+/**************************************************
+*
+*    SplicedSeg
+*
+**************************************************/
+typedef struct struct_Spliced_seg {
+   ValNodePtr   product_id;
+   ValNodePtr   genomic_id;
+   Uint2   product_strand;
+   Uint2   genomic_strand;
+   Uint2   product_type;
+   /* following #defines are for enumerated type, not used by object loaders */
+#define Spliced_seg_product_type_transcript 0
+#define Spliced_seg_product_type_protein 1
+
+   struct struct_Spliced_exon PNTR   exons;
+   Int4   poly_a;
+   Int4   product_length;
+   ValNodePtr   modifiers;
+} SplicedSeg, PNTR SplicedSegPtr;
+
+
+NLM_EXTERN SplicedSegPtr LIBCALL SplicedSegFree PROTO ((SplicedSegPtr ));
+NLM_EXTERN SplicedSegPtr LIBCALL SplicedSegNew PROTO (( void ));
+NLM_EXTERN SplicedSegPtr LIBCALL SplicedSegAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SplicedSegAsnWrite PROTO (( SplicedSegPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SplicedExon
+*
+**************************************************/
+typedef struct struct_Spliced_exon {
+   struct struct_Spliced_exon PNTR next;
+   ValNodePtr   product_start;
+   ValNodePtr   product_end;
+   Int4   genomic_start;
+   Int4   genomic_end;
+   ValNodePtr   product_id;
+   ValNodePtr   genomic_id;
+   Uint2   product_strand;
+   Uint2   genomic_strand;
+   ValNodePtr   parts;
+   struct struct_Score PNTR   scores;
+   struct struct_Splice_site PNTR   splice_5_prime;
+   struct struct_Splice_site PNTR   splice_3_prime;
+   Uint1   partial;
+   struct struct_User_object PNTR   ext;
+} SplicedExon, PNTR SplicedExonPtr;
+
+
+NLM_EXTERN SplicedExonPtr LIBCALL SplicedExonFree PROTO ((SplicedExonPtr ));
+NLM_EXTERN SplicedExonPtr LIBCALL SplicedExonNew PROTO (( void ));
+NLM_EXTERN SplicedExonPtr LIBCALL SplicedExonAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SplicedExonAsnWrite PROTO (( SplicedExonPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr SplicedSegModifierPtr;
+typedef ValNode SplicedSegModifier;
+#define SplicedSegModifier_start_codon_found 1
+#define SplicedSegModifier_stop_codon_found 2
+
+
+NLM_EXTERN SplicedSegModifierPtr LIBCALL SplicedSegModifierFree PROTO ((SplicedSegModifierPtr ));
+NLM_EXTERN SplicedSegModifierPtr LIBCALL SplicedSegModifierAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SplicedSegModifierAsnWrite PROTO (( SplicedSegModifierPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr ProductPosPtr;
+typedef ValNode ProductPos;
+#define ProductPos_nucpos 1
+#define ProductPos_protpos 2
+
+
+NLM_EXTERN ProductPosPtr LIBCALL ProductPosFree PROTO ((ProductPosPtr ));
+NLM_EXTERN ProductPosPtr LIBCALL ProductPosAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ProductPosAsnWrite PROTO (( ProductPosPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr SplicedExonChunkPtr;
+typedef ValNode SplicedExonChunk;
+#define SplicedExonChunk_match 1
+#define SplicedExonChunk_mismatch 2
+#define SplicedExonChunk_diag 3
+#define SplicedExonChunk_product_ins 4
+#define SplicedExonChunk_genomic_ins 5
+
+
+NLM_EXTERN SplicedExonChunkPtr LIBCALL SplicedExonChunkFree PROTO ((SplicedExonChunkPtr ));
+NLM_EXTERN SplicedExonChunkPtr LIBCALL SplicedExonChunkAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SplicedExonChunkAsnWrite PROTO (( SplicedExonChunkPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SpliceSite
+*
+**************************************************/
+typedef struct struct_Splice_site {
+   CharPtr   bases;
+} SpliceSite, PNTR SpliceSitePtr;
+
+
+NLM_EXTERN SpliceSitePtr LIBCALL SpliceSiteFree PROTO ((SpliceSitePtr ));
+NLM_EXTERN SpliceSitePtr LIBCALL SpliceSiteNew PROTO (( void ));
+NLM_EXTERN SpliceSitePtr LIBCALL SpliceSiteAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SpliceSiteAsnWrite PROTO (( SpliceSitePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ProtPos
+*
+**************************************************/
+typedef struct struct_Prot_pos {
+   Int4   amin;
+   Int4   frame;
+} ProtPos, PNTR ProtPosPtr;
+
+
+NLM_EXTERN ProtPosPtr LIBCALL ProtPosFree PROTO ((ProtPosPtr ));
+NLM_EXTERN ProtPosPtr LIBCALL ProtPosNew PROTO (( void ));
+NLM_EXTERN ProtPosPtr LIBCALL ProtPosAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ProtPosAsnWrite PROTO (( ProtPosPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 }

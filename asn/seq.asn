@@ -1,4 +1,4 @@
---$Revision: 6.12 $
+--$Revision: 6.15 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -10,9 +10,9 @@
 NCBI-Sequence DEFINITIONS ::=
 BEGIN
 
-EXPORTS Annotdesc, Annot-descr, Bioseq, GIBB-mol, Heterogen, Numbering, Pubdesc,
-        Seq-annot, Seq-data, Seq-descr, Seq-ext, Seq-hist, Seq-inst,Seq-literal, 
-        Seqdesc;
+EXPORTS Annotdesc, Annot-descr, Bioseq, GIBB-mol, Heterogen, MolInfo,
+        Numbering, Pubdesc, Seq-annot, Seq-data, Seqdesc, Seq-descr, Seq-ext,
+        Seq-hist, Seq-inst, Seq-literal, Seqdesc;
 
 IMPORTS Date, Int-fuzz, Dbtag, Object-id, User-object FROM NCBI-General
         Seq-align FROM NCBI-Seqalign
@@ -345,8 +345,29 @@ Seq-data ::= CHOICE {              -- sequence representations
     ncbi8aa NCBI8aa ,              -- 8 bit extended amino acid codes
     ncbieaa NCBIeaa ,              -- extended ASCII 1 letter aa codes
     ncbipaa NCBIpaa ,              -- amino acid probabilities
-    ncbistdaa NCBIstdaa }          -- consecutive codes for std aas
+    ncbistdaa NCBIstdaa,           -- consecutive codes for std aas
+    gap Seq-gap                    -- gap types
+}
 
+Seq-gap ::= SEQUENCE {
+    type INTEGER {
+        unknown(0),
+        fragment(1),
+        clone(2),
+        short-arm(3),
+        heterochromatin(4),
+        centromere(5),
+        telomere(6),
+        repeat(7),
+        contig(8),
+        other(255)
+    },
+    linkage INTEGER {
+        unlinked(0),
+        linked(1),
+        other(255)
+    } OPTIONAL
+}
 
 IUPACna ::= StringStore       -- IUPAC 1 letter codes, no spaces
 IUPACaa ::= StringStore       -- IUPAC 1 letter codes, no spaces

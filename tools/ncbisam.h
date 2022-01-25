@@ -1,4 +1,4 @@
-/* $Id: ncbisam.h,v 6.4 2003/04/14 19:52:31 camacho Exp $
+/* $Id: ncbisam.h,v 6.5 2006/05/10 20:47:14 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *         External include file for ISAM library
 *
 * $Log: ncbisam.h,v $
+* Revision 6.5  2006/05/10 20:47:14  camacho
+* From Ilya Dondoshansky: Added ISAMSetDataSorted function to set flag that data is already sorted.
+*
 * Revision 6.4  2003/04/14 19:52:31  camacho
 * Added ISAMUninitSearch
 *
@@ -344,6 +347,14 @@ ISAMErrorCode ISAMGetIdxOption(ISAMObjectPtr object, Int4Ptr idx_option);
    NOTE:        None
   ------------------------------------------------------------------*/
 void ISAMSetCheckForNonUnique(ISAMObjectPtr object, Boolean test_non_unique);
+
+/** Sets the sorting_done boolean, avoiding an expensive check in the 
+ * ISAMCheckIfSorted function.
+ * @param object ISAM object to modify. [in] [out]
+ * @param num_terms Number of terms in the data, which otherwise would have to
+ *                  be calculated in ISAMCheckIfSorted. [in]
+ */
+void ISAMSetDataSorted(ISAMObjectPtr object, Int4 num_terms);
 
 #ifdef __cplusplus
 }

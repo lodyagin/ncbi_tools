@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/20/98
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
@@ -54,7 +54,8 @@ typedef struct mycolor{
 typedef struct mediainfo{
 SeqIdPtr sip;
 Int4 Gi, length;
-Uint2 entityID, itemID, itemtype;
+Uint2 entityID, itemtype;
+Uint4 itemID;
 Byte bVisible;
 BytePtr bAligned;
 ValNodePtr seq_color; /* seq_color->data.ptrvalue is ResidueColorCellPtr */

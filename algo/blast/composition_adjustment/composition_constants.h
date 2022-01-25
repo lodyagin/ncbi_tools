@@ -1,4 +1,4 @@
-/* $Id: composition_constants.h,v 1.6 2006/04/03 17:43:51 gertz Exp $
+/* $Id: composition_constants.h,v 1.8 2006/06/29 16:50:24 gertz Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -41,8 +41,10 @@
 /** Number of standard amino acids */
 #define COMPO_NUM_TRUE_AA 20
 
-/** Number of amino acids, including nonstandard ones */
-#define COMPO_PROTEIN_ALPHABET 26
+/** The largest alphabet supported by this code (the code supports 26
+    or 28 character amino acid alphabets). Used to specify the size of
+    structures that are statically allocated. */
+#define COMPO_LARGEST_ALPHABET 28
 
 /** An collection of constants that specify all permissible
  * modes of composition adjustment */

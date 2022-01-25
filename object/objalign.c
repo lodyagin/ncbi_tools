@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -366,10 +366,15 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignFree (SeqAlignPtr sap)
         case 5:                   /* disc */
             SeqAlignSetFree((SeqAlignPtr)sap->segs);
             break;
+        case 6:                   /* spliced */
+            SplicedSegFree((SplicedSegPtr)sap->segs);
+            break;
     }
     ScoreSetFree(sap->score);
+    AsnGenericChoiceSeqOfFree(sap -> id, (AsnOptFreeFunc) ObjectIdFree);
+    AsnGenericUserSeqOfFree(sap -> ext, (AsnOptFreeFunc) UserObjectFree);
 	SeqLocSetFree(sap->bounds);
-        SeqIdFree(sap->master);
+    SeqIdFree(sap->master);
 
 	ObjMgrDelete(OBJ_SEQALIGN, (Pointer)sap);
 
@@ -475,6 +480,10 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
             if (! SpecialSeqAlignSetAsnWrite((SeqAlignPtr)sap->segs, aip, SEQ_ALIGN_segs_disc))
                 goto erret;
             break;
+        case 6:                   /* spliced */
+            if (! SplicedSegAsnWrite((SplicedSegPtr)sap->segs, aip, SEQ_ALIGN_segs_spliced))
+                goto erret;
+            break;
     }
 
 	if (sap->bounds != NULL)
@@ -486,6 +495,26 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
 	   else
 		if (! SeqLocSetAsnWrite(sap->bounds, aip, SEQ_ALIGN_bounds, SEQ_ALIGN_bounds_E))
 			goto erret;
+	}
+
+	if (sap->id != NULL)
+	{
+	   if (aip->spec_version == 3)    /* ASN3 strip new value */
+	   {
+	   	ErrPostEx(SEV_ERROR,0,0,"ASN3: SeqAlign.id stripped");
+	   }
+	   else
+	    AsnGenericChoiceSeqOfAsnWrite(sap -> id, (AsnWriteFunc) ObjectIdAsnWrite, aip, SEQ_ALIGN_id, SEQ_ALIGN_id_E);
+	}
+
+	if (sap->ext != NULL)
+	{
+	   if (aip->spec_version == 3)    /* ASN3 strip new value */
+	   {
+	   	ErrPostEx(SEV_ERROR,0,0,"ASN3: SeqAlign.ext stripped");
+	   }
+	   else
+	    AsnGenericUserSeqOfAsnWrite(sap -> ext, (AsnWriteFunc) UserObjectAsnWrite, aip, SEQ_ALIGN_ext, SEQ_ALIGN_ext_E);
 	}
 
 	if (! AsnCloseStruct(aip, atp, (Pointer)sap))
@@ -512,6 +541,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     SeqAlignPtr sap=NULL;
     DenseDiagPtr currddp = NULL, ddp;
     StdSegPtr currssp = NULL, ssp;
+    Boolean isError = FALSE;
 
 	if (! loaded)
 	{
@@ -609,6 +639,31 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignAsnRead (AsnIoPtr aip, AsnTypePtr orig)
             sap->segtype = 5;
             sap->segs = (Pointer) SpecialSeqAlignSetAsnRead(aip, atp);
             if (sap->segs == NULL)
+                goto erret;
+        }
+        else if (atp == SEQ_ALIGN_segs_spliced)
+        {
+            sap->segtype = 6;
+            sap->segs = (Pointer) SplicedSegAsnRead(aip, atp);
+            if (sap->segs == NULL)
+                goto erret;
+        }
+        else if (atp == SEQ_ALIGN_bounds)
+        {
+            sap->bounds = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLocAsnRead, (AsnOptFreeFunc) SeqLocFree);
+            if (sap->bounds == NULL)
+                goto erret;
+        }
+        else if (atp == SEQ_ALIGN_id)
+        {
+            sap->id = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ObjectIdAsnRead, (AsnOptFreeFunc) ObjectIdFree);
+            if (sap->id == NULL)
+                goto erret;
+        }
+        else if (atp == SEQ_ALIGN_ext)
+        {
+            sap->ext = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) UserObjectAsnRead, (AsnOptFreeFunc) UserObjectFree);
+            if (sap->ext == NULL)
                 goto erret;
         }
 		else
@@ -1985,5 +2040,1417 @@ ret:
 erret:
     psp = PackSegFree(psp);
     goto ret;
+}
+
+
+/**************************************************
+*
+*    SplicedSegNew()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedSegPtr LIBCALL
+SplicedSegNew(void)
+{
+   SplicedSegPtr ptr = MemNew((size_t) sizeof(SplicedSeg));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SplicedSegFree()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedSegPtr LIBCALL
+SplicedSegFree(SplicedSegPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqIdFree(ptr -> product_id);
+   SeqIdFree(ptr -> genomic_id);
+   AsnGenericUserSeqOfFree(ptr -> exons, (AsnOptFreeFunc) SplicedExonFree);
+   AsnGenericChoiceSeqOfFree(ptr -> modifiers, (AsnOptFreeFunc) SplicedSegModifierFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SplicedSegAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedSegPtr LIBCALL
+SplicedSegAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SplicedSegPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SplicedSeg ::= (self contained) */
+      atp = AsnReadId(aip, amp, SPLICED_SEG);
+   } else {
+      atp = AsnLinkType(orig, SPLICED_SEG);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SplicedSegNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SPLICED_SEG_product_id) {
+      ptr -> product_id = SeqIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_SEG_genomic_id) {
+      ptr -> genomic_id = SeqIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_SEG_product_strand) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> product_strand = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_SEG_genomic_strand) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> genomic_strand = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_SEG_product_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> product_type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_SEG_exons) {
+      ptr -> exons = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SplicedExonAsnRead, (AsnOptFreeFunc) SplicedExonFree);
+      if (isError && ptr -> exons == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_SEG_poly_a) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> poly_a = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_SEG_product_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> product_length = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_SEG_modifiers) {
+      ptr -> modifiers = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SplicedSegModifierAsnRead, (AsnOptFreeFunc) SplicedSegModifierFree);
+      if (isError && ptr -> modifiers == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SplicedSegFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SplicedSegAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SplicedSegAsnWrite(SplicedSegPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SPLICED_SEG);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> product_id != NULL) {
+      if ( ! SeqIdAsnWrite(ptr -> product_id, aip, SPLICED_SEG_product_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> genomic_id != NULL) {
+      if ( ! SeqIdAsnWrite(ptr -> genomic_id, aip, SPLICED_SEG_genomic_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> product_strand > 0) {
+      av.intvalue = ptr -> product_strand;
+      retval = AsnWrite(aip, SPLICED_SEG_product_strand,  &av);
+   }
+   if (ptr -> genomic_strand > 0) {
+      av.intvalue = ptr -> genomic_strand;
+      retval = AsnWrite(aip, SPLICED_SEG_genomic_strand,  &av);
+   }
+   av.intvalue = ptr -> product_type;
+   retval = AsnWrite(aip, SPLICED_SEG_product_type,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> exons, (AsnWriteFunc) SplicedExonAsnWrite, aip, SPLICED_SEG_exons, SPLICED_SEG_exons_E);
+   if (ptr -> poly_a > 0) {
+      av.intvalue = ptr -> poly_a;
+      retval = AsnWrite(aip, SPLICED_SEG_poly_a,  &av);
+   }
+   av.intvalue = ptr -> product_length;
+   retval = AsnWrite(aip, SPLICED_SEG_product_length,  &av);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> modifiers, (AsnWriteFunc) SplicedSegModifierAsnWrite, aip, SPLICED_SEG_modifiers, SPLICED_SEG_modifiers_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    SplicedExonNew()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedExonPtr LIBCALL
+SplicedExonNew(void)
+{
+   SplicedExonPtr ptr = MemNew((size_t) sizeof(SplicedExon));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SplicedExonFree()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedExonPtr LIBCALL
+SplicedExonFree(SplicedExonPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   ProductPosFree(ptr -> product_start);
+   ProductPosFree(ptr -> product_end);
+   SeqIdFree(ptr -> product_id);
+   SeqIdFree(ptr -> genomic_id);
+   AsnGenericChoiceSeqOfFree(ptr -> parts, (AsnOptFreeFunc) SplicedExonChunkFree);
+   ScoreSetFree((ScorePtr) ptr -> scores);
+   SpliceSiteFree(ptr -> splice_5_prime);
+   SpliceSiteFree(ptr -> splice_3_prime);
+   AsnGenericUserSeqOfFree(ptr -> ext, (AsnOptFreeFunc) UserObjectFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SplicedExonAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedExonPtr LIBCALL
+SplicedExonAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SplicedExonPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SplicedExon ::= (self contained) */
+      atp = AsnReadId(aip, amp, SPLICED_EXON);
+   } else {
+      atp = AsnLinkType(orig, SPLICED_EXON);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SplicedExonNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SPLICED_EXON_product_start) {
+      ptr -> product_start = ProductPosAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_product_end) {
+      ptr -> product_end = ProductPosAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_genomic_start) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> genomic_start = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_genomic_end) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> genomic_end = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_product_id) {
+      ptr -> product_id = SeqIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_genomic_id) {
+      ptr -> genomic_id = SeqIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_product_strand) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> product_strand = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_genomic_strand) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> genomic_strand = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_parts) {
+      ptr -> parts = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SplicedExonChunkAsnRead, (AsnOptFreeFunc) SplicedExonChunkFree);
+      if (isError && ptr -> parts == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_scores) {
+      ptr -> scores = (struct struct_Score PNTR) ScoreSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_splice_5_prime) {
+      ptr -> splice_5_prime = SpliceSiteAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_splice_3_prime) {
+      ptr -> splice_3_prime = SpliceSiteAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_partial) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> partial = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPLICED_EXON_ext) {
+      ptr -> ext = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) UserObjectAsnRead, (AsnOptFreeFunc) UserObjectFree);
+      if (isError && ptr -> ext == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SplicedExonFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SplicedExonAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SplicedExonAsnWrite(SplicedExonPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SPLICED_EXON);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> product_start != NULL) {
+      if ( ! ProductPosAsnWrite(ptr -> product_start, aip, SPLICED_EXON_product_start)) {
+         goto erret;
+      }
+   }
+   if (ptr -> product_end != NULL) {
+      if ( ! ProductPosAsnWrite(ptr -> product_end, aip, SPLICED_EXON_product_end)) {
+         goto erret;
+      }
+   }
+   av.intvalue = ptr -> genomic_start;
+   retval = AsnWrite(aip, SPLICED_EXON_genomic_start,  &av);
+   av.intvalue = ptr -> genomic_end;
+   retval = AsnWrite(aip, SPLICED_EXON_genomic_end,  &av);
+   if (ptr -> product_id != NULL) {
+      if ( ! SeqIdAsnWrite(ptr -> product_id, aip, SPLICED_EXON_product_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> genomic_id != NULL) {
+      if ( ! SeqIdAsnWrite(ptr -> genomic_id, aip, SPLICED_EXON_genomic_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> product_strand > 0) {
+      av.intvalue = ptr -> product_strand;
+      retval = AsnWrite(aip, SPLICED_EXON_product_strand,  &av);
+   }
+   if (ptr -> genomic_strand > 0) {
+      av.intvalue = ptr -> genomic_strand;
+      retval = AsnWrite(aip, SPLICED_EXON_genomic_strand,  &av);
+   }
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> parts, (AsnWriteFunc) SplicedExonChunkAsnWrite, aip, SPLICED_EXON_parts, SPLICED_EXON_parts_E);
+   if (ptr -> scores != NULL) {
+      if ( ! ScoreSetAsnWrite((ScorePtr) ptr -> scores, aip, SPLICED_EXON_scores)) {
+         goto erret;
+      }
+   }
+   if (ptr -> splice_5_prime != NULL) {
+      if ( ! SpliceSiteAsnWrite(ptr -> splice_5_prime, aip, SPLICED_EXON_splice_5_prime)) {
+         goto erret;
+      }
+   }
+   if (ptr -> splice_3_prime != NULL) {
+      if ( ! SpliceSiteAsnWrite(ptr -> splice_3_prime, aip, SPLICED_EXON_splice_3_prime)) {
+         goto erret;
+      }
+   }
+   if (ptr -> partial) {
+      av.boolvalue = ptr -> partial;
+      retval = AsnWrite(aip, SPLICED_EXON_partial,  &av);
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> ext, (AsnWriteFunc) UserObjectAsnWrite, aip, SPLICED_EXON_ext, SPLICED_EXON_ext_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    SplicedSegModifierFree()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedSegModifierPtr LIBCALL
+SplicedSegModifierFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    SplicedSegModifierAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedSegModifierPtr LIBCALL
+SplicedSegModifierAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SplicedSegModifier ::= (self contained) */
+      atp = AsnReadId(aip, amp, SPLICED_SEG_MODIFIER);
+   } else {
+      atp = AsnLinkType(orig, SPLICED_SEG_MODIFIER);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == SEG_MODIFIER_start_codon_found) {
+      choice = SplicedSegModifier_start_codon_found;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == SEG_MODIFIER_stop_codon_found) {
+      choice = SplicedSegModifier_stop_codon_found;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    SplicedSegModifierAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SplicedSegModifierAsnWrite(SplicedSegModifierPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, SPLICED_SEG_MODIFIER);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case SplicedSegModifier_start_codon_found:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, SEG_MODIFIER_start_codon_found, &av);
+      break;
+   case SplicedSegModifier_stop_codon_found:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, SEG_MODIFIER_stop_codon_found, &av);
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    ProductPosFree()
+*
+**************************************************/
+NLM_EXTERN 
+ProductPosPtr LIBCALL
+ProductPosFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case ProductPos_protpos:
+      ProtPosFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    ProductPosAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ProductPosPtr LIBCALL
+ProductPosAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ProductPos ::= (self contained) */
+      atp = AsnReadId(aip, amp, PRODUCT_POS);
+   } else {
+      atp = AsnLinkType(orig, PRODUCT_POS);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == PRODUCT_POS_nucpos) {
+      choice = ProductPos_nucpos;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == PRODUCT_POS_protpos) {
+      choice = ProductPos_protpos;
+      func = (AsnReadFunc) ProtPosAsnRead;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    ProductPosAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ProductPosAsnWrite(ProductPosPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, PRODUCT_POS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case ProductPos_nucpos:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, PRODUCT_POS_nucpos, &av);
+      break;
+   case ProductPos_protpos:
+      writetype = PRODUCT_POS_protpos;
+      func = (AsnWriteFunc) ProtPosAsnWrite;
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    SplicedExonChunkFree()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedExonChunkPtr LIBCALL
+SplicedExonChunkFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    SplicedExonChunkAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SplicedExonChunkPtr LIBCALL
+SplicedExonChunkAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SplicedExonChunk ::= (self contained) */
+      atp = AsnReadId(aip, amp, SPLICED_EXON_CHUNK);
+   } else {
+      atp = AsnLinkType(orig, SPLICED_EXON_CHUNK);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == SPLICED_EXON_CHUNK_match) {
+      choice = SplicedExonChunk_match;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == SPLICED_EXON_CHUNK_mismatch) {
+      choice = SplicedExonChunk_mismatch;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == SPLICED_EXON_CHUNK_diag) {
+      choice = SplicedExonChunk_diag;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == SPLICED_EXON_CHUNK_product_ins) {
+      choice = SplicedExonChunk_product_ins;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == SPLICED_EXON_CHUNK_genomic_ins) {
+      choice = SplicedExonChunk_genomic_ins;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    SplicedExonChunkAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SplicedExonChunkAsnWrite(SplicedExonChunkPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, SPLICED_EXON_CHUNK);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case SplicedExonChunk_match:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SPLICED_EXON_CHUNK_match, &av);
+      break;
+   case SplicedExonChunk_mismatch:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SPLICED_EXON_CHUNK_mismatch, &av);
+      break;
+   case SplicedExonChunk_diag:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SPLICED_EXON_CHUNK_diag, &av);
+      break;
+   case SplicedExonChunk_product_ins:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SPLICED_EXON_CHUNK_product_ins, &av);
+      break;
+   case SplicedExonChunk_genomic_ins:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SPLICED_EXON_CHUNK_genomic_ins, &av);
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    SpliceSiteNew()
+*
+**************************************************/
+NLM_EXTERN 
+SpliceSitePtr LIBCALL
+SpliceSiteNew(void)
+{
+   SpliceSitePtr ptr = MemNew((size_t) sizeof(SpliceSite));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SpliceSiteFree()
+*
+**************************************************/
+NLM_EXTERN 
+SpliceSitePtr LIBCALL
+SpliceSiteFree(SpliceSitePtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> bases);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SpliceSiteAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SpliceSitePtr LIBCALL
+SpliceSiteAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SpliceSitePtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SpliceSite ::= (self contained) */
+      atp = AsnReadId(aip, amp, SPLICE_SITE);
+   } else {
+      atp = AsnLinkType(orig, SPLICE_SITE);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SpliceSiteNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SPLICE_SITE_bases) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> bases = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SpliceSiteFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SpliceSiteAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SpliceSiteAsnWrite(SpliceSitePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SPLICE_SITE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> bases != NULL) {
+      av.ptrvalue = ptr -> bases;
+      retval = AsnWrite(aip, SPLICE_SITE_bases,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ProtPosNew()
+*
+**************************************************/
+NLM_EXTERN 
+ProtPosPtr LIBCALL
+ProtPosNew(void)
+{
+   ProtPosPtr ptr = MemNew((size_t) sizeof(ProtPos));
+
+   ptr -> frame = 0;
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ProtPosFree()
+*
+**************************************************/
+NLM_EXTERN 
+ProtPosPtr LIBCALL
+ProtPosFree(ProtPosPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ProtPosAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ProtPosPtr LIBCALL
+ProtPosAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ProtPosPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ProtPos ::= (self contained) */
+      atp = AsnReadId(aip, amp, PROT_POS);
+   } else {
+      atp = AsnLinkType(orig, PROT_POS);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ProtPosNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == PROT_POS_amin) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> amin = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PROT_POS_frame) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> frame = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ProtPosFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ProtPosAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ProtPosAsnWrite(ProtPosPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqAlignAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, PROT_POS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> amin;
+   retval = AsnWrite(aip, PROT_POS_amin,  &av);
+   av.intvalue = ptr -> frame;
+   retval = AsnWrite(aip, PROT_POS_frame,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
 }
 

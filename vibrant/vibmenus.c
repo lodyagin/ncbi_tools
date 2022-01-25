@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.21 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,15 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.24  2006/09/14 19:18:29  ivanov
+* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
+*
+* Revision 6.23  2006/09/14 18:05:45  ivanov
+* Fixed compilation errors on MS Windows
+*
+* Revision 6.22  2006/09/14 14:45:38  kans
+* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
+*
 * Revision 6.21  2005/11/30 20:19:27  rsmith
 * Update Mac API to fix hier-menus.
 *
@@ -269,25 +278,26 @@
 #include <vibincld.h>
 
 #ifdef WIN_MAC
-# if !defined(OS_UNIX_DARWIN)
-#  include "MoreCarbonAccessors.h"
-# endif
-#define Nlm_MenuTool   MenuRef
-#define Nlm_PopupTool  Nlm_Handle
-#define Nlm_ItemTool   Nlm_Handle
+#   if !defined(OS_UNIX_DARWIN)
+#    include "MoreCarbonAccessors.h"
+#  endif
+#  define Nlm_MenuTool   MenuRef
+#  define Nlm_PopupTool  Nlm_Handle
+#  define Nlm_ItemTool   Nlm_Handle
 #endif
 
 #ifdef WIN_MSWIN
-#define Nlm_MenuTool   HMENU
-#define Nlm_PopupTool  HWND
-#define Nlm_ItemTool   Nlm_Handle
+#  include <windows.h>
+#  define Nlm_MenuTool   HMENU
+#  define Nlm_PopupTool  HWND
+#  define Nlm_ItemTool   Nlm_Handle
 #endif
 
 #ifdef WIN_MOTIF
-#define Nlm_MenuTool   Widget
-#define Nlm_PopupTool  Widget
-#define Nlm_ItemTool   Widget
-#define POPUP_LOCATION_ADJUSTMENT -2
+#  define Nlm_MenuTool   Widget
+#  define Nlm_PopupTool  Widget
+#  define Nlm_ItemTool   Widget
+#  define POPUP_LOCATION_ADJUSTMENT -2
 #endif
 
 typedef  struct  Nlm_menudata {
@@ -674,7 +684,7 @@ static Nlm_Int2 Nlm_GetChildPosition(Nlm_GraphiC child)
   Nlm_GraphiC next_child;
   for (next_child = Nlm_GetChild( parent );
        next_child != NULL  &&  next_child != child;
-       next_child = Nlm_GetNext( next_child ), pos++);
+       next_child = Nlm_GetNext( next_child ), pos++) continue;
   return (Nlm_Int2)(next_child == NULL ? 0 : pos);
 }
 #endif
@@ -4192,7 +4202,6 @@ static Nlm_ItemTool Nlm_AppendItems(Nlm_MenU m, Nlm_IteM i,
 
 #ifdef WIN_MSWIN
   {{
-  Nlm_Char accel;
   Nlm_PrepareTitleMsWin(temp, itemNames, sizeof(temp), &accel, FALSE);
   AppendMenu(h, MF_ENABLED, nextMenuNum, temp);
   Nlm_AddAccel(m, nextMenuNum, accel);
@@ -4873,7 +4882,7 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
   }
 }
 
-LRESULT CALLBACK EXPORT PopupProc (HWND hwnd, UINT message,
+static LRESULT CALLBACK EXPORT PopupProc (HWND hwnd, UINT message,
 				   WPARAM wParam, LPARAM lParam)
 {
   Nlm_PopuP  p;
@@ -5256,11 +5265,11 @@ static void Nlm_NewPopListMenu (Nlm_MenU m)
     lpfnNewPopupProc = (WNDPROC) MakeProcInstance ((FARPROC) PopupProc, Nlm_currentHInst);
   }
   if (lpfnOldPopupProc == NULL) {
-    lpfnOldPopupProc = (WNDPROC) GetWindowLong (c, GWL_WNDPROC);
-  } else if (lpfnOldPopupProc != (WNDPROC) GetWindowLong (c, GWL_WNDPROC)) {
+    lpfnOldPopupProc = (WNDPROC) GetWindowLongPtr (c, GWLP_WNDPROC);
+  } else if (lpfnOldPopupProc != (WNDPROC) GetWindowLongPtr (c, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "PopupProc subclass error");
   }
-  SetWindowLong (c, GWL_WNDPROC, (LONG) lpfnNewPopupProc);
+  SetWindowLongPtr (c, GWLP_WNDPROC, (LONG) lpfnNewPopupProc);
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(c, fntptr->handle, FALSE);
   Nlm_HandUnlock(Nlm_systemFont);

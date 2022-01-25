@@ -30,7 +30,7 @@
  */
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: composition_adjustment.c,v 1.19 2006/05/03 18:41:04 gertz Exp $";
+    "$Id: composition_adjustment.c,v 1.23 2006/09/18 18:16:41 gertz Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <limits.h>
@@ -53,9 +53,9 @@ static int trueCharPositions[COMPO_NUM_TRUE_AA] =
  * for true amino acids: ARNDCQEGHILKMFPSTWYV.  This order is
  * alphabetical in the standard three-letter abbreviation of each
  * amino acid */
-static int alphaConvert[COMPO_PROTEIN_ALPHABET] =
+static int alphaConvert[COMPO_LARGEST_ALPHABET] =
   {(-1), 0, (-1),  4, 3, 6, 13, 7, 8, 9, 11, 10, 12, 2, 14, 5, 1, 15,
-   16, 19, 17, (-1), 18, (-1), (-1), (-1)};
+   16, 19, 17, (-1), 18, (-1), (-1), (-1), (-1), (-1)};
 
 
 /**
@@ -65,7 +65,7 @@ static int alphaConvert[COMPO_PROTEIN_ALPHABET] =
 static const int kCompositionMargin = 20;
 
 /** iteration limit for Newton's method for computing Lambda */
-static const double kLambdaIterationLimit = 100;
+static const int kLambdaIterationLimit = 100;
 /** bound on error for estimating lambda */
 static const double kLambdaErrorTolerance = 0.0000001;
 /** bound on the difference between the expected value of
@@ -108,9 +108,9 @@ static double BLOS62[COMPO_NUM_TRUE_AA][COMPO_NUM_TRUE_AA]=
 
 /* Documented in composition_adjustment.h. */
 void
-Blast_ApplyPseudocounts(double * probs,
+Blast_ApplyPseudocounts(double * probs20,
                     int number_of_observations,
-                    const double * background_probs,
+                    const double * background_probs20,
                     int pseudocounts)
 {
     int i;                 /* loop index */
@@ -122,15 +122,15 @@ Blast_ApplyPseudocounts(double * probs,
     /* Normalize probabilities */
     sum = 0.0;
     for (i = 0;  i < COMPO_NUM_TRUE_AA;  i++) {
-        sum += probs[i];
+        sum += probs20[i];
     }
     if (sum == 0.0) {  /* Can't normalize a zero vector */
         sum = 1.0;
     }
     weight = dpseudocounts / (number_of_observations + dpseudocounts);
     for (i = 0;  i < COMPO_NUM_TRUE_AA;  i++) {
-        probs[i] = (1.0 - weight) * probs[i] / sum
-            + weight * background_probs[i];
+        probs20[i] = (1.0 - weight) * probs20[i] / sum
+            + weight * background_probs20[i];
     }
 }
 
@@ -426,14 +426,15 @@ Blast_FreqRatioToScore(double ** matrix, int rows, int cols, double Lambda)
  *
  * @param outputLetterProbs   the ARND letter probabilities [out]
  * @param inputLetterProbs    the NCBIstdaa letter probabilities [in]
+ * @param alphsize            the size of the alphabet
  */
 static void
 s_GatherLetterProbs(double * outputLetterProbs,
-                    const double * inputLetterProbs)
+                    const double * inputLetterProbs, int alphsize)
 {
     int c; /*index over characters*/
 
-    for (c = 0;  c < COMPO_PROTEIN_ALPHABET;  c++) {
+    for (c = 0;  c < alphsize;  c++) {
         if ((-1) != alphaConvert[c]) {
             outputLetterProbs[alphaConvert[c]] = inputLetterProbs[c];
         }
@@ -446,14 +447,15 @@ s_GatherLetterProbs(double * outputLetterProbs,
  * probabilities for nonstandard characters to zero.
  *
  * @param std_probs   the NCBIstdaa letter probabilities [out]
+ * @param alphsize    size of the NCBIstdaa alphabet [in]
  * @param probs       the ARND letter probabilities [in]
  */
 static void
-s_UnpackLetterProbs(double std_probs[], const double probs[])
+s_UnpackLetterProbs(double std_probs[], int alphsize, const double probs[])
 {
     int c; /*index over characters*/
 
-    for (c = 0;  c < COMPO_PROTEIN_ALPHABET;  c++) {
+    for (c = 0;  c < alphsize;  c++) {
         if ((-1) != alphaConvert[c]) {
             std_probs[c] = probs[alphaConvert[c]];
         } else {
@@ -469,12 +471,16 @@ s_UnpackLetterProbs(double std_probs[], const double probs[])
  *                  On entry, values for the standard amino acids must
  *                  be set; on exit, values for the two-character
  *                  ambiguities will also be set.
+ * @param alphsize  the size of the alphabet
  */
 static void
-s_SetPairAmbigProbsToSum(double probs[])
+s_SetPairAmbigProbsToSum(double probs[], int alphsize)
 {
     probs[eBchar] = probs[eDchar] + probs[eNchar];
     probs[eZchar] = probs[eEchar] + probs[eQchar];
+    if (alphsize > eJchar) {
+        probs[eJchar] = probs[eIchar] + probs[eLchar];
+    }
 }
 
 
@@ -536,17 +542,10 @@ Blast_EntropyOldFreqNewContext(double * entropy,
 }
 
 
-/**
- * Convert a matrix of target frequencies for the ARND alphabet of
- * true amino acids to a set of target frequencies for the NCBIstdaa
- * alphabet, filling in value for the two-character ambiguities (but
- * not X).
- *
- * @param StdFreq      frequencies in the NCBIstdaa alphabet [output]
- * @param freq         frequencies in the ARND alphabet [input]
- */
-static void
-s_TrueAaToStdTargetFreqs(double ** StdFreq, double ** freq)
+/* Documented in composition_adjustment.h. */
+void
+Blast_TrueAaToStdTargetFreqs(double ** StdFreq, int StdAlphsize,
+                             double ** freq)
 {
     /* Note I'm using a rough convention for this routine that uppercase
      * letters refer to quantities in the standard (larger) alphabet
@@ -555,7 +554,6 @@ s_TrueAaToStdTargetFreqs(double ** StdFreq, double ** freq)
      */
     /* Shorter names for the sizes of the two alphabets */
     const int small_alphsize = COMPO_NUM_TRUE_AA;
-    const int StdAlphsize = COMPO_PROTEIN_ALPHABET;
     int A, B;          /* characters in the std (big) alphabet */
     int a, b;          /* characters in the small alphabet */
     double sum;        /* sum of values in target_freq; used to normalize */
@@ -590,6 +588,9 @@ s_TrueAaToStdTargetFreqs(double ** StdFreq, double ** freq)
             /* Set values for two-character ambiguities */
             StdFreq[A][eBchar] = StdFreq[A][eDchar] + StdFreq[A][eNchar];
             StdFreq[A][eZchar] = StdFreq[A][eEchar] + StdFreq[A][eQchar];
+            if (StdAlphsize > eJchar) {
+                StdFreq[A][eJchar] = StdFreq[A][eIchar] + StdFreq[A][eLchar];
+            }
         }
     }
     /* Add rows to set values for two-character ambiguities */
@@ -598,6 +599,11 @@ s_TrueAaToStdTargetFreqs(double ** StdFreq, double ** freq)
 
     memcpy(StdFreq[eZchar], StdFreq[eEchar], StdAlphsize * sizeof(double));
     Nlm_AddVectors(StdFreq[eZchar], StdAlphsize, 1.0, StdFreq[eQchar]);
+
+    if (StdAlphsize > eJchar) {
+        memcpy(StdFreq[eJchar],StdFreq[eIchar], StdAlphsize * sizeof(double));
+        Nlm_AddVectors(StdFreq[eJchar], StdAlphsize, 1.0, StdFreq[eLchar]);
+    }
 }
 
 
@@ -605,18 +611,19 @@ s_TrueAaToStdTargetFreqs(double ** StdFreq, double ** freq)
  * Calculate the average score of a row or column of a matrix.
  *
  * @param M            a vector of scores
+ * @param alphsize     the size of the alphabet
  * @param incM         stride between elements of M; used to pass a column
  *                     of a score matrix to this routine by setting incM
  *                     to the number of elements in a column.
  * @param probs        background probabilities for a sequence.
  */
 static double
-s_CalcAvgScore(double * M, int incM, const double probs[])
+s_CalcAvgScore(double * M, int alphsize, int incM, const double probs[])
 {
     int j;                   /* iteration index */
     double score_iX = 0.0;   /* score of character i substituted by X */
 
-    for (j = 0;  j < COMPO_PROTEIN_ALPHABET;  j++) {
+    for (j = 0;  j < alphsize;  j++) {
         if (alphaConvert[j] >= 0) {
             /* If the column corresponds to a true amino acid */
             score_iX += M[j * incM] * probs[j];
@@ -629,58 +636,73 @@ s_CalcAvgScore(double * M, int incM, const double probs[])
  * Calculate values for the X ambiguity score, give an vector of scores and
  * a set of character probabilities.
  * @param M            a vector of scores
+ * @param alphsize     the size of the alphabet
  * @param incM         stride between elements of M; used to pass a column
  *                     of a score matrix to this routine by setting incM
  *                     to the number of elements in a column.
  * @param probs        background probabilities for a sequence.
  */
 static double
-s_CalcXScore(double * M, int incM, const double probs[])
+s_CalcXScore(double * M, int alphsize, int incM, const double probs[])
 {
-    return MIN( s_CalcAvgScore(M, incM, probs), kMaximumXscore);
+    return MIN( s_CalcAvgScore(M, alphsize, incM, probs), kMaximumXscore);
 }
 
 
 /**
  * Given a standard matrix with the scores for true amino acid, and
  * pairwise ambiguity scores set, calculate and set the scores for the
- * X and U (Selenocystiene) characters.
+ * X, U (Selenocystiene) and O (pyrrolysine) characters.
  *
  * @param M             a scoring matrix
+ * @param alphsize      the size of the alphabet
  * @param row_probs     character frequencies for the sequence corresponding
  *                      to the rows of M.
  * @param col_probs     character frequencies for the sequence corresponding
  *                      to the columns of M.
  */
 static void
-s_SetXUScores(double ** M, const double row_probs[], const double col_probs[])
+s_SetXUOScores(double ** M, int alphsize, 
+              const double row_probs[], const double col_probs[])
 {
     int i;                      /* iteration index */
     double score_XX = 0.0;      /* score of matching an X to an X */
-    /* A shorter name for COMPO_PROTEIN_ALPHABET */
-    const int alphsize = COMPO_PROTEIN_ALPHABET;
+    /* the matrix has alphsize colums (this variable exists just to
+       make things easier to read) */
+    const int cols = alphsize;  
 
     for (i = 0;  i < alphsize;  i++) {
         if (alphaConvert[i] >= 0) {
-            double avg_iX = s_CalcAvgScore(M[i], 1, col_probs);
+            double avg_iX = s_CalcAvgScore(M[i], alphsize, 1, col_probs);
             M[i][eXchar] = MIN(avg_iX, kMaximumXscore);
             score_XX += avg_iX * row_probs[i];
 
-            M[eXchar][i] = s_CalcXScore(&M[0][i], alphsize, row_probs);
+            M[eXchar][i] = s_CalcXScore(&M[0][i], alphsize, cols, row_probs);
         }
     }
     M[eXchar][eXchar] = MIN(score_XX, kMaximumXscore);
 
     /* Set X scores for pairwise ambiguity characters */
-    M[eBchar][eXchar] = s_CalcXScore(M[eBchar], 1, col_probs);
-    M[eXchar][eBchar] = s_CalcXScore(&M[0][eBchar], alphsize, row_probs);
+    M[eBchar][eXchar] = s_CalcXScore(M[eBchar], alphsize, 1, col_probs);
+    M[eXchar][eBchar] = s_CalcXScore(&M[0][eBchar], alphsize, cols, row_probs);
 
-    M[eZchar][eXchar] = s_CalcXScore(M[eZchar], 1, col_probs);
-    M[eXchar][eZchar] = s_CalcXScore(&M[0][eZchar], alphsize, row_probs);
-    /* Copy X scores to U */
+    M[eZchar][eXchar] = s_CalcXScore(M[eZchar], alphsize, 1, col_probs);
+    M[eXchar][eZchar] = s_CalcXScore(&M[0][eZchar], alphsize, cols, row_probs);
+    if( alphsize > eJchar) {
+        M[eJchar][eXchar] = s_CalcXScore(M[eJchar], alphsize, 1, col_probs);
+        M[eXchar][eJchar] =
+            s_CalcXScore(&M[0][eJchar], alphsize, cols, row_probs);
+    }
+    /* Copy X scores to U and O */
     memcpy(M[eSelenocysteine], M[eXchar], alphsize * sizeof(double));
     for (i = 0;  i < alphsize;  i++) {
         M[i][eSelenocysteine] = M[i][eXchar];
+    }
+    if (alphsize > eOchar) {
+        memcpy(M[eOchar], M[eXchar], alphsize * sizeof(double));
+        for (i = 0;  i < alphsize;  i++) {
+            M[i][eOchar] = M[i][eXchar];
+        }
     }
 }
 
@@ -700,16 +722,17 @@ static long Nint(double x)
  * @param matrix             the matrix of integer valued scores [out]
  * @param floatScoreMatrix   the matrix of floating point valued
  *                           scores [in]
- * @param numPositions       the number of rows of the matrices.
+ * @param rows               the number of rows of the matrices.
+ * @param cols               the number of columns in matrix.
  */
 static void
-s_RoundScoreMatrix(int **matrix, int numPositions,
+s_RoundScoreMatrix(int **matrix, int rows, int cols,    
                    double **floatScoreMatrix)
 {
     int p, c; /*indices over positions and characters*/
 
-    for (p = 0;  p < numPositions;  p++) {
-        for (c = 0;  c < COMPO_PROTEIN_ALPHABET;  c++) {
+    for (p = 0;  p < rows;  p++) {
+        for (c = 0;  c < cols;  c++) {
             if (floatScoreMatrix[p][c] < INT_MIN) {
                 matrix[p][c] = INT_MIN;
             } else {
@@ -727,6 +750,7 @@ s_RoundScoreMatrix(int **matrix, int numPositions,
  * characters in the NCBIstdaa amino acid alphabet.
  *
  * @param Matrix        the newly computed matrix
+ * @param Alphsize      the size of the NCBIstdaa alphabet
  * @param target_freq   target frequencies for true amino acids (20x20)
  * @param StartMatrix   a matrix containing values for the stop character
  * @param row_prob      probabilities of true amino acids in the sequence
@@ -736,7 +760,8 @@ s_RoundScoreMatrix(int **matrix, int numPositions,
  * @param Lambda        the desired scale of this matrix
  */
 static int
-s_ScoresStdAlphabet(int ** Matrix, double ** target_freq, int ** StartMatrix,
+s_ScoresStdAlphabet(int ** Matrix, int Alphsize,
+                    double ** target_freq, int ** StartMatrix,
                     const double row_prob[], const double col_prob[],
                     double Lambda)
 {
@@ -747,30 +772,28 @@ s_ScoresStdAlphabet(int ** Matrix, double ** target_freq, int ** StartMatrix,
      */
     int i;
     /* row and column probabilities in the NCBIstdaa alphabet */
-    double RowProb[COMPO_PROTEIN_ALPHABET];
-    double ColProb[COMPO_PROTEIN_ALPHABET];
+    double RowProb[COMPO_LARGEST_ALPHABET];
+    double ColProb[COMPO_LARGEST_ALPHABET];
     /* A double precision score matrix */
-    double ** Scores = Nlm_DenseMatrixNew(COMPO_PROTEIN_ALPHABET,
-                                          COMPO_PROTEIN_ALPHABET);
+    double ** Scores = Nlm_DenseMatrixNew(Alphsize, Alphsize);
     if (Scores == NULL) {
         return -1;
     }
-    s_UnpackLetterProbs(RowProb, row_prob);
-    s_SetPairAmbigProbsToSum(RowProb);
+    s_UnpackLetterProbs(RowProb, Alphsize, row_prob);
+    s_SetPairAmbigProbsToSum(RowProb, Alphsize);
 
-    s_UnpackLetterProbs(ColProb, col_prob);
-    s_SetPairAmbigProbsToSum(ColProb);
+    s_UnpackLetterProbs(ColProb, Alphsize, col_prob);
+    s_SetPairAmbigProbsToSum(ColProb, Alphsize);
 
-    s_TrueAaToStdTargetFreqs(Scores, target_freq);
-    Blast_CalcFreqRatios(Scores, COMPO_PROTEIN_ALPHABET, RowProb, ColProb);
-    Blast_FreqRatioToScore(Scores, COMPO_PROTEIN_ALPHABET,
-                           COMPO_PROTEIN_ALPHABET, Lambda);
-    s_SetXUScores(Scores, RowProb, ColProb);
+    Blast_TrueAaToStdTargetFreqs(Scores, Alphsize, target_freq);
+    Blast_CalcFreqRatios(Scores, Alphsize, RowProb, ColProb);
+    Blast_FreqRatioToScore(Scores, Alphsize, Alphsize, Lambda);
+    s_SetXUOScores(Scores, Alphsize, RowProb, ColProb);
 
-    s_RoundScoreMatrix(Matrix, COMPO_PROTEIN_ALPHABET, Scores);
+    s_RoundScoreMatrix(Matrix, Alphsize, Alphsize, Scores);
     Nlm_DenseMatrixFree(&Scores);
 
-    for (i = 0;  i < COMPO_PROTEIN_ALPHABET;  i++) {
+    for (i = 0;  i < Alphsize;  i++) {
         Matrix[i][eStopChar] = StartMatrix[i][eStopChar];
         Matrix[eStopChar][i] = StartMatrix[eStopChar][i];
     }
@@ -782,7 +805,7 @@ s_ScoresStdAlphabet(int ** Matrix, double ** target_freq, int ** StartMatrix,
  * Find the range of scores contained in an scoring matrix.
  * @param obs_min    smallest value in the matrix
  * @param obs_max    largest value in the matrix
- * @param matrix     a matrix with COMPO_NUM_TRUE_AA columns
+ * @param matrix     a scoring matrix for the ncbistdaa alphabet 
  * @param rows       number of rows in the matrix
  */
 static void s_GetScoreRange(int * obs_min, int * obs_max,
@@ -820,6 +843,7 @@ static void s_GetScoreRange(int * obs_min, int * obs_max,
  *                          the probability for score *obs_min.
  * @param matrix            a amino-acid substitution matrix (not
  *                          position-specific)
+ * @param alphsize          the size of the alphabet
  * @param subjectProbArray  is an array containing the probability of
  *                          occurrence of each residue in the subject
  * @param queryProbArray    is an array containing the probability of
@@ -830,7 +854,8 @@ static void s_GetScoreRange(int * obs_min, int * obs_max,
  */
 static int
 s_GetMatrixScoreProbs(double **scoreProb, int * obs_min, int * obs_max,
-                      int **matrix, const double *subjectProbArray,
+                      int **matrix, int alphsize, 
+                      const double *subjectProbArray,
                       const double *queryProbArray)
 {
     int aa;          /* index of an amino-acid in the 20 letter
@@ -843,7 +868,7 @@ s_GetMatrixScoreProbs(double **scoreProb, int * obs_min, int * obs_max,
                         (*obs_min). */
     int range;       /* the range of scores in the matrix */
 
-    s_GetScoreRange(obs_min, obs_max, matrix, COMPO_PROTEIN_ALPHABET);
+    s_GetScoreRange(obs_min, obs_max, matrix, alphsize);
     minScore = *obs_min;
     range = *obs_max - *obs_min + 1;
     *scoreProb = calloc(range, sizeof(double));
@@ -851,7 +876,7 @@ s_GetMatrixScoreProbs(double **scoreProb, int * obs_min, int * obs_max,
         return -1;
     }
     sprob = &((*scoreProb)[-(*obs_min)]); /*center around 0*/
-    for (irow = 0;  irow < COMPO_PROTEIN_ALPHABET;  irow++) {
+    for (irow = 0;  irow < alphsize;  irow++) {
         for (aa = 0;  aa < COMPO_NUM_TRUE_AA;  aa++) {
             jcol = trueCharPositions[aa];
             if (matrix[irow][jcol] >= minScore) {
@@ -920,19 +945,20 @@ s_GetPssmScoreProbs(double ** scoreProb, int * obs_min, int * obs_max,
 
 /* Documented in composition_adjustment.h. */
 void
-Blast_Int4MatrixFromFreq(Int4 **matrix, double ** freq, double Lambda)
+Blast_Int4MatrixFromFreq(Int4 **matrix, int alphsize, 
+                         double ** freq, double Lambda)
 {
     /* A row of the matrix in double precision */
-    double dMatrixStore[COMPO_PROTEIN_ALPHABET];
+    double dMatrixStore[COMPO_LARGEST_ALPHABET];
     double * dMatrix[1];
     int i;
 
     dMatrix[0] = dMatrixStore;
 
-    for (i = 0;  i < COMPO_PROTEIN_ALPHABET;  i++) {
-        memcpy(dMatrix[0], freq[i], COMPO_PROTEIN_ALPHABET * sizeof(double));
-        Blast_FreqRatioToScore(dMatrix, 1, COMPO_PROTEIN_ALPHABET, Lambda);
-        s_RoundScoreMatrix(&matrix[i], 1, dMatrix);
+    for (i = 0;  i < alphsize;  i++) {
+        memcpy(dMatrix[0], freq[i], alphsize * sizeof(double));
+        Blast_FreqRatioToScore(dMatrix, 1, alphsize, Lambda);
+        s_RoundScoreMatrix(&matrix[i], 1, alphsize, dMatrix);
     }
 }
 
@@ -952,26 +978,27 @@ void Blast_MatrixInfoFree(Blast_MatrixInfo ** ss)
 
 /* Documented in composition_adjustment.h. */
 Blast_MatrixInfo *
-Blast_MatrixInfoNew(int rows, int positionBased)
+Blast_MatrixInfoNew(int rows, int cols, int positionBased)
 {
     int i;       /* loop index */
     Blast_MatrixInfo * ss = malloc(sizeof(Blast_MatrixInfo));
     if (ss != NULL) {
         ss->rows = rows;
+        ss->cols = cols;
         ss->positionBased = positionBased;
 
         ss->matrixName = NULL;
         ss->startMatrix = NULL;
         ss->startFreqRatios = NULL;
 
-        ss->startMatrix  = Nlm_Int4MatrixNew(rows + 1, COMPO_PROTEIN_ALPHABET);
+        ss->startMatrix  = Nlm_Int4MatrixNew(rows + 1, cols);
         if (ss->startMatrix == NULL)
             goto error_return;
-        ss->startFreqRatios = Nlm_DenseMatrixNew(rows + 1,
-                                                 COMPO_PROTEIN_ALPHABET);
+        ss->startFreqRatios = Nlm_DenseMatrixNew(rows + 1, cols);
+
         if (ss->startFreqRatios == NULL)
             goto error_return;
-        for (i = 0;  i < COMPO_PROTEIN_ALPHABET;  i++) {
+        for (i = 0;  i < cols;  i++) {
             ss->startMatrix[rows][i] = COMPO_SCORE_MIN;
             ss->startFreqRatios[rows][i] = (double) COMPO_SCORE_MIN;
         }
@@ -990,6 +1017,7 @@ normal_return:
  *
  * @param matrix       the newly computed matrix [output]
  * @param rows         number of positions (rows) in the PSSM
+ * @param cols         the number of columns in the PSSM; the alphabet size
  * @param freq_ratios  frequency ratios defining the PSSM
  * @param start_matrix an existing PSSM; used to set values for the
  *                     stop character.
@@ -997,24 +1025,28 @@ normal_return:
  * @param Lambda       scale of the new matrix
  */
 static void
-s_ScalePSSM(int **matrix, int rows, double ** freq_ratios,
+s_ScalePSSM(int **matrix, int rows, int cols, double ** freq_ratios,
             int ** start_matrix, const double col_prob[], double Lambda)
 {
     int p;          /* index over matrix rows */
     /* A row of scores corresponding to one position in the PSSM */
-    double row[COMPO_PROTEIN_ALPHABET];
+    double row[COMPO_LARGEST_ALPHABET];
     /* A matrix with one row */
     double * row_matrix[1];
 
     row_matrix[0] = row;
 
     for (p = 0;  p < rows;  p++) {
-        memcpy(row, freq_ratios[p], sizeof(row));
+        double Xscore;
+        memcpy(row, freq_ratios[p], cols * sizeof(double));
 
-        Blast_FreqRatioToScore(row_matrix, 1, COMPO_PROTEIN_ALPHABET, Lambda);
-        row[eXchar] = s_CalcXScore(row, 1, col_prob);
-        row[eSelenocysteine] = row[eXchar];
-        s_RoundScoreMatrix(&matrix[p], 1, row_matrix);
+        Blast_FreqRatioToScore(row_matrix, 1, cols, Lambda);
+        row[eXchar] = Xscore = s_CalcXScore(row, cols, 1, col_prob);
+        row[eSelenocysteine] = Xscore;
+        if (cols > eOchar) {
+            row[eOchar] = Xscore;
+        }
+        s_RoundScoreMatrix(&matrix[p], 1, cols, row_matrix);
 
         matrix[p][eStopChar] = start_matrix[p][eStopChar];
     }
@@ -1026,6 +1058,7 @@ s_ScalePSSM(int **matrix, int rows, double ** freq_ratios,
  * at a given scale Lambda.
  *
  * @param matrix       the newly computed matrix [output]
+ * @param alphsize     the alphabet size
  * @param freq_ratios  frequency ratios defining the PSSM
  * @param start_matrix an existing matrix; used to set values for the
  *                     stop character.
@@ -1036,12 +1069,11 @@ s_ScalePSSM(int **matrix, int rows, double ** freq_ratios,
  * @param Lambda       scale of the new matrix
  */
 static int
-s_ScaleSquareMatrix(int **matrix, double ** freq_ratios, int ** start_matrix,
+s_ScaleSquareMatrix(int **matrix, int alphsize,
+                    double ** freq_ratios, int ** start_matrix,
                     const double row_prob[], const double col_prob[],
                     double Lambda)
 {
-    /* A shorter name for COMPO_PROTEIN_ALPHABET; the size of the alphabet */
-    const int alphsize = COMPO_PROTEIN_ALPHABET;
     double ** scores;     /* a double precision matrix of scores */
     int i;                /* iteration index */
 
@@ -1052,8 +1084,8 @@ s_ScaleSquareMatrix(int **matrix, double ** freq_ratios, int ** start_matrix,
         memcpy(scores[i], freq_ratios[i], alphsize * sizeof(double));
     }
     Blast_FreqRatioToScore(scores, alphsize, alphsize, Lambda);
-    s_SetXUScores(scores, row_prob, col_prob);
-    s_RoundScoreMatrix(matrix, alphsize, scores);
+    s_SetXUOScores(scores, alphsize, row_prob, col_prob);
+    s_RoundScoreMatrix(matrix, alphsize, alphsize, scores);
     for (i = 0;  i < alphsize;  i++) {
         matrix[i][eStopChar] = start_matrix[i][eStopChar];
         matrix[eStopChar][i] = start_matrix[eStopChar][i];
@@ -1091,7 +1123,8 @@ Blast_CompositionBasedStats(int ** matrix, double * LambdaRatio,
     } else {
         out_of_memory =
             s_GetMatrixScoreProbs(&scoreArray, &obs_min, &obs_max,
-                                  ss->startMatrix, resProb, queryProb);
+                                  ss->startMatrix, ss->cols,
+                                  resProb, queryProb);
     }
     if (out_of_memory)
         return -1;
@@ -1112,10 +1145,11 @@ Blast_CompositionBasedStats(int ** matrix, double * LambdaRatio,
     if (*LambdaRatio > 0) {
         double scaledLambda = ss->ungappedLambda/(*LambdaRatio);
         if (ss->positionBased) {
-            s_ScalePSSM(matrix, ss->rows, ss->startFreqRatios,
+            s_ScalePSSM(matrix, ss->rows, ss->cols, ss->startFreqRatios,
                         ss->startMatrix, resProb, scaledLambda);
         } else {
-            s_ScaleSquareMatrix(matrix, ss->startFreqRatios, ss->startMatrix,
+            s_ScaleSquareMatrix(matrix, ss->cols,
+                                ss->startFreqRatios, ss->startMatrix,
                                 queryProb, resProb, scaledLambda);
         }
     }
@@ -1128,6 +1162,7 @@ Blast_CompositionBasedStats(int ** matrix, double * LambdaRatio,
 /* Documented in composition_adjustment.h. */
 void
 Blast_ReadAaComposition(Blast_AminoAcidComposition * composition,
+                        int alphsize,
                         const Uint1 * sequence, int length)
 {
     int i; /* iteration index */
@@ -1136,7 +1171,7 @@ Blast_ReadAaComposition(Blast_AminoAcidComposition * composition,
     int numTrueAminoAcids = 0;
     double * prob = composition->prob;
 
-    for (i = 0;  i < COMPO_PROTEIN_ALPHABET;  i++) {
+    for (i = 0;  i < alphsize;  i++) {
         prob[i] = 0.0;
     }
     for (i = 0;  i < length;  i++) {
@@ -1147,7 +1182,7 @@ Blast_ReadAaComposition(Blast_AminoAcidComposition * composition,
     }
     composition->numTrueAminoAcids = numTrueAminoAcids;
     if (numTrueAminoAcids > 0) {
-        for (i = 0;  i < COMPO_PROTEIN_ALPHABET;  i++) {
+        for (i = 0;  i < alphsize;  i++) {
             prob[i] /= numTrueAminoAcids;
         }
     }
@@ -1289,6 +1324,7 @@ Blast_CompositionWorkspaceInit(Blast_CompositionWorkspace * NRrecord,
 /* Documented in composition_adjustment.h. */
 int
 Blast_CompositionMatrixAdj(int ** matrix,
+                           int alphsize,
                            EMatrixAdjustRule matrix_adjust_rule,
                            int length1,
                            int length2,
@@ -1319,8 +1355,8 @@ Blast_CompositionMatrixAdj(int ** matrix,
     int constrain_rel_entropy =
         eUnconstrainedRelEntropy != matrix_adjust_rule;
 
-    s_GatherLetterProbs(row_probs, stdaa_row_probs);
-    s_GatherLetterProbs(col_probs, stdaa_col_probs);
+    s_GatherLetterProbs(row_probs, stdaa_row_probs, alphsize);
+    s_GatherLetterProbs(col_probs, stdaa_col_probs, alphsize);
 
     switch (matrix_adjust_rule) {
     case eUnconstrainedRelEntropy:
@@ -1379,7 +1415,7 @@ Blast_CompositionMatrixAdj(int ** matrix,
         max_iterations = new_iterations;
 
     if (status == 0) {
-        status = s_ScoresStdAlphabet(matrix, NRrecord->mat_final,
+        status = s_ScoresStdAlphabet(matrix, alphsize, NRrecord->mat_final,
                                      matrixInfo->startMatrix,
                                      row_probs, col_probs,
                                      matrixInfo->ungappedLambda);
@@ -1420,6 +1456,8 @@ Blast_AdjustScores(Int4 ** matrix,
                    int compositionTestIndex,
                    double *ratioToPassBack)
 {
+    const int alphsize = matrixInfo->cols;
+
     double lambdaForPair;     /*lambda for this pair of compositions*/
     int iter_count; /*used as argument to Blast_CalcLambdaFullPrecision*/
 
@@ -1439,15 +1477,17 @@ Blast_AdjustScores(Int4 ** matrix,
     if ((compositionTestIndex > 0) ||
         ((!(matrixInfo->positionBased)) &&
          (composition_adjust_mode != eCompositionBasedStats))) {
-        s_GatherLetterProbs(permutedQueryProbs, query_composition->prob);
-        s_GatherLetterProbs(permutedMatchProbs, subject_composition->prob);
+        s_GatherLetterProbs(permutedQueryProbs,
+                            query_composition->prob, alphsize);
+        s_GatherLetterProbs(permutedMatchProbs,
+                            subject_composition->prob, alphsize);
     }
 
     if (compositionTestIndex > 0) {
         int i,j; /*loop indices*/
         /* a score matrix to pass*/
-        double **scores = Nlm_DenseMatrixNew(COMPO_PROTEIN_ALPHABET,
-                                             COMPO_PROTEIN_ALPHABET);
+        double **scores = Nlm_DenseMatrixNew(alphsize, alphsize);
+
         if (scores == NULL) {
             return -1;
         }
@@ -1469,11 +1509,8 @@ Blast_AdjustScores(Int4 ** matrix,
             lambdaForPair = COMPO_MIN_LAMBDA;
         }
         /*use lengths of query and subject not counting X's */
-        *pvalueForThisPair =
-            Blast_CompositionPvalue(query_composition->numTrueAminoAcids,
-                                    subject_composition->numTrueAminoAcids,
-                                    lambdaForPair,
-                                    compositionTestIndex - 1);
+        *pvalueForThisPair = Blast_CompositionPvalue(lambdaForPair);
+
         Nlm_DenseMatrixFree(&scores);
     }
 
@@ -1501,6 +1538,7 @@ Blast_AdjustScores(Int4 ** matrix,
         *ratioToPassBack = 1.0;    /* meaningless for this mode */
         return
             Blast_CompositionMatrixAdj(matrix,
+                                       alphsize,
                                        *matrix_adjust_rule,
                                        query_composition->
                                        numTrueAminoAcids,

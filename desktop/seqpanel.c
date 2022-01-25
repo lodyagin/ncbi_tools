@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.182 2006/02/02 18:05:09 bollin Exp $
+/* $Id: seqpanel.c,v 6.197 2006/09/21 17:33:30 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -131,6 +131,10 @@ typedef struct seqedformdata
                                              * for the translated search for the most recent
                                              * search in the Find dialog.
                                              */
+  Boolean           current_pattern_exact_match; /* This indicates whether the most recent search
+                                             * in the Find dialog was an exact match or an
+                                             * ambiguous match.
+                                             */                                             
   ValNodePtr        match_list;             /* This holds a list of SeqLocs that contain 
                                              * current_pattern.
                                              */
@@ -165,8 +169,13 @@ typedef struct seqedformdata
   SeqAnnotPtr       annot;                  /* This is the annotation that should point
                                              * to our alignment.  If it does not, the
                                              * alignment has been replaced.
-                                             */                                                                                                                               
-  
+                                             */        
+  ValNodePtr        locked_aln_bioseqs;     /* This is the list of far Bioseqs that are
+                                             * locked when the alignment panel is created
+                                             * using LockFarAlignmentBioseqs and unlocked
+                                             * when the alignment panel is removed using
+                                             * UnlockFarComponents.
+                                             */  
 } SeqEdFormData, PNTR SeqEdFormPtr;
 
 typedef struct seqpanpara 
@@ -254,7 +263,7 @@ static void ShowSeqView (BioseqViewPtr bvp, Boolean show)
   SafeShow (bvp->newFeatControl);
 }
 
-static Boolean isSelected(Uint2 itemID, Int2 itemtype, BioseqViewPtr bvp)
+static Boolean isSelected(Uint2 entityID, Uint4 itemID, Int2 itemtype, BioseqViewPtr bvp)
 {
   SelStructPtr      sel;
 
@@ -265,7 +274,7 @@ static Boolean isSelected(Uint2 itemID, Int2 itemtype, BioseqViewPtr bvp)
       for (sel = bvp->sel_list; sel != NULL; sel = sel->next)
       {
         if (sel->itemID == itemID && sel->itemtype == itemtype
-            && sel->entityID == bvp->bsp->idx.entityID)
+            && sel->entityID == entityID)
         {
           return TRUE;
         }
@@ -277,12 +286,23 @@ static Boolean isSelected(Uint2 itemID, Int2 itemtype, BioseqViewPtr bvp)
     sel = ObjMgrGetSelected ();
     while (sel != NULL)
     {
-      if (sel->entityID == bvp->salp->idx.entityID
+      if (sel->entityID == entityID
           && sel->itemtype == itemtype && sel->itemID == itemID) 
       {
         return TRUE;
       }
       sel = sel->next;
+    }
+    if (entityID == 0) 
+    {
+      for (sel = bvp->sel_list; sel != NULL; sel = sel->next)
+      {
+        if (sel->itemID == itemID && sel->itemtype == itemtype
+            && sel->entityID == entityID)
+        {
+          return TRUE;
+        }
+      }
     }
   }
   
@@ -327,7 +347,7 @@ static void SeqEdSelectFeature (BioseqViewPtr bvp, Int4 idx)
 }
 
 
-static void SelectSeqView (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
+static void SelectSeqView (BioseqViewPtr bvp, Uint2 selentityID, Uint4 selitemID,
             Uint2 selitemtype, SeqLocPtr region, Boolean select, Boolean scrollto)
 {
   RecT r_redraw;
@@ -856,6 +876,13 @@ static void onSeqViewRelease (PaneL p, PoinT pt)
   }
 
   if (bvp->wasDoubleClick) {
+      if (bvp->sendSelectMessages) {
+        if (bvp->wasShiftKey) {
+          ObjMgrAlsoSelect (entityID, itemID, itemtype, 0, NULL);
+        } else {
+          ObjMgrSelect (entityID, itemID, itemtype, 0, NULL);
+        }
+      }
       sep = GetTopSeqEntryForEntityID (entityID);
       if (bvp->launchSubviewers) {
         WatchCursor ();
@@ -882,12 +909,6 @@ static void onSeqViewRelease (PaneL p, PoinT pt)
       } else {
         return;
       }
-    if (! bvp->sendSelectMessages) return;
-    if (bvp->wasShiftKey) {
-      ObjMgrAlsoSelect (entityID, itemID, itemtype, 0, NULL);
-    } else {
-      ObjMgrSelect (entityID, itemID, itemtype, 0, NULL);
-    }
   } else if (bvp->sendSelectMessages) {
       if (bvp->wasShiftKey) {
         ObjMgrAlsoSelect (entityID, itemID, itemtype, 0, NULL);
@@ -1164,7 +1185,7 @@ static void DrawAlignment
   PaintStringEx (alnlabel, x+10, y);                                   /* Draw sequence label */
 
   
-  if (isSelected (bsp->idx.itemID, OBJ_BIOSEQ, bvp))
+  if (isSelected (bsp->idx.entityID, bsp->idx.itemID, OBJ_BIOSEQ, bvp))
   {
     Gray ();
     InvertColors ();
@@ -1780,7 +1801,7 @@ static void PaintPlusProtein
 }
 
 static void DrawFeatureCodonLines 
-(Int2 x, Int2 y, Int4 line, Int4 row, Int2 seqY, Int2 itemID, 
+(Int2 x, Int2 y, Int4 line, Int4 row, Int2 seqY, Uint4 itemID, 
                         Boolean protProduct, BioseqPtr bsp, BioseqViewPtr bvp)
 {
   Int4              codon_pos;  
@@ -1797,7 +1818,7 @@ static void DrawFeatureCodonLines
   CdRegionPtr       crp;
   Int2              frame = 1;
 
-  if (!isSelected(itemID, OBJ_SEQFEAT, bvp) || ! protProduct) 
+  if (!isSelected(bsp->idx.entityID, itemID, OBJ_SEQFEAT, bvp) || ! protProduct) 
   {
     return;
   }
@@ -2006,7 +2027,7 @@ static void DrawFeatureCodonLines
 }
 
 
-static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Int2 itemID, 
+static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Uint4 itemID, 
                         Boolean protProduct, Boolean on_the_fly,
                         BioseqPtr bsp, BioseqViewPtr bvp)
 {
@@ -2184,21 +2205,21 @@ static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Int2 itemID,
       fcontext.seqfeattype == SEQFEAT_CDREGION ? Blue() : Black();
 #if defined(WIN_MOTIF)
       DrawLineEx(x1+1, y-bvp->LineHeight/2+2, x2, y-bvp->LineHeight/2+2, 3);
-      if (isSelected(itemID, OBJ_SEQFEAT, bvp)) {
+      if (isSelected(bsp->idx.entityID, itemID, OBJ_SEQFEAT, bvp)) {
         Black();
         DrawLineEx(x1+1, y-bvp->LineHeight/2-1, x2, y-bvp->LineHeight/2-1, 1);
         DrawLineEx(x1+1, y-bvp->LineHeight/2+7, x2, y-bvp->LineHeight/2+7, 1);
       }
 #elif defined(WIN_MSWIN)  /* should be verified */
       DrawLineEx(x1+1, y-bvp->LineHeight/2+2, x2, y-bvp->LineHeight/2+2, 3);
-      if (isSelected(itemID, OBJ_SEQFEAT, bvp)) {
+      if (isSelected(bsp->idx.entityID, itemID, OBJ_SEQFEAT, bvp)) {
         Black();
         DrawLineEx(x1+1, y-bvp->LineHeight/2-1, x2, y-bvp->LineHeight/2-1, 1);
         DrawLineEx(x1+1, y-bvp->LineHeight/2+7, x2, y-bvp->LineHeight/2+7, 1);
       }
 #else
       DrawLineEx(x1, y-bvp->LineHeight/2+1, x2, y-bvp->LineHeight/2+1, 3);
-      if (isSelected(itemID, OBJ_SEQFEAT, bvp)) {
+      if (isSelected(bsp->idx.entityID, itemID, OBJ_SEQFEAT, bvp)) {
         Black();
         DrawLineEx(x1, y-bvp->LineHeight/2-2, x2, y-bvp->LineHeight/2-2, 1);
         DrawLineEx(x1, y-bvp->LineHeight/2+6, x2, y-bvp->LineHeight/2+6, 1);
@@ -2368,7 +2389,7 @@ static void DrawSeqPanel (BioseqViewPtr bvp)
   Int4             start;
   PaneL            p;
   
-  if (bvp == NULL || bvp->bsp == NULL) return;
+  if (bvp == NULL || bvp->bsp == NULL || bvp->SeqPanLines == NULL) return;
   bsp = bvp->bsp;
   p = bvp->seqView;
   spp = SeqPortNew (bsp, 0, bsp->length-1, Seq_strand_plus, Seq_code_iupacna);
@@ -3673,7 +3694,7 @@ static void PrintPlusProtein
 }
 
 
-static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Int2 itemID, 
+static void PrintFeature(CharPtr feature_line, Int4 line, Int4 row, Uint4 itemID, 
                         Boolean protProduct, BioseqPtr bsp, BioseqViewPtr bvp)
 {
   SeqMgrFeatContext fcontext;
@@ -4257,6 +4278,7 @@ static SeqEdFormPtr SeqEdFormNew (void)
   	sefp->edit_pos_end = 0;
   	sefp->current_pattern = NULL;
   	sefp->gapvnp = NULL;
+  	sefp->locked_aln_bioseqs = NULL;
   }
   InitJournal (sefp);
   return sefp;
@@ -4866,7 +4888,7 @@ static void SeqEdOnClick (PaneL pnl, PoinT pt)
     } 
     else
     {
-      if (!isSelected (splp->idx, OBJ_SEQFEAT, &(sefp->bfp->bvd)))
+      if (!isSelected (sefp->bfp->bvd.bsp->idx.entityID, splp->idx, OBJ_SEQFEAT, &(sefp->bfp->bvd)))
       {
         SeqEdSelectFeature ( &(sefp->bfp->bvd), splp->idx);
       }
@@ -5212,7 +5234,7 @@ static void SeqEdOnDrag (PaneL pnl, PoinT pt)
   
   if (sefp->feature_to_drag != NULL)
   {
-    if (!isSelected (sefp->feature_to_drag->idx.itemID, OBJ_SEQFEAT, &(sefp->bfp->bvd)))
+    if (!isSelected (sefp->feature_to_drag->idx.entityID, sefp->feature_to_drag->idx.itemID, OBJ_SEQFEAT, &(sefp->bfp->bvd)))
     {
       SeqEdSelectFeature ( &(sefp->bfp->bvd), splp->idx);
     }
@@ -5371,26 +5393,64 @@ static void SetSeqEdPanelClick (SeqEdFormPtr sefp)
 }
 
 
-static void SeqAlnToggleItemSelection (BioseqViewPtr bvp, Int2 itemID, Int2 itemtype)
+static void SeqAlnToggleItemSelection (BioseqViewPtr bvp, Uint2 entityID, Uint4 itemID, Int2 itemtype)
 {
+  SelStructPtr sel, prev = NULL;
+  
   if (bvp->salp == NULL)
   {
     return;
   }
   
-  if (isSelected (itemID, itemtype, bvp))
+  if (isSelected (entityID, itemID, itemtype, bvp))
   {
-    ObjMgrDeSelect (bvp->salp->idx.entityID, itemID, itemtype, 0, NULL);
+    ObjMgrDeSelect (entityID, itemID, itemtype, 0, NULL);
+    if (entityID == 0) 
+    {
+      /* ObjMgr won't handle selected items in the desktop */
+      sel = bvp->sel_list;
+      while (sel != NULL) 
+      {
+        if (sel->entityID == entityID && sel->itemID == itemID && sel->itemtype == itemtype) 
+        {
+          if (prev == NULL)    
+          {
+            bvp->sel_list = sel->next;
+          } else {
+            prev->next = sel->next;
+          }
+          sel->next = NULL;
+          sel = SelStructListFree (sel);
+        } 
+        else
+        {
+          prev = sel;
+          sel = sel->next;
+        }
+      }
+    }
   }
   else 
   {
     if (itemtype == OBJ_BIOSEQ)
     {
-      ObjMgrAlsoSelect (bvp->salp->idx.entityID, itemID, itemtype, 0, NULL);
+      ObjMgrAlsoSelect (entityID, itemID, itemtype, 0, NULL);
+      if (entityID == 0) 
+      {
+        sel = SelStructNew (entityID, itemID, itemtype, 0, 0, NULL, 0, FALSE);
+        sel->next = bvp->sel_list;
+        bvp->sel_list = sel;
+      }
     }
     else
     {
-      ObjMgrSelect (bvp->salp->idx.entityID, itemID, itemtype, 0, NULL);
+      ObjMgrSelect (entityID, itemID, itemtype, 0, NULL);
+      if (entityID == 0) 
+      {
+        sel = SelStructNew (entityID, itemID, itemtype, 0, 0, NULL, 0, FALSE);
+        bvp->sel_list = SelStructListFree (bvp->sel_list);
+        bvp->sel_list = sel;
+      }
     }
   }
 }
@@ -5411,6 +5471,7 @@ static void SeqAlnOnClick (PaneL pnl, PoinT pt)
   Int4              row;
   Int4              idx;
   Int4              bioSeqLine;
+  SeqEntryPtr       oldscope;
 	
   w = ParentWindow(pnl);
   if (w == NULL) return;
@@ -5433,6 +5494,11 @@ static void SeqAlnOnClick (PaneL pnl, PoinT pt)
   {
     sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, row);
     bsp = BioseqFind (sip);
+    if (bsp == NULL) {
+      oldscope = SeqEntrySetScope (NULL);
+      bsp = BioseqFind (sip);
+      SeqEntrySetScope (oldscope);
+    }
     if (bsp != NULL)
     {
       if (!is_ctrl)
@@ -5442,7 +5508,7 @@ static void SeqAlnOnClick (PaneL pnl, PoinT pt)
          */
         ObjMgrDeSelectAll ();
       }
-      SeqAlnToggleItemSelection (&(sefp->bfp->bvd), bsp->idx.itemID, OBJ_BIOSEQ);
+      SeqAlnToggleItemSelection (&(sefp->bfp->bvd), bsp->idx.entityID, bsp->idx.itemID, OBJ_BIOSEQ);
       /* if user double-clicks on sequence, make it the target */
       if (is_double_click)
       {
@@ -5476,7 +5542,7 @@ static void SeqAlnOnClick (PaneL pnl, PoinT pt)
       bsp = BioseqFind (sip);
       if (bsp != NULL)
       {
-        SeqAlnToggleItemSelection (&(sefp->bfp->bvd), idx, OBJ_SEQFEAT);
+        SeqAlnToggleItemSelection (&(sefp->bfp->bvd), bsp->idx.entityID, idx, OBJ_SEQFEAT);
         /* make target sequence the one the feature belongs to */
         sefp->bfp->bvd.TargetRow = GetAlnRowForBsp (bsp, sefp->bfp->bvd.salp);
         Select (sefp->bfp->bvd.seqView);
@@ -6616,6 +6682,8 @@ static void CleanupSeqEdForm (GraphiC g, VoidPtr data)
       Remove (sefp->find_window);
     }
     BioseqUnlock (sefp->bfp->bvd.bsp);
+    
+    sefp->locked_aln_bioseqs = UnlockFarComponents (sefp->locked_aln_bioseqs);    
   }
 
   StdCleanupFormProc (g, data);
@@ -6936,6 +7004,7 @@ typedef struct finddlgdata
   PopuP        frame_choice_popup;
   PrompT       prompt;
   WindoW PNTR  find_window;
+  GrouP        exact_match_choice;
 
 } FindDlgData, PNTR FindDlgPtr;
 
@@ -6950,6 +7019,18 @@ static void LIBCALLBACK MatchProc (Int4 position, CharPtr name, CharPtr pattern,
   
   ValNodeAddInt (loc_list, 0, position);
 }
+
+
+static void LIBCALLBACK ProtMatchProc (Int4 position, CharPtr name, CharPtr pattern, Pointer userdata)
+{
+  ValNodePtr PNTR loc_list;
+  
+  loc_list = (ValNodePtr PNTR) userdata;
+  if (loc_list == NULL) return;
+  
+  ValNodeAddInt (loc_list, 0, position);
+}
+
 
 static void ConvertIntListToLocList (ValNodePtr loc_list, BioseqPtr bsp, Int4 pattern_len)
 {
@@ -6973,33 +7054,60 @@ static void ConvertIntListToLocList (ValNodePtr loc_list, BioseqPtr bsp, Int4 pa
 }
 
 
-static ValNodePtr FindSeqMatch (BioseqPtr bsp, CharPtr pattern)
+static ValNodePtr FindProteinMatch (BioseqPtr bsp, CharPtr pattern, Boolean exact_match)
+{
+  ProtSearchPtr psp;
+  ValNodePtr    pattern_loc_list = NULL;
+  SearchFlgType flags = 0;
+
+  if (bsp == NULL || StringHasNoText (pattern)
+      || ! ISA_aa (bsp->mol)
+      || bsp->repr != Seq_repr_raw
+      || bsp->seq_data_type != Seq_code_ncbieaa)
+  {
+    return NULL;
+  }
+
+  psp = ProtSearchNew (ProtMatchProc, &pattern_loc_list);
+
+  if (!exact_match) {
+    flags |= SEQ_SEARCH_EXPAND_PATTERN;
+  }
+  ProtSearchAddProteinPattern (psp, "Find", pattern, flags);
+
+  ProtSearchProcessBioseq (psp, bsp);
+  psp = ProtSearchFree (psp);
+  
+  ConvertIntListToLocList (pattern_loc_list, bsp, StringLen (pattern));
+  return pattern_loc_list;  
+}
+
+
+static ValNodePtr FindSeqMatch (BioseqPtr bsp, CharPtr pattern, Boolean exact_match)
 
 {
   SeqSearchPtr  tbl;
   ValNodePtr    pattern_loc_list = NULL;
-  SeqPortPtr    spp;
-  Uchar         buf[2];
-  Int2          ctr;
+  Uint4         flags = SEQ_SEARCH_JUST_TOP_STRAND;
 
   if (bsp == NULL || StringHasNoText (pattern))
   {
     return NULL;
   }
   
+  if (ISA_aa (bsp->mol)) {
+    return FindProteinMatch(bsp, pattern, exact_match);
+  }
+  
   tbl = SeqSearchNew (MatchProc, &pattern_loc_list);
   if (tbl == NULL) return NULL;
 
-  SeqSearchAddNucleotidePattern (tbl, "Find", pattern, 1, SEQ_SEARCH_JUST_TOP_STRAND); 
-
-  spp = SeqPortNew (bsp, 0, bsp->length-1, Seq_strand_plus, Seq_code_iupacna);
-  SeqPortSeek (spp, 0, SEEK_SET);
-  ctr = SeqPortRead (spp, buf, 1);
-  while (ctr > 0)
-  {
-    SeqSearchProcessCharacter (tbl, buf[0]);
-    ctr = SeqPortRead (spp, buf, 1);
+  if (!exact_match) {
+      flags |= SEQ_SEARCH_EXPAND_PATTERN;
   }
+  SeqSearchAddNucleotidePattern (tbl, "Find", pattern, 1, flags); 
+
+  SeqSearchProcessBioseq (tbl, bsp);
 
   SeqSearchFree (tbl);
   ConvertIntListToLocList (pattern_loc_list, bsp, StringLen (pattern));
@@ -7046,26 +7154,91 @@ static ValNodePtr MergeIntLists (ValNodePtr list1, ValNodePtr list2)
   return new_list;
 }
 
+
+static ValNodePtr ReverseValNodeList (ValNodePtr vnp_list)
+{
+  ValNodePtr tmp_list = NULL, vnp_next;
+  
+  if (vnp_list == NULL || vnp_list->next == NULL) {
+    return vnp_list;
+  }
+  
+  while (vnp_list != NULL) {
+    vnp_next = vnp_list->next;
+    vnp_list->next = tmp_list;
+    tmp_list = vnp_list;
+    vnp_list = vnp_next;
+  }
+  return tmp_list;
+}
+
+
+static ValNodePtr FindInCDSTranslation (SeqFeatPtr fake_cds, CharPtr pattern, Boolean exact_match)
+{
+  ByteStorePtr  bs;
+  BioseqPtr     prot_bsp;
+  ValNodePtr    match_list = NULL, vnp;
+  Int4          start, stop, pattern_len;
+  ProtSearchPtr psp;
+  SearchFlgType flags = 0;
+  
+  if (fake_cds == NULL || fake_cds->data.choice != SEQFEAT_CDREGION || StringHasNoText (pattern)) {
+    return NULL;
+  }
+  
+  bs = ProteinFromCdRegionEx(fake_cds, TRUE, FALSE);
+  if(bs == NULL) return NULL;
+  prot_bsp = BioseqNew();
+  prot_bsp->mol = Seq_mol_aa;
+  prot_bsp->repr = Seq_repr_raw;
+  prot_bsp->seq_data = bs;
+  prot_bsp->seq_data_type = Seq_code_iupacaa;
+  start = SeqLocStart (fake_cds->location);
+  stop = SeqLocStop (fake_cds->location);
+  prot_bsp->length = ABS (stop - start) + 1;
+    
+  psp = ProtSearchNew (ProtMatchProc, &match_list);
+
+  if (!exact_match) {
+    flags |= SEQ_SEARCH_EXPAND_PATTERN;
+  }
+  ProtSearchAddProteinPattern (psp, "Find", pattern, flags);
+
+  ProtSearchProcessBioseq (psp, prot_bsp);
+  psp = ProtSearchFree (psp);
+  
+  prot_bsp = BioseqFree (prot_bsp);
+          
+  if (SeqLocStrand (fake_cds->location) == Seq_strand_minus) {
+    /* reverse the locations */
+    match_list = ReverseValNodeList (match_list);
+    /* position is relative to the end of the coding region */
+    pattern_len = StringLen (pattern);
+    for (vnp = match_list; vnp != NULL; vnp = vnp->next) {
+      vnp->data.intvalue = stop - (3 * (vnp->data.intvalue + pattern_len)) + 1;
+    }
+  } else {
+    /* position is relative to the start of the coding region */
+    for (vnp = match_list; vnp != NULL; vnp = vnp->next) {
+      vnp->data.intvalue = start + 3 * (vnp->data.intvalue);
+    }
+  }
+  
+  return match_list;
+}
+
+
 static ValNodePtr FindTranslationMatchOneFrame 
 (BioseqPtr       bsp,
  CharPtr         pattern,
- Int4            frame)
+ Int4            frame,
+ Boolean         exact_match)
 {
   SeqFeatPtr    fake_cds;
   Uint1         strand;
   Int4          start;
   Int4          stop;
-  ByteStorePtr  bs;
-  CharPtr       frame_str;
-  CharPtr       cp;
-  ValNodePtr    pattern_loc_list = NULL, vnp;
-  Int4          prot_pos;
-  TextFsaPtr    tfp;
-  Int2          state;
-  ValNodePtr    matches;
-  Uchar         ch;
-  Int4          pattern_len;
-  CharPtr       scratch_pattern;
+  ValNodePtr    pattern_loc_list = NULL;
   
   if (bsp == NULL || StringHasNoText (pattern))
   {
@@ -7111,73 +7284,13 @@ static ValNodePtr FindTranslationMatchOneFrame
   
   fake_cds = make_fake_cds(bsp, start, stop, strand);
   
-  bs = ProteinFromCdRegionEx(fake_cds, TRUE, FALSE);
+  pattern_loc_list = FindInCDSTranslation (fake_cds, pattern, exact_match);
   SeqFeatFree(fake_cds);
-  if(bs == NULL) return NULL;
-  frame_str = BSMerge (bs, NULL);
-  bs = BSFree (bs);
-  if (frame_str == NULL) return NULL;
-  scratch_pattern = StringSave (pattern);
-  if (strand == Seq_strand_minus)
-  {
-    reverse_string (scratch_pattern);
-  }
-  
-  tfp = TextFsaNew ();
-  TextFsaAdd (tfp, scratch_pattern);
-  
-  state = 0;
-  cp = frame_str;
-  ch = *cp;
-  if (strand == Seq_strand_minus)
-  {
-    prot_pos = stop + 1;
-  }
-  else
-  {
-    prot_pos = start;
-  }
-  pattern_len = StringLen (scratch_pattern);
-  while (ch != '\0') {
-    matches = NULL;
-    state = TextFsaNext (tfp, state, ch, &matches);
-    if (matches != NULL) 
-    {
-      if (strand == Seq_strand_minus)
-      {
-        /* need to add locations in reverse order */
-        vnp = ValNodeNew(NULL);
-        if (vnp != NULL)
-        {
-          vnp->next = pattern_loc_list;
-          vnp->data.intvalue = prot_pos - 3;
-          pattern_loc_list = vnp;
-        }
-      }
-      else
-      {
-        ValNodeAddInt (&pattern_loc_list, 0, prot_pos + 3 - (3 * pattern_len));    
-      }
-    }
-    cp++;
-    ch = *cp;
-    if (strand == Seq_strand_minus)
-    {
-      prot_pos -= 3;
-    }
-    else
-    {
-      prot_pos += 3;
-    }
-  }
 
-  MemFree (frame_str);
-  MemFree (scratch_pattern);
-  
   return pattern_loc_list;
 }
 
-static ValNodePtr FindTranslation (BioseqPtr bsp, CharPtr pattern, Int4 pick_frame)
+static ValNodePtr FindTranslation (BioseqPtr bsp, CharPtr pattern, Int4 pick_frame, Boolean exact_match)
 {
   Int4       i;
   ValNodePtr loc_list = NULL;
@@ -7191,7 +7304,7 @@ static ValNodePtr FindTranslation (BioseqPtr bsp, CharPtr pattern, Int4 pick_fra
   {
     for (i = 1; i <= 6; i++)
     {
-      new_list = FindTranslationMatchOneFrame (bsp, pattern, i);
+      new_list = FindTranslationMatchOneFrame (bsp, pattern, i, exact_match);
       comb_list = MergeIntLists (loc_list, new_list);
       ValNodeFree (new_list);
       ValNodeFree (loc_list);
@@ -7200,7 +7313,7 @@ static ValNodePtr FindTranslation (BioseqPtr bsp, CharPtr pattern, Int4 pick_fra
   }
   else
   {
-    loc_list = FindTranslationMatchOneFrame (bsp, pattern, pick_frame);
+    loc_list = FindTranslationMatchOneFrame (bsp, pattern, pick_frame, exact_match);
   }
   ConvertIntListToLocList (loc_list, bsp, StringLen (pattern));
   return loc_list;  
@@ -7234,6 +7347,7 @@ static void FindPatternButton (ButtoN b)
   Char               str[255];
   Uint1              pick_frame;
   Int4               search_choice = 0;
+  Boolean            exact_match = TRUE;
   
   if (b == NULL) return;
   sefp = (SeqEdFormPtr) GetObjectExtra (b);
@@ -7245,6 +7359,10 @@ static void FindPatternButton (ButtoN b)
   if (fdp->search_choice_grp != NULL)
   {
     search_choice = GetValue (fdp->search_choice_grp);
+  }
+  
+  if (fdp->exact_match_choice != NULL && GetValue (fdp->exact_match_choice) != 1) {
+      exact_match = FALSE;
   }
   
   CleanPattern (strp, search_choice);
@@ -7266,7 +7384,8 @@ static void FindPatternButton (ButtoN b)
              || (search_choice == 1 && !sefp->current_pattern_translate
               && sefp->current_pattern_revcomp == GetStatus (fdp->reverse_complement_btn))
              || (search_choice == 3 && sefp->current_pattern_translate
-              && sefp->current_pattern_translate_frame_choice == GetValue (fdp->frame_choice_popup))))
+              && sefp->current_pattern_translate_frame_choice == GetValue (fdp->frame_choice_popup)))
+         && (exact_match == sefp->current_pattern_exact_match))
     {
       MemFree (strp);
       ShowNextSeqEdPattern (sefp);
@@ -7298,12 +7417,13 @@ static void FindPatternButton (ButtoN b)
     {
       pick_frame --;
     }
-    sefp->match_list = FindTranslation (sefp->bfp->bvd.bsp, strp, pick_frame);
+    sefp->match_list = FindTranslation (sefp->bfp->bvd.bsp, strp, pick_frame, exact_match);
   }
   else 
   {
-    sefp->match_list = FindSeqMatch (sefp->bfp->bvd.bsp, strp);
+    sefp->match_list = FindSeqMatch (sefp->bfp->bvd.bsp, strp, exact_match);
   }
+  sefp->current_pattern_exact_match = exact_match;
   if (sefp->match_list != NULL) {
     count = ValNodeLen (sefp->match_list);
     if (count ==0)
@@ -7416,20 +7536,29 @@ static void SeqEdFindPatternDialog (IteM i)
     SetValue (fdp->search_choice_grp, 1);
     
     g1 = fdp->search_choice_grp;
+    
+  }
+
+  fdp->exact_match_choice = HiddenGroup (h, 2, 0, NULL);
+  RadioButton (fdp->exact_match_choice, "Exact Match");
+  RadioButton (fdp->exact_match_choice, "Ambiguous Match");
+  SetValue (fdp->exact_match_choice, 1);
+
+  if (ISA_na (sefp->bfp->bvd.bsp->mol)) {
     g2 = HiddenGroup (h, 2, 0, NULL);
     b = PushButton (g2, "Find Next", FindPatternButton);
     SetObjectExtra (b, sefp, NULL); 
     PushButton (g2, "Dismiss", StdCancelButtonProc);
-  }
-  else {
+  } else {
     g1 = HiddenGroup (h, 2, 0, NULL);
     b = PushButton (g1, "Find Next", FindPatternButton); 
     SetObjectExtra (b, sefp, NULL); 
     PushButton (g1, "Close", StdCancelButtonProc);
+    g2 = NULL;
   }
   
   AlignObjects (ALIGN_CENTER, (HANDLE) p1, (HANDLE) fdp->pattern_txt, (HANDLE)fdp->prompt,
-                (HANDLE) fdp->search_choice_grp, (HANDLE) g2, NULL);
+                (HANDLE) g1, (HANDLE) fdp->exact_match_choice, (HANDLE) g2, NULL);
   RealizeWindow (sefp->find_window);
   Show (sefp->find_window);
   return;
@@ -7438,7 +7567,7 @@ static void SeqEdFindPatternDialog (IteM i)
 static void ObjMgrSelectSeqEdSelection (SeqEdFormPtr sefp, BioseqPtr target_bsp)
 {
   SeqLocPtr slp;
-  Uint2     itemID;
+  Uint4     itemID;
   Uint2     entityID;
   Int4      real_start, real_stop;
   Int4      aln_len;
@@ -7498,7 +7627,7 @@ static void SeqEditNewFeatureMenuProc (IteM i)
   ObjMgrProcPtr     ompp;
   Int2              retval;
   SeqEdFormPtr      sefp;
-  Uint2             itemID;
+  Uint4             itemID;
   SeqIdPtr          sip;
   BioseqPtr         target_bsp;
 
@@ -7623,6 +7752,7 @@ static void SeqEdNewFeaturesMenu (MenU m, Boolean is_na)
                 subtype = ompp->subinputtype;
                 if (subtype == fdp->featdef_key &&
                     subtype != FEATDEF_PUB &&
+                    subtype != FEATDEF_IMP &&
                     subtype != FEATDEF_Imp_CDS &&
                     subtype != FEATDEF_misc_RNA &&
                     subtype != FEATDEF_precursor_RNA &&
@@ -8261,12 +8391,68 @@ static CharPtr GetSeqAlignLabels (SeqAlignPtr salp, Int4Ptr label_len)
   return labels;
 }
 
+static Int4 GetMaxCoordLen (SeqAlignPtr salp) 
+{
+  BioseqPtr bsp;
+  SeqIdPtr  sip;
+  Int4      i;
+  Int4      max_len = 0;
+
+  if (salp == NULL) {
+    return 0;
+  }
+  
+  for (i = 0; i < salp->dim; i++) {
+    sip = AlnMgr2GetNthSeqIdPtr(salp, i + 1);
+    bsp = BioseqFind (sip);
+    if (bsp->length > max_len) max_len = bsp->length;
+  }
+  
+  i = log (max_len) + 1;
+  
+  return i;  
+}
+
+
+static void AddCoordToPrintedLine (CharPtr printed_line, SeqAlignPtr salp, Int4 row, Int4 start, Int4 stop, Int4 coord_len)
+{
+  Uint1 strand;
+  Int4  seqstart;
+  
+  if (printed_line == NULL || salp == NULL || start < 0 || row < 1 || coord_len < 2) return;
+  
+  strand = AlnMgr2GetNthStrand (salp, row);
+  if (strand == Seq_strand_minus) {
+    *printed_line = '<';
+  } else {
+    *printed_line = '>';
+  }
+  printed_line += 2;
+  
+  seqstart = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
+  if (strand == Seq_strand_minus) {
+    while ((seqstart == ALNMGR_GAP || seqstart == ALNMGR_ROW_UNDEFINED) && start > 0) { /* count backward if we are in the gap */
+      start--;
+      seqstart = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
+    }
+  } else {
+    while ((seqstart == ALNMGR_GAP || seqstart == ALNMGR_ROW_UNDEFINED) && start < stop) { /* count forward if we are in the gap */
+      start++;
+      seqstart = AlnMgr2MapSeqAlignToBioseq(salp, start, row);
+    }
+  }
+  sprintf (printed_line, "%*d", coord_len, seqstart);
+  *(printed_line + coord_len) = ' ';
+}
+
+
 extern void 
-WriteAlignmentInterleaveToFile 
+WriteAlignmentInterleaveToFileEx 
 (SeqAlignPtr salp,
  FILE        *fp,
  Int4        seq_chars_per_row,
- Boolean     show_substitutions)
+ Boolean     show_substitutions,
+ Boolean     show_coordinates)
 {
   Int4     row, start, stop;
   Uint1Ptr alnbuf;
@@ -8278,6 +8464,7 @@ WriteAlignmentInterleaveToFile
   Int4     printed_line_len;
   CharPtr  label_pos;
   Int4     label_len = 0;
+  Int4     coord_len;
 
   if (salp == NULL || fp == NULL) return;
 
@@ -8287,7 +8474,12 @@ WriteAlignmentInterleaveToFile
     if (alnbuf != NULL) {
       seqbuf = (Uint1Ptr) MemNew ((seq_chars_per_row + 1) * sizeof (Uint1));
       if (seqbuf != NULL) {
-        printed_line_len = label_len + 1 + seq_chars_per_row + 3;
+        if (show_coordinates) {
+          coord_len = GetMaxCoordLen(salp) + 3;
+        } else {
+          coord_len = 0;
+        }
+        printed_line_len = label_len + 1 + coord_len + seq_chars_per_row + 3;
         printed_line = (CharPtr) MemNew (printed_line_len * sizeof (Char));
         if (printed_line != NULL) {
           printed_line [ printed_line_len - 1] = 0;
@@ -8299,10 +8491,14 @@ WriteAlignmentInterleaveToFile
               MemSet (printed_line, ' ', printed_line_len - 2);
               label_pos = alnlabels + (row - 1) * (label_len + 1) * sizeof (Char);
               MemCpy (printed_line, label_pos, StringLen (label_pos));
-              AlignmentIntervalToString (salp, row, start, stop, 1, TRUE, 
+              
+              /* add coordinates and strand marker */
+              AddCoordToPrintedLine (printed_line + label_len + 1, salp, row, start, stop, coord_len - 3);
+              
+              AlignmentIntervalToString (salp, row, start, stop, 1, FALSE, 
                                          seqbuf, alnbuf, &alnbuf_len,
                                          show_substitutions);
-              MemCpy (printed_line + label_len + 1, alnbuf, alnbuf_len);
+              MemCpy (printed_line + label_len + 1 + coord_len, alnbuf, alnbuf_len);
               fprintf (fp, printed_line);
             }
             fprintf (fp, "\n");
@@ -8318,6 +8514,16 @@ WriteAlignmentInterleaveToFile
     MemFree (alnlabels);
   }
 }
+
+extern void 
+WriteAlignmentInterleaveToFile 
+(SeqAlignPtr salp,
+ FILE        *fp,
+ Int4        seq_chars_per_row,
+ Boolean     show_substitutions)
+ {
+   WriteAlignmentInterleaveToFileEx (salp, fp, seq_chars_per_row, show_substitutions, FALSE);
+ }
 
 extern void WriteAlignmentContiguousToFile
 (SeqAlignPtr salp,
@@ -8554,18 +8760,29 @@ static void RemoveSequencesFromAlignment (IteM i)
   SeqEntryPtr   sep;
   ValNodePtr    sip_list = NULL, vnp;
   Int4          num_to_remove;
+  SeqEntryPtr   oldscope;
   
   sefp = (SeqEdFormPtr) GetObjectExtra (i);
   
   if (sefp != NULL && sefp->bfp != NULL && sefp->bfp->bvd.salp != NULL)
   {
+    if (sefp->bfp->bvd.salp->segtype != SAS_DENSEG) 
+    {
+      Message (MSG_ERROR, "You cannot remove sequences from a pairwise alignment.  You must convert it first.");
+      return;
+    }
     sep = GetTopSeqEntryForEntityID (sefp->input_entityID);
     /* first, check for pairwise alignments */
     for (n = 1; n <= sefp->bfp->bvd.salp->dim; n++)
     {
       sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, n);
       bsp = BioseqFind (sip);
-      if (bsp != NULL && isSelected (bsp->idx.itemID, OBJ_BIOSEQ, &(sefp->bfp->bvd)))
+      if (bsp == NULL) {
+        oldscope = SeqEntrySetScope (NULL);
+        bsp = BioseqFind (sip);
+        SeqEntrySetScope (oldscope);
+      }
+      if (bsp != NULL && isSelected (bsp->idx.entityID, bsp->idx.itemID, OBJ_BIOSEQ, &(sefp->bfp->bvd)))
       {
         if (IsSequenceFirstInPairwise (sep, sip))
 	      {
@@ -8657,7 +8874,7 @@ static void SeqAlnFeaturePropagate (IteM i)
   BioseqPtr          bsp = NULL;
   ForM               f;
   SeqMgrFeatContext  fcontext;
-  Uint2              itemID = 0;
+  Uint4              itemID = 0;
   SeqFeatPtr         sfp;
   SelStructPtr       sel;
   SeqEntryPtr        sep;
@@ -9013,6 +9230,10 @@ extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqA
   sefp->bfp->bvd.seqAlignMode = TRUE;
   sefp->bfp->bvd.salp = salp;
   AlnMgr2IndexSeqAlign(sefp->bfp->bvd.salp);
+  
+  /* lock elements of the alignment that could be cached out */
+  sefp->locked_aln_bioseqs = LockFarAlignmentBioseqs (sefp->bfp->bvd.salp);
+  
   /* find first viewable target */
   sefp->bfp->bvd.TargetRow = 1;
   sip = AlnMgr2GetNthSeqIdPtr(sefp->bfp->bvd.salp, sefp->bfp->bvd.TargetRow);

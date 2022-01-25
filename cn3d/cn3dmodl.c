@@ -1,4 +1,4 @@
-/* $Id: cn3dmodl.c,v 6.92 2001/04/27 20:07:59 juran Exp $
+/* $Id: cn3dmodl.c,v 6.93 2006/07/13 17:08:36 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -22,13 +22,16 @@
 *  purpose.
 * =========================================================================== 
 *
-* File Name: $Id: cn3dmodl.c,v 6.92 2001/04/27 20:07:59 juran Exp $
+* File Name: $Id: cn3dmodl.c,v 6.93 2006/07/13 17:08:36 bollin Exp $
 *
 * Author: Yanli Wang
 *
 * Version Creation Date: 18/9/1998
 *
 * $Log: cn3dmodl.c,v $
+* Revision 6.93  2006/07/13 17:08:36  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.92  2001/04/27 20:07:59  juran
 * Heed warnings.
 *
@@ -990,7 +993,7 @@ NLM_EXTERN void fnAlignList(LisT l)
     PMMD pmmdThis = NULL;
     Byte bVisible = 0;
     SeqIdPtr sipThis = NULL;
-    Uint2 entityID = 0, itemID = 0, itemtype = 0;
+    Uint2 entityID = 0, itemtype = 0;
 
 #ifndef _OPENGL
     Cn3D_SaveActiveCam();

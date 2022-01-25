@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.64 $
+* $Revision: 6.67 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,17 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.67  2006/09/22 15:00:56  kans
+* removed NCBI from StructuredCommentPrefix/Suffix
+*
+* Revision 6.66  2006/09/18 18:40:30  kans
+* special symbols for structured comment prefix, suffix, for parsing flatfile
+*
+* Revision 6.65  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.64  2006/05/05 19:49:40  kans
 * added StructuredComment user object creation functions
 *
@@ -2513,8 +2524,8 @@ NLM_EXTERN Boolean AddOrganismToEntryNew (
 NLM_EXTERN Boolean SetGeneticCodeForEntry (
 	NCBISubPtr submission,
         SeqEntryPtr entry,
-        Int2 genetic_code,  /* for cytoplasm */
-        Int2 mito_code )   /* for mitochondria */
+        Uint1 genetic_code,  /* for cytoplasm */
+        Uint1 mito_code )   /* for mitochondria */
 {
 	ValNodePtr vnp;
 	BioSourcePtr bio;
@@ -5360,9 +5371,9 @@ NLM_EXTERN UserObjectPtr AddIDsToGenomeProjectsDBUserObject (
   ObjectIdPtr    oip;
   UserFieldPtr   ufp;
 
-  if (uop == NULL) return;
+  if (uop == NULL) return NULL;
   oip = uop->type;
-  if (oip == NULL || StringICmp (oip->str, "GenomeProjectsDB") != 0) return;
+  if (oip == NULL || StringICmp (oip->str, "GenomeProjectsDB") != 0) return uop;
 
   for (curr = uop->data; curr != NULL; curr = curr->next) {
     prev = curr;
@@ -5456,7 +5467,10 @@ NLM_EXTERN UserObjectPtr CreateFeatureFetchPolicyUserObject (
 
 /* structured comment user object for flatfile presentation */
 
-NLM_EXTERN UserObjectPtr CreateStructuredCommentUserObject (void)
+NLM_EXTERN UserObjectPtr CreateStructuredCommentUserObject (
+  CharPtr prefix,
+  CharPtr suffix
+)
 
 {
   ObjectIdPtr    oip;
@@ -5466,6 +5480,14 @@ NLM_EXTERN UserObjectPtr CreateStructuredCommentUserObject (void)
   oip = ObjectIdNew ();
   oip->str = StringSave ("StructuredComment");
   uop->type = oip;
+
+  if (StringDoesHaveText (prefix)) {
+    AddItemStructuredCommentUserObject (uop, "StructuredCommentPrefix", prefix);
+  }
+
+  if (StringDoesHaveText (suffix)) {
+    AddItemStructuredCommentUserObject (uop, "StructuredCommentSuffix", suffix);
+  }
 
   return uop;
 }

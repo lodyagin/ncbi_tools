@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: spidey.c,v 6.72 2005/11/17 17:12:50 kskatz Exp $";
+static char const rcsid[] = "$Id: spidey.c,v 6.73 2006/06/01 14:55:31 kskatz Exp $";
 
 /* ===========================================================================
 *
@@ -30,13 +30,16 @@ static char const rcsid[] = "$Id: spidey.c,v 6.72 2005/11/17 17:12:50 kskatz Exp
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.72 $
+* $Revision: 6.73 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.c,v $
+* Revision 6.73  2006/06/01 14:55:31  kskatz
+* fixed -s option so that it sets gap-open/gap-extend penalties that are valid as a pair for gap statistics and are a bit less stringent thatn default (default = 5 open : 2 extend; interspecies -s = 4 open :  1 extend)
+*
 * Revision 6.72  2005/11/17 17:12:50  kskatz
 * Fixed initializations and removed non-used functions to get rid of warnings
 *
@@ -2855,7 +2858,7 @@ NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, 
    if (spot->interspecies)
    {
       options->gap_x_dropoff_final = 100;
-      options->gap_open = 5;
+      options->gap_open = 4;
       options->gap_extend = 1;
       options->penalty = -1;
    }
@@ -2870,7 +2873,7 @@ NLM_EXTERN SPI_mRNAToHerdPtr SPI_AlnSinglemRNAToPieces(SPI_bsinfoPtr spig_head, 
    if (spot->interspecies)
    {
       options->gap_x_dropoff_final = 100;
-      options->gap_open = 5;
+      options->gap_open = 4;
       options->gap_extend = 1;
       options->penalty = -1;
    }
@@ -3915,7 +3918,7 @@ static void SPI_DoAln(SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr b
    if (spot->interspecies)
    {
       options->gap_x_dropoff_final = 100;
-      options->gap_open = 5;
+      options->gap_open = 4;
       options->gap_extend = 1;
       options->penalty = -1;
    }
@@ -4481,7 +4484,7 @@ static SeqAlignPtr SPI_FillInIntron(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start1, I
    if (spot->interspecies)
    {
       options->gap_x_dropoff_final = 100;
-      options->gap_open = 5;
+      options->gap_open = 4;
       options->gap_extend = 1;
       options->penalty = -1;
    }
@@ -4692,7 +4695,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
          if (spot->interspecies)
          {
             options->gap_x_dropoff_final = 100;
-            options->gap_open = 5;
+            options->gap_open = 4;
             options->gap_extend = 1;
             options->penalty = -1;
          }
@@ -4749,7 +4752,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
          if (spot->interspecies)
          {
             options->gap_x_dropoff_final = 100;
-            options->gap_open = 5;
+            options->gap_open = 4;
             options->gap_extend = 1;
             options->penalty = -1;
          }
@@ -4814,7 +4817,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
          if (spot->interspecies)
          {
             options->gap_x_dropoff_final = 100;
-            options->gap_open = 5;
+            options->gap_open = 4;
             options->gap_extend = 1;
             options->penalty = -1;
          }
@@ -4871,7 +4874,7 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
          if (spot->interspecies)
          {
             options->gap_x_dropoff_final = 100;
-            options->gap_open = 5;
+            options->gap_open = 4;
             options->gap_extend = 1;
             options->penalty = -1;
          }
@@ -8027,7 +8030,7 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                if (spot->interspecies)
                {
                   options->gap_x_dropoff_final = 100;
-                  options->gap_open = 5;
+                  options->gap_open = 4;
                   options->gap_extend = 1;
                   options->penalty = -1;
                }
@@ -8043,7 +8046,7 @@ static Boolean SPI_ConnectAlnPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_contig, 
                if (spot->interspecies)
                {
                   options->gap_x_dropoff_final = 100;
-                  options->gap_open = 5;
+                  options->gap_open = 4;
                   options->gap_extend = 1;
                   options->penalty = -1;
                }

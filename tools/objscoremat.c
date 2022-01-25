@@ -410,7 +410,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 PssmIntermediateDataAsnWrite(PssmIntermediateDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -939,7 +938,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 PssmWithParametersAsnWrite(PssmWithParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

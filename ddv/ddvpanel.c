@@ -1,4 +1,4 @@
-/*  $Id: ddvpanel.c,v 1.108 2004/04/01 13:43:06 lavr Exp $
+/*  $Id: ddvpanel.c,v 1.109 2006/07/13 17:11:42 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.108 $
+* $Revision: 1.109 $
 *
 * File Description: window management module of DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvpanel.c,v $
+* Revision 1.109  2006/07/13 17:11:42  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 1.108  2004/04/01 13:43:06  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -3656,7 +3659,7 @@ static void ShowDDV (BioseqViewPtr bvp, Boolean show)
 {
 }
 
-static void SelectDDV (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
+static void SelectDDV (BioseqViewPtr bvp, Uint2 selentityID, Uint4 selitemID,
                        Uint2 selitemtype, SeqLocPtr region,
                        Boolean select, Boolean scrollto)
 

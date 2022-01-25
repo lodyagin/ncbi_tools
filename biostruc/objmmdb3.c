@@ -891,7 +891,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 SphereAsnWrite(SpherePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1068,7 +1067,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 ConeAsnWrite(ConePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1250,7 +1248,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CylinderAsnWrite(CylinderPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1472,7 +1469,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 BrickAsnWrite(BrickPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -2959,7 +2955,6 @@ NLM_EXTERN
 BiostrucScriptPtr LIBCALL
 BiostrucScriptAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -3015,7 +3010,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 BiostrucScriptAsnWrite(BiostrucScriptPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

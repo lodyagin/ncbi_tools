@@ -1,4 +1,4 @@
-/* $Id: blast_parameters.h,v 1.9 2006/01/03 17:46:53 papadopo Exp $
+/* $Id: blast_parameters.h,v 1.15 2006/09/14 14:51:10 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -81,7 +81,7 @@ extern "C" {
 typedef enum ESeedContainerType {
     eDiagArray,         /**< use diagonal structures with array of last hits
                            and levels. */
-    eWordStacks,          /**< use stacks (megablast only) */
+    eDiagHash,          /**< use hash table (blastn only) */
     eMaxContainerType   /**< maximum value for this enumeration */
 } ESeedContainerType;
 
@@ -96,18 +96,28 @@ typedef enum ESeedExtensionMethod {
     eMaxSeedExtensionMethod   /**< maximum value for this enumeration */
 } ESeedExtensionMethod;
 
+/** All the ungapped cutoff values that can change 
+ *  from context to context
+ */
+typedef struct BlastUngappedCutoffs {
+    Int4 x_dropoff_init; /**< Raw X-dropoff value specified by the
+                              bit score in BlastInitialWordOptions */
+    Int4 x_dropoff;   /**< Raw X-dropoff value used in the ungapped extension */
+    Int4 cutoff_score; /**< Cutoff score for saving ungapped hits. */
+    Int4 reduced_nucl_cutoff_score; /**< for blastn, a reduced cutoff score
+                                      for use with approximate ungapped
+                                      alignments */
+} BlastUngappedCutoffs;
+
 /** Parameter block that contains a pointer to BlastInitialWordOptions
- * and parsed values for those options that require it 
- * (in this case x_dropoff).
+ * and the values derived from it.
  */
 typedef struct BlastInitialWordParameters {
    BlastInitialWordOptions* options; /**< The original (unparsed) options. */
-   Int4 x_dropoff_init; /**< Raw X-dropoff value corresponding to the bit 
-                           value in options. */
-   Int4 x_dropoff; /**< Raw X-dropoff value used in the ungapped extension */
-   Int4 cutoff_score; /**< Cutoff score for saving ungapped hits. */
-   Int4 reduced_nucl_cutoff_score; /**< reduced cutoff score for early pruning 
-                                        of ungapped nucleotide alignments */
+
+   Int4 x_dropoff_max; /**< largest X-drop cutoff across all contexts */
+   Int4 cutoff_score_min; /**< smallest cutoff score across all contexts */
+   BlastUngappedCutoffs *cutoffs;   /**< cutoff values (one per context) */
    ESeedContainerType container_type; /**< How to store offset pairs for initial
                                         seeds? */
    ESeedExtensionMethod extension_method; /**< How should exact matches be 
@@ -116,7 +126,10 @@ typedef struct BlastInitialWordParameters {
                                     combinations for aligning four bases */
 } BlastInitialWordParameters;
     
-/** Computed values used as parameters for gapped alignments */
+/** Computed values used as parameters for gapped alignments.
+ *  Note that currently the value of the X-dropoff parameter
+ *  is fixed for all search contexts
+ */
 typedef struct BlastExtensionParameters {
    BlastExtensionOptions* options; /**< The original (unparsed) options. */
    Int4 gap_x_dropoff; /**< X-dropoff value for gapped extension (raw) */
@@ -140,21 +153,38 @@ typedef struct BlastLinkHSPParameters {
                            of HSPs. */
 } BlastLinkHSPParameters;
 
+/** All the gapped cutoff values that can change 
+ *  from context to context
+ */
+typedef struct BlastGappedCutoffs {
+   Int4 cutoff_score; /**< Raw cutoff score corresponding to the e-value 
+                         provided by the user if no sum stats, the lowest score
+                         to attempt linking on if sum stats are used. */
+   Int4 cutoff_score_max; /**< Raw cutoff score corresponding to the e-value 
+                         provided by user, cutoff_score must be <= this. */
+} BlastGappedCutoffs;
+
 /** Parameter block that contains a pointer to BlastHitSavingOptions
- * and parsed values for those options that require it
- * (in this case expect value).
+ * and the values derived from it.
  */
 typedef struct BlastHitSavingParameters {
    BlastHitSavingOptions* options; /**< The original (unparsed) options. */
-   Int4 cutoff_score; /**< Raw cutoff score corresponding to the e-value 
-                         provided by the user if no sum stats, the lowest score
-                         to attempt linking on if sum stats are used.*/
-   Int4 cutoff_score_max; /**< Raw cutoff score corresponding to the e-value 
-                         provided by user, cutoff_score should always <= this. */
+   Int4 cutoff_score_min; /**< smallest cutoff score across all contexts */
+   BlastGappedCutoffs *cutoffs; /**< per-context gapped cutoff information */
    BlastLinkHSPParameters* link_hsp_params; /**< Parameters for linking HSPs
                                                with sum statistics; linking 
                                                is not done if NULL. */
+   Boolean restricted_align; /**< TRUE if approximate score-only gapped
+                                  alignment is used */
 } BlastHitSavingParameters;
+
+/** Because approximate gapped alignment adds extra overhead,
+ *  it should be avoided if there is no performance benefit
+ *  to using it. To be benficial, most score-only gapped alignments
+ *  should be the restricted kind, and we can only assure that
+ *  if the e-value cutoff is not too generous
+ */
+#define RESTRICTED_ALIGNMENT_WORST_EVALUE 10.0
 
 /** Scoring parameters block
  *  Contains scoring-related information that is actually used
@@ -205,7 +235,7 @@ BlastInitialWordParametersFree(BlastInitialWordParameters* parameters);
  * raw x_dropoff from the bit x_dropoff and puts it into
  * the x_dropoff field of BlastInitialWordParameters*.
  * The container type is also set.  For blastn queries over a certain
- * length eWordStacks is set, otherwise it's eDiagArray.
+ * length eDiagHash is set, otherwise it's eDiagArray.
  * The extension method is also set via a call to s_GetBestExtensionMethod
  *
  * @param program_number Type of BLAST program [in]
@@ -225,7 +255,7 @@ BlastInitialWordParametersNew(EBlastProgramType program_number,
    const BlastInitialWordOptions* word_options, 
    const BlastHitSavingParameters* hit_params, 
    const LookupTableWrap* lookup_wrap,
-   BlastScoreBlk* sbp, 
+   const BlastScoreBlk* sbp, 
    BlastQueryInfo* query_info, 
    Uint4 subject_length,
    BlastInitialWordParameters* *parameters);
@@ -244,7 +274,7 @@ NCBI_XBLAST_EXPORT
 Int2
 BlastInitialWordParametersUpdate(EBlastProgramType program_number, 
    const BlastHitSavingParameters* hit_params, 
-   BlastScoreBlk* sbp, 
+   const BlastScoreBlk* sbp, 
    BlastQueryInfo* query_info, Uint4 subject_length,
    BlastInitialWordParameters* parameters);
 
@@ -357,7 +387,8 @@ BlastHitSavingParametersFree(BlastHitSavingParameters* parameters);
 NCBI_XBLAST_EXPORT
 Int2 BlastHitSavingParametersNew(EBlastProgramType program_number, 
         const BlastHitSavingOptions* options, 
-        BlastScoreBlk* sbp, BlastQueryInfo* query_info, 
+        const BlastScoreBlk* sbp, 
+        const BlastQueryInfo* query_info, 
         Int4 avg_subject_length,
         BlastHitSavingParameters* *parameters);
 
@@ -373,7 +404,7 @@ Int2 BlastHitSavingParametersNew(EBlastProgramType program_number,
  */
 NCBI_XBLAST_EXPORT
 Int2 BlastHitSavingParametersUpdate(EBlastProgramType program_number, 
-        BlastScoreBlk* sbp, BlastQueryInfo* query_info, 
+        const BlastScoreBlk* sbp, const BlastQueryInfo* query_info, 
         Int4 avg_subject_length,
         BlastHitSavingParameters* parameters);
 
@@ -391,7 +422,7 @@ Int2 BlastHitSavingParametersUpdate(EBlastProgramType program_number,
 NCBI_XBLAST_EXPORT
 void
 CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info, 
-   BlastScoreBlk* sbp, BlastLinkHSPParameters* link_hsp_params, 
+   const BlastScoreBlk* sbp, BlastLinkHSPParameters* link_hsp_params, 
    const BlastInitialWordParameters* word_params,
    Int8 db_length, Int4 subject_length);
 

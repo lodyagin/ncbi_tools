@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.114 2006/01/25 15:49:40 ucko Exp $
+# $Id: makedis.csh,v 1.115 2006/09/14 15:36:43 ucko Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -221,6 +221,11 @@ case FreeBSD:
 	breaksw
 case Darwin:
 	set platform=darwin
+	if ("$?DARWIN_MODE" == 1) then
+		if ("$DARWIN_MODE" == "universal") then
+			set platform=darwin-univ
+		endif
+	endif
 	set HAVE_MOTIF=0
 	set HAVE_MAC=1
 	breaksw

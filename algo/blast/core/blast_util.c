@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.114 2006/05/05 17:46:02 camacho Exp $
+/* $Id: blast_util.c,v 1.116 2006/09/12 20:53:45 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.114 2006/05/05 17:46:02 camacho Exp $";
+    "$Id: blast_util.c,v 1.116 2006/09/12 20:53:45 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -737,6 +737,16 @@ Int2 BLAST_PackDNA(const Uint1* buffer, Int4 length, EBlastEncoding encoding,
    return 0;
 }
 
+size_t
+BLAST_GetTranslatedProteinLength(size_t nucleotide_length, unsigned int context)
+{
+    ASSERT(context >= 0 && context < NUM_FRAMES);
+    if (nucleotide_length == 0) {
+        return 0;
+    }
+    return (nucleotide_length - context % CODON_LENGTH) / CODON_LENGTH;
+}
+
 Int2 BLAST_CreateMixedFrameDNATranslation(BLAST_SequenceBlk* query_blk, 
                                           const BlastQueryInfo* query_info)
 {
@@ -1006,12 +1016,24 @@ int Blast_GetPartialTranslation(const Uint1* nucl_seq,
 }
 
 
-Int4 FrameToContext(Int2 frame) 
+Int4 BLAST_FrameToContext(Int2 frame, EBlastProgramType program) 
 {
-   if (frame > 0)
-      return frame - 1;
-   else
-      return 2 - frame;
+    if (Blast_QueryIsTranslated(program) || 
+        Blast_SubjectIsTranslated(program)) {
+        ASSERT(frame >= -3 && frame <= 3 && frame != 0);
+        if (frame > 0) { 
+            return frame - 1;
+        } else { 
+            return 2 - frame;
+        }
+    } else if (Blast_QueryIsNucleotide(program) ||
+               Blast_SubjectIsNucleotide(program)) {
+        ASSERT(frame == 1 || frame == -1);
+        return frame == 1 ? 0 : 1;
+    } else {
+        ASSERT(frame == 0);
+        return 0;
+    }
 }
 
 Int4 BSearchInt4(Int4 n, Int4* A, Int4 size)

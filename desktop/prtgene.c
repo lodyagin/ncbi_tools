@@ -1045,7 +1045,7 @@ static Boolean PrintSequenceToFile(SeqLocPtr slp, FILE *fp, Uint1 print_loc, Num
 
 
 
-static Boolean is_sfp_query_gene (GeneDataPtr gdata, Uint2 itemID, 
+static Boolean is_sfp_query_gene (GeneDataPtr gdata, Uint4 itemID, 
 								  Uint2 entityID, Uint2 itemType)
 {
 	while(gdata)

@@ -1,4 +1,4 @@
-/* $Id: blast_rps.h,v 1.9 2005/11/16 14:31:36 madden Exp $
+/* $Id: blast_rps.h,v 1.10 2006/07/05 15:43:41 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,7 +40,8 @@
 extern "C" {
 #endif
 
-#define RPS_MAGIC_NUM 0x1e16    /**< RPS data files contain this number */
+#define RPS_MAGIC_NUM 0x1e16    /**< RPS blast version number */
+#define RPS_MAGIC_NUM_28 0x1e17    /**< Version number for 28-letter alphabet */
 #define NUM_EXPANSION_WORDS 3   /**< Intentionally unused words in .loo file */
 
 /** header of RPS blast '.loo' file */

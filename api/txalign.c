@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.92 2006/01/24 18:37:08 papadopo Exp $
+/* $Id: txalign.c,v 6.93 2006/07/13 12:58:15 bollin Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,16 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.92 $
+* $Revision: 6.93 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.93  2006/07/13 12:58:15  bollin
+* removed unused variables
+*
 * Revision 6.92  2006/01/24 18:37:08  papadopo
 * from Mike Gertz: Use enumerated values, rather than #define'd constants, to specify the composition adjustment method
 *
@@ -615,7 +618,7 @@ static void makeEmptyString(CharPtr str, Int4 num){
        
 /*return initials of names not exceeding 15 elements delimited by space. Need to free memory afterwards*/
 static CharPtr getNameInitials(CharPtr name){
-  CharPtr temp, temp2, initials=NULL; 
+  CharPtr temp2, initials=NULL; 
   Int4 i, maxElements=15;
   CharPtr nameCopy;
  
@@ -690,11 +693,9 @@ BlastDefLinePtr getBlastDefLineForSeqId(BlastDefLinePtr bdlp, SeqIdPtr sip){
 /*add linkout for defline. It adds the linkout for the first sip that has a linkout*/
 static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){   
     BlastDefLinePtr bdlp, bdlpTemp;
-    CharPtr taxName, unigeneName;
     Boolean hasLinkout=FALSE;
     Int4 gi, firstGi=GetGIForSeqId(sip);
     Char molType[8]={""};
-    RDBTaxNamesPtr rnp;
 
     if(bsp){
       bdlp=FDGetDeflineAsnFromBioseq(bsp);     
@@ -760,11 +761,9 @@ static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 /*print linkout for bsp.  If sip is not null, the linkout is for that sip (ie., the case for nonredundant blast db*/
 static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, SeqIdPtr firstSip, FILE* fp){   
     BlastDefLinePtr bdlp, actualBdlp;
-    CharPtr taxName, unigeneName;
     Boolean hasLinkout=FALSE;
     Int4 gi, firstGi;
     Char molType[8]={""};
-    RDBTaxNamesPtr rnp;
 
     if(bsp){
       bdlp=FDGetDeflineAsnFromBioseq(bsp);
@@ -822,7 +821,8 @@ static ValNodePtr ExtractCurrentAlignNode(ValNodePtr PNTR anp_list)
 {
 	ValNodePtr head, curr, prev = NULL;
 	AlignNodePtr anp;
-	Uint2 itemID, chain;
+	Uint4 itemID;
+	Uint2 chain;
 
 	head = *anp_list;
 	while(head && head->choice == OBJ_SEQANNOT)
@@ -864,7 +864,7 @@ static ValNodePtr ExtractCurrentAlignNode(ValNodePtr PNTR anp_list)
 }
 	
 
-static void modify_kludge_itemID (ValNodePtr anp_list, Uint2 itemID)
+static void modify_kludge_itemID (ValNodePtr anp_list, Uint4 itemID)
 {
 	AlignNodePtr anp;
 
@@ -3867,13 +3867,9 @@ static Boolean ShowAlignNodeText2Ex(ValNodePtr anp_list, Int2 num_node, Int4 lin
           fprintf(fp, "\n\n");
        }
     if (option & TXALIGN_BL2SEQ_LINK) {
-       Boolean numeric_id;
-       Int4 gi, index;
-       CharPtr accession, id1, id2;
+       CharPtr id1, id2;
        Char buffer[BUFFER_LENGTH+1];
        BioseqPtr bsp;
-       SeqPortPtr spp;
-       CharPtr query_seq;
 
        bsp = BioseqLockById(asp->master_sip);
 
@@ -4351,7 +4347,6 @@ make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbnam
     Boolean nodb_path = FALSE;
     Char gnl[256];
     CharPtr str, chptr, dbtmp;
-    CharPtr dumpgnl_test;
     Uchar buf[32];
     Int4 i, j, length, gi;
     MD5Context context;
@@ -4700,8 +4695,6 @@ PrintDefLinesFromSeqAlignWithPath(SeqAlignPtr seqalign, Int4 line_length, FILE *
     Boolean firstnew = TRUE;
     Int4 countdescr = number_of_descriptions;
     Int4 numalign;
-    Char passwd[128];
-    Char tool_url[128];
     DbtagPtr db_tag;
     ObjectIdPtr oip;
     Int2 ColumnDistance=2, extraSpace=0, extraSpace2=0, strLen=0, maxEvalWidth=5, maxNWidth=2;
@@ -5651,21 +5644,19 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     CharPtr new_defline;
     Char buf1[5], buf2[5];
     Char buffer[BUFFER_LENGTH+1], eval_buff[10], bit_score_buff[10];
-    Char HTML_buffer[BUFFER_LENGTH+1], seqid_buf[TX_SEQID_BUF_SIZE+2];
+    Char seqid_buf[TX_SEQID_BUF_SIZE+2];
     Char id_buffer[BUFFER_LENGTH+1];
     Nlm_FloatHi bit_score, evalue; 
     Int4 percent_identical, percent_positive;
     Int4 number, score, gi, len, i;
     Int4 index; /* index for while loop over seqid. */
     ObjectIdPtr obid;
-    SeqIdPtr gilist, sip, new_sip, sip_tmp, sipGi;
+    SeqIdPtr gilist, sip, new_sip;
     ScorePtr	scrp, sp;
     Boolean splice_junction = FALSE;
     BlastDefLinePtr bdsp = NULL;
     CharPtr warning_msg = NULL;
-    Char fastaLongIdBuf[BUFFER_LENGTH+1];
     SeqIdPtr firstSip=NULL;
-    Int4 num_ident;
     Int2 comp_adjustment_method = eNoCompositionBasedStats;
 
 
@@ -6071,12 +6062,11 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
 {
     StdSegPtr sseg;
     SeqIntPtr seq_int1, seq_int2;
-    SeqLocPtr slp, slp1, slp2;
+    SeqLocPtr slp1, slp2;
     SeqIdPtr sip1, sip2;
     SeqFeatPtr fake_cds;
     ByteStorePtr b_store = NULL;
     Char line1[128], line2[128], line3[128];
-    Char tmpbuf[256];
     Int4 line_index, length_dna, length_pro, length;
     Int4 dna_index, pro_index, dna_line_start, pro_line_start;
     Int4 dna_line_end, pro_line_end, dna_to, dna_from;
@@ -6513,7 +6503,7 @@ NLM_EXTERN Boolean OOFShowBlastAlignment(SeqAlignPtr sap, ValNodePtr mask,
 {
     SeqAlignPtr     sap4;
     SeqIdPtr        new_id = NULL, old_id = NULL;    
-    Uint4           option,i;
+    Uint4           i;
     Boolean         bRet, follower= FALSE, matrix_loaded = FALSE;
     
     if(sap == NULL || fp == NULL) 
@@ -6788,7 +6778,6 @@ RDBTaxNamesPtr FDGetTaxNamesFromBioseq(BioseqPtr bsp, Int4 taxid)
 BlastDefLinePtr FDGetDeflineAsnFromBioseq(BioseqPtr bsp) 
 {
     BlastDefLinePtr bdsp;
-    AsnIoPtr aip;
     AsnIoMemPtr aimp;
     Int4 length;
     ByteStorePtr bstorep;

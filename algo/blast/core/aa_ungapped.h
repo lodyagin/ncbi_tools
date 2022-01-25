@@ -1,4 +1,4 @@
-/* $Id: aa_ungapped.h,v 1.27 2006/03/23 16:00:35 papadopo Exp $
+/* $Id: aa_ungapped.h,v 1.33 2006/10/03 15:31:33 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -25,14 +25,14 @@
  */
 
 /** @file aa_ungapped.h
- * @todo FIXME: Need file description (protein wordfinding & ungapped 
- * extension code?)
+ * Protein ungapped extension code.
  */
 
 #ifndef AA_UNGAPPED__H
 #define AA_UNGAPPED__H
 
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_lookup.h>
 #include <algo/blast/core/blast_extend.h>
 
@@ -44,6 +44,7 @@ extern "C" {
  *
  * @param subject the subject sequence [in]
  * @param query the query sequence [in]
+ * @param query_info concatenated query information [in]
  * @param lookup the lookup table [in]
  * @param matrix the substitution matrix [in]
  * @param word_params word parameters, needed for cutoff and dropoff [in]
@@ -55,6 +56,7 @@ extern "C" {
  */
 Int2 BlastAaWordFinder(BLAST_SequenceBlk* subject,
 		       BLAST_SequenceBlk* query,
+                       BlastQueryInfo* query_info,
 		       LookupTableWrap* lookup,
 		       Int4** matrix,
 		       const BlastInitialWordParameters* word_params,
@@ -69,10 +71,10 @@ Int2 BlastAaWordFinder(BLAST_SequenceBlk* subject,
  * @param subject the subject sequence [in]
  * @param query the query sequence [in]
  * @param lookup_wrap the lookup table [in]
- * @param diag the diagonal array structure [in/out]
+ * @param ewp Structure containing the diagonal array
  * @param matrix the substitution matrix [in]
- * @param cutoff cutoff score for saving ungapped HSPs [in]
- * @param dropoff x dropoff [in]
+ * @param word_params structure containing per-context cutoff information [in]
+ * @param query_info structure containing context ranges [in]
  * @param offset_pairs Array for storing query and subject offsets. [in]
  * @param array_size the number of elements in each offset array [in]
  * @param ungapped_hsps hsps resulting from the ungapped extension [out]
@@ -82,10 +84,10 @@ Int2 BlastAaWordFinder(BLAST_SequenceBlk* subject,
 Int2 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
 			      const BLAST_SequenceBlk* query,
 			      const LookupTableWrap* lookup_wrap,
-			      BLAST_DiagTable* diag,
+			      Blast_ExtendWord * ewp,
 			      Int4 ** matrix,
-			      Int4 cutoff,
-			      Int4 dropoff,
+			      const BlastInitialWordParameters * word_params,
+			      BlastQueryInfo * query_info,
                               BlastOffsetPair* NCBI_RESTRICT offset_pairs,
 			      Int4 array_size,
 	                      BlastInitHitList* ungapped_hsps, 
@@ -97,7 +99,7 @@ Int2 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
  * @param subject the subject sequence [in]
  * @param query the query sequence [in]
  * @param lookup_wrap the lookup table [in]
- * @param diag the diagonal array structure [in/out]
+ * @param ewp Structure containing the diagonal array [in]
  * @param matrix the substitution matrix [in]
  * @param cutoff cutoff score for saving ungapped HSPs [in]
  * @param dropoff x dropoff [in]
@@ -107,7 +109,7 @@ Int2 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
 Int2 BlastRPSWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
 	 		       const BLAST_SequenceBlk* query,
 			       const LookupTableWrap* lookup_wrap,
-			       BLAST_DiagTable* diag,
+			       Blast_ExtendWord * ewp,
 			       Int4 ** matrix,
 			       Int4 cutoff,
 			       Int4 dropoff,
@@ -119,10 +121,10 @@ Int2 BlastRPSWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
  * @param subject the subject sequence
  * @param query the query sequence
  * @param lookup_wrap the lookup table
- * @param diag the diagonal array structure
+ * @param ewp Structure containing the diagonal array [in]
  * @param matrix the substitution matrix [in]
- * @param cutoff cutoff score for saving ungapped HSPs [in]
- * @param dropoff x dropoff [in]
+ * @param word_params structure containing per-context cutoff information [in]
+ * @param query_info structure containing context ranges [in]
  * @param offset_pairs Array for storing query and subject offsets. [in]
  * @param array_size the number of elements in each offset array
  * @param ungapped_hsps hsps resulting from the ungapped extensions [out]
@@ -131,10 +133,10 @@ Int2 BlastRPSWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
 Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
 			      const BLAST_SequenceBlk* query,
 			      const LookupTableWrap* lookup_wrap,
-			      BLAST_DiagTable* diag,
+			      Blast_ExtendWord * ewp,
 			      Int4 ** matrix,
-			      Int4 cutoff,
-			      Int4 dropoff,
+			      const BlastInitialWordParameters * word_params,
+			      BlastQueryInfo * query_info,
                               BlastOffsetPair* NCBI_RESTRICT offset_pairs,
 			      Int4 array_size,
 	            BlastInitHitList* ungapped_hsps, 
@@ -146,7 +148,7 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
  * @param subject the subject sequence
  * @param query the query sequence
  * @param lookup_wrap the lookup table
- * @param diag the diagonal array structure
+ * @param ewp Structure containing the diagonal array [in]
  * @param matrix the substitution matrix [in]
  * @param cutoff cutoff score for saving ungapped HSPs [in]
  * @param dropoff x dropoff [in]
@@ -156,7 +158,7 @@ Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
 Int2 BlastRPSWordFinder_OneHit(const BLAST_SequenceBlk* subject,
                                const BLAST_SequenceBlk* query,
                                const LookupTableWrap* lookup_wrap,
-                               BLAST_DiagTable* diag,
+                               Blast_ExtendWord * ewp,
                                Int4 ** matrix,
                                Int4 cutoff,
                                Int4 dropoff,
@@ -328,6 +330,28 @@ Int4 BlastAaExtendTwoHit(Int4 ** matrix,
 	                 Int4 word_size,
 	                 Boolean *right_extend,
 	                 Int4* s_last_off);
+
+/** Allocates memory for the BLAST_DiagTable*. This function also 
+ * sets many of the parametes such as diag_array_length etc.
+ * @param qlen Length of the query [in]
+ * @param multiple_hits Specifies whether multiple hits method is used [in]
+ * @param window_size The max. distance between two hits that are extended [in]
+ * @return The allocated BLAST_DiagTable structure
+*/
+BLAST_DiagTable*
+BlastDiagTableNew (Int4 qlen, Boolean multiple_hits, Int4 window_size);
+
+/** Deallocate memory for the diagonal table structure 
+ * @param diag_table the object to be freed [in]
+ * @return NULL
+*/
+BLAST_DiagTable*
+BlastDiagTableFree(BLAST_DiagTable* diag_table);
+
+/** Reset the diagonal array structure. Used when offset has wrapped around.
+ * @param diag pointer to the diagonal array structure [in]
+ */
+Int4 BlastDiagClear(BLAST_DiagTable* diag);
 
 #ifdef __cplusplus
 }

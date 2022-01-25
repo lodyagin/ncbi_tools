@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.376 $
+* $Revision: 6.388 $
 *
 * File Description: 
 *
@@ -435,7 +435,7 @@ static Boolean FindBspItem (GatherContextPtr gcp)
   return TRUE;
 }
 
-NLM_EXTERN BioseqPtr GetBioseqGivenIDs (Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+NLM_EXTERN BioseqPtr GetBioseqGivenIDs (Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 
 {
   BioseqPtr  bsp;
@@ -482,7 +482,7 @@ NLM_EXTERN BioseqPtr GetBioseqGivenSeqLoc (SeqLocPtr slp, Uint2 entityID)
 
 typedef struct tripletdata {
 	Uint2      entityID;
-	Uint2      itemID;
+	Uint4      itemID;
 	Uint2      itemtype;
 	Pointer    lookfor;
 } TripletData, PNTR TripletDataPtr;
@@ -501,7 +501,7 @@ static Boolean FindIDsFromPointer (GatherContextPtr gcp)
   return TRUE;
 }
 
-NLM_EXTERN Uint2 GetItemIDGivenPointer (Uint2 entityID, Uint2 itemtype, Pointer lookfor)
+NLM_EXTERN Uint4 GetItemIDGivenPointer (Uint2 entityID, Uint2 itemtype, Pointer lookfor)
 
 {
   GatherScope  gs;
@@ -1232,7 +1232,7 @@ NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForData (Uint2 entityID, BioseqPt
   return GetBestTopParentForDataEx (entityID, bsp, FALSE);
 }
 
-NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForItemIDEx (Uint2 entityID, Uint2 itemID, Uint2 itemtype, Boolean skipGenProdSet)
+NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForItemIDEx (Uint2 entityID, Uint4 itemID, Uint2 itemtype, Boolean skipGenProdSet)
 
 {
   TargetData  td;
@@ -1246,7 +1246,7 @@ NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForItemIDEx (Uint2 entityID, Uint
   return td.nps;
 }
 
-NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForItemID (Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForItemID (Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 
 {
   return GetBestTopParentForItemIDEx (entityID, itemID, itemtype, FALSE);
@@ -2691,6 +2691,8 @@ static Boolean HandledGBQualOnGene (SeqFeatPtr sfp, GBQualPtr gbq)
     choice = 3;
   } else if (StringICmp (gbq->qual, "locus_tag") == 0) {
     choice = 4;
+  } else if (StringICmp (gbq->qual, "old_locus_tag") == 0) {
+    choice = 5;
   }
   if (choice > 0) {
     grp = (GeneRefPtr) sfp->data.value.ptrvalue;
@@ -2713,6 +2715,13 @@ static Boolean HandledGBQualOnGene (SeqFeatPtr sfp, GBQualPtr gbq)
         if (grp->locus_tag != NULL) return FALSE;
         if (StringHasNoText (gbq->val)) return FALSE;
         grp->locus_tag = StringSave (gbq->val);
+        break;
+      case 5 :
+        if (StringHasNoText (gbq->val)) return FALSE;
+        if (grp->locus_tag != NULL) {
+          if (StringICmp (gbq->val, grp->locus_tag) == 0) return TRUE;
+          return FALSE;
+        }
         break;
       default :
         break;
@@ -3043,7 +3052,7 @@ static void UniqueCodons (tRNAPtr trp)
 
 {
   Int2   i, j;
-  Uint2  last = 255, next;
+  Uint1  last = 255, next;
 
   if (trp == NULL) return;
 
@@ -3075,7 +3084,8 @@ NLM_EXTERN Boolean ParseDegenerateCodon (tRNAPtr trp, Uint1Ptr codon)
 {
   Uint1    ch;
   Uint1    chrToInt [256];
-  Int2     i, j;
+  Int2     k;
+  Uint1    i, j;
   Uint1    idx;
   CharPtr  intToChr = "?ACMGRSVTWYHKDBN";
   CharPtr  ptr, str;
@@ -3087,8 +3097,8 @@ NLM_EXTERN Boolean ParseDegenerateCodon (tRNAPtr trp, Uint1Ptr codon)
     if (ch != 'A' && ch != 'C' && ch != 'G' && ch != 'T') return FALSE;
   }
 
-  for (i = 0; i < 256; i++) {
-    chrToInt [i] = 0;
+  for (k = 0; k < 256; k++) {
+    chrToInt [k] = 0;
   }
   for (i = 1; i < 16; i++) {
     ch = intToChr [i];
@@ -3832,7 +3842,7 @@ static void CleanupRptUnitSeq (GBQualPtr gbq)
   ptr = gbq->val;
   ch = *ptr;
   while (ch != '\0') {
-    if (StringChr ("ACGTUacgtu", ch) == NULL) return;
+    if (StringChr ("ACGTUNacgtun0123456789()", ch) == NULL) return;
     ptr++;
     ch = *ptr;
   }
@@ -3881,6 +3891,55 @@ static void CleanupReplace (GBQualPtr gbq)
     ptr++;
     ch = *ptr;
   }
+}
+
+static void CleanupInference (GBQualPtr gbq)
+
+{
+  Char     ch;
+  CharPtr  colon;
+  CharPtr  dst;
+  CharPtr  ptr;
+  CharPtr  space;
+  CharPtr  str;
+
+  if (gbq == NULL) return;
+  if (StringHasNoText (gbq->val)) return;
+
+  str = gbq->val;
+  space = NULL;
+  colon = NULL;
+
+  dst = str;
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    *dst = ch;
+    if (ch == ' ') {
+      if (space == NULL) {
+        space = dst;
+      }
+    } else if (ch == ':') {
+      if (space != NULL) {
+        dst = space;
+        *dst = ch;
+      }
+      space = NULL;
+      colon = dst;
+    } else {
+      if (space != NULL && colon != NULL) {
+        colon++;
+        dst = colon;
+        *dst = ch;
+      }
+      space = NULL;
+      colon = NULL;
+    }
+    dst++;
+    ptr++;
+    ch = *ptr;
+  }
+  *dst = '\0';
 }
 
 static Boolean StringIsJustQuotes (CharPtr str)
@@ -4212,9 +4271,13 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
     } else if (StringICmp (gbq->qual, "experiment") == 0 &&
                StringICmp (gbq->val, "experimental evidence, no additional details recorded") == 0) {
       /* remove default experiment string if instantiated */
-    } else if (StringICmp (gbq->qual, "inference") == 0 &&
-               StringICmp (gbq->val, "non-experimental evidence, no additional details recorded") == 0) {
-      /* remove default inference string if instantiated */
+    } else if (StringICmp (gbq->qual, "inference") == 0) {
+      if (StringICmp (gbq->val, "non-experimental evidence, no additional details recorded") == 0) {
+        /* remove default inference string if instantiated */
+      } else {
+        CleanupInference (gbq);
+        unlink = FALSE;
+      }
     } else {
       unlink = FALSE;
     }
@@ -4695,7 +4758,7 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
 {
   Char               ch;
   CharPtr            dst;
-  SubSourcePtr       fwd_seq = NULL, rev_seq = NULL;
+  SubSourcePtr       fwd_seq = NULL, rev_seq = NULL, fwd_name = NULL, rev_name = NULL;
   SubSourcePtr       last = NULL;
   size_t             len;
   SubSourcePtr       next;
@@ -4759,6 +4822,22 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
         rev_seq = ssp;
       } else {
         rev_seq->name = CombineSplitQual (rev_seq->name, ssp->name);
+        unlink = TRUE;
+      }
+    }
+    if (ssp->subtype == SUBSRC_fwd_primer_name) {
+      if (fwd_name == NULL) {
+        fwd_name = ssp;
+      } else {
+        fwd_name->name = CombineSplitQual (fwd_name->name, ssp->name);
+        unlink = TRUE;
+      }
+    }
+    if (ssp->subtype == SUBSRC_rev_primer_name) {
+      if (rev_name == NULL) {
+        rev_name = ssp;
+      } else {
+        rev_name->name = CombineSplitQual (rev_name->name, ssp->name);
         unlink = TRUE;
       }
     }
@@ -4830,6 +4909,40 @@ static void CleanSubSourceList (SubSourcePtr PNTR sspp)
           StringCat (str, ")");
           rev_seq->name = MemFree (rev_seq->name);
           rev_seq->name = str;
+        }
+      }
+    }
+  }
+  if (fwd_name != NULL) {
+    if (StringChr (fwd_name->name, ',') != NULL) {
+      ptr = fwd_name->name;
+      len = StringLen (ptr);
+      if (ptr [0] != '(' || ptr [len - 1] != ')') {
+        TrimParenthesesAndCommasAroundString (fwd_name->name);
+        str = MemNew (sizeof (Char) * (len + 4));
+        if (str != NULL) {
+          StringCpy (str, "(");
+          StringCat (str, fwd_name->name);
+          StringCat (str, ")");
+          fwd_name->name = MemFree (fwd_name->name);
+          fwd_name->name = str;
+        }
+      }
+    }
+  }
+  if (rev_name != NULL) {
+    if (StringChr (rev_name->name, ',') != NULL) {
+      ptr = rev_name->name;
+      len = StringLen (ptr);
+      if (ptr [0] != '(' || ptr [len - 1] != ')') {
+        TrimParenthesesAndCommasAroundString (rev_name->name);
+        str = MemNew (sizeof (Char) * (len + 4));
+        if (str != NULL) {
+          StringCpy (str, "(");
+          StringCat (str, rev_name->name);
+          StringCat (str, ")");
+          rev_name->name = MemFree (rev_name->name);
+          rev_name->name = str;
         }
       }
     }
@@ -5202,6 +5315,9 @@ static void FixOldDbxrefs (ValNodePtr vnp)
       } else if (StringICmp (dbt->db, "SUBTILIS") == 0) {
         dbt->db = MemFree (dbt->db);
         dbt->db = StringSave ("SubtiList");
+      } else if (StringICmp (dbt->db, "MGD") == 0) {
+        dbt->db = MemFree (dbt->db);
+        dbt->db = StringSave ("MGI");
       }
       if (StringICmp (dbt->db, "Swiss-Prot") == 0 ||
           StringICmp (dbt->db, "SWISSPROT") == 0) {
@@ -5374,7 +5490,7 @@ NLM_EXTERN void FirstNameToInitials (CharPtr first, CharPtr inits, size_t maxsiz
 
 {
   Char  ch;
-  Int2  i;
+  Uint2  i;
 
   if (inits != NULL && maxsize > 0) {
     inits [0] = '\0';
@@ -6575,6 +6691,280 @@ static void CleanUpExceptText (SeqFeatPtr sfp)
   ValNodeFreeData (head);
 }
 
+static Boolean ExpandedGeneSyn (ValNodePtr headsyn)
+
+{
+  ValNodePtr  lastsyn;
+  ValNodePtr  newsyn;
+  ValNodePtr  nextsyn;
+  CharPtr     ptr;
+  CharPtr     str;
+  CharPtr     tmp;
+
+  str = (CharPtr) headsyn->data.ptrvalue;
+  if (StringHasNoText (str)) return TRUE;
+  if (StringChr (str, ',') == NULL) return FALSE;
+
+  nextsyn = headsyn->next;
+  lastsyn = headsyn;
+  tmp = StringSave ((CharPtr) headsyn->data.ptrvalue);
+  str = tmp;
+
+  while (! StringHasNoText (str)) {
+    ptr = StringChr (str, ',');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr++;
+    }
+    TrimSpacesAroundString (str);
+    newsyn = ValNodeNew (NULL);
+    if (newsyn != NULL) {
+      newsyn->data.ptrvalue = StringSave (str);
+      newsyn->next = nextsyn;
+      lastsyn->next = newsyn;
+      lastsyn = newsyn;
+    }
+    str = ptr;
+  }
+
+  MemFree (tmp);
+  return TRUE;
+}
+
+static void ExpandGeneSynList (GeneRefPtr grp)
+
+{
+  ValNodePtr       currsyn;
+  ValNodePtr       nextsyn;
+  ValNodePtr PNTR  prevsyn;
+
+  if (grp == NULL || grp->syn == NULL) return;
+  currsyn = grp->syn;
+  prevsyn = &(grp->syn);
+  while (currsyn != NULL) {
+    if (ExpandedGeneSyn (currsyn)) {
+      nextsyn = currsyn->next;
+      *(prevsyn) = currsyn->next;
+      currsyn->next = NULL;
+      ValNodeFreeData (currsyn);
+    } else {
+      nextsyn = currsyn->next;
+      prevsyn = (ValNodePtr PNTR) &(currsyn->next);
+    }
+    currsyn = nextsyn;
+  }
+}
+
+typedef struct gosstruc {
+  CharPtr       term;
+  Char          goid [32];
+  CharPtr       evidence;
+  Int4          pmid;
+  UserFieldPtr  ufp;
+} GosStruc, PNTR GosStrucPtr;
+
+static int LIBCALLBACK SortVnpByGssp (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  int           compare;
+  GosStrucPtr   gsp1, gsp2;
+  Int4          pmid1 = 0, pmid2 = 0;
+  CharPtr       str1 = NULL, str2 = NULL;
+  ValNodePtr    vnp1, vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  gsp1 = (GosStrucPtr) vnp1->data.ptrvalue;
+  gsp2 = (GosStrucPtr) vnp2->data.ptrvalue;
+  if (gsp1 == NULL || gsp2 == NULL) return 0;
+
+  compare = StringICmp (gsp1->goid, gsp2->goid);
+  if (compare > 0) {
+    return 1;
+  } else if (compare < 0) {
+    return -1;
+  }
+
+  compare = StringICmp (gsp1->term, gsp2->term);
+  if (compare > 0) {
+    return 1;
+  } else if (compare < 0) {
+    return -1;
+  }
+
+  compare = StringICmp (gsp1->evidence, gsp2->evidence);
+  if (compare > 0) {
+    return 1;
+  } else if (compare < 0) {
+    return -1;
+  }
+
+  if (gsp1->pmid == 0) return 1;
+  if (gsp2->pmid == 0) return -1;
+  if (gsp1->pmid > gsp2->pmid) {
+    return 1;
+  } else if (gsp1->pmid < gsp2->pmid) {
+    return -1;
+  }
+
+  return 0;
+}
+
+static CharPtr goQualType [] = {
+  "", "Process", "Component", "Function", NULL
+};
+
+static CharPtr goFieldType [] = {
+  "", "text string", "go id", "pubmed id", "evidence", NULL
+};
+
+static UserFieldPtr SortGoTerms (
+  UserFieldPtr entryhead
+)
+
+{
+  UserFieldPtr  entry, topufp, ufp, lastufp;
+  CharPtr       evidence, goid, textstr;
+  Char          gid [32];
+  GosStrucPtr   gsp, lastgsp;
+  ValNodePtr    head = NULL, vnp;
+  Int2          j;
+  ObjectIdPtr   oip;
+  Int4          pmid;
+
+  if (entryhead == NULL) return entryhead;
+
+  for (entry = entryhead; entry != NULL; entry = entry->next) {
+    if (entry == NULL || entry->choice != 11) break;
+    topufp = (UserFieldPtr)  entry->data.ptrvalue;
+    if (topufp == NULL) continue;
+
+    textstr = NULL;
+    evidence = NULL;
+    goid = NULL;
+    pmid = 0;
+    for (ufp = topufp; ufp != NULL; ufp = ufp->next) {
+      oip = ufp->label;
+      if (oip == NULL) continue;
+      for (j = 0; goFieldType [j] != NULL; j++) {
+        if (StringICmp (oip->str, goFieldType [j]) == 0) break;
+      }
+      if (goFieldType [j] == NULL) continue;
+      switch (j) {
+        case 1 :
+          if (ufp->choice == 1) {
+            textstr = (CharPtr) ufp->data.ptrvalue;
+          }
+          break;
+        case 2 :
+          if (ufp->choice == 1) {
+            goid = (CharPtr) ufp->data.ptrvalue;
+          } else if (ufp->choice == 2) {
+            sprintf (gid, "%ld", (long) (Int4) ufp->data.intvalue);
+            goid = (CharPtr) gid;
+          }
+          break;
+        case 3 :
+          if (ufp->choice == 2) {
+            pmid = (Int4) ufp->data.intvalue;
+          }
+          break;
+        case 4 :
+          if (ufp->choice == 1) {
+            evidence = (CharPtr) ufp->data.ptrvalue;
+          }
+          break;
+        default :
+          break;
+      }
+    }
+
+    if (StringDoesHaveText (textstr)) {
+      gsp = (GosStrucPtr) MemNew (sizeof (GosStruc));
+      if (gsp != NULL) {
+        gsp->term = textstr;
+        StringNCpy_0 (gsp->goid, goid, sizeof (gsp->goid));
+        gsp->evidence = evidence;
+        gsp->pmid = pmid;
+        gsp->ufp = entry;
+        ValNodeAddPointer (&head, 0, (Pointer) gsp);
+      }
+    }
+  }
+
+  if (head == NULL) return entryhead;
+  head = ValNodeSort (head, SortVnpByGssp);
+
+  entryhead = NULL;
+  lastgsp = NULL;
+  lastufp = NULL;
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    gsp = (GosStrucPtr) vnp->data.ptrvalue;
+    if (gsp == NULL || gsp->ufp == NULL) continue;
+    if (lastgsp != NULL &&
+        (StringICmp (gsp->term, lastgsp->term) == 0 || StringICmp (gsp->goid, lastgsp->goid) == 0) &&
+        (gsp->pmid == lastgsp->pmid && StringICmp (gsp->evidence, lastgsp->evidence) == 0)) {
+      gsp->ufp->next = NULL;
+      UserFieldFree (gsp->ufp);
+    } else {
+      if (lastufp != NULL) {
+        lastufp->next = gsp->ufp;
+      } else {
+        entryhead = gsp->ufp;
+      }
+      lastufp = gsp->ufp;
+      lastufp->next = NULL;
+    }
+    lastgsp = gsp;
+  }
+
+  ValNodeFreeData (head);
+
+  return entryhead;
+}
+
+static void SortGoTermsUfp (
+  UserFieldPtr ufp,
+  Pointer userdata
+)
+
+{
+  UserFieldPtr  entry;
+  Int2          i;
+  ObjectIdPtr   oip;
+ 
+  if (ufp == NULL || ufp->choice != 11) return;
+  oip = ufp->label;
+  if (oip == NULL) return;
+  for (i = 0; goQualType [i] != NULL; i++) {
+    if (StringICmp (oip->str, goQualType [i]) == 0) break;
+  }
+  if (goQualType [i] == NULL) return;
+
+  entry = ufp->data.ptrvalue;
+  if (entry == NULL || entry->choice != 11) return;
+
+  ufp->data.ptrvalue = SortGoTerms (entry);
+}
+
+static void SortGoTermsSfp (
+  UserObjectPtr uop,
+  Pointer userdata
+)
+
+{
+  ObjectIdPtr  oip;
+
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL) return;
+  if (StringCmp (oip->str, "GeneOntology") == 0) {
+    VisitUserFieldsInUop (uop, userdata, SortGoTermsUfp);
+  }
+}
+
 static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodePtr PNTR publist)
 
 {
@@ -6615,6 +7005,11 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
   if (StringCmp (sfp->comment, ".") == 0) {
     sfp->comment = MemFree (sfp->comment);
   }
+  /*
+  if (sfp->ext != NULL) {
+    VisitUserObjectsInUop (sfp->ext, NULL, SortGoTermsSfp);
+  }
+  */
   switch (sfp->data.choice) {
     case SEQFEAT_BOND :
     case SEQFEAT_PSEC_STR :
@@ -6684,6 +7079,7 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
       CleanVisString (&(grp->desc));
       CleanVisString (&(grp->maploc));
       CleanVisString (&(grp->locus_tag));
+      ExpandGeneSynList (grp);
       CleanVisStringList (&(grp->syn));
       CleanDoubleQuote (grp->locus);
       CleanDoubleQuote (grp->allele);
@@ -7477,12 +7873,32 @@ static void CheckForEmblDdbjID (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
 static void CleanupSeqLoc (SeqLocPtr slp)
 
 {
+  BioseqPtr  bsp;
   SeqLocPtr  last;
   SeqLocPtr  loc;
+  SeqIdPtr   sip;
   SeqIntPtr  sintp;
+  SeqPntPtr  spp;
   Int4       swp;
 
   if (slp == NULL) return;
+
+  if (slp->choice == SEQLOC_WHOLE) {
+    sip = (SeqIdPtr) slp->data.ptrvalue;
+    if (sip != NULL) {
+      bsp = BioseqFind (sip);
+      if (bsp != NULL) {
+        sintp = SeqIntNew ();
+        if (sintp != NULL) {
+          sintp->from = 0;
+          sintp->to = bsp->length - 1;
+          sintp->id = sip; /* reuse existing slp->data.ptrvalue, no need to free */
+          slp->choice = SEQLOC_INT;
+          slp->data.ptrvalue = (Pointer) sintp;
+        }
+      }
+    }
+  }
 
   /* from < to for all intervals */
   loc = SeqLocFindNext (slp, NULL);
@@ -7494,6 +7910,20 @@ static void CleanupSeqLoc (SeqLocPtr slp)
           swp = sintp->from;
           sintp->from = sintp->to;
           sintp->to = swp;
+        }
+        if (sintp->strand == Seq_strand_both) {
+          sintp->strand = Seq_strand_plus;
+        } else if (sintp->strand == Seq_strand_both_rev) {
+          sintp->strand = Seq_strand_minus;
+        }
+      }
+    } else if (loc->choice == SEQLOC_PNT) {
+      spp = (SeqPntPtr) loc->data.ptrvalue;
+      if (spp != NULL) {
+        if (spp->strand == Seq_strand_both) {
+          spp->strand = Seq_strand_plus;
+        } else if (spp->strand == Seq_strand_both_rev) {
+          spp->strand = Seq_strand_minus;
         }
       }
     }
@@ -7705,6 +8135,11 @@ NLM_EXTERN void CleanUpSeqFeat (
 		ifp->key = MemFree (ifp->key);
 		ifp->key = StringSave ("variation");
 		sfp->idx.subtype = FEATDEF_variation;
+	  } else if (StringCmp (ifp->key, "Import") == 0 ||
+				 StringCmp (ifp->key, "virion") == 0) {
+		ifp->key = MemFree (ifp->key);
+		ifp->key = StringSave ("misc_feature");
+		sfp->idx.subtype = FEATDEF_misc_feature;
 	  } else if (StringHasNoText (ifp->loc)) {
 		rrptype = 0;
 		if (StringCmp (ifp->key, "precursor_RNA") == 0) {
@@ -7833,6 +8268,25 @@ NLM_EXTERN void CleanUpSeqFeat (
 		}
 	  }
 	}
+  } else if (sfp->data.choice == SEQFEAT_REGION ||
+             sfp->data.choice == SEQFEAT_SITE ||
+             sfp->data.choice == SEQFEAT_BOND ||
+             sfp->data.choice == SEQFEAT_PROT) {
+    bsp = BioseqFind (SeqLocId (sfp->location));
+    if (bsp != NULL && ISA_aa (bsp->mol)) {
+      slp = SeqLocFindNext (sfp->location, NULL);
+      while (slp != NULL) {
+        if (slp->choice == SEQLOC_INT) {
+          sintp = (SeqIntPtr) slp->data.ptrvalue;
+          if (sintp != NULL) {
+            if (sintp->strand != Seq_strand_unknown) {
+              sintp->strand = Seq_strand_unknown;
+            }
+          }
+        }
+        slp = SeqLocFindNext (sfp->location, slp);
+      }
+    }
   }
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
   hasNulls = LocationHasNullsBetween (sfp->location);
@@ -9182,7 +9636,7 @@ NLM_EXTERN Boolean LocationHasNullsBetween (SeqLocPtr location)
   return FALSE;
 }
 
-NLM_EXTERN Uint2 FindFeatFromFeatDefType (Uint2 subtype)
+NLM_EXTERN Uint1 FindFeatFromFeatDefType (Uint2 subtype)
 
 {
   switch (subtype) {

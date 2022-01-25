@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.541 $
+* $Revision: 6.565 $
 *
 * File Description: 
 *
@@ -126,7 +126,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "6.20"
+#define SEQ_APP_VER "6.42"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -144,6 +144,7 @@ extern EnumFieldAssoc  biosource_genome_simple_alist [];
 
 Boolean  useDesktop = FALSE;
 Boolean  useEntrez = FALSE;
+Boolean  useSeqFetch = FALSE;
 Boolean  useLocal = FALSE;
 Boolean  useBlast = FALSE;
 Boolean  useMedarch = FALSE;
@@ -1072,7 +1073,7 @@ static void SaveBinSeqEntry (IteM i)
 }
 
 static void LIBCALLBACK ValidNotify (ErrSev sev, int errcode, int subcode,
-                                     Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+                                     Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                      Boolean select, Boolean dblClick)
 
 {
@@ -1803,8 +1804,12 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
   Boolean           has_nucleomorphs;
   Boolean           is_nucleomorph;
   Boolean           is_species_level;
+  Boolean           force_tax_consult;
+  ValNodePtr        last = NULL;
   OrgRefPtr         orp;
   TaxLst            srclist;
+  CharPtr           str;
+  T3ErrorPtr        t3ep;
   Taxon3RequestPtr  t3rq;
   Taxon3ReplyPtr    t3ry;
   T3DataPtr         tdp;
@@ -1813,6 +1818,7 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
   TaxValPtr         tvp;
   ValNodePtr        val;
   ValNodePtr        vnp;
+  ValNodePtr        vnp2;
 
   if (sep == NULL || vsp == NULL) return;
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
@@ -1833,7 +1839,11 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
     orp = AsnIoMemCopy (tvp->orp,
                         (AsnReadFunc) OrgRefAsnRead,
                         (AsnWriteFunc) OrgRefAsnWrite);
-    ValNodeAddPointer (&(t3rq->request), 3, (Pointer) orp);
+    vnp2 = ValNodeAddPointer (&last, 3, (Pointer) orp);
+    if (t3rq->request == NULL) {
+      t3rq->request = vnp2;
+    }
+    last = vnp2;
   }
 
   t3ry = Tax3SynchronousQuery (t3rq);
@@ -1845,6 +1855,26 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
        trp = trp->next, vnp = vnp->next) {
     tvp = (TaxValPtr) vnp->data.ptrvalue;
     if (tvp == NULL) continue;
+    if (trp->choice == T3Reply_error) {
+      t3ep = (T3ErrorPtr) trp->data.ptrvalue;
+      if (t3ep != NULL) {
+        str = t3ep->message;
+        if (str == NULL) {
+          str = "?";
+        }
+
+        vsp->bssp = NULL;
+        vsp->bsp = tvp->bsp;
+        vsp->sfp = tvp->sfp;
+        vsp->descr = NULL;
+
+        gc.entityID = tvp->entityID;
+        gc.itemID = tvp->itemID;
+        gc.thistype = tvp->itemtype;
+
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, "Taxonomy lookup failed with message '%s'", str);
+      }
+    }
     if (trp->choice != T3Reply_data) continue;
     tdp = (T3DataPtr) trp->data.ptrvalue;
     if (tdp == NULL) continue;
@@ -1857,6 +1887,22 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
     is_species_level = FALSE;
     has_nucleomorphs = FALSE;
     for (tfp = tdp->status; tfp != NULL; tfp = tfp->next) {
+
+      /*
+      val = tfp->Value_value;
+      if (val != NULL && val->choice == Value_value_bool) {
+        str = tfp->property;
+        if (str == NULL) {
+          str = "?";
+        }
+        if (val->data.intvalue != 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, "'%s' TRUE", str);
+        } else {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, "'%s' FALSE", str);
+        }
+      }
+      */
+
       if (StringICmp (tfp->property, "is_species_level") == 0) {
         val = tfp->Value_value;
         if (val != NULL && val->choice == Value_value_bool) {
@@ -1867,6 +1913,18 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
             gc.thistype = tvp->itemtype;
 
             ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, "Taxonomy lookup reports is_species_level FALSE");
+          }
+        }
+      } else if (StringICmp (tfp->property, "force_consult") == 0) {
+        val = tfp->Value_value;
+        if (val != NULL && val->choice == Value_value_bool) {
+          force_tax_consult = (Boolean) (val->data.intvalue != 0);
+          if (force_tax_consult) {
+            gc.entityID = tvp->entityID;
+            gc.itemID = tvp->itemID;
+            gc.thistype = tvp->itemtype;
+
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyLookupProblem, "Taxonomy lookup reports taxonomy consultation needed");
           }
         }
       } else if (StringICmp (tfp->property, "has_nucleomorphs") == 0) {
@@ -2917,6 +2975,7 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
   Uint2          entityID;
   FILE           *fp;
   ValNodePtr     head = NULL;
+  ValNodePtr     last = NULL;
   OMUserDataPtr  omudp;
   ValNodePtr     projects;
   Boolean        rsult;
@@ -2932,7 +2991,11 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
     rsult = FALSE;
     while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE,
                                               parseFastaSeqId, fastaAsSimpleSeq)) != NULL) {
-      ValNodeAddPointer (&head, datatype, dataptr);
+      vnp = ValNodeAddPointer (&last, datatype, dataptr);
+      if (head == NULL) {
+        head = vnp;
+      }
+      last = vnp;
     }
     FileClose (fp);
     bioseqs = ValNodeExtractList (&head, OBJ_BIOSEQ);
@@ -3562,6 +3625,10 @@ ProduceAlignmentNotes
   TmpNam (path);
   fp = FileOpen (path, "wb");
   if (fp == NULL) return;
+  
+  if (afp != NULL && error_list != NULL) {
+    fprintf (fp, "Congratulations, you have successfully created a sequin file;\nhowever, I had trouble reading part of your file.\nPlease check your data carefully before submitting to be sure that all of your sequences\nwere included correctly.\nIf your file is incomplete, or contains incorrect sequences, please use the error report below\nto find the problem.\n");
+  }
 
   WalkErrorList (error_list, fp);
   PrintAlignmentSummary (afp, fp);
@@ -3624,7 +3691,7 @@ SeqEntryFromAlignmentFile
  CharPtr beginning_gap,
  CharPtr middle_gap,
  CharPtr end_gap,
- CharPtr alphabet,
+ const CharPtr alphabet,
  Uint1   moltype,
  CharPtr no_org_err_msg)
 {
@@ -3650,8 +3717,7 @@ SeqEntryFromAlignmentFile
   sequence_info->end_gap = StringSave (end_gap);
   MemFree (sequence_info->match);
   sequence_info->match = StringSave (match);
-  MemFree (sequence_info->alphabet);
-  sequence_info->alphabet = StringSave (alphabet);
+  sequence_info->alphabet = alphabet;
 
   error_list = NULL;
   rbd.fp = fp;
@@ -3696,8 +3762,6 @@ static void DoReadAlignment (ButtoN b)
   Char             end_gap [15];
   Char             match [15];
   TSequenceInfoPtr  sequence_info;
-  Char             nucleotide_alphabet[] = "ABCDGHKMRSTUVWXYabcdghkmrstuvwxy";
-  Char             protein_alphabet[] = "ABCDEFGHIKLMPQRSTUVWXYZabcdefghiklmpqrstuvwxyz";
   SeqEntryPtr      sep;
   Uint1            moltype;
   ReadBufferData   rbd;
@@ -3720,10 +3784,10 @@ static void DoReadAlignment (ButtoN b)
   GetTitle (abc->end_gap, end_gap, sizeof (end_gap) - 1);
   GetTitle (abc->match, match, sizeof (match) - 1);
   if (GetValue (abc->sequence_type) == 1) {
-    sequence_info->alphabet = StringSave (nucleotide_alphabet);
+    sequence_info->alphabet = nucleotide_alphabet;
     moltype = Seq_mol_na;
   } else {
-    sequence_info->alphabet = StringSave (protein_alphabet);
+    sequence_info->alphabet = protein_alphabet;
     moltype = Seq_mol_aa;
   }
 
@@ -4823,6 +4887,7 @@ static void CloseProc (BaseFormPtr bfp)
   BioseqViewFormPtr  bvfp;
   Uint2              entityID;
   Boolean            freeEditors = FALSE;
+  Int4               num_dirty;
   Int2               j;
   Int2               num;
   Boolean            numview;
@@ -4844,20 +4909,24 @@ static void CloseProc (BaseFormPtr bfp)
     num = omp->currobj;
     for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
       tmp = *omdpp;
-      if (tmp->parentptr == NULL && tmp->dirty &&
-          tmp->EntityID == bfp->input_entityID) {
+      if (tmp->parentptr == NULL && tmp->EntityID == bfp->input_entityID) {
+        num_dirty = 0;
         numview = 0;
-
         for (omudp = tmp->userdata; omudp != NULL; omudp = omudp->next) {
           if (omudp->proctype == OMPROC_VIEW) {
             numview++;
+            if (tmp->dirty) {
+              num_dirty++;
+            }
           }
         }
-        if (numview < 2) {
+        if (num_dirty == 1 && numview < 2) {
           if (Message (MSG_OKC,
               "Closing the window will lose unsaved data.") != ANS_OK) {
             return;
           }
+        }
+        if (numview < 2) {
           freeEditors = TRUE;
         }
       }
@@ -4865,6 +4934,10 @@ static void CloseProc (BaseFormPtr bfp)
     if (freeEditors) {
       bvfp = (BioseqViewFormPtr) bfp;
       if (bvfp->input_entityID > 0 && bvfp->userkey > 0) {
+        /* need to unlock far components before freeing data */
+        if (bvfp->bvd.bsplist != NULL) {
+          bvfp->bvd.bsplist = UnlockFarComponents (bvfp->bvd.bsplist);
+        }
         userkey = bvfp->userkey;
         bvfp->userkey = 0;
         /* ObjMgrFreeUserData (bvfp->input_entityID, bvfp->procid, bvfp->proctype, userkey); */
@@ -4894,8 +4967,8 @@ static void CloseProc (BaseFormPtr bfp)
       }
     }
 
+    entityID = bfp->input_entityID;
     if(!smartnetMode) {
-        entityID = bfp->input_entityID;
         /* RemoveSeqEntryViewer (bfp->form); */ /* can go back to Remove */
         Remove (bfp->form);
         if (freeEditors) {
@@ -4919,12 +4992,14 @@ static void CloseProc (BaseFormPtr bfp)
                   SMSendMsgToClient(sm_usr_data); 
               }
 
-              entityID = bfp->input_entityID;
               RemoveSeqEntryViewer (bfp->form);
               ObjMgrFreeUserData(entityID, 0, 0, SMART_KEY); 
               ObjMgrFreeUserData (entityID, 0, 0, DUMB_KEY);
               if (freeEditors) {
                 ObjMgrSendMsg (OM_MSG_DEL, entityID, 0, 0);
+                if (DeleteRemainingViews(entityID)) {
+                  VSeqMgrShow();
+                }
               }
               
           }
@@ -5017,7 +5092,7 @@ static void DuplicateViewProc (IteM i)
 {
   BaseFormPtr  bfp;
   Int2         handled;
-  Uint2        itemID;
+  Uint4        itemID;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -6364,7 +6439,7 @@ typedef struct findgenedata {
 typedef struct tripletdata {
     ObjMgrPtr  omp;
 	Uint2      entityID;
-	Uint2      itemID;
+	Uint4      itemID;
 	Uint2      itemtype;
 	Pointer    lookfor;
     Char       label [81];
@@ -6460,7 +6535,7 @@ static Boolean DeleteSelectedFeatureOrDescriptor (GatherContextPtr gcp)
   Uint2           entityID;
   SeqFeatPtr      gene;
   GatherScope     gs;
-  Uint2           itemID;
+  Uint4           itemID;
   Uint2           itemtype;
   SeqFeatPtr      mrna;
   BioseqSetPtr    nps;
@@ -6896,8 +6971,8 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
   MsgAnswer     ans;
   BaseFormPtr   bfp;
   BioseqPtr     bsp;
-  Uint2         entityID;
-  Uint2         itemID;
+  Uint4         entityID;
+  Uint4         itemID;
   Int2          mssgalign;
   Int2          mssgdup;
   Int2          mssgseq;
@@ -7814,6 +7889,7 @@ static void SetupDesktop (void)
   seqviewprocs.updateControls = UpdateViewerLinkTarget;
   seqviewprocs.makeAlignBtn = DoMakeViewerAlignBtn;
   seqviewprocs.updateCounts = DoUpdateFetchCounts;
+  seqviewprocs.filepath = NULL;
 
   SetupBioseqPageList ();
 
@@ -9027,11 +9103,14 @@ static void PutItTogether (ButtoN b)
       if (sqfp != NULL) 
       {     
         sqfp->nuc_prot_assoc_list = FreeAssociationList (sqfp->nuc_prot_assoc_list);
-        sqfp->nuc_prot_assoc_list = AssignProteinsForSequenceSet (nuc_list, prot_list);
+        sqfp->nuc_prot_assoc_list = AssignProteinsForSequenceSet (nuc_list, prot_list, FALSE);
         if (sqfp->nuc_prot_assoc_list == NULL)
         {
           return;
         }
+        
+        
+        
       }
     }
 
@@ -9674,6 +9753,10 @@ static void CleanupSequin (void)
     PubSeqFetchDisable ();
   }
 /*#endif*/
+
+  TransTableFreeAll ();
+
+  ECNumberFSAFreeAll ();
 }
 
 static Pointer SubtoolModeAsnTextFileRead (CharPtr filename,
@@ -10213,10 +10296,14 @@ static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, Int4 length, Int4 fd)
 
     switch (header->format) {
     case OBJ_SEQSUB:
+        SeqMgrHoldIndexing (TRUE);
         bio_data = (VoidPtr) SeqSubmitAsnRead(aimp->aip, NULL);
+        SeqMgrHoldIndexing (FALSE);
         break;
     case OBJ_SEQENTRY:
+        SeqMgrHoldIndexing (TRUE);
         bio_data = (VoidPtr) SeqEntryAsnRead(aimp->aip, NULL);
+        SeqMgrHoldIndexing (FALSE);
         if((sep = (SeqEntryPtr) bio_data) != NULL) {
             if (sep->choice == 1) {
                 bio_type = OBJ_BIOSEQ;
@@ -10226,7 +10313,9 @@ static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, Int4 length, Int4 fd)
         }
         break;
     case OBJ_BIOSEQ:
+        SeqMgrHoldIndexing (TRUE);
         bio_data = (VoidPtr) BioseqAsnRead(aimp->aip, NULL);
+        SeqMgrHoldIndexing (FALSE);
         bsp = (BioseqPtr) bio_data;
         sep = SeqEntryNew ();
         sep->choice = 1;
@@ -10237,6 +10326,7 @@ static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, Int4 length, Int4 fd)
     case OBJ_BIOSEQSET:
 
         aimp->aip->scan_for_start = TRUE;
+        SeqMgrHoldIndexing (TRUE);
         while ((bssp2 = BioseqSetAsnRead (aimp->aip, NULL)) != NULL) {
             if (sep == NULL) {
                 sep2 = SeqEntryNew ();
@@ -10257,6 +10347,7 @@ static Int4 SMReadBioseqObj(VoidPtr data, CharPtr buffer, Int4 length, Int4 fd)
                 BioseqSetFree (bssp2);
             }
         }
+        SeqMgrHoldIndexing (FALSE);
         if (sep != NULL) {
             SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
             RestoreSeqEntryObjMgrData (sep, omdptop, &omdata);
@@ -10598,6 +10689,8 @@ Int2 Main (void)
   subtoolEntityID = 0;
   leaveAsOldAsn = FALSE;
 
+  useSeqFetch = useEntrez;
+
 #if defined(OS_UNIX) || defined(WIN_MOTIF)
   {{
     Nlm_Int4         argc = GetArgc();
@@ -10646,6 +10739,8 @@ Int2 Main (void)
           gphviewscorealigns = TRUE;
         } else if (StringCmp (argv[i], "-y") == 0) {
           backupMode = TRUE;
+        } else if (StringCmp (argv[i], "-noseqfetch") == 0) {
+          useSeqFetch = FALSE;
         }
 #ifdef USE_SMARTNET
         else if (StringCmp (argv[i], "-ds") == 0) {
@@ -10681,6 +10776,8 @@ Int2 Main (void)
           entrezMode = TRUE;
         else if (StringCmp (argv[i], "-h") == 0)
           nohelpMode = TRUE;
+        else if (StringCmp (argv[i], "-noseqfetch") == 0)
+          useSeqFetch = FALSE;
 #ifdef USE_SMARTNET
         else if (StringNCmp (argv[i], "-z", 2) == 0) {
           smartnetMode = TRUE;
@@ -10816,9 +10913,14 @@ Int2 Main (void)
 /*#ifdef USE_ENTREZ*/
   if (useEntrez) {
     /* EntrezBioseqFetchEnable ("Sequin", FALSE); */
-    /* ID1BioseqFetchEnable ("Sequin", FALSE); */
-    PubSeqFetchEnable ();
-    PubMedFetchEnable ();
+    if (useSeqFetch) {
+      /* ID1BioseqFetchEnable ("Sequin", FALSE); */
+      PubSeqFetchEnable ();
+      PubMedFetchEnable ();
+    } else {
+      PubSeqFetchEnableEx (FALSE, TRUE, TRUE, TRUE, TRUE);
+      PubMedFetchEnable ();
+    }
   }
 /*#endif*/
 
@@ -10912,7 +11014,9 @@ Int2 Main (void)
     } else if (binseqentryMode) {
       dataptr = NULL;
       aip = AsnIoOpen ("stdin", "rb");
+      SeqMgrHoldIndexing (TRUE);
       sep = SeqEntryAsnRead (aip, NULL);
+      SeqMgrHoldIndexing (FALSE);
       AsnIoClose (aip);
       if (sep != NULL) {
         if (sep->choice == 1) {
@@ -10940,7 +11044,9 @@ Int2 Main (void)
       if (dataptr == NULL) {
         fseek (stdin, 0, SEEK_SET);
         aip = AsnIoOpen ("stdin", "rb");
+        SeqMgrHoldIndexing (TRUE);
         sep = SeqEntryAsnRead (aip, NULL);
+        SeqMgrHoldIndexing (FALSE);
         AsnIoClose (aip);
         if (sep != NULL) {
           if (sep->choice == 1) {
@@ -11015,10 +11121,14 @@ Int2 Main (void)
             }
           }
         }
+        if (stdinMode) {
+          seqviewprocs.filepath = filename;
+        }
         seqviewprocs.forceSeparateViewer = TRUE;
         SeqEntrySetScope (NULL);
         handled = GatherProcLaunch (OMPROC_VIEW, FALSE, subtoolEntityID, 1,
                                     OBJ_BIOSEQ, 0, 0, OBJ_BIOSEQ, 0);
+        seqviewprocs.filepath = NULL;
         ArrowCursor ();
         subtoolTimerCount = 0;
         subtoolRecordDirty = FALSE;

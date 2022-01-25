@@ -1,4 +1,4 @@
-/* $Id: thrdsalr.c,v 1.1 2000/08/16 20:45:21 hurwitz Exp $
+/* $Id: thrdsalr.c,v 1.2 2006/07/13 17:07:27 bollin Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdsalr.c,v $
+* Revision 1.2  2006/07/13 17:07:27  bollin
+* removed unused variables
+*
 * Revision 1.1  2000/08/16 20:45:21  hurwitz
 * initial check in of threading routines
 *
@@ -67,7 +70,6 @@ int	nsc;		/* Number of core segments */
 int	lm1,lm2;	/* Loop length limits */
 int	ntmn,ntmx;	/* Alignment range due to n-termnal constraints */
 int	ctmn,ctmx;	/* Alignment range due to c-termnal constraints */
-int	i;
 
 /* Number of core segments */
 nsc=cdf->sll.n;

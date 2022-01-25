@@ -1,4 +1,4 @@
-/* $Id: cddposutil.c,v 1.20 2005/10/22 02:04:53 thiessen Exp $
+/* $Id: cddposutil.c,v 1.21 2006/09/18 20:54:53 kans Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 12/21/1999
 *
-* $Revision: 1.20 $
+* $Revision: 1.21 $
 *
 * File Description: CDD utilities involving position-specific scoring 
 *                   matrices (PSSMs)
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddposutil.c,v $
+* Revision 1.21  2006/09/18 20:54:53  kans
+* removed PROTEIN_ALPHABET - collides with new version in posit.h
+*
 * Revision 1.20  2005/10/22 02:04:53  thiessen
 * plug memory leak
 *
@@ -130,7 +133,6 @@
 #define posEpsilon 0.0001
 #define posEpsilon2 0.0000001
 #define POSIT_SCALE_FACTOR2 200
-#define PROTEIN_ALPHABET 26
 #define EFFECTIVE_ALPHABET 20
 
 /* function definitions */

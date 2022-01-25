@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.42 2005/09/13 13:33:12 ivanov Exp $
+# $Id: install.sh,v 1.44 2006/10/04 15:07:00 ivanov Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -12,7 +12,10 @@ script="$0"
 builddir="${1:-//u/coremake/ncbi}"
 target="${2:-//u/coremake/public/ncbi.last}"
 
-if test -n "$3" ; then
+# Real number of argument is 2.
+# The 3th argument don not used here (32|64-bit architecture),
+# but is needed for master installation script.
+if test -n "$4" ; then
   echo "USAGE:  `basename $script` [build_dir] [install_dir]"
 fi
 

@@ -28,11 +28,11 @@
 * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov, Jonathan Kans,
 *          Mati Shomrat
 *
-* $Id: asn2gnb1.c,v 1.101 2006/05/03 18:05:39 kans Exp $
+* $Id: asn2gnb1.c,v 1.112 2006/10/11 15:14:48 bollin Exp $
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.101 $
+* $Revision: 1.112 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -645,7 +645,7 @@ NLM_EXTERN void FFAddPeriod (StringItemPtr sip) {
   for ( i = riter->pos - 1; i >= 0; --i ) {
     ch = riter->buf[i];
 
-    if ( (ch == ' ') || (ch == '\t')  || (ch == '~')  || (ch == '.') || (ch == '\n')) {
+    if ( (ch == ' ') || (ch == '\t')  || (ch == '~')  || (ch == '.') || (ch == '\n') || (ch == '\r')) {
       riter->pos--;
       
       if ( i < 0 && riter != sip ) {
@@ -1927,6 +1927,7 @@ NLM_EXTERN void DoOneSection (
   IntAsn2gbJobPtr      ajp;
   Asn2gbSectPtr        asp;
   SeqMgrBioseqContext  bcontext;
+  BlockMask            bkmask;
   BaseBlockPtr         PNTR blockArray;
   SeqMgrDescContext    dcontext;
   Boolean              hasRefs;
@@ -1951,6 +1952,7 @@ NLM_EXTERN void DoOneSection (
   if (target == NULL || parent == NULL || bsp == NULL || awp == NULL) return;
   ajp = awp->ajp;
   if (ajp == NULL) return;
+  bkmask = ajp->bkmask;
 
   if (awp->mode == RELEASE_MODE && awp->style == CONTIG_STYLE) {
     if (bsp->repr == Seq_repr_seg) {
@@ -2092,7 +2094,9 @@ NLM_EXTERN void DoOneSection (
     if (! awp->hideSources) {
       AddSourceFeatBlock (awp);
     }
-    AddFeatureBlock (awp);
+    if (! awp->hideFeatures) {
+      AddFeatureBlock (awp);
+    }
 
   } else {
 
@@ -2170,6 +2174,10 @@ NLM_EXTERN void DoOneSection (
     AddSourceBlock (awp);
     AddOrganismBlock (awp);
 
+    if (awp->showRefStats) {
+      AddRefStatsBlock (awp);
+    }
+
     if (! awp->hidePubs) {
 
       /* !!! RELEASE_MODE should check return value of AddReferenceBlock !!! */
@@ -2188,6 +2196,10 @@ NLM_EXTERN void DoOneSection (
     AddCommentBlock (awp);
     AddPrimaryBlock (awp);
 
+    if (awp->showFeatStats) {
+      AddFeatStatsBlock (awp);
+    }
+
     AddFeatHeaderBlock (awp);
     if (! awp->hideSources) {
       AddSourceFeatBlock (awp);
@@ -2204,9 +2216,13 @@ NLM_EXTERN void DoOneSection (
     } else if (contig) {
 
       if (awp->showconfeats) {
-        AddFeatureBlock (awp);
+        if (! awp->hideFeatures) {
+          AddFeatureBlock (awp);
+        }
       } else if (awp->smartconfeats && bsp->length <= 1000000) {
-        AddFeatureBlock (awp);
+        if (! awp->hideFeatures) {
+          AddFeatureBlock (awp);
+        }
       }
       AddContigBlock (awp);
 
@@ -2225,7 +2241,9 @@ NLM_EXTERN void DoOneSection (
 
     } else {
 
-      AddFeatureBlock (awp);
+      if (! awp->hideFeatures) {
+        AddFeatureBlock (awp);
+      }
 
       if (awp->showContigAndSeq) {
         if (bsp->repr == Seq_repr_seg && (! SegHasParts (bsp))) {
@@ -3118,7 +3136,7 @@ static void SetFlagsFromMode (
       /* collaboration unapproved Gene Ontology quals on their own line only for RefSeq */
 
       /* ajp->flags.goQualsToNote = TRUE; */
-      ajp->flags.geneSynsToNote = TRUE;
+      /* ajp->flags.geneSynsToNote = TRUE; */
     }
 
   } else {
@@ -3180,18 +3198,19 @@ static void CheckVersionWithGi (BioseqPtr bsp, Pointer userdata)
 
 
 typedef struct lookforids {
-  Boolean isG;
-  Boolean isGED;
-  Boolean isNTorNW;
-  Boolean isNC;
-  Boolean isRefSeq;
-  Boolean isGeneral;
-  Boolean isTPA;
-  Boolean isTPG;
-  Boolean isNuc;
-  Boolean isProt;
-  Boolean isLocal;
-  Boolean isNonLocal;
+  Boolean  isG;
+  Boolean  isGED;
+  Boolean  isNTorNWorNG;
+  Boolean  isNC;
+  Boolean  isRefSeq;
+  Boolean  isGeneral;
+  Boolean  isTPA;
+  Boolean  isTPG;
+  Boolean  isNuc;
+  Boolean  isProt;
+  Boolean  isLocal;
+  Boolean  isNonLocal;
+  Boolean  sourcePubFuse;
 } LookForIDs, PNTR LookForIDsPtr;
 
 static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
@@ -3209,6 +3228,7 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
   if (ISA_aa (bsp->mol)) {
     lfip->isProt = TRUE;
   }
+
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     switch (sip->choice) {
       case SEQID_GENBANK :
@@ -3234,9 +3254,11 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
           if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
             lfip->isNC = TRUE;
           } else if (StringNCmp (tsip->accession, "NT_", 3) == 0) {
-            lfip->isNTorNW = TRUE;
+            lfip->isNTorNWorNG = TRUE;
           } else if (StringNCmp (tsip->accession, "NW_", 3) == 0) {
-            lfip->isNTorNW = TRUE;
+            lfip->isNTorNWorNG = TRUE;
+          } else if (StringNCmp (tsip->accession, "NG_", 3) == 0) {
+            lfip->isNTorNWorNG = TRUE;
           }
         }
         lfip->isNonLocal = TRUE;
@@ -3257,6 +3279,41 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
         lfip->isNonLocal = TRUE;
         break;
     }
+    /* also set policy on sourcePubFuse */
+    switch (sip->choice) {
+      case SEQID_GIBBSQ :
+      case SEQID_GIBBMT :
+        lfip->sourcePubFuse = TRUE;
+        break;
+      case SEQID_EMBL :
+      case SEQID_PIR :
+      case SEQID_SWISSPROT :
+      case SEQID_PATENT :
+      case SEQID_DDBJ :
+      case SEQID_PRF :
+      case SEQID_PDB :
+      case SEQID_TPE:
+      case SEQID_TPD:
+      case SEQID_GPIPE:
+        lfip->sourcePubFuse = TRUE;
+        break;
+      case SEQID_GENBANK :
+      case SEQID_TPG:
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if (tsip != NULL) {
+          if (StringLen (tsip->accession) == 6) {
+            lfip->sourcePubFuse = TRUE;
+          }
+        }
+        break;
+      case SEQID_NOT_SET :
+      case SEQID_LOCAL :
+      case SEQID_OTHER :
+      case SEQID_GENERAL :
+        break;
+      default :
+        break;
+    }
   }
 }
 
@@ -3264,7 +3321,7 @@ static void LookForGEDetc (
   SeqEntryPtr topsep,
   BoolPtr isG,
   BoolPtr isGED,
-  BoolPtr isNTorNW,
+  BoolPtr isNTorNWorNG,
   BoolPtr isNC,
   BoolPtr isRefSeq,
   BoolPtr isGeneral,
@@ -3272,7 +3329,8 @@ static void LookForGEDetc (
   BoolPtr isTPG,
   BoolPtr isNuc,
   BoolPtr isProt,
-  BoolPtr isOnlyLocal
+  BoolPtr isOnlyLocal,
+  BoolPtr sourcePubFuse
 )
 
 {
@@ -3282,7 +3340,7 @@ static void LookForGEDetc (
   VisitBioseqsInSep (topsep, (Pointer) &lfi, LookForSeqIDs);
   *isG = lfi.isG;
   *isGED = lfi.isGED;
-  *isNTorNW = lfi.isNTorNW;
+  *isNTorNWorNG = lfi.isNTorNWorNG;
   *isNC = lfi.isNC;
   *isRefSeq = lfi.isRefSeq;
   *isGeneral = lfi.isGeneral;
@@ -3295,6 +3353,7 @@ static void LookForGEDetc (
   } else {
     *isOnlyLocal = FALSE;
   }
+  *sourcePubFuse = lfi.sourcePubFuse;
 }
 
 static void MakeGapFeats (
@@ -3367,7 +3426,7 @@ static void MakeGapFeats (
   }
 }
 
-static void LookForFeatFetchPolicy (
+static void LookFarFeatFetchPolicy (
   SeqDescrPtr sdp,
   Pointer userdata
 )
@@ -3447,6 +3506,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Asn2gbSectPtr    asp;
   Asn2gbWork       aw;
   BaseBlockPtr     bbp;
+  BlockMask        bkmask = (BlockMask) 0;
   BaseBlockPtr     PNTR blockArray;
   Uint2            eID = 0;
   Uint2            entityID = 0;
@@ -3461,7 +3521,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Boolean          isG;
   Boolean          isGED;
   Boolean          isGeneral;
-  Boolean          isNTorNW;
+  Boolean          isNTorNWorNG;
   Boolean          isNC;
   Boolean          isNuc;
   Boolean          isOnlyLocal;
@@ -3506,6 +3566,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   SeqIdPtr         sip;
   Boolean          skipMrnas = FALSE;
   Boolean          skipProts = FALSE;
+  Boolean          sourcePubFuse;
   SeqSubmitPtr     ssp;
   BioseqSetPtr     topbssp;
   Pointer          userdata = NULL;
@@ -3534,6 +3595,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     remotedata = extra->remotedata;
     prevGi = extra->prevGi;
     nextGi = extra->nextGi;
+    bkmask = extra->bkmask;
   }
 
   if (slp != NULL) {
@@ -3610,8 +3672,9 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   sep = GetTopSeqEntryForEntityID (entityID);
 
-  LookForGEDetc (sep, &isG, &isGED, &isNTorNW, &isNC, &isRefSeq,
-                 &isGeneral, &isTPA, &isTPG, &isNuc, &isProt, &isOnlyLocal);
+  LookForGEDetc (sep, &isG, &isGED, &isNTorNWorNG, &isNC, &isRefSeq,
+                 &isGeneral, &isTPA, &isTPG, &isNuc, &isProt,
+                 &isOnlyLocal, &sourcePubFuse);
 
   if (mode == RELEASE_MODE) {
     missingVersion = FALSE;
@@ -3622,7 +3685,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   ajp = (IntAsn2gbJobPtr) MemNew (sizeof (IntAsn2gbJob));
   if (ajp == NULL) return NULL;
 
-  VisitDescriptorsInSep (sep, (Pointer) &forceOnlyNearFeats, LookForFeatFetchPolicy);
+  VisitDescriptorsInSep (sep, (Pointer) &forceOnlyNearFeats, LookFarFeatFetchPolicy);
 
   gapvnp = NULL;
   if (format != FTABLE_FMT) {
@@ -3692,6 +3755,10 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   ajp->index = index;
   ajp->gbseq = gbseq; /* gbseq output can relax srcQualsToNote or goQualsToNote strictness */
+  if (bkmask == 0) {
+    bkmask = (BlockMask) (0xFFFFFFFF - FEAT_STATS_MASK - REF_STATS_MASK);
+  }
+  ajp->bkmask = bkmask;
   ajp->aip = aip;
   ajp->atp = atp;
 
@@ -3740,8 +3807,6 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   ajp->showTranscript = (Boolean) ((flags & SHOW_TRANCRIPTION) != 0);
   ajp->showPeptide = (Boolean) ((flags & SHOW_PEPTIDE) != 0);
 
-  ajp->produceInsdSeq = (Boolean) ((flags & PRODUCE_OLD_GBSEQ) == 0);
-
   if (stream && (format == GENBANK_FMT || format == GENPEPT_FMT)) {
     ajp->specialGapFormat = (Boolean) ((flags & SPECIAL_GAP_DISPLAY) != 0);
     if (is_html && mode == ENTREZ_MODE) {
@@ -3755,10 +3820,13 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   }
   ajp->seqGapCurrLen = 0;
 
+  ajp->produceInsdSeq = (Boolean) ((flags & PRODUCE_OLD_GBSEQ) == 0);
+
   ajp->gihead = NULL;
   ajp->gitail = NULL;
 
   ajp->hideGoTerms = (Boolean) ((custom & HIDE_GO_TERMS) != 0);
+  ajp->hideTranslation = (Boolean) ((custom & HIDE_TRANSLATION) != 0);
 
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
     ajp->newSourceOrg = TRUE;
@@ -3836,7 +3904,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
       aw.nearFeatsSuppress = TRUE;
     }
 
-  } else if (isNTorNW || isTPA) {
+  } else if (isNTorNWorNG || isTPA) {
 
     aw.onlyNearFeats = TRUE;
 
@@ -3864,14 +3932,13 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   /* continue setting flags */
 
+  aw.showFeatStats = (Boolean) ((custom & SHOW_FEATURE_STATS) != 0);
+  aw.showRefStats = (Boolean) ((custom & SHOW_REFERENCE_STATS) != 0);
+  aw.hideFeatures = (Boolean) ((custom & HIDE_FEATURES) != 0);
+
   aw.hideImpFeats = (Boolean) ((custom & HIDE_IMP_FEATS) != 0);
-  aw.hideRemImpFeats = (Boolean) ((custom & HIDE_REM_IMP_FEATS) != 0);
-
-  aw.hideSnpFeats = (Boolean) ((custom & HIDE_SNP_FEATS) != 0);
-  aw.hideExonFeats = (Boolean) ((custom & HIDE_EXON_FEATS) != 0);
-  aw.hideIntronFeats = (Boolean) ((custom & HIDE_INTRON_FEATS) != 0);
-  aw.hideMiscFeats = (Boolean) ((custom & HIDE_MISC_FEATS) != 0);
-
+  aw.hideVariations = (Boolean) ((custom & HIDE_VARIATION_FEATS) != 0);
+  aw.hideRepeatRegions = (Boolean) ((custom & HIDE_REPEAT_REGIONS) != 0);
   aw.hideCddFeats = (Boolean) ((custom & HIDE_CDD_FEATS) != 0);
   aw.hideCdsProdFeats = (Boolean) ((custom & HIDE_CDS_PROD_FEATS) != 0);
 
@@ -3920,6 +3987,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   aw.forcePrimaryBlock = (Boolean) ((flags & FORCE_PRIMARY_BLOCK) != 0);
 
   aw.localFeatCount = VisitFeaturesInSep (sep, NULL, NULL);
+
+  aw.sourcePubFuse = sourcePubFuse;
 
   aw.hup = FALSE;
   aw.ssp = NULL;
@@ -4128,7 +4197,7 @@ NLM_EXTERN CharPtr DefaultFormatBlock (
 
 typedef CharPtr (*FormatProc) (Asn2gbFormatPtr afp, BaseBlockPtr bbp);
 
-static FormatProc asn2gnbk_fmt_functions [28] = {
+static FormatProc asn2gnbk_fmt_functions [30] = {
   NULL,
   NULL,
   DefaultFormatBlock,
@@ -4143,9 +4212,11 @@ static FormatProc asn2gnbk_fmt_functions [28] = {
   DefaultFormatBlock,
   FormatSourceBlock,
   FormatOrganismBlock,
+  DefaultFormatBlock,
   FormatReferenceBlock,
   DefaultFormatBlock,
   FormatCommentBlock,
+  DefaultFormatBlock,
   FormatFeatHeaderBlock,
   FormatSourceFeatBlock,
   FormatFeatureBlock,
@@ -4158,6 +4229,48 @@ static FormatProc asn2gnbk_fmt_functions [28] = {
   FormatSlashBlock,
   NULL
 };
+
+static CharPtr asn2gnbk_fmt_labels [30] = {
+  NULL,
+  NULL,
+  "locus",
+  "defline",
+  "accession",
+  "version",
+  "project",
+  "pid",
+  "dbsource",
+  "date",
+  "keywords",
+  "segment",
+  "source",
+  "organism",
+  "refstats",
+  "reference",
+  "primary",
+  "comment",
+  "featstats",
+  "featheader",
+  "sourcefeat",
+  "feature",
+  "basecount",
+  "origin",
+  "sequence",
+  "contig",
+  "wgs",
+  "genome",
+  "slash",
+  NULL
+};
+
+NLM_EXTERN CharPtr asn2gnbk_block_label (
+  BlockType blocktype
+)
+
+{
+  if (blocktype < LOCUS_BLOCK || blocktype > SLASH_BLOCK) return NULL;
+  return asn2gnbk_fmt_labels [(int) blocktype];
+}
 
 NLM_EXTERN void PrintFtableIntervals (
   ValNodePtr PNTR head,
@@ -4423,7 +4536,7 @@ static Boolean SeqIdWriteForTable (SeqIdPtr sip, CharPtr buf, size_t buflen, Int
   SeqIdPtr  accn = NULL, local = NULL, patent = NULL,
             pdb = NULL, general = NULL, gi = NULL;
   DbtagPtr  dbt;
-  Char      id [41], str [64];
+  Char      id [128], str [250];
   Int2      numids;
   CharPtr   prefix = NULL;
 

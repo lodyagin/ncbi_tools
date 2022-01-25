@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.h,v 1.11 2006/04/26 12:45:28 madden Exp $
+/* $Id: blast_options_api.h,v 1.13 2006/06/08 21:46:24 papadopo Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -119,14 +119,12 @@ Int2 SBlastOptionsSetMatrixAndGapCosts(SBlastOptions* options,
 
 
 /** Reset rewared, penalty and gap costs to new values.
- *  Will suggest and use conservative values if gap_open and gap_extend are zero
- *  and suggest is TRUE.
  * 
  * @param options Options structure to update. [in] [out]
  * @param reward match score [in]
  * @param penalty mismatch score [in]
- * @param gap_open New gap existence cost.  If zero default for reward/penalty is used. [in]
- * @param gap_extend New gap extension cost.  If zero default for reward/penalty is used. [in]
+ * @param gap_open New gap existence cost. If -1, default for reward/penalty is used. [in]
+ * @param gap_extend New gap extension cost. If -1, default for reward/penalty is used. [in]
  * @param greedy TRUE specifies that greedy algorithms will be used. [in]
  */
 Int2 SBlastOptionsSetRewardPenaltyAndGapCosts(SBlastOptions* options, 

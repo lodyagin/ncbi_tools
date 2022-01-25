@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.183 2006/04/25 16:06:53 camacho Exp $
+/* $Id: blast_options.c,v 1.188 2006/10/13 15:47:49 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.183 2006/04/25 16:06:53 camacho Exp $";
+    "$Id: blast_options.c,v 1.188 2006/10/13 15:47:49 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -480,6 +480,18 @@ BlastExtensionOptionsValidate(EBlastProgramType program_number,
 		}
 	}
 
+        if ((options->ePrelimGapExt == eSmithWatermanScoreOnly &&
+             options->eTbackExt != eSmithWatermanTbckFull) ||
+            (options->ePrelimGapExt != eSmithWatermanScoreOnly &&
+             options->eTbackExt == eSmithWatermanTbckFull))
+	{
+		Blast_MessageWrite(blast_msg, eBlastSevWarning, 
+                                   kBlastMessageNoContext,
+                           "Score-only and traceback Smith-Waterman must "
+                           "both be specified");
+		return (Int2) 3;
+	}
+
 	return 0;
 }
 
@@ -683,9 +695,12 @@ BlastEffectiveLengthsOptions*
 BlastEffectiveLengthsOptionsFree(BlastEffectiveLengthsOptions* options)
 
 {
-	sfree(options);
+   if (options == NULL)
+      return NULL;
 
-	return NULL;
+   sfree(options->searchsp_eff);
+   sfree(options);
+   return NULL;
 }
 
 
@@ -693,28 +708,55 @@ Int2
 BlastEffectiveLengthsOptionsNew(BlastEffectiveLengthsOptions* *options)
 
 {
-   *options = (BlastEffectiveLengthsOptions*)
-      calloc(1, sizeof(BlastEffectiveLengthsOptions));
+    if (options == NULL) {
+        return BLASTERR_INVALIDPARAM;
+    }
 
-   if (*options == NULL)
-      return 1;
-   
-   return 0;
+    *options = (BlastEffectiveLengthsOptions*)
+       calloc(1, sizeof(BlastEffectiveLengthsOptions));
+ 
+    if (*options == NULL)
+       return BLASTERR_MEMORY;
+    
+    return 0;
+}
+
+Boolean
+BlastEffectiveLengthsOptions_IsSearchSpaceSet(const
+                                              BlastEffectiveLengthsOptions*
+                                              options)
+{
+    int i;
+    if ( !options || options->searchsp_eff == NULL) {
+        return FALSE;
+    }
+
+    for (i = 0; i < options->num_searchspaces; i++) {
+        if (options->searchsp_eff[i] != 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
 }
 
 Int2 
 BLAST_FillEffectiveLengthsOptions(BlastEffectiveLengthsOptions* options, 
-   Int4 dbseq_num, Int8 db_length, Int8 searchsp_eff)
+   Int4 dbseq_num, Int8 db_length, Int8* searchsp_eff, Int4 num_searchsp)
 {
+   Int4 index;
    if (!options)
-      return 1;
+      return BLASTERR_INVALIDPARAM;
 
-   if (searchsp_eff) {	
-      /* dbnum_seq and dblen are used to calculate effective search space, so 
-         if it is already set don't bother with those. */
-      options->searchsp_eff = searchsp_eff;
-      return 0;
+   if (num_searchsp > options->num_searchspaces) {
+       options->num_searchspaces = num_searchsp;
+       options->searchsp_eff = (Int8 *)realloc(options->searchsp_eff,
+                                               num_searchsp * sizeof(Int8));
+       if (options->searchsp_eff == NULL)
+           return BLASTERR_MEMORY;
    }
+
+   for (index = 0; index < options->num_searchspaces; index++)
+      options->searchsp_eff[index] = searchsp_eff[index];
 
    options->dbseq_num = dbseq_num;
    options->db_length = db_length;
@@ -750,8 +792,8 @@ LookupTableOptionsNew(EBlastProgramType program_number, LookupTableOptions* *opt
        (*options)->word_size = BLAST_WORDSIZE_MEGABLAST;
        (*options)->lut_type = MB_LOOKUP_TABLE;
        (*options)->max_positions = INT4_MAX;
-       /* Discontig mb scanning default is one byte at at time. */
-       (*options)->full_byte_scan = TRUE; 
+       /* Discontig mb scanning default is one base at a time. */
+       (*options)->full_byte_scan = FALSE; 
        break;
    case eBlastTypeRpsBlast: case eBlastTypeRpsTblastn:
        (*options)->word_size = BLAST_WORDSIZE_PROT;
@@ -992,7 +1034,8 @@ BlastHitSavingOptionsFree(BlastHitSavingOptions* options)
 
 
 Int2 BlastHitSavingOptionsNew(EBlastProgramType program_number, 
-        BlastHitSavingOptions* *options)
+        BlastHitSavingOptions** options,
+        Boolean gapped_calculation)
 {
    *options = (BlastHitSavingOptions*) calloc(1, sizeof(BlastHitSavingOptions));
    
@@ -1002,6 +1045,18 @@ Int2 BlastHitSavingOptionsNew(EBlastProgramType program_number,
    (*options)->hitlist_size = BLAST_HITLIST_SIZE;
    (*options)->expect_value = BLAST_EXPECT_VALUE;
    (*options)->program_number = program_number;
+
+   /* By default, sum statistics is used for all translated searches 
+    * (except RPS BLAST), and for all ungapped searches.
+    */
+   if (!gapped_calculation ||  
+      (program_number == eBlastTypeBlastx) ||
+      (program_number == eBlastTypeTblastn) ||
+      (program_number == eBlastTypeTblastx)) {
+       (*options)->do_sum_stats = TRUE;
+   } else {
+       (*options)->do_sum_stats = FALSE;
+   }
 
    return 0;
 
@@ -1022,8 +1077,10 @@ BLAST_FillHitSavingOptions(BlastHitSavingOptions* options,
       options->expect_value = evalue;
    if (min_diag_separation)
       options->min_diag_separation = min_diag_separation;
-   if(!is_gapped)
-     options->hsp_num_max = kUngappedHSPNumMax;
+   if(!is_gapped) {
+      options->hsp_num_max = kUngappedHSPNumMax;
+      options->do_sum_stats = TRUE;
+   }
    options->culling_limit = culling_limit;
 
    return 0;
@@ -1178,10 +1235,11 @@ Int2 BLAST_InitDefaultOptions(EBlastProgramType program_number,
    if ((status = BlastExtensionOptionsNew(program_number, ext_options)))
       return status;
 
-   if ((status=BlastHitSavingOptionsNew(program_number, hit_options)))
+   if ((status=BlastScoringOptionsNew(program_number, score_options)))
       return status;
 
-   if ((status=BlastScoringOptionsNew(program_number, score_options)))
+   if ((status=BlastHitSavingOptionsNew(program_number, hit_options,
+                                        (*score_options)->gapped_calculation)))
       return status;
 
    if ((status=BlastEffectiveLengthsOptionsNew(eff_len_options)))
@@ -1269,6 +1327,21 @@ Int2 BLAST_ValidateOptions(EBlastProgramType program_number,
  * ===========================================================================
  *
  * $Log: blast_options.c,v $
+ * Revision 1.188  2006/10/13 15:47:49  camacho
+ * Set the default full_byte_scan to false for disco megablast
+ *
+ * Revision 1.187  2006/09/13 15:08:37  papadopo
+ * validate Smith-Waterman options
+ *
+ * Revision 1.186  2006/07/13 15:11:18  papadopo
+ * turn on sum statistics in BLAST_FillHitSavingOptions when an ungapped search is specified
+ *
+ * Revision 1.185  2006/06/29 16:23:08  camacho
+ * Changed BlastHitSavingOptions::do_sum_stats to boolean so that it is the primary way to check if sum statistics should be performed
+ *
+ * Revision 1.184  2006/05/18 16:17:00  papadopo
+ * allow multiple search spaces to be set in BlastEffectiveLengthsOptions
+ *
  * Revision 1.183  2006/04/25 16:06:53  camacho
  * tblastx scoring options must be set to false
  *

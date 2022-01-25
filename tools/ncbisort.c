@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: ncbisort.c,v 6.7 2003/07/15 20:17:39 coulouri Exp $";
+static char const rcsid[] = "$Id: ncbisort.c,v 6.8 2006/05/10 20:47:17 camacho Exp $";
 
-/* $Id: ncbisort.c,v 6.7 2003/07/15 20:17:39 coulouri Exp $
+/* $Id: ncbisort.c,v 6.8 2006/05/10 20:47:17 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: ncbisort.c,v 6.7 2003/07/15 20:17:39 coulouri 
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *         Main file for SORTing library
 *
 * $Log: ncbisort.c,v $
+* Revision 6.8  2006/05/10 20:47:17  camacho
+* From Ilya Dondoshansky: SORTFiles: added output parameter for total number of lines processed
+*
 * Revision 6.7  2003/07/15 20:17:39  coulouri
 * remove signal() and setrlimit() calls
 *
@@ -234,7 +237,7 @@ SORTErrorCode SORTSetPrefix(CharPtr prefix, SORTObjectPtr sop)
 
 /* Sort any number of FILES onto the given OFP. */
 SORTErrorCode SORTFiles(CharPtr PNTR files, Int4 nfiles, FILE *ofp, 
-               SORTObjectPtr sop)
+               SORTObjectPtr sop, Int4* line_count)
 {
   SORTBuffer   buf;
   SORTLines   lines;
@@ -247,6 +250,8 @@ SORTErrorCode SORTFiles(CharPtr PNTR files, Int4 nfiles, FILE *ofp,
   CharPtr PNTR tempfiles;
   CharPtr temp;
   SORTErrorCode error_code = SORTNoError;
+
+  *line_count = 0;
   
   if((sdp = (SORTDataPtr) sop) == NULL) {
     error_code = SORTBadParameter;
@@ -267,9 +272,10 @@ SORTErrorCode SORTFiles(CharPtr PNTR files, Int4 nfiles, FILE *ofp,
       error_code = SORTBadFileName;
       goto return_from_function;
     }
-    
+
     while (SORTFillBuf(&buf, fp)) {
       SORTFindLines(&buf, &lines, sdp);
+      *line_count += lines.used;
       if (lines.used > ntmp) {
         while (lines.used > ntmp)
           ntmp *= 2;
@@ -280,7 +286,6 @@ SORTErrorCode SORTFiles(CharPtr PNTR files, Int4 nfiles, FILE *ofp,
         }
       }
       SORTArrayLines(lines.lines, lines.used, tmp, sdp);
-
       if (feof(fp) && !nfiles && !ntemp) {
         tfp = ofp;
       } else {
@@ -311,7 +316,8 @@ SORTErrorCode SORTFiles(CharPtr PNTR files, Int4 nfiles, FILE *ofp,
     }
     FileClose(fp);
   }
-  
+
+
   MemFree(buf.buf);
   MemFree((CharPtr) lines.lines);
   MemFree((CharPtr) tmp);
@@ -543,6 +549,7 @@ static Int4 SORTFillBuf(SORTBufferPtr buf, FILE *fp)
     buf->buf[buf->used++] = '\n';
     ++total;
   }
+
   return total;
 }
 

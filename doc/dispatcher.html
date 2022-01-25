@@ -304,7 +304,7 @@ Use <tt>TRUE</tt> if so!<br> This parameter of the new dispatcher is analogous t
 the old dispatcher into firewall  mode by specifying <tt>FIREWALL</tt> in <tt>SRV_CONN_MODE</tt>.</td>
 </tr>
 <tr>
-<td><tt>CONN_SERVICE_NAME_&lt;<i>name</i>&gt;</tt></td>
+<td><tt>&lt;<i>name</i>&gt;_CONN_SERVICE_NAME</tt></td>
 <td>see description for <tt>NI_SERVICE_NAME_...</tt> above.</td>
 </tr>
 </table>
@@ -313,15 +313,15 @@ the old dispatcher into firewall  mode by specifying <tt>FIREWALL</tt> in <tt>SR
 When intermixed with older (<tt>SRV_...</tt>) parameters, the order of consideration is the following:
 the new parameters (<tt>CONN_...</tt>) first as described in the table above, then <tt>SRV_...</tt>
 parameters, thus all <tt>SRV_...</tt> parameters taking precedence over all <tt>CONN_...</tt> parameters.
-The only exception is the service name override (<tt>{CONN|NI}_SERVICE_NAME_...</tt>), which works the different way:
+The only exception is the service name override (<tt>{..._CONN|NI}_SERVICE_NAME_...</tt>), which works the different way:
 <ul>
 <li>All other parameters loaded, first <tt>CONN_...</tt> using the original service name as specified in the application
 (e.g. <tt>Entrez</tt>) from the registry/environment, followed by <tt>SRV_...</tt> found in the registry/environment.
 <li><tt>SERVICE_NAME</tt> registry key in the service's section followed by <tt>NI_SERVICE_NAME_...</tt> environment 
 variable (if exist) are then consulted for an alternate name.
-<li><tt>CONN_SERVICE_NAME_...</tt> environment variable (or service's registry section with <tt>SERVICE_NAME</tt> key)
+<li><tt>..._CONN_SERVICE_NAME</tt> environment variable (or service's registry section with <tt>SERVICE_NAME</tt> key)
 in then consulted, using a new name from the substitution above (if occurred). This process is recursive but with
-no loop detection, i.e. CONN_SERVICE_NAME_A=B and CONN_SERVICE_NAME_B=A would create an infinite loop, which
+no loop detection, i.e. A_CONN_SERVICE_NAME=B and B_CONN_SERVICE_NAME=A would create an infinite loop, which
 breaks the application. The following registry/environment combination changes the name of the <tt>Entrez</tt>
 service into <tt>Entrez2</tt>:
 <p>
@@ -547,7 +547,7 @@ you have a question, please contact <a href="mailto:info@ncbi.nlm.nih.gov">
 <p>
 <hr>
 <table border="0" cellspasing="0">
-<tr><td>Source: distrib/doc/dispatcher.html</td><td>$Date: 2004/11/05 20:47:17 $</td><td>$Revision: 6.25 $</td></tr>
+<tr><td>Source: distrib/doc/dispatcher.html</td><td>$Date: 2006/05/31 18:59:09 $</td><td>$Revision: 6.26 $</td></tr>
 </table>
 
 

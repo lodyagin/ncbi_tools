@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: document.h,v $
+* Revision 6.3  2006/09/27 18:30:00  kans
+* support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
+*
 * Revision 6.2  2000/05/22 16:38:24  kans
 * added UpdateColFmt per Serge Bazhin request
 *
@@ -229,6 +232,7 @@ extern Nlm_Boolean Nlm_GetScrlParams4 PROTO((Nlm_DoC d, Nlm_Int4Ptr offset,
             Nlm_Int2Ptr firstShown, Nlm_Int2Ptr firstLine));
 extern Nlm_Boolean Nlm_GetScrlParams PROTO((Nlm_DoC d, Nlm_Int2Ptr offset,
             Nlm_Int2Ptr firstShown, Nlm_Int2Ptr firstLine));
+extern void Nlm_SetScrlParams4 PROTO((Nlm_DoC d, Int4 offset));            
 extern void Nlm_UpdateDocument PROTO((Nlm_DoC d, Nlm_Int2 from, Nlm_Int2 to));
 extern void Nlm_InvalDocRows PROTO((Nlm_DoC d, Nlm_Int2 item, Nlm_Int2 from, Nlm_Int2 to));
 extern void Nlm_InvalDocCols PROTO((Nlm_DoC d, Nlm_Int2 item, Nlm_Int2 from, Nlm_Int2 to));
@@ -301,6 +305,7 @@ extern void Nlm_DisplayFancy  PROTO((Nlm_DoC d, Nlm_CharPtr file, Nlm_ParPtr par
 #define RowIsVisible Nlm_RowIsVisible
 #define GetScrlParams4 Nlm_GetScrlParams4
 #define GetScrlParams Nlm_GetScrlParams
+#define SetScrlParams4 Nlm_SetScrlParams4
 #define UpdateDocument Nlm_UpdateDocument
 #define InvalDocRows Nlm_InvalDocRows
 #define InvalDocCols Nlm_InvalDocCols

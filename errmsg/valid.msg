@@ -207,6 +207,20 @@ identifiers must be unique in a case-insensitive manner within a record.
 $^   DeltaComponentIsGi0, 58
 Delta component refers to gi 0. This indicates an error in database processing of this record.
 
+$^   FarFetchFailure, 59
+Fetching of a far feature location or component bioseq was needed, but no fetch
+function is registered in the program.
+
+$^   InternalGapsInSeqRaw, 60
+Raw sequences should not have gap characters.
+
+$^   SelfReferentialSequence, 61
+A delta sequence must refer to other components, not to itself.
+
+$^   WholeComponent, 62
+A delta sequence component should be described as a specific interval, not as
+the whole of a sequence.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -353,6 +367,9 @@ The PCR primer sequence has illegal characters or non-IUPAC nucleotides.
 $^   BadPunctuation, 37
 The title ends with incorrect punctuation marks.
 
+$^   BadPCRPrimerName, 38
+The PCR primer name appears to be a sequence instead of an identifying label.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -445,6 +462,9 @@ A feature product should refer to the accession or gi number, not a local or gen
 
 $^   GraphPackagingProblem, 15
 A graph should be packaged on its bioseq, or on a set containing the Bioseq.
+
+$^   InternalGenBankSet, 16
+An outer BioseqSet should not contain an internal BioseqSet of class genbank.
 
 $$ SEQ_FEAT, 5
 
@@ -930,6 +950,42 @@ protein product bioseq or protein cross reference on a pseudo CDS.
 $^ ErroneousException, 121
 The feature is marked with a specific exception qualifier, but validation indicates
 that a different exception should be used.
+
+$^ SegmentedGeneProblem, 122
+A gene feature on the parts of a segmented Bioseq should map to a single interval on the
+segmented Bioseq's coordinate system.
+
+$^   WholeLocation, 123
+Feature location is set to whole, the entirety of the parent sequence.  Please specify
+exact intervals for this feature location.
+
+$^ BadEcNumberFormat, 124
+There is a problem with the format of the EC_number qualifier.
+
+$^ BadEcNumberValue, 125
+There is a problem with the value of the EC_number qualifier.
+
+$^ EcNumberProblem, 126
+There is a problem with the format of the EC_number qualifier.
+
+$^ VectorContamination, 127
+Contamination by cloning vector is annotated on this sequence. The underlying region
+should be removed from the sequence.
+
+$^ MinusStrandProtein, 128
+A feature on a protein indicates the minus strand, which does not exist.
+
+$^ BadProteinName, 129
+A protein feature has a name that conflicts with other information on the feature.
+
+$^ GeneXrefWithoutLocus, 130
+A feature has a gene xref with a locus_tag and no locus, but the gene with that locus_tag has a locus.
+
+$^ UTRdoesNotExtendToEnd, 131
+The UTR does not have the expected range.
+
+$^ CDShasTooManyXs, 132
+The CDS translation has greater than 50 percent ambiguous X residues.
 
 $$ SEQ_ALIGN, 6
 

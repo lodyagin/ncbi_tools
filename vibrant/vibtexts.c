@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.29 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,18 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.33  2006/09/27 18:30:00  kans
+* support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
+*
+* Revision 6.32  2006/09/14 19:18:29  ivanov
+* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
+*
+* Revision 6.31  2006/09/14 18:05:45  ivanov
+* Fixed compilation errors on MS Windows
+*
+* Revision 6.30  2006/09/14 14:45:39  kans
+* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
+*
 * Revision 6.29  2005/07/18 15:15:18  kans
 * fixed minor xcode compiler warnings
 *
@@ -258,7 +270,7 @@
 #endif
 
 #ifdef WIN_MSWIN
-#define Nlm_TextTool HWND
+#  define Nlm_TextTool HWND
 #endif
 
 #ifdef WIN_MOTIF
@@ -2229,7 +2241,7 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
     if (h) {
       SNDMSG(h, EM_SETSEL, (WPARAM)(0), (LPARAM)(MAKELONG(0, 0xffff)));
     }
-  } else if (ch == '\t'  && !Nlm_ctrlKey && iseditable && (GetWindowLong(hwnd, GWL_STYLE) & ES_MULTILINE)) {
+  } else if (ch == '\t'  && !Nlm_ctrlKey && iseditable && (GetWindowLongPtr(hwnd, GWL_STYLE) & ES_MULTILINE)) {
     /* editable multiline boxes accept tab as input character not as focus change to stay 
        consistent with behavior on MOTIF */
     handlechar = TRUE;
@@ -2238,7 +2250,7 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
   } else if ((ch == '\n' || ch == '\r') && ishidden) {
     Nlm_DoReturnCallback (t);
   } else if ((ch == '\n' || ch == '\r') && iseditable) {
-    if (GetWindowLong(hwnd, GWL_STYLE) & ES_MULTILINE) {
+    if (GetWindowLongPtr(hwnd, GWL_STYLE) & ES_MULTILINE) {
 	/* multiline edit box */
 	if (Nlm_ctrlKey)
 	    /* Ctrl-Enter goes to dialog box buttons */
@@ -2280,7 +2292,7 @@ static void MyCls_OnKillFocus (HWND hwnd, HWND hwndNewFocus)
   */
 }
 
-LRESULT CALLBACK EXPORT TextProc (HWND hwnd, UINT message,
+static LRESULT CALLBACK EXPORT TextProc (HWND hwnd, UINT message,
                                   WPARAM wParam, LPARAM lParam)
 
 {
@@ -2336,7 +2348,7 @@ LRESULT CALLBACK EXPORT TextProc (HWND hwnd, UINT message,
 	  call_win_proc = FALSE;
 	  break;
       }
-      if ( !(GetWindowLong(hwnd, GWL_STYLE) & ES_MULTILINE) ) {
+      if ( !(GetWindowLongPtr(hwnd, GWL_STYLE) & ES_MULTILINE) ) {
         LPSTR text = NULL, str;
         HANDLE h_text;
         VERIFY ( OpenClipboard(hwnd) );
@@ -2402,7 +2414,7 @@ static Nlm_GraphiC Nlm_TextGainFocus (Nlm_GraphiC t, Nlm_Char ch, Nlm_Boolean sa
   if (ch == '\t' && Nlm_GetVisible (t) && Nlm_GetEnabled (t)) {
     Nlm_TextTool h = Nlm_GetTextHandle ((Nlm_TexT) t);
     Nlm_SetActive ((Nlm_TexT) t, TRUE);
-    if (GetWindowLong(h, GWL_STYLE) & ES_MULTILINE) {
+    if (GetWindowLongPtr(h, GWL_STYLE) & ES_MULTILINE) {
 	/* multiline edit box */
 	Nlm_Int4 begin = 0, end = 0;
 	Nlm_TextSelectionRange((Nlm_TexT) t, &begin, &end);
@@ -2620,6 +2632,51 @@ static void Nlm_ResetVisLines (Nlm_TexT t)
 }
 
 
+extern void Nlm_SetScrollTextOffset4 (Nlm_GraphiC t, Nlm_Int4 horiz,
+                                     Nlm_Int4 vert, Nlm_Boolean savePort)
+
+{
+#ifdef WIN_MAC
+  Nlm_BaR  sb;
+
+  sb = Nlm_GetTextVScrollBar ((Nlm_TexT) t);
+  if (sb != NULL) {
+    Nlm_DoSetValue ((Nlm_GraphiC) sb, vert, savePort);
+  }
+#endif
+#ifdef WIN_MSWIN
+  Nlm_TextTool  h;
+
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  PostMessage (h, WM_VSCROLL, MAKEWPARAM (SB_THUMBPOSITION, vert), 0L);
+  SetScrollPos (h, SB_VERT, vert, TRUE);
+
+#endif
+#ifdef WIN_MOTIF
+  Nlm_Int4 value, slider_size, increment, page_increment;
+  Nlm_TextTool  h;
+  Widget        scrolled_window;
+  Widget        vscroll;
+
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  value = 0;
+  slider_size = 0;
+  increment = 0;
+  page_increment = 0;
+  vscroll = NULL;
+
+  scrolled_window = XtParent (h);
+  if (scrolled_window == NULL) return;
+
+  XtVaGetValues (scrolled_window, XmNverticalScrollBar, &vscroll, NULL);
+  if (vscroll == NULL) return;
+
+  XmScrollBarGetValues (vscroll, &value, &slider_size, &increment, &page_increment);
+  XmScrollBarSetValues (vscroll, vert, slider_size, increment, page_increment, TRUE);
+
+#endif
+}
+
 static void Nlm_SetScrollTextOffset (Nlm_GraphiC t, Nlm_Int2 horiz,
                                      Nlm_Int2 vert, Nlm_Boolean savePort)
 
@@ -2637,7 +2694,7 @@ static void Nlm_SetScrollTextOffset (Nlm_GraphiC t, Nlm_Int2 horiz,
 
   h = Nlm_GetTextHandle ((Nlm_TexT) t);
   PostMessage (h, WM_VSCROLL, MAKEWPARAM (SB_THUMBPOSITION, vert), 0L);
-
+  SetScrollPos (h, SB_VERT, vert, TRUE);
 
 #endif
 #ifdef WIN_MOTIF
@@ -2698,6 +2755,66 @@ static void Nlm_GetScrollTextOffset (Nlm_GraphiC t, Nlm_Int2Ptr horiz, Nlm_Int2P
 #ifdef WIN_MOTIF
   if (vert != NULL) {
     *vert = 0;
+  }
+  if (horiz != NULL) {
+    *horiz = 0;
+  }
+#endif
+}
+
+extern void Nlm_GetScrollTextOffset4 (Nlm_GraphiC t, Nlm_Int4Ptr horiz, Nlm_Int4Ptr vert)
+
+{
+#ifdef WIN_MAC
+  Nlm_BaR   sb;
+  Nlm_Int2  rsult;
+
+  sb = Nlm_GetTextVScrollBar ((Nlm_TexT) t);
+  rsult = 0;
+  if (sb != NULL) {
+    rsult = Nlm_DoGetValue ((Nlm_GraphiC) sb);
+  }
+  if (vert != NULL) {
+    *vert = rsult;
+  }
+  if (horiz != NULL) {
+    *horiz = 0;
+  }
+#endif
+#ifdef WIN_MSWIN
+  Nlm_TextTool  h;
+
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  if (vert != NULL) {
+    *vert = GetScrollPos (h, SB_VERT);
+  }
+  if (horiz != NULL) {
+    *horiz = 0;
+  }
+#endif
+#ifdef WIN_MOTIF
+  Nlm_Int4 value, slider_size, increment, page_increment;
+  Nlm_TextTool  h;
+  Widget        scrolled_window;
+  Widget        vscroll;
+
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  value = 0;
+  slider_size = 0;
+  increment = 0;
+  page_increment = 0;
+  vscroll = NULL;
+
+  scrolled_window = XtParent (h);
+  if (scrolled_window == NULL) return;
+
+  XtVaGetValues (scrolled_window, XmNverticalScrollBar, &vscroll, NULL);
+  if (vscroll == NULL) return;
+
+  XmScrollBarGetValues (vscroll, &value, &slider_size, &increment, &page_increment);
+
+  if (vert != NULL) {
+    *vert = value;
   }
   if (horiz != NULL) {
     *horiz = 0;
@@ -3115,11 +3232,11 @@ static void Nlm_NewDialogText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc a
     lpfnNewTextProc = (WNDPROC) MakeProcInstance ((FARPROC) TextProc, Nlm_currentHInst);
   }
   if (lpfnOldTextProc == NULL) {
-    lpfnOldTextProc = (WNDPROC) GetWindowLong (h, GWL_WNDPROC);
-  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLong (h, GWL_WNDPROC)) {
+    lpfnOldTextProc = (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC);
+  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLong (h, GWL_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
   allowTextCallback = TRUE;
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(h, fntptr->handle, FALSE);
@@ -3218,11 +3335,11 @@ static void Nlm_NewPasswordText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc
     lpfnNewTextProc = (WNDPROC) MakeProcInstance ((FARPROC) TextProc, Nlm_currentHInst);
   }
   if (lpfnOldTextProc == NULL) {
-    lpfnOldTextProc = (WNDPROC) GetWindowLong (h, GWL_WNDPROC);
-  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLong (h, GWL_WNDPROC)) {
+    lpfnOldTextProc = (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC);
+  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLong (h, GWL_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
   Nlm_SetPassword (t, local);
 #endif
 
@@ -3323,11 +3440,11 @@ static void Nlm_NewHiddenText (Nlm_TexT t, Nlm_CharPtr dfault,
     lpfnNewTextProc = (WNDPROC) MakeProcInstance ((FARPROC) TextProc, Nlm_currentHInst);
   }
   if (lpfnOldTextProc == NULL) {
-    lpfnOldTextProc = (WNDPROC) GetWindowLong (h, GWL_WNDPROC);
-  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLong (h, GWL_WNDPROC)) {
+    lpfnOldTextProc = (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC);
+  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLong (h, GWL_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(h, fntptr->handle, FALSE);
   Nlm_HandUnlock(Nlm_systemFont);
@@ -3437,11 +3554,11 @@ static void Nlm_NewSpecialText (Nlm_TexT t, Nlm_CharPtr dfault,
     lpfnNewTextProc = (WNDPROC) MakeProcInstance ((FARPROC) TextProc, Nlm_currentHInst);
   }
   if (lpfnOldTextProc == NULL) {
-    lpfnOldTextProc = (WNDPROC) GetWindowLong (h, GWL_WNDPROC);
-  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLong (h, GWL_WNDPROC)) {
+    lpfnOldTextProc = (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC);
+  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLong (h, GWL_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
   allowTextCallback = TRUE;
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(h, fntptr->handle, FALSE);
@@ -3595,11 +3712,11 @@ static void Nlm_NewScrollText (Nlm_TexT t, Nlm_Int2 height,
     lpfnNewTextProc = (WNDPROC) MakeProcInstance ((FARPROC) TextProc, Nlm_currentHInst);
   }
   if (lpfnOldTextProc == NULL) {
-    lpfnOldTextProc = (WNDPROC) GetWindowLong (h, GWL_WNDPROC);
-  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLong (h, GWL_WNDPROC)) {
+    lpfnOldTextProc = (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC);
+  } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLong (h, GWL_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
   allowTextCallback = TRUE;
 #endif
 

@@ -107,6 +107,18 @@ SOURCE=..\..\..\..\corelib\binary.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\corelib\drwnflpt.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\corelib\drwnfspc.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\corelib\drwnmfls.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\corelib\gifgen.c
 # End Source File
 # Begin Source File
@@ -115,7 +127,123 @@ SOURCE=..\..\..\..\corelib\matrix.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\corelib\ncbiargs.c
+SOURCE=..\..\..\..\connect\ncbi_ansi_ext.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_ansi_ext.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_buffer.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_connection.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_connector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_connutil.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_core.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_core_c.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_dispd.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_dispd.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_file_connector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_ftp_connector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_heapmgr.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_host_info.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_http_connector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_lb.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_lb.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_lbsmd_stub.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_local.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_local.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_memory_connector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_priv.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_priv.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_sendmail.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_server_info.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_service.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_service_connector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_socket.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_socket_connector.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_util.c
 # End Source File
 # Begin Source File
 
@@ -265,6 +393,94 @@ SOURCE=..\..\..\..\corelib\ncbi.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\connect\ncbi_buffer.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_config.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_connection.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_connector.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_connutil.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_core.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_core_c.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_file_connector.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_ftp_connector.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_heapmgr.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_host_info.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_host_infop.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_http_connector.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_memory_connector.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_sendmail.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_server_info.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_server_infop.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_service.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_service_connector.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_service_misc.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_socket.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_socket_connector.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\corelib\ncbibs.h
 # End Source File
 # Begin Source File
@@ -286,6 +502,10 @@ SOURCE=..\..\..\..\corelib\ncbilang.h
 # Begin Source File
 
 SOURCE=..\..\..\..\corelib\ncbilcl.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\corelib\ncbimain.h
 # End Source File
 # Begin Source File
 

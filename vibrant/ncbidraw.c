@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.37 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,15 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.40  2006/09/14 19:18:28  ivanov
+* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
+*
+* Revision 6.39  2006/09/14 18:05:45  ivanov
+* Fixed compilation errors on MS Windows
+*
+* Revision 6.38  2006/09/14 14:45:38  kans
+* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
+*
 * Revision 6.37  2004/04/14 19:15:50  sinyakov
 * WIN_MSWIN: support X-Windows-like -bg color command line option
 *
@@ -846,9 +855,9 @@ static HBRUSH GetBackgroundBrush (HWND hwnd)
 
 {
 #ifndef WIN32
-  return (HBRUSH) GetClassWord (hwnd, GCW_HBRBACKGROUND);
+  return (HBRUSH) GetClassWord (hwnd, GCLP_HBRBACKGROUND);
 #else
-  return (HBRUSH) GetClassLong (hwnd, GCL_HBRBACKGROUND);
+  return (HBRUSH) GetClassLongPtr (hwnd, GCLP_HBRBACKGROUND);
 #endif
 }
 #endif

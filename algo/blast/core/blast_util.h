@@ -1,4 +1,4 @@
-/* $Id: blast_util.h,v 1.76 2006/05/05 17:45:55 camacho Exp $
+/* $Id: blast_util.h,v 1.78 2006/09/12 20:53:33 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -212,6 +212,19 @@ NCBI_XBLAST_EXPORT
 Int2 BLAST_PackDNA(const Uint1* buffer, Int4 length, 
                    EBlastEncoding encoding, Uint1** packed_seq);
 
+/** 
+ * @brief Calculates the length of frame for a translated protein
+ * 
+ * @param nucleotide_length Length of the nucleotide sequence translated [in]
+ * @param context Index of the translated frame (values: 0 to 5, inclusive)
+ * [in]
+ * 
+ * @return The requested length, or 0 if the nucleotide length is 0
+ */
+size_t
+BLAST_GetTranslatedProteinLength(size_t nucleotide_length, 
+                                 unsigned int context);
+
 /** Initialize the mixed-frame sequence for out-of-frame gapped extension.
  * @param query_blk Sequence block containing the concatenated frames of the 
  *                  query. The mixed-frame sequence is saved here. [in] [out]
@@ -263,11 +276,16 @@ int Blast_GetPartialTranslation(const Uint1* nucl_seq,
         Uint1** mixed_seq_ptr);
 
 
-/** Convert translation frame into a context for the concatenated translation
- * buffer.
+/** Convert translation frame or strand into a context number suitable for 
+ * indexing into the BlastQueryInfo::contexts array
+ * @param frame Frame (allowed values: 1,2,3,-1,-2,-3, 0) [in]
+ * @param program Type of BLAST program [in]
+ * @return context number: 0 or 1 for nucleotide query/subjects, 
+ * a value between 0 and 5 (inclusive) for translated query/subjects, and 0 for 
+ * protein query/subjects.
  */
 NCBI_XBLAST_EXPORT
-Int4 FrameToContext(Int2 frame);
+Int4 BLAST_FrameToContext(Int2 frame, EBlastProgramType program);
 
 
 /** The following binary search routine assumes that array A is filled. */

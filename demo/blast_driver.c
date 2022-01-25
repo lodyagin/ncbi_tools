@@ -1,4 +1,4 @@
-/* $Id: blast_driver.c,v 1.110 2006/04/26 12:48:06 madden Exp $
+/* $Id: blast_driver.c,v 1.114 2006/09/05 17:16:58 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Main function for running BLAST
 
 ******************************************************************************
- * $Revision: 1.110 $
+ * $Revision: 1.114 $
  * */
 
-static char const rcsid[] = "$Id: blast_driver.c,v 1.110 2006/04/26 12:48:06 madden Exp $";
+static char const rcsid[] = "$Id: blast_driver.c,v 1.114 2006/09/05 17:16:58 papadopo Exp $";
 
 #include <ncbi.h>
 #include <sqnutils.h>
@@ -196,12 +196,14 @@ static Args myargs[] = {
      "identities,\n5 = query-anchored no identities and blunt ends,\n6 = "
      "flat query-anchored, no identities and blunt ends,\n7 = XML Blast "
      "output,\n8 = tabular, \n9 tabular with comment lines\n10 ASN, text\n"
-     "11 ASN, binary",                         /* ARG_FORMAT */
+     "11 ASN, binary",                                    /* ARG_FORMAT */
      "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
    { "Produce HTML output",                    /* ARG_HTML */
      "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
-   { "Produce on-the-fly tabular output; 1 - just offsets and quality values;\n"
-     "2 - add sequence data.",
+   { "Produce on-the-fly tabular output;\n"
+     "1 - just offsets and quality values;\n"
+     "2 - add sequence data;\n3 - on-the-fly text ASN.1;\n"
+     "4 - on-the-fly binary ASN.1",
      "0", NULL, NULL, FALSE, 'B', ARG_INT, 0.0, 0, NULL}, /* ARG_TABULAR */
    { "Number of threads to use in preliminary search stage",
      "1", NULL, NULL, FALSE, 'a', ARG_INT, 0.0, 0, NULL}, /* ARG_THREADS */
@@ -310,11 +312,20 @@ s_FillOptions(SBlastOptions* options)
       (Boolean)(greedy_extension && !greedy_with_ungapped), 
       myargs[ARG_WINDOW].intvalue, myargs[ARG_XDROP_UNGAPPED].intvalue);
 
+   if (myargs[ARG_WINDOW].intvalue < 0) {
+      word_options->window_size = 0;
+   }
+   else if (word_options->window_size == 0 &&
+            lookup_options->mb_template_length > 0) {
+      word_options->window_size = 40;
+   }
+
    if (!greedy_extension)
       word_options->ungapped_extension = TRUE;
-
-   if (myargs[ARG_WINDOW].intvalue < 0)
-       word_options->window_size = 0;
+   if (lookup_options->mb_template_length > 0) {
+      if (word_options->window_size > 0)
+          word_options->ungapped_extension = FALSE;
+   }
 
    BLAST_FillExtensionOptions(ext_options, program_number, greedy_extension, 
       myargs[ARG_XDROP].intvalue, myargs[ARG_XDROP_FINAL].intvalue);
@@ -348,7 +359,8 @@ s_FillOptions(SBlastOptions* options)
    hit_options->longest_intron = myargs[ARG_INTRON].intvalue;
 
    if (myargs[ARG_SEARCHSP].floatvalue != 0) {
-      eff_len_options->searchsp_eff = (Int8) myargs[ARG_SEARCHSP].floatvalue; 
+      Int8 searchsp = (Int8) myargs[ARG_SEARCHSP].floatvalue; 
+      BLAST_FillEffectiveLengthsOptions(eff_len_options, 0, 0, &searchsp, 1);
    }
    if ((program_number == eBlastTypeTblastn ||
         program_number == eBlastTypeBlastp) && is_gapped) {
@@ -451,10 +463,12 @@ Int2 Nlm_Main(void)
    SeqLoc* lcase_mask = NULL;
    SeqLoc* query_slp = NULL;
    FILE *infp, *outfp = NULL;
+   AsnIoPtr asn_outfp = NULL;
    SBlastOptions* options = NULL;
    BlastFormattingInfo* format_info = NULL;
    Int4 ctr = 1;
    Int4 num_queries=0;
+   Int4 batch_size;
    int tabular_output = FALSE;
    BlastTabularFormatData* tf_data = NULL;
    Boolean believe_query = FALSE;
@@ -535,6 +549,22 @@ Int2 Nlm_Main(void)
 
    s_FillOptions(options);
 
+   switch(program_number) {
+       case eBlastTypeBlastn:
+           batch_size = 40000;
+           if (myargs[ARG_LOOKUP].intvalue)
+               batch_size = 5000000;
+           break;
+       case eBlastTypeTblastn:
+           batch_size = 20000;
+           break;
+       case eBlastTypeBlastp:
+       case eBlastTypeBlastx:
+       case eBlastTypeTblastx:
+       default:
+           batch_size = 10000;
+   }
+
    if ((infp = FileOpen(myargs[ARG_QUERY].strvalue, "r")) == NULL) {
       ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", 
                 myargs[ARG_QUERY].strvalue);
@@ -553,16 +583,34 @@ Int2 Nlm_Main(void)
       option must be set to true, otherwise it should be false. */
    believe_query = 
        (myargs[ARG_FORMAT].intvalue == eAlignViewAsnText ||
-        myargs[ARG_FORMAT].intvalue == eAlignViewAsnBinary);
+        myargs[ARG_FORMAT].intvalue == eAlignViewAsnBinary ||
+        tabular_output == eBlastIncrementalASN);
 
 
-   if (tabular_output) {
+   switch (tabular_output) {
+   case eBlastTabularDefault:
+   case eBlastTabularAddSequences:
       if ((outfp = FileOpen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
-         ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", 
+         ErrPostEx(SEV_FATAL, 1, 0, "Unable to open output file %s\n", 
                    myargs[ARG_OUT].strvalue);
         return (1);
       }
-   } else {
+      break;
+   case 3:
+      if ((asn_outfp = AsnIoOpen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
+         ErrPostEx(SEV_FATAL, 1, 0, "Unable to open text ASN outfile %s\n", 
+                   myargs[ARG_OUT].strvalue);
+        return (2);
+      }
+      break;
+   case 4:
+      if ((asn_outfp = AsnIoOpen(myargs[ARG_OUT].strvalue, "wb")) == NULL) {
+         ErrPostEx(SEV_FATAL, 1, 0, "Unable to open binary ASN outfile %s\n", 
+                   myargs[ARG_OUT].strvalue);
+        return (2);
+      }
+      break;
+   default:
        BlastFormattingInfoNew(myargs[ARG_FORMAT].intvalue, options, 
                               blast_program, dbname, 
                               myargs[ARG_OUT].strvalue, &format_info);
@@ -577,6 +625,7 @@ Int2 Nlm_Main(void)
 
        if (dbname)
            BLAST_PrintOutputHeader(format_info);
+       break;
    }
 
    /* Get the query (queries), loop if necessary. */
@@ -589,15 +638,16 @@ Int2 Nlm_Main(void)
        if ((Boolean)myargs[ARG_LCASE].intvalue) {
            letters_read = 
                BLAST_GetQuerySeqLoc(infp, query_is_na, 
-                   (Uint1)myargs[ARG_STRAND].intvalue, 10000, q_from, q_to, &lcase_mask,
+                   (Uint1)myargs[ARG_STRAND].intvalue, batch_size, 
+                   q_from, q_to, &lcase_mask,
                    &query_slp, &ctr, &num_queries, believe_query,
                    myargs[ARG_GENCODE].intvalue);
        } else {
            letters_read = 
                BLAST_GetQuerySeqLoc(infp, query_is_na,
-                   (Uint1)myargs[ARG_STRAND].intvalue, 0, q_from, q_to, NULL, 
-                   &query_slp, &ctr, &num_queries, believe_query,
-                   myargs[ARG_GENCODE].intvalue);
+                   (Uint1)myargs[ARG_STRAND].intvalue, batch_size,
+                   q_from, q_to, NULL, &query_slp, &ctr, &num_queries, 
+                   believe_query, myargs[ARG_GENCODE].intvalue);
        }
 
        /* If there is no sequence data left in the input file, break out of 
@@ -618,24 +668,28 @@ Int2 Nlm_Main(void)
 
        if (tabular_output) {
            EBlastTabularFormatOptions tab_option = eBlastTabularDefault;
-           if (tabular_output == 2) {
-               if (program_number == eBlastTypeBlastn) {
-                   tab_option = eBlastTabularAddSequences;
-               } else {
-                   fprintf(stderr, 
-                           "WARNING: Sequences printout in tabular output"
-                           " allowed only for blastn\n");
-               }
-           } 
+           if (tabular_output == 3 || tabular_output == 4) {
+               tab_option = eBlastIncrementalASN;
+           } else {
+               /* Print the header of tabular output. */
+               PrintTabularOutputHeader(dbname, NULL, query_slp, 
+                                        blast_program, 0, FALSE, outfp);
+               if (tabular_output == 2) {
+                   if (program_number == eBlastTypeBlastn) {
+                       tab_option = eBlastTabularAddSequences;
+                   } else {
+                       fprintf(stderr, 
+                               "WARNING: Sequences printout in tabular output"
+                               " allowed only for blastn\n");
+                   }
+               } 
+           }
            
-           /* Print the header of tabular output. */
-           PrintTabularOutputHeader(dbname, NULL, query_slp, 
-                                    blast_program, 0, FALSE, outfp);
-           
-           tf_data = BlastTabularFormatDataNew(outfp, query_slp, 
+           tf_data = BlastTabularFormatDataNew(outfp, asn_outfp, query_slp, 
                                                tab_option, believe_query);
            tf_data->show_gi = (Boolean) myargs[ARG_SHOWGI].intvalue;
            tf_data->show_accession = (Boolean) myargs[ARG_ACCESSION].intvalue;
+           tf_data->is_ooframe = (Boolean)(myargs[ARG_FRAMESHIFT].intvalue > 0);
        }
 
        options->num_cpus = myargs[ARG_THREADS].intvalue;
@@ -700,7 +754,6 @@ Int2 Nlm_Main(void)
                
                seqalign_arr = SBlastSeqalignArrayFree(seqalign_arr);
            }
-
        }
        /* Update the cumulative summary returns structure and clean the returns
           substructures for the current search iteration. */
@@ -721,16 +774,14 @@ Int2 Nlm_Main(void)
    sum_returns = Blast_SummaryReturnFree(sum_returns);
    full_sum_returns = Blast_SummaryReturnFree(full_sum_returns);
 
-   if (!tabular_output) 
-       format_info = BlastFormattingInfoFree(format_info);       
-   else
+   if (tabular_output == 3 || tabular_output == 4)
+       AsnIoClose(asn_outfp);
+   else if (tabular_output) 
        FileClose(outfp);
+   else
+       format_info = BlastFormattingInfoFree(format_info);       
 
    options = SBlastOptionsFree(options);
 
    return status;
 }
-
-
-
-

@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE___BLAST_TUNE__H
 #define ALGO_BLAST_CORE___BLAST_TUNE__H
 
-/*  $Id: blast_tune.h,v 1.1 2006/04/19 17:40:59 papadopo Exp $
+/*  $Id: blast_tune.h,v 1.2 2006/07/06 19:22:12 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -54,12 +54,11 @@ extern "C" {
  *  still possible to find alignments that are shorter and/or have less
  *  identity than what is specified here. The returned word size is
  *  just a choice that makes it unlikely that ungapped blast will 
- *  miss alignments that exceed *both* minimums. 
+ *  miss alignments that exceed *both* minimums. The algorithm used 
+ *  is described in
  *
  *  <PRE>
- *  The algorithm used is described in
- *
- *  Valer Gotea, Vamsi Veeramachaneni, and Wojciech Makaowski
+ *  Valer Gotea, Vamsi Veeramachaneni, and Wojciech Makalowski
  *  "Mastering seeds for genomic size nucleotide BLAST searches"
  *  Nucleic Acids Research, 2003, Vol 31, No. 23, pp 6935-6941
  *  </PRE>

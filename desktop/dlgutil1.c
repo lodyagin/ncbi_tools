@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.98 $
+* $Revision: 6.103 $
 *
 * File Description: 
 *
@@ -222,7 +222,7 @@ extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
     ompc.output_itemtype = dfp->input_itemtype;
     sdp = SeqDescrNew (NULL);
     if (sdp != NULL) {
-      sdp->choice = dfp->this_subtype;
+      sdp->choice = (Uint1)dfp->this_subtype;
       switch (sdp->choice) {
         case Seq_descr_mol_type :
         case Seq_descr_method :
@@ -308,7 +308,7 @@ extern void StdDescFormCleanupProc (GraphiC g, VoidPtr data)
   StdCleanupExtraProc (g, data);
 }
 
-extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint2 procid)
+extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint2 procid)
 
 {
   BaseFormPtr    bfp;
@@ -342,6 +342,110 @@ extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint2 itemID, Uint2 i
   return NULL;
 }
 
+
+/* Note - if a viewer displays features from a far sequence mapped to
+ * the current sequence, it will register an interest in the entityID
+ * for the far sequence.
+ * To find the "main" viewer for just the original sequence, we want
+ * to find a view for which only one entityID is registered.
+ */
+extern OMUserDataPtr EntityAlreadyHasViewer (Uint2 entityID)
+
+{
+  BaseFormPtr    bfp;
+  Int2           j;
+  Int2           num;
+  ObjMgrPtr      omp;
+  ObjMgrDataPtr  PNTR omdpp;
+  OMUserDataPtr  omudp;
+  ObjMgrDataPtr  tmp;
+  ValNodePtr     found_views = NULL, vnp_view;
+  ValNodePtr     view_forms = NULL, vnp_form;
+  Boolean        not_this_one;
+
+  if (entityID == 0) return NULL;
+  omp = ObjMgrGet ();
+  if (omp == NULL) return NULL;
+  num = omp->currobj;
+  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
+    tmp = *omdpp;
+    if (tmp->parentptr == NULL && tmp->EntityID == entityID) {
+
+      for (omudp = tmp->userdata; omudp != NULL; omudp = omudp->next) {
+        if (omudp->proctype == OMPROC_VIEW) {
+          bfp = (BaseFormPtr) omudp->userdata.ptrvalue;
+          if (bfp != NULL) {
+            ValNodeAddPointer (&found_views, 0, omudp);
+            ValNodeAddPointer (&view_forms, 0, bfp);
+          }
+        }
+      }
+    }
+  }
+  
+  /* now look to see if the form is also a view for another entityID */
+  for (vnp_view = found_views, vnp_form = view_forms;
+       vnp_view != NULL && vnp_form != NULL;
+       vnp_view = vnp_view->next, vnp_form = vnp_form->next) {
+    not_this_one = FALSE;
+    for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL && !not_this_one; j++, omdpp++) {
+      tmp = *omdpp;
+      if (tmp->parentptr == NULL && tmp->EntityID != entityID) {
+
+        for (omudp = tmp->userdata; omudp != NULL && !not_this_one; omudp = omudp->next) {
+          if (omudp->proctype == OMPROC_VIEW) {
+            bfp = (BaseFormPtr) omudp->userdata.ptrvalue;
+            if (bfp != NULL && bfp == (BaseFormPtr) vnp_form->data.ptrvalue) {
+              not_this_one = TRUE;
+            }
+          }
+        }
+      }
+    }
+    if (!not_this_one) {
+      omudp = vnp_view->data.ptrvalue;
+      found_views = ValNodeFree (found_views);
+      view_forms = ValNodeFree (view_forms);
+      return omudp;
+    }
+  }
+  found_views = ValNodeFree (found_views);
+  view_forms = ValNodeFree (view_forms);
+  
+  return NULL;
+}
+
+
+extern Boolean MakeViewerIndependent (Uint2 entityID, OMUserDataPtr omudp)
+{
+  Int2           j;
+  Int2           num;
+  ObjMgrPtr      omp;
+  ObjMgrDataPtr  PNTR omdpp;
+  OMUserDataPtr  omudp_tmp;
+  ObjMgrDataPtr  tmp;
+
+  if (entityID == 0 || omudp == NULL) return FALSE;
+  omp = ObjMgrGet ();
+  if (omp == NULL) return FALSE;
+  num = omp->currobj;
+  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
+    tmp = *omdpp;
+    if (tmp->parentptr == NULL && tmp->EntityID == entityID) {
+      omudp_tmp = tmp->userdata;
+      while (omudp_tmp != NULL && omudp_tmp != omudp) {
+        omudp_tmp = omudp_tmp->next;
+      }
+      if (omudp_tmp != NULL) {
+        tmp->tempload = TL_NOT_TEMP;
+        return TRUE;
+      }
+    }
+  }
+  return FALSE;
+}
+
+
 typedef struct genegatherlist {
   FeatureFormPtr  ffp;
   ObjMgrPtr       omp;
@@ -352,7 +456,7 @@ typedef struct genegatherlist {
   Int2            val;
   Int4            min;
   Uint2           geneEntityID;
-  Uint2           geneItemID;
+  Uint4           geneItemID;
   Uint2           geneItemtype;
   Boolean         geneFound;
   SeqLocPtr       old_feature_location;
@@ -1042,6 +1146,9 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
             SetTitle (ffp->protXrefName, (CharPtr) vnp->data.ptrvalue);
           }
         }
+        if (prp != NULL && StringDoesHaveText (prp->desc)) {
+          SetTitle (ffp->protXrefDesc, prp->desc);
+        }
       }
       xref = sfp->xref;
       while (xref != NULL && xref->data.choice != SEQFEAT_GENE) {
@@ -1302,16 +1409,19 @@ static Boolean HasExceptionGBQual (SeqFeatPtr sfp)
   return rsult;
 }
 
-static void AddProtRefXref (SeqFeatPtr sfp, TexT protXrefName)
+static void AddProtRefXref (SeqFeatPtr sfp, TexT protXrefName, TexT protXrefDesc)
 
 {
+  Char            desc [256];
+  Char            name [256];
   ProtRefPtr      prp;
-  Char            str [256];
   SeqFeatXrefPtr  xref;
 
-  if (sfp == NULL || protXrefName == NULL) return;
-  GetTitle (protXrefName, str, sizeof (str) - 1);
-  if (StringHasNoText (str)) return;
+  if (sfp == NULL) return;
+  if (protXrefName == NULL && protXrefDesc == NULL) return;
+  GetTitle (protXrefName, name, sizeof (name) - 1);
+  GetTitle (protXrefDesc, desc, sizeof (desc) - 1);
+  if (StringHasNoText (name) && StringHasNoText (desc)) return;
   for (xref = sfp->xref; xref != NULL; xref = xref->next) {
     if (xref->data.choice == SEQFEAT_PROT) break;
   }
@@ -1328,7 +1438,7 @@ static void AddProtRefXref (SeqFeatPtr sfp, TexT protXrefName)
   if (xref != NULL && xref->data.choice == SEQFEAT_PROT) {
     prp = (ProtRefPtr) xref->data.value.ptrvalue;
     xref->data.value.ptrvalue = ProtRefFree (prp);
-    prp = CreateNewProtRef (str, NULL, NULL, NULL);
+    prp = CreateNewProtRef (name, desc, NULL, NULL);
     xref->data.value.ptrvalue = (Pointer) prp;
   }
 }
@@ -1477,7 +1587,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   Boolean         hasNulls;
   Int2            i;
   Int4Ptr         intptr;
-  Uint2           itemID;
+  Uint4           itemID;
   Char            locustag [128];
   Boolean         noLeft;
   Boolean         noRight;
@@ -1576,7 +1686,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           }
           return FALSE;
         } else {
-          if (Message (MSG_YN, "%s", infAccept) == ANS_NO) return;
+          if (Message (MSG_YN, "%s", infAccept) == ANS_NO) return FALSE;
           ffp->acceptBadInf = TRUE;
         }
       }
@@ -1717,7 +1827,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         if (ffp->fidxref != NULL) {
           TextToFeatXref (ffp->fidxref, sfp);
         }
-        AddProtRefXref (sfp, ffp->protXrefName);
+        AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
         if (! ObjMgrRegister (OBJ_SEQFEAT, (Pointer) sfp)) {
           Message (MSG_ERROR, "ObjMgrRegister failed");
         }
@@ -1741,7 +1851,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         if (ffp->fidxref != NULL) {
           TextToFeatXref (ffp->fidxref, sfp);
         }
-        AddProtRefXref (sfp, ffp->protXrefName);
+        AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
         ompc.output_itemtype = OBJ_SEQFEAT;
         if (ompc.input_itemtype == OBJ_BIOSEQ) {
           bsp = GetBioseqGivenIDs (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype);
@@ -1791,7 +1901,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         }
         else
         {
-          AddProtRefXref (sfp, ffp->protXrefName);
+          AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
         }
         if (! ReplaceDataForProc (&ompc, FALSE)) {
           Message (MSG_ERROR, "ReplaceDataForProc failed");
@@ -3256,7 +3366,6 @@ static Boolean HasDisqualifyingUserObjects(SeqAnnotPtr sap)
   AnnotDescrPtr desc;
   UserObjectPtr uop;
   ObjectIdPtr   oip;
-  UserFieldPtr  ufp;
   
   if (sap == NULL) {
     return FALSE;
@@ -3483,8 +3592,10 @@ static ENUM_ALIST(strand_alist)
 {" ",             Seq_strand_unknown},  /* 0 */
 {"Plus",          Seq_strand_plus},     /* 1 */
 {"Minus",         Seq_strand_minus},    /* 2 */
-{"Both",          Seq_strand_both},     /* 3 */
-{"Reverse",       Seq_strand_both_rev}, /* 4 */
+/*
+{"Both",          Seq_strand_both},
+{"Reverse",       Seq_strand_both_rev},
+*/
 {"Other",         Seq_strand_other},    /* 255 */
 END_ENUM_ALIST
 

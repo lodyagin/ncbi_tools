@@ -10,7 +10,7 @@
 #endif
 
 static char * asnfilename = "blstxml.h";
-static AsnType atx[75] = {
+static AsnType atx[76] = {
   {401, "BlastOutput" ,1,0,0,0,0,0,0,0,NULL,&atx[24],&atx[1],0,&atx[12]} ,
   {0, "program" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -36,7 +36,7 @@ static AsnType atx[75] = {
   {0, "pattern" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[23]} ,
   {0, "entrez-query" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "iterations" ,128,9,0,0,0,0,0,0,NULL,&atx[63],&atx[26],0,&atx[74]} ,
+  {0, "iterations" ,128,9,0,0,0,0,0,0,NULL,&atx[63],&atx[26],0,&atx[75]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[27],NULL,0,NULL} ,
   {403, "Iteration" ,1,0,0,0,0,0,0,0,NULL,&atx[24],&atx[28],0,&atx[65]} ,
   {0, "iter-num" ,128,0,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[29]} ,
@@ -75,14 +75,15 @@ static AsnType atx[75] = {
   {0, "hseq" ,128,18,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[62]} ,
   {0, "midline" ,128,19,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {312, "SEQUENCE OF" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "stat" ,128,5,0,1,0,0,0,0,NULL,&atx[65],NULL,0,&atx[73]} ,
+  {0, "stat" ,128,5,0,1,0,0,0,0,NULL,&atx[65],NULL,0,&atx[74]} ,
   {404, "Statistics" ,1,0,0,0,0,0,0,0,NULL,&atx[24],&atx[66],0,&atx[34]} ,
   {0, "db-num" ,128,0,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[67]} ,
-  {0, "db-len" ,128,1,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[68]} ,
-  {0, "hsp-len" ,128,2,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[69]} ,
-  {0, "eff-space" ,128,3,0,0,0,0,0,0,NULL,&atx[15],NULL,0,&atx[70]} ,
-  {0, "kappa" ,128,4,0,0,0,0,0,0,NULL,&atx[15],NULL,0,&atx[71]} ,
-  {0, "lambda" ,128,5,0,0,0,0,0,0,NULL,&atx[15],NULL,0,&atx[72]} ,
+  {0, "db-len" ,128,1,0,0,0,0,0,0,NULL,&atx[68],NULL,0,&atx[69]} ,
+  {352, "BigInt" ,64,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
+  {0, "hsp-len" ,128,2,0,0,0,0,0,0,NULL,&atx[9],NULL,0,&atx[70]} ,
+  {0, "eff-space" ,128,3,0,0,0,0,0,0,NULL,&atx[15],NULL,0,&atx[71]} ,
+  {0, "kappa" ,128,4,0,0,0,0,0,0,NULL,&atx[15],NULL,0,&atx[72]} ,
+  {0, "lambda" ,128,5,0,0,0,0,0,0,NULL,&atx[15],NULL,0,&atx[73]} ,
   {0, "entropy" ,128,6,0,0,0,0,0,0,NULL,&atx[15],NULL,0,NULL} ,
   {0, "message" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "mbstat" ,128,10,0,1,0,0,0,0,NULL,&atx[65],NULL,0,NULL} };
@@ -114,7 +115,7 @@ static AsnModulePtr amp = ampx;
 #define BLASTOUTPUT_param &at[11]
 #define BLASTOUTPUT_iterations &at[25]
 #define BLASTOUTPUT_iterations_E &at[26]
-#define BLASTOUTPUT_mbstat &at[74]
+#define BLASTOUTPUT_mbstat &at[75]
 
 #define PARAMETERS &at[12]
 #define PARAMETERS_matrix &at[13]
@@ -136,16 +137,16 @@ static AsnModulePtr amp = ampx;
 #define ITERATION_hits &at[32]
 #define ITERATION_hits_E &at[33]
 #define ITERATION_stat &at[64]
-#define ITERATION_message &at[73]
+#define ITERATION_message &at[74]
 
 #define STATISTICS &at[65]
 #define STATISTICS_db_num &at[66]
 #define STATISTICS_db_len &at[67]
-#define STATISTICS_hsp_len &at[68]
-#define STATISTICS_eff_space &at[69]
-#define STATISTICS_kappa &at[70]
-#define STATISTICS_lambda &at[71]
-#define STATISTICS_entropy &at[72]
+#define STATISTICS_hsp_len &at[69]
+#define STATISTICS_eff_space &at[70]
+#define STATISTICS_kappa &at[71]
+#define STATISTICS_lambda &at[72]
+#define STATISTICS_entropy &at[73]
 
 #define HIT &at[34]
 #define HIT_num &at[35]

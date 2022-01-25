@@ -1693,7 +1693,7 @@ static Int4 LayoutInsertions(AlignNodePtr anp, Int4 maxScale, Int4 cur_line, Int
 *	return the list of FeatNode with the same itemID
 *
 **********************************************************************/
-ValNodePtr merge_same_itemID(ValNodePtr PNTR head, Int2 itemID)
+ValNodePtr merge_same_itemID(ValNodePtr PNTR head, Uint4 itemID)
 {
 	FeatNodePtr fnp, l_fnp;
 	ValNodePtr curr, prev = NULL, next;
@@ -1811,7 +1811,7 @@ static Boolean modify_master_line(ValNodePtr vnp, Int4Ptr m_left, Int4Ptr m_righ
 }
 
 typedef struct align_feature{
-	Uint2 itemID;
+	Uint4 itemID;
 	Int4 pos;
 	Int4 e_left, e_right;
 	Int4 p_left, p_right;

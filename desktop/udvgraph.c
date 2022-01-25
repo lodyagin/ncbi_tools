@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.49 $
+* $Revision: 6.50 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvgraph.c,v $
+* Revision 6.50  2006/07/13 17:13:18  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.49  2002/08/23 18:47:52  kans
 * protect against dereferencing NULL prot
 *
@@ -665,12 +668,10 @@ NLM_EXTERN void UDV_InvalRegion(PaneL UnDViewer,UnDViewerGraphDataPtr GrData,
 		ParaGPtr pgp,Int4 start_inval,Int4 stop_inval,Boolean IsSelect)
 {
 Int4 				decal_haut,StartLine;
-ValNodePtr 			vnp,vnp2;
 RecT 				rc,rcP;
 Int2				decal_gauche,left_pos,right_pos;
 ViewerDialogDataPtr vdp;
-WindoW              w,temport;
-ViewerMainPtr       vmp;
+WindoW              temport;
 
 	/*get some usefull data...*/
 	vdp = (ViewerDialogDataPtr) GetObjectExtra (UnDViewer);
@@ -773,13 +774,14 @@ Return value: TRUE if feature has been found in the ParaG list
 *****************************************************************************/
 #ifndef WWW_UDV
 static Boolean  UDV_find_item(ValNodePtr ParaG,BioseqPtr bsp,
-		Uint2 entityID,Uint2 itemID,Uint2 itemType,CharPtr szFeatureName,
+		Uint2 entityID,Uint4 itemID,Uint2 itemType,CharPtr szFeatureName,
 		ParaGPtr PNTR pgpFeat,Uint2Ptr nLineDecal,UDV_Item_SelectPtr isp)
 {
 ParaGPtr pgp;				/*data to check*/
 Uint2 j;					/*little counter*/
 ValNodePtr vnp,vnp2;		/*use to scan features*/
-Uint2 iID,idx;				/*used to retrieve a desired Feature*/
+Uint4 iID;
+Uint2 idx;				/*used to retrieve a desired Feature*/
 SeqMgrFeatContext context;	/*used to retrieve feature data*/
 Char szBuf[255]={""};		/*feature name */
 Char szTmp[255]={""};		/*feature name */
@@ -863,13 +865,14 @@ Return value: TRUE if  the user has clicked within a feat
 #ifndef WWW_UDV
 static Boolean  UDV_click_item(UnDViewerGraphDataPtr GrData,PoinT pt,
 		RecT rc,ParaGPtr pgp,BspInfo bsp_i,Uint2Ptr entityID,
-		Uint2Ptr itemID,Uint2Ptr itemType,Uint2Ptr index)
+		Uint4Ptr itemID,Uint2Ptr itemType,Uint2Ptr index)
 {
 Boolean InFeat=FALSE;		/*TRUE if the user has clicked within a feat*/
 ValNodePtr vnp;				/*use to scan features*/
 Int2 i,j,yDecal=0/*1*/;			/*use to find a feat region*/
 Int4 pos,OccupyTo;			/*position (# of letters) of the mouse*/
-Uint2 iID,idx;				/*used to retrieve a desired Feature*/
+Uint4 iID;
+Uint2 idx;				/*used to retrieve a desired Feature*/
 SeqMgrFeatContext context;	/*used to retrieve feature data*/
 Boolean IsTransNeeded=FALSE;
 
@@ -1128,7 +1131,7 @@ Return value: none
 *****************************************************************************/
 #ifndef WWW_UDV
 NLM_EXTERN void UDV_select_feature(PaneL p,ViewerDialogDataPtr vdp,
-			Uint2 entityID,Uint2 itemID,Boolean bRepos)
+			Uint2 entityID,Uint4 itemID,Boolean bRepos)
 {
 ParaGPtr pgp_select;	/*selected pgp*/
 Char 	 szFeatName[500]; /*used to modify the InfoPanel Text*/
@@ -1295,7 +1298,8 @@ Return value: none
 static void UDV_AutoSelectAllSeq(ViewerDialogDataPtr vdp,Boolean bSelect)
 {
 SeqLocPtr   slp;
-Uint2       bsp_eID,bsp_iID;
+Uint2       bsp_eID;
+Uint4       bsp_iID;
 
 	slp = SeqLocIntNew (0, vdp->bsp_i.bspLength-1, Seq_strand_plus, 
 			vdp->bsp_i.bsp->id);
@@ -1317,7 +1321,7 @@ Uint2       bsp_eID,bsp_iID;
 #endif /*WWW_UDV*/
 
 #ifndef WWW_UDV
-NLM_EXTERN void UDV_SelectFeatInFeatDlg(ViewerMainPtr vmp, Uint2 entityID, Uint2 itemID)
+NLM_EXTERN void UDV_SelectFeatInFeatDlg(ViewerMainPtr vmp, Uint2 entityID, Uint4 itemID)
 {
 FLMDataPtr	pflm;
 
@@ -1373,17 +1377,14 @@ Return value: none
 #ifndef WWW_UDV
 NLM_EXTERN void UDV_ClickProc(PaneL p, PoinT pt)
 {
-WindoW 				w;
 ViewerDialogDataPtr vdp;
 ValNodePtr 			vnp;
 ViewerMainPtr		vmp;
-SeqLocPtr           slp;
 ParaGPtr 			pgp=NULL;
 RecT 				rc,rcP;
-Int4 				decal_top,pos,old_pos,decal,limit,dec,dec2;
+Int4 				decal_top,pos,decal,limit,dec,dec2;
 Boolean 			bFind=FALSE;
 Int2				decal_left;
-Uint2               bsp_eID,bsp_iID;
 
 	/*get some usefull data...*/
 	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
@@ -1435,7 +1436,7 @@ Uint2               bsp_eID,bsp_iID;
 		if (bFind){
 			Boolean ClickFeat=FALSE;
 			Uint2 entityID;
-			Uint2 itemID;
+			Uint4 itemID;
 			Uint2 itemType;
 			Uint2 index;
 			/*the user clicked on a feature ?*/
@@ -1506,8 +1507,6 @@ Uint2               bsp_eID,bsp_iID;
 	}
 	else{
 		WindoW temport;
-		RecT rcI;
-		CharPtr szFeatName;
 		Uint2 bsp_eID,bsp_iID;
 			/*deselect the sequence*/
 			ObjMgrDeSelectAll ();
@@ -1679,9 +1678,7 @@ Return value: none
 #ifndef WWW_UDV
 NLM_EXTERN void UDV_DragProc(PaneL p, PoinT pt)
 {
-WindoW 				w;
 ViewerDialogDataPtr vdp;
-ViewerMainPtr		vmp;
 
 	/*get some usefull data...*/
 	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
@@ -1708,7 +1705,8 @@ Return value: none
 #ifndef WWW_UDV
 NLM_EXTERN void UDV_ReleaseMouse(PaneL p,ViewerDialogDataPtr vdp, PoinT pt)
 {
-Uint2       bsp_eID,bsp_iID;
+Uint2       bsp_eID;
+Uint4       bsp_iID;
 
 	if (vdp == NULL) return;
 	
@@ -1763,9 +1761,7 @@ Return value: none
 #ifndef WWW_UDV
 NLM_EXTERN void UDV_ReleaseProc(PaneL p, PoinT pt)
 {
-WindoW 				w;
 ViewerDialogDataPtr vdp;
-ViewerMainPtr		vmp;
 
 	/*get some usefull data...*/
 	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
@@ -1790,9 +1786,7 @@ Return value: none
 #ifndef WWW_UDV
 NLM_EXTERN void UDV_HoldProc(PaneL p, PoinT pt)
 {
-WindoW 				w;
 ViewerDialogDataPtr vdp;
-ViewerMainPtr		vmp;
 
 	/*get some usefull data...*/
 	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
@@ -2800,7 +2794,8 @@ Int2 y,ybase;				/*text position*/
 Int2 xMargin;				/*initial margins*/
 Int2 nTicks=0,nLet=0;		/*y decal*/
 ValNodePtr vnp;				/*Features list of itemID and index values*/
-Uint2 iID,idx,lineID;		/*used to retrieve a desired Feature*/
+Uint4 iID;
+Uint2 idx,lineID;		/*used to retrieve a desired Feature*/
 /*Uint8 index_g;			merged value containing itemID, index and lineID*/
 SeqMgrFeatContextPtr context;	/*used to retrieve feature data*/
 SeqMgrFeatContext context2;	/*used to retrieve feature data*/
@@ -3267,7 +3262,8 @@ Int4 start,stop;			/*limit of the feature to draw*/
 Int2 y,ybase;				/*text position*/
 Int2 xMargin;				/*initial margins*/
 Int2 nTicks=0,nLet=0;		/*y decal*/
-Uint2 iID,idx,lineID;		/*used to retrieve a desired Feature*/
+Uint4 iID;
+Uint2 idx,lineID;		/*used to retrieve a desired Feature*/
 Int2 start_x,stop_x;		/*ends of the feature : box, arrow*/
 Int2 i,numivals2,i_decal,j;	/*counters*/
 
@@ -3443,7 +3439,8 @@ Int2 xMargin;				/*initial margins*/
 Int2 nTicks=0,nLet=0;		/*y decal*/
 Char szBuf[51]={""};		/*name to draw*/
 ValNodePtr vnp;				/*Features list of itemID and index values*/
-Uint2 iID,idx;				/*used to retrieve a desired Feature*/
+Uint4 iID;
+Uint2 idx;				/*used to retrieve a desired Feature*/
 /*Uint4 index_g;			merged value containing itemID and index*/
 SeqMgrFeatContext context;	/*used to retrieve feature data*/
 Uint2 j;					/*counter*/
@@ -4035,7 +4032,7 @@ static void UDV_draw_panel(PaneL p,ViewerDialogDataPtr vdp,RecT PNTR MyUpdateRec
 	Boolean bSelect)	
 {
 Uint4               DisplayStyle;
-Int4 				stop,decal_haut,from_row,to_row,nTotRow,nLinesDraw;
+Int4 				decal_haut,from_row,to_row,nTotRow,nLinesDraw;
 ValNodePtr 			vnp,vnp2,vnp_bsp;
 ParaGPtr 			pgp;
 RecT 				rc,rcP,rcP_old;
@@ -4043,7 +4040,8 @@ Int2				decal_gauche;
 DDV_ColorGlobal     *svpp=NULL;
 ValNodePtr          vnp_seqinfo=NULL;
 SelStructPtr        ssp;/*used to get the selected region(s)*/
-Uint2               bsp_eID,bsp_iID;
+Uint2               bsp_eID;
+Uint4               bsp_iID;
 ViewerMainPtr 	    vmp;
 Int4                Row = -1;
 
@@ -4173,7 +4171,7 @@ Int4                Row = -1;
 				UDV_Draw_scale(&vdp->udv_graph,
 					vdp->udv_graph.udv_scale.ShowMajorTick,
 					vdp->udv_graph.udv_scale.ShowMMinorTick,
-					vdp->udv_graph.udv_scale.ScalePosition,
+					(Uint1) vdp->udv_graph.udv_scale.ScalePosition,
 					pgp->StartLetter,pgp->StopLetter,&rc,
 					vdp->udv_graph.udv_font.cxChar,
 					vdp->bsp_i.bspLength,pgp->StartLetter,
@@ -4229,7 +4227,6 @@ Int4                Row = -1;
 #ifndef WWW_UDV
 NLM_EXTERN void  UDV_draw_viewer (PaneL p)
 {
-WindoW 	w;
 ViewerDialogDataPtr vdp;
 
 	/*get some usefull data...*/
@@ -4256,7 +4253,6 @@ ViewerDialogDataPtr vdp;
 #ifndef WWW_UDV
 NLM_EXTERN void UDV_Logo_onDraw (PaneL p)
 {
-WindoW 				w;
 RecT 				rcP;
 UDVLogoDataPtr		ldp;
 

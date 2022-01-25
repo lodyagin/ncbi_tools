@@ -242,7 +242,6 @@ NLM_EXTERN
 CddIdSetPtr LIBCALL
 CddIdSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -298,7 +297,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddIdSetAsnWrite(CddIdSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -790,7 +788,6 @@ NLM_EXTERN
 CddSetPtr LIBCALL
 CddSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -846,7 +843,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddSetAsnWrite(CddSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1137,7 +1133,6 @@ NLM_EXTERN
 CddTreeSetPtr LIBCALL
 CddTreeSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1193,7 +1188,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddTreeSetAsnWrite(CddTreeSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1362,7 +1356,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddPrefNodesAsnWrite(CddPrefNodesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1824,7 +1817,6 @@ NLM_EXTERN
 CddOrgRefSetPtr LIBCALL
 CddOrgRefSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1880,7 +1872,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddOrgRefSetAsnWrite(CddOrgRefSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -2115,7 +2106,6 @@ NLM_EXTERN
 CddPrefNodeDescrSetPtr LIBCALL
 CddPrefNodeDescrSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -2171,7 +2161,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddPrefNodeDescrSetAsnWrite(CddPrefNodeDescrSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -3139,7 +3128,6 @@ NLM_EXTERN
 CddDescrSetPtr LIBCALL
 CddDescrSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -3195,7 +3183,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 CddDescrSetAsnWrite(CddDescrSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -4094,7 +4081,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 RejectIdAsnWrite(RejectIdPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -4547,7 +4533,6 @@ NLM_EXTERN
 AlignAnnotSetPtr LIBCALL
 AlignAnnotSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -4603,7 +4588,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 AlignAnnotSetAsnWrite(AlignAnnotSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

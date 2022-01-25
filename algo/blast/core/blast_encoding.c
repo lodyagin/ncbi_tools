@@ -1,4 +1,4 @@
-/* $Id: blast_encoding.c,v 1.5 2006/03/31 17:32:40 camacho Exp $
+/* $Id: blast_encoding.c,v 1.6 2006/08/29 21:56:34 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_encoding.c,v 1.5 2006/03/31 17:32:40 camacho Exp $";
+    "$Id: blast_encoding.c,v 1.6 2006/08/29 21:56:34 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_encoding.h>
@@ -107,12 +107,20 @@ const Uint1 AMINOACID_TO_NCBISTDAA[128] = {
  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+const char NCBISTDAA_TO_AMINOACID[BLASTAA_SIZE] = {
+'-','A','B','C','D','E','F','G','H','I','K','L','M',
+'N','P','Q','R','S','T','V','W','X','Y','Z','U','*',
+'O', 'J'};
+
 const Uint1 kProtSentinel = NULLB;
 const Uint1 kNuclSentinel = 0xF;
 
 /*
  * ===========================================================================
  * $Log: blast_encoding.c,v $
+ * Revision 1.6  2006/08/29 21:56:34  camacho
+ * +NCBISTDAA_TO_AMINOACID
+ *
  * Revision 1.5  2006/03/31 17:32:40  camacho
  * Added constants for sentinel values
  *

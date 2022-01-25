@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatrpsdb.c,v 1.20 2006/01/25 16:22:18 camacho Exp $";
+static char const rcsid[] = "$Id: formatrpsdb.c,v 1.22 2006/08/01 17:39:37 papadopo Exp $";
 
 /*****************************************************************************
 
@@ -38,6 +38,13 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.20 2006/01/25 16:22:18 camac
 
 ***************************************************************************
     $Log: formatrpsdb.c,v $
+    Revision 1.22  2006/08/01 17:39:37  papadopo
+    1. Read in scoremats using 26- or 28-letter alphabets
+    2. Always produce an rpsblast database using a 28-letter alphabet
+
+    Revision 1.21  2006/07/05 16:23:55  papadopo
+    disallow creation of RPS databases that do not have a 26-letter protein alphabet
+
     Revision 1.20  2006/01/25 16:22:18  camacho
     Calculate kbp_ideal values rather than loading them from pre-computed values
 
@@ -138,6 +145,12 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.20 2006/01/25 16:22:18 camac
 
 #define RPS_NUM_LOOKUP_CELLS 32768
 
+#if BLASTAA_SIZE == 28
+#define RPS_DATABASE_VERSION RPS_MAGIC_NUM_28
+#else
+#define RPS_DATABASE_VERSION RPS_MAGIC_NUM
+#endif
+
 /* RPS-related data */
 
 typedef struct RPS_DbInfo {
@@ -150,7 +163,6 @@ typedef struct RPS_DbInfo {
     FILE * pssm_fd;
     FILE * aux_fd;
     Int4 **posMatrix;
-    Int4 alphabet_size;
     Int4 gap_open;
     Int4 gap_extend;
     Int4 scale_factor;
@@ -231,7 +243,7 @@ void RPS_DbInfoInit(RPS_DbInfo *info, Int4 num_files, char *db_name)
 
     /* Write the magic numbers to the PSSM file */
 
-    i = RPS_MAGIC_NUM;
+    i = RPS_DATABASE_VERSION;
     FileWrite(&i, sizeof(Int4), 1, info->pssm_fd);
 
     /* Fill in space for the sequence offsets. The PSSM
@@ -245,7 +257,9 @@ void RPS_DbInfoInit(RPS_DbInfo *info, Int4 num_files, char *db_name)
 }
 
 /* Update the input scoremat with a new PSSM and modified
-   statistics. Scoremat must contain only residue frequencies
+   statistics. Scoremat must contain only residue frequencies.
+   Note that upon completion the new PSSM will always have
+   columns of length BLASTAA_SIZE
         seq is the sequence and set of score frequencies read in 
                 from the next data file
         seq_size is the number of letters in this sequence
@@ -304,7 +318,7 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
     sbp->number_of_contexts = 1;
     BlastScoreBlkMatFill(sbp, matrix_name);
     compactSearch->matrix = sbp->matrix;
-    compactSearch->alphabetSize = alphabet_size;
+    compactSearch->alphabetSize = BLASTAA_SIZE;
     compactSearch->gapped_calculation = TRUE;
     compactSearch->pseudoCountConst = 10;
     compactSearch->ethresh = 0.001;
@@ -342,8 +356,8 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
 
     stdrfp = BlastResFreqNew(sbp);
     BlastResFreqStdComp(sbp,stdrfp); 
-    compactSearch->standardProb = MemNew(alphabet_size * sizeof(double));
-    for(i = 0; i < alphabet_size; i++)
+    compactSearch->standardProb = MemNew(BLASTAA_SIZE * sizeof(double));
+    for(i = 0; i < BLASTAA_SIZE; i++)
         compactSearch->standardProb[i] = stdrfp->prob[i];
     stdrfp = BlastResFreqDestruct(stdrfp);
 
@@ -355,14 +369,15 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
     posSearch->posFreqs = (Nlm_FloatHi **)MemNew((seq_size + 1) * 
                                                  sizeof(Nlm_FloatHi *));
     for (i = 0; i < seq_size + 1; i++) {
-        posSearch->posMatrix[i] = (Int4 *)MemNew(alphabet_size * sizeof(Int4));
-        posSearch->posPrivateMatrix[i] = (Int4 *)MemNew(alphabet_size * 
+        posSearch->posMatrix[i] = (Int4 *)MemNew(BLASTAA_SIZE * sizeof(Int4));
+        posSearch->posPrivateMatrix[i] = (Int4 *)MemNew(BLASTAA_SIZE * 
                                                         sizeof(Int4));
-        posSearch->posFreqs[i] = (Nlm_FloatHi *)MemNew(alphabet_size * 
+        posSearch->posFreqs[i] = (Nlm_FloatHi *)MemNew(BLASTAA_SIZE * 
                                                        sizeof(Nlm_FloatHi));
     }
 
-    /* read in the list of position frequencies */
+    /* read in the list of position frequencies. If alphabet_size
+       is less than BLASTAA_SIZE then the extra entries are zero */
 
     freq_list = pssm->intermediateData->freqRatios;
 
@@ -417,7 +432,7 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
     pssm->finalData->scalingFactor = Nlm_Nint(ScalingFactor);
 
     score_list = NULL;
-    for (i = 0; i < seq_size * alphabet_size; i++) {
+    for (i = 0; i < seq_size * BLASTAA_SIZE; i++) {
         ValNodePtr score_list_tmp = ValNodeNew(NULL);
         score_list_tmp->next = score_list;
         score_list = score_list_tmp;
@@ -430,6 +445,10 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
                 score_list->data.intvalue = posSearch->posPrivateMatrix[i][j];
                 score_list = score_list->next;
             }
+            for (; j < BLASTAA_SIZE; j++) {
+                score_list->data.intvalue = INT2_MIN;
+                score_list = score_list->next;
+            }
         }
     }
     else {
@@ -438,6 +457,10 @@ Int2 RPSUpdateStatistics(PssmWithParameters *seq,
                 score_list->data.intvalue = posSearch->posPrivateMatrix[i][j];
                 score_list = score_list->next;
             }
+        }
+        while (score_list != NULL) {
+            score_list->data.intvalue = INT2_MIN;
+            score_list = score_list->next;
         }
     }
 
@@ -489,7 +512,7 @@ Int2 RPSUpdatePSSM(RPS_DbInfo *info,
     score_list = pssm->finalData->scores;
     info->posMatrix = (Int4 **)MemNew((seq_size + 1) * sizeof(Int4 *));
     for (i = 0; i < seq_size + 1; i++)
-        info->posMatrix[i] = (Int4 *)MemNew(alphabet_size * sizeof(Int4));
+        info->posMatrix[i] = (Int4 *)MemNew(BLASTAA_SIZE * sizeof(Int4));
 
     if (pssm->byRow == FALSE) {
         for (i = 0; i < seq_size; i++) {
@@ -501,6 +524,9 @@ Int2 RPSUpdatePSSM(RPS_DbInfo *info,
             }
             if (j < alphabet_size)
                 break;
+            for (; j < BLASTAA_SIZE; j++) {
+                info->posMatrix[i][j] = INT2_MIN;
+            }
         }
     }
     else {
@@ -513,6 +539,13 @@ Int2 RPSUpdatePSSM(RPS_DbInfo *info,
             }
             if (i < seq_size)
                 break;
+        }
+        if (j == alphabet_size) {
+            for (; j < BLASTAA_SIZE; j++) {
+                for (i = 0; i < seq_size; i++) {
+                    info->posMatrix[i][j] = INT2_MIN;
+                }
+            }
         }
     }
 
@@ -530,14 +563,14 @@ Int2 RPSUpdatePSSM(RPS_DbInfo *info,
        be BLAST_SCORE_MIN, but we instead follow the convention
        used in copymat */
 
-    for (i = 0; i < alphabet_size; i++)
+    for (i = 0; i < BLASTAA_SIZE; i++)
        info->posMatrix[seq_size][i] = -BLAST_SCORE_MAX;
 
     /* Dump the score matrix, column by column */
 
     for (i = 0; i < seq_size + 1; i++) {
        FileWrite(info->posMatrix[i], sizeof(Int4), 
-                 alphabet_size, info->pssm_fd);
+                 BLASTAA_SIZE, info->pssm_fd);
     }
 
     /* Write the next context offset. Note that the
@@ -608,10 +641,14 @@ Int2 RPSAddFirstSequence(RPS_DbInfo *info,
     PssmParametersPtr params = seq->params;
     Int4 threshold;
 
-    info->alphabet_size = alphabet_size;
     info->gap_open = params->rpsdbparams->gapOpen;
     info->gap_extend = params->rpsdbparams->gapExtend;
     info->scale_factor = pssm->finalData->scalingFactor;
+
+    if (alphabet_size > BLASTAA_SIZE) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Alphabet is too large");
+        return 1;
+    }
 
     /* scale up the threshold value and convert to integer */
 
@@ -776,6 +813,10 @@ Int2 RPSAddSequence(RPS_DbInfo *info,
                       "PSSM creation failed with error %d", status);
             return 1;
         }
+
+        /* The generated PSSM has a fixed alphabet size */
+
+        alphabet_size = pssm->numRows = BLASTAA_SIZE;
     }
 
     /* Beyond this point, pssm->finalData and
@@ -787,15 +828,17 @@ Int2 RPSAddSequence(RPS_DbInfo *info,
        for all sequences in the DB, or else RPS blast
        will not work */
 
-    if (info->alphabet_size == 0) {
+    if (info->curr_seq_offset == 0) {
         if (RPSAddFirstSequence(info, seq, seq_size, alphabet_size) != 0)
             return 1;
     }
     
-    /* Do sanity checking on the input sequence */
+    /* Do sanity checking on the input sequence. Note that a mixture
+       of alphabet sizes is acceptable, as long as an alphabet does
+       not exceed BLASTAA_SIZE */
 
-    if (alphabet_size != info->alphabet_size) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Alphabets do not match");
+    if (alphabet_size > BLASTAA_SIZE) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Alphabet is too large");
         return 1;
     }
     if (rps_params->gapOpen != info->gap_open) {
@@ -880,7 +923,7 @@ void RPS_DbClose(RPS_DbInfo *info)
         RPSBackboneCell empty_cell;
 
         memset(&header, 0, sizeof(header));
-        header.magic_number = RPS_MAGIC_NUM;
+        header.magic_number = RPS_DATABASE_VERSION;
 
         /* for each lookup table cell */
 

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blfmtutl.c,v 1.18 2006/05/05 13:43:28 coulouri Exp $";
+static char const rcsid[] = "$Id: blfmtutl.c,v 1.23 2006/10/12 19:51:32 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -36,6 +36,22 @@ Contents: Utilities for BLAST formatting
 /*
 * $Revision: 
 * $Log: blfmtutl.c,v $
+* Revision 1.23  2006/10/12 19:51:32  coulouri
+* bump release date
+*
+* Revision 1.22  2006/09/23 23:52:12  coulouri
+* bump version/date for release
+*
+* Revision 1.21  2006/05/31 17:17:44  jianye
+* always show plus strand for query for dendiag tabular
+*
+* Revision 1.20  2006/05/27 13:58:07  ucko
+* Move use_this_gi_id's declaration *above* other statements in the
+* block per C89.
+*
+* Revision 1.19  2006/05/25 16:38:07  jianye
+* use use_this_gi seqid for subject if present
+*
 * Revision 1.18  2006/05/05 13:43:28  coulouri
 * bump date
 *
@@ -101,11 +117,11 @@ Contents: Utilities for BLAST formatting
 #include <ncbithr.h>
 #include <txalign.h>
 #include <blfmtutl.h>
-
+#include <jzcoll.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.14"
-#define BLAST_RELEASE_DATE "May-07-2006"
+#define BLAST_ENGINE_VERSION "2.2.15"
+#define BLAST_RELEASE_DATE "Oct-15-2006"
 
 #define BUFFER_LENGTH 255
 
@@ -1042,8 +1058,18 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
             continue;
          if (subject_bsp->id->choice != SEQID_GENERAL ||
              StringCmp(((DbtagPtr)subject_id->data.ptrvalue)->db, "BL_ORD_ID")) {
+            SeqIdPtr use_this_gi_id = GetUseThisGi(sap); 
             defline = (CharPtr) Malloc(BUFFER_LENGTH+1);
-            SeqIdWrite(subject_bsp->id, defline, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+            if (use_this_gi_id) {
+                BlastDefLinePtr bdlp, actual_bdlp;
+                bdlp=FDGetDeflineAsnFromBioseq(subject_bsp);
+                actual_bdlp=getBlastDefLineForSeqId(bdlp, use_this_gi_id);
+                
+                SeqIdWrite(actual_bdlp->seqid, defline, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+                BlastDefLineSetFree(bdlp);
+            } else {
+                SeqIdWrite(subject_bsp->id, defline, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+            }
             if (StringNCmp(defline, "lcl|", 4))
                StringCpy(subject_buffer, defline);
             else
@@ -1165,6 +1191,12 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                                     bit_score_buff, &eval_buff, 0);
 
             align_length = ddp->len;
+            /*always show plus strand for query*/
+            if (ddp->strands[0] == Seq_strand_minus &&
+                ddp->strands[1] == Seq_strand_plus) { 
+                ddp->strands[0] = Seq_strand_plus;
+                ddp->strands[1] = Seq_strand_minus;   
+            }
             if (ddp->strands[0] == Seq_strand_minus) {
                q_start = ddp->starts[0] + align_length;
                q_end = ddp->starts[0] + 1;

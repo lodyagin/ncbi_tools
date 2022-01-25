@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -1049,7 +1049,7 @@ static Pointer SubmitPageToSubmitBlockPtr (DialoG d)
         if (i > 3 || i < 0) {
           i = 255;
         }
-        sbp->subtype = i;
+        sbp->subtype = (Uint1) i;
       } else {
         sbp->subtype = 1;
       }
@@ -2649,7 +2649,7 @@ static void CleanUpTemplatePreviewDialog (GraphiC g, VoidPtr data)
   MemFree (dlg);
 }
 
-static Int4 GetRefNumForPub (SeqSubmitPtr ssp, Int4 itemID)
+static Int4 GetRefNumForPub (SeqSubmitPtr ssp, Uint4 itemID)
 {
   SeqEntryPtr  sep;
   BioseqPtr    bsp;

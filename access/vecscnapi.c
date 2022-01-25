@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/13/00
 *
-* $Revision: 1.15 $
+* $Revision: 1.16 $
 *
 * File Description: 
 *
@@ -94,7 +94,7 @@ NLM_EXTERN EIO_Status VecScreenWaitForReply (
 
 {
   time_t           currtime, starttime;
-  Int2             max = 0;
+  time_t           max = 0;
   EIO_Status       status;
   STimeout         timeout;
 #ifdef OS_MAC

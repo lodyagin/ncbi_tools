@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/20/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *       template for custom scans of ASN.1 release files
@@ -173,7 +173,8 @@ static void ProcessOneRecord (
 
   if (StringStr (filename, "gbest") != NULL ||
       StringStr (filename, "gbgss") != NULL ||
-      StringStr (filename, "gbhtg") != NULL) {
+      StringStr (filename, "gbhtg") != NULL ||
+      StringStr (filename, "gbsts") != NULL) {
     printf ("Skipping %s\n", filename);
     return;
   }

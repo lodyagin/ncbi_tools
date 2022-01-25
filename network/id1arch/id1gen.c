@@ -595,7 +595,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 ID1SeqHistAsnWrite(ID1SeqHistPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1052,7 +1051,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 ID1SeqEntryInfoAsnWrite(ID1SeqEntryInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1365,7 +1363,6 @@ NLM_EXTERN
 ID1serverDebugPtr LIBCALL
 ID1serverDebugAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1421,7 +1418,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 ID1serverDebugAsnWrite(ID1serverDebugPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

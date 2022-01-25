@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.23  2006/05/09 19:12:19  kans
+* CreateTagListDialogExEx protects against row or col being > maximum allowed
+*
 * Revision 6.22  2006/02/01 17:57:57  kans
 * for Mac, FindFormMenuItem first tries window-specific list, and if nothing set it then tries the desktop window menu
 *
@@ -2112,6 +2115,11 @@ extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
   Int2               wid;
 
   if (cols < 1 || types == NULL) return NULL;
+
+  if (rows > MAX_TAGLIST_ROWS) {
+    rows = MAX_TAGLIST_ROWS;
+  }
+  if (cols > MAX_TAGLIST_COLS) return NULL;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);

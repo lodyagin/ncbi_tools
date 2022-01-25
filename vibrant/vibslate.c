@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.43 $
+* $Revision: 6.44 $
 *
 * File Description:
 *       Vibrant slate (universal drawing environment) functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.44  2006/09/14 14:45:38  kans
+* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
+*
 * Revision 6.43  2004/04/14 19:15:51  sinyakov
 * WIN_MSWIN: support X-Windows-like -bg color command line option
 *
@@ -4332,7 +4335,7 @@ static void MyCls_OnKillFocus (HWND hwnd, HWND hwndNewFocus)
 }
 
 
-LRESULT CALLBACK EXPORT SlateProc(HWND hwnd, UINT message,
+static LRESULT CALLBACK EXPORT SlateProc(HWND hwnd, UINT message,
                                   WPARAM wParam, LPARAM lParam)
 {
   Nlm_SlatE    s;

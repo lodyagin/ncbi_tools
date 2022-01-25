@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.31  2006/09/27 18:30:00  kans
+* support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
+*
 * Revision 6.30  2005/09/23 20:30:10  kans
 * added NLM_BACK for backspace key, which is separate from delete, even though the label may be the same on a keyboard
 *
@@ -560,6 +563,10 @@ Nlm_TexT  Nlm_ScrollText PROTO((Nlm_GrouP prnt, Nlm_Int2 width, Nlm_Int2 height,
 void      Nlm_SetTextSelect PROTO((Nlm_TexT t, Nlm_TxtActnProc slct, Nlm_TxtActnProc dslct));
 
 Nlm_TexT  Nlm_CurrentText PROTO((void));
+
+extern void Nlm_SetScrollTextOffset4 (Nlm_GraphiC t, Nlm_Int4 horiz,
+                                     Nlm_Int4 vert, Nlm_Boolean savePort);
+extern void Nlm_GetScrollTextOffset4 (Nlm_GraphiC t, Nlm_Int4Ptr horiz, Nlm_Int4Ptr vert);
 
 /* return TRUE and selection range [begin,end] -- if there is a selection
  */

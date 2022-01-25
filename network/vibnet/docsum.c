@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.56 $
+* $Revision: 6.57 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.57  2006/07/13 17:14:49  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.56  2003/12/02 20:42:06  kans
 * fixed sprintf calls in SetDefaultFailureMessae
 *
@@ -494,7 +497,7 @@ static SeqEntryPtr SeqEntryLockByGi (Int4 uid)
   return sep;
 }
 
-static Uint2 BioseqFindEntityByGi (Int4 uid, Uint2Ptr itemIDptr)
+static Uint2 BioseqFindEntityByGi (Int4 uid, Uint4Ptr itemIDptr)
 
 {
   ValNode  vn;
@@ -803,7 +806,7 @@ static CharPtr FileToString (CharPtr path)
 {
   Int2     actual;
   FILE     *fp;
-  Int4     len;
+  Int8     len;
   CharPtr  ptr;
 
   if (path == NULL) return NULL;
@@ -3945,7 +3948,7 @@ static void LaunchSequenceViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, In
   EntrezGlobalsPtr  egp;
   Uint2             entityID;
   Int2              handled;
-  Uint2             itemID;
+  Uint4             itemID;
   SeqEntryPtr       sep;
 
   WatchCursor ();
@@ -3992,7 +3995,7 @@ static void LaunchGenomeViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Int2
   Uint2        datatype;
   Uint2        entityID;
   Int2         handled;
-  Uint2        itemID;
+  Uint4        itemID;
   SeqEntryPtr  sep;
 
   WatchCursor ();

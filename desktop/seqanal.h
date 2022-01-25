@@ -36,7 +36,8 @@ typedef struct seqanalform
   ButtoN            curbut;
   ButRegPtr         burp;
   BioseqPtr         bsp;
-  Uint2             entityID, itemID, procID, userKEY;
+  Uint2             entityID, procID, userKEY;
+  Uint4             itemID;
 } SeqAnalForm, PNTR SeqAnalFormPtr;
 
 /* prototypes */

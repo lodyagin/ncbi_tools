@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: mblast.c,v 6.214 2005/08/31 20:33:18 coulouri Exp $";
+static char const rcsid[] = "$Id: mblast.c,v 6.215 2006/09/21 13:42:37 madden Exp $";
 
 /* ===========================================================================
 *
@@ -40,9 +40,12 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.214 $
+ * $Revision: 6.215 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.215  2006/09/21 13:42:37  madden
+ * BlastProcessGiLists returns a boolean to specify that an attempt was made to process a list of GIs.  If no matches were found this can be reported back to the user
+ *
  * Revision 6.214  2005/08/31 20:33:18  coulouri
  * From Mike Gertz:
  *     In MegaBlastSetUpSearchWithReadDbInternal, replaced existing code
@@ -1000,6 +1003,7 @@ MegaBlastSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr
 
 	BlastSearchBlkPtr search;
 	Boolean options_alloc=FALSE;
+        Boolean looking_for_gis = FALSE;
 	Int2 status, first_context, last_context;
         Int8	dblen;
 	Int4	query_length;
@@ -1054,7 +1058,7 @@ MegaBlastSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr
            
        /* Create virtual database if any of the databases have gi lists or 
           ordinal id masks, or if gi list is provided from options */
-       BlastProcessGiLists(search, options, gi_list, gi_list_total);
+       looking_for_gis = BlastProcessGiLists(search, options, gi_list, gi_list_total);
 
        /* search->thr_info->blast_gi_list will be non-NULL if gi_list or 
         * options->gilist or options->gifile was non-NULL and therefore
@@ -1064,6 +1068,12 @@ MegaBlastSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr
        if (search->thr_info->blast_gi_list && !options->use_real_db_size)
            readdb_get_totals_ex3(search->rdfp, &dblen, &search->dbseq_num,
                                  FALSE, TRUE, eApproximate);
+
+       if (looking_for_gis && search->thr_info->blast_gi_list == NULL)
+       {
+              ErrPostEx(SEV_WARNING, 0, 0, "Intersection of gilist and database IDs is empty");
+              search->query_invalid = TRUE;
+       }
 
            /* command-line/options trump alias file. */
            if (options->db_length > 0)

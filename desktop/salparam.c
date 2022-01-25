@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.57 $
+* $Revision: 6.58 $
 *
 * File Description: 
 *
@@ -946,7 +946,7 @@ extern void inval_allines (EditAlignDataPtr adp, RecT *rp)
   }
 }
 
-extern void inval_selstruct (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int2 left, Int2 toright)
+extern void inval_selstruct (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int2 left, Int2 toright)
 {
   Int2         ptx = rp->left + left, 
                pty = rp->top, 
@@ -963,7 +963,7 @@ extern void inval_selstruct (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it,
   }
 }
 
-extern void inval_selstructpos (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, RecT *rp, Int4 pos)
+extern void inval_selstructpos (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, RecT *rp, Int4 pos)
 {
   Int2         ptx = rp->left, 
                pty;
@@ -977,7 +977,7 @@ extern void inval_selstructpos (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 
   return;
 }
 
-extern void inval_selstructpos_tobottom (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, RecT *rp, Int4 pos)
+extern void inval_selstructpos_tobottom (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, RecT *rp, Int4 pos)
 {
   Int2         ptx = rp->left, 
                pty;
@@ -1000,7 +1000,7 @@ extern void inval_selstructpos_tobottom (EditAlignDataPtr adp, Uint2 ei, Uint2 i
   return;
 }
 
-extern void inval_selstructloc (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int4 from, Int4 to)
+extern void inval_selstructloc (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int4 from, Int4 to)
 {
   RecT         rid;
   Int2         ptx = rp->left, 
@@ -1088,7 +1088,7 @@ if (from>to) {
 }
 
 
-extern void inval_selstructloc_forfeat (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int4 from, Int4 to)
+extern void inval_selstructloc_forfeat (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int4 from, Int4 to)
 {
   RecT         rid;
   Int2         ptx = rp->left, 

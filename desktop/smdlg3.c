@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -362,7 +362,7 @@ static void
       else SetStatus ( trancCheckBox[curDlg], FALSE );
     }
     val = Nlm_GetMuskCParamEd(curClass,MSM_SEGMENT,MSM_HEIGHT);
-    i = (val - 4)/2 + 1;
+    i = (Int2)((val - 4)/2 + 1);
     if ( i <= 0 ) i = 1;
     if ( i > 9 ) i = 9;
     SetValue ( segHeightPopup[curDlg], i );

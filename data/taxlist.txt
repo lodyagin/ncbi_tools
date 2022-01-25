@@ -1,471 +1,474 @@
-13
-Acanthamoeba healyi		1	4	INV	65661
-Acanthocybium solandri		1	2	VRT	13323
-Acanthopanax sessiliflorus		1	1	PLN	105886
+14
+Acanthamoeba castellanii		1	4	INV	5755
+Acanthoscurria gomesiana		1	5	INV	115339
 Acetabularia acetabulum		6	1	PLN	35845
-Acidithiobacillus ferrooxidans		11	0	BCT	920
-Acipenser baerii	Siberian sturgeon	1	2	VRT	27689
-Acrossocheilus paradoxus		1	2	VRT	76593
-Actinobacillus actinomycetemcomitans		11	0	BCT	714
-Actinobacillus pleuropneumoniae		11	0	BCT	715
+Acipenser transmontanus	white sturgeon	1	2	VRT	7904
+Acorus americanus		1	1	PLN	263995
+Acropora millepora		1	4	INV	45264
+Acropora palmata		1	4	INV	6131
 Acyrthosiphon pisum	pea aphid	1	5	INV	7029
+Adiantum capillus-veneris		1	1	PLN	13818
 Aedes aegypti	yellow fever mosquito	1	5	INV	7159
 Aegilops speltoides		1	1	PLN	4573
 Aegilops tauschii		1	1	PLN	37682
-Aepyceros melampus	impala	1	2	MAM	9897
-Aequorea victoria		1	4	INV	6100
-Aeromonas hydrophila		11	0	BCT	644
-African swine fever virus		1	0	VRL	10497
-Agaricus bisporus		1	4	PLN	5341
+Agriotes lineatus		1	5	INV	292458
 Agrobacterium tumefaciens		11	0	BCT	358
+Agrostis capillaris		1	1	PLN	204232
+Agrostis stolonifera		1	1	PLN	63632
 Aids-associated retrovirus		1	0	VRL	11966
 Ajellomyces capsulatus		1	4	PLN	5037
 Alexandrium tamarense		1	4	PLN	2926
 Allium cepa	onion	1	1	PLN	4679
-Allium sativum	garlic	1	1	PLN	4682
+Allomyces macrogynus		1	4	PLN	28583
 Alstroemeria peruviana		1	1	PLN	245552
-Amblyomma americanum		1	5	INV	6943
+Alternaria alternata		1	4	PLN	5599
+Alternaria brassicicola		1	4	PLN	29001
+Amblyomma americanum	lone star tick	1	5	INV	6943
+Amblyomma cajennense		1	5	INV	34607
 Amblyomma variegatum		1	5	INV	34610
 Amborella trichopoda		1	1	PLN	13333
-Ambystoma maculatum	spotted salamander	1	2	VRT	43114
 Ambystoma mexicanum	axolotl	1	2	VRT	8296
+Ambystoma ordinarium	Puerto Hondo stream salamander	1	2	VRT	288796
+Amoebidium parasiticum		1	4	INV	4881
+Amorphotheca resinae	creosote fungus	1	4	PLN	5101
 Amphidinium carterae		1	4	PLN	2961
-Anaplasma marginale		11	0	BCT	770
-Anaplasma phagocytophilum		11	0	BCT	948
-Anas fulvigula		1	2	VRT	75846
+Ananas comosus	pineapple	1	1	PLN	4615
 Anas platyrhynchos		1	2	VRT	8839
 Ancylostoma caninum	dog hookworm	1	5	INV	29170
 Ancylostoma ceylanicum		1	5	INV	53326
-Anguilla japonica	Japanese eel	1	2	VRT	7937
+Angiostrongylus cantonensis		1	5	INV	6313
 Anolis sagrei	brown anole	1	2	VRT	38937
-Anopheles arabiensis		1	5	INV	7173
+Anolis smaragdinus		1	2	VRT	172665
 Anopheles funestus		1	5	INV	62324
 Anopheles gambiae	African malaria mosquito	1	5	INV	7165
-Anopheles maculipennis		1	5	INV	41429
-Antheraea yamamai	Japanese oak silkmoth	1	5	INV	7121
+Antheraea mylitta		1	5	INV	34739
 Antirrhinum majus	snapdragon	1	1	PLN	4151
-Aotus nancymaae	Ma's night monkey	1	2	PRI	37293
+Antonospora locustae		1	1	INV	278021
+Antrodia cinnamomea		1	4	PLN	279009
+Aphis gossypii	cotton aphid	1	5	INV	80765
 Apis mellifera	honey bee	1	5	INV	7460
 Apium graveolens		1	1	PLN	4045
 Aplysia californica	California sea hare	1	5	INV	6500
-Apodemus sylvaticus	European woodmouse	1	2	ROD	10129
+Aquilegia formosa x Aquilegia pubescens		1	1	PLN	338618
+Arabidopsis arenosa x Arabidopsis thaliana		1	1	PLN	378006
 Arabidopsis lyrata		1	1	PLN	59689
-Arabidopsis suecica		1	1	PLN	45249
 Arabidopsis thaliana	thale cress	1	1	PLN	3702
+Arachis batizocoi		1	1	PLN	108210
+Arachis duranensis		1	1	PLN	130453
 Arachis hypogaea	peanut	1	1	PLN	3818
-Araneus ventricosus		1	5	INV	182803
-Archaeoglobus fulgidus		11	0	BCT	2234
+Argas monolakensis		1	5	INV	34602
 Argopecten irradians		1	5	INV	31199
-Artemia franciscana		1	5	INV	6661
+Armigeres subalbatus		1	5	INV	124917
 Ascaris lumbricoides	common roundworm	1	5	INV	6252
 Ascaris suum	pig roundworm	1	5	INV	6253
-Ashbya gossypii		1	3	PLN	33169
 Asparagus officinalis	garden asparagus	1	1	PLN	4686
 Aspergillus flavus		1	4	PLN	5059
 Aspergillus fumigatus		1	4	PLN	5085
-Aspergillus nidulans		1	4	PLN	162425
 Aspergillus niger		1	4	PLN	5061
 Aspergillus oryzae		1	4	PLN	5062
 Aspergillus terreus		1	4	PLN	33178
-Aspergillus tubingensis		1	4	PLN	5068
-Ateles geoffroyi	black-handed spider monkey	1	2	PRI	9509
+Astatotilapia burtoni		1	2	VRT	8153
+Asterina pectinifera		1	9	INV	7594
+Aureobasidium pullulans		1	4	PLN	5580
 Avena sativa	oat	1	1	PLN	4498
-Avian infectious bronchitis virus		1	0	VRL	11120
 Avicennia marina		1	1	PLN	82927
-Azotobacter vinelandii		11	0	BCT	354
-B19 virus		1	0	VRL	10798
-Bacillus anthracis		11	0	BCT	1392
-Bacillus atticus		1	5	INV	36825
 Bacillus cereus		11	0	BCT	1396
 Bacillus clausii		11	0	BCT	79880
-Bacillus grandii		1	5	INV	55088
 Bacillus licheniformis		11	0	BCT	1402
-Bacillus lynceorum		1	5	INV	73234
 Bacillus subtilis		11	0	BCT	1423
 Bacillus thuringiensis		11	0	BCT	1428
-Bacillus whitei		1	5	INV	57870
-Bacteroides fragilis		11	0	BCT	817
-Beauveria bassiana		1	4	PLN	176275
+Balanus glandula		1	5	INV	110520
 Bemisia tabaci		1	5	INV	7038
 Beta vulgaris		1	1	PLN	161934
 Betula pendula	European white birch	1	1	PLN	3505
-Bifidobacterium longum		11	0	BCT	216816
-Biomphalaria glabrata	bloodfluke planorb	1	5	INV	6526
-Biomphalaria pfeifferi		1	5	INV	112525
-Biphyllus lunatus		1	5	INV	197003
-Bluetongue virus		1	0	VRL	40051
-Blumeria graminis		1	4	PLN	34373
-Bombyx mandarina	wild silkworm	1	5	INV	7092
+Bicyclus anynana	squinting bush brown	1	5	INV	110368
+Bigelowiella natans		1	1	INV	227086
+Biomphalaria glabrata		1	5	INV	6526
+Blastocladiella emersonii		1	4	PLN	4808
+Blastocystis hominis		1	1	PLN	12968
+Blomia tropicalis		1	5	INV	40697
+Boechera stricta		1	1	PLN	72658
 Bombyx mori	domestic silkworm	1	5	INV	7091
 Boophilus microplus	southern cattle tick	1	5	INV	6941
-Bordetella bronchiseptica		11	0	BCT	518
-Bordetella pertussis		11	0	BCT	520
-Borrelia afzelii		11	0	BCT	29518
 Borrelia burgdorferi	Lyme disease spirochete	11	0	BCT	139
-Borrelia garinii		11	0	BCT	29519
-Bos indicus	zebu	1	2	MAM	9915
-Bos taurus	cow	1	2	MAM	9913
-Bothrops insularis	island jararaca	1	2	VRT	8723
-Botryllus schlosseri		1	13	INV	30301
+Bos indicus		1	2	MAM	9915
+Bos indicus x Bos taurus	hybrid cattle	1	2	MAM	30522
+Bos taurus	cattle	1	2	MAM	9913
+Bothrops jararaca	jararaca	1	2	VRT	8724
 Botryotinia fuckeliana		1	4	PLN	40559
-Bovine respiratory syncytial virus		1	0	VRL	11246
+Bovine viral diarrhea virus 1		1	0	VRL	11099
+Brachypodium distachyon		1	1	PLN	15368
 Bradyrhizobium japonicum		11	0	BCT	375
-Branchiostoma belcheri		1	5	INV	7741
 Branchiostoma floridae	Florida lancelet	1	5	INV	7739
-Brassica campestris		1	1	PLN	3711
-Brassica juncea		1	1	PLN	3707
 Brassica napus	rape	1	1	PLN	3708
 Brassica oleracea		1	1	PLN	3712
 Brassica rapa		1	1	PLN	3711
-Brucella melitensis		11	0	BCT	29459
+Brucella abortus		11	0	BCT	235
 Brugia malayi		1	5	INV	6279
-Bruguiera gymnorrhiza		1	1	PLN	39984
+Bruguiera gymnorhiza		1	1	PLN	39984
 Bubalus bubalis	water buffalo	1	2	MAM	89462
-Buchnera aphidicola		11	0	BCT	9
-Burkholderia cepacia		11	0	BCT	292
-Burkholderia fungorum		11	0	BCT	134537
-Burkholderia pseudomallei		11	0	BCT	28450
+Bursaphelenchus mucronatus		1	5	INV	6325
+Bursaphelenchus xylophilus		1	5	INV	6326
 Caenorhabditis briggsae		1	5	INV	6238
 Caenorhabditis elegans		1	5	INV	6239
+Caenorhabditis remanei		1	5	INV	31234
+Cajanus cajan	pigeon pea	1	1	PLN	3821
+Callinectes sapidus	blue crab	1	5	INV	6763
 Callithrix jacchus	white-tufted-ear marmoset	1	2	PRI	9483
-Callosobruchus maculatus	cowpea weevil	1	5	INV	64391
-Camelus dromedarius	Arabian camel	1	2	MAM	9838
+Callorhinchus milii	elephantfish	1	2	VRT	7868
+Camellia sinensis		1	1	PLN	4442
 Campylobacter jejuni		11	0	BCT	197
 Candida albicans		12	4	PLN	5476
-Candida famata		1	3	PLN	4959
 Candida glabrata		1	3	PLN	5478
+Candida parapsilosis		12	4	PLN	5480
 Candida tropicalis		12	3	PLN	5482
-Candidula unifasciata		1	5	INV	100452
+Candidatus Hamiltonella defensa		11	0	BCT	138072
 Canis familiaris	dog	1	2	MAM	9615
+Canis latrans	coyote	1	2	MAM	9614
+Canis lupus	gray wolf	1	2	MAM	9612
 Capra hircus	goat	1	2	MAM	9925
-Caprine arthritis-encephalitis virus		1	0	VRL	11660
+Capsaspora owczarzaki		1	1	INV	192875
 Capsicum annuum		1	1	PLN	4072
-Capsicum chinense		1	1	PLN	80379
-Carabus granulatus		1	5	INV	118799
 Carassius auratus	goldfish	1	2	VRT	7957
+Carcinus maenas	green crab	1	5	INV	6759
 Carica papaya	papaya	1	1	PLN	3649
-Caulobacter crescentus		11	0	BCT	155892
-Caulobacter vibrioides		11	0	BCT	155892
+Casuarina glauca	swamp oak	1	1	PLN	3522
+Catharanthus roseus	Madagascar periwinkle	1	1	PLN	4058
 Cavia porcellus	domestic guinea pig	1	2	ROD	10141
-Ceratitis capitata	Mediterranean fruit fly	1	5	INV	7213
+Celuca pugilator	Atlantic sand fiddler crab	1	5	INV	6772
+Cenchrus ciliaris		1	1	PLN	35872
 Ceratodon purpureus		1	1	PLN	3225
 Ceratopteris richardii		1	1	PLN	49495
-Cercopithecus aethiops	African green monkey	1	2	PRI	9534
-Cervus elaphus	red deer	1	2	MAM	9860
-Chaetodipus intermedius	rock pocket mouse	1	2	ROD	38666
+Chaetomium cupreum		1	4	PLN	155874
 Chaetomium globosum		1	4	PLN	38033
+Chamaecyparis obtusa		1	1	PLN	13415
+Chironomus tentans		1	5	INV	7153
 Chlamydia trachomatis		11	0	BCT	813
+Chlamydomonas incerta		1	1	PLN	51695
 Chlamydomonas reinhardtii		1	1	PLN	3055
 Chlamydophila pneumoniae		11	0	BCT	83558
-Chlamydotis undulata		1	2	VRT	172680
-Chlorobium tepidum		11	0	BCT	1097
-Chloroflexus aurantiacus		11	0	BCT	1108
+Chlorocebus aethiops	African green monkey	1	2	PRI	9534
+Chondrus crispus	carragheen	1	4	PLN	2769
 Cicer arietinum	chickpea	1	1	PLN	3827
-Cicindela campestris		1	5	INV	150234
+Cichorium intybus	chicory	1	1	PLN	13427
 Ciona intestinalis		1	13	INV	7719
 Ciona savignyi		1	13	INV	51511
-Citrullus lanatus	watermelon	1	1	PLN	3654
+Citrus aurantium		1	1	PLN	43166
+Citrus clementina		1	1	PLN	85681
+Citrus clementina x Citrus tangerina		1	1	PLN	307631
+Citrus jambhiri	rough lemon	1	1	PLN	64884
+Citrus macrophylla		1	1	PLN	307630
+Citrus reshni		1	1	PLN	171252
 Citrus reticulata		1	1	PLN	85571
+Citrus reticulata x Citrus temple		1	1	PLN	322160
 Citrus sinensis		1	1	PLN	2711
+Citrus sinensis x Poncirus trifoliata		1	1	PLN	105581
 Citrus tristeza virus		1	0	VRL	12162
 Citrus unshiu		1	1	PLN	55188
 Citrus x paradisi		1	1	PLN	37656
-Cladosporium fulvum		1	4	PLN	5499
+Citrus x paradisi x Poncirus trifoliata		1	1	PLN	309804
 Cleome hassleriana		1	1	PLN	28532
 Clonorchis sinensis		1	9	INV	79923
-Clostridium acetobutylicum		11	0	BCT	1488
+Closterium peracerosum-strigosum-littorale complex		1	1	PLN	34146
 Clostridium difficile		11	0	BCT	1496
 Clostridium perfringens		11	0	BCT	1502
-Clostridium thermocellum		11	0	BCT	1515
-Coccidioides immitis		1	4	PLN	5501
+Coccidioides posadasii		1	4	PLN	199306
 Codonopsis lanceolata		1	1	PLN	103999
 Coffea arabica	coffee	1	1	PLN	13443
-Colletotrichum gloeosporioides		1	4	PLN	5457
+Coffea canephora		1	1	PLN	49390
 Colletotrichum trifolii		1	4	PLN	5466
-Columba livia	domestic pigeon	1	2	VRT	8932
 Conidiobolus coronatus		1	4	PLN	34488
 Cooperia oncophora		1	5	INV	27828
 Coprinopsis cinerea		1	4	PLN	5346
-Coprinus cinereus		1	4	PLN	5346
 Cordyceps bassiana		1	4	PLN	176275
 Coregonus clupeaformis		1	2	VRT	59861
+Corynascus heterothallicus		1	4	PLN	78579
 Corynebacterium glutamicum		11	0	BCT	1718
-Corynebacterium pseudotuberculosis		11	0	BCT	1719
-Coturnix coturnix	common quail	1	2	VRT	9091
-Coturnix japonica	Japanese quail	1	2	VRT	93934
+Coxiella burnetii		11	0	BCT	777
 Crassostrea gigas	Pacific oyster	1	5	INV	29159
 Crassostrea virginica	eastern oyster	1	5	INV	6565
 Cricetulus griseus	Chinese hamster	1	2	ROD	10029
-Crocus sativus		1	1	PLN	82528
 Cryphonectria parasitica		1	4	PLN	5116
-Cryptococcus bacillisporus		1	4	PLN	37769
-Cryptococcus neoformans		1	4	PLN	5207
+Cryptococcus laurentii		1	4	PLN	5418
 Cryptomeria japonica	Japanese cedar	1	1	PLN	3369
+Cryptosporidium hominis		1	4	INV	237895
 Cryptosporidium parvum		1	4	INV	5807
 Ctenocephalides felis	cat flea	1	5	INV	7515
-Ctenopharyngodon idella	grass carp	1	2	VRT	7959
-Cucumber mosaic virus	cucumber mosaic cucumovirus	1	0	VRL	12305
 Cucumis melo	muskmelon	1	1	PLN	3656
 Cucumis sativus	cucumber	1	1	PLN	3659
-Culex pipiens	house mosquito	1	5	INV	7175
-Curculio glandium		1	5	INV	197013
+Culicoides sonorensis		1	5	INV	179676
+Cunninghamella elegans		1	4	PLN	4853
+Curcuma longa		1	1	PLN	136217
+Cyanophora paradoxa		1	1	PLN	2762
 Cycas rumphii		1	1	PLN	58031
+Cyclamen persicum		1	1	PLN	87530
 Cynodon dactylon	Bermuda grass	1	1	PLN	28909
 Cyprinus carpio	common carp	1	2	VRT	7962
-Daktulosphaira vitifoliae	grape phylloxera	1	5	INV	58002
 Danio rerio	zebrafish	1	2	VRT	7955
+Daphnia magna		1	5	INV	35525
+Daphnia pulex		1	5	INV	6669
 Dasypus novemcinctus	nine-banded armadillo	1	2	MAM	9361
-Daucus carota	carrot	1	1	PLN	4039
-Debaryomyces hansenii		1	3	PLN	4959
-Deinococcus radiodurans		11	0	BCT	1299
-Delacroixia coronata		1	4	PLN	34488
-Dendrocopos major		1	2	VRT	137523
-Dengue virus		1	0	VRL	12637
+Deinagkistrodon acutus		1	2	VRT	36307
+delta proteobacterium MLMS-1		11	0	BCT	262489
+Dermatophagoides farinae	American house dust mite	1	5	INV	6954
 Descurainia sophia		1	1	PLN	89411
-Desulfitobacterium hafniense		11	0	BCT	49338
-Desulfovibrio desulfuricans		11	0	BCT	876
-Diadema antillarum		1	9	INV	105358
-Dianthus caryophyllus	clove pink	1	1	PLN	3570
+Diaphorina citri		1	5	INV	121845
+Diaprepes abbreviatus	Diaprepes root weevil	1	5	INV	13040
 Dicentrarchus labrax	European sea bass	1	2	VRT	13489
 Dictyostelium discoideum		1	1	INV	44689
+Diplonema papillatum		1	4	INV	91374
+Diploptera punctata	Pacific beetle cockroach	1	5	INV	6984
+Diplosoma listerianum		1	13	INV	168635
 Dirofilaria immitis	dog heartworm nematode	1	5	INV	6287
-Dreissena polymorpha		1	5	INV	45954
 Drosophila americana		1	5	INV	40366
 Drosophila ananassae		1	5	INV	7217
-Drosophila buzzatii		1	5	INV	7264
-Drosophila mauritiana		1	5	INV	7226
+Drosophila auraria		1	5	INV	47315
+Drosophila erecta		1	5	INV	7220
+Drosophila grimshawi		1	5	INV	7222
 Drosophila melanogaster	fruit fly	1	5	INV	7227
 Drosophila miranda		1	5	INV	7229
+Drosophila mojavensis		1	5	INV	7230
 Drosophila persimilis		1	5	INV	7234
 Drosophila pseudoobscura		1	5	INV	7237
+Drosophila sechellia		1	5	INV	7238
 Drosophila simulans		1	5	INV	7240
-Drosophila subobscura		1	5	INV	7241
 Drosophila virilis		1	5	INV	7244
+Drosophila willistoni		1	5	INV	7260
 Drosophila yakuba		1	5	INV	7245
 Dugesia japonica		1	9	INV	6161
+Dugesia ryukyuensis		1	9	INV	79738
 Dunaliella salina		1	1	PLN	3046
 Echinococcus granulosus		1	9	INV	6210
 Echinococcus multilocularis		1	9	INV	6211
-Echinostoma paraensei		1	14	INV	48215
+Echinops telfairi	small Madagascar hedgehog	1	2	MAM	9371
+Echis ocellatus		1	2	VRT	99586
 Eimeria tenella		1	4	INV	5802
-Elephas maximus	Asiatic elephant	1	2	MAM	9783
+Eisenia andrei		1	5	INV	168636
+Elaeis guineensis	African oil palm	1	1	PLN	51953
+Eleusine coracana	finger millet	1	1	PLN	4511
 Emericella nidulans		1	4	PLN	162425
 Emiliania huxleyi		1	4	PLN	2903
 Entamoeba histolytica		1	1	INV	5759
 Entamoeba invadens		1	1	INV	33085
 Enterobacter cloacae		11	0	BCT	550
-Enterobacteria phage T7		11	0	PHG	10760
 Enterococcus faecalis		11	0	BCT	1351
 Enterococcus faecium		11	0	BCT	1352
-Epinephelus quernus	Hawaiian grouper	1	2	VRT	212795
-Equine arteritis virus		1	0	VRL	11047
+environmental sequence		1	2	ENV	256318
+Epinephelus coioides	orange-spotted grouper	1	2	VRT	94232
+Eptatretus burgeri	inshore hagfish	1	2	VRT	7764
 Equine infectious anemia virus		1	0	VRL	11665
 Equus caballus	horse	1	2	MAM	9796
+Eragrostis pilosa		1	1	PLN	208273
+Eragrostis tef		1	1	PLN	110835
 Eremothecium gossypii		1	3	PLN	33169
-Erwinia amylovora		11	0	BCT	552
+Erinaceus europaeus	western European hedgehog	1	2	MAM	9365
 Escherichia coli		11	0	BCT	562
 Eschscholzia californica	California poppy	1	1	PLN	3467
+Eucalyptus camaldulensis	Murray red gum	1	1	PLN	34316
 Eucalyptus globulus		1	1	PLN	34317
 Eucalyptus grandis		1	1	PLN	71139
+Eucalyptus gunnii	cider tree	1	1	PLN	3933
 Eucalyptus tereticornis		1	1	PLN	183855
-Euhadra peliomphala		1	5	INV	87841
-Eulemur fulvus	brown lemur	1	2	PRI	13515
+Eucinetus sp. APV-2005		1	5	INV	292446
+Euglena gracilis		1	4	PLN	3039
+Euglena longa		1	4	PLN	3037
 Euphorbia esula	leafy spurge	1	1	PLN	3993
-Euphorbia lagascae		1	1	PLN	54672
+Euphorbia tirucalli		1	1	PLN	142860
+Euprymna scolopes		1	5	INV	6613
+Eurydice pulchra		1	5	INV	155694
 Feline immunodeficiency virus		1	0	VRL	11673
-Feline leukemia virus		1	0	VRL	11768
 Felis catus	cat	1	2	MAM	9685
-Ferroplasma acidarmanus		11	0	BCT	97393
-Filobasidiella bacillispora		1	4	PLN	37769
-Filobasidiella neoformans		1	4	PLN	5207
-Foot-and-mouth disease virus A		1	0	VRL	12111
-Foot-and-mouth disease virus O		1	0	VRL	12118
+Fenneropenaeus chinensis		1	5	INV	139456
+Festuca arundinacea		1	1	PLN	4606
+Fragaria vesca		1	1	PLN	57918
 Fragaria x ananassa		1	1	PLN	3747
 Fragilariopsis cylindrus		1	1	PLN	186039
-Francisella tularensis		11	0	BCT	263
-Fucus distichus		1	1	PLN	3012
-Fugu rubripes		1	2	VRT	31033
 Fundulus heteroclitus	killifish	1	2	VRT	8078
 Fusarium oxysporum		1	4	PLN	5507
+Fusarium solani		1	4	PLN	169388
 Fusarium sporotrichioides		1	4	PLN	5514
-Fusarium subglutinans		1	4	PLN	42677
-Fusobacterium nucleatum		11	0	BCT	851
 Gadus morhua	Atlantic cod	1	2	VRT	8049
 Gallus gallus	chicken	1	2	VRT	9031
 Gasterosteus aculeatus	three spined stickleback	1	2	VRT	69293
-GB virus C/Hepatitis G virus	Hepatitis GB virus C / Hepatitis G virus	1	0	VRL	54290
-Geobacillus stearothermophilus		11	0	BCT	1422
-Geobacter metallireducens		11	0	BCT	28232
+GB virus C		1	0	VRL	54290
+Gekko japonicus		1	2	VRT	146911
 Geochelone nigra		1	2	VRT	66189
+Geomyces pannorum		1	4	PLN	79858
+Georissus sp. APV-2005		1	5	INV	292453
 Giardia intestinalis		1	0	INV	5741
-Giardia lamblia		1	0	INV	5741
 Gibberella moniliformis		1	4	PLN	117187
 Gibberella zeae		1	4	PLN	5518
 Gillichthys mirabilis	long-jawed mudsucker	1	2	VRT	8222
 Ginglymostoma cirratum	nurse shark	1	2	VRT	7801
 Ginkgo biloba	maidenhair tree	1	1	PLN	3311
+Glaucocystis nostochinearum		1	1	PLN	38271
 Globodera pallida		1	5	INV	36090
 Globodera rostochiensis		1	5	INV	31243
-Glomerella cingulata		1	4	PLN	5457
+Gloeophyllum trabeum		1	4	PLN	104355
 Glomus intraradices		1	4	PLN	4876
 Glomus versiforme		1	4	PLN	43425
-Glossina morsitans		1	5	INV	7394
 Glycine clandestina		1	1	PLN	45687
 Glycine max	soybean	1	1	PLN	3847
-Glycine tomentella		1	1	PLN	44015
-Glyphorynchus spirurus	wedge-billed woodcreeper	1	2	VRT	135974
+Glycine soja		1	1	PLN	3848
 Gnetum gnemon		1	1	PLN	3382
 Gorilla gorilla	gorilla	1	2	PRI	9593
+Gossypioides kirkii		1	1	PLN	47615
 Gossypium arboreum		1	1	PLN	29729
-Gossypium barbadense	sea-island cotton	1	1	PLN	3634
+Gossypium exiguum		1	1	PLN	47626
 Gossypium herbaceum		1	1	PLN	34274
 Gossypium hirsutum	upland cotton	1	1	PLN	3635
 Gossypium raimondii		1	1	PLN	29730
-Gracilaria gracilis		1	4	PLN	2777
 Gregarina niphandrodes		1	4	INV	110365
-Griffithsia japonica		1	1	PLN	83288
-Guillardia theta		1	1	PLN	55529
-Haematobia irritans	horn fly	1	5	INV	7368
+Gryllus pennsylvanicus		1	5	INV	51074
+Gymnogyps californianus	California condor	1	2	VRT	33616
+Haematococcus pluvialis		1	1	PLN	44745
+Haementeria depressa		1	5	INV	279730
 Haemonchus contortus		1	5	INV	6289
 Haemophilus influenzae		11	0	BCT	727
-Haloarcula marismortui		11	0	BCT	2238
-Halobacterium sp. NRC-1		11	0	BCT	64091
+Haliotis discus		1	5	INV	36094
 Halobaculum gomorrense		11	0	BCT	43928
 Halocynthia roretzi		1	13	INV	7729
 Halorubrum lacusprofundi		11	0	BCT	2247
+Hartmannella vermiformis		1	1	INV	5778
 Hebeloma cylindrosporum		1	4	PLN	76867
 Hedyotis centranthoides		1	1	PLN	219666
 Hedyotis terminalis		1	1	PLN	219667
 Helianthus annuus	common sunflower	1	1	PLN	4232
 Helianthus argophyllus		1	1	PLN	73275
+Helianthus exilis		1	1	PLN	400408
 Helianthus paradoxus		1	1	PLN	73304
+Helianthus petiolaris		1	1	PLN	4234
 Helicobacter pylori		11	0	BCT	210
+Heliconius erato	crimson-patched longwing	1	5	INV	33431
 Heliconius melpomene		1	5	INV	34740
+Helicosporidium sp. ex Simulium jonesii		1	1	PLN	145475
 Helicoverpa armigera	cotton bollworm	1	5	INV	29058
-Heliocidaris erythrogramma		1	9	INV	7634
 Hemicentrotus pulcherrimus		1	9	INV	7650
 Hepatitis A virus		1	0	VRL	12092
 Hepatitis B virus		1	0	VRL	10407
 Hepatitis C virus		1	0	VRL	11103
-Hepatitis D virus		1	0	VRL	12475
 Hepatitis E virus		1	0	VRL	12461
 Heterobasidion annosum		1	4	PLN	13563
+Heterocapsa triquetra		1	4	PLN	66468
 Heterodera glycines		1	5	INV	51029
 Heterodera schachtii		1	5	INV	97005
-Hevea brasiliensis	Para rubber tree	1	1	PLN	3981
+Heterorhabditis bacteriophora		1	5	INV	37862
+Hevea brasiliensis		1	1	PLN	3981
 Hippoglossus hippoglossus	Atlantic halibut	1	2	VRT	8267
-Histophilus somni		11	0	BCT	731
-Holothuria nobilis		1	9	INV	221420
+Hister sp. APV-2005		1	5	INV	292455
+Histiona aroides		1	1	INV	392300
 Homalodisca coagulata	glassy-winged sharpshooter	1	5	INV	197043
+Homarus americanus	American lobster	1	5	INV	6706
 Homo sapiens	human	1	2	PRI	9606
 Hordeum vulgare		1	1	PLN	4513
-Human adenovirus B		1	0	VRL	108098
-Human adenovirus C		1	0	VRL	129951
-Human astrovirus		1	0	VRL	12702
-Human endogenous retrovirus		1	0	VRL	11827
-Human enterovirus A		1	0	VRL	138948
-Human enterovirus B		1	0	VRL	138949
-Human enterovirus C		1	0	VRL	138950
-Human herpesvirus 1		1	0	VRL	10298
-Human herpesvirus 3		1	0	VRL	10335
-Human herpesvirus 4	Epstein-Barr virus	1	0	VRL	10376
-Human herpesvirus 5		1	0	VRL	10359
+Human herpesvirus 1	Herpes simplex virus type 1	1	0	VRL	10298
+Human herpesvirus 5	Human cytomegalovirus	1	0	VRL	10359
 Human herpesvirus 8	Kaposi's sarcoma-associated herpesvirus - Human herpesvirus 8	1	0	VRL	37296
 Human immunodeficiency virus		1	0	VRL	12721
 Human immunodeficiency virus 1		1	0	VRL	11676
 Human immunodeficiency virus 2		1	0	VRL	11709
+Human metapneumovirus		1	0	VRL	162145
 Human papillomavirus		1	0	VRL	10566
-Human papillomavirus type 16		1	0	VRL	10581
 Human respiratory syncytial virus		1	0	VRL	11250
+Humulus lupulus	European hop	1	1	PLN	3486
 Hydra magnipapillata		1	4	INV	6085
-Hylobates lar	common gibbon	1	2	PRI	9580
+Hydra oligactis		1	4	INV	6088
+Hydra vulgaris		1	4	INV	6087
+Hydractinia echinata		1	4	INV	35630
+Hyperamoeba dachnaya		1	1	INV	181200
 Hypocrea jecorina		1	4	PLN	51453
 Hypocrea lixii		1	4	PLN	5544
+Hypocrea virens		1	4	PLN	29875
 Hypsibius dujardini		1	5	INV	232323
-Ichthyophthirius multifiliis		6	4	INV	5932
 Ictalurus furcatus		1	2	VRT	66913
 Ictalurus punctatus	channel catfish	1	2	VRT	7998
+Infectious bronchitis virus		1	0	VRL	11120
 Infectious bursal disease virus	Gumboro virus	1	0	VRL	10995
-Infectious salmon anemia virus		1	0	VRL	55987
 Ipomoea batatas	sweet potato	1	1	PLN	4120
 Ipomoea nil	Japanese morning glory	1	1	PLN	35883
 Ipomoea trifida		1	1	PLN	35884
 Ips pini	North American pine engraver	1	5	INV	102803
-Iris hollandica		1	1	PLN	35876
-Isotricha sp. BBF-2003		1	4	INV	223153
+Isochrysis galbana		1	1	PLN	37099
 Ixodes scapularis	black-legged tick	1	5	INV	6945
-Japanese encephalitis virus		1	0	VRL	11072
-JC virus		1	0	VRL	10632
+Jakoba bahamiensis		1	1	INV	221721
+Jakoba libera		1	1	INV	143017
+JC polyomavirus		1	0	VRL	10632
 Juglans regia	English walnut	1	1	PLN	51240
-Kandelia candel		1	1	PLN	61147
-Klebsiella oxytoca		11	0	BCT	571
+Julodis onopordi		1	5	INV	261158
+Karenia brevis		1	4	PLN	156230
+Karlodinium micrum		1	4	PLN	188904
+Kazachstania exigua		1	3	PLN	34358
 Klebsiella pneumoniae		11	0	BCT	573
-Kluyveromyces delphensis		1	3	PLN	51657
-Kluyveromyces lactis		1	3	PLN	28985
+Kluyveromyces lactis		1	4	PLN	28985
 Kluyveromyces marxianus		1	3	PLN	4911
 Kluyveromyces thermotolerans		1	3	PLN	4916
 Laccaria bicolor		1	4	PLN	29883
-Lactobacillus brevis		11	0	BCT	1580
-Lactobacillus delbrueckii		11	0	BCT	1584
-Lactobacillus plantarum		11	0	BCT	1590
-Lactococcus lactis		11	0	BCT	1358
+Lachancea kluyveri		1	3	PLN	4934
+Lachesis muta	bushmaster	1	2	VRT	8752
+Lactobacillus reuteri		11	0	BCT	1598
+Lactuca perennis		1	1	PLN	43195
+Lactuca saligna		1	1	PLN	75948
 Lactuca sativa		1	1	PLN	4236
 Lactuca serriola		1	1	PLN	75943
-Lama glama	llama	1	2	MAM	9844
+Lactuca virosa		1	1	PLN	75947
 Laminaria digitata		1	1	PLN	80365
 Lawsonia intracellularis		11	0	BCT	29546
 Legionella pneumophila		11	0	BCT	446
-Leifsonia xyli		11	0	BCT	1575
 Leishmania braziliensis		1	4	INV	5660
 Leishmania donovani		1	4	INV	5661
-Leishmania infantum		1	4	INV	5671
 Leishmania major		1	4	INV	5664
-Lemur catta	ring-tailed lemur	1	2	PRI	9447
-Leopardus pardalis	ocelot	1	2	MAM	32538
-Lepilemur septentrionalis	northern sportive lemur	1	2	PRI	78584
-Leptospira interrogans		11	0	BCT	173
-Leuconostoc mesenteroides		11	0	BCT	1245
+Lentinula edodes	shiitake mushroom	1	4	PLN	5353
+Lepeophtheirus salmonis	salmon louse	1	5	INV	72036
+Leptinotarsa decemlineata	Colorado potato beetle	1	5	INV	7539
+Leptosphaeria maculans	blackleg of rapeseed fungus	1	4	PLN	5022
+Leucoraja erinacea	little skate	1	2	VRT	7782
+Leucosporidium scottii		1	4	PLN	5278
 Leymus chinensis		1	1	PLN	52714
-Limnanthes alba	white meadowfoam	1	1	PLN	42439
+Lilium longiflorum	trumpet lily	1	1	PLN	4690
+Limonium bicolor		1	1	PLN	293754
 Lingulodinium polyedrum		1	4	PLN	160621
 Linum usitatissimum	flax	1	1	PLN	4006
+Lipochromis sp. 'matumbi hunter'		1	2	VRT	400101
+Liriodendron tulipifera		1	1	PLN	3415
 Listeria innocua		11	0	BCT	1642
 Listeria monocytogenes		11	0	BCT	1639
 Litomosoides sigmodontis		1	5	INV	42156
 Litopenaeus setiferus	white shrimp	1	5	INV	64468
 Litopenaeus vannamei	Pacific white shrimp	1	5	INV	6689
-Littorina littorea		1	5	INV	31216
-Lotus corniculatus		1	1	PLN	47247
+Locusta migratoria	migratory locust	1	5	INV	7004
+Lolium multiflorum	Italian ryegrass	1	1	PLN	4521
+Lolium temulentum		1	1	PLN	34176
+Lonomia obliqua		1	5	INV	304329
+Lotus japonicus		1	1	PLN	34305
 Loxodonta africana	African savanna elephant	1	2	MAM	9785
 Lumbricus rubellus	humus earthworm	1	5	INV	35632
 Lupinus albus	white lupine	1	1	PLN	3870
-Lupinus luteus	yellow lupine	1	1	PLN	3873
-Luscinia svecica		1	2	VRT	52792
 Lutzomyia longipalpis		1	5	INV	7200
-Lycopersicon esculentum	tomato	1	1	PLN	4081
+Lycopersicon esculentum		1	1	PLN	4081
+Lycopersicon esculentum x Lycopersicon pimpinellifolium		1	1	PLN	286530
 Lycopersicon hirsutum		1	1	PLN	62890
 Lycopersicon pennellii		1	1	PLN	28526
+Lycoris longituba		1	1	PLN	272140
+Lymnaea stagnalis	great pond snail	1	5	INV	6523
 Macaca fascicularis	crab-eating macaque	1	2	PRI	9541
-Macaca fuscata	Japanese macaque	1	2	PRI	9542
 Macaca mulatta	rhesus monkey	1	2	PRI	9544
 Macaca nemestrina	pig-tailed macaque	1	2	PRI	9545
-Macropus eugenii	tammar wallaby	1	2	MAM	9315
+Macrotyloma uniflorum		1	1	PLN	271171
 Magnaporthe grisea		1	4	PLN	148305
-Magnetococcus sp. MC-1		11	0	BCT	156889
-Magnetospirillum magnetotacticum		11	0	BCT	188
-Malus x domestica	apple tree	1	1	PLN	3750
+Malawimonas californiana		1	1	INV	221722
+Malawimonas jakobiformis		1	1	INV	136089
+Malus sieboldii		1	1	PLN	106566
+Malus x domestica		1	1	PLN	3750
+Malus x domestica x Malus sieversii		1	1	PLN	339852
+Malva pusilla		1	1	PLN	96480
 Manduca sexta	tobacco hornworm	1	5	INV	7130
 Manihot esculenta	cassava	1	1	PLN	3983
 Marchantia polymorpha	liverwort	1	1	PLN	3197
-Marmota monax	woodchuck	1	2	ROD	9995
 Marsupenaeus japonicus		1	5	INV	27405
-Martes americana	American marten	1	2	MAM	9660
 Mastigamoeba balamuthi		1	1	INV	108607
 Measles virus		1	0	VRL	11234
 Medicago sativa		1	1	PLN	3879
 Medicago truncatula	barrel medic	1	1	PLN	3880
-Meladema coriacea		1	5	INV	107907
-Melaleuca alternifolia	tea tree	1	1	PLN	164405
 Meleagris gallopavo	turkey	1	2	VRT	9103
 Meloidogyne arenaria		1	5	INV	6304
 Meloidogyne chitwoodi		1	5	INV	59747
@@ -474,384 +477,363 @@ Meloidogyne incognita	southern root-knot nematode	1	5	INV	6306
 Meloidogyne javanica	root-knot nematode	1	5	INV	6303
 Meloidogyne paranaensis		1	5	INV	189293
 Mentha x piperita	peppermint	1	1	PLN	34256
-Meriones unguiculatus	Mongolian gerbil	1	2	ROD	10047
 Mesembryanthemum crystallinum	common iceplant	1	1	PLN	3544
-Mesobuthus gibbosus		1	5	INV	123226
+Mesobuthus gibbosus	Mediterranean checkered scorpion	1	5	INV	123226
+Mesocestoides corti		1	9	INV	53468
 Mesocricetus auratus	golden hamster	1	2	ROD	10036
+Mesostigma viride		1	1	PLN	41882
 Metarhizium anisopliae		1	4	PLN	5530
-Methanosarcina acetivorans		11	0	BCT	2214
-Methanosarcina barkeri		11	0	BCT	2208
-Methanosarcina mazei		11	0	BCT	2209
-Methanothermobacter thermautotrophicus		11	0	BCT	145262
+Miamiensis avidus		6	4	INV	279580
 Microbotryum violaceum		1	4	PLN	5272
-Microbulbifer degradans		11	0	BCT	86304
-Microcystis aeruginosa		11	0	BCT	1126
-Micromonospora carbonacea		11	0	BCT	47853
-Microtus oeconomus	tundra vole	1	2	ROD	64717
+Microcebus murinus	gray mouse lemur	1	2	PRI	30608
+Micromonas sp. CCMP490		1	1	PLN	392814
+Mimulus guttatus	spotted monkey flower	1	1	PLN	4155
+Misgurnus anguillicaudatus		1	2	VRT	75329
 Mnemiopsis leidyi		1	4	INV	27923
 Molgula tectiformis		1	13	INV	30286
-Moneuplotes crassus		10	4	INV	5936
+Monacrosporium haptotylum		1	4	PLN	74495
 Monodelphis domestica	gray short-tailed opossum	1	2	MAM	13616
-Moraxella catarrhalis		11	0	BCT	480
+Monosiga ovata		1	1	INV	81526
+Montastraea faveolata		1	4	INV	48498
 Morone saxatilis	striped sea-bass	1	2	VRT	34816
-Motacilla flava		1	2	VRT	180448
-Mumps virus		1	0	VRL	11161
 Murine leukemia virus		1	0	VRL	11786
 Mus musculus	house mouse	1	2	ROD	10090
-Mus spretus	western wild mouse	1	2	ROD	10096
 Musa acuminata		1	1	PLN	4641
-Musca domestica	house fly	1	5	INV	7370
-Mycobacterium avium		11	0	BCT	1764
-Mycobacterium bovis		11	0	BCT	1765
-Mycobacterium leprae		11	0	BCT	1769
-Mycobacterium smegmatis		11	0	BCT	1772
+Mustela vison	American mink	1	2	MAM	9667
 Mycobacterium tuberculosis		11	0	BCT	1773
-Mycoplasma capricolum		4	0	BCT	2095
-Mycoplasma genitalium		4	0	BCT	2097
-Mycoplasma haemofelis		4	0	BCT	29501
-Mycoplasma hominis		4	0	BCT	2098
 Mycosphaerella graminicola		1	4	PLN	54734
-Mystacina tuberculata	New Zealand lesser short-tailed bat	1	2	MAM	94961
+Myotis lucifugus	little brown bat	1	2	MAM	59463
 Mytilus edulis		1	5	INV	6550
 Mytilus galloprovincialis	Mediterranean mussel	1	5	INV	29158
-Mytilus trossulus	common blue mussel	1	5	INV	6551
-Myxococcus xanthus		11	0	BCT	34
+Myzus persicae	green peach aphid	1	5	INV	13164
+Nakaseomyces delphensis		1	3	PLN	51657
+Nannochloropsis oculata		1	1	PLN	43925
+Nasonia vitripennis		1	5	INV	7425
 Natrialba asiatica		11	0	BCT	64602
 Necator americanus		1	5	INV	51031
-Nectria haematococca		1	4	PLN	140110
 Neisseria gonorrhoeae		11	0	BCT	485
 Neisseria meningitidis		11	0	BCT	487
+Nelumbo nucifera		1	1	PLN	4432
+Nematostella vectensis		1	4	INV	45351
 Neospora caninum		1	4	INV	29176
 Neospora hughesi		1	4	INV	83675
 Neurospora crassa		1	4	PLN	5141
 Newcastle disease virus		1	0	VRL	11176
-Nicotiana attenuata		1	1	PLN	49451
 Nicotiana benthamiana		1	1	PLN	4100
+Nicotiana langsdorffii x Nicotiana sanderae		1	1	PLN	164110
 Nicotiana sylvestris	wood tobacco	1	1	PLN	4096
 Nicotiana tabacum	common tobacco	1	1	PLN	4097
 Nippostrongylus brasiliensis		1	5	INV	27835
-Norwalk virus		1	0	VRL	11983
-Nostoc punctiforme		11	0	BCT	63737
-Novosphingobium aromaticivorans		11	0	BCT	48935
 Nuphar advena		1	1	PLN	77108
-Ochrobactrum anthropi		11	0	BCT	529
-Ocinebrellus inornatus	Asian drill	1	5	INV	213425
-Oenococcus oeni		11	0	BCT	1247
-Oikopleura dioica		1	5	INV	34765
-Olea europaea	common olive	1	1	PLN	4146
+Ocimum basilicum	sweet basil	1	1	PLN	39350
 Onchocerca volvulus		1	5	INV	6282
-Oncorhynchus keta	chum salmon	1	2	VRT	8018
+Oncometopia nigricans		1	5	INV	266772
 Oncorhynchus mykiss	rainbow trout	1	2	VRT	8022
 Oncorhynchus nerka	sockeye salmon	1	2	VRT	8023
 Oncorhynchus tshawytscha	Chinook salmon	1	2	VRT	74940
-Opsanus beta		1	2	VRT	95145
+Ophiostoma clavigerum		1	4	PLN	226899
+Ophiostoma piliferum		1	4	PLN	38032
 Oreochromis niloticus	Nile tilapia	1	2	VRT	8128
-Ornithodoros porcinus		1	5	INV	34594
 Ornithorhynchus anatinus	platypus	1	2	MAM	9258
 Oryctolagus cuniculus	rabbit	1	2	MAM	9986
+Oryza alta		1	1	PLN	52545
+Oryza australiensis		1	1	PLN	4532
+Oryza brachyantha		1	1	PLN	4533
+Oryza coarctata		1	1	PLN	77588
+Oryza glaberrima	African rice	1	1	PLN	4538
+Oryza granulata		1	1	PLN	110450
 Oryza minuta		1	1	PLN	63629
+Oryza nivara		1	1	PLN	4536
+Oryza officinalis		1	1	PLN	4535
+Oryza punctata		1	1	PLN	4537
+Oryza ridleyi		1	1	PLN	83308
+Oryza rufipogon		1	1	PLN	4529
 Oryza sativa		1	1	PLN	4530
 Oryzias latipes	Japanese medaka	1	2	VRT	8090
+Oscarella carmela		1	4	INV	386100
+Osmerus mordax	rainbow smelt	1	2	VRT	8014
 Ostertagia ostertagi		1	5	INV	6317
 Ostreococcus tauri		1	1	PLN	70448
-Otis tarda		1	2	VRT	73107
+Otolemur garnettii	small-eared galago	1	2	PRI	30611
 Ovis aries	sheep	1	2	MAM	9940
-Oxytricha trifallax		6	4	INV	94289
-Pacifastacus leniusculus	signal crayfish	1	5	INV	6720
 Pan paniscus	pygmy chimpanzee	1	2	PRI	9597
 Pan troglodytes	chimpanzee	1	2	PRI	9598
 Panax ginseng		1	1	PLN	4054
-Pantoea agglomerans		11	0	BCT	549
+Panicum virgatum	switchgrass	1	1	PLN	38727
 Papio anubis	olive baboon	1	2	PRI	9555
-Papio hamadryas	hamadryas baboon	1	2	PRI	9557
+Paracentrotus lividus	common urchin	1	9	INV	7656
 Paracoccidioides brasiliensis		1	4	PLN	121759
+Paralabidochromis chilotes		1	2	VRT	77306
 Paralichthys olivaceus	bastard halibut	1	2	VRT	8255
 Paramecium tetraurelia		6	4	INV	5888
 Parastrongyloides trichosuri		1	5	INV	131310
-Parus major		1	2	VRT	9157
-Pasteurella multocida		11	0	BCT	747
 Pasteuria penetrans		11	0	BCT	86005
+Pavlova lutheri		1	1	PLN	2832
 Paxillus involutus		1	4	PLN	71150
-Pectobacterium atrosepticum		11	0	BCT	29471
-Pectobacterium carotovorum		11	0	BCT	554
+Pecten maximus		1	5	INV	6579
 Pediculus humanus	human lice	1	5	INV	121225
 Penaeus monodon	black tiger shrimp	1	5	INV	6687
 Penicillium marneffei		1	4	PLN	37727
 Pennisetum ciliare	buffelgrass	1	1	PLN	35520
 Pennisetum glaucum		1	1	PLN	4543
+Pennisetum glaucum x Pennisetum squamulatum		1	1	PLN	404567
+Perca fluviatilis	perch	1	2	VRT	8168
 Peromyscus leucopus	white-footed mouse	1	2	ROD	10041
-Peromyscus maniculatus	deer mouse	1	2	ROD	10042
-Pestivirus type 1		1	0	VRL	11099
-Pestivirus type 2		1	0	VRL	54314
+Persea americana	avocado	1	1	PLN	3435
 Petromyzon marinus	sea lamprey	1	2	VRT	7757
 Petunia x hybrida		1	1	PLN	4102
 Phaeodactylum tricornutum		1	1	PLN	2850
+Phaeosphaeria nodorum		1	4	PLN	13684
+Phakopsora pachyrhizi		1	4	PLN	170000
+Phalaenopsis equestris		1	1	PLN	78828
+Phalaenopsis violacea		1	1	PLN	86509
 Phanerochaete chrysosporium		1	4	PLN	5306
+Phaseolus acutifolius	tepary bean	1	1	PLN	33129
 Phaseolus coccineus		1	1	PLN	3886
 Phaseolus vulgaris		1	1	PLN	3885
-Phoca vitulina	harbor seal	1	2	MAM	9720
+Philodryas olfersii		1	2	VRT	120305
 Photorhabdus luminescens		11	0	BCT	29488
+Phyllostachys pubescens		1	1	PLN	38705
+Physarum polycephalum	slime mold	1	1	INV	5791
 Physcomitrella patens		1	1	PLN	3218
 Phytophthora infestans	potato late blight agent	1	1	PLN	4787
-Phytophthora nicotianae		1	1	PLN	4790
+Phytophthora parasitica		1	1	PLN	4792
+Phytophthora ramorum	Sudden oak death agent	1	1	PLN	164328
 Phytophthora sojae		1	1	PLN	67593
 Picea abies	Norway spruce	1	1	PLN	3329
+Picea engelmannii x Picea glauca		1	1	PLN	373101
+Picea glauca	white spruce	1	1	PLN	3330
+Picea sitchensis	Sitka spruce	1	1	PLN	3332
 Pichia angusta		1	3	PLN	4905
 Pichia farinosa		1	3	PLN	4920
+Pimephales promelas		1	2	VRT	90988
 Pinus pinaster		1	1	PLN	71647
 Pinus radiata	Monterey pine	1	1	PLN	3347
 Pinus taeda	loblolly pine	1	1	PLN	3352
 Pisolithus microcarpus		1	4	PLN	178872
-Pisolithus tinctorius		1	4	PLN	37468
 Pisum sativum	pea	1	1	PLN	3888
-Planococcus lilacinus	lilac mealybug	1	5	INV	40930
 Plasmodium berghei		1	4	INV	5821
 Plasmodium chabaudi		1	4	INV	5825
 Plasmodium falciparum	malaria parasite P. falciparum	1	4	INV	5833
 Plasmodium vivax	malaria parasite P. vivax	1	4	INV	5855
 Plasmodium yoelii		1	4	INV	5861
 Platichthys flesus	European flounder	1	2	VRT	8260
-Platystomus albinus		1	5	INV	197009
-Plethodon elongatus	Del Norte salamander	1	2	VRT	46761
-Pleuronectes platessa	plaice	1	2	VRT	8262
+Platynereis dumerilii	Dumeril's clam worm	1	5	INV	6359
 Pleurotus ostreatus	oyster mushroom	1	4	PLN	5322
+Plodia interpunctella	Indianmeal moth	1	5	INV	58824
 Plumbago zeylanica		1	1	PLN	76149
+Plutella xylostella	diamondback moth	1	5	INV	51655
 Pneumocystis carinii		1	4	PLN	4754
-Podarcis hispanica		1	2	VRT	74081
-Poecilia reticulata	guppy	1	2	VRT	8081
-Poliovirus		1	0	VRL	138953
-Polyandrocarpa misakiensis		1	13	INV	7723
+Podocoryne carnea		1	4	INV	6096
+Polysphondylium pallidum		1	4	INV	13642
+Polytomella parva		1	1	PLN	51329
 Poncirus trifoliata		1	1	PLN	37690
 Pongo pygmaeus	orangutan	1	2	PRI	9600
-Populus alba x Populus glandulosa		1	1	PLN	153471
 Populus alba x Populus tremula		1	1	PLN	80863
-Populus balsamifera		1	1	PLN	73824
-Populus balsamifera subsp. trichocarpa x Populus deltoides		1	1	PLN	3695
+Populus alba x Populus tremula var. glandulosa		1	1	PLN	153471
+Populus deltoides		1	1	PLN	3696
+Populus euphratica		1	1	PLN	75702
+Populus fremontii x Populus angustifolia		1	1	PLN	352374
+Populus nigra		1	1	PLN	3691
+Populus tomentiglandulosa		1	1	PLN	255244
 Populus tremula		1	1	PLN	113636
 Populus tremula x Populus tremuloides		1	1	PLN	47664
 Populus tremuloides	quaking aspen	1	1	PLN	3693
-Porcine reproductive and respiratory syndrome virus		1	0	VRL	28344
+Populus trichocarpa		1	1	PLN	3694
+Populus trichocarpa x Populus deltoides		1	1	PLN	3695
+Populus trichocarpa x Populus nigra		1	1	PLN	293756
+Populus x canadensis		1	1	PLN	3690
+Porcine respiratory and reproductive syndrome virus		1	0	VRL	28344
+Porphyra haitanensis		1	4	PLN	76159
 Porphyra yezoensis		1	4	PLN	2788
-Porphyromonas gingivalis		11	0	BCT	837
-Potato virus Y		1	0	VRL	12216
 Pratylenchus penetrans		1	5	INV	45929
-Primate T-lymphotropic virus 1		1	0	VRL	194440
-Primate T-lymphotropic virus 2		1	0	VRL	194441
+Pratylenchus vulnus		1	5	INV	45931
 Pristionchus pacificus		1	5	INV	54126
+Prosopis juliflora		1	1	PLN	13230
+Prototheca wickerhamii		1	1	PLN	3111
 Prunus armeniaca	apricot	1	1	PLN	36596
+Prunus cerasus		1	1	PLN	140311
 Prunus dulcis	almond	1	1	PLN	3755
 Prunus persica	peach	1	1	PLN	3760
+Prymnesium parvum		1	1	PLN	97485
 Pseudomonas aeruginosa		11	0	BCT	287
 Pseudomonas fluorescens		11	0	BCT	294
 Pseudomonas putida		11	0	BCT	303
-Pseudomonas stutzeri		11	0	BCT	316
-Pseudomonas syringae		11	0	BCT	317
+Pseudomonas viridiflava		11	0	BCT	33069
 Pseudopleuronectes americanus	winter flounder	1	2	VRT	8265
-Pseudotsuga menziesii	Douglas fir	1	1	PLN	3357
-Psoroptes equi var. ovis	sheep scab mite	1	5	INV	83912
-Psoroptes ovis	sheep scab mite	1	5	INV	83912
-Pygoscelis adeliae	Adelie penguin	1	2	VRT	9238
-Pyricularia grisea		1	4	PLN	148305
-Pyrobaculum aerophilum		11	0	BCT	13773
-Pyrococcus furiosus		11	0	BCT	2261
-Pyrocoelia rufa		1	5	INV	71223
-Pyrocystis lunula		1	4	PLN	2972
-Pyrus communis	pear	1	1	PLN	23211
+Ptyochromis sp. 'redtail sheller'		1	2	VRT	257976
+Puccinellia tenuiflora		1	1	PLN	240906
+Quercus petraea	sessile oak	1	1	PLN	38865
+Quercus robur		1	1	PLN	38942
 Rabies virus		1	0	VRL	11292
-Ralstonia metallidurans		11	0	BCT	119219
+Radopholus similis		1	5	INV	46012
 Ralstonia solanacearum		11	0	BCT	305
-Rana catesbeiana	bullfrog	1	2	VRT	8400
-Rangifer tarandus	reindeer	1	2	MAM	9870
-Raphanus sativus	radish	1	1	PLN	3726
 Rattus norvegicus	Norway rat	1	2	ROD	10116
-Rattus rattus	black rat	1	2	ROD	10117
-Respiratory syncytial virus		1	0	VRL	12814
+Reclinomonas americana		1	1	INV	48483
+Reticulomyxa filosa		1	1	INV	46433
 Rhagoletis pomonella	apple maggot	1	5	INV	28610
 Rhinolophus ferrumequinum	greater horseshoe bat	1	2	MAM	59479
-Rhizobium etli		11	0	BCT	29449
-Rhizobium leguminosarum		11	0	BCT	384
-Rhizobium meliloti		11	0	BCT	382
-Rhizobium radiobacter		11	0	BCT	358
+Rhipicephalus appendiculatus		1	5	INV	34631
 Rhizobium sp. NGR234		11	0	BCT	394
-Rhizoctonia solani		1	4	PLN	107832
-Rhodobacter sphaeroides		11	0	BCT	1063
-Rhodococcus erythropolis		11	0	BCT	1833
-Rhodospirillum rubrum		11	0	BCT	1085
-Rhopalosiphum padi	bird cherry-oat aphid	1	5	INV	40932
+Rhizopus oryzae		1	1	PLN	64495
+Rhododendron catawbiense		1	1	PLN	257784
+Rhynchosciara americana		1	5	INV	7186
+Ribes americanum		1	1	PLN	3802
 Ricinus communis	castor bean	1	1	PLN	3988
-Rickettsia prowazekii		11	0	BCT	782
 Robinia pseudoacacia		1	1	PLN	35938
 Rosa chinensis		1	1	PLN	74649
 Rosa hybrid cultivar		1	1	PLN	128735
-Rotavirus A		1	0	VRL	28875
-Rous sarcoma virus		1	0	VRL	11886
-Rubella virus		1	0	VRL	11041
-Ruminococcus flavefaciens		11	0	BCT	1265
+Rosa wichurana		1	1	PLN	74648
 Saccharomyces bayanus		1	3	PLN	4931
 Saccharomyces cariocanus		1	3	PLN	114526
 Saccharomyces castellii		1	3	PLN	27288
 Saccharomyces cerevisiae	baker's yeast	1	3	PLN	4932
-Saccharomyces exiguus		1	3	PLN	34358
-Saccharomyces kluyveri		1	3	PLN	4934
-Saccharomyces kudriavzevii		1	3	PLN	114524
 Saccharomyces mikatae		1	3	PLN	114525
 Saccharomyces paradoxus		1	3	PLN	27291
 Saccharomyces servazzii		1	3	PLN	27293
 Saccharomyces unisporus		1	3	PLN	27294
+Saccharomyces uvarum		1	3	PLN	230603
+Saccharum hybrid cultivar		1	1	PLN	128810
 Saccharum officinarum		1	1	PLN	4547
-Saguinus oedipus	cotton-top tamarin	1	2	PRI	9490
-Saimiri sciureus	common squirrel monkey	1	2	PRI	9521
-Salix viminalis	osier	1	1	PLN	40686
+Saitoella complicata		1	4	PLN	5606
+Salicornia brachiata		1	1	PLN	179119
 Salmo salar	Atlantic salmon	1	2	VRT	8030
 Salmo trutta	brown trout	1	2	VRT	8032
 Salmonella enterica		11	0	BCT	28901
 Salmonella typhimurium		11	0	BCT	602
-Salvelinus alpinus	Arctic char	1	2	VRT	8036
+Salvia miltiorrhiza		1	1	PLN	226208
+Saprolegnia parasitica		1	1	PLN	101203
+Sarcocystis falcatula		1	4	INV	32593
 Sarcocystis neurona		1	4	INV	42890
 Sarcoptes scabiei		1	5	INV	52283
+Saruma henryi		1	1	PLN	13258
+Sawyeria marylandensis		1	1	INV	194530
+Scarabaeus laticollis		1	5	INV	292456
+Scenedesmus obliquus		1	22	PLN	3088
 Scherffelia dubia		1	1	PLN	3190
 Schistosoma japonicum		1	9	INV	6182
 Schistosoma mansoni		1	9	INV	6183
 Schizophyllum commune		1	4	PLN	5334
 Schizosaccharomyces pombe	fission yeast	1	4	PLN	4896
 Schmidtea mediterranea		1	9	INV	79327
-Sciaenops ocellatus		1	2	VRT	76340
 Sclerotinia sclerotiorum		1	4	PLN	5180
-Sebastes mystinus		1	2	VRT	72088
 Secale cereale	rye	1	1	PLN	4550
+Seculamonas ecuadoriensis		1	1	INV	221724
 Selaginella lepidophylla		1	1	PLN	59777
-SEN virus		1	0	VRL	136966
-Seriola quinqueradiata	five-ray yellowtail	1	2	VRT	8161
-Serratia marcescens		11	0	BCT	615
+Selaginella moellendorffii		1	1	PLN	88036
+Senecio aethnensis		1	1	PLN	121540
+Senecio cambrensis		1	1	PLN	285720
+Senecio chrysanthemifolius		1	1	PLN	121541
 Sesamum indicum	sesame	1	1	PLN	4182
-Sesbania rostrata		1	1	PLN	3895
-Shewanella oneidensis		11	0	BCT	70863
+Shigella boydii		11	0	BCT	621
+Shigella dysenteriae		11	0	BCT	622
 Shigella flexneri		11	0	BCT	623
-Shrimp white spot syndrome virus		1	0	VRL	92652
-Silene latifolia		1	1	PLN	37657
-Silurana tropicalis	western clawed frog	1	2	VRT	8364
 Simian immunodeficiency virus		1	0	VRL	11723
-Simian virus 40		1	0	VRL	10633
-Simian-Human immunodeficiency virus		1	0	VRL	57667
-Sindbis virus		1	0	VRL	11034
-Sinorhizobium meliloti		11	0	BCT	382
+Solanum chacoense	Chaco potato	1	1	PLN	4108
 Solanum tuberosum	potato	1	1	PLN	4113
+Sorex araneus	European shrew	1	2	MAM	42254
 Sorghum bicolor	sorghum	1	1	PLN	4558
 Sorghum halepense		1	1	PLN	4560
 Sorghum propinquum		1	1	PLN	132711
 Sparus aurata	gilthead seabream	1	2	VRT	8175
-Sphingomonas aromaticivorans		11	0	BCT	48935
-Spinacia oleracea	spinach	1	1	PLN	3562
-Spiroplasma kunkelii		4	0	BCT	47834
-Sporotrichum pruinosum		1	4	PLN	5306
+Spermophilus lateralis	golden-mantled ground squirrel	1	2	ROD	76772
+Spermophilus tridecemlineatus	thirteen-lined ground squirrel	1	2	ROD	43179
+Sphaeroforma arctica		1	1	INV	72019
+Spizellomyces punctatus		1	16	PLN	109760
+Spodoptera frugiperda	fall armyworm	1	5	INV	7108
+Squalus acanthias	spiny dogfish	1	2	VRT	7797
 Staphylococcus aureus		11	0	BCT	1280
 Staphylococcus epidermidis		11	0	BCT	1282
-Stealth virus 1		1	0	VRL	36452
 Sterkiella histriomuscorum		6	4	INV	94289
 Stevia rebaudiana		1	1	PLN	55670
+Stomoxys calcitrans	stable fly	1	5	INV	35570
+Streblomastix strix		6	1	INV	222440
 Streptococcus agalactiae		11	0	BCT	1311
-Streptococcus dysgalactiae		11	0	BCT	1334
-Streptococcus equi		11	0	BCT	1336
-Streptococcus mitis		11	0	BCT	28037
-Streptococcus mutans		11	0	BCT	1309
-Streptococcus oralis		11	0	BCT	1303
 Streptococcus pneumoniae		11	0	BCT	1313
 Streptococcus pyogenes		11	0	BCT	1314
 Streptococcus suis		11	0	BCT	1307
-Streptococcus thermophilus		11	0	BCT	1308
-Streptomyces coelicolor		11	0	BCT	1902
-Streptomyces lividans		11	0	BCT	1916
 Strongylocentrotus purpuratus		1	9	INV	7668
 Strongyloides ratti		1	5	INV	34506
 Strongyloides stercoralis		1	5	INV	6248
-Struthio camelus	ostrich	1	2	VRT	8801
-Suaeda maritima		1	1	PLN	126913
-Suid herpesvirus 1		1	0	VRL	10345
-Sulfolobus solfataricus		11	0	BCT	2287
+Suaeda salsa		1	1	PLN	126914
 Sus scrofa	pig	1	2	MAM	9823
-Symsagittifera roscofensis		1	5	INV	84072
-Syncerus caffer	African buffalo	1	2	MAM	9970
-Tadarida brasiliensis	Brazilian free-tailed bat	1	2	MAM	9438
-Taenia solium	pork tapeworm	1	9	INV	6204
+Symsagittifera roscoffensis		1	5	INV	84072
+Taeniopygia guttata		1	2	VRT	59729
+Taiwania cryptomerioides		1	1	PLN	50187
 Takifugu rubripes		1	2	VRT	31033
 Tamarix androssowii		1	1	PLN	189785
-Tamias amoenus	yellow-pine chipmunk	1	2	ROD	64679
-Tamias ruficaudus	red-tailed chipmunk	1	2	ROD	123792
+Taphrina deformans	peach leaf curl fungus	1	4	PLN	5011
+Taraxacum kok-saghyz		1	1	PLN	333970
+Taraxacum officinale		1	1	PLN	50225
 Teladorsagia circumcincta		1	5	INV	45464
-Telestes souffia		1	2	VRT	129883
 Tetrahymena thermophila		6	4	INV	5911
 Tetraodon nigroviridis		1	2	VRT	99883
-Thanatephorus cucumeris		1	4	PLN	107832
+Theileria annulata		1	4	INV	5874
 Theileria parva		1	4	INV	5875
 Thellungiella halophila		1	1	PLN	98038
+Thellungiella salsuginea		1	1	PLN	72664
 Theobroma cacao	cacao	1	1	PLN	3641
-Thermoanaerobacter tengcongensis		11	0	BCT	119072
-Thermotoga maritima		11	0	BCT	2336
-Thermotoga sp. RQ2		11	0	BCT	126740
+Thermomyces lanuginosus		1	4	PLN	5541
 Thermus thermophilus		11	0	BCT	274
-Timarcha balearica		1	5	INV	79517
+Thlaspi caerulescens		1	1	PLN	107243
+Thunnus thynnus	bluefin tuna	1	2	VRT	8237
+Tineola bisselliella		1	5	INV	93883
+Torque teno virus		1	0	VRL	68887
+Tortula ruralis		1	1	PLN	38588
 Toxocara canis		1	5	INV	6265
 Toxoplasma gondii		1	4	INV	5811
 Toxoptera citricida	brown citrus aphid	1	5	INV	223852
-Toxostoma curvirostre		1	2	VRT	99878
-Treponema pallidum		11	0	BCT	160
+Toxorhynchites amboinensis		1	5	INV	46208
+Trametes versicolor		1	4	PLN	5325
+Triatoma brasiliensis		1	5	INV	65344
 Tribolium castaneum	red flour beetle	1	5	INV	7070
 Trichinella spiralis		1	5	INV	6334
-Trichoderma harzianum		1	4	PLN	5544
-Trichoderma reesei		1	4	PLN	51453
-Trichodesmium erythraeum		11	0	BCT	1206
 Trichomonas vaginalis		1	0	INV	5722
-Trichoplusia ni	cabbage looper	1	5	INV	7111
-Trichostrongylus vitrinus		1	5	INV	40352
+Trichophyton rubrum		1	4	PLN	5551
 Trichosurus vulpecula	silver-gray brushtail possum	1	2	MAM	9337
 Trichuris muris		1	5	INV	70415
 Trichuris vulpis		1	5	INV	219738
-Trifolium repens	white clover	1	1	PLN	3899
+Trifolium pratense		1	1	PLN	57577
+Trimastix pyriformis		1	1	INV	342808
 Triphysaria versicolor		1	1	PLN	64093
 Triticum aestivum	bread wheat	1	1	PLN	4565
 Triticum monococcum		1	1	PLN	4568
 Triticum turgidum		1	1	PLN	4571
-Tropheus moorii	blunthead cichlid	1	2	VRT	8150
+Tritrichomonas foetus		1	0	INV	5724
+Trox sp. JH-2005		1	5	INV	358432
 Trypanosoma brucei		1	4	INV	5691
 Trypanosoma carassii		1	4	INV	38249
 Trypanosoma cruzi		1	4	INV	5693
-TT virus		1	0	VRL	68887
-TTV-like mini virus		1	0	VRL	93678
 Tuber borchii	whitish truffle	1	4	PLN	42251
-Turkey rhinotracheitis virus		1	0	VRL	11264
-Turnip mosaic virus		1	0	VRL	12230
-Ureaplasma urealyticum		4	0	BCT	2130
-Ursus arctos	brown bear	1	2	MAM	9644
+Tupaia belangeri	northern tree shrew	1	2	MAM	37347
+Tursiops truncatus	bottlenosed dolphin	1	2	MAM	9739
+Ulva linza		1	1	PLN	63409
 Ustilago maydis		1	4	PLN	5270
-Vaccinia virus		1	0	VRL	10245
 Vaccinium corymbosum		1	1	PLN	69266
 Verticillium dahliae		1	4	PLN	27337
-Vesicular stomatitis virus		1	0	VRL	11276
 Vibrio cholerae		11	0	BCT	666
-Vibrio parahaemolyticus		11	0	BCT	670
-Vibrio vulnificus		11	0	BCT	672
-Vicia faba	fava bean	1	1	PLN	3906
-Vigna radiata		1	1	PLN	157791
-Vigna unguiculata	cowpea	1	1	PLN	3917
 Vitis aestivalis		1	1	PLN	3605
 Vitis hybrid cultivar		1	1	PLN	241073
 Vitis riparia		1	1	PLN	96939
 Vitis shuttleworthii		1	1	PLN	246827
 Vitis vinifera		1	1	PLN	29760
+Welwitschia mirabilis		1	1	PLN	3377
 West Nile virus		1	0	VRL	11082
+Wolbachia endosymbiont of Drosophila ananassae		11	0	BCT	307502
+Wolbachia endosymbiont of Drosophila simulans		11	0	BCT	77038
 Wuchereria bancrofti		1	5	INV	6293
-Xanthomonas axonopodis		11	0	BCT	53413
-Xanthomonas campestris		11	0	BCT	339
 Xenopus laevis	African clawed frog	1	2	VRT	8355
 Xenopus tropicalis	western clawed frog	1	2	VRT	8364
 Xiphias gladius	swordfish	1	2	VRT	8245
+Xiphinema index		1	5	INV	46003
+Xiphophorus maculatus	southern platyfish	1	2	VRT	8083
 Xylella fastidiosa		11	0	BCT	2371
 Yarrowia lipolytica		1	3	PLN	4952
-Yersinia enterocolitica		11	0	BCT	630
-Yersinia pestis		11	0	BCT	632
+Yucca filamentosa		1	1	PLN	55960
+Zamia fischeri		1	1	PLN	34342
 Zamia furfuracea		1	1	PLN	42329
+Zantedeschia aethiopica		1	1	PLN	69721
 Zea mays		1	1	PLN	4577
-Zeldia punctata		1	5	INV	49351
+Zingiber officinale		1	1	PLN	94328
 Zinnia elegans		1	1	PLN	34245
-Zucchini yellow mosaic virus		1	0	VRL	12232
 Zygosaccharomyces rouxii		1	3	PLN	4956

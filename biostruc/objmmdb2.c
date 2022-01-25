@@ -1132,7 +1132,6 @@ erret:
 Boolean LIBCALL 
 ReferenceFrameAsnWrite(ReferenceFramePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1852,7 +1851,6 @@ erret:
 Boolean LIBCALL 
 SurfaceCoordinatesAsnWrite(SurfaceCoordinatesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -2750,7 +2748,6 @@ AlternateConformationIdsFree(AlternateConformationIdsPtr ptr)
 AlternateConformationIdsPtr LIBCALL
 AlternateConformationIdsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -2806,7 +2803,6 @@ erret:
 Boolean LIBCALL 
 AlternateConformationIdsAsnWrite(AlternateConformationIdsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

@@ -31,6 +31,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objmime.c,v $
+* Revision 6.15  2006/07/13 17:03:19  bollin
+* removed unused variables
+*
 * Revision 6.14  2002/08/23 20:35:34  thiessen
 * fix wrong user_annotations symbols
 *
@@ -897,7 +900,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 BiostrucAlignAsnWrite(BiostrucAlignPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1102,7 +1104,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 BiostrucAlignSeqAsnWrite(BiostrucAlignSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1294,7 +1295,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 BiostrucSeqAsnWrite(BiostrucSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1497,7 +1497,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 BiostrucSeqsAsnWrite(BiostrucSeqsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -2055,7 +2054,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL
 BundleSeqsAlignsAsnWrite(BundleSeqsAlignsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

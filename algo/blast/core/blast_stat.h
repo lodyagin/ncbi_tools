@@ -1,4 +1,4 @@
-/*  $Id: blast_stat.h,v 1.78 2006/04/20 19:26:37 madden Exp $
+/*  $Id: blast_stat.h,v 1.84 2006/08/03 20:40:45 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,6 +38,7 @@
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_query_info.h>
 #include <algo/blast/core/blast_message.h>
+#include <util/tables/raw_scoremat.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,6 +54,9 @@ extern "C" {
 
 
 #define BLASTMAT_DIR "/usr/ncbi/blast/matrix" /**< Default location for blast databases. */
+
+/** callback to resolve the path to blast score matrices */
+typedef char* (*GET_MATRIX_PATH) (const char*, Boolean);
 
 /**
   Structure to hold the Karlin-Altschul parameters.
@@ -226,10 +230,11 @@ Blast_ScoreBlkKbpUngappedCalc(EBlastProgramType program,
  * -read in the matrix
  * -set maxscore
  * @param sbp Scoring block [in] [out]
- * @param matrix Full path to the matrix in the directory structure [in]
+ * @param get_path pointer to function that will return path to matrix.  Only called
+ *  if built-in matrix not found [in]
 */
 NCBI_XBLAST_EXPORT
-Int2 Blast_ScoreBlkMatrixFill (BlastScoreBlk* sbp, char* matrix);
+Int2 Blast_ScoreBlkMatrixFill (BlastScoreBlk* sbp, GET_MATRIX_PATH get_path);
  
 /** Callocs a Blast_KarlinBlk
  * @return pointer to the Blast_KarlinBlk
@@ -350,6 +355,46 @@ Blast_KarlinLambdaNR(Blast_ScoreFreq* sfp, double initialLambdaGuess);
  */
 NCBI_XBLAST_EXPORT
 double BLAST_KarlinStoE_simple (Int4 S, Blast_KarlinBlk* kbp, Int8  searchsp);
+
+/** Convert a P-value to an E-value.
+ *
+ * P-values and E-values may either represent statistics of a database
+ * search or represent statistics on the two sequences being compared.
+ * If given a database P-value, this routine will return a database
+ * E-value; if given a pairwise P-value, it will return a pairwise
+ * E-value.
+ *  
+ * In the context of a database search, the available P-value is often
+ * a pairwise P-value, whereas the desired E-value is a database
+ * E-value.  When this it the case, the value returned by this routine
+ * should be multiplied by the effective length of the database and
+ * divided by the effective length of the subject.
+ * 
+ * @param p the P-value to be converted [in] @return the corresponding
+ * expect value.
+ */
+NCBI_XBLAST_EXPORT double BLAST_KarlinPtoE(double p);
+
+/** Convert an E-value to a P-value.
+ * 
+ * E-values and P-values may either represent statistics of a database
+ * search or represent statistics on the two sequences being compared.
+ * If given a database E-value, this routine will return a database
+ * P-value; if given a pairwise E-value, it will return a pairwise
+ * P-value.
+ *
+ * In the context of a database search, the available E-value is
+ * typically a database E-value, whereas the desired P-value is a
+ * pairwise P-value.  When this is the case, the E-value should be
+ * divided by the effective length of the database and multiplied by
+ * the effective length of the subject, before BLAST_KarlinEtoP is
+ * called.
+ *
+ * @param x the expect value to be converted [in]
+ * @return the corresponding p-value.
+ */
+NCBI_XBLAST_EXPORT
+double BLAST_KarlinEtoP(double x);
 
 /** Compute a divisor used to weight the evalue of a collection of
  * "nsegs" distinct alignments.  These divisors are used to compensate
@@ -523,13 +568,13 @@ Int2 Blast_GetNuclAlphaBeta(Int4 reward, Int4 penalty, Int4 gap_open,
  * @param rps_query_seq the query sequence [in]
  * @param db_seq_length Length of the database sequence [in]
  * @param posMatrix matrix (actual) values to be used [in]
- * @param matrix_name Name of the score matrix underlying the RPS search [in]
+ * @param sbp Structure with score matrix parameters [in][out]
  * @return rescaled pssm 
  */
 NCBI_XBLAST_EXPORT
 Int4 ** RPSRescalePssm(double scalingFactor, Int4 rps_query_length, 
                    const Uint1 * rps_query_seq, Int4 db_seq_length, 
-                   Int4 **posMatrix, const char *matrix_name);
+                   Int4 **posMatrix, BlastScoreBlk *sbp);
 
 
 /** 
@@ -670,6 +715,15 @@ Blast_FillResidueProbability(const Uint1* sequence, Int4 length, double * resPro
 */
 NCBI_XBLAST_EXPORT
 Int2 BlastScoreBlkNuclMatrixCreate(BlastScoreBlk* sbp);
+
+/** Returns a pointer to the static compiled in version of the 
+ * matrix.  If name is NULL or the matrix is not compiled in
+ * NULL is returned.
+ * @param name matrix name [in]
+ * @return pointer to matrix or NULL if not supported.
+ */
+NCBI_XBLAST_EXPORT 
+SNCBIPackedScoreMatrix* BlastScoreBlkGetCompiledInMatrix(const char* name);
 
 #ifdef __cplusplus
 }

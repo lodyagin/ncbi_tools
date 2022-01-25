@@ -38,7 +38,8 @@ typedef struct graphviewform
   Int2           zoom;
   Int4           margin, start, stop;
   SeqLocPtr      seqloc, slp;
-  Uint2          entityID, itemID, procID, userKEY;
+  Uint2          entityID, procID, userKEY;
+  Uint4          itemID;
 } GraphViewForm, PNTR GraphViewFormPtr;
 
 /* prototypes */

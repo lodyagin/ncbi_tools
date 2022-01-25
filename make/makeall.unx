@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.274 2006/05/03 14:41:13 madden Exp $
+#	$Id: makeall.unx,v 6.276 2006/09/14 14:20:19 ucko Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -74,6 +74,7 @@ BINCOPY = cp -p
 SUFFIXENV = unx
 ASNDIR = asnstat
 LIB1 = libncbi.a
+LIB1e = libncbiext.a
 LIB2 = libncbiobj.a
 LIB3 = libncbicdr.a
 ULIB4 = libvibrant.a
@@ -167,8 +168,8 @@ LDFLAGS = $(LDFLAGS1) -I$(NCBI_INCDIR) $(VIBFLAG) $(NCBI_OTHERLINKOPTIONS) -L$(N
 THR_SRC = ncbithr.c
 # NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
 
-SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
-	ncbiprop.c ncbimain.c ncbimath.c ncbimem.c ncbimisc.c \
+SRC1e =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
+	ncbiprop.c ncbimath.c ncbimem.c ncbimisc.c \
 	ncbimsg.c ncbistr.c ncbisgml.c ncbitime.c ncbilang.c \
 	asnbufo.c asndebin.c asnenbin.c asngen.c asnio.c asnlex.c \
 	asnlext.c asnout.c asnprint.c asntypes.c asngenob.c gifgen.c \
@@ -182,6 +183,7 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbi_lb.c ncbi_local.c ncbi_socket_connector.c urlquery.c binary.c \
 	ncbi_sendmail.c asn_connection.c raw_scoremat.c \
 	drwnflpt.c drwnfspc.c drwnmfls.c
+SRC1 =	ncbimain.c $(SRC1e)
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
@@ -287,7 +289,7 @@ SRC50 = chartables.c get.c maketables.c pcre.c pcreposix.c study.c
 SRC60 = aa_ungapped.c blast_diagnostics.c blast_dust.c blast_engine.c \
     blast_extend.c blast_filter.c blast_gapalign.c blast_hits.c blast_itree.c \
     blast_lookup.c blast_message.c blast_options.c blast_seg.c blast_seqsrc.c \
-    blast_setup.c blast_stat.c blast_traceback.c blast_util.c \
+    blast_setup.c blast_stat.c blast_traceback.c blast_util.c blast_sw.c \
     gapinfo.c greedy_align.c hspstream_collector.c link_hsps.c lookup_wrap.c \
     mb_lookup.c ncbi_math.c ncbi_std.c pattern.c phi_extend.c phi_lookup.c \
     lookup_util.c blast_encoding.c blast_psi.c blast_psi_priv.c blast_kappa.c \
@@ -305,8 +307,8 @@ SRC61 = blast_api.c blast_format.c blast_input.c blast_mtlock.c \
 THR_OBJ = ncbithr.o
 # NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o
 
-OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
-	ncbimain.o ncbiprop.o ncbimath.o ncbimem.o ncbimisc.o \
+OBJ1e =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
+	ncbiprop.o ncbimath.o ncbimem.o ncbimisc.o \
 	ncbimsg.o ncbistr.o ncbisgml.o ncbitime.o ncbilang.o \
 	asnbufo.o asndebin.o asnenbin.o asngen.o asnio.o asnlex.o \
 	asnlext.o asnout.o asnprint.o asntypes.o asngenob.o gifgen.o \
@@ -320,6 +322,7 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbi_lb.o ncbi_local.o ncbi_socket_connector.o urlquery.o binary.o \
 	ncbi_sendmail.o asn_connection.o raw_scoremat.o \
 	drwnflpt.o drwnfspc.o drwnmfls.o
+OBJ1 =	ncbimain.o $(OBJ1e)
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objfeat.o objgen.o objloc.o objmedli.o objpub.o \
@@ -441,7 +444,7 @@ OBJ50 = chartables.o get.o maketables.o pcre.o pcreposix.o study.o
 
 OBJ60 = aa_ungapped.o blast_diagnostics.o blast_dust.o blast_engine.o blast_extend.o \
     blast_filter.o blast_gapalign.o blast_hits.o blast_itree.o blast_lookup.o \
-    blast_message.o blast_options.o blast_seg.o blast_seqsrc.o \
+    blast_message.o blast_options.o blast_seg.o blast_seqsrc.o blast_sw.o \
     blast_setup.o blast_stat.o blast_traceback.o blast_util.o \
     gapinfo.o greedy_align.o hspstream_collector.o link_hsps.o lookup_wrap.o \
     mb_lookup.o ncbi_math.o ncbi_std.o pattern.o phi_extend.o phi_lookup.o \
@@ -784,6 +787,12 @@ $(LIB1) : $(OBJ1)
 	$(AR) cru $(LIB1) $(OBJ1)
 	$(LIBCOPY) $(LIB1) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(LIB1)
+
+$(LIB1e) : $(OBJ1e)
+	- $(RM_LIB) $(LIB1e)
+	$(AR) cru $(LIB1e) $(OBJ1e)
+	$(LIBCOPY) $(LIB1e) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(LIB1e)
 
 $(LIB2) : $(OBJ2)
 	- $(RM_LIB) $(LIB2)

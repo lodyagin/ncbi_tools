@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.c,v 1.32 2006/04/25 17:59:02 papadopo Exp $
+/* $Id: blast_tabular.c,v 1.34 2006/06/09 17:44:50 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,9 @@
  * On-the-fly tabular formatting of BLAST results
  */
 
-static char const rcsid[] = "$Id: blast_tabular.c,v 1.32 2006/04/25 17:59:02 papadopo Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: blast_tabular.c,v 1.34 2006/06/09 17:44:50 papadopo Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_tabular.h>
 #include <algo/blast/core/blast_util.h>
@@ -47,13 +49,14 @@ static char const rcsid[] = "$Id: blast_tabular.c,v 1.32 2006/04/25 17:59:02 pap
  */
 
 BlastTabularFormatData*
-BlastTabularFormatDataNew(FILE* outfp, SeqLoc* query_seqloc,
+BlastTabularFormatDataNew(FILE* outfp, AsnIoPtr asn_outfp, SeqLoc* query_seqloc,
                           EBlastTabularFormatOptions format_option,
                           Boolean believe_query)
 {
    BlastTabularFormatData* tf_data = 
       (BlastTabularFormatData*) calloc(1, sizeof(BlastTabularFormatData));
    tf_data->outfp = outfp;
+   tf_data->asn_outfp = asn_outfp;
    tf_data->query_slp = query_seqloc;
    tf_data->format_options = format_option;
    tf_data->believe_query = believe_query;
@@ -245,6 +248,10 @@ FillNuclSequenceBuffers(EBlastProgramType program, BlastHSP* hsp,
 /** Maximal buffer length to use for a Seq-id in tabular output. */
 #define SEQIDLEN_MAX 255
 
+/** For incremental ASN.1 output, the maximum number of seq-aligns
+    that are packed into a single seq-annot */
+#define INCREMENTAL_ASN_BATCH_SIZE 50
+
 void* Blast_TabularFormatThread(void* data) 
 {
    BlastTabularFormatData* tf_data;
@@ -279,10 +286,13 @@ void* Blast_TabularFormatThread(void* data)
    Int4 num_queries;
    Int4* query_lengths;
    Boolean sequence_in_use = FALSE;
+   Int4 num_asn_results = 0;
+   SeqAlignPtr sap_head = NULL;
+   SeqAlignPtr sap_last = NULL;
  
    tf_data = (BlastTabularFormatData*) data;
    if (!tf_data || !tf_data->query_slp || !tf_data->hsp_stream ||
-       !tf_data->seq_src || !tf_data->outfp) 
+       !tf_data->seq_src || (!tf_data->outfp && !tf_data->asn_outfp)) 
       return NULL;
 
    program = tf_data->program;
@@ -389,8 +399,6 @@ void* Blast_TabularFormatThread(void* data)
          if (subject_buffer != NULL)
             sfree(descr);
       }
-      if (subject_id)
-         subject_id = SeqIdSetFree(subject_id);
 
       /* Last chance to assign anything - take the first token from the 
          description. */
@@ -403,8 +411,11 @@ void* Blast_TabularFormatThread(void* data)
           !tf_data->perform_traceback) {
           seq_arg.oid = hsp_list->oid;
           seq_arg.encoding = eBlastEncodingNucleotide;
-          if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0)
-              continue;
+          if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0) {
+             if (subject_id)
+                subject_id = SeqIdSetFree(subject_id);
+             continue;
+          }
           sequence_in_use = TRUE;
       }
 
@@ -415,6 +426,50 @@ void* Blast_TabularFormatThread(void* data)
          hsp = hsp_list->hsp_array[index];
          query_index = 
             Blast_GetQueryIndexFromContext(hsp->context, program);
+
+         /* handle incremental ASN.1 output */
+         if (tf_data->format_options == eBlastIncrementalASN) {
+            SeqAlignPtr sap = NULL;
+            if (tf_data->is_ooframe) {
+               sap = OOFBlastHSPToSeqAlign(program, hsp, 
+                                   query_id_array[query_index], subject_id,
+                                   query_lengths[query_index], subject_length);
+            }
+            else {
+               sap = BlastHSPToSeqAlign(program, hsp, 
+                                   query_id_array[query_index], subject_id,
+                                   query_lengths[query_index], subject_length);
+            }
+            sap->score = GetScoreSetFromBlastHsp(hsp);
+            /* add to the current batch of results */
+            if (sap_head == NULL) {
+               sap_head = sap_last = sap;
+            }
+            else {
+               sap_last->next = sap;
+               sap_last = sap;
+            }
+
+            /* flush the current batch if enough alignments
+               have accumulated */
+            if (++num_asn_results == INCREMENTAL_ASN_BATCH_SIZE) {
+               SeqAnnot* seqannot = SeqAnnotNew();
+               Boolean unused; 
+               seqannot->type = 2;
+               AddAlignInfoToSeqAnnot(seqannot, 
+                             GetOldAlignType(program, &unused));
+               seqannot->data = sap_head;
+               SeqAnnotAsnWrite((SeqAnnot*) seqannot, tf_data->asn_outfp, NULL);
+               AsnIoReset(tf_data->asn_outfp);
+               num_asn_results = 0;
+               sap_head = sap_last = NULL;
+               seqannot = SeqAnnotFree(seqannot);
+            }
+            continue;
+         }
+
+         /* handle ordinary tabular output */
+
          Blast_SeqIdGetDefLine(query_id_array[query_index], &query_buffer, 
                                tf_data->show_gi, tf_data->show_accession,
                                tf_data->believe_query);
@@ -482,6 +537,21 @@ void* Blast_TabularFormatThread(void* data)
       fflush(tf_data->outfp);
       sfree(subject_buffer);
       hsp_list = Blast_HSPListFree(hsp_list);
+      if (subject_id)
+         subject_id = SeqIdSetFree(subject_id);
+   }
+
+   /* flush any leftover ASN.1 output */
+   if (sap_head != NULL) {
+      SeqAnnot* seqannot = SeqAnnotNew();
+      Boolean unused; 
+      seqannot->type = 2;
+      AddAlignInfoToSeqAnnot(seqannot, 
+                    GetOldAlignType(program, &unused));
+      seqannot->data = sap_head;
+      SeqAnnotAsnWrite((SeqAnnot*) seqannot, tf_data->asn_outfp, NULL);
+      AsnIoReset(tf_data->asn_outfp);
+      seqannot = SeqAnnotFree(seqannot);
    }
 
    BlastSequenceBlkFree(seq_arg.seq);

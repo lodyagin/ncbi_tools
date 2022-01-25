@@ -196,9 +196,9 @@ extern void BioseqPtrToSeqAnalForm (ForM f, Pointer data)
 {
   SeqAnalFormPtr   sqap;
   BioseqPtr        bsp;
-  GrouP            g,       g1, g2;
-  GrouP            h,       h1, h2;
-  ButtoN           bc, ba,  b1, b2;
+  GrouP            g,       g2;
+  GrouP            h,       h2;
+  ButtoN           bc, ba,  b2;
   ButRegPtr        burp;
 
   WatchCursor ();

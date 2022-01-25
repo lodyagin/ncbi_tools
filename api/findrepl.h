@@ -44,6 +44,9 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.h,v $
+* Revision 6.6  2006/07/13 18:17:17  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.5  2006/01/04 20:39:41  kans
 * added FindStringsInEntity using finite state machine, general cleanup of code
 *
@@ -109,7 +112,7 @@ extern "C" {
 #define UPDATE_EACH  1  /* send it on each replace */
 #define UPDATE_ONCE  2  /* send once for whole entityID, if any replacements occur */
 
-typedef void (*FindReplProc) (Uint2 entityID, Uint2 itemID, Uint2 itemtype, Pointer userdata);
+typedef void (*FindReplProc) (Uint2 entityID, Uint4 itemID, Uint2 itemtype, Pointer userdata);
 
 NLM_EXTERN void FindReplaceInEntity (
   Uint2 entityID,

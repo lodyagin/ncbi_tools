@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_multiseq.c,v 1.23 2005/05/10 16:07:59 camacho Exp $
+/*  $Id: seqsrc_multiseq.c,v 1.24 2006/05/24 21:17:50 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,9 @@
  * locations.
  */
 
-static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.23 2005/05/10 16:07:59 camacho Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.24 2006/05/24 21:17:50 camacho Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/seqsrc_multiseq.h>
 #include <algo/blast/core/blast_seqsrc_impl.h>

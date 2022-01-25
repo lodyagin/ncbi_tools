@@ -44,6 +44,17 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.24  2006/08/31 16:34:32  kans
+* FindReplAuthor handles consortium, properly replaces pid->data, not pNameStr, for string choices
+*
+* Revision 6.23  2006/07/13 21:06:52  kans
+* SearchForString passes strLen - (ptr - str) to FindSubString when looping for whole_word
+*
+* Revision 6.22  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.21  2006/01/17 17:50:01  bollin
 * allow FindReplaceInEntity to search for a string made up of whitespace, as
 * long as whole_word is not specified
@@ -259,6 +270,8 @@ static CharPtr SearchForString (
 )
 
 {
+  Char     ch;
+  size_t   diff;
   CharPtr  ptr = NULL;
   size_t   strLen;
   CharPtr  tmp;
@@ -277,18 +290,21 @@ static CharPtr SearchForString (
     keep_looking = FALSE;
     if (ptr > str) {
       tmp = ptr - 1;
-      if (! IS_WHITESP (*tmp)) {
+      ch = *tmp;
+      if (! IS_WHITESP (ch)) {
         keep_looking = TRUE;
       }
     }
     if (! keep_looking) {
-      tmp = ptr + StringLen (sub);
-      if (*tmp != '\0' && (! IS_WHITESP (*tmp)) && (! ispunct (*tmp))) {
+      tmp = ptr + subLen;
+      ch = *tmp;
+      if (ch != '\0' && (! IS_WHITESP (ch)) && (! ispunct (ch))) {
         keep_looking = TRUE;
       }
     }
     if (keep_looking) {
-      ptr = FindSubString (ptr + subLen, sub, case_counts, strLen, subLen, d);
+      diff = ptr - str;
+      ptr = FindSubString (ptr + subLen, sub, case_counts, strLen - diff, subLen, d);
     }
   }
 
@@ -320,9 +336,9 @@ static void BoyerMooreReplaceString (
 )
 
 {
-  Int4           buffSize;
+  Uint4          buffSize;
   FindStructPtr  fsp;
-  Int4           searchLen;
+  Uint4          searchLen;
   CharPtr        searchString;
   CharPtr        substringPtr;
   Boolean        wasChanged;
@@ -567,6 +583,7 @@ static void FindReplAffil (
 #define PID_NAME   2
 #define PID_ML     3
 #define PID_STR    4
+#define PID_CONSRT 5
 
 static void FindReplAuthor (
   AuthorPtr pAuthor,
@@ -574,23 +591,26 @@ static void FindReplAuthor (
 )
 
 {
-  NameStdPtr pNameStandard;
-  CharPtr    pNameStr;
-  ValNodePtr pDbxref;
+  NameStdPtr   pNameStandard;
+  ValNodePtr   pDbxref;
+  PersonIdPtr  pid;
 
   if (pAuthor == NULL) return;
 
   FindReplAffil (pAuthor->affil, fsp);
-  
-  switch (pAuthor->name->choice) {
+
+  pid = pAuthor->name;
+  if (pid == NULL) return;
+
+  switch (pid->choice) {
     case PID_NOTSET :
       break;
     case PID_DBTAG :
-      pDbxref = pAuthor->name->data;
+      pDbxref = pid->data;
       FindReplDbxrefs (pDbxref, fsp);
       break;
     case PID_NAME :
-      pNameStandard = pAuthor->name->data;
+      pNameStandard = pid->data;
       if (pNameStandard != NULL) {
         FindReplString (&(pNameStandard->names [NAMESTD_LAST])    , fsp);
         FindReplString (&(pNameStandard->names [NAMESTD_FIRST])   , fsp);
@@ -603,8 +623,10 @@ static void FindReplAuthor (
       break;
     case PID_ML :
     case PID_STR :
-      pNameStr = pAuthor->name->data;
-      FindReplString (&pNameStr, fsp);
+      FindReplString ((CharPtr PNTR) &(pid->data), fsp);
+      break;
+    case PID_CONSRT :
+      FindReplString ((CharPtr PNTR) &(pid->data), fsp);
       break;
     default:
       break;
@@ -1224,7 +1246,7 @@ static void FindReplSeqId (
 
 static void FindReplSendMessages (
   FindStructPtr fsp,
-  Uint2 itemID,
+  Uint4 itemID,
   Uint2 itemtype
 )
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.54 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
@@ -543,7 +543,7 @@ extern Entrez2ReplyPtr SpecialEntrezSynchronousQuery (
 /*                                                                  */
 /*==================================================================*/
 
-static Uint2 BioseqFindEntityByGi (Int4 uid, Uint2Ptr itemIDptr)
+static Uint2 BioseqFindEntityByGi (Int4 uid, Uint4Ptr itemIDptr)
 
 {
   ValNode  vn;
@@ -1306,7 +1306,7 @@ static CharPtr FileToString (CharPtr path)
 {
   Int2     actual;
   FILE     *fp;
-  Int4     len;
+  Int8     len;
   CharPtr  ptr;
 
   if (path == NULL) return NULL;
@@ -2693,7 +2693,7 @@ static void LaunchSequenceViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Ch
   Uint2              entityID;
   Int4               flags = -1;
   Int2               handled;
-  Uint2              itemID;
+  Uint4              itemID;
   Int2               retcode;
   SeqEntryPtr        seqEntryPtr;
   ValNode            vn;
@@ -2765,7 +2765,7 @@ static void LaunchSequin (Int4 uid, Int2 numAlign, Int4Ptr alignuids, CharPtr db
   Entrez2GlobalsPtr  egp;
   Uint2              entityID;
   Int4               flags = -1;
-  Uint2              itemID;
+  Uint4              itemID;
   Char               path [PATH_MAX];
   Int2               retcode;
   SeqEntryPtr        seqEntryPtr;
@@ -4630,7 +4630,7 @@ static void DuplicateViewProc (IteM i)
 {
   BaseFormPtr  bfp;
   Int2         handled;
-  Uint2        itemID;
+  Uint4        itemID;
 
   bfp = GetObjectExtra (i);
 #ifdef WIN_MAC

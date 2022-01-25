@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.13 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -1988,265 +1988,169 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignIDUncacheAll (SeqAlignPtr salphead)
   return salphead; 
 }
 
-/**************************************************
-***
-***************************************************/
+/* Find the segment where pos occurs for the nth segment.
+ * If pos is not the start of the segment, cut the alignment
+ * segment in two, with one of the segments with pos as the new start.
+ */
+static void CutAlignmentSegment(SeqAlignPtr salp, Int4 nth, Int4 pos)
+{
+  DenseSegPtr dsp;
+  Int4        seg_num, seg_start, k, j, first_len, second_len;
+  Int4Ptr     new_starts, new_lens;
+  Uint1Ptr    new_strands = NULL;
+  
+  if (salp == NULL || salp->segtype != SAS_DENSEG || salp->segs == NULL || nth < 1 || pos < 0) {
+    return;
+  }
+  
+  dsp = (DenseSegPtr) salp->segs;
+  if (nth > dsp->dim) return;
+  
+  for (seg_num = 0; seg_num < dsp->numseg; seg_num++) {
+    seg_start = dsp->starts[(seg_num * dsp->dim) + nth - 1];
+    if (seg_start < 0) {
+      continue;
+    } else if (seg_start <= pos && seg_start + dsp->lens[seg_num] > pos) {
+      /* found our segment */
+      if (seg_start != pos) {
+        /* only need to cut if pos is not already the start */
+        new_starts = (Int4Ptr) MemNew (sizeof (Int4) * (dsp->numseg + 1) * dsp->dim);
+        new_lens = (Int4Ptr) MemNew (sizeof(Int4) * (dsp->numseg + 1));
+        if (dsp->strands != NULL) {
+          new_strands = (Uint1Ptr) MemNew (sizeof (Uint1) * (dsp->numseg + 1) * dsp->dim);
+        }
+        /* copy before */
+        for (k = 0; k < seg_num; k++) {
+          for (j = 0; j < dsp->dim; j++) {
+            new_starts[k * dsp->dim + j] = dsp->starts[k * dsp->dim + j];
+            if (dsp->strands != NULL) {
+              new_strands[k * dsp->dim + j] = dsp->strands[k * dsp->dim + j];
+            }
+          }
+          new_lens[k] = dsp->lens[k];
+        }
+        
+        if (dsp->strands == NULL || dsp->strands[seg_num * dsp->dim + nth - 1] != Seq_strand_minus) {
+          first_len = pos - seg_start;
+          second_len = dsp->lens[seg_num] - first_len;
+        } else {
+          second_len = pos - seg_start;
+          first_len = dsp->lens[seg_num] - second_len;
+        }
+        
+        /* split */
+        for (j = 0; j < dsp->dim; j++) {
+          /* set starts for split segments */
+          if (dsp->starts[seg_num * dsp->dim + j] == -1) {
+            new_starts[seg_num * dsp->dim + j] = -1;
+            new_starts[(seg_num + 1) * dsp->dim + j] = -1;
+          } else if (dsp->strands == NULL || dsp->strands[seg_num * dsp->dim + j] != Seq_strand_minus) {
+            new_starts[seg_num * dsp->dim + j] = dsp->starts[seg_num * dsp->dim + j];
+            new_starts[(seg_num + 1) * dsp->dim + j] = dsp->starts[seg_num * dsp->dim + j] + first_len;
+          } else {
+            new_starts[seg_num * dsp->dim + j] = dsp->starts[seg_num * dsp->dim + j] + second_len;
+            new_starts[(seg_num + 1) * dsp->dim + j] = dsp->starts[seg_num * dsp->dim + j];
+          }
+          /* set strands for split segments */
+          if (dsp->strands != NULL) {
+            new_strands[seg_num * dsp->dim + j] = dsp->strands[seg_num * dsp->dim + j];
+            new_strands[(seg_num + 1) * dsp->dim + j] = dsp->strands[seg_num * dsp->dim + j];
+          }
+        }
+        /* set lens for split segments */
+        new_lens[seg_num] = first_len;
+        new_lens[seg_num + 1] = second_len;
+                
+        /* copy after */
+        for (k = seg_num + 1; k < dsp->numseg; k++) {
+          for (j = 0; j < dsp->dim; j++) {
+            new_starts[(k + 1) * dsp->dim + j] = dsp->starts[k * dsp->dim + j];
+            if (dsp->strands != NULL) {
+              new_strands[(k + 1) * dsp->dim + j] = dsp->strands[k * dsp->dim + j];
+            }
+          }
+          new_lens[(k + 1)] = dsp->lens[k];
+        }
+        
+        /* replace in dsp */
+        dsp->starts = MemFree (dsp->starts);
+        dsp->starts = new_starts;
+        dsp->lens = MemFree (dsp->lens);
+        dsp->lens = new_lens;
+        dsp->strands = MemFree (dsp->strands);
+        dsp->strands = new_strands;
+        /* can't fix scores */
+        ScoreSetFree(dsp->scores);
+        dsp->scores = NULL;
+        /* now have one more segment */
+        dsp->numseg++;
+      }
+      return;
+    }
+  }  
+}
+
+/* A section of a sequence in an alignment has been deleted.  We need to adjust
+ * the alignment to reflect the new positions of nucleotides that were previously
+ * aligned to other sequences in the alignment.
+ * We need to find the segments in which the start and stop of the deleted section
+ * are found.  If the start and stop do not fall on segment boundaries, we need to
+ * cut the segment at those boundaries.
+ * Then we change the alignment segments that cover the portion of the sequence that
+ * was deleted to be gaps for that sequence.
+ * Finally, we decrease the start values for this sequence for any segment that started
+ * after the cut by the length of the cut.
+ */
 NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignDeleteByLoc (SeqLocPtr slp, SeqAlignPtr salp)
 {
   SeqIdPtr    sip;
   DenseSegPtr dsp;
-  Int4Ptr     dspstart=NULL;
-  Int4Ptr     newstartp=NULL, 
-              newstart=NULL;
-  Int4Ptr     dsplens=NULL;
-  Int4Ptr     newlensp=NULL, 
-              newlens=NULL;
-  Uint1Ptr    strandp=NULL;
-  Uint1Ptr    newstrdp=NULL, 
-              newstrd=NULL;
-  Int4        from;
-  Int4        sumlens = 0;
-  Int4        seqlens = 0;
-  Int4        lensplus = 0;
-  Int4        position;
-  Int2        newseg;
-  Int2        j, tmp;
-  Int2        numseg;
-  Int2        inter_salp = 0;
-  Int2        index;
-  Boolean     seen = FALSE;
-  Boolean     delete_before = FALSE;
-  Int2    intersalpwidth=0;
-  Int2    is_end=0;
-  Int4        num_new_strands;
-  Int4        num_addl_strands;
+  Int4        nth, pos, len, seg_index, seg_start;
+  Int4        stop;
 
-  if (salp == NULL)
-     return NULL;
+  if (salp == NULL || salp->segtype != SAS_DENSEG || salp->segs == NULL) {
+    return NULL;
+  }
+  
   sip = SeqLocId(slp);
   dsp = (DenseSegPtr) salp->segs;
   if (dsp == NULL) {
          return salp;
   }
-  index = SeqIdOrderInBioseqIdList (sip, dsp->ids);
-  if (index == 0) {
-         return salp;
-  }
-  index -= 1;
-  from = SeqAlignStart(salp, index);
-/**/     
-  delete_before = (Boolean) (SeqLocStart(slp) <= from);
-  if (delete_before) 
-     position = SeqLocStop(slp) +1;
-  else
-     position = SeqLocStart(slp);
-/**/
-  dspstart = dsp->starts + index;
-  dsplens = dsp->lens;
-  if (dspstart == NULL || dsplens == NULL ) {
-         return salp;
-  }
-  numseg = 1;
-  while ( !seen && numseg <= dsp->numseg ) 
-  {
-     if (position>=from+seqlens && position<from+seqlens+*dsplens)
-     {
-        if (*dspstart > -1)
-           lensplus = (Int4)ABS(position - from - seqlens);
-        seen = TRUE;
-     }
-     else if (*dspstart > -1 && position<=from+seqlens+*dsplens 
-     && is_end==APPEND_RESIDUE) {
-                lensplus = (Int4)ABS(position - from - seqlens);
-                seen = TRUE;
-     }
-     else if ( numseg == dsp->numseg )
-     {
-                break;
-    }
-     else if (numseg < dsp->numseg)
-     {
-                sumlens += *dsplens;
-                if (*dspstart > -1) 
-                   seqlens += *dsplens;
-                dspstart += dsp->dim;
-                dsplens++;
-     }
-     if ( !seen ) numseg++;
-  }       
-  if ( !seen ) {
+  nth = SeqIdOrderInBioseqIdList (sip, dsp->ids);
+  if (nth == 0 || nth > dsp->dim) {
     return salp;
   }
-  if (position != from+seqlens) 
-  {
-     newseg = dsp->numseg+1;
-     newstart =(Int4Ptr)MemNew((size_t)((dsp->dim*newseg+4)*sizeof (Int4)));
-     newlens  =(Int4Ptr)MemNew((size_t) ((newseg + 2) * sizeof (Int4)));
-     if (dsp->strands!=NULL) {
-        num_new_strands = dsp->dim*newseg+4;
-        newstrd  =(Uint1Ptr)MemNew((size_t)((num_new_strands)*sizeof(Uint1)));
-     } else {
-        num_new_strands = 0;
-     }
-     if (newstart!=NULL && newlens!=NULL) 
-     {
-        if (dsp->strands!=NULL) 
-        {
-            MemCpy (newstrd, dsp->strands, dsp->dim * dsp->numseg);
-            num_addl_strands = num_new_strands - dsp->dim * dsp->numseg;
-            if (num_addl_strands > dsp->dim * dsp->numseg) {
-              num_addl_strands = dsp->dim * dsp->numseg;
-            }
-            MemCpy (newstrd + dsp->dim * dsp->numseg, dsp->strands, num_addl_strands);
-        }
-        dspstart = dsp->starts;
-        dsplens = dsp->lens;
-        newstartp = newstart;
-        newlensp = newlens;
-/*------*/
-        if (delete_before) 
-        {
-           for(tmp=0; tmp<numseg-1; tmp++) {
-              for (j = 0; j < dsp->dim; j++) {
-                 if (j == index)
-                    *newstartp = -1;
-                 else
-                    *newstartp = *dspstart;
-                 newstartp++; 
-                 dspstart++;
-              }
-              *newlensp = *dsplens;
-              newlensp++; dsplens++;
-           }        
-        }
-        else {
-           for(tmp=0; tmp<numseg -1; tmp++) {
-              for (j = 0; j < dsp->dim; j++) {
-                 *newstartp = *dspstart;
-                 newstartp++; 
-                 dspstart++;
-              }
-              *newlensp = *dsplens;
-              newlensp++; dsplens++;
-           }
-        }
-/*------*/
-        *newlensp = lensplus+intersalpwidth*inter_salp;
-        for (j = 0; j < dsp->dim; j++) {
-           if (delete_before)
-           {
-              if (j == index) {
-                 *newstartp = -1;
-                 *(newstartp + dsp->dim) = *dspstart + *newlensp;
-              }
-              else {
-                 *newstartp = *dspstart;
-                 if (*dspstart < 0)
-                    *(newstartp + dsp->dim) = -1;
-                 else
-                    *(newstartp + dsp->dim) = *dspstart + *newlensp;
-              }
-           }
-           else {           
-              *newstartp = *dspstart;
-              if (j == index || *dspstart < 0)
-                 *(newstartp + dsp->dim) = -1;
-              else 
-                 *(newstartp + dsp->dim) = *dspstart + *newlensp;
-           }
-           newstartp++; 
-           dspstart++;
-        }
-        newstartp += dsp->dim;
-        newlensp++; 
-        tmp++;
-        *newlensp = *dsplens-(lensplus+intersalpwidth*inter_salp);
-        newlensp++; 
-        dsplens++;
-/*------*/
-        if (delete_before)
-        {
-           for(; tmp < dsp->numseg; tmp++) {
-              for (j = 0; j < dsp->dim; j++) {
-                 *newstartp = *dspstart;
-                 newstartp++; 
-                 dspstart++;
-              }
-              *newlensp = *dsplens;
-              newlensp++; dsplens++;
-           }
-        }
-        else 
-        {
-           for(; tmp < dsp->numseg; tmp++) {
-              for (j = 0; j < dsp->dim; j++) {
-                 if (j == index)
-                    *newstartp = -1; 
-                 else
-                    *newstartp = *dspstart;
-                 newstartp++; 
-                 dspstart++;
-              }
-              *newlensp = *dsplens;
-              newlensp++; dsplens++;
-           }
-        }
-/*------*/
-        dsp->numseg = newseg;
-        dspstart = dsp->starts;
-        dsp->starts = newstart;
-        MemFree (dspstart);
-        dsplens = dsp->lens;
-        dsp->lens = newlens;
-        MemFree (dsplens);
-        strandp = dsp->strands;
-        dsp->strands = newstrd;
-        MemFree (strandp);
-     }
-     if (delete_before)
-     {
-        sumlens = from;
-        dspstart = dsp->starts + index;
-        dsplens = dsp->lens;
-        for(tmp=0; tmp< dsp->numseg; tmp++) {
-           if (*dspstart > -1) {
-              *dspstart = sumlens;
-              sumlens+=*dsplens;
-           }
-           dspstart += dsp->dim;
-           dsplens++; 
-        }
-     }
+  
+  pos = SeqLocStart (slp);
+  stop = SeqLocStop (slp);
+  if (stop < pos) {
+    len = pos - stop + 1;
+    pos = stop;
+  } else {
+    len = stop - pos + 1;
   }
-  else if (position == from+seqlens && numseg <= dsp->numseg) {
-     if (delete_before) 
-     {
-        dspstart = dsp->starts + index;
-        for(tmp=0; tmp< numseg-1; tmp++) {
-           *dspstart = -1;
-           dspstart += dsp->dim;
-        }     
-        /*------------------*/ 
-        sumlens = from;
-        dspstart = dsp->starts + index;
-        dsplens = dsp->lens;
-        for(tmp=0; tmp< dsp->numseg; tmp++) {
-           if (*dspstart > -1) {
-              *dspstart = sumlens;
-              sumlens+=*dsplens;
-           }
-           dspstart += dsp->dim;
-           dsplens++; 
-        }
-     }
-     else {
-        while (numseg <= dsp->numseg) {
-           *dspstart = -1;
-           numseg++;
-           dspstart += dsp->dim;
-        }
-     }
+    
+  CutAlignmentSegment(salp, nth, pos);
+  CutAlignmentSegment(salp, nth, pos + len);
+  
+  /* change deleted sequence segment start values */
+  for (seg_index = 0; seg_index < dsp->numseg; seg_index++) {
+    seg_start = dsp->starts[dsp->dim * seg_index + nth - 1];
+    if (seg_start < 0) {
+      /* gap, no change */
+      continue;
+    } else if (seg_start < pos) {
+      /* before cut, no change */
+    } else if (seg_start >= pos && seg_start + dsp->lens[seg_index] <= pos + len) {
+      /* in gap */
+      dsp->starts[dsp->dim * seg_index + nth - 1] = -1;
+    } else {
+      /* after cut */
+      dsp->starts[dsp->dim * seg_index + nth - 1] -= len;
+    }
   }
+
   return salp;
 }
 
@@ -3636,7 +3540,7 @@ static Boolean LIBCALL sap_replace (SeqAnnotPtr sap, SeqAlignPtr salp, Uint1 cho
   return FALSE;
 }
 
-NLM_EXTERN void LIBCALL ReplaceSeqAlignInSeqEntry (Uint2 entityID, Uint2 itemID, SeqAlignPtr salp)
+NLM_EXTERN void LIBCALL ReplaceSeqAlignInSeqEntry (Uint2 entityID, Uint4 itemID, SeqAlignPtr salp)
 {
   SeqEntryPtr      sep,
                    sep1 = NULL;

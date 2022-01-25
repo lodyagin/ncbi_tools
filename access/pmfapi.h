@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.26 $
+* $Revision: 1.27 $
 *
 * File Description: 
 *
@@ -313,6 +313,14 @@ NLM_EXTERN void PubMedFetchDisable (
 
 NLM_EXTERN Boolean PubSeqFetchEnable (
   void
+);
+
+NLM_EXTERN Boolean PubSeqFetchEnableEx (
+  Boolean fetch,
+  Boolean seqidtogi,
+  Boolean gitoseqid,
+  Boolean precache,
+  Boolean seqidset
 );
 
 NLM_EXTERN void PubSeqFetchDisable (

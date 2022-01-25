@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.37 $
+* $Revision: 6.40 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -72,9 +72,11 @@ typedef enum {
   SEGMENT_BLOCK,
   SOURCE_BLOCK,
   ORGANISM_BLOCK,
+  REF_STATS_BLOCK,
   REFERENCE_BLOCK,
   PRIMARY_BLOCK,
   COMMENT_BLOCK,
+  FEAT_STATS_BLOCK,
   FEATHEADER_BLOCK,
   SOURCEFEAT_BLOCK,
   FEATURE_BLOCK,
@@ -87,6 +89,42 @@ typedef enum {
   SLASH_BLOCK,
   TAIL_BLOCK
 } BlockType;
+
+NLM_EXTERN CharPtr asn2gnbk_block_label (
+  BlockType blocktype
+);
+
+typedef enum {
+  HEAD_MASK       = 0x00000001,
+  LOCUS_MASK      = 0x00000002,
+  DEFLINE_MASK    = 0x00000004,
+  ACCESSION_MASK  = 0x00000008,
+  VERSION_MASK    = 0x00000010,
+  PROJECT_MASK    = 0x00000020,
+  PID_MASK        = 0x00000040,
+  DBSOURCE_MASK   = 0x00000080,
+  DATE_MASK       = 0x00000100,
+  KEYWORDS_MASK   = 0x00000200,
+  SEGMENT_MASK    = 0x00000400,
+  SOURCE_MASK     = 0x00000800,
+  ORGANISM_MASK   = 0x00001000,
+  REF_STATS_MASK  = 0x00002000,
+  REFERENCE_MASK  = 0x00004000,
+  PRIMARY_MASK    = 0x00008000,
+  COMMENT_MASK    = 0x00010000,
+  FEAT_STATS_MASK = 0x00020000,
+  FEATHEADER_MASK = 0x00040000,
+  SOURCEFEAT_MASK = 0x00080000,
+  FEATURE_MASK    = 0x00100000,
+  BASECOUNT_MASK  = 0x00200000,
+  ORIGIN_MASK     = 0x00400000,
+  SEQUENCE_MASK   = 0x00800000,
+  CONTIG_MASK     = 0x01000000,
+  WGS_MASK        = 0x02000000,
+  GENOME_MASK     = 0x04000000,
+  SLASH_MASK      = 0x08000000,
+  TAIL_MASK       = 0x10000000
+} BlockMask;
 
 #define ASN2GB_BASE_BLOCK \
   Uint2      entityID;  \
@@ -239,6 +277,7 @@ typedef struct XtraData {
   Pointer          remotedata;
   Int4             prevGi;
   Int4             nextGi;
+  BlockMask        bkmask;
 } XtraBlock;
 
 

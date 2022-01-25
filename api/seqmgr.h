@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.60 $
+* $Revision: 6.62 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,16 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.62  2006/08/29 16:02:45  bollin
+* fixed bug in reloading cached Bioseqs without user fetch procs in the
+* ObjMgrData record.
+* Added function for locking Bioseqs in an alignment that are cacheable
+*
+* Revision 6.61  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.60  2006/04/13 20:02:15  kans
 * LookupFarSeqIDs takes inference parameter
 *
@@ -679,7 +689,7 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqFindCore PROTO((SeqIdPtr sip));
 *       itemtype is OBJ_BIOSEQ of course
 *
 *****************************************************************************/
-NLM_EXTERN Uint2 LIBCALL BioseqFindEntity PROTO((SeqIdPtr sip, Uint2Ptr itemIDptr));
+NLM_EXTERN Uint2 LIBCALL BioseqFindEntity PROTO((SeqIdPtr sip, Uint4Ptr itemIDptr));
 
 
 /*****************************************************************************
@@ -1084,8 +1094,8 @@ NLM_EXTERN void LIBCALL SeqMgrIndexAlignments (Uint2 entityID);
 *
 *****************************************************************************/
 
-NLM_EXTERN AnnotDescPtr LIBCALL SeqMgrFindAnnotDescByID (Uint2 entityID, Uint2 itemID);
-NLM_EXTERN SeqAlignPtr LIBCALL SeqMgrFindSeqAlignByID PROTO((Uint2 entityID, Uint2 itemID));
+NLM_EXTERN AnnotDescPtr LIBCALL SeqMgrFindAnnotDescByID (Uint2 entityID, Uint4 itemID);
+NLM_EXTERN SeqAlignPtr LIBCALL SeqMgrFindSeqAlignByID PROTO((Uint2 entityID, Uint4 itemID));
 
 /*****************************************************************************
 *
@@ -1104,6 +1114,15 @@ NLM_EXTERN ValNodePtr LockFarComponents (SeqEntryPtr sep);
 NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, SeqLocPtr loc);
 
 NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist);
+
+/*****************************************************************************
+*
+*   LockFarAlignmentBioseqs finds Bioseqs in an alignment that could be
+*   cached out and locks them.  It returns a ValNode list of the Bioseqs 
+*   that can be unlocked with UnlockFarComponents.
+*
+*****************************************************************************/
+NLM_EXTERN ValNodePtr LockFarAlignmentBioseqs (SeqAlignPtr salp);
 
 /*****************************************************************************
 *

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.74 $
+* $Revision: 1.84 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -72,7 +72,7 @@ static CharPtr strd [4] = {
 };
 
 static CharPtr gnbk_mol [14] = {
-  "    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "snRNA", "scRNA", " AA ", "DNA ", "DNA ", "RNA ", "snoRNA", "RNA "
+  "    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "snRNA", "scRNA", " AA ", "DNA ", "DNA ", "cRNA ", "snoRNA", "RNA "
 };
 
 /* EMBL_FMT in RELEASE_MODE or ENTREZ_MODE, otherwise use gnbk_mol */
@@ -418,6 +418,7 @@ NLM_EXTERN void AddLocusBlock (
   Char               buf [1024];
   SeqFeatPtr         cds;
   Int4               currGi;
+  Char               dataclass [10];
   Char               date [40];
   SeqMgrDescContext  dcontext;
   Char               div [10];
@@ -425,6 +426,7 @@ NLM_EXTERN void AddLocusBlock (
   DatePtr            dp;
   CharPtr            ebmol;
   EMBLBlockPtr       ebp;
+  Char               embldiv [10];
   SeqMgrFeatContext  fcontext;
   StringItemPtr      ffstring;
   GBBlockPtr         gbp;
@@ -447,12 +449,13 @@ NLM_EXTERN void AddLocusBlock (
   Boolean            is_nz = FALSE;
   Boolean            is_env_sample = FALSE;
   Boolean            is_transgenic = FALSE;
+  Boolean            is_tpa = FALSE;
   Char               len [32];
   Int4               length;
   size_t             loclen;
   Char               locus [41];
   MolInfoPtr         mip;
-  Char               mol [30];
+  Char               mol [64];
   Int4               nextGi;
   BioseqPtr          nm = NULL;
   BioseqPtr          nuc;
@@ -471,11 +474,14 @@ NLM_EXTERN void AddLocusBlock (
   SeqHistPtr         hist;
   SeqIdPtr           sip;
   SubSourcePtr       ssp;
+  CharPtr            str;
   CharPtr            suffix = NULL;
   Uint1              tech;
   Uint1              topology;
   TextSeqIdPtr       tsip;
   UserObjectPtr      uop;
+  Char               ver [16];
+  Int2               version;
   ValNodePtr         vnp;
   Boolean            wgsmaster = FALSE;
   Int2               moltype, strandedness, topol;
@@ -497,6 +503,8 @@ NLM_EXTERN void AddLocusBlock (
   mol [0] = '\0';
   len [0] = '\0';
   div [0] = '\0';
+  embldiv [0] = '\0';
+  dataclass [0] = '\0';
   date [0] = '\0';
   gene [0] = '\0';
 
@@ -512,10 +520,12 @@ NLM_EXTERN void AddLocusBlock (
   /* locus id */
 
   sip = NULL;
+  version = 0;
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_OTHER) {
       tsip = (TextSeqIdPtr) sip->data.ptrvalue;
       if (tsip != NULL) {
+        version = tsip->version;
         if (StringNCmp (tsip->accession, "NM_", 3) == 0 ||
             StringNCmp (tsip->accession, "NR_", 3) == 0 ||
             StringNCmp (tsip->accession, "XM_", 3) == 0 ||
@@ -533,14 +543,27 @@ NLM_EXTERN void AddLocusBlock (
     }
     if (sip->choice == SEQID_GENBANK ||
         sip->choice == SEQID_EMBL ||
-        sip->choice == SEQID_DDBJ) break;
+        sip->choice == SEQID_DDBJ) {
+      tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+      if (tsip != NULL) {
+        version = tsip->version;
+      }
+      break;
+    }
+    if (sip->choice == SEQID_TPG ||
+        sip->choice == SEQID_TPE ||
+        sip->choice == SEQID_TPD) {
+      is_tpa = TRUE;
+      tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+      if (tsip != NULL) {
+        version = tsip->version;
+      }
+      break;
+    }
     if (sip->choice == SEQID_PIR ||
         sip->choice == SEQID_SWISSPROT ||
         sip->choice == SEQID_PRF ||
         sip->choice == SEQID_PDB) break;
-    if (sip->choice == SEQID_TPG ||
-        sip->choice == SEQID_TPE ||
-        sip->choice == SEQID_TPD) break;
     if (sip->choice == SEQID_GPIPE) {
       gpp = sip;
     }
@@ -551,6 +574,7 @@ NLM_EXTERN void AddLocusBlock (
   if (sip == NULL) {
     sip = SeqIdFindBest (bsp->id, SEQID_GENBANK);
   }
+  sprintf (ver, "%d", (int) version);
 
   if (genome_view) {
     SeqIdWrite (sip, locus, PRINTID_TEXTID_ACCESSION, sizeof (locus) - 1);
@@ -796,6 +820,7 @@ NLM_EXTERN void AddLocusBlock (
       onp = orp->orgname;
       if (onp != NULL) {
         StringNCpy_0 (div, onp->div, sizeof (div));
+        StringNCpy_0 (embldiv, onp->div, sizeof (embldiv));
       }
     }
     for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
@@ -807,23 +832,33 @@ NLM_EXTERN void AddLocusBlock (
     }
   }
 
+  StringCpy (dataclass, "STD");
+  if (is_tpa) {
+    StringCpy (dataclass, "TPA");
+  }
+
   switch (tech) {
     case MI_TECH_est :
       StringCpy (div, "EST");
+      StringCpy (dataclass, "EST");
       break;
     case MI_TECH_sts :
       StringCpy (div, "STS");
+      StringCpy (dataclass, "STS");
       break;
     case MI_TECH_survey :
       StringCpy (div, "GSS");
+      StringCpy (dataclass, "GSS");
       break;
     case MI_TECH_htgs_0 :
     case MI_TECH_htgs_1 :
     case MI_TECH_htgs_2 :
       StringCpy (div, "HTG");
+      StringCpy (dataclass, "HTG");
       break;
     case MI_TECH_htc :
       StringCpy (div, "HTC");
+      StringCpy (dataclass, "HTC");
       break;
     default :
       break;
@@ -834,18 +869,21 @@ NLM_EXTERN void AddLocusBlock (
       origin == ORG_SYNTHETIC ||
       is_transgenic) {
     StringCpy (div, "SYN");
+    StringCpy (embldiv, "SYN");
   } else if (is_env_sample) {
     if (tech == MI_TECH_unknown ||
         tech == MI_TECH_standard ||
         tech == MI_TECH_other ||
         tech == MI_TECH_htgs_3) {
       StringCpy (div, "ENV");
+      StringCpy (embldiv, "ENV");
     }
   }
 
   sip = SeqIdFindBest (bsp->id, SEQID_PATENT);
   if (sip != NULL && sip->choice == SEQID_PATENT) {
     StringCpy (div, "PAT");
+    StringCpy (dataclass, "PAT");
   }
 
   /* if protein is encoded by a patent nucleotide, use PAT division */
@@ -858,6 +896,7 @@ NLM_EXTERN void AddLocusBlock (
         for (sip = nuc->id; sip != NULL; sip = sip->next) {
           if (sip->choice == SEQID_PATENT) {
             StringCpy (div, "PAT");
+            StringCpy (dataclass, "PAT");
           }
         }
       }
@@ -872,10 +911,13 @@ NLM_EXTERN void AddLocusBlock (
     if (gbp != NULL) {
       if (StringHasNoText (div) && gbp->div != NULL) {
         StringCpy (div, gbp->div);
-      }
-      else if (StringCmp(gbp->div, "PAT") == 0 ||
-               StringCmp(gbp->div, "SYN") == 0 ) {
+        StringCpy (embldiv, gbp->div);
+      } else if (StringCmp(gbp->div, "PAT") == 0) {
         StringCpy (div, gbp->div);
+        StringCpy (dataclass, gbp->div);
+      } else if (StringCmp(gbp->div, "SYN") == 0 ) {
+        StringCpy (div, gbp->div);
+        StringCpy (embldiv, gbp->div);
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_genbank, &dcontext);
@@ -890,15 +932,18 @@ NLM_EXTERN void AddLocusBlock (
         if (ebp->div == 255) {
           if (mip == NULL) {
             StringCpy (div, "HUM");
+            StringCpy (embldiv, "HUM");
           }
         } else if (ebp->div < 18)  {
           StringCpy (div, embl_divs [ebp->div]);
+          StringCpy (embldiv, embl_divs [ebp->div]);
         }
       }
     }
 
     if (StringHasNoText (div)) {
       StringCpy (div, "UNA");
+      StringCpy (embldiv, "UNA");
     }
   }
 
@@ -907,15 +952,28 @@ NLM_EXTERN void AddLocusBlock (
   if (StringHasNoText (div)) {
     StringCpy (div, "   ");
   }
+  if (StringHasNoText (embldiv)) {
+    StringCpy (embldiv, "   ");
+  }
 
   /* contig style (old genome_view flag) forces CON division */
 
   if (awp->contig) {
     StringCpy (div, "CON");
+    StringCpy (dataclass, "CON");
   }
 
   if (genome_view) {
     StringCpy (div, "CON");
+    StringCpy (dataclass, "CON");
+  }
+
+  if (StringCmp (dataclass, "CON") == 0) {
+    if (DeltaLitOnly (bsp)) {
+      if (SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext) != NULL) {
+        StringCpy (dataclass, "ANN");
+      }
+    }
   }
 
   /* date */
@@ -1015,26 +1073,73 @@ NLM_EXTERN void AddLocusBlock (
 
   } else if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
 
-    FFStartPrint (ffstring, awp->format, 0, 0, NULL, 0, 5, 0, "ID", FALSE);
+    if (awp->newLocusLine) {
 
-    FFAddOneString (ffstring, locus, FALSE, FALSE, TILDE_IGNORE);
-    loclen = StringLen(locus);
-    if (14 - 5 - loclen > 0) {
-      FFAddNChar(ffstring, ' ', 14 - 5 - loclen, FALSE);
-    }
-    if (awp->hup) {
-      FFAddOneString (ffstring, " confidential; ", FALSE, FALSE, TILDE_IGNORE);
+      str = GetMolTypeQual (bsp);
+      if (str == NULL) {
+        switch (bsp->mol) {
+          case Seq_mol_dna :
+            str = "unassigned DNA";
+            break;
+          case Seq_mol_rna :
+            str = "unassigned RNA";
+            break;
+          case Seq_mol_aa :
+            break;
+          default :
+            str = "unassigned DNA";
+            break;
+        }
+      }
+      if (StringCmp (str, "viral cRNA") == 0) {
+        str = "other RNA";
+      }
+      StringNCpy_0 (mol, str, sizeof (mol));
+
+      FFStartPrint (ffstring, awp->format, 0, 0, NULL, 0, 5, 0, "ID", FALSE);
+
+      FFAddOneString (ffstring, locus, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "SV ", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, ver, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
+      if (topology == TOPOLOGY_CIRCULAR) {
+        FFAddOneString (ffstring, "circular", FALSE, FALSE, TILDE_IGNORE);
+      } else {
+        FFAddOneString (ffstring, "linear", FALSE, FALSE, TILDE_IGNORE);
+      }
+      FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, mol, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, dataclass, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, embldiv, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, len, FALSE, FALSE, TILDE_IGNORE);
+
     } else {
-      FFAddOneString (ffstring, " standard; ", FALSE, FALSE, TILDE_IGNORE);
+
+      FFStartPrint (ffstring, awp->format, 0, 0, NULL, 0, 5, 0, "ID", FALSE);
+
+      FFAddOneString (ffstring, locus, FALSE, FALSE, TILDE_IGNORE);
+      loclen = StringLen(locus);
+      if (14 - 5 - loclen > 0) {
+        FFAddNChar(ffstring, ' ', 14 - 5 - loclen, FALSE);
+      }
+      if (awp->hup) {
+        FFAddOneString (ffstring, " confidential; ", FALSE, FALSE, TILDE_IGNORE);
+      } else {
+        FFAddOneString (ffstring, " standard; ", FALSE, FALSE, TILDE_IGNORE);
+      }
+      FFAddOneString (ffstring, mol, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
+
+      /* conditional code to make div "UNA" goes here */
+
+      FFAddOneString (ffstring, div, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, len, FALSE, FALSE, TILDE_IGNORE);
     }
-    FFAddOneString (ffstring, mol, FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
-
-    /* conditional code to make div "UNA" goes here */
-
-    FFAddOneString (ffstring, div, FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString (ffstring, "; ", FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString (ffstring, len, FALSE, FALSE, TILDE_IGNORE);
   }
 
   /* optionally populate indexes for NCBI internal database */
@@ -1070,24 +1175,34 @@ NLM_EXTERN void AddLocusBlock (
     gbseq->moltype = imolToMoltype [imol];
     gbseq->topology = topology;
     */
-    strandedness = (Int2) bsp->strand;
-    if (strandedness < 0 || strandedness > 3) {
-      strandedness = 0;
-    }
-    gbseq->strandedness = StringSave (gbseq_strd [strandedness]);
+
     moltype = (Int2) imolToMoltype [imol];
     if (moltype < 0 || moltype > 9) {
       moltype = 0;
     }
     gbseq->moltype = StringSave (gbseq_mol [moltype]);
-    topol = (Int2) topology;
+
+    strandedness = (Int2) bsp->strand;
+    if (strandedness < 0 || strandedness > 3) {
+      strandedness = 0;
+    }
+    if (strandedness == 0) {
+      if (moltype == 1) {
+        strandedness = 2; /* default to double strand for DNA */
+      } else if (moltype >= 2 && moltype <= 8) {
+        strandedness = 1; /* default to single strand for RNA */
+      }
+    }
+    gbseq->strandedness = StringSaveNoNull (gbseq_strd [strandedness]);
+
+    topol = (Int2) bsp->topology;
     if (topol < 0 || topol > 2) {
       topol = 0;
     }
     if (topol == 0) {
-      topol = 1; /* default to displaying linear if not set */
+      topol = 1; /* default to linear if not set */
     }
-    gbseq->topology = StringSave (gbseq_top [topol]);
+    gbseq->topology = StringSaveNoNull (gbseq_top [topol]);
 
     for (sip = bsp->id; sip != NULL; sip = sip->next) {
       SeqIdWrite (sip, id, PRINTID_FASTA_SHORT, sizeof (id));
@@ -1906,6 +2021,7 @@ NLM_EXTERN void AddVersionBlock (
 
   if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
     if ( accn == NULL ) return;
+    if (awp->newLocusLine) return;
   }
 
   bbp = Asn2gbAddBlock (awp, VERSION_BLOCK, sizeof (BaseBlock));
@@ -2011,8 +2127,8 @@ NLM_EXTERN void AddVersionBlock (
 
     FFStartPrint (ffstring, awp->format, 0, 0, "VERSION", 0, 5, 5, "SV", TRUE);
     FFAddOneChar(ffstring, '\n', FALSE);
-    bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "SV");
   }
+
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "SV");
   FFRecycleString(ajp, ffstring);
 
@@ -2475,8 +2591,11 @@ static void AddSPBlock (
     FFAddOneString (ffstring, "extra accessions:", FALSE, FALSE, TILDE_IGNORE);
     for (vnp = spb->extra_acc; vnp != NULL; vnp = vnp->next) {
       FFAddOneString (ffstring, (CharPtr) vnp->data.ptrvalue, FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneChar (ffstring, ',', FALSE );
+      if (vnp->next != NULL) {
+        FFAddOneChar (ffstring, ',', FALSE );
+      }
     }
+    FFAddNewLine(ffstring);
   }
 
   if (spb->imeth) {
@@ -3915,7 +4034,7 @@ static RefBlockPtr AddPub (
   IntRefBlockPtr  irp;
   RefBlockPtr     rbp;
   ValNodePtr      vnp;
-  ArticleIdPtr	  aip;
+  ArticleIdPtr    aip;
 
   if (awp == NULL || head == NULL || pdp == NULL) return NULL;
 
@@ -4025,9 +4144,9 @@ static RefBlockPtr AddPub (
             default:
               break;
           }
-		  /*  look for PMID and MUID in the Cit-art article ids set */
-		  if (cap->ids != NULL) {
-			for (aip = cap->ids; aip != NULL; aip = aip->next) {
+          /*  look for PMID and MUID in the Cit-art article ids set */
+          if (cap->ids != NULL) {
+            for (aip = cap->ids; aip != NULL; aip = aip->next) {
               if (aip->choice == ARTICLEID_PUBMED && rbp->pmid == 0) {
                 rbp->pmid = aip->data.intvalue;
                 rbp->category = REF_CAT_PUB;
@@ -4035,8 +4154,8 @@ static RefBlockPtr AddPub (
                 rbp->muid = aip->data.intvalue;
                 rbp->category = REF_CAT_PUB;
               }
-			}
-		  }
+            }
+          }
         }
         break;
       case PUB_Book:
@@ -4750,59 +4869,6 @@ static Boolean LIBCALLBACK GetRefsOnSeg (
   return TRUE;
 }
 
-static void CheckForPubFusion (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
-{
-  BioseqPtr     bsp;
-  SeqIdPtr      sip;
-  BoolPtr       pubFuse;
-  TextSeqIdPtr  tsip;
-
-  if (sep == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    if (bsp == NULL) return;
-    pubFuse = (BoolPtr) mydata;
-    if (pubFuse == NULL) return;
-    for (sip = bsp->id; sip != NULL; sip = sip->next) {
-      switch (sip->choice) {
-        case SEQID_GIBBSQ :
-        case SEQID_GIBBMT :
-          *pubFuse = TRUE;
-          break;
-        case SEQID_EMBL :
-        case SEQID_PIR :
-        case SEQID_SWISSPROT :
-        case SEQID_PATENT :
-        case SEQID_DDBJ :
-        case SEQID_PRF :
-        case SEQID_PDB :
-        case SEQID_TPE:
-        case SEQID_TPD:
-        case SEQID_GPIPE:
-          *pubFuse = TRUE;
-          break;
-        case SEQID_GENBANK :
-        case SEQID_TPG:
-          tsip = (TextSeqIdPtr) sip->data.ptrvalue;
-          if (tsip != NULL) {
-            if (StringLen (tsip->accession) == 6) {
-              *pubFuse = TRUE;
-            }
-          }
-          break;
-        case SEQID_NOT_SET :
-        case SEQID_LOCAL :
-        case SEQID_OTHER :
-        case SEQID_GENERAL :
-          break;
-        default :
-          break;
-      }
-    }
-  }
-}
-
 NLM_EXTERN Boolean AddReferenceBlock (
   Asn2gbWorkPtr awp,
   Boolean isRefSeq
@@ -4832,12 +4898,10 @@ NLM_EXTERN Boolean AddReferenceBlock (
   ValNodePtr         next;
   Int2               numReferences;
   ValNodePtr         PNTR prev;
-  Boolean            pubFuse = FALSE;
   RefBlockPtr        rbp;
   RefBlockPtr        PNTR referenceArray;
   BioseqPtr          refs;
   SubmitBlockPtr     sbp;
-  SeqEntryPtr        sep;
   SeqIdPtr           sip;
   SeqLocPtr          slp;
   BioseqPtr          target;
@@ -4955,10 +5019,6 @@ NLM_EXTERN Boolean AddReferenceBlock (
     }
   }
 
-  /* does not fuse equivalent publication features for local, general, refseq, and 2+6 genbank ids */
-  sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
-  SeqEntryExplore (sep, (Pointer) &pubFuse, CheckForPubFusion);
-
   /* unique references, excise duplicates from list */
 
   prev = &(head);
@@ -5030,7 +5090,8 @@ NLM_EXTERN Boolean AddReferenceBlock (
     if (awp->mode == DUMP_MODE) {
       excise = FALSE;
     }
-    if (excise && pubFuse) {
+    /* does not fuse equivalent publication features for local, general, refseq, and 2+6 genbank ids */
+    if (excise && awp->sourcePubFuse) {
       *prev = vnp->next;
       vnp->next = NULL;
 
@@ -5198,6 +5259,42 @@ NLM_EXTERN Boolean AddReferenceBlock (
   }
 
   return TRUE;
+}
+
+NLM_EXTERN void AddRefStatsBlock (
+  Asn2gbWorkPtr awp
+)
+
+{
+  IntAsn2gbJobPtr  ajp;
+  BaseBlockPtr     bbp;
+  BioseqPtr        bsp;
+  StringItemPtr    ffstring;
+
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if ( ajp == NULL ) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
+
+  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) return;
+
+  bbp = Asn2gbAddBlock (awp, REF_STATS_BLOCK, sizeof (BaseBlock));
+  if (bbp != NULL) {
+    ffstring = FFGetString (ajp);
+    if (ffstring != NULL) {
+      FFStartPrint (ffstring, awp->format, 0, 12, "REFSTATS", 12, 0, 0, NULL, FALSE);
+    
+      FFAddOneString (ffstring, "placeholder", FALSE, FALSE, TILDE_TO_SPACES);
+  
+      bbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 0, 0, NULL);
+      FFRecycleString(ajp, ffstring);
+    }
+
+    if (awp->afp != NULL) {
+      DoImmediateFormat (awp->afp, bbp);
+    }
+  }
 }
 
 NLM_EXTERN void AddWGSBlock (
@@ -5420,6 +5517,9 @@ NLM_EXTERN void AddBasecountBlock (
   if (bsp == NULL) return;
 
   bbp = Asn2gbAddBlock (awp, BASECOUNT_BLOCK, sizeof (BaseBlock));
+  if (bbp == NULL) return;
+
+  bbp->entityID = awp->entityID;
 
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, bbp);

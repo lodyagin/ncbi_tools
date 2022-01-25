@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.22 2005/04/06 19:34:13 lavr Exp $
+* $Id: ncbierr.c,v 6.23 2006/07/13 17:10:35 bollin Exp $
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,9 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.23  2006/07/13 17:10:35  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.22  2005/04/06 19:34:13  lavr
 * Reassign severity (if found in message file) in case of C++ Tkit hook
 *
@@ -659,7 +662,7 @@ NLM_EXTERN void LIBCALL Nlm_ErrLogPrintStr (const char *str)
 * 02-03-94 Schuler   Return 1 if busy
 */
 NLM_EXTERN int LIBCALL Nlm_ErrSetContext (const char *ctx, const char *fname, int line, int db,
-                                        Nlm_Uint2 entityID, Nlm_Uint2 itemID, Nlm_Uint2 itemtype)
+                                        Nlm_Uint2 entityID, Nlm_Uint4 itemID, Nlm_Uint2 itemtype)
 {
 	AppErrInfoPtr info = GetAppErrInfo();
 

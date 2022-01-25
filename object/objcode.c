@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:  Object manager for module NCBI-SeqCode
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objcode.c,v $
+* Revision 6.13  2006/09/19 15:26:37  kans
+* restored O and J to ncbistdaa now that BLAST is fixed
+*
 * Revision 6.12  2006/04/28 15:05:11  kans
 * removed O and J from ncbistdaa to avoid breaking some BLAST programs
 *
@@ -930,7 +933,7 @@ static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
 "{ symbol \"Ter\", name \"Termination\"},\n" \
 "{ symbol \"Pyl\", name \"Pyrrolysine\"},\n" \
 "{ symbol \"Xle\", name \"Leu or Ile\" } } } ,\n" \
-"{ code ncbistdaa , num 26 , one-letter TRUE , table {\n" \
+"{ code ncbistdaa , num 28 , one-letter TRUE , table {\n" \
 "{ symbol \"-\", name \"Gap\" } ,\n" \
 "{ symbol \"A\", name \"Alanine\" },\n" \
 "{ symbol \"B\" , name \"Asp or Asn\" },\n" \
@@ -956,7 +959,9 @@ static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
 "{ symbol \"Y\", name \"Tyrosine\"},\n" \
 "{ symbol \"Z\", name \"Glu or Gln\" },\n" \
 "{ symbol \"U\", name \"Selenocysteine\"},\n" \
-"{ symbol \"*\", name \"Termination\" } } } ,\n" \
+"{ symbol \"*\", name \"Termination\"},\n" \
+"{ symbol \"O\", name \"Pyrrolysine\"},\n" \
+"{ symbol \"J\", name \"Leu or Ile\" } } } ,\n" \
 "{ code ncbi2na , num 4 , one-letter TRUE , table {\n" \
 "{ symbol \"A\", name \"Adenine\" },\n" \
 "{ symbol \"C\", name \"Cytosine\" },\n" \
@@ -999,14 +1004,14 @@ static CharPtr seqCodeSetMemStr = "Seq-code-set ::= {\n" \
 "table { 88 , 255, 255, 88, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,\n" \
 "65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90 } } ,\n" \
 "{ from iupacaa , to ncbistdaa , num 26 , start-at 65 ,\n" \
-"table { 1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 255, 10, 11, 12, 13, 255, 14, 15, 16, 17, 18, 24, 19, 20, 21, 22, 23 } } ,\n" \
+"table { 1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 27, 10, 11, 12, 13, 26, 14, 15, 16, 17, 18, 24, 19, 20, 21, 22, 23 } } ,\n" \
 "{ from ncbieaa , to ncbistdaa , num 49 , start-at 42 ,\n" \
 "table { 25, 255, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,\n" \
-"1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 255, 10, 11, 12, 13, 255, 14, 15, 16, 17, 18, 24, 19, 20, 21, 22, 23 } } ,\n" \
-"{ from ncbistdaa , to ncbieaa , num 26 ,\n" \
-"table { 45 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 85, 42} } ,\n" \
-"{ from ncbistdaa , to iupacaa , num 26 ,\n" \
-"table { 255 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 85, 255} } } };\n";
+"1 , 2 , 3 , 4, 5, 6, 7, 8, 9, 27, 10, 11, 12, 13, 26, 14, 15, 16, 17, 18, 24, 19, 20, 21, 22, 23 } } ,\n" \
+"{ from ncbistdaa , to ncbieaa , num 28 ,\n" \
+"table { 45 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 85, 42, 79, 74} } ,\n" \
+"{ from ncbistdaa , to iupacaa , num 28 ,\n" \
+"table { 255 , 65 , 66 , 67 , 68, 69, 70, 71, 72, 73, 75, 76, 77, 78, 80, 81, 82, 83, 84, 86, 87, 88, 89, 90, 85, 255, 79, 74} } } };\n";
 #endif
 
 /*****************************************************************************

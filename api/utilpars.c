@@ -3,6 +3,9 @@
 *   -- all common routines for main programs in this directory
 *
 * $Log: utilpars.c,v $
+* Revision 6.4  2006/07/28 20:04:44  bollin
+* fixed bug in tbl2asn
+*
 * Revision 6.3  2006/01/31 22:31:49  kans
 * added O for pyrrolysine and J for leu or ile ambiguity
 *
@@ -210,7 +213,7 @@ NLM_EXTERN Uint1 ValidAminoAcid(CharPtr aa)
 {
    Int2  i;
 
-   if (aa == NULL) (Uint1) 'X';
+   if (aa == NULL) return (Uint1) 'X';
 
    for (i = 0; i < ParFlat_TOTAL_AA && aa != NULL; i++)
        if (StringICmp(aa, ParFlat_AA_array[i].aa3) == 0) {

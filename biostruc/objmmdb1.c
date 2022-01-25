@@ -266,7 +266,6 @@ erret:
 Boolean LIBCALL 
 BiostrucAsnWrite(BiostrucPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -627,7 +626,6 @@ erret:
 Boolean LIBCALL 
 BiostrucSetAsnWrite(BiostrucSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -797,7 +795,6 @@ erret:
 Boolean LIBCALL 
 BiostrucAnnotSetAsnWrite(BiostrucAnnotSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -967,7 +964,6 @@ erret:
 Boolean LIBCALL 
 BiostrucResidueGraphSetAsnWrite(BiostrucResidueGraphSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1353,7 +1349,6 @@ erret:
 Boolean LIBCALL 
 BiostrucHistoryAsnWrite(BiostrucHistoryPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1527,7 +1522,6 @@ erret:
 Boolean LIBCALL 
 BiostrucReplaceAsnWrite(BiostrucReplacePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -2092,7 +2086,6 @@ erret:
 Boolean LIBCALL 
 BiostrucGraphAsnWrite(BiostrucGraphPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -4432,7 +4425,6 @@ AtomPntrSetFree(AtomPntrSetPtr ptr)
 AtomPntrSetPtr LIBCALL
 AtomPntrSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -4488,7 +4480,6 @@ erret:
 Boolean LIBCALL 
 AtomPntrSetAsnWrite(AtomPntrSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

@@ -133,7 +133,7 @@ void add_attribute_pen(SegmenT seg, Int2 p_class, Int2 sub_class)
 *
 *************************************************************************/
 
-static void AddLabelWithAlign(SegmenT seg, Uint1 label_align, Int4 left, Int4 right, Int4 top, Int4 bottom, CharPtr label, FonT font, Uint2 itemID)
+static void AddLabelWithAlign(SegmenT seg, Uint1 label_align, Int4 left, Int4 right, Int4 top, Int4 bottom, CharPtr label, FonT font, Uint4 itemID)
 {
 	Int4 center, middle;
 	
@@ -189,7 +189,7 @@ static Boolean AddBoxWithAlign(SegmenT seg, Uint1 label_align, FeatNodePtr fnp, 
 	Int4 left, right, top, bottom;
 	CharPtr label;
 	Int4 labelHeight;
-	Uint2 itemID;
+	Uint4 itemID;
 	Char buf[10];
 
 	if(fnp == NULL || fnp->label == NULL)
@@ -367,7 +367,7 @@ static Boolean  AddFeatNodeListLabel(SegmenT p_seg, ValNodePtr fnp_node, Uint1 l
 	return TRUE;
 }
 
-static void DrawGapInterval(SegmenT seg, Int4 left, Int4 right, Int4 top, Int4 bottom, Int4 gap_style, Uint2 itemID)
+static void DrawGapInterval(SegmenT seg, Int4 left, Int4 right, Int4 top, Int4 bottom, Int4 gap_style, Uint4 itemID)
 {
 	Int4 center, middle;
 	
@@ -907,7 +907,7 @@ static void AddAlignmentLabel(ValNodePtr anp_list, SegmenT seg)
 	Uint1 color[3];
 	AlignNodePtr anp;
 	Uint1 label_align;
-	Uint2 itemID;
+	Uint4 itemID;
 	
 	
 	font = (FonT)GetMuskCParam(MSM_SEQUENCE, MSM_FLABEL, MSM_FONT);
@@ -968,7 +968,7 @@ static void AddAlignBlocks(ValNodePtr anp_list, SegmenT seg)
 	AlignBlockPtr abp;
 	Int2 arrow;
 	Int2 c_num;
-	Uint2 itemID;
+	Uint4 itemID;
 
 	
 	c_num = (Int2)GetMuskCParam(MSM_CCOLOR, MSM_NOSUBCLASS, MSM_NUM);
@@ -1000,7 +1000,7 @@ static void AddSeqWithAlignmentSymbol(SegmenT seg, ValNodePtr anp_list, Int4 sca
 	Int4 length, width;
 	AlignNodePtr anp;
 	Int4 left, right, center;
-	Uint2 itemID;
+	Uint4 itemID;
 
 	
 	length = scale *4;
@@ -1041,7 +1041,7 @@ static void AddRepeatsToAlignment (ValNodePtr anp_list, SegmenT seg)
 	Int4 left, right;
 	ValNodePtr f_node;
 	FeatNodePtr fnp;
-	Uint2 itemID;
+	Uint4 itemID;
 	Uint1 arrow;
 
 	AddAttribute(seg, COLOR_ATT|SHADING_ATT, BLACK_COLOR, 0, LIGHT_SHADING, 0, 0);
@@ -1099,7 +1099,7 @@ static void DrawAlignSegs(SegmenT seg, AlignNodePtr anp)
 	Boolean has_prev = FALSE;
 	Boolean load;
 	Int4 seglen;
-	Uint2 itemID;
+	Uint4 itemID;
 
 	
 
@@ -1223,12 +1223,12 @@ static void AddAlignmentSegs(ValNodePtr anp_list, SegmenT seg)
 
 
 typedef struct alignfeature{
-	Uint2 itemID;
+	Uint4 itemID;
 	Int4 e_left;
 	Int4 e_right;
 }AlignFeature, PNTR AlignFeaturePtr;
 
-static void ck_load_itemID (Uint2 itemID, Int4 e_left, Int4 e_right, ValNodePtr PNTR item_list)
+static void ck_load_itemID (Uint4 itemID, Int4 e_left, Int4 e_right, ValNodePtr PNTR item_list)
 {
 	ValNodePtr curr;
 	AlignFeaturePtr afp;
@@ -1360,7 +1360,7 @@ static void AddAlignFeature(AlignNodePtr anp, SegmenT a_seg, Boolean show_arrow)
 {
 	ValNodePtr item_list = NULL, c_list;
 	ValNodePtr i_node, p_node;
-	Uint2 itemID;
+	Uint4 itemID;
 	AlignSegPtr asp;
 	FeatNodePtr fnp, c_fnp;
 	GatherRange extremes;
@@ -1528,7 +1528,7 @@ static void AddAlignmentMismatch(ValNodePtr anp_node, Int4 scale, SegmenT seg)
 	AlignSegPtr asp;
 	Int4 symbol_width = 8;
 	Int2 p_type = -1, type;
-	Uint2 itemID;
+	Uint4 itemID;
 
 	AddAttribute (seg, WIDTH_ATT | COLOR_ATT, RED_COLOR, NO_LINE_STYLE, NO_SHADING, 1, NO_MODE);
 	
@@ -1656,7 +1656,7 @@ Boolean DrawAlignNode(ValNodePtr vnp, Int4 scale, SegmenT seg)
 
 Boolean DrawFlatAlign(SegmenT seg, ValNodePtr anp_list)
 {
-	Uint2 itemID;
+	Uint4 itemID;
 	AlignNodePtr anp;
 	Int4 pos;
 
@@ -2374,7 +2374,7 @@ static ValNodePtr group_feature_by_annot_label(ValNodePtr PNTR g_node, CharPtr a
 	return list;
 }
 			
-static void AddAnnotGroup(Int4 left, Int4 top, Int4 right, Int4 bottom, Int2 order, CharPtr annot_db, Uint2 itemID, SegmenT seg)
+static void AddAnnotGroup(Int4 left, Int4 top, Int4 right, Int4 bottom, Int2 order, CharPtr annot_db, Uint4 itemID, SegmenT seg)
 {
 	Uint1Ptr color;
 	Int4 center;

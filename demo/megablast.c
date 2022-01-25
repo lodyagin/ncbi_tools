@@ -1,5 +1,5 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.186 2006/04/26 12:47:48 madden Exp $";
-/* $Id: megablast.c,v 6.186 2006/04/26 12:47:48 madden Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.193 2006/08/29 18:13:12 papadopo Exp $";
+/* $Id: megablast.c,v 6.193 2006/08/29 18:13:12 papadopo Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,27 @@ static char const rcsid[] = "$Id: megablast.c,v 6.186 2006/04/26 12:47:48 madden
 *                                                                         *
 ************************************************************************** 
  * $Log: megablast.c,v $
+ * Revision 6.193  2006/08/29 18:13:12  papadopo
+ * make 2-hit extension the default for discontiguous megablast
+ *
+ * Revision 6.192  2006/08/16 17:03:59  papadopo
+ * allow search space to be specified
+ *
+ * Revision 6.191  2006/07/28 21:09:18  papadopo
+ * allow database length to override the real value when using the rewritten blast engine
+ *
+ * Revision 6.190  2006/06/09 17:46:32  papadopo
+ * allow for on-the-fly ASN.1 seqalign output, with alignments batched together and periodically dumped
+ *
+ * Revision 6.189  2006/06/05 13:38:21  madden
+ * Blast_ScoreBlkMatrixInit gets extra parameter
+ *
+ * Revision 6.188  2006/06/01 15:43:09  papadopo
+ * when printing the masked query, do not add mask locations to seqalign locations (they are complements of each other)
+ *
+ * Revision 6.187  2006/05/18 16:29:13  papadopo
+ * do not set search space field directly
+ *
  * Revision 6.186  2006/04/26 12:47:48  madden
  * Use SBlastMessage in place of Blast_Message
  *
@@ -1082,6 +1103,7 @@ ARG_BELIEVEQUERY,
 ARG_MAXQUERY,
 ARG_WORDSIZE,
 ARG_DBSIZE,
+ARG_SEARCHSP,
 ARG_MAXPOS,
 ARG_STRAND,
 ARG_HTML,
@@ -1135,7 +1157,7 @@ static Args myargs [] = {
         "500", NULL, NULL, FALSE, 'v', ARG_INT, 0.0, 0, NULL},     /* ARG_DESCRIPTIONS */
   { "Number of database sequence to show alignments for (B)",
         "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL},     /* ARG_ALIGNMENTS */
-  { "Type of output:\n0 - alignment endpoints and score,\n1 - all ungapped segments endpoints,\n2 - traditional BLAST output,\n3 - tab-delimited one line format",
+  { "Type of output:\n0 - alignment endpoints and score,\n1 - all ungapped segments endpoints,\n2 - traditional BLAST output,\n3 - tab-delimited one line format,\n4 - incremental text ASN.1,\n5 - incremental binary ASN.1",
         "2", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL},       /* ARG_OUTTYPE */
   { "Number of processors to use",
         "1", NULL, NULL, FALSE, 'a', ARG_INT, 0.0, 0, NULL},       /* ARG_THREADS */
@@ -1149,6 +1171,8 @@ static Args myargs [] = {
         "28", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},      /* ARG_WORDSIZE */
   { "Effective length of the database (use zero for the real size)", 
         "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},     /* ARG_DBSIZE */
+  { "Effective length of the search space (use zero for the real size)", 
+        "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},     /* ARG_SEARCHSP */
   { "Maximal number of positions for a hash value (set to 0 to ignore)",
         "0", NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},       /* ARG_MAXPOS */
   { "Query strands to search against database: 3 is both, 1 is top, 2 is bottom",
@@ -1175,7 +1199,7 @@ static Args myargs [] = {
         "0", NULL, NULL, FALSE, 'p', ARG_FLOAT, 0.0, 0, NULL},     /* ARG_PERC_IDENT */
   { "Location on query sequence",                             
         NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},    /* ARG_QUERYLOC */
-  { "Multiple Hits window size",  
+  { "Multiple Hits window size; default is 0 (i.e. single-hit extensions) or 40 for discontiguous template (negative number overrides this)",  
         "0", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL},      /* ARG_WINDOW  */
   { "X dropoff value for ungapped extension",
 	"10", NULL, NULL, FALSE, 'y', ARG_INT, 0.0, 0, NULL},      /* ARG_XDROP_UNGAPPED */
@@ -1330,6 +1354,7 @@ static Int2 Main_old (void)
            options->cutoff_s2 = myargs[ARG_MINSCORE].intvalue;
 
         options->db_length = (Int8) myargs[ARG_DBSIZE].floatvalue;
+        options->searchsp_eff = (Nlm_FloatHi) myargs[ARG_SEARCHSP].floatvalue;
 
 	options->perform_culling = FALSE;
 	/* Kludge */
@@ -1623,7 +1648,9 @@ static Int2 Main_old (void)
                        mask_loc->next = NULL;
                     }
                     if (mqfp) {
-                       mask_slp = MaskSeqLocFromSeqAlign(seqalign);
+                       /* convert mask locations from all sources into
+                          a single seqloc */
+                       mask_slp = NULL;
                        if (mask_loc) 
                           mask_slp = blastMergeFilterLocs(mask_slp, 
                               (SeqLocPtr)mask_loc->data.ptrvalue,
@@ -1823,7 +1850,7 @@ GetLambdaFast(const BlastScoringOptions* scoring_options)
     double lambda;
     
     BlastScoreBlk* sbp = BlastScoreBlkNew(BLASTNA_SEQ_CODE, 1);
-    Blast_ScoreBlkMatrixInit(eBlastTypeBlastn, scoring_options, sbp);
+    Blast_ScoreBlkMatrixInit(eBlastTypeBlastn, scoring_options, sbp, NULL);
     if (Blast_ScoreBlkKbpIdealCalc(sbp))
         return 0.0; 
     lambda = sbp->kbp_ideal->Lambda;
@@ -1847,6 +1874,8 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    BlastExtensionOptions* ext_options = options->ext_options;
    BlastHitSavingOptions* hit_options = options->hit_options ;
    BlastScoringOptions* score_options = options->score_options;
+   BlastEffectiveLengthsOptions* eff_len_options = options->eff_len_options;
+   Int4 windows = 0;
    Boolean mb_lookup = TRUE;
    Boolean greedy=TRUE; /* greedy alignment should be done. */
    double lambda=0;
@@ -1893,6 +1922,13 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
       greedy, myargs[ARG_WINDOW].intvalue,
       lambda*myargs[ARG_XDROP_UNGAPPED].intvalue/NCBIMATH_LN2);
 
+   if (lookup_options->mb_template_length > 0) {
+      if (word_options->window_size < 0)
+         word_options->window_size = 0;
+      else if (word_options->window_size == 0)
+         word_options->window_size = 40;
+   }
+
    BLAST_FillExtensionOptions(ext_options, kProgram, (greedy ? 1 : 0), 
       lambda*myargs[ARG_XDROP].intvalue/NCBIMATH_LN2, 
       lambda*myargs[ARG_XDROP_FINAL].intvalue/NCBIMATH_LN2);
@@ -1921,11 +1957,14 @@ BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
    
    hit_options->percent_identity = myargs[ARG_PERC_IDENT].floatvalue;
 
-/* FIXME ??
-   if (myargs[ARG_SEARCHSP].floatvalue != 0) {
-      eff_len_options->searchsp_eff = (Int8) myargs[ARG_SEARCHSP].floatvalue; 
+
+   if (myargs[ARG_SEARCHSP].floatvalue != 0 ||
+       myargs[ARG_DBSIZE].floatvalue != 0) {
+      Int8 searchsp = (Int8)myargs[ARG_SEARCHSP].floatvalue; 
+      Int8 dbsize = (Int8)myargs[ARG_DBSIZE].floatvalue; 
+      BLAST_FillEffectiveLengthsOptions(eff_len_options, 0, dbsize, &searchsp, 1);
    }
-*/
+
    /* Validate the options. */
    status = BLAST_ValidateOptions(kProgram, ext_options, score_options, 
                                   lookup_options, word_options, hit_options, 
@@ -1944,6 +1983,7 @@ static Int2 Main_new(void)
    Int4 start=0, end=0;   /* start and end of sequence to be searched as specified by ARG_QUERYLOC */
    SeqLoc* lcase_mask = NULL;
    FILE *infp=NULL, *outfp=NULL;
+   AsnIoPtr asn_outfp = NULL;
    SBlastOptions* options = NULL;
    Int4 ctr = 1;
    Int4 num_queries_total=0;  /* total number of queries read. */
@@ -1955,7 +1995,9 @@ static Int2 Main_new(void)
    Blast_SummaryReturn* full_sum_returns = NULL;
    EAlignView align_view = eAlignViewMax;
 
-   if (myargs[ARG_OUTTYPE].intvalue == 3)
+   if (myargs[ARG_OUTTYPE].intvalue == 3 ||
+       myargs[ARG_OUTTYPE].intvalue == 4 ||
+       myargs[ARG_OUTTYPE].intvalue == 5)
        tabular_output = TRUE;
 
    sum_returns = Blast_SummaryReturnNew();
@@ -1987,7 +2029,9 @@ static Int2 Main_new(void)
       exit with an error. */
    if (!believe_query && (myargs[ARG_ASNOUT].strvalue ||
                           align_view == eAlignViewAsnText || 
-                          align_view == eAlignViewAsnBinary)) {
+                          align_view == eAlignViewAsnBinary ||
+                          myargs[ARG_OUTTYPE].intvalue == 4 ||
+                          myargs[ARG_OUTTYPE].intvalue == 5)) {
        ErrPostEx(SEV_FATAL, 1, 0,
                  "-J option must be TRUE to produce ASN.1 output; before "
                  "changing -J to TRUE please also ensure that all query "
@@ -2007,16 +2051,35 @@ static Int2 Main_new(void)
                                        myargs[ARG_ALIGNMENTS].intvalue,
                                        (Boolean) myargs[ARG_HTML].intvalue,
                                        TRUE,
-                                       (Boolean) myargs[ARG_SHOWGIS].intvalue,
+                                       (Boolean) (myargs[ARG_SHOWGIS].intvalue ||
+                                                  myargs[ARG_FULLID].intvalue),
                                        believe_query);
 
        if (dbname)
            BLAST_PrintOutputHeader(format_info);
    } else { /* tabular output requires raw FILE*. */
-       if ((outfp = FileOpen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
-            ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", 
-                myargs[ARG_OUT].strvalue);
-            return (1);
+       switch (myargs[ARG_OUTTYPE].intvalue) {
+       case 3:
+          if ((outfp = FileOpen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
+             ErrPostEx(SEV_FATAL, 1, 0, 
+                       "blast: Unable to open output file %s\n", 
+                       myargs[ARG_OUT].strvalue);
+               return (1);
+          }
+       case 4:
+          if ((asn_outfp = AsnIoOpen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
+             ErrPostEx(SEV_FATAL, 1, 0, 
+                       "blast: Unable to open text ASN output file %s\n", 
+                       myargs[ARG_OUT].strvalue);
+               return (1);
+          }
+       case 5:
+          if ((asn_outfp = AsnIoOpen(myargs[ARG_OUT].strvalue, "wb")) == NULL) {
+             ErrPostEx(SEV_FATAL, 1, 0, 
+                       "blast: Unable to open binary ASN output file %s\n", 
+                       myargs[ARG_OUT].strvalue);
+               return (1);
+          }
        }
    }
 
@@ -2068,13 +2131,20 @@ static Int2 Main_new(void)
 
       if (tabular_output) {
           EBlastTabularFormatOptions tab_option = eBlastTabularDefault;
+          if (myargs[ARG_OUTTYPE].intvalue == 4 ||
+              myargs[ARG_OUTTYPE].intvalue == 5) {
+              tab_option = eBlastIncrementalASN;
+          }
+          else {
+              /* Print the header of tabular output. */
+              PrintTabularOutputHeader(myargs[ARG_DB].strvalue, NULL, 
+                                       query_slp, program_name, 0, 
+                                       believe_query, outfp);
+          }
           if (getenv("PRINT_SEQUENCES") != NULL)
               tab_option = eBlastTabularAddSequences;
           
-          /* Print the header of tabular output. */
-          PrintTabularOutputHeader(myargs[ARG_DB].strvalue, NULL, query_slp, 
-                                   program_name, 0, believe_query, outfp);
-          tf_data = BlastTabularFormatDataNew(outfp, query_slp, 
+          tf_data = BlastTabularFormatDataNew(outfp, asn_outfp, query_slp, 
                                               tab_option, believe_query);
           tf_data->show_gi = (Boolean) myargs[ARG_SHOWGIS].intvalue;
           tf_data->show_accession = !((Boolean) myargs[ARG_FULLID].intvalue);
@@ -2181,7 +2251,12 @@ static Int2 Main_new(void)
    {
       if (myargs[ARG_LOGINFO].intvalue)
            BlastPrintLogReport(outfp, num_queries_total);
-      FileClose(outfp);
+
+      if (myargs[ARG_OUTTYPE].intvalue == 4 ||
+          myargs[ARG_OUTTYPE].intvalue == 5)
+          AsnIoClose(asn_outfp);
+      else
+          FileClose(outfp);
    }
 
    options = SBlastOptionsFree(options);

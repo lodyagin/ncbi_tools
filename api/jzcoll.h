@@ -1,4 +1,4 @@
-/* $Id: jzcoll.h,v 6.7 2000/11/16 22:10:38 shavirin Exp $
+/* $Id: jzcoll.h,v 6.8 2006/07/13 17:06:38 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,17 @@
 *
 * Initial Version Creation Date: 03/24/97
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *         File for various alignments
 *
 * $Log: jzcoll.h,v $
+* Revision 6.8  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.7  2000/11/16 22:10:38  shavirin
 * Moved many functions from txalign.c - due to move of txalign.c to
 * distrib/tools directory and libncbitool.a library.
@@ -63,12 +68,17 @@
 * Revision 5.13  1997/08/13 18:45:33  zjing
 * add support for tblastx
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *         File for various alignments
 *
 * $Log: jzcoll.h,v $
+* Revision 6.8  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.7  2000/11/16 22:10:38  shavirin
 * Moved many functions from txalign.c - due to move of txalign.c to
 * distrib/tools directory and libncbitool.a library.
@@ -274,7 +284,7 @@ NLM_EXTERN ValNodePtr CollectItemForAlignment PROTO((SeqLocPtr slp, Uint2 entity
 NLM_EXTERN ValNodePtr collect_anpnode_with_option PROTO((CollectAlignOptionPtr caop, SeqLocPtr m_loc, Uint2 entityID, Int4 style, Uint1 itemType, Uint1Ptr f_order, Uint1Ptr g_order, Boolean take_all_annot));
 
 typedef struct featnode {       /*for collecting the features*/
-  Uint2       itemID;
+  Uint4       itemID;
   Uint2       entityID;
   Uint1       feattype;         /*type for Seq-feat*/
   Uint1	      subtype;		/*subtype for Seq-feat*/
@@ -346,7 +356,7 @@ NLM_EXTERN ValNodePtr SortFeatNode PROTO((ValNodePtr list, Uint1Ptr featureOrder
 *	return the list of FeatNode with the same itemID
 *
 **********************************************************************/
-NLM_EXTERN ValNodePtr merge_same_itemID PROTO((ValNodePtr PNTR head, Int2 itemID));
+NLM_EXTERN ValNodePtr merge_same_itemID PROTO((ValNodePtr PNTR head, Uint4 itemID));
 
 
 typedef struct alignblock{
@@ -383,7 +393,7 @@ typedef struct annotinfo {	/*information stored in Seq-annot*/
 	Uint1 consistent;	/*the type of the consistency*/
 	Char annotDB[21];
 	Uint2 entityID;
-	Uint2 itemID;
+	Uint4 itemID;
 	Uint1 annot_type;	/*is it a BLAST/Consist/FISH alignment */
 	Uint1 blast_type;	/*if it is alignment from BLAST, what is the type*/
 	Boolean is_fish_align;	/*is it the alignment for the FISH map */
@@ -452,10 +462,10 @@ typedef struct alignnode {      /*for collecting the alignment*/
 
   Int4			seqpos;			/*the position of the sequence*/
   SeqIdPtr		sip;			/*the SeqId of the aligned sequence*/
-  Uint2			itemID;
+  Uint4			itemID;
   Uint2			entityID;
-  Uint2			seq_entityID;		/*entity id for the sequence*/
-  Uint2			bsp_itemID;		/*itemID for the current Bioseq*/
+  Uint4			seq_entityID;		/*entity id for the sequence*/
+  Uint4			bsp_itemID;		/*itemID for the current Bioseq*/
   Uint2			seqOrder;
   Uint2			chain;	
   Boolean		seq_has_align;	/*is the aligned segment itself contains alignment*/
@@ -597,7 +607,7 @@ NLM_EXTERN Int2 find_insert_ypos PROTO((Int4Ptr left, Int4 seglen, Int4 ins, Int
 *	itemID for the Bioseq
 *
 *****************************************************************/
-NLM_EXTERN Uint2 get_bioseq_itemID PROTO((BioseqPtr bsp, Uint2 entityID));
+NLM_EXTERN Uint4 get_bioseq_itemID PROTO((BioseqPtr bsp, Uint2 entityID));
 
 
 NLM_EXTERN ValNodePtr clean_annot_for_anp PROTO((ValNodePtr PNTR head));

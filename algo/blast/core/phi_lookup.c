@@ -1,4 +1,4 @@
-/* $Id: phi_lookup.c,v 1.31 2006/04/20 19:28:30 madden Exp $
+/* $Id: phi_lookup.c,v 1.38 2006/09/15 13:10:27 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: phi_lookup.c,v 1.31 2006/04/20 19:28:30 madden Exp $";
+    "$Id: phi_lookup.c,v 1.38 2006/09/15 13:10:27 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h>
@@ -131,12 +131,19 @@ s_InitDNAPattern(SPHIPatternSearchBlk *pattern_blk)
   }
 }
 
-/** Expands pattern. @todo FIXME: what exactly does it do?
+/** Determine the length of the pattern after it has been expanded
+ * for efficient searching. The expansion process concatenates all
+ * the patterns formed by enumerating every combination of variable-
+ * size regions. For example, A-x(2,5)-B-C expands to a concatenation
+ * of patterns of length 5, 6, 7 and 8. If the sum of concatenated 
+ * pattern lengths exceeds PHI_MAX_PATTERN_LENGTH, the pattern is
+ * treated as very long.
  * @param inputPatternMasked Masked input pattern [in]
  * @param inputPattern Input pattern [in]
  * @param length Length of inputPattern [in]
  * @param maxLength Limit on how long inputPattern can get [in]
- * @return the final length of the pattern or -1 if too long.
+ * @return the length of the expanded pattern, or -1 if the pattern
+ *        is treated as very long
  */
 static Int4 
 s_ExpandPattern(Int4 *inputPatternMasked, Uint1 *inputPattern, 
@@ -362,8 +369,31 @@ SPHIPatternSearchBlk* s_PatternSearchItemsInit()
     return retval;
 }
 
+/** Convert the string representation of a PHIblast pattern to uppercase
+ * @param pattern_in The input patter [in]
+ * @param pattern_out The converted pattern [out]
+ * @param length Length of the pattern [in]
+ */
+static void
+s_MakePatternUpperCase(char* pattern_in, char* pattern_out, int length)
+{
+     int index = 0;
+
+     ASSERT(pattern_in && pattern_out && length > 0);
+ 
+     for (index=0; index<length; index++)
+     {
+          if (pattern_in[index] >= 'a' && pattern_in[index] <= 'z')
+             pattern_out[index] = toupper(pattern_in[index]);
+          else
+             pattern_out[index] = pattern_in[index];
+     }
+
+     return;
+}
+
 Int2
-SPHIPatternSearchBlkNew(char* pattern, Boolean is_dna, BlastScoreBlk* sbp, 
+SPHIPatternSearchBlkNew(char* pattern_in, Boolean is_dna, BlastScoreBlk* sbp, 
                        SPHIPatternSearchBlk* *pattern_blk_out, 
                        Blast_Message* *error_msg)
 {
@@ -394,12 +424,14 @@ SPHIPatternSearchBlkNew(char* pattern, Boolean is_dna, BlastScoreBlk* sbp,
                                    character positions that overlap*/
     Int4 wildcardProduct;       /* Maximal product of wildcard lengths. */
     /* Which positions can a character occur in for short patterns*/
-    Int4 whichPositionsByCharacter[PHI_ASCII_SIZE]; 
+    Int4* whichPositionsByCharacter=NULL;
     SPHIPatternSearchBlk* pattern_blk;
     SShortPatternItems* one_word_items;
     SLongPatternItems* multiword_items;
     const Uint1* kOrder = (is_dna ? IUPACNA_TO_NCBI4NA : AMINOACID_TO_NCBISTDAA);
     Blast_ResFreq* rfp = NULL;
+    char* pattern = NULL;  /* copy of pattern made upper-case. */
+    int pattern_length = 0; /* length of above. */
 
     *pattern_blk_out = pattern_blk = s_PatternSearchItemsInit();        
     one_word_items = pattern_blk->one_word_items;
@@ -413,15 +445,34 @@ SPHIPatternSearchBlkNew(char* pattern, Boolean is_dna, BlastScoreBlk* sbp,
     prevSetMask = 0;
     currentSetMask = 0;
 
+    pattern_length = strlen(pattern_in);
+    if (pattern_length >= PHI_MAX_PATTERN_LENGTH) {
+      if (error_msg)
+      {
+          char message[1024];
+          sprintf(message, "Pattern is too long (%ld but only %ld supported)",
+            (long) pattern_length, (long) PHI_MAX_PATTERN_LENGTH);
+          Blast_MessageWrite(error_msg, eBlastSevWarning,
+             kBlastMessageNoContext, message);
+      }
+      return(-1);
+    }
+
+    pattern = calloc(pattern_length+1, sizeof(char));
+    s_MakePatternUpperCase(pattern_in, pattern, pattern_length);
+    pattern_blk->pattern = pattern; /* Save the copy here */
+
     memset(localPattern, 0, PHI_MAX_PATTERN_LENGTH*sizeof(Uint1));
 
     /* Parse the pattern */
-    for (charIndex = 0, posIndex = 0; charIndex < (Int4)strlen(pattern); 
-         charIndex++) {
-        if ((next_char=pattern[charIndex]) == '-' || next_char == '\n' || 
-            next_char == '.' || next_char =='>' || next_char ==' ' || 
-            next_char == '<')  /*spacers that mean nothing*/
-            continue;
+    for (charIndex = 0, posIndex = 0; charIndex < pattern_length; charIndex++) 
+    {
+        next_char = pattern[charIndex];
+        if (next_char == '\0' || next_char == '\r' || next_char == '\n')
+            break;
+        if (next_char == '-' || next_char == '.' || 
+            next_char =='>' || next_char ==' ' || next_char == '<')
+            continue;  /*spacers that mean nothing*/
         if ( next_char != '[' && next_char != '{') { /*not the start of a set of characters*/
             if (next_char == 'x' || next_char== 'X') {  /*wild-card character matches anything*/
                 /* Next line checks to see if wild card is for multiple 
@@ -618,6 +669,9 @@ SPHIPatternSearchBlkNew(char* pattern, Boolean is_dna, BlastScoreBlk* sbp,
     } 
     /*make a bit mask out of local pattern of length posIndex*/
     one_word_items->match_mask = s_PackPattern(localPattern, posIndex);
+
+    whichPositionsByCharacter = malloc(PHI_ASCII_SIZE*sizeof(Int4));
+
     /*store for each character a bit mask of which positions
       that character can occur in*/
     for (charIndex = 0; charIndex < BLASTAA_SIZE; charIndex++) {
@@ -653,9 +707,15 @@ SPHIPatternSearchBlk* SPHIPatternSearchBlkFree(SPHIPatternSearchBlk* lut)
         sfree(lut->multi_word_items);
     }
     if (lut->one_word_items) {
-        sfree(lut->one_word_items->dna_items);
+        if (lut->flagPatternLength != eVeryLong)
+        {  /* For eVeryLong these are just pointers to another array. */
+            sfree(lut->one_word_items->dna_items);
+            sfree(lut->one_word_items->whichPositionPtr);
+        }
         sfree(lut->one_word_items);
     }
+
+    sfree(lut->pattern);
 
     sfree(lut);
     return NULL;

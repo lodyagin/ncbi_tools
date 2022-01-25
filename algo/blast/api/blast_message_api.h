@@ -1,4 +1,4 @@
-/* $Id: blast_message_api.h,v 1.1 2006/04/26 12:44:09 madden Exp $
+/* $Id: blast_message_api.h,v 1.2 2006/05/24 21:08:17 camacho Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,7 +27,7 @@
 *
 */
 
-/** @file blast_messge_api.h
+/** @file blast_message_api.h
  * API for C Toolkit BLAST messages
  */
 

@@ -1,4 +1,4 @@
-/* $Id: thrdcpll.c,v 1.1 2000/08/16 20:45:21 hurwitz Exp $
+/* $Id: thrdcpll.c,v 1.2 2006/07/13 17:07:27 bollin Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdcpll.c,v $
+* Revision 1.2  2006/07/13 17:07:27  bollin
+* removed unused variables
+*
 * Revision 1.1  2000/08/16 20:45:21  hurwitz
 * initial check in of threading routines
 *
@@ -81,7 +84,6 @@ int	*cf;		/* Flags residues possibly within the core. */
 int	le;		/* Explicit limit on segment extent, query index */
 int	la;		/* Alignment-derived limit on segment extent */
 int	mn,mx;		/* Range */
-int	qi;		/* Aligned query sequence index from motif index */
 
 /* Parameters */
 

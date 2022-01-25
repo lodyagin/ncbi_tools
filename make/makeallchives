@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives,v 1.81 2005/05/13 04:01:00 beloslyu Exp $
+# $Id: makeallchives,v 1.83 2006/08/30 12:10:29 ivanov Exp $
 #
 #
 # Creates all archives from a directory above 'ncbi'
@@ -23,10 +23,12 @@ if [ ! -d ncbi/build ] ; then
 fi
 
 datafiles="humrep.fsa lineages.txt sequin.hlp asn2ff.prt bstdt.val \
-featdef.val gc.val makerpt.prt objprt.prt pubkey.enc seqcode.val \
-sgmlbb.ent taxlist.txt BLOSUM62 KSat.flt KSchoth.flt KSgc.flt \
-KShopp.flt KSkyte.flt KSpur.flt KSpyr.flt \
-BLOSUM45 BLOSUM80 PAM30 PAM70 KSpcc.mat"
+   featdef.val gc.val makerpt.prt objprt.prt pubkey.enc seqcode.val \
+   sgmlbb.ent taxlist.txt BLOSUM62 KSat.flt KSchoth.flt KSgc.flt \
+   KShopp.flt KSkyte.flt KSpur.flt KSpyr.flt \
+   BLOSUM45 BLOSUM80 PAM30 PAM70 KSpcc.mat \
+   ecnum_ambiguous.txt ecnum_specific.txt UniVec.nhr UniVec.nin UniVec.nsq \
+   UniVec_Core.nhr UniVec_Core.nin UniVec_Core.nsq"
 
 configfiles="nlmstmanrc sequinrc ncbidtrc"
 
@@ -71,7 +73,7 @@ EOF
 		(cd ncbi/build; test -f Nentrez && ln -f Nentrez entrez)
 		;;
 	sequin)
-		f="sequin tbl2asn asn2gb"
+		f="sequin"
 		(cd ncbi/build; test -f Psequin && ln -f Psequin sequin)
 		mkdir -p archive/sequin/errmsg archive/sequin/images
 		test -d $errmsgdir && ln $errmsgdir/* archive/sequin/errmsg/

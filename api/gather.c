@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.47 $
+* $Revision: 6.49 $
 *
 * File Description: 
 *
@@ -39,6 +39,14 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.49  2006/07/18 20:20:40  bollin
+* must use Uint4 instead of Uint2 to hold itemID values
+*
+* Revision 6.48  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.47  2005/07/15 19:01:36  kans
 * minor fixes for Xcode warnings
 *
@@ -4664,9 +4672,9 @@ NLM_EXTERN Boolean LIBCALL GatherEntity (Uint2 entityID, Pointer userdata, Gathe
 ***************************************************************************/
 static Boolean GatherItemByDataProc (GatherContextPtr gcp)
 {
-	Uint2Ptr ptr;
+	Uint4Ptr ptr;
 
-	ptr = (Uint2Ptr)(gcp->userdata);
+	ptr = (Uint4Ptr)(gcp->userdata);
 	*ptr = gcp->itemID;
 
 	return TRUE;
@@ -4682,9 +4690,9 @@ static Boolean GatherItemByDataProc (GatherContextPtr gcp)
 *      itemtype is as defined in objmgr.h for OBJ_
 *
 *****************************************************************************/
-NLM_EXTERN Uint2 LIBCALL GatherItemIDByData (Uint2 entityID, Uint2 itemtype, Pointer dataptr)
+NLM_EXTERN Uint4 LIBCALL GatherItemIDByData (Uint2 entityID, Uint2 itemtype, Pointer dataptr)
 {
-	Uint2 itemID = 0;
+	Uint4 itemID = 0;
 
 	GatherData(entityID, dataptr, itemtype, (Pointer)(&itemID), GatherItemByDataProc);
 	return itemID;
@@ -4723,7 +4731,7 @@ NLM_EXTERN Boolean LIBCALL GatherData (Uint2 entityID, Pointer dataptr, Uint2 it
 *      Sets locatetype and locateID, which are checked in the traversal
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL GatherItem (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+NLM_EXTERN Boolean LIBCALL GatherItem (Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                    Pointer userdata, GatherItemProc userfunc)
 {
 	return GatherItemFunc (entityID, itemID, itemtype, userdata, userfunc, NULL, FALSE);
@@ -5982,7 +5990,7 @@ NLM_EXTERN Boolean LIBCALL ReplaceDataForProc (OMProcControlPtr ompcp, Boolean s
 *     returns the return from the proc, or OM_MSG_RET_NOPROC if not found
 *
 *****************************************************************************/
-NLM_EXTERN Int2 GatherProcLaunch (Uint2 proctype, Boolean sel, Uint2 entityID, Uint2 itemID,
+NLM_EXTERN Int2 GatherProcLaunch (Uint2 proctype, Boolean sel, Uint2 entityID, Uint4 itemID,
                     Uint2 itemtype, Uint2 inputtype, Uint2 subinputtype, Uint2 outputtype, Uint2 suboutputtype)
 {
 	ObjMgrPtr omp;
@@ -6075,7 +6083,7 @@ all_done:
 }
 
 NLM_EXTERN Int2 GatherSpecificProcLaunch (Uint2 procid, CharPtr procname, Uint2 proctype,
-                                          Boolean sel, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+                                          Boolean sel, Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 {
 	ObjMgrPtr omp;
 	OMProcControl ompc;
@@ -7068,7 +7076,7 @@ NLM_EXTERN SeqDescrPtr GetNextDescriptorUnindexed (
 
 typedef struct getptrforid {
   Uint2    entityID;
-  Uint2    itemID;
+  Uint4    itemID;
   Uint2    itemtype;
   Pointer  dataptr;
 } GetPtrForId, PNTR GetPtrForIdPtr;
@@ -7086,7 +7094,7 @@ static Boolean GetPointerProc (GatherObjectPtr gop)
   return TRUE;
 }
 
-NLM_EXTERN Pointer LIBCALL GetPointerForIDs (Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+NLM_EXTERN Pointer LIBCALL GetPointerForIDs (Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 
 {
   GetPtrForId  gfi;

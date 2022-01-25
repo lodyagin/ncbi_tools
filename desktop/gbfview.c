@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.91 $
+* $Revision: 6.94 $
 *
 * File Description: 
 *
@@ -53,7 +53,8 @@ static ParData ffParFmt = {FALSE, FALSE, FALSE, FALSE, TRUE, 0, 0};
 static ColData ffColFmt = {0, 0, 80, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, TRUE};
 
 typedef struct docdescrstruct {
-  Uint2  entityID, itemID, itemtype;
+  Uint2  entityID, itemtype;
+  Uint4  itemID;
   Int2   docitem;
 } DocDescrStruct, PNTR DocDescrPtr;
 
@@ -342,7 +343,7 @@ static void ClickIcon (DoC d, PoinT pt)
 
 typedef struct matchstruc {
   CharPtr   str;
-  Uint2     editItemID;
+  Uint4     editItemID;
   Boolean   found;
   Boolean   slashgene;
   Boolean   slashproduct;
@@ -398,7 +399,7 @@ typedef struct protgenegatherlist {
   Uint2      choice;
   Int4       min;
   Uint2      entityID;
-  Uint2      itemID;
+  Uint4      itemID;
   Uint2      itemtype;
   Boolean    found;
 } ProtGeneGatherList, PNTR ProtGeneGatherPtr;
@@ -482,7 +483,7 @@ static Boolean MatchSubItemInFlatFileProc (GatherContextPtr gcp)
 static Boolean MatchItemInFlatFileProc (GatherContextPtr gcp)
 
 {
-  Uint2          itemID;
+  Uint4          itemID;
   MatchStrucPtr  msp;
   SeqFeatPtr     sfp;
 
@@ -533,7 +534,7 @@ static Boolean MatchItemInFlatFileProc (GatherContextPtr gcp)
   return FALSE;
 }
 
-static Uint2 MatchItemInFlatFile (Uint2 entityID, Uint2 itemID, CharPtr str,
+static Uint2 MatchItemInFlatFile (Uint2 entityID, Uint4 itemID, CharPtr str,
                                   Boolean slashgene, Boolean slashproduct)
 
 {
@@ -553,9 +554,9 @@ static void ReleaseIcon (DoC d, PoinT pt)
   BioseqViewPtr  bvp;
   Char           ch;
   CharPtr        dst;
-  Uint2          editItemID;
+  Uint4          editItemID;
   Uint2          entityID;
-  Boolean        handled;
+  Int2           handled;
   Int2           item;
   Uint4          itemID;
   Uint2          itemtype;
@@ -743,7 +744,7 @@ static int LIBCALLBACK SortDescrProc (VoidPtr vp1, VoidPtr vp2)
 
 typedef struct lookforids {
   Boolean isGED;
-  Boolean isNTorNW;
+  Boolean isNTorNWorNG;
   Boolean isNC;
   Boolean isTPA;
   Boolean isAEorCH;
@@ -783,9 +784,11 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
           if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
             lfip->isNC = TRUE;
           } else if (StringNCmp (tsip->accession, "NT_", 3) == 0) {
-            lfip->isNTorNW = TRUE;
+            lfip->isNTorNWorNG = TRUE;
           } else if (StringNCmp (tsip->accession, "NW_", 3) == 0) {
-            lfip->isNTorNW = TRUE;
+            lfip->isNTorNWorNG = TRUE;
+          } else if (StringNCmp (tsip->accession, "NG_", 3) == 0) {
+            lfip->isNTorNWorNG = TRUE;
           }
         }
         break;
@@ -798,7 +801,7 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
 static void LookForGEDetc (
   SeqEntryPtr topsep,
   BoolPtr isGED,
-  BoolPtr isNTorNW,
+  BoolPtr isNTorNWorNG,
   BoolPtr isNC,
   BoolPtr isTPA,
   BoolPtr isAEorCH
@@ -810,7 +813,7 @@ static void LookForGEDetc (
   MemSet ((Pointer) &lfi, 0, sizeof (LookForIDs));
   VisitBioseqsInSep (topsep, (Pointer) &lfi, LookForSeqIDs);
   *isGED = lfi.isGED;
-  *isNTorNW = lfi.isNTorNW;
+  *isNTorNWorNG = lfi.isNTorNWorNG;
   *isNC = lfi.isNC;
   *isTPA = lfi.isTPA;
   *isAEorCH = lfi.isAEorCH;
@@ -1119,6 +1122,38 @@ static void LookForFarProds (
   }
 }
 
+static void GbfLookFarFeatFetchPolicy (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
+
+{
+  BoolPtr        forceOnlyNearFeatsP;
+  ObjectIdPtr    oip;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_user) return;
+  forceOnlyNearFeatsP = (BoolPtr) userdata;
+  if (forceOnlyNearFeatsP == NULL) return;
+
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL) return;
+  if (StringCmp (oip->str, "FeatureFetchPolicy") != 0) return;
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (oip == NULL || ufp->data.ptrvalue == NULL) continue;
+    if (StringCmp (oip->str, "Policy") == 0) {
+      if (StringICmp ((CharPtr) ufp->data.ptrvalue, "OnlyNearFeatures") == 0) {
+        *forceOnlyNearFeatsP = TRUE;
+      }
+    }
+  }
+}
+
 static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
 
 {
@@ -1131,12 +1166,13 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   Uint2              entityID;
   Int4               feats_with_product_count;
   FonT               fnt;
+  Boolean            forceOnlyNearFeats = FALSE;
   FILE               *fp;
   Boolean            hastpaaligns;
   Int2               into;
   Boolean            isAEorCH;
   Boolean            isGED;
-  Boolean            isNTorNW;
+  Boolean            isNTorNWorNG;
   Boolean            isNC;
   Boolean            isTPA;
   Int2               item;
@@ -1206,10 +1242,11 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   bsp = bvp->bsp;
   entityID = ObjMgrGetEntityIDForPointer (bsp);
   topsep = GetTopSeqEntryForEntityID (entityID);
-  LookForGEDetc (topsep, &isGED, &isNTorNW, &isNC, &isTPA, &isAEorCH);
+  LookForGEDetc (topsep, &isGED, &isNTorNWorNG, &isNC, &isTPA, &isAEorCH);
+  VisitDescriptorsInSep (topsep, (Pointer) &forceOnlyNearFeats, GbfLookFarFeatFetchPolicy);
 
   if ((flags & SHOW_CONTIG_FEATURES) != 0 || (flags & SHOW_CONTIG_SOURCES) != 0) {
-    if (isNTorNW || isTPA) {
+    if (isNTorNWorNG || isTPA) {
       lockFar = FALSE;
       lookupFar = TRUE;
       if (GetAppProperty ("InternalNcbiSequin") != NULL) {
@@ -1350,9 +1387,11 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   WatchCursor ();
   ffColFmt.pixWidth = screenRect.right - screenRect.left;
   ffColFmt.pixInset = 8;
-  /* LookForGEDetc (topsep, &isGED, &isNTorNW, &isNC, &isTPA); */
+  /* LookForGEDetc (topsep, &isGED, &isNTorNWorNG, &isNC, &isTPA); */
   if ((flags & SHOW_CONTIG_FEATURES) != 0 || (flags & SHOW_CONTIG_SOURCES) != 0) {
-    if (isNTorNW || isTPA) {
+    if (forceOnlyNearFeats) {
+      flags |= ONLY_NEAR_FEATURES;
+    } else if (isNTorNWorNG || isTPA) {
       flags |= ONLY_NEAR_FEATURES;
     } else if (isNC) {
       flags |= NEAR_FEATURES_SUPPRESS;
@@ -2126,7 +2165,7 @@ static void ShowGBSeq (BioseqViewPtr bvp, Boolean show)
   }
 }
 
-static void SelectFlatFile (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
+static void SelectFlatFile (BioseqViewPtr bvp, Uint2 selentityID, Uint4 selitemID,
                             Uint2 selitemtype, SeqLocPtr region,
                             Boolean select, Boolean scrollto)
 

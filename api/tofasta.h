@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,11 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.28  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.27  2005/03/21 22:15:09  kans
 * added SeqLocFastaStream
 *
@@ -185,8 +190,8 @@ typedef Boolean (* FastaWriteFunc) PROTO ((BioseqPtr bsp, Int2 key,
 
 typedef struct iteminfo {   /* struct used for defline */
 	Uint2	entityID,	   
-		    itemID,			   
 			itemtype;
+    Uint4   itemID;
 } ItemInfo, PNTR ItemInfoPtr;
 
 typedef struct descrinfo {   /* struct used for defline */

@@ -1,4 +1,4 @@
-/* $Id: blast_filter.h,v 1.34 2005/09/20 00:02:47 camacho Exp $
+/* $Id: blast_filter.h,v 1.37 2006/09/18 15:30:24 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -128,14 +128,6 @@ NCBI_XBLAST_EXPORT
 BlastSeqLoc*
 BlastSeqLocCombine(BlastSeqLoc* mask_loc, Int4 link_value);
 
-/** Deallocate memory for a BlastMaskLoc structure
- * as well as the BlastSeqLoc's pointed to.
- * @param mask_loc the object to be deleted [in]
- * @return NULL pointer
- */
-NCBI_XBLAST_EXPORT
-BlastMaskLoc* BlastMaskLocFree(BlastMaskLoc* mask_loc);
-
 /** Allocate memory for a BlastMaskLoc.
  * @param total number of contexts for which SSeqLocs should be allocated 
  * (result of number of queries * number of contexts for given program) [in]
@@ -144,17 +136,37 @@ BlastMaskLoc* BlastMaskLocFree(BlastMaskLoc* mask_loc);
 NCBI_XBLAST_EXPORT
 BlastMaskLoc* BlastMaskLocNew(Int4 total);
 
+/** 
+ * @brief Perform a deep copy of the BlastMaskLoc structure passed to this
+ * function
+ * 
+ * @param mask_loc Source masking location structure [in]
+ * 
+ * @return Deep copy of its argument, or NULL if the argument was NULL or if
+ * not enough memory was available
+ */
+NCBI_XBLAST_EXPORT
+BlastMaskLoc* BlastMaskLocDup(const BlastMaskLoc* mask_loc);
+
+/** Deallocate memory for a BlastMaskLoc structure
+ * as well as the BlastSeqLoc's pointed to.
+ * @param mask_loc the object to be deleted [in]
+ * @return NULL pointer
+ */
+NCBI_XBLAST_EXPORT
+BlastMaskLoc* BlastMaskLocFree(BlastMaskLoc* mask_loc);
+
 /** Given a BlastMaskLoc with an array of lists of DNA mask locations, 
  * substitutes that array by a new array of per-protein-frame mask location 
  * lists.
- * @param mask_loc Mask locations structure [in|out]
+ * @param mask_loc Mask locations structure. This structure can have either
+ * masks for all frames in nucleotide coordinates (e.g.: the results of
+ * translating protein masks to nucleotide) or a single mask per query
+ * (i.e.:location NUM_FRAMES*query_index). In the latter case, this mask will 
+ * be used for all frames. [in|out]
  * @param query_info Query information structure, containing contexts data [in]
- * Note: This function does NOT take into consideration the strands requested
- * to be searched, which is INCONSISTENT with what the C++ API does (this
- * function is not called from the C++ API, only from the C API). Therefore,
- * this function should either 1) be moved out of the CORE or 2) modified to
- * take into consideration the strand specified for the nucleotide
- * query/queries.
+ * @note This function does NOT take into consideration the strands requested
+ * to be searched, which is INCONSISTENT with what the C++ API does.
  */
 Int2 BlastMaskLocDNAToProtein(BlastMaskLoc* mask_loc, 
                               const BlastQueryInfo* query_info);
@@ -241,6 +253,20 @@ NCBI_XBLAST_EXPORT
 void
 Blast_MaskTheResidues(Uint1 * buffer, Int4 length, Boolean is_na, 
     const BlastSeqLoc* mask_loc, Boolean reverse, Int4 offset);
+
+/** Mask protein letters that are currently unsupported. This routine
+ *  is used to make the core ignore letters within protein sequences
+ *  that cannot (yet) be correctly handled
+ * @param seq Protein sequence to be masked (ncbistdaa format required).
+ *            Letters whose numerical value exceeds a cutoff are
+ *            converted into kProtMask values [in|out]
+ * @param min_invalid The first ncbistdaa value that is considered invalid.
+ *            All sequence letters with numerical value >= this number
+ *            are masked [in]
+ */
+NCBI_XBLAST_EXPORT
+void
+Blast_MaskUnsupportedAA(BLAST_SequenceBlk* seq, Uint1 min_invalid);
 
 /** Masks the sequence given a BlastMaskLoc
  * @param query_blk sequence to be filtered [in]

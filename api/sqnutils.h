@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.140 $
+* $Revision: 6.143 $
 *
 * File Description: 
 *
@@ -64,10 +64,10 @@ extern "C" {
 
 NLM_EXTERN SeqEntryPtr LIBCALL GetTopSeqEntryForEntityID (Uint2 entityID);
 NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForData (Uint2 entityID, BioseqPtr bsp);
-NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForItemID (Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForItemID (Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 
 NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForDataEx (Uint2 entityID, BioseqPtr bsp, Boolean skipGenProdSet);
-NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForItemIDEx (Uint2 entityID, Uint2 itemID, Uint2 itemtype, Boolean skipGenProdSet);
+NLM_EXTERN SeqEntryPtr LIBCALL GetBestTopParentForItemIDEx (Uint2 entityID, Uint4 itemID, Uint2 itemtype, Boolean skipGenProdSet);
 
 NLM_EXTERN SeqIdPtr SeqIdFindWorst (SeqIdPtr sip);
 NLM_EXTERN void ChangeSeqIdToWorstID (SeqIdPtr sip);
@@ -124,7 +124,7 @@ NLM_EXTERN GeneRefPtr  CreateNewGeneRef (CharPtr locus, CharPtr allele,
                                      CharPtr desc, Boolean pseudo);
 NLM_EXTERN ProtRefPtr  CreateNewProtRef (CharPtr name, CharPtr desc,
                                      CharPtr ec, CharPtr activity);
-NLM_EXTERN CdRegionPtr CreateNewCdRgn (Int2 frame, Boolean orf, Int2 genCode);
+NLM_EXTERN CdRegionPtr CreateNewCdRgn (Uint1 frame, Boolean orf, Int2 genCode);
 
 NLM_EXTERN void        SetSeqFeatData (SeqFeatPtr sfp, Pointer data);
 NLM_EXTERN void        SetSeqFeatProduct (SeqFeatPtr sfp, BioseqPtr bsp);
@@ -196,10 +196,10 @@ NLM_EXTERN Boolean SeqLocMixedStrands (BioseqPtr bsp, SeqLocPtr slp);
 
 NLM_EXTERN BioseqPtr GetBioseqGivenSeqLoc (SeqLocPtr slp, Uint2 entityID);
 
-NLM_EXTERN BioseqPtr GetBioseqGivenIDs (Uint2 entityID, Uint2 itemID, Uint2 itemtype);
-NLM_EXTERN Uint2 GetItemIDGivenPointer (Uint2 entityID, Uint2 itemtype, Pointer lookfor);
+NLM_EXTERN BioseqPtr GetBioseqGivenIDs (Uint2 entityID, Uint4 itemID, Uint2 itemtype);
+NLM_EXTERN Uint4 GetItemIDGivenPointer (Uint2 entityID, Uint2 itemtype, Pointer lookfor);
 
-NLM_EXTERN Uint2 FindFeatFromFeatDefType (Uint2 subtype);
+NLM_EXTERN Uint1 FindFeatFromFeatDefType (Uint2 subtype);
 NLM_EXTERN Uint1 FindFeatDefTypeFromKey (CharPtr key);
 NLM_EXTERN CharPtr FindKeyFromFeatDefType (Uint1 type, Boolean forGBFF);
 
@@ -244,8 +244,8 @@ NLM_EXTERN void OffsetFeatureIDXrefs (SeqEntryPtr sep, Int4 offset);
 NLM_EXTERN void ReassignFeatureIDs (SeqEntryPtr sep);
 
 NLM_EXTERN void LinkCDSmRNAbyOverlap (SeqEntryPtr sep);
-
 NLM_EXTERN void LinkCDSmRNAbyProduct (SeqEntryPtr sep);
+NLM_EXTERN void LinkCDSmRNAbyLabel (SeqEntryPtr sep);
 
 NLM_EXTERN void StripFeatIDXrefAsnFilter (AsnIoPtr aip, AsnIoPtr aop);
 
@@ -735,6 +735,8 @@ extern Boolean RemoveSequenceFromAlignments (SeqEntryPtr sep, SeqIdPtr sip);
 extern BioseqPtr ReadFastaOnly (FILE *fp,
                               Boolean forceNuc, Boolean forceProt,
                               BoolPtr chars_stripped);
+
+extern void ExtendSingleGeneOnMRNA (BioseqPtr bsp, Pointer userdata);
 
 #ifdef __cplusplus
 }

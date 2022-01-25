@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.32 $
+* $Revision: 1.33 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.33  2006/07/13 17:03:51  bollin
+* resolved compiler warnings
+*
 * Revision 1.32  2005/11/28 17:49:55  coulouri
 * correction to previous commit; define snprintf for windows
 *
@@ -168,7 +171,7 @@ NLM_EXTERN EIO_Status QBlastWaitForReply (
 
 {
   time_t           currtime, starttime;
-  Int2             max = 0;
+  time_t           max = 0;
   EIO_Status       status;
   STimeout         timeout;
 #ifdef OS_MAC

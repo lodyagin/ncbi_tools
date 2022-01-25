@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.21 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -53,14 +53,14 @@ static VSMWinPtr NEAR VSMWinNew PROTO((VSeqMgrPtr vsmp));
 
 static void NEAR VSMWinShow PROTO((VSMWinPtr vsmwp));
 
-static void NEAR VSMWinDelete PROTO((VSMWinPtr vsmwp, Uint2 entityID, Uint2 itemID,
+static void NEAR VSMWinDelete PROTO((VSMWinPtr vsmwp, Uint2 entityID, Uint4 itemID,
                                           Uint2 itemtype));
 
 static void NEAR VSMWinRefreshData PROTO((VSMWinPtr vsmwp, Uint2 entityID,
-                                     Uint2 itemID, Uint2 itemtype));
+                                     Uint4 itemID, Uint2 itemtype));
 
 static void NEAR VSMPictSelect PROTO((VSMPictPtr vsmpp,
-               Uint2 entityID, Uint2 itemID, Uint2 itemtype, Boolean select));
+               Uint2 entityID, Uint4 itemID, Uint2 itemtype, Boolean select));
 
 static VSMWinPtr NEAR VSeqMgrGetWinForW PROTO((WindoW w));
 
@@ -290,7 +290,7 @@ static void NEAR VSMWinShow (VSMWinPtr vsmwp)
 }
 
 static void NEAR VSMWinRefreshData (VSMWinPtr vsmwp, Uint2 entityID,
-                                     Uint2 itemID, Uint2 itemtype)
+                                     Uint4 itemID, Uint2 itemtype)
 {
 	if (vsmwp == NULL) return;
 	
@@ -703,6 +703,7 @@ Boolean LIBCALL VSMAddMenu (WindoW w, Int2 menutype)
 				      subtype = ompp->subinputtype;
                       if (subtype == fdp->featdef_key &&
                           subtype != FEATDEF_PUB &&
+                          subtype != FEATDEF_IMP &&
                           subtype != FEATDEF_Imp_CDS &&
                           subtype != FEATDEF_misc_RNA &&
                           subtype != FEATDEF_precursor_RNA &&
@@ -1042,7 +1043,7 @@ static void VSeqMgrDeleteProc (IteM i)
 	return;
 }
 
-static void VSMDragAndDrop(VSMWinPtr vsmwp, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+static void VSMDragAndDrop(VSMWinPtr vsmwp, Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 {
 	OMProcControl ompc;
 	
@@ -1075,6 +1076,7 @@ static void VSMDragAndDrop(VSMWinPtr vsmwp, Uint2 entityID, Uint2 itemID, Uint2 
 	{
 		ObjMgrSendMsg(OM_MSG_UPDATE, ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype);
 		ObjMgrRegister(ompc.input_itemtype, ompc.input_data);
+		AssignIDsInEntityEx (entityID, ompc.input_itemtype, ompc.input_data, NULL);
 		return;
 	}
 		
@@ -1248,7 +1250,8 @@ static void VSeqMgrReleaseProc (VieweR v, SegmenT s, PoinT p)
 {
 	VSMWinPtr vsmwp;
 	SegmenT sp, top, next, prev;
-	Uint2 segID, primID, primCt, entityID=0, itemtype = 0, itemID = 0;
+	Uint2 segID, primID, primCt, entityID=0, itemtype = 0;
+	Uint4 itemID = 0;
 	Uint1 highlight = PLAIN_SEGMENT;
 	Int2 expand = 0;
 	Boolean do_drag = FALSE;
@@ -1851,7 +1854,7 @@ static VSMWinPtr NEAR VSMWinNew (VSeqMgrPtr vsmp)
 *   	deletes vsmwp from chain
 *
 *****************************************************************************/
-static void NEAR VSMWinDelete(VSMWinPtr vsmwp, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+static void NEAR VSMWinDelete(VSMWinPtr vsmwp, Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 {
 	VSeqMgrPtr vsmp;
 	VSMWinPtr tmp, prev=NULL, next=NULL;
@@ -1976,6 +1979,7 @@ Int2 LIBCALLBACK VSeqMgrMsgFunc (OMMsgStructPtr ommsp)
 {
 	OMUserDataPtr omudp;
 	VSMWinPtr vsmwp;
+	
    
     /***
 	Message(MSG_OK, "VSeqMgrMsgFunc [%d]", (int)message);
@@ -1988,8 +1992,9 @@ Int2 LIBCALLBACK VSeqMgrMsgFunc (OMMsgStructPtr ommsp)
 	switch (ommsp->message)
 	{
 		case OM_MSG_DEL:
-			if (! ommsp->entityID)  /* deleting desktop */
+			if (! ommsp->entityID) {  /* deleting desktop */
 				VSMWinDelete(vsmwp, ommsp->entityID, ommsp->itemID, ommsp->itemtype);
+		    }
 			break;
 		case OM_MSG_CREATE:
 			VSMWinRefreshData(vsmwp, ommsp->entityID, ommsp->itemID, ommsp->itemtype);
@@ -2119,7 +2124,7 @@ static Boolean VSMHighlightProc (SegmenT seg, PrimitivE prim, Uint2 segid, Uint2
 *	VSMPictSelect(vspp, entityID, itemID, itemtype, select)
 *
 *****************************************************************************/
-static void NEAR VSMPictSelect(VSMPictPtr vsmpp, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Boolean select)
+static void NEAR VSMPictSelect(VSMPictPtr vsmpp, Uint2 entityID, Uint4 itemID, Uint2 itemtype, Boolean select)
 {
 	
 	VieweR v;
@@ -2217,9 +2222,9 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			bottom = top - lineheight;
 
 			AddAttribute(seg, COLOR_ATT, WHITE_COLOR,0, 0, 0, 0);
-			AddSegRect(seg, TRUE, (Uint2)(gcp->itemID));
+			AddSegRect(seg, TRUE, gcp->itemID);
 			AddAttribute(seg, COLOR_ATT, BLACK_COLOR,0, 0, 0, 0);
-			AddSegRect(seg, FALSE, (Uint2)(gcp->itemID));
+			AddSegRect(seg, FALSE, gcp->itemID);
 			if (gcp->thistype == OBJ_SEQSUB)
 				StringMove(buf, "Data Submission");
 			else
@@ -2227,8 +2232,8 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			
 			width = StringWidth(buf) + (2 * vsmp->charw);
 				               /* this just forces the segment size */
-			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), (Uint2)(gcp->itemID));
-			AddTextLabel(seg, left+(vsmp->charw), top, buf, vsmp->font,0,LOWER_RIGHT,(Uint2)(gcp->itemID));
+			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), gcp->itemID);
+			AddTextLabel(seg, left+(vsmp->charw), top, buf, vsmp->font,0,LOWER_RIGHT,gcp->itemID);
 			vsmgp->currline--;
 			break;
 		case OBJ_SEQSUB_CONTACT:
@@ -2254,9 +2259,9 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 				(*(omtp->labelfunc))(gcp->thisitem, buf, buflen, OM_LABEL_BOTH);
 			width = StringWidth(buf) + (2 * vsmp->charw);
 				               /* this just forces the segment size */
-			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), (Uint2)(gcp->itemID));
+			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), gcp->itemID);
 			AddAttribute(seg, COLOR_ATT, BLACK_COLOR,0, 0, 0, 0);
-			AddTextLabel(seg, left+(vsmp->charw), top, buf, vsmp->font,0,LOWER_RIGHT,(Uint2)(gcp->itemID));
+			AddTextLabel(seg, left+(vsmp->charw), top, buf, vsmp->font,0,LOWER_RIGHT,gcp->itemID);
 			vsmgp->currline--;
 			break;
 		case OBJ_BIOSEQSET:
@@ -2275,13 +2280,13 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 				setcolor[k] = shading;
 
 			AddAttribute(seg, COLOR_ATT, setcolor,0, 0, 0, 0);
-			AddSegRect(seg, TRUE, (Uint2)(gcp->itemID));
+			AddSegRect(seg, TRUE, gcp->itemID);
 			(*(omtp->labelfunc))(gcp->thisitem, buf, 40, OM_LABEL_TYPE);
 			width = StringWidth(buf) + (2 * vsmp->charw);
 				               /* this just forces the segment size */
-			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), (Uint2)(gcp->itemID));
+			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), gcp->itemID);
 			AddAttribute(seg, COLOR_ATT, BLUE_COLOR, 0, 0, 0,0);
-			AddTextLabel(seg, left+(vsmp->charw), top, buf, vsmp->font,0,LOWER_RIGHT,(Uint2)(gcp->itemID));
+			AddTextLabel(seg, left+(vsmp->charw), top, buf, vsmp->font,0,LOWER_RIGHT,gcp->itemID);
 			vsmgp->currline--;
 			break;
 		case OBJ_BIOSEQ:
@@ -2303,10 +2308,10 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 				k = 2;
 			else
 				k = 1;
-			AddSegRect(seg, TRUE, (Uint2)(gcp->itemID));
+			AddSegRect(seg, TRUE, gcp->itemID);
 			AddAttribute(seg, COLOR_ATT , tcolor, 0, 0,0,0);
-			AddSegRect(seg, FALSE, (Uint2)(gcp->itemID));
-			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+			AddSegRect(seg, FALSE, gcp->itemID);
+			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 			vsmgp->currline--;
 			if (k == 2)
 			{
@@ -2315,7 +2320,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 				width = StringWidth(buf) + (3 * vsmp->charw);
 				if (width > maxwidth)
 					maxwidth = width;
-				AddTextLabel(seg, left + (2 * vsmp->charw), (top - lineheight), buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+				AddTextLabel(seg, left + (2 * vsmp->charw), (top - lineheight), buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 				vsmgp->currline--;
 			}
 			if (vsmgp->level[OBJ_BIOSEQ] == 3)
@@ -2331,11 +2336,11 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 					width = StringWidth(buf) + (3 * vsmp->charw);
 					if (width > maxwidth)
 						maxwidth = width;
-					AddTextLabel(seg, left + (2 * vsmp->charw), (top - (2*lineheight)), buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+					AddTextLabel(seg, left + (2 * vsmp->charw), (top - (2*lineheight)), buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 					vsmgp->currline--;
 				}
 			}
-			add_frame(seg, left, top-2, (left+maxwidth), (top-(k * lineheight)+2), (Uint2)(gcp->itemID));
+			add_frame(seg, left, top-2, (left+maxwidth), (top-(k * lineheight)+2), gcp->itemID);
 			break;
 		case OBJ_SEQANNOT:
 			(*(omtp->labelfunc))(gcp->thisitem, buf, 40, OM_LABEL_BOTH);
@@ -2355,9 +2360,9 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			seg = CreateSegment(vsmgp->segs[gcp->indent], (Uint2)(gcp->thistype), 0);
 			vsmgp->segs[i] = seg;
 			AddAttribute(seg, COLOR_ATT, BLUE_COLOR, 0,0,0,0);
-			AddSegRect(seg, FALSE, (Uint2)(gcp->itemID));
-			AddTextLabel(seg, left, top, buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
-			add_frame(seg, left, top, (left+width), (top-lineheight), (Uint2)(gcp->itemID));
+			AddSegRect(seg, FALSE, gcp->itemID);
+			AddTextLabel(seg, left, top, buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
+			add_frame(seg, left, top, (left+width), (top-lineheight), gcp->itemID);
 			vsmgp->currline--;
 			break;
 		case OBJ_SEQALIGN:
@@ -2370,8 +2375,8 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			(*(omtp->labelfunc))(gcp->thisitem, buf, buflen, OM_LABEL_BOTH);
 			width = StringWidth(buf) + (2 * vsmp->charw);
 			AddAttribute(seg, COLOR_ATT , BLUE_COLOR, 0, 0,0,0);
-			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
-			add_frame(seg, left+vsmp->charw, top, (left+width), (top-lineheight), (Uint2)(gcp->itemID));
+			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
+			add_frame(seg, left+vsmp->charw, top, (left+width), (top-lineheight), gcp->itemID);
 			vsmgp->currline--;
 			break;
 		case OBJ_ANNOTDESC:
@@ -2383,9 +2388,9 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			vsmgp->segs[i] = seg;
 			(*(omtp->labelfunc))(gcp->thisitem, buf, buflen, OM_LABEL_BOTH);
 			width = StringWidth(buf) + (2 * vsmp->charw);
-			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), (Uint2)(gcp->itemID));
+			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), gcp->itemID);
 			AddAttribute(seg, COLOR_ATT , CYAN_COLOR, 0, 0,0,0);
-			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 			vsmgp->currline--;
 			break;
 		case OBJ_SEQGRAPH:
@@ -2398,7 +2403,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			(*(omtp->labelfunc))(gcp->thisitem, buf, buflen, OM_LABEL_BOTH);
 			width = StringWidth(buf) + (2 * vsmp->charw);
 			AddAttribute(seg, COLOR_ATT , BLUE_COLOR, 0, 0,0,0);
-			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 			vsmgp->currline--;
 			maxwidth = width;
 			k = 1;
@@ -2410,10 +2415,10 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 				width = StringWidth(buf) + (3 * vsmp->charw);
 				if (width > maxwidth)
 					maxwidth = width;
-				AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight), buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+				AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight), buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 				vsmgp->currline--;
 			}
-			add_frame(seg, left, top-2, (left+width), (top-(k*lineheight)+2), (Uint2)(gcp->itemID));
+			add_frame(seg, left, top-2, (left+width), (top-(k*lineheight)+2), gcp->itemID);
 			/* add_frame(seg, left+vsmp->charw, top, (left+width), (top-lineheight), (Uint2)(gcp->itemID)); */
 			break;
 		case OBJ_SEQFEAT:
@@ -2426,7 +2431,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			(*(omtp->labelfunc))(gcp->thisitem, buf, buflen, OM_LABEL_BOTH);
 			width = StringWidth(buf) + (2 * vsmp->charw);
 			AddAttribute(seg, COLOR_ATT , BLUE_COLOR, 0, 0,0,0);
-			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 			vsmgp->currline--;
 			maxwidth = width;
 			k = 1;
@@ -2439,7 +2444,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 				width = StringWidth(buf) + (3 * vsmp->charw);
 				if (width > maxwidth)
 					maxwidth = width;
-				AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight), buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+				AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight), buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 				vsmgp->currline--;
 				if (vsmp != NULL && vsmp->extraLevel && sfp->product != NULL) {
 					k++;
@@ -2449,7 +2454,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 					width = StringWidth(buf) + (3 * vsmp->charw);
 					if (width > maxwidth)
 						maxwidth = width;
-					AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight*2), buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+					AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight*2), buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 					vsmgp->currline--;
 				}
 				if (vsmp != NULL && vsmp->extraLevel && sfp->data.choice == SEQFEAT_RNA && sfp->ext != NULL) {
@@ -2473,7 +2478,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 										width = StringWidth(buf) + (3 * vsmp->charw);
 										if (width > maxwidth)
 											maxwidth = width;
-										AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight*(k-1)), buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+										AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight*(k-1)), buf, vsmp->font,0, LOWER_RIGHT,gcp->itemID);
 										vsmgp->currline--;
 										SeqIdFree (sip);
 									}
@@ -2483,7 +2488,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 					}
 				}
 			}
-			add_frame(seg, left, top-2, (left+width), (top-(k*lineheight)+2), (Uint2)(gcp->itemID));
+			add_frame(seg, left, top-2, (left+width), (top-(k*lineheight)+2), gcp->itemID);
 			break;
 		case OBJ_SEQDESC:
 			if (vsmgp->level[OBJ_SEQDESC] < 2)
@@ -2494,9 +2499,9 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			vsmgp->segs[i] = seg;
 			(*(omtp->labelfunc))(gcp->thisitem, buf, buflen, OM_LABEL_BOTH);
 			width = StringWidth(buf) + (2 * vsmp->charw);
-			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), (Uint2)(gcp->itemID));
+			add_frame(seg, left, top-2, (left+width), (top-lineheight+2), gcp->itemID);
 			AddAttribute(seg, COLOR_ATT , BLACK_COLOR, 0, 0,0,0);
-			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT, gcp->itemID);
 			vsmgp->currline--;
 			break;
 		default:
@@ -2799,6 +2804,9 @@ static OMUserDataPtr NEAR VSMAddPictureToEntity (VSMWinPtr vsmwp, Uint2 entityID
 	{
 		omudp = ObjMgrAddUserData(entityID, vsmwp->procid, vsmwp->proctype,
 					vsmwp->userkey);
+	    if (omudp == NULL) {
+	      return NULL;
+	    }
 		vsmpp = MemNew(sizeof(VSMPict));
 		vsmpp->vsmwin = vsmwp;
 		vsmpp->entityID = entityID;

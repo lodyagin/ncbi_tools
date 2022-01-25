@@ -1,5 +1,5 @@
 
-/* $Id: link_hsps.c,v 1.58 2005/11/16 14:27:04 madden Exp $
+/* $Id: link_hsps.c,v 1.61 2006/06/29 16:23:08 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: link_hsps.c,v 1.58 2005/11/16 14:27:04 madden Exp $";
+    "$Id: link_hsps.c,v 1.61 2006/06/29 16:23:08 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/link_hsps.h>
@@ -417,8 +417,8 @@ s_LinkHSPStructReset(LinkHSPStruct* lhsp)
  */
 static Int2
 s_BlastEvenGapLinkHSPs(EBlastProgramType program_number, BlastHSPList* hsp_list, 
-   BlastQueryInfo* query_info, Int4 subject_length,
-   BlastScoreBlk* sbp, const BlastLinkHSPParameters* link_hsp_params,
+   const BlastQueryInfo* query_info, Int4 subject_length,
+   const BlastScoreBlk* sbp, const BlastLinkHSPParameters* link_hsp_params,
    Boolean gapped_calculation)
 {
 	LinkHSPStruct* H,* H2,* best[2],* first_hsp,* last_hsp,** hp_frame_start;
@@ -1120,7 +1120,7 @@ typedef struct BlastLinkedHSPSet {
  */
 static double 
 s_SumHSPEvalue(EBlastProgramType program_number, 
-   BlastQueryInfo* query_info, Int4 subject_length, 
+   const BlastQueryInfo* query_info, Int4 subject_length, 
    const BlastLinkHSPParameters* link_hsp_params, 
    BlastLinkedHSPSet* head_hsp, BlastLinkedHSPSet* new_hsp, double* sum_score)
 {
@@ -1570,7 +1570,7 @@ s_LinkedHSPSetArrayCleanUp(BlastLinkedHSPSet** link_hsp_array, Int4 hspcnt,
             lhsp->hsp->subject = seg;
             /* Also restore the correct context number. */
             lhsp->hsp->context = lhsp->hsp->context * NUM_FRAMES +
-                FrameToContext(lhsp->hsp->query.frame);
+                BLAST_FrameToContext(lhsp->hsp->query.frame, program);
         }
         sfree(lhsp);
     }
@@ -1637,7 +1637,7 @@ s_LinkedHSPSetArrayIndexQueryEnds(BlastLinkedHSPSet** hsp_array, Int4 hspcnt,
  */
 static Int2
 s_BlastUnevenGapLinkHSPs(EBlastProgramType program, BlastHSPList* hsp_list, 
-   BlastQueryInfo* query_info, Int4 subject_length, BlastScoreBlk* sbp, 
+   const BlastQueryInfo* query_info, Int4 subject_length, const BlastScoreBlk* sbp, 
    const BlastLinkHSPParameters* link_hsp_params, Boolean gapped_calculation)
 {
    BlastHSP** hsp_array;
@@ -1783,14 +1783,16 @@ s_BlastUnevenGapLinkHSPs(EBlastProgramType program, BlastHSPList* hsp_list,
 /* see description in link_hsps.h */
 Int2 
 BLAST_LinkHsps(EBlastProgramType program_number, BlastHSPList* hsp_list, 
-   BlastQueryInfo* query_info, Int4 subject_length,
-   BlastScoreBlk* sbp, const BlastLinkHSPParameters* link_hsp_params,
+   const BlastQueryInfo* query_info, Int4 subject_length,
+   const BlastScoreBlk* sbp, const BlastLinkHSPParameters* link_hsp_params,
    Boolean gapped_calculation)
 {
     Int4 index;
 
     if (!hsp_list || hsp_list->hspcnt == 0)
         return 0;
+
+    ASSERT(link_hsp_params);
 
     /* Remove any information on number of linked HSPs from previous
        linking. */

@@ -151,7 +151,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 Taxon3RequestAsnWrite(Taxon3RequestPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -491,7 +490,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 Taxon3ReplyAsnWrite(Taxon3ReplyPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1039,7 +1037,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 T3DataAsnWrite(T3DataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

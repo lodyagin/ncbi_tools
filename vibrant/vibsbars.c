@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.6 $
 *
 * File Description:
 *       Vibrant scroll bar functions
@@ -41,6 +41,15 @@
 *
 *
 * $Log: vibsbars.c,v $
+* Revision 6.6  2006/09/14 19:18:29  ivanov
+* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
+*
+* Revision 6.5  2006/09/14 18:05:45  ivanov
+* Fixed compilation errors on MS Windows
+*
+* Revision 6.4  2006/09/14 14:45:38  kans
+* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
+*
 * Revision 6.3  2001/04/05 03:23:07  juran
 * Carbon UPP fix and removed pre-UPP support.
 *
@@ -132,7 +141,7 @@
 #endif
 
 #ifdef WIN_MSWIN
-#define Nlm_BarTool HWND
+#  define Nlm_BarTool HWND
 #endif
 
 #ifdef WIN_MOTIF
@@ -856,7 +865,7 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
 }
 
 
-LRESULT CALLBACK EXPORT BarProc (HWND hwnd, UINT message,
+static LRESULT CALLBACK EXPORT BarProc (HWND hwnd, UINT message,
                                  WPARAM wParam, LPARAM lParam)
 {
   Nlm_BaR  b;
@@ -998,11 +1007,11 @@ static void Nlm_NewBarX (Nlm_BaR b, Nlm_GraphiC slv,
                                                Nlm_currentHInst);
 
   if (lpfnOldBarProc == NULL)
-    lpfnOldBarProc = (WNDPROC)GetWindowLong(c, GWL_WNDPROC);
-  else if (lpfnOldBarProc != (WNDPROC)GetWindowLong(c, GWL_WNDPROC))
+    lpfnOldBarProc = (WNDPROC)GetWindowLongPtr(c, GWLP_WNDPROC);
+  else if (lpfnOldBarProc != (WNDPROC)GetWindowLongPtr(c, GWLP_WNDPROC))
     Nlm_Message(MSG_ERROR, "BarProc subclass error");
 
-  SetWindowLong(c, GWL_WNDPROC, (LONG)lpfnNewBarProc);
+  SetWindowLongPtr(c, GWLP_WNDPROC, (LONG)lpfnNewBarProc);
 #endif
 
 #ifdef WIN_MOTIF

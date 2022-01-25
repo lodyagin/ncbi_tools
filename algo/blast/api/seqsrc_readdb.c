@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.c,v 1.52 2006/05/04 15:53:12 camacho Exp $
+/*  $Id: seqsrc_readdb.c,v 1.54 2006/05/31 19:00:52 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,9 @@
  * Implementation of the BlastSeqSrc interface using readdb
  */
 
-static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.52 2006/05/04 15:53:12 camacho Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.54 2006/05/31 19:00:52 camacho Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/seqsrc_readdb.h>
 #include <algo/blast/core/blast_seqsrc_impl.h>
@@ -206,6 +208,39 @@ s_ReaddbGetSeqLen(void* readdb_handle, void* args)
 
     return readdb_get_sequence_length(rdfp, *oid);
 }
+
+#ifdef KAPPA_PRINT_DIAGNOSTICS
+
+static Blast_GiList*
+s_ReaddbGetGis(void* readdb_handle, void* args)
+{
+    ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
+    Int4* oid = (Int4*) args;
+    Blast_GiList* retval = NULL;
+    Uint4 header = 0;
+    SeqId* sip = NULL;
+
+    if (!rdfp || !oid)
+       return NULL;
+
+    retval = Blast_GiListNew();
+
+    while (readdb_get_header(rdfp, *oid, &header, &sip, NULL)) {
+        int gi = -1;
+        SeqId* best_id = SeqIdFindBest(sip, SEQID_GI);
+        if ( !best_id ) {
+            sip = SeqIdSetFree(sip);
+            continue;
+        }
+        gi = best_id->data.intvalue;
+        Blast_GiList_Append(retval, gi);
+        sip = SeqIdSetFree(sip);
+    }
+
+    return retval;
+}
+
+#endif /* KAPPA_PRINT_DIAGNOSTICS */
 
 /** Mutex for retrieving ordinal id chunks from ReadDB in a multi-threaded
  * search.
@@ -458,6 +493,9 @@ s_InitNewReaddbSeqSrc(BlastSeqSrc* retval, ReadDBFILE* rdfp)
     _BlastSeqSrcImpl_SetGetSeqLen(retval, &s_ReaddbGetSeqLen);
     _BlastSeqSrcImpl_SetIterNext(retval, &s_ReaddbIteratorNext);
     _BlastSeqSrcImpl_SetReleaseSequence(retval, &s_ReaddbReleaseSequence);
+#ifdef KAPPA_PRINT_DIAGNOSTICS
+    _BlastSeqSrcImpl_SetGetGis(retval, &s_ReaddbGetGis);
+#endif /* KAPPA_PRINT_DIAGNOSTICS */
 }
 
 /** Fills contents in the allocated BlastSeqSrc, given an already created

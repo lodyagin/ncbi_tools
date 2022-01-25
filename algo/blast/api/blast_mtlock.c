@@ -1,4 +1,4 @@
-/*  $Id: blast_mtlock.c,v 1.5 2005/03/31 16:18:21 dondosha Exp $
+/*  $Id: blast_mtlock.c,v 1.6 2006/05/24 21:17:50 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,8 +31,10 @@
  * Initialization for the mutex locking interface. 
  */
 
+#ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_mtlock.c,v 1.5 2005/03/31 16:18:21 dondosha Exp $";
+    "$Id: blast_mtlock.c,v 1.6 2006/05/24 21:17:50 camacho Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <ncbithr.h>
 #include <algo/blast/api/blast_mtlock.h>

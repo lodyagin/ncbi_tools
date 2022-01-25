@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.56 $
+* $Revision: 6.57 $
 *
 * File Description: 
 *
@@ -657,7 +657,7 @@ static void update_promptsel (PaneL pnl, CharPtr label)
   SetTitle (wdp->pos, label);
 }
 
-static CharPtr seqid_tolabel (SeqIdPtr sip, Uint2 choice)
+static CharPtr seqid_tolabel (SeqIdPtr sip, Uint1 choice)
 {
   BioseqPtr bsp;
   SeqIdPtr  tmp = NULL;
@@ -693,7 +693,7 @@ static CharPtr seqid_tolabel (SeqIdPtr sip, Uint2 choice)
   return strp;
 }
 
-extern void to_update_prompt (PaneL pnl, SelStructPtr ssp, SeqAlignPtr salp, ValNodePtr sqloc_list, Boolean sel, Uint2 choice)
+extern void to_update_prompt (PaneL pnl, SelStructPtr ssp, SeqAlignPtr salp, ValNodePtr sqloc_list, Boolean sel, Uint1 choice)
 {
   SeqIdPtr  sip;
   Int4      pos, posto;
@@ -1503,10 +1503,10 @@ static SelStructPtr make_bufssp (SelStructPtr csp, SelStructPtr bufhead, Int2 it
 ***  locate_point 
 ***
 **********************************************************/
-extern Uint1 locate_point (PoinT pt, RecT rp, Uint2 *item_id, Uint2 *the_entity_id, Uint2 *item_type, Uint2 *item_subtype, Int4 *position, Int2 *line, EditAlignDataPtr adp)
+extern Uint1 locate_point (PoinT pt, RecT rp, Uint4 *item_id, Uint2 *the_entity_id, Uint2 *item_type, Uint2 *item_subtype, Int4 *position, Int2 *line, EditAlignDataPtr adp)
 {
-  Uint2 itemid = 0, 
-        seqEntityid = 0;
+  Uint4 itemid = 0;
+  Uint2 seqEntityid = 0;
   Uint2 itemtype = 0;
   Uint2 itemsubtype = 0;
   Int4  pos = -1;
@@ -1515,7 +1515,7 @@ extern Uint1 locate_point (PoinT pt, RecT rp, Uint2 *item_id, Uint2 *the_entity_
   Int2  ligne = -1;
   Uint1 what = BADLAND;
 
-  *item_id = *the_entity_id = (Uint2) 0;
+  *item_id = *the_entity_id = (Uint4) 0;
   *item_type= *item_subtype = (Uint2) 0;
   *position = (Int4) -1;
   *line = (Int2) -1;
@@ -1570,7 +1570,7 @@ extern Uint1 locate_point (PoinT pt, RecT rp, Uint2 *item_id, Uint2 *the_entity_
   }  
   if ( what == SIDLAND ) 
   {
-         *item_id   = (Uint2) itemid;
+         *item_id   = itemid;
          *the_entity_id = (Uint2) seqEntityid;
          *item_type = (Uint2) itemtype;
          *item_subtype = (Uint2) itemsubtype;
@@ -1579,7 +1579,7 @@ extern Uint1 locate_point (PoinT pt, RecT rp, Uint2 *item_id, Uint2 *the_entity_
   } 
   else if ( what == SEQLAND ) 
   {
-         *item_id   = (Uint2) itemid;
+         *item_id   = itemid;
          *the_entity_id = (Uint2) seqEntityid;
          *item_type = (Uint2) itemtype;
          *item_subtype = (Uint2) itemsubtype;
@@ -2348,8 +2348,9 @@ ssp->regiontype, ssp->region);
           }
           else if ( j != adp->caret_line ) 
           {
-  SeqIdPtr sip;
-  Uint2 eid, iid, it;
+               SeqIdPtr sip;
+               Uint2 eid, it;
+               Uint4 iid;
                eid = adp->caret.entityID;
                iid = adp->caret.itemID;
                it = adp->caret.itemtype;
@@ -2432,8 +2433,9 @@ ssp->regiontype, ssp->region);
           }
           else if (j != adp->caret_line ) 
           {
-  SeqIdPtr sip;
-  Uint2 eid, iid, it;
+               SeqIdPtr sip;
+               Uint2 eid, it;
+               Uint4 iid;
                eid = adp->caret.entityID;
                iid = adp->caret.itemID;
                it = adp->caret.itemtype;

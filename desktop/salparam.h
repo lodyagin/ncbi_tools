@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -100,12 +100,12 @@ extern void inval_panel (PaneL pnl, Int2 x, Int2 y);
 extern void inval_window (WindoW w);
 extern void inval_rect (Int2 left, Int2 top, Int2 right, Int2 bottom);
 extern void inval_allines (EditAlignDataPtr adp, RecT *rp);
-extern void inval_selstruct (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int2 left, Int2 toright);
-extern void inval_selstructpos (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, RecT *rp, Int4 pos);
-extern void inval_selstructpos_tobottom (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, RecT *rp, Int4 pos);
-extern void inval_selstructloc (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int4 from, Int4 to);
+extern void inval_selstruct (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int2 left, Int2 toright);
+extern void inval_selstructpos (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, RecT *rp, Int4 pos);
+extern void inval_selstructpos_tobottom (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, RecT *rp, Int4 pos);
+extern void inval_selstructloc (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int4 from, Int4 to);
 
-extern void inval_selstructloc_forfeat (EditAlignDataPtr adp, Uint2 ei, Uint2 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int4 from, Int4 to);
+extern void inval_selstructloc_forfeat (EditAlignDataPtr adp, Uint2 ei, Uint4 ii, Uint2 it, Uint2 itemsubtype, RecT *rp, Int4 from, Int4 to);
 
 extern void inval_rectidselected (EditAlignDataPtr adp, RecT *rp);
 extern void inval_pep (EditAlignDataPtr adp, RecT *rp);

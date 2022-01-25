@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.c,v 1.57 2006/03/21 15:27:58 madden Exp $
+/* $Id: blast_seqalign.c,v 1.60 2006/06/13 14:42:44 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,9 @@
  * Conversion of BLAST results to the SeqAlign form
  */
 
-static char const rcsid[] = "$Id: blast_seqalign.c,v 1.57 2006/03/21 15:27:58 madden Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: blast_seqalign.c,v 1.60 2006/06/13 14:42:44 papadopo Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_seqalign.h>
 
@@ -84,8 +86,8 @@ SBlastSeqalignArrayFree(SBlastSeqalignArray* seqalign_vec)
  * @param hsp HSP structure [in]
  * @return Score set for this HSP.
  */
-static ScorePtr 
-s_GetScoreSetFromBlastHsp(BlastHSP* hsp)
+ScorePtr 
+GetScoreSetFromBlastHsp(BlastHSP* hsp)
 {
    ScorePtr	score_set=NULL;
    double	prob;
@@ -196,7 +198,7 @@ s_HSPToDenseDiag(DenseDiagPtr* old, BlastHSP* hsp, Boolean reverse,
 			new->starts[1] = subject_length - hsp->subject.end;
 		}
 	}
-	new->scores = s_GetScoreSetFromBlastHsp(hsp);
+	new->scores = GetScoreSetFromBlastHsp(hsp);
 
 /* Go to the end of the chain, and then attach "new" */
 	if (*old)
@@ -300,7 +302,7 @@ s_HSPToStdSeg(StdSeg** old, BlastHSP* hsp, Int4 query_length,
 	}
 	new->loc = slp;
 
-	new->scores = s_GetScoreSetFromBlastHsp(hsp);
+	new->scores = GetScoreSetFromBlastHsp(hsp);
 
 /* Go to the end of the chain, and then attach "new" */
 	if (*old)
@@ -712,21 +714,10 @@ s_GapMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id,
     return sap;
 }
 
-/** Convert an HSP into a SeqAlign of type DenseSeg.
- * Used for a non-simple interval (i.e., one without subs. or 
- * deletions).  
- * @param program Type of BLAST program [in]
- * @param hsp HSP structure to convert. [in]
- * @param subject_id Seq-id of the subject sequence [in]
- * @param query_id Seq-id of the query sequence [in]
- * @param query_length Length of query sequence [in]
- * @param subject_length Length of subject sequence [in]
- * @return Seq-align corresponding to this alignment.
- */
-static SeqAlignPtr
-s_BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp, 
-                     SeqIdPtr subject_id, SeqIdPtr query_id,
-                     Int4 query_length, Int4 subject_length)
+SeqAlignPtr
+BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp, 
+                   SeqIdPtr subject_id, SeqIdPtr query_id,
+                   Int4 query_length, Int4 subject_length)
 
 {
     GapEditScript* esp;
@@ -838,20 +829,10 @@ s_BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,
     return sap;
 }
 
-/** This function is used for Out-Of-Frame traceback conversion
- * Convert an OOF EditScript chain to a SeqAlign of type StdSeg.
- * @param program Type of BLAST program (blastx or tblastn) [in]
- * @param hsp Internal HSP structure. [in]
- * @param query_id Seq-id of the query sequence [in]
- * @param subject_id Seq-id of the subject sequence [in]
- * @param query_length Length of query sequence [in]
- * @param subject_length Length of subject sequence [in]
- * @return Resulting Seq-align.
- */
-static SeqAlignPtr
-s_OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp, 
-                         SeqIdPtr query_id, SeqIdPtr subject_id,
-                         Int4 query_length, Int4 subject_length)
+SeqAlignPtr
+OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp, 
+                      SeqIdPtr query_id, SeqIdPtr subject_id,
+                      Int4 query_length, Int4 subject_length)
 {
     Boolean reverse = FALSE;
     GapEditScript* esp;
@@ -1289,15 +1270,15 @@ s_HSPListToSeqAlignGapped(EBlastProgramType program_number,
    for (index=0; index<hsp_list->hspcnt; index++) { 
       if (is_ooframe) {
          seqalign = 
-             s_OOFBlastHSPToSeqAlign(program_number, hsp_array[index], 
-                                      query_id, subject_id, query_length, 
-                                      subject_length);
+             OOFBlastHSPToSeqAlign(program_number, hsp_array[index], 
+                                   query_id, subject_id, query_length, 
+                                   subject_length);
       } else {
          /* The following line is needed for negative frames of translated 
             query */
          seqalign = 
-             s_BlastHSPToSeqAlign(program_number, hsp_array[index], subject_id, 
-                                  query_id, query_length, subject_length);
+             BlastHSPToSeqAlign(program_number, hsp_array[index], subject_id, 
+                                query_id, query_length, subject_length);
       }
       if (index==0) {
          *head_seqalign = last_seqalign = seqalign;
@@ -1305,7 +1286,7 @@ s_HSPListToSeqAlignGapped(EBlastProgramType program_number,
          last_seqalign->next = seqalign;
          last_seqalign = last_seqalign->next;
       }
-      seqalign->score = s_GetScoreSetFromBlastHsp(hsp_array[index]);
+      seqalign->score = GetScoreSetFromBlastHsp(hsp_array[index]);
    }
 
    return status;

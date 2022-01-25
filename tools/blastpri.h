@@ -32,8 +32,11 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.122 $ 
+/* $Revision: 6.123 $ 
 * $Log: blastpri.h,v $
+* Revision 6.123  2006/09/21 13:42:37  madden
+* BlastProcessGiLists returns a boolean to specify that an attempt was made to process a list of GIs.  If no matches were found this can be reported back to the user
+*
 * Revision 6.122  2006/04/26 12:42:36  madden
 * BlastSetUserErrorString and BlastDeleteUserErrorString moved from blastool.c to blfmtutl.c
 *
@@ -992,7 +995,7 @@ StdSegPtr BLASTHspToStdSeg PROTO((BlastSearchBlkPtr search, Int4 subject_length,
 int LIBCALLBACK BlastPrintAlignInfo PROTO((VoidPtr srch));
 int LIBCALLBACK MegaBlastPrintAlignInfo PROTO((VoidPtr srch));
 
-void
+Boolean
 BlastProcessGiLists PROTO((BlastSearchBlkPtr search, 
             BLAST_OptionsBlkPtr options, BlastDoubleInt4Ptr gi_list, 
             Int4 gi_list_size));

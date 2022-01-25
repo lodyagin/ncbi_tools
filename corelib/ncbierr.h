@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.h,v 6.7 2001/07/12 21:58:03 vakatov Exp $
+* $Id: ncbierr.h,v 6.8 2006/07/13 17:10:36 bollin Exp $
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -44,6 +44,9 @@
 *                       of functions from int to ErrSev to eliminate warnings
 *
 * $Log: ncbierr.h,v $
+* Revision 6.8  2006/07/13 17:10:36  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.7  2001/07/12 21:58:03  vakatov
 * Introduced #NLM_NO_TRACE (define it if you need to prohibit macro #TRACE)
 *
@@ -184,7 +187,8 @@ typedef struct ErrDesc
 	const ValNode *userstr;
 	const ErrMsgRoot *root;
 	const ErrMsgNode *node;
-	Nlm_Uint2 entityID, itemID, itemtype;  /* for gather.c messages */
+	Nlm_Uint2 entityID, itemtype;  /* for gather.c messages */
+	Nlm_Uint4 itemID;
 } ErrDesc;
 typedef const ErrDesc *ErrDescPtr;
 
@@ -218,7 +222,7 @@ NLM_EXTERN int CDECL Nlm_ErrPostEx VPROTO((ErrSev sev, int lev1, int lev2, const
 NLM_EXTERN int LIBCALL Nlm_ErrPostStr PROTO((ErrSev sev, int lev1, int lev2, const char *str));
 NLM_EXTERN void CDECL Nlm_ErrLogPrintf VPROTO((const char *fmt, ...));
 NLM_EXTERN void LIBCALL Nlm_ErrLogPrintStr PROTO((const char *str));
-NLM_EXTERN int LIBCALL Nlm_ErrSetContext PROTO((const char *ctx, const char *fn, int ln, int db, Nlm_Uint2 entityID, Nlm_Uint2 itemID, Nlm_Uint2 itemtype));
+NLM_EXTERN int LIBCALL Nlm_ErrSetContext PROTO((const char *ctx, const char *fn, int ln, int db, Nlm_Uint2 entityID, Nlm_Uint4 itemID, Nlm_Uint2 itemtype));
 
 #define ErrPost	\
 	(Nlm_ErrSetContext(THIS_MODULE,THIS_FILE,__LINE__,DBFLAG,0,0,0)) ? (void)0 : \

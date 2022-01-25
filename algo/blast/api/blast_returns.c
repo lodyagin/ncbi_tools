@@ -1,4 +1,4 @@
-/* $Id: blast_returns.c,v 1.29 2006/04/26 12:46:00 madden Exp $
+/* $Id: blast_returns.c,v 1.34 2006/10/13 18:44:29 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,9 @@
  * Manipulating data returned from BLAST other than Seq-aligns
  */
 
-static char const rcsid[] = "$Id: blast_returns.c,v 1.29 2006/04/26 12:46:00 madden Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: blast_returns.c,v 1.34 2006/10/13 18:44:29 papadopo Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_returns.h>
 #include <algo/blast/api/blast_seq.h>
@@ -381,6 +383,7 @@ s_SummaryDBStatsFill(EBlastProgramType program_number,
    (*db_stats)->dbnum = num_entries;
 
    if (program_number == eBlastTypeBlastx ||
+       program_number == eBlastTypeRpsTblastn ||
        program_number == eBlastTypeTblastx)
       num_frames = NUM_FRAMES;
    else if (program_number == eBlastTypeBlastn ||
@@ -401,8 +404,10 @@ s_SummaryDBStatsFill(EBlastProgramType program_number,
           total_length - num_entries*((*db_stats)->hsp_length);
       (*db_stats)->eff_searchsp = 
           query_info->contexts[query_info->first_context].eff_searchsp;
-      if (eff_len_options && eff_len_options->searchsp_eff)
-         (*db_stats)->eff_searchsp_used = eff_len_options->searchsp_eff;
+      if (eff_len_options && 
+          eff_len_options->num_searchspaces &&
+          eff_len_options->searchsp_eff[0])
+         (*db_stats)->eff_searchsp_used = eff_len_options->searchsp_eff[0];
       else
          (*db_stats)->eff_searchsp_used = (*db_stats)->eff_searchsp;
    }
@@ -643,8 +648,7 @@ int Blast_SummaryReturnUpdate(const Blast_SummaryReturn* new_return,
     if (new_return->error)
         full_return->error = SBlastMessageDup(new_return->error);
 
-    full_return->pattern_info = (SPHIQueryInfo*)
-        BlastMemDup(new_return->pattern_info, sizeof(SPHIQueryInfo));
+    full_return->pattern_info = SPHIQueryInfoCopy(new_return->pattern_info);
 
     return 0;
 }

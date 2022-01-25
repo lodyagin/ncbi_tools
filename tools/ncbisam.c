@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: ncbisam.c,v 6.31 2005/07/28 14:57:10 coulouri Exp $";
+static char const rcsid[] = "$Id: ncbisam.c,v 6.33 2006/06/21 13:55:06 camacho Exp $";
 
-/* $Id: ncbisam.c,v 6.31 2005/07/28 14:57:10 coulouri Exp $
+/* $Id: ncbisam.c,v 6.33 2006/06/21 13:55:06 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,19 @@ static char const rcsid[] = "$Id: ncbisam.c,v 6.31 2005/07/28 14:57:10 coulouri 
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.31 $
+* $Revision: 6.33 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.33  2006/06/21 13:55:06  camacho
+* Fixed from Ilya Dondoshansky in s_ISAMBufferReadLine
+* Change FILEREAD_BUFFER_SIZE from 1MB to 64k
+*
+* Revision 6.32  2006/05/10 20:47:15  camacho
+* From Ilya Dondoshansky: In ISAMMakeStringIndex: read large chunks from file instead of one line at a time.
+*
 * Revision 6.31  2005/07/28 14:57:10  coulouri
 * remove dead code
 *
@@ -262,7 +269,9 @@ ISAMObjectPtr ISAMObjectNew(ISAMType type,       /* Type of ISAM */
 {
     ISAMDataPtr data;
     Char name[MAX_FILENAME_LEN];
+#ifndef OS_UNIX
 	CharPtr ch, ch1;
+#endif
 
     if(DBFile == NULL)
         return NULL;
@@ -612,6 +621,63 @@ static ISAMErrorCode ISAMDumpTermEntry(ISAMTmpCAPtr cap, FILE *off_fd,
     return ISAMNoError;
 }
 
+#define IS_END_BUF(ch) (ch == EOF || ch == '\0')
+#define IS_NEWLINE(ch) (IS_END_BUF(ch) || (ch == '\n' || ch == '\r')) 
+
+/** Reads one line from a buffer. If end of buffer is reached before the next 
+ * newline character, line is not returned, and the start of line is saved 
+ * in a "remainder" string. 
+ * @param buffer Start of buffer to read from; pointer to the start of next line
+ *               on exit. If line is unfinished, output pointer is the same as 
+ *               input pointer. [in|out]
+ * @param buffer_length Length of input and output buffer. [in|out] 
+ * @param line_length Length of the current line, even if unfinished. [out]
+ * @return TRUE if full line has been read.
+ */
+static Boolean 
+s_ISAMBufferReadLine(char* *buffer, Int4* buffer_length, Int4* line_length)
+{
+    char* ptr;
+    Int4 length;
+    Boolean success = TRUE;
+    Boolean end_of_file = FALSE;
+
+    if (!buffer)
+        return 0;
+    
+    for (ptr = *buffer, length = 0; 
+         (length < *buffer_length) && !IS_NEWLINE(*ptr); ++ptr, ++length);
+    
+    /* Check if end of buffer (file) has been reached. */
+    /* If buffer_length has been reached, consider this line as unfinished,
+       even if a full line has actually been found, because we were unable
+       to reach the start of the next line. */
+    if (length == *buffer_length) {
+        success = FALSE;
+    } else if (IS_END_BUF(*ptr)) {
+        end_of_file = TRUE;
+    } else if (IS_NEWLINE(*ptr)) {
+        /* If new line has been reached, and this is not the end of buffer, 
+           skip the white space before the start of the next line. */
+        while ((length < *buffer_length) && IS_WHITESP(*ptr)) {
+            ++length;
+            ++ptr;
+        }
+    }
+
+    *line_length = (ptr - *buffer);
+
+    if (success) {
+        *buffer = ptr;
+        if (end_of_file)
+            *buffer_length = 0;
+        else
+            *buffer_length -= *line_length;
+    }
+
+    return success;
+}
+
 /* returns NULL terminated string \n\r are removed */
 
 static Int4 ISAMReadLine(ISAMDataPtr data)
@@ -652,22 +718,26 @@ static Int4 ISAMReadLine(ISAMDataPtr data)
 
 static Boolean ISAMCheckIfSorted(ISAMDataPtr data) 
 {
-    CharPtr prevline;
+    CharPtr prevline = NULL;
     Int4 length;
     CharPtr chptr;
 
     if(data == NULL || data->db_fd == NULL || data->max_line_size == 0)
         return FALSE;
     
-    prevline = MemNew(data->max_line_size);
-    
     rewind(data->db_fd);
+    
+    if (data->sorting_done)
+        return TRUE;
+
     data->NumTerms = 0;
+    prevline = MemNew(data->max_line_size);
+
     
     if(data->type == ISAMString || data->type == ISAMStringDatabase) {
         while(ISAMReadLine(data) > 0) {
             data->NumTerms++;
-            
+
             /* If not testing data - lines eventually should be counted */
             if(data->test_non_unique) {
                 if((chptr = StringChr(data->line, ISAM_DATA_CHAR)) != NULL)
@@ -738,17 +808,48 @@ static ISAMErrorCode ISAMMakeStringIndex(
     MasterPos = (Int4 *)Nlm_Malloc(sizeof(Int4) * (((data->NumTerms+1)/(data->PageSize))+2));
     
     Pos = TermCount = SampleCount = 0;
-    
-    while(ISAMReadLine(data) > 0) {
-        if (TermCount++ % data->PageSize == 0) 
-            	MasterPos[SampleCount++] = SwapUint4(Pos);
-        
+
+#define FILEREAD_BUFFER_SIZE 0x00010000
+    {
+        char buffer[FILEREAD_BUFFER_SIZE];
+        Int4 buffer_length = FILEREAD_BUFFER_SIZE;
+        char *buffer_ptr = buffer;
+        Int4 bytes_read;
+
         Pos = ftell(data->db_fd);
+
+        while ((bytes_read = 
+               FileRead(buffer_ptr, 1, buffer_length, data->db_fd)) > 0) {
+            Int4 line_length;
+            /* Lines are always read beginning at the start of the original 
+               buffer. */
+            buffer_length = bytes_read + (buffer_ptr - buffer);
+            buffer_ptr = buffer;
+            while (buffer_length > 0 &&
+                   s_ISAMBufferReadLine(&buffer_ptr, &buffer_length, 
+                                        &line_length)) {
+                if (TermCount++ % data->PageSize == 0) 
+                    MasterPos[SampleCount++] = SwapUint4(Pos);
+                Pos += line_length;
+            }
+            /* If an unfinished line is left, copy it to the start of the
+               buffer, and set buffer pointer so that next file chunk is read
+               into location immediately following the unfinished line. */
+            if (buffer_length > 0 && line_length > 0) {
+                Int4 file_pos = ftell(data->db_fd);
+                memmove(buffer, buffer_ptr, line_length);
+                buffer_ptr = buffer + line_length;
+                ASSERT(Pos ==  file_pos - line_length);
+                buffer_length = FILEREAD_BUFFER_SIZE - line_length;
+            } else {
+                buffer_ptr = buffer;
+                buffer_length = FILEREAD_BUFFER_SIZE;
+            }
+        }
     }
-    
+        
     MasterPos[SampleCount] = SwapUint4(Pos);
-    
-    
+
     /* Create the sample file. */
     
     if (!(tf_fd = FileOpen(data->IndexFileName, "wb")))
@@ -1401,6 +1502,13 @@ void ISAMSetCheckForNonUnique(ISAMObjectPtr object, Boolean test_non_unique)
     return;
 }
 
+void ISAMSetDataSorted(ISAMObjectPtr object, Int4 num_terms)
+{
+    ISAMDataPtr data = (ISAMDataPtr) object;
+    data->sorting_done = TRUE;
+    data->NumTerms = num_terms;
+}
+
 /* ---------------------- ISAMUninitSearch --------------------------
    Purpose:     Uninitialize an ISAM search (free all allocated and used 
                 buffers and unmap and close all mapped/opened files).
@@ -1490,7 +1598,7 @@ static Int4 GetPageNumElements(ISAMDataPtr data, Int4 SampleNum,
 /* ------------------------ NISAMSearch ----------------------------
    Purpose:     Main search function of Numeric ISAM
    
-   Parameters:  Key - interer to search
+   Parameters:  Key - integer to search
                 Data - returned value (for NIASM with data)
                 Index - internal index in database
    Returns:     ISAM Error Code

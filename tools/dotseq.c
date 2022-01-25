@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: dotseq.c,v 6.13 2004/03/17 20:33:48 bollin Exp $";
+static char const rcsid[] = "$Id: dotseq.c,v 6.14 2006/07/13 17:16:20 bollin Exp $";
 
 /* dotSeq.c */
 /* ===========================================================================
@@ -31,7 +31,7 @@ static char const rcsid[] = "$Id: dotseq.c,v 6.13 2004/03/17 20:33:48 bollin Exp
 *
 * Version Creation Date:   8/9/01
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: computes local alignments for dot matrix
 *
@@ -40,8 +40,12 @@ static char const rcsid[] = "$Id: dotseq.c,v 6.13 2004/03/17 20:33:48 bollin Exp
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 
-$Revision: 6.13 $
+$Revision: 6.14 $
 $Log: dotseq.c,v $
+Revision 6.14  2006/07/13 17:16:20  bollin
+use Uint4 instead of Uint2 for itemID values
+removed unused variables
+
 Revision 6.13  2004/03/17 20:33:48  bollin
 In DOT_InitMainInfobyLoc, exit function and return NULL if unable to determine
 ID or Bioseq from SeqLoc provided.  This change averts a core dump.
@@ -560,7 +564,7 @@ static Int2 DOT_ExtendProt (DOTMainDataPtr mip, Uint1Ptr queryseq, Uint1Ptr subj
 ____________________________________________________________________*/
 static Int2 DOT_ExtendNuc (DOTMainDataPtr mip, Uint1Ptr queryseq, Uint1Ptr subjectseq, Int4 q_off, Int4 s_off, Int4 diag, Int4 wordsize, DOTHistPtr node)
 {
-  Uint1Ptr         q_end, s_end, s, q, end, start, q_beg;
+  Uint1Ptr         q_end, s, q, end, start, q_beg;
   Int4             score, sum, length;
   Int4             s_left, q_left, s_right, s_diff, q_right;
   Int4Ptr PNTR     matrix;
@@ -881,7 +885,6 @@ static LookupTablePtr DOT_BuildPLookup(Uint1Ptr queryseq, Int4 qlen, Int4 word_s
   Int4            threshold=13; /* one-hit heuristics T must be at least 13*/
   Uint1Ptr        str, PNTR array, word;
   Boolean         EXACTMATCH, found_ambig, saved_index = FALSE;
-  Int4                    end;
   Int4                    counter;
 
 
@@ -960,7 +963,7 @@ static LookupTablePtr DOT_BuildNLookup(Uint1Ptr queryseq, Int4 qlen, Int2 wordsi
 
   Boolean          found_ambig, saved_index=FALSE;
   Int4             offset, end, reduced_wordsize, stop;
-  Int4             lookup_index, index, char_size, index_addition;
+  Int4             lookup_index, index, index_addition;
   Uint1Ptr         str;
   LookupTablePtr   lookup;
   
@@ -1028,21 +1031,20 @@ ____________________________________________________________________*/
 static Int2 DOT_ComputeHits(DOTMainDataPtr mip) 
 {
 
-  BlastAllWordPtr all_words;
   LookupTablePtr  lookup;
   ModLAEntry      *mod_lt;
-  Int4            wordsize, alphabet_size, num_cols;
-  Int4            char_size, lookup_index, mask, stop, start, compression_ratio;
-  Int4            qlen, slen, offset, index1, index2;
+  Int4            wordsize, alphabet_size;
+  Int4            char_size, lookup_index, mask, compression_ratio;
+  Int4            qlen, slen;
   Int4            threshold=13;
-  Uint1Ptr        queryseq, subjectseq, str, word, PNTR array;
-  Boolean         EXACTMATCH, found_ambig, saved_index = FALSE;
+  Uint1Ptr        queryseq, subjectseq;
+  Boolean         saved_index = FALSE;
   Int4                    end;
-  Uint1Ptr                s, subject0, s_end, q_end, end_of_str;
+  Uint1Ptr                s, subject0, s_end, q_end;
   ModLookupPositionPtr    lookup_pos;
   ModLookupPosition       hit_info;
-  Int4                    num_hits, num_hitsH, s_off, s_pos, q_off, q_pos;
-  Int4                    diag, i, code_limit;
+  Int4                    num_hits, s_off, s_pos, q_pos;
+  Int4                    diag, code_limit;
   DOTInfoPtr                 info;
   DOTHistPtr                 node=NULL;
   
@@ -1338,15 +1340,12 @@ ____________________________________________________________________*/
 static Boolean DOT_GetPResidues (DOTMainDataPtr mip, Boolean is_byLoc)
 {
  
-  Int4             i, j, q, s,m, n, temp, sum;
+  Int4             i;
   SeqPortPtr       qspp, sspp;
   Uint1Ptr         qseq, sseq, temp_seq1, temp_seq2;
-  Int4             offset,  x;
-  Boolean          found_ambig;
-  Int4             index_addition, index, buf_len, mod_len;
+  Int4             buf_len;
   Int4             qlen, slen;
   Int2             ctr;
-  DOTDiagPtr PNTR  hitlist;
   Uint1Ptr         sbuffer, qbuffer;
 
 
@@ -1445,15 +1444,12 @@ ____________________________________________________________________*/
 
 static Boolean DOT_GetNResidues (DOTMainDataPtr mip, Boolean is_byLoc)
 {
-  Int4             i, j, q, s,m, n, temp, sum;
+  Int4             i;
   SeqPortPtr       qspp, sspp;
   Uint1Ptr         qseq, sseq, temp_seq1, temp_seq2;
-  Int4             offset, x;  
   Int4             qlen, slen;
-  Boolean          found_ambig;
-  Int4             index_addition, index, buf_len, mod_len;
+  Int4             buf_len;
   Int2             ctr;    
-  DOTDiagPtr PNTR  hitlist;
   Uint1Ptr         sbuffer, qbuffer;
 
  /* initialize buffers */
@@ -1545,7 +1541,6 @@ static Boolean DOT_GetNResidues (DOTMainDataPtr mip, Boolean is_byLoc)
 ____________________________________________________________________*/
 static Boolean DOT_GetSeqsbyLoc (DOTMainDataPtr mip)
 {
-   SeqIdPtr         ssip, qsip, sId, qId; 
   Char         q_idbuf[42]={""}, s_idbuf[42]={""};
 
 /*   mip->sname = (CharPtr)MemNew(42*sizeof(Char)); */
@@ -1589,7 +1584,6 @@ static Boolean DOT_GetSeqsbyLoc (DOTMainDataPtr mip)
 ____________________________________________________________________*/
 Boolean DOT_GetSeqs (DOTMainDataPtr mip, Boolean is_zoom)
 {
-  SeqIdPtr         ssip, qsip;
   Char             q_idbuf[42]={""}, s_idbuf[42]={""};
 
 
@@ -1742,8 +1736,6 @@ ____________________________________________________________________*/
 
 extern DOTMainDataPtr DOT_InitMainInfo (DOTMainDataPtr mip, BioseqPtr qbsp, BioseqPtr sbsp, Int4 word_size, Int4 tree_limit, Int4 q_left, Int4 q_right, Int4 s_left, Int4 s_right)
 {
-  Int4   slen;
-  Int4   qlen;
   
   mip->q_start=q_left;
   mip->q_stop=q_right;
@@ -1881,7 +1873,6 @@ extern Uint2 DOT_AttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap, Bios
 
 {
   Int2           genCode;
-  SeqEntryPtr    oldscope;
   OMProcControl  ompc;
   SeqEntryPtr    sep;
   SeqFeatPtr     sfp = NULL;
@@ -1928,9 +1919,8 @@ ____________________________________________________________________*/
 static DOTMainDataPtr DOT_InitMainInfobyLoc (DOTMainDataPtr mip, SeqLocPtr slp1, SeqLocPtr slp2, Int4 word_size, Int4 tree_limit)
 {
   Int4   slen;
-  Int4   qlen, temp;
+  Int4   qlen;
   SeqLocPtr qslp, sslp;
-  BioseqPtr qbsp, sbsp;
   SeqIdPtr qsip, ssip;
 
   if (mip == NULL || slp1 == NULL || slp2 == NULL) return MemFree (mip);
@@ -1993,8 +1983,6 @@ static DOTMainDataPtr DOT_InitMainInfobyLoc (DOTMainDataPtr mip, SeqLocPtr slp1,
 ____________________________________________________________________*/
 static Boolean DOT_ComputeDotPlot (DOTMainDataPtr mip)
 {
-  DOTDiagPtr    PNTR  hitlist;
-  Int4                index;
 
 
   DOT_CalculateMatrix_MinMax(mip);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.62 $
+* $Revision: 1.72 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -131,6 +131,7 @@ typedef struct int_asn2gb_job {
   Boolean         alwaysTranslCds;
   Boolean         showTranscript;
   Boolean         showPeptide;
+  Boolean         hideTranslation;
   Boolean         masterStyle;
   Boolean         newSourceOrg;
   Boolean         produceInsdSeq;
@@ -146,6 +147,7 @@ typedef struct int_asn2gb_job {
   Boolean         skipMrnas;
   IndxPtr         index;
   GBSeqPtr        gbseq;
+  BlockMask       bkmask;
   AsnIoPtr        aip;
   AsnTypePtr      atp;
   StringItemPtr   pool;
@@ -267,12 +269,12 @@ typedef struct asn2gbwork {
   Boolean          showBaseCount;
   Boolean          forcePrimaryBlock;
 
+  Boolean          showFeatStats;
+  Boolean          showRefStats;
+  Boolean          hideFeatures;
   Boolean          hideImpFeats;
-  Boolean          hideRemImpFeats;
-  Boolean          hideSnpFeats;
-  Boolean          hideExonFeats;
-  Boolean          hideIntronFeats;
-  Boolean          hideMiscFeats;
+  Boolean          hideVariations;
+  Boolean          hideRepeatRegions;
   Boolean          hideCddFeats;
   Boolean          hideCdsProdFeats;
 
@@ -313,6 +315,8 @@ typedef struct asn2gbwork {
 
   Boolean          farFeatTimeLimit;
   time_t           farFeatStartTime;
+
+  Boolean          sourcePubFuse;
 
   SeqSubmitPtr     ssp;
   Boolean          hup;
@@ -573,6 +577,7 @@ typedef enum {
   FTQUAL_bond,
   FTQUAL_bond_type,
   FTQUAL_bound_moiety,
+  FTQUAL_cdd_definition,
   FTQUAL_cds_product,
   FTQUAL_citation,
   FTQUAL_clone,
@@ -618,6 +623,7 @@ typedef enum {
   FTQUAL_locus_tag,
   FTQUAL_map,
   FTQUAL_maploc,
+  FTQUAL_mobile_element,
   FTQUAL_mod_base,
   FTQUAL_modelev,
   FTQUAL_mol_wt,
@@ -988,6 +994,12 @@ NLM_EXTERN void AddFeatureToGbseq (
   SeqFeatPtr sfp
 );
 
+NLM_EXTERN void AddIntervalsToGbfeat (
+  GBFeaturePtr gbfeat,
+  SeqLocPtr location,
+  BioseqPtr target
+);
+
 NLM_EXTERN SeqIdPtr SeqLocIdForProduct (
   SeqLocPtr product
 );
@@ -1048,7 +1060,7 @@ NLM_EXTERN CharPtr legalDbXrefs [];
 NLM_EXTERN CharPtr legalRefSeqDbXrefs [];
 
 
-NLM_EXTERN void AddFeatureBlock (
+NLM_EXTERN void AddRefStatsBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN Boolean AddReferenceBlock (
@@ -1056,6 +1068,9 @@ NLM_EXTERN Boolean AddReferenceBlock (
   Boolean isRefSeq
 );
 NLM_EXTERN void AddSourceFeatBlock (
+  Asn2gbWorkPtr awp
+);
+NLM_EXTERN void AddFeatStatsBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddFeatureBlock (

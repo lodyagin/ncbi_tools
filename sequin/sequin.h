@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.376 $
+* $Revision: 6.394 $
 *
 * File Description: 
 *
@@ -356,7 +356,7 @@ extern Int2 LIBCALLBACK BioseqSegEditFunc (Pointer data);
 #define REGISTER_BIOSEQ_SET_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Bioseq Set","BioseqSetEditor",OBJ_BIOSEQSET,0,OBJ_BIOSEQSET,0,NULL,BioseqSetEditFunc,PROC_PRIORITY_DEFAULT)
 extern Int2 LIBCALLBACK BioseqSetEditFunc (Pointer data);
 
-extern void LaunchOrfViewer (BioseqPtr bsp, Uint2 entityID, Uint2 itemID, Boolean standAlone);
+extern void LaunchOrfViewer (BioseqPtr bsp, Uint2 entityID, Uint4 itemID, Boolean standAlone);
 
 extern Int2 ApplyAnnotationToAll (Int2 type, SeqEntryPtr sep,
                                   ButtoN partialLft, ButtoN partialRgt,
@@ -541,6 +541,7 @@ extern Int2 LIBCALLBACK CreateSegregateByTextWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByFeatureWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByDescriptorWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByMoleculeTypeWindow (Pointer data);
+extern Int2 LIBCALLBACK CreateSegregateByIdWindow (Pointer data);
 extern Int2 LIBCALLBACK RemoveExtraneousSets (Pointer data);
 extern void ReverseComplementBioseqAndFeats (BioseqPtr bsp, Uint2 entityID);
 extern void RemoveOrphanProteins (Uint2 entityID, SeqEntryPtr sep);
@@ -608,10 +609,12 @@ extern void RemoveProteinsAndRenormalize (IteM i);
 extern void GlobalAddTranslExcept (IteM i);
 extern void AddTranslExceptWithComment (IteM i);
 
+extern const char *nucleotide_alphabet;
+extern const char *protein_alphabet;
 extern void ReadAlignment (IteM i);
 extern SeqEntryPtr SeqEntryFromAlignmentFile (FILE *fp, CharPtr missing, CharPtr match,
                                               CharPtr beginning_gap, CharPtr middle_gap,
-                                              CharPtr end_gap, CharPtr alphabet, Uint1 moltype,
+                                              CharPtr end_gap, const CharPtr alphabet, Uint1 moltype,
                                               CharPtr no_org_err_msg);
 
 extern SeqAlignPtr Sqn_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
@@ -627,6 +630,12 @@ extern void CreateSqnInitialFormMenus (WindoW w);
 #endif
 
 #define NUM_PAGES  8
+
+typedef struct nucprotassoc {
+  Int4 position;
+  SeqLocPtr loc;
+  struct nucprotassoc PNTR  next;
+} NucProtAssocData, PNTR NucProtAssocPtr;
 
 typedef struct sequencesform {
   FORM_MESSAGE_BLOCK
@@ -692,7 +701,7 @@ typedef struct sequencesform {
   
   /* This list pairs the proteins and nucleotides. */
   /* It must be freed using FreeAssociationList. */
-  ValNodePtr      nuc_prot_assoc_list;
+  NucProtAssocPtr nuc_prot_assoc_list;
 
 } SequencesForm, PNTR SequencesFormPtr;
 
@@ -1095,12 +1104,21 @@ extern DialoG AcceptCancelDialog
 extern void EnableAcceptCancelDialogAccept (DialoG d);
 extern void DisableAcceptCancelDialogAccept (DialoG d);
 
-extern ValNodePtr BuildFeatureDialogList (Boolean list_most_used_first);
+// note - set sep to NULL if you don't want to limit the list to the features present
+extern ValNodePtr BuildFeatureDialogList (Boolean list_most_used_first, SeqEntryPtr sep);
 
 extern DialoG 
 FeatureSelectionDialog 
 (GrouP                    h,
  Boolean                  allow_multi,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata);
+
+extern DialoG 
+FeatureSelectionDialogEx 
+(GrouP                    h,
+ Boolean                  allow_multi,
+ SeqEntryPtr              sep,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata);
 
@@ -1238,16 +1256,18 @@ extern DialoG ParseFieldDestDialog
  Pointer                  change_userdata);
 extern DialoG ParseFieldSourceDialog
 (GrouP                    h,
+ SeqEntryPtr              sep,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata);
 
 extern DialoG SampleDialog (GrouP h);
 
-extern ValNodePtr FreeAssociationList (ValNodePtr assoc_list);
-extern ValNodePtr 
+extern NucProtAssocPtr FreeAssociationList (NucProtAssocPtr assoc_list);
+extern NucProtAssocPtr 
 AssignProteinsForSequenceSet 
 (SeqEntryPtr nuc_list,
- SeqEntryPtr prot_list);
+ SeqEntryPtr prot_list,
+ Boolean always_review);
 
 extern CharPtr 
 CreateListMessage 
@@ -1301,7 +1321,7 @@ extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data);
 #endif
 
 extern void AddGeneFeatureFromTitle (SeqEntryPtr nucsep, CharPtr ttl,  SeqLocPtr slp);
-extern ProtRefPtr AddProteinFeatureFromDefline (SeqEntryPtr psep, CharPtr title);
+extern SeqFeatPtr AddProteinFeatureFromDefline (SeqEntryPtr psep, CharPtr title);
 extern void AddCodingRegionFieldsFromProteinTitle (CdRegionPtr crp, CharPtr title, CharPtr PNTR pcomment);
 extern Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num);
 
@@ -1340,6 +1360,19 @@ extern void RecomputeSuggestedIntervalsForCDS
  MonitorPtr     mon,
  SeqFeatPtr     sfp);
  
+ typedef struct recompdata {
+  Int4        count;
+  MonitorPtr  mon;
+  BioseqPtr   batchbsp;
+  Boolean     include_stop;
+  Boolean     no_stop_at_end_of_complete_cds;
+  Boolean     fix_genes;
+  Uint2       entityID;
+} RecompData, PNTR RecompDataPtr;
+
+extern void RecomputeIntervalsForOneCDS (SeqFeatPtr sfp, RecompDataPtr rdp);
+
+ 
 extern CharPtr ExtendProtein3 
 (SeqFeatPtr sfp,
  Uint2      input_entityID,
@@ -1353,7 +1386,7 @@ ExpandSeqLoc
  BioseqPtr bsp,
  SeqLocPtr slp);
 
-extern void SetSeqLocStrand (SeqLocPtr location, Uint2 strand);
+extern void SetSeqLocStrand (SeqLocPtr location, Uint1 strand);
 extern void SetPrimerBindPairStrands (IteM i);
 extern Boolean IsBioseqInAnyAlignment (BioseqPtr bsp, Uint2 input_entityID);
 
@@ -1400,8 +1433,29 @@ extern Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, Char
 extern Boolean DoBioseqFeaturesMatchSequenceConstraint (BioseqPtr bsp, ValNodePtr feat_list, StringConstraintPtr scp);
 extern void ResetCapitalization (Boolean first_is_upper, CharPtr pString);
 extern Int2 LIBCALLBACK ReorderSetByAccession (Pointer data);
+
+extern Int2 LIBCALLBACK CopyDescriptorToList (Pointer data);
  
 extern void MapFeaturesToProteinSequence(IteM i);
+
+extern void FindContig (IteM i);
+extern ValNodePtr FreeSeqIdList (ValNodePtr id_list);
+extern void DownloadAndDisplay (Int4 uid);
+extern void LaunchDisplay (Uint2 entityID);
+extern void SetBioseqViewTargetByBioseq (BaseFormPtr bfp, BioseqPtr bsp);
+
+extern Boolean ShowDeltaReport (SeqEntryPtr sep);
+extern void DeltaReport (IteM  i);
+
+extern void ParseModifiersFromDefline (IteM i);
+extern void ConvertLocalToGeneral(IteM i);
+
+extern void FixLocusTagGeneXrefs (IteM i);
+extern void FixLastExonLocNoPartial (IteM i);
+extern void FixLastExonLocMakePartial (IteM i);
+
+extern void RemoveGeneByUnderlyingFeatureType(IteM i);
+extern CharPtr GetDiscrepancyItemText (ValNodePtr vnp);
 
 #ifdef __cplusplus
 }

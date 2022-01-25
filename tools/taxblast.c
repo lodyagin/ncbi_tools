@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: taxblast.c,v 6.25 2006/04/12 22:00:28 jianye Exp $";
+static char const rcsid[] = "$Id: taxblast.c,v 6.27 2006/07/26 19:08:37 jianye Exp $";
 
-/* $Id: taxblast.c,v 6.25 2006/04/12 22:00:28 jianye Exp $
+/* $Id: taxblast.c,v 6.27 2006/07/26 19:08:37 jianye Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,18 @@ static char const rcsid[] = "$Id: taxblast.c,v 6.25 2006/04/12 22:00:28 jianye E
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.25 $
+* $Revision: 6.27 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.27  2006/07/26 19:08:37  jianye
+* fix entrez url
+*
+* Revision 6.26  2006/07/26 18:03:29  jianye
+* fix database type in entrez url link
+*
 * Revision 6.25  2006/04/12 22:00:28  jianye
 * getting evalue from sum_e
 *
@@ -1390,7 +1396,7 @@ static void TXBHtmlReportInternal (FILE *outfile, HitObjPtr hitobj,
                 title = StringSave(hitobj->accs[hitoff]);
 
             if(gi > 0) {            
-                if (hitobj->query_is_na) {
+                if (hitobj->db_is_na) {
                     fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Nucleotide&list_uids=%d&dopt=GenBank>%s</a>", gi, title);
                 } else {
                     fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Protein&list_uids=%d&dopt=GenPept>%s</a>", gi, title);
@@ -1510,7 +1516,7 @@ static void TXBHtmlReportInternal (FILE *outfile, HitObjPtr hitobj,
                 title[59]='\0'; */
 
             if(gi > 0) {            
-                if (hitobj->query_is_na) {
+                if (hitobj->db_is_na) {
                     fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Nucleotide&list_uids=%d&dopt=GenBank>%s</a>", gi, ptr_start);
                 } else {
                     fprintf (outfile, " <a href=http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=Protein&list_uids=%d&dopt=GenPept>%s</a>", gi, ptr_start);

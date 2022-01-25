@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  runs external programs for ingenue
 *
@@ -61,7 +61,6 @@ static Boolean LIBCALLBACK Ing_BlastCallback (BlastResponse *brp,
 {
     BlastProgressPtr bpp;
     Int4 completed = 0;
-    Boolean retval;
     
     *cancel=FALSE;
     switch (brp->choice) {
@@ -130,7 +129,7 @@ static Int4 pendingqueries = 0;
 static Int4 querytimerlimit = 100;
 static Int4 querytimercount = 0;
 static Uint2 query_entityID = 0;
-static Uint2 query_itemID = 0;
+static Uint4 query_itemID = 0;
 static Int2  max_tokeep = 20;
 
 extern void IngenueCheckSocketsProc (WindoW w)
@@ -517,7 +516,7 @@ typedef struct iurlparamdata {
 } IUrlParamData, PNTR IUrlParamPtr;
 
 static Uint2 urlquery_entityID = 0;
-static Uint2 urlquery_itemID = 0;
+static Uint4 urlquery_itemID = 0;
 
 static void Ing_HandleResults(CharPtr path)
 {
@@ -582,8 +581,6 @@ static void Ing_FinishURLProc (tRSdataPtr trs, CharPtr arguments, CharPtr path)
 
   QueryResultProc  resultproc;
   EMIME_SubType    subtype;
-  Int4             n_written;
-  Char             str [256];
 
 
   resultproc = trs->resultproc;
@@ -881,7 +878,6 @@ static void Ing_ShowArgumentHelp (ButtoN b)
   CharPtr        str;
   tRSdataPtr     trs;
   IUrlParamPtr    upp;
-  ValNodePtr     vnp;
 
   trs = (tRSdataPtr) GetObjectExtra (ParentWindow(b));
   if (trs == NULL) return;
@@ -898,18 +894,15 @@ static void Ing_ShowArgumentHelp (ButtoN b)
 static void Ing_tRNAscanProc(IteM i)
 {
   CharPtr       args = NULL;
-  size_t        len;
   tRSdataPtr    trs = NULL;
 
   trs = (tRSdataPtr) GetObjectExtra (i);
   if (trs == NULL) return;
   {{ /* build arguement form */
   ButtoN             b;
-  ButtoN             btn;
   GrouP              c;
   Char               ch;
   CharPtr            def;
-  Int2               delta;
   TexT               first = NULL;
   GrouP              g;
   GrouP              grp;
@@ -918,24 +911,14 @@ static void Ing_tRNAscanProc(IteM i)
   CharPtr            itms;
   CharPtr            last;
   CharPtr            lastGroup = " ";
-  LisT               lst;
   GrouP              m;
-  Int2               max;
-  Int2               min;
   ValNodePtr         moveMe = NULL;
-  Nlm_Handle         obj1, obj2;
-  PopuP              pop;
-  PrompT             prmpt;
   ValNodePtr         ppt;
   CharPtr            ptr;
-  RecT               r;
-  StdEditorProcsPtr  sepp;
   CharPtr            str;
   Char               tmp [128];
-  TexT               txt;
   IUrlParamPtr        upp;
   Int2               val;
-  ValNodePtr         vnp;
   WindoW             w;
 
 
@@ -1226,13 +1209,11 @@ extern void Ing_tRNAscanMenu (MenU m)
 {
 
   ValNodePtr    head1 = NULL, head2 = NULL;
-  Int2          i;
   size_t        len;
   Char          path1 [PATH_MAX];
   Char          path2 [PATH_MAX];
   CharPtr       ptr;
   Char          sect [256];
-  ValNodePtr    vnp;
 
  ProgramPath (path1, sizeof (path1));
   ptr = StringRChr (path1, DIRDELIMCHR);
@@ -1326,7 +1307,7 @@ static void Ing_DoBlast2Seqs (ButtoN b)
   Uint2               datatype=0, entityID=0;
   IngBlast2InfoPtr    bip=NULL;
   FILE       *        fp;
-  CharPtr             path, str, ptr;
+  CharPtr             str, ptr;
   CharPtr             text;
   Boolean             is_local, first_bsp=TRUE;
   Char                eval[8];
@@ -2173,7 +2154,7 @@ static void Ing_DoSpidey(ButtoN b)
   spot->printasn = FALSE;
   spot->idcutoff = Ing_GetValue(sfp->idcutoff);
   spot->lencutoff = Ing_GetValue(sfp->lencutoff);  
-  spot->interspecies = GetValue(sfp->inters);
+  spot->interspecies = (Boolean) GetValue(sfp->inters);
   spot->organism=GetValue(sfp->org);
   spot->callback= Ing_SpideyCallback;
 
@@ -2468,7 +2449,7 @@ static void Ing_ReplaceGapInGenomic(SeqAlignPtr sap, Int4 mmis)
   DenseSegPtr  dsp_new = NULL, dsp = NULL;
   Int4         i, j;
   Int4         seg_start, seg_stop;
-  Int2         newsegs, offset = 0;
+  Int2         offset = 0;
   Boolean      found = FALSE;
   Boolean      gap_filled = FALSE;
 
@@ -2636,7 +2617,6 @@ extern void Ing_ReplaceAllMismatchedInLocation(IngGenomeViewerPtr igvp, SeqAlign
   Int4              gmis, mmis, nmismatches, nkeep = 0;
   Int4              nleft = 0, nright = 0, ntotal = 0; 
   Int4Ptr           mismatches, keep = NULL, tmp;
-  MsgAnswer         ans;
   Boolean           always_false = FALSE; 
   SeqAlignPtr       parent = NULL;
   SeqAlignPtr       sap_exon = NULL, sap_continuous = NULL;
@@ -2925,7 +2905,6 @@ static IngMisListPtr PNTR Ing_MisListFree(IngMisListPtr PNTR mislist, Int4 nmism
 
 static Boolean Ing_is_frameshift(Int4Ptr mismatches, Int4 nmismatches, Int4 index, SeqAlignPtr sap, Int4 row)
 {
-  Int4 pos;
   Int4 mm, mm_orig;
   Int4 gm, gm_orig;
   Int4 i;
@@ -3017,7 +2996,6 @@ static Int4 Ing_get_nearest(SeqAlignPtr sap, Int4 mismatch)
 {
   Int4 mm;
   Int4 i = 1;
-  Int4 start, stop;
 
   while (Ing_range(sap, mismatch - i, 2) || Ing_range(sap, mismatch + i, 2)){
     mm = AlnMgr2MapBioseqToSeqAlign(sap, mismatch - i, 2);
@@ -3040,7 +3018,7 @@ static Boolean LIBCALLBACK Ing_MismatchProc(SeqFeatPtr sfp, SeqMgrFeatContextPtr
   Int4Ptr     ivals = NULL;
   Int4        mmis, gmis, mm;
   Int4        mstart, gstart;
-  Int4        start, stop, temp;
+  Int4        start, stop;
   Int4        i, j, k, pos;
   Int4        L1, L2, L3, R1, R2, R3;
   Int4        nmismatches;
@@ -3851,7 +3829,7 @@ static Int4 Ing_PrintBlastReport(IngReportPtr Report, SegmenT seg, SeqAlignPtr s
 {
   Int4           num_mismatches = 0, num_gap_opens = 0;
   Int4           align_length = 0, num_ident = 0, tot_ident = 0;
-  FloatHi        per_ident, bit_score, evalue;
+  FloatHi        per_ident;
   CharPtr        eval_buff, bit_score_buff;
   SeqAlignPtr    salp = NULL;
   Int4           i, j, k;
@@ -4063,7 +4041,6 @@ static MsgAnswer Ing_DoReplace(SeqAlignPtr sap, Int4 gm, Int4 mm, Uint1 gstrand,
   Uint1   strand;
   Uint1Ptr   gcodon, mcodon;
   CharPtr    letters[] = {"A", "C", "G", "T", "-"};
-  MsgAnswer  ans;
   
 
   AlnMgr2GetNthSeqRangeInSA(sap, 1, &gstart, &gstop);
@@ -4345,8 +4322,6 @@ extern void Ing_PopulateReport(IngReportPtr Report, IngGenomeViewerPtr igvp)
   ValNodePtr       vnp = NULL;
   CharPtr PNTR     names = NULL;
   CharPtr          temp = NULL;
-  IngSeqAnnotData  sad;
-  SeqEntryPtr      sep;
   SeqAlignPtr      sap = NULL;
   SPI_mRNAPtr      spidp = NULL;
   SPI_mRNAPtr      spidp_head = NULL;

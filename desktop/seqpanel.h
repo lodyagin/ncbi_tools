@@ -1,4 +1,4 @@
-/* $Id: seqpanel.h,v 6.14 2006/01/17 17:47:58 bollin Exp $
+/* $Id: seqpanel.h,v 6.15 2006/09/11 20:22:40 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -44,6 +44,13 @@ WriteAlignmentInterleaveToFile
  FILE        *fp,
  Int4        seq_chars_per_row,
  Boolean     show_substitutions); 
+extern void 
+WriteAlignmentInterleaveToFileEx 
+(SeqAlignPtr salp,
+ FILE        *fp,
+ Int4        seq_chars_per_row,
+ Boolean     show_substitutions,
+ Boolean     show_coordinates);
 
 extern ForM CreateSeqEditorWindow (Int2 left, Int2 top, CharPtr windowname, BioseqPtr bsp);
 

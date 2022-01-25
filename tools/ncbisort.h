@@ -1,4 +1,4 @@
-/* $Id: ncbisort.h,v 6.0 1997/08/25 18:53:37 madden Exp $
+/* $Id: ncbisort.h,v 6.1 2006/05/10 20:47:17 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *         External include file for SORTing library
 *
 * $Log: ncbisort.h,v $
+* Revision 6.1  2006/05/10 20:47:17  camacho
+* From Ilya Dondoshansky: SORTFiles: added output parameter for total number of lines processed
+*
 * Revision 6.0  1997/08/25 18:53:37  madden
 * Revision changed to 6.0
 *
@@ -157,7 +160,8 @@ SORTErrorCode SORTFiles (
                 CharPtr PNTR files, /* Pointer to list of filename strings */
                 Int4 nfiles,        /* Number of files to merge */
                 FILE *ofp,          /* Output FILE* */
-                SORTObjectPtr sop); /* Sort options */
+                SORTObjectPtr sop,  /* Sort options */
+                Int4* line_count);  /* Total number of lines processed. */
   
 /* ---------------------- SORTCheckOrderS --------------------------
    Purpose:     Check, that all passed files are in order

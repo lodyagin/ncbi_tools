@@ -28,13 +28,18 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: salsap.h,v $
+* Revision 6.5  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.4  2006/01/10 22:27:06  bollin
 * added function SeqAlignInsertByLoc, to be used when nucleotides are inserted
 * into a sequence that is in an alignment.  An extra segment, where all functions
@@ -194,7 +199,7 @@ NLM_EXTERN SeqAnnotPtr aaSeqAnnot_to_dnaSeqAnnotFunc
 /**
 *SeqAlign and SeqEntry
 **/
-NLM_EXTERN void LIBCALL ReplaceSeqAlignInSeqEntry (Uint2 entityID, Uint2 itemID, 
+NLM_EXTERN void LIBCALL ReplaceSeqAlignInSeqEntry (Uint2 entityID, Uint4 itemID, 
 	SeqAlignPtr salp);
 
 /*******************************************************/

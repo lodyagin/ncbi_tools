@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatdb.c,v 6.100 2006/05/04 20:07:27 camacho Exp $";
+static char const rcsid[] = "$Id: formatdb.c,v 6.102 2006/09/25 19:56:05 camacho Exp $";
 
 /*****************************************************************************
 
@@ -32,11 +32,17 @@ static char const rcsid[] = "$Id: formatdb.c,v 6.100 2006/05/04 20:07:27 camacho
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.100 $
+   $Revision: 6.102 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.102  2006/09/25 19:56:05  camacho
+   Added s_SetDBListNameMultiVolDereference to fix bug when creating alias files over est
+
+   Revision 6.101  2006/06/19 17:20:14  coulouri
+   Extend 1GB default volume size to all platforms and impose a hard limit of 4G. rt#15171398
+
    Revision 6.100  2006/05/04 20:07:27  camacho
    Report fatal error in case of failure to add sequence to BLAST database because
    of zero-length sequence and clean up the datababase that was being created.
@@ -445,7 +451,7 @@ Args dump_args[] = {
     { "Base name for BLAST files",
       NULL, NULL, NULL, TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
     { "Database volume size in millions of letters",
-      "0", "0", NULL, TRUE, 'v', ARG_INT, 0.0, 0, NULL},
+      "4000", NULL, NULL, TRUE, 'v', ARG_INT, 0.0, 0, NULL},
     { "Create indexes limited only to accessions - sparse",
       "F", NULL, NULL, TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Verbose: check for non-unique string ids in the database",
@@ -541,6 +547,40 @@ void SeqEntryGetLength(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     return;
 }
 
+/** This function ensures that the path listed in the alias file's DBLIST
+ * contains any (relative) paths specified by the user and also do any
+ * necessary dereferences of the alias file contents so that they refer to the
+ * database's underlying name
+ */
+static void
+s_SetDBListNameMultiVolDereference(const ReadDBFILE* rdfp,
+                                   CharPtr basename_requested_by_user,
+                                   Int4 rdfp_ctr,
+                                   Char base_fn[])
+{
+    char* basename_of_volume = FileNameFind(rdfp->filename);
+    char* basename_predicted = NULL;
+
+    /* Calculate the 'predicted' name of the database to go in the DBLIST of
+     * the alias file */
+    sprintf(base_fn, "%s.%02d", basename_requested_by_user, rdfp_ctr);
+    basename_predicted = FileNameFind(base_fn); /* basename thereof */
+
+    /* If the basename of the volume is not the same as the 'predicted'
+     * basename, save the path prefix of the database name provided by the 
+     * user and append the volume's basename */
+    if (StringCmp(basename_predicted, basename_of_volume)) {
+        char* dirname = FilePathFind(basename_requested_by_user);
+        if (StringLen(dirname)) {
+            sprintf(base_fn, "%s%c%s", dirname, DIRDELIMCHR, 
+                    basename_of_volume);
+        } else {
+            StringCpy(base_fn, basename_of_volume);
+        }
+        MemFree(dirname);
+    }
+}
+
 Int2 Main(void) 
 {
     SeqEntryPtr sep = NULL;
@@ -578,6 +618,12 @@ Int2 Main(void)
         ErrSetOpts(ERR_CONTINUE, ERR_LOG_ON);
     UseLocalAsnloadDataAndErrMsg();
     ErrSetMessageLevel(SEV_WARNING);
+
+    /* Ensure that volume size is within acceptable limits */
+    if (dump_args[dbsize_arg].intvalue > 16000) {
+        ErrPostEx(SEV_FATAL, 1, 0, "Volume size may not exceed 16 gigabases.\n");
+        return 1;
+    }
     
     /* Parse input string for multiple inputs */
     file_inputs = StringSave(dump_args[input_arg].strvalue);
@@ -695,10 +741,12 @@ Int2 Main(void)
             sprintf(alias_fn, "%s.%02d", options->alias_file_name, rdfp_ctr);
             /* For the base name (DBLIST field in alias file) append the
              * volume number if there are multiple volumes in this database */
-            if (rdfp->next || rdfp_ctr != 0)
-                sprintf(base_fn, "%s.%02d", options->base_name, rdfp_ctr);
-            else
+            if (rdfp->next || rdfp_ctr != 0) {
+                s_SetDBListNameMultiVolDereference(rdfp, options->base_name,
+                                                   rdfp_ctr, base_fn);
+            } else {
                 StringCpy(base_fn, options->base_name);
+            }
             FD_CreateAliasFileEx(options->db_title, alias_fn, 0, 
                     options->is_protein, base_fn, 0, 0, 
                     nletters, nseqs, NULL, options->gi_file);
@@ -718,6 +766,7 @@ Int2 Main(void)
                 FileRemove(alias_fn);
             }
             FDBOptionsFree(options);
+            gi_list = MemFree(gi_list);
             rdfp_tmp = readdb_destruct(rdfp_tmp);
             return 1;
         }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.74 $
+* $Revision: 6.80 $
 *
 * File Description: 
 *
@@ -603,6 +603,105 @@ NLM_EXTERN void LinkCDSmRNAbyOverlap (
   VisitBioseqsInSep (sep, NULL, BspLinkCDSmRNAbyOverlap);
 }
 
+static void BspLinkCDSmRNAbyLabel (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  SeqFeatPtr         cds, mrna;
+  SeqMgrFeatContext  ccontext;
+  SeqMgrFeatContext  mcontext;
+  Int4               id;
+  ObjectIdPtr        oip;
+  SeqFeatXrefPtr     xref;
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) return;
+
+  /* loop through CDS features, finding mRNA partner by label */
+
+  cds = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &ccontext);
+  while (cds != NULL) {
+    if (StringDoesHaveText (ccontext.label)) {
+      mrna = SeqMgrGetFeatureByLabel (bsp, ccontext.label, 0, FEATDEF_mRNA, &mcontext);
+      if (mrna != NULL && StringCmp (ccontext.label, mcontext.label) == 0) {
+        if (cds->id.choice == 3 && mrna->id.choice == 3) {
+
+          /* assign xrefs between CDS and mRNA features */
+
+          oip = (ObjectIdPtr) mrna->id.value.ptrvalue;
+          if (oip != NULL && oip->str == NULL) {
+            id = oip->id;
+            if (id > 0) {
+              for (xref = cds->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+              if (xref != NULL) {
+                oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+                if (oip != NULL) {
+                  if (oip->str != NULL) {
+                    oip->str = MemFree (oip->str);
+                  }
+                  oip->id = id;
+                }
+              } else {
+                xref = SeqFeatXrefNew ();
+                if (xref != NULL) {
+                  oip = ObjectIdNew ();
+                  if (oip != NULL) {
+                    oip->id = id;
+                    xref->id.choice = 3;
+                    xref->id.value.ptrvalue = (Pointer) oip;
+                    xref->next = cds->xref;
+                    cds->xref = xref;
+                  }
+                }
+              }
+            }
+          }
+
+          oip = (ObjectIdPtr) cds->id.value.ptrvalue;
+          if (oip != NULL && oip->str == NULL) {
+            id = oip->id;
+            if (id > 0) {
+              for (xref = mrna->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+              if (xref != NULL) {
+                oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+                if (oip != NULL) {
+                  if (oip->str != NULL) {
+                    oip->str = MemFree (oip->str);
+                  }
+                  oip->id = id;
+                }
+              } else {
+                xref = SeqFeatXrefNew ();
+                if (xref != NULL) {
+                  oip = ObjectIdNew ();
+                  if (oip != NULL) {
+                    oip->id = id;
+                    xref->id.choice = 3;
+                    xref->id.value.ptrvalue = (Pointer) oip;
+                    xref->next = mrna->xref;
+                    mrna->xref = xref;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, 0, &ccontext);
+  }
+}
+
+NLM_EXTERN void LinkCDSmRNAbyLabel (
+  SeqEntryPtr sep
+)
+
+{
+  AssignFeatureIDs (sep);
+  VisitBioseqsInSep (sep, NULL, BspLinkCDSmRNAbyLabel);
+}
+
 typedef struct ovpdata {
   SeqFeatPtr  sfp;
   Char        revstr [42];
@@ -1094,82 +1193,6 @@ static void ReplicatePopPhyMutSetBioSource (SeqEntryPtr sep)
     if (sdp->extended != 0) {
       ovp = (ObjValNodePtr) sdp;
       ovp->idx.deleteme = TRUE;
-    }
-  }
-}
-
-typedef struct featcount {
-  Boolean     is_mRNA;
-  BioseqPtr   bsp;
-  Int2        numRNAs;
-  SeqFeatPtr  gene;
-  Int4        numGene;
-  Int4        numCDS;
-} FeatCount, PNTR FeatCountPtr;
-
-static void CountGenesAndCDSs (SeqFeatPtr sfp, Pointer userdata)
-
-{
-  FeatCountPtr  fcp;
-
-  fcp = (FeatCountPtr) userdata;
-  if (sfp->data.choice == SEQFEAT_GENE) {
-    (fcp->numGene)++;
-    fcp->gene = sfp;
-  } else if (sfp->data.choice == SEQFEAT_CDREGION) {
-    (fcp->numCDS)++;
-  }
-}
-
-static void LookForMrna (BioseqPtr bsp, Pointer userdata)
-
-{
-  FeatCountPtr  fcp;
-  MolInfoPtr    mip;
-  SeqDescrPtr   sdp;
-
-  if (bsp == NULL || bsp->length == 0) return;
-  if (! ISA_na (bsp->mol)) return;
-  fcp = (FeatCountPtr) userdata;
-  for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
-    if (sdp->choice != Seq_descr_molinfo) continue;
-    mip = (MolInfoPtr) sdp->data.ptrvalue;
-    if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA) {
-      fcp->is_mRNA = TRUE;
-      fcp->bsp = bsp;
-      (fcp->numRNAs)++;
-      return;
-    }
-  }
-}
-
-static void ExtendSingleGeneOnMRNA (SeqEntryPtr sep, Pointer userdata)
-
-{
-  FeatCount   fc;
-  SeqIntPtr   sintp;
-  ValNodePtr  vnp;
-
-  fc.is_mRNA = FALSE;
-  fc.bsp = NULL;
-  fc.numRNAs = 0;
-  VisitBioseqsInSep (sep, (Pointer) &fc, LookForMrna);
-  if (! fc.is_mRNA) return;
-  fc.gene = NULL;
-  fc.numGene = 0;
-  fc.numCDS = 0;
-  VisitFeaturesInSep (sep, (Pointer) &fc, CountGenesAndCDSs);
-  if (fc.numGene == 1 && fc.numCDS < 2 && fc.numRNAs == 1 &&
-      fc.bsp != NULL && fc.gene != NULL) {
-    if (fc.bsp != BioseqFindFromSeqLoc (fc.gene->location)) return;
-    for (vnp = fc.gene->location; vnp != NULL; vnp = vnp->next) {
-      if (vnp->choice != SEQLOC_INT) continue;
-      sintp = (SeqIntPtr) vnp->data.ptrvalue;
-      if (sintp == NULL) continue;
-      if (sintp->from != 0 || sintp->to != fc.bsp->length - 1) {
-        sintp->from = 0;
-        sintp->to = fc.bsp->length - 1;
-      }
     }
   }
 }
@@ -1827,7 +1850,7 @@ NLM_EXTERN void CautiousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, S
   ChangeImpFeatToProt (sep);
   DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
 
-  VisitElementsInSep (sep, NULL, ExtendSingleGeneOnMRNA);
+  VisitBioseqsInSep (sep, NULL, ExtendSingleGeneOnMRNA);
 
   ReplicatePopPhyMutSetBioSource (sep);
   SeqEntryExplore (sep, NULL, RemoveMultipleTitles);
@@ -2329,11 +2352,13 @@ static Boolean FeatIsCDD (
   }
   for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
     dbt = (DbtagPtr) vnp->data.ptrvalue;
-    if (dbt != NULL && StringCmp (dbt->db, "CDD") == 0) {
-      if (scoreP != NULL) {
-        *scoreP = GetCddBitScore (sfp);
+    if (dbt != NULL) {
+      if (StringCmp (dbt->db, "CDD") == 0 || StringCmp (dbt->db, "cdd") == 0) {
+        if (scoreP != NULL) {
+          *scoreP = GetCddBitScore (sfp);
+        }
+        return TRUE;
       }
-      return TRUE;
     }
   }
 
@@ -3227,7 +3252,7 @@ static void AddDefLinesToAlignmentSequences
   Int4         index;
   ValNodePtr   sdp;
   CharPtr      new_title;
-  Int4         new_title_len;
+  Uint4         new_title_len;
   Int4         curr_seg;
   Int4         num_sets = 1;
   Boolean      one_defline_per_sequence = TRUE;
@@ -4673,5 +4698,76 @@ NLM_EXTERN Int2 ValidateInferenceQualifier (CharPtr val, Boolean fetchAccn)
   MemFree (str);
 
   return rsult;
+}
+
+extern void ExtendSingleGeneOnMRNA (BioseqPtr bsp, Pointer userdata)
+{
+  MolInfoPtr        mip;
+  SeqDescrPtr       sdp;
+  Boolean           is_mrna = FALSE;
+  SeqFeatPtr        gene = NULL;
+  SeqFeatPtr        sfp;
+  SeqMgrFeatContext context;
+  Int4              num_cds = 0;
+  SeqLocPtr         slp;
+  Boolean           partial5, partial3;
+  BioSourcePtr      biop;
+  OrgRefPtr         orp;
+
+  if (bsp == NULL || bsp->length == 0
+      || !ISA_na (bsp->mol)) {
+    return;
+  }
+
+  for (sdp = bsp->descr; sdp != NULL && !is_mrna; sdp = sdp->next) {
+    if (sdp->choice != Seq_descr_molinfo) continue;
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA) {
+      is_mrna = TRUE;
+    }
+  }
+  if (!is_mrna) {
+    return;
+  }
+
+  sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_source, NULL);
+  if (sdp != NULL) {
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+    if (biop != NULL) {
+      if (biop->origin == ORG_ARTIFICIAL) {
+        orp = biop->org;
+        if (orp != NULL) {
+          if (StringICmp (orp->taxname, "synthetic construct") == 0) return;
+        }
+      }
+    }
+  }
+  
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &context);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context)) {
+    if (sfp->data.choice == SEQFEAT_GENE) {
+      /* skip this sequence if it has more than one gene */
+      if (gene == NULL) {
+        gene = sfp;
+      } else {
+        return; 
+      }
+    } else if (sfp->data.choice == SEQFEAT_CDREGION) {
+      num_cds++;
+      /* skip this seuqence if it has more than one coding region */
+      if (num_cds > 1) {
+        return;
+      }
+    }
+  }
+  if (gene != NULL && BioseqFindFromSeqLoc (gene->location) == bsp) {
+    CheckSeqLocForPartial (gene->location, &partial5, &partial3);
+    /* gene should cover entire length of sequence */
+    slp = SeqLocIntNew (0, bsp->length - 1, SeqLocStrand (gene->location), SeqLocId (gene->location));
+    SetSeqLocPartial (slp, partial5, partial3);
+    gene->location = SeqLocFree (gene->location);
+    gene->location = slp;
+  }
 }
 

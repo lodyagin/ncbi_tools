@@ -33,6 +33,9 @@
 *
 * Modifications:
 * $Log: cn3dmatn.c,v $
+* Revision 6.94  2006/07/13 17:08:36  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.93  2000/03/14 16:20:56  lewisg
 * bug fix: selection on non-aligned residues
 *
@@ -324,7 +327,7 @@ void MediaObjSelect(PDNMG pdnmgThis, Boolean highlight)
     PMMD pmmdThis = NULL;
     SeqLocPtr slp = NULL;
 
-    Uint2 entityID, itemID;
+    Uint4 entityID, itemID;
     Int4 from, to;
 
     pmgdThis = pdnmgThis->data.ptrvalue;

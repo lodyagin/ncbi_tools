@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.51 $
+* $Revision: 6.53 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,14 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.53  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
+* Revision 6.52  2006/05/19 18:40:07  kans
+* added protein equivalent of nucleotide SeqSearch finite state machine
+*
 * Revision 6.51  2005/08/24 15:14:31  kans
 * modified MolWtForLoc to use StreamCache, added MolWtForBsp and MolWtForStr
 *
@@ -589,7 +597,7 @@ NLM_EXTERN Boolean CodonForIndex PROTO((Uint1 index, Uint1 code, Uint1Ptr codon)
 *   	0 if not
 *
 *****************************************************************************/
-NLM_EXTERN Int2 GetFrameFromLoc PROTO((SeqLocPtr slp));
+NLM_EXTERN Uint1 GetFrameFromLoc PROTO((SeqLocPtr slp));
 
 /******************************************************************
 *
@@ -896,6 +904,66 @@ NLM_EXTERN void SeqSearchReset (
 
 NLM_EXTERN SeqSearchPtr SeqSearchFree (
   SeqSearchPtr tbl
+);
+
+
+/*****************************************************************************
+*
+*   ProtSearch
+*       Initializes ProtSearch finite state machine for sequence searching
+*       Based on Practical Algorithms for Programmers by Binstock and Rex
+*
+*****************************************************************************/
+
+struct ProtSearch;
+typedef struct ProtSearch* ProtSearchPtr;
+
+typedef void (LIBCALLBACK *ProtSearchMatchProc) (Int4 position, CharPtr name, CharPtr pattern, Pointer userdata);
+
+/* create empty protein sequence search finite state machine */
+
+NLM_EXTERN ProtSearchPtr ProtSearchNew (
+  ProtSearchMatchProc matchproc,
+  Pointer userdata
+);
+
+/*
+   add protein pattern to protein sequence search finite state machine,
+   expands using ambiguity codes B = D and N, Z = E and Q, etc.
+*/
+
+NLM_EXTERN void ProtSearchAddProteinPattern (
+  ProtSearchPtr tbl,
+  CharPtr name,
+  CharPtr pattern,
+  SearchFlgType flags
+);
+
+/* program passes each character in turn to finite state machine */
+
+NLM_EXTERN void ProtSearchProcessCharacter (
+  ProtSearchPtr tbl,
+  Char ch
+);
+
+/* convenience function calls ProtSearchProcessCharacter for entire bioseq */
+
+NLM_EXTERN void ProtSearchProcessBioseq (
+  ProtSearchPtr tbl,
+  BioseqPtr bsp
+);
+
+
+/* reset state and position to allow another run with same search patterns */
+
+NLM_EXTERN void ProtSearchReset (
+  ProtSearchPtr tbl
+);
+
+/* clean up sequence search finite state machine allocated memory */
+
+NLM_EXTERN ProtSearchPtr ProtSearchFree (
+  ProtSearchPtr tbl
 );
 
 

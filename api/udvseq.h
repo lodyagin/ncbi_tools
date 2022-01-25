@@ -29,13 +29,18 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.h,v $
+* Revision 6.21  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.20  2000/07/08 20:43:55  vakatov
 * Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
@@ -219,7 +224,7 @@ typedef struct paragfeaturesinloc{
 typedef struct bspinfo {
 		/*general data*/
 	Uint2			bsp_entityID;
-	Uint2			bsp_itemID;
+	Uint4			bsp_itemID;
 	Uint2			bsp_itemType;
 	BioseqPtr 		bsp;  /* set to NULL if uninitialized */
 	Char			bspName[41];
@@ -261,8 +266,8 @@ NLM_EXTERN MsaTxtDispPtr UDV_MsaTxtDispFree(MsaTxtDispPtr pTxtDisp);
 NLM_EXTERN void  UDV_ReadBspDataForViewer(BspInfoPtr bsp_i);
 /*Feature management*/
 NLM_EXTERN void UDV_DecodeIdxFeat (Uint4 index_g, Uint2Ptr val1,
-		Uint2Ptr val2);
-NLM_EXTERN void  UDV_BigDecodeIdxFeat (Uint8 index_g, Uint2Ptr val1, Uint2Ptr val2,
+		Uint4Ptr val2);
+NLM_EXTERN void  UDV_BigDecodeIdxFeat (Uint8 index_g, Uint4Ptr val1, Uint2Ptr val2,
 	Uint2Ptr val3, Uint2Ptr val4);
 NLM_EXTERN Uint4  UDV_EncodeIdxFeat (Uint2 val1,Uint2 val2);
 NLM_EXTERN Uint8 UDV_BigEncodeIdxFeat (Uint2 val1,Uint2 val2,Uint2 val3,Uint2 val4);

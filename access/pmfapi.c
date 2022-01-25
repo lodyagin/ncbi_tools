@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.87 $
+* $Revision: 1.89 $
 *
 * File Description: 
 *
@@ -570,7 +570,7 @@ static EIO_Status CommonWaitForReply (
 
 {
   time_t           currtime, starttime;
-  Int2             max = 0;
+  time_t           max = 0;
   EIO_Status       status;
   STimeout         timeout;
 #ifdef OS_MAC
@@ -1791,6 +1791,44 @@ NLM_EXTERN Boolean PubSeqFetchEnable (void)
   SeqMgrSetPreCache (GiRevHistLookupFarSeqIDs);
 
   SeqMgrSetSeqIdSetFunc (GiRevHistLookupSeqIdSet);
+
+  return TRUE;
+}
+
+NLM_EXTERN Boolean PubSeqFetchEnableEx (
+  Boolean fetch,
+  Boolean seqidtogi,
+  Boolean gitoseqid,
+  Boolean precache,
+  Boolean seqidset
+)
+
+{
+  if (fetch) {
+    ObjMgrProcLoad (OMPROC_FETCH, pubseqfetchproc, pubseqfetchproc,
+                    OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                    PubSeqBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+  }
+
+  if (seqidtogi) {
+    ObjMgrProcLoad (OMPROC_FETCH, pubseqseqidtogi, pubseqseqidtogi,
+                    OBJ_SEQID, SEQID_GI, OBJ_SEQID, 0, NULL,
+                    PubSeqSeqIdForGiFunc, PROC_PRIORITY_DEFAULT);
+  }
+
+  if (gitoseqid) {
+    ObjMgrProcLoad (OMPROC_FETCH, pubseqgitoseqid, pubseqgitoseqid,
+                    OBJ_SEQID, 0, OBJ_SEQID, SEQID_GI, NULL,
+                    PubSeqGiForSeqIdFunc, PROC_PRIORITY_DEFAULT);
+  }
+
+  if (precache) {
+    SeqMgrSetPreCache (GiRevHistLookupFarSeqIDs);
+  }
+
+  if (seqidset) {
+    SeqMgrSetSeqIdSetFunc (GiRevHistLookupSeqIdSet);
+  }
 
   return TRUE;
 }

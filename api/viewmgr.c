@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.c,v 1.36 2002/05/09 15:34:51 kans Exp $
+/*   $Id: viewmgr.c,v 1.37 2006/07/13 17:06:39 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.c,v 1.36 2002/05/09 15:34:51 kans Exp $
+* File Name:  $Id: viewmgr.c,v 1.37 2006/07/13 17:06:39 bollin Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.36 $
+* $Revision: 1.37 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,11 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.c,v $
+* Revision 1.37  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 1.36  2002/05/09 15:34:51  kans
 * commented out unneeded headers in tools library
 *
@@ -843,7 +848,7 @@ Notes: will index the seqalign
 
 NLM_EXTERN Int4 ViewMgr_Attach(SeqAlign *salp, Boolean Neat,
                                Boolean Intersect, Uint2 entityID,
-                               Uint2 itemID)
+                               Uint4 itemID)
 {
     ViewMgr_AlignInfo *pInfo;
     ViewMgr_Global *pGlobal;
@@ -997,7 +1002,7 @@ Returns: 1 on success
 NLM_EXTERN Int4 ViewMgr_Update2(SeqAlign *salp, Boolean Fast)
 {
     ViewMgr_AlignInfo *pInfo;
-    Uint2 itemID;
+    Uint4 itemID;
     DDVUpdateMSG dum;
 
     pInfo = ViewMgr_GetInfo(salp);

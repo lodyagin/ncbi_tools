@@ -26,9 +26,6 @@ CFG=ncbimain - Win32 DebugDLL
 # PROP Scc_LocalPath ""
 CPP=cl.exe
 RSC=rc.exe
-
-!IF  "$(CFG)" == "ncbimain - Win32 DebugDLL"
-
 # PROP BASE Use_MFC 0
 # PROP BASE Use_Debug_Libraries 1
 # PROP BASE Output_Dir "DebugDLL"
@@ -39,9 +36,9 @@ RSC=rc.exe
 # PROP Output_Dir "DebugDLL"
 # PROP Intermediate_Dir "DebugDLL"
 # PROP Target_Dir ""
-# ADD BASE CPP /nologo /MDd /W3 /Gm /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
+# ADD BASE CPP /nologo /MDd /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
 # SUBTRACT BASE CPP /Fr
-# ADD CPP /nologo /MDd /W3 /Gm /GR /Z7 /Od /I "..\..\..\.." /I "..\..\..\..\corelib" /I "..\..\..\..\connect" /I "..\..\..\..\asnlib" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
+# ADD CPP /nologo /MDd /W3 /GR /Z7 /Od /I "..\..\..\.." /I "..\..\..\..\corelib" /I "..\..\..\..\connect" /I "..\..\..\..\asnlib" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
 BSC32=bscmake.exe
@@ -50,15 +47,16 @@ BSC32=bscmake.exe
 LIB32=link.exe -lib
 # ADD BASE LIB32 /nologo
 # ADD LIB32 /nologo
-
-!ENDIF 
-
 # Begin Target
 
 # Name "ncbimain - Win32 DebugDLL"
 # Begin Group "Source Files"
 
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
+# Begin Source File
+
+SOURCE=..\..\..\..\corelib\ncbiargs.c
+# End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\corelib\ncbimain.c

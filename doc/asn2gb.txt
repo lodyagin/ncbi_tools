@@ -274,21 +274,18 @@ To use PubSeqFetchEnable, the application should #include <pmfapi.h>.
 CUSTOM are bit flags suppressing specific features, and are also ORed
 together.
 
-One set suppresses all import features, or all that don't have specific
-custom bits of their own.
+One set enables display of statistics for features and references.
 
-#define HIDE_IMP_FEATS             1
-#define HIDE_REM_IMP_FEATS         2
+#define SHOW_FEATURE_STATS         1
+#define SHOW_REFERENCE_STATS       2
 
-Another set suppresses common individual import feature types.
+Another set suppresses common feature types or all features.
 
-#define HIDE_SNP_FEATS             4
-#define HIDE_EXON_FEATS            8
-#define HIDE_INTRON_FEATS         16
-#define HIDE_MISC_FEATS           32
+#define HIDE_FEATURES              4
 
-Additional bits hide CDD regions, or all features on the CDS product.
-
+#define HIDE_IMP_FEATS             8
+#define HIDE_VARIATION_FEATS      16
+#define HIDE_REPEAT_REGIONS       32
 #define HIDE_CDD_FEATS            64
 #define HIDE_CDS_PROD_FEATS      128
 
@@ -322,6 +319,10 @@ shorthand notation. These can be forced to expand to runs of Ns.
 Gene Ontology terms can be suppressed if desired.
 
 #define HIDE_GO_TERMS         131072
+
+The CDS /translation can also be suppressed, even with near products.
+
+#define HIDE_TRANSLATION      262144
 
 
 EXTRA is an opaque pointer used for preparing internal NCBI indices.  Most

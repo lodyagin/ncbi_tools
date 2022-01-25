@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.h,v 1.30 2006/03/29 21:43:30 madden Exp $
+/* $Id: blast_seqalign.h,v 1.31 2006/06/09 17:40:41 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -106,6 +106,45 @@ GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* esp, Int4 start,
                           Boolean translate1, Boolean translate2,
                           Int4** start_out, Int4** length_out,
                           Uint1** strands_out, Int4* start1, Int4* start2);
+
+/** Convert an HSP into a SeqAlign of type DenseSeg.
+ * Used for a non-simple interval (i.e., one without subs. or 
+ * deletions).  
+ * @param program Type of BLAST program [in]
+ * @param hsp HSP structure to convert. [in]
+ * @param subject_id Seq-id of the subject sequence [in]
+ * @param query_id Seq-id of the query sequence [in]
+ * @param query_length Length of query sequence [in]
+ * @param subject_length Length of subject sequence [in]
+ * @return Seq-align corresponding to this alignment.
+ */
+SeqAlignPtr
+BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp, 
+                   SeqIdPtr subject_id, SeqIdPtr query_id,
+                   Int4 query_length, Int4 subject_length);
+
+
+/** This function is used for Out-Of-Frame traceback conversion
+ * Convert an OOF EditScript chain to a SeqAlign of type StdSeg.
+ * @param program Type of BLAST program (blastx or tblastn) [in]
+ * @param hsp Internal HSP structure. [in]
+ * @param query_id Seq-id of the query sequence [in]
+ * @param subject_id Seq-id of the subject sequence [in]
+ * @param query_length Length of query sequence [in]
+ * @param subject_length Length of subject sequence [in]
+ * @return Resulting Seq-align.
+ */
+SeqAlignPtr
+OOFBlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp,  
+                      SeqIdPtr query_id, SeqIdPtr subject_id,
+                      Int4 query_length, Int4 subject_length);
+
+/** Creates a score set corresponding to one HSP.
+ * @param hsp HSP structure [in]
+ * @return Score set for this HSP.
+ */
+ScorePtr 
+GetScoreSetFromBlastHsp(BlastHSP* hsp);
 
 /* @} */
 

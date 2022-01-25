@@ -1,4 +1,4 @@
-/* $Id: link_hsps.h,v 1.15 2005/11/16 14:31:37 madden Exp $
+/* $Id: link_hsps.h,v 1.16 2006/06/28 16:02:47 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -51,8 +51,8 @@ extern "C" {
  */
 Int2 
 BLAST_LinkHsps(EBlastProgramType program_number, BlastHSPList* hsp_list, 
-   BlastQueryInfo* query_info, Int4 subject_length, 
-   BlastScoreBlk* sbp, const BlastLinkHSPParameters* link_hsp_params,
+   const BlastQueryInfo* query_info, Int4 subject_length, 
+   const BlastScoreBlk* sbp, const BlastLinkHSPParameters* link_hsp_params,
    Boolean gapped_calculation);
 
 #ifdef __cplusplus

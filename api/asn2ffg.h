@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.18 $
-* $Revision: 6.18 $
+* $Revision: 6.19 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
@@ -46,6 +46,11 @@
 /*************************************
 *
  * $Log: asn2ffg.h,v $
+ * Revision 6.19  2006/07/13 17:06:38  bollin
+ * use Uint4 instead of Uint2 for itemID values
+ * removed unused variables
+ * resolved compiler warnings
+ *
  * Revision 6.18  2001/12/21 20:21:16  cavanaug
  * old_locus_fmt now controls generated of *old* LOCUS line format
  *
@@ -239,8 +244,8 @@ typedef struct sortstruct {
 	SeqFeatPtr 	sfp;		/* would be NULL if gather tempload == TRUE */
 	SeqLocPtr 	slp;		/*for converted locations, free if not NULL!*/
 	Uint2		entityID,	   
-		    	itemID,			   
 				itemtype;
+    Uint4       itemID;
 	Int4		hash;
 	Boolean 	dup;
 	SeqLocPtr PNTR extra_loc;
@@ -254,8 +259,8 @@ typedef struct sortstruct {
 typedef struct descrstruct {
 	ValNodePtr vnp;
 	Uint2	entityID,	   
-		    itemID,			   
 			itemtype;
+    Uint4   itemID;
 	struct descrstruct PNTR next;
 } DescrStruct, PNTR DescrStructPtr;
 
@@ -263,8 +268,8 @@ typedef struct comstruct {
 	CharPtr string;
 	Boolean gsdb_id;
 	Uint2	entityID,	   
-		    itemID,			   
 			itemtype;
+    Uint4   itemID;
 	struct comstruct PNTR next;
 } ComStruct, PNTR ComStructPtr;
 
@@ -318,8 +323,8 @@ typedef struct organizefeat {
 typedef struct gbentry {
 	BioseqPtr bsp;         /* the Bioseq for this record */
 	Uint2	entityID,	   
-		    itemID,		
 			itemtype;
+    Uint4   itemID;
 	Char date[12];
 	CharPtr create_date;
 	CharPtr update_date;
@@ -399,8 +404,8 @@ typedef struct asn2ff_job {
 	
 						 /* Specify the data to be formatted */
 	Uint2	entityID,	    /* could be a data object */
-		    itemID,			   /* specified by ID or by pointer */
 			itemtype;
+	Uint4   itemID;			   /* specified by ID or by pointer */
 	Boolean only_one, 			/* show only one top-level bioseq */
 		ignore_top;            /* do not show features from top-level bioseq */
 	SeqSubmitPtr ssp;          /* alternative data object pointers */

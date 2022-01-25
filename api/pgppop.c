@@ -1,4 +1,4 @@
-/*  $Id: pgppop.c,v 6.67 2001/10/03 00:15:47 vakatov Exp $
+/*  $Id: pgppop.c,v 6.68 2006/07/13 17:06:39 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.67 $
+* $Revision: 6.68 $
 *
 * File Description: 
 *
@@ -37,6 +37,11 @@
 * --------------------------------------------------------------------------
 *
 * $Log: pgppop.c,v $
+* Revision 6.68  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.67  2001/10/03 00:15:47  vakatov
 * Replaced some ASSERTs by VERIFYs
 *
@@ -568,7 +573,7 @@ Int2 			n2,nCompt,
 ByteStorePtr	bs=NULL;
 Boolean bGiForProductOk=FALSE;
 SeqIdPtr sip=NULL;
-Int4 gi=0,size_trans;
+Int4 gi=0;
 BioseqPtr prot;
 
 	/*retrieve the protein sequence; need to be optimized in future release*/
@@ -681,7 +686,6 @@ Int4			il=0,
 				pos=0,
 				n=0,
 				start_prot,
-				stop_prot,
 				limit,
 				gap;
 Int2 			n2=0,
@@ -691,7 +695,7 @@ Int2 			n2=0,
 ByteStorePtr	bs=NULL;
 Boolean bGiForProductOk=FALSE;
 SeqIdPtr sip=NULL;
-Int4 gi=0,size_trans;
+Int4 gi=0;
 BioseqPtr prot;
 
 	/*retrieve the protein sequence; need to be optimized in future release*/
@@ -800,7 +804,8 @@ BioseqPtr            parent;
 CharPtr              szTrans;
 Int4                 from_bsp,to_bsp,start,stop,i,numivals2,i_decal;
 Int2                 jj;
-Uint2                iID,idx;
+Uint4                iID;
+Uint2                idx;
 Boolean              bDispTrans=FALSE;
 
 	/*the current bsp is just a segment ?*/
@@ -3918,8 +3923,7 @@ NLM_EXTERN void DDV_PrintPopSetSummary(SeqEntryPtr sep, Int4 gi, FILE *FileOut)
 {
 ValNodePtr  vnp_sap,vnp_biosrc,vnp_biosrc2,vnp,vnp2;
 SeqAlignPtr sap;
-SABlockPtr  sabp;
-Int4		sapLength, sapNumBioseqs, numBlocks;
+Int4		sapLength, sapNumBioseqs;
 Uint2	    i;	
 Boolean bPairwise=TRUE,bPrintTax,bPrintCom;
 Uint4 disp_format;
@@ -4049,7 +4053,6 @@ NLM_EXTERN void PrintSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
   SeqAnnotPtr        sap;
   SeqAlignPtr        salp,salp2;
   Uint4              option = 0;
-  ByteStorePtr PNTR byteSpp;
   DDVOptionsBlockPtr dobp = (DDVOptionsBlockPtr) mydata;
   
   if (sep != NULL && sep->data.ptrvalue)
@@ -4105,7 +4108,6 @@ NLM_EXTERN ByteStorePtr SeqAlignToBS (Uint2 entityID)
 {{
   SeqEntryPtr sep;
   ByteStorePtr bsp = NULL;
-  FILE *fp;
   DDVOptionsBlockPtr dobp=MemNew(sizeof (DDVOptionsBlock));
 
   dobp->LineSize=50; 

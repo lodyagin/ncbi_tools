@@ -150,6 +150,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_stat.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\blast_sw.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\blast_traceback.c
 # End Source File
 # Begin Source File
@@ -323,6 +327,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_stat.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\blast_sw.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\blast_toolkit.h
 # End Source File
 # Begin Source File
@@ -364,6 +372,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\matrix_freq_ratios.h
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\mb_lookup.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\mb_indexed_lookup.h
 # End Source File
 # Begin Source File
 

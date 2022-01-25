@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.118 $
-* $Revision: 6.118 $
+* $Revision: 6.119 $
+* $Revision: 6.119 $
 *
 * File Description:  files that go with "asn2ff"
 *
@@ -347,7 +347,8 @@ NLM_EXTERN Boolean asn2ff_print (Asn2ffJobPtr ajp)
 Asn2ffJobPtr Asn2ffJobCreate(SeqEntryPtr sep, SeqSubmitPtr ssp, SeqLocPtr slp, FILE *fp, Uint1 format, Uint1 mode, StdPrintOptionsPtr	Spop)
 {
 	Asn2ffJobPtr	ajp;
-	Uint2			entityID = 0, itemID = 0;
+	Uint2			entityID = 0;
+	Uint4           itemID = 0;
 	BioseqPtr bsp;
 	
 	ajp = (Asn2ffJobPtr) MemNew(sizeof(Asn2ffJob));
@@ -1514,7 +1515,7 @@ NLM_EXTERN Boolean SeqLocToFlat (SeqLocPtr slp, FILE *fp, Uint1 format, Uint1 mo
 	Boolean          rsult;
 	Asn2ffJobPtr		ajp;
 	StdPrintOptionsPtr Spop = NULL;
-	Uint2            itemID=0;
+	Uint4            itemID=0;
 
 	rsult = FALSE;
 	if (format == GENPEPT_FMT) {
@@ -5384,7 +5385,7 @@ void PrintEPSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 
 }	/* PrintEPSequence */
 
-void GatherItemWithLock(Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+void GatherItemWithLock(Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                    Pointer userdata, GatherItemProc userfunc)
 {
 	GatherItem(entityID, itemID, itemtype, userdata,  userfunc);

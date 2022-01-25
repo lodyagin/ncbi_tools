@@ -1,4 +1,4 @@
-/* $Id: phi_extend.c,v 1.13 2005/11/16 14:27:04 madden Exp $
+/* $Id: phi_extend.c,v 1.14 2006/09/01 14:46:08 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: phi_extend.c,v 1.13 2005/11/16 14:27:04 madden Exp $";
+    "$Id: phi_extend.c,v 1.14 2006/09/01 14:46:08 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h>
@@ -57,7 +57,9 @@ s_PHISaveInitialHit(BlastInitHitList* init_hitlist, BlastOffsetPair* offset_pair
 
 Int2 
 PHIBlastWordFinder(BLAST_SequenceBlk* subject, 
-                   BLAST_SequenceBlk* query, LookupTableWrap* lookup_wrap,
+                   BLAST_SequenceBlk* query, 
+                   BlastQueryInfo* query_info,
+                   LookupTableWrap* lookup_wrap,
                    Int4** matrix, const BlastInitialWordParameters* word_params,
                    Blast_ExtendWord* ewp, BlastOffsetPair* offset_pairs,
                    Int4 max_hits, BlastInitHitList* init_hitlist, 

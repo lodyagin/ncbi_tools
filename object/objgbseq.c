@@ -1555,7 +1555,6 @@ NLM_EXTERN
 GBSetPtr LIBCALL
 GBSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1611,7 +1610,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 GBSetAsnWrite(GBSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

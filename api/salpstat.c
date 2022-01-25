@@ -1682,7 +1682,6 @@ NLM_EXTERN Int4 LIBCALL SeqAlignOverlapLen(SeqAlignPtr sap,BioseqPtr query_bsp,B
               Overlap= lenq;
       }
   } else { /* Opposite strands */
-      Int4 Intercept,Interceptl;
       diag=qposl+sposl;
       /* posA+posB = diag = constant 
          

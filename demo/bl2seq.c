@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bl2seq.c,v 6.83 2006/04/26 12:47:29 madden Exp $";
+static char const rcsid[] = "$Id: bl2seq.c,v 6.86 2006/08/28 14:11:37 coulouri Exp $";
 
 /**************************************************************************
 *                                                                         *
@@ -27,6 +27,15 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.83 2006/04/26 12:47:29 madden Exp
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.86  2006/08/28 14:11:37  coulouri
+* correct seqids in asn.1 output when input sequences are specified as accessions; fixes rt#15192840
+*
+* Revision 6.85  2006/08/21 21:47:06  camacho
+* Allocate Blast_SummaryReturn structure to avoid dereferencing NULL pointer
+*
+* Revision 6.84  2006/08/16 16:03:59  coulouri
+* do not strlen NULL pointer
+*
 * Revision 6.83  2006/04/26 12:47:29  madden
 * Use SBlastMessage in place of Blast_Message
 *
@@ -295,13 +304,9 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.83 2006/04/26 12:47:29 madden Exp
 #include <algo/blast/api/repeats_filter.h>
 #include <algo/blast/core/blast_util.h>
 
-
-/* Used by the callback function. */
-FILE *global_fp=NULL;
-
 #define LOCAL_BUFLEN 255
 static BioseqPtr
-BioseqFromAccession(CharPtr accver, Boolean is_query, Boolean is_na)
+BioseqFromAccession(CharPtr accver, Boolean is_na)
 {
    CharPtr accession, version_str;
    Int4 version=0, gi, number;
@@ -312,7 +317,7 @@ BioseqFromAccession(CharPtr accver, Boolean is_query, Boolean is_na)
    SeqPortPtr spp;
    Int2 retval, buf_length=512;
    Uint1 buf[512];
-   char* defline;
+   char* defline = NULL;
    char* dummy_ptr = NULL;
 
    if (!ID1BioseqFetchEnable ("bl2seq", TRUE))
@@ -420,72 +425,12 @@ BioseqFromAccession(CharPtr accver, Boolean is_query, Boolean is_na)
                    accver);
       return NULL;
    }
-   
-   bsp = BioseqNew();
-   bsp->length = bsp_tmp->length;
-   bsp->mol = bsp_tmp->mol;
-                   
-   if (ISA_na(bsp->mol)) {
-      spp = SeqPortNew(bsp_tmp, 0, -1, Seq_strand_plus, 
-                       Seq_code_iupacna);
-      bsp->seq_data_type = Seq_code_iupacna;
-   } else {
-      spp = SeqPortNew(bsp_tmp, 0, -1, Seq_strand_unknown, 
-                       Seq_code_ncbieaa);
-      bsp->seq_data_type = Seq_code_ncbieaa;
-   }
-   
-   SeqPortSet_do_virtual(spp, TRUE);
-   number = 0;
-   
-   bsp->repr = Seq_repr_raw;
-   bsp->seq_data = BSNew(bsp->length);
-   
-   while (number < bsp->length) {
-      retval = SeqPortRead(spp, buf, buf_length);
-      if (retval < 0)
-         continue;
-      if (retval == 0)
-         break;
-      BSWrite(bsp->seq_data, buf, retval);
-      number += retval;
-   }
-   
-   SeqPortFree(spp);
-   defline = StringSave(BioseqGetTitle(bsp_tmp));
-   /* Cut off any defline extensions due to combining of sequences in the BLAST
-      database. */
-   defline = StringTokMT(defline, ">", &dummy_ptr);
-   /* If there did exist a second defline, then there is an extra space in front
-      of the ">" sign, which should be removed. */
-   if (dummy_ptr)
-       defline[strlen(defline)-1] = NULLB;
 
-   if (is_query) {
-       ObjectIdPtr oid = ObjectIdNew();
-       oid->str = (char*) Malloc(LOCAL_BUFLEN+1);
-       SeqIdWrite(bsp_tmp->id, oid->str, PRINTID_FASTA_LONG, LOCAL_BUFLEN);
-       ValNodeAddPointer(&bsp->id, SEQID_LOCAL, oid);
-       bsp->descr = ValNodeAddStr(NULL, Seq_descr_title, defline);
-   } else {
-       Char seqid_buf[LOCAL_BUFLEN];
-       char* title;
-       DbtagPtr dbtagptr = DbtagNew();
-       dbtagptr->db = StringSave("BL_ORD_ID");
-       dbtagptr->tag = ObjectIdNew();
-       ValNodeAddPointer(&bsp->id, SEQID_GENERAL, dbtagptr);
-       
-       SeqIdWrite(bsp_tmp->id, seqid_buf, PRINTID_FASTA_LONG, 
-                  LOCAL_BUFLEN);
-       
-       title = (char*) Malloc(strlen(seqid_buf) + strlen(defline) + 2);
-       sprintf(title, "%s %s", seqid_buf, defline);
-       defline = MemFree(defline);
-       bsp->descr = ValNodeAddStr(NULL, Seq_descr_title, title);
-   }
+   bsp = AsnIoMemCopy(bsp_tmp, (AsnReadFunc) BioseqAsnRead, (AsnWriteFunc) BioseqAsnWrite);
    SeqMgrDeleteFromBioseqIndex(bsp_tmp);
    BioseqUnlock(bsp_tmp);
    BioseqPack(bsp);
+   
    return bsp;
 }
 		
@@ -534,7 +479,7 @@ static Args myargs [] = {
 	"stdout", NULL, NULL, FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL}, /* ARG_OUT */
   { "theor. db size (zero is real size)", 
 	"0", NULL, NULL, FALSE, 'd', ARG_FLOAT, 0.0, 0, NULL}, /* ARG_DBSIZE */
-  { "SeqAnnot output file",
+  { "Text ASN.1 output file",
 	NULL, NULL, NULL, TRUE, 'a', ARG_FILE_OUT, 0.0, 0, NULL}, /* ARG_ASNOUT */
   { "Cost to open a gap (-1 invokes default behavior)",
         "-1", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL}, /* ARG_GAPOPEN */
@@ -613,7 +558,7 @@ BL2SEQ_GetSequences(Boolean seq1_is_na, Boolean seq2_is_na, BioseqPtr *query_bsp
         }
 
         if (entrez_lookup) {
-           *query_bsp = BioseqFromAccession(query_accver, TRUE, seq1_is_na);
+           *query_bsp = BioseqFromAccession(query_accver, seq1_is_na);
         } else {
            FILE *infp;
 	   if ((infp = FileOpen(blast_inputfile, "r")) == NULL)
@@ -646,7 +591,7 @@ BL2SEQ_GetSequences(Boolean seq1_is_na, Boolean seq2_is_na, BioseqPtr *query_bsp
 
         if (entrez_lookup) {
            *subject_bsp = 
-              BioseqFromAccession(subject_accver, FALSE, seq2_is_na);
+              BioseqFromAccession(subject_accver, seq2_is_na);
         } else {
            FILE *infp1;
 	   if ((infp1 = FileOpen(blast_inputfile1, "r")) == NULL)
@@ -835,7 +780,7 @@ Int2 Main_new(void)
         BioseqPtr fake_bsp=NULL, fake_subject_bsp=NULL;
         BlastFormattingInfo* format_info = NULL;
         BLAST_SummaryOptions* options=NULL;
-        Blast_SummaryReturn* extra_returns=NULL;
+        Blast_SummaryReturn* extra_returns = Blast_SummaryReturnNew();
         Boolean believe_query= FALSE;
         Boolean seq1_is_na, seq2_is_na;  /* seq1/2 is DNA if TRUE. */
         Boolean seqannot_output;   /* SeqAlign will be output. */
@@ -897,7 +842,12 @@ Int2 Main_new(void)
             dbtagptr = DbtagNew();
             dbtagptr->db = StringSave("BL_ORD_ID");
             dbtagptr->tag = ObjectIdNew();
-            dbtagptr->tag->str = StringSave(BioseqGetTitle(subject_bsp));
+
+            if (BioseqGetTitle(subject_bsp) != NULL)
+              dbtagptr->tag->str = StringSave(BioseqGetTitle(subject_bsp));
+            else
+              dbtagptr->tag->str = StringSave("No definition line found");
+
             ValNodeAddPointer(&fake_subject_bsp->id, SEQID_GENERAL, dbtagptr);
             bsp1 = (believe_query ? query_bsp : fake_bsp);
             bsp2 = fake_subject_bsp;
@@ -1056,7 +1006,6 @@ Int2 Main_old (void)
 		return (1);
 	}
 
-        global_fp = outfp;
         gapped_calculation = (Boolean) myargs[ARG_GAPPED].intvalue;
         believe_query = (seqannot_output || entrez_lookup); 
 
@@ -1085,7 +1034,12 @@ Int2 Main_old (void)
             dbtagptr = DbtagNew();
             dbtagptr->db = StringSave("BL_ORD_ID");
             dbtagptr->tag = ObjectIdNew();
-            dbtagptr->tag->str = StringSave(BioseqGetTitle(subject_bsp));
+
+            if (BioseqGetTitle(subject_bsp) != NULL)
+              dbtagptr->tag->str = StringSave(BioseqGetTitle(subject_bsp));
+            else
+              dbtagptr->tag->str = StringSave("No definition line found");
+
             ValNodeAddPointer(&fake_subject_bsp->id, SEQID_GENERAL, dbtagptr);
             bsp1 = (believe_query ? query_bsp : fake_bsp);
             bsp2 = fake_subject_bsp;
@@ -1306,7 +1260,7 @@ Int2 Main (void)
     else
         status = Main_new();
 
+    FreeArgs(NUMARG, myargs);
+
     return status;
 }
-	
-

@@ -1,4 +1,4 @@
-/* $Id: jzcoll.c,v 6.17 2001/06/26 16:42:58 vakatov Exp $
+/* $Id: jzcoll.c,v 6.18 2006/07/13 17:06:38 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,17 @@
 *
 * Initial Version Creation Date: 03/24/97
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:
 *         File for various alignments
 *
 * $Log: jzcoll.c,v $
+* Revision 6.18  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.17  2001/06/26 16:42:58  vakatov
 * POINT --> BAND_POINT  (to avoid conflicts with MS-Win standard headers)
 *
@@ -831,7 +836,7 @@ static Int4 get_long_insert_len(Int4 length)
 	return (StringLen(temp) + 13);
 }
 
-static ValNodePtr load_tdp_data(ValNodePtr PNTR head, CharPtr label, CharPtr text, Uint2 itemID, Uint2 entityID, Uint2 seqEntityID, Uint2 bsp_itemID)
+static ValNodePtr load_tdp_data(ValNodePtr PNTR head, CharPtr label, CharPtr text, Uint4 itemID, Uint2 entityID, Uint2 seqEntityID, Uint4 bsp_itemID)
 {
 	TextAlignBufPtr tdp;
 
@@ -1629,7 +1634,7 @@ static ValNodePtr get_last_node (ValNodePtr head)
 	return head;
 }
 
-static FeatNodePtr CreateFeatNode (ValNodePtr PNTR f_head, ValNodePtr PNTR prev, Uint2 itemType, Uint2 itemID, Uint2 entityID, Uint2 feattype)
+static FeatNodePtr CreateFeatNode (ValNodePtr PNTR f_head, ValNodePtr PNTR prev, Uint2 itemType, Uint4 itemID, Uint2 entityID, Uint2 feattype)
 {
 	FeatNodePtr  fnp;
 
@@ -2253,7 +2258,7 @@ static Boolean add_sequence_alignment_info(ValNodePtr align_id_list, ValNodePtr 
 
 typedef struct temp_bsp_data{
 	BioseqPtr bsp;
-	Uint2 itemID;
+	Uint4 itemID;
 	Boolean found;
 }TempBsp, PNTR TempBspPtr;
 
@@ -2286,7 +2291,7 @@ static Boolean bspcountfunc(GatherContextPtr gcp)
 *       itemID for the Bioseq
 *
 *****************************************************************/
-NLM_EXTERN Uint2 get_bioseq_itemID(BioseqPtr bsp, Uint2 entityID)
+NLM_EXTERN Uint4 get_bioseq_itemID(BioseqPtr bsp, Uint2 entityID)
 {
 	GatherScope gs;
 	TempBsp tb;
@@ -2443,7 +2448,7 @@ static Boolean LoadIndexLabelBlock(AlignNodePtr anp)
 *
 ************************************************************************/	
 
-static Boolean coll_align_data(SeqAlignPtr align, Uint1 index, AlignDataPtr adp, CollectAlignOptionPtr caop, Int2 itemID, Int2 entityID, Int2 itemType, SeqLocPtr mloc, ValNodePtr PNTR anp_list, ValNodePtr PNTR prev)
+static Boolean coll_align_data(SeqAlignPtr align, Uint1 index, AlignDataPtr adp, CollectAlignOptionPtr caop, Uint4 itemID, Int2 entityID, Int2 itemType, SeqLocPtr mloc, ValNodePtr PNTR anp_list, ValNodePtr PNTR prev)
 {
 	Char label[41];
 	
@@ -2641,7 +2646,7 @@ static Boolean coll_align_data(SeqAlignPtr align, Uint1 index, AlignDataPtr adp,
 	
 static Boolean does_annot_match_target (SeqLocPtr target, SeqAnnotPtr annot)
 {
-    SeqAlignPtr sap, sap_tmp;
+    SeqAlignPtr sap;
     SeqIdPtr sip;
     DenseDiagPtr ddp;
     DenseSegPtr dsp;

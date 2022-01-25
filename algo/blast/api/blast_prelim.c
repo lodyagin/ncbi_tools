@@ -1,4 +1,4 @@
-/* $Id: blast_prelim.c,v 1.7 2005/02/09 20:55:38 dondosha Exp $
+/* $Id: blast_prelim.c,v 1.8 2006/05/24 21:17:50 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,9 @@
  * in a multi-threaded search.
  */
 
-static char const rcsid[] = "$Id: blast_prelim.c,v 1.7 2005/02/09 20:55:38 dondosha Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: blast_prelim.c,v 1.8 2006/05/24 21:17:50 camacho Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_prelim.h>
 #include <algo/blast/core/blast_util.h>

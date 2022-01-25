@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.11 $
+* $Revision: 1.13 $
 *
 * File Description: 
 *
@@ -130,11 +130,12 @@ NLM_EXTERN CONN CddOpenConnection (
   }
 
   /*
-  sprintf (query, "%s&NOHTML&DATALIB=%s&EXPECT=%s&FILTER=%s&GRAPH=%s&SEQUENCE=>%s\n%s", feats, dataLib, expect, filter, graph, id, str);
+  sprintf (query, "%s&NOHTML&DATALIB=%s&EXPECT=%s&FILTER=%s&GRAPH=%s&SEQUENCE=>%s%s%s",
+           feats, dataLib, expect, filter, graph, id, "%0A", str);
   conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Structure/cdd/wrpsb.cgi",
                              NULL, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_Plain, eENCOD_None, 0);
-  status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
+  status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written, eIO_WritePersist);
   if (status != eIO_Success) {
     CONN_Close (conn);
     MemFree (str);
@@ -147,10 +148,10 @@ NLM_EXTERN CONN CddOpenConnection (
     sprintf (query, "%s&NOHTML&DATALIB=%s&EXPECT=%s&FILTER=%s&GRAPH=%s&%sSEQUENCE=%s",
              feats, dataLib, expect, filter, graph, inputtype, id);
   } else {
-    sprintf (query, "%s&NOHTML&DATALIB=%s&EXPECT=%s&FILTER=%s&GRAPH=%s&%sSEQUENCE=>%s\n%s",
-             feats, dataLib, expect, filter, graph, inputtype, id, str);
+    sprintf (query, "%s&NOHTML&DATALIB=%s&EXPECT=%s&FILTER=%s&GRAPH=%s&%sSEQUENCE=>%s%s%s",
+             feats, dataLib, expect, filter, graph, inputtype, id, "%0A", str);
   }
-  conn = QUERY_OpenServiceQuery ("CddSearch", query, 30);
+  conn = QUERY_OpenServiceQuery ("CddSearch2", query, 30);
 
   MemFree (str);
   MemFree (query);
@@ -194,7 +195,7 @@ NLM_EXTERN SeqAnnotPtr CddWaitForReply (
 
 {
   time_t        currtime, starttime;
-  Int2          max = 0;
+  time_t        max = 0;
   SeqAnnotPtr   sap = NULL;
   EIO_Status    status;
   STimeout      timeout;

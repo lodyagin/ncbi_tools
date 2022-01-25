@@ -29,13 +29,50 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.196 $
+* $Revision: 6.207 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.207  2006/09/28 20:19:26  bollin
+* fixed buffer overrun problem in SeqPointWriteEx, increased size of buffer used
+* by SeqLocPrintProc
+*
+* Revision 6.206  2006/09/20 14:53:18  kans
+* ExtendSingleGeneOnMRNA and CorrectGeneFeatLocation look for origin artificial and taxname synthetic construct, do not extend gene
+*
+* Revision 6.205  2006/09/18 17:58:41  kans
+* added EG to WHICH_db_accession
+*
+* Revision 6.204  2006/08/21 20:02:31  kans
+* assign EF to NCBI dirsub in WHICH_db_accession
+*
+* Revision 6.203  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
+* Revision 6.202  2006/07/06 15:05:02  kans
+* added EE to WHICH_db_accession as NCBI EST
+*
+* Revision 6.201  2006/06/29 20:31:19  kans
+* only AH may be segmented protein, CH, CM, DS are nucleotide
+*
+* Revision 6.200  2006/06/29 14:24:05  kans
+* added ED to WHICH_db_accession as NCBI GSS
+*
+* Revision 6.199  2006/06/20 20:49:21  kans
+* added CU to WHICH_db_accession as EMBL genome project data
+*
+* Revision 6.198  2006/05/30 14:54:06  kans
+* added EC as NCBI EST prefix
+*
+* Revision 6.197  2006/05/11 17:08:13  bollin
+* corrected problem in GetThePointForOffset for SeqLocStart and SeqLocStop for
+* all-minus strand interval locations
+*
 * Revision 6.196  2006/04/06 15:41:19  kans
 * added DG to WHICH_db_accession
 *
@@ -1506,7 +1543,7 @@ NLM_EXTERN ByteStorePtr BSPack (ByteStorePtr from, Uint1 oldcode,
         j = 0;
       }
       /* byte = (Uint1) BSGetByte(from); */
-      byte = (Int2) (Uint1) tmp [j];
+      byte = (Uint1) tmp [j];
       j++;
       if(Code4na[byte]) {
         newcode = Seq_code_ncbi4na;
@@ -1540,7 +1577,7 @@ NLM_EXTERN ByteStorePtr BSPack (ByteStorePtr from, Uint1 oldcode,
         j = 0;
       }
       /* byte = (Uint1) BSGetByte(from); */
-      byte = (Int2) (Uint1) tmp [j];
+      byte = (Uint1) tmp [j];
       j++;
       if(CodeIna[byte]) {
         newcode = Seq_code_ncbi4na;
@@ -1827,7 +1864,7 @@ NLM_EXTERN Boolean RebuildDNA_4na (Uint1Ptr buffer, Int4 length, Uint4Ptr lbytes
      
 {
     Boolean	new = FALSE;
-    Int4        i;
+    Uint4        i;
     Uint4 	amb_num;
     Uint4Ptr  amb_buff;
     Uint1     char_l, char_r;
@@ -2413,13 +2450,16 @@ NLM_EXTERN ByteStorePtr BSCompressDNAOld(ByteStorePtr from, Int4 len,
 NLM_EXTERN void CorrectGeneFeatLocation(SeqEntryPtr sep, Pointer data, 
                              Int4 n, Int2 m)
 {
-    BioseqPtr	bsp;
-    ValNodePtr	vnp;
-    MolInfoPtr	mip;
-    SeqAnnotPtr	sap;
-    SeqFeatPtr	sfp;
-    SeqIntPtr	sip;
-    
+    BioseqPtr	  bsp;
+    ValNodePtr	  vnp;
+    MolInfoPtr	  mip;
+    SeqAnnotPtr	  sap;
+    SeqFeatPtr	  sfp;
+    SeqIntPtr	  sip;
+    SeqDescrPtr   sdp;
+    BioSourcePtr  biop;
+    OrgRefPtr     orp;
+
     if(sep == NULL)
         return;
     
@@ -2453,6 +2493,19 @@ NLM_EXTERN void CorrectGeneFeatLocation(SeqEntryPtr sep, Pointer data,
     if(vnp == NULL)
         return;
     
+    sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_source, NULL);
+    if (sdp != NULL) {
+      biop = (BioSourcePtr) sdp->data.ptrvalue;
+      if (biop != NULL) {
+        if (biop->origin == ORG_ARTIFICIAL) {
+          orp = biop->org;
+          if (orp != NULL) {
+            if (StringICmp (orp->taxname, "synthetic construct") == 0) return;
+          }
+        }
+      }
+    }
+  
     /* Otherwise go ahead
      */
     for(sap = bsp->annot; sap != NULL; sap = sap->next) {
@@ -6814,8 +6867,8 @@ Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 		case SEQLOC_START:
 		  if (all_minus)
 		  {
-		    target->point = SeqLocStop (last);
-		    target->id = last_sip;
+		    target->point = SeqLocStop (first);
+		    target->id = first_sip;
 		  }
 		  else
 		  {
@@ -6833,8 +6886,8 @@ Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 		case SEQLOC_STOP:
 		  if (all_minus)
 		  {
-		    target->point = SeqLocStart (first);
-		    target->id = first_sip;
+		    target->point = SeqLocStart (last);
+		    target->id = last_sip;
 		  }
 		  else
 		  {
@@ -7092,7 +7145,7 @@ SeqLocPrintProc
  SeqIdPtr     lastid,
  Boolean      use_best_id)
 {
-	Char buf[41];
+	Char buf[128];
 	SeqBondPtr sbp;
 	PackSeqPntPtr pspp;
 	SeqIntPtr sip;
@@ -7118,7 +7171,7 @@ SeqLocPrintProc
 				sbp = (SeqBondPtr)(slp->data.ptrvalue);
 				if (sbp->a != NULL)
 				{
-					lastid = SeqPointWriteEx(sbp->a, buf, lastid, 40, use_best_id);
+					lastid = SeqPointWriteEx(sbp->a, buf, lastid, sizeof(buf) - 1, use_best_id);
 					BSstring(bsp, buf);
 				}
 				else
@@ -7128,7 +7181,7 @@ SeqLocPrintProc
 
 				if (sbp->b != NULL)
 				{
-					lastid = SeqPointWriteEx(sbp->b, buf, lastid, 40, use_best_id);
+					lastid = SeqPointWriteEx(sbp->b, buf, lastid, sizeof(buf) - 1, use_best_id);
 					BSstring(bsp, buf);
 				}
 				else
@@ -7143,13 +7196,13 @@ SeqLocPrintProc
 	        case SEQLOC_EMPTY:    /* empty */
 				BSPutByte(bsp, '{');
 				SeqIdWrite((SeqIdPtr)(slp->data.ptrvalue), 
-							buf, PRINTID_FASTA_SHORT, 40);
+							buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
 				BSstring(bsp, buf);
 				BSPutByte(bsp, '}');
 				break;
 	        case SEQLOC_WHOLE:    /* whole */
 				SeqIdWrite((SeqIdPtr)(slp->data.ptrvalue), 
-						buf, PRINTID_FASTA_SHORT, 40);
+						buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
 				BSstring(bsp, buf);
 				break;
 	        case SEQLOC_MIX:    /* mix -- more than one seq */
@@ -7179,7 +7232,7 @@ SeqLocPrintProc
 				}
 				if (! SeqIdMatch(sip->id, lastid))
 				{
-					SeqIdWrite(thisid, buf, PRINTID_FASTA_SHORT, 40);
+					SeqIdWrite(thisid, buf, PRINTID_FASTA_SHORT, sizeof(buf) - 1);
 					BSstring(bsp, buf);
 					BSPutByte(bsp, ':');
 				}
@@ -7211,7 +7264,7 @@ SeqLocPrintProc
         	    break;
 	        case SEQLOC_PNT:    /* pnt */
 				lastid = SeqPointWriteEx((SeqPntPtr)(slp->data.ptrvalue), 
-					                       buf, lastid, 40, use_best_id);
+					                       buf, lastid, sizeof(buf) - 1, use_best_id);
 				BSstring(bsp, buf);
 	            break;
     	    case SEQLOC_PACKED_PNT:    /* packed pnt */
@@ -7281,11 +7334,15 @@ SeqPointWriteEx
 	CharPtr  tmp;
 	SeqIdPtr best_id, tmp_next;
 	BioseqPtr bsp;
+	Int4      fuzzlen, id_len;
+	Char      fuzzbuf[100];
 
 	if ((spp == NULL) || (buf == NULL)) return NULL;
 	
 	tmp = buf;
 	*tmp = '\0';
+	if (buflen < 2) return NULL;
+	
 	best_id = spp->id;
 	if (use_best_id)
 	{
@@ -7298,9 +7355,12 @@ SeqPointWriteEx
 	tmp_next = best_id->next;
 	best_id->next = NULL;
 
+	IntFuzzPrint(spp->fuzz, spp->point, fuzzbuf, TRUE);
+	fuzzlen = StringLen (fuzzbuf);
+
 	if (! SeqIdMatch(best_id, lastid))
 	{
-		SeqIdWrite(best_id, tmp, PRINTID_FASTA_SHORT, buflen);
+		SeqIdWrite(best_id, tmp, PRINTID_FASTA_SHORT, buflen - 2);
 		while (*tmp != '\0') tmp++;
 		*tmp = ':';
 		tmp++; *tmp = '\0';
@@ -7310,7 +7370,12 @@ SeqPointWriteEx
 		*tmp = strandsymbol[spp->strand];
 		tmp++; *tmp = '\0';
 	}
-	IntFuzzPrint(spp->fuzz, spp->point, tmp, TRUE);
+	
+	id_len = StringLen (buf);
+	if (id_len < buflen - 1) {
+	  StringNCat (buf, fuzzbuf, buflen - id_len - 1);
+	  buf[buflen - 1] = 0;
+	}
 	
 	best_id->next = tmp_next;
 	
@@ -9379,7 +9444,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"DV") == 0) || 
 	      (StringICmp(temp,"DW") == 0) || 
 	      (StringICmp(temp,"DY") == 0) || 
-	      (StringICmp(temp,"EB") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"EB") == 0) || 
+	      (StringICmp(temp,"EC") == 0) || 
+	      (StringICmp(temp,"EE") == 0) || 
+	      (StringICmp(temp,"EG") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -9388,18 +9456,19 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_HTGS;
           } else if ((StringICmp(temp,"AF") == 0) ||
                      (StringICmp(temp,"AY") == 0) ||
-                     (StringICmp(temp,"DQ") == 0)) {      /* NCBI direct submission */
+                     (StringICmp(temp,"DQ") == 0) ||
+                     (StringICmp(temp,"EF") == 0)) {      /* NCBI direct submission */
               retcode = ACCN_NCBI_DIRSUB;
           } else if ((StringICmp(temp,"AE") == 0) ||
                      (StringICmp(temp,"CP") == 0) ||
                      (StringICmp(temp,"CY") == 0)) {      /* NCBI genome project data */
               retcode = ACCN_NCBI_GENOME;
-          } else if ((StringICmp(temp,"AH") == 0) ||
-                     (StringICmp(temp,"CH") == 0) ||
+          } else if ((StringICmp(temp,"AH") == 0)) {      /* NCBI segmented set header Bioseq */
+              retcode = ACCN_NCBI_SEGSET | ACCN_AMBIGOUS_MOL; /* A few segmented proteins are AH */
+          } else if ((StringICmp(temp,"CH") == 0) ||
                      (StringICmp(temp,"CM") == 0) ||
                      (StringICmp(temp,"DS") == 0)) {      /* NCBI segmented set header Bioseq */
-              retcode = ACCN_NCBI_SEGSET | ACCN_AMBIGOUS_MOL; /* A few segmented
-                                                                 proteins are AH */
+              retcode = ACCN_NCBI_SEGSET;
           } else if ((StringICmp(temp,"AS") == 0)) {      /* NCBI "other" */
               retcode = ACCN_NCBI_OTHER;
           } else if ((StringICmp(temp,"AD") == 0)) {      /* NCBI accessions assigned to GSDB entries */
@@ -9415,7 +9484,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"CW") == 0) ||
                      (StringICmp(temp,"CZ") == 0) ||
                      (StringICmp(temp,"DU") == 0) ||
-                     (StringICmp(temp,"DX") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"DX") == 0) ||
+                     (StringICmp(temp,"ED") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0) ||
                      (StringICmp(temp,"DZ") == 0) ||
@@ -9438,7 +9508,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AL") == 0) ||
                      (StringICmp(temp,"BX") == 0)||
                      (StringICmp(temp,"CR") == 0)||
-                     (StringICmp(temp,"CT") == 0)) {      /* EMBL genome project data */
+                     (StringICmp(temp,"CT") == 0)||
+                     (StringICmp(temp,"CU") == 0)) {      /* EMBL genome project data */
               retcode = ACCN_EMBL_GENOME;
           } else if ((StringICmp(temp,"AN") == 0)) {      /* EMBL CON division */
               retcode = ACCN_EMBL_CON;

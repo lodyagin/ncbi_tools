@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *               system dependent header
@@ -39,6 +39,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.msw,v $
+* Revision 6.6  2006/09/08 16:12:45  coulouri
+* add x64 support
+*
 * Revision 6.5  2003/12/24 18:37:55  vakatov
 * More consistent #define of FAR and near (as per D.Sinyakov's request).
 * Also, get rid of all WIN16-related code (it's just not supported nowdays).
@@ -152,7 +155,7 @@
 #define CDECL
 #endif
 
-#elif defined(i386) || defined(X86) || defined(_X86_) || defined(_M_IX86)
+#elif defined(i386) || defined(X86) || defined(_X86_) || defined(_M_IX86) || defined(_M_X64)
 /* INTEL processor */
 #define PLATFORM_NAME "Win32i"
 #define PROC_I80X86

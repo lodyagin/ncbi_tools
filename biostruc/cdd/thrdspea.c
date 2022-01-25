@@ -1,4 +1,4 @@
-/* $Id: thrdspea.c,v 1.3 2001/04/25 15:43:29 hurwitz Exp $
+/* $Id: thrdspea.c,v 1.4 2006/07/13 17:07:27 bollin Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdspea.c,v $
+* Revision 1.4  2006/07/13 17:07:27  bollin
+* removed unused variables
+*
 * Revision 1.3  2001/04/25 15:43:29  hurwitz
 * initial check-in of Anna's code to fix problem of duplicate alignments with different scores
 *
@@ -76,15 +79,13 @@ int spea(Cor_Def* cdf, Cxl_Als** cpa, Cur_Aln* sai, Cur_Loc* sli,
 /*--------------------------------------------------------*/
 
 int     nsc;            /* Number of threaded segments in core definition */
-int	i,j,k;		/* Counters */
+int	i,j;		/* Counters */
 int	r1,r2;		/* Residue indices in core motif */
 int	s1,s2;		/* Segment indices in core motif */
 int	t1,t2;		/* Residue type indices */
 Cxl_Als *ca;	/* Pointer to contact list of the current segment */
 int	gs;		/* Potential profile energy sum */
 int	ms;		/* Motif energy sum */
-int	cs;		/* Conservation energies sum */
-int	ls;		/* Loopout energies sum */
 /*int	s0;*/		/* Expected motif energy sum */
 int	mn, mx;		
 int     nrt;            /* Number of residue types in potential */

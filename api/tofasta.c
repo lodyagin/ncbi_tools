@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.152 $
+* $Revision: 6.153 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,11 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.153  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.152  2006/03/29 16:04:47  kans
 * in AddNcTitles, do not clear mip->completeness - cannot determine why this was done in the past
 *
@@ -3577,7 +3582,7 @@ static CharPtr FindProtDefLine(BioseqPtr bsp, Boolean extProtTitle)
 		return NULL;
 	}
 	entityID = ObjMgrGetEntityIDForPointer (bsp);
-	indexed = SeqMgrFeaturesAreIndexed (entityID);
+	indexed = (Boolean)SeqMgrFeaturesAreIndexed (entityID);
 
 	sfp = NULL;
 	if (indexed) {

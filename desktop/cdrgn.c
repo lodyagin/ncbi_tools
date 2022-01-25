@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.90 $
+* $Revision: 6.92 $
 *
 * File Description: 
 *
@@ -81,7 +81,7 @@ typedef struct cdrgnform {
   GrouP         protPromptGrp;
   DialoG        ecProcs;
   Uint2         protEntityID;
-  Uint2         protItemID;
+  Uint4         protItemID;
   Uint2         protItemtype;
   Boolean       protFound;
   PrompT        protlen;
@@ -910,7 +910,7 @@ typedef struct protgatherlist {
   CharPtr    protName;
   CharPtr    protDesc;
   Uint2      entityID;
-  Uint2      itemID;
+  Uint4      itemID;
   Uint2      itemtype;
   Boolean    protFound;
 } ProtGatherList, PNTR ProtGatherPtr;
@@ -2990,6 +2990,7 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
             SeqIdFree (sip);
           } else {
             cfp->protXrefName = cfp->protNameText;
+            cfp->protXrefDesc = cfp->protDescText;
           }
         }
       }

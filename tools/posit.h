@@ -1,4 +1,4 @@
-/* $Id: posit.h,v 6.29 2004/10/12 15:06:57 papadopo Exp $
+/* $Id: posit.h,v 6.30 2006/09/18 17:49:06 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,14 @@ Author: Alejandro Schaffer
 
 Contents: header file for position-based BLAST.
 
-$Revision: 6.29 $
+$Revision: 6.30 $
 
 *****************************************************************************/
 /*
 * $Log: posit.h,v $
+* Revision 6.30  2006/09/18 17:49:06  papadopo
+* increase size of PROTEIN_ALPHABET
+*
 * Revision 6.29  2004/10/12 15:06:57  papadopo
 * 1. Modify residue frequency IO to comply with new scoremat spec
 * 2. Remove check that residue frequencies read from scoremat are <= 1.0
@@ -375,7 +378,7 @@ Nlm_FloatHi ** LIBCALL posComputePseudoFreqs(posSearchItems *posSearch, compactS
 void LIBCALL posScaling(posSearchItems *posSearch, compactSearchItems * compactSearch);
 
 
-#define PROTEIN_ALPHABET 26
+#define PROTEIN_ALPHABET 28
 
 #define POSIT_SCALE_FACTOR 200
 

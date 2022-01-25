@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -182,7 +182,7 @@ static Boolean FindSfpItem (GatherContextPtr gcp)
   return TRUE;
 }
 
-static SeqFeatPtr GetSeqFeatGivenIDs (Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+static SeqFeatPtr GetSeqFeatGivenIDs (Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 
 {
   SeqFeatPtr  sfp;
@@ -245,7 +245,7 @@ static void ValDoNotify (ValidExtraPtr vep, Int2 item, Boolean select, Boolean t
         ObjMgrDeSelect (entityID, itemID, itemtype, 0, NULL);
       }
       (vep->notify) ((ErrSev) sev, errcode, subcode,
-                     (Uint2) entityID, (Uint2) itemID, (Uint2) itemtype,
+                     (Uint2) entityID, itemID, (Uint2) itemtype,
                      select, vep->dblClick);
     }
     MemFree (str);
@@ -1352,7 +1352,7 @@ static void AppendFilter (ValidExtraPtr vep, CharPtr text1, CharPtr text2,
 
 static void ProcessValidMessage (ValidExtraPtr vep, CharPtr text1, CharPtr text2,
                                  CharPtr text3, ErrSev sev, int errcode, int subcode,
-                                 Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+                                 Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                  CharPtr message, CharPtr expanded, ValNodePtr context,
                                  size_t ctxlen, Int2 minlev)
 
@@ -1407,7 +1407,7 @@ static void ProcessValidMessage (ValidExtraPtr vep, CharPtr text1, CharPtr text2
 
 extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
                                 ErrSev sev, int errcode, int subcode,
-                                Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+                                Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                 CharPtr message, CharPtr expanded, ValNodePtr context)
 
 {
@@ -2041,7 +2041,7 @@ static void RepDoNotify (ReplaceExtraPtr rep, Int2 item, Boolean select)
     str = GetDocText (rep->doc, item, 1, 2);
     if (str != NULL &&
         sscanf (str, "%u %u %u %u", &entityID, &itemID, &itemtype, &subtype) == 4) {
-      (rep->notify) ((Uint2) entityID, (Uint2) itemID, (Uint2) itemtype,
+      (rep->notify) ((Uint2) entityID, itemID, (Uint2) itemtype,
                      (Uint2) subtype, select, rep->dblClick);
     }
     MemFree (str);
@@ -2186,7 +2186,7 @@ extern void CreateReplaceWindow (ReplaceNotifyProc notify, CharPtr title,
 }
 
 extern void LIBCALLBACK AppendReplaceMessage (CharPtr searchFor, CharPtr foundIn, CharPtr label,
-                                              Uint2 entityID, Uint2 itemID,
+                                              Uint2 entityID, Uint4 itemID,
                                               Uint2 itemtype, Uint2 subtype)
 
 {
@@ -2229,11 +2229,11 @@ extern void LIBCALLBACK AppendReplaceMessage (CharPtr searchFor, CharPtr foundIn
   }
 }
 
-extern void LIBCALLBACK StdReplaceNotify (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+extern void LIBCALLBACK StdReplaceNotify (Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                           Uint2 subtype, Boolean select, Boolean dblClick)
 
 {
-  Boolean  handled;
+  Int2 handled;
 
   if (dblClick) {
     WatchCursor ();

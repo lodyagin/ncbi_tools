@@ -405,7 +405,6 @@ NLM_EXTERN
 EntrezgeneSetPtr LIBCALL
 EntrezgeneSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -461,7 +460,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 EntrezgeneSetAsnWrite(EntrezgeneSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

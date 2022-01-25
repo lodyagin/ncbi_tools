@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: seedtop.c,v 6.12 2006/03/01 13:43:45 coulouri Exp $";
+static char const rcsid[] = "$Id: seedtop.c,v 6.18 2006/08/04 20:40:15 papadopo Exp $";
 
-/* $Id: seedtop.c,v 6.12 2006/03/01 13:43:45 coulouri Exp $ */
+/* $Id: seedtop.c,v 6.18 2006/08/04 20:40:15 papadopo Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,29 @@ Maintainer: Alejandro Schaffer
  
 Contents: main routine for pseed3, stand-alone counterpart to PHI-BLAST.
  
-$Revision: 6.12 $
+$Revision: 6.18 $
 
 $Log: seedtop.c,v $
+Revision 6.18  2006/08/04 20:40:15  papadopo
+allow filtering of query sequences
+
+Revision 6.17  2006/08/04 14:59:49  coulouri
+initialize variable, plug memory leaks; fixes rt#15187012
+
+Revision 6.16  2006/07/13 17:55:10  papadopo
+allow searching for patterns even if they are too likely
+
+Revision 6.15  2006/07/11 20:38:27  papadopo
+initialize query length; also fix previous commit
+
+Revision 6.14  2006/07/11 19:47:01  papadopo
+1. Only initialize input database if needed for searching
+2. Add some comments
+3. Remove dead code
+
+Revision 6.13  2006/06/13 17:02:38  papadopo
+print warnings as well as errors
+
 Revision 6.12  2006/03/01 13:43:45  coulouri
 From Alejandro Schaffer: do not dereference null pointer
 
@@ -83,7 +103,7 @@ extern "C" {
 #endif
 
 
-#define NUMARG 19
+#define NUMARG 20
 
 static Args myargs [NUMARG] = {
   { "Database", 
@@ -123,7 +143,9 @@ static Args myargs [NUMARG] = {
   { "Cost for a mismatch",
 	"-10", NULL, NULL, FALSE, 'q', ARG_INT, 0.0, 0, NULL},
   { "Filter query sequence with SEG",
-	"F", NULL, NULL, FALSE, 'F', ARG_BOOLEAN, 0.0, 0, NULL}     
+	"F", NULL, NULL, FALSE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
+  { "Force searching for patterns even if they are too likely",
+	"F", NULL, NULL, FALSE, 'f', ARG_BOOLEAN, 0.0, 0, NULL}     
 };
 
 
@@ -166,7 +188,7 @@ Int2 Main(void)
 	ReadDBFILEPtr rdpt=NULL;  /*holds result of attempt to read database*/
  	GapAlignBlkPtr gap_align; /*structure to keep track of gapped
                                     alingment information*/
-        BLAST_ScoreBlkPtr sbp; /*BLAST structure used to hold matrix*/
+        BLAST_ScoreBlkPtr sbp=NULL; /*BLAST structure used to hold matrix*/
 	FILE *infp, *patfp; /*file descriptors for query file and pattern file*/
         FILE *outfp;  /*file descriptor for output file*/
 	Boolean is_dna; /*are we working with DNA or protein sequences*/
@@ -189,6 +211,8 @@ Int2 Main(void)
 
         if (! SeqEntryLoad())
                 return (1);
+
+        ErrSetMessageLevel(SEV_WARNING);
 
 	database = myargs[0].strvalue;
 	queryfile = myargs[1].strvalue;
@@ -230,7 +254,6 @@ Int2 Main(void)
 	fillCandLambda(seedSearch, myargs[14].strvalue, options);
 	gap_align->x_parameter = myargs[7].intvalue*NCBIMATH_LN2/seedSearch->paramLambda;
 
-	/* seedSearch->cutoffScore = myargs[8].intvalue; */
         eThresh = (Nlm_FloatHi) myargs[11].floatvalue;
         if (eThresh > MAX_EVALUE) {
           ErrPostEx(SEV_FATAL, 1, 0, "E-value threshold is too high\n");
@@ -240,6 +263,8 @@ Int2 Main(void)
         if (!is_dna)
           initProbs(seedSearch);
 
+        /* if the search needs a query, read it in */
+        queryLength = 0;
 	if (program_flag != PATTERN_FLAG) {
 	  if (program_flag != PAT_MATCH_FLAG) {
 	    sbp = BLAST_ScoreBlkNew(Seq_code_ncbistdaa, 1);
@@ -275,7 +300,8 @@ Int2 Main(void)
 		  return 2;
 		}
               query = BlastGetSequenceFromBioseq(query_bsp, &queryLength);
-	      seg_slp = BlastBioseqFilter(query_bsp, options->filter_string);
+	      seg_slp = BlastBioseqFilter(query_bsp, 
+                                     (Boolean)myargs[18].intvalue ? "T" : "F");
 	      if (seg_slp) {
 		unfilter_query = MemNew((queryLength + 1) * sizeof(Uint1));
 		for (i = 0; i < queryLength; i++)
@@ -295,119 +321,127 @@ Int2 Main(void)
         else {
 	  init_order(NULL, program_flag, is_dna, seedSearch);
 	}
-	rdpt = readdb_new(database, !is_dna);
-	if (NULL == rdpt) {
-	  ErrPostEx(SEV_FATAL, 1, 0, "seed: Unable to find or open database %s\n", database);
-	  return (1);
-	}
-	if (program_flag == PATTERN_FLAG) {
-	    search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &error_returns, &info_vnp);
-            PGPOutTextMessages(info_vnp, outfp);
-            info_vnp = ValNodeFreeData(info_vnp);
 
-            BlastErrorPrint(error_returns);
-	    rdpt = readdb_destruct(rdpt);
-	    return(0);
-	} 
+        /* if the search needs a database, initialize it */
+	dbLength = 0;
+	num_seq = 0;
+        if (program_flag != PAT_MATCH_FLAG) {
+	  rdpt = readdb_new(database, !is_dna);
+	  if (NULL == rdpt) {
+	    ErrPostEx(SEV_FATAL, 1, 0, "seed: Unable to find or open database %s\n", database);
+	    return (1);
+	  }
+	  if (program_flag == PATTERN_FLAG) {
+	      search_pat(rdpt, patfile, is_dna, seedSearch, patternSearch, &error_returns, &info_vnp);
+              PGPOutTextMessages(info_vnp, outfp);
+              info_vnp = ValNodeFreeData(info_vnp);
+
+              BlastErrorPrint(error_returns);
+	      rdpt = readdb_destruct(rdpt);
+	      return(0);
+	  } 
+	  num_seq = readdb_get_num_entries(rdpt);
+	  dbLength = (Nlm_FloatHi) readdb_get_dblen(rdpt);              
+        }
+
 	occurArray = (Int4 *) ckalloc(sizeof(Int4)*queryLength*2);
 	hitArray = (Int4 *) MemNew(sizeof(Int4)*queryLength*2);
 
-	dbLength = 0;
-	num_seq = readdb_get_num_entries(rdpt);
-	dbLength = (Nlm_FloatHi) readdb_get_dblen(rdpt);              
-	/*correct the effective size of the database to take out
-	  the number of positions at the end of each sequence where
-	  pattern match cannot start*/
-		 
-	while (pattern = get_a_pat(patfp, &pname, occurArray, hitArray, &numPatOccur, 
-                                   &effectiveOccurrences,
+	/* perform the search one pattern at a time */
+	while (pattern = get_a_pat(patfp, &pname, occurArray, hitArray, 
+                                   &numPatOccur, &effectiveOccurrences,
 				   program_flag, unfilter_query, query, 
                                    queryLength, is_dna,
-                                   patternSearch, seedSearch, TRUE, &error_returns, &info_vnp)) {
+                                   patternSearch, seedSearch, TRUE, 
+                                   &error_returns, &info_vnp)) {
 
-            PGPOutTextMessages(info_vnp, outfp);
-            info_vnp = ValNodeFreeData(info_vnp);
+          PGPOutTextMessages(info_vnp, outfp);
+          info_vnp = ValNodeFreeData(info_vnp);
+          BlastErrorPrint(error_returns);
 
-            BlastErrorPrint(error_returns);
-          if (patternSearch->patternProbability > PAT_PROB_THRESH &&
-	      (patternSearch->patternProbability * dbLength > EXPECT_MATCH_THRESH)) {
-             fprintf(outfp,"Pattern %s is too likely to occur in the database to be informative\n",pname);
-          }
-	  else {
-            if (patternSearch->wildcardProduct > WILDCARD_THRESH) {
-              fprintf(outfp, "Due to variable wildcards pattern %s is likely to occur too many times in a single sequence\n",pname);
+          if (myargs[19].intvalue == 0) {
+            if (patternSearch->patternProbability > PAT_PROB_THRESH &&
+                (patternSearch->patternProbability * dbLength > 
+                                  EXPECT_MATCH_THRESH)) {
+               fprintf(outfp,"Pattern %s is too likely to occur "
+                             "in the database to be informative\n",pname);
+               continue;
             }
-	    else {
+            else if (patternSearch->wildcardProduct > WILDCARD_THRESH) {
+               fprintf(outfp, "Due to variable wildcards pattern %s is likely "
+                      "to occur too many times in a single sequence\n",pname);
+               continue;
+            }
+          }
+          for (occurIndex = 0; occurIndex < numPatOccur; occurIndex++) {
+            seed = occurArray[occurIndex];
+            totalOccurrences = 0;
+            fprintf(outfp,"Name  %sPattern %s At position %d of query sequence\n",
+                 pname, pattern, seed);
+            if ((twiceNumMatches=find_hits(list, &query[seed-1], 
+                             queryLength-seed+1, FALSE, patternSearch)) < 2 || 
+                list[1] != 0) {
+              fprintf(outfp,"twiceNumMatches=%d list[1]=%d\n", i, list[1]);
+              ErrPostEx(SEV_FATAL, 1, 0, "pattern does not match the query at the place\n");
+              return 1;
+            }
+            if (program_flag != PAT_MATCH_FLAG) {
+              /* correct the effective size of the database to take out
+                 the number of positions at the end of each sequence where
+                 pattern match cannot start*/
+              adjustdbLength = dbLength - (num_seq * patternSearch->minPatternMatchLength);
 
-	      adjustdbLength = dbLength - (num_seq * patternSearch->minPatternMatchLength);
+              lenPatMatch = list[0]+1;
+          
+              matchIndex = 0;
+              query_seq = split_target_seq(query, seed, lenPatMatch, queryLength);
 
-	      for (occurIndex = 0; occurIndex < numPatOccur; occurIndex++) {
-		seed = occurArray[occurIndex];
-		totalOccurrences = 0;
-		fprintf(outfp,"Name  %sPattern %s At position %d of query sequence\n",
-		     pname, pattern, seed);
-		if ((twiceNumMatches=find_hits(list, &query[seed-1], queryLength-seed+1, FALSE, patternSearch)) < 2 || 
-		    list[1] != 0) {
-		  fprintf(outfp,"twiceNumMatches=%d list[1]=%d\n", i, list[1]);
-		  ErrPostEx(SEV_FATAL, 1, 0, "pattern does not match the query at the place\n");
-		  return 1;
-		}
-		if (program_flag != PAT_MATCH_FLAG) {
-		  lenPatMatch = list[0]+1;
-	      
-		  matchIndex = 0;
-		  query_seq = split_target_seq(query, seed, lenPatMatch, queryLength);
+              fprintf(outfp, "effective database length=%.1e\n pattern probability=%.1e\nlengthXprobability=%.1e\n", (Nlm_FloatHi) adjustdbLength, 
+                      patternSearch->patternProbability, 
+                      patternSearch->patternProbability * adjustdbLength);
+              if (!is_dna) {
+                /*extra caution about what values are tolerated*/
+                seedSearch->cutoffScore = eValueFit(
+                                                    MIN(MAX_EVALUE, 10 * eThresh), adjustdbLength, 
+                                                    seedSearch, effectiveOccurrences, patternSearch->patternProbability);
+              }
+              else
+                seedSearch->cutoffScore = myargs[8].intvalue;
 
-		  fprintf(outfp, "effective database length=%.1e\n pattern probability=%.1e\nlengthXprobability=%.1e\n", (Nlm_FloatHi) adjustdbLength, 
-			  patternSearch->patternProbability, 
-			  patternSearch->patternProbability * adjustdbLength);
-		  if (!is_dna) {
-		    /*extra caution about what values are tolerated*/
-		    seedSearch->cutoffScore = eValueFit(
-							MIN(MAX_EVALUE, 10 * eThresh), adjustdbLength, 
-							seedSearch, effectiveOccurrences, patternSearch->patternProbability);
-		  }
-		  else
-		    seedSearch->cutoffScore = myargs[8].intvalue;
+              for (num_seq = 0; num_seq < rdpt->num_seqs; num_seq++) {                    
+                lenSeqFromDb = readdb_get_sequence(rdpt, num_seq, &seqFromDb);
+                hit_list = get_hits(query_seq, lenPatMatch, seqFromDb, 
+                                    lenSeqFromDb, gap_align, is_dna, patternSearch, 
+                                    seedSearch, &newOccurrences);
+                if (newOccurrences > 0)
+                  totalOccurrences += newOccurrences;
+                if (hit_list) {
+                  storeOneMatch(hit_list, num_seq, seqFromDb, seedResults); 
+                  matchIndex++;
+                }
+              }
+              if (matchIndex > 0) 
+                quicksort_hits(matchIndex, seedResults);
+              fprintf(outfp,"\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
+              /*Note: for stand-alone program, score only will be shown*/
+              output_hits(rdpt, TRUE, query, query_seq, 
+                          lenPatMatch, adjustdbLength, gap_align, is_dna, 
+                          effectiveOccurrences, seedSearch, seedResults,
+                          patternSearch, FALSE, totalOccurrences, eThresh,
+                          NULL, 0.0, NULL, matchIndex, NULL, TRUE, 
+                          &info_vnp);
 
-		  for (num_seq = 0; num_seq < rdpt->num_seqs; num_seq++) {	    	
-		    lenSeqFromDb = readdb_get_sequence(rdpt, num_seq, &seqFromDb);
-		    /*if (num_seq == 3530)
-		      printf("\n Stop here");*/
-		    hit_list = get_hits(query_seq, lenPatMatch, seqFromDb, 
-					lenSeqFromDb, gap_align, is_dna, patternSearch, 
-					seedSearch, &newOccurrences);
-		    if (newOccurrences > 0)
-		      totalOccurrences += newOccurrences;
-		    if (hit_list) {
-		      storeOneMatch(hit_list, num_seq, seqFromDb, seedResults); 
-		      matchIndex++;
-		    }
-		  }
-		  if (matchIndex > 0) 
-		    quicksort_hits(matchIndex, seedResults);
-		  fprintf(outfp,"\nNumber of occurrences of pattern in the database is %d\n", totalOccurrences);
-		  /*Note: for stand-alone program, score only will be shown*/
-		  output_hits(rdpt, TRUE, query, query_seq, 
-			      lenPatMatch, adjustdbLength, gap_align, is_dna, 
-			      effectiveOccurrences, seedSearch, seedResults,
-			      patternSearch, FALSE, totalOccurrences, eThresh,
-			      NULL, 0.0, NULL, matchIndex, NULL, TRUE, 
-                              &info_vnp);
+              if(query_seq != NULL) {
+                  MemFree(query_seq->lseq);
+                  MemFree(query_seq);
+              }
 
-                  if(query_seq != NULL) {
-                      MemFree(query_seq->lseq);
-                      MemFree(query_seq);
-                  }
+              PGPOutTextMessages(info_vnp, outfp);
+              info_vnp = ValNodeFreeData(info_vnp);
 
-                  PGPOutTextMessages(info_vnp, outfp);
-                  info_vnp = ValNodeFreeData(info_vnp);
-
-		  seed_free_all(seedResults);
-		}
-	      }
-	    }
-	  }
+              seed_free_all(seedResults);
+            }
+          }
 	}
 
         BLAST_ScoreBlkDestruct(sbp);
@@ -421,6 +455,9 @@ Int2 Main(void)
         MemFree(seedSearch);
         MemFree(seedResults);
         MemFree(patternSearch);
+        FileClose(patfp);
+        FileClose(infp);
+        FreeArgs(NUMARG, myargs);
 
 	return(0);
 }

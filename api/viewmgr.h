@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.h,v 1.18 2001/01/18 22:28:06 hurwitz Exp $
+/*   $Id: viewmgr.h,v 1.19 2006/07/13 17:06:39 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.h,v 1.18 2001/01/18 22:28:06 hurwitz Exp $
+* File Name:  $Id: viewmgr.h,v 1.19 2006/07/13 17:06:39 bollin Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.18 $
+* $Revision: 1.19 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,11 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.h,v $
+* Revision 1.19  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 1.18  2001/01/18 22:28:06  hurwitz
 * added fast option for ViewMgr_Update
 *
@@ -343,7 +348,7 @@ Notes: will index the seqalign
 *****************************************************************************/
 NLM_EXTERN Int4 ViewMgr_Attach(SeqAlign *salp, Boolean Neat,
                                Boolean Intersect, Uint2 entityID,
-                               Uint2 itemID);
+                               Uint4 itemID);
 
 /*****************************************************************************
 

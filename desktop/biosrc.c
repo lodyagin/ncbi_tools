@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.75 $
+* $Revision: 6.76 $
 *
 * File Description: 
 *
@@ -194,7 +194,7 @@ END_ENUM_ALIST
 
 Int2     numGeneticCodes = 0;
 Int2     gcIdToIndex [NUM_GENETIC_CODES];
-Int2     gcIndexToId [NUM_GENETIC_CODES];
+Uint1    gcIndexToId [NUM_GENETIC_CODES];
 CharPtr  gcNames [NUM_GENETIC_CODES];
 
 static CharPtr  orgTxtPtr = NULL;
@@ -268,7 +268,7 @@ extern Boolean LoadOrganismTable (void)
   Boolean  failed;
   Char     first [16];
   Int2     idx;
-  Int4     len;
+  Int8     len;
   Int2     num;
   CharPtr  ptr;
   Char     str [PATH_MAX];

@@ -1,4 +1,4 @@
-/* $Id: phi_gapalign.c,v 1.11 2006/03/02 13:28:34 madden Exp $
+/* $Id: phi_gapalign.c,v 1.12 2006/09/01 14:47:16 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,7 +55,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: phi_gapalign.c,v 1.11 2006/03/02 13:28:34 madden Exp $";
+    "$Id: phi_gapalign.c,v 1.12 2006/09/01 14:47:16 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -810,7 +810,7 @@ Int2 PHIGetGappedScore (EBlastProgramType program_number,
 
            /* PHI BLAST does not support query concatenation, so context is 
               always 0. */
-           if (gap_align->score >= hit_params->cutoff_score) {
+           if (gap_align->score >= hit_params->cutoff_score_min) {
                Blast_HSPInit(gap_align->query_start, gap_align->query_stop, 
                              gap_align->subject_start, gap_align->subject_stop, 
                              q_pat_offset, s_pat_offset, 

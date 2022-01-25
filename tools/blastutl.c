@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.465 2006/02/15 18:23:47 madden Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.466 2006/08/10 17:34:38 merezhuk Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,15 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.465 $
+$Revision: 6.466 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.466  2006/08/10 17:34:38  merezhuk
+* Fix for reading -z advanced option by StringToInt8; RT # 15187990
+*
 * Revision 6.465  2006/02/15 18:23:47  madden
 * Made changes so that CheckStartForGappedAlignment by default
 * checks ungapped alignments of length 11, rather than length 10.
@@ -7027,8 +7030,8 @@ parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options,
         /* -z Effective database length */
         index = BlastGetLetterIndex(opt_str, 'z');
         if (values[index] != NULL) {
-           const char **dummy=NULL;
-           options->db_length =  StringToInt8(values[index], dummy);
+           const char *dummy=NULL;
+           options->db_length =  StringToInt8(values[index], &dummy);
         }
 
         /* -c Constant in pseudocounts for multipass version */

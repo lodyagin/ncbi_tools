@@ -1,4 +1,4 @@
-/* $Id: thrdspci.c,v 1.1 2000/08/16 20:45:21 hurwitz Exp $
+/* $Id: thrdspci.c,v 1.2 2006/07/13 17:07:27 bollin Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdspci.c,v $
+* Revision 1.2  2006/07/13 17:07:27  bollin
+* removed unused variables
+*
 * Revision 1.1  2000/08/16 20:45:21  hurwitz
 * initial check in of threading routines
 *
@@ -70,7 +73,6 @@ int	nsc;		/* Number of core segments */
 int	nlp;		/* Number of loops */
 int	nrt;		/* Number of residue types in potential */
 int	nqi;		/* Number of residues in query sequence */
-int	ppi;		/* Index of peptide group in contact potential */
 int	i,j;		/* Counters */
 int	r;		/* Residue type */
 int	nt,ct;		/* Core segment or loop terminii */

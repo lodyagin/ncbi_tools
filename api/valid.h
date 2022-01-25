@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.23 $
+* $Revision: 6.27 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.27  2006/10/11 21:41:27  kans
+* added vsp->validateExons, exclude ends based on overlapping CDS
+*
+* Revision 6.26  2006/10/10 19:06:42  kans
+* validate modified base indicators in PCR_primers qualifier
+*
+* Revision 6.25  2006/06/15 18:28:18  kans
+* added far_fetch_failure field
+*
+* Revision 6.24  2006/06/07 19:56:34  kans
+* added ECnumberNotInList, persistent EC_number finite state machines stored by AppProperty
+*
 * Revision 6.23  2006/04/21 17:59:18  kans
 * added ignoreExceptions flag to vsp - for MrnaTransCheck and CdTransCheck
 *
@@ -237,6 +249,7 @@ typedef struct validstruct {
 	Boolean seqSubmitParent;       /* flag from tbl2asn to suppress no pub message */
 	Boolean justShowAccession;     /* extremely terse output with accession and error type */
 	Boolean ignoreExceptions;      /* report translation and transcription problems even if exception set */
+	Boolean validateExons;         /* check splice sites on exon features except at ends of overlapping CDS */
 	Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
 								   /* this section used for finer error reporting callback */
 	ValidErrorFunc errfunc;
@@ -244,11 +257,13 @@ typedef struct validstruct {
 	Boolean convertGiToAccn;
 								   /* this section used for internal flags */
 	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
+	TextFsaPtr modifiedBases;      /* permitted modified bases in PCR_primer qualifier */
 	Boolean is_htg_in_sep;         /* record has technique of htgs 0 through htgs 3 */
 	Boolean is_refseq_in_sep;      /* record has seqid of type other (refseq) */
 	Boolean is_smupd_in_sep;       /* record in INSD internal processing */
 	Boolean feat_loc_has_gi;       /* at least one feature has a gi location reference */
 	Boolean feat_prod_has_gi;      /* at least one feature has a gi product reference */
+	Boolean far_fetch_failure;     /* a far location or bioseq with no fetch function */
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));
@@ -262,6 +277,9 @@ NLM_EXTERN CharPtr GetValidCategoryName (int errcode);
 NLM_EXTERN CharPtr GetValidErrorName (int errcode, int subcode);
 
 NLM_EXTERN CharPtr PNTR GetValidCountryList (void);
+
+/* EC_number finite state machine persists to avoid expensive reload, should free on program exit */
+NLM_EXTERN void ECNumberFSAFreeAll (void);
 
 #ifdef __cplusplus
 }

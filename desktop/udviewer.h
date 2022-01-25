@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.57 $
+* $Revision: 6.58 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udviewer.h,v $
+* Revision 6.58  2006/07/13 17:13:18  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.57  2000/07/12 15:38:08  hurwitz
 * made rectangle select much faster.  it's almost working.
 *
@@ -583,9 +586,9 @@ extern "C" {
 	NLM_EXTERN void UDV_Build_AA_LayoutPalette(UnDViewerGraphDataPtr GrData);
 	NLM_EXTERN void UDV_deselect_feature(ViewerDialogDataPtr vdp);
 	NLM_EXTERN void UDV_SelectFeatInFeatDlg(ViewerMainPtr vmp, 
-			Uint2 entityID, Uint2 itemID);
+			Uint2 entityID, Uint4 itemID);
 	NLM_EXTERN void UDV_select_feature(PaneL p,ViewerDialogDataPtr vdp,
-			Uint2 entityID,Uint2 itemID,Boolean bRepos);
+			Uint2 entityID,Uint4 itemID,Boolean bRepos);
 	NLM_EXTERN void UDV_draw_double_cursor(RecT rcClip,PoinT pos);
   NLM_EXTERN void UDV_draw_horizontal_line(RecT rcClip, Int4 VPos);
   NLM_EXTERN void UDV_draw_rectangle(RecT rcClip, Boolean DotIt);
@@ -666,7 +669,7 @@ extern "C" {
 	/*Sequin stuffs*/
 	NLM_EXTERN Boolean UDV_InitForSequin(PaneL udvPanel, BioseqViewPtr bvp);
 	NLM_EXTERN void UDV_LoadSpecificEditor(BioseqViewPtr bvp, Uint2 entityID, 
-		Uint2 itemID, Uint2 itemtype);
+		Uint4 itemID, Uint2 itemtype);
 
   /*zero UDV_mouse_select structure*/
   NLM_EXTERN void ClearUDV_mouse_select(UDV_mouse_selectPtr msp);

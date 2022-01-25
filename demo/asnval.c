@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.23 $
+* $Revision: 1.32 $
 *
 * File Description:
 *
@@ -60,7 +60,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "2.2"
+#define ASNVAL_APP_VER "3.1"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -264,6 +264,7 @@ typedef struct valflags {
   Boolean  locusTagGeneralMatch;
   Boolean  validateIDSet;
   Boolean  ignoreExceptions;
+  Boolean  validateExons;
   Boolean  batch;
   Boolean  binary;
   Boolean  compressed;
@@ -656,6 +657,7 @@ static void DoValidation (
   vsp->locusTagGeneralMatch = vfp->locusTagGeneralMatch;
   vsp->validateIDSet = vfp->validateIDSet;
   vsp->ignoreExceptions = vfp->ignoreExceptions;
+  vsp->validateExons = vfp->validateExons;
 
   if (ofp == NULL && vfp->outfp != NULL) {
     ofp = vfp->outfp;
@@ -868,6 +870,7 @@ static void ProcessMultipleRecord (
   Char            buf [64], path [PATH_MAX], longest [64];
   Int2            skipcount = 0, maxcount = 0;
   CitSubPtr       csp = NULL;
+  Boolean         detailed_report = FALSE;
   FILE            *fp, *ofp = NULL;
   Int4            numrecords = 0;
   SeqEntryPtr     fsep, sep;
@@ -933,6 +936,10 @@ static void ProcessMultipleRecord (
   }
 
 #ifdef OS_UNIX
+  if (getenv ("ASNVAL_LOG_OBJMGR_REPORT") != NULL) {
+    detailed_report = TRUE;
+  }
+
   if (vfp->compressed) {
     gzcatprog = getenv ("NCBI_UNCOMPRESS_BINARY");
     if (gzcatprog != NULL) {
@@ -1073,6 +1080,11 @@ static void ProcessMultipleRecord (
       ObjMgrReapOne (omp);
       ObjMgrFreeCache (0);
       FreeSeqIdGiCache ();
+
+      if (detailed_report && vfp->logfp != NULL) {
+        ObjMgrReportProc (vfp->logfp);
+      }
+
     } else if (atp == atp_sbp) {
       sbp = SubmitBlockAsnRead (aip, atp);
       if (sbp != NULL) {
@@ -1132,6 +1144,11 @@ static void ProcessOneRecord (
   vfp = (ValFlagPtr) userdata;
   if (vfp == NULL) return;
 
+  if (vfp->logfp != NULL) {
+    fprintf (vfp->logfp, "%s\n", filename);
+    fflush (vfp->logfp);
+  }
+
   if (vfp->batch) {
     ProcessMultipleRecord (filename, vfp);
   } else {
@@ -1153,21 +1170,22 @@ static void ProcessOneRecord (
 #define A_argAlignments    9
 #define J_argIsoJta       10
 #define Z_argRemoteCDS    11
-#define M_argMatchTag     12
-#define Y_argCheckOld     13
-#define e_argIgnoreExcept 14
-#define v_argVerbosity    15
-#define a_argType         16
-#define b_argBinary       17
-#define c_argCompressed   18
-#define r_argRemote       19
-#define k_argLocalFetch   20
-#define l_argLockFar      21
-#define G_argGiLookup     22
-#define T_argThreads      23
-#define L_argLogFile      24
-#define S_argSkipCount    25
-#define C_argMaxCount     26
+#define X_argExonSplice   12
+#define M_argMatchTag     13
+#define Y_argCheckOld     14
+#define e_argIgnoreExcept 15
+#define v_argVerbosity    16
+#define a_argType         17
+#define b_argBinary       18
+#define c_argCompressed   19
+#define r_argRemote       20
+#define k_argLocalFetch   21
+#define l_argLockFar      22
+#define G_argGiLookup     23
+#define T_argThreads      24
+#define L_argLogFile      25
+#define S_argSkipCount    26
+#define C_argMaxCount     27
 
 Args myargs [] = {
   {"Path to ASN.1 Files", NULL, NULL, NULL,
@@ -1194,6 +1212,8 @@ Args myargs [] = {
     TRUE, 'J', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Remote CDS Product Fetch", "F", NULL, NULL,
     TRUE, 'Z', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Exon Splice Check", "F", NULL, NULL,
+    TRUE, 'X', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Match locus_tag against General ID", "F", NULL, NULL,
     TRUE, 'M', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Check Against Old IDs", "F", NULL, NULL,
@@ -1304,6 +1324,7 @@ Int2 Main (void)
   vfd.locusTagGeneralMatch = (Boolean) myargs [M_argMatchTag].intvalue;
   vfd.validateIDSet = (Boolean) myargs [Y_argCheckOld].intvalue;
   vfd.ignoreExceptions = (Boolean) myargs [e_argIgnoreExcept].intvalue;
+  vfd.validateExons = (Boolean) myargs [X_argExonSplice].intvalue;
 
   vfd.verbosity = (Int2) myargs [v_argVerbosity].intvalue;
 
@@ -1453,6 +1474,8 @@ Int2 Main (void)
   }
 
   TransTableFreeAll ();
+
+  ECNumberFSAFreeAll ();
 
   if (vfd.fatal_errors > 0) return 1;
 

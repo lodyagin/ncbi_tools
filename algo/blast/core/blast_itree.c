@@ -1,4 +1,4 @@
-/* $Id: blast_itree.c,v 1.11 2005/11/16 14:27:03 madden Exp $
+/* $Id: blast_itree.c,v 1.12 2006/05/24 18:29:39 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_itree.c,v 1.11 2005/11/16 14:27:03 madden Exp $";
+    "$Id: blast_itree.c,v 1.12 2006/05/24 18:29:39 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include "blast_itree.h"
@@ -758,32 +758,30 @@ s_HSPIsContained(const BlastHSP *in_hsp,
     if (in_q_start != tree_q_start)
         return FALSE;
        
-    if (min_diag_separation > 0) {
-
-        if (MB_HSP_CONTAINED(in_hsp->query.offset, 
-                             tree_hsp->query.offset, tree_hsp->query.end,
-                             in_hsp->subject.offset, 
-                             tree_hsp->subject.offset, tree_hsp->subject.end,
-                             min_diag_separation) && 
-            in_hsp->score <= tree_hsp->score &&
-            SIGN(in_hsp->subject.frame) == SIGN(tree_hsp->subject.frame)) {
-            return TRUE;
-        }
-    } 
-    else if (CONTAINED_IN_HSP(tree_hsp->query.offset, tree_hsp->query.end, 
+    if (in_hsp->score <= tree_hsp->score &&
+        SIGN(in_hsp->subject.frame) == SIGN(tree_hsp->subject.frame) &&
+        CONTAINED_IN_HSP(tree_hsp->query.offset, tree_hsp->query.end, 
                               in_hsp->query.offset,
                               tree_hsp->subject.offset, tree_hsp->subject.end, 
-                              in_hsp->subject.offset)) {
-
-        if (CONTAINED_IN_HSP(tree_hsp->query.offset, tree_hsp->query.end, 
+                              in_hsp->subject.offset) &&
+        CONTAINED_IN_HSP(tree_hsp->query.offset, tree_hsp->query.end, 
                              in_hsp->query.end,
                              tree_hsp->subject.offset, tree_hsp->subject.end, 
-                             in_hsp->subject.end) &&
-            in_hsp->score <= tree_hsp->score &&
-            SIGN(in_hsp->subject.frame) == SIGN(tree_hsp->subject.frame)) {
+                             in_hsp->subject.end)) {
+
+        if (min_diag_separation == 0)
+            return TRUE;
+
+        if (MB_HSP_CLOSE(tree_hsp->query.offset, tree_hsp->subject.offset,
+                         in_hsp->query.offset, in_hsp->subject.offset,
+                         min_diag_separation) ||
+            MB_HSP_CLOSE(tree_hsp->query.end, tree_hsp->subject.end,
+                         in_hsp->query.end, in_hsp->subject.end,
+                         min_diag_separation)) {
             return TRUE;
         }
     }
+
     return FALSE;
 }
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.70 $
+* $Revision: 6.72 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -138,14 +138,14 @@ typedef unsigned long LckType;
 
 typedef unsigned long CstType;
 
-#define HIDE_IMP_FEATS             1
-#define HIDE_REM_IMP_FEATS         2
+#define SHOW_FEATURE_STATS         1
+#define SHOW_REFERENCE_STATS       2
 
-#define HIDE_SNP_FEATS             4
-#define HIDE_EXON_FEATS            8
-#define HIDE_INTRON_FEATS         16
-#define HIDE_MISC_FEATS           32
+#define HIDE_FEATURES              4
 
+#define HIDE_IMP_FEATS             8
+#define HIDE_VARIATION_FEATS      16
+#define HIDE_REPEAT_REGIONS       32
 #define HIDE_CDD_FEATS            64
 #define HIDE_CDS_PROD_FEATS      128
 
@@ -165,6 +165,7 @@ typedef unsigned long CstType;
 
 #define EXPANDED_GAP_DISPLAY   65536
 #define HIDE_GO_TERMS         131072
+#define HIDE_TRANSLATION      262144
 
 /* opaque pointer for special extensions */
 

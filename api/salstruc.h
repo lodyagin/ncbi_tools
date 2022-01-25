@@ -29,13 +29,18 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: salstruc.h,v $
+* Revision 6.6  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.5  2005/11/22 21:56:23  bollin
 * made function for deleting locations from alignments extern
 *
@@ -70,11 +75,11 @@ NLM_EXTERN EditAlignDataPtr SetupDataPanel (EditAlignDataPtr adp);
 
 NLM_EXTERN CharPtr      next_notemptyline (ValNodePtr anp_list, ValNodePtr linebuff, Int2 numberalignline, Int2 *index, Int4 start, Int4 *drw_width, TextAlignBufPtr *tdp, AlignNodePtr *anp);
 
-NLM_EXTERN SelEdStructPtr is_feature_to_buffer (ValNodePtr vnphead, Uint2 bspitemID, Uint2 entityID, Int4 from, Int4 drw_width, SeqAlignPtr salp, Uint2 seqedit, ValNodePtr sqloc_list);
+NLM_EXTERN SelEdStructPtr is_feature_to_buffer (ValNodePtr vnphead, Uint4 bspitemID, Uint2 entityID, Int4 from, Int4 drw_width, SeqAlignPtr salp, Uint2 seqedit, ValNodePtr sqloc_list);
 NLM_EXTERN ByteStorePtr cds_to_pept (SeqLocPtr slp, Uint1 frame, Int2 gencode, Boolean include_stop);
 NLM_EXTERN void         data_collect_arrange (EditAlignDataPtr adp, Boolean recollect);
  
-NLM_EXTERN CharPtr      get_master (ValNodePtr linebuff, Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+NLM_EXTERN CharPtr      get_master (ValNodePtr linebuff, Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 
 NLM_EXTERN Boolean      read_buffer_fromalignnode (EditAlignDataPtr adp, ValNodePtr *linebuff, Int4 bufferstart, Int4 minbufferlength, Int2 *numberalignline);
 
@@ -103,7 +108,7 @@ NLM_EXTERN ValNodePtr AddFeatFunc (SelEdStructPtr feat, ValNodePtr *featlist, Ui
 ***      anp: the AlignNode belong to the target Seq-loc
 ***      csop: the option for gathering the features
 ******************************************************************/
-NLM_EXTERN ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat, Uint2 seq_entityID, Uint2 bsp_itemID, Uint1 *featOrder, Boolean all_feat);
+NLM_EXTERN ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat, Uint2 seq_entityID, Uint4 bsp_itemID, Uint1 *featOrder, Boolean all_feat);
 
 /**********************************************************************
 ***  Display alignment in several formats

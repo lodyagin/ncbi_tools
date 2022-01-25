@@ -1,4 +1,4 @@
-/* $Id: pattern.h,v 1.9 2006/02/01 14:58:45 ivanov Exp $
+/* $Id: pattern.h,v 1.14 2006/09/26 15:56:51 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,6 +36,7 @@
  */
 
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_query_info.h>
 
 #ifndef ALGO_BLAST_CORE__PATTERN_H
 #define ALGO_BLAST_CORE__PATTERN_H
@@ -162,6 +163,9 @@ typedef struct SPHIPatternSearchBlk {
                                            
     SLongPatternItems* multi_word_items; /**< Additional items, when pattern
                                             requires multiple words. */
+    Int4 num_patterns_db; /**< Number of patterns actually found during the 
+                                            database search. */
+    char* pattern; /**< Pattern used, saved here for error reporting. */
 } SPHIPatternSearchBlk;
 
     
@@ -207,15 +211,18 @@ SPHIQueryInfoCopy(SPHIQueryInfo* pat_info);
  * @param location Segments in the query sequence where to look for 
  *                 pattern [in]
  * @param is_dna Is this a nucleotide sequence? [in]
- * @param pattern_info Structure containing pattern occurrences. Must be 
- *                     allocated before this call. [out]
+ * @param query_info Used to store pattern occurrences and get length 
+ *                     of query (for error checking) [out]
+ * @return a negative number is an unknown error, INT4_MAX indicates the
+ *       pattern (illegally) covered the entire query, other non-negative numbers
+ *       indicate the nubmer of pattern occurrences found.
  */
 NCBI_XBLAST_EXPORT
 Int4 PHIGetPatternOccurrences(const SPHIPatternSearchBlk * pattern_blk,
                               const BLAST_SequenceBlk    * query,
                               const BlastSeqLoc          * location, 
                               Boolean                      is_dna,
-                              SPHIQueryInfo              * pattern_info);
+                              BlastQueryInfo*             query_info);
 
 
 #ifdef __cplusplus

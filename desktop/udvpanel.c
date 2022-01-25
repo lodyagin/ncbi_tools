@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.53 $
+* $Revision: 6.54 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvpanel.c,v $
+* Revision 6.54  2006/07/13 17:13:18  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.53  2002/03/14 16:38:48  kans
 * SeqMgrIndexFeaturesEx takes new parameter
 *
@@ -585,7 +588,8 @@ SeqLocPtr     slp;
 ParaGPtr      pgp;
 ValNodePtr    vnp_start,vnp;
 Int4          from_bsp,to_bsp,bsp_start,bsp_stop,tot,pop,decal,start_inval,stop_inval;
-Uint2         bsp_eID,bsp_iID;
+Uint2         bsp_eID;
+Uint4         bsp_iID;
 
 	/*some usefull tests...*/
 	if (vdp == NULL) return(OM_MSG_RET_ERROR);
@@ -794,7 +798,8 @@ UdvGlobalsPtr       ugp=NULL;
 RecT                rcP;
 WindoW              temport;
 SAM_ViewGlobal      *vgp=NULL;
-Uint2               eID, iID;
+Uint2               eID;
+Uint4               iID;
 
     vgp = GetAppProperty(SAM_ViewString);
 
@@ -1635,9 +1640,7 @@ Boolean 			IsGoUp=FALSE;
 NLM_EXTERN void UnDViewerVScrlProc (BaR sb, SlatE s, Int4 newval, 
 			Int4 oldval)
 {
-WindoW 				w;
 ViewerDialogDataPtr vdp;
-ViewerMainPtr 		vmp;	
 
 	/*get the parent Window of the Panel*/
 	/*
@@ -1692,10 +1695,8 @@ static void  UnDViewerVScrlUpdatePage(Int4Ptr PageUpDn,Int2 cyClient,
 *******************************************************************************/
 NLM_EXTERN void  UnDViewerVScrlUpdate(PaneL p,Boolean bInit,Int4 CurPos)
 {
-WindoW 				hWnd;
 BaR 				vsb;
 ViewerDialogDataPtr vdp;
-ViewerMainPtr 		vmp;
 
 	/*get some usefull data...*/
 	vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
@@ -1870,7 +1871,7 @@ NLM_EXTERN void  UDV_WinMainResize (WindoW w)
 ViewerDialogDataPtr vdp;
 ViewerMainPtr 		vmp;
 RecT				rcP,rcI,rcW;
-Int2                height,diff,gap,width,delta;
+Int2                height,diff,gap,width;
 	
 	vmp = (ViewerMainPtr) GetObjectExtra (w);
 	if (vmp==NULL) return;
@@ -2075,9 +2076,8 @@ static void UDV_GotoBtnProc(ButtoN g)
 WindoW        w;
 ViewerMainPtr vmp;
 CharPtr       szTmp;
-ParaGPtr      pgp;
-ValNodePtr    vnp,vnp_old;
-Int4          iValue,old_ivalue,line_num,old_line_num,from_bsp,to_bsp,
+ValNodePtr    vnp;
+Int4          iValue,old_ivalue,line_num,from_bsp,to_bsp,
 			  from_line,to_line;
 BaR           vsb;
 Char          szValue[20];
@@ -2274,7 +2274,8 @@ PaneL  pnl;
 NLM_EXTERN Boolean UDV_InitForSequin(PaneL udvPanel, BioseqViewPtr bvp)
 {
 ViewerDialogDataPtr vdp;
-Uint2 eID, iID;
+Uint2 eID;
+Uint4 iID;
 
 	vdp=(ViewerDialogDataPtr)MemNew(sizeof(ViewerDialogData));
 	if (vdp==NULL) 
@@ -2378,7 +2379,7 @@ static void ShowUDV (BioseqViewPtr bvp, Boolean show)
   }
 }
 
-static void SelectUDV (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
+static void SelectUDV (BioseqViewPtr bvp, Uint2 selentityID, Uint4 selitemID,
                        Uint2 selitemtype, SeqLocPtr region,
                        Boolean select, Boolean scrollto)
 
@@ -3567,7 +3568,7 @@ ViewerMainPtr vmp;
 
 *******************************************************************************/
 NLM_EXTERN void UDV_LoadSpecificEditor(BioseqViewPtr bvp, Uint2 entityID, 
-		Uint2 itemID, Uint2 itemtype)
+		Uint4 itemID, Uint2 itemtype)
 {
 SeqEntryPtr sep;
 

@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.92 2006/03/02 13:25:28 madden Exp $
+/* $Id: blast_hits.h,v 1.100 2006/08/03 20:40:45 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,6 +37,7 @@
 #include <algo/blast/core/blast_parameters.h>
 #include <algo/blast/core/gapinfo.h>
 #include <algo/blast/core/blast_seqsrc.h>
+#include <algo/blast/core/pattern.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,6 +65,14 @@ Int2 SBlastHitsParametersNew(const BlastHitSavingOptions* hit_options,
                              const BlastExtensionOptions* ext_options,
                              const BlastScoringOptions* scoring_options,
                              SBlastHitsParameters* *retval);
+
+/** Make a deep copy of the SBlastHitsParameters structure passed in
+ * @param hit_params source hit parameters structure [in]
+ * @return NULL if out of memory, otherwise deep copy of first argument
+ */
+NCBI_XBLAST_EXPORT
+SBlastHitsParameters* 
+SBlastHitsParametersDup(const SBlastHitsParameters* hit_params);
 
 /** Deallocated SBlastHitsParameters.
  * @param param object to be freed.
@@ -138,6 +147,7 @@ typedef struct BlastHitList {
    Boolean heapified; /**< Is this hit list already heapified? */
    BlastHSPList** hsplist_array; /**< Array of HSP lists for individual
                                           database hits */
+   Int4 hsplist_current; /**< Number of allocated HSP list arrays. */
 } BlastHitList;
 
 /** The structure to contain all BLAST results, for multiple queries */
@@ -375,6 +385,13 @@ BlastHSPList* Blast_HSPListFree(BlastHSPList* hsp_list);
 NCBI_XBLAST_EXPORT
 BlastHSPList* Blast_HSPListNew(Int4 hsp_max);
 
+/** Returns true if the BlastHSPList contains no HSPs
+ * @param hsp_list list of HSPs to examine [in]
+ */
+NCBI_XBLAST_EXPORT
+Boolean
+Blast_HSPList_IsEmpty(const BlastHSPList* hsp_list);
+
 /** Saves HSP information into a BlastHSPList structure
  * @param hsp_list Structure holding all HSPs with full gapped alignment 
  *        information [in] [out]
@@ -403,17 +420,19 @@ NCBI_XBLAST_EXPORT
 Int2 Blast_HSPListGetEvalues(const BlastQueryInfo* query_info,
                              BlastHSPList* hsp_list,
                              Boolean gapped_calculation, 
-                             BlastScoreBlk* sbp, double gap_decay_rate,
+                             const BlastScoreBlk* sbp, double gap_decay_rate,
                              double scaling_factor);
 
 /** Calculate e-values for a PHI BLAST HSP list.
  * @param hsp_list HSP list found by PHI BLAST [in] [out]
  * @param sbp Scoring block with statistical parameters [in]
  * @param query_info Structure containing information about pattern counts [in]
+ * @param pattern_blk Structure containing information about pattern hits in db [in]
  */
 NCBI_XBLAST_EXPORT
 void Blast_HSPListPHIGetEvalues(BlastHSPList* hsp_list, BlastScoreBlk* sbp, 
-                                const BlastQueryInfo* query_info);
+                                const BlastQueryInfo* query_info,
+                                const SPHIPatternSearchBlk* pattern_blk);
 
 /** Calculate bit scores from raw scores in an HSP list.
  * @param hsp_list List of HSPs [in] [out]
@@ -422,7 +441,8 @@ void Blast_HSPListPHIGetEvalues(BlastHSPList* hsp_list, BlastScoreBlk* sbp,
  */
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPListGetBitScores(BlastHSPList* hsp_list, 
-                               Boolean gapped_calculation, BlastScoreBlk* sbp);
+                               Boolean gapped_calculation, 
+                               const BlastScoreBlk* sbp);
 
 /** Calculate bit scores from raw scores in an HSP list for a PHI BLAST search.
  * @param hsp_list List of HSPs [in] [out]
@@ -436,7 +456,7 @@ void Blast_HSPListPHIGetBitScores(BlastHSPList* hsp_list, BlastScoreBlk* sbp);
 */
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPListReapByEvalue(BlastHSPList* hsp_list, 
-                               BlastHitSavingOptions* hit_options);
+                               const BlastHitSavingOptions* hit_options);
 
 /** Cleans out the NULLed out HSP's from the HSP array that
  * is part of the BlastHSPList.
@@ -535,7 +555,9 @@ void Blast_HSPListAdjustOffsets(BlastHSPList* hsp_list, Int4 offset);
  * @param gapped_calculation not an ungapped alignment [in]
  * @param sbp used for round_down Boolean
  */
-void Blast_HSPListAdjustOddBlastnScores(BlastHSPList* hsp_list, Boolean gapped_calculation, BlastScoreBlk* sbp);
+void Blast_HSPListAdjustOddBlastnScores(BlastHSPList* hsp_list, 
+                                        Boolean gapped_calculation, 
+                                        const BlastScoreBlk* sbp);
 
 /** Check if HSP list is sorted by score.
  * @param hsp_list The list to check [in]
@@ -594,6 +616,12 @@ Int2 Blast_HitListHSPListsFree(BlastHitList* hitlist);
 NCBI_XBLAST_EXPORT
 Int2 Blast_HitListUpdate(BlastHitList* hit_list, BlastHSPList* hsp_list);
 
+/** Purges a BlastHitList of NULL HSP lists.
+ * @param hit_list BLAST hit list to purge. [in] [out]
+ */
+NCBI_XBLAST_EXPORT
+Int2 
+Blast_HitListPurgeNullHSPLists(BlastHitList* hit_list);
 /********************************************************************************
           HSPResults API.
 ********************************************************************************/
@@ -691,6 +719,18 @@ Int2 Blast_HSPResultsInsertHSPList(BlastHSPResults* results,
 /* Forward declaration */
 struct BlastHSPStream;
 
+/** Move all of the hits within an HSPStream into a BlastHSPResults
+ * structure.
+ * @param hsp_stream The HSPStream [in][out]
+ * @param num_queries Number of queries in the search [in]
+ * @param hit_options Hit saving options, used to determine
+ *                      hit list sizes [in]
+ * @param ext_options Extension options, used to determine
+ *                      hit list sizes [in]
+ * @param scoring_options Scoring options, used to determine
+ *                      hit list sizes [in]
+ * @return The generated collection of HSP results
+ */
 BlastHSPResults*
 Blast_HSPResultsFromHSPStream(struct BlastHSPStream* hsp_stream, 
                               size_t num_queries, 
@@ -698,6 +738,25 @@ Blast_HSPResultsFromHSPStream(struct BlastHSPStream* hsp_stream,
                               const BlastExtensionOptions* ext_options, 
                               const BlastScoringOptions* scoring_options);
 
+/** As Blast_HSPResultsFromHSPStream, except the total number of
+ * HSPs kept for each query does not exceed an explicit limit.
+ * The database sequences with the smallest number of hits are
+ * saved first, and hits are removed from query i if the average
+ * number of hits saved threatens to exceed (max_num_hsps / (number
+ * of DB sequences with hits to query i))
+ * @param hsp_stream The HSPStream [in][out]
+ * @param num_queries Number of queries in the search [in]
+ * @param hit_options Hit saving options, used to determine
+ *                      hit list sizes [in]
+ * @param ext_options Extension options, used to determine
+ *                      hit list sizes [in]
+ * @param scoring_options Scoring options, used to determine
+ *                      hit list sizes [in]
+ * @param max_num_hsps The limit on the number of HSPs to be
+ *                     kept for each query sequence [in]
+ * @param removed_hsps Set to TRUE if any hits were removed [out]
+ * @return The generated collection of HSP results
+ */
 BlastHSPResults*
 Blast_HSPResultsFromHSPStreamWithLimit(struct BlastHSPStream* hsp_stream, 
                                    Uint4 num_queries, 
@@ -720,6 +779,14 @@ Blast_HSPResultsFromHSPStreamWithLimit(struct BlastHSPStream* hsp_stream,
 BlastHSPResults** 
 PHIBlast_HSPResultsSplit(const BlastHSPResults* results, 
                          const SPHIQueryInfo* pattern_info);
+
+
+/** Count the number of occurrences of pattern in sequence, which
+ * do not overlap by more than half the pattern match length. 
+ * @param query_info Query information structure, containing pattern info. [in]
+ */
+Int4
+PhiBlastGetEffectiveNumberOfPatterns(const BlastQueryInfo *query_info);
 
 #ifdef __cplusplus
 }

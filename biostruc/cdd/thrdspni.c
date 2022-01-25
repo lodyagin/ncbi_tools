@@ -1,4 +1,4 @@
-/* $Id: thrdspni.c,v 1.1 2000/08/16 20:45:21 hurwitz Exp $
+/* $Id: thrdspni.c,v 1.2 2006/07/13 17:07:27 bollin Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdspni.c,v $
+* Revision 1.2  2006/07/13 17:07:27  bollin
+* removed unused variables
+*
 * Revision 1.1  2000/08/16 20:45:21  hurwitz
 * initial check in of threading routines
 *
@@ -62,7 +65,6 @@ int	nsc;		/* Number of core segments */
 int	ndi;		/* Number of distance intervals */
 int	nrt;		/* Number of residue types in potential */
 int	i,j,k;		/* Counters */
-int	r1,r2;		/* Residue indices */
 int	s1,s2;		/* Core segment indices */
 int	t2;		/* Residue type index */
 Cxl_Los *cl;	/* Pointer to contact list for current segment */

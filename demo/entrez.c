@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: entrez.c,v $
+* Revision 6.37  2006/07/13 17:12:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.36  2002/01/04 15:01:43  kans
 * move query window down a bit
 *
@@ -641,7 +644,7 @@ static void DuplicateViewProc (IteM i)
 {
   BaseFormPtr  bfp;
   Int2         handled;
-  Uint2        itemID;
+  Uint4        itemID;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;

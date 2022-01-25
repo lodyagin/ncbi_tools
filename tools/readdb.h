@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.169 $
+* $Revision: 6.176 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,27 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.176  2006/08/07 15:03:57  camacho
+* +is_REFSEQ_GENOMIC
+*
+* Revision 6.175  2006/07/03 18:27:22  coulouri
+* correct volume size defaults for protein databases
+*
+* Revision 6.174  2006/06/27 15:34:18  coulouri
+* Correct comment and default volume size
+*
+* Revision 6.173  2006/06/19 18:37:08  coulouri
+* improve default handling for non-formatdb clients
+*
+* Revision 6.172  2006/06/19 17:20:14  coulouri
+* Extend 1GB default volume size to all platforms and impose a hard limit of 4G. rt#15171398
+*
+* Revision 6.171  2006/05/10 22:00:28  kans
+* new function prototypes were erroneously inside ifdef HAVE_MADVISE block, moved outside
+*
+* Revision 6.170  2006/05/10 20:48:57  camacho
+* From Ilya Dondoshansky: 1. Several FDB functions made public - needed for incremental dump efficiency; 2. mol field added to SI_Record and DI_Record
+*
 * Revision 6.169  2006/04/24 15:50:19  camacho
 * + is_REFSEQ_RNA
 *
@@ -817,6 +838,12 @@ belong to the same sequence. */
 /* 'Magic' number at the beginning of a binary gi list that indicates it is binary. */
 #define READDB_MAGIC_NUMBER UINT4_MAX
 
+/* Maximum volume size, in bytes */
+#define SEQFILE_SIZE_MAX 4000000000UL
+
+/* Default volume size; 4*10^9 bases, or 1*10^9 residues */
+#define SEQFILE_SIZE_DFL 4000000000UL
+
 /****************************************************************************/
 /* TYPEDEFS */
 /****************************************************************************/
@@ -1032,8 +1059,16 @@ typedef struct si_record {
     Int4    taxid;
     Int4    owner;
     char    div[4];
-    Int4    ent;  /* entity [sat_key in the ID] */
+    Int4    ent;  /* entity (sat_key) */
+    Uint1   mol;  /* Molecule type, as in Seq-inst::mol */
 } SI_Record, PNTR SI_RecordPtr;
+
+/** Allocates a single node in the SI_Record linked list structure */
+SI_Record* SI_RecordNew(void);
+/** Deallocates the linked list of SI_Record structures in srp 
+ * @return NULL
+ */
+SI_Record* SI_RecordFree(SI_Record* srp);
 
 /*    ----
       Here are functions for run-time blast in relation to the
@@ -1670,7 +1705,6 @@ typedef struct formatdb
 
     Int4 OffsetAllocated; /* storage for allocation size */
 
-    
 } FormatDB, *FormatDBPtr;
 
 
@@ -1764,7 +1798,6 @@ Int2 FDBAddSequence2 (FormatDBPtr  fdbp,
 Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, BlastDefLinePtr bdp);
 Int2 FormatDBClose(FormatDBPtr fdbp);
 
-
 Boolean FDBAddLinksInformation(BlastDefLinePtr bdp, ValNodePtr links_tblp);
 Boolean FDBAddMembershipInformation(BlastDefLinePtr bdp, ValNodePtr memb_tblp, 
                                     VoidPtr criteria_arg);
@@ -1798,12 +1831,14 @@ typedef	struct di_record {
     Int4    gi;
     Int4    taxid;
     Int4    owner;
-    Char    div[4];
-    Int4    len;
-    Int4    hash;
-    Int4    date;
+    Char    div[4]; /* 3-letter division */
+    Int4    len;  /* Length of sequence */
+    Int4    hash; /* Hash value for sequence data */
+    Int4    date; /* NB: name is misleading; this is actually sat_key */
     CharPtr acc; /* accession should not exceed this size */
-	Int4	gi_threshold;   /* for 'month' subset */
+    Uint1   mol; /* Molecule type, as in Seq-inst::mol */
+    Int4    gi_threshold;   /* for 'month' subset */
+    
 } DI_Record, *DI_RecordPtr;
 
 /******** genmask structures and functions *********/
@@ -1840,6 +1875,7 @@ Boolean is_MONTH(VoidPtr di_record);
 Boolean is_PDB(VoidPtr di_record);
 Boolean is_REFSEQ(VoidPtr di_record);
 Boolean is_REFSEQ_RNA(VoidPtr di_record);
+Boolean is_REFSEQ_GENOMIC(VoidPtr ptr);
 Boolean is_CONTIG(VoidPtr di_record);
 
 /************************************************************************/
@@ -1932,6 +1968,14 @@ Boolean FD_CreateAliasFile PROTO((CharPtr title, CharPtr basename,
 Boolean FD_MakeAliasFile PROTO((FDB_optionsPtr options));
 Int4 LIBCALL 
 readdb_get_sequence_number PROTO((ReadDBFILEPtr rdfp, Int4 first_seq, Int8 offset));
+
+Boolean FDBDumpDeflineAsn(FormatDBPtr fdbp, BlastDefLinePtr bdp_in);
+
+Int4 FDBFillIndexTables(FormatDBPtr fdbp, Int4 seq_length);
+
+BlastDefLinePtr FDLCreateAsnDF(FormatDBPtr fdbp, CharPtr seq_id, 
+                               CharPtr title, Int4 taxid);
+void FDBBlastDefLineSetBit(Int2 bit_no, ValNodePtr PNTR retval);
 
 #if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
 #ifdef HAVE_MADVISE

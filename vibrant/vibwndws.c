@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.70 $
+* $Revision: 6.73 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.73  2006/09/14 19:18:29  ivanov
+* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
+*
+* Revision 6.72  2006/09/14 18:05:45  ivanov
+* Fixed compilation errors on MS Windows
+*
+* Revision 6.71  2006/09/14 14:45:39  kans
+* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
+*
 * Revision 6.70  2005/11/16 19:50:37  kans
 * Nlm_showGetArgTag always TRUE, do not get shift key for old Vibrant about box
 *
@@ -5950,7 +5959,7 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
 *  is first displayed.
 */
 
-LRESULT CALLBACK EXPORT MainProc (HWND hwnd, UINT message,
+static LRESULT CALLBACK EXPORT MainProc (HWND hwnd, UINT message,
                                   WPARAM wParam, LPARAM lParam)
 
 {
@@ -6022,7 +6031,7 @@ LRESULT CALLBACK EXPORT MainProc (HWND hwnd, UINT message,
               HDC hdc = GetDC( hwnd );
               SetBkMode((HDC)wParam, TRANSPARENT);
               ReleaseDC(hwnd, hdc); 
-              mainwndrsult = GetClassLong(hwnd, GCL_HBRBACKGROUND);
+              mainwndrsult = GetClassLongPtr(hwnd, GCLP_HBRBACKGROUND);
               break;
       }
     case WM_CTLCOLORLISTBOX:
@@ -6061,7 +6070,7 @@ LRESULT CALLBACK EXPORT MainProc (HWND hwnd, UINT message,
                 HDC hdc = GetDC( hwnd );
                 SetBkMode((HDC)wParam, TRANSPARENT);
                 ReleaseDC(hwnd, hdc); 
-                mainwndrsult = GetClassLong(hwnd, GCW_HBRBACKGROUND);
+                mainwndrsult = GetClassLongPtr(hwnd, GCLP_HBRBACKGROUND);
                 break;
               }
             case CTLCOLOR_LISTBOX:
@@ -6110,7 +6119,7 @@ LRESULT CALLBACK EXPORT MainProc (HWND hwnd, UINT message,
   return mainwndrsult;
 }
 
-void FAR PASCAL EXPORT MetronomeProc (HWND hwnd, UINT message,
+static void FAR PASCAL EXPORT MetronomeProc (HWND hwnd, UINT message,
                                       WPARAM wParam, LPARAM lParam)
 
 {
@@ -6606,7 +6615,7 @@ static void ParseSetupArguments(HINSTANCE hInstance, Nlm_CharPtr lpszCmdLine)
         {
           char quote = *p;
           xx_argc++;
-          while (*(++p)  &&  *p != quote);
+          while (*(++p)  &&  *p != quote) continue;
           if ( *p )
             *p++ = '\0';
           continue;
@@ -7341,6 +7350,7 @@ static Nlm_Boolean Nlm_ProcessVibrantCallback (LPMSG lpMsg)
 
 #ifdef WIN_MSWIN
 
+extern Nlm_Handle Nlm_GetWindowHAccel (Nlm_WindoW w);
 extern Nlm_Handle Nlm_GetWindowHAccel (Nlm_WindoW w)
 
 {
@@ -7356,6 +7366,7 @@ extern Nlm_Handle Nlm_GetWindowHAccel (Nlm_WindoW w)
 }
 
 
+extern void Nlm_SetWindowHAccel (Nlm_WindoW w, Nlm_Handle h);
 extern void Nlm_SetWindowHAccel (Nlm_WindoW w, Nlm_Handle h)
 
 {

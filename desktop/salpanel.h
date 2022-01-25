@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -109,7 +109,7 @@ extern ForM
 FeaturePropagateForm 
 (BioseqPtr   bsp,
  SeqAlignPtr salp,
- Uint2       selFeatItemID);
+ Uint4       selFeatItemID);
 
 #define ADD_TITLE   1
 #define ADD_RRNA    2

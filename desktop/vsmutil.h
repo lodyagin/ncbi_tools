@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vsmutil.h,v $
+* Revision 6.6  2006/07/13 17:13:19  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.5  2004/10/04 18:01:54  kans
 * added ShouldSetJustShowAccession for communication with Sequin, implement Table verbosity level to just show accessions
 *
@@ -64,7 +67,7 @@ extern "C" {
 
 typedef void (LIBCALLBACK *ErrNotifyProc) PROTO((
               ErrSev sev, int errcode, int subcode,
-              Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+              Uint2 entityID, Uint4 itemID, Uint2 itemtype,
               Boolean select, Boolean dblClick));
 
 extern void CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
@@ -81,7 +84,7 @@ extern void ClearValidateWindow (void);
 extern void FreeValidateWindow (void);
 extern void AppendValidMessage (CharPtr text1, CharPtr text2, CharPtr text3,
                                 ErrSev sev, int errcode, int subcode,
-                                Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+                                Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                 CharPtr message, CharPtr expanded, ValNodePtr context);
 extern int LIBCALLBACK ValidErrHook PROTO((const ErrDesc *err));
 extern Boolean ShouldSetSuppressContext (void);
@@ -96,7 +99,7 @@ extern Boolean ShouldSetJustShowAccession (void);
 
 typedef void (LIBCALLBACK *SearchGatherProc) PROTO((
               CharPtr searchFor, CharPtr foundIn, CharPtr label,
-              Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint2 subtype));
+              Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint2 subtype));
 
 extern void CreateSearchWindow (SearchGatherProc gather, CharPtr title, Uint2 entityID);
 extern void ShowSearchWindow (void);
@@ -109,7 +112,7 @@ extern void FreeSearchWindow (void);
 *****************************************************************************/
 
 typedef void (LIBCALLBACK *ReplaceNotifyProc) PROTO((
-              Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+              Uint2 entityID, Uint4 itemID, Uint2 itemtype,
               Uint2 subtype, Boolean select, Boolean dblClick));
 
 extern void CreateReplaceWindow (ReplaceNotifyProc notify, CharPtr title,
@@ -117,9 +120,9 @@ extern void CreateReplaceWindow (ReplaceNotifyProc notify, CharPtr title,
 extern void ShowReplaceWindow (void);
 extern void FreeReplaceWindow (void);
 extern void LIBCALLBACK AppendReplaceMessage (CharPtr searchFor, CharPtr foundIn, CharPtr label,
-                                              Uint2 entityID, Uint2 itemID,
+                                              Uint2 entityID, Uint4 itemID,
                                               Uint2 itemtype, Uint2 subtype);
-extern void LIBCALLBACK StdReplaceNotify (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+extern void LIBCALLBACK StdReplaceNotify (Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                           Uint2 subtype, Boolean select, Boolean dblClick);
 
 

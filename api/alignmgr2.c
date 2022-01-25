@@ -28,13 +28,20 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.58 $
+* $Revision: 6.60 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.60  2006/09/06 15:48:33  bollin
+* removed compiler warnings
+*
+* Revision 6.59  2006/09/06 15:14:54  bollin
+* fixed bug that was generating segments of length zero at the end of an
+* alignment
+*
 * Revision 6.58  2005/03/01 13:56:03  bollin
 * if the alignment we want to index is a DenseSeg and not a list of alignments,
 * just give it a simple index - don't decompose to pairwise and reconstruct it.
@@ -2800,7 +2807,7 @@ static AMSeqPiecePtr AlnMgr2GetNextLimitedSeqPiece(
   return NULL;
 }
 
-static Boolean AlnMgr2AddSeqPiece(
+static void AlnMgr2AddSeqPiece(
   AMSeqPieceSetPtr set,
   AMSeqPiecePtr what)
 {
@@ -2838,7 +2845,7 @@ static Boolean AlnMgr2AddSeqPiece(
   set->tail = s;
 }
 
-static Boolean AlnMgr2InsertSeqPiece(
+static void AlnMgr2InsertSeqPiece(
   AMSeqPiecePtr where,
   AMSeqPiecePtr what,
   Int4 end) 
@@ -5644,11 +5651,6 @@ NLM_EXTERN void AlnMgr2DumpIndexedAlnToFile(SeqAlignPtr sap, CharPtr filename)
       sap_tmp = sap_tmp->next;
    }
    AsnIoClose(aip);
-}
-
-NLM_EXTERN SeqAlignPtr AlnMgr2ReadIndexedAlnFromFile(CharPtr filename)
-{
-   AsnIoOpen(filename, "r");
 }
 
 /***************************************************************************
@@ -8979,7 +8981,11 @@ NLM_EXTERN void AlnMgr2ExtendToCoords(SeqAlignPtr sap, Int4 from, Int4 to, Int4 
    }
    if (diff1 == 0 && prediff1 != 0)
       numseg--;
+   else if (diff1 < 0) 
+      numseg--;
    if (diff2 == 0 && prediff2 != 0)
+      numseg--;
+   else if (diff2 < 0)
       numseg--;
    if (numseg == 0)
       return;

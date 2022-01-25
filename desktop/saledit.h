@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.31 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -189,7 +189,7 @@ typedef struct seqeditviewprocs {
 extern EditAlignDataPtr EditAlignDataRepopulateFromSeqAlign (PaneL pnl, EditAlignDataPtr adp, SeqAlignPtr salp);
 
 extern void     SalsaPanelHasResized (PaneL pnl);
-extern Boolean  FindIdsInSalsaPanel (PaneL pnl, PoinT pt, Uint2 *entityID, Uint2 *itemID, Uint2 *itemtype);
+extern Boolean  FindIdsInSalsaPanel (PaneL pnl, PoinT pt, Uint2 *entityID, Uint4 *itemID, Uint2 *itemtype);
 extern void     SaveSalsaPanel (PaneL pnl);
 extern PaneL    SalsaTextPanel (GrouP g, Int2 wid, Int2 hgt);
 extern void     PopulateSalsaPanel (PaneL pnl, SeqEntryPtr sep, Boolean all_seq, Uint1 sequence_shown, Uint1 show_feat, Uint1 numbering, FonT font);
@@ -211,6 +211,33 @@ extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop3 (Pointer data);
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop4 (Pointer data);
 
 extern Int2 LIBCALLBACK UpdateSeqAlign (Pointer data);
+
+/****************************************************
+ ValidateSeqAlignandACC
+
+   validates a SeqAlign using the ValidateSeqAlign function 
+   in api directory, and tests for occurrence of ACC string in sequence ID.
+   ACC|ACC# will be compared with the corresponding sequence (ACC#)
+   in the database and replaced by a far pointer if the sequences
+   are identical. 
+
+******************************************************/
+NLM_EXTERN Int2 LIBCALLBACK ValidateSeqAlignandACCFromData (Pointer data);
+
+NLM_EXTERN Boolean ValidateSeqAlignandACC (SeqAlignPtr salp, Uint2 entityID, 
+                   Boolean message,
+                   Boolean msg_success, Boolean find_remote_bsp,
+                   Boolean find_acc_bsp,
+                   Boolean delete_bsp, Boolean delete_salp, BoolPtr dirty);
+
+NLM_EXTERN Boolean ValidateSeqAlignandACCInSeqEntry (SeqEntryPtr sep, 
+                   Boolean message, 
+                   Boolean msg_success, Boolean find_remote_bsp, 
+                   Boolean find_acc_bsp,
+                   Boolean delete_bsp, Boolean delete_salp);
+
+NLM_EXTERN void    CalculateAlignmentOffsets (SeqEntryPtr sepnew, SeqEntryPtr sepold);
+NLM_EXTERN Boolean CheckAlignmentSequenceLengths (SeqAlignPtr salp);
 
 #endif
 

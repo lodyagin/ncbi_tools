@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.108 $
+* $Revision: 6.112 $
 *
 * File Description: 
 *
@@ -381,7 +381,7 @@ static DialoG CreateCitOnFeatDialog (GrouP h, CharPtr title)
 
 typedef struct citlist {
   Uint2    entityID;
-  Uint2    itemID;
+  Uint4    itemID;
   Uint2    itemtype;
   CharPtr  label;
 } CitListData, PNTR CitListDataPtr;
@@ -1899,7 +1899,7 @@ extern Boolean FileToScrollText (TexT t, CharPtr path)
 
 {
   FILE     *fp;
-  Int4     len;
+  Int8     len;
   Int4     read_len;
   Int4     max;
   CharPtr  str;
@@ -1926,7 +1926,7 @@ extern Boolean FileToScrollText (TexT t, CharPtr path)
 #endif
 #endif
     if (len > 0 && len < max - 4) {
-      str = MemNew (sizeof (char) * (len + 3));
+      str = MemNew (sizeof (char) * ((size_t)len + 3));
       if (str != NULL) {
         fp = FileOpen (path, "r");
         if (fp != NULL) {
@@ -2014,7 +2014,7 @@ extern void FileToClipboard (CharPtr path)
 
 {
   FILE     *fp;
-  Int4     len;
+  Int8     len;
   Int4     max;
   CharPtr  str;
 #ifdef WIN_MAC
@@ -2033,7 +2033,7 @@ extern void FileToClipboard (CharPtr path)
     max = (Int4) INT2_MAX;
 #endif
     if (len > 0 && len < max - 4) {
-      str = MemNew (sizeof (char) * (len + 3));
+      str = MemNew (sizeof (char) * ((size_t)len + 3));
       if (str != NULL) {
         fp = FileOpen (path, "r");
         if (fp != NULL) {
@@ -2214,7 +2214,7 @@ static void FindInGeneralText (ButtoN b)
   Char             buf [1030];
   Char             ch;
   Int2             cnt;
-  Int4             cntr;
+  Int8             cntr;
   Int2             first;
   FILE             *fp;
   Char             lastch;
@@ -2598,7 +2598,7 @@ static Boolean DlgutilGetLowestStackSeqEntry (GatherContextPtr gcp)
 extern Boolean SetClosestParentIfDuplicating (BaseFormPtr bfp)
 
 {
-  Uint2              itemID;
+  Uint4              itemID;
   Uint2              itemtype;
   StdEditorProcsPtr  sepp;
 
@@ -2663,8 +2663,10 @@ static ENUM_ALIST(strand_alist)
 {" ",             Seq_strand_unknown},  /* 0 */
 {"Plus",          Seq_strand_plus},     /* 1 */
 {"Minus",         Seq_strand_minus},    /* 2 */
-{"Both",          Seq_strand_both},     /* 3 */
-{"Reverse",       Seq_strand_both_rev}, /* 4 */
+/*
+{"Both",          Seq_strand_both},
+{"Reverse",       Seq_strand_both_rev},
+*/
 {"Other",         Seq_strand_other},    /* 255 */
 END_ENUM_ALIST
 
@@ -3344,7 +3346,7 @@ PrepareTableDisplayTextBuffer
  Int4    col_width,
  CharPtr data)
 {
-  Int4 chars_to_paint = 0;
+  Uint4 chars_to_paint = 0;
   if (buf == NULL)
   {
     return 0;
@@ -4059,7 +4061,7 @@ MultiSelectDialog
   width = 0;
   for (vnp = choice_list; vnp != NULL; vnp = vnp->next)
   {
-    width = MAX (width, StringWidth (vnp->data.ptrvalue));
+    width = MAX (width, StringWidth (vnp->data.ptrvalue) + 2);
   }
   
   dlg->num_choices = ValNodeLen (choice_list) + 1;
@@ -5436,20 +5438,25 @@ static CharPtr PrintInferTable (
 )
 
 {
-  Char            buf [256];
+  CharPtr         buf;
   InferDialogPtr  idp;
   InferEvidPtr    iep;
+  size_t          len;
 
   idp = (InferDialogPtr) GetObjectExtra (d);
   if (idp == NULL || item < 1 || item > 127) return NULL;
   iep = GetInferEvid (idp, item);
   if (iep == NULL) return NULL;
 
-  buf [0] = '\0';
+  len = StringLen (iep->prefix) + StringLen (iep->database) + StringLen (iep->db_other) + StringLen (iep->accession) +
+        StringLen (iep->program) + StringLen (iep->pr_other) + StringLen (iep->version) + StringLen (iep->basis1) +
+        StringLen (iep->basis2) + 50;
+  buf = MemNew (len);
+  if (buf == NULL) return NULL;
 
   if (StringHasNoText (iep->prefix)) {
     StringCat (buf, " \t \n");
-    return StringSave (buf);
+    return buf;
   }
 
   StringCat (buf, iep->prefix);
@@ -5496,7 +5503,7 @@ static CharPtr PrintInferTable (
   }
 
   StringCat (buf, "\n");
-  return StringSave (buf);
+  return buf;
 }
 
 static void ShowInferenceGroup (

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *       Vibrant list functions
@@ -41,6 +41,15 @@
 *
 *
 * $Log: viblists.c,v $
+* Revision 6.8  2006/09/14 19:18:28  ivanov
+* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
+*
+* Revision 6.7  2006/09/14 18:05:45  ivanov
+* Fixed compilation errors on MS Windows
+*
+* Revision 6.6  2006/09/14 14:45:38  kans
+* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
+*
 * Revision 6.5  2000/02/07 20:17:35  lewisg
 * minor bug fixes, use gui font for win32
 *
@@ -143,11 +152,11 @@
 #include <vibincld.h>
 
 #ifdef WIN_MAC
-#define Nlm_ListTool ListHandle
+#  define Nlm_ListTool ListHandle
 #endif
 
 #ifdef WIN_MSWIN
-#define Nlm_ListTool HWND
+#  define Nlm_ListTool HWND
 #endif
 
 #ifdef WIN_MOTIF
@@ -1174,7 +1183,7 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
   }
 }
 
-LRESULT CALLBACK EXPORT ListProc (HWND hwnd, UINT message,
+static LRESULT CALLBACK EXPORT ListProc (HWND hwnd, UINT message,
                                   WPARAM wParam, LPARAM lParam)
 
 {
@@ -1318,11 +1327,11 @@ static void Nlm_NewList (Nlm_LisT l, Nlm_Int2 width,
     lpfnNewListProc = (WNDPROC) MakeProcInstance ((FARPROC) ListProc, Nlm_currentHInst);
   }
   if (lpfnOldListProc == NULL) {
-    lpfnOldListProc = (WNDPROC) GetWindowLong (c, GWL_WNDPROC);
-  } else if (lpfnOldListProc != (WNDPROC) GetWindowLong (c, GWL_WNDPROC)) {
+    lpfnOldListProc = (WNDPROC) GetWindowLongPtr (c, GWLP_WNDPROC);
+  } else if (lpfnOldListProc != (WNDPROC) GetWindowLongPtr (c, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "ListProc subclass error");
   }
-  SetWindowLong (c, GWL_WNDPROC, (LONG) lpfnNewListProc);
+  SetWindowLongPtr (c, GWLP_WNDPROC, (LONG) lpfnNewListProc);
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(c, fntptr->handle, FALSE);
   Nlm_HandUnlock(Nlm_systemFont);

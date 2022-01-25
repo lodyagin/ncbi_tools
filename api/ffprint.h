@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -45,6 +45,11 @@
 /*************************************
 *
  * $Log: ffprint.h,v $
+ * Revision 6.11  2006/07/13 17:06:38  bollin
+ * use Uint4 instead of Uint2 for itemID values
+ * removed unused variables
+ * resolved compiler warnings
+ *
  * Revision 6.10  2002/08/26 22:06:57  kans
  * ff_RecalculateLinks (MS) to fix hotlink artifact
  *
@@ -245,7 +250,7 @@ NLM_EXTERN Boolean LIBCALL ff_PrintLine PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp,
 NLM_EXTERN CharPtr LIBCALL www_featloc PROTO((CharPtr loc));
 NLM_EXTERN void LIBCALL GetHelpMsg PROTO((SeqEntryPtr sep));
 NLM_EXTERN void LIBCALL www_PrintComment  PROTO((CharPtr string, Boolean identifier, Uint1 format));
-NLM_EXTERN Boolean LIBCALL www_featkey PROTO((CharPtr key, Int4 gi, Int2 entityID, Int2 itemID));
+NLM_EXTERN Boolean LIBCALL www_featkey PROTO((CharPtr key, Int4 gi, Int2 entityID, Uint4 itemID));
 NLM_EXTERN void LIBCALL www_accession PROTO((CharPtr string));
 NLM_EXTERN void LIBCALL ff_RecalculateLinks(Int4 indent);
 

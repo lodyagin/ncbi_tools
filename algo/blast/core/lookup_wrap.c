@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.21 2006/04/27 19:33:39 madden Exp $
+/* $Id: lookup_wrap.c,v 1.26 2006/10/04 19:17:12 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,7 +37,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.21 2006/04/27 19:33:39 madden Exp $";
+    "$Id: lookup_wrap.c,v 1.26 2006/10/04 19:17:12 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
@@ -46,16 +46,22 @@ static char const rcsid[] =
 #include <algo/blast/core/mb_lookup.h>
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/blast_rps.h>
+#include <algo/blast/core/blast_encoding.h>
+#include <algo/blast/core/blast_filter.h>
 
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
-        LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info)
+        LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info,
+        Blast_Message* *error_msg)
 {
    Int2 status = 0;
    Int4 num_table_entries;
    LookupTableWrap* lookup_wrap;
    const Int4 kNucEntriesCutoff = 8500;  /* probably machine dependent */
+
+   if (error_msg)
+      *error_msg = NULL;
 
    /* Construct the lookup table. */
    *lookup_wrap_ptr = lookup_wrap = 
@@ -80,6 +86,11 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
                                  query, lookup_segments);
        _BlastAaLookupFinalize((BlastLookupTable*) lookup_wrap->lut);
        }
+      break;
+   case INDEXED_MB_LOOKUP_TABLE:
+      /* for indexed megablast, lookup table data is initialized
+         in the API layer, not here */
+      lookup_wrap->lut = NULL;
       break;
    case NA_LOOKUP_TABLE:
    case MB_LOOKUP_TABLE:
@@ -118,22 +129,27 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
       break;
    case PHI_AA_LOOKUP: case PHI_NA_LOOKUP:
        {
-           Blast_Message* error_msg = NULL;
            const Boolean kIsDna = (lookup_options->lut_type == PHI_NA_LOOKUP);
            status = SPHIPatternSearchBlkNew(lookup_options->phi_pattern, kIsDna, sbp,
                              (SPHIPatternSearchBlk* *) &(lookup_wrap->lut),
-                             &error_msg);
-           /** @todo FIXME: this error message must be passed further up!!! */
-           if (error_msg) {
-               Blast_MessagePost(error_msg);
-               Blast_MessageFree(error_msg);
-           }
+                             error_msg);
            break;
        }
    case RPS_LOOKUP_TABLE:
-      status = RPSLookupTableNew(rps_info, (BlastRPSLookupTable* *)(&lookup_wrap->lut));
-      break;
-      
+       {
+           BlastRPSLookupTable *lookup;
+           Int4 alphabet_size;
+           RPSLookupTableNew(rps_info, (BlastRPSLookupTable* *)
+                                        (&lookup_wrap->lut));
+
+           /* if the alphabet size from the RPS database is too
+              small, mask all unsupported query letters */
+           lookup = (BlastRPSLookupTable*)(lookup_wrap->lut);
+           alphabet_size = lookup->alphabet_size;
+           if (alphabet_size < BLASTAA_SIZE)
+               Blast_MaskUnsupportedAA(query, alphabet_size);
+           break;
+       }
    default:
       {
          /* FIXME - emit error condition here */
@@ -151,6 +167,8 @@ LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup)
    if (lookup->lut_type == MB_LOOKUP_TABLE) {
       lookup->lut = (void*) 
          MBLookupTableDestruct((BlastMBLookupTable*)lookup->lut);
+   } else if( lookup->lut_type == INDEXED_MB_LOOKUP_TABLE ) {
+       lookup->lut = NULL;
    } else if (lookup->lut_type == PHI_AA_LOOKUP || 
               lookup->lut_type == PHI_NA_LOOKUP) {
        lookup->lut = (void*)

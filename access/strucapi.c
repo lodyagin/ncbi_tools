@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/18/00
 *
-* $Revision: 1.17 $
+* $Revision: 1.18 $
 *
 * File Description: 
 *
@@ -91,7 +91,7 @@ NLM_EXTERN BiostrucSeqPtr StrucWaitForReply (
 {
   BiostrucSeqPtr  bsp = NULL;
   time_t          currtime, starttime;
-  Int2            max = 0;
+  time_t          max = 0;
   EIO_Status      status;
   STimeout        timeout;
 

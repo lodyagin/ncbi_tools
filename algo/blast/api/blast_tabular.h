@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.h,v 1.13 2006/04/25 17:59:02 papadopo Exp $
+/* $Id: blast_tabular.h,v 1.14 2006/06/09 17:43:11 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -56,7 +56,8 @@ extern "C" {
 /** Tabular formatting options. */
 typedef enum {
    eBlastTabularDefault=1,
-   eBlastTabularAddSequences
+   eBlastTabularAddSequences,
+   eBlastIncrementalASN
 } EBlastTabularFormatOptions;
 
 /** Data structure containing all information necessary for production of the
@@ -78,7 +79,8 @@ typedef struct BlastTabularFormatData {
    BlastGapAlignStruct* gap_align; /**< Auxiliary structure used for gapped 
                                         alignment. */
    SeqLoc* query_slp; /**< Source of query sequences identifiers */
-   FILE* outfp; /**< Output stream */
+   FILE* outfp; /**< Output stream (tabular formatted output) */
+   AsnIoPtr asn_outfp; /**< Output stream (incremental ASN output) */
    Boolean perform_traceback; /**< Must gapped extension with traceback be
                                  performed before formatting? */
    Boolean show_gi; /**< Show gi's instead of full ids in output, if 
@@ -89,19 +91,22 @@ typedef struct BlastTabularFormatData {
    Boolean believe_query; /**< TRUE if query identifiers are parsed; if
                                FALSE, the first token in the query defline is
                                treated as an identifier */
+   Boolean is_ooframe; /**< TRUE if incremental ASN output is selected and
+                            the results contain out-of-frame alignments */
    EBlastTabularFormatOptions format_options; /**< Tabular formatting options. */
 } BlastTabularFormatData;
 
 /** Allocate the tabular formatting data structure and save the output 
  * stream and formatting option. 
- * @param outfp Output stream to write to [in]
+ * @param outfp Output stream to write to (ordinary tabular output) [in]
+ * @param asn_outfp Output stream to write to (incremental ASN output) [in]
  * @param query_seqloc List of query sequence locations [in]
  * @param format_option What type of tabular output is requested? [in]
  * @param believe_query Should query identifiers be parsed? [in]
  * @return Allocated structure
  */
 BlastTabularFormatData*
-BlastTabularFormatDataNew(FILE* outfp, SeqLoc* query_seqloc,
+BlastTabularFormatDataNew(FILE* outfp, AsnIoPtr asn_outfp, SeqLoc* query_seqloc,
                           EBlastTabularFormatOptions format_option,
                           Boolean believe_query);
 

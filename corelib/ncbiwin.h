@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.11  2006/09/14 19:51:37  ivanov
+* Added defines for missed *LongPtr on MSVC6
+*
+* Revision 6.10  2006/09/14 19:12:36  ivanov
+* MSWIN: Define GCLP_HBRBACKGROUND and GWLP_WNDPROC for MSVC6
+*
 * Revision 6.9  2003/11/07 15:54:44  rsmith
 * Remove obsolete and uneeded Macintosh headers Types.h and Windows.h
 *
@@ -192,27 +198,45 @@
 	                  /* end of ncbifile section */
 
 #ifdef OS_MSWIN
-#ifndef WIN16
-#undef Beep
-#endif
-#ifndef COMP_METRO
-#undef TRUE
-#undef FALSE
-#undef NULL
-#undef FAR
-#undef NEAR
-#undef PASCAL
-#undef CDECL
-#define STRICT
-#endif
-#define NOKANJI
-#define NODBCS
-#define NOCOMM
-#define NOSOUND
-#define NOPROFILER
-#define NOKEYBOARDINFO
-#include <windows.h>
-#include <windowsx.h>
+#  ifndef WIN16
+#    undef Beep
+#  endif
+#  ifndef COMP_METRO
+#    undef TRUE
+#    undef FALSE
+#    undef NULL
+#    undef FAR
+#    undef NEAR
+#    undef PASCAL
+#    undef CDECL
+#    define STRICT
+#  endif
+#  define NOKANJI
+#  define NODBCS
+#  define NOCOMM
+#  define NOSOUND
+#  define NOPROFILER
+#  define NOKEYBOARDINFO
+#  include <windows.h>
+#  include <windowsx.h>
+   /* MSVC 6.0 or less */
+#  if defined(COMP_MSC)  &&  (_MSC_VER < 1300)
+#    ifndef GCLP_HBRBACKGROUND
+#      define GCLP_HBRBACKGROUND GCL_HBRBACKGROUND
+#    endif
+#    ifndef GWLP_WNDPROC
+#      define GWLP_WNDPROC GWL_WNDPROC
+#    endif
+#    ifndef GetWindowLongPtr
+#      define GetWindowLongPtr GetWindowLong
+#    endif
+#    ifndef SetWindowLongPtr
+#      define SetWindowLongPtr SetWindowLong
+#    endif
+#    ifndef GetClassLongPtr
+#      define GetClassLongPtr GetClassLong
+#    endif
+#  endif
 #endif /* OS_MSWIN */
 
 #ifdef WIN_MOTIF

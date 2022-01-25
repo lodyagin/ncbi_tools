@@ -12,7 +12,8 @@ typedef struct seqgraphview
   FORM_MESSAGE_BLOCK
   BioseqPtr          bsp;
   GrouP              ftype, mtype, ptype;
-  Uint2              entityID, itemID, procID, userKEY;
+  Uint2              entityID, procID, userKEY;
+  Uint4              itemID;
 } SeqGraphView, PNTR SeqGraphViewPtr;
 
 /* prototypes */

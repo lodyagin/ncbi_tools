@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.149 $
+* $Revision: 6.168 $
 *
 * File Description: 
 *
@@ -67,7 +67,7 @@
 #include <accpubseq.h>
 #endif
 
-#define TBL2ASN_APP_VER "5.9"
+#define TBL2ASN_APP_VER "7.2"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
@@ -79,7 +79,8 @@ typedef struct tblargs {
   Boolean  gapped;
   Boolean  phrapace;
   Boolean  genprodset;
-  Boolean  makelinks;
+  Boolean  linkbyoverlap;
+  Boolean  linkbyproduct;
   Boolean  implicitgaps;
   Boolean  forcelocalid;
   Boolean  gpstonps;
@@ -92,6 +93,7 @@ typedef struct tblargs {
   CharPtr  srcquals;
   CharPtr  comment;
   CharPtr  commentFile;
+  CharPtr  tableFile;
   Boolean  findorf;
   Boolean  altstart;
   Boolean  conflict;
@@ -100,6 +102,7 @@ typedef struct tblargs {
   Boolean  seqidfromfile;
   Boolean  smartfeats;
   Boolean  smarttitle;
+  Boolean  logtoterminal;
   CharPtr  aln_beginning_gap;
   CharPtr  aln_end_gap;
   CharPtr  aln_middle_gap;
@@ -123,6 +126,7 @@ static FILE* OpenOneFile (
   if (suffix == NULL) {
     suffix = "";
   }
+
   StringNCpy_0 (path, directory, sizeof (path));
   sprintf (file, "%s%s", base, suffix);
   FileBuildPath (path, NULL, file);
@@ -134,6 +138,7 @@ static void WriteOneFile (
   CharPtr results,
   CharPtr base,
   CharPtr suffix,
+  CharPtr outfile,
   SeqEntryPtr sep,
   SubmitBlockPtr sbp
 )
@@ -148,9 +153,13 @@ static void WriteOneFile (
   ssb.datatype = 1;
   ssb.data = (Pointer) sep;
 
-  StringNCpy_0 (path, results, sizeof (path));
-  sprintf (file, "%s%s", base, suffix);
-  FileBuildPath (path, NULL, file);
+  if (StringDoesHaveText (outfile)) {
+    StringNCpy_0 (path, outfile, sizeof (path));
+  } else {
+    StringNCpy_0 (path, results, sizeof (path));
+    sprintf (file, "%s%s", base, suffix);
+    FileBuildPath (path, NULL, file);
+  }
 
   aip = AsnIoOpen (path, "w");
   if (aip == NULL) return;
@@ -295,7 +304,6 @@ static SeqFeatPtr AnnotateBestOrf (
   Int2 genCode,
   Boolean altstart,
   SqnTagPtr stp
-  
 )
 
 {
@@ -389,7 +397,7 @@ static SeqFeatPtr AnnotateBestOrf (
   /* parse CDS comment ("note" goes to biosource) and experimental evidence */
 
   str = SqnTagFind (stp, "comment");
-  if (! StringHasNoText (str)) {
+  if (StringDoesHaveText (str)) {
     cds->comment = StringSave (str);
   }
 
@@ -650,7 +658,7 @@ static void AddMissingSourceInfo (
         /* fix capitalization of supplied name if in common organism list */
         StringCpy (orp->taxname, osp->taxname);
       }
-      if (StringHasNoText (orp->common) && (! StringHasNoText (osp->common))) {
+      if (StringHasNoText (orp->common) && StringDoesHaveText (osp->common)) {
         orp->common = StringSave (osp->common);
       }
       if (onp->gcode == 0) {
@@ -1263,7 +1271,7 @@ static Boolean HasTpaAccession (
       oip = ufp->label;
       if (oip == NULL || StringICmp (oip->str, "accession") != 0) continue;
       str = (CharPtr) ufp->data.ptrvalue;
-      if (! StringHasNoText (str)) return TRUE;
+      if (StringDoesHaveText (str)) return TRUE;
     }
   }
 
@@ -1396,11 +1404,11 @@ static void ProcessOneNuc (
     }
   }
 
-  if (! StringHasNoText (tbl->comment)) {
+  if (StringDoesHaveText (tbl->comment)) {
     str = StringSave (tbl->comment);
     SeqDescrAddPointer (&(bsp->descr), Seq_descr_comment, (Pointer) str);
   }
-  if (! StringHasNoText (tbl->commentFile)) {
+  if (StringDoesHaveText (tbl->commentFile)) {
     str = StringSave (tbl->commentFile);
     SeqDescrAddPointer (&(bsp->descr), Seq_descr_comment, (Pointer) str);
   }
@@ -1439,7 +1447,7 @@ static void ProcessOneNuc (
   }
 
   TrimBracketsFromString (ttl, stp);
-  if (! StringHasNoText (ttl)) {
+  if (StringDoesHaveText (ttl)) {
     str = StringSave (ttl);
     SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
   }
@@ -1501,13 +1509,20 @@ static void ReplaceOnePeptide (
   SeqIntPtr     sintp;
   SeqIdPtr      sip;
   SeqLocPtr     slp;
-  CharPtr       str1, str2;
+  CharPtr       str, str1, str2;
 
   if (ssp == NULL || ssp->numid < 1) return;
 
   sip = MakeSeqID (ssp->id [0]);
   bsp = BioseqFind (sip);
   SeqIdFree (sip);
+  if (bsp == NULL) {
+    str = ssp->id [0];
+    if (StringHasNoText (str)) {
+      str = "?";
+    }
+    Message (MSG_POSTERR, "Unable to find protein sequence %s", str);
+  }
   if (bsp == NULL || bsp->repr != Seq_repr_raw) return;
 
   /* remove trailing X and * */
@@ -1572,13 +1587,20 @@ static void ReplaceOneRNA (
   ByteStorePtr  bs;
   BioseqPtr     bsp;
   SeqIdPtr      sip;
-  CharPtr       str1, str2;
+  CharPtr       str, str1, str2;
 
   if (ssp == NULL || ssp->numid < 1) return;
 
   sip = MakeSeqID (ssp->id [0]);
   bsp = BioseqFind (sip);
   SeqIdFree (sip);
+  if (bsp == NULL) {
+    str = ssp->id [0];
+    if (StringHasNoText (str)) {
+      str = "?";
+    }
+    Message (MSG_POSTERR, "Unable to find mRNA sequence %s", str);
+  }
   if (bsp == NULL || bsp->repr != Seq_repr_raw) return;
 
   /* remove trailing X and * */
@@ -1680,7 +1702,7 @@ static Uint2 ProcessOneAsn (
     return 0;
   }
 
-  if (! StringHasNoText (localname)) {
+  if (StringDoesHaveText (localname)) {
     sip = MakeSeqID (localname);
     if (sip != NULL) {
       bsp->id = SeqIdSetFree (bsp->id);
@@ -1758,7 +1780,11 @@ typedef struct resqseqgph {
   SeqGraphPtr  sgp;
 } ResqSeqgph, PNTR ResqSeqgphPtr;
 
-static void RescueSeqGraphs (BioseqPtr bsp, Int2 index, ValNodePtr PNTR vnpp)
+static void RescueSeqGraphs (
+  BioseqPtr bsp,
+  Int2 index,
+  ValNodePtr PNTR vnpp
+)
 
 {
   SeqAnnotPtr    nextsap;
@@ -1799,7 +1825,10 @@ static void RescueSeqGraphs (BioseqPtr bsp, Int2 index, ValNodePtr PNTR vnpp)
   }
 }
 
-static SeqAnnotPtr NewSeqAnnotType3 (CharPtr name, SeqGraphPtr sgp)
+static SeqAnnotPtr NewSeqAnnotType3 (
+  CharPtr name,
+  SeqGraphPtr sgp
+)
 
 {
   SeqAnnotPtr  sap = NULL;
@@ -1817,7 +1846,11 @@ static SeqAnnotPtr NewSeqAnnotType3 (CharPtr name, SeqGraphPtr sgp)
   return sap;
 }
 
-static void OffsetAndLinkSeqGraph (BioseqPtr bsp, SeqGraphPtr sgp, Int2 index)
+static void OffsetAndLinkSeqGraph (
+  BioseqPtr bsp,
+  SeqGraphPtr sgp,
+  Int2 index
+)
 
 {
   DeltaSeqPtr  dsp;
@@ -1874,7 +1907,9 @@ static void OffsetAndLinkSeqGraph (BioseqPtr bsp, SeqGraphPtr sgp, Int2 index)
   }
 }
 
-static CharPtr BioseqGetLocalIdStr (BioseqPtr bsp)
+static CharPtr BioseqGetLocalIdStr (
+  BioseqPtr bsp
+)
 
 {
   ObjectIdPtr  oip;
@@ -1954,23 +1989,23 @@ static CharPtr ReadContigFile (
       }
     }
 
-    if (! StringHasNoText (field [0])) {
+    if (StringDoesHaveText (field [0])) {
       StringNCpy_0 (instr, field [0], sizeof (instr) - 2);
-      if (! StringHasNoText (field [1])) {
+      if (StringDoesHaveText (field [1])) {
         if (StringNICmp (field [1], "-", 1) == 0) {
           StringCat (instr, "-");
         }
       }
       ValNodeCopyStr (&rescuedcontigs, 0, instr);
-      if (! StringHasNoText (field [2])) {
+      if (StringDoesHaveText (field [2])) {
         if (sscanf (field [2], "%d", &frg) == 1) {
           ValNodeCopyStr (fragmentgroupsp, (Uint1) frg, field [0]);
         }
       }
       left_end = FALSE;
       right_end = FALSE;
-      if (! StringHasNoText (field [3])) {
-         if (! StringHasNoText (field [4])) {
+      if (StringDoesHaveText (field [3])) {
+         if (StringDoesHaveText (field [4])) {
            if (StringNICmp (field [4], "l", 1) == 0) {
             left_end = TRUE;
            } else if (StringNICmp (field [4], "r", 1) == 0) {
@@ -2059,10 +2094,16 @@ static CharPtr ReadContigFile (
   return pstring;
 }
 
-static void MakeAssemblyFragments (BioseqPtr bsp, CharPtr name, Int2 index,
-                                   CharPtr sp6_clone, CharPtr sp6_end,
-                                   CharPtr t7_clone, CharPtr t7_end,
-                                   Uint1 frag)
+static void MakeAssemblyFragments (
+  BioseqPtr bsp,
+  CharPtr name,
+  Int2 index,
+  CharPtr sp6_clone,
+  CharPtr sp6_end,
+  CharPtr t7_clone,
+  CharPtr t7_end,
+  Uint1 frag
+)
 
 {
   DeltaSeqPtr  dsp;
@@ -2320,7 +2361,7 @@ static Uint2 ProcessPhrapAce (
     SeqMgrLinkSeqEntry (topsep, 0, NULL);
   }
 
-  if (! StringHasNoText (localname)) {
+  if (StringDoesHaveText (localname)) {
     sip = MakeSeqID (localname);
     if (sip != NULL) {
       bsp->id = SeqIdSetFree (bsp->id);
@@ -2662,7 +2703,7 @@ static Uint2 ProcessDeltaSet (
     SeqMgrLinkSeqEntry (topsep, 0, NULL);
   }
 
-  if (! StringHasNoText (localname)) {
+  if (StringDoesHaveText (localname)) {
     sip = MakeSeqID (localname);
     if (sip != NULL) {
       bsp->id = SeqIdSetFree (bsp->id);
@@ -2680,6 +2721,7 @@ static Uint2 ProcessDeltaSet (
 static Boolean DoSequenceLengthsMatch (
   TAlignmentFilePtr afp
 )
+
 {
   int    seq_index;
   Int4   seq_len;
@@ -2696,9 +2738,11 @@ static Boolean DoSequenceLengthsMatch (
   return TRUE;
 }
 
-static void ShowAlignmentNotes 
-(TAlignmentFilePtr afp,
- TErrorInfoPtr error_list)
+static void ShowAlignmentNotes (
+  TAlignmentFilePtr afp,
+  TErrorInfoPtr error_list
+)
+
 {
   TErrorInfoPtr eip;
   Int4         index;
@@ -2767,10 +2811,10 @@ static Uint2 ProcessAlignSet (
   /* set sequence alphabet */
   if (tbl->aln_is_protein) {
     moltype = Seq_mol_aa;
-    sequence_info->alphabet = StringSave (protein_alphabet);
+    sequence_info->alphabet = protein_alphabet;
   } else {
     moltype = Seq_mol_dna;
-    sequence_info->alphabet = StringSave (nucleotide_alphabet);
+    sequence_info->alphabet = nucleotide_alphabet;
   }
   
   sequence_info->beginning_gap = MemFree (sequence_info->beginning_gap);
@@ -2844,13 +2888,13 @@ static Uint2 ProcessAlignSet (
   } else if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     bssp->_class = BioseqseqSet_class_phy_set;
-      entityID = ObjMgrRegister (OBJ_BIOSEQSET, (Pointer) bssp);
-      for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
-        if (IS_Bioseq (tmp)) {
-            bsp = (BioseqPtr) tmp->data.ptrvalue;
+    entityID = ObjMgrRegister (OBJ_BIOSEQSET, (Pointer) bssp);
+    for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+      if (IS_Bioseq (tmp)) {
+        bsp = (BioseqPtr) tmp->data.ptrvalue;
         ProcessOneNuc (entityID, bsp, src, tbl, template_molinfo);
-        }
       }
+    }
   } else return 0;
 
   SeqMgrLinkSeqEntry (sep, 0, NULL);
@@ -2870,7 +2914,7 @@ static SeqAnnotPtr NewGraphSeqAnnot (
   sap = SeqAnnotNew ();
   if (sap == NULL) return NULL;
 
-  if (! StringHasNoText (name)) {
+  if (StringDoesHaveText (name)) {
     SeqDescrAddPointer (&(sap->desc), Annot_descr_name, StringSave (name));
   }
   sap->type = 3;
@@ -2920,7 +2964,7 @@ static Boolean InRightNps (
   Uint4     version = 0;
 
   StringNCpy_0 (id, gbqval, sizeof (id));
-  if (! StringHasNoText (id)) {
+  if (StringDoesHaveText (id)) {
     if (StringChr (id, '|') != NULL) {
       sip = SeqIdParse (id);
     } else if (force_local_id) {
@@ -3435,7 +3479,7 @@ static void AddMrnaTitles (
   if (str == NULL) return;
   str [0] = '\0';
 
-  if (! StringHasNoText (organism)) {
+  if (StringDoesHaveText (organism)) {
     StringCat (str, organism);
   }
   if (cdslabel != NULL) {
@@ -3666,15 +3710,11 @@ static void TakeProteinsFromGPS (
   lastp = (SeqEntryPtr PNTR) userdata;
   if (lastp == NULL) return;
 
-  /* unlink from existing chain */
+  /* link copy after genomic sequence */
 
-  sep = bsp->seqentry;
-  if (sep != NULL) {
-    sep->data.ptrvalue = NULL;
-  }
-
-  /* link after genomic sequence */
-
+  bsp = (BioseqPtr) AsnIoMemCopy ((Pointer) bsp,
+                                  (AsnReadFunc) BioseqAsnRead,
+                                  (AsnWriteFunc) BioseqAsnWrite);
   sep = ValNodeAddPointer (lastp, 1, (Pointer) bsp);
   *lastp = sep;
 }
@@ -3686,31 +3726,44 @@ static void GPStoNPS (
 
 {
   BioseqSetPtr  bssp;
-  BioseqSet     dum;
+  BioseqSetPtr  dum;
   SeqEntryPtr   last, sep;
   Uint2         parenttype;
   Pointer       parentptr;
 
-  if (top == NULL || top->choice != 2) return;
+  if (top == NULL || top->choice != 2) {
+    Message (MSG_POSTERR, "GPStoNPS failed at top || top->choice");
+    return;
+  }
   bssp = (BioseqSetPtr) top->data.ptrvalue;
-  if (bssp == NULL || bssp->_class != BioseqseqSet_class_gen_prod_set) return;
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_gen_prod_set) {
+    Message (MSG_POSTERR, "GPStoNPS failed at bssp || bssp->_class");
+    return;
+  }
 
   GetSeqEntryParent (top, &parentptr, &parenttype);
 
+  /* point to genomic Bioseq component of gps */
+
   sep = bssp->seq_set;
-  if (sep == NULL || sep->choice != 1) return;
+  if (sep == NULL || sep->choice != 1) {
+    Message (MSG_POSTERR, "GPStoNPS failed at sep || sep->choice");
+    return;
+  }
 
   /* unlink nuc-prot sets, etc., from genomic Bioseq */
 
-  MemSet ((Pointer) &dum, 0, sizeof (BioseqSet));
-  dum._class = 1;
-  dum.seq_set = sep->next;
+  dum = BioseqSetNew ();
+  if (dum == NULL) {
+    Message (MSG_POSTERR, "GPStoNPS failed at BioseqSetNew");
+    return;
+  }
+  dum->_class = 1;
+  dum->seq_set = sep->next;
   sep->next = NULL;
 
   last = sep;
-  VisitBioseqsInSet (&dum, (Pointer) &last, TakeProteinsFromGPS);
-
-  /* leave dum.seq_set dangling for now */
+  VisitBioseqsInSet (dum, (Pointer) &last, TakeProteinsFromGPS);
 
   bssp->_class = BioseqseqSet_class_nuc_prot;
 
@@ -3721,6 +3774,14 @@ static void GPStoNPS (
   VisitFeaturesInSet (bssp, NULL, ClearRnaProducts);
 
   move_cds (top);
+
+  /* in case result has no proteins, demote to bioseq */
+
+  RenormalizeNucProtSets (top, TRUE);
+
+  /* cleanup original nuc-prot sets */
+
+  BioseqSetFree (dum);
 }
 
 static void GeneralToNote (
@@ -4012,24 +4073,26 @@ static void ProcessSourceTable (
   }
 }
 
-static SeqDescrPtr GetDescriptorTypeAlreadyInList (Uint1 descr_choice, SeqDescrPtr list)
+static SeqDescrPtr GetDescriptorTypeAlreadyInList (
+  Uint1 descr_choice,
+  SeqDescrPtr list
+)
 
 {
-  while (list != NULL && list->choice != descr_choice)
-  {
+  while (list != NULL && list->choice != descr_choice) {
     list = list->next;
   }
   return list;
 }
 
-static void AddTemplateDescriptors 
-(
+static void AddTemplateDescriptors (
   SeqDescrPtr PNTR current_list,
-  SeqDescrPtr new_list
+  SeqDescrPtr new_list,
+  Boolean copy
 )
 
 {
-  SeqDescrPtr  sdp_next, sdp;
+  SeqDescrPtr  dsc, sdp_next, sdp;
 
   if (current_list == NULL || new_list == NULL) return;
   
@@ -4039,10 +4102,14 @@ static void AddTemplateDescriptors
     if (sdp->choice == Seq_descr_source &&
         GetDescriptorTypeAlreadyInList (Seq_descr_source, *current_list) != NULL) continue;
     sdp->next = NULL;
-    ValNodeLink (current_list, AsnIoMemCopy ((Pointer) sdp,
-                 (AsnReadFunc) SeqDescrAsnRead,
-                 (AsnWriteFunc) SeqDescrAsnWrite));
-    sdp->next = sdp_next;
+    if (copy) {
+      dsc = AsnIoMemCopy ((Pointer) sdp,
+                          (AsnReadFunc) SeqDescrAsnRead,
+                          (AsnWriteFunc) SeqDescrAsnWrite);
+    } else {
+      dsc = sdp;
+    }
+    ValNodeLink (current_list, (Pointer) dsc);
   }
 }
 
@@ -4116,6 +4183,71 @@ static void MakeAccessionID (
   VisitGraphsOnBsp (bsp, (Pointer) bsp->id, CorrectGraphSeqIds);
 }
 
+static void FindCreateDate (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
+
+{
+  BoolPtr  has_create_dateP;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_create_date || userdata == NULL) return;
+  has_create_dateP = (BoolPtr) userdata;
+  *has_create_dateP = TRUE;
+}
+
+static void ConvertStructuredComment (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
+
+{
+  SeqDescrPtr    com;
+  CharPtr        prefix = NULL;
+  CharPtr        str;
+  UserObjectPtr  uop = NULL;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_comment) return;
+  str = (CharPtr) sdp->data.ptrvalue;
+  if (StringHasNoText (str)) return;
+
+  if (StringStr (str, "##HIVData-START##") != NULL &&
+      StringStr (str, "##HIVData-END##") != NULL) {
+    prefix = StringStr (str, "##HIVData-START##");
+    uop = ParseStringIntoStructuredComment (NULL, str, "##HIVData-START##",
+                                            "##HIVData-END##");
+  } else if (StringStr (str, "##FluData-START##") != NULL &&
+             StringStr (str, "##FluData-END##") != NULL) {
+    prefix = StringStr (str, "##FluData-START##");
+    uop = ParseStringIntoStructuredComment (NULL, str, "##FluData-START##",
+                                            "##FluData-END##");
+  }
+  if (uop == NULL) return;
+
+  /* if there is text before prefix, truncate existing comment and append user object */
+
+  if (prefix != NULL) {
+    *prefix = '\0';
+    TrimSpacesAroundString (str);
+    if (StringDoesHaveText (str)) {
+      com = SeqDescrNew (NULL);
+      if (com != NULL) {
+        com->choice = Seq_descr_user;
+        com->data.ptrvalue = uop;
+        com->next = sdp->next;
+        sdp->next = com;
+        return;
+      }
+    }
+  }
+
+  /* if entire comment was structured, replace existing descriptor with user object */
+
+  MemFree (sdp->data.ptrvalue);
+  sdp->choice = Seq_descr_user;
+  sdp->data.ptrvalue = uop;
+}
+
 static void ProcessOneRecord (
   SubmitBlockPtr sbp,
   PubdescPtr pdp,
@@ -4127,7 +4259,8 @@ static void ProcessOneRecord (
   SeqDescrPtr sdphead,
   TblArgsPtr tbl,
   TextFsaPtr gotags,
-  AsnIoPtr aip
+  AsnIoPtr aip,
+  CharPtr outfile
 )
 
 {
@@ -4146,6 +4279,7 @@ static void ProcessOneRecord (
   FILE               *fp;
   Boolean            goOn;
   SeqEntryPtr        gsep = NULL;
+  Boolean            has_create_date;
   SeqGraphPtr        lastsgp;
   CharPtr            localname = NULL;
   ErrSev             msev;
@@ -4168,6 +4302,10 @@ static void ProcessOneRecord (
 
   fp = OpenOneFile (directory, base, suffix);
   if (fp == NULL) return;
+
+  if (tbl->logtoterminal) {
+    Message (MSG_POSTERR, "File %s", base);
+  }
 
   /* if genomic product set, make parent set */
 
@@ -4231,7 +4369,7 @@ static void ProcessOneRecord (
       if (biop == NULL) continue;
       orp = biop->org;
       if (orp == NULL) continue;
-      if (! StringHasNoText (orp->taxname)) {
+      if (StringDoesHaveText (orp->taxname)) {
         organism = orp->taxname;
       }
     }
@@ -4240,7 +4378,11 @@ static void ProcessOneRecord (
 
   /* read one or more feature tables from .tbl file */
 
-  fp = OpenOneFile (directory, base, ".tbl");
+  if (StringDoesHaveText (tbl->tableFile)) {
+    fp = FileOpen (tbl->tableFile, "r");
+  } else {
+    fp = OpenOneFile (directory, base, ".tbl");
+  }
   if (fp != NULL) {
 
     /* indexing needed to find segmented bsp if location is on part */
@@ -4336,9 +4478,12 @@ static void ProcessOneRecord (
       str = FileCacheReadLine (&fc, buf, sizeof (buf), &nonewline);
       if (str == NULL) {
         goOn = FALSE;
-      } else if (! StringHasNoText (str)) {
+      } else if (StringDoesHaveText (str)) {
         if (str [0] == '>') {
           ptr = StringChr (str, ' ');
+          if (ptr == NULL) {
+            ptr = StringChr (str, '\t');
+          }
           if (ptr != NULL) {
             *ptr = '\0';
           }
@@ -4399,6 +4544,7 @@ static void ProcessOneRecord (
 
     if (tbl->gpstonps) {
       GPStoNPS (sep, entityID);
+      sep = GetTopSeqEntryForEntityID (entityID);
     }
 
     if (! tbl->genprodset) {
@@ -4407,19 +4553,49 @@ static void ProcessOneRecord (
     if (sdphead != NULL) {
       if (IS_Bioseq (sep)) {
         bsp = (BioseqPtr) sep->data.ptrvalue;
-        AddTemplateDescriptors (&(bsp->descr), sdphead);
+        AddTemplateDescriptors (&(bsp->descr), sdphead, TRUE);
       } else if (IS_Bioseq_set (sep)) {
         dssp = (BioseqSetPtr) sep->data.ptrvalue;
-         AddTemplateDescriptors (&(dssp->descr), sdphead);
+        AddTemplateDescriptors (&(dssp->descr), sdphead, TRUE);
       }
     }
     dp = DateCurr ();
     if (dp != NULL) {
-      sdp = CreateNewDescriptor (sep, Seq_descr_create_date);
+      has_create_date = FALSE;
+      VisitDescriptorsInSep (sep, (Pointer) &has_create_date, FindCreateDate);
+      if (has_create_date) {
+        sdp = CreateNewDescriptor (sep, Seq_descr_update_date);
+      } else {
+        sdp = CreateNewDescriptor (sep, Seq_descr_create_date);
+      }
       if (sdp != NULL) {
         sdp->data.ptrvalue = (Pointer) dp;
       }
     }
+
+    /* read one or more descriptors from .dsc file */
+
+    fp = OpenOneFile (directory, base, ".dsc");
+    if (fp != NULL) {
+
+      while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, TRUE, TRUE, TRUE)) != NULL) {
+        if (datatype == OBJ_SEQDESC) {
+
+          if (IS_Bioseq (sep)) {
+            bsp = (BioseqPtr) sep->data.ptrvalue;
+            AddTemplateDescriptors (&(bsp->descr), (SeqDescrPtr) dataptr, FALSE);
+          } else if (IS_Bioseq_set (sep)) {
+            dssp = (BioseqSetPtr) sep->data.ptrvalue;
+            AddTemplateDescriptors (&(dssp->descr), (SeqDescrPtr) dataptr, FALSE);
+          }
+
+        } else {
+          ObjMgrFree (datatype, dataptr);
+        }
+      }
+      FileClose (fp);
+    }
+
     msev = ErrSetMessageLevel (SEV_MAX);
     move_cds (sep);
 
@@ -4482,13 +4658,19 @@ static void ProcessOneRecord (
       VisitBioseqsInSep (sep, tbl->accn, MakeAccessionID);
     }
 
+    VisitDescriptorsInSep (sep, NULL, ConvertStructuredComment);
+
     SeqMgrClearFeatureIndexes (entityID, NULL);
     BasicSeqEntryCleanup (sep);
     ErrSetMessageLevel (msev);
     /*
     SeriousSeqEntryCleanup (sep, NULL, NULL);
     */
-    if (tbl->makelinks) {
+    if (tbl->linkbyoverlap) {
+      SeqMgrIndexFeatures (entityID, NULL);
+      LinkCDSmRNAbyOverlap (sep);
+    } else if (tbl->linkbyproduct) {
+      SeqMgrIndexFeatures (entityID, NULL);
       LinkCDSmRNAbyProduct (sep);
     }
     if (StringHasNoText (results)) {
@@ -4510,7 +4692,7 @@ static void ProcessOneRecord (
         SeqEntryAsnWrite (sep, aip, atp_bssse);
       }
     } else {
-      WriteOneFile (results, base, ".sqn", sep, sbp);
+      WriteOneFile (results, base, ".sqn", outfile, sep, sbp);
     }
 
     if (HasGoTermsInNote (sep, gotags)) {
@@ -4561,7 +4743,7 @@ static void GetFirstBiop (
 static CharPtr overwriteMsg = "Your template with a .sqn suffix will be overwritten.  Do you wish to continue?";
 
 static Boolean TemplateOverwriteRisk (
-  CharPtr tmplate,
+  CharPtr filename,
   CharPtr single,
   CharPtr directory,
   CharPtr suffix
@@ -4572,9 +4754,9 @@ static Boolean TemplateOverwriteRisk (
   CharPtr  ptr;
 
 
-  if (StringStr (tmplate, ".sqn") == NULL) return FALSE;
-  if (! StringHasNoText (single)) {
-    StringNCpy_0 (file, tmplate, sizeof (file));
+  if (StringStr (filename, ".sqn") == NULL) return FALSE;
+  if (StringDoesHaveText (single)) {
+    StringNCpy_0 (file, filename, sizeof (file));
     ptr = StringStr (file, ".");
     if (ptr != NULL) {
       *ptr = '\0';
@@ -4584,9 +4766,9 @@ static Boolean TemplateOverwriteRisk (
       StringCat (file, ptr);
     }
     if (StringCmp (file, single) == 0) return TRUE;
-  } else if (! StringHasNoText (directory)) {
+  } else if (StringDoesHaveText (directory)) {
     StringNCpy_0 (path, directory, sizeof (path));
-    StringNCpy_0 (file, tmplate, sizeof (file));
+    StringNCpy_0 (file, filename, sizeof (file));
     ptr = StringStr (file, ".");
     if (ptr != NULL) {
       *ptr = '\0';
@@ -4608,7 +4790,8 @@ static void FileRecurse (
   SeqDescrPtr sdphead,
   TblArgsPtr tbl,
   TextFsaPtr gotags,
-  AsnIoPtr aip
+  AsnIoPtr aip,
+  CharPtr outfile
 )
 
 {
@@ -4624,17 +4807,23 @@ static void FileRecurse (
   for (vnp = head; vnp != NULL; vnp = vnp->next) {
     if (vnp->choice == 0) {
       str = (CharPtr) vnp->data.ptrvalue;
-      if (! StringHasNoText (str)) {
+      if (StringDoesHaveText (str)) {
 
         /* does filename have desired substring? */
 
         ptr = StringStr (str, suffix);
+
         if (ptr != NULL) {
-          *ptr = '\0';
 
-          /* process file that has desired suffix (usually .fsa) */
+          /* make sure detected suffix is really at end of filename */
 
-          ProcessOneRecord (sbp, pdp, src, directory, results, str, suffix, sdphead, tbl, gotags, aip);
+          if (StringCmp (ptr, suffix) == 0) {
+            *ptr = '\0';
+
+            /* process file that has desired suffix (usually .fsa) */
+
+            ProcessOneRecord (sbp, pdp, src, directory, results, str, suffix, sdphead, tbl, gotags, aip, outfile);
+          }
         }
       }
     } else if (vnp->choice == 1) {
@@ -4644,7 +4833,7 @@ static void FileRecurse (
       StringNCpy_0 (path, directory, sizeof (path));
       str = (CharPtr) vnp->data.ptrvalue;
       FileBuildPath (path, str, NULL);
-      FileRecurse (sbp, pdp, src, path, results, suffix, sdphead, tbl, gotags, aip);
+      FileRecurse (sbp, pdp, src, path, results, suffix, sdphead, tbl, gotags, aip, outfile);
     }
   }
 
@@ -4928,60 +5117,63 @@ static CharPtr ReadCommentFile (
 
 /* Args structure contains command-line arguments */
 
-#define p_argInputPath      0
-#define r_argOutputPath     1
-#define i_argInputFile      2
-#define o_argOutputFile     3
-#define x_argSuffix         4
-#define t_argTemplate       5
-#define s_argFastaSet       6
-#define w_argWhichClass     7
-#define d_argDeltaSet       8
-#define l_argAlignment      9
-#define z_argGapped        10
-#define e_argPhrapAce      11
-#define g_argGenProdSet    12
-#define F_argFeatIdLinks   13
-#define H_argImplicitGaps  14
-#define a_argAccession     15
-#define C_argCenter        16
-#define n_argOrgName       17
-#define j_argSrcQuals      18
-#define y_argComment       19
-#define Y_argCommentFile   20
-#define c_argFindOrf       21
-#define m_argAltStart      22
-#define k_argConflict      23
-#define v_argValidate      24
-#define b_argGenBank       25
-#define q_argFileID        26
-#define u_argUndoGPS       27
-#define h_argGnlToNote     28
-#define B_argBegGap        29
-#define E_argEndGap        30
-#define G_argMidGap        31
-#define X_argMissing       32
-#define M_argMatch         33
-#define P_argIsProt        34
-#define R_argRemote        35
-#define S_argSmartFeats    36
-#define Q_argSmartTitle    37
-#define U_argUnnecXref     38
-#define L_argLocalID       39
-#define T_argTaxLookup     40
+#define p_argInputPath         0
+#define r_argOutputPath        1
+#define i_argInputFile         2
+#define o_argOutputFile        3
+#define x_argSuffix            4
+#define t_argTemplate          5
+#define s_argFastaSet          6
+#define w_argWhichClass        7
+#define d_argDeltaSet          8
+#define l_argAlignment         9
+#define z_argGapped           10
+#define e_argPhrapAce         11
+#define g_argGenProdSet       12
+#define F_argFeatIdLinks      13
+#define H_argImplicitGaps     14
+#define a_argAccession        15
+#define C_argCenter           16
+#define n_argOrgName          17
+#define j_argSrcQuals         18
+#define y_argComment          19
+#define Y_argCommentFile      20
+#define D_argDescrsFile       21
+#define f_argTableFile        22
+#define c_argFindOrf          23
+#define m_argAltStart         24
+#define k_argConflict         25
+#define v_argValidate         26
+#define b_argGenBank          27
+#define q_argFileID           28
+#define u_argUndoGPS          29
+#define h_argGnlToNote        30
+#define B_argBegGap           31
+#define E_argEndGap           32
+#define G_argMidGap           33
+#define X_argMissing          34
+#define M_argMatch            35
+#define P_argIsProt           36
+#define R_argRemote           37
+#define S_argSmartFeats       38
+#define Q_argSmartTitle       39
+#define U_argUnnecXref        40
+#define L_argLocalID          41
+#define T_argTaxLookup        42
+#define W_argLogProgress      43
 
 Args myargs [] = {
-  {"Path to files", NULL, NULL, NULL,
+  {"Path to Files", NULL, NULL, NULL,
     TRUE, 'p', ARG_STRING, 0.0, 0, NULL},
-  {"Path for results", NULL, NULL, NULL,
+  {"Path for Results", NULL, NULL, NULL,
     TRUE, 'r', ARG_STRING, 0.0, 0, NULL},
-  {"Single input file", NULL, NULL, NULL,
+  {"Single Input File", NULL, NULL, NULL,
     TRUE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
-  {"Single output file", NULL, NULL, NULL,
+  {"Single Output File", NULL, NULL, NULL,
     TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
   {"Suffix", ".fsa", NULL, NULL,
     TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
-  {"Template file", NULL, NULL, NULL,
+  {"Template File", NULL, NULL, NULL,
     TRUE, 't', ARG_FILE_IN, 0.0, 0, NULL},
   {"Read FASTAs as Set", "F", NULL, NULL,
     TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -4997,33 +5189,37 @@ Args myargs [] = {
     TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Genomic Product Set", "F", NULL, NULL,
     TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Feature ID Links", "F", NULL, NULL,
-    TRUE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Feature ID Links (o by Overlap, p by Product)", NULL, NULL, NULL,
+    TRUE, 'F', ARG_STRING, 0.0, 0, NULL},
   {"Implicit Gaps", "F", NULL, NULL,
     TRUE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Accession", NULL, NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
-  {"Genome center tag", NULL, NULL, NULL,
+  {"Genome Center Tag", NULL, NULL, NULL,
     TRUE, 'C', ARG_STRING, 0.0, 0, NULL},
-  {"Organism name", NULL, NULL, NULL,
+  {"Organism Name", NULL, NULL, NULL,
     TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
-  {"Source qualifiers", NULL, NULL, NULL,
+  {"Source Qualifiers", NULL, NULL, NULL,
     TRUE, 'j', ARG_STRING, 0.0, 0, NULL},
   {"Comment", NULL, NULL, NULL,
     TRUE, 'y', ARG_STRING, 0.0, 0, NULL},
-  {"Comment file", NULL, NULL, NULL,
+  {"Comment File", NULL, NULL, NULL,
     TRUE, 'Y', ARG_FILE_IN, 0.0, 0, NULL},
-  {"Annotate longest ORF", "F", NULL, NULL,
+  {"Descriptors File", NULL, NULL, NULL,
+    TRUE, 'D', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Single Table File", NULL, NULL, NULL,
+    TRUE, 'f', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Annotate Longest ORF", "F", NULL, NULL,
     TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Allow alternative starts", "F", NULL, NULL,
+  {"Allow Alternative Starts", "F", NULL, NULL,
     TRUE, 'm', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Set conflict on mismatch", "F", NULL, NULL,
+  {"Set Conflict on Mismatch", "F", NULL, NULL,
     TRUE, 'k', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Validate", "F", NULL, NULL,
     TRUE, 'v', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Generate GenBank file", "F", NULL, NULL,
+  {"Generate GenBank File", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Seq ID from file name", "F", NULL, NULL,
+  {"Seq ID from File Name", "F", NULL, NULL,
     TRUE, 'q', ARG_BOOLEAN, 0.0, 0, NULL},
   {"GenProdSet to NucProtSet", "F", NULL, NULL,
     TRUE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -5053,6 +5249,8 @@ Args myargs [] = {
     TRUE, 'L', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Remote Taxonomy Lookup", "F", NULL, NULL,
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Log Progress", "F", NULL, NULL,
+    TRUE, 'W', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -5065,6 +5263,7 @@ Int2 Main (void)
   CitSubPtr       csp;
   Pointer         dataptr;
   Uint2           datatype;
+  CharPtr         descrs;
   CharPtr         directory;
   FILE            *fp;
   TextFsaPtr      gotags;
@@ -5133,13 +5332,19 @@ Int2 Main (void)
   suffix = (CharPtr) myargs [x_argSuffix].strvalue;
   base = (CharPtr) myargs [i_argInputFile].strvalue;
   outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
+  if (StringHasNoText (outfile)) {
+    outfile = NULL;
+  }
   tmplate = (CharPtr) myargs [t_argTemplate].strvalue;
+  descrs = (CharPtr) myargs [D_argDescrsFile].strvalue;
 
   if (StringHasNoText(directory) && StringHasNoText(base)) {
     Message (MSG_FATAL, "You must supply either an input file (-i) or an input directory (-p).\nUse -p . to specify the current directory.\n\n");
     return 1;
   }
   remote = (Boolean) myargs [R_argRemote].intvalue;
+
+  MemSet ((Pointer) &tbl, 0, sizeof (TblArgs));
 
   tbl.fastaset = (Boolean) myargs [s_argFastaSet].intvalue;
   tbl.whichclass = (Boolean) myargs [w_argWhichClass].intvalue;
@@ -5148,7 +5353,12 @@ Int2 Main (void)
   tbl.gapped = (Boolean) myargs [z_argGapped].intvalue;
   tbl.phrapace = (Boolean) myargs [e_argPhrapAce].intvalue;
   tbl.genprodset = (Boolean) myargs [g_argGenProdSet].intvalue;
-  tbl.makelinks = (Boolean) myargs [F_argFeatIdLinks].intvalue;
+  ptr = myargs [F_argFeatIdLinks].strvalue;
+  if (StringICmp (ptr, "o") == 0) {
+    tbl.linkbyoverlap = TRUE;
+  } else if (StringICmp (ptr, "p") == 0) {
+    tbl.linkbyproduct = TRUE;
+  }
   tbl.implicitgaps = (Boolean) myargs [H_argImplicitGaps].intvalue;
   tbl.forcelocalid = (Boolean) myargs [L_argLocalID].intvalue;
   tbl.gpstonps = (Boolean) myargs [u_argUndoGPS].intvalue;
@@ -5169,6 +5379,7 @@ Int2 Main (void)
   tbl.smarttitle = (Boolean) myargs [Q_argSmartTitle].intvalue;
   tbl.removeunnecxref = (Boolean) myargs [U_argUnnecXref].intvalue;
   tbl.dotaxlookup = (Boolean) myargs [T_argTaxLookup].intvalue;
+  tbl.logtoterminal = (Boolean) myargs [W_argLogProgress].intvalue;
 
   /* arguments for alignment reading */
   tbl.aln_beginning_gap = (CharPtr) myargs [B_argBegGap].strvalue;
@@ -5202,24 +5413,24 @@ Int2 Main (void)
     return 1;
   }
 
-  if (! tbl.alignset && (! StringHasNoText (tbl.aln_beginning_gap)
-      || ! StringHasNoText (tbl.aln_end_gap)
-      || ! StringHasNoText (tbl.aln_middle_gap)
-      || ! StringHasNoText (tbl.aln_missing)
-      || ! StringHasNoText (tbl.aln_match)
+  if (! tbl.alignset && (StringDoesHaveText (tbl.aln_beginning_gap)
+      || StringDoesHaveText (tbl.aln_end_gap)
+      || StringDoesHaveText (tbl.aln_middle_gap)
+      || StringDoesHaveText (tbl.aln_missing)
+      || StringDoesHaveText (tbl.aln_match)
       || tbl.aln_is_protein)) {
     Message (MSG_FATAL, "Alignment options (-B, -E, -G, -X, -M, -P) can only be used with -l");
     return 1;
   }
 
-  if (StringHasNoText (base) && (! StringHasNoText (tbl.accn))) {
+  if (StringHasNoText (base) && (StringDoesHaveText (tbl.accn))) {
     Message (MSG_FATAL, "Accession can be entered only for a single record");
     return 1;
   }
 
   /* Seq-submit or Submit-block template is optional */
 
-  if (! StringHasNoText (tmplate)) {
+  if (StringDoesHaveText (tmplate)) {
     if (TemplateOverwriteRisk (tmplate, base, directory, suffix)) {
       if (Message (MSG_YN, overwriteMsg) == ANS_NO) return 0;
     }
@@ -5299,6 +5510,23 @@ Int2 Main (void)
     }
   }
 
+  if (StringDoesHaveText (descrs)) {
+    if (TemplateOverwriteRisk (descrs, base, directory, suffix)) {
+      if (Message (MSG_YN, overwriteMsg) == ANS_NO) return 0;
+    }
+    fp = FileOpen (descrs, "r");
+    if (fp != NULL) {
+      while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+        if (datatype == OBJ_SEQDESC) {
+          ValNodeLink (&sdphead, (SeqDescrPtr) dataptr);
+        } else {
+          ObjMgrFree (datatype, dataptr);
+        }
+      }
+      FileClose (fp);
+    }
+  }
+
   gotags = TextFsaNew ();
   TextFsaAdd (gotags, "go_component");
   TextFsaAdd (gotags, "go_function");
@@ -5319,7 +5547,7 @@ Int2 Main (void)
 
   /* process one or more records */
 
-  if (! StringHasNoText (outfile)) {
+  if (StringDoesHaveText (outfile) && StringHasNoText (base)) {
     aip = AsnIoOpen (outfile, "w");
     if (aip == NULL) {
       Message (MSG_FATAL, "Unable to open single output file");
@@ -5329,18 +5557,19 @@ Int2 Main (void)
     bssp_atp = DoSecondPrefix (aip);
   }
 
-  if (! StringHasNoText (base)) {
+  if (StringDoesHaveText (base)) {
     ptr = StringRChr (base, '.');
     sfx[0] = '\0';
     if (ptr != NULL) {
       StringNCpy_0 (sfx, ptr, sizeof (sfx));
       *ptr = '\0';
     }
-    ProcessOneRecord (sbp, pdp, src, directory, results, base, sfx, sdphead, &tbl, gotags, aip);
+    tbl.tableFile = (CharPtr) myargs [f_argTableFile].strvalue;
+    ProcessOneRecord (sbp, pdp, src, directory, results, base, sfx, sdphead, &tbl, gotags, aip, outfile);
 
   } else {
 
-    FileRecurse (sbp, pdp, src, directory, results, suffix, sdphead, &tbl, gotags, aip);
+    FileRecurse (sbp, pdp, src, directory, results, suffix, sdphead, &tbl, gotags, aip, NULL);
   }
 
   if (aip != NULL) {
@@ -5359,6 +5588,8 @@ Int2 Main (void)
   SeqDescrFree (sdphead);
 
   TransTableFreeAll ();
+
+  ECNumberFSAFreeAll ();
 
   TextFsaFree (gotags);
 

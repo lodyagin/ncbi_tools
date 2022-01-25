@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:  handles windowing for ingenue
 *
@@ -56,7 +56,7 @@ typedef struct selectdata {
   VieweR        vwr;
   Boolean       returnFALSE;
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   Uint2         itemtype;
   Uint2         segID;
 } IngSelectData, PNTR IngSelectPtr;
@@ -392,7 +392,6 @@ static void Ing_DoRange(ButtoN b)
   Int4               start=0, end=0;
   WindoW             w;
   BioseqPtr          bsp;
-  PrimitivE          prim;
 
 
   w=ParentWindow(b);
@@ -711,7 +710,6 @@ static void Ing_PopulateMotif(IngMInfoPtr minfo)
 {
   MotifInfoPtr   temp = NULL;
   CharPtr        name = NULL;
-  FloatHi        confidence;
   Char           str[500] = {""};
   RecT           rc;
   Int4           row = 0;
@@ -1420,7 +1418,6 @@ static IngIvalInfoPtr Ing_GetAlignmentIntervals (SeqAlignPtr sap, Int4 from_row,
    SeqIdPtr        master = NULL;
    Int4         tmp;
    Int4         from_aln, to_aln;
-   Int4         start, stop;
 
 
    if (sap == NULL || sap->saip == NULL)
@@ -1497,7 +1494,6 @@ static IngIvalInfoPtr Ing_OldGetAlignmentIntervals (SeqAlignPtr sap, Int4 from_r
    SeqIdPtr        master = NULL;
    Int4         tmp;
    Int4         from_aln, to_aln;
-   Int4         start, stop;
 
 
    if (sap == NULL || sap->saip == NULL)
@@ -1582,9 +1578,7 @@ static SeqLocPtr Ing_MakeLocListFromSAP(SeqAlignPtr salp, Boolean gap_split)
   SeqLocPtr    head = NULL;
   IngIvalInfoPtr  ival;
   IngIvalInfoPtr  ival_head;
-  SeqIntPtr    sinp;
   SeqLocPtr    slp;
-  SeqPntPtr    spp;
   Uint1        strand;
   SeqIdPtr     sip = NULL;
   Int4         from_row, to_row;
@@ -2102,8 +2096,7 @@ static Int4 Ing_AllButPartsCount (SeqEntryPtr sep, Pointer mydata,
 static void Ing_ResetTitle(IngGenomeViewerPtr igvp, Boolean clear)
 {
   RecT      rc;
-  Int2      width, stringwd;
-  Int2      nchars, nrows;
+  Int2      nchars;
   Int2      nlines;
   Int2      len;
   CharPtr   c=NULL, end=NULL, str=NULL;
@@ -2276,7 +2269,6 @@ static Int2 LIBCALLBACK Ing_OM_MsgFunc (OMMsgStructPtr ommsp)
   Int4               start=0, stop=0;
   Int4               s1=0, s2=0, n=1;
   Int4               score=0, number=0;
-  AlnMsg2Ptr          amp;
   Boolean            refresh=FALSE;
   Char               buf[255]={""};
   CharPtr            str1=NULL;
@@ -2287,10 +2279,9 @@ static Int2 LIBCALLBACK Ing_OM_MsgFunc (OMMsgStructPtr ommsp)
   SeqIdPtr           sip=NULL;
   SeqEntryPtr        sep=NULL;
   Uint2              entityID=0;
-  Uint2              itemID=0;
+  Uint4              itemID=0;
   Uint2              itemtype=0;
   Uint2              segID=0;
-  Int2               highlight;
   IngReportPtr       Report=NULL;
   CharPtr            eval_buff, bit_score_buff;
 
@@ -2569,17 +2560,14 @@ static Int2 LIBCALLBACK Ing_OM_MsgFunc (OMMsgStructPtr ommsp)
 *******************************************************************************/
 static void Ing_DoMoveCursor(VieweR v, SegmenT pict, Int2 SegBoxTop, Int2 SegBoxBottom, Int4 from, Int4 to,Int4 MaxLength, Boolean bFirst, Uint1Ptr grayClr)
 {
-  Int2 Half;
   WindoW  temport; 
   PrimitivE prim=NULL;
   enumPrimAddOrder oldOrder;
   Int4 scaleX,scaleY;
-  Int4 primwidth; 
   PntInfo worldPt;
   PoinT viewerPt;
   RecT rc,rc2, rcV;
   BoxInfo boxCursor;
-  BoxInfo boxSeg;
  
 
  temport=SavePort(ParentWindow(v)); 
@@ -2667,11 +2655,6 @@ static void Ing_MoveCursor(IngGenomeViewerPtr igvp, Int4 from, Int4 to, Boolean 
 
 static Boolean Ing_BuildStartupPage(IngGenomeViewerPtr igvp)
 {
-SegmenT        segRuler,segLines, pictControl;
-BioseqPtr      bsp;
-Int4           nSegments;
-IngExploreSegs gpn;
-
 	if (igvp==NULL) return(FALSE);
    Ing_PopulateOverviewPage((Pointer)igvp, TRUE);
    Ing_PopulateDetailedPage((Pointer)igvp);
@@ -2819,13 +2802,8 @@ static void Ing_FeatViewerClickProc(VieweR v, SegmenT s, PoinT pt)
   Int1       highlight=0; 
   IngGenomeViewerPtr igvp=NULL;
   SeqLocPtr  slp=NULL; 
-  Int4       start, stop;
-  Int4       i;
-  Char       str1[100], str2[50]; 
-  Uint2      strand;
   Int2       handled;
   SegmenT    subSeg=NULL;
-  IngSelectData    sel;
   SelStructPtr       ssp=NULL;
 
 
@@ -2951,7 +2929,6 @@ PoinT  stopPt;
 
 static void Ing_Ruler1ClickProc(VieweR v, SegmenT s, PoinT pt)
 {
- RecT                rc;
  Int4                from, to;
  IngGenomeViewerPtr  igvp;
 
@@ -2973,8 +2950,6 @@ static void Ing_Ruler1DragProc(VieweR v, SegmenT s, PoinT pt)
   Int4    offset, LscaleX,scaleX, from, to, diff;
   PntInfo worldPt;
   PoinT   viewerPt;
-  RecT    cursor, rc, rcDetail;
-  WindoW  temport;
   
   igvp=(IngGenomeViewerPtr)GetObjectExtra((WindoW)ParentWindow(v));
   if (igvp->bMaxScale) 
@@ -3016,9 +2991,7 @@ static void Ing_Ruler1ReleaseProc(VieweR v, SegmenT s, PoinT pt)
   Int4    offset, LscaleX,scaleX, from, to, diff;
   PntInfo worldPt;
   PoinT   viewerPt;
-  RecT    cursor, rc, rcDetail;
-  BaR     hsb;
-  WindoW  temport;
+  RecT    rc;
 
   igvp=(IngGenomeViewerPtr)GetObjectExtra((WindoW)ParentWindow(v));
   if (igvp->bMaxScale) 
@@ -3095,15 +3068,12 @@ static void Ing_ReadDotMatrixInfo(IngGenomeViewerPtr igvp, CharPtr path, CharPtr
 static void Ing_ReadInBlastAsn (IngGenomeViewerPtr igvp, FILE * ifp)
 {
   Pointer         dataptr;
-  Uint2           datatype, entityID, itemID;
+  Uint2           datatype;
   BioseqPtr       bsp;
   SeqAlignPtr     n_sap=NULL;
   SeqAlignPtr     salp=NULL;
   SeqIdPtr        sip=NULL;
   SeqAnnotPtr     sanp=NULL; 
-  Int4            start, i;
-  Int4            stop;
-  Char            str[10];
   IngReportPtr    Report=NULL;
   
   if (ifp == NULL)
@@ -3221,12 +3191,7 @@ static void Ing_ReadInFeatureTable (IngGenomeViewerPtr igvp, FILE * ifp)
    Pointer         dataptr;
    Uint2           datatype, entityID;
    BioseqPtr       bsp;
-   Uint2           itemID;
-   SeqFeatPtr      sfp;
    SeqAnnotPtr     sanp;
-   Int4            start, i;
-   Int4            stop;
-   IngReportPtr    Report=NULL;
 
    if (ifp == NULL)
       return;
@@ -3332,15 +3297,12 @@ static void Ing_ReadInGenscan(FILE *ifp, IngGenomeViewerPtr igvp)
 {
    Boolean         found=FALSE, first_pass=FALSE;
    Int4            i;
-   Int4            len;
    CharPtr         letter=NULL, str=NULL;
    CharPtr         line=NULL;
    IngInfoPtr     lip=NULL;
    IngInfoPtr     lip_head=NULL;
    IngInfoPtr     lip_prev=NULL;
    CharPtr         ptr=NULL;
-   Int4            prevlen;
-   Int4            seq;
    CharPtr         tmp;
 
    WatchCursor();
@@ -3685,7 +3647,6 @@ static void Ing_ReadInTabDelimited(IngGenomeViewerPtr igvp, BioseqPtr bsp, FILE 
    Boolean         first_pass=TRUE;
    Boolean         was_saved=FALSE;
    Int4            i;
-   Int4            len;
    CharPtr         letter=NULL;
    Char            line[1000];
    IngInfoPtr      lip=NULL;
@@ -3694,9 +3655,7 @@ static void Ing_ReadInTabDelimited(IngGenomeViewerPtr igvp, BioseqPtr bsp, FILE 
    IngInfoPtr      lip_head=NULL;
    IngInfoPtr      lip_prev=NULL;
    CharPtr         ptr=NULL, id_ptr=NULL;
-   Int4            prevlen, left=0, right=0;
-   Int4            seq;
-   Uint1           type;
+   Int4            left=0, right=0;
    CharPtr         tmp=NULL, str=NULL, label_str=NULL;
   
    WatchCursor();
@@ -3942,7 +3901,6 @@ static BioseqPtr GetBioseqReferencedByAnnot (SeqAnnotPtr sap, Uint2 entityID)
 extern Uint2 Ing_AttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap, BioseqPtr bsp)
 {
   Int2           genCode;
-  SeqEntryPtr    oldscope;
   OMProcControl  ompc;
   SeqEntryPtr    sep;
   SeqFeatPtr     sfp = NULL;
@@ -4026,10 +3984,7 @@ static Boolean Ing_FileOpenSpecial(IngGenomeViewerPtr igvp, CharPtr path, CharPt
   IngReportPtr Report=NULL;
   FILE*     fp=NULL;
   BioseqPtr bsp=NULL;
-  RecT      rcLines, rcControl, rcFeats;
   Boolean   DoUpdate=TRUE;
-  Int4      scaleX;
-  WindoW    temport, w;
   Char      strErr[50]={""};
   
   if (!igvp) return FALSE;
@@ -4217,7 +4172,7 @@ static Int4  Ing_GetBPMaxScale(IngGenomeViewerPtr igvp)
 *******************************************************************************/
 static void Ing_ResizeMainWindow(IngGenomeViewerPtr igvp, WindoW w, Boolean bfirst)
 {
-  Int4     diff, Zoom, scaleX;
+  Int4     diff, scaleX;
   RecT     rcDlg;
   RecT     rcVsb,rcHsb, rcZoom, rcInfo;
   RecT     rcTop; 
@@ -4367,7 +4322,6 @@ Purpose: Open procs
 *************************************************************/
 static void  Ing_OpenAcceptProc(ButtoN b)
 {
-  FILE * fp;
   IngGenomeViewerPtr igvp;
   Char              path [PATH_MAX]={""}, GI_list[PATH_MAX]={""};
   IngFileOpenDataPtr dfodp=NULL;
@@ -4429,7 +4383,6 @@ static void  Ing_OpenAcceptProc(ButtoN b)
 static void Ing_OpenTextProc(TexT t)
 {
 Char               szFName[PATH_MAX]={""};
-WindoW             hOpenDlg;
 IngFileOpenDataPtr  igodp;
 
         
@@ -4533,10 +4486,9 @@ static void Ing_InputFileType(PopuP pops)
 extern void Ing_OpenFromFileORNetwork(IngGenomeViewerPtr igvp)
 {
   WindoW              hOpenDlg=NULL;
-  GrouP               g, c, g_top;
+  GrouP               g, g_top;
   IngFileOpenDataPtr  dfodp=NULL;
-  ButtoN              b,b1,b2;
-  TexT                t1;
+  ButtoN              b,b2;
 
 
   if (igvp==NULL) return;
@@ -4596,7 +4548,7 @@ extern void Ing_FileOpenProc(IngGenomeViewerPtr igvp, WindoW hStart)
 {
 IngFileOpenDataPtr               dfodp=NULL;
 WindoW                          hOpenDlg;
-GrouP                           g,g4;
+GrouP                           g;
 ButtoN                          b,b1,b2;
 TexT                            t1;    
 
@@ -4687,7 +4639,6 @@ static void Ing_EditFeature(IteM i)
   SelStructPtr ssp=NULL;
   IngGenomeViewerPtr igvp=NULL;
   Int2       handled; 
-  SeqEntryPtr sep;
 
   ssp=ObjMgrGetSelected();
   if (!ssp) {
@@ -4970,7 +4921,7 @@ static void Ing_CreateMismatchedDialog(IngGenomeViewerPtr igvp, SeqAlignPtr salp
   IngRepMismatchedPtr rmp = NULL;
   WindoW           w;
   Int4             start, stop;
-  GrouP            g, g1, g2, g3, main;
+  GrouP            g, g1, g2, main;
   ButtoN           b;
   Char             buf[20]={""};
   
@@ -5107,7 +5058,6 @@ static void Ing_PropagateClickProc(VieweR v, SegmenT s, PoinT pt)
 {
   IngGenomeViewerPtr igvp=NULL;
   SelStructPtr       ssp=NULL;
-  PrimitivE          prim;
   Uint2              entityID=0;
   Uint4              itemID=0;
   Uint2              itemtype=0;
@@ -5184,7 +5134,7 @@ static void Ing_PrintCompProteins (IngAnnotAlignPtr aap, IngProgFeatPtr pfp)
 {
   Int4       len_orig, len_new, len_min, width_orig;
   Int4       n;
-  Int4       i, j, k, row, add;
+  Int4       i, j, k, row;
   Int4       start, exit;
   Int2       winsize, cxChar, nchars_row;
   Int2       last_pos = 0;
@@ -5489,7 +5439,6 @@ static SeqLocPtr Ing_MapLocForProp(SeqAlignPtr salp, Boolean gap_split, SeqLocPt
   SeqPntPtr    spp;
   SeqIdPtr     sip = NULL;
   Int4         from_row = 2, to_row = 1;
-  Int4         start, stop;
   
   sip = AlnMgr2GetNthSeqIdPtr(salp, 1);
   slp = SeqLocFindNext (location, NULL);
@@ -5656,7 +5605,6 @@ static Boolean LIBCALLBACK Ing_DoPropagate(SeqFeatPtr sfp, SeqMgrFeatContextPtr 
   SeqIdPtr        sip_prot = NULL;
   BioseqPtr       bsp_prot = NULL;
   MsgAnswer       ans;
-  SeqMgrFeatContext context;
 
 
   aap = (IngAnnotAlignPtr)sfc->userdata;
@@ -5801,7 +5749,6 @@ static void Ing_ClosePropagateWin(WindoW w)
 
 static void Ing_PropagateFeatures(BioseqPtr bsp_genome, IngAnnotAlignPtr aap)
 {
-  SegmenT       seg;
 
   aap->viewer = CreateViewer(aap->w, 500 ,150, TRUE, TRUE);
   aap->seg = CreatePicture();
@@ -5870,7 +5817,6 @@ static void Ing_QuitPropagateWin(IteM i)
 static void Ing_AnnotateAlignmentAccept (ButtoN b)
 {
   IngGenomeViewerPtr igvp = NULL;
-  Int2               retval;
   SelStructPtr       ssp = NULL;
   SeqLocPtr          slp_list = NULL;
   SeqAlignPtr        child=NULL, parent=NULL;
@@ -5881,17 +5827,15 @@ static void Ing_AnnotateAlignmentAccept (ButtoN b)
   Boolean            found=FALSE, Only_sap=FALSE;
   SeqEntryPtr        sep = NULL;
   IngAnnotAlignPtr   aap = NULL;
-  Int4               value, i;
-  Uint2              itemID;
+  Int4               value;
+  Uint4              itemID;
   WindoW             w;
   Uint1              seqfeattype=0;
   Uint1              featdeftype= 0;
   IngMarkData        marked;
-  OMProcControl      ompc;
   Boolean            gap_split;
   MsgAnswer          ans;
   MenU               m;
-  ChoicE             cg;
 
 
   WatchCursor();
@@ -6272,7 +6216,6 @@ static void Ing_ViewFlatFile(IteM i)
 static void Ing_NewFeatureMenuProc (IteM i)
 
 {
-  MsgAnswer      ans;
   IngGenomeViewerPtr igvp;
   IngObjectPtr   nop;
   OMProcControl  ompc;
@@ -6300,7 +6243,7 @@ static void Ing_NewFeatureMenuProc (IteM i)
 }
 
 
-static Boolean Ing_FeatureFilter(Uint1 featdeftype)
+static Boolean Ing_FeatureFilter(Uint2 featdeftype)
 {
   if (featdeftype != FEATDEF_COMMENT && featdeftype!=FEATDEF_BIOSRC && featdeftype!=FEATDEF_PUB && featdeftype!=FEATDEF_ORG)
     return TRUE;
@@ -6322,7 +6265,6 @@ static void Ing_SetupNewFeaturesMenu(MenU m, IngGenomeViewerPtr igvp)
   ObjMgrProcPtr     ompp;
   ObjMgrTypePtr     omtp;
   MenU              sub;
-  Uint2             subtype;
 
   if (m == NULL) return;
   omp = ObjMgrGet ();
@@ -6672,8 +6614,8 @@ static void Ing_PrintProc(IteM i)
 void Ing_SetupMenus ()
 
 {
-  MenU    m;  
 #ifdef WIN_MAC
+  MenU    m;  
   m = AppleMenu (NULL);
   DeskAccGroup (m);
 #endif
@@ -7106,7 +7048,6 @@ static void Ing_CreateReOrderAlignForm(IteM item)
   Int4                 i;
   IngseqFormPtr        sformp;
   IngGenomeViewerPtr   igvp=NULL;
-  IngSeqAnnotData      sad;
   ValNodePtr           vnp = NULL;
   SeqIdPtr             sip = NULL;
   SeqAlignPtr          sap = NULL;
@@ -7434,7 +7375,6 @@ static void Ing_CreateSearchForm(IteM item)
   GrouP                g;
   IngSimplePopupPtr    ipp=NULL;
   ButtoN               b;
-  Int4                 i;
 
   igvp=(IngGenomeViewerPtr)GetObjectExtra(ParentWindow(item));
   
@@ -7813,21 +7753,16 @@ static void Ing_SetupMainWindow(IngGenomeViewerPtr PNTR real_igvp)
 {
 WindoW         hMain;
 GrouP          g, g1, g2, g3, subg2;
-VieweR         v1,v2;
 IteM           i; 
 ButtoN         b1, b2; 
-SegmenT        seg1, pict;
-ChoicE         ch;
 MenU           m1, m2, m3, m4, m5, m6, m7, m8;
-MenU           submenu1, submenu2, submenu3; 
+MenU           submenu1, submenu2; 
 Char           title[100]={""}, str1[20]={""}, str2[20]={""}; 
 Char           szAppName [10]={"Ingenue"}; 
 FonT           hFnt;
 Int2           cxChar,cyChar;
 IngRangePtr    rnp;
 IngGenomeViewerPtr igvp;
-RecT           rcg;
-Int4           Fh; 
  Int4           j; 
 
  
@@ -7977,12 +7912,6 @@ static WindoW Ing_BuildMainGui(IngGenomeViewerPtr igvp, Int2 numrows)
 {
 WindoW hMain;
 GrouP  g;
-IteM   i; 
-SegmenT seg1,seg2;
-Int2   Margins;
-ChoicE  ch;
-MenU     m1, m2, m3, m4, m5, m6, submenu1, submenu2; 
-Char    title[100]; 
 
  
 	if (!igvp) return(NULL);
@@ -8021,7 +7950,6 @@ Char    title[100];
 extern Boolean Ing_AttachMessageProc(IngGenomeViewerPtr igvp, Uint2 procID, Uint2 eID)
 {
   OMUserDataPtr omudp;
-  Uint2         userkey;
   
   igvp->userKey=OMGetNextUserKey();
   igvp->procID=procID;
@@ -8072,8 +8000,9 @@ static IngGenomeViewerPtr Ing_LoadViewer(IngGenomeViewerPtr igvp, BioseqPtr bsp,
 {
 WindoW             hMain;
 Boolean            bRet;
-Int4               from,to,scaleX, diff;
-Uint2              entityID, itemID; 
+Int4               from,to,scaleX;
+Uint2              entityID;
+Uint4              itemID; 
 
 	WatchCursor();
 
@@ -8225,10 +8154,8 @@ NLM_EXTERN Int2 LIBCALLBACK Ing_RegIngenueProc(Pointer data)
 *******************************************************************************/
 NLM_EXTERN Int2 LIBCALLBACK Ing_RegisterIngenueProc (Pointer data)
 {
-  IngGenomeViewerPtr  igvp;
   OMProcControlPtr    ompcp;
   BioseqPtr           bsp;
-  SeqEntryPtr         sep;
   
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) {

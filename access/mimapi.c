@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.9 $
+* $Revision: 1.10 $
 *
 * File Description: 
 *
@@ -79,7 +79,7 @@ NLM_EXTERN MimEntryPtr MimWaitForReply (
 {
   AsnIoConnPtr  aicp;
   time_t        currtime, starttime;
-  Int2          max = 0;
+  time_t        max = 0;
   MimEntryPtr   mep = NULL;
   EIO_Status    status;
   STimeout      timeout;

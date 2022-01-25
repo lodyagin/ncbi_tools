@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bxmlobj.c,v 6.10 2003/05/30 17:25:36 coulouri Exp $";
+static char const rcsid[] = "$Id: bxmlobj.c,v 6.11 2006/09/18 15:20:39 bealer Exp $";
 
 #include <asn.h>
 
@@ -33,7 +33,7 @@ bxmlobjAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-BlastOutput
-*    Generated using ASNCODE Revision: 6.14 at Jul 12, 2002  2:02 PM
+*    Generated using ASNCODE Revision: 6.16 at Sep 15, 2006  1:53 PM
 *
 **************************************************/
 
@@ -872,7 +872,7 @@ StatisticsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
-      ptr -> db_len = av.intvalue;
+      ptr -> db_len = av.bigintvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == STATISTICS_hsp_len) {
@@ -963,7 +963,7 @@ StatisticsAsnWrite(StatisticsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 
    av.intvalue = ptr -> db_num;
    retval = AsnWrite(aip, STATISTICS_db_num,  &av);
-   av.intvalue = ptr -> db_len;
+   av.bigintvalue = ptr -> db_len;
    retval = AsnWrite(aip, STATISTICS_db_len,  &av);
    av.intvalue = ptr -> hsp_len;
    retval = AsnWrite(aip, STATISTICS_hsp_len,  &av);

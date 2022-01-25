@@ -29,13 +29,20 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.62 $
+* $Revision: 6.78 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: objmgr.c,v $
+* Revision 6.78  2006/08/25 16:12:33  bollin
+* added ObjMgrReportProc back in
+*
+* Revision 6.77  2006/08/25 15:34:21  bollin
+* rollback of objmgr to earlier version, followed by selective changes to fix
+* Object Manager problems.
+*
 * Revision 6.62  2005/07/18 14:49:53  kans
 * fixed minor xcode compiler warnings
 *
@@ -383,15 +390,15 @@ static Boolean NEAR ObjMgrTypeExtend PROTO((ObjMgrPtr omp));
 *
 *****************************************************************************/
 static Boolean NEAR ObjMgrSendMsgFunc PROTO((ObjMgrPtr omp, ObjMgrDataPtr omdp,
-				Int2 msg, Uint2 entityID, Uint2 itemID,	Uint2 itemtype, Uint2 rowID,
+				Int2 msg, Uint2 entityID, Uint4 itemID,	Uint2 itemtype, Uint2 rowID,
 				Uint2 fromProcID, Uint2 toProcID, Pointer procmsgdata));
 static Boolean NEAR ObjMgrSendStructMsgFunc PROTO((ObjMgrPtr omp, ObjMgrDataPtr omdp,
 				OMMsgStructPtr ommsp));
 static SelStructPtr NEAR ObjMgrAddSelStruct PROTO((ObjMgrPtr omp,
-	 Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region));
-static Boolean NEAR ObjMgrSelectFunc PROTO((ObjMgrPtr omp, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+	 Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region));
+static Boolean NEAR ObjMgrSelectFunc PROTO((ObjMgrPtr omp, Uint2 entityID, Uint4 itemID, Uint2 itemtype,
 									Uint1 regiontype, Pointer region));
-static Boolean NEAR ObjMgrDeSelectFunc PROTO((ObjMgrPtr omp, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+static Boolean NEAR ObjMgrDeSelectFunc PROTO((ObjMgrPtr omp, Uint2 entityID, Uint4 itemID, Uint2 itemtype,
 									Uint1 regiontype, Pointer region));
 /* static Boolean NEAR ObjMgrDeSelectStrucFunc PROTO((ObjMgrPtr omp, SelStructPtr ssp)); */
 static Boolean NEAR ObjMgrDeSelectAllFunc PROTO((ObjMgrPtr omp));
@@ -652,7 +659,7 @@ static Uint2 ObjMgrNextAvailEntityID (ObjMgrPtr omp)
 
   /* calculate entityID */
 
-  entityID = (Uint2) ((Int4) idx) * 32L + (Int4) jdx;
+  entityID = (Uint2) (((Int4) idx) * 32L + (Int4) jdx);
 
   if (omp != NULL && omp->HighestEntityID < entityID) {
     omp->HighestEntityID = entityID;
@@ -742,7 +749,7 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrAddEntityID (ObjMgrPtr omp, ObjMgrDataPtr omdp)
 	return omdp->EntityID;
 }
 static Boolean NEAR ObjMgrSendMsgFunc (ObjMgrPtr omp, ObjMgrDataPtr omdp,
-				Int2 msg, Uint2 entityID, Uint2 itemID,	Uint2 itemtype, Uint2 rowID,
+				Int2 msg, Uint2 entityID, Uint4 itemID,	Uint2 itemtype, Uint2 rowID,
 				Uint2 fromProcID, Uint2 toProcID, Pointer procmsgdata)
 {
 	OMMsgStruct omms;
@@ -2293,7 +2300,7 @@ NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindTop (ObjMgrPtr omp, ObjMgrDataPtr omd
 *       returns FALSE if these are an internal part of the entity
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjMgrWholeEntity (ObjMgrDataPtr omdp, Uint2 itemID, Uint2 itemtype)
+NLM_EXTERN Boolean LIBCALL ObjMgrWholeEntity (ObjMgrDataPtr omdp, Uint4 itemID, Uint2 itemtype)
 {
 	if (omdp == NULL)
 		return FALSE;
@@ -3812,7 +3819,7 @@ NLM_EXTERN ObjMgrTypePtr LIBCALL ObjMgrTypeFindNext (ObjMgrPtr omp, ObjMgrTypePt
 *
 *****************************************************************************/
 static Boolean NEAR ObjMgrSendSelMsg (ObjMgrPtr omp, Uint2 entityID,
-         Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
+         Uint4 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
 {
         ObjMgrDataPtr omdp;
         OMMsgStruct ommds;
@@ -3834,7 +3841,7 @@ static Boolean NEAR ObjMgrSendSelMsg (ObjMgrPtr omp, Uint2 entityID,
 }
 
 static Boolean NEAR ObjMgrSendDeSelMsg (ObjMgrPtr omp, Uint2 entityID,
-         Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
+         Uint4 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
 {
         ObjMgrDataPtr omdp;
         OMMsgStruct ommds;
@@ -3856,7 +3863,7 @@ static Boolean NEAR ObjMgrSendDeSelMsg (ObjMgrPtr omp, Uint2 entityID,
 }
 
 static SelStructPtr NEAR ObjMgrAddSelStruct (ObjMgrPtr omp, Uint2 entityID,
-		 Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
+		 Uint4 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
 {
 	SelStructPtr ssp, tmp;
 
@@ -4015,7 +4022,7 @@ static Pointer NEAR ObjMgrRegionFree (ObjMgrPtr omp, Uint1 regiontype, Pointer r
 *      returns TRUE if item is now currently selected, FALSE if not
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjMgrSelect (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+NLM_EXTERN Boolean LIBCALL ObjMgrSelect (Uint2 entityID, Uint4 itemID, Uint2 itemtype,
 									Uint1 regiontype, Pointer region)
 {
 	ObjMgrPtr omp;
@@ -4039,7 +4046,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSelect (Uint2 entityID, Uint2 itemID, Uint2 ite
 *      returns TRUE if item is now currently selected, FALSE if not
 *
 *****************************************************************************/
-static Boolean NEAR ObjMgrSelectFunc (ObjMgrPtr omp, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+static Boolean NEAR ObjMgrSelectFunc (ObjMgrPtr omp, Uint2 entityID, Uint4 itemID, Uint2 itemtype,
 									Uint1 regiontype, Pointer region)
 {
 	SelStructPtr ssp, next;
@@ -4161,7 +4168,7 @@ static Int2 NEAR ObjMgrRegionComp (Pointer region1,Pointer region2, Boolean dire
 
 
 static Boolean NEAR ObjMgrSelectFunc2 
-(ObjMgrPtr omp, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
+(ObjMgrPtr omp, Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint1 regiontype, Pointer region)
 {
         SelStructPtr ssp, next;
         Boolean      retval = FALSE;
@@ -4365,7 +4372,7 @@ static Boolean NEAR CheckRedondantSelect (ObjMgrPtr omp)
 *      rgb is a pointer to a Uint1[3] array containing an RGB value.
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjMgrSetColor (Uint2 entityID, Uint2 itemID,
+NLM_EXTERN Boolean LIBCALL ObjMgrSetColor (Uint2 entityID, Uint4 itemID,
                                         Uint2 itemtype, Uint1 regiontype,
                                         Pointer region, Uint1Ptr rgb)
 {
@@ -4409,7 +4416,7 @@ erret:
 *
 *****************************************************************************/
 
-NLM_EXTERN Boolean LIBCALL ObjMgrDeSelect (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+NLM_EXTERN Boolean LIBCALL ObjMgrDeSelect (Uint2 entityID, Uint4 itemID, Uint2 itemtype,
 									Uint1 regiontype, Pointer region)
 {
 	ObjMgrPtr omp;
@@ -4431,7 +4438,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDeSelect (Uint2 entityID, Uint2 itemID, Uint2 i
 *
 *****************************************************************************/
 
-static Boolean NEAR ObjMgrDeSelectFunc (ObjMgrPtr omp, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+static Boolean NEAR ObjMgrDeSelectFunc (ObjMgrPtr omp, Uint2 entityID, Uint4 itemID, Uint2 itemtype,
 									Uint1 regiontype, Pointer region)
 {
 	SelStructPtr tmp, next;
@@ -4498,7 +4505,7 @@ erret:
 	return retval;
 }
 
-NLM_EXTERN Boolean LIBCALL ObjMgrAlsoSelect (Uint2 entityID, Uint2 itemID,
+NLM_EXTERN Boolean LIBCALL ObjMgrAlsoSelect (Uint2 entityID, Uint4 itemID,
 					 Uint2 itemtype, Uint1 regiontype, Pointer region)
 {
 	ObjMgrPtr omp;
@@ -4550,7 +4557,7 @@ NLM_EXTERN SelStructPtr LIBCALL ObjMgrGetSelected (void)
 *       should be used cautiously
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg(Uint2 msg, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg(Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 {
 	ObjMgrPtr omp;
 	ObjMgrDataPtr omdp;
@@ -4573,7 +4580,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg(Uint2 msg, Uint2 entityID, Uint2 itemID
 	return retval;
 }
 
-NLM_EXTERN Boolean LIBCALL ObjMgrSendProcMsg(Uint2 msg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+NLM_EXTERN Boolean LIBCALL ObjMgrSendProcMsg(Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                              Uint2 fromProcID, Uint2 toProcID, Pointer procmsgdata)
 {
 	ObjMgrPtr omp;
@@ -4591,7 +4598,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSendProcMsg(Uint2 msg, Uint2 entityID, Uint2 it
 	return retval;
 }
 
-NLM_EXTERN Boolean LIBCALL ObjMgrSendRowMsg(Uint2 msg, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint2 rowID)
+NLM_EXTERN Boolean LIBCALL ObjMgrSendRowMsg(Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint2 rowID)
 {
 	ObjMgrPtr omp;
 	ObjMgrDataPtr omdp;
@@ -4857,7 +4864,7 @@ static void PrintABool (FILE *fp, CharPtr str, Boolean val)
 }
 
 static void ReportOnEntity (ObjMgrDataPtr omdp, ObjMgrPtr omp, Boolean selected,
-                            Uint2 itemID, Uint2 itemtype, Int2 index, FILE *fp)
+                            Uint4 itemID, Uint2 itemtype, Int2 index, FILE *fp)
 
 {
   BioseqPtr      bsp;
@@ -4917,6 +4924,45 @@ static void ReportOnEntity (ObjMgrDataPtr omdp, ObjMgrPtr omp, Boolean selected,
     fprintf (fp, "\n");
   }
 }
+
+
+NLM_EXTERN void LIBCALL ObjMgrReportProc (FILE *fp)
+
+{
+  Int2           j;
+  Int2           num;
+  ObjMgrPtr      omp;
+  ObjMgrDataPtr  omdp;
+  ObjMgrDataPtr  PNTR omdpp;
+
+  if (fp == NULL) return;
+  omp = ObjMgrGet ();
+  if (omp == NULL) return;
+  fprintf (fp, "Object Manager\n\n");
+  fprintf (fp, "  HighestEntityID %d\n", (int) omp->HighestEntityID);
+  fprintf (fp, "  Totobj %d\n", (int) omp->totobj);
+  fprintf (fp, "  Currobj %d\n", (int) omp->currobj);
+  fprintf (fp, "  Maxtemp %d\n", (int) omp->maxtemp);
+  fprintf (fp, "  Tempcnt %d\n", (int) omp->tempcnt);
+  fprintf (fp, "  Hold %d\n", (int) omp->hold);
+  PrintABool (fp, "  Reaping", omp->reaping);
+  PrintABool (fp, "  Is_write_locked", omp->is_write_locked);
+  fprintf (fp, "\n");
+  num = omp->currobj;
+  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
+    omdp = *omdpp;
+    if (omdp->parentptr == NULL) {
+      ReportOnEntity (omdp, omp, FALSE, 0, 0, j + 1, fp);
+    }
+  }
+  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
+    omdp = *omdpp;
+    if (omdp->parentptr != NULL) {
+      ReportOnEntity (omdp, omp, FALSE, 0, 0, j + 1, fp);
+    }
+  }
+}
+
 
 NLM_EXTERN void LIBCALL ObjMgrReportFunc (CharPtr filename)
 
@@ -5053,4 +5099,60 @@ ObjMgrLookupIndexOnEntityID(ObjMgrPtr omp,Uint2 entityID)
 	} else {
 		return NULL;
 	}
+}
+
+NLM_EXTERN Boolean DeleteRemainingViews (Uint2 entityID)
+{
+  OMUserDataPtr omudp;
+  Boolean found_desktop = FALSE, has_other = FALSE, removed_one;
+  Uint2 procid;
+  Uint4               i, num;
+  ObjMgrDataPtr       omdp;
+  ObjMgrDataPtr PNTR  omdpp;
+  ObjMgrPtr           omp;
+    
+  if (entityID == 0) return FALSE;
+  omp = ObjMgrWriteLock();
+  if (omp == NULL) 
+  {
+    return FALSE;
+  }  
+  
+  procid = ObjMgrGetProcID(omp, "NCBI DeskTop", OMPROC_EDIT);
+  
+  omdpp = omp->datalist;
+  if (omdpp != NULL) {
+    for (i = 0; i < omp->currobj && !has_other; i++) {
+      if (omdpp[i] != NULL && omdpp[i]->EntityID == entityID && !omdpp[i]->being_freed) {
+        omudp = omdpp[i]->userdata;
+        while (omudp != NULL && !has_other) {
+            if (omudp->procid != procid) {
+                has_other = TRUE;
+            }
+            omudp = omudp->next;
+        }
+      }
+    }
+    if (!has_other) {
+      removed_one = TRUE;
+      while (removed_one && omp->currobj > 0) {
+        removed_one = FALSE;
+        num = omp->currobj;
+        omdpp = omp->datalist;
+        for (i = 0; i < num && ! removed_one; i++) {
+          omdp = omdpp [i];
+          if (omdp != NULL && omdp->EntityID == entityID) {
+            omudp = omdp->userdata;
+            if (omudp != NULL) {
+              ObjMgrFreeUserDataFunc (omp, entityID, omudp->procid, omudp->proctype, omudp->userkey);
+              removed_one = TRUE;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  ObjMgrUnlock ();
+  return found_desktop;
 }

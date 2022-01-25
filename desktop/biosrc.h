@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -56,7 +56,7 @@ extern "C" {
 
 extern Int2     numGeneticCodes;
 extern Int2     gcIdToIndex [NUM_GENETIC_CODES];
-extern Int2     gcIndexToId [NUM_GENETIC_CODES];
+extern Uint1    gcIndexToId [NUM_GENETIC_CODES];
 extern CharPtr  gcNames [NUM_GENETIC_CODES];
 
 extern Boolean LoadOrganismTable (void);

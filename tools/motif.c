@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: motif.c,v 6.5 2003/05/30 17:25:37 coulouri Exp $";
+static char const rcsid[] = "$Id: motif.c,v 6.6 2006/07/13 17:16:20 bollin Exp $";
 
 /*   motif.c
 * ===========================================================================
@@ -31,7 +31,7 @@ static char const rcsid[] = "$Id: motif.c,v 6.5 2003/05/30 17:25:37 coulouri Exp
 *
 * Version Creation Date:   8/9/01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  sequence motif search functions
 *
@@ -48,7 +48,6 @@ static char const rcsid[] = "$Id: motif.c,v 6.5 2003/05/30 17:25:37 coulouri Exp
 
 static Int4 MOT_IsItPolyA(Uint1Ptr buf)
 {
-   BioseqPtr   bsp;
    Int4        count;
    Boolean     done;
    Int4        i;
@@ -311,7 +310,6 @@ NLM_EXTERN MotifInfoPtr MOT_FindKozak(BioseqPtr bsp)
 
 NLM_EXTERN MotifInfoPtr MOT_MotifSearch(CharPtr motif, BioseqPtr bsp, Boolean is_prot)
 {
-   ACTProfilePtr        app;
    FloatHi              bit_score;
    ByteStorePtr         bs;
    Int4                 bslen;
@@ -450,7 +448,6 @@ static void MOT_ScoreSignalPep(Uint1Ptr sequence, FloatHiPtr score)
 
 NLM_EXTERN MotifInfoPtr MOT_FindSignalPeptide(BioseqPtr bsp)
 {
-   Uint1         buf[MOT_WINSIZE];
    Uint1         buf2[MOT_WINSIZE];
    Int4          i;
    Int4          j;

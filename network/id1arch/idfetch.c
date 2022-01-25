@@ -25,6 +25,9 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.39  2006/08/02 15:16:04  vysokolo
+ Added features tRNA and microRNA
+
  Revision 1.38  2005/05/16 23:18:34  vysokolo
  Added features 'HPRD' and 'STS' to the key '-F'.
 
@@ -244,7 +247,7 @@ prf|acc|name pdb|entry|chain",
         {"Generate gi list by entrez query", NULL,NULL,NULL,TRUE,'q',ARG_STRING,0.0,0,NULL},
         {"Generate gi list by entrez query", NULL,NULL,NULL,TRUE,'Q',ARG_FILE_IN,0.0,0,NULL},
         {"Output only the list of gis, used with -q", NULL,NULL,NULL,TRUE,'n',ARG_BOOLEAN,0.0,0,NULL},
-        {"Add features delimited by ','. Allowed values are: 'CDD', 'SNP', 'SNP_graph', 'MGC', 'HPRD', 'STS'.", NULL,NULL,NULL,TRUE,'F',ARG_STRING,0.0,0,NULL}
+        {"Add features delimited by ','. Allowed values are: 'CDD', 'SNP', 'SNP_graph', 'MGC', 'HPRD', 'STS','tRNA','microRNA'.", NULL,NULL,NULL,TRUE,'F',ARG_STRING,0.0,0,NULL}
 };
 int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 
@@ -1309,6 +1312,8 @@ select * from annot_types;
 5 "MGC"       feff 9
 6 "HPRD"      fdff 10
 7 "STS"       fbff 11
+8 "tRNA"      f7ff 12
+9 "microRNA"  efff 13
 */
 
 Boolean CreateMaxPlexParam()
@@ -1346,6 +1351,14 @@ Boolean CreateMaxPlexParam()
       else if( !StringICmp( ptoken, "STS"))
       {
 	maxplex_param &= 0xfffffbff;
+      }
+      else if( !StringICmp( ptoken, "tRNA"))
+      {
+	maxplex_param &= 0xfffff7ff;
+      }
+      else if( !StringICmp( ptoken, "microRNA"))
+      {
+	maxplex_param &= 0xffffefff;
       }
       else
       {

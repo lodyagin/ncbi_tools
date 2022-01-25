@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.67 $
+* $Revision: 6.68 $
 *
 * File Description:
 *
@@ -70,7 +70,7 @@ static Int4  zoomScaleVal [MAXZOOMSCALEVAL] = {
 };
 
 static Boolean Find_segment_IDs (VieweR viewer, PoinT pt, Uint2Ptr entityID,
-                                 Uint2Ptr itemID, Uint2Ptr itemType)			
+                                 Uint4Ptr itemID, Uint2Ptr itemType)			
 {
   SegmenT seg, pseg;
   Uint2 pID, sID, primID, primCt;
@@ -218,7 +218,7 @@ static void ReleaseMap (VieweR vwr, SegmenT seg, PoinT pt)
 {
   BioseqViewPtr  bvp;
   Uint2          entityID;
-  Uint2          itemID;
+  Uint4          itemID;
   Uint2          itemtype;
   SeqEntryPtr    sep;
   PntInfo        start_info, stop_info;
@@ -335,7 +335,7 @@ static void ReleaseGraphic (VieweR vwr, SegmenT seg, PoinT pt)
 {
   BioseqViewPtr  bvp;
   Uint2          entityID;
-  Uint2          itemID;
+  Uint4          itemID;
   Uint2          itemtype;
   SeqEntryPtr    sep;
 
@@ -1297,7 +1297,7 @@ static void ReleaseAlignment (VieweR vwr, SegmenT seg, PoinT pt)
   BioseqViewPtr  bvp;
   Uint2          entityID;
   FILE           *fp;
-  Uint2          itemID;
+  Uint4          itemID;
   Uint2          itemtype;
   Int4           left, right;
   Uint4          option = TXALIGN_MISMATCH;
@@ -1664,7 +1664,7 @@ static void ReleaseSalsa (PaneL pnl, PoinT pt)
 {
   BioseqViewPtr  bvp;
   Uint2          entityID;
-  Uint2          itemID;
+  Uint4          itemID;
   Uint2          itemtype;
   SeqEntryPtr    sep;
 
@@ -1830,7 +1830,7 @@ static void ReleaseDesktop (VieweR vwr, SegmenT s, PoinT pt)
   BioseqViewPtr  bvp;
   Uint2          entityID;
   Int2           expand = 0;
-  Uint2          itemID;
+  Uint4          itemID;
   Uint2          itemtype;
   Uint2          primID;
   SegmenT        seg;
@@ -2937,7 +2937,7 @@ typedef struct selectdata {
   VieweR        vwr;
   SelStructPtr  sel;
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   Uint2         itemtype;
   SeqLocPtr     region;
 } SelectData, PNTR SelectPtr;
@@ -2947,7 +2947,7 @@ static Boolean SelectPrim (SegmenT seg, PrimitivE prim, Uint2 segID,
 
 {
   Uint2      entityID;
-  Uint2      itemID;
+  Uint4      itemID;
   Uint2      itemtype;
   Int2       parID;
   SelectPtr  sp;
@@ -2970,7 +2970,7 @@ static Boolean DeselectPrim (SegmenT seg, PrimitivE prim, Uint2 segID,
 
 {
   Uint2      entityID;
-  Uint2      itemID;
+  Uint4      itemID;
   Uint2      itemtype;
   Int2       parID;
   SelectPtr  sp;
@@ -2988,7 +2988,7 @@ static Boolean DeselectPrim (SegmenT seg, PrimitivE prim, Uint2 segID,
   return TRUE;
 }
 
-static void SelectGraphical (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
+static void SelectGraphical (BioseqViewPtr bvp, Uint2 selentityID, Uint4 selitemID,
                              Uint2 selitemtype, SeqLocPtr region,
                              Boolean select, Boolean scrollto)
 
@@ -3016,7 +3016,7 @@ static Boolean InitSelectPrim (SegmenT seg, PrimitivE prim, Uint2 segID,
 
 {
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   Uint2         itemtype;
   Int2          parID;
   SelStructPtr  sel;
@@ -3054,7 +3054,7 @@ static void InitSelectGraphical (BioseqViewPtr bvp)
   ExploreSegment (bvp->pict, (Pointer) &sd, InitSelectPrim);
 }
 
-static void SelectSalsa (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
+static void SelectSalsa (BioseqViewPtr bvp, Uint2 selentityID, Uint4 selitemID,
                          Uint2 selitemtype, SeqLocPtr region,
                          Boolean select, Boolean scrollto)
 
@@ -3064,7 +3064,7 @@ static void SelectSalsa (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
 static Boolean VSMSelectProc (SegmenT seg, PrimitivE prim, Uint2 segid, Uint2 primID, Uint2 primct, Pointer data)
 
 {
-  Uint2      itemID;
+  Uint4      itemID;
   Uint2      itemtype;
   SelectPtr  sp;
 
@@ -3081,7 +3081,7 @@ static Boolean VSMSelectProc (SegmenT seg, PrimitivE prim, Uint2 segid, Uint2 pr
 static Boolean VSMDeselectProc (SegmenT seg, PrimitivE prim, Uint2 segid, Uint2 primID, Uint2 primct, Pointer data)
 
 {
-  Uint2      itemID;
+  Uint4      itemID;
   Uint2      itemtype;
   SelectPtr  sp;
 
@@ -3095,7 +3095,7 @@ static Boolean VSMDeselectProc (SegmenT seg, PrimitivE prim, Uint2 segid, Uint2 
   return TRUE;
 }
 
-static void SelectDesktop (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID,
+static void SelectDesktop (BioseqViewPtr bvp, Uint2 selentityID, Uint4 selitemID,
                            Uint2 selitemtype, SeqLocPtr region,
                            Boolean select, Boolean scrollto)
 
@@ -3121,7 +3121,7 @@ static void SelectDesktop (BioseqViewPtr bvp, Uint2 selentityID, Uint2 selitemID
 static Boolean VSMInitSelectProc (SegmenT seg, PrimitivE prim, Uint2 segid, Uint2 primID, Uint2 primct, Pointer data)
 
 {
-  Uint2         itemID;
+  Uint4         itemID;
   Uint2         itemtype;
   SelStructPtr  sel;
   SelectPtr     sp;
@@ -3203,7 +3203,7 @@ static Boolean DrawSelectionPrim (SegmenT seg, PrimitivE prim, Uint2 segID,
 
 {
   Uint2         entityID;
-  Uint2         itemID;
+  Uint4         itemID;
   Uint2         itemtype;
   Int2          parID;
   SelStructPtr  sel;
@@ -3292,7 +3292,7 @@ static Boolean ExpBoundCallback (SegmenT seg, PrimitivE prim, Uint2 segID,
 {
   ExpBoundPtr  ebp;
   Uint2        entityID;
-  Uint2        itemID;
+  Uint4        itemID;
   Uint2        itemType;
   BoxInfo      pLimits;
   SegmenT      pseg;
@@ -3663,7 +3663,7 @@ static Boolean DeselectAsn2GphPrim (
 static void SelectAsn2GphView (
   BioseqViewPtr bvp,
   Uint2 selentityID,
-  Uint2 selitemID,
+  Uint4 selitemID,
   Uint2 selitemtype,
   SeqLocPtr region,
   Boolean select,

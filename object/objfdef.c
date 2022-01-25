@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -1199,6 +1199,15 @@ protref:    if (prp->name != NULL)
 						aacode = SeqMapTableConvert(smtp, trp->aa);
 					} else {
 						aacode = trp->aa;
+					}
+					if (aacode == 255) {
+				        if (trp->aatype == Seq_code_iupacaa || trp->aatype == Seq_code_ncbieaa) {
+				            if (trp->aa == 74) {
+				                aacode = 27; /* Xle */
+				            } else if (trp->aa == 79) {
+				                aacode = 26; /* Pyl */
+				            }
+				        }
 					}
 					if (aacode == 255) {
 						label = prefix;

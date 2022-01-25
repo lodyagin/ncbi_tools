@@ -2,7 +2,7 @@
 #define UTIL_CREADERS___ALNREAD__H
 
 /*
- * $Id: alnread.h,v 1.5 2005/10/21 15:18:36 bollin Exp $
+ * $Id: alnread.h,v 1.7 2006/09/14 13:31:00 bollin Exp $
  *
  * ===========================================================================
  *
@@ -100,7 +100,7 @@ typedef struct SSequenceInfo {
     char * beginning_gap;
     char * middle_gap;
     char * end_gap;
-    char * alphabet;
+    const char * alphabet;
 } SSequenceInfo, * TSequenceInfoPtr;
 
 extern NCBI_CREADERS_EXPORT TSequenceInfoPtr SequenceInfoNew (void);
@@ -115,6 +115,7 @@ typedef struct SAlignmentFile {
     char ** sequences;
     char ** organisms;
     char ** deflines;
+    char    align_format_found;
 } SAlignmentFile, * TAlignmentFilePtr;
 
 extern NCBI_CREADERS_EXPORT TAlignmentFilePtr AlignmentFileNew (void);
@@ -165,6 +166,12 @@ extern NCBI_CREADERS_EXPORT TAlignmentFilePtr ReadAlignmentFileEx (
  * ==========================================================================
  *
  * $Log: alnread.h,v $
+ * Revision 1.7  2006/09/14 13:31:00  bollin
+ * make alphabet in SequenceInfo struct const
+ *
+ * Revision 1.6  2006/09/13 18:34:41  bollin
+ * added flag to indicate whether alignment formatting clues were found
+ *
  * Revision 1.5  2005/10/21 15:18:36  bollin
  * added function to allow the gap, missing, and match characters to be read
  * from NEXUS comments for an alignment

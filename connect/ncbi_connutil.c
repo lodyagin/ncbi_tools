@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.108 2006/04/21 14:38:12 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.110 2006/06/15 02:44:44 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,27 +37,13 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
-#if defined(NCBI_OS_UNIX)
-#  ifndef NCBI_OS_SOLARIS
-#    include <limits.h>
-#  endif
-#  if defined(HAVE_GETPWUID)  ||  defined(HAVE_GETPWUID_R)
-#    include <pwd.h>
-#  endif
-#  include <unistd.h>
-#elif defined(NCBI_OS_MSWIN)
-#  if defined(_MSC_VER)  &&  (_MSC_VER > 1200)
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  include <windows.h>
-#endif
 
 
 extern const char* ConnNetInfo_GetValue(const char* service, const char* param,
                                         char* value, size_t value_size,
                                         const char* def_value)
 {
-    char        buf[256];
+    char        buf[128];
     const char* val;
     char*       s;
 
@@ -130,7 +116,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
                                                 (service  &&  *service
                                                  ? strlen(service) + 1 : 0));
     /* aux. storage for the string-to-int conversions, etc. */
-    char   str[256];
+    char   str[1024];
     int    val;
     double dbl;
     char*  s;
@@ -255,6 +241,11 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
         info->http_user_header = strdup(str);
     } else
         info->http_user_header = 0;
+
+    /* default referer */
+    ConnNetInfo_GetValue(0, REG_CONN_HTTP_REFERER, str, sizeof(str),
+                         DEF_CONN_HTTP_REFERER);
+    info->http_referer = *str ? strdup(str) : 0;
 
     /* not adjusted yet... */
     info->http_proxy_adjusted = 0/*false*/;
@@ -514,7 +505,7 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
             } else
                 l = len;
             if (l != linelen) {
-                size_t off  = (size_t)(line - hdr);
+                size_t off = (size_t)(line - hdr);
                 if (l > linelen) {
                     char* temp = (char*)realloc(hdr, hdrlen + l - linelen + 1);
                     if (!temp) {
@@ -820,6 +811,7 @@ extern SConnNetInfo* ConnNetInfo_Clone(const SConnNetInfo* info)
     }
     x_info->http_user_header = 0;
     ConnNetInfo_SetUserHeader(x_info, info->http_user_header);
+    x_info->http_referer = info->http_referer ? strdup(info->http_referer) : 0;
     return x_info;
 }
 
@@ -850,7 +842,9 @@ extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
     if (!(s = (char*) malloc(sizeof(*info) + 4096 +
                              (info->service ? strlen(info->service) : 0) +
                              (info->http_user_header
-                              ? strlen(info->http_user_header) : 0)))) {
+                              ? strlen(info->http_user_header) : 0) +
+                             (info->http_referer
+                              ? strlen(info->http_referer) : 0)))) {
         LOG_WRITE(lg, eLOG_Error, "ConnNetInfo_Log: Cannot alloc temp buffer");
         return;
     }
@@ -892,7 +886,8 @@ extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
     s_SaveBool      (s, "stateless",       info->stateless);
     s_SaveBool      (s, "firewall",        info->firewall);
     s_SaveBool      (s, "lb_disable",      info->lb_disable);
-    s_SaveString    (s, "user_header",     info->http_user_header);
+    s_SaveString    (s, "http_user_header",info->http_user_header);
+    s_SaveString    (s, "http_referer",    info->http_referer);
     s_SaveBool      (s, "proxy_adjusted",  info->http_proxy_adjusted);
     strcat(s, "#################### [END] SConnNetInfo\n");
 
@@ -906,6 +901,10 @@ extern void ConnNetInfo_Destroy(SConnNetInfo* info)
     if (!info)
         return;
     ConnNetInfo_SetUserHeader(info, 0);
+    if (info->http_referer) {
+        free((void*) info->http_referer);
+        info->http_referer = 0;
+    }
     free(info);
 }
 
@@ -1795,214 +1794,15 @@ extern size_t HostPortToString(unsigned int   host,
 }
 
 
-
-/****************************************************************************
- * CRC32
- */
-
-
-/* Standard Ethernet/ZIP polynomial */
-#define CRC32_POLY 0x04C11DB7UL
-
-
-static unsigned int s_CRC32[256];
-
-static void s_CRC32_Init(void)
-{
-    size_t i;
-    if (s_CRC32[255])
-        return;
-    for (i = 0;  i < 256;  i++) {
-        unsigned int byteCRC = (unsigned int) i << 24;
-        int j;
-        for (j = 0;  j < 8;  j++) {
-            if (byteCRC & 0x80000000UL)
-                byteCRC = (byteCRC << 1) ^ CRC32_POLY;
-            else
-                byteCRC = (byteCRC << 1);
-        }
-        s_CRC32[i] = byteCRC;
-    }
-}
-
-
-extern unsigned int CRC32_Update(unsigned int checksum,
-                                 const void *ptr, size_t count)
-{
-    const unsigned char* str = (const unsigned char*) ptr;
-    size_t j;
-
-    s_CRC32_Init();
-    for (j = 0;  j < count;  j++) {
-        size_t i = ((checksum >> 24) ^ *str++) & 0xFF;
-        checksum <<= 8;
-        checksum  ^= s_CRC32[i];
-    }
-    return checksum;
-}
-
-
-
-/****************************************************************************
- * CONNUTIL_GetUsername
- */
-
-
-extern const char* CONNUTIL_GetUsername(char* buf, size_t bufsize)
-{
-#if defined(NCBI_OS_UNIX)
-#  if !defined(NCBI_OS_SOLARIS)  &&  defined(HAVE_GETLOGIN_R)
-#    ifndef LOGIN_NAME_MAX
-#      ifdef _POSIX_LOGIN_NAME_MAX
-#        define LOGIN_NAME_MAX _POSIX_LOGIN_NAME_MAX
-#      else
-#        define LOGIN_NAME_MAX 256
-#      endif
-#    endif
-    char loginbuf[LOGIN_NAME_MAX + 1];
-#  endif
-    struct passwd* pw;
-#  if !defined(NCBI_OS_SOLARIS)  &&  defined(HAVE_GETPWUID_R)
-    struct passwd pwd;
-    char pwdbuf[256];
-#  endif
-#elif defined(NCBI_OS_MSWIN)
-    char  loginbuf[256 + 1];
-    DWORD loginbufsize = sizeof(loginbuf) - 1;
-#endif
-    const char* login;
-
-    assert(buf  &&  bufsize);
-
-#ifndef NCBI_OS_UNIX
-
-#  ifdef NCBI_OS_MSWIN
-    if (GetUserName(loginbuf, &loginbufsize)) {
-        assert(loginbufsize < sizeof(loginbuf));
-        loginbuf[loginbufsize] = '\0';
-        strncpy0(buf, loginbuf, bufsize - 1);
-        return buf;
-    }
-    if ((login = getenv("USERNAME")) != 0) {
-        strncpy0(buf, login, bufsize - 1);
-        return buf;
-    }
-#  endif
-
-#else /*!NCBI_OS_UNIX*/
-
-#  if defined(NCBI_OS_SOLARIS)  ||  !defined(HAVE_GETLOGIN_R)
-    /* NB:  getlogin() is MT-safe on Solaris, yet getlogin_r() comes in two
-     * flavors that differ only in return type, so to make things simpler,
-     * use plain getlogin() here */
-#    ifndef NCBI_OS_SOLARIS
-    CORE_LOCK_WRITE;
-#    endif
-    if ((login = getlogin()) != 0)
-        strncpy0(buf, login, bufsize - 1);
-#    ifndef NCBI_OS_SOLARIS
-    CORE_UNLOCK;
-#    endif
-    if (login)
-        return buf;
-#  else
-    if (getlogin_r(loginbuf, sizeof(loginbuf) - 1) == 0) {
-        loginbuf[sizeof(loginbuf) - 1] = '\0';
-        strncpy0(buf, loginbuf, bufsize - 1);
-        return buf;
-    }
-#  endif
-
-#  if defined(NCBI_OS_SOLARIS)  ||  \
-    (!defined(HAVE_GETPWUID_R)  &&  defined(HAVE_GETPWUID))
-    /* NB:  getpwuid() is MT-safe on Solaris, so use it here, if available */
-#  ifndef NCBI_OS_SOLARIS
-    CORE_LOCK_WRITE;
-#  endif
-    if ((pw = getpwuid(getuid())) != 0  &&  pw->pw_name)
-        strncpy0(buf, pw->pw_name, bufsize - 1);
-#  ifndef NCBI_OS_SOLARIS
-    CORE_UNLOCK;
-#  endif
-    if (pw  &&  pw->pw_name)
-        return buf;
-#  elif defined(HAVE_GETPWUID_R)
-#    if   HAVE_GETPWUID_R == 4
-    /* obsolete but still existent */
-    pw = getpwuid_r(getuid(), &pwd, pwdbuf, sizeof(pwdbuf));
-#    elif HAVE_GETPWUID_R == 5
-    /* POSIX-conforming */
-    if (getpwuid_r(getuid(), &pwd, pwdbuf, sizeof(pwdbuf), &pw) != 0)
-        pw = 0;
-#    else
-#      error "Unknown value of HAVE_GETPWUID_R, 4 or 5 expected."
-#    endif
-    if (pw  &&  pw->pw_name) {
-        assert(pw == &pwd);
-        strncpy0(buf, pw->pw_name, bufsize - 1);
-        return buf;
-    }
-#  endif /*HAVE_GETPWUID_R*/
-
-#endif /*!NCBI_OS_UNIX*/
-
-    /* last resort */
-    if (!(login = getenv("USER"))  &&  !(login = getenv("LOGNAME"))) {
-        buf[0] = '\0';
-        return 0;
-    }
-    strncpy0(buf, login, bufsize - 1);
-    return buf;
-}
-
-
-
-/****************************************************************************
- * Page size granularity
- * See also at corelib's ncbi_system.cpp::GetVirtualMemoryPageSize().
- */
-
-size_t CONNUTIL_GetVMPageSize(void)
-{
-    static size_t ps = 0;
-
-    if (!ps) {
-#if defined(NCBI_OS_MSWIN)
-        SYSTEM_INFO si;
-        GetSystemInfo(&si); 
-        ps = (size_t) si.dwAllocationGranularity;
-#elif defined(NCBI_OS_UNIX) 
-#  if   defined(_SC_PAGESIZE)
-#    define NCBI_SC_PAGESIZE _SC_PAGESIZE
-#  elif defined(_SC_PAGE_SIZE)
-#    define NCBI_SC_PAGESIZE _SC_PAGE_SIZE
-#  elif defined(NCBI_SC_PAGESIZE)
-#    undef  NCBI_SC_PAGESIZE
-#  endif
-#  ifndef   NCBI_SC_PAGESIZE
-        long x = 0;
-#  else
-        long x = sysconf(NCBI_SC_PAGESIZE);
-#    undef  NCBI_SC_PAGESIZE
-#  endif
-        if (x <= 0) {
-#  ifdef HAVE_GETPAGESIZE
-            if ((x = getpagesize()) <= 0)
-                return 0;
-#  else
-            return 0;
-#  endif
-        }
-        ps = (size_t) x;
-#endif /*OS_TYPE*/
-    }
-    return ps;
-}
-
-
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.110  2006/06/15 02:44:44  lavr
+ * GetUsername, GetVMPageSize, CRC32 moved from here to ncbi_util.c
+ *
+ * Revision 6.109  2006/06/07 20:04:10  lavr
+ * +SConnNetInfo::http_referer
+ *
  * Revision 6.108  2006/04/21 14:38:12  lavr
  * ConnNetInfo_GetValue() simplified and sped up considerably
  *

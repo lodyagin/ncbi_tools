@@ -192,7 +192,7 @@ Seq-code-set ::= {
         } ,
         {                                -- NCBIstdaa
             code ncbistdaa ,
-            num 26 ,                     -- continuous 0-25
+            num 28 ,                     -- continuous 0-27
             one-letter TRUE ,            -- all one letter codes
             table {
                 { symbol "-", name "Gap" } ,                -- 0
@@ -220,7 +220,9 @@ Seq-code-set ::= {
                 { symbol "Y", name "Tyrosine"},             -- 22
                 { symbol "Z", name "Glu or Gln" },          -- 23
                 { symbol "U", name "Selenocysteine"},       -- 24 
-                { symbol "*", name "Termination" }          -- 25
+                { symbol "*", name "Termination" },         -- 25
+                { symbol "O", name "Pyrrolysine" },         -- 26
+                { symbol "J", name "Leu or Ile" }           -- 27
             }                            -- end of table            
         } ,
         {                                -- NCBI2na
@@ -516,12 +518,12 @@ Seq-code-set ::= {
                 7,
                 8,
                 9,
-                255,  -- J
+                27,  -- J - was 255
                 10,
                 11,
                 12,
                 13,
-                255,  -- O
+                26,  -- O - was 255
                 14,
                 15,
                 16,
@@ -572,12 +574,12 @@ Seq-code-set ::= {
                 7,
                 8,
                 9,
-                255,  -- J
+                27,  -- J - was 255
                 10,
                 11,
                 12,
                 13,
-                255,  -- O
+                26,  -- O - was 255
                 14,
                 15,
                 16,
@@ -593,7 +595,7 @@ Seq-code-set ::= {
         {
             from ncbistdaa ,
             to ncbieaa ,
-            num 26 ,
+            num 28 ,
             table {
                 45 ,  --   "-"
                 65 ,    -- they map directly with holes for O and J
@@ -620,12 +622,14 @@ Seq-code-set ::= {
                 89,
                 90,
                 85,	 -- U
-                42}  -- *
+                42,  -- *
+                79,	 -- O - new
+                74}  -- J - new
         } ,
         {
             from ncbistdaa ,
             to iupacaa ,
-            num 26 ,
+            num 28 ,
             table {
                 255 ,  --   "-"
                 65 ,    -- they map directly with holes for O and J
@@ -652,7 +656,9 @@ Seq-code-set ::= {
                 89,
                 90,
                 85,  -- U - was 88
-                255}  -- *
+                255, -- *
+                79,	 -- O - new
+                74}  -- J - new
         } 
     }
 }    -- end of seq-code-set

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -41,6 +41,12 @@
 * 01-25-94 DGG + JK    Fixed MapDocPoint bug
 *
 * $Log: document.c,v $
+* Revision 6.20  2006/09/27 18:30:00  kans
+* support for Int4 scroll bars for switching between text and doc views in Sequin (CB)
+*
+* Revision 6.19  2006/07/13 12:29:29  bollin
+* fixed compiler warning
+*
 * Revision 6.18  2005/07/18 15:15:18  kans
 * fixed minor xcode compiler warnings
 *
@@ -3800,6 +3806,20 @@ extern Boolean GetScrlParams4 (DoC d, Int4Ptr offset,
   return rsult;
 }
 
+extern void SetScrlParams4 (DoC d, Int4 offset)
+
+{
+  BaR      sb;
+
+  if (d != NULL) {
+    sb = GetSlateVScrollBar ((SlatE) d);
+    if (sb != NULL) {
+      SetBarValue (sb, offset);
+    }
+  }
+}
+
+
 extern Boolean GetScrlParams (DoC d, Int2Ptr offset,
                               Int2Ptr firstShown, Int2Ptr firstLine)
 
@@ -4604,7 +4624,7 @@ extern void DisplayFancy (DoC d, CharPtr file, ParPtr parFmt,
   Int2     actual;
   Char     ch;
   Int2     cnt;
-  Int4     cntr;
+  Int8     cntr;
   DocData  ddata;
   FILE     *fp;
   Int2     leftOver;

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.177 2006/04/26 12:47:48 madden Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.185 2006/10/06 12:23:01 madden Exp $";
 
-/* $Id: blastall.c,v 6.177 2006/04/26 12:47:48 madden Exp $
+/* $Id: blastall.c,v 6.185 2006/10/06 12:23:01 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,31 @@ static char const rcsid[] = "$Id: blastall.c,v 6.177 2006/04/26 12:47:48 madden 
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.185  2006/10/06 12:23:01  madden
+ * Use head_on_every_query boolean on BlastFormattingInfo for backwards compatibilty in new engine
+ *
+ * Revision 6.184  2006/10/02 18:13:10  papadopo
+ * make new engine use the -P option
+ *
+ * Revision 6.183  2006/09/13 15:21:28  papadopo
+ * add switch to turn on use of only Smith-Waterman alignments (currently ifdef'ed out)
+ *
+ * Revision 6.182  2006/07/28 21:09:18  papadopo
+ * allow database length to override the real value when using the rewritten blast engine
+ *
+ * Revision 6.181  2006/07/20 20:48:43  madden
+ * Fix for truncated SeqAlign when multiple runs are done
+ *
+ * Revision 6.180  2006/06/09 17:45:36  papadopo
+ * change signature of BlastTabularFormatDataNew
+ *
+ * Revision 6.179  2006/06/07 16:52:54  madden
+ * Enable the use of composition-based statistics and unified P-values for blastp.
+ * (from Mike Gertz)
+ *
+ * Revision 6.178  2006/05/18 16:29:13  papadopo
+ * do not set search space field directly
+ *
  * Revision 6.177  2006/04/26 12:47:48  madden
  * Use SBlastMessage in place of Blast_Message
  *
@@ -887,7 +912,8 @@ ARG_FORCE_OLD,
 #endif
 #endif
 ARG_COMP_BASED_STATS,
-ARG_SMITH_WATERMAN
+ARG_SMITH_WATERMAN,
+ARG_SMITH_WATERMAN_ALL
 } BlastArguments;
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
@@ -1008,7 +1034,8 @@ static Args myargs[] = {
       "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},              /* ARG_FORCE_OLD */
 #endif  /* BLASTALL_TOOLS_ONLY */
 #endif
-    { "Use composition-based statistics for tblastn:\n"                /* ARG_COMP_BASED_STATS */
+    { "Use composition-based statistics for blastpgp or tblastn:\n"                /* ARG_COMP_BASED_STATS */
+      "      As first character:\n"
       "      D or d: default (equivalent to F)\n"
       "      0 or F or f: no composition-based statistics\n"
       "      1 or T or t: Composition-based statistics as in "
@@ -1020,13 +1047,22 @@ static Args myargs[] = {
       "Bioinformatics 21:902-911,\n"
       "          2005, unconditionally\n"
       "      For programs other than tblastn, must either be absent "
-      "or be D, F or 0.\n     ",
+      "or be D, F or 0.\n     "
+      "      As second character, if first character is "
+      "equivalent to 1, 2, or 3:\n"
+      "      U or u: unified p-value combining alignment p-value "
+      "and compositional p-value in round 1 only\n",
       "D", NULL, NULL, FALSE, 'C', ARG_STRING, 0.0, 0, NULL},
     { "Compute locally optimal Smith-Waterman alignments "
         "(This option is only\n"
       "      available for gapped tblastn.)",                          /* ARG_SMITH_WATERMAN */
       "F", NULL, NULL, FALSE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
+#ifdef ALLOW_FULL_SMITH_WATERMAN
+    { "Compute only Smith-Waterman alignments (new engine only)",
+      "F", NULL, NULL, FALSE, 'h', ARG_BOOLEAN, 0.0, 0, NULL},         /* ARG_SMITH_WATERMAN_ALL */
+#endif
 };
+
 
 #ifdef BLAST_CS_API
 static BlastNet3Hptr BNETInitializeBlast(CharPtr database, CharPtr program, 
@@ -1138,7 +1174,8 @@ s_FillOptions(SBlastOptions* options)
         myargs[ARG_GAPEXT].intvalue,
         FALSE);
 
-   if (myargs[ARG_WINDOW].intvalue < 0)
+   if (myargs[ARG_MULTIPLEHITS].intvalue == 1 ||
+       myargs[ARG_WINDOW].intvalue < 0)
        word_options->window_size = 0;
    else
        SBlastOptionsSetWindowSize(options, myargs[ARG_WINDOW].intvalue);
@@ -1166,16 +1203,21 @@ s_FillOptions(SBlastOptions* options)
  
    hit_options->longest_intron = MIN(myargs[ARG_INTRON].intvalue, MAX_INTRON_LENGTH);
 
-   if (myargs[ARG_SEARCHSP].floatvalue != 0)
-      eff_len_options->searchsp_eff = (Int8) myargs[ARG_SEARCHSP].floatvalue; 
+   if (myargs[ARG_SEARCHSP].floatvalue != 0 ||
+       myargs[ARG_DBSIZE].floatvalue != 0) {
+      Int8 searchsp = (Int8)myargs[ARG_SEARCHSP].floatvalue; 
+      Int8 dbsize = (Int8)myargs[ARG_DBSIZE].floatvalue; 
+      BLAST_FillEffectiveLengthsOptions(eff_len_options, 0, dbsize, &searchsp, 1);
+   }
 
    if (program_number == eBlastTypeTblastn ||
        program_number == eBlastTypeRpsTblastn ||
        program_number == eBlastTypeTblastx) {
        SBlastOptionsSetDbGeneticCode(options, myargs[ARG_DBGENCODE].intvalue);
    }
-   if (program_number == eBlastTypeTblastn && is_gapped) {
-       /* Set options specific to gapped tblastn */
+   if ((program_number == eBlastTypeTblastn ||
+        program_number == eBlastTypeBlastp) && is_gapped) {
+       /* Set options specific to gapped tblastn  and blastp */
        switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
        case 'D': case 'd':
        case '0': case 'F': case 'f':
@@ -1199,6 +1241,27 @@ s_FillOptions(SBlastOptions* options)
                      "based statistics; see -C options\n");
            break;
        }
+       if (ext_options->compositionBasedStats > eNoCompositionBasedStats) {
+           switch (myargs[ARG_COMP_BASED_STATS].strvalue[1]) {
+           case 'U':
+           case 'u':
+               if (program_number == eBlastTypeBlastp) {
+                   ext_options->unifiedP = 1;
+                   ErrPostEx(SEV_WARNING, 1, 0, "unified p-values "
+                             "are currently experimental\n");
+               } else {
+                   ErrPostEx(SEV_FATAL, 1, 0, "unified p-values "
+                             "are currently only available for blastp\n");
+               }
+               break;
+           case '\0':
+               break;
+           default:
+               ErrPostEx(SEV_WARNING, 1, 0, "unrecognized second character"
+                         "in value of -t, ignoring it\n");
+               break;
+           }
+       }
        if (myargs[ARG_SMITH_WATERMAN].intvalue) {
            ext_options->eTbackExt = eSmithWatermanTbck;
        }
@@ -1211,16 +1274,23 @@ s_FillOptions(SBlastOptions* options)
            break;
        default:
            ErrPostEx(SEV_FATAL, 1, 0,
-                     "Invalid option -C: only gapped tblastn may use"
-                     " composition based statistics.");
+                     "Invalid option -C: only gapped blastp or gapped tblastn "
+                     "may use composition based statistics.");
            break;
        }
        if(myargs[ARG_SMITH_WATERMAN].intvalue) {
            ErrPostEx(SEV_FATAL, 1, 0,
                      "Invalid option -s: Smith-Waterman alignments are only "
-                     "available for gapped tblastn and blastp.");
+                     "available for gapped blastp and gapped tblastn.");
        }
    }
+
+#ifdef ALLOW_FULL_SMITH_WATERMAN
+   if (myargs[ARG_SMITH_WATERMAN_ALL].intvalue) {
+       ext_options->ePrelimGapExt = eSmithWatermanScoreOnly;
+       ext_options->eTbackExt = eSmithWatermanTbckFull;
+   }
+#endif
 
    return 0;
 }
@@ -1273,6 +1343,7 @@ Int2 Main_new (void)
    FILE *infp=NULL, *outfp=NULL;
    SBlastOptions* options = NULL;
    BlastFormattingInfo* format_info = NULL;
+   BlastFormattingInfo* asn_format_info = NULL;  /* For ASN.1 output. */  /* For ASN.1 output. */
    Int4 ctr = 1;
    Boolean tabular_output = FALSE;
    Blast_SummaryReturn* sum_returns = Blast_SummaryReturnNew();
@@ -1337,10 +1408,7 @@ Int2 Main_new (void)
                                        FALSE,
                                        (Boolean) myargs[ARG_SHOWGIS].intvalue,
                                        believe_query);
-
-      if (myargs[ARG_DB].strvalue) {
-         BLAST_PrintOutputHeader(format_info); 
-      }
+       format_info->head_on_every_query = TRUE;
    }
    else
    { /* tabular output requires raw FILE*. */
@@ -1354,6 +1422,19 @@ Int2 Main_new (void)
        ReadDBBioseqFetchEnable ("blastall", myargs[ARG_DB].strvalue, db_is_na, TRUE);
    }
 
+   if (myargs[ARG_ASNOUT].strvalue) {
+        /* This just prints out the ASN.1 to a secondary file. */
+        BlastFormattingInfoNew(eAlignViewAsnText, options,
+              blast_program, dbname, myargs[ARG_ASNOUT].strvalue, &asn_format_info);
+        BlastFormattingInfoSetUpOptions(asn_format_info,
+              myargs[ARG_DESCRIPTIONS].intvalue,
+              myargs[ARG_ALIGNMENTS].intvalue,
+              FALSE,
+              FALSE,
+              (Boolean) myargs[ARG_SHOWGIS].intvalue,
+              believe_query);
+   }
+
 
    if ((infp = FileOpen(myargs[ARG_QUERY].strvalue, "r")) == NULL) {
       ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", 
@@ -1362,6 +1443,7 @@ Int2 Main_new (void)
    }
 
    sGetLoc(myargs[ARG_QUERYLOC].strvalue, &start, &end);
+
 
    /* Get the query (queries), loop if necessary. */
    while (1) {
@@ -1417,7 +1499,7 @@ Int2 Main_new (void)
            PrintTabularOutputHeader(dbname, NULL, query_slp, 
                                     blast_program, 0, FALSE, outfp);
            
-           tf_data = BlastTabularFormatDataNew(outfp, query_slp, 
+           tf_data = BlastTabularFormatDataNew(outfp, NULL, query_slp, 
                                                tab_option, believe_query);
            tf_data->show_gi = (Boolean) myargs[ARG_SHOWGIS].intvalue;
            tf_data->show_accession = TRUE;
@@ -1481,22 +1563,9 @@ Int2 Main_new (void)
 */
            if (myargs[ARG_ASNOUT].strvalue) {
                    /* This just prints out the ASN.1 to a secondary file. */
-                   BlastFormattingInfo* asn_format_info = NULL;
-                   BlastFormattingInfoNew(eAlignViewAsnText, options,
-                              blast_program, dbname,
-                              myargs[ARG_ASNOUT].strvalue, &asn_format_info);
-
-                   BlastFormattingInfoSetUpOptions(asn_format_info,
-                                       myargs[ARG_DESCRIPTIONS].intvalue,
-                                       myargs[ARG_ALIGNMENTS].intvalue,
-                                       (Boolean) myargs[ARG_HTML].intvalue,
-                                       FALSE,
-                                       (Boolean) myargs[ARG_SHOWGIS].intvalue,
-                                       believe_query);
                    status = 
                        BLAST_FormatResults(seqalign_arr, num_queries, query_slp, 
                                    NULL, asn_format_info, sum_returns);
-                   asn_format_info = BlastFormattingInfoFree(asn_format_info);
            }
            
            /* Format the results */
@@ -1528,6 +1597,9 @@ Int2 Main_new (void)
       /* FetchEnable/Disable called in blast_format.c for non-tabular output. */
       ReadDBBioseqFetchDisable();
    }
+
+   if (asn_format_info)
+      asn_format_info = BlastFormattingInfoFree(asn_format_info);
 
    if (infp)
       FileClose(infp);
@@ -1751,13 +1823,15 @@ Int2 Main_old (void)
     if (myargs[ARG_SEARCHSP].floatvalue)
         options->searchsp_eff = (Nlm_FloatHi) myargs[ARG_SEARCHSP].floatvalue;
 
-    if (0 != StringICmp("tblastn", blast_program) ||
-       !options->gapped_calculation) {
+    if ((0 != StringICmp("tblastn", blast_program) &&
+         0 != StringICmp("blastp", blast_program)) ||
+        !options->gapped_calculation) {
         /* Set some gapped tblastn-specific options to the correct
          * defaults for non-tblastn or non-gapped modes of operation.
          */
         options->tweak_parameters = eNoCompositionBasedStats;
         options->smith_waterman = 0;
+        options->unified_p = 0;
         
         switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
         case '0': case 'D': case 'd': case 'F': case 'f':
@@ -1765,17 +1839,17 @@ Int2 Main_old (void)
             break;
         default:
             ErrPostEx(SEV_FATAL, 1, 0,
-               "Invalid option -C: only gapped tblastn may use"
-               " composition based statistics.");
+               "Invalid option -C: only gapped blastp or gapped tblastn "
+               "may use composition based statistics.");
             break;
         }
         if(myargs[ARG_SMITH_WATERMAN].intvalue) {
             ErrPostEx(SEV_FATAL, 1, 0,
                "Invalid option -s: Smith-Waterman alignments are only "
-               "available for gapped tblastn.");
+               "available for gapped blastp or gapped tblastn.");
         }
     } else {
-        /* Set options specific to gapped tblastn */
+        /* Set options specific to gapped tblastn and blastp */
         switch (myargs[ARG_COMP_BASED_STATS].strvalue[0]) {
         case 'D': case 'd':
         case '0': case 'F': case 'f':
@@ -1799,6 +1873,27 @@ Int2 Main_old (void)
                       "based statistics; see -C options\n");
             break;
         }
+	if (options->tweak_parameters > 0) {
+            switch (myargs[ARG_COMP_BASED_STATS].strvalue[1]) {
+            case 'U':
+            case 'u': 
+                if (0 == StringICmp("blastp", blast_program)) {
+                    options->unified_p = 1;
+                    ErrPostEx(SEV_WARNING, 1, 0, "unified p-values "
+                              "are currently experimental\n");
+                } else {
+                    ErrPostEx(SEV_FATAL, 1, 0, "unified p-values "
+                              "are currently only available for blastp\n");
+                }
+                break;
+	  case '\0':
+            break;
+	  default:
+            ErrPostEx(SEV_WARNING, 1, 0, "unrecognized second character"
+                      "in value of -t, ignoring it\n");
+            break;
+	  }
+	}
         options->smith_waterman =
             (Boolean) myargs[ARG_SMITH_WATERMAN].intvalue;
     }

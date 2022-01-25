@@ -1,4 +1,6 @@
-static char const rcsid[] = "$Id: repeats_filter.c,v 1.14 2006/04/26 12:46:47 madden Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: repeats_filter.c,v 1.15 2006/05/24 21:17:50 camacho Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 /*
  * ===========================================================================

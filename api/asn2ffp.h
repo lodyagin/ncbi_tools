@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -45,6 +45,11 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.34  2006/07/13 17:06:38  bollin
+ * use Uint4 instead of Uint2 for itemID values
+ * removed unused variables
+ * resolved compiler warnings
+ *
  * Revision 6.33  2003/07/22 16:18:27  kans
  * added ZFIN as legal db_xref
  *
@@ -201,6 +206,11 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.34  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.33  2003/07/22 16:18:27  kans
 * added ZFIN as legal db_xref
 *
@@ -430,7 +440,7 @@ NLM_EXTERN CharPtr FlatJournal PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, ValNode
 NLM_EXTERN ValNodePtr GetKeywordLine PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintSourceFeat PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN Int2 PrintImpFeat PROTO ((Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp));
-NLM_EXTERN Int2 PrintImpFeatEx PROTO ((Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp, Int4 gi, Int2 entityID, Int2 itemID));
+NLM_EXTERN Int2 PrintImpFeatEx PROTO ((Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp, Int4 gi, Int2 entityID, Uint4 itemID));
 NLM_EXTERN void PrintNAFeatAwp PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintNAFeatByNumber PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintAAFeatByNumber PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
@@ -476,7 +486,7 @@ NLM_EXTERN void SeparatePartSuppl PROTO((CharPtr vol_issue, CharPtr part_sub));
 NLM_EXTERN void AddExtraAccessions PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 NLM_EXTERN void PrintTerminator PROTO ((void));
 NLM_EXTERN Boolean get_pubs PROTO ((GatherContextPtr gcp));
-NLM_EXTERN void GatherItemWithLock PROTO((Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+NLM_EXTERN void GatherItemWithLock PROTO((Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                    Pointer userdata, GatherItemProc userfunc));
 NLM_EXTERN CharPtr format_article PROTO ((Asn2ffJobPtr ajp, BioseqPtr bsp, ValNodePtr the_pub, Boolean make_index));
 NLM_EXTERN CharPtr format_bookarticle PROTO ((Asn2ffJobPtr ajp, BioseqPtr bsp, ValNodePtr the_pub, Boolean make_index));

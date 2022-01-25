@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: impatool.c,v 6.15 2004/10/04 13:35:53 camacho Exp $";
+static char const rcsid[] = "$Id: impatool.c,v 6.16 2006/06/30 18:44:40 camacho Exp $";
 
-/* $Id: impatool.c,v 6.15 2004/10/04 13:35:53 camacho Exp $
+/* $Id: impatool.c,v 6.16 2006/06/30 18:44:40 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,9 +34,12 @@ Author: Alejandro Schaffer
 
 Contents: utility routines for IMPALA.
 
- $Revision: 6.15 $
+ $Revision: 6.16 $
 
  $Log: impatool.c,v $
+ Revision 6.16  2006/06/30 18:44:40  camacho
+ Add support for O and J to getRes, ResToInt
+
  Revision 6.15  2004/10/04 13:35:53  camacho
  Do not use hard coded constants in IMPALAfindUngappedLambda
 
@@ -139,6 +142,10 @@ Char LIBCALL getRes(Char input)
 	return('U');
       case 25: 
 	return('*');
+      case 26: 
+	return('O');
+      case 27: 
+	return('J');
       default:
         return('?');
     }

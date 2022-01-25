@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: open/close/choose sequence/file from disk/network
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvopen.c,v $
+* Revision 6.21  2006/07/13 17:13:18  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.20  2000/07/26 17:26:26  lewisg
 * fix code for c++ inclusion
 *
@@ -158,7 +161,6 @@ NLM_EXTERN void  UDV_Init_vdp_struct(PaneL p,ViewerDialogDataPtr vdp,
 	Boolean EraseParaG,Boolean EraseMainTitle,Boolean EraseInfoPanel)
 {
 BaR 	vsb;
-WindoW 	w;
 
 	if (!vdp) return;
 	
@@ -237,7 +239,8 @@ NLM_EXTERN Boolean  UDV_analyze_SEP_for_open(FILE *fp,SeqEntryPtr the_set,
 BioseqPtr 	bsp;
 Boolean 	bRet=TRUE,bReadOk=FALSE;
 Pointer     dataptr;
-Uint2       datatype,entityID,eID,iID;
+Uint2       datatype,entityID,eID;
+Uint4       iID;
 MonitorPtr  mon;
 RecT        rcP;
 WindoW      temport;
@@ -936,8 +939,7 @@ NLM_EXTERN void UDV_FileClose(IteM i)
 {
 ViewerMainPtr 		vmp;
 WindoW				hWinMain;
-RecT				rcL,rcP;
-PaneL				p1,p2;
+RecT				rcP;
 
 	hWinMain=(WindoW)ParentWindow(i);
 
@@ -1004,7 +1006,8 @@ ViewerMainPtr 		vmp;
 Int2 				value;
 WindoW				hOpenDlg,temport;
 ValNodePtr			vnp;
-Uint2				nCompt=1,eID,iID;
+Uint2				nCompt=1,eID;
+Uint4               iID;
 BioseqPtr			bsp=NULL;
 RecT                rcP;
 Char 				szBuf[255]={""};
@@ -1138,7 +1141,8 @@ Char 			szName[21]={""};
 Char 			szBuf[50]={""};
 ViewerMainPtr 	vmp;
 UDVChooseSeqPtr ucsp;
-Uint2			eID,iID;
+Uint2			eID;
+Uint4           iID;
 
 	ucsp=(UDVChooseSeqPtr)MemNew(sizeof(UDVChooseSeq));
 	if (ucsp==NULL) return;

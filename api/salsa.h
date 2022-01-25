@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -161,10 +161,10 @@ typedef struct seledstruct
         Boolean    dirty;
         Boolean    visible;
         Uint2      entityID,
-                   itemID,
                    itemtype,
                    itemsubtype;
-        Uint2      bsp_itemID;
+        Uint4      itemID;
+        Uint4      bsp_itemID;
         Pointer    region;       
         Uint1      regiontype;     /* 0 = not set
                                  1 = SeqLocPtr of type SEQLOC_INT       */
@@ -178,7 +178,7 @@ typedef struct seledstruct
 
 typedef struct seqparam {
         Uint2    entityID;
-        Uint2    itemID;
+        Uint4    itemID;
         Boolean  complement;
         Boolean  rf[10];
         Uint2    group;
@@ -217,8 +217,8 @@ typedef struct editaligndata {
 
   Pointer         wdp;
   Uint2           input_entityID,
-                  input_itemID,
                   input_itemtype;
+  Uint4           input_itemID;
   Int2            seqnumber;        /* number of sequences       */
   Int4            length;           /* alignment length          */
   Boolean         seg_bioseq;
@@ -263,7 +263,7 @@ typedef struct editaligndata {
   SelStructPtr    firstssp;
   SelEdStructPtr  lastses;
   Int4            numberalignline;
-  Uint2Ptr        item_id;          /* array of itemID / line      */
+  Uint4Ptr        item_id;          /* array of itemID / line      */
   Uint2Ptr        seqEntity_id;     /* array of entityID / line    */
   Uint2Ptr        itemtype;         /* array of feattype / line    */
   Uint2Ptr        itemsubtype;      /* array of feattype / line    */
@@ -336,7 +336,7 @@ typedef struct editaligndata {
   ValNodePtr      allseqfeat;
   Uint4           nfeat;
   Uint1           prot_mode;
-  Uint2           printid;
+  Uint1           printid;
   Int4            stoptransl;
   ValNodePtr      params;
 

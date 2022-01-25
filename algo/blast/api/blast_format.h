@@ -1,4 +1,4 @@
-/* $Id: blast_format.h,v 1.44 2006/04/25 17:56:54 papadopo Exp $
+/* $Id: blast_format.h,v 1.46 2006/10/06 12:22:00 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -118,6 +118,8 @@ typedef struct BlastFormattingInfo {
     AsnIo* aip;                  /**< Output stream for ASN.1 output */
     MBXml* xmlp;                 /**< Output stream for XML output */
     Boolean is_seqalign_null;    /**< flag indicating absence of seqalign */
+    Boolean head_on_every_query; /**< Flag indicating that reference, db, etc. should appear
+                                      on every entry. */
 } BlastFormattingInfo;
 
 /** Allocates and initializes the formatting information structure.
@@ -249,6 +251,15 @@ Int2 PHIBlastFormatResults(ValNode* phivnps, SeqLocPtr query_slp,
  * @return NULL.
  */
 ValNode* PHIBlastResultsFree(ValNode* phivnps);
+
+/** Returns the integer alignment type value used in the C toolkit 
+ * formatting code, given the EBlastProgramType enumeration value.
+ * @param prog The BLAST program enumeration value [in]
+ * @param db_is_na Is database nucleotide or protein for this program? [out]
+ * @return Integer alignment type for use in old formatting code.
+ */      
+Uint1 
+GetOldAlignType(EBlastProgramType prog, Boolean* db_is_na);
 
 /* @} */
 

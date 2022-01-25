@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.13 $
+* $Revision: 1.15 $
 *
 * File Description: 
 *
@@ -69,7 +69,7 @@ NLM_EXTERN Taxon3ReplyPtr Tax3WaitForReply (
 {
   AsnIoConnPtr    aicp;
   time_t          currtime, starttime;
-  Int2            max = 0;
+  time_t          max = 0;
   EIO_Status      status;
   STimeout        timeout;
   Taxon3ReplyPtr  t3ry = NULL;
@@ -83,7 +83,7 @@ NLM_EXTERN Taxon3ReplyPtr Tax3WaitForReply (
   timeout.sec = 0;
   timeout.usec = 0;
 #else
-  timeout.sec = 100;
+  timeout.sec = 300;
   timeout.usec = 0;
 #endif
 
@@ -256,39 +256,59 @@ NLM_EXTERN ValNodePtr Taxon3GetOrgRefList (ValNodePtr org_list)
   OrgRefPtr        t3orp = NULL;
   T3ReplyPtr       trp;
   T3ErrorPtr       tep;
-  ValNodePtr       response_list = NULL;
+  ValNodePtr       response_list = NULL, next_org_list, last_org;
+  Int4             request_num, max_requests = 2000;
 
-  if (org_list == NULL) return NULL;
-  
-  t3rq = CreateMultiTaxon3Request (org_list);
-  if (t3rq == NULL) return NULL;
-  t3ry = Tax3SynchronousQuery (t3rq);
-  Taxon3RequestFree (t3rq);
-  if (t3ry != NULL) {
-    for (trp = t3ry->reply; trp != NULL; trp = trp->next) {
-      switch (trp->choice) {
-        case T3Reply_error :
-          tep = (T3ErrorPtr) trp->data.ptrvalue;
-          if (tep != NULL) {
-            ErrPostEx (SEV_ERROR, 0, 0, tep->message);
-          }
-          ValNodeAddPointer (&response_list, 3, NULL);
-          break;
-        case T3Reply_data :
-          tdp = (T3DataPtr) trp->data.ptrvalue;
-          if (tdp != NULL) {
-            t3orp = (OrgRefPtr)(tdp->org);
-            ValNodeAddPointer (&response_list, 3, (Pointer) t3orp);
-            tdp->org = NULL;
-          }
-          break;
-        default :
-          break;
-      }
+  while (org_list != NULL) {
+    /* we need to break large org_lists into manageable chunks */
+    next_org_list = org_list->next;
+    last_org = org_list; 
+    request_num = 1;
+    while (next_org_list != NULL && request_num < max_requests) {
+      last_org = next_org_list;
+      next_org_list = next_org_list->next;
+      request_num++;
     }
-    Taxon3ReplyFree (t3ry);
-  }
+    if (last_org != NULL) {
+      last_org->next = NULL;
+    }
+      
+    /* now create the request */
   
+    t3rq = CreateMultiTaxon3Request (org_list);
+    if (t3rq == NULL) return NULL;
+    t3ry = Tax3SynchronousQuery (t3rq);
+    Taxon3RequestFree (t3rq);
+    if (t3ry != NULL) {
+      for (trp = t3ry->reply; trp != NULL; trp = trp->next) {
+        switch (trp->choice) {
+          case T3Reply_error :
+            tep = (T3ErrorPtr) trp->data.ptrvalue;
+            if (tep != NULL) {
+              ErrPostEx (SEV_ERROR, 0, 0, tep->message);
+            }
+            ValNodeAddPointer (&response_list, 3, NULL);
+            break;
+          case T3Reply_data :
+            tdp = (T3DataPtr) trp->data.ptrvalue;
+            if (tdp != NULL) {
+              t3orp = (OrgRefPtr)(tdp->org);
+              ValNodeAddPointer (&response_list, 3, (Pointer) t3orp);
+              tdp->org = NULL;
+            }
+            break;
+          default :
+            break;
+        }
+      }
+      Taxon3ReplyFree (t3ry);
+    }
+    
+    if (last_org != NULL) {
+        last_org->next = next_org_list;
+    }
+    org_list = next_org_list;
+  }
   return response_list;
 }
 

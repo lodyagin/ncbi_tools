@@ -60,6 +60,10 @@
 #define ERR_SEQ_INST_InternalNsAdjacentToGap  1,56
 #define ERR_SEQ_INST_CaseDifferenceInSeqID  1,57
 #define ERR_SEQ_INST_DeltaComponentIsGi0  1,58
+#define ERR_SEQ_INST_FarFetchFailure  1,59
+#define ERR_SEQ_INST_InternalGapsInSeqRaw  1,60
+#define ERR_SEQ_INST_SelfReferentialSequence  1,61
+#define ERR_SEQ_INST_WholeComponent  1,62
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -98,6 +102,7 @@
 #define ERR_SEQ_DESCR_BadCollectionDate  2,35
 #define ERR_SEQ_DESCR_BadPCRPrimerSequence  2,36
 #define ERR_SEQ_DESCR_BadPunctuation  2,37
+#define ERR_SEQ_DESCR_BadPCRPrimerName  2,38
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -126,6 +131,7 @@
 #define ERR_SEQ_PKG_ArchaicFeatureLocation  4,13
 #define ERR_SEQ_PKG_ArchaicFeatureProduct  4,14
 #define ERR_SEQ_PKG_GraphPackagingProblem  4,15
+#define ERR_SEQ_PKG_InternalGenBankSet  4,16
 #define ERR_SEQ_FEAT  5,0
 #define ERR_SEQ_FEAT_InvalidForType  5,1
 #define ERR_SEQ_FEAT_PartialProblem  5,2
@@ -248,6 +254,17 @@
 #define ERR_SEQ_FEAT_GapFeatureProblem  5,119
 #define ERR_SEQ_FEAT_PseudoCdsHasProtXref  5,120
 #define ERR_SEQ_FEAT_ErroneousException  5,121
+#define ERR_SEQ_FEAT_SegmentedGeneProblem  5,122
+#define ERR_SEQ_FEAT_WholeLocation  5,123
+#define ERR_SEQ_FEAT_BadEcNumberFormat  5,124
+#define ERR_SEQ_FEAT_BadEcNumberValue  5,125
+#define ERR_SEQ_FEAT_EcNumberProblem  5,126
+#define ERR_SEQ_FEAT_VectorContamination  5,127
+#define ERR_SEQ_FEAT_MinusStrandProtein  5,128
+#define ERR_SEQ_FEAT_BadProteinName  5,129
+#define ERR_SEQ_FEAT_GeneXrefWithoutLocus  5,130
+#define ERR_SEQ_FEAT_UTRdoesNotExtendToEnd  5,131
+#define ERR_SEQ_FEAT_CDShasTooManyXs  5,132
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

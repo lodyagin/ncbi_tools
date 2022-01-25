@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.82 2006/04/26 12:47:48 madden Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.85 2006/08/29 18:12:09 papadopo Exp $";
 
-/* $Id: rpsblast.c,v 6.82 2006/04/26 12:47:48 madden Exp $
+/* $Id: rpsblast.c,v 6.85 2006/08/29 18:12:09 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,21 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.82 2006/04/26 12:47:48 madden E
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.82 $
+* $Revision: 6.85 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.85  2006/08/29 18:12:09  papadopo
+* reduce input sequence batch size
+*
+* Revision 6.84  2006/07/28 21:09:18  papadopo
+* allow database length to override the real value when using the rewritten blast engine
+*
+* Revision 6.83  2006/05/18 16:29:13  papadopo
+* do not set search space field directly
+*
 * Revision 6.82  2006/04/26 12:47:48  madden
 * Use SBlastMessage in place of Blast_Message
 *
@@ -487,8 +496,12 @@ s_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
                       0,        /* turn off culling */
                       0);       /* min diag separation */
 
-   if (myargs[OPT_SEARCHSP].floatvalue != 0) {
-      eff_len_options->searchsp_eff = (Int8) myargs[OPT_SEARCHSP].floatvalue; 
+   if (myargs[OPT_SEARCHSP].floatvalue != 0 ||
+       myargs[OPT_DBLENGTH].floatvalue != 0) {
+      Int8 searchsp = (Int8) myargs[OPT_SEARCHSP].floatvalue; 
+      Int8 dblength = (Int8) myargs[OPT_DBLENGTH].floatvalue; 
+      BLAST_FillEffectiveLengthsOptions(eff_len_options, 0, 
+                                        dblength, &searchsp, 1);
    }
 
    if (db_options && kProgram == eBlastTypeRpsTblastn) {
@@ -551,7 +564,7 @@ Int2 Main_New(void)
    Blast_SummaryReturn* sum_returns=Blast_SummaryReturnNew();
    Int4 num_queries = 0;
    SeqLoc* lcase_mask = NULL;
-   const int kMaxConcatLength = 40000;
+   const int kMaxConcatLength = 10000;
    Blast_SummaryReturn* full_sum_returns = NULL;
    Boolean believe_query = (Boolean) myargs[OPT_BELIEVE_QUERY].intvalue;
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.72 $
+* $Revision: 6.73 $
 *
 * File Description: 
 *
@@ -45,6 +45,11 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.73  2006/07/13 17:06:39  bollin
+ * use Uint4 instead of Uint2 for itemID values
+ * removed unused variables
+ * resolved compiler warnings
+ *
  * Revision 6.72  2005/01/12 22:53:04  vakatov
  * /htbin-post/Taxonomy/wgetorg -> /Taxonomy/Browser/wwwtax.cgi
  * /htbin-post/Taxonomy/wprintgc -> /Taxonomy/Utils/wprintgc.cgi
@@ -763,7 +768,7 @@ NLM_EXTERN Boolean LIBCALL www_taxid(CharPtr orgname, Int4 id)
 		return TRUE;
 }			
 
-NLM_EXTERN Boolean LIBCALL www_featkey(CharPtr key, Int4 gi, Int2 entityID, Int2 itemID)
+NLM_EXTERN Boolean LIBCALL www_featkey(CharPtr key, Int4 gi, Int2 entityID, Uint4 itemID)
 {
 	Int2	l, ll;
 	CharPtr	s;
@@ -1967,7 +1972,7 @@ NLM_EXTERN Boolean LIBCALL PrintSPBlock (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 NLM_EXTERN CharPtr LIBCALL www_featloc(CharPtr loc)
 {
 	Int2 i, n, k, l1, l2;
-	CharPtr buf, tmp, ptr, s, eptr;
+	CharPtr buf, ptr, s, eptr;
 	
 	if (loc == NULL) {
 		return NULL;
@@ -2028,18 +2033,16 @@ static void LitPrintGenome(SeqLitPtr slp)
 
 static void LocPrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqLocPtr slp_head)
 {
-	SeqLocPtr	slp, sslp;
+	SeqLocPtr	slp;
 	Boolean		first = TRUE;
 	static Char		buf[14], val[166], temp[166];
 	SeqIdPtr	sid, newid;
-	Int4 		from, to, start, stop, beg, end, lcur, lprev;
-	SeqIntPtr 	sint;
+	Int4 		from, to, start, stop;
 	BioseqPtr 	bsp = NULL, b = NULL;
 	SeqEntryPtr sep = NULL;
 	Int4		uid;
-	Boolean		is_network, is_link = FALSE;
+	Boolean		is_link = FALSE;
 	Int2 p1=0, p2=0;
-	DeltaSeqPtr dsp;
 	static Uint1 fasta_order[NUM_SEQID] = { 
  	33, /* 0 = not set */
 	20, /* 1 = local Object-id */
@@ -2272,12 +2275,9 @@ void PrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
 	SeqLocPtr	slp_head=NULL;
 	Boolean		first = TRUE;
-	Boolean		is_network;
 	DeltaSeqPtr dsp;
 	SeqLitPtr 	litp;
 	
-	Int2	l, ll;
-	CharPtr	s, prefix;
 	
 #ifdef ENABLE_ENTREZ
 	if ( !EntrezInit("asn2ff", FALSE, &is_network) ) {
@@ -2323,8 +2323,7 @@ void PrintGenome(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 
 NLM_EXTERN void LIBCALL www_accession (CharPtr string)
 {
-	Int2	l, ll;
-	CharPtr	s, prefix=NULL, p, link=NULL;
+	CharPtr	s, prefix=NULL, link=NULL;
 
 	if (string == NULL) {
 		return;

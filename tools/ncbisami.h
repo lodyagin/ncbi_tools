@@ -1,4 +1,4 @@
-/* $Id: ncbisami.h,v 6.4 2002/01/18 18:53:13 madden Exp $
+/* $Id: ncbisami.h,v 6.5 2006/05/10 20:47:13 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *         Internal include file for ISAM library
 *
 * $Log: ncbisami.h,v $
+* Revision 6.5  2006/05/10 20:47:13  camacho
+* From Ilya Dondoshansky: Added sorting_done field to ISAMData to indicate that data is already sorted
+*
 * Revision 6.4  2002/01/18 18:53:13  madden
 * Changes to research the last page if appropriate
 *
@@ -163,6 +166,7 @@ typedef struct ISAMData
     NISAMKeyDataPtr lastKeyDataPage;	/* last page searched. */
     Int4 first_gi, last_gi;		/* first and last gi's of last page. */
     Int4 first, last;		/* first and last offset's of last page. */
+    Boolean sorting_done; /* Is data already sorted? */
 } ISAMData, PNTR ISAMDataPtr;
 
 typedef struct ISAMTmpCA

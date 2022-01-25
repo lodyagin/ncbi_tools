@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.150 $
+* $Revision: 6.159 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,36 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.159  2006/09/20 17:54:19  kans
+* SeqPortStreamWork checks stack depth overflow indicating recursive sequence definition
+*
+* Revision 6.158  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
+* Revision 6.157  2006/06/29 19:05:02  bollin
+* better check for when conversion to delta sequence is actually necessary
+*
+* Revision 6.156  2006/06/26 16:51:55  kans
+* report proper error for MapNa4ByteToIUPACplusGapString failure
+*
+* Revision 6.155  2006/06/16 17:46:59  kans
+* reality checks in seqportcache
+*
+* Revision 6.154  2006/06/09 21:26:17  kans
+* in protExpandList, X expands to all unambiguous amino acid letters
+*
+* Revision 6.153  2006/06/09 13:36:33  bollin
+* modified ConvertNsToGaps to correctly handle sequences that begin with Ns that
+* are not converted to a gap.
+*
+* Revision 6.152  2006/06/07 21:52:24  kans
+* trans table allows mapping of J (Xle) ambiguity, flatfile generator converts J to X in translation until quarantine ended
+*
+* Revision 6.151  2006/05/19 18:40:07  kans
+* added protein equivalent of nucleotide SeqSearch finite state machine
+*
 * Revision 6.150  2006/03/22 15:31:32  kans
 * SeqPortStreamSeqLoc gives unique message when bailing on gi 0 as opposed to failure after trying to load
 *
@@ -809,7 +839,7 @@ static void InitNa4toIUPACplusGap (void)
 
   ret = NlmMutexLockEx (&seqport_mutex);  /* protect this section */
   if (ret) {
-    ErrPostEx (SEV_FATAL, 0, 0, "MapNa4ByteToIUPACString mutex failed [%ld]", (long) ret);
+    ErrPostEx (SEV_FATAL, 0, 0, "MapNa4ByteToIUPACplusGapString mutex failed [%ld]", (long) ret);
     return;
   }
 
@@ -2586,6 +2616,7 @@ typedef struct streamdata {
   Uint1              letterToComp [256];
   CharPtr            tmp;
   Boolean            failed;
+  Int2               depth;
 } StreamData, PNTR StreamDataPtr;
 
 /* prototype for main internal recursive processing function */
@@ -3434,6 +3465,16 @@ static Int4 SeqPortStreamWork (
 
   if (start > stop) return 0;
 
+  /* stack depth overflow check for recursively-defined sequence instances */
+
+  (sdp->depth)++;
+
+  if (sdp->depth > 20) {
+    ErrPostEx (SEV_ERROR, 0, 0, "SeqPortStreamWork stack depth overflow");
+    sdp->failed = TRUE;
+    return 0;
+  }
+
   /* call appropriate stream function */
 
   switch (bsp->repr) {
@@ -3462,6 +3503,10 @@ static Int4 SeqPortStreamWork (
     default :
       break;
   }
+
+  /* restore stack depth value */
+
+  (sdp->depth)--;
 
   return count;
 }
@@ -3516,6 +3561,7 @@ static Int4 SeqPortStreamSetup (
   sd.proc = proc;
   sd.tmp = NULL;
   sd.failed = FALSE;
+  sd.depth = 0;
 
   /* if NULL callback, copy into allocated userdata string */
 
@@ -3664,7 +3710,7 @@ NLM_EXTERN Uint1 StreamCacheGetResidue (
     scp->ctr = 0;
     scp->total = 0;
 
-    if (scp->offset >= scp->length) return residue;
+    if (scp->offset < 0 || scp->offset >= scp->length) return residue;
 
     stop = MIN (scp->offset + 4000L, scp->length);
 
@@ -3726,6 +3772,11 @@ NLM_EXTERN Boolean StreamCacheSetPosition (
   scp->ctr = 0;
   scp->total = 0;
   scp->offset = pos;
+
+  if (scp->offset < 0 || scp->offset >= scp->length) {
+    scp->offset = 0;
+    return FALSE;
+  }
 
   return TRUE;
 }
@@ -4307,9 +4358,9 @@ NLM_EXTERN Boolean CodonForIndex (Uint1 index, Uint1 code, Uint1Ptr codon)
 *   	0 if not
 *
 *****************************************************************************/
-NLM_EXTERN Int2 GetFrameFromLoc (SeqLocPtr slp)
+NLM_EXTERN Uint1 GetFrameFromLoc (SeqLocPtr slp)
 {
-	Int2 frame = 0;
+	Uint1 frame = 0;
 	SeqLocPtr curr, last;
 	Boolean is_partial;
 	SeqIntPtr sip;
@@ -4374,7 +4425,7 @@ NLM_EXTERN Int2 GetFrameFromLoc (SeqLocPtr slp)
 
 					  /* have complete last codon, get frame 
 from length */
-	frame = (Int2)(SeqLocLen(slp) % 3);
+	frame = (Uint1)(SeqLocLen(slp) % 3);
 	if (frame == 0)
 		frame = 1;
 	else if (frame == 1)
@@ -5845,7 +5896,8 @@ NLM_EXTERN Int2 ComposeCodonsRecognizedString (tRNAPtr trna, CharPtr buf, size_t
   Uint1         codon [4];
   Int2          count = 0;
   ValNodePtr    head, next, vnp;
-  Int2          i, j, k;
+  Int2          k;
+  Uint1         i, j;
   CharPtr       intToChr = "?ACMGRSVUWYHKDBN";
   CharPtr       prefix, ptr, str1, str2;
   Pointer PNTR  prev;
@@ -5873,8 +5925,8 @@ NLM_EXTERN Int2 ComposeCodonsRecognizedString (tRNAPtr trna, CharPtr buf, size_t
 
   if (head == NULL) return 0;
 
-  for (i = 0; i < 256; i++) {
-    chrToInt [i] = 0;
+  for (k = 0; k < 256; k++) {
+    chrToInt [k] = 0;
   }
   for (i = 1; i < 16; i++) {
     ch = intToChr [i];
@@ -6001,6 +6053,7 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
   Boolean  goOn;
   Int2     i, j, k, st, nx, cd;
   Int2     p, q, r, x, y, z;
+  Uint1    ui;
   Int2     codonidx [4] = {2, 1, 3, 0};  /* in genetic code table, T = 0, C = 1, A = 2, G = 3, */
   Int2     complidx [4] = {0, 3, 1, 2};  /* and index = (base1 * 16) + (base2 * 4) + base3 */
   CharPtr  ncbieaa = NULL, sncbieaa = NULL;
@@ -6033,11 +6086,11 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
   }
 
   /* map iupacna alphabet to BaseCode */
-  for (i = BASE_A; i <= BASE_N; i++) {
-    ch = charToBase [i];
-    tbl->basesToIdx [(int) ch] = i;
+  for (ui = BASE_A; ui <= BASE_N; ui++) {
+    ch = charToBase [ui];
+    tbl->basesToIdx [(int) ch] = ui;
     ch = TO_LOWER (ch);
-    tbl->basesToIdx [(int) ch] = i;
+    tbl->basesToIdx [(int) ch] = ui;
   }
   tbl->basesToIdx [(int) 'U'] = BASE_T;
   tbl->basesToIdx [(int) 'u'] = BASE_T;
@@ -6096,11 +6149,13 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
               if (tpaa == '\0') {
                 tpaa = ch;
               } else if (tpaa != ch) {
-                /* allow Asx (Asp or Asn) and Glx (Glu or Gln) */
+                /* allow Asx (Asp or Asn) and Glx (Glu or Gln) and Xle (Leu or Ile) */
                 if ((tpaa == 'B' || tpaa == 'D' || tpaa == 'N') && (ch == 'D' || ch == 'N')) {
                   tpaa = 'B';
                 } else if ((tpaa == 'Z' || tpaa == 'E' || tpaa == 'Q') && (ch == 'E' || ch == 'Q')) {
                   tpaa = 'Z';
+                } else if ((tpaa == 'J' || tpaa == 'I' || tpaa == 'L') && (ch == 'I' || ch == 'L')) {
+                  tpaa = 'J';
                 } else {
                   tpaa = 'X';
                 }
@@ -6119,11 +6174,13 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
               if (btaa == '\0') {
                 btaa = ch;
               } else if (btaa != ch) {
-                /* allow Asx (Asp or Asn) and Glx (Glu or Gln) */
+                /* allow Asx (Asp or Asn) and Glx (Glu or Gln) and Xle (Leu or Ile) */
                 if ((btaa == 'B' || btaa == 'D' || btaa == 'N') && (ch == 'D' || ch == 'N')) {
                   btaa = 'B';
                 } else if ((btaa == 'Z' || btaa == 'E' || btaa == 'Q') && (ch == 'E' || ch == 'Q')) {
                   btaa = 'Z';
+                } else if ((btaa == 'J' || btaa == 'I' || btaa == 'L') && (ch == 'I' || ch == 'L')) {
+                  btaa = 'J';
                 } else {
                   btaa = 'X';
                 }
@@ -6308,7 +6365,7 @@ static void LIBCALLBACK SaveCdsBases (
 {
   Char        ch;
   CharPtr     from, to;
-  int         len;
+  unsigned int len;
   Int4        max;
   ReadCdsPtr  rcp;
 
@@ -7315,6 +7372,7 @@ NLM_EXTERN SeqSearchPtr SeqSearchNew (
   Char          ch, lttr;
   CharPtr       complementBase = " TVGH  CD  M KN   YSAABW R ";
   Int2          i;
+  Uint1         k;
   SeqSearchPtr  tbl;
 
   if (matchproc == NULL) return NULL;
@@ -7337,11 +7395,11 @@ NLM_EXTERN SeqSearchPtr SeqSearchNew (
   for (i = 0; i < 256; i++) {
     tbl->letterToIdx [i] = 14;
   }
-  for (i = 0; i < 15; i++) {
-    ch = charToNuc [i];
-    tbl->letterToIdx [(int) ch] = i;
+  for (k = 0; k < 15; k++) {
+    ch = charToNuc [k];
+    tbl->letterToIdx [(int) ch] = k;
     ch = TO_LOWER (ch);
-    tbl->letterToIdx [(int) ch] = i;
+    tbl->letterToIdx [(int) ch] = k;
   }
   tbl->letterToIdx [(int) 'U'] = tbl->letterToIdx [(int) 'T'];
   tbl->letterToIdx [(int) 'u'] = tbl->letterToIdx [(int) 'T'];
@@ -7438,13 +7496,13 @@ static void ExpandSeqPattern (
   Uint1 strand,
   size_t patLen,
   CharPtr str,
-  Int2 position,
+  Uint2 position,
   SearchFlgType flags
 )
 
 {
   Char     ch, lttr;
-  Int2     idx;
+  Uint2     idx;
   CharPtr  ptr;
 
   if (position < patLen) {
@@ -7796,6 +7854,785 @@ extern void TestSeqSearch (void)
 
 /*****************************************************************************
 *
+*   ProtSearch
+*       Initializes ProtSearch finite state machine for sequence searching
+*       Based on Practical Algorithms for Programmers by Binstock and Rex
+*
+*****************************************************************************/
+
+/* general purpose protein sequence search finite state machine */
+
+typedef struct protpattern {
+  CharPtr           name;
+  CharPtr           pattern;
+  struct protpattern * next;
+} ProtPatternItem, PNTR ProtPatternPtr;
+
+typedef struct protmatch {
+  CharPtr          name;
+  CharPtr          pattern;
+  struct protmatch * next;
+} ProtMatchItem, PNTR ProtMatchPtr;
+
+typedef struct protstate {
+  Int2          onfailure;
+  Int2          transitions [27]; /* order is ABCDEFGHIJKLMNOPQRSTUVWXYZ */
+  ProtMatchPtr  matches;
+} ProtStateItem, PNTR ProtStatePtr;
+
+typedef struct ProtSearch {
+  ProtStatePtr         stateArray;
+  ProtPatternPtr       patternList;
+  Int4                 maxPatLen;
+  Int2                 maxState;
+  Int2                 highState;
+  Int2                 currentState;
+  Int4                 currentPos;
+  Boolean              primed;
+  ProtSearchMatchProc  matchproc;
+  Pointer              userdata;
+  Uint1                letterToIdx [256];
+} ProtSearchData;
+
+#define FAIL_STATE -1
+
+/* returns next state given current state and next character */
+
+static Int2 ProtSearchGotoState (
+  ProtSearchPtr tbl,
+  Int2 state,
+  Char ch,
+  Boolean zeroFailureReturnsZero
+)
+
+{
+  int           index;
+  Int2          newstate;
+  ProtStatePtr  sp;
+
+  sp = &(tbl->stateArray [(int) state]);
+  index = tbl->letterToIdx [(int) (Uint1) ch];
+  newstate = sp->transitions [index];
+
+  if (newstate != 0) return newstate;
+
+  if (state == 0 && zeroFailureReturnsZero) return 0;
+
+  return FAIL_STATE;
+}
+
+/* returns state to check next if current pattern broken */
+
+static Int2 ProtSearchFailState (
+  ProtSearchPtr tbl,
+  Int2 state
+)
+
+{
+  ProtStatePtr  sp;
+
+  sp = &(tbl->stateArray [(int) state]);
+  return sp->onfailure;
+}
+
+/* add a single character transition from one state to another */
+
+static void ProtSearchAddTransition (
+  ProtSearchPtr tbl,
+  Int2 oldState,
+  Char ch,
+  Int2 newState
+)
+
+{
+  int           index;
+  ProtStatePtr  sp;
+
+  sp = &(tbl->stateArray [(int) oldState]);
+  index = tbl->letterToIdx [(int) (Uint1) ch];
+  sp->transitions [index] = newState;
+}
+
+/* given state should report a successful match */
+
+static void ProtSearchAddOutput (
+  ProtSearchPtr tbl,
+  Int2 state,
+  CharPtr name,
+  CharPtr pattern
+)
+
+{
+  ProtMatchPtr  mp;
+  ProtStatePtr  sp;
+
+  sp = &(tbl->stateArray [(int) state]);
+  for (mp = sp->matches; mp != NULL; mp = mp->next) {
+    if (StringCmp (name, mp->name) == 0) return;
+  }
+
+  mp = (ProtMatchPtr) MemNew (sizeof (ProtMatchItem));
+  if (mp == NULL) return;
+
+  mp->name = StringSave (name);
+  mp->pattern = StringSave (pattern);
+
+  mp->next = sp->matches;
+  sp->matches = mp;
+}
+
+/* add one protein sequence pattern to the finite state machine */
+
+static Int2 ProtSearchEnterProtWord (
+  ProtSearchPtr tbl,
+  Int2 highState,
+  Int2 maxState,
+  CharPtr name,
+  CharPtr pattern
+)
+
+{
+  Char     ch;
+  Int2     next, patLen, state;
+  CharPtr  ptr;
+
+  state = 0;
+  next = 0;
+
+  patLen = StringLen (pattern);
+
+  /* try to overlay beginning of pattern onto existing table */
+
+  for (ptr = pattern, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+    next = ProtSearchGotoState (tbl, state, ch, FALSE);
+    if (next == FAIL_STATE) break;
+    state = next;
+  }
+
+  /* now create new states for remaining characters in pattern */
+
+  for ( ; ch != '\0'; ptr++, ch = *ptr) {
+    highState++;
+    ProtSearchAddTransition (tbl, state, ch, highState);
+    state = highState;
+  }
+
+  /* at end of pattern record match information */
+
+  ProtSearchAddOutput (tbl, state, name, pattern);
+
+  return highState;
+}
+
+/* FIFO queue and other functions for building failure states */
+
+static void ProtSearchQueueAdd (
+  Int2Ptr queue,
+  Int2 qbeg,
+  Int2 val
+)
+
+{
+  Int2  q;
+
+  q = queue [qbeg];
+  if (q == 0) {
+    queue [qbeg] = val;
+  } else {
+    for ( ; queue [q] != 0; q = queue [q]) continue;
+    queue [q] = val;
+  }
+  queue [val] = 0;
+}
+
+static void ProtSearchFindFail (
+  ProtSearchPtr tbl,
+  Int2 state,
+  Int2 newState,
+  Char ch
+)
+
+{
+  ProtMatchPtr  mp;
+  Int2          next;
+  ProtStatePtr  sp;
+
+  /* traverse existing failure path */
+
+  while ((next = ProtSearchGotoState (tbl, state, ch, TRUE)) == FAIL_STATE) {
+    state = ProtSearchFailState (tbl, state);
+  }
+
+  /* add new failure state */
+
+  sp = &(tbl->stateArray [(int) newState]);
+  sp->onfailure = next;
+
+  /* add matches of substring at new state */
+
+  sp = &(tbl->stateArray [(int) next]);
+  for (mp = sp->matches; mp != NULL; mp = mp->next) {
+    ProtSearchAddOutput (tbl, newState, mp->name, mp->pattern);
+  }
+}
+
+static void ProtSearchComputeFail (
+  ProtSearchPtr tbl,
+  Int2Ptr queue
+)
+
+{
+  CharPtr       charToProt = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  Char          ch;
+  Int2          qbeg, r, s, state;
+  int           index;
+  ProtStatePtr  sp;
+
+  qbeg = 0;
+  queue [0] = 0;
+
+  /* queue up states reached directly from state 0 (depth 1) */
+
+  sp = &(tbl->stateArray [0]);
+  for (index = 0; index < 26; index++) {
+    s = sp->transitions [index];
+    if (s == 0) continue;
+    sp->onfailure = 0;
+    ProtSearchQueueAdd (queue, qbeg, s);
+  }
+
+  while (queue [qbeg] != 0) {
+    r = queue [qbeg];
+    qbeg = r;
+
+    /* depth 1 states beget depth 2 states, etc. */
+
+    sp = &(tbl->stateArray [r]);
+    for (index = 0; index < 26; index++) {
+      ch = charToProt [index];
+      s = sp->transitions [index];
+      if (s == 0) continue;
+      ProtSearchQueueAdd (queue, qbeg, s);
+
+      state = ProtSearchFailState (tbl, r);
+      ProtSearchFindFail (tbl, state, s, ch);
+    }
+  }
+}
+
+/* on first character, populate state transition table */
+
+static void ProtSearchPrimeStateArray (
+  ProtSearchPtr tbl
+)
+
+{
+  Int2            highState, maxState;
+  ProtPatternPtr  pp;
+  Int2Ptr         queue;
+  ProtStatePtr    stateArray;
+
+  if (tbl == NULL || tbl->primed || tbl->patternList == NULL) return;
+
+  for (maxState = 1, pp = tbl->patternList; pp != NULL; pp = pp->next) {
+    maxState += StringLen (pp->pattern);
+  }
+
+  if (maxState > 4000) {
+    Message (MSG_POST, "FiniteStateSearch cannot handle %d states", (int) maxState);
+    return;
+  }
+
+  stateArray = (ProtStatePtr) MemNew (sizeof (ProtStateItem) * (size_t) maxState);
+  queue = (Int2Ptr) MemNew (sizeof (Int2) * maxState);
+
+  if (stateArray == NULL || queue == NULL) {
+    MemFree (stateArray);
+    MemFree (queue);
+    Message (MSG_POST, "SequenceSearch unable to allocate buffers");
+    return;
+  }
+
+  tbl->stateArray = stateArray;
+  tbl->maxState = maxState;
+
+  for (highState = 0, pp = tbl->patternList; pp != NULL; pp = pp->next) {
+    highState = ProtSearchEnterProtWord (tbl, highState, maxState, pp->name,
+                                         pp->pattern);
+  }
+
+  ProtSearchComputeFail (tbl, queue);
+
+  MemFree (queue);
+
+  tbl->highState = highState;
+  tbl->currentState = 0;
+  tbl->currentPos = 0;
+  tbl->primed = TRUE;
+}
+
+/* for testing, print summary of transition table */
+
+/*
+static void PrintProtSearchTable (
+  ProtSearchPtr tbl,
+  FILE *fp
+)
+
+{
+  Int2         i;
+  ProtMatchPtr  mp;
+  ProtStatePtr  sp;
+  Int2         state;
+
+  if (tbl == NULL || fp == NULL) return;
+  if (! tbl->primed) {
+    ProtSearchPrimeStateArray (tbl);
+  }
+  if (tbl->stateArray == NULL) return;
+  if (tbl->highState > 99) return;
+
+  fprintf (fp, "State Fail A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S  T  U  V  W  X  Y  Z\n");
+
+  for (state = 0; state <= tbl->highState; state++) {
+    sp = &(tbl->stateArray [(int) state]);
+    fprintf (fp, " %3d  %3d", (int) state, (int) sp->onfailure);
+
+    for (i = 0; i < 26; i++) {
+      if (sp->transitions [i] != 0) {
+        fprintf (fp, "%3d", (int) sp->transitions [i]);
+      } else {
+        fprintf (fp, "   ");
+      }
+    }
+
+    for (mp = sp->matches; mp != NULL; mp = mp->next) {
+      fprintf (fp, " %s", mp->name);
+    }
+
+    fprintf (fp, "\n");
+  }
+}
+*/
+
+/* create empty protein sequence search finite state machine */
+
+NLM_EXTERN ProtSearchPtr ProtSearchNew (
+  ProtSearchMatchProc matchproc,
+  Pointer userdata
+)
+
+{
+  CharPtr        charToProt = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  Char           ch;
+  Int2           i;
+  ProtSearchPtr  tbl;
+
+  if (matchproc == NULL) return NULL;
+  tbl = (ProtSearchPtr) MemNew (sizeof (ProtSearchData));
+  if (tbl == NULL) return NULL;
+
+  tbl->stateArray = NULL;
+  tbl->patternList = NULL;
+  tbl->maxPatLen = 0;
+  tbl->maxState = 0;
+  tbl->highState = 0;
+  tbl->currentState = 0;
+  tbl->currentPos = 0;
+  tbl->matchproc = matchproc;
+  tbl->userdata = userdata;
+  tbl->primed = FALSE;
+
+  /* initialize table to convert character to transition index from 0 (A) to 25 (Z) */
+
+  for (i = 0; i < 256; i++) {
+    tbl->letterToIdx [i] = 23;
+  }
+  for (i = 0; i < 26; i++) {
+    ch = charToProt [i];
+    tbl->letterToIdx [(int) ch] = i;
+    ch = TO_LOWER (ch);
+    tbl->letterToIdx [(int) ch] = i;
+  }
+
+  return tbl;
+}
+
+/* table to expand ambiguity letter to all matching nucleotide letters */
+
+static CharPtr  protExpandList [26] = {
+  "A",
+  "DN",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "I",
+  "IL",
+  "K",
+  "L",
+  "M",
+  "N",
+  "O",
+  "P",
+  "Q",
+  "R",
+  "S",
+  "T",
+  "U",
+  "V",
+  "W",
+  "ACDEFGHIKLMNOPQRSTUVWY",
+  "Y",
+  "EQ"
+};
+
+/* recursive function to expand and store appropriate individual patterns */
+
+static void StoreProtPattern (
+  ProtSearchPtr tbl,
+  CharPtr name,
+  CharPtr str
+)
+
+{
+  Int4            patLen;
+  ProtPatternPtr  pp;
+
+  pp = (ProtPatternPtr) MemNew (sizeof (ProtPatternItem));
+  if (pp == NULL) return;
+
+  pp->name = StringSave (name);
+  pp->pattern = StringSave (str);
+
+  pp->next = tbl->patternList;
+  tbl->patternList = pp;
+  patLen = StringLen (str);
+  if (patLen > tbl->maxPatLen) {
+    tbl->maxPatLen = patLen;
+  }
+}
+
+static void ExpandProtPattern (
+  ProtSearchPtr tbl,
+  CharPtr name,
+  CharPtr pattern,
+  size_t patLen,
+  CharPtr str,
+  Int2 position,
+  SearchFlgType flags
+)
+
+{
+  Char     ch, lttr;
+  Int2     idx;
+  CharPtr  ptr;
+
+  if (position < patLen) {
+
+    if ((Boolean) ((flags & SEQ_SEARCH_EXPAND_PATTERN) != 0)) {
+
+      /* given ambiguity letter, get index into protExpandList */
+
+      ch = pattern [position];
+      idx = ch - 'A';
+      ptr = protExpandList [idx];
+
+      /* put every unambiguous amino acid letter at current
+         position, recurse for next position */
+
+      for (lttr = *ptr; lttr != '\0'; ptr++, lttr = *ptr) {
+        str [position] = lttr;
+        ExpandProtPattern (tbl, name, pattern, patLen, str, position + 1, flags);
+      }
+
+    } else {
+
+      /* if matching ambiguity characters in sequence, do not expand each base */
+
+      str [position] = pattern [position];
+      ExpandProtPattern (tbl, name, pattern, patLen, str, position + 1, flags);
+    }
+
+    /* do not run into pattern storage section of code located below */
+
+    return;
+  }
+
+  /* when position reaches pattern length, store one fully expanded string */
+
+  StoreProtPattern (tbl, name, str);
+
+  if ((Boolean) ((flags & SEQ_SEARCH_ALLOW_MISMATCH) == 0)) return;
+
+  for (idx = 0; idx < patLen; idx++) {
+    ch = str [idx];
+
+    /* put X at every position if a single mismatch is allowed */
+
+    str [idx] = 'X';
+
+    StoreProtPattern (tbl, name, str);
+
+    /* now restore proper character, go on to put X in next position */
+
+    str [idx] = ch;
+  }
+}
+
+/* add protein to sequence search finite state machine */
+
+NLM_EXTERN void ProtSearchAddProteinPattern (
+  ProtSearchPtr tbl,
+  CharPtr name,
+  CharPtr pattern,
+  SearchFlgType flags
+)
+
+{
+  Char     ch, pat [128], str [128];
+  Int2     i;
+  size_t   len;
+
+  if (tbl == NULL || StringHasNoText (name) || StringHasNoText (pattern)) return;
+
+  StringNCpy_0 (pat, pattern, sizeof (pat));
+  TrimSpacesAroundString (pat);
+
+  len = StringLen (pat);
+
+  /* upper case working copy of pattern string */
+
+  for (i = 0; i < len; i++) {
+    ch = pat [i];
+    pat [i] = TO_UPPER (ch);
+  }
+
+  /* record expansion of entered pattern */
+
+  MemSet ((Pointer) str, 0, sizeof (str));
+  ExpandProtPattern (tbl, name, pat, len, str, 0, flags);
+}
+
+/* program passes each character in turn to finite state machine */
+
+static void ProtSearchProcessCharacterEx (
+  ProtSearchPtr tbl,
+  Char ch,
+  Int4 length
+)
+
+{
+  Int2          curr, next;
+  ProtMatchPtr  mp;
+  Int4          patLen;
+  ProtStatePtr  sp;
+
+  if (tbl == NULL) return;
+  if (! tbl->primed) {
+    ProtSearchPrimeStateArray (tbl);
+  }
+  if (tbl->stateArray == NULL) return;
+
+  curr = tbl->currentState;
+
+  /* loop through failure states until match or back to state 0 */
+
+  while ((next = ProtSearchGotoState (tbl, curr, ch, TRUE)) == FAIL_STATE) {
+    curr = ProtSearchFailState (tbl, curr);
+  }
+
+  tbl->currentState = next;
+  (tbl->currentPos)++;
+
+  /* report any matches at current state to callback function */
+
+  sp = &(tbl->stateArray [(int) next]);
+  for (mp = sp->matches; mp != NULL; mp = mp->next) {
+
+    /* for circular sequences, prevent multiple reports of patterns */
+
+    patLen = StringLen (mp->pattern);
+    if (tbl->currentPos - patLen < length) {
+      tbl->matchproc (tbl->currentPos - patLen,
+                      mp->name, mp->pattern, tbl->userdata);
+    }
+  }
+}
+
+NLM_EXTERN void ProtSearchProcessCharacter (
+  ProtSearchPtr tbl,
+  Char ch
+)
+
+{
+  ProtSearchProcessCharacterEx (tbl, ch, INT4_MAX);
+}
+
+/* convenience function calls ProtSearchProcessCharacter for entire protein bioseq */
+
+typedef struct protsrchdata {
+  ProtSearchPtr  tbl;
+  Int4          length;
+} ProtSrchData, PNTR ProtSrchPtr;
+
+static void LIBCALLBACK SearchProtProc (
+  CharPtr sequence,
+  Pointer userdata
+)
+
+{
+  Char        ch;
+  CharPtr     ptr;
+  ProtSrchPtr  ssp;
+
+  ssp = (ProtSrchPtr) userdata;
+
+  ptr = sequence;
+  ch = *ptr;
+  while (ch != '\0') {
+    ch = TO_UPPER (ch);
+    ProtSearchProcessCharacterEx (ssp->tbl, ch, ssp->length);
+    ptr++;
+    ch = *ptr;
+  }
+}
+
+NLM_EXTERN void ProtSearchProcessBioseq (
+  ProtSearchPtr tbl,
+  BioseqPtr bsp
+)
+
+{
+  ProtSrchData  ssd;
+
+  ProtSearchReset (tbl);
+
+  if (tbl == NULL || bsp == NULL) return;
+
+  if (! ISA_aa (bsp->mol)) return;
+
+  ssd.tbl = tbl;
+  ssd.length = bsp->length;
+
+  SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) &ssd, SearchProtProc);
+
+  ProtSearchReset (tbl);
+}
+
+/* reset state and position to allow another run with same search patterns */
+
+NLM_EXTERN void ProtSearchReset (
+  ProtSearchPtr tbl
+)
+
+{
+  if (tbl == NULL) return;
+
+  tbl->currentState = 0;
+  tbl->currentPos = 0;
+}
+
+/* clean up sequence search finite state machine allocated memory */
+
+static ProtPatternPtr FreeProtPatternList (
+  ProtPatternPtr pp
+)
+
+{
+  ProtPatternPtr  next;
+
+  while (pp != NULL) {
+    next = pp->next;
+    pp->next = NULL;
+    MemFree (pp->name);
+    MemFree (pp->pattern);
+    MemFree (pp);
+    pp = next;
+  }
+
+  return NULL;
+}
+
+static ProtMatchPtr FreeProtMatchList (
+  ProtMatchPtr mp
+)
+
+{
+  ProtMatchPtr  next;
+
+  while (mp != NULL) {
+    next = mp->next;
+    mp->next = NULL;
+    MemFree (mp->name);
+    MemFree (mp->pattern);
+    MemFree (mp);
+    mp = next;
+  }
+
+  return NULL;
+}
+
+NLM_EXTERN ProtSearchPtr ProtSearchFree (
+  ProtSearchPtr tbl
+)
+
+{
+  Int2  maxState, state;
+
+  if (tbl == NULL) return NULL;
+
+  maxState = tbl->maxState;
+
+  for (state = 0; state < maxState; state++) {
+    FreeProtMatchList (tbl->stateArray [state].matches);
+  }
+
+  FreeProtPatternList (tbl->patternList);
+
+  MemFree (tbl->stateArray);
+  return MemFree (tbl);
+}
+
+/*
+
+static CharPtr testseq =
+ "MALWMRLLPLLALLALWGPDPAAAFVNQHLCGSHLVEALYLVCGERGFFYTPKTRREAEDLQVGQVELGGGPGAGSLQPLALEGSLQKRGIVEQCCTSICSLYQLENYCN";
+
+static void MatchProc (Int4 position, CharPtr name, CharPtr pattern, Pointer userdata)
+
+{
+  Message (MSG_POST, "Name '%s', Pattern '%s', Position %ld",
+           name, pattern, (long) position);
+}
+
+
+extern void TestProtSearch (void);
+extern void TestProtSearch (void)
+
+{
+  Char           ch;
+  CharPtr        ptr;
+  ProtSearchPtr  tbl;
+
+  tbl = ProtSearchNew (MatchProc, NULL);
+  if (tbl == NULL) return;
+
+  ProtSearchAddProteinPattern (tbl, "AmbiG", "GRATYC", 1, SEQ_SEARCH_EXPAND_PATTERN);
+
+  for (ptr = testseq, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+    ProtSearchProcessCharacter (tbl, ch);
+  }
+
+  ProtSearchFree (tbl);
+}
+
+*/
+
+/*****************************************************************************
+*
 *  Convenience functions for genome processing use BioseqLockById to get sequence
 *  record (perhaps with phrap quality score graphs) so fetching from some network
 *  or local server must be enabled, or sequences must already be in memory.
@@ -8005,6 +8842,130 @@ static void FixGapLength (BioseqPtr bsp, Int4 offset, Int4 diff)
   }
 }
 
+static Int4 AddSeqLitData (CharPtr str, ValNodePtr PNTR seq_ext)
+{
+  Int4      len;
+  SeqLitPtr slp;
+   
+  if (StringHasNoText (str)) {
+    return 0;
+  }
+  len = StringLen (str);  
+  slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+  if (slp != NULL) {
+    slp->length = len;
+    ValNodeAddPointer (seq_ext, (Int2) 2, (Pointer) slp);
+    slp->seq_data = BSNew (slp->length);
+    slp->seq_data_type = Seq_code_iupacna;
+    AddBasesToByteStore (slp->seq_data, str);
+  }
+  return len;
+}
+
+static Boolean IsGapUnknown (Int4 gap_len,
+                             Int4 unknown_gap_size, 
+                             Int4 known_gap_size, 
+                             Boolean unknown_greater_than_or_equal, 
+                             Boolean known_greater_than_or_equal)
+{
+  Boolean    make_unknown_size = FALSE;
+  
+  if (gap_len == 0)
+  {
+    make_unknown_size = FALSE;
+  }
+  else if (gap_len == unknown_gap_size)
+  {
+    make_unknown_size = TRUE;
+  }
+  else if (gap_len == known_gap_size)
+  {
+    make_unknown_size = FALSE;
+  }
+  else if (gap_len > unknown_gap_size && unknown_greater_than_or_equal)
+  {
+    if (!known_greater_than_or_equal)
+    {
+      make_unknown_size = TRUE;
+    }
+    else if (unknown_gap_size > known_gap_size)
+    {
+      make_unknown_size = TRUE;
+    }
+    else if (gap_len < known_gap_size)
+    {
+      make_unknown_size = TRUE;
+    }
+  }
+  return make_unknown_size;
+}
+
+
+static Int4 AddGap(Int4 gap_len, 
+                  Boolean    make_unknown_size,
+                   BioseqPtr bsp,
+                   Int4      len,
+                   ValNodePtr PNTR seq_ext)
+{
+  Int4       added_len = 0;
+  SeqLitPtr  slp;
+  IntFuzzPtr ifp;
+    
+  if (gap_len > 0) {
+    slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+    if (slp != NULL) {
+      slp->length = gap_len;
+      ValNodeAddPointer (seq_ext, (Int2) 2, (Pointer) slp);
+      if (make_unknown_size) {
+        ifp = IntFuzzNew ();
+        ifp->choice = 4;
+        slp->fuzz = ifp;
+        if (slp->length != 100) {
+          FixGapLength (bsp, len, 100 - slp->length);
+       	  slp->length = 100;
+        }
+      }
+      added_len += slp->length;
+    }
+  }
+  return added_len;
+}
+
+
+static Boolean NeedToConvert 
+(CharPtr  bases, 
+ Boolean  unknown_greater_than_or_equal,
+ Boolean     known_greater_than_or_equal,
+ Int4        unknown_gap_size,
+ Int4        known_gap_size)
+{
+  Int4        gap_len;
+  CharPtr     cp;
+
+  if (StringHasNoText(bases)) { 
+      return FALSE;
+  }
+  cp = bases;
+  while (*cp != '\0') {
+
+    gap_len = StringSpn (cp, "N");
+    if (gap_len > 0 ) {
+      if ((gap_len == unknown_gap_size
+            || (gap_len > unknown_gap_size && unknown_greater_than_or_equal)
+            || gap_len == known_gap_size
+            || (gap_len > known_gap_size && known_greater_than_or_equal))) {
+        return TRUE;
+      } else {
+        cp += gap_len;
+      }
+    } else {
+      gap_len = StringCSpn (cp, "N");
+      cp += gap_len;
+    }      
+  }
+  return FALSE;
+}
+
 /*****************************************************************************
 *
 *   ConvertNsToGaps
@@ -8022,14 +8983,12 @@ NLM_EXTERN void ConvertNsToGaps (
   Char        ch;
   Int4        len;
   ValNodePtr  seq_ext;
-  SeqLitPtr   slp;
   Boolean     use_unknown = FALSE;
   Boolean     unknown_greater_than_or_equal = FALSE;
   Boolean     known_greater_than_or_equal = FALSE;
   Int4Ptr     gap_sizes;
   Int4        unknown_gap_size = 0;
   Int4        known_gap_size = 0;
-  IntFuzzPtr  ifp;
   Int4        gap_len;
   Boolean     make_unknown_size;
 
@@ -8058,11 +9017,7 @@ NLM_EXTERN void ConvertNsToGaps (
   bases = GetSequenceByBsp (bsp);
   if (bases == NULL) return;
 
-  for (txt = bases, ch = *txt; ch != '\0'; txt++, ch = *txt) {
-    if (ch == 'N') break;
-  }
-  if (ch != 'N') {
-    MemFree (bases);
+  if (!NeedToConvert(bases, unknown_greater_than_or_equal, known_greater_than_or_equal, unknown_gap_size, known_gap_size)) {
     return;
   }
 
@@ -8070,108 +9025,45 @@ NLM_EXTERN void ConvertNsToGaps (
   len = 0;
 
   txt = bases;
+  str = txt;
   ch = *txt;
-
-  while (ch != '\0') {
-
-    str = txt;
-    gap_len = 0;
-    while (ch != 'N' && ch != '\0') {
-      txt++;
-      ch = *txt;
-      if (ch == 'N')
-      {
-        gap_len = StringSpn (txt, "N");
-        if (gap_len == unknown_gap_size
-          || (gap_len > unknown_gap_size && unknown_greater_than_or_equal)
-          || gap_len == known_gap_size
-          || (gap_len > known_gap_size && known_greater_than_or_equal))
-        {
-          /* leave ch pointing to N so that we will break out and
-           * create a gap */
-        }
-        else
-        {
-          /* this is an N that should be left in the sequence */
-          txt += gap_len;
-          ch = *txt;
-          gap_len = 0;
-        }
-      }
-    }
-    
-    *txt = '\0';
-    if (StringLen (str) > 0) {
-      slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
-      if (slp != NULL) {
-        slp->length = StringLen (str);
-        ValNodeAddPointer (&(seq_ext), (Int2) 2, (Pointer) slp);
-        slp->seq_data = BSNew (slp->length);
-        slp->seq_data_type = Seq_code_iupacna;
-        AddBasesToByteStore (slp->seq_data, str);
-        len += slp->length;
-      }
-    }
-    *txt = ch;
-
-    str = txt;
-    while (ch == 'N') {
-      txt++;
-      ch = *txt;
-    }
-    *txt = '\0';
-    gap_len = StringLen (str);
-    make_unknown_size = FALSE;
-    if (gap_len == 0)
-    {
-      make_unknown_size = FALSE;
-    }
-    else if (gap_len == unknown_gap_size)
-    {
-      make_unknown_size = TRUE;
-    }
-    else if (gap_len == known_gap_size)
-    {
-      make_unknown_size = FALSE;
-    }
-    else if (gap_len > unknown_gap_size && unknown_greater_than_or_equal)
-    {
-      if (!known_greater_than_or_equal)
-      {
-      	make_unknown_size = TRUE;
-      }
-      else if (unknown_gap_size > known_gap_size)
-      {
-      	make_unknown_size = TRUE;
-      }
-      else if (gap_len < known_gap_size)
-      {
-      	make_unknown_size = TRUE;
-      }
-    }
-    
-    if (gap_len > 0) {
-      slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
-      if (slp != NULL) {
-        slp->length = gap_len;
-        ValNodeAddPointer ((ValNodePtr PNTR) &(seq_ext), (Int2) 2, (Pointer) slp);
-        if (make_unknown_size)
-        {
-          ifp = IntFuzzNew ();
-          ifp->choice = 4;
-          slp->fuzz = ifp;
-          if (slp->length != 100)
-          {
-            FixGapLength (bsp, len, 100 - slp->length);
-          	slp->length = 100;
-          }
-        }
-        len += slp->length;
-      }
-    }
-    *txt = ch;
-  }
   
+  while (*str != '\0') {
+
+    gap_len = StringSpn (str, "N");
+    if (gap_len > 0 ) {
+      if ((gap_len == unknown_gap_size
+            || (gap_len > unknown_gap_size && unknown_greater_than_or_equal)
+            || gap_len == known_gap_size
+            || (gap_len > known_gap_size && known_greater_than_or_equal))) {
+        /* add any prior sequence data as literal */
+        ch = *str;
+        *str = '\0';
+        len += AddSeqLitData (txt, &(seq_ext));
+        *str = ch;        
+        /* add a gap */
+        make_unknown_size = IsGapUnknown (gap_len,
+                                          unknown_gap_size, 
+                                          known_gap_size, 
+                                          unknown_greater_than_or_equal, 
+                                          known_greater_than_or_equal);
+
+        len += AddGap(gap_len, 
+                      make_unknown_size,
+                      bsp,
+                      len,
+                      &(seq_ext));
+        txt = str + gap_len;
+      }
+      str += gap_len;
+    } else {
+      gap_len = StringCSpn (str, "N");
+      str += gap_len;
+    }      
+  }
+  /* at end, add last sequence data literal */
+  len += AddSeqLitData (txt, &(seq_ext));
+    
   MemFree (bases);
 
   bsp->seq_data = BSFree (bsp->seq_data);

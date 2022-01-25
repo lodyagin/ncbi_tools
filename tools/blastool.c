@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastool.c,v 6.290 2006/04/26 12:42:36 madden Exp $";
+static char const rcsid[] = "$Id: blastool.c,v 6.291 2006/09/21 13:42:37 madden Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,11 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.290 $
+* $Revision: 6.291 $
 * $Log: blastool.c,v $
+* Revision 6.291  2006/09/21 13:42:37  madden
+* BlastProcessGiLists returns a boolean to specify that an attempt was made to process a list of GIs.  If no matches were found this can be reported back to the user
+*
 * Revision 6.290  2006/04/26 12:42:36  madden
 * BlastSetUserErrorString and BlastDeleteUserErrorString moved from blastool.c to blfmtutl.c
 *
@@ -2778,7 +2781,7 @@ BlastCreateVirtualOIDList(BlastGiListPtr bglp, ReadDBFILEPtr rdfp_chain,
    BlastGiListPtr search->thr_info->blast_gi_list field. The definite source
    for the actual search resides in the virtual oidlist (if any).
 */
-void
+Boolean
 BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
                     BlastDoubleInt4Ptr gi_list, Int4 gi_list_size)
 {
@@ -2789,6 +2792,7 @@ BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
     /* determine if final oidlist should cover all rdfps or it should start
      * with the first rdfp that had a rdfp->oidlist or a rdfp->gilist */
     Boolean oidlist_forall_rdfp = FALSE; 
+    Boolean looking_for_gis = FALSE;
 
     /* if any of the following parameters is non-NULL, we need to create an 
      * oidlist that covers all rdfp(s) in search->rdfp. */
@@ -2799,7 +2803,10 @@ BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
     MergeDbGiListsWithOIDLists(search->rdfp, &search->error_return, &bglp);
 
     if (gi_list)
+    {
         bglp = CombineDoubleInt4Lists(gi_list, gi_list_size, NULL, 0);
+        looking_for_gis = TRUE;
+    }
 
     if (options->gifile) {
 
@@ -2817,17 +2824,19 @@ BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
             tmp_list = (BlastDoubleInt4Ptr) MemFree(tmp_list);
             ngis = 0;
         }
+        looking_for_gis = TRUE;
     }
 
     /* this is very inefficient, needs to be changed in ASN.1 spec? */
     if (options->gilist) {
         Int4 alloc_chunk = 1024, alloc = 1024; 
+        looking_for_gis = TRUE;
 
         tmp_list = (BlastDoubleInt4Ptr) MemNew(sizeof(BlastDoubleInt4)*alloc);
         if (!tmp_list) {
             ErrPostEx(SEV_WARNING, 0, 0, "BlastProcessGiLists: Out of memory");
             BlastGiListDestruct(bglp, TRUE);
-            return ;
+            return looking_for_gis;
         }
 
         for (vnp = options->gilist; vnp; vnp = vnp->next) {
@@ -2860,6 +2869,8 @@ BlastProcessGiLists(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
     search->thr_info->blast_gi_list = 
         BlastCreateVirtualOIDList(bglp, search->rdfp, oidlist_forall_rdfp,
                 options);
+
+   return looking_for_gis;
 }
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.51 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
@@ -108,6 +108,7 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   TexT            locusTag;         \
   ButtoN          editGeneBtn;      \
   TexT            protXrefName;     \
+  TexT            protXrefDesc;     \
   DialoG          location;         \
   DialoG          product;          \
   DialoG          featcits;         \
@@ -151,7 +152,10 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp);
 extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
 */
 
-extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint2 procid);
+extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint2 procid);
+extern OMUserDataPtr EntityAlreadyHasViewer (Uint2 entityID);
+extern Boolean MakeViewerIndependent (Uint2 entityID, OMUserDataPtr omudp);
+
 extern Int2 LIBCALLBACK StdVibrantEditorMsgFunc (OMMsgStructPtr ommsp);
 
 extern Boolean TestInference (FeatureFormPtr ffp, CharPtr badInfQual, size_t len, CharPtr badInfMssg);

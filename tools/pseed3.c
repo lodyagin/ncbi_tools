@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pseed3.c,v 6.47 2006/03/10 15:22:30 papadopo Exp $";
+static char const rcsid[] = "$Id: pseed3.c,v 6.50 2006/08/04 21:59:11 papadopo Exp $";
 
-/* $Id: pseed3.c,v 6.47 2006/03/10 15:22:30 papadopo Exp $ */
+/* $Id: pseed3.c,v 6.50 2006/08/04 21:59:11 papadopo Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,19 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.47 $
+$Revision: 6.50 $
 
 $Log: pseed3.c,v $
+Revision 6.50  2006/08/04 21:59:11  papadopo
+refine stripping of newlines from patterns read from file
+
+Revision 6.49  2006/08/03 17:52:32  papadopo
+when building edit scripts, account for the fact that the pattern length on the query may not equal the pattern length on the DB sequence (resolves RT 15182754)
+
+Revision 6.48  2006/05/11 14:43:59  madden
+Use readdb_get_totals to get proper totals for multi volume database.
+This only changes some of the database and statistics that are printed.
+
 Revision 6.47  2006/03/10 15:22:30  papadopo
 when reading multi-line PHI patterns, strip trailing newlines from each line
 
@@ -406,7 +416,8 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
                                   Boolean showDiagnostics,
                                   ValNodePtr PNTR info_vnp)
 {
-    Nlm_FloatHi  dbLength, adjustdbLength;  /*total number of characters in database*/
+    Int8  dbLength;  /*total number of characters in database*/
+    Nlm_FloatHi  adjustdbLength;  /*total number of characters in database*/
     qseq_ptr query_seq; /*query sequence in record format*/
     Char  *pattern; /*string description of a pettern*/
     Char *pname; /*name of pattern*/
@@ -457,8 +468,7 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
     hitArray = (Int4 *) MemNew(sizeof(Int4)*search->sbp->query_length*2);
     
     dbLength = 0;
-    num_seq = readdb_get_num_entries(search->rdfp);
-    dbLength = (Nlm_FloatHi) readdb_get_dblen(search->rdfp);
+    readdb_get_totals(search->rdfp, &dbLength, &num_seq);
     
     /*correct the effective size of the database to take out
       the number of positions at the end of each sequence where
@@ -467,7 +477,7 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
     
     while (pattern = get_a_pat(patfp, &pname, occurArray, hitArray, &numPatOccur, &effectiveOccurrences, program_flag, unfilter_query, query, search->sbp->query_length, is_dna, patternSearch, seedSearch, showDiagnostics, &(search->error_return), info_vnp)) {
         if (patternSearch->patternProbability > PAT_PROB_THRESH &&
-            (patternSearch->patternProbability * dbLength > EXPECT_MATCH_THRESH)) {
+            (patternSearch->patternProbability * (FloatHi) dbLength > EXPECT_MATCH_THRESH)) {
             sprintf(buffer, "Pattern %s is too likely to occur in the database to be informative\n", pname);
             ValNodeCopyStr(info_vnp, 0, buffer);
         } else {
@@ -476,7 +486,7 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
                 ValNodeCopyStr(info_vnp, 0, buffer);
             } else {
                 *seed_seq_loc = NULL;
-                adjustdbLength = dbLength - (num_seq * patternSearch->minPatternMatchLength);
+                adjustdbLength = (FloatHi) dbLength - (num_seq * patternSearch->minPatternMatchLength);
                 if (0.0 < searchSpEff)
                     adjustdbLength = searchSpEff;
 
@@ -1104,7 +1114,7 @@ ScorePtr putScoresInSeqAlign(Int4 rawScore, Nlm_FloatHi eValue, Nlm_FloatHi lamb
     score_only determines how much output to give per match
     seq1 is the query sequence
     qp is the split reprsentation of the query sequence
-    len is the length of the query sequence
+    q_pat_len is the length of the pattern match on the query sequence
     dbLength is the total length of the database
     gap_align is structure to keep track of a gapped alignment
     is_dna tells whether the sequences are DNA or proteins 
@@ -1113,7 +1123,7 @@ ScorePtr putScoresInSeqAlign(Int4 rawScore, Nlm_FloatHi eValue, Nlm_FloatHi lamb
     
 SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 	    Boolean score_only, Uint1 *seq1, qseq_ptr qp, 
-	    Int4 len, Nlm_FloatHi dbLength, GapAlignBlkPtr gap_align, 
+	    Int4 q_pat_len, Nlm_FloatHi dbLength, GapAlignBlkPtr gap_align, 
             Boolean is_dna, Int4 effectiveOccurrences,
             seedSearchItems *seedSearch, seedResultItems *seedResults, 
             patternSearchItems * patternSearch, Boolean reverse, 
@@ -1265,12 +1275,37 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
        oneHit->bi = llen - endPosQuery;
        oneHit->bj = lenPrefix - endPosDbSeq;
 
-	    align_of_pattern(sseq, &oneMatch->seq[oneHit->hit_pos-1], len,
+	    align_of_pattern(sseq, &oneMatch->seq[oneHit->hit_pos-1], q_pat_len,
 			     oneHit->hit_end-oneHit->hit_pos+2, alignScript, &alignScript, 
 			     gap_align, &patWildcardScore, &mul, patternSearch,
 			     seedSearch);
-       oneHit->ei = llen + len;
-       oneHit->ej = lenPrefix + len;
+
+           /* Set the end of the alignment to be the end
+              of the pattern match. Note that at this point
+              the only way to determine the length of the
+              pattern match on the DB sequence is to 
+              analyze the current edit script */
+            {
+               Int4 *tmp_script = alignScript - 1;
+               Int4 tmp_q_len = 0;
+               Int4 db_pat_len = 0;
+
+               while (tmp_q_len < q_pat_len) {
+                  if (*tmp_script < 0) {
+                     tmp_q_len += abs(*tmp_script);
+                  }
+                  else if (*tmp_script > 0) {
+                     db_pat_len += *tmp_script;
+                  }
+                  else {
+                     tmp_q_len++;
+                     db_pat_len++;
+                  }
+                  tmp_script--;
+                }
+                oneHit->ei = llen + q_pat_len;
+                oneHit->ej = lenPrefix + db_pat_len;
+            }
 
 	    SEMI_G_ALIGN((Uchar *) (rseq-1), (Uchar *) &oneMatch->seq[oneHit->hit_end], rlen, 
 			 lenDbSequence-oneHit->hit_end-1, 
@@ -1468,6 +1503,9 @@ static Int4 get_pat(FILE *fp, Char *stringForPattern, Char *pname)
           rp = strchr(line, '\n');
           if (rp)
             *rp = NULLB;
+          rp = strchr(line, '\r');
+          if (rp)
+            *rp = NULLB;
 
 	  /*skip over spaces*/
 	  for (rp = &line[2]; *rp == ' '; rp++);
@@ -1478,6 +1516,9 @@ static Int4 get_pat(FILE *fp, Char *stringForPattern, Char *pname)
 
               /* remove newlines */
               rp = strchr(line, '\n');
+              if (rp)
+                *rp = NULLB;
+              rp = strchr(line, '\r');
               if (rp)
                 *rp = NULLB;
 

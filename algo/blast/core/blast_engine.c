@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.218 2006/05/05 13:44:35 coulouri Exp $
+/* $Id: blast_engine.c,v 1.227 2006/10/12 19:51:57 coulouri Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,7 +55,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_engine.c,v 1.218 2006/05/05 13:44:35 coulouri Exp $";
+    "$Id: blast_engine.c,v 1.227 2006/10/12 19:51:57 coulouri Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_engine.h>
@@ -64,6 +64,7 @@ static char const rcsid[] =
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_setup.h>
 #include <algo/blast/core/blast_gapalign.h>
+#include <algo/blast/core/blast_sw.h>
 #include <algo/blast/core/blast_traceback.h>
 #include <algo/blast/core/phi_extend.h>
 #include <algo/blast/core/link_hsps.h>
@@ -71,10 +72,12 @@ static char const rcsid[] =
 #include <algo/blast/core/phi_gapalign.h>
 #include <algo/blast/core/phi_lookup.h>
 
+#include <algo/blast/core/mb_indexed_lookup.h>
+
 NCBI_XBLAST_EXPORT const int   kBlastMajorVersion = 2;
 NCBI_XBLAST_EXPORT const int   kBlastMinorVersion = 2;
-NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 14;
-NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "May-07-2006";
+NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 15;
+NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Oct-15-2006";
 
 /** Structure to be passed to s_BlastSearchEngineCore, containing pointers 
     to various preallocated structures and arrays. */
@@ -143,7 +146,7 @@ s_TranslateHSPsToDNAPCoord(EBlastProgramType program,
                 BSearchContextInfo(init_hsp->offsets.qs_offsets.q_off, 
                                    query_info);
             
-            frame_idx = context_idx % 3;
+            frame_idx = context_idx % CODON_LENGTH;
             init_frame_idx = context_idx - frame_idx;
             
             frame_pos = contexts[init_frame_idx].query_offset + frame_idx;
@@ -250,6 +253,7 @@ s_BlastSearchEngineOneContext(EBlastProgramType program_number,
       const Boolean kNucleotide = (program_number == eBlastTypeBlastn ||
                                 program_number == eBlastTypePhiBlastn);
       const int kHspNumMax = BlastHspNumMax(score_options->gapped_calculation, hit_params->options);
+      const int kScanSubjectOffsetArraySize = GetOffsetArraySize(lookup);
      
       if (diagnostics) {
          ungapped_stats = diagnostics->ungapped_stat;
@@ -283,13 +287,17 @@ s_BlastSearchEngineOneContext(EBlastProgramType program_number,
          
          BlastInitHitListReset(init_hitlist);
          
-         aux_struct->WordFinder(subject, query, lookup, matrix, word_params, 
-                                aux_struct->ewp, aux_struct->offset_pairs, 
-                                GetOffsetArraySize(lookup), 
-                                init_hitlist, ungapped_stats);
+         if (aux_struct->WordFinder) {
+            subject->chunk = chunk;
+            aux_struct->WordFinder(subject, query, query_info, lookup, matrix, 
+                                   word_params, aux_struct->ewp, 
+                                   aux_struct->offset_pairs, 
+                                   kScanSubjectOffsetArraySize,
+                                   init_hitlist, ungapped_stats);
             
-         if (init_hitlist->total == 0)
-            continue;
+            if (init_hitlist->total == 0)
+               continue;
+         }
 
          if (score_options->gapped_calculation) {
             Int4 prot_length = 0;
@@ -589,20 +597,24 @@ s_FillReturnCutoffsInfo(BlastRawCutoffs* return_cutoffs,
                         const BlastHitSavingParameters* hit_params)
 {
    /* since the cutoff score here will be used for display
-      putposes, strip out any internal scaling of the scores */
+      purposes, strip out any internal scaling of the scores 
+    
+      If this was a multi-query search, use the least stringent
+      cutoff and most generous dropoff value among all the 
+      possible sequences */
 
    Int4 scale_factor = (Int4)score_params->scale_factor;
 
    if (!return_cutoffs)
       return -1;
 
-   return_cutoffs->x_drop_ungapped = 
-      word_params->x_dropoff / scale_factor;
+   return_cutoffs->x_drop_ungapped = word_params->x_dropoff_max / scale_factor;
    return_cutoffs->x_drop_gap = ext_params->gap_x_dropoff / scale_factor;
    return_cutoffs->x_drop_gap_final = ext_params->gap_x_dropoff_final / 
                                                         scale_factor;
-   return_cutoffs->ungapped_cutoff = word_params->cutoff_score / scale_factor;
-   return_cutoffs->cutoff_score = hit_params->cutoff_score;
+   return_cutoffs->ungapped_cutoff = word_params->cutoff_score_min / 
+                                                        scale_factor;
+   return_cutoffs->cutoff_score = hit_params->cutoff_score_min / scale_factor;
 
    return 0;
 }
@@ -633,8 +645,11 @@ s_BlastSetUpAuxStructures(const BlastSeqSrc* seq_src,
    Boolean blastp = (lookup_wrap->lut_type == AA_LOOKUP_TABLE ||
                      lookup_wrap->lut_type == RPS_LOOKUP_TABLE);
    Boolean mb_lookup = (lookup_wrap->lut_type == MB_LOOKUP_TABLE);
+   Boolean indexed_mb_lookup = (lookup_wrap->lut_type == INDEXED_MB_LOOKUP_TABLE);
    Boolean phi_lookup = (lookup_wrap->lut_type == PHI_AA_LOOKUP ||
                          lookup_wrap->lut_type == PHI_NA_LOOKUP);
+   Boolean smith_waterman = 
+                 (ext_options->ePrelimGapExt == eSmithWatermanScoreOnly);
    Int4 offset_array_size = GetOffsetArraySize(lookup_wrap);
    Uint4 avg_subj_length;
 
@@ -649,8 +664,12 @@ s_BlastSetUpAuxStructures(const BlastSeqSrc* seq_src,
                                     avg_subj_length, &aux_struct->ewp)) != 0)
       return status;
 
-   if (mb_lookup) {
+   if (smith_waterman) {
+      aux_struct->WordFinder = NULL;
+   } else if (mb_lookup) {
       aux_struct->WordFinder = MB_WordFinder;
+   } else if (indexed_mb_lookup) {
+      aux_struct->WordFinder = MB_IndexedWordFinder;
    } else if (phi_lookup) {
       aux_struct->WordFinder = PHIBlastWordFinder;
    } else if (blastp) {
@@ -668,6 +687,8 @@ s_BlastSetUpAuxStructures(const BlastSeqSrc* seq_src,
    /* Pick which gapped alignment algorithm to use. */
    if (phi_lookup)
       aux_struct->GetGappedScore = PHIGetGappedScore;
+   else if (smith_waterman)
+      aux_struct->GetGappedScore = BLAST_SmithWatermanGetGappedScore;
    else 
       aux_struct->GetGappedScore = BLAST_GetGappedScore;
 
@@ -729,7 +750,8 @@ s_RPSPreliminarySearchEngine(EBlastProgramType program_number,
       use with RPS blast. */
 
    gap_align->positionBased = TRUE;
-   RPSPsiMatrixAttach(gap_align->sbp, lookup->rps_pssm);
+   RPSPsiMatrixAttach(gap_align->sbp, lookup->rps_pssm,
+                      lookup->alphabet_size);
 
    /* determine the total number of residues in the db.
       This figure must also include one trailing NULL for
@@ -1121,8 +1143,8 @@ Blast_RunFullSearch(EBlastProgramType program_number,
    BlastHSPStreamClose(hsp_stream);
 
    if (Blast_ProgramIsPhiBlast(program_number)) {
-       PHIPatternSpaceCalc(query_info, diagnostics);
        pattern_blk = ((SPHIPatternSearchBlk*) lookup_wrap->lut);
+       pattern_blk->num_patterns_db = diagnostics->ungapped_stat->lookup_hits;
    } 
 
    if ((status = 

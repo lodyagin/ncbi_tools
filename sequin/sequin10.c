@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.310 $
+* $Revision: 1.317 $
 *
 * File Description: 
 *
@@ -2581,6 +2581,7 @@ static Boolean IsPseudo (
 )
 {
   GeneRefPtr grp;
+  SeqMgrFeatContext context;
 
   if (sfp == NULL) return FALSE;
   if (sfp->pseudo) return TRUE;
@@ -2592,9 +2593,17 @@ static Boolean IsPseudo (
   { 
     grp = SeqMgrGetGeneXref (sfp);
   }
-  if (grp == NULL) return FALSE;
-  if (grp->pseudo) return TRUE;
-  return FALSE;
+  if (grp == NULL) 
+  {
+    if (sfp->data.choice != SEQFEAT_GENE) {
+      sfp = SeqMgrGetOverlappingGene(sfp->location, &context);
+      return IsPseudo(sfp);
+    } else {
+      return FALSE;
+    }
+  } else {
+    return grp->pseudo;
+  }
 }
 
 static Boolean LIBCALLBACK IsExon (
@@ -4891,7 +4900,7 @@ static CharPtr GetFeatureTypeWord (
   {
     return StringSave ("operon");
   }
-  else if (biomol == MOLECULE_TYPE_GENOMIC)
+  else if (biomol == MOLECULE_TYPE_GENOMIC || biomol == MOLECULE_TYPE_CRNA)
   {
     if (IsPseudo (sfp))
     {
@@ -7304,6 +7313,12 @@ static void ListClauses (
     }
 
     clause_len = StringLen (thisclause->feature_label_data.description) + 1;
+    
+    /* add one in case we need to add the semicolon to this clause (when
+     * the interval has changed because this clause has no interval and
+     * the next one does).
+     */
+    clause_len++;
 
     /* we need to place a comma between the description and the type word 
      * when the description ends with "precursor" or when the type word
@@ -7317,7 +7332,7 @@ static void ListClauses (
             && thisclause->feature_label_data.description [StringLen (thisclause->feature_label_data.description) - 1] != ')')
           || (clause_len > StringLen ("precursor")
               && StringCmp ( thisclause->feature_label_data.description
-                     + clause_len - StringLen ("precursor") - 1,
+                     + clause_len - StringLen ("precursor") - 2,
                      "precursor") == 0)))
     {
       print_comma_between_description_and_typeword = TRUE;
@@ -7400,25 +7415,28 @@ static void ListClauses (
  
     if (oneafter == NULL || oneafter_has_interval_change)
     {
-      if (print_semicolon
-        && (thisclause->interval == NULL
-          || StringHasNoText(thisclause->interval)
-          || thisclause->interval[StringLen (thisclause->interval)] != ';'))
-      {
-        new_interval = MemNew (StringLen (thisclause->interval) + 2);
-        if (new_interval == NULL) return;
-        StringCpy (new_interval, thisclause->interval);
-        if (allow_semicolons) 
-        {
-          StringCat (new_interval, ";");
+      if (print_semicolon) {
+        if (thisclause->interval == NULL
+          || StringHasNoText(thisclause->interval)) {
+          if (clause_string != NULL) {
+            StringCat (clause_string, ";");
+          }
+        } else if (thisclause->interval[StringLen (thisclause->interval)] != ';') {
+          new_interval = MemNew (StringLen (thisclause->interval) + 2);
+          if (new_interval == NULL) return;
+          StringCpy (new_interval, thisclause->interval);
+          if (allow_semicolons) 
+          {
+            StringCat (new_interval, ";");
+          }
+          else
+          {
+            StringCat (new_interval, ",");
+          }
+          MemFree (thisclause->interval);
+          thisclause->interval = new_interval;
         }
-        else
-        {
-          StringCat (new_interval, ",");
-        }
-        MemFree (thisclause->interval);
-        thisclause->interval = new_interval;
-      } 
+      }
       if (thisclause->interval != NULL
         && !StringHasNoText (thisclause->interval))
       {
@@ -10242,6 +10260,7 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
 {
   GrouP p, q, g, g2, r;
   Int4  i;
+  SeqEntryPtr sep;
 
   p = HiddenGroup (h, -1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -10306,7 +10325,8 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
 
   g2 = NormalGroup (p, -1, 0,
                     "Features to Suppress", programFont, NULL);
-  dlfp->suppressed_feature_list = FeatureSelectionDialog (g2, TRUE, NULL, NULL);
+  sep = GetTopSeqEntryForEntityID(dlfp->input_entityID);
+  dlfp->suppressed_feature_list = FeatureSelectionDialogEx (g2, TRUE, sep, NULL, NULL);
 /*  AlignObjects (ALIGN_CENTER, (HANDLE) g2, NULL); */
 
   AlignObjects (ALIGN_CENTER, (HANDLE) q,
@@ -11632,7 +11652,8 @@ static void FindTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
     if (GetValue (form_data->line_forms[column_index].action_choice) == 1
       && (match_choice == eMatchAccession 
           || match_choice == eMatchLocalID 
-          || match_choice == eMatchTMSMART))
+          || match_choice == eMatchTMSMART
+          || match_choice == eMatchGeneral))
     {
       if (match_choice == eMatchAccession || match_choice == eMatchTMSMART) {
         use_local_id = FALSE;
@@ -12028,6 +12049,7 @@ static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
   Int4              i;
   OrgModPtr         mod;
   SubSourcePtr      ssp;
+  Boolean           need_tab = FALSE;
   
   if (biop == NULL || userdata == NULL) return;
   eotp = (ExportOrgTablePtr) userdata;
@@ -12057,7 +12079,7 @@ static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
     /* get accession number and print to column */
     if (acc_sip == NULL)
     {
-      fprintf (eotp->fp, " \t");
+      fprintf (eotp->fp, " ");
     }
     else
     {
@@ -12065,16 +12087,20 @@ static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
       acc_sip->next = NULL;
       SeqIdWrite (acc_sip, acc_str, PRINTID_TEXTID_ACC_VER, sizeof (acc_str));
       acc_sip->next = sip;
-      fprintf (eotp->fp, "%s\t", acc_str);
+      fprintf (eotp->fp, "%s", acc_str);
     }
+    need_tab = TRUE;
   }
   
   if (eotp->list_local)
   {
+    if (need_tab) {
+      fprintf (eotp->fp, "\t");
+    }
     /* get local ID and print to column */
     if (local_sip == NULL)
     {
-      fprintf (eotp->fp, " \t");
+      fprintf (eotp->fp, " ");
     }
     else
     {
@@ -12082,16 +12108,20 @@ static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
       local_sip->next = NULL;
       SeqIdWrite (local_sip, acc_str, PRINTID_TEXTID_ACCESSION, sizeof (acc_str));
       local_sip->next = sip;
-      fprintf (eotp->fp, "%s\t", acc_str);
+      fprintf (eotp->fp, "%s", acc_str);
     }
+    need_tab = TRUE;
   }
   
   if (eotp->list_general)
   {
+    if (need_tab) {
+      fprintf (eotp->fp, "\t");
+    }
     /* get general ID and print to column */
     if (gen_sip == NULL)
     {
-      fprintf (eotp->fp, " \t");
+      fprintf (eotp->fp, " ");
     }
     else
     {
@@ -12099,12 +12129,16 @@ static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
       gen_sip->next = NULL;
       SeqIdWrite (gen_sip, acc_str, PRINTID_TEXTID_ACCESSION, sizeof (acc_str));
       gen_sip->next = sip;
-      fprintf (eotp->fp, "%s\t", acc_str);
+      fprintf (eotp->fp, "%s", acc_str);
     }
+    need_tab = TRUE;
   }
   
   if (eotp->list_tax_name)
   {
+    if (need_tab) {
+      fprintf (eotp->fp, "\t");
+    }
     /* get tax name and print to column */
     if (biop->org != NULL && ! StringHasNoText (biop->org->taxname))
     {
@@ -12114,6 +12148,7 @@ static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
     {
       fprintf (eotp->fp, " ");
     }
+    need_tab = TRUE;
   }
   
   /* print modifiers for each available column */
@@ -12143,29 +12178,33 @@ static void ExportOneOrganism (BioSourcePtr biop, Pointer userdata)
           ssp = ssp->next;
         }
       }
+      if (need_tab) {
+        fprintf (eotp->fp, "\t");
+      }
 	  if (IsNonTextModifier (DefLineModifiers[i].name))
 	  {
 	    if (mod == NULL && ssp == NULL)
 	    {
-	      fprintf (eotp->fp, "\tFALSE");
+	      fprintf (eotp->fp, "FALSE");
 		}
 		else
 		{
-		  fprintf (eotp->fp, "\tTRUE");
+		  fprintf (eotp->fp, "TRUE");
 		}
 	  }
       else if (mod != NULL && !StringHasNoText (mod->subname))
       {
-        fprintf (eotp->fp, "\t%s", mod->subname);
+        fprintf (eotp->fp, "%s", mod->subname);
       }
       else if (ssp != NULL && !StringHasNoText (ssp->name))
       {
-        fprintf (eotp->fp, "\t%s", ssp->name);
+        fprintf (eotp->fp, "%s", ssp->name);
       }
       else
       {
-        fprintf (eotp->fp, "\t ");
+        fprintf (eotp->fp, " ");
       }
+      need_tab = TRUE;
     }
   }
   fprintf (eotp->fp, "\n");

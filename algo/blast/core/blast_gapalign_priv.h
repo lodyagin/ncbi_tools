@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE___BLAST_GAPALIGN_PRI__H
 #define ALGO_BLAST_CORE___BLAST_GAPALIGN_PRI__H
 
-/*  $Id: blast_gapalign_priv.h,v 1.12 2005/11/30 18:25:03 papadopo Exp $
+/*  $Id: blast_gapalign_priv.h,v 1.17 2006/08/22 19:26:20 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,23 @@
 extern "C" {
 #endif
 
+/** Low level function to perform dynamic programming gapped extension 
+ * with traceback.
+ * @param A The query sequence [in]
+ * @param B The subject sequence [in]
+ * @param M Maximal extension length in query [in]
+ * @param N Maximal extension length in subject [in]
+ * @param a_offset Resulting starting offset in query [out]
+ * @param b_offset Resulting starting offset in subject [out]
+ * @param edit_block Structure to hold traceback generated [out]
+ * @param gap_align Structure holding various information and allocated 
+ *        memory for the gapped alignment [in]
+ * @param scoringParams Parameters related to scoring [in]
+ * @param query_offset The starting offset in query [in]
+ * @param reversed Has the sequence been reversed? Used for psi-blast [in]
+ * @param reverse_sequence Do reverse the sequence [in]
+ * @return The best alignment score found.
+*/
 Int4
 ALIGN_EX(Uint1* A, Uint1* B, Int4 M, Int4 N, Int4* a_offset,
         Int4* b_offset, GapPrelimEditBlock *edit_block, 
@@ -107,13 +124,8 @@ BLAST_CheckStartForGappedAlignment(const BlastHSP* hsp,
                                    const BlastScoreBlk* sbp);
 
 /** Are the two HSPs within a given number of diagonals from each other? */
-#define MB_HSP_CLOSE(q1, q2, s1, s2, c) \
-(ABS((q1-s1) - (q2-s2)) < c)
-
-/** Is one HSP contained in a diagonal strip around another? */
-#define MB_HSP_CONTAINED(qo1,qo2,qe2,so1,so2,se2,c) \
-(qo1>=qo2 && qo1<=qe2 && so1>=so2 && so1<=se2 && \
-MB_HSP_CLOSE(qo1,qo2,so1,so2,c))
+#define MB_HSP_CLOSE(q1, s1, q2, s2, c) \
+(ABS(((q1)-(s1)) - ((q2)-(s2))) < c)
 
 /** Modify a BlastScoreBlk structure so that it can be used in RPS-BLAST. This
  * involves allocating a SPsiBlastScoreMatrix structure so that the PSSMs 
@@ -121,8 +133,10 @@ MB_HSP_CLOSE(qo1,qo2,so1,so2,c))
  * structure.
  * @param sbp BlastScoreBlk structure to modify [in|out]
  * @param rps_pssm PSSMs in RPS-BLAST database to use [in]
+ * @param alphabet_size Elements in one pssm row [in]
  */
-void RPSPsiMatrixAttach(BlastScoreBlk* sbp, Int4** rps_pssm);
+void RPSPsiMatrixAttach(BlastScoreBlk* sbp, Int4** rps_pssm,
+                        Int4 alphabet_size);
 
 /** Remove the artificially built SPsiBlastScoreMatrix structure allocated by
  * RPSPsiMatrixAttach
@@ -139,6 +153,22 @@ void RPSPsiMatrixDetach(BlastScoreBlk* sbp);
  * ===========================================================================
  *
  * $Log: blast_gapalign_priv.h,v $
+ * Revision 1.17  2006/08/22 19:26:20  papadopo
+ * change order of macro parameters
+ *
+ * Revision 1.16  2006/07/18 14:41:36  papadopo
+ * doxygen fixes
+ *
+ * Revision 1.15  2006/07/17 16:02:56  papadopo
+ * 1. Add doxygen block from blast_gapalign.c
+ * 2. Guard macro parameters with parentheses
+ *
+ * Revision 1.14  2006/07/05 15:25:07  papadopo
+ * change signature of RPSPsiMatrixAttach
+ *
+ * Revision 1.13  2006/05/24 18:25:57  papadopo
+ * remove MB_HSP_CONTAINED
+ *
  * Revision 1.12  2005/11/30 18:25:03  papadopo
  * move BlastGapDP, remove BlastGapSmallDP
  *

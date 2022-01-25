@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket.c,v 6.188 2006/04/27 18:37:26 lavr Exp $
+/*  $Id: ncbi_socket.c,v 6.191 2006/09/06 15:25:31 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -1573,7 +1573,7 @@ extern EIO_Status LSOCK_Close(LSOCK lsock)
     }
 
     /* set the socket back to blocking mode */
-    if ( !s_SetNonblock(lsock->sock, 0/*false*/) ) {
+    if (s_Initialized  &&  !s_SetNonblock(lsock->sock, 0/*false*/)) {
         CORE_LOGF(eLOG_Trace, ("LSOCK#%u[%u]: [LSOCK::Close] "
                                " Cannot set socket back to blocking mode",
                                lsock->id, (unsigned int) lsock->sock));
@@ -1595,7 +1595,7 @@ extern EIO_Status LSOCK_Close(LSOCK lsock)
     }
 
     status = eIO_Success;
-    for (;;) { /* close persistently - retry if interrupted by a signal */
+    while (s_Initialized) { /* close persistently - retry if interrupted */
         /* success */
         if (SOCK_CLOSE(lsock->sock) == 0)
             break;
@@ -1637,7 +1637,8 @@ extern EIO_Status LSOCK_GetOSHandle(LSOCK  lsock,
     }
 
     memcpy(handle, &lsock->sock, handle_size);
-    return lsock->sock == SOCK_INVALID ? eIO_Closed : eIO_Success;
+    return (!s_Initialized  ||  lsock->sock == SOCK_INVALID
+            ? eIO_Closed : eIO_Success);
 }
 
 
@@ -2552,7 +2553,7 @@ static EIO_Status s_Shutdown(SOCK                  sock,
         return eIO_InvalidArg;
     }
 
-    if (SOCK_SHUTDOWN(sock->sock, x_how) != 0) {
+    if (s_Initialized  &&  SOCK_SHUTDOWN(sock->sock, x_how) != 0) {
         int x_errno = SOCK_ERRNO;
         if (
 #if defined(NCBI_OS_LINUX)/*bug in the Linux kernel to report*/  || \
@@ -2999,8 +3000,12 @@ extern EIO_Status SOCK_Shutdown(SOCK      sock,
 
 extern EIO_Status SOCK_CloseEx(SOCK sock, int/*bool*/ destroy)
 {
-    EIO_Status status = sock->sock==SOCK_INVALID ? eIO_Success : s_Close(sock);
-    assert(sock->sock == SOCK_INVALID);
+    EIO_Status status;
+    if (!s_Initialized) {
+        sock->sock = SOCK_INVALID;
+        status = eIO_Success;
+    } else
+        status = sock->sock == SOCK_INVALID ? eIO_Success : s_Close(sock);
 
     if (destroy) {
         BUF_Destroy(sock->r_buf);
@@ -4289,7 +4294,7 @@ extern unsigned int SOCK_gethostbyname(const char* hostname)
 #if defined(HAVE_GETADDRINFO)
         struct addrinfo hints, *out = 0;
         memset(&hints, 0, sizeof(hints));
-        hints.ai_family = PF_INET; /* currently, we only handle IPv4 */
+        hints.ai_family = AF_INET; /* currently, we only handle IPv4 */
         if ((x_errno = getaddrinfo(hostname, 0, &hints, &out)) == 0  &&  out) {
             struct sockaddr_in* addr = (struct sockaddr_in *) out->ai_addr;
             assert(addr->sin_family == AF_INET);
@@ -4393,24 +4398,26 @@ extern char* SOCK_gethostbyaddr(unsigned int host,
         addr.sin_len = sizeof(addr);
 #  endif /*HAVE_SIN_LEN*/
         if ((x_errno = getnameinfo((struct sockaddr*) &addr, sizeof(addr),
-                                   name, namelen, 0, 0, 0)) == 0) {
-            return name;
-        } else {
-            if (s_Log == eOn) {
+                                   name, namelen, 0, 0, 0)) != 0) {
+            if (SOCK_ntoa(host, name, namelen) != 0) {
+                name[0] = '\0';
+                name = 0;
+            }
+            if (!name  &&  s_Log == eOn) {
                 char addr[16];
+                if (SOCK_ntoa(host, addr, sizeof(addr)) != 0)
+                    strcpy(addr, "<unknown>");
                 if (x_errno == EAI_SYSTEM)
                     x_errno = SOCK_ERRNO;
                 else
                     x_errno += EAI_BASE;
-                if (SOCK_ntoa(host, addr, sizeof(addr)) != 0)
-                    strcpy(addr, "<unknown>");
                 CORE_LOGF_ERRNO_EX(eLOG_Warning,x_errno,SOCK_STRERROR(x_errno),
                                    ("[SOCK_gethostbyaddr]  Failed "
                                     "getnameinfo(%s)", addr));
             }
-            name[0] = '\0';
-            return 0;
         }
+        return name;
+
 #else /* use some variant of gethostbyaddr */
         struct hostent* he;
 #  if defined(HAVE_GETHOSTBYADDR_R)
@@ -4558,6 +4565,15 @@ extern size_t SOCK_HostPortToString(unsigned int   host,
 /*
  * ===========================================================================
  * $Log: ncbi_socket.c,v $
+ * Revision 6.191  2006/09/06 15:25:31  lavr
+ * Allow silent closure of sockets after the socket API having been finalized
+ *
+ * Revision 6.190  2006/08/14 19:09:13  lavr
+ * Use AF_INET consistently everywhere
+ *
+ * Revision 6.189  2006/07/13 17:59:26  lavr
+ * SOCK_gethostbyaddr() to upcall SOCK_ntoa() as the last resort
+ *
  * Revision 6.188  2006/04/27 18:37:26  lavr
  * Formatting by Anna Lavrentieva on Take Your Child To Work Day at NIH
  *

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.64 $
+* $Revision: 1.75 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -194,6 +194,12 @@ static Char link_imgt [MAX_WWWBUF];
 static Char link_imgt_gene [MAX_WWWBUF];
 #define DEF_LINK_IMGT_GENE "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+"
 
+static Char link_imgt_gene_hs [MAX_WWWBUF];
+#define DEF_LINK_IMGT_GENE_HS "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+"
+
+static Char link_imgt_gene_mm [MAX_WWWBUF];
+#define DEF_LINK_IMGT_GENE_MM "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Mus+musculus&query=2+"
+
 static Char link_ifo [MAX_WWWBUF];
 #define DEF_LINK_IFO "http://www.ifo.or.jp/index_e.html"
 
@@ -281,11 +287,29 @@ static Char link_hprd [MAX_WWWBUF];
 static Char link_uspto [MAX_WWWBUF];
 #define DEF_LINK_USPTO "http://patft.uspto.gov/netacgi/nph-Parser?patentnumber="
 
+static Char link_cambia [MAX_WWWBUF];
+#define DEF_LINK_CAMBIA "http://www.patentlens.net/patentlens/simple.cgi?patnum="
+
 static Char link_vector [MAX_WWWBUF];
 #define DEF_LINK_VECTOR "http://www.vectorbase.org/Genome/BRCGene/?"
 
 static Char link_mirbase [MAX_WWWBUF];
 #define DEF_LINK_MIRBASE "http://microrna.sanger.ac.uk/cgi-bin/sequences/mirna_entry.pl?acc="
+
+static Char link_dbclone [MAX_WWWBUF];
+#define DEF_LINK_DBCLONE "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=clone&cmd=Retrieve&list_uids="
+
+static Char link_dbclonelib [MAX_WWWBUF];
+#define DEF_LINK_DBCLONELIB "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=clonelib&cmd=Retrieve&list_uids="
+
+static Char link_dbprobe [MAX_WWWBUF];
+#define DEF_LINK_DBPROBE "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=probe&cmd=Retrieve&list_uids="
+
+static Char link_isd [MAX_WWWBUF];
+#define DEF_LINK_ISD "http://www.flu.lanl.gov/search/view_record.html?accession="
+
+static Char link_grin [MAX_WWWBUF];
+#define DEF_LINK_GRIN "http://www.ars-grin.gov/cgi-bin/npgs/acc/display.pl?"
 
 
 /* www utility functions */
@@ -346,6 +370,8 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_NEXTDB", DEF_LINK_NEXTDB, link_nextdb, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT", DEF_LINK_IMGT, link_imgt, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT_GENE", DEF_LINK_IMGT_GENE, link_imgt_gene, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT_GENE_HS", DEF_LINK_IMGT_GENE_HS, link_imgt_gene_hs, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT_GENE_MM", DEF_LINK_IMGT_GENE_MM, link_imgt_gene_mm, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_IFO", DEF_LINK_IFO, link_ifo, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_JCM", DEF_LINK_JCM, link_jcm, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ISFINDER", DEF_LINK_ISFINDER, link_isfinder, MAX_WWWBUF);
@@ -375,8 +401,14 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_BOLD", DEF_LINK_BOLD, link_bold, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_HPRD", DEF_LINK_HPRD, link_hprd, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_USPTO", DEF_LINK_USPTO, link_uspto, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_CAMBIA", DEF_LINK_CAMBIA, link_cambia, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_VECTOR", DEF_LINK_VECTOR, link_vector, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_MIRBASE", DEF_LINK_MIRBASE, link_mirbase, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_DBCLONE", DEF_LINK_DBCLONE, link_dbclone, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_DBCLONELIB", DEF_LINK_DBCLONELIB, link_dbclonelib, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_DBPROBE", DEF_LINK_DBPROBE, link_dbprobe, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ISD", DEF_LINK_ISD, link_isd, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GRIN", DEF_LINK_GRIN, link_grin, MAX_WWWBUF);
 }
 
 
@@ -427,7 +459,7 @@ static void FF_www_db_xref_fly (
 )
 {
   CharPtr link = link_fly;
-  
+
   if ( StringStr(identifier, "FBa") != NULL ) {
     link = link_fly_fban;
   }
@@ -436,6 +468,29 @@ static void FF_www_db_xref_fly (
   }
   if ( StringStr(identifier, "FBs") != NULL ) {
     link = link_fly_fbst;
+  }
+
+  FF_www_db_xref_std(ffstring, db, identifier, link);
+}
+
+static void FF_www_db_xref_imgt_gene (
+  StringItemPtr ffstring,
+  CharPtr db, 
+  CharPtr identifier,
+  BioseqPtr bsp
+)
+
+{
+  CharPtr link = link_imgt_gene;
+  Char    taxname [64];
+
+  if (bsp != NULL && BioseqToGeneticCode (bsp, NULL, NULL, NULL, taxname, sizeof (taxname), NULL)) {
+    if ( StringCmp (taxname, "Homo sapiens") == 0) {
+      link = link_imgt_gene_hs;
+    }
+    if ( StringCmp (taxname, "Mus musculus") == 0) {
+      link = link_imgt_gene_mm;
+    }
   }
 
   FF_www_db_xref_std(ffstring, db, identifier, link);
@@ -593,10 +648,10 @@ static void FF_www_db_xref_gdb(
     start += StringLen("G00-");
     while ( *start != '\0' ) {
       if ( *start != '-' ) {
-		*idp = *start;
-		++idp;
-	  }
-	  ++start;
+        *idp = *start;
+        ++idp;
+      }
+      ++start;
     }
     *idp = '\0';
     FFAddTextToString(ffstring, "<a href=", link_gdb, id, FALSE, FALSE, TILDE_IGNORE);  
@@ -751,7 +806,7 @@ static void Do_www_db_xref(
   } else if ( StringCmp(db , "IMGT/LIGM") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_imgt);
   } else if ( StringCmp(db , "IMGT/GENE-DB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_imgt_gene);
+    FF_www_db_xref_imgt_gene(ffstring, db, identifier, bsp);
   } else if ( StringCmp(db , "CK") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_ck);
   } else if ( StringCmp(db , "RiceGenes") == 0) {
@@ -766,8 +821,8 @@ static void Do_www_db_xref(
     FF_www_db_xref_mgd(ffstring, db, identifier);
   } else if ( StringCmp(db , "MGD") == 0) {
     FF_www_db_xref_mgd(ffstring, db, identifier);
-  } else if ( StringCmp(db , "CDD") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_cdd);
+  } else if ( StringCmp(db , "CDD") == 0 || StringCmp(db , "cdd") == 0) {
+    FF_www_db_xref_std(ffstring, "CDD", identifier, link_cdd);
   } else if ( StringCmp(db , "JCM") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_jcm);
   } else if ( StringCmp(db , "ISFinder") == 0) {
@@ -858,6 +913,16 @@ static void Do_www_db_xref(
     FF_www_db_xref_vector(ffstring, db, identifier, bsp, link_vector);
   } else if ( StringCmp(db , "miRBase") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_mirbase);
+  } else if ( StringCmp(db , "dbClone") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_dbclone);
+  } else if ( StringCmp(db , "dbCloneLib") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_dbclonelib);
+  } else if ( StringCmp(db , "dbProbe") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_dbprobe);
+  } else if ( StringCmp(db , "ISD") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_isd);
+  } else if ( StringCmp(db , "GRIN") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_grin);
 
   } else {  
     /* default: no link just the text */
@@ -885,6 +950,8 @@ NLM_EXTERN void FF_www_db_xref(
         identifier += 4;
       }
       FFAddTextToString(ffstring, "MGI", ":", identifier, FALSE, FALSE, TILDE_IGNORE);
+    } else if ( StringCmp(db , "CDD") == 0 || StringCmp(db , "cdd") == 0) {
+      FFAddTextToString(ffstring, "CDD", ":", identifier, FALSE, FALSE, TILDE_IGNORE);
     } else {
       FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
     }
@@ -2914,6 +2981,8 @@ static CharPtr FormatCitGen (
                StringNICmp (cgp->cit, "Published Only in DataBase", 26) == 0) {
 
       inpress = cgp->cit;
+    } else if (StringNICmp (cgp->cit, "(er) ", 5) == 0) {
+      journal = cgp->cit;
     } else if ((! dropBadCitGens) && journal == NULL) {
       journal = cgp->cit;
     }
@@ -3120,7 +3189,7 @@ static Int4 GetMuid (
 )
 
 {
-  ArticleIdPtr	   aip;
+  ArticleIdPtr     aip;
   CitArtPtr        cap;
   MedlineEntryPtr  mep;
   ValNodePtr       vnp;
@@ -3144,7 +3213,7 @@ static Int4 GetMuid (
             if (aip->choice == ARTICLEID_MEDLINE) {
               return aip->data.intvalue;
             }
-		  }
+          }
         }
       default :
         break;
@@ -3159,7 +3228,7 @@ static Int4 GetPmid (
 )
 
 {
-  ArticleIdPtr	   aip;
+  ArticleIdPtr       aip;
   CitArtPtr        cap;
   MedlineEntryPtr  mep;
   ValNodePtr       vnp;
@@ -3183,7 +3252,7 @@ static Int4 GetPmid (
             if (aip->choice == ARTICLEID_PUBMED) {
               return aip->data.intvalue;
             }
-		  }
+          }
         }
       default :
         break;
@@ -3355,7 +3424,9 @@ static void AddReferenceToGbseq (
     }
     if (ptr != NULL) {
       *ptr = '\0';
-      gbref->reference = StringSave (ref);
+      /* gbref->reference = StringSave (ref); */
+      sprintf (buf, "%d", (int) rbp->serial);
+      gbref->reference = StringSave (buf);
     }
   }
 
@@ -3459,6 +3530,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   CitJourPtr         cjp;
   Boolean            citArtIsoJta;
   CharPtr            consortium;
+  CitPatPtr          cpp;
   CitRetractPtr      crp;
   CitSubPtr          csp = NULL;
   SeqMgrDescContext  dcontext;
@@ -3988,6 +4060,44 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
     prefix = "REMARK";
 
+    cpp = NULL;
+    for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice == PUB_Patent) {
+        cpp = (CitPatPtr) vnp->data.ptrvalue;
+      }
+    }
+    if (cpp != NULL && ajp != NULL && ajp->mode == ENTREZ_MODE) {
+      if (StringCmp (cpp->country, "US") == 0) {
+        if (StringDoesHaveText (cpp->number)) {
+          FFRecycleString(ajp, temp);
+          temp = FFGetString(ajp);
+
+          sprintf (buf, "CAMBIA Patent Lens: %s %s", cpp->country, cpp->number);
+          if (remprefix != NULL) {
+            ValNodeCopyStr (&remarks, 0, remprefix);
+          }
+          ValNodeCopyStr (&remarks, 0, buf);
+          remprefix = "; ";
+          FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
+          if (GetWWW (ajp)) {
+            sprintf (buf, "CAMBIA Patent Lens: %s ", cpp->country);
+            FFAddOneString (temp, buf, FALSE, FALSE, TILDE_EXPAND);
+            FFAddOneString (temp, "<a href=", FALSE, FALSE, TILDE_EXPAND);
+            FFAddOneString (temp, link_cambia, FALSE, FALSE, TILDE_EXPAND);
+            FFAddOneString (temp, cpp->country, FALSE, FALSE, TILDE_EXPAND);
+            FFAddOneString (temp, cpp->number, FALSE, FALSE, TILDE_EXPAND);
+            FFAddOneString (temp, "#list>", FALSE, FALSE, TILDE_EXPAND);
+            FFAddOneString (temp, cpp->number, FALSE, FALSE, TILDE_EXPAND);
+            FFAddOneString (temp, "</a>", FALSE, FALSE, TILDE_EXPAND);
+          } else {
+            FFAddOneString (temp, buf, FALSE, FALSE, TILDE_EXPAND);
+          }
+          FFLineWrap (ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+          prefix = NULL;
+        }
+      }
+    }
+
     if (pdp->comment != NULL) {
       for (i = 0, notFound = TRUE; notFound && remarksText [i] != NULL; i++) {
         if (StringCmp (pdp->comment, remarksText [i]) == 0) {
@@ -4115,26 +4225,89 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
             imp = cjp->imp;
             if (imp != NULL) {
               crp = imp->retract;
-              if (crp != NULL && crp->type == 3) {
-                FFRecycleString(ajp, temp);
-                temp = FFGetString(ajp);
+              if (crp != NULL) {
+                if (crp->type == 1) {
+                  FFRecycleString(ajp, temp);
+                  temp = FFGetString(ajp);
 
-                len = StringLen (crp->exp) + 20;
-                str = MemNew (sizeof (Char) * len);
-                if (str != NULL) {
-                  sprintf (str, "Erratum:[%s]", crp->exp);
-                  if (remprefix != NULL) {
-                    ValNodeCopyStr (&remarks, 0, remprefix);
+                  len = StringLen (crp->exp) + 30;
+                  str = MemNew (sizeof (Char) * len);
+                  if (str != NULL) {
+                    sprintf (str, "Retracted", exp);
+                    if (StringDoesHaveText (crp->exp)) {
+                      StringCat (str, ":[");
+                      StringCat (str, crp->exp);
+                      StringCat (str, "]");
+                    }
+                    if (remprefix != NULL) {
+                      ValNodeCopyStr (&remarks, 0, remprefix);
+                    }
+                    ValNodeCopyStr (&remarks, 0, str);
+                    remprefix = "; ";
+                    str = MemFree (str);
                   }
-                  ValNodeCopyStr (&remarks, 0, str);
-                  remprefix = "; ";
-                  str = MemFree (str);
+                  FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
+                  FFAddOneString (temp, "Retracted", FALSE, FALSE, TILDE_TO_SPACES);
+                  if (StringDoesHaveText (crp->exp)) {
+                    FFAddTextToString (temp, ":[", crp->exp, "]", FALSE, TRUE, TILDE_EXPAND);
+                  }
+                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+                  prefix = NULL;
+                } else if (crp->type == 3) {
+                  FFRecycleString(ajp, temp);
+                  temp = FFGetString(ajp);
+
+                  len = StringLen (crp->exp) + 30;
+                  str = MemNew (sizeof (Char) * len);
+                  if (str != NULL) {
+                    sprintf (str, "Erratum", exp);
+                    if (StringDoesHaveText (crp->exp)) {
+                      StringCat (str, ":[");
+                      StringCat (str, crp->exp);
+                      StringCat (str, "]");
+                    }
+                    if (remprefix != NULL) {
+                      ValNodeCopyStr (&remarks, 0, remprefix);
+                    }
+                    ValNodeCopyStr (&remarks, 0, str);
+                    remprefix = "; ";
+                    str = MemFree (str);
+                  }
+                  FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
+                  FFAddOneString (temp, "Erratum", FALSE, FALSE, TILDE_TO_SPACES);
+                  if (StringDoesHaveText (crp->exp)) {
+                    FFAddTextToString (temp, ":[", crp->exp, "]", FALSE, TRUE, TILDE_EXPAND);
+                  }
+                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+                  prefix = NULL;
+                } else if (crp->type == 4) {
+                  FFRecycleString(ajp, temp);
+                  temp = FFGetString(ajp);
+
+                  len = StringLen (crp->exp) + 30;
+                  str = MemNew (sizeof (Char) * len);
+                  if (str != NULL) {
+                    sprintf (str, "Correction", exp);
+                    if (StringDoesHaveText (crp->exp)) {
+                      StringCat (str, " to:[");
+                      StringCat (str, crp->exp);
+                      StringCat (str, "]");
+                    }
+                    if (remprefix != NULL) {
+                      ValNodeCopyStr (&remarks, 0, remprefix);
+                    }
+                    ValNodeCopyStr (&remarks, 0, str);
+                    remprefix = "; ";
+                    str = MemFree (str);
+                  }
+                  FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
+                  FFAddOneString (temp, "Correction", FALSE, FALSE, TILDE_TO_SPACES);
+                  if (StringDoesHaveText (crp->exp)) {
+                    FFAddTextToString (temp, " to:[", crp->exp, "]", FALSE, TRUE, TILDE_EXPAND);
+                  }
+                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+                  prefix = NULL;
                 }
-                FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
-                FFAddOneString (temp, "Erratum:", FALSE, FALSE, TILDE_TO_SPACES);
-                FFAddTextToString (temp, "[", crp->exp, "]", FALSE, TRUE, TILDE_EXPAND);
-                FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
-                prefix = NULL;
               }
             }
           }

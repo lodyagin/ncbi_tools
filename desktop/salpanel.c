@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.81 $
+* $Revision: 6.82 $
 *
 * File Description: 
 *
@@ -2206,7 +2206,7 @@ static void draw_feat (EditAlignDataPtr adp, Uint2 eid, Uint2 iid, Uint2 it, Uin
   draw_line (adp, start, stop, strand, pt, from, drw_width, line, alignline, color, wideline, featselect, partialstart, partialstop, gapline);
 }
 
-static void what_inline (EditAlignDataPtr adp, Int4 line, Uint2 ei, Uint2 ii, Uint2 it, Uint2 ist, Uint2 al)
+static void what_inline (EditAlignDataPtr adp, Int4 line, Uint2 ei, Uint4 ii, Uint2 it, Uint2 ist, Uint2 al)
 { 
   adp->seqEntity_id [line]  = ei;
   adp->item_id [line]  = ii;
@@ -2258,7 +2258,7 @@ static Int2 getparam (ValNodePtr vnprm, Uint2 eID, Uint2 iID, Uint1 choice)
   return -1;
 }
 
-static CharPtr seqid_tolabel (SeqIdPtr sip, Uint2 choice)
+static CharPtr seqid_tolabel (SeqIdPtr sip, Uint1 choice)
 {
   BioseqPtr bsp;
   SeqIdPtr  tmp = NULL;
@@ -2721,7 +2721,7 @@ typedef struct fprdata {
   FORM_MESSAGE_BLOCK
   BioseqPtr           bsp;
   SeqAlignPtr         salp;
-  Uint2               selFeatItemID;
+  Uint4               selFeatItemID;
   Int4                aln_length;
   Int4                log10_aln_length;
   VieweR              details;
@@ -3734,7 +3734,7 @@ static SeqAlignPtr CheckForProteinAlignment (ByteStorePtr bs, BioseqPtr match_pr
 /*                                                                  */
 /*------------------------------------------------------------------*/
 
-static Int2 CalculateReadingFrame (SeqFeatPtr sfp, Boolean partial3, BioseqPtr match_prot)
+static Uint1 CalculateReadingFrame (SeqFeatPtr sfp, Boolean partial3, BioseqPtr match_prot)
 {
   ByteStorePtr  bs;
   CdRegionPtr   crp;
@@ -3911,7 +3911,7 @@ PropagateOneFeat
   SeqIdPtr        sip;
   tRNAPtr         trp;
   LocListPtr      llp;
-  Uint2           strand;
+  Uint1           strand;
   ProtRefPtr      prp = NULL;
   BioseqPtr       pbsp = NULL;
   SeqFeatPtr      prot;
@@ -4484,7 +4484,7 @@ extern void UpdateSequenceFormActivate (WindoW w)
 extern ForM FeaturePropagateForm (
   BioseqPtr bsp,
   SeqAlignPtr salp,
-  Uint2 selFeatItemID
+  Uint4 selFeatItemID
 )
 
 {

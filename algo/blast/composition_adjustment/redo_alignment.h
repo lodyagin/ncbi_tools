@@ -1,4 +1,4 @@
-/* $Id: redo_alignment.h,v 1.7 2006/05/03 14:07:41 gertz Exp $
+/* $Id: redo_alignment.h,v 1.9 2006/06/29 16:50:24 gertz Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -365,6 +365,7 @@ void Blast_RedoAlignParamsFree(Blast_RedoAlignParams ** pparams);
  * @param query_info       information about all queries
  * @param numQueries       the number of queries
  * @param matrix           the scoring matrix
+ * @param alphsize         the size of the alphabet
  * @param NRrecord         a workspace used to adjust the composition.
  * @param forbidden        a workspace used to hold forbidden ranges
  *                         for the Smith-Waterman algorithm.
@@ -391,7 +392,7 @@ int Blast_RedoOneMatchSmithWaterman(BlastCompo_Alignment ** alignments,
                                     BlastCompo_MatchingSequence * matchingSeq,
                                     BlastCompo_QueryInfo query_info[],
                                     int numQueries,
-                                    int ** matrix,
+                                    int ** matrix, int alphsize,
                                     Blast_CompositionWorkspace * NRrecord,
                                     Blast_ForbiddenRanges * forbidden,
                                     BlastCompo_Heap * significantMatches,
@@ -417,6 +418,7 @@ int Blast_RedoOneMatchSmithWaterman(BlastCompo_Alignment ** alignments,
  * @param query_info       information about all queries
  * @param numQueries       the number of queries
  * @param matrix           the scoring matrix
+ * @param alphsize         the size of the alphabet
  * @param NRrecord         a workspace used to adjust the composition.
  * @param pvalueThisPair   the compositional p-value for this pair of sequences
  * @param compositionTestIndex   index of the test function used to decide
@@ -436,7 +438,7 @@ int Blast_RedoOneMatch(BlastCompo_Alignment ** alignments,
                        int ccat_query_length,
                        BlastCompo_QueryInfo query_info[],
                        int numQueries,
-                       int ** matrix,
+                       int ** matrix, int alphsize,
                        Blast_CompositionWorkspace * NRrecord,
                        double *pvalueThisPair,
                        int compositionTestIndex,

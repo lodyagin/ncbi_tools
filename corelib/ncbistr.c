@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *   	portable string routines
@@ -37,6 +37,13 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbistr.c,v $
+* Revision 6.14  2006/09/12 16:22:55  ludwigf
+* CHANGED: Internal logic on LabelCopy() to no longer touch memory outside
+*  the buffer it is given to operate on.
+* NOTE: This change was necessary as there are instances in the code calling
+*  that function that are not aware that LabelCopy() expects to also own
+*  the bytes adjacent to the given buffer range.
+*
 * Revision 6.13  2003/12/03 02:10:24  kans
 * added defines missing from Mac OS 10.3 headers
 *
@@ -895,37 +902,36 @@ NLM_EXTERN char* LIBCALL Nlm_Int8ToString (Nlm_Int8  value, char* str, size_t st
 *   	Copies the string "from" into "to" for up to "buflen" chars
 *   	if "from" is longer than buflen, makes the last character '>'
 *   	always puts one '\0' to terminate the string in to
-*   	to MUST be one character longer than buflen to leave room for the
-*   		last '\0' if from = buflen.
 *       returns number of characters transferred to "to"
 *
 *****************************************************************************/
-NLM_EXTERN Nlm_Uint4 LIBCALL Nlm_LabelCopy (Nlm_CharPtr to, Nlm_CharPtr from, Nlm_Uint4 buflen)
+NLM_EXTERN Nlm_Uint4 LIBCALL Nlm_LabelCopy (
+    Nlm_CharPtr to, 
+    Nlm_CharPtr from, 
+    Nlm_Uint4 buflen)
 {
 	Nlm_Uint4 len;
 
-	if ((to == NULL) || (from == NULL) || (buflen < 0)) return 0;
-	
-	if (buflen == 0)         /* this is a sign of multiple writes */
-	{
-		*(to-1) = '>';
+
+	if ((to == NULL) || (from == NULL) || (buflen == 0)) {
 		return 0;
 	}
-	
-	len = buflen;
 
+    --buflen; /* reserve last byte for terminating \0 */
+
+	len = buflen;
 	while ((*from != '\0') && (buflen))
 	{
 		*to = *from;
 		from++; to++; buflen--;
 	}
 
-	if (*from != '\0')
+	if (len && (*from != '\0'))
 	{
 		*(to - 1) = '>';
 	}
 
-	*to = '\0';      /* buffer is bufferlen+1 */
+	*to = '\0';
 	return (Nlm_Uint4)(len - buflen);
 }
 
@@ -944,8 +950,6 @@ NLM_EXTERN void LIBCALL Nlm_LabelCopyNext(Nlm_CharPtr PNTR to, Nlm_CharPtr from,
 *   	Copies the string "from" into "to" for up to "buflen" chars
 *   	if all together are longer than buflen, makes the last character '>'
 *   	always puts one '\0' to terminate the string in to
-*   	to MUST be one character longer than buflen to leave room for the
-*   		last '\0' if from = buflen.
 *       returns number of characters transferred to "to"
 *
 *   	if not NULL, puts prefix before from and suffix after from
@@ -953,11 +957,18 @@ NLM_EXTERN void LIBCALL Nlm_LabelCopyNext(Nlm_CharPtr PNTR to, Nlm_CharPtr from,
 *  
 *
 *****************************************************************************/
-NLM_EXTERN Nlm_Uint4 LIBCALL Nlm_LabelCopyExtra (Nlm_CharPtr to, Nlm_CharPtr from, Nlm_Uint4 buflen, Nlm_CharPtr prefix, Nlm_CharPtr suffix)
+NLM_EXTERN Nlm_Uint4 LIBCALL Nlm_LabelCopyExtra (
+    Nlm_CharPtr to, 
+    Nlm_CharPtr from, 
+    Nlm_Uint4 buflen, 
+    Nlm_CharPtr prefix, 
+    Nlm_CharPtr suffix)
 {
 	Nlm_Int4 len, diff;
 
-	if ((to == NULL) || (buflen < 1) || (from == NULL)) return 0;
+    if ((to == NULL) || (from == NULL) || (buflen == 0)) {
+        return 0;
+    }
 
 	len = buflen;
 	diff = Nlm_LabelCopy(to, prefix, buflen);

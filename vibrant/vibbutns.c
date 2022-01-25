@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *       Vibrant button functions
@@ -41,6 +41,15 @@
 *
 *
 * $Log: vibbutns.c,v $
+* Revision 6.11  2006/09/14 19:18:28  ivanov
+* Rollback last changes. All missed defines added to corelib/ncbiwin.h.
+*
+* Revision 6.10  2006/09/14 18:05:45  ivanov
+* Fixed compilation errors on MS Windows
+*
+* Revision 6.9  2006/09/14 14:45:38  kans
+* changes for 64-bit Windows (GC) plus a few CodeWarrior complaints (JK)
+*
 * Revision 6.8  2004/01/20 23:34:38  sinyakov
 * [WIN_MSWIN]: fixed to display '&' character in button text
 *
@@ -137,15 +146,15 @@
 #include <vibincld.h>
 
 #ifdef WIN_MAC
-#define Nlm_ControlTool ControlHandle
+#  define Nlm_ControlTool ControlHandle
 #endif
 
 #ifdef WIN_MSWIN
-#define Nlm_ControlTool HWND
+#  define Nlm_ControlTool HWND
 #endif
 
 #ifdef WIN_MOTIF
-#define Nlm_ControlTool Widget
+#  define Nlm_ControlTool Widget
 #endif
 
 typedef  struct  Nlm_buttondata {
@@ -924,7 +933,7 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
   }
 }
 
-LRESULT CALLBACK EXPORT ButtonProc (HWND hwnd, UINT message,
+static LRESULT CALLBACK EXPORT ButtonProc (HWND hwnd, UINT message,
                                     WPARAM wParam, LPARAM lParam)
 
 {
@@ -1160,11 +1169,11 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
     lpfnNewButtonProc = (WNDPROC) MakeProcInstance ((FARPROC) ButtonProc, Nlm_currentHInst);
   }
   if (lpfnOldButtonProc == NULL) {
-    lpfnOldButtonProc = (WNDPROC) GetWindowLong (c, GWL_WNDPROC);
-  } else if (lpfnOldButtonProc != (WNDPROC) GetWindowLong (c, GWL_WNDPROC)) {
+    lpfnOldButtonProc = (WNDPROC) GetWindowLongPtr (c, GWLP_WNDPROC);
+  } else if (lpfnOldButtonProc != (WNDPROC) GetWindowLongPtr (c, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "ButtonProc subclass error");
   }
-  SetWindowLong (c, GWL_WNDPROC, (LONG) lpfnNewButtonProc);
+  SetWindowLongPtr (c, GWLP_WNDPROC, (LONG) lpfnNewButtonProc);
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(c, fntptr->handle, FALSE);
   Nlm_HandUnlock(Nlm_systemFont);

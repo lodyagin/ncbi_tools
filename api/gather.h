@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -39,6 +39,11 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.h,v $
+* Revision 6.14  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.13  2004/10/25 20:13:27  kans
 * added AssignIDsInEntityEx and GatherObjectsInEntityEx to index remotely fetched features
 *
@@ -212,14 +217,15 @@ typedef struct alignrange{
 *
 *****************************************************************************/
 typedef struct gatherelement {
-	Uint2 itemID, itemtype;
+	Uint4 itemID;
+	Uint2 itemtype;
 	Pointer thisitem;
 	Boolean tempload;
 } GatherElement, PNTR GatherElementPtr;
 
 typedef struct gathercontext {
-	Uint2  entityID ,
-		  itemID;
+	Uint2  entityID;
+    Uint4  itemID;
 	Pointer thisitem,
 		  previtem,
 		  parentitem;
@@ -284,7 +290,7 @@ typedef struct internalgcc {
 	Boolean rev;                /* TRUE if scope->target is on complement */
 	Int2 max_interval;
 	BioseqPtr bsp;              /* for checking a range on a Bioseq */
-	Int2 itemIDs[OBJ_MAX];
+	Uint4 itemIDs[OBJ_MAX];
 	SeqLocPtr segloc;           /* if target is segmented and seglevel > 0 */
 	Int2 first_seg, last_seg;   /* see SeqLocCopyPart() in edutil.h */
 	Int2 segcnt;                /* count of segments in segloc */
@@ -292,7 +298,7 @@ typedef struct internalgcc {
 	BoolPtr found_annot;     /* TRUE if annot found in this region of current Bioseq */
 	                            /*    Not an indication of annot found in this segment */
 	Uint1 locatetype;           /* itemtype to locate */
-	Int2 locateID;              /* itemID to locate */
+	Uint4 locateID;              /* itemID to locate */
 	Pointer locatePtr;          /* data item to locate */
 	ObjMgrDataPtr omdp;         /* top level omdp in entity */
 	Boolean reloaded;           /* TRUE if entity was reloaded from cache by IGCCBuild() */
@@ -375,7 +381,7 @@ NLM_EXTERN Int2 LIBCALL FocusSeqEntry PROTO((SeqEntryPtr sep, GatherScopePtr sco
 *        only those included in GITEM_ defined above will be found
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL GatherItem PROTO((Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+NLM_EXTERN Boolean LIBCALL GatherItem PROTO((Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                    Pointer userdata, GatherItemProc userfunc));
 
 /*****************************************************************************
@@ -404,7 +410,7 @@ NLM_EXTERN Boolean LIBCALL GatherData PROTO((Uint2 entityID, Pointer dataptr, Ui
 *      itemtype is as defined in objmgr.h for OBJ_
 *
 *****************************************************************************/
-NLM_EXTERN Uint2 LIBCALL GatherItemIDByData PROTO((Uint2 entityID, Uint2 itemtype, Pointer dataptr));
+NLM_EXTERN Uint4 LIBCALL GatherItemIDByData PROTO((Uint2 entityID, Uint2 itemtype, Pointer dataptr));
 
 
 /****************************************************************************
@@ -540,7 +546,7 @@ NLM_EXTERN Boolean LIBCALL ReplaceDataForProc PROTO((OMProcControlPtr ompcp, Boo
 *     returns the return from the proc, or OM_MSG_RET_NOPROC if not found
 *
 *****************************************************************************/
-NLM_EXTERN Int2 GatherProcLaunch PROTO((Uint2 proctype, Boolean sel, Uint2 entityID, Uint2 itemID,
+NLM_EXTERN Int2 GatherProcLaunch PROTO((Uint2 proctype, Boolean sel, Uint2 entityID, Uint4 itemID,
                     Uint2 itemtype, Uint2 inputtype, Uint2 subinputtype, Uint2 outputtype, Uint2 suboutputtype));
 
 /*****************************************************************************
@@ -551,7 +557,7 @@ NLM_EXTERN Int2 GatherProcLaunch PROTO((Uint2 proctype, Boolean sel, Uint2 entit
 *
 *****************************************************************************/
 NLM_EXTERN Int2 GatherSpecificProcLaunch PROTO((Uint2 procid, CharPtr procname, Uint2 proctype,
-                                          Boolean sel, Uint2 entityID, Uint2 itemID, Uint2 itemtype));
+                                          Boolean sel, Uint2 entityID, Uint4 itemID, Uint2 itemtype));
 
 /*****************************************************************
 *
@@ -651,7 +657,7 @@ NLM_EXTERN Boolean DeleteMarkedObjects (Uint2 entityID, Uint2 datatype, Pointer 
 *
 *****************************************************************************/
 
-NLM_EXTERN Pointer LIBCALL GetPointerForIDs (Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+NLM_EXTERN Pointer LIBCALL GetPointerForIDs (Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 
 /*****************************************************************************
 *

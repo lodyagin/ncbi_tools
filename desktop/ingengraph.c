@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/8/01
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -426,7 +426,7 @@ typedef struct ingcontext{
   Int4       numivals;
   Int4Ptr    ivals;
   Uint2      entityID;
-  Uint2      itemID;
+  Uint4      itemID;
   CharPtr    name;
 } IngContext, PNTR IngContextPtr;
 
@@ -488,7 +488,6 @@ static Boolean LIBCALLBACK Ing_DrawOverviewPage(IngPopFeatPtr pfp, IngContextPtr
   Boolean    Visible=FALSE;
   Uint8      idx;
   Char       str[60]={""};
-  Int4       feat_len;
   Int4       pict_len;
   Int4       offset;
   Boolean    index_by_fdtype = TRUE;
@@ -651,7 +650,6 @@ static Boolean LIBCALLBACK Ing_CollectFeatures2(SeqFeatPtr sfp, SeqMgrFeatContex
   IngPopFeatPtr pfp = NULL;
   IngContextPtr context = NULL;
   Int4          numivals = 0, i;
-  ValNodePtr    desc;
 
   pfp = (IngPopFeatPtr)sfc->userdata;
   if (!pfp) return (FALSE);
@@ -1120,7 +1118,7 @@ static Uint4 Ing_AddAlignsToDetailedPage(SegmenT pictBottom, IngPopFeatPtr pfp, 
       tmp_vnp=vnp_head;
       while(tmp_vnp){
         Ing_BigDecodeIdxFeat((Uint8)tmp_vnp->data.bigintvalue, &rowCnt, &ColStart);
-        if (ColStart < MAX(0, start-len_diff)){
+        if (ColStart < (Uint4) (MAX(0, start-len_diff))){
           ColStart=stop+len_diff;
           tmp_vnp->data.bigintvalue=Ing_BigEncodeIdxFeat(rowCnt,ColStart);
           NewLine=FALSE;
@@ -1373,7 +1371,7 @@ static void Ing_DrawDetailedPage(IngPopFeatPtr pfp, IngContextPtr context)
     tmp_vnp=pfp->PopRowsList;
     while(tmp_vnp){
       Ing_BigDecodeIdxFeat((Uint8)tmp_vnp->data.bigintvalue,&rowNum,&ColStart);
-      if (ColStart < MAX(0, left-len_diff)){
+      if (ColStart < (Uint4)(MAX(0, left-len_diff))){
         ColStart=context->right+len_diff;
         tmp_vnp->data.bigintvalue=Ing_BigEncodeIdxFeat(rowNum,ColStart);
         bPop=TRUE;
@@ -1830,7 +1828,7 @@ extern Boolean LIBCALLBACK Ing_ExploreSegments(SeqLocPtr slp, SeqMgrSegmentConte
   SeqIdPtr           sip = NULL;
   Boolean            isDraft = FALSE;
   Uint2              entityID = 0;
-  Uint2              itemID = 0;
+  Uint4              itemID = 0;
   OMUserDataPtr      omudp;
   Boolean            needs_label = TRUE;
 
@@ -1922,7 +1920,7 @@ static void Ing_GetLeftandRight(BioseqPtr bsp, SeqLocPtr slp, Int4Ptr left, Int4
 }
 
 
-extern void Ing_AddGCRect(SegmenT seg, SeqIdPtr sip, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint1Ptr seq, Int4 left, Int4 top, Int4 right, Int4 bottom, Int4 scaleX,  Uint1 strand, Boolean needs_label, Boolean clickable, Int4 idx, Boolean bShowGC)
+extern void Ing_AddGCRect(SegmenT seg, SeqIdPtr sip, Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint1Ptr seq, Int4 left, Int4 top, Int4 right, Int4 bottom, Int4 scaleX,  Uint1 strand, Boolean needs_label, Boolean clickable, Int4 idx, Boolean bShowGC)
 {
    Int4         a1, a2;
    Int4         c1, c2;
@@ -2217,7 +2215,7 @@ extern void Ing_InitGrData(IngGraphDataPtr gdp)
   Purpose : populate sequin viewer
 
 *******************************************************************************/
-extern SegmenT Ing_PopulateSequinGraphic(SegmenT seg, BioseqPtr bsp, Uint2 entityID, Uint2 itemID, Int4 scaleX)
+extern SegmenT Ing_PopulateSequinGraphic(SegmenT seg, BioseqPtr bsp, Uint2 entityID, Uint4 itemID, Int4 scaleX)
 {
   IngExploreSegs     gpn;
   Int2               nSegments;

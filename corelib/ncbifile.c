@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.38 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,9 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.39  2006/07/13 17:10:36  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.38  2005/04/20 20:14:31  lavr
 * +<assert.h>
 *
@@ -1490,7 +1493,7 @@ NLM_EXTERN Nlm_CharPtr Nlm_FileCacheGetString (
 
 {
   Nlm_Char     ch;
-  Nlm_Int2     count;
+  Nlm_Uint2     count;
   Nlm_CharPtr  ptr;
 
   if (fcp == NULL || fcp->fp == NULL || str == NULL || size < 1) return NULL;

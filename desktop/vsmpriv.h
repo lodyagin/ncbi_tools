@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: Internal data structures used by VSM routines
 *
@@ -68,8 +68,8 @@ typedef struct vsmwin {
 	WindoW w;
 	SegmenT picture;
 	Uint2 entityID,    /* if 0, is the desktop */
-		  itemID,
 		  itemtype;
+    Uint4 itemID;
 	Uint2 procid;      /* proc for drawing */
 	Uint2 proctype;
 	Uint2 userkey;
@@ -88,8 +88,8 @@ typedef struct vsmwin {
 	     r;               /* marquee rect */
 	PoinT lastpnt;
 	Uint2 entityID1,      /* first thing clicked on */
-	      itemID1,
 	      itemtype1;
+	Uint4 itemID1;
 	struct vsmwin PNTR next;
 }VSMWin, PNTR VSMWinPtr;
 

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: copymat.c,v 6.44 2005/12/22 14:22:19 papadopo Exp $";
+static char const rcsid[] = "$Id: copymat.c,v 6.45 2006/09/15 15:45:35 madden Exp $";
 
 /*
 * ===========================================================================
@@ -36,6 +36,9 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.45  2006/09/15 15:45:35  madden
+Change to LookupTableWrapInit
+
 Revision 6.44  2005/12/22 14:22:19  papadopo
 change signature of BLAST_FillLookupTableOptions
 
@@ -624,7 +627,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     BlastSeqLocNew(&lookup_segment, 0, all_length);
 
     /* Need query for psi-blast??  where to put the PSSM? */
-    LookupTableWrapInit(NULL, lookup_options, lookup_segment, sbp, &lookup_wrap_ptr, NULL);
+    LookupTableWrapInit(NULL, lookup_options, lookup_segment, sbp, &lookup_wrap_ptr, NULL, NULL);
    
     RPSPsiMatrixDetach(sbp);
     sbp = BlastScoreBlkFree(sbp);

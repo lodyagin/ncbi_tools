@@ -1,7 +1,7 @@
 
-static char const rcsid[] = "$Id: blast.c,v 6.445 2005/10/06 12:52:23 madden Exp $";
+static char const rcsid[] = "$Id: blast.c,v 6.447 2006/09/21 13:42:36 madden Exp $";
 
-/* $Id: blast.c,v 6.445 2005/10/06 12:52:23 madden Exp $
+/* $Id: blast.c,v 6.447 2006/09/21 13:42:36 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,9 +50,15 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.445 $
+ * $Revision: 6.447 $
  *
  * $Log: blast.c,v $
+ * Revision 6.447  2006/09/21 13:42:36  madden
+ * BlastProcessGiLists returns a boolean to specify that an attempt was made to process a list of GIs.  If no matches were found this can be reported back to the user
+ *
+ * Revision 6.446  2006/06/01 15:48:38  papadopo
+ * in blastMergeFilterLocs, add the capability to merge mixed-type seqlocs; these appear in e.g. megablast with both low-complexity and repeat filtering
+ *
  * Revision 6.445  2005/10/06 12:52:23  madden
  * Changes to support correct gapped stats for blastn
  *
@@ -3900,7 +3906,29 @@ SeqLocPtr blastMergeFilterLocs(SeqLocPtr slp1, SeqLocPtr slp2, Boolean translate
     if(slp2 == NULL)
         return slp1;
 
-    dup_slp = blastDuplicateSeqLocInt(slp2);
+    if (slp2->choice == SEQLOC_PACKED_INT || slp2->choice == SEQLOC_INT) {
+        dup_slp = blastDuplicateSeqLocInt(slp2);
+    }
+    else if (slp2->choice == SEQLOC_MIX) {
+        /* for mixed seqlocs, recursively flatten all the internal
+           seqloc components into a single seqloc_int */
+        SeqLocPtr list_slp = slp2;
+        dup_slp = NULL;
+        while (list_slp != NULL) {
+            if (list_slp->choice == SEQLOC_MIX) {
+                dup_slp = blastMergeFilterLocs(dup_slp, list_slp->data.ptrvalue,
+                                           FALSE, frame, length);
+            }
+            else {
+                dup_slp = blastMergeFilterLocs(dup_slp, list_slp,
+                                           FALSE, frame, length);
+            }
+            list_slp = list_slp->next;
+        }
+    }
+    else {
+        ErrPostEx(SEV_FATAL, 1, 0, "Duplication of SeqLoc failed\n");
+    }
 
     /* Request to translate means, that slp2 is DNA SeqLoc, that should be
        translated into protein SeqLoc corresponding to the specific frame */
@@ -5707,9 +5735,10 @@ BLASTSetUpSearchWithReadDbInternalMult (SeqLocPtr query_slp, BioseqPtr query_bsp
 
        if (!options->ignore_gilist)
        {
+           Boolean looking_for_gis = FALSE;
            /* Create virtual database if any of the databases have gi lists or 
               ordinal id masks, or if gi list is provided from options */
-           BlastProcessGiLists(search, options, gi_list, gi_list_total);
+           looking_for_gis = BlastProcessGiLists(search, options, gi_list, gi_list_total);
 
            /* search->thr_info->blast_gi_list will be non-NULL if gi_list or 
             * options->gilist or options->gifile was non-NULL and therefore
@@ -5719,6 +5748,12 @@ BLASTSetUpSearchWithReadDbInternalMult (SeqLocPtr query_slp, BioseqPtr query_bsp
            if (search->thr_info->blast_gi_list && !options->use_real_db_size)
                readdb_get_totals_ex3(search->rdfp, &dblen, &search->dbseq_num,
                                  FALSE, TRUE, eApproximate);
+
+           if (looking_for_gis && search->thr_info->blast_gi_list == NULL)
+           {
+               ErrPostEx(SEV_WARNING, 0, 0, "Intersection of gilist and BLAST database ID's empty");
+               search->query_invalid = TRUE;
+           }
        }
 
         /* command-line/options trump alias file. */

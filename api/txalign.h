@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.19 2004/08/16 19:36:52 dondosha Exp $
+/* $Id: txalign.h,v 6.21 2006/07/13 17:06:39 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.19 $
+* $Revision: 6.21 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,14 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.21  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
+* Revision 6.20  2006/05/30 13:50:48  kans
+* set define to include BlastDefLineSet* functions in fdlobj.h
+*
 * Revision 6.19  2004/08/16 19:36:52  dondosha
 * Made CreateMaskByteStore function public: needed by web BLAST 2 sequences
 *
@@ -219,6 +227,12 @@
 
 #include <jzcoll.h>
 #include <ffprint.h>
+
+/* This define should be added to include BlastDefLineSet* functions in fdlobj.h */
+#ifndef NLM_GENERATED_CODE_PROTO
+#define NLM_GENERATED_CODE_PROTO 
+#endif
+
 #include <fdlobj.h>
 
 /****************************************************************************/
@@ -319,12 +333,12 @@ typedef struct text_buf{	/*for a generic feature comment*/
 	Int4 f_pos;	        /*position of the current buf*/
 	Uint2 exonCount;	/*count the number of exons, useded in 
                                   cds for aa*/
-        Uint2 itemID;	/*feature's itemID. It is used to check identity*/
+        Uint4 itemID;	/*feature's itemID. It is used to check identity*/
 	Uint2 feattype;
 	Uint2 subtype;
 	Uint2 entityID;
 	Uint2 seqEntityID;	/*the entityID for the sequence*/
-	Uint2 bsp_itemID;	/*itemID for the Bioseqs*/
+	Uint4 bsp_itemID;	/*itemID for the Bioseqs*/
 	Boolean extra_space;
 }TextAlignBuf, PNTR TextAlignBufPtr;
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.57 $
+* $Revision: 6.58 $
 *
 * File Description: 
 *
@@ -104,7 +104,8 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
       if (key != FEATDEF_BAD) {
         if (notJustImpFeats || curr->seqfeat_key == SEQFEAT_IMP) {
           subtype = curr->featdef_key;
-          if (subtype != FEATDEF_Imp_CDS &&
+          if (subtype != FEATDEF_IMP &&
+              subtype != FEATDEF_Imp_CDS &&
               subtype != FEATDEF_source &&
               subtype != FEATDEF_virion &&
               subtype != FEATDEF_mutation &&

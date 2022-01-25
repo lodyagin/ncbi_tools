@@ -1,7 +1,7 @@
 #ifndef UTIL_TABLES___SCOREMAT__H
 #define UTIL_TABLES___SCOREMAT__H
 
-/*  $Id: raw_scoremat.h,v 1.2 2003/12/29 21:25:50 ucko Exp $
+/*  $Id: raw_scoremat.h,v 1.3 2006/09/25 19:29:05 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -72,8 +72,10 @@ void NCBISM_Unpack(const SNCBIPackedScoreMatrix* psm,
 
 /** The standard matrices. */
 extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Blosum45;
+extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Blosum50;
 extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Blosum62;
 extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Blosum80;
+extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Blosum90;
 extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Pam30;
 extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Pam70;
 extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Pam250;
@@ -86,6 +88,9 @@ extern NCBI_TABLES_EXPORT const SNCBIPackedScoreMatrix NCBISM_Pam250;
 * ===========================================================================
 *
 * $Log: raw_scoremat.h,v $
+* Revision 1.3  2006/09/25 19:29:05  madden
+* Added the BLOSUM50 and BLOSUM90 matrices. [from Mike Gertz]
+*
 * Revision 1.2  2003/12/29 21:25:50  ucko
 * +PAM250
 *

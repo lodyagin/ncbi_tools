@@ -8,6 +8,9 @@
 /************************************************************/ 
 /*
 * $Log: prunebsc.c,v $
+* Revision 6.4  2006/07/13 17:07:27  bollin
+* removed unused variables
+*
 * Revision 6.3  2002/05/31 20:16:37  chenj
 * PruneModel: Initialize molidx=NULL & if (molidx) Memfree(molidx)
 *
@@ -215,12 +218,8 @@ static BiostrucFeatureSetPtr PruneFeatureSet(BiostrucFeatureSetPtr bsfsp, Int4 i
 {
   BiostrucFeatureSetPtr pbsfs;
   BiostrucFeaturePtr bsfpDie, bsfp, bsfpnew = NULL;
-  Int4 i, j, cnt, cnt2, zero;
-  ValNodePtr vnp;
-  ResidueExplicitPntrsPtr repp;
-  ResidueIntervalPntrPtr ripp,current;
+  ResidueIntervalPntrPtr ripp;
   ResiduePntrsPtr rpp;
-  AtomPntrsPtr app;
   ChemGraphPntrsPtr cgpp;
    
   pbsfs = BiostrucFeatureSetNew();
@@ -524,9 +523,8 @@ BiostrucPtr LIBCALL PruneBiostruc(BiostrucPtr bsp, CharPtr chain)
   Int4 mol_id, hetnum, molId1, molId2;
   BiostrucPtr bsp2;
   BiostrucGraphPtr bsgp;
-  BiostrucModelPtr bsmp, bsmp2, bsmpHead = NULL, bsmpTail;
-  BiostrucFeatureSetPtr bsfsp, bsfsp2, bsfspHead = NULL, bsfspTail;
-  BiostrucFeaturePtr bsfp;
+  BiostrucModelPtr bsmp, bsmpHead = NULL, bsmpTail;
+  BiostrucFeatureSetPtr bsfsp, bsfspHead = NULL, bsfspTail;
   MoleculeGraphPtr bp, het, currenthet, currentbp;
   InterResidueBondPtr pirb, pirbnew;
   Boolean found1, found2;

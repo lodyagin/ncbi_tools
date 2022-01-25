@@ -23,6 +23,7 @@ set DIRLIST=%DIRLIST% algo
 set DIRLIST=%DIRLIST% algo\blast
 set DIRLIST=%DIRLIST% algo\blast\api
 set DIRLIST=%DIRLIST% algo\blast\core
+set DIRLIST=%DIRLIST% algo\blast\composition_adjustment
 set DIRLIST=%DIRLIST% api
 set DIRLIST=%DIRLIST% asnlib
 set DIRLIST=%DIRLIST% biostruc

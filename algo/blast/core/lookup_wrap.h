@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.h,v 1.12 2005/11/16 14:31:37 madden Exp $
+/* $Id: lookup_wrap.h,v 1.14 2006/10/05 15:02:22 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,6 +47,8 @@ extern "C" {
 typedef struct LookupTableWrap {
    Uint1 lut_type; /**< What kind of a lookup table it is? */
    void* lut; /**< Pointer to the actual lookup table structure */
+   void* read_indexed_db; /** function used to retrieve hits
+                              from an indexed database */
 } LookupTableWrap;
 
 /** Create the lookup table for all query words.
@@ -57,11 +59,13 @@ typedef struct LookupTableWrap {
  * @param sbp Scoring block containing matrix [in]
  * @param lookup_wrap_ptr The initialized lookup table [out]
  * @param rps_info Structure containing RPS blast setup information [in]
+ * @param error_msg message with warning or errors [in|out]
  */
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
-        LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info);
+        LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info,
+        Blast_Message* *error_msg);
 
 /** Deallocate memory for the lookup table */
 LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup);

@@ -1,4 +1,4 @@
-/*   $Id: blocks.h,v 6.2 1999/11/26 15:42:24 vakatov Exp $
+/*   $Id: blocks.h,v 6.3 2006/07/13 17:06:38 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,18 @@
 *
 * Version Creation Date:   
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: Creating an editable version of a seqalign
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: blocks.h,v $
+* Revision 6.3  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.2  1999/11/26 15:42:24  vakatov
 * Fixed for the C++ and/or MSVC DLL compilation
 *
@@ -148,7 +153,7 @@ typedef struct _ddv_seginfo {
     BioseqPtr bsp;              /* Optional, Only if locked */
     struct _ddv_segInfo * next;
     Uint2 entityID;
-    Uint2 itemID;
+    Uint4 itemID;
 } DDV_SegInfo, * DDV_SegInfoPtr;
 
 /* Transform an N-dim Multiple SeqAlign into the Block SeqAlign (dsp only) */

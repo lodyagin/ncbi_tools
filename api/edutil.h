@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,11 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.18  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.17  2006/02/07 13:41:29  bollin
 * added function AdjustFeatureForGapChange, which changes a feature to accommodate
 * a change in the length of a gap
@@ -629,7 +634,7 @@ typedef struct seqedjournaldata
                                             * being inserted (or deleted) from a delta sequence
                                             * is unknown. */                                            
   BioseqPtr           bsp;                 /* The Bioseq for which the action is to be/was applied. */
-  Uint2               moltype;             /* Molecule type for bsp.  Stored for convenience. */
+  Uint1               moltype;             /* Molecule type for bsp.  Stored for convenience. */
   Uint2               entityID;            /* entityID for bsp.  Stored for convenience. */
   Pointer             next;                /* Journal entries are a doubly-linked list so that */
   Pointer             prev;                /* we can traverse the list in both directions for  */
@@ -680,7 +685,7 @@ NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewSeqEdit
  CharPtr             char_data,
  Boolean             spliteditmode,
  BioseqPtr           bsp,
- Uint2               moltype,
+ Uint1               moltype,
  Uint2               entityID);
  
 NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewFeatEdit
@@ -688,7 +693,7 @@ NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewFeatEdit
  SeqFeatPtr          sfp,
  SeqLocPtr           slp,
  BioseqPtr           bsp,
- Uint2               moltype,
+ Uint1               moltype,
  Uint2               entityID);
  
 NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewTranslate

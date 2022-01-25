@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service.c,v 6.80 2006/04/21 14:40:07 lavr Exp $
+/*  $Id: ncbi_service.c,v 6.84 2006/06/07 20:19:57 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -540,9 +540,46 @@ int/*bool*/ SERV_Update(SERV_ITER iter, const char* text, int code)
 }
 
 
-char* SERV_Print(SERV_ITER iter, const SConnNetInfo* referrer)
+static void s_SetDefaultReferer(SERV_ITER iter, SConnNetInfo* net_info)
 {
-    static const char referrer_header[] = "Referer: "/*standard misspelling*/;
+    char* str, *referer = 0;
+
+    if (strcasecmp(iter->op->name, "DISPD") == 0) {
+        const char* host = net_info->host;
+        const char* path = net_info->path;
+        const char* args = net_info->args;
+        char        port[8];
+
+        if (net_info->port && net_info->port != DEF_CONN_PORT)
+            sprintf(port, ":%hu", net_info->port);
+        else
+            *port = '\0';
+        if (!(referer = malloc(9 + strlen(host) + strlen(port)
+                               + strlen(path) + strlen(args)))) {
+            return;
+        }
+        strcat(strcat(strcpy(strcpy(referer, "http://")+7, host), port), path);
+        if (args[0])
+            strcat(strcat(referer, "?"), args);
+    } else if ((str = strdup(iter->op->name)) != 0) {
+        const char* host = net_info->client_host;
+        const char* name = iter->name;
+
+        if (!(referer = malloc(3 + 1 + 9 + 1 + 2*strlen(strlwr(str)) +
+                               strlen(host) + strlen(name)))) {
+            return;
+        }
+        strcat(strcat(strcat(strcpy(referer, str), "://"), host), "/");
+        strcat(strcat(strcat(referer, str), "?service="), name);
+        free(str);
+    }
+    assert(!net_info->http_referer);
+    net_info->http_referer = referer;
+}
+
+
+char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info)
+{
     static const char client_revision[] = "Client-Revision: %hu.%hu\r\n";
     static const char accepted_types[] = "Accepted-Server-Types:";
     static const char server_count[] = "Server-Count: ";
@@ -560,40 +597,8 @@ char* SERV_Print(SERV_ITER iter, const SConnNetInfo* referrer)
         return 0;
     }
     if (iter) {
-        int/*bool*/ refer = referrer && iter->op && iter->op->name;
-        if (refer && strcasecmp(iter->op->name, "DISPD") == 0) {
-            const char* host = referrer->host;
-            const char* path = referrer->path;
-            const char* args = referrer->args;
-            char        port[8];
-            if (referrer->port && referrer->port != DEF_CONN_PORT)
-                sprintf(port, ":%hu", referrer->port);
-            else
-                port[0] = '\0';
-            if (!BUF_Write(&buf, referrer_header, sizeof(referrer_header)-1) ||
-                !BUF_Write(&buf, "http://", 7)                               ||
-                !BUF_Write(&buf, host,      strlen(host))                    ||
-                !BUF_Write(&buf, port,      strlen(port))                    ||
-                !BUF_Write(&buf, path,      strlen(path))                    ||
-                (args[0] && (!BUF_Write(&buf, "?",  1)                       ||
-                             !BUF_Write(&buf, args, strlen(args))))          ||
-                !BUF_Write(&buf, "\r\n",    2)) {
-                BUF_Destroy(buf);
-                return 0;
-            }
-        } else if (refer && strcasecmp(iter->op->name, "LBSMD") == 0) {
-            const char* host = referrer->client_host;
-            const char* name = iter->name;
-            if (!BUF_Write(&buf, referrer_header, sizeof(referrer_header)-1) ||
-                !BUF_Write(&buf, "lbsm://",         7)                       ||
-                !BUF_Write(&buf, host,              strlen(host))            ||
-                !BUF_Write(&buf, "/lbsmd?service=", 15)                      ||
-                !BUF_Write(&buf, name,              strlen(name))            ||
-                !BUF_Write(&buf, "\r\n",            2)) {
-                BUF_Destroy(buf);
-                return 0;
-            }
-        }
+        if (net_info && !net_info->http_referer && iter->op && iter->op->name)
+            s_SetDefaultReferer(iter, net_info);
         /* Form accepted server types */
         buflen = sizeof(accepted_types) - 1;
         memcpy(buffer, accepted_types, buflen);
@@ -616,7 +621,7 @@ char* SERV_Print(SERV_ITER iter, const SConnNetInfo* referrer)
                 return 0;
             }
         }
-        /* how many server-infos for the dispatcher to send to us */
+        /* How many server-infos for the dispatcher to send to us */
         if (iter->ismask  ||  (iter->pref  &&  iter->host)) {
             if (!BUF_Write(&buf, server_count, sizeof(server_count) - 1)  ||
                 !BUF_Write(&buf,
@@ -695,6 +700,18 @@ double SERV_Preference(double pref, double gap, unsigned int n)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.c,v $
+ * Revision 6.84  2006/06/07 20:19:57  lavr
+ * Formatting;  also note that minor revision number has been bumped up to 220
+ *
+ * Revision 6.83  2006/06/07 20:17:29  lavr
+ * Slight rearrangement: s_FillOutReferer -> s_SetDefaultReferer
+ *
+ * Revision 6.82  2006/06/07 20:06:27  lavr
+ * +s_FillOutReferer()
+ *
+ * Revision 6.81  2006/05/19 23:25:43  lavr
+ * Reformat HTTP Referer: to account for all types of mappers
+ *
  * Revision 6.80  2006/04/21 14:40:07  lavr
  * Use reinstated SConnNetInfo::lb_disable as before
  *

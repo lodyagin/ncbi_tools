@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.169 $
+* $Revision: 6.177 $
 *
 * File Description: 
 *
@@ -68,6 +68,8 @@
 #include <alignmgr.h>
 #include <alignmgr2.h>
 #include <seqpanel.h>
+#include <blastpri.h>
+#include <spidey.h>
 
 /******/
 #include <pgppop.h>
@@ -132,7 +134,7 @@ static void get_client_rect (PaneL p, RectPtr prc)
   InsetRect (prc, HRZ_BORDER_WIDTH, VER_BORDER_WIDTH);
 }
 
-static Int2 getsize_seqids (ValNodePtr sloc, Uint2 printid)
+static Int2 getsize_seqids (ValNodePtr sloc, Uint1 printid)
 {
   ValNodePtr  vnp;
   SeqLocPtr   slp;
@@ -474,7 +476,7 @@ static EditAlignDataPtr AdpFieldsInit (EditAlignDataPtr adp, Int2 width, Int2 he
 }
 
 
-static EditAlignDataPtr EditAlignDataInit (SelStructPtr master, Int2 width, Int2 height, Int2 marginleft, Int2 columnpcell, Handle font, Boolean size_pixel, Uint1 display_panel)
+static EditAlignDataPtr EditAlignDataInit (SelStructPtr master, Int2 width, Int2 height, Int2 marginleft, Uint1 columnpcell, Handle font, Boolean size_pixel, Uint1 display_panel)
 {
   EditAlignDataPtr adp;
 
@@ -2039,7 +2041,8 @@ static void SelectAllProc (IteM i)
   ValNodePtr       vnp;
   SeqLocPtr        slp;
   AlignNodePtr     anp;
-  Uint2            ei, ii;
+  Uint2            ei;
+  Uint4            ii;
   Boolean          first = TRUE;
 
   if ( ( pnl= GetPanelFromWindow ((WindoW)ParentWindow (i)) ) == NULL) return;
@@ -2128,7 +2131,8 @@ static void SelectSubsProc (IteM i)
   Int2             seqnumber,
                    nalgline,
                    j;
-  Uint2            eID, iID;
+  Uint2            eID;
+  Uint4            iID;
   Boolean          goOn= FALSE,
                    sel = FALSE,
                    first=TRUE;
@@ -2296,7 +2300,7 @@ static void ComplementItemProc (IteM i)
 }
 
 
-static void changeseqid (PaneL pnl, Uint2 choice)
+static void changeseqid (PaneL pnl, Uint1 choice)
 {
   WindoW           temport;
   EditAlignDataPtr adp;
@@ -2720,6 +2724,7 @@ static void SalsaNewFeaturesMenu (MenU m, Boolean is_na)
                 subtype = ompp->subinputtype;
                 if (subtype == fdp->featdef_key &&
                     subtype != FEATDEF_PUB &&
+                    subtype != FEATDEF_IMP &&
                     subtype != FEATDEF_Imp_CDS &&
                     subtype != FEATDEF_misc_RNA &&
                     subtype != FEATDEF_precursor_RNA &&
@@ -3532,12 +3537,13 @@ salp = SeqAlignList2PosStrand(salp);
   return TRUE;
 }
 
-static void SeqAlignBioseqRegister (SeqAlignPtr salp, Uint2 *entityID, Uint2 *itemID)
+static void SeqAlignBioseqRegister (SeqAlignPtr salp, Uint2 *entityID, Uint4 *itemID)
 {
   SeqAlignPtr tmp;
   SeqIdPtr    sip;
   Int2        j;
-  Uint2       eID=0, iID=0;
+  Uint2       eID=0;
+  Uint4       iID=0;
   Boolean     first=TRUE;
 
   for (tmp=salp; tmp!=NULL; tmp=tmp->next)
@@ -3655,13 +3661,14 @@ extern void SalsaPanelHasResized (PaneL pnl)
   SetPanelExtra (pnl, &adp); 
 }
 
-extern Boolean FindIdsInSalsaPanel (PaneL pnl, PoinT pt, Uint2 *entityID, Uint2 *itemID, Uint2 *itemtype)
+extern Boolean FindIdsInSalsaPanel (PaneL pnl, PoinT pt, Uint2 *entityID, Uint4 *itemID, Uint2 *itemtype)
 {
   EditAlignDataPtr adp;
   RecT             rp;
   Int4             pos;
   Int2             line;
-  Uint2            iID, eID, itype, isubtype;
+  Uint4            iID;
+  Uint2            eID, itype, isubtype;
   Uint1            what;
   SeqAlignPtr      salp;
 
@@ -3740,7 +3747,8 @@ extern void PopulateSalsaPanel (PaneL pnl, SeqEntryPtr sep, Boolean all_seq, Uin
   SeqAlignPtr      salp = NULL;
   RecT             rp;
   Int2             height, width;
-  Uint2            entityID, itemID;
+  Uint2            entityID;
+  Uint4            itemID;
   SeqEditViewProcsPtr  svpp;
 
   if (sep == NULL)
@@ -4462,7 +4470,8 @@ static void DoCopyFeatBtn (ButtoN b)
   PropaStructPtr     psp;
   SeqIdPtr           target_id,
                      source_id;
-  Uint2              entityID, itemID;
+  Uint2              entityID;
+  Uint4              itemID;
   Boolean            val = FALSE;
   
   w = (WindoW)ParentWindow (b);
@@ -5032,7 +5041,7 @@ static Int2
 FinishOpeningEditAlignmentWindow 
 (SeqAlignPtr salp,
  Uint2       input_entityID,
- Uint2       input_itemID,
+ Uint4       input_itemID,
  Uint2       input_itemtype,
  Uint2       procid,
  Uint2       proctype)
@@ -5118,7 +5127,7 @@ extern void OldAlignmentEditor (IteM i)
   ValNodePtr   seq_annot_list;
   SeqAnnotPtr  sap;
   SeqAlignPtr  salp = NULL;
-  Boolean      rval;
+  Int2         rval;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -5640,6 +5649,2292 @@ static void InsertSequenceButton (ButtoN b)
    Remove ( (WindoW)ParentWindow (b) );
    return;
 }
+
+
+static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, BioseqPtr bsp1, BioseqPtr bsp2, Int4 threshold, CharPtr PNTR message, Int4Ptr nonly)
+{
+   AMFreqPtr         afp;
+   Int4              alln;
+   AMAlignIndex2Ptr  amaip;
+   Int4              beg;
+   Int4              ctr;
+   Int4              end;
+   Boolean           found;
+   Int4              gaps;
+   Int4              i;
+   Int4              j;
+   Int4              last;
+   Int4              len;
+   Int4              n;
+   Int4              nctr;
+   Char              newstr[256];
+   Int4              mismatches;
+   Uint1             res;
+   SeqAlignPtr       sap;
+   SeqAlignPtr       sap_new;
+   SeqAlignPtr       sap_new2;
+   SeqAlignPtr       sap_orig;
+   SeqPortPtr        spp;
+   Int4              start1;
+   Int4              start2;
+   Int4              stop1;
+   Int4              stop2;
+   Uint1             strand;
+
+   if (salp == NULL)
+      return NULL;
+   sap = NULL;
+   if (salp->next != NULL)
+   {
+      sap_orig = SeqAlignDup(salp);
+      AlnMgr2IndexLite(salp);
+      AlnMgr2SortAlnSetByNthRowPos(salp, 1);
+      SPI_RemoveInconsistentAlnsFromSet(salp, 10, 1, SPI_LEFT);
+      amaip = (AMAlignIndex2Ptr)(salp->saip);
+      last = 0;
+      sap_new = NULL;
+      for (i=0; i<amaip->numsaps-1; i++)
+      {
+         amaip->saps[i]->next = NULL;
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, &start1, &stop1);
+         AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &start2, &stop2);
+         strand = AlnMgr2GetNthStrand(amaip->saps[i], 1);
+         if (strand == Seq_strand_minus)
+         {
+            if (start1 <= stop2)
+               AlnMgr2TruncateSeqAlign(amaip->saps[i], stop2+1, start1, 1);
+            SeqAlignFree(amaip->saps[i]->next);
+            amaip->saps[i]->next = NULL;
+         } else
+         {
+            if (stop1 >= start2)
+               AlnMgr2TruncateSeqAlign(amaip->saps[i], start1, start2-1, 1);
+            SeqAlignFree(amaip->saps[i]->next);
+            amaip->saps[i]->next = NULL;
+         }
+      }
+      amaip->saps[amaip->numsaps-1]->next = NULL;
+      for (i=0; i<amaip->numsaps-1; i++)
+      {
+         if (sap_new == NULL)
+            sap_new = SeqAlignDup(amaip->saps[i]);
+         sap_new2 = AlnMgr2MergeTwoAlignments(sap_new, amaip->saps[i+1]);
+         if (sap_new2 == NULL)
+            sap_new = amaip->saps[i];
+         else
+         {
+            SeqAlignFree(sap_new);
+            sap_new = sap_new2;
+            sap_new2 = NULL;
+         }
+      }
+      AlnMgr2IndexSingleChildSeqAlign(sap_new);
+      if (AlnMgr2GetAlnLength(sap_orig, FALSE) >= AlnMgr2GetAlnLength(sap_new, FALSE))
+      {
+         SeqAlignFree(sap_new);
+         sap_new = SeqAlignDup(sap_orig);
+      }
+      salp = sap_new;
+   }
+   sap = salp;
+   AlnMgr2IndexSingleChildSeqAlign(sap);
+   AlnMgr2ExtendToCoords(sap, 0, -1, 1);
+   AlnMgr2GetNthSeqRangeInSA(sap, 1, &start1, &stop1);
+   len = stop1 - start1 + 1; /* the actual length of sequence1 covered by aln */
+   afp = AlnMgr2ComputeFreqMatrix(sap, 0, -1, 0);
+   gaps = 0;
+   mismatches = n = 0;
+   alln = 0;
+   for (i=0; i<afp->len; i++)
+   {
+      if (afp->freq[5][i] > 0)
+         alln++;
+      found = FALSE;
+      for (j=0; !found && j<afp->size; j++)
+      {
+         if (afp->freq[0][i] > 0)
+         {
+            gaps++;
+            found = TRUE;
+         } else if (afp->freq[j][i] == 1 && afp->freq[5][i] == 0)
+         {
+            mismatches++;
+            found = TRUE;
+         } else if (afp->freq[j][i] == 1 && afp->freq[5][i] == 1)
+         {
+            n++;
+            found = TRUE;
+         }
+      }
+   }
+   if (alln > 0 && (gaps>0 || mismatches>0 || n > 0))
+   {
+      spp = SeqPortNew(bsp1, 0, bsp1->length-1, Seq_strand_plus, Seq_code_ncbi4na);
+      beg = end = 0;
+      ctr = 0;
+      nctr = 0;
+      while ((res = SeqPortGetResidue(spp)) != SEQPORT_EOF)
+      {
+         if (res == 15)
+         {
+            if (beg == ctr)
+               beg++;
+            else
+            {
+               end++;
+               nctr++;
+            }
+         } else
+            end = 0;
+         ctr++;
+      }
+      nctr = nctr - end;
+      if (beg > 0 || end > 0)
+      {
+         sprintf(newstr, "The local sequence has %d terminal N%s. ", beg+end, beg+end!=1?"s":"");
+         StringCat(*message, newstr);
+      }
+      if (nctr > 0)
+      {
+         sprintf(newstr, "The local sequence has %d internal N%s. ", nctr, nctr!=1?"s":"");
+         StringCat(*message, newstr);
+      }
+      SeqPortFree(spp);
+   }
+   if ((*message[0] != '\0') && len == bsp1->length && gaps == 0 && mismatches == 0)
+   {
+      if (nctr > 0)
+         *nonly = nctr+beg+end;
+      else
+         *nonly = -(beg+end);
+      sprintf(newstr, "\nThere are no other differences between the local and database sequences.");
+      StringCat(*message, newstr);
+      return sap;
+   } else
+      *nonly = 0;
+   if (len < bsp1->length)
+   {
+      sprintf(newstr, "%sThe alignment to the database sequence does not cover all of the local sequence. ", *message[0]=='\0'?"":"\n");
+      StringCat(*message, newstr);
+      spp = SeqPortNew(bsp1, len, bsp1->length-1, Seq_strand_plus, Seq_code_ncbi4na);
+      alln = TRUE;
+      while (alln && (res = SeqPortGetResidue(spp)) != SEQPORT_EOF)
+      {
+         if (res != 15)
+            alln = FALSE;
+      }
+      if (alln)
+         sprintf(newstr, "\nThe unaligned sequence consists only of Ns. ");
+      else
+         sprintf(newstr, "\nThere are non-N residues in the unaligned sequence. ");
+      StringCat(*message, newstr);
+      SeqPortFree(spp);
+   }
+   if (gaps > 0 || mismatches > 0 || n > 0)
+   {
+      sprintf(newstr, "%sThe alignment to the database sequence has %d gap%s, %d mismatch%s, and %d N-mismatch%s. ", afp->len<bsp1->length?"\n":"", gaps, (gaps!=1?"s":""), mismatches, (mismatches!=1?"es":""), n, (n!=1?"es":""));
+      StringCat(*message, newstr);
+   }
+   return sap;
+}
+
+static void SeqAlignStartUpdate (SeqAlignPtr salp, SeqIdPtr target_sip, Int4 offset, Int4 len, Uint1 strand)
+{
+  SeqAlignPtr salptmp;
+  DenseSegPtr dsp;
+  SeqIdPtr    pre, sip, next;
+  Int4Ptr     lenp,
+              startp;
+  Uint1Ptr    strandp;
+  Int4        len_sum,
+              start;
+  Int2        index, k, j;
+
+  if (salp==NULL || offset<=0)
+     return;
+  for (salptmp=salp; salptmp!=NULL; salptmp=salptmp->next)
+  {
+     if (salptmp->segtype == 2)
+     {
+        dsp = (DenseSegPtr) salptmp->segs;
+        pre = NULL;
+        index=0;
+        sip=dsp->ids;
+        while (sip)
+        {
+           next=sip->next;
+           if (SeqIdForSameBioseq(target_sip, sip))
+           {
+              if (strand == Seq_strand_minus)
+              {
+                 strandp=dsp->strands;
+                 if (strandp != NULL) {
+                   strandp+=index;
+                   for (j=0; j < dsp->numseg; j++)
+                   {
+                      if (*strandp == Seq_strand_minus)
+                         *strandp = Seq_strand_plus;
+                      else if (*strandp == Seq_strand_plus)
+                         *strandp = Seq_strand_minus;
+                      strandp+=dsp->dim;
+                   }
+                } else
+                {
+                   dsp->strands = (Uint1Ptr)MemNew(dsp->dim*dsp->numseg*sizeof(Uint1));
+                   for (j=0; j<dsp->dim*dsp->numseg; j++)
+                      dsp->strands[j] = Seq_strand_plus;
+                   for(j=0; j<dsp->numseg; j++)
+                      dsp->strands[j*dsp->dim + index] = Seq_strand_minus;
+                }
+                 lenp=dsp->lens;
+                 startp=dsp->starts;
+                 start=startp[index];
+                 len_sum=0;
+                 j=dsp->dim*dsp->numseg-dsp->dim;
+                 k=dsp->numseg-1;
+                 for (j=0; j<dsp->numseg; j++) {
+                   if (startp[j*dsp->dim + index]>=0) {
+                       startp[j*dsp->dim + index]=len-startp[j*dsp->dim + index]-dsp->lens[j]+1;
+                   }
+                 }
+              } else
+              {
+                 for (j=0; j<dsp->numseg; j++) {
+                    if (dsp->starts[dsp->dim*j+index] != -1)
+                        dsp->starts[dsp->dim*j+index] += offset;
+                 }
+              }
+           }
+           pre=sip;
+           sip=next;
+           index++;
+        }
+     }
+  }
+}
+
+
+static SeqIdPtr SWSeqIdReplaceID(SeqIdPtr sip_head, SeqIdPtr sip1, SeqIdPtr sip2)
+{
+   Boolean   found;
+   SeqIdPtr  sip;
+   SeqIdPtr  sip_prev;
+
+   sip = sip_head;
+   sip_prev = NULL;
+   found = FALSE;
+   while (sip != NULL && !found)
+   {
+      if (SeqIdComp(sip, sip1) == SIC_YES)
+         found = TRUE;
+      else
+      {
+         sip_prev = sip;
+         sip = sip->next;
+      }
+   }
+   if (!found)
+      return sip_head;
+   if (sip_prev == NULL)
+   {
+      sip2->next = sip_head->next;
+      SeqIdFree(sip_head);
+      return sip2;
+   } else
+   {
+      sip_prev->next = sip2;
+      sip2->next = sip->next;
+      SeqIdFree(sip);
+      return sip_head;
+   }
+}
+
+/**********************************************************************
+ * 
+ * nrSeqIdIsInValNodeList (vnp, sip)
+ * 
+ * This function checks to see if SeqIdPtr sip points to the same Bioseq
+ * as the SeqIdPtr values in ValNode list vnp's data.ptrvalues.
+ *
+ * Return values:
+ *       TRUE if a match was found
+ *       FALSE if no match was found
+ **********************************************************************/
+static Boolean nrSeqIdIsInValNodeList (ValNodePtr vnp, SeqIdPtr sip)
+{
+  ValNodePtr vnptmp=NULL;
+  SeqIdPtr   siptmp;
+  Boolean    rval = FALSE;
+
+  if (sip == NULL)
+  {
+    return FALSE;
+  }
+  
+  for (vnptmp=vnp; vnptmp!=NULL && !rval; vnptmp=vnptmp->next) {
+    siptmp=(SeqIdPtr)vnptmp->data.ptrvalue;
+    if (SeqIdForSameBioseq(sip, siptmp))
+    {
+      rval = TRUE;
+    }
+  }
+ 
+  return rval;
+}
+
+
+/**********************************************************************
+ * 
+ * nrSeqIdAdd (vnp, sip)
+ * 
+ * This function checks to see if SeqIdPtr sip points to the same Bioseq
+ * as the SeqIdPtr values in ValNode list vnp's data.ptrvalues.
+ * If not, sip is added to the list.
+ *
+ * Return value:
+ *       A ValNodeList pointing to SeqIDPtr values
+ **********************************************************************/
+static ValNodePtr nrSeqIdAdd (ValNodePtr vnp, SeqIdPtr sip)
+{
+  if (sip == NULL)
+  {
+    return vnp;
+  }
+  
+  if (!nrSeqIdIsInValNodeList (vnp, sip))
+  {
+    ValNodeAddPointer(&vnp, 0, sip);
+  }
+     
+  return vnp;
+}
+
+
+static Int4 CalculateAlignmentDisplayPosition (SeqAlignPtr sap, Int4 aln_pos, Int4 row)
+{
+  Int4 seq_pos;
+  
+  /* calculate alignment position */
+  if (sap == NULL)
+  {
+    return aln_pos;
+  }
+  seq_pos = AlnMgr2MapSeqAlignToBioseq(sap, aln_pos, row); 
+  while ((seq_pos == ALNMGR_GAP || seq_pos == ALNMGR_ROW_UNDEFINED) && aln_pos > 1) { /* count back if we in the gap */
+    aln_pos--;
+    seq_pos = AlnMgr2MapSeqAlignToBioseq(sap, aln_pos, 1);
+  }
+  if (seq_pos == ALNMGR_GAP || seq_pos == ALNMGR_ROW_UNDEFINED) 
+      seq_pos = 1;  /* Gap at the begining of the alignment */
+  return seq_pos;
+}
+
+
+static void SWPrintFarpointerAln(SeqAlignPtr sap, FILE *fp)
+{
+   Uint1Ptr    buf, seqbuf;
+   Char        dig [6];
+   Int4        i;
+   Int4        l;
+   Int4        len;
+   Int4        linesize = 70;
+   SeqIdPtr    sip;
+   SeqIdPtr    sip2;
+   Int4        alnbuflen;
+   Uint1       strand1, strand2;
+   Char        textid1[16];
+   Char        textid2[16];
+   Int4        seq_pos;
+
+   if (sap == NULL || fp == NULL)
+      return;
+   if (sap->saip == NULL)
+      AlnMgr2IndexSingleChildSeqAlign(sap);
+   buf = (Uint1Ptr)MemNew(linesize * sizeof(Uint1));
+   seqbuf = (Uint1Ptr)MemNew(linesize * sizeof(Uint1));
+
+   for (i=0; i<16; i++)
+   {
+      textid1[i] = textid2[i] = ' ';
+   }
+   sip = AlnMgr2GetNthSeqIdPtr(sap, 1);
+   SeqIdWrite(sip, textid1, PRINTID_TEXTID_ACC_VER, 15);
+   sip2 = AlnMgr2GetNthSeqIdPtr(sap, 2);
+   SeqIdWrite(sip2, textid2, PRINTID_TEXTID_ACC_VER, 15);
+   for (i=0; i<15; i++)
+   {
+      if (textid1[i] == '\0')
+         textid1[i] = ' ';
+      if (textid2[i] == '\0')
+         textid2[i] = ' ';
+   }
+   textid1[15] = '\0';
+   textid2[15] = '\0';
+   
+   len = AlnMgr2GetAlnLength(sap, FALSE);
+   strand1 = AlnMgr2GetNthStrand(sap, 1);
+   strand2 = AlnMgr2GetNthStrand(sap, 2);
+   
+   for (l = 0; l < len; l+= linesize)
+   {
+     alnbuflen = linesize;
+     AlignmentIntervalToString (sap, 1, l, l + linesize - 1, 1, FALSE, seqbuf, buf, &alnbuflen, TRUE);
+     StringUpper ((char *)buf);
+     seq_pos = CalculateAlignmentDisplayPosition (sap, l, 1);
+     sprintf (dig, "%5d", seq_pos + 1);
+     
+     fprintf(fp, "%s%c%s %s\n", textid1, strand1 == Seq_strand_plus?'>':'<', dig, buf);
+     alnbuflen = linesize;
+     AlignmentIntervalToString (sap, 2, l, l + linesize - 1, 1, FALSE, seqbuf, buf, &alnbuflen, TRUE);
+     StringUpper ((char *)buf);
+     seq_pos = CalculateAlignmentDisplayPosition (sap, l, 2);
+     sprintf (dig, "%5d", seq_pos + 1);
+     fprintf(fp, "%s%c%s %s\n", textid2, strand2 == Seq_strand_plus?'>':'<', dig, buf);  
+     fprintf (fp, "\n");   
+   }
+
+   sip = SeqIdFree(sip);
+   sip2 = SeqIdFree (sip2);
+   buf = MemFree(buf);
+   seqbuf = MemFree (seqbuf);
+}
+
+
+#if 1
+
+typedef enum {
+    FARPOINTER_LOOKUP_NO_ERROR = 0,
+    FARPOINTER_LOOKUP_NOT_FOUND,
+    FARPOINTER_LOOKUP_NONLY,
+    FARPOINTER_LOOKUP_BAD_ALN
+} EFarPointerError;
+
+typedef struct farpointer {
+  SeqIdPtr    sip_local;
+  SeqIdPtr    sip_db;
+  BioseqPtr   bsp_local;
+  BioseqPtr   bsp_db;
+  SeqAlignPtr salp;
+  Boolean     revcomp;
+  CharPtr     err_msg;
+  Int4        nonly;
+  EFarPointerError err_type;
+}FarPointerData, PNTR FarPointerPtr;
+
+typedef struct farpointerwin 
+{
+  FORM_MESSAGE_BLOCK
+  
+  ParData ParFmt;
+  ColData ColFmt[3];  
+  
+  DoC        doc;
+  BoolPtr    selected;
+  Int2       lineheight;  
+  
+  FarPointerPtr far_pointer_list;
+  Int4          num_sequences;
+} FarPointerWinData, PNTR FarPointerWinPtr;
+
+
+static FarPointerPtr FreeFarPointerData (FarPointerPtr fpp, Int4 num)
+{
+  Int4 i;
+  
+  if (fpp != NULL) {
+    for (i = 0; i < num; i++) {
+      fpp[i].sip_local = SeqIdFree (fpp[i].sip_local);
+      fpp[i].sip_db = SeqIdFree (fpp[i].sip_db);
+      BioseqUnlock (fpp[i].bsp_local);
+      if (fpp[i].bsp_local != NULL) {
+        fpp[i].bsp_local->idx.deleteme = TRUE;
+      }
+      fpp[i].bsp_local = NULL;
+      BioseqUnlock (fpp[i].bsp_db);
+      fpp[i].bsp_db = NULL;
+      fpp[i].salp = SeqAlignFree (fpp[i].salp);
+      fpp[i].err_msg = MemFree (fpp[i].err_msg);
+    }
+    fpp = MemFree (fpp);
+  }
+  return fpp;
+}
+
+static void CleanupFarPointerWinProc (GraphiC g, Pointer data)
+{
+  FarPointerWinPtr fpwp;
+  
+  if (data != NULL)  
+  {
+    fpwp = (FarPointerWinPtr) data;
+    fpwp->selected = MemFree (fpwp->selected);
+    fpwp = MemFree (fpwp);
+  }
+}
+
+static Int4 GetDisplayGroupNum (FarPointerPtr fpp)
+{
+  if (fpp == NULL) return -1;
+  else if (fpp->sip_db == NULL) return 4;
+  else if (fpp->bsp_db == NULL) return 3;
+  else if (fpp->nonly < 0) return 1;
+  else if (fpp->err_msg != NULL) return 0;
+  else return 2;
+}
+
+static Int4 GetSeqNumFromListPos (Int4 list_pos, FarPointerPtr fpp, Int4 num)
+{
+  Int4       seq_num, list_offset = 0, group_num;
+  
+  if (fpp == NULL || num < list_pos)
+  {
+    return 0;
+  }
+
+  /* TO DO: sort items by how they are listed */
+  
+  for (group_num = 0; group_num < 5; group_num++) {
+    for (seq_num = 0; seq_num < num; seq_num++) {
+      if (GetDisplayGroupNum(fpp + seq_num) == group_num) {
+        if (list_offset == list_pos) {
+          return seq_num;
+        }
+        list_offset++;
+      }
+    }
+  }
+  return 0;
+}
+
+static void ReleaseFarPointer (DoC d, PoinT pt)
+
+{
+  Int2            col;
+  FarPointerWinPtr  fpwp;
+  Int2            item;
+  RecT            rct;
+  Int2            row;
+  Int4            seq_num, group_num;
+
+  fpwp = (FarPointerWinPtr) GetObjectExtra (d);
+  if (fpwp != NULL && fpwp->selected != NULL) {
+    MapDocPoint (d, pt, &item, &row, &col, &rct);
+    rct.left += 1;
+    rct.right = rct.left + fpwp->lineheight;
+    rct.bottom = rct.top + (rct.right - rct.left);
+    if (row == 1 && col == 3 && PtInRect (pt, &rct))
+    {
+      seq_num = GetSeqNumFromListPos (item - 1, fpwp->far_pointer_list, fpwp->num_sequences);
+      if (seq_num > -1 && seq_num < fpwp->num_sequences)
+      {
+        group_num = GetDisplayGroupNum(fpwp->far_pointer_list + seq_num);
+        if (group_num == 3 || group_num == 4) {
+          /* can never replace non-far pointers */
+          fpwp->selected[seq_num] = FALSE;
+        } else if (fpwp->selected [seq_num]) {
+          fpwp->selected [seq_num] = FALSE;
+        } else {
+          fpwp->selected [seq_num] = TRUE;
+        }
+        InsetRect (&rct, -1, -1);
+        InvalRect (&rct);
+        Update ();
+      }
+    }
+  }
+}
+
+static void DrawFarPointer (DoC d, RectPtr r, Int2 item, Int2 firstLine)
+
+{
+  FarPointerWinPtr fpwp;
+  RecT             rct;
+  RecT             doc_rect;
+  Int4             seq_num, group_num;
+
+  fpwp = (FarPointerWinPtr) GetObjectExtra (d);
+  
+  if (fpwp == NULL || r == NULL 
+      || item < 1 || item > fpwp->num_sequences 
+      || firstLine != 0)
+  {
+    return;
+  }
+  
+  rct = *r;
+  rct.right --;
+  rct.left = rct.right - fpwp->lineheight;
+  rct.bottom = rct.top + (rct.right - rct.left);
+  
+  /* make sure we don't draw a box where we aren't drawing text */
+  ObjectRect (fpwp->doc, &doc_rect);
+  InsetRect (&doc_rect, 4, 4);
+  if (rct.bottom > doc_rect.bottom)
+  {
+    return;
+  }
+
+  seq_num = GetSeqNumFromListPos (item - 1, fpwp->far_pointer_list, fpwp->num_sequences);
+  if (seq_num > -1 && seq_num < fpwp->num_sequences) {
+    group_num = GetDisplayGroupNum(fpwp->far_pointer_list + seq_num);
+    if (group_num != 3 && group_num != 4) {
+      FrameRect (&rct);
+  
+      if (fpwp->selected != NULL && fpwp->selected [seq_num]) {
+        MoveTo (rct.left, rct.top);
+        LineTo (rct.right - 1, rct.bottom - 1);
+        MoveTo (rct.left, rct.bottom - 1);
+        LineTo (rct.right - 1, rct.top);
+      }
+    }
+  }
+}
+
+static void GetTextForOneFarPointerData (FarPointerPtr fpp, CharPtr doc_line)
+{
+  CharPtr      cp;
+
+  if (fpp == NULL || doc_line == NULL) return;
+  
+  SeqIdWrite (fpp->sip_local, doc_line, PRINTID_TEXTID_ACC_ONLY, 255);
+  if (fpp->sip_db == NULL) {
+    StringCat (doc_line, "\tNot a far pointer\t\n");
+  } else if (fpp->bsp_db == NULL) {
+    StringCat (doc_line, "\tNot found in GenBank\t\n");
+  } else if (fpp->err_msg != NULL) {
+    /* replace carriage returns with spaces */
+    cp = StringChr (fpp->err_msg, '\n');
+    while (cp != NULL) {
+      *cp = ' ';
+      cp = StringChr (cp + 1, '\n');
+    }
+    /* replace tabs with spaces */
+    cp = StringChr (fpp->err_msg, '\t');
+    while (cp != NULL) {
+      *cp = ' ';
+      cp = StringChr (cp + 1, '\t');
+    }
+    
+    StringCat (doc_line, "\t");
+    StringCat (doc_line, fpp->err_msg);
+    StringCat (doc_line, "\t\n");
+  } else {
+    StringCat (doc_line, "\t\t\n");
+  }
+}
+
+static void RedrawFarPointerWin (FarPointerWinPtr fpwp)
+{
+  Int4         i, group_num;
+  Char         doc_line [500];
+  
+  if (fpwp == NULL)
+  {
+    return;
+  }
+
+  Reset (fpwp->doc);
+  
+  for (group_num = 0; group_num < 5; group_num++) {
+    for (i = 0; i < fpwp->num_sequences; i++) {
+      if (GetDisplayGroupNum(fpwp->far_pointer_list + i) == group_num) {
+        GetTextForOneFarPointerData (fpwp->far_pointer_list + i, doc_line);
+        AppendText (fpwp->doc, doc_line, &(fpwp->ParFmt), fpwp->ColFmt, Nlm_programFont);
+        if (group_num == 2) {
+          fpwp->selected [i] = TRUE;
+        } else {
+          fpwp->selected [i] = FALSE;
+        }
+      }
+    }
+  }
+  
+
+  UpdateDocument (fpwp->doc, 0, 0);  
+}
+
+static void ExportBadAlignments (ButtoN b)
+{
+  FarPointerWinPtr   fpwp;
+  Char               path [PATH_MAX];
+  FILE               *fp;
+  Int4               i;
+  Char               str[50];
+  
+  fpwp = (FarPointerWinPtr) GetObjectExtra (b);
+  if (fpwp == NULL) return;
+  
+  if (GetOutputFileName (path, sizeof (path), NULL)) {
+    fp = FileOpen (path, "w");
+    if (fp == NULL) {
+      Message (MSG_ERROR, "Unable to open %s", path);
+      return;
+    }
+    for (i = 0; i < fpwp->num_sequences; i++) {
+      if (fpwp->far_pointer_list[i].salp != NULL 
+          && fpwp->far_pointer_list[i].err_msg != NULL) {
+        SeqIdWrite (fpwp->far_pointer_list[i].sip_local, str, PRINTID_FASTA_LONG, sizeof (str) - 1);
+        fprintf (fp, "%s\n", str);
+        fprintf (fp, "%s\n", fpwp->far_pointer_list[i].err_msg);
+        WriteAlignmentInterleaveToFileEx (fpwp->far_pointer_list[i].salp, fp,
+                                        60, TRUE, TRUE);
+      }
+    }
+  }
+  FileClose (fp);
+}
+
+
+static void ExportFASTAForUnselectedUpdates (ButtoN b)
+{
+  FarPointerWinPtr   fpwp;
+  Char               path [PATH_MAX];
+  FILE               *fp;
+  Int4               i;
+  
+  fpwp = (FarPointerWinPtr) GetObjectExtra (b);
+  if (fpwp == NULL) return;
+  
+  if (GetOutputFileName (path, sizeof (path), NULL)) {
+    fp = FileOpen (path, "w");
+    if (fp == NULL) {
+      Message (MSG_ERROR, "Unable to open %s", path);
+      return;
+    }
+    for (i = 0; i < fpwp->num_sequences; i++) {
+      if (fpwp->far_pointer_list[i].bsp_db != NULL 
+          && !fpwp->selected[i]) {
+        EditBioseqToFasta (fpwp->far_pointer_list[i].bsp_db, fp, 0, fpwp->far_pointer_list[i].bsp_db->length - 1);	          
+      }
+    }
+  }
+  FileClose (fp);
+}
+
+static void ExportFarPointerErrorMessages (ButtoN b)
+{
+  FarPointerWinPtr   fpwp;
+  Char               path [PATH_MAX];
+  FILE               *fp;
+  Int4               i;
+  Char               str[50];
+  
+  fpwp = (FarPointerWinPtr) GetObjectExtra (b);
+  if (fpwp == NULL) return;
+ 
+  TmpNam (path);  
+  fp = FileOpen (path, "w");
+  if (fp == NULL) {
+    Message (MSG_ERROR, "Unable to open %s", path);
+    return;
+  }
+  for (i = 0; i < fpwp->num_sequences; i++) {
+    if (fpwp->far_pointer_list[i].err_msg != NULL 
+        && fpwp->far_pointer_list[i].sip_local != NULL) {
+        SeqIdWrite (fpwp->far_pointer_list[i].sip_local, str, PRINTID_FASTA_LONG, sizeof (str) - 1);
+        fprintf (fp, "%s\t%s\n", str, fpwp->far_pointer_list[i].err_msg);        
+    }
+  }
+  FileClose (fp);
+  LaunchGeneralTextViewer (path, "FarPointer Errors");
+  FileRemove (path);
+}
+
+
+static Boolean DisplayFarPointerData (FarPointerPtr fpp, Int4 num)
+{
+  WindoW w;
+  ModalAcceptCancelData acd;
+  FarPointerWinPtr   fpwp;
+  ButtoN             b;
+  GrouP              h, g, c;
+  RecT               r;
+  Int4               i;
+  
+  if (fpp == NULL) {
+    return FALSE;
+  }
+  
+  fpwp = (FarPointerWinPtr) MemNew (sizeof (FarPointerWinData));
+  
+  fpwp->far_pointer_list = fpp;
+  fpwp->num_sequences = num;
+  fpwp->selected = (BoolPtr) MemNew (sizeof(Boolean) * num);
+  
+  /* initialize document paragraph format */
+  fpwp->ParFmt.openSpace = FALSE;
+  fpwp->ParFmt.keepWithNext = FALSE;
+  fpwp->ParFmt.keepTogether = FALSE;
+  fpwp->ParFmt.newPage = FALSE;
+  fpwp->ParFmt.tabStops = FALSE;
+  fpwp->ParFmt.minLines = 0;
+  fpwp->ParFmt.minHeight = 0;
+  
+  /* initialize document column format */
+  fpwp->ColFmt[0].pixWidth = 0;
+  fpwp->ColFmt[0].pixInset = 0;
+  fpwp->ColFmt[0].charWidth = 80;
+  fpwp->ColFmt[0].charInset = 0;
+  fpwp->ColFmt[0].font = NULL;
+  fpwp->ColFmt[0].just = 'l';
+  fpwp->ColFmt[0].wrap = TRUE;
+  fpwp->ColFmt[0].bar = FALSE;
+  fpwp->ColFmt[0].underline = FALSE;
+  fpwp->ColFmt[0].left = FALSE;
+  fpwp->ColFmt[0].last = FALSE;
+  fpwp->ColFmt[1].pixWidth = 0;
+  fpwp->ColFmt[1].pixInset = 0;
+  fpwp->ColFmt[1].charWidth = 80;
+  fpwp->ColFmt[1].charInset = 0;
+  fpwp->ColFmt[1].font = NULL;
+  fpwp->ColFmt[1].just = 'l';
+  fpwp->ColFmt[1].wrap = TRUE;
+  fpwp->ColFmt[1].bar = FALSE;
+  fpwp->ColFmt[1].underline = FALSE;
+  fpwp->ColFmt[1].left = FALSE;
+  fpwp->ColFmt[1].last = FALSE;
+  fpwp->ColFmt[2].pixWidth = 0;
+  fpwp->ColFmt[2].pixInset = 0;
+  fpwp->ColFmt[2].charWidth = 80;
+  fpwp->ColFmt[2].charInset = 0;
+  fpwp->ColFmt[2].font = NULL;
+  fpwp->ColFmt[2].just = 'l';
+  fpwp->ColFmt[2].wrap = TRUE;
+  fpwp->ColFmt[2].bar = FALSE;
+  fpwp->ColFmt[2].underline = FALSE;
+  fpwp->ColFmt[2].left = FALSE;
+  fpwp->ColFmt[2].last = TRUE;  
+  
+  w = MovableModalWindow (50, 33, -10, -10, "Far Pointer Sequences", NULL);
+  SetObjectExtra (w, fpwp, CleanupFarPointerWinProc);
+  fpwp->form = (ForM) w;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  fpwp->doc = DocumentPanel (h, stdCharWidth * 50, stdLineHeight * 20);
+  SetObjectExtra (fpwp->doc, fpwp, NULL);
+  SetDocAutoAdjust (fpwp->doc, TRUE);
+  SetDocProcs (fpwp->doc, NULL, NULL, ReleaseFarPointer, NULL); 
+  SetDocShade (fpwp->doc, DrawFarPointer, NULL, NULL, NULL);
+
+  SelectFont (Nlm_programFont);
+  fpwp->lineheight = LineHeight ();
+  
+  ObjectRect (fpwp->doc, &r);
+  InsetRect (&r, 4, 4);
+  fpwp->ColFmt[0].pixWidth = (r.right - r.left - fpwp->lineheight) / 2;
+  fpwp->ColFmt[1].pixWidth = (r.right - r.left - fpwp->lineheight) / 2;
+  fpwp->ColFmt[2].pixWidth = fpwp->lineheight;
+  
+  g = HiddenGroup (h, 4, 0, NULL);
+  b = PushButton (g, "Export Bad Alignments", ExportBadAlignments);
+  SetObjectExtra (b, fpwp, NULL);
+  Disable (b);
+  for (i = 0; i < fpwp->num_sequences; i++) {
+    if (fpwp->far_pointer_list[i].salp != NULL && fpwp->far_pointer_list[i].err_msg != NULL) {
+      Enable (b);
+      break;
+    }
+  }
+  b = PushButton (g, "Export FASTA for Unselected Sequences", ExportFASTAForUnselectedUpdates);
+  SetObjectExtra (b, fpwp, NULL);
+  
+  b = PushButton (g, "Export FarPointer Error Messages", ExportFarPointerErrorMessages);
+  SetObjectExtra (b, fpwp, NULL);
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton (c, "Replace Selected Sequences", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) fpwp->doc,
+                              (HANDLE) g,
+                              (HANDLE) c,
+                              NULL);  
+  RedrawFarPointerWin (fpwp);
+  Show (w);
+  Select (w);
+  ArrowCursor();
+  Update ();
+
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+
+  if (acd.accepted)
+  {
+    Hide (w);
+    for (i = 0; i < num; i++) {
+      if (!fpwp->selected[i]) {
+        fpp[i].salp = SeqAlignFree (fpp[i].salp);
+        BioseqUnlock (fpp[i].bsp_db);
+        fpp[i].bsp_db = NULL;
+        fpp[i].sip_db = SeqIdFree (fpp[i].sip_db);
+        /* make sure local sequence is not deleted */
+        BioseqUnlock (fpp[i].bsp_local);
+        fpp[i].bsp_local = NULL;
+      }
+    }
+        
+  }
+  Remove (w);
+  WatchCursor();
+  Update();
+  return acd.accepted;
+}
+
+/* This function will replace a sequence in an alignment record with one
+ * downloaded from GenBank.  It will also adjust the alignment starts
+ * for that sequence if the GenBank sequence is not identical to the
+ * sequence in the alignment (salp).
+ * vnp is a ValNodePtr to a list of sequence IDs for Bioseqs to be deleted
+ * later.
+ */
+static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
+{
+  Int4 num_rows, i;
+  CharPtr tmp, id_start, dot_pos;
+  Char    str [52];
+  FarPointerPtr far_pointer_list = NULL;
+  Int4          num_missing = 0, num_found = 0;
+  CharPtr       missing_cont_fmt = "The alignment contains %s that can not be found in GenBank.\nPlease check the accession number.\nContinue anyway?\n";
+  CharPtr       missing_fmt = "The alignment contains %s that can not be found in GenBank.\nPlease check the accession number.\n";
+  Int4                gi = 0;
+  Int4                version;
+  BLAST_OptionsBlkPtr options;
+  SeqAlignPtr         tmp_salp;
+  DenseSegPtr         dsp;
+  Int4                offset, len, start1, start2, stop1, stop2;
+  SeqIdPtr            sip, presip;
+  Uint1               strand;
+  
+  if (salp == NULL || salp->segtype != 2) {
+    return vnp;
+  }
+  
+  dsp = (DenseSegPtr) salp->segs;
+  
+  AlnMgr2IndexSingleChildSeqAlign(salp);
+  num_rows = AlnMgr2GetNumRows(salp);
+  
+  far_pointer_list = (FarPointerPtr) MemNew (num_rows * sizeof (FarPointerData)); 
+
+  for (i = 0; i < num_rows; i++) {
+    far_pointer_list[i].sip_local = AlnMgr2GetNthSeqIdPtr(salp, i + 1);
+    far_pointer_list[i].sip_db = NULL;
+    far_pointer_list[i].bsp_local = NULL;
+    far_pointer_list[i].bsp_db = NULL;
+    far_pointer_list[i].salp = NULL;
+    far_pointer_list[i].revcomp = FALSE;
+    far_pointer_list[i].nonly = 0;
+    far_pointer_list[i].err_type = FARPOINTER_LOOKUP_NO_ERROR;
+
+    /* is this a farpointer ID? */
+    SeqIdWrite (far_pointer_list[i].sip_local, str, PRINTID_FASTA_LONG, sizeof (str) - 1);
+    tmp = StringISearch (str, "acc");
+    if (tmp!=NULL) {
+      tmp += 3;
+      if (*tmp == '|')
+         tmp++;   
+      id_start = tmp;
+      
+      /* look for next pipe char, carriage return, or end of string */
+      while (*tmp!='\0' && *tmp != '|' && *tmp!='\n')
+        tmp++;
+      *tmp = '\0';
+      
+      /* check for version */
+      version = 0;
+      dot_pos = StringChr (id_start, '.');
+      if (dot_pos != NULL) {
+        *dot_pos = '\0';
+        version = atoi (dot_pos + 1);
+      }
+      if (StringSpn (id_start, "0123456789") == StringLen (id_start)) {
+        /* all numbers, is GI */
+        gi = (Int4)atol(id_start);
+        if (gi>0) {
+          far_pointer_list[i].sip_db = ValNodeNew (NULL);
+          if (far_pointer_list[i].sip_db) {
+            far_pointer_list[i].sip_db->choice = SEQID_GI;
+            far_pointer_list[i].sip_db->data.intvalue = (Int4)gi;
+          }
+        }
+      } else if (IS_ntdb_accession(id_start) || IS_protdb_accession(id_start)) {
+        far_pointer_list[i].sip_db = SeqIdFromAccession (id_start, version, NULL);
+      }
+      if (far_pointer_list[i].sip_db != NULL) {
+        far_pointer_list[i].bsp_local = BioseqLockById(far_pointer_list[i].sip_local);
+        far_pointer_list[i].bsp_db = BioseqLockById(far_pointer_list[i].sip_db);
+        if (far_pointer_list[i].bsp_local != NULL 
+            && far_pointer_list[i].bsp_db != NULL 
+            && far_pointer_list[i].bsp_local->length > 0 
+            && far_pointer_list[i].bsp_db->length > 0) {
+          options = BLASTOptionNew("blastn", TRUE);
+          options->filter_string = StringSave("m L;R");
+          tmp_salp = BlastTwoSequences (far_pointer_list[i].bsp_local, far_pointer_list[i].bsp_db, "blastn", options);
+          options = BLASTOptionDelete(options);
+          far_pointer_list[i].err_msg = (CharPtr) MemNew (sizeof(Char) * 1000);
+          far_pointer_list[i].salp = SeqAlignBestHit (tmp_salp, 
+                                                      far_pointer_list[i].bsp_local, 
+                                                      far_pointer_list[i].bsp_db, 
+                                                      100, &(far_pointer_list[i].err_msg),
+                                                      &(far_pointer_list[i].nonly));
+          if (far_pointer_list[i].err_msg[0] == '\0')
+            far_pointer_list[i].err_msg = MemFree (far_pointer_list[i].err_msg);
+          else if (far_pointer_list[i].nonly < 0)
+            far_pointer_list[i].err_type = FARPOINTER_LOOKUP_NONLY;
+          else
+            far_pointer_list[i].err_type = FARPOINTER_LOOKUP_BAD_ALN;
+                                                            
+          num_found++;
+        } else {
+          num_missing++;
+        }
+      }
+    }
+  }
+
+  if (DisplayFarPointerData (far_pointer_list, num_rows)) {
+    /* for each entry that still has a bioseq, do the replacement */
+    presip = NULL;
+    for (i = 0, sip = dsp->ids; i < num_rows && sip != NULL; i++, sip = sip->next) {
+      if (far_pointer_list[i].bsp_db == NULL) {
+        continue;
+      }
+      offset = SeqAlignStart(far_pointer_list[i].salp, 1)-SeqAlignStart(far_pointer_list[i].salp, 0);
+      if ((SeqAlignStrand(far_pointer_list[i].salp, 0)==Seq_strand_minus && SeqAlignStrand(far_pointer_list[i].salp, 1) != Seq_strand_minus) 
+          || (SeqAlignStrand(far_pointer_list[i].salp, 1)==Seq_strand_minus && SeqAlignStrand(far_pointer_list[i].salp, 0) != Seq_strand_minus))
+      {
+        /* strand is reversed */
+        strand=Seq_strand_minus;
+        AlnMgr2IndexSingleChildSeqAlign(far_pointer_list[i].salp);
+        AlnMgr2GetNthSeqRangeInSA(far_pointer_list[i].salp, 1, &start1, &stop1);
+        AlnMgr2GetNthSeqRangeInSA(far_pointer_list[i].salp, 2, &start2, &stop2);
+        len = stop2 + start1;
+        if (offset < 0)
+        {
+          offset = 0 - offset;
+        }
+      } else
+        strand=Seq_strand_plus;
+      SeqAlignStartUpdate (far_pointer_list[i].salp, far_pointer_list[i].sip_local, abs(offset), len, strand);
+      dsp->ids = SWSeqIdReplaceID(dsp->ids, far_pointer_list[i].sip_local, far_pointer_list[i].sip_db);
+      /* set to NULL so that we don't free it later */
+      far_pointer_list[i].sip_db = NULL;
+
+      if (presip)
+        sip = presip->next;
+      else
+        sip = dsp->ids;
+      /* We add the ID of the sequence we are replacing to a list
+       * of sequences that will be deleted later.
+       * We can't delete the sequence now, in case it is present
+       * in more than one alignment for this record.
+       */
+      vnp = nrSeqIdAdd (vnp, far_pointer_list[i].sip_local);
+      /* set to NULL so that we don't free it later */
+      far_pointer_list[i].sip_local = NULL;
+    }
+  } else {
+    for (i = 0, sip = dsp->ids; i < num_rows && sip != NULL; i++, sip = sip->next) {
+      if (far_pointer_list[i].bsp_db != NULL) {
+        BioseqUnlock (far_pointer_list[i].bsp_db);
+        far_pointer_list[i].bsp_db->idx.deleteme = TRUE;
+      }
+      if (far_pointer_list[i].bsp_local != NULL) {
+        BioseqUnlock (far_pointer_list[i].bsp_local);
+        far_pointer_list[i].bsp_local = NULL;
+      }
+    }
+  }
+  
+  far_pointer_list = FreeFarPointerData(far_pointer_list, num_rows);
+  
+  return vnp;
+}
+#else
+static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
+{
+  BLAST_OptionsBlkPtr options;
+  MsgAnswer           ans;
+  DenseSegPtr         dsp;
+  SeqIdPtr            sip,
+                      dbsip = NULL,
+                      lclsip,
+                      presip, 
+                      next,
+                      tmpsip;
+  SeqAlignPtr         seqalign = NULL;
+  SeqAlignPtr         bestsalp = NULL;
+  CharPtr             TmpBuff, tmp;
+  Char                str [52];
+  Int4                gi = 0,
+                      offset,
+                      totlenlcl = 0, totlendb = 0;
+  Int4                i, j, k, len = 0, n;
+  Int4                num_not_asked;
+  Int2                index;
+  Uint1               strand;
+  Boolean             ok, 
+                      found;
+  
+  Char                strLog[50];
+  BioseqPtr           bsp1, bsp2;
+  Int4                start1, start2, stop1, stop2;
+  CharPtr             errstr;
+  Int4                nonly;
+  BestHitPtr          hip, hip_prev, hip_head;
+  BestHitPtr          PNTR hiparray;
+  Char                messagestr[1500];
+  Int4                numhips;
+  FILE                *ofp;
+  Int4                version;
+
+  hip_prev = hip_head = NULL;
+  errstr = (CharPtr)MemNew(500*sizeof(Char));
+  if (salp!=NULL) {
+     if (salp->segtype == 2) {
+        dsp = (DenseSegPtr) salp->segs;
+        presip = NULL;
+        sip = dsp->ids;
+        index = 0;
+        found = FALSE;
+        while (sip != NULL) 
+        {
+           next = sip->next;
+           lclsip = SeqIdDup (sip);
+           SeqIdWrite (lclsip, str, PRINTID_FASTA_LONG, 50);
+           tmp = StringStr (str, "acc");
+           if (tmp==NULL) 
+           {
+              tmp = StringStr (str, "ACC");
+           }
+           if (tmp!=NULL) {
+              tmp++; tmp++; tmp++;
+              if (*tmp == '|')
+                 tmp++;   
+              TmpBuff = tmp;
+              while (*tmp!='\0' && *tmp != '|' && *tmp!='\n')
+                 tmp++;
+              *tmp = '\0';
+              /* check for version */
+              tmp = TmpBuff;
+              version = 0;
+              while (*tmp != 0 && *tmp != '.')
+              {
+                *tmp++;
+              }
+              if (*tmp == '.')
+              {
+                *tmp = 0;
+                version = atoi (tmp + 1);
+              }
+
+              ok = FALSE;
+              j = StringLen (TmpBuff);
+              for(k =0; k < j; k++) {
+                 if(!isdigit(TmpBuff[k])) {
+                    break;
+                 }
+              }
+              dbsip=NULL;
+              if(k != j) {
+                 
+                 ok=(IS_ntdb_accession(TmpBuff) || IS_protdb_accession(TmpBuff));
+                 if (ok) {
+                    dbsip = SeqIdFromAccession (TmpBuff, version, NULL);
+                 }
+              }
+              else {
+                 gi = (Int4)atol(TmpBuff);
+                 if (gi>0) {
+                    dbsip = ValNodeNew (NULL);
+                    if (dbsip) {
+                       dbsip->choice = SEQID_GI;
+                       dbsip->data.intvalue = (Int4)gi;
+                    }
+                 }
+              }
+              if (dbsip!=NULL) {
+                 bsp1 = BioseqLockById(lclsip);
+                 bsp2 = BioseqLockById(dbsip);
+                 if ( bsp1 != NULL && bsp2 != NULL && bsp1->length > 0 && bsp2->length > 0) {
+                 options = BLASTOptionNew("blastn", TRUE);
+                 options->filter_string = StringSave("m L;R");
+                 seqalign = BlastTwoSequences (bsp1, bsp2, "blastn", options);
+                 if (errstr != NULL)
+                    MemFree(errstr);
+                 errstr = (CharPtr)MemNew(1000*sizeof(Char));
+                 bestsalp = SeqAlignBestHit (seqalign, bsp1, bsp2, 100, &errstr, &nonly);
+                 hip = (BestHitPtr)MemNew(sizeof(BestHit));
+                 hip->sap = bestsalp;
+                 hip->sip1 = lclsip;
+                 if (dbsip->choice != SEQID_GI && bsp2->id != NULL) {
+                   /* recreate sip to get correct version number */
+                   for (tmpsip = bsp2->id; tmpsip != NULL; tmpsip = tmpsip->next) {
+                     if (tmpsip->choice == dbsip->choice) break;
+                   }
+                   if (tmpsip != NULL) {
+                     dbsip = SeqIdFree (dbsip);
+                     dbsip = SeqIdStripLocus (SeqIdDup (tmpsip));
+                   }
+                 }
+                 hip->sip2 = dbsip;
+                 hip->bsp1 = bsp1;
+                 hip->bsp2 = bsp2;
+                 hip->errstr = StringSave(errstr);
+                 hip->nonly = nonly;
+                 if (*hip->errstr == '\0')
+                    hip->errtype = 0;
+                 else if (nonly < 0)
+                    hip->errtype = 1;
+                 else
+                    hip->errtype = 2;
+                 if (hip_head != NULL)
+                 {
+                    hip_prev->next = hip;
+                    hip_prev = hip;
+                 } else
+                    hip_head = hip_prev = hip;
+             } else {
+                 if (totlendb == 0) {
+                    SeqIdWrite(dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                    sprintf(errstr, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
+                   sip->next = next;
+                 } else if (totlenlcl == 0) {
+                   SeqIdWrite (lclsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                   sprintf(errstr, "This alignment contains \"%s\" that can not be found.\nPlease check the accession number.\n", strLog);
+                   sip->next = next;
+                 }
+                 hip = (BestHitPtr)MemNew(sizeof(BestHit));
+                 hip->sap = bestsalp;
+                 hip->sip1 = lclsip;
+                 hip->sip2 = dbsip;
+                 hip->errstr = StringSave(errstr);
+                 hip->nonly = 0;
+                 hip->errtype = 3;
+                 hip->bsp1 = NULL;
+                 hip->bsp2 = NULL;
+                 if (hip_head != NULL)
+                 {
+                    hip_prev->next = hip;
+                    hip_prev = hip;
+                 } else
+                    hip_head = hip_prev = hip;
+              }
+              } else {
+                 SeqIdWrite (sip, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                 sprintf(errstr, "This alignment contains \"%s\" that can not be found in GenBank.\nPlease check the accession number.\n", strLog);
+                 sip->next = next;
+                 hip = (BestHitPtr)MemNew(sizeof(BestHit));
+                 hip->sap = bestsalp;
+                 hip->sip1 = lclsip;
+                 hip->sip2 = dbsip;
+                 hip->errstr = StringSave(errstr);
+                 hip->nonly = 0;
+                 hip->errtype = 3;
+                 hip->bsp1 = NULL;
+                 hip->bsp2 = NULL;
+                 if (hip_head != NULL)
+                 {
+                    hip_prev->next = hip;
+                    hip_prev = hip;
+                 } else
+                    hip_head = hip_prev = hip;
+              }
+           }
+           presip = sip;
+           sip = next;
+           index++;
+           found = FALSE;
+        }
+        hip = hip_head;
+        numhips = 0;
+        while (hip != NULL)
+        {
+           numhips++;
+           hip = hip->next;
+        }
+        hiparray = (BestHitPtr PNTR)MemNew(numhips*sizeof(BestHitPtr));
+        hip = hip_head;
+        numhips = 0;
+        while (hip != NULL)
+        {
+           hiparray[numhips] = hip;
+           numhips++;
+           hip = hip->next;
+        }
+        HeapSort(hiparray, numhips, sizeof(BestHitPtr), OrderBestHits);
+        i = 0;
+        while (i<numhips && *hiparray[i]->errstr == '\0')
+        {
+           i++;
+        }
+        if (i > 0)
+        {
+           /* If there are sequences that can be treated as Far Pointers
+            * and are identical to the most recent version of the sequence
+            * in GenBank, ask the user if these sequences should be replace
+            * by the GenBank sequence.
+            */
+           messagestr[0] = '\0';
+           ans = ANS_OK;
+           num_not_asked = 0;
+           for (j=0; j<i; j++)
+           {
+             /* if we are looking at an alignment of segmented sets,
+              * and the far pointer points to something other than a
+              * segmented set, the sequence ID will be the same for
+              * the alignments for each segment.  We only want to ask
+              * about the same sequence once.
+              */
+             if (! nrSeqIdIsInValNodeList (vnp, hiparray[j]->sip1))
+             {
+               SeqIdWrite(hiparray[j]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
+               StringCat(messagestr, strLog);
+               StringCat(messagestr, ", ");
+               ans = ANS_CANCEL;
+               num_not_asked ++;
+             }
+           }
+           if (ans == ANS_CANCEL)
+           {
+             ans = Message(MSG_OKC, 
+                           "This alignment contains %s that %s already in GenBank. \nDo you wish to replace %s?", 
+                           messagestr, num_not_asked > 1 ? "are":"is",
+                           num_not_asked > 1 ? "them":"it");
+           }
+           if (ans != ANS_CANCEL)
+           {
+              for (j=0; j<i; j++)
+              {
+                 offset = SeqAlignStart(hiparray[j]->sap, 1)-SeqAlignStart(hiparray[j]->sap, 0);
+                 if ((SeqAlignStrand(hiparray[j]->sap, 0)==Seq_strand_minus && SeqAlignStrand(hiparray[j]->sap, 1) != Seq_strand_minus) || (SeqAlignStrand(hiparray[j]->sap, 1)==Seq_strand_minus && SeqAlignStrand(hiparray[j]->sap, 0) != Seq_strand_minus))
+                 {
+                     strand=Seq_strand_minus;
+                     AlnMgr2IndexSingleChildSeqAlign(hiparray[j]->sap);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 1, &start1, &stop1);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 2, &start2, &stop2);
+                     len = stop2 + start1;
+                     if (offset < 0)
+                     {
+                      offset = 0 - offset;
+                     }
+                 } else
+                      strand=Seq_strand_plus;
+                 SeqAlignStartUpdate (salp, hiparray[j]->sip1, abs(offset), len, strand);
+                 dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j]->sip1, hiparray[j]->sip2);
+
+                 if (presip)
+                    sip = presip->next;
+                 else
+                    sip = dsp->ids;
+                 
+                 /* We add the ID of the sequence we are replacing to a list
+                  * of sequences that will be deleted later.
+                  * We can't delete the sequence now, in case it is present
+                  * in more than one alignment for this record.
+                  */
+                 vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
+                 found = TRUE;
+                 SeqAlignFree(hiparray[j]->sap);
+                 if (hiparray[j]->bsp1 != NULL) {
+                   BioseqUnlock (hiparray[j]->bsp1);
+                   hiparray[j]->bsp1->idx.deleteme = TRUE;
+                   hiparray[j]->bsp1 = NULL;
+                 }
+                 if (hiparray[j]->bsp2 != NULL) {
+                   BioseqUnlock (hiparray[j]->bsp2);
+                   hiparray[j]->bsp2 = NULL;
+                 }
+              }
+           } else /* need to ask one by one */
+           {
+              for (j=0; j<i; j++)
+              {
+                 SeqIdWrite(hiparray[j]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
+                 ans = Message(MSG_OKC, "This alignment contains %s that is already in GenBank. \nDo you wish to replace it?", strLog);
+                 if (ans != ANS_CANCEL)
+                 {
+                    offset = SeqAlignStart(hiparray[j]->sap, 1)-SeqAlignStart(hiparray[j]->sap, 0);
+                    if ((SeqAlignStrand(hiparray[j]->sap, 0)==Seq_strand_minus && SeqAlignStrand(hiparray[j]->sap, 1) != Seq_strand_minus) || (SeqAlignStrand(hiparray[j]->sap, 1)==Seq_strand_minus && SeqAlignStrand(hiparray[j]->sap, 0) != Seq_strand_minus))
+                    {
+                        strand=Seq_strand_minus;
+                        AlnMgr2IndexSingleChildSeqAlign(hiparray[j]->sap);
+                        AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 1, &start1, &stop1);
+                        AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 2, &start2, &stop2);
+                        len = stop2 + start1;
+                        if (offset < 0)
+                        {
+                          offset = 0 - offset;
+                        }
+                    } else
+                         strand=Seq_strand_plus;
+                    SeqAlignStartUpdate (salp, hiparray[j]->sip1, offset, len, strand);
+                    dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j]->sip1, hiparray[j]->sip2);
+                    if (presip)
+                       sip = presip->next;
+                    else
+                       sip = dsp->ids;
+                    SeqAlignReplaceId (hiparray[j]->sip1, hiparray[j]->sip2, salp);
+                    vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
+                    found = TRUE;
+                    if (hiparray[j]->bsp1 != NULL) {
+                      hiparray[j]->bsp1->idx.deleteme = TRUE;
+                    }
+                 }
+                 SeqAlignFree(hiparray[j]->sap);
+                 if (hiparray[j]->bsp1 != NULL) {
+                   BioseqUnlock (hiparray[j]->bsp1);
+                   hiparray[j]->bsp1 = NULL;
+                 }
+                 if (hiparray[j]->bsp2 != NULL) {
+                   BioseqUnlock (hiparray[j]->bsp2);
+                   hiparray[j]->bsp2 = NULL;
+                 }
+              }
+           }
+        }
+        n = i;
+        i = 0;
+        /* Replacement of sequences that are not exact matches */
+        for (j=n+i; j<numhips; j++)
+        {
+           if (hiparray[j]->errtype <3)
+           {
+               SeqIdWrite (hiparray[j]->sip2, strLog, PRINTID_TEXTID_ACCESSION, 50);
+               ans = Message (MSG_OKC, "This alignment contains \"%s\" that is already in GenBank.\n However, the local version is not identical to the most recent database version.\n %s \nDo you wish to replace it anyway ?\n If you cancel, the alignment of the local and the database versions \nof \"%s\" will be saved in the error file \"error.log\"", strLog, hiparray[j]->errstr, strLog);
+               if (ans != ANS_CANCEL)
+               {
+                  offset = SeqAlignStart(hiparray[j]->sap, 1)-SeqAlignStart(hiparray[j]->sap, 0);
+
+                  if (SeqAlignStrand(hiparray[j]->sap, 0)==Seq_strand_minus || SeqAlignStrand(hiparray[j]->sap, 1)==Seq_strand_minus)
+                  {
+                     strand=Seq_strand_minus;
+                     AlnMgr2IndexSingleChildSeqAlign(hiparray[j]->sap);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 1, &start1, &stop1);
+                     AlnMgr2GetNthSeqRangeInSA(hiparray[j]->sap, 2, &start2, &stop2);
+                     len = stop2 + start1;
+                     if (offset < 0)
+                     {
+                       offset = 0 - offset;
+                     }                    
+                  }                  
+                  else
+                     strand=Seq_strand_plus;
+                  SeqAlignStartUpdate (salp, hiparray[j]->sip1, offset, len, strand);
+                  dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j]->sip1, hiparray[j]->sip2);
+                  if (presip)
+                     sip = presip->next;
+                  else
+                     sip = dsp->ids;
+                  SeqAlignReplaceId (hiparray[j]->sip1, hiparray[j]->sip2, salp);
+                  vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
+                  found = TRUE;
+               }
+               else {
+                  ofp = FileOpen("error.log", "a");
+                  fprintf(ofp, "This alignment contains %s that is already in GenBank; \nhowever, the local version is not identical to the most recent database version.\n %s\n", strLog, hiparray[j]->errstr);
+                  FileClose(ofp);
+                  SWPrintFarpointerAln(hiparray[j]->sap, "error.log");
+               }
+            } else
+               Message(MSG_OK, "%s", hiparray[j]->errstr);
+         }
+     }
+  }
+  return vnp;  
+}
+#endif
+
+static ValNodePtr errorp = NULL;
+
+/******************************************************************
+Output error message according to code defined in alignval.h.  
+id refers to seqid of the sequence that causes the error 
+and idcontext refers to other sequences in the same segment.  
+Intvalue is used to indicate 1) the segment where the sequence 
+with error is, or 2) the segtype in case of segtype error.  
+Please note that not all errors report all three 
+parameters(id, idcontext, Intvalue)
+******************************************************************/ 
+static void ValMessage (Int1 MessageCode, ErrSev errlevel, SeqIdPtr id, SeqIdPtr idcontext , Int4 Intvalue) 
+{
+  
+  Char     buf[256], 
+           buf3[64],
+           string1[64],
+           string2[252];
+
+  string1[0] = '\0';
+  string2[0] = '\0';
+  SeqIdWrite(id, buf, PRINTID_FASTA_LONG, sizeof(buf)-1);
+  switch(MessageCode)
+  {
+    case Err_SeqId:
+      sprintf(string1, "SeqId");
+      sprintf(string2, "Invalid Seq_id: %s\n", buf);
+      break;
+
+    case Err_Strand_Rev:      
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Strand");
+      sprintf(string2, "Alignment strand is reversed in segment %d for Seq ID: %s in the context of%s\n", Intvalue, buf, buf3);
+      break;
+
+    case Err_Denseg_Len_Start:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Start/Length");
+      sprintf(string2, "Error in length and/or starts in segment %d for sequence ID: %s in the context of %s\n", Intvalue, buf, buf3);
+      break;
+
+    case  Err_Start_Less_Than_Zero:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Start");
+      sprintf(string2, "Start point is less than zero in segment %d for sequence ID: %s in the context of %s\n", Intvalue, buf, buf3);
+      break;
+
+    case Err_Start_More_Than_Biolen:      
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Start");
+      sprintf(string2, "Start point is greater than total bioseq length in segment %d for sequence ID: %s in the context of%s\n", Intvalue, buf, buf3);
+      break;
+
+    case Err_End_Less_Than_Zero:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Length");
+      sprintf(string2, "End point is less than zero in segment %d for sequence ID: %s in the context of %s\n", Intvalue, buf, buf3);
+      break;
+
+    case Err_End_More_Than_Biolen:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Length");
+      sprintf(string2, "End point is greater than total bioseq length in segment %d for sequence ID: %s in the context of%s\n", Intvalue, buf, buf3);
+      break;
+
+    case Err_Len_Less_Than_Zero:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Length");
+      sprintf(string2, "Segment length is less than zero in segment %d for sequence ID: %s in the context of %s\n", Intvalue, buf, buf3); 
+      break;
+
+    case Err_Len_More_Than_Biolen:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Length");
+      sprintf(string2, "Segment length is greater than total bioseq length in segment %d for sequence ID: %s in the context of %s\n", Intvalue, buf, buf3);
+      break; 
+ 
+    case Err_Sum_Len_Start:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Start");
+      sprintf(string2, "Sum of start point and segment is greater than total bioseq length in segment %d  for sequence ID: %s in the context of %s\n",  Intvalue, buf, buf3); 
+      break;
+
+    case Err_SeqAlign_DimSeqId_Not_Match:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "SeqId");
+      sprintf(string2, "The number of SeqId does not match the dimensions for sequence ID's %s\n", buf3); 
+      break;
+
+    case Err_Segs_DimSeqId_Not_Match:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "SeqId");
+      sprintf(string2, "The number of SeqId does not match the dimensions in segment %d for  sequence ID's %s\n", Intvalue, buf3); 
+      break;
+
+    case Err_Fastalike:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Fasta");
+      sprintf(string2, "This may be a fasta-like alignment for SeqId: %s in the context of %s\n", buf, buf3); 
+      break;
+
+    case Err_Null_Segs:
+      sprintf(string1, "Segs");
+      sprintf(string2, "This alignment contains a null segs\n");
+      break;
+
+    case Err_Segment_Gap:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Segs");
+      sprintf(string2, "Segment %d is a gap for all sequence with the following ID's: %s\n", Intvalue, buf3); 
+      break;
+
+    case Err_Segs_Dim_One:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Segs");
+      sprintf(string2, "There is only one dimension in segment %d for  sequence ID's %s\n", Intvalue, buf3); 
+      break;
+
+    case Err_SeqAlign_Dim_One:
+      SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
+      sprintf(string1, "Dim");
+      sprintf(string2, "There is only one dimension for sequence ID's %s\n", buf3); 
+      break;
+
+    case Err_Segtype :
+      sprintf(string1, "Segs");
+      sprintf(string2, "This alignment has a undefined or unsupported Seqalign segtype %d\n", Intvalue);
+      break;
+
+    default:
+      break;
+  }
+  if (StringLen(string1) > 0)
+     errorp = BlastConstructErrorMessage (string1, string2, errlevel, &errorp);
+}
+
+/******************************************************************
+validate each alignment sequentially.  
+This function will subject the seqalign to all validation functions
+******************************************************************/ 
+/*********************************************************/
+static void delete_bioseqs (ValNodePtr ids, Uint2 entityID)
+{
+  SeqEntryPtr  sep_top;
+  SeqEntryPtr  sep_del;
+  ValNodePtr   vnp;
+  SeqIdPtr     sip;
+  SeqLocPtr    slp;
+  BioseqPtr    bsp;
+  ObjMgrDataPtr  omdptop;
+  ObjMgrData     omdata;
+  Uint2          parenttype;
+  Pointer        parentptr;
+
+  if (ids == NULL)
+     return;
+  sep_top = GetTopSeqEntryForEntityID (entityID);
+  SaveSeqEntryObjMgrData (sep_top, &omdptop, &omdata);
+  GetSeqEntryParent (sep_top, &parentptr, &parenttype);
+
+  vnp=ids;
+  while (vnp!=NULL)
+  {
+     sip = (SeqIdPtr) vnp->data.ptrvalue;
+     if (sip!=NULL) {
+        slp = (SeqLocPtr)ValNodeNew (NULL);
+        slp->choice = SEQLOC_WHOLE;
+        slp->data.ptrvalue = sip;
+        bsp = GetBioseqGivenSeqLoc (slp, entityID);
+        if (bsp!=NULL) {
+           sep_del=GetBestTopParentForData (entityID, bsp);
+           RemoveSeqEntryFromSeqEntry (sep_top, sep_del, FALSE);
+        }
+        slp->data.ptrvalue = NULL;
+        SeqLocFree (slp);
+     }
+     vnp=vnp->next;
+  }
+  SeqMgrLinkSeqEntry (sep_top, parenttype, parentptr);
+  RestoreSeqEntryObjMgrData (sep_top, omdptop, &omdata);
+  RenormalizeNucProtSets (sep_top, TRUE);
+
+  for (vnp=ids; vnp!=NULL; vnp=vnp->next) {
+     SeqIdFree ((SeqIdPtr) vnp->data.ptrvalue);
+     vnp->data.ptrvalue = NULL;
+  }
+  ValNodeFree (ids);
+  return;
+}
+
+
+static Boolean check_dbid_seqalign (SeqAlignPtr salp)
+{
+  DenseSegPtr dsp;
+  SeqIdPtr    sip, next;
+  Char        str [52];
+  CharPtr     TmpBuff, tmp;
+  Int4        j, k;
+  Boolean     found = FALSE;
+
+  if (salp!=NULL) 
+  {
+     if (salp->segtype == 2) 
+     {
+        dsp = (DenseSegPtr) salp->segs;
+        sip = dsp->ids;
+        while (!found && sip != NULL) 
+        {
+           next = sip->next;
+           sip->next = NULL;
+           SeqIdWrite (sip, str, PRINTID_FASTA_LONG, 50);
+           sip->next = next;
+           tmp = StringStr (str, "acc");
+           if (tmp!=NULL) {
+              tmp++; tmp++; tmp++;
+              if (*tmp == '|')
+                 tmp++;
+              TmpBuff = tmp;
+              while (*tmp!='\0' && *tmp != '|' && *tmp!='\n' && *tmp != '.')
+                 tmp++;
+              *tmp = '\0';
+
+              j = StringLen (TmpBuff);
+              for(k =0; k < j; k++) {
+                 if(!isdigit(TmpBuff[k])) {
+                    break;
+                 }
+              }
+              if(k != j) {
+                found=(IS_ntdb_accession(TmpBuff) || IS_protdb_accession(TmpBuff));
+              }
+           }  
+           sip = next;
+        }     
+     }
+  }     
+  return found;
+}
+
+
+/***************************************************************************************
+***
+***  ValidateSeqAlignandACC
+***	calls ValidateSeqAlign (in api directory)
+***	and tests for occurrence of ACC string in sequence ID.
+***	ACC|ACC# will be compared with the corresponding sequence (ACC#)
+***	in the database and replaced by a far pointer if the sequences
+***	are identical.
+***
+***************************************************************************************/
+typedef struct saval {
+  Boolean     message;
+  Boolean     msg_success;
+  Boolean     find_remote_bsp;
+  Boolean     find_acc_bsp;
+  Boolean     delete_salp;
+  Boolean     delete_bsp;
+  Boolean     retdel;
+  ValNodePtr  ids;
+  Uint2       entityID;
+  Boolean     dirty;
+} SaVal, PNTR SaValPtr;
+
+
+static Boolean 
+ValidateSeqAlignandACCEx 
+(SeqAlignPtr salp, Uint2 entityID, Boolean message,
+ Boolean msg_success, Boolean find_remote_bsp,Boolean find_acc_bsp,
+ Boolean delete_bsp, Boolean delete_salp, BoolPtr dirty,
+ ValNodePtr PNTR id_list) /* added id_list so that we could defer deleting bioseqs */
+{  
+  SeqAlignPtr  pre,
+               salptmp;
+  SaVal        sv;
+  SaValPtr     svp;
+  MsgAnswer    ans;
+  Int2         err_count=0,
+               salp_count=0;
+  Boolean      ok;
+
+  if(salp!=NULL)
+  {
+    /* initialize SaVal structure */
+    sv.message = message;
+    sv.msg_success = msg_success;
+    sv.find_remote_bsp = find_remote_bsp;
+    sv.find_acc_bsp = find_acc_bsp;
+    sv.delete_salp = delete_salp;
+    sv.delete_bsp = delete_bsp;
+    sv.retdel = TRUE;
+    sv.ids = NULL;
+    sv.entityID = entityID; 
+    sv.dirty = FALSE;   
+    svp = &sv;
+    
+    pre=NULL;
+    salptmp=salp; 
+    while (salptmp)
+    {
+      salp_count++;
+      if(salp->segtype==5)
+      {
+        ValidateSeqAlignandACCEx ((SeqAlignPtr) (salptmp->segs), entityID, 
+                                  message, msg_success, find_remote_bsp, 
+                                  find_acc_bsp, delete_bsp, delete_salp, 
+                                  &svp->dirty, id_list);
+      } 
+      else if (salp->segtype<1 || salp->segtype>4)
+      {
+        ValMessage (Err_Segtype, SEV_ERROR, NULL, NULL, salptmp->segtype);
+      }
+      else 
+      {
+        ValidateSeqAlign (salptmp, svp->entityID, svp->message, 
+                          svp->msg_success, svp->find_remote_bsp, 
+                          svp->delete_bsp, svp->delete_salp, &svp->dirty);
+        if (svp->find_acc_bsp) 
+        {
+	        ok = check_dbid_seqalign (salptmp);
+	        if (ok) 
+	        {
+	          if (id_list != NULL)
+	          {
+	            svp->ids = *id_list;
+	          }
+            svp->ids = CCNormalizeSeqAlignId (salptmp, svp->ids);
+            if (svp->ids!=NULL && svp->entityID > 0) {
+              if (svp->delete_bsp)
+              {
+                delete_bioseqs (svp->ids, svp->entityID);
+                svp->ids = NULL;
+              }
+              svp->dirty = TRUE;
+            }
+          }       	
+        }
+      }     	
+   	  if (errorp)
+   	  {
+        if(svp->message)
+  	    {
+          BlastErrorPrint (errorp);
+          errorp = BlastErrorChainDestroy (errorp);
+        }
+        if (svp->delete_salp)
+        {
+          if (pre==NULL) 
+          {
+            salp=salptmp->next;
+            salptmp->next = NULL;
+            SeqAlignFree (salptmp);
+            salptmp = salp;
+          }
+          else 
+          {
+            pre->next = salptmp->next;
+            salptmp->next = NULL;
+            SeqAlignFree (salptmp);
+            salptmp = pre->next;
+          }
+        }
+        else 
+        {
+         	salptmp = salptmp->next;
+        }
+        err_count++;
+        svp->retdel=FALSE;
+      }
+      else 
+      {
+        salptmp = salptmp->next;
+      }
+    }
+    if (err_count==0 && svp->msg_success) 
+    {
+      if (salp_count>1)
+        ans = Message (MSG_OK, "Validation test of %d alignments succeded", salp_count);
+      else
+        ans = Message (MSG_OK, "Validation test of the alignment succeded");
+    }
+    if (dirty)
+      *dirty = svp->dirty;
+  }
+  if (id_list != NULL)
+  {
+    *id_list = svp->ids;
+  }
+  return svp->retdel;
+} 
+
+NLM_EXTERN Boolean ValidateSeqAlignandACC (SeqAlignPtr salp, Uint2 entityID, Boolean message,
+                         Boolean msg_success, Boolean find_remote_bsp,Boolean find_acc_bsp,
+                         Boolean delete_bsp, Boolean delete_salp, BoolPtr dirty)
+{
+  return ValidateSeqAlignandACCEx (salp, entityID, message, msg_success, 
+                                   find_remote_bsp, find_acc_bsp, delete_bsp, 
+                                   delete_salp, dirty, NULL);
+}
+
+/***************************************************************************
+ *
+ * ValidateAllAlignmentsInAnnotList (sap, svp)
+ *
+ * This function validates all of the alignments in the annotation list
+ * (there may be multiple alignments, especially when there is an alignment
+ * of segmented sequences), and then deletes the local versions of sequences
+ * which have been replaced by farpointers.
+ * We wait to remove the sequences in case the sequence is used in more than
+ * one alignment, which may be the case if an alignment of segmented sets
+ * contains a far pointer, and that far pointer points to a sequence that is
+ * not actually a segmented set.
+ *
+ ***************************************************************************/
+static void ValidateAllAlignmentsInAnnotList (SeqAnnotPtr sap, SaValPtr svp)
+{
+  SeqAlignPtr salp;
+  ValNodePtr  id_list = NULL;
+  
+  if (svp == NULL)
+  {
+    return;
+  }
+  
+  while (sap != NULL)    
+  {
+    if (sap->type == 2 && sap->data != NULL)
+    {
+      salp = (SeqAlignPtr) sap->data;
+      ValidateSeqAlignandACCEx (salp, svp->entityID, svp->message, 
+                                svp->msg_success, svp->find_remote_bsp, 
+                                svp->find_acc_bsp, FALSE, 
+                                svp->delete_salp, &svp->dirty,
+                                &id_list);
+    }
+    sap = sap->next;
+  }
+  if (svp->delete_bsp)
+  {
+    delete_bioseqs (id_list, svp->entityID);
+  }
+}
+
+
+
+/***************************************************************************
+ *
+ * ValidateSeqAlignandACCCallback (sep, mydata, index, indent)
+ *
+ * This function is a callback for SeqEntryExplore used by 
+ * ValidateSeqAlignandACCInSeqEntry.  It will validate the alignments
+ * found in the record.
+ * This function used to only validate the first alignment found on a
+ * SeqEntry.  It was repaired to validate all alignments on the SeqEntry
+ * on May 27, 2005 by Colleen Bollin.
+ *
+ ***************************************************************************/
+static void ValidateSeqAlignandACCCallback (SeqEntryPtr sep, Pointer mydata,
+                                          Int4 index, Int2 indent)
+{
+  BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
+  SaValPtr           svp = NULL;
+  SeqAnnotPtr        sap = NULL;
+
+  if (sep != NULL && sep->data.ptrvalue && mydata != NULL) {
+     svp = (SaValPtr)mydata;
+     if (IS_Bioseq(sep)) {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+        if (bsp!=NULL) {
+           sap = bsp->annot;
+        }
+     }   
+     else if(IS_Bioseq_set(sep)) {
+        bssp = (BioseqSetPtr)sep->data.ptrvalue;
+        if (bssp!=NULL) {
+           sap = bssp->annot;
+        }
+     }
+  }
+  ValidateAllAlignmentsInAnnotList (sap, svp);
+}
+
+
+NLM_EXTERN Boolean ValidateSeqAlignandACCInSeqEntry (SeqEntryPtr sep, Boolean message, 
+                                 Boolean msg_success, Boolean find_remote_bsp, Boolean find_acc_bsp,
+                                 Boolean delete_bsp, Boolean delete_salp)
+{
+  SeqEntryPtr      sep_head;
+  Uint2            entityID;
+  SaVal            sv;
+  Boolean          success=TRUE;
+
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  if (entityID > 0) {
+     sep_head = GetTopSeqEntryForEntityID (entityID);
+     if (sep_head != NULL) {
+        sv.message = message;
+        sv.msg_success = msg_success;
+        sv.find_remote_bsp = find_remote_bsp;
+        sv.find_acc_bsp = find_acc_bsp;
+        sv.delete_salp = delete_salp;
+        sv.delete_bsp = delete_bsp;
+        sv.retdel = TRUE;
+        sv.ids = NULL;
+        sv.entityID = entityID; 
+        sv.dirty = FALSE;
+        SeqEntryExplore (sep_head, (Pointer)&sv, ValidateSeqAlignandACCCallback);
+        if (sv.dirty) {
+           ObjMgrSetDirtyFlag (entityID, TRUE);
+           ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+        }
+        success = sv.retdel;
+     }
+  }
+  return success;
+}
+
+
+/* we need to iterate through the actual SeqEntries, because theoretically the
+ * same SeqID should appear in the SeqEntry with the new alignment and again
+ * in the SeqEntry of the original record.
+ */
+static BioseqPtr FindBioseqInSep (SeqEntryPtr sep, SeqIdPtr sip)
+{
+  BioseqPtr    bsp = NULL;
+  BioseqSetPtr bssp;
+  SeqEntryPtr  this_sep;
+  
+  if (sep == NULL || sip == NULL) return NULL;
+  
+  if (IS_Bioseq (sep))
+  {
+  	bsp = (BioseqPtr) sep->data.ptrvalue;
+	if (! BioseqMatch(bsp, sip))
+	{
+	  bsp = NULL;
+	}
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+  	bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    for (this_sep = bssp->seq_set; this_sep != NULL && bsp == NULL; this_sep = this_sep->next)
+    {
+      bsp = FindBioseqInSep (this_sep, sip);
+    }
+  }
+  return bsp;
+}
+
+
+NLM_EXTERN void CalculateAlignmentOffsets (SeqEntryPtr sepnew, SeqEntryPtr sepold)
+{
+  SeqAlignPtr         salpnew;
+  DenseSegPtr         dsp;
+  SeqIdPtr            sip_temp, sip_next;
+  BioseqPtr           bsp1, bsp2;
+  BLAST_OptionsBlkPtr options;
+  SeqAlignPtr         seqalign = NULL;
+  SeqAlignPtr         bestsalp = NULL;
+  Int4                start1, start2, stop1, stop2;
+  CharPtr             errstr = NULL;
+  Uint1               strand;
+  Int4                offset, len, nonly;
+  BioseqPtr           copybsp1, copybsp2;
+  SeqIdPtr            tmp_id_1, tmp_id_2;
+  
+  if (sepnew == NULL || sepold == NULL)
+  {
+  	return;
+  }
+  /* this function needs to look at the bioseqs we have created while reading in the
+   * alignment, align them with the existing bioseqs, and adjust the alignment start
+   * positions if necessary.
+   */
+
+  salpnew = (SeqAlignPtr) FindSeqAlignInSeqEntry (sepnew, OBJ_SEQALIGN);
+  if (salpnew == NULL)
+  {
+  	return;
+  }
+  
+  if (salpnew->segtype != 2) return;
+  dsp = (DenseSegPtr) salpnew->segs;
+  if (dsp == NULL) return;
+
+  /* create IDs to use when copying Bioseqs.
+   * BioseqCopyEx makes a copy of these for the Bioseq it creates,
+   * so we can reuse them and then free them at the end of the for-next loop.
+   */
+  tmp_id_1 = MakeSeqID ("lcl|tmp_1_for_update");
+  tmp_id_2 = MakeSeqID ("lcl|tmp_2_for_update");
+  
+  for (sip_temp = dsp->ids; sip_temp != NULL; sip_temp = sip_next)
+  {
+  	sip_next = sip_temp->next;
+  	sip_temp->next = NULL;
+  	
+  	/* find bsp1 in sepnew, bsp2 in sepold */
+    bsp1 = FindBioseqInSep (sepnew, sip_temp);
+    bsp2 = FindBioseqInSep (sepold, sip_temp);
+    
+    if (bsp1 != NULL && bsp2 != NULL) 
+    {
+  	  /* create alignment between old and new bioseqs */
+  	  /* new bioseq will have same ID as old bioseq, so BLAST won't work
+  	   * because it's looking for IDs using indexing.
+  	   * Create a temporary copy of the two bioseqs with different IDS,
+  	   * add them to the BioseqIndex, BLAST them, then remove them 
+  	   * from the index and delete them.
+  	   */
+      copybsp1 = BioseqCopyEx (tmp_id_1, bsp1, 0, bsp1->length - 1, Seq_strand_plus, FALSE);
+      copybsp2 = BioseqCopyEx (tmp_id_2, bsp2, 0, bsp2->length - 1 , Seq_strand_plus, FALSE);
+      SeqMgrAddToBioseqIndex (copybsp1);
+      SeqMgrAddToBioseqIndex (copybsp2);
+ 	   
+      options = BLASTOptionNew("blastn", TRUE);
+      options->filter_string = StringSave("m L;R");
+      seqalign = BlastTwoSequences (copybsp1, copybsp2, "blastn", options);
+      if (errstr != NULL)
+        MemFree(errstr);
+      errstr = (CharPtr)MemNew(1000*sizeof(Char));
+      bestsalp = SeqAlignBestHit (seqalign, copybsp1, copybsp2, 100, &errstr, &nonly);
+  
+      /* we don't need the copies after this, and we don't want them in the BioseqIndex
+       * (or BLAST might get confused the next time through the loop).
+       */	
+  	  copybsp1->idx.deleteme = TRUE;
+  	  copybsp2->idx.deleteme = TRUE;
+  	  SeqMgrDeleteFromBioseqIndex (copybsp1);
+  	  SeqMgrDeleteFromBioseqIndex (copybsp2);
+  	
+  	  /* update start position in alignment */
+      offset = SeqAlignStart(bestsalp, 1)-SeqAlignStart(bestsalp, 0);
+      if ((SeqAlignStrand(bestsalp, 0)==Seq_strand_minus && SeqAlignStrand(bestsalp, 1) != Seq_strand_minus) || (SeqAlignStrand(bestsalp, 1)==Seq_strand_minus && SeqAlignStrand(bestsalp, 0) != Seq_strand_minus))
+      {
+        strand=Seq_strand_minus;
+        AlnMgr2IndexSingleChildSeqAlign(bestsalp);
+        AlnMgr2GetNthSeqRangeInSA(bestsalp, 1, &start1, &stop1);
+        AlnMgr2GetNthSeqRangeInSA(bestsalp, 2, &start2, &stop2);
+        len = stop2 + start1;
+        if (offset < 0)
+        {
+          offset = 0 - offset;
+        }                    
+      } 
+      else
+      {
+        strand=Seq_strand_plus;
+        len = offset;
+        offset = 0;
+      }
+      SeqAlignStartUpdate (salpnew, sip_temp, abs(offset), len, strand);	    	
+    }  	
+  	sip_temp->next = sip_next;
+  }
+  SeqIdFree (tmp_id_1);
+  SeqIdFree (tmp_id_2);
+    
+  if (errstr != NULL)
+  {
+  	MemFree (errstr);
+  }
+}
+
+
+NLM_EXTERN Boolean CheckAlignmentSequenceLengths (SeqAlignPtr salp)
+{
+  Int4 i, num_rows, num_bad = 0;
+  Int4 from, to;
+  SeqIdPtr sip;
+  BioseqPtr bsp;
+  ValNodePtr sip_list = NULL, vnp;
+  Char       path [PATH_MAX];
+  FILE       *fp;
+  Char       str[50];
+  Boolean    retval = TRUE;
+  
+  if (salp == NULL) return FALSE;
+  
+  num_rows = AlnMgr2GetNumRows(salp);
+
+  for (i = 0; i < num_rows; i++) {
+    AlnMgr2GetNthSeqRangeInSA(salp, i + 1, &from, &to);
+    sip = AlnMgr2GetNthSeqIdPtr(salp, i + 1);
+    bsp = BioseqFind (sip);
+    if (bsp != NULL) {
+      if (from > to) to = from;
+      if (bsp->length < to) {
+        ValNodeAddPointer (&sip_list, 0, sip);
+        num_bad++;
+      } else {
+        sip = SeqIdFree (sip);
+      }
+    }
+  }
+  if (sip_list != NULL) {
+    TmpNam (path);  
+    fp = FileOpen (path, "w");
+    if (fp == NULL) {
+      Message (MSG_ERROR, "Unable to open %s", path);
+    } else {
+      vnp = sip_list;
+      while (vnp != NULL) {
+        SeqIdWrite (vnp->data.ptrvalue, str, PRINTID_FASTA_LONG, sizeof (str) - 1);
+        fprintf (fp, "%s\n", str);       
+        vnp->data.ptrvalue = SeqIdFree (vnp->data.ptrvalue);
+        vnp = vnp->next;
+      }
+      FileClose (fp);
+      LaunchGeneralTextViewer (path, "Short Sequences");
+      FileRemove (path);
+    }
+    if (Message(MSG_YN, "%d sequence%s too short for this alignment.  Do you wish to continue?", 
+                num_bad, num_bad > 1 ? "s are" : " is") == ANS_NO) {
+      retval = FALSE;
+    }
+    sip_list = ValNodeFree (sip_list);
+  }
+  return retval;
+}
+
+
+/******************************************************************
+call back function for REGISTER_ALIGNVALIDATION defined in sequin4.c.  
+Starting point for seqalign validation if user clicked on 
+SeqalignValidation under menu Filer/Alignment.  
+Either individual alignment or alignment block 
+should be highlighted for this validation to work
+******************************************************************/ 
+
+NLM_EXTERN Int2 LIBCALLBACK ValidateSeqAlignandACCFromData (Pointer data)
+{ 
+ 
+  OMProcControlPtr  ompcp;
+  SeqAlignPtr       salp=NULL;
+  SeqAnnotPtr       sap=NULL;
+  SeqEntryPtr       sep=NULL;
+  
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+  
+  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
+  
+  switch(ompcp->input_itemtype)
+    {
+    case OBJ_BIOSEQ :
+      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
+      break;
+    case OBJ_BIOSEQSET :
+      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
+      break;
+      /*if clicked on alignment block*/
+    case OBJ_SEQANNOT:
+      sap=(SeqAnnotPtr) (ompcp->input_data);
+      break;
+      /*if clicked on individual alignment*/
+    case OBJ_SEQALIGN:
+      salp=(SeqAlignPtr) (ompcp->input_data);
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  
+  ErrSetMessageLevel(SEV_ERROR);
+  if(sap!=NULL)
+  {
+     salp=is_salp_in_sap(sap, 2);
+     ValidateSeqAlignandACC (salp, 0, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, NULL);
+  }
+  if (salp!=NULL) {
+     ValidateSeqAlignandACC (salp, 0, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, NULL);
+  }
+  if (sep!=NULL) {
+     ValidateSeqAlignandACCInSeqEntry (sep, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE);
+  }
+  return OM_MSG_RET_DONE;
+}
+
 
 
 

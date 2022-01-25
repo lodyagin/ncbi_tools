@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.92 $
+* $Revision: 1.95 $
 *
 * File Description: 
 *
@@ -195,7 +195,7 @@ NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
   AsnIoConnPtr     aicp;
   time_t           currtime, starttime;
   Entrez2ReplyPtr  e2ry = NULL;
-  Int2             max = 0;
+  time_t           max = 0;
   EIO_Status       status;
   STimeout         timeout;
 #ifdef OS_MAC
@@ -1064,7 +1064,8 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
           StringICmp (db, "nlmcatalog") != 0 &&
           StringICmp (db, "nuccore") != 0 &&
           StringICmp (db, "nucgss") != 0 &&
-          StringICmp (db, "nucest") != 0) {
+          StringICmp (db, "nucest") != 0 &&
+          StringICmp (db, "toolkit") != 0) {
         sprintf (buf, "Database %s has no links", db);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
@@ -1312,6 +1313,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "PharmAction") == 0 && StringICmp (str, "PharmActionActive") == 0) {
             } else if (StringICmp (last, "SubstanceID") == 0 && StringICmp (str, "SubstanceIDActive") == 0) {
             } else if (StringICmp (last, "Synonym") == 0 && StringICmp (str, "SynonymActive") == 0) {
+            } else if (StringICmp (last, "Definition") == 0 && StringICmp (str, "Definition Type") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);

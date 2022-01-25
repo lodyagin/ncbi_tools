@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/8/01
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: dotvibrant.c,v $
+* Revision 6.17  2006/07/13 17:13:17  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.16  2004/03/03 13:38:57  kans
 * removed unused end: labels
 *
@@ -153,7 +156,7 @@ Int4 DOT_Compression (Int4  len, Int4 viewersize)
       if (f <= 1)
         cmpfactor = 1;
       else
-        cmpfactor = ceil(f);
+        cmpfactor = (Int4)ceil(f);
 
       return cmpfactor;
 
@@ -167,9 +170,9 @@ ____________________________________________________________________*/
 void DOT_SetupMenus ()
 
 {
+#ifdef WIN_MAC
   MenU    m;  
 
-#ifdef WIN_MAC
   m = AppleMenu (NULL);
   DeskAccGroup (m);
 #endif
@@ -186,7 +189,7 @@ void DOT_SetupMenus ()
 ____________________________________________________________________*/
 void DOT_DrawXGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4 HFrom, Int4 HTo, Int4 comp, Boolean GRID)
 {
-  Int4         x, y, y2, offset=0, start;
+  Int4         x, y, y2, offset=0;
   Int4         scale_pos, pos, Hseq_pos;
   Char         scale_buf[15] = {""};	/*scale value*/
   
@@ -521,9 +524,10 @@ static Boolean DOT_RectIntsRect (RectPtr r1, RectPtr r2)
 ____________________________________________________________________*/
 static Int4 DOT_LoopStop (DOTVibDataPtr vdp)
 {
-  Int4   stop, pos;
+  Int4   stop;
+  Int4 pos;
 
-  pos=ceil((double)(vdp->sdp.TrampPos*vdp->mip->unique)/100);
+  pos=(Int4)ceil((double)(vdp->sdp.TrampPos*vdp->mip->unique)/100);
 
   if (pos>=vdp->mip->unique)
     return vdp->mip->index;
@@ -543,24 +547,19 @@ ____________________________________________________________________*/
 static void DOT_DisplayHits (PaneL p)
 {
 
-  Int4           i, x, y, x2, y2, index;
+  Int4           i, x, y, x2, y2;
   RecT           rcP, rupd, rcS, rcs, dr, rcR, rcP_off;
-  Int4           Xscore, Yscore, comp, stop;
-  Uint1Ptr PNTR  scores;
+  Int4           comp, stop;
   DOTVibDataPtr    vdp=NULL;
   DOTMainDataPtr   mip=NULL;
   DOTSelDataPtr      data;
   WindoW         w;
-  BaR            Vsb, Hsb;
-  Int4           VFrom, HFrom, VTo, HTo, cutoff;
-  Boolean        x_axis_incr;
+  Int4           VFrom, HFrom, VTo, HTo;
   Boolean        query_on_minus = FALSE;
   Boolean        q_hitonplus, s_hitonplus;
   Int4           q_start, s_start, length;
-  Int4           s_stop, q_stop, ycomp, xcomp;
-  Int4           swdt, shgt;
+  Int4           ycomp, xcomp;
   DOTDiagPtr     PNTR hitlist;
-  DOTAlnPtr      PNTR Alnlist;
   Int4           Left, Right, Bottom, Top;
   Int2           dx, dy;
   DOTAlnPtr      PNTR alnL;
@@ -1147,7 +1146,7 @@ ____________________________________________________________________*/
 static void DOT_SetUpWin(WindoW w, PaneL p, DOTVibDataPtr vdp)
 {
 
-  Int4       Vcurpos, Hcurpos, height, width, viewersize, len;
+  Int4       height, width, viewersize, len;
   Int4       gap, lmargin, vsbWidth, hsbHeight;
   BaR        vsb, hsb;
   WindoW     temport;
@@ -1214,8 +1213,6 @@ static void  DOT_CloseSequenceWindow (ButtoN b)
 
   DOTVibDataPtr vdp2, vdp;
   DOTSelDataPtr  data;
-
-  Uint1Ptr   qseq, sseq;
 
   vdp2=(DOTVibDataPtr)GetObjectExtra(ParentWindow(b));
 
@@ -1398,9 +1395,8 @@ static void DOT_ModeProc(ChoicE i)
 
 static void DOT_VCrossHairs (RecT rcP, DOTVibDataPtr vdp, Int4 VFrom,Int4 HFrom)
 {
-  Int4   y, y2, x, x2, Vseq;
+  Int4   y, y2, x, x2;
   Int4   cursor_size =15;
-  Char   seq_pos[15];
 /*   SelectPtr c_data; */
 
 /*   c_data = cip->data; */
@@ -1426,7 +1422,6 @@ static void DOT_HCrossHairs (RecT rcP, DOTVibDataPtr vdp, Int4 VFrom,Int4 HFrom)
 {
   Int4  y, y2, x, x2;
   Int4  cursor_size = 15;
-  Char  seq_pos[15];
 /*   SelectPtr  c_data; */
 
 /*   data = vdp->data; */
@@ -1452,7 +1447,6 @@ static void DOT_MoveCrossHairs (RecT rcP, DOTVibDataPtr vdp)
 {
   Int4   y, y2, x, x2;
   Int4   cursor_size = 15;
-  Char   seq_pos[15];
   DOTSelDataPtr  data;
 
   SelectFont(vdp->Fnt);
@@ -1493,7 +1487,6 @@ static void DOT_SelectLineProc (PaneL p)
 
 {
   RecT        rcP;
-  DOTSelDataPtr  data;
   DOTVibDataPtr  vdp;
 
   vdp = (DOTVibDataPtr) GetObjectExtra (ParentWindow(p));
@@ -1763,16 +1756,13 @@ static Boolean DOT_SVDisplayDiags(DOTVibDataPtr vdp2, DOTSelDataPtr data)
   VieweR             v;
   SegmenT            seg1, seg2, seg3, seg4;
   PrimitivE          prim;
-  Char               buffer[50];
   Int4               stop, cutoff=0, q_start, s_start, length;
-  Int4               x, y, x2, y2, tmp, Right_limit, Bottom_limit;
-  Int4               i, j, s_stop, q_stop;
+  Int4               x, y, x2, y2;
+  Int4               i, j;
   Int4               p_VFrom, p_HFrom;
-  Int4               width, height, primID;
-  Int4               r_width, r_ht, x_start, y_start, x_stop, y_stop;
-  Int4               right, left, top, bottom;
+  Int4               width, height;
+  Int4               x_start, y_start;
   Int4               Right, Left, Top, Bottom;
-  Int4               lb_boundary, tr_boundary;
   Int4               right_end, bottom_end;
   Int4               diag, aln_diag;
   Int4               q_left, q_right;
@@ -2073,7 +2063,7 @@ ____________________________________________________________________*/
 void DOT_DrawScale (SegmenT sbSeg, Uint1 strand1, Uint1 strand2, RecT  r, Int4 margin,Int4 res_cnt, Int4 bloc_cnt, Int4 Fh, Int4 q_pos, Int4 s_pos, Int4 chw_2, Int4 chw_4)
 {
   Char      Buf[15]={""};
-  Int4      x, x2,y1, y2, y3, y4, y5, y6, y7, y8;
+  Int4      x, x2,y1, y2, y3, y4, y5, y6;
   Int4      pos, col;
 
 
@@ -2263,8 +2253,6 @@ ____________________________________________________________________*/
 static void DOT_InitCInfo(DOTVibDataPtr vdp, DOTVibDataPtr vdp2, DOTSelDataPtr data)
 {
   Char       colBuf[12]={""};
-  Int4       i;
-  Int4       q_left, q_right;
   DOTMainDataPtr mip1=NULL, mip2=NULL;
   BioseqPtr  qbsp, sbsp;
   
@@ -2359,7 +2347,6 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
   DOTMainDataPtr mip1, mip2;
   SegmenT    pict2;
   SegmenT    nmSeg;
-  SegmenT    hlSeg;
   SegmenT    clSeg;
   SegmenT    sbSeg;
   Boolean    match=FALSE;
@@ -2373,20 +2360,16 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
   Int4       i, k, spaces;
   Int4       prot_threshold=0, bloc_cntr;
   Int4       res_cnt, bloc_size;
-  Int4       x, y, x2, y2, q_ahead;
-  Int4       s_ahead, qavail, savail;
+  Int4       x, y, x2, y2;
   Int4       vis_2, buf_len;
-  Int4       bufsize, sglen, diff1, diff2;
+  Int4       bufsize, sglen;
   Int4       xstart, xstop, ystart, ystop;
   Int4       hit_start, hit_stop, q_pos, s_pos;
-  Int4       V2Height, Fh, margin;
+  Int4       Fh, margin;
   Int4       xdiff_left,xdiff_right;
   Int4       ydiff_left,ydiff_right;
   Int4       width,height;
   Int4       chw_2, chw_4;
-  Int4       qbufstart, qbufstop;
-  Int4       sbufstart, sbufstop;
-  BaR        vsb;
   CharPtr    qBuf;
   CharPtr    sBuf;
   CharPtr PNTR residue_names;
@@ -2395,7 +2378,7 @@ static void  DOT_SVDisplaySequence(DOTVibDataPtr vdp2, DOTAlnPtr salp)
   Int4       num_cls, num_segs, seg_len;
   Int4       q_start, q_stop, s_start, s_stop;      
   Boolean    query_on_minus = FALSE;
-  Uint1      highlight;
+  Uint2      highlight;
 
 
   data=(DOTSelDataPtr)vdp2->data;
@@ -2680,8 +2663,6 @@ ____________________________________________________________________*/
 static Boolean DOT_SVPopulateSequenceViewer(DOTVibDataPtr vdp2)
 {
   RecT    rc;
-  Int4    x;
-  BaR     hsb;
   Char    infoBuf[255];
   DOTSelDataPtr data;
   DOTAlnPtr salp;
@@ -2733,7 +2714,7 @@ ____________________________________________________________________*/
 DOTAlnPtr DOT_SVFindHit(DOTVibDataPtr vdp2, Int4 primID)
 {
   DOTAlnPtr  salp;
-  Int4     index, s_start, q_start, q_stop, len;
+  Int4     index, s_start, q_start, len;
   Boolean  query_on_minus = FALSE;
 
 
@@ -2872,10 +2853,9 @@ static void DOT_SVClickProc(VieweR v, SegmenT seg, PoinT pt)
 ____________________________________________________________________*/
 static Boolean DOT_SVPopulateDiagViewer(DOTVibDataPtr vdp2)
 {
-  Int4       scale, index;
-  Char       str[16], infoBuf[255];
+  Int4       index;
+  Char       str[16];
   DOTSelDataPtr  data;
-  BaR        vsb;
   
   
   data=(DOTSelDataPtr)vdp2->data;
@@ -2925,7 +2905,6 @@ static void DOT_ChangeSequenceViewerCutoff (BaR b, GraphiC g, Int2 new, Int2 old
 {
   DOTVibDataPtr vdp2;
   WindoW     w;
-  RecT       rcP;
 
   w=(WindoW)ParentWindow(b);
   vdp2 = (DOTVibDataPtr) GetObjectExtra (w);
@@ -2990,8 +2969,9 @@ ____________________________________________________________________*/
 static void DOT_SVCalculateScaling (DOTVibDataPtr vdp2)
 
 {
-  RecT   r, world;
-  Int4   index, r_hgt, r_wdt, w_hgt, w_wdt, scale;
+  RecT   r;
+  Int4   index, r_hgt, r_wdt;
+  double w_hgt, w_wdt, scale;
   double f1, f2;
 
   w_hgt=vdp2->ylen+(vdp2->ylen*0.15);
@@ -3290,7 +3270,7 @@ static DOTSelFeatPtr DOT_FindFeatureInViewer(DOTFeatIndexPtr fdindex, DOTRowPtr 
 
 static DOTSelFeatPtr DOT_FindBetweenFeats(DOTFeatIndexPtr fdindex, DOTRowPtr drp, Int4 cursor_pos)
 {
-  DOTFeatPtr dfp1, dfp2;
+  DOTFeatPtr dfp1;
   DOTSelFeatPtr feat_list=NULL;
   Int4       i;
 
@@ -3367,10 +3347,6 @@ Char     str[50];
 static Boolean LIBCALLBACK DOT_AddFeaturesToViewer(SeqFeatPtr sfp, 
 			SeqMgrFeatContextPtr context)
 {
-BioseqPtr            parent;
-SeqMgrSegmentContext contextPart;
-SeqMgrFeatContextPtr context2;
-Int4                 segID;
 DOTFeatPtr           dfp_new=NULL;
 DOTRowPtr            drp=NULL;
 DOTFeatIndexPtr      fdindex=NULL; 
@@ -3446,7 +3422,6 @@ static void DOT_PlaceCursors(VieweR viewer, SegmenT seg, SegmenT segCursor, DOTF
   Boolean found;
   DOTSelFeatPtr foundfeats;
   Int4    Y_pos;
-  BaR     bar;
   WindoW  temport;
   RecT    rcP;
 
@@ -3505,7 +3480,7 @@ static void DOT_QViewerClickProc(VieweR v, SegmenT seg, PoinT pt)
   DOTFeatListPtr flp;
   DOTFeatPtr     dfp;
   DOTSelDataPtr  data;
-  Int4           i, xmidPt, comp, j;
+  Int4           i, xmidPt, comp;
   Uint2          segID, primID, primCT;
   PrimitivE      prim;
   RecT           rc;
@@ -3717,7 +3692,6 @@ static void DOT_HideFeatList(ButtoN b)
     WindoW hHideDlg;
     DOTFeatListPtr flp;
     Int4 i, numrows;
-    Boolean status;
     DOTFeatIndexPtr fdindex;
 
 	hHideDlg = (WindoW)ParentWindow(b);
@@ -3763,7 +3737,6 @@ static void DOT_SetHideList(DOTFeatListPtr flp)
 
 static void DOT_HideFeatDlg(DOTFeatListPtr flp)
 {
-    Char szName[181], szName2[161];
     Int4 i, numrows;
     GrouP g, hg;
     ButtoN b;
@@ -3830,7 +3803,6 @@ static WindoW DOT_BuildFeatGUI (DOTFeatListPtr flp)
   VieweR  v1, v2;
   SegmenT seg1, seg2;
   GrouP   subg1, subg2, g;
-  PrompT  pr1, pr2;
   Int2   Margins;
   Char   str[255];
 
@@ -4050,8 +4022,6 @@ static WindoW DOT_SVBuildDiagViewer(DOTVibDataPtr vdp2)
   RecT      rc;
   SegmenT   pict1,pict2;
   Int2      Margins, pixwidth; 
-  MenU      menu; 
-  BaR       hsb;
   Char      zoombuf[]={"Decrease scale to zoom in .."};
   Char      str1[41]={""}, str2[41]={""};
   DOTGotoPtr   gtp;
@@ -4392,18 +4362,14 @@ ________________________________________________________*/
 static void DOT_ReleaseProc(PaneL p, PoinT pt)
 {
   DOTSelDataPtr   data;
-  MenU        menu, gmenu;
-  Int4        VFrom, HFrom, sFeatscount, qFeatscount;
+  Int4        VFrom, HFrom;
   DOTVibDataPtr  vdp2=NULL, vdp=NULL;
   DOTMainDataPtr mip1=NULL;
   DOTAlignInfoPtr alp=NULL;
   DOTFeatListPtr     flp;
-  DOTDiagPtr  PNTR hitlist;
   Boolean     xaxis_incr=TRUE, yaxis_incr=TRUE;
-  RecT        rc, rcP;
-  Int4        width, height, index, xscale, yscale, scale, Y_pos;
+  RecT        rc;
   Int2        dx, dy;
-  GrouP       g;
   Char        infoBuf[255];
   
 
@@ -4620,7 +4586,7 @@ static void DOT_ReduceSizeProc (IteM i)
   RecT        rcP;
   DOTVibDataPtr  vdp;
   DOTSelDataPtr   data;
-  Int4        xscale, yscale, VCurPos, HCurPos;
+  Int4        VCurPos, HCurPos;
   BaR         vsb, hsb;
 
   
@@ -4673,7 +4639,7 @@ static void DOT_EnlargeSizeProc (IteM i)
   RecT      rcP;
   DOTVibDataPtr vdp;
   DOTSelDataPtr  data;
-  Int4     xscale, yscale, VCurPos, HCurPos;
+  Int4     VCurPos, HCurPos;
   BaR      vsb, hsb;
 
   w = (WindoW)ParentWindow(i);
@@ -4746,7 +4712,6 @@ static void DOT_OriginalSizeProc (IteM i)
   RecT      rcP;
   DOTVibDataPtr vdp;
   DOTSelDataPtr  data;
-  Int4     xscale, yscale;
 
   w = (WindoW)ParentWindow(i);
   temport = SavePort(w);
@@ -4849,8 +4814,6 @@ void DOT_DoParams(ButtoN b)
   DOTparamsinfoPtr pip;
   DOTVibDataPtr       vdp;
   DOTMainDataPtr      mip;
-  RecT             rc;
-  Char             wordsize[5], treelimit[20];
 
   WatchCursor();
   w=(WindoW)ParentWindow(b);
@@ -4924,8 +4887,6 @@ void DOT_StartDOTPLOT(ButtoN b)
   DOTparamsinfoPtr pip;
   DOTVibDataPtr       vdp;
   DOTMainDataPtr      mip;
-  RecT             rc;
-  Char             wordsize[5], treelimit[20];
   BioseqPtr        qbsp, sbsp;
 
 
@@ -5074,12 +5035,10 @@ static Uint1Ptr DOT_GetNthSeqFromAlign (SeqAlignPtr sap, Int4 n)
   SeqPortPtr       spp;
   Uint1Ptr         seq, temp_seq;
   Uint1            strand;
-  Int4             offset, x;  
   Int4             start=0, stop=0;
   Int4             len, buf_len;
   Int2             ctr, i;    
   Uint1Ptr         buffer;
-  Int4Ptr    PNTR  matrix;
   
   sip=AlnMgr2GetNthSeqIdPtr(sap, n);
   bsp=BioseqLockById(sip); 
@@ -5145,7 +5104,6 @@ void DOT_DoZoom(ButtoN b)
   DOTMainDataPtr mip;
   Int4           viewersize, newLen;
   RecT           rc;
-  Char   xstart[20], xstop[20], ystart[20], ystop[20];
 
 
   w=(WindoW)ParentWindow(b);
@@ -5241,7 +5199,6 @@ static void DOT_ZoomProc (IteM i)
 {
   DOTVibDataPtr          vdp;
   WindoW              temport, w;
-  RecT                rc;
   
   w= (WindoW)ParentWindow(i);
   temport=SavePort(w);
@@ -5365,10 +5322,8 @@ ____________________________________________________________________*/
 static Boolean DOT_GetAlign (DOTAlignInfoPtr alp)
 { 
   AlnMsg2Ptr    amp1, amp2;
-  OMProcControlPtr ompcp;
   BioseqPtr    bsp1, bsp2;
   SeqAlignPtr  sap=NULL, salp=NULL, sap_tmp=NULL;
-  SeqIdPtr     sip1, sip2;
   DOTAlnPtr    Aln;
   Boolean      saved=FALSE;
   Int4         x1, y1, x2, y2, numlines=0, n=0, i=0;
@@ -5564,7 +5519,6 @@ ____________________________________________________________________*/
 static DOTAlnPtr PNTR DOT_IndexAlnlist(DOTAlnPtr aln_head, Int4Ptr index)
 {
   DOTAlnPtr PNTR Alnlist=NULL;
-  DOTAlnPtr aln_next;
   Int4      i=0;
 
   if (!aln_head || !index)
@@ -5601,7 +5555,6 @@ extern Boolean DOT_FillAlignInfoPointer (DOTAlignInfoPtr alp)
   AlnMsg2Ptr    amp1, amp2;  
   DOTAlnPtr    PNTR Alnlist=NULL;
   DOTAlnPtr    aln_list=NULL;
-  OMProcControlPtr ompcp;
   BioseqPtr    bsp1, bsp2;
   SeqAlignPtr  sap=NULL, salp=NULL, sap_tmp=NULL;
   Boolean      saved=FALSE;
@@ -5718,7 +5671,6 @@ extern Boolean DOT_Prob_FillAlignInfoPointer (DOTAlignInfoPtr alp)
   AlnMsg2Ptr    amp1, amp2;  
   DOTAlnPtr    PNTR Alnlist=NULL;
   DOTAlnPtr    aln_list=NULL;
-  OMProcControlPtr ompcp;
   BioseqPtr    bsp1, bsp2;
   SeqAlignPtr  sap=NULL, salp=NULL, sap_tmp=NULL;
   Boolean      saved=FALSE;
@@ -5829,7 +5781,6 @@ extern Boolean DOT_Prob_FillAlignInfoPointer (DOTAlignInfoPtr alp)
 
 static SeqIdPtr DOT_GetNthSeqIdFromScp(SCP_ResultPtr scp, Int2 n)
 {
-  SeqIdPtr sip;
   SeqAlignPtr PNTR saps;
 
   
@@ -5858,8 +5809,6 @@ static Boolean DOT_FillFromScp (DOTAlignInfoPtr alp, SCP_ResultPtr scp)
   BioseqPtr    bsp1=NULL, bsp2=NULL;
   DOTAlnPtr    PNTR Alnlist=NULL;
   DOTAlnPtr    aln_list =NULL;
-  Char         text1[42];
-  Char         text2[42];
   Int4         start=0;
   Boolean      saved=FALSE;
   Char         q_idbuf[42]={""}, s_idbuf[42]={""};
@@ -5954,14 +5903,10 @@ static FloatHi DOT_get_eval(Int4 exp)
 
 static void DOT_DoBlast (ButtoN b)
 {
-  BLAST_OptionsBlkPtr options;
-  SeqAlignPtr         sap, sap_final;
   DOTVibDataPtr       vdp;
-  WindoW              temport, w;
-  RecT                rc;
+  WindoW              w;
   DOTblastinfoPtr     bip;
   BioseqPtr           bsp1, bsp2;
-  Int4                e;
   Int2                i;
   Int2                progval;
   Uint2               entityID=0;
@@ -5969,8 +5914,6 @@ static void DOT_DoBlast (ButtoN b)
   Boolean             is_local;
   Char                eval[11]={""};
   Char                str[20]={""};
-  SeqEntryPtr         sep;
-  SeqAnnotPtr         sanp;
   SCP_ResultPtr       scp=NULL;
   DOTMainDataPtr      mip=NULL;
 
@@ -6049,8 +5992,8 @@ void DOT_SetupBlastWindow(DOTVibDataPtr vdp)
    DOTMainDataPtr    mip;
    ButtoN            b;
    ButtoN            b1;
-   GrouP             maingroup, topg, globalg, localg, gapsg, eANDwg;
-   GrouP             submitg, maskg, blastg, bottomg, g1, g2, g3;
+   GrouP             maingroup, topg, localg, eANDwg;
+   GrouP             submitg, blastg, bottomg, g3;
    Char              title[255]={""};
    WindoW            w;
    
@@ -6233,8 +6176,7 @@ ____________________________________________________________________*/
 
 static void DOT_GridProc (ChoicE i) 
 {
-  WindoW      w, temport;
-  RecT        rcP;
+  WindoW      w;
   DOTVibDataPtr  vdp;
   Int4        value;
   
@@ -6260,15 +6202,10 @@ static void DOT_GridProc (ChoicE i)
 static void DOT_CreateWindowDetails (WindoW w, DOTVibDataPtr vdp)
 {
   GrouP          g, g1, g2;
-  Int4           index, maxzoom, wvals;
-  Char           str[15], PNTR qname, PNTR sname;
+  Char           PNTR qname, PNTR sname;
   Int4           q_start, q_stop, s_start, s_stop;
   RecT           rc;
-  ButtoN         blastButton;
-  BaR 			  vsb;
-  BaR 			  hsb;
-  Int4           Xpixels, Ypixels, pixwidth, ychar;
-  DOTSelDataPtr      data;
+  Int4           Xpixels, Ypixels, pixwidth;
   DOTMainDataPtr     mip=NULL;
   DOTAlignInfoPtr    alp=NULL;
   PrompT             pr1, pr2;
@@ -6406,7 +6343,7 @@ ____________________________________________________________________*/
 static void DOT_NewAnalysis (ButtoN b)
 {
   WindoW     w;
-  DOTVibDataPtr vdp, vdp2;
+  DOTVibDataPtr vdp;
   DOTSelDataPtr  data;
   
   w = (WindoW)ParentWindow (b);
@@ -6568,7 +6505,6 @@ NLM_EXTERN Boolean DOT_MakeMainViewer (DOTMainDataPtr mip, DOTAlignInfoPtr alp)
   Int2           margins;
   MenU		     m1, m2, m3, m4, s1, s2;
   IteM           i;
-  Int4           n;
   ChoicE         ch;
   DOTVibDataPtr  vdp;
   SeqAlignPtr    sap=NULL;
@@ -6719,10 +6655,7 @@ static DOTAlnPtr DOT_FindAlignment(DOTVibDataPtr vdp2, Uint2 primID)
 {
   DOTAlnPtr aln, salp;
   DOTAlnPtr PNTR alnL;
-  Int4      q_start, q_stop, s_start, s_stop;
-  Int4      width, height;
   DOTSelDataPtr data;
-  Int4      Left,Right,Top,Bottom,left,right,top,bottom;
   Boolean   lt_fixed=FALSE, rb_fixed=FALSE;
 
 
@@ -6852,7 +6785,8 @@ NLM_EXTERN SCP_ResultPtr SCP_CompareOrderOrganizeBioseqs(BioseqPtr bsp1, BioseqP
    Int4                 stop;
    SeqAnnotPtr          sanp;
    SeqEntryPtr          sep;
-   Uint2                entityID=0, itemID=0;
+   Uint2                entityID=0;
+   Uint4                itemID=0;
 
    if (bsp1 == NULL || bsp2 == NULL)
       return NULL;

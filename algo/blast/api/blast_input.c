@@ -1,4 +1,6 @@
-static char const rcsid[] = "$Id: blast_input.c,v 1.24 2006/04/21 14:33:44 madden Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: blast_input.c,v 1.25 2006/05/24 21:17:50 camacho Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE

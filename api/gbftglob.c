@@ -4,6 +4,18 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.57  2006/10/11 15:59:14  kans
+* added bound_moiety to enhances, oriT, promoter
+*
+* Revision 6.56  2006/09/27 20:28:57  kans
+* operon legal on rRNA
+*
+* Revision 6.55  2006/09/06 21:47:55  kans
+* added slot for mobile_element qualifier
+*
+* Revision 6.54  2006/08/31 15:25:55  kans
+* gene feature can have /product qualifier
+*
 * Revision 6.53  2005/10/31 18:24:43  kans
 * repeat_unit did not have rpt_unit family of qualifiers
 *
@@ -277,7 +289,7 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"ribosomal_slippage", Class_none}, {"trans_splicing", Class_none},
  {"collected_by", Class_text}, {"collection_date", Class_text},
  {"identified_by", Class_text}, {"lat_lon", Class_text},
- {"PCR_primers", Class_text}
+ {"PCR_primers", Class_text}, {"mobile_element", Class_text}
 };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {
@@ -358,12 +370,12 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"enhancer",  0, {-1, -1, -1, -1, -1}, 15,
+   {"enhancer",  0, {-1, -1, -1, -1, -1}, 16,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_label, 
      GBQUAL_gene, GBQUAL_map, 
       GBQUAL_note, GBQUAL_partial, GBQUAL_standard_name,  GBQUAL_usedin,
-      GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele, GBQUAL_bound_moiety,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"exon", 0, {-1, -1, -1, -1, -1}, 20,
@@ -387,11 +399,11 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"gene", 0, {-1, -1, -1, -1, -1}, 19,
+   {"gene", 0, {-1, -1, -1, -1, -1}, 20,
      {GBQUAL_allele, GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, 
-     GBQUAL_function, GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, 
+     GBQUAL_function, GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, GBQUAL_product, 
      GBQUAL_pseudo, GBQUAL_phenotype, GBQUAL_usedin, GBQUAL_locus_tag, GBQUAL_old_locus_tag,
-     GBQUAL_operon, GBQUAL_trans_splicing, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+     GBQUAL_operon, GBQUAL_trans_splicing, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
 	{"iDNA", 0, {-1, -1, -1, -1, -1}, 17,
@@ -541,12 +553,12 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"oriT", 0, {-1, -1, -1, -1, -1}, 21,
+   {"oriT", 0, {-1, -1, -1, -1, -1}, 22,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_direction, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, 
      GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, 
      GBQUAL_rpt_family, GBQUAL_rpt_type, GBQUAL_rpt_unit, GBQUAL_rpt_unit_seq, GBQUAL_rpt_unit_range, GBQUAL_standard_name,
-     GBQUAL_usedin, GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+     GBQUAL_usedin, GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele, GBQUAL_bound_moiety,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"polyA_signal", 0, {-1, -1, -1, -1, -1}, 14,
@@ -587,12 +599,12 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"promoter",  0, {-1, -1, -1, -1, -1}, 19,
+   {"promoter",  0, {-1, -1, -1, -1, -1}, 20,
      {GBQUAL_citation,GBQUAL_db_xref,  GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_function,
       GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial,
       GBQUAL_phenotype, GBQUAL_pseudo, GBQUAL_standard_name, GBQUAL_usedin,
       GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele, GBQUAL_operon,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      GBQUAL_bound_moiety, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"protein_bind",  1, {GBQUAL_bound_moiety, -1, -1, -1, -1}, 16,
@@ -610,16 +622,16 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"repeat_region",  0, {-1, -1, -1, -1, -1}, 23,
+   {"repeat_region",  0, {-1, -1, -1, -1, -1}, 24,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_function,
       GBQUAL_gene, GBQUAL_insertion_seq, GBQUAL_label, GBQUAL_map, GBQUAL_note,
       GBQUAL_partial, GBQUAL_rpt_type, GBQUAL_rpt_family, GBQUAL_rpt_unit, GBQUAL_rpt_unit_seq, GBQUAL_rpt_unit_range,
-      GBQUAL_standard_name,
+      GBQUAL_standard_name, GBQUAL_mobile_element,
       GBQUAL_transposon, GBQUAL_usedin,
       GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"repeat_unit",  0, {-1, -1, -1, -1, -1}, 20,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_function,
       GBQUAL_gene, 
@@ -637,14 +649,14 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"rRNA",  0, {-1, -1, -1, -1, -1}, 18,
+   {"rRNA",  0, {-1, -1, -1, -1, -1}, 19,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_function, 
      GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, GBQUAL_product,
       GBQUAL_pseudo, GBQUAL_standard_name, GBQUAL_usedin,
-      GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele,
+      GBQUAL_locus_tag, GBQUAL_old_locus_tag, GBQUAL_allele, GBQUAL_operon,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"S_region",  0, {-1, -1, -1, -1, -1}, 17,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_experiment, GBQUAL_inference, GBQUAL_gene,
       GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, GBQUAL_product,

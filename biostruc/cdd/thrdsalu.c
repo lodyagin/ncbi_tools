@@ -1,4 +1,4 @@
-/* $Id: thrdsalu.c,v 1.1 2000/08/16 20:45:21 hurwitz Exp $
+/* $Id: thrdsalu.c,v 1.2 2006/07/13 17:07:27 bollin Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdsalu.c,v $
+* Revision 1.2  2006/07/13 17:07:27  bollin
+* removed unused variables
+*
 * Revision 1.1  2000/08/16 20:45:21  hurwitz
 * initial check in of threading routines
 *
@@ -59,7 +62,6 @@ int salu(Cor_Def* cdf, Qry_Seq* qsq, Cur_Loc* sli, int cs, int al, Cur_Aln* sai)
 /* sai:  Contains segment alignment values to be set     */
 /*-------------------------------------------------------*/
 
-int	i,j;
 int	ci;		/* Residue index in core motif */
 int	si;		/* Residue index in query sequence */
 int	mx,mn;		/* Aligment range */

@@ -29,13 +29,18 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.68 $
+* $Revision: 6.69 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.69  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.68  2002/02/15 18:30:55  kans
 * no longer change snoRNA to misc_RNA
 *
@@ -1162,7 +1167,7 @@ NLM_EXTERN ValNodePtr FlatRefBest(ValNodePtr equiv, Boolean error_msgs, Boolean 
 }	/* FlatRefBest */
 
 NLM_EXTERN Int4 StoreFeatTemp(SortStruct PNTR List, SeqFeatPtr sfp,
-Int4 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt,
+Int4 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint4 itemID, Uint2 itemtype,SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt,
 Boolean temp)
 {
 	SeqLocPtr PNTR slpp = NULL;
@@ -1193,7 +1198,7 @@ Boolean temp)
 }
 
 NLM_EXTERN Int4 StoreFeat(SortStruct PNTR List, SeqFeatPtr sfp, Int4 currentsize, 
-BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint4 itemID, Uint2 itemtype,
 SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt)
 {
 	return StoreFeatFree(List, sfp, currentsize, bsp, seg, entityID, itemID, 
@@ -1201,7 +1206,7 @@ SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt)
 }
 
 NLM_EXTERN Int4 StoreFeatFree(SortStruct PNTR List, SeqFeatPtr sfp, Int4 currentsize, 
-BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint4 itemID, Uint2 itemtype,
 SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt, Boolean feat_free)
 {
 	SeqLocPtr PNTR slpp = NULL;
@@ -2286,15 +2291,10 @@ void GR_PrintPubs (Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp)
 {
 
 	BioseqPtr bsp=gbp->bsp;
-	Boolean first_time, ignore_this=FALSE, submit=FALSE, tag;
-	Char buffer[150];
-	CharPtr authors=NULL,title=NULL,journal=NULL,string_start, string, retract;
+	Boolean ignore_this=FALSE, submit=FALSE;
+	CharPtr authors=NULL,title=NULL,journal=NULL;
 	CharPtr descr = NULL;
-	Int2 i;
-	Int4 gibbsq, muid, pmid, pat_seqid=0, start=0, stop=0;
-	PubdescPtr pdp;
-	SeqFeatPtr sfp;
-	SeqLocPtr loc, slp;
+	Int4 muid, pmid, pat_seqid=0, start=0, stop=0;
 	ValNodePtr pub;
 
 	if (ASN2FF_SHOW_ALL_PUBS) {

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastkar.c,v 6.113 2006/04/07 13:46:24 madden Exp $";
+static char const rcsid[] = "$Id: blastkar.c,v 6.114 2006/10/02 12:36:01 madden Exp $";
 
 /* ===========================================================================
 *
@@ -49,8 +49,11 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.113 $
+ * $Revision: 6.114 $
  * $Log: blastkar.c,v $
+ * Revision 6.114  2006/10/02 12:36:01  madden
+ * Comment out BLOSUM62_20
+ *
  * Revision 6.113  2006/04/07 13:46:24  madden
  * Improved the comment for NlmKarlinLambdaNR.  Reformatted the
  * function prototype to fit in 80 characters. (from Mike Gertz).
@@ -3228,8 +3231,10 @@ BlastLoadMatrixValues (void)
 	matrix_info = MatrixInfoNew("PAM250", pam250_values, pam250_prefs, PAM250_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
 
+/*
 	matrix_info = MatrixInfoNew("BLOSUM62_20", blosum62_20_values, blosum62_20_prefs, BLOSUM62_20_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
+*/
 
 	matrix_info = MatrixInfoNew("BLOSUM90", blosum90_values, blosum90_prefs, BLOSUM90_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);

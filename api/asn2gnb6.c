@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.73 $
+* $Revision: 1.88 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -393,9 +393,13 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "BDGP_INS",
   "BoLD",
   "CDD",
+  "cdd",
   "CK",
   "COG",
+  "dbClone",
+  "dbCloneLib",
   "dbEST",
+  "dbProbe",
   "dbSNP",
   "dbSTS",
   "dictyBase",
@@ -411,6 +415,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "GI",
   "GO",
   "GOA",
+  "GRIN",
   "H-InvDB",
   "HGNC",
   "HSSP",
@@ -420,6 +425,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "IMGT/LIGM",
   "InterimID",
   "InterPro",
+  "ISD",
   "ISFinder",
   "JCM",
   "LocusID",
@@ -1083,7 +1089,8 @@ NLM_EXTERN void AddCommentWithURLlinks (
 
 static void CatenateCommentInGbseq (
   GBSeqPtr gbseq,
-  CharPtr str
+  CharPtr str,
+  Boolean compress
 )
 
 {
@@ -1117,7 +1124,9 @@ static void CatenateCommentInGbseq (
     ch = *tmp;
   }
   TrimSpacesAroundString (gbseq->comment);
-  Asn2gnbkCompressSpaces (gbseq->comment);
+  if (compress) {
+    Asn2gnbkCompressSpaces (gbseq->comment);
+  }
 }
 
 
@@ -1167,7 +1176,7 @@ NLM_EXTERN CharPtr FormatCommentBlock (
 
   if (! StringHasNoText (bbp->string)) {
     str = StringSave (bbp->string);
-    CatenateCommentInGbseq (gbseq, str);
+    CatenateCommentInGbseq (gbseq, str, TRUE);
     return str;
   }
 
@@ -1266,7 +1275,10 @@ NLM_EXTERN CharPtr FormatCommentBlock (
 
   str = FFEndPrint(ajp, ffstring, afp->format, 12, 12, 5, 5, "CC");
 
+  /*
   CatenateCommentInGbseq (gbseq, str);
+  */
+  CatenateCommentInGbseq (gbseq, title, FALSE);
 
   FFRecycleString(ajp, ffstring);
   return str;
@@ -2279,6 +2291,7 @@ NLM_EXTERN void AddFeatureToGbseq (
   GBQualifierPtr  last = NULL;
   CharPtr         ptr;
   CharPtr         qual;
+  CharPtr         tmp;
   CharPtr         val;
 
   if (gbseq == NULL || gbfeat == NULL || StringHasNoText (str)) return;
@@ -2311,10 +2324,17 @@ NLM_EXTERN void AddFeatureToGbseq (
       *val = '\0';
       val++;
       if (ch == '=') {
+        tmp = val;
         if (*val == '"') {
           val++;
+          tmp = val;
+          ch = *tmp;
+          while (ch != '"' && ch != '\0') {
+            tmp++;
+            ch = *tmp;
+          }
         }
-        ptr = StringStr (val, "\n                     /");
+        ptr = StringStr (tmp, "\n                     /");
         if (ptr != NULL) {
           *ptr = '\0';
           ptr++;
@@ -2431,7 +2451,7 @@ NLM_EXTERN CharPtr GetMolTypeQual (
     case MOLECULE_TYPE_GENOMIC_MRNA_MIX :
       break;
     case MOLECULE_TYPE_CRNA :
-      return "other RNA";
+      return "viral cRNA";
       break;
     case MOLECULE_TYPE_SNORNA :
       return "snoRNA";
@@ -2549,16 +2569,92 @@ static void ParsePCRPrimerString (
   psp->curr_rev_seq = psp->rev_seq_list;
 }
 
+static ValNodePtr ParseColonString (
+  CharPtr strs
+)
+
+{
+  ValNodePtr  head = NULL;
+  size_t      len;
+  CharPtr     ptr, str, tmp;
+
+  if (StringHasNoText (strs)) return NULL;
+
+  tmp = StringSave (strs);
+  str = tmp;
+  len = StringLen (str);
+  if (len > 1 && StringChr (str, ':') != NULL) {
+    while (StringDoesHaveText (str)) {
+      ptr = StringChr (str, ':');
+      if (ptr != NULL) {
+        *ptr = '\0';
+        ptr++;
+      }
+      TrimSpacesAroundString (str);
+      ValNodeCopyStr (&head, 0, str);
+      str = ptr;
+    }
+  } else {
+    ValNodeCopyStr (&head, 0, str);
+  }
+
+  MemFree (tmp);
+  return head;
+}
+
+static void PrintHalfPrimer (
+  ValNodePtr PNTR headp,
+  CharPtr name,
+  CharPtr seq,
+  CharPtr nm_label,
+  CharPtr sq_label,
+  CharPtr prefix
+)
+
+{
+  ValNodePtr  name_list, seq_list, name_vnp, seq_vnp;
+  CharPtr     str;
+
+  name_list = ParseColonString (name);
+  seq_list = ParseColonString (seq);
+
+  name_vnp = name_list;
+  seq_vnp = seq_list;
+  while (seq_vnp != NULL) {
+    if (name_vnp != NULL) {
+      str = (CharPtr) name_vnp->data.ptrvalue;
+      if (StringDoesHaveText (str)) {
+        ValNodeCopyStr (headp, 0, prefix);
+        ValNodeCopyStr (headp, 0, nm_label);
+        ValNodeCopyStr (headp, 0, str);
+        prefix = ", ";
+      }
+      name_vnp = name_vnp->next;
+    }
+    str = (CharPtr) seq_vnp->data.ptrvalue;
+    if (StringDoesHaveText (str)) {
+      ValNodeCopyStr (headp, 0, prefix);
+      ValNodeCopyStr (headp, 0, sq_label);
+      ValNodeCopyStr (headp, 0, str);
+      prefix = ", ";
+    }
+    seq_vnp = seq_vnp->next;
+  }
+
+  ValNodeFreeData (name_list);
+  ValNodeFreeData (seq_list);
+}
+
 static CharPtr NextPCRPrimerString (
   PcrStrsPtr psp,
   Boolean isInNote
 )
 
 {
-  CharPtr     prefix = NULL, str;
-  size_t      len;
+  ValNodePtr  head = NULL, vnp;
   Boolean     okay = FALSE;
-  ValNodePtr  vnp;
+  CharPtr     prefix = NULL;
+  CharPtr     str;
 
   if (psp == NULL) return NULL;
 
@@ -2598,46 +2694,54 @@ static CharPtr NextPCRPrimerString (
   if (! okay) return NULL;
 
   if (StringHasNoText (psp->fwd_seq) || StringHasNoText (psp->rev_seq)) {
-    if (! isInNote) return StringSave ("");
-    prefix = "PCR_primers=";
+    if (isInNote) {
+      if (StringDoesHaveText (psp->fwd_name)) {
+        ValNodeCopyStr (&head, 0, prefix);
+        ValNodeCopyStr (&head, 0, "fwd_name: ");
+        ValNodeCopyStr (&head, 0, psp->fwd_name);
+        prefix = ", ";
+      }
+
+      if (StringDoesHaveText (psp->fwd_seq)) {
+        ValNodeCopyStr (&head, 0, prefix);
+        ValNodeCopyStr (&head, 0, "fwd_seq: ");
+        ValNodeCopyStr (&head, 0, psp->fwd_seq);
+        prefix = ", ";
+      }
+
+      if (StringDoesHaveText (psp->rev_name)) {
+        ValNodeCopyStr (&head, 0, prefix);
+        ValNodeCopyStr (&head, 0, "rev_name: ");
+        ValNodeCopyStr (&head, 0, psp->rev_name);
+        prefix = ", ";
+      }
+
+      if (StringDoesHaveText (psp->rev_seq)) {
+        ValNodeCopyStr (&head, 0, prefix);
+        ValNodeCopyStr (&head, 0, "rev_seq: ");
+        ValNodeCopyStr (&head, 0, psp->rev_seq);
+        prefix = ", ";
+      }
+    } else {
+      return StringSave ("");
+    }
   } else {
     if (isInNote) return StringSave ("");
+
+    PrintHalfPrimer (&head, psp->fwd_name, psp->fwd_seq, "fwd_name: ", "fwd_seq: ", NULL);
+    PrintHalfPrimer (&head, psp->rev_name, psp->rev_seq, "rev_name: ", "rev_seq: ", ", ");
   }
 
-  len = StringLen (psp->fwd_name) + StringLen (psp->fwd_seq) +
-        StringLen (psp->rev_name) + StringLen (psp->rev_seq);
-  if (len == 0) return StringSave ("");
-  str = (CharPtr) MemNew (sizeof (Char) * len + 80);
-  if (str == NULL) return NULL;
-
-  if (StringDoesHaveText (psp->fwd_name)) {
-    StringCat (str, prefix);
-    StringCat (str, "fwd_name: ");
-    StringCat (str, psp->fwd_name);
-    prefix = ", ";
+  if (head != NULL && isInNote) {
+    vnp = ValNodeCopyStr (NULL, 0, "PCR_primers=");
+    if (vnp != NULL) {
+      vnp->next = head;
+      head = vnp;
+    }
   }
 
-  if (StringDoesHaveText (psp->fwd_seq)) {
-    StringCat (str, prefix);
-    StringCat (str, "fwd_seq: ");
-    StringCat (str, psp->fwd_seq);
-    prefix = ", ";
-  }
-
-  if (StringDoesHaveText (psp->rev_name)) {
-    StringCat (str, prefix);
-    StringCat (str, "rev_name: ");
-    StringCat (str, psp->rev_name);
-    prefix = ", ";
-  }
-
-  if (StringDoesHaveText (psp->rev_seq)) {
-    StringCat (str, prefix);
-    StringCat (str, "rev_seq: ");
-    StringCat (str, psp->rev_seq);
-    prefix = ", ";
-  }
-
+  str = MergeFFValNodeStrs (head);
+  ValNodeFreeData (head);
   return str;
 }
 
@@ -2828,6 +2932,8 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   OrgModPtr          omp;
   OrgNamePtr         onp = NULL;
   OrgRefPtr          orp = NULL;
+  Boolean            partial5;
+  Boolean            partial3;
   CharPtr            prefix;
   PcrStrs            ps;
   SourceType PNTR    qualtbl = NULL;
@@ -2917,10 +3023,25 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
 
   if (gbseq != NULL) {
     if (gbfeat != NULL) {
-      if (! StringHasNoText (str)) {
+      if (StringDoesHaveText (str)) {
         gbfeat->location = StringSave (str);
       } else {
         gbfeat->location = StringSave ("");
+      }
+      if (StringDoesHaveText (str)) {
+        if (StringStr (str, "join") != NULL) {
+          gbfeat->operator__ = StringSave ("join");
+        } else if (StringStr (str, "order") != NULL) {
+          gbfeat->operator__ = StringSave ("order");
+        }
+      }
+      CheckSeqLocForPartial (location, &partial5, &partial3);
+      gbfeat->partial5 = partial5;
+      gbfeat->partial3 = partial3;
+      if (ajp->masterStyle) {
+        AddIntervalsToGbfeat (gbfeat, location, bsp);
+      } else {
+        AddIntervalsToGbfeat (gbfeat, location, NULL);
       }
     }
   }
@@ -3618,43 +3739,6 @@ static CharPtr CompressNonBases (CharPtr str)
   return str;
 }
 
-/*
-static void CatenateSequenceInGbseq (
-  GBSeqPtr gbseq,
-  CharPtr str
-)
-
-{
-  Char     ch;
-  CharPtr  tmp;
-
-  if (gbseq == NULL || StringHasNoText (str)) return;
-
-  if (gbseq->sequence == NULL) {
-    gbseq->sequence = StringSave (str);
-  } else {
-    tmp = (CharPtr) MemNew (StringLen (gbseq->sequence) + StringLen (str) + 2);
-    StringCpy (tmp, gbseq->sequence);
-    StringCat (tmp, str);
-    gbseq->sequence = MemFree (gbseq->sequence);
-    gbseq->sequence = tmp;
-  }
-
-  tmp = gbseq->sequence;
-  if (tmp == NULL) return;
-  ch = *tmp;
-  while (ch != '\0') {
-    if (ch == '\n' || ch == '\r' || ch == '\t') {
-      *tmp = ' ';
-    }
-    tmp++;
-    ch = *tmp;
-  }
-  TrimSpacesAroundString (gbseq->sequence);
-  CompressNonBases (gbseq->sequence);
-}
-*/
-
   static Uint1 fasta_order [NUM_SEQID] = {
     33, /* 0 = not set */
     20, /* 1 = local Object-id */
@@ -4167,7 +4251,8 @@ static Int2 ProcessGapSpecialFormat (
   return startgapgap;
 }
 
-static void ChangeoTox (CharPtr str)
+/*
+static void ChangeOandJtoX (CharPtr str)
 
 {
   Char  ch;
@@ -4175,15 +4260,16 @@ static void ChangeoTox (CharPtr str)
   if (str == NULL) return;
   ch = *str;
   while (ch != '\0') {
-    if (ch == 'O') {
+    if (ch == 'O' || ch == 'J') {
       *str = 'X';
-    } else if (ch == 'o') {
+    } else if (ch == 'o' || ch == 'j') {
       *str = 'x';
     }
     str++;
     ch = *str;
   }
 }
+*/
 
 NLM_EXTERN CharPtr FormatSequenceBlock (
   Asn2gbFormatPtr afp,
@@ -4247,11 +4333,13 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
     } else {
       SeqPortStream (bsp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) &tmp, SaveGBSeqSequence);
     }
+    /*
     if (ISA_aa (bsp->mol) && StringDoesHaveText (str)) {
       if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
-        ChangeoTox (str);
+        ChangeOandJtoX (str);
       }
     }
+    */
     gbseq->sequence = StringSave (str);
 
     tmp = gbseq->sequence;
@@ -4260,6 +4348,9 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
     while (ch != '\0') {
       if (ch == '\n' || ch == '\r' || ch == '\t') {
         *tmp = ' ';
+      } else if (IS_UPPER (ch)) {
+        /* collab decision to present target sequence in lower case */
+        *tmp = TO_LOWER (ch);
       }
       tmp++;
       ch = *tmp;
@@ -4310,11 +4401,13 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
         } else {
           SeqPortStreamInt (bsp, start, extend - 1, Seq_strand_plus, flags, (Pointer) str, NULL);
         }
+        /*
         if (ISA_aa (bsp->mol) && StringDoesHaveText (str)) {
           if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
-            ChangeoTox (str);
+            ChangeOandJtoX (str);
           }
         }
+        */
         sbp->bases = str;
       }
     }

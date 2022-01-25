@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.427 $
+* $Revision: 6.438 $
 *
 * File Description: 
 *
@@ -61,6 +61,7 @@
 #include <salpanel.h>
 #include <assert.h>
 #include <pmfapi.h>
+#include <vsm.h>
 
 /*-------------------*/
 /* Defined Constants */
@@ -750,6 +751,8 @@ static void SimpleVecScreenCommon (IteM i, CharPtr database)
   DatePtr       dp;
   Int4          max;
   Char          path [PATH_MAX];
+  CharPtr       pathplusone;
+  Char          quote [4];
   SeqEntryPtr   sep;
   VsData        vsd;
 
@@ -760,9 +763,22 @@ static void SimpleVecScreenCommon (IteM i, CharPtr database)
 #endif
   if (bfp == NULL) return;
 
-  path [0] = '\0';
-  GetAppParam ("NCBI", "NCBI", "DATA", "", path, sizeof (path));
-  FileBuildPath (path, NULL, database);
+  path [0] = '"';
+  path [1] = '\0';
+  pathplusone = &(path [1]);
+  GetAppParam ("NCBI", "NCBI", "DATA", "", pathplusone, sizeof (path) - 1);
+
+  /*
+  if (StringChr (path, ' ') != NULL) {
+    Message (MSG_OK, "Unable to process because vector database file\npath must not have a space character.  Path is:\n'%s'", path);
+    return;
+  }
+  */
+
+  FileBuildPath (pathplusone, NULL, database);
+  quote [0] = '"';
+  quote [1] = '\0';
+  StringCat (pathplusone, quote);
 
   date [0] = '\0';
   dp = DateCurr ();
@@ -10097,7 +10113,7 @@ extern void NewFeaturePropagate (
   BioseqPtr          bsp;
   ForM               f;
   SeqMgrFeatContext  fcontext;
-  Uint2              itemID = 0;
+  Uint4              itemID = 0;
   SeqAlignPtr        salp;
   SeqFeatPtr         sfp;
   SelStructPtr       sel;
@@ -10825,13 +10841,23 @@ static void DoAddTranslExceptWithComment (ButtoN b)
   Remove (ap->form);
 }
 
+static void ClearComment(ButtoN b)
+{
+  AddTranslExceptPtr ap;
+
+  ap = (AddTranslExceptPtr) GetObjectExtra (b);
+  if (ap != NULL) {
+      SetTitle (ap->cds_comment, "");
+  }
+}
+
 extern void AddTranslExceptWithComment (IteM i)
 {
   BaseFormPtr        bfp;
   AddTranslExceptPtr ap;
   WindoW             w;
   GrouP              h, g, c;
-  ButtoN             b;
+  ButtoN             b, clear_btn;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -10852,14 +10878,16 @@ extern void AddTranslExceptWithComment (IteM i)
 
   g = HiddenGroup (h, 2, 0, NULL);
   StaticPrompt (g, "CDS comment", 0, 0, programFont, 'c');
-  ap->cds_comment = DialogText (g, "", 20, NULL);
+  ap->cds_comment = DialogText (g, "TAA stop codon is completed by the addition of 3' A residues to the mRNA", 20, NULL);
+  clear_btn = PushButton (h, "Clear Comment", ClearComment);
+  SetObjectExtra (clear_btn, ap, NULL);
   ap->strict_checking_btn = CheckBox (h, "Overhang must be T or TA", NULL);
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", DoAddTranslExceptWithComment);
   SetObjectExtra (b, ap, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) ap->strict_checking_btn, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) clear_btn, (HANDLE) ap->strict_checking_btn, (HANDLE) c, NULL);
   RealizeWindow (w);
   Show (w);
   Update ();
@@ -11756,9 +11784,9 @@ UpdateSequencePatchRaw
   ByteStorePtr  bs;
   Int4          newlen;
   CharPtr       str;
-  SeqPortPtr    spp;
   Uint1         seqcode;
   Int4          ctr;
+  StreamFlgType flags = STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL;
 
   if (upp == NULL || upp->orig_bsp == NULL || upp->update_bsp == NULL 
       || upp->salp == NULL || ualp == NULL)
@@ -11782,17 +11810,14 @@ UpdateSequencePatchRaw
   /* construct replacement sequence by double recombination */
 
   /* take old 5'  */
-  spp = SeqPortNew(upp->orig_bsp, 0, ualp->old5 - 1, Seq_strand_plus, seqcode);
-  ctr = SeqPortRead(spp, (Uint1Ptr)str, ualp->old5);
-  spp = SeqPortFree (spp);
+  ctr = SeqPortStreamInt (upp->orig_bsp, 0, ualp->old5 - 1, Seq_strand_plus,
+                    flags, (Pointer) str, NULL);
   /* take aligned middle */
-  spp = SeqPortNew(upp->update_bsp, ualp->new5, ualp->new5 + ualp->newa - 1, Seq_strand_plus, seqcode);
-  ctr += SeqPortRead(spp, (Uint1Ptr)(str + ctr), ualp->newa);
-  spp = SeqPortFree (spp);
+  ctr += SeqPortStreamInt (upp->update_bsp, ualp->new5, ualp->new5 + ualp->newa - 1, Seq_strand_plus,
+                    flags, (Pointer) (str + ctr), NULL);
   /* take old 3' */
-  spp = SeqPortNew(upp->orig_bsp, ualp->old5 + ualp->olda, upp->orig_bsp->length - 1, Seq_strand_plus, seqcode);
-  ctr += SeqPortRead(spp, (Uint1Ptr)(str + ctr), ualp->old3);
-  spp = SeqPortFree (spp);
+  ctr += SeqPortStreamInt (upp->orig_bsp, ualp->old5 + ualp->olda, upp->orig_bsp->length - 1, Seq_strand_plus,
+                    flags, (Pointer) (str + ctr), NULL);
   
   str[ctr] = '\0';
   
@@ -11808,7 +11833,7 @@ UpdateSequencePatchRaw
 
   upp->update_bsp->seq_data = BSFree (upp->update_bsp->seq_data);
   upp->update_bsp->seq_data = bs;
-  upp->update_bsp->seq_data_type = Seq_code_iupacna;
+  upp->update_bsp->seq_data_type = seqcode;
   upp->update_bsp->length = newlen;
   return TRUE;  
 }
@@ -12072,6 +12097,14 @@ static void RemoveRefTrackDescriptors (BioseqPtr bsp)
 	}
 }
 
+static void RemoveCreateDateDescriptors (BioseqPtr bsp)
+{
+  ValNodePtr vnp;
+  
+  vnp = ValNodeExtract (&(bsp->descr), Seq_descr_create_date);
+  vnp = ValNodeFree (vnp);
+}
+
 static void 
 ImportFeatureProduct 
 (SeqFeatPtr  dup, 
@@ -12101,6 +12134,8 @@ ImportFeatureProduct
           if (newbsp != NULL) {
             /* we do not want to import reftrack descriptors with the products */
             RemoveRefTrackDescriptors (newbsp);
+            /* we do not want to import create-date descriptors with the products */
+            RemoveCreateDateDescriptors (newbsp);
             if (! keepProteinIDs) {
               newbsp->id = SeqIdSetFree (newbsp->id);
               newbsp->id = MakeNewProteinSeqId (NULL, nuc_sip);
@@ -13281,7 +13316,7 @@ static void DrawUpdateAlignmentDiffs
   seq1 = GetSequenceByBsp (orig_bsp);
   SeqEntrySetScope (NULL);
 
-  entityID = ObjMgrGetEntityIDForPointer (update_bsp);
+  entityID = update_bsp->idx.entityID;
   sep = GetTopSeqEntryForEntityID (entityID);
   SeqEntrySetScope (sep);
   seq2 = GetSequenceByBsp (update_bsp);
@@ -14584,7 +14619,8 @@ static Pointer SubmitterUpdateOptionsFromDialog (DialoG d)
     {
       if (Enabled (dlg->ignore_alignment)
           && (suop->sequence_update_type == eSequenceUpdateExtend5
-              || suop->sequence_update_type == eSequenceUpdateExtend3))
+              || suop->sequence_update_type == eSequenceUpdateExtend3
+              || suop->sequence_update_type == eSequenceUpdateReplace))
       {
         suop->ignore_alignment = GetStatus (dlg->ignore_alignment);
       }
@@ -16696,6 +16732,7 @@ static void DoTestUpdateOneSequence (ButtoN b)
   UpdateOptionsPtr           uop;
   UpdatePairData             upd;
   Uint2                      update_entityID = 0;
+  BioseqPtr                  update_bsp = NULL;
   
   usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (b);
   if (usfp == NULL)
@@ -16735,7 +16772,8 @@ static void DoTestUpdateOneSequence (ButtoN b)
     if (update_vnp != NULL)
     {
       upd.update_bsp = update_vnp->data.ptrvalue;
-	    update_entityID = upd.update_bsp->idx.entityID;
+      update_entityID = upd.update_bsp->idx.entityID;
+      update_bsp = upd.update_bsp;
     }
     
     /* if we are going to ignore the alignment, don't calculate it */
@@ -16766,6 +16804,13 @@ static void DoTestUpdateOneSequence (ButtoN b)
     orig_vnp = ValNodeFree (orig_vnp);
     update_vnp = ExtractNthValNode (&(usfp->update_bioseq_list), orig_pos);
     update_vnp = ValNodeFree (update_vnp);
+    
+    /* delete update sequence */
+    if (update_bsp != NULL) {
+      update_bsp->idx.deleteme = TRUE;
+      update_entityID = update_bsp->idx.entityID;
+      DeleteMarkedObjects (update_entityID, 0, NULL);
+    }
 
     /* renumber valnode lists */
     for (orig_vnp = usfp->orig_bioseq_list; orig_vnp != NULL; orig_vnp = orig_vnp->next)
@@ -16911,6 +16956,8 @@ static void UpdateAllSequences (ButtoN b)
   Boolean                    update_successful;
   UpdateOptionsPtr           uop;
   UpdateAlignmentLengthsData uald;
+  BioseqPtr                  update_bsp = NULL;
+  Uint2                      update_entityID = 0;
 
   usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (b);
   if (usfp == NULL)
@@ -16963,6 +17010,12 @@ static void UpdateAllSequences (ButtoN b)
     {
       usfp->num_successful++;
       /* remove update sequence from list */
+      update_bsp = update_vnp->data.ptrvalue;
+      if (update_bsp != NULL) {
+        update_bsp->idx.deleteme = TRUE;
+        update_entityID = update_bsp->idx.entityID;
+        DeleteMarkedObjects (update_entityID, 0, NULL);
+      }
       update_vnp->data.ptrvalue = NULL;
     }
     else
@@ -17129,7 +17182,6 @@ static void CleanupUpdateMultiSequence (GraphiC g, Pointer data)
   ValNodePtr                 vnp;
   BioseqPtr                  update_bsp;
   Uint2                      update_entityID;
-  ObjMgrPtr  omp;
   
   usfp = (UpdateMultiSequenceFormPtr) data;
   if (usfp != NULL)
@@ -17199,7 +17251,7 @@ static void CleanupUpdateMultiSequence (GraphiC g, Pointer data)
         update_bsp = (BioseqPtr) vnp->data.ptrvalue;
         update_bsp->idx.deleteme = TRUE;
         update_entityID = update_bsp->idx.entityID;
-        DeleteMarkedObjects (update_entityID, 0, NULL);
+        DeleteMarkedObjects (update_entityID, 0, NULL);       
       }
     }
     usfp->update_bioseq_list = ValNodeFree (usfp->update_bioseq_list);
@@ -17222,11 +17274,6 @@ static void CleanupUpdateMultiSequence (GraphiC g, Pointer data)
     
     FileRemove (usfp->undo_file);
     
-    /* clear indexes */
-    omp = ObjMgrGet ();
-    ObjMgrReapOne (omp);
-    ObjMgrFreeCache (0);
-    FreeSeqIdGiCache ();
   }
   
   StdCleanupExtraProc (g, data);
@@ -17543,6 +17590,48 @@ static void UndoUpdates (ButtoN b)
   Update ();  
 }
 
+static void ExportUnmatchedUpdates (IteM i)
+{
+  UpdateMultiSequenceFormPtr usfp;
+  FILE                       *fp;
+  Char                       path[PATH_MAX];
+  ValNodePtr                 vnp;
+  Char                       id_txt[128];
+  BioseqPtr                  bsp;
+
+  usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (i);
+  if (usfp == NULL) {
+    return;
+  }
+
+  if (! GetOutputFileName (path, sizeof (path), "")) return;
+  fp = FileOpen (path, "w");
+  if (fp == NULL) 
+  {
+    Message (MSG_ERROR, "Unable to open %s", path);
+    return;
+  }
+  fprintf (fp, "Unmatched update sequences\n");
+  for (vnp = usfp->unmatched_updates_list; vnp != NULL; vnp = vnp->next) {
+    bsp = (BioseqPtr) vnp->data.ptrvalue;
+    if (bsp != NULL) {
+      SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+      fprintf (fp, "%s\n", id_txt);
+    }
+  }
+
+  fprintf (fp, "Sequences in record with no updates\n");
+  for (vnp = usfp->no_updates_list; vnp != NULL; vnp = vnp->next) {
+    bsp = (BioseqPtr) vnp->data.ptrvalue;
+    if (bsp != NULL) {
+      SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+      fprintf (fp, "%s\n", id_txt);
+    }
+  }
+  FileClose (fp);
+  
+}
+
 static void TestUpdateSequenceSet (IteM i, Boolean is_indexer, Boolean do_update)
 {
   BaseFormPtr                bfp;
@@ -17560,6 +17649,8 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer, Boolean do_update
   MultiSequenceUpdateData    msud;
   UpdateOptionsPtr           uop;
   DialoG                     ext_dlg;
+  MenU                       file_menu;
+  IteM                       localItem;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -17572,6 +17663,14 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer, Boolean do_update
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL)
     return;
+
+  if (ShowDeltaReport (sep)) {  
+    if (Message (MSG_YN, "This set contains delta sequences.  If you update a delta sequence with a raw sequence, the delta sequence will be converted to raw.  Do you want to continue?")
+        != ANS_YES) {
+        return;
+    }
+  }
+
   
   orig_bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID,
 			   bfp->input_itemtype);
@@ -17648,6 +17747,12 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer, Boolean do_update
   
   SetObjectExtra (w, usfp, CleanupUpdateMultiSequence);
   usfp->form = (ForM) w;
+  
+  if (is_indexer) {
+    file_menu = PulldownMenu (w, "File");
+    localItem = CommandItem (file_menu, "Export Unmatched", ExportUnmatchedUpdates);
+    SetObjectExtra (localItem, usfp, NULL);
+  }
   
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
@@ -17957,7 +18062,6 @@ UpdateSingleSequence
     return;
   }
 
-  
   is_na = ISA_na (orig_bsp->mol);
 
   ssufp = (SingleSequenceUpdateFormPtr) MemNew (sizeof (SingleSequenceUpdateFormData));
@@ -17983,6 +18087,15 @@ UpdateSingleSequence
   if (ssufp->update_pair.update_bsp != NULL)
   {
     ssufp->update_entity_ID = ssufp->update_pair.update_bsp->idx.entityID;    
+  }
+  
+  if (ssufp->update_pair.orig_bsp->repr == Seq_repr_delta 
+      && ssufp->update_pair.update_bsp->repr != Seq_repr_delta) {
+    if (Message (MSG_YN, "You are about to update a delta sequence with a raw sequence, which will convert the delta sequence to raw.  Do you want to continue?")
+        != ANS_YES) {
+        ssufp = MemFree (ssufp);
+        return;
+    }
   }
   
   if (AreSequenceResiduesIdentical (ssufp->update_pair.orig_bsp,

@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.71 2006/05/04 15:52:51 camacho Exp $
+/* $Id: blast_def.h,v 1.74 2006/10/04 19:27:09 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -110,6 +110,13 @@ extern const int kUngappedHSPNumMax;
 NCBI_XBLAST_EXPORT
 void __sfree(void** x);
 
+#if 0
+/** Define this symbol to enable debugging APIs in the BlastSeqSrc interface to
+ * allow diagnostics/debugging to be performed in the composition based
+ * statistics code */
+#define KAPPA_PRINT_DIAGNOSTICS 1
+#endif
+
 /********************* Structure definitions ********************************/
 
 /** A structure containing two integers, used e.g. for locations for the 
@@ -174,6 +181,8 @@ typedef struct BLAST_SequenceBlk {
                                 scanning for subject. */
    Boolean lcase_mask_allocated; /**< TRUE if memory has been allocated for 
                                     lcase_mask */
+   Int4 chunk;  /**< Used for indexing only: the chunk number within the 
+                     subject sequence. */
 } BLAST_SequenceBlk;
 
 /** Information about a single pattern occurence in the query. */
@@ -190,7 +199,7 @@ typedef struct SPHIQueryInfo {
     SPHIPatternInfo *occurrences; /**< Array of pattern occurrence information
                                         structures. */
     Int4 allocated_size; /**< Allocated size of the occurrences array. */
-    double probability; /**< Probability of the pattern */
+    double probability; /**< Estimated probability of the pattern */
 } SPHIQueryInfo;
 
 /************************* Progress monitoring/interruptible API *************/

@@ -1,4 +1,6 @@
-static char const rcsid[] = "$Id: blast_seq.c,v 1.83 2006/05/04 15:53:12 camacho Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: blast_seq.c,v 1.85 2006/07/05 15:52:35 papadopo Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 /*
 * ===========================================================================
 *
@@ -487,13 +489,8 @@ s_SeqLocReadSequence(SeqLocPtr slp, EBlastEncoding encoding, Uint1** buffer)
 
    switch (encoding) {
    case eBlastEncodingProtein: 
-      for (index = 0; index < size; index++) {
-         Uint1 letter = buffer_var[index];
-         if (letter == 'U' || letter == 'O' || letter == 'J')
-            buffer_var[index] = AMINOACID_TO_NCBISTDAA['X'];
-         else
-            buffer_var[index] = AMINOACID_TO_NCBISTDAA[letter];
-      }
+      for (index = 0; index < size; index++)
+         buffer_var[index] = AMINOACID_TO_NCBISTDAA[buffer_var[index]];
       break;
    case eBlastEncodingNcbi4na:
       for (index = 0; index < size; index++) 

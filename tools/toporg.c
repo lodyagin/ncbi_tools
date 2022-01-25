@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toporg.c,v 6.93 2006/02/22 16:52:36 bollin Exp $";
+static char const rcsid[] = "$Id: toporg.c,v 6.97 2006/09/14 15:57:16 kans Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -2929,7 +2929,7 @@ static void CleanUpPseudoProductsEx (Uint2 entityID, SeqEntryPtr sep, Boolean do
   BioseqPtr      bsp;
   Char           id [41];
   Boolean        isEmblOrDdbj = FALSE;
-  Uint2          itemID;
+  Uint4          itemID;
   ValNodePtr     list;
   OMProcControl  ompc;
   ValNodePtr     vnp;
@@ -3069,6 +3069,19 @@ extern void MergeAdjacentAnnotsCallback (SeqEntryPtr sep, Pointer mydata, Int4 i
   }
 }
 
+static Boolean HasEvidenceOrInferenceQual (SeqFeatPtr sfp)
+
+{
+  GBQualPtr  gbq;
+
+  if (sfp == NULL) return FALSE;
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "experiment") == 0) return TRUE;
+    if (StringICmp (gbq->qual, "inference") == 0) return TRUE;
+  }
+  return FALSE;
+}
+
 extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -3126,7 +3139,10 @@ extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 inde
 			  EmptyOrNullString (grp->desc) &&
 			  EmptyOrNullString (grp->maploc) &&
 			  EmptyOrNullString (grp->locus_tag) &&
-			  grp->db == NULL && grp->syn == NULL) {
+			  grp->db == NULL && grp->syn == NULL &&
+			  (! sfp->pseudo) && (! grp->pseudo) &&
+			  (sfp->exp_ev == 0) &&
+			  (! HasEvidenceOrInferenceQual (sfp))) {
             empty = TRUE;
           }
           if (empty) {
@@ -4561,82 +4577,6 @@ static void FindSingleBioSource (BioSourcePtr biop, Pointer userdata)
   *biopp = biop;
 }
 
-typedef struct featcount {
-  Boolean     is_mRNA;
-  BioseqPtr   bsp;
-  Int2        numRNAs;
-  SeqFeatPtr  gene;
-  Int4        numGene;
-  Int4        numCDS;
-} FeatCount, PNTR FeatCountPtr;
-
-static void CountGenesAndCDSs (SeqFeatPtr sfp, Pointer userdata)
-
-{
-  FeatCountPtr  fcp;
-
-  fcp = (FeatCountPtr) userdata;
-  if (sfp->data.choice == SEQFEAT_GENE) {
-    (fcp->numGene)++;
-    fcp->gene = sfp;
-  } else if (sfp->data.choice == SEQFEAT_CDREGION) {
-    (fcp->numCDS)++;
-  }
-}
-
-static void LookForMrna (BioseqPtr bsp, Pointer userdata)
-
-{
-  FeatCountPtr  fcp;
-  MolInfoPtr    mip;
-  SeqDescrPtr   sdp;
-
-  if (bsp == NULL || bsp->length == 0) return;
-  if (! ISA_na (bsp->mol)) return;
-  fcp = (FeatCountPtr) userdata;
-  for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
-    if (sdp->choice != Seq_descr_molinfo) continue;
-    mip = (MolInfoPtr) sdp->data.ptrvalue;
-    if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA) {
-      fcp->is_mRNA = TRUE;
-      fcp->bsp = bsp;
-      (fcp->numRNAs)++;
-      return;
-    }
-  }
-}
-
-static void ExtendSingleGeneOnMRNA (SeqEntryPtr sep, Pointer userdata)
-
-{
-  FeatCount   fc;
-  SeqIntPtr   sintp;
-  ValNodePtr  vnp;
-
-  fc.is_mRNA = FALSE;
-  fc.bsp = NULL;
-  fc.numRNAs = 0;
-  VisitBioseqsInSep (sep, (Pointer) &fc, LookForMrna);
-  if (! fc.is_mRNA) return;
-  fc.gene = NULL;
-  fc.numGene = 0;
-  fc.numCDS = 0;
-  VisitFeaturesInSep (sep, (Pointer) &fc, CountGenesAndCDSs);
-  if (fc.numGene == 1 && fc.numCDS < 2 && fc.numRNAs == 1 &&
-      fc.bsp != NULL && fc.gene != NULL) {
-    if (fc.bsp != BioseqFindFromSeqLoc (fc.gene->location)) return;
-    for (vnp = fc.gene->location; vnp != NULL; vnp = vnp->next) {
-      if (vnp->choice != SEQLOC_INT) continue;
-      sintp = (SeqIntPtr) vnp->data.ptrvalue;
-      if (sintp == NULL) continue;
-      if (sintp->from != 0 || sintp->to != fc.bsp->length - 1) {
-        sintp->from = 0;
-        sintp->to = fc.bsp->length - 1;
-      }
-    }
-  }
-}
-
 static SeqFeatPtr GetUnambigOverlappingGene (BioseqPtr bsp, SeqLocPtr slp)
 
 {
@@ -4842,7 +4782,9 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   /* MoveCdsGBQualProductToName (sep); */ /* move cds gbqual product to prot-ref.name */
   /* MoveFeatGBQualsToFields (sep); */ /* move feature partial, exception to fields */
   /* ExtendGeneFeatIfOnMRNA (0, sep); */ /* gene on mRNA is full length */
-  VisitElementsInSep (sep, NULL, ExtendSingleGeneOnMRNA);
+  
+  VisitBioseqsInSep (sep, NULL, ExtendSingleGeneOnMRNA);
+
   RemoveBioSourceOnPopSet (sep, NULL);
   /*
   SeqEntryExplore (sep, NULL, DeleteMultipleTitles);

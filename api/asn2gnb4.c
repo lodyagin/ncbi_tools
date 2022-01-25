@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.106 $
+* $Revision: 1.119 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -138,6 +138,7 @@ static FtQualType feat_qual_order [] = {
   FTQUAL_rpt_unit_seq,
   FTQUAL_insertion_seq,
   FTQUAL_transposon,
+  FTQUAL_mobile_element,
   FTQUAL_usedin,
 
   FTQUAL_illegal_qual,
@@ -204,6 +205,7 @@ static FtQualType feat_note_order [] = {
   FTQUAL_xtra_prod_quals,
   FTQUAL_inference_bad,
   FTQUAL_modelev,
+  FTQUAL_cdd_definition,
   /* GO terms appear as own qualifiers in RefSeq records, Sequin or Dump mode */
   FTQUAL_go_component,
   FTQUAL_go_function,
@@ -225,6 +227,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR]  =  {
   { "bond",               Qual_class_bond          },
   { "bond_type",          Qual_class_bond          },
   { "bound_moiety",       Qual_class_quote         },
+  { "cdd_definition",     Qual_class_string        },
   { "product",            Qual_class_string        },
   { "citation",           Qual_class_pubset        },
   { "clone",              Qual_class_quote         },
@@ -270,6 +273,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR]  =  {
   { "locus_tag",          Qual_class_locus_tag     },
   { "map",                Qual_class_quote         },
   { "maploc",             Qual_class_string        },
+  { "mobile_element",     Qual_class_quote         },
   { "mod_base",           Qual_class_noquote       },
   { "model_evidence",     Qual_class_model_ev      },
   { "calculated_mol_wt",  Qual_class_mol_wt        },
@@ -338,7 +342,7 @@ typedef struct qualfeatur {
   FtQualType  featurclass;
 } QualFeatur, PNTR QualFeaturPtr;
 
-#define NUM_GB_QUALS 33
+#define NUM_GB_QUALS 34
 
 static QualFeatur qualToFeature [NUM_GB_QUALS] = {
   { "allele",           FTQUAL_allele           },
@@ -357,6 +361,7 @@ static QualFeatur qualToFeature [NUM_GB_QUALS] = {
   { "insertion_seq",    FTQUAL_insertion_seq    },
   { "label",            FTQUAL_label            },
   { "map",              FTQUAL_map              },
+  { "mobile_element",   FTQUAL_mobile_element   },
   { "mod_base",         FTQUAL_mod_base         },
   { "number",           FTQUAL_number           },
   { "old_locus_tag",    FTQUAL_old_locus_tag    },
@@ -532,7 +537,7 @@ NLM_EXTERN CharPtr Get3LetterSymbol (
     return retval;
   }
 
-  if (ajp->flags.iupacaaOnly) {
+  if (ajp != NULL && ajp->flags.iupacaaOnly) {
     code = Seq_code_iupacaa;
   } else {
     code = Seq_code_ncbieaa;
@@ -551,8 +556,15 @@ NLM_EXTERN CharPtr Get3LetterSymbol (
     retval = "OTHER";
     return retval;
   } else {
+    if (table == NULL) {
+      table = SeqCodeTableFind (Seq_code_ncbieaa);
+      if (table == NULL) {
+        retval = "OTHER";
+        return retval;
+      }
+    }
     ptr = SeqCodeNameGet (table, residue);
-    table_3aa=SeqCodeTableFind  (Seq_code_iupacaa3);
+    table_3aa = SeqCodeTableFind (Seq_code_iupacaa3);
     if (ptr != NULL && table_3aa != NULL) {
       for (index=0; index < (int) table_3aa->num; index++) {
         if (StringCmp(ptr, (table_3aa->names) [index]) == 0) {
@@ -866,6 +878,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_rRNA , FTQUAL_label },
   { FEATDEF_rRNA , FTQUAL_map },
   { FEATDEF_rRNA , FTQUAL_old_locus_tag },
+  { FEATDEF_rRNA , FTQUAL_operon },
   { FEATDEF_rRNA , FTQUAL_product },
   { FEATDEF_rRNA , FTQUAL_standard_name },
 
@@ -1128,6 +1141,9 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_repeat_region , FTQUAL_insertion_seq },
   { FEATDEF_repeat_region , FTQUAL_label },
   { FEATDEF_repeat_region , FTQUAL_map },
+  /* !!! quarantined - and remove /insertion_seq and /transposon !!!
+  { FEATDEF_repeat_region , FTQUAL_mobile_element },
+  */
   { FEATDEF_repeat_region , FTQUAL_old_locus_tag },
   { FEATDEF_repeat_region , FTQUAL_rpt_family },
   { FEATDEF_repeat_region , FTQUAL_rpt_type },
@@ -1372,7 +1388,7 @@ static Int2 CompareValQual (Uint2 av, FtQualType aq, Uint2 bv, FtQualType bq)
 
 /* Returns TRUE if {featureKey, qualKey} exists in legalGbqualList */
 
-static Boolean AllowedValQual (Uint2 featureKey, FtQualType qualKey)
+static Boolean AllowedValQual (Uint2 featureKey, FtQualType qualKey, Boolean forGbRelease)
 
 {
   Int2 L, R, mid;
@@ -1391,11 +1407,15 @@ static Boolean AllowedValQual (Uint2 featureKey, FtQualType qualKey)
       R = mid;
   }
   if (CompareValQual (legalGbqualList [R].featdef,
-      legalGbqualList [R].ftqual,
-      featureKey, qualKey) != 0) {
-    return FALSE;
+      legalGbqualList [R].ftqual, featureKey, qualKey) == 0) {
+    return TRUE;
   }
-  return TRUE;
+
+  /* !!! remove after quarantine !!! */
+  if (forGbRelease) return FALSE;
+  if (featureKey == FEATDEF_repeat_region && qualKey == FTQUAL_mobile_element) return TRUE;
+
+  return FALSE;
 }
 
 
@@ -2269,7 +2289,7 @@ static void FF_AddECnumber (
    except from FormatFeatureBlock.  It performs no input
    validation.  (perhaps it should?) */
 
-static void LIBCALLBACK SaveGBSeqSequence (
+static void LIBCALLBACK SaveGBSeqTranslation (
   CharPtr sequence,
   Pointer userdata
 )
@@ -2360,7 +2380,8 @@ static FloatHi MolWtForProtFeat (
   return MolWtForLoc (sfp->location);
 }
 
-static void ChangeOToX (CharPtr str)
+/*
+static void ChangeOandJtoX (CharPtr str)
 
 {
   Char  ch;
@@ -2368,14 +2389,97 @@ static void ChangeOToX (CharPtr str)
   if (str == NULL) return;
   ch = *str;
   while (ch != '\0') {
-    if (ch == 'O') {
+    if (ch == 'O' || ch == 'J') {
       *str = 'X';
-    } else if (ch == 'o') {
+    } else if (ch == 'o' || ch == 'j') {
       *str = 'x';
     }
     str++;
     ch = *str;
   }
+}
+*/
+
+static Boolean ECNumberFormatOkay (
+  CharPtr str,
+  Boolean forGbRelease
+)
+
+{
+  Char     ch;
+  Boolean  is_ambig;
+  Int2     numdashes;
+  Int2     numdigits;
+  Int2     numperiods;
+  CharPtr  ptr;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  is_ambig = FALSE;
+  numperiods = 0;
+  numdigits = 0;
+  numdashes = 0;
+
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (IS_DIGIT (ch)) {
+      numdigits++;
+      if (is_ambig) return FALSE;
+      ptr++;
+      ch = *ptr;
+    } else if (ch == '-') {
+      numdashes++;
+      is_ambig = TRUE;
+      ptr++;
+      ch = *ptr;
+    } else if (ch == 'n') {
+      numdashes++;
+      is_ambig = TRUE;
+      ptr++;
+      ch = *ptr;
+    } else if (ch == '.') {
+      numperiods++;
+      if (numdigits > 0 && numdashes > 0) return FALSE;
+      if (numdigits == 0 && numdashes == 0) return FALSE;
+      if (numdashes > 1) return FALSE;
+      numdigits = 0;
+      numdashes = 0;
+      ptr++;
+      ch = *ptr;
+    } else {
+      ptr++;
+      ch = *ptr;
+    }
+  }
+
+  if (numperiods == 3) {
+    if (numdigits > 0 && numdashes > 0) return FALSE;
+    if (numdigits > 0 || numdashes == 1) return TRUE;
+  }
+
+  return FALSE;
+}
+
+static OnlyOneRealGeneral (SeqIdPtr sip)
+
+{
+  DbtagPtr  dbt;
+  Int2      numGenerals = 0;
+
+  while (sip != NULL) {
+    if (sip->choice != SEQID_GENERAL) return FALSE;
+    dbt = (DbtagPtr) sip->data.ptrvalue;
+    if (dbt == NULL) return FALSE;
+    if (StringICmp (dbt->db, "TMSMART") != 0 &&
+        StringICmp (dbt->db, "BankIt") != 0 &&
+        StringICmp (dbt->db, "SMART") != 0) {
+      numGenerals++;
+    }
+    sip = sip->next;
+  }
+  if (numGenerals == 1) return TRUE;
+  return FALSE;
 }
 
 static void FormatFeatureBlockQuals (
@@ -2508,7 +2612,7 @@ static void FormatFeatureBlockQuals (
       case Qual_class_product :
         if (StringHasNoText (qvp [idx].str) ||
             (ajp->flags.dropIllegalQuals &&
-             (! AllowedValQual (featdeftype, FTQUAL_product)))) break;
+             (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
           FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=",
             FALSE, TRUE, TILDE_TO_SPACES);
           FFAddTextToString(ffstring, "\"", qvp [idx].str, "\"",
@@ -2656,7 +2760,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_EC_quote :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
         if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
@@ -2667,13 +2772,8 @@ static void FormatFeatureBlockQuals (
           }
 
           if (ajp->flags.dropIllegalQuals && okay) {
-            tmp = gbq->val;
-            while (*tmp != '\0' && *tmp == '\"')
-              tmp++;
-            for (; *tmp != '\0' && *tmp != '\"'; tmp++) {
-              if (!IS_DIGIT(*tmp) && *tmp != '.' && *tmp != '-') {
-                okay = FALSE;
-              }
+            if (! ECNumberFormatOkay (gbq->val, ajp->flags.forGbRelease)) {
+              okay = FALSE;
             }
           }
 
@@ -2697,7 +2797,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_quote :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
         if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
@@ -2717,7 +2818,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_noquote :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
         if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
@@ -2734,7 +2836,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_label :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
         if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
@@ -2765,7 +2868,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_number :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
 
         if (ajp->flags.checkQualSyntax) {
           str = gbq->val;
@@ -2794,7 +2898,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_usedin :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
         if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
@@ -2835,7 +2940,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_paren :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
         if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
@@ -2878,7 +2984,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_rpt :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
 
         if (lasttype == NULL) {
           lasttype = gbq->qual;
@@ -2924,7 +3031,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_rpt_unit :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
         if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
@@ -2991,7 +3099,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_compare :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
 
         if (lasttype == NULL) {
           lasttype = gbq->qual;
@@ -3037,7 +3146,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_replace :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
         if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
@@ -3056,7 +3166,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_consplice :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
 
         if (ajp->flags.checkQualSyntax && (! StringInStringList (gbq->val, validConsSpliceString)) ) {
           break;
@@ -3096,7 +3207,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_L_R_B :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
 
         if (ajp->flags.checkQualSyntax && (! StringInStringList (gbq->val, validLRBString)) ) {
           break;
@@ -3270,7 +3382,8 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_codon :
         gbq = qvp [idx].gbq;
-        if (gbq == NULL || (ajp->flags.dropIllegalQuals && (! AllowedValQual (featdeftype, idx)))) break;
+        if (gbq == NULL || (ajp->flags.dropIllegalQuals &&
+            (! AllowedValQual (featdeftype, idx, ajp->flags.forGbRelease)))) break;
         if (lasttype == NULL) {
           lasttype = gbq->qual;
         }
@@ -3454,12 +3567,18 @@ static void FormatFeatureBlockQuals (
                   */
                 } else if (dbt != NULL) {
                   pbsp = BioseqFind (sip);
-                  if (pbsp != NULL && pbsp->id != NULL && pbsp->id->next == NULL) {
-                    if (SeqIdWrite (sip, seqid, PRINTID_REPORT, sizeof (seqid)) != NULL) {
-                      FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
-                                        FALSE, FALSE, TILDE_IGNORE);
-                      FF_www_protein_id(ajp, ffstring, seqid);
-                      FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
+                  if (pbsp != NULL && pbsp->id != NULL && /* pbsp->id->next == NULL && */ OnlyOneRealGeneral (pbsp->id)) {
+                    dbt = (DbtagPtr) sip->data.ptrvalue;
+                    if (dbt != NULL &&
+                        StringICmp (dbt->db, "TMSMART") != 0 &&
+                        StringICmp (dbt->db, "BankIt") != 0 &&
+                        StringICmp (dbt->db, "SMART") != 0) {
+                      if (SeqIdWrite (sip, seqid, PRINTID_REPORT, sizeof (seqid)) != NULL) {
+                        FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
+                                          FALSE, FALSE, TILDE_IGNORE);
+                        FF_www_protein_id(ajp, ffstring, seqid);
+                        FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
+                      }
                     }
                   }
                 }
@@ -3553,7 +3672,7 @@ static void FormatFeatureBlockQuals (
         break;
 
       case Qual_class_translation :
-        if (qvp [idx].ble) {
+        if (qvp [idx].ble && (! ajp->hideTranslation)) {
           if ((prod == NULL && ajp->transIfNoProd) || ajp->alwaysTranslCds) {
             bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
             if (bs != NULL) {
@@ -3574,9 +3693,11 @@ static void FormatFeatureBlockQuals (
                    }
                 }
                 if (! StringHasNoText (str)) {
+                  /*
                   if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
-                    ChangeOToX (str);
+                    ChangeOandJtoX (str);
                   }
+                  */
                   FFAddTextToString(ffstring, "/translation=\"", str, "\"", 
                                     FALSE, TRUE, TILDE_TO_SPACES);
                   FFAddOneChar(ffstring, '\n', FALSE);
@@ -3601,11 +3722,13 @@ static void FormatFeatureBlockQuals (
                 code = Seq_code_ncbieaa;
               }
               */
-              SeqPortStreamLoc (sfp->product, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) &protein_seq, SaveGBSeqSequence);
+              SeqPortStreamLoc (sfp->product, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) &protein_seq, SaveGBSeqTranslation);
               if (! StringHasNoText (str)) {
+                /*
                 if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
-                  ChangeOToX (str);
+                  ChangeOandJtoX (str);
                 }
+                */
                 FFAddTextToString(ffstring, "/translation=\"", str, "\"", 
                                   FALSE, TRUE, TILDE_TO_SPACES);
                 FFAddOneChar(ffstring, '\n', FALSE);
@@ -4402,7 +4525,7 @@ static void RecordUserObjectsInQVP (
   }
 }
 
-static void AddIntervalsToGbfeat (
+NLM_EXTERN void AddIntervalsToGbfeat (
   GBFeaturePtr gbfeat,
   SeqLocPtr location,
   BioseqPtr target
@@ -4996,105 +5119,105 @@ static CharPtr FormatFeatureBlockEx (
   itemID = fcontext->itemID;
 
   if (doKey) {
-	/* may need to map location between aa and dna */
+    /* may need to map location between aa and dna */
   
-	if (ifp->mapToNuc) {
+    if (ifp->mapToNuc) {
   
-	  /* map mat_peptide, etc., to nucleotide coordinates */
+      /* map mat_peptide, etc., to nucleotide coordinates */
   
-	  sip = SeqLocId (sfp->location);
-	  prd = BioseqFind (sip);
-	  cds = SeqMgrGetCDSgivenProduct (prd, NULL);
-	  CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
-	  location = aaFeatLoc_to_dnaFeatLoc (cds, sfp->location);
-	  SetSeqLocPartial (location, noLeft, noRight);
-	  locforgene = location;
-	  loc = location;
+      sip = SeqLocId (sfp->location);
+      prd = BioseqFind (sip);
+      cds = SeqMgrGetCDSgivenProduct (prd, NULL);
+      CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
+      location = aaFeatLoc_to_dnaFeatLoc (cds, sfp->location);
+      SetSeqLocPartial (location, noLeft, noRight);
+      locforgene = location;
+      loc = location;
   
-	} else if (ifp->mapToProt) {
+    } else if (ifp->mapToProt) {
   
-	  /* map CDS to protein product coordinates */
+      /* map CDS to protein product coordinates */
   
-	  sip = SeqLocIdForProduct (sfp->product);
-	  prd = BioseqFind (sip);
-	  cds = SeqMgrGetCDSgivenProduct (prd, NULL);
-	  location = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, NULL, FALSE);
-	  SetSeqLocPartial (location, FALSE, FALSE);
-	  locforgene = sfp->location;
-	  loc = location;
+      sip = SeqLocIdForProduct (sfp->product);
+      prd = BioseqFind (sip);
+      cds = SeqMgrGetCDSgivenProduct (prd, NULL);
+      location = dnaLoc_to_aaLoc (cds, sfp->location, TRUE, NULL, FALSE);
+      SetSeqLocPartial (location, FALSE, FALSE);
+      locforgene = sfp->location;
+      loc = location;
   
-	} else if (ifp->mapToGen) {
+    } else if (ifp->mapToGen) {
   
-	  /* map CDS from cDNA to genomic Bioseq */
+      /* map CDS from cDNA to genomic Bioseq */
   
-	  cdna = BioseqFindFromSeqLoc (sfp->location);
-	  mrna = SeqMgrGetRNAgivenProduct (cdna, &mcontext);
-	  CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
-	  location = productLoc_to_locationLoc (mrna, sfp->location);
-	  SetSeqLocPartial (location, noLeft, noRight);
-	  locforgene = location;
-	  loc = location;
+      cdna = BioseqFindFromSeqLoc (sfp->location);
+      mrna = SeqMgrGetRNAgivenProduct (cdna, &mcontext);
+      CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
+      location = productLoc_to_locationLoc (mrna, sfp->location);
+      SetSeqLocPartial (location, noLeft, noRight);
+      locforgene = location;
+      loc = location;
   
-	} else if (ifp->mapToMrna) {
+    } else if (ifp->mapToMrna) {
   
-	  /* map gene from genomic to cDNA Bioseq */
+      /* map gene from genomic to cDNA Bioseq */
   
-	  sep = SeqMgrGetSeqEntryForData (bsp);
-	  location = CreateWholeInterval (sep);
-	  SetSeqLocPartial (location, FALSE, FALSE);
-	  locforgene = location;
-	  loc = location;
+      sep = SeqMgrGetSeqEntryForData (bsp);
+      location = CreateWholeInterval (sep);
+      SetSeqLocPartial (location, FALSE, FALSE);
+      locforgene = location;
+      loc = location;
   
-	} else if (ifp->mapToPep) {
+    } else if (ifp->mapToPep) {
   
-	  /* map protein processing from precursor to subpeptide Bioseq */
+      /* map protein processing from precursor to subpeptide Bioseq */
   
-	  sep = SeqMgrGetSeqEntryForData (bsp);
-	  location = CreateWholeInterval (sep);
-	  SetSeqLocPartial (location, FALSE, FALSE);
-	  locforgene = location;
-	  loc = location;
+      sep = SeqMgrGetSeqEntryForData (bsp);
+      location = CreateWholeInterval (sep);
+      SetSeqLocPartial (location, FALSE, FALSE);
+      locforgene = location;
+      loc = location;
   
-	} else {
+    } else {
   
-	  /* no aa-dna or dna-aa mapping, just use location */
+      /* no aa-dna or dna-aa mapping, just use location */
   
-	  location = sfp->location;
-	  locforgene = sfp->location;
-	}
-	if (location == NULL) return NULL;
+      location = sfp->location;
+      locforgene = sfp->location;
+    }
+    if (location == NULL) return NULL;
   
-	sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
-	if (sep == NULL && IS_Bioseq_set (sep)) {
-	  bssp = (BioseqSetPtr) sep->data.ptrvalue;
-	  if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
-		is_gps = TRUE;
-	  }
-	}
+    sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
+    if (sep == NULL && IS_Bioseq_set (sep)) {
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
+        is_gps = TRUE;
+      }
+    }
 
     if (bsp != NULL) {
-	  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-	    switch (sip->choice) {
-	      case SEQID_OTHER :
-	        is_other = TRUE;
-	        break;
-	      case SEQID_GIBBSQ :
-	      case SEQID_GIBBMT :
-	      case SEQID_GIIM :
-	        is_journalscan = TRUE;
-	        break;
-	      case SEQID_GENBANK :
-	      case SEQID_EMBL :
-	      case SEQID_DDBJ :
-	      case SEQID_TPG :
-	      case SEQID_TPE :
-	      case SEQID_TPD :
-	        is_ged = TRUE;
-	        break;
-	      default :
-	      break;
-	    }
-	  }
+      for (sip = bsp->id; sip != NULL; sip = sip->next) {
+        switch (sip->choice) {
+          case SEQID_OTHER :
+            is_other = TRUE;
+            break;
+          case SEQID_GIBBSQ :
+          case SEQID_GIBBMT :
+          case SEQID_GIIM :
+            is_journalscan = TRUE;
+            break;
+          case SEQID_GENBANK :
+          case SEQID_EMBL :
+          case SEQID_DDBJ :
+          case SEQID_TPG :
+          case SEQID_TPE :
+          case SEQID_TPD :
+            is_ged = TRUE;
+            break;
+          default :
+          break;
+        }
+      }
     }
  
     if (ajp->refseqConventions) {
@@ -5103,120 +5226,120 @@ static CharPtr FormatFeatureBlockEx (
 
     featdeftype = fcontext->featdeftype;
 
-	if (featdeftype < FEATDEF_GENE || featdeftype >= FEATDEF_MAX) {
-	  featdeftype = FEATDEF_BAD;
-	}
-	if (featdeftype == 0) {
-	  featdeftype = sfp->idx.subtype;
-	}
-	key = FindKeyFromFeatDefType (featdeftype, TRUE);
+    if (featdeftype < FEATDEF_GENE || featdeftype >= FEATDEF_MAX) {
+      featdeftype = FEATDEF_BAD;
+    }
+    if (featdeftype == 0) {
+      featdeftype = sfp->idx.subtype;
+    }
+    key = FindKeyFromFeatDefType (featdeftype, TRUE);
   
     seqfeattype = fcontext->seqfeattype;
     if (seqfeattype == 0) {
       seqfeattype = sfp->data.choice;
     }
 
-	if (format == GENPEPT_FMT && isProt) {
-	  if (featdeftype == FEATDEF_REGION) {
-		key = "Region";
-	  } else if (featdeftype == FEATDEF_BOND) {
-		key = "Bond";
-	  } else if (featdeftype == FEATDEF_SITE) {
-		key = "Site";
-	  }
-	  if (ifp->mapToPep) {
-		if (featdeftype >= FEATDEF_preprotein && featdeftype <= FEATDEF_transit_peptide_aa) {
-		  key = "Precursor";
-		  itemID = 0;
-		}
-	  }
-	}
-	if (! isProt) {
-	  if (featdeftype == FEATDEF_preprotein) {
-	    if (! is_other) {
-	      key = "misc_feature";
-	      encode_prefix = TRUE;
-	    }
-	  }
-	}
+    if (format == GENPEPT_FMT && isProt) {
+      if (featdeftype == FEATDEF_REGION) {
+        key = "Region";
+      } else if (featdeftype == FEATDEF_BOND) {
+        key = "Bond";
+      } else if (featdeftype == FEATDEF_SITE) {
+        key = "Site";
+      }
+      if (ifp->mapToPep) {
+        if (featdeftype >= FEATDEF_preprotein && featdeftype <= FEATDEF_transit_peptide_aa) {
+          key = "Precursor";
+          itemID = 0;
+        }
+      }
+    }
+    if (! isProt) {
+      if (featdeftype == FEATDEF_preprotein) {
+        if (! is_other) {
+          key = "misc_feature";
+          encode_prefix = TRUE;
+        }
+      }
+    }
   
-	/* deal with unmappable impfeats */
+    /* deal with unmappable impfeats */
   
-	if (featdeftype == FEATDEF_BAD && seqfeattype == SEQFEAT_IMP) {
-	  imp = (ImpFeatPtr) sfp->data.value.ptrvalue;
-	  if (imp != NULL) {
-		key = imp->key;
-	  }
-	}
+    if (featdeftype == FEATDEF_BAD && seqfeattype == SEQFEAT_IMP) {
+      imp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+      if (imp != NULL) {
+        key = imp->key;
+      }
+    }
   
-	FFStartPrint(ffstring, format, 5, 21, NULL, 0, 5, 21, "FT", /* ifp->firstfeat */ FALSE);
-	if (ajp->ajp.slp != NULL) {
-	  FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
-	} else if ( GetWWW(ajp) && StringICmp (key, "gap") != 0 /* && SeqMgrGetParentOfPart (bsp, NULL) == NULL */ ) {
-	  FF_asn2gb_www_featkey (ffstring, key, sfp, fcontext->left + 1, fcontext->right + 1, fcontext->strand, itemID);
-	} else {
-	  FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
-	}
-	FFAddNChar(ffstring, ' ', 21 - 5 - StringLen(key), FALSE);
+    FFStartPrint(ffstring, format, 5, 21, NULL, 0, 5, 21, "FT", /* ifp->firstfeat */ FALSE);
+    if (ajp->ajp.slp != NULL) {
+      FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
+    } else if ( GetWWW(ajp) && StringICmp (key, "gap") != 0 /* && SeqMgrGetParentOfPart (bsp, NULL) == NULL */ ) {
+      FF_asn2gb_www_featkey (ffstring, key, sfp, fcontext->left + 1, fcontext->right + 1, fcontext->strand, itemID);
+    } else {
+      FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
+    }
+    FFAddNChar(ffstring, ' ', 21 - 5 - StringLen(key), FALSE);
   
-	if (gbseq != NULL) {
-	  gbfeat = GBFeatureNew ();
-	  if (gbfeat != NULL) {
-		gbfeat->key = StringSave (key);
-	  }
-	}
+    if (gbseq != NULL) {
+      gbfeat = GBFeatureNew ();
+      if (gbfeat != NULL) {
+        gbfeat->key = StringSave (key);
+      }
+    }
   
-	if (imp == NULL || StringHasNoText (imp->loc)) {
+    if (imp == NULL || StringHasNoText (imp->loc)) {
   
-	  
-	  if (ajp->ajp.slp != NULL) {
-		sip = SeqIdParse ("lcl|dummy");
-		left = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_LEFT_END);
-		right = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_RIGHT_END);
-		strand = SeqLocStrand (ajp->ajp.slp);
-		split = FALSE;
-		newloc = SeqLocReMapEx (sip, ajp->ajp.slp, location, 0, FALSE, ajp->masterStyle);
-		/*
-		newloc = SeqLocCopyRegion (sip, location, bsp, left, right, strand, &split);
-		*/
-		SeqIdFree (sip);
-		if (newloc == NULL) return NULL;
-		A2GBSeqLocReplaceID (newloc, ajp->ajp.slp);
-		str = FFFlatLoc (ajp, target, newloc, ajp->masterStyle);
-		SeqLocFree (newloc);
-	  } else {
-		str = FFFlatLoc (ajp, target, location, ajp->masterStyle);
-	  }
-	} else {
-	  str = StringSave (imp->loc);
-	}
-	if ( GetWWW(ajp) ) {
-	  FF_www_featloc (ffstring, str);
-	} else {
-	  FFAddOneString(ffstring, str, FALSE, FALSE, TILDE_IGNORE);
-	}
+      
+      if (ajp->ajp.slp != NULL) {
+        sip = SeqIdParse ("lcl|dummy");
+        left = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_LEFT_END);
+        right = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_RIGHT_END);
+        strand = SeqLocStrand (ajp->ajp.slp);
+        split = FALSE;
+        newloc = SeqLocReMapEx (sip, ajp->ajp.slp, location, 0, FALSE, ajp->masterStyle);
+        /*
+        newloc = SeqLocCopyRegion (sip, location, bsp, left, right, strand, &split);
+        */
+        SeqIdFree (sip);
+        if (newloc == NULL) return NULL;
+        A2GBSeqLocReplaceID (newloc, ajp->ajp.slp);
+        str = FFFlatLoc (ajp, target, newloc, ajp->masterStyle);
+        SeqLocFree (newloc);
+      } else {
+        str = FFFlatLoc (ajp, target, location, ajp->masterStyle);
+      }
+    } else {
+      str = StringSave (imp->loc);
+    }
+    if ( GetWWW(ajp) ) {
+      FF_www_featloc (ffstring, str);
+    } else {
+      FFAddOneString(ffstring, str, FALSE, FALSE, TILDE_IGNORE);
+    }
   
-	if (gbseq != NULL) {
-	  if (gbfeat != NULL) {
-		gbfeat->location = StringSave (str);
-	    if (StringDoesHaveText (str)) {
-	      if (StringStr (str, "join") != NULL) {
-	        gbfeat->operator__ = StringSave ("join");
-	      } else if (StringStr (str, "order") != NULL) {
-	        gbfeat->operator__ = StringSave ("order");
-	      }
-	    }
-		gbfeat->partial5 = fcontext->partialL;
-		gbfeat->partial3 = fcontext->partialR;
-		if (ajp->masterStyle) {
-		  AddIntervalsToGbfeat (gbfeat, location, target);
-		} else {
-		  AddIntervalsToGbfeat (gbfeat, location, NULL);
-		}
-	  }
-	}
+    if (gbseq != NULL) {
+      if (gbfeat != NULL) {
+        gbfeat->location = StringSave (str);
+        if (StringDoesHaveText (str)) {
+          if (StringStr (str, "join") != NULL) {
+            gbfeat->operator__ = StringSave ("join");
+          } else if (StringStr (str, "order") != NULL) {
+            gbfeat->operator__ = StringSave ("order");
+          }
+        }
+        gbfeat->partial5 = fcontext->partialL;
+        gbfeat->partial3 = fcontext->partialR;
+        if (ajp->masterStyle) {
+          AddIntervalsToGbfeat (gbfeat, location, target);
+        } else {
+          AddIntervalsToGbfeat (gbfeat, location, NULL);
+        }
+      }
+    }
   
-	MemFree (str);
+    MemFree (str);
 
   } else {
 
@@ -5337,13 +5460,13 @@ static CharPtr FormatFeatureBlockEx (
 
       /* special case to get gene by overlap for coded_by cds on isolated protein bioseq */
       if (ifp->mapToProt && seqfeattype == SEQFEAT_CDREGION) {
-	    sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
-	    if (sep != NULL && IS_Bioseq (sep)) {
-	      bsp = (BioseqPtr) sep->data.ptrvalue;
-	      if (bsp != NULL && ISA_aa (bsp->mol)) {
-		    gene = FindGeneOnIsolatedProtein (sep, sfp);
-	      }
-	    }
+        sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
+        if (sep != NULL && IS_Bioseq (sep)) {
+          bsp = (BioseqPtr) sep->data.ptrvalue;
+          if (bsp != NULL && ISA_aa (bsp->mol)) {
+            gene = FindGeneOnIsolatedProtein (sep, sfp);
+          }
+        }
       }
 
       gene_for_old_locus_tag = gene;
@@ -5589,7 +5712,9 @@ static CharPtr FormatFeatureBlockEx (
           if (! pseudo) {
             if (prod != NULL || ajp->transIfNoProd || ajp->alwaysTranslCds) {
               if (doKey) {
-                qvp [FTQUAL_translation].ble = TRUE;
+                if (! ajp->hideTranslation) {
+                  qvp [FTQUAL_translation].ble = TRUE;
+                }
               }
             }
           }
@@ -5821,8 +5946,12 @@ static CharPtr FormatFeatureBlockEx (
                   smtp = SeqMapTableFind (code, from);
                   if (smtp != NULL) {
                     aa = SeqMapTableConvert (smtp, trna->aa);
-                    if (aa == 255 && from == Seq_code_iupacaa && trna->aa == 'U') {
-                      aa = 'U';
+                    if (aa == 255 && from == Seq_code_iupacaa) {
+                      if (trna->aa == 'U') {
+                        aa = 'U';
+                      } else if (trna->aa == 'O') {
+                        aa = 'O';
+                      }
                     }
                   }
                 }
@@ -5835,6 +5964,19 @@ static CharPtr FormatFeatureBlockEx (
                   }
                 }
                 if (aa > 0 && aa != 255) {
+                  if (aa == 'U') {
+                     if (ajp->flags.selenocysteineToNote) {
+                      qvp [FTQUAL_selenocysteine_note].str = "selenocysteine";
+                    } else {
+                      qvp [FTQUAL_selenocysteine].ble = TRUE;
+                    }
+                  } else if (aa == 'O') {
+                    if (ajp->flags.pyrrolysineToNote) {
+                      qvp [FTQUAL_pyrrolysine_note].str = "pyrrolysine";
+                    } else {
+                      qvp [FTQUAL_pyrrolysine].ble = TRUE;
+                    }
+                  }
                   if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
                     if (aa == 79 || aa == 74) { /* O or J quarantined */
                       aa = 88; /* X */
@@ -5901,6 +6043,22 @@ static CharPtr FormatFeatureBlockEx (
           qvp [FTQUAL_region_name].str = (CharPtr) sfp->data.value.ptrvalue;
         } else {
           qvp [FTQUAL_region].str = (CharPtr) sfp->data.value.ptrvalue;
+        }
+        if (sfp->ext != NULL) {
+          uop = FindUopByTag (sfp->ext, "cddScoreData");
+          if (uop != NULL) {
+            for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+              if (ufp->choice != 1) continue;
+              oip = ufp->label;
+              if (oip == NULL) continue;
+              if (StringICmp (oip->str, "definition") == 0) {
+                str = (CharPtr) ufp->data.ptrvalue;
+                if (StringDoesHaveText (str)) {
+                  qvp [FTQUAL_cdd_definition].str = str;
+                }
+              }
+            }
+          }
         }
         break;
       case SEQFEAT_COMMENT :
@@ -6429,6 +6587,8 @@ NLM_EXTERN CharPtr FormatFeatureBlock (
                                format, (IntFeatBlockPtr) bbp, ISA_aa (bsp->mol), TRUE);
 }
 
+const CharPtr feature_table_header_format = ">Feature %s\n";
+
 NLM_EXTERN CharPtr FormatFeatHeaderBlock (
   Asn2gbFormatPtr afp,
   BaseBlockPtr bbp
@@ -6440,14 +6600,14 @@ NLM_EXTERN CharPtr FormatFeatHeaderBlock (
   BioseqPtr        bsp;
   Char             ch;
   Boolean          has_space;
-  Char             id [64];
+  Char             id [128];
   ObjectIdPtr      oip;
   CharPtr          ptr;
   SeqIdPtr         sip;
   SeqIdPtr         sip2;
   CharPtr          str = NULL;
   BioseqPtr        target;
-  Char             tmp [53];
+  CharPtr          tmp = NULL;
 
   if (afp == NULL || bbp == NULL) return NULL;
   ajp = afp->ajp;
@@ -6494,8 +6654,9 @@ NLM_EXTERN CharPtr FormatFeatHeaderBlock (
       SeqIdWrite (sip, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
     }
     if (! StringHasNoText (id)) {
+      tmp = (CharPtr) MemNew ((StringLen(feature_table_header_format) + StringLen(id)) * sizeof(Char));
       sprintf (tmp, ">Feature %s\n", id);
-      str = StringSave (tmp);
+      str = tmp;
     }
     return str;
   }

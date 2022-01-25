@@ -1,4 +1,4 @@
-/*   $Id: ddvcolor.c,v 1.22 2000/03/06 18:35:22 thiessen Exp $
+/*   $Id: ddvcolor.c,v 1.23 2006/07/13 17:06:38 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,24 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: ddvcolor.c,v 1.22 2000/03/06 18:35:22 thiessen Exp $
+* File Name:  $Id: ddvcolor.c,v 1.23 2006/07/13 17:06:38 bollin Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   6/4/99
 *
-* $Revision: 1.22 $
+* $Revision: 1.23 $
 *
 * File Description: Shared color information for viewers
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcolor.c,v $
+* Revision 1.23  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 1.22  2000/03/06 18:35:22  thiessen
 * fixes for 8-bit color
 *
@@ -1037,7 +1042,6 @@ NLM_EXTERN void DDV_SetPaletteColor
 (DDV_ColorGlobal *pColorGlobal, Char *ColorName, 
  Char *ParamFile, Uint1 red, Uint1 grn, Uint1 blu)
 {
-    long Value;
     DDV_ColorEntry *pColorEntry = NULL;
 
     if(pColorGlobal == NULL || ColorName == NULL || ParamFile == NULL) return;
@@ -1069,7 +1073,7 @@ static void DDV_GetPaletteColor(DDV_ColorGlobal *pColorGlobal, Char *ColorName,
     if(Value == -1) DDV_SetPaletteColor(pColorGlobal, ColorName, ParamFile,
         red, grn, blu);
     else DDV_SetPaletteColor(pColorGlobal, ColorName, ParamFile,
-        DDVRED(Value), DDVGRN(Value), DDVBLU(Value));
+        (Uint1) DDVRED(Value), (Uint1) DDVGRN(Value), (Uint1) DDVBLU(Value));
 }
 
 /*****************************************************************************
@@ -1412,7 +1416,6 @@ NLM_EXTERN DDV_ColorCell * DDV_GetColor
 (DDV_ColorGlobal *pColorGlobal, SeqId *sip, Int4 lRow, Int4 lPosition)
 {
     DDV_MediaInfo *pMediaInfo;
-    ValNode *pvn;
     DDV_Color *pColor;
     DDV_ColorCell *pColorCell = NULL;
     DDV_Range TestRange;

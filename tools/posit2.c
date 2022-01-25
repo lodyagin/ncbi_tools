@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: posit2.c,v 6.11 2005/07/28 14:57:10 coulouri Exp $";
+static char const rcsid[] = "$Id: posit2.c,v 6.12 2006/09/18 20:54:27 kans Exp $";
 
-/* $Id: posit2.c,v 6.11 2005/07/28 14:57:10 coulouri Exp $
+/* $Id: posit2.c,v 6.12 2006/09/18 20:54:27 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,12 +34,15 @@ Author: Alejandro Schaffer
 
 Contents: utilities for makematrices.
 
-$Revision: 6.11 $
+$Revision: 6.12 $
 
 *****************************************************************************/
 
 /*
  * $Log: posit2.c,v $
+ * Revision 6.12  2006/09/18 20:54:27  kans
+ * removed PROTEIN_ALPHABET - collides with new version in posit.h
+ *
  * Revision 6.11  2005/07/28 14:57:10  coulouri
  * remove dead code
  *
@@ -83,7 +86,6 @@ $Revision: 6.11 $
 #include <profiles.h>
 
 /*Used to check that diagnostics printing routine will work*/
-#define PROTEIN_ALPHABET 26
 #define EFFECTIVE_ALPHABET 20
 
 #define POSIT_PERCENT 0.05

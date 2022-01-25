@@ -1555,7 +1555,6 @@ NLM_EXTERN
 INSDSetPtr LIBCALL
 INSDSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -1611,7 +1610,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 INSDSetAsnWrite(INSDSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

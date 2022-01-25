@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.56 $
+* $Revision: 6.57 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,11 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.57  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.56  2006/04/04 18:00:47  kans
 * SeqLocAddEx properly returns value to &last argument, makes SeqLocMix from DeltaSeqsToSeqLocs
 *
@@ -4827,7 +4832,7 @@ SeqEdGetNextFeature
 {
   SMFeatItemPtr PNTR  array = NULL;
   BioseqExtraPtr      bspextra;
-  Uint4               i;
+  Int4               i;
   SMFeatItemPtr       item;
   Int4                num = 0;
   ObjMgrDataPtr       omdp;
@@ -5941,7 +5946,7 @@ static Boolean ReStitchLocation (Int4 delete_point, SeqFeatPtr sfp)
   SeqLocPtr this_slp, next_slp, loc_list = NULL, tmp_slp, last_slp = NULL, tmp_next;
   SeqIdPtr  this_id, next_id;
   Boolean   merged = FALSE;
-  Uint2     this_strand, next_strand;
+  Uint1     this_strand, next_strand;
   
   if (sfp->location == NULL)
   {
@@ -6060,7 +6065,7 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
   SeqMgrFeatContext fcontext;
   BioseqContextPtr  bcp;
   Int2              feat_change;
-  Int2              feats_deleted = FALSE;
+  Boolean           feats_deleted = FALSE;
   SeqFeatPtr        tmp_sfp;
   AffectedFeatPtr   afp;
   Boolean           merge_mode;
@@ -6601,7 +6606,7 @@ NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewSeqEdit
  CharPtr             char_data,
  Boolean             spliteditmode,
  BioseqPtr           bsp,
- Uint2               moltype,
+ Uint1               moltype,
  Uint2               entityID)
 {
   SeqEdJournalPtr sejp;
@@ -6634,7 +6639,7 @@ NLM_EXTERN SeqEdJournalPtr SeqEdJournalNewFeatEdit
  SeqFeatPtr          sfp,
  SeqLocPtr           slp,
  BioseqPtr           bsp,
- Uint2               moltype,
+ Uint1               moltype,
  Uint2               entityID)
 {
   SeqEdJournalPtr sejp;

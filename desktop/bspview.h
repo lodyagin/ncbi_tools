@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.60 $
+* $Revision: 6.62 $
 *
 * File Description: 
 *
@@ -65,7 +65,7 @@ extern "C" {
 typedef struct seqPanelLines {
   Int4    bioSeqLine;   /* this line refers to bioseq line           */
   Int2    lineType;     /* what to draw on this line (see ELineType) */
-  Int4    idx;          /* feature index                             */
+  Uint4   idx;          /* feature index                             */
   Int4    row;          /* index in alignment                        */
   Boolean protProduct;  /* indicates whether product sequence should be drawn */
   Boolean on_the_fly;   /* indicates whether translation of feature location should be drawn */
@@ -208,7 +208,7 @@ typedef struct bioseqviewdata {
 typedef void (*BioseqViewProc) (BioseqViewPtr bvp);
 typedef void (*BioseqShowHideProc) (BioseqViewPtr bvp, Boolean show);
 typedef void (*BioseqExportProc) (BioseqViewPtr bvp, CharPtr filename, CharPtr dfault);
-typedef void (*BioseqSelectProc) (BioseqViewPtr bvp, Uint2 entityID, Uint2 itemID, Uint2 itemtype, SeqLocPtr region, Boolean select, Boolean scrollto);
+typedef void (*BioseqSelectProc) (BioseqViewPtr bvp, Uint2 entityID, Uint4 itemID, Uint2 itemtype, SeqLocPtr region, Boolean select, Boolean scrollto);
 
 /* bioseqpagedata pointer array allows flexible control of pages in viewer */
 
@@ -392,13 +392,13 @@ extern Boolean SeqnSeqEntrysToFasta (SeqEntryPtr sep, FILE *fp, Boolean is_na, U
 extern Int2 LIBCALLBACK BioseqViewMsgFunc (OMMsgStructPtr ommsp);
 
 extern Boolean InBioseqViewEntityList (Uint2 entityID, BioseqViewPtr bvp);
-extern void LIBCALL LaunchNewBioseqViewer (BioseqPtr bsp, Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+extern void LIBCALL LaunchNewBioseqViewer (BioseqPtr bsp, Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 extern Boolean LIBCALL IsAGenomeRecord (SeqEntryPtr sep);
-extern Boolean LIBCALL IsANamedAlignment (Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+extern Boolean LIBCALL IsANamedAlignment (Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 extern Boolean IsSegmentedBioseqWithoutParts (SeqEntryPtr sep);
 extern Boolean IsADeltaBioseq (SeqEntryPtr sep);
 extern Boolean LIBCALL LaunchViewerNotEditor (BioseqViewPtr bvp, SeqEntryPtr sep,
-                                              Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+                                              Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 
 extern ValNodePtr LIBCALL GetUidsForSeqEntryAligns (SeqEntryPtr sep);
 extern ValNodePtr LIBCALL GetIdStringsForSeqEntryAligns (SeqEntryPtr sep);

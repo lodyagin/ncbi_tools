@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.37 2006/04/26 14:48:23 jianye Exp $
+/* $Id: wblast2.c,v 1.39 2006/07/05 15:59:21 jianye Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,18 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.37 $
+* $Revision: 1.39 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.39  2006/07/05 15:59:21  jianye
+* limit the defline length to 512
+*
+* Revision 1.38  2006/06/07 23:44:48  jianye
+* fix short identical user id collision
+*
 * Revision 1.37  2006/04/26 14:48:23  jianye
 * force printing out accession in defline
 *
@@ -295,6 +301,8 @@
 
 #define NR_SIZE_NA 2385885539
 #define NR_SIZE_AA 181542687
+#define DEFLINE_LENGTH 512
+Char defline_buf[DEFLINE_LENGTH+4];
 
 typedef struct prym{
 	Int2		len;
@@ -1717,7 +1725,11 @@ static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_Optio
  
     defline = BioseqGetTitle(query_bsp);
     if(defline) {
-        printf("%s", defline);
+        StringNCpy(defline_buf, defline, DEFLINE_LENGTH);
+        if(StringLen(defline) > DEFLINE_LENGTH) {
+            StringCat(defline_buf, "...");
+        }
+        printf("%s", defline_buf);
     } 
 
     printf("<BR>");
@@ -1738,7 +1750,11 @@ static void PrintParam(Boolean is_prot, Int2 mtrx, Int2 ma, Int2 ms, BLAST_Optio
    
     defline = BioseqGetTitle(subject_bsp);
     if(defline) {
-        printf("%s", defline);
+        StringNCpy(defline_buf, defline, DEFLINE_LENGTH - 3);
+        if(StringLen(defline) > DEFLINE_LENGTH) {
+            StringCat(defline_buf, "...");
+        }
+        printf("%s", defline_buf);
     } 
     printf("<BR>\n");
 
@@ -2328,7 +2344,7 @@ Int2 Main(void)
     
     if(seq1EntryData && seq2EntryData && 
             seq_1_type != ACCESSION_GI && seq_2_type != ACCESSION_GI &&
-                            StrNCmp(seq1EntryData, seq2EntryData, 6) == 0 ) {
+                            StrNCmp(seq1EntryData, seq2EntryData, 2) == 0 ) {
         AdjustSubjectLine(&seq1EntryData,&seq2EntryData);
     }
     

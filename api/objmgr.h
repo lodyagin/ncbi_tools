@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.38 $
+* $Revision: 6.41 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,17 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.41  2006/08/08 20:20:19  kans
+* added ObjMgrReportProc, internals of ObjMgrReportFunc that takes file pointer
+*
+* Revision 6.40  2006/08/03 20:18:14  bollin
+* will remove desktop views if only desktop views remain
+*
+* Revision 6.39  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.38  2005/04/08 21:23:08  kans
 * added ObjMgrStatusString function for debugging
 *
@@ -356,9 +367,9 @@ typedef Uint2 (LIBCALLBACK *OMSubTypeFunc) PROTO((Pointer ptr));
 typedef struct ommsgstruct {
 	Int2 message;    /* the message code, defined below */
 	Uint2 entityID,
-		itemID,
 		itemtype,
 		rowID;
+    Uint4 itemID;
 	Uint2 fromProcID,
 		toProcID;         /* allows communication to and from particular procs */
 	Pointer procmsgdata;  /* procedure specific data to be sent, assumes toProcID set */
@@ -433,12 +444,12 @@ typedef struct ddvupdatemsg{
 *       Allows messages to be sent to particular procs
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg PROTO((Uint2 msg, Uint2 entityID, Uint2 itemID, Uint2 itemtype));
+NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg PROTO((Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype));
 
-NLM_EXTERN Boolean LIBCALL ObjMgrSendProcMsg PROTO((Uint2 msg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
+NLM_EXTERN Boolean LIBCALL ObjMgrSendProcMsg PROTO((Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                                     Uint2 fromProcID, Uint2 toProcID, Pointer procmsgdata));
 
-NLM_EXTERN Boolean LIBCALL ObjMgrSendRowMsg PROTO((Uint2 msg, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint2 rowID));
+NLM_EXTERN Boolean LIBCALL ObjMgrSendRowMsg PROTO((Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint2 rowID));
 
 	                              /* user supplied data on entity */
 typedef struct omuserdata {
@@ -469,7 +480,7 @@ typedef struct objmgrdata {
 	Boolean bulkIndexFree;     /* used to suppress individual SeqMgrDeleteFromBioseqIndex */
 	OMUserDataPtr userdata;    /* for user supplied data */
 	Uint2 options;             /* options set with bit flags, defined below */
-	Uint2 lastDescrItemID;     /* for new seqmgr extra bioseq exploration functions */
+	Uint4 lastDescrItemID;     /* for new seqmgr extra bioseq exploration functions */
 	time_t indexed;            /* time that entity was seqmgr indexed */
 	Pointer extradata;         /* used (initially) for extra bioseq feature indices */
 	OMFreeFunc reapextra;      /* function to call when caching out, passed extradata */
@@ -563,17 +574,17 @@ typedef struct omproccontrol {
 	Pointer input_data,
 			input_choice;      
 	Uint2 input_entityID,
-		input_itemID,
 		input_itemtype,
 		input_choicetype;
+    Uint4 input_itemID;
 	Uint1 input_regiontype;   /* for region of entity */
 	Pointer input_region;     
 	Pointer output_data,
 		output_choice;      
 	Uint2 output_entityID,
-		output_itemID,
 		output_itemtype,
 		output_choicetype;
+	Uint4 output_itemID;
 	Uint1 output_regiontype;
 	Pointer output_region;
 	ObjMgrProcPtr proc;
@@ -617,8 +628,8 @@ typedef struct omtype {
 
 typedef struct selstruct {
 	Uint2 entityID,
-		  itemtype,
-		  itemID;
+		  itemtype;
+    Uint4 itemID;
 	Pointer region;       /* this restricts the message to a region.
 	                         currently only a SeqLocPtr of type SEQLOC_INT */
 	Uint1 regiontype;     /* 0 = not set
@@ -1025,7 +1036,7 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrAddEntityID PROTO((ObjMgrPtr omp, ObjMgrDataPtr o
 *       returns FALSE if these are an internal part of the entity
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjMgrWholeEntity PROTO((ObjMgrDataPtr omdp, Uint2 itemID, Uint2 itemtype));
+NLM_EXTERN Boolean LIBCALL ObjMgrWholeEntity PROTO((ObjMgrDataPtr omdp, Uint4 itemID, Uint2 itemtype));
 
 /*****************************************************************************
 *
@@ -1243,9 +1254,9 @@ NLM_EXTERN ValNodePtr LIBCALL ObjMgrGetChoiceForEntityID PROTO((Uint2 id));
 *      returns TRUE if item is now currently selected, FALSE if not
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjMgrSelect PROTO((Uint2 entityID, Uint2 itemID,
+NLM_EXTERN Boolean LIBCALL ObjMgrSelect PROTO((Uint2 entityID, Uint4 itemID,
                                                Uint2 itemtype, Uint1 regiontype, Pointer region));
-NLM_EXTERN Boolean LIBCALL ObjMgrAlsoSelect PROTO((Uint2 entityID, Uint2 itemID,
+NLM_EXTERN Boolean LIBCALL ObjMgrAlsoSelect PROTO((Uint2 entityID, Uint4 itemID,
                                                    Uint2 itemtype, Uint1 regiontype, Pointer region));
 
 /*****************************************************************************
@@ -1256,7 +1267,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrAlsoSelect PROTO((Uint2 entityID, Uint2 itemID,
 *      rgb is a pointer to a Uint1[3] array containing an RGB value.
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjMgrSetColor PROTO((Uint2 entityID, Uint2 itemID,
+NLM_EXTERN Boolean LIBCALL ObjMgrSetColor PROTO((Uint2 entityID, Uint4 itemID,
                                         Uint2 itemtype, Uint1 regiontype,
                                         Pointer region, Uint1Ptr rgb));
   
@@ -1267,7 +1278,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSetColor PROTO((Uint2 entityID, Uint2 itemID,
 *   	else returns FALSE
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL ObjMgrDeSelect PROTO((Uint2 entityID, Uint2 itemID,
+NLM_EXTERN Boolean LIBCALL ObjMgrDeSelect PROTO((Uint2 entityID, Uint4 itemID,
 						 Uint2 itemtype, Uint1 regiontype, Pointer region));
 NLM_EXTERN Boolean LIBCALL ObjMgrDeSelectAll PROTO((void));
 	
@@ -1328,6 +1339,7 @@ NLM_EXTERN void LIBCALL ObjMgrResetAll PROTO((void));
 
 /* debugging functions */
 
+NLM_EXTERN void LIBCALL ObjMgrReportProc (FILE *fp);
 NLM_EXTERN void LIBCALL ObjMgrReportFunc (CharPtr filename);
 NLM_EXTERN Boolean LIBCALL ObjMgrStatusString (CharPtr str, size_t len);
 
@@ -1335,6 +1347,8 @@ NLM_EXTERN Boolean LIBCALL ObjMgrStatusString (CharPtr str, size_t len);
 NLM_EXTERN void LIBCALL ObjMgrAddIndexOnEntityID PROTO((ObjMgrPtr omp,Uint2 entityID,ObjMgrDataPtr omdp));
 NLM_EXTERN void LIBCALL ObjMgrDeleteIndexOnEntityID PROTO((ObjMgrPtr omp,Uint2 entityID));
 NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrLookupIndexOnEntityID PROTO((ObjMgrPtr omp,Uint2 entityID));
+
+NLM_EXTERN Boolean DeleteRemainingViews (Uint2 entityID);
 
 #ifdef __cplusplus
 }

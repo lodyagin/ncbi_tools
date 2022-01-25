@@ -306,7 +306,7 @@ typedef struct alignlabelrect {
 	Int4 right;
 	Int4 bottom;
 	Uint2 itemType;
-	Uint2 itemID;
+	Uint4 itemID;
 	CharPtr label;
 	Int4 from, to;	/*the interval on the sequence. For showing partial Seq-loc*/
 }AlignLabelRect, PNTR AlignLabelRectPtr;

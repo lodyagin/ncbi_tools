@@ -1,4 +1,4 @@
-/* $Id: mb_lookup.c,v 1.60 2005/12/22 14:04:52 papadopo Exp $
+/* $Id: mb_lookup.c,v 1.62 2006/08/22 17:10:38 coulouri Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: mb_lookup.c,v 1.60 2005/12/22 14:04:52 papadopo Exp $";
+    "$Id: mb_lookup.c,v 1.62 2006/08/22 17:10:38 coulouri Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -42,6 +42,46 @@ static char const rcsid[] =
 #include <algo/blast/core/mb_lookup.h>
 #include <algo/blast/core/lookup_util.h>
 #include "blast_inline.h"
+
+/**
+* Determine if this subject word occurs in the query.
+* @param lookup The lookup table to read from. [in]
+* @param index The index value of the word to retrieve. [in]
+* @return 1 if there are hits, 0 otherwise.
+*/
+static NCBI_INLINE Int4 s_BlastMBLookupHasHits(BlastMBLookupTable * lookup,
+                                               Int4 index)
+{
+    if (NA_PV_TEST(lookup->pv_array, index, lookup->pv_array_bts))
+        return 1;
+    else
+        return 0;
+}
+
+/** 
+* Copy query offsets from the lookup table to the array of offset pairs.
+* @param lookup The lookup table to read from. [in]
+* @param index The index value of the word to retrieve. [in]
+* @param offset_pairs A pointer into the destination array. [out]
+* @param s_off The subject offset to be associated with the retrieved query offset(s). [in]
+* @return The number of hits copied.
+*/
+static NCBI_INLINE Int4 s_BlastMBLookupRetrieve(BlastMBLookupTable * lookup,
+                                                Int4 index,
+                                                BlastOffsetPair * offset_pairs,
+                                                Int4 s_off)
+{
+    Int4 i=0;
+    Int4 q_off = lookup->hashtable[index];
+
+    while (q_off) {
+        offset_pairs[i].qs_offsets.q_off   = q_off - 1;
+        offset_pairs[i++].qs_offsets.s_off = s_off;
+        q_off = lookup->next_pos[q_off];
+    }
+    return i;
+}
+
 
 BlastMBLookupTable* MBLookupTableDestruct(BlastMBLookupTable* mb_lt)
 {
@@ -558,7 +598,7 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
    BlastMBLookupTable* mb_lt;
    Uint1* s;
    Uint1* abs_start;
-   Int4 q_off, s_off;
+   Int4 s_off;
    Int4 last_offset;
    Int4 index;
    Int4 mask;
@@ -599,10 +639,9 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
          /* for strides that are a multiple of 4, words are
             always aligned and three bytes of the subject sequence 
             will always hold a complete word (plus possible extra bases 
-            that must be shifted away). s_end below points to either
-            the second to last or third to last byte of the subject 
-            sequence; all subject sequences must therefore have a 
-            sentinel byte */
+            that must be shifted away). s_end below always points to
+            the third-to-last byte of the subject sequence, so we will
+            never fetch the byte beyond the end of subject */
 
          Uint1* s_end = abs_start + (subject->length - lut_word_length) /
                                                    COMPRESSION_RATIO;
@@ -615,16 +654,14 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
             index = s[0] << 16 | s[1] << 8 | s[2];
             index = index >> shift;
       
-            if (NA_PV_TEST(pv_array, index, pv_array_bts)) {
-               if (total_hits >= max_hits)
-                  break;
-               q_off = mb_lt->hashtable[index];
-               s_off = (s - abs_start)*COMPRESSION_RATIO;
-               while (q_off) {
-                  offset_pairs[total_hits].qs_offsets.q_off = q_off - 1;
-                  offset_pairs[total_hits++].qs_offsets.s_off = s_off;
-                  q_off = mb_lt->next_pos[q_off];
-               }
+            if (s_BlastMBLookupHasHits(mb_lt, index)) {
+                if (total_hits >= max_hits)
+                    break;
+                s_off = (s - abs_start)*COMPRESSION_RATIO;
+                total_hits += s_BlastMBLookupRetrieve(mb_lt,
+                    index,
+                    offset_pairs + total_hits,
+                    s_off);
             }
          }
          *end_offset = (s - abs_start)*COMPRESSION_RATIO;
@@ -635,9 +672,33 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
             the subject sequence. The portion of each 16-base
             region that contains the actual word depends on the
             offset of the word and the lookup table width, and
-            must be recalculated for each 16-base region */
+            must be recalculated for each 16-base region
+          
+            Unlike the aligned stride case, the scanning can
+            walk off the subject array for lut_word_length = 10 or 11
+            (length 12 may also do this, but only if the subject is a
+            multiple of 4 bases in size, and in that case there is 
+            a sentinel byte). We avoid this by first handling all 
+            the cases where 16-base regions fit, then handling the 
+            last few offsets separately */
 
-         for (s_off = start_offset; s_off <= last_offset; s_off += scan_step) {
+         Int4 last_offset4 = last_offset;
+         switch (subject->length % COMPRESSION_RATIO) {
+         case 2:
+             if (lut_word_length == 10)
+                 last_offset4--;
+             break;
+         case 3:
+             if (lut_word_length == 10)
+                 last_offset4 -= 2;
+             else if (lut_word_length == 11)
+                 last_offset4--;
+             break;
+         default:
+             break;
+         }
+
+         for (s_off = start_offset; s_off <= last_offset4; s_off += scan_step) {
       
             Int4 shift = 2*(16 - (s_off % COMPRESSION_RATIO + lut_word_length));
             s = abs_start + (s_off / COMPRESSION_RATIO);
@@ -645,24 +706,48 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
             index = s[0] << 24 | s[1] << 16 | s[2] << 8 | s[3];
             index = (index >> shift) & mask;
       
-            if (NA_PV_TEST(pv_array, index, pv_array_bts)) {
-               if (total_hits >= max_hits)
-                  break;
-               q_off = mb_lt->hashtable[index];
-               while (q_off) {
-                  offset_pairs[total_hits].qs_offsets.q_off = q_off - 1;
-                  offset_pairs[total_hits++].qs_offsets.s_off = s_off;
-                  q_off = mb_lt->next_pos[q_off];
-               }
+            if (s_BlastMBLookupHasHits(mb_lt, index)) {
+                if (total_hits >= max_hits)
+                    break;
+                total_hits += s_BlastMBLookupRetrieve(mb_lt,
+                    index,
+                    offset_pairs + total_hits,
+                    s_off);
+            }
+         }
+
+         /* repeat the loop but only read three bytes at a time. For
+            lut_word_length = 10 the loop runs at most twice, and for
+            lut_word_length = 11 it runs at most once */
+
+         for (; s_off > last_offset4 && s_off <= last_offset; 
+                                                s_off += scan_step) {
+      
+            Int4 shift = 2*(12 - (s_off % COMPRESSION_RATIO + lut_word_length));
+            s = abs_start + (s_off / COMPRESSION_RATIO);
+      
+            index = s[0] << 16 | s[1] << 8 | s[2];
+            index = (index >> shift) & mask;
+      
+            if (s_BlastMBLookupHasHits(mb_lt, index)) {
+                if (total_hits >= max_hits)
+                    break;
+                total_hits += s_BlastMBLookupRetrieve(mb_lt,
+                    index,
+                    offset_pairs + total_hits,
+                    s_off);
             }
          }
          *end_offset = s_off;
       }
    }
    else {
-      /* perform scanning for a lookup tables of width 9
+      /* perform scanning for a lookup tables of width 9.
          Here the stride will never be a multiple of 4 
-         (this table is only used for very small word sizes) */
+         (this table is only used for small word sizes).
+         The last word is always three bytes from the end of the 
+         sequence, so the following does not need to be corrected 
+         when scanning near the end of the subject sequence */
 
       for (s_off = start_offset; s_off <= last_offset; s_off += scan_step) {
    
@@ -672,15 +757,13 @@ Int4 MB_AG_ScanSubject(const LookupTableWrap* lookup_wrap,
          index = s[0] << 16 | s[1] << 8 | s[2];
          index = (index >> shift) & mask;
    
-         if (NA_PV_TEST(pv_array, index, pv_array_bts)) {
-            if (total_hits >= max_hits)
-               break;
-            q_off = mb_lt->hashtable[index];
-            while (q_off) {
-               offset_pairs[total_hits].qs_offsets.q_off = q_off - 1;
-               offset_pairs[total_hits++].qs_offsets.s_off = s_off;
-               q_off = mb_lt->next_pos[q_off];
-            }
+         if (s_BlastMBLookupHasHits(mb_lt, index)) {
+             if (total_hits >= max_hits)
+                 break;
+             total_hits += s_BlastMBLookupRetrieve(mb_lt,
+                 index,
+                 offset_pairs + total_hits,
+                 s_off);
          }
       }
       *end_offset = s_off;

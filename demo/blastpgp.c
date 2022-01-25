@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.135 2006/05/03 14:40:49 madden Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.136 2006/07/17 17:32:54 coulouri Exp $";
 
-/* $Id: blastpgp.c,v 6.135 2006/05/03 14:40:49 madden Exp $ */
+/* $Id: blastpgp.c,v 6.136 2006/07/17 17:32:54 coulouri Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,11 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.135 2006/05/03 14:40:49 madden 
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.135 $ 
+ * $Revision: 6.136 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.136  2006/07/17 17:32:54  coulouri
+ * from mike gertz: fix a memory leak in PGPFormatFooter
+ *
  * Revision 6.135  2006/05/03 14:40:49  madden
  * Changed usage of -t flag to also include specification of whether
  * unified p-values should be used to calculate the significance of
@@ -1230,13 +1233,11 @@ Boolean PGPFormatHeader(PGPBlastOptionsPtr bop)
 }
 Boolean  PGPFormatFooter(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search)
 {
-    
-    ValNodePtr  mask_loc, vnp;
+    ValNodePtr vnp;
     BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
     TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
     CharPtr params_buffer=NULL;
     ValNodePtr other_returns;
-    BLAST_MatrixPtr blast_matrix;
     Boolean html = myargs[ARG_HTML].intvalue;
 
     if (bop->outfp == NULL)
@@ -1246,8 +1247,6 @@ Boolean  PGPFormatFooter(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search)
         fprintf(bop->outfp, "<PRE>\n");
 
     other_returns = BlastOtherReturnsPrepare(search);
-
-    mask_loc = NULL;
     for (vnp=other_returns; vnp; vnp = vnp->next) {
         switch (vnp->choice) {
         case TXDBINFO:
@@ -1262,49 +1261,35 @@ Boolean  PGPFormatFooter(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search)
         case TXPARAMETERS:
             params_buffer = vnp->data.ptrvalue;
             break;
-        case TXMATRIX:
-            blast_matrix = vnp->data.ptrvalue;
-            BLAST_MatrixDestruct(blast_matrix);
-            break;
-        case SEQLOC_MASKING_NOTSET:
-        case SEQLOC_MASKING_PLUS1:
-        case SEQLOC_MASKING_PLUS2:
-        case SEQLOC_MASKING_PLUS3:
-        case SEQLOC_MASKING_MINUS1:
-        case SEQLOC_MASKING_MINUS2:
-        case SEQLOC_MASKING_MINUS3:
-            ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
-            break;
         default:
             break;
         }
-    }	
-    
+    }
     init_buff_ex(85);
     dbinfo_head = dbinfo;
     while (dbinfo) {
         PrintDbReport(dbinfo, 70, bop->outfp);
         dbinfo = dbinfo->next;
     }
-    dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
-    
     if (ka_params && !bop->options->isPatternSearch) {
-        PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, bop->outfp, FALSE);
+        PrintKAParameters(ka_params->Lambda, ka_params->K,
+                          ka_params->H, 70, bop->outfp, FALSE);
     }
-    
     if (ka_params_gap) {
         if (bop->options->isPatternSearch)
-            PrintKAParametersExtra(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, bop->seedSearch->paramC, 70, bop->outfp, FALSE);
+            PrintKAParametersExtra(ka_params_gap->Lambda,
+                                   ka_params_gap->K, ka_params_gap->H,
+                                   bop->seedSearch->paramC, 70,
+                                   bop->outfp, FALSE);
         else
-            PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, bop->outfp, FALSE);
+            PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K,
+                              ka_params_gap->H, 70, bop->outfp,
+                              FALSE);
     }
-    
-    MemFree(ka_params);
-    MemFree(ka_params_gap);
-
     PrintTildeSepLines(params_buffer, 70, bop->outfp);
-    MemFree(params_buffer);
+
     free_buff();
+    BlastOtherReturnsFree(other_returns);
 
     return TRUE;
 }

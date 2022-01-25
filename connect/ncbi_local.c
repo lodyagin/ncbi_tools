@@ -1,4 +1,4 @@
-/*  $Id: ncbi_local.c,v 1.5 2006/04/20 19:23:24 lavr Exp $
+/*  $Id: ncbi_local.c,v 1.8 2006/05/20 00:55:26 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -92,7 +92,7 @@ static int/*bool*/ s_LoadSingleService(const char* name, SERV_ITER iter)
     char* buf;
     int n;
 
-    if (!(buf = malloc(strlen(name) + 80)))
+    if (!(buf = malloc(strlen(name) + sizeof(REG_CONN_LOCAL_SERVER) + 80)))
         return 0/*failed*/;
 
     info = 0;
@@ -106,9 +106,17 @@ static int/*bool*/ s_LoadSingleService(const char* name, SERV_ITER iter)
         }
         sprintf(buf, "%s_" REG_CONN_LOCAL_SERVER "_%d", name, n);
         if (!(c = getenv(strupr(buf)))) {
-            sprintf(buf, REG_CONN_LOCAL_SERVER "_%d", n);
-            CORE_REG_GET(name, buf, service, sizeof(service) - 1, 0);
-            if (!*service)
+            char*  b = buf + strlen(name);
+            size_t len;
+            *b++ = '\0';
+            CORE_REG_GET(buf, b, service, sizeof(service) - 1, 0);
+            len = strlen(service);
+            if (len > 1  &&  (service[0] == '"'  ||  service[0] == '\'')
+                &&  service[len - 1] == service[0]  &&  (len -= 2) > 0) {
+                memmove(service, service + 1, len);
+                service[len] = '\0';
+            }
+            if (!len)
                 continue;
             c = service;
         }
@@ -403,6 +411,15 @@ const SSERV_VTable* SERV_LOCAL_Open(SERV_ITER iter,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_local.c,v $
+ * Revision 1.8  2006/05/20 00:55:26  lavr
+ * Fix ChangeLog for last revision
+ *
+ * Revision 1.7  2006/05/20 00:54:41  lavr
+ * Allow LOCAL_SERVER spec to enclose in [double]quotes (mostly for C tkit)
+ *
+ * Revision 1.6  2006/05/19 23:24:56  lavr
+ * Speed-up s_LoadSingleService()
+ *
  * Revision 1.5  2006/04/20 19:23:24  lavr
  * Remove a comment that referenced iter->external
  *

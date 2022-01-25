@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.99 $
+* $Revision: 6.100 $
 *
 * File Description: 
 *
@@ -825,7 +825,7 @@ static SeqEntryPtr GapFastaRead (CharPtr path, Uint2 mol_type)
 /********************************************************************/
 static Boolean has_extrachar (CharPtr str, Char missingchar, Char gapchar)
 {
-  Int2     j;
+  Uint2     j;
   Boolean  ret = FALSE;
  
   if (str==NULL)
@@ -3308,7 +3308,7 @@ extern void ShowFeatureProc (PaneL pnl, Boolean invalidate)
 ***   LaunchCDSEditor on a Bioseq (input_itemID)
 ***
 *******************************************************/
-static void LaunchCDSEditor (Uint2 input_entityID, Uint2 input_itemID, SeqLocPtr slp, Uint1 codonstart)
+static void LaunchCDSEditor (Uint2 input_entityID, Uint4 input_itemID, SeqLocPtr slp, Uint1 codonstart)
 {
   WindoW         w;
   SeqEntryPtr    top_sep;
@@ -3520,7 +3520,7 @@ static void MakeFeatFunc (EditAlignDataPtr adp, SelStructPtr ssp, Uint2 itemsubt
   SeqIntPtr        sit;
   SeqLocPtr        slpfeat;
   Int4             from, to;
-  Uint2            itemID;
+  Uint4            itemID;
 
   slp = (SeqLocPtr) ssp->region;
   ssptmp = is_selectedbyID (ssp->entityID, 255, OBJ_VIRT);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.39 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *
@@ -465,7 +465,7 @@ static Entrez2ReplyPtr EntrezTextWaitForReply (
   Entrez2ReplyPtr  e2ry = NULL;
   Boolean          first;
   FILE *           fp;
-  Int2             max = 0;
+  time_t           max = 0;
   size_t           n_read;
   Boolean          special_read = FALSE;
   EIO_Status       status;

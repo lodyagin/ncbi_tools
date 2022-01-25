@@ -939,7 +939,7 @@ static Boolean ApplyNewSeqFeat (ValNodePtr vnpfeat, Int4 stoptransl, Boolean kee
 ***
 **********************************************************************/
 
-NLM_EXTERN void PropagateFeatureBySeqLock (SeqAnnotPtr sap, Uint2 source_bspitemID, Uint2 target_entityID, SeqEntryPtr target_sep, ValNodePtr seqfeat, Uint1 gap_choice)
+NLM_EXTERN void PropagateFeatureBySeqLock (SeqAnnotPtr sap, Uint4 source_bspitemID, Uint2 target_entityID, SeqEntryPtr target_sep, ValNodePtr seqfeat, Uint1 gap_choice)
 {
   BioseqPtr        target_bsp;
   SeqFeatPtr       source_sfp;
@@ -1336,7 +1336,7 @@ NLM_EXTERN Boolean FeatListToProp (EditAlignDataPtr adp, ValNodePtr vnpfeat)
                    source_dup;
   SeqAnnotPtr      sap;
   SeqAlignPtr      salp;
-  Uint2            feat_itemID;
+  Uint4            feat_itemID;
   Uint1            frame;
   Boolean          val,
                    keep_sesp;

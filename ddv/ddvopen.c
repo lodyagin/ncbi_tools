@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.c,v 1.97 2004/04/01 13:43:06 lavr Exp $
+/*  $Id: ddvopen.c,v 1.98 2006/07/13 17:11:42 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.97 $
+* $Revision: 1.98 $
 *
 * File Description: code to open a SeqAlign (file & Net) and code of the
 * message callback for DeuxD-Viewer (DDV).
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.c,v $
+* Revision 1.98  2006/07/13 17:11:42  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 1.97  2004/04/01 13:43:06  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -527,9 +530,10 @@ Boolean   bRet=FALSE;
 
 *******************************************************************************/
 static Boolean DDV_CheckBSPEntitiesInDisplay(MsaParaGPopListPtr mpplp,
-		Uint2 entityID,Uint2 itemID)
+		Uint2 entityID,Uint4 itemID)
 {
-Uint2     bsp_eID,bsp_iID;
+Uint2     bsp_eID;
+Uint4     bsp_iID;
 Int4      i;
 Boolean   bRet=FALSE;
 
@@ -555,11 +559,12 @@ Boolean   bRet=FALSE;
 
 *******************************************************************************/
 static Int4Ptr DDV_GetBspListGivenIDs(MsaParaGPopListPtr mpplp,
-		Uint2 entityID,Uint2 itemID,Int4Ptr nFound)
+		Uint2 entityID,Uint4 itemID,Int4Ptr nFound)
 {
 Int4       i;
 Int4Ptr    pList=NULL;
-Uint2     bsp_eID,bsp_iID;
+Uint2     bsp_eID;
+Uint4     bsp_iID;
 
 	*nFound=0;
 	
@@ -1318,7 +1323,7 @@ static void DDV_NoConvert(ButtoN g) {
 
 *******************************************************************************/
 static Boolean DDV_StartPanel_Slave(DdvMainPtr dmp, SeqAlignPtr sap,
-		Uint2* pInput_entityID, Uint2* pInput_itemID, Boolean bEditor)
+		Uint2* pInput_entityID, Uint4* pInput_itemID, Boolean bEditor)
 {
 DDV_ColorGlobal * dcgp;
 MsaParaGPopListPtr  mpplp;
@@ -1968,7 +1973,8 @@ Int2				procval;
 				&The_entityID);
 			ArrowCursor();
 			if (vnp_ali && The_entityID!=0){
-				Uint2 entityID,itemID;
+				Uint2 entityID;
+				Uint4 itemID;
 				SeqAlignPtr sap;
 								
 				/*get the first SeqAlign in the list and load the viewer panel*/
@@ -2197,7 +2203,8 @@ Uint2           The_entityID;
 		MonitorFree (mon);
 
 		if (vnp_ali && The_entityID!=0){
-			Uint2 entityID,itemID;
+			Uint2 entityID;
+			Uint4 itemID;
 			SeqAlignPtr sap;
 			
 			/*get the first SeqAlign in the list and load the viewer panel*/
@@ -2961,7 +2968,8 @@ DdvMainWinPtr mWin_d;
 SeqEntryPtr   sep;
 ValNodePtr    vnp_ali;
 SeqAlignPtr   sap;
-Uint2 		  The_entityID,entityID,itemID;
+Uint2 		  The_entityID,entityID;
+Uint4         itemID;
 Int2		  procval;
 
 	hWinMain=(WindoW)ParentWindow(i);

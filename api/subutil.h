@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.54 $
+* $Revision: 6.56 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,14 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.56  2006/09/18 18:40:30  kans
+* special symbols for structured comment prefix, suffix, for parsing flatfile
+*
+* Revision 6.55  2006/07/13 17:06:39  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.54  2006/05/05 19:49:40  kans
 * added StructuredComment user object creation functions
 *
@@ -802,8 +810,8 @@ NLM_EXTERN Boolean AddOrganismToEntryEx (
 NLM_EXTERN Boolean SetGeneticCodeForEntry (
 	NCBISubPtr submission,
         SeqEntryPtr entry,
-        Int2 genetic_code,  /* for cytoplasm */
-        Int2 mito_code );   /* for mitochondria */
+        Uint1 genetic_code,  /* for cytoplasm */
+        Uint1 mito_code );   /* for mitochondria */
 
         
 
@@ -1713,7 +1721,10 @@ NLM_EXTERN UserObjectPtr CreateFeatureFetchPolicyUserObject (
 
 /* structured comment user object for flatfile presentation */
 
-NLM_EXTERN UserObjectPtr CreateStructuredCommentUserObject (void);
+NLM_EXTERN UserObjectPtr CreateStructuredCommentUserObject (
+  CharPtr prefix,
+  CharPtr suffix
+);
 
 NLM_EXTERN void AddItemStructuredCommentUserObject (
   UserObjectPtr uop,

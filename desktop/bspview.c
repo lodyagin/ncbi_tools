@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.133 $
+* $Revision: 6.139 $
 *
 * File Description: 
 *
@@ -67,6 +67,8 @@
 #include <explore.h>
 #include <asn2graphic.h>
 #include <seqpanel.h>
+#include <vsm.h>
+#include <objmgr.h>
 /*
 #include <udviewer.h>
 #include <udvdef.h>
@@ -310,7 +312,7 @@ static Boolean NamedAlignmentProc (GatherContextPtr gcp)
   return FALSE;
 }
 
-extern Boolean LIBCALL IsANamedAlignment (Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+extern Boolean LIBCALL IsANamedAlignment (Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 
 {
   Boolean  rsult;
@@ -321,7 +323,7 @@ extern Boolean LIBCALL IsANamedAlignment (Uint2 entityID, Uint2 itemID, Uint2 it
 }
 
 extern Boolean LIBCALL LaunchViewerNotEditor (BioseqViewPtr bvp, SeqEntryPtr sep,
-                                              Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+                                              Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 
 {
   if (bvp == NULL) return FALSE;
@@ -440,7 +442,7 @@ static Boolean LaunchSequenceViewer (SeqIdPtr sip, BioseqPtr query)
   BioseqPtr        bsp;
   Uint2            entityID;
   Int2             handled;
-  Uint2            itemID;
+  Uint4            itemID;
   SeqViewProcsPtr  svpp;
 
   if (sip == NULL) return FALSE;
@@ -602,7 +604,7 @@ static Boolean LaunchPrim (GatherContextPtr gcp)
   return FALSE;
 }
 
-void LIBCALL LaunchNewBioseqViewer (BioseqPtr bsp, Uint2 entityID, Uint2 itemID, Uint2 itemtype)
+void LIBCALL LaunchNewBioseqViewer (BioseqPtr bsp, Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 
 {
   GatherItem (entityID, itemID, itemtype, (Pointer) bsp, LaunchPrim);
@@ -1771,6 +1773,13 @@ static void ChangeBioseqDocText (PopuP p)
 {
   BioseqViewFormPtr  bfp;
   BioseqPagePtr      bpp;
+  Int2               firstLine = 0;
+  Int2               firstShown = 0;
+  Int4               horiz = 0;
+  Int4               vert = 0;
+  Int2               i;
+  Int2               numItems = 0;
+  Int4               startsAt = 0;
   Int4               val;
 
   bfp = (BioseqViewFormPtr) GetObjectExtra (p);
@@ -1778,6 +1787,24 @@ static void ChangeBioseqDocText (PopuP p)
     WatchCursor ();
     bfp->bvd.moveToOldPos = FALSE;
     bpp = bfp->currentBioseqPage;
+
+    if (Visible (bfp->bvd.text) && AllParentsVisible (bfp->bvd.text)) {
+      /*GetOffset (bfp->bvd.text, &horiz, &vert); */
+      Nlm_GetScrollTextOffset4 ((Nlm_GraphiC)bfp->bvd.text, &horiz, &vert);
+
+    } else if (Visible (bfp->bvd.doc) && AllParentsVisible (bfp->bvd.doc)) {
+      GetDocParams (bfp->bvd.doc, &numItems, NULL);
+      GetScrlParams4 (bfp->bvd.doc, &vert, &firstShown, &firstLine);
+      for (i = 1; i <= firstShown; i++) {
+        ForceFormat (bfp->bvd.doc, i);
+      }
+      GetItemParams4 (bfp->bvd.doc, firstShown, &startsAt, NULL, NULL, NULL, NULL);
+      vert = startsAt + firstLine;
+      /*
+      GetOffset (bfp->bvd.doc, &horiz, &vert);
+      */
+    }
+
     if (bpp != NULL && bpp->show != NULL) {
       bpp->show (&(bfp->bvd), FALSE);
     }
@@ -1795,6 +1822,20 @@ static void ChangeBioseqDocText (PopuP p)
     
     PointerToForm (bfp->form, (Pointer) bfp->bvd.bsp);
     SetBioseqImportExportItems (bfp);
+    if (vert > 0) {
+      if (bfp->bvd.useScrollText) {
+        Nlm_SetScrollTextOffset4 ((Nlm_GraphiC)bfp->bvd.text, 0, vert, TRUE);
+        /*SetOffset (bfp->bvd.text, 0, vert); */
+      } else {
+        GetDocParams (bfp->bvd.doc, &numItems, NULL);
+        for (i = 1; i <= numItems && startsAt < vert; i++) {
+          ForceFormat (bfp->bvd.doc, i);
+          GetItemParams4 (bfp->bvd.doc, i, &startsAt, NULL, NULL, NULL, NULL);
+        }
+        SetScrlParams4 (bfp->bvd.doc, vert);
+/*        SetOffset (bfp->bvd.doc, 0, vert); */
+      }
+    }
     ArrowCursor ();
     Update ();
     AdjustDynamicGraphicViewer (&(bfp->bvd));
@@ -2161,7 +2202,7 @@ static void DuplicateViewProc (ButtoN b)
 {
   BioseqViewFormPtr  bfp;
   Int2               handled;
-  Uint2              itemID;
+  Uint4              itemID;
   SeqViewProcsPtr    svpp;
 
   bfp = (BioseqViewFormPtr) GetObjectExtra (b);
@@ -2201,7 +2242,7 @@ static void CleanupBioseqForm (GraphiC g, VoidPtr data)
 
 {
   BioseqViewFormPtr  bfp;
-  Uint2              userkey;
+  Uint2              userkey, entityID;
   ValNodePtr         vnp;
 
   bfp = (BioseqViewFormPtr) data;
@@ -2210,6 +2251,7 @@ static void CleanupBioseqForm (GraphiC g, VoidPtr data)
     /*
     BioseqUnlock (bfp->bvd.bsp);
     */
+    entityID = bfp->input_entityID;
     if (bfp->input_entityID > 0 && bfp->userkey > 0) {
       userkey = bfp->userkey;
       bfp->userkey = 0;
@@ -2247,7 +2289,20 @@ static void CleanupBioseqForm (GraphiC g, VoidPtr data)
     bfp->bioseqNucPageList = BioseqPageListFree (bfp->bioseqNucPageList);
     bfp->bioseqProtPageList = BioseqPageListFree (bfp->bioseqProtPageList);
     bfp->targetAlist = FreeEnumFieldAlist (bfp->targetAlist);
+    
+    /* remove orphaned far components */
+    ObjMgrFreeCache (OBJ_MAX); 
+    FreeSeqIdGiCache ();    
+    
+    /* if the only remaining views for this entity ID are desktop views, get rid
+     * of the desktop views as well
+     */  
+    if (DeleteRemainingViews(entityID)) {
+        VSeqMgrShow();
+    }
+    
     ArrowCursor ();
+   
   }
   StdCleanupFormProc (g, data);
 }
@@ -2603,7 +2658,7 @@ static void EnviroProc (ButtoN b)
 
 static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr title,
                                                  BioseqPtr bsp, SeqViewProcsPtr svpp,
-                                                 Uint2 entD, Uint2 itemID, Uint2 itemtype,
+                                                 Uint2 entD, Uint4 itemID, Uint2 itemtype,
                                                  Boolean smart)
 
 {
@@ -3870,7 +3925,7 @@ extern Int2 LIBCALLBACK NewSeqEntryViewGenFunc (Pointer data)
     }
     bfp->userkey = OMGetNextUserKey ();
     omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid,
-	                           OMPROC_VIEW, bfp->userkey);
+	                           ompcp->proc->proctype, bfp->userkey);
     if (omudp != NULL) {
       omudp->userdata.ptrvalue = (Pointer) bfp;
       omudp->messagefunc = BioseqViewMsgFunc;
@@ -4023,7 +4078,8 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
     }
     bfp->userkey = OMGetNextUserKey ();
     omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid,
-	                           OMPROC_VIEW, bfp->userkey);
+	                           ompcp->proc->proctype, bfp->userkey);	                           
+	                           
     if (omudp != NULL) {
       omudp->userdata.ptrvalue = (Pointer) bfp;
       omudp->messagefunc = BioseqViewMsgFunc;

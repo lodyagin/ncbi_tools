@@ -6303,6 +6303,7 @@
 		};
 		F095C4FC06AE8E5F00C0C74D = {
 			children = (
+				F0DECDBB0AB97B9E008B27CE,
 				F03CED7409F7AFA000EB5378,
 				F052068E09EC294C005AF35A,
 				5EDE874E0823E6AF008F2E80,
@@ -6403,6 +6404,7 @@
 				5EDE87650823F29F008F2E80,
 				F052068F09EC294C005AF35A,
 				F03CED7509F7AFA100EB5378,
+				F0DECDBC0AB97B9E008B27CE,
 			);
 			isa = PBXSourcesBuildPhase;
 			runOnlyForDeploymentPostprocessing = 0;
@@ -12146,6 +12148,21 @@
 		};
 		F0D4E75D07A66C93006CF3D5 = {
 			fileRef = F0D4E75C07A66C93006CF3D5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		F0DECDBB0AB97B9E008B27CE = {
+			fileEncoding = 30;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = blast_sw.c;
+			path = ../../algo/blast/core/blast_sw.c;
+			refType = 2;
+			sourceTree = SOURCE_ROOT;
+		};
+		F0DECDBC0AB97B9E008B27CE = {
+			fileRef = F0DECDBB0AB97B9E008B27CE;
 			isa = PBXBuildFile;
 			settings = {
 			};

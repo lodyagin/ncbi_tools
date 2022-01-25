@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pattern1.c,v 6.21 2005/07/28 14:57:10 coulouri Exp $";
+static char const rcsid[] = "$Id: pattern1.c,v 6.22 2006/08/04 21:11:17 papadopo Exp $";
 
-/* $Id: pattern1.c,v 6.21 2005/07/28 14:57:10 coulouri Exp $
+/* $Id: pattern1.c,v 6.22 2006/08/04 21:11:17 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,9 +33,12 @@ Original Author: Zheng Zhang
  
 Contents: central pattern matching routines for PHI-BLAST and pseed3
 
-$Revision: 6.21 $ 
+$Revision: 6.22 $ 
 
 $Log: pattern1.c,v $
+Revision 6.22  2006/08/04 21:11:17  papadopo
+refine check for end of line when parsing pattern string (fixes rt#15187012)
+
 Revision 6.21  2005/07/28 14:57:10  coulouri
 remove dead code
 
@@ -212,9 +215,11 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
       localPattern[i] = 0;
     }
     for (i = 0, j = 0; i < strlen((Char *) pattern); i++) {
-      if ((c=pattern[i]) == '-' || c == '\n' || c == '.' || c =='>' || c ==' ' 
-|| c == '<')  /*spacers that mean nothing*/
-	continue;
+      c = pattern[i];
+      if (c == '\0' || c == '\r' || c == '\n')
+        break;
+      if (c == '-' || c == '.' || c =='>' || c ==' ' || c == '<')
+	continue;  /*spacers that mean nothing*/
       if ( c != '[' && c != '{') { /*not the start of a set of characters*/
 	if (c == 'x' || c== 'X') {  /*wild-card character matches anything*/
           /*next line checks to see if wild card is for multiple positions*/

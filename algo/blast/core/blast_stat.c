@@ -1,4 +1,4 @@
-/* $Id: blast_stat.c,v 1.141 2006/04/20 19:28:30 madden Exp $
+/* $Id: blast_stat.c,v 1.151 2006/10/02 12:33:59 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,12 +50,11 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_stat.c,v 1.141 2006/04/20 19:28:30 madden Exp $";
+    "$Id: blast_stat.c,v 1.151 2006/10/02 12:33:59 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_util.h>
-#include <util/tables/raw_scoremat.h>
 #include <algo/blast/core/blast_encoding.h>
 #include "blast_psi_priv.h"
 
@@ -407,6 +406,8 @@ BLAST_MATRIX_NOMINAL
 
 
 
+#ifdef BLOSUM62_20_ENABLE
+
 #define BLOSUM62_20_VALUES_MAX 65 /**< Number of different combinations supported for BLOSUM62 with 1/20 bit scaling. */
 static array_of_8 blosum62_20_values[BLOSUM62_20_VALUES_MAX] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.03391, 0.125, 0.4544, 0.07462, -3.2},
@@ -543,6 +544,8 @@ BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL
 };  /**< Quality values for BLOSUM62_20 matrix, each element corresponds to same element number in array blosum62_20_values */
+
+#endif
 
 /** Supported substitution and gap costs with corresponding quality values
  * for nucleotide sequence comparisons.
@@ -1037,7 +1040,7 @@ BlastScoreBlkProteinMatrixRead(BlastScoreBlk* sbp, FILE *fp)
     long lineno = 0;
     double  xscore;
     register int  index1, index2;
-    int x_index, u_index;
+    int x_index, u_index, o_index;
     const char kCommentChar = '#';
     const char* kTokenStr = " \t\n\r";
     
@@ -1149,13 +1152,16 @@ BlastScoreBlkProteinMatrixRead(BlastScoreBlk* sbp, FILE *fp)
         return 2;
     }
     
-    /* Use the X scores for selenocysteines; if this is not done
-       then U will never align to a non-gap residue */
+    /* Use the X scores for the more exotic ncbistdaa characters; 
+       if this is not done then they will never align to non-gap residues */
     x_index = AMINOACID_TO_NCBISTDAA['X'];
     u_index = AMINOACID_TO_NCBISTDAA['U'];
+    o_index = AMINOACID_TO_NCBISTDAA['O'];
     for (index1 = 0; index1 < sbp->alphabet_size; index1++) {
         matrix[u_index][index1] = matrix[x_index][index1];
         matrix[index1][u_index] = matrix[index1][x_index];
+        matrix[o_index][index1] = matrix[x_index][index1];
+        matrix[index1][o_index] = matrix[index1][x_index];
     }
 
     return 0;
@@ -1202,6 +1208,35 @@ BlastScoreBlkMaxScoreSet(BlastScoreBlk* sbp)
     return 0;
 }
 
+NCBI_XBLAST_EXPORT SNCBIPackedScoreMatrix*
+BlastScoreBlkGetCompiledInMatrix(const char* name)
+{
+    SNCBIPackedScoreMatrix* psm = NULL; 
+
+    if (name == NULL)
+        return NULL;
+
+    if (strcasecmp(name, "BLOSUM62") == 0) {
+        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum62;
+    } else if (strcasecmp(name, "BLOSUM45") == 0) {
+        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum45;
+    } else if (strcasecmp(name, "BLOSUM50") == 0) {
+        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum50;
+    } else if (strcasecmp(name, "BLOSUM80") == 0) {
+        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum80;
+    } else if (strcasecmp(name, "BLOSUM90") == 0) {
+        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum90;
+    } else if (strcasecmp(name, "PAM30") == 0) {
+        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Pam30;
+    } else if (strcasecmp(name, "PAM70") == 0) {
+        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Pam70;
+    } else if (strcasecmp(name, "PAM250") == 0) {
+        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Pam250;
+    }
+ 
+    return psm;
+}
+
 /** Sets sbp->matrix->data field using sbp->name field using
  * the matrices in the toolkit (util/tables/raw_scoremat.h).
  * @param sbp the object containing matrix and name [in|out]
@@ -1214,7 +1249,7 @@ BlastScoreBlkProteinMatrixLoad(BlastScoreBlk* sbp)
     SNCBIPackedScoreMatrix* psm;
     Int4** matrix = NULL;
     int i, j;   /* loop indices */
-    int x_index, u_index;
+    int x_index, u_index, o_index;
 
     ASSERT(sbp);
     ASSERT(sbp->alphabet_size == BLASTAA_SIZE);
@@ -1222,23 +1257,11 @@ BlastScoreBlkProteinMatrixLoad(BlastScoreBlk* sbp)
     ASSERT(sbp->matrix->ncols == BLASTAA_SIZE);
     ASSERT(sbp->matrix->nrows == BLASTAA_SIZE);
 
-    matrix = sbp->matrix->data;
+    psm = BlastScoreBlkGetCompiledInMatrix(sbp->name); 
+    if (psm == NULL)
+       return 1;
 
-    if (strcasecmp(sbp->name, "BLOSUM62") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum62;
-    } else if (strcasecmp(sbp->name, "BLOSUM45") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum45;
-    } else if (strcasecmp(sbp->name, "BLOSUM80") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Blosum80;
-    } else if (strcasecmp(sbp->name, "PAM30") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Pam30;
-    } else if (strcasecmp(sbp->name, "PAM70") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Pam70;
-    } else if (strcasecmp(sbp->name, "PAM250") == 0) {
-        psm = (SNCBIPackedScoreMatrix*) &NCBISM_Pam250;
-    } else {
-        return 1;
-    }
+    matrix = sbp->matrix->data;
 
     /* Initialize with BLAST_SCORE_MIN */
     for (i = 0; i < sbp->alphabet_size; i++) {
@@ -1249,10 +1272,12 @@ BlastScoreBlkProteinMatrixLoad(BlastScoreBlk* sbp)
 
     for (i = 0; i < sbp->alphabet_size; i++) {
         for (j = 0; j < sbp->alphabet_size; j++) {
-            /* skip selenocysteine and gap */
+            /* skip special characters */
             if (i == AMINOACID_TO_NCBISTDAA['U'] || 
+                i == AMINOACID_TO_NCBISTDAA['O'] ||
                 i == AMINOACID_TO_NCBISTDAA['-'] ||
                 j == AMINOACID_TO_NCBISTDAA['U'] || 
+                j == AMINOACID_TO_NCBISTDAA['O'] || 
                 j == AMINOACID_TO_NCBISTDAA['-']) {
                 continue;
             }
@@ -1261,21 +1286,25 @@ BlastScoreBlkProteinMatrixLoad(BlastScoreBlk* sbp)
         }
     }
 
-    /* Use the X scores for selenocysteines; if this is not done
-       then U will never align to a non-gap residue */
+    /* Use the X scores for the more exotic ncbistdaa characters; 
+       if this is not done then they will never align to non-gap residues */
     x_index = AMINOACID_TO_NCBISTDAA['X'];
     u_index = AMINOACID_TO_NCBISTDAA['U'];
+    o_index = AMINOACID_TO_NCBISTDAA['O'];
     for (i = 0; i < sbp->alphabet_size; i++) {
         matrix[u_index][i] = matrix[x_index][i];
         matrix[i][u_index] = matrix[i][x_index];
+        matrix[o_index][i] = matrix[x_index][i];
+        matrix[i][o_index] = matrix[i][x_index];
     }
 
     return status;
 }
 
 Int2
-Blast_ScoreBlkMatrixFill(BlastScoreBlk* sbp, char* matrix_path)
+Blast_ScoreBlkMatrixFill(BlastScoreBlk* sbp, GET_MATRIX_PATH get_path)
 {
+    Boolean matrix_found = FALSE;
     Int2 status = 0;
     
     /* For nucleotide case we first create a default matrix, based on the 
@@ -1283,40 +1312,49 @@ Blast_ScoreBlkMatrixFill(BlastScoreBlk* sbp, char* matrix_path)
     if (sbp->alphabet_code == BLASTNA_SEQ_CODE) {
        if ( (status=BlastScoreBlkNuclMatrixCreate(sbp)) != 0)
           return status;
+       matrix_found = TRUE;
+    }
+    else
+    {  /* Try to get compiled in matrix for proteins. */
+       status = BlastScoreBlkProteinMatrixLoad(sbp);
+       if (status == 0)
+          matrix_found = TRUE;
     }
 
-    if (sbp->read_in_matrix) {
-        if (matrix_path && *matrix_path != NULLB) {
+    if (matrix_found == FALSE && sbp->read_in_matrix && get_path) {
+            char* matrix_path = get_path(sbp->name, TRUE);
+            if (matrix_path) {
 
-            FILE *fp = NULL;
-            char* full_matrix_path = NULL;
-            int path_len = strlen(matrix_path);
-            int buflen = path_len + strlen(sbp->name);
+                FILE *fp = NULL;
+                char* full_matrix_path = NULL;
+                int path_len = strlen(matrix_path);
+                int buflen = path_len + strlen(sbp->name);
 
-            full_matrix_path = (char*) malloc((buflen + 1) * sizeof(char));
-            if (!full_matrix_path) {
-                return -1;
-            }
-            strncpy(full_matrix_path, matrix_path, buflen);
-            strncat(full_matrix_path, sbp->name, buflen - path_len);
+                full_matrix_path = (char*) malloc((buflen + 1) * sizeof(char));
+                if (!full_matrix_path) {
+                    return -1;
+                }
+                strncpy(full_matrix_path, matrix_path, buflen);
+                strncat(full_matrix_path, sbp->name, buflen - path_len);
 
-            if ( (fp=fopen(full_matrix_path, "r")) == NULL) {
-               return -1;
-            }
-            sfree(full_matrix_path);
+                sfree(matrix_path);
 
-            if ( (status=BlastScoreBlkProteinMatrixRead(sbp, fp)) != 0) {
-               fclose(fp);
-               return status;
-            }
-            fclose(fp);
+                if ( (fp=fopen(full_matrix_path, "r")) == NULL) {
+                   return -1;
+                }
+                sfree(full_matrix_path);
 
-        } else {
-            if ( (status = BlastScoreBlkProteinMatrixLoad(sbp)) !=0) {
-                return status;
-            }
-        }
+                if ( (status=BlastScoreBlkProteinMatrixRead(sbp, fp)) != 0) {
+                   fclose(fp);
+                   return status;
+                }
+                fclose(fp);
+                matrix_found = TRUE;
+            } 
     }
+
+    if (matrix_found == FALSE)
+        return -1;
 
     if ( (status=BlastScoreBlkMaxScoreSet(sbp)) != 0)
          return status;
@@ -2601,8 +2639,10 @@ BlastLoadMatrixValues (void)
    matrix_info = MatrixInfoNew("PAM250", pam250_values, pam250_prefs, PAM250_VALUES_MAX);
    ListNodeAddPointer(&retval, 0, matrix_info);
 
+#ifdef BLOSUM62_20_ENABLE
    matrix_info = MatrixInfoNew("BLOSUM62_20", blosum62_20_values, blosum62_20_prefs, BLOSUM62_20_VALUES_MAX);
    ListNodeAddPointer(&retval, 0, matrix_info);
+#endif
 
    matrix_info = MatrixInfoNew("BLOSUM90", blosum90_values, blosum90_prefs, BLOSUM90_VALUES_MAX);
    ListNodeAddPointer(&retval, 0, matrix_info);
@@ -3659,27 +3699,27 @@ BLAST_KarlinStoE_simple(Int4 S,
    return (double) searchsp * exp((double)(-Lambda * S) + kbp->logK);
 }
 
-/** BlastKarlinPtoE -- convert a P-value to an Expect value
- * When using BlastKarlinPtoE in the context of a database search,
- * the returned E-value should be multiplied by the effective
- * length of the database and divided by the effective lnegth of
- * the subject.
- * @param p the P-value to be converted [in]
- * @return the corresponding expect value.
-*/
-static double
-BlastKarlinPtoE(double p)
+/* Convert a P-value to an E-value. */
+double
+BLAST_KarlinPtoE(double p)
 {
-        if (p < 0. || p > 1.0) 
-   {
-                return INT4_MIN;
-        }
+    if (p < 0.0 || p > 1.0) {
+        return INT4_MIN;
+    }
+    if (p == 1.0)
+        return INT4_MAX;
 
-   if (p == 1)
-      return INT4_MAX;
-
-        return -BLAST_Log1p(-p);
+    return -BLAST_Log1p(-p);
 }
+
+
+/* Convert an E-value to a P-value. */
+double
+BLAST_KarlinEtoP(double x)
+{
+    return -BLAST_Expm1(-x);
+}
+
 
 /** Internal data structure used by Romberg integration callbacks. */
 typedef struct SRombergCbackArgs {
@@ -3940,7 +3980,7 @@ BLAST_SmallGapSumE(
         xsum -= BLAST_LnFactorial((double) num);
 
         sum_p = s_BlastSumP(num, xsum);
-        sum_e = BlastKarlinPtoE(sum_p) *
+        sum_e = BLAST_KarlinPtoE(sum_p) *
             ((double) searchsp_eff / (double) pair_search_space);
     }
     if( weight_divisor == 0.0 || (sum_e /= weight_divisor) > INT4_MAX ) {
@@ -3998,7 +4038,7 @@ BLAST_UnevenGapSumE(Int4 query_start_points, Int4 subject_start_points,
         xsum -= BLAST_LnFactorial((double) num);
 
         sum_p = s_BlastSumP(num, xsum);
-        sum_e = BlastKarlinPtoE(sum_p) *
+        sum_e = BLAST_KarlinPtoE(sum_p) *
             ((double) searchsp_eff / (double) pair_search_space);
     }
     if( weight_divisor == 0.0 || (sum_e /= weight_divisor) > INT4_MAX ) {
@@ -4048,7 +4088,7 @@ BLAST_LargeGapSumE(
       
       sum_p = s_BlastSumP(num, xsum);
       
-      sum_e = BlastKarlinPtoE(sum_p) *
+      sum_e = BLAST_KarlinPtoE(sum_p) *
           ((double) searchsp_eff / (lcl_query_length * lcl_subject_length));
     }
     if( weight_divisor == 0.0 || (sum_e /= weight_divisor) > INT4_MAX ) {
@@ -4126,21 +4166,23 @@ RPSfindUngappedLambda(const char *matrixName)
  * @param return_sfp a structure to be filled in and returned [in|out]
  * @param range the size of scoreArray and is an upper bound on the
  *       difference between maximum score and minimum score in the matrix [in]
+ * @param alphabet_size Number of letters in the alphabet of the input
+ *                  score matrix [in]
 */
 
 static void
 RPSFillScores(Int4 **matrix, Int4 matrixLength, 
               double *queryProbArray, double *scoreArray,  
-              Blast_ScoreFreq* return_sfp, Int4 range)
+              Blast_ScoreFreq* return_sfp, Int4 range,
+              Int4 alphabet_size)
 {
     Int4 minScore, maxScore;    /*observed minimum and maximum scores */
     Int4 i,j;                   /* indices */
     double recipLength;        /* 1/matrix length as a double */
 
     minScore = maxScore = 0;
-
     for (i = 0; i < matrixLength; i++) {
-        for (j = 0 ; j < BLASTAA_SIZE; j++) {
+        for (j = 0 ; j < alphabet_size; j++) {
             if (j == AMINOACID_TO_NCBISTDAA['X'])
                 continue;
             if ((matrix[i][j] > BLAST_SCORE_MIN) && 
@@ -4153,13 +4195,12 @@ RPSFillScores(Int4 **matrix, Int4 matrixLength,
 
     return_sfp->obs_min = minScore;
     return_sfp->obs_max = maxScore;
-    for (i = 0; i < range; i++)
-        scoreArray[i] = 0.0;
+    memset(scoreArray, 0, (maxScore - minScore + 1) * sizeof(double));
 
     return_sfp->sprob = &(scoreArray[-minScore]); /*center around 0*/
     recipLength = 1.0 / (double) matrixLength;
     for(i = 0; i < matrixLength; i++) {
-        for (j = 0; j < BLASTAA_SIZE; j++) {
+        for (j = 0; j < alphabet_size; j++) {
             if (j == AMINOACID_TO_NCBISTDAA['X'])
                 continue;
             if(matrix[i][j] >= minScore)
@@ -4176,7 +4217,7 @@ RPSFillScores(Int4 **matrix, Int4 matrixLength,
 Int4 **
 RPSRescalePssm(double scalingFactor, Int4 rps_query_length, 
                const Uint1* rps_query_seq, Int4 db_seq_length, 
-               Int4 **posMatrix, const char *matrix_name)
+               Int4 **posMatrix, BlastScoreBlk *sbp)
 {
     double *scoreArray;         /*array of score probabilities*/
     double *resProb;            /*array of probabilities for each residue*/
@@ -4188,6 +4229,7 @@ RPSRescalePssm(double scalingFactor, Int4 rps_query_length,
     double finalLambda;
     double temp;               /*intermediate variable for adjusting matrix*/
     Int4 index, inner_index; 
+    Int4 alphabet_size;
 
     resProb = (double *)malloc(BLASTAA_SIZE * sizeof(double));
     scoreArray = (double *)malloc(BLAST_SCORE_RANGE_MAX * sizeof(double));
@@ -4195,10 +4237,11 @@ RPSRescalePssm(double scalingFactor, Int4 rps_query_length,
 
     Blast_FillResidueProbability(rps_query_seq, rps_query_length, resProb);
 
+    alphabet_size = sbp->psi_matrix->pssm->nrows;
     RPSFillScores(posMatrix, db_seq_length, resProb, scoreArray, 
-                 return_sfp, BLAST_SCORE_RANGE_MAX);
+                 return_sfp, BLAST_SCORE_RANGE_MAX, alphabet_size);
 
-    initialUngappedLambda = RPSfindUngappedLambda(matrix_name);
+    initialUngappedLambda = RPSfindUngappedLambda(sbp->name);
     ASSERT(initialUngappedLambda > 0.0);
     scaledInitialUngappedLambda = initialUngappedLambda / scalingFactor;
     correctUngappedLambda = Blast_KarlinLambdaNR(return_sfp, 
@@ -4211,12 +4254,15 @@ RPSRescalePssm(double scalingFactor, Int4 rps_query_length,
 
     finalLambda = correctUngappedLambda/scaledInitialUngappedLambda;
 
+    /* note that the final score matrix returned has an
+       alphabet size of BLASTAA_SIZE, even if the initial
+       PSSM has a smaller alphabet*/
     returnMatrix = (Int4 **)_PSIAllocateMatrix(db_seq_length,
                                                BLASTAA_SIZE,
                                                sizeof(Int4));
 
     for (index = 0; index < db_seq_length; index++) {
-        for (inner_index = 0; inner_index < BLASTAA_SIZE; inner_index++) {
+        for (inner_index = 0; inner_index < alphabet_size; inner_index++) {
             if (posMatrix[index][inner_index] <= BLAST_SCORE_MIN || 
                 inner_index == AMINOACID_TO_NCBISTDAA['X']) {
                 returnMatrix[index][inner_index] = 
@@ -4226,6 +4272,9 @@ RPSRescalePssm(double scalingFactor, Int4 rps_query_length,
                temp = ((double)(posMatrix[index][inner_index])) * finalLambda;
                returnMatrix[index][inner_index] = BLAST_Nint(temp);
            }
+        }
+        for (; inner_index < BLASTAA_SIZE; inner_index++) {
+           returnMatrix[index][inner_index] = BLAST_SCORE_MIN;
         }
     }
 
@@ -4363,6 +4412,47 @@ BLAST_ComputeLengthAdjustment(double K,
  * ===========================================================================
  *
  * $Log: blast_stat.c,v $
+ * Revision 1.151  2006/10/02 12:33:59  madden
+ * Add ifdef for BLOSUM62_20
+ *
+ * Revision 1.150  2006/09/27 18:09:16  papadopo
+ * remove unused variable
+ *
+ * Revision 1.149  2006/09/25 19:32:44  madden
+ *   Added the BLOSUM50 and BLOSUM90 matrices to
+ *   BlastScoreBlkGetCompiledInMatrix. [from Mike Gertz]
+ *
+ * Revision 1.148  2006/09/14 14:49:07  papadopo
+ * doxygen fixes
+ *
+ * Revision 1.147  2006/08/22 19:45:06  papadopo
+ * 1. Alphabet size must be variable in RPSFillScores
+ * 2. In RPSRescalePssm, only initialize the portion of the
+ *    array of score counts that is actually used
+ *
+ * Revision 1.146  2006/07/05 15:33:35  papadopo
+ * 1. Copy the 'X' columns in score matrices into the columns
+ *    for 'U', 'O', 'J'
+ * 2. When rebuilding RPS database profiles to account for the
+ *    composition of the query, allow for the returned score matrix
+ *    to have an alphabet size different from the input score matrix
+ *
+ * Revision 1.145  2006/06/08 15:36:37  madden
+ * In Blast_ScoreBlkMatrixFill check that matrix was found, or return -1
+ *
+ * Revision 1.144  2006/06/07 16:49:31  madden
+ *     - Renamed BlastKarlinPtoE as BLAST_KarlinPtoE and made it external;
+ *       it is need by the composition adjustment routines.
+ *     - Added a Blast_KarlinEtoP routine, the inverse of
+ *       BLAST_KarlinPtoE.
+ *     (from Mike Gertz).
+ *
+ * Revision 1.143  2006/06/05 13:27:33  madden
+ * Add support for GET_MATRIX_PATH callback
+ *
+ * Revision 1.142  2006/05/24 17:19:02  madden
+ * Add BlastScoreBlkGetCompiledInMatrix
+ *
  * Revision 1.141  2006/04/20 19:28:30  madden
  * Prototype change for Blast_MessageWrite
  *

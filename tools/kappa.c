@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: kappa.c,v 6.84 2006/05/03 14:42:15 madden Exp $";
+static char const rcsid[] = "$Id: kappa.c,v 6.87 2006/06/29 17:43:39 papadopo Exp $";
 
-/* $Id: kappa.c,v 6.84 2006/05/03 14:42:15 madden Exp $ 
+/* $Id: kappa.c,v 6.87 2006/06/29 17:43:39 papadopo Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@ functions in this file have a 'Kappa_' prefix.  Please adhere to this
 convention to avoid a name clash with functions in blast_kappa.c (the
 name clash can matter in debuggers and search engines.)
 
- $Revision: 6.84 $
+ $Revision: 6.87 $
 
  Revision 6.75  2005/11/07 15:28:56  coulouri
  From Mike Gertz:
@@ -663,7 +663,9 @@ Kappa_AdjustEvaluesForComposition(
 
     if (KAPPA_PRINT_DIAGNOSTICS) {
       int    sequence_gi; /*GI of a sequence*/
-
+      int    context_index; /* query context index of this HSP */
+      context_index = hsp->context;
+      
       if (search->rdfp) {
         SeqIdPtr sip; /*used to extract sequence from database*/
         char    *sname = NULL; /*string for defline*/
@@ -693,7 +695,7 @@ Kappa_AdjustEvaluesForComposition(
              "adjust E-value of query length %d match length "
              "%d from %e to %e\n",
              sequence_gi, LambdaRatio, comp_p_value,
-             search->context[0].query->length,
+             search->context[context_index].query->length,
              search->subject->length, old_e_value, hsp->evalue);
     } /* end if (KAPPA_PRINT_DIAGNOSTICS) */
   } /* end for all HSPs */
@@ -1669,7 +1671,9 @@ typedef struct Kappa_SearchParameters {
                                       nucleotide) in the gap */
   Int4          gapDecline;     /**< a penalty for declining to align a pair
                                      of residues */
-  int           gap_x_dropoff_final;
+  int           gap_x_dropoff_final;  /**< value of the x-drop parameter
+                                           for the final gapped alignment 
+                                           with traceback */
   BLAST_Score **origMatrix;     /**< The original matrix values */
   /** a matrix.  Each row represents a query and each column
        represents the probabilities of a particular residue */
@@ -1931,9 +1935,9 @@ Kappa_RestoreSearch(
  * @param matrixName           name of the matrix */
 static void
 Kappa_MatrixInfoInit(Blast_MatrixInfo * self,
-                 double localScalingFactor,
-                 BlastSearchBlkPtr search,
-                 const char * matrixName)
+                     double localScalingFactor,
+                     BlastSearchBlkPtr search,
+                     const char * matrixName)
 {
   Uint1Ptr query;             /* the query sequence */
   Int4 queryLength;           /* the length of the query sequence */
@@ -1968,7 +1972,7 @@ Kappa_MatrixInfoInit(Blast_MatrixInfo * self,
       ErrPostEx(SEV_FATAL, 1, 0, "blastpgp: Cannot adjust parameters "
                 "for matrix %s\n", matrixName);
     }
-    Blast_Int4MatrixFromFreq(self->startMatrix, freqRatios->data,
+    Blast_Int4MatrixFromFreq(self->startMatrix, self->cols, freqRatios->data,
                              self->ungappedLambda);
     freqRatios = PSIMatrixFrequencyRatiosFree(freqRatios);
   }
@@ -1985,7 +1989,8 @@ Kappa_MatrixInfoInit(Blast_MatrixInfo * self,
  * @param search        a search block, which is used to obtain the 
  *                      query information */
 static void
-Kappa_GetQueryInfo(BlastCompo_QueryInfo **pquery, int * pnumQueries,
+Kappa_GetQueryInfo(BlastCompo_QueryInfo **pquery,
+                   int * pnumQueries,
                    int *maxLength, BlastSearchBlkPtr search)
 {
   int query_index;
@@ -2031,6 +2036,7 @@ Kappa_GetQueryInfo(BlastCompo_QueryInfo **pquery, int * pnumQueries,
   }
   for (query_index = 0;  query_index < numQueries;  query_index++) {
     Blast_ReadAaComposition(&query[query_index].composition,
+                            PROTEIN_ALPHABET,
                             query[query_index].seq.data,
                             query[query_index].seq.length);
   }
@@ -2118,7 +2124,8 @@ Kappa_GetAlignParams(BlastSearchBlkPtr search,
      * that are undesirable and deeply embedded in the code. */
     scaledMatrixInfo = NULL;
   } else {
-    scaledMatrixInfo = Blast_MatrixInfoNew(rows, search->positionBased);
+    scaledMatrixInfo = Blast_MatrixInfoNew(rows, PROTEIN_ALPHABET,
+                                           search->positionBased);
     if (scaledMatrixInfo == NULL) {
       ErrPostEx(SEV_FATAL, E_NoMemory, 0, "Failed to allocate memory");
     }
@@ -2378,7 +2385,8 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
                                         incoming_aligns, thisMatch->hspcnt,
                                         Lambda, logK,
                                         &matchingSeq, query_info, numQueries,
-                                        matrix, NRrecord, &forbidden,
+                                        matrix, PROTEIN_ALPHABET,
+                                        NRrecord, &forbidden,
                                         significantMatches,
 					&pvalueForThisPair,
 					compositionTestIndex, &LambdaRatio);
@@ -2387,7 +2395,8 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
         Blast_RedoOneMatch(alignments, redo_align_params, incoming_aligns,
                            thisMatch->hspcnt, Lambda, &matchingSeq,
                            ccat_query_length, query_info, numQueries,
-                           matrix, NRrecord, &pvalueForThisPair,
+                           matrix, PROTEIN_ALPHABET,
+                           NRrecord, &pvalueForThisPair,
                            compositionTestIndex, &LambdaRatio);
     }
     if (status != 0) {

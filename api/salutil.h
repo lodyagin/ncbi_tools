@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -90,21 +90,21 @@ NLM_EXTERN ValNodePtr   ValNodeFind (ValNodePtr head, Int2 start, Int2 index);
 NLM_EXTERN ValNodePtr   ValNodeFreeType (ValNodePtr *head, Int2 seqtype);
 
 NLM_EXTERN SeqLocPtr    seqloc2fuzzloc(SeqLocPtr slp, Boolean is_from, Boolean is_to);
-NLM_EXTERN TextAlignBufPtr TextAlignBufFind (ValNodePtr anpvnp, Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+NLM_EXTERN TextAlignBufPtr TextAlignBufFind (ValNodePtr anpvnp, Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 NLM_EXTERN CharPtr PNTR buf2array (ValNodePtr list, Int2 seq1, Int2 seq2);
-NLM_EXTERN AlignNodePtr AlignNodeFind (ValNodePtr anpvnp, Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+NLM_EXTERN AlignNodePtr AlignNodeFind (ValNodePtr anpvnp, Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 
-NLM_EXTERN Int2         AlignNodeIndex (ValNodePtr anpvnp, Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+NLM_EXTERN Int2         AlignNodeIndex (ValNodePtr anpvnp, Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 NLM_EXTERN void         OrderFeatProc (ValNodePtr vnpanp);
 NLM_EXTERN ValNodePtr   SeqfeatlistFree (ValNodePtr feathead);
 NLM_EXTERN ValNodePtr   SeqfeatlistFree_fromID (ValNodePtr feathead, Uint2 entityID);
-NLM_EXTERN SelEdStructPtr get_feat_fromid (ValNodePtr feat_vnp, Uint2 feattype, Uint2 ei, Uint2 ii, Int4 pos, SelEdStructPtr *prec);
+NLM_EXTERN SelEdStructPtr get_feat_fromid (ValNodePtr feat_vnp, Uint2 feattype, Uint2 ei, Uint4 ii, Int4 pos, SelEdStructPtr *prec);
 
 NLM_EXTERN SeqLocPtr    CollectSeqLocFromAlignNode (AlignNodePtr anp);
 NLM_EXTERN Int4         GetAlignLengthFromAlignNode (AlignNodePtr anp);
 
-NLM_EXTERN SeqIdPtr     SeqIdFromAlignNode (ValNodePtr anp_lst, Uint2 entityID, Uint2 itemID, Uint2 itemtype);
-NLM_EXTERN Uint1 StrandFromAlignNode (ValNodePtr anp_lst, Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+NLM_EXTERN SeqIdPtr     SeqIdFromAlignNode (ValNodePtr anp_lst, Uint2 entityID, Uint4 itemID, Uint2 itemtype);
+NLM_EXTERN Uint1 StrandFromAlignNode (ValNodePtr anp_lst, Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 
 /*********************************************************
 ***
@@ -169,7 +169,7 @@ NLM_EXTERN SelStructPtr SelStructDelList (SelStructPtr ssp);
 NLM_EXTERN void setposition_tossp (SelStructPtr ssp, Int4 from, Int4 to);
 
 NLM_EXTERN Boolean is_samessp (SelStructPtr ssp1, SelStructPtr ssp2);
-NLM_EXTERN Boolean is_sameId (Uint2 sei, Uint2 sii, Uint2 sit, Uint2 sist, Uint2 ei, Uint2 ii, Uint2 it, Uint2 ist);
+NLM_EXTERN Boolean is_sameId (Uint2 sei, Uint4 sii, Uint2 sit, Uint2 sist, Uint2 ei, Uint4 ii, Uint2 it, Uint2 ist);
 NLM_EXTERN Boolean is_samepos (SelStructPtr ssp1, SelStructPtr ssp2);
 NLM_EXTERN ValNodePtr del_ssp_fromid (ValNodePtr headp, Uint2 itemsubtype, SelEdStructPtr target);
 NLM_EXTERN Boolean include_ssp (SeqLocPtr slp1, SeqLocPtr slp2);
@@ -192,9 +192,9 @@ NLM_EXTERN SelEdStructPtr SelEdStructAdd (SelEdStructPtr head, SelEdStructPtr ss
 NLM_EXTERN SelEdStructPtr SelEdStructDel (SelEdStructPtr ssp);
 NLM_EXTERN SelEdStructPtr SelEdStructListDel (SelEdStructPtr ssp);
 NLM_EXTERN void           setposition_toses (SelEdStructPtr ssp, Int4 from, Int4 to);
-NLM_EXTERN void           set_seqnot_visible (Uint2 eID, Uint2 iID, SelEdStructPtr sesp);
-NLM_EXTERN void           set_seqvisible (Uint2 eID, Uint2 iID, SelEdStructPtr sesp);
-NLM_EXTERN Boolean        is_seqvisible (Uint2 eID, Uint2 iID, SelEdStructPtr sesp);
+NLM_EXTERN void           set_seqnot_visible (Uint2 eID, Uint4 iID, SelEdStructPtr sesp);
+NLM_EXTERN void           set_seqvisible (Uint2 eID, Uint4 iID, SelEdStructPtr sesp);
+NLM_EXTERN Boolean        is_seqvisible (Uint2 eID, Uint4 iID, SelEdStructPtr sesp);
 NLM_EXTERN SelEdStructPtr ss_to_ses (SelStructPtr ssp);
 NLM_EXTERN SelStructPtr   ses_to_ss (SelEdStructPtr sesp);
 NLM_EXTERN Boolean        is_samess_ses (SelStructPtr ssp1, SelEdStructPtr ssp2);
@@ -211,11 +211,11 @@ NLM_EXTERN void           SelectType (EditAlignDataPtr adp, Uint2 feattype, Int4
 NLM_EXTERN Int2           GetNumberObjMgrSelect (void);
 NLM_EXTERN Int2           checkOMss_for_itemtype (Uint2 itemtype);
 NLM_EXTERN SelStructPtr   getOMselect_for_itemtype (Uint2 itemtype);
-NLM_EXTERN SelStructPtr   is_selectedbyID (Uint2 entityID, Uint2 itemID, Uint2 itemtype);
+NLM_EXTERN SelStructPtr   is_selectedbyID (Uint2 entityID, Uint4 itemID, Uint2 itemtype);
 NLM_EXTERN SelEdStructPtr getCDSselect (ValNodePtr seqfeathead, ValNodePtr feathead);
 NLM_EXTERN Int2           checkCDSselect_forprotein (ValNodePtr seqfeathead, ValNodePtr feathead, Boolean with_prot);
 NLM_EXTERN Boolean        checkssp_for_editor (SelStructPtr ssp);
-NLM_EXTERN SeqLocPtr      checkseqlocfeature_for_editor (Uint2 entityID, Uint2 itemID, ValNodePtr headfeat);
+NLM_EXTERN SeqLocPtr      checkseqlocfeature_for_editor (Uint2 entityID, Uint4 itemID, ValNodePtr headfeat);
 NLM_EXTERN void           checkselectsequinfeature_for_editor (ValNodePtr headfeat);
 NLM_EXTERN Int4           getminpos_fromOMselect (Uint2 itemsubtype);
 
@@ -233,7 +233,7 @@ NLM_EXTERN Int4 SeqCoordToAlignCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr s
 NLM_EXTERN Int4 AlignCoordToSeqCoord (Int4 position, SeqIdPtr sip, SeqAlignPtr salp, ValNodePtr sqloc_list, Int2 intersalpwidth);
 NLM_EXTERN Int4 AlignCoordToSeqCoord2 (Int4 position, SeqIdPtr sip, SeqAlignPtr salp,ValNodePtr sqloc_list, Int2 intersalpwidth);
 NLM_EXTERN Boolean GetAlignCoordFromSeqLoc (SeqLocPtr slp, SeqAlignPtr salp, Int4 *start, Int4 *stop);
-NLM_EXTERN Boolean  SeqPosToLineColumn (Uint2 itemID, Uint2 entityID, Uint2 itemtype, 
+NLM_EXTERN Boolean  SeqPosToLineColumn (Uint4 itemID, Uint2 entityID, Uint2 itemtype, 
            Int4 pos, Int4 *line, Int4 *column, Int4 hoffset, EditAlignDataPtr adp);
 NLM_EXTERN Boolean  SeqPosInLineColumn (Int4 pos, Int4 alignline, Int4 *column, 
            Int4 hoffset, EditAlignDataPtr adp);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/12/05
 *
-* $Revision: 1.7 $
+* $Revision: 1.8 $
 *
 * File Description:
 *
@@ -50,7 +50,7 @@
 #include <toasn3.h>
 #include <pmfapi.h>
 
-#define NPS2GPSAPP_VER "1.5"
+#define NPS2GPSAPP_VER "1.6"
 
 CharPtr NPS2GPSAPPLICATION = NPS2GPSAPP_VER;
 
@@ -488,6 +488,28 @@ static Boolean LIBCALLBACK FindSingleMrnaProc (
   return TRUE;
 }
 
+static Boolean CdsIsPseudo (SeqFeatPtr cds)
+
+{
+  SeqMgrFeatContext  gcontext;
+  SeqFeatPtr         gene;
+  GeneRefPtr         grp;
+
+  if (cds == NULL) return FALSE;
+  if (cds->pseudo) return TRUE;
+
+  grp = SeqMgrGetGeneXref (cds);
+  if (grp != NULL) {
+    return grp->pseudo;
+  }
+
+  gene = SeqMgrGetOverlappingGene (cds->location, &gcontext);
+  if (gene == NULL) return FALSE;
+  grp = (GeneRefPtr) gene->data.value.ptrvalue;
+  if (grp == NULL) return FALSE;
+  return grp->pseudo;
+}
+
 static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
 
 {
@@ -533,14 +555,18 @@ static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
   sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
   while (sfp != NULL) {
     if (sfp->id.choice == 0) {
-      if (ngp != NULL) {
-        ngp->failure = TRUE;
+      if (sfp->product == NULL && CdsIsPseudo (sfp)) {
+        /* do not complain about pseudo CDS not having product or matching mRNA */
+      } else {
+        if (ngp != NULL) {
+          ngp->failure = TRUE;
+        }
+        str = fcontext.label;
+        if (StringHasNoText (str)) {
+          str = "?";
+        }
+        Message (MSG_POSTERR, "Failed to match CDS '%s' to mRNA", str);
       }
-      str = fcontext.label;
-      if (StringHasNoText (str)) {
-        str = "?";
-      }
-      Message (MSG_POSTERR, "Failed to match CDS '%s' to mRNA", str);
     }
     sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
   }

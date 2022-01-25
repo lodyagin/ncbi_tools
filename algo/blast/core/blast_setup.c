@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.132 2006/05/05 17:46:02 camacho Exp $
+/* $Id: blast_setup.c,v 1.145 2006/09/18 16:48:43 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.132 2006/05/05 17:46:02 camacho Exp $";
+    "$Id: blast_setup.c,v 1.145 2006/09/18 16:48:43 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_setup.h>
@@ -51,7 +51,7 @@ Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
                             const BlastQueryInfo * query_info,
                             Blast_Message** error_return)
 {
-    Int2 index = 0;
+    Int4 index = 0;
 
     if (sbp == NULL || scoring_options == NULL) {
         Blast_PerrorWithLocation(error_return, BLASTERR_INVALIDPARAM, -1);
@@ -108,17 +108,18 @@ Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
  * @param sbp Scoring block structure [in] [out]
  * @param options Scoring options structure [in]
  * @param blast_message Structure for reporting errors [out]
+ * @param get_path callback function for matrix path [in]
  */
 static Int2
 s_PHIScoreBlkFill(BlastScoreBlk* sbp, const BlastScoringOptions* options,
-   Blast_Message** blast_message)
+   Blast_Message** blast_message, GET_MATRIX_PATH get_path)
 {
    Blast_KarlinBlk* kbp;
    char buffer[1024];
    Int2 status = 0;
 
    sbp->read_in_matrix = TRUE;
-   if ((status = Blast_ScoreBlkMatrixFill(sbp, options->matrix_path)) != 0)
+   if ((status = Blast_ScoreBlkMatrixFill(sbp, get_path)) != 0)
       return status;
    kbp = sbp->kbp_gap_std[0] = Blast_KarlinBlkNew();
    /* Point both non-allocated Karlin block arrays to kbp_gap_std. */
@@ -299,7 +300,8 @@ s_PHIScoreBlkFill(BlastScoreBlk* sbp, const BlastScoringOptions* options,
 Int2
 Blast_ScoreBlkMatrixInit(EBlastProgramType program_number, 
                   const BlastScoringOptions* scoring_options,
-                  BlastScoreBlk* sbp)
+                  BlastScoreBlk* sbp,
+                  GET_MATRIX_PATH get_path)
 {
     Int2 status = 0;
 
@@ -312,9 +314,7 @@ Blast_ScoreBlkMatrixInit(EBlastProgramType program_number,
         BLAST_ScoreSetAmbigRes(sbp, 'N');
         sbp->penalty = scoring_options->penalty;
         sbp->reward = scoring_options->reward;
-        if (scoring_options->matrix_path &&
-            *scoring_options->matrix_path != NULLB &&
-            scoring_options->matrix && *scoring_options->matrix != NULLB) {
+        if (scoring_options->matrix && *scoring_options->matrix != NULLB) {
  
             sbp->read_in_matrix = TRUE;
             sbp->name = strdup(scoring_options->matrix);
@@ -332,7 +332,7 @@ Blast_ScoreBlkMatrixInit(EBlastProgramType program_number,
         BLAST_ScoreSetAmbigRes(sbp, 'X');
         sbp->name = BLAST_StrToUpper(scoring_options->matrix);
     }
-    status = Blast_ScoreBlkMatrixFill(sbp, scoring_options->matrix_path);
+    status = Blast_ScoreBlkMatrixFill(sbp, get_path);
     if (status) {
         return status;
     }
@@ -347,7 +347,8 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
                         EBlastProgramType program_number, 
                         BlastScoreBlk* *sbpp, 
                         double scale_factor, 
-                        Blast_Message* *blast_message)
+                        Blast_Message* *blast_message,
+                        GET_MATRIX_PATH get_path)
 {
     BlastScoreBlk* sbp;
     Int2 status=0;      /* return value. */
@@ -369,7 +370,7 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
     *sbpp = sbp;
     sbp->scale_factor = scale_factor;
 
-    status = Blast_ScoreBlkMatrixInit(program_number, scoring_options, sbp);
+    status = Blast_ScoreBlkMatrixInit(program_number, scoring_options, sbp, get_path);
     if (status) {
         Blast_Perror(blast_message, status, -1);
         return status;
@@ -377,7 +378,7 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
 
     /* Fills in block for gapped blast. */
     if (Blast_ProgramIsPhiBlast(program_number)) {
-       status = s_PHIScoreBlkFill(sbp, scoring_options, blast_message);
+       status = s_PHIScoreBlkFill(sbp, scoring_options, blast_message, get_path);
     } else {
        status = Blast_ScoreBlkKbpUngappedCalc(program_number, sbp, query_blk->sequence, 
                query_info, blast_message);
@@ -435,7 +436,8 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
     BlastSeqLoc **lookup_segments, 
     BlastMaskLoc **mask,
     BlastScoreBlk **sbpp, 
-    Blast_Message **blast_message)
+    Blast_Message **blast_message,
+    GET_MATRIX_PATH get_path)
 {
     Boolean mask_at_hash = FALSE; /* mask only for making lookup table? */
     Int2 status = 0;            /* return value */
@@ -516,7 +518,7 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
 
     status = BlastSetup_ScoreBlkInit(query_blk, query_info, scoring_options, 
                                      program_number, sbpp, scale_factor, 
-                                     blast_message);
+                                     blast_message, get_path);
     if (status) {
         return status;
     }
@@ -531,11 +533,41 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
     return status;
 }
 
+/** Return the search space appropriate for a given context from
+ * a list of tabulated search spaces
+ * @param eff_len_options Container for search spaces [in]
+ * @param context_index Identifier for the search space to return [in]
+ * @param blast_message List of messages, to receive possible warnings [in][out]
+ * @return The selected search space
+ */
+static Int8 s_GetEffectiveSearchSpaceForContext(
+                        const BlastEffectiveLengthsOptions* eff_len_options,
+                        int context_index, Blast_Message **blast_message)
+{
+    Int8 retval = 0;
+
+    if (eff_len_options->num_searchspaces == 0) {
+        retval = 0;
+    } else if (eff_len_options->num_searchspaces == 1) {
+        if (context_index != 0) {
+            Blast_MessageWrite(blast_message, eBlastSevWarning, context_index, 
+                    "One search space is being used for multiple sequences");
+        }
+        retval = eff_len_options->searchsp_eff[0];
+    } else if (eff_len_options->num_searchspaces > 1) {
+        ASSERT(context_index < eff_len_options->num_searchspaces);
+        retval = eff_len_options->searchsp_eff[context_index];
+    } else {
+        abort();    /* should never happen */
+    }
+    return retval;
+}
 
 Int2 BLAST_CalcEffLengths (EBlastProgramType program_number, 
    const BlastScoringOptions* scoring_options,
    const BlastEffectiveLengthsParameters* eff_len_params, 
-   const BlastScoreBlk* sbp, BlastQueryInfo* query_info)
+   const BlastScoreBlk* sbp, BlastQueryInfo* query_info,
+   Blast_Message * *blast_message)
 {
    double alpha=0, beta=0; /*alpha and beta for new scoring system */
    Int4 index;		/* loop index. */
@@ -547,10 +579,6 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
    if (!query_info || !sbp)
       return -1;
 
-   /* Do nothing for PHI BLAST, because search space is calculated by 
-      completely different formulas there. */
-   if (Blast_ProgramIsPhiBlast(program_number))
-       return 0;
 
    /* use overriding value from effective lengths options or the real value
       from effective lengths parameters. */
@@ -563,10 +591,12 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
     * overriding value of effective search space is not provided by user,
     * do nothing.
     * This situation can occur in the initial set up for a non-database search,
-    * where each subject is treated as an individual sequence. 
+    * where each subject is treated as an individual database. 
     */
-   if (db_length == 0 && eff_len_options->searchsp_eff == 0)
+   if (db_length == 0 &&
+       !BlastEffectiveLengthsOptions_IsSearchSpaceSet(eff_len_options)) {
       return 0;
+   }
 
    if (program_number == eBlastTypeTblastn || 
        program_number == eBlastTypeTblastx)
@@ -577,6 +607,19 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
    else
       db_num_seqs = eff_len_params->real_num_seqs;
    
+   /* PHI BLAST search space calculation is different. */
+   if (Blast_ProgramIsPhiBlast(program_number))
+   {
+        for (index = query_info->first_context;
+           index <= query_info->last_context;
+           index++) {
+           Int8 effective_search_space = db_length - (db_num_seqs*(query_info->contexts[index].length_adjustment));
+           query_info->contexts[index].eff_searchsp = effective_search_space;
+        }
+       
+       return 0;
+   }
+
    /* N.B.: the old code used kbp_gap_std instead of the kbp_gap alias (which
     * could be kbp_gap_psi), hence we duplicate that behavior here */
    kbp_ptr = (scoring_options->gapped_calculation ? sbp->kbp_gap_std : sbp->kbp);
@@ -584,12 +627,15 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
    for (index = query_info->first_context;
         index <= query_info->last_context;
         index++) {
-      Blast_KarlinBlk * kbp; /* statistical parameters for the current context */
+      Blast_KarlinBlk *kbp; /* statistical parameters for the current context */
       Int4 length_adjustment = 0; /* length adjustment for current iteration. */
-      Int8 effective_search_space = 0; /* Effective search space for a given 
-                                          sequence/strand/frame */
       Int4 query_length;   /* length of an individual query sequence */
       
+      /* Effective search space for a given sequence/strand/frame */
+      Int8 effective_search_space =
+          s_GetEffectiveSearchSpaceForContext(eff_len_options, index,
+                                              blast_message);
+
       kbp = kbp_ptr[index];
       
       if (query_info->contexts[index].is_valid &&
@@ -619,17 +665,47 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
                                        query_length, db_length,
                                        db_num_seqs, &length_adjustment);
 
-         if (eff_len_options->searchsp_eff)
-            effective_search_space = eff_len_options->searchsp_eff;
-         else
-            effective_search_space =
-               (query_length - length_adjustment) * 
-               (db_length - db_num_seqs*length_adjustment);
+         if (effective_search_space == 0) {
+             effective_search_space =
+                        (query_length - length_adjustment) * 
+                        (db_length - db_num_seqs*length_adjustment);
+         }
       }
       query_info->contexts[index].eff_searchsp = effective_search_space;
       query_info->contexts[index].length_adjustment = length_adjustment;
    }
    return 0;
+}
+
+void
+BLAST_GetSubjectTotals(const BlastSeqSrc* seqsrc,
+                       Int8* total_length,
+                       Int4* num_seqs)
+{
+    ASSERT(total_length && num_seqs);
+
+    *total_length = -1;
+    *num_seqs = -1;
+
+    if ( !seqsrc )  {
+        return;
+    }
+
+    *total_length = BlastSeqSrcGetTotLen(seqsrc);
+
+    if (*total_length > 0) {
+        *num_seqs = BlastSeqSrcGetNumSeqs(seqsrc);
+    } else {
+        /* Not a database search; each subject sequence is considered
+           individually */
+        Int4 oid = 0;  /* Get length of first sequence. */
+        if ( (*total_length = BlastSeqSrcGetSeqLen(seqsrc, (void*) &oid)) < 0) {
+            *total_length = -1;
+            *num_seqs = -1;
+            return;
+        }
+        *num_seqs = 1;
+    }
 }
 
 Int2 
@@ -652,18 +728,7 @@ BLAST_GapAlignSetUp(EBlastProgramType program_number,
    Int8 total_length;
    Int4 num_seqs;
 
-   total_length = BlastSeqSrcGetTotLen(seq_src);
-   
-   if (total_length > 0) {
-      num_seqs = BlastSeqSrcGetNumSeqs(seq_src);
-   } else {
-      /* Not a database search; each subject sequence is considered
-         individually */
-      Int4 oid=0;  /* Get length of first sequence. */
-      if ((total_length=BlastSeqSrcGetSeqLen(seq_src, (void*) &oid)) < 0)
-          return -1;
-      num_seqs = 1;
-   }
+   BLAST_GetSubjectTotals(seq_src, &total_length, &num_seqs);
 
    /* Initialize the effective length parameters with real values of
       database length and number of sequences */
@@ -671,7 +736,7 @@ BLAST_GapAlignSetUp(EBlastProgramType program_number,
                                       eff_len_params);
    /* Effective lengths are calculated for all programs except PHI BLAST. */
    if ((status = BLAST_CalcEffLengths(program_number, scoring_options, 
-                     *eff_len_params, sbp, query_info)) != 0)
+                     *eff_len_params, sbp, query_info, NULL)) != 0)
       return status;
 
    BlastScoringParametersNew(scoring_options, sbp, score_params);
@@ -698,7 +763,7 @@ Int2 BLAST_OneSubjectUpdateParameters(EBlastProgramType program_number,
                     Uint4 subject_length,
                     const BlastScoringOptions* scoring_options,
                     BlastQueryInfo* query_info, 
-                    BlastScoreBlk* sbp, 
+                    const BlastScoreBlk* sbp, 
                     BlastHitSavingParameters* hit_params,
                     BlastInitialWordParameters* word_params,
                     BlastEffectiveLengthsParameters* eff_len_params)
@@ -706,7 +771,7 @@ Int2 BLAST_OneSubjectUpdateParameters(EBlastProgramType program_number,
    Int2 status = 0;
    eff_len_params->real_db_length = subject_length;
    if ((status = BLAST_CalcEffLengths(program_number, scoring_options, 
-                                      eff_len_params, sbp, query_info)) != 0)
+                                eff_len_params, sbp, query_info, NULL)) != 0)
       return status;
    /* Update cutoff scores in hit saving parameters */
    BlastHitSavingParametersUpdate(program_number, sbp, query_info, subject_length, 
@@ -762,9 +827,11 @@ Blast_SetPHIPatternInfo(EBlastProgramType            program,
                         const SPHIPatternSearchBlk * pattern_blk,
                         const BLAST_SequenceBlk    * query,
                         const BlastSeqLoc          * lookup_segments,
-                        BlastQueryInfo             * query_info)
+                        BlastQueryInfo             * query_info,
+                        Blast_Message** blast_message)
 {
     const Boolean kIsNa = (program == eBlastTypePhiBlastn);
+    Int4 num_patterns = 0;
     
     ASSERT(Blast_ProgramIsPhiBlast(program));
     ASSERT(query_info && pattern_blk);
@@ -772,69 +839,37 @@ Blast_SetPHIPatternInfo(EBlastProgramType            program,
     query_info->pattern_info = SPHIQueryInfoNew();
     
     /* If pattern is not found in query, return failure status. */
-    if (!PHIGetPatternOccurrences(pattern_blk, query, lookup_segments, kIsNa,
-                                  query_info->pattern_info))
-        return -1;
+    num_patterns = PHIGetPatternOccurrences(pattern_blk, query, lookup_segments, kIsNa,
+                                  query_info);
+    if (num_patterns == 0)
+    {
+       char buffer[512]; 
+       sprintf(buffer, "The pattern %s was not found in the query.", pattern_blk->pattern);
+       if (blast_message)
+           Blast_MessageWrite(blast_message, eBlastSevWarning, kBlastMessageNoContext, buffer);
+       return -1;
+    }
+    else if (num_patterns == INT4_MAX)
+    {
+       char buffer[512]; 
+       sprintf(buffer, "The pattern (%s) may not cover the entire query.", pattern_blk->pattern);
+       if (blast_message)
+           Blast_MessageWrite(blast_message, eBlastSevWarning, kBlastMessageNoContext, buffer);
+       return -1;
+    }
+    else if (num_patterns < 0)
+    {
+       return -1;
+    }
     
     /* Save pattern probability, because it needs to be passed back to
        formatting stage, where lookup table will not be available. */
     query_info->pattern_info->probability = pattern_blk->patternProbability;
-    
+
     /* Save minimal pattern length in the length adjustment field, because 
        that is essentially its meaning. */
     query_info->contexts[0].length_adjustment = 
         pattern_blk->minPatternMatchLength;
-    
+
     return 0;
 }
-
-/** Count the number of occurrences of pattern in sequence, which
- * do not overlap by more than half the pattern match length. 
- * @param query_info Query information structure, containing pattern info. [in]
- */
-static Int4
-s_GetEffectiveNumberOfPatterns(const BlastQueryInfo *query_info)
-{
-    Int4 index; /*loop index*/
-    Int4 lastEffectiveOccurrence; /*last nonoverlapping occurrence*/
-    Int4 count; /* Count of effective (nonoverlapping) occurrences */
-    Int4 min_pattern_length;
-    SPHIQueryInfo* pat_info;
-
-    ASSERT(query_info && query_info->pattern_info && query_info->contexts);
-    
-    pat_info = query_info->pattern_info;
-
-    if (pat_info->num_patterns <= 1)
-        return pat_info->num_patterns;
-
-    /* Minimal length of a pattern is saved in the length adjustment field. */
-    min_pattern_length = query_info->contexts[0].length_adjustment;
-
-    count = 1;
-    lastEffectiveOccurrence = pat_info->occurrences[0].offset;
-    for(index = 1; index < pat_info->num_patterns; ++index) {
-        if (((pat_info->occurrences[index].offset - lastEffectiveOccurrence) * 2)
-            > min_pattern_length) {
-            lastEffectiveOccurrence = pat_info->occurrences[index].offset;
-            ++count;
-        }
-    }
-    
-    return count;
-}
-
-void
-PHIPatternSpaceCalc(BlastQueryInfo* query_info, 
-                    const BlastDiagnostics* diagnostics)
-{
-    Int4 num_query_patterns;
-    Int8 num_db_patterns;
-
-    ASSERT(query_info && diagnostics && diagnostics->ungapped_stat);
-
-    num_query_patterns = s_GetEffectiveNumberOfPatterns(query_info);
-    num_db_patterns = diagnostics->ungapped_stat->lookup_hits;
-    query_info->contexts[0].eff_searchsp = num_query_patterns * num_db_patterns;
-}
-

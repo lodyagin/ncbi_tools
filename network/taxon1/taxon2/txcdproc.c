@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/15/97
 *
-* $Revision: 1.16 $
+* $Revision: 1.17 $
 *
 * File Description: 
 *       API for Taxonomy service
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: txcdproc.c,v $
+* Revision 1.17  2006/07/13 17:14:49  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 1.16  2003/11/04 17:13:58  soussov
 * adds NetFini() call if service can not start properly
 *
@@ -185,7 +188,6 @@ static Taxon1RespPtr NetTaxArchReadAsn(void)
 
 static Boolean TaxServInit(void)
 {
-    DataVal    av;
     Taxon1ReqPtr taxrp;
     Taxon1RespPtr taxbp;
 

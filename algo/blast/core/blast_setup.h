@@ -1,4 +1,4 @@
-/*  $Id: blast_setup.h,v 1.55 2005/08/29 14:32:36 dondosha Exp $
+/*  $Id: blast_setup.h,v 1.62 2006/07/19 13:19:04 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -59,6 +59,7 @@ extern "C" {
  * @param mask masking locations. [out]
  * @param sbpp Contains scoring information. [out]
  * @param blast_message error or warning [out] 
+ * @param get_path callback function to get matrix path [in]
  */
 NCBI_XBLAST_EXPORT
 Int2 BLAST_MainSetUp(EBlastProgramType program_number,
@@ -70,7 +71,8 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
         BlastSeqLoc* *lookup_segments,
         BlastMaskLoc* *mask,
         BlastScoreBlk* *sbpp, 
-        Blast_Message* *blast_message);
+        Blast_Message* *blast_message,
+        GET_MATRIX_PATH get_path);
 
 /** Blast_ScoreBlkKbpGappedCalc, fills the ScoreBlkPtr for a gapped search.  
  *      Should be moved to blast_stat.c in the future.
@@ -96,12 +98,14 @@ Int2 Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
  * @param sbp Karlin-Altschul parameters [out]
  * @param query_info The query information block, which stores the effective
  *                   search spaces for all queries [in] [out]
+ * @param blast_message Error message [out]
 */
 NCBI_XBLAST_EXPORT
 Int2 BLAST_CalcEffLengths (EBlastProgramType program_number, 
    const BlastScoringOptions* scoring_options,
    const BlastEffectiveLengthsParameters* eff_len_params, 
-   const BlastScoreBlk* sbp, BlastQueryInfo* query_info);
+   const BlastScoreBlk* sbp, BlastQueryInfo* query_info,
+   Blast_Message **blast_message);
 
 /** Set up the auxiliary structures for gapped alignment / traceback only 
  * @param program_number blastn, blastp, blastx, etc. [in]
@@ -155,7 +159,7 @@ Int2 BLAST_OneSubjectUpdateParameters(EBlastProgramType program_number,
     Uint4 subject_length,
     const BlastScoringOptions* scoring_options,
     BlastQueryInfo* query_info, 
-    BlastScoreBlk* sbp, 
+    const BlastScoreBlk* sbp, 
     BlastHitSavingParameters* hit_params,
     BlastInitialWordParameters* word_params,
     BlastEffectiveLengthsParameters* eff_len_params);
@@ -166,12 +170,14 @@ Int2 BLAST_OneSubjectUpdateParameters(EBlastProgramType program_number,
  * @param program_number Used to set fields on sbp [in]
  * @param scoring_options Scoring_options [in]
  * @param sbp Contains fields to be set, should not be NULL. [out]
+ * @param get_path callback function to get matrix path [in]
  *
 */
 NCBI_XBLAST_EXPORT
 Int2 Blast_ScoreBlkMatrixInit(EBlastProgramType program_number, 
     const BlastScoringOptions* scoring_options,
-    BlastScoreBlk* sbp);
+    BlastScoreBlk* sbp,
+    GET_MATRIX_PATH get_path);
 
 /** Initializes the score block structure.
  * @param query_blk Query sequence(s) [in]
@@ -181,6 +187,7 @@ Int2 Blast_ScoreBlkMatrixInit(EBlastProgramType program_number,
  * @param sbpp Initialized score block [out]
  * @param scale_factor Matrix scaling factor for this search [in]
  * @param blast_message Error message [out]
+ * @param get_path callback function to get matrix path [in]
  */
 NCBI_XBLAST_EXPORT
 Int2 BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk, 
@@ -189,7 +196,8 @@ Int2 BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
     EBlastProgramType program_number, 
     BlastScoreBlk* *sbpp, 
     double scale_factor, 
-    Blast_Message* *blast_message);
+    Blast_Message* *blast_message,
+    GET_MATRIX_PATH get_path);
 
 
 /** Adjusts the mask locations coordinates to a sequence interval. Removes those
@@ -211,6 +219,7 @@ BlastSeqLoc_RestrictToInterval(BlastSeqLoc* *mask, Int4 from, Int4 to);
  * @param lookup_segments Locations on query sequence to find pattern on [in]
  * @param query_info Query information structure, where pattern occurrences
  *                   will be saved. [in][out]
+ * @param blast_message will be filled in if pattern not found on query [in][out]
  * @return Status, 0 on success, -1 on error.
  */
 Int2 
@@ -218,20 +227,18 @@ Blast_SetPHIPatternInfo(EBlastProgramType            program,
                         const SPHIPatternSearchBlk * pattern_blk,
                         const BLAST_SequenceBlk    * query,
                         const BlastSeqLoc          * lookup_segments,
-                        BlastQueryInfo             * query_info);
+                        BlastQueryInfo             * query_info,
+                        Blast_Message** blast_message);
 
-/** Calculates pattern space, which is used instead of search space in PHI BLAST
- * e-value calculations. Pattern space is equal to the product of the number of 
- * effective occurrences of pattern in query, and the number of pattern 
- * occurrences in database.
- * @param query_info The query information structure [in][out]
- * @param diagnostics The diagnostics structure containing the pattern count in 
- *                    database [in]
+/** Auxiliary function to retrieve the subject's number of sequences and total
+ * length. 
+ * @note In the case of a Blast2Sequences search, this function assumes a
+ * single sequence and returns the length of the first sequence only
  */
 void
-PHIPatternSpaceCalc(BlastQueryInfo* query_info, 
-                    const BlastDiagnostics* diagnostics);
-
+BLAST_GetSubjectTotals(const BlastSeqSrc* seqsrc,
+                       Int8* total_length,
+                       Int4* num_seqs);
 #ifdef __cplusplus
 }
 #endif
@@ -240,6 +247,27 @@ PHIPatternSpaceCalc(BlastQueryInfo* query_info,
 /*
  *
 * $Log: blast_setup.h,v $
+* Revision 1.62  2006/07/19 13:19:04  madden
+* Blast_SetPHIPatternInfo takes a new Blast_Message parameter
+*
+* Revision 1.61  2006/07/12 23:03:24  camacho
+* + BLAST_GetSubjectTotals
+*
+* Revision 1.60  2006/07/11 22:30:59  camacho
+* Add const where possible
+*
+* Revision 1.59  2006/06/06 15:15:05  madden
+* Doxygen fix
+*
+* Revision 1.58  2006/06/05 13:27:11  madden
+* Add support for GET_MATRIX_PATH callback
+*
+* Revision 1.57  2006/05/22 13:21:40  madden
+* Remove prototype for PHIPatternSpaceCalc
+*
+* Revision 1.56  2006/05/18 16:21:50  papadopo
+* add message to BLAST_CalcEffLengths
+*
 * Revision 1.55  2005/08/29 14:32:36  dondosha
 * From Ilya Dondoshansky:
 * Removed BlastMaskInformation wrapper structure, because mask_at_hash can

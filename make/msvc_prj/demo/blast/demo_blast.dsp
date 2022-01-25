@@ -50,6 +50,14 @@ LINK32=link.exe
 # Begin Target
 
 # Name "demo_blast - Win32 DebugDLL"
+# Begin Group "Source Files"
+
+# PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
+# End Group
+# Begin Group "Header Files"
+
+# PROP Default_Filter "h;hpp;hxx;hm;inl"
+# End Group
 # Begin Source File
 
 SOURCE=..\..\..\..\demo\blast_driver.c

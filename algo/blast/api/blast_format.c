@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.105 2006/04/26 12:46:16 madden Exp $
+/* $Id: blast_format.c,v 1.112 2006/10/06 12:22:28 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,9 @@
  * Formatting of BLAST results (SeqAlign)
  */
 
-static char const rcsid[] = "$Id: blast_format.c,v 1.105 2006/04/26 12:46:16 madden Exp $";
+#ifndef SKIP_DOXYGEN_PROCESSING
+static char const rcsid[] = "$Id: blast_format.c,v 1.112 2006/10/06 12:22:28 madden Exp $";
+#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_seq.h>
@@ -39,6 +41,7 @@ static char const rcsid[] = "$Id: blast_format.c,v 1.105 2006/04/26 12:46:16 mad
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/api/blast_returns.h>
 #include <algo/blast/api/blast_seq.h>
+#include <algo/blast/composition_adjustment/composition_constants.h>
 #include <readdb.h>
 #include <txalign.h>
 #include <blfmtutl.h>
@@ -171,9 +174,12 @@ s_CreateBlastOutputHead(const char* program, const char* database,
        boutp->query_ID = strdup(buffer);
 
        bsp = BioseqLockById(sip);
-       if(!bsp ||
-          (boutp->query_def = strdup(BioseqGetTitle(bsp))) == NULL) {
-          boutp->query_def = strdup("No definition line found");
+
+       if(bsp != NULL) {
+          if (BioseqGetTitle(bsp) != NULL)
+             boutp->query_def = strdup(BioseqGetTitle(bsp));
+          else
+             boutp->query_def = strdup("No definition line found");
        }
        BioseqUnlock(bsp);
 
@@ -385,7 +391,7 @@ s_XMLBuildStatistics(Blast_SummaryReturn* sum_returns, Boolean ungapped)
    stat->eff_space = (double) db_stats->eff_searchsp;
    stat->hsp_len = db_stats->hsp_length;
    stat->db_num= db_stats->dbnum;
-   stat->db_len = (Int4) db_stats->dblength;
+   stat->db_len = db_stats->dblength;
 
    if(ungapped) {
       if(sum_returns->ka_params != NULL) {
@@ -431,9 +437,10 @@ s_XMLBuildOneQueryIteration(SeqAlign* seqalign,
        SeqIdWrite(query->id, buffer, PRINTID_FASTA_LONG, sizeof(buffer));
        iterp->query_ID = strdup(buffer);
 
-       if((iterp->query_def = strdup(BioseqGetTitle(query))) == NULL) {
+       if(BioseqGetTitle(query) != NULL)
+          iterp->query_def = strdup(BioseqGetTitle(query));
+       else
           iterp->query_def = strdup("No definition line found");
-       }
 
        iterp->query_len = query->length;
     }
@@ -494,6 +501,7 @@ Int2 BlastFormattingInfoNew(EAlignView align_view,
       sfree(filename_copy);
    }
    info->is_seqalign_null = TRUE; /* will be updated in BLAST_FormatResults */
+   info->head_on_every_query = FALSE; /* One header for a file is the default. */
    return 0;
 }
 
@@ -570,14 +578,8 @@ BlastFormattingInfo* BlastFormattingInfoFree(BlastFormattingInfo* info)
     return NULL;
 }
 
-/** Returns the integer alignment type value used in the C toolkit 
- * formatting code, given the EBlastProgramType enumeration value.
- * @param prog The BLAST program enumeration value [in]
- * @param db_is_na Is database nucleotide or protein for this program? [out]
- * @return Integer alignment type for use in old formatting code.
- */
-static Uint1 
-s_GetOldAlignType(EBlastProgramType prog, Boolean* db_is_na)
+Uint1 
+GetOldAlignType(EBlastProgramType prog, Boolean* db_is_na)
 {
     Uint1 align_type = 0;
 
@@ -609,6 +611,28 @@ s_GetOldAlignType(EBlastProgramType prog, Boolean* db_is_na)
     return align_type;
 }
 
+static Int2
+s_BLAST_PrintDatabaseInfo(const BlastFormattingInfo* format_info)
+{
+   Int2 status = 0;
+   BlastFormattingOptions* format_options = format_info->format_options;
+
+   if (format_options->align_view < eAlignViewXml) {
+      if(format_info->db_name) { 
+         EBlastProgramType prog = format_info->search_options->program;
+         const Boolean kDbIsProt = 
+              (prog == eBlastTypeBlastp || prog == eBlastTypeBlastx ||
+               prog == eBlastTypeRpsBlast || prog == eBlastTypeRpsTblastn ||
+               prog == eBlastTypePhiBlastp);
+         init_buff_ex(90);
+         status = 
+            PrintDbInformation(format_info->db_name, kDbIsProt, 70, 
+                               format_info->outfp, format_options->html);
+         free_buff();
+      }
+   }
+   return status;
+}
 
 /** Prints out the description of a query sequence, along
  *  with notification that the query has no hits
@@ -619,14 +643,25 @@ s_GetOldAlignType(EBlastProgramType prog, Boolean* db_is_na)
 static void 
 s_AcknowledgeEmptyResults(SeqLoc *slp,
                           BlastFormattingOptions* format_options,
+                          const BlastFormattingInfo* format_info,
                           FILE *outfp)
 {
     Bioseq *bsp = BioseqLockById(SeqLocId(slp));
+
+    if (format_info->head_on_every_query == TRUE)
+        BLAST_PrintOutputHeader(format_info);
+
     init_buff_ex(70);
     AcknowledgeBlastQuery(bsp, 70, outfp, 
-               format_options->believe_query, format_options->html);
+       format_options->believe_query, format_options->html);
     free_buff();
     BioseqUnlock(bsp);
+
+    if (format_info->head_on_every_query == TRUE)
+    {
+        s_BLAST_PrintDatabaseInfo(format_info);
+        fprintf(format_info->outfp, "%s", "Searching..................................................done\n\n");
+    }
     fprintf(outfp, " ***** No hits found ******\n\n\n");
 }
 
@@ -676,7 +711,7 @@ Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries,
        outfp = format_info->outfp;
 
    align_type = 
-       s_GetOldAlignType(format_info->search_options->program, &db_is_na);
+       GetOldAlignType(format_info->search_options->program, &db_is_na);
 
    if (format_info->db_name) {
        /* Enable fetching from the BLAST database. */
@@ -706,7 +741,7 @@ Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries,
       if (seqalign == NULL)
       {
             if (align_view < eAlignViewXml)
-                s_AcknowledgeEmptyResults(slp, format_options, outfp);  /* this query has no results. */
+                s_AcknowledgeEmptyResults(slp, format_options, format_info, outfp);  /* this query has no results. */
             continue;
       }
       format_info->is_seqalign_null = FALSE; /* reset flag, at least one query has seqalign */
@@ -742,10 +777,19 @@ Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries,
       bsp = BioseqLockById(query_id);
 
       if (align_view < eAlignViewXml) {
+         if (format_info->head_on_every_query == TRUE)
+             BLAST_PrintOutputHeader(format_info);
+
          init_buff_ex(70);
          AcknowledgeBlastQuery(bsp, 70, outfp, 
             format_options->believe_query, format_options->html);
          free_buff();
+
+         if (format_info->head_on_every_query == TRUE)
+         {
+             s_BLAST_PrintDatabaseInfo(format_info);
+             fprintf(format_info->outfp, "%s", "Searching..................................................done\n\n");
+         }
       }
       if (align_view == eAlignViewTabular || 
           align_view == eAlignViewTabularWithComments) {
@@ -1123,22 +1167,25 @@ BLAST_PrintOutputHeader(const BlastFormattingInfo* format_info)
          fprintf(format_info->outfp, "\n");
          BlastPrintReference(format_options->html, 90, format_info->outfp);
       }
-
-      if(format_info->db_name) { 
-          EBlastProgramType prog = format_info->search_options->program;
-          const Boolean kDbIsProt = 
-              (prog == eBlastTypeBlastp || prog == eBlastTypeBlastx ||
-               prog == eBlastTypeRpsBlast || prog == eBlastTypeRpsTblastn ||
-               prog == eBlastTypePhiBlastp);
-         status = 
-            PrintDbInformation(format_info->db_name, kDbIsProt, 70, 
-                               format_info->outfp, format_options->html);
-      }
+      {{
+          int comp_based_stats =
+              format_info->search_options->ext_options->compositionBasedStats;
+          if (comp_based_stats == eCompositionBasedStats) {
+              CBStatisticsPrintReference(format_options->html, 90,
+                                        TRUE, FALSE, format_info->outfp);
+          } else if (comp_based_stats > eCompositionBasedStats) {
+              CAdjustmentPrintReference(format_options->html, 90,
+                                        format_info->outfp);
+          }
+      }}
       free_buff();
-	
-#ifdef OS_UNIX
-      fprintf(format_info->outfp, "%s", "Searching\n\n");
-#endif
+      fprintf(format_info->outfp, "\n");
+
+      if (format_info->head_on_every_query == FALSE)
+      {
+          status = s_BLAST_PrintDatabaseInfo(format_info);
+          fprintf(format_info->outfp, "%s", "Searching..................................................done\n\n");
+      }
    }
 
    return status;
@@ -1195,8 +1242,12 @@ Blast_SeqIdGetDefLine(SeqId* sip, char** buffer_ptr, Boolean ncbi_gi,
       /* If it's still NULL make a last ditch effort to get info. */
       char* title=NULL;
       Bioseq* bsp = BioseqLockById(sip);
-      if (bsp)
-         title = strdup(BioseqGetTitle(bsp));
+      if (bsp) {
+         if (BioseqGetTitle(bsp) != NULL)
+            title = strdup(BioseqGetTitle(bsp));
+         else
+            title = strdup("No definition line found");
+      }
       BioseqUnlock(bsp);
       
       if (title) /* Use first token as id. */

@@ -1,4 +1,4 @@
-/* $Id: blast_options.h,v 1.131 2006/03/02 13:24:50 madden Exp $
+/* $Id: blast_options.h,v 1.136 2006/10/04 19:28:05 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -151,6 +151,7 @@ extern "C" {
 #define PHI_AA_LOOKUP 4  /**< protein lookup table specialized for phi-blast */
 #define PHI_NA_LOOKUP 5  /**< nucleotide lookup table for phi-blast */
 #define RPS_LOOKUP_TABLE 6 /**< RPS lookup table (rpsblast and rpstblastn) */
+#define INDEXED_MB_LOOKUP_TABLE 7 /**< use database index as a lookup structure */
 
 /** Defaults for PSI-BLAST options */
 #define PSI_INCLUSION_ETHRESH 0.002 /**< Inclusion threshold for PSI BLAST */
@@ -252,8 +253,9 @@ typedef struct BlastInitialWordOptions {
 typedef enum EBlastPrelimGapExt {
     eDynProgExt,                /**< standard affine gapping */
     eGreedyExt,                 /**< Greedy extension (megaBlast) */
-    eGreedyWithTracebackExt     /**< Greedy extension with Traceback
+    eGreedyWithTracebackExt,    /**< Greedy extension with Traceback
                                calculated. */
+    eSmithWatermanScoreOnly     /**< Score-only smith-waterman */
 } EBlastPrelimGapExt;
 
 /** The algorithm to be used for final gapped
@@ -262,8 +264,9 @@ typedef enum EBlastPrelimGapExt {
 typedef enum EBlastTbackExt {
     eDynProgTbck,          /**< standard affine gapping */
     eGreedyTbck,           /**< Greedy extension (megaBlast) */
-    eSmithWatermanTbck     /**< Smith-waterman finds optimal scores, then 
+    eSmithWatermanTbck,    /**< Smith-waterman finds optimal scores, then 
                                 ALIGN_EX to find alignment. */
+    eSmithWatermanTbckFull /**< Smith-waterman to find all alignments */
 } EBlastTbackExt;
 
 /** Options used for gapped extension 
@@ -283,18 +286,9 @@ typedef struct BlastExtensionOptions {
    Int4 compositionBasedStats; /**< mode of compositional adjustment to use;
                                    if zero then compositional adjustment is
                                    not used */
+   Int4 unifiedP; /**< Indicates unified P values to be used in blastp or tblastn */
    EBlastProgramType program_number; /**< indicates blastn, blastp, etc. */
 } BlastExtensionOptions;
-
-/** Should sum statistics be performed? If not set, the engine decides this
- * question based on the program and gapped calculation option.
- */
-typedef enum ESumStatsMode {
-   eSumStatsNotSet = 0, /**< Let the engine decide, based on the program and 
-                           gapped calculation option. */
-   eSumStatsFalse, /**< Do not use sum statistics. */
-   eSumStatsTrue   /**< Use sum statistics. */
-} ESumStatsMode;
 
 /** Options used when evaluating and saving hits
  *  These include: 
@@ -321,9 +315,9 @@ typedef struct BlastHitSavingOptions {
 
    /********************************************************************/
    /* Merge all these in a structure for clarity? */
-   /* applicable to all, except blastn */
-   ESumStatsMode do_sum_stats; /**< Force sum statistics to be used to combine 
-                                  HSPs */
+   Boolean do_sum_stats; /**< Force sum statistics to be used to combine HSPs,
+                          TRUE by default for all ungapped searches and translated
+                          gapped searches (except RPS-BLAST) */
    Int4 longest_intron; /**< The longest distance between HSPs allowed for
                            combining via sum statistics with uneven gaps */
    /********************************************************************/
@@ -367,8 +361,10 @@ typedef struct BlastEffectiveLengthsOptions {
                          calculations */
    Int4 dbseq_num;    /**< Number of database sequences to be used for
                            statistical calculations */
-   Int8 searchsp_eff; /**< Search space to be used for statistical
-                           calculations */
+   Int4 num_searchspaces; /**< Number of elements in searchsp_eff, this must be
+                            equal to the number of contexts in the search */
+   Int8 *searchsp_eff; /**< Search space to be used for statistical
+                           calculations (one such per query context) */
 } BlastEffectiveLengthsOptions;
 
 /** Options used in protein BLAST only (PSI, PHI, RPS and translated BLAST)
@@ -706,16 +702,32 @@ BlastEffectiveLengthsOptionsFree(BlastEffectiveLengthsOptions* options);
 NCBI_XBLAST_EXPORT
 Int2 BlastEffectiveLengthsOptionsNew(BlastEffectiveLengthsOptions* *options);
 
+/** Return true if the search spaces is set for any of the queries in the
+ * search
+ * @param options The options to examine [in]
+ */
+NCBI_XBLAST_EXPORT
+Boolean
+BlastEffectiveLengthsOptions_IsSearchSpaceSet(const
+                                              BlastEffectiveLengthsOptions*
+                                              options);
+
 /** Fill the non-default values in the BlastEffectiveLengthsOptions structure.
  * @param options The options [in] [out]
  * @param dbseq_num Number of sequences in the database (if zero real value will be used) [in]
  * @param db_length Total length of the database (if zero real value will be used) [in]
- * @param searchsp_eff Effective search space (if zero real value will be used) [in]
+ * @param *searchsp_eff Array of effective search spaces (the real value 
+ *                   will be used for elements that are 0). If array 
+ *                   contains one element, all contexts use this value. 
+ *                   If array has multiple elements, the number must match
+ *                   the number of contexts in the search [in]
+ * @param num_searchsp The number of elements in searchsp_eff [in]
  */
 NCBI_XBLAST_EXPORT
 Int2 
 BLAST_FillEffectiveLengthsOptions(BlastEffectiveLengthsOptions* options, 
-   Int4 dbseq_num, Int8 db_length, Int8 searchsp_eff);
+                                  Int4 dbseq_num, Int8 db_length, 
+                                  Int8 *searchsp_eff, Int4 num_searchsp);
 
 
 /** Allocate memory for lookup table options and fill with default values.
@@ -778,10 +790,12 @@ BlastHitSavingOptionsValidate(EBlastProgramType program_number,
 /** Allocate memory for BlastHitSavingOptions.
  * @param program Program number (blastn, blastp, etc.) [in]
  * @param options The options that are being returned [out]
+ * @param gapped_calculation is this search gapped? [in]
 */
 NCBI_XBLAST_EXPORT
 Int2 BlastHitSavingOptionsNew(EBlastProgramType program, 
-        BlastHitSavingOptions* *options);
+        BlastHitSavingOptions** options,
+        Boolean gapped_calculation);
 
 /** Allocate memory for BlastHitSavingOptions.
  * @param options The options [in] [out]

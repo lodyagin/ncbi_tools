@@ -64,7 +64,6 @@ NLM_EXTERN
 BlastDefLineSetPtr LIBCALL
 BlastDefLineSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -120,7 +119,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 BlastDefLineSetAsnWrite(BlastDefLineSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

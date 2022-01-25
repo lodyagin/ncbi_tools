@@ -32,8 +32,13 @@ Author: Hugues Sicotte
 
 Content Basic Global Needleman Wunsch Global Alignment Function with
 restriction on the ends.
-$Revision: 6.6 $
+$Revision: 6.7 $
 $Log: needleman.c,v $
+Revision 6.7  2006/07/13 17:06:38  bollin
+use Uint4 instead of Uint2 for itemID values
+removed unused variables
+resolved compiler warnings
+
 Revision 6.6  2000/10/31 21:20:04  vakatov
 [WIN32] DLL'zation
 
@@ -284,7 +289,6 @@ NLM_EXTERN SeqAlignPtr LIBCALL NeedlemanWunschQuadraticByLoc(SeqLocPtr slp1,SeqL
     Int4 prevScoreGapQuery;   /* score if a gap already started in query*/
     Int4 continueGapScore; /* score for continuing a gap in dbSequence*/
     Int4 queryPos, dbPos; /* positions in query and dbSequence*/
-    Nlm_FloatHi returnEvalue; /* e-value to return*/
     Int4 QueryMin, QueryMax;
     Int4 numsegs;
     DenseDiagPtr ddp,ddp_head,ddp_next,ddp_last;
@@ -300,7 +304,6 @@ NLM_EXTERN SeqAlignPtr LIBCALL NeedlemanWunschQuadraticByLoc(SeqLocPtr slp1,SeqL
     Boolean qreverse,dbreverse;
     Int4 i,j;
     Int4 rawScore;
-    Nlm_FloatHi eValue;
     Int4 slp_start1,slp_start2,BspLen1,BspLen2;
     
 
@@ -599,7 +602,6 @@ NLM_EXTERN SeqAlignPtr LIBCALL NeedlemanWunschQuadraticByLoc(SeqLocPtr slp1,SeqL
            change the coordinates to "+" coordinates
           and change the "start" to point to begging of block
           on the minus strand */
-        Int4 tmp_start;
         for(i=0;i<dsp->numseg;i++) {
             dsp->starts[2*i+1]= (BspLen2-1 - dsp->starts[2*i+1])-(dsp->lens[i]-1);
             dsp->strands[2*i+1] = Seq_strand_minus;

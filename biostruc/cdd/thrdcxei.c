@@ -1,4 +1,4 @@
-/* $Id: thrdcxei.c,v 1.4 2001/05/25 19:12:54 vakatov Exp $
+/* $Id: thrdcxei.c,v 1.5 2006/07/13 17:07:27 bollin Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.4 $
+* $Revision: 1.5 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdcxei.c,v $
+* Revision 1.5  2006/07/13 17:07:27  bollin
+* removed unused variables
+*
 * Revision 1.4  2001/05/25 19:12:54  vakatov
 * Nested comment typo fixed
 *
@@ -86,11 +89,9 @@ int	*pmr;		/* Pointer to a residue-row of the potential */
 int     *fnd;           /* Fixed contact counts for a distance interval */
 int     fnr;            /* Fixed contact counts for a residue type */
 int     nsc;            /* Number of threaded segments in core definition */
-int     s0, ss0;
-int     mn, mx, mn1, mx1;
-int     t1;
+int     s0;
+int     mn, mx;
 int     ntot, ms;
-int     mnq, mxq;
 
 nrt=cxe->nrt;
 ndi=cxe->ndi;

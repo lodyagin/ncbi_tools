@@ -1,4 +1,4 @@
-/* $Id: sortcmd.c,v 6.1 1998/06/11 18:18:55 shavirin Exp $
+/* $Id: sortcmd.c,v 6.2 2006/05/11 18:56:29 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *         Main file for sortcmd standalone executable.
 *
 * $Log: sortcmd.c,v $
+* Revision 6.2  2006/05/11 18:56:29  kans
+* added line_count argument to SORTFiles
+*
 * Revision 6.1  1998/06/11 18:18:55  shavirin
 * Removed old style function declarations
 *
@@ -74,7 +77,7 @@ Int2 Main(void)
   SORTKeyField gkey;
   CharPtr s;
   Int4 i, t, t2;
-  Int4 checkonly = 0, mergeonly = 0, nfiles;
+  Int4 checkonly = 0, mergeonly = 0, nfiles, line_count;
   CharPtr minus = "-", outfile = minus, *files, tmp;
   CharPtr sort_stdin = "stdin";
   FILE *ofp;
@@ -362,7 +365,7 @@ Int2 Main(void)
   if (mergeonly)
     SORTMergeFiles(files, nfiles, ofp, sop);
   else
-    SORTFiles(files, nfiles, ofp, sop);
+    SORTFiles(files, nfiles, ofp, sop, &line_count);
 
   FileClose(ofp);
 

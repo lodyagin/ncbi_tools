@@ -158,7 +158,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 MimSetAsnWrite(MimSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 

@@ -1,4 +1,4 @@
-/* $Id: maputil.h,v 6.8 2001/06/26 16:42:59 vakatov Exp $
+/* $Id: maputil.h,v 6.9 2006/07/13 17:06:38 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,17 @@
 *
 * Initial Version Creation Date: 03/21/97
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *         External include file for graphical alignments
 *
 * $Log: maputil.h,v $
+* Revision 6.9  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.8  2001/06/26 16:42:59  vakatov
 * POINT --> BAND_POINT  (to avoid conflicts with MS-Win standard headers)
 *
@@ -59,12 +64,17 @@
 * Revision 5.9  1997/07/23 13:45:29  zjing
 * look up for the sequence index map
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *         External include file for graphical alignments
 *
 * $Log: maputil.h,v $
+* Revision 6.9  2006/07/13 17:06:38  bollin
+* use Uint4 instead of Uint2 for itemID values
+* removed unused variables
+* resolved compiler warnings
+*
 * Revision 6.8  2001/06/26 16:42:59  vakatov
 * POINT --> BAND_POINT  (to avoid conflicts with MS-Win standard headers)
 *
@@ -121,7 +131,7 @@ typedef struct genedata{
         CharPtr symbol;
         Boolean landmark; /*is it a landmark gene?*/
         Uint2 entityID;
-        Uint2 itemID;
+        Uint4 itemID;
         Uint2 itemType;
         Uint2 subtype;
 	Uint2 priority;

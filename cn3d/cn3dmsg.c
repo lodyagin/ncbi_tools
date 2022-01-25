@@ -33,6 +33,9 @@
 *
 * Modifications:
 * $Log: cn3dmsg.c,v $
+* Revision 6.103  2006/07/13 17:08:37  bollin
+* use Uint4 instead of Uint2 for itemID values
+*
 * Revision 6.102  2000/06/16 14:57:03  lewisg
 * move entrez calls out of desktop
 *
@@ -405,7 +408,8 @@ Parameters: sap, the SeqAnnot
 
 void Cn3D_LaunchSeqAnnot(SeqAnnot * sap)
 {
-    Int2 entityID, itemID;
+    Uint2 entityID;
+    Uint4 itemID;
     SeqAlign *salp;
     SAM_ViewGlobal vg;
     RecT cn3drc;
@@ -520,7 +524,8 @@ Purpose: Sends an update message to everyone about everything.
 NLM_EXTERN void Cn3D_SendUpdate()
 {
     DDVUpdateMSG  dump;
-    Uint2 entityID, itemID;
+    Uint2 entityID;
+    Uint4 itemID;
     SeqAlign *salp;
     SeqAnnot *sap;
     ValNode *pvnSips, *pvnSipsHold, *pvnsep;

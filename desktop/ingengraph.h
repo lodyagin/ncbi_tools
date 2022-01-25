@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/26/01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -207,7 +207,7 @@ typedef struct gvpopnames{/*used to populate the Segments in Viewer*/
   typedef struct ing_entitylist{
     ValNode *Sips;               /* list of sips in SeqEntry */
     Uint2    entityID;
-    Uint2    itemID;
+    Uint4    itemID;
     Int4     bspcount;
     struct   ing_entitylist PNTR next;
   } IngEntity, PNTR IngEntityPtr;
@@ -247,7 +247,7 @@ typedef struct ing_genomeviewer{
   GrouP       deflineg;
   PopuP       pageControl;
   Uint2       sel_entityID;
-  Uint2       sel_itemID;
+  Uint4       sel_itemID;
   GrouP       Buttons;
   IteM        item_usenetwork;
   Boolean     update;
@@ -256,7 +256,7 @@ typedef struct ing_genomeviewer{
   Uint2       procID;
   Uint2       userKey;
   Uint2       entityID;
-  Uint2       itemID;
+  Uint4       itemID;
   Uint2       itemType;
   BioseqPtr   bsp;
   Boolean     bspIsLocked;
@@ -324,9 +324,9 @@ extern Uint1   IngfeatDefTrack[FEATDEF_MAX];/* track features 1=exists 2=exists 
 	Static Function Declarations
 
 *******************************************************************************/
-extern void Ing_AddGCRect(SegmenT seg, SeqIdPtr sip, Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint1Ptr seq, Int4 left, Int4 top, Int4 right, Int4 bottom, Int4 scaleX,  Uint1 strand, Boolean needs_label, Boolean clickable, Int4 idx, Boolean bShowGC);
+extern void Ing_AddGCRect(SegmenT seg, SeqIdPtr sip, Uint2 entityID, Uint4 itemID, Uint2 itemtype, Uint1Ptr seq, Int4 left, Int4 top, Int4 right, Int4 bottom, Int4 scaleX,  Uint1 strand, Boolean needs_label, Boolean clickable, Int4 idx, Boolean bShowGC);
 
-extern SegmenT Ing_PopulateSequinGraphic(SegmenT seg, BioseqPtr bsp, Uint2 entityID, Uint2 itemID, Int4 scaleX);
+extern SegmenT Ing_PopulateSequinGraphic(SegmenT seg, BioseqPtr bsp, Uint2 entityID, Uint4 itemID, Int4 scaleX);
 
 extern void Ing_AddRuler(SegmenT seg, Int4 height, Int4 xstart,Int4 xstop, Int4 scaleX, Int4 scaleY, Boolean add_whitespace);
 

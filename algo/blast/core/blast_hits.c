@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.188 2006/04/05 18:47:42 camacho Exp $
+/* $Id: blast_hits.c,v 1.200 2006/09/01 14:56:28 papadopo Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.188 2006/04/05 18:47:42 camacho Exp $";
+    "$Id: blast_hits.c,v 1.200 2006/09/01 14:56:28 papadopo Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -72,6 +72,20 @@ Int2 SBlastHitsParametersNew(const BlastHitSavingOptions* hit_options,
        (*retval)->hsp_num_max = BlastHspNumMax(scoring_options->gapped_calculation, hit_options);
 
        return 0;
+}
+
+SBlastHitsParameters* 
+SBlastHitsParametersDup(const SBlastHitsParameters* hit_params)
+{
+    SBlastHitsParameters* retval = (SBlastHitsParameters*)
+        malloc(sizeof(SBlastHitsParameters));
+
+    if ( !retval ) {
+        return NULL;
+    }
+
+    memcpy((void*)retval, (void*) hit_params, sizeof(SBlastHitsParameters));
+    return retval;
 }
 
 NCBI_XBLAST_EXPORT
@@ -200,29 +214,70 @@ s_BlastHSPCopy(const BlastHSP* hsp)
     return new_hsp;
 }
 
+/** Count the number of occurrences of pattern in sequence, which
+ * do not overlap by more than half the pattern match length. 
+ * @param query_info Query information structure, containing pattern info. [in]
+ */
+Int4
+PhiBlastGetEffectiveNumberOfPatterns(const BlastQueryInfo *query_info)
+{
+    Int4 index; /*loop index*/
+    Int4 lastEffectiveOccurrence; /*last nonoverlapping occurrence*/
+    Int4 count; /* Count of effective (nonoverlapping) occurrences */
+    Int4 min_pattern_length;
+    SPHIQueryInfo* pat_info;
+
+    ASSERT(query_info && query_info->pattern_info && query_info->contexts);
+
+    pat_info = query_info->pattern_info;
+
+    if (pat_info->num_patterns <= 1)
+        return pat_info->num_patterns;
+
+    /* Minimal length of a pattern is saved in the length adjustment field. */
+    min_pattern_length = query_info->contexts[0].length_adjustment;
+
+    count = 1;
+    lastEffectiveOccurrence = pat_info->occurrences[0].offset;
+    for(index = 1; index < pat_info->num_patterns; ++index) {
+        if (((pat_info->occurrences[index].offset - lastEffectiveOccurrence) * 2)
+            > min_pattern_length) {
+            lastEffectiveOccurrence = pat_info->occurrences[index].offset;
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+
 /** Calculate e-value for an HSP found by PHI BLAST.
  * @param hsp An HSP found by PHI BLAST [in]
  * @param sbp Scoring block with statistical parameters [in]
  * @param query_info Structure containing information about pattern counts [in]
+ * @param pattern_blk Structure containing counts of PHI pattern hits [in]
  */
 static void 
 s_HSPPHIGetEvalue(BlastHSP* hsp, BlastScoreBlk* sbp, 
-                  const BlastQueryInfo* query_info)
+                  const BlastQueryInfo* query_info,
+                  const SPHIPatternSearchBlk* pattern_blk)
 {
    double paramC;
    double Lambda;
    Int8 pattern_space;
   
-   if (!hsp || !sbp)
-      return;
+   ASSERT(query_info && hsp && sbp && pattern_blk);
 
    paramC = sbp->kbp[0]->paramC;
    Lambda = sbp->kbp[0]->Lambda;
 
    pattern_space = query_info->contexts[0].eff_searchsp;
 
-   hsp->evalue = pattern_space*paramC*(1+Lambda*hsp->score)*
-                    exp(-Lambda*hsp->score);
+   /* We have the actual number of occurrences of pattern in db. */
+   hsp->evalue = paramC*(1+Lambda*hsp->score)*
+                PhiBlastGetEffectiveNumberOfPatterns(query_info)*
+                pattern_blk->num_patterns_db*
+                exp(-Lambda*hsp->score);
 }
 
 /** Update HSP data after reevaluation with ambiguities. In particular this 
@@ -316,6 +371,7 @@ Boolean Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp,
    Int4** matrix;
    Int2 factor = 1;
    const Uint1 kResidueMask = 0x0f;
+   Int4 cutoff_score = hit_params->cutoffs[hsp->context].cutoff_score;
 
    matrix = sbp->matrix->data;
 
@@ -387,7 +443,7 @@ Boolean Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp,
                  and edit scripts positions information untouched, otherwise reset
                  the best score to 0 and point the best edit script positions to
                  the new start. */
-              if (score < hit_params->cutoff_score) {
+              if (score < cutoff_score) {
                   /* Start from new offset; discard all previous information. */
                   best_q_start = query;
                   best_s_start = subject;
@@ -419,8 +475,8 @@ Boolean Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp,
    
    /* Update HSP data. */
    return
-       s_UpdateReevaluatedHSP(hsp, TRUE, hit_params->cutoff_score, score, 
-                              query_start, subject_start, best_q_start, 
+       s_UpdateReevaluatedHSP(hsp, TRUE, cutoff_score,
+                              score, query_start, subject_start, best_q_start, 
                               best_q_end, best_s_start, best_s_end, 
                               best_start_esp_index, best_end_esp_index,
                               best_end_esp_num);
@@ -465,6 +521,7 @@ Blast_HSPReevaluateWithAmbiguitiesUngapped(BlastHSP* hsp, Uint1* query_start,
    Int4 index;
    const Uint1 kResidueMask = (translated ? 0xff : 0x0f);
    Int4 hsp_length = hsp->query.end - hsp->query.offset;
+   Int4 cutoff_score = word_params->cutoffs[hsp->context].cutoff_score;
 
    matrix = sbp->matrix->data;
 
@@ -488,7 +545,7 @@ Blast_HSPReevaluateWithAmbiguitiesUngapped(BlastHSP* hsp, Uint1* query_start,
           /* If previous top score never reached the cutoff, discard the front
              part of the alignment completely. Otherwise keep pointer to the 
              top-scoring front part. */
-         if (score < word_params->cutoff_score) {
+         if (score < cutoff_score) {
             best_q_start = best_q_end = query;
             best_s_start = best_s_end = subject;
             score = 0;
@@ -507,7 +564,7 @@ Blast_HSPReevaluateWithAmbiguitiesUngapped(BlastHSP* hsp, Uint1* query_start,
 
    /* Update HSP data. */
    return
-       s_UpdateReevaluatedHSPUngapped(hsp, word_params->cutoff_score, score, 
+       s_UpdateReevaluatedHSPUngapped(hsp, cutoff_score, score,
                                       query_start, subject_start, best_q_start,
                                       best_q_end, best_s_start, best_s_end);
 } 
@@ -869,6 +926,7 @@ Blast_HSPGetPartialSubjectTranslation(BLAST_SequenceBlk* subject_blk,
                                      subject_length_ptr, &translation_buffer);
    }
    hsp->subject.offset -= start_shift;
+   hsp->subject.end -= start_shift;
    hsp->subject.gapped_start -= start_shift;
    *translation_buffer_ptr = translation_buffer;
    *start_shift_ptr = start_shift;
@@ -1025,12 +1083,31 @@ void Blast_HSPListSortByEvalue(BlastHSPList* hsp_list)
 }
 
 
-/** Comparison callback for sorting HSPs by diagonal. Do not compare
- * diagonals for HSPs from different contexts. The absolute value of the
- * return is the diagonal difference between the HSPs.
+/** Retrieve the starting diagonal of an HSP
+ * @param hsp The target HSP
+ * @return The starting diagonal
+ */
+static Int4
+s_HSPStartDiag(const BlastHSP *hsp)
+{
+    return hsp->query.offset - hsp->subject.offset;
+}
+
+/** Retrieve the ending diagonal of an HSP
+ * @param hsp The target HSP
+ * @return The ending diagonal
+ */
+static Int4
+s_HSPEndDiag(const BlastHSP *hsp)
+{
+    return hsp->query.end - hsp->subject.end;
+}
+
+/** Comparison callback for sorting HSPs by starting diagonal. 
+ *  Do not compare diagonals for HSPs from different contexts.
  */
 static int
-s_DiagCompareHSPs(const void* v1, const void* v2)
+s_StartDiagCompareHSPs(const void* v1, const void* v2)
 {
    BlastHSP* h1,* h2;
 
@@ -1041,8 +1118,25 @@ s_DiagCompareHSPs(const void* v1, const void* v2)
       return INT4_MIN;
    else if (h1->context > h2->context)
       return INT4_MAX;
-   return (h1->query.offset - h1->subject.offset) - 
-      (h2->query.offset - h2->subject.offset);
+   return s_HSPStartDiag(h1) - s_HSPStartDiag(h2);
+}
+
+/** Comparison callback for sorting HSPs by ending diagonal. 
+ *  Do not compare diagonals for HSPs from different contexts.
+ */
+static int
+s_EndDiagCompareHSPs(const void* v1, const void* v2)
+{
+   BlastHSP* h1,* h2;
+
+   h1 = *((BlastHSP**) v1);
+   h2 = *((BlastHSP**) v2);
+   
+   if (h1->context < h2->context)
+      return INT4_MIN;
+   else if (h1->context > h2->context)
+      return INT4_MAX;
+   return s_HSPEndDiag(h1) - s_HSPEndDiag(h2);
 }
 
 
@@ -1123,15 +1217,29 @@ BlastMergeTwoHSPs(BlastHSP* hsp1, BlastHSP* hsp2, Int4 start)
 
    if (!hsp1->gap_info || !hsp2->gap_info)
    {
-      /* Assume that this is an ungapped alignment, hence simply compare 
-         diagonals. Do not merge if they are on different diagonals */
-      if (s_DiagCompareHSPs(&hsp1, &hsp2) == 0 &&
-          hsp1->query.end >= hsp2->query.offset) {
-         hsp1->query.end = hsp2->query.end;
-         hsp1->subject.end = hsp2->subject.end;
+      /* No traceback; just combine the boundaries of the
+         two HSPs, assuming they intersect at all */
+      if (CONTAINED_IN_HSP(hsp1->query.offset, hsp1->query.end,
+                           hsp2->query.offset,
+                           hsp1->subject.offset, hsp1->subject.end,
+                           hsp2->subject.offset) ||
+          CONTAINED_IN_HSP(hsp1->query.offset, hsp1->query.end,
+                           hsp2->query.end,
+                           hsp1->subject.offset, hsp1->subject.end,
+                           hsp2->subject.end)) {
+         hsp1->query.offset = MIN(hsp1->query.offset, hsp2->query.offset);
+         hsp1->subject.offset = MIN(hsp1->subject.offset, hsp2->subject.offset);
+         hsp1->query.end = MAX(hsp1->query.end, hsp2->query.end);
+         hsp1->subject.end = MAX(hsp1->subject.end, hsp2->subject.end);
+         if (hsp2->score > hsp1->score) {
+             hsp1->query.gapped_start = hsp2->query.gapped_start;
+             hsp1->subject.gapped_start = hsp2->subject.gapped_start;
+             hsp1->score = hsp2->score;
+         }
          return TRUE;
-      } else
+      } else {
          return FALSE;
+      }
    }
 
    esp = hsp1->gap_info;
@@ -1276,6 +1384,12 @@ BlastHSPList* Blast_HSPListNew(Int4 hsp_max)
       calloc(hsp_list->allocated, sizeof(BlastHSP*));
 
    return hsp_list;
+}
+
+Boolean
+Blast_HSPList_IsEmpty(const BlastHSPList* hsp_list)
+{
+    return (hsp_list && hsp_list->hspcnt == 0) ? TRUE : FALSE;
 }
 
 /** This is a copy of a static function from ncbimisc.c.
@@ -1467,7 +1581,7 @@ Blast_HSPListSaveHSP(BlastHSPList* hsp_list, BlastHSP* new_hsp)
 Int2 Blast_HSPListGetEvalues(const BlastQueryInfo* query_info,
                              BlastHSPList* hsp_list, 
                              Boolean gapped_calculation, 
-                             BlastScoreBlk* sbp, double gap_decay_rate,
+                             const BlastScoreBlk* sbp, double gap_decay_rate,
                              double scaling_factor)
 {
    BlastHSP* hsp;
@@ -1518,7 +1632,8 @@ Int2 Blast_HSPListGetEvalues(const BlastQueryInfo* query_info,
 }
 
 Int2 Blast_HSPListGetBitScores(BlastHSPList* hsp_list, 
-                               Boolean gapped_calculation, BlastScoreBlk* sbp)
+                               Boolean gapped_calculation, 
+                               const BlastScoreBlk* sbp)
 {
    BlastHSP* hsp;
    Blast_KarlinBlk** kbp;
@@ -1563,7 +1678,8 @@ void Blast_HSPListPHIGetBitScores(BlastHSPList* hsp_list, BlastScoreBlk* sbp)
 
 void 
 Blast_HSPListPHIGetEvalues(BlastHSPList* hsp_list, BlastScoreBlk* sbp, 
-                           const BlastQueryInfo* query_info)
+                           const BlastQueryInfo* query_info,
+                           const SPHIPatternSearchBlk* pattern_blk)
 {
    Int4 index;
    BlastHSP* hsp;
@@ -1573,7 +1689,7 @@ Blast_HSPListPHIGetEvalues(BlastHSPList* hsp_list, BlastScoreBlk* sbp,
 
    for (index = 0; index < hsp_list->hspcnt; ++index) {
       hsp = hsp_list->hsp_array[index];
-      s_HSPPHIGetEvalue(hsp, sbp, query_info);
+      s_HSPPHIGetEvalue(hsp, sbp, query_info, pattern_blk);
    }
    /* The best e-value is the one for the highest scoring HSP, which 
       must be the first in the list. Check that HSPs are sorted by score
@@ -1583,7 +1699,7 @@ Blast_HSPListPHIGetEvalues(BlastHSPList* hsp_list, BlastScoreBlk* sbp,
 }
 
 Int2 Blast_HSPListReapByEvalue(BlastHSPList* hsp_list, 
-        BlastHitSavingOptions* hit_options)
+        const BlastHitSavingOptions* hit_options)
 {
    BlastHSP* hsp;
    BlastHSP** hsp_array;
@@ -1985,7 +2101,8 @@ Blast_HSPListReevaluateWithAmbiguities(EBlastProgramType program,
                   gen_code_string, &translation_buffer, &subject_start,
                   &subject_length, &start_shift);
             } else {
-               Int4 subject_context = FrameToContext(hsp->subject.frame);
+               Int4 subject_context = BLAST_FrameToContext(hsp->subject.frame,
+                                                     program);
                subject_start = 
                   translation_buffer + frame_offsets[subject_context] + 1;
             }
@@ -2161,14 +2278,16 @@ Int2 Blast_HSPListAppend(BlastHSPList** old_hsp_list_ptr,
 
 Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list_ptr, 
                    BlastHSPList** combined_hsp_list_ptr,
-                   Int4 hsp_num_max, Int4 start, Boolean merge_hsps)
+                   Int4 hsp_num_max, Int4 start, 
+                   Boolean merge_hsps)
 {
    BlastHSPList* combined_hsp_list = *combined_hsp_list_ptr;
    BlastHSPList* hsp_list = *hsp_list_ptr;
-   BlastHSP* hsp, *hsp_var;
+   BlastHSP* hsp1, *hsp2, *hsp_var;
    BlastHSP** hspp1,** hspp2;
-   Int4 index, index1, last_index1;
+   Int4 index1, index2, last_index2;
    Int4 hspcnt1, hspcnt2, new_hspcnt = 0;
+   Int4 start_diag, end_diag;
    BlastHSP** new_hsp_array;
   
    if (!hsp_list || hsp_list->hspcnt == 0)
@@ -2181,93 +2300,102 @@ Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list_ptr,
       return 0;
    }
 
-   /* Merge the two HSP lists for successive chunks of the subject sequence */
+   /* Merge the two HSP lists for successive chunks of the subject sequence.
+      First put all HSPs that intersect the overlap region at the front of 
+      the respective HSP arrays. */
    hspcnt1 = hspcnt2 = 0;
 
-   /* Put all HSPs that intersect the overlap region at the front of the
-      respective HSP arrays. */
-   for (index = 0; index < combined_hsp_list->hspcnt; index++) {
-      hsp = combined_hsp_list->hsp_array[index];
-      if (hsp->subject.end > start) {
+   for (index1 = 0; index1 < combined_hsp_list->hspcnt; index1++) {
+      hsp1 = combined_hsp_list->hsp_array[index1];
+      if (hsp1->subject.end > start) {
          /* At least part of this HSP lies in the overlap strip. */
          hsp_var = combined_hsp_list->hsp_array[hspcnt1];
-         combined_hsp_list->hsp_array[hspcnt1] = hsp;
-         combined_hsp_list->hsp_array[index] = hsp_var;
+         combined_hsp_list->hsp_array[hspcnt1] = hsp1;
+         combined_hsp_list->hsp_array[index1] = hsp_var;
          ++hspcnt1;
       }
    }
-   for (index = 0; index < hsp_list->hspcnt; index++) {
-      hsp = hsp_list->hsp_array[index];
-      if (hsp->subject.offset < start + DBSEQ_CHUNK_OVERLAP) {
+   for (index2 = 0; index2 < hsp_list->hspcnt; index2++) {
+      hsp2 = hsp_list->hsp_array[index2];
+      if (hsp2->subject.offset < start + DBSEQ_CHUNK_OVERLAP) {
          /* At least part of this HSP lies in the overlap strip. */
          hsp_var = hsp_list->hsp_array[hspcnt2];
-         hsp_list->hsp_array[hspcnt2] = hsp;
-         hsp_list->hsp_array[index] = hsp_var;
+         hsp_list->hsp_array[hspcnt2] = hsp2;
+         hsp_list->hsp_array[index2] = hsp_var;
          ++hspcnt2;
       }
    }
 
-   hspp1 = combined_hsp_list->hsp_array;
-   hspp2 = hsp_list->hsp_array;
-   /* Sort HSPs from in the overlap region by diagonal */
-   qsort(hspp1, hspcnt1, sizeof(BlastHSP*), s_DiagCompareHSPs);
-   qsort(hspp2, hspcnt2, sizeof(BlastHSP*), s_DiagCompareHSPs);
-
-   for (index=last_index1=0; index<hspcnt1; index++) {
-
-      /* scan through hspp2 until an HSP is found whose
-         starting diagonal is less than OVERLAP_DIAG_CLOSE
-         diagonals ahead of the current HSP from hspp1 */
-
-      for (index1 = last_index1; index1<hspcnt2; index1++,last_index1++) {
-         /* Skip already deleted HSPs */
-         if (!hspp2[index1])
-            continue;
-         if (s_DiagCompareHSPs(&hspp1[index], &hspp2[index1]) < 
-             OVERLAP_DIAG_CLOSE) {
-             break;
-         }
-      }
-
-      /* attempt to merge the HSPs in hspp2 until their
-         diagonals occur too far away */
-
-      for (; index1<hspcnt2; index1++) {
-         /* Skip already deleted HSPs */
-         if (!hspp2[index1])
-            continue;
-         if (hspp1[index]->context == hspp2[index1]->context && 
-             ABS(s_DiagCompareHSPs(&hspp1[index], &hspp2[index1])) < 
-             OVERLAP_DIAG_CLOSE) {
-            if (merge_hsps) {
-               if (BlastMergeTwoHSPs(hspp1[index], hspp2[index1], start)) {
-                  /* Free the second HSP. */
-                  hspp2[index1] = Blast_HSPFree(hspp2[index1]);
-               }
-            } else { /* No gap information available */
-               if (s_BlastHSPContained(hspp1[index], hspp2[index1])) {
-                  sfree(hspp1[index]);
-                  /* Point the first HSP to the new HSP; free the old HSP. */
-                  hspp1[index] = hspp2[index1];
-                  hspp2[index1] = NULL;
-                  /* This HSP has been removed, so break out of the inner 
-                     loop */
-                  break;
-               } else if (s_BlastHSPContained(hspp2[index1], hspp1[index])) {
-                  /* Just free the second HSP */
-                  hspp2[index1] = Blast_HSPFree(hspp2[index1]);
-               }
+   if (hspcnt1 > 0 && hspcnt2 > 0) {
+      hspp1 = combined_hsp_list->hsp_array;
+      hspp2 = hsp_list->hsp_array;
+      /* Sort HSPs in the overlap region, in order of increasing
+         context and then increasing diagonal */
+      qsort(hspp1, hspcnt1, sizeof(BlastHSP*), s_EndDiagCompareHSPs);
+      qsort(hspp2, hspcnt2, sizeof(BlastHSP*), s_StartDiagCompareHSPs);
+   
+      for (index1 = last_index2 = 0; index1 < hspcnt1; index1++) {
+   
+         /* scan through hspp2 until an HSP is found whose
+            starting diagonal is less than OVERLAP_DIAG_CLOSE
+            diagonals ahead of the current HSP from hspp1 */
+   
+         hsp1 = hspp1[index1];
+         end_diag = s_HSPEndDiag(hsp1);
+   
+         for (index2 = last_index2; index2 < hspcnt2; index2++, last_index2++) {
+            /* Skip already deleted HSPs, or HSPs from
+               different contexts */
+            hsp2 = hspp2[index2];
+            if (!hsp2 || hsp1->context < hsp2->context)
+               continue;
+            start_diag = s_HSPStartDiag(hsp2);
+            if (end_diag - start_diag < OVERLAP_DIAG_CLOSE) {
+               break;
             }
-         } else {
-            /* This and remaining HSPs are too far from the one being 
-               checked */
-            break;
+         }
+   
+         /* attempt to merge the HSPs in hspp2 until their
+            diagonals occur too far away */
+         for (; index2 < hspcnt2; index2++) {
+            /* Skip already deleted HSPs */
+            hsp2 = hspp2[index2];
+            if (!hsp2)
+               continue;
+
+            start_diag = s_HSPStartDiag(hsp2);
+   
+            if (hsp1->context == hsp2->context && 
+                ABS(end_diag - start_diag) < OVERLAP_DIAG_CLOSE) {
+               if (merge_hsps) {
+                  if (BlastMergeTwoHSPs(hsp1, hsp2, start)) {
+                     /* Free the second HSP. */
+                     hspp2[index2] = Blast_HSPFree(hsp2);
+                  }
+               } else {
+                  if (s_BlastHSPContained(hsp1, hsp2)) {
+                     /* Point the first HSP to the new HSP; free the old HSP. */
+                     hspp1[index1] = hsp2;
+                     hspp2[index2] = NULL;
+                     Blast_HSPFree(hsp1);
+                     /* hsp1 has been removed, so break out of the inner loop */
+                     break;
+                  } else if (s_BlastHSPContained(hsp2, hsp1)) {
+                     /* Just free the second HSP */
+                     hspp2[index2] = Blast_HSPFree(hsp2);
+                  }
+               }
+            } else {
+               /* This and remaining HSPs are too far from the one being 
+                  checked */
+               break;
+            }
          }
       }
+   
+      /* Purge the nulled out HSPs from the new HSP list */
+      Blast_HSPListPurgeNullHSPs(hsp_list);
    }
-
-   /* Purge the nulled out HSPs from the new HSP list */
-   Blast_HSPListPurgeNullHSPs(hsp_list);
 
    /* The new number of HSPs is now the sum of the remaining counts in the 
       two lists, but if there is a restriction on the number of HSPs to keep,
@@ -2318,7 +2446,9 @@ void Blast_HSPListAdjustOffsets(BlastHSPList* hsp_list, Int4 offset)
    }
 }
 
-void Blast_HSPListAdjustOddBlastnScores(BlastHSPList* hsp_list, Boolean gapped_calculation, BlastScoreBlk* sbp)
+void Blast_HSPListAdjustOddBlastnScores(BlastHSPList* hsp_list, 
+                                        Boolean gapped_calculation, 
+                                        const BlastScoreBlk* sbp)
 {
     int index;
     
@@ -2404,6 +2534,8 @@ BlastHitList* Blast_HitListNew(Int4 hitlist_size)
       calloc(1, sizeof(BlastHitList));
    new_hitlist->hsplist_max = hitlist_size;
    new_hitlist->low_score = INT4_MAX;
+   new_hitlist->hsplist_count = 0;
+   new_hitlist->hsplist_current = 0;
    return new_hitlist;
 }
 
@@ -2483,6 +2615,38 @@ s_BlastHitListInsertHSPListInHeap(BlastHitList* hit_list,
       hit_list->low_score = hit_list->hsplist_array[0]->hsp_array[0]->score;
 }
 
+/** Given a BlastHitList pointer this function makes the 
+ * hsplist_array larger, up to a maximum size.
+ * These incremental increases are mostly an issue for users who
+ * put in a very large number for number of hits to save, but only save a few.
+ * @param hit_list object containing the hsplist_array to grow [in]
+ * @return zero on success, 1 if full already.
+ */
+Int2 s_Blast_HitListGrowHSPListArray(BlastHitList* hit_list)
+
+{
+    const int kStartValue = 100; /* default number of hsplist_array to start with. */
+
+    ASSERT(hit_list);
+
+    if (hit_list->hsplist_current >= hit_list->hsplist_max)
+       return 1;
+
+    if (hit_list->hsplist_current <= 0)
+       hit_list->hsplist_current = kStartValue;
+    else
+       hit_list->hsplist_current = MIN(2*hit_list->hsplist_current, hit_list->hsplist_max);
+
+    hit_list->hsplist_array = 
+       (BlastHSPList**) realloc(hit_list->hsplist_array, hit_list->hsplist_current*sizeof(BlastHSPList*));
+
+    if (hit_list->hsplist_array == NULL)
+       return -1;
+
+    return 0;
+}
+
+
 
 Int2 Blast_HitListUpdate(BlastHitList* hit_list, 
                          BlastHSPList* hsp_list)
@@ -2494,9 +2658,12 @@ Int2 Blast_HitListUpdate(BlastHitList* hit_list,
    if (hit_list->hsplist_count < hit_list->hsplist_max) {
       /* If the array of HSP lists for this query is not yet allocated, 
          do it here */
-      if (!hit_list->hsplist_array)
-         hit_list->hsplist_array = (BlastHSPList**)
-            malloc(hit_list->hsplist_max*sizeof(BlastHSPList*));
+      if (hit_list->hsplist_current == hit_list->hsplist_count)
+      {
+         Int2 status = s_Blast_HitListGrowHSPListArray(hit_list);
+         if (status)
+           return status;
+      }
       /* Just add to the end; sort later */
       hit_list->hsplist_array[hit_list->hsplist_count++] = hsp_list;
       hit_list->worst_evalue = 
@@ -2528,11 +2695,8 @@ Int2 Blast_HitListUpdate(BlastHitList* hit_list,
    return 0;
 }
 
-/** Purges a BlastHitList of NULL HSP lists.
- * @param hit_list BLAST hit list to purge. [in] [out]
- */
-static Int2 
-s_BlastHitListPurgeNullHSPLists(BlastHitList* hit_list)
+Int2 
+Blast_HitListPurgeNullHSPLists(BlastHitList* hit_list)
 {
    Int4 index, index1; /* loop indices. */
    Int4 hsplist_count; /* total number of HSPList's to iterate over. */
@@ -2766,13 +2930,16 @@ Int2 Blast_HSPResultsPerformCulling(BlastHSPResults *results,
              Blast_HSPListSortByScore(hitlist->hsplist_array[j]);
          }
       }
-      s_BlastHitListPurgeNullHSPLists(hitlist);
+      Blast_HitListPurgeNullHSPLists(hitlist);
    }
 
    tree = Blast_IntervalTreeFree(tree);
    return 0;
 }
 
+/** Callback used for sorting HSPs by score, with HSPs
+ *  from different contexts segregated from each other
+ */
 static int
 s_ScoreCompareHSPWithContext(const void* h1, const void* h2)
 {
@@ -2869,6 +3036,7 @@ Blast_HSPResultsSaveRPSHSPList(EBlastProgramType program,
 Int2 Blast_HSPResultsSaveHSPList(EBlastProgramType program, BlastHSPResults* results, 
         BlastHSPList* hsp_list, const SBlastHitsParameters* blasthit_params)
 {
+
    if (!hsp_list)
       return 0;
 
@@ -3126,6 +3294,7 @@ s_TrimResultsByTotalHSPLimit(BlastHSPResults* results, Uint4 total_hsp_limit)
             continue;
         /* The count of HSPs is separate for each query. */
         hsplist_count = hit_list->hsplist_count;
+
         hsplist_array = (BlastHSPList**) 
             malloc(hsplist_count*sizeof(BlastHSPList*));
         

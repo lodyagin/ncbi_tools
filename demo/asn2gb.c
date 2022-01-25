@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.88 $
+* $Revision: 6.93 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -50,7 +50,7 @@
 #include <explore.h>
 #include <asn2gnbp.h>
 
-#define ASN2GB_APP_VER "3.2"
+#define ASN2GB_APP_VER "3.6"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -162,7 +162,7 @@ static Int2 HandleSingleRecord (
   Int4 from,
   Int4 to,
   Uint1 strand,
-  Int4 itemID,
+  Uint4 itemID,
   Boolean do_tiny_seq,
   Boolean do_fasta_stream
 )
@@ -1329,7 +1329,7 @@ Args myargs [] = {
     FALSE, 'g', ARG_INT, 0.0, 0, NULL},
   {"Lock/Lookup Flags (8 LockProd, 16 LookupComp, 64 LookupProd)", "0", NULL, NULL,
     FALSE, 'h', ARG_INT, 0.0, 0, NULL},
-  {"Custom Flags (2 HideMostImpFeats, 4 HideSnpFeats)", "0", NULL, NULL,
+  {"Custom Flags (4 HideFeats, 1792 HideRefs, 8192 HideSources, 262144 HideTranslation)", "0", NULL, NULL,
     FALSE, 'u', ARG_INT, 0.0, 0, NULL},
   {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
@@ -1404,7 +1404,7 @@ Int2 Main (
   Int4         from = 0;
   GBSeq        gbsq;
   GBSet        gbst;
-  Int4         itemID = 0;
+  Uint4         itemID = 0;
   LckType      locks;
   CharPtr      logfile = NULL;
   FILE         *logfp = NULL;
