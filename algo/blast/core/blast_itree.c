@@ -1,4 +1,4 @@
-/* $Id: blast_itree.c,v 1.14 2010/05/06 18:54:32 kazimird Exp $
+/* $Id: blast_itree.c,v 1.16 2011/02/09 21:09:57 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_itree.c,v 1.14 2010/05/06 18:54:32 kazimird Exp $";
+    "$Id: blast_itree.c,v 1.16 2011/02/09 21:09:57 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include "blast_itree.h"
@@ -532,6 +532,8 @@ BlastIntervalTreeAddHSP(BlastHSP *hsp, BlastIntervalTree *tree,
     enum EIntervalDirection which_half;
     Boolean index_subject_range = FALSE;
     Int2 retval = 0;
+    Int4 q_start;
+    Int4 mid_index2;
 
     /* Determine the query strand containing the input HSP.
        Only the strand matters for containment purposes,
@@ -539,8 +541,18 @@ BlastIntervalTreeAddHSP(BlastHSP *hsp, BlastIntervalTree *tree,
 
     query_start = s_GetQueryStrandOffset(query_info, hsp->context);
 
-    region_start = query_start + hsp->query.offset;
-    region_end = query_start + hsp->query.end;
+    if ( index_method == eQueryOnlyStrandIndifferent &&
+         query_info->contexts[hsp->context].frame == -1 ) {
+        /* translate the ranges to the + (frame=1) strand for storage
+           and comparison. -RMH- */
+        region_end = query_start - hsp->query.offset;
+        region_start = query_start - hsp->query.end;
+        query_start = query_start -
+                      query_info->contexts[hsp->context].query_length - 1;
+    }else {
+        region_start = query_start + hsp->query.offset;
+        region_end = query_start + hsp->query.end;
+    }
 
     nodes = tree->nodes;
     ASSERT(region_start >= nodes->leftend);
@@ -654,7 +666,9 @@ BlastIntervalTreeAddHSP(BlastHSP *hsp, BlastIntervalTree *tree,
             /* the new interval crosses the center of the node, and
                so has a "shadow" in both subtrees */
 
-            if (index_subject_range || index_method == eQueryOnly) {
+            // Added support for eQueryOnlyStrandIndifferent -RMH-
+            if (index_subject_range || index_method == eQueryOnly ||
+                index_method == eQueryOnlyStrandIndifferent ) {
 
                 /* If indexing subject offsets already, prepend the 
                    new node to the list of "midpoint" nodes and return.
@@ -719,8 +733,19 @@ BlastIntervalTreeAddHSP(BlastHSP *hsp, BlastIntervalTree *tree,
             old_region_end = old_hsp->subject.end;
         }
         else {
-            old_region_start = nodes[old_index].leftptr + old_hsp->query.offset;
-            old_region_end = nodes[old_index].leftptr + old_hsp->query.end;
+            // -RMH-
+            if ( index_method == eQueryOnlyStrandIndifferent &&
+                 query_info->contexts[old_hsp->context].frame == -1 ) {
+              /* Translate the old_hsp coordinates to the + strand 
+                 (frame=1) for storage and comparison. -RMH- */
+              q_start = s_GetQueryStrandOffset(query_info,
+                                                    old_hsp->context);
+              old_region_end = q_start - old_hsp->query.offset;
+              old_region_start = q_start - old_hsp->query.end;
+            }else {
+              old_region_start = nodes[old_index].leftptr + old_hsp->query.offset;
+              old_region_end = nodes[old_index].leftptr + old_hsp->query.end;
+            }
         }
 
         root_index = mid_index;
@@ -745,11 +770,13 @@ BlastIntervalTreeAddHSP(BlastHSP *hsp, BlastIntervalTree *tree,
                must be allocated from scratch, just to accomodate the
                old leaf */
 
-            if (index_subject_range || index_method == eQueryOnly) {
+            // Added support for eQueryOnlyStrandIndifferent -RMH-
+            if (index_subject_range || index_method == eQueryOnly ||
+                index_method == eQueryOnlyStrandIndifferent ) {
                 nodes[mid_index].midptr = old_index;
             }
             else {
-                Int4 mid_index2 = s_IntervalRootNodeInit(tree, tree->s_min,
+                mid_index2 = s_IntervalRootNodeInit(tree, tree->s_min,
                                                          tree->s_max, &retval);
                 if (retval)
                       return retval;   
@@ -1003,6 +1030,172 @@ s_HSPQueryRangeIsContained(const BlastHSP *in_hsp,
         return 1;
 
     return 0;
+}
+
+/** Determine whether the query range of an HSP overlaps 
+ *  within the query range of another HSP by a percentage of
+ *  their aligned lengths.
+ *  
+ *  This routine adds the cross_match -masklevel functionality
+ *  to the Blast itree implementation
+ *
+ *  @param in_offset  The input HSP start position ( relative to in_q_start )
+ *  @param in_end     The input HSP end position ( relative to in_q_start )
+ *  @param in_score   The input HSP score
+ *  @param in_q_start The start offset of the strand of the query
+ *                    sequence containing in_hsp [in]
+ *  @param tree_hsp An HSP from the interval tree, assumed to have
+ *                  score equal to or exceeding that of in_hsp [in]
+ *  @param tree_q_start The start offset of the strand of the query
+ *                      sequence containing tree_hsp [in]
+ *  @param masklevel    The percentage of either range which qualifies
+ *                      the in_hsp as being part of the same query
+ *                      domain group ( ie. "contained" in blast parlance ).
+ *  @return 1 if query range of either HSP is masklevel% contained in
+ *           that of the other -- higher score always wins.
+ *  -RMH-
+ */
+static Int4
+s_HSPQueryRangeIsMasklevelContained(Int4 in_offset,
+                                    Int4 in_end,
+                                    Int4 in_score,
+                                    Int4 in_q_start,
+                                    const BlastHSP *tree_hsp,
+                                    Int4 tree_q_start,
+                                    const BlastQueryInfo *query_info,
+                                    Int4 masklevel )
+{
+    Int4 tree_hsp_offset;
+    Int4 tree_hsp_end;
+    Int4 overlapStart;
+    Int4 overlapEnd;
+    Int4 percOverlap;
+
+    tree_q_start = s_GetQueryStrandOffset(query_info, tree_hsp->context);
+
+    /* check if alignments are from different query sequences 
+       or query strands. Also check if tree_hsp has score strictly
+       higher than in_hsp */
+
+    if (in_q_start != tree_q_start ||
+        in_score > tree_hsp->score)
+    {
+        return 0;
+    }
+
+    if ( query_info->contexts[tree_hsp->context].frame == -1 )
+    {
+      tree_hsp_end = tree_q_start - tree_hsp->query.offset;
+      tree_hsp_offset = tree_q_start - tree_hsp->query.end;
+    }else {
+      tree_hsp_offset = tree_q_start + tree_hsp->query.offset;
+      tree_hsp_end = tree_q_start + tree_hsp->query.end;
+    }
+
+    overlapStart = tree_hsp_offset;
+    if ( overlapStart < in_offset )
+      overlapStart = in_offset;
+    overlapEnd = tree_hsp_end;
+    if ( overlapEnd > in_end )
+      overlapEnd = in_end;
+    percOverlap = (Int4)( 100*((double)(overlapEnd - overlapStart) /
+                               (in_end - in_offset)) );
+
+    if ( percOverlap >=  masklevel )
+      return 1;
+
+    return 0;
+}
+
+// -RMH-
+Int4
+BlastIntervalTreeMasksHSP(const BlastIntervalTree *tree,
+                              const BlastHSP *hsp,
+                              const BlastQueryInfo *query_info,
+                              Int4 subtree_index,
+                              Int4 masklevel )
+{
+    Int4 region_start;
+    Int4 region_end;
+    Int4 in_query_start;
+    Int4 tmp_qstart;
+    Int4 middle;
+    Int4 tmp_index = 0;
+
+    SIntervalNode *node = tree->nodes + subtree_index;
+
+    in_query_start = s_GetQueryStrandOffset(query_info, hsp->context);
+    tmp_qstart = in_query_start;
+
+    if ( query_info->contexts[hsp->context].frame == -1 )
+    {
+      region_end = in_query_start - hsp->query.offset;
+      region_start = in_query_start - hsp->query.end;
+      in_query_start = in_query_start - query_info->contexts[hsp->context].query_length - 1;
+    }else {
+      region_start = in_query_start + hsp->query.offset;
+      region_end = in_query_start + hsp->query.end;
+    }
+
+    ASSERT(hsp->query.offset <= hsp->query.end);
+    ASSERT(hsp->subject.offset <= hsp->subject.end);
+
+    /* Descend the tree */
+
+    while (node->hsp == NULL) {
+
+        /* First perform containment tests on all of the HSPs
+           in the midpoint list for the current node. All HSPs
+           in the list must be examined */
+        tmp_index = node->midptr;
+        while (tmp_index != 0) {
+            SIntervalNode *tmp_node = tree->nodes + tmp_index;
+            if ( s_HSPQueryRangeIsMasklevelContained(region_start, region_end,
+                                      hsp->score, in_query_start,
+                                      tmp_node->hsp, tmp_node->leftptr,
+                                      query_info,
+                                      masklevel) )
+              return 1;
+            tmp_index = tmp_node->midptr;
+        }
+
+        /* Descend to the left subtree if the input HSP lies completely
+           to the left of this node's center, or to the right subtree if
+           it lies completely to the right */
+
+        middle = (node->leftend + node->rightend) / 2;
+        tmp_index = 0;
+        if (region_end < middle)
+            tmp_index = node->leftptr;
+        else if (region_start > middle)
+            tmp_index = node->rightptr;
+        else
+        {
+
+         /* If the current region stradles the middle region it 
+            still might be the case that there is an overlapping
+            hit in either the right or left subtree.  Since we
+            are not strictly looking for containment we must look
+            for these higher scoring shorter segments either side. */
+           if ( node->leftptr && BlastIntervalTreeMasksHSP( tree, hsp, query_info, node->leftptr, masklevel ) == 1 )
+            return 1;
+           if ( node->rightptr && BlastIntervalTreeMasksHSP( tree, hsp, query_info, node->rightptr, masklevel ) == 1 )
+            return 1;
+        }
+
+        if (tmp_index == 0)
+            return 0;
+
+        node = tree->nodes + tmp_index;
+    }
+
+    /* Reached a leaf of the tree */
+    return s_HSPQueryRangeIsMasklevelContained(region_start, region_end,
+                                      hsp->score, in_query_start,
+                                      node->hsp, node->leftptr,
+                                      query_info,
+                                      masklevel);
+
 }
 
 /* see blast_itree.h for description */

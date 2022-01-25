@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatrpsdb.c,v 1.28 2008/11/04 16:26:59 boratyng Exp $";
+static char const rcsid[] = "$Id: formatrpsdb.c,v 1.29 2010/10/20 13:09:42 madden Exp $";
 
 /*****************************************************************************
 
@@ -38,6 +38,9 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.28 2008/11/04 16:26:59 borat
 
 ***************************************************************************
     $Log: formatrpsdb.c,v $
+    Revision 1.29  2010/10/20 13:09:42  madden
+    Plug memory leak, JIRA:SB-660
+
     Revision 1.28  2008/11/04 16:26:59  boratyng
     Synchronized with the new BlastAaLookupTable implementation
 
@@ -1168,6 +1171,7 @@ Int2 Main(void)
         }
 
         sequence = PssmWithParametersFree(sequence);
+        bdp = BlastDefLineSetFree(bdp);
         ioptr = AsnIoClose(ioptr);
         index++;
     }

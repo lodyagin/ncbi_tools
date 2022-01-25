@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.6 $
+* $Revision: 1.8 $
 *
 * File Description: 
 *
@@ -58,7 +58,7 @@
 #include <objmacro.h>
 #include <macroapi.h>
 
-#define ASNMACRO_APP_VER "1.0"
+#define ASNMACRO_APP_VER "1.2"
 
 CharPtr ASNMACRO_APPLICATION = ASNMACRO_APP_VER;
 
@@ -290,7 +290,6 @@ static Uint2 ProcessOneAsn (
   Pointer        dataptr;
   Uint2          datatype, entityID = 0;
   SeqEntryPtr    sep;
-  Int4           num_fields = 0, num_features = 0;
 
   if (fp == NULL) return 0;
 
@@ -302,8 +301,7 @@ static Uint2 ProcessOneAsn (
 
   SeqMgrIndexFeatures (entityID, NULL);
   sep = GetTopSeqEntryForEntityID (entityID);
-  ApplyMacroToSeqEntry (sep, macro, &num_fields, &num_features);
-  Message (MSG_POST, "For file %s, macro script affected %d fields and created %d features", path, num_fields, num_features);
+  ApplyMacroToSeqEntry (sep, macro);
 
   return entityID;
 }
@@ -349,8 +347,6 @@ static Int4 ProcessStream (InputStreamPtr isp, OutputStreamPtr osp, AsnStreamPtr
   SeqEntryPtr  sep;
   Uint2        entityID;
   DataVal av;
-  Int4         num_fields = 0, num_features = 0;
-  Int4         tmp_fields, tmp_features;
   
   if (isp == NULL || osp == NULL || asp == NULL) return 1;
 
@@ -379,11 +375,7 @@ static Int4 ProcessStream (InputStreamPtr isp, OutputStreamPtr osp, AsnStreamPtr
     }
     if (rval == 0) {
       entityID = ObjMgrRegister (OBJ_SEQENTRY, sep);
-      tmp_fields = 0;
-      tmp_features = 0;
-      ApplyMacroToSeqEntry (sep, macro, &tmp_fields, &tmp_features);
-      num_fields += tmp_fields;
-      num_features += tmp_features;
+      ApplyMacroToSeqEntry (sep, macro);
       DeleteMarkedObjects (entityID, 0, NULL);
       RenormalizeNucProtSets (sep, TRUE);
       if (! SeqEntryAsnWrite(sep, asn_out, atp)) {
@@ -399,7 +391,6 @@ static Int4 ProcessStream (InputStreamPtr isp, OutputStreamPtr osp, AsnStreamPtr
   if (asn_out != osp->aip) {
     AsnIoClose(asn_out);
   }
-  Message (MSG_POST, "Macro script affected %d fields and created %d features", num_fields, num_features);
   return rval;
 }
 
@@ -638,7 +629,7 @@ Int2 Main(void)
   }
   osd.is_binary = (Boolean) myargs [d_argOutputBinary].intvalue;
 
-  if (osd.base == "stdin") {
+  if (StringCmp (osd.base, "stdin") == 0) {
     osd.base = NULL;
   }
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
@@ -583,7 +583,8 @@ NLM_EXTERN Boolean OkToListFeatDefInRemainingFeatures (Uint2 subtype)
       subtype != FEATDEF_snRNA &&
       subtype != FEATDEF_scRNA &&
       subtype != FEATDEF_snoRNA &&
-      subtype != FEATDEF_gap) {
+      subtype != FEATDEF_gap &&
+      subtype != FEATDEF_conflict) {
     return TRUE;
   } else {
     return FALSE;

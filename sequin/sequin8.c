@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.590 $
+* $Revision: 6.608 $
 *
 * File Description: 
 *
@@ -514,7 +514,7 @@ typedef struct extendpartialfeaturesform {
   ButtoN extend5;
   ButtoN extend3;
   ButtoN stop_at_gaps;
-  DialoG string_constraint;
+  DialoG constraint;
   ButtoN leave_dlg_up;
 } ExtendPartialFeaturesFormData, PNTR ExtendPartialFeaturesFormPtr;
 
@@ -526,7 +526,6 @@ static void DoExtendPartialFeatures (ButtoN b)
   ApplyActionPtr fake_apply;
   FeatureFieldPtr feature_field;
   ValNodePtr vnp;
-  StringConstraintPtr scp;
   ValNodePtr object_list;
   Boolean    extend5, extend3, stop_at_gaps;
 
@@ -542,7 +541,7 @@ static void DoExtendPartialFeatures (ButtoN b)
   feature_field = FeatureFieldNew ();
   vnp = DialogToPointer (f->feature_type);
   if (vnp == NULL) {
-    feature_field->type = Feature_type_any;
+    feature_field->type = Macro_feature_type_any;
   } else {
     feature_field->type = vnp->choice;
     vnp = ValNodeFree (vnp);
@@ -552,10 +551,7 @@ static void DoExtendPartialFeatures (ButtoN b)
   action = AECRActionNew ();
   ValNodeAddPointer (&(action->action), ActionChoice_apply, fake_apply);
   
-  scp = DialogToPointer (f->string_constraint);
-  if (scp != NULL) {
-    ValNodeAddPointer (&(action->constraint), ConstraintChoice_string, scp);
-  }
+  action->constraint = DialogToPointer (f->constraint);
   object_list = GetObjectListForAECRAction (sep, action);
   action = AECRActionFree (action);
 
@@ -586,7 +582,7 @@ extern void ExtendPartialFeaturesWithConstraint (IteM i)
   ValNode             vn;
   WindoW              w;
   GrouP               h, g, c;
-  PrompT              p1, p2;
+  PrompT              p1;
   ButtoN              b;
 
 #ifdef WIN_MAC
@@ -608,14 +604,14 @@ extern void ExtendPartialFeaturesWithConstraint (IteM i)
   SetGroupSpacing (h, 10, 10);
 
   p1 = StaticPrompt (h, "Feature Type to Extend", 0, dialogTextHeight, programFont, 'c');
-  ValNodeAddPointer (&feature_list, Feature_type_any, StringSave ("Any"));
+  ValNodeAddPointer (&feature_list, Macro_feature_type_any, StringSave ("Any"));
   AddAllFeaturesToChoiceList (&feature_list);
   
   f->feature_type = ValNodeSelectionDialog (h, feature_list, TALL_SELECTION_LIST, ValNodeStringName,
                                 ValNodeSimpleDataFree, ValNodeStringCopy,
                                 ValNodeChoiceMatch, "feature type", 
                                 NULL, NULL, FALSE);
-  vn.choice = Feature_type_any;
+  vn.choice = Macro_feature_type_any;
   vn.data.ptrvalue = NULL;
   vn.next = NULL;
   PointerToDialog (f->feature_type, &vn);
@@ -629,9 +625,8 @@ extern void ExtendPartialFeaturesWithConstraint (IteM i)
   f->stop_at_gaps = CheckBox (h, "Stop at gaps", NULL);
   SetStatus (f->stop_at_gaps, TRUE);
   
-  p2 = StaticPrompt (h, "Optional Constraint", 0, dialogTextHeight, programFont, 'c');
-  f->string_constraint = StringConstraintDialog (h, "Where feature text", FALSE, NULL, NULL);
-  
+  f->constraint = ComplexConstraintDialog (h, NULL, NULL);
+  ChangeComplexConstraintFieldType (f->constraint, FieldType_feature_field, NULL, Macro_feature_type_any);
   c = HiddenGroup (h, 3, 0, NULL);
   b = PushButton (c, "Accept", DoExtendPartialFeatures);
   SetObjectExtra (b, f, NULL);
@@ -642,8 +637,7 @@ extern void ExtendPartialFeaturesWithConstraint (IteM i)
                               (HANDLE) f->feature_type,
                               (HANDLE) g,
                               (HANDLE) f->stop_at_gaps,
-                              (HANDLE) p2,
-                              (HANDLE) f->string_constraint,
+                              (HANDLE) f->constraint,
                               (HANDLE) c,
                               NULL);
   Show (w);
@@ -1011,6 +1005,76 @@ extern void RetranslateCdRegionsDoStop (IteM i)
 extern void RetranslateCdRegionsNoStopExceptEndCompleteCDS (IteM i)
 {
   RetranslateCdRegions (i, TRUE, TRUE);
+}
+
+
+static void RetranslateForNoStop (SeqFeatPtr sfp, Pointer data)
+{
+  CdRegionPtr  crp;
+  Uint1        new_frame = 0, i, orig_frame;
+  ByteStorePtr bs;
+  CharPtr      str;
+  Int4         lens [3];
+  Int4         max;
+  Boolean      retval = TRUE;
+
+  if (sfp == NULL 
+      || sfp->data.choice != SEQFEAT_CDREGION
+      || (crp = (CdRegionPtr) sfp->data.value.ptrvalue) == NULL) {
+    return;  
+  }
+
+  orig_frame = crp->frame;
+
+  max = 0;
+  for (i = 1; i <= 3; i++) {
+    crp->frame = i;
+    bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+    lens[i - 1] = BSLen (bs);
+    str = BSMerge (bs, NULL);
+    if (StringCSpn (str, "*") < lens[i - 1] - 1) {
+      lens[i - 1] = 0;
+    }
+    str = MemFree (str);
+    BSFree (bs);
+    if (lens[i - 1] > max) {
+      max = lens[i - 1];
+      new_frame = i;
+    }
+  }
+  for (i = 1; i <= 3; i++) {
+    if (lens [i - 1] == max && i != new_frame) {
+      retval = FALSE;
+    }
+  }
+  if (retval) {
+    crp->frame = new_frame;
+    RetranslateOneCDS (sfp, sfp->idx.entityID, TRUE, TRUE);
+  } else {
+    crp->frame = orig_frame;
+  }
+}
+
+NLM_EXTERN void RetranslateCdRegionsChooseFrameWithNoStop (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  WatchCursor();
+  Update();
+  VisitFeaturesInSep (sep, NULL, RetranslateForNoStop);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
 
@@ -2945,6 +3009,10 @@ static void RemoveAsnObject (IteM i, Boolean feature)
     vnp->choice = Seq_descr_user;
     vnp->data.ptrvalue = StringSave ("StructuredComment");
     ValNodeInsert (&(head->next), vnp, SortVnpByString);
+    vnp = ValNodeNew (NULL);
+    vnp->choice = Seq_descr_user;
+    vnp->data.ptrvalue = StringSave ("DBLink");
+    ValNodeInsert (&(head->next), vnp, SortVnpByString);
   }
   if (head != NULL) {
 
@@ -3365,9 +3433,11 @@ typedef struct fuseformdata {
 
   LisT           objlist;
   DialoG         constraint_dlg;
+  ButtoN         keep_orig_btn;
   Uint2          subtype;
   ValNodePtr     head;
   ConstraintChoiceSetPtr constraint;
+  Boolean        keep_orig;
 } FuseFormData, PNTR FuseFormPtr;
 
 static SeqLocPtr FuseTwoLocations (Uint2 entityID, SeqLocPtr slp1, SeqLocPtr slp2)
@@ -3669,7 +3739,7 @@ static void FuseTwoProducts (SeqFeatPtr sfp1, SeqFeatPtr sfp2, Uint2 entityID)
 static void FuseFeatureCallback (BioseqPtr bsp, Pointer userdata)
 {
   FuseFormPtr       ffp;
-  SeqFeatPtr        first = NULL, sfp = NULL;
+  SeqFeatPtr        first = NULL, sfp = NULL, orig = NULL;
   SeqMgrFeatContext context;
   SeqLocPtr         slp;
   
@@ -3694,11 +3764,19 @@ static void FuseFeatureCallback (BioseqPtr bsp, Pointer userdata)
       }
       else
       {
+        if (ffp->keep_orig && orig == NULL) {
+          orig = first;
+          first = AsnIoMemCopy (orig, (AsnReadFunc) SeqFeatAsnRead, (AsnWriteFunc) SeqFeatAsnWrite);
+          first->next = orig->next;
+          orig->next = first;
+        }
         slp = FuseTwoLocations (ffp->input_entityID, first->location, sfp->location);
         first->location = SeqLocFree (first->location);
         first->location = slp;
         first->partial = CheckSeqLocForPartial (slp, NULL, NULL);
-        sfp->idx.deleteme = TRUE;
+        if (!ffp->keep_orig) {
+          sfp->idx.deleteme = TRUE;
+        }
         if (sfp->idx.subtype == FEATDEF_CDS)
         {
           FuseTwoProducts (first, sfp, ffp->input_entityID);
@@ -3725,6 +3803,8 @@ static void DoFuseFeature (ButtoN b)
   Hide (ffp->form);
   WatchCursor ();
   Update ();
+
+  ffp->keep_orig = GetStatus (ffp->keep_orig_btn);
 
   vnp = NULL;
   val = GetValue (ffp->objlist);
@@ -3864,15 +3944,17 @@ extern void FuseFeature (IteM i)
   }
   ffp->head = head;
 
+  ffp->keep_orig_btn = CheckBox (h, "Keep original feature", NULL);
+
   ffp->constraint_dlg = ComplexConstraintDialog(h, NULL, NULL);
-  ChangeComplexConstraintFieldType (ffp->constraint_dlg, FieldType_feature_field, NULL, Feature_type_any);
+  ChangeComplexConstraintFieldType (ffp->constraint_dlg, FieldType_feature_field, NULL, Macro_feature_type_any);
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", DoFuseFeature);
   SetObjectExtra (b, ffp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) ffp->constraint_dlg, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) ffp->keep_orig_btn, (HANDLE) ffp->constraint_dlg, (HANDLE) c, NULL);
   RealizeWindow (w);
   Show (w);
   Update ();
@@ -4286,6 +4368,254 @@ extern Int2 LIBCALLBACK GenomeProjectsDBUserGenFunc (Pointer data)
 }
 
 
+
+typedef struct unverifieduserdialog {
+  DIALOG_MESSAGE_BLOCK
+} UnverifiedUserDialog, PNTR UnverifiedUserDialogPtr;
+
+typedef struct unverifieduserform {
+  FEATURE_FORM_BLOCK
+  SeqEntryPtr   sep;
+} UnverifiedUserForm, PNTR UnverifiedUserFormPtr;
+
+static void UserObjectPtrToUnverifiedDialog (DialoG d, Pointer data)
+
+{
+  UnverifiedUserDialogPtr  rdp;
+  UserObjectPtr            uop;
+
+  rdp = (UnverifiedUserDialogPtr) GetObjectExtra (d);
+  if (rdp == NULL) return;
+  uop = (UserObjectPtr) data;
+  if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "Unverified") != 0) {
+    return;
+  }
+}
+
+static Pointer UnverifiedDialogToUserObjectPtr (DialoG d)
+
+{
+  UnverifiedUserDialogPtr  rdp;
+  UserObjectPtr            uop;
+
+  rdp = (UnverifiedUserDialogPtr) GetObjectExtra (d);
+  if (rdp == NULL) return NULL;
+
+  uop = CreateUnverifiedUserObject ();
+  if (uop == NULL) return NULL;
+
+  return uop;
+}
+
+static DialoG CreateUnverifiedDialog (GrouP g)
+
+{
+  GrouP                      p;
+  UnverifiedUserDialogPtr  rdp;
+
+  p = HiddenGroup (g, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  rdp = (UnverifiedUserDialogPtr) MemNew (sizeof (UnverifiedUserDialog));
+  if (rdp == NULL) return NULL;
+
+  SetObjectExtra (p, rdp, NULL);
+  rdp->dialog = (DialoG) p;
+  rdp->todialog = UserObjectPtrToUnverifiedDialog;
+  rdp->fromdialog = UnverifiedDialogToUserObjectPtr;
+
+  return (DialoG) p;
+}
+
+static void UnverifiedUserFormMessage (ForM f, Int2 mssg)
+
+{
+  UnverifiedUserFormPtr  rfp;
+
+  rfp = (UnverifiedUserFormPtr) GetObjectExtra (f);
+  if (rfp != NULL) {
+    switch (mssg) {
+      case VIB_MSG_CLOSE :
+        Remove (f);
+        break;
+      case VIB_MSG_CUT :
+        StdCutTextProc (NULL);
+        break;
+      case VIB_MSG_COPY :
+        StdCopyTextProc (NULL);
+        break;
+      case VIB_MSG_PASTE :
+        StdPasteTextProc (NULL);
+        break;
+      case VIB_MSG_DELETE :
+        StdDeleteTextProc (NULL);
+        break;
+      default :
+        if (rfp->appmessage != NULL) {
+          rfp->appmessage (f, mssg);
+        }
+        break;
+    }
+  }
+}
+
+static ForM CreateUnverifiedDescForm (Int2 left, Int2 top, Int2 width,
+                                      Int2 height, CharPtr title, ValNodePtr sdp,
+                                      SeqEntryPtr sep, FormActnFunc actproc)
+
+{
+  ButtoN                 b;
+  GrouP                  c;
+  GrouP                  g;
+  UnverifiedUserFormPtr  rfp;
+  StdEditorProcsPtr      sepp;
+  WindoW                 w;
+
+  w = NULL;
+  rfp = (UnverifiedUserFormPtr) MemNew (sizeof (UnverifiedUserForm));
+  if (rfp != NULL) {
+    w = FixedWindow (left, top, width, height, title, StdCloseWindowProc);
+    SetObjectExtra (w, rfp, StdDescFormCleanupProc);
+    rfp->form = (ForM) w;
+    rfp->actproc = actproc;
+    rfp->formmessage = UnverifiedUserFormMessage;
+
+    rfp->sep = sep;
+
+#ifndef WIN_MAC
+    CreateStdEditorFormMenus (w);
+#endif
+    sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+    if (sepp != NULL) {
+      SetActivate (w, sepp->activateForm);
+      rfp->appmessage = sepp->handleMessages;
+    }
+
+    g = HiddenGroup (w, -1, 0, NULL);
+    rfp->data = CreateUnverifiedDialog (g);
+
+    c = HiddenGroup (w, 2, 0, NULL);
+    b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
+    SetObjectExtra (b, rfp, NULL);
+    PushButton (c, "Cancel", StdCancelButtonProc);
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+    RealizeWindow (w);
+  }
+  return (ForM) w;
+}
+
+extern Int2 LIBCALLBACK UnverifiedUserGenFunc (Pointer data);
+extern Int2 LIBCALLBACK UnverifiedUserGenFunc (Pointer data)
+
+{
+  ObjectIdPtr            oip;
+  OMProcControlPtr       ompcp;
+  OMUserDataPtr          omudp;
+  ObjMgrProcPtr          proc;
+  UnverifiedUserFormPtr  rfp;
+  ValNodePtr             sdp;
+  SeqEntryPtr            sep;
+  UserObjectPtr          uop;
+  WindoW                 w;
+
+  ompcp = (OMProcControlPtr) data;
+  w = NULL;
+  sdp = NULL;
+  sep = NULL;
+  uop = NULL;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+  proc = ompcp->proc;
+  switch (ompcp->input_itemtype) {
+    case OBJ_SEQDESC :
+      sdp = (ValNodePtr) ompcp->input_data;
+      if (sdp != NULL && sdp->choice != Seq_descr_user) {
+        return OM_MSG_RET_ERROR;
+      }
+      uop = (UserObjectPtr) sdp->data.ptrvalue;
+      break;
+    case OBJ_BIOSEQ :
+      break;
+    case OBJ_BIOSEQSET :
+      break;
+    case 0 :
+      break;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  omudp = ItemAlreadyHasEditor (ompcp->input_entityID, ompcp->input_itemID,
+                                ompcp->input_itemtype, ompcp->proc->procid);
+  if (omudp != NULL) {
+    if (StringCmp (proc->procname, "Edit Unverified User Desc") == 0) {
+      rfp = (UnverifiedUserFormPtr) omudp->userdata.ptrvalue;
+      if (rfp != NULL) {
+        Select (rfp->form);
+      }
+      return OM_MSG_RET_DONE;
+    } else {
+      return OM_MSG_RET_OK; /* not this type, check next registered user object editor */
+    }
+  }
+  if (uop != NULL) {
+    oip = uop->type;
+    if (oip == NULL || oip->str == NULL) return OM_MSG_RET_OK;
+    if (StringCmp (oip->str, "Unverified") != 0) return OM_MSG_RET_OK;
+  }
+  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  w = (WindoW) CreateUnverifiedDescForm (-50, -33, -10, -10,
+                                               "Unverified", sdp, sep,
+                                               StdDescFormActnProc);
+  rfp = (UnverifiedUserFormPtr) GetObjectExtra (w);
+  if (rfp != NULL) {
+    rfp->input_entityID = ompcp->input_entityID;
+    rfp->input_itemID = ompcp->input_itemID;
+    rfp->input_itemtype = ompcp->input_itemtype;
+    rfp->this_itemtype = OBJ_SEQDESC;
+    rfp->this_subtype = Seq_descr_user;
+    rfp->procid = ompcp->proc->procid;
+    rfp->proctype = ompcp->proc->proctype;
+    rfp->userkey = OMGetNextUserKey ();
+    omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid,
+	                           OMPROC_EDIT, rfp->userkey);
+    if (omudp != NULL) {
+      omudp->userdata.ptrvalue = (Pointer) rfp;
+      omudp->messagefunc = StdVibrantEditorMsgFunc;
+    }
+    SendMessageToForm (rfp->form, VIB_MSG_INIT);
+    if (sdp != NULL) {
+      PointerToDialog (rfp->data, (Pointer) sdp->data.ptrvalue);
+      SetClosestParentIfDuplicating ((BaseFormPtr) rfp);
+    }
+  }
+  Show (w);
+  Select (w);
+  return OM_MSG_RET_DONE;
+}
+
+
+
+
+typedef struct replaceuserobject {
+  UserObjectPtr   deleteThis;
+  UserObjectPtr   replaceWith;
+} ReplaceUserObjectData, PNTR ReplaceUserObjectPtr;
+
+
+static void ReplaceAllUserObjectsCallback (SeqDescrPtr sdp, Pointer data)
+
+{
+  ReplaceUserObjectPtr   rp;
+
+  if ((rp = (ReplaceUserObjectPtr) data) == NULL || sdp == NULL || sdp->choice != Seq_descr_user) {
+    return;
+  }
+
+  if (AsnIoMemComp (sdp->data.ptrvalue, rp->deleteThis, (AsnWriteFunc) UserObjectAsnWrite)) {
+    sdp->data.ptrvalue = UserObjectFree (sdp->data.ptrvalue);
+    sdp->data.ptrvalue = AsnIoMemCopy (rp->replaceWith, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
+  }
+}
+
+
 typedef struct dblinkdialog {
   DIALOG_MESSAGE_BLOCK
   DialoG  traceassm;
@@ -4618,6 +4948,49 @@ static void DblinkFormMessage (
   }
 }
 
+
+static void ReplaceAllDBLinksButtonProc (ButtoN b)
+{
+  DblinkFormPtr      dfp;
+  SeqEntryPtr   sep;
+  ReplaceUserObjectData rd; 
+  SeqDescrPtr       sdp_orig;
+  SeqMgrDescContext context;
+
+  dfp = (DblinkFormPtr) GetObjectExtra (b);
+  if (dfp == NULL) {
+    return;
+  }
+
+  rd.replaceWith = DialogToPointer (dfp->data);
+  if (rd.replaceWith == NULL) {
+    Message (MSG_ERROR, "Must supply text!");
+    rd.replaceWith = UserObjectFree (rd.replaceWith);
+    return;
+  }
+
+  sdp_orig = SeqMgrGetDesiredDescriptor (dfp->input_entityID, NULL, dfp->input_itemID, 0, NULL, &context);
+  if (sdp_orig == NULL || sdp_orig->choice != Seq_descr_user) {
+    Message (MSG_ERROR, "Unable to find original descriptor!");
+    Remove (dfp->form);
+    rd.replaceWith = UserObjectFree (rd.replaceWith);
+    return;
+  }
+  rd.deleteThis = AsnIoMemCopy (sdp_orig->data.ptrvalue, (AsnReadFunc)UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
+
+  sep = GetTopSeqEntryForEntityID (dfp->input_entityID);
+  VisitDescriptorsInSep (sep, &rd, ReplaceAllUserObjectsCallback);
+
+  rd.deleteThis = UserObjectFree (rd.deleteThis);
+  rd.replaceWith = UserObjectFree (rd.replaceWith);
+  
+  ObjMgrSetDirtyFlag (dfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, dfp->input_entityID,
+                  dfp->input_itemID, dfp->input_itemtype);
+  Remove (dfp->form);
+}
+
+
 static ForM CreateDblinkDescForm (
   Int2 left,
   Int2 top,
@@ -4660,9 +5033,18 @@ static ForM CreateDblinkDescForm (
     g = HiddenGroup (w, -1, 0, NULL);
     dfp->data = CreateDblinkDialog (g);
 
-    c = HiddenGroup (w, 2, 0, NULL);
-    b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
-    SetObjectExtra (b, dfp, NULL);
+    c = HiddenGroup (w, 3, 0, NULL);
+
+    if (sdp == NULL) {
+      b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
+      SetObjectExtra (b, dfp, NULL);
+    } else {
+      b = PushButton (c, "Replace All", ReplaceAllDBLinksButtonProc);
+      SetObjectExtra (b, dfp, NULL);
+      b = DefaultButton (c, "Replace This", StdAcceptFormButtonProc);
+      SetObjectExtra (b, dfp, NULL);
+    }
+
     PushButton (c, "Cancel", StdCancelButtonProc);
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
     RealizeWindow (w);
@@ -5856,33 +6238,11 @@ static void StruCommUserFormMessage (ForM f, Int2 mssg)
 }
 
 
-typedef struct replacestruccmt {
-  UserObjectPtr   deleteThis;
-  UserObjectPtr   replaceWith;
-} ReplaceStrucCmtData, PNTR ReplaceStrucCmtPtr;
-
-
-static void ReplaceAllStructuredCommentsCallback (SeqDescrPtr sdp, Pointer data)
-
-{
-  ReplaceStrucCmtPtr   rp;
-
-  if ((rp = (ReplaceStrucCmtPtr) data) == NULL || sdp == NULL || sdp->choice != Seq_descr_user) {
-    return;
-  }
-
-  if (AsnIoMemComp (sdp->data.ptrvalue, rp->deleteThis, (AsnWriteFunc) UserObjectAsnWrite)) {
-    sdp->data.ptrvalue = UserObjectFree (sdp->data.ptrvalue);
-    sdp->data.ptrvalue = AsnIoMemCopy (rp->replaceWith, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
-  }
-}
-
-
 static void ReplaceAllStructuredCommentsButtonProc (ButtoN b)
 {
   StruCommUserFormPtr sfp;
   SeqEntryPtr   sep;
-  ReplaceStrucCmtData rd; 
+  ReplaceUserObjectData rd; 
   SeqDescrPtr       sdp_orig;
   SeqMgrDescContext context;
 
@@ -5908,7 +6268,7 @@ static void ReplaceAllStructuredCommentsButtonProc (ButtoN b)
   rd.deleteThis = AsnIoMemCopy (sdp_orig->data.ptrvalue, (AsnReadFunc)UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
 
   sep = GetTopSeqEntryForEntityID (sfp->input_entityID);
-  VisitDescriptorsInSep (sep, &rd, ReplaceAllStructuredCommentsCallback);
+  VisitDescriptorsInSep (sep, &rd, ReplaceAllUserObjectsCallback);
 
   rd.deleteThis = UserObjectFree (rd.deleteThis);
   rd.replaceWith = UserObjectFree (rd.replaceWith);
@@ -6822,18 +7182,78 @@ static Int4 RowDiff (SeqAlignRowPtr r1, SeqAlignRowPtr r2)
 }
 
 
-static Boolean SeqAlignRowConflict (SeqAlignRowPtr r1, SeqAlignRowPtr r2)
+static Boolean DoesRow1ContainRow2 (SeqAlignRowPtr row1, SeqAlignRowPtr row2)
+{
+  if (row1 == NULL || row2 == NULL) {
+    return FALSE;
+  }
+
+  if (row1->start <= row2->start && row1->stop >= row2->stop) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Boolean DoesRowContainPoint (SeqAlignRowPtr row, Int4 point)
+{
+  if (row == NULL) {
+    return FALSE;
+  }
+
+  if (row->start <= point && row->stop >= point) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Int4 SeqAlignRowOverlap (SeqAlignRowPtr r1, SeqAlignRowPtr r2)
+{
+  Int4 overlap = 0;
+
+  if (r1 == NULL || r2 == NULL) {
+    return 0;
+  }
+  if (r1->start <= r2->start) {
+    if (r1->stop < r2->stop) {
+      /* completely before */
+      overlap = 0;
+    } else if (r1->stop >= r2->stop) {
+      /* completely contains */
+      overlap = r2->stop - r2->start + 1;
+    } else {
+      /* partial overlap */
+      overlap = r1->stop - r2->start + 1;
+    }
+  } else {
+    if (r1->start > r2->stop) {
+      /* completely after */
+      overlap = 0;
+    } else if (r1->stop <= r2->stop) {
+      /* completely contained */
+      overlap = r1->stop - r1->start + 1;
+    } else {
+      /* partial overlap */
+      overlap = r2->stop - r1->start + 1;
+    }
+  }
+  return overlap;
+}
+
+
+static Boolean SeqAlignRowConflict (SeqAlignRowPtr r1, SeqAlignRowPtr r2, Int4 fuzz)
 {
   if (r1 == NULL || r2 == NULL) {
     return FALSE;
   }
-  if (r1->start <= r2->start && r1->stop >= r2->start) {
+  if (DoesRow1ContainRow2(r1, r2)) {
     return TRUE;
-  } else if (r1->start <= r2->stop && r1->stop >= r2->stop) {
+  } else if (DoesRow1ContainRow2(r2, r1)) {
     return TRUE;
-  } else if (r2->start <= r1->start && r2->start >= r2->start) {
-    return TRUE;
-  } else if (r2->start <= r1->stop && r2->stop >= r2->stop) {
+  } else if (SeqAlignRowOverlap (r1, r2) > fuzz) {
     return TRUE;
   } else {
     return FALSE;
@@ -6850,6 +7270,7 @@ static Int4 SeqAlignRowLen (SeqAlignRowPtr r)
   }
   return len;
 }
+
 
 
 typedef struct seqalignsort {
@@ -6936,13 +7357,13 @@ static ValNodePtr SeqAlignSortListFree (ValNodePtr vnp)
 }
 
 
-static Boolean SeqAlignSortConflict (SeqAlignSortPtr s1, SeqAlignSortPtr s2)
+static Boolean SeqAlignSortConflict (SeqAlignSortPtr s1, SeqAlignSortPtr s2, Int4 fuzz)
 {
   if (s1 == NULL || s2 == NULL) {
     return FALSE;
-  } else if (SeqAlignRowConflict (s1->row1, s2->row1)) {
+  } else if (SeqAlignRowConflict (s1->row1, s2->row1, fuzz)) {
     return TRUE;
-  } else if (SeqAlignRowConflict (s1->row2, s2->row2)) {
+  } else if (SeqAlignRowConflict (s1->row2, s2->row2, fuzz)) {
     return TRUE;
   } else {
     return FALSE;
@@ -6991,6 +7412,18 @@ static Uint1 SeqAlignSortRowStrand (SeqAlignSortPtr s, Int4 row)
     strand = r->strand;
   }
   return strand;
+}
+
+
+static Boolean DoesSeqAlignSort1ContainSeqAlignSort2 (SeqAlignSortPtr s1, SeqAlignSortPtr s2)
+{
+  if (s1 == NULL || s2 == NULL) {
+    return FALSE;
+  } else if (DoesRow1ContainRow2 (s1->row1, s2->row1) && DoesRow1ContainRow2(s1->row2, s2->row2)) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
 }
 
 
@@ -7212,6 +7645,47 @@ static int LIBCALLBACK SortVnpBySeqAlignSortRow2 (VoidPtr ptr1, VoidPtr ptr2)
     }
   }
   return 0;
+}
+
+
+static Boolean DoesFirstRepeatContainAllOtherRepeats (ValNodePtr start, ValNodePtr stop)
+{
+  SeqAlignSortPtr s1, s2;
+  ValNodePtr vnp;
+
+  if (start == NULL || stop == NULL || stop == start->next) {
+    return FALSE;
+  }
+  s1 = (SeqAlignSortPtr) start->data.ptrvalue;
+  for (vnp = start->next; vnp != stop; vnp = vnp->next) {
+    s2 = (SeqAlignSortPtr) vnp->data.ptrvalue;
+    if (!DoesSeqAlignSort1ContainSeqAlignSort2 (s1, s2)) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+
+static void MarkSubAlignments (ValNodePtr PNTR list)
+{
+  ValNodePtr vnp1, vnp2;
+
+  if (list == NULL) {
+    return;
+  }
+
+  *list = ValNodeSort (*list, SortVnpBySeqAlignSortRow1);
+
+  for (vnp1 = *list; vnp1 != NULL; vnp1 = vnp1->next) {
+    if (vnp1->choice != 1) {
+      for (vnp2 = vnp1->next; vnp2 != NULL; vnp2 = vnp2->next) {
+        if (DoesSeqAlignSort1ContainSeqAlignSort2 (vnp1->data.ptrvalue, vnp2->data.ptrvalue)) {
+          vnp2->choice = 1;
+        }
+      }
+    }
+  }
 }
 
 
@@ -7602,7 +8076,7 @@ static void InsertBestRepeat (ValNodePtr repeat_list, ValNodePtr PNTR sorted_lis
 
     /* find first entry that is after this repeat, and insert before that */
     while (vnp != NULL && !found) {
-      if (SeqAlignSortConflict (s_repeat, vnp->data.ptrvalue)) {
+      if (SeqAlignSortConflict (s_repeat, vnp->data.ptrvalue, fuzz)) {
         found = TRUE;
         break;
       }
@@ -7801,6 +8275,12 @@ static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
   best_len = LengthOfLongestInterval (list, 1);
 
   FindSeqAlignSortWithPoint (list, missing, 1);
+
+  if (list != NULL && list->next != NULL) {
+    /* remove alignments that are completely contained in another alignment */
+    MarkSubAlignments (&list);
+    SeqAlignSortListRemoveMarked (&list);
+  }
 
   if (list != NULL && list->next != NULL) {
     row1_repeats = SeqAlignSortListMarkRepeats (&list, 1, fuzz);
@@ -12877,20 +13357,6 @@ static Boolean GetCDStRNArRNAGatherFunc (GatherContextPtr gcp)
 }
 
 
-extern void StringToLower (CharPtr str)
-
-{
-  Char  ch;
-
-  if (str == NULL) return;
-  ch = *str;
-  while (ch != '\0') {
-    *str = TO_LOWER (ch);
-    str++;
-    ch = *str;
-  }
-}
-
 static CharPtr molinfo_tech_list [] = {
   "?", "standard", "EST", "STS", "survey", "genetic map", "physical map",
   "derived", "concept-trans", "seq-pept", "both", "seq-pept-overlap",
@@ -14671,6 +15137,7 @@ extern void CopyLocusToLocusTag (IteM i)
 /* data structure and functions for a generic form displaying a clickable list */
 typedef  void  (*Nlm_AddClickableListEntityIDProc) PROTO ((ButtoN, Uint2));
 typedef  void  (*Nlm_ReorderResultsProc) PROTO ((ValNodePtr PNTR));
+typedef  void  (*Nlm_RelabelResultsProc) PROTO ((ValNodePtr));
 
 #define CLICKABLE_LIST_FORM_BLOCK   \
   FORM_MESSAGE_BLOCK                \
@@ -14679,7 +15146,8 @@ typedef  void  (*Nlm_ReorderResultsProc) PROTO ((ValNodePtr PNTR));
   ButtoN          recheck_btn;         \
   CharPtr         log_name;            \
   Nlm_AddClickableListEntityIDProc add_entity_proc;        \
-  Nlm_ReorderResultsProc reorder_results_proc;
+  Nlm_ReorderResultsProc reorder_results_proc; \
+  Nlm_RelabelResultsProc relabel_results_proc;
   
 typedef struct clickablelistform {
   CLICKABLE_LIST_FORM_BLOCK
@@ -14873,6 +15341,7 @@ typedef struct discrepancyreportform
 
   DiscrepancyConfigPtr dcp;
   Int4 report_type;
+  ButtoN show_names;
 } DiscrepancyReportFormData, PNTR DiscrepancyReportFormPtr;
 
 static void CleanupDiscrepancyReportForm (GraphiC g, VoidPtr data)
@@ -14985,11 +15454,14 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp, EDiscrepancyRepo
   CharPtr PNTR          page_name_list = NULL;
   Char                  page_name[50];
   DiscrepancyConfigPageData cfg_page;
-  Int4                  num_rows = 25;
-  Int4                  num_columns = 3;
+  Int4                  num_rows = 15;
+  Int4                  num_columns = 2;
   Int4                  num_per_page = num_rows * num_columns;
   Int4                  num_appropriate = 0;
   Int4                  num_on_page = 0, page_num = 0;
+  ValNodePtr            button_list = NULL, vnp;
+  CharPtr conf_name, setting_name, full_name;
+  CharPtr fmt = "%s (%s)";
   
   if (dcp == NULL)
   {
@@ -15007,8 +15479,19 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp, EDiscrepancyRepo
   {
     if (IsTestTypeAppropriateForReportType (i, report_type) && i != DISC_CATEGORY_HEADER) {
       num_appropriate ++;
+      conf_name = GetDiscrepancyTestConfName((DiscrepancyType) i);
+      setting_name = GetDiscrepancyTestSettingName((DiscrepancyType) i);
+      full_name = (CharPtr) MemNew (sizeof (Char) * 
+                                    (StringLen (fmt) 
+                                     + StringLen (conf_name) 
+                                     + StringLen (setting_name)));
+      sprintf (full_name, fmt, setting_name, conf_name);
+      ValNodeAddPointer (&button_list, i, full_name);
     }
   }
+
+  button_list = ValNodeSort (button_list, SortVnpByString);
+  MemSet (test_options, 0, sizeof (test_options));
 
   if (num_appropriate > num_per_page) {
     /* set up page headers */
@@ -15030,38 +15513,28 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp, EDiscrepancyRepo
     cfg_page.grp_list = (GrouP PNTR) MemNew (sizeof (GrouP) * cfg_page.num_pages );
     cfg_page.grp_list[page_num] = HiddenGroup (g, 0, num_rows, NULL);
     SetGroupSpacing (cfg_page.grp_list[page_num], 10, 10);
-    for (i = 0; i < MAX_DISC_TYPE; i++)
-    {
-      if (IsTestTypeAppropriateForReportType (i, report_type) && i != DISC_CATEGORY_HEADER) {
-        if (num_on_page == num_per_page) {
-          page_num++;
-          cfg_page.grp_list[page_num] = HiddenGroup (g, 0, num_rows, NULL);
-          SetGroupSpacing (cfg_page.grp_list[page_num], 10, 10);
-        }
-        test_options[i] = CheckBox (cfg_page.grp_list[page_num], GetDiscrepancyTestConfName ((DiscrepancyType) i), NULL);
-        SetStatus (test_options[i], dcp->conf_list[i]);
-        num_on_page++;
-      } else {
-        test_options[i] = NULL;
+    for (vnp = button_list; vnp != NULL; vnp = vnp->next) {
+      if (num_on_page == num_per_page) {
+        page_num++;
+        cfg_page.grp_list[page_num] = HiddenGroup (g, 0, num_rows, NULL);
+        SetGroupSpacing (cfg_page.grp_list[page_num], 10, 10);
+        Hide (cfg_page.grp_list[page_num]);
+        num_on_page = 0;
       }
+      test_options[vnp->choice] = CheckBox (cfg_page.grp_list[page_num], vnp->data.ptrvalue, NULL);
+      SetStatus (test_options[vnp->choice], dcp->conf_list[vnp->choice]);
+      num_on_page++;
     }
-    for (i = 1; i < cfg_page.num_pages; i++) {
-      Hide (cfg_page.grp_list[i]);
-    }    
   } else {
     g = NormalGroup (h, 0, num_rows, "Discrepancy Tests to Run", programFont, NULL);
     SetGroupSpacing (g, 10, 10);
-
-    for (i = 0; i < MAX_DISC_TYPE; i++)
-    {
-      if (IsTestTypeAppropriateForReportType (i, report_type) && i != DISC_CATEGORY_HEADER) {
-        test_options[i] = CheckBox (g, GetDiscrepancyTestConfName ((DiscrepancyType) i), NULL);
-        SetStatus (test_options[i], dcp->conf_list[i]);
-      } else {
-        test_options[i] = NULL;
-      }
+    for (vnp = button_list; vnp != NULL; vnp = vnp->next) {
+      test_options[vnp->choice] = CheckBox (g, vnp->data.ptrvalue, NULL);
+      SetStatus (test_options[vnp->choice], dcp->conf_list[vnp->choice]);
     }
   }
+
+  button_list = ValNodeFreeData (button_list);
   
   k = HiddenGroup (h, 3, 0, NULL);
   b = PushButton (k, "Select All", SelectDiscrepancyList);
@@ -15761,11 +16234,14 @@ static Uint4 sOnCallerToolPriorities[] = {
 DISC_COUNT_NUCLEOTIDES,
 DISC_DUP_DEFLINE,
 DISC_MISSING_DEFLINES,
+TEST_TAXNAME_NOT_IN_DEFLINE,
 TEST_HAS_PROJECT_ID,
 ONCALLER_DEFLINE_ON_SET,
+TEST_UNWANTED_SET_WRAPPER,
 DISC_SRC_QUAL_PROBLEM,
 DISC_FEATURE_COUNT,
 DISC_FEATURE_MOLTYPE_MISMATCH,
+TEST_ORGANELLE_NOT_GENOMIC,
 DISC_INCONSISTENT_MOLTYPES,
 DISC_CHECK_AUTH_CAPS,
 ONCALLER_CONSORTIUM,
@@ -15785,7 +16261,10 @@ DISC_SPECVOUCHER_TAXNAME_MISMATCH,
 DISC_STRAIN_TAXNAME_MISMATCH,
 DISC_BACTERIA_SHOULD_NOT_HAVE_ISOLATE,
 DISC_BACTERIA_MISSING_STRAIN,
+TEST_SP_NOT_UNCULTURED,
 DISC_REQUIRED_CLONE,
+TEST_UNNECESSARY_ENVIRONMENTAL,
+TEST_AMPLIFIED_PRIMERS_NO_ENVIRONMENTAL_SAMPLE,
 ONCALLER_MULTISRC,
 DUP_DISC_ATCC_CULTURE_CONFLICT,
 ONCALLER_STRAIN_CULTURE_COLLECTION_MISMATCH,
@@ -15796,11 +16275,15 @@ DISC_MAP_CHROMOSOME_CONFLICT,
 DISC_METAGENOMIC,
 DISC_METAGENOME_SOURCE,
 DISC_RETROVIRIDAE_DNA,
+TEST_BAD_MRNA_QUAL,
 DISC_MITOCHONDRION_REQUIRED,
+TEST_UNWANTED_SPACER,
+TEST_SMALL_GENOME_SET_PROBLEM,
 ONCALLER_SUPERFLUOUS_GENE,
 ONCALLER_GENE_MISSING,
 DISC_GENE_PARTIAL_CONFLICT,
 DISC_BAD_GENE_STRAND,
+TEST_UNNECESSARY_VIRUS_GENE,
 DISC_NON_GENE_LOCUS_TAG,
 DISC_RBS_WITHOUT_GENE,
 ONCALLER_ORDERED_LOCATION,
@@ -15915,6 +16398,7 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
     cip = (vnp->data.ptrvalue);
     switch (cip->clickable_item_type) {
       case DISC_FEATURE_MOLTYPE_MISMATCH:
+      case TEST_ORGANELLE_NOT_GENOMIC:
       case DISC_INCONSISTENT_MOLTYPES:
         if (cip_mol_type == NULL) {
           cip_mol_type = CreateTopLevelCategory (vnp, "Molecule type tests");
@@ -15954,7 +16438,10 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
       case DISC_STRAIN_TAXNAME_MISMATCH:
       case DISC_BACTERIA_SHOULD_NOT_HAVE_ISOLATE:
       case DISC_BACTERIA_MISSING_STRAIN:
+      case TEST_SP_NOT_UNCULTURED:
       case DISC_REQUIRED_CLONE:
+      case TEST_UNNECESSARY_ENVIRONMENTAL:
+      case TEST_AMPLIFIED_PRIMERS_NO_ENVIRONMENTAL_SAMPLE:
       case ONCALLER_MULTISRC:
       case DUP_DISC_ATCC_CULTURE_CONFLICT:
       case ONCALLER_STRAIN_CULTURE_COLLECTION_MISMATCH:
@@ -15965,7 +16452,10 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
       case DISC_METAGENOMIC:
       case DISC_METAGENOME_SOURCE:
       case DISC_RETROVIRIDAE_DNA:
+      case TEST_BAD_MRNA_QUAL:
       case DISC_MITOCHONDRION_REQUIRED:
+      case TEST_UNWANTED_SPACER:
+      case TEST_SMALL_GENOME_SET_PROBLEM:
         if (cip_src == NULL) {
           cip_src = CreateTopLevelCategory (vnp, "Source tests");
           v_prev = vnp;
@@ -15980,6 +16470,7 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
       case ONCALLER_GENE_MISSING:
       case DISC_GENE_PARTIAL_CONFLICT:
       case DISC_BAD_GENE_STRAND:
+      case TEST_UNNECESSARY_VIRUS_GENE:
       case DISC_NON_GENE_LOCUS_TAG:
       case DISC_RBS_WITHOUT_GENE:
       case ONCALLER_ORDERED_LOCATION:
@@ -16029,6 +16520,28 @@ static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
 }
 
 
+static void RelabelDiscrepancyItems (ValNodePtr list)
+{
+  ValNodePtr vnp;
+  ClickableItemPtr cip;
+  CharPtr new_desc, test_name, fmt = "%s (%s)";
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    cip = (ClickableItemPtr) vnp->data.ptrvalue;
+    if (cip != NULL) {
+      test_name = GetDiscrepancyTestSettingName (cip->clickable_item_type);
+      if (test_name != NULL) {
+        new_desc = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (cip->description) + StringLen (test_name)));
+        sprintf (new_desc, fmt, cip->description, test_name);
+        cip->description = MemFree (cip->description);
+        cip->description = new_desc;
+      }
+      RelabelDiscrepancyItems (cip->subcategories);
+    }
+  }
+}
+
+
 static void RecheckDiscrepancyProc (ButtoN b)
 {
   DiscrepancyReportFormPtr drfp;
@@ -16054,6 +16567,9 @@ static void RecheckDiscrepancyProc (ButtoN b)
     /* reorder as necessary */
     if (drfp->reorder_results_proc != NULL) {
       (drfp->reorder_results_proc) (&(drfp->clickable_list_data));
+    }
+    if (drfp->relabel_results_proc != NULL) {
+      (drfp->relabel_results_proc) (drfp->clickable_list_data);
     }
 
     /* add bulk editing where appropriate */
@@ -16101,6 +16617,9 @@ static void AddNewEntityDiscrepancyProc (ButtoN b, Uint2 new_entityID )
     /* reorder as necessary */
     if (drfp->reorder_results_proc != NULL) {
       (drfp->reorder_results_proc) (&(drfp->clickable_list_data));
+    }
+    if (drfp->relabel_results_proc != NULL) {
+      (drfp->relabel_results_proc) (drfp->clickable_list_data);
     }
 
     /* add bulk editing where appropriate */
@@ -16377,6 +16896,26 @@ static void ContractAllDiscReportItems (ButtoN b)
 }
 
 
+static void ToggleDiscrepancyReportNames (ButtoN b)
+{
+  DiscrepancyReportFormPtr d;
+
+  d = (DiscrepancyReportFormPtr) GetObjectExtra (b);
+  if (d == NULL) {
+    return;
+  }
+
+  if (d->relabel_results_proc == NULL) {
+    d->relabel_results_proc = RelabelDiscrepancyItems;
+    SetTitle (d->show_names, "Hide Test Names");
+  } else {
+    d->relabel_results_proc = NULL;
+     SetTitle (d->show_names, "Show Test Names");
+  }
+  RecheckDiscrepancyProc (b);
+}
+
+
 static void UnmarkAllBtn (ButtoN b)
 {
   DiscrepancyReportFormPtr d;
@@ -16424,6 +16963,9 @@ static void FixMarkedDiscrepanciesBtn (ButtoN b)
   /* reorder as necessary */
   if (d->reorder_results_proc != NULL) {
     (d->reorder_results_proc) (&(d->clickable_list_data));
+  }
+  if (d->relabel_results_proc != NULL) {
+    (d->relabel_results_proc) (d->clickable_list_data);
   }
 
   /* add bulk editing where appropriate */
@@ -16563,12 +17105,14 @@ extern void CreateReportWindow (EDiscrepancyReportType report_type)
                                                     ScrollToDiscrepancyItem, EditDiscrepancyItem, NULL,
                                                     GetDiscrepancyItemText);
                               
-  c1 = HiddenGroup (h, 2, 0, NULL);
+  c1 = HiddenGroup (h, 3, 0, NULL);
   SetGroupSpacing (c1, 10, 10);
   b = PushButton (c1, "Expand All", ExpandAllDiscReportItems);
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c1, "Contract All", ContractAllDiscReportItems);
   SetObjectExtra (b, drfp, NULL);
+  drfp->show_names = PushButton (c1, "Show Test Names", ToggleDiscrepancyReportNames);
+  SetObjectExtra (drfp->show_names, drfp, NULL);
 
   c = HiddenGroup (h, 8, 0, NULL);
   SetGroupSpacing (c, 10, 10);
@@ -16616,7 +17160,87 @@ typedef struct sucform
   Boolean reverse;
   Boolean byblock;
   Boolean showsequence;
+  Boolean is_registered;
 } SUCFormData, PNTR SUCFormPtr;
+
+
+static void UnregisterSuc (SUCFormPtr sfp);
+
+static Int2 LIBCALLBACK SUCFormMsgFunc (OMMsgStructPtr ommsp)
+{
+  WindoW         currentport,
+                 temport;
+  OMUserDataPtr  omudp;
+  SUCFormPtr     sfp = NULL;
+  
+  omudp = (OMUserDataPtr)(ommsp->omuserdata);
+  if (omudp == NULL) return OM_MSG_RET_ERROR;
+  sfp = (SUCFormPtr) omudp->userdata.ptrvalue;
+  if (sfp == NULL) return OM_MSG_RET_ERROR;
+
+  currentport = ParentWindow (sfp->form);
+  temport = SavePort (currentport);
+  UseWindow (currentport);
+  switch (ommsp->message) 
+  {
+      case OM_MSG_UPDATE:
+          break;
+      case OM_MSG_DESELECT:
+          break;
+
+      case OM_MSG_SELECT: 
+          break;
+      case OM_MSG_DEL:
+          sfp->clickable_list_data = FreeClickableList (sfp->clickable_list_data);
+          PointerToDialog (sfp->clickable_list_dlg, NULL);
+          UnregisterSuc(sfp);
+          break;
+      case OM_MSG_HIDE:
+          break;
+      case OM_MSG_SHOW:
+          break;
+      case OM_MSG_FLUSH:
+          sfp->clickable_list_data = FreeClickableList (sfp->clickable_list_data);
+          PointerToDialog (sfp->clickable_list_dlg, NULL);
+          UnregisterSuc(sfp);
+          break;
+      default:
+          break;
+  }
+  RestorePort (temport);
+  UseWindow (temport);
+  return OM_MSG_RET_OK;
+}
+
+
+static void RegisterSuc (SUCFormPtr sfp, Uint2 entityID)
+{
+  OMUserDataPtr omudp;
+
+  if (sfp == NULL || sfp->is_registered) {
+    return;
+  }
+
+  /* register to receive update messages */
+  sfp->input_entityID = entityID;
+  sfp->userkey = OMGetNextUserKey ();
+  sfp->procid = 0;
+  sfp->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (sfp->input_entityID, sfp->procid, sfp->proctype, sfp->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) sfp;
+    omudp->messagefunc = SUCFormMsgFunc;
+  }
+  sfp->is_registered = TRUE;
+}
+
+
+static void UnregisterSuc (SUCFormPtr sfp)
+{
+  ObjMgrFreeUserData (sfp->input_entityID, sfp->procid, sfp->proctype, sfp->userkey);
+  sfp->is_registered = FALSE;
+}
+
 
 static void ReSUCProc (ButtoN b)
 {
@@ -16626,6 +17250,7 @@ static void ReSUCProc (ButtoN b)
   if (sfp != NULL)
   {
     sep = GetTopSeqEntryForEntityID (sfp->input_entityID);
+    RegisterSuc(sfp, sfp->input_entityID);
     WatchCursor();
     Update();    
     sfp->clickable_list_data = FreeClickableList (sfp->clickable_list_data);
@@ -16677,6 +17302,45 @@ static void SUCCollapseAll (ButtoN b)
 }
 
 
+static void SUCFormMessage (ForM f, Int2 mssg)
+
+{
+  SUCFormPtr    sfp;
+
+  sfp = (SUCFormPtr) GetObjectExtra (f);
+  if (sfp != NULL) {
+    switch (mssg) {
+      case VIB_MSG_EXPORT :
+        if (sfp->exportform != NULL) {
+          (sfp->exportform) (f, NULL);
+        }
+        break;
+      case VIB_MSG_PRINT :
+        break;
+      case VIB_MSG_CLOSE :
+        Remove (f);
+        break;
+      case VIB_MSG_CUT :
+      case VIB_MSG_COPY :
+        SendMessageToDialog (sfp->clickable_list_dlg, VIB_MSG_COPY);
+        break;
+      case VIB_MSG_PASTE :
+        break;
+      case VIB_MSG_DELETE :
+        sfp->clickable_list_data = FreeClickableList (sfp->clickable_list_data);
+        PointerToDialog (sfp->clickable_list_dlg, NULL);
+        UnregisterSuc(sfp);
+        break;
+      default :
+        if (sfp->appmessage != NULL) {
+          sfp->appmessage (f, mssg);
+        }
+        break;
+    }
+  }
+}
+
+
 extern void NewSUC (ValNodePtr suc_list, Uint2 entityID, Boolean reverse, Boolean byblock, Boolean showsequence)
 {
   SUCFormPtr    sfp;
@@ -16684,7 +17348,6 @@ extern void NewSUC (ValNodePtr suc_list, Uint2 entityID, Boolean reverse, Boolea
   GrouP         c;
   WindoW        w;
   ButtoN        b;
-  OMUserDataPtr omudp;
 
   sfp = (SUCFormPtr) MemNew (sizeof (SUCFormData));
   if (sfp == NULL)
@@ -16695,20 +17358,12 @@ extern void NewSUC (ValNodePtr suc_list, Uint2 entityID, Boolean reverse, Boolea
   w = FixedWindow (-50, -33, -10, -10, "SUC", StdCloseWindowProc);
   SetObjectExtra (w, sfp, CleanupClickableListForm);
   sfp->form = (ForM) w;
-  sfp->formmessage = ClickableListFormMessage;
+  sfp->formmessage = SUCFormMessage;
   sfp->exportform = DiscrepancyReportExportProc;
     
   /* register to receive update messages */
   sfp->input_entityID = entityID;
-  sfp->userkey = OMGetNextUserKey ();
-  sfp->procid = 0;
-  sfp->proctype = OMPROC_EDIT;
-  omudp = ObjMgrAddUserData (sfp->input_entityID, sfp->procid, sfp->proctype, sfp->userkey);
-  if (omudp != NULL) {
-    omudp->userdata.ptrvalue = (Pointer) sfp;
-    omudp->messagefunc = ClickableListFormMsgFunc;
-  }
-
+  RegisterSuc(sfp, sfp->input_entityID);
 
 #ifndef WIN_MAC
   CreateStdValidatorFormMenus (w);
@@ -17027,16 +17682,10 @@ static void ApplyNameRNACallback (BioseqPtr bsp, Pointer userdata)
 }
 
 
-static void ApplyNamedRNA (IteM i, CharPtr rnaName)
+NLM_EXTERN void ApplyNamedRNABaseForm (BaseFormPtr bfp, CharPtr rnaName)
 {
-  BaseFormPtr       bfp;
   SeqEntryPtr       sep;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
   if (bfp == NULL) return;
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
@@ -17047,6 +17696,20 @@ static void ApplyNamedRNA (IteM i, CharPtr rnaName)
   Update ();
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+
+static void ApplyNamedRNA (IteM i, CharPtr rnaName)
+{
+  BaseFormPtr       bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  ApplyNamedRNABaseForm (bfp, rnaName);
 }
 
 

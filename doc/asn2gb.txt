@@ -105,6 +105,14 @@ for formatting.
   -r  Remote Fetching [T/F]
   -A  Accession to Fetch
 
+Remote features should be fetched by using a modified form of -A:
+
+  -A "<accession>,0,-1"
+
+The middle number is the desired set structure complexity, which normally
+should be 0. If the last number is -1, it will fetch all external feature
+annotations and package them with the returned sequence record.
+
 
 SEQENTRYTOGNBK FUNCTION
 

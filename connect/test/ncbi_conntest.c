@@ -1,4 +1,4 @@
-/* $Id: ncbi_conntest.c,v 6.16 2010/02/05 20:35:04 kazimird Exp $
+/* $Id: ncbi_conntest.c,v 6.19 2011/06/10 03:49:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,7 @@
  */
 
 #include <connect/ncbi_connection.h>
+#include <connect/ncbi_connector.h>
 #include "../ncbi_priv.h"               /* CORE logging facilities */
 #include "ncbi_conntest.h"
 #include <string.h>
@@ -329,23 +330,47 @@ static void s_SingleBounceCheck
 }
 
 
+/*ARGSUSED*/
+static void s_DummySetup(SMetaConnector* meta, CONNECTOR connector)
+{
+    meta->default_timeout = kInfiniteTimeout;
+}
+
+
 
 /***********************************************************************
  *  EXTERNAL
  */
 
 
-extern void CONN_TestConnector
+void CONN_TestConnector
 (CONNECTOR       connector,
  const STimeout* timeout,
  FILE*           data_file,
  TTestConnFlags  flags)
 {
     EIO_Status status;
+    SConnector dummy;
     CONN       conn;
+
+    memset(&dummy, 0, sizeof(dummy));
 
     TEST_LOG(eIO_Success, "[CONN_TestConnector]  Starting...");
 
+    /* Fool around with dummy connector / connection
+     */
+    assert(CONN_Create(0,      &conn) != eIO_Success  &&  !conn);
+    assert(CONN_Create(&dummy, &conn) != eIO_Success  &&  !conn);
+    dummy.setup = s_DummySetup;
+    assert(CONN_Create(&dummy, &conn) == eIO_Success);
+    assert(CONN_Flush (conn)          != eIO_Success);
+    assert(CONN_ReInit(conn, 0)       == eIO_Success);
+    assert(CONN_ReInit(conn, 0)       != eIO_Success);
+    assert(CONN_ReInit(conn, &dummy)  == eIO_Success);
+    assert(CONN_Flush (conn)          != eIO_Success);
+    assert(CONN_ReInit(conn, &dummy)  == eIO_Success);
+    assert(CONN_ReInit(conn, 0)       == eIO_Success);
+    assert(CONN_Close (conn)          == eIO_Success);
 
     /* CREATE new connection on the base of the connector, set
      * TIMEOUTs, try to RECONNECT, WAIT for the connection is writable

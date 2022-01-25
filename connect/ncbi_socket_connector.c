@@ -1,4 +1,4 @@
-/* $Id: ncbi_socket_connector.c,v 6.27 2010/05/10 16:59:31 kazimird Exp $
+/* $Id: ncbi_socket_connector.c,v 6.29 2010/12/14 19:41:14 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -53,7 +53,7 @@ typedef struct {
     SOCK           sock;      /* socket;  NULL if not connected yet       */
     const char*    host;      /* server:  host                            */
     unsigned short port;      /* server:  service port                    */
-    unsigned int   try_own;   /* max.number of attempts to establish conn */
+    unsigned short try_own;   /* max.number of attempts to establish conn */
     const void*    init_data; /* data to send to the server on connect    */
     size_t         init_size; /* size of the "init_data" buffer           */
     TSOCK_Flags    flags;     /* see socket flags in ncbi_socket.h        */
@@ -108,10 +108,21 @@ static char* s_VT_Descr
 (CONNECTOR connector)
 {
     SSockConnector* xxx = (SSockConnector*) connector->handle;
-    size_t len = strlen(xxx->host) + 6/*:port*/ + 1/*EOL*/;
-    char* buf = (char*) malloc(len);
-    if (buf)
-        sprintf(buf, "%s:%hu", xxx->host, xxx->port);
+    size_t hostlen, portlen;
+    char* buf, port[16];
+    if (!xxx->host)
+        return 0;
+    if (!xxx->port  &&  *xxx->host) {
+        portlen = 1/*EOL*/;
+        port[0] = '\0';
+    } else
+        portlen = (size_t) sprintf(port, ":%hu", xxx->port) + 1/*EOL*/;
+    hostlen = strlen(xxx->host);
+    buf = (char*) malloc(hostlen + portlen);
+    if (buf) {
+        memcpy(buf,           xxx->host, hostlen);
+        memcpy(buf + hostlen,      port, portlen);
+    }
     return buf;
 }
 
@@ -124,24 +135,20 @@ static EIO_Status s_VT_Open
     EIO_Status status = eIO_Success;
 
     if (!xxx->sock) {
-        unsigned int i;
+        unsigned short i;
+        if (!xxx->port)
+            return eIO_Closed;
         assert(xxx->try_own);
         for (i = 0;  i < xxx->try_own;  i++) {
             /* connect */
             status = SOCK_CreateEx(xxx->host, xxx->port, timeout, &xxx->sock,
                                    xxx->init_data, xxx->init_size, xxx->flags);
-            if (xxx->sock) {
-                if (xxx->init_data) {
-                    assert(xxx->init_size);
-                    free((void*) xxx->init_data);
-                    xxx->init_data = 0;
-                }
+            if (xxx->sock)
                 break;
-            }
             assert(status != eIO_Success);
         }
     }
-    assert(xxx->sock  ||  status != eIO_Success);
+    assert(!xxx->sock ^ !(status != eIO_Success));
     return status;
 }
 
@@ -251,43 +258,51 @@ static CONNECTOR s_Init
 (SOCK           sock,
  const char*    host,
  unsigned short port,
- unsigned int   try_own,
+ unsigned short try_own,
  const void*    init_data,
  size_t         init_size,
  TSOCK_Flags    flags)
 {
     CONNECTOR       ccc = (SConnector    *) malloc(sizeof(SConnector));
-    SSockConnector* xxx = (SSockConnector*) malloc(sizeof(*xxx) +
-                                                   (port
-                                                    ? strlen(host) + 1
-                                                    : MAX_IP_ADDR_LEN));
+    SSockConnector* xxx = (SSockConnector*) malloc(sizeof(*xxx)
+                                                   + (host
+                                                      ? strlen(host) + 1
+                                                      : MAX_IP_ADDR_LEN));
 
-    /* sanity check: either sock or host/port, not both */
-    assert((!sock && host && port)  ||  (sock && !host && !port));
-    assert(!sock  ||  !(init_size || init_data || flags));  
+    /* some sanity checks */
+    assert(!sock  ||  !(init_size || init_data || flags));
     assert(!init_size  ||  init_data);
 
     /* initialize internal data structures */
-    if (sock) {
-        unsigned int x_host;
-        char* addr = (char*) xxx + sizeof(*xxx);
-        SOCK_GetPeerAddress(sock, &x_host, &xxx->port, eNH_HostByteOrder);
-        SOCK_ntoa(SOCK_HostToNetLong(x_host), addr, MAX_IP_ADDR_LEN);
+    if (sock  ||  !host  ||  !port) {
         xxx->sock      = sock;
-        xxx->host      = addr;
-        assert(xxx->port);
-        xxx->try_own   = try_own ? 1       : 0;
+        if (host) {
+            xxx->host  = strcpy((char*) xxx + sizeof(*xxx), host);
+            xxx->port  = 0;
+        } else if (sock) {
+            unsigned int x_host;
+            char* addr = (char*) xxx + sizeof(*xxx);
+            SOCK_GetPeerAddress(sock, &x_host, &xxx->port, eNH_HostByteOrder);
+            SOCK_ntoa(SOCK_HostToNetLong(x_host), addr, MAX_IP_ADDR_LEN);
+            xxx->host  = addr;
+            assert(xxx->port);
+        } else {
+            /* this signifies invalid state */
+            xxx->host  = 0;
+            xxx->port  = 0;
+        }
+        xxx->try_own   = try_own   ? 1                                  : 0;
         xxx->init_data = 0;
     } else {
         xxx->sock      = 0;
         xxx->host      = strcpy((char*) xxx + sizeof(*xxx), host);
         xxx->port      = port;
-        xxx->try_own   = try_own ? try_own : 1;
+        xxx->try_own   = try_own   ? try_own                            : 1;
         xxx->flags     = flags;
-        xxx->init_size = init_data ? init_size : 0;
+        xxx->init_size = init_data ? init_size                          : 0;
         if (xxx->init_size) {
             void* data     = malloc(init_size);
-            xxx->init_data = data ? memcpy(data, init_data, init_size) : 0;
+            xxx->init_data = data  ? memcpy(data, init_data, init_size) : 0;
         } else
             xxx->init_data = 0;
     }
@@ -310,27 +325,36 @@ static CONNECTOR s_Init
 extern CONNECTOR SOCK_CreateConnector
 (const char*    host,
  unsigned short port,
- unsigned int   max_try)
+ unsigned short max_try)
 {
-    return s_Init(0,    host, port, max_try,  0,         0, fSOCK_LogDefault);
+    return s_Init(0,    host, port,  max_try,  0,         0, fSOCK_LogDefault);
 }
 
 
 extern CONNECTOR SOCK_CreateConnectorEx
 (const char*    host,
  unsigned short port,
- unsigned int   max_try,
+ unsigned short max_try,
  const void*    init_data,
  size_t         init_size,
  TSOCK_Flags    flags)
 {
-    return s_Init(0,    host, port, max_try,  init_data, init_size, flags);
+    return s_Init(0,    host, port,  max_try,  init_data, init_size, flags);
 }
 
 
 extern CONNECTOR SOCK_CreateConnectorOnTop
-(SOCK                 sock,
- unsigned int/*bool*/ own_sock)
+(SOCK                   sock,
+ unsigned short/*bool*/ own_sock)
 {
-    return s_Init(sock, 0,    0,    own_sock, 0,         0,         0);
+    return s_Init(sock, 0,    0,     own_sock, 0,         0,         0);
+}
+
+
+extern CONNECTOR SOCK_CreateConnectorOnTopEx
+(SOCK                   sock,
+ unsigned short/*bool*/ own_sock,
+ const char*            hostport)
+{
+    return s_Init(sock, hostport, 0, own_sock, 0,         0,         0);
 }

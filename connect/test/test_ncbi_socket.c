@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_socket.c,v 6.53 2010/06/10 19:19:46 kazimird Exp $
+/* $Id: test_ncbi_socket.c,v 6.55 2011/06/24 15:04:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -60,14 +60,6 @@
 /* #define DO_SERVER */
 
 #define TEST_BUFSIZE 8192
-
-/* exit server before sending the data expected by client(Test 1) */
-/*#define TEST_SRV1_SHUTDOWN*/
-
-#ifndef TEST_SRV1_SHUTDOWN
-/* exit server immediately after its first client is served(Test 1) */
-/*#define TEST_SRV1_ONCE*/
-#endif
 
 /* test SOCK_Reconnect() */
 #define DO_RECONNECT
@@ -220,10 +212,6 @@ static void TEST__server_1(SOCK sock)
     status = SOCK_Read(sock, buf, n_io, &n_io_done, eIO_ReadPlain);
     assert(status == eIO_Success  &&  n_io == n_io_done);
     assert(strcmp(buf, s_C1) == 0  ||  strcmp(buf, s_M1) == 0);
-
-#ifdef TEST_SRV1_SHUTDOWN
-    return 212;
-#endif
 
     SOCK_SetDataLogging(sock, eDefault);
     SOCK_SetDataLoggingAPI(eOn);
@@ -519,7 +507,7 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
             s_DoubleTimeout(&r_to);
             status = SOCK_SetTimeout(sock, eIO_Read, &r_to);
             assert(status == eIO_Success);
-            assert(SOCK_Status(sock, eIO_Read) == eIO_Success);
+            assert(SOCK_Status(sock, eIO_Read) == eIO_Timeout);
             break;
 
         default:
@@ -657,13 +645,6 @@ static void TEST__server(unsigned short port)
         TEST__server_2(sock, lsock);
 #else
         TEST__server_2(sock, 0);
-#endif
-
-#ifdef TEST_SRV1_ONCE
-        /* Close listening socket */
-        assert(LSOCK_Close(lsock) == eIO_Success);
-        /* Finish after the first session */
-        break;
 #endif
     } /* for */
 }

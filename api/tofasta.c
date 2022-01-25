@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.219 $
+* $Revision: 6.230 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -876,6 +876,7 @@ static SeqIdPtr ChooseFastaID (BioseqPtr bsp, Boolean allow_mult)
 static Int4 BioseqFastaStreamInternal (
   BioseqPtr bsp,
   SeqLocPtr slp,
+  SeqLitPtr lit,
   CharPtr str,
   FILE *fp,
   ByteStorePtr bs,
@@ -890,16 +891,22 @@ static Int4 BioseqFastaStreamInternal (
 )
 
 {
+  Char         acc [41];
+  SeqIdPtr     accn = NULL;
   Char         buf [4096];
-  Char         ch;
+  Char         ch, ch1, ch2, ch3;
   Int4         count = 0;
+  Int4         gi = -1;
+  SeqIdPtr     gpp = NULL;
   Char         id [128];
+  Uint1        id_format = PRINTID_FASTA_LONG;
+  CharPtr      ptr;
   StreamFsa    sf;
   SeqIdPtr     sip = NULL;
   Char         spn [64];
   CharPtr      tmp;
 
-  if (bsp == NULL && slp == NULL && str == NULL) return 0;
+  if (bsp == NULL && slp == NULL && lit == NULL && str == NULL) return 0;
   if (fp == NULL && bs == NULL) return 0;
   if (bsp != NULL && bsp->repr == Seq_repr_virtual) return 0;
   if (linelen > 128) {
@@ -920,6 +927,7 @@ static Int4 BioseqFastaStreamInternal (
   if (grouplen < 1) {
     grouplen = 0;
   }
+  acc [0] = '\0';
   MemSet ((Pointer) &sf, 0, sizeof (StreamFsa));
   sf.fp = fp;
   sf.bs = bs;
@@ -932,15 +940,108 @@ static Int4 BioseqFastaStreamInternal (
   sf.grouplen = grouplen;
   sf.skip = skip;
   sf.gi = 0;
-  if (bsp != NULL) {
-    for (sip = bsp->id; sip != NULL; sip = sip->next) {
-      if (sip->choice != SEQID_GI) continue;
-      sf.gi = sip->data.intvalue;
-    }
-  }
   sf.start = 0;
   sf.seqpos = 0;
   sf.seqspans = (Boolean) ((flags & STREAM_HTML_SPANS) != 0);
+  if (sf.seqspans) {
+    if (bsp != NULL) {
+      for (sip = bsp->id; sip != NULL; sip = sip->next) {
+        switch (sip->choice) {
+          case SEQID_GI :
+            gi = sip->data.intvalue;
+            break;
+          case SEQID_GENBANK :
+          case SEQID_EMBL :
+          case SEQID_DDBJ :
+          case SEQID_OTHER :
+            accn = sip;
+            break;
+          case SEQID_PIR :
+          case SEQID_SWISSPROT :
+          case SEQID_PRF :
+          case SEQID_PDB :
+            accn = sip;
+            break;
+          case SEQID_TPG :
+          case SEQID_TPE :
+          case SEQID_TPD :
+            accn = sip;
+            break;
+          case SEQID_GPIPE :
+            /* should not override better accession */
+            gpp = sip;
+            break;
+          default :
+            break;
+        }
+      }
+    } else if (slp != NULL) {
+      /* PUBSEQ_OS will send a SeqInt with a chain of Seq-ids */
+      for (sip = SeqLocId (slp); sip != NULL; sip = sip->next) {
+        switch (sip->choice) {
+          case SEQID_GI :
+            gi = sip->data.intvalue;
+            break;
+          case SEQID_GENBANK :
+          case SEQID_EMBL :
+          case SEQID_DDBJ :
+          case SEQID_OTHER :
+            accn = sip;
+            break;
+          case SEQID_PIR :
+          case SEQID_SWISSPROT :
+          case SEQID_PRF :
+          case SEQID_PDB :
+            accn = sip;
+            break;
+          case SEQID_TPG :
+          case SEQID_TPE :
+          case SEQID_TPD :
+            accn = sip;
+            break;
+          case SEQID_GPIPE :
+            /* should not override better accession */
+            gpp = sip;
+            break;
+          default :
+            break;
+        }
+      }
+      if (sip != NULL && sip->choice == SEQID_GI) {
+        sf.gi = sip->data.intvalue;
+      }
+    }
+    if (gi > 0) {
+      sf.gi = gi;
+    }
+    if (accn == NULL) {
+      accn = gpp;
+    }
+    if (accn != NULL) {
+      SeqIdWrite (accn, acc, PRINTID_TEXTID_ACC_ONLY, sizeof (acc) - 1);
+
+      if (accn->choice == SEQID_PDB) {
+        ptr = StringChr (acc, '_');
+        if (ptr != NULL) {
+          ch1 = ptr [1];
+          if (ch1 != '\0') {
+            ch2 = ptr [2];
+            if (ch2 != '\0') {
+              ch3 = ptr [3];
+              if (ch3 == '\0') {
+                if (ch1 == ch2) {
+                  if (IS_UPPER (ch1)) {
+                    ptr [1] = TO_LOWER (ch1);
+                    ptr [2] = '\0';
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   if (do_defline) {
     id [0] = '\0';
     if (substitute_ids) {
@@ -948,7 +1049,10 @@ static Int4 BioseqFastaStreamInternal (
     } else if (bsp != NULL) {
       sip = bsp->id;
     }
-    SeqIdWrite (sip, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+    if ((flags & STREAM_ALL_FASTA_IDS) != 0) {
+      id_format = PRINTID_FASTA_ALL;
+    }
+    SeqIdWrite (sip, id, id_format, sizeof (id) - 1);
     /* no longer need to do feature indexing if title not present to speed up creation */
     /*
     sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_title, NULL);
@@ -984,6 +1088,8 @@ static Int4 BioseqFastaStreamInternal (
     count = SeqPortStream (bsp, flags, (Pointer) &sf, FsaStreamProc);
   } else if (slp != NULL) {
     count = SeqPortStreamLoc (slp, flags, (Pointer) &sf, FsaStreamProc);
+  } else if (lit != NULL) {
+    count = SeqPortStreamLit (lit, flags, (Pointer) &sf, FsaStreamProc);
   } else if (str != NULL) {
     count = StringLen (str);
     FsaStreamProc (str, (Pointer) &sf);
@@ -1007,6 +1113,12 @@ static Int4 BioseqFastaStreamInternal (
         fprintf (sf.fp, "</span>");
       }
       fprintf (sf.fp, "\n");
+      if (sf.seqspans) {
+        fprintf (sf.fp, "<script type=\"text/javascript\">");
+        fprintf (sf.fp, "if (typeof(oData) == \"undefined\") oData = []; ");
+        fprintf (sf.fp, "oData.push({gi:%ld,acc:\"%s\"})", (long) sf.gi, acc);
+        fprintf (sf.fp, "</script>\n");
+      }
     } else if (sf.bs != NULL) {
       if (sf.seqspans) {
         sprintf (spn, "<span class=\"ff_line\" id=\"gi_%ld_%ld\">", (long) sf.gi, (long) (sf.start + 1));
@@ -1017,6 +1129,16 @@ static Int4 BioseqFastaStreamInternal (
         BSWrite (sf.bs, "</span>", sizeof ("</span>"));
       }
       BSWrite (sf.bs, "\n", sizeof ("\n"));
+      if (sf.seqspans) {
+        sprintf (spn, "<script type=\"text/javascript\">");
+        BSWrite (sf.bs, spn, StringLen (spn));
+        sprintf (spn, "if (typeof(oData) == \"undefined\") oData = []; ");
+        BSWrite (sf.bs, spn, StringLen (spn));
+        sprintf (spn, "oData.push({gi:%ld,acc:\"%s\"})", (long) sf.gi, acc);
+        BSWrite (sf.bs, spn, StringLen (spn));
+        sprintf (spn, "</script>\n");
+        BSWrite (sf.bs, spn, StringLen (spn));
+      }
     }
   }
   return count;
@@ -1033,7 +1155,7 @@ NLM_EXTERN Int4 BioseqFastaStream (
 )
 
 {
-  return BioseqFastaStreamInternal (bsp, NULL, NULL, fp, NULL, flags,
+  return BioseqFastaStreamInternal (bsp, NULL, NULL, NULL, fp, NULL, flags,
                                     linelen, blocklen, grouplen,
                                     do_defline, FALSE, FALSE, 0);
 }
@@ -1051,7 +1173,7 @@ NLM_EXTERN Int4 BioseqFastaStreamEx (
 )
 
 {
-  return BioseqFastaStreamInternal (bsp, NULL, NULL, fp, NULL, flags,
+  return BioseqFastaStreamInternal (bsp, NULL, NULL, NULL, fp, NULL, flags,
                                     linelen, blocklen, grouplen,
                                     do_defline, substitute_ids, sorted_protein, 0);
 }
@@ -1067,7 +1189,7 @@ NLM_EXTERN Int4 BioseqFastaMemStream (
 )
 
 {
-  return BioseqFastaStreamInternal (bsp, NULL, NULL, NULL, bs, flags,
+  return BioseqFastaStreamInternal (bsp, NULL, NULL, NULL, NULL, bs, flags,
                                     linelen, blocklen, grouplen,
                                     do_defline, FALSE, FALSE, 0);
 }
@@ -1084,7 +1206,24 @@ NLM_EXTERN Int4 SeqLocFastaStream (
 {
   if (slp == NULL || fp == NULL) return 0;
 
-  return BioseqFastaStreamInternal (NULL, slp, NULL, fp, NULL, flags, 
+  return BioseqFastaStreamInternal (NULL, slp, NULL, NULL, fp, NULL, flags, 
+                                    linelen, blocklen, grouplen,
+                                    FALSE, FALSE, FALSE, 0);
+}
+
+NLM_EXTERN Int4 SeqLitFastaStream (
+  SeqLitPtr lit,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen
+)
+
+{
+  if (lit == NULL || fp == NULL) return 0;
+
+  return BioseqFastaStreamInternal (NULL, NULL, lit, NULL, fp, NULL, flags, 
                                     linelen, blocklen, grouplen,
                                     FALSE, FALSE, FALSE, 0);
 }
@@ -1275,7 +1414,7 @@ NLM_EXTERN Int4 CdRegionFastaStream (
     skip = 2;
   }
 
-  return BioseqFastaStreamInternal (NULL, sfp->location, NULL, fp, NULL, flags,
+  return BioseqFastaStreamInternal (NULL, sfp->location, NULL, NULL, fp, NULL, flags,
                                     linelen, blocklen, grouplen,
                                     FALSE, FALSE, FALSE, skip);
 }
@@ -1330,13 +1469,160 @@ NLM_EXTERN Int4 TranslationFastaStream (
     }
   }
 
-  count = BioseqFastaStreamInternal (NULL, NULL, str, fp, NULL, flags,
+  count = BioseqFastaStreamInternal (NULL, NULL, NULL, str, fp, NULL, flags,
                                      linelen, blocklen, grouplen,
                                      FALSE, FALSE, FALSE, 0);
 
   MemFree (str);
  
   return count;
+}
+
+static void DoGeneDefline (
+  SeqFeatPtr sfp,
+  FILE *fp,
+  GeneRefPtr grp,
+  CharPtr idSuffix
+)
+
+{
+  BioseqPtr          bsp = NULL;
+  Char               buf [512];
+  Boolean            do_defline = TRUE;
+  Uint2              entityID;
+  SeqMgrFeatContext  genecontext;
+  IntAsn2gbJob       iaj;
+  Boolean            partial5;
+  Boolean            partial3;
+  SeqIdPtr           sip;
+  CharPtr            str;
+  Char               tmp [64];
+
+  if (sfp == NULL || fp == NULL || grp == NULL) return;
+  if (sfp == NULL || fp == NULL || sfp->data.choice != SEQFEAT_GENE) return;
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (grp == NULL) return;
+
+  if (do_defline) {
+    bsp = BioseqFindFromSeqLoc (sfp->location);
+    if (bsp == NULL) {
+      do_defline = FALSE;
+      StringCpy (buf, "lcl|");
+      sip = SeqLocId (sfp->location);
+      if (sip != NULL) {
+        SeqIdWrite (sip, tmp, PRINTID_TEXTID_ACC_VER, sizeof (tmp) - 1);
+        StringCat (buf, tmp);
+      }
+      if (StringDoesHaveText (idSuffix) && StringLen (idSuffix) < 200) {
+        StringCat (buf, idSuffix);
+      }
+      FastaFileFunc (bsp, FASTA_ID, buf, sizeof (buf), (Pointer) fp);
+      StringCpy (buf, "?");
+      FastaFileFunc (bsp, FASTA_DEFLINE, buf, sizeof (buf), (Pointer) fp);
+      fflush (fp);
+    }
+  }
+
+  if (do_defline && bsp != NULL) {
+    if (sfp != SeqMgrGetDesiredFeature (0, bsp, 0, 0, sfp, &genecontext)) {
+      do_defline = FALSE;
+      StringCpy (buf, "lcl|");
+      sip = SeqIdFindWorst (bsp->id);
+      if (sip != NULL) {
+        SeqIdWrite (sip, tmp, PRINTID_TEXTID_ACC_VER, sizeof (tmp) - 1);
+        StringCat (buf, tmp);
+      }
+      if (StringDoesHaveText (idSuffix) && StringLen (idSuffix) < 200) {
+        StringCat (buf, idSuffix);
+      }
+      FastaFileFunc (bsp, FASTA_ID, buf, sizeof (buf), (Pointer) fp);
+      StringCpy (buf, "?");
+      FastaFileFunc (bsp, FASTA_DEFLINE, buf, sizeof (buf), (Pointer) fp);
+      fflush (fp);
+    }
+  }
+
+  if (do_defline) {
+    entityID = ObjMgrGetEntityIDForPointer (bsp);
+    if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
+      SeqMgrIndexFeatures (entityID, NULL);
+    }
+
+    CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+  
+    MemSet ((Pointer) &iaj, 0, sizeof (IntAsn2gbJob));
+    iaj.flags.iupacaaOnly = FALSE;
+    iaj.relModeError = FALSE;
+  
+    StringCpy (buf, "lcl|");
+    sip = SeqIdFindWorst (bsp->id);
+    if (sip != NULL) {
+      SeqIdWrite (sip, tmp, PRINTID_TEXTID_ACC_VER, sizeof (tmp) - 1);
+      StringCat (buf, tmp);
+    }
+    if (StringDoesHaveText (idSuffix) && StringLen (idSuffix) < 200) {
+      StringCat (buf, idSuffix);
+    }
+  
+    FastaFileFunc (bsp, FASTA_ID, buf, sizeof (buf), (Pointer) fp);
+  
+    buf [0] = '\0';
+    if (StringDoesHaveText (grp->locus)) {
+      StringCat (buf, "[gene=");
+      StringCat (buf, grp->locus);
+      StringCat (buf, "] ");
+    }
+    if (StringDoesHaveText (grp->locus_tag)) {
+      StringCat (buf, "[locus_tag=");
+      StringCat (buf, grp->locus_tag);
+      StringCat (buf, "] ");
+    }
+    if (StringLen (buf) == 0 && StringDoesHaveText (genecontext.label)) {
+      StringCat (buf, "[gene=");
+      StringCat (buf, genecontext.label);
+      StringCat (buf, "] ");
+    }
+    str = FFFlatLoc (&iaj, bsp, sfp->location, FALSE, FALSE);
+    if (str != NULL && StringLen (str) + StringLen (buf) < sizeof (buf) - 10) {
+      StringCat (buf, "[location=");
+      StringCat (buf, str);
+      StringCat (buf, "] ");
+      MemFree (str);
+    }
+    TrimSpacesAroundString (buf);
+  
+    FastaFileFunc (bsp, FASTA_DEFLINE, buf, sizeof (buf), (Pointer) fp);
+  
+    fflush (fp);
+  }
+}
+
+NLM_EXTERN Int4 GeneFastaStream (
+  SeqFeatPtr sfp,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen,
+  Boolean do_defline,
+  CharPtr idSuffix
+)
+
+{
+  GeneRefPtr  grp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE) return 0;
+  if (fp == NULL) return 0;
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (grp == NULL) return 0;
+
+  if (do_defline) {
+    DoGeneDefline (sfp, fp, grp, idSuffix);
+  }
+
+  return BioseqFastaStreamInternal (NULL, sfp->location, NULL, NULL, fp, NULL, flags,
+                                    linelen, blocklen, grouplen,
+                                    FALSE, FALSE, FALSE, 0);
 }
 
 /*****************************************************************************
@@ -5109,6 +5395,7 @@ typedef struct deflinestruct {
   /* subsource fields */
   CharPtr m_chromosome;
   CharPtr m_clone;
+  Boolean m_has_clone;
   CharPtr m_map;
   CharPtr m_plasmid;
   CharPtr m_segment;
@@ -5116,6 +5403,9 @@ typedef struct deflinestruct {
   /* orgmod fields */
   CharPtr m_isolate;
   CharPtr m_strain;
+
+  /* user object fields */
+  Boolean m_is_unverified;
 
   /* exception fields */
   TextFsaPtr m_low_quality_fsa;
@@ -5176,6 +5466,7 @@ static void x_SetFlags (
   SeqIdPtr        sip;
   CharPtr         str;
   TextSeqIdPtr    tsip;
+  UserObjectPtr   uop;
   ValNodePtr      vnp;
 
   if (dlp == NULL) return;
@@ -5307,6 +5598,19 @@ static void x_SetFlags (
     }
   }
 
+  /* process Unverified user object */
+  for (sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_user, NULL);
+       sdp != NULL;
+       sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_user, sdp)) {
+    if (sdp->choice != Seq_descr_user) continue;
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop == NULL) continue;
+    oip = uop->type;
+    if (oip == NULL) continue;
+    if (StringICmp (oip->str, "Unverified") != 0) continue;
+    dlp->m_is_unverified = TRUE;
+  }
+
   if (dlp->m_htg_tech || dlp->m_third_party) {
     /* process keywords */
     keywords = NULL;
@@ -5365,6 +5669,31 @@ static void x_SetFlags (
 }
 
 /* set instance variables from BioSource */
+static void x_SetSrcClone (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  BioSourcePtr  biop;
+  DefLinePtr    dlp;
+  SubSourcePtr  ssp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_BIOSRC) return;
+  dlp = (DefLinePtr) userdata;
+  if (dlp == NULL) return;
+
+  biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+  if (biop == NULL) return;
+
+  /* look for clones on source features */
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+    if (StringHasNoText (ssp->name)) continue;
+    if (ssp->subtype != SUBSRC_clone) continue;
+    dlp->m_has_clone = TRUE;
+  }
+}
+
 static void x_SetBioSrc (
   DefLinePtr dlp
 )
@@ -5404,6 +5733,7 @@ static void x_SetBioSrc (
               break;
             case SUBSRC_clone :
               dlp->m_clone = ssp->name;
+              dlp->m_has_clone = TRUE;
               break;
             case SUBSRC_map :
               dlp->m_map = ssp->name;
@@ -5444,6 +5774,10 @@ static void x_SetBioSrc (
       }
     }
   }
+
+  if (dlp->m_has_clone) return;
+
+  VisitFeaturesOnBsp (bsp, (Pointer) dlp, x_SetSrcClone);
 }
 
 static CharPtr x_TrimFirstNCharacters (
@@ -5593,6 +5927,11 @@ static CharPtr x_DescribeClones (
 
   if (dlp == NULL) return NULL;
 
+  if (dlp->m_htgs_unfinished && dlp->m_htgs_pooled && dlp->m_has_clone) {
+    result = StringSave (", pooled multiple clones");
+    return result;
+  }
+
   str = dlp->m_clone;
   if (StringHasNoText (str)) return NULL;
 
@@ -5606,9 +5945,7 @@ static CharPtr x_DescribeClones (
     ch = *str;
   }
 
-  if (dlp->m_htgs_unfinished && dlp->m_htgs_pooled) {
-    result = StringSave (", pooled multiple clones");
-  } else if (count > 3) {
+  if (count > 3) {
     sprintf (buf, ", %d clones", (int) count);
     result = StringSave (buf);
   } else {
@@ -6817,7 +7154,8 @@ static CharPtr x_TitleFromWGS (
 }
 
 static CharPtr x_SetPrefix (
-  DefLinePtr dlp
+  DefLinePtr dlp,
+  CharPtr title
 )
 
 {
@@ -6825,7 +7163,11 @@ static CharPtr x_SetPrefix (
 
   if (dlp == NULL) return NULL;
 
-  if (dlp->m_is_tsa) {
+  if (dlp->m_is_unverified) {
+    if (StringStr (title, "UNVERIFIED") == NULL) {
+      prefix = "UNVERIFIED: ";
+    }
+  } else if (dlp->m_is_tsa) {
     prefix = "TSA: ";
   } else if (dlp->m_third_party) {
     if (dlp->m_tpa_exp) {
@@ -7062,6 +7404,8 @@ NLM_EXTERN CharPtr NewCreateDefLine (
     x_TrimFirstNCharacters (title, 10);
   } else if (StringNICmp (title, "TSA:", 4) == 0) {
     x_TrimFirstNCharacters (title, 4);
+  } else if (StringNICmp (title, "UNVERIFIED:", 11) == 0) {
+    x_TrimFirstNCharacters (title, 11);
   }
 
   /* strip leading spaces remaining after removal of old TPA or TSA prefixes */
@@ -7071,7 +7415,7 @@ NLM_EXTERN CharPtr NewCreateDefLine (
   x_TrimMostPunctFromEnd (title);
 
   /* calcualte prefix */
-  prefix = x_SetPrefix (dlp);
+  prefix = x_SetPrefix (dlp, title);
 
   /* calculate suffix */
   suffix = x_SetSuffix (dlp, title);
@@ -7092,6 +7436,8 @@ NLM_EXTERN CharPtr NewCreateDefLine (
   TextFsaFree (dlp->m_low_quality_fsa);
 
   dlp = MemFree (dlp);
+
+  Asn2gnbkCompressSpaces (result);
 
   return result;
 }

@@ -1,4 +1,4 @@
-/* $Id: blast_nascan.c,v 1.18 2010/07/27 18:24:31 kazimird Exp $
+/* $Id: blast_nascan.c,v 1.19 2011/04/11 14:54:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_nascan.c,v 1.18 2010/07/27 18:24:31 kazimird Exp $";
+    "$Id: blast_nascan.c,v 1.19 2011/04/11 14:54:31 kazimird Exp $";
 #endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 /**
@@ -182,7 +182,8 @@ static Int4 s_BlastNaScanSubject_Any(const LookupTableWrap * lookup_wrap,
            widths require two bytes of the compressed subject sequence, and
            possibly a third if the word is not aligned on a 4-base boundary */
 
-        if (scan_step % COMPRESSION_RATIO == 0 && !subject->mask_type) {
+        if (scan_step % COMPRESSION_RATIO == 0 && 
+            (subject->mask_type == eNoSubjMasking)) {
 
             /* for strides that are a multiple of 4, words are always aligned 
                and two bytes of the subject sequence will always hold a
@@ -469,7 +470,8 @@ static Int4 s_BlastSmallNaScanSubject_Any(const LookupTableWrap * lookup_wrap,
            widths require two bytes of the compressed subject sequence, and
            possibly a third if the word is not aligned on a 4-base boundary */
 
-        if (scan_step % COMPRESSION_RATIO == 0 && !subject->mask_type) {
+        if (scan_step % COMPRESSION_RATIO == 0 && 
+            (subject->mask_type == eNoSubjMasking)) {
 
             /* for strides that are a multiple of 4, words are always aligned 
                and two bytes of the subject sequence will always hold a
@@ -1509,7 +1511,8 @@ static Int4 s_MBScanSubject_Any(const LookupTableWrap* lookup_wrap,
       subtract the longest chain length from the allowed offset array size. */
    max_hits -= mb_lt->longest_chain;
 
-   if (scan_step % COMPRESSION_RATIO == 0 && !subject->mask_type) {
+   if (scan_step % COMPRESSION_RATIO == 0 && 
+       (subject->mask_type == eNoSubjMasking)) {
 
       /* for strides that are a multiple of 4, words are
          always aligned and three bytes of the subject sequence 

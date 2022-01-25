@@ -1,4 +1,4 @@
-/*  $Id: hspfilter_collector.c,v 1.2 2009/10/01 17:55:38 kazimird Exp $
+/*  $Id: hspfilter_collector.c,v 1.4 2011/04/15 12:30:06 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: hspfilter_collector.c,v 1.2 2009/10/01 17:55:38 kazimird Exp $";
+    "$Id: hspfilter_collector.c,v 1.4 2011/04/15 12:30:06 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 
@@ -113,7 +113,6 @@ s_BlastHSPCollectorRun(void* data, BlastHSPList* hsp_list)
          return -1;
 
       for (index = 0; index < hsp_list->hspcnt; index++) {
-         Boolean can_insert = TRUE;
          Int4 query_index;
          hsp = hsp_list->hsp_array[index];
          query_index = Blast_GetQueryIndexFromContext(hsp->context, program);
@@ -129,37 +128,14 @@ s_BlastHSPCollectorRun(void* data, BlastHSPList* hsp_list)
             tmp_hsp_list->oid = hsp_list->oid;
          }
 
-         if (tmp_hsp_list->hspcnt >= tmp_hsp_list->allocated) {
-            if (tmp_hsp_list->do_not_reallocate == FALSE) {
-               BlastHSP** new_hsp_array;
-               Int4 new_size = 
-                  MIN(2*tmp_hsp_list->allocated, tmp_hsp_list->hsp_max);
-               if (new_size == tmp_hsp_list->hsp_max)
-                  tmp_hsp_list->do_not_reallocate = TRUE;
-            
-               new_hsp_array = realloc(tmp_hsp_list->hsp_array, 
-                                    new_size*sizeof(BlastHSP*));
-               if (!new_hsp_array) {
-                  tmp_hsp_list->do_not_reallocate = TRUE;
-                  can_insert = FALSE;
-               } else {
-                  tmp_hsp_list->hsp_array = new_hsp_array;
-                  tmp_hsp_list->allocated = new_size;
-               }
-            }
-            else
-            {
-               can_insert = FALSE;
-            }
-         }
-         if (can_insert) {
-            tmp_hsp_list->hsp_array[tmp_hsp_list->hspcnt++] = hsp;
-         } else {
-            /* FIXME: what if this is not the least significant HSP?? */
-            /* Cannot add more HSPs; free the memory */
-            hsp_list->hsp_array[index] = Blast_HSPFree(hsp);
-         }
+         Blast_HSPListSaveHSP(tmp_hsp_list, hsp);
+         hsp_list->hsp_array[index] = NULL;
       }
+
+      /* All HSPs from the hsp_list structure are now moved to the results 
+         structure, so set the HSP count back to 0 */
+      hsp_list->hspcnt = 0;
+      Blast_HSPListFree(hsp_list);
 
       /* Insert the hit list(s) into the appropriate places in the results 
          structure */
@@ -174,10 +150,6 @@ s_BlastHSPCollectorRun(void* data, BlastHSPList* hsp_list)
          }
       }
       sfree(hsp_list_array);
-      /* All HSPs from the hsp_list structure are now moved to the results 
-         structure, so set the HSP count back to 0 */
-      hsp_list->hspcnt = 0;
-      Blast_HSPListFree(hsp_list);
    } else if (hsp_list->hspcnt > 0) {
       /* Single query; save the HSP list directly into the results 
          structure */

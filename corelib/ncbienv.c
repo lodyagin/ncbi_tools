@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.49 $
+* $Revision: 6.51 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.51  2011/01/20 17:08:07  lavr
+* Do not simply truncate size_t into Int2, use max instead NOJIRA
+*
+* Revision 6.50  2011/01/19 19:09:34  lavr
+* Heed a warning NOJIRA
+*
 * Revision 6.49  2010/06/30 15:54:38  ucko
 * Handle 64-bit Darwin builds, which require disabling WIN_MAC because
 * Carbon is 32-bit-only.
@@ -1611,7 +1617,7 @@ NLM_EXTERN Nlm_Boolean Nlm_FindPath(const Nlm_Char* file, const Nlm_Char* sectio
 
   *buf = '\0';
   if (*file != '\0'  &&  *section != '\0'  &&  *type != '\0'  &&
-      Nlm_GetAppParam(file, section, type, "", buf, (Nlm_Int2)(buflen - 1))  &&
+      Nlm_GetAppParam(file, section, type, "", buf, buflen - 1)  &&
       *buf != '\0')
     {
       Nlm_FileBuildPath(buf, NULL, NULL);
@@ -1904,7 +1910,8 @@ extern size_t Nlm_GetEnvParamEx
 
   /* Search in the configuration file */
   if (!len  &&  conf_name  &&  *conf_name) {
-    len = GetAppParam(conf_file, conf_section, conf_name, dflt, buf, bufsize);
+    len = GetAppParam(conf_file, conf_section, conf_name, dflt, buf,
+                      bufsize < INT2_MAX ? (Nlm_Int2) bufsize : INT2_MAX);
   }
 
   /* Store the value in the transient parameter list */

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.41 $
+* $Revision: 6.46 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -701,7 +701,8 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"ncRNA\" , menulabel \"Non-coding RNA\" , featdef-key 94 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
 "{ typelabel \"tmRNA\" , menulabel \"Transfer-messenger RNA\" , featdef-key 95 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
 "{ typelabel \"CloneRef\" , menulabel \"Clone Reference\" , featdef-key 96 , seqfeat-key 21 , entrygroup 0 , displaygroup 0 , molgroup na } ,\n" \
-"{ typelabel \"VariationRef\" , menulabel \"Variation Reference\" , featdef-key 97 , seqfeat-key 22 , entrygroup 0 , displaygroup 0 , molgroup na  } } };\n";
+"{ typelabel \"VariationRef\" , menulabel \"Variation Reference\" , featdef-key 97 , seqfeat-key 22 , entrygroup 0 , displaygroup 0 , molgroup na } ,\n" \
+"{ typelabel \"mobile_element\" , menulabel \"Mobile genetic element\" , featdef-key 98 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na  } } };\n";
 #endif
 
 /*****************************************************************************

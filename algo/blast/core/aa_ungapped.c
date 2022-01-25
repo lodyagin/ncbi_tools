@@ -1,4 +1,4 @@
-/* $Id: aa_ungapped.c,v 1.62 2010/07/27 18:24:31 kazimird Exp $
+/* $Id: aa_ungapped.c,v 1.63 2011/03/17 14:15:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: aa_ungapped.c,v 1.62 2010/07/27 18:24:31 kazimird Exp $";
+    "$Id: aa_ungapped.c,v 1.63 2011/03/17 14:15:31 kazimird Exp $";
 #endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/aa_ungapped.h>
@@ -500,6 +500,9 @@ s_BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk * subject,
     scan_range[0] = 0;
     scan_range[1] = subject->seq_ranges[0].left;
     scan_range[2] = subject->seq_ranges[0].right - wordsize;
+
+    if (scan_range[2] < scan_range[1])
+        scan_range[2] = scan_range[1];
 
     while (scan_range[1] <= scan_range[2]) {
         /* scan the subject sequence for hits */

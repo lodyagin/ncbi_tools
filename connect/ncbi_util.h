@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_UTIL__H
 #define CONNECT___NCBI_UTIL__H
 
-/* $Id: ncbi_util.h,v 6.39 2010/02/04 15:17:12 kazimird Exp $
+/* $Id: ncbi_util.h,v 6.44 2011/02/17 18:09:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -174,7 +174,7 @@ extern NCBI_XCONNECT_EXPORT void CORE_SetLOGFILE_Ex
 
 
 /** Same as CORE_SetLOGFILE_Ex() with last parameter passed as 0
- * (all messages pass).
+ * (all messages get posted).
  * @sa
  *   CORE_SetLOGFILE_Ex, CORE_SetLOG
  */
@@ -216,10 +216,9 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ CORE_SetLOGFILE_NAME
  */
 typedef enum {
     fLOG_Default       = 0x0,    /**< fLOG_Short if NDEBUG, else fLOG_Full   */
-
     fLOG_Level         = 0x1,
     fLOG_Module        = 0x2,
-    fLOG_FileLine      = 0x4,    /**< always here for eLOG_Trace level       */
+    fLOG_FileLine      = 0x4,
     fLOG_DateTime      = 0x8,
     fLOG_FullOctal     = 0x2000, /**< do not do reduction in octal data bytes*/
     fLOG_OmitNoteLevel = 0x4000, /**< do not add NOTE if eLOG_Note is level  */
@@ -385,6 +384,17 @@ extern NCBI_XCONNECT_EXPORT REG  CORE_GetREG(void);
 extern NCBI_XCONNECT_EXPORT const char* CORE_GetPlatform(void);
 
 
+/** Obtain current application name (toolkit dependent).
+ * @return
+ *  Return 0 when the application name cannot be determined;
+ *  otherwise, return a NULL-terminated string
+ *
+ * NOTE that setting an application name concurrently with this
+ * call can cause undefined behavior or a stale pointer returned.
+ */
+extern NCBI_XCONNECT_EXPORT const char* CORE_GetAppName(void);
+
+
 /** Obtain and store current user's name in the buffer provided.
  * Note that resultant strlen(buf) is always guaranteed to be less
  * than "bufsize", extra non-fit characters discarded.
@@ -490,7 +500,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ UTIL_MatchesMask
  *  Hostname to shorten (if possible)
  * @return 0 if the hostname wasn't modified, otherwise return "hostname".
  */
-extern char* UTIL_NcbiLocalHostName
+extern NCBI_XCONNECT_EXPORT char* UTIL_NcbiLocalHostName
 (char* hostname
  );
 
@@ -505,7 +515,7 @@ extern char* UTIL_NcbiLocalHostName
  * @return the buffer size needed (0 for NULL or empty (size==0) block).
  * @sa UTIL_PrintableString
  */
-extern size_t UTIL_PrintableStringSize
+extern NCBI_XCONNECT_EXPORT size_t UTIL_PrintableStringSize
 (const char* data,
  size_t      size
  );
@@ -532,12 +542,40 @@ extern size_t UTIL_PrintableStringSize
  * @return next position in the buffer past the last stored character.
  * @sa UTIL_PrintableStringSize
  */
-extern char* UTIL_PrintableString
+extern NCBI_XCONNECT_EXPORT char* UTIL_PrintableString
 (const char* data,
  size_t      size,
  char*       buf,
  int         full
  );
+
+
+/**
+ *  Conversion from Unicode to UTF8, and back.
+ *  Microsoft Windows - specific.
+ *  NOTE:
+ *    The caller should use UTIL_ReleaseBufferOnHeap function
+ *    to free the buffer returned from UTIL_TcharToUtf8OnHeap;
+ *    and ReleaseBuffer to free the one returned from UTIL_TcharToUtf8
+ */
+
+#if defined(NCBI_OS_MSWIN)  &&  defined(_UNICODE)
+extern const char*    UTIL_TcharToUtf8OnHeap(const wchar_t* buffer);
+extern const char*    UTIL_TcharToUtf8      (const wchar_t* buffer);
+extern const wchar_t* UTIL_Utf8ToTchar      (const    char* buffer);
+#  define             UTIL_ReleaseBuffer(x)  UTIL_ReleaseBufferOnHeap(x)
+#else
+#  define             UTIL_TcharToUtf8OnHeap(x)  (x)
+#  define             UTIL_TcharToUtf8(x)        (x)
+#  define             UTIL_Utf8ToTchar(x)        (x)
+#  define             UTIL_ReleaseBuffer(x)      /*void*/
+#endif /*NCBI_OS_MSWIN && _UNICODE*/
+
+#ifdef NCBI_OS_MSWIN
+extern void           UTIL_ReleaseBufferOnHeap(const void* buffer);
+#else
+#  define             UTIL_ReleaseBufferOnHeap(x)  /*void*/
+#endif /*NCBI_OS_MSWIN*/
 
 
 #ifdef __cplusplus

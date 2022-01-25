@@ -29,13 +29,17 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cdrgn.h,v $
+* Revision 6.15  2010/09/21 12:54:12  bollin
+* Fixed bug in update mRNA spans button - needs to use original location to
+* find mRNA to update.
+*
 * Revision 6.14  2009/09/02 15:08:39  bollin
 * New RNA editing.
 *
@@ -138,6 +142,7 @@ extern void ApplyProductToRNA (SeqFeatPtr sfp, CharPtr product);
 extern void AddToComment (SeqFeatPtr sfp, CharPtr comment);
 extern DialoG RnaTypeDialog (GrouP h, Boolean is_constraint, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 extern DialoG CreatencRNAClassDialog (GrouP h, Boolean is_constraint, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+NLM_EXTERN void UpdatemRNAAfterEditing(DialoG d, SeqLocPtr old_slp, SeqLocPtr new_slp);
 
 #ifdef __cplusplus
 }

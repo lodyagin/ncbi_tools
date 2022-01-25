@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.38 $
+* $Revision: 6.54 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -362,6 +362,91 @@ heapify (Nlm_CharPtr base0, Nlm_CharPtr base, Nlm_CharPtr lim, Nlm_CharPtr last,
 	}
 }
 
+/* helper for Nlm_StableMergeSort */
+static void 
+mergesort_helper( Nlm_CharPtr b, size_t nel, size_t width, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )), Nlm_CharPtr scratch, Nlm_CharPtr output );
+
+
+/* Also guaranteed O(NlogN) and guarantees a stable sort.
+   That is, elements which are the same
+   according to the compar function are kept in the same order. */
+NLM_EXTERN void LIBCALL Nlm_StableMergeSort (Nlm_VoidPtr b, size_t nel, size_t width, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )))	/* Element comparison routine */
+
+{
+  Nlm_CharPtr scratch = NULL;
+  Nlm_CharPtr output = NULL;
+
+  if( nel < 1 ) {
+    return; /* nothing to do */
+  }
+
+  /* We create scratch spaces which will be used throughout the 
+     sort. */
+  scratch = (Nlm_CharPtr) Nlm_MemNew( nel * width );  
+  output = (Nlm_CharPtr) Nlm_MemNew( nel * width );  
+
+  mergesort_helper( (Nlm_CharPtr)b, nel, width, compar, scratch, output );
+  memmove( b, output, nel * width );
+
+  /* free our scratch space, which is no longer needed */
+  Nlm_MemFree(scratch);
+  Nlm_MemFree(output);
+}
+
+/* This helper for Nlm_StableMergeSort sorts b and puts the
+   result in output.  It uses "scratch" for its own internal
+   scratch space. */
+static void 
+mergesort_helper( Nlm_CharPtr b, size_t nel, size_t width, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )), Nlm_CharPtr scratch, Nlm_CharPtr output )
+{
+  Nlm_CharPtr output_ptr = NULL;
+  Nlm_CharPtr left_ptr = NULL;
+  Nlm_CharPtr right_ptr = NULL;
+  Nlm_CharPtr midpoint_ptr = NULL;
+  Nlm_CharPtr one_past_end_ptr = NULL;
+  int compar_result = 0;
+
+  /* non-recursive base case */
+  if( 1 == nel ) {
+    memmove( output, b, width );
+    return;
+  }
+
+  /* divide-and-conquer: split roughly in half and sort each subarray,
+     with intermediate results ending up in the scratch array
+     ( the subcalls use "output" as a scratch space ) */
+  mergesort_helper( b, nel/2, width, compar, output, scratch );
+  mergesort_helper( b + (nel/2)*width, ((nel + 1) / 2), width, compar, output, scratch + (nel/2)*width );
+  
+  /* merge the sorted subarrays from scratch into output */ 
+  output_ptr = output;
+  left_ptr = scratch;
+  midpoint_ptr = scratch + (nel/2)*width;
+  right_ptr = midpoint_ptr;
+  one_past_end_ptr = scratch + (nel * width);
+
+  while( left_ptr < midpoint_ptr && right_ptr < one_past_end_ptr ) {
+    compar_result = (*compar)( left_ptr, right_ptr );
+    if( compar_result <= 0 ) {
+      memmove( output_ptr, left_ptr, width );
+      left_ptr += width;
+      output_ptr += width;
+    } else if( compar_result > 0 ) {
+      memmove( output_ptr, right_ptr, width );
+      right_ptr += width;
+      output_ptr += width;
+    }
+  }
+
+  if( left_ptr < midpoint_ptr ) {
+    /* right_ptr no longer valid, so just bulk copy from left_ptr */
+    memmove( output_ptr, left_ptr, midpoint_ptr - left_ptr );
+  } else if( right_ptr < one_past_end_ptr ) {
+    /* left_ptr no longer valid, so just bulk copy from right_ptr */
+    memmove( output_ptr, right_ptr, one_past_end_ptr - right_ptr );
+  }
+}
+
 /*****************************************************************************
 *
 *   ValNodeNew(vnp)
@@ -508,6 +593,42 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStr (ValNodePtr PNTR head, Nlm_Int2 cho
 	return newnode;
 }
 
+NLM_EXTERN ValNodePtr LIBCALL ValNodeCopyStrEx (ValNodePtr PNTR head, ValNodePtr PNTR tail, Nlm_Int2 choice, const char* str)
+
+{
+	ValNodePtr newnode = NULL;
+    ValNodePtr vnp;
+
+	if (str == NULL) return NULL;
+
+    newnode = ValNodeNew (NULL);
+    if (newnode == NULL) return NULL;
+
+    if (head != NULL) {
+        if (*head == NULL) {
+            *head = newnode;
+        }
+    }
+
+    if (tail != NULL) {
+        if (*tail != NULL) {
+            vnp = *tail;
+            while (vnp->next != NULL) {
+              vnp = vnp->next;
+            }
+            vnp->next = newnode;
+        }
+        *tail = newnode;
+    }
+
+	if (newnode != NULL) {
+		newnode->choice = (Nlm_Uint1)choice;
+		newnode->data.ptrvalue = StringSave(str);
+	}
+
+	return newnode;
+}
+
 /*****************************************************************************
 *
 *   ValNodeAddInt (head, choice, value)
@@ -609,6 +730,40 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeAddPointer (ValNodePtr PNTR head, Nlm_Int2 
 	ValNodePtr newnode;
 
 	newnode = ValNodeAdd(head);
+	if (newnode != NULL)
+	{
+		newnode->choice = (Nlm_Uint1)choice;
+		newnode->data.ptrvalue = value;
+	}
+
+	return newnode;
+}
+
+NLM_EXTERN ValNodePtr LIBCALL ValNodeAddPointerEx (ValNodePtr PNTR head, ValNodePtr PNTR tail, Nlm_Int2 choice, Nlm_VoidPtr value)
+{
+	ValNodePtr newnode = NULL;
+    ValNodePtr vnp;
+
+    newnode = ValNodeNew (NULL);
+    if (newnode == NULL) return NULL;
+
+    if (head != NULL) {
+        if (*head == NULL) {
+            *head = newnode;
+        }
+    }
+
+    if (tail != NULL) {
+        if (*tail != NULL) {
+            vnp = *tail;
+            while (vnp->next != NULL) {
+              vnp = vnp->next;
+            }
+            vnp->next = newnode;
+        }
+        *tail = newnode;
+    }
+
 	if (newnode != NULL)
 	{
 		newnode->choice = (Nlm_Uint1)choice;
@@ -806,6 +961,30 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeSort (ValNodePtr list, int (LIBCALLBACK *co
 }
 
 
+/*****************************************************************************
+*
+*   ValNodeIsSorted(list, compar)
+*   	Looks for first instance of compar not being true.
+*     If all true, then is sorted, otherwise not.
+*
+*****************************************************************************/
+NLM_EXTERN Nlm_Boolean LIBCALL ValNodeIsSorted (ValNodePtr list, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )))
+{
+  Nlm_Boolean rval = TRUE;
+
+  if (list == NULL || compar == NULL) {
+    return TRUE;
+  }
+  while (list->next != NULL && rval) {
+    if (compar (&list, &(list->next)) > 0) {
+      rval = FALSE;
+    }
+    list = list->next;
+  }
+  return rval;
+}
+
+
 NLM_EXTERN void LIBCALL
 ValNodeUnique 
 (ValNodePtr PNTR list,
@@ -827,6 +1006,31 @@ ValNodeUnique
       vnp = vnp->next;
     }
   }
+}
+
+
+NLM_EXTERN ValNodePtr LIBCALL
+ValNodeDupList 
+(ValNodePtr orig,
+ ValNodePtr (LIBCALLBACK *copy )PROTO ((ValNodePtr)))
+{
+  ValNodePtr list = NULL, prev = NULL, vnp, new_vnp;
+
+  if (copy == NULL) {
+    return NULL;
+  }
+  for (vnp = orig; vnp != NULL; vnp = vnp->next) {
+    new_vnp = copy (vnp);
+    if (new_vnp != NULL) {
+      if (prev == NULL) {
+        list = new_vnp;
+      } else {
+        prev->next = new_vnp;
+      }
+      prev = new_vnp;
+    }
+  }
+  return list;
 }
 
 
@@ -958,6 +1162,61 @@ NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrs (ValNodePtr list)
   }
 
   return ptr;
+}
+
+NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrsExEx (ValNodePtr list, Nlm_CharPtr separator, Nlm_CharPtr pfx, Nlm_CharPtr sfx)
+
+{
+  size_t       len;
+  size_t       lens;
+  size_t       pfx_len;
+  Nlm_CharPtr  ptr;
+  Nlm_CharPtr  sep;
+  size_t       sfx_len;
+  Nlm_CharPtr  str;
+  Nlm_CharPtr  tmp;
+  ValNodePtr   vnp;
+
+  if (list == NULL) return NULL;
+
+  pfx_len = StringLen (pfx);
+  sfx_len = StringLen (sfx);
+
+  lens = StringLen (separator);
+
+  for (vnp = list, len = 0; vnp != NULL; vnp = vnp->next) {
+    str = (Nlm_CharPtr) vnp->data.ptrvalue;
+    len += Nlm_StringLen (str);
+    len += lens;
+  }
+  if (len == 0) return NULL;
+  len += pfx_len + sfx_len;
+
+  ptr = Nlm_MemNew (sizeof (Nlm_Char) * (len + 2));
+  if (ptr == NULL) return NULL;
+
+  tmp = ptr;
+  if (pfx_len > 0) {
+    tmp = Nlm_StringMove (tmp, pfx);
+  }
+  sep = NULL;
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    tmp = Nlm_StringMove (tmp, sep);
+    str = (Nlm_CharPtr) vnp->data.ptrvalue;
+    tmp = Nlm_StringMove (tmp, str);
+    sep = separator;
+  }
+  if (sfx_len > 0) {
+    tmp = Nlm_StringMove (tmp, sfx);
+  }
+
+  return ptr;
+}
+
+NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrsEx (ValNodePtr list, Nlm_CharPtr separator)
+
+{
+  return ValNodeMergeStrsExEx (list, separator, NULL, NULL);
 }
 
 /*****************************************************************************
@@ -2103,3 +2362,785 @@ Nlm_Uint4 Nlm_GetChecksum(Nlm_CharPtr p)
 }
 
 /*  ----- End of simplified MD4 algorithm ------ */
+
+
+/* XML parsing section */
+
+/* function to decode ampersand-protected symbols */
+
+typedef struct xmltable {
+  Nlm_CharPtr  code;
+  size_t       len;
+  Nlm_Char     letter;
+} Nlm_XmlTable, PNTR Nlm_XmlTablePtr;
+
+static Nlm_XmlTable xmlcodes [] = {
+  { "&amp;",  5, '&'},
+  { "&apos;", 6, '\''},
+  { "&gt;",   4, '>'},
+  { "&lt;",   4, '<'},
+  { "&quot;", 6, '"'},
+  { NULL,     0, '\0'}
+};
+
+static Nlm_CharPtr DecodeXml (
+  Nlm_CharPtr str
+)
+
+{
+  Nlm_Char         ch;
+  Nlm_CharPtr      dst, src;
+  Nlm_Int2         i;
+  Nlm_XmlTablePtr  xtp;
+
+  if (StringHasNoText (str)) return str;
+
+  src = str;
+  dst = str;
+  ch = *src;
+  while (ch != '\0') {
+    if (ch == '&') {
+      xtp = NULL;
+      for (i = 0; xmlcodes [i].code != NULL; i++) {
+        if (StringNICmp (src, xmlcodes [i].code, xmlcodes [i].len) == 0) {
+          xtp = &(xmlcodes [i]);
+          break;
+        }
+      }
+      if (xtp != NULL) {
+        *dst = xtp->letter;
+        dst++;
+        src += xtp->len;
+      } else {
+        *dst = ch;
+        dst++;
+        src++;
+      }
+    } else {
+      *dst = ch;
+      dst++;
+      src++;
+    }
+    ch = *src;
+  }
+  *dst = '\0';
+
+  return str;
+}
+
+static Nlm_CharPtr EncodeXml (
+  Nlm_CharPtr str
+)
+
+{
+  Nlm_Char         ch;
+  Nlm_CharPtr      dst, src, tag, tmp;
+  Nlm_Int2         i;
+  size_t           len = 1;
+  Nlm_XmlTablePtr  xtp;
+
+  if (str == NULL) return NULL;
+
+  tmp = str;
+  ch = *tmp;
+  while (ch != '\0') {
+    len++;
+    for (i = 0; xmlcodes [i].code != NULL; i++) {
+      if (ch == xmlcodes [i].letter) {
+        len += xmlcodes [i].len;
+        break;
+      }
+    }
+    tmp++;
+    ch = *tmp;
+  }
+
+  if (len == 0) return NULL;
+
+  tmp = (Nlm_CharPtr) MemNew (len + 1);
+  if (tmp == NULL) return NULL;
+
+  src = str;
+  dst = tmp;
+  ch = *src;
+  while (ch != '\0') {
+    xtp = NULL;
+    for (i = 0; xmlcodes [i].code != NULL; i++) {
+      if (ch == xmlcodes [i].letter) {
+        xtp = &(xmlcodes [i]);
+        break;
+      }
+    }
+    if (xtp != NULL) {
+      tag = xtp->code;
+      ch = *tag;
+      while (ch != '\0') {
+        *dst = ch;
+        dst++;
+        tag++;
+        ch = *tag;
+      }
+    } else {
+      *dst = ch;
+      dst++;
+    }
+    src++;
+    ch = *src;
+  }
+  *dst = '\0';
+
+  return tmp;
+}
+
+#define XML_START_TAG  1
+#define XML_END_TAG    2
+#define XML_ATTRIBUTE  3
+#define XML_CONTENT    4
+
+/* first pass - tokenize XML into linear ValNode chain */
+
+static void TokenizeXmlLine (
+  ValNodePtr PNTR headp,
+  ValNodePtr PNTR tailp,
+  Nlm_CharPtr str
+)
+
+{
+  Nlm_CharPtr     atr, fst, lst, nxt, ptr;
+  Nlm_Char        ch, cha, chf, chl, quo;
+  Nlm_Boolean     doStart, doEnd;
+
+  if (headp == NULL || tailp == NULL) return;
+  if (StringHasNoText (str)) return;
+
+  ptr = str;
+  ch = *ptr;
+
+  while (ch != '\0') {
+    if (ch == ' ' || ch == '\r' || ch == '\n' || ch == '\t') {
+      /* ignore whitespace between tags */
+      ptr++;
+      ch = *ptr;
+
+    } else if (ch == '<') {
+
+      /* process XML tag */
+      /* skip past left angle bracket */
+      ptr++;
+
+      /* keep track of pointers to first character after < and last character before > in XML tag */
+      fst = ptr;
+      lst = ptr;
+      ch = *ptr;
+      while (ch != '\0' && ch != '>') {
+        lst = ptr;
+        ptr++;
+        ch = *ptr;
+      }
+      if (ch != '\0') {
+        *ptr = '\0';
+        ptr++;
+        ch = *ptr;
+      }
+
+      chf = *fst;
+      chl = *lst;
+      if (chf == '?' || chf == '!') {
+        /* skip processing instructions */
+      } else {
+        /* initial default - if no slashes are present, just do start tag */
+        doStart = TRUE;
+        doEnd = FALSE;
+        /* check for slash just after < or just before > symbol */
+        if (chf == '/') {
+          /* slash after <, just do end tag */
+          fst++;
+          doStart = FALSE;
+          doEnd = TRUE;
+        } else if (chl == '/') {
+          /* slash before > - self-closing tag - do start tag and end tag - content will be empty */
+          *lst = '\0';
+          doEnd = TRUE;
+        }
+
+        /* skip past first space to look for attribute strings before closing > symbol */
+        atr = fst;
+        cha = *atr;
+        while (cha != '\0' && cha != ' ') {
+          atr++;
+          cha = *atr;
+        }
+        if (cha != '\0') {
+          *atr = '\0';
+          atr++;
+          cha = *atr;
+        }
+
+        /* report start tag */
+        if (doStart) {
+          TrimSpacesAroundString (fst);
+          ValNodeCopyStrEx (headp, tailp, XML_START_TAG, fst);
+        }
+
+        /* report individual attribute tag="value" clauses */
+        while (cha != '\0') {
+          nxt = atr;
+          cha = *nxt;
+          /* skip to equal sign */
+          while (cha != '\0' && cha != '=') {
+            nxt++;
+            cha = *nxt;
+          }
+          if (cha != '\0') {
+            nxt++;
+            cha = *nxt;
+          }
+          quo = '\0';
+          if (cha == '"' || cha == '\'') {
+            quo = cha;
+            nxt++;
+            cha = *nxt;
+          }
+          while (cha != '\0' && cha != quo) {
+            nxt++;
+            cha = *nxt;
+          }
+          if (cha != '\0') {
+            nxt++;
+            cha = *nxt;
+          }
+          *nxt = '\0';
+          TrimSpacesAroundString (atr);
+          ValNodeCopyStrEx (headp, tailp, XML_ATTRIBUTE, atr);
+          *nxt = cha;
+          atr = nxt;
+        }
+
+        /* report end tag */
+        if (doEnd) {
+          TrimSpacesAroundString (fst);
+          ValNodeCopyStrEx (headp, tailp, XML_END_TAG, fst);
+        }
+      }
+
+    } else {
+
+      /* process content between tags */
+      fst = ptr;
+      ptr++;
+      ch = *ptr;
+      while (ch != '\0' && ch != '<') {
+        ptr++;
+        ch = *ptr;
+      }
+      if (ch != '\0') {
+        *ptr = '\0';
+      }
+
+      /* report content string */
+      TrimSpacesAroundString (fst);
+      DecodeXml (fst);
+      ValNodeCopyStrEx (headp, tailp, XML_CONTENT, fst);
+      /*
+      if (ch != '\0') {
+        *ptr = ch;
+      }
+      */
+    }
+  }
+}
+
+static ValNodePtr TokenizeXmlString (
+  Nlm_CharPtr str
+)
+
+{
+  ValNodePtr  head = NULL, tail = NULL;
+
+  if (StringHasNoText (str)) return NULL;
+
+  TokenizeXmlLine (&head, &tail, str);
+
+  return head;
+}
+
+/* second pass - process ValNode chain into hierarchical structure */
+
+static Nlm_XmlObjPtr ProcessAttribute (
+  Nlm_CharPtr str
+)
+
+{
+  Nlm_XmlObjPtr  attr = NULL;
+  Nlm_Char       ch, chf, chl, quo;
+  Nlm_CharPtr    eql, lst;
+
+  if (StringHasNoText (str)) return NULL;
+
+  eql = str;
+  ch = *eql;
+  while (ch != '\0' && ch != '=') {
+    eql++;
+    ch = *eql;
+  }
+  if (ch == '\0') return NULL;
+
+  *eql = '\0';
+  eql++;
+  ch = *eql;
+  quo = ch;
+  if (quo == '"' || quo == '\'') {
+    eql++;
+    ch = *eql;
+  }
+  chf = *eql;
+  if (chf == '\0') return NULL;
+
+  lst = eql;
+  chl = *lst;
+  while (chl != '\0' && chl != quo) {
+    lst++;
+    chl = *lst;
+  }
+  if (chl != '\0') {
+    *lst = '\0';
+  }
+
+  if (StringHasNoText (str) || StringHasNoText (eql)) return NULL;
+
+  attr = (Nlm_XmlObjPtr) MemNew (sizeof (Nlm_XmlObj));
+  if (attr == NULL) return NULL;
+
+  TrimSpacesAroundString (str);
+  TrimSpacesAroundString (eql);
+  DecodeXml (str);
+  DecodeXml (eql);
+  attr->name = StringSave (str);
+  attr->contents = StringSave (eql);
+
+  return attr;
+}
+
+static Nlm_XmlObjPtr ProcessStartTag (
+  ValNodePtr PNTR curr,
+  Nlm_CharPtr name
+)
+
+{
+  Nlm_XmlObjPtr  attr, child, lastattr = NULL, lastchild = NULL, xop = NULL;
+  Nlm_Uint1      choice;
+  Nlm_CharPtr    str;
+  ValNodePtr     vnp;
+
+  if (curr == NULL) return NULL;
+
+  xop = (Nlm_XmlObjPtr) MemNew (sizeof (Nlm_XmlObj));
+  if (xop == NULL) return NULL;
+
+  xop->name = StringSave (name);
+
+  while (*curr != NULL) {
+
+    vnp = *curr;
+    str = (Nlm_CharPtr) vnp->data.ptrvalue;
+    choice = vnp->choice;
+
+    /* advance to next token */
+    *curr = vnp->next;
+
+    TrimSpacesAroundString (str);
+
+    if (StringHasNoText (str)) {
+      /* skip */
+    } else if (choice == XML_START_TAG) {
+
+      /* recursive call to process next level */
+      child = ProcessStartTag (curr, str);
+      /* link into children list */
+      if (child != NULL) {
+        if (xop->children == NULL) {
+          xop->children = child;
+        }
+        if (lastchild != NULL) {
+          lastchild->next = child;
+        }
+        lastchild = child;
+      }
+
+    } else if (choice == XML_END_TAG) {
+
+      /* pop out of recursive call */
+      return xop;
+
+    } else if (choice == XML_ATTRIBUTE) {
+
+      /* get attributes within tag */
+      attr = ProcessAttribute (str);
+      if (attr != NULL) {
+        if (xop->attributes == NULL) {
+          xop->attributes = attr;
+        }
+        if (lastattr != NULL) {
+          lastattr->next = attr;
+        }
+        lastattr = attr;
+      }
+
+    } else if (choice == XML_CONTENT) {
+
+      /* get contact between start and end tags */
+      xop->contents = StringSave (str);
+    }
+  }
+
+  return xop;
+}
+
+static Nlm_XmlObjPtr ParseXmlTokens (
+  ValNodePtr head
+)
+
+{
+  ValNodePtr  curr;
+
+  if (head == NULL) return NULL;
+
+  curr = head;
+
+  return ProcessStartTag (&curr, "root");
+}
+
+static Nlm_Int4 VisitXmlNodeProc (
+  Nlm_XmlObjPtr xop,
+  Nlm_XmlObjPtr parent,
+  Nlm_Int2 level,
+  Nlm_VoidPtr userdata,
+  VisitXmlNodeFunc callback,
+  Nlm_CharPtr nodeFilter,
+  Nlm_CharPtr parentFilter,
+  Nlm_CharPtr attrTagFilter,
+  Nlm_CharPtr attrValFilter,
+  Nlm_Int2 maxDepth
+)
+
+{
+  Nlm_XmlObjPtr  attr, tmp;
+  Nlm_Int4       index = 0;
+  Nlm_Boolean    okay;
+
+  if (xop == NULL) return index;
+
+  /* check depth limit */
+  if (level > maxDepth) return index;
+
+  okay = TRUE;
+
+  /* check attribute filters */
+  if (StringDoesHaveText (attrTagFilter)) {
+    okay = FALSE;
+    for (attr = xop->attributes; attr != NULL; attr = attr->next) {
+      if (StringICmp (attr->name, attrTagFilter) == 0) {
+        if (StringHasNoText (attrValFilter) || StringICmp (attr->contents, attrValFilter) == 0) {
+          okay = TRUE;
+          break;
+        }
+      }
+    }
+  } else if (StringDoesHaveText (attrValFilter)) {
+    okay = FALSE;
+    for (attr = xop->attributes; attr != NULL; attr = attr->next) {
+      if (StringICmp (attr->contents, attrValFilter) == 0) {
+        okay = TRUE;
+        break;
+      }
+    }
+  }
+
+  /* check node name filter */
+  if (StringDoesHaveText (nodeFilter)) {
+    if (StringICmp (xop->name, nodeFilter) != 0) {
+      okay = FALSE;
+    }
+  }
+
+  /* check parent name filter */
+  if (StringDoesHaveText (parentFilter)) {
+    if (parent != NULL && StringICmp (parent->name, parentFilter) != 0) {
+      okay = FALSE;
+    }
+  }
+
+  if (okay) {
+    /* call callback for this node if all filter tests pass */
+    if (callback != NULL) {
+      callback (xop, parent, level, userdata);
+    }
+    index++;
+  }
+
+  /* visit children */
+  for (tmp = xop->children; tmp != NULL; tmp = tmp->next) {
+    index += VisitXmlNodeProc (tmp, xop, level + 1, userdata, callback, nodeFilter,
+                               parentFilter, attrTagFilter, attrValFilter, maxDepth);
+  }
+
+  return index;
+}
+
+NLM_EXTERN Nlm_Int4 VisitXmlNodes (
+  Nlm_XmlObjPtr xop,
+  Nlm_VoidPtr userdata,
+  VisitXmlNodeFunc callback,
+  Nlm_CharPtr nodeFilter,
+  Nlm_CharPtr parentFilter,
+  Nlm_CharPtr attrTagFilter,
+  Nlm_CharPtr attrValFilter,
+  Nlm_Int2 maxDepth
+)
+
+{
+  Nlm_Int4  index = 0;
+
+  if (xop == NULL) return index;
+
+  if (maxDepth == 0) {
+    maxDepth = INT2_MAX;
+  }
+
+  index += VisitXmlNodeProc (xop, NULL, 1, userdata, callback, nodeFilter,
+                             parentFilter, attrTagFilter, attrValFilter, maxDepth);
+
+  return index;
+}
+
+NLM_EXTERN Nlm_Int4 VisitXmlAttributes (
+  Nlm_XmlObjPtr xop,
+  Nlm_VoidPtr userdata,
+  VisitXmlNodeFunc callback,
+  Nlm_CharPtr attrTagFilter,
+  Nlm_CharPtr attrValFilter
+)
+
+{
+  Nlm_XmlObjPtr  attr;
+  Nlm_Int4       index = 0;
+  Nlm_Boolean    okay;
+
+  if (xop == NULL) return index;
+
+  for (attr = xop->attributes; attr != NULL; attr = attr->next) {
+
+    okay = TRUE;
+
+    /* check attribute filters */
+    if (StringDoesHaveText (attrTagFilter)) {
+      okay = FALSE;
+      if (StringICmp (attr->name, attrTagFilter) == 0) {
+        if (StringHasNoText (attrValFilter) || StringICmp (attr->contents, attrValFilter) == 0) {
+          okay = TRUE;
+        }
+      }
+    } else if (StringDoesHaveText (attrValFilter)) {
+      okay = FALSE;
+      if (StringICmp (attr->contents, attrValFilter) == 0) {
+        okay = TRUE;
+      }
+    }
+
+    if (okay) {
+      /* call callback for this attribute */
+      if (callback != NULL) {
+        callback (attr, xop, 0, userdata);
+      }
+      index++;
+    }
+  }
+
+  return index;
+}
+
+NLM_EXTERN Nlm_XmlObjPtr FreeXmlObject (
+  Nlm_XmlObjPtr xop
+)
+
+{
+  Nlm_XmlObjPtr  curr, next;
+
+  if (xop == NULL) return NULL;
+
+  MemFree (xop->name);
+  MemFree (xop->contents);
+
+  curr = xop->attributes;
+  while (curr != NULL) {
+    next = curr->next;
+    curr->next = NULL;
+    FreeXmlObject (curr);
+    curr = next;
+  }
+
+  curr = xop->children;
+  while (curr != NULL) {
+    next = curr->next;
+    curr->next = NULL;
+    FreeXmlObject (curr);
+    curr = next;
+  }
+
+  MemFree (xop);
+
+  return NULL;
+}
+
+NLM_EXTERN Nlm_XmlObjPtr ParseXmlString (
+  Nlm_CharPtr str
+)
+
+{
+  ValNodePtr     head;
+  Nlm_XmlObjPtr  root, xop;
+  Nlm_CharPtr    tmp;
+
+  if (StringHasNoText (str)) return NULL;
+  tmp = StringSave (str);
+  if (tmp == NULL) return NULL;
+
+  head = TokenizeXmlString (tmp);
+  MemFree (tmp);
+
+  if (head == NULL) return NULL;
+
+  root = ParseXmlTokens (head);
+  ValNodeFreeData (head);
+
+  if (root == NULL) return NULL;
+  xop = root->children;
+  root->children = NULL;
+  FreeXmlObject (root);
+
+  return xop;
+}
+
+/*
+Note: Use <urlquery.h> QUERY_CopyResultsToString (conn) to get XML string
+directly from network connection without going through file intermediate.
+*/
+
+NLM_EXTERN Nlm_CharPtr XmlFileToString (
+  FILE *ifp
+)
+
+{
+  FileCache    fc;
+  Nlm_Char     line [4096];
+  Nlm_CharPtr  str;
+  ValNodePtr   head = NULL, tail = NULL;
+
+  if (ifp == NULL) return NULL;
+
+  if (! FileCacheSetup (&fc, ifp)) return NULL;
+
+  str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+
+  while (str != NULL) {
+    TrimSpacesAroundString (str);
+    CompressSpaces (str);
+
+    ValNodeCopyStrEx (&head, &tail, 0, line);
+
+    /*
+    line [0] = ' ';
+    line [1] = '\0';
+    */
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+  }
+
+  str = ValNodeMergeStrs (head);
+  ValNodeFreeData (head);
+
+  return str;
+}
+
+static void PrintXmlObject (
+  Nlm_XmlObjPtr master,
+  FILE *fp,
+  Nlm_Boolean useTabs,
+  Nlm_Boolean altSelfClose,
+  Nlm_Int2 level
+)
+
+{
+  Nlm_XmlObjPtr  attr, xop;
+  Nlm_Int2       i;
+  Nlm_CharPtr    tmp, tmp1, tmp2;
+  Nlm_CharPtr    spaces = "  ";
+
+  if (master == NULL || fp == NULL) return;
+
+  if (useTabs) {
+    spaces = "\t";
+  }
+
+  for (xop = master; xop != NULL; xop = xop->next) {
+    if (StringHasNoText (xop->name)) continue;
+    for (i = 0; i < level; i++) {
+      fprintf (fp, "%s", spaces);
+    }
+    fprintf (fp, "<%s", xop->name);
+    for (attr = xop->attributes; attr != NULL; attr = attr->next) {
+      if (StringHasNoText (attr->name) || StringHasNoText (attr->contents)) continue;
+      tmp1 = EncodeXml (attr->name);
+      tmp2 = EncodeXml (attr->contents);
+      if (tmp1 != NULL && tmp2 != NULL) {
+        fprintf (fp, " %s=\"%s\"", tmp1, tmp2);
+      }
+      MemFree (tmp1);
+      MemFree (tmp2);
+    }
+    if (xop->contents != NULL) {
+      tmp = EncodeXml (xop->contents);
+      if (tmp != NULL) {
+        fprintf (fp, ">%s", tmp);
+      }
+      MemFree (tmp);
+      fprintf (fp, "</%s>", xop->name);
+    } else if (xop->children != NULL) {
+      fprintf (fp, ">\n");
+      PrintXmlObject (xop->children, fp, useTabs, altSelfClose, level + 1);
+      for (i = 0; i < level; i++) {
+        fprintf (fp, "%s", spaces);
+      }
+      fprintf (fp, "</%s>", xop->name);
+    } else if (altSelfClose) {
+      fprintf (fp, "></%s>", xop->name);
+    } else {
+      fprintf (fp, "/>");
+    }
+    fprintf (fp, "\n");
+  }
+}
+
+NLM_EXTERN void WriteXmlObject (
+  Nlm_XmlObjPtr xop,
+  FILE *fp
+)
+
+{
+  if (xop == NULL || fp == NULL) return;
+
+  PrintXmlObject (xop, fp, FALSE, FALSE, 0);
+}
+
+NLM_EXTERN void WriteXmlObjectEx (
+  Nlm_XmlObjPtr xop,
+  FILE *fp,
+  Nlm_Boolean useTabs,
+  Nlm_Boolean altSelfClose
+)
+
+{
+  if (xop == NULL || fp == NULL) return;
+
+  PrintXmlObject (xop, fp, useTabs, altSelfClose, 0);
+}
+

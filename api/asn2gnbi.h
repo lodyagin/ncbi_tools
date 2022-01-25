@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.123 $
+* $Revision: 1.138 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -107,6 +107,11 @@ typedef struct asn2gbflags {
 
 typedef struct int_Asn2gbSect {
   Asn2gbSect  asp;
+  Int4        feat_counts [FEATDEF_MAX];
+  CharPtr     gi;
+  CharPtr     acc;
+  CharPtr     feat_key [FEATDEF_MAX];
+  Boolean     feat_js_prefix_added;
 } IntAsn2gbSect, PNTR IntAsn2gbSectPtr;
 
 /* string structure */
@@ -160,6 +165,7 @@ typedef struct int_asn2gb_job {
   Boolean         specialGapFormat;
   Boolean         hideGoTerms;
   Boolean         multiIntervalGenes;
+  Boolean         segmentedBioseqs;
   Boolean         reindex;
   Int4            seqGapCurrLen;
   ValNodePtr      gihead;
@@ -188,6 +194,7 @@ typedef union qualval {
   RNAGenPtr            rgp;
   GeneNomenclaturePtr  gnp;
   PCRReactionSetPtr    prp;
+  DbtagPtr             dbt;
 } QualVal, PNTR QualValPtr;
 
 /* structure passed to individual paragraph format functions */
@@ -306,6 +313,8 @@ typedef struct asn2gbwork {
   Boolean          copyGpsCdsUp;
   Boolean          copyGpsGeneDown;
 
+  Boolean          isRefSeq;
+
   Boolean          showContigAndSeq;
 
   Char             basename [SEQID_MAX_LEN];
@@ -384,6 +393,7 @@ typedef struct int_src_block {
   ValNodePtr        vnp;
   Int4              left;
   Int4              right;
+  Int4              source_count;
 } IntSrcBlock, PNTR IntSrcBlockPtr;
 
 /* internal feature block has fields on top of FeatBlock fields */
@@ -400,6 +410,7 @@ typedef struct int_feat_block {
   Boolean    firstfeat;
   Int4       left;
   Int4       right;
+  Int4       feat_count; /* unique in combination with feature type */
 } IntFeatBlock, PNTR IntFeatBlockPtr;
 
 /* internal cds block has fields on top of IntFeatBlock fields */
@@ -488,7 +499,11 @@ typedef enum {
   Qual_class_voucher,
   Qual_class_lat_lon,
   Qual_class_mobile_element,
-  Qual_class_tag_peptide
+  Qual_class_tag_peptide,
+  Qual_class_variation_id,
+  Qual_class_delta_item,
+  Qual_class_variation_set,
+  Qual_class_experiment
 }  QualType;
 
 /* source 'feature' */
@@ -609,6 +624,7 @@ typedef enum {
   FTQUAL_allele = 1,
   FTQUAL_anticodon,
   FTQUAL_artificial_location,
+  FTQUAL_artificial_location_str,
   FTQUAL_bond,
   FTQUAL_bond_type,
   FTQUAL_bound_moiety,
@@ -622,6 +638,7 @@ typedef enum {
   FTQUAL_codon_start,
   FTQUAL_cons_splice,
   FTQUAL_db_xref,
+  FTQUAL_delta_item,
   FTQUAL_derived_from,
   FTQUAL_direction,
   FTQUAL_EC_number,
@@ -662,6 +679,7 @@ typedef enum {
   FTQUAL_map,
   FTQUAL_maploc,
   FTQUAL_mobile_element,
+  FTQUAL_mobile_element_type,
   FTQUAL_mod_base,
   FTQUAL_modelev,
   FTQUAL_mol_wt,
@@ -729,6 +747,8 @@ typedef enum {
   FTQUAL_trna_codons_note,
   FTQUAL_UniProtKB_evidence,
   FTQUAL_usedin,
+  FTQUAL_variation_id,
+  FTQUAL_variation_set,
   FTQUAL_xtra_prod_quals,
   ASN2GNBK_TOTAL_FEATUR
 }  FtQualType;
@@ -840,9 +860,15 @@ NLM_EXTERN void FFCatenateSubString (
   Uint4 line_max
 );
 NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip);
+NLM_EXTERN CharPtr FFToCharPtrEx (StringItemPtr sip, CharPtr pfx, CharPtr sfx);
 NLM_EXTERN void FFSkipLink (StringItemPtr PNTR iterp, Int4Ptr ip);
+NLM_EXTERN void FFSkipHTMLAmpersandEscape (StringItemPtr PNTR iterp, Int4Ptr ip);
 
 NLM_EXTERN Boolean FFIsStartOfLink (
+    StringItemPtr iter,
+    Int4 pos );
+
+NLM_EXTERN Boolean FFIsStartOfHTMLAmpersandEscape (
     StringItemPtr iter,
     Int4 pos );
 
@@ -863,9 +889,11 @@ NLM_EXTERN void FFAdvanceChar(
 );
 NLM_EXTERN void FFCalculateLineBreak (
   StringItemPtr PNTR break_sip, Int4 PNTR break_pos,
-  Int4 init_indent, Int4 visible
+  Int4 init_indent, Int4 visible,
+  Boolean is_html
 );
 NLM_EXTERN void FFLineWrap (
+  IntAsn2gbJobPtr ajp,
   StringItemPtr dest, 
   StringItemPtr src, 
   Int4 init_indent,
@@ -904,6 +932,18 @@ NLM_EXTERN CharPtr FFEndPrint (
   Int2 eb_cont_indent,
   CharPtr eb_line_prefix
 );
+NLM_EXTERN CharPtr FFEndPrintEx (
+  IntAsn2gbJobPtr ajp,
+  StringItemPtr ffstring,
+  FmtType format,
+  Int2 gb_init_indent,
+  Int2 gb_cont_indent,
+  Int2 eb_init_indent,
+  Int2 eb_cont_indent,
+  CharPtr eb_line_prefix,
+  CharPtr pfx,
+  CharPtr sfx
+);
 NLM_EXTERN Uint4 FFLength(StringItemPtr ffstring);
 NLM_EXTERN Char FFCharAt(StringItemPtr ffstring, Uint4 pos);
 NLM_EXTERN Char FFFindChar (
@@ -918,6 +958,12 @@ NLM_EXTERN Int4 FFStringSearch (
   StringItemPtr text,
   const CharPtr pattern,
   Uint4 position
+);
+NLM_EXTERN Boolean FFStartsWith( 
+  StringItemPtr text,
+  Int4 text_pos,
+  const CharPtr pattern,
+  Boolean case_insens
 );
 
 /*

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.111 $
+* $Revision: 1.127 $
 *
 * File Description:
 *
@@ -56,12 +56,13 @@
 #include <lsqfetch.h>
 #include <valid.h>
 #include <pmfapi.h>
+#include <ent2api.h>
 #include <gbftdef.h>
 #ifdef INTERNAL_NCBI_ASN2VAL
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "8.6"
+#define ASNVAL_APP_VER "10.0"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -86,6 +87,7 @@ typedef struct valflags {
   Boolean  testLatLonSubregion;
   Boolean  strictLatLonCountry;
   Boolean  rubiscoTest;
+  Boolean  disableSuppression;
   Boolean  indexerVersion;
   Boolean  automatic;
   Boolean  catenated;
@@ -663,7 +665,9 @@ static void LIBCALLBACK ValidCallback (
   CharPtr     catname, errname, urlmssg = NULL;
   ErrSev      cutoff;
   FILE        *fp;
+  Int4        gi = 0;
   size_t      len;
+  SeqIdPtr    sip;
   VCPtr       vcp;
   ValFlagPtr  vfp;
   CharPtr     xml_header;
@@ -780,6 +784,16 @@ static void LIBCALLBACK ValidCallback (
         MemFree (urlmssg);
       }
     }
+
+  } else if (vcp->verbosity == 5) {
+
+    sip = SeqIdFromAccessionDotVersion (accession);
+    gi = GetGIForSeqId (sip);
+    SeqIdFree (sip);
+
+    fprintf (fp, "%s\t%ld\t%s\t%s_%s\n",
+             accession, (long) gi, severityLabel [severity],
+             catname, errname);
   }
 
   vfp->has_errors = TRUE;
@@ -824,6 +838,7 @@ static void DoValidation (
   vsp->testLatLonSubregion = vfp->testLatLonSubregion;
   vsp->strictLatLonCountry = vfp->strictLatLonCountry;
   vsp->rubiscoTest = vfp->rubiscoTest;
+  vsp->disableSuppression = vfp->disableSuppression;
   vsp->indexerVersion = vfp->indexerVersion;
 
   if (ofp == NULL && vfp->outfp != NULL) {
@@ -999,8 +1014,10 @@ static void ProcessSingleRecord (
 
       if (vfp->outpath != NULL) {
         ErrSetLogfile (vfp->outpath, ELOG_APPEND);
+        ErrSetLogLevel (SEV_INFO);
       } else if (vfp->verbosity == 0 || vfp->verbosity == 1) {
         ErrSetLogfile (path, ELOG_APPEND);
+        ErrSetLogLevel (SEV_INFO);
       } else if (vfp->outfp == NULL) {
         ofp = FileOpen (path, "w");
       }
@@ -1009,7 +1026,9 @@ static void ProcessSingleRecord (
 
       if (! TooManyFarComponents (sep)) {
         if (vfp->inferenceAccnCheck) {
-          LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+          if (! TooManyInferenceAccessions (sep, NULL, NULL)) {
+            LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+          }
         }
         if (vfp->lock) {
           bsplist = DoLockFarComponents (sep, vfp);
@@ -1221,8 +1240,10 @@ static void ProcessMultipleRecord (
 
   if (vfp->outpath != NULL) {
     ErrSetLogfile (vfp->outpath, ELOG_APPEND);
+    ErrSetLogLevel (SEV_INFO);
   } else if (vfp->verbosity == 0 || vfp->verbosity == 1) {
     ErrSetLogfile (path, ELOG_APPEND);
+    ErrSetLogLevel (SEV_INFO);
   } else if (vfp->outfp == NULL) {
     ofp = FileOpen (path, "w");
   }
@@ -1281,7 +1302,9 @@ static void ProcessMultipleRecord (
 
           if (! TooManyFarComponents (sep)) {
             if (vfp->inferenceAccnCheck) {
-              LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+              if (! TooManyInferenceAccessions (sep, NULL, NULL)) {
+                LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+              }
             }
             if (vfp->lock) {
               bsplist = DoLockFarComponents (sep, vfp);
@@ -1464,8 +1487,10 @@ static void ValidWrapper (
 
   if (vfp->outpath != NULL) {
     ErrSetLogfile (vfp->outpath, ELOG_APPEND);
+    ErrSetLogLevel (SEV_INFO);
   } else if (vfp->verbosity == 0 || vfp->verbosity == 1) {
     ErrSetLogfile (vfp->path, ELOG_APPEND);
+    ErrSetLogLevel (SEV_INFO);
   } else if (vfp->outfp == NULL) {
     ofp = FileOpen (vfp->path, "w");
   }
@@ -1475,7 +1500,9 @@ static void ValidWrapper (
   if (! TooManyFarComponents (sep)) {
     sev = ErrSetMessageLevel (SEV_WARNING);
     if (vfp->inferenceAccnCheck) {
-      LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+      if (! TooManyInferenceAccessions (sep, NULL, NULL)) {
+        LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+      }
     }
     if (vfp->lock) {
       bsplist = DoLockFarComponents (sep, vfp);
@@ -1545,6 +1572,22 @@ static void ProcessOneRecord (
   }
 }
 
+static QUEUE bouncequeue = NULL;
+
+static Boolean LIBCALLBACK BounceProc (
+  CONN conn, VoidPtr userdata, EIO_Status status
+)
+
+{
+  BoolPtr  bp;
+
+  if (NetTestReadReply (conn, status)) {
+    bp = (BoolPtr) userdata;
+    *bp = TRUE;
+  }
+  return TRUE;
+}
+
 /* Args structure contains command-line arguments */
 
 typedef enum {
@@ -1576,8 +1619,10 @@ typedef enum {
   d_argAsnIdx,
   l_argLockFar,
   T_argThreads,
+  F_argTestNetwork,
   L_argLogFile,
-  K_argSummmary,
+  K_argSummary,
+  D_argDisableSuppress,
   S_argSkipCount,
   B_argBarcodeVal,
   C_argMaxCount,
@@ -1630,9 +1675,18 @@ Args myargs [] = {
     TRUE, 'Y', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Ignore Transcription/Translation Exceptions", "F", NULL, NULL,
     TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Verbosity", "1", "0", "4",
+  {"Verbosity", "1", "0", "5",
     FALSE, 'v', ARG_INT, 0.0, 0, NULL},
-  {"ASN.1 Type (a Automatic, c Catenated, z Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
+  {"ASN.1 Type\n"
+   "      a Automatic\n"
+   "      c Catenated\n"
+   "      z Any\n"
+   "      e Seq-entry\n"
+   "      b Bioseq\n"
+   "      s Bioseq-set\n"
+   "      m Seq-submit\n"
+   "      t Batch Bioseq-set\n"
+   "      u Batch Seq-submit\n", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Batch File is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -1648,10 +1702,14 @@ Args myargs [] = {
     TRUE, 'l', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Use Threads", "F", NULL, NULL,
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Test Network Access", "F", NULL, NULL,
+    TRUE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Log File", NULL, NULL, NULL,
     TRUE, 'L', ARG_FILE_OUT, 0.0, 0, NULL},
   {"Summary to Error File", "F", NULL, NULL,
     TRUE, 'K', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Disable Message Suppression", "F", NULL, NULL,
+    TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Skip Count", "0", NULL, NULL,
     TRUE, 'S', ARG_INT, 0.0, 0, NULL},
   {"Barcode Validate", "F", NULL, NULL,
@@ -1674,12 +1732,14 @@ Int2 Main (void)
   Char         app [64];
   CharPtr      asnidx, directory, filter, infile, logfile, outfile, str, suffix;
   Boolean      automatic, batch, binary, catenated, compressed, dorecurse,
-               indexed, local, lock, remote, summary, usethreads;
+               indexed, local, lock, remote, summary, usethreads, bouncefound = FALSE;
 #ifdef INTERNAL_NCBI_ASN2VAL
   Boolean      hup = FALSE;
 #endif
+  ErrSev       oldsev;
   ValNodePtr   parflat_list, vnp;
   time_t       run_time, start_time, stop_time;
+  STimeout     timeout = { 0, 100000 };
   Int2         type = 0, val;
   ValFlagData  vfd;
 
@@ -1687,6 +1747,7 @@ Int2 Main (void)
 
   ErrSetFatalLevel (SEV_MAX);
   ErrSetMessageLevel (SEV_MAX);
+  ErrSetLogLevel (SEV_ERROR);
   ErrClearOptFlags (EO_SHOW_USERSTR);
   ErrSetLogfile ("stderr", ELOG_APPEND);
   ErrSetOpts (ERR_IGNORE, ERR_LOG_ON);
@@ -1733,6 +1794,36 @@ Int2 Main (void)
     return 0;
   }
 
+  /* test network connection if requested */
+
+  if ((Boolean) myargs [F_argTestNetwork].intvalue) {
+    bouncefound = FALSE;
+    start_time = GetSecs ();
+    oldsev = ErrSetMessageLevel (SEV_FATAL);
+    if (! NetTestAsynchronousQuery (&bouncequeue, BounceProc, (Pointer) &bouncefound)) {
+      ErrSetMessageLevel (oldsev);
+      Message (MSG_POSTERR, "NetTestAsynchronousQuery failed");
+      return 1;
+    }
+
+    /* busy wait here, would normally call NetTestCheckQueue from event loop timer */
+    while (! bouncefound) {
+      stop_time = GetSecs ();
+      if (stop_time - start_time >= 30) {
+        Message (MSG_POSTERR, "Internet connection attempt timed out, exiting");
+        return 1;
+      }
+      /* wait 0.1 seconds between attempts to avoid hogging machine */
+      SOCK_Poll (0, 0, &timeout, 0);
+      NetTestCheckQueue (&bouncequeue);
+    }
+    QUERY_CloseQueue (&bouncequeue);
+    ErrSetMessageLevel (oldsev);
+
+    Message (MSG_POSTERR, "Internet connection attempt succeeded, exiting");
+    return 0;
+  }
+
   /* additional setup modifications */
 
   MemSet ((Pointer) &vfd, 0, sizeof (ValFlagData));
@@ -1769,6 +1860,7 @@ Int2 Main (void)
   vfd.ignoreExceptions = (Boolean) myargs [e_argIgnoreExcept].intvalue;
   vfd.validateExons = (Boolean) myargs [X_argExonSplice].intvalue;
   vfd.inferenceAccnCheck = (Boolean) myargs [G_argInfAccns].intvalue;
+  vfd.disableSuppression = (Boolean) myargs [D_argDisableSuppress].intvalue;
   vfd.validateBarcode = (Boolean) myargs[B_argBarcodeVal].intvalue;
 
 
@@ -1839,7 +1931,7 @@ Int2 Main (void)
   }
 
   logfile = (CharPtr) myargs [L_argLogFile].strvalue;
-  summary = (Boolean) myargs [K_argSummmary].intvalue;
+  summary = (Boolean) myargs [K_argSummary].intvalue;
 
   start_time = GetSecs ();
 

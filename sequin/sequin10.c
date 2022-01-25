@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.504 $
+* $Revision: 1.554 $
 *
 * File Description: 
 *
@@ -66,6 +66,7 @@
 #include <valapi.h>
 #include <seqsub.h>
 #include <tax3api.h>
+#include <valid.h>
 
 typedef struct deflineformdata {
   FEATURE_FORM_BLOCK
@@ -262,6 +263,9 @@ static void DoAutoDefLine (ButtoN b)
   {
     case DEFLINE_USE_FEATURES :
       dlfp->feature_requests.feature_list_type = DEFLINE_USE_FEATURES;
+      break;
+    case DEFLINE_PARTIAL_SEQUENCE :
+      dlfp->feature_requests.feature_list_type = DEFLINE_PARTIAL_SEQUENCE;
       break;
     case DEFLINE_COMPLETE_SEQUENCE :
       dlfp->feature_requests.feature_list_type = DEFLINE_COMPLETE_SEQUENCE;
@@ -668,6 +672,7 @@ static GrouP CreateDefLineFormFeatureListPopuP (
   SetObjectExtra (dlfp->featurePopup, dlfp, NULL);
   PopupItem (dlfp->featurePopup, "List Features");
   PopupItem (dlfp->featurePopup, "Complete Sequence");
+  PopupItem (dlfp->featurePopup, "Partial Sequence");
   PopupItem (dlfp->featurePopup, "Complete Genome");
   PopupItem (dlfp->featurePopup, "Partial Genome");
   PopupItem (dlfp->featurePopup, "Sequence");
@@ -2789,9 +2794,8 @@ static Int4Ptr GetColumnBlankCounts (ValNodePtr header_line, Int4 num_columns)
 }
 
 
-static void LoadOrganismModifierTableEx (IteM i, Boolean IsTaxConsult)
+NLM_EXTERN void LoadOrganismModifierTableBaseForm (BaseFormPtr bfp, Boolean IsTaxConsult)
 {
-  BaseFormPtr   bfp;
   ValNodePtr    header_line;
   ValNodePtr    vnp;
   TableLinePtr  tlp;
@@ -2803,11 +2807,6 @@ static void LoadOrganismModifierTableEx (IteM i, Boolean IsTaxConsult)
   Int4Ptr       blank_list = NULL;
   OrgModTableColumnData o;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
   if (bfp == NULL) return;
 
   header_line = ReadTableData ();
@@ -2880,6 +2879,18 @@ static void LoadOrganismModifierTableEx (IteM i, Boolean IsTaxConsult)
   Update ();
 }
 
+static void LoadOrganismModifierTableEx (IteM i, Boolean IsTaxConsult)
+{
+  BaseFormPtr   bfp;
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  LoadOrganismModifierTableBaseForm (bfp, IsTaxConsult);
+}
+
 extern void LoadOrganismModifierTable (IteM i)
 {
   LoadOrganismModifierTableEx (i, FALSE);
@@ -2891,7 +2902,26 @@ extern void LoadTaxConsult (IteM i)
 }
 
 
-extern Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num)
+static void LoadOrganismModifierTableButtonEx (ButtoN b, Boolean IsTaxConsult)
+{
+  BaseFormPtr   bfp;
+
+  bfp = (BaseFormPtr) GetObjectExtra(b);
+  if (b == NULL) {
+    return;
+  }
+  LoadOrganismModifierTableBaseForm (bfp, IsTaxConsult);
+}
+
+
+extern void LoadTaxConsultBtn (ButtoN b)
+{
+  LoadOrganismModifierTableButtonEx (b, TRUE);
+}
+
+
+
+extern Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num, ValNodePtr preferred_list)
 {
   ModalAcceptCancelData acd;
   WindoW                w;
@@ -2921,7 +2951,8 @@ extern Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num)
   }
   
   ValNodeAddPointer (&mod_name_choice_list, 1, StringSave ("Ignore Column"));
-  mod_name_choice_list->next = GetSourceQualDescList (TRUE, TRUE, FALSE, FALSE);
+  ValNodeLink (&mod_name_choice_list, ValNodeDupList(preferred_list, SourceQualValNodeCopy));
+  ValNodeLink(&mod_name_choice_list, GetSourceQualDescList (TRUE, TRUE, FALSE, FALSE));
   ValNodeAddPointer (&mod_name_choice_list, 2, StringSave ("Organism"));
   ValNodeAddPointer (&mod_name_choice_list, 3, StringSave ("Location"));
   
@@ -3006,6 +3037,7 @@ typedef struct exportorgtable
   Boolean              list_accession;
   Boolean              list_local;
   Boolean              list_general;
+  Boolean              launch_excel;
 
   ValNodePtr           organism_id_profile;
   FILE *fp;  
@@ -3376,6 +3408,7 @@ typedef struct exportmodform
   ButtoN list_local;
   ButtoN list_general;
   ButtoN list_additional_mods;
+  ButtoN launch_excel;
   ButtoN accept_btn;
 } ExportModFormData, PNTR ExportModFormPtr;
 
@@ -3517,6 +3550,10 @@ static Boolean SelectModifiersForExport (ExportOrgTablePtr eotp)
   /* initialize dialog to "All" */
   SendMessageToDialog (form_data->selected_mods, NUM_VIB_MSG + 1);
 
+#ifdef WIN_MSWIN
+  form_data->launch_excel = CheckBox (h, "Launch Excel", NULL);
+#endif
+
   c = HiddenGroup (h, 2, 0, NULL);
   form_data->accept_btn = PushButton (c, "Accept", ModalAcceptButton);
   SetObjectExtra (form_data->accept_btn, &acd, NULL);
@@ -3577,6 +3614,9 @@ static Boolean SelectModifiersForExport (ExportOrgTablePtr eotp)
     eotp->list_accession = GetStatus (form_data->list_accession);
     eotp->list_local = GetStatus (form_data->list_local);
     eotp->list_general = GetStatus (form_data->list_general);
+#ifdef WIN_MSWIN
+    eotp->launch_excel = GetStatus (form_data->launch_excel);
+#endif
 
     return TRUE;
   }  
@@ -3601,6 +3641,7 @@ extern void ExportOrganismTable (IteM i)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
 
+  MemSet (&eotd, 0, sizeof (ExportOrgTableData));
   eotd.modList = MemNew (NumDefLineModifiers () * sizeof (ModifierItemLocalData));
   if (eotd.modList == NULL) return;
 
@@ -3612,37 +3653,37 @@ extern void ExportOrganismTable (IteM i)
   if (SelectModifiersForExport (&eotd))
   {
     if (GetOutputFileName (path, sizeof (path), NULL))
-	{
+    {
       eotd.fp = FileOpen (path, "w");
       if (eotd.fp == NULL) 
-	  {
-	    Message (MSG_ERROR, "Unable to open %s", path);
-	  }
-	  else
-	  {
-	    lead_str [0] = 0;
-		lead_str [1] = 0;
+      {
+        Message (MSG_ERROR, "Unable to open %s", path);
+      }
+	    else
+	    {
+	      lead_str [0] = 0;
+		    lead_str [1] = 0;
         /* print a header line */
-	    if (eotd.list_accession)
-		{
-		  fprintf (eotd.fp, "Accession Number");
-		  lead_str [0] = '\t';
-		}
-		if (eotd.list_local)
-		{
-  	      fprintf (eotd.fp, "%sLocal ID", lead_str);
-		  lead_str [0] = '\t';
-		}
+	      if (eotd.list_accession)
+		    {
+		      fprintf (eotd.fp, "Accession Number");
+		      lead_str [0] = '\t';
+		    }
+		    if (eotd.list_local)
+		    {
+  	          fprintf (eotd.fp, "%sLocal ID", lead_str);
+		      lead_str [0] = '\t';
+		    }
         if (eotd.list_general)
-		{
-		  fprintf (eotd.fp, "%sGeneral ID", lead_str);
-		  lead_str [0] = '\t';
-		}
-		if (eotd.list_tax_name)
-		{
-		  fprintf (eotd.fp, "%sTax Name", lead_str);
-		  lead_str [0] = '\t';
-		}
+		    {
+		      fprintf (eotd.fp, "%sGeneral ID", lead_str);
+		      lead_str [0] = '\t';
+		    }
+		    if (eotd.list_tax_name)
+		    {
+		      fprintf (eotd.fp, "%sTax Name", lead_str);
+		      lead_str [0] = '\t';
+		    }
 
         for (idx = 0; idx < NumDefLineModifiers (); idx++)
         {
@@ -3656,8 +3697,13 @@ extern void ExportOrganismTable (IteM i)
         
         ExportOrganisms  (sep, &eotd);
         FileClose (eotd.fp);
+#ifdef WIN_MSWIN
+        if (eotd.launch_excel) {
+          Nlm_MSWin_OpenApplication ("excel.exe", path);
+        }
+#endif
+	    }
 	  }
-	}
   }
   for (idx=0; idx < NumDefLineModifiers (); idx++)
   {
@@ -4764,6 +4810,7 @@ typedef struct qualloadformdata {
   ButtoN                 remove_quotes;
   ButtoN                 accept_button;
   ButtoN                 mail_button;
+  PrompT                 err_msg;
 } QualLoadFormData, PNTR QualLoadFormPtr;
 
 static void CleanupQualLoadForm (
@@ -4791,6 +4838,7 @@ static void ChangeTabColumnChoice (Pointer data)
   if (data == NULL) return;
 
   form_data = (QualLoadFormPtr) data;
+  SetTitle (form_data->err_msg, "");
   /* must have one and only one match choice, must have at least one apply choice */
 
   if (form_data->list_dlg == NULL) {
@@ -4826,6 +4874,7 @@ static void ChangeTabColumnChoice (Pointer data)
     } else {
       Disable (form_data->accept_button);
       Disable (form_data->mail_button);
+      SetTitle (form_data->err_msg, err_list->data.ptrvalue);
       err_list = ValNodeFree (err_list);
     }
   }
@@ -4927,6 +4976,90 @@ static Boolean ApplyTableValues (SeqEntryPtr sep, ValNodePtr table, ValNodePtr c
 }
 
 
+static ValNodePtr CheckForDuplicateColumns (ValNodePtr columns)
+{
+  ValNodePtr vnp, vnp2;
+  TabColumnConfigPtr t, t2;
+  ValNodePtr duplicate_column_list = NULL;
+  Boolean    this_dup;
+
+  for (vnp = columns; vnp != NULL; vnp = vnp->next) {
+    this_dup = FALSE;
+    t = (TabColumnConfigPtr) vnp->data.ptrvalue;
+    if (t != NULL && t->field != NULL) {
+      for (vnp2 = vnp->next; vnp2 != NULL && !this_dup; vnp2 = vnp2->next) {
+        t2 = (TabColumnConfigPtr) vnp2->data.ptrvalue;
+        if (t2 != NULL && CompareFieldTypes(t->field, t2->field) == 0 && t2->existing_text != ExistingTextOption_add_qual) {
+          ValNodeAddPointer (&duplicate_column_list, 0, SummarizeFieldType (t->field));
+          this_dup = TRUE;
+        }
+      }
+    }
+  }
+  duplicate_column_list = ValNodeSort (duplicate_column_list, SortVnpByString);
+  ValNodeUnique (&duplicate_column_list, SortVnpByString, ValNodeFreeData);
+  return duplicate_column_list;
+}
+
+  
+static void FixDuplicateColumns (ValNodePtr columns)
+{
+  ValNodePtr vnp, vnp2;
+  TabColumnConfigPtr t, t2;
+
+  if (columns == NULL || columns->next == NULL) {
+    return;
+  }
+
+  for (vnp = columns; vnp != NULL; vnp = vnp->next) {
+    t = (TabColumnConfigPtr) vnp->data.ptrvalue;
+    if (t->field != NULL) {
+      for (vnp2 = vnp->next; vnp2 != NULL; vnp2 = vnp2->next) {
+        t2 = (TabColumnConfigPtr) vnp2->data.ptrvalue;
+        if (CompareFieldTypes(t->field, t2->field) == 0 && t2->existing_text != ExistingTextOption_add_qual) {
+          t2->existing_text = ExistingTextOption_add_qual;
+        }
+      }
+    }
+  }
+}
+
+
+static Boolean HandleDuplicateColumns (QualLoadFormPtr form_data, ValNodePtr columns)
+{
+  ValNodePtr      dup_col_list;
+  Int4            i;
+  ValNodePtr      vnp;
+  Boolean         rval = TRUE;
+
+  if (form_data == NULL || columns == NULL) {
+    return FALSE;
+  }
+
+  dup_col_list = CheckForDuplicateColumns (columns);
+  if (dup_col_list != NULL) {
+    if (ANS_CANCEL == Message (MSG_OKC, 
+         "You have specified multiple columns for the same qualifier value.  This will probably not work as expected. "
+         " Do you want to change the configuration to add them all as separate qualifiers?")) {
+      rval = FALSE;
+    } else {
+      dup_col_list = ValNodeFreeData(dup_col_list);
+      FixDuplicateColumns (columns);
+      if (form_data->list_dlg == NULL) {
+        for (i = 0, vnp = columns; i < form_data->num_columns && vnp != NULL; i++, vnp = vnp->next) {
+          PointerToDialog (form_data->column_list[i], vnp->data.ptrvalue);
+        }
+      } else {
+        PointerToDialog (form_data->list_dlg, columns);
+      }
+    }
+  }
+  dup_col_list = ValNodeFreeData(dup_col_list);
+
+  return rval;
+}
+
+
 static void DoAcceptQuals (ButtoN b)
 {
   QualLoadFormPtr form_data;
@@ -4938,10 +5071,6 @@ static void DoAcceptQuals (ButtoN b)
   form_data = (QualLoadFormPtr) GetObjectExtra (b);
   if (form_data == NULL) return;
 
-  if (GetStatus (form_data->remove_quotes)) {
-    RemoveQuotesFromTabTable (form_data->table);
-  }
-
   if (form_data->list_dlg == NULL) {
     for (i = 0; i < form_data->num_columns; i++) {
       t = DialogToPointer (form_data->column_list[i]);
@@ -4949,6 +5078,15 @@ static void DoAcceptQuals (ButtoN b)
     }
   } else {
     columns = DialogToPointer (form_data->list_dlg);
+  }
+
+  if (!HandleDuplicateColumns(form_data, columns)) {
+    columns = TabColumnConfigListFree (columns);
+    return;
+  }
+
+  if (GetStatus (form_data->remove_quotes)) {
+    RemoveQuotesFromTabTable (form_data->table);
   }
 
   sep = GetTopSeqEntryForEntityID (form_data->input_entityID);
@@ -5029,26 +5167,6 @@ static void MailReportCallback (BioseqPtr bsp, Pointer data)
       ValNodeAddPointer ((ValNodePtr PNTR) data, 0, MailReportNew (bsp, biop->org->taxname, biop));
     }
   }
-}
-
-
-static Boolean HasTaxonomyID (BioSourcePtr biop)
-{
-  ValNodePtr  db;
-  DbtagPtr    dbt;
-  Boolean     rval = FALSE;
-
-  if (biop == NULL || biop->org == NULL) {
-    return FALSE;
-  }
-  for (db = biop->org->db; db != NULL && !rval; db = db->next) {
-    dbt = (DbtagPtr) db->data.ptrvalue;
-    if (dbt != NULL && dbt->db != NULL &&
-      StringICmp (dbt->db, "taxon") == 0) {
-      rval = TRUE;
-    }
-  }
-  return rval;
 }
 
 
@@ -5139,11 +5257,266 @@ static void ReportUnpublishedTaxnames (ValNodePtr list, LogInfoPtr lip)
 }
 
 
+static void WantBarcodeAdjustmentCallback (BioseqPtr bsp, Pointer data)
+{
+  if (bsp != NULL && data != NULL && HasBARCODETech(bsp)) {
+    *((BoolPtr)data) = TRUE;
+  }
+}
+
+
+static Boolean WantBarcodeAdjustment (SeqEntryPtr sep)
+{
+  Boolean want_adjustment = FALSE;
+  Char    path [PATH_MAX];
+  FILE   *fp;  
+
+  if (!GetSequinAppParam ("BARCODE", "LIVELIST", NULL, path, sizeof (path))) {
+    return FALSE;
+  }
+  if (StringHasNoText (path)) {
+    return FALSE;
+  }
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    return FALSE;
+  }
+  FileClose (fp);
+
+  VisitBioseqsInSep (sep, &want_adjustment, WantBarcodeAdjustmentCallback);
+
+  return want_adjustment;
+}
+
+
+static TwoStringHashPtr sBarcodeLiveListAccBin = NULL;
+static TwoStringHashPtr sBarcodeLiveListAccId = NULL;
+static TwoStringHashPtr sBarcodeLiveListIdBin = NULL;
+static Boolean sAttemptedToReadBarcodeLiveList = FALSE;
+
+static void FixBarcodeLiveListIds (ValNodePtr table)
+{
+  ValNodePtr row, col;
+  CharPtr    cp;
+
+  for (row = table; row != NULL; row = row->next) {
+    col = row->data.ptrvalue;
+    if (col != NULL && col->next != NULL && (cp = StringChr (col->next->data.ptrvalue, '.')) != NULL) {
+      *cp = 0;
+    }
+  }
+}
+
+
+static Boolean ReadBarcodeLiveList (void)
+{
+  ValNodePtr table, col, vnp;
+  Char    path [PATH_MAX];
+  FILE   *fp; 
+  Int4   len, i;
+
+  if (sAttemptedToReadBarcodeLiveList) {
+    if (sBarcodeLiveListAccBin == NULL) {
+      return FALSE;
+    } else {
+      return TRUE;
+    }
+  }
+  if (!GetSequinAppParam ("BARCODE", "LIVELIST", NULL, path, sizeof (path))) {
+    return FALSE;
+  }
+  if (StringHasNoText (path)) {
+    return FALSE;
+  }
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    return FALSE;
+  }
+  table = ReadTabTableFromFile (fp);
+  FileClose (fp);
+
+  if (table == NULL) {
+    return FALSE;
+  }
+
+  /* process IDs in second column are actually just the part before the first period */
+  FixBarcodeLiveListIds (table);
+  table = SortTableRowByAnyColumn (table, 1);
+  len = ValNodeLen (table);
+  sBarcodeLiveListAccBin = (TwoStringHashPtr) MemNew (sizeof (TwoStringHashData));
+  sBarcodeLiveListAccBin->table = (CharPtr PNTR) MemNew (sizeof (CharPtr) * len * 2);
+  sBarcodeLiveListAccBin->num_lines = 0;
+  sBarcodeLiveListAccId = (TwoStringHashPtr) MemNew (sizeof (TwoStringHashData));
+  sBarcodeLiveListAccId->table = (CharPtr PNTR) MemNew (sizeof (CharPtr) * len * 2);
+  sBarcodeLiveListAccId->num_lines = 0;
+  for (vnp = table; vnp != NULL; vnp = vnp->next) {
+    col = vnp->data.ptrvalue;
+    if (col != NULL && !StringHasNoText (col->data.ptrvalue)) {
+      if (col->next != NULL && !StringHasNoText (col->next->data.ptrvalue)) {
+        i = sBarcodeLiveListAccId->num_lines;
+        sBarcodeLiveListAccId->table[2 * i] = StringSave (col->data.ptrvalue);
+        sBarcodeLiveListAccId->table[2 * i + 1] = StringSave (col->next->data.ptrvalue);
+        sBarcodeLiveListAccId->num_lines++;
+      }
+      if (col->next != NULL && col->next->next != NULL && col->next->next->next != NULL && !StringHasNoText (col->next->next->next->data.ptrvalue)) {
+        i = sBarcodeLiveListAccBin->num_lines;
+        sBarcodeLiveListAccBin->table[2 * i] = StringSave (col->data.ptrvalue);
+        sBarcodeLiveListAccBin->table[2 * i + 1] = StringSave (col->next->next->next->data.ptrvalue);
+        sBarcodeLiveListAccBin->num_lines++;
+      }
+    }
+  }
+  table = SortTableRowByAnyColumn (table, 2);
+  sBarcodeLiveListIdBin = (TwoStringHashPtr) MemNew (sizeof (TwoStringHashData));
+  sBarcodeLiveListIdBin->table = (CharPtr PNTR) MemNew (sizeof (CharPtr) * len * 2);
+  sBarcodeLiveListIdBin->num_lines = 0;
+  for (vnp = table; vnp != NULL; vnp = vnp->next) {
+    col = vnp->data.ptrvalue;
+    if (col != NULL && col->next != NULL && !StringHasNoText (col->next->data.ptrvalue)
+        && col->next->next != NULL && col->next->next->next != NULL && !StringHasNoText (col->next->next->next->data.ptrvalue)) {
+      i = sBarcodeLiveListIdBin->num_lines;
+      sBarcodeLiveListIdBin->table[2 * i] = StringSave (col->next->data.ptrvalue);
+      sBarcodeLiveListIdBin->table[2 * i + 1] = StringSave (col->next->next->next->data.ptrvalue);
+      sBarcodeLiveListIdBin->num_lines++;
+    }
+  }
+
+  table = FreeTabTable (table);
+
+  sAttemptedToReadBarcodeLiveList = TRUE;
+  return TRUE;
+}
+
+
+static const CharPtr sBarcodeSpecialWords[] = {
+  " sp.", " aff.", " cf.", " group", " complex", " nr.", " near", NULL };
+
+
+static Boolean IsJustOneWord (CharPtr organism)
+{
+  if (StringChr (organism, ' ') == NULL) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Boolean OrganismWantsBarcodeAdjustment (CharPtr organism)
+{
+  Boolean rval = FALSE;
+  Int4    i;
+  /* TODO - only if contains one of the special words, or is just one word */
+  if (IsJustOneWord (organism)) {
+    rval = TRUE;
+  } else {
+    for (i = 0; sBarcodeSpecialWords[i] != NULL && !rval; i++) {
+      if (StringSearch (organism, sBarcodeSpecialWords[i]) != NULL) {
+        rval = TRUE;
+      }
+    }
+  }
+
+  return rval;
+}
+
+
+static ValNodePtr GetNthValNode (ValNodePtr list, Int4 nth);
+
+static Boolean FieldTypeIsTaxname (ValNodePtr field)
+{
+  ValNodePtr srcq;
+  if (field != NULL
+      && field->choice == FieldType_source_qual
+      && (srcq = field->data.ptrvalue) != NULL
+      && srcq->choice == SourceQualChoice_textqual
+      && srcq->data.intvalue == Source_qual_taxname) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static ValNodePtr AdjustTableForBarcodeLiveList (ValNodePtr table, QualLoadFormPtr form_data)
+{
+  ValNodePtr new_table;
+  ValNodePtr         columns = NULL, vnp, org_vnp, acc_vnp;
+  TabColumnConfigPtr t;
+  Int4               accession_column = -1;
+  Int4               organism_column = -1;
+  Int4               i;
+  CharPtr            uniquer, id, tmp_name;
+
+  new_table = CopyTabTable (table);
+
+  if (form_data->list_dlg == NULL) {
+    for (i = 0; i < form_data->num_columns; i++) {
+      t = DialogToPointer (form_data->column_list[i]);
+      if (t != NULL && t->match_type != NULL && t->match_type->choice == eTableMatchNucID) {
+        accession_column = i + 1;
+      } else if (t != NULL && FieldTypeIsTaxname(t->field)) {
+        organism_column = i + 1;
+      }
+      t = TabColumnConfigFree (t);
+    }
+  } else {
+    columns = DialogToPointer (form_data->list_dlg);
+    for (vnp = columns, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+      t = (TabColumnConfigPtr) vnp->data.ptrvalue;
+      if (t != NULL && t->match_type != NULL && t->match_type->choice == eTableMatchNucID) {
+        accession_column = i;
+      } else if (t != NULL && FieldTypeIsTaxname(t->field)) {
+        organism_column = i;
+      }
+    }
+    columns = TabColumnConfigListFree (columns);
+  }
+
+  if (accession_column > -1 && organism_column > -1) {
+    /* do replacements */
+    for (vnp = new_table; vnp != NULL; vnp = vnp->next) {
+      org_vnp = GetNthValNode(vnp->data.ptrvalue, organism_column);
+      if (org_vnp != NULL && OrganismWantsBarcodeAdjustment (org_vnp->data.ptrvalue)) {
+        acc_vnp = GetNthValNode(vnp->data.ptrvalue, accession_column);
+        if (acc_vnp != NULL) {
+          uniquer = GetValueFromTwoStringHash(acc_vnp->data.ptrvalue, sBarcodeLiveListAccBin);
+          if (uniquer == NULL) {
+            id = GetValueFromTwoStringHash(acc_vnp->data.ptrvalue, sBarcodeLiveListAccId);
+            if (id != NULL) {
+              uniquer = GetValueFromTwoStringHash(acc_vnp->data.ptrvalue, sBarcodeLiveListIdBin);
+              if (uniquer == NULL) {
+                uniquer = id;
+              }
+            }
+          }
+          if (uniquer != NULL) {
+            /* make sure it's not already in the organism name */
+            tmp_name = org_vnp->data.ptrvalue;
+            if (StringSearch (tmp_name, uniquer) == NULL) {
+              if (IsJustOneWord(tmp_name)) {
+                SetStringValue (&tmp_name, "sp.", ExistingTextOption_append_space);
+              }
+              SetStringValue (&tmp_name, uniquer, ExistingTextOption_append_space);
+              org_vnp->data.ptrvalue = tmp_name;
+            }              
+          }
+        }
+      }
+    }
+  }
+
+  return new_table;
+}
+
+
 static void SpecialMailReport (ButtoN b)
 {
   QualLoadFormPtr form_data;
+  ValNodePtr      adjusted_table = NULL, tmp_table = NULL;
   ValNodePtr      list = NULL, vnp;
-  ValNodePtr      columns = NULL;
   SeqEntryPtr     sep;
   LogInfoPtr      lip;
   MailReportPtr   m;
@@ -5155,8 +5528,19 @@ static void SpecialMailReport (ButtoN b)
   sep = GetTopSeqEntryForEntityID (form_data->input_entityID);
   VisitBioseqsInSep (sep, &list, MailReportCallback);
 
+  /* adjust table if necessary for barcode livelist */
+  tmp_table = form_data->table;
+  if (WantBarcodeAdjustment (sep) && ReadBarcodeLiveList()) {
+    adjusted_table = AdjustTableForBarcodeLiveList (form_data->table, form_data);
+    form_data->table = adjusted_table;
+  } 
+
   /* now apply table */
   DoAcceptQuals (b);
+
+  /* put original table back */
+  form_data->table = tmp_table;
+  adjusted_table = FreeTabTable (adjusted_table);
 
   /* now do taxfix */
   Taxon3ReplaceOrgInSeqEntryEx (sep, FALSE, FALSE);
@@ -5238,6 +5622,37 @@ static void AutoMatchQuals (ButtoN b)
     PointerToDialog (form_data->list_dlg, columns);
   }
   columns = TabColumnConfigListFree (columns);
+}
+
+
+static void ResetColumns (ButtoN b)
+{
+  QualLoadFormPtr form_data;
+  ValNodePtr      vnp;
+  ValNodePtr      columns = NULL;
+  Int4            i;
+  TabColumnConfigPtr t;
+
+  form_data = (QualLoadFormPtr) GetObjectExtra (b);
+  if (form_data == NULL) return;
+
+  if (form_data->list_dlg == NULL) {
+    for (i = 0; i < form_data->num_columns; i++) {
+      t = DialogToPointer (form_data->column_list[i]);
+      TabColumnConfigReset(t);
+      PointerToDialog (form_data->column_list[i], t);
+      t = TabColumnConfigFree(t);
+    }
+  } else {
+    columns = DialogToPointer (form_data->list_dlg);
+    for (vnp = columns;
+         vnp != NULL;
+         vnp = vnp->next) {
+      vnp->data.ptrvalue = TabColumnConfigFree (vnp->data.ptrvalue);
+    }
+    PointerToDialog (form_data->list_dlg, columns);
+    columns = TabColumnConfigListFree (columns);
+  }  
 }
 
 
@@ -5396,18 +5811,6 @@ static void ReloadMultiSpace (ButtoN b)
 }
 
 
-static void ReparseTabTableAddDummySeqId (ValNodePtr row_list)
-{
-  AddTextToTabTableColumn (row_list, 0, "_Seq1", ExistingTextOption_append_none);
-}
-
-
-static void ReloadNewBankitNoId (ButtoN b)
-{
-  ReLoadTable (b, ReparseTabTableAddDummySeqId);
-}
-
-
 static void ReparseForFileId (ValNodePtr table)
 {
   ValNodePtr column_list = NULL;
@@ -5420,21 +5823,6 @@ static void ReparseForFileId (ValNodePtr table)
 static void ReloadFileId (ButtoN b)
 {
   ReLoadTable (b, ReparseForFileId);
-}
-
-
-static void ReparseForNewBankitId (ValNodePtr table)
-{
-  ValNodePtr column_list = NULL;
-  ValNodeAddInt (&column_list, 0, 0);
-  ValNodeAddInt (&column_list, 0, 1);
-  CombineTabTableColumns (table, column_list, "_");
-}
-
-
-static void ReloadNewBankitId (ButtoN b)
-{
-  ReLoadTable (b, ReparseForNewBankitId);
 }
 
 
@@ -5462,14 +5850,15 @@ static int LIBCALLBACK SortVnpByInt (VoidPtr ptr1, VoidPtr ptr2)
 static void CombineColumns (ButtoN b_in)
 {
   WindoW w;
-  GrouP  h, c;
+  GrouP  h, g, c;
   DialoG dlg;
+  TexT   delimiter_txt;
   ValNodePtr options = NULL, vnp, combine_list = NULL;
   Int4       i;
   ButtoN b;
   ModalAcceptCancelData acd;
   QualLoadFormPtr form_data;
-  CharPtr         label;
+  CharPtr         label, delimiter;
 
   form_data = (QualLoadFormPtr) GetObjectExtra (b_in);
   if (form_data == NULL || form_data->table == NULL || form_data->table->data.ptrvalue == NULL) return;
@@ -5487,7 +5876,7 @@ static void CombineColumns (ButtoN b_in)
        i++, vnp = vnp->next) 
   {
     label = (CharPtr) MemNew (sizeof (Char) * (StringLen (vnp->data.ptrvalue) + 15));
-    sprintf (label, "%5d   %s", i + 1, vnp->data.ptrvalue);
+    sprintf (label, "%5d   %s", i + 1, (char *) vnp->data.ptrvalue);
     ValNodeAddPointer (&options, i, label);
   }
 
@@ -5495,6 +5884,10 @@ static void CombineColumns (ButtoN b_in)
                                               ValNodeSimpleDataFree, ValNodeStringCopy,
                                               ValNodeStringMatch, "column", 
                                               NULL, NULL, TRUE);
+  g = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "Delimiter", 0, popupMenuHeight, programFont, 'l');
+  delimiter_txt = DialogText (g, ",", 5, NULL);
 
   c = HiddenGroup (h, 3, 0, NULL);
   SetGroupSpacing (c, 10, 10);
@@ -5502,7 +5895,7 @@ static void CombineColumns (ButtoN b_in)
   SetObjectExtra (b, &acd, NULL);
   b = PushButton (c, "Cancel", ModalCancelButton);
   SetObjectExtra (b, &acd, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) dlg, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg, (HANDLE) g, (HANDLE) c, NULL);
   
   Show(w); 
   Select (w);
@@ -5523,7 +5916,9 @@ static void CombineColumns (ButtoN b_in)
           ValNodeAddInt (&combine_list, 0, vnp->choice);
         }
         combine_list = ValNodeSort (combine_list, SortVnpByInt);
-        CombineTabTableColumns (form_data->table, combine_list, ",");
+        delimiter = JustSaveStringFromText (delimiter_txt);
+        CombineTabTableColumns (form_data->table, combine_list, delimiter);
+        delimiter = MemFree (delimiter);
         combine_list = ValNodeFree (combine_list);
         ReDrawWindowAfterTableReload (form_data);
       }
@@ -5534,13 +5929,122 @@ static void CombineColumns (ButtoN b_in)
 }
 
 
+static void SeparateColumns (ButtoN b_in)
+{
+  WindoW w;
+  GrouP  h, g, c;
+  DialoG dlg;
+  TexT   delimiter_txt;
+  ButtoN just_first_delimiter_btn;
+  ValNodePtr options = NULL, vnp;
+  Int4       i;
+  ButtoN b;
+  ModalAcceptCancelData acd;
+  QualLoadFormPtr form_data;
+  CharPtr         label, delimiter;
+  Boolean         just_first_delimiter;
+
+  form_data = (QualLoadFormPtr) GetObjectExtra (b_in);
+  if (form_data == NULL || form_data->table == NULL || form_data->table->data.ptrvalue == NULL) return;
+  
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  acd.third_option = FALSE;
+  
+  w = ModalWindow(-20, -13, -10, -10, NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  for (i = 0, vnp = form_data->table->data.ptrvalue;
+       i < form_data->num_columns && vnp != NULL; 
+       i++, vnp = vnp->next) 
+  {
+    label = (CharPtr) MemNew (sizeof (Char) * (StringLen (vnp->data.ptrvalue) + 15));
+    sprintf (label, "%5d   %s", i + 1, (char *) vnp->data.ptrvalue);
+    ValNodeAddPointer (&options, i, label);
+  }
+
+  dlg = ValNodeSelectionDialog (h, options, TALL_SELECTION_LIST, ValNodeStringName,
+                                              ValNodeSimpleDataFree, ValNodeStringCopy,
+                                              ValNodeStringMatch, "column", 
+                                              NULL, NULL, TRUE);
+  g = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "Delimiter", 0, popupMenuHeight, programFont, 'l');
+  delimiter_txt = DialogText (g, ",", 5, NULL);
+
+  just_first_delimiter_btn = CheckBox (h, "Separate only at first delimiter", NULL);
+
+  c = HiddenGroup (h, 3, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  b = PushButton (c, "Separate", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg, (HANDLE) g, (HANDLE) c, NULL);
+  
+  Show(w); 
+  Select (w);
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+    ProcessAnEvent ();
+    if (acd.accepted)
+    {
+      /* combine here */
+      options = DialogToPointer (dlg);
+      if (options == NULL) {
+        Message (MSG_ERROR, "Must choose at least one column!");
+        acd.accepted = FALSE;
+      } else {
+        delimiter = JustSaveStringFromText (delimiter_txt);
+        if (delimiter == NULL) {
+          delimiter = StringSave (" ");
+        }
+        just_first_delimiter = GetStatus (just_first_delimiter_btn);
+        for (vnp = options; vnp != NULL; vnp = vnp->next) {
+          ReparseTabTableSeparateColumnAtDelimiter (form_data->table, *delimiter, vnp->choice, just_first_delimiter);
+        }
+        delimiter = MemFree (delimiter);
+        ReDrawWindowAfterTableReload (form_data);
+      }
+      options = ValNodeFree (options);
+    }
+  }
+  Remove (w);
+}
+
+
+static void ShowTableReaderTable (ButtoN b)
+{
+  QualLoadFormPtr form_data;
+  Char            path [PATH_MAX];
+  FILE           *fp;
+
+  form_data = (QualLoadFormPtr) GetObjectExtra (b);
+  if (form_data == NULL || form_data->table == NULL) return;
+
+  TmpNam (path);
+  fp = FileOpen (path, "wb");
+  if (fp == NULL) {
+    Message (MSG_ERROR, "Unable to open temporary file %s", path);
+    return;
+  }
+  WriteTabTableToFile (form_data->table, fp);
+  FileClose (fp);
+  LaunchGeneralTextViewer (path, "WARNING - Editing in this window will not be reflected in the table reader!");
+  FileRemove (path);
+}
+
+
 static WindoW CreateTableReaderWindowWithTable (Uint2 entityID, ValNodePtr table)
 {
   ValNodePtr   blank_list;
   ValNodePtr   col_vnp, blank_vnp;
   Int4         index;
   WindoW        w;
-  GrouP         h, g, g2, g3, c;
+  GrouP         h, g, g2, g3, g4, c;
   QualLoadFormPtr form_data;
   CharPtr         title;
   Int4            col_for_list = 3;
@@ -5594,28 +6098,32 @@ static WindoW CreateTableReaderWindowWithTable (Uint2 entityID, ValNodePtr table
     }
   }
 
-  g2 = HiddenGroup (h, 2, 0, NULL);
+  g2 = HiddenGroup (h, 3, 0, NULL);
   b = PushButton (g2, "Automatch Qualifiers", AutoMatchQuals);
+  SetObjectExtra (b, form_data, NULL);
+  b = PushButton (g2, "Reset Columns", ResetColumns);
   SetObjectExtra (b, form_data, NULL);
   form_data->remove_quotes = CheckBox (g2, "Remove quotes around values", NULL);
   SetStatus (form_data->remove_quotes, TRUE);
-
-  g3 = HiddenGroup (h, 7, 0, NULL);
+  g4 = HiddenGroup (h, 8, 0, NULL);
+  SetGroupSpacing (g4, 10, 10);
+  b = PushButton (g4, "View Table (NO EDITING!)", ShowTableReaderTable);
+  SetObjectExtra (b, form_data, NULL);
+  g3 = HiddenGroup (h, 8, 0, NULL);
   b = PushButton (g3, "Load New Table", LoadNewTable);
   SetObjectExtra (b, form_data, NULL);
   b = PushButton (g3, "Reload, 1st Space=Tab", ReloadFirstSpace);
   SetObjectExtra (b, form_data, NULL);
   b = PushButton (g3, "Reload, Mult Space=Tab", ReloadMultiSpace);
   SetObjectExtra (b, form_data, NULL);
-  b = PushButton (g3, "Reload, First Two are File ID", ReloadFileId);
-  SetObjectExtra (b, form_data, NULL);
-  b = PushButton (g3, "New BankIt With SeqId", ReloadNewBankitId);
-  SetObjectExtra (b, form_data, NULL);
-  b = PushButton (g3, "New BankIt No SeqId", ReloadNewBankitNoId);
+  b = PushButton (g3, "Reload, Combine First Two for ID", ReloadFileId);
   SetObjectExtra (b, form_data, NULL);
   b = PushButton (g3, "Combine Columns", CombineColumns);
   SetObjectExtra (b, form_data, NULL);
+  b = PushButton (g3, "Separate Columns", SeparateColumns);
+  SetObjectExtra (b, form_data, NULL);
 
+  form_data->err_msg = StaticPrompt (h, "", 200, dialogTextHeight, systemFont, 'c');
   c = HiddenGroup (h, 7, 0, NULL);
   form_data->accept_button = DefaultButton (c, "Accept", DoAcceptQuals);
   SetObjectExtra (form_data->accept_button, form_data, NULL);
@@ -5631,6 +6139,8 @@ static WindoW CreateTableReaderWindowWithTable (Uint2 entityID, ValNodePtr table
                 (HANDLE) g, 
                 (HANDLE) g2,
                 (HANDLE) g3,
+                (HANDLE) g4,
+                (HANDLE) form_data->err_msg,
                 (HANDLE) c, NULL);
 
   blank_list = ValNodeFree (blank_list);
@@ -5668,22 +6178,15 @@ static WindoW CreateTableReaderWindow (Uint2 entityID)
 }
 
 
-extern void NewLoadFeatureQualifierTable (IteM i)
+static void NewLoadFeatureQualifierTableEntityID (Uint2 entityID)
 {
-  BaseFormPtr  bfp;
   WindoW        w;
   QualLoadFormPtr form_data;
   TabColumnConfigPtr t;
   ValNodePtr         column_list = NULL;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
 
-  w = CreateTableReaderWindow (bfp->input_entityID);
+  w = CreateTableReaderWindow (entityID);
 
   if (w != NULL) {
     /* populate */
@@ -5706,6 +6209,30 @@ extern void NewLoadFeatureQualifierTable (IteM i)
     Show (w);
     Update ();
   }
+}
+
+
+extern void NewLoadFeatureQualifierTable (IteM i)
+{
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  NewLoadFeatureQualifierTableEntityID (bfp->input_entityID);
+}
+
+
+extern void NewLoadFeatureQualifierTableToolBtn (ButtoN b)
+{
+  BaseFormPtr  bfp;
+
+  bfp = (BaseFormPtr) GetObjectExtra (b);
+  if (bfp == NULL) return;
+  NewLoadFeatureQualifierTableEntityID (bfp->input_entityID);
 }
 
 
@@ -5751,19 +6278,13 @@ NLM_EXTERN void CreateTableReaderWindowWithStructuredComments (IteM i)
 }  
   
 
-extern void LoadTaxTableReader (IteM i)
+static void LoadTaxTableReaderBaseForm (BaseFormPtr bfp)
 {
-  BaseFormPtr  bfp;
   WindoW        w;
   QualLoadFormPtr form_data;
   TabColumnConfigPtr t;
   ValNodePtr         column_list = NULL, s;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
   if (bfp == NULL) return;
 
   w = CreateTableReaderWindow (bfp->input_entityID);
@@ -5811,6 +6332,18 @@ extern void LoadTaxTableReader (IteM i)
     Show (w);
     Update ();
   }
+}
+
+
+extern void LoadTaxTableReader (IteM i)
+{
+  ButtonOrMenuItemTemplate (i, LoadTaxTableReaderBaseForm);
+}
+
+
+extern void LoadTaxTableReaderBtn (ButtoN b)
+{
+  ButtonOrMenuButtonTemplate (b, LoadTaxTableReaderBaseForm);
 }
 
 
@@ -8801,58 +9334,6 @@ NLM_EXTERN void FlipSequenceIntervals (IteM i)
 }
 
 
-#ifdef OS_MSWIN
-#include <undefwin.h>
-#include <windows.h>
-
-NLM_EXTERN Int4 RunSilent(const char *cmdline) {
-    int status = -1;
-
-    STARTUPINFO         StartupInfo;
-    PROCESS_INFORMATION ProcessInfo;
-
-    DWORD dwCreateFlags;
-
-#ifndef COMP_METRO
-    /* code warrior headers do not have this, so comment out to allow compilation */
-    _flushall();
-#endif
-
-    /* Set startup info */
-    memset(&StartupInfo, 0, sizeof(StartupInfo));
-    StartupInfo.cb          = sizeof(STARTUPINFO);
-    StartupInfo.dwFlags     = STARTF_USESHOWWINDOW;
-    StartupInfo.wShowWindow = SW_HIDE;
-    dwCreateFlags           = CREATE_NEW_CONSOLE;
-
-    /* Run program */
-    if (CreateProcess(NULL, (LPSTR)cmdline, NULL, NULL, FALSE,
-                      dwCreateFlags, NULL, NULL, &StartupInfo, &ProcessInfo))
-    {
-        /* wait running process */
-        DWORD exitcode = -1;
-        WaitForSingleObject(ProcessInfo.hProcess, INFINITE);
-        GetExitCodeProcess(ProcessInfo.hProcess, &exitcode);
-        status = exitcode;
-        CloseHandle(ProcessInfo.hProcess);
-        CloseHandle(ProcessInfo.hThread);
-    }
-    else
-    {
-	DWORD dw = GetLastError();
-	/* check for common errors first */
-	if(dw == ERROR_FILE_NOT_FOUND)
-	    Message(MSG_ERROR, "CreateProcess() failed: file not found.");
-	else
-	    /* generic error message */
-	    Message(MSG_ERROR, "CreateProcess() failed, error code %d.",
-		    (int)dw);
-    }
-
-    return status;
-}
-#endif
-
 static void MacroAECRAction (IteM i, Boolean indexer_version, Uint1 action_type, Uint1 qual_type)
 {
   BaseFormPtr        bfp;
@@ -9025,6 +9506,84 @@ extern void MacroRemoveStructuredComment (IteM i)
 }
 
 
+NLM_EXTERN void RemoveAllSourceNoteBaseForm (BaseFormPtr bfp)
+{
+  SeqEntryPtr sep;
+  RemoveActionPtr remove;
+  AECRActionPtr aecr;
+  ValNodePtr    aecr_a;
+  ValNodePtr    macro;
+  ValNodePtr    src_field;
+
+  if (bfp == NULL) {
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) {
+    return;
+  }
+
+  src_field = ValNodeNew (NULL);
+  src_field->choice = SourceQualChoice_textqual;
+  src_field->data.intvalue = Source_qual_all_notes;
+  remove = RemoveActionNew ();
+  remove->field = ValNodeNew (NULL);
+  remove->field->choice = FieldType_source_qual;
+  remove->field->data.ptrvalue = src_field;
+  aecr_a = ValNodeNew (NULL);
+  aecr_a->choice = ActionChoice_remove;
+  aecr_a->data.ptrvalue = remove;
+  aecr = AECRActionNew ();
+  aecr->action = aecr_a;
+  macro = ValNodeNew (NULL);
+  macro->choice = MacroActionChoice_aecr;
+  macro->data.ptrvalue = aecr;
+
+  ApplyMacroToSeqEntry (sep, macro);
+
+  macro = MacroActionChoiceFree(macro);
+}
+
+
+NLM_EXTERN void ApplyIsolationSourceBaseForm (BaseFormPtr bfp)
+{
+  ForM           f;
+  ValNodePtr     macro;
+  ValNodePtr     src_field;
+  ApplyActionPtr apply;
+  AECRActionPtr  aecr;
+  ValNodePtr     aecr_a;
+  
+  f = SingleMacroAction (bfp->input_entityID, TRUE);
+
+  src_field = ValNodeNew (NULL);
+  src_field->choice = SourceQualChoice_textqual;
+  src_field->data.intvalue = Source_qual_isolation_source;
+
+  apply = ApplyActionNew ();
+  apply->field = ValNodeNew (NULL);
+  apply->field->choice = FieldType_source_qual;
+  apply->field->data.ptrvalue = src_field;
+
+  aecr_a = ValNodeNew (NULL);
+  aecr_a->choice = ActionChoice_apply;
+  aecr_a->data.ptrvalue = apply;
+  aecr = AECRActionNew ();
+  aecr->action = aecr_a;
+
+  macro = ValNodeNew (NULL);
+  macro->choice = MacroActionChoice_aecr;
+  macro->data.ptrvalue = aecr;
+
+  PointerToForm (f, macro);
+  macro = MacroActionChoiceFree (macro);
+    
+  Show (f);
+  Select (f);
+  SendMessageToForm (f, VIB_MSG_ENTER);
+}
+
 
 typedef struct convertboisourcedbxreftofeaturedbxref {
   FORM_MESSAGE_BLOCK
@@ -9193,9 +9752,11 @@ extern void ConvertBioSourceDbxrefToFeatureDbxref (IteM i)
 
 typedef struct structuredcommentsform {
   FORM_MESSAGE_BLOCK
+  GrouP table_type;
+  GrouP match_info;
   PopuP match_column;
   DialoG match_type;
-  TexT   database_name;
+  DialoG database_name;
 
   ValNodePtr table;
 } StructuredCommentsFormData, PNTR StructuredCommentsFormPtr;
@@ -9213,40 +9774,6 @@ static void CleanupStructuredCommentsForm (GraphiC g, VoidPtr data)
 }
 
 
-static CharPtr DbnameFromString (CharPtr string)
-{
-  CharPtr tmp;
-  Int4    len;
-
-  if (StringHasNoText (string)) {
-    return NULL;
-  }
-
-  tmp = StringSave (string + StringSpn (string, "##"));
-  len = StringLen (tmp);
-  if (len > 2 && StringCmp (tmp + len - 2, "##") == 0) {
-    tmp[len - 2] = 0;
-    len -= 2;
-  }
-  if (len > 6 && StringCmp (tmp + len - 6, "-START") == 0) {
-    tmp[len - 6] = 0;
-    len -= 6;
-  }
-  if (len > 6 && StringCmp (tmp + len - 4, "-END") == 0) {
-    tmp[len - 4] = 0;
-    len -= 4;
-  }
-  if (len > 4 && StringCmp (tmp + len - 4, "Data") == 0) {
-    tmp[len - 4] = 0;
-    len -= 4;
-  }
-  if (StringCmp (tmp, "HIV-Database") == 0) {
-    StringCpy (tmp, "HIVDatabase");
-  }
-  return tmp;
-}
-
-
 static UserObjectPtr UserObjectFromRow (ValNodePtr header, ValNodePtr line, Int4 col, CharPtr dbname, ValNodePtr PNTR err_list)
 {
   ValNodePtr vnp_h, vnp_l;
@@ -9256,8 +9783,8 @@ static UserObjectPtr UserObjectFromRow (ValNodePtr header, ValNodePtr line, Int4
   CharPtr    msg;
   UserObjectPtr uop;
   CharPtr       prefix = NULL, suffix = NULL;
-  CharPtr       prefix_fmt = "##%sData-START##";
-  CharPtr       suffix_fmt = "##%sData-END##";
+  CharPtr       prefix_fmt = "##%s-START##";
+  CharPtr       suffix_fmt = "##%s-END##";
   CharPtr       tmp_dbname = NULL;
   Boolean       prefix_from_row = FALSE;
 
@@ -9289,13 +9816,18 @@ static UserObjectPtr UserObjectFromRow (ValNodePtr header, ValNodePtr line, Int4
          vnp_h = vnp_h->next, vnp_l = vnp_l->next) {
       if (StringICmp (vnp_h->data.ptrvalue, "StructuredCommentPrefix") == 0
           || StringICmp (vnp_h->data.ptrvalue, "StructuredCommentSuffix") == 0) {
-        tmp_dbname = DbnameFromString(vnp_l->data.ptrvalue);
+        tmp_dbname = StructuredCommentDbnameFromString(vnp_l->data.ptrvalue);
         dbname = tmp_dbname;
         prefix_from_row = TRUE;
       }
     }
+  } else {
+    /* fix supplied dbname if necessary */
+    tmp_dbname = StructuredCommentDbnameFromString(dbname);
+    if (tmp_dbname != NULL) {
+      dbname = tmp_dbname;
+    }
   }
-
 
   /* build user object */
   vnp_h = header;
@@ -9339,6 +9871,23 @@ static UserObjectPtr UserObjectFromRow (ValNodePtr header, ValNodePtr line, Int4
 }
 
 
+static void ChangeStructuredCommentTableType(GrouP g)
+{
+  StructuredCommentsFormPtr frm;
+
+  frm = (StructuredCommentsFormPtr)GetObjectExtra (g);
+  if (frm == NULL) {
+    return;
+  }
+
+  if (GetValue (frm->table_type) == 1) {
+    Enable (frm->match_info);
+  } else {
+    Disable (frm->match_info);
+  }
+}
+
+
 static void DoParseStructuredComments (ButtoN b)
 {
   StructuredCommentsFormPtr frm;
@@ -9346,13 +9895,13 @@ static void DoParseStructuredComments (ButtoN b)
   MatchTypePtr              match_type;
   ValNodePtr                sequence_lists;
   SeqEntryPtr               sep;
-  ValNodePtr                err_list = NULL, vnp, header, line, s_row, vnp_s;
+  ValNodePtr                err_list = NULL, vnp, header, line, s_row, vnp_s, tmp_table, vnp_h;
   LogInfoPtr                lip;
   BioseqPtr                 bsp;
   UserObjectPtr             uop, uop_cpy;
   SeqDescrPtr               sdp;
-  CharPtr                   database_name = NULL;
-  Int4                      len;
+  CharPtr                   database_name = NULL, spec_db, file_db;
+  Boolean                   found_prefix;
 
   frm = (StructuredCommentsFormPtr) GetObjectExtra (b);
   if (frm == NULL) {
@@ -9361,59 +9910,94 @@ static void DoParseStructuredComments (ButtoN b)
 
   sep = GetTopSeqEntryForEntityID (frm->input_entityID);
 
-  col = GetValue (frm->match_column) - 1;
-  match_type = DialogToPointer (frm->match_type);
-  sequence_lists = GetSequenceListsForMatchTypeInTabTable (sep, frm->table->next, col, match_type, &err_list);
+  database_name = DialogToPointer (frm->database_name);
 
-  if (err_list != NULL) {
-    lip = OpenLog ("Table Problems");
-    for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
-      fprintf (lip->fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
-    }
-    lip->data_in_log = TRUE;
-    CloseLog (lip);
-    lip = FreeLog (lip);
-    err_list = ValNodeFreeData (err_list);
-    if (ANS_YES != Message (MSG_YN, "Continue with table problems")) {
-      sequence_lists = FreeSequenceLists(sequence_lists);
-      return;
-    }
-  }
+  if (GetValue (frm->table_type) == 1) {
+    col = GetValue (frm->match_column) - 1;
+    match_type = DialogToPointer (frm->match_type);
+    sequence_lists = GetSequenceListsForMatchTypeInTabTable (sep, frm->table->next, col, match_type, &err_list);
 
-  WatchCursor ();
-  Update();
-
-  header = frm->table->data.ptrvalue;
-  line = frm->table->next;
-  s_row = sequence_lists;
-
-  if (frm->database_name != NULL) {
-    database_name = SaveStringFromText (frm->database_name);
-    len = StringLen (database_name);
-    if (len >= 4 && StringCmp (database_name + len - 4, "data") == 0) {
-      database_name[len - 4] = 0;
-    }
-  }
-
-  while (line != NULL && s_row != NULL) {
-    vnp_s = s_row->data.ptrvalue;
-    if (vnp_s != NULL) {
-      uop = UserObjectFromRow (header, line, col, database_name, &err_list);
-      while (vnp_s != NULL) {
-        bsp = vnp_s->data.ptrvalue;
-        uop_cpy = (UserObjectPtr) AsnIoMemCopy (uop, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
-        sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
-        sdp->data.ptrvalue = uop_cpy;
-        vnp_s = vnp_s->next;
+    if (err_list != NULL) {
+      lip = OpenLog ("Table Problems");
+      for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
+        fprintf (lip->fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
       }
-      uop = UserObjectFree (uop);
+      lip->data_in_log = TRUE;
+      CloseLog (lip);
+      lip = FreeLog (lip);
+      err_list = ValNodeFreeData (err_list);
+      if (ANS_YES != Message (MSG_YN, "Continue with table problems")) {
+        sequence_lists = FreeSequenceLists(sequence_lists);
+        return;
+      }
     }
-    line = line->next;
-    s_row = s_row->next;
+
+    WatchCursor ();
+    Update();
+
+    header = frm->table->data.ptrvalue;
+    line = frm->table->next;
+    s_row = sequence_lists;
+
+
+    while (line != NULL && s_row != NULL) {
+      vnp_s = s_row->data.ptrvalue;
+      if (vnp_s != NULL) {
+        uop = UserObjectFromRow (header, line, col, database_name, &err_list);
+        while (vnp_s != NULL) {
+          bsp = vnp_s->data.ptrvalue;
+          uop_cpy = (UserObjectPtr) AsnIoMemCopy (uop, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
+          sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
+          sdp->data.ptrvalue = uop_cpy;
+          vnp_s = vnp_s->next;
+        }
+        uop = UserObjectFree (uop);
+      }
+      line = line->next;
+      s_row = s_row->next;
+    }
+
+
+    sequence_lists = FreeSequenceLists(sequence_lists);
+
+  } else {
+    tmp_table = FlipTabTableAxes (frm->table);
+    if (!StringHasNoText (database_name)) {
+      found_prefix = FALSE;
+      spec_db = StructuredCommentDbnameFromString(database_name);
+      for (vnp_h = tmp_table->data.ptrvalue, vnp_s = tmp_table->next->data.ptrvalue; 
+           vnp_h != NULL && vnp_s != NULL; 
+           vnp_h = vnp_h->next, vnp_s = vnp_s->next) {
+        if (StringICmp(vnp_h->data.ptrvalue, "StructuredCommentPrefix") == 0
+            || StringICmp (vnp_h->data.ptrvalue, "StructuredCommentSuffix") == 0) {
+          file_db = StructuredCommentDbnameFromString(vnp_s->data.ptrvalue);
+          if (StringCmp (file_db, spec_db) != 0) {
+            vnp_s->data.ptrvalue = MemFree (vnp_s->data.ptrvalue);
+            vnp_s->data.ptrvalue = StringSave (spec_db);
+          }
+          file_db = MemFree (file_db);
+          found_prefix = TRUE;
+        }
+      }
+      if (!found_prefix) {
+        vnp = ValNodeNew (NULL);
+        vnp->data.ptrvalue = StringSave ("StructuredCommentPrefix");
+        vnp->next = tmp_table->data.ptrvalue;
+        tmp_table->data.ptrvalue = vnp;
+
+        vnp = ValNodeNew (NULL);
+        vnp->data.ptrvalue = StringSave (spec_db);
+        vnp->next = tmp_table->next->data.ptrvalue;
+        tmp_table->next->data.ptrvalue = vnp;
+      }
+      spec_db = MemFree (spec_db);
+    }
+
+    CreateStructuredCommentsForAllFromTable(sep, tmp_table->data.ptrvalue, tmp_table->next, &err_list);
+    tmp_table = FreeTabTable(tmp_table);
   }
 
-  database_name = MemFree (database_name);
-
+  /* show errors from creating structured comments */
   if (err_list != NULL) {
     lip = OpenLog ("Data Problems");
     for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
@@ -9425,7 +10009,8 @@ static void DoParseStructuredComments (ButtoN b)
     err_list = ValNodeFreeData (err_list);
   }
 
-  sequence_lists = FreeSequenceLists(sequence_lists);
+  database_name = MemFree (database_name);
+
   ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, frm->input_entityID, 0, 0);
 
@@ -9490,9 +10075,18 @@ NLM_EXTERN void CreateStructuredCommentsItem (IteM i)
 
       h = HiddenGroup (w, -1, 0, NULL);
 
-      ppt1 = StaticPrompt (h, "Choose column that identifies sequence for structured comment", 0, dialogTextHeight,
+      frm->table_type = HiddenGroup (h, 0, 2, ChangeStructuredCommentTableType);
+      SetGroupSpacing (frm->table_type, 10, 10);
+      SetObjectExtra (frm->table_type, frm, NULL);
+      RadioButton (frm->table_type, "Table includes accessions for structured comments, one per line");
+      RadioButton (frm->table_type, "Table is one structured comment, field names across the top");
+      SetValue (frm->table_type, 1);
+
+      frm->match_info = HiddenGroup (h, -1, 0, NULL);
+      SetGroupSpacing (frm->match_info, 10, 10);
+      ppt1 = StaticPrompt (frm->match_info, "Choose column that identifies sequence for structured comment", 0, dialogTextHeight,
 		                       programFont, 'l');
-      frm->match_column = PopupList (h, TRUE, NULL);
+      frm->match_column = PopupList (frm->match_info, TRUE, NULL);
       vnp = frm->table->data.ptrvalue;
       col = 1;
       while (vnp != NULL) {
@@ -9510,24 +10104,26 @@ NLM_EXTERN void CreateStructuredCommentsItem (IteM i)
       }
       SetValue (frm->match_column, 1);
 
-      ppt2 = StaticPrompt (h, "Specify relationship of column to sequence", 0, dialogTextHeight,
+      ppt2 = StaticPrompt (frm->match_info, "Specify relationship of column to sequence", 0, dialogTextHeight,
 		                       programFont, 'l');      
-      frm->match_type = MatchTypeDialog (h, NULL, NULL);
+      frm->match_type = MatchTypeDialog (frm->match_info, NULL, NULL);
+      AlignObjects (ALIGN_CENTER, (HANDLE) ppt1,
+                                  (HANDLE) frm->match_column,
+                                  (HANDLE) ppt2,
+                                  (HANDLE) frm->match_type,
+                                  NULL);
 
       ppt3 = StaticPrompt (h, "Choose database name", 0, dialogTextHeight,
 		                  programFont, 'l');
 
-      frm->database_name = DialogText (h, "", 10, NULL);
+      frm->database_name = StructuredCommentDatabaseNameDialog (h, NULL, NULL);
 
       c = HiddenGroup (h, 2, 0, NULL);
       b = PushButton (c, "Accept", DoParseStructuredComments);
       SetObjectExtra (b, frm, NULL);
       PushButton (c, "Cancel", StdCancelButtonProc);
-
-      AlignObjects (ALIGN_CENTER, (HANDLE) ppt1,
-                                  (HANDLE) frm->match_column,
-                                  (HANDLE) ppt2,
-                                  (HANDLE) frm->match_type,
+      AlignObjects (ALIGN_CENTER, (HANDLE) frm->table_type,
+                                  (HANDLE) frm->match_info,
                                   (HANDLE) ppt3,
                                   (HANDLE) frm->database_name,
                                   (HANDLE) c,
@@ -9539,99 +10135,43 @@ NLM_EXTERN void CreateStructuredCommentsItem (IteM i)
   } 
 }
 
-#if 0
-static void DoSubmitterParseStructuredComments (ButtoN b)
+
+static Boolean AnySequencesInList (ValNodePtr list)
 {
-  StructuredCommentsFormPtr frm;
-  Int4                      col;
-  MatchTypeData             match_type;
-  CharPtr                   database_name = NULL;
-  ValNodePtr                sequence_lists;
-  SeqEntryPtr               sep;
-  ValNodePtr                err_list = NULL, vnp, header, line, s_row, vnp_s;
-  LogInfoPtr                lip;
-  BioseqPtr                 bsp;
-  UserObjectPtr             uop, uop_cpy;
-  SeqDescrPtr               sdp;
+  Boolean rval = FALSE;
 
-  frm = (StructuredCommentsFormPtr) GetObjectExtra (b);
-  if (frm == NULL) {
-    return;
-  }
-
-  sep = GetTopSeqEntryForEntityID (frm->input_entityID);
-  col = 0;
-  match_type.choice = eTableMatchNucID;
-  match_type.match_location = String_location_equals;
-  match_type.data = NULL;
-
-  sequence_lists = GetSequenceListsForMatchTypeInTabTable (sep, frm->table->next, col, &match_type, &err_list);
-
-  if (err_list != NULL) {
-    lip = OpenLog ("Table Problems");
-    for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
-      fprintf (lip->fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+  while (list != NULL && !rval) {
+    if (list->data.ptrvalue != NULL) {
+      rval = TRUE;
     }
-    lip->data_in_log = TRUE;
-    CloseLog (lip);
-    lip = FreeLog (lip);
-    err_list = ValNodeFreeData (err_list);
-    if (ANS_YES != Message (MSG_YN, "Continue with table problems")) {
-      sequence_lists = FreeSequenceLists(sequence_lists);
-      return;
-    }
+    list = list->next;
   }
-
-  WatchCursor ();
-  Update();
-
-  header = frm->table->data.ptrvalue;
-  line = frm->table->next;
-  s_row = sequence_lists;
-  if (frm->database_name != NULL) {
-    database_name = SaveStringFromText (frm->database_name);
-  }
-
-  while (line != NULL && s_row != NULL) {
-    vnp_s = s_row->data.ptrvalue;
-    if (vnp_s != NULL) {
-      uop = UserObjectFromRow (header, line, col, database_name, &err_list);
-      while (vnp_s != NULL) {
-        bsp = vnp_s->data.ptrvalue;
-        uop_cpy = (UserObjectPtr) AsnIoMemCopy (uop, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
-        sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
-        sdp->data.ptrvalue = uop_cpy;
-        vnp_s = vnp_s->next;
-      }
-      uop = UserObjectFree (uop);
-    }
-    line = line->next;
-    s_row = s_row->next;
-  }
-
-  database_name = MemFree (database_name);
-
-  if (err_list != NULL) {
-    lip = OpenLog ("Data Problems");
-    for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
-      fprintf (lip->fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
-    }
-    lip->data_in_log = TRUE;
-    CloseLog (lip);
-    lip = FreeLog (lip);
-    err_list = ValNodeFreeData (err_list);
-  }
-
-  sequence_lists = FreeSequenceLists(sequence_lists);
-  ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, frm->input_entityID, 0, 0);
-
-  Remove (frm->form);
-  ArrowCursor ();
-  Update ();
-  
+  return rval;
 }
-#endif
+
+
+static Boolean HeaderHasAtLeastTwoColumns (ValNodePtr header)
+{
+  if (header == NULL || header->next == NULL) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
+
+static Boolean HeaderLooksLikeSeqId (ValNodePtr header)
+{
+  if (header == NULL) {
+    return FALSE;
+  } else if (StringICmp (header->data.ptrvalue, "accession") == 0
+    || StringICmp (header->data.ptrvalue, "seqid") == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
 
 NLM_EXTERN void SubmitterCreateStructuredComments (IteM i)
 {
@@ -9640,10 +10180,9 @@ NLM_EXTERN void SubmitterCreateStructuredComments (IteM i)
   FILE *fp;
   Int4                      col;
   MatchTypeData             match_type;
-  CharPtr                   database_name = NULL;
   ValNodePtr                sequence_lists;
   SeqEntryPtr               sep;
-  ValNodePtr                err_list = NULL, vnp, header, line, s_row, vnp_s;
+  ValNodePtr                err_list = NULL, vnp, header, line, s_row, vnp_s, tmp;
   LogInfoPtr                lip;
   BioseqPtr                 bsp;
   UserObjectPtr             uop, uop_cpy;
@@ -9685,45 +10224,54 @@ NLM_EXTERN void SubmitterCreateStructuredComments (IteM i)
 
   sequence_lists = GetSequenceListsForMatchTypeInTabTable (sep, table->next, col, &match_type, &err_list);
 
-  if (err_list != NULL) {
-    lip = OpenLog ("Table Problems");
-    for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
-      fprintf (lip->fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
-    }
-    lip->data_in_log = TRUE;
-    CloseLog (lip);
-    lip = FreeLog (lip);
+  if (err_list != NULL && !AnySequencesInList(sequence_lists) 
+      && HeaderHasAtLeastTwoColumns(table->data.ptrvalue)
+      && !HeaderLooksLikeSeqId(table->data.ptrvalue)) {
     err_list = ValNodeFreeData (err_list);
-    if (ANS_YES != Message (MSG_YN, "Continue with table problems")) {
-      sequence_lists = FreeSequenceLists(sequence_lists);
-      return;
-    }
-  }
-
-  WatchCursor ();
-  Update();
-
-  header = table->data.ptrvalue;
-  line = table->next;
-  s_row = sequence_lists;
-
-  while (line != NULL && s_row != NULL) {
-    vnp_s = s_row->data.ptrvalue;
-    if (vnp_s != NULL) {
-      uop = UserObjectFromRow (header, line, col, NULL, &err_list);
-      while (vnp_s != NULL) {
-        bsp = vnp_s->data.ptrvalue;
-        uop_cpy = (UserObjectPtr) AsnIoMemCopy (uop, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
-        sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
-        sdp->data.ptrvalue = uop_cpy;
-        vnp_s = vnp_s->next;
+    tmp = FlipTabTableAxes (table);
+    table = FreeTabTable (table);
+    table = tmp;
+    CreateStructuredCommentsForAllFromTable(sep, table->data.ptrvalue, table->next, &err_list);
+  } else {
+    if (err_list != NULL) {
+      lip = OpenLog ("Table Problems");
+      for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
+        fprintf (lip->fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
       }
-      uop = UserObjectFree (uop);
+      lip->data_in_log = TRUE;
+      CloseLog (lip);
+      lip = FreeLog (lip);
+      err_list = ValNodeFreeData (err_list);
+      if (ANS_YES != Message (MSG_YN, "Continue with table problems")) {
+        sequence_lists = FreeSequenceLists(sequence_lists);
+        return;
+      }
     }
-    line = line->next;
-    s_row = s_row->next;
-  }
 
+    WatchCursor ();
+    Update();
+
+    header = table->data.ptrvalue;
+    line = table->next;
+    s_row = sequence_lists;
+
+    while (line != NULL && s_row != NULL) {
+      vnp_s = s_row->data.ptrvalue;
+      if (vnp_s != NULL) {
+        uop = UserObjectFromRow (header, line, col, NULL, &err_list);
+        while (vnp_s != NULL) {
+          bsp = vnp_s->data.ptrvalue;
+          uop_cpy = (UserObjectPtr) AsnIoMemCopy (uop, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
+          sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
+          sdp->data.ptrvalue = uop_cpy;
+          vnp_s = vnp_s->next;
+        }
+        uop = UserObjectFree (uop);
+      }
+      line = line->next;
+      s_row = s_row->next;
+    }
+  }
 
   if (err_list != NULL) {
     lip = OpenLog ("Data Problems");
@@ -10339,6 +10887,7 @@ typedef struct exportqualifiersform {
   ButtoN source_qualifiers;
   DialoG src_qual_selection;
   GrouP  qual_choice;
+  ButtoN launch_excel;
 } ExportQualifiersFormData, PNTR ExportQualifiersFormPtr;
 
 static void DoExportQualifiers (ButtoN b)
@@ -10392,6 +10941,12 @@ static void DoExportQualifiers (ButtoN b)
     }
     ExportFieldTable (field_type, field_list, GetTopSeqEntryForEntityID (frm->input_entityID), fp);
     FileClose (fp);
+#ifdef WIN_MSWIN
+    if (GetStatus (frm->launch_excel)) {
+      Nlm_MSWin_OpenApplication ("excel.exe", path);
+    }
+#endif
+
   }
   field_list = FieldTypeListFree (field_list);
   Remove (frm->form);
@@ -10487,13 +11042,23 @@ NLM_EXTERN void ExportQualifiers (IteM i)
   RadioButton (frm->qual_choice, "Publication Titles");
   SetValue (frm->qual_choice, 1);
 
+#ifdef WIN_MSWIN
+  frm->launch_excel = CheckBox (h, "Launch Excel", NULL);
+#endif
 
   c = HiddenGroup (h, 2, 0, NULL);
   b = PushButton (c, "Accept", DoExportQualifiers);
   SetObjectExtra (b, frm, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) frm->source_qualifiers, (HANDLE) frm->src_qual_selection, (HANDLE) frm->qual_choice, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) frm->source_qualifiers, 
+                              (HANDLE) frm->src_qual_selection, 
+                              (HANDLE) frm->qual_choice, 
+#ifdef WIN_MSWIN
+                              (HANDLE) frm->launch_excel,
+#endif
+                              (HANDLE) c, 
+                              NULL);
   Show (w);
 }
 
@@ -10604,6 +11169,31 @@ extern void TrimPrimerSeqJunk (IteM i)
   WatchCursor ();
   Update();
   TrimPrimerSeqJunkInSeqEntry (sep, NULL);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+
+extern void FixiPCRPrimerSeqsMenuItem (IteM i)
+{
+  BaseFormPtr    bfp;
+  SeqEntryPtr    sep;
+
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+
+  WatchCursor ();
+  Update();
+  VisitBioSourcesInSep (sep, NULL, FixiPCRPrimerSeqsCallback);
   ArrowCursor ();
   Update ();
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
@@ -10761,58 +11351,6 @@ typedef struct removecontigfromscaffoldform {
   DialoG list_dlg;
 
 } RemoveContigFromScaffoldFormData, PNTR RemoveContigFromScaffoldFormPtr;
-
-
-static CharPtr ValNodeSeqIdName (ValNodePtr vnp)
-{
-  Char buf[100];
-  if (vnp == NULL || vnp->data.ptrvalue == NULL)
-  {
-    return NULL;
-  }
-  else
-  {
-    SeqIdWrite (vnp->data.ptrvalue, buf, PRINTID_REPORT, sizeof (buf) - 1);
-    return StringSave (buf);
-  }
-}
-
-
-static void ValNodeSeqIdFree (ValNodePtr vnp)
-{
-  if (vnp != NULL && vnp->data.ptrvalue != NULL)
-  {
-    vnp->data.ptrvalue = SeqIdFree (vnp->data.ptrvalue);
-  }
-}
-
-
-static ValNodePtr ValNodeSeqIdCopy (ValNodePtr vnp)
-{
-  ValNodePtr vnp_copy = NULL;
-  if (vnp != NULL)
-  {
-    ValNodeAddPointer (&vnp_copy, vnp->choice, SeqIdDup (vnp->data.ptrvalue));
-  }
-  return vnp_copy;
-}
-
-
-static Boolean ValNodeSeqIdMatch (ValNodePtr vnp1, ValNodePtr vnp2)
-{
-  if (vnp1 == NULL || vnp2 == NULL)
-  {
-    return FALSE;
-  }
-  if (SeqIdComp (vnp1->data.ptrvalue, vnp2->data.ptrvalue) == SIC_YES)
-  {
-    return TRUE;
-  }
-  else
-  {
-    return FALSE;
-  }
-}
 
 
 static void DoRemoveContigsFromScaffolds (ButtoN b)
@@ -11573,6 +12111,24 @@ static void ChangeTrimSeqByAlnTxt(TexT t)
 }
 
 
+static Boolean AreAllSequencesInAlignmentAtPosition (SeqAlignPtr salp, Int4 pos)
+{
+  Int4 row, num_rows, val;
+
+  if (salp == NULL || pos < 0) {
+    return FALSE;
+  }
+  num_rows = AlnMgr2GetNumRows(salp);
+  for (row = 1; row <= num_rows; row++) {
+    val = AlnMgr2MapSeqAlignToBioseq (salp, pos, row);
+    if (val == -2) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+
 static void DoTrimSeqsByAln (ButtoN b)
 {
   TrimSeqByAlignFormPtr frm;
@@ -11587,17 +12143,27 @@ static void DoTrimSeqsByAln (ButtoN b)
 
   frm = (TrimSeqByAlignFormPtr) GetObjectExtra (b);
 
-  lip = OpenLog ("Trimmed Locations");
   if (GetStatus (frm->trim_before_btn)) {
     str = SaveStringFromText (frm->trim_before_coord_txt);
     val_start = atoi (str) - 1;
     str = MemFree (str);
+    if (!AreAllSequencesInAlignmentAtPosition(frm->salp, val_start)) {
+      if (Message(MSG_OKC, "Not all sequences are in the alignment at position %d - are you sure you want to continue?", val_start) == ANS_CANCEL) {
+        return;
+      }
+    }
   }
   if (GetStatus (frm->trim_after_btn)) {
     str = SaveStringFromText (frm->trim_after_coord_txt);
     val_stop = atoi (str) - 1;
     str = MemFree (str);
+    if (!AreAllSequencesInAlignmentAtPosition(frm->salp, val_stop)) {
+      if (Message(MSG_OKC, "Not all sequences are in the alignment at position %d - are you sure you want to continue?", val_stop) == ANS_CANCEL) {
+        return;
+      }
+    }
   }
+  lip = OpenLog ("Trimmed Locations");
 
   num_rows = AlnMgr2GetNumRows(frm->salp);
 
@@ -11696,6 +12262,8 @@ static void DoTrimSeqsByAln (ButtoN b)
   sep = GetTopSeqEntryForEntityID (frm->input_entityID);
   sap = (SeqAnnotPtr) FindSeqAlignInSeqEntry (sep, OBJ_SEQANNOT);
   if (sap != NULL) {
+    CloseAlignmentEditor (sap->idx.entityID, sap->idx.itemID);
+
     sap->idx.deleteme = TRUE;
     DeleteMarkedObjects (frm->input_entityID, 0, NULL);
     fprintf (lip->fp, "Removed Alignment\n");
@@ -12295,7 +12863,7 @@ static void FeatureBetweenEndPolicyToDialog (DialoG d, Pointer data)
   if (data == NULL) {
     SetValue (dlg->missing_feat_policy, eFeatureBetweenPolicy_NoFeatPartial);
     MemSet (&vn, 0, sizeof (ValNode));
-    vn.choice = Feature_type_cds;
+    vn.choice = Macro_feature_type_cds;
     PointerToDialog (dlg->feat_type_dlg, &vn);
     PointerToDialog (dlg->constraint_dlg, NULL);
   } else {
@@ -12416,7 +12984,7 @@ static void AddFeatureBetweenToDialog (DialoG d, Pointer data)
   if (add == NULL) {
     PointerToDialog (dlg->left_policy_dlg, NULL);
     MemSet (&vn, 0, sizeof (ValNode));
-    vn.choice = Feature_type_misc_feature;
+    vn.choice = Macro_feature_type_misc_feature;
     PointerToDialog (dlg->feat_type_add_dlg, &vn);
     PointerToDialog (dlg->details_dlg, NULL);
     PointerToDialog (dlg->right_policy_dlg, NULL);
@@ -12725,7 +13293,7 @@ static void DoChangeQualCase(ButtoN b)
     return;
   }
 
-  ccd.change_cap = (Int4) DialogToPointer (dlg->cap_dlg);
+  ccd.change_cap = GetCapChangeDialogValue (dlg->cap_dlg);
 
   ccd.orgnames = NULL;
   sep = GetTopSeqEntryForEntityID (dlg->input_entityID);
@@ -12771,19 +13339,14 @@ static void DoChangeQualCase(ButtoN b)
 }
 
 
-NLM_EXTERN void ChangeQualifierCase (IteM i)
+NLM_EXTERN void ChangeQualifierCaseBaseForm (BaseFormPtr bfp)
 {
-  BaseFormPtr       bfp;
   WindoW            w;
   GrouP             h, c;
   ButtoN            b;
   ChangeQualCaseFormPtr dlg;
+  ValNode           vn;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
   if (bfp == NULL || bfp->input_entityID == 0) return;
 
   dlg = (ChangeQualCaseFormPtr) MemNew (sizeof (ChangeQualCaseFormData));
@@ -12797,8 +13360,11 @@ NLM_EXTERN void ChangeQualifierCase (IteM i)
   SetGroupSpacing (h, 10, 10);
 
   dlg->qual_dlg = ParseDstDialog (h, NULL, NULL);
+  MemSet (&vn, 0, sizeof (ValNode));
+  vn.choice = ParseDest_org;
+  PointerToDialog (dlg->qual_dlg, &vn);
   dlg->cap_dlg = CapChangeDialog (h, NULL, NULL);
-  PointerToDialog (dlg->cap_dlg, (Pointer) 1);
+  SetCapChangeDialogValue (dlg->cap_dlg, Cap_change_tolower);
 
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", DoChangeQualCase);
@@ -12811,6 +13377,20 @@ NLM_EXTERN void ChangeQualifierCase (IteM i)
   RealizeWindow (w);
   Show (w);
   Update ();
+}
+
+NLM_EXTERN void ChangeQualifierCase (IteM i)
+{
+  BaseFormPtr       bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL || bfp->input_entityID == 0) return;
+
+  ChangeQualifierCaseBaseForm (bfp);
 }
 
 
@@ -13100,6 +13680,12 @@ static void ApplyFormattedStructuredComment (IteM i, CharPtr prefix)
 NLM_EXTERN void ApplyGenomeAssemblyComment (IteM i)
 {
   ApplyFormattedStructuredComment (i, "Genome-Assembly");
+}
+
+
+NLM_EXTERN void ApplyAssemblyComment (IteM i)
+{
+  ApplyFormattedStructuredComment (i, "Assembly");
 }
 
 
@@ -13716,4 +14302,1227 @@ NLM_EXTERN void AdjustForConsensusSplice (IteM i)
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);  
   Update ();
+}
+
+
+
+static ValNodePtr BioseqListFromString(CharPtr str, SeqEntryPtr sep)
+{
+  ValNodePtr list = NULL;
+  SeqIdPtr   sip;
+  BioseqPtr  bsp;
+  CharPtr    cp;
+  Int4       len;
+  Char       ch;
+  ValNodePtr errors = NULL;
+
+  if (str == NULL) {
+    return NULL;
+  }
+  len = StringSpn (str, " \t\r\n,;");
+  cp = str + len;
+
+  while (*cp != 0) {
+    len = StringCSpn (cp, " \t\r\n,;");
+    ch = *(cp + len);
+    *(cp + len) = 0;
+    sip = CreateSeqIdFromText (cp, sep);
+    if (sip == NULL) {
+      ValNodeAddPointer (&errors, 0, StringSave (cp));
+    } else {
+      bsp = BioseqFind (sip);
+      if (bsp == NULL) {
+        ValNodeAddPointer (&errors, 0, StringSave (cp));
+      } else {
+        ValNodeAddPointer (&list, OBJ_BIOSEQ, bsp);
+      }
+      sip = SeqIdFree (sip);
+    }
+    *(cp + len) = ch;
+    cp += len;
+    len = StringSpn (cp, " \t\r\n,;");
+    cp = cp + len;
+  }
+  
+  if (errors != NULL) {
+    cp = ValNodeMergeStrs (errors);
+    Message (MSG_ERROR, "Unable to find Bioseqs for the following IDs: %s", cp);
+    cp = MemFree (cp);
+    list = ValNodeFree (list);
+  } else if (list == NULL) {
+    Message (MSG_ERROR, "No IDs listed!");
+  }
+  return list;
+}
+
+
+typedef struct withdrawsequencesfrm {
+  FORM_MESSAGE_BLOCK
+
+  TexT id_list;
+  ButtoN leave_dlg_up;
+} WithdrawSequencesFrmData, PNTR WithdrawSequencesFrmPtr;
+
+static void DoWithdrawSequences (ButtoN b)
+{
+  WithdrawSequencesFrmPtr frm;
+  SeqEntryPtr             sep;
+  ValNodePtr              list = NULL;
+  CharPtr                 list_str;
+  PopSetRetroStatData     stat;
+
+  frm = (WithdrawSequencesFrmPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (frm->input_entityID);
+
+  /* get id list from text */
+  list_str = SaveStringFromText (frm->id_list);
+  list = BioseqListFromString (list_str, sep);
+  list_str = MemFree (list_str);
+  if (list == NULL) {
+    return;
+  }
+
+  /* move listed sequences to wrapper */
+  MoveSequencesFromSetToWrapper (list, frm->input_entityID);
+
+  /* taxfix/cleanup */
+  ForceCleanupEntityID (frm->input_entityID);
+
+  /* redo set title */
+  MemSet ((Pointer) &stat, 0, sizeof (PopSetRetroStatData));
+  RemovePopsetTitles (sep);
+  PopSetAutoDefRetro (sep, &stat);
+
+  /* validate */
+  ValSeqEntryForm (frm->form);
+
+  if (!GetStatus (frm->leave_dlg_up)) {
+    Remove (frm->form);
+  }
+
+}
+
+
+NLM_EXTERN void WithdrawSequences (IteM i)
+{
+  BaseFormPtr  bfp;
+  WithdrawSequencesFrmPtr frm;
+  WindoW       w;
+  GrouP        h, c;
+  ButtoN       b;
+  PrompT       ppt;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+
+  frm = MemNew (sizeof (WithdrawSequencesFrmData));
+  if (frm == NULL) return;
+  frm->input_entityID = bfp->input_entityID;
+
+  w = FixedWindow (-50, -33, -10, -10, "Withdraw Sequences", StdCloseWindowProc);
+  SetObjectExtra (w, frm, StdCleanupFormProc);
+  frm->form = (ForM) w;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  ppt = StaticPrompt (h, "List of Accessions", 0, popupMenuHeight, programFont, 'l');
+
+  frm->id_list = ScrollText (h, 25, 10, programFont, TRUE, NULL);
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = DefaultButton (c, "Accept", DoWithdrawSequences);
+  SetObjectExtra (b, frm, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  frm->leave_dlg_up = CheckBox (c, "Leave dialog up", NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) frm->id_list,
+                (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+}
+
+
+extern void ParseTaxnameToSourceQual (IteM i)
+{
+  BaseFormPtr  bfp;
+  ForM         f;
+  ParseSrcOrgPtr org;
+  ParseActionPtr parse;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  f = SingleParseAction (bfp->input_entityID);
+  if (f != NULL) {
+    /* create parse action with preselected fields */
+    parse = ParseActionNew ();
+    /* choose taxname after bionomial as source */
+    org = ParseSrcOrgNew ();
+    org->field = ValNodeNew (NULL);
+    org->field->choice = ParseSrcOrgChoice_taxname_after_binomial;
+    parse->src = ValNodeNew (NULL);
+    parse->src->choice = ParseSrc_org;
+    parse->src->data.ptrvalue = org;
+    /* choose source qualifiers as dest */
+    parse->dest = ValNodeNew (NULL);
+    parse->dest->choice = ParseDest_org;
+    PointerToForm (f, parse);
+    parse = ParseActionFree (parse);
+    Show (f);
+  }
+}
+
+
+extern void ParseDefLineToSourceQual (IteM i)
+{
+  BaseFormPtr  bfp;
+  ForM         f;
+  ParseActionPtr parse;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  f = SingleParseAction (bfp->input_entityID);
+  if (f != NULL) {
+    /* create parse action with preselected fields */
+    parse = ParseActionNew ();
+    /* choose defline as source */
+    parse->src = ValNodeNew (NULL);
+    parse->src->choice = ParseSrc_defline;
+    /* choose source qualifiers as dest */
+    parse->dest = ValNodeNew (NULL);
+    parse->dest->choice = ParseDest_org;
+    PointerToForm (f, parse);
+    parse = ParseActionFree (parse);
+    Show (f);
+  }
+}
+
+extern void ParseFlatfileToSourceQual (IteM i)
+{
+  BaseFormPtr  bfp;
+  ForM         f;
+  ParseActionPtr parse;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  f = SingleParseAction (bfp->input_entityID);
+  if (f != NULL) {
+    /* create parse action with preselected fields */
+    parse = ParseActionNew ();
+    /* choose defline as source */
+    parse->src = ValNodeNew (NULL);
+    parse->src->choice = ParseSrc_flatfile;
+    /* choose source qualifiers as dest */
+    parse->dest = ValNodeNew (NULL);
+    parse->dest->choice = ParseDest_org;
+    PointerToForm (f, parse);
+    parse = ParseActionFree (parse);
+    Show (f);
+  }
+}
+
+
+extern void ParseLocalIDToSourceQual (ButtoN b)
+{
+  BaseFormPtr bfp;
+  ForM         f;
+  ParseActionPtr parse;
+
+  bfp = (BaseFormPtr) GetObjectExtra (b);
+  if (bfp == NULL) return;
+
+  f = SingleParseAction (bfp->input_entityID);
+  if (f != NULL) {
+    /* create parse action with preselected fields */
+    parse = ParseActionNew ();
+    /* choose localID as source */
+    parse->src = ValNodeNew (NULL);
+    parse->src->choice = ParseSrc_local_id;
+    /* choose source qualifiers as dest */
+    parse->dest = ValNodeNew (NULL);
+    parse->dest->choice = ParseDest_org;
+    PointerToForm (f, parse);
+    parse = ParseActionFree (parse);
+    Show (f);
+  }
+}
+
+
+NLM_EXTERN DialoG SegregateIdDialog (GrouP g)
+{
+  DialoG dlg;
+  StringConstraint   scd;
+
+  dlg = StringConstraintDialog (g, "Mark sequences where sequence ID", TRUE, NULL, NULL);
+  MemSet (&scd, 0, sizeof (StringConstraint));
+  scd.match_location = eStringConstraintInList;
+  PointerToDialog (dlg, &scd);
+  return dlg;
+}
+
+
+static void ChooseCategoriesByStringConstraint (ValNodePtr value_list, StringConstraintPtr scp, Boolean do_choose)
+{
+  ClickableItemPtr cip;
+
+  while (value_list != NULL) {
+    cip = (ClickableItemPtr) value_list->data.ptrvalue;
+      if (cip != NULL) {
+      if (cip->item_list != NULL 
+          && cip->item_list->choice == OBJ_BIOSEQ 
+          && cip->item_list->data.ptrvalue != NULL
+          && DoesSeqIDListMeetStringConstraint (((BioseqPtr) cip->item_list->data.ptrvalue)->id, scp)) {
+        cip->chosen = do_choose;
+      } else {
+          ChooseCategoriesByStringConstraint (cip->subcategories, scp, do_choose);
+      }
+      }
+      value_list = value_list->next;
+  }
+}
+
+
+NLM_EXTERN void ChooseCategoriesForSegregateIdDialog(DialoG d, ValNodePtr list)
+{
+  StringConstraintPtr scp;
+
+  scp = DialogToPointer (d);
+  ChooseCategoriesByStringConstraint (list, scp, TRUE);
+  scp = StringConstraintFree (scp);
+
+}
+
+
+NLM_EXTERN DialoG SegregateConstraintDialog (GrouP g)
+{
+  DialoG dlg;
+
+  dlg = ComplexConstraintDialog (g, NULL, NULL);
+  ChangeComplexConstraintFieldType (dlg, FieldType_molinfo_field, NULL, Macro_feature_type_any);
+  return dlg;
+}
+
+
+static void ChooseCategoriesByConstraint (ValNodePtr value_list, ValNodePtr constraint, Boolean do_choose)
+{
+  ClickableItemPtr cip;
+
+  while (value_list != NULL) {
+    cip = (ClickableItemPtr) value_list->data.ptrvalue;
+    if (cip != NULL) {
+      if (cip->item_list != NULL 
+          && DoesObjectMatchConstraintChoiceSet (cip->item_list->choice, cip->item_list->data.ptrvalue, constraint)) {
+        cip->chosen = do_choose;
+      } else {
+          ChooseCategoriesByConstraint (cip->subcategories, constraint, do_choose);
+      }
+    }
+    value_list = value_list->next;
+  }
+}
+
+
+NLM_EXTERN void ChooseCategoriesForSegregateConstraintDialog(DialoG d, ValNodePtr list)
+{
+  ValNodePtr constraint;
+
+  constraint = DialogToPointer (d);
+  ChooseCategoriesByConstraint (list, constraint, TRUE);
+  constraint = ConstraintChoiceSetFree (constraint);
+}
+
+
+NLM_EXTERN void UnchooseCategoriesForSegregateConstraintDialog(DialoG d, ValNodePtr list)
+{
+  ValNodePtr constraint;
+
+  constraint = DialogToPointer (d);
+  ChooseCategoriesByConstraint (list, constraint, FALSE);
+  constraint = ConstraintChoiceSetFree (constraint);
+}
+
+
+static Boolean DomRNAAndProteinMatch (SeqFeatPtr mrna, ProtRefPtr prp)
+{
+  CharPtr mrna_product;
+  Boolean rval = FALSE;
+
+  if (mrna == NULL || prp == NULL) {
+    return FALSE;
+  }
+  mrna_product = GetRNARefProductString (mrna->data.value.ptrvalue, NULL);
+  if (StringHasNoText (mrna_product)) {
+    if (prp->name == NULL || StringHasNoText (prp->name->data.ptrvalue)) {
+      rval = TRUE;
+    }
+  } else {
+    if (prp->name != NULL && StringCmp (mrna_product, prp->name->data.ptrvalue) == 0) {
+      rval = TRUE;
+    }
+  }
+  mrna_product = MemFree (mrna_product);
+  return rval;
+}
+
+
+NLM_EXTERN void BulkCDSSetProtein (Pointer target, Pointer data)
+{
+  SeqFeatXrefPtr xref;
+  ProtRefPtr     prp = NULL;
+  BioseqPtr      prot_bsp;
+  SeqFeatPtr     prot_feat;
+  SeqMgrFeatContext fcontext;
+  ValNodePtr        prot_name_list = NULL, vnp;
+  SeqFeatPtr        sfp, mrna;
+
+  if ((sfp = (SeqFeatPtr) target) == NULL) return;
+
+  prot_name_list = (ValNodePtr) data;
+
+  xref = sfp->xref;
+  while (xref != NULL && xref->data.choice != SEQFEAT_PROT) {
+    xref = xref->next;
+  }
+  if (xref != NULL) {
+    prp = xref->data.value.ptrvalue;
+  }
+
+  if (prp == NULL) {
+    if (sfp->data.choice == SEQFEAT_PROT) {
+      prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+    } else if (sfp->data.choice == SEQFEAT_CDREGION) {
+      prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+      prot_feat = SeqMgrGetNextFeature (prot_bsp, NULL, SEQFEAT_PROT, FEATDEF_PROT, &fcontext);
+      if (prot_feat == NULL && prot_name_list != NULL) {
+        prot_feat = CreateNewFeatureOnBioseq (prot_bsp, SEQFEAT_PROT, NULL);
+        prp = ProtRefNew ();
+        prot_feat->data.value.ptrvalue = prp;
+          SeqMgrIndexFeatures (prot_bsp->idx.entityID, NULL);
+      }
+      if (prot_feat != NULL) {
+        prp = (ProtRefPtr) prot_feat->data.value.ptrvalue;
+      }
+    }
+  }
+
+  if (prp == NULL && prot_name_list != NULL) {
+    xref = SeqFeatXrefNew ();
+    prp = ProtRefNew ();
+    xref->data.choice = SEQFEAT_PROT;
+    xref->data.value.ptrvalue = prp;
+    xref->next = sfp->xref;
+    sfp->xref = xref;
+  }
+
+  mrna = SeqMgrGetOverlappingmRNA (sfp->location, &fcontext);
+  if (mrna != NULL) {
+    if (!DomRNAAndProteinMatch(mrna, prp)) {
+      mrna = NULL;
+    }
+  }
+
+  if (prp != NULL) {
+    prp->name = ValNodeFreeData (prp->name);
+    for (vnp = prot_name_list; vnp != NULL; vnp = vnp->next) {
+      ValNodeAddPointer (&prp->name, vnp->choice, StringSave (vnp->data.ptrvalue));
+    }
+    if (mrna != NULL && prot_name_list != NULL) {
+      SetRNARefProductString (mrna->data.value.ptrvalue, NULL, prot_name_list->data.ptrvalue, ExistingTextOption_replace_old);
+    }
+  }
+
+}
+
+
+typedef struct stringobjectpair {
+  CharPtr str;
+  Uint1   choice;
+  Pointer data;
+} StringObjectPairData, PNTR StringObjectPairPtr;
+
+
+static StringObjectPairPtr StringObjectPairNew (CharPtr str, Uint1 choice, Pointer data)
+{
+  StringObjectPairPtr sop = (StringObjectPairPtr) MemNew (sizeof (StringObjectPairData));
+  sop->str = str;
+  sop->choice = choice;
+  sop->data = data;
+  return sop;
+}
+
+
+static StringObjectPairPtr StringObjectPairFree (StringObjectPairPtr sop)
+{
+  if (sop != NULL) {
+    sop->str = MemFree (sop->str);
+    sop = MemFree (sop);
+  }
+  return sop;
+}
+
+
+static ValNodePtr StringObjectPairListFree (ValNodePtr list)
+{
+  ValNodePtr vnp_next;
+
+  while (list != NULL) {
+    vnp_next = list->next;
+    list->next = NULL;
+    list->data.ptrvalue = StringObjectPairFree (list->data.ptrvalue);
+    list = ValNodeFree (list);
+    list = vnp_next;
+  }
+  return list;
+}
+
+
+static int LIBCALLBACK SortVnpByStringObjectPair (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  StringObjectPairPtr     sop1;
+  StringObjectPairPtr     sop2;
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      sop1 = (StringObjectPairPtr) vnp1->data.ptrvalue;
+      sop2 = (StringObjectPairPtr) vnp2->data.ptrvalue;
+      if (sop1 != NULL && sop2 != NULL) {
+        return StringCmp (sop1->str, sop2->str);
+      }
+    }
+  }
+  return 0;
+}
+
+
+typedef struct uniqstructuredcomment {
+  StructuredCommentFieldPtr field;
+  ValNodeBlock pair_list;
+} UniqStructuredCommentData, PNTR UniqStructuredCommentPtr;
+
+
+static void GetUniqueValuesForStructuredCommentFieldCallback (SeqDescrPtr sdp, Pointer data)
+{
+  UniqStructuredCommentPtr usc;
+  UserObjectPtr uop;
+  CharPtr str;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_user 
+      || (uop = (UserObjectPtr) sdp->data.ptrvalue) == NULL
+      || uop->type == NULL
+      || StringCmp (uop->type->str, "StructuredComment") != 0
+      || (usc = (UniqStructuredCommentPtr)data) == NULL) {
+    return;
+  }
+
+  str = GetStructuredCommentFieldFromUserObject (uop, usc->field, NULL);
+  if (str != NULL) {
+    ValNodeAddPointerToEnd (&(usc->pair_list), 0, StringObjectPairNew(str, OBJ_SEQDESC, sdp));
+  }
+}
+
+
+NLM_EXTERN ValNodePtr GetUniqueValuesForStructuredCommentField (SeqEntryPtr sep, CharPtr field_name)
+{
+  UniqStructuredCommentData usd;
+  ValNodePtr list, vnp;
+  ClickableItemPtr last_cip = NULL;
+  StringObjectPairPtr sop;
+  ValNodeBlock cip_list;
+
+  usd.field = ValNodeNew (NULL);
+  usd.field->choice = StructuredCommentField_named;
+  usd.field->data.ptrvalue = field_name;
+  InitValNodeBlock(&(usd.pair_list), NULL);
+
+  VisitDescriptorsInSep (sep, &usd, GetUniqueValuesForStructuredCommentFieldCallback);
+  usd.field = ValNodeFree (usd.field);
+  list = usd.pair_list.head;
+  list = ValNodeSort (list, SortVnpByStringObjectPair);
+
+  InitValNodeBlock(&cip_list, NULL);
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    sop = (StringObjectPairPtr) vnp->data.ptrvalue;
+    if (sop != NULL) {
+      if (last_cip == NULL || StringCmp (last_cip->description, sop->str) != 0) {
+        /* make new category */
+        last_cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+        MemSet (last_cip, 0, sizeof (ClickableItemData));
+        last_cip->description = sop->str;
+        sop->str = NULL;
+        ValNodeAddPointerToEnd (&(cip_list), 0, last_cip);
+      }
+      /* add to category */
+      ValNodeAddPointer (&(last_cip->item_list), sop->choice, sop->data);        
+    }
+  }
+  list = StringObjectPairListFree(list);
+
+  return cip_list.head;
+}
+
+
+static void GetStructuredCommentFieldNamesCallback (SeqDescrPtr sdp, Pointer data)
+{
+  UserObjectPtr uop;
+  UserFieldPtr  ufp;
+
+  if (sdp != NULL && data != NULL && sdp->choice == Seq_descr_user
+      && (uop = sdp->data.ptrvalue) != NULL
+      && IsUserObjectStructuredComment (uop)) {
+
+    ufp = uop->data;
+    while (ufp != NULL) {
+      if (ufp->label != NULL && ufp->label->str != NULL
+          && StringCmp (ufp->label->str, "StructuredCommentPrefix") != 0
+          && StringCmp (ufp->label->str, "StructuredCommentSuffix") != 0) {
+        ValNodeAddPointer ((ValNodePtr PNTR) data, 0, StringSave (ufp->label->str));
+      }
+      ufp = ufp->next;
+    }
+  }
+}
+
+
+NLM_EXTERN ValNodePtr GetStructuredCommentFieldNames (SeqEntryPtr sep)
+{
+  ValNodePtr list = NULL;
+
+  VisitDescriptorsInSep (sep, &list, GetStructuredCommentFieldNamesCallback);
+  list = ValNodeSort (list, SortVnpByString);
+  ValNodeUnique (&list, SortVnpByString, ValNodeFreeData);
+  return list;
+}
+
+
+typedef struct badqual {
+  Boolean wrong;
+  Boolean illegal;
+  Boolean move_to_note;
+} BadQualData, PNTR BadQualPtr;
+
+static void RemoveBadQualsCommonCallback (SeqFeatPtr sfp, Pointer data)
+{
+  BadQualPtr bq;
+  GBQualPtr  gbqual, gbqual_prev = NULL, gbqual_next;
+  Int2       index;
+  Int2       val;
+  CharPtr    key;
+  Boolean    do_remove;
+  CharPtr    note_txt;
+  CharPtr    note_fmt = "[%s=%s]";
+  Int4       qvalid;
+
+  if (sfp == NULL || (bq = (BadQualPtr) data) == NULL) {
+    return;
+  }
+  key = GetGBFeatKeyForFeature (sfp);
+  index = GBFeatKeyNameValid (&key, FALSE);
+  key = MemFree (key);
+  if (index < 0) {
+    return;
+  }
+
+  for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual_next) {
+    gbqual_next = gbqual->next;
+    do_remove = FALSE;
+    qvalid = IsQualValidForFeature(gbqual, sfp);
+    if (qvalid == 1) {
+      val = GBQualNameValid (gbqual->qual);
+      if (bq->illegal && !ShouldBeAGBQual (sfp->idx.subtype, val, FALSE)) {
+        do_remove = TRUE;
+      }
+    } else {
+      if (bq->illegal && (val = GBQualNameValid (gbqual->qual)) == -1) {
+        do_remove = TRUE;
+      } else if (bq->wrong && (qvalid == 0 || qvalid > 1)) {
+        do_remove = TRUE;
+      }
+    }
+    if (do_remove) {
+      if (bq->move_to_note) {
+        note_txt = (CharPtr) MemNew (sizeof (Char) * (StringLen (note_fmt) + StringLen (gbqual->qual) + StringLen (gbqual->val)));
+        sprintf (note_txt, note_fmt, gbqual->qual == NULL ? "" : gbqual->qual, gbqual->val == NULL ? "" : gbqual->val);
+        SetStringValue (&(sfp->comment), note_txt, ExistingTextOption_append_semi);
+        note_txt = MemFree (note_txt);
+      }
+      if (gbqual_prev == NULL) {
+        sfp->qual = gbqual_next;
+      } else {
+        gbqual_prev->next = gbqual_next;
+      }
+      gbqual->next = NULL;
+      gbqual = GBQualFree (gbqual);
+    } else {
+      gbqual_prev = gbqual;
+    }
+  }
+}
+
+
+NLM_EXTERN void RemoveBadQualsCommon (Uint2 entityID, Boolean wrong, Boolean illegal, Boolean move_to_note)
+{
+  SeqEntryPtr  sep;
+  BadQualData  bq;
+
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL) {
+    return;
+  }
+
+  bq.wrong = wrong;
+  bq.illegal = illegal;
+  bq.move_to_note = move_to_note;
+
+  VisitFeaturesInSep (sep, &bq, RemoveBadQualsCommonCallback);
+
+  ObjMgrSetDirtyFlag (entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  Update();
+}
+
+
+static void RemoveBadQualsCommonItem (IteM i, Boolean wrong, Boolean illegal, Boolean move_to_note)
+{
+  BaseFormPtr  bfp;
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL || bfp->input_entityID == 0) return;
+
+  RemoveBadQualsCommon (bfp->input_entityID, wrong, illegal, move_to_note);
+}
+
+
+NLM_EXTERN void RemoveIllegalQuals (IteM i)
+{
+  RemoveBadQualsCommonItem (i, FALSE, TRUE, FALSE);
+}
+
+
+NLM_EXTERN void RemoveWrongQuals (IteM i)
+{
+  RemoveBadQualsCommonItem (i, TRUE, FALSE, FALSE);
+}
+
+
+NLM_EXTERN void MoveIllegalQuals (IteM i)
+{
+  RemoveBadQualsCommonItem (i, FALSE, TRUE, TRUE);
+}
+
+
+NLM_EXTERN void MoveWrongQuals (IteM i)
+{
+  RemoveBadQualsCommonItem (i, TRUE, FALSE, TRUE);
+}
+
+
+static SeqIdPtr GetProteinSeqIdFromBioseq (BioseqPtr bsp)
+{
+  SeqIdPtr sip;
+  DbtagPtr dbtag;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_GENERAL
+        && (dbtag = (DbtagPtr) sip->data.ptrvalue) != NULL
+        && !IsSkippableDbtag(dbtag)) {
+      return sip;
+    }
+  }
+  return NULL;
+}
+
+
+static void FindProteinIDDBCallback (BioseqPtr bsp, Pointer data)
+{
+  CharPtr PNTR pDb;
+  SeqIdPtr sip;
+  DbtagPtr dbtag;
+
+  if (bsp == NULL || !ISA_aa(bsp->mol) || (pDb = (CharPtr PNTR)data) == NULL || *pDb != NULL) {
+    return;
+  }
+
+  sip = GetProteinSeqIdFromBioseq (bsp);
+  if (sip != NULL 
+      && (dbtag = (DbtagPtr) sip->data.ptrvalue) != NULL
+      && !IsSkippableDbtag(dbtag)) {
+    *pDb = StringSave (dbtag->db);
+  }
+}
+
+
+
+static void CreateOneProteinId (BioseqPtr bsp, CharPtr db, CharPtr locus_tag)
+{
+  SeqIdPtr sip;
+  DbtagPtr dbtag;
+  SeqEntryPtr sep;
+  SeqIdPtr sip_local, sip_last = NULL;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_GENERAL
+        && (dbtag = (DbtagPtr) sip->data.ptrvalue) != NULL
+        && !IsSkippableDbtag(dbtag)) {
+      return;
+    }
+    if (sip->choice == SEQID_LOCAL) {
+      sip_local = sip;
+    }
+    sip_last = sip;
+  }
+
+  sip = ValNodeNew(NULL);
+  sip->choice = SEQID_GENERAL;
+  dbtag = DbtagNew ();
+  dbtag->db = StringSave (db);
+  dbtag->tag = ObjectIdNew();
+  dbtag->tag->str = StringSave (locus_tag);
+  sip->data.ptrvalue = dbtag;
+  if (sip_local == NULL) {
+    if (sip_last == NULL) {
+      bsp->id = sip;
+    } else {
+      sip_last->next = sip;
+    }
+    /* replace in bioseq index */
+    SeqMgrReplaceInBioseqIndex (bsp);
+  } else {
+    sep = GetTopSeqEntryForEntityID (bsp->idx.entityID);
+    ReplaceSeqIdWithSeqId (sip_local, sip, sep);
+    sip = SeqIdFree (sip);
+  }
+}
+
+
+static void CreateProteinIDsCallback (BioseqPtr bsp, Pointer data)
+{
+  CharPtr db;
+  SeqIdPtr sip;
+  DbtagPtr dbtag;
+  SeqFeatPtr cds, gene = NULL;
+  GeneRefPtr grp = NULL;
+  SeqMgrFeatContext context;
+
+  if (bsp == NULL || !ISA_aa(bsp->mol) || (db = (CharPtr)data) == NULL) {
+    return;
+  }
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_GENERAL
+        && (dbtag = (DbtagPtr) sip->data.ptrvalue) != NULL
+        && !IsSkippableDbtag(dbtag)) {
+      return;
+    }
+  }
+
+  cds = SeqMgrGetCDSgivenProduct (bsp, &context);
+  if (cds == NULL) {
+    return;
+  }
+  GetGeneInfoForFeature (cds, &grp, &gene);
+  if (grp != NULL && !StringHasNoText (grp->locus_tag)) {
+    CreateOneProteinId (bsp, db, grp->locus_tag);
+  }
+
+}
+
+
+typedef struct justtextform {
+  FORM_MESSAGE_BLOCK
+  TexT       db_txt;
+} JustTextFormData, PNTR JustTextFormPtr;
+
+
+static void DoCreateProteinIDs (ButtoN b)
+{
+  JustTextFormPtr frm;
+  CharPtr db;
+  SeqEntryPtr sep;
+
+  frm = (JustTextFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  } else if (TextHasNoText (frm->db_txt)) {
+    Message (MSG_ERROR, "Must provide database tag!");
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (frm->input_entityID);
+
+  WatchCursor();
+  Update();
+  db = SaveStringFromText (frm->db_txt);
+  VisitBioseqsInSep (sep, db, CreateProteinIDsCallback);
+  db = MemFree (db);
+  ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, frm->input_entityID, 0, 0);
+  Remove (frm->form);
+  ArrowCursor();
+  Update();
+}
+
+
+NLM_EXTERN void CreateProteinIDs (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  JustTextFormPtr frm;
+  WindoW       w;
+  GrouP        h, g, c;
+  ButtoN       b;
+  CharPtr      db = NULL;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  VisitBioseqsInSep (sep, &db, FindProteinIDDBCallback);
+
+  frm = (JustTextFormPtr) MemNew (sizeof (JustTextFormData));
+
+  w = FixedWindow (-50, -33, -10, -10, "Create Protein IDs", StdCloseWindowProc);
+  SetObjectExtra (w, frm, StdCleanupExtraProc);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  frm->form = (ForM) w;
+  frm->input_entityID = bfp->input_entityID;
+
+  g = HiddenGroup (h, 2, 0, NULL);
+  StaticPrompt (g, "Database", 0, dialogTextHeight, programFont, 'c');
+  frm->db_txt = DialogText (g, db, 14, NULL);
+  db = MemFree (db);
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = DefaultButton (c, "Accept", DoCreateProteinIDs);
+  SetObjectExtra (b, frm, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+
+  Show (w);
+
+}
+
+
+typedef struct existinglocustag {
+  CharPtr prefix;
+  Int4    max;
+  CharPtr id_db;
+} ExistingLocusTagData, PNTR ExistingLocusTagPtr;
+
+
+static Int4 GetLocusTagPrefixLen (CharPtr str)
+
+{
+  Int4    len;
+
+  if (StringHasNoText (str)) return 0;
+
+  len = StringLen (str) - 1;
+
+  while (len > 0 && isdigit (*(str + len))) {
+    len--;
+  }
+  return len;
+}
+
+
+static void PopulateExistingLocusTag (ExistingLocusTagPtr pLocusTag, CharPtr locus_tag)
+{
+  Int4 prefix_len;
+  Int4 val;
+
+  if (pLocusTag == NULL || StringHasNoText (locus_tag)
+      || (prefix_len = GetLocusTagPrefixLen(locus_tag)) < 1) {
+    return;
+  }
+
+  if (pLocusTag->prefix == NULL) {
+    pLocusTag->prefix = (CharPtr) MemNew (sizeof (Char) * (prefix_len + 1));
+    StringNCpy (pLocusTag->prefix, locus_tag, prefix_len);
+    pLocusTag->prefix[prefix_len] = 0;
+  } 
+  if (StringNCmp (locus_tag, pLocusTag->prefix, prefix_len) == 0) {
+    val = atol (locus_tag + prefix_len + 1);
+    if (val > pLocusTag->max) {
+      pLocusTag->max = val;
+    }
+  }
+}
+
+
+static void FindGenePrefix (SeqFeatPtr sfp, Pointer data)
+{
+  ExistingLocusTagPtr pLocusTag;
+  GeneRefPtr grp;
+
+  if (sfp == NULL 
+      || sfp->data.choice != SEQFEAT_GENE
+      || (pLocusTag = (ExistingLocusTagPtr)data) == NULL
+      || (grp = (GeneRefPtr) sfp->data.value.ptrvalue) == NULL) {
+    return;
+  }
+
+  PopulateExistingLocusTag (pLocusTag, grp->locus_tag);
+}
+
+
+static void FindGeneLocusTagFromProteinID (BioseqPtr bsp, Pointer data)
+{
+  ExistingLocusTagPtr pLocusTag;
+  SeqIdPtr sip;
+  DbtagPtr dbtag;
+
+  if (bsp == NULL || !ISA_aa (bsp->mol)
+      || (pLocusTag = (ExistingLocusTagPtr)data) == NULL) {
+    return;
+  }
+
+  sip = GetProteinSeqIdFromBioseq (bsp);
+  if (sip != NULL 
+      && (dbtag = (DbtagPtr) sip->data.ptrvalue) != NULL
+      && !IsSkippableDbtag(dbtag)) {
+    PopulateExistingLocusTag (pLocusTag, dbtag->tag->str);
+    if (pLocusTag->id_db == NULL) {
+      pLocusTag->id_db = StringSave (dbtag->db);
+    }
+  }
+}
+
+
+static Boolean FeatureSubtypeWantsLocusTagGene (Int4 featdef)
+{
+  if (featdef == FEATDEF_CDS
+      || featdef == FEATDEF_tRNA
+      || featdef == FEATDEF_rRNA
+      || featdef == FEATDEF_tmRNA
+      || featdef == FEATDEF_ncRNA) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static void CreateLocusTagGenesCallback (SeqFeatPtr sfp, Pointer data)
+{
+  ExistingLocusTagPtr locus_data;
+  SeqFeatPtr gene = NULL, mrna;
+  GeneRefPtr grp = NULL;
+  Char buf[15];
+  BioseqPtr bsp, pbsp = NULL;
+  SeqLocPtr gene_loc;
+  DbtagPtr  dbtag = NULL;
+  SeqIdPtr  sip;
+
+  /* create locus tag genes for features that don't have them */
+  if (sfp == NULL || !FeatureSubtypeWantsLocusTagGene(sfp->idx.subtype) || (locus_data = (ExistingLocusTagPtr) data) == NULL) {
+    return;
+  }
+
+  if (sfp->idx.subtype == FEATDEF_CDS) {
+    pbsp = BioseqFindFromSeqLoc (sfp->product);
+    sip = GetProteinSeqIdFromBioseq (pbsp);
+    if (sip != NULL) { 
+      dbtag = (DbtagPtr) sip->data.ptrvalue;
+    }
+  }
+      
+  GetGeneInfoForFeature (sfp, &grp, &gene);
+  if (grp == NULL) {
+    bsp = BioseqFindFromSeqLoc (sfp->location);
+    if (bsp != NULL) {
+      mrna = GetmRNAforCDS(sfp);
+      if (mrna == NULL) {
+        gene_loc = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
+      } else {
+        gene_loc = SeqLocMerge (bsp, mrna->location, NULL, TRUE, FALSE, FALSE);
+      }
+      if (gene_loc != NULL) {
+        gene = CreateNewFeatureOnBioseq (bsp, SEQFEAT_GENE, gene_loc);
+        gene_loc = SeqLocFree (gene_loc);
+        grp = GeneRefNew ();
+        gene->data.value.ptrvalue = grp;
+      }
+    }
+  }
+  if (grp != NULL && StringHasNoText (grp->locus_tag)) {
+    grp->locus_tag = MemFree (grp->locus_tag);
+    if (dbtag != NULL && dbtag->tag != NULL && !StringHasNoText (dbtag->tag->str))
+    {
+      grp->locus_tag = StringSave (dbtag->tag->str);
+    } else {
+      sprintf (buf, "%04d", locus_data->max + 5);
+
+      grp->locus_tag = (CharPtr) MemNew (sizeof (Char) * (StringLen (locus_data->prefix) + StringLen (buf) + 2));
+      sprintf (grp->locus_tag, "%s_%s", locus_data->prefix, buf);
+      locus_data->max += 5;
+    }
+    if (pbsp != NULL && !StringHasNoText (locus_data->id_db)) {
+      CreateOneProteinId (pbsp, locus_data->id_db, grp->locus_tag);
+    }
+  }
+}
+
+
+typedef struct locustaggeneform {
+  FORM_MESSAGE_BLOCK
+  TexT       prefix_txt;
+  ButtoN     also_protein_ids;
+  TexT       db_txt;
+
+  ExistingLocusTagData locus_data;
+} LocusTagGeneFormData, PNTR LocusTagGeneFormPtr;
+
+
+static void CleanupLocusTagGeneForm (
+  GraphiC g,
+  VoidPtr data
+)
+
+{
+  LocusTagGeneFormPtr frm;
+
+  frm = (LocusTagGeneFormPtr) data;
+  if (frm != NULL) {
+    frm->locus_data.prefix = MemFree (frm->locus_data.prefix);
+    frm->locus_data.id_db = MemFree (frm->locus_data.id_db);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+
+static void DoCreateLocusTagGenes (ButtoN b)
+{
+  LocusTagGeneFormPtr frm;
+  SeqEntryPtr sep;
+
+  frm = (LocusTagGeneFormPtr) GetObjectExtra (b);
+  if (frm == NULL || TextHasNoText (frm->prefix_txt)) {
+    return;
+  }
+  frm->locus_data.prefix = MemFree (frm->locus_data.prefix);
+  frm->locus_data.prefix = SaveStringFromText (frm->prefix_txt);
+  frm->locus_data.id_db = MemFree (frm->locus_data.id_db);
+  if (GetStatus (frm->also_protein_ids)) {
+    frm->locus_data.id_db = SaveStringFromText (frm->db_txt);
+  }
+
+  sep = GetTopSeqEntryForEntityID (frm->input_entityID);
+  WatchCursor();
+  Update();
+  VisitFeaturesInSep (sep, &(frm->locus_data), CreateLocusTagGenesCallback);
+  ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, frm->input_entityID, 0, 0);
+  Remove (frm->form);
+  ArrowCursor();
+  Update();
+}
+
+
+static void AlsoProteinIdsBtn (ButtoN b)
+{
+  LocusTagGeneFormPtr frm;
+
+  frm = (LocusTagGeneFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  if (GetStatus (frm->also_protein_ids)) {
+    Enable (frm->db_txt);
+  } else {
+    Disable (frm->db_txt);
+  }
+}
+
+
+NLM_EXTERN void AddLocusTagGenes (IteM i)
+{
+  BaseFormPtr         bfp;
+  SeqEntryPtr         sep;
+  LocusTagGeneFormPtr frm;
+  WindoW              w;
+  GrouP               h, g, g2, c;
+  ButtoN              b;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+
+  frm = (LocusTagGeneFormPtr) MemNew (sizeof (LocusTagGeneFormData));
+  frm->locus_data.prefix = NULL;
+  frm->locus_data.max = 0;
+  VisitFeaturesInSep (sep, &(frm->locus_data), FindGenePrefix);
+  VisitBioseqsInSep (sep, &(frm->locus_data), FindGeneLocusTagFromProteinID);
+
+  w = FixedWindow (-50, -33, -10, -10, "Create locus_tag genes", StdCloseWindowProc);
+  SetObjectExtra (w, frm, CleanupLocusTagGeneForm);
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  frm->form = (ForM) w;
+  frm->input_entityID = bfp->input_entityID;
+
+  g = HiddenGroup (h, 2, 0, NULL);
+  StaticPrompt (g, "Prefix", 0, dialogTextHeight, programFont, 'c');
+  frm->prefix_txt = DialogText (g, frm->locus_data.prefix, 14, NULL);
+
+  g2 = HiddenGroup (h, 2, 0, NULL);
+  frm->also_protein_ids = CheckBox (g2, "Also create protein IDs with database:", AlsoProteinIdsBtn);
+  SetObjectExtra (frm->also_protein_ids, frm, NULL);
+  frm->db_txt = DialogText (g2, frm->locus_data.id_db, 14, NULL);
+  Disable (frm->db_txt);
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = DefaultButton (c, "Accept", DoCreateLocusTagGenes);
+  SetObjectExtra (b, frm, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+
+  Show (w);
+
 }

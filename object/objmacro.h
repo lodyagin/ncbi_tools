@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Macro
-*    Generated using ASNCODE Revision: 6.17 at Jul 26, 2010  2:39 PM
+*    Generated using ASNCODE Revision: 6.17 at Jul 12, 2011 12:37 PM
 *
 **************************************************/
 
@@ -55,6 +55,7 @@ typedef struct struct_Parse_action {
    ValNodePtr   dest;
    Uint2   capitalization;
    Uint1   remove_from_parsed;
+   ValNodePtr   transform;
    Uint2   existing_text;
 } ParseAction, PNTR ParseActionPtr;
 
@@ -84,6 +85,26 @@ NLM_EXTERN Boolean LIBCALL MacroActionListAsnWrite PROTO (( MacroActionListPtr ,
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 
+
+
+/**************************************************
+*
+*    SuspectRuleSet
+*
+**************************************************/
+typedef struct struct_Suspect_rule SuspectRuleSet;
+typedef struct struct_Suspect_rule PNTR SuspectRuleSetPtr;
+#define SuspectRuleSetNew() Suspect_ruleNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN SuspectRuleSetPtr LIBCALL SuspectRuleSetFree PROTO ((SuspectRuleSetPtr ));
+NLM_EXTERN SuspectRuleSetPtr LIBCALL SuspectRuleSetNew PROTO (( void ));
+NLM_EXTERN SuspectRuleSetPtr LIBCALL SuspectRuleSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SuspectRuleSetAsnWrite PROTO (( SuspectRuleSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
 /* following #defines are for enumerated type, not used by object loaders */
 #define String_location_contains 1
 #define String_location_equals 2
@@ -95,15 +116,64 @@ NLM_EXTERN Boolean LIBCALL MacroActionListAsnWrite PROTO (( MacroActionListPtr ,
 
 /**************************************************
 *
+*    WordSubstitution
+*
+**************************************************/
+typedef struct struct_Word_substitution {
+   struct struct_Word_substitution PNTR next;
+   CharPtr   word;
+   ValNodePtr   synonyms;
+   Uint1   case_sensitive;
+   Uint1   whole_word;
+} WordSubstitution, PNTR WordSubstitutionPtr;
+
+
+NLM_EXTERN WordSubstitutionPtr LIBCALL WordSubstitutionFree PROTO ((WordSubstitutionPtr ));
+NLM_EXTERN WordSubstitutionPtr LIBCALL WordSubstitutionNew PROTO (( void ));
+NLM_EXTERN WordSubstitutionPtr LIBCALL WordSubstitutionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL WordSubstitutionAsnWrite PROTO (( WordSubstitutionPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    WordSubstitutionSet
+*
+**************************************************/
+typedef struct struct_Word_substitution WordSubstitutionSet;
+typedef struct struct_Word_substitution PNTR WordSubstitutionSetPtr;
+#define WordSubstitutionSetNew() Word_substitutionNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN WordSubstitutionSetPtr LIBCALL WordSubstitutionSetFree PROTO ((WordSubstitutionSetPtr ));
+NLM_EXTERN WordSubstitutionSetPtr LIBCALL WordSubstitutionSetNew PROTO (( void ));
+NLM_EXTERN WordSubstitutionSetPtr LIBCALL WordSubstitutionSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL WordSubstitutionSetAsnWrite PROTO (( WordSubstitutionSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
 *    StringConstraint
 *
 **************************************************/
 typedef struct struct_String_constraint {
+   struct struct_String_constraint PNTR next;
    CharPtr   match_text;
    Uint2   match_location;
    Uint1   case_sensitive;
+   Uint1   ignore_space;
+   Uint1   ignore_punct;
+   struct struct_Word_substitution PNTR   ignore_words;
    Uint1   whole_word;
    Uint1   not_present;
+   Uint1   is_all_caps;
+   Uint1   is_all_lower;
+   Uint1   is_all_punct;
+   Uint1   ignore_weasel;
 } StringConstraint, PNTR StringConstraintPtr;
 
 
@@ -111,6 +181,26 @@ NLM_EXTERN StringConstraintPtr LIBCALL StringConstraintFree PROTO ((StringConstr
 NLM_EXTERN StringConstraintPtr LIBCALL StringConstraintNew PROTO (( void ));
 NLM_EXTERN StringConstraintPtr LIBCALL StringConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL StringConstraintAsnWrite PROTO (( StringConstraintPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    StringConstraintSet
+*
+**************************************************/
+typedef struct struct_String_constraint StringConstraintSet;
+typedef struct struct_String_constraint PNTR StringConstraintSetPtr;
+#define StringConstraintSetNew() String_constraintNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN StringConstraintSetPtr LIBCALL StringConstraintSetFree PROTO ((StringConstraintSetPtr ));
+NLM_EXTERN StringConstraintSetPtr LIBCALL StringConstraintSetNew PROTO (( void ));
+NLM_EXTERN StringConstraintSetPtr LIBCALL StringConstraintSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL StringConstraintSetAsnWrite PROTO (( StringConstraintSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define Strand_constraint_any 0
@@ -173,100 +263,101 @@ NLM_EXTERN Boolean LIBCALL LocationConstraintAsnWrite PROTO (( LocationConstrain
 #define Object_type_constraint_descriptor 2
 
 /* following #defines are for enumerated type, not used by object loaders */
-#define Feature_type_any 0
-#define Feature_type_gene 1
-#define Feature_type_org 2
-#define Feature_type_cds 3
-#define Feature_type_prot 4
-#define Feature_type_preRNA 5
-#define Feature_type_mRNA 6
-#define Feature_type_tRNA 7
-#define Feature_type_rRNA 8
-#define Feature_type_snRNA 9
-#define Feature_type_scRNA 10
-#define Feature_type_otherRNA 11
-#define Feature_type_pub 12
-#define Feature_type_seq 13
-#define Feature_type_imp 14
-#define Feature_type_allele 15
-#define Feature_type_attenuator 16
-#define Feature_type_c_region 17
-#define Feature_type_caat_signal 18
-#define Feature_type_imp_CDS 19
-#define Feature_type_conflict 20
-#define Feature_type_d_loop 21
-#define Feature_type_d_segment 22
-#define Feature_type_enhancer 23
-#define Feature_type_exon 24
-#define Feature_type_gC_signal 25
-#define Feature_type_iDNA 26
-#define Feature_type_intron 27
-#define Feature_type_j_segment 28
-#define Feature_type_ltr 29
-#define Feature_type_mat_peptide 30
-#define Feature_type_misc_binding 31
-#define Feature_type_misc_difference 32
-#define Feature_type_misc_feature 33
-#define Feature_type_misc_recomb 34
-#define Feature_type_misc_RNA 35
-#define Feature_type_misc_signal 36
-#define Feature_type_misc_structure 37
-#define Feature_type_modified_base 38
-#define Feature_type_mutation 39
-#define Feature_type_n_region 40
-#define Feature_type_old_sequence 41
-#define Feature_type_polyA_signal 42
-#define Feature_type_polyA_site 43
-#define Feature_type_precursor_RNA 44
-#define Feature_type_prim_transcript 45
-#define Feature_type_primer_bind 46
-#define Feature_type_promoter 47
-#define Feature_type_protein_bind 48
-#define Feature_type_rbs 49
-#define Feature_type_repeat_region 50
-#define Feature_type_rep_origin 51
-#define Feature_type_s_region 52
-#define Feature_type_sig_peptide 53
-#define Feature_type_source 54
-#define Feature_type_stem_loop 55
-#define Feature_type_sts 56
-#define Feature_type_tata_signal 57
-#define Feature_type_terminator 58
-#define Feature_type_transit_peptide 59
-#define Feature_type_unsure 60
-#define Feature_type_v_region 61
-#define Feature_type_v_segment 62
-#define Feature_type_variation 63
-#define Feature_type_virion 64
-#define Feature_type_n3clip 65
-#define Feature_type_n3UTR 66
-#define Feature_type_n5clip 67
-#define Feature_type_n5UTR 68
-#define Feature_type_n10_signal 69
-#define Feature_type_n35_signal 70
-#define Feature_type_site_ref 71
-#define Feature_type_region 72
-#define Feature_type_comment 73
-#define Feature_type_bond 74
-#define Feature_type_site 75
-#define Feature_type_rsite 76
-#define Feature_type_user 77
-#define Feature_type_txinit 78
-#define Feature_type_num 79
-#define Feature_type_psec_str 80
-#define Feature_type_non_std_residue 81
-#define Feature_type_het 82
-#define Feature_type_biosrc 83
-#define Feature_type_preprotein 84
-#define Feature_type_mat_peptide_aa 85
-#define Feature_type_sig_peptide_aa 86
-#define Feature_type_transit_peptide_aa 87
-#define Feature_type_snoRNA 88
-#define Feature_type_gap 89
-#define Feature_type_operon 90
-#define Feature_type_oriT 91
-#define Feature_type_ncRNA 92
-#define Feature_type_tmRNA 93
+#define Macro_feature_type_any 0
+#define Macro_feature_type_gene 1
+#define Macro_feature_type_org 2
+#define Macro_feature_type_cds 3
+#define Macro_feature_type_prot 4
+#define Macro_feature_type_preRNA 5
+#define Macro_feature_type_mRNA 6
+#define Macro_feature_type_tRNA 7
+#define Macro_feature_type_rRNA 8
+#define Macro_feature_type_snRNA 9
+#define Macro_feature_type_scRNA 10
+#define Macro_feature_type_otherRNA 11
+#define Macro_feature_type_pub 12
+#define Macro_feature_type_seq 13
+#define Macro_feature_type_imp 14
+#define Macro_feature_type_allele 15
+#define Macro_feature_type_attenuator 16
+#define Macro_feature_type_c_region 17
+#define Macro_feature_type_caat_signal 18
+#define Macro_feature_type_imp_CDS 19
+#define Macro_feature_type_conflict 20
+#define Macro_feature_type_d_loop 21
+#define Macro_feature_type_d_segment 22
+#define Macro_feature_type_enhancer 23
+#define Macro_feature_type_exon 24
+#define Macro_feature_type_gC_signal 25
+#define Macro_feature_type_iDNA 26
+#define Macro_feature_type_intron 27
+#define Macro_feature_type_j_segment 28
+#define Macro_feature_type_ltr 29
+#define Macro_feature_type_mat_peptide 30
+#define Macro_feature_type_misc_binding 31
+#define Macro_feature_type_misc_difference 32
+#define Macro_feature_type_misc_feature 33
+#define Macro_feature_type_misc_recomb 34
+#define Macro_feature_type_misc_RNA 35
+#define Macro_feature_type_misc_signal 36
+#define Macro_feature_type_misc_structure 37
+#define Macro_feature_type_modified_base 38
+#define Macro_feature_type_mutation 39
+#define Macro_feature_type_n_region 40
+#define Macro_feature_type_old_sequence 41
+#define Macro_feature_type_polyA_signal 42
+#define Macro_feature_type_polyA_site 43
+#define Macro_feature_type_precursor_RNA 44
+#define Macro_feature_type_prim_transcript 45
+#define Macro_feature_type_primer_bind 46
+#define Macro_feature_type_promoter 47
+#define Macro_feature_type_protein_bind 48
+#define Macro_feature_type_rbs 49
+#define Macro_feature_type_repeat_region 50
+#define Macro_feature_type_rep_origin 51
+#define Macro_feature_type_s_region 52
+#define Macro_feature_type_sig_peptide 53
+#define Macro_feature_type_source 54
+#define Macro_feature_type_stem_loop 55
+#define Macro_feature_type_sts 56
+#define Macro_feature_type_tata_signal 57
+#define Macro_feature_type_terminator 58
+#define Macro_feature_type_transit_peptide 59
+#define Macro_feature_type_unsure 60
+#define Macro_feature_type_v_region 61
+#define Macro_feature_type_v_segment 62
+#define Macro_feature_type_variation 63
+#define Macro_feature_type_virion 64
+#define Macro_feature_type_n3clip 65
+#define Macro_feature_type_n3UTR 66
+#define Macro_feature_type_n5clip 67
+#define Macro_feature_type_n5UTR 68
+#define Macro_feature_type_n10_signal 69
+#define Macro_feature_type_n35_signal 70
+#define Macro_feature_type_site_ref 71
+#define Macro_feature_type_region 72
+#define Macro_feature_type_comment 73
+#define Macro_feature_type_bond 74
+#define Macro_feature_type_site 75
+#define Macro_feature_type_rsite 76
+#define Macro_feature_type_user 77
+#define Macro_feature_type_txinit 78
+#define Macro_feature_type_num 79
+#define Macro_feature_type_psec_str 80
+#define Macro_feature_type_non_std_residue 81
+#define Macro_feature_type_het 82
+#define Macro_feature_type_biosrc 83
+#define Macro_feature_type_preprotein 84
+#define Macro_feature_type_mat_peptide_aa 85
+#define Macro_feature_type_sig_peptide_aa 86
+#define Macro_feature_type_transit_peptide_aa 87
+#define Macro_feature_type_snoRNA 88
+#define Macro_feature_type_gap 89
+#define Macro_feature_type_operon 90
+#define Macro_feature_type_oriT 91
+#define Macro_feature_type_ncRNA 92
+#define Macro_feature_type_tmRNA 93
+#define Macro_feature_type_mobile_element 94
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define Feat_qual_legal_allele 1
@@ -338,6 +429,8 @@ NLM_EXTERN Boolean LIBCALL LocationConstraintAsnWrite PROTO (( LocationConstrain
 #define Feat_qual_legal_satellite_name 67
 #define Feat_qual_legal_location 68
 #define Feat_qual_legal_tag_peptide 69
+#define Feat_qual_legal_mobile_element_type_type 70
+#define Feat_qual_legal_name 71
 
 
 
@@ -453,13 +546,14 @@ NLM_EXTERN Boolean LIBCALL FeatureFieldPairAsnWrite PROTO (( FeatureFieldPairPtr
 
 typedef ValNodePtr RnaFeatTypePtr;
 typedef ValNode RnaFeatType;
-#define RnaFeatType_preRNA 1
-#define RnaFeatType_mRNA 2
-#define RnaFeatType_tRNA 3
-#define RnaFeatType_rRNA 4
-#define RnaFeatType_ncRNA 5
-#define RnaFeatType_tmRNA 6
-#define RnaFeatType_miscRNA 7
+#define RnaFeatType_any 1
+#define RnaFeatType_preRNA 2
+#define RnaFeatType_mRNA 3
+#define RnaFeatType_tRNA 4
+#define RnaFeatType_rRNA 5
+#define RnaFeatType_ncRNA 6
+#define RnaFeatType_tmRNA 7
+#define RnaFeatType_miscRNA 8
 
 
 NLM_EXTERN RnaFeatTypePtr LIBCALL RnaFeatTypeFree PROTO ((RnaFeatTypePtr ));
@@ -615,6 +709,7 @@ NLM_EXTERN Boolean LIBCALL RnaQualPairAsnWrite PROTO (( RnaQualPairPtr , AsnIoPt
 #define Source_qual_haplogroup 94
 #define Source_qual_all_quals 95
 #define Source_qual_dbxref 96
+#define Source_qual_taxid 97
 
 
 
@@ -788,7 +883,7 @@ NLM_EXTERN Boolean LIBCALL CDSGeneProtFieldPairAsnWrite PROTO (( CDSGeneProtFiel
 #define Molecule_type_transcribed_RNA 8
 #define Molecule_type_ncRNA 9
 #define Molecule_type_transfer_messenger_RNA 10
-#define Molecule_type_other 11
+#define Molecule_type_macro_other 11
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define Technique_type_unknown 0
@@ -1007,6 +1102,24 @@ NLM_EXTERN Boolean LIBCALL MolinfoFieldListAsnWrite PROTO (( MolinfoFieldListPtr
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 
+
+
+/**************************************************
+*
+*    MolinfoFieldConstraint
+*
+**************************************************/
+typedef struct struct_Molinfo_field_constraint {
+   ValNodePtr   field;
+   Uint1   is_not;
+} MolinfoFieldConstraint, PNTR MolinfoFieldConstraintPtr;
+
+
+NLM_EXTERN MolinfoFieldConstraintPtr LIBCALL MolinfoFieldConstraintFree PROTO ((MolinfoFieldConstraintPtr ));
+NLM_EXTERN MolinfoFieldConstraintPtr LIBCALL MolinfoFieldConstraintNew PROTO (( void ));
+NLM_EXTERN MolinfoFieldConstraintPtr LIBCALL MolinfoFieldConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL MolinfoFieldConstraintAsnWrite PROTO (( MolinfoFieldConstraintPtr , AsnIoPtr, AsnTypePtr));
+
 /* following #defines are for enumerated type, not used by object loaders */
 #define Publication_field_cit 1
 #define Publication_field_authors 2
@@ -1065,6 +1178,30 @@ NLM_EXTERN Boolean LIBCALL StructuredCommentFieldPairAsnWrite PROTO (( Structure
 #define Misc_field_keyword 4
 
 /* following #defines are for enumerated type, not used by object loaders */
+#define DBLink_field_type_trace_assembly 1
+#define DBLink_field_type_bio_sample 2
+#define DBLink_field_type_probe_db 3
+#define DBLink_field_type_sequence_read_archve 4
+
+
+
+/**************************************************
+*
+*    DBLinkFieldPair
+*
+**************************************************/
+typedef struct struct_DBLink_field_pair {
+   Uint2   from;
+   Uint2   to;
+} DBLinkFieldPair, PNTR DBLinkFieldPairPtr;
+
+
+NLM_EXTERN DBLinkFieldPairPtr LIBCALL DBLinkFieldPairFree PROTO ((DBLinkFieldPairPtr ));
+NLM_EXTERN DBLinkFieldPairPtr LIBCALL DBLinkFieldPairNew PROTO (( void ));
+NLM_EXTERN DBLinkFieldPairPtr LIBCALL DBLinkFieldPairAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL DBLinkFieldPairAsnWrite PROTO (( DBLinkFieldPairPtr , AsnIoPtr, AsnTypePtr));
+
+/* following #defines are for enumerated type, not used by object loaders */
 #define Pub_type_any 0
 #define Pub_type_published 1
 #define Pub_type_unpublished 2
@@ -1094,6 +1231,8 @@ typedef ValNode PubFieldSpecialConstraintType;
 #define PubFieldSpecialConstraintType_is_present 1
 #define PubFieldSpecialConstraintType_is_not_present 2
 #define PubFieldSpecialConstraintType_is_all_caps 3
+#define PubFieldSpecialConstraintType_is_all_lower 4
+#define PubFieldSpecialConstraintType_is_all_punct 5
 
 
 NLM_EXTERN PubFieldSpecialConstraintTypePtr LIBCALL PubFieldSpecialConstraintTypeFree PROTO ((PubFieldSpecialConstraintTypePtr ));
@@ -1239,6 +1378,7 @@ typedef ValNode FieldType;
 #define FieldType_pub 6
 #define FieldType_struc_comment_field 7
 #define FieldType_misc 8
+#define FieldType_dblink 9
 
 
 NLM_EXTERN FieldTypePtr LIBCALL FieldTypeFree PROTO ((FieldTypePtr ));
@@ -1282,6 +1422,15 @@ NLM_EXTERN QuantityConstraintPtr LIBCALL QuantityConstraintFree PROTO ((Quantity
 NLM_EXTERN QuantityConstraintPtr LIBCALL QuantityConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL QuantityConstraintAsnWrite PROTO (( QuantityConstraintPtr , AsnIoPtr, AsnTypePtr));
 
+/* following #defines are for enumerated type, not used by object loaders */
+#define Feature_strandedness_constraint_any 0
+#define Feature_strandedness_constraint_minus_only 1
+#define Feature_strandedness_constraint_plus_only 2
+#define Feature_strandedness_constraint_at_least_one_minus 3
+#define Feature_strandedness_constraint_at_least_one_plus 4
+#define Feature_strandedness_constraint_no_minus 5
+#define Feature_strandedness_constraint_no_plus 6
+
 
 
 /**************************************************
@@ -1294,6 +1443,8 @@ typedef struct struct_Sequence_constraint {
    struct struct_String_constraint PNTR   id;
    Uint2   feature;
    ValNodePtr   num_features;
+   ValNodePtr   length;
+   Uint2   strandedness;
 } SequenceConstraint, PNTR SequenceConstraintPtr;
 
 
@@ -1301,6 +1452,31 @@ NLM_EXTERN SequenceConstraintPtr LIBCALL SequenceConstraintFree PROTO ((Sequence
 NLM_EXTERN SequenceConstraintPtr LIBCALL SequenceConstraintNew PROTO (( void ));
 NLM_EXTERN SequenceConstraintPtr LIBCALL SequenceConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL SequenceConstraintAsnWrite PROTO (( SequenceConstraintPtr , AsnIoPtr, AsnTypePtr));
+
+/* following #defines are for enumerated type, not used by object loaders */
+#define Match_type_constraint_dont_care 0
+#define Match_type_constraint_yes 1
+#define Match_type_constraint_no 2
+
+
+
+/**************************************************
+*
+*    TranslationConstraint
+*
+**************************************************/
+typedef struct struct_Translation_constraint {
+   struct struct_String_constraint PNTR   actual_strings;
+   struct struct_String_constraint PNTR   transl_strings;
+   Uint2   internal_stops;
+   ValNodePtr   num_mismatches;
+} TranslationConstraint, PNTR TranslationConstraintPtr;
+
+
+NLM_EXTERN TranslationConstraintPtr LIBCALL TranslationConstraintFree PROTO ((TranslationConstraintPtr ));
+NLM_EXTERN TranslationConstraintPtr LIBCALL TranslationConstraintNew PROTO (( void ));
+NLM_EXTERN TranslationConstraintPtr LIBCALL TranslationConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL TranslationConstraintAsnWrite PROTO (( TranslationConstraintPtr , AsnIoPtr, AsnTypePtr));
 
 typedef ValNodePtr ConstraintChoicePtr;
 typedef ValNode ConstraintChoice;
@@ -1312,6 +1488,9 @@ typedef ValNode ConstraintChoice;
 #define ConstraintChoice_cdsgeneprot_pseudo 6
 #define ConstraintChoice_sequence 7
 #define ConstraintChoice_pub 8
+#define ConstraintChoice_molinfo 9
+#define ConstraintChoice_field_missing 10
+#define ConstraintChoice_translation 11
 
 
 NLM_EXTERN ConstraintChoicePtr LIBCALL ConstraintChoiceFree PROTO ((ConstraintChoicePtr ));
@@ -1388,6 +1567,7 @@ typedef struct struct_Field_edit {
    CharPtr   find_txt;
    CharPtr   repl_txt;
    Uint2   location;
+   Uint1   case_insensitive;
 } FieldEdit, PNTR FieldEditPtr;
 
 
@@ -1404,6 +1584,7 @@ typedef ValNode FieldPairType;
 #define FieldPairType_cds_gene_prot 4
 #define FieldPairType_molinfo_field 5
 #define FieldPairType_struc_comment_field 6
+#define FieldPairType_dblink 7
 
 
 NLM_EXTERN FieldPairTypePtr LIBCALL FieldPairTypeFree PROTO ((FieldPairTypePtr ));
@@ -1468,6 +1649,37 @@ NLM_EXTERN Boolean LIBCALL EditActionAsnWrite PROTO (( EditActionPtr , AsnIoPtr,
 #define Cap_change_toupper 2
 #define Cap_change_firstcap 3
 #define Cap_change_firstcaprestnochange 4
+
+typedef ValNodePtr TextTransformPtr;
+typedef ValNode TextTransform;
+#define TextTransform_edit 1
+#define TextTransform_caps 2
+#define TextTransform_remove 3
+
+
+NLM_EXTERN TextTransformPtr LIBCALL TextTransformFree PROTO ((TextTransformPtr ));
+NLM_EXTERN TextTransformPtr LIBCALL TextTransformAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL TextTransformAsnWrite PROTO (( TextTransformPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    TextTransformSet
+*
+**************************************************/
+typedef ValNode TextTransformSet;
+typedef ValNodePtr TextTransformSetPtr;
+#define TextTransformSetNew() ValNodeNew(NULL) 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN TextTransformSetPtr LIBCALL TextTransformSetFree PROTO ((TextTransformSetPtr ));
+NLM_EXTERN TextTransformSetPtr LIBCALL TextTransformSetNew PROTO (( void ));
+NLM_EXTERN TextTransformSetPtr LIBCALL TextTransformSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL TextTransformSetAsnWrite PROTO (( TextTransformSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
 
 
 
@@ -1539,6 +1751,7 @@ typedef struct struct_AECRParse_action {
    Uint1   remove_from_parsed;
    Uint1   remove_left;
    Uint1   remove_right;
+   ValNodePtr   transform;
    Uint2   existing_text;
 } AECRParseAction, PNTR AECRParseActionPtr;
 
@@ -1608,6 +1821,17 @@ NLM_EXTERN ParseSrcOrgPtr LIBCALL ParseSrcOrgNew PROTO (( void ));
 NLM_EXTERN ParseSrcOrgPtr LIBCALL ParseSrcOrgAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ParseSrcOrgAsnWrite PROTO (( ParseSrcOrgPtr , AsnIoPtr, AsnTypePtr));
 
+typedef ValNodePtr ParseSrcGeneralIdPtr;
+typedef ValNode ParseSrcGeneralId;
+#define ParseSrcGeneralId_whole_text 1
+#define ParseSrcGeneralId_db 2
+#define ParseSrcGeneralId_tag 3
+
+
+NLM_EXTERN ParseSrcGeneralIdPtr LIBCALL ParseSrcGeneralIdFree PROTO ((ParseSrcGeneralIdPtr ));
+NLM_EXTERN ParseSrcGeneralIdPtr LIBCALL ParseSrcGeneralIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ParseSrcGeneralIdAsnWrite PROTO (( ParseSrcGeneralIdPtr , AsnIoPtr, AsnTypePtr));
+
 typedef ValNodePtr ParseSrcPtr;
 typedef ValNode ParseSrc;
 #define ParseSrc_defline 1
@@ -1618,6 +1842,7 @@ typedef ValNode ParseSrc;
 #define ParseSrc_bankit_comment 6
 #define ParseSrc_structured_comment 7
 #define ParseSrc_file_id 8
+#define ParseSrc_general_id 9
 
 
 NLM_EXTERN ParseSrcPtr LIBCALL ParseSrcFree PROTO ((ParseSrcPtr ));
@@ -1966,6 +2191,32 @@ NLM_EXTERN Boolean LIBCALL Partial3SetActionAsnWrite PROTO (( Partial3SetActionP
 #define Partial_3_clear_constraint_good_end 2
 
 /* following #defines are for enumerated type, not used by object loaders */
+#define Partial_both_set_constraint_all 0
+#define Partial_both_set_constraint_at_end 1
+
+
+
+/**************************************************
+*
+*    PartialBothSetAction
+*
+**************************************************/
+typedef struct struct_Partial_both_set_action {
+   Uint2   constraint;
+   Uint1   extend;
+} PartialBothSetAction, PNTR PartialBothSetActionPtr;
+
+
+NLM_EXTERN PartialBothSetActionPtr LIBCALL PartialBothSetActionFree PROTO ((PartialBothSetActionPtr ));
+NLM_EXTERN PartialBothSetActionPtr LIBCALL PartialBothSetActionNew PROTO (( void ));
+NLM_EXTERN PartialBothSetActionPtr LIBCALL PartialBothSetActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL PartialBothSetActionAsnWrite PROTO (( PartialBothSetActionPtr , AsnIoPtr, AsnTypePtr));
+
+/* following #defines are for enumerated type, not used by object loaders */
+#define Partial_both_clear_constraint_all 0
+#define Partial_both_clear_constraint_not_at_end 1
+
+/* following #defines are for enumerated type, not used by object loaders */
 #define Convert_location_type_join 1
 #define Convert_location_type_order 2
 #define Convert_location_type_merge 3
@@ -1977,9 +2228,11 @@ typedef ValNode LocationEditType;
 #define LocationEditType_clear_5_partial 3
 #define LocationEditType_set_3_partial 4
 #define LocationEditType_clear_3_partial 5
-#define LocationEditType_convert 6
-#define LocationEditType_extend_5 7
-#define LocationEditType_extend_3 8
+#define LocationEditType_set_both_partial 6
+#define LocationEditType_clear_both_partial 7
+#define LocationEditType_convert 8
+#define LocationEditType_extend_5 9
+#define LocationEditType_extend_3 10
 
 
 NLM_EXTERN LocationEditTypePtr LIBCALL LocationEditTypeFree PROTO ((LocationEditTypePtr ));
@@ -1996,6 +2249,7 @@ NLM_EXTERN Boolean LIBCALL LocationEditTypeAsnWrite PROTO (( LocationEditTypePtr
 typedef struct struct_Edit_feature_location_action {
    Uint2   type;
    ValNodePtr   action;
+   Uint1   retranslate_cds;
    ValNodePtr   constraint;
 } EditFeatureLocationAction, PNTR EditFeatureLocationActionPtr;
 
@@ -2090,6 +2344,8 @@ typedef struct struct_Fix_pub_caps_action {
    Uint1   title;
    Uint1   authors;
    Uint1   affiliation;
+   Uint1   affil_country;
+   Uint1   punct_only;
    ValNodePtr   constraint;
 } FixPubCapsAction, PNTR FixPubCapsActionPtr;
 
@@ -2098,6 +2354,172 @@ NLM_EXTERN FixPubCapsActionPtr LIBCALL FixPubCapsActionFree PROTO ((FixPubCapsAc
 NLM_EXTERN FixPubCapsActionPtr LIBCALL FixPubCapsActionNew PROTO (( void ));
 NLM_EXTERN FixPubCapsActionPtr LIBCALL FixPubCapsActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL FixPubCapsActionAsnWrite PROTO (( FixPubCapsActionPtr , AsnIoPtr, AsnTypePtr));
+
+/* following #defines are for enumerated type, not used by object loaders */
+#define Sort_order_short_to_long 1
+#define Sort_order_long_to_short 2
+#define Sort_order_alphabetical 3
+
+
+
+/**************************************************
+*
+*    SortFieldsAction
+*
+**************************************************/
+typedef struct struct_Sort_fields_action {
+   ValNodePtr   field;
+   Uint2   order;
+   ValNodePtr   constraint;
+} SortFieldsAction, PNTR SortFieldsActionPtr;
+
+
+NLM_EXTERN SortFieldsActionPtr LIBCALL SortFieldsActionFree PROTO ((SortFieldsActionPtr ));
+NLM_EXTERN SortFieldsActionPtr LIBCALL SortFieldsActionNew PROTO (( void ));
+NLM_EXTERN SortFieldsActionPtr LIBCALL SortFieldsActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SortFieldsActionAsnWrite PROTO (( SortFieldsActionPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr FixCapsActionPtr;
+typedef ValNode FixCapsAction;
+#define FixCapsAction_pub 1
+#define FixCapsAction_src_country 2
+#define FixCapsAction_mouse_strain 3
+#define FixCapsAction_src_qual 4
+
+
+NLM_EXTERN FixCapsActionPtr LIBCALL FixCapsActionFree PROTO ((FixCapsActionPtr ));
+NLM_EXTERN FixCapsActionPtr LIBCALL FixCapsActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL FixCapsActionAsnWrite PROTO (( FixCapsActionPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr FixFormatActionPtr;
+typedef ValNode FixFormatAction;
+#define FixFormatAction_collection_date 1
+#define FixFormatAction_lat_lon 2
+#define FixFormatAction_primers 3
+#define FixFormatAction_protein_name 4
+
+
+NLM_EXTERN FixFormatActionPtr LIBCALL FixFormatActionFree PROTO ((FixFormatActionPtr ));
+NLM_EXTERN FixFormatActionPtr LIBCALL FixFormatActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL FixFormatActionAsnWrite PROTO (( FixFormatActionPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    RemoveDuplicateFeatureAction
+*
+**************************************************/
+typedef struct struct_Remove_duplicate_feature_action {
+   Uint2   type;
+   Uint1   ignore_partials;
+   Uint1   case_sensitive;
+   Uint1   remove_proteins;
+   ValNodePtr   rd_constraint;
+} RemoveDuplicateFeatureAction, PNTR RemoveDuplicateFeatureActionPtr;
+
+
+NLM_EXTERN RemoveDuplicateFeatureActionPtr LIBCALL RemoveDuplicateFeatureActionFree PROTO ((RemoveDuplicateFeatureActionPtr ));
+NLM_EXTERN RemoveDuplicateFeatureActionPtr LIBCALL RemoveDuplicateFeatureActionNew PROTO (( void ));
+NLM_EXTERN RemoveDuplicateFeatureActionPtr LIBCALL RemoveDuplicateFeatureActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RemoveDuplicateFeatureActionAsnWrite PROTO (( RemoveDuplicateFeatureActionPtr , AsnIoPtr, AsnTypePtr));
+
+/* following #defines are for enumerated type, not used by object loaders */
+#define Gene_xref_suppression_type_any 0
+#define Gene_xref_suppression_type_suppressing 1
+#define Gene_xref_suppression_type_non_suppressing 2
+
+/* following #defines are for enumerated type, not used by object loaders */
+#define Gene_xref_necessary_type_any 0
+#define Gene_xref_necessary_type_necessary 1
+#define Gene_xref_necessary_type_unnecessary 2
+
+
+
+/**************************************************
+*
+*    GeneXrefType
+*
+**************************************************/
+typedef struct struct_Gene_xref_type {
+   Uint2   feature;
+   Uint2   suppression;
+   Uint2   necessary;
+} GeneXrefType, PNTR GeneXrefTypePtr;
+
+
+NLM_EXTERN GeneXrefTypePtr LIBCALL GeneXrefTypeFree PROTO ((GeneXrefTypePtr ));
+NLM_EXTERN GeneXrefTypePtr LIBCALL GeneXrefTypeNew PROTO (( void ));
+NLM_EXTERN GeneXrefTypePtr LIBCALL GeneXrefTypeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GeneXrefTypeAsnWrite PROTO (( GeneXrefTypePtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr XrefTypePtr;
+typedef ValNode XrefType;
+#define XrefType_gene 1
+
+
+NLM_EXTERN XrefTypePtr LIBCALL XrefTypeFree PROTO ((XrefTypePtr ));
+NLM_EXTERN XrefTypePtr LIBCALL XrefTypeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL XrefTypeAsnWrite PROTO (( XrefTypePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    RemoveXrefsAction
+*
+**************************************************/
+typedef struct struct_Remove_xrefs_action {
+   ValNodePtr   xref_type;
+   ValNodePtr   constraint;
+} RemoveXrefsAction, PNTR RemoveXrefsActionPtr;
+
+
+NLM_EXTERN RemoveXrefsActionPtr LIBCALL RemoveXrefsActionFree PROTO ((RemoveXrefsActionPtr ));
+NLM_EXTERN RemoveXrefsActionPtr LIBCALL RemoveXrefsActionNew PROTO (( void ));
+NLM_EXTERN RemoveXrefsActionPtr LIBCALL RemoveXrefsActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RemoveXrefsActionAsnWrite PROTO (( RemoveXrefsActionPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    MakeGeneXrefAction
+*
+**************************************************/
+typedef struct struct_Make_gene_xref_action {
+   Uint2   feature;
+   ValNodePtr   constraint;
+} MakeGeneXrefAction, PNTR MakeGeneXrefActionPtr;
+
+
+NLM_EXTERN MakeGeneXrefActionPtr LIBCALL MakeGeneXrefActionFree PROTO ((MakeGeneXrefActionPtr ));
+NLM_EXTERN MakeGeneXrefActionPtr LIBCALL MakeGeneXrefActionNew PROTO (( void ));
+NLM_EXTERN MakeGeneXrefActionPtr LIBCALL MakeGeneXrefActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL MakeGeneXrefActionAsnWrite PROTO (( MakeGeneXrefActionPtr , AsnIoPtr, AsnTypePtr));
+
+/* following #defines are for enumerated type, not used by object loaders */
+#define Author_fix_type_truncate_middle_initials 1
+#define Author_fix_type_strip_suffix 2
+#define Author_fix_type_move_middle_to_first 3
+
+
+
+/**************************************************
+*
+*    AuthorFixAction
+*
+**************************************************/
+typedef struct struct_Author_fix_action {
+   Uint2   fix_type;
+   ValNodePtr   constraint;
+} AuthorFixAction, PNTR AuthorFixActionPtr;
+
+
+NLM_EXTERN AuthorFixActionPtr LIBCALL AuthorFixActionFree PROTO ((AuthorFixActionPtr ));
+NLM_EXTERN AuthorFixActionPtr LIBCALL AuthorFixActionNew PROTO (( void ));
+NLM_EXTERN AuthorFixActionPtr LIBCALL AuthorFixActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL AuthorFixActionAsnWrite PROTO (( AuthorFixActionPtr , AsnIoPtr, AsnTypePtr));
 
 typedef ValNodePtr MacroActionChoicePtr;
 typedef ValNode MacroActionChoice;
@@ -2117,11 +2539,125 @@ typedef ValNode MacroActionChoice;
 #define MacroActionChoice_adjust_for_consensus_splice 14
 #define MacroActionChoice_fix_pub_caps 15
 #define MacroActionChoice_remove_seg_gaps 16
+#define MacroActionChoice_sort_fields 17
+#define MacroActionChoice_apply_molinfo_block 18
+#define MacroActionChoice_fix_caps 19
+#define MacroActionChoice_fix_format 20
+#define MacroActionChoice_fix_spell 21
+#define MacroActionChoice_remove_duplicate_features 22
+#define MacroActionChoice_remove_lineage_notes 23
+#define MacroActionChoice_remove_xrefs 24
+#define MacroActionChoice_make_gene_xrefs 25
+#define MacroActionChoice_make_bold_xrefs 26
+#define MacroActionChoice_fix_author 27
 
 
 NLM_EXTERN MacroActionChoicePtr LIBCALL MacroActionChoiceFree PROTO ((MacroActionChoicePtr ));
 NLM_EXTERN MacroActionChoicePtr LIBCALL MacroActionChoiceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL MacroActionChoiceAsnWrite PROTO (( MacroActionChoicePtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr SearchFuncPtr;
+typedef ValNode SearchFunc;
+#define SearchFunc_string_constraint 1
+#define SearchFunc_contains_plural 2
+#define SearchFunc_n_or_more_brackets_or_parentheses 3
+#define SearchFunc_three_numbers 4
+#define SearchFunc_underscore 5
+#define SearchFunc_prefix_and_numbers 6
+#define SearchFunc_all_caps 7
+#define SearchFunc_unbalanced_paren 8
+#define SearchFunc_too_long 9
+#define SearchFunc_has_term 10
+
+
+NLM_EXTERN SearchFuncPtr LIBCALL SearchFuncFree PROTO ((SearchFuncPtr ));
+NLM_EXTERN SearchFuncPtr LIBCALL SearchFuncAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SearchFuncAsnWrite PROTO (( SearchFuncPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SimpleReplace
+*
+**************************************************/
+typedef struct struct_Simple_replace {
+   CharPtr   replace;
+   Uint1   whole_string;
+   Uint1   weasel_to_putative;
+} SimpleReplace, PNTR SimpleReplacePtr;
+
+
+NLM_EXTERN SimpleReplacePtr LIBCALL SimpleReplaceFree PROTO ((SimpleReplacePtr ));
+NLM_EXTERN SimpleReplacePtr LIBCALL SimpleReplaceNew PROTO (( void ));
+NLM_EXTERN SimpleReplacePtr LIBCALL SimpleReplaceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SimpleReplaceAsnWrite PROTO (( SimpleReplacePtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr ReplaceFuncPtr;
+typedef ValNode ReplaceFunc;
+#define ReplaceFunc_simple_replace 1
+#define ReplaceFunc_haem_replace 2
+
+
+NLM_EXTERN ReplaceFuncPtr LIBCALL ReplaceFuncFree PROTO ((ReplaceFuncPtr ));
+NLM_EXTERN ReplaceFuncPtr LIBCALL ReplaceFuncAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ReplaceFuncAsnWrite PROTO (( ReplaceFuncPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ReplaceRule
+*
+**************************************************/
+typedef struct struct_Replace_rule {
+   ValNodePtr   replace_func;
+   Uint1   move_to_note;
+} ReplaceRule, PNTR ReplaceRulePtr;
+
+
+NLM_EXTERN ReplaceRulePtr LIBCALL ReplaceRuleFree PROTO ((ReplaceRulePtr ));
+NLM_EXTERN ReplaceRulePtr LIBCALL ReplaceRuleNew PROTO (( void ));
+NLM_EXTERN ReplaceRulePtr LIBCALL ReplaceRuleAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ReplaceRuleAsnWrite PROTO (( ReplaceRulePtr , AsnIoPtr, AsnTypePtr));
+
+/* following #defines are for enumerated type, not used by object loaders */
+#define Fix_type_none 0
+#define Fix_type_typo 1
+#define Fix_type_quickfix 2
+#define Fix_type_no_organelle_for_prokaryote 3
+#define Fix_type_might_be_nonfunctional 4
+#define Fix_type_database 5
+#define Fix_type_remove_organism_name 6
+#define Fix_type_inappropriate_symbol 7
+#define Fix_type_evolutionary_relationship 8
+#define Fix_type_use_protein 9
+#define Fix_type_hypothetical 10
+#define Fix_type_british 11
+#define Fix_type_description 12
+#define Fix_type_gene 13
+
+
+
+/**************************************************
+*
+*    SuspectRule
+*
+**************************************************/
+typedef struct struct_Suspect_rule {
+   struct struct_Suspect_rule PNTR next;
+   ValNodePtr   find;
+   ValNodePtr   except;
+   ValNodePtr   feat_constraint;
+   Uint2   rule_type;
+   struct struct_Replace_rule PNTR   replace;
+} SuspectRule, PNTR SuspectRulePtr;
+
+
+NLM_EXTERN SuspectRulePtr LIBCALL SuspectRuleFree PROTO ((SuspectRulePtr ));
+NLM_EXTERN SuspectRulePtr LIBCALL SuspectRuleNew PROTO (( void ));
+NLM_EXTERN SuspectRulePtr LIBCALL SuspectRuleAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SuspectRuleAsnWrite PROTO (( SuspectRulePtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }

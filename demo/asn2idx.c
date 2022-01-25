@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/2/04
 *
-* $Revision: 1.5 $
+* $Revision: 1.6 $
 *
 * File Description:
 *
@@ -51,6 +51,10 @@
 #include <objfdef.h>
 #include <sqnutils.h>
 #include <lsqfetch.h>
+
+#define ASN2IDX_APP_VER "1.1"
+
+CharPtr ASN2IDX_APPLICATION = ASN2IDX_APP_VER;
 
 static Boolean NotInFilter (
   CharPtr filename,
@@ -192,6 +196,7 @@ Args myargs [] = {
 Int2 Main (void)
 
 {
+  Char        app [64];
   Boolean     binary, dorecurse;
   CharPtr     directory, filter, results, subdir, subfile;
   ValNodePtr  exclude = NULL;
@@ -226,7 +231,8 @@ Int2 Main (void)
 
   /* process command line arguments */
 
-  if (! GetArgs ("asn2idx", sizeof (myargs) / sizeof (Args), myargs)) {
+  sprintf (app, "asn2idx %s", ASN2IDX_APPLICATION);
+  if (! GetArgs (app, sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
   }
 

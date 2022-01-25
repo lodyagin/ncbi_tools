@@ -916,8 +916,16 @@ FeatDefGroupSet ::= {
     entrygroup 0 ,
     displaygroup 0 ,
     molgroup na
-  } ,
-
-}
+  },
+  {                   -- Imp
+    typelabel "mobile_element" ,
+    menulabel "Mobile genetic element" ,
+    featdef-key 98 ,
+    seqfeat-key 8 ,
+    entrygroup 1 ,
+    displaygroup 1 ,
+    molgroup na
+  }
+  }
 }
 

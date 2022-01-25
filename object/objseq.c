@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -392,6 +392,9 @@ orgref:        if (orp != NULL) {
             return len - buflen;
 
 
+        case Seq_descr_modelev:
+            break;
+
         case Seq_descr_dbxref:
             if (vnp->data.ptrvalue == NULL) return 0;
             len = buflen;
@@ -415,7 +418,7 @@ static Int2 LIBCALLBACK SeqDescLabelFunc ( Pointer data, CharPtr buffer, Int2 bu
 NLM_EXTERN Int2 LIBCALL SeqDescLabel (ValNodePtr vnp, CharPtr buffer, Int2 buflen, Boolean content)
 {
     CharPtr name;
-    static CharPtr descrs [25] = {
+    static CharPtr descrs [26] = {
         "SeqDesc..",
         "MolType",
         "Modifier",
@@ -440,14 +443,15 @@ NLM_EXTERN Int2 LIBCALL SeqDescLabel (ValNodePtr vnp, CharPtr buffer, Int2 bufle
         "PDB",
         "Heterogen",
         "BioSrc",
-        "MolInfo"
+        "MolInfo",
+        "ModelEv"
         };
     Int2 len, diff, rsult = 0;
 
     if ((vnp == NULL) || (buflen < 1))
         return 0;
 
-    if (vnp->choice <= 24)
+    if (vnp->choice <= 25)
         name = descrs[vnp->choice];
     else
         name = descrs[0];
@@ -735,7 +739,9 @@ NLM_EXTERN BioseqPtr LIBCALL BioseqNew (void)
     bsp->length = -1;    /* not set */
     bsp->topology = 1;   /* DEFAULT = linear */
 
-    SeqMgrAdd (SM_BIOSEQ, (Pointer)bsp);   /* add to Bioseq list */
+    if (!SeqMgrAdd (SM_BIOSEQ, (Pointer)bsp)) {   /* add to Bioseq list */
+      bsp = BioseqFree (bsp);
+    }
 
     return bsp;
 }
@@ -1804,6 +1810,9 @@ NLM_EXTERN SeqDescPtr LIBCALL SeqDescFree (SeqDescPtr anp)
         case 24:     /* MolInfo */
             MolInfoFree((MolInfoPtr)pnt);
             break;
+        case 25:     /* ModelEvidenceSupport */
+            ModelEvidenceSupportFree((ModelEvidenceSupportPtr)pnt);
+            break;
     }
     anp = (SeqDescPtr)MemFree(anp);
     return anp;
@@ -2022,6 +2031,9 @@ NLM_EXTERN Boolean LIBCALL SeqDescAsnWrite (SeqDescPtr anp, AsnIoPtr aip, AsnTyp
            break;
        case 24:                   /* MolInfo */
            if (! MolInfoAsnWrite((MolInfoPtr)pnt, aip, SEQDESC_molinfo)) goto erret;
+           break;
+       case 25:                   /* ModelEvidenceSupport */
+           if (! ModelEvidenceSupportAsnWrite((ModelEvidenceSupportPtr)pnt, aip, SEQDESC_modelev)) goto erret;
            break;
    }
     retval = TRUE;
@@ -2248,6 +2260,11 @@ NLM_EXTERN SeqDescPtr LIBCALL SeqDescAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     {
         choice = 24;
         func = (AsnReadFunc) MolInfoAsnRead;
+    }
+    else if (atp == SEQDESC_modelev)
+    {
+        choice = 25;
+        func = (AsnReadFunc) ModelEvidenceSupportAsnRead;
     }
 
     anp = SeqDescrNew(NULL);

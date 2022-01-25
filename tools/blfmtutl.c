@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blfmtutl.c,v 1.41 2010/08/06 16:23:16 coulouri Exp $";
+static char const rcsid[] = "$Id: blfmtutl.c,v 1.42 2011/01/28 19:29:37 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -36,6 +36,9 @@ Contents: Utilities for BLAST formatting
 /*
 * $Revision: 
 * $Log: blfmtutl.c,v $
+* Revision 1.42  2011/01/28 19:29:37  coulouri
+* bump version/date for release
+*
 * Revision 1.41  2010/08/06 16:23:16  coulouri
 * bump to 2.2.24
 *
@@ -174,8 +177,8 @@ Contents: Utilities for BLAST formatting
 #include <jzcoll.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.24"
-#define BLAST_RELEASE_DATE "Aug-08-2010"
+#define BLAST_ENGINE_VERSION "2.2.25"
+#define BLAST_RELEASE_DATE "Feb-01-2011"
 
 #define BUFFER_LENGTH 255
 

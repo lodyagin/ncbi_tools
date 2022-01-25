@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.327 $
+* $Revision: 6.349 $
 *
 * File Description:
 *
@@ -73,7 +73,7 @@ static char *date_of_compilation = __DATE__;
 #include <objmacro.h>
 #include <macroapi.h>
 
-#define TBL2ASN_APP_VER "15.4"
+#define TBL2ASN_APP_VER "17.1"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
@@ -99,6 +99,7 @@ typedef struct tblargs {
   Boolean     phrapace;
   Boolean     ftable;
   Boolean     genprodset;
+  Boolean     delaygenprodset;
   Boolean     linkbyoverlap;
   Boolean     linkbyproduct;
   Boolean     implicitgaps;
@@ -127,6 +128,7 @@ typedef struct tblargs {
   Boolean     genereport;
   Boolean     seqidfromfile;
   Boolean     smartfeats;
+  Boolean     refSeqTitles;
   Boolean     smarttitle;
   Boolean     logtoterminal;
   CharPtr     aln_beginning_gap;
@@ -136,7 +138,10 @@ typedef struct tblargs {
   CharPtr     aln_match;
   Boolean     aln_is_protein;
   Boolean     save_bioseq_set;
+  Boolean     auto_def;
   Boolean     apply_cmt_to_all;
+  Boolean     adjust_mrna_for_cds_stop_codon;
+  Boolean     seq_fetch_failure;
 
   GlobalDiscrepReportPtr global_report;
 
@@ -181,6 +186,7 @@ static void WriteOneFile (
   BioseqSetPtr  bssp;
   Char          file [FILENAME_MAX], path [PATH_MAX];
   SeqSubmit     ssb;
+  Uint2         entityID;
 
   if (sep == NULL || sep->data.ptrvalue == NULL) return;
 
@@ -188,6 +194,8 @@ static void WriteOneFile (
   ssb.sub = sbp;
   ssb.datatype = 1;
   ssb.data = (Pointer) sep;
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  AutoFixSpecialCharactersInEntity(entityID);
 
   if (StringDoesHaveText (outfile)) {
     StringNCpy_0 (path, outfile, sizeof (path));
@@ -1857,7 +1865,7 @@ static BioseqPtr AttachSeqAnnotEntity (
         EnhanceFeatureAnnotation (sfp, bsp);
       }
 
-      PromoteXrefsExEx (sfp, bsp, entityID, TRUE, FALSE, tbl->genprodset, tbl->forcelocalid);
+      PromoteXrefsExEx (sfp, bsp, entityID, TRUE, FALSE, tbl->genprodset, tbl->forcelocalid, &(tbl->seq_fetch_failure));
       sep = GetTopSeqEntryForEntityID (entityID);
     }
   } else {
@@ -2252,7 +2260,7 @@ static void ProcessOneNuc (
   if (tbl->findorf) {
     cds = AnnotateBestOrf (bsp, genCode, tbl->altstart, tbl->runonorf, stp);
     if (cds != NULL) {
-      PromoteXrefsExEx (cds, bsp, entityID, TRUE, FALSE, FALSE, tbl->forcelocalid);
+      PromoteXrefsExEx (cds, bsp, entityID, TRUE, FALSE, FALSE, tbl->forcelocalid, &(tbl->seq_fetch_failure));
     }
   }
 
@@ -2306,11 +2314,29 @@ static void ProcessOneAnnot (
 
 {
   BioseqPtr   bsp;
+  GBQualPtr   gbq;
   Int2        genCode;
   SeqFeatPtr  sfp;
   SeqEntryPtr sep;
 
   if (sap == NULL || tbl == NULL) return;
+
+  if (tbl->delaygenprodset) {
+    if (sap->type == 1) {
+      for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
+        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+          if (StringICmp (gbq->qual, "protein_id") == 0 && sfp->data.choice == SEQFEAT_RNA) {
+            gbq->qual = MemFree (gbq->qual);
+            gbq->qual = StringSave ("orig_protein_id");
+          }
+          if (StringICmp (gbq->qual, "transcript_id") == 0) {
+            gbq->qual = MemFree (gbq->qual);
+            gbq->qual = StringSave ("orig_transcript_id");
+          }
+        }
+      }
+    }
+  }
 
   bsp = AttachSeqAnnotEntity (entityID, sap, tbl);
   if (bsp == NULL) return;
@@ -2331,7 +2357,7 @@ static void ProcessOneAnnot (
     if (sap->type == 1) {
       SetEmptyGeneticCodes (sap, genCode);
       sfp = (SeqFeatPtr) sap->data;
-      PromoteXrefsExEx (sfp, bsp, entityID, TRUE, FALSE, tbl->genprodset, tbl->forcelocalid);
+      PromoteXrefsExEx (sfp, bsp, entityID, TRUE, FALSE, tbl->genprodset, tbl->forcelocalid, &(tbl->seq_fetch_failure));
     }
   }
   sep = GetTopSeqEntryForEntityID (entityID);
@@ -2363,10 +2389,25 @@ static void UpdateException (
   }
 }
 
+
+static void AddToPeptideMismatchList (ValNodeBlockPtr mismatch_list, Uint1 mismatch_type, SeqIdPtr sip)
+{
+  Char buf[128];
+
+  if (mismatch_list == NULL || sip == NULL) {
+    return;
+  }
+
+  SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf) - 1);
+  ValNodeAddPointerToEnd (mismatch_list, mismatch_type, StringSave (buf));
+}
+
+
 static void ReplaceOnePeptide (
   SimpleSeqPtr ssp,
   Boolean conflict,
-  Boolean genprodset
+  Boolean genprodset,
+  ValNodeBlockPtr mismatch_list
 )
 
 {
@@ -2384,6 +2425,7 @@ static void ReplaceOnePeptide (
   SeqLocPtr          slp;
   CharPtr            str, str1, str2;
   ValNodePtr         vnp;
+  Uint1              match_type = 0;
 
   if (ssp == NULL || ssp->numid < 1) return;
 
@@ -2423,6 +2465,8 @@ static void ReplaceOnePeptide (
   str2 = BSMerge ((ByteStorePtr) bsp->seq_data, NULL);
 
   if (StringCmp (str1, str2) != 0) {
+    /* keep a list of the mismatches */
+    match_type = 1;
 
     /* swap sequence byte stores */
 
@@ -2482,6 +2526,8 @@ static void ReplaceOnePeptide (
       }
     }
   }
+  /* keep a list of the ids that match and those that don't - use 0 for match, 1 for mismatch */
+  AddToPeptideMismatchList(mismatch_list, match_type, SeqIdFindBest (bsp->id, SEQID_GENBANK));
 
   MemFree (str1);
   MemFree (str2);
@@ -2832,6 +2878,7 @@ static Uint2 ProcessOneAsn (
     ObjMgrFreeByEntityID (entityID);
     return 0;
   }
+  AutoFixSpecialCharactersInEntity(entityID);
 
   VisitFeaturesInSep (sep, NULL, RnaProtTrailingCommaFix);
 
@@ -3645,7 +3692,7 @@ static Uint2 ProcessBulkSet (
   BioseqSetPtr  bssp;
   Uint2         entityID;
   SeqEntryPtr   lastsep, sep, topsep;
-  Raw2DeltData   r;
+  Raw2DeltData  r;
 
   /*
   Pointer       dataptr;
@@ -3670,6 +3717,12 @@ static Uint2 ProcessBulkSet (
     case 4 :
       bssp->_class = BioseqseqSet_class_eco_set;
       break;
+    case 5 :
+      bssp->_class = BioseqseqSet_class_wgs_set;
+      break;
+    case 6 :
+      bssp->_class = BioseqseqSet_class_small_genome_set;
+      break;
     default :
       bssp->_class = BioseqseqSet_class_genbank;
       break;
@@ -3684,7 +3737,7 @@ static Uint2 ProcessBulkSet (
 
   lastsep = NULL;
 
-/*
+  /*
   while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, TRUE, FALSE, TRUE, FALSE)) != NULL) {
     if (datatype == OBJ_BIOSEQ) {
 
@@ -3703,7 +3756,7 @@ static Uint2 ProcessBulkSet (
       ObjMgrFree (datatype, dataptr);
     }
   }
-*/
+  */
 
   while ((bsp = ReadDeltaFasta (fp, NULL)) != NULL) {
 
@@ -4887,7 +4940,8 @@ static CharPtr RnaTypeLabel (
 
 static void AddRnaTitles (
   SeqFeatPtr rna,
-  CharPtr organism
+  CharPtr organism,
+  Boolean refSeqTitles
 )
 
 {
@@ -4943,9 +4997,18 @@ static void AddRnaTitles (
     StringCat (str, " ");
     StringCat (str, typ);
     if (ccontext.partialL || ccontext.partialR) {
-      StringCat (str, ", partial cds.");
+      if (refSeqTitles) {
+        StringCat (str, " partial mRNA.");
+      } else {
+        StringCat (str, ", partial cds.");
+      }
     } else {
-      StringCat (str, ", complete cds.");
+      if (refSeqTitles) {
+        /* requested to make all mRNAs partial in defline */
+        StringCat (str, " partial mRNA.");
+      } else {
+        StringCat (str, ", complete cds.");
+      }
     }
   } else if (genelabel != NULL) {
     StringCat (str, " ");
@@ -6340,6 +6403,62 @@ static void DoTbl2AsnCleanup (SeqEntryPtr sep, CleanupArgsPtr c)
 
 }
 
+static void DoTbl2AsnAutoDef (SeqEntryPtr sep, Uint2 entityID)
+
+{
+  ValNodePtr                    defline_clauses = NULL;
+  DeflineFeatureRequestList     feature_requests;
+  Int4                          index;
+  ValNodePtr                    modifier_indices = NULL;
+  ModifierItemLocalPtr          modList;
+  OrganismDescriptionModifiers  odmp;
+  SeqEntryPtr                   oldscope;
+
+  if (sep == NULL) return;
+  if (entityID < 1) return;
+
+  modList = MemNew (NumDefLineModifiers () * sizeof (ModifierItemLocalData));
+  if (modList == NULL) return;
+
+  InitFeatureRequests (&feature_requests);
+
+  SetRequiredModifiers (modList);
+  CountModifiers (modList, sep);
+
+  InitOrganismDescriptionModifiers (&odmp, sep);
+
+  RemoveNucProtSetTitles (sep);
+  oldscope = SeqEntrySetScope (sep);
+
+  BuildDefLineFeatClauseList (sep, entityID, &feature_requests,
+                              DEFAULT_ORGANELLE_CLAUSE, FALSE, FALSE,
+                              &defline_clauses);
+  if (AreFeatureClausesUnique (defline_clauses)) {
+    modifier_indices = GetModifierIndicesFromModList (modList);
+  } else {
+    modifier_indices = FindBestModifiers (sep, modList);
+  }
+
+  BuildDefinitionLinesFromFeatureClauseLists (defline_clauses, modList,
+                                              modifier_indices, &odmp);
+  DefLineFeatClauseListFree (defline_clauses);
+  if (modList != NULL) {
+    for (index = 0; index < NumDefLineModifiers (); index++) {
+      ValNodeFree (modList [index].values_seen);
+    }
+    MemFree (modList);
+  }
+  modifier_indices = ValNodeFree (modifier_indices);
+
+  ClearProteinTitlesInNucProts (entityID, NULL);
+  InstantiateProteinTitles (entityID, NULL);
+  /*
+  RemovePopsetTitles (sep);
+  */
+  AddPopsetTitles (sep, &feature_requests, DEFAULT_ORGANELLE_CLAUSE, FALSE, FALSE);
+
+  SeqEntrySetScope (oldscope);
+}
 
 static void SeqEntryHasConflictingIDsCallback (BioseqPtr bsp, Pointer data)
 {
@@ -6446,6 +6565,132 @@ static Boolean IsGenProdSet (SeqEntryPtr sep)
   }
 }
 
+static void LinkCDSmRNAByProteinID (
+  SeqFeatPtr mrna,
+  Pointer userdata
+)
+
+{
+  BioseqPtr       bsp;
+  SeqFeatPtr      cds;
+  GBQualPtr       gbq;
+  Int4            id;
+  ObjectIdPtr     oip;
+  SeqIdPtr        sip;
+  SeqFeatXrefPtr  xref;
+
+  if (mrna == NULL) return;
+  if (mrna->idx.subtype != FEATDEF_mRNA) return;
+
+  for (gbq = mrna->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "orig_protein_id") != 0) continue;
+    if (StringHasNoText (gbq->val)) continue;
+    sip = MakeSeqID (gbq->val);
+    if (sip == NULL) continue;
+    bsp = BioseqFind (sip);
+    if (bsp == NULL) continue;
+    cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+    if (cds == NULL) continue;
+
+    /* make reciprocal feature ID xrefs */
+
+    if (cds->id.choice == 3) {
+      oip = (ObjectIdPtr) cds->id.value.ptrvalue;
+      if (oip != NULL && oip->str == NULL) {
+        id = oip->id;
+        if (id > 0) {
+          for (xref = mrna->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+          if (xref != NULL) {
+            oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+            if (oip != NULL) {
+              if (oip->str != NULL) {
+                oip->str = MemFree (oip->str);
+              }
+              oip->id = id;
+            }
+          } else {
+            xref = SeqFeatXrefNew ();
+            if (xref != NULL) {
+              oip = ObjectIdNew ();
+              if (oip != NULL) {
+                oip->id = id;
+                xref->id.choice = 3;
+                xref->id.value.ptrvalue = (Pointer) oip;
+                xref->next = mrna->xref;
+                mrna->xref = xref;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (mrna->id.choice == 3) {
+      oip = (ObjectIdPtr) mrna->id.value.ptrvalue;
+      if (oip != NULL && oip->str == NULL) {
+        id = oip->id;
+        if (id > 0) {
+          for (xref = cds->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+          if (xref != NULL) {
+            oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+            if (oip != NULL) {
+              if (oip->str != NULL) {
+                oip->str = MemFree (oip->str);
+              }
+              oip->id = id;
+            }
+          } else {
+            xref = SeqFeatXrefNew ();
+            if (xref != NULL) {
+              oip = ObjectIdNew ();
+              if (oip != NULL) {
+                oip->id = id;
+                xref->id.choice = 3;
+                xref->id.value.ptrvalue = (Pointer) oip;
+                xref->next = cds->xref;
+                cds->xref = xref;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+static void ReportPeptideMismatches (ValNodeBlockPtr mismatch_list, CharPtr directory, CharPtr base)
+{
+  ValNodePtr match, mismatch, vnp;
+  Char    file [FILENAME_MAX], path [PATH_MAX];
+  FILE    *fp;
+
+  StringNCpy_0 (path, directory, sizeof (path));
+  sprintf (file, "%s%s", base, ".pep.report");
+  FileBuildPath (path, NULL, file);
+
+  fp = FileOpen (path, "w");
+  if (fp != NULL) {
+    match = ValNodeExtractList (&mismatch_list->head, 0);
+    mismatch = mismatch_list->head;
+    mismatch_list->head = NULL;
+    mismatch_list->tail = NULL;
+
+    fprintf (fp, "%d mismatches\n", ValNodeLen (mismatch));
+    for (vnp = mismatch; vnp != NULL; vnp = vnp->next) {
+      fprintf (fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+    }
+    fprintf (fp, "\n%d matches\n", ValNodeLen (match));
+    for (vnp = match; vnp != NULL; vnp = vnp->next) {
+      fprintf (fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+    }
+
+    FileClose (fp);
+    match = ValNodeFreeData (match);
+    mismatch = ValNodeFreeData (mismatch);
+  }
+}
+
 
 static void ProcessOneRecord (
   SubmitBlockPtr sbp,
@@ -6510,6 +6755,7 @@ static void ProcessOneRecord (
   MolInfoPtr         template_molinfo = NULL;
   ValNodePtr         cmt_errors, vnp;
   GenomizeSeqIdData  gs;
+  ValNodeBlock       mismatch_list;
 
   if (tbl->ftable) {
     fp = OpenOneFile (directory, base, ".tbl");
@@ -6695,14 +6941,16 @@ static void ProcessOneRecord (
   if (fp != NULL) {
 
     /* indexing needed to find CDS from protein product to set conflict flag */
-
     SeqMgrIndexFeatures (entityID, NULL);
+
+    /* prepare mismatch list */
+    InitValNodeBlock (&mismatch_list, NULL);
 
     while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, TRUE, TRUE, TRUE)) != NULL) {
       if (datatype == OBJ_FASTA) {
 
         ssp = (SimpleSeqPtr) dataptr;
-        ReplaceOnePeptide (ssp, tbl->conflict, tbl->genprodset);
+        ReplaceOnePeptide (ssp, tbl->conflict, tbl->genprodset, &mismatch_list);
         SimpleSeqFree (ssp);
 
       } else {
@@ -6710,6 +6958,8 @@ static void ProcessOneRecord (
       }
     }
     FileClose (fp);
+    ReportPeptideMismatches (&mismatch_list, directory, base);
+    mismatch_list.head = ValNodeFreeData (mismatch_list.head);
   }
 
   /* read one or more RNA sequences from .rna file */
@@ -6941,7 +7191,7 @@ static void ProcessOneRecord (
 
     /* need to reindex before extending CDS to stop codon */
     SeqMgrIndexFeatures (entityID, NULL);
-    CdCheck (sep, NULL);
+    CdCheckEx (sep, NULL, tbl->adjust_mrna_for_cds_stop_codon);
 
     /* need to reindex before copying genes, instantiating protein titles */
     SeqMgrIndexFeatures (entityID, NULL);
@@ -7004,7 +7254,7 @@ static void ProcessOneRecord (
       } else {
         sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_RNA, 0, &context);
         while (sfp != NULL) {
-          AddRnaTitles (sfp, organism);
+          AddRnaTitles (sfp, organism, tbl->refSeqTitles);
           sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_RNA, 0, &context);
         }
       }
@@ -7030,7 +7280,17 @@ static void ProcessOneRecord (
       LinkCDSmRNAbyOverlap (sep);
     } else if (tbl->linkbyproduct) {
       SeqMgrIndexFeatures (entityID, NULL);
-      LinkCDSmRNAbyProduct (sep);
+      if (tbl->delaygenprodset) {
+        AssignFeatureIDs (sep);
+        VisitFeaturesInSep (sep, NULL, LinkCDSmRNAByProteinID);
+      } else {
+        LinkCDSmRNAbyProduct (sep);
+      }
+    }
+
+    if (tbl->auto_def) {
+      SeqMgrIndexFeatures (entityID, NULL);
+      DoTbl2AsnAutoDef (sep, entityID);
     }
 
     DoTbl2AsnCleanup (sep, &(tbl->cleanup_args));
@@ -7343,6 +7603,12 @@ static AsnTypePtr DoSecondPrefix (
     case 4 :
       av.intvalue = BioseqseqSet_class_eco_set;
       break;
+    case 5 :
+      av.intvalue = BioseqseqSet_class_wgs_set;
+      break;
+    case 6 :
+      av.intvalue = BioseqseqSet_class_small_genome_set;
+      break;
     default :
       av.intvalue = BioseqseqSet_class_genbank;
       break;
@@ -7596,6 +7862,15 @@ static Boolean MoreThanYearOld (void)
 }
 
 
+static void PostValnodeList (ValNodePtr list)
+{
+  while (list != NULL) {
+    Message (MSG_POSTERR, "%s", list->data.ptrvalue);
+    list = list->next;
+  }
+}
+
+
 static void AddStructuredCommentsFromTabFileToDescriptorList (CharPtr fname, ValNodePtr PNTR descr_list)
 {
   ValNodePtr err_list = NULL;
@@ -7614,6 +7889,10 @@ static void AddStructuredCommentsFromTabFileToDescriptorList (CharPtr fname, Val
   }
 
   table = ReadTabTableFromFile (fp);
+  err_list = AutoReplaceSpecialCharactersInTabTable (table);
+  PostValnodeList(err_list);
+  err_list = ValNodeFreeData(err_list);
+
   if (table == NULL || table->next == NULL || table->data.ptrvalue == NULL) {
     ValNodeAddPointer (&err_list, 0, StringSave ("Unable to read table from file"));
   } else {
@@ -7655,49 +7934,52 @@ static void AddStructuredCommentsFromTabFileToDescriptorList (CharPtr fname, Val
 
 /* Args structure contains command-line arguments */
 
-#define p_argInputPath         0
-#define r_argOutputPath        1
-#define i_argInputFile         2
-#define o_argOutputFile        3
-#define x_argSuffix            4
-#define E_argRecurse           5
-#define t_argTemplate          6
-#define a_argType              7
-#define s_argFastaSet          8
-#define g_argGenProdSet        9
-#define F_argFeatIdLinks      10
-#define A_argAccession        11
-#define C_argCenter           12
-#define n_argOrgName          13
-#define j_argSrcQuals         14
-#define y_argComment          15
-#define Y_argCommentFile      16
-#define D_argDescrsFile       17
-#define f_argTableFile        18
-#define k_argCdsFlags         19
-#define V_argVerify           20
-#define v_argValidate         21
-#define b_argGenBank          22
-#define q_argFileID           23
-#define u_argUndoGPS          24
-#define h_argGnlToNote        25
-#define G_argGapFields        26
-#define R_argRemote           27
-#define S_argSmartFeats       28
-#define Q_argSmartTitle       29
-#define U_argUnnecXref        30
-#define L_argLocalID          31
-#define T_argTaxLookup        32
-#define P_argPubLookup        33
-#define W_argLogProgress      34
-#define K_argBioseqSet        35
-#define H_argHoldUntilPub     36
-#define Z_argDiscRepFile      37
-#define c_argCleanupOptions   38
-#define z_argCleanupLogFile   39
-#define X_argExtraFlags       40
-#define N_argProjectVersion   41
-#define w_argStructuredCommentFile 42
+typedef enum {
+  p_argInputPath = 0,
+  r_argOutputPath,
+  i_argInputFile,
+  o_argOutputFile,
+  x_argSuffix,
+  E_argRecurse,
+  t_argTemplate,
+  a_argType,
+  s_argFastaSet,
+  g_argGenProdSet,
+  J_argDelayGenProdSet,
+  F_argFeatIdLinks,
+  A_argAccession,
+  C_argCenter,
+  n_argOrgName,
+  j_argSrcQuals,
+  y_argComment,
+  Y_argCommentFile,
+  D_argDescrsFile,
+  f_argTableFile,
+  k_argCdsFlags,
+  V_argVerify,
+  v_argValidate,
+  b_argGenBank,
+  q_argFileID,
+  u_argUndoGPS,
+  h_argGnlToNote,
+  G_argGapFields,
+  R_argRemote,
+  S_argSmartFeats,
+  Q_argSmartTitle,
+  U_argUnnecXref,
+  L_argLocalID,
+  T_argTaxLookup,
+  P_argPubLookup,
+  W_argLogProgress,
+  K_argBioseqSet,
+  H_argHoldUntilPub,
+  Z_argDiscRepFile,
+  c_argCleanupOptions,
+  z_argCleanupLogFile,
+  X_argExtraFlags,
+  N_argProjectVersion,
+  w_argStrucCommFile,
+} Arguments;
 
 
 Args myargs [] = {
@@ -7719,7 +8001,7 @@ Args myargs [] = {
    "      a Any\n"
    "      r20u Runs of 20+ Ns are gaps, 100 Ns are unknown length\n"
    "      r20k Runs of 20+ Ns are gaps, 100 Ns are known length\n"
-   "      s FASTA Set (s Batch, s1 Pop, s2 Phy, s3 Mut, s4 Eco)\n"
+   "      s FASTA Set (s Batch, s1 Pop, s2 Phy, s3 Mut, s4 Eco, s5 WGS, s6 Small-genome)\n"
    "      d FASTA Delta, di FASTA Delta with Implicit Gaps\n"
    "      l FASTA+Gap Alignment\n"
    "      z FASTA with Gap Lines\n"
@@ -7729,6 +8011,8 @@ Args myargs [] = {
     TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Genomic Product Set", "F", NULL, NULL,
     TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Delayed Genomic Product Set", "F", NULL, NULL,
+    TRUE, 'J', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Feature ID Links (o by Overlap, p by Product)", NULL, NULL, NULL,
     TRUE, 'F', ARG_STRING, 0.0, 0, NULL},
   {"Accession", NULL, NULL, NULL,
@@ -7756,6 +8040,7 @@ Args myargs [] = {
   {"Verification (combine any of the following letters)\n"
    "      v Validate with Normal Stringency\n"
    "      r Validate without Country Check\n"
+   "      c BarCode Validation\n"
    "      b Generate GenBank Flatfile\n"
    "      g Generate Gene Report\n", NULL, NULL, NULL,
     TRUE, 'V', ARG_STRING, 0.0, 0, NULL},
@@ -7778,8 +8063,10 @@ Args myargs [] = {
     TRUE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Smart Feature Annotation", "F", NULL, NULL,
     TRUE, 'S', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Special mRNA Titles", "F", NULL, NULL,
-    TRUE, 'Q', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"mRNA Title Policy\n"
+   "      s Special mRNA Titles\n"
+   "      r RefSeq mRNA Titles\n",  NULL, NULL, NULL,
+    TRUE, 'Q', ARG_STRING, 0.0, 0, NULL},
   {"Remove Unnecessary Gene Xref", "F", NULL, NULL,
     TRUE, 'U', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Force Local protein_id/transcript_id", "F", NULL, NULL,
@@ -7809,7 +8096,10 @@ Args myargs [] = {
   {"Cleanup Log File", NULL, NULL, NULL,
     TRUE, 'z', ARG_FILE_OUT, 0.0, 0, NULL},
   {"Extra Flags (combine any of the following letters)\n"
-   "      C Apply comments in .cmt files to all sequences\n",  NULL, NULL, NULL,
+   "      A Automatic definition line generator\n"
+   "      C Apply comments in .cmt files to all sequences\n"
+   "      M Adjust mRNA 3' end when adjusting coding region 3' end for stop codons\n"
+   "      E Treat like eukaryota in the Discrepancy Report",  NULL, NULL, NULL,
     TRUE, 'X', ARG_STRING, 0.0, 0, NULL},
   {"Project Version Number",  "0", NULL, NULL,
     TRUE, 'N', ARG_INT, 0.0, 0, NULL},
@@ -7856,6 +8146,7 @@ Int2 Main (void)
   TblArgs         tbl;
   CharPtr         tmp;
   CharPtr         tmplate;
+  Boolean         too_old = FALSE;
   CharPtr         disc_rep_file = NULL;
 
   /* standard setup */
@@ -7890,6 +8181,7 @@ Int2 Main (void)
   }
 
   if (MoreThanYearOld ()) {
+    too_old = TRUE;
     Message (MSG_POST, "This copy of tbl2asn is more than a year old.  Please download the current version.");
   }
 
@@ -7959,6 +8251,12 @@ Int2 Main (void)
   } else if (StringISearch (ptr, "w4") != NULL || StringISearch (ptr, "s4") != NULL) {
     tbl.fastaset = TRUE;
     tbl.whichclass = 4;
+  } else if (StringISearch (ptr, "w5") != NULL || StringISearch (ptr, "s5") != NULL) {
+    tbl.fastaset = TRUE;
+    tbl.whichclass = 5;
+  } else if (StringISearch (ptr, "w6") != NULL || StringISearch (ptr, "s6") != NULL) {
+    tbl.fastaset = TRUE;
+    tbl.whichclass = 6;
   } else if (StringISearch (ptr, "s") != NULL) {
     tbl.fastaset = TRUE;
   } else if (StringISearch (ptr, "l") != NULL) {
@@ -7975,6 +8273,10 @@ Int2 Main (void)
   }
 
   tbl.genprodset = (Boolean) myargs [g_argGenProdSet].intvalue;
+  tbl.delaygenprodset = (Boolean) myargs [J_argDelayGenProdSet].intvalue;
+  if (tbl.delaygenprodset) {
+    tbl.genprodset = FALSE;
+  }
   ptr = myargs [F_argFeatIdLinks].strvalue;
   if (StringICmp (ptr, "o") == 0) {
     tbl.linkbyoverlap = TRUE;
@@ -7988,8 +8290,11 @@ Int2 Main (void)
   tbl.center = (CharPtr) myargs [C_argCenter].strvalue;
   tbl.project_version = myargs[N_argProjectVersion].intvalue;
   tbl.organism = (CharPtr) myargs [n_argOrgName].strvalue;
+  AutoReplaceSpecialCharactersWithMessage(&(tbl.organism));
   tbl.srcquals = (CharPtr) myargs [j_argSrcQuals].strvalue;
+  AutoReplaceSpecialCharactersWithMessage(&(tbl.srcquals));
   tbl.comment = (CharPtr) myargs [y_argComment].strvalue;
+  AutoReplaceSpecialCharactersWithMessage(&(tbl.comment));
   tbl.commentFile = ReadCommentFile ((CharPtr) myargs [Y_argCommentFile].strvalue);
 
   ptr = myargs [k_argCdsFlags].strvalue;
@@ -8032,20 +8337,27 @@ Int2 Main (void)
     tbl.validate = TRUE;
     tbl.relaxed = TRUE;
   }
+  if (StringChr (ptr, 'c') != NULL) {
+    tbl.validate_barcode = TRUE;
+  }
   if (StringChr (ptr, 'b') != NULL) {
     tbl.flatfile = TRUE;
   }
   if (StringChr (ptr, 'g') != NULL) {
     tbl.genereport = TRUE;
   }
-  if (StringChr (ptr, 'c') != NULL) {
-    tbl.validate_barcode = TRUE;
-  }
   
-
   tbl.seqidfromfile = (Boolean) myargs [q_argFileID].intvalue;
   tbl.smartfeats = (Boolean) myargs [S_argSmartFeats].intvalue;
-  tbl.smarttitle = (Boolean) myargs [Q_argSmartTitle].intvalue;
+  
+  ptr = myargs [Q_argSmartTitle].strvalue;
+  if (StringChr (ptr, 's') != NULL) {
+    tbl.smarttitle = TRUE;
+  }
+  if (StringChr (ptr, 'r') != NULL) {
+    tbl.refSeqTitles = TRUE;
+  }
+  
   tbl.removeunnecxref = (Boolean) myargs [U_argUnnecXref].intvalue;
   tbl.dotaxlookup = (Boolean) myargs [T_argTaxLookup].intvalue;
   tbl.dopublookup = (Boolean) myargs [P_argPubLookup].intvalue;
@@ -8055,10 +8367,23 @@ Int2 Main (void)
 
   /* get extra flags */
   ptr = myargs [X_argExtraFlags].strvalue;
+  if (StringChr (ptr, 'A') != NULL) {
+    tbl.auto_def = TRUE;
+  }
   if (StringChr (ptr, 'C') == NULL) {
     tbl.apply_cmt_to_all = FALSE;
   } else {
     tbl.apply_cmt_to_all = TRUE;
+  }
+  if (StringChr (ptr, 'M') == NULL) {
+    tbl.adjust_mrna_for_cds_stop_codon = FALSE;
+  } else {
+    tbl.adjust_mrna_for_cds_stop_codon = TRUE;
+  }
+
+  /* lineage for discrepancy report from extra */
+  if (StringChr (ptr, 'E') != NULL) {
+      SetAppProperty("ReportLineage", StringSave ("Eukaryota"));
   }
 
   disc_rep_file = (CharPtr) myargs [Z_argDiscRepFile].strvalue;
@@ -8076,7 +8401,6 @@ Int2 Main (void)
     tbl.global_report->output_config->expand_report_categories[DISC_SUSPECT_PRODUCT_NAME] = TRUE;
     tbl.global_report->output_config->expand_report_categories[DISC_OVERLAPPING_CDS] = TRUE;
   }
-
 
   /* arguments for alignment reading, e.g., "p,-,-,-,?,." */
 
@@ -8177,6 +8501,8 @@ Int2 Main (void)
     Message (MSG_FATAL, "Accession can be entered only for a single record");
     return 1;
   }
+
+  tbl.seq_fetch_failure = FALSE;
 
   /* Seq-submit or Submit-block template is optional */
 
@@ -8305,7 +8631,7 @@ Int2 Main (void)
   /* if the user has specified a single file for structured comments, use it to create a descriptor
    * to be added to all entries
    */
-  AddStructuredCommentsFromTabFileToDescriptorList ((CharPtr) myargs [w_argStructuredCommentFile].strvalue,
+  AddStructuredCommentsFromTabFileToDescriptorList ((CharPtr) myargs [w_argStrucCommFile].strvalue,
                                                     &sdphead);
   
 
@@ -8403,6 +8729,15 @@ Int2 Main (void)
 #else
     PubSeqFetchDisable ();
 #endif
+  }
+
+  if (tbl.seq_fetch_failure) {
+    Message (MSG_FATAL, "No network access was required to obtain sequence - rerun with -R flag");
+    return 1;
+  }
+
+  if (too_old) {
+    return 1;
   }
 
   return 0;

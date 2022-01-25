@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc_impl.h,v 1.11 2009/05/27 17:39:36 kazimird Exp $
+/*  $Id: blast_seqsrc_impl.h,v 1.12 2011/01/07 14:34:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -123,6 +123,12 @@ typedef Boolean (*GetBoolFnPtr)
     (void* seqsrc_impl, /**< BlastSeqSrc implementation's data structure */
      void* arg /**< place holder argument to pass arguments to the
                  client-defined BlastSeqSrc implementation */
+    );
+
+/** Function pointer typedef to set partial fetching range */
+typedef void (*SetSeqRangeFnPtr)
+    (void* seqsrc_impl, /**< BlastSeqSrc implementation's data structure */
+     BlastSeqSrcSetRangesArg* arg /**< arguments to set partial fetching ranges */
     );
 
 /** Function pointer typedef to retrieve sequences from data structure embedded
@@ -254,6 +260,9 @@ DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt8FnPtr, GetTotLenStats);
 
 DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetStrFnPtr, GetName);
 DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetBoolFnPtr, GetIsProt);
+
+DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetBoolFnPtr, GetSupportsPartialFetching);
+DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(SetSeqRangeFnPtr, SetSeqRange);
 
 DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetSeqBlkFnPtr, GetSequence);
 DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetSeqLen);

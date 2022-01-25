@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.471 2007/05/08 19:03:33 kans Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.472 2010/12/10 18:47:12 madden Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,15 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.471 $
+$Revision: 6.472 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.472  2010/12/10 18:47:12  madden
+* Do not change db_length on options
+*
 * Revision 6.471  2007/05/08 19:03:33  kans
 * in FilterWithSeg added SeqDataPtr and ByteStorePtr casts for seq_data
 *
@@ -3529,6 +3532,7 @@ BlastTwoSequencesByLocWithCallback(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr
 	Uint1 residue;
 	Uint1Ptr subject_seq, subject_seq_start;
 	Uint1Ptr *array;
+        Boolean db_length_changed = FALSE;
 
 	if (slp1 == NULL || slp2 == NULL)
 		return NULL;
@@ -3676,13 +3680,21 @@ BlastTwoSequencesByLocWithCallback(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr
         options->block_width = 0;
 
     if (options->db_length == 0)
+    {
         options->db_length = subject_length;
+        db_length_changed = TRUE;
+    }
 
     options->dbseq_num = 1;
 
     search = BLASTSetUpSearchByLoc(query_slp, progname, SeqLocLen(query_slp), subject_length, all_words, options, NULL);
 
-	if (search == NULL) 
+    /* Change length back, change only happens if zero. */
+    if(db_length_changed)
+        options->db_length = 0;
+         
+
+    if (search == NULL) 
         return NULL;
 
     if (search->query_invalid) {

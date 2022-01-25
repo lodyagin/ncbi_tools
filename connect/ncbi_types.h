@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_TYPES__H
 #define CONNECT___NCBI_TYPES__H
 
-/* $Id: ncbi_types.h,v 6.16 2009/11/10 15:54:40 kazimird Exp $
+/* $Id: ncbi_types.h,v 6.21 2010/11/07 18:49:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -48,6 +48,13 @@
  */
 
 #include <connect/connect_export.h>
+#ifndef _WIN32
+#  ifndef   __STDC_FORMAT_MACROS
+#    define __STDC_FORMAT_MACROS
+#  endif  /*__STDC_FORMAT_MACROS*/
+#  include <inttypes.h>
+#  include <stdint.h>
+#endif /*_WIN32*/
 #include <stddef.h>
 
 
@@ -67,8 +74,8 @@ extern "C" {
  * @sa CTimeout, g_CTimeoutToSTimeout, g_STimeoutToCTimeout
  */
 typedef struct STimeoutTag {
-    unsigned int sec;  /**< seconds (truncated to the platf.-dep. max. limit)*/
-    unsigned int usec; /**< microseconds (always truncated by mod. 1,000,000)*/
+    unsigned int sec;  /**< seconds                         */
+    unsigned int usec; /**< microseconds (modulo 1,000,000) */
 } STimeout;
 
 #define kDefaultTimeout  ((const STimeout*)(-1))
@@ -114,6 +121,21 @@ typedef unsigned int TNCBI_Size;
 typedef unsigned int TNCBI_Time;
 
 #define NCBI_TIME_INFINITE ((TNCBI_Time)(-1))
+
+
+/** Big integer for file size and position
+ */
+
+#if defined(__MINGW32__)  ||  defined(__MINGW64__)
+typedef unsigned long long TNCBI_BigCount;
+#  define NCBI_BIGCOUNT_FORMAT_SPEC "I64u"
+#elif defined(_WIN32)
+typedef unsigned __int64   TNCBI_BigCount;
+#  define NCBI_BIGCOUNT_FORMAT_SPEC "I64u"
+#else
+typedef uint64_t           TNCBI_BigCount;
+#  define NCBI_BIGCOUNT_FORMAT_SPEC PRIu64
+#endif
 
 
 #ifdef __cplusplus

@@ -1,6 +1,6 @@
 asntool -m ../asn/general.asn -o asngen.h
 asntool -m ../asn/seqset.asn -o asnsset.h
-asntool -m ../asn/seqfeat.asn -o asnfeat.h
+asntool -m ../asn/seqfeat.asn -o asnfeat.h -w100
 asntool -m ../asn/seqtable.asn -o asntable.h
 asntool -m ../asn/seqalign.asn -o asnalign.h
 asntool -m ../asn/seqloc.asn -o asnloc.h
@@ -11,7 +11,7 @@ asntool -m ../asn/seq.asn -o asnseq.h
 asntool -m ../asn/pub.asn -o asnpub.h
 asntool -m ../asn/access.asn -o asnacces.h
 asntool -m ../asn/asnpub.all -o allpub.h
-asntool -m ../asn/asn.all -o all.h
+asntool -m ../asn/asn.all -o all.h -w100
 asntool -m ../cdromlib/cdrom.asn -o cdrom.h
 asntool -m ../asn/submit.asn -o asnsubmt.h
 asntool -m ../asn/seqcode.asn -o asncode.h

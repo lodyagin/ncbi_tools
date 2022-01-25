@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.81 $
+* $Revision: 6.89 $
 *
 * File Description:
 *
@@ -110,6 +110,7 @@ typedef struct pubdescform {
   Boolean       is_feat;
 
   Boolean       replaceAll;
+  Boolean       is_new;
 } PubdescForm, PNTR PubdescFormPtr;
 
 typedef struct pubdescpage {
@@ -643,7 +644,7 @@ static CitArtPtr PutATArt (ValNodePtr vnp, PubdescPagePtr ppp)
 static void TestPubdescArt (ValNodePtr PNTR err_list, PubdescPagePtr ppp)
 {
   if (err_list == NULL || ppp == NULL) return;
-  
+
   if (TextHasNoText (ppp->title_box)) {
     ValNodeAddPointer (err_list, 0, StringSave ("Missing required field Article Title"));
   }
@@ -674,7 +675,7 @@ static ValNodePtr TestPubdescDialog (DialoG d)
         if (TextHasNoText (ppp->title_box)) {
           ValNodeAddPointer (&err_list, 0, StringSave ("Missing required field Title"));
         }
-          
+
         alp = (AuthListPtr) DialogToPointer (ppp->author_list);
         alp = AddConsortiumToAuthList (alp, ppp->consortium);
         if (alp == NULL) {
@@ -1879,7 +1880,7 @@ static ValNodePtr LookupAnArticle (PubEquivLookupProc lookup, ValNodePtr oldpep,
             msg = Message (MSG_YN, "Retain original %d authors?", (int) num);
             if (msg == ANS_YES) {
               AuthListFree (cap->authors);
-              cap2->authors = cap2->authors;
+              cap->authors = cap2->authors;
               cap2->authors = NULL;
             } else if (msg == ANS_CANCEL) {
               pub = PubEquivFree (pub);
@@ -2085,7 +2086,7 @@ static Boolean ChooseFromMultipleJournals (CharPtr rsult, size_t max, ValNodePtr
   SetObjectExtra (b, allTitles, NULL);
   AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) q, (HANDLE) c, NULL);
 
-  Show (w); 
+  Show (w);
   Select (w);
   while (! acd.accepted && ! acd.cancelled) {
     ProcessExternalEvent ();
@@ -2126,6 +2127,7 @@ static void LookupISOJournalProc (ButtoN b)
   Int4            len;
   PubdescPagePtr  ppp;
   Char            str [256];
+  Boolean         unable_to_match = TRUE;
 
   ppp = (PubdescPagePtr) GetObjectExtra (b);
   if (ppp != NULL && ppp->lookupJournal != NULL) {
@@ -2137,18 +2139,19 @@ static void LookupISOJournalProc (ButtoN b)
           if (ChooseFromMultipleJournals (str, sizeof (str) - 1, allTitles)) {
             SetTitle (ppp->journal, str);
             FixEPubOnlyJournal (ppp, FALSE);
-          } else {
-            Message (MSG_OK, "Unable to match journal");
+            unable_to_match = FALSE;
           }
         } else if (len == 1 && StringDoesHaveText (allTitles->data.ptrvalue) &&
                    allTitles->choice == Cit_title_iso_jta) {
           SetTitle (ppp->journal, allTitles->data.ptrvalue);
           FixEPubOnlyJournal (ppp, FALSE);
-        } else {
-          Message (MSG_OK, "Unable to match journal");
+          unable_to_match = FALSE;
         }
         allTitles = ValNodeFreeData (allTitles);
         Update ();
+      }
+      if (unable_to_match) {
+        Message (MSG_OK, "Unable to match journal");
       }
     }
   }
@@ -2892,7 +2895,7 @@ static void PubdescAcceptFormButtonProc (ButtoN b)
 
   copy = AsnIoMemCopy ((Pointer) pdp,
                        (AsnReadFunc) PubdescAsnRead,
-                       (AsnWriteFunc) PubdescAsnWrite); 
+                       (AsnWriteFunc) PubdescAsnWrite);
   ErrSetMessageLevel (oldErrSev);
   ErrShow ();
   ErrClear ();
@@ -3133,6 +3136,11 @@ extern ForM CreatePubdescDescForm (Int2 left, Int2 top,
     pfp->pub_choice = pub_choice;
     pfp->is_feat = FALSE;
     pfp->replaceAll = FALSE;
+    if (sdp == NULL) {
+      pfp->is_new = TRUE;
+    } else {
+      pfp->is_new = FALSE;
+    }
     labels = pubdescFormTabs[pub_choice];
     for (j = 0; j < NUM_TABS; j++)
     {
@@ -3603,9 +3611,13 @@ static void PubdescDescFormActnProc (ForM f)
     if (DescFormReplaceWithoutUpdateProc (f)) {
       UpdateRAD (&rad, pfp);
       GetRidOfEmptyFeatsDescStrings (pfp->input_entityID, NULL);
-      ObjMgrSendMsgNoFeatureChange(OM_MSG_UPDATE, pfp->input_entityID,
-               pfp->input_itemID, pfp->input_itemtype);
-
+      if (pfp->is_new) {
+        ObjMgrSendMsg(OM_MSG_UPDATE, pfp->input_entityID,
+                 pfp->input_itemID, pfp->input_itemtype);
+      } else {
+        ObjMgrSendMsgNoFeatureChange(OM_MSG_UPDATE, pfp->input_entityID,
+                 pfp->input_itemID, pfp->input_itemtype);
+      }
     }
     CleanupRAD (&rad);
   }
@@ -3895,7 +3907,7 @@ static void ChangePubStat (GrouP g)
         if (GetStatus (pifp->patent_btn)) {
           SetValue (pifp->pub_choice, 0);
         }
-        Disable (pifp->patent_btn);        
+        Disable (pifp->patent_btn);
       } else {
         Enable (pifp->patent_btn);
       }
@@ -4429,7 +4441,7 @@ extern ForM CreatePubdescInitForm (Int2 left, Int2 top, CharPtr title,
     }
     else
     {
-      RadioButton (g5, "Submission");    	
+      RadioButton (g5, "Submission");
     }
 
     Disable (g5);               /* publications disabled */
@@ -4670,9 +4682,9 @@ extern Int2 LIBCALLBACK PubdescGenFunc (Pointer data)
 
 typedef struct citart_inpress_struct {
 
-  Boolean error;	
-      
-  CharPtr   f_last_name, l_last_name; 
+  Boolean error;
+
+  CharPtr   f_last_name, l_last_name;
   CharPtr  jour_title, jour_volume,  jour_page, art_title;
 
   Int2 year;
@@ -4711,8 +4723,8 @@ typedef struct citationupdateform {
   ButtoN          expand_year;
 
   PopuP           new_query;
-  DoC             rdoc;          
-  ButtoN          action;           
+  DoC             rdoc;
+  ButtoN          action;
 
   Pointer         userdata;
 
@@ -4735,11 +4747,14 @@ static void Quit PROTO((ButtoN b));
 static void  MyNotify PROTO((DoC d, Int2 item, Int2 row, Int2 col, Boolean dblclick));
 
 
+static Boolean log_mla_asn = FALSE;
+static Boolean log_mla_set = FALSE;
+
 /*****************************************************************************
 *
 *  Function:   GetUidListFromE2Request
 *              executes entrez2 query  passed in,
-               and get back the uids from entrezReplyPtr. 
+               and get back the uids from entrezReplyPtr.
 ********************************
 *  Argument:   CitArtInPressPtr
 *
@@ -4751,10 +4766,10 @@ static void GetUidListFromE2Request (CitArtInPressPtr caipp, Entrez2RequestPtr e
   Entrez2ReplyPtr         e2ry;
   Entrez2BooleanReplyPtr  e2br;
   Entrez2IdListPtr        e2idlist;
- 
+
   /*  feed back to user, in case it takes long*/
   Reset (rdoc);
-  Update ();                 
+  Update ();
 
   AppendText (rdoc, "Query submitted to Entrez2 server, waiting for reply\n\n", NULL, NULL, NULL);
 
@@ -4769,6 +4784,11 @@ static void GetUidListFromE2Request (CitArtInPressPtr caipp, Entrez2RequestPtr e
 
   e2rp = Entrez2RequestFree (e2rp);
   if (e2ry == NULL) return;
+
+  if (log_mla_asn) {
+    LaunchAsnTextViewer ((Pointer) e2ry, (AsnWriteFunc) Entrez2ReplyAsnWrite, "citation match result");
+  }
+
   e2br = EntrezExtractBooleanReply (e2ry);      /* get the reply part of it*/
   if (e2br == NULL) return;
 
@@ -4788,10 +4808,10 @@ static void GetUidListFromE2Request (CitArtInPressPtr caipp, Entrez2RequestPtr e
 
 /*****************************************************************************
 *  Function:     DisplayDocSum
-*  Description:	
+*  Description:
 *  Argument:     CharPtr, Doc
 *
-*  Returns:	 void
+*  Returns:  void
 *
 *****************************************************************************
 
@@ -4807,7 +4827,7 @@ static void DisplayDocSum(CharPtr docSum, DoC dp)
   SelectFont (systemFont);
 
   SetDocDefaults (dp, &txtParFmt, &txtColFmt, programFont);
-  
+
   SetDocNotify (dp, MyNotify);
   SetDocAutoAdjust (dp, FALSE);
 
@@ -4827,20 +4847,20 @@ static void DisplayDocSum(CharPtr docSum, DoC dp)
 *
 *              create docSums on a list of Uids, call display funcion for them.
 *              displays count of Uids into the textfield.
-* 
+*
 ********************************
 *  Argument:   ByteStorePtr, DoC,  TexT
 *
-*  Returns:   
+*  Returns:
 *
 ***************************************************************************/
-static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text) 
-{ 
+static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text)
+{
 
   Uint4                   uid = 0;
-  Int4                    i = 0;   
+  Int4                    i = 0;
   ByteStorePtr bs = uids_bs;
-  Int2             count = BSLen(bs)/ sizeof(uid); 
+  Int2             count = BSLen(bs)/ sizeof(uid);
   CharPtr count_str, sumStr = NULL;
 
   Entrez2DocsumPtr      dsp;
@@ -4861,25 +4881,25 @@ static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text)
   /* no citation hit returned */
   if  (uids_bs == NULL) {
     Reset (doc);
-    Update ();                 
-    
+    Update ();
+
     AppendText (doc, "No match was found, hints for a modified query:\n Leave out one author\n Leave out year field (or increase it by 1) \n Leave out Volume field \n Modify the fields as you deem sensible", NULL, NULL, systemFont);
-    
-    InvalDocument (doc);   
+
+    InvalDocument (doc);
     ArrowCursor ();
     Update ();
 
     SafeSetTitle (count_text, "0");
-    
+
     return;
   }
 
   BSSeek (bs, 0, SEEK_SET);
 
   count_str = MemNew(5);
-  sprintf(count_str, "%d", count);  
+  sprintf(count_str, "%d", count);
   SafeSetTitle (count_text, count_str);
- 
+
   Reset (doc);
   Update ();
 
@@ -4889,69 +4909,94 @@ static void  CreateDocSum  (ByteStorePtr uids_bs, DoC doc, TexT count_text)
 
     /*not familiar with this function yet.*/
     e2rp = EntrezCreateDocSumRequest ("PubMed", uid, 0, NULL, NULL);
-    
+
     /*  e2rp = EntrezCreateDocSumRequest ("PubMed", uid, num, uids, NULL); */
     if (e2rp == NULL) return;
-    
+
     e2ry =  EntrezSynchronousQuery(e2rp);
     e2rp = Entrez2RequestFree(e2rp);
     e2dl = EntrezExtractDocsumReply (e2ry);
-    
+
     if (e2dl == NULL) return;
-    
-    for (dsp = e2dl->list; dsp != NULL; dsp = dsp->next)
-      {
-        for (e2ddp = dsp->docsum_data; e2ddp != NULL; e2ddp = e2ddp->next) {
-          if (StringHasNoText (e2ddp->field_value)) continue;
-          if (StringICmp (e2ddp->field_name, "Authors") == 0) {
-            author = e2ddp->field_value;
-            if (author != NULL) {
-              tmp = StringChr (author, ',');
-              if (tmp != NULL) {
-                *tmp = '\0';
-              }
+
+    author = NULL;
+    title = NULL;
+    source = NULL;
+    volume = NULL;
+    pages = NULL;
+    year_str = NULL;
+
+    for (dsp = e2dl->list; dsp != NULL; dsp = dsp->next) {
+      for (e2ddp = dsp->docsum_data; e2ddp != NULL; e2ddp = e2ddp->next) {
+        if (StringHasNoText (e2ddp->field_value)) continue;
+        if (StringICmp (e2ddp->field_name, "Authors") == 0) {
+          author = e2ddp->field_value;
+          if (author != NULL) {
+            tmp = StringChr (author, ',');
+            if (tmp != NULL) {
+              *tmp = '\0';
             }
-          } else if (StringICmp (e2ddp->field_name, "Title") == 0) {
-            title = e2ddp->field_value;
-          } else if (StringICmp (e2ddp->field_name, "Source") == 0) {
-            source = e2ddp->field_value;
-          } else if (StringICmp (e2ddp->field_name, "Volume") == 0) {
-            volume = e2ddp->field_value;
-          } else if (StringICmp (e2ddp->field_name, "Pages") == 0) {
-            pages = e2ddp->field_value;
-          } else if (StringICmp (e2ddp->field_name, "PubDate") == 0) {
-            year_str = e2ddp->field_value;
-            if (year_str != NULL) {
-              tmp = StringChr (year_str, ' ');
-              if (tmp != NULL) {
-                *tmp = '\0';
-              }
+          }
+        } else if (StringICmp (e2ddp->field_name, "Title") == 0) {
+          title = e2ddp->field_value;
+        } else if (StringICmp (e2ddp->field_name, "Source") == 0) {
+          source = e2ddp->field_value;
+        } else if (StringICmp (e2ddp->field_name, "Volume") == 0) {
+          volume = e2ddp->field_value;
+        } else if (StringICmp (e2ddp->field_name, "Pages") == 0) {
+          pages = e2ddp->field_value;
+        } else if (StringICmp (e2ddp->field_name, "PubDate") == 0) {
+          year_str = e2ddp->field_value;
+          if (year_str != NULL) {
+            tmp = StringChr (year_str, ' ');
+            if (tmp != NULL) {
+              *tmp = '\0';
             }
           }
         }
+      }
+    }
 
-	size =  StringLen(author)+ StringLen(title)+ StringLen(source)+  StringLen(volume)+ StringLen(pages);
+    if (author == NULL) {
+      author = "NO AUTHOR AVAILABLE";
+    }
+    if (title == NULL) {
+      title = "NO TITLE AVAILABLE";
+    }
+    if (source == NULL) {
+      source = "";
+    }
+    if (volume == NULL) {
+      volume = "";
+    }
+    if (pages == NULL) {
+      pages = "";
+    }
+    if (year_str == NULL) {
+      year_str = "";
+    }
 
-	/* account for 4 new line char.s, PMID, etc!!*/
-	sumStr = MemNew(size + 40);
-	       
- 	sprintf(sumStr, "%s\n%s\n%s. %s; %s:%s\nPMID: %d \n\n", author, title, source,year_str, volume, pages, uid);
+    size =  StringLen(author)+ StringLen(title)+ StringLen(source)+  StringLen(volume)+ StringLen(pages);
 
-	/*add each sumStr to DoC object by AppendText.*/
-	DisplayDocSum (sumStr, doc);
-	MemFree(sumStr);
-      }   
+    /* account for 4 new line char.s, PMID, etc!!*/
+    sumStr = MemNew(size + 40);
+
+    sprintf(sumStr, "%s\n%s\n%s. %s; %s:%s\nPMID: %d \n\n", author, title, source,year_str, volume, pages, uid);
+
+    /*add each sumStr to DoC object by AppendText.*/
+    DisplayDocSum (sumStr, doc);
+    MemFree(sumStr);
   }
- 
+
   InvalDocument (doc);   /*Invalidates visible area of a document ??*/
   ArrowCursor ();
   Update ();
   /*update Highlighted item (none) */
   SetDocHighlight (doc, 0, 0);
-    
+
   Entrez2DocsumListFree (e2dl);
- 
-  BSSeek (bs, 0, SEEK_SET); /* reset bs read position*/      
+
+  BSSeek (bs, 0, SEEK_SET); /* reset bs read position*/
 }
 
 
@@ -4962,7 +5007,7 @@ static  void AddAuthor(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
   if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
   }
   EntrezAddToBooleanRequest (e2rp, NULL, 0, "AUTH", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
@@ -4971,7 +5016,7 @@ static  void AddJournal(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
   if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
   }
   EntrezAddToBooleanRequest (e2rp, NULL, 0, "JOUR", term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
@@ -4980,7 +5025,7 @@ static  void AddVolume(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
   if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
   }
   EntrezAddToBooleanRequest (e2rp, NULL, 0, "VOLUME",term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
@@ -4989,7 +5034,7 @@ static  void AddPage(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
   if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
   }
   EntrezAddToBooleanRequest (e2rp, NULL, 0, "PAGE",term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
@@ -5000,18 +5045,18 @@ static  void AddYear(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st, Boole
   Char year_buf[10];
   if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
   }
   if (expand) {
     year = atoi (term);
     if (year > 0) {
-      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE); 
+      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_LEFT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
       sprintf (year_buf, "%d", year - 1);
       EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", year_buf, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
-      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_OR, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE); 
+      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_OR, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
       sprintf (year_buf, "%d", year);
       EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", year_buf, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
-      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_OR, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE); 
+      EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_OR, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
       sprintf (year_buf, "%d", year + 1);
       EntrezAddToBooleanRequest (e2rp, NULL, 0, "EDAT", year_buf, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
       EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_RIGHT_PAREN, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
@@ -5027,7 +5072,7 @@ static  void AddAll(Entrez2RequestPtr e2rp, CharPtr term, Boolean is_1st)
 {
   if (StringHasNoText (term)) return;
   if (!is_1st) {
-    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);  
+    EntrezAddToBooleanRequest (e2rp, NULL, ENTREZ_OP_AND, NULL, NULL, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
   }
   EntrezAddToBooleanRequest (e2rp, NULL, 0, "ALL",term, NULL, 0, 0, NULL, NULL, FALSE, FALSE);
 }
@@ -5046,7 +5091,7 @@ static Entrez2RequestPtr QueryFromForm (CitationUpdateFormPtr cufp, Boolean use_
   /* debug:  assuming this is a well-formed query string, let the add func. parse it*/
   if ( !TextHasNoText (cufp->extra_term_text) && (use_all || GetStatus (cufp->Extra_Term))) {
     GetTitle (cufp->extra_term_text, val_str, sizeof (val_str));
-    e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", val_str, 0, 0, NULL, 20, 0); 
+    e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", val_str, 0, 0, NULL, 20, 0);
     is_first_term = FALSE;
   } else {
     e2rp = EntrezCreateBooleanRequest (TRUE, FALSE, "PubMed", NULL, 0, 0, NULL, 20, 0);
@@ -5060,7 +5105,7 @@ static Entrez2RequestPtr QueryFromForm (CitationUpdateFormPtr cufp, Boolean use_
 
   if ( !TextHasNoText (cufp->l_auth_text) && (use_all || GetStatus (cufp->Last_Author))) {
     GetTitle (cufp->l_auth_text, val_str, sizeof (val_str));
-    AddAuthor(e2rp, val_str, is_first_term);    
+    AddAuthor(e2rp, val_str, is_first_term);
     is_first_term = FALSE;
   }
 
@@ -5087,7 +5132,7 @@ static Entrez2RequestPtr QueryFromForm (CitationUpdateFormPtr cufp, Boolean use_
     AddYear(e2rp, val_str, is_first_term, GetStatus (cufp->expand_year));
     is_first_term = FALSE;
   }
-  return e2rp;  
+  return e2rp;
 }
 
 
@@ -5099,18 +5144,20 @@ static Entrez2RequestPtr QueryFromForm (CitationUpdateFormPtr cufp, Boolean use_
 *
 ********************************
 *  Argument:     ButtoN b
-*  
+*
 *  Returns:      void
 *
 ***************************************************************************/
 static void SendQuery (ButtoN b)
 
 {
-  Int2               choice;     
+  Int2               choice;
   CitationUpdateFormPtr  cufp;
   CitArtInPressPtr caipp;        /* local caipp, make deref coding easier*/
-
   Entrez2RequestPtr  e2rp = NULL;
+#ifdef OS_UNIX
+  CharPtr        str;
+#endif
 
 
   cufp = (CitationUpdateFormPtr) GetObjectExtra (b);
@@ -5120,7 +5167,19 @@ static void SendQuery (ButtoN b)
   if (caipp == NULL) return;
 
   Reset (cufp->rdoc);
-  Update ();                 
+  Update ();
+
+#ifdef OS_UNIX
+  if (! log_mla_set) {
+    str = (CharPtr) getenv ("LOG_MLA_ASN");
+    if (StringDoesHaveText (str)) {
+      if (StringICmp (str, "TRUE") == 0) {
+        log_mla_asn = TRUE;
+      }
+    }
+    log_mla_set = TRUE;
+  }
+#endif
 
   choice = GetValue (cufp->new_query);
 
@@ -5128,6 +5187,10 @@ static void SendQuery (ButtoN b)
    add one before!! */
 
   e2rp = QueryFromForm (cufp, choice == 1);
+
+  if (log_mla_asn) {
+    LaunchAsnTextViewer ((Pointer) e2rp, (AsnWriteFunc) Entrez2RequestAsnWrite, "citation match request");
+  }
 
   /* process query, get Uids, populate the caipp field*/
   GetUidListFromE2Request (caipp, e2rp, cufp->rdoc);
@@ -5140,24 +5203,24 @@ static void SendQuery (ButtoN b)
 
 
 /*****************************************************************************
-*  Function:     Accept 
+*  Function:     Accept
 *
-*  Description:	
+*  Description:
 *****************
-*  Argument:  
+*  Argument:
 *
-*  Returns:	int, or call a CB to return uid.
+*  Returns: int, or call a CB to return uid.
 *
-*            need to change from Update to Accept, 
+*            need to change from Update to Accept,
 
 *****************************************************************************/
 
 static void  Accept (ButtoN b) {
 
-  Int2               curr_item = 0, max;     
+  Int2               curr_item = 0, max;
   Char max_str[6], pmid_str[15];
   CitationUpdateFormPtr  cufp;
-  CitArtInPressPtr caipp; 
+  CitArtInPressPtr caipp;
   WindoW w;
   PubdescPagePtr ppp;
 
@@ -5179,7 +5242,7 @@ static void  Accept (ButtoN b) {
   if (curr_item == 0 || curr_item > max) {
     AppendText (cufp->rdoc, "\n      Please select a valid citation for update!!", NULL, NULL, systemFont);
 
-    InvalDocument (cufp->rdoc);  
+    InvalDocument (cufp->rdoc);
     ArrowCursor ();
     Update ();
     return;
@@ -5189,11 +5252,11 @@ static void  Accept (ButtoN b) {
   BSRead (caipp->uids_bs, &pmid, sizeof (Uint4));
 
   Reset (cufp->rdoc);
-  Update ();                  
+  Update ();
 
   w = ParentWindow (b);
   Hide (w);
-  sprintf(pmid_str, "%d", pmid); 
+  sprintf(pmid_str, "%d", pmid);
   /* fill in pmid in text box of original window */
   SetTitle (ppp->pmid, pmid_str);
   ArrowCursor ();
@@ -5209,9 +5272,9 @@ static void MyNotify (DoC d, Int2 item, Int2 row, Int2 col, Boolean dblclick)
 {
   Int2  curr = 0, max;
   CharPtr  str;
-   
+
   CitationUpdateFormPtr  cufp;
-  CitArtInPressPtr caipp; 
+  CitArtInPressPtr caipp;
 
   Uint4 pmid;
   Char max_str[6];
@@ -5229,12 +5292,12 @@ static void MyNotify (DoC d, Int2 item, Int2 row, Int2 col, Boolean dblclick)
    GetTitle (cufp->count, max_str, sizeof (max_str));
    max = atoi(max_str);
 
-   
+
    /*debug*/
    if (curr == 0 || curr > max) {
      AppendText (cufp->rdoc, "\n      Please select a valid citation!!", NULL, NULL, systemFont);
-     
-    InvalDocument (cufp->rdoc);  
+
+    InvalDocument (cufp->rdoc);
     ArrowCursor ();
     Update ();
     return;
@@ -5252,7 +5315,7 @@ static void MyNotify (DoC d, Int2 item, Int2 row, Int2 col, Boolean dblclick)
     */
 
     LaunchEntrezURL ("PubMed", pmid, "Abstract");
- 
+
     MemFree (str);
   } else {
     Beep ();
@@ -5261,7 +5324,7 @@ static void MyNotify (DoC d, Int2 item, Int2 row, Int2 col, Boolean dblclick)
   else {
     GetDocHighlight (d, &curr, NULL);
     SetDocHighlight (d, item, item);
-    
+
     UpdateDocument(d, curr, 0);
     UpdateDocument(d, item, 0);
   }
@@ -5293,16 +5356,16 @@ static void SetRequestType (ButtoN b)
     SetValue (cufp->new_query, 2);
   } else {
     SetValue (cufp->new_query, 1);
-  }  
+  }
 }
 
 
 /*****************************************************************************
 *  Function:     CreateCitationUpdateWindow_detail
-*  Description:	 create the empty GUI, no caipp is passed in to populate the text areas.
+*  Description:  create the empty GUI, no caipp is passed in to populate the text areas.
 *  Argument:     CitArtInPressPtr
-*   
-*  Returns:	void
+*
+*  Returns: void
 *
 ****************************************************************************/
 
@@ -5311,11 +5374,11 @@ static void SetRequestType (ButtoN b)
 static WindoW CreateCitationUpdateWindow_detail (Pointer userdata)
 {
 
-  CitationUpdateFormPtr  cufp; 
+  CitationUpdateFormPtr  cufp;
 
   /*cufp attached to b (and other action items, to which CB are attached) by SetOjectExtra*/
-  
-  ButtoN             b;    
+
+  ButtoN             b;
   GrouP              e, g, h, i, j, k, l;
   GrouP              cit_fields, authors, journal, imprint, title;
   PopuP              p;
@@ -5349,9 +5412,9 @@ static WindoW CreateCitationUpdateWindow_detail (Pointer userdata)
 
   /********* group together all cit-fields with a normal group.
    * inside the normal group, control display with hidden groups */
-  cit_fields = NormalGroup (h, 0, 4, "Availble information on this in-press citation:", systemFont, NULL);
+  cit_fields = NormalGroup (h, 0, 4, "Available information on this in-press citation:", systemFont, NULL);
 
-  
+
   /* add authors*/
   authors = HiddenGroup (cit_fields, 4, 0, NULL);
   SetGroupSpacing (authors, 5, 3);
@@ -5424,7 +5487,7 @@ static WindoW CreateCitationUpdateWindow_detail (Pointer userdata)
   SetValue (p, 1);   /* after 1st default query, set value to 2*/
   cufp->new_query = p;
 
-  b = DefaultButton (j, "Send Modified Query", SendQuery);   
+  b = DefaultButton (j, "Send Modified Query", SendQuery);
   SetObjectExtra (b, cufp, NULL);
 
   cufp->action = b;
@@ -5441,7 +5504,7 @@ static WindoW CreateCitationUpdateWindow_detail (Pointer userdata)
   cufp->rdoc = DocumentPanel (g, 650, 300);        /*here, pixel width and height*/
   SetObjectExtra (cufp->rdoc, cufp, NULL);
 
-  /*debug, hard-code pixWidth, need to specify with Window left/right coord. in 
+  /*debug, hard-code pixWidth, need to specify with Window left/right coord. in
    *the case of resizable window*/
   txtColFmt.pixWidth = 650;
   txtColFmt.pixInset = 8;
@@ -5454,9 +5517,9 @@ static WindoW CreateCitationUpdateWindow_detail (Pointer userdata)
 
   /*spacing*/
   StaticPrompt (k, " ", 0, popupMenuHeight, programFont, 'l');
-  StaticPrompt (k, " ", 0, popupMenuHeight, programFont, 'l'); 
+  StaticPrompt (k, " ", 0, popupMenuHeight, programFont, 'l');
 
-  b = PushButton (k, " Accept ", Accept);   
+  b = PushButton (k, " Accept ", Accept);
   SetObjectExtra (b, cufp, NULL);
 
   b = PushButton (k, "  Cancel ", StdCancelButtonProc);
@@ -5482,9 +5545,9 @@ static CharPtr GetLastNameFromPersonId (PersonIdPtr pid)
   NameStdPtr nsp;
   CharPtr lname = NULL;
 
-  if (pid != NULL && pid->choice == 2) {		     
-		nsp = (NameStdPtr) pid->data;  
-		if (nsp->names != NULL) {    		
+  if (pid != NULL && pid->choice == 2) {
+    nsp = (NameStdPtr) pid->data;
+     if (nsp->names != NULL) {
       lname = nsp->names[0];
     }
   }
@@ -5494,15 +5557,15 @@ static CharPtr GetLastNameFromPersonId (PersonIdPtr pid)
 
 /*****************************************************************************
 *  Function:     PopulateWindow
-*  Description:	 use pdp to populate a caipp structure. No default query!!
-*                calls UpdateWindow to populate the text areas 
+*  Description:  use pdp to populate a caipp structure. No default query!!
+*                calls UpdateWindow to populate the text areas
 *  Argument:     WindoW
-*   
-*  Returns:	void
+*
+*  Returns: void
 **************************************************************************
 *
 *   do not   call SendQuery()  !!!
-*    
+*
 *
 ****************************************************************************/
 static void PopulateWindow( WindoW w, PubdescPtr pdp)
@@ -5510,12 +5573,12 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
   CitationUpdateFormPtr  cufp;
 
   CitArtInPressPtr caipp;       /* keep populate this for use in SendQuery*/
-  PubdescPtr pubdesc;		/* pubdesc node in seqdesc */
-  ValNodePtr pub;		/* pub-equiv chain in pubdesc */
-  CitArtPtr cap;		/* article pulled from pub-equiv */
+  PubdescPtr pubdesc;   /* pubdesc node in seqdesc */
+  ValNodePtr pub;       /* pub-equiv chain in pubdesc */
+  CitArtPtr cap;        /* article pulled from pub-equiv */
   CitJourPtr cjp;
   ImprintPtr ImpPtr;
-  AuthListPtr alp;  
+  AuthListPtr alp;
   AuthorPtr f_author_p = NULL, l_author_p = NULL, ap;  /* first and last authors*/
   PersonIdPtr pid;
 
@@ -5523,7 +5586,7 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
 
   CharPtr f_last_name = NULL, l_last_name = NULL;
   CharPtr jour_title = NULL, jour_volume = NULL, jour_page = NULL, art_title = NULL;
-  
+
   Int2 year = -1;
 
   Boolean is_article = FALSE;;
@@ -5532,7 +5595,7 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
   if (cufp == NULL) return;
 
 
-  pubdesc = pdp;      /* don't really need this could use pubdesc*/   
+  pubdesc = pdp;      /* don't really need this could use pubdesc*/
   if(pubdesc == NULL) return;
 
   /*loop through set of pub-equiv Value Nodes, find cit-art */
@@ -5542,105 +5605,105 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
     if (pub->choice == PUB_Article) {
       is_article = TRUE;
       cap = (CitArtPtr) pub->data.ptrvalue;
-      if (cap == NULL) return; 
-      
+      if (cap == NULL) return;
+
       /* look for cit-art from journals only*/
-      if (cap->from ==1) {	
-	      cjp = (CitJourPtr) cap->fromptr;
-	      if (cjp == NULL) return; 
-      	
-	      ImpPtr =(ImprintPtr) cjp->imp;	      
-	      if(ImpPtr == NULL) return; 
-	      
-	      /* get article title */
-	      for (art_title_vnp=cap->title; art_title_vnp; art_title_vnp=art_title_vnp->next) {
-	        /*could combine the four*/
-	        if((art_title_vnp->choice == Cit_title_name) || (art_title_vnp->choice == Cit_title_tsub)|| (art_title_vnp->choice == Cit_title_trans)) {
-	          art_title = art_title_vnp->data.ptrvalue;		    
-	        }
-	      }
+      if (cap->from ==1) {
+          cjp = (CitJourPtr) cap->fromptr;
+          if (cjp == NULL) return;
 
-	      /* get journal title */
-	      for (title_vnp=cjp->title; title_vnp; title_vnp=title_vnp->next) {
-	        /*could combine the four*/
-	        if (title_vnp->choice == Cit_title_iso_jta) {
-	          jour_title = title_vnp->data.ptrvalue;		    
-	        }
-	        else if (title_vnp->choice == Cit_title_ml_jta) {
-	          jour_title = title_vnp->data.ptrvalue;
-	        }
-	        else if (title_vnp->choice == Cit_title_jta) {
-	          jour_title = title_vnp->data.ptrvalue;
-	        }
-	        else if (title_vnp->choice == Cit_title_name) {
-	          jour_title = title_vnp->data.ptrvalue;
-	          /* break;            don't need break ??? */
-	        }
-	        else { 
-	          jour_title = "this journal got a WEIRD title";
-	        }
-	      }
-	  
-	  
-	      if (ImpPtr->volume) {
-	        jour_volume =  ImpPtr->volume;
-	      }
-    	  
-	      if (ImpPtr->pages) { 
-	        jour_page =  ImpPtr->pages;
-	      }
-	
-	  
-	      /* not ideal behavior, although date is required in imp*/
-	      if ((DatePtr)ImpPtr->date != NULL) {	  
-		      DateRead (ImpPtr->date, &year, NULL, NULL, NULL);
-		    }
+          ImpPtr =(ImprintPtr) cjp->imp;
+          if(ImpPtr == NULL) return;
 
-		    alp = (AuthListPtr) cap->authors; 
-		    if (alp != NULL && alp->choice == 1) {		  		 		 			
-		      /*get ptr to both 1st and last author*/	 
-		      auth_vnp = (ValNodePtr) alp->names; /*get the first node */ 
-      		
-		      f_author_p = (AuthorPtr)auth_vnp->data.ptrvalue;
-		      l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
-      		
-		      /* get the node for the last author, but ignore consortium */
-		      while (auth_vnp->next) {
-		        auth_vnp = auth_vnp->next;
-		        ap = (AuthorPtr) auth_vnp->data.ptrvalue;
-		        if (ap != NULL) {
-		          pid = (PersonIdPtr) ap->name;
-		          if (pid != NULL) {
-		            if (pid->choice == 2) {
-		              l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
-		            }
-		          }
-		        }
-		      }
-    		
-		      /* should be analyzing the value of alp->choice,  not alp->names->choice*/
-		      if (alp->choice == 1) {
-            /* std */   
+          /* get article title */
+          for (art_title_vnp=cap->title; art_title_vnp; art_title_vnp=art_title_vnp->next) {
+            /*could combine the four*/
+            if((art_title_vnp->choice == Cit_title_name) || (art_title_vnp->choice == Cit_title_tsub)|| (art_title_vnp->choice == Cit_title_trans)) {
+              art_title = art_title_vnp->data.ptrvalue;
+            }
+          }
+
+          /* get journal title */
+          for (title_vnp=cjp->title; title_vnp; title_vnp=title_vnp->next) {
+            /*could combine the four*/
+            if (title_vnp->choice == Cit_title_iso_jta) {
+              jour_title = title_vnp->data.ptrvalue;
+            }
+            else if (title_vnp->choice == Cit_title_ml_jta) {
+              jour_title = title_vnp->data.ptrvalue;
+            }
+            else if (title_vnp->choice == Cit_title_jta) {
+              jour_title = title_vnp->data.ptrvalue;
+            }
+            else if (title_vnp->choice == Cit_title_name) {
+              jour_title = title_vnp->data.ptrvalue;
+              /* break;            don't need break ??? */
+            }
+            else {
+              jour_title = "this journal got a WEIRD title";
+            }
+          }
+
+
+          if (ImpPtr->volume) {
+            jour_volume =  ImpPtr->volume;
+          }
+
+          if (ImpPtr->pages) {
+            jour_page =  ImpPtr->pages;
+          }
+
+
+          /* not ideal behavior, although date is required in imp*/
+          if ((DatePtr)ImpPtr->date != NULL) {
+              DateRead (ImpPtr->date, &year, NULL, NULL, NULL);
+            }
+
+            alp = (AuthListPtr) cap->authors;
+            if (alp != NULL && alp->choice == 1) {
+              /*get ptr to both 1st and last author*/
+              auth_vnp = (ValNodePtr) alp->names; /*get the first node */
+
+              f_author_p = (AuthorPtr)auth_vnp->data.ptrvalue;
+              l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
+
+              /* get the node for the last author, but ignore consortium */
+              while (auth_vnp->next) {
+                auth_vnp = auth_vnp->next;
+                ap = (AuthorPtr) auth_vnp->data.ptrvalue;
+                if (ap != NULL) {
+                  pid = (PersonIdPtr) ap->name;
+                  if (pid != NULL) {
+                    if (pid->choice == 2) {
+                      l_author_p =(AuthorPtr)auth_vnp->data.ptrvalue;
+                    }
+                  }
+                }
+              }
+
+              /* should be analyzing the value of alp->choice,  not alp->names->choice*/
+              if (alp->choice == 1) {
+            /* std */
             f_last_name = GetLastNameFromPersonId (f_author_p->name);
-		        l_last_name = GetLastNameFromPersonId (l_author_p->name);
-		      } else if (alp->choice == 2) {  		   
-            /* full name as last name*/	       
-		        f_last_name = (CharPtr)f_author_p;
-		        l_last_name = (CharPtr)l_author_p;
-		      } else {  
-		        /* full name as last name*/	       
-		        f_last_name = (CharPtr)f_author_p;
-		        l_last_name = (CharPtr)l_author_p;
-		      }	      		     		   
-		    }			
-      }        /*end if cit-art*/      
-    }          /*end if Pub_article*/    
+                l_last_name = GetLastNameFromPersonId (l_author_p->name);
+              } else if (alp->choice == 2) {
+            /* full name as last name*/
+                f_last_name = (CharPtr)f_author_p;
+                l_last_name = (CharPtr)l_author_p;
+              } else {
+                /* full name as last name*/
+                f_last_name = (CharPtr)f_author_p;
+                l_last_name = (CharPtr)l_author_p;
+              }
+            }
+      }        /*end if cit-art*/
+    }          /*end if Pub_article*/
   }  /* end for, looped through all valnodes of pub*/
 
   if (!is_article) {
     AppendText (cufp->rdoc, "\n ONLY article citation are looked up here, please click Cancel to get back!!", NULL, NULL, systemFont);
-    
-    InvalDocument (cufp->rdoc);  
+
+    InvalDocument (cufp->rdoc);
     ArrowCursor ();
     Update ();
 
@@ -5651,14 +5714,14 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
     return;
   }
 
-	caipp->jour_title =  StringSave(jour_title);
-	caipp->f_last_name = StringSave(f_last_name);
-	caipp->l_last_name = StringSave(l_last_name);
-	caipp->jour_volume = StringSave(jour_volume);
-	caipp->jour_page = StringSave(jour_page);
-	caipp->year = year;
-	caipp->art_title = StringSave(art_title);
-  
+    caipp->jour_title =  StringSave(jour_title);
+    caipp->f_last_name = StringSave(f_last_name);
+    caipp->l_last_name = StringSave(l_last_name);
+    caipp->jour_volume = StringSave(jour_volume);
+    caipp->jour_page = StringSave(jour_page);
+    caipp->year = year;
+    caipp->art_title = StringSave(art_title);
+
   cufp->caipp = caipp;
 
   UpdateWindow(cufp, caipp);
@@ -5671,10 +5734,10 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
 
 /*****************************************************************************
 *  Function:     UpdateWindow
-*  Description:	 use current node of caipp to populate the text areas. reset caipp
+*  Description:     use current node of caipp to populate the text areas. reset caipp
 *  Argument:     CitArtInPressPtr, WindoW
-*   
-*  Returns:	void
+*
+*  Returns:    void
 **************************************************************************
 *
 *     No call to SendQuery()
@@ -5691,7 +5754,7 @@ static void UpdateWindow( CitationUpdateFormPtr cufp, CitArtInPressPtr caipp)
 
   if (caipp->year > -1) {
     year = MemNew(5);
-    sprintf(year, "%d", caipp->year); 
+    sprintf(year, "%d", caipp->year);
     SafeSetTitle (cufp->year_text, year);
   } else {
     SetTitle (cufp->year_text, "");
@@ -5735,11 +5798,11 @@ static void UpdateWindow( CitationUpdateFormPtr cufp, CitArtInPressPtr caipp)
 
 
 /*****************************************************************************
-*  Function:     LaunchRelaxedQuery 
-*  Description:	 call back function for visitPubDesc  (or, CB for Ssequin button.
+*  Function:     LaunchRelaxedQuery
+*  Description:     call back function for visitPubDesc  (or, CB for Ssequin button.
 *  Argument:     userdata could be a FormPtr of some sort.
-*   
-*  Returns:	 void
+*
+*  Returns:     void
 *
 ****************************************************************************/
 static void LaunchRelaxedQuery (PubdescPtr pdp, Pointer userdata)
@@ -5749,19 +5812,19 @@ static void LaunchRelaxedQuery (PubdescPtr pdp, Pointer userdata)
 
   WindoW w;
 
-  w = CreateCitationUpdateWindow_detail(userdata);	
-  
+  w = CreateCitationUpdateWindow_detail(userdata);
+
   if (w == NULL) return;
   PopulateWindow(w, pdp);
   Show (w);
   Select (w);
 }
 
-typedef struct publicationlistdialog 
+typedef struct publicationlistdialog
 {
   DIALOG_MESSAGE_BLOCK
   DialoG      pubdesc_table;
-  
+
   SeqEntryPtr  sep;
   BioseqSetPtr bssp;
   Uint2        entityID;
@@ -5770,14 +5833,14 @@ typedef struct publicationlistdialog
 static SeqDescrPtr SeqDescrListCopy (SeqDescrPtr sdp_list)
 {
   SeqDescrPtr new_list = NULL;
-  
+
   new_list = AsnIoMemCopy((Pointer)sdp_list, (AsnReadFunc)SeqDescrAsnRead, (AsnWriteFunc)SeqDescrAsnWrite);
   return new_list;
 }
 
-static void 
-AddOnePublicationToTableDisplayList 
-(ValNodePtr PNTR    row_list, 
+static void
+AddOnePublicationToTableDisplayList
+(ValNodePtr PNTR    row_list,
  SeqDescrPtr        sdp,
  StdPrintOptionsPtr spop)
 
@@ -5789,7 +5852,7 @@ AddOnePublicationToTableDisplayList
   {
     return;
   }
-  
+
   if (StdFormatPrint ((Pointer) sdp, (AsnWriteFunc) SeqDescAsnWrite,
                                     "StdSeqDesc", spop))
   {
@@ -5805,7 +5868,7 @@ AddOnePublicationToTableDisplayList
     }
     ValNodeAddPointer (&new_row, 30, str);
     spop->ptr = MemFree (spop->ptr);
-    
+
     ValNodeAddPointer (row_list, 0, new_row);
   }
 }
@@ -5820,18 +5883,18 @@ static void PublicationListDialogRedraw (PublicationListDialogPtr dlg)
   {
     return;
   }
-  
+
   SeqMgrIndexFeatures (dlg->entityID, NULL);
   spop = StdPrintOptionsNew (NULL);
-  if (spop == NULL) 
+  if (spop == NULL)
   {
     Message (MSG_FATAL, "StdPrintOptionsNew failed");
     return;
   }
-  
+
   spop->newline = ";";
   spop->indent = "";
-  
+
   /* make row list for table display and update table display */
   for (sdp = dlg->bssp->descr;
        sdp != NULL;
@@ -5842,23 +5905,23 @@ static void PublicationListDialogRedraw (PublicationListDialogPtr dlg)
   PointerToDialog (dlg->pubdesc_table, row_list);
   row_list = FreeTableDisplayRowList (row_list);
   spop = StdPrintOptionsFree (spop);
-  
-  
+
+
 }
 
 static void SeqDescrToPublicationListDialog (DialoG d, Pointer userdata)
 {
   PublicationListDialogPtr dlg;
-  
+
   dlg = (PublicationListDialogPtr) GetObjectExtra (d);
   if (dlg == NULL || dlg->bssp == NULL)
   {
     return;
   }
-  
+
   dlg->bssp->descr = SeqDescrFree (dlg->bssp->descr);
   dlg->bssp->descr = SeqDescrListCopy((SeqDescrPtr) userdata);
- 
+
   SeqMgrIndexFeatures (dlg->entityID, NULL);
   PublicationListDialogRedraw (dlg);
 }
@@ -5866,7 +5929,7 @@ static void SeqDescrToPublicationListDialog (DialoG d, Pointer userdata)
 static Pointer PublicationListDialogToSeqDescr (DialoG d)
 {
   PublicationListDialogPtr dlg;
-  
+
   dlg = (PublicationListDialogPtr) GetObjectExtra (d);
   if (dlg == NULL)
   {
@@ -5876,7 +5939,7 @@ static Pointer PublicationListDialogToSeqDescr (DialoG d)
   {
     return SeqDescrListCopy (dlg->bssp->descr);
   }
-  
+
 }
 
 static void AddToPublicationList (ButtoN b)
@@ -5884,15 +5947,15 @@ static void AddToPublicationList (ButtoN b)
   WindoW                   w;
   PublicationListDialogPtr dlg;
   DescriptorFormPtr        dfp;
-  
+
   dlg = (PublicationListDialogPtr) GetObjectExtra (b);
   if (dlg == NULL || dlg->sep == NULL || ! IS_Bioseq_set (dlg->sep)
       || dlg->bssp == NULL)
   {
     return;
   }
-  
-  w =  (WindoW) CreatePubdescInitForm (-50, -33, "New Reference", NULL, NULL, 
+
+  w =  (WindoW) CreatePubdescInitForm (-50, -33, "New Reference", NULL, NULL,
                              NULL, OBJ_SEQDESC, NULL, NULL);
 
   dfp = (DescriptorFormPtr) GetObjectExtra (w);
@@ -5908,7 +5971,7 @@ static void AddToPublicationList (ButtoN b)
 
   Show (w);
   Select (w);
-                             
+
 }
 
 static void EditPublicationInList (PublicationListDialogPtr dlg, SeqDescrPtr sdp)
@@ -5916,21 +5979,21 @@ static void EditPublicationInList (PublicationListDialogPtr dlg, SeqDescrPtr sdp
   PubinitFormPtr pifp;
   WindoW         w;
   ObjValNodePtr  ovp;
-  
+
   if (dlg == NULL)
   {
     return;
   }
-  
-  w =  (WindoW) CreatePubdescInitForm (-50, -33, "New Reference", sdp, NULL, 
+
+  w =  (WindoW) CreatePubdescInitForm (-50, -33, "New Reference", sdp, NULL,
                              dlg->sep, OBJ_SEQDESC, PubdescDescFormActnProc, NULL);
 
-  
+
   pifp = (PubinitFormPtr) GetObjectExtra (w);
   if (pifp != NULL)
   {
     pifp->input_entityID = dlg->entityID;
-    
+
     if (sdp == NULL)
     {
       pifp->input_itemID = dlg->bssp->idx.itemID;
@@ -5944,13 +6007,13 @@ static void EditPublicationInList (PublicationListDialogPtr dlg, SeqDescrPtr sdp
         pifp->input_itemtype = OBJ_SEQDESC;
       }
     }
-    
+
     pifp->this_itemtype = OBJ_SEQDESC;
     pifp->this_subtype = Seq_descr_pub;
-#if 0    
+#if 0
     pifp->procid = ompcp->proc->procid;
     pifp->proctype = ompcp->proc->proctype;
-#endif    
+#endif
     pifp->userkey = OMGetNextUserKey ();
 
     SendMessageToForm (pifp->form, VIB_MSG_INIT);
@@ -5960,7 +6023,7 @@ static void EditPublicationInList (PublicationListDialogPtr dlg, SeqDescrPtr sdp
       SetClosestParentIfDuplicating ((BaseFormPtr) pifp);
     }
   }
-  
+
   Show (w);
   Select (w);
 }
@@ -5970,25 +6033,25 @@ static void PublicationListDblClick (PoinT cell_coord, CharPtr header_text, Char
   PublicationListDialogPtr dlg;
   SeqDescrPtr              sdp, prev_sdp = NULL;
   Int4                     sdp_num;
-  
+
   dlg = (PublicationListDialogPtr) userdata;
   if (dlg == NULL || dlg->bssp == NULL || dlg->bssp->descr == NULL)
   {
     return;
   }
-  
+
   for (sdp = dlg->bssp->descr, sdp_num = 0;
        sdp != NULL && sdp_num < cell_coord.y;
        sdp = sdp->next, sdp_num++)
   {
     prev_sdp = sdp;
   }
-  
+
   if (sdp == NULL)
   {
     return;
   }
-  
+
   if (cell_coord.x == 1)
   {
     if (ANS_YES != Message (MSG_YN, "Are you sure you want to delete the publication?"))
@@ -6012,17 +6075,17 @@ static void PublicationListDblClick (PoinT cell_coord, CharPtr header_text, Char
     EditPublicationInList (dlg, sdp);
   }
   PublicationListDialogRedraw (dlg);
- 
+
 }
 
 static void CleanupPublicationListDialog (GraphiC g, VoidPtr data)
 {
   PublicationListDialogPtr dlg;
-  
+
   dlg = (PublicationListDialogPtr) data;
   if (dlg != NULL)
   {
-    ObjMgrFreeUserData(dlg->entityID, 0, 0, 0);  
+    ObjMgrFreeUserData(dlg->entityID, 0, 0, 0);
     dlg->sep = SeqEntryFree (dlg->sep);
     data = MemFree (data);
   }
@@ -6037,7 +6100,7 @@ static void PublicationListDialogMessage (DialoG d, Int2 mssg)
   {
     return;
   }
-  
+
   if (mssg == VIB_MSG_REDRAW)
   {
     PublicationListDialogRedraw (dlg);
@@ -6049,8 +6112,8 @@ extern DialoG PublicationListDialog (GrouP parent)
   PublicationListDialogPtr dlg;
   GrouP                    p, c;
   PrompT                   s;
-  ButtoN                   b; 
-  
+  ButtoN                   b;
+
   dlg = (PublicationListDialogPtr) MemNew (sizeof (PublicationListDialogData));
   if (dlg == NULL)
   {
@@ -6060,38 +6123,38 @@ extern DialoG PublicationListDialog (GrouP parent)
   p = HiddenGroup (parent, -1, 0, NULL);
   SetObjectExtra (p, dlg, CleanupPublicationListDialog);
   SetGroupSpacing (p, 10, 10);
-  
+
   dlg->dialog = (DialoG) p;
   dlg->todialog = SeqDescrToPublicationListDialog;
   dlg->fromdialog = PublicationListDialogToSeqDescr;
   dlg->dialogmessage = PublicationListDialogMessage;
   dlg->testdialog = NULL;
-  
+
   dlg->sep = SeqEntryNew ();
   dlg->bssp = BioseqSetNew ();
   dlg->bssp->_class = BioseqseqSet_class_empty_set;
   dlg->sep->choice = 2;
   dlg->sep->data.ptrvalue = dlg->bssp;
-  
+
 /*  SeqMgrSeqEntry (SM_BIOSEQSET, (Pointer) dlg->bssp, dlg->sep);*/
   dlg->entityID = ObjMgrGetEntityIDForChoice (dlg->sep);
   if (dlg->entityID > 0)
   {
     SeqMgrIndexFeatures (dlg->entityID, NULL);
-  }                 
-  
+  }
+
   s = StaticPrompt (p, "References", 0, 0, programFont, 'c');
-  
+
   dlg->pubdesc_table = TableDisplayDialog (p, stdCharWidth * 27, stdLineHeight * 16, 0, 2,
                                        PublicationListDblClick, dlg,
                                        NULL, NULL);
-  c = HiddenGroup (p, 2, 0, NULL);                                       
+  c = HiddenGroup (p, 2, 0, NULL);
   b = PushButton (c, "Add new publication", AddToPublicationList);
   SetObjectExtra (b, dlg, NULL);
-  
+
   AlignObjects (ALIGN_CENTER, (HANDLE) s, (HANDLE) dlg->pubdesc_table, (HANDLE) c, NULL);
-  
-  return (DialoG) p;  
+
+  return (DialoG) p;
 }
 
 extern void EditPublicationInDialog (DialoG d, Int4 ref_num)
@@ -6099,24 +6162,24 @@ extern void EditPublicationInDialog (DialoG d, Int4 ref_num)
   PublicationListDialogPtr dlg;
   SeqDescrPtr              sdp;
   Int4                     sdp_num;
-  
+
   dlg = (PublicationListDialogPtr) GetObjectExtra (d);
   if (dlg == NULL || dlg->bssp == NULL || dlg->bssp->descr == NULL)
   {
     return;
   }
-  
+
   for (sdp = dlg->bssp->descr, sdp_num = 0;
        sdp != NULL && sdp_num < ref_num;
        sdp = sdp->next, sdp_num++)
   {
   }
-  
+
   if (sdp == NULL)
   {
     return;
   }
-  
+
   EditPublicationInList (dlg, sdp);
 }
 
@@ -6139,7 +6202,7 @@ static Boolean EditPubdescDataInPlace (SeqDescPtr sdp, PubinitFormPtr pifp)
   ModalAcceptCancelData acd;
   Boolean               rval = FALSE;
 
-  if (pifp == NULL || pifp->form == NULL || sdp == NULL || sdp->choice != Seq_descr_pub) 
+  if (pifp == NULL || pifp->form == NULL || sdp == NULL || sdp->choice != Seq_descr_pub)
   {
     return FALSE;
   }
@@ -6330,7 +6393,7 @@ NLM_EXTERN Boolean EditPubdescInPlace (SeqDescPtr sdp)
   RealizeWindow (w);
   SendMessageToForm (pifp->form, VIB_MSG_INIT);
   PointerToForm (pifp->form, (Pointer) sdp->data.ptrvalue);
-  
+
   if (pdp->pub != NULL && pdp->pub->choice == PUB_Sub) {
     /* can't change anything, just proceed to next form */
     acd.accepted = TRUE;
@@ -6353,7 +6416,7 @@ NLM_EXTERN Boolean EditPubdescInPlace (SeqDescPtr sdp)
     {
       st_value = (Uint1) GetValue (pifp->pub_status);
       pb_value = GetValue (pifp->pub_choice);
-      if (st_value > 1 && pb_value == 0) 
+      if (st_value > 1 && pb_value == 0)
       {
         Message (MSG_ERROR, "Must choose class");
         acd.accepted = FALSE;

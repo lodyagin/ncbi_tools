@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.24 $
+* $Revision: 6.32 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -41,137 +41,6 @@
 *
 * ==========================================================================
 *
-*
-* RCS Modification History:
-* $Log: medutil.c,v $
-* Revision 6.24  2009/06/19 19:27:29  bazhin
-* Added support for multiple consortium names.
-*
-* Revision 6.23  2007/12/04 23:29:22  bazhin
-* MergePubIds() renamed to MergeNonPubmedPubIds(). Merging is
-* limited to types DOI and OTHER only.
-*
-* Revision 6.22  2007/12/04 20:07:02  bazhin
-* Added ability to merge input article ids with ones from med server.
-*
-* Revision 6.21  2005/02/15 17:45:32  bazhin
-* Modified MedlineToISO() function: now in addition to Cit-art.Auth-list.ml
-* slot it also looks at Cit-art.Auth-list.Author.Person-id.ml one
-* to convert authors names from Medline format to Name-std (last, first,
-* initials).
-*
-* Revision 6.20  2005/01/28 20:43:00  bazhin
-* Fixed bug related to preserving input Cit-arts in cases of
-* lookup without replacement.
-*
-* Revision 6.19  2004/11/29 17:50:06  bazhin
-* Removed memory leak in FixPubEquiv() function.
-*
-* Revision 6.18  2004/11/12 17:35:51  bazhin
-* Fixed bug related to the converting empty authors list from
-* medline format to standard one.
-*
-* Revision 6.17  2004/11/04 17:53:17  bazhin
-* Reverted FixPubEquiv modification, when not lookup for pmid was
-* performed, if input Pub-equiv has a Cit-gen with authors, or title,
-* or journal blocks filled in. Now it does lookup for pmid even if
-* Cit-gen has them.
-*
-* Revision 6.16  2004/11/02 21:28:35  bazhin
-* Modifications related to the new MedArch server to be installed.
-* Does not use Medline ids for lookup, and does not look them up.
-*
-* Revision 6.15  2004/08/18 17:00:56  bazhin
-* Fixed bug with medline lookup if both PubMed and Medline ids are present.
-*
-* Revision 6.14  2004/03/19 18:32:03  bazhin
-* One more patch related to the previous one.
-*
-* Revision 6.13  2004/03/19 14:53:18  bazhin
-* Added function PropogateInPress(), which is called from FixPubEquiv().
-* It sets Imprint.prepub value to "in-press" if input Cit-art was flagged
-* as "in-press", but had Medline or/and Pubmed id(s) and successful lookup
-* returned Cit-art with no article references, such as volume and page
-* numbers.
-*
-* Revision 6.12  2004/03/17 16:59:35  bazhin
-* Slight modification in ten_authors() function. If the number of input
-* authors greater than 10 and number of MedArch ones less or equal 11,
-* or input has more than 25 and MedArch has less or equal 26, then
-* it will take input set instead of MedArch one.
-*
-* Revision 6.11  2004/03/16 18:53:37  bazhin
-* Now does not ignore in-press'ed Cit-arts for lookup.
-*
-* Revision 6.10  2003/10/01 13:08:33  bazhin
-* Modified ten_authors() function to handle consortiums properly.
-*
-* Revision 6.9  2003/09/10 18:47:28  bazhin
-* "print_pub()" function now is aware of consortiums.
-*
-* Revision 6.8  2003/03/25 19:14:59  bazhin
-* Function "ten_authors()" became public (from static).
-*
-* Revision 6.7  2003/03/12 20:35:02  bazhin
-* "ten_authors()" function now can handle consortiums.
-*
-* Revision 6.6  2001/03/08 12:47:44  ostell
-* made FixPub work if no medline uid returned, but pmid is returned.
-*
-* Revision 6.5  2000/08/18 17:01:02  kans
-* added FetchPubPmId, enhanced FixPubEquiv to handle records with pmid but no muid
-*
-* Revision 6.4  1999/11/17 18:16:15  bazhin
-* If failed to get pub from MedArch server, then does not return NULL,
-* but use input one.
-* Also removed unused variables.
-*
-* Revision 6.3  1999/11/08 19:32:44  kans
-* removed unnecessary for loop initialization picked up by IRIX C comnpiler
-*
-* Revision 6.2  1999/05/06 18:53:53  kans
-* FixPubEquiv now works on PMID as well as MUID
-*
-* Revision 6.1  1998/09/14 20:54:51  bazhin
-* Changes in "ten_authors()" : if successful medline lookup has returned
-* no authors, then will use input ones.
-*
-* Revision 6.0  1997/08/25 18:35:48  madden
-* Revision changed to 6.0
-*
-* Revision 5.0  1996/05/28 14:11:11  ostell
-* Set to revision 5.0
-*
- * Revision 4.4  1996/05/22  17:30:09  kans
- * changed name of error file, initialize muid in lookup procedure
- *
- * Revision 4.3  1996/03/12  22:21:07  tatiana
- * add bullet proof to MedlineToISO function
- *
- * Revision 4.2  1995/11/02  23:39:28  tatiana
- * do not accept Medline article with 0 authors
- *
- * Revision 4.1  1995/08/16  14:28:21  tatiana
- * modified get_std_auth to handle spaces between initials
- *
- * Revision 4.0  1995/07/26  13:55:12  ostell
- * force revision to 4.0
- *
- * Revision 1.32  1995/06/06  14:34:39  tatiana
- * bug fixed in print_pub()
- *
- * Revision 1.30  1995/05/25  22:17:14  kans
- * fixed FixPubEquiv
- *
- * Revision 1.29  1995/05/25  18:14:35  kans
- * additional long and int casts in ErrPostEx
- *
- * Revision 1.28  1995/05/24  16:13:47  tatiana
- * add in_press() to avoid lookup for in press articles
- *
- * Revision 1.24  1995/05/17  17:54:05  epstein
- * add RCS log revision history
- *
 */
 
 /** for ErrPostEx() ****/
@@ -189,6 +58,172 @@ static char *this_file = __FILE__;
 #include <medutil.h>		   /* the interface */
 #include <medarch.h>           /* the medarch interface */
 #include <mdrcherr.h>           /* the errors interface */
+#include <urlquery.h>
+
+static void MUGetStringCallback (XmlObjPtr xop, XmlObjPtr parent, Int2 level, Pointer userdata)
+
+{
+  CharPtr PNTR  strp;
+
+  if (xop == NULL || userdata == NULL) return;
+  strp = (CharPtr PNTR) userdata;
+
+  if (StringHasNoText (xop->contents)) return;
+
+  *strp = StringSave (xop->contents);
+}
+
+static void MUGetStringSetCallback (XmlObjPtr xop, XmlObjPtr parent, Int2 level, Pointer userdata)
+
+{
+  ValNodeBlockPtr  vnbp;
+
+  if (xop == NULL || userdata == NULL) return;
+  vnbp = (ValNodeBlockPtr) userdata;
+
+  if (StringHasNoText (xop->contents)) return;
+
+  ValNodeCopyStrEx (&(vnbp->head), &(vnbp->tail), 0, xop->contents);
+}
+
+static Boolean MULooksLikeISSN (CharPtr str)
+
+{
+  Char  ch;
+  Int2  i;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  if (StringLen (str) != 9) return FALSE;
+  if (str [4] != '-') return FALSE;
+
+  for (i = 0; i < 9; i++) {
+    ch = str [i];
+    if (IS_DIGIT (ch)) continue;
+    if (ch == '-' && i == 4) continue;
+    if (ch == 'X' && i == 8) continue;
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+static Boolean MUIsJournalIndexed (CharPtr journal)
+
+{
+  ValNodeBlock  blk;
+  Char          ch;
+  CharPtr       count = NULL;
+  CharPtr       jids = NULL;
+  CharPtr       ptr;
+  Boolean       rsult = FALSE;
+  CharPtr       status = NULL;
+  CharPtr       str = FALSE;
+  Char          title [512];
+  XmlObjPtr     xop;
+
+  if (StringHasNoText (journal)) return FALSE;
+  StringNCpy_0 (title, journal, sizeof (title));
+
+  ptr = title;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch == '(' || ch == ')') {
+      *ptr = ' ';
+    }
+    ptr++;
+    ch = *ptr;
+  }
+  TrimSpacesAroundString (title);
+  CompressSpaces (title);
+
+  if (MULooksLikeISSN (title)) {
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+                                     "/entrez/eutils/esearch.fcgi",
+                                     "db=nlmcatalog&retmax=200&term=",
+                                     title, "%5Bissn%5D", NULL);
+  }
+
+  if (str == NULL) {
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+                                     "/entrez/eutils/esearch.fcgi",
+                                     "db=nlmcatalog&retmax=200&term=",
+                                     title, "%5Bmulti%5D+AND+ncbijournals%5Bsb%5D", NULL);
+  }
+
+  if (str == NULL) return FALSE;
+
+  xop = ParseXmlString (str);
+  MemFree (str);
+  if (xop == NULL) return FALSE;
+
+  blk.head = NULL;
+  blk.tail = NULL;
+  VisitXmlNodes (xop, (Pointer) &blk, MUGetStringSetCallback, "Id", NULL, NULL, NULL, 0);
+  VisitXmlNodes (xop, (Pointer) &count, MUGetStringCallback, "Count", "eSearchResult", NULL, NULL, 0);
+
+  FreeXmlObject (xop);
+
+  if (StringCmp (count, "0") == 0 || blk.head == NULL) {
+    MemFree (count);
+
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+                                     "/entrez/eutils/esearch.fcgi",
+                                     "db=nlmcatalog&retmax=200&term=",
+                                     title, "%5Bmulti%5D+AND+ncbijournals%5Bsb%5D", NULL);
+    if (str == NULL) return FALSE;
+
+    xop = ParseXmlString (str);
+    MemFree (str);
+    if (xop == NULL) return FALSE;
+
+    blk.head = NULL;
+    blk.tail = NULL;
+    VisitXmlNodes (xop, (Pointer) &blk, MUGetStringSetCallback, "Id", NULL, NULL, NULL, 0);
+    VisitXmlNodes (xop, (Pointer) &count, MUGetStringCallback, "Count", "eSearchResult", NULL, NULL, 0);
+
+    FreeXmlObject (xop);
+  }
+
+  MemFree (count);
+
+  if (blk.head == NULL) return FALSE;
+
+  /* if more than one candidate, bail */
+
+  if (blk.head->next != NULL) {
+    ValNodeFreeData (blk.head);
+    return FALSE;
+  }
+
+  jids = ValNodeMergeStrsEx (blk.head, ",");
+  ValNodeFreeData (blk.head);
+
+  if (jids == NULL) return FALSE;
+
+  str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+                                   "/entrez/eutils/esummary.fcgi",
+                                   "db=nlmcatalog&retmax=200&version=2.0&id=",
+                                   jids, NULL, NULL);
+  MemFree (jids);
+  if (str == NULL) return FALSE;
+
+  xop = ParseXmlString (str);
+  MemFree (str);
+  if (xop == NULL) return FALSE;
+
+  VisitXmlNodes (xop, (Pointer) &status, MUGetStringCallback, "CurrentIndexingStatus", NULL, NULL, NULL, 0);
+
+  FreeXmlObject (xop);
+
+  if (StringCmp (status, "Y") == 0) {
+    rsult = TRUE;
+  }
+
+  MemFree (status);
+
+  return rsult;
+}
 
 /**********************************************************/
 void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
@@ -319,17 +354,29 @@ void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
                       "%ld|%s %s|%s|(%d)|%s|%s", (long) muid, last, first,
                       s_title, (int) year, vol, page);
         }
-        else if(muid == 0)
+        else if (MUIsJournalIndexed (s_title))
         {
-            ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFound,  
-                      "%s %s|%s|(%d)|%s|%s", last, first, s_title,
-                      (int) year, vol, page);
+            if (muid == 0) {
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFound,  
+                          "%s %s|%s|(%d)|%s|%s", last, first, s_title,
+                          (int) year, vol, page);
+            } else {
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFound,  
+                          ">>%ld<<|%s %s|%s|(%d)|%s|%s", (long) muid, last,
+                          first, s_title, (int) year, vol, page);
+            }
         }
         else
         {
-            ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFound,  
-                      ">>%ld<<|%s %s|%s|(%d)|%s|%s", (long) muid, last,
-                      first, s_title, (int) year, vol, page);
+            if (muid == 0) {
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_NoPmidJournalNotInPubMed,  
+                          "%s %s|%s|(%d)|%s|%s", last, first, s_title,
+                          (int) year, vol, page);
+            } else {
+                ErrPostEx(SEV_INFO, ERR_REFERENCE_NoPmidJournalNotInPubMed,  
+                          ">>%ld<<|%s %s|%s|(%d)|%s|%s", (long) muid, last,
+                          first, s_title, (int) year, vol, page);
+            }
         }
     }
 }
@@ -681,7 +728,9 @@ void FindPub(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
             continue;
         pdp = (PubdescPtr) vnp->data.ptrvalue;
         newpub = FixPubEquiv(pdp->pub, fpop);
-        pdp->pub = newpub;
+        if (newpub != NULL) {
+          pdp->pub = newpub;
+        }
     }
 
     for(; sap != NULL; sap = sap->next)
@@ -695,7 +744,9 @@ void FindPub(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
             {
                 pdp = (PubdescPtr) sfp->data.value.ptrvalue;
                 newpub = FixPubEquiv(pdp->pub, fpop);
-                pdp->pub = newpub;
+                if (newpub != NULL) {
+                  pdp->pub = newpub;
+                }
             }
 
             if(sfp->cit == NULL)
@@ -851,8 +902,10 @@ ValNodePtr FixPub(ValNodePtr pub, FindPubOptionPtr fpop)
             break;
         case PUB_Equiv:
             tmp = FixPubEquiv((ValNodePtr) pub->data.ptrvalue, fpop);
-            pub->data.ptrvalue = tmp;
-            newpub = pub;
+            if (tmp != NULL) {
+              pub->data.ptrvalue = tmp;
+              newpub = pub;
+            }
             break;
         default:
             break;
@@ -1244,7 +1297,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
             return(pube);
         }
 
-        print_pub(citartptr, FALSE, FALSE, oldmuid);
+        print_pub(citartptr, FALSE, FALSE, oldpmid);
         pube = FixPubEquivAppend(pube, tmp2, citartptr);
         if(muidptr != NULL)             /* ditch the mismatched muid */
             PubFree(muidptr);

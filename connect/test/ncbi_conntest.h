@@ -1,7 +1,7 @@
 #ifndef NCBI_CONNTEST__H
 #define NCBI_CONNTEST__H
 
-/*  $Id: ncbi_conntest.h,v 6.2 2003/02/10 20:36:24 lavr Exp $
+/* $Id: ncbi_conntest.h,v 6.3 2011/06/10 03:49:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -61,7 +61,7 @@ typedef enum {
 typedef unsigned int TTestConnFlags;
 
 
-extern void CONN_TestConnector
+void CONN_TestConnector
 (CONNECTOR       connector,  /* [in]  connector handle */
  const STimeout* timeout,    /* [in]  timeout for all i/o */
  FILE*           data_file,  /* [in]  output data file */
@@ -72,18 +72,5 @@ extern void CONN_TestConnector
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_conntest.h,v $
- * Revision 6.2  2003/02/10 20:36:24  lavr
- * Move log to end
- *
- * Revision 6.1  2000/04/07 20:03:02  vakatov
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* NCBI_CONNTEST__H */

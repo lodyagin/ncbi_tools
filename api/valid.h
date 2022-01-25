@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.56 $
+* $Revision: 6.73 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -153,6 +153,7 @@ typedef struct validstruct {
     Boolean strictLatLonCountry;   /* bodies of water do not relax country vs. lat_lon mismatch */
     Boolean rubiscoTest;           /* look for ribulose bisphosphate variants */
     Boolean indexerVersion;        /* special tests for GenBank indexers */
+    Boolean disableSuppression;    /* disables suppression of message by ShouldSuppressValidErr */
     Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
                                    /* this section used for finer error reporting callback */
     ValidErrorFunc errfunc;
@@ -169,6 +170,8 @@ typedef struct validstruct {
     Boolean is_gps_in_sep;         /* record has genomic product set */
     Boolean other_sets_in_sep;     /* record has pop/phy/mut/eco/wgs set */
     Boolean is_embl_ddbj_in_sep;   /* record has embl or ddbj seqid */
+    Boolean is_old_gb_in_sep;      /* record has old style GenBank accession */
+    Boolean is_patent_in_sep;      /* record has patent seqid */
     Boolean is_insd_in_sep;        /* record has genbank/embl/ddbj or tpg/tpe/tpd seqid */
     Boolean only_lcl_gnl_in_sep;   /* record has seqid of only local or general */
     Boolean has_gnl_prot_sep;      /* protein Bioseq has general seqid */
@@ -176,6 +179,8 @@ typedef struct validstruct {
     Boolean is_smupd_in_sep;       /* record in INSD internal processing */
     Boolean feat_loc_has_gi;       /* at least one feature has a gi location reference */
     Boolean feat_prod_has_gi;      /* at least one feature has a gi product reference */
+    Boolean has_multi_int_genes;   /* record has multi-interval genes */
+    Boolean has_seg_bioseqs;       /* record has segmented Bioseqs */
     Boolean far_fetch_failure;     /* a far location or bioseq with no fetch function */
     VoidPtr rrna_array;            /* sorted feature index array of rRNA features */
     VoidPtr trna_array;            /* sorted feature index array of tRNA features */
@@ -199,10 +204,86 @@ NLM_EXTERN Boolean CountryIsValid (CharPtr name, BoolPtr old_countryP, BoolPtr b
 NLM_EXTERN CharPtr GetCorrectedCountryCapitalization (CharPtr name);
 NLM_EXTERN Boolean LookForECnumberPattern (CharPtr str);
 
+NLM_EXTERN Boolean StringContainsBodyOfWater (CharPtr str);
+
+/* original country latitude-longitude tests */
 NLM_EXTERN Boolean IsCountryInLatLonList (CharPtr country);
 NLM_EXTERN Boolean TestLatLonForCountry (CharPtr country, FloatHi lat, FloatHi lon);
 NLM_EXTERN CharPtr GuessCountryForLatLon (FloatHi lat, FloatHi lon);
-NLM_EXTERN Boolean StringContainsBodyOfWater (CharPtr str);
+
+/* improved country latitude-longitude tests */
+/*
+   for proximity tests, range is a maximum bounding search box in degrees,
+   distanceP is filled in with a minimum distance in kilometers (subject
+   to non-spherical earth calculation error)
+*/
+
+NLM_EXTERN Boolean CountryIsInLatLonList (
+  CharPtr country
+);
+NLM_EXTERN Boolean WaterIsInLatLonList (
+  CharPtr country
+);
+
+NLM_EXTERN Boolean CountryContainsLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon
+);
+NLM_EXTERN Boolean WaterContainsLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon
+);
+
+NLM_EXTERN CharPtr LookupCountryByLatLon (
+  FloatHi lat,
+  FloatHi lon
+);
+NLM_EXTERN CharPtr LookupWaterByLatLon (
+  FloatHi lat,
+  FloatHi lon
+);
+
+NLM_EXTERN CharPtr CountryClosestToLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+);
+NLM_EXTERN CharPtr WaterClosestToLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+);
+
+NLM_EXTERN Boolean CountryIsNearLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+);
+NLM_EXTERN Boolean WaterIsNearLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+);
+
+NLM_EXTERN Boolean CountryExtremesOverlap (
+  CharPtr first,
+  CharPtr second
+);
+NLM_EXTERN Boolean WaterExtremesOverlap (
+  CharPtr first,
+  CharPtr second
+);
+
+NLM_EXTERN FloatHi CountryDataScaleIs (void);
+NLM_EXTERN FloatHi WaterDataScaleIs (void);
 
 NLM_EXTERN Boolean ParseStructuredVoucher (CharPtr subname, CharPtr PNTR inst, CharPtr PNTR id);
 NLM_EXTERN Boolean VoucherInstitutionIsValid (CharPtr inst);
@@ -213,6 +294,20 @@ NLM_EXTERN void ECNumberFSAFreeAll (void);
 NLM_EXTERN Boolean HasTpaUserObject (BioseqPtr bsp);
 
 NLM_EXTERN Boolean CountryBoxesOverlap (CharPtr country1, CharPtr country2);
+NLM_EXTERN Boolean IsGeneXrefRedundant (SeqFeatPtr sfp);
+
+/* warns if over 1000 /inference qualifiers or accessions in inference qualifiers */
+NLM_EXTERN Boolean TooManyInferenceAccessions (
+  SeqEntryPtr sep,
+  Int4Ptr numInferences,
+  Int4Ptr numAccessions
+);
+
+NLM_EXTERN Int4 IsQualValidForFeature (GBQualPtr gbqual, SeqFeatPtr sfp);
+NLM_EXTERN CharPtr GetGBFeatKeyForFeature (SeqFeatPtr sfp);
+NLM_EXTERN Boolean ShouldSuppressGBQual(Uint1 subtype, CharPtr qual_name);
+NLM_EXTERN Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGBQual);
+
 
 #ifdef __cplusplus
 }

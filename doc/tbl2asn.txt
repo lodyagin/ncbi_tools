@@ -99,7 +99,8 @@ Data records will be validated when the -V v flag is indicated.  Output is
 saved to files with a .val suffix.  The validator checks for many things,
 including internal stops in CDS features and mismatches between the CDS
 translation and the supplied protein sequence.  Errors need to be corrected
-before submitting files to GenBank.
+before submitting files to GenBank.  Additional BarCode validation tests
+are performed with -V c.
 
 GenBank format output is generated when the -V b flag is used.  Resulting
 files have a .gbf suffix.  The validation and flatfile generation flags can

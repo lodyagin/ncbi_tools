@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.39 $
+* $Revision: 6.41 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -148,8 +148,10 @@ NLM_EXTERN Boolean BioseqToFastaX PROTO((BioseqPtr bsp, MyFsaPtr mfp, Boolean is
 *   BioseqFastaStream (bsp, fp, flags, linelen, blocklen, grouplen, do_defline)
 *   BioseqFastaMemStream (bsp, bs, flags, linelen, blocklen, grouplen, do_defline)
 *   SeqLocFastaStream (slp, fp, flags, linelen, blocklen, grouplen)
+*   SeqLitFastaStream (lit, fp, flags, linelen, blocklen, grouplen)
 *   CdRegionFastaStream (sfp, fp, flags, linelen, blocklen, grouplen)
 *   TranslationFastaStream (sfp, fp, flags, linelen, blocklen, grouplen)
+*   GeneFastaStream (sfp, fp, flags, linelen, blocklen, grouplen)
 *   SeqEntryFastaStream (sep, fp, flags, linelen, blocklen, grouplen,
 *                        do_na, do_aa, master_style)
 *
@@ -197,6 +199,15 @@ NLM_EXTERN Int4 SeqLocFastaStream (
   Int2 grouplen
 );
 
+NLM_EXTERN Int4 SeqLitFastaStream (
+  SeqLitPtr lit,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen
+);
+
 NLM_EXTERN Int4 CdRegionFastaStream (
   SeqFeatPtr sfp,
   FILE *fp,
@@ -209,6 +220,17 @@ NLM_EXTERN Int4 CdRegionFastaStream (
 );
 
 NLM_EXTERN Int4 TranslationFastaStream (
+  SeqFeatPtr sfp,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen,
+  Boolean do_defline,
+  CharPtr idSuffix
+);
+
+NLM_EXTERN Int4 GeneFastaStream (
   SeqFeatPtr sfp,
   FILE *fp,
   StreamFlgType flags,

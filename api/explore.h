@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.55 $
+* $Revision: 6.57 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -210,6 +210,11 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetPROTgivenProduct (
 
 NLM_EXTERN GeneRefPtr LIBCALL SeqMgrGetGeneXref (
   SeqFeatPtr sfp
+);
+
+NLM_EXTERN GeneRefPtr LIBCALL SeqMgrGetGeneXrefEx (
+  SeqFeatPtr sfp,
+  ObjectIdPtr PNTR oipP
 );
 
 NLM_EXTERN Boolean LIBCALL SeqMgrGeneIsSuppressed (
@@ -569,6 +574,17 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature (
   Int4Ptr position,
   Int2 overlapType,
   SeqMgrFeatContext PNTR context
+);
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeatureEx (
+  SeqLocPtr slp,
+  Uint2 subtype,
+  VoidPtr featarray,
+  Int4 numfeats,
+  Int4Ptr position,
+  Int2 overlapType,
+  SeqMgrFeatContext PNTR context,
+  Boolean special
 );
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex (

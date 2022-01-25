@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.78 $
+* $Revision: 6.83 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -692,6 +692,8 @@ NLM_EXTERN Boolean AddGenomeToEntry (
 #define SUBSRC_mating_type 38
 #define SUBSRC_linkage_group 39
 #define SUBSRC_haplogroup 40
+#define SUBSRC_whole_replicon 41
+#define SUBSRC_phenotype 42
 #define SUBSRC_other 255
 
 /*********************************************
@@ -739,6 +741,8 @@ NLM_EXTERN Boolean AddGenomeToEntry (
         mating-type (38) ,
         linkage-group (39) ,
         haplogroup (40) ,
+        whole-replicon (41) ,
+        phenotype (42) ,
         other (255) } ,
 
 *   value is an optional string to give the name (eg. of the
@@ -1621,6 +1625,44 @@ NLM_EXTERN UserObjectPtr FindSeqAnnotCleanupUserObj (
 
 NLM_EXTERN void RemoveAllSeqAnnotCleanupUserObjs (
   SeqAnnotPtr sap
+);
+
+NLM_EXTERN UserObjectPtr FindNcbiAutofixUserObject (
+  SeqEntryPtr sep
+);
+
+NLM_EXTERN void AddNcbiAutofixUserObject (
+  SeqEntryPtr sep
+);
+
+NLM_EXTERN void RemoveNcbiAutofixUserObjects (
+  SeqEntryPtr sep
+);
+
+/* Mark unverified sequences */
+
+NLM_EXTERN UserObjectPtr CreateUnverifiedUserObject (
+  void
+);
+
+NLM_EXTERN UserObjectPtr FindUnverifiedUserObject (
+  SeqEntryPtr sep
+);
+
+NLM_EXTERN void AddUnverifiedUserObject (
+  SeqEntryPtr sep
+);
+
+NLM_EXTERN void AddUnverifiedUserObjectToBioseq (
+  BioseqPtr bsp
+);
+
+NLM_EXTERN void RemoveUnverifiedUserObjects (
+  SeqEntryPtr sep
+);
+
+NLM_EXTERN Boolean IsUnverifiedUserObject (
+  UserObjectPtr uop
 );
 
 

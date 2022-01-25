@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.23 $
+* $Revision: 6.25 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -250,10 +250,10 @@ static Int2 GetNextBlock (CharPtr title, Int2 maxwid, Boolean byPixels,
 
 {
   Char     ch;
-  Int2     i;
+  Int4     i;
   Boolean  isjapanese;
-  Int2     j;
-  Int2     wid;
+  Int4     j;
+  Int4     wid;
 
   isjapanese = IsJapanese ();
   if (isjapanese) {
@@ -487,7 +487,8 @@ static void ParseText (ItemPtr itemPtr, ParsePtr parsePtr,
         wrap = FALSE;
         ch = text [start];
         if (ch != '\0' && ch != '\n' && ch != '\r' && (ch != '\t' || tabStops)) {
-          maxwid = INT2_MAX;
+          /* note - maxwid has to be less than INT2_MAX less the width of one character, or it will roll to negative */
+          maxwid = INT2_MAX - 16;
           if (col < numCols) {
             if (byPixels) {
               width = colFmt [col].pixWidth;

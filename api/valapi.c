@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/7/2009
 *
-* $Revision: 1.9 $
+* $Revision: 1.10 $
 *
 * File Description: 
 *
@@ -136,7 +136,18 @@ static CharPtr commentRulesStr = "Comment-set ::= {\n" \
 "          { \n" \
 "            field-name \"Current Finishing Status\" ,\n" \
 "            match-expression \"^\\(Standard Draft\\|High Quality Draft\\|Improved High Quality Draft\\|Annotation Directed\\|Non-contiguous Finished\\|Finished\\)$\" } } }\n" \
-"} } }\n";
+"} } , \n" \
+"  { \n" \
+"    prefix \"##Assembly-Data-START##\" , \n" \
+"    fields {  \n" \
+"      { \n" \
+"        field-name \"Assembly Method\" ,  \n" \
+"        match-expression \".+ v\\. .+\" , \n" \
+"        required TRUE } , \n" \
+"      { \n" \
+"        field-name \"Sequencing Technology\" , \n" \
+"        required TRUE } } } \n" \
+"}\n";
 #endif
 
 

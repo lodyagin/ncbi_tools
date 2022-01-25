@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.98 $
+* $Revision: 6.100 $
 *
 * File Description: 
 *
@@ -5154,7 +5154,7 @@ static void AddTextToComment (ButtoN b, CharPtr text)
   orig_comment = MemFree (orig_comment);
 
   rtd.ncrna_class = NULL;
-  rtd.rna_featdef = FEATDEF_otherRNA;
+  rtd.rna_featdef = FEATDEF_misc_RNA;
   PointerToDialog (dlg->rnaType, &rtd);
 }
 
@@ -6369,6 +6369,7 @@ extern void ApplyFeatureToAlignment (Uint2 entityID, SeqAlignPtr salp, SeqLocPtr
   EnableApplyFeatureAccept (aafdp);
   Show (w);
 }
+
 
 extern SeqAnnotPtr GetSeqAnnotForAlignment (SeqAlignPtr sap)
 {

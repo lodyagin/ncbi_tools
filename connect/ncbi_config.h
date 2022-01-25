@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONFIG__H
 #define CONNECT___NCBI_CONFIG__H
 
-/* $Id: ncbi_config.h,v 6.17 2010/05/21 16:40:19 lavr Exp $
+/* $Id: ncbi_config.h,v 6.18 2011/05/04 16:05:39 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,6 +44,9 @@
 #if defined(OS_UNIX)
 #  define NCBI_OS_UNIX 1
 #  define HAVE_GETPWUID 1
+#  ifdef __GLIBC__
+#    define HAVE_MEMRCHR 1
+#  endif
 #  if defined(OS_UNIX_LINUX)
 #    define NCBI_OS_LINUX 1
 #    ifdef PROC_X86_64

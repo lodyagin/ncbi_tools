@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnmla2.h11";
-static AsnValxNode avnx[20] = {
+static char * asnfilename = "asnmla2.h12";
+static AsnValxNode avnx[23] = {
     {20,"not-set" ,0,0.0,&avnx[1] } ,
     {20,"name" ,1,0.0,&avnx[2] } ,
     {20,"tsub" ,2,0.0,&avnx[3] } ,
@@ -30,7 +30,10 @@ static AsnValxNode avnx[20] = {
     {20,"journal-not-found" ,4,0.0,&avnx[17] } ,
     {20,"citation-not-found" ,5,0.0,&avnx[18] } ,
     {20,"citation-ambiguous" ,6,0.0,&avnx[19] } ,
-    {20,"citation-too-many" ,7,0.0,NULL } };
+    {20,"citation-too-many" ,7,0.0,&avnx[20] } ,
+    {20,"cannot-connect-searchbackend-jrsrv" ,8,0.0,&avnx[21] } ,
+    {20,"cannot-connect-searchbackend-pmdb" ,9,0.0,&avnx[22] } ,
+    {20,"cannot-connect-docsumbackend" ,10,0.0,NULL } };
 
 static AsnType atx[58] = {
   {401, "Medline-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[1]} ,
@@ -93,7 +96,7 @@ static AsnType atx[58] = {
   {0, "getmlr" ,128,12,0,0,0,0,0,0,NULL,&atx[1],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-MedArchive" , "asnmla2.h11",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-MedArchive" , "asnmla2.h12",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;

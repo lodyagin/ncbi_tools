@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_HEAPMGR__H
 #define CONNECT___NCBI_HEAPMGR__H
 
-/*  $Id: ncbi_heapmgr.h,v 6.25 2006/11/20 20:18:56 lavr Exp $
+/* $Id: ncbi_heapmgr.h,v 6.26 2011/05/26 18:44:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -79,19 +79,19 @@ typedef struct {
 typedef void* (*FHEAP_Resize)
 (void*      old_base,  /* current base of the heap to be expanded           */
  TNCBI_Size new_size,  /* requested new heap size (zero to deallocate heap) */
- void*      arg        /* user-supplied argument, see HEAP_Create() below   */
+ void*      auxarg     /* user-supplied argument, see HEAP_Create() below   */
  );
 
 
 /* Create new heap.
- * NOTE: the initial heap base must be aligned with a 'double' boundary!
+ * NOTE: the initial heap base must be aligned at a 'double' boundary!
  */
 extern NCBI_XCONNECT_EXPORT HEAP HEAP_Create
 (void*        base,        /* initial heap base (use "resize" if NULL) */
  TNCBI_Size   size,        /* initial heap size                        */
  TNCBI_Size   chunk_size,  /* minimal increment size                   */
  FHEAP_Resize resize,      /* NULL if not resizeable                   */
- void*        arg          /* user argument to pass to "resize"        */
+ void*        auxarg       /* a user argument to pass to "resize"      */
  );
 
 
@@ -136,7 +136,7 @@ extern NCBI_XCONNECT_EXPORT void HEAP_Free
 
 
 /* Deallocate a block pointed to by "ptr" and having "prev" as its predecessor
- * (NULL if "ptr" is the first on the heap) -- faster variant of HEAP_Free().
+ * (NULL if "ptr" is the first on the heap) -- a faster variant of HEAP_Free().
  * NOTE:  Since the block pointed to by "ptr" may cause free blocks to
  * coalesce, to use this call again while walking the following rule must
  * be utilized:  If "prev" was free, "prev" must not get advanced;
@@ -161,7 +161,7 @@ extern NCBI_XCONNECT_EXPORT SHEAP_Block* HEAP_Walk
 
 /* Trim the heap, making garbage collection first.  Returned is
  * the resultant heap, which has its last block (if any) trimmed to the
- * size of heap chunk size as specified at the time of the heap creation.
+ * size of the heap chunk size as specified at the time of the heap creation.
  * No change in size is made if the last block is not free or large
  * enough to allow the trimming.  NULL gets returned on NULL or read-only
  * heaps, or if a resize error has occurred.
@@ -235,6 +235,9 @@ extern NCBI_XCONNECT_EXPORT int HEAP_Serial(const HEAP heap);
  * newalk == eDefault keeps current setting.
  * This call is intended for internal uses; and default settings (fast ops
  * w/o new structure integrity checks) should suffice for most users.
+ * Note that in current implementation, new heap walk is only coupled with
+ * slow heap operations, that is if heap access is set to fast==eOn, then
+ * newalk setting is read but ignored.
  */
 extern NCBI_XCONNECT_EXPORT void HEAP_Options(ESwitch fast, ESwitch newalk);
 
@@ -245,83 +248,5 @@ extern NCBI_XCONNECT_EXPORT void HEAP_Options(ESwitch fast, ESwitch newalk);
 
 
 /* @} */
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_heapmgr.h,v $
- * Revision 6.25  2006/11/20 20:18:56  lavr
- * +HEAP_AllocFast() [and better documentation on HEAP_FreeFast()]
- *
- * Revision 6.24  2006/11/20 17:26:20  lavr
- * HEAP_FreeFast() better documented (with all side effects)
- *
- * Revision 6.23  2006/11/20 17:01:52  lavr
- * Added missing declaration of newly added HEAP_FreeFast()
- *
- * Revision 6.22  2006/11/20 16:38:15  lavr
- * Faster heap with free blocks linked into a list.
- * HEAP_AttachEx() -> HEAP_AttachFast()
- * +HEAP_FreeFast(), +HEAP_Options()
- *
- * Revision 6.21  2006/03/05 17:32:35  lavr
- * Revised API to allow to create ref-counted heap copies
- *
- * Revision 6.20  2004/07/08 14:11:11  lavr
- * Fix few inline descriptions
- *
- * Revision 6.19  2003/09/23 21:00:53  lavr
- * +HEAP_AttachEx()
- *
- * Revision 6.18  2003/09/02 20:45:45  lavr
- * -<connect/connect_export.h> -- now included from <connect/ncbi_types.h>
- *
- * Revision 6.17  2003/08/28 21:09:37  lavr
- * Accept (and allocate) additional heap extent in HEAP_CopySerial()
- *
- * Revision 6.16  2003/08/25 14:50:10  lavr
- * Heap arena ptrs changed to be "void*";  expand routine to take user arg
- *
- * Revision 6.15  2003/07/31 17:53:43  lavr
- * +HEAP_Trim()
- *
- * Revision 6.14  2003/04/09 17:58:51  siyan
- * Added doxygen support
- *
- * Revision 6.13  2003/01/08 01:59:32  lavr
- * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
- *
- * Revision 6.12  2002/09/25 20:08:43  lavr
- * Added table to explain expand callback inputs and outputs
- *
- * Revision 6.11  2002/09/19 18:00:58  lavr
- * Header file guard macro changed; log moved to the end
- *
- * Revision 6.10  2002/04/13 06:33:22  lavr
- * +HEAP_Base(), +HEAP_Size(), +HEAP_Serial(), new HEAP_CopySerial()
- *
- * Revision 6.9  2001/07/03 20:23:46  lavr
- * Added function: HEAP_Copy()
- *
- * Revision 6.8  2001/06/19 20:16:19  lavr
- * Added #include <connect/ncbi_types.h>
- *
- * Revision 6.7  2001/06/19 19:09:35  lavr
- * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
- *
- * Revision 6.6  2000/10/05 21:25:45  lavr
- * ncbiconf.h removed
- *
- * Revision 6.5  2000/10/05 21:09:52  lavr
- * ncbiconf.h included
- *
- * Revision 6.4  2000/05/23 21:41:05  lavr
- * Alignment changed to 'double'
- *
- * Revision 6.3  2000/05/12 18:28:40  lavr
- * First working revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_HEAPMGR__H */

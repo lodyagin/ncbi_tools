@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.87 $
+* $Revision: 6.88 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -2753,7 +2753,7 @@ NLM_EXTERN Nlm_Boolean Nlm_HasDualScreen (void)
 
 {
 #if(WINVER >= 0x0500)
-  int num_monitors  = (Nlm_Int2)GetSystemMetrics (SM_CMONITORS);
+  int num_monitors = GetSystemMetrics (SM_CMONITORS);
   if (num_monitors == 2) {
     return TRUE;
   }
@@ -2764,6 +2764,20 @@ NLM_EXTERN Nlm_Boolean Nlm_HasDualScreen (void)
   } else if (screenBitBounds.right > 2500 && screenBitBounds.bottom < 1100) {
     return TRUE;
   }
+  return FALSE;
+#endif
+}
+
+NLM_EXTERN Nlm_Boolean Nlm_IsRemoteDesktop (void)
+
+{
+#if(WINVER >= 0x0500)
+  int iRemoteSession = GetSystemMetrics (SM_REMOTESESSION);
+  if (iRemoteSession) {
+    return TRUE;
+  }
+  return FALSE;
+#else
   return FALSE;
 #endif
 }

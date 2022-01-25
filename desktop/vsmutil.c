@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.74 $
+* $Revision: 6.76 $
 *
 * File Description: 
 *
@@ -54,6 +54,10 @@
 #include <explore.h>
 #include <valid.h>
 #include <subutil.h>
+
+#define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macroapi.h>
 
 typedef struct errfltrdata {
   ErrSev         sev;
@@ -884,7 +888,7 @@ static CharPtr GetEcNumberReport (SeqFeatPtr sfp)
 {
   SeqIdPtr  sip = NULL;
   BioseqPtr bsp;
-  CharPtr   ec_number = NULL, tmp;
+  CharPtr   ec_number = NULL, tmp, prot_name = NULL;
   GBQualPtr gbq;
   ProtRefPtr prp;
   ValNodePtr vnp;
@@ -893,11 +897,12 @@ static CharPtr GetEcNumberReport (SeqFeatPtr sfp)
   GeneRefPtr grp;
   SeqMgrFeatContext fcontext;
   CharPtr           report_str = NULL;
+  CharPtr           report_fmt = "%s\t%s\t%s\t%s\n";
   Int4              report_len;
   Char              seqid [128];
 
   if (sfp == NULL) return NULL;
-  /* want: accession number for sequence, ec number, locus tag */
+  /* want: accession number for sequence, ec number, locus tag, protein name */
 
   /* find accession number */
   if (sfp->idx.subtype == FEATDEF_PROT) {
@@ -950,6 +955,9 @@ static CharPtr GetEcNumberReport (SeqFeatPtr sfp)
         ec_number = tmp;
       }
     }
+    if (prp->name != NULL) {
+      prot_name = prp->name->data.ptrvalue;
+    }
   }
 
   if (StringHasNoText (ec_number)) {
@@ -971,12 +979,17 @@ static CharPtr GetEcNumberReport (SeqFeatPtr sfp)
     grp = NULL;
   }
   
-  report_len = StringLen (seqid) + StringLen (ec_number) + 4;
+  report_len = StringLen (seqid) + StringLen (ec_number) + StringLen (report_fmt);
   if (grp != NULL) {
     report_len += StringLen (grp->locus_tag);
   }
+  if (prot_name != NULL) {
+    report_len += StringLen (prot_name);
+  }
   report_str = (CharPtr) MemNew (sizeof (Char) * report_len);
-  sprintf (report_str, "%s\t%s\t%s\n", seqid, ec_number, (grp != NULL && grp->locus_tag != NULL) ? grp->locus_tag : "");
+  sprintf (report_str, report_fmt, seqid, ec_number, 
+          (grp != NULL && grp->locus_tag != NULL) ? grp->locus_tag : "",
+          prot_name == NULL ? "" : prot_name);
   ec_number = MemFree (ec_number);
   return report_str;
 }
@@ -1551,6 +1564,114 @@ static Boolean MakeStandardReports (ValNodePtr chosen, ValNodePtr PNTR reports_l
 }
 
 
+static Boolean MakeFieldReports (ValNodePtr report_list, ValNodePtr field_list, FILE *fp)
+{
+  ValNodePtr item_vnp, field_vnp;
+  CharPtr    cp;
+  Boolean    found_any = FALSE;
+  CharPtr    label;
+
+  if (report_list == NULL || fp == NULL) return FALSE;
+
+  for (item_vnp = report_list; item_vnp != NULL; item_vnp = item_vnp->next)
+  {
+    cp = GetDiscrepancyItemText (item_vnp);
+    if (cp != NULL)
+    {
+      label = GetParentLabelForDiscrepancyItem (item_vnp);
+      if (label != NULL) {
+          fprintf (fp, "%s:", label);
+          label = MemFree (label);
+      }
+      fprintf (fp, "%s", cp);
+      found_any = TRUE;
+      cp = MemFree (cp);
+    }
+    for (field_vnp = field_list; field_vnp != NULL; field_vnp = field_vnp->next) {
+      cp = GetFieldValueForObject (item_vnp->choice, item_vnp->data.ptrvalue, field_vnp, NULL);
+      fprintf (fp, "\t%s", cp == NULL ? "" : cp);
+      cp = MemFree (cp);
+    }
+    fprintf (fp, "\n");
+  }
+  return found_any;
+}
+
+
+static Boolean MakeBadInstCodeReport (ValNodePtr item_list, FILE *fp)
+{
+  ValNodePtr   item_vnp;
+  BioSourcePtr biop;
+  OrgModPtr    mod;
+  CharPtr    cp;
+  Boolean    found_any = FALSE;
+  CharPtr    label;
+
+  if (item_list == NULL || fp == NULL) return FALSE;
+
+  for (item_vnp = item_list; item_vnp != NULL; item_vnp = item_vnp->next)
+  {
+    cp = GetDiscrepancyItemText (item_vnp);
+    if (cp != NULL)
+    {
+      /* get rid of trailing carriage return */
+      *(cp + StringLen (cp) - 1) = 0;
+      label = GetParentLabelForDiscrepancyItem (item_vnp);
+      if (label != NULL) 
+      {
+        fprintf (fp, "%s:", label);
+        label = MemFree (label);
+      }
+      fprintf (fp, "%s", cp);
+      found_any = TRUE;
+      cp = MemFree (cp);
+    }
+    biop = GetBioSourceFromObject (item_vnp->choice, item_vnp->data.ptrvalue);
+    if (biop != NULL && biop->org != NULL && biop->org->orgname != NULL) {
+      for (mod = biop->org->orgname->mod; mod != NULL; mod = mod->next) {
+        if (mod->subtype == ORGMOD_culture_collection 
+            || mod->subtype == ORGMOD_bio_material 
+            || mod->subtype == ORGMOD_specimen_voucher) {
+          label = StringSave (mod->subname);
+          cp = StringChr (label, ':');
+          if (cp != NULL) {
+            *cp = 0;
+          }
+          fprintf (fp, "\t%s", label == NULL ? "" : label);
+          label = MemFree (label);
+        }
+      }
+    }
+    fprintf (fp, "\n");
+  }
+  return found_any;
+}
+
+
+static Boolean MakeBadECNumberReport (ValNodePtr ecnumber_list, FILE *fp)
+{
+  Boolean found_any = FALSE;
+  CharPtr cp;
+  ValNodePtr vnp;
+
+  if (ecnumber_list == NULL || fp == NULL) {
+    return FALSE;
+  }
+
+  fprintf (fp, "EC Number Errors\n");
+  for (vnp = ecnumber_list; vnp != NULL; vnp = vnp->next) {
+    cp = GetEcNumberReport (vnp->data.ptrvalue);
+    if (cp != NULL) {
+      fprintf (fp, "%s", cp);
+      found_any = TRUE;
+      cp = MemFree (cp);
+    }
+  }
+  fprintf (fp, "\n");
+  return found_any;
+}
+
+
 static void MakeValidatorReport (ButtoN b)
 {
   ValidExtraPtr  vep;
@@ -1564,6 +1685,7 @@ static void MakeValidatorReport (ButtoN b)
   ValNodePtr     consensus_splice_list = NULL;
   ValNodePtr     ecnumber_list = NULL;
   ValNodePtr     specific_host_list = NULL;
+  ValNodePtr     bad_inst_code = NULL;
   SeqFeatPtr     sfp;
   SeqDescrPtr    sdp;
   BioseqPtr      bsp;
@@ -1643,6 +1765,18 @@ static void MakeValidatorReport (ButtoN b)
               ValNodeAddPointer (&specific_host_list, OBJ_SEQFEAT, sfp);
             }
           }
+        } else if (eip->errcode == 2 && eip->subcode == 53) {
+          if (eip->itemtype == OBJ_SEQDESC) {
+            sdp = SeqMgrGetDesiredDescriptor (eip->entityID, NULL, eip->itemID, 0, NULL, &dcontext);
+            if (sdp != NULL) {
+              ValNodeAddPointer (&bad_inst_code, OBJ_SEQDESC, sdp);
+            }
+          } else if (eip->itemtype == OBJ_SEQFEAT) {
+            sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
+            if (sfp != NULL) {
+              ValNodeAddPointer (&bad_inst_code, OBJ_SEQFEAT, sfp);
+            }
+          }
         } else if (eip->itemtype == OBJ_SEQFEAT) {
           sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
           if (sfp != NULL) {
@@ -1674,16 +1808,7 @@ static void MakeValidatorReport (ButtoN b)
   }
 
   if (ecnumber_list != NULL) {
-    fprintf (fp, "EC Number Errors\n");
-    for (vnp = ecnumber_list; vnp != NULL; vnp = vnp->next) {
-      cp = GetEcNumberReport (vnp->data.ptrvalue);
-      if (cp != NULL) {
-        fprintf (fp, "%s", cp);
-        found_any = TRUE;
-        cp = MemFree (cp);
-      }
-    }
-    fprintf (fp, "\n");
+    found_any |= MakeBadECNumberReport(ecnumber_list, fp);
     ecnumber_list = ValNodeFree (ecnumber_list);
   }
  
@@ -1691,6 +1816,11 @@ static void MakeValidatorReport (ButtoN b)
     fprintf (fp, "Bad Specific-host Values\n");
     WriteBadSpecificHostTable (specific_host_list, fp);
     found_any = TRUE;
+  }
+
+  if (bad_inst_code != NULL) {
+    fprintf (fp, "Bad Institution Codes\n");
+    found_any |= MakeBadInstCodeReport(bad_inst_code, fp);
   }
 
   found_any |= MakeStandardReports (chosen, report_lists, fp);

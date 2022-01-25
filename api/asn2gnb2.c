@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.147 $
+* $Revision: 1.161 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -63,7 +63,7 @@
 #endif
 #endif
 
-static CharPtr link_projid = "http://www.ncbi.nlm.nih.gov/sites/entrez?db=genomeprj&cmd=Retrieve&dopt=Overview&list_uids=";
+static CharPtr link_projid = "http://www.ncbi.nlm.nih.gov/bioproject/";
 
 static CharPtr link_srr = "http://www.ncbi.nlm.nih.gov/sites/entrez?db=sra&term=";
 
@@ -449,6 +449,7 @@ NLM_EXTERN void AddLocusBlock (
   Char               buf [1024];
   Boolean            cagemaster = FALSE;
   SeqFeatPtr         cds;
+  Char               ch1, ch2, ch3;
   Int4               currGi;
   Char               dataclass [10];
   Char               date [40];
@@ -494,6 +495,7 @@ NLM_EXTERN void AddLocusBlock (
   OrgRefPtr          orp;
   BioseqPtr          parent;
   Int4               prevGi;
+  CharPtr            ptr;
   SeqDescrPtr        sdp;
   Char               sect [128];
   Char               seg [32];
@@ -616,6 +618,27 @@ NLM_EXTERN void AddLocusBlock (
     SeqIdWrite (sip, locus, PRINTID_TEXTID_LOCUS, sizeof (locus) - 1);
     if (LocusHasBadChars (locus)) {
       SeqIdWrite (sip, locus, PRINTID_TEXTID_ACCESSION, sizeof (locus) - 1);
+    }
+  }
+
+  if (sip != NULL && sip->choice == SEQID_PDB) {
+    ptr = StringChr (locus, '_');
+    if (ptr != NULL) {
+      ch1 = ptr [1];
+      if (ch1 != '\0') {
+        ch2 = ptr [2];
+        if (ch2 != '\0') {
+          ch3 = ptr [3];
+          if (ch3 == '\0') {
+            if (ch1 == ch2) {
+              if (IS_UPPER (ch1)) {
+                ptr [1] = TO_LOWER (ch1);
+                ptr [2] = '\0';
+              }
+            }
+          }
+        }
+      }
     }
   }
 
@@ -1763,6 +1786,7 @@ NLM_EXTERN void AddAccessionBlock (
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
   Char               buf [41];
+  Char               ch1, ch2, ch3;
   SeqMgrDescContext  dcontext;
   EMBLBlockPtr       ebp;
   ValNodePtr         extra_access;
@@ -1777,6 +1801,7 @@ NLM_EXTERN void AddAccessionBlock (
   SeqIdPtr           lcl = NULL;
   size_t             len = 0;
   MolInfoPtr         mip;
+  CharPtr            ptr;
   SeqDescrPtr        sdp;
   ValNodePtr         secondary_acc;
   CharPtr            separator = " ";
@@ -1874,6 +1899,27 @@ NLM_EXTERN void AddAccessionBlock (
   if (sip == NULL) return;
 
   SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_ONLY, sizeof (buf));
+
+  if (sip->choice == SEQID_PDB) {
+    ptr = StringChr (buf, '_');
+    if (ptr != NULL) {
+      ch1 = ptr [1];
+      if (ch1 != '\0') {
+        ch2 = ptr [2];
+        if (ch2 != '\0') {
+          ch3 = ptr [3];
+          if (ch3 == '\0') {
+            if (ch1 == ch2) {
+              if (IS_UPPER (ch1)) {
+                ptr [1] = TO_LOWER (ch1);
+                ptr [2] = '\0';
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 
   bbp = Asn2gbAddBlock (awp, ACCESSION_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
@@ -2051,22 +2097,24 @@ NLM_EXTERN void AddVersionBlock (
 )
 
 {
-  SeqIdPtr         accn = NULL;
-  IntAsn2gbJobPtr  ajp;
-  Asn2gbSectPtr    asp;
-  BaseBlockPtr     bbp;
-  BioseqPtr        bsp;
-  Char             buf [41];
-  Uint1            format = PRINTID_TEXTID_ACC_VER;
-  GBSeqPtr         gbseq;
-  Int4             gi = -1;
-  SeqIdPtr         gpp = NULL;
-  IndxPtr          index;
-  CharPtr          ptr;
-  SeqIdPtr         sip;
-  Char             tmp [41];
-  Char             version [64];
-  StringItemPtr    ffstring;
+  SeqIdPtr          accn = NULL;
+  IntAsn2gbJobPtr   ajp;
+  Asn2gbSectPtr     asp;
+  BaseBlockPtr      bbp;
+  BioseqPtr         bsp;
+  Char              buf [41];
+  Char              ch1, ch2, ch3;
+  Uint1             format = PRINTID_TEXTID_ACC_VER;
+  GBSeqPtr          gbseq;
+  Int4              gi = -1;
+  SeqIdPtr          gpp = NULL;
+  IntAsn2gbSectPtr  iasp;
+  IndxPtr           index;
+  CharPtr           ptr;
+  SeqIdPtr          sip;
+  Char              tmp [41];
+  Char              version [64];
+  StringItemPtr     ffstring;
 
   if (awp == NULL) return;
   ajp = awp->ajp;
@@ -2078,6 +2126,8 @@ NLM_EXTERN void AddVersionBlock (
 
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return;
+
+  iasp = (IntAsn2gbSectPtr) asp;
 
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     switch (sip->choice) {
@@ -2166,10 +2216,44 @@ NLM_EXTERN void AddVersionBlock (
     return;
   }
 
+  if (iasp != NULL && GetWWW (ajp) && ajp->mode == ENTREZ_MODE) {
+    sprintf (version, "%ld", (long) gi);
+    iasp->gi = StringSave (version);
+  }
+
   if (accn != NULL) {
 
     buf [0] = '\0';
     SeqIdWrite (accn, buf, format, sizeof (buf) - 1);
+
+    if (accn->choice == SEQID_PDB) {
+      ptr = StringChr (buf, '_');
+      if (ptr != NULL) {
+        ch1 = ptr [1];
+        if (ch1 != '\0') {
+          ch2 = ptr [2];
+          if (ch2 != '\0') {
+            ch3 = ptr [3];
+            if (ch3 == '\0') {
+              if (ch1 == ch2) {
+                if (IS_UPPER (ch1)) {
+                  ptr [1] = TO_LOWER (ch1);
+                  ptr [2] = '\0';
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (iasp != NULL && GetWWW (ajp) && ajp->mode == ENTREZ_MODE) {
+      iasp->acc = StringSave (buf);
+      ptr = StringChr (iasp->acc, '.');
+      if (ptr != NULL) {
+        *ptr = '\0';
+      }
+    }
 
     if (gi > 0) {
       sprintf (version, "%s  GI:%ld", buf, (long) gi);
@@ -3065,12 +3149,14 @@ static void AddSPBlock (
     str = NULL;
     if ( oip->str != NULL ) {
       str = oip->str;
-      if (StringNCmp (str, "GO:", 3) == 0) {
+      if (StringCmp (db->db, "GO") == 0 && StringNCmp (str, "GO:", 3) == 0) {
         str += 3;
       } else if (StringNCmp (str, "MGI:", 4) == 0) {
         str += 4;
-      } else if (StringNCmp (str, "HGNC:", 5) == 0) {
+      } else if (StringCmp (db->db, "HGNC") == 0 && StringNCmp (str, "HGNC:", 5) == 0) {
         str += 5;
+      } else if (StringCmp (db->db, "DIP") == 0 && StringNCmp (str, "DIP:", 4) == 0) {
+        str += 4;
       }
     } else if ( oip->id > 0 ) {
       sprintf (numbuf, "%d", oip->id);
@@ -3869,13 +3955,13 @@ typedef struct finstatdata {
 } FinStatData, PNTR FinStatPtr;
 
 static FinStatData finStatKywds [] = {
-  {"Standard-Draft",              "STANDARD_DRAFT"},
-  {"High-quality-draft",          "HIGH_QUALITY_DRAFT"},
-  {"Improved-high-quality-draft", "IMPROVED_HIGH_QUALITY_DRAFT"},
-  {"Annotation-grade",            "ANNOTATION_GRADE"},
-  {"Non-contiguous-finished",     "NON_CONTIGUOUS_FINISHED"},
+  {"Standard-draft",                  "STANDARD_DRAFT"},
+  {"High-quality-draft",              "HIGH_QUALITY_DRAFT"},
+  {"Improved-high-quality-draft",     "IMPROVED_HIGH_QUALITY_DRAFT"},
+  {"Annotation-directed-improvement", "ANNOTATION_DIRECTED_IMPROVEMENT"},
+  {"Noncontiguous-finished",          "NONCONTIGUOUS_FINISHED"},
   /*
-  {"Finished",                    "FINISHED"},
+  {"Finished",                        "FINISHED"},
   */
   {NULL, NULL}
 };
@@ -3937,6 +4023,7 @@ NLM_EXTERN void AddKeywordsBlock (
   Boolean            is_sts = FALSE;
   Boolean            is_env_sample = FALSE;
   Boolean            is_genome_assembly = FALSE;
+  Boolean            is_unverified = FALSE;
   ValNodePtr         keywords;
   CharPtr            kwd;
   MolInfoPtr         mip;
@@ -4124,9 +4211,17 @@ NLM_EXTERN void AddKeywordsBlock (
             finishing_status = GetFinishingStatus ((CharPtr) curr->data.ptrvalue);
           }
         }
+      } else if (oip != NULL && StringICmp (oip->str, "Unverified") == 0) {
+        is_unverified = TRUE;
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+  if (is_unverified) {
+    if (head != NULL) {
+      ValNodeCopyStr (&head, 0, "; ");
+    }
+    ValNodeCopyStr (&head, 0, "UNVERIFIED");
   }
   if (add_encode) {
     if (head != NULL) {
@@ -4822,6 +4917,13 @@ static int LIBCALLBACK SortReferences (
 
   status = DateMatch (irp1->date, irp2->date, TRUE);
   if (status == 1 || status == -1) return status;
+  /* if dates incomparable, do other comparisons */
+  if ( status != 0 ) {
+    if( (NULL != irp1->date) && (NULL != irp2->date ) ) {
+      /* std date comes before str date */
+      return ( irp2->date->data[0] - irp1->date->data[0] ); 
+    }
+  }
 
   /* if dates (e.g., years) match, try to distinguish by uids */
 
@@ -4870,14 +4972,6 @@ static int LIBCALLBACK SortReferences (
     return -1;
   }
 
-  /* for publication features, sort in explore index order */
-
-  if (irp1->index > irp2->index) {
-    return 1;
-  } else if (irp1->index < irp2->index) {
-    return -1;
-  }
-
   /* next use author string */
 
   if (irp1->authstr != NULL && irp2->authstr != NULL) {
@@ -4898,6 +4992,14 @@ static int LIBCALLBACK SortReferences (
     } else if (compare < 0) {
       return -1;
     }
+  }
+
+  /* for publication features, sort in explore index order - probably superset of itemID below */
+
+  if (irp1->index > irp2->index) {
+    return 1;
+  } else if (irp1->index < irp2->index) {
+    return -1;
   }
 
   /* last resort for equivalent publication descriptors, sort in itemID order */
@@ -5069,7 +5171,8 @@ static void GetRefsOnBioseq (
   BioseqPtr bsp,
   Int4 from,
   Int4 to,
-  SeqLocPtr cdsloc
+  SeqLocPtr cdsloc,
+  BioseqPtr cdsbsp
 )
 
 {
@@ -5094,6 +5197,7 @@ static void GetRefsOnBioseq (
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp;
   SeqInt             sint;
+  SeqIntPtr          sintp;
   SeqIdPtr           sip;
   Boolean            split;
   Int4               start;
@@ -5161,9 +5265,22 @@ static void GetRefsOnBioseq (
         rbp->itemtype = OBJ_SEQDESC;
 
         irp = (IntRefBlockPtr) rbp;
-        irp->loc = SeqLocMerge (target, &vn, NULL, FALSE, TRUE, FALSE);
-        irp->left = 0;
-        irp->right = target->length - 1;
+        if (cdsloc != NULL && cdsbsp != NULL) {
+          sintp = SeqIntNew ();
+          sintp->from = 0;
+          sintp->to = cdsbsp->length - 1;
+          sintp->id = SeqIdDup (cdsbsp->id);
+          irp->loc = ValNodeAddPointer (NULL, SEQLOC_INT, (Pointer) sintp);
+          /*
+          irp->loc = SeqLocWholeNew (cdsbsp);
+          */
+          irp->left = 0;
+          irp->right = cdsbsp->length - 1;
+        } else {
+          irp->loc = SeqLocMerge (target, &vn, NULL, FALSE, TRUE, FALSE);
+          irp->left = from;
+          irp->right = to;
+        }
         alp = GetAuthListPtr (pdp, NULL);
         if (alp != NULL) {
           irp->authstr = GetAuthorsPlusConsortium (awp->format, alp);
@@ -5178,7 +5295,7 @@ static void GetRefsOnBioseq (
 
   if (cdsloc != NULL) {
     cp.awp = awp;
-    cp.target = target;
+    cp.target = cdsbsp;
     cp.vnp = &vn;
     SeqMgrGetAllOverlappingFeatures (cdsloc, FEATDEF_PUB, NULL, 0, LOCATION_SUBSET, (Pointer) &cp, GetRefsOnCDS);
   }
@@ -5201,8 +5318,8 @@ static void GetRefsOnBioseq (
 
         irp = (IntRefBlockPtr) rbp;
         irp->loc = SeqLocMerge (target, &vn, NULL, FALSE, TRUE, FALSE);
-        irp->left = 0;
-        irp->right = target->length - 1;
+        irp->left = from;
+        irp->right = to;
         alp = GetAuthListPtr (pdp, NULL);
         if (alp != NULL) {
           irp->authstr = GetAuthorsPlusConsortium (awp->format, alp);
@@ -5334,7 +5451,7 @@ static Boolean LIBCALLBACK GetRefsOnSeg (
   SeqEntrySetScope (oldscope);
 
   if (bsp != NULL) {
-    GetRefsOnBioseq (awp, awp->refs, bsp, from, to, NULL);
+    GetRefsOnBioseq (awp, awp->refs, bsp, from, to, NULL, NULL);
     return TRUE;
   }
 
@@ -5394,7 +5511,7 @@ NLM_EXTERN Boolean AddReferenceBlock (
   /* collect publications on bioseq */
 
   awp->pubhead = NULL;
-  GetRefsOnBioseq (awp, bsp, refs, awp->from, awp->to, NULL);
+  GetRefsOnBioseq (awp, bsp, refs, awp->from, awp->to, NULL, NULL);
   target = bsp;
 
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
@@ -5425,7 +5542,7 @@ NLM_EXTERN Boolean AddReferenceBlock (
     if (cds != NULL) {
       dna = BioseqFindFromSeqLoc (cds->location);
       if (dna != NULL) {
-        GetRefsOnBioseq (awp, dna, dna, context.left, context.right, cds->location);
+        GetRefsOnBioseq (awp, dna, dna, context.left, context.right, cds->location, bsp);
         target = dna;
       }
     }

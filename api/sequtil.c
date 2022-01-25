@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.304 $
+* $Revision: 6.328 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -7677,6 +7677,11 @@ Boolean GetThePointForOffsetEx(SeqLocPtr of, SeqPntPtr target, Uint1 which_end, 
     
     while ((pnt = SeqLocFindNext(of, pnt)) != NULL)
     {
+      if( pnt->choice == SEQLOC_NULL )
+      {
+        /* Skip NULL parts when determining offsets */
+        continue;
+      }
       last_strand = SeqLocStrand (pnt);
       last_sip = SeqLocId (pnt);
       if (last_strand != Seq_strand_minus)
@@ -7839,6 +7844,11 @@ Boolean GetPointsForLeftAndRightOffsets(SeqLocPtr of, SeqPntPtr left, SeqPntPtr 
     
     while ((pnt = SeqLocFindNext(of, pnt)) != NULL)
     {
+      if( pnt->choice == SEQLOC_NULL )
+      {
+        /* Skip NULL parts when determining offsets */
+        continue;
+      }
       last_strand = SeqLocStrand (pnt);
       last_sip = SeqLocId (pnt);
       if (last_strand != Seq_strand_minus)
@@ -9795,7 +9805,7 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccessionEx(CharPtr accession, Uint4 versi
     BioseqPtr bsp=NULL;
     TextSeqIdPtr tsp;
     Uint4 status;
-    if(accession==NULL || accession[0]=='\0')
+    if(accession==NULL || accession[0]=='\0' || accession[0]=='\n' || accession[0]=='\r')
         return NULL;
     sip=NULL;
     status = WHICH_db_accession(accession);
@@ -10449,6 +10459,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_DDBJ_WGS_PROT;
           } else if ((StringICmp(temp,"HAA") >= 0) && (StringICmp(temp,"HZZ") <= 0)) { 
               retcode = ACCN_NCBI_TPA_PROT;
+          } else  if ((StringICmp(temp,"IAA") >= 0) && (StringICmp(temp,"IZZ") <= 0)) { 
+              retcode = ACCN_DDBJ_TPA_PROT;
           } else {
               retcode = ACCN_IS_PROTEIN;
               retval = TRUE;
@@ -10510,7 +10522,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           (StringICmp(temp,"GR") == 0) || 
           (StringICmp(temp,"GT") == 0) || 
           (StringICmp(temp,"GW") == 0) || 
-          (StringICmp(temp,"HO") == 0) ) {                /* NCBI EST */
+          (StringICmp(temp,"HO") == 0) || 
+          (StringICmp(temp,"HS") == 0) || 
+          (StringICmp(temp,"JG") == 0) || 
+          (StringICmp(temp,"JK") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0) ||
                      (StringICmp(temp,"GF") == 0)) {      /* NCBI STS */
@@ -10527,7 +10542,7 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"GQ") == 0) ||
                      (StringICmp(temp,"GU") == 0) ||
                      (StringICmp(temp,"HM") == 0) ||
-                     (StringICmp(temp,"HQ") == 0)) {      /* NCBI direct submission */
+                     (StringICmp(temp,"JF") == 0)) {      /* NCBI direct submission */
               retcode = ACCN_NCBI_DIRSUB;
           } else if ((StringICmp(temp,"AE") == 0) ||
                      (StringICmp(temp,"CP") == 0) ||
@@ -10544,7 +10559,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"EQ") == 0) ||
                      (StringICmp(temp,"FA") == 0) ||
                      (StringICmp(temp,"GG") == 0) ||
-                     (StringICmp(temp,"GL") == 0)) {      /* NCBI segmented set header Bioseq */
+                     (StringICmp(temp,"GL") == 0) ||
+                     (StringICmp(temp,"JH") == 0)) {      /* NCBI segmented set header Bioseq */
               retcode = ACCN_NCBI_SEGSET;
           } else if ((StringICmp(temp,"AS") == 0) ||
                      (StringICmp(temp,"HR") == 0) ||
@@ -10573,7 +10589,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"FH") == 0) ||
                      (StringICmp(temp,"FI") == 0) ||
                      (StringICmp(temp,"GS") == 0) ||
-                     (StringICmp(temp,"HN") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"HN") == 0) ||
+                     (StringICmp(temp,"HR") == 0) ||
+                     (StringICmp(temp,"JJ") == 0) ||
+                     (StringICmp(temp,"JM") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0) ||
                      (StringICmp(temp,"DZ") == 0) ||
@@ -10599,10 +10618,17 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_TPA;
           } else if ((StringICmp(temp,"BN") == 0)) {      /* EMBL third-party annotation */
               retcode = ACCN_EMBL_TPA;
-          } else if ((StringICmp(temp,"BR") == 0)) {      /* DDBJ third-party annotation */
+          } else if ((StringICmp(temp,"BR") == 0) ||
+                    (StringICmp(temp,"HT") == 0) ||
+                    (StringICmp(temp,"HU") == 0)) {      /* DDBJ third-party annotation */
               retcode = ACCN_DDBJ_TPA;
           } else if((StringICmp(temp,"EZ") == 0) ||
-                    (StringICmp(temp,"HP") == 0)) {
+                    (StringICmp(temp,"HP") == 0) ||
+                    (StringICmp(temp,"HQ") == 0) ||
+                    (StringICmp(temp,"JI") == 0) ||
+                    (StringICmp(temp,"JL") == 0) ||
+                    (StringICmp(temp,"JO") == 0) ||
+                    (StringICmp(temp,"JN") == 0)) {
               retcode = ACCN_NCBI_TSA;
           } else if((StringICmp(temp,"FX") == 0)) {
               retcode = ACCN_DDBJ_TSA;
@@ -10612,7 +10638,6 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"HE") == 0) ||
                      (StringICmp(temp,"HF") == 0) ||
                      (StringICmp(temp,"HG") == 0) ||
-                     (StringICmp(temp,"HH") == 0) ||
                      (StringICmp(temp,"HI") == 0)) {     /* EMBL direct submission */
               retcode = ACCN_EMBL_DIRSUB;
           } else if ((StringICmp(temp,"AL") == 0) ||
@@ -10632,7 +10657,13 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"HA") == 0) ||
                      (StringICmp(temp,"HB") == 0) ||
                      (StringICmp(temp,"HC") == 0) ||
-                     (StringICmp(temp,"HD") == 0)) {      /* EMBL patent division */
+                     (StringICmp(temp,"HD") == 0) ||
+                     (StringICmp(temp,"HH") == 0) ||
+                     (StringICmp(temp,"JA") == 0) ||
+                     (StringICmp(temp,"JB") == 0) ||
+                     (StringICmp(temp,"JC") == 0) ||
+                     (StringICmp(temp,"JD") == 0) ||
+                     (StringICmp(temp,"JE") == 0)) {      /* EMBL patent division */
               retcode = ACCN_EMBL_PATENT;
           } else if ((StringICmp(temp,"AT") == 0) || 
                      (StringICmp(temp,"AU") == 0) ||
@@ -10672,15 +10703,16 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"FU") == 0) || 
                      (StringICmp(temp,"FV") == 0) || 
                      (StringICmp(temp,"FW") == 0) || 
-                     (StringICmp(temp,"FZ") == 0)) {      /* DDBJ patent division */
+                     (StringICmp(temp,"FZ") == 0) || 
+                     (StringICmp(temp,"GB") == 0) || 
+                     (StringICmp(temp,"HV") == 0) || 
+                     (StringICmp(temp,"HW") == 0)) {      /* DDBJ patent division */
               retcode = ACCN_DDBJ_PATENT;
           } else if ((StringICmp(temp,"DE") == 0) ||
                      (StringICmp(temp,"DH") == 0) || 
-                     (StringICmp(temp,"FT") == 0)) {      /* DDBJ GSS */
+                     (StringICmp(temp,"FT") == 0) || 
+                     (StringICmp(temp,"GA") == 0)) {      /* DDBJ GSS */
               retcode = ACCN_DDBJ_GSS;
-          } else if ((StringICmp(temp,"GA") == 0) || 
-                     (StringICmp(temp,"GB") == 0)) {      /* DDBJ unassigned */
-              retcode = ACCN_DDBJ_OTHER;
           } else {
               retcode = ACCN_IS_NT;
               break;
@@ -10778,6 +10810,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           retcode = ACCN_EMBL_WGS;
         } else if ((StringNICmp(temp,"D", 1) == 0)) {
           retcode = ACCN_NCBI_WGS;
+        } else if ((StringNICmp(temp,"E", 1) == 0)) {
+          retcode = ACCN_DDBJ_WGS;
         } else
           retval = FALSE;
         while (*s) {

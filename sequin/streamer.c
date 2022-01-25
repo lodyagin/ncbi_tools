@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/17/2005
 *
-* $Revision: 1.4 $
+* $Revision: 1.6 $
 *
 * File Description: 
 * This file provides the Main function for the standalone Streaming Editor.
@@ -1091,6 +1091,7 @@ static WindoW MakeStreamFilteringWindow (CharPtr input_file, CharPtr output_file
   ButtoN       b;
   StreamFilterFormPtr frm;
   SeqIdPtr     sip_list = NULL;
+  time_t       t1, t2;
 
   fp = FileOpen (input_file, "r");
   if (fp == NULL) {
@@ -1098,7 +1099,9 @@ static WindoW MakeStreamFilteringWindow (CharPtr input_file, CharPtr output_file
     return NULL;
   }
 
+  t1 = time (NULL);
   tmp = StreamAsnForDescriptors(fp, is_binary, is_batch, is_submit, &sip_list);
+  t2 = time (NULL);
   FileClose (fp);
 
   frm = (StreamFilterFormPtr) MemNew (sizeof (StreamFilterFormData));
@@ -1121,6 +1124,7 @@ static WindoW MakeStreamFilteringWindow (CharPtr input_file, CharPtr output_file
   frm->pub_dlg = DescriptorStreamEditor (g, NULL, NULL);
   SetDescriptorStreamEditorIdList(frm->pub_dlg, frm->sip_list);
   PointerToDialog (frm->pub_dlg, frm->desc_stream_list);
+  t1 = time (NULL);
 
   c = HiddenGroup (h, 2, 0, NULL);
   b = DefaultButton (c, "Accept", AcceptFilteringChanges);
@@ -1180,12 +1184,12 @@ Int2 Main (void)
   sprintf (app, "streamer %s", STREAMER_APPLICATION);
   for (i = 1;  i < argc;  i++)
   {
-    if (StringCmp (argv[i], "-i") == 0)
+    if (StringCmp (argv[i], "-in") == 0)
     {
       input_file = argv[i + 1];
       i++;
     }
-    else if (StringCmp (argv[i], "-o") == 0)
+    else if (StringCmp (argv[i], "-out") == 0)
     {
       output_file = argv[i + 1];
       i++;

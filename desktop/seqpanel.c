@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.228 2010/08/02 17:43:05 bollin Exp $
+/* $Id: seqpanel.c,v 6.229 2010/12/06 17:16:46 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -4225,7 +4225,7 @@ static void ExportSequenceText (SeqEdFormPtr sefp, Int4 from, Int4 to, FILE *fp)
   ValNodePtr    chapter_vnp;
   SeqPanParaPtr sppp;
   Int4          first_paragraph_number, last_paragraph_number, p_n, l_n;
-  Int4          ctr, i, k;
+  Int4          ctr, k;
   Uint1Ptr      buf;
   SeqPortPtr    spp;
   BioseqViewPtr bvp;
@@ -5883,6 +5883,7 @@ static void SeqEdCancel (SeqEdFormPtr sefp)
     entityID = ObjMgrGetEntityIDForPointer (sefp->bfp->bvd.bsp);
     ObjMgrSetDirtyFlag (entityID, TRUE);
     ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+    ObjMgrFreeUserData (sefp->input_entityID, sefp->procid, sefp->proctype, sefp->userkey);
     Remove (sefp->form); 
     Update (); 
   } 
@@ -9615,6 +9616,8 @@ extern ForM CreateAlnEditorWindowEx
   sefp->userkey = OMGetNextUserKey ();
   sefp->procid = 0;
   sefp->proctype = OMPROC_EDIT;
+  sefp->input_itemtype = OBJ_SEQANNOT;
+  sefp->input_itemID = sefp->annot->idx.itemID;
   omudp = ObjMgrAddUserData (sefp->input_entityID, sefp->procid, sefp->proctype, sefp->userkey);
   if (omudp != NULL) {
     omudp->userdata.ptrvalue = (Pointer) sefp;
@@ -10117,4 +10120,45 @@ NLM_EXTERN CharPtr FeatureLocationAlignment (SeqFeatPtr sfp, SeqAlignPtr salp, I
   }
   
   return (CharPtr) alnbuf;
+}
+
+
+NLM_EXTERN Boolean CloseAlignmentEditor(Uint2 entityID, Uint4 itemID)
+
+{
+  BaseFormPtr    bfp;
+  Uint4          j;
+  Uint4          num;
+  ObjMgrPtr      omp;
+  ObjMgrDataPtr  PNTR omdpp;
+  OMUserDataPtr  omudp;
+  ObjMgrDataPtr  tmp;
+  Boolean        any = FALSE;
+  ValNodePtr     list = NULL, vnp;
+
+  omp = ObjMgrGet ();
+  if (omp == NULL) return FALSE;
+  num = omp->currobj;
+  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
+    tmp = *omdpp;
+    if (tmp->parentptr == NULL && (tmp->EntityID == entityID || entityID == 0)) {
+      for (omudp = tmp->userdata; omudp != NULL; omudp = omudp->next) {
+        if (omudp->proctype == OMPROC_EDIT) {
+          bfp = (BaseFormPtr) omudp->userdata.ptrvalue;
+          if (bfp != NULL) {
+            if ((bfp->input_itemID == itemID || itemID == 0) && bfp->input_itemtype == OBJ_SEQANNOT) {
+              ValNodeAddPointer (&list, 0, bfp);
+              any = TRUE;
+            }
+          }
+        }
+      }
+    }
+  }
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    SeqEdCancel ((SeqEdFormPtr) vnp->data.ptrvalue);
+  }
+  list = ValNodeFree (list);
+
+  return any;
 }

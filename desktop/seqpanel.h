@@ -1,4 +1,4 @@
-/* $Id: seqpanel.h,v 6.23 2010/05/04 12:23:03 bollin Exp $
+/* $Id: seqpanel.h,v 6.24 2010/12/06 17:16:46 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -65,5 +65,7 @@ NLM_EXTERN void SeqAlnWindowScrollToAlnPos (WindoW w, Int4 aln_pos, Int4 seq_num
 
 NLM_EXTERN CharPtr FeatureLocationAlignment (SeqFeatPtr sfp, SeqAlignPtr salp, Int4 begin, Int4 fin);
 extern void FlipAlignment (SeqAlignPtr salp);
+
+NLM_EXTERN Boolean CloseAlignmentEditor(Uint2 entityID, Uint4 itemID);
 
 #endif

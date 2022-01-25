@@ -1,4 +1,4 @@
-/* $Id: blast_filter.c,v 1.99 2010/03/31 16:14:46 kazimird Exp $
+/* $Id: blast_filter.c,v 1.100 2011/06/20 13:19:45 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_filter.c,v 1.99 2010/03/31 16:14:46 kazimird Exp $";
+    "$Id: blast_filter.c,v 1.100 2011/06/20 13:19:45 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -1347,7 +1347,7 @@ BlastSetUp_MaskQuery(BLAST_SequenceBlk* query_blk,
 {
     const Boolean kIsNucl = (program_number == eBlastTypeBlastn);
     Int4 context; /* loop variable. */
-    Int4 total_length = 2; /* Length to copy, adding one for beginning and end. */
+    Int4 total_length;
     Boolean has_mask = FALSE; /* Check for whether filter_maskloc is empty. */
     Int4 index; /* loop variable. */
 
@@ -1368,10 +1368,8 @@ BlastSetUp_MaskQuery(BLAST_SequenceBlk* query_blk,
        return;
 
 
-    for (context = query_info->first_context;
-         context <= query_info->last_context; ++context) {
-        total_length += query_info->contexts[context].query_length;
-    }
+    total_length  = query_info->contexts[query_info->last_context].query_offset
+                  + query_info->contexts[query_info->last_context].query_length + 2;
     query_blk->sequence_start_nomask = BlastMemDup(query_blk->sequence_start, total_length);
     query_blk->sequence_nomask = query_blk->sequence_start_nomask + 1;
     query_blk->nomask_allocated = TRUE;

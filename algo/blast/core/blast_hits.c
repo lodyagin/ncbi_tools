@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.234 2010/07/30 17:44:35 kazimird Exp $
+/* $Id: blast_hits.c,v 1.243 2011/05/31 16:09:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.234 2010/07/30 17:44:35 kazimird Exp $";
+    "$Id: blast_hits.c,v 1.243 2011/05/31 16:09:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
@@ -1525,8 +1525,10 @@ Blast_HSPListSaveHSP(BlastHSPList* hsp_list, BlastHSP* new_hsp)
 }
 
 Int2 Blast_HSPListGetEvalues(const BlastQueryInfo* query_info,
+                             Int4 subject_length,
                              BlastHSPList* hsp_list, 
                              Boolean gapped_calculation, 
+                             Boolean RPS_prelim,
                              const BlastScoreBlk* sbp, double gap_decay_rate,
                              double scaling_factor)
 {
@@ -1535,7 +1537,9 @@ Int2 Blast_HSPListGetEvalues(const BlastQueryInfo* query_info,
    Blast_KarlinBlk** kbp;
    Int4 hsp_cnt;
    Int4 index;
+   Int4 kbp_context;
    double gap_decay_divisor = 1.;
+   Boolean isRPS = (fabs(scaling_factor - 1.0) > 1.0e-6);
    
    if (hsp_list == NULL || hsp_list->hspcnt == 0)
       return 0;
@@ -1557,15 +1561,42 @@ Int2 Blast_HSPListGetEvalues(const BlastQueryInfo* query_info,
       /* Divide Lambda by the scaling factor, so e-value is 
          calculated correctly from a scaled score. This is needed only
          for RPS BLAST, where scores are scaled, but Lambda is not. */
-      kbp[hsp->context]->Lambda /= scaling_factor;
+      kbp_context = hsp->context;
+      if (RPS_prelim) {
+          /* All kbp in preliminary stage are equivalent.  However, some
+             may be invalid.  Search for the first populated kbp */
+          int i;
+          for (i=0; i<6; ++i) {
+              if (kbp[i]) break;
+          }
+          kbp_context = i;
+      }
+      kbp[kbp_context]->Lambda /= scaling_factor;
 
-      /* Get effective search space from the query information block */
-      hsp->evalue =
-          BLAST_KarlinStoE_simple(hsp->score, kbp[hsp->context], 
+      if (sbp->gbp) {
+          /* Only try Spouge's method if gumbel parameters are available */
+          if (!isRPS) {
+              hsp->evalue =
+                  BLAST_SpougeStoE(hsp->score, kbp[kbp_context], sbp->gbp, 
+                               query_info->contexts[hsp->context].query_length, 
+                               subject_length);
+          } else {
+              /* for RPS blast, query and subject is swapped */
+              hsp->evalue =
+                  BLAST_SpougeStoE(hsp->score, kbp[kbp_context], sbp->gbp, 
+                               subject_length,
+                               query_info->contexts[hsp->context].query_length);
+          }
+      } else {
+          /* Get effective search space from the query information block */
+          hsp->evalue =
+              BLAST_KarlinStoE_simple(hsp->score, kbp[kbp_context], 
                                query_info->contexts[hsp->context].eff_searchsp);
+      }
+
       hsp->evalue /= gap_decay_divisor;
       /* Put back the unscaled value of Lambda. */
-      kbp[hsp->context]->Lambda *= scaling_factor;
+      kbp[kbp_context]->Lambda *= scaling_factor;
    }
    
    /* Assign the best e-value field. Here the best e-value will always be
@@ -1673,6 +1704,44 @@ Int2 Blast_HSPListReapByEvalue(BlastHSPList* hsp_list,
       }
    }
       
+   hsp_list->hspcnt = hsp_cnt;
+
+   return 0;
+}
+
+/** Same as Blast_HSPListReapByEvalue() except that it uses
+ *  the raw score of the hit and the HitSavingOptions->cutoff_score
+ *  to filter out hits. -RMH- 
+ */
+Int2 Blast_HSPListReapByRawScore(BlastHSPList* hsp_list,
+        const BlastHitSavingOptions* hit_options)
+{
+   BlastHSP* hsp;
+   BlastHSP** hsp_array;
+   Int4 hsp_cnt = 0;
+   Int4 index;
+   double cutoff;
+
+   if (hsp_list == NULL)
+      return 0;
+
+   cutoff = hit_options->expect_value;
+
+   hsp_array = hsp_list->hsp_array;
+   for (index = 0; index < hsp_list->hspcnt; index++) {
+      hsp = hsp_array[index];
+
+      ASSERT(hsp != NULL);
+
+      if ( hsp->score < hit_options->cutoff_score ) {
+         hsp_array[index] = Blast_HSPFree(hsp_array[index]);
+      } else {
+         if (index > hsp_cnt)
+            hsp_array[hsp_cnt] = hsp_array[index];
+         hsp_cnt++;
+      }
+   }
+
    hsp_list->hspcnt = hsp_cnt;
 
    return 0;
@@ -1882,14 +1951,14 @@ s_QueryOffsetCompareHSPs(const void* v1, const void* v2)
       return -1;
 
    if (h1->query.end < h2->query.end)
-      return -1;
-   if (h1->query.end > h2->query.end)
       return 1;
+   if (h1->query.end > h2->query.end)
+      return -1;
 
    if (h1->subject.end < h2->subject.end)
-      return -1;
-   if (h1->subject.end > h2->subject.end)
       return 1;
+   if (h1->subject.end > h2->subject.end)
+      return -1;
 
    return 0;
 }
@@ -2816,6 +2885,110 @@ typedef struct SHspWrap {
     BlastHSPList *hsplist;  /**< The HSPList to which this HSP belongs */
     BlastHSP *hsp;          /**< HSP described by this structure */
 } SHspWrap;
+
+/** callback used to sort a list of encapsulated HSP
+ *  structures in order of decreasing raw score 
+ *  -RMH-
+ */
+static int s_SortHspWrapRawScore(const void *x, const void *y)
+{
+    SHspWrap *wrap1 = (SHspWrap *)x;
+    SHspWrap *wrap2 = (SHspWrap *)y;
+    if (wrap1->hsp->score > wrap2->hsp->score)
+        return -1;
+    if (wrap1->hsp->score < wrap2->hsp->score)
+        return 1;
+
+    return 0;
+}
+
+// Masklevel filtering for rmblastn. -RMH-
+Int2 Blast_HSPResultsApplyMasklevel(BlastHSPResults *results,
+                                    const BlastQueryInfo *query_info,
+                                    Int4 masklevel, Int4 query_length)
+{
+   Int4 i, j, k, m;
+   Int4 hsp_count;
+   SHspWrap *hsp_array;
+   BlastIntervalTree *tree;
+
+   /* set up the interval tree; subject offsets are not needed */
+
+   tree = Blast_IntervalTreeInit(0, query_length + 1, 0, 0);
+
+   for (i = 0; i < results->num_queries; i++) {
+      BlastHitList *hitlist = results->hitlist_array[i];
+      if (hitlist == NULL)
+         continue;
+
+      for (j = hsp_count = 0; j < hitlist->hsplist_count; j++) {
+         BlastHSPList *hsplist = hitlist->hsplist_array[j];
+         hsp_count += hsplist->hspcnt;
+      }
+
+      /* empty each HSP into a combined HSP array, then
+         sort the array by raw score */
+
+      hsp_array = (SHspWrap *)malloc(hsp_count * sizeof(SHspWrap));
+
+      for (j = k = 0; j < hitlist->hsplist_count; j++) {
+         BlastHSPList *hsplist = hitlist->hsplist_array[j];
+         for (m = 0; m < hsplist->hspcnt; k++, m++) {
+            BlastHSP *hsp = hsplist->hsp_array[m];
+            hsp_array[k].hsplist = hsplist;
+            hsp_array[k].hsp = hsp;
+         }
+         hsplist->hspcnt = 0;
+      }
+
+      qsort(hsp_array, hsp_count, sizeof(SHspWrap), s_SortHspWrapRawScore);
+
+      /* Starting with the best HSP, use the interval tree to
+         check that the query range of each HSP in the list has
+         not already been enveloped by too many higher-scoring
+         HSPs. If this is not the case, add the HSP back into results */
+
+      Blast_IntervalTreeReset(tree);
+
+      for (j = 0; j < hsp_count; j++) {
+         BlastHSPList *hsplist = hsp_array[j].hsplist;
+         BlastHSP *hsp = hsp_array[j].hsp;
+
+         if (BlastIntervalTreeMasksHSP(tree,
+                         hsp, query_info, 0, masklevel)) {
+             Blast_HSPFree(hsp);
+         }
+         else {
+             BlastIntervalTreeAddHSP(hsp, tree, query_info, eQueryOnlyStrandIndifferent);
+             Blast_HSPListSaveHSP(hsplist, hsp);
+
+             /* the first HSP added back into an HSPList
+                automatically has the best e-value */
+             // RMH: hmmmmmmm
+             if (hsplist->hspcnt == 1)
+                 hsplist->best_evalue = hsp->evalue;
+         }
+      }
+      sfree(hsp_array);
+
+      /* remove any HSPLists that are still empty after the 
+         culling process. Sort any remaining lists by score */
+      for (j = 0; j < hitlist->hsplist_count; j++) {
+         BlastHSPList *hsplist = hitlist->hsplist_array[j];
+         if (hsplist->hspcnt == 0) {
+             hitlist->hsplist_array[j] =
+                   Blast_HSPListFree(hitlist->hsplist_array[j]);
+         }
+         else {
+             Blast_HSPListSortByScore(hitlist->hsplist_array[j]);
+         }
+      }
+      Blast_HitListPurgeNullHSPLists(hitlist);
+   }
+
+   tree = Blast_IntervalTreeFree(tree);
+   return 0;
+}
 
 /** callback used to sort a list of encapsulated HSP
  *  structures in order of increasing e-value, using

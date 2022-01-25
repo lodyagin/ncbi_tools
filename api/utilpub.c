@@ -259,7 +259,8 @@ Uint2 entityID, Uint4 itemID, Uint2 itemtype)
 	if (pdp) {
 		descr = AsnIoMemCopy(pdp, (AsnReadFunc) PubdescAsnRead,
 											(AsnWriteFunc) PubdescAsnWrite);
-		vnp = ValNodeNew(NULL);
+		if (descr == NULL) return NULL;
+        vnp = ValNodeNew(NULL);
 		vnp->choice = PUB_Equiv;
 		vnp->data.ptrvalue = descr->pub;
 		psp = (PubStructPtr) MemNew(sizeof(PubStruct));
@@ -1593,6 +1594,12 @@ NLM_EXTERN void EntryStripSerialNumber (SeqEntryPtr sep)
 	if (stripSerial) {
 		SeqEntryExplore(sep, NULL, StripSerialNumber);
 	}
+}
+
+NLM_EXTERN void ForceStripSerialNumber (SeqEntryPtr sep)
+{
+	if (sep == NULL) return;
+	SeqEntryExplore(sep, NULL, StripSerialNumber);
 }
 
 NLM_EXTERN ValNodePtr remove_node(ValNodePtr head, ValNodePtr x)

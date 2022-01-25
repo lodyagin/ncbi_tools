@@ -31,7 +31,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.198 $
+* $Revision: 1.217 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -743,6 +743,7 @@ NLM_EXTERN void FFCatenateSubString (
   Int4 max_i, min_i, i, len = 0;
   StringItemPtr current;
   Boolean in_url = FALSE, found_start = FALSE;
+  Boolean in_html_ampersand_escape = FALSE;
   IntAsn2gbJobPtr ajp = (IntAsn2gbJobPtr)dest->iajp;
   Uint4 char_count = 0;
 
@@ -767,7 +768,7 @@ NLM_EXTERN void FFCatenateSubString (
        * HTML specific processing:
        * ---------------------------------------------------------------------*/
       if ( GetWWW(ajp) ) {
-        if ( ! in_url ) {
+        if ( ! in_url && ! in_html_ampersand_escape ) {
           if ( current->buf[i] == '<' ) {
             /* Watch out! */
             if (FFIsStartOfLinkEx (current, i, &len)) {
@@ -780,6 +781,15 @@ NLM_EXTERN void FFCatenateSubString (
               ++char_count;
               continue;
             }
+          }
+          if( current->buf[i] == '&' ) 
+          {
+            FFAddOneChar(dest, '&', FALSE);
+            if( FFIsStartOfHTMLAmpersandEscape(current, i) ) {
+              in_html_ampersand_escape = TRUE;
+            }
+            ++char_count;
+            continue;
           }
           if (char_count == line_max) {
             break;
@@ -805,8 +815,18 @@ NLM_EXTERN void FFCatenateSubString (
           }
         }
 
+        else if( in_html_ampersand_escape ) {
+          FFAddOneChar(dest, current->buf[i], FALSE);
+          if( current->buf[i] == ';' ) {
+            in_html_ampersand_escape = FALSE;
+          }
+          continue;
+        }
+
         else /* in_url */ {
-          if ( current->buf[i] == '&' ) {
+          if ( current->buf[i] == '&' && 
+               ! FFStartsWith(current, i, "&amp;", TRUE) )
+          {
             /* encode ampersand for XHMLT */
             FFAddOneString(dest, "&amp;", FALSE, FALSE, TILDE_IGNORE);
             continue;
@@ -839,21 +859,35 @@ NLM_EXTERN void FFCatenateSubString (
   }
 }
 
-NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip) {
+NLM_EXTERN CharPtr FFToCharPtrEx (StringItemPtr sip, CharPtr pfx, CharPtr sfx)
+
+{
   Int4 size = 0;
   StringItemPtr iter;
   CharPtr result, temp;
+  size_t pfx_len, sfx_len;
+
+  pfx_len = StringLen (pfx);
+  sfx_len = StringLen (sfx);
 
   for ( iter = sip; iter != NULL; iter = iter->next ) {
     size += iter->pos;
   }
 
-  result = (CharPtr)MemNew(size + 2);
+  result = (CharPtr)MemNew(size + pfx_len + sfx_len + 2);
   temp = result;
 
+  if (pfx_len > 0) {
+    MemCpy( temp, pfx, pfx_len );
+    temp += pfx_len;
+  }
   for ( iter = sip; iter != NULL; iter = iter->next ) {
     MemCpy( temp, iter->buf, iter->pos );
     temp += iter->pos;
+  }
+  if (sfx_len > 0) {
+    MemCpy( temp, sfx, sfx_len );
+    temp += sfx_len;
   }
 
   *temp = '\0';
@@ -861,7 +895,11 @@ NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip) {
   return result;
 }
 
+NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip)
 
+{
+  return FFToCharPtrEx (sip, NULL, NULL);
+}
 
 /* word wrap functions */
 
@@ -877,6 +915,8 @@ static CharPtr url_anchor_strings [] = {
   "<A HREF=\"HTTP://",
   "<A HREF=\"HTTPS://",
   "<ACRONYM TITLE=\"",
+  "<DIV ",
+  "</DIV>",
   NULL
 };
 
@@ -941,6 +981,24 @@ NLM_EXTERN void FFSkipLink (StringItemPtr PNTR iterp, Int4Ptr ip) {
   *ip = i;
 }
 
+NLM_EXTERN void FFSkipHTMLAmpersandEscape (StringItemPtr PNTR iterp, Int4Ptr ip)
+{
+  StringItemPtr iter = *iterp;
+  Int4 i = *ip;
+
+  while ( (iter != NULL) && (iter->buf[i] != ';') ) {
+    ++i;
+
+    if ( i == iter->pos ) {
+      iter = iter->next;
+      i = 0;
+    }
+  }
+
+  *iterp = iter;
+  *ip = i;
+}
+
 static Boolean FFIsStartOfLinkEx (StringItemPtr iter, Int4 pos, Int4Ptr lenP)
 
 {
@@ -985,6 +1043,48 @@ NLM_EXTERN Boolean FFIsStartOfLink (StringItemPtr iter, Int4 pos)
 
 {
   return FFIsStartOfLinkEx (iter, pos, NULL);
+}
+
+NLM_EXTERN Boolean FFIsStartOfHTMLAmpersandEscape (
+    StringItemPtr iter,
+    Int4 pos )
+{
+  Char        ch;
+  Int4        i;
+  Int4        max_len = 20;
+
+  if ( iter == NULL || pos >= iter->pos ) return FALSE;
+  if ( iter->buf [pos] != '&' ) return FALSE;
+
+  /* skip the initial '&' */
+  pos++;
+  if (pos >= iter->pos) {
+    iter = iter->next;
+    pos = 0;
+    if (iter == NULL) return FALSE;
+  }  
+
+  for (i = 0; i < max_len; i++) {
+    ch = iter->buf [pos];
+    if( isalnum(ch) || ch == '#' ) {
+      /* fine; these are chars expected in HTML ampersand char */
+    } else if( ch == ';' ) {
+      /* found end of HTML ampersand char */
+      return TRUE;
+    } else {
+      /* illegal char in HTML ampersand char */
+      return FALSE;
+    }
+
+    pos++;
+    if (pos >= iter->pos) {
+      iter = iter->next;
+      pos = 0;
+      if (iter == NULL) return FALSE;
+    }
+  }
+
+  return FALSE;  
 }
 
 /*
@@ -1127,7 +1227,8 @@ NLM_EXTERN void FFAdvanceChar(
 
 NLM_EXTERN void FFCalculateLineBreak (
   StringItemPtr PNTR break_sip, Int4 PNTR break_pos,
-  Int4 init_indent, Int4 visible
+  Int4 init_indent, Int4 visible,
+  Boolean is_html
 )
 {
   StringItemPtr iter, prev;
@@ -1145,6 +1246,13 @@ NLM_EXTERN void FFCalculateLineBreak (
   Int4          candidate_int_space = -1,  
                 candidate_int_comma = -1,
                 candidate_int_dash  = -1;
+  /* This is set when the line consists entirely of one huge word that 
+     we actually ended up breaking in the middle */
+  /* This variable was introduced to cover problems with the corner case
+     of having a really long word such that it would be broken at exactly the 
+     point where only its last letter ends up on the next line. */
+  /* e.g. AA000002 */
+  Boolean breaking_long_word = FALSE;
   
 
   iter = *break_sip;
@@ -1161,10 +1269,15 @@ NLM_EXTERN void FFCalculateLineBreak (
         done = TRUE;
         break;
       }
-      if ( FFIsStartOfLink(iter, i) ) {
-        FFSkipLink(&iter, &i);
-        --i;
-        continue;
+      if( is_html ) {
+        if ( FFIsStartOfLink(iter, i) ) {
+          FFSkipLink(&iter, &i);
+          --i;
+          continue;
+        }
+        if( FFIsStartOfHTMLAmpersandEscape(iter, i) ) {
+          FFSkipHTMLAmpersandEscape(&iter, &i);
+        }
       }
 
       --init_indent;
@@ -1210,10 +1323,15 @@ NLM_EXTERN void FFCalculateLineBreak (
         candidate_int_dash = i;*/
       }
 
-      if ( FFIsStartOfLink(iter, i) ) {
-        FFSkipLink(&iter, &i);
-        --i;
-        continue;
+      if( is_html ) {
+        if ( FFIsStartOfLink(iter, i) ) {
+          FFSkipLink(&iter, &i);
+          --i;
+          continue;
+        }
+        if( FFIsStartOfHTMLAmpersandEscape(iter, i) ) {
+          FFSkipHTMLAmpersandEscape(&iter, &i);
+        }
       }
 
       ++copied;
@@ -1221,6 +1339,7 @@ NLM_EXTERN void FFCalculateLineBreak (
         if ( (candidate_sip_space == NULL) && (candidate_int_space == -1) &&
              (candidate_sip_comma == NULL) && (candidate_int_comma == -1) &&
              (candidate_sip_dash == NULL)  && (candidate_int_dash == -1)  ) {
+	  breaking_long_word = TRUE;
           candidate_sip_space = iter;
           candidate_int_space = i;
         }
@@ -1251,9 +1370,9 @@ NLM_EXTERN void FFCalculateLineBreak (
       *break_sip = candidate_sip_dash;
       *break_pos = candidate_int_dash;
     }
-    if (! found_lb) {
-      while (FFNextChar(*break_sip, *break_pos) == ' ') {
-        FFAdvanceChar(break_sip, break_pos);
+    if ( ! found_lb && ! breaking_long_word ) {
+      while (FFNextChar(*break_sip, *break_pos) == ' ') { 
+	FFAdvanceChar(break_sip, break_pos);
       }
       if (FFNextChar(*break_sip, *break_pos) == '\n') {
         FFAdvanceChar(break_sip, break_pos);
@@ -1498,6 +1617,7 @@ NLM_EXTERN Boolean FFLineBreakSplitsHtmlLink(
 } /*FFLineBreakSplitsHtmlLink*/
 
 NLM_EXTERN void FFLineWrap (
+  IntAsn2gbJobPtr ajp,
   StringItemPtr dest, 
   StringItemPtr src, 
   Int4 init_indent,
@@ -1514,6 +1634,7 @@ NLM_EXTERN void FFLineWrap (
   Int4          i, line_prefix_len = 0;
   StringItemPtr iter;
   Boolean       cont = FALSE;
+  Boolean       is_html = GetWWW(ajp);
 
   /* Note:
      The value of the next two variables needs to persist between consecutive 
@@ -1531,12 +1652,11 @@ NLM_EXTERN void FFLineWrap (
   for ( iter = src; iter != NULL; iter = iter->next ) {
     for ( i = 0; i < iter->pos; ) {
 
-
       break_pos = i;
       break_sip = iter;
 
-      FFCalculateLineBreak(
-        &break_sip, &break_pos, init_indent, line_max - line_prefix_len + 1);
+      FFCalculateLineBreak(&break_sip, &break_pos, init_indent, 
+                           line_max - line_prefix_len + 1, is_html);
       linebreak_splits_link = 
         FFLineBreakSplitsHtmlLink(iter, i, break_sip, break_pos, 
           buf_split_link_open, &html_open_link_counter );
@@ -1647,7 +1767,36 @@ NLM_EXTERN void FFAddTextToString (
     FFAddPeriod(ffstring);
   }
 }
-   
+
+NLM_EXTERN CharPtr FFEndPrintEx (
+  IntAsn2gbJobPtr ajp,
+  StringItemPtr ffstring,
+  FmtType format,
+  Int2 gb_init_indent,
+  Int2 gb_cont_indent,
+  Int2 eb_init_indent,
+  Int2 eb_cont_indent,
+  CharPtr eb_line_prefix,
+  CharPtr pfx,
+  CharPtr sfx
+)
+
+{
+  StringItemPtr temp = FFGetString(ajp);
+  CharPtr result;
+
+  if ( (ffstring == NULL) || (ajp == NULL) ) return NULL;
+
+  if (format == GENBANK_FMT || format == GENPEPT_FMT) {
+    FFLineWrap(ajp, temp, ffstring, gb_init_indent, gb_cont_indent, ASN2FF_GB_MAX, NULL);
+  } else {
+    FFLineWrap(ajp, temp, ffstring, eb_init_indent, eb_cont_indent, ASN2FF_EMBL_MAX, eb_line_prefix);
+  }
+  result = FFToCharPtrEx(temp, pfx, sfx);
+  FFRecycleString(ajp, temp);
+  return result;
+}
+
 NLM_EXTERN CharPtr FFEndPrint (
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
@@ -1658,20 +1807,10 @@ NLM_EXTERN CharPtr FFEndPrint (
   Int2 eb_cont_indent,
   CharPtr eb_line_prefix
 )
+
 {
-  StringItemPtr temp = FFGetString(ajp);
-  CharPtr result;
-
-  if ( (ffstring == NULL) || (ajp == NULL) ) return NULL;
-
-  if (format == GENBANK_FMT || format == GENPEPT_FMT) {
-    FFLineWrap(temp, ffstring, gb_init_indent, gb_cont_indent, ASN2FF_GB_MAX, NULL);
-  } else {
-    FFLineWrap(temp, ffstring, eb_init_indent, eb_cont_indent, ASN2FF_EMBL_MAX, eb_line_prefix);
-  }
-  result = FFToCharPtr(temp);
-  FFRecycleString(ajp, temp);
-  return result;
+  return FFEndPrintEx (ajp, ffstring, format, gb_init_indent, gb_cont_indent,
+                       eb_init_indent, eb_cont_indent, eb_line_prefix, NULL, NULL);
 }
 
 NLM_EXTERN Uint4 FFLength(StringItemPtr ffstring) {
@@ -1764,14 +1903,14 @@ NLM_EXTERN Boolean FFEmpty(StringItemPtr ffstring) {
  * 
  * The result is returned in the supplied vector.
  */
-static void ComputeLastOccurrence(const CharPtr pattern, Uint4 last_occurrence[])
+static void ComputeLastOccurrence(const CharPtr pattern, Int4 last_occurrence[])
 {
-    Uint4 i;
-    Uint4 pat_len;
+    Int4 i;
+    Int4 pat_len;
 
     /* Initilalize vector */
     for ( i = 0; i < 256; ++i ) {
-        last_occurrence[i] = 0;
+        last_occurrence[i] = -1;
     }
 
     /* compute right-most occurrence */
@@ -1781,10 +1920,10 @@ static void ComputeLastOccurrence(const CharPtr pattern, Uint4 last_occurrence[]
     }
 }
 
-static void ComputePrefix(const CharPtr pattern, Uint4 longest_prefix[])
+static void ComputePrefix(const CharPtr pattern, Int4 longest_prefix[])
 {
-    Uint4 pat_len = StringLen(pattern);
-    Uint4 k, q;
+    Int4 pat_len = StringLen(pattern);
+    Int4 k, q;
 
     longest_prefix[0] = 0;
 
@@ -1801,16 +1940,16 @@ static void ComputePrefix(const CharPtr pattern, Uint4 longest_prefix[])
 }
 
 
-static void ComputeGoodSuffix(const CharPtr pattern, Uint4 good_suffix[])
+static void ComputeGoodSuffix(const CharPtr pattern, Int4 good_suffix[])
 {
-    Uint4 pat_len = StringLen(pattern);
-    Uint4Ptr longest_prefix, reverse_longest_prefix;
+    Int4 pat_len = StringLen(pattern);
+    Int4Ptr longest_prefix, reverse_longest_prefix;
     CharPtr reverse_pattern;
-    Uint4 i, j;
+    Int4 i, j;
 
     /* allocate memory */
-    longest_prefix = MemNew(pat_len * sizeof(Uint4));
-    reverse_longest_prefix = MemNew(pat_len * sizeof(Uint4));
+    longest_prefix = MemNew(pat_len * sizeof(Int4));
+    reverse_longest_prefix = MemNew(pat_len * sizeof(Int4));
     reverse_pattern = MemNew((pat_len + 1) * sizeof(Char));
 
     if ( longest_prefix == NULL  ||
@@ -1824,18 +1963,18 @@ static void ComputeGoodSuffix(const CharPtr pattern, Uint4 good_suffix[])
 
     /* compute reverse pattern */
     for ( i = 0; i < pat_len; ++i ) {
-      reverse_pattern[pat_len - i] = pattern[i];
+      reverse_pattern[pat_len - i - 1] = pattern[i];
     }
 
     ComputePrefix(pattern, longest_prefix);
     ComputePrefix(reverse_pattern, reverse_longest_prefix);
 
-    for ( j = 0; j < pat_len; ++j) {
+    for ( j = 0; j <= pat_len; ++j) {
         good_suffix[j] = pat_len - longest_prefix[pat_len-1];
     }
 
     for ( i = 0; i < pat_len; ++i ) {
-        j = pat_len - reverse_longest_prefix[i] - 1;
+        j = pat_len - reverse_longest_prefix[i];
         if ( good_suffix[j] > i - reverse_longest_prefix[i] + 1) {
             good_suffix[j] = i - reverse_longest_prefix[i] + 1;
         }
@@ -1856,17 +1995,17 @@ NLM_EXTERN Int4 FFStringSearch (
   const CharPtr pattern,
   Uint4 position )
 {
-  Uint4 text_len = FFLength(text);
-  Uint4 pat_len = StringLen(pattern);
-  Uint4 last_occurrence[256];
-  Uint4Ptr good_suffix;
-  Uint4 shift;
+  Int4 text_len = FFLength(text);
+  Int4 pat_len = StringLen(pattern);
+  Int4 last_occurrence[256];
+  Int4Ptr good_suffix;
+  Int4 shift;
   Int4 j;
 
   if ( pat_len == 0 ) return 0;
   if ( text_len == 0 || pat_len > text_len - position ) return -1;
   
-  good_suffix = (Uint4Ptr)MemNew(pat_len * sizeof(Int4));
+  good_suffix = (Int4Ptr)MemNew((pat_len+1) * sizeof(Int4));
   if ( good_suffix == NULL ) return -1;
 
   ComputeLastOccurrence(pattern, last_occurrence);
@@ -1882,8 +2021,12 @@ NLM_EXTERN Int4 FFStringSearch (
       MemFree (good_suffix);
       return shift;
     } else {
-        shift += MAX( (Int4)good_suffix[(int) j],
+      if( last_occurrence[(int) FFCharAt(text,shift + j)] <= j ) {
+        shift += MAX( (Int4)good_suffix[(int) j+1],
               (Int4)(j - last_occurrence[(int) FFCharAt(text,shift + j)]));
+      } else {
+        shift += (Int4)good_suffix[(int) j+1];
+      }
     }
   }
   MemFree (good_suffix);
@@ -1891,6 +2034,47 @@ NLM_EXTERN Int4 FFStringSearch (
   return -1;
 }
 
+/* Returns true if the given text starts with "pattern".
+   You can also control whether this is done case insensitively */
+NLM_EXTERN Boolean FFStartsWith( 
+  StringItemPtr text,
+  Int4 text_pos,
+  const CharPtr pattern,
+  Boolean case_insens
+)
+{
+  Int4 pattern_pos = 0;
+
+  if( NULL == text || NULL == pattern ) {
+    return FALSE;
+  }
+
+  /* every string starts with the empty string */
+  if( pattern[0] == '\0' ) {
+    return TRUE;
+  }
+  
+  while( ( case_insens ?
+           toupper(pattern[pattern_pos]) == toupper(text->buf[text_pos]) :
+           pattern[pattern_pos] == text->buf[text_pos] ) )
+  {
+    /* advance pattern; if we reach the end, 
+     * text starts with pattern */
+    ++pattern_pos;
+    if( pattern[pattern_pos] == '\0' ) {
+      return TRUE;
+    }
+
+    /* advance text, if we reach the end, text does NOT start
+     * with pattern */
+    FFAdvanceChar( &text, &text_pos );
+    if( NULL == text ) {
+      return FALSE;
+    }
+  }
+
+  return FALSE;
+}
 
 /*                                                                   */
 /* IsWholeWordSubstr () -- Determines if a substring that is         */
@@ -2881,7 +3065,8 @@ static void DoBioseqSetList (
           bssp->_class == BioseqseqSet_class_phy_set ||
           bssp->_class == BioseqseqSet_class_eco_set ||
           bssp->_class == BioseqseqSet_class_wgs_set ||
-          bssp->_class == BioseqseqSet_class_gen_prod_set) {
+          bssp->_class == BioseqseqSet_class_gen_prod_set ||
+          bssp->_class == BioseqseqSet_class_small_genome_set) {
 
         /* if popset within genbank set, for example, recurse */
 
@@ -2917,7 +3102,8 @@ static void DoOneBioseqSet (
         bssp->_class == BioseqseqSet_class_phy_set ||
         bssp->_class == BioseqseqSet_class_eco_set ||
         bssp->_class == BioseqseqSet_class_wgs_set ||
-        bssp->_class == BioseqseqSet_class_gen_prod_set) {
+        bssp->_class == BioseqseqSet_class_gen_prod_set ||
+        bssp->_class == BioseqseqSet_class_small_genome_set) {
 
       /* this is a pop/phy/mut/eco set, catenate separate reports */
 
@@ -3179,7 +3365,8 @@ static void CountBioseqSetList (
           bssp->_class == BioseqseqSet_class_phy_set ||
           bssp->_class == BioseqseqSet_class_eco_set ||
           bssp->_class == BioseqseqSet_class_wgs_set ||
-          bssp->_class == BioseqseqSet_class_gen_prod_set) {
+          bssp->_class == BioseqseqSet_class_gen_prod_set ||
+          bssp->_class == BioseqseqSet_class_small_genome_set) {
 
         CountBioseqSetList (bssp->seq_set, awp);
 
@@ -3211,7 +3398,8 @@ static void CountOneBioseqSet (
         bssp->_class == BioseqseqSet_class_phy_set ||
         bssp->_class == BioseqseqSet_class_eco_set ||
         bssp->_class == BioseqseqSet_class_wgs_set ||
-        bssp->_class == BioseqseqSet_class_gen_prod_set) {
+        bssp->_class == BioseqseqSet_class_gen_prod_set ||
+        bssp->_class == BioseqseqSet_class_small_genome_set) {
 
       CountBioseqSetList (bssp->seq_set, awp);
 
@@ -3640,7 +3828,8 @@ static void LookForGEDetc (
 static void MakeGapFeatsBase (
   BioseqPtr bsp,
   Pointer userdata,
-  Boolean isSP
+  Boolean isSP,
+  Boolean rev_comp
 )
 
 {
@@ -3702,7 +3891,11 @@ static void MakeGapFeatsBase (
             sprintf (buf, "%ld", (long) litp->length);
             AddQualifierToFeature (sfp, "estimated_length", buf);
           }
-          sfp->location = AddIntervalToLocation (NULL, sip, currpos, currpos + litp->length - 1, FALSE, FALSE);
+          if (rev_comp) {
+            sfp->location = AddIntervalToLocation (NULL, sip, currpos + litp->length - 1, currpos, FALSE, FALSE);
+          } else {
+            sfp->location = AddIntervalToLocation (NULL, sip, currpos, currpos + litp->length - 1, FALSE, FALSE);
+          }
         } else if (isSP && litp->length == 0) {
           if (fakebsp == NULL) {
             /* to be freed with MemFree, not BioseqFree */
@@ -3730,7 +3923,11 @@ static void MakeGapFeatsBase (
             sprintf (buf, "%ld", (long) litp->length);
             AddQualifierToFeature (sfp, "estimated_length", buf);
           }
-          sfp->location = AddIntervalToLocation (NULL, sip, currpos - 1, currpos, FALSE, FALSE);
+          if (rev_comp) {
+            sfp->location = AddIntervalToLocation (NULL, sip, currpos, currpos - 1, FALSE, FALSE);
+          } else {
+            sfp->location = AddIntervalToLocation (NULL, sip, currpos - 1, currpos, FALSE, FALSE);
+          }
           sfp->comment = StringSave ("Non-consecutive residues");
         }
       }
@@ -3745,7 +3942,16 @@ static void MakeSPGapFeats (
 )
 
 {
-  MakeGapFeatsBase (bsp, userdata, TRUE);
+  MakeGapFeatsBase (bsp, userdata, TRUE, FALSE);
+}
+
+static void MakeRCGapFeats (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  MakeGapFeatsBase (bsp, userdata, FALSE, TRUE);
 }
 
 static void MakeGapFeats (
@@ -3754,7 +3960,7 @@ static void MakeGapFeats (
 )
 
 {
-  MakeGapFeatsBase (bsp, userdata, FALSE);
+  MakeGapFeatsBase (bsp, userdata, FALSE, FALSE);
 }
 
 static CharPtr gapstr1 = "     gap             ";
@@ -3893,6 +4099,20 @@ static void FindMultiIntervalGenes (
   }
 }
 
+static void FindSegmentedBioseqs (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  BoolPtr  segmentedBioseqsP;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_seg) return;
+  segmentedBioseqsP = (BoolPtr) userdata;
+  if (segmentedBioseqsP == NULL) return;
+  *segmentedBioseqsP = TRUE;
+}
+
 static CharPtr bad_html_strings [] = {
   "<script", "<object", "<applet", "<embed", "<form", "javascript:", "vbscript:", NULL
 };
@@ -4000,8 +4220,9 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Asn2gbFreeFunc   remotefree = NULL;
   Asn2gbLockFunc   remotelock = NULL;
   ValNodePtr       remotevnp = NULL;
-  Asn2gbSectPtr    PNTR sectionArray;
   SubmitBlockPtr   sbp;
+  Asn2gbSectPtr    PNTR sectionArray;
+  Boolean          segmentedBioseqs = FALSE;
   SeqEntryPtr      sep;
   Boolean          seqspans = FALSE;
   SeqIntPtr        sintp;
@@ -4013,6 +4234,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   BioseqSetPtr     topbssp;
   Pointer          userdata = NULL;
   ValNodePtr       vnp;
+  Boolean          was_slp = FALSE;
+  Boolean          rev_comp = FALSE;
   Boolean          is_html = FALSE;
 
   if (format == 0) {
@@ -4089,12 +4312,22 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
       if (sintp != NULL &&
           sintp->from == 0 &&
           sintp->to == bsp->length - 1 &&
-          sintp->strand == Seq_strand_plus) {
+          sintp->strand != Seq_strand_minus) {
         slp = NULL;
         SeqLocFree (loc);
         loc = NULL;
+      } else if (sintp != NULL &&
+          sintp->from == 0 &&
+          sintp->to == bsp->length - 1 &&
+          sintp->strand == Seq_strand_minus) {
+        rev_comp = TRUE;
       }
     }
+  }
+
+  if (slp != NULL && (! rev_comp)) {
+    /* suppress gaps if using sub-location, but show gaps if location was whole or interval 0..length-1 on either strand */
+    was_slp = TRUE;
   }
 
   if (bsp != NULL) {
@@ -4139,24 +4372,26 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   VisitDescriptorsInSep (sep, (Pointer) &featpolicy, LookFarFeatFetchPolicy);
 
   fargaps = NULL;
-  if (format != FTABLE_FMT) {
+  if (format != FTABLE_FMT && (! was_slp)) {
     if (isRefSeq && isNC && VisitFeaturesInSep (sep, NULL, NULL) == 0) {
       if ((Boolean) ((custom & HIDE_GAP_FEATS) == 0)) {
         VisitBioseqsInSep (sep, (Pointer) &fargaps, MakeFarGapFeats);
       }
+      if (fargaps != NULL && fargaps->choice == 1) {
+        fargaps = ValNodeFreeData (fargaps);
+      }
     }
-  }
-  if (fargaps != NULL && fargaps->choice == 1) {
-    fargaps = ValNodeFreeData (fargaps);
   }
   ajp->fargaps = fargaps;
 
   gapvnp = NULL;
-  if (fargaps == NULL && format != FTABLE_FMT) {
+  if (fargaps == NULL && format != FTABLE_FMT && (! was_slp)) {
     if (isGED /* was isG */ || isTPG || isOnlyLocal || isRefSeq || isSP || (isGeneral && (! isGED))) {
       if ((Boolean) ((custom & HIDE_GAP_FEATS) == 0)) {
         if (isSP) {
           VisitBioseqsInSep (sep, (Pointer) &gapvnp, MakeSPGapFeats);
+        } else if (rev_comp) {
+          VisitBioseqsInSep (sep, (Pointer) &gapvnp, MakeRCGapFeats);
         } else {
           VisitBioseqsInSep (sep, (Pointer) &gapvnp, MakeGapFeats);
         }
@@ -4234,9 +4469,9 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     }
   }
 
-  /* if location specified, normal defaults to master style */
+  /* if location specified, other than full reverse complement, normal defaults to master style */
 
-  if (ajp->ajp.slp != NULL && style == NORMAL_STYLE) {
+  if (ajp->ajp.slp != NULL && style == NORMAL_STYLE && (! rev_comp)) {
     style = MASTER_STYLE;
   }
 
@@ -4327,6 +4562,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   VisitFeaturesInSep (sep, (Pointer) &multiIntervalGenes, FindMultiIntervalGenes);
   ajp->multiIntervalGenes = multiIntervalGenes;
+  VisitBioseqsInSep (sep, (Pointer) &segmentedBioseqs, FindSegmentedBioseqs);
+  ajp->segmentedBioseqs = segmentedBioseqs;
 
   ajp->relModeError = FALSE;
   ajp->skipProts = skipProts;
@@ -4470,6 +4707,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
       aw.copyGpsGeneDown = (Boolean) ((flags & COPY_GPS_GENE_DOWN) != 0);
     }
   }
+  aw.isRefSeq = isRefSeq;
 
   aw.showContigAndSeq = (Boolean) ((flags & SHOW_CONTIG_AND_SEQ) != 0);
   /*
@@ -5536,6 +5774,12 @@ static void AddOneFtableQual (
   if (head == NULL) return;
   if (StringHasNoText (qual)) return;
   if (StringHasNoText (val)) return;
+
+  if (StringCmp (qual, "orig_protein_id") == 0) {
+    qual = "protein_id";
+  } else if (StringCmp (qual, "orig_transcript_id") == 0) {
+    qual = "transcript_id";
+  }
 
   len = StringLen (qual) + StringLen (val) + 10;
   tmp = (CharPtr) MemNew (sizeof (Char) * len);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.126 $
+* $Revision: 6.131 $
 *
 * File Description: 
 *
@@ -100,6 +100,7 @@ typedef struct cdrgnform {
   BioseqPtr     usethisbioseq;
   Boolean       autoUpdatePartials;
   Boolean       autoRetranslate;
+  Boolean       autoUpdatemRNASpans;
   Boolean       locvisited;
   ButtoN        convertToMiscFeat;
   Boolean       saveAsMiscFeat;
@@ -1908,6 +1909,17 @@ static void SetSynchProc (ButtoN b)
   }
 }
 
+static void SetUpdatemRNAProc (ButtoN b)
+
+{
+  CdRgnFormPtr  cfp;
+
+  cfp = (CdRgnFormPtr) GetObjectExtra (b);
+  if (cfp != NULL) {
+    cfp->autoUpdatemRNASpans = GetStatus (b);
+  }
+}
+
 static void SetRetransProc (ButtoN b)
 
 {
@@ -3414,6 +3426,9 @@ static Boolean LabelChangeOnly (CdRgnFormPtr cfp)
   ProtRefPtr        prp;
   SeqFeatPtr        sfp_tmp;
 
+  /* THIS HAS BEEN DECLARED UNSAFE */
+  return FALSE;
+
   if (cfp == NULL || cfp->input_itemtype != OBJ_SEQFEAT) 
   {
     return FALSE;
@@ -3424,7 +3439,7 @@ static Boolean LabelChangeOnly (CdRgnFormPtr cfp)
     return FALSE;
   }
   
-  if (cfp->autoRetranslate) 
+  if (cfp->autoRetranslate || cfp->autoUpdatemRNASpans) 
   {
     return FALSE;
   }
@@ -3479,10 +3494,18 @@ static Boolean LabelChangeOnly (CdRgnFormPtr cfp)
       slp = SeqLocFree (slp);
       return FALSE;
     }
-    /* check translation */
-    bsp_new = (BioseqPtr) DialogToPointer (cfp->protseq);
+    /* look at product feature */
     bsp_old = BioseqFindFromSeqLoc (slp);
     slp = SeqLocFree (slp);
+
+    prot = SeqMgrGetNextFeature (bsp_old, NULL, SEQFEAT_PROT, FEATDEF_PROT, &context);
+    if (prot == NULL) {
+      return FALSE;
+    }
+
+    /* check translation */
+    bsp_new = (BioseqPtr) DialogToPointer (cfp->protseq);
+
     match = TRUE;
     if (bsp_new == NULL || bsp_old == NULL) {
       match = FALSE;
@@ -3950,7 +3973,9 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
     cpp->commonGrp = HiddenGroup (w, -1, 0, NULL);
     SetGroupSpacing (cpp->commonGrp, 3, 5);
     y = HiddenGroup (cpp->commonGrp, 3, 0, NULL);
-    x = HiddenGroup (cpp->commonGrp, 2, 0, NULL);
+    b = CheckBox (y, "Update mRNA Span on Accept", SetUpdatemRNAProc);
+    SetObjectExtra (b, cfp, NULL);
+    x = HiddenGroup (cpp->commonGrp, 3, 0, NULL);
     b = CheckBox (x, "Retranslate on Accept", SetRetransProc);
     SetObjectExtra (b, cfp, NULL);
     cfp->autoRetranslate = FALSE;
@@ -3958,6 +3983,7 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
     SetObjectExtra (b, cfp, NULL);
     SetStatus (b, TRUE);
     cfp->autoUpdatePartials = TRUE;
+    cfp->autoUpdatemRNASpans = FALSE;
     AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) y, NULL);
 
     c = HiddenGroup (w, 2, 0, NULL);
@@ -4144,14 +4170,12 @@ extern void CdRgnFeatFormActnProc (ForM f)
   GBQualPtr     quals;
   SeqEntryPtr   sep;
   Uint1         seq_data_type;
-  SeqFeatPtr    sfp, mrna;
+  SeqFeatPtr    sfp;
   SeqIdPtr      sip;
   SeqLocPtr     slp;
   BioseqPtr     target = NULL;
   PartialTrio   trio;
   ValNodePtr    vnp, err_list;
-  SeqMgrFeatContext fcontext;
-  RnaRefPtr         rrp;
 
   cfp = (CdRgnFormPtr) GetObjectExtra (f);
   sep = NULL;
@@ -4191,27 +4215,10 @@ extern void CdRgnFeatFormActnProc (ForM f)
     }
     */
 
-    /* adjust mRNA product name */
-    if (GetStatus (cfp->makemRNAMatch)) {
-      mrna = SeqMgrGetOverlappingmRNA (slp, &fcontext);
-      if (mrna != NULL && mrna->idx.subtype == FEATDEF_mRNA) {
-        rrp = (RnaRefPtr) mrna->data.value.ptrvalue;
-        if (rrp == NULL) {
-          rrp = RnaRefNew();
-          mrna->data.value.ptrvalue = rrp;
-        }
-        rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
-        if (TextHasNoText (cfp->protNameText)) {
-          rrp->ext.choice = 0;
-        } else {
-          rrp->ext.choice = 1;
-          rrp->ext.value.ptrvalue = SaveStringFromText (cfp->protNameText);
-        }
-      }
-    }
-
-
+    /* check for partial now, so we can set mRNA partial if necessary. */
     CheckSeqLocForPartial (slp, &partial5, &partial3);
+
+
     SeqLocFree (slp);
     partial = GetStatus (cfp->partial);
     slp = DialogToPointer (cfp->product);
@@ -4425,6 +4432,52 @@ extern void CdRgnFeatFormActnProc (ForM f)
       if (SeeIfProtTitleNeedsFixing (target, cfp->input_entityID)) {
         ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID,
                        cfp->input_itemID, cfp->input_itemtype);
+      }
+    }
+  }
+}
+
+
+NLM_EXTERN void UpdatemRNAAfterEditing(DialoG d, SeqLocPtr old_slp, SeqLocPtr new_slp)
+{
+  CdRgnPagePtr cpp;
+  CdRgnFormPtr cfp;
+  SeqFeatPtr   mrna;
+  RnaRefPtr    rrp;
+  SeqMgrFeatContext fcontext;
+  Boolean           partial5, partial3;
+
+  cpp = (CdRgnPagePtr) GetObjectExtra (d);
+  if (cpp == NULL) {
+    return;
+  }
+  cfp = cpp->cfp;
+  if (cfp == NULL) {
+    return;
+  }
+  /* adjust mRNA product name */
+  if (GetStatus (cfp->makemRNAMatch) || cfp->autoUpdatemRNASpans) {
+    mrna = SeqMgrGetOverlappingmRNA (cfp->autoUpdatemRNASpans ? old_slp : new_slp, &fcontext);
+    if (mrna != NULL && mrna->idx.subtype == FEATDEF_mRNA) {
+      rrp = (RnaRefPtr) mrna->data.value.ptrvalue;
+      if (rrp == NULL) {
+        rrp = RnaRefNew();
+        mrna->data.value.ptrvalue = rrp;
+      }
+      if (cfp->autoUpdatemRNASpans) {
+        mrna->location = SeqLocFree (mrna->location);
+        mrna->location = SeqLocCopy (new_slp);
+        CheckSeqLocForPartial (new_slp, &partial5, &partial3);
+        mrna->partial = partial5 || partial3;
+      }
+      if (GetStatus (cfp->makemRNAMatch)) {
+        rrp->ext.value.ptrvalue = MemFree (rrp->ext.value.ptrvalue);
+        if (TextHasNoText (cfp->protNameText)) {
+          rrp->ext.choice = 0;
+        } else {
+          rrp->ext.choice = 1;
+          rrp->ext.value.ptrvalue = SaveStringFromText (cfp->protNameText);
+        }
       }
     }
   }

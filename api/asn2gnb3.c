@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.129 $
+* $Revision: 1.142 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -84,15 +84,16 @@ static void AddHistCommentString (
   CharPtr suffix,
   DatePtr dp,
   SeqIdPtr ids,
-  Boolean is_na
+  Boolean is_na,
+  Boolean use_accn
 )
 
 {
   Int2      count = 0;
-  Char      buf [256];
-  Boolean   first;
+  Char      buf [256], id [42];
+  Boolean   first, skip;
   Int4      gi = 0;
-  SeqIdPtr  sip;
+  SeqIdPtr  sip, sip2;
   CharPtr   strd;
   
   if (dp == NULL || ids == NULL || prefix == NULL || suffix == NULL || ffstring == NULL) return;
@@ -131,21 +132,50 @@ static void AddHistCommentString (
         FFAddOneString (ffstring, ",", FALSE, FALSE, TILDE_IGNORE);
       }
       first = FALSE;
-      if ( GetWWW(ajp) ) {
-        FFAddOneString (ffstring, " gi:", FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-        if (is_na) {
-          FF_Add_NCBI_Base_URL (ffstring, link_seqn);
-        } else {
-          FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+      skip = FALSE;
+      if (use_accn) {
+        sip2 = GetSeqIdForGI (gi);
+        if (sip2 != NULL) {
+          SeqIdWrite (sip2, id, PRINTID_TEXTID_ACC_VER, sizeof (id) - 1);
+          if (StringDoesHaveText (id)) {
+            if ( GetWWW(ajp) ) {
+              FFAddOneString (ffstring, " ", FALSE, FALSE, TILDE_IGNORE);
+              FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+              if (is_na) {
+                FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+              } else {
+                FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+              }
+              sprintf (buf, "%ld", (long) gi);
+              FFAddTextToString (ffstring, /* "val=" */ NULL, buf, "\">", FALSE, FALSE, TILDE_IGNORE);
+              FFAddOneString (ffstring, id, FALSE, FALSE, TILDE_EXPAND);
+              FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+            } else {
+              sprintf (buf, " %s", id);
+              FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
+            }
+            skip = TRUE;
+          }
+          SeqIdFree (sip2);
         }
-        sprintf (buf, "%ld", (long) gi);
-        FFAddTextToString (ffstring, /* "val=" */ NULL, buf, "\">", FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
-        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-      } else {
-        sprintf (buf, " gi:%ld", (long) gi);
-        FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
+      }
+      if (! skip) {
+        if ( GetWWW(ajp) ) {
+          FFAddOneString (ffstring, " gi:", FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+          if (is_na) {
+            FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+          } else {
+            FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+          }
+          sprintf (buf, "%ld", (long) gi);
+          FFAddTextToString (ffstring, /* "val=" */ NULL, buf, "\">", FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
+          FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+        } else {
+          sprintf (buf, " gi:%ld", (long) gi);
+          FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
+        }
       }
     }
   }
@@ -2043,6 +2073,7 @@ NLM_EXTERN void AddCommentBlock (
   Boolean            is_tpa = FALSE;
   Boolean            is_wgs = FALSE;
   Boolean            isRefSeqStandard = FALSE;
+  Boolean            is_unverified = FALSE;
   SeqLitPtr          litp;
   ObjectIdPtr        localID = NULL;
   Char               locusID [32];
@@ -2066,6 +2097,7 @@ NLM_EXTERN void AddCommentBlock (
   Char               tmp [32];
   TextSeqIdPtr       tsip;
   UserFieldPtr       ufp;
+  Int4               unverified_itemID = 0;
   UserObjectPtr      uop;
   CharPtr            wgsaccn = NULL;
   CharPtr            wgsname = NULL;
@@ -2102,6 +2134,10 @@ NLM_EXTERN void AddCommentBlock (
       }
       oip = uop->type;
       if (oip != NULL) {
+        if (StringICmp (oip->str, "Unverified") == 0) {
+          is_unverified = TRUE;
+          unverified_itemID = dcontext.itemID;
+        }
         if (StringICmp (oip->str, "ENCODE") == 0) {
           is_encode = TRUE;
           encodeUop = uop;
@@ -2114,6 +2150,36 @@ NLM_EXTERN void AddCommentBlock (
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+
+  if (is_unverified) {
+    cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+    if (cbp != NULL) {
+
+      cbp->entityID = awp->entityID;
+      cbp->itemID = unverified_itemID;
+      cbp->itemtype = OBJ_SEQDESC;
+      cbp->first = first;
+      first = FALSE;
+
+      if (cbp->first) {
+        FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+      } else {
+        FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+      }
+
+        FFAddOneString (ffstring,
+                        "GenBank staff is unable to verify sequence and/or annotation provided by the submitter.",
+                        FALSE, FALSE, TILDE_IGNORE);
+
+      cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
+      FFRecycleString(ajp, ffstring);
+      ffstring = FFGetString(ajp);
+
+      if (awp->afp != NULL) {
+        DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+      }
+    }
   }
 
   /*
@@ -2153,7 +2219,7 @@ NLM_EXTERN void AddCommentBlock (
 
       if (tsip != NULL) {
         is_other = TRUE;
-        if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
+        if (StringNCmp (tsip->accession, "NC_", 3) == 0 || StringNCmp (tsip->accession, "AC_", 3) == 0) {
           if (hasRefTrackStatus) {
             /* will print elsewhere */
           } else if (! StringHasNoText (genomeBuildNumber)) {
@@ -2950,8 +3016,13 @@ NLM_EXTERN void AddCommentBlock (
             FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
           }
 
-          AddHistCommentString (ajp, ffstring, "[WARNING] On", "this sequence was replaced by",
-                                hist->replaced_by_date, hist->replaced_by_ids, ISA_na (bsp->mol));
+          if (wgsaccn != NULL) {
+            AddHistCommentString (ajp, ffstring, "[WARNING] On", "this project was updated. The new version is",
+                                  hist->replaced_by_date, hist->replaced_by_ids, ISA_na (bsp->mol), TRUE);
+          } else {
+            AddHistCommentString (ajp, ffstring, "[WARNING] On", "this sequence was replaced by",
+                                  hist->replaced_by_date, hist->replaced_by_ids, ISA_na (bsp->mol), FALSE);
+          }
 
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
           FFRecycleString(ajp, ffstring);
@@ -2990,7 +3061,7 @@ NLM_EXTERN void AddCommentBlock (
           }
 
           AddHistCommentString (ajp, ffstring, "On", "this sequence version replaced",
-                                hist->replace_date, hist->replace_ids, ISA_na (bsp->mol));
+                                hist->replace_date, hist->replace_ids, ISA_na (bsp->mol), FALSE);
 
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
           FFRecycleString(ajp, ffstring);
@@ -4189,6 +4260,7 @@ NLM_EXTERN void AddSourceFeatBlock (
   BioseqPtr          bsp;
   SeqFeatPtr         cds;
   SeqMgrFeatContext  context;
+  Int4               currGi = 0;
   BioseqPtr          dna;
   SeqLocPtr          duploc;
   Boolean            excise;
@@ -4199,9 +4271,12 @@ NLM_EXTERN void AddSourceFeatBlock (
   IntSrcBlockPtr     lastisp;
   IntSrcBlockPtr     descrIsp;
   ValNodePtr         next;
+  Char               pfx [128], sfx [128];
   ValNodePtr         PNTR prev;
   SeqInt             sint;
+  SeqIdPtr           sip;
   SeqLocPtr          slp;
+  Int4               source_count = 0;
   CharPtr            str;
   BioseqPtr          target;
   ValNode            vn;
@@ -4220,6 +4295,8 @@ NLM_EXTERN void AddSourceFeatBlock (
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return;
 
+  pfx [0] = '\0';
+  sfx [0] = '\0';
 
   /* collect biosources on bioseq */
 
@@ -4272,6 +4349,18 @@ NLM_EXTERN void AddSourceFeatBlock (
     vn.next = NULL;
 
     FFStartPrint (ffstring, awp->format, 5, 21, NULL, 0, 5, 21, "FT", FALSE);
+
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      if (sip->choice == SEQID_GI) {
+        currGi = (Int4) sip->data.intvalue;
+      }
+    }
+
+    if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE &&
+        (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
+      sprintf (pfx, "<span id=\"feature_%ld_source_0\" class=\"feature\">", (long) currGi);
+    }
+
     FFAddOneString(ffstring, "source", FALSE, FALSE, TILDE_IGNORE);
     FFAddNChar(ffstring, ' ', 21 - 5 - StringLen("source"), FALSE);
 
@@ -4335,7 +4424,12 @@ NLM_EXTERN void AddSourceFeatBlock (
       FFAddTextToString (ffstring, "/mol_type=\"", str, "\"", FALSE, TRUE, TILDE_TO_SPACES);
     }
 
-    str = FFEndPrint(ajp, ffstring, awp->format, 5, 21, 5, 21, "FT");
+    if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE &&
+        (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
+      sprintf (sfx, "</span>");
+    }
+
+    str = FFEndPrintEx (ajp, ffstring, awp->format, 5, 21, 5, 21, "FT", pfx, sfx);
 
     bbp = (BaseBlockPtr) Asn2gbAddBlock (awp, SOURCEFEAT_BLOCK, sizeof (IntSrcBlock));
     if (bbp != NULL) {
@@ -4357,6 +4451,8 @@ NLM_EXTERN void AddSourceFeatBlock (
         AddFeatureToGbseq (gbseq, gbfeat, str, NULL);
       }
     }
+
+    return;
   }
 
   if (head == NULL) return;
@@ -4488,6 +4584,13 @@ NLM_EXTERN void AddSourceFeatBlock (
   }
   FFRecycleString(ajp, ffstring);
 
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    isp = (IntSrcBlockPtr) vnp->data.ptrvalue;
+    if (isp == NULL) continue;
+    isp->source_count = source_count;
+    source_count++;
+  }
+
   if (awp->afp != NULL) {
     for (vnp = head; vnp != NULL; vnp = vnp->next) {
       isp = (IntSrcBlockPtr) vnp->data.ptrvalue;
@@ -4512,6 +4615,92 @@ static Boolean IsCDD (
   }
 
   return FALSE;
+}
+
+static void SetIfpFeatCount (
+  IntFeatBlockPtr ifp,
+  IntAsn2gbJobPtr ajp,
+  Asn2gbWorkPtr awp,
+  Boolean isProt
+)
+
+{
+  FeatBlockPtr      fbp;
+  Uint1             featdeftype;
+  IntAsn2gbSectPtr  iasp;
+  Boolean           is_other = FALSE;
+
+  if (ifp == NULL || ajp == NULL || awp == NULL) return;
+  iasp = (IntAsn2gbSectPtr) awp->asp;
+  if (iasp == NULL) return;
+
+  fbp = (FeatBlockPtr) ifp;
+
+  featdeftype = fbp->featdeftype;
+
+  if (featdeftype == FEATDEF_COMMENT) {
+    featdeftype = FEATDEF_misc_feature;
+  }
+
+  if (! isProt) {
+    if (featdeftype == FEATDEF_REGION || featdeftype == FEATDEF_BOND || featdeftype == FEATDEF_SITE) {
+      featdeftype = FEATDEF_misc_feature;
+    }
+  }
+
+  if (ajp->format == GENPEPT_FMT && isProt) {
+    if (ifp->mapToPep) {
+      if (featdeftype >= FEATDEF_preprotein && featdeftype <= FEATDEF_transit_peptide_aa) {
+        featdeftype = FEATDEF_preprotein;
+      }
+    }
+  }
+
+  if (featdeftype == FEATDEF_Imp_CDS) {
+    featdeftype = FEATDEF_CDS;
+  }
+  if (featdeftype == FEATDEF_preRNA) {
+    featdeftype = FEATDEF_precursor_RNA;
+  }
+  if (featdeftype == FEATDEF_otherRNA) {
+    featdeftype = FEATDEF_misc_RNA;
+  }
+  if (featdeftype == FEATDEF_mat_peptide_aa) {
+    featdeftype = FEATDEF_mat_peptide;
+  }
+  if (featdeftype == FEATDEF_sig_peptide_aa) {
+    featdeftype = FEATDEF_sig_peptide;
+  }
+  if (featdeftype == FEATDEF_transit_peptide_aa) {
+    featdeftype = FEATDEF_transit_peptide;
+  }
+
+  if (ajp->refseqConventions || awp->isRefSeq) {
+    is_other = TRUE;
+  }
+
+  if (! isProt) {
+    if (featdeftype == FEATDEF_preprotein) {
+      if (! is_other) {
+        featdeftype = FEATDEF_misc_feature;
+      }
+    }
+  }
+
+  if (featdeftype == FEATDEF_CLONEREF) {
+    if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
+      featdeftype = FEATDEF_misc_feature;
+    }
+  }
+
+  if (featdeftype == FEATDEF_repeat_unit && (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE)) {
+    featdeftype = FEATDEF_repeat_region;
+  }
+
+  if (featdeftype < FEATDEF_MAX) {
+    ifp->feat_count = iasp->feat_counts [featdeftype];
+    (iasp->feat_counts [featdeftype])++;
+  }
 }
 
 static void GetFeatsOnCdsProduct (
@@ -4635,6 +4824,7 @@ static void GetFeatsOnCdsProduct (
             ifp->mapToPep = FALSE;
             ifp->left = 0;
             ifp->right = 0;
+            SetIfpFeatCount (ifp, ajp, awp, FALSE);
             ifp->firstfeat = awp->firstfeat;
             awp->firstfeat = FALSE;
 
@@ -4802,6 +4992,7 @@ static void GetRemoteFeatsOnCdsProduct (
             ifp->mapToPep = FALSE;
             ifp->left = 0;
             ifp->right = 0;
+            SetIfpFeatCount (ifp, ajp, awp, FALSE);
             ifp->firstfeat = awp->firstfeat;
             awp->firstfeat = FALSE;
 
@@ -4932,6 +5123,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   if (awp->hideImpFeats && sfp->data.choice == SEQFEAT_IMP && fcontext->featdeftype != FEATDEF_operon) return TRUE;
   if (awp->hideVariations && fcontext->featdeftype == FEATDEF_variation) return TRUE;
   if (awp->hideRepeatRegions && fcontext->featdeftype == FEATDEF_repeat_region) return TRUE;
+  if (awp->hideRepeatRegions && fcontext->featdeftype == FEATDEF_mobile_element) return TRUE;
   if (awp->hideGaps && fcontext->featdeftype == FEATDEF_gap) return TRUE;
   if (ISA_aa (bsp->mol) && fcontext->featdeftype == FEATDEF_REGION &&
       awp->hideCddFeats && IsCDD (sfp)) return TRUE;
@@ -5286,6 +5478,18 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       }
       break;
 
+    case FEATDEF_mobile_element:
+      /* mobile_element requires FTQUAL_mobile_element_type */
+      gbq = sfp->qual;
+      while (gbq != NULL) {
+        if (StringICmp (gbq->qual, "mobile_element_type") == 0 && (StringDoesHaveText (gbq->val))) {
+          okay = TRUE;
+          break;
+        }
+        gbq = gbq->next;
+      }
+      break;
+
     default:
       if (fcontext->featdeftype >= FEATDEF_GENE && fcontext->featdeftype < FEATDEF_MAX) {
         okay = TRUE;
@@ -5338,6 +5542,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   ifp->mapToPep = FALSE;
   ifp->left = 0;
   ifp->right = 0;
+  SetIfpFeatCount (ifp, ajp, awp, ISA_aa (bsp->mol));
   ifp->firstfeat = awp->firstfeat;
   awp->firstfeat = FALSE;
 
@@ -5415,6 +5620,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
           ifp->mapToPep = FALSE;
           ifp->left = 0;
           ifp->right = 0;
+          SetIfpFeatCount (ifp, ajp, awp, FALSE);
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
 
@@ -5757,6 +5963,7 @@ NLM_EXTERN void AddFeatureBlock (
                 ifp->isCDS = TRUE;
                 ifp->left = 0;
                 ifp->right = 0;
+                SetIfpFeatCount (ifp, ajp, awp, FALSE);
                 ifp->firstfeat = awp->firstfeat;
                 awp->firstfeat = FALSE;
 
@@ -5846,6 +6053,7 @@ NLM_EXTERN void AddFeatureBlock (
           ifp->isCDS = TRUE;
           ifp->left = 0;
           ifp->right = 0;
+          SetIfpFeatCount (ifp, ajp, awp, TRUE);
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
 
@@ -5873,6 +6081,7 @@ NLM_EXTERN void AddFeatureBlock (
           ifp->isCDS = TRUE;
           ifp->left = 0;
           ifp->right = 0;
+          SetIfpFeatCount (ifp, ajp, awp, TRUE);
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
 
@@ -5910,6 +6119,7 @@ NLM_EXTERN void AddFeatureBlock (
           ifp->mapToPep = TRUE;
           ifp->left = 0;
           ifp->right = 0;
+          SetIfpFeatCount (ifp, ajp, awp, TRUE);
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
 

@@ -1,4 +1,4 @@
-/* $Id: ncbi_core.c,v 6.22 2008/12/01 16:34:35 kazimird Exp $
+/* $Id: ncbi_core.c,v 6.23 2011/04/01 16:19:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -130,9 +130,10 @@ extern MT_LOCK MT_LOCK_Delete(MT_LOCK lk)
 extern int/*bool*/ MT_LOCK_DoInternal(MT_LOCK lk, EMT_Lock how)
 {
     MT_LOCK_VALID;
-    if (lk->handler)
-        return lk->handler(lk->user_data, how);
-    return -1/* rightful non-doing */;
+
+    return lk->handler
+        ? lk->handler(lk->user_data, how)
+        : -1/* rightful non-doing */;
 }
 
 
@@ -468,6 +469,7 @@ extern int/*bool*/ REG_Set
  EREG_Storage storage)
 {
     int result;
+
     if (rg) {
         REG_LOCK_READ;
         REG_VALID;

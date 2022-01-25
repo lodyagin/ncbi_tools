@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_PRIV__H
 #define CONNECT___NCBI_PRIV__H
 
-/* $Id: ncbi_priv.h,v 6.52 2010/05/22 15:09:36 kazimird Exp $
+/* $Id: ncbi_priv.h,v 6.63 2011/06/06 15:34:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -66,7 +66,6 @@ extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectSrandAddend(void);
  *  Multi-Thread SAFETY
  */
 
-
 #ifdef _DEBUG
 extern NCBI_XCONNECT_EXPORT int g_NCBI_CoreCheckLock  (void);
 extern NCBI_XCONNECT_EXPORT int g_NCBI_CoreCheckUnlock(void);
@@ -91,6 +90,13 @@ extern NCBI_XCONNECT_EXPORT MT_LOCK g_CORE_MT_Lock;
                                 MT_LOCK_Do(g_CORE_MT_Lock, eMT_Unlock  ))
 
 
+/******************************************************************************
+ *  App name support
+ */
+
+#define NCBI_CORE_APPNAME_MAXLEN 80
+extern NCBI_XCONNECT_EXPORT char g_CORE_AppName[NCBI_CORE_APPNAME_MAXLEN + 1];
+
 
 /******************************************************************************
  *  ERROR HANDLING and LOGGING
@@ -110,14 +116,15 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
 #define DO_CORE_LOG_X(_code, _subcode, _level, _message, _dynamic,      \
                       _error, _descr, _raw_data, _raw_size)             \
     do {                                                                \
-        if (g_CORE_Log  ||  (_level) == eLOG_Fatal) {                   \
+        ELOG_Level xx_level = (_level);                                 \
+        if (g_CORE_Log  ||  xx_level == eLOG_Fatal) {                   \
             SLOG_Handler _mess;                                         \
             _mess.dynamic     = _dynamic;                               \
             _mess.message     = NcbiMessagePlusError(&_mess.dynamic,    \
                                                      _message,          \
                                                      _error,            \
                                                      _descr);           \
-            _mess.level       = (_level);                               \
+            _mess.level       = xx_level;                               \
             _mess.module      = THIS_MODULE;                            \
             _mess.file        = THIS_FILE;                              \
             _mess.line        = __LINE__;                               \
@@ -242,22 +249,20 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
 /* Here are only error codes used in C sources. For error codes used in
  * C++ sources (in C++ Toolkit) see include/connect/error_codes.hpp.
  */
-NCBI_C_DEFINE_ERRCODE_X(Connect_Connection, 301,  32);
-NCBI_C_DEFINE_ERRCODE_X(Connect_MetaConn,   302,   2);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Util,       303,  14);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Dispd,      304,   2);
-NCBI_C_DEFINE_ERRCODE_X(Connect_FTP,        305,   4);
-NCBI_C_DEFINE_ERRCODE_X(Connect_HeapMgr,    306,  33);
-NCBI_C_DEFINE_ERRCODE_X(Connect_HTTP,       307,  20);
-NCBI_C_DEFINE_ERRCODE_X(Connect_LB,         308,   0);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Sendmail,   309,  31);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Service,    310,   8);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Socket,     311, 147);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Crypt,      312,   6);
-NCBI_C_DEFINE_ERRCODE_X(Connect_LocalNet,   313,  11);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Mghbn,      319,  16);
-NCBI_C_DEFINE_ERRCODE_X(Connect_LBSM,       320,  23);
-NCBI_C_DEFINE_ERRCODE_X(Connect_LBSMD,      321,   8);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Conn,     301,  35);
+NCBI_C_DEFINE_ERRCODE_X(Connect_LBSM,     302,  23);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Util,     303,   8);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Dispd,    304,   2);
+NCBI_C_DEFINE_ERRCODE_X(Connect_FTP,      305,  10);
+NCBI_C_DEFINE_ERRCODE_X(Connect_HeapMgr,  306,  33);
+NCBI_C_DEFINE_ERRCODE_X(Connect_HTTP,     307,  18);
+NCBI_C_DEFINE_ERRCODE_X(Connect_LBSMD,    308,   8);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Sendmail, 309,  31);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Service,  310,   8);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Socket,   311, 160);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Crypt,    312,   6);
+NCBI_C_DEFINE_ERRCODE_X(Connect_LocalNet, 313,  11);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Mghbn,    314,  16);
 
 
 /******************************************************************************

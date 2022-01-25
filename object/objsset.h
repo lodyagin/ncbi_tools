@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  Object manager interface for module NCBI-Seqset
 *
@@ -37,49 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: objsset.h,v $
-* Revision 6.8  2005/07/11 16:02:02  kans
-* added define for BioseqseqSet_class_empty_set - for temporary internal use to prevent automatic freeing by DeleteMarkedObjects
-*
-* Revision 6.7  2002/09/30 13:39:34  kans
-* added wgs_set define
-*
-* Revision 6.6  2002/06/27 16:26:10  kans
-* document eco-set, gen-prod-set in comment
-*
-* Revision 6.5  2001/05/14 19:54:20  kans
-* redefine BioseqseqSet_class_gen_prod_set to 17, now in ASN.1 spec
-*
-* Revision 6.4  2001/02/14 23:57:28  kans
-* added define for BioseqseqSet_class_eco_set
-*
-* Revision 6.3  1999/09/27 17:48:38  kans
-* using GatherIndex structure
-*
-* Revision 6.2  1999/09/24 23:09:24  kans
-* adds EXTRA_OBJMGR_FIELDS to several objects
-*
-* Revision 6.1  1998/05/29 20:49:26  kans
-* added BioseqseqSet_class_gen_prod_set, currently same as _other (255)
-*
-* Revision 6.0  1997/08/25 18:50:58  madden
-* Revision changed to 6.0
-*
-* Revision 4.2  1997/06/19 18:42:09  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 4.1  1996/03/06 20:44:45  ostell
-* added defines for bioseqset classes
-*
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 3.3  1995/05/15  21:22:00  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -167,6 +124,11 @@ NLM_EXTERN Int2 LIBCALL BioseqSetLabel PROTO((BioseqSetPtr bssp, CharPtr buffer,
         eco-set (16) ,              -- ecological sample study
         gen-prod-set (17) ,         -- genomic products, chrom+mRNa+protein
         wgs-set (18) ,              -- whole genome shotgun project
+        named-annot (19) ,          -- named annotation set
+        named-annot-prod (20) ,     -- with instantiated mRNA+protein
+        read-set (21) ,             -- set from a single read
+        paired-end-reads (22) ,     -- paired sequences within a read-set
+        small-genome-set (23) ,     -- viral segments or mitochondrial minicircles
         other (255) } DEFAULT not-set ,
 
 *
@@ -190,6 +152,11 @@ NLM_EXTERN Int2 LIBCALL BioseqSetLabel PROTO((BioseqSetPtr bssp, CharPtr buffer,
 #define BioseqseqSet_class_eco_set 16
 #define BioseqseqSet_class_gen_prod_set 17
 #define BioseqseqSet_class_wgs_set 18
+#define BioseqseqSet_class_named_annot 19
+#define BioseqseqSet_class_named_annot_prod 20
+#define BioseqseqSet_class_read_set 21
+#define BioseqseqSet_class_paired_end_reads 22
+#define BioseqseqSet_class_small_genome_set 23
 
 /* for temporary internal use to prevent automatic freeing */
 #define BioseqseqSet_class_empty_set 254

@@ -123,7 +123,7 @@ static Int4 DoInfoValidation (Entrez2ReplyPtr e2ry, Boolean showinfo)
     }
     if (reply != NULL && reply->choice == E2Reply_get_info) {
       e2ip = EntrezExtractInfoReply (e2ry);
-      if (ValidateEntrez2InfoPtr (e2ip, &head)) {
+      if (ValidateEntrez2InfoPtrExEx (e2ip, &head, TRUE, TRUE)) {
         printf ("GetInfo validation succeeded\n");
       } else {
         printf ("GetInfo validation failed\n");

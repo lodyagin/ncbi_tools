@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.216 $
+* $Revision: 6.225 $
 *
 * File Description: 
 *
@@ -55,6 +55,7 @@
 #include <toasn3.h>
 #include <explore.h>
 #include <findrepl.h>
+#include <valid.h>
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -1167,80 +1168,6 @@ typedef struct fieldpage {
 } FieldPage, PNTR FieldPagePtr;
 
 
-static Boolean ShouldSuppressGBQual(Uint1 subtype, CharPtr qual_name)
-{
-  if (StringHasNoText (qual_name)) {
-    return FALSE;
-  }
-
-  /* always suppress experiment and inference quals */
-  if (StringCmp (qual_name, "experiment") == 0 || StringCmp (qual_name, "inference") == 0) {
-    return TRUE;
-  }
-  
-  if (subtype == FEATDEF_ncRNA) {
-    if (StringCmp (qual_name, "product") == 0
-        || StringCmp (qual_name, "ncRNA_class") == 0) {
-      return TRUE;
-    }
-  } else if (subtype == FEATDEF_tmRNA) {
-    if (StringCmp (qual_name, "product") == 0
-        || StringCmp (qual_name, "tag_peptide") == 0) {
-      return TRUE;
-    }
-  } else if (subtype == FEATDEF_otherRNA) {
-    if (StringCmp (qual_name, "product") == 0) {
-      return TRUE;
-    }
-  }
-
-  return FALSE;
-}
-    
-
-static Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGBQual)
-
-{
-  if (qual < 0) return FALSE;
-  if (allowProductGBQual && qual == GBQUAL_product) return TRUE;
-  if (qual == GBQUAL_citation ||
-      qual == GBQUAL_db_xref ||
-      qual == GBQUAL_evidence ||
-      qual == GBQUAL_exception ||
-      qual == GBQUAL_gene ||
-      qual == GBQUAL_gene_synonym ||
-      qual == GBQUAL_insertion_seq ||
-      qual == GBQUAL_label ||
-      qual == GBQUAL_locus_tag ||
-      qual == GBQUAL_non_functional ||
-      qual == GBQUAL_note ||
-      qual == GBQUAL_partial ||
-      qual == GBQUAL_product ||
-      qual == GBQUAL_pseudo ||
-      qual == GBQUAL_pseudogene ||
-      qual == GBQUAL_rpt_unit ||
-      qual == GBQUAL_transposon ||
-      qual == GBQUAL_experiment ||
-      qual == GBQUAL_trans_splicing ||
-      qual == GBQUAL_ribosomal_slippage ||
-      qual == GBQUAL_standard_name ||
-      qual == GBQUAL_inference) {
-    return FALSE;
-  }
-  if (qual == GBQUAL_map && subtype != FEATDEF_ANY && subtype != FEATDEF_repeat_region && subtype != FEATDEF_gap) return FALSE;
-  if (qual == GBQUAL_operon && subtype != FEATDEF_ANY && subtype != FEATDEF_operon) return FALSE;
-  if (Nlm_GetAppProperty ("SequinUseEMBLFeatures") == NULL) {
-    if (qual == GBQUAL_usedin) {
-      return FALSE;
-    }
-  }
-
-  if (qual > -1 && ShouldSuppressGBQual (subtype, ParFlat_GBQual_names [qual].name)) {
-    return FALSE;
-  }
-
-  return TRUE;
-}
 
 static CharPtr TrimCommasAndAtSignsAroundGBString (CharPtr str)
 
@@ -2081,7 +2008,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     x = NULL;
     if (hasQuals && ffp->gbquals == NULL) {
       x = HiddenGroup (c, -1, 0, NULL);
-      featname = GetNameForFeature (sfp);
+      featname = GetGBFeatKeyForFeature (sfp);
       ffp->gbquals = NewCreateImportFields (x, featname, sfp, FALSE);
       featname = MemFree (featname);
     }
@@ -4437,7 +4364,7 @@ MultiSelectDialog
   dlg->listCol.left = FALSE;
   dlg->listCol.last = TRUE;  
   
-    AppendText (dlg->doc, "All", &(dlg->listPar), &(dlg->listCol), programFont);
+  AppendText (dlg->doc, "All", &(dlg->listPar), &(dlg->listCol), programFont);
   for (vnp = choice_list; vnp != NULL; vnp = vnp->next)
   {
       AppendText (dlg->doc, vnp->data.ptrvalue, &(dlg->listPar), &(dlg->listCol), programFont);
@@ -4953,10 +4880,10 @@ static void ValNodeSelectionDialogMessage (DialoG d, Int2 mssg)
         PointerToDialog (dlg->list_dlg, NULL);
         break;
       case VIB_MSG_SELECT:
-        Select (dlg->list_dlg);
+        SendMessageToDialog (dlg->list_dlg, VIB_MSG_SELECT);
         break;
       case VIB_MSG_ENTER :
-        Select (dlg->list_dlg);
+        SendMessageToDialog (dlg->list_dlg, VIB_MSG_ENTER);
         break;
       case NUM_VIB_MSG + 1:
         SendMessageToDialog (dlg->list_dlg, NUM_VIB_MSG + 1);
@@ -5083,6 +5010,121 @@ extern DialoG ValNodeSelectionDialog
                                    change_notify, change_userdata,
                                    allow_multi, FALSE, NULL);
 }
+
+
+typedef struct stringcombodlg {
+ DIALOG_MESSAGE_BLOCK
+
+ DialoG list;
+ TexT   text;
+ Nlm_ChangeNotifyProc     change_notify;
+ Pointer                  change_userdata;
+} StringComboDlgData, PNTR StringComboDlgPtr;
+
+
+static void ChangeStringComboDialogList (Pointer data)
+{
+  StringComboDlgPtr dlg;
+  ValNodePtr        vnp;
+
+  dlg = (StringComboDlgPtr) data;
+  if (dlg == NULL) {
+    return;
+  }
+
+  vnp = DialogToPointer (dlg->list);
+  if (vnp != NULL && vnp->data.ptrvalue != NULL) {
+    SetTitle (dlg->text, (CharPtr) vnp->data.ptrvalue);
+  }
+  vnp = ValNodeFree (vnp);
+}
+
+
+static void ChangeStringComboDialogText (TexT t)
+{
+  StringComboDlgPtr dlg;
+
+  dlg = (StringComboDlgPtr) GetObjectExtra (t);
+  if (dlg == NULL) {
+    return;
+  }
+
+  /* to do - change list to match selection? */
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static void StringToStringComboDialog (DialoG d, Pointer data)
+{
+  StringComboDlgPtr dlg;
+  CharPtr           text;
+
+  dlg = (StringComboDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  text = (CharPtr) data;
+  if (text == NULL) {
+    SetTitle (dlg->text, "");
+  } else {
+    SetTitle (dlg->text, text);
+  }
+
+  /* to do - pick from list also? */
+
+}
+
+
+static Pointer StringComboDialogToString (DialoG d)
+{
+  StringComboDlgPtr dlg;
+
+  dlg = (StringComboDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  return JustSaveStringFromText (dlg->text);
+}
+
+extern DialoG StringComboDialog
+(GrouP h,
+ ValNodePtr               choice_list,
+ Int2                     list_height,
+ Int2                     list_width,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  StringComboDlgPtr dlg;
+  GrouP             p;
+
+  dlg = (StringComboDlgPtr) MemNew (sizeof (StringComboDlgData));
+
+  p = HiddenGroup (h, 0, 2, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToStringComboDialog;
+  dlg->fromdialog = StringComboDialogToString;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->text = DialogText (p, "", list_width, ChangeStringComboDialogText);
+  dlg->list = ValNodeSelectionDialog (p, choice_list, list_height, 
+                                      ValNodeStringName,
+                                      ValNodeSimpleDataFree,
+                                      ValNodeStringCopy,
+                                      ValNodeStringMatch,
+                                      "combo",
+                                      ChangeStringComboDialogList, dlg, FALSE);
+  
+  return (DialoG) p;
+}
+
 
 extern DialoG EnumAssocSelectionDialog 
 (GrouP                 h,
@@ -6047,6 +6089,7 @@ static TaglistCallback AccessionListCallbacks[] =
 { ChangeInferAccessionList, ChangeInferAccessionList };
 
 typedef struct inferevid {
+  CharPtr  evcat;      /* from inferencePrefix     */
   CharPtr  prefix;     /* from inferencePrefix     */
   Boolean  species;    /* optional (same species)  */
   CharPtr  database;   /* INSD, RefSeq, etc.       */
@@ -6066,6 +6109,7 @@ typedef struct inferdialog {
   DoC           inferdoc;
   Int2          currItem;
 
+  PopuP         evcat;
   PopuP         prefix;
   ButtoN        species;
   PopuP         database;
@@ -6114,6 +6158,7 @@ static InferEvidPtr InferEvidFree (
 {
   if (iep == NULL) return NULL;
 
+  MemFree (iep->evcat);
   MemFree (iep->prefix);
   MemFree (iep->database);
   MemFree (iep->accession);
@@ -6141,6 +6186,7 @@ static InferEvidPtr GetInferEvid (
   iep = InferEvidNew ();
   if (iep != NULL) {
     /*
+    iep->evcat = StringSave (" ");
     iep->prefix = StringSave (" ");
     iep->database = StringSave (" ");
     iep->db_other = StringSave ("");
@@ -6166,6 +6212,21 @@ static ColData  inferColFmt [] = {
   {0, 5, 25, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE}, /* class     */
   {0, 5, 25, 2, NULL, 'l', FALSE, TRUE,  FALSE, FALSE, TRUE}   /* specifics */
 };
+
+static CharPtr evcatPrefix [] = {
+  "",
+  "COORDINATES: ",
+  "DESCRIPTION: ",
+  "EXISTENCE: ",
+  NULL
+};
+
+ENUM_ALIST(evcat_alist)
+  { " ",             0 },
+  { "COORDINATES",   1 },
+  { "DESCRIPTION",   2 },
+  { "EXISTENCE",     3 },
+END_ENUM_ALIST
 
 static CharPtr inferencePrefix [] = {
   "",
@@ -6234,7 +6295,7 @@ static CharPtr PrintInferTable (
 
   len = StringLen (iep->prefix) + StringLen (iep->database) + StringLen (iep->db_other) + StringLen (iep->accession) +
         StringLen (iep->program) + StringLen (iep->pr_other) + StringLen (iep->version) + StringLen (iep->basis1) +
-        StringLen (iep->basis2) + StringLen (iep->accession_list) + 50;
+        StringLen (iep->basis2) + StringLen (iep->accession_list) + StringLen (iep->evcat) + 50;
   buf = MemNew (len);
   if (buf == NULL) return NULL;
 
@@ -6402,6 +6463,7 @@ static void ChangeInferTableSelect (
   iep = GetInferEvid (idp, item);
   if (iep != NULL) {
     ResetClip ();
+    SafeSetEnumPopupByName (idp->evcat, evcat_alist, iep->evcat);
     SafeSetEnumPopupByName (idp->prefix, inference_alist, iep->prefix);
 
     SafeSetStatus (idp->species, iep->species);
@@ -6441,6 +6503,35 @@ static void CheckExtendInferTable (
   }
 
   Update ();
+}
+
+static void ChangeInferCat (
+  PopuP p
+)
+
+{
+  AlistDialogPtr  adp;
+  InferDialogPtr  idp;
+  InferEvidPtr    iep;
+  CharPtr         str;
+
+  adp = (AlistDialogPtr) GetObjectExtra (p);
+  if (adp == NULL) return;
+  idp = (InferDialogPtr) adp->userdata;
+  if (idp == NULL) return;
+  iep = GetInferEvid (idp, idp->currItem);
+  if (iep == NULL) return;
+
+  str = GetEnumPopupByName (idp->evcat, evcat_alist);
+  iep->evcat = MemFree (iep->evcat);
+  iep->evcat = str; /* allocated by GetEnumPopupByName */
+
+  ShowInferenceGroup (idp);
+
+  UpdateDocument (idp->inferdoc, idp->currItem, idp->currItem);
+  Update ();
+
+  CheckExtendInferTable (idp);
 }
 
 static void ChangeInferPrefix (
@@ -6756,7 +6847,9 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
 {
   Int2            best;
   Char            ch;
+  Int2            evc;
   GBQualPtr       gbq;
+  CharPtr         gbval;
   Int2            i, j, k;
   InferDialogPtr  idp;
   InferEvidPtr    iep;
@@ -6770,6 +6863,7 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
 
   if (sfp == NULL || sfp->qual == NULL) {
     Reset (idp->inferdoc);
+    SetValue (idp->evcat, 0);
     SetValue (idp->prefix, 0);
     SetStatus (idp->species, FALSE);
     SetValue (idp->database, 0);
@@ -6807,12 +6901,21 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
     if (StringICmp (gbq->qual, "inference") != 0) continue;
     if (StringHasNoText (gbq->val)) continue;
 
+    gbval = gbq->val;
+    evc = -1;
+    for (j = 0; evcatPrefix [j] != NULL; j++) {
+      len = StringLen (evcatPrefix [j]);
+      if (StringNICmp (gbq->val, evcatPrefix [j], len) != 0) continue;
+      gbval = gbq->val + len;
+      evc = j;
+    }
+
     rest = NULL;
     best = -1;
     for (j = 0; inferencePrefix [j] != NULL; j++) {
       len = StringLen (inferencePrefix [j]);
-      if (StringNICmp (gbq->val, inferencePrefix [j], len) != 0) continue;
-      rest = gbq->val + len;
+      if (StringNICmp (gbval, inferencePrefix [j], len) != 0) continue;
+      rest = gbval + len;
       best = j;
     }
 
@@ -6824,6 +6927,11 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
     if (best > 0 && inferencePrefix [best] != NULL) {
       iep->prefix = MemFree (iep->prefix);
       iep->prefix = StringSave(GetEnumName ((UIEnum) best, inference_alist));
+
+      if (evc > 0 && evcatPrefix [evc] != NULL) {
+        iep->evcat = MemFree (iep->evcat);
+        iep->evcat = StringSave(GetEnumName ((UIEnum) evc, evcat_alist));
+      }
 
       if (rest != NULL) {
         ch = *rest;
@@ -6906,8 +7014,9 @@ extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp)
       }
 
     } else {
+      iep->evcat = NULL;
       iep->prefix = StringSave ("???");
-      str = StringSave (gbq->val);
+      str = StringSave (gbval);
       tmp = StringChr (str, ':');
       if (tmp != NULL) {
         *tmp = '\0';
@@ -6954,6 +7063,7 @@ extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertB
 
 {
   CharPtr         first = NULL, second = NULL, accession_list = NULL;
+  CharPtr         evcat = NULL;
   GBQualPtr       gbq, lastgbq;
   InferDialogPtr  idp;
   InferEvidPtr    iep;
@@ -6983,6 +7093,13 @@ extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertB
 
     gbq->qual = StringSave ("inference");
 
+    evcat = NULL;
+    if (WhereInEnumPopup (evcat_alist, iep->evcat, &val)) {
+      if (val > 0 && val <= 3) {
+        evcat = evcatPrefix [(int) val];
+      }
+    }
+    prefix = NULL;
     if (WhereInEnumPopup (inference_alist, iep->prefix, &val)) {
       if (val > 0 && val <= 12) {
         prefix = inferencePrefix [(int) val];
@@ -7024,10 +7141,15 @@ extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertB
       }
     }
 
-    len = StringLen (prefix) + StringLen (speciesies) + StringLen (first) + StringLen (second) + StringLen (accession_list);
+    len = StringLen (evcat) + StringLen (prefix) + StringLen (speciesies) +
+          StringLen (first) + StringLen (second) + StringLen (accession_list);
     str = MemNew (len + 6);
     if (str != NULL) {
-      StringCpy (str, prefix);
+      str [0] = '\0';
+      if (evcat != NULL) {
+        StringCat (str, evcat);
+      }
+      StringCat (str, prefix);
       StringCat (str, speciesies);
       StringCat (str, ":");
       StringCat (str, first);
@@ -7167,6 +7289,9 @@ static DialoG NewCreateInferenceDialog (
   SetGroupSpacing (g1, 5, 5);
 
   StaticPrompt (g1, "Category", 0, popupMenuHeight, programFont, 'l');
+  idp->evcat = CreateEnumPopupDialog (g1, TRUE, ChangeInferCat, evcat_alist, (UIEnum) 0, idp);
+
+  StaticPrompt (g1, "Type", 0, popupMenuHeight, programFont, 'l');
   idp->prefix = CreateEnumPopupDialog (g1, TRUE, ChangeInferPrefix, inference_alist, (UIEnum) 0, idp);
 
   idp->species = CheckBox (g1, "(same species)", ChangeSameSpecies);
@@ -7769,6 +7894,11 @@ static void EditApplyMessage (DialoG d, Int2 mssg)
           Select (dlg->apply_dlg);
         }
         break;
+      case NUM_VIB_MSG + 1 :
+        SafeSetTitle (dlg->apply_txt, "");
+        SafeSetTitle (dlg->find_txt, "");
+        SafeSetTitle (dlg->repl_txt, "");
+        break;
       default :
         break;
     }
@@ -7818,6 +7948,7 @@ static ValNodePtr TestEditApply (DialoG d)
   }
   return total_err_list;
 }
+
 
 static void EditApplyDialogCopy (ButtoN b)
 {
@@ -7955,7 +8086,7 @@ extern DialoG EditApplyDialog
 
 extern InferenceParsePtr ParseInferenceText (CharPtr inference)
 {
-  CharPtr cp1, cp2;
+  CharPtr cp1, cp2, cp3;
   Int4    len;
   InferenceParsePtr ipp;
 
@@ -7974,31 +8105,44 @@ extern InferenceParsePtr ParseInferenceText (CharPtr inference)
   {
     return NULL;
   }
+  cp3 = StringChr (cp2 + 1, ':');
+  if (cp3 == NULL) 
+  {
+    return NULL;
+  }
 
   ipp = (InferenceParsePtr) MemNew (sizeof (InferenceParseData));
-  ipp->second_field = StringSave (cp2 + 1);
+  ipp->second_field = StringSave (cp3 + 1);
 
-  len = cp2 - cp1;
+  len = cp3 - cp2;
   ipp->first_field = (CharPtr) MemNew (sizeof (Char) * len);
-  StringNCpy (ipp->first_field, cp1 + 1, len - 1);
+  StringNCpy (ipp->first_field, cp2 + 1, len - 1);
   ipp->first_field[len - 1] = 0;
 
   /* look for same species */
-  cp2 = StringISearch (inference, "(same species)");
-  if (cp2 != NULL && cp2 < cp1)
+  cp3 = StringISearch (inference, "(same species)");
+  if (cp3 != NULL && cp3 < cp2)
   {
     ipp->same_species = TRUE;
-    cp1 = cp2;
+    cp2 = cp3;
   } 
   else
   {
     ipp->same_species = FALSE;
   }
+
+  /* type */
+  len = cp2 - cp1;
+  ipp->type = (CharPtr) MemNew (sizeof (Char) * len);
+  StringNCpy (ipp->type, cp1 + 1, len - 1);
+  ipp->type[len - 1] = 0;
+
   len = cp1 - inference + 1;
   ipp->category = (CharPtr) MemNew (sizeof (Char) * len);
   StringNCpy (ipp->category, inference, len - 1);
   ipp->category[len - 1] = 0;
   TrimSpacesAroundString (ipp->category);
+  TrimSpacesAroundString (ipp->type);
   TrimSpacesAroundString (ipp->first_field);
   TrimSpacesAroundString (ipp->second_field);
 
@@ -8014,15 +8158,16 @@ extern CharPtr InferenceTextFromStruct (InferenceParsePtr ipp)
 
   if (ipp == NULL) return NULL;
 
-  len = StringLen (ipp->category) + StringLen (ipp->first_field) + StringLen (ipp->second_field)
-        + 3;
+  len = StringLen (ipp->category) + + StringLen (ipp->type) + StringLen (ipp->first_field) + StringLen (ipp->second_field)
+        + 4;
   if (ipp->same_species)
   {
     len += StringLen (same_sp);
   }
 
   inference = (CharPtr) MemNew (sizeof (Char) * len);
-  sprintf (inference, "%s%s:%s:%s", ipp->category == NULL ? "" : ipp->category,
+  sprintf (inference, "%s:%s%s:%s:%s", ipp->category == NULL ? "" : ipp->category,
+                                    ipp->type == NULL ? "" : ipp->type,
                                     ipp->same_species ? same_sp : "",
                                     ipp->first_field == NULL ? "" : ipp->first_field,
                                     ipp->second_field == NULL ? "" : ipp->second_field);
@@ -8102,7 +8247,7 @@ typedef struct inferencefieldeditdialog
 {
   DIALOG_MESSAGE_BLOCK
 
-  PopuP  field_category;
+  PopuP  field_type;
   PopuP  field_list[eNumInferenceCategories];
   DialoG field_editors[eNumInferenceCategories * 2];
   Nlm_ChangeNotifyProc     change_notify;
@@ -8121,14 +8266,14 @@ static Pointer InferenceFieldEditDataFromDialog (DialoG d)
   dlg = (InferenceFieldEditDialogPtr) GetObjectExtra (d);
   if (dlg == NULL) return NULL;
 
-  if (GetEnumPopup (dlg->field_category, inference_alist, &val)
+  if (GetEnumPopup (dlg->field_type, inference_alist, &val)
       && val > 0
       && (i = GetCategoryTypeFromNum (val)) > -1
       && (j = GetValue (dlg->field_list[i])) > 0
       && j < 3)
   {
     data = (InferenceFieldEditPtr) MemNew (sizeof (InferenceFieldEditData));
-    data->field_category = inferencePrefix[val];
+    data->field_type = inferencePrefix[val];
     data->field_choice = j - 1;
     data->edit_apply = DialogToPointer (dlg->field_editors[2 * i + j - 1]);
   }
@@ -8154,7 +8299,7 @@ static void ChangeInferenceFieldChoice (PopuP p)
     Hide (dlg->field_editors[2 * i + 1]);
   }
 
-  if (GetEnumPopup (dlg->field_category, inference_alist, &val)
+  if (GetEnumPopup (dlg->field_type, inference_alist, &val)
       && val > 0
       && (i = GetCategoryTypeFromNum (val)) > -1)
   {
@@ -8218,7 +8363,7 @@ CreateInferenceFieldEditApplyDialog
   dlg->change_notify = change_notify;
   dlg->change_userdata = change_userdata;
 
-  StaticPrompt (p, "Category", 0, popupMenuHeight, programFont, 'c');
+  StaticPrompt (p, "Type", 0, popupMenuHeight, programFont, 'c');
   StaticPrompt (p, "Field", 0, popupMenuHeight, programFont, 'c');
   if (action_choice == eEditApplyChoice_Apply) 
   {
@@ -8229,9 +8374,9 @@ CreateInferenceFieldEditApplyDialog
     StaticPrompt (p, "Convert", 0, popupMenuHeight, programFont, 'c');
   }
 
-  dlg->field_category = PopupList (p, TRUE, ChangeInferenceFieldChoice);
-  SetObjectExtra (dlg->field_category, dlg, NULL);
-  InitEnumPopup (dlg->field_category, inference_alist, NULL);
+  dlg->field_type = PopupList (p, TRUE, ChangeInferenceFieldChoice);
+  SetObjectExtra (dlg->field_type, dlg, NULL);
+  InitEnumPopup (dlg->field_type, inference_alist, NULL);
 
 
   k = HiddenGroup (p, 0, 0, NULL);
@@ -8261,7 +8406,7 @@ CreateInferenceFieldEditApplyDialog
   dlg->field_editors[i++] = EditApplyDialog (k, action_choice, "", choice_list, change_notify, change_userdata);
   dlg->field_editors[i++] = EditApplyDialog (k, action_choice, "", NULL, change_notify, change_userdata);
 
-  ChangeInferenceFieldChoice (dlg->field_category);
+  ChangeInferenceFieldChoice (dlg->field_type);
   return (DialoG) p;
 }
 
@@ -8272,6 +8417,8 @@ typedef struct inferenceeditdialog {
   GrouP action_pages[eNumInferenceEditActions];
   PopuP category_from;
   PopuP category_to;
+  PopuP type_from;
+  PopuP type_to;
   
   DialoG apply_field;
   DialoG edit_field;
@@ -8309,7 +8456,7 @@ static Pointer InferenceEditDataFromDialog (DialoG d)
       }
       else
       {
-        data->category_from = inferencePrefix[i - 2];
+        data->category_from = evcat_alist[i - 2].name;
       }
       i = GetValue (dlg->category_to);
       if (i < 1)
@@ -8318,13 +8465,33 @@ static Pointer InferenceEditDataFromDialog (DialoG d)
       }
       else
       {
-        data->category_to = inferencePrefix[i - 1];
+        data->category_to = evcat_alist[i - 1].name;
       }
       break;
-    case eInferenceApplyCategoryFields:
+    case eInferenceEditType:
+      i = GetValue (dlg->type_from);
+      if (i <= 1) 
+      {
+        data->type_from = NULL;
+      }
+      else
+      {
+        data->type_from = inference_alist[i - 2].name;
+      }
+      i = GetValue (dlg->type_to);
+      if (i < 1)
+      {
+        data->type_to = NULL;
+      }
+      else
+      {
+        data->type_to = inference_alist[i - 1].name;
+      }
+      break;
+    case eInferenceApplyTypeFields:
      data->field_edit = DialogToPointer (dlg->apply_field);
      break;
-    case eInferenceEditCategoryFields:
+    case eInferenceEditTypeFields:
      data->field_edit = DialogToPointer (dlg->edit_field);
       break;
     default:
@@ -8403,8 +8570,18 @@ static ValNodePtr TestInferenceEditDialog (DialoG d)
           ValNodeAddPointer (&err_list, 0, "missing category to");
         }
         break;
-      case eInferenceApplyCategoryFields:
-      case eInferenceEditCategoryFields:
+      case eInferenceEditType:
+        if (StringHasNoText (iep->type_from))
+        {
+          ValNodeAddPointer (&err_list, 0, "missing type from");
+        }
+        if (StringHasNoText (iep->type_to))
+        {
+          ValNodeAddPointer (&err_list, 0, "missing type to");
+        }
+        break;
+      case eInferenceApplyTypeFields:
+      case eInferenceEditTypeFields:
         if (iep->field_edit == NULL)
         {
           ValNodeAddPointer (&err_list, 0, "missing edit data");
@@ -8452,8 +8629,9 @@ extern DialoG CreateInferenceEditDialog
   SetObjectExtra (dlg->action, dlg, NULL);
   PopupItem (dlg->action, "Remove");
   PopupItem (dlg->action, "Change Category");
-  PopupItem (dlg->action, "Apply Category Fields");
-  PopupItem (dlg->action, "Edit Category Fields");
+  PopupItem (dlg->action, "Change Type");
+  PopupItem (dlg->action, "Apply Type Fields");
+  PopupItem (dlg->action, "Edit Type Fields");
   SetValue (dlg->action, eInferenceRemove + 1);
 
   g = HiddenGroup (p, 0, 0, NULL);
@@ -8470,7 +8648,7 @@ extern DialoG CreateInferenceEditDialog
   dlg->category_from = PopupList (dlg->action_pages[i], TRUE, ChangeInferenceCategoryChoice);
   SetObjectExtra (dlg->category_from, dlg, NULL);
   PopupItem (dlg->category_from, "Any");
-  eap = inference_alist;
+  eap = evcat_alist;
   while (eap->name != NULL) {
     PopupItem (dlg->category_from, eap->name);
     eap++;
@@ -8479,7 +8657,25 @@ extern DialoG CreateInferenceEditDialog
   StaticPrompt (dlg->action_pages[i], "New Category", 0, popupMenuHeight, programFont, 'c');
   dlg->category_to = PopupList (dlg->action_pages[i], TRUE, ChangeInferenceCategoryChoice);
   SetObjectExtra (dlg->category_to, dlg, NULL);
-  InitEnumPopup (dlg->category_to, inference_alist, NULL);
+  InitEnumPopup (dlg->category_to, evcat_alist, NULL);
+  i++;
+
+  /* edit type group */
+  dlg->action_pages[i] = HiddenGroup (g, 2, 0, NULL);
+  StaticPrompt (dlg->action_pages[i], "Original Type", 0, popupMenuHeight, programFont, 'c');
+  dlg->type_from = PopupList (dlg->action_pages[i], TRUE, ChangeInferenceCategoryChoice);
+  SetObjectExtra (dlg->type_from, dlg, NULL);
+  PopupItem (dlg->type_from, "Any");
+  eap = inference_alist;
+  while (eap->name != NULL) {
+    PopupItem (dlg->type_from, eap->name);
+    eap++;
+  }
+  
+  StaticPrompt (dlg->action_pages[i], "New Type", 0, popupMenuHeight, programFont, 'c');
+  dlg->type_to = PopupList (dlg->action_pages[i], TRUE, ChangeInferenceCategoryChoice);
+  SetObjectExtra (dlg->type_to, dlg, NULL);
+  InitEnumPopup (dlg->type_to, inference_alist, NULL);
   i++;
 
   dlg->action_pages[i] = HiddenGroup (g, 0, 0, NULL);
@@ -11496,6 +11692,7 @@ GBQualEditListData gbqual_edit_list[] = {
   {"macronuclear",         TrueFalseDialog,           ParseTrueFalseOk,      NULL },
   {"mitochondrion",        TrueFalseDialog,           ParseTrueFalseOk,      NULL },
   {"mobile_element",       CreateMobileElementDialog, ParseMobileElementOk,  CopyTextToControlPlusFreeDialog },
+  {"mobile_element_type",  CreateMobileElementDialog, ParseMobileElementOk,  CopyTextToControlPlusFreeDialog },
   {"mol_type",             MolTypeQualDialog,         ParseMolTypeOk,        NULL },
   {"organelle",            OrganelleQualDialog,       ParseOrganelleOk,      NULL },
   {"partial",              TrueFalseDialog,           ParseTrueFalseOk,      NULL },
@@ -13187,6 +13384,7 @@ NLM_EXTERN Boolean AutomatchFeatures (DialoG d, ValNodePtr PNTR existing_feature
   ValNodePtr               vnp, vnp_f, vnp_next, prev = NULL;
   FeatureReplacePtr        fr;
   Boolean                  found = FALSE;
+  SeqIntPtr                s1, s2, s3;
 
   dlg = (FeatureReplaceListDlgPtr) GetObjectExtra (d);
   if (dlg == NULL || dlg->list == NULL || existing_features == NULL || *existing_features == NULL) {
@@ -13196,8 +13394,16 @@ NLM_EXTERN Boolean AutomatchFeatures (DialoG d, ValNodePtr PNTR existing_feature
   for (vnp = dlg->list; vnp != NULL; vnp = vnp->next) {
     fr = (FeatureReplacePtr) vnp->data.ptrvalue;
     prev = NULL;
+    s1 = (SeqIntPtr)(fr->sfp->location->data.ptrvalue);
+    if (s1->from == 86391) {
+      s2 = NULL;
+    }
     for (vnp_f = *existing_features; vnp_f != NULL; vnp_f = vnp_next) {
       vnp_next = vnp_f->next;
+      s2 = (SeqIntPtr)((SeqFeatPtr)vnp_f->data.ptrvalue)->location->data.ptrvalue;
+      if (s2->from == 86391) {
+        s3 = NULL;
+      }
       if (DoFeaturesAutomatchForUpdate (fr->sfp, vnp_f->data.ptrvalue)) {
         if (prev == NULL) {
           *existing_features = vnp_f->next;

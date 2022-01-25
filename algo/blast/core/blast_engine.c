@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.270 2010/08/06 14:24:46 kazimird Exp $
+/* $Id: blast_engine.c,v 1.279 2011/05/31 16:09:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,7 +55,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_engine.c,v 1.270 2010/08/06 14:24:46 kazimird Exp $";
+    "$Id: blast_engine.c,v 1.279 2011/05/31 16:09:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_engine.h>
@@ -84,8 +84,8 @@ static char const rcsid[] =
 
 NCBI_XBLAST_EXPORT const int   kBlastMajorVersion = 2;
 NCBI_XBLAST_EXPORT const int   kBlastMinorVersion = 2;
-NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 24;
-NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Aug-02-2010";
+NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 25;
+NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Feb-01-2011";
 
 /** Structure to be passed to s_BlastSearchEngineCore, containing pointers 
     to various preallocated structures and arrays. */
@@ -162,12 +162,12 @@ static void s_BackupSubject(BLAST_SequenceBlk* subject,
     backup->num_soft_ranges = 1;
     backup->sm_index = 0;
 
-    if (subject->mask_type == DB_MASK_SOFT) {
+    if (subject->mask_type == eSoftSubjMasking) {
         ASSERT (backup->seq_ranges);
         ASSERT (backup->num_seq_ranges >= 1);
         backup->soft_ranges = backup->seq_ranges;
         backup->num_soft_ranges = backup->num_seq_ranges;
-    } else if (subject->mask_type == DB_MASK_HARD) {
+    } else if (subject->mask_type == eHardSubjMasking) {
         ASSERT (backup->seq_ranges);
         ASSERT (backup->num_seq_ranges >= 1);
         backup->hard_ranges = backup->seq_ranges;
@@ -259,7 +259,7 @@ static Int2 s_GetNextSubjectChunk(BLAST_SequenceBlk* subject,
     }
 
     /* if soft masking is off */
-    if (subject->mask_type != DB_MASK_SOFT) {
+    if (subject->mask_type != eSoftSubjMasking) {
         s_AllocateSeqRange(subject, backup, 1);
         subject->seq_ranges[0].left = residual;
         subject->seq_ranges[0].right = subject->length;
@@ -632,6 +632,9 @@ s_BlastSearchEngineCore(EBlastProgramType program_number,
     Uint4 context, first_context, last_context;
     BlastQueryInfo* query_info = query_info_in;
     Int4 orig_length = subject->length;
+    Int4 stat_length = subject->length;
+    // To support rmblastn -RMH-
+    BlastScoreBlk* sbp = gap_align->sbp;
 
     const Boolean kTranslatedSubject = 
         (Blast_SubjectIsTranslated(program_number) || program_number == eBlastTypeRpsTblastn);
@@ -647,7 +650,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number,
     if (kTranslatedSubject) {
 
         s_BackupSubject(subject, &backup);
-        if (subject->mask_type) {
+        if (subject->mask_type != eNoSubjMasking) {
             s_AllocateSeqRange(subject, &backup, backup.num_seq_ranges);
         } else {
             subject->num_seq_ranges = 0;
@@ -710,6 +713,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number,
             subject->frame = BLAST_ContextToFrame(eBlastTypeBlastx, context);
             subject->sequence = translation_buffer + frame_offsets[context] + 1;
             subject->length = frame_offsets[context+1] - frame_offsets[context] - 1;
+            if (subject->length > 0) stat_length = subject->length;
 
             /* perform per-context mask translation */
             if (context == 0) { /* first positive context */
@@ -770,18 +774,33 @@ s_BlastSearchEngineCore(EBlastProgramType program_number,
         status = BLAST_LinkHsps(program_number, hsp_list_out, query_info,
                   subject->length, gap_align->sbp, hit_params->link_hsp_params, 
                   score_options->gapped_calculation);
-    } else if (!Blast_ProgramIsPhiBlast(program_number) &&
-              !Blast_ProgramIsRpsBlast(program_number)) {
+    } else if (!Blast_ProgramIsPhiBlast(program_number)
+           && !(Blast_ProgramIsRpsBlast(program_number) && !sbp->gbp) ){
         /* Calculate e-values for all HSPs. Skip this step
-           for PHI and RPS BLAST, since calculating the E values 
+           for PHI or RPS with old FSC, since calculating the E values 
            requires precomputation that has not been done yet */
-        status = Blast_HSPListGetEvalues(query_info, hsp_list_out, 
+        Boolean isRPS = FALSE;
+        double scale_factor = 1.0;
+        if (Blast_ProgramIsRpsBlast(program_number)) {
+            isRPS = TRUE;
+            scale_factor = score_params->scale_factor;
+        }
+        status = Blast_HSPListGetEvalues(query_info, stat_length, hsp_list_out, 
                                          score_options->gapped_calculation, 
-                                         gap_align->sbp, 0, 1.0);
+                                         isRPS, gap_align->sbp, 0, scale_factor);
+        sbp->matrix_only_scoring = FALSE;
     }
     
-    /* Discard HSPs that don't pass the e-value test. */
-    status = Blast_HSPListReapByEvalue(hsp_list_out, hit_options);
+   /* Use score threshold rather than evalue if 
+    * matrix_only_scoring is used.  -RMH- 
+    */
+    if ( sbp->matrix_only_scoring )
+    {
+        status = Blast_HSPListReapByRawScore(hsp_list_out, hit_options);
+    }else {
+       /* Discard HSPs that don't pass the e-value test. */
+        status = Blast_HSPListReapByEvalue(hsp_list_out, hit_options);
+    }
 
     /* If there are no HSPs left, destroy the HSP list too. */
     if (hsp_list_out && hsp_list_out->hspcnt == 0)
@@ -1122,6 +1141,7 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
     /* iterate over all subject sequences */
     while ( (seq_arg.oid = BlastSeqSrcIteratorNext(seq_src, itr)) 
            != BLAST_SEQSRC_EOF) {
+       Int4 stat_length;
        if (seq_arg.oid == BLAST_SEQSRC_ERROR)
            break;
        if (BlastSeqSrcGetSequence(seq_src, &seq_arg) < 0)
@@ -1137,6 +1157,8 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
                           eff_len_params)) != 0)
               return status;
       }
+
+      stat_length = seq_arg.seq->length; 
 
       /* Calculate cutoff scores for linking HSPs. Do this only for
          ungapped protein searches and ungapped translated
@@ -1157,6 +1179,7 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
                   GenCodeSingletonFind(db_options->genetic_code);
           }
           ASSERT(seq_arg.seq->gen_code_string);
+          stat_length /= CODON_LENGTH;
       }
       status = 
          s_BlastSearchEngineCore(program_number, query, query_info,
@@ -1193,13 +1216,22 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
                                       hit_params->link_hsp_params, 
                                       gapped_calculation);
                } else {
-                  Blast_HSPListGetEvalues(query_info, hsp_list, 
-                                          gapped_calculation, 
+                  Blast_HSPListGetEvalues(query_info, stat_length,
+                                          hsp_list, gapped_calculation, FALSE,
                                           sbp, 0, 1.0);
                }
-               status = Blast_HSPListReapByEvalue(hsp_list, 
+               /* Use score threshold rather than evalue if 
+                * matrix_only_scoring is used.  -RMH- 
+                */
+               if ( sbp->matrix_only_scoring )
+               {
+                   status = Blast_HSPListReapByRawScore(hsp_list,
                                           hit_params->options);
-             
+               }else {
+                   status = Blast_HSPListReapByEvalue(hsp_list,
+                                          hit_params->options);
+               }
+ 
             /* Calculate and fill the bit scores, since there will be no
                traceback stage where this can be done. */
             Blast_HSPListGetBitScores(hsp_list, gapped_calculation, sbp);
@@ -1235,7 +1267,7 @@ BLAST_PreliminarySearchEngine(EBlastProgramType program_number,
     return status;
 }
 
-Int2 
+Int2
 Blast_RunPreliminarySearch(EBlastProgramType program, 
     BLAST_SequenceBlk* query, 
     BlastQueryInfo* query_info, 
@@ -1250,7 +1282,31 @@ Blast_RunPreliminarySearch(EBlastProgramType program,
     const PSIBlastOptions* psi_options, 
     const BlastDatabaseOptions* db_options, 
     BlastHSPStream* hsp_stream, 
-    BlastDiagnostics* diagnostics)
+    BlastDiagnostics* diagnostics) 
+{
+    return Blast_RunPreliminarySearchWithInterrupt(program,
+           query, query_info, seq_src, score_options, sbp, lookup_wrap,
+           word_options, ext_options, hit_options, eff_len_options,
+           psi_options, db_options, hsp_stream, diagnostics, NULL, NULL);
+}
+
+Int2 
+Blast_RunPreliminarySearchWithInterrupt(EBlastProgramType program, 
+    BLAST_SequenceBlk* query, 
+    BlastQueryInfo* query_info, 
+    const BlastSeqSrc* seq_src, 
+    const BlastScoringOptions* score_options,
+    BlastScoreBlk* sbp, 
+    LookupTableWrap* lookup_wrap,
+    const BlastInitialWordOptions* word_options, 
+    const BlastExtensionOptions* ext_options,
+    const BlastHitSavingOptions* hit_options,
+    const BlastEffectiveLengthsOptions* eff_len_options,
+    const PSIBlastOptions* psi_options, 
+    const BlastDatabaseOptions* db_options, 
+    BlastHSPStream* hsp_stream, 
+    BlastDiagnostics* diagnostics,
+    TInterruptFnPtr interrupt_search, SBlastProgress* progress_info)
 {
     Int2 status = 0;
     BlastScoringParameters* score_params = NULL;/**< Scoring parameters */
@@ -1279,7 +1335,8 @@ Blast_RunPreliminarySearch(EBlastProgramType program,
                                       lookup_wrap, word_options, 
                                       ext_params, hit_params, eff_len_params,
                                       psi_options, db_options, hsp_stream, 
-                                      local_diagnostics, 0, 0)) != 0)
+                                      local_diagnostics, interrupt_search, 
+                                      progress_info)) != 0) 
       return status;
 
     /* Do not destruct score block here */

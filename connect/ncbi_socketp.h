@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKETP__H
 #define CONNECT___NCBI_SOCKETP__H
 
-/* $Id: ncbi_socketp.h,v 1.19 2010/05/01 15:54:36 kazimird Exp $
+/* $Id: ncbi_socketp.h,v 1.23 2010/10/21 20:24:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -258,10 +258,11 @@ typedef struct SOCK_tag {
 
     unsigned       crossexec:1; /* =1 if close-on-exec must NOT be set       */
     unsigned       connected:1; /* =1 if remote end-point is fully connected */
+    unsigned       keepalive:1; /* =1 if needs to be kept alive (if OS supp.)*/
 #ifndef NCBI_OS_MSWIN
-    unsigned        reserved:6; /* MBZ                                       */
+    unsigned        reserved:5; /* MBZ                                       */
 #else
-    unsigned        reserved:3; /* MBZ                                       */
+    unsigned        reserved:2; /* MBZ                                       */
     unsigned        readable:1; /* =1 if known to be readable                */
     unsigned        writable:1; /* =1 if known to be writeable               */
     unsigned         closing:1; /* =1 if FD_CLOSE posted                     */
@@ -285,14 +286,24 @@ typedef struct SOCK_tag {
     /* aux I/O data */
     BUF              r_buf;     /* read  buffer                              */
     BUF              w_buf;     /* write buffer                              */
+    size_t           r_len;     /* DSOCK: size of last message received      */
     size_t           w_len;     /* SOCK: how much data is pending for output */
 
     /* statistics */
-    size_t           n_read;    /* DSOCK: total #; SOCK: last connect/ only  */
-    size_t           n_written; /* DSOCK: total #; SOCK: last /session only  */
-    size_t           n_in;      /* DSOCK: msg #; SOCK: total # of bytes read */
-    size_t           n_out;     /* DSOCK: msg #; SOCK: total # of bytes sent */
-
+    TNCBI_BigCount   n_read;    /* DSOCK: total # of bytes read (in all msgs)
+                                   SOCK:  # of bytes read since last connect
+                                */
+    TNCBI_BigCount   n_written; /* DSOCK: total # of bytes written (all msgs)
+                                   SOCK:  # of bytes written since last connect
+                                */
+    TNCBI_BigCount   n_in;      /* DSOCK: total # of messages received
+                                   SOCK:  total # of bytes read in all
+                                   completed connections in this SOCK so far
+                                */
+    TNCBI_BigCount   n_out;     /* DSOCK: total # of messages sent
+                                   SOCK:  total # of bytes written in all
+                                   completed connections in this SOCK so far
+                                */
 #ifdef NCBI_OS_UNIX
     /* pathname for UNIX socket */
     char             path[1];   /* must go last                              */

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -37,32 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 05-13-93 Schuler     All public functions are now declared LIBCALL.
-*
-* $Log: objalign.c,v 
- * Revision 4.1  1995/09/21  02:26:14  ostel
- * added ProgMon call
- *
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 3.10  1995/07/25  01:00:07  ostell
- * added checks to strip asn1 spec 4.0 objects on demand
- *
- * Revision 3.9  1995/07/22  21:59:13  ostell
- * added support for ASN.1 spec 4.0
- *
- * Revision 3.8  1995/06/27  17:35:03  epstein
- * add missing return values to new Seq-align-set functions
- *
- * Revision 3.7  95/06/21  17:17:46  epstein
- * add Seq-align-set
- * 
- * Revision 3.6  95/05/15  21:22:00  ostell
- * added Log line
- * 
-*
-*
 *
 * ==========================================================================
 */
@@ -593,6 +567,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     Boolean isError = FALSE;
 	ValNodePtr anp, prev = NULL;
 	ObjectIdPtr oip;
+    UserObjectPtr uop, lastuop = NULL;
 
 	if (! loaded)
 	{
@@ -738,7 +713,21 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         }
         else if (atp == SEQ_ALIGN_ext)
         {
+            /*
             sap->ext = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) UserObjectAsnRead, (AsnOptFreeFunc) UserObjectFree);
+            */
+            if (AsnReadVal (aip, atp, &av) <= 0) goto erret;  /* START_STRUCT */
+            while ((atp = AsnReadId(aip, amp, atp)) == SEQ_ALIGN_ext_E) {
+                uop = UserObjectAsnRead (aip, atp);
+                if (uop == NULL) goto erret;
+                if (sap->ext == NULL) {
+                    sap->ext = (Pointer) uop;
+                } else if (lastuop != NULL) {
+                  lastuop->next = uop;
+                }
+                lastuop = uop;
+            }
+            if (AsnReadVal (aip, atp, &av) <= 0) goto erret;  /* END_STRUCT */
             if (sap->ext == NULL)
                 goto erret;
         }

@@ -1,5 +1,5 @@
 
-/* $Id: link_hsps.c,v 1.67 2009/01/05 16:54:38 kazimird Exp $
+/* $Id: link_hsps.c,v 1.73 2011/06/13 17:34:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: link_hsps.c,v 1.67 2009/01/05 16:54:38 kazimird Exp $";
+    "$Id: link_hsps.c,v 1.73 2011/06/13 17:34:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/link_hsps.h>
@@ -1792,7 +1792,11 @@ BLAST_LinkHsps(EBlastProgramType program_number, BlastHSPList* hsp_list,
         /* Calculate individual HSP e-values first - they'll be needed to
            compare with sum e-values. Use decay rate to compensate for 
            multiple tests. */
-        Blast_HSPListGetEvalues(query_info, hsp_list, gapped_calculation, sbp, 
+        
+        Blast_HSPListGetEvalues(query_info, 
+                                Blast_SubjectIsTranslated(program_number) ?
+                                subject_length / CODON_LENGTH : subject_length,
+                                hsp_list, gapped_calculation, FALSE,sbp, 
                                 link_hsp_params->gap_decay_rate, 1.0);
         
         s_BlastUnevenGapLinkHSPs(program_number, hsp_list, query_info, 

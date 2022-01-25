@@ -29,55 +29,12 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.17 $
+ * $Revision: 6.22 $
  *
  * File Description: 
  *
  * Modifications:  
  * --------------------------------------------------------------------------
- * $Log: urlquery.h,v $
- * Revision 6.17  2009/09/18 19:58:40  lavr
- * +QUERY_QueueSize()
- *
- * Revision 6.16  2006/10/17 02:19:07  lavr
- * Use "const char*" wherever appropriate
- *
- * Revision 6.15  2006/04/15 01:59:01  lavr
- * +QUERY_OpenServiceQueryEx
- *
- * Revision 6.14  2006/01/24 20:22:26  lavr
- * The boiler plate and revision log reindented
- *
- * Revision 6.13  2006/01/19 21:11:42  lavr
- * QUERY_SendQuery() to return EIO_Status
- *
- * Revision 6.12  2003/09/03 21:15:29  lavr
- * Reuse "arguments" in QUERY_OpenServiceQuery() to be real service argument
- * (formely it was to modify the dispatcher and was not really used anywhere)
- *
- * Revision 6.11  2002/11/21 15:24:31  johnson
- * changed 'queue' vars to 'q' to avoid stl conflict
- *
- * Revision 6.10  2001/06/07 20:07:41  kans
- * added QUERY_OpenServiceQuery
- *
- * Revision 6.9  2001/02/21 22:02:04  lavr
- * Changes for use new CONN interface
- *
- * Revision 6.8  2000/08/18 19:08:58  kans
- * added QUERY_WaitForNextMacEvent, otherwise QuickDraw collides with mmdbapi
- *
- * Revision 6.7  2000/06/30 12:46:11  kans
- * added QUERY_CloseQueue
- *
- * Revision 6.6  2000/06/29 18:27:10  kans
- * QUERY_OpenUrlQuery has new EMIME_Type type and EMIME_Encoding encoding parameters
- *
- * Revision 6.5  2000/06/13 12:58:15  kans
- * added closeConn parameter to QUERY_AddToQueue
- *
- * Revision 6.4  1999/07/28 21:05:23  vakatov
- * Moved all #include's from inside the NLM_EXTERN & `extern "C"' block
  *
  * ==========================================================================
  */
@@ -110,11 +67,11 @@ extern "C" {
   Initializes a POST connector based on URL query parameters.  For example:
 
   QUERY_OpenUrlQuery (
-    "cruncher.nlm.nih.gov", 80,
+    "www.ncbi.nlm.nih.gov", 80,
     "/cgi-bin/Sequin/testcgi.cgi",
     "request=seg&window=12&lowcut=2.3&hicut=2.6",
     "Sequin", 30, eMIME_T_NcbiData, eMIME_Fasta, eENCOD_Url,
-    fHCC_SureFlush | fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput
+    fHTTP_SureFlush | fHTTP_UrlDecodeInput | fHTTP_UrlEncodeOutput
   );
 
   The returned CONN value is then passed data before being sent to the cgi.
@@ -129,16 +86,16 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   EMIME_Type type,
   EMIME_SubType subtype,
   EMIME_Encoding encoding,
-  THCC_Flags flags
+  THTTP_Flags flags
 );
 
 /*
   Returns connection to NCBI named service.  Pass parameters (if any)
   via the connection to the service (if successful).  Optionally,
   arguments may be passed to services that support connections via
-  URLs (note that unlike the service parameters these is no guarantee
-  that the arguments will be passed since the service can be implemented
-  in a non-URL-compatible manner, like e.g. via a standalone server).
+  URLs (note that unlike the service parameters there is no guarantee
+  that the arguments will be passed since services can be implemented
+  in non-URL-compatible manners, like e.g. via standalone servers).
   Return NULL on error.
 */
 
@@ -189,6 +146,10 @@ NLM_EXTERN void QUERY_CopyFileToQuery (
 NLM_EXTERN void QUERY_CopyResultsToFile (
   CONN conn,
   FILE *fp
+);
+
+NLM_EXTERN CharPtr QUERY_CopyResultsToString (
+  CONN conn
 );
 
 /* Structure for direct AsnIo-CONN link */
@@ -266,6 +227,31 @@ NLM_EXTERN void QUERY_WaitForNextMacEvent (
   void
 );
 #endif
+
+/* Simple query functions for access to EUtils services */
+
+NLM_EXTERN CharPtr QUERY_UrlSynchronousQuery (
+  CharPtr machine,
+  Uint2 port,
+  CharPtr path,
+  CharPtr prefix,
+  CharPtr arguments,
+  CharPtr suffix,
+  CharPtr post
+);
+
+NLM_EXTERN Boolean QUERY_UrlAsynchronousQuery (
+  CharPtr machine,
+  Uint2 port,
+  CharPtr path,
+  CharPtr prefix,
+  CharPtr arguments,
+  CharPtr suffix,
+  CharPtr post,
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+);
 
 
 #ifdef __cplusplus

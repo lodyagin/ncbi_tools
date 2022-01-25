@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.120 2010/07/15 20:09:00 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.127 2011/05/02 17:18:27 kans Exp $";
 
 /*****************************************************************************
 *
@@ -4126,20 +4126,113 @@ extern Boolean EntryCheckGBBlock (SeqEntryPtr sep)
   return hasGBStuff;
 }
 
+
+static SeqIntPtr GetOriginalBeforeAdjustment (SeqLocPtr slp, Int4Ptr p_oldfrom, Int4Ptr p_oldto)
+{
+    SeqLocPtr curr = NULL, last;
+    SeqIntPtr sip;
+  
+    if (slp == NULL)
+    {
+        return NULL;
+    }
+    while ((curr = SeqLocFindNext(slp, curr)) != NULL)
+    {
+        last = curr;
+    }
+
+    if (last != NULL && last->choice != SEQLOC_INT)  /* this is too weird */
+    {
+        return NULL;
+    }
+    if (last == NULL || last->data.ptrvalue == NULL) return NULL;
+    sip = (SeqIntPtr)(last->data.ptrvalue);
+
+    *p_oldfrom = sip->from;
+    *p_oldto = sip->to;
+
+    return sip;
+}
+
+
+static Boolean AdjustLocByRemainder (SeqLocPtr slp, Int4 remainder, Boolean even_if_partial, Int4Ptr p_oldnum)
+{
+    SeqIntPtr sip;
+    BioseqPtr nucseq;
+    Int4      oldfrom, oldto;
+    Int4      oldnum = 0;
+
+    sip = GetOriginalBeforeAdjustment(slp, &oldfrom, &oldto);
+    if (sip == NULL) {
+      return FALSE;
+    }
+
+    nucseq = BioseqFind(sip->id);
+    if (nucseq == NULL)
+    {
+        return FALSE;
+    }
+
+    switch (remainder)
+    {
+        case 0:
+            remainder = 3;
+            break;
+        case 1:
+            remainder = 2;
+            break;
+        case 2:
+            remainder = 1;
+            break;
+    }
+
+    if (sip->strand == Seq_strand_minus)
+    {
+        if (sip->from < remainder)
+        {
+            return FALSE;
+        }
+        if (sip->if_from != NULL && !even_if_partial)
+        {
+            return FALSE;
+        }
+        oldnum = sip->from;
+        sip->from -= remainder;
+    }
+    else
+    {
+        if (sip->to >= (nucseq->length - remainder))
+        {
+            return FALSE;
+        }
+        if (sip->if_to != NULL && !even_if_partial)
+        {
+            return FALSE;
+        }
+        oldnum = sip->to;
+        sip->to += remainder;
+    }
+    if (p_oldnum != NULL) {
+      *p_oldnum = oldnum;
+    }
+    return TRUE;
+}
+
+
 /*****************************************************************************
 *
 *   CdEndCheck(sfp, fp)
 *
 *****************************************************************************/
-static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
+static void CdEndCheck(SeqFeatPtr sfp, FILE *fp, Boolean also_adjust_mrna)
 {
     ByteStorePtr newprot = NULL;
     BioseqPtr protseq, nucseq;
-    SeqLocPtr last= NULL, curr = NULL;
     Int4 len, remainder, aas, oldfrom, oldto, protlen, i, oldnum;
+    Int4 m_oldfrom, m_oldto;
     CdRegionPtr crp;
     SeqIdPtr protid, tmp;
-    SeqIntPtr sip;
+    SeqIntPtr sip, msip = NULL;
     Int2 residue, residue2;
     Char nuc[40];
     CodeBreakPtr cbp;
@@ -4147,6 +4240,7 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
     SeqLocPtr tmpslp;
     Int4 len2;
     SeqFeatPtr gene = NULL;
+    SeqFeatPtr mrna = NULL;
     GeneRefPtr grp ;
     BioseqPtr bsp;
     SeqLocPtr slp;
@@ -4162,6 +4256,20 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
     grp = SeqMgrGetGeneXref (sfp);
     if (grp == NULL || (! SeqMgrGeneIsSuppressed (grp))) {
       gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
+    }
+    if (also_adjust_mrna) {
+      mrna = SeqMgrGetOverlappingmRNA (sfp->location, NULL);
+      if (mrna != NULL) {
+        if (SeqLocStrand (mrna->location) == Seq_strand_minus) {
+          if (SeqLocStart (mrna->location) != SeqLocStart (sfp->location)) {
+            mrna = NULL;
+          }
+        } else {
+          if (SeqLocStop (mrna->location) != SeqLocStop (sfp->location)) {
+            mrna = NULL;
+          }
+        }
+      }
     }
 
     crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
@@ -4217,66 +4325,19 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
         cbp = cbp->next;
     }
 
-    while ((curr = SeqLocFindNext(sfp->location, curr)) != NULL)
-    {
-        last = curr;
+    sip = GetOriginalBeforeAdjustment (sfp->location, &oldfrom, &oldto);
+    if (mrna != NULL) {
+      msip = GetOriginalBeforeAdjustment (mrna->location, &m_oldfrom, &m_oldto);
     }
 
-    if (last != NULL && last->choice != SEQLOC_INT)  /* this is too weird */
-    {
+    if (!AdjustLocByRemainder(sfp->location, remainder, FALSE, &oldnum)) {
         return;
     }
-    if (last == NULL || last->data.ptrvalue == NULL) return;
-    sip = (SeqIntPtr)(last->data.ptrvalue);
+    if (mrna != NULL) {
+      AdjustLocByRemainder (mrna->location, remainder, TRUE, NULL);
+    }
+
     nucseq = BioseqFind(sip->id);
-    if (nucseq == NULL)
-    {
-        return;
-    }
-
-    switch (remainder)
-    {
-        case 0:
-            remainder = 3;
-            break;
-        case 1:
-            remainder = 2;
-            break;
-        case 2:
-            remainder = 1;
-            break;
-    }
-
-    oldfrom = sip->from;
-    oldto = sip->to;
-
-    if (sip->strand == Seq_strand_minus)
-    {
-        if (sip->from < remainder)
-        {
-            return;
-        }
-        if (sip->if_from != NULL)
-        {
-            return;
-        }
-        oldnum = sip->from;
-        sip->from -= remainder;
-    }
-    else
-    {
-        if (sip->to >= (nucseq->length - remainder))
-        {
-            return;
-        }
-        if (sip->if_to != NULL)
-        {
-            return;
-        }
-        oldnum = sip->to;
-        sip->to += remainder;
-    }
-
     newprot = ProteinFromCdRegion(sfp, TRUE);   /* include stop codons */
     if (newprot == NULL)
     {
@@ -4284,7 +4345,7 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
     }
 
     protlen = BSLen(newprot);
-    if (protlen != ((len + remainder)/3))
+    if (protlen != aas + 1)
     {
         goto erret;
     }
@@ -4360,8 +4421,7 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
                 SetSeqLocPartial (gene->location, noLeft, noRight);
                 gene->partial = (gene->partial || noLeft || noRight);
               }
-            }
-          
+            }          
         }
     }
 
@@ -4370,8 +4430,18 @@ erret:
     BSFree(newprot);
     sip->from = oldfrom;
     sip->to = oldto;
+    if (msip != NULL) {
+      msip->from = m_oldfrom;
+      msip->to = m_oldto;
+    }
     return;
 }
+
+
+typedef struct findcd {
+    FILE *fp;
+    Boolean also_adjust_mrna;
+} FindCdData, PNTR FindCdPtr;
 
 static void FindCd (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
@@ -4379,9 +4449,15 @@ static void FindCd (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     SeqFeatPtr sfp;
     BioseqPtr bsp;
     BioseqSetPtr bssp;
-    FILE *fp;
+    FindCdPtr fcp;
+    FILE *fp = NULL;
+    Boolean also_adjust_mrna = FALSE;
 
-    fp = (FILE *)data;
+    fcp = (FindCdPtr) data;
+    if (fcp != NULL) {
+      fp = fcp->fp;
+      also_adjust_mrna = fcp->also_adjust_mrna;
+    }
     if (IS_Bioseq(sep))
     {
         bsp = (BioseqPtr)(sep->data.ptrvalue);
@@ -4402,7 +4478,7 @@ static void FindCd (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
             {
                 if (sfp->data.choice == 3) { /* cdregion */
                     if (! sfp->excpt) { /* if not biological exception */
-                        CdEndCheck(sfp, fp);
+                        CdEndCheck(sfp, fp, also_adjust_mrna);
                     }
                 }
                 sfp = sfp->next;
@@ -4442,11 +4518,22 @@ static SeqLocPtr fake_bond_loc(SeqLocPtr slp)
 *
 *****************************************************************************/
 
-void CdCheck(SeqEntryPtr sep, FILE *fp)
+NLM_EXTERN void CdCheckEx(SeqEntryPtr sep, FILE *fp, Boolean also_adjust_mrna)
 {
-    SeqEntryExplore(sep, (Pointer)fp, FindCd);
+    FindCdData fcd;
+
+    MemSet (&fcd, 0, sizeof (FindCdData));
+    fcd.fp = fp;
+    fcd.also_adjust_mrna = also_adjust_mrna;
+    SeqEntryExplore(sep, (Pointer)&fcd, FindCd);
     return;
 }
+
+NLM_EXTERN void CdCheck(SeqEntryPtr sep, FILE *fp)
+{
+    CdCheckEx (sep, fp, FALSE);
+}
+
 
 static Boolean OutOfFramePeptideButEmblOrDdbj (SeqFeatPtr sfp, SeqFeatPtr cds)
 
@@ -5461,7 +5548,8 @@ void StripTitleFromProtsInNucProts (SeqEntryPtr sep)
   if (bssp == NULL) return;
   if (bssp->_class == 7 ||
       (bssp->_class >= 13 && bssp->_class <= 16) ||
-      bssp->_class == BioseqseqSet_class_wgs_set) {
+      bssp->_class == BioseqseqSet_class_wgs_set ||
+      bssp->_class == BioseqseqSet_class_small_genome_set) {
     for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
       StripTitleFromProtsInNucProts (sep);
     }
@@ -5955,7 +6043,8 @@ Uint2 move_cds_ex (SeqEntryPtr sep, Boolean doPseudo)
     if (bssp->_class == BioseqseqSet_class_genbank ||
         (bssp->_class >= BioseqseqSet_class_mut_set && bssp->_class <= BioseqseqSet_class_eco_set) ||
         bssp->_class == BioseqseqSet_class_gen_prod_set ||
-        bssp->_class == BioseqseqSet_class_wgs_set) {
+        bssp->_class == BioseqseqSet_class_wgs_set ||
+        bssp->_class == BioseqseqSet_class_small_genome_set) {
         found = 0;
         for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
           found += move_cds (sep);

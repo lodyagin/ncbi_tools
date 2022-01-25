@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.55 $
+* $Revision: 1.60 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASN2FSA_APP_VER "4.0"
+#define ASN2FSA_APP_VER "5.2"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
@@ -252,8 +252,10 @@ static ValNodePtr ExtractBspList (
 
 typedef struct fastaflags {
   Boolean  master_style;
+  Boolean  html_spans;
   Boolean  expand_gaps;
   Boolean  use_dashes;
+  Boolean  extended_ids;
   Boolean  far_genomic_qual;
   Boolean  qual_gap_is_zero;
   Boolean  automatic;
@@ -662,6 +664,12 @@ static void ProcessSingleRecord (
       } else if (ffp->use_dashes) {
         flags |= GAP_TO_SINGLE_DASH;
       }
+      if (ffp->html_spans) {
+        flags |= STREAM_HTML_SPANS;
+      }
+      if (ffp->extended_ids) {
+        flags |= STREAM_ALL_FASTA_IDS;
+      }
 
       bsplist = NULL;
       if (ffp->lock) {
@@ -830,6 +838,12 @@ static void ProcessMultipleRecord (
   } else if (ffp->use_dashes) {
     flags |= GAP_TO_SINGLE_DASH;
   }
+  if (ffp->html_spans) {
+    flags |= STREAM_HTML_SPANS;
+  }
+  if (ffp->extended_ids) {
+    flags |= STREAM_ALL_FASTA_IDS;
+  }
 
   longest [0] = '\0';
   worsttime = 0;
@@ -938,6 +952,12 @@ static void FastaWrapper (
   } else if (ffp->use_dashes) {
     flags |= GAP_TO_SINGLE_DASH;
   }
+  if (ffp->html_spans) {
+    flags |= STREAM_HTML_SPANS;
+  }
+  if (ffp->extended_ids) {
+    flags |= STREAM_ALL_FASTA_IDS;
+  }
 
   bsplist = NULL;
   if (ffp->lock) {
@@ -1031,6 +1051,12 @@ static void ProcessOneSeqEntry (
   } else if (ffp->use_dashes) {
     flags |= GAP_TO_SINGLE_DASH;
   }
+  if (ffp->html_spans) {
+    flags |= STREAM_HTML_SPANS;
+  }
+  if (ffp->extended_ids) {
+    flags |= STREAM_ALL_FASTA_IDS;
+  }
 
   bsplist = NULL;
   if (ffp->lock) {
@@ -1112,23 +1138,47 @@ static void FileRecurse (
 }
 
 static SeqEntryPtr SeqEntryFromAccnOrGi (
-  CharPtr accn
+  CharPtr str
 )
 
 {
+  CharPtr      accn;
   Boolean      alldigits;
   BioseqPtr    bsp;
+  Char         buf [64];
   Char         ch;
+  Int4         flags = 0;
   CharPtr      ptr;
+  Int2         retcode = 0;
   SeqEntryPtr  sep = NULL;
   SeqIdPtr     sip;
+  CharPtr      tmp1 = NULL;
+  CharPtr      tmp2 = NULL;
   Int4         uid = 0;
   long int     val;
   ValNode      vn;
 
-  if (StringHasNoText (accn)) return NULL;
+  if (StringHasNoText (str)) return NULL;
+  StringNCpy_0 (buf, str, sizeof (buf));
+  TrimSpacesAroundString (buf);
 
-  TrimSpacesAroundString (accn);
+  accn = buf;
+  tmp1 = StringChr (accn, ',');
+  if (tmp1 != NULL) {
+    *tmp1 = '\0';
+    tmp1++;
+    tmp2 = StringChr (tmp1, ',');
+    if (tmp2 != NULL) {
+      *tmp2 = '\0';
+      tmp2++;
+      if (StringDoesHaveText (tmp2) && sscanf (tmp2, "%ld", &val) == 1) {
+        flags = (Int4) val;
+      }
+    }
+    if (StringDoesHaveText (tmp1) && sscanf (tmp1, "%ld", &val) == 1) {
+      retcode = (Int2) val;
+    }
+  }
 
   alldigits = TRUE;
   ptr = accn;
@@ -1154,7 +1204,7 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
   }
 
   if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 0, -1);
+    sep = PubSeqSynchronousQuery (uid, retcode, flags);
     if (sep != NULL) {
       MemSet ((Pointer) &vn, 0, sizeof (ValNode));
       vn.choice = SEQID_GI;
@@ -1181,21 +1231,23 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 #define m_argMaster        7
 #define g_argExpandGaps    8
 #define D_argUseDashes     9
-#define s_argGenomicQual  10
-#define z_argZeroQualGap  11
-#define a_argType         12
-#define b_argBinary       13
-#define c_argCompressed   14
-#define r_argRemote       15
-#define f_argFastaIdx     16
-#define d_argBlastDB      17
-#define k_argLocalFetch   18
-#define l_argLockFar      19
-#define h_argFarOutFile   20
-#define e_argLineLength   21
-#define T_argThreads      22
-#define L_argLogFile      23
-#define A_argAccession    24
+#define E_argExtendedIDs  10
+#define s_argGenomicQual  11
+#define z_argZeroQualGap  12
+#define a_argType         13
+#define b_argBinary       14
+#define c_argCompressed   15
+#define r_argRemote       16
+#define f_argFastaIdx     17
+#define d_argBlastDB      18
+#define k_argLocalFetch   19
+#define l_argLockFar      20
+#define h_argFarOutFile   21
+#define e_argLineLength   22
+#define T_argThreads      23
+#define L_argLogFile      24
+#define A_argAccession    25
+#define H_argHtmlSpans    26
 
 Args myargs [] = {
   {"Path to ASN.1 Files", NULL, NULL, NULL,
@@ -1218,6 +1270,8 @@ Args myargs [] = {
     TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Use Dash for Gap", "F", NULL, NULL,
     TRUE, 'D', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Extended Seq-IDs", "F", NULL, NULL,
+    TRUE, 'E', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Far Genomic Contig for Quality Scores", "F", NULL, NULL,
     TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Print Quality Score Gap as -1", "F", NULL, NULL,
@@ -1248,6 +1302,8 @@ Args myargs [] = {
     TRUE, 'L', ARG_FILE_OUT, 0.0, 0, NULL},
   {"Accession to Fetch", NULL, NULL, NULL,
     TRUE, 'A', ARG_STRING, 0.0, 0, NULL},
+  {"HTML Spans", "F", NULL, NULL,
+    TRUE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -1257,8 +1313,8 @@ Int2 Main (void)
   CharPtr        accn, base, blastdb, directory, fastaidx, ntout,
                  aaout, qlout, frout, logfile, ptr, str, suffix;
   Boolean        automatic, batch, binary, blast, compressed, dorecurse,
-                 expandgaps, fargenomicqual, fasta, local, lock,
-                 masterstyle, qualgapzero, remote, usedashes,
+                 expandgaps, extendedids, fargenomicqual, fasta, htmlspans,
+                 local, lock, masterstyle, qualgapzero, remote, usedashes,
                  usethreads;
   FastaFlagData  ffd;
   Int2           linelen, type = 0;
@@ -1321,7 +1377,9 @@ Int2 Main (void)
   usethreads = (Boolean) myargs [T_argThreads].intvalue;
 
   expandgaps = (Boolean) myargs [g_argExpandGaps].intvalue;
+  htmlspans = (Boolean) myargs [H_argHtmlSpans].intvalue;
   usedashes = (Boolean) myargs [D_argUseDashes].intvalue;
+  extendedids = (Boolean) myargs [E_argExtendedIDs].intvalue;
   masterstyle = (Boolean) myargs [m_argMaster].intvalue;
   fargenomicqual = (Boolean) myargs [s_argGenomicQual].intvalue;
   qualgapzero = (Boolean) myargs [z_argZeroQualGap].intvalue;
@@ -1383,7 +1441,9 @@ Int2 Main (void)
   /* populate parameter structure */
 
   ffd.expand_gaps = expandgaps;
+  ffd.html_spans = htmlspans;
   ffd.use_dashes = usedashes;
+  ffd.extended_ids = extendedids;
   ffd.master_style = masterstyle;
   ffd.far_genomic_qual = fargenomicqual;
   ffd.qual_gap_is_zero = (Boolean) (! qualgapzero);

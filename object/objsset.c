@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.17 $
 *
 * File Description:  Object manager for module NCBI-Seqset
 *
@@ -382,6 +382,21 @@ NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetFree (BioseqSetPtr bsp)
 	return (BioseqSetPtr)MemFree(bsp);
 }
 
+
+static SeqEntryPtr ReverseSeqEntryList (SeqEntryPtr start)
+{
+  SeqEntryPtr first = NULL, next;
+
+  while (start != NULL) {
+    next = start->next;
+    start->next = first;
+    first = start;
+    start = next;
+  }
+
+  return first;
+}
+
 /*****************************************************************************
 *
 *   BioseqSetFreeComponents(bsp, parts)
@@ -408,13 +423,22 @@ NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetFreeComponents (BioseqSetPtr bsp, Boole
     bsp->date = DateFree(bsp->date);
     bsp->descr = SeqDescrFree(bsp->descr);
     sep = bsp->seq_set;
+    /* reverse seq-set, to increase speed of freeing it, since the elements will have
+     * probably been added to the index in order, and it's faster to take the last out first.
+     */
+    sep = ReverseSeqEntryList(sep);
+    bsp->seq_set = sep;
     while (sep != NULL)
     {
         sepnext = sep->next;
-		if (parts)
-	        SeqEntryFree(sep);
-		else
-			SeqEntryFreeComponents(sep);
+		    if (parts)
+        {
+	          SeqEntryFree(sep);
+        }
+		    else
+        {
+			      SeqEntryFreeComponents(sep);
+        }
         sep = sepnext;
     }
     sp = bsp->annot;

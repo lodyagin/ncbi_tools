@@ -3198,6 +3198,15 @@ Package=<4>
     Project_Dep_Name ncbiobj
     End Project Dependency
     Begin Project Dependency
+    Project_Dep_Name blastcompadj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastapi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blast
+    End Project Dependency
+    Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
     Begin Project Dependency

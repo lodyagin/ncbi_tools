@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager interface for module NCBI-Seq
 *
@@ -37,73 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: objseq.h,v $
-* Revision 6.10  2008/03/05 18:32:51  kans
-* added support for the new TextAnnotId object
-*
-* Revision 6.9  2007/05/07 13:25:32  kans
-* added support for Seq-data.gap
-*
-* Revision 6.8  2005/01/07 17:30:52  yaschenk
-* fixing definition
-*
-* Revision 6.7  2005/01/07 17:26:44  yaschenk
-* SeqDataAsnWriteXML is needed as non-static
-*
-* Revision 6.6  2004/11/23 19:40:34  kans
-* added AnnotDesc registration
-*
-* Revision 6.5  2001/10/02 21:47:54  kans
-* added hooks for writing extra descriptors or features (JO)
-*
-* Revision 6.4  1999/09/27 17:48:38  kans
-* using GatherIndex structure
-*
-* Revision 6.3  1999/09/24 23:09:23  kans
-* adds EXTRA_OBJMGR_FIELDS to several objects
-*
-* Revision 6.2  1998/10/13 20:59:05  kans
-* Bioseq has new slot for omdp, to be used by SeqMgr indexing functions
-*
-* Revision 6.1  1998/06/29 20:31:32  kans
-* explicit defines for FEATDEF_MAX, SEQFEAT_MAX, and SEQDESCR_MAX Boolean array sizes
-*
-* Revision 6.0  1997/08/25 18:50:52  madden
-* Revision changed to 6.0
-*
-* Revision 4.5  1997/08/20 19:17:23  madden
-* Version 6 of ASN.1
-*
-* Revision 4.4  1997/06/19 18:42:04  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 4.3  1997/04/23 23:01:57  ostell
-* changed SeqDataAsnRead to check for internal spaces on text falphabets
-* when reading from a text file. they can be introuduced when test asn1 is
-* emailed.
-*
- * Revision 4.2  1996/07/19  22:16:14  ostell
- * added comment about delta seq gaps
- *
- * Revision 4.1  1996/06/16  04:18:12  ostell
- * added comment on delta seq-ext
- *
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 3.6  1995/07/22  21:59:13  ostell
- * added support for ASN.1 spec 4.0
- *
- * Revision 3.5  1995/07/11  18:46:25  ostell
- * replaced Seqdesc neighbors with dbxref
- * added reftype to Pubdesc
- *
- * Revision 3.4  1995/05/15  21:22:00  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -599,8 +532,9 @@ typedef struct op_objseq {
 #define Seq_descr_het 22
 #define Seq_descr_source 23
 #define Seq_descr_molinfo 24
+#define Seq_descr_modelev 25
 
-#define SEQDESCR_MAX 25 /* size of array needed for seqdescr filter parameters */
+#define SEQDESCR_MAX 26 /* size of array needed for seqdescr filter parameters */
 
 /* SeqDescr/SeqDesc will start to be allocated as ObjValNodes with vnp->extended
    set to 1 and EXTRA_OBJMGR_FIELDS fields available with a cast pointer */

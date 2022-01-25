@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_COMM__H
 #define CONNECT___NCBI_COMM__H
 
-/* $Id: ncbi_comm.h,v 6.16 2010/04/01 14:09:34 kazimird Exp $
+/* $Id: ncbi_comm.h,v 6.17 2010/10/19 18:44:37 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,7 +40,7 @@
 #define HTTP_DISP_MESSAGES     "Dispatcher-Messages:"
 #define HTTP_NCBI_MESSAGE      "NCBI-Message:"
 #define LBSM_DEFAULT_TIME      30     /* Default expiration time, in seconds */
-#define LBSM_DEFAULT_RATE      1000   /* For SLBSM_Service::info::rate       */
+#define LBSM_DEFAULT_RATE      1000.0 /* For SLBSM_Service::info::rate       */
 #define DISPATCHER_CFGPATH     "/etc/lbsmd/"
 #define DISPATCHER_CFGFILE     "servrc.cfg"
 #define DISP_PROTOCOL_VERSION  "1.1"

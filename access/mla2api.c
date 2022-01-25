@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/30/07
 *
-* $Revision: 1.16 $
+* $Revision: 1.17 $
 *
 * File Description: 
 *
@@ -726,6 +726,7 @@ static EjourData mla2_ejour_list [] = {
  {"Microb. Cell Fact.",                                            0 },
  {"Mol. Syst. Biol.",                                              0 },
  {"Mol. Vis.",                                                     0 },
+ {"Nat Commun",                                                    0 },
  {"Neoplasia",                                                  2005 },
  {"Nucl. Recept.",                                                 0 },
  {"Pharmacologyonline",                                            0 },

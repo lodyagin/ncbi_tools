@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module MMDB-Features
-*    Generated using ASNCODE Revision: 6.8 at Mar 6, 2000  9:42 AM
+*    Generated using ASNCODE Revision: 6.17 at Feb 3, 2011 12:29 PM
 *
 **************************************************/
 
@@ -98,6 +98,31 @@ NLM_EXTERN ChemGraphAlignmentPtr LIBCALL ChemGraphAlignmentFree PROTO ((ChemGrap
 NLM_EXTERN ChemGraphAlignmentPtr LIBCALL ChemGraphAlignmentNew PROTO (( void ));
 NLM_EXTERN ChemGraphAlignmentPtr LIBCALL ChemGraphAlignmentAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ChemGraphAlignmentAsnWrite PROTO (( ChemGraphAlignmentPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ChemGraphInteraction
+*
+**************************************************/
+typedef struct struct_Chem_graph_interaction {
+   Uint4 OBbits__;
+#define OB__Chem_graph_interaction_type 0
+
+   Int4   type;
+   struct struct_RealValue PNTR   distance_threshold;
+   struct struct_Biostruc_molecule_pntr PNTR   interactors;
+   ValNodePtr   residue_contacts;
+   ValNodePtr   atom_contacts;
+   struct struct_RealValue PNTR   atom_distance;
+} ChemGraphInteraction, PNTR ChemGraphInteractionPtr;
+
+
+NLM_EXTERN ChemGraphInteractionPtr LIBCALL ChemGraphInteractionFree PROTO ((ChemGraphInteractionPtr ));
+NLM_EXTERN ChemGraphInteractionPtr LIBCALL ChemGraphInteractionNew PROTO (( void ));
+NLM_EXTERN ChemGraphInteractionPtr LIBCALL ChemGraphInteractionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ChemGraphInteractionAsnWrite PROTO (( ChemGraphInteractionPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -253,8 +278,9 @@ typedef ValNode Location_location;
 #define Location_location_subgraph 1
 #define Location_location_region 2
 #define Location_location_alignment 3
-#define Location_location_similarity 4
-#define Location_location_indirect 5
+#define Location_location_interaction 4
+#define Location_location_similarity 5
+#define Location_location_indirect 6
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
@@ -344,9 +370,9 @@ NLM_EXTERN Boolean LIBCALL CameraAsnWrite PROTO (( CameraPtr , AsnIoPtr, AsnType
 *    BiostrucScript
 *
 **************************************************/
-typedef struct struct_BiostrucScriptStep BiostrucScript;
-typedef struct struct_BiostrucScriptStep PNTR BiostrucScriptPtr;
-#define BiostrucScriptNew() BiostrucScriptStepNew() 
+typedef struct struct_Biostruc_script_step BiostrucScript;
+typedef struct struct_Biostruc_script_step PNTR BiostrucScriptPtr;
+#define BiostrucScriptNew() Biostruc_script_stepNew() 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
@@ -437,6 +463,26 @@ NLM_EXTERN OtherFeaturePtr LIBCALL OtherFeatureFree PROTO ((OtherFeaturePtr ));
 NLM_EXTERN OtherFeaturePtr LIBCALL OtherFeatureNew PROTO (( void ));
 NLM_EXTERN OtherFeaturePtr LIBCALL OtherFeatureAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL OtherFeatureAsnWrite PROTO (( OtherFeaturePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    BiostrucMoleculePntr
+*
+**************************************************/
+typedef struct struct_Biostruc_molecule_pntr {
+   struct struct_Biostruc_molecule_pntr PNTR next;
+   Uint4 OBbits__;
+   ValNodePtr   biostruc_id;
+   Int4   molecule_id;
+} BiostrucMoleculePntr, PNTR BiostrucMoleculePntrPtr;
+
+
+NLM_EXTERN BiostrucMoleculePntrPtr LIBCALL BiostrucMoleculePntrFree PROTO ((BiostrucMoleculePntrPtr ));
+NLM_EXTERN BiostrucMoleculePntrPtr LIBCALL BiostrucMoleculePntrNew PROTO (( void ));
+NLM_EXTERN BiostrucMoleculePntrPtr LIBCALL BiostrucMoleculePntrAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BiostrucMoleculePntrAsnWrite PROTO (( BiostrucMoleculePntrPtr , AsnIoPtr, AsnTypePtr));
 
 typedef ValNodePtr ResiduePntrsPtr;
 typedef ValNode ResiduePntrs;
@@ -590,6 +636,26 @@ NLM_EXTERN Boolean LIBCALL AlignStatsAsnWrite PROTO (( AlignStatsPtr , AsnIoPtr,
 
 /**************************************************
 *
+*    RealValue
+*
+**************************************************/
+typedef struct struct_RealValue {
+   struct struct_RealValue PNTR next;
+   Uint4 OBbits__;
+   Int4   scale_factor;
+   Int4   scaled_integer_value;
+} RealValue, PNTR RealValuePtr;
+
+
+NLM_EXTERN RealValuePtr LIBCALL RealValueFree PROTO ((RealValuePtr ));
+NLM_EXTERN RealValuePtr LIBCALL RealValueNew PROTO (( void ));
+NLM_EXTERN RealValuePtr LIBCALL RealValueAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RealValueAsnWrite PROTO (( RealValuePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
 *    ModelSpacePoint
 *
 **************************************************/
@@ -607,27 +673,8 @@ NLM_EXTERN ModelSpacePointPtr LIBCALL ModelSpacePointNew PROTO (( void ));
 NLM_EXTERN ModelSpacePointPtr LIBCALL ModelSpacePointAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ModelSpacePointAsnWrite PROTO (( ModelSpacePointPtr , AsnIoPtr, AsnTypePtr));
 
-
-
-/**************************************************
-*
-*    RealValue
-*
-**************************************************/
-typedef struct struct_RealValue {
-   Uint4 OBbits__;
-   Int4   scale_factor;
-   Int4   scaled_integer_value;
-} RealValue, PNTR RealValuePtr;
-
-
-NLM_EXTERN RealValuePtr LIBCALL RealValueFree PROTO ((RealValuePtr ));
-NLM_EXTERN RealValuePtr LIBCALL RealValueNew PROTO (( void ));
-NLM_EXTERN RealValuePtr LIBCALL RealValueAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL RealValueAsnWrite PROTO (( RealValuePtr , AsnIoPtr, AsnTypePtr));
-
 typedef ValNodePtr MovePtr;
-typedef ValNode Move_t;
+typedef ValNode Move;
 #define Move_rotate 1
 #define Move_translate 2
 

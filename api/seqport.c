@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.184 $
+* $Revision: 6.186 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -2386,7 +2386,7 @@ static Int4 SeqPortStreamRaw (
   return count;
 }
 
-static Int4 SeqPortStreamLit (
+static Int4 SeqPortStreamSeqLit (
   SeqLitPtr slitp,
   Boolean is_na,
   Int4 start,
@@ -2775,7 +2775,7 @@ static Int4 SeqPortStreamDelta (
 
     } else if (sop->slitp != NULL) {
 
-      count += SeqPortStreamLit (sop->slitp, is_na, sop->from, sop->to, sop->strand, sdp);
+      count += SeqPortStreamSeqLit (sop->slitp, is_na, sop->from, sop->to, sop->strand, sdp);
     }
   }
 
@@ -3006,6 +3006,7 @@ static Int4 SeqPortStreamSetup (
   Int4 stop,
   Uint1 strand,
   SeqLocPtr loc,
+  SeqLitPtr lit,
   StreamFlgType flags,
   Pointer userdata,
   SeqPortStreamProc proc
@@ -3017,10 +3018,11 @@ static Int4 SeqPortStreamSetup (
   Int4        count = 0, from, to;
   Uint2       entityID;
   Int2        i;
+  Boolean     is_na;
   StreamData  sd;
   SeqLocPtr   slp;
 
-  if (bsp == NULL && loc == NULL) return 0;
+  if (bsp == NULL && loc == NULL && lit == NULL) return 0;
   if (proc == NULL && userdata == NULL) return 0;
 
   MemSet ((Pointer) &sd, 0, sizeof (StreamData));
@@ -3087,6 +3089,24 @@ static Int4 SeqPortStreamSetup (
 
       slp = SeqLocFindNext (loc, slp);
     }
+
+  } else if (lit != NULL) {
+
+    is_na = TRUE;
+    switch (lit->seq_data_type) {
+      case Seq_code_iupacaa :
+      case Seq_code_ncbi8aa :
+      case Seq_code_ncbieaa :
+      case Seq_code_ncbipaa :
+      case Seq_code_iupacaa3 :
+      case Seq_code_ncbistdaa :
+        is_na = FALSE;
+        break;
+      default :
+        break;
+    }
+
+    count += SeqPortStreamSeqLit (lit, is_na, 0, lit->length - 1, Seq_strand_plus, &sd);
   }
 
   /* return number of bases or residues streamed to callback */
@@ -3109,7 +3129,7 @@ NLM_EXTERN Int4 SeqPortStream (
 )
 
 {
-  return SeqPortStreamSetup (bsp, 0, -1, Seq_strand_unknown, NULL, flags, userdata, proc);
+  return SeqPortStreamSetup (bsp, 0, -1, Seq_strand_unknown, NULL, NULL, flags, userdata, proc);
 }
 
 NLM_EXTERN Int4 SeqPortStreamInt (
@@ -3123,7 +3143,7 @@ NLM_EXTERN Int4 SeqPortStreamInt (
 )
 
 {
-  return SeqPortStreamSetup (bsp, start, stop, strand, NULL, flags, userdata, proc);
+  return SeqPortStreamSetup (bsp, start, stop, strand, NULL, NULL, flags, userdata, proc);
 }
 
 NLM_EXTERN Int4 SeqPortStreamLoc (
@@ -3134,7 +3154,18 @@ NLM_EXTERN Int4 SeqPortStreamLoc (
 )
 
 {
-  return SeqPortStreamSetup (NULL, 0, 0, 0, slp, flags, userdata, proc);
+  return SeqPortStreamSetup (NULL, 0, 0, 0, slp, NULL, flags, userdata, proc);
+}
+
+NLM_EXTERN Int4 SeqPortStreamLit (
+  SeqLitPtr lit,
+  StreamFlgType flags,
+  Pointer userdata,
+  SeqPortStreamProc proc
+)
+
+{
+  return SeqPortStreamSetup (NULL, 0, 0, 0, NULL, lit, flags, userdata, proc);
 }
 
 /*******************************************************************************
@@ -8686,6 +8717,7 @@ NLM_EXTERN void ConvertNsToGaps (
   if (bases == NULL) return;
 
   if (!NeedToConvert(bases, unknown_greater_than_or_equal, known_greater_than_or_equal, unknown_gap_size, known_gap_size)) {
+    MemFree (bases);
     return;
   }
 

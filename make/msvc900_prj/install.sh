@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.1 2009/01/23 19:48:09 ivanov Exp $
+# $Id: install.sh,v 1.2 2011/03/21 13:56:07 ivanov Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -64,14 +64,14 @@ test -d "$target"  ||  error "Cannot create target dir \"$target\""
 
 # Make all dirs
 makedir "$incdir" -p
-makedir "$incdir"/algo
-makedir "$incdir"/algo/blast
+makedir "$srcdir" -p
+makedir "$incdir"/algo/blast -p
 makedir "$incdir"/algo/blast/api
 makedir "$incdir"/algo/blast/core
 makedir "$incdir"/algo/blast/composition_adjustment
+makedir "$srcdir"/algo/blast/composition_adjustment -p
 makedir "$incdir"/connect
 makedir "$incdir"/ctools
-makedir "$srcdir" -p
 makedir "$srcdir"/access
 makedir "$srcdir"/algo
 makedir "$srcdir"/algo/blast

@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_ftp_connector.c,v 1.26 2010/06/04 14:59:37 kazimird Exp $
+/* $Id: test_ncbi_ftp_connector.c,v 1.30 2011/04/17 19:34:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -63,17 +63,17 @@ static double s_GetTime(void)
 
 int main(int argc, char* argv[])
 {
-    static const char kChdir[] = "CWD /toolbox/ncbi_tools\n";
-    static const char kFile[] = "RETR CURRENT/ncbi.tar.gz";
-    int/*bool*/   aborting = 0, first;
-    TFCDC_Flags   flag = 0;
+    static const char kChdir[] = "CWD /toolbox/ncbi_tools++\n";
+    static const char kFile[] = "DATA/Misc/test_ncbi_conn_stream.FTP.data";
+    int/*bool*/   cancel = 0, first;
+    TFTP_Flags    flag = 0;
     SConnNetInfo* net_info;
     char          buf[1024];
     CONNECTOR     connector;
     FILE*         data_file;
     size_t        size, n;
+    double        elapsed;
     EIO_Status    status;
-    double        elapse;
     CONN          conn;
 
     g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
@@ -88,14 +88,14 @@ int main(int argc, char* argv[])
 
     assert((net_info = ConnNetInfo_Create(0)) != 0);
     if (net_info->debug_printout == eDebugPrintout_Some)
-        flag |= fFCDC_LogControl;
+        flag |= fFTP_LogControl;
     else if (net_info->debug_printout == eDebugPrintout_Data) {
         char val[32];
         ConnNetInfo_GetValue(0, REG_CONN_DEBUG_PRINTOUT, val, sizeof(val),
                              DEF_CONN_DEBUG_PRINTOUT);
-        flag |= strcasecmp(val, "all") == 0 ? fFCDC_LogAll : fFCDC_LogData;
+        flag |= strcasecmp(val, "all") == 0 ? fFTP_LogAll : fFTP_LogData;
     }
-    flag |= fFCDC_UseFeatures;
+    flag |= fFTP_UseFeatures;
 
     if (TEST_PORT) {
         sprintf(buf, ":%hu", TEST_PORT);
@@ -109,8 +109,10 @@ int main(int argc, char* argv[])
                                             TEST_USER, TEST_PASS,
                                             TEST_PATH, flag);
 
-    if (CONN_Create(connector, &conn) != eIO_Success)
+    if (CONN_CreateEx(connector,
+                      fCONN_Supplement | fCONN_Untie, &conn) != eIO_Success) {
         CORE_LOG(eLOG_Fatal, "Cannot create FTP download connection");
+    }
 
     assert(CONN_SetTimeout(conn, eIO_Open,      net_info->timeout)
            == eIO_Success);
@@ -133,7 +135,7 @@ int main(int argc, char* argv[])
         CORE_LOG(eLOG_Fatal, "Test failed to reject multiple commands");
     CORE_LOG(eLOG_Note, "Multiple commands correctly rejected");
 
-    status = CONN_Write(conn, "SIZE 1GB\n", 9, &n, eIO_WritePersist);
+    status = CONN_Write(conn, "SIZE 1GB", 9, &n, eIO_WritePlain);
     if (status == eIO_Success) {
         char buf[128];
         CONN_ReadLine(conn, buf, sizeof(buf) - 1, &n);
@@ -180,11 +182,10 @@ int main(int argc, char* argv[])
         fflush(stdout);
     }
 
-    if (CONN_Write(conn, "SIZE ", 5, &n, eIO_WritePlain) != eIO_Success)
+    if (CONN_Write(conn, "SIZE ", 5, &n, eIO_WritePersist) != eIO_Success)
         CORE_LOG(eLOG_Fatal, "Cannot write SIZE directory command");
     size = strlen(kChdir + 4);
-    if (CONN_Write(conn, kChdir + 4, size, &n, eIO_WritePersist)==eIO_Success){
-        char buf[128];
+    if (CONN_Write(conn, kChdir + 4, size, &n, eIO_WritePlain) == eIO_Success){
         CONN_ReadLine(conn, buf, sizeof(buf) - 1, &n);
         CORE_LOGF(eLOG_Note, ("SIZE directory returned: %.*s", (int) n, buf));
     } else {
@@ -197,12 +198,28 @@ int main(int argc, char* argv[])
         CORE_LOGF(eLOG_Fatal, ("Cannot execute %.*s",
                                (int) sizeof(kChdir) - 2, kChdir));
     }
+    if (CONN_Write(conn, "PWD\n", 4, &n, eIO_WritePlain) == eIO_Success) {
+        CONN_ReadLine(conn, buf, sizeof(buf) - 1, &n);
+        CORE_LOGF(eLOG_Note, ("PWD returned: %.*s", (int) n, buf));
+    } else
+        CORE_LOG(eLOG_Fatal, "Cannot execute PWD");
 
-    size = strlen(kFile + 5);
-    if ((status = CONN_Write(conn, "MDTM ", 5, &n, eIO_WritePlain))
-        == eIO_Success  &&
-        (status = CONN_Write(conn, kFile + 5, size, &n, eIO_WritePersist))
-        == eIO_Success) {
+    if (CONN_Write(conn, "CDUP\n", 5, &n, eIO_WritePlain) != eIO_Success)
+        CORE_LOG(eLOG_Fatal, "Cannot execute CDUP"); 
+    if (CONN_Write(conn, "XCUP\n", 5, &n, eIO_WritePlain) != eIO_Success)
+        CORE_LOG(eLOG_Fatal, "Cannot execute XCUP");
+
+    if (CONN_Write(conn, kChdir, sizeof(kChdir) - 1, &n, eIO_WritePlain)
+        != eIO_Success) {
+        CORE_LOGF(eLOG_Fatal, ("Cannot re-execute %.*s",
+                               (int) sizeof(kChdir) - 2, kChdir));
+    }
+
+    size = sizeof(kFile) - 1;
+    if ((status = CONN_Write(conn, "MDTM ", 5, &n, eIO_WritePersist))
+        == eIO_Success  &&  n == 5  &&
+        (status = CONN_Write(conn, kFile, size, &n, eIO_WritePlain))
+        == eIO_Success  &&  n == size) {
         unsigned long val;
         char buf[128];
         CONN_ReadLine(conn, buf, sizeof(buf) - 1, &n);
@@ -218,13 +235,16 @@ int main(int argc, char* argv[])
                               IO_StatusStr(status)));
     }
 
-    if (CONN_Write(conn, kFile, sizeof(kFile) - 1, &n, eIO_WritePersist)
-        != eIO_Success) {
-        CORE_LOGF(eLOG_Fatal, ("Cannot write %s", kFile));
+    if ((status = CONN_Write(conn, "RETR ", 5, &n, eIO_WritePersist))
+        != eIO_Success  ||  n != 5  ||
+        (status = CONN_Write(conn, kFile, size, &n, eIO_WritePersist))
+        != eIO_Success  ||  n != size) {
+        CORE_LOGF(eLOG_Fatal, ("Cannot write 'RETR %s': %s",
+                               kFile, IO_StatusStr(status)));
     }
 
     size = 0;
-    elapse = s_GetTime();
+    elapsed = s_GetTime();
     do {
         status = CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPlain);
         if (n != 0) {
@@ -232,8 +252,8 @@ int main(int argc, char* argv[])
             fflush(data_file);
             size += n;
             rand();
-            if (argc > 1  &&  rand() % 100 == 0) {
-                aborting = 1;
+            if (argc > 1  &&  rand() % 100000 == 55555) {
+                cancel = 1;
                 break;
             }
         } else {
@@ -242,15 +262,19 @@ int main(int argc, char* argv[])
                 CORE_LOGF(eLOG_Error, ("Read error: %s",IO_StatusStr(status)));
         }
     } while (status == eIO_Success);
-    elapse = s_GetTime() - elapse;
+    if (status != eIO_Success)
+        cancel = 0;
+    elapsed = s_GetTime() - elapsed;
 
-    if (!aborting  ||  (rand() & 1) == 0) {
+    if (!cancel  ||  !(rand() & 1)) {
+        if (cancel)
+            CORE_LOG(eLOG_Note, "Cancelling download by a command");
         if (CONN_Write(conn, "NLST blah*", 10, &n, eIO_WritePlain)
             != eIO_Success) {
             CORE_LOG(eLOG_Fatal, "Cannot write garbled NLST command");
         }
 
-        CORE_LOG(eLOG_Note, "Garbled NLST command output (should be empty):");
+        CORE_LOG(eLOG_Note, "Garbled NLST command output (expected empty):");
         first = 1/*true*/;
         do {
             status = CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPlain);
@@ -264,20 +288,19 @@ int main(int argc, char* argv[])
             printf("<EOF>\n");
             fflush(stdout);
         }
-    }
+    } else if (cancel)
+        CORE_LOG(eLOG_Note, "Closing with download still in progress");
 
-    if (CONN_Close(conn) != eIO_Success) {
-        CORE_LOGF(eLOG_Fatal, ("Error %s FTP connection",
-                               aborting ? "aborting" : "closing"));
-    }
+    if (CONN_Close(conn) != eIO_Success)
+        CORE_LOG(eLOG_Fatal, "Error in closing FTP connection");
 
     /* Cleanup and exit */
     fclose(data_file);
-    if (!aborting) {
+    if (!cancel) {
         CORE_LOGF(size ? eLOG_Note : eLOG_Fatal,
                   ("%lu byte(s) downloaded in %.2f second(s) @ %.2fKB/s",
-                   (unsigned long) size, elapse,
-                   (unsigned long) size / (1024 * (elapse ? elapse : 1.0))));
+                   (unsigned long) size, elapsed,
+                   (unsigned long) size / (1024 * (elapsed ? elapsed : 1.0))));
     } else
         remove("test_ncbi_ftp_connector.dat");
     ConnNetInfo_Destroy(net_info);

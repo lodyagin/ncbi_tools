@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.30 $
+* $Revision: 1.31 $
 *
 * File Description: 
 *
@@ -314,6 +314,13 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
   Entrez2InfoPtr e2ip,
   ValNodePtr PNTR head,
   Boolean checkMenuNameVariants
+);
+
+NLM_EXTERN Boolean ValidateEntrez2InfoPtrExEx (
+  Entrez2InfoPtr e2ip,
+  ValNodePtr PNTR head,
+  Boolean checkMenuNameVariants,
+  Boolean checkMenuNameFormat
 );
 
 /* sample synchronous query code:

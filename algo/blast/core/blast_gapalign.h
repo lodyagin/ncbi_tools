@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.h,v 1.70 2009/03/26 14:34:31 kazimird Exp $
+/* $Id: blast_gapalign.h,v 1.71 2010/09/13 12:49:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -234,6 +234,23 @@ Int4
 BlastGetStartForGappedAlignment (const Uint1* query, const Uint1* subject,
    const BlastScoreBlk* sbp, Uint4 q_start, Uint4 q_length, 
    Uint4 s_start, Uint4 s_length);
+
+/** Function to look for the highest scoring window (of size HSP_MAX_WINDOW)
+ * in an HSP and return the middle of this.  Used by the gapped-alignment
+ * functions to start the gapped alignments.
+ * Should be used instead of BlastGetStartForGappedAlignment 
+ * @param query The query sequence [in]
+ * @param subject The subject sequence [in]
+ * @param sbp Scoring block, containing matrix [in]
+ * @param hsp start and stops of HSP [in]
+ * @param q_retval query offset to use [out]
+ * @param s_retval subject offset to use [out]
+ *
+*/
+NCBI_XBLAST_EXPORT
+Boolean
+BlastGetOffsetsForGappedAlignment (const Uint1* query, const Uint1* subject,
+   const BlastScoreBlk* sbp, BlastHSP* hsp, Int4* q_retval, Int4* s_retval);
 
 #ifdef __cplusplus
 }

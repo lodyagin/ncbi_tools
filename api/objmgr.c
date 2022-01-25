@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.86 $
+* $Revision: 6.87 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -2405,6 +2405,9 @@ static Int4 NEAR ObjMgrLockFunc (ObjMgrPtr omp, Uint2 type, Pointer data, Boolea
     }
 
     omdp = ObjMgrFindTop(omp, omp->datalist[i]);
+    if (omdp == NULL) {
+      return lockcnt;
+    }
 
     if (lockit) {
         omdp->lockcnt++;

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.308 $
+* $Revision: 6.314 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -274,6 +274,7 @@ NLM_EXTERN Boolean MakeReversedSeqIdString (SeqIdPtr sid, CharPtr buf, size_t le
     case SEQID_TPE:
     case SEQID_TPD:
     case SEQID_GPIPE:
+    case SEQID_NAMED_ANNOT_TRACK:
       tsip = (TextSeqIdPtr) (sid->data.ptrvalue);
       if (tsip->accession != NULL) {
         tmp = tsip->name;
@@ -2891,8 +2892,7 @@ NLM_EXTERN Boolean LIBCALL SeqMgrAdd (Uint2 type, Pointer data)
         SeqMgrUnlock(); 
         return retval;
     }
-    
-    SeqMgrAddToBioseqIndex((BioseqPtr)data);
+    retval &= SeqMgrAddToBioseqIndex((BioseqPtr)data);
     
     SeqMgrUnlock(); 
     
@@ -3320,6 +3320,11 @@ NLM_EXTERN Boolean LIBCALL SeqMgrAddToBioseqIndex (BioseqPtr bsp)
     {
         bspp = smp->NonIndexedBioseq;
         smp->NonIndexedBioseq = MemNew((smp->NonIndexedBioseqNum + 10) * sizeof (BioseqPtr));
+        if (smp->NonIndexedBioseq == NULL) {
+          Message (MSG_POSTERR, "Unable to allocate memory for bioseq index");
+          smp->NonIndexedBioseq = bspp;
+          return FALSE;
+        }
         MemCopy(smp->NonIndexedBioseq, bspp, (smp->NonIndexedBioseqNum * sizeof(BioseqPtr)));
         MemFree(bspp);
         smp->NonIndexedBioseqNum += 10;
@@ -6373,6 +6378,16 @@ static int LIBCALLBACK SortFeatItemListByLabel (VoidPtr vp1, VoidPtr vp2)
     return -1;
   }
 
+  /* If they're case-insensitive the same, but case-sensitive different,
+     then fall back to sort by case-sensitive 
+     (e.g. AJ344068.1 has genes korA and KorA ) */
+  compare = StringCmp (sp1->label, sp2->label);
+  if( compare > 0 ) {
+    return 1;
+  } else if( compare < 0 ) {
+    return -1;
+  }
+
   /* for duplicated genes, etc., that cross origin, put ignored item last for binary search */
 
   if (sp1->ignore) {
@@ -8341,6 +8356,33 @@ NLM_EXTERN GeneRefPtr LIBCALL SeqMgrGetGeneXref (SeqFeatPtr sfp)
   return grp;
 }
 
+NLM_EXTERN GeneRefPtr LIBCALL SeqMgrGetGeneXrefEx (SeqFeatPtr sfp, ObjectIdPtr PNTR oipP)
+
+{
+  GeneRefPtr      grp = NULL;
+  ObjectIdPtr     oip;
+  SeqFeatXrefPtr  xref;
+
+  if (oipP != NULL) {
+    *oipP = NULL;
+  }
+  if (sfp == NULL) return NULL;
+  xref = sfp->xref;
+  while (xref != NULL && xref->data.choice != SEQFEAT_GENE) {
+    xref = xref->next;
+  }
+  if (xref != NULL) {
+    grp = (GeneRefPtr) xref->data.value.ptrvalue;
+    if (xref->id.choice == 3) {
+      oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+      if (oip != NULL && oipP != NULL) {
+        *oipP = oip;
+      }
+    }
+  }
+  return grp;
+}
+
 NLM_EXTERN Boolean LIBCALL SeqMgrGeneIsSuppressed (GeneRefPtr grp)
 
 {
@@ -8426,16 +8468,13 @@ static Int4 TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
   } else if (overlapType == LOCATION_SUBSET || overlapType == CHECK_INTERVALS) {
 
     /* requires individual intervals to be completely contained within gene, etc. */
-
-    if (feat->left <= left && feat->right >= right) {
-      sfp = feat->sfp;
-      if (sfp != NULL) {
-        diff = SeqLocAinB (slp, sfp->location);
-        if (diff >= 0) {
-          if (overlapType == LOCATION_SUBSET || numivals == 1 ||
-              CheckInternalExonBoundaries (numivals, ivals, feat->numivals, feat->ivals)) {
-            return diff;
-          }
+    sfp = feat->sfp;
+    if (sfp != NULL) {
+      diff = SeqLocAinB (slp, sfp->location);
+      if (diff >= 0) {
+        if (overlapType == LOCATION_SUBSET || numivals == 1 ||
+            CheckInternalExonBoundaries (numivals, ivals, feat->numivals, feat->ivals)) {
+          return diff;
         }
       }
     }
@@ -9256,6 +9295,17 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature (SeqLocPtr slp, Uint2 
 {
   return SeqMgrGetBestOverlappingFeat (slp, subtype, (SMFeatItemPtr PNTR) featarray,
                                        numfeats, position, overlapType, context, NULL, NULL, NULL, FALSE);
+}
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeatureEx (SeqLocPtr slp, Uint2 subtype,
+                                                           VoidPtr featarray, Int4 numfeats,
+                                                           Int4Ptr position, Int2 overlapType,
+                                                           SeqMgrFeatContext PNTR context,
+                                                           Boolean special)
+
+{
+  return SeqMgrGetBestOverlappingFeat (slp, subtype, (SMFeatItemPtr PNTR) featarray,
+                                       numfeats, position, overlapType, context, NULL, NULL, NULL, special);
 }
 
 NLM_EXTERN Int2 LIBCALL SeqMgrGetAllOverlappingFeatures (SeqLocPtr slp, Uint2 subtype,

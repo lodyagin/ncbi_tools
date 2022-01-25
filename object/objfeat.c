@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.55 $
+* $Revision: 6.70 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -210,8 +210,9 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatFree (SeqFeatPtr sfp)
         UserObjectFree(uop);
     }
     /*
-  AsnGenericUserSeqOfFree (sfp->exts, (AsnOptFreeFunc) UserObjectFree);
-  */
+    AsnGenericUserSeqOfFree (sfp->exts, (AsnOptFreeFunc) UserObjectFree);
+    */
+    SeqFeatSupportFree (sfp->support);
 
     ObjMgrDelete(OBJ_SEQFEAT, (Pointer)sfp);
 
@@ -402,6 +403,11 @@ NLM_EXTERN Boolean LIBCALL SeqFeatAsnWrite (SeqFeatPtr sfp, AsnIoPtr aip, AsnTyp
         AsnGenericUserSeqOfAsnWrite (sfp->exts, (AsnWriteFunc) UserObjectAsnWrite, aip, SEQ_FEAT_exts, SEQ_FEAT_exts_E);
         */
     }
+    if (sfp->support != NULL)
+    {
+        if (! SeqFeatSupportAsnWrite(sfp->support, aip, SEQ_FEAT_support))
+            goto erret;
+    }
     if (! AsnCloseStruct(aip, atp, (Pointer)sfp))
         goto erret;
     retval = TRUE;
@@ -546,31 +552,37 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatAsnRead (AsnIoPtr aip, AsnTypePtr orig)
                 goto erret;
             }
             */
-    }
-    else if (atp == SEQ_FEAT_exts)
-    {
-        atp = AsnLinkType (SEQ_FEAT_exts, FEAT_ID);
-        if (atp == NULL) goto erret;
-        if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read the SEQUENCE */
-            while ((atp = AsnReadId(aip, amp, atp)) == SEQ_FEAT_exts_E) {
-            uop = UserObjectAsnRead (aip, atp);
-            if (uop == NULL) goto erret;
-            if (last != NULL) {
-              last->next = uop;
+        }
+        else if (atp == SEQ_FEAT_exts)
+        {
+            atp = AsnLinkType (SEQ_FEAT_exts, FEAT_ID);
+            if (atp == NULL) goto erret;
+            if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read the SEQUENCE */
+                while ((atp = AsnReadId(aip, amp, atp)) == SEQ_FEAT_exts_E) {
+                uop = UserObjectAsnRead (aip, atp);
+                if (uop == NULL) goto erret;
+                if (last != NULL) {
+                  last->next = uop;
+                }
+                if (sfp->exts == NULL) {
+                  sfp->exts = uop;
+                }
+                last = uop;
             }
-            if (sfp->exts == NULL) {
-              sfp->exts = uop;
-            }
-            last = uop;
-            }
-        if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read the END STRUCT */
-        AsnUnlinkType (SEQ_FEAT_exts);
+            if (AsnReadVal(aip, atp, &av) <= 0) goto erret;    /* read the END STRUCT */
+            AsnUnlinkType (SEQ_FEAT_exts);
             /*
             sfp->exts = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) UserObjectAsnRead, (AsnOptFreeFunc) UserObjectFree);
             if (isError && sfp->exts == NULL) {
                 goto erret;
             }
             */
+        }
+        else if (atp == SEQ_FEAT_support)
+        {
+            sfp->support = SeqFeatSupportAsnRead(aip, atp);
+            if (sfp->support == NULL)
+                goto erret;
         }
         else
         {
@@ -1424,6 +1436,1356 @@ erret:
     goto ret;
 }
 
+
+
+/**************************************************
+*
+*    ModelEvidenceSupportNew()
+*
+**************************************************/
+NLM_EXTERN 
+ModelEvidenceSupportPtr LIBCALL
+ModelEvidenceSupportNew(void)
+{
+   ModelEvidenceSupportPtr ptr = MemNew((size_t) sizeof(ModelEvidenceSupport));
+
+   ptr -> full_length = 0;
+   ptr -> supports_all_exon_combo = 0;
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ModelEvidenceSupportFree()
+*
+**************************************************/
+NLM_EXTERN 
+ModelEvidenceSupportPtr LIBCALL
+ModelEvidenceSupportFree(ModelEvidenceSupportPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> method);
+   AsnGenericValNodeSetFree(ptr -> mrna, (AsnOptFreeFunc) ModelEvidenceItemFree);
+   AsnGenericValNodeSetFree(ptr -> est, (AsnOptFreeFunc) ModelEvidenceItemFree);
+   AsnGenericValNodeSetFree(ptr -> protein, (AsnOptFreeFunc) ModelEvidenceItemFree);
+   SeqIdFree(ptr -> identification);
+   AsnGenericValNodeSetFree(ptr -> dbxref, (AsnOptFreeFunc) DbtagFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ModelEvidenceSupportAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ModelEvidenceSupportPtr LIBCALL
+ModelEvidenceSupportAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ModelEvidenceSupportPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ModelEvidenceSupport ::= (self contained) */
+      atp = AsnReadId(aip, amp, MODELEVIDENCESUPPORT);
+   } else {
+      atp = AsnLinkType(orig, MODELEVIDENCESUPPORT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ModelEvidenceSupportNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == MODELEVIDENCESUPPORT_method) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> method = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCESUPPORT_mrna) {
+      ptr -> mrna = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ModelEvidenceItemAsnRead, (AsnOptFreeFunc) ModelEvidenceItemFree);
+      if (isError && ptr -> mrna == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCESUPPORT_est) {
+      ptr -> est = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ModelEvidenceItemAsnRead, (AsnOptFreeFunc) ModelEvidenceItemFree);
+      if (isError && ptr -> est == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCESUPPORT_protein) {
+      ptr -> protein = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ModelEvidenceItemAsnRead, (AsnOptFreeFunc) ModelEvidenceItemFree);
+      if (isError && ptr -> protein == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCESUPPORT_identification) {
+      ptr -> identification = SeqIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCESUPPORT_dbxref) {
+      ptr -> dbxref = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DbtagAsnRead, (AsnOptFreeFunc) DbtagFree);
+      if (isError && ptr -> dbxref == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCESUPPORT_exon_count) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> exon_count = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCESUPPORT_exon_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> exon_length = av.intvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCESUPPORT_full_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> full_length = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCESUPPORT_supports_all_exon_combo) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> supports_all_exon_combo = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ModelEvidenceSupportFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ModelEvidenceSupportAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ModelEvidenceSupportAsnWrite(ModelEvidenceSupportPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, MODELEVIDENCESUPPORT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> method != NULL) {
+      av.ptrvalue = ptr -> method;
+      retval = AsnWrite(aip, MODELEVIDENCESUPPORT_method,  &av);
+   }
+   AsnGenericValNodeSetAsnWrite(ptr -> mrna, (AsnWriteFunc) ModelEvidenceItemAsnWrite, aip, MODELEVIDENCESUPPORT_mrna, MODELEVIDENCESUPPORT_mrna_E);
+   AsnGenericValNodeSetAsnWrite(ptr -> est, (AsnWriteFunc) ModelEvidenceItemAsnWrite, aip, MODELEVIDENCESUPPORT_est, MODELEVIDENCESUPPORT_est_E);
+   AsnGenericValNodeSetAsnWrite(ptr -> protein, (AsnWriteFunc) ModelEvidenceItemAsnWrite, aip, MODELEVIDENCESUPPORT_protein, MODELEVIDENCESUPPORT_protein_E);
+   if (ptr -> identification != NULL) {
+      if ( ! SeqIdAsnWrite(ptr -> identification, aip, MODELEVIDENCESUPPORT_identification)) {
+         goto erret;
+      }
+   }
+   AsnGenericValNodeSetAsnWrite(ptr -> dbxref, (AsnWriteFunc) DbtagAsnWrite, aip, MODELEVIDENCESUPPORT_dbxref, MODELEVIDENCESUPPORT_dbxref_E);
+   if (ptr -> exon_count || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> exon_count;
+      retval = AsnWrite(aip, MODELEVIDENCESUPPORT_exon_count,  &av);
+   }
+   if (ptr -> exon_length || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> exon_length;
+      retval = AsnWrite(aip, MODELEVIDENCESUPPORT_exon_length,  &av);
+   }
+   if (ptr -> full_length) {
+      av.boolvalue = ptr -> full_length;
+      retval = AsnWrite(aip, MODELEVIDENCESUPPORT_full_length,  &av);
+   }
+   if (ptr -> supports_all_exon_combo) {
+      av.boolvalue = ptr -> supports_all_exon_combo;
+      retval = AsnWrite(aip, MODELEVIDENCESUPPORT_supports_all_exon_combo,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ExperimentSupportNew()
+*
+**************************************************/
+NLM_EXTERN 
+ExperimentSupportPtr LIBCALL
+ExperimentSupportNew(void)
+{
+   ExperimentSupportPtr ptr = MemNew((size_t) sizeof(ExperimentSupport));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ExperimentSupportFree()
+*
+**************************************************/
+NLM_EXTERN 
+ExperimentSupportPtr LIBCALL
+ExperimentSupportFree(ExperimentSupportPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> explanation);
+   AsnGenericBaseSeqOfFree(ptr -> pmids ,ASNCODE_INTVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> dois ,ASNCODE_PTRVAL_SLOT);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ExperimentSupportAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ExperimentSupportPtr LIBCALL
+ExperimentSupportAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ExperimentSupportPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ExperimentSupport ::= (self contained) */
+      atp = AsnReadId(aip, amp, EXPERIMENTSUPPORT);
+   } else {
+      atp = AsnLinkType(orig, EXPERIMENTSUPPORT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ExperimentSupportNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == EXPERIMENTSUPPORT_category) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> category = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == EXPERIMENTSUPPORT_explanation) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> explanation = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == EXPERIMENTSUPPORT_pmids) {
+      ptr -> pmids = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> pmids == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == EXPERIMENTSUPPORT_dois) {
+      ptr -> dois = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+      if (isError && ptr -> dois == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ExperimentSupportFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ExperimentSupportAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ExperimentSupportAsnWrite(ExperimentSupportPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, EXPERIMENTSUPPORT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> category || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> category;
+      retval = AsnWrite(aip, EXPERIMENTSUPPORT_category,  &av);
+   }
+   if (ptr -> explanation != NULL) {
+      av.ptrvalue = ptr -> explanation;
+      retval = AsnWrite(aip, EXPERIMENTSUPPORT_explanation,  &av);
+   }
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> pmids ,ASNCODE_INTVAL_SLOT, aip, EXPERIMENTSUPPORT_pmids, EXPERIMENTSUPPORT_pmids_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> dois ,ASNCODE_PTRVAL_SLOT, aip, EXPERIMENTSUPPORT_dois, EXPERIMENTSUPPORT_dois_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ProgramIdNew()
+*
+**************************************************/
+NLM_EXTERN 
+ProgramIdPtr LIBCALL
+ProgramIdNew(void)
+{
+   ProgramIdPtr ptr = MemNew((size_t) sizeof(ProgramId));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ProgramIdFree()
+*
+**************************************************/
+NLM_EXTERN 
+ProgramIdPtr LIBCALL
+ProgramIdFree(ProgramIdPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> name);
+   MemFree(ptr -> version);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ProgramIdAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ProgramIdPtr LIBCALL
+ProgramIdAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   ProgramIdPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ProgramId ::= (self contained) */
+      atp = AsnReadId(aip, amp, PROGRAM_ID);
+   } else {
+      atp = AsnLinkType(orig, PROGRAM_ID);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ProgramIdNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == PROGRAM_ID_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PROGRAM_ID_version) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> version = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ProgramIdFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ProgramIdAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ProgramIdAsnWrite(ProgramIdPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, PROGRAM_ID);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, PROGRAM_ID_name,  &av);
+   }
+   if (ptr -> version != NULL) {
+      av.ptrvalue = ptr -> version;
+      retval = AsnWrite(aip, PROGRAM_ID_version,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    EvidenceBasisNew()
+*
+**************************************************/
+NLM_EXTERN 
+EvidenceBasisPtr LIBCALL
+EvidenceBasisNew(void)
+{
+   EvidenceBasisPtr ptr = MemNew((size_t) sizeof(EvidenceBasis));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    EvidenceBasisFree()
+*
+**************************************************/
+NLM_EXTERN 
+EvidenceBasisPtr LIBCALL
+EvidenceBasisFree(EvidenceBasisPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericValNodeSetFree(ptr -> programs, (AsnOptFreeFunc) ProgramIdFree);
+   AsnGenericChoiceSeqOfFree(ptr -> accessions, (AsnOptFreeFunc) SeqIdFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    EvidenceBasisAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+EvidenceBasisPtr LIBCALL
+EvidenceBasisAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   EvidenceBasisPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* EvidenceBasis ::= (self contained) */
+      atp = AsnReadId(aip, amp, EVIDENCEBASIS);
+   } else {
+      atp = AsnLinkType(orig, EVIDENCEBASIS);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = EvidenceBasisNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == EVIDENCEBASIS_programs) {
+      ptr -> programs = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ProgramIdAsnRead, (AsnOptFreeFunc) ProgramIdFree);
+      if (isError && ptr -> programs == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == EVIDENCEBASIS_accessions) {
+      ptr -> accessions = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqIdAsnRead, (AsnOptFreeFunc) SeqIdFree);
+      if (isError && ptr -> accessions == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = EvidenceBasisFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    EvidenceBasisAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+EvidenceBasisAsnWrite(EvidenceBasisPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, EVIDENCEBASIS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   AsnGenericValNodeSetAsnWrite(ptr -> programs, (AsnWriteFunc) ProgramIdAsnWrite, aip, EVIDENCEBASIS_programs, EVIDENCEBASIS_programs_E);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> accessions, (AsnWriteFunc) SeqIdAsnWrite, aip, EVIDENCEBASIS_accessions, EVIDENCEBASIS_accessions_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    InferenceSupportNew()
+*
+**************************************************/
+NLM_EXTERN 
+InferenceSupportPtr LIBCALL
+InferenceSupportNew(void)
+{
+   InferenceSupportPtr ptr = MemNew((size_t) sizeof(InferenceSupport));
+
+   ptr -> type = 0;
+   ptr -> same_species = 0;
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    InferenceSupportFree()
+*
+**************************************************/
+NLM_EXTERN 
+InferenceSupportPtr LIBCALL
+InferenceSupportFree(InferenceSupportPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> other_type);
+   EvidenceBasisFree(ptr -> basis);
+   AsnGenericBaseSeqOfFree(ptr -> pmids ,ASNCODE_INTVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> dois ,ASNCODE_PTRVAL_SLOT);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    InferenceSupportAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+InferenceSupportPtr LIBCALL
+InferenceSupportAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   InferenceSupportPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* InferenceSupport ::= (self contained) */
+      atp = AsnReadId(aip, amp, INFERENCESUPPORT);
+   } else {
+      atp = AsnLinkType(orig, INFERENCESUPPORT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = InferenceSupportNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == INFERENCESUPPORT_category) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> category = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INFERENCESUPPORT_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INFERENCESUPPORT_other_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> other_type = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INFERENCESUPPORT_same_species) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> same_species = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INFERENCESUPPORT_basis) {
+      ptr -> basis = EvidenceBasisAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INFERENCESUPPORT_pmids) {
+      ptr -> pmids = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> pmids == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INFERENCESUPPORT_dois) {
+      ptr -> dois = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+      if (isError && ptr -> dois == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = InferenceSupportFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    InferenceSupportAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+InferenceSupportAsnWrite(InferenceSupportPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, INFERENCESUPPORT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> category || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> category;
+      retval = AsnWrite(aip, INFERENCESUPPORT_category,  &av);
+   }
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, INFERENCESUPPORT_type,  &av);
+   if (ptr -> other_type != NULL) {
+      av.ptrvalue = ptr -> other_type;
+      retval = AsnWrite(aip, INFERENCESUPPORT_other_type,  &av);
+   }
+   av.boolvalue = ptr -> same_species;
+   retval = AsnWrite(aip, INFERENCESUPPORT_same_species,  &av);
+   if (ptr -> basis != NULL) {
+      if ( ! EvidenceBasisAsnWrite(ptr -> basis, aip, INFERENCESUPPORT_basis)) {
+         goto erret;
+      }
+   }
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> pmids ,ASNCODE_INTVAL_SLOT, aip, INFERENCESUPPORT_pmids, INFERENCESUPPORT_pmids_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> dois ,ASNCODE_PTRVAL_SLOT, aip, INFERENCESUPPORT_dois, INFERENCESUPPORT_dois_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ModelEvidenceItemNew()
+*
+**************************************************/
+NLM_EXTERN 
+ModelEvidenceItemPtr LIBCALL
+ModelEvidenceItemNew(void)
+{
+   ModelEvidenceItemPtr ptr = MemNew((size_t) sizeof(ModelEvidenceItem));
+
+   ptr -> full_length = 0;
+   ptr -> supports_all_exon_combo = 0;
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ModelEvidenceItemFree()
+*
+**************************************************/
+NLM_EXTERN 
+ModelEvidenceItemPtr LIBCALL
+ModelEvidenceItemFree(ModelEvidenceItemPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqIdFree(ptr -> id);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ModelEvidenceItemAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ModelEvidenceItemPtr LIBCALL
+ModelEvidenceItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   ModelEvidenceItemPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ModelEvidenceItem ::= (self contained) */
+      atp = AsnReadId(aip, amp, MODELEVIDENCEITEM);
+   } else {
+      atp = AsnLinkType(orig, MODELEVIDENCEITEM);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ModelEvidenceItemNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == MODELEVIDENCEITEM_id) {
+      ptr -> id = SeqIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCEITEM_exon_count) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> exon_count = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCEITEM_exon_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> exon_length = av.intvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCEITEM_full_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> full_length = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MODELEVIDENCEITEM_supports_all_exon_combo) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> supports_all_exon_combo = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ModelEvidenceItemFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ModelEvidenceItemAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ModelEvidenceItemAsnWrite(ModelEvidenceItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, MODELEVIDENCEITEM);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> id != NULL) {
+      if ( ! SeqIdAsnWrite(ptr -> id, aip, MODELEVIDENCEITEM_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> exon_count || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> exon_count;
+      retval = AsnWrite(aip, MODELEVIDENCEITEM_exon_count,  &av);
+   }
+   if (ptr -> exon_length || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> exon_length;
+      retval = AsnWrite(aip, MODELEVIDENCEITEM_exon_length,  &av);
+   }
+   if (ptr -> full_length) {
+      av.boolvalue = ptr -> full_length;
+      retval = AsnWrite(aip, MODELEVIDENCEITEM_full_length,  &av);
+   }
+   if (ptr -> supports_all_exon_combo) {
+      av.boolvalue = ptr -> supports_all_exon_combo;
+      retval = AsnWrite(aip, MODELEVIDENCEITEM_supports_all_exon_combo,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    SeqFeatSupportNew()
+*
+**************************************************/
+NLM_EXTERN 
+SeqFeatSupportPtr LIBCALL
+SeqFeatSupportNew(void)
+{
+   SeqFeatSupportPtr ptr = MemNew((size_t) sizeof(SeqFeatSupport));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SeqFeatSupportFree()
+*
+**************************************************/
+NLM_EXTERN 
+SeqFeatSupportPtr LIBCALL
+SeqFeatSupportFree(SeqFeatSupportPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericValNodeSetFree(ptr -> experiment, (AsnOptFreeFunc) ExperimentSupportFree);
+   AsnGenericValNodeSetFree(ptr -> inference, (AsnOptFreeFunc) InferenceSupportFree);
+   AsnGenericValNodeSetFree(ptr -> model_evidence, (AsnOptFreeFunc) ModelEvidenceSupportFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SeqFeatSupportAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SeqFeatSupportPtr LIBCALL
+SeqFeatSupportAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SeqFeatSupportPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SeqFeatSupport ::= (self contained) */
+      atp = AsnReadId(aip, amp, SEQFEATSUPPORT);
+   } else {
+      atp = AsnLinkType(orig, SEQFEATSUPPORT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SeqFeatSupportNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SEQFEATSUPPORT_experiment) {
+      ptr -> experiment = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ExperimentSupportAsnRead, (AsnOptFreeFunc) ExperimentSupportFree);
+      if (isError && ptr -> experiment == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SEQFEATSUPPORT_inference) {
+      ptr -> inference = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) InferenceSupportAsnRead, (AsnOptFreeFunc) InferenceSupportFree);
+      if (isError && ptr -> inference == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SEQFEATSUPPORT_model_evidence) {
+      ptr -> model_evidence = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ModelEvidenceSupportAsnRead, (AsnOptFreeFunc) ModelEvidenceSupportFree);
+      if (isError && ptr -> model_evidence == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SeqFeatSupportFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SeqFeatSupportAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SeqFeatSupportAsnWrite(SeqFeatSupportPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SEQFEATSUPPORT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   AsnGenericValNodeSetAsnWrite(ptr -> experiment, (AsnWriteFunc) ExperimentSupportAsnWrite, aip, SEQFEATSUPPORT_experiment, SEQFEATSUPPORT_experiment_E);
+   AsnGenericValNodeSetAsnWrite(ptr -> inference, (AsnWriteFunc) InferenceSupportAsnWrite, aip, SEQFEATSUPPORT_inference, SEQFEATSUPPORT_inference_E);
+   AsnGenericValNodeSetAsnWrite(ptr -> model_evidence, (AsnWriteFunc) ModelEvidenceSupportAsnWrite, aip, SEQFEATSUPPORT_model_evidence, SEQFEATSUPPORT_model_evidence_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+
 /*****************************************************************************
 *
 *   CdRegionNew()
@@ -1979,7 +3341,10 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
 "{ name \"Thraustochytrium Mitochondrial\" , id 23 ,\n" \
 "ncbieaa  \"FF*LSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
-"sncbieaa \"--------------------------------M--M---------------M------------\" } };\n";
+"sncbieaa \"--------------------------------M--M---------------M------------\" } ,\n" \
+"{ name \"Pterobranchia Mitochondrial\" , id 24 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"---M---------------M---------------M----------------------------\" } };\n";
 #endif
 
 /*****************************************************************************
@@ -7831,6 +9196,38 @@ erret:
 
 /**************************************************
 *
+*    SomaticOriginNew()
+*
+**************************************************/
+NLM_EXTERN 
+SomaticOriginPtr LIBCALL
+SomaticOriginNew(void)
+{
+   SomaticOriginPtr ptr = MemNew((size_t) sizeof(SomaticOrigin));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SomaticOriginConditionNew()
+*
+**************************************************/
+NLM_EXTERN 
+SomaticOriginConditionPtr LIBCALL
+SomaticOriginConditionNew(void)
+{
+   SomaticOriginConditionPtr ptr = MemNew((size_t) sizeof(SomaticOriginCondition));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
 *    VariationRefNew()
 *
 **************************************************/
@@ -7858,6 +9255,44 @@ Consequence_loss_of_heterozygosityNew(void)
 
    return ptr;
 
+}
+
+
+/**************************************************
+*
+*    SomaticOriginFree()
+*
+**************************************************/
+NLM_EXTERN 
+SomaticOriginPtr LIBCALL
+SomaticOriginFree(SomaticOriginPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SubSourceFree(ptr -> source);
+   SomaticOriginConditionFree(ptr -> condition);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SomaticOriginConditionFree()
+*
+**************************************************/
+NLM_EXTERN 
+SomaticOriginConditionPtr LIBCALL
+SomaticOriginConditionFree(SomaticOriginConditionPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> description);
+   AsnGenericValNodeSetFree(ptr -> object_id, (AsnOptFreeFunc) DbtagFree);
+   return MemFree(ptr);
 }
 
 
@@ -7909,6 +9344,7 @@ VariationRefFree(VariationRefPtr ptr)
    AsnGenericUserSeqOfFree(ptr -> ext_locs, (AsnOptFreeFunc) ExtLocFree);
    */
    UserObjectFree(ptr -> ext);
+   AsnGenericValNodeSetFree(ptr -> somatic_origin, (AsnOptFreeFunc) SomaticOriginFree);
    return MemFree(ptr);
 }
 
@@ -7930,6 +9366,163 @@ ConsequenceFree(ValNodePtr anp)
    AsnGenericChoiceSeqOfFree(anp, (AsnOptFreeFunc) Consequence_elementFree);    
    return NULL;
 }
+
+
+/**************************************************
+*
+*    SomaticOriginAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SomaticOriginPtr LIBCALL
+SomaticOriginAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   SomaticOriginPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SomaticOrigin ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIATION_REF_somatic_origin);
+   } else {
+      atp = AsnLinkType(orig, VARIATION_REF_somatic_origin);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SomaticOriginNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == VARIATION_REF_somatic_origin_E_source) {
+      ptr -> source = SubSourceAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_somatic_origin_E_condition) {
+      ptr -> condition = SomaticOriginConditionAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SomaticOriginFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SomaticOriginConditionAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SomaticOriginConditionPtr LIBCALL
+SomaticOriginConditionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SomaticOriginConditionPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SomaticOriginCondition ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIATION_REF_somatic_origin_E_condition);
+   } else {
+      atp = AsnLinkType(orig, VARIATION_REF_somatic_origin_E_condition);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SomaticOriginConditionNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == VARIATION_REF_somatic_origin_E_condition_description) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> description = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_somatic_origin_E_condition_object_id) {
+      ptr -> object_id = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DbtagAsnRead, (AsnOptFreeFunc) DbtagFree);
+      if (isError && ptr -> object_id == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SomaticOriginConditionFree(ptr);
+   goto ret;
+}
+
 
 
 /**************************************************
@@ -8110,7 +9703,7 @@ VariationRefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> OBbits__ |= 1<<3;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == REF_is_ancestral_allele) {
+   if (atp == VARIATION_REF_is_ancestral_allele) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
@@ -8159,6 +9752,13 @@ VariationRefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    if (atp == VARIATION_REF_ext) {
       ptr -> ext = UserObjectAsnRead(aip, atp);
       if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_somatic_origin) {
+      ptr -> somatic_origin = AsnGenericValNodeSetAsnRead (aip, amp, atp, &isError, (AsnReadFunc) SomaticOriginAsnRead, (AsnOptFreeFunc) SomaticOriginFree);
+      if (isError && ptr -> somatic_origin == NULL) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
@@ -8231,6 +9831,112 @@ erret:
    aip -> io_failure = TRUE;
    goto ret;
 }
+
+
+/**************************************************
+*
+*    SomaticOriginAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SomaticOriginAsnWrite(SomaticOriginPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, VARIATION_REF_somatic_origin);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> source != NULL) {
+      if ( ! SubSourceAsnWrite(ptr -> source, aip, VARIATION_REF_somatic_origin_E_source)) {
+         goto erret;
+      }
+   }
+   if (ptr -> condition != NULL) {
+      if ( ! SomaticOriginConditionAsnWrite(ptr -> condition, aip, VARIATION_REF_somatic_origin_E_condition)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    SomaticOriginConditionAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SomaticOriginConditionAsnWrite(SomaticOriginConditionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, VARIATION_REF_somatic_origin_E_condition);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> description != NULL) {
+      av.ptrvalue = ptr -> description;
+      retval = AsnWrite(aip, VARIATION_REF_somatic_origin_E_condition_description,  &av);
+   }
+   if (ptr -> object_id != NULL) {
+     AsnGenericValNodeSetAsnWrite(ptr -> object_id, (AsnWriteFunc) DbtagAsnWrite, aip, VARIATION_REF_somatic_origin_E_condition_object_id, VARIATION_REF_somatic_origin_E_condition_object_id_E);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
 
 
 /**************************************************
@@ -8337,7 +10043,7 @@ VariationRefAsnWrite(VariationRefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnWrite(aip, VARIATION_REF_allele_frequency,  &av);
    }
    if (ptr -> is_ancestral_allele || (ptr -> OBbits__ & (1<<4) )){   av.boolvalue = ptr -> is_ancestral_allele;
-      retval = AsnWrite(aip, REF_is_ancestral_allele,  &av);
+      retval = AsnWrite(aip, VARIATION_REF_is_ancestral_allele,  &av);
    }
    if (ptr -> pub != NULL) {
       if ( ! PubAsnWrite(ptr -> pub, aip, VARIATION_REF_pub)) {
@@ -8367,6 +10073,9 @@ VariationRefAsnWrite(VariationRefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       if ( ! UserObjectAsnWrite(ptr -> ext, aip, VARIATION_REF_ext)) {
          goto erret;
       }
+   }
+   if (ptr -> somatic_origin != NULL) {
+     AsnGenericValNodeSetAsnWrite (ptr -> somatic_origin, (AsnWriteFunc) SomaticOriginAsnWrite, aip, VARIATION_REF_somatic_origin, VARIATION_REF_somatic_origin_E);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -8459,26 +10168,26 @@ Consequence_elementAsnWrite(Consequence_elementPtr anp, AsnIoPtr aip, AsnTypePtr
    {
    case Consequence_unknown:
       av.boolvalue = anp->data.boolvalue;
-      retval = AsnWrite(aip, REF_consequence_E_unknown, &av);
+      retval = AsnWrite(aip, VARIATION_REF_consequence_E_unknown, &av);
       break;
    case Consequence_splicing:
       av.boolvalue = anp->data.boolvalue;
-      retval = AsnWrite(aip, REF_consequence_E_splicing, &av);
+      retval = AsnWrite(aip, VARIATION_REF_consequence_E_splicing, &av);
       break;
    case Consequence_note:
       av.ptrvalue = anp->data.ptrvalue;
-      retval = AsnWrite(aip, REF_consequence_E_note, &av);
+      retval = AsnWrite(aip, VARIATION_REF_consequence_E_note, &av);
       break;
    case Consequence_variation:
-      writetype = REF_consequence_E_variation;
+      writetype = VARIATION_REF_consequence_E_variation;
       func = (AsnWriteFunc) VariationRefAsnWrite;
       break;
    case Consequence_Consequence_Frameshift:
-      writetype = REF_consequence_E_frameshift;
+      writetype = VARIATION_REF_consequence_E_frameshift;
       func = (AsnWriteFunc) Consequence_frameshiftAsnWrite;
       break;
    case Consequence_Consequence_LossOfHeterozygosity:
-      writetype = E_loss_of_heterozygosity;
+      writetype = VARIATION_REF_consequence_E_loss_of_heterozygosity;
       func = (AsnWriteFunc) Consequence_loss_of_heterozygosityAsnWrite;
       break;
    }
@@ -8519,7 +10228,7 @@ Consequence_loss_of_heterozygosityAsnWrite(Consequence_loss_of_heterozygosityPtr
       return FALSE;
    }
 
-   atp = AsnLinkType(orig, E_loss_of_heterozygosity);   /* link local tree */
+   atp = AsnLinkType(orig, VARIATION_REF_consequence_E_loss_of_heterozygosity);   /* link local tree */
    if (atp == NULL) {
       return FALSE;
    }
@@ -8531,11 +10240,11 @@ Consequence_loss_of_heterozygosityAsnWrite(Consequence_loss_of_heterozygosityPtr
 
    if (ptr -> reference != NULL) {
       av.ptrvalue = ptr -> reference;
-      retval = AsnWrite(aip, of_heterozygosity_reference,  &av);
+      retval = AsnWrite(aip, VARIATION_REF_consequence_E_loss_of_heterozygosity_reference,  &av);
    }
    if (ptr -> test != NULL) {
       av.ptrvalue = ptr -> test;
-      retval = AsnWrite(aip, E_loss_of_heterozygosity_test,  &av);
+      retval = AsnWrite(aip, VARIATION_REF_consequence_E_loss_of_heterozygosity_test,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -8572,7 +10281,7 @@ Consequence_frameshiftAsnWrite(Consequence_frameshiftPtr ptr, AsnIoPtr aip, AsnT
       return FALSE;
    }
 
-   atp = AsnLinkType(orig, REF_consequence_E_frameshift);   /* link local tree */
+   atp = AsnLinkType(orig, VARIATION_REF_consequence_E_frameshift);   /* link local tree */
    if (atp == NULL) {
       return FALSE;
    }
@@ -8583,10 +10292,10 @@ Consequence_frameshiftAsnWrite(Consequence_frameshiftPtr ptr, AsnIoPtr aip, AsnT
    }
 
    if (ptr -> phase || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> phase;
-      retval = AsnWrite(aip, consequence_E_frameshift_phase,  &av);
+      retval = AsnWrite(aip, VARIATION_REF_consequence_E_frameshift_phase,  &av);
    }
    if (ptr -> x_length || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> x_length;
-      retval = AsnWrite(aip, E_frameshift_x_length,  &av);
+      retval = AsnWrite(aip, VARIATION_REF_consequence_E_frameshift_x_length,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -8635,9 +10344,9 @@ VarRefDataSetAsnWrite(VarRefDataSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 
    av.intvalue = ptr -> type;
    retval = AsnWrite(aip, VARIATION_REF_data_set_type,  &av);
-   AsnGenericValNodeSetAsnWrite(ptr -> variations, (AsnWriteFunc) VariationRefAsnWrite, aip, REF_data_set_variations, REF_data_set_variations_E);
+   AsnGenericValNodeSetAsnWrite(ptr -> variations, (AsnWriteFunc) VariationRefAsnWrite, aip, VARIATION_REF_data_set_variations, VARIATION_REF_data_set_variations_E);
    /*
-   AsnGenericUserSeqOfAsnWrite(ptr -> variations, (AsnWriteFunc) VariationRefAsnWrite, aip, REF_data_set_variations, REF_data_set_variations_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> variations, (AsnWriteFunc) VariationRefAsnWrite, aip, VARIATION_REF_data_set_variations, VARIATION_REF_data_set_variations_E);
    */
    if (ptr -> name != NULL) {
       av.ptrvalue = ptr -> name;
@@ -8703,7 +10412,7 @@ VarRefDataAsnWrite( VarRefDataPtr anp, AsnIoPtr aip, AsnTypePtr orig)
       break;
    case VarRefData_uniparental_disomy:
       av.boolvalue = anp->data.boolvalue;
-      retval = AsnWrite(aip, REF_data_uniparental_disomy, &av);
+      retval = AsnWrite(aip, VARIATION_REF_data_uniparental_disomy, &av);
       break;
    case VarRefData_instance:
       writetype = VARIATION_REF_data_instance;
@@ -8712,6 +10421,10 @@ VarRefDataAsnWrite( VarRefDataPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case VarRefData_set:
       writetype = VARIATION_REF_data_set;
       func = (AsnWriteFunc) VarRefDataSetAsnWrite;
+      break;
+   case VarRefData_complex:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, VARIATION_REF_data_complex, &av);
       break;
    }
    if (writetype != NULL) {
@@ -8779,36 +10492,36 @@ Consequence_elementAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    if (atp == NULL) {
       goto erret;
    }
-   if (atp == REF_consequence_E_unknown) {
+   if (atp == VARIATION_REF_consequence_E_unknown) {
       choice = Consequence_unknown;
       if (AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
       anp->data.boolvalue = av.boolvalue;
    }
-   else if (atp == REF_consequence_E_splicing) {
+   else if (atp == VARIATION_REF_consequence_E_splicing) {
       choice = Consequence_splicing;
       if (AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
       anp->data.boolvalue = av.boolvalue;
    }
-   else if (atp == REF_consequence_E_note) {
+   else if (atp == VARIATION_REF_consequence_E_note) {
       choice = Consequence_note;
       if (AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
       anp->data.ptrvalue = av.ptrvalue;
    }
-   else if (atp == REF_consequence_E_variation) {
+   else if (atp == VARIATION_REF_consequence_E_variation) {
       choice = Consequence_variation;
       func = (AsnReadFunc) VariationRefAsnRead;
    }
-   else if (atp == REF_consequence_E_frameshift) {
+   else if (atp == VARIATION_REF_consequence_E_frameshift) {
       choice = Consequence_Consequence_Frameshift;
       func = (AsnReadFunc) Consequence_frameshiftAsnRead;
    }
-   else if (atp == E_loss_of_heterozygosity) {
+   else if (atp == VARIATION_REF_consequence_E_loss_of_heterozygosity) {
       choice = Consequence_Consequence_LossOfHeterozygosity;
       func = (AsnReadFunc) Consequence_loss_of_heterozygosityAsnRead;
    }
@@ -8860,9 +10573,9 @@ Consequence_loss_of_heterozygosityAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (orig == NULL) {         /* Consequence_loss_of_heterozygosity ::= (self contained) */
-      atp = AsnReadId(aip, amp, E_loss_of_heterozygosity);
+      atp = AsnReadId(aip, amp, VARIATION_REF_consequence_E_loss_of_heterozygosity);
    } else {
-      atp = AsnLinkType(orig, E_loss_of_heterozygosity);
+      atp = AsnLinkType(orig, VARIATION_REF_consequence_E_loss_of_heterozygosity);
    }
    /* link in local tree */
    if (atp == NULL) {
@@ -8880,14 +10593,14 @@ Consequence_loss_of_heterozygosityAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == of_heterozygosity_reference) {
+   if (atp == VARIATION_REF_consequence_E_loss_of_heterozygosity_reference) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
       ptr -> reference = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == E_loss_of_heterozygosity_test) {
+   if (atp == VARIATION_REF_consequence_E_loss_of_heterozygosity_test) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
@@ -8938,9 +10651,9 @@ Consequence_frameshiftAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (orig == NULL) {         /* Consequence_frameshift ::= (self contained) */
-      atp = AsnReadId(aip, amp, REF_consequence_E_frameshift);
+      atp = AsnReadId(aip, amp, VARIATION_REF_consequence_E_frameshift);
    } else {
-      atp = AsnLinkType(orig, REF_consequence_E_frameshift);
+      atp = AsnLinkType(orig, VARIATION_REF_consequence_E_frameshift);
    }
    /* link in local tree */
    if (atp == NULL) {
@@ -8958,7 +10671,7 @@ Consequence_frameshiftAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == consequence_E_frameshift_phase) {
+   if (atp == VARIATION_REF_consequence_E_frameshift_phase) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
@@ -8966,7 +10679,7 @@ Consequence_frameshiftAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> OBbits__ |= 1<<0;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == E_frameshift_x_length) {
+   if (atp == VARIATION_REF_consequence_E_frameshift_x_length) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
@@ -9118,7 +10831,7 @@ VarRefDataSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> type = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == REF_data_set_variations) {
+   if (atp == VARIATION_REF_data_set_variations) {
       ptr -> variations = AsnGenericValNodeSetAsnRead (aip, amp, atp, &isError, (AsnReadFunc) VariationRefAsnRead, (AsnOptFreeFunc) VariationRefFree);
       /*
       ptr -> variations = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) VariationRefAsnRead, (AsnOptFreeFunc) VariationRefFree);
@@ -9216,7 +10929,7 @@ VarRefDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.ptrvalue = av.ptrvalue;
    }
-   else if (atp == REF_data_uniparental_disomy) {
+   else if (atp == VARIATION_REF_data_uniparental_disomy) {
       choice = VarRefData_uniparental_disomy;
       if (AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -9230,6 +10943,13 @@ VarRefDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    else if (atp == VARIATION_REF_data_set) {
       choice = VarRefData_set;
       func = (AsnReadFunc) VarRefDataSetAsnRead;
+   }
+   else if (atp == VARIATION_REF_data_complex) {
+      choice = VarRefData_complex;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
    }
    anp->choice = choice;
    if (func != NULL)
@@ -9444,6 +11164,14 @@ VariationInstAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == VARIATION_INST_observation) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> observation = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -9501,6 +11229,9 @@ VariationInstAsnWrite(VariationInstPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    /*
    AsnGenericUserSeqOfAsnWrite(ptr -> delta, (AsnWriteFunc) DeltaItemAsnWrite, aip, VARIATION_INST_delta, VARIATION_INST_delta_E);
    */
+   if (ptr -> observation || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> observation;
+      retval = AsnWrite(aip, VARIATION_INST_observation,  &av);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -9511,22 +11242,6 @@ erret:
    return retval;
 }
 
-
-
-/**************************************************
-*
-*    ProjectDataNew()
-*
-**************************************************/
-NLM_EXTERN 
-ProjectDataPtr LIBCALL
-ProjectDataNew(void)
-{
-   ProjectDataPtr ptr = MemNew((size_t) sizeof(ProjectData));
-
-   return ptr;
-
-}
 
 
 /**************************************************
@@ -9546,24 +11261,6 @@ VariantPropertiesNew(void)
 
 
 /**************************************************
-*
-*    ProjectDataFree()
-*
-**************************************************/
-NLM_EXTERN 
-ProjectDataPtr LIBCALL
-ProjectDataFree(ProjectDataPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   AsnGenericBaseSeqOfFree(ptr -> project_ids ,ASNCODE_INTVAL_SLOT);
-   return MemFree(ptr);
-}
-
-
-/**************************************************
 /**************************************************
 *
 *    VariantPropertiesFree()
@@ -9577,81 +11274,9 @@ VariantPropertiesFree(VariantPropertiesPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
-   ProjectDataFree(ptr -> project_data);
+   AsnGenericBaseSeqOfFree(ptr -> project_data, ASNCODE_INTVAL_SLOT);
    return MemFree(ptr);
 }
-
-
-/**************************************************
-*
-*    ProjectDataAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-ProjectDataPtr LIBCALL
-ProjectDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   ProjectDataPtr ptr;
-
-   if (! loaded)
-   {
-      if (! SeqFeatAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* ProjectData ::= (self contained) */
-      atp = AsnReadId(aip, amp, VARIANTPROPERTIES_project_data);
-   } else {
-      atp = AsnLinkType(orig, VARIANTPROPERTIES_project_data);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = ProjectDataNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == project_data_E_project_ids) {
-      ptr -> project_ids = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
-      if (isError && ptr -> project_ids == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = ProjectDataFree(ptr);
-   goto ret;
-}
-
 
 
 /**************************************************
@@ -9667,6 +11292,7 @@ VariantPropertiesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    AsnReadFunc func;
    VariantPropertiesPtr ptr;
+   Boolean isError = FALSE;
 
    if (! loaded)
    {
@@ -9747,7 +11373,7 @@ VariantPropertiesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> OBbits__ |= 1<<4;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == frequency_based_validation) {
+   if (atp == VARIANTPROPERTIES_frequency_based_validation) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
@@ -9764,8 +11390,8 @@ VariantPropertiesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == VARIANTPROPERTIES_project_data) {
-      ptr -> project_data =  ProjectDataAsnRead(aip, atp);
-      if (ptr -> project_data == NULL) {
+      ptr -> project_data = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> project_data == NULL) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
@@ -9786,6 +11412,46 @@ VariantPropertiesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> OBbits__ |= 1<<8;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == VARIANTPROPERTIES_other_validation) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> other_validation = av.boolvalue;
+      ptr -> OBbits__ |= 1<<9;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_allele_origin) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> allele_origin = av.intvalue;
+      ptr -> OBbits__ |= 1<<10;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_allele_state) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> allele_state = av.intvalue;
+      ptr -> OBbits__ |= 1<<11;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_allele_frequency) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> allele_frequency = av.realvalue;
+      ptr -> OBbits__ |= 1<<12;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_is_ancestral_allele) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_ancestral_allele = av.boolvalue;
+      ptr -> OBbits__ |= 1<<13;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -9800,51 +11466,6 @@ erret:
    aip -> io_failure = TRUE;
    ptr = VariantPropertiesFree(ptr);
    goto ret;
-}
-
-
-
-/**************************************************
-*
-*    ProjectDataAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-ProjectDataAsnWrite(ProjectDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! SeqFeatAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, VARIANTPROPERTIES_project_data);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> project_ids ,ASNCODE_INTVAL_SLOT, aip, project_data_E_project_ids, project_data_E_project_ids_E);
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
 }
 
 
@@ -9900,17 +11521,34 @@ VariantPropertiesAsnWrite(VariantPropertiesPtr ptr, AsnIoPtr aip, AsnTypePtr ori
       retval = AsnWrite(aip, VARIANTPROPERTIES_map_weight,  &av);
    }
    if (ptr -> freq_based_validation || (ptr -> OBbits__ & (1<<5) )){   av.intvalue = ptr -> freq_based_validation;
-      retval = AsnWrite(aip, frequency_based_validation,  &av);
+      retval = AsnWrite(aip, VARIANTPROPERTIES_frequency_based_validation,  &av);
    }
    if (ptr -> genotype || (ptr -> OBbits__ & (1<<6) )){   av.intvalue = ptr -> genotype;
       retval = AsnWrite(aip, VARIANTPROPERTIES_genotype,  &av);
    }
-   retval = ProjectDataAsnWrite(ptr -> project_data, aip,VARIANTPROPERTIES_project_data);
+   if (ptr -> project_data != NULL) {
+      retval = AsnGenericBaseSeqOfAsnWrite(ptr -> project_data ,ASNCODE_INTVAL_SLOT, aip, VARIANTPROPERTIES_project_data, VARIANTPROPERTIES_project_data_E);
+   }
    if (ptr -> quality_check || (ptr -> OBbits__ & (1<<7) )){   av.intvalue = ptr -> quality_check;
       retval = AsnWrite(aip, VARIANTPROPERTIES_quality_check,  &av);
    }
    if (ptr -> confidence || (ptr -> OBbits__ & (1<<8) )){   av.intvalue = ptr -> confidence;
       retval = AsnWrite(aip, VARIANTPROPERTIES_confidence,  &av);
+   }
+   if (ptr -> other_validation || (ptr -> OBbits__ & (1<<9) )){   av.boolvalue = ptr -> other_validation;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_other_validation,  &av);
+   }
+   if (ptr -> allele_origin || (ptr -> OBbits__ & (1<<10) )){   av.intvalue = ptr -> allele_origin;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_allele_origin,  &av);
+   }
+   if (ptr -> allele_state || (ptr -> OBbits__ & (1<<11) )){   av.intvalue = ptr -> allele_state;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_allele_state,  &av);
+   }
+   if (ptr -> allele_frequency || (ptr -> OBbits__ & (1<<12) )){   av.realvalue = ptr -> allele_frequency;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_allele_frequency,  &av);
+   }
+   if (ptr -> is_ancestral_allele || (ptr -> OBbits__ & (1<<13) )){   av.boolvalue = ptr -> is_ancestral_allele;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_is_ancestral_allele,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -10211,7 +11849,7 @@ PopulationDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> population = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == DATA_genotype_frequency) {
+   if (atp == POPULATION_DATA_genotype_frequency) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
@@ -10219,7 +11857,7 @@ PopulationDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> OBbits__ |= 1<<0;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == DATA_chromosomes_tested) {
+   if (atp == POPULATION_DATA_chromosomes_tested) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
@@ -10235,6 +11873,22 @@ PopulationDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       if (isError && ptr -> sample_ids == NULL) {
          goto erret;
       }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == POPULATION_DATA_allele_frequency) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> allele_frequency = av.realvalue;
+      ptr -> OBbits__ |= 1<<2;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == POPULATION_DATA_flags) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> flags = av.intvalue;
+      ptr -> OBbits__ |= 1<<3;
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -10293,15 +11947,21 @@ PopulationDataAsnWrite(PopulationDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnWrite(aip, POPULATION_DATA_population,  &av);
    }
    if (ptr -> genotype_frequency || (ptr -> OBbits__ & (1<<0) )){   av.realvalue = ptr -> genotype_frequency;
-      retval = AsnWrite(aip, DATA_genotype_frequency,  &av);
+      retval = AsnWrite(aip, POPULATION_DATA_genotype_frequency,  &av);
    }
    if (ptr -> chromosomes_tested || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> chromosomes_tested;
-      retval = AsnWrite(aip, DATA_chromosomes_tested,  &av);
+      retval = AsnWrite(aip, POPULATION_DATA_chromosomes_tested,  &av);
    }
    AsnGenericValNodeSetAsnWrite(ptr -> sample_ids, (AsnWriteFunc) ObjectIdAsnWrite, aip, POPULATION_DATA_sample_ids, POPULATION_DATA_sample_ids_E);
    /*
    AsnGenericChoiceSeqOfAsnWrite(ptr -> sample_ids, (AsnWriteFunc) ObjectIdAsnWrite, aip, POPULATION_DATA_sample_ids, POPULATION_DATA_sample_ids_E);
    */
+   if (ptr -> allele_frequency || (ptr -> OBbits__ & (1<<2) )){   av.realvalue = ptr -> allele_frequency;
+      retval = AsnWrite(aip, POPULATION_DATA_allele_frequency,  &av);
+   }
+   if (ptr -> flags || (ptr -> OBbits__ & (1<<3) )){   av.intvalue = ptr -> flags;
+      retval = AsnWrite(aip, POPULATION_DATA_flags,  &av);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -10773,10 +12433,9 @@ DeltaItemAsnWrite(DeltaItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   av.intvalue = ptr -> action;
-   retval = AsnWrite(aip, DELTA_ITEM_action,  &av);
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
+   if (ptr -> action != 0) {
+      av.intvalue = ptr -> action;
+      retval = AsnWrite(aip, DELTA_ITEM_action,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;

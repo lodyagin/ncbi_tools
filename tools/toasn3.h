@@ -1,7 +1,7 @@
 #ifndef _TOASN3_
 #define _TOASN3_
 
-/*  $Id: toasn3.h,v 6.19 2010/07/21 21:56:28 kans Exp $
+/*  $Id: toasn3.h,v 6.26 2011/05/09 20:02:40 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -155,7 +155,8 @@ void EntryChangeImpFeat(SeqEntryPtr sep);
 *****************************************************/
 Boolean ImpFeatToCdregion(SeqFeatPtr sfp);
 
-void CdCheck(SeqEntryPtr sep, FILE *fp);
+NLM_EXTERN void CdCheck(SeqEntryPtr sep, FILE *fp);
+NLM_EXTERN void CdCheckEx(SeqEntryPtr sep, FILE *fp, Boolean also_adjust_mrna);
 
 /****************************************************
 *  Creates source string from BioSource structure
@@ -211,6 +212,7 @@ extern void CleanupGenbankCallback (SeqEntryPtr sep, Pointer mydata, Int4 index,
 extern void MergeAdjacentAnnotsCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
 extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
 extern void RemoveBioSourceOnPopSet (SeqEntryPtr sep, OrgRefPtr master);
+extern void RemoveMolInfoOnPopSet (SeqEntryPtr sep, MolInfoPtr master);
 extern Boolean NoBiosourceOrTaxonId (SeqEntryPtr sep);
 extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
 extern void ConvertFullLenSourceFeatToDesc (SeqEntryPtr sep);
@@ -232,6 +234,13 @@ extern void GpipeSeqEntryCleanup (SeqEntryPtr sep);
 /* SeriousSeqAnnotCleanup calls BasicSeqAnnotCleanup and adds a cleanup user object to annot-desc */
 
 extern void SeriousSeqAnnotCleanup (SeqAnnotPtr sap);
+
+/* ConvertSegSetToDeltaSeq will be used to convert and retire segmented bioseqs */
+
+extern Boolean ConvertSegSetToDeltaSeq (SeqEntryPtr sep);
+extern void ConvertPartDescToFeat (SeqEntryPtr sep);
+extern void SegSeqNullToVirtual (SeqEntryPtr sep);
+extern void SimpleAutoDef (SeqEntryPtr sep);
 
 
 #ifdef __cplusplus

@@ -1,4 +1,4 @@
-/* $Id: blast_options.h,v 1.156 2010/03/16 17:59:36 kazimird Exp $
+/* $Id: blast_options.h,v 1.158 2011/02/09 14:39:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -119,7 +119,7 @@ extern "C" {
                                          based gapped extensions) */
 #define BLAST_GAP_X_DROPOFF_NUCL 30 /**< default dropoff for non-greedy
                                          nucleotide gapped extensions */
-#define BLAST_GAP_X_DROPOFF_GREEDY 30 /**< default dropoff for greedy
+#define BLAST_GAP_X_DROPOFF_GREEDY 25 /**< default dropoff for greedy
                                          nucleotide gapped extensions */
 #define BLAST_GAP_X_DROPOFF_TBLASTX 0 /**< default dropoff for tblastx */
 
@@ -344,6 +344,9 @@ typedef struct BlastHitSavingOptions {
    Int4 culling_limit; /**< If the query range of an HSP is contained in
                             at least this many higher-scoring HSPs, throw
                             away the HSP as redundant (turned off if zero) */
+   Int4 mask_level; /**< Only keep the highest scoring HSP when more than
+                          one HSP overlaps the same region of the query by
+                          more than or equal to mask_level %. -RMH- */
 
    /********************************************************************/
    /* Merge all these in a structure for clarity? */
@@ -379,6 +382,8 @@ typedef struct BlastScoringOptions {
    Int2 reward;      /**< Reward for a match */
    Int2 penalty;     /**< Penalty for a mismatch */
    Boolean gapped_calculation; /**< gap-free search if FALSE */
+   Boolean complexity_adjusted_scoring; /**< Use cross_match-like complexity
+                                           adjustment on raw scores. -RMH- */
    Int4 gap_open;    /**< Extra penalty for starting a gap */
    Int4 gap_extend;  /**< Penalty for each gap residue */
 

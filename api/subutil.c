@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.87 $
+* $Revision: 6.93 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -56,6 +56,7 @@ static char *this_file = __FILE__;
 #include <seqport.h>
 #include <utilpars.h>
 #include <sqnutils.h>
+#include <explore.h>
 
 /*****************************************************************************
 *
@@ -644,7 +645,8 @@ NLM_EXTERN SeqEntryPtr AddSeqOnlyToSubmission (
             targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
             if (targetbssp->_class == 7 ||
                 (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
-                targetbssp->_class == BioseqseqSet_class_wgs_set) {
+                targetbssp->_class == BioseqseqSet_class_wgs_set ||
+                targetbssp->_class == BioseqseqSet_class_small_genome_set) {
                 tmp = targetbssp->seq_set;
             }
         }
@@ -886,7 +888,8 @@ NLM_EXTERN SeqEntryPtr AddSegmentedSeqToSubmission (
             targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
             if (targetbssp->_class == 7 ||
                 (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
-                targetbssp->_class == BioseqseqSet_class_wgs_set) {
+                targetbssp->_class == BioseqseqSet_class_wgs_set ||
+                targetbssp->_class == BioseqseqSet_class_small_genome_set) {
                 tmp = targetbssp->seq_set;
             }
         }
@@ -1317,7 +1320,8 @@ NLM_EXTERN SeqEntryPtr AddNucProtToSubmission (
             targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
             if (targetbssp->_class == 7 ||
                 (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
-                targetbssp->_class == BioseqseqSet_class_wgs_set) {
+                targetbssp->_class == BioseqseqSet_class_wgs_set ||
+                targetbssp->_class == BioseqseqSet_class_small_genome_set) {
                 tmp = targetbssp->seq_set;
             }
         }
@@ -1652,22 +1656,23 @@ NLM_EXTERN Boolean AddBasesToByteStore (ByteStorePtr bsp, CharPtr the_bases)
     Uint1    residue;
     Uint1Ptr dnaconv;
     CharPtr tmp;
+    Char ch;
 
     dnaconv = GetDNAConv();
     buf = MemNew(StringLen(the_bases) + 1);
     bu = buf;
     for (tmp = the_bases; *tmp != '\0'; tmp++)
     {
-        *tmp = TO_UPPER(*tmp);
-        if (*tmp == 'U') *tmp = 'T';
-        if (*tmp == 'X') *tmp = 'N';
-        residue = dnaconv[*tmp];
+        ch = TO_UPPER(*tmp);
+        if (ch == 'U') ch = 'T';
+        if (ch == 'X') ch = 'N';
+        residue = dnaconv[ch];
         if (residue > 2) {
             *bu++ = residue;
         } else if (residue == 1 && IS_ALPHA(*tmp)) {
             *bu++ = 'N';
         } else {
-            ErrPostEx(SEV_ERROR, 0,0, "Illegal character in Bioseq [%c]", *tmp);
+            ErrPostEx(SEV_ERROR, 0,0, "Illegal character in Bioseq [%c]", ch);
         }
     }
     BSWrite(bsp, buf, (Int4) (bu - buf));
@@ -1684,20 +1689,21 @@ NLM_EXTERN Boolean AddAAsToByteStore (ByteStorePtr bsp, CharPtr the_aas)
     Uint1    residue;
     Uint1Ptr aaconv;
     CharPtr tmp;
+    Char ch;
 
     aaconv = GetProteinConv();
     buf = MemNew(StringLen(the_aas) + 1);
     bu = buf;
     for (tmp = the_aas; *tmp != '\0'; tmp++)
     {
-        *tmp = TO_UPPER(*tmp);
-        residue = aaconv[*tmp];
+        ch = TO_UPPER(*tmp);
+        residue = aaconv[ch];
         if (residue > 2) {
             *bu++ = residue;
-        } else if (residue == 1 && IS_ALPHA(*tmp)) {
+        } else if (residue == 1 && IS_ALPHA(ch)) {
             *bu++ = 'X';
         } else {
-            ErrPostEx(SEV_ERROR, 0,0, "Illegal character in Bioseq [%c]", *tmp);
+            ErrPostEx(SEV_ERROR, 0,0, "Illegal character in Bioseq [%c]", ch);
         }
     }
 
@@ -5808,6 +5814,208 @@ NLM_EXTERN void RemoveAllSeqAnnotCleanupUserObjs (
       prev = (AnnotDescrPtr PNTR) &(adp->next);
     }
     adp = next;
+  }
+}
+
+
+static void GetNcbiAutofixDescr(SeqDescrPtr sdp, Pointer data)
+{
+  UserObjectPtr  uop;
+  UserObjectPtr PNTR p_uop;
+
+  if (sdp != NULL 
+      && sdp->choice == Seq_descr_user 
+      && (uop = (UserObjectPtr)sdp->data.ptrvalue) != NULL
+      && uop->type != NULL
+      && StringICmp (uop->type->str, "NcbiAutofix") == 0
+      && (p_uop = (UserObjectPtr PNTR) data) != NULL) {
+    *p_uop = uop;
+  }
+}
+
+
+NLM_EXTERN UserObjectPtr FindNcbiAutofixUserObject (
+  SeqEntryPtr sep
+)
+
+{
+  UserObjectPtr  uop = NULL;
+
+  if (sep == NULL) return NULL;
+
+  VisitDescriptorsInSep (sep, (Pointer) &uop, GetNcbiAutofixDescr);
+
+  return uop;
+}
+
+
+NLM_EXTERN void AddNcbiAutofixUserObject (
+  SeqEntryPtr sep
+)
+
+{
+  SeqDescrPtr sdp;
+  UserObjectPtr uop;
+
+  sdp = CreateNewDescriptor(sep, Seq_descr_user);
+  uop = UserObjectNew ();
+  uop->type = ObjectIdNew();
+  uop->type->str = StringSave ("NcbiAutofix");
+  sdp->data.ptrvalue = uop;
+}
+
+
+static void RemoveNcbiAutofixDescr(SeqDescrPtr sdp, Pointer data)
+{
+  UserObjectPtr  uop;
+  ObjValNodePtr  ovp;
+
+  if (sdp != NULL 
+      && sdp->choice == Seq_descr_user 
+      && (uop = (UserObjectPtr)sdp->data.ptrvalue) != NULL
+      && uop->type != NULL
+      && StringICmp (uop->type->str, "NcbiAutofix") == 0
+      && sdp->extended != 0) {
+    ovp = (ObjValNodePtr) sdp;
+    ovp->idx.deleteme = TRUE;
+  }
+}
+
+
+NLM_EXTERN void RemoveNcbiAutofixUserObjects (
+  SeqEntryPtr sep
+)
+
+{
+  if (sep == NULL) return;
+
+  VisitDescriptorsInSep (sep, (Pointer) NULL, RemoveNcbiAutofixDescr);
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
+}
+
+NLM_EXTERN UserObjectPtr CreateUnverifiedUserObject (
+  void
+)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("Unverified");
+  uop->type = oip;
+
+  return uop;
+}
+
+static void GetUnverifiedDescr(SeqDescrPtr sdp, Pointer data)
+{
+  UserObjectPtr  uop;
+  UserObjectPtr PNTR p_uop;
+
+  if (sdp != NULL 
+      && sdp->choice == Seq_descr_user 
+      && (uop = (UserObjectPtr)sdp->data.ptrvalue) != NULL
+      && IsUnverifiedUserObject(uop)
+      && (p_uop = (UserObjectPtr PNTR) data) != NULL) {
+    *p_uop = uop;
+  }
+}
+
+
+NLM_EXTERN UserObjectPtr FindUnverifiedUserObject (
+  SeqEntryPtr sep
+)
+
+{
+  UserObjectPtr  uop = NULL;
+
+  if (sep == NULL) return NULL;
+
+  VisitDescriptorsInSep (sep, (Pointer) &uop, GetUnverifiedDescr);
+
+  return uop;
+}
+
+
+NLM_EXTERN void AddUnverifiedUserObject (
+  SeqEntryPtr sep
+)
+
+{
+  SeqDescrPtr sdp;
+  UserObjectPtr uop;
+
+  sdp = CreateNewDescriptor(sep, Seq_descr_user);
+  uop = UserObjectNew ();
+  uop->type = ObjectIdNew();
+  uop->type->str = StringSave ("Unverified");
+  sdp->data.ptrvalue = uop;
+}
+
+
+NLM_EXTERN void AddUnverifiedUserObjectToBioseq (
+  BioseqPtr bsp
+)
+
+{
+  SeqDescPtr sdp;
+  SeqMgrDescContext context;
+  Boolean found = FALSE;
+
+  if (bsp == NULL || ISA_aa(bsp->mol)) {
+    return;
+  }
+  for (sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &context);
+       sdp != NULL && !found;
+       sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &context)) {
+    if (IsUnverifiedUserObject(sdp->data.ptrvalue)) {
+      found = TRUE;
+    }
+  }
+  if (!found) {
+    sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
+    sdp->data.ptrvalue = CreateUnverifiedUserObject();
+  }
+}
+
+
+static void RemoveUnverifiedDescr(SeqDescrPtr sdp, Pointer data)
+{
+  UserObjectPtr  uop;
+  ObjValNodePtr  ovp;
+
+  if (sdp != NULL 
+      && sdp->choice == Seq_descr_user 
+      && (uop = (UserObjectPtr)sdp->data.ptrvalue) != NULL
+      && uop->type != NULL
+      && StringICmp (uop->type->str, "Unverified") == 0
+      && sdp->extended != 0) {
+    ovp = (ObjValNodePtr) sdp;
+    ovp->idx.deleteme = TRUE;
+  }
+}
+
+
+NLM_EXTERN void RemoveUnverifiedUserObjects (
+  SeqEntryPtr sep
+)
+
+{
+  if (sep == NULL) return;
+
+  VisitDescriptorsInSep (sep, (Pointer) NULL, RemoveUnverifiedDescr);
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
+}
+
+
+NLM_EXTERN Boolean IsUnverifiedUserObject (UserObjectPtr uop)
+{
+  if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "Unverified") != 0) {
+    return FALSE;
+  } else {
+    return TRUE;
   }
 }
 

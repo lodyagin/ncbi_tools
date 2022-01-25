@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *   Routines for AsnIo objects.  This code has some machine dependencies.
@@ -45,6 +45,9 @@
 * 01-31-94 Schuler     Changed ErrGetOpts/ErrSetOpts to ErrSaveOptions/ErrRestoreOptions
 *
 * $Log: asnio.c,v $
+* Revision 6.13  2011/04/12 21:28:51  lavr
+* Fix ASN stream flushing: avoid fflush(NULL) that has an effect of flushing ALL open FILE* streams
+*
 * Revision 6.12  2005/12/01 20:00:13  lavr
 * AsnIoErrorMsg(): Don't insert extra LFs if there was no typestack dumped
 *
@@ -1224,8 +1227,8 @@ NLM_EXTERN void LIBCALL  AsnIoFlush (AsnIoPtr aip)
 
     if (aip->offset)
         AsnIoWriteBlock(aip);
-    if (aip->type & ASNIO_FILE)    /* not a socket, clear buffers */
-        fflush(aip->fp);
+    if (aip->fp  &&  (aip->type & ASNIO_FILE))    /* not a socket, clear buffers */
+        fflush(aip->fp);  /* NB: fflush(NULL) causes ALL streams to flush */
     return;
 }
 

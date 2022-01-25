@@ -1,4 +1,4 @@
-/*  $Id: blast_stat.h,v 1.89 2009/09/24 16:09:34 kazimird Exp $
+/*  $Id: blast_stat.h,v 1.94 2011/05/31 16:09:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -72,6 +72,44 @@ typedef struct Blast_KarlinBlk {
    } Blast_KarlinBlk;
 
 
+/**
+  Tabulated results for faster erfc(x) lookup.
+  erfc(x) = 1/2 + 1/sqrt(2*pi) * \int_0^x { exp(-y^2/2)} dy
+  erfc(-\inf) = 0.0
+  erfc(+\inf) = 1.0
+  The erfc(x) is tabulated in p with step h, starting from a to b
+*/
+typedef struct erfc_table {
+      double eps;
+      double a;  
+      double b;
+      Int4   N;
+      double h;
+      double *p;
+   } erfc_table;
+
+/**
+  Structure to hold the Gumbel parameters (for FSC).
+*/
+typedef struct Blast_GumbelBlk {
+      double  Lambda;    /**< the unscaled Lambda value */
+      double  C;
+      double  G;         /**< G is the total penalty for extension */
+      double  a;         /**< avg(L) = a     y + b    */
+      double  Alpha;     /**< var(L) = alpha y + beta */
+      double  Sigma;     /**< cov(L) = sigma y + tau  */
+      double  a_un;      /**< Ungapped a */
+      double  Alpha_un;  /**< Ungapped alpha */
+
+      double  b;         /**< 2*G*(a_un - a) */
+      double  Beta;      /**< 2*G*(alpha_un - alpha) */
+      double  Tau;       /**< 2*G*(alpha_un - Sigma) */
+
+      Int8 db_length;    /**< total length of database */
+
+      erfc_table *p;     /**< Tabulated results of erfc(x) */
+      
+   } Blast_GumbelBlk;
 
 
 /********************************************************************
@@ -103,6 +141,8 @@ typedef struct SBlastScoreMatrix {
                           form */
     size_t ncols;       /**< number of columns */
     size_t nrows;       /**< number of rows */
+    double* freqs;      /**< array of assumed matrix background frequencies -RMH-*/
+    double lambda;      /**< derived value of the matrix lambda -RMH- */
 } SBlastScoreMatrix;
 
 /** Scoring matrix data used in PSI-BLAST */
@@ -146,6 +186,14 @@ protein alphabet (e.g., ncbistdaa etc.), FALSE for nt. alphabets. */
    SPsiBlastScoreMatrix* psi_matrix;    /**< PSSM and associated data. If this
                                          is not NULL, then the BLAST search is
                                          position specific (i.e.: PSI-BLAST) */
+   Boolean  matrix_only_scoring;  /**< Score ungapped/gapped alignment only
+                                       using the matrix parameters and
+                                       with raw scores. Ignore 
+                                       penalty/reward and do not report 
+                                       Karlin-Altschul stats.  This is used
+                                       by the rmblastn program. -RMH- */
+   Boolean complexity_adjusted_scoring; /**< Use cross_match-like complexity
+                                           adjustment on raw scores. -RMH- */
    Int4  loscore;   /**< Min.  substitution scores */
    Int4  hiscore;   /**< Max. substitution scores */
    Int4  penalty;   /**< penalty for mismatch in blastn. */
@@ -158,6 +206,7 @@ protein alphabet (e.g., ncbistdaa etc.), FALSE for nt. alphabets. */
    /* kbp & kbp_gap are ptrs that should be set to kbp_std, kbp_psi, etc. */
    Blast_KarlinBlk** kbp;  /**< Karlin-Altschul parameters. Actually just a placeholder. */
    Blast_KarlinBlk** kbp_gap; /**< K-A parameters for gapped alignments.  Actually just a placeholder. */
+   Blast_GumbelBlk* gbp;  /**< Gumbel parameters for FSC. */
    /* Below are the Karlin-Altschul parameters for non-position based ('std')
    and position based ('psi') searches. */
    Blast_KarlinBlk **kbp_std,  /**< K-A parameters for ungapped alignments */
@@ -358,6 +407,32 @@ Int2 Blast_ScoreBlkKbpIdealCalc(BlastScoreBlk* sbp);
 NCBI_XBLAST_EXPORT
 Int2 Blast_KarlinBlkGappedLoadFromTables(Blast_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, const char* matrix_name);
 
+/** Fills in gumbel parameters to estimate p-value using FSC
+ * @param gbp object to be filled in [in|out]
+ * @param gap_open cost of gap existence [in]
+ * @param gap_extend cost to extend a gap one letter [in]
+ * @param matrix_name name of the matrix to be used [in]
+ * @param error_return filled in with error message if needed [out]
+ * @return zero on success
+ */
+NCBI_XBLAST_EXPORT
+Int2 Blast_GumbelBlkCalc (Blast_GumbelBlk* gbp, Int4 gap_open, 
+     Int4 gap_extend, const char* matrix_name, Blast_Message** error_return);
+
+/** Attempts to fill GumbelBlk for given gap opening, extensions etc.
+ *
+ * @param gbp object to be filled in [in|out]
+ * @param gap_open gap existence cost [in]
+ * @param gap_extend gap extension cost [in]
+ * @param matrix_name name of the matrix used [in]
+ * @return  -1 if matrix_name is NULL;
+ *          1 if matrix not found
+ *           2 if matrix found, but open, extend etc. values not supported.
+*/
+NCBI_XBLAST_EXPORT
+Int2 Blast_GumbelBlkLoadFromTables(Blast_GumbelBlk* gbp, Int4 gap_open, 
+     Int4 gap_extend, const char* matrix_name);
+
 /** Prints a messages about the allowed matrices, BlastKarlinBlkGappedFill should return 1 before this is called. 
  * @param matrix the matrix to print a message about [in]
  * @return the message
@@ -389,6 +464,16 @@ Blast_KarlinLambdaNR(Blast_ScoreFreq* sfp, double initialLambdaGuess);
  */
 NCBI_XBLAST_EXPORT
 double BLAST_KarlinStoE_simple (Int4 S, Blast_KarlinBlk* kbp, Int8  searchsp);
+
+/** Calculates the Expect value based upon the Spouge's FSC method.
+ * @param S the score of the alignment. [in]
+ * @param gbp the Gumbel parameters. [in]
+ * @param qlen the query length. [in]
+ * @param slen the subject length. [in]
+ * @return the expect value
+ */
+NCBI_XBLAST_EXPORT
+double BLAST_SpougeStoE (Int4 S, Blast_KarlinBlk* kbp, Blast_GumbelBlk* gbp, Int4 qlen, Int4 slen);
 
 /** Convert a P-value to an E-value.
  *

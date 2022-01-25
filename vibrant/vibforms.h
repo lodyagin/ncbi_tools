@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.17 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
@@ -360,7 +360,7 @@ extern Nlm_DialoG Nlm_CreateTextTabs (Nlm_GrouP h, Nlm_CharPtr PNTR titles, Nlm_
 *****************************************************************************/
 
 #define MAX_TAGLIST_ROWS   8
-#define MAX_TAGLIST_COLS   6
+#define MAX_TAGLIST_COLS   12
 #define STD_TAG_SPACING    2
 
 #define TAGLIST_TEXT     1
@@ -393,6 +393,12 @@ extern Nlm_DialoG Nlm_CreateTagListDialog (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint
                                            Nlm_Uint2Ptr textWidths,
                                            Nlm_EnumFieldAssocPtr PNTR alists,
                                            Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc);
+
+extern Nlm_DialoG CreateTagListDialogEx (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint2 cols,
+                                         Nlm_Int2 spacing, Nlm_Uint2Ptr types,
+                                         Nlm_Uint2Ptr textWidths, Nlm_EnumFieldAssocPtr PNTR alists,
+                                         Nlm_Boolean useBar, Nlm_Boolean noExtend,
+                                         Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc);
 
 extern Nlm_DialoG CreateTagListDialogExEx (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint2 cols,
                                        Nlm_Int2 spacing, Nlm_Uint2Ptr types,

@@ -1,4 +1,4 @@
-/* $Id: ncbi_sendmail.c,v 6.45 2010/04/05 13:59:32 kazimird Exp $
+/* $Id: ncbi_sendmail.c,v 6.51 2011/02/10 21:49:51 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,7 @@
 
 #include "ncbi_ansi_ext.h"
 #include "ncbi_priv.h"
+#include <connect/ncbi_connutil.h>
 #include <connect/ncbi_sendmail.h>
 #include <connect/ncbi_socket.h>
 #include <ctype.h>
@@ -49,9 +50,9 @@
 #define MX_MAGIC_NUMBER 0xBA8ADEDA
 #define MX_CRLF         "\r\n"
 
-#define SMTP_READERR    -1      /* Error reading from socket            */
+#define SMTP_READERR    -1      /* Read error from socket               */
 #define SMTP_READTMO    -2      /* Read timed out                       */
-#define SMTP_RESPERR    -3      /* Error reading response prefix        */
+#define SMTP_RESPERR    -3      /* Cannot read response prefix          */
 #define SMTP_NOCODE     -4      /* No response code detected (letters?) */
 #define SMTP_BADCODE    -5      /* Response code doesn't match in lines */
 #define SMTP_BADRESP    -6      /* Malformed response                   */
@@ -150,13 +151,13 @@ static int/*bool*/ s_SockReadResponse(SOCK sock, int code, int alt_code,
             message = "Read timed out";
             break;
         case SMTP_RESPERR:
-            message = "Error reading response prefix";
+            message = "Cannot read response prefix";
             break;
         case SMTP_NOCODE:
             message = "No response code detected";
             break;
         case SMTP_BADCODE:
-            message = "Response code doesn't match in lines";
+            message = "Response code mismatch";
             break;
         case SMTP_BADRESP:
             message = "Malformed response";
@@ -213,11 +214,43 @@ static void s_MakeFrom(char* buf, size_t size, const char* user)
 }
 
 
-/* FIXME:  To remove altogether */
-#undef SendMailInfo_Init
-SSendMailInfo* SendMailInfo_Init(SSendMailInfo* info)
+static char           s_MxHost[256];
+static unsigned short s_MxPort;
+static STimeout       s_MxTmo;
+
+
+static void x_Sendmail_InitEnv(void)
 {
-    return SendMailInfo_InitEx(info, 0);
+    char         buf[sizeof(s_MxHost)];
+    unsigned int port;
+    double       tmo;
+
+    if (*s_MxHost)
+        return;
+
+    if (!ConnNetInfo_GetValue(0, "MX_TIMEOUT", buf, sizeof(buf), 0)
+        ||  (tmo = atof(buf)) <= 0.0) {
+        tmo = 120.0;
+    }
+    if (!ConnNetInfo_GetValue(0, "MX_PORT", buf, sizeof(buf), 0)
+        ||  !(port = atoi(buf))  ||  port > 65535) {
+        port = 25;
+    }
+    if (!ConnNetInfo_GetValue(0, "MX_HOST", buf, sizeof(buf), 0)
+        ||  !*buf) {
+#if defined(NCBI_OS_UNIX)  &&  !defined(NCBI_OS_CYGWIN)
+        strcpy(buf, "localhost");
+#else
+        strcpy(buf, "mailgw");
+#endif /*NCBI_OS_UNIX && !NCBI_OS_CYGWIN*/
+    }
+
+    CORE_LOCK_WRITE;
+    s_MxTmo.sec  = (unsigned int)  tmo;
+    s_MxTmo.usec = (unsigned int)((tmo - s_MxTmo.sec) * 1000000.0);
+    strcpy(s_MxHost, buf);
+    s_MxPort = port;
+    CORE_UNLOCK;
 }
 
 
@@ -225,16 +258,16 @@ SSendMailInfo* SendMailInfo_InitEx(SSendMailInfo* info,
                                    const char*    user)
 {
     if (info) {
+        x_Sendmail_InitEnv();
         info->magic_number    = MX_MAGIC_NUMBER;
         info->cc              = 0;
         info->bcc             = 0;
         s_MakeFrom(info->from, sizeof(info->from), user);
         info->header          = 0;
         info->body_size       = 0;
-        info->mx_host         = "mailgw.ncbi.nlm.nih.gov";
-        info->mx_port         = 25;
-        info->mx_timeout.sec  = 120;
-        info->mx_timeout.usec = 0;
+        info->mx_host         = s_MxHost;
+        info->mx_port         = s_MxPort;
+        info->mx_timeout      = s_MxTmo;
         info->mx_options      = 0;
     }
     return info;

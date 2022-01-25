@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:
 *  This system-independent header supposedly works "as is"
@@ -47,6 +47,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistd.h,v $
+* Revision 6.10  2011/01/20 17:12:42  lavr
+* Remove inclusion of <connect/ncbi_core.h>, replace with <stdint.h> everywhere but Windows NOJIRA
+*
+* Revision 6.9  2011/01/18 18:04:46  ivanov
+* Include <ncbiopt.h> after <connect/ncbi_core.h>
+*
 * Revision 6.8  2001/09/27 21:38:57  vakatov
 * Vice-versa fix to R6.7:  define "NDEBUG" if "_DEBUG" is not defined
 *
@@ -92,8 +98,10 @@
 #endif
 
 #include <ncbilcl.h>
+#ifndef _WIN32
+#  include <stdint.h>
+#endif
 #include <ncbiopt.h>
-#include <connect/ncbi_core.h>
 
 #ifndef LITTLE_ENDIAN
 #define LITTLE_ENDIAN	1234

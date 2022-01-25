@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.c,v 1.100 2010/07/30 17:44:35 kazimird Exp $
+/* $Id: blast_kappa.c,v 1.110 2011/05/31 16:09:30 kazimird Exp $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-"$Id: blast_kappa.c,v 1.100 2010/07/30 17:44:35 kazimird Exp $";
+"$Id: blast_kappa.c,v 1.110 2011/05/31 16:09:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <float.h>
@@ -402,7 +402,7 @@ s_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
                                 hitParams->link_hsp_params, TRUE);
     } else {
         status =
-            Blast_HSPListGetEvalues(queryInfo, hsp_list, TRUE, sbp,
+            Blast_HSPListGetEvalues(queryInfo, subject_length, hsp_list, TRUE, FALSE, sbp,
                                     0.0, /* use a non-zero gap decay
                                             only when linking HSPs */
                                     1.0); /* Use scaling factor equal to
@@ -1466,17 +1466,15 @@ s_RedoOneAlignment(BlastCompo_Alignment * in_align,
     } else {
         /* We must recompute the start for the gapped alignment, as the
            one in the HSP was unacceptable.*/
-        q_start =
-            BlastGetStartForGappedAlignment(query_data->data,
+        Boolean retval =
+            BlastGetOffsetsForGappedAlignment(query_data->data,
                                             subject_data->data, sbp,
-                                            hsp->query.offset,
-                                            hsp->query.end -
-                                            hsp->query.offset,
-                                            hsp->subject.offset,
-                                            hsp->subject.end -
-                                            hsp->subject.offset);
-        s_start =
-            (hsp->subject.offset - hsp->query.offset) + q_start;
+                                            hsp,
+                                            &q_start, 
+                                            &s_start);
+        /* ASSERT(retval == TRUE); */
+        if (retval == FALSE)
+           return NULL;
     }
     /* Undo the shift so there is no side effect on the incoming HSP
        list. */
@@ -2059,6 +2057,7 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
        p-value is desired; value needs to be passed in eventually*/
     int compositionTestIndex = extendParams->options->unifiedP;
     Uint1* genetic_code_string = GenCodeSingletonFind(default_db_genetic_code);
+    Boolean perform_partial_fetch = BlastSeqSrcGetSupportsPartialFetching(seqSrc);
 
     ASSERT(program_number == eBlastTypeBlastp ||
            program_number == eBlastTypeTblastn ||
@@ -2194,9 +2193,39 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
         }
         if (BlastCompo_EarlyTermination(thisMatch->best_evalue,
                                         redoneMatches, numQueries)) {
+            Blast_HSPListFree(thisMatch);
             break;
         }
         /* Get the sequence for this match */
+        if (perform_partial_fetch) {
+            
+            Int4 oid = thisMatch->oid;
+            Int4 i;
+            BlastHSPRangeList *range_list = NULL;
+            BlastSeqSrcSetRangesArg *arg = NULL;
+
+            ASSERT(Blast_SubjectIsTranslated(program_number));
+            for (i=0; i<thisMatch->hspcnt; i++) {
+                BlastHSP *hsp = thisMatch->hsp_array[i];
+                Int4 begin = (hsp->subject.offset - 2) * CODON_LENGTH;
+                Int4 end = (hsp->subject.end + 2) * CODON_LENGTH;
+                if (hsp->subject.frame < 0) {
+                    Int4 len = BlastSeqSrcGetSeqLen(seqSrc, &oid);
+                    Int4 begin_new = len - end;
+                    end = len - begin;
+                    begin = begin_new;
+                }
+                range_list = BlastHSPRangeListAddRange(range_list, begin, end);
+            }
+            arg = BlastSeqSrcSetRangesArgNew(thisMatch->hspcnt);
+            arg->oid = oid;
+            
+            BlastHSPRangeBuildSetRangesArg(range_list, arg);
+            BlastSeqSrcSetSeqRanges(seqSrc, arg);
+            BlastHSPRangeListFree(range_list);
+            BlastSeqSrcSetRangesArgFree(arg);
+        }
+
         status_code =
             s_MatchingSequenceInitialize(&matchingSeq, program_number,
                                          seqSrc, default_db_genetic_code,

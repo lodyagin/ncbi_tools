@@ -1,4 +1,4 @@
-/* $Id: ncbi_util.c,v 6.64 2010/05/29 01:14:46 kazimird Exp $
+/* $Id: ncbi_util.c,v 6.72 2011/05/05 21:04:50 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -144,7 +144,7 @@ extern int/*bool*/ CORE_SetLOGFILE_NAME_Ex
 {
     FILE* fp = fopen(filename, "a");
     if (!fp) {
-        CORE_LOGF_ERRNO_X(9, eLOG_Error, errno,
+        CORE_LOGF_ERRNO_X(1, eLOG_Error, errno,
                           ("Cannot open \"%s\"", filename));
         return 0/*false*/;
     }
@@ -294,6 +294,7 @@ extern const char* NcbiMessagePlusError
     char*  buf;
     size_t mlen;
     size_t dlen;
+    int/*bool*/ release = 0/*false*/;
 
     /* Check for an empty addition */
     if (!error  &&  (!descr  ||  !*descr)) {
@@ -304,9 +305,17 @@ extern const char* NcbiMessagePlusError
     }
 
     /* Adjust description, if necessary and possible */
-    if (error  &&  !descr) {
-        if (error < 0  ||  !(descr = strerror(error)))
-            descr = "";
+    
+    if (error >=0  &&  !descr) {
+#if defined(NCBI_OS_MSWIN)  &&  defined(_UNICODE)
+        descr = UTIL_TcharToUtf8( _wcserror(error) );
+        release = 1/*true*/;
+#else
+        descr = strerror(error);
+#endif
+    }
+    if (!descr) {
+        descr = "";
     }
     dlen = strlen(descr);
     while (dlen  &&  isspace((unsigned char) descr[dlen - 1]))
@@ -322,6 +331,8 @@ extern const char* NcbiMessagePlusError
         if (*dynamic  &&  message)
             free((void*) message);
         *dynamic = 0;
+        if (release)
+            UTIL_ReleaseBuffer(descr);
         return "Ouch! Out of memory";
     }
 
@@ -337,6 +348,8 @@ extern const char* NcbiMessagePlusError
         mlen += sprintf(buf + mlen, "%d%s", error, "," + !*descr);
 
     memcpy((char*) memcpy(buf + mlen, descr, dlen) + dlen, "}", 2);
+    if (release)
+        UTIL_ReleaseBuffer(descr);
 
     *dynamic = 1/*true*/;
     return buf;
@@ -365,12 +378,8 @@ extern char* LOG_ComposeMessage
     size_t total_len;
 
     /* Adjust formatting flags */
-    if (call_data->level == eLOG_Trace) {
-#if defined(NDEBUG)  &&  !defined(_DEBUG)
-        if (!(format_flags & fLOG_None))
-#endif /*NDEBUG && !_DEBUG*/
-            format_flags |= fLOG_Full;
-    }
+    if (call_data->level == eLOG_Trace  &&  !(format_flags & fLOG_None))
+        format_flags |= fLOG_Full;
     if (format_flags == fLOG_Default) {
 #if defined(NDEBUG)  &&  !defined(_DEBUG)
         format_flags = fLOG_Short;
@@ -597,6 +606,19 @@ extern const char* CORE_GetPlatform(void)
 
 
 
+/******************************************************************************
+ *  CORE_GetAppName
+ */
+
+char g_CORE_AppName[NCBI_CORE_APPNAME_MAXLEN + 1];
+
+extern const char* CORE_GetAppName(void)
+{
+    return *g_CORE_AppName ? g_CORE_AppName : 0;
+}
+
+
+
 /****************************************************************************
  * CORE_GetUsername
  */
@@ -620,8 +642,8 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
     char pwdbuf[1024];
 #  endif
 #elif defined(NCBI_OS_MSWIN)
-    char  loginbuf[256 + 1];
-    DWORD loginbufsize = sizeof(loginbuf) - 1;
+    TCHAR  loginbuf[256 + 1];
+    DWORD loginbufsize = sizeof(loginbuf)/sizeof(TCHAR) - 1;
 #endif
     const char* login;
 
@@ -631,9 +653,11 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
 
 #  ifdef NCBI_OS_MSWIN
     if (GetUserName(loginbuf, &loginbufsize)) {
-        assert(loginbufsize < sizeof(loginbuf));
-        loginbuf[loginbufsize] = '\0';
-        strncpy0(buf, loginbuf, bufsize - 1);
+        assert(loginbufsize < sizeof(loginbuf)/sizeof(TCHAR));
+        loginbuf[loginbufsize] = (TCHAR)0;
+        login = UTIL_TcharToUtf8(loginbuf);
+        strncpy0(buf, login, bufsize - 1);
+        UTIL_ReleaseBuffer(login);
         return buf;
     }
     if ((login = getenv("USERNAME")) != 0) {
@@ -1008,3 +1032,64 @@ extern char* UTIL_NcbiLocalHostName(char* hostname)
     }
     return 0;
 }
+
+
+#ifdef NCBI_OS_MSWIN
+
+
+#  ifdef _UNICODE
+
+extern const char* UTIL_TcharToUtf8OnHeap(const TCHAR* buffer)
+{
+    const char* p = UTIL_TcharToUtf8(buffer);
+    UTIL_ReleaseBufferOnHeap(buffer);
+    return p;
+}
+
+
+extern const char* UTIL_TcharToUtf8(const TCHAR* buffer)
+{
+    char* p = NULL;
+    if (buffer) {
+        int n = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, NULL,
+                                    0, NULL, NULL);
+        if (n >= 0) {
+            p = (char*) LocalAlloc(LMEM_FIXED, (n + 1) * sizeof(char));
+            if (p) {
+                WideCharToMultiByte(CP_UTF8, 0, buffer, -1, p,
+                                    n, NULL, NULL);
+                p[n] = '\0';
+            }
+        }
+    }
+    return p;
+}
+
+
+extern const TCHAR* UTIL_Utf8ToTchar(const char* buffer)
+{
+    TCHAR* p = NULL;
+    if (buffer) {
+        int n = MultiByteToWideChar(CP_UTF8, 0, buffer, -1, NULL, 0);
+        if (n >= 0) {
+            p = (wchar_t*) LocalAlloc(LMEM_FIXED, (n + 1) * sizeof(wchar_t));
+            if (p) {
+                MultiByteToWideChar(CP_UTF8, 0, buffer, -1, p,    n);
+                p[n] = 0;
+            }
+        }
+    }
+    return p;
+}
+
+#  endif /*_UNICODE*/
+
+
+extern void UTIL_ReleaseBufferOnHeap(const void* buffer)
+{
+    if (buffer)
+        LocalFree((HLOCAL) buffer);
+}
+
+
+#endif /*NCBI_OS_MSWIN*/

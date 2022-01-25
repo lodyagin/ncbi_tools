@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_service.c,v $  $Revision: 6.26 $  $Date: 2006/04/21 14:36:35 $
+/*  $RCSfile: ni_service.c,v $  $Revision: 6.27 $  $Date: 2010/10/16 21:43:10 $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ni_service.c,v $
+ * Revision 6.27  2010/10/16 21:43:10  lavr
+ * Adjust timeout set sequence
+ *
  * Revision 6.26  2006/04/21 14:36:35  lavr
  * Debug printout data to trigger on 'ALL'
  *
@@ -261,14 +264,14 @@ static NI_HandPtr s_GenericGetService
                    str, sizeof(str), "");
     if (*str) {
         if (strlen(str) > 2 && StringNICmp(str, "infinite", strlen(str)) == 0){
-            net_info->timeout = 0;
+            net_info->timeout = kInfiniteTimeout/*0*/;
         } else {
-            net_info->timeout = &net_info->tmo;
             if ((valf = atof(str)) < 0.0)
                 valf = DEF_CONN_TIMEOUT;
-            net_info->timeout->sec  = (unsigned int) valf;
-            net_info->timeout->usec = (unsigned int)
-                ((valf - net_info->timeout->sec) * 1000000);
+            net_info->tmo.sec  = (unsigned int) valf;
+            net_info->tmo.usec = (unsigned int)
+                ((valf - net_info->tmo.sec) * 1000000);
+            net_info->timeout = &net_info->tmo;
         }
     }
 

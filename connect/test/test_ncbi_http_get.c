@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_http_get.c,v 6.26 2010/06/08 15:14:44 kazimird Exp $
+/* $Id: test_ncbi_http_get.c,v 6.27 2011/06/10 03:39:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
     ConnNetInfo_GetValue(0, "RECONNECT", blk, 32, "");
     if (ConnNetInfo_Boolean(blk)) {
         CORE_LOG(eLOG_Note, "Reconnect mode acknowledged");
-        flags = fHCC_AutoReconnect;
+        flags = fHTTP_AutoReconnect;
     } else
         flags = 0;
 

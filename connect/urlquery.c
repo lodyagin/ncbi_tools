@@ -1,4 +1,4 @@
-/* $Id: urlquery.c,v 6.49 2009/09/24 14:58:19 lavr Exp $
+/* $Id: urlquery.c,v 6.60 2011/06/23 20:52:19 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,153 +29,12 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.49 $
+ * $Revision: 6.60 $
  *
  * File Description: 
  *
  * Modifications:  
  * --------------------------------------------------------------------------
- * $Log: urlquery.c,v $
- * Revision 6.49  2009/09/24 14:58:19  lavr
- * Fix timeout comparison bug
- *
- * Revision 6.48  2009/09/22 13:46:33  lavr
- * Speedup queue insertion
- *
- * Revision 6.47  2009/09/21 20:38:30  lavr
- * Properly treat timeout settings
- *
- * Revision 6.46  2009/09/18 19:58:40  lavr
- * +QUERY_QueueSize()
- *
- * Revision 6.45  2009/09/12 01:28:49  lavr
- * Correct comment in setting HTTP header
- *
- * Revision 6.44  2009/08/14 19:02:44  lavr
- * x_SetupUserHeader() to override C-T only and to extend User-Agent
- *
- * Revision 6.43  2009/08/14 18:14:43  lavr
- * Formatting
- *
- * Revision 6.42  2009/08/14 18:04:53  lavr
- * StringHasText->StringDoesHaveText
- *
- * Revision 6.41  2009/08/14 18:02:24  lavr
- * Use GetProgramName() when setting HTTP user-header
- *
- * Revision 6.40  2006/10/17 02:19:07  lavr
- * Use "const char*" wherever appropriate
- *
- * Revision 6.39  2006/04/19 02:11:23  lavr
- * QUERY_OpenServiceQuery: Use PostOverrideArg instead of AppendArg
- *
- * Revision 6.38  2006/04/19 01:41:52  lavr
- * QUERY_OpenServiceQuery(): Take advantage of ConnNetInfo_*Arg API
- *
- * Revision 6.37  2006/04/17 16:47:50  lavr
- * QUERY_OpenServiceQueryEx not to override but append argument in net_info
- *
- * Revision 6.36  2006/04/15 01:59:01  lavr
- * +QUERY_OpenServiceQueryEx
- *
- * Revision 6.35  2006/01/19 21:11:15  lavr
- * QUERY_SendQuery() to return EIO_Status
- *
- * Revision 6.34  2006/01/17 21:11:51  lavr
- * Formatting; a few minor code improvements; a few minor bugfixes
- *
- * Revision 6.33  2005/12/01 18:47:49  lavr
- * Code formatting
- *
- * Revision 6.32  2004/09/16 19:16:45  lavr
- * QUERY_OpenUrlQuery() to set port only if provided as non-zero
- *
- * Revision 6.31  2004/09/14 19:09:41  lavr
- * Correct last change log entry
- *
- * Revision 6.30  2004/09/14 18:52:12  kans
- * QUERY_OpenUrlQuery makes content type only if type < eMIME_T_Unknown
- *
- * Revision 6.29  2004/09/14 18:47:51  kans
- * QUERY_OpenUrlQuery looks for eMIME_T_Unknown, does not compost content type
- *
- * Revision 6.28  2004/02/23 15:30:02  lavr
- * New (last) parameter "how" added in CONN_Write() API call
- *
- * Revision 6.27  2003/10/21 18:27:43  lavr
- * QUERY_OpenServiceQuery(): Timeout override changed
- *
- * Revision 6.26  2003/09/03 21:15:29  lavr
- * Reuse "arguments" in QUERY_OpenServiceQuery() to be real service argument
- * (formely it was to modify the dispatcher and was not really used anywhere)
- *
- * Revision 6.25  2003/05/29 21:54:20  kans
- * QUERY_CheckQueue calls callback and dequeues connection if status is
- * eIO_Closed as well as eIO_Success  - callbacks already check status
- * before trying to read
- *
- * Revision 6.24  2003/05/29 19:02:56  kans
- * badstatus only used for future debugging purposes, does not block further
- * checks, also increments count of remaining queued connections for return
- * value
- *
- * Revision 6.23  2003/05/29 18:39:54  kans
- * QUERY_CheckQueue sets new badstatus field, protects against further checks,
- * if eIO_Timeout or eIO_Closed
- *
- * Revision 6.22  2002/11/21 20:35:41  kans
- * forgot to call ConnNetInfo_Destroy if bailing due to NULL connector
- *
- * Revision 6.21  2002/11/21 19:46:32  kans
- * if connector is NULL, do not call CONN_Create
- *
- * Revision 6.20  2002/08/07 18:45:17  lavr
- * Change from deprecated to current EIO_ReadMethod enums
- *
- * Revision 6.19  2002/07/02 17:17:58  kans
- * fixed error message
- *
- * Revision 6.18  2001/09/25 13:20:56  lavr
- * SERVICE_CreateConnectorEx() - number of args adjusted
- *
- * Revision 6.17  2001/08/16 18:07:04  kans
- * protect against calling CONN_Read or CONN_Write with NULL conn parameter
- *
- * Revision 6.16  2001/06/07 20:17:34  kans
- * in QUERY_OpenServiceQuery, pass service to ConnNetInfo_Create
- *
- * Revision 6.15  2001/06/07 20:07:41  kans
- * added QUERY_OpenServiceQuery
- *
- * Revision 6.14  2001/04/25 15:14:27  lavr
- * SConnNetInfo::timeout is now a pointer
- *
- * Revision 6.13  2001/02/25 21:42:27  kans
- * changed several Uint4s to size_t due to new prototypes
- *
- * Revision 6.12  2001/02/21 22:02:04  lavr
- * Changes for use new CONN interface
- *
- * Revision 6.11  2000/08/18 19:08:58  kans
- * added QUERY_WaitForNextMacEvent, otherwise QuickDraw collides with mmdbapi
- *
- * Revision 6.10  2000/06/30 18:16:09  kans
- * protect against reentrant calls if resultproc is GUI and processes timer -
- * showed up on PC/Windows, not Mac or UNIX version of Sequin
- *
- * Revision 6.9  2000/06/30 12:46:10  kans
- * added QUERY_CloseQueue
- *
- * Revision 6.8  2000/06/29 18:27:10  kans
- * QUERY_OpenUrlQuery has new EMIME_Type type and EMIME_Encoding
- * encoding parameters
- *
- * Revision 6.7  2000/06/13 12:58:14  kans
- * added closeConn parameter to QUERY_AddToQueue
- *
- * Revision 6.6  1999/07/28 21:09:15  vakatov
- * Multiple fixes in QUERY_OpenUrlQuery() to make it work with a generic
- * URL server;  also, pass arguments in the cmd.-line
  *
  * ==========================================================================
  */
@@ -245,7 +104,7 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   EMIME_Type      type,
   EMIME_SubType   subtype,
   EMIME_Encoding  encoding,
-  THCC_Flags      flags
+  THTTP_Flags     flags
 )
 {
   CONN           conn;
@@ -274,11 +133,11 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   }
 
   if (timeoutsec == (Nlm_Uint4)(-1L)) {
-    net_info->timeout       = 0;
+    net_info->timeout  = kInfiniteTimeout;
   } else if ( timeoutsec ) {
-    net_info->timeout       = &net_info->tmo;
-    net_info->timeout->sec  = timeoutsec;
-    net_info->timeout->usec = 0;
+    net_info->tmo.sec  = timeoutsec;
+    net_info->tmo.usec = 0;
+    net_info->timeout  = &net_info->tmo;
   }
 
   connector = HTTP_CreateConnector (net_info, NULL, flags);
@@ -320,11 +179,11 @@ NLM_EXTERN CONN QUERY_OpenServiceQueryEx (
                      NULL, eMIME_T_Unknown, eMIME_Unknown, eENCOD_None);
 
   if (timeoutsec == (Nlm_Uint4)(-1L)) {
-    net_info->timeout       = 0;
+    net_info->timeout  = kInfiniteTimeout;
   } else if ( timeoutsec ) {
-    net_info->timeout       = &net_info->tmo;
-    net_info->timeout->sec  = timeoutsec;
-    net_info->timeout->usec = 0;
+    net_info->tmo.sec  = timeoutsec;
+    net_info->tmo.usec = 0;
+    net_info->timeout  = &net_info->tmo;
   }
 
   ConnNetInfo_PostOverrideArg (net_info, arguments, 0);
@@ -387,22 +246,17 @@ NLM_EXTERN void QUERY_CopyFileToQuery (
   FILE *fp
 )
 {
-  char*        buffer;
+  Char         buffer [URL_QUERY_BUFLEN + 4];
   size_t       ct;
   size_t       n_written;
   EIO_Status   status;
 
   if (conn == NULL || fp == NULL) return;
 
-  buffer = (char*) MemNew(URL_QUERY_BUFLEN + 1);
-  if (buffer != NULL) {
-    while ((ct = FileRead (buffer, 1, URL_QUERY_BUFLEN, fp)) > 0) {
-      status = CONN_Write (conn, (const void *) buffer, ct,
-                           &n_written, eIO_WritePersist);
-      if (status != eIO_Success)
-        break;
-    }
-    MemFree (buffer);
+  while ((ct = FileRead (buffer, 1, URL_QUERY_BUFLEN, fp)) > 0) {
+    status = CONN_Write (conn, (const void *) buffer, ct,
+                         &n_written, eIO_WritePersist);
+    if (status != eIO_Success) break;
   }
 }
 
@@ -412,21 +266,52 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
   FILE *fp
 )
 {
-  char*        buffer;
+  Char         buffer [URL_QUERY_BUFLEN + 4];
   size_t       n_read;
   EIO_Status   status;
 
   if (conn == NULL || fp == NULL) return;
 
-  buffer = (char*) MemNew(URL_QUERY_BUFLEN + 1);
-  if (buffer != NULL) {
-    do {
-      status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read, eIO_ReadPlain);
-      if ( n_read )
-        FileWrite (buffer, 1, n_read, fp);
-    } while (status == eIO_Success);
-    MemFree (buffer);
-  }
+  do {
+    status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read, eIO_ReadPlain);
+    if ( n_read ) {
+      FileWrite (buffer, 1, n_read, fp);
+    }
+  } while (status == eIO_Success);
+}
+
+
+NLM_EXTERN CharPtr QUERY_CopyResultsToString (
+  CONN conn
+)
+
+{
+  Char        buffer [URL_QUERY_BUFLEN + 4];
+  ValNodePtr  head = NULL, last = NULL, vnp;
+  size_t      n_read;
+  EIO_Status  status;
+  CharPtr     str;
+
+  if (conn == NULL) return NULL;
+
+  do {
+    status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read, eIO_ReadPlain);
+    if ( n_read ) {
+      buffer [n_read] = '\0';
+      vnp = ValNodeCopyStr (&last, 0, buffer);
+      if (head == NULL) {
+        head = vnp;
+      }
+      last = vnp;
+    }
+  } while (status == eIO_Success);
+
+  if (head == NULL) return NULL;
+
+  str = ValNodeMergeStrs (head);
+  ValNodeFreeData (head);
+
+  return str;
 }
 
 
@@ -658,3 +543,127 @@ NLM_EXTERN void QUERY_CloseQueue (
     curr = next;
   }
 }
+
+static CONN QUERY_SendSimpleUrlQuery (
+  CharPtr machine,
+  Uint2 port,
+  CharPtr path,
+  CharPtr prefix,
+  CharPtr arguments,
+  CharPtr suffix,
+  CharPtr post
+)
+
+{
+  Char     ch;
+  CONN     conn;
+  size_t   len;
+  size_t   n_written;
+  CharPtr  ptr;
+  CharPtr  query = NULL;
+
+  len = StringLen (prefix) + StringLen (arguments) + StringLen (suffix);
+  if (len > 0) {
+    query = (CharPtr) MemNew (len + 2);
+    if (query != NULL) {
+      StringCpy (query, prefix);
+      StringCat (query, arguments);
+      StringCat (query, suffix);
+      ptr = query;
+      ch = *ptr;
+      while (ch != '\0') {
+        if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+          *ptr = '+';
+        }
+        ptr++;
+        ch = *ptr;
+      }
+    }
+  }
+
+  conn = QUERY_OpenUrlQuery (machine, port, path, query, NULL,
+                             30, eMIME_T_Text, eMIME_Xml, eENCOD_Url,
+                             fHTTP_SureFlush | /* fHTTP_UrlDecodeInput | */ fHTTP_UrlEncodeOutput);
+
+  MemFree (query);
+  if (conn == NULL) return NULL;
+
+  if (StringDoesHaveText (post)) {
+    CONN_Write (conn, (const void *) post, StringLen (post), &n_written, eIO_WritePersist);
+  }
+
+  QUERY_SendQuery (conn);
+
+  return conn;
+}
+
+NLM_EXTERN CharPtr QUERY_UrlSynchronousQuery (
+  CharPtr machine,
+  Uint2 port,
+  CharPtr path,
+  CharPtr prefix,
+  CharPtr arguments,
+  CharPtr suffix,
+  CharPtr post
+)
+
+{
+  CONN        conn;
+  time_t      currtime, starttime, max = 0;
+  EIO_Status  status;
+  CharPtr     str = NULL;
+  STimeout    timeout;
+
+  conn = QUERY_SendSimpleUrlQuery (machine, port, path, prefix, arguments, suffix, post);
+
+  if (conn == NULL) return NULL;
+
+#ifdef OS_MAC 
+  timeout.sec = 0;
+  timeout.usec = 0;
+#else
+  timeout.sec = 100;
+  timeout.usec = 0;
+#endif
+
+
+  starttime = GetSecs ();
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
+    currtime = GetSecs ();
+    max = currtime - starttime;
+  }
+
+  if (status == eIO_Success) {
+    str = QUERY_CopyResultsToString (conn);
+  }
+
+  CONN_Close (conn);
+
+  return str;
+}
+
+NLM_EXTERN Boolean QUERY_UrlAsynchronousQuery (
+  CharPtr machine,
+  Uint2 port,
+  CharPtr path,
+  CharPtr prefix,
+  CharPtr arguments,
+  CharPtr suffix,
+  CharPtr post,
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+)
+
+{
+  CONN  conn;
+
+  conn = QUERY_SendSimpleUrlQuery (machine, port, path, prefix, arguments, suffix, post);
+
+  if (conn == NULL) return FALSE;
+
+  QUERY_AddToQueue (queue, conn, resultproc, userdata, TRUE);
+
+  return TRUE;
+}
+

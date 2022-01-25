@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.1388 $
+* $Revision: 6.1533 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -70,6 +70,10 @@ static char    *this_file = __FILE__;
 #include <macroapi.h>
 #include <objvalid.h>
 #include <valapi.h>
+#include "ecnum_specific.inc"
+#include "ecnum_ambiguous.inc"
+#include "ecnum_deleted.inc"
+#include "ecnum_replaced.inc"
 
 /*****************************************************************************
 *
@@ -121,6 +125,24 @@ static Boolean ECnumberWasDeleted (CharPtr str);
 static Boolean ECnumberWasReplaced (CharPtr str);
 static void ValidateCitSub (ValidStructPtr vsp, CitSubPtr csp);
 
+static Boolean HasFeatId(SeqFeatPtr sfp, Int4 num)
+{
+  Boolean rval = FALSE;
+  ObjectIdPtr oip;
+
+  if (sfp == NULL) {
+    return FALSE;
+  }
+  if (sfp->id.choice == 3) {
+    oip = (ObjectIdPtr) sfp->id.value.ptrvalue;
+    if (oip->id == num) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
 /* alignment validator */
 NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntryPtr sep, Boolean find_remote_bsp, Boolean do_hist_assembly);
 
@@ -161,6 +183,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   Boolean         strictLatLonCountry;
   Boolean         rubiscoTest;
   Boolean         indexerVersion;
+  Boolean         disableSuppression;
   Int2            validationLimit;
   ValidErrorFunc  errfunc;
   Pointer         userdata;
@@ -174,6 +197,8 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   Boolean         is_gpipe_in_sep;
   Boolean         is_gps_in_sep;
   Boolean         is_embl_ddbj_in_sep;
+  Boolean         is_old_gb_in_sep;
+  Boolean         is_patent_in_sep;
   Boolean         other_sets_in_sep;
   Boolean         is_insd_in_sep;
   Boolean         only_lcl_gnl_in_sep;
@@ -182,6 +207,8 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   Boolean         is_smupd_in_sep;
   Boolean         feat_loc_has_gi;
   Boolean         feat_prod_has_gi;
+  Boolean         has_multi_int_genes;
+  Boolean         has_seg_bioseqs;
   Boolean         far_fetch_failure;
 
   if (vsp == NULL)
@@ -214,6 +241,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   strictLatLonCountry = vsp->strictLatLonCountry;
   rubiscoTest = vsp->rubiscoTest;
   indexerVersion = vsp->indexerVersion;
+  disableSuppression = vsp->disableSuppression;
   validationLimit = vsp->validationLimit;
   errfunc = vsp->errfunc;
   userdata = vsp->userdata;
@@ -228,6 +256,8 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   is_gps_in_sep = vsp->is_gps_in_sep;
   other_sets_in_sep = vsp->other_sets_in_sep;
   is_embl_ddbj_in_sep = vsp->is_embl_ddbj_in_sep;
+  is_old_gb_in_sep = vsp->is_old_gb_in_sep;
+  is_patent_in_sep = vsp->is_patent_in_sep;
   is_insd_in_sep = vsp->is_insd_in_sep;
   only_lcl_gnl_in_sep = vsp->only_lcl_gnl_in_sep;
   has_gnl_prot_sep = vsp->has_gnl_prot_sep;
@@ -235,6 +265,8 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   is_smupd_in_sep = vsp->is_smupd_in_sep;
   feat_loc_has_gi = vsp->feat_loc_has_gi;
   feat_prod_has_gi = vsp->feat_prod_has_gi;
+  has_multi_int_genes = vsp->has_multi_int_genes;
+  has_seg_bioseqs = vsp->has_seg_bioseqs;
   far_fetch_failure = vsp->far_fetch_failure;
   MemSet ((VoidPtr) vsp, 0, sizeof (ValidStruct));
   vsp->errbuf = errbuf;
@@ -264,6 +296,7 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   vsp->strictLatLonCountry = strictLatLonCountry;
   vsp->rubiscoTest = rubiscoTest;
   vsp->indexerVersion = indexerVersion;
+  vsp->disableSuppression = disableSuppression;
   vsp->validationLimit = validationLimit;
   vsp->errfunc = errfunc;
   vsp->userdata = userdata;
@@ -278,6 +311,8 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   vsp->is_gps_in_sep = is_gps_in_sep;
   vsp->other_sets_in_sep = other_sets_in_sep;
   vsp->is_embl_ddbj_in_sep = is_embl_ddbj_in_sep;
+  vsp->is_old_gb_in_sep = is_old_gb_in_sep;
+  vsp->is_patent_in_sep = is_patent_in_sep;
   vsp->is_insd_in_sep = is_insd_in_sep;
   vsp->only_lcl_gnl_in_sep = only_lcl_gnl_in_sep;
   vsp->has_gnl_prot_sep = has_gnl_prot_sep;
@@ -285,6 +320,8 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   vsp->is_smupd_in_sep = is_smupd_in_sep;
   vsp->feat_loc_has_gi = feat_loc_has_gi;
   vsp->feat_prod_has_gi = feat_prod_has_gi;
+  vsp->has_multi_int_genes = has_multi_int_genes;
+  vsp->has_seg_bioseqs = has_seg_bioseqs;
   vsp->far_fetch_failure = far_fetch_failure;
   return;
 }
@@ -571,7 +608,8 @@ static CharPtr err1Label [] = {
   "SeqLitDataLength0",
   "DSmRNA",
   "HighNContentStretch",
-  "HighNContentPercent"
+  "HighNContentPercent",
+  "BadSegmentedSeq"
 };
 
 static CharPtr err2Label [] = {
@@ -651,7 +689,12 @@ static CharPtr err2Label [] = {
   "BadStrucCommMultipleFields",
   "BioSourceNeedsChromosome",
   "MolInfoConflictsWithBioSource",
-  "MissingKeyword"
+  "MissingKeyword",
+  "FakeStructuredComment",
+  "StructuredCommentPrefixOrSuffixMissing",
+  "LatLonWater",
+  "LatLonOffshore",
+  "MissingPersonalCollectionName"
 };
 
 static CharPtr err3Label [] = {
@@ -701,7 +744,9 @@ static CharPtr err4Label [] = {
   "MissingSetTitle",
   "NucProtSetHasTitle",
   "ComponentMissingTitle",
-  "SingleItemSet"
+  "SingleItemSet",
+  "MisplacedMolInfo",
+  "ImproperlyNestedSets"
 };
 
 static CharPtr err5Label [] = {
@@ -881,7 +926,11 @@ static CharPtr err5Label [] = {
   "ShortIntron",
   "GeneXrefStrandProblem",
   "CDSmRNAXrefLocationProblem",
-  "LocusCollidesWithLocusTag"
+  "LocusCollidesWithLocusTag",
+  "IdenticalGeneSymbolAndSynonym",
+  "NeedsNote",
+  "RptUnitRangeProblem",
+  "TooManyInferenceAccessions"
 };
 
 static CharPtr err6Label [] = {
@@ -1142,6 +1191,13 @@ static void CustValErr (ValidStructPtr vsp, ErrSev severity, int errcode, int su
   } else if (vsp->descr != NULL) {
     label = tmp;
     diff = SeqDescLabel (vsp->descr, tmp, wrklen, OM_LABEL_BOTH);
+
+    if (diff > 100 && vsp->descr->choice == Seq_descr_comment && errcode == 2 && subcode == 77) {
+      diff = 100;
+      *(tmp + diff - 3) = '.';
+      *(tmp + diff - 2) = '.';
+      *(tmp + diff - 1) = '.';
+    }
     buflen -= diff;
     tmp += diff;
     *tmp = '\0';
@@ -1296,6 +1352,229 @@ static void CustValErr (ValidStructPtr vsp, ErrSev severity, int errcode, int su
               featureID, message, objtype, label, context, location, product, vsp->userdata);
 }
 
+
+/* framework for suppressing validator errors using a list-based strategy */
+typedef Boolean (*ValidErrSuppressFunc) PROTO ((ValidStructPtr));
+
+static Boolean IsGenomicPipeline (ValidStructPtr vsp)
+{
+  if (vsp == NULL) {
+    return FALSE;
+  } else if (vsp->bsp_genomic_in_sep && vsp->is_gpipe_in_sep) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Boolean IsUnclassifiedExcept (ValidStructPtr vsp)
+{
+  Boolean rval = FALSE;
+  if (vsp == NULL || vsp->sfp == NULL) {
+    return FALSE;
+  }
+  if (vsp->sfp->excpt && (! vsp->ignoreExceptions)) {
+    if (vsp->sfp->data.choice == SEQFEAT_CDREGION) {
+      if (StringStr (vsp->sfp->except_text, "unclassified translation discrepancy") != NULL) {
+        rval = TRUE;
+      }
+    } else if (vsp->sfp->idx.subtype == FEATDEF_mRNA) {
+      if (StringStr (vsp->sfp->except_text, "unclassified transcription discrepancy") != NULL) {
+        rval = TRUE;
+      }
+    }
+  }
+  return rval;
+}
+
+
+static Boolean IsNotUnclassifiedExcept (ValidStructPtr vsp)
+{
+  return !IsUnclassifiedExcept(vsp);
+}
+
+
+static Boolean IsUnclassifedExceptAndGenomicPipeline (ValidStructPtr vsp)
+{
+  if (IsGenomicPipeline(vsp) && IsUnclassifiedExcept(vsp)) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Boolean NonconsensusExcept (ValidStructPtr vsp)
+{
+  Boolean rval = FALSE;
+  if (vsp == NULL || vsp->sfp == NULL) {
+    return FALSE;
+  }
+  if (vsp->sfp->excpt && (! vsp->ignoreExceptions)) {
+    if (StringISearch (vsp->sfp->except_text, "nonconsensus splice site") != NULL ||
+        StringISearch (vsp->sfp->except_text, "heterogeneous population sequenced") != NULL ||
+        StringISearch (vsp->sfp->except_text, "low-quality sequence region") != NULL ||
+        StringISearch (vsp->sfp->except_text, "artificial location") != NULL) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+typedef struct validerrsuppression {
+  int code1;
+  int code2;
+  CharPtr search_phrase;
+  CharPtr exclude_phrase;
+  ValidErrSuppressFunc func;
+} ValidErrSuppressionData, PNTR ValidErrSuppressionPtr;
+
+static ValidErrSuppressionData valid_suppress[] = {
+  {ERR_SEQ_FEAT_PartialProblem, "When SeqFeat.product is a partial Bioseq, SeqFeat.location should also be partial", NULL, IsGenomicPipeline },
+  {ERR_SEQ_FEAT_PartialProblem, "End of location should probably be partial", NULL, IsGenomicPipeline},
+  {ERR_SEQ_FEAT_PartialProblem, "This SeqFeat should not be partial", NULL, IsGenomicPipeline},
+  {ERR_SEQ_FEAT_PartialProblem, "AND is not at consensus splice site", NULL, IsGenomicPipeline},
+  {ERR_SEQ_FEAT_PartialProblem, "PartialLocation: Internal partial intervals do not include first/last residue of sequence", NULL, IsGenomicPipeline},
+  {ERR_SEQ_FEAT_PartialProblem, "AND is not at consensus splice site", NULL, NonconsensusExcept},
+  {ERR_SEQ_FEAT_PartialProblem, "(but is at consensus splice site)", NULL, IsGenomicPipeline},
+  {ERR_SEQ_FEAT_PartialProblem, "PartialLocation: Start does not include first/last residue of sequence", NULL, IsGenomicPipeline},
+  {ERR_SEQ_FEAT_PartialProblem, "PartialLocation: Stop does not include first/last residue of sequence", NULL, IsGenomicPipeline},
+  {ERR_SEQ_FEAT_PartialsInconsistent, NULL, NULL, IsGenomicPipeline },
+  {ERR_SEQ_FEAT_PolyATail, NULL, NULL, IsGenomicPipeline },
+  {ERR_SEQ_FEAT_InternalStop, NULL, NULL, IsUnclassifedExceptAndGenomicPipeline},
+  {ERR_SEQ_FEAT_StartCodon , NULL, NULL, IsUnclassifiedExcept}
+
+};
+
+const Int4 kNumSuppressionRules = sizeof (valid_suppress) / sizeof (ValidErrSuppressionData);
+
+static Boolean ShouldSuppressValidErr (ValidStructPtr vsp, int code1, int code2, const char *fmt)
+{
+  Int4 i;
+  Boolean rval = FALSE;
+
+  if (vsp->disableSuppression) return FALSE;
+
+  for (i = 0; i < kNumSuppressionRules && !rval; i++) {
+    if (code1 == valid_suppress[i].code1 && code2 == valid_suppress[i].code2
+        && (valid_suppress[i].search_phrase == NULL || StringISearch (fmt, valid_suppress[i].search_phrase) != NULL)
+        && (valid_suppress[i].func == NULL || valid_suppress[i].func(vsp))
+        && (valid_suppress[i].exclude_phrase == NULL || StringISearch (fmt, valid_suppress[i].exclude_phrase) == NULL)) {
+      rval = TRUE;
+    }
+  }
+
+  return rval;
+}
+
+
+/* framework for changing validator warnings using a list-based strategy */
+typedef int (*ValidErrSevChangeFunc) PROTO ((int, ValidStructPtr));
+
+typedef struct validerrsevchange {
+  int code1;
+  int code2;
+  CharPtr search_phrase;
+  CharPtr exclude_phrase;
+  ValidErrSevChangeFunc func;
+} ValidErrSevChangeData, PNTR ValidErrSevChangePtr;
+
+
+static int LowerToInfoForGenomic (int severity, ValidStructPtr vsp)
+{
+  if (IsGenomicPipeline(vsp)) {
+    return SEV_INFO;
+  } else {
+    return severity;
+  }
+}
+
+
+static int WarnForGPSOrRefSeq (int severity, ValidStructPtr vsp)
+{
+  Boolean         gpsOrRefSeq = FALSE;
+  SeqEntryPtr     sep;
+  SeqFeatPtr      sfp;
+  BioseqSetPtr    bssp;
+  SeqLocPtr       head, slp = NULL, nxt;
+  SeqIdPtr        sip, id;
+  BioseqPtr       bsp;
+  TextSeqIdPtr    tsip;
+
+  sep = vsp->sep;
+  if (sep != NULL && IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
+      gpsOrRefSeq = TRUE;
+    }
+  }
+
+  if (!gpsOrRefSeq) {
+    sfp = vsp->sfp;
+    head = sfp->location;
+    slp = SeqLocFindPart (head, slp, EQUIV_IS_ONE);
+    while (slp != NULL && !gpsOrRefSeq) {
+      sip = SeqLocId (slp);
+      if (sip == NULL)
+        break;
+      nxt = SeqLocFindPart (head, slp, EQUIV_IS_ONE);
+
+      /* genomic product set or NT_ contig always relaxes to SEV_WARNING */
+      bsp = BioseqFind (sip);
+      if (bsp != NULL) {
+        for (id = bsp->id; id != NULL; id = id->next) {
+          if (id->choice == SEQID_OTHER) {
+            tsip = (TextSeqIdPtr) id->data.ptrvalue;
+            if (tsip != NULL && tsip->accession != NULL) {
+              gpsOrRefSeq = TRUE;
+            }
+          }
+        }
+      }
+
+      slp = nxt;
+    }
+  }
+  if (gpsOrRefSeq) {
+    if (severity > SEV_WARNING) {
+      severity = SEV_WARNING;
+    }
+  }
+  return severity;
+}
+
+
+static ValidErrSevChangeData valid_sevchange[] = {
+  {ERR_SEQ_FEAT_NotSpliceConsensusDonor, "Splice donor consensus (GT) not found at start of intron, position", NULL, LowerToInfoForGenomic},
+  {ERR_SEQ_FEAT_NotSpliceConsensusAcceptor, "Splice acceptor consensus (AG) not found at end of intron, position", NULL, LowerToInfoForGenomic},
+  {ERR_SEQ_FEAT_NotSpliceConsensusDonor, "Splice donor consensus (GT) not found after exon", NULL, LowerToInfoForGenomic},
+  {ERR_SEQ_FEAT_NotSpliceConsensusDonor, "Splice donor consensus (GT) not found after exon", NULL, WarnForGPSOrRefSeq},
+  {ERR_SEQ_FEAT_NotSpliceConsensusAcceptor, "Splice acceptor consensus (AG) not found before exon", NULL, LowerToInfoForGenomic},
+  {ERR_SEQ_FEAT_NotSpliceConsensusAcceptor, "Splice acceptor consensus (AG) not found before exon", NULL, WarnForGPSOrRefSeq},
+};
+
+const Int4 kNumSevChangeRules = sizeof (valid_sevchange) / sizeof (ValidErrSevChangeData);
+
+static int AdjustSeverity (int severity, ValidStructPtr vsp, int code1, int code2, const char *fmt)
+{
+  Int4 i;
+  int rval = severity;
+
+  for (i = 0; i < kNumSevChangeRules; i++) {
+    if (code1 == valid_sevchange[i].code1 && code2 == valid_sevchange[i].code2
+        && (valid_sevchange[i].search_phrase == NULL || StringISearch (fmt, valid_sevchange[i].search_phrase) != NULL)
+        && (valid_sevchange[i].exclude_phrase == NULL || StringISearch (fmt, valid_sevchange[i].exclude_phrase) == NULL)
+        && valid_sevchange[i].func != NULL) {
+      rval = (valid_sevchange[i].func)(rval, vsp);
+    }
+  }
+
+  return rval;
+}
+
+
 #ifdef VAR_ARGS
 NLM_EXTERN void CDECL ValidErr (vsp, severity, code1, code2, fmt, va_alist)
      ValidStructPtr vsp;
@@ -1322,8 +1601,10 @@ NLM_EXTERN void CDECL ValidErr (ValidStructPtr vsp, int severity, int code1, int
   SeqFeatPtr        sfp;
   SeqIdPtr          sip;
 
-  if (vsp == NULL || severity < vsp->cutoff)
+  if (vsp == NULL || severity < vsp->cutoff || ShouldSuppressValidErr(vsp, code1, code2, fmt))
     return;
+
+  severity = AdjustSeverity(severity, vsp, code1, code2, fmt);
 
   if (vsp->errbuf == NULL) {
     vsp->errbuf = MemNew (8192);
@@ -1491,9 +1772,27 @@ NLM_EXTERN void CDECL ValidErr (ValidStructPtr vsp, int severity, int code1, int
     buflen -= diff;
     tmp += diff;
 
-    diff = SeqDescLabel (vsp->descr, tmp, buflen, OM_LABEL_BOTH);
-    buflen -= diff;
-    tmp += diff;
+    if (vsp->descr->choice == Seq_descr_comment) {
+      diff = SeqDescLabel (vsp->descr, tmp, buflen, OM_LABEL_BOTH);
+      if (diff > 100) {
+        /* truncate long comment in message */
+        tmp [94] = ' ';
+        tmp [95] = '.';
+        tmp [96] = '.';
+        tmp [97] = '.';
+        tmp [98] = '\0';
+        diff = 98;
+        buflen -= diff;
+        tmp += diff;
+      } else {
+        buflen -= diff;
+        tmp += diff;
+      }
+    } else {
+      diff = SeqDescLabel (vsp->descr, tmp, buflen, OM_LABEL_BOTH);
+      buflen -= diff;
+      tmp += diff;
+    }
   }
 
   /*
@@ -1650,6 +1949,18 @@ static void StructuredCommentError (EFieldValid err_code, FieldRulePtr field_rul
       break;
   }
   depend_str = MemFree (depend_str);
+}
+
+
+static Boolean StringLooksLikeFakeStructuredComment (CharPtr str)
+{
+  if (StringHasNoText (str)) {
+    return FALSE;
+  }
+  if (StringSearch (str, "::") != NULL) {
+    return TRUE;
+  }
+  return FALSE;
 }
 
 
@@ -1870,6 +2181,10 @@ static Boolean Valid1GatherProc (GatherContextPtr gcp)
           if (SerialNumberInString (str)) {
             ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_SerialInComment,
                       "Comment may refer to reference by serial number - attach reference specific comments to the reference REMARK instead.");
+          }
+          if (StringLooksLikeFakeStructuredComment (str)) {
+            ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_FakeStructuredComment,
+                      "Comment may be formatted to look like a structured comment.");
           }
           for (vnp2 = sdp->next; vnp2 != NULL; vnp2 = vnp2->next) {
             if (vnp2->choice == Seq_descr_comment) {
@@ -2595,13 +2910,21 @@ static void CheckForCollidingSerials (
 static void ValidateFeatCits (SeqEntryPtr sep, ValidStructPtr vsp)
 
 {
+  SeqEntryPtr    bsep;
+  BioseqPtr      bsp = NULL;
   GatherContext  gc;
   VfcData        vfd;
 
   if (vsp == NULL || sep == NULL) return;
+
+  bsep = FindNthBioseq (sep, 1);
+  if (bsep != NULL && IS_Bioseq (bsep)) {
+    bsp = (BioseqPtr) bsep->data.ptrvalue;
+  }
+
   vsp->gcp = &gc;
   vsp->bssp = NULL;
-  vsp->bsp = NULL;
+  vsp->bsp = bsp;
   vsp->sfp = NULL;
   vsp->descr = NULL;
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
@@ -2613,7 +2936,7 @@ static void ValidateFeatCits (SeqEntryPtr sep, ValidStructPtr vsp)
   VisitFeaturesInSep (sep, (Pointer) &vfd, CheckFeatCits);
 
   vsp->bssp = NULL;
-  vsp->bsp = NULL;
+  vsp->bsp = bsp;
   vsp->sfp = NULL;
   vsp->descr = NULL;
   vfd.serial = ValNodeSort (vfd.serial, SortByIntvalue);
@@ -2625,10 +2948,12 @@ static void ValidateFeatCits (SeqEntryPtr sep, ValidStructPtr vsp)
   ValNodeFree (vfd.serial);
 }
 
-static void ValidateFeatIDs (Uint2 entityID, ValidStructPtr vsp)
+static void ValidateFeatIDs (SeqEntryPtr sep, Uint2 entityID, ValidStructPtr vsp)
 
 {
   SMFidItemPtr PNTR  array;
+ SeqEntryPtr         bsep;
+  BioseqPtr           bsp = NULL;
   BioseqExtraPtr     bspextra;
   SMFeatItemPtr      feat;
   GatherContext      gc;
@@ -2640,7 +2965,7 @@ static void ValidateFeatIDs (Uint2 entityID, ValidStructPtr vsp)
   ObjMgrDataPtr      omdp;
   SeqFeatPtr         sfp;
 
-  if (entityID < 1 || vsp == NULL) return;
+  if (sep == NULL || entityID < 1 || vsp == NULL) return;
   omdp = ObjMgrGetData (entityID);
   if (omdp == NULL) return;
   bspextra = (BioseqExtraPtr) omdp->extradata;
@@ -2649,9 +2974,14 @@ static void ValidateFeatIDs (Uint2 entityID, ValidStructPtr vsp)
   num = bspextra->numfids;
   if (array == NULL || num < 1) return;
 
+  bsep = FindNthBioseq (sep, 1);
+  if (bsep != NULL && IS_Bioseq (bsep)) {
+    bsp = (BioseqPtr) bsep->data.ptrvalue;
+  }
+
   vsp->gcp = &gc;
   vsp->bssp = NULL;
-  vsp->bsp = NULL;
+  vsp->bsp = bsp;
   vsp->sfp = NULL;
   vsp->descr = NULL;
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
@@ -2683,21 +3013,6 @@ typedef struct vsicdata {
   ValNodePtr      headid;
   ValNodePtr      tailid;
 } VsicData, PNTR VsicDataPtr;
-
-static Boolean IsNCBIFileID (SeqIdPtr sip)
-{
-  DbtagPtr dbt;
-
-  if (sip == NULL || sip->choice != SEQID_GENERAL) return FALSE;
-  dbt = (DbtagPtr) sip->data.ptrvalue;
-  if (dbt == NULL) return FALSE;
-  if (StringCmp (dbt->db, "NCBIFILE") == 0) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
 
 static void CaptureTextSeqIDs (BioseqPtr bsp, Pointer userdata)
 
@@ -2755,6 +3070,8 @@ static ValNodePtr UniqueValNodeCaseSensitive (ValNodePtr list)
 static void ValidateSeqIdCase (SeqEntryPtr sep, ValidStructPtr vsp)
 
 {
+  SeqEntryPtr       bsep;
+  BioseqPtr         bsp = NULL;
   CharPtr           curr;
   GatherContext     gc;
   GatherContextPtr  gcp;
@@ -2764,13 +3081,18 @@ static void ValidateSeqIdCase (SeqEntryPtr sep, ValidStructPtr vsp)
 
   if (vsp == NULL || sep == NULL) return;
 
+  bsep = FindNthBioseq (sep, 1);
+  if (bsep != NULL && IS_Bioseq (bsep)) {
+    bsp = (BioseqPtr) bsep->data.ptrvalue;
+  }
+
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
   MemSet ((Pointer) &vd, 0, sizeof (VsicData));
 
   gcp = &gc;
   vsp->gcp = &gc;
   vsp->bssp = NULL;
-  vsp->bsp = NULL;
+  vsp->bsp = bsp;
   vsp->sfp = NULL;
   vsp->descr = NULL;
   vd.vsp = vsp;
@@ -2806,6 +3128,7 @@ static void LookForBioseqFields (BioseqPtr bsp, Pointer userdata)
   Boolean         has_lcl_gnl = FALSE;
   Boolean         has_others = FALSE;
   SeqIdPtr        sip;
+  TextSeqIdPtr    tsip;
   ValidStructPtr  vsp;
 
   if (bsp == NULL || userdata == NULL) return;
@@ -2819,9 +3142,20 @@ static void LookForBioseqFields (BioseqPtr bsp, Pointer userdata)
       /* and fall through */
     case SEQID_GENBANK:
     case SEQID_TPG:
+      vsp->is_insd_in_sep = TRUE;
+      tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+      if (tsip != NULL) {
+        if (StringLen (tsip->accession) == 6) {
+          vsp->is_old_gb_in_sep = TRUE;
+        }
+      }
+      break;
     case SEQID_TPE:
     case SEQID_TPD:
       vsp->is_insd_in_sep = TRUE;
+      break;
+    case SEQID_PATENT:
+      vsp->is_patent_in_sep = TRUE;
       break;
     case SEQID_OTHER:
       vsp->is_refseq_in_sep = TRUE;
@@ -2870,6 +3204,7 @@ static void LookForBioseqSetFields (BioseqSetPtr bssp, Pointer userdata)
   case BioseqseqSet_class_phy_set:
   case BioseqseqSet_class_eco_set:
   case BioseqseqSet_class_wgs_set:
+  case BioseqseqSet_class_small_genome_set:
     break;
     vsp->other_sets_in_sep = TRUE;
   default:
@@ -2883,7 +3218,8 @@ static void LookForBioseqSetFields (BioseqSetPtr bssp, Pointer userdata)
              bssp->_class == BioseqseqSet_class_pop_set ||
              bssp->_class == BioseqseqSet_class_phy_set ||
              bssp->_class == BioseqseqSet_class_eco_set ||
-             bssp->_class == BioseqseqSet_class_wgs_set) {
+             bssp->_class == BioseqseqSet_class_wgs_set ||
+             bssp->_class == BioseqseqSet_class_small_genome_set) {
     vsp->other_sets_in_sep = TRUE;
   }
 }
@@ -2943,6 +3279,46 @@ static void LookForSeqDescrFields (SeqDescrPtr sdp, Pointer userdata)
   }
 }
 
+static void FindMultiIntervalGenes (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  BoolPtr    multiIntervalGenesP;
+  SeqLocPtr  slp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE) return;
+  multiIntervalGenesP = (BoolPtr) userdata;
+  if (multiIntervalGenesP == NULL) return;
+
+  slp = sfp->location;
+  if (slp == NULL) return;
+  switch (slp->choice) {
+    case SEQLOC_PACKED_INT :
+    case SEQLOC_PACKED_PNT :
+    case SEQLOC_MIX :
+    case SEQLOC_EQUIV :
+      *multiIntervalGenesP = TRUE;
+      break;
+    default :
+      break;
+  }
+}
+
+static void FindSegmentedBioseqs (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  BoolPtr  segmentedBioseqsP;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_seg) return;
+  segmentedBioseqsP = (BoolPtr) userdata;
+  if (segmentedBioseqsP == NULL) return;
+  *segmentedBioseqsP = TRUE;
+}
 static void SetPubScratchData (SeqDescrPtr sdp, Pointer userdata)
 
 {
@@ -3231,6 +3607,7 @@ static void TestDeletedOrReplacedECnumbers (ValidStructPtr vsp)
   CharPtr     ptr;
   ErrSev      sev;
   CharPtr     str;
+  CharPtr     tmp;
 
   /* only check first time program runs validator */
 
@@ -3260,14 +3637,22 @@ static void TestDeletedOrReplacedECnumbers (ValidStructPtr vsp)
             if (! ECnumberNotInList (str)) {
               ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Replaced EC number %s still in live list", str);
             }
-            if (ECnumberNotInList (ptr)) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Replacement EC number %s not in live list", ptr);
-            }
             if (ECnumberWasDeleted (str)) {
               ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Replaced EC number %s in deleted list", str);
             }
-            if (ECnumberWasDeleted (ptr)) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Replacement EC number %s in deleted list", ptr);
+            while (StringDoesHaveText (ptr)) {
+              tmp = StringChr (ptr, '\t');
+              if (tmp != NULL) {
+                *tmp = '\0';
+                tmp++;
+              }
+              if (ECnumberNotInList (ptr)) {
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Replacement EC number %s not in live list", ptr);
+              }
+              if (ECnumberWasDeleted (ptr)) {
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Replacement EC number %s in deleted list", ptr);
+              }
+              ptr = tmp;
             }
           }
         }
@@ -3334,21 +3719,6 @@ static CollisionInfoPtr CollisionInfoFree (CollisionInfoPtr cip)
 }
 
 
-static Boolean IsNcbiFileId(SeqIdPtr sip)
-{
-  DbtagPtr dbtag;
-
-  if (sip == NULL || sip->choice != SEQID_GENERAL || (dbtag = sip->data.ptrvalue) == NULL) {
-    return FALSE;
-  }
-  if (StringCmp (dbtag->db, "NCBIFILE") == 0) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-
 static void LongCollisionCallback (BioseqPtr bsp, Pointer data)
 {
   SeqIdPtr sip;
@@ -3358,7 +3728,7 @@ static void LongCollisionCallback (BioseqPtr bsp, Pointer data)
   }
 
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (!IsNcbiFileId(sip)) {
+    if (!IsNCBIFileID(sip)) {
       ValNodeAddPointer ((ValNodePtr PNTR) data, 0, CollisionInfoNew (sip, bsp));
     }
   }
@@ -3469,6 +3839,165 @@ static Boolean ValTooManyFarComponents (
   return toomanyfar;
 }
 
+static CharPtr inferencePrefix [] = {
+  "",
+  "similar to sequence",
+  "similar to AA sequence",
+  "similar to DNA sequence",
+  "similar to RNA sequence",
+  "similar to RNA sequence, mRNA",
+  "similar to RNA sequence, EST",
+  "similar to RNA sequence, other RNA",
+  "profile",
+  "nucleotide motif",
+  "protein motif",
+  "ab initio prediction",
+  "alignment",
+  NULL
+};
+
+
+static CharPtr NextColonOrVerticalBarPtr (CharPtr ptr)
+
+{
+  Char  ch = '\0';
+
+  if (ptr == NULL) return NULL;
+
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch == ':' || ch == '|') return ptr;
+    ptr++;
+    ch = *ptr;
+  }
+
+  return NULL;
+}
+
+typedef struct valcountdata {
+  Int4  numInferences;
+  Int4  numAccessions;
+} ValCountData, PNTR ValCountPtr;
+
+static void ValCountInfAccnVer (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Int2         best, j;
+  Char         ch;
+  GBQualPtr    gbq;
+  size_t       len;
+  CharPtr      nxt;
+  CharPtr      ptr;
+  CharPtr      rest;
+  CharPtr      str;
+  CharPtr      tmp;
+  ValCountPtr  vcp;
+
+
+  if (sfp == NULL || userdata == NULL) return;
+  vcp = (ValCountPtr) userdata;
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "inference") != 0) continue;
+    if (StringHasNoText (gbq->val)) continue;
+
+    (vcp->numInferences)++;
+
+    rest = NULL;
+    best = -1;
+    for (j = 0; inferencePrefix [j] != NULL; j++) {
+      len = StringLen (inferencePrefix [j]);
+      if (StringNICmp (gbq->val, inferencePrefix [j], len) != 0) continue;
+      rest = gbq->val + len;
+      best = j;
+    }
+    if (best < 0 || inferencePrefix [best] == NULL) continue;
+    if (rest == NULL) continue;
+
+    ch = *rest;
+    while (IS_WHITESP (ch)) {
+      rest++;
+      ch = *rest;
+    }
+    if (StringNICmp (rest, "(same species)", 14) == 0) {
+      rest += 14;
+    }
+    ch = *rest;
+    while (IS_WHITESP (ch) || ch == ':') {
+      rest++;
+      ch = *rest;
+    }
+    if (StringHasNoText (rest)) continue;
+
+    str = StringSave (rest);
+
+    ptr = str;
+    if (best == 12) {
+      ptr = StringRChr (str, ':');
+      if (ptr != NULL) {
+        *ptr = '\0';
+        ptr++;
+      }
+    }
+    while (ptr != NULL) {
+      nxt = StringChr (ptr, ',');
+      if (nxt != NULL) {
+        *nxt = '\0';
+        nxt++;
+      }
+      tmp = NextColonOrVerticalBarPtr (ptr);
+      if (tmp != NULL) {
+        *tmp = '\0';
+        tmp++;
+        TrimSpacesAroundString (ptr);
+        TrimSpacesAroundString (tmp);
+        if (StringDoesHaveText (tmp)) {
+          if (StringICmp (ptr, "INSD") == 0 || StringICmp (ptr, "RefSeq") == 0) {
+            (vcp->numAccessions)++;
+          }
+        }
+      }
+      ptr = nxt;
+    }
+
+    MemFree (str);
+  }
+}
+
+NLM_EXTERN Boolean TooManyInferenceAccessions (
+  SeqEntryPtr sep,
+  Int4Ptr numInferences,
+  Int4Ptr numAccessions
+)
+
+{
+  ValCountData  vcd;
+
+  if (numInferences != NULL) {
+    *numInferences = 0;
+  }
+  if (numAccessions != NULL) {
+    *numAccessions = 0;
+  }
+  if (sep == NULL) return FALSE;
+
+  vcd.numInferences = 0;
+  vcd.numAccessions = 0;
+
+  VisitFeaturesInSep (sep, (Pointer) &vcd, ValCountInfAccnVer);
+
+  if (numInferences != NULL) {
+    *numInferences = vcd.numInferences;
+  }
+  if (numAccessions != NULL) {
+    *numAccessions = vcd.numAccessions;
+  }
+
+  if (vcd.numInferences > 1000 || vcd.numAccessions > 1000) return TRUE;
+
+  return FALSE;
+}
+
 NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
 
 {
@@ -3487,6 +4016,7 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   Boolean         first = TRUE;
   Int4            errors[6];
   Int2            i;
+  Boolean         inferenceAccnCheck;
   Boolean         suppress_no_pubs = TRUE;
   Boolean         suppress_no_biosrc = TRUE;
   FeatProb        featprob;
@@ -3504,10 +4034,14 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   SubmitBlockPtr  sbp;
   ErrSev          sev;
   SeqIdPtr        sip;
+  Boolean         has_multi_int_genes = FALSE;
+  Boolean         has_seg_bioseqs = FALSE;
   Boolean         isGPS = FALSE;
   Boolean         isPatent = FALSE;
   Boolean         isPDB = FALSE;
   FindRepData     frd;
+  Int4            numInferences;
+  Int4            numAccessions;
 
   if (sep == NULL || vsp == NULL) return FALSE;
 
@@ -3595,6 +4129,7 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   vsp->is_gps_in_sep = FALSE;
   vsp->other_sets_in_sep = FALSE;
   vsp->is_embl_ddbj_in_sep = FALSE;
+  vsp->is_old_gb_in_sep = FALSE;
   vsp->is_insd_in_sep = FALSE;
   vsp->only_lcl_gnl_in_sep = FALSE;
   vsp->has_gnl_prot_sep = FALSE;
@@ -3604,6 +4139,11 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   VisitBioseqsInSep (sep, (Pointer) vsp, LookForBioseqFields);
   VisitSetsInSep (sep, (Pointer) vsp, LookForBioseqSetFields);
   VisitDescriptorsInSep (sep, (Pointer) vsp, LookForSeqDescrFields);
+
+  VisitFeaturesInSep (sep, (Pointer) &has_multi_int_genes, FindMultiIntervalGenes);
+  vsp->has_multi_int_genes = has_multi_int_genes;
+  VisitBioseqsInSep (sep, (Pointer) &has_seg_bioseqs, FindSegmentedBioseqs);
+  vsp->has_seg_bioseqs = has_seg_bioseqs;
 
   /*
   vsp->is_htg_in_sep = FALSE;
@@ -3632,6 +4172,8 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   vsp->feat_prod_has_gi = featprob.prod_has_gi;
 
   globalvsp = vsp;              /* for spell checker */
+
+  inferenceAccnCheck = vsp->inferenceAccnCheck;
 
   while (sep != NULL) {
     vsp->far_fetch_failure = FALSE;
@@ -3798,7 +4340,23 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
 
       /* AssignIDsInEntity (gc.entityID, 0, NULL); */
 
+      if (inferenceAccnCheck) {
+        numInferences = 0;
+        numAccessions = 0;
+        if (TooManyInferenceAccessions (sep, &numInferences, &numAccessions)) {
+          ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_TooManyInferenceAccessions,
+                    "Skipping validation of %ld /inference qualifiers with %ld accessions",
+                    (long) numInferences, (long) numAccessions);
+
+          /* suppress inference accession.version check for this record */
+          vsp->inferenceAccnCheck = FALSE;
+        }
+      }
+
       GatherSeqEntry (sep, (Pointer) vsp, Valid1GatherProc, &gs);
+
+      /* restore inferenceAccnCheck flag for next record */
+      vsp->inferenceAccnCheck = inferenceAccnCheck;
 
       if (ssp != NULL) {
         if (ssp->datatype == 1) {
@@ -3844,7 +4402,7 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
       vsp->gcp = NULL;
 
       vsp->gcp = NULL;
-      ValidateFeatIDs (gc.entityID, vsp);
+      ValidateFeatIDs (sep, gc.entityID, vsp);
       vsp->gcp = NULL;
 
       vsp->gcp = NULL;
@@ -3970,6 +4528,8 @@ static CharPtr GetBioseqSetClass (Uint1 cl)
     return ("gen-prod-set");
   if (cl == BioseqseqSet_class_wgs_set)
     return ("wgs-set");
+  if (cl == BioseqseqSet_class_small_genome_set)
+    return ("small-genome-set");
   if (cl == BioseqseqSet_class_other)
     return ("other");
   return ("not-set");
@@ -4101,15 +4661,19 @@ static void ValidateNucProtSet (BioseqSetPtr bssp, ValidStructPtr vsp)
   }
 
   for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice == Seq_descr_title) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_NucProtSetHasTitle,
+                "Nuc-prot set should not have title descriptor");
+    }
+  }
+
+  for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {
     if (sdp->choice == Seq_descr_source) {
       biop = (BioSourcePtr) sdp->data.ptrvalue;
       if (biop != NULL) {
         orp = biop->org;
         if (orp != NULL && StringDoesHaveText (orp->taxname)) return;
       }
-    } else if (sdp->choice == Seq_descr_title) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_NucProtSetHasTitle,
-                "Nuc-prot set should not have title descriptor");
     }
   }
 
@@ -4447,6 +5011,20 @@ static void LookForMolInfoInconsistency (BioseqSetPtr bssp, ValidStructPtr vsp)
   }
 }
 
+static Boolean SetHasMolInfo (BioseqSetPtr bssp)
+
+{
+  SeqDescrPtr  sdp;
+
+  if (bssp == NULL) return FALSE;
+
+  for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice == Seq_descr_molinfo) return TRUE;
+  }
+
+  return FALSE;
+}
+
 static void ValidatePopSet (BioseqSetPtr bssp, ValidStructPtr vsp)
 
 {
@@ -4471,6 +5049,10 @@ static void ValidatePopSet (BioseqSetPtr bssp, ValidStructPtr vsp)
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_InternalGenBankSet,
                 "Bioseq-set contains internal GenBank Bioseq-set");
     }
+  }
+
+  if (SetHasMolInfo (bssp)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_MisplacedMolInfo, "Pop set has MolInfo on set");
   }
 
   LookForMolInfoInconsistency (bssp, vsp);
@@ -4529,6 +5111,10 @@ static void ValidateMutSet (BioseqSetPtr bssp, ValidStructPtr vsp)
     }
   }
 
+  if (SetHasMolInfo (bssp)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_MisplacedMolInfo, "Mut set has MolInfo on set");
+  }
+
   LookForMolInfoInconsistency (bssp, vsp);
 
   /* error is currently suppressed
@@ -4559,6 +5145,10 @@ static void ValidateGenbankSet (BioseqSetPtr bssp, ValidStructPtr vsp)
                 "Bioseq-set contains internal GenBank Bioseq-set");
     }
   }
+
+  if (SetHasMolInfo (bssp)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_MisplacedMolInfo, "Genbank set has MolInfo on set");
+  }
 }
 
 static void ValidatePhyEcoWgsSet (BioseqSetPtr bssp, ValidStructPtr vsp)
@@ -4576,6 +5166,10 @@ static void ValidatePhyEcoWgsSet (BioseqSetPtr bssp, ValidStructPtr vsp)
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_InternalGenBankSet,
                 "Bioseq-set contains internal GenBank Bioseq-set");
     }
+  }
+
+  if (SetHasMolInfo (bssp)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_MisplacedMolInfo, "Phy/eco/wgs set has MolInfo on set");
   }
 
   LookForMolInfoInconsistency (bssp, vsp);
@@ -4637,8 +5231,51 @@ static void ValidateGenProdSet (BioseqSetPtr bssp, ValidStructPtr vsp)
     }
   }
 
+  if (SetHasMolInfo (bssp)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_MisplacedMolInfo, "GenProd set has MolInfo on set");
+  }
+
   gcp->itemID = olditemid;
   gcp->thistype = olditemtype;
+}
+
+static void NestedSetProc (BioseqSetPtr bssp, Pointer userdata)
+
+{
+  ValidStructPtr   vsp;
+  GatherContextPtr gcp = NULL;
+
+  if (bssp == NULL) return;
+
+  /* pop/phy/mut/eco set can contain up to nuc-prot sets */
+  switch (bssp->_class) {
+  case BioseqseqSet_class_nuc_prot:
+  case BioseqseqSet_class_segset:
+  case BioseqseqSet_class_parts:
+    return;
+  default:
+    break;
+  }
+
+  vsp = (ValidStructPtr) userdata;
+  if (vsp == NULL) return;
+  gcp = vsp->gcp;
+  if (gcp == NULL) return;
+
+  ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ImproperlyNestedSets, "Nested sets within Pop/Phy/Mut/Eco/Wgs set");
+}
+
+static void CheckForNestedSets (BioseqSetPtr bssp, Pointer userdata)
+
+{
+  SeqEntryPtr  sep;
+
+  if (bssp == NULL) return;
+
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    if (!IS_Bioseq_set (sep)) continue;
+    VisitSetsInSep (sep, userdata, NestedSetProc);
+  }
 }
 
 static void ValidateBioseqSet (GatherContextPtr gcp)
@@ -4706,14 +5343,18 @@ static void ValidateBioseqSet (GatherContextPtr gcp)
     break;
   case BioseqseqSet_class_pop_set:
     ValidatePopSet (bssp, vsp);
+    CheckForNestedSets (bssp, vsp);
     break;
   case BioseqseqSet_class_mut_set:
     ValidateMutSet (bssp, vsp);
+    CheckForNestedSets (bssp, vsp);
     break;
   case BioseqseqSet_class_phy_set:
   case BioseqseqSet_class_eco_set:
   case BioseqseqSet_class_wgs_set:
+  case BioseqseqSet_class_small_genome_set:
     ValidatePhyEcoWgsSet (bssp, vsp);
+    CheckForNestedSets (bssp, vsp);
     break;
   case BioseqseqSet_class_gen_prod_set:
     ValidateGenProdSet (bssp, vsp);
@@ -4748,7 +5389,7 @@ static void ValidateBioseqSet (GatherContextPtr gcp)
     if (sep == NULL) {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_EmptySet, "Pop/Phy/Mut/Eco set has no components");
     } else if (sep->next == NULL) {
-      if (VisitAlignmentsInSep (sep, NULL, NULL) == 0) {
+      if (VisitAlignmentsInSep (gcp->sep, NULL, NULL) == 0) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_SingleItemSet, "Pop/Phy/Mut/Eco set has only one component and no alignments");
       }
     }
@@ -4818,10 +5459,12 @@ static void LookForSecondaryConflict (ValidStructPtr vsp, GatherContextPtr gcp, 
 static void CheckSegBspAgainstParts (ValidStructPtr vsp, GatherContextPtr gcp, BioseqPtr bsp)
 {
   BioseqSetPtr    bssp;
+  Boolean         is_odd;
   BioseqPtr       part;
   SeqEntryPtr     sep;
   SeqIdPtr        sip;
   SeqLocPtr       slp;
+  BioseqPtr       vbsp;
 
   if (vsp == NULL || gcp == NULL || bsp == NULL)
     return;
@@ -4844,6 +5487,25 @@ static void CheckSegBspAgainstParts (ValidStructPtr vsp, GatherContextPtr gcp, B
     return;
   if (bssp->_class != BioseqseqSet_class_parts)
     return;
+
+  is_odd = FALSE;
+  for (slp = (ValNodePtr) bsp->seq_ext; slp != NULL; slp = slp->next) {
+    is_odd = (! is_odd);
+    if (is_odd) {
+      if (slp->choice == SEQLOC_NULL) {
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_BadSegmentedSeq, "Odd segmented component is not expected to be NULL");
+      }
+    } else {
+      if (slp->choice != SEQLOC_NULL) {
+        vbsp = BioseqFindFromSeqLoc (slp);
+        if (vbsp != NULL) {
+          if (vbsp->repr != Seq_repr_virtual) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_BadSegmentedSeq, "Even segmented component is expected to be NULL or VIRTUAL");
+          }
+        }
+      }
+    }
+  }
 
   sep = bssp->seq_set;
   for (slp = (ValNodePtr) bsp->seq_ext; slp != NULL; slp = slp->next) {
@@ -5160,7 +5822,7 @@ static Int4 CountAdjacentNsInInterval (GatherContextPtr gcp, BioseqPtr bsp, Int4
   SeqLocPtr slp;
   RunOfNs   ron;
 
-  if (bsp == NULL || from < 0 || to < from) {
+  if (bsp == NULL || from < 0 || to < from || ISA_aa (bsp->mol)) {
     return 0;
   }
 
@@ -5375,7 +6037,7 @@ static void ReportLongSeqId (SeqIdPtr sip, ValidStructPtr vsp, Int4 max_len)
   Int4 id_len = 0;
   CharPtr id_txt;
 
-  if (sip == NULL || vsp == NULL || IsNcbiFileId(sip)) {
+  if (sip == NULL || vsp == NULL || IsNCBIFileID(sip)) {
     return;
   }
 
@@ -5386,6 +6048,23 @@ static void ReportLongSeqId (SeqIdPtr sip, ValidStructPtr vsp, Int4 max_len)
     id_txt = MemFree (id_txt);
   }
 
+}
+
+
+static Boolean SequenceHasGaps (BioseqPtr bsp)
+{
+  SeqMgrFeatContext context;
+  SeqFeatPtr sfp;
+
+  if (bsp == NULL) {
+    return FALSE;
+  }
+  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_gap, &context);
+  if (sfp == NULL) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
 }
 
 
@@ -5430,7 +6109,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
   SeqMgrFeatContext protctxt;
   CharPtr         protlbl = NULL;
   TextSeqIdPtr    tsip;
-  CharPtr         ptr, last, str, title, buf;
+  CharPtr         ptr, last, str, title, buf, bufplus;
   Uint1           lastchoice;
   Char            ch;
   Boolean         multitoken;
@@ -5459,6 +6138,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
   Boolean         is_gps = FALSE;
   Boolean         isRefSeq = FALSE;
   Boolean         isSwissProt = FALSE;
+  Boolean         only_local = TRUE;
   Boolean         isLRG = FALSE;
   ValNodePtr      keywords;
   Boolean         last_is_gap;
@@ -5533,6 +6213,9 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
   }
 
   for (sip1 = bsp->id; sip1 != NULL; sip1 = sip1->next) {
+    if (sip1->choice != SEQID_LOCAL) {
+      only_local = FALSE;
+    }
     if (sip1->choice == SEQID_OTHER) {
       isRefSeq = TRUE;
       tsip = (TextSeqIdPtr) sip1->data.ptrvalue;
@@ -5778,8 +6461,13 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
       break;
     case SEQID_GENERAL:
       dbt = (DbtagPtr) sip1->data.ptrvalue;
-      if (dbt != NULL && StringICmp (dbt->db, "LRG") == 0) {
-        isLRG = TRUE;
+      if (dbt != NULL) {
+        if (StringICmp (dbt->db, "LRG") == 0) {
+          isLRG = TRUE;
+        }
+        if (StringLen (dbt->db) > 20) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_BadSeqIdFormat, "Database name longer than 20 characters");
+        }
       }
       break;
     default:
@@ -6957,9 +7645,20 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
             gcp->thistype = olditemtype;
           }
         }
+
+        if (StringISearch (title, "complete genome") != NULL && SequenceHasGaps (bsp)) {
+          /* warning if title contains complete genome but sequence contains gap features */
+          olditemid = gcp->itemID;
+          olditemtype = gcp->thistype;
+          gcp->itemID = bsp->idx.itemID;
+          gcp->thistype = OBJ_BIOSEQ;
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_CompleteTitleProblem, "Title contains 'complete genome' but sequence has gaps");
+          gcp->itemID = olditemid;
+          gcp->thistype = olditemtype;
+        }
       }
     } else {
-      if (ISA_na (bsp->mol) && vsp->other_sets_in_sep && vsp->indexerVersion) {
+      if (ISA_na (bsp->mol) && vsp->other_sets_in_sep && (vsp->is_insd_in_sep || vsp->is_refseq_in_sep) && vsp->indexerVersion) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ComponentMissingTitle,
                   "Nucleotide component of pop/phy/mut/eco/wgs set is missing its title");
       }
@@ -7003,7 +7702,18 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
             if (StringICmp (buf, title) != 0) {
               /* also check generated protein defline with all prp->names - old convention */
               if (NewCreateDefLineBuf (&ii, bsp, buf, buflen, TRUE, TRUE)) {
-                if (StringICmp (buf, title) != 0) {
+                bufplus = buf;
+                if (StringNCmp (bufplus, "PREDICTED: ", 11) == 0) {
+                  bufplus += 11;
+                } else if (StringNCmp (bufplus, "UNVERIFIED: ", 12) == 0) {
+                  bufplus += 12;
+                }
+                if (StringNCmp (title, "PREDICTED: ", 11) == 0) {
+                  title += 11;
+                } else if (StringNCmp (title, "UNVERIFIED: ", 12) == 0) {
+                  title += 12;
+                }
+                if (StringICmp (bufplus, title) != 0) {
                   olditemid = gcp->itemID;
                   olditemtype = gcp->thistype;
                   if (vnp->extended != 0) {
@@ -7106,6 +7816,8 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
           sev = SEV_WARNING;
         } else if (bsp->topology == TOPOLOGY_CIRCULAR) {
           sev = SEV_WARNING;
+        } else if (only_local) {
+          sev = SEV_WARNING;
         } else if (StringICmp (str, "NNNNNNNNNN") == 0) {
           sev = SEV_ERROR;
         } else {
@@ -7137,6 +7849,8 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
         if (isNC || isPatent) {
           sev = SEV_WARNING;
         } else if (bsp->topology == TOPOLOGY_CIRCULAR) {
+          sev = SEV_WARNING;
+        } else if (only_local) {
           sev = SEV_WARNING;
         } else if (StringICmp (str, "NNNNNNNNNN") == 0) {
           sev = SEV_ERROR;
@@ -7411,7 +8125,9 @@ static void ValidateCitSub (ValidStructPtr vsp, CitSubPtr csp)
     ValidErr (vsp, SEV_ERROR, ERR_GENERIC_MissingPubInfo, "Submission citation has no author names");
   }
   if (!hasAffil) {
-    ValidErr (vsp, sev, ERR_GENERIC_MissingPubInfo, "Submission citation has no affiliation");
+    if (! vsp->is_patent_in_sep) {
+      ValidErr (vsp, sev, ERR_GENERIC_MissingPubInfo, "Submission citation has no affiliation");
+    }
   }
   dp = csp->date;
   if (dp != NULL) {
@@ -7682,7 +8398,9 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
       cgp = (CitGenPtr) vnp->data.ptrvalue;
       hasName = FALSE;
       if (cgp != NULL) {
-        if (!StringHasNoText (cgp->cit)) {
+        if (StringDoesHaveText (cgp->cit)) {
+          /* skip if just BackBone id number */
+          if (StringNICmp (cgp->cit, "BackBone id_pub = ", 18) == 0 && cgp->journal == NULL && cgp->date == NULL && cgp->serial_number < 0) break;
           if (StringNICmp (cgp->cit, "submitted", 8) == 0 ||
               StringNICmp (cgp->cit, "unpublished", 11) == 0 ||
               StringNICmp (cgp->cit, "Online Publication", 18) == 0 ||
@@ -8086,27 +8804,6 @@ static Boolean DeltaOrFarSeg (SeqEntryPtr sep, SeqLocPtr location)
 }
 
 
-static Boolean IsLocationOrganelle (Uint1 genome)
-{
-  if (genome == GENOME_chloroplast
-      || genome == GENOME_chromoplast
-      || genome == GENOME_kinetoplast
-      || genome == GENOME_mitochondrion
-      || genome == GENOME_cyanelle
-      || genome == GENOME_nucleomorph
-      || genome == GENOME_apicoplast
-      || genome == GENOME_leucoplast
-      || genome == GENOME_proplastid
-      || genome == GENOME_hydrogenosome
-      || genome == GENOME_plastid
-      || genome == GENOME_chromatophore) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-
 static Boolean IsOrganelleBioseq (BioseqPtr bsp)
 {
   SeqDescrPtr sdp;
@@ -8136,7 +8833,6 @@ ValidateIntronEndsAtSpliceSiteOrGap
   Char               id_buf[150];
   SeqFeatPtr         rna;
   SeqMgrFeatContext  rcontext;
-  ErrSev             sev = SEV_WARNING;
 
   if (vsp == NULL || slp == NULL) return;
   CheckSeqLocForPartial (slp, &partial5, &partial3);
@@ -8178,10 +8874,6 @@ ValidateIntronEndsAtSpliceSiteOrGap
 
   strand = SeqLocStrand (slp);
 
-  if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-    sev = SEV_INFO;
-  }
-
   if (!partial5) {
     if (strand == Seq_strand_minus) {
       SeqPortStreamInt (bsp, stop - 1, stop, Seq_strand_minus, EXPAND_GAPS_TO_DASHES, (Pointer) buf, NULL);
@@ -8198,7 +8890,7 @@ ValidateIntronEndsAtSpliceSiteOrGap
       ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_NotSpliceConsensusDonor,
                 "Splice donor consensus (GT) not found at start of terminal intron, position %ld of %s", (long) (pos + 1), id_buf);
     } else {
-      ValidErr (vsp, sev, ERR_SEQ_FEAT_NotSpliceConsensusDonor,
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NotSpliceConsensusDonor,
                 "Splice donor consensus (GT) not found at start of intron, position %ld of %s", (long) (pos + 1), id_buf);
     }
   }
@@ -8217,11 +8909,75 @@ ValidateIntronEndsAtSpliceSiteOrGap
       ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_NotSpliceConsensusAcceptor,
                 "Splice acceptor consensus (AG) not found at end of terminal intron, position %ld of %s, but at end of sequence", (long) (pos + 1), id_buf);
     } else {
-      ValidErr (vsp, sev, ERR_SEQ_FEAT_NotSpliceConsensusAcceptor,
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NotSpliceConsensusAcceptor,
                 "Splice acceptor consensus (AG) not found at end of intron, position %ld of %s", (long) (pos + 1), id_buf);
     }
   }
   BioseqUnlock (bsp);
+}
+
+static Boolean IsLocInSmallGenomeSet (
+  SeqLocPtr loc
+)
+
+{
+  BioseqPtr  bsp;
+  SeqIdPtr   sip;
+  SeqLocPtr  slp;
+
+  if (loc == NULL) return FALSE;
+
+  slp = SeqLocFindNext (loc, NULL);
+  while (slp != NULL) {
+    sip = SeqLocId (slp);
+    if (sip == NULL) return FALSE;
+    bsp = BioseqFind (sip);
+    if (bsp == NULL) return FALSE;
+    slp = SeqLocFindNext (loc, slp);
+  }
+
+  return TRUE;
+}
+
+static Boolean AllPartsInSmallGenomeSet (
+  SeqLocPtr loc,
+  ValidStructPtr vsp,
+  BioseqPtr bsp
+)
+
+{
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   oldscope;
+  Boolean       rsult = FALSE;
+  SeqEntryPtr   sep;
+
+  if (loc == NULL || vsp == NULL || bsp == NULL) return FALSE;
+
+  sep = vsp->sep;
+  if (sep == NULL) return FALSE;
+  if (! IS_Bioseq_set (sep)) return FALSE;
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp == NULL) return FALSE;
+
+  /* if genbank set wraps everything, go down one set level */
+  if (bssp->_class == BioseqseqSet_class_genbank) {
+    sep = bssp->seq_set;
+    if (sep == NULL) return FALSE;
+    if (! IS_Bioseq_set (sep)) return FALSE;
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  }
+
+  /* check for small genome set */
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_small_genome_set) return FALSE;
+
+  /* scope within small genome set for subsequent BioseqFind calls */
+  oldscope = SeqEntrySetScope (sep);
+
+  rsult = IsLocInSmallGenomeSet (loc);
+
+  SeqEntrySetScope (oldscope);
+
+  return rsult;
 }
 
 
@@ -8411,7 +9167,7 @@ static Boolean ValidateSeqFeatCommon (SeqFeatPtr sfp, BioseqValidStrPtr bvsp, Va
     }
   }
 
-  if (farloc && (! is_nc) && (! is_emb)) {
+  if (farloc && (! is_nc) && (! is_emb) && (! AllPartsInSmallGenomeSet (sfp->location, vsp, bsp))) {
     ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_FarLocation, "Feature has 'far' location - accession not packaged in record");
   }
 
@@ -8619,6 +9375,7 @@ static CharPtr  Nlm_valid_country_codes [] = {
   "Bahamas",
   "Bahrain",
   "Baker Island",
+  "Baltic Sea",
   "Bangladesh",
   "Barbados",
   "Bassas da India",
@@ -8990,979 +9747,10 @@ NLM_EXTERN CharPtr GetCorrectedCountryCapitalization (CharPtr name)
   return NULL;
 }
 
-
-static CharPtr ctry_lat_lon [] = {
-  "Afghanistan\tAF\t60.4\t29.3\t74.9\t38.5",
-  "Albania\tAL\t19.2\t39.6\t21.1\t42.7",
-  "Algeria\tAG\t-8.7\t18.9\t12.0\t37.1",
-  "American Samoa\tAQ\t-171.1\t-11.1\t-171.1\t-11.0\t-170.9\t-14.4\t-169.4\t-14.2",
-  "Andorra\tAN\t1.4\t42.4\t1.8\t42.7",
-  "Angola\tAO\t11.6\t-18.1\t24.1\t-4.4",
-  "Anguilla\tAV\t-63.2\t18.1\t-62.9\t18.3",
-  "Antarctica\tAY\t",
-  "Antigua and Barbuda\tAC\t-62.4\t16.9\t-62.3\t16.9\t-62.0\t16.9\t-61.7\t17.7",
-  "Arctic Ocean\tXX\t",
-  "Argentina\tAR\t-73.6\t-55.1\t-53.6\t-21.8",
-  "Armenia\tAM\t43.4\t38.8\t46.6\t41.3",
-  "Aruba\tAA\t-70.1\t12.4\t-69.8\t12.7",
-  "Ashmore and Cartier Islands\tAT\t122.9\t-12.3\t123.1\t-12.1",
-  "Atlantic Ocean\tXX\t",
-  "Australia\tAS\t112.9\t-43.7\t153.6\t-10.0",
-  "Australia: Australian Capital Territory\tXX\t148.7\t-36.0\t149.4\t-35.1",
-  "Australia: Jervis Bay Territory\tXX\t150.5\t-35.2\t150.8\t-35.1",
-  "Australia: New South Wales\tXX\t140.9\t-37.6\t153.6\t-28.2",
-  "Australia: Northern Territory\tXX\t128.9\t-26.1\t138.0\t-10.9",
-  "Australia: Queensland\tXX\t137.9\t-29.2\t153.6\t-10.0",
-  "Australia: South Australia\tXX\t128.9\t-38.1\t141.0\t-26.0",
-  "Australia: Tasmania\tXX\t143.8\t-43.7\t148.5\t-39.6",
-  "Australia: Victoria\tXX\t140.9\t-39.6\t150.0\t-34.0",
-  "Australia: Western Australia\tXX\t112.9\t-35.2\t129.0\t-13.7",
-  "Austria\tAU\t9.5\t46.3\t17.2\t49.0",
-  "Azerbaijan\tAJ\t45.0\t38.3\t50.6\t41.9",
-  "Bahamas\tBF\t-79.7\t20.9\t-72.7\t27.2",
-  "Bahrain\tBA\t50.3\t25.7\t50.7\t26.3",
-  "Baker Island\tFQ\t-176.5\t0.1\t-176.5\t0.2",
-  "Bangladesh\tBG\t88.0\t20.5\t92.7\t26.6",
-  "Barbados\tBB\t-59.7\t13.0\t-59.4\t13.3",
-  "Bassas da India\tBS\t39.6\t-21.6\t39.8\t-21.4",
-  "Belarus\tBO\t23.1\t51.2\t32.8\t56.2",
-  "Belgium\tBE\t2.5\t49.4\t6.4\t51.5",
-  "Belize\tBH\t-89.3\t15.8\t-86.9\t18.5",
-  "Benin\tBN\t0.7\t6.2\t3.9\t12.4",
-  "Bermuda\tBD\t-64.9\t32.2\t-64.7\t32.4",
-  "Bhutan\tBT\t88.7\t26.7\t92.1\t28.3",
-  "Bolivia\tBL\t-69.7\t-22.9\t-57.5\t-9.7",
-  "Borneo\tXX\t108.6\t-4.2\t119.3\t7.4",
-  "Bosnia and Herzegovina\tBK\t15.7\t42.5\t19.7\t45.3",
-  "Botswana\tBC\t19.9\t-27.0\t29.4\t-17.8",
-  "Bouvet Island\tBV\t3.3\t-54.5\t3.5\t-54.4",
-  "Brazil\tBR\t-74.0\t-33.8\t-34.8\t5.0",
-  "British Virgin Islands\tVI\t-64.8\t18.2\t-63.2\t18.8",
-  "Brunei\tBX\t114.0\t4.0\t115.4\t5.0",
-  "Bulgaria\tBU\t22.3\t41.2\t28.6\t44.2",
-  "Burkina Faso\tUV\t-5.6\t9.4\t2.4\t15.1",
-  "Burundi\tBY\t28.9\t-4.5\t30.8\t-2.3",
-  "Cambodia\tCB\t102.3\t9.2\t107.6\t14.7",
-  "Cameroon\tCM\t8.4\t1.6\t16.2\t13.1",
-  "Canada\tCA\t-141.0\t41.7\t-52.6\t83.1",
-  "Canada: Alberta\tXX\t-120.0\t48.9\t-110.0\t60.0",
-  "Canada: British Columbia\tXX\t-139.1\t48.3\t-114.1\t60.0",
-  "Canada: Manitoba\tXX\t-102.1\t48.9\t-89.0\t60.0",
-  "Canada: New Brunswick\tXX\t-69.1\t44.5\t-63.8\t48.1",
-  "Canada: Newfoundland and Labrador\tXX\t-67.9\t46.6\t-52.6\t60.4",
-  "Canada: Northwest Territories\tXX\t-136.5\t60.0\t-102.0\t78.8",
-  "Canada: Nova Scotia\tXX\t-66.4\t43.3\t-59.7\t47.0",
-  "Canada: Nunavut\tXX\t-120.4\t60.0\t-61.2\t83.1",
-  "Canada: Ontario\tXX\t-95.2\t41.6\t-74.3\t56.9",
-  "Canada: Prince Edward Island\tXX\t-64.5\t45.9\t-62.0\t47.1",
-  "Canada: Quebec\tXX\t-79.8\t45.0\t-57.1\t62.6",
-  "Canada: Saskatchewan\tXX\t-110.0\t48.9\t-101.4\t60.0",
-  "Canada: Yukon\tXX\t-141.0\t60.0\t-124.0\t69.6",
-  "Cape Verde\tCV\t-25.4\t14.8\t-22.7\t17.2",
-  "Cayman Islands\tCJ\t-81.5\t19.2\t-81.1\t19.4\t-80.2\t19.6\t-79.7\t19.8",
-  "Central African Republic\tCT\t14.4\t2.2\t27.5\t11.0",
-  "Chad\tCD\t13.4\t7.4\t24.0\t23.5",
-  "Chile\tCI\t-75.8\t-56.0\t-66.4\t-17.5",
-  "China\tCH\t73.5\t20.2\t134.8\t53.6\t108.6\t18.1\t111.1\t20.2",
-  "China: Hainan\tXX\t108.6\t18.1\t111.1\t20.2",
-  "Christmas Island\tKT\t105.5\t-10.6\t105.7\t-10.4",
-  "Clipperton Island\tIP\t-109.3\t10.2\t-109.2\t10.3",
-  "Cocos Islands\tCK\t96.8\t-12.2\t96.9\t-11.8",
-  "Colombia\tCO\t-79.1\t-4.3\t-66.9\t12.5",
-  "Comoros\tCN\t43.2\t-12.5\t44.5\t-11.4",
-  "Cook Islands\tCW\t-159.9\t-22.0\t-157.3\t-18.8",
-  "Coral Sea Islands\tCR\t",
-  "Costa Rica\tCS\t-87.1\t5.4\t-87.0\t5.6\t-86.0\t8.0\t-82.6\t11.2",
-  "Cote d'Ivoire\tIV\t-8.6\t4.3\t-2.5\t10.7",
-  "Croatia\tHR\t13.4\t42.3\t19.4\t46.5",
-  "Cuba\tCU\t-85.0\t19.8\t-74.1\t23.3",
-  "Cyprus\tCY\t32.2\t34.5\t34.6\t35.7",
-  "Czech Republic\tEZ\t12.0\t48.5\t18.9\t51.0",
-  "Democratic Republic of the Congo\tCG\t12.2\t-13.5\t31.3\t5.4",
-  "Denmark\tDA\t8.0\t54.5\t12.7\t57.7\t14.6\t54.9\t15.2\t55.3",
-  "Djibouti\tDJ\t41.7\t10.9\t43.4\t12.7",
-  "Dominica\tDO\t-61.5\t15.2\t-61.2\t15.6",
-  "Dominican Republic\tDR\t-72.1\t17.4\t-68.3\t19.9",
-  "East Timor\tTT\t124.9\t-9.5\t127.4\t-8.3",
-  "Ecuador\tEC\t-92.1\t-1.5\t-89.2\t1.7\t-81.1\t-5.0\t-75.2\t1.4",
-  "Ecuador: Galapagos\tXX\t-92.1\t-1.5\t-89.2\t1.7",
-  "Egypt\tEG\t24.6\t21.7\t35.8\t31.7",
-  "El Salvador\tES\t-90.2\t13.1\t-87.7\t14.4",
-  "Equatorial Guinea\tEK\t8.4\t3.2\t8.9\t3.8\t9.2\t0.8\t11.3\t2.3",
-  "Eritrea\tER\t36.4\t12.3\t43.1\t18.0",
-  "Estonia\tEN\t21.7\t57.5\t28.2\t59.7",
-  "Ethiopia\tET\t32.9\t3.4\t48.0\t14.9",
-  "Europa Island\tEU\t40.3\t-22.4\t40.4\t-22.3",
-  "Falkland Islands (Islas Malvinas)\tFK\t-61.4\t-53.0\t-57.7\t-51.0",
-  "Faroe Islands\tFO\t-7.7\t61.3\t-6.3\t62.4",
-  "Fiji\tFJ\t-180.0\t-20.7\t-178.2\t-15.7\t-175.7\t-19.8\t-175.0\t-15.6\t176.8\t-19.3\t180.0\t-12.5",
-  "Finland\tFI\t19.3\t59.7\t31.6\t70.1",
-  "France\tFR\t-5.2\t42.3\t8.2\t51.1\t8.5\t41.3\t9.6\t43.1",
-  "France: Corsica\tXX\t8.5\t41.3\t9.6\t43.1",
-  "French Guiana\tFG\t-54.6\t2.1\t-51.6\t5.8",
-  "French Polynesia\tFP\t-154.7\t-27.7\t-134.9\t-7.8",
-  "French Southern and Antarctic Lands\tFS\t68.6\t-49.8\t70.6\t-48.5",
-  "Gabon\tGB\t8.6\t-4.0\t14.5\t2.3",
-  "Gambia\tGA\t-16.9\t13.0\t-13.8\t13.8",
-  "Gaza Strip\tGZ\t34.2\t31.2\t34.5\t31.6",
-  "Georgia\tGG\t40.0\t41.0\t46.7\t43.6",
-  "Germany\tGM\t5.8\t47.2\t15.0\t55.1",
-  "Ghana\tGH\t-3.3\t4.7\t1.2\t11.2",
-  "Gibraltar\tGI\t-5.4\t36.1\t-5.3\t36.2",
-  "Glorioso Islands\tGO\t47.2\t-11.6\t47.4\t-11.5",
-  "Greece\tGR\t19.3\t34.8\t28.2\t41.8",
-  "Greenland\tGL\t-73.3\t59.7\t-11.3\t83.6",
-  "Grenada\tGJ\t-61.8\t11.9\t-61.6\t12.3",
-  "Guadeloupe\tGP\t-63.2\t17.8\t-62.8\t18.1\t-61.9\t15.8\t-61.0\t16.5",
-  "Guam\tGQ\t144.6\t13.2\t145.0\t13.7",
-  "Guatemala\tGT\t-92.3\t13.7\t-88.2\t17.8",
-  "Guernsey\tGK\t-2.7\t49.4\t-2.4\t49.5",
-  "Guinea\tGV\t-15.1\t7.1\t-7.6\t12.7",
-  "Guinea-Bissau\tPU\t-16.8\t10.8\t-13.6\t12.7",
-  "Guyana\tGY\t-61.4\t1.1\t-56.5\t8.6",
-  "Haiti\tHA\t-74.5\t18.0\t-71.6\t20.1",
-  "Heard Island and McDonald Islands\tHM\t73.2\t-53.2\t73.7\t-52.9",
-  "Honduras\tHO\t-89.4\t12.9\t-83.2\t16.5",
-  "Hong Kong\tHK\t113.8\t22.1\t114.4\t22.6",
-  "Howland Island\tHQ\t-176.7\t0.7\t-176.6\t0.8",
-  "Hungary\tHU\t16.1\t45.7\t22.9\t48.6",
-  "Iceland\tIC\t-24.6\t63.2\t-13.5\t66.6",
-  "India\tIN\t67.3\t8.0\t97.4\t35.5",
-  "Indian Ocean\tXX\t",
-  "Indonesia\tID\t95.0\t-11.1\t141.0\t5.9",
-  "Iran\tIR\t44.0\t25.0\t63.3\t39.8",
-  "Iraq\tIZ\t38.8\t29.1\t48.6\t37.4",
-  "Ireland\tEI\t-10.7\t51.4\t-6.0\t55.4",
-  "Isle of Man\tIM\t-4.9\t54.0\t-4.3\t54.4",
-  "Israel\tIS\t34.2\t29.4\t35.7\t33.3",
-  "Italy\tIT\t6.6\t35.4\t18.5\t47.1",
-  "Jamaica\tJM\t-78.4\t17.7\t-76.2\t18.5",
-  "Jan Mayen\tJN\t-9.1\t70.8\t-7.9\t71.2",
-  "Japan\tJA\t122.9\t24.0\t125.5\t25.9\t126.7\t20.5\t145.8\t45.5",
-  "Jarvis Island\tDQ\t-160.1\t-0.4\t-160.0\t-0.4",
-  "Jersey\tJE\t-2.3\t49.1\t-2.0\t49.3",
-  "Johnston Atoll\tJQ\t-169.6\t16.7\t-169.4\t16.8",
-  "Jordan\tJO\t34.9\t29.1\t39.3\t33.4",
-  "Juan de Nova Island\tJU\t42.6\t-17.1\t42.8\t-16.8",
-  "Kazakhstan\tKZ\t46.4\t40.9\t87.3\t55.4",
-  "Kenya\tKE\t33.9\t-4.7\t41.9\t4.6",
-  "Kerguelen Archipelago\tXX\t",
-  "Kingman Reef\tKQ\t-162.9\t6.1\t-162.4\t6.7",
-  "Kiribati\tKR\t172.6\t0.1\t173.9\t3.4\t174.2\t-2.7\t176.9\t-0.5",
-  "Kosovo\tKV\t20.0\t41.8\t43.3\t21.9",
-  "Kuwait\tKU\t46.5\t28.5\t48.4\t30.1",
-  "Kyrgyzstan\tKG\t69.2\t39.1\t80.3\t43.2",
-  "Laos\tLA\t100.0\t13.9\t107.7\t22.5",
-  "Latvia\tLG\t20.9\t55.6\t28.2\t58.1",
-  "Lebanon\tLE\t35.1\t33.0\t36.6\t34.7",
-  "Lesotho\tLT\t27.0\t-30.7\t29.5\t-28.6",
-  "Liberia\tLI\t-11.5\t4.3\t-7.4\t8.6",
-  "Libya\tLY\t9.3\t19.5\t25.2\t33.2",
-  "Liechtenstein\tLS\t9.4\t47.0\t9.6\t47.3",
-  "Lithuania\tLH\t20.9\t53.9\t26.9\t56.4",
-  "Luxembourg\tLU\t5.7\t49.4\t6.5\t50.2",
-  "Macau\tMC\t113.5\t22.1\t113.6\t22.2",
-  "Macedonia\tMK\t20.4\t40.8\t23.0\t42.4",
-  "Madagascar\tMA\t43.1\t-25.7\t50.5\t-11.9",
-  "Malawi\tMI\t32.6\t-17.2\t35.9\t-9.4",
-  "Malaysia\tMY\t98.9\t5.6\t98.9\t5.7\t99.6\t1.2\t104.5\t6.7\t109.5\t0.8\t119.3\t7.4",
-  "Maldives\tMV\t72.6\t-0.7\t73.7\t7.1",
-  "Mali\tML\t-12.3\t10.1\t4.2\t25.0",
-  "Malta\tMT\t14.1\t35.8\t14.6\t36.1",
-  "Marshall Islands\tRM\t160.7\t4.5\t172.0\t14.8",
-  "Martinique\tMB\t-61.3\t14.3\t-60.8\t14.9",
-  "Mauritania\tMR\t-17.1\t14.7\t-4.8\t27.3",
-  "Mauritius\tMP\t57.3\t-20.6\t57.8\t-20.0\t59.5\t-16.9\t59.6\t-16.7",
-  "Mayotte\tMF\t45.0\t-13.1\t45.3\t-12.6",
-  "Mediterranean Sea\tXX\t",
-  "Mexico\tMX\t-118.5\t28.8\t-118.3\t29.2\t-117.3\t14.5\t-86.7\t32.7",
-  "Micronesia\tFM\t138.0\t9.4\t138.2\t9.6\t139.6\t9.8\t139.8\t10.0\t140.5\t9.7\t140.5\t9.8\t147.0\t7.3\t147.0\t7.4\t149.3\t6.6\t149.3\t6.7\t151.5\t7.1\t152.0\t7.5\t153.5\t5.2\t153.8\t5.6\t157.1\t5.7\t160.7\t7.1\t162.9\t5.2\t163.0\t5.4",
-  "Midway Islands\tMQ\t-178.4\t28.3\t-178.3\t28.4\t-177.4\t28.1\t-177.3\t28.2\t-174.0\t26.0\t-174.0\t26.1\t-171.8\t25.7\t-171.7\t25.8",
-  "Moldova\tMD\t26.6\t45.4\t30.2\t48.5",
-  "Monaco\tMN\t7.3\t43.7\t7.5\t43.8",
-  "Mongolia\tMG\t87.7\t41.5\t119.9\t52.2",
-  "Montenegro\tMJ\t18.4\t42.2\t20.4\t43.6",
-  "Montserrat\tMH\t-62.3\t16.6\t-62.1\t16.8",
-  "Morocco\tMO\t-13.2\t27.6\t-1.0\t35.9",
-  "Mozambique\tMZ\t30.2\t-26.9\t40.8\t-10.5",
-  "Myanmar\tBM\t92.1\t9.6\t101.2\t28.5",
-  "Namibia\tWA\t11.7\t-29.0\t25.3\t-17.0",
-  "Nauru\tNR\t166.8\t-0.6\t166.9\t-0.5",
-  "Navassa Island\tBQ\t-75.1\t18.3\t-75.0\t18.4",
-  "Nepal\tNP\t80.0\t26.3\t88.2\t30.4",
-  "Netherlands\tNL\t3.3\t50.7\t7.2\t53.6",
-  "Netherlands Antilles\tNT\t-69.2\t11.9\t-68.2\t12.4\t-63.3\t17.4\t-62.9\t18.1",
-  "New Caledonia\tNC\t163.5\t-22.8\t169.0\t-19.5",
-  "New Zealand\tNZ\t166.4\t-48.1\t178.6\t-34.1",
-  "Nicaragua\tNU\t-87.7\t10.7\t-82.6\t15.0",
-  "Niger\tNG\t0.1\t11.6\t16.0\t23.5",
-  "Nigeria\tNI\t2.6\t4.2\t14.7\t13.9",
-  "Niue\tNE\t-170.0\t-19.2\t-169.8\t-19.0",
-  "Norfolk Island\tNF\t168.0\t-29.2\t168.1\t-29.0",
-  "North Korea\tKN\t124.1\t37.5\t130.7\t43.0",
-  "North Sea\tXX\t",
-  "Northern Mariana Islands\tCQ\t144.8\t14.1\t146.1\t20.6",
-  "Norway\tNO\t4.6\t57.9\t31.1\t71.2",
-  "Oman\tMU\t51.8\t16.6\t59.8\t25.0",
-  "Pacific Ocean\tXX\t",
-  "Pakistan\tPK\t60.8\t23.6\t77.8\t37.1",
-  "Palau\tPS\t132.3\t4.3\t132.3\t4.3\t134.1\t6.8\t134.7\t7.7",
-  "Palmyra Atoll\tLQ\t-162.2\t5.8\t-162.0\t5.9",
-  "Panama\tPM\t-83.1\t7.1\t-77.2\t9.6",
-  "Papua New Guinea\tPP\t140.8\t-11.7\t156.0\t-0.9\t157.0\t-4.9\t157.1\t-4.8\t159.4\t-4.7\t159.5\t-4.5",
-  "Paracel Islands\tPF\t111.1\t15.7\t111.2\t15.8",
-  "Paraguay\tPA\t-62.7\t-27.7\t-54.3\t-19.3",
-  "Peru\tPE\t-81.4\t-18.4\t-68.7\t0.0",
-  "Philippines\tRP\t116.9\t4.9\t126.6\t21.1",
-  "Pitcairn Islands\tPC\t-128.4\t-24.5\t-128.3\t-24.3",
-  "Poland\tPL\t14.1\t49.0\t24.2\t54.8",
-  "Portugal\tPO\t-9.5\t36.9\t-6.2\t42.1\t-31.3\t36.9\t-25.0\t39.8\t-17.3\t32.4\t-16.2\t33.2",
-  "Portugal: Azores\tXX\t-31.3\t36.9\t-25.0\t39.8",
-  "Portugal: Madeira\tXX\t-17.3\t32.4\t-16.2\t33.2",
-  "Puerto Rico\tRQ\t-68.0\t17.8\t-65.2\t18.5",
-  "Qatar\tQA\t50.7\t24.4\t52.4\t26.2",
-  "Republic of the Congo\tCF\t11.2\t-5.1\t18.6\t3.7",
-  "Reunion\tRE\t55.2\t-21.4\t55.8\t-20.9",
-  "Romania\tRO\t20.2\t43.6\t29.7\t48.3",
-  "Ross Sea\tXX\t",
-  "Russia\tRS\t-180.0\t64.2\t-169.0\t71.6\t19.7\t54.3\t22.9\t55.3\t26.9\t41.1\t180.0\t81.3",
-  "Rwanda\tRW\t28.8\t-2.9\t30.9\t-1.1",
-  "Saint Helena\tSH\t-5.8\t-16.1\t-5.6\t-15.9",
-  "Saint Kitts and Nevis\tSC\t62.9\t17.0\t62.5\t17.5",
-  "Saint Lucia\tST\t-61.1\t13.7\t-60.9\t14.1",
-  "Saint Pierre and Miquelon\tSB\t-56.5\t46.7\t-56.2\t47.1",
-  "Saint Vincent and the Grenadines\tVC\t-61.6\t12.4\t-61.1\t13.4",
-  "Samoa\tWS\t-172.8\t-14.1\t-171.4\t-13.4",
-  "San Marino\tSM\t12.4\t43.8\t12.5\t44.0",
-  "Sao Tome and Principe\tTP\t6.4\t0.0\t1.7\t7.5",
-  "Saudi Arabia\tSA\t34.4\t15.6\t55.7\t32.2",
-  "Senegal\tSG\t-17.6\t12.3\t-11.4\t16.7",
-  "Serbia\tRB\t18.8\t42.2\t23.1\t46.2",
-  "Seychelles\tSE\t50.7\t-9.6\t51.1\t-9.2\t52.7\t-7.2\t52.8\t-7.0\t53.0\t-6.3\t53.7\t-5.1\t55.2\t-5.9\t56.0\t-3.7\t56.2\t-7.2\t56.3\t-7.1",
-  "Sierra Leone\tSL\t-13.4\t6.9\t-10.3\t10.0",
-  "Singapore\tSN\t103.6\t1.1\t104.1\t1.5",
-  "Slovakia\tLO\t16.8\t47.7\t22.6\t49.6",
-  "Slovenia\tSI\t13.3\t45.4\t16.6\t46.9",
-  "Solomon Islands\tBP\t155.5\t-11.9\t162.8\t-5.1\t165.6\t-11.8\t167.0\t-10.1\t167.1\t-10.0\t167.3\t-9.8\t168.8\t-12.3\t168.8\t-12.3",
-  "Somalia\tSO\t40.9\t-1.7\t51.4\t12.0",
-  "South Africa\tSF\t16.4\t-34.9\t32.9\t-22.1",
-  "South Georgia and the South Sandwich Islands\tSX\t-38.3\t-54.9\t-35.7\t-53.9",
-  "South Korea\tKS\t125.0\t33.1\t129.6\t38.6",
-  "Southern Ocean\tXX\t",
-  "Spain\tSP\t-9.3\t35.1\t4.3\t43.8\t-18.2\t27.6\t-13.4\t29.5",
-  "Spain: Canary Islands\tXX\t-18.2\t27.6\t-13.4\t29.5",
-  "Spratly Islands\tPG\t114.0\t9.6\t115.8\t11.1",
-  "Sri Lanka\tCE\t79.6\t5.9\t81.9\t9.8",
-  "Sudan\tSU\t21.8\t3.4\t38.6\t23.6",
-  "Suriname\tNS\t-58.1\t1.8\t-54.0\t6.0",
-  "Svalbard\tSV\t10.4\t76.4\t33.5\t80.8",
-  "Swaziland\tWZ\t30.7\t-27.4\t32.1\t-25.7",
-  "Sweden\tSW\t10.9\t55.3\t24.2\t69.1",
-  "Switzerland\tSZ\t5.9\t45.8\t10.5\t47.8",
-  "Syria\tSY\t35.7\t32.3\t42.4\t37.3",
-  "Taiwan\tTW\t119.3\t21.9\t122.0\t25.3",
-  "Tajikistan\tTI\t67.3\t36.6\t75.1\t41.0",
-  "Tanzania\tTZ\t29.3\t-11.8\t40.4\t-1.0",
-  "Tasman Sea\tXX\t",
-  "Thailand\tTH\t97.3\t5.6\t105.6\t20.5",
-  "Togo\tTO\t-0.2\t6.1\t1.8\t11.1",
-  "Tokelau\tTL\t-172.6\t-9.5\t-171.1\t-8.5",
-  "Tonga\tTN\t-176.3\t-22.4\t-176.2\t-22.3\t-175.5\t-21.5\t-174.5\t-20.0",
-  "Trinidad and Tobago\tTD\t-62.0\t10.0\t-60.5\t11.3",
-  "Tromelin Island\tTE\t54.5\t-15.9\t54.5\t-15.9",
-  "Tunisia\tTS\t7.5\t30.2\t11.6\t37.5",
-  "Turkey\tTU\t25.6\t35.8\t44.8\t42.1",
-  "Turkmenistan\tTX\t52.4\t35.1\t66.7\t42.8",
-  "Turks and Caicos Islands\tTK\t-73.8\t20.9\t-73.0\t21.3",
-  "Tuvalu\tTV\t176.0\t-7.3\t177.3\t-5.6\t178.4\t-8.0\t178.7\t-7.4\t179.0\t-9.5\t179.9\t-8.5",
-  "Uganda\tUG\t29.5\t-1.5\t35.0\t4.2",
-  "Ukraine\tUP\t22.1\t44.3\t40.2\t52.4",
-  "United Arab Emirates\tAE\t51.1\t22.4\t56.4\t26.1",
-  "United Kingdom\tUK\t-8.7\t49.7\t1.8\t60.8",
-  "Uruguay\tUY\t-58.5\t-35.0\t-53.1\t-30.1",
-  "USA\tUS\t-124.8\t24.5\t-66.9\t49.4\t-168.2\t54.3\t-130.0\t71.4\t172.4\t52.3\t176.0\t53.0\t177.2\t51.3\t179.8\t52.1\t-179.5\t51.0\t-172.0\t52.5\t-171.5\t52.0\t-164.5\t54.5\t-164.8\t23.5\t-164.7\t23.6\t-162.0\t23.0\t-161.9\t23.1\t-160.6\t18.9\t-154.8\t22.2",
-  "USA: Alabama\tXX\t-88.8\t30.1\t-84.9\t35.0",
-  "USA: Alaska\tXX\t-168.2\t54.3\t-130.0\t71.4\t172.4\t52.3\t176.0\t53.0\t177.2\t51.3\t179.8\t52.1\t-179.5\t51.0\t-172.0\t52.5\t-171.5\t52.0\t-164.5\t54.5",
-  "USA: Alaska, Aleutian Islands\tXX\t172.4\t52.3\t176.0\t53.0\t177.2\t51.3\t179.8\t52.1\t-179.5\t51.0\t-172.0\t52.5\t-171.5\t52.0\t-164.5\t54.5",
-  "USA: Arizona\tXX\t-114.9\t31.3\t-109.0\t37.0",
-  "USA: Arkansas\tXX\t-94.7\t33.0\t-89.6\t36.5",
-  "USA: California\tXX\t-124.5\t32.5\t-114.1\t42.0",
-  "USA: Colorado\tXX\t-109.1\t36.9\t-102.0\t41.0",
-  "USA: Connecticut\tXX\t-73.8\t40.9\t-71.8\t42.1",
-  "USA: Delaware\tXX\t-75.8\t38.4\t-74.9\t39.8",
-  "USA: Florida\tXX\t-87.7\t24.5\t-80.0\t31.0",
-  "USA: Georgia\tXX\t-85.7\t30.3\t-80.8\t35.0",
-  "USA: Hawaii\tXX\t-164.8\t23.5\t-164.7\t23.6\t-162.0\t23.0\t-161.9\t23.1\t-160.6\t18.9\t-154.8\t22.2",
-  "USA: Idaho\tXX\t-117.3\t41.9\t-111.0\t49.0",
-  "USA: Illinois\tXX\t-91.6\t36.9\t-87.0\t42.5",
-  "USA: Indiana\tXX\t-88.1\t37.7\t-84.8\t41.8",
-  "USA: Iowa\tXX\t-96.7\t40.3\t-90.1\t43.5",
-  "USA: Kansas\tXX\t-102.1\t36.9\t-94.6\t40.0",
-  "USA: Kentucky\tXX\t-89.5\t36.5\t-82.0\t39.1",
-  "USA: Louisiana\tXX\t-94.1\t28.9\t-88.8\t33.0",
-  "USA: Maine\tXX\t-71.1\t43.0\t-66.9\t47.5",
-  "USA: Maryland\tXX\t-79.5\t37.8\t-75.1\t39.7",
-  "USA: Massachusetts\tXX\t-73.6\t41.2\t-69.9\t42.9",
-  "USA: Michigan\tXX\t-90.5\t41.6\t-82.1\t48.3",
-  "USA: Minnesota\tXX\t-97.3\t43.4\t-90.0\t49.4",
-  "USA: Mississippi\tXX\t-91.7\t30.1\t-88.1\t35.0",
-  "USA: Missouri\tXX\t-95.8\t36.0\t-89.1\t40.6",
-  "USA: Montana\tXX\t-116.1\t44.3\t-104.0\t49.0",
-  "USA: Nebraska\tXX\t-104.1\t40.0\t-95.3\t43.0",
-  "USA: Nevada\tXX\t-120.0\t35.0\t-114.0\t42.0",
-  "USA: New Hampshire\tXX\t-72.6\t42.6\t-70.7\t45.3",
-  "USA: New Jersey\tXX\t-75.6\t38.9\t-73.9\t41.4",
-  "USA: New Mexico\tXX\t-109.1\t31.3\t-103.0\t37.0",
-  "USA: New York\tXX\t-79.8\t40.4\t-71.9\t45.0",
-  "USA: North Carolina\tXX\t-84.4\t33.8\t-75.5\t36.6",
-  "USA: North Dakota\tXX\t-104.1\t45.9\t-96.6\t49.0",
-  "USA: Ohio\tXX\t-84.9\t38.3\t-80.5\t42.3",
-  "USA: Oklahoma\tXX\t-103.1\t33.6\t-94.4\t37.0",
-  "USA: Oregon\tXX\t-124.6\t41.9\t-116.5\t46.3",
-  "USA: Pennsylvania\tXX\t-80.6\t39.7\t-74.7\t42.5",
-  "USA: Rhode Island\tXX\t-71.9\t41.1\t-71.1\t42.0",
-  "USA: South Carolina\tXX\t-83.4\t32.0\t-78.6\t35.2",
-  "USA: South Dakota\tXX\t-104.1\t42.4\t-96.4\t45.9",
-  "USA: Tennessee\tXX\t-90.4\t35.0\t-81.7\t36.7",
-  "USA: Texas\tXX\t-106.7\t25.8\t-93.5\t36.5",
-  "USA: Utah\tXX\t-114.1\t37.0\t-109.1\t42.0",
-  "USA: Vermont\tXX\t-73.5\t42.7\t-71.5\t45.0",
-  "USA: Virginia\tXX\t-83.7\t36.5\t-75.2\t39.5",
-  "USA: Washington\tXX\t-124.8\t45.5\t-116.9\t49.0",
-  "USA: West Virginia\tXX\t-82.7\t37.1\t-77.7\t40.6",
-  "USA: Wisconsin\tXX\t-92.9\t42.4\t-86.3\t47.3",
-  "USA: Wyoming\tXX\t-111.1\t40.9\t-104.1\t45.0",
-  "Uzbekistan\tUZ\t55.9\t37.1\t73.1\t45.6",
-  "Vanuatu\tNH\t166.5\t-20.3\t170.2\t-13.1",
-  "Venezuela\tVE\t-73.4\t0.7\t-59.8\t12.2",
-  "Viet Nam\tVM\t102.1\t8.4\t109.5\t23.4",
-  "Virgin Islands\tVQ\t-65.1\t17.6\t-64.6\t18.5",
-  "Wake Island\tWQ\t166.5\t19.2\t166.7\t19.3",
-  "Wallis and Futuna\tWF\t-178.3\t-14.4\t-178.0\t-14.2\t-176.3\t-13.4\t-176.1\t-13.2",
-  "West Bank\tWE\t34.8\t31.3\t35.6\t32.6",
-  "Western Sahara\tWI\t-17.2\t20.7\t-8.7\t27.7",
-  "Yemen\tYM\t41.8\t11.7\t54.5\t19.0",
-  "Zambia\tZA\t21.9\t-18.1\t33.7\t-8.2",
-  "Zimbabwe\tZI\t25.2\t-22.5\t33.1\t-15.6",
-  NULL
-};
-
-
-/* one CtBlock for each discontiguous area per country */
-
-typedef struct ctblock {
-  CharPtr  country;       /* points to instance in countries list */
-  FloatHi  minx;
-  FloatHi  miny;
-  FloatHi  maxx;
-  FloatHi  maxy;
-} CtBlock, PNTR CtBlockPtr;
-
-/* one CtGrid for each 10-degree-by-10-degree area touched by a CtBlock */
-
-typedef struct ctgrid {
-  CtBlockPtr  cbp;
-  Int2        xindex;
-  Int2        yindex;
-} CtGrid, PNTR CtGridPtr;
-
-/* main structure for country/lat-lon lookup */
-
-typedef struct ctset {
-  ValNodePtr       countries;
-  ValNodePtr       blocks;
-  ValNodePtr       grids;
-  CtBlockPtr PNTR  bkarray;     /* sorted by country name */
-  CtGridPtr PNTR   gdarray;     /* sorted by geographic index */
-  Int4             num_blocks;
-  Int4             num_grids;
-} CtSet, PNTR CtSetPtr;
-
-static int LIBCALLBACK SortCbpByCountry (
-  VoidPtr ptr1,
-  VoidPtr ptr2
-)
-
-{
-  int         compare;
-  CtBlockPtr  cbp1, cbp2;
-
-  if (ptr1 == NULL || ptr2 == NULL) return 0;
-  cbp1 = *((CtBlockPtr PNTR) ptr1);
-  cbp2 = *((CtBlockPtr PNTR) ptr2);
-  if (cbp1 == NULL || cbp2 == NULL) return 0;
-
-  compare = StringICmp (cbp1->country, cbp2->country);
-  if (compare > 0) {
-    return 1;
-  } else if (compare < 0) {
-    return -1;
-  }
-
-  return 0;
-}
-
-static int CgpGridComp (
-  CtGridPtr cgp1,
-  Int2 xindex,
-  Int2 yindex
-)
-
-{
-  if (cgp1 == NULL) return 0;
-
-  if (cgp1->xindex > xindex) {
-    return 1;
-  } else if (cgp1->xindex < xindex) {
-    return -1;
-  }
-
-  if (cgp1->yindex > yindex) {
-    return 1;
-  } else if (cgp1->yindex < yindex) {
-    return -1;
-  }
-
-  return 0;
-}
-
-static int LIBCALLBACK SortCgpByGrid (
-  VoidPtr ptr1,
-  VoidPtr ptr2
-)
-
-{
-  CtBlockPtr  cbp1, cbp2;
-  CtGridPtr   cgp1, cgp2;
-  int         compare;
-
-  if (ptr1 == NULL || ptr2 == NULL) return 0;
-  cgp1 = *((CtGridPtr PNTR) ptr1);
-  cgp2 = *((CtGridPtr PNTR) ptr2);
-  if (cgp1 == NULL || cgp2 == NULL) return 0;
-
-  compare = CgpGridComp (cgp1, cgp2->xindex, cgp2->yindex);
-  if (compare > 0) {
-    return 1;
-  } else if (compare < 0) {
-    return -1;
-  }
-
-  cbp1 = cgp1->cbp;
-  cbp2 = cgp2->cbp;
-  if (cbp1 == NULL || cbp2 == NULL) return 0;
-
-  if (cbp1->minx > cbp2->minx) {
-    return 1;
-  } else if (cbp1->minx < cbp2->minx) {
-    return -1;
-  }
-
-  if (cbp1->maxx > cbp2->maxx) {
-    return -1;
-  } else if (cbp1->maxx < cbp2->maxx) {
-    return 1;
-  }
-
-  if (cbp1->miny > cbp2->miny) {
-    return 1;
-  } else if (cbp1->miny < cbp2->miny) {
-    return -1;
-  }
-
-  if (cbp1->maxy > cbp2->maxy) {
-    return -1;
-  } else if (cbp1->maxy < cbp2->maxy) {
-    return 1;
-  }
-
-  compare = StringICmp (cbp1->country, cbp2->country);
-  if (compare > 0) {
-    return 1;
-  } else if (compare < 0) {
-    return -1;
-  }
-
-  return 0;
-}
-
-static Int2 LatLonDegreeToIndex (
-  FloatHi coord
-)
-
-{
-  double  fval;
-  long    ival;
-
-  fval = coord;
-  fval += 200.0;
-  fval /= 10.0;
-  ival = (long) fval;
-  ival -= 20;
-
-  return (Int2) ival;
-}
-
-static CtSetPtr CtSetDataFree (
-  CtSetPtr csp
-)
-
-{
-  if (csp == NULL) return NULL;
-
-  ValNodeFreeData (csp->countries);
-  ValNodeFreeData (csp->blocks);
-  ValNodeFreeData (csp->grids);
-
-  MemFree (csp->bkarray);
-  MemFree (csp->gdarray);
-
-  MemFree (csp);
-
-  return NULL;
-}
-
-static Boolean ct_set_not_found = FALSE;
-
-static CtSetPtr GetCtSetLatLonDataInt (
-  CharPtr prop,
-  CharPtr file,
-  CharPtr PNTR local
-)
-
-{
-  CtBlockPtr PNTR  bkarray;
-  ValNodePtr       blocks = NULL;
-  FloatHi          bounds [4];
-  CtBlockPtr       cbp;
-  CtGridPtr        cgp;
-  ValNodePtr       countries = NULL;
-  CharPtr          country;
-  CtSetPtr         csp;
-  FileCache        fc;
-  FILE             *fp = NULL;
-  CtGridPtr PNTR   gdarray;
-  ValNodePtr       grids = NULL;
-  Int2             hix;
-  Int2             hiy;
-  Int2             i;
-  Int2             j = 0;
-  ValNodePtr       lastblk = NULL;
-  ValNodePtr       lastctry = NULL;
-  ValNodePtr       lastgrd = NULL;
-  Char             line [1024];
-  Int2             lox;
-  Int2             loy;
-  Int4             num;
-  Char             path [PATH_MAX];
-  CharPtr          ptr;
-  ErrSev           sev;
-  CharPtr          str = NULL;
-  double           val;
-  ValNodePtr       vnp;
-  CharPtr          wrk;
-  Int2             x;
-  Int2             y;
-
-  csp = (CtSetPtr) GetAppProperty (prop);
-  if (csp != NULL) return csp;
-
-  if (ct_set_not_found) return NULL;
-
-  if (FindPath ("ncbi", "ncbi", "data", path, sizeof (path))) {
-    FileBuildPath (path, NULL, file);
-    sev = ErrSetMessageLevel (SEV_ERROR);
-    fp = FileOpen (path, "r");
-    ErrSetMessageLevel (sev);
-  }
-
-  if (fp != NULL) {
-    FileCacheSetup (&fc, fp);
-    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
-  } else if (local != NULL) {
-    str = local [j];
-    if (str != NULL) {
-      StringNCpy_0 (line, str, sizeof (line));
-      str = line;
-    }
-  } else return NULL;
-
-  while (str != NULL) {
-    if (StringDoesHaveText (str)) {
-      ptr = StringChr (str, '\t');
-      if (ptr != NULL) {
-        *ptr = '\0';
-        ptr++;
-        ptr = StringChr (ptr, '\t');
-        if (ptr != NULL) {
-          ptr++;
-          if (StringDoesHaveText (str) && StringDoesHaveText (ptr)) {
-
-            country = StringSave (str);
-
-            vnp = ValNodeAddPointer (&lastctry, 0, (Pointer) country);
-            if (countries == NULL) {
-              countries = vnp;
-            }
-            lastctry = vnp;
-
-            wrk = StringSave (ptr);
-            str = wrk;
-            i = 0;
-
-            while (StringDoesHaveText (str)) {
-              ptr = StringChr (str, '\t');
-              if (ptr != NULL) {
-                *ptr = '\0';
-                ptr++;
-              }
-
-              if (sscanf (str, "%lf", &val) == 1) {
-                bounds [i] = (FloatHi) val;
-                i++;
-                if (i > 3) {
-
-                  cbp = (CtBlockPtr) MemNew (sizeof (CtBlock));
-                  if (cbp != NULL) {
-                    cbp->country = country;
-                    cbp->minx = bounds [0];
-                    cbp->miny = bounds [1];
-                    cbp->maxx = bounds [2];
-                    cbp->maxy = bounds [3];
-
-                    vnp = ValNodeAddPointer (&lastblk, 0, (Pointer) cbp);
-                    if (blocks == NULL) {
-                      blocks = vnp;
-                    }
-                    lastblk = vnp;
-
-                    lox = LatLonDegreeToIndex (cbp->minx);
-                    loy = LatLonDegreeToIndex (cbp->miny);
-                    hix = LatLonDegreeToIndex (cbp->maxx);
-                    hiy = LatLonDegreeToIndex (cbp->maxy);
-
-                    for (x = lox; x <= hix; x++) {
-                      for (y = loy; y <= hiy; y++) {
-                        cgp = (CtGridPtr) MemNew (sizeof (CtGrid));
-                        if (cgp != NULL) {
-                          cgp->cbp = cbp;
-                          cgp->xindex = x;
-                          cgp->yindex = y;
-
-                          vnp = ValNodeAddPointer (&lastgrd, 0, (Pointer) cgp);
-                          if (grids == NULL) {
-                            grids = vnp;
-                          }
-                          lastgrd = vnp;
-                        }
-                      }
-                    }
-                  }
-
-                  i = 0;
-                }
-              }
-
-              str = ptr;
-            }
-
-            MemFree (wrk);
-          }
-        }
-      }
-    }
-
-    if (fp != NULL) {
-      str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
-    } else {
-      j++;
-      str = local [j];
-      if (str != NULL) {
-        StringNCpy_0 (line, str, sizeof (line));
-        str = line;
-      }
-    }
-  }
-
-  if (fp != NULL) {
-    FileClose (fp);
-  }
-
-  if (countries == NULL || blocks == NULL || grids == NULL) {
-    ct_set_not_found = TRUE;
-    return NULL;
-  }
-
-  csp = (CtSetPtr) MemNew (sizeof (CtSet));
-  if (csp == NULL) return NULL;
-
-  /* now populate, heap sort arrays */
-
-  num = ValNodeLen (blocks);
-
-  csp->countries = countries;
-  csp->blocks = blocks;
-  csp->num_blocks = (Int2) num;
-
-  bkarray = (CtBlockPtr PNTR) MemNew (sizeof (CtBlockPtr) * (num + 1));
-  if (bkarray != NULL) {
-    for (vnp = blocks, i = 0; vnp != NULL; vnp = vnp->next, i++) {
-      cbp = (CtBlockPtr) vnp->data.ptrvalue;
-      bkarray [i] = cbp;
-    }
-
-    HeapSort (bkarray, (size_t) num, sizeof (CtBlockPtr), SortCbpByCountry);
-    csp->bkarray = bkarray;
-  }
-
-  num = ValNodeLen (grids);
-
-  csp->num_grids = (Int2) num;
-
-  gdarray = (CtGridPtr PNTR) MemNew (sizeof (CtGridPtr) * (num + 1));
-  if (gdarray != NULL) {
-    for (vnp = grids, i = 0; vnp != NULL; vnp = vnp->next, i++) {
-      cgp = (CtGridPtr) vnp->data.ptrvalue;
-      gdarray [i] = cgp;
-    }
-
-    HeapSort (gdarray, (size_t) num, sizeof (CtGridPtr), SortCgpByGrid);
-    csp->gdarray = gdarray;
-  }
-
-  SetAppProperty (prop, (Pointer) csp);
-
-  return csp;
-}
-
-static CtSetPtr GetCtSetLatLonData (
-  void
-)
-
-{
-  return GetCtSetLatLonDataInt ("CountryLatLonList", "country_lat_lon.txt", ctry_lat_lon);
-}
-
-NLM_EXTERN Boolean IsCountryInLatLonList (
-  CharPtr country
-)
-
-{
-  CtBlockPtr       cbp;
-  CtBlockPtr PNTR  bkarray;
-  CtSetPtr         csp;
-  Int2             L, R, mid;
-
-  if (StringHasNoText (country)) return FALSE;
-
-  csp = GetCtSetLatLonData ();
-  if (csp == NULL) return FALSE;
-
-  bkarray = csp->bkarray;
-  if (bkarray == NULL) return FALSE;
-
-  L = 0;
-  R = csp->num_blocks - 1;
-
-  while (L < R) {
-    mid = (L + R) / 2;
-    cbp = bkarray [mid];
-    if (cbp != NULL && StringICmp (cbp->country, country) < 0) {
-      L = mid + 1;
-    } else {
-      R = mid;
-    }
-  }
-
-  cbp = bkarray [R];
-  if (cbp != NULL && StringICmp (cbp->country, country) == 0) return TRUE;
-
-  return FALSE;
-}
-
-static Int2 GetCountryBlockIndex (
-  CharPtr country
-)
-
-{
-  CtBlockPtr       cbp;
-  CtBlockPtr PNTR  bkarray;
-  CtSetPtr         csp;
-  Int2             L, R, mid;
-
-  if (StringHasNoText (country)) return -1;
-
-  csp = GetCtSetLatLonData ();
-  if (csp == NULL) return -1;
-
-  bkarray = csp->bkarray;
-  if (bkarray == NULL) return -1;
-
-  L = 0;
-  R = csp->num_blocks - 1;
-
-  while (L < R) {
-    mid = (L + R) / 2;
-    cbp = bkarray [mid];
-    if (cbp != NULL && StringICmp (cbp->country, country) < 0) {
-      L = mid + 1;
-    } else {
-      R = mid;
-    }
-  }
-
-  if (R < csp->num_blocks) {
-    cbp = bkarray [R];
-    if (cbp == NULL) return -1;
-    if (StringICmp (cbp->country, country) != 0) return -1;
-    return R;
-  }
-
-  return -1;
-}
-
-NLM_EXTERN Boolean CountryBoxesOverlap (
-  CharPtr country1,
-  CharPtr country2
-)
-
-{
-  CtBlockPtr       cbp1, cbp2;
-  CtBlockPtr PNTR  bkarray;
-  CtSetPtr         csp;
-  Int4             num_blocks;
-  Int2             R1, R2, x1, x2;
-
-  R1 = GetCountryBlockIndex (country1);
-  R2 = GetCountryBlockIndex (country2);
-
-  if (R1 < 0 || R2 < 0) return FALSE;
-
-  csp = GetCtSetLatLonData ();
-  if (csp == NULL) return FALSE;
-  num_blocks = csp->num_blocks;
-
-  bkarray = csp->bkarray;
-  if (bkarray == NULL) return FALSE;
-
-  for (x1 = R1; x1 < num_blocks; x1++) {
-    cbp1 = bkarray [x1];
-    if (cbp1 == NULL) return FALSE;
-    if (StringICmp (cbp1->country, country1) != 0) break;
-
-    for (x2 = R2; x2 < num_blocks; x2++) {
-      cbp2 = bkarray [x2];
-      if (cbp2 == NULL) return FALSE;
-      if (StringICmp (cbp2->country, country2) != 0) break;
-
-      if (cbp1->maxx >= cbp2->minx && cbp1->minx <= cbp2->maxx) {
-        if (cbp1->maxy >= cbp2->miny && cbp1->miny <= cbp2->maxy) return TRUE;
-      }
-    }
-  }
-
-  return FALSE;
-}
-
-NLM_EXTERN Boolean TestLatLonForCountry (
-  CharPtr country,
-  FloatHi lat,
-  FloatHi lon
-)
-
-{
-  CtBlockPtr       cbp;
-  CtBlockPtr PNTR  bkarray;
-  CtSetPtr         csp;
-  Int2             L, R, mid;
-
-  if (StringHasNoText (country)) return FALSE;
-
-  csp = GetCtSetLatLonData ();
-  if (csp == NULL) return FALSE;
-
-  bkarray = csp->bkarray;
-  if (bkarray == NULL) return FALSE;
-
-  L = 0;
-  R = csp->num_blocks - 1;
-
-  while (L < R) {
-    mid = (L + R) / 2;
-    cbp = bkarray [mid];
-    if (cbp != NULL && StringICmp (cbp->country, country) < 0) {
-      L = mid + 1;
-    } else {
-      R = mid;
-    }
-  }
-
-  while (R < csp->num_blocks) {
-    cbp = bkarray [R];
-    if (cbp == NULL) return FALSE;
-    if (StringICmp (cbp->country, country) != 0) return FALSE;
-    if (lon >= cbp->minx && lat >= cbp->miny && lon <= cbp->maxx && lat <= cbp->maxy) return TRUE;
-    R++;
-  }
-
-  return FALSE;
-}
-
-NLM_EXTERN CharPtr GuessCountryForLatLon (
-  FloatHi lat,
-  FloatHi lon
-)
-
-{
-  CtBlockPtr      cbp;
-  CtGridPtr       cgp;
-  CharPtr         country = NULL;
-  CtSetPtr        csp;
-  CtGridPtr PNTR  gdarray;
-  Int2            L, R, mid;
-  Int2            x;
-  Int2            y;
-
-  csp = GetCtSetLatLonData ();
-  if (csp == NULL) return NULL;
-
-  gdarray = csp->gdarray;
-  if (gdarray == NULL) return NULL;
-
-  L = 0;
-  R = csp->num_grids - 1;
-
-  x = LatLonDegreeToIndex (lon);
-  y = LatLonDegreeToIndex (lat);
-
-  while (L < R) {
-    mid = (L + R) / 2;
-    cgp = gdarray [mid];
-    if (cgp != NULL && CgpGridComp (cgp, x, y) < 0) {
-      L = mid + 1;
-    } else {
-      R = mid;
-    }
-  }
-
-  while (R < csp->num_grids) {
-    cgp = gdarray [R];
-    if (cgp == NULL) return country;
-    if (cgp->xindex != x || cgp->yindex != y) return country;
-    cbp = cgp->cbp;
-    if (cbp == NULL) return country;
-    if (lon >= cbp->minx && lat >= cbp->miny && lon <= cbp->maxx && lat <= cbp->maxy) {
-      country = cbp->country;
-    }
-    R++;
-  }
-
-  return country;
-}
-
-
 static CharPtr bodiesOfWater [] = {
+  "Basin",
   "Bay",
+  "Bight",
   "Canal",
   "Channel",
   "Coastal",
@@ -9979,11 +9767,15 @@ static CharPtr bodiesOfWater [] = {
   "Ocean",
   "Offshore",
   "Passage",
+  "Passages",
+  "Reef",
   "River",
   "Sea",
   "Seawater",
   "Sound",
   "Strait",
+  "Trench",
+  "Trough",
   "Water",
   "Waters",
   NULL
@@ -10044,8 +9836,1467 @@ NLM_EXTERN Boolean StringContainsBodyOfWater (CharPtr str)
   return FALSE;
 }
 
+/* BEGINNING OF NEW LATITUDE-LONGITUDE COUNTRY VALIDATION CODE */
+
+/* latitude-longitude to country conversion */
+
+typedef struct ctyblock {
+  CharPtr  name;    /* name of country or country: subregion */
+  CharPtr  level0;  /* just the country */
+  CharPtr  level1;  /* just the subregion */
+  Int4     area;    /* pixel area for choosing smallest overlapping subregion */
+  Int4     minlat;  /* minimum latitude */
+  Int4     maxlat;  /* maximum latitude */
+  Int4     minlon;  /* minimum longitude */
+  Int4     maxlon;  /* maximum longitude */
+} CtyBlock, PNTR CtyBlockPtr;
+
+typedef struct latblock {
+  CtyBlockPtr  landmass;   /* points to instance in countries list */
+  Int4         lat;        /* latitude (integer in 10ths of a degree) */
+  Int4         minlon;     /* minimum longitude */
+  Int4         maxlon;     /* maximum longitude */
+} LatBlock, PNTR LatBlockPtr;
+
+typedef struct ctryset {
+  ValNodePtr        ctyblocks;      /* linked list of country blocks */
+  CtyBlockPtr PNTR  ctyarray;       /* country blocks sorted by name */
+  Int4              numCtyBlocks;
+  ValNodePtr        latblocks;      /* linked list of latitude blocks */
+  LatBlockPtr PNTR  latarray;       /* latitude blocks sorted by latitude then longitude */
+  Int4              numLatBlocks;
+  FloatHi           scale;
+} CtrySet, PNTR CtrySetPtr;
+
+static int LIBCALLBACK SortByCountry (
+  VoidPtr ptr1,
+  VoidPtr ptr2
+)
+
+{
+  CtyBlockPtr  cbp1;
+  CtyBlockPtr  cbp2;
+  int          cmp;
+  ValNodePtr   vnp1;
+  ValNodePtr   vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  cbp1 = (CtyBlockPtr) vnp1->data.ptrvalue;
+  cbp2 = (CtyBlockPtr) vnp2->data.ptrvalue;
+  if (cbp1 == NULL || cbp2 == NULL) return 0;
+
+  cmp = StringICmp (cbp1->name, cbp2->name);
+  if (cmp > 0) {
+    return 1;
+  } else if (cmp < 0) {
+    return -1;
+  }
+
+  return 0;
+}
+
+static int LIBCALLBACK SortByLatLon (
+  VoidPtr ptr1,
+  VoidPtr ptr2
+)
+
+{
+  CtyBlockPtr  cbp1;
+  CtyBlockPtr  cbp2;
+  int          cmp;
+  LatBlockPtr  lbp1;
+  LatBlockPtr  lbp2;
+  ValNodePtr   vnp1;
+  ValNodePtr   vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  lbp1 = (LatBlockPtr) vnp1->data.ptrvalue;
+  lbp2 = (LatBlockPtr) vnp2->data.ptrvalue;
+  if (lbp1 == NULL || lbp2 == NULL) return 0;
+
+  if (lbp1->lat < lbp2->lat) {
+    return -1;
+  } else if (lbp1->lat > lbp2->lat) {
+    return 1;
+  }
+
+  if (lbp1->minlon < lbp2->minlon) {
+    return -1;
+  } else if (lbp1->minlon > lbp2->minlon) {
+    return 1;
+  }
+
+  if (lbp1->maxlon < lbp2->maxlon) {
+    return 1;
+  } else if (lbp1->maxlon > lbp2->maxlon) {
+    return -1;
+  }
+
+  cbp1 = lbp1->landmass;
+  cbp2 = lbp2->landmass;
+  if (cbp1 == NULL || cbp2 == NULL) return 0;
+
+  if (cbp1->area < cbp2->area) {
+    return -1;
+  } else if (cbp1->area > cbp2->area) {
+    return 1;
+  }
+
+  cmp = StringICmp (cbp1->name, cbp2->name);
+  if (cmp > 0) {
+    return 1;
+  } else if (cmp < 0) {
+    return -1;
+  }
+
+  return 0;
+}
+
+#define EPSILON 0.001
+
+static Int4 ConvertLat (FloatHi lat, FloatHi scale) {
+
+  Int4  val = 0;
+
+  if (lat < -90.0) {
+    lat = -90.0;
+  }
+  if (lat > 90.0) {
+    lat = 90.0;
+  }
+
+  if (lat > 0) {
+    val = (Int4) (lat * scale + EPSILON);
+  } else {
+    val = (Int4) (-(-lat * scale + EPSILON));
+  }
+
+  return val;
+}
+
+static Int4 ConvertLon (FloatHi lon, FloatHi scale) {
+
+  Int4  val = 0;
+
+  if (lon < -180.0) {
+    lon = -180.0;
+  }
+  if (lon > 180.0) {
+    lon = 180.0;
+  }
+
+  if (lon > 0) {
+    val = (Int4) (lon * scale + EPSILON);
+  } else {
+    val = (Int4) (-(-lon * scale + EPSILON));
+  }
+
+  return val;
+}
+
+static CtrySetPtr FreeLatLonCountryData (
+  CtrySetPtr csp
+)
+
+{
+  CtyBlockPtr  cbp;
+  ValNodePtr   vnp;
+
+  if (csp == NULL) return NULL;
+
+  for (vnp = csp->ctyblocks; vnp != NULL; vnp = vnp->next) {
+    cbp = (CtyBlockPtr) vnp->data.ptrvalue;
+    if (cbp == NULL) continue;
+    MemFree (cbp->name);
+    MemFree (cbp->level0);
+    MemFree (cbp->level1);
+  }
+
+  ValNodeFreeData (csp->ctyblocks);
+  ValNodeFreeData (csp->latblocks);
+
+  MemFree (csp->ctyarray);
+  MemFree (csp->latarray);
+
+  MemFree (csp);
+
+  return NULL;
+}
+
+/* Original data source is Natural Earth.  Free vector and raster map data @ http://naturalearthdata.com */
+
+static CharPtr LatLonCountryReadNextLine (
+  FileCache PNTR fcp,
+  CharPtr buf,
+  size_t bufsize,
+  CharPtr PNTR local,
+  Int4Ptr idxP
+)
+
+{
+  Int4     idx;
+  CharPtr  str = NULL;
+
+  if (fcp != NULL) {
+    str = FileCacheReadLine (fcp, buf, bufsize, NULL);
+  }
+
+  if (local != NULL && idxP != NULL) {
+    idx = *idxP;
+    str = local [idx];
+    if (str != NULL) {
+      StringNCpy_0 (buf, local [idx], bufsize);
+      str = buf;
+    }
+    idx++;
+    *idxP = idx;
+  }
+
+  return str;
+}
+
+static CtrySetPtr ReadLatLonCountryData (
+  CharPtr prop,
+  CharPtr file,
+  CharPtr PNTR local
+)
+
+{
+  Char              buf [128];
+  Char              ch;
+  CtyBlockPtr       cbp = NULL;
+  CtrySetPtr        csp = NULL;
+  CtyBlockPtr PNTR  ctyarray;
+  ValNodePtr        ctyblocks = NULL;
+  FileCache         fc;
+  FileCache PNTR    fcp = NULL;
+  FILE              *fp = NULL;
+  Int4              i;
+  Int4              idx = 0;
+  ValNodePtr        lastlatblock = NULL;
+  ValNodePtr        lastctyblock = NULL;
+  FloatHi           latitude;
+  LatBlockPtr PNTR  latarray;
+  ValNodePtr        latblocks = NULL;
+  LatBlockPtr       lbp;
+  Char              line [1024];
+  FloatHi           maxlongitude;
+  FloatHi           minlongitude;
+  Char              path [PATH_MAX];
+  CharPtr           ptr;
+  CharPtr           recentCountry = NULL;
+  FloatHi           scale = 0.0;
+  Boolean           scale_not_set = TRUE;
+  ErrSev            sev;
+  CharPtr           str;
+  Char              tmp [128];
+  double            val;
+  ValNodePtr        vnp;
+  CharPtr           wrk;
+
+  if (FindPath ("ncbi", "ncbi", "data", path, sizeof (path))) {
+    FileBuildPath (path, NULL, file);
+    sev = ErrSetMessageLevel (SEV_ERROR);
+    fp = FileOpen (path, "r");
+    ErrSetMessageLevel (sev);
+  }
+
+  if (fp != NULL) {
+    FileCacheSetup (&fc, fp);
+    fcp = &fc;
+    local = NULL;
+  } else if (local == NULL) {
+    return NULL;
+  }
+
+  for (str = LatLonCountryReadNextLine (fcp, line, sizeof (line), local, &idx);
+       str != NULL;
+       str = LatLonCountryReadNextLine (fcp, line, sizeof (line), local, &idx)) {
+    if (StringHasNoText (str)) continue;
+
+    /* if reading from local copy, str cannot be modified, so copy to local buf and reset pointer */
+
+    StringNCpy_0 (buf, str, sizeof (buf));
+    str = buf;
+
+    ch = str [0];
+
+    /* ignore comment lines starting with hyphen */
+
+    if (ch == '-') continue;
+
+    /* Scale should be at top of file, after comments */
+
+    if (IS_DIGIT (ch)) {
+      if (scale_not_set && sscanf (str, "%lf", &val) == 1) {
+        scale = (FloatHi) val;
+        scale_not_set = FALSE;
+      }
+
+      continue;
+    }
+
+    /* Country starts on first column */
+
+    if (IS_ALPHA (ch)) {
+
+      if (scale_not_set) {
+        scale = 20.0;
+        scale_not_set = FALSE;
+      }
+
+      ptr = StringChr (str, '\t');
+      if (ptr != NULL) {
+        *ptr = '\0';
+      }
+
+      if (StringCmp (str, recentCountry) == 0) continue;
+
+      cbp = (CtyBlockPtr) MemNew (sizeof (CtyBlock));
+      if (cbp == NULL) continue;
+
+      TrimSpacesAroundString (str);
+      cbp->name = StringSave (str);
+      StringNCpy_0 (tmp, str, sizeof (tmp));
+      ptr = StringChr (tmp, ':');
+      if (ptr != NULL) {
+        *ptr = '\0';
+        ptr++;
+        TrimSpacesAroundString (ptr);
+        if (StringDoesHaveText (ptr)) {
+          cbp->level1 = StringSave (ptr);
+        }
+        TrimSpacesAroundString (tmp);
+        cbp->level0 = StringSave (tmp);
+      } else {
+        TrimSpacesAroundString (str);
+        cbp->level0 = StringSave (str);
+      }
+      cbp->area = 0;
+      cbp->minlat = INT4_MAX;
+      cbp->maxlat = INT4_MIN;
+      cbp->minlon = INT4_MAX;
+      cbp->maxlon = INT4_MIN;
+      vnp = ValNodeAddPointer (&lastctyblock, 0, (Pointer) cbp);
+      if (ctyblocks == NULL) {
+        ctyblocks = vnp;
+      }
+      lastctyblock = vnp;
+
+      recentCountry = cbp->name;
+
+      continue;
+    }
+
+    /* Latitude with longitude min/max pairs on line starting with tab */
+
+    if (ch != '\t') continue;
+
+    wrk = StringSave (str + 1);
+    if (wrk == NULL) continue;
+
+    ptr = StringChr (wrk, '\t');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr++;
+      if (sscanf (wrk, "%lf", &val) == 1) {
+        latitude = (FloatHi) val;
+
+        str = ptr;
+        while (StringDoesHaveText (str)) {
+          ptr = StringChr (str, '\t');
+          if (ptr != NULL) {
+            *ptr = '\0';
+            ptr++;
+          }
+          if (sscanf (str, "%lf", &val) != 1) {
+            /* prevent infinite loop if it fails */
+            str = NULL;
+          } else {
+            minlongitude = (FloatHi) val;
+            str = ptr;
+            if (StringDoesHaveText (str)) {
+              ptr = StringChr (str, '\t');
+              if (ptr != NULL) {
+                *ptr = '\0';
+                ptr++;
+              }
+              if (sscanf (str, "%lf", &val) == 1) {
+                maxlongitude = (FloatHi) val;
+
+                lbp = (LatBlockPtr) MemNew (sizeof (LatBlock));
+                if (lbp != NULL) {
+                  lbp->landmass = cbp;
+                  lbp->lat = ConvertLat (latitude, scale);
+                  lbp->minlon = ConvertLon (minlongitude, scale);
+                  lbp->maxlon = ConvertLon (maxlongitude, scale);
+
+                  vnp = ValNodeAddPointer (&lastlatblock, 0, (Pointer) lbp);
+                  if (latblocks == NULL) {
+                    latblocks = vnp;
+                  }
+                  lastlatblock = vnp;
+                }
+              }
+            }
+            str = ptr;
+          }
+        }
+      }
+    }
+
+    MemFree (wrk);
+  }
+
+  if (fp != NULL) {
+    FileClose (fp);
+  }
+
+  if (ctyblocks == NULL || latblocks == NULL) {
+    return NULL;
+  }
+
+  csp = (CtrySetPtr) MemNew (sizeof (CtrySet));
+  if (csp == NULL) return NULL;
+
+  for (vnp = latblocks; vnp != NULL; vnp = vnp->next) {
+    lbp = (LatBlockPtr) vnp->data.ptrvalue;
+    if (lbp == NULL) continue;
+    cbp = lbp->landmass;
+    if (cbp == NULL) continue;
+    cbp->area += lbp->maxlon - lbp->minlon + 1;
+    if (cbp->minlat > lbp->lat) {
+      cbp->minlat = lbp->lat;
+    }
+    if (cbp->maxlat < lbp->lat) {
+      cbp->maxlat = lbp->lat;
+    }
+    if (cbp->minlon > lbp->minlon) {
+      cbp->minlon = lbp->minlon;
+    }
+    if (cbp->maxlon < lbp->maxlon) {
+      cbp->maxlon = lbp->maxlon;
+    }
+  }
+
+  ctyblocks = ValNodeSort (ctyblocks, SortByCountry);
+  csp->ctyblocks = ctyblocks;
+  csp->numCtyBlocks = ValNodeLen (ctyblocks);
+
+  latblocks = ValNodeSort (latblocks, SortByLatLon);
+  csp->latblocks = latblocks;
+  csp->numLatBlocks = ValNodeLen (latblocks);
+
+  if (scale_not_set) {
+    scale = 20.0;
+  }
+  csp->scale = scale;
+
+  ctyarray = (CtyBlockPtr PNTR) MemNew (sizeof (CtyBlockPtr) * (csp->numCtyBlocks + 1));
+  if (ctyarray != NULL) {
+    for (vnp = ctyblocks, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+      cbp = (CtyBlockPtr) vnp->data.ptrvalue;
+      ctyarray [i] = cbp;
+    }
+
+    csp->ctyarray = ctyarray;
+  }
+
+  latarray = (LatBlockPtr PNTR) MemNew (sizeof (LatBlockPtr) * (csp->numLatBlocks + 1));
+  if (latarray != NULL) {
+    for (vnp = latblocks, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+      lbp = (LatBlockPtr) vnp->data.ptrvalue;
+      latarray [i] = lbp;
+    }
+
+    csp->latarray = latarray;
+  }
+
+/*
+{
+  FILE *fp;
+  fp = FileOpen ("ctrymap.txt", "w");
+  if (fp != NULL) {
+    for (vnp = latblocks; vnp != NULL; vnp = vnp->next) {
+      lbp = (LatBlockPtr) vnp->data.ptrvalue;
+      if (lbp == NULL) continue;
+      cbp = lbp->landmass;
+      if (cbp == NULL) continue;
+      fprintf (fp, "%s\t[%d]\t%d\t%d\t%d\n", cbp->name, (int) cbp->area,
+               (int) lbp->lat, (int) lbp->minlon, (int) lbp->maxlon);
+    }
+    FileClose (fp);
+  }
+}
+*/
+
+  return csp;
+}
+
+static Boolean ctryset_not_found = FALSE;
+static Boolean watrset_not_found = FALSE;
+
+extern CharPtr latlon_onedegree [];
+extern CharPtr water_onedegree [];
+
+static CtrySetPtr GetLatLonCountryData (void)
+
+{
+  CtrySetPtr  csp = NULL;
+  CharPtr     prop = "CountryLatLonData";
+
+  csp = (CtrySetPtr) GetAppProperty (prop);
+  if (csp != NULL) return csp;
+
+  if (ctryset_not_found) return NULL;
+
+  csp = ReadLatLonCountryData (prop, "lat_lon_country.txt", latlon_onedegree);
+
+  if (csp == NULL) {
+    ctryset_not_found = TRUE;
+    return NULL;
+  }
+
+  SetAppProperty (prop, (Pointer) csp);
+
+  return csp;
+}
+
+static CtrySetPtr GetLatLonWaterData (void)
+
+{
+  CtrySetPtr  csp = NULL;
+  CharPtr     prop = "WaterLatLonData";
+
+  csp = (CtrySetPtr) GetAppProperty (prop);
+  if (csp != NULL) return csp;
+
+  if (watrset_not_found) return NULL;
+
+  csp = ReadLatLonCountryData (prop, "lat_lon_water.txt", water_onedegree);
+
+  if (csp == NULL) {
+    watrset_not_found = TRUE;
+    return NULL;
+  }
+
+  SetAppProperty (prop, (Pointer) csp);
+
+  return csp;
+}
+
+static CtyBlockPtr GetEntryInLatLonListIndex (
+  CharPtr country,
+  CtrySetPtr csp
+)
+
+{
+  CtyBlockPtr PNTR  array;
+  CtyBlockPtr       cbp;
+  Int2              L, R, mid;
+
+  if (StringHasNoText (country)) return NULL;
+  if (csp == NULL) return NULL;
+
+  array = csp->ctyarray;
+  if (array == NULL) return NULL;
+
+  L = 0;
+  R = csp->numCtyBlocks - 1;
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    cbp = array [mid];
+    if (cbp != NULL && cbp->name != NULL && StringICmp (cbp->name, country) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  cbp = array [R];
+  if (cbp != NULL && cbp->name != NULL && StringICmp (cbp->name, country) == 0) return cbp;
+
+  return NULL;
+}
+
+NLM_EXTERN Boolean CountryIsInLatLonList (
+  CharPtr country
+)
+
+{
+  CtyBlockPtr  cbp;
+  CtrySetPtr   csp;
+
+  if (StringHasNoText (country)) return FALSE;
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) return FALSE;
+
+  cbp = GetEntryInLatLonListIndex (country, csp);
+  if (cbp != NULL && cbp->name != NULL && StringICmp (cbp->name, country) == 0) return TRUE;
+
+  return FALSE;
+}
+
+NLM_EXTERN Boolean IsCountryInLatLonList (
+  CharPtr country
+)
+
+{
+  return CountryIsInLatLonList (country);
+}
+
+NLM_EXTERN Boolean WaterIsInLatLonList (
+  CharPtr country
+)
+
+{
+  CtyBlockPtr  cbp;
+  CtrySetPtr   csp;
+
+  if (StringHasNoText (country)) return FALSE;
+  csp = GetLatLonWaterData ();
+  if (csp == NULL) return FALSE;
+
+  cbp = GetEntryInLatLonListIndex (country, csp);
+  if (cbp != NULL && cbp->name != NULL && StringICmp (cbp->name, country) == 0) return TRUE;
+
+  return FALSE;
+}
+
+static int LatLonCmp (
+  LatBlockPtr lbp,
+  Int2 latitude
+)
+
+{
+  if (lbp == NULL) return 0;
+
+  if (lbp->lat < latitude) {
+    return -1;
+  } else if (lbp->lat > latitude) {
+    return 1;
+  }
+
+  return 0;
+}
+
+static Int4 GetLatLonIndex (
+  CtrySetPtr csp,
+  LatBlockPtr PNTR array,
+  Int2 latitude
+)
+
+{
+  LatBlockPtr  lbp;
+  Int4         L, R, mid;
+
+  if (csp == NULL || array == NULL) return 0;
+
+  L = 0;
+  R = csp->numLatBlocks - 1;
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    lbp = array [mid];
+    if (lbp != NULL && LatLonCmp (lbp, latitude) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  return R;
+}
+
+static Boolean SubregionStringICmp (
+  CharPtr region,
+  CharPtr country
+)
+
+{
+  Char     possible [256];
+  CharPtr  ptr;
+
+  if (StringHasNoText (region) || StringHasNoText (country)) return FALSE;
+  StringNCpy_0 (possible, region, sizeof (possible));
+  ptr = StringChr (possible, ':');
+  if (ptr == NULL) return FALSE;
+  *ptr = '\0';
+  if (StringICmp (possible, country) == 0) return TRUE;
+  return FALSE;
+}
+
+static Boolean RegionContainsLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon,
+  CtrySetPtr csp
+)
+
+{
+  LatBlockPtr PNTR  array;
+  CtyBlockPtr       cbp;
+  Int4              latitude;
+  Int4              longitude;
+  LatBlockPtr       lbp;
+  Int4              R;
+
+  if (StringHasNoText (country)) return FALSE;
+  if (csp == NULL) return FALSE;
+
+  array = csp->latarray;
+  if (array == NULL) return FALSE;
+
+  latitude = ConvertLat (lat, csp->scale);
+  longitude = ConvertLon (lon, csp->scale);
+
+  for (R = GetLatLonIndex (csp, array, latitude); R < csp->numLatBlocks; R++) {
+    lbp = array [R];
+    if (lbp == NULL) break;
+    if (latitude != lbp->lat) break;
+
+    if (longitude < lbp->minlon) continue;
+    if (longitude > lbp->maxlon) continue;
+
+    cbp = lbp->landmass;
+    if (cbp == NULL) continue;
+    if (StringICmp (cbp->name, country) == 0) return TRUE;
+    if (SubregionStringICmp (cbp->name, country)) return TRUE;
+  }
+
+  return FALSE;
+}
+
+NLM_EXTERN Boolean CountryContainsLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon
+)
+
+{
+  CtrySetPtr  csp;
+
+  if (StringHasNoText (country)) return FALSE;
+
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) return FALSE;
+
+  return RegionContainsLatLon (country, lat, lon, csp);
+}
+
+NLM_EXTERN Boolean TestLatLonForCountry (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon
+)
+
+{
+  return CountryContainsLatLon (country, lat, lon);
+}
+
+NLM_EXTERN Boolean WaterContainsLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon
+)
+
+{
+  CtrySetPtr  csp;
+
+  if (StringHasNoText (country)) return FALSE;
+
+  csp = GetLatLonWaterData ();
+  if (csp == NULL) return FALSE;
+
+  return RegionContainsLatLon (country, lat, lon, csp);
+}
+
+static Boolean NewLatLonCandidateIsBetter (
+  CharPtr country,
+  CharPtr province,
+  CtyBlockPtr best,
+  CtyBlockPtr cbp,
+  Boolean newer_is_smaller
+)
+
+{
+  if (cbp == NULL) return FALSE;
+  if (best == NULL) return TRUE;
+
+  /* if no preferred country, just look for smallest area */
+  if (country == NULL) {
+    return newer_is_smaller;
+  }
+
+  /* if match to preferred country */
+  if (StringICmp (country, cbp->level0) == 0) {
+
+    /* if best was not preferred country, take new match */
+    if (StringICmp (country, best->level0) != 0) return TRUE;
+
+    /* if match to preferred province */
+    if (province != NULL && StringICmp (province, cbp->level1) == 0) {
+
+      /* if best was not preferred province, take new match */
+      if (StringICmp (province, best->level1) != 0) return TRUE;
+    }
+
+    /* if both match province, or neither does, or no preferred province, take smallest */
+    return newer_is_smaller;
+  }
+
+  /* if best matches preferred country, keep */
+  if (StringICmp (country, best->level0) == 0) return FALSE;
+
+  /* otherwise take smallest */
+  return newer_is_smaller;
+}
+
+static CtyBlockPtr LookupRegionByLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  CharPtr country,
+  CharPtr province,
+  CtrySetPtr csp
+)
+
+{
+  LatBlockPtr PNTR  array;
+  CtyBlockPtr       cbp, best = NULL;
+  Int4              latitude;
+  Int4              longitude;
+  LatBlockPtr       lbp;
+  Int4              R;
+
+  if (csp == NULL) return NULL;
+
+  array = csp->latarray;
+  if (array == NULL) return NULL;
+
+  latitude = ConvertLat (lat, csp->scale);
+  longitude = ConvertLon (lon, csp->scale);
+
+  for (R = GetLatLonIndex (csp, array, latitude); R < csp->numLatBlocks; R++) {
+    lbp = array [R];
+    if (lbp == NULL) break;
+    if (latitude != lbp->lat) break;
+
+    if (longitude < lbp->minlon) continue;
+    if (longitude > lbp->maxlon) continue;
+
+    cbp = lbp->landmass;
+    if (cbp == NULL) continue;
+
+    if (best == NULL || NewLatLonCandidateIsBetter (country, province, best, cbp, (Boolean) (cbp->area < best->area))) {
+      best = cbp;
+    }
+  }
+
+  return best;
+}
+
+static CtyBlockPtr GuessCountryByLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  CharPtr country,
+  CharPtr province
+)
+
+{
+  CtrySetPtr  csp;
+
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) return NULL;
+
+  return LookupRegionByLatLon (lat, lon, country, province, csp);
+}
+
+static CtyBlockPtr GuessWaterByLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  CharPtr country
+)
+
+{
+  CtrySetPtr  csp;
+
+  csp = GetLatLonWaterData ();
+  if (csp == NULL) return NULL;
+
+  return LookupRegionByLatLon (lat, lon, country, NULL, csp);
+}
+
+NLM_EXTERN CharPtr LookupCountryByLatLon (
+  FloatHi lat,
+  FloatHi lon
+)
+
+{
+  CtyBlockPtr  cbp;
+
+  cbp = GuessCountryByLatLon (lat, lon, NULL, NULL);
+  if (cbp == NULL) return NULL;
+
+  return cbp->name;
+}
+
+NLM_EXTERN CharPtr GuessCountryForLatLon (
+  FloatHi lat,
+  FloatHi lon
+)
+
+{
+  return LookupCountryByLatLon (lat, lon);
+}
+
+NLM_EXTERN CharPtr LookupWaterByLatLon (
+  FloatHi lat,
+  FloatHi lon
+)
+
+{
+  CtyBlockPtr  cbp;
+
+  cbp = GuessWaterByLatLon (lat, lon, NULL);
+  if (cbp == NULL) return NULL;
+
+  return cbp->name;
+}
+
+NLM_EXTERN FloatHi CountryDataScaleIs (void)
+
+{
+  CtrySetPtr  csp;
+
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) return 0.0;
+
+  return csp->scale;
+}
+
+NLM_EXTERN FloatHi WaterDataScaleIs (void)
+
+{
+  CtrySetPtr  csp;
+
+  csp = GetLatLonWaterData ();
+  if (csp == NULL) return 0.0;
+
+  return csp->scale;
+}
 
 
+static Boolean RegionExtremesOverlap (
+  CharPtr first,
+  CharPtr second,
+  CtrySetPtr csp
+)
+
+{
+  CtyBlockPtr  cbp1, cbp2;
+
+  if (StringHasNoText (first) || StringHasNoText (second)) return FALSE;
+  if (csp == NULL) return FALSE;
+
+  cbp1 = GetEntryInLatLonListIndex (first, csp);
+  if (cbp1 == NULL || cbp1->name == NULL || StringICmp (cbp1->name, first) != 0) return FALSE;
+
+  cbp2 = GetEntryInLatLonListIndex (second, csp);
+  if (cbp2 == NULL || cbp2->name == NULL || StringICmp (cbp2->name, second) != 0) return FALSE;
+
+  if (cbp1->minlat > cbp2->maxlat) return FALSE;
+  if (cbp2->minlat > cbp1->maxlat) return FALSE;
+  if (cbp1->minlon > cbp2->maxlon) return FALSE;
+  if (cbp2->minlon > cbp1->maxlon) return FALSE;
+
+  return TRUE;
+}
+
+NLM_EXTERN Boolean CountryExtremesOverlap (
+  CharPtr first,
+  CharPtr second
+)
+
+{
+  CtrySetPtr  csp;
+
+  if (StringHasNoText (first) || StringHasNoText (second)) return FALSE;
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) return FALSE;
+
+  return RegionExtremesOverlap (first, second, csp);
+}
+
+NLM_EXTERN Boolean CountryBoxesOverlap (
+  CharPtr country1,
+  CharPtr country2
+)
+
+{
+  return CountryExtremesOverlap (country1, country2);
+}
+
+NLM_EXTERN Boolean WaterExtremesOverlap (
+  CharPtr first,
+  CharPtr second
+)
+
+{
+  CtrySetPtr  csp;
+
+  if (StringHasNoText (first) || StringHasNoText (second)) return FALSE;
+  csp = GetLatLonWaterData ();
+  if (csp == NULL) return FALSE;
+
+  return RegionExtremesOverlap (first, second, csp);
+}
+
+/*
+Distance on a spherical surface calculation adapted from
+http://www.linuxjournal.com/magazine/
+work-shell-calculating-distance-between-two-latitudelongitude-points
+*/
+
+#define EARTH_RADIUS 6371.0 /* average radius of non-spherical earth in kilometers */
+#define CONST_PI 3.14159265359
+
+static double DegreesToRadians (
+  FloatHi degrees
+)
+
+{
+  return (degrees * (CONST_PI / 180.0));
+}
+
+static FloatHi DistanceOnGlobe (
+  FloatHi latA,
+  FloatHi lonA,
+  FloatHi latB,
+  FloatHi lonB
+)
+
+{
+  double lat1, lon1, lat2, lon2;
+  double dLat, dLon, a, c;
+
+  lat1 = DegreesToRadians (latA);
+  lon1 = DegreesToRadians (lonA);
+  lat2 = DegreesToRadians (latB);
+  lon2 = DegreesToRadians (lonB);
+
+  dLat = lat2 - lat1;
+  dLon = lon2 - lon1;
+
+   a = sin (dLat / 2) * sin (dLat / 2) +
+       cos (lat1) * cos (lat2) * sin (dLon / 2) * sin (dLon / 2);
+   c = 2 * atan2 (sqrt (a), sqrt (1 - a));
+
+  return (FloatHi) (EARTH_RADIUS * c);
+}
+
+static FloatHi ErrorDistance (
+  FloatHi latA,
+  FloatHi lonA,
+  FloatHi scale)
+{
+  double lat1, lon1, lat2, lon2;
+  double dLat, dLon, a, c;
+
+  lat1 = DegreesToRadians (latA);
+  lon1 = DegreesToRadians (lonA);
+  lat2 = DegreesToRadians (latA + (1.0 / scale));
+  lon2 = DegreesToRadians (lonA + (1.0 / scale));
+
+  dLat = lat2 - lat1;
+  dLon = lon2 - lon1;
+
+   a = sin (dLat / 2) * sin (dLat / 2) +
+       cos (lat1) * cos (lat2) * sin (dLon / 2) * sin (dLon / 2);
+   c = 2 * atan2 (sqrt (a), sqrt (1 - a));
+
+  return (FloatHi) (EARTH_RADIUS * c);
+  
+}
+
+
+static CtyBlockPtr RegionClosestToLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP,
+  CtrySetPtr csp
+)
+
+{
+  LatBlockPtr PNTR  array;
+  CtyBlockPtr       cbp, best = NULL;
+  FloatHi           closest = EARTH_RADIUS * CONST_PI * 2;
+  FloatHi           delta;
+  Int4              latitude;
+  Int4              longitude;
+  Int4              maxDelta;
+  LatBlockPtr       lbp;
+  Int4              R;
+  Int4              x;
+  Int4              y;
+  Boolean           is_geographically_better;
+
+  if (distanceP != NULL) {
+    *distanceP = 0.0;
+  }
+
+  if (csp == NULL) return NULL;
+
+  array = csp->latarray;
+  if (array == NULL) return NULL;
+
+  latitude = ConvertLat (lat, csp->scale);
+  longitude = ConvertLon (lon, csp->scale);
+
+  maxDelta = (Int4) (range * csp->scale + EPSILON);
+
+  for (R = GetLatLonIndex (csp, array, latitude - maxDelta); R < csp->numLatBlocks; R++) {
+    lbp = array [R];
+    if (lbp == NULL) break;
+    if (latitude + maxDelta < lbp->lat) break;
+
+    if (longitude < lbp->minlon - maxDelta) continue;
+    if (longitude > lbp->maxlon + maxDelta) continue;
+
+    cbp = lbp->landmass;
+    if (cbp == NULL) continue;
+
+    if (longitude < lbp->minlon) {
+      x = lbp->minlon;
+    } else if (longitude > lbp->maxlon) {
+      x = lbp->maxlon;
+    } else {
+      x = longitude;
+    }
+
+    y = lbp->lat;
+
+    delta = DistanceOnGlobe (lat, lon, (FloatHi) (y / csp->scale), (FloatHi) (x / csp->scale));
+
+    is_geographically_better = FALSE;
+    if (delta < closest) {
+      is_geographically_better = TRUE;
+    } else if (delta - closest < 0.000001) {
+      if (best == NULL || cbp->area < best->area) {
+        is_geographically_better = TRUE;
+      }
+    }
+
+    if (best == NULL || NewLatLonCandidateIsBetter (NULL, NULL, best, cbp, is_geographically_better)) {
+      best = cbp;
+      closest = delta;
+    }
+  }
+
+  if (best != NULL) {
+    if (distanceP != NULL) {
+      *distanceP = closest;
+    }
+  }
+
+  return best;
+}
+
+static CtyBlockPtr NearestCountryByLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+)
+
+{
+  CtrySetPtr  csp;
+
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) return NULL;
+
+  return RegionClosestToLatLon (lat, lon, range, distanceP, csp);
+}
+
+static CtyBlockPtr NearestWaterByLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+)
+
+{
+  CtrySetPtr  csp;
+
+  csp = GetLatLonWaterData ();
+  if (csp == NULL) return NULL;
+
+  return RegionClosestToLatLon (lat, lon, range, distanceP, csp);
+}
+
+NLM_EXTERN CharPtr CountryClosestToLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+)
+
+{
+  CtyBlockPtr  cbp;
+
+  cbp = NearestCountryByLatLon (lat, lon, range, distanceP);
+  if (cbp == NULL) return NULL;
+
+  return cbp->name;
+}
+
+NLM_EXTERN CharPtr WaterClosestToLatLon (
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+)
+
+{
+  CtyBlockPtr  cbp;
+
+  cbp = NearestWaterByLatLon (lat, lon, range, distanceP);
+  if (cbp == NULL) return NULL;
+
+  return cbp->name;
+}
+
+static CtyBlockPtr RegionIsNearLatLon (
+  CharPtr country,
+  CharPtr province,
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP,
+  CtrySetPtr csp
+)
+
+{
+  LatBlockPtr PNTR  array;
+  CtyBlockPtr       cbp, best = NULL;
+  FloatHi           closest = EARTH_RADIUS * CONST_PI * 2;
+  FloatHi           delta;
+  Int4              latitude;
+  Int4              longitude;
+  Int4              maxDelta;
+  LatBlockPtr       lbp;
+  Int4              R;
+  Int4              x;
+  Int4              y;
+
+  if (distanceP != NULL) {
+    *distanceP = 0.0;
+  }
+
+  if (StringHasNoText (country)) return NULL;
+  if (csp == NULL) return NULL;
+
+  array = csp->latarray;
+  if (array == NULL) return NULL;
+
+  latitude = ConvertLat (lat, csp->scale);
+  longitude = ConvertLon (lon, csp->scale);
+
+  maxDelta = (Int4) (range * csp->scale + EPSILON);
+
+  for (R = GetLatLonIndex (csp, array, latitude - maxDelta); R < csp->numLatBlocks; R++) {
+    lbp = array [R];
+    if (lbp == NULL) break;
+    if (latitude + maxDelta < lbp->lat) break;
+
+    if (longitude < lbp->minlon - maxDelta) continue;
+    if (longitude > lbp->maxlon + maxDelta) continue;
+
+    cbp = lbp->landmass;
+    if (cbp == NULL) continue;
+
+    if (StringICmp (country, cbp->level0) != 0) continue;
+    if (/* province != NULL && */ StringICmp (province, cbp->level1) != 0) continue;
+
+    if (longitude < lbp->minlon) {
+      x = lbp->minlon;
+    } else if (longitude > lbp->maxlon) {
+      x = lbp->maxlon;
+    } else {
+      x = longitude;
+    }
+
+    y = lbp->lat;
+
+    delta = DistanceOnGlobe (lat, lon, (FloatHi) (y / csp->scale), (FloatHi) (x / csp->scale));
+
+    if (best == NULL || delta < closest) {
+      best = cbp;
+      closest = delta;
+    }
+  }
+
+  if (best != NULL) {
+    if (distanceP != NULL) {
+      *distanceP = closest;
+    }
+  }
+
+  return best;
+}
+
+static CtyBlockPtr CountryToLatLonDistance (
+  CharPtr country,
+  CharPtr province,
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+)
+
+{
+  CtrySetPtr  csp;
+
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) return NULL;
+
+  return RegionIsNearLatLon (country, province, lat, lon, range, distanceP, csp);
+}
+
+static CtyBlockPtr WaterToLatLonDistance (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+)
+
+{
+  CtrySetPtr  csp;
+
+  csp = GetLatLonWaterData ();
+  if (csp == NULL) return NULL;
+
+  return RegionIsNearLatLon (country, NULL, lat, lon, range, distanceP, csp);
+}
+
+NLM_EXTERN Boolean CountryIsNearLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+)
+
+{
+  CtyBlockPtr  cbp;
+
+  cbp = CountryToLatLonDistance (country, NULL, lat, lon, range, distanceP);
+  if (cbp == NULL) return FALSE;
+
+  return TRUE;
+}
+
+NLM_EXTERN Boolean WaterIsNearLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+)
+
+{
+  CtyBlockPtr  cbp;
+
+  cbp = WaterToLatLonDistance (country, lat, lon, range, distanceP);
+  if (cbp == NULL) return FALSE;
+
+  return TRUE;
+}
+
+/*
+static void WriteLatLonRegionData (
+  CtrySetPtr csp,
+  FILE* fp
+)
+
+{
+  Char         buf [150];
+  CtyBlockPtr  cbp;
+  LatBlockPtr  lbp;
+  ValNodePtr   vnp;
+
+  if (csp == NULL || fp == NULL) return;
+
+  for (vnp = csp->latblocks; vnp != NULL; vnp = vnp->next) {
+    lbp = (LatBlockPtr) vnp->data.ptrvalue;
+    if (lbp == NULL) {
+      fprintf (fp, "NULL LatBlockPtr\n");
+      continue;
+    }
+    cbp = lbp->landmass;
+    if (cbp == NULL) {
+      fprintf (fp, "NULL CtyBlockPtr\n");
+      continue;
+    }
+
+    if (StringHasNoText (cbp->name)) {
+      fprintf (fp, "NULL cbp->name\n");
+      continue;
+    }
+
+    StringNCpy_0 (buf, cbp->name, 50);
+    StringCat (buf, "                                                  ");
+    buf [50] = '\0';
+
+    fprintf (fp, "%s %4d : %4d  .. %4d\n", buf, (int) lbp->lat, (int) lbp->minlon, (int) lbp->maxlon);
+  }
+
+  fprintf (fp, "\n\n");
+}
+
+static void TestLatLonCountryData (void)
+
+{
+  CtrySetPtr  csp;
+  FILE        *fp;
+
+  fp = FileOpen ("stdout", "w");
+  if (fp == NULL) {
+    Message (MSG_OK, "Unable to open output file");
+    return;
+  }
+
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) {
+    fprintf (fp, "GetLatLonCountryData failed\n");
+    FileClose (fp);
+    return;
+  }
+
+  WriteLatLonRegionData (csp, fp);
+
+  csp = GetLatLonWaterData ();
+  if (csp == NULL) {
+    fprintf (fp, "GetLatLonWaterData failed\n");
+    FileClose (fp);
+    return;
+  }
+
+  WriteLatLonRegionData (csp, fp);
+
+  FileClose (fp);
+}
+*/
+
+/* END OF NEW LATITUDE-LONGITUDE COUNTRY VALIDATION CODE */
 
 static Boolean StringListIsUnique (ValNodePtr list)
 
@@ -10143,6 +11394,7 @@ static Boolean PrimerSeqIsValid (ValidStructPtr vsp, CharPtr name, Char PNTR bad
   ValNodePtr  matches;
   CharPtr     ptr;
   Int4        state;
+  Boolean     first;
 
   if (badch != NULL) {
     *badch = '\0';
@@ -10175,12 +11427,14 @@ static Boolean PrimerSeqIsValid (ValidStructPtr vsp, CharPtr name, Char PNTR bad
     if (ch == '<') {
       state = 0;
       matches = NULL;
-      while (ch != '\0' && ch != '>') {
+      first = TRUE;
+      while (ch != '\0' && ch != '>' && (first || ch != '<')) {
         state = TextFsaNext (fsa, state, ch, &matches);
         ptr++;
         ch = *ptr;
+        first = FALSE;
       }
-      if (ch != '>') {
+      if (ch != '>' || ch == '<') {
         if (badch != NULL) {
           *badch = ch;
         }
@@ -10740,8 +11994,14 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
     return;
   }
 
-  /* ignore personal collections */
-  if (StringNICmp (inst, "personal", 8) == 0) return;
+  /* previously ignored personal collections, now complain if name missing */
+  if (StringNICmp (inst, "personal", 8) == 0) {
+    if (StringICmp (inst, "personal") == 0 && StringLen (str) > 0) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_MissingPersonalCollectionName,
+                "Personal collection does not have name of collector");
+    }
+    return;
+  }
 
   len1 = StringLen (inst);
   len2 = StringLen (str);
@@ -11086,6 +12346,703 @@ static Boolean IsValidSexValue (CharPtr str)
   return FALSE;
 }
 
+static Boolean LatLonInRange (
+  FloatHi lat,
+  FloatHi lon
+)
+
+{
+  if (lat < -90.0001 || lat > 90.0001) return FALSE;
+  if (lon < -180.0001 || lon > 180.0001) return FALSE;
+
+  return TRUE;
+}
+
+static Boolean RegionIsClosestToLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP,
+  CtrySetPtr csp
+)
+
+{
+  LatBlockPtr PNTR  array;
+  CtyBlockPtr       cbp;
+  FloatHi           closest = EARTH_RADIUS * CONST_PI * 2;
+  CharPtr           guess = NULL;
+  FloatHi           delta;
+  Int4              latitude;
+  Int4              longitude;
+  Int4              maxDelta;
+  LatBlockPtr       lbp;
+  Int4              R;
+  Int4              x;
+  Int4              y;
+
+
+  if (StringHasNoText (country)) return FALSE;
+
+  if (distanceP != NULL) {
+    *distanceP = 0.0;
+  }
+
+  if (csp == NULL) return FALSE;
+
+  array = csp->latarray;
+  if (array == NULL) return FALSE;
+
+  latitude = ConvertLat (lat, csp->scale);
+  longitude = ConvertLon (lon, csp->scale);
+
+  maxDelta = (Int4) (range * csp->scale + EPSILON);
+
+  for (R = GetLatLonIndex (csp, array, latitude - maxDelta); R < csp->numLatBlocks; R++) {
+    lbp = array [R];
+    if (lbp == NULL) break;
+    if (latitude + maxDelta < lbp->lat) break;
+
+    if (longitude < lbp->minlon - maxDelta) continue;
+    if (longitude > lbp->maxlon + maxDelta) continue;
+
+    cbp = lbp->landmass;
+    if (cbp == NULL) continue;
+
+    if (longitude < lbp->minlon) {
+      x = lbp->minlon;
+    } else if (longitude > lbp->maxlon) {
+      x = lbp->maxlon;
+    } else {
+      x = longitude;
+    }
+
+    y = lbp->lat;
+
+    delta = DistanceOnGlobe (lat, lon, (FloatHi) (y / csp->scale), (FloatHi) (x / csp->scale));
+
+    if (delta < closest) {
+      guess = cbp->name;
+      closest = delta;
+    } else if (delta == closest) {
+      if (StringCmp (country, cbp->name) == 0) {
+        guess = cbp->name;
+      }
+    }
+  }
+
+  if (guess != NULL) {
+    if (distanceP != NULL) {
+      *distanceP = closest;
+    }
+  }
+
+  if (StringCmp (guess, country) == 0) return TRUE;
+
+  return FALSE;
+}
+
+
+static Boolean CountryIsClosestToLatLon (
+  CharPtr country,
+  FloatHi lat,
+  FloatHi lon,
+  FloatHi range,
+  FloatHi PNTR distanceP
+)
+
+{
+  CtrySetPtr  csp;
+
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) return FALSE;
+
+  return RegionIsClosestToLatLon (country, lat, lon, range, distanceP, csp);
+}
+
+
+static int AdjustAndRoundDistance (
+  FloatHi distance,
+  FloatHi scale
+)
+
+{
+  if (scale < 1.1) {
+    distance += 111.19;
+  } else if (scale > 19.5 && scale < 20.5) {
+    distance += 5.56;
+  } else if (scale > 99.5 && scale < 100.5) {
+    distance += 1.11;
+  }
+
+  return (int) (distance + 0.5);
+}
+
+typedef struct latlonmap {
+  FloatHi  lat;
+  FloatHi  lon;
+  CharPtr  fullguess;
+  CharPtr  guesscountry;
+  CharPtr  guessprovince;
+  CharPtr  guesswater;
+  CharPtr  closestfull;
+  CharPtr  closestcountry;
+  CharPtr  closestprovince;
+  CharPtr  closestwater;
+  CharPtr  claimedfull;
+  int      landdistance;
+  int      waterdistance;
+  int      claimeddistance;
+} LatLonMap, PNTR LatLonMapPtr;
+
+static void CalculateLatLonMap (
+  FloatHi lat,
+  FloatHi lon,
+  CharPtr country,
+  CharPtr province,
+  FloatHi scale,
+  LatLonMapPtr lmp
+)
+
+{
+  CtyBlockPtr  cbp;
+  FloatHi      landdistance = 0.0, waterdistance = 0.0, claimeddistance = 0.0;
+  Boolean      goodmatch = FALSE;
+
+  if (lmp == NULL) return;
+
+  /* initialize result values */
+  MemSet ((Pointer) lmp, 0, sizeof (LatLonMap));
+
+  lmp->lat = lat;
+  lmp->lon = lon;
+
+  /* lookup region by coordinates, or find nearest region and calculate distance */
+  cbp = GuessCountryByLatLon (lat, lon, country, province);
+  if (cbp != NULL) {
+    /* successfully found inside some country */
+    lmp->fullguess = cbp->name;
+    lmp->guesscountry = cbp->level0;
+    lmp->guessprovince = cbp->level1;
+    if (StringICmp (country, lmp->guesscountry) == 0 && (province == NULL || StringICmp (province, lmp->guessprovince) == 0)) {
+      goodmatch = TRUE;
+    }
+  } else {
+    /* not inside a country, check water */
+    cbp = GuessWaterByLatLon (lat, lon, country);
+    if (cbp != NULL) {
+      /* found inside water */
+      lmp->guesswater = cbp->name;
+      if (StringICmp (country, lmp->guesswater) == 0) {
+        goodmatch = TRUE;
+      }
+      /*
+      also see if close to land for coastal warning (if country is land)
+      or proximity message (if country is water)
+      */
+      cbp = NearestCountryByLatLon (lat, lon, 5.0, &landdistance);
+      if (cbp != NULL) {
+        lmp->closestfull = cbp->name;
+        lmp->closestcountry = cbp->level0;
+        lmp->closestprovince = cbp->level1;
+        lmp->landdistance = AdjustAndRoundDistance (landdistance, scale);
+        if (StringICmp (country, lmp->closestcountry) == 0 && (province == NULL || StringICmp (province, lmp->closestprovince) == 0)) {
+          goodmatch = TRUE;
+        }
+      }
+    } else {
+      /* may be coastal inlet, area of data insufficiency */
+      cbp = NearestCountryByLatLon (lat, lon, 5.0, &landdistance);
+      if (cbp != NULL) {
+        lmp->closestfull = cbp->name;
+        lmp->closestcountry = cbp->level0;
+        lmp->closestprovince = cbp->level1;
+        lmp->landdistance = AdjustAndRoundDistance (landdistance, scale);
+        if (StringICmp (country, lmp->closestcountry) == 0 && (province == NULL || StringICmp (province, lmp->closestprovince) == 0)) {
+          goodmatch = TRUE;
+        }
+      }
+      cbp = NearestWaterByLatLon (lat, lon, 5.0, &waterdistance);
+      if (cbp != NULL) {
+        lmp->closestwater = cbp->level0;
+        lmp->waterdistance = AdjustAndRoundDistance (waterdistance, scale);
+        if (StringICmp (country, lmp->closestwater) == 0) {
+          goodmatch = TRUE;
+        }
+      }
+    }
+  }
+  /* if guess is not the provided country or province, calculate distance to claimed country */
+  if (! goodmatch) {
+    cbp = CountryToLatLonDistance (country, province, lat, lon, 5.0, &claimeddistance);
+    if (cbp != NULL) {
+      if (claimeddistance < ErrorDistance(lmp->lat, lmp->lon, scale)) {
+        lmp->guesscountry = country;
+        lmp->guessprovince = province;
+        lmp->fullguess = cbp->name;
+      } else {
+        lmp->claimedfull = cbp->name;
+        lmp->claimeddistance = AdjustAndRoundDistance (claimeddistance, scale);
+      }
+    } else if (province == NULL) {
+      cbp = WaterToLatLonDistance (country, lat, lon, 5.0, &claimeddistance);
+      if (cbp != NULL) {
+        lmp->claimedfull = cbp->name;
+        lmp->claimeddistance = AdjustAndRoundDistance (claimeddistance, scale);
+      }
+    }
+  }
+}
+
+
+enum {
+  eLatLonClassify_CountryMatch = 1 ,
+  eLatLonClassify_ProvinceMatch = 2 ,
+  eLatLonClassify_WaterMatch = 4 ,
+  eLatLonClassify_CountryClosest = 8 ,
+  eLatLonClassify_ProvinceClosest = 16 ,
+  eLatLonClassify_WaterClosest = 32 ,
+  eLatLonClassify_Error = 256
+} ELatLonClassify;
+
+
+static Uint4 ClassifyLatLonMap (
+  CharPtr fullname,
+  CharPtr country,
+  CharPtr province,
+  LatLonMapPtr lmp
+)
+
+{
+  Uint4 rval = 0;
+
+  if (lmp == NULL) return eLatLonClassify_Error;
+
+  /* compare guesses or closest regions to indicated country and province */
+  if (lmp->guesscountry != NULL) {
+
+    /* if top level countries match */
+    if (StringICmp (country, lmp->guesscountry) == 0) {
+      rval |= eLatLonClassify_CountryMatch;
+      /* if both are null, call it a match */
+      if (StringICmp (province, lmp->guessprovince) == 0) {
+        rval |= eLatLonClassify_ProvinceMatch;
+      }
+    }
+    /* if they don't match, do they overlap or are closest? */
+    if (!(rval & eLatLonClassify_CountryMatch)) {
+      if (StringICmp (country, lmp->closestcountry) == 0) {
+        rval |= eLatLonClassify_CountryClosest;
+        if (StringICmp (province, lmp->closestprovince) == 0) {
+          rval |= eLatLonClassify_ProvinceClosest;
+        }
+      }
+    } else if (!(rval & eLatLonClassify_ProvinceMatch) && province != NULL) {
+      if (StringICmp (province, lmp->closestprovince) == 0) {
+        rval |= eLatLonClassify_ProvinceClosest;
+      }
+    }
+  }
+  if (lmp->guesswater != NULL) {
+    /* was the non-approved body of water correctly indicated? */
+    if (StringICmp (country, lmp->guesswater) == 0) {
+      rval |= eLatLonClassify_WaterMatch;
+    } else if (StringICmp (country, lmp->closestwater) == 0) {
+      rval |= eLatLonClassify_WaterClosest;
+    } 
+  }
+  if (lmp->closestcountry != NULL && StringICmp (country, lmp->closestcountry) == 0) {
+    if (lmp->guesscountry == NULL && lmp->guesswater == NULL) {
+      /* coastal area */
+      rval |= eLatLonClassify_CountryMatch;
+      lmp->guesscountry = lmp->closestcountry;
+      lmp->fullguess = lmp->closestcountry;
+      if (lmp->closestprovince != NULL && StringICmp (province, lmp->closestprovince) == 0) {
+        rval |= eLatLonClassify_ProvinceMatch;
+        lmp->guessprovince = lmp->closestprovince;
+        lmp->fullguess = lmp->closestfull;
+      }
+    } else {      
+      rval |= eLatLonClassify_CountryClosest;
+      if (lmp->closestprovince != NULL && StringICmp (province, lmp->closestprovince) == 0) {
+        rval |= eLatLonClassify_ProvinceClosest;
+      }
+    }
+  }
+  return rval;
+}
+
+
+static void LatLonWaterErrors (
+  ValidStructPtr vsp,
+  LatLonMapPtr lmp,
+  Uint4 test,
+  FloatHi neardist,
+  CharPtr country,
+  CharPtr province,
+  CharPtr lat_lon,
+  CharPtr fullname,
+  FloatHi scale
+  )
+{
+  CharPtr fmt = "Lat_lon '%s' is closest to %s'%s' at distance %d km, but in water '%s'";
+  CharPtr claimed_fmt = "Lat_lon '%s' is closest to %s'%s' at distance %d km, but in water '%s' - claimed region '%s' is at distance %d km";
+
+  Boolean suppress = FALSE;
+  CharPtr reportregion;
+  CharPtr nosubphrase = "";
+  CharPtr desphrase = "designated subregion ";
+  CharPtr subphrase = "another subregion ";
+  CharPtr phrase = nosubphrase;
+  Boolean show_claimed = FALSE;
+
+  if (test & (eLatLonClassify_CountryClosest | eLatLonClassify_ProvinceClosest)) {
+
+    if (lmp->landdistance < 22) {
+      /* for now, will not report */
+      /* this is a policy decision */
+      suppress = TRUE;
+    } else if (StringStr (fullname, "Island") != NULL) {
+      suppress = TRUE;
+    }
+
+    if (test & eLatLonClassify_ProvinceClosest) {
+      reportregion = fullname;
+      phrase = desphrase;
+    } else {
+      /* wasn't closest province, so must be closest country */
+      if (province != NULL && vsp->testLatLonSubregion) {
+        phrase = subphrase;
+        reportregion = lmp->closestfull;
+      } else {
+        reportregion = lmp->closestcountry;
+      }
+      if (lmp->claimedfull != NULL) {
+        show_claimed = TRUE;
+      }
+    }
+
+    if (!suppress) {
+      if (show_claimed) {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonWater, claimed_fmt, lat_lon, 
+                  phrase, reportregion,
+                  lmp->landdistance, lmp->guesswater, 
+                  lmp->claimedfull, lmp->claimeddistance);
+      } else {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonWater, 
+                  fmt, lat_lon, 
+                  phrase, reportregion, 
+                  lmp->landdistance, lmp->guesswater);
+      }
+    }
+
+  } else if (neardist > 0) {
+    fmt = "Lat_lon '%s' is in water '%s', '%s' is %d km away";
+    ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonWater, fmt, lat_lon, lmp->guesswater, fullname, AdjustAndRoundDistance (neardist, scale));
+  } else {
+    fmt = "Lat_lon '%s' is in water '%s'";
+    ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonWater, fmt, lat_lon, lmp->guesswater);
+  }
+}
+
+
+static void LatLonLandErrors (
+  ValidStructPtr vsp,
+  LatLonMapPtr lmp,
+  CharPtr country,
+  CharPtr province,
+  CharPtr lat_lon,
+  CharPtr fullname
+  )
+{
+  CharPtr fmt;
+
+  if (lmp->claimedfull != NULL) {
+    fmt = "Lat_lon '%s' maps to '%s' instead of '%s' - claimed region '%s' is at distance %d km";
+    if (province != NULL) {
+      if (StringICmp (lmp->guesscountry, country) == 0) {
+        if (vsp->testLatLonSubregion) {
+          ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState, fmt, lat_lon, lmp->fullguess, fullname, lmp->claimedfull, lmp->claimeddistance);
+        }
+      } else {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry, fmt, lat_lon, lmp->fullguess, fullname, lmp->claimedfull, lmp->claimeddistance);
+      }
+    } else {
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry, fmt, lat_lon, lmp->fullguess, country, lmp->claimedfull, lmp->claimeddistance);
+    }
+  } else {
+    fmt = "Lat_lon '%s' maps to '%s' instead of '%s'";
+    if (StringICmp (lmp->guesscountry, country) == 0) {
+      if (vsp->testLatLonSubregion) {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState, fmt, lat_lon, lmp->fullguess, fullname);
+      }
+    } else {
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry, fmt, lat_lon, lmp->fullguess, fullname);
+    }
+  }
+}
+
+
+typedef enum {
+  eLatLonAdjust_none = 0 ,
+  eLatLonAdjust_flip = 1 ,
+  eLatLonAdjust_negate_lat = 2 ,
+  eLatLonAdjust_negate_lon = 4
+} ELatLonAdjust;
+
+static void NewerValidateCountryLatLon (
+  ValidStructPtr vsp,
+  GatherContextPtr gcp,
+  CharPtr countryname,
+  CharPtr lat_lon
+)
+
+{
+  Char        buf0 [256], buf1 [256], buf2 [256];
+  CharPtr     country = NULL, province = NULL, fullname = NULL;
+  CtrySetPtr  csp;
+  Boolean     format_ok = FALSE, lat_in_range = FALSE, lon_in_range = FALSE;
+  FloatHi     lat = 0.0;
+  FloatHi     lon = 0.0;
+  LatLonMap   llm, adjusted;
+  CharPtr     ptr;
+  FloatHi     scale = 1.0;
+  FloatHi     neardist = 0.0;
+  ELatLonAdjust adjust = eLatLonAdjust_none;
+  Uint4         test, adjust_test = 0;
+  CharPtr       fmt;
+
+  if (vsp == NULL || gcp == NULL) return;
+  if (StringHasNoText (countryname)) return;
+  if (StringHasNoText (lat_lon)) return;
+
+  IsCorrectLatLonFormat (lat_lon, &format_ok, &lat_in_range, &lon_in_range);
+  if (! format_ok) {
+    /* may have comma and then altitude, so just get lat_lon component */
+    StringNCpy_0 (buf0, lat_lon, sizeof (buf0));
+    ptr = StringChr (buf0, ',');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      lat_lon = buf0;
+      IsCorrectLatLonFormat (lat_lon, &format_ok, &lat_in_range, &lon_in_range);
+    }
+  }
+
+  /* reality checks */
+  if (! format_ok) {
+    /* incorrect lat_lon format should be reported elsewhere */
+    return;
+  }
+  if (! lat_in_range) {
+    /* incorrect latitude range should be reported elsewhere */
+    return;
+  }
+  if (! lon_in_range) {
+    /* incorrect longitude range should be reported elsewhere */
+    return;
+  }
+
+  if (! ParseLatLon (lat_lon, &lat, &lon)) {
+    /* report unable to parse lat_lon */
+    return;
+  }
+
+  StringNCpy_0 (buf1, countryname, sizeof (buf1));
+  /* trim at comma or semicolon, leaving only country/ocean and possibly state/province */
+  ptr = StringChr (buf1, ',');
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+  ptr = StringChr (buf1, ';');
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+  TrimSpacesAroundString (buf1);
+  if (StringDoesHaveText (buf1)) {
+    fullname = buf1;
+  }
+
+  StringNCpy_0 (buf2, buf1, sizeof (buf2));
+  /* separate country from state/province */
+  ptr = StringChr (buf2, ':');
+  if (ptr != NULL) {
+    if (CountryIsInLatLonList (buf2)) {
+      /* store province if in data list as subregion of designated country */
+      *ptr = '\0';
+      ptr++;
+      TrimSpacesAroundString (ptr);
+      if (StringDoesHaveText (ptr)) {
+        province = ptr;
+      }
+    } else {
+      /* otherwise just truncate country at colon, trimming further descriptive information */
+      *ptr = '\0';
+      ptr++;
+    }
+  }
+  TrimSpacesAroundString (buf2);
+  if (StringDoesHaveText (buf2)) {
+    country = buf2;
+  }
+
+  if (StringHasNoText (country)) {
+    /* report leading colon without country */
+    return;
+  }
+
+  /* known exceptions - don't even bother calculating any further */
+  if (StringCmp (country, "Antarctica") == 0 && lat < -60.0) {
+    return;
+  }
+
+  if (! CountryIsInLatLonList (country)) {
+    if (! WaterIsInLatLonList (country)) {
+      /* report unrecognized country */
+      return;
+    } else {
+      /* report that it may refer to specific small body of water */
+      /* continue to look for nearby country for proximity report */
+      /* (do not return) */
+    }
+  }
+
+  csp = GetLatLonCountryData ();
+  if (csp == NULL) {
+    /* report unable to find data */
+    return;
+  }
+
+  /* scale (reciprocal of degree resolution) needed for adjusting offshore distance calculation */
+  scale = csp->scale;
+
+  /* calculate assignment or proximity by coordinates */
+  CalculateLatLonMap (lat, lon, country, province, scale, &llm);
+
+  /* compare indicated country/province to guess/proximate country/water */
+  test = ClassifyLatLonMap (fullname, country, province, &llm);
+
+  if (!test && CountryIsNearLatLon(country, lat, lon, 2.0, &neardist) && neardist < 5.0) {
+    llm.guesscountry = country;
+    llm.guessprovince = NULL;
+    test = ClassifyLatLonMap (fullname, country, province, &llm);
+  }
+
+  if (!test && !CountryIsNearLatLon(country, lat, lon, 20.0, &neardist) && !WaterIsNearLatLon(country, lat, lon, 20.0, &neardist)) {
+    CalculateLatLonMap (lon, lat, country, province, scale, &adjusted);
+    adjust_test = ClassifyLatLonMap (fullname, country, province, &adjusted);
+    if (adjust_test) {
+      adjust = eLatLonAdjust_flip;
+    } else {
+      CalculateLatLonMap (-lat, lon, country, province, scale, &adjusted);
+      adjust_test = ClassifyLatLonMap (fullname, country, province, &adjusted);
+      if (adjust_test) {
+        adjust = eLatLonAdjust_negate_lat;
+      } else {
+        CalculateLatLonMap (lat, -lon, country, province, scale, &adjusted);
+        adjust_test = ClassifyLatLonMap (fullname, country, province, &adjusted);
+        if (adjust_test) {
+          adjust = eLatLonAdjust_negate_lon;
+        }
+      }
+    }
+
+    if (adjust_test) {
+      test = adjust_test;
+      MemCopy (&llm, &adjusted, sizeof (LatLonMap));
+    }
+  }
+
+  if (adjust) {
+    if (adjust == eLatLonAdjust_flip) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Latitude and longitude values appear to be exchanged");
+    } else if (adjust == eLatLonAdjust_negate_lat) {
+      if (lat < 0.0) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Latitude should be set to N (northern hemisphere)");
+      } else {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Latitude should be set to S (southern hemisphere)");
+      }
+    } else if (adjust == eLatLonAdjust_negate_lon) {
+      if (lon < 0.0) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Longitude should be set to E (eastern hemisphere)");
+      } else {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Longitude should be set to W (western hemisphere)");
+      }
+    }
+  } else {
+    if ((test & eLatLonClassify_CountryMatch) && (test & eLatLonClassify_ProvinceMatch)) {
+      /* success!  nothing to report */
+    } else if (test & eLatLonClassify_WaterMatch) {
+      /* success!  nothing to report */
+    } else if (test & eLatLonClassify_CountryMatch && province == NULL) {
+      if (vsp->testLatLonSubregion) {
+        fmt = "Lat_lon %s is in %s (more specific than %s)";
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState, fmt, lat_lon, llm.fullguess, country);
+      }
+    } else if (llm.guesswater != NULL) {
+      LatLonWaterErrors(vsp, &llm, test, neardist, country, province, lat_lon, fullname, scale);
+    } else if (llm.guesscountry != NULL) {
+      LatLonLandErrors (vsp, &llm, country, province, lat_lon, fullname);
+    } else if (llm.closestcountry != NULL) {
+      fmt = "Lat_lon '%s' is closest to '%s' instead of '%s'";
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry, fmt, lat_lon, llm.closestcountry, fullname);
+    } else if (llm.closestwater != NULL) {
+      fmt = "Lat_lon '%s' is closest to '%s' instead of '%s'";
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonWater, fmt, lat_lon, llm.closestwater, fullname);
+    } else {
+      fmt = "Unable to determine mapping for lat_lon '%s' and country '%s'";
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry, fmt, lat_lon, fullname);
+    }
+  }
+}
+
+
+/* note - special case for sex because it prevents a different message from being displayed, do not list here */
+static const Uint1 sUnexpectedViralSubSourceQualifiers[] = {
+  SUBSRC_cell_line, 
+  SUBSRC_cell_type, 
+  SUBSRC_tissue_type,
+  SUBSRC_dev_stage
+};
+
+static const Int4 sNumUnexpectedViralSubSourceQualifiers = sizeof (sUnexpectedViralSubSourceQualifiers) / sizeof (Uint1);
+
+
+static Boolean IsUnexpectedViralSubSourceQualifier (Uint1 subtype)
+{
+  Int4 i;
+  Boolean rval = FALSE;
+
+  for (i = 0; i < sNumUnexpectedViralSubSourceQualifiers && !rval; i++) {
+    if (subtype == sUnexpectedViralSubSourceQualifiers[i]) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+static const Uint1 sUnexpectedViralOrgModQualifiers[] = {
+  ORGMOD_breed,
+  ORGMOD_cultivar,
+  ORGMOD_specimen_voucher
+};
+
+static const Int4 sNumUnexpectedViralOrgModQualifiers = sizeof (sUnexpectedViralOrgModQualifiers) / sizeof (Uint1);
+
+
+static Boolean IsUnexpectedViralOrgModQualifier (Uint1 subtype)
+{
+  Int4 i;
+  Boolean rval = FALSE;
+
+  for (i = 0; i < sNumUnexpectedViralOrgModQualifiers && !rval; i++) {
+    if (subtype == sUnexpectedViralOrgModQualifiers[i]) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
 static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSourcePtr biop, SeqFeatPtr sfp, ValNodePtr sdp)
 {
   Char            badch;
@@ -11093,24 +13050,23 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
   Boolean         bad_frequency;
   BioseqPtr       bsp;
   BioseqSetPtr    bssp;
-  Char            buf [256];
   Char            ch;
   Boolean         chromconf = FALSE;
   Int2            chromcount = 0;
   SubSourcePtr    chromosome = NULL;
   CharPtr         countryname = NULL;
+  CtrySetPtr      csp;
   ValNodePtr      db;
   DbtagPtr        dbt;
-  Boolean         format_ok;
   CharPtr         gb_synonym = NULL;
   Boolean         germline = FALSE;
   CharPtr         good;
-  CharPtr         guess = NULL;
   Boolean         has_strain = FALSE;
   Boolean         has_fwd_pcr_seq = FALSE;
   Boolean         has_rev_pcr_seq = FALSE;
   Boolean         has_pcr_name = FALSE;
   Boolean         has_metagenome_source = FALSE;
+  Boolean         has_plasmid = FALSE;
   Int4            id;
   Boolean         is_env_sample = FALSE;
   Boolean         is_iso_source = FALSE;
@@ -11129,11 +13085,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
   Boolean         is_rf;
   Boolean         is_sc;
   CharPtr         last_db = NULL;
-  FloatHi         lat = 0.0;
-  FloatHi         lon = 0.0;
   CharPtr         lat_lon = NULL;
-  Boolean         lat_in_range;
-  Boolean         lon_in_range;
   Int2            num_bio_material = 0;
   Int2            num_culture_collection = 0;
   Int2            num_specimen_voucher = 0;
@@ -11152,18 +13104,17 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
   Int4            primer_len_before;
   Int4            primer_len_after;
   ValNodePtr      pset;
-  CharPtr         ptr;
   Boolean         rearranged = FALSE;
   SeqEntryPtr     sep;
   ErrSev          sev;
   SubSourcePtr    ssp;
   CharPtr         str;
-  Boolean         strict = TRUE;
   CharPtr         synonym = NULL;
-  Char            tmp [128];
   Boolean         varietyOK;
   CharPtr         inst1, inst2, id1, id2, coll1, coll2;
   Char            buf1 [512], buf2 [512];
+  PCRPrimerPtr      ppp;
+  PCRReactionSetPtr prp;
 
   if (vsp->sourceQualTags == NULL) {
     InitializeSourceQualTags (vsp);
@@ -11302,6 +13253,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Unexpected use of /mating_type qualifier");
       }
     } else if (ssp->subtype == SUBSRC_plasmid_name) {
+      has_plasmid = TRUE;
       if (biop->genome != GENOME_plasmid) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Plasmid subsource but not plasmid location");
       }
@@ -11441,15 +13393,20 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "bad frequency qualifier value %s", ssp->name);
         }
       }
-    } else if (ssp->subtype == SUBSRC_cell_line && isViral) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Virus has unexpected cell_line qualifier");
-    } else if (ssp->subtype == SUBSRC_cell_type && isViral) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Virus has unexpected cell_type qualifier");
-    } else if (ssp->subtype == SUBSRC_tissue_type && isViral) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Virus has unexpected tissue_type qualifier");
+    }
+
+    if (isViral && IsUnexpectedViralSubSourceQualifier(ssp->subtype)) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Virus has unexpected %s qualifier", GetSubsourceQualName (ssp->subtype));
     }
     ssp = ssp->next;
   }
+
+  if (biop->genome == GENOME_plasmid) {
+    if (! has_plasmid) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Plasmid location but not plasmid subsource");
+    }
+  }
+
   if (num_country > 1) {
     ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_MultipleSourceQualifiers, "Multiple country qualifiers present");
   }
@@ -11470,112 +13427,9 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
   }
 
   if (countryname != NULL && lat_lon != NULL) {
-    IsCorrectLatLonFormat (lat_lon, &format_ok, &lat_in_range, &lon_in_range);
-    if (! format_ok) {
-      /* may have comma and then altitude, so just get lat_lon component */
-      StringNCpy_0 (tmp, lat_lon, sizeof (tmp));
-      ptr = StringChr (tmp, ',');
-      if (ptr != NULL) {
-        *ptr = '\0';
-        lat_lon = tmp;
-        IsCorrectLatLonFormat (tmp, &format_ok, &lat_in_range, &lon_in_range);
-      }
-    }
-    if (format_ok && ParseLatLon (lat_lon, &lat, &lon)) {
-      StringNCpy_0 (buf, countryname, sizeof (buf));
-      ptr = StringChr (buf, ':');
-      if (ptr != NULL) {
-        *ptr = '\0';
-        strict = FALSE;
-      }
-      if (IsCountryInLatLonList (buf)) {
-        if (TestLatLonForCountry (buf, lat, lon)) {
-          /* match */
-          if (! strict) {
-            StringNCpy_0 (buf, countryname, sizeof (buf));
-            ptr = StringChr (buf, ',');
-            if (ptr != NULL) {
-              *ptr = '\0';
-            }
-            ptr = StringChr (buf, ';');
-            if (ptr != NULL) {
-              *ptr = '\0';
-            }
-            if (IsCountryInLatLonList (buf)) {
-              if (TestLatLonForCountry (buf, lat, lon)) {
-                /* match */
-              } else {
-                if (vsp->strictLatLonCountry || (vsp->testLatLonSubregion && (! StringContainsBodyOfWater (countryname)))) {
-                  /* passed unqualified but failed qualified country name, report at info level for now */
-                  guess = GuessCountryForLatLon (lat, lon);
-                  if (StringDoesHaveText (guess)) {
-                    if (CountryBoxesOverlap (buf, guess)) {
-                      if (vsp->indexerVersion) {
-                        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonAdjacent,
-                                  "Lat_lon '%s' MIGHT be in '%s' instead of adjacent '%s' - SHIFT DOUBLE CLICK TO LAUNCH GOOGLE EARTH -",
-                                  lat_lon, guess, buf);
-                      } else {
-                        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState,
-                                  "Lat_lon '%s' MIGHT be in '%s' instead of '%s'", lat_lon, guess, buf);
-                      }
-                    } else {
-                      ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState,
-                                "Lat_lon '%s' does not map to subregion '%s', but may be in '%s'", lat_lon, buf, guess);
-                    }
-                  } else {
-                    ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState,
-                              "Lat_lon '%s' does not map to subregion '%s'", lat_lon, buf);
-                  }
-                }
-              }
-            }
-          }
-        } else if (TestLatLonForCountry (buf, -lat, lon)) {
-          if (lat < 0.0) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Latitude should be set to N (northern hemisphere)");
-          } else {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Latitude should be set to S (southern hemisphere)");
-          }
-        } else if (TestLatLonForCountry (buf, lat, -lon)) {
-          if (lon < 0.0) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Longitude should be set to E (eastern hemisphere)");
-          } else {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Longitude should be set to W (western hemisphere)");
-          }
-        /*
-        } else if (TestLatLonForCountry (buf, -lat, -lon)) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Both latitude and longitude appear to be in wrong hemispheres");
-        */
-        } else if (TestLatLonForCountry (buf, lon, lat)) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_LatLonValue, "Latitude and longitude values appear to be exchanged");
-        /*
-        } else if (strict) {
-          ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry, "Lat_lon '%s' does not map to '%s'", lat_lon, buf);
-        */
-        } else {
-          if (vsp->strictLatLonCountry || (! StringContainsBodyOfWater (countryname))) {
-            guess = GuessCountryForLatLon (lat, lon);
-            if (guess != NULL) {
-              if (CountryBoxesOverlap (buf, guess)) {
-                if (vsp->indexerVersion) {
-                  ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonAdjacent,
-                            "Lat_lon '%s' MIGHT be in '%s' instead of adjacent '%s' - SHIFT DOUBLE CLICK TO LAUNCH GOOGLE EARTH -",
-                            lat_lon, guess, buf);
-                } else {
-                  ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry,
-                            "Lat_lon '%s' MIGHT be in '%s' instead of '%s'", lat_lon, guess, buf);
-                }
-              } else {
-                ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry,
-                          "Lat_lon '%s' does not map to '%s', but may be in '%s'", lat_lon, buf, guess);
-              }
-            } else {
-              ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry,
-                        "Lat_lon '%s' does not map to '%s'", lat_lon, buf);
-            }
-          }
-        }
-      }
+    csp = GetLatLonCountryData ();
+    if (csp != NULL) {
+      NewerValidateCountryLatLon (vsp, gcp, countryname, lat_lon);
     }
   }
 
@@ -11601,6 +13455,41 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
     if (primer_len_before != primer_len_after) {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_DuplicatePCRPrimerSequence,
                 "PCR primer sequence has duplicates");
+    }
+  }
+
+  for (prp = biop->pcr_primers; prp != NULL; prp = prp->next) {
+
+    for (ppp = prp->forward; ppp != NULL; ppp = ppp->next) {
+      if (StringDoesHaveText (ppp->seq) && (! PrimerSeqIsValid (vsp, ppp->seq, &badch))) {
+        if (badch < ' ' || badch > '~') {
+          badch = '?';
+        }
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadPCRPrimerSequence,
+                  "PCR forward primer sequence format is incorrect, first bad character is '%c'", (char) badch);
+      }
+      if (StringLen (ppp->name) > 10 && PrimerSeqIsValid (vsp, ppp->name, &badch)) {
+        if (badch < ' ' || badch > '~') {
+          badch = '?';
+        }
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadPCRPrimerName, "PCR forward primer name appears to be a sequence");
+      }
+    }
+
+    for (ppp = prp->reverse; ppp != NULL; ppp = ppp->next) {
+      if (StringDoesHaveText (ppp->seq) && (! PrimerSeqIsValid (vsp, ppp->seq, &badch))) {
+        if (badch < ' ' || badch > '~') {
+          badch = '?';
+        }
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadPCRPrimerSequence,
+                  "PCR reverse primer sequence format is incorrect, first bad character is '%c'", (char) badch);
+      }
+      if (StringLen (ppp->name) > 10 && PrimerSeqIsValid (vsp, ppp->name, &badch)) {
+        if (badch < ' ' || badch > '~') {
+          badch = '?';
+        }
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadPCRPrimerName, "PCR reverse primer name appears to be a sequence");
+      }
     }
   }
 
@@ -11734,15 +13623,23 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
       if (StringStr (onp->lineage, "Chlorarachniophyceae") == 0 && StringStr (onp->lineage, "Cryptophyta") == 0) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadOrganelle, "Only Chlorarachniophyceae and Cryptophyta have nucleomorphs");
       }
+    } else if (biop->genome == GENOME_macronuclear) {
+      if (StringStr (onp->lineage, "Ciliophora") == 0) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadOrganelle, "Only Ciliophora have macronuclear locations");
+      }
     }
 
     /* warn if bacteria has organelle location */
-    if (StringCmp (onp->div, "BCT") == 0
-        && biop->genome != GENOME_unknown
-        && biop->genome != GENOME_genomic
-        && biop->genome != GENOME_plasmid
-        && biop->genome != GENOME_chromosome) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Bacterial source should not have organelle location");
+    if (StringCmp (onp->div, "BCT") == 0 || StringCmp (onp->div, "VRL") == 0) {
+      if (biop->genome == GENOME_unknown
+          || biop->genome == GENOME_genomic
+          || biop->genome == GENOME_plasmid
+          || biop->genome == GENOME_chromosome
+          || (biop->genome == GENOME_proviral && StringCmp (onp->div, "VRL") == 0)) {
+        /* it's ok */
+      } else {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Bacterial or viral source should not have organelle location");
+      }
     }
 
     if (StringCmp (onp->div, "ENV") == 0 && (! is_env_sample)) {
@@ -11812,6 +13709,11 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
       } else if (omp->subtype == ORGMOD_gb_synonym) {
         gb_synonym = omp->subname;
       }
+
+      if (isViral && IsUnexpectedViralOrgModQualifier(omp->subtype)) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Virus has unexpected %s qualifier", GetOrgModQualName (omp->subtype));
+      }
+
       omp = omp->next;
     }
 
@@ -12079,6 +13981,23 @@ static Boolean StringHasPMID (CharPtr str)
   return FALSE;
 }
 
+
+static Boolean HasStructuredCommentPrefix (UserObjectPtr uop)
+{
+  UserFieldPtr ufp;
+
+  if (uop == NULL) {
+    return FALSE;
+  }
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    if (ufp->label != NULL && StringCmp (ufp->label->str, "StructuredCommentPrefix") == 0) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+
 static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, ValidStructPtr vsp, Uint4 descitemid)
 {
   ValNodePtr      vnp, vnp2;
@@ -12216,6 +14135,10 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
     if (SerialNumberInString (str)) {
       ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_SerialInComment,
                 "Comment may refer to reference by serial number - attach reference specific comments to the reference REMARK instead.");
+    }
+    if (StringLooksLikeFakeStructuredComment (str)) {
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_FakeStructuredComment,
+                "Comment may be formatted to look like a structured comment.");
     }
     for (vnp2 = vnp->next; vnp2 != NULL; vnp2 = vnp2->next) {
       if (vnp2->choice == Seq_descr_comment) {
@@ -12427,6 +14350,9 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
         if (StringCmp (oip->str, "StructuredComment") == 0) {
           if (uop->data == NULL) {
             ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_UserObjectProblem, "Structured Comment user object descriptor is empty");
+          }
+          if (!HasStructuredCommentPrefix (uop)) {
+            ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_StructuredCommentPrefixOrSuffixMissing, "Structured Comment lacks prefix");
           }
         }
       }
@@ -13234,7 +15160,7 @@ static Int2 IdXrefsNotReciprocal (
   for (xref = cds->xref; xref != NULL; xref = xref->next) {
     if (xref->id.choice != 0) {
       matchsfp = SeqMgrGetFeatureByFeatID (cds->idx.entityID, NULL, NULL, xref, NULL);
-      if (matchsfp != mrna) {
+      if (matchsfp != NULL && matchsfp->idx.subtype == FEATDEF_mRNA && matchsfp != mrna) {
         return 1;
       }
     }
@@ -13243,7 +15169,7 @@ static Int2 IdXrefsNotReciprocal (
   for (xref = mrna->xref; xref != NULL; xref = xref->next) {
     if (xref->id.choice != 0) {
       matchsfp = SeqMgrGetFeatureByFeatID (mrna->idx.entityID, NULL, NULL, xref, NULL);
-      if (matchsfp != cds) {
+      if (matchsfp != NULL && matchsfp->idx.subtype == FEATDEF_CDS && matchsfp != cds) {
         return 1;
       }
     }
@@ -13709,21 +15635,23 @@ static void ValidateCDSmRNAmatch (
           rpt_region = SeqMgrGetOverlappingFeature (sfp->location, 0, repeat_region_array, num_repeat_regions,
                                                     NULL, CONTAINED_WITHIN, &rcontext);
           if (rpt_region == NULL) {
-            /*
-            if (gcp != NULL) {
-              gcp->itemID = sfp->idx.itemID;
-              gcp->thistype = OBJ_SEQFEAT;
+            if (StringStr (sfp->except_text, "rearrangement required for product") == NULL) {
+              /*
+              if (gcp != NULL) {
+                gcp->itemID = sfp->idx.itemID;
+                gcp->thistype = OBJ_SEQFEAT;
+              }
+              vsp->descr = NULL;
+              vsp->sfp = sfp;
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_CDSwithNoMRNAOverlap, "CDS overlapped by 0 mRNAs");
+              */
+              vnp = ValNodeAddPointer (&cdstail, 0, (Pointer) sfp);
+              if (cdshead == NULL) {
+                cdshead = vnp;
+              }
+              cdstail = vnp;
+              num_no_mrna++;
             }
-            vsp->descr = NULL;
-            vsp->sfp = sfp;
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_CDSwithNoMRNAOverlap, "CDS overlapped by 0 mRNAs");
-            */
-            vnp = ValNodeAddPointer (&cdstail, 0, (Pointer) sfp);
-            if (cdshead == NULL) {
-              cdshead = vnp;
-            }
-            cdstail = vnp;
-            num_no_mrna++;
           }
         }
       }
@@ -14226,6 +16154,7 @@ static void CheckForNonViralComplete (BioseqPtr bsp, ValidStructPtr vsp, GatherC
   ObjValNodePtr      ovp;
   SeqDescrPtr        sdp;
   CharPtr            title = NULL;
+  SubSourcePtr       ssp;
 
   if (bsp == NULL || vsp == NULL) return;
 
@@ -14257,6 +16186,12 @@ static void CheckForNonViralComplete (BioseqPtr bsp, ValidStructPtr vsp, GatherC
   if (StringNICmp (onp->lineage, "Viruses; ", 9) == 0) return;
   if (StringNICmp (onp->lineage, "Viroids; ", 9) == 0) return;
   if (StringICmp (onp->lineage, "Viruses") == 0 && StringICmp (onp->div, "PHG") == 0) return;
+
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+    if (ssp->subtype == SUBSRC_endogenous_virus_name) {
+      return;
+    }
+  }
 
   if (gcp != NULL) {
     olditemid = gcp->itemID;
@@ -14404,7 +16339,8 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   Int2               numBadFullSource;
   SubSourcePtr       sbsp;
   Int2               numgene, numcds, nummrna, numcdsproducts, nummrnaproducts,
-                     numcdspseudo, nummrnapseudo, lastrnatype, thisrnatype;
+                     numcdspseudo, nummrnapseudo, numrearrangedcds, lastrnatype,
+                     thisrnatype;
   Boolean            cds_products_unique = TRUE, mrna_products_unique = TRUE,
                      suppress_duplicate_messages = FALSE, pseudo;
   SeqIdPtr           sip;
@@ -14460,6 +16396,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   nummrnaproducts = 0;
   numcdspseudo = 0;
   nummrnapseudo = 0;
+  numrearrangedcds = 0;
 
   sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
   while (sfp != NULL) {
@@ -14469,6 +16406,9 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
         break;
       case FEATDEF_CDS :
         numcds++;
+        if (StringStr (sfp->except_text, "rearrangement required for product") != NULL) {
+          numrearrangedcds++;
+        }
         if (sfp->product != NULL) {
           numcdsproducts++;
           sip = SeqLocId (sfp->product);
@@ -14567,7 +16507,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
         cds_products_unique && mrna_products_unique) {
       suppress_duplicate_messages = TRUE;
     }
-    if (numcdsproducts > 0 && numcdsproducts + numcdspseudo != numcds) {
+    if (numcdsproducts > 0 && numcdsproducts + numcdspseudo != numcds && numcdsproducts + numcdspseudo + numrearrangedcds != numcds) {
       if (gcp != NULL) {
         gcp->itemID = olditemid;
         gcp->thistype = olditemtype;
@@ -14646,6 +16586,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
   last_reported = FALSE;
   while (sfp != NULL) {
+    HasFeatId(sfp, 932);
     leave = TRUE;
     if (last != NULL) {
       ivalssame = FALSE;
@@ -15097,9 +17038,9 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
             if (cdsRight + 1 != fcontext.left) {
               ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UTRdoesNotAbutCDS, "CDS does not abut 3'UTR");
             }
-            if (bvsp->is_mrna && cdscount == 1 && utr3count == 1 && fcontext.right != bsp->length - 1) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UTRdoesNotExtendToEnd, "3'UTR does not extend to end of mRNA");
-            }
+          }
+          if (bvsp->is_mrna && cdscount == 1 && utr3count == 1 && fcontext.right != bsp->length - 1) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UTRdoesNotExtendToEnd, "3'UTR does not extend to end of mRNA");
           }
           threeUTRright = fcontext.right;
         }
@@ -15710,6 +17651,9 @@ static void ValidateTSASequenceForNs (BioseqPtr bsp, ValidStructPtr vsp)
   CharPtr         str;
   ValNode         vn;
 
+  if (ISA_aa (bsp->mol)) {
+    return;
+  }
   gcp = vsp->gcp;
 
   oldEntityID = gcp->entityID;
@@ -15768,6 +17712,19 @@ static void ValidateTSASequenceForNs (BioseqPtr bsp, ValidStructPtr vsp)
       }
       MemFree (str);
     }
+  } else {
+    CountNsInSequence (bsp, &total, &max_stretch, FALSE);
+    percent_N = (total * 100) / bsp->length;
+    if (percent_N > 50) {
+      vsp->bsp = bsp;
+      vsp->descr = NULL;
+      vsp->sfp = NULL;
+      gcp->entityID = bsp->idx.entityID;
+      gcp->itemID = bsp->idx.itemID;
+      gcp->thistype = OBJ_BIOSEQ;
+
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_HighNContentPercent, "Sequence contains %d percent Ns", percent_N);
+    }
   }
   gcp->entityID = oldEntityID;
   gcp->itemID = oldItemID;
@@ -15814,6 +17771,9 @@ static void ValidateRefSeqTitle (BioseqPtr bsp, ValidStructPtr vsp, Boolean is_v
     if (sdp != NULL) {
       title = (CharPtr) sdp->data.ptrvalue;
       if (StringDoesHaveText (title)) {
+        if (StringNCmp (title, "PREDICTED: ", 11) == 0) {
+          title += 11;
+        }
         len = StringLen (taxname);
         tlen = StringLen (title);
         if (ISA_na (bsp->mol)) {
@@ -15828,6 +17788,87 @@ static void ValidateRefSeqTitle (BioseqPtr bsp, ValidStructPtr vsp, Boolean is_v
             ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrganismInTitle, "RefSeq protein title does not end with organism name");
           }
         }
+      }
+    }
+  }
+}
+
+
+static Boolean EndsWithSuffixPlusFieldValue (CharPtr str, CharPtr suffix, CharPtr val)
+{
+  CharPtr cp, last_word;
+
+  cp = StringSearch (str, suffix);
+  if (cp == NULL) {
+    return FALSE;
+  }
+  last_word = StringRChr (str, ' ');
+  if (last_word == NULL || last_word < cp) {
+    return FALSE;
+  }
+  if (StringCmp (last_word + 1, val) == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+
+}
+
+
+static void ValidateBarcodeIndexNumber (CharPtr bin, BioseqPtr bsp, ValidStructPtr vsp)
+{
+  SeqDescPtr        sdp;
+  SeqMgrDescContext context;
+  BioSourcePtr      biop;
+  Int4              bin_len;
+
+  if (StringHasNoText (bin) || bsp == NULL || vsp == NULL) {
+    return;
+  }
+
+  bin_len = StringLen (bin);
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
+  if (sdp == NULL || (biop = (BioSourcePtr) sdp->data.ptrvalue) == NULL || biop->org == NULL) {
+    return;
+  }
+  /* only check if name contains "sp." or "bacterium" */
+  if (StringISearch (biop->org->taxname, "sp.") == NULL && StringISearch (biop->org->taxname, "bacterium") == NULL) {
+    return;
+  }
+  /* only check if name contains BOLD */
+  if (StringSearch (biop->org->taxname, "BOLD") == NULL) {
+    return;
+  }
+  if (!EndsWithSuffixPlusFieldValue(biop->org->taxname, "sp. ", bin)
+      && !EndsWithSuffixPlusFieldValue(biop->org->taxname, "bacterium ", bin)) {
+    ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_BadStrucCommInvalidFieldValue, "Organism name should end with sp. plus Barcode Index Number (%s)", bin);
+  }
+}
+
+
+static void ValidateStructuredCommentsInContext (BioseqPtr bsp, ValidStructPtr vsp)
+{
+  SeqDescPtr    sdp;
+  SeqMgrDescContext dcontext;
+  UserObjectPtr uop;
+  ObjectIdPtr   oip;
+  UserFieldPtr  curr;
+
+  /* validate structured comments in context */
+  for (sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+       sdp != NULL;
+       sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext))
+  {
+    uop = sdp->data.ptrvalue;
+    if (uop != NULL && uop->type != NULL && StringICmp (uop->type->str, "StructuredComment") == 0) 
+    {
+      for (curr = uop->data; curr != NULL; curr = curr->next) 
+      {
+        if (curr->choice != 1) continue;
+        oip = curr->label;
+        if (oip == NULL || StringCmp (oip->str, "Barcode Index Number") != 0) continue;
+        ValidateBarcodeIndexNumber ((CharPtr) curr->data.ptrvalue, bsp, vsp);
       }
     }
   }
@@ -15889,7 +17930,7 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
   CharPtr         str;
   CharPtr         taxname = NULL;
   TextSeqIdPtr    tsip;
-  BioSourcePtr    biop;
+  BioSourcePtr    biop = NULL;
   OrgRefPtr       orp;
   OrgNamePtr      onp;
   OrgModPtr       omp;
@@ -16081,6 +18122,9 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
       gcp->entityID = oldEntityID;
       gcp->itemID = oldItemID;
       gcp->thistype = oldItemtype;
+    }
+    if (BioseqHasKeyword(bsp, "BARCODE") && BioseqHasKeyword(bsp, "UNVERIFIED")) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadKeyword, "Sequence has both BARCODE and UNVERIFIED keywords");
     }
   }
 
@@ -16393,6 +18437,9 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
 
   /* TSA checks */
   ValidateTSASequenceForNs (bsp, vsp);
+
+  /* validate structured comments in context */
+  ValidateStructuredCommentsInContext (bsp, vsp);
 }
 
 /*****************************************************************************
@@ -16424,6 +18471,9 @@ static void CheckPeptideOnCodonBoundary (ValidStructPtr vsp, GatherContextPtr gc
   Boolean         partial5, partial3;
   Int4            pos1, pos2, adjust = 0, mod1, mod2;
 
+  if (SeqLocStop (sfp->location) == 2150166) {
+    mod1 = 0;
+  }
   cds = SeqMgrGetOverlappingCDS (sfp->location, NULL);
   if (cds == NULL)
     return;
@@ -16497,969 +18547,6 @@ static CharPtr legal_mobile_element_strings [] = {
   "MITE",
   "LINE",
   "other",
-  NULL
-};
-
-static CharPtr ecnum_ambig [] = {
-  "1.-.-.-", "1.1.-.-", "1.1.1.-", "1.1.1.n", "1.1.2.-", "1.1.2.n",
-  "1.1.3.-", "1.1.3.n", "1.1.4.-", "1.1.4.n", "1.1.5.-", "1.1.5.n",
-  "1.1.98.-", "1.1.98.n", "1.1.99.-", "1.1.99.n", "1.1.n.n",
-  "1.2.-.-", "1.2.1.-", "1.2.1.n", "1.2.2.-", "1.2.2.n", "1.2.3.-",
-  "1.2.3.n", "1.2.4.-", "1.2.4.n", "1.2.7.-", "1.2.7.n", "1.2.99.-",
-  "1.2.99.n", "1.2.n.n", "1.3.-.-", "1.3.1.-", "1.3.1.n", "1.3.2.-",
-  "1.3.2.n", "1.3.3.-", "1.3.3.n", "1.3.5.-", "1.3.5.n", "1.3.7.-",
-  "1.3.7.n", "1.3.99.-", "1.3.99.n", "1.3.n.n", "1.4.-.-", "1.4.1.-",
-  "1.4.1.n", "1.4.2.-", "1.4.2.n", "1.4.3.-", "1.4.3.n", "1.4.4.-",
-  "1.4.4.n", "1.4.5.-", "1.4.5.n", "1.4.7.-", "1.4.7.n", "1.4.99.-",
-  "1.4.99.n", "1.4.n.n", "1.5.-.-", "1.5.1.-", "1.5.1.n", "1.5.3.-",
-  "1.5.3.n", "1.5.4.-", "1.5.4.n", "1.5.5.-", "1.5.5.n", "1.5.7.-",
-  "1.5.7.n", "1.5.8.-", "1.5.8.n", "1.5.99.-", "1.5.99.n", "1.5.n.n",
-  "1.6.-.-", "1.6.1.-", "1.6.1.n", "1.6.2.-", "1.6.2.n", "1.6.3.-",
-  "1.6.3.n", "1.6.4.-", "1.6.4.n", "1.6.5.-", "1.6.5.n", "1.6.6.-",
-  "1.6.6.n", "1.6.7.-", "1.6.7.n", "1.6.8.-", "1.6.8.n", "1.6.99.-",
-  "1.6.99.n", "1.6.n.n", "1.7.-.-", "1.7.1.-", "1.7.1.n", "1.7.2.-",
-  "1.7.2.n", "1.7.3.-", "1.7.3.n", "1.7.5.-", "1.7.5.n", "1.7.7.-",
-  "1.7.7.n", "1.7.99.-", "1.7.99.n", "1.7.n.n", "1.8.-.-", "1.8.1.-",
-  "1.8.1.n", "1.8.2.-", "1.8.2.n", "1.8.3.-", "1.8.3.n", "1.8.4.-",
-  "1.8.4.n", "1.8.5.-", "1.8.5.n", "1.8.6.-", "1.8.6.n", "1.8.7.-",
-  "1.8.7.n", "1.8.98.-", "1.8.98.n", "1.8.99.-", "1.8.99.n",
-  "1.8.n.n", "1.9.-.-", "1.9.3.-", "1.9.3.n", "1.9.6.-", "1.9.6.n",
-  "1.9.99.-", "1.9.99.n", "1.9.n.n", "1.10.-.-", "1.10.1.-",
-  "1.10.1.n", "1.10.2.-", "1.10.2.n", "1.10.3.-", "1.10.3.n",
-  "1.10.99.-", "1.10.99.n", "1.10.n.n", "1.11.-.-", "1.11.1.-",
-  "1.11.1.n", "1.11.n.n", "1.12.-.-", "1.12.1.-", "1.12.1.n",
-  "1.12.2.-", "1.12.2.n", "1.12.5.-", "1.12.5.n", "1.12.7.-",
-  "1.12.7.n", "1.12.98.-", "1.12.98.n", "1.12.99.-", "1.12.99.n",
-  "1.12.n.n", "1.13.-.-", "1.13.1.-", "1.13.1.n", "1.13.11.-",
-  "1.13.11.n", "1.13.12.-", "1.13.12.n", "1.13.99.-", "1.13.99.n",
-  "1.13.n.n", "1.14.-.-", "1.14.1.-", "1.14.1.n", "1.14.2.-",
-  "1.14.2.n", "1.14.3.-", "1.14.3.n", "1.14.11.-", "1.14.11.n",
-  "1.14.12.-", "1.14.12.n", "1.14.13.-", "1.14.13.n", "1.14.14.-",
-  "1.14.14.n", "1.14.15.-", "1.14.15.n", "1.14.16.-", "1.14.16.n",
-  "1.14.17.-", "1.14.17.n", "1.14.18.-", "1.14.18.n", "1.14.19.-",
-  "1.14.19.n", "1.14.20.-", "1.14.20.n", "1.14.21.-", "1.14.21.n",
-  "1.14.99.-", "1.14.99.n", "1.14.n.n", "1.15.-.-", "1.15.1.-",
-  "1.15.1.n", "1.15.n.n", "1.16.-.-", "1.16.1.-", "1.16.1.n",
-  "1.16.3.-", "1.16.3.n", "1.16.8.-", "1.16.8.n", "1.16.n.n",
-  "1.17.-.-", "1.17.1.-", "1.17.1.n", "1.17.3.-", "1.17.3.n",
-  "1.17.4.-", "1.17.4.n", "1.17.5.-", "1.17.5.n", "1.17.7.-",
-  "1.17.7.n", "1.17.99.-", "1.17.99.n", "1.17.n.n", "1.18.-.-",
-  "1.18.1.-", "1.18.1.n", "1.18.2.-", "1.18.2.n", "1.18.3.-",
-  "1.18.3.n", "1.18.6.-", "1.18.6.n", "1.18.96.-", "1.18.96.n",
-  "1.18.99.-", "1.18.99.n", "1.18.n.n", "1.19.-.-", "1.19.6.-",
-  "1.19.6.n", "1.19.n.n", "1.20.-.-", "1.20.1.-", "1.20.1.n",
-  "1.20.4.-", "1.20.4.n", "1.20.98.-", "1.20.98.n", "1.20.99.-",
-  "1.20.99.n", "1.20.n.n", "1.21.-.-", "1.21.3.-", "1.21.3.n",
-  "1.21.4.-", "1.21.4.n", "1.21.99.-", "1.21.99.n", "1.21.n.n",
-  "1.22.-.-", "1.22.1.-", "1.22.1.n", "1.22.n.n", "1.97.-.-",
-  "1.97.1.-", "1.97.1.n", "1.97.n.n", "1.98.-.-", "1.98.1.-",
-  "1.98.1.n", "1.98.n.n", "1.99.-.-", "1.99.1.-", "1.99.1.n",
-  "1.99.2.-", "1.99.2.n", "1.99.n.n", "1.n.n.n", "2.-.-.-", "2.1.-.-",
-  "2.1.1.-", "2.1.1.n", "2.1.2.-", "2.1.2.n", "2.1.3.-", "2.1.3.n",
-  "2.1.4.-", "2.1.4.n", "2.1.n.n", "2.2.-.-", "2.2.1.-", "2.2.1.n",
-  "2.2.n.n", "2.3.-.-", "2.3.1.-", "2.3.1.n", "2.3.2.-", "2.3.2.n",
-  "2.3.3.-", "2.3.3.n", "2.3.n.n", "2.4.-.-", "2.4.1.-", "2.4.1.n",
-  "2.4.2.-", "2.4.2.n", "2.4.99.-", "2.4.99.n", "2.4.n.n", "2.5.-.-",
-  "2.5.1.-", "2.5.1.n", "2.5.n.n", "2.6.-.-", "2.6.1.-", "2.6.1.n",
-  "2.6.2.-", "2.6.2.n", "2.6.3.-", "2.6.3.n", "2.6.99.-", "2.6.99.n",
-  "2.6.n.n", "2.7.-.-", "2.7.1.-", "2.7.1.n", "2.7.2.-", "2.7.2.n",
-  "2.7.3.-", "2.7.3.n", "2.7.4.-", "2.7.4.n", "2.7.5.-", "2.7.5.n",
-  "2.7.6.-", "2.7.6.n", "2.7.7.-", "2.7.7.n", "2.7.8.-", "2.7.8.n",
-  "2.7.9.-", "2.7.9.n", "2.7.10.-", "2.7.10.n", "2.7.11.-",
-  "2.7.11.n", "2.7.12.-", "2.7.12.n", "2.7.13.-", "2.7.13.n",
-  "2.7.99.-", "2.7.99.n", "2.7.n.n", "2.8.-.-", "2.8.1.-", "2.8.1.n",
-  "2.8.2.-", "2.8.2.n", "2.8.3.-", "2.8.3.n", "2.8.4.-", "2.8.4.n",
-  "2.8.n.n", "2.9.-.-", "2.9.1.-", "2.9.1.n", "2.9.n.n", "2.n.n.n",
-  "3.-.-.-", "3.1.-.-", "3.1.1.-", "3.1.1.n", "3.1.2.-", "3.1.2.n",
-  "3.1.3.-", "3.1.3.n", "3.1.4.-", "3.1.4.n", "3.1.5.-", "3.1.5.n",
-  "3.1.6.-", "3.1.6.n", "3.1.7.-", "3.1.7.n", "3.1.8.-", "3.1.8.n",
-  "3.1.11.-", "3.1.11.n", "3.1.13.-", "3.1.13.n", "3.1.14.-",
-  "3.1.14.n", "3.1.15.-", "3.1.15.n", "3.1.16.-", "3.1.16.n",
-  "3.1.21.-", "3.1.21.n", "3.1.22.-", "3.1.22.n", "3.1.23.-",
-  "3.1.23.n", "3.1.24.-", "3.1.24.n", "3.1.25.-", "3.1.25.n",
-  "3.1.26.-", "3.1.26.n", "3.1.27.-", "3.1.27.n", "3.1.30.-",
-  "3.1.30.n", "3.1.31.-", "3.1.31.n", "3.1.n.n", "3.2.-.-", "3.2.1.-",
-  "3.2.1.n", "3.2.2.-", "3.2.2.n", "3.2.3.-", "3.2.3.n", "3.2.n.n",
-  "3.3.-.-", "3.3.1.-", "3.3.1.n", "3.3.2.-", "3.3.2.n", "3.3.n.n",
-  "3.4.-.-", "3.4.1.-", "3.4.1.n", "3.4.2.-", "3.4.2.n", "3.4.3.-",
-  "3.4.3.n", "3.4.4.-", "3.4.4.n", "3.4.11.-", "3.4.11.n", "3.4.12.-",
-  "3.4.12.n", "3.4.13.-", "3.4.13.n", "3.4.14.-", "3.4.14.n",
-  "3.4.15.-", "3.4.15.n", "3.4.16.-", "3.4.16.n", "3.4.17.-",
-  "3.4.17.n", "3.4.18.-", "3.4.18.n", "3.4.19.-", "3.4.19.n",
-  "3.4.21.-", "3.4.21.n", "3.4.22.-", "3.4.22.n", "3.4.23.-",
-  "3.4.23.n", "3.4.24.-", "3.4.24.n", "3.4.25.-", "3.4.25.n",
-  "3.4.99.-", "3.4.99.n", "3.4.n.n", "3.5.-.-", "3.5.1.-", "3.5.1.n",
-  "3.5.2.-", "3.5.2.n", "3.5.3.-", "3.5.3.n", "3.5.4.-", "3.5.4.n",
-  "3.5.5.-", "3.5.5.n", "3.5.99.-", "3.5.99.n", "3.5.n.n", "3.6.-.-",
-  "3.6.1.-", "3.6.1.n", "3.6.2.-", "3.6.2.n", "3.6.3.-", "3.6.3.n",
-  "3.6.4.-", "3.6.4.n", "3.6.5.-", "3.6.5.n", "3.6.n.n", "3.7.-.-",
-  "3.7.1.-", "3.7.1.n", "3.7.n.n", "3.8.-.-", "3.8.1.-", "3.8.1.n",
-  "3.8.2.-", "3.8.2.n", "3.8.n.n", "3.9.-.-", "3.9.1.-", "3.9.1.n",
-  "3.9.n.n", "3.10.-.-", "3.10.1.-", "3.10.1.n", "3.10.n.n",
-  "3.11.-.-", "3.11.1.-", "3.11.1.n", "3.11.n.n", "3.12.-.-",
-  "3.12.1.-", "3.12.1.n", "3.12.n.n", "3.13.-.-", "3.13.1.-",
-  "3.13.1.n", "3.13.n.n", "3.n.n.n", "4.-.-.-", "4.1.-.-", "4.1.1.-",
-  "4.1.1.n", "4.1.2.-", "4.1.2.n", "4.1.3.-", "4.1.3.n", "4.1.99.-",
-  "4.1.99.n", "4.1.n.n", "4.2.-.-", "4.2.1.-", "4.2.1.n", "4.2.2.-",
-  "4.2.2.n", "4.2.3.-", "4.2.3.n", "4.2.99.-", "4.2.99.n", "4.2.n.n",
-  "4.3.-.-", "4.3.1.-", "4.3.1.n", "4.3.2.-", "4.3.2.n", "4.3.3.-",
-  "4.3.3.n", "4.3.99.-", "4.3.99.n", "4.3.n.n", "4.4.-.-", "4.4.1.-",
-  "4.4.1.n", "4.4.n.n", "4.5.-.-", "4.5.1.-", "4.5.1.n", "4.5.n.n",
-  "4.6.-.-", "4.6.1.-", "4.6.1.n", "4.6.n.n", "4.99.-.-", "4.99.1.-",
-  "4.99.1.n", "4.99.n.n", "4.n.n.n", "5.-.-.-", "5.1.-.-", "5.1.1.-",
-  "5.1.1.n", "5.1.2.-", "5.1.2.n", "5.1.3.-", "5.1.3.n", "5.1.99.-",
-  "5.1.99.n", "5.1.n.n", "5.2.-.-", "5.2.1.-", "5.2.1.n", "5.2.n.n",
-  "5.3.-.-", "5.3.1.-", "5.3.1.n", "5.3.2.-", "5.3.2.n", "5.3.3.-",
-  "5.3.3.n", "5.3.4.-", "5.3.4.n", "5.3.99.-", "5.3.99.n", "5.3.n.n",
-  "5.4.-.-", "5.4.1.-", "5.4.1.n", "5.4.2.-", "5.4.2.n", "5.4.3.-",
-  "5.4.3.n", "5.4.4.-", "5.4.4.n", "5.4.99.-", "5.4.99.n", "5.4.n.n",
-  "5.5.-.-", "5.5.1.-", "5.5.1.n", "5.5.n.n", "5.99.-.-", "5.99.1.-",
-  "5.99.1.n", "5.99.n.n", "5.n.n.n", "6.-.-.-", "6.1.-.-", "6.1.1.-",
-  "6.1.1.n", "6.1.n.n", "6.2.-.-", "6.2.1.-", "6.2.1.n", "6.2.n.n",
-  "6.3.-.-", "6.3.1.-", "6.3.1.n", "6.3.2.-", "6.3.2.n", "6.3.3.-",
-  "6.3.3.n", "6.3.4.-", "6.3.4.n", "6.3.5.-", "6.3.5.n", "6.3.n.n",
-  "6.4.-.-", "6.4.1.-", "6.4.1.n", "6.4.n.n", "6.5.-.-", "6.5.1.-",
-  "6.5.1.n", "6.5.n.n", "6.6.-.-", "6.6.1.-", "6.6.1.n", "6.6.n.n",
-  "6.n.n.n",
-  NULL
-};
-
-static CharPtr ecnum_specif [] = {
-  "1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.6", "1.1.1.7",
-  "1.1.1.8", "1.1.1.9", "1.1.1.10", "1.1.1.11", "1.1.1.12",
-  "1.1.1.13", "1.1.1.14", "1.1.1.15", "1.1.1.16", "1.1.1.17",
-  "1.1.1.18", "1.1.1.19", "1.1.1.20", "1.1.1.21", "1.1.1.22",
-  "1.1.1.23", "1.1.1.24", "1.1.1.25", "1.1.1.26", "1.1.1.27",
-  "1.1.1.28", "1.1.1.29", "1.1.1.30", "1.1.1.31", "1.1.1.32",
-  "1.1.1.33", "1.1.1.34", "1.1.1.35", "1.1.1.36", "1.1.1.37",
-  "1.1.1.38", "1.1.1.39", "1.1.1.40", "1.1.1.41", "1.1.1.42",
-  "1.1.1.43", "1.1.1.44", "1.1.1.45", "1.1.1.46", "1.1.1.47",
-  "1.1.1.48", "1.1.1.49", "1.1.1.50", "1.1.1.51", "1.1.1.52",
-  "1.1.1.53", "1.1.1.54", "1.1.1.55", "1.1.1.56", "1.1.1.57",
-  "1.1.1.58", "1.1.1.59", "1.1.1.60", "1.1.1.61", "1.1.1.62",
-  "1.1.1.63", "1.1.1.64", "1.1.1.65", "1.1.1.66", "1.1.1.67",
-  "1.1.1.69", "1.1.1.71", "1.1.1.72", "1.1.1.73", "1.1.1.75",
-  "1.1.1.76", "1.1.1.77", "1.1.1.78", "1.1.1.79", "1.1.1.80",
-  "1.1.1.81", "1.1.1.82", "1.1.1.83", "1.1.1.84", "1.1.1.85",
-  "1.1.1.86", "1.1.1.87", "1.1.1.88", "1.1.1.90", "1.1.1.91",
-  "1.1.1.92", "1.1.1.93", "1.1.1.94", "1.1.1.95", "1.1.1.96",
-  "1.1.1.97", "1.1.1.98", "1.1.1.99", "1.1.1.100", "1.1.1.101",
-  "1.1.1.102", "1.1.1.103", "1.1.1.104", "1.1.1.105", "1.1.1.106",
-  "1.1.1.107", "1.1.1.108", "1.1.1.110", "1.1.1.111", "1.1.1.112",
-  "1.1.1.113", "1.1.1.114", "1.1.1.115", "1.1.1.116", "1.1.1.117",
-  "1.1.1.118", "1.1.1.119", "1.1.1.120", "1.1.1.121", "1.1.1.122",
-  "1.1.1.123", "1.1.1.124", "1.1.1.125", "1.1.1.126", "1.1.1.127",
-  "1.1.1.128", "1.1.1.129", "1.1.1.130", "1.1.1.131", "1.1.1.132",
-  "1.1.1.133", "1.1.1.134", "1.1.1.135", "1.1.1.136", "1.1.1.137",
-  "1.1.1.138", "1.1.1.140", "1.1.1.141", "1.1.1.142", "1.1.1.143",
-  "1.1.1.144", "1.1.1.145", "1.1.1.146", "1.1.1.147", "1.1.1.148",
-  "1.1.1.149", "1.1.1.150", "1.1.1.151", "1.1.1.152", "1.1.1.153",
-  "1.1.1.154", "1.1.1.156", "1.1.1.157", "1.1.1.158", "1.1.1.159",
-  "1.1.1.160", "1.1.1.161", "1.1.1.162", "1.1.1.163", "1.1.1.164",
-  "1.1.1.165", "1.1.1.166", "1.1.1.167", "1.1.1.168", "1.1.1.169",
-  "1.1.1.170", "1.1.1.172", "1.1.1.173", "1.1.1.174", "1.1.1.175",
-  "1.1.1.176", "1.1.1.177", "1.1.1.178", "1.1.1.179", "1.1.1.181",
-  "1.1.1.183", "1.1.1.184", "1.1.1.185", "1.1.1.186", "1.1.1.187",
-  "1.1.1.188", "1.1.1.189", "1.1.1.190", "1.1.1.191", "1.1.1.192",
-  "1.1.1.193", "1.1.1.194", "1.1.1.195", "1.1.1.196", "1.1.1.197",
-  "1.1.1.198", "1.1.1.199", "1.1.1.200", "1.1.1.201", "1.1.1.202",
-  "1.1.1.203", "1.1.1.205", "1.1.1.206", "1.1.1.207", "1.1.1.208",
-  "1.1.1.209", "1.1.1.210", "1.1.1.211", "1.1.1.212", "1.1.1.213",
-  "1.1.1.214", "1.1.1.215", "1.1.1.216", "1.1.1.217", "1.1.1.218",
-  "1.1.1.219", "1.1.1.220", "1.1.1.221", "1.1.1.222", "1.1.1.223",
-  "1.1.1.224", "1.1.1.225", "1.1.1.226", "1.1.1.227", "1.1.1.228",
-  "1.1.1.229", "1.1.1.230", "1.1.1.231", "1.1.1.232", "1.1.1.233",
-  "1.1.1.234", "1.1.1.235", "1.1.1.236", "1.1.1.237", "1.1.1.238",
-  "1.1.1.239", "1.1.1.240", "1.1.1.241", "1.1.1.243", "1.1.1.244",
-  "1.1.1.245", "1.1.1.246", "1.1.1.247", "1.1.1.248", "1.1.1.250",
-  "1.1.1.251", "1.1.1.252", "1.1.1.254", "1.1.1.255", "1.1.1.256",
-  "1.1.1.257", "1.1.1.258", "1.1.1.259", "1.1.1.260", "1.1.1.261",
-  "1.1.1.262", "1.1.1.263", "1.1.1.264", "1.1.1.265", "1.1.1.266",
-  "1.1.1.267", "1.1.1.268", "1.1.1.269", "1.1.1.270", "1.1.1.271",
-  "1.1.1.272", "1.1.1.273", "1.1.1.274", "1.1.1.275", "1.1.1.276",
-  "1.1.1.277", "1.1.1.278", "1.1.1.279", "1.1.1.280", "1.1.1.281",
-  "1.1.1.282", "1.1.1.283", "1.1.1.284", "1.1.1.285", "1.1.1.286",
-  "1.1.1.287", "1.1.1.288", "1.1.1.289", "1.1.1.290", "1.1.1.291",
-  "1.1.1.292", "1.1.1.294", "1.1.1.295", "1.1.1.296", "1.1.1.297",
-  "1.1.1.298", "1.1.1.299", "1.1.1.300", "1.1.1.301", "1.1.1.302",
-  "1.1.1.303", "1.1.1.304", "1.1.2.2", "1.1.2.3", "1.1.2.4",
-  "1.1.2.5", "1.1.3.3", "1.1.3.4", "1.1.3.5", "1.1.3.6", "1.1.3.7",
-  "1.1.3.8", "1.1.3.9", "1.1.3.10", "1.1.3.11", "1.1.3.12",
-  "1.1.3.13", "1.1.3.14", "1.1.3.15", "1.1.3.16", "1.1.3.17",
-  "1.1.3.18", "1.1.3.19", "1.1.3.20", "1.1.3.21", "1.1.3.23",
-  "1.1.3.27", "1.1.3.28", "1.1.3.29", "1.1.3.30", "1.1.3.37",
-  "1.1.3.38", "1.1.3.39", "1.1.3.40", "1.1.3.41", "1.1.4.1",
-  "1.1.4.2", "1.1.5.2", "1.1.5.3", "1.1.5.4", "1.1.5.5", "1.1.5.6",
-  "1.1.5.7", "1.1.99.1", "1.1.99.2", "1.1.99.3", "1.1.99.4",
-  "1.1.99.6", "1.1.99.7", "1.1.99.8", "1.1.99.9", "1.1.99.10",
-  "1.1.99.11", "1.1.99.12", "1.1.99.13", "1.1.99.14", "1.1.99.18",
-  "1.1.99.20", "1.1.99.21", "1.1.99.22", "1.1.99.23", "1.1.99.24",
-  "1.1.99.25", "1.1.99.26", "1.1.99.27", "1.1.99.28", "1.1.99.29",
-  "1.1.99.30", "1.1.99.31", "1.1.99.32", "1.1.99.33", "1.2.1.2",
-  "1.2.1.3", "1.2.1.4", "1.2.1.5", "1.2.1.7", "1.2.1.8", "1.2.1.9",
-  "1.2.1.10", "1.2.1.11", "1.2.1.12", "1.2.1.13", "1.2.1.15",
-  "1.2.1.16", "1.2.1.17", "1.2.1.18", "1.2.1.19", "1.2.1.20",
-  "1.2.1.21", "1.2.1.22", "1.2.1.23", "1.2.1.24", "1.2.1.25",
-  "1.2.1.26", "1.2.1.27", "1.2.1.28", "1.2.1.29", "1.2.1.30",
-  "1.2.1.31", "1.2.1.32", "1.2.1.33", "1.2.1.36", "1.2.1.38",
-  "1.2.1.39", "1.2.1.40", "1.2.1.41", "1.2.1.42", "1.2.1.43",
-  "1.2.1.44", "1.2.1.45", "1.2.1.46", "1.2.1.47", "1.2.1.48",
-  "1.2.1.49", "1.2.1.50", "1.2.1.51", "1.2.1.52", "1.2.1.53",
-  "1.2.1.54", "1.2.1.57", "1.2.1.58", "1.2.1.59", "1.2.1.60",
-  "1.2.1.61", "1.2.1.62", "1.2.1.63", "1.2.1.64", "1.2.1.65",
-  "1.2.1.66", "1.2.1.67", "1.2.1.68", "1.2.1.69", "1.2.1.70",
-  "1.2.1.71", "1.2.1.72", "1.2.1.73", "1.2.1.74", "1.2.1.75",
-  "1.2.1.76", "1.2.1.77", "1.2.1.78", "1.2.2.1", "1.2.2.2", "1.2.2.3",
-  "1.2.2.4", "1.2.3.1", "1.2.3.3", "1.2.3.4", "1.2.3.5", "1.2.3.6",
-  "1.2.3.7", "1.2.3.8", "1.2.3.9", "1.2.3.11", "1.2.3.13", "1.2.3.14",
-  "1.2.4.1", "1.2.4.2", "1.2.4.4", "1.2.7.1", "1.2.7.2", "1.2.7.3",
-  "1.2.7.4", "1.2.7.5", "1.2.7.6", "1.2.7.7", "1.2.7.8", "1.2.99.2",
-  "1.2.99.3", "1.2.99.4", "1.2.99.5", "1.2.99.6", "1.2.99.7",
-  "1.3.1.1", "1.3.1.2", "1.3.1.3", "1.3.1.4", "1.3.1.5", "1.3.1.6",
-  "1.3.1.7", "1.3.1.8", "1.3.1.9", "1.3.1.10", "1.3.1.11", "1.3.1.12",
-  "1.3.1.13", "1.3.1.14", "1.3.1.15", "1.3.1.16", "1.3.1.17",
-  "1.3.1.18", "1.3.1.19", "1.3.1.20", "1.3.1.21", "1.3.1.22",
-  "1.3.1.24", "1.3.1.25", "1.3.1.26", "1.3.1.27", "1.3.1.28",
-  "1.3.1.29", "1.3.1.30", "1.3.1.31", "1.3.1.32", "1.3.1.33",
-  "1.3.1.34", "1.3.1.35", "1.3.1.36", "1.3.1.37", "1.3.1.38",
-  "1.3.1.39", "1.3.1.40", "1.3.1.41", "1.3.1.42", "1.3.1.43",
-  "1.3.1.44", "1.3.1.45", "1.3.1.46", "1.3.1.47", "1.3.1.48",
-  "1.3.1.49", "1.3.1.51", "1.3.1.52", "1.3.1.53", "1.3.1.54",
-  "1.3.1.56", "1.3.1.57", "1.3.1.58", "1.3.1.60", "1.3.1.62",
-  "1.3.1.63", "1.3.1.64", "1.3.1.65", "1.3.1.66", "1.3.1.67",
-  "1.3.1.68", "1.3.1.69", "1.3.1.70", "1.3.1.71", "1.3.1.72",
-  "1.3.1.73", "1.3.1.74", "1.3.1.75", "1.3.1.76", "1.3.1.77",
-  "1.3.1.78", "1.3.1.79", "1.3.1.80", "1.3.1.81", "1.3.1.82",
-  "1.3.1.83", "1.3.1.84", "1.3.2.3", "1.3.3.1", "1.3.3.3", "1.3.3.4",
-  "1.3.3.5", "1.3.3.6", "1.3.3.7", "1.3.3.8", "1.3.3.9", "1.3.3.10",
-  "1.3.3.11", "1.3.3.12", "1.3.5.1", "1.3.5.2", "1.3.7.1", "1.3.7.2",
-  "1.3.7.3", "1.3.7.4", "1.3.7.5", "1.3.7.6", "1.3.99.1", "1.3.99.2",
-  "1.3.99.3", "1.3.99.4", "1.3.99.5", "1.3.99.6", "1.3.99.7",
-  "1.3.99.8", "1.3.99.10", "1.3.99.12", "1.3.99.13", "1.3.99.14",
-  "1.3.99.15", "1.3.99.16", "1.3.99.17", "1.3.99.18", "1.3.99.19",
-  "1.3.99.20", "1.3.99.21", "1.3.99.22", "1.3.99.23", "1.3.99.24",
-  "1.3.99.25", "1.4.1.1", "1.4.1.2", "1.4.1.3", "1.4.1.4", "1.4.1.5",
-  "1.4.1.7", "1.4.1.8", "1.4.1.9", "1.4.1.10", "1.4.1.11", "1.4.1.12",
-  "1.4.1.13", "1.4.1.14", "1.4.1.15", "1.4.1.16", "1.4.1.17",
-  "1.4.1.18", "1.4.1.19", "1.4.1.20", "1.4.1.21", "1.4.2.1",
-  "1.4.3.1", "1.4.3.2", "1.4.3.3", "1.4.3.4", "1.4.3.5", "1.4.3.7",
-  "1.4.3.8", "1.4.3.10", "1.4.3.11", "1.4.3.12", "1.4.3.13",
-  "1.4.3.14", "1.4.3.15", "1.4.3.16", "1.4.3.19", "1.4.3.20",
-  "1.4.3.21", "1.4.3.22", "1.4.3.23", "1.4.4.2", "1.4.5.1", "1.4.7.1",
-  "1.4.99.1", "1.4.99.2", "1.4.99.3", "1.4.99.4", "1.4.99.5",
-  "1.5.1.1", "1.5.1.2", "1.5.1.3", "1.5.1.5", "1.5.1.6", "1.5.1.7",
-  "1.5.1.8", "1.5.1.9", "1.5.1.10", "1.5.1.11", "1.5.1.12",
-  "1.5.1.15", "1.5.1.16", "1.5.1.17", "1.5.1.18", "1.5.1.19",
-  "1.5.1.20", "1.5.1.21", "1.5.1.22", "1.5.1.23", "1.5.1.24",
-  "1.5.1.25", "1.5.1.26", "1.5.1.27", "1.5.1.28", "1.5.1.29",
-  "1.5.1.30", "1.5.1.31", "1.5.1.32", "1.5.1.33", "1.5.1.34",
-  "1.5.3.1", "1.5.3.2", "1.5.3.4", "1.5.3.5", "1.5.3.6", "1.5.3.7",
-  "1.5.3.10", "1.5.3.11", "1.5.3.12", "1.5.3.13", "1.5.3.14",
-  "1.5.3.15", "1.5.3.16", "1.5.3.17", "1.5.4.1", "1.5.5.1", "1.5.7.1",
-  "1.5.8.1", "1.5.8.2", "1.5.99.1", "1.5.99.2", "1.5.99.3",
-  "1.5.99.4", "1.5.99.5", "1.5.99.6", "1.5.99.8", "1.5.99.9",
-  "1.5.99.11", "1.5.99.12", "1.5.99.13", "1.6.1.1", "1.6.1.2",
-  "1.6.2.2", "1.6.2.4", "1.6.2.5", "1.6.2.6", "1.6.3.1", "1.6.5.2",
-  "1.6.5.3", "1.6.5.4", "1.6.5.5", "1.6.5.6", "1.6.5.7", "1.6.6.9",
-  "1.6.99.1", "1.6.99.3", "1.6.99.5", "1.6.99.6", "1.7.1.1",
-  "1.7.1.2", "1.7.1.3", "1.7.1.4", "1.7.1.5", "1.7.1.6", "1.7.1.7",
-  "1.7.1.9", "1.7.1.10", "1.7.1.11", "1.7.1.12", "1.7.1.13",
-  "1.7.2.1", "1.7.2.2", "1.7.2.3", "1.7.3.1", "1.7.3.2", "1.7.3.3",
-  "1.7.3.4", "1.7.3.5", "1.7.5.1", "1.7.7.1", "1.7.7.2", "1.7.99.1",
-  "1.7.99.4", "1.7.99.6", "1.7.99.7", "1.7.99.8", "1.8.1.2",
-  "1.8.1.3", "1.8.1.4", "1.8.1.5", "1.8.1.6", "1.8.1.7", "1.8.1.8",
-  "1.8.1.9", "1.8.1.10", "1.8.1.11", "1.8.1.12", "1.8.1.13",
-  "1.8.1.14", "1.8.1.15", "1.8.1.16", "1.8.2.1", "1.8.2.2", "1.8.3.1",
-  "1.8.3.2", "1.8.3.3", "1.8.3.4", "1.8.3.5", "1.8.4.1", "1.8.4.2",
-  "1.8.4.3", "1.8.4.4", "1.8.4.7", "1.8.4.8", "1.8.4.9", "1.8.4.10",
-  "1.8.4.11", "1.8.4.12", "1.8.4.13", "1.8.4.14", "1.8.5.1",
-  "1.8.5.2", "1.8.7.1", "1.8.98.1", "1.8.98.2", "1.8.99.1",
-  "1.8.99.2", "1.8.99.3", "1.9.3.1", "1.9.6.1", "1.9.99.1",
-  "1.10.1.1", "1.10.2.1", "1.10.2.2", "1.10.3.1", "1.10.3.2",
-  "1.10.3.3", "1.10.3.4", "1.10.3.5", "1.10.3.6", "1.10.99.1",
-  "1.10.99.2", "1.10.99.3", "1.11.1.1", "1.11.1.2", "1.11.1.3",
-  "1.11.1.5", "1.11.1.6", "1.11.1.7", "1.11.1.8", "1.11.1.9",
-  "1.11.1.10", "1.11.1.11", "1.11.1.12", "1.11.1.13", "1.11.1.14",
-  "1.11.1.15", "1.11.1.16", "1.11.1.17", "1.12.1.2", "1.12.1.3",
-  "1.12.2.1", "1.12.5.1", "1.12.7.2", "1.12.98.1", "1.12.98.2",
-  "1.12.98.3", "1.12.99.6", "1.13.11.1", "1.13.11.2", "1.13.11.3",
-  "1.13.11.4", "1.13.11.5", "1.13.11.6", "1.13.11.8", "1.13.11.9",
-  "1.13.11.10", "1.13.11.11", "1.13.11.12", "1.13.11.13",
-  "1.13.11.14", "1.13.11.15", "1.13.11.16", "1.13.11.17",
-  "1.13.11.18", "1.13.11.19", "1.13.11.20", "1.13.11.22",
-  "1.13.11.23", "1.13.11.24", "1.13.11.25", "1.13.11.26",
-  "1.13.11.27", "1.13.11.28", "1.13.11.29", "1.13.11.30",
-  "1.13.11.31", "1.13.11.33", "1.13.11.34", "1.13.11.35",
-  "1.13.11.36", "1.13.11.37", "1.13.11.38", "1.13.11.39",
-  "1.13.11.40", "1.13.11.41", "1.13.11.43", "1.13.11.44",
-  "1.13.11.45", "1.13.11.46", "1.13.11.47", "1.13.11.48",
-  "1.13.11.49", "1.13.11.50", "1.13.11.51", "1.13.11.52",
-  "1.13.11.53", "1.13.11.54", "1.13.11.55", "1.13.11.56", "1.13.12.1",
-  "1.13.12.2", "1.13.12.3", "1.13.12.4", "1.13.12.5", "1.13.12.6",
-  "1.13.12.7", "1.13.12.8", "1.13.12.9", "1.13.12.12", "1.13.12.13",
-  "1.13.12.14", "1.13.12.15", "1.13.12.16", "1.13.12.17", "1.13.99.1",
-  "1.13.99.3", "1.14.11.1", "1.14.11.2", "1.14.11.3", "1.14.11.4",
-  "1.14.11.6", "1.14.11.7", "1.14.11.8", "1.14.11.9", "1.14.11.10",
-  "1.14.11.11", "1.14.11.12", "1.14.11.13", "1.14.11.14",
-  "1.14.11.15", "1.14.11.16", "1.14.11.17", "1.14.11.18",
-  "1.14.11.19", "1.14.11.20", "1.14.11.21", "1.14.11.22",
-  "1.14.11.23", "1.14.11.24", "1.14.11.25", "1.14.11.26",
-  "1.14.11.27", "1.14.11.28", "1.14.12.1", "1.14.12.3", "1.14.12.4",
-  "1.14.12.5", "1.14.12.7", "1.14.12.8", "1.14.12.9", "1.14.12.10",
-  "1.14.12.11", "1.14.12.12", "1.14.12.13", "1.14.12.14",
-  "1.14.12.15", "1.14.12.16", "1.14.12.17", "1.14.12.18",
-  "1.14.12.19", "1.14.12.20", "1.14.12.21", "1.14.13.1", "1.14.13.2",
-  "1.14.13.3", "1.14.13.4", "1.14.13.5", "1.14.13.6", "1.14.13.7",
-  "1.14.13.8", "1.14.13.9", "1.14.13.10", "1.14.13.11", "1.14.13.12",
-  "1.14.13.13", "1.14.13.14", "1.14.13.15", "1.14.13.16",
-  "1.14.13.17", "1.14.13.18", "1.14.13.19", "1.14.13.20",
-  "1.14.13.21", "1.14.13.22", "1.14.13.23", "1.14.13.24",
-  "1.14.13.25", "1.14.13.26", "1.14.13.27", "1.14.13.28",
-  "1.14.13.29", "1.14.13.30", "1.14.13.31", "1.14.13.32",
-  "1.14.13.33", "1.14.13.34", "1.14.13.35", "1.14.13.36",
-  "1.14.13.37", "1.14.13.38", "1.14.13.39", "1.14.13.40",
-  "1.14.13.41", "1.14.13.42", "1.14.13.43", "1.14.13.44",
-  "1.14.13.46", "1.14.13.47", "1.14.13.48", "1.14.13.49",
-  "1.14.13.50", "1.14.13.51", "1.14.13.52", "1.14.13.53",
-  "1.14.13.54", "1.14.13.55", "1.14.13.56", "1.14.13.57",
-  "1.14.13.58", "1.14.13.59", "1.14.13.60", "1.14.13.61",
-  "1.14.13.62", "1.14.13.63", "1.14.13.64", "1.14.13.66",
-  "1.14.13.67", "1.14.13.68", "1.14.13.69", "1.14.13.70",
-  "1.14.13.71", "1.14.13.72", "1.14.13.73", "1.14.13.74",
-  "1.14.13.75", "1.14.13.76", "1.14.13.77", "1.14.13.78",
-  "1.14.13.79", "1.14.13.80", "1.14.13.81", "1.14.13.82",
-  "1.14.13.83", "1.14.13.84", "1.14.13.85", "1.14.13.86",
-  "1.14.13.87", "1.14.13.88", "1.14.13.89", "1.14.13.90",
-  "1.14.13.91", "1.14.13.92", "1.14.13.93", "1.14.13.94",
-  "1.14.13.95", "1.14.13.96", "1.14.13.97", "1.14.13.98",
-  "1.14.13.99", "1.14.13.100", "1.14.13.101", "1.14.13.102",
-  "1.14.13.103", "1.14.13.104", "1.14.13.105", "1.14.13.106",
-  "1.14.13.107", "1.14.13.108", "1.14.13.109", "1.14.13.110",
-  "1.14.13.111", "1.14.13.112", "1.14.13.113", "1.14.14.1",
-  "1.14.14.3", "1.14.14.5", "1.14.14.7", "1.14.15.1", "1.14.15.2",
-  "1.14.15.3", "1.14.15.4", "1.14.15.5", "1.14.15.6", "1.14.15.7",
-  "1.14.15.8", "1.14.16.1", "1.14.16.2", "1.14.16.3", "1.14.16.4",
-  "1.14.16.5", "1.14.16.6", "1.14.17.1", "1.14.17.3", "1.14.17.4",
-  "1.14.18.1", "1.14.18.2", "1.14.19.1", "1.14.19.2", "1.14.19.3",
-  "1.14.19.4", "1.14.19.5", "1.14.19.6", "1.14.20.1", "1.14.21.1",
-  "1.14.21.2", "1.14.21.3", "1.14.21.4", "1.14.21.5", "1.14.21.6",
-  "1.14.21.7", "1.14.99.1", "1.14.99.2", "1.14.99.3", "1.14.99.4",
-  "1.14.99.7", "1.14.99.9", "1.14.99.10", "1.14.99.11", "1.14.99.12",
-  "1.14.99.14", "1.14.99.15", "1.14.99.19", "1.14.99.20",
-  "1.14.99.21", "1.14.99.22", "1.14.99.23", "1.14.99.24",
-  "1.14.99.26", "1.14.99.27", "1.14.99.28", "1.14.99.29",
-  "1.14.99.30", "1.14.99.31", "1.14.99.32", "1.14.99.33",
-  "1.14.99.34", "1.14.99.35", "1.14.99.36", "1.14.99.37",
-  "1.14.99.38", "1.14.99.39", "1.14.99.40", "1.15.1.1", "1.15.1.2",
-  "1.16.1.1", "1.16.1.2", "1.16.1.3", "1.16.1.4", "1.16.1.5",
-  "1.16.1.6", "1.16.1.7", "1.16.1.8", "1.16.3.1", "1.16.8.1",
-  "1.17.1.1", "1.17.1.2", "1.17.1.3", "1.17.1.4", "1.17.1.5",
-  "1.17.3.1", "1.17.3.2", "1.17.3.3", "1.17.4.1", "1.17.4.2",
-  "1.17.5.1", "1.17.7.1", "1.17.99.1", "1.17.99.2", "1.17.99.3",
-  "1.17.99.4", "1.17.99.5", "1.18.1.1", "1.18.1.2", "1.18.1.3",
-  "1.18.1.4", "1.18.6.1", "1.19.6.1", "1.20.1.1", "1.20.4.1",
-  "1.20.4.2", "1.20.4.3", "1.20.98.1", "1.20.99.1", "1.21.3.1",
-  "1.21.3.2", "1.21.3.3", "1.21.3.4", "1.21.3.5", "1.21.3.6",
-  "1.21.4.1", "1.21.4.2", "1.21.4.3", "1.21.4.4", "1.21.99.1",
-  "1.22.1.1", "1.97.1.1", "1.97.1.2", "1.97.1.3", "1.97.1.4",
-  "1.97.1.8", "1.97.1.9", "1.97.1.10", "1.97.1.11", "2.1.1.1",
-  "2.1.1.2", "2.1.1.3", "2.1.1.4", "2.1.1.5", "2.1.1.6", "2.1.1.7",
-  "2.1.1.8", "2.1.1.9", "2.1.1.10", "2.1.1.11", "2.1.1.12",
-  "2.1.1.13", "2.1.1.14", "2.1.1.15", "2.1.1.16", "2.1.1.17",
-  "2.1.1.18", "2.1.1.19", "2.1.1.20", "2.1.1.21", "2.1.1.22",
-  "2.1.1.25", "2.1.1.26", "2.1.1.27", "2.1.1.28", "2.1.1.29",
-  "2.1.1.31", "2.1.1.32", "2.1.1.33", "2.1.1.34", "2.1.1.35",
-  "2.1.1.36", "2.1.1.37", "2.1.1.38", "2.1.1.39", "2.1.1.40",
-  "2.1.1.41", "2.1.1.42", "2.1.1.43", "2.1.1.44", "2.1.1.45",
-  "2.1.1.46", "2.1.1.47", "2.1.1.48", "2.1.1.49", "2.1.1.50",
-  "2.1.1.51", "2.1.1.52", "2.1.1.53", "2.1.1.54", "2.1.1.55",
-  "2.1.1.56", "2.1.1.57", "2.1.1.59", "2.1.1.60", "2.1.1.61",
-  "2.1.1.62", "2.1.1.63", "2.1.1.64", "2.1.1.65", "2.1.1.66",
-  "2.1.1.67", "2.1.1.68", "2.1.1.69", "2.1.1.70", "2.1.1.71",
-  "2.1.1.72", "2.1.1.74", "2.1.1.75", "2.1.1.76", "2.1.1.77",
-  "2.1.1.78", "2.1.1.79", "2.1.1.80", "2.1.1.82", "2.1.1.83",
-  "2.1.1.84", "2.1.1.85", "2.1.1.86", "2.1.1.87", "2.1.1.88",
-  "2.1.1.89", "2.1.1.90", "2.1.1.91", "2.1.1.94", "2.1.1.95",
-  "2.1.1.96", "2.1.1.97", "2.1.1.98", "2.1.1.99", "2.1.1.100",
-  "2.1.1.101", "2.1.1.102", "2.1.1.103", "2.1.1.104", "2.1.1.105",
-  "2.1.1.106", "2.1.1.107", "2.1.1.108", "2.1.1.109", "2.1.1.110",
-  "2.1.1.111", "2.1.1.112", "2.1.1.113", "2.1.1.114", "2.1.1.115",
-  "2.1.1.116", "2.1.1.117", "2.1.1.118", "2.1.1.119", "2.1.1.120",
-  "2.1.1.121", "2.1.1.122", "2.1.1.123", "2.1.1.124", "2.1.1.125",
-  "2.1.1.126", "2.1.1.127", "2.1.1.128", "2.1.1.129", "2.1.1.130",
-  "2.1.1.131", "2.1.1.132", "2.1.1.133", "2.1.1.136", "2.1.1.137",
-  "2.1.1.139", "2.1.1.140", "2.1.1.141", "2.1.1.142", "2.1.1.143",
-  "2.1.1.144", "2.1.1.145", "2.1.1.146", "2.1.1.147", "2.1.1.148",
-  "2.1.1.149", "2.1.1.150", "2.1.1.151", "2.1.1.152", "2.1.1.153",
-  "2.1.1.154", "2.1.1.155", "2.1.1.156", "2.1.1.157", "2.1.1.158",
-  "2.1.1.159", "2.1.1.160", "2.1.1.161", "2.1.1.162", "2.1.1.163",
-  "2.1.1.164", "2.1.1.165", "2.1.2.1", "2.1.2.2", "2.1.2.3",
-  "2.1.2.4", "2.1.2.5", "2.1.2.7", "2.1.2.8", "2.1.2.9", "2.1.2.10",
-  "2.1.2.11", "2.1.3.1", "2.1.3.2", "2.1.3.3", "2.1.3.5", "2.1.3.6",
-  "2.1.3.7", "2.1.3.8", "2.1.3.9", "2.1.3.10", "2.1.3.11", "2.1.4.1",
-  "2.1.4.2", "2.2.1.1", "2.2.1.2", "2.2.1.3", "2.2.1.4", "2.2.1.5",
-  "2.2.1.6", "2.2.1.7", "2.2.1.8", "2.2.1.9", "2.3.1.1", "2.3.1.2",
-  "2.3.1.3", "2.3.1.4", "2.3.1.5", "2.3.1.6", "2.3.1.7", "2.3.1.8",
-  "2.3.1.9", "2.3.1.10", "2.3.1.11", "2.3.1.12", "2.3.1.13",
-  "2.3.1.14", "2.3.1.15", "2.3.1.16", "2.3.1.17", "2.3.1.18",
-  "2.3.1.19", "2.3.1.20", "2.3.1.21", "2.3.1.22", "2.3.1.23",
-  "2.3.1.24", "2.3.1.25", "2.3.1.26", "2.3.1.27", "2.3.1.28",
-  "2.3.1.29", "2.3.1.30", "2.3.1.31", "2.3.1.32", "2.3.1.33",
-  "2.3.1.34", "2.3.1.35", "2.3.1.36", "2.3.1.37", "2.3.1.38",
-  "2.3.1.39", "2.3.1.40", "2.3.1.41", "2.3.1.42", "2.3.1.43",
-  "2.3.1.44", "2.3.1.45", "2.3.1.46", "2.3.1.47", "2.3.1.48",
-  "2.3.1.49", "2.3.1.50", "2.3.1.51", "2.3.1.52", "2.3.1.53",
-  "2.3.1.54", "2.3.1.56", "2.3.1.57", "2.3.1.58", "2.3.1.59",
-  "2.3.1.60", "2.3.1.61", "2.3.1.62", "2.3.1.63", "2.3.1.64",
-  "2.3.1.65", "2.3.1.66", "2.3.1.67", "2.3.1.68", "2.3.1.69",
-  "2.3.1.71", "2.3.1.72", "2.3.1.73", "2.3.1.74", "2.3.1.75",
-  "2.3.1.76", "2.3.1.77", "2.3.1.78", "2.3.1.79", "2.3.1.80",
-  "2.3.1.81", "2.3.1.82", "2.3.1.83", "2.3.1.84", "2.3.1.85",
-  "2.3.1.86", "2.3.1.87", "2.3.1.88", "2.3.1.89", "2.3.1.90",
-  "2.3.1.91", "2.3.1.92", "2.3.1.93", "2.3.1.94", "2.3.1.95",
-  "2.3.1.96", "2.3.1.97", "2.3.1.98", "2.3.1.99", "2.3.1.100",
-  "2.3.1.101", "2.3.1.102", "2.3.1.103", "2.3.1.104", "2.3.1.105",
-  "2.3.1.106", "2.3.1.107", "2.3.1.108", "2.3.1.109", "2.3.1.110",
-  "2.3.1.111", "2.3.1.112", "2.3.1.113", "2.3.1.114", "2.3.1.115",
-  "2.3.1.116", "2.3.1.117", "2.3.1.118", "2.3.1.119", "2.3.1.121",
-  "2.3.1.122", "2.3.1.123", "2.3.1.125", "2.3.1.126", "2.3.1.127",
-  "2.3.1.128", "2.3.1.129", "2.3.1.130", "2.3.1.131", "2.3.1.132",
-  "2.3.1.133", "2.3.1.134", "2.3.1.135", "2.3.1.136", "2.3.1.137",
-  "2.3.1.138", "2.3.1.139", "2.3.1.140", "2.3.1.141", "2.3.1.142",
-  "2.3.1.143", "2.3.1.144", "2.3.1.145", "2.3.1.146", "2.3.1.147",
-  "2.3.1.148", "2.3.1.149", "2.3.1.150", "2.3.1.151", "2.3.1.152",
-  "2.3.1.153", "2.3.1.154", "2.3.1.155", "2.3.1.156", "2.3.1.157",
-  "2.3.1.158", "2.3.1.159", "2.3.1.160", "2.3.1.161", "2.3.1.162",
-  "2.3.1.163", "2.3.1.164", "2.3.1.165", "2.3.1.166", "2.3.1.167",
-  "2.3.1.168", "2.3.1.169", "2.3.1.170", "2.3.1.171", "2.3.1.172",
-  "2.3.1.173", "2.3.1.174", "2.3.1.175", "2.3.1.176", "2.3.1.177",
-  "2.3.1.178", "2.3.1.179", "2.3.1.180", "2.3.1.181", "2.3.1.182",
-  "2.3.1.183", "2.3.1.184", "2.3.1.185", "2.3.1.186", "2.3.1.187",
-  "2.3.1.188", "2.3.1.189", "2.3.1.190", "2.3.2.1", "2.3.2.2",
-  "2.3.2.3", "2.3.2.4", "2.3.2.5", "2.3.2.6", "2.3.2.7", "2.3.2.8",
-  "2.3.2.9", "2.3.2.10", "2.3.2.11", "2.3.2.12", "2.3.2.13",
-  "2.3.2.14", "2.3.2.15", "2.3.3.1", "2.3.3.2", "2.3.3.3", "2.3.3.4",
-  "2.3.3.5", "2.3.3.6", "2.3.3.7", "2.3.3.8", "2.3.3.9", "2.3.3.10",
-  "2.3.3.11", "2.3.3.12", "2.3.3.13", "2.3.3.14", "2.3.3.15",
-  "2.4.1.1", "2.4.1.2", "2.4.1.4", "2.4.1.5", "2.4.1.7", "2.4.1.8",
-  "2.4.1.9", "2.4.1.10", "2.4.1.11", "2.4.1.12", "2.4.1.13",
-  "2.4.1.14", "2.4.1.15", "2.4.1.16", "2.4.1.17", "2.4.1.18",
-  "2.4.1.19", "2.4.1.20", "2.4.1.21", "2.4.1.22", "2.4.1.23",
-  "2.4.1.24", "2.4.1.25", "2.4.1.26", "2.4.1.27", "2.4.1.28",
-  "2.4.1.29", "2.4.1.30", "2.4.1.31", "2.4.1.32", "2.4.1.33",
-  "2.4.1.34", "2.4.1.35", "2.4.1.36", "2.4.1.37", "2.4.1.38",
-  "2.4.1.39", "2.4.1.40", "2.4.1.41", "2.4.1.43", "2.4.1.44",
-  "2.4.1.45", "2.4.1.46", "2.4.1.47", "2.4.1.48", "2.4.1.49",
-  "2.4.1.50", "2.4.1.52", "2.4.1.53", "2.4.1.54", "2.4.1.56",
-  "2.4.1.57", "2.4.1.58", "2.4.1.60", "2.4.1.62", "2.4.1.63",
-  "2.4.1.64", "2.4.1.65", "2.4.1.66", "2.4.1.67", "2.4.1.68",
-  "2.4.1.69", "2.4.1.70", "2.4.1.71", "2.4.1.73", "2.4.1.74",
-  "2.4.1.78", "2.4.1.79", "2.4.1.80", "2.4.1.81", "2.4.1.82",
-  "2.4.1.83", "2.4.1.85", "2.4.1.86", "2.4.1.87", "2.4.1.88",
-  "2.4.1.90", "2.4.1.91", "2.4.1.92", "2.4.1.94", "2.4.1.95",
-  "2.4.1.96", "2.4.1.97", "2.4.1.99", "2.4.1.100", "2.4.1.101",
-  "2.4.1.102", "2.4.1.103", "2.4.1.104", "2.4.1.105", "2.4.1.106",
-  "2.4.1.109", "2.4.1.110", "2.4.1.111", "2.4.1.113", "2.4.1.114",
-  "2.4.1.115", "2.4.1.116", "2.4.1.117", "2.4.1.118", "2.4.1.119",
-  "2.4.1.120", "2.4.1.121", "2.4.1.122", "2.4.1.123", "2.4.1.125",
-  "2.4.1.126", "2.4.1.127", "2.4.1.128", "2.4.1.129", "2.4.1.130",
-  "2.4.1.131", "2.4.1.132", "2.4.1.133", "2.4.1.134", "2.4.1.135",
-  "2.4.1.136", "2.4.1.137", "2.4.1.138", "2.4.1.139", "2.4.1.140",
-  "2.4.1.141", "2.4.1.142", "2.4.1.143", "2.4.1.144", "2.4.1.145",
-  "2.4.1.146", "2.4.1.147", "2.4.1.148", "2.4.1.149", "2.4.1.150",
-  "2.4.1.152", "2.4.1.153", "2.4.1.155", "2.4.1.156", "2.4.1.157",
-  "2.4.1.158", "2.4.1.159", "2.4.1.160", "2.4.1.161", "2.4.1.162",
-  "2.4.1.163", "2.4.1.164", "2.4.1.165", "2.4.1.166", "2.4.1.167",
-  "2.4.1.168", "2.4.1.170", "2.4.1.171", "2.4.1.172", "2.4.1.173",
-  "2.4.1.174", "2.4.1.175", "2.4.1.176", "2.4.1.177", "2.4.1.178",
-  "2.4.1.179", "2.4.1.180", "2.4.1.181", "2.4.1.182", "2.4.1.183",
-  "2.4.1.184", "2.4.1.185", "2.4.1.186", "2.4.1.187", "2.4.1.188",
-  "2.4.1.189", "2.4.1.190", "2.4.1.191", "2.4.1.192", "2.4.1.193",
-  "2.4.1.194", "2.4.1.195", "2.4.1.196", "2.4.1.197", "2.4.1.198",
-  "2.4.1.199", "2.4.1.201", "2.4.1.202", "2.4.1.203", "2.4.1.205",
-  "2.4.1.206", "2.4.1.207", "2.4.1.208", "2.4.1.209", "2.4.1.210",
-  "2.4.1.211", "2.4.1.212", "2.4.1.213", "2.4.1.214", "2.4.1.215",
-  "2.4.1.216", "2.4.1.217", "2.4.1.218", "2.4.1.219", "2.4.1.220",
-  "2.4.1.221", "2.4.1.222", "2.4.1.223", "2.4.1.224", "2.4.1.225",
-  "2.4.1.226", "2.4.1.227", "2.4.1.228", "2.4.1.229", "2.4.1.230",
-  "2.4.1.231", "2.4.1.232", "2.4.1.234", "2.4.1.236", "2.4.1.237",
-  "2.4.1.238", "2.4.1.239", "2.4.1.240", "2.4.1.241", "2.4.1.242",
-  "2.4.1.243", "2.4.1.244", "2.4.1.245", "2.4.1.246", "2.4.1.247",
-  "2.4.1.248", "2.4.1.249", "2.4.1.250", "2.4.2.1", "2.4.2.2",
-  "2.4.2.3", "2.4.2.4", "2.4.2.5", "2.4.2.6", "2.4.2.7", "2.4.2.8",
-  "2.4.2.9", "2.4.2.10", "2.4.2.11", "2.4.2.12", "2.4.2.14",
-  "2.4.2.15", "2.4.2.16", "2.4.2.17", "2.4.2.18", "2.4.2.19",
-  "2.4.2.20", "2.4.2.21", "2.4.2.22", "2.4.2.23", "2.4.2.24",
-  "2.4.2.25", "2.4.2.26", "2.4.2.27", "2.4.2.28", "2.4.2.29",
-  "2.4.2.30", "2.4.2.31", "2.4.2.32", "2.4.2.33", "2.4.2.34",
-  "2.4.2.35", "2.4.2.36", "2.4.2.37", "2.4.2.38", "2.4.2.39",
-  "2.4.2.40", "2.4.2.41", "2.4.2.42", "2.4.99.1", "2.4.99.2",
-  "2.4.99.3", "2.4.99.4", "2.4.99.5", "2.4.99.6", "2.4.99.7",
-  "2.4.99.8", "2.4.99.9", "2.4.99.10", "2.4.99.11", "2.5.1.1",
-  "2.5.1.2", "2.5.1.3", "2.5.1.4", "2.5.1.5", "2.5.1.6", "2.5.1.7",
-  "2.5.1.9", "2.5.1.10", "2.5.1.11", "2.5.1.15", "2.5.1.16",
-  "2.5.1.17", "2.5.1.18", "2.5.1.19", "2.5.1.20", "2.5.1.21",
-  "2.5.1.22", "2.5.1.23", "2.5.1.24", "2.5.1.25", "2.5.1.26",
-  "2.5.1.27", "2.5.1.28", "2.5.1.29", "2.5.1.30", "2.5.1.31",
-  "2.5.1.32", "2.5.1.33", "2.5.1.34", "2.5.1.35", "2.5.1.36",
-  "2.5.1.38", "2.5.1.39", "2.5.1.41", "2.5.1.42", "2.5.1.43",
-  "2.5.1.44", "2.5.1.45", "2.5.1.46", "2.5.1.47", "2.5.1.48",
-  "2.5.1.49", "2.5.1.50", "2.5.1.51", "2.5.1.52", "2.5.1.53",
-  "2.5.1.54", "2.5.1.55", "2.5.1.56", "2.5.1.57", "2.5.1.58",
-  "2.5.1.59", "2.5.1.60", "2.5.1.61", "2.5.1.62", "2.5.1.63",
-  "2.5.1.65", "2.5.1.66", "2.5.1.67", "2.5.1.68", "2.5.1.69",
-  "2.5.1.70", "2.5.1.71", "2.5.1.72", "2.5.1.73", "2.5.1.74",
-  "2.5.1.75", "2.5.1.76", "2.5.1.77", "2.5.1.78", "2.5.1.79",
-  "2.5.1.80", "2.6.1.1", "2.6.1.2", "2.6.1.3", "2.6.1.4", "2.6.1.5",
-  "2.6.1.6", "2.6.1.7", "2.6.1.8", "2.6.1.9", "2.6.1.11", "2.6.1.12",
-  "2.6.1.13", "2.6.1.14", "2.6.1.15", "2.6.1.16", "2.6.1.17",
-  "2.6.1.18", "2.6.1.19", "2.6.1.21", "2.6.1.22", "2.6.1.23",
-  "2.6.1.24", "2.6.1.26", "2.6.1.27", "2.6.1.28", "2.6.1.29",
-  "2.6.1.30", "2.6.1.31", "2.6.1.32", "2.6.1.33", "2.6.1.34",
-  "2.6.1.35", "2.6.1.36", "2.6.1.37", "2.6.1.38", "2.6.1.39",
-  "2.6.1.40", "2.6.1.41", "2.6.1.42", "2.6.1.43", "2.6.1.44",
-  "2.6.1.45", "2.6.1.46", "2.6.1.47", "2.6.1.48", "2.6.1.49",
-  "2.6.1.50", "2.6.1.51", "2.6.1.52", "2.6.1.54", "2.6.1.55",
-  "2.6.1.56", "2.6.1.57", "2.6.1.58", "2.6.1.59", "2.6.1.60",
-  "2.6.1.62", "2.6.1.63", "2.6.1.64", "2.6.1.65", "2.6.1.66",
-  "2.6.1.67", "2.6.1.68", "2.6.1.70", "2.6.1.71", "2.6.1.72",
-  "2.6.1.73", "2.6.1.74", "2.6.1.75", "2.6.1.76", "2.6.1.77",
-  "2.6.1.78", "2.6.1.79", "2.6.1.80", "2.6.1.81", "2.6.1.82",
-  "2.6.1.83", "2.6.1.84", "2.6.1.85", "2.6.1.86", "2.6.3.1",
-  "2.6.99.1", "2.6.99.2", "2.7.1.1", "2.7.1.2", "2.7.1.3", "2.7.1.4",
-  "2.7.1.5", "2.7.1.6", "2.7.1.7", "2.7.1.8", "2.7.1.10", "2.7.1.11",
-  "2.7.1.12", "2.7.1.13", "2.7.1.14", "2.7.1.15", "2.7.1.16",
-  "2.7.1.17", "2.7.1.18", "2.7.1.19", "2.7.1.20", "2.7.1.21",
-  "2.7.1.22", "2.7.1.23", "2.7.1.24", "2.7.1.25", "2.7.1.26",
-  "2.7.1.27", "2.7.1.28", "2.7.1.29", "2.7.1.30", "2.7.1.31",
-  "2.7.1.32", "2.7.1.33", "2.7.1.34", "2.7.1.35", "2.7.1.36",
-  "2.7.1.39", "2.7.1.40", "2.7.1.41", "2.7.1.42", "2.7.1.43",
-  "2.7.1.44", "2.7.1.45", "2.7.1.46", "2.7.1.47", "2.7.1.48",
-  "2.7.1.49", "2.7.1.50", "2.7.1.51", "2.7.1.52", "2.7.1.53",
-  "2.7.1.54", "2.7.1.55", "2.7.1.56", "2.7.1.58", "2.7.1.59",
-  "2.7.1.60", "2.7.1.61", "2.7.1.62", "2.7.1.63", "2.7.1.64",
-  "2.7.1.65", "2.7.1.66", "2.7.1.67", "2.7.1.68", "2.7.1.69",
-  "2.7.1.71", "2.7.1.72", "2.7.1.73", "2.7.1.74", "2.7.1.76",
-  "2.7.1.77", "2.7.1.78", "2.7.1.79", "2.7.1.80", "2.7.1.81",
-  "2.7.1.82", "2.7.1.83", "2.7.1.84", "2.7.1.85", "2.7.1.86",
-  "2.7.1.87", "2.7.1.88", "2.7.1.89", "2.7.1.90", "2.7.1.91",
-  "2.7.1.92", "2.7.1.93", "2.7.1.94", "2.7.1.95", "2.7.1.100",
-  "2.7.1.101", "2.7.1.102", "2.7.1.103", "2.7.1.105", "2.7.1.106",
-  "2.7.1.107", "2.7.1.108", "2.7.1.113", "2.7.1.114", "2.7.1.118",
-  "2.7.1.119", "2.7.1.121", "2.7.1.122", "2.7.1.127", "2.7.1.130",
-  "2.7.1.134", "2.7.1.136", "2.7.1.137", "2.7.1.138", "2.7.1.140",
-  "2.7.1.142", "2.7.1.143", "2.7.1.144", "2.7.1.145", "2.7.1.146",
-  "2.7.1.147", "2.7.1.148", "2.7.1.149", "2.7.1.150", "2.7.1.151",
-  "2.7.1.153", "2.7.1.154", "2.7.1.156", "2.7.1.157", "2.7.1.158",
-  "2.7.1.159", "2.7.1.160", "2.7.1.161", "2.7.1.162", "2.7.1.163",
-  "2.7.1.164", "2.7.1.165", "2.7.2.1", "2.7.2.2", "2.7.2.3",
-  "2.7.2.4", "2.7.2.6", "2.7.2.7", "2.7.2.8", "2.7.2.10", "2.7.2.11",
-  "2.7.2.12", "2.7.2.13", "2.7.2.14", "2.7.2.15", "2.7.3.1",
-  "2.7.3.2", "2.7.3.3", "2.7.3.4", "2.7.3.5", "2.7.3.6", "2.7.3.7",
-  "2.7.3.8", "2.7.3.9", "2.7.3.10", "2.7.4.1", "2.7.4.2", "2.7.4.3",
-  "2.7.4.4", "2.7.4.6", "2.7.4.7", "2.7.4.8", "2.7.4.9", "2.7.4.10",
-  "2.7.4.11", "2.7.4.12", "2.7.4.13", "2.7.4.14", "2.7.4.15",
-  "2.7.4.16", "2.7.4.17", "2.7.4.18", "2.7.4.19", "2.7.4.20",
-  "2.7.4.21", "2.7.4.22", "2.7.4.23", "2.7.4.24", "2.7.6.1",
-  "2.7.6.2", "2.7.6.3", "2.7.6.4", "2.7.6.5", "2.7.7.1", "2.7.7.2",
-  "2.7.7.3", "2.7.7.4", "2.7.7.5", "2.7.7.6", "2.7.7.7", "2.7.7.8",
-  "2.7.7.9", "2.7.7.10", "2.7.7.11", "2.7.7.12", "2.7.7.13",
-  "2.7.7.14", "2.7.7.15", "2.7.7.18", "2.7.7.19", "2.7.7.21",
-  "2.7.7.22", "2.7.7.23", "2.7.7.24", "2.7.7.25", "2.7.7.27",
-  "2.7.7.28", "2.7.7.30", "2.7.7.31", "2.7.7.32", "2.7.7.33",
-  "2.7.7.34", "2.7.7.35", "2.7.7.36", "2.7.7.37", "2.7.7.38",
-  "2.7.7.39", "2.7.7.40", "2.7.7.41", "2.7.7.42", "2.7.7.43",
-  "2.7.7.44", "2.7.7.45", "2.7.7.46", "2.7.7.47", "2.7.7.48",
-  "2.7.7.49", "2.7.7.50", "2.7.7.51", "2.7.7.52", "2.7.7.53",
-  "2.7.7.54", "2.7.7.55", "2.7.7.56", "2.7.7.57", "2.7.7.58",
-  "2.7.7.59", "2.7.7.60", "2.7.7.61", "2.7.7.62", "2.7.7.63",
-  "2.7.7.64", "2.7.7.65", "2.7.7.66", "2.7.7.67", "2.7.7.68",
-  "2.7.8.1", "2.7.8.2", "2.7.8.3", "2.7.8.4", "2.7.8.5", "2.7.8.6",
-  "2.7.8.7", "2.7.8.8", "2.7.8.9", "2.7.8.10", "2.7.8.11", "2.7.8.12",
-  "2.7.8.13", "2.7.8.14", "2.7.8.15", "2.7.8.17", "2.7.8.18",
-  "2.7.8.19", "2.7.8.20", "2.7.8.21", "2.7.8.22", "2.7.8.23",
-  "2.7.8.24", "2.7.8.25", "2.7.8.26", "2.7.8.27", "2.7.8.28",
-  "2.7.9.1", "2.7.9.2", "2.7.9.3", "2.7.9.4", "2.7.9.5", "2.7.10.1",
-  "2.7.10.2", "2.7.11.1", "2.7.11.2", "2.7.11.3", "2.7.11.4",
-  "2.7.11.5", "2.7.11.6", "2.7.11.7", "2.7.11.8", "2.7.11.9",
-  "2.7.11.10", "2.7.11.11", "2.7.11.12", "2.7.11.13", "2.7.11.14",
-  "2.7.11.15", "2.7.11.16", "2.7.11.17", "2.7.11.18", "2.7.11.19",
-  "2.7.11.20", "2.7.11.21", "2.7.11.22", "2.7.11.23", "2.7.11.24",
-  "2.7.11.25", "2.7.11.26", "2.7.11.27", "2.7.11.28", "2.7.11.29",
-  "2.7.11.30", "2.7.11.31", "2.7.12.1", "2.7.12.2", "2.7.13.1",
-  "2.7.13.2", "2.7.13.3", "2.7.99.1", "2.8.1.1", "2.8.1.2", "2.8.1.3",
-  "2.8.1.4", "2.8.1.5", "2.8.1.6", "2.8.1.7", "2.8.1.8", "2.8.2.1",
-  "2.8.2.2", "2.8.2.3", "2.8.2.4", "2.8.2.5", "2.8.2.6", "2.8.2.7",
-  "2.8.2.8", "2.8.2.9", "2.8.2.10", "2.8.2.11", "2.8.2.13",
-  "2.8.2.14", "2.8.2.15", "2.8.2.16", "2.8.2.17", "2.8.2.18",
-  "2.8.2.19", "2.8.2.20", "2.8.2.21", "2.8.2.22", "2.8.2.23",
-  "2.8.2.24", "2.8.2.25", "2.8.2.26", "2.8.2.27", "2.8.2.28",
-  "2.8.2.29", "2.8.2.30", "2.8.2.31", "2.8.2.32", "2.8.2.33",
-  "2.8.2.34", "2.8.3.1", "2.8.3.2", "2.8.3.3", "2.8.3.5", "2.8.3.6",
-  "2.8.3.7", "2.8.3.8", "2.8.3.9", "2.8.3.10", "2.8.3.11", "2.8.3.12",
-  "2.8.3.13", "2.8.3.14", "2.8.3.15", "2.8.3.16", "2.8.3.17",
-  "2.8.4.1", "2.8.4.2", "2.9.1.1", "2.9.1.2", "3.1.1.1", "3.1.1.2",
-  "3.1.1.3", "3.1.1.4", "3.1.1.5", "3.1.1.6", "3.1.1.7", "3.1.1.8",
-  "3.1.1.10", "3.1.1.11", "3.1.1.13", "3.1.1.14", "3.1.1.15",
-  "3.1.1.17", "3.1.1.19", "3.1.1.20", "3.1.1.21", "3.1.1.22",
-  "3.1.1.23", "3.1.1.24", "3.1.1.25", "3.1.1.26", "3.1.1.27",
-  "3.1.1.28", "3.1.1.29", "3.1.1.30", "3.1.1.31", "3.1.1.32",
-  "3.1.1.33", "3.1.1.34", "3.1.1.35", "3.1.1.36", "3.1.1.37",
-  "3.1.1.38", "3.1.1.39", "3.1.1.40", "3.1.1.41", "3.1.1.42",
-  "3.1.1.43", "3.1.1.44", "3.1.1.45", "3.1.1.46", "3.1.1.47",
-  "3.1.1.48", "3.1.1.49", "3.1.1.50", "3.1.1.51", "3.1.1.52",
-  "3.1.1.53", "3.1.1.54", "3.1.1.55", "3.1.1.56", "3.1.1.57",
-  "3.1.1.58", "3.1.1.59", "3.1.1.60", "3.1.1.61", "3.1.1.63",
-  "3.1.1.64", "3.1.1.65", "3.1.1.66", "3.1.1.67", "3.1.1.68",
-  "3.1.1.70", "3.1.1.71", "3.1.1.72", "3.1.1.73", "3.1.1.74",
-  "3.1.1.75", "3.1.1.76", "3.1.1.77", "3.1.1.78", "3.1.1.79",
-  "3.1.1.80", "3.1.1.81", "3.1.1.82", "3.1.1.83", "3.1.1.84",
-  "3.1.2.1", "3.1.2.2", "3.1.2.3", "3.1.2.4", "3.1.2.5", "3.1.2.6",
-  "3.1.2.7", "3.1.2.10", "3.1.2.11", "3.1.2.12", "3.1.2.13",
-  "3.1.2.14", "3.1.2.15", "3.1.2.16", "3.1.2.17", "3.1.2.18",
-  "3.1.2.19", "3.1.2.20", "3.1.2.21", "3.1.2.22", "3.1.2.23",
-  "3.1.2.25", "3.1.2.26", "3.1.2.27", "3.1.3.1", "3.1.3.2", "3.1.3.3",
-  "3.1.3.4", "3.1.3.5", "3.1.3.6", "3.1.3.7", "3.1.3.8", "3.1.3.9",
-  "3.1.3.10", "3.1.3.11", "3.1.3.12", "3.1.3.13", "3.1.3.14",
-  "3.1.3.15", "3.1.3.16", "3.1.3.17", "3.1.3.18", "3.1.3.19",
-  "3.1.3.20", "3.1.3.21", "3.1.3.22", "3.1.3.23", "3.1.3.24",
-  "3.1.3.25", "3.1.3.26", "3.1.3.27", "3.1.3.28", "3.1.3.29",
-  "3.1.3.31", "3.1.3.32", "3.1.3.33", "3.1.3.34", "3.1.3.35",
-  "3.1.3.36", "3.1.3.37", "3.1.3.38", "3.1.3.39", "3.1.3.40",
-  "3.1.3.41", "3.1.3.42", "3.1.3.43", "3.1.3.44", "3.1.3.45",
-  "3.1.3.46", "3.1.3.47", "3.1.3.48", "3.1.3.49", "3.1.3.50",
-  "3.1.3.51", "3.1.3.52", "3.1.3.53", "3.1.3.54", "3.1.3.55",
-  "3.1.3.56", "3.1.3.57", "3.1.3.58", "3.1.3.59", "3.1.3.60",
-  "3.1.3.62", "3.1.3.63", "3.1.3.64", "3.1.3.66", "3.1.3.67",
-  "3.1.3.68", "3.1.3.69", "3.1.3.70", "3.1.3.71", "3.1.3.72",
-  "3.1.3.73", "3.1.3.74", "3.1.3.75", "3.1.3.76", "3.1.3.77",
-  "3.1.3.78", "3.1.3.79", "3.1.3.80", "3.1.4.1", "3.1.4.2", "3.1.4.3",
-  "3.1.4.4", "3.1.4.11", "3.1.4.12", "3.1.4.13", "3.1.4.14",
-  "3.1.4.15", "3.1.4.16", "3.1.4.17", "3.1.4.35", "3.1.4.37",
-  "3.1.4.38", "3.1.4.39", "3.1.4.40", "3.1.4.41", "3.1.4.42",
-  "3.1.4.43", "3.1.4.44", "3.1.4.45", "3.1.4.46", "3.1.4.48",
-  "3.1.4.49", "3.1.4.50", "3.1.4.51", "3.1.4.52", "3.1.4.53",
-  "3.1.5.1", "3.1.6.1", "3.1.6.2", "3.1.6.3", "3.1.6.4", "3.1.6.6",
-  "3.1.6.7", "3.1.6.8", "3.1.6.9", "3.1.6.10", "3.1.6.11", "3.1.6.12",
-  "3.1.6.13", "3.1.6.14", "3.1.6.15", "3.1.6.16", "3.1.6.17",
-  "3.1.6.18", "3.1.7.1", "3.1.7.2", "3.1.7.3", "3.1.7.4", "3.1.7.5",
-  "3.1.8.1", "3.1.8.2", "3.1.11.1", "3.1.11.2", "3.1.11.3",
-  "3.1.11.4", "3.1.11.5", "3.1.11.6", "3.1.13.1", "3.1.13.2",
-  "3.1.13.3", "3.1.13.4", "3.1.13.5", "3.1.14.1", "3.1.15.1",
-  "3.1.16.1", "3.1.21.1", "3.1.21.2", "3.1.21.3", "3.1.21.4",
-  "3.1.21.5", "3.1.21.6", "3.1.21.7", "3.1.22.1", "3.1.22.2",
-  "3.1.22.4", "3.1.22.5", "3.1.25.1", "3.1.26.1", "3.1.26.2",
-  "3.1.26.3", "3.1.26.4", "3.1.26.5", "3.1.26.6", "3.1.26.7",
-  "3.1.26.8", "3.1.26.9", "3.1.26.10", "3.1.26.11", "3.1.26.12",
-  "3.1.26.13", "3.1.27.1", "3.1.27.2", "3.1.27.3", "3.1.27.4",
-  "3.1.27.5", "3.1.27.6", "3.1.27.7", "3.1.27.8", "3.1.27.9",
-  "3.1.27.10", "3.1.30.1", "3.1.30.2", "3.1.31.1", "3.2.1.1",
-  "3.2.1.2", "3.2.1.3", "3.2.1.4", "3.2.1.6", "3.2.1.7", "3.2.1.8",
-  "3.2.1.10", "3.2.1.11", "3.2.1.14", "3.2.1.15", "3.2.1.17",
-  "3.2.1.18", "3.2.1.20", "3.2.1.21", "3.2.1.22", "3.2.1.23",
-  "3.2.1.24", "3.2.1.25", "3.2.1.26", "3.2.1.28", "3.2.1.31",
-  "3.2.1.32", "3.2.1.33", "3.2.1.35", "3.2.1.36", "3.2.1.37",
-  "3.2.1.38", "3.2.1.39", "3.2.1.40", "3.2.1.41", "3.2.1.42",
-  "3.2.1.43", "3.2.1.44", "3.2.1.45", "3.2.1.46", "3.2.1.47",
-  "3.2.1.48", "3.2.1.49", "3.2.1.50", "3.2.1.51", "3.2.1.52",
-  "3.2.1.53", "3.2.1.54", "3.2.1.55", "3.2.1.56", "3.2.1.57",
-  "3.2.1.58", "3.2.1.59", "3.2.1.60", "3.2.1.61", "3.2.1.62",
-  "3.2.1.63", "3.2.1.64", "3.2.1.65", "3.2.1.66", "3.2.1.67",
-  "3.2.1.68", "3.2.1.70", "3.2.1.71", "3.2.1.72", "3.2.1.73",
-  "3.2.1.74", "3.2.1.75", "3.2.1.76", "3.2.1.77", "3.2.1.78",
-  "3.2.1.80", "3.2.1.81", "3.2.1.82", "3.2.1.83", "3.2.1.84",
-  "3.2.1.85", "3.2.1.86", "3.2.1.87", "3.2.1.88", "3.2.1.89",
-  "3.2.1.91", "3.2.1.92", "3.2.1.93", "3.2.1.94", "3.2.1.95",
-  "3.2.1.96", "3.2.1.97", "3.2.1.98", "3.2.1.99", "3.2.1.100",
-  "3.2.1.101", "3.2.1.102", "3.2.1.103", "3.2.1.104", "3.2.1.105",
-  "3.2.1.106", "3.2.1.107", "3.2.1.108", "3.2.1.109", "3.2.1.111",
-  "3.2.1.112", "3.2.1.113", "3.2.1.114", "3.2.1.115", "3.2.1.116",
-  "3.2.1.117", "3.2.1.118", "3.2.1.119", "3.2.1.120", "3.2.1.121",
-  "3.2.1.122", "3.2.1.123", "3.2.1.124", "3.2.1.125", "3.2.1.126",
-  "3.2.1.127", "3.2.1.128", "3.2.1.129", "3.2.1.130", "3.2.1.131",
-  "3.2.1.132", "3.2.1.133", "3.2.1.134", "3.2.1.135", "3.2.1.136",
-  "3.2.1.137", "3.2.1.139", "3.2.1.140", "3.2.1.141", "3.2.1.142",
-  "3.2.1.143", "3.2.1.144", "3.2.1.145", "3.2.1.146", "3.2.1.147",
-  "3.2.1.149", "3.2.1.150", "3.2.1.151", "3.2.1.152", "3.2.1.153",
-  "3.2.1.154", "3.2.1.155", "3.2.1.156", "3.2.1.157", "3.2.1.158",
-  "3.2.1.159", "3.2.1.161", "3.2.1.162", "3.2.1.163", "3.2.1.164",
-  "3.2.1.165", "3.2.2.1", "3.2.2.2", "3.2.2.3", "3.2.2.4", "3.2.2.5",
-  "3.2.2.6", "3.2.2.7", "3.2.2.8", "3.2.2.9", "3.2.2.10", "3.2.2.11",
-  "3.2.2.12", "3.2.2.13", "3.2.2.14", "3.2.2.15", "3.2.2.16",
-  "3.2.2.17", "3.2.2.19", "3.2.2.20", "3.2.2.21", "3.2.2.22",
-  "3.2.2.23", "3.2.2.24", "3.2.2.25", "3.2.2.26", "3.2.2.27",
-  "3.2.2.28", "3.2.2.29", "3.3.1.1", "3.3.1.2", "3.3.2.1", "3.3.2.2",
-  "3.3.2.4", "3.3.2.5", "3.3.2.6", "3.3.2.7", "3.3.2.8", "3.3.2.9",
-  "3.3.2.10", "3.3.2.11", "3.4.11.1", "3.4.11.2", "3.4.11.3",
-  "3.4.11.4", "3.4.11.5", "3.4.11.6", "3.4.11.7", "3.4.11.9",
-  "3.4.11.10", "3.4.11.13", "3.4.11.14", "3.4.11.15", "3.4.11.16",
-  "3.4.11.17", "3.4.11.18", "3.4.11.19", "3.4.11.20", "3.4.11.21",
-  "3.4.11.22", "3.4.11.23", "3.4.11.24", "3.4.13.3", "3.4.13.4",
-  "3.4.13.5", "3.4.13.7", "3.4.13.9", "3.4.13.12", "3.4.13.17",
-  "3.4.13.18", "3.4.13.19", "3.4.13.20", "3.4.13.21", "3.4.13.22",
-  "3.4.14.1", "3.4.14.2", "3.4.14.4", "3.4.14.5", "3.4.14.6",
-  "3.4.14.9", "3.4.14.10", "3.4.14.11", "3.4.14.12", "3.4.15.1",
-  "3.4.15.4", "3.4.15.5", "3.4.15.6", "3.4.16.2", "3.4.16.4",
-  "3.4.16.5", "3.4.16.6", "3.4.17.1", "3.4.17.2", "3.4.17.3",
-  "3.4.17.4", "3.4.17.6", "3.4.17.8", "3.4.17.10", "3.4.17.11",
-  "3.4.17.12", "3.4.17.13", "3.4.17.14", "3.4.17.15", "3.4.17.16",
-  "3.4.17.17", "3.4.17.18", "3.4.17.19", "3.4.17.20", "3.4.17.21",
-  "3.4.17.22", "3.4.17.23", "3.4.18.1", "3.4.19.1", "3.4.19.2",
-  "3.4.19.3", "3.4.19.5", "3.4.19.6", "3.4.19.7", "3.4.19.9",
-  "3.4.19.11", "3.4.19.12", "3.4.21.1", "3.4.21.2", "3.4.21.3",
-  "3.4.21.4", "3.4.21.5", "3.4.21.6", "3.4.21.7", "3.4.21.9",
-  "3.4.21.10", "3.4.21.12", "3.4.21.19", "3.4.21.20", "3.4.21.21",
-  "3.4.21.22", "3.4.21.25", "3.4.21.26", "3.4.21.27", "3.4.21.32",
-  "3.4.21.34", "3.4.21.35", "3.4.21.36", "3.4.21.37", "3.4.21.38",
-  "3.4.21.39", "3.4.21.41", "3.4.21.42", "3.4.21.43", "3.4.21.45",
-  "3.4.21.46", "3.4.21.47", "3.4.21.48", "3.4.21.49", "3.4.21.50",
-  "3.4.21.53", "3.4.21.54", "3.4.21.55", "3.4.21.57", "3.4.21.59",
-  "3.4.21.60", "3.4.21.61", "3.4.21.62", "3.4.21.63", "3.4.21.64",
-  "3.4.21.65", "3.4.21.66", "3.4.21.67", "3.4.21.68", "3.4.21.69",
-  "3.4.21.70", "3.4.21.71", "3.4.21.72", "3.4.21.73", "3.4.21.74",
-  "3.4.21.75", "3.4.21.76", "3.4.21.77", "3.4.21.78", "3.4.21.79",
-  "3.4.21.80", "3.4.21.81", "3.4.21.82", "3.4.21.83", "3.4.21.84",
-  "3.4.21.85", "3.4.21.86", "3.4.21.88", "3.4.21.89", "3.4.21.90",
-  "3.4.21.91", "3.4.21.92", "3.4.21.93", "3.4.21.94", "3.4.21.95",
-  "3.4.21.96", "3.4.21.97", "3.4.21.98", "3.4.21.99", "3.4.21.100",
-  "3.4.21.101", "3.4.21.102", "3.4.21.103", "3.4.21.104",
-  "3.4.21.105", "3.4.21.106", "3.4.21.107", "3.4.21.108",
-  "3.4.21.109", "3.4.21.110", "3.4.21.111", "3.4.21.112",
-  "3.4.21.113", "3.4.21.114", "3.4.21.115", "3.4.21.116",
-  "3.4.21.117", "3.4.21.118", "3.4.21.119", "3.4.21.120", "3.4.22.1",
-  "3.4.22.2", "3.4.22.3", "3.4.22.6", "3.4.22.7", "3.4.22.8",
-  "3.4.22.10", "3.4.22.14", "3.4.22.15", "3.4.22.16", "3.4.22.24",
-  "3.4.22.25", "3.4.22.26", "3.4.22.27", "3.4.22.28", "3.4.22.29",
-  "3.4.22.30", "3.4.22.31", "3.4.22.32", "3.4.22.33", "3.4.22.34",
-  "3.4.22.35", "3.4.22.36", "3.4.22.37", "3.4.22.38", "3.4.22.39",
-  "3.4.22.40", "3.4.22.41", "3.4.22.42", "3.4.22.43", "3.4.22.44",
-  "3.4.22.45", "3.4.22.46", "3.4.22.47", "3.4.22.48", "3.4.22.49",
-  "3.4.22.50", "3.4.22.51", "3.4.22.52", "3.4.22.53", "3.4.22.54",
-  "3.4.22.55", "3.4.22.56", "3.4.22.57", "3.4.22.58", "3.4.22.59",
-  "3.4.22.60", "3.4.22.61", "3.4.22.62", "3.4.22.63", "3.4.22.64",
-  "3.4.22.65", "3.4.22.66", "3.4.22.67", "3.4.22.68", "3.4.22.69",
-  "3.4.22.70", "3.4.22.71", "3.4.23.1", "3.4.23.2", "3.4.23.3",
-  "3.4.23.4", "3.4.23.5", "3.4.23.12", "3.4.23.15", "3.4.23.16",
-  "3.4.23.17", "3.4.23.18", "3.4.23.19", "3.4.23.20", "3.4.23.21",
-  "3.4.23.22", "3.4.23.23", "3.4.23.24", "3.4.23.25", "3.4.23.26",
-  "3.4.23.28", "3.4.23.29", "3.4.23.30", "3.4.23.31", "3.4.23.32",
-  "3.4.23.34", "3.4.23.35", "3.4.23.36", "3.4.23.38", "3.4.23.39",
-  "3.4.23.40", "3.4.23.41", "3.4.23.42", "3.4.23.43", "3.4.23.44",
-  "3.4.23.45", "3.4.23.46", "3.4.23.47", "3.4.23.48", "3.4.23.49",
-  "3.4.23.50", "3.4.23.51", "3.4.24.1", "3.4.24.3", "3.4.24.6",
-  "3.4.24.7", "3.4.24.11", "3.4.24.12", "3.4.24.13", "3.4.24.14",
-  "3.4.24.15", "3.4.24.16", "3.4.24.17", "3.4.24.18", "3.4.24.19",
-  "3.4.24.20", "3.4.24.21", "3.4.24.22", "3.4.24.23", "3.4.24.24",
-  "3.4.24.25", "3.4.24.26", "3.4.24.27", "3.4.24.28", "3.4.24.29",
-  "3.4.24.30", "3.4.24.31", "3.4.24.32", "3.4.24.33", "3.4.24.34",
-  "3.4.24.35", "3.4.24.36", "3.4.24.37", "3.4.24.38", "3.4.24.39",
-  "3.4.24.40", "3.4.24.41", "3.4.24.42", "3.4.24.43", "3.4.24.44",
-  "3.4.24.45", "3.4.24.46", "3.4.24.47", "3.4.24.48", "3.4.24.49",
-  "3.4.24.50", "3.4.24.51", "3.4.24.52", "3.4.24.53", "3.4.24.54",
-  "3.4.24.55", "3.4.24.56", "3.4.24.57", "3.4.24.58", "3.4.24.59",
-  "3.4.24.60", "3.4.24.61", "3.4.24.62", "3.4.24.63", "3.4.24.64",
-  "3.4.24.65", "3.4.24.66", "3.4.24.67", "3.4.24.68", "3.4.24.69",
-  "3.4.24.70", "3.4.24.71", "3.4.24.72", "3.4.24.73", "3.4.24.74",
-  "3.4.24.75", "3.4.24.76", "3.4.24.77", "3.4.24.78", "3.4.24.79",
-  "3.4.24.80", "3.4.24.81", "3.4.24.82", "3.4.24.83", "3.4.24.84",
-  "3.4.24.85", "3.4.24.86", "3.4.24.87", "3.4.25.1", "3.4.25.2",
-  "3.5.1.1", "3.5.1.2", "3.5.1.3", "3.5.1.4", "3.5.1.5", "3.5.1.6",
-  "3.5.1.7", "3.5.1.8", "3.5.1.9", "3.5.1.10", "3.5.1.11", "3.5.1.12",
-  "3.5.1.13", "3.5.1.14", "3.5.1.15", "3.5.1.16", "3.5.1.17",
-  "3.5.1.18", "3.5.1.19", "3.5.1.20", "3.5.1.21", "3.5.1.22",
-  "3.5.1.23", "3.5.1.24", "3.5.1.25", "3.5.1.26", "3.5.1.27",
-  "3.5.1.28", "3.5.1.29", "3.5.1.30", "3.5.1.31", "3.5.1.32",
-  "3.5.1.33", "3.5.1.35", "3.5.1.36", "3.5.1.38", "3.5.1.39",
-  "3.5.1.40", "3.5.1.41", "3.5.1.42", "3.5.1.43", "3.5.1.44",
-  "3.5.1.46", "3.5.1.47", "3.5.1.48", "3.5.1.49", "3.5.1.50",
-  "3.5.1.51", "3.5.1.52", "3.5.1.53", "3.5.1.54", "3.5.1.55",
-  "3.5.1.56", "3.5.1.57", "3.5.1.58", "3.5.1.59", "3.5.1.60",
-  "3.5.1.61", "3.5.1.62", "3.5.1.63", "3.5.1.64", "3.5.1.65",
-  "3.5.1.66", "3.5.1.67", "3.5.1.68", "3.5.1.69", "3.5.1.70",
-  "3.5.1.71", "3.5.1.72", "3.5.1.73", "3.5.1.74", "3.5.1.75",
-  "3.5.1.76", "3.5.1.77", "3.5.1.78", "3.5.1.79", "3.5.1.81",
-  "3.5.1.82", "3.5.1.83", "3.5.1.84", "3.5.1.85", "3.5.1.86",
-  "3.5.1.87", "3.5.1.88", "3.5.1.89", "3.5.1.90", "3.5.1.91",
-  "3.5.1.92", "3.5.1.93", "3.5.1.94", "3.5.1.95", "3.5.1.96",
-  "3.5.1.97", "3.5.1.98", "3.5.1.99", "3.5.1.100", "3.5.1.101",
-  "3.5.1.102", "3.5.1.103", "3.5.2.1", "3.5.2.2", "3.5.2.3",
-  "3.5.2.4", "3.5.2.5", "3.5.2.6", "3.5.2.7", "3.5.2.9", "3.5.2.10",
-  "3.5.2.11", "3.5.2.12", "3.5.2.13", "3.5.2.14", "3.5.2.15",
-  "3.5.2.16", "3.5.2.17", "3.5.2.18", "3.5.3.1", "3.5.3.2", "3.5.3.3",
-  "3.5.3.4", "3.5.3.5", "3.5.3.6", "3.5.3.7", "3.5.3.8", "3.5.3.9",
-  "3.5.3.10", "3.5.3.11", "3.5.3.12", "3.5.3.13", "3.5.3.14",
-  "3.5.3.15", "3.5.3.16", "3.5.3.17", "3.5.3.18", "3.5.3.19",
-  "3.5.3.20", "3.5.3.21", "3.5.3.22", "3.5.3.23", "3.5.4.1",
-  "3.5.4.2", "3.5.4.3", "3.5.4.4", "3.5.4.5", "3.5.4.6", "3.5.4.7",
-  "3.5.4.8", "3.5.4.9", "3.5.4.10", "3.5.4.11", "3.5.4.12",
-  "3.5.4.13", "3.5.4.14", "3.5.4.15", "3.5.4.16", "3.5.4.17",
-  "3.5.4.18", "3.5.4.19", "3.5.4.20", "3.5.4.21", "3.5.4.22",
-  "3.5.4.23", "3.5.4.24", "3.5.4.25", "3.5.4.26", "3.5.4.27",
-  "3.5.4.28", "3.5.4.29", "3.5.4.30", "3.5.5.1", "3.5.5.2", "3.5.5.4",
-  "3.5.5.5", "3.5.5.6", "3.5.5.7", "3.5.5.8", "3.5.99.1", "3.5.99.2",
-  "3.5.99.3", "3.5.99.4", "3.5.99.5", "3.5.99.6", "3.5.99.7",
-  "3.6.1.1", "3.6.1.2", "3.6.1.3", "3.6.1.5", "3.6.1.6", "3.6.1.7",
-  "3.6.1.8", "3.6.1.9", "3.6.1.10", "3.6.1.11", "3.6.1.12",
-  "3.6.1.13", "3.6.1.14", "3.6.1.15", "3.6.1.16", "3.6.1.17",
-  "3.6.1.18", "3.6.1.19", "3.6.1.20", "3.6.1.21", "3.6.1.22",
-  "3.6.1.23", "3.6.1.24", "3.6.1.25", "3.6.1.26", "3.6.1.27",
-  "3.6.1.28", "3.6.1.29", "3.6.1.30", "3.6.1.31", "3.6.1.39",
-  "3.6.1.40", "3.6.1.41", "3.6.1.42", "3.6.1.43", "3.6.1.44",
-  "3.6.1.45", "3.6.1.52", "3.6.1.53", "3.6.2.1", "3.6.2.2", "3.6.3.1",
-  "3.6.3.2", "3.6.3.3", "3.6.3.4", "3.6.3.5", "3.6.3.6", "3.6.3.7",
-  "3.6.3.8", "3.6.3.9", "3.6.3.10", "3.6.3.11", "3.6.3.12",
-  "3.6.3.14", "3.6.3.15", "3.6.3.16", "3.6.3.17", "3.6.3.18",
-  "3.6.3.19", "3.6.3.20", "3.6.3.21", "3.6.3.22", "3.6.3.23",
-  "3.6.3.24", "3.6.3.25", "3.6.3.26", "3.6.3.27", "3.6.3.28",
-  "3.6.3.29", "3.6.3.30", "3.6.3.31", "3.6.3.32", "3.6.3.33",
-  "3.6.3.34", "3.6.3.35", "3.6.3.36", "3.6.3.37", "3.6.3.38",
-  "3.6.3.39", "3.6.3.40", "3.6.3.41", "3.6.3.42", "3.6.3.43",
-  "3.6.3.44", "3.6.3.46", "3.6.3.47", "3.6.3.48", "3.6.3.49",
-  "3.6.3.50", "3.6.3.51", "3.6.3.52", "3.6.3.53", "3.6.4.1",
-  "3.6.4.2", "3.6.4.3", "3.6.4.4", "3.6.4.5", "3.6.4.6", "3.6.4.7",
-  "3.6.4.8", "3.6.4.9", "3.6.4.10", "3.6.4.11", "3.6.4.12",
-  "3.6.4.13", "3.6.5.1", "3.6.5.2", "3.6.5.3", "3.6.5.4", "3.6.5.5",
-  "3.6.5.6", "3.7.1.1", "3.7.1.2", "3.7.1.3", "3.7.1.4", "3.7.1.5",
-  "3.7.1.6", "3.7.1.7", "3.7.1.8", "3.7.1.9", "3.7.1.10", "3.7.1.11",
-  "3.8.1.1", "3.8.1.2", "3.8.1.3", "3.8.1.5", "3.8.1.6", "3.8.1.7",
-  "3.8.1.8", "3.8.1.9", "3.8.1.10", "3.8.1.11", "3.9.1.1", "3.10.1.1",
-  "3.10.1.2", "3.11.1.1", "3.11.1.2", "3.11.1.3", "3.12.1.1",
-  "3.13.1.1", "3.13.1.3", "4.1.1.1", "4.1.1.2", "4.1.1.3", "4.1.1.4",
-  "4.1.1.5", "4.1.1.6", "4.1.1.7", "4.1.1.8", "4.1.1.9", "4.1.1.11",
-  "4.1.1.12", "4.1.1.14", "4.1.1.15", "4.1.1.16", "4.1.1.17",
-  "4.1.1.18", "4.1.1.19", "4.1.1.20", "4.1.1.21", "4.1.1.22",
-  "4.1.1.23", "4.1.1.24", "4.1.1.25", "4.1.1.28", "4.1.1.29",
-  "4.1.1.30", "4.1.1.31", "4.1.1.32", "4.1.1.33", "4.1.1.34",
-  "4.1.1.35", "4.1.1.36", "4.1.1.37", "4.1.1.38", "4.1.1.39",
-  "4.1.1.40", "4.1.1.41", "4.1.1.42", "4.1.1.43", "4.1.1.44",
-  "4.1.1.45", "4.1.1.46", "4.1.1.47", "4.1.1.48", "4.1.1.49",
-  "4.1.1.50", "4.1.1.51", "4.1.1.52", "4.1.1.53", "4.1.1.54",
-  "4.1.1.55", "4.1.1.56", "4.1.1.57", "4.1.1.58", "4.1.1.59",
-  "4.1.1.60", "4.1.1.61", "4.1.1.62", "4.1.1.63", "4.1.1.64",
-  "4.1.1.65", "4.1.1.66", "4.1.1.67", "4.1.1.68", "4.1.1.69",
-  "4.1.1.70", "4.1.1.71", "4.1.1.72", "4.1.1.73", "4.1.1.74",
-  "4.1.1.75", "4.1.1.76", "4.1.1.77", "4.1.1.78", "4.1.1.79",
-  "4.1.1.80", "4.1.1.81", "4.1.1.82", "4.1.1.83", "4.1.1.84",
-  "4.1.1.85", "4.1.1.86", "4.1.1.87", "4.1.1.88", "4.1.1.89",
-  "4.1.1.90", "4.1.2.2", "4.1.2.4", "4.1.2.5", "4.1.2.8", "4.1.2.9",
-  "4.1.2.10", "4.1.2.11", "4.1.2.12", "4.1.2.13", "4.1.2.14",
-  "4.1.2.17", "4.1.2.18", "4.1.2.19", "4.1.2.20", "4.1.2.21",
-  "4.1.2.22", "4.1.2.23", "4.1.2.24", "4.1.2.25", "4.1.2.26",
-  "4.1.2.27", "4.1.2.28", "4.1.2.29", "4.1.2.30", "4.1.2.32",
-  "4.1.2.33", "4.1.2.34", "4.1.2.35", "4.1.2.36", "4.1.2.37",
-  "4.1.2.38", "4.1.2.40", "4.1.2.41", "4.1.2.42", "4.1.2.43",
-  "4.1.2.44", "4.1.2.45", "4.1.3.1", "4.1.3.3", "4.1.3.4", "4.1.3.6",
-  "4.1.3.13", "4.1.3.14", "4.1.3.16", "4.1.3.17", "4.1.3.22",
-  "4.1.3.24", "4.1.3.25", "4.1.3.26", "4.1.3.27", "4.1.3.30",
-  "4.1.3.32", "4.1.3.34", "4.1.3.35", "4.1.3.36", "4.1.3.38",
-  "4.1.3.39", "4.1.3.40", "4.1.99.1", "4.1.99.2", "4.1.99.3",
-  "4.1.99.5", "4.1.99.11", "4.1.99.12", "4.1.99.13", "4.1.99.14",
-  "4.1.99.15", "4.2.1.1", "4.2.1.2", "4.2.1.3", "4.2.1.4", "4.2.1.5",
-  "4.2.1.6", "4.2.1.7", "4.2.1.8", "4.2.1.9", "4.2.1.10", "4.2.1.11",
-  "4.2.1.12", "4.2.1.17", "4.2.1.18", "4.2.1.19", "4.2.1.20",
-  "4.2.1.22", "4.2.1.24", "4.2.1.25", "4.2.1.27", "4.2.1.28",
-  "4.2.1.30", "4.2.1.31", "4.2.1.32", "4.2.1.33", "4.2.1.34",
-  "4.2.1.35", "4.2.1.36", "4.2.1.39", "4.2.1.40", "4.2.1.41",
-  "4.2.1.42", "4.2.1.43", "4.2.1.44", "4.2.1.45", "4.2.1.46",
-  "4.2.1.47", "4.2.1.48", "4.2.1.49", "4.2.1.50", "4.2.1.51",
-  "4.2.1.52", "4.2.1.53", "4.2.1.54", "4.2.1.55", "4.2.1.56",
-  "4.2.1.57", "4.2.1.58", "4.2.1.59", "4.2.1.60", "4.2.1.61",
-  "4.2.1.62", "4.2.1.65", "4.2.1.66", "4.2.1.67", "4.2.1.68",
-  "4.2.1.69", "4.2.1.70", "4.2.1.73", "4.2.1.74", "4.2.1.75",
-  "4.2.1.76", "4.2.1.77", "4.2.1.78", "4.2.1.79", "4.2.1.80",
-  "4.2.1.81", "4.2.1.82", "4.2.1.83", "4.2.1.84", "4.2.1.85",
-  "4.2.1.87", "4.2.1.88", "4.2.1.89", "4.2.1.90", "4.2.1.91",
-  "4.2.1.92", "4.2.1.93", "4.2.1.94", "4.2.1.95", "4.2.1.96",
-  "4.2.1.97", "4.2.1.98", "4.2.1.99", "4.2.1.100", "4.2.1.101",
-  "4.2.1.103", "4.2.1.104", "4.2.1.105", "4.2.1.106", "4.2.1.107",
-  "4.2.1.108", "4.2.1.109", "4.2.1.110", "4.2.1.111", "4.2.1.112",
-  "4.2.1.113", "4.2.1.114", "4.2.1.115", "4.2.1.116", "4.2.1.117",
-  "4.2.1.118", "4.2.1.119", "4.2.1.120", "4.2.2.1", "4.2.2.2",
-  "4.2.2.3", "4.2.2.5", "4.2.2.6", "4.2.2.7", "4.2.2.8", "4.2.2.9",
-  "4.2.2.10", "4.2.2.11", "4.2.2.12", "4.2.2.13", "4.2.2.14",
-  "4.2.2.15", "4.2.2.16", "4.2.2.17", "4.2.2.18", "4.2.2.19",
-  "4.2.2.20", "4.2.2.21", "4.2.2.22", "4.2.3.1", "4.2.3.2", "4.2.3.3",
-  "4.2.3.4", "4.2.3.5", "4.2.3.6", "4.2.3.7", "4.2.3.8", "4.2.3.9",
-  "4.2.3.10", "4.2.3.11", "4.2.3.12", "4.2.3.13", "4.2.3.14",
-  "4.2.3.15", "4.2.3.16", "4.2.3.17", "4.2.3.18", "4.2.3.19",
-  "4.2.3.20", "4.2.3.21", "4.2.3.22", "4.2.3.23", "4.2.3.24",
-  "4.2.3.25", "4.2.3.26", "4.2.3.27", "4.2.3.28", "4.2.3.29",
-  "4.2.3.30", "4.2.3.31", "4.2.3.32", "4.2.3.33", "4.2.3.34",
-  "4.2.3.35", "4.2.3.36", "4.2.3.37", "4.2.3.38", "4.2.3.39",
-  "4.2.3.40", "4.2.3.41", "4.2.3.42", "4.2.3.43", "4.2.3.44",
-  "4.2.3.45", "4.2.99.12", "4.2.99.18", "4.2.99.20", "4.3.1.1",
-  "4.3.1.2", "4.3.1.3", "4.3.1.4", "4.3.1.6", "4.3.1.7", "4.3.1.9",
-  "4.3.1.10", "4.3.1.12", "4.3.1.13", "4.3.1.14", "4.3.1.15",
-  "4.3.1.16", "4.3.1.17", "4.3.1.18", "4.3.1.19", "4.3.1.20",
-  "4.3.1.22", "4.3.1.23", "4.3.1.24", "4.3.1.25", "4.3.1.26",
-  "4.3.2.1", "4.3.2.2", "4.3.2.3", "4.3.2.4", "4.3.2.5", "4.3.3.1",
-  "4.3.3.2", "4.3.3.3", "4.3.3.4", "4.3.3.5", "4.3.99.2", "4.4.1.1",
-  "4.4.1.2", "4.4.1.3", "4.4.1.4", "4.4.1.5", "4.4.1.6", "4.4.1.8",
-  "4.4.1.9", "4.4.1.10", "4.4.1.11", "4.4.1.13", "4.4.1.14",
-  "4.4.1.15", "4.4.1.16", "4.4.1.17", "4.4.1.19", "4.4.1.20",
-  "4.4.1.21", "4.4.1.22", "4.4.1.23", "4.4.1.24", "4.4.1.25",
-  "4.5.1.1", "4.5.1.2", "4.5.1.3", "4.5.1.4", "4.5.1.5", "4.6.1.1",
-  "4.6.1.2", "4.6.1.6", "4.6.1.12", "4.6.1.13", "4.6.1.14",
-  "4.6.1.15", "4.99.1.1", "4.99.1.2", "4.99.1.3", "4.99.1.4",
-  "4.99.1.5", "4.99.1.6", "4.99.1.7", "4.99.1.8", "5.1.1.1",
-  "5.1.1.2", "5.1.1.3", "5.1.1.4", "5.1.1.5", "5.1.1.6", "5.1.1.7",
-  "5.1.1.8", "5.1.1.9", "5.1.1.10", "5.1.1.11", "5.1.1.12",
-  "5.1.1.13", "5.1.1.14", "5.1.1.15", "5.1.1.16", "5.1.1.17",
-  "5.1.1.18", "5.1.2.1", "5.1.2.2", "5.1.2.3", "5.1.2.4", "5.1.2.5",
-  "5.1.2.6", "5.1.3.1", "5.1.3.2", "5.1.3.3", "5.1.3.4", "5.1.3.5",
-  "5.1.3.6", "5.1.3.7", "5.1.3.8", "5.1.3.9", "5.1.3.10", "5.1.3.11",
-  "5.1.3.12", "5.1.3.13", "5.1.3.14", "5.1.3.15", "5.1.3.16",
-  "5.1.3.17", "5.1.3.18", "5.1.3.19", "5.1.3.20", "5.1.3.21",
-  "5.1.3.22", "5.1.3.23", "5.1.99.1", "5.1.99.2", "5.1.99.3",
-  "5.1.99.4", "5.1.99.5", "5.2.1.1", "5.2.1.2", "5.2.1.3", "5.2.1.4",
-  "5.2.1.5", "5.2.1.6", "5.2.1.7", "5.2.1.8", "5.2.1.9", "5.2.1.10",
-  "5.3.1.1", "5.3.1.3", "5.3.1.4", "5.3.1.5", "5.3.1.6", "5.3.1.7",
-  "5.3.1.8", "5.3.1.9", "5.3.1.12", "5.3.1.13", "5.3.1.14",
-  "5.3.1.15", "5.3.1.16", "5.3.1.17", "5.3.1.20", "5.3.1.21",
-  "5.3.1.22", "5.3.1.23", "5.3.1.24", "5.3.1.25", "5.3.1.26",
-  "5.3.1.27", "5.3.2.1", "5.3.2.2", "5.3.3.1", "5.3.3.2", "5.3.3.3",
-  "5.3.3.4", "5.3.3.5", "5.3.3.6", "5.3.3.7", "5.3.3.8", "5.3.3.9",
-  "5.3.3.10", "5.3.3.11", "5.3.3.12", "5.3.3.13", "5.3.3.14",
-  "5.3.3.15", "5.3.4.1", "5.3.99.2", "5.3.99.3", "5.3.99.4",
-  "5.3.99.5", "5.3.99.6", "5.3.99.7", "5.3.99.8", "5.3.99.9",
-  "5.4.1.1", "5.4.1.2", "5.4.2.1", "5.4.2.2", "5.4.2.3", "5.4.2.4",
-  "5.4.2.5", "5.4.2.6", "5.4.2.7", "5.4.2.8", "5.4.2.9", "5.4.2.10",
-  "5.4.3.2", "5.4.3.3", "5.4.3.4", "5.4.3.5", "5.4.3.6", "5.4.3.7",
-  "5.4.3.8", "5.4.4.1", "5.4.4.2", "5.4.4.3", "5.4.99.1", "5.4.99.2",
-  "5.4.99.3", "5.4.99.4", "5.4.99.5", "5.4.99.7", "5.4.99.8",
-  "5.4.99.9", "5.4.99.11", "5.4.99.12", "5.4.99.13", "5.4.99.14",
-  "5.4.99.15", "5.4.99.16", "5.4.99.17", "5.4.99.18", "5.5.1.1",
-  "5.5.1.2", "5.5.1.3", "5.5.1.4", "5.5.1.5", "5.5.1.6", "5.5.1.7",
-  "5.5.1.8", "5.5.1.9", "5.5.1.10", "5.5.1.11", "5.5.1.12",
-  "5.5.1.13", "5.5.1.14", "5.5.1.15", "5.5.1.16", "5.99.1.1",
-  "5.99.1.2", "5.99.1.3", "5.99.1.4", "6.1.1.1", "6.1.1.2", "6.1.1.3",
-  "6.1.1.4", "6.1.1.5", "6.1.1.6", "6.1.1.7", "6.1.1.9", "6.1.1.10",
-  "6.1.1.11", "6.1.1.12", "6.1.1.13", "6.1.1.14", "6.1.1.15",
-  "6.1.1.16", "6.1.1.17", "6.1.1.18", "6.1.1.19", "6.1.1.20",
-  "6.1.1.21", "6.1.1.22", "6.1.1.23", "6.1.1.24", "6.1.1.25",
-  "6.1.1.26", "6.1.1.27", "6.2.1.1", "6.2.1.2", "6.2.1.3", "6.2.1.4",
-  "6.2.1.5", "6.2.1.6", "6.2.1.7", "6.2.1.8", "6.2.1.9", "6.2.1.10",
-  "6.2.1.11", "6.2.1.12", "6.2.1.13", "6.2.1.14", "6.2.1.15",
-  "6.2.1.16", "6.2.1.17", "6.2.1.18", "6.2.1.19", "6.2.1.20",
-  "6.2.1.22", "6.2.1.23", "6.2.1.24", "6.2.1.25", "6.2.1.26",
-  "6.2.1.27", "6.2.1.28", "6.2.1.30", "6.2.1.31", "6.2.1.32",
-  "6.2.1.33", "6.2.1.34", "6.2.1.35", "6.2.1.36", "6.3.1.1",
-  "6.3.1.2", "6.3.1.4", "6.3.1.5", "6.3.1.6", "6.3.1.7", "6.3.1.8",
-  "6.3.1.9", "6.3.1.10", "6.3.1.11", "6.3.1.12", "6.3.1.13",
-  "6.3.2.1", "6.3.2.2", "6.3.2.3", "6.3.2.4", "6.3.2.5", "6.3.2.6",
-  "6.3.2.7", "6.3.2.8", "6.3.2.9", "6.3.2.10", "6.3.2.11", "6.3.2.12",
-  "6.3.2.13", "6.3.2.14", "6.3.2.16", "6.3.2.17", "6.3.2.18",
-  "6.3.2.19", "6.3.2.20", "6.3.2.21", "6.3.2.22", "6.3.2.23",
-  "6.3.2.24", "6.3.2.25", "6.3.2.26", "6.3.2.27", "6.3.2.28",
-  "6.3.2.29", "6.3.2.30", "6.3.2.31", "6.3.2.32", "6.3.2.33",
-  "6.3.2.34", "6.3.3.1", "6.3.3.2", "6.3.3.3", "6.3.3.4", "6.3.4.1",
-  "6.3.4.2", "6.3.4.3", "6.3.4.4", "6.3.4.5", "6.3.4.6", "6.3.4.7",
-  "6.3.4.8", "6.3.4.9", "6.3.4.10", "6.3.4.11", "6.3.4.12",
-  "6.3.4.13", "6.3.4.14", "6.3.4.15", "6.3.4.16", "6.3.4.17",
-  "6.3.4.18", "6.3.5.1", "6.3.5.2", "6.3.5.3", "6.3.5.4", "6.3.5.5",
-  "6.3.5.6", "6.3.5.7", "6.3.5.9", "6.3.5.10", "6.4.1.1", "6.4.1.2",
-  "6.4.1.3", "6.4.1.4", "6.4.1.5", "6.4.1.6", "6.4.1.7", "6.5.1.1",
-  "6.5.1.2", "6.5.1.3", "6.5.1.4", "6.6.1.1", "6.6.1.2",
   NULL
 };
 
@@ -17615,7 +18702,7 @@ static Boolean ValidateECnumber (CharPtr str)
 NLM_EXTERN void ECNumberFSAFreeAll (void)
 
 {
-  CtSetPtr    csp;
+  CtrySetPtr  ctsp;
   TextFsaPtr  fsa;
 
   fsa = (TextFsaPtr) GetAppProperty ("SpecificECNumberFSA");
@@ -17648,17 +18735,23 @@ NLM_EXTERN void ECNumberFSAFreeAll (void)
     TextFsaFree (fsa);
   }
 
-  csp = (CtSetPtr) GetAppProperty ("CountryLatLonList");
-  if (csp != NULL) {
-    SetAppProperty ("CountryLatLonList", NULL);
-    CtSetDataFree (csp);
+  ctsp = (CtrySetPtr) GetAppProperty ("CountryLatLonData");
+  if (ctsp != NULL) {
+    SetAppProperty ("CountryLatLonData", NULL);
+    FreeLatLonCountryData (ctsp);
+  }
+
+  ctsp = (CtrySetPtr) GetAppProperty ("WaterLatLonData");
+  if (ctsp != NULL) {
+    SetAppProperty ("WaterLatLonData", NULL);
+    FreeLatLonCountryData (ctsp);
   }
 
   ic_code_data = MemFree (ic_code_data);
   ic_code_list = ValNodeFreeData (ic_code_list);
 }
 
-static TextFsaPtr GetECNumberFSA (CharPtr prop, CharPtr file, CharPtr PNTR local, Boolean trimAtTab)
+static TextFsaPtr GetECNumberFSA (CharPtr prop, CharPtr file, CharPtr PNTR local, size_t numitems, Boolean trimAtTab)
 
 {
   FileCache   fc;
@@ -17707,7 +18800,7 @@ static TextFsaPtr GetECNumberFSA (CharPtr prop, CharPtr file, CharPtr PNTR local
       }
 
     } else if (local != NULL) {
-      for (i = 0; local [i] != NULL; i++) {
+      for (i = 0; /* local [i] != NULL */ i < numitems; i++) {
         str = local [i];
         if (StringDoesHaveText (str)) {
           if (StringLen (str) + 3 < sizeof (tmp)) {
@@ -17733,25 +18826,25 @@ static TextFsaPtr GetECNumberFSA (CharPtr prop, CharPtr file, CharPtr PNTR local
 static TextFsaPtr GetSpecificECNumberFSA (void)
 
 {
-  return (GetECNumberFSA ("SpecificECNumberFSA", "ecnum_specific.txt", ecnum_specif, FALSE));
+  return (GetECNumberFSA ("SpecificECNumberFSA", "ecnum_specific.txt", (CharPtr PNTR) kECNum_specific, sizeof (kECNum_specific) / sizeof (char*), TRUE));
 }
 
 static TextFsaPtr GetAmbiguousECNumberFSA (void)
 
 {
-  return (GetECNumberFSA ("AmbiguousECNumberFSA", "ecnum_ambiguous.txt", ecnum_ambig, FALSE));
+  return (GetECNumberFSA ("AmbiguousECNumberFSA", "ecnum_ambiguous.txt", (CharPtr PNTR) kECNum_ambiguous, sizeof (kECNum_ambiguous) / sizeof (char*), TRUE));
 }
 
 static TextFsaPtr GetDeletedECNumberFSA (void)
 
 {
-  return (GetECNumberFSA ("DeletedECNumberFSA", "ecnum_deleted.txt", NULL, FALSE));
+  return (GetECNumberFSA ("DeletedECNumberFSA", "ecnum_deleted.txt", (CharPtr PNTR) kECNum_deleted, sizeof (kECNum_deleted) / sizeof (char*), TRUE));
 }
 
 static TextFsaPtr GetReplacedECNumberFSA (void)
 
 {
-  return (GetECNumberFSA ("ReplacedEECNumberFSA", "ecnum_replaced.txt", NULL, TRUE));
+  return (GetECNumberFSA ("ReplacedEECNumberFSA", "ecnum_replaced.txt", (CharPtr PNTR) kECNum_replaced, sizeof (kECNum_replaced) / sizeof (char*), TRUE));
 }
 
 static Boolean ECnumberNotInList (CharPtr str)
@@ -17933,7 +19026,7 @@ static void ValidateRptUnit (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
             fto = ftmp;
           }
           if (from < ffrom || from > fto || to < ffrom || to > fto) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_InvalidQualifierValue, "/rpt_unit_range is not within sequence length");
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RptUnitRangeProblem, "/rpt_unit_range is not within sequence length");
           }
         }
       }
@@ -17958,6 +19051,224 @@ static void ValidateRptUnit (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
     }
   }
 }
+
+
+static Boolean IsGbIndexQualPairValid (Int2 index, Int2 val)
+{
+  Int2    i;
+  Boolean found = FALSE;
+
+  for (i = 0; i < ParFlat_GBFeat[index].opt_num && !found; i++) {
+    if (ParFlat_GBFeat[index].opt_qual[i] == val) {
+      found = TRUE;
+    }
+  }
+  for (i = 0; i < ParFlat_GBFeat[index].mand_num && !found; i++) {
+    if (ParFlat_GBFeat[index].mand_qual[i] == val) {
+      found = TRUE;
+    }
+  }
+  return found;
+}
+
+
+NLM_EXTERN CharPtr GetGBFeatKeyForFeature (SeqFeatPtr sfp)
+{
+  CharPtr key = NULL;
+  ImpFeatPtr ifp;
+
+  if (sfp == NULL) {
+    return NULL;
+  }
+
+  if (sfp->data.choice == SEQFEAT_IMP) {
+    ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+    if (StringCmp (ifp->key, "-") == 0) {
+      key = StringSave ("misc_feature");
+    } else {
+      key = StringSaveNoNull (ifp->key);
+    }
+  } else {
+    key = StringSaveNoNull (FeatDefTypeLabel (sfp));
+    if (StringCmp (key, "Gene") == 0) {
+      *key = 'g';
+    } else if (StringCmp (key, "preRNA") == 0) {
+      key = MemFree (key);
+      key = StringSave ("precursor_RNA");
+    }
+  }
+  return key;
+}
+
+
+NLM_EXTERN Boolean ShouldSuppressGBQual(Uint1 subtype, CharPtr qual_name)
+{
+  if (StringHasNoText (qual_name)) {
+    return FALSE;
+  }
+
+  /* always suppress experiment and inference quals */
+  if (StringCmp (qual_name, "experiment") == 0 || StringCmp (qual_name, "inference") == 0) {
+    return TRUE;
+  }
+  
+  if (subtype == FEATDEF_ncRNA) {
+    if (StringCmp (qual_name, "product") == 0
+        || StringCmp (qual_name, "ncRNA_class") == 0) {
+      return TRUE;
+    }
+  } else if (subtype == FEATDEF_tmRNA) {
+    if (StringCmp (qual_name, "product") == 0
+        || StringCmp (qual_name, "tag_peptide") == 0) {
+      return TRUE;
+    }
+  } else if (subtype == FEATDEF_otherRNA) {
+    if (StringCmp (qual_name, "product") == 0) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+    
+
+NLM_EXTERN Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGBQual)
+
+{
+  if (qual < 0) return FALSE;
+  if (allowProductGBQual && qual == GBQUAL_product) return TRUE;
+  if (qual == GBQUAL_citation ||
+      qual == GBQUAL_db_xref ||
+      qual == GBQUAL_evidence ||
+      qual == GBQUAL_exception ||
+      qual == GBQUAL_gene ||
+      qual == GBQUAL_gene_synonym ||
+      qual == GBQUAL_insertion_seq ||
+      qual == GBQUAL_label ||
+      qual == GBQUAL_locus_tag ||
+      qual == GBQUAL_non_functional ||
+      qual == GBQUAL_note ||
+      qual == GBQUAL_partial ||
+      qual == GBQUAL_product ||
+      qual == GBQUAL_pseudo ||
+      qual == GBQUAL_pseudogene ||
+      qual == GBQUAL_rpt_unit ||
+      qual == GBQUAL_transposon ||
+      qual == GBQUAL_experiment ||
+      qual == GBQUAL_trans_splicing ||
+      qual == GBQUAL_ribosomal_slippage ||
+      qual == GBQUAL_standard_name ||
+      qual == GBQUAL_inference) 
+  {
+    return FALSE;
+  }
+  if (subtype == FEATDEF_CDS) 
+  {
+    if (qual == GBQUAL_codon_start 
+        || qual == GBQUAL_codon 
+        || qual == GBQUAL_EC_number
+        || qual == GBQUAL_gdb_xref
+        || qual == GBQUAL_number
+        || qual == GBQUAL_protein_id
+        || qual == GBQUAL_transl_except
+        || qual == GBQUAL_transl_table
+        || qual == GBQUAL_translation
+        || qual == GBQUAL_allele
+        || qual == GBQUAL_function
+        || qual == GBQUAL_old_locus_tag)
+    {
+      return FALSE;
+    }
+  }
+  if (qual == GBQUAL_map && subtype != FEATDEF_ANY && subtype != FEATDEF_repeat_region && subtype != FEATDEF_gap) return FALSE;
+  if (qual == GBQUAL_operon && subtype != FEATDEF_ANY && subtype != FEATDEF_operon) return FALSE;
+  if (Nlm_GetAppProperty ("SequinUseEMBLFeatures") == NULL) 
+  {
+    if (qual == GBQUAL_usedin) 
+    {
+      return FALSE;
+    }
+  }
+
+  if (qual > -1 && ShouldSuppressGBQual (subtype, ParFlat_GBQual_names [qual].name)) {
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+
+static CharPtr sWrongQualReasons[] = {
+  "conflicting codon_start values",
+  "codon_start value should be 1, 2, or 3" 
+};
+
+typedef enum {
+  eWrongQualReason_conflicting_codon_start = 0,
+  eWrongQualReason_bad_codon_start_value
+} EWrongQualReason;
+
+/* 
+ * Return values:
+ * 1: yes
+ * 0: no
+ * -1: don't know
+ * 2: no for special reasons
+ */
+NLM_EXTERN Int4 IsQualValidForFeature (GBQualPtr gbqual, SeqFeatPtr sfp)
+{
+  CharPtr     key = NULL;
+  Int2        val;
+  Int4        rval = -1;
+  Int2        index;
+  CdRegionPtr crp;
+
+  if (sfp == NULL || gbqual == NULL) {
+    return -1;
+  }
+
+  key = GetGBFeatKeyForFeature (sfp);
+  index = GBFeatKeyNameValid (&key, FALSE);
+  key = MemFree (key);
+
+  if (index == -1) {
+    /* unknown */
+    rval = -1;
+  } else if (StringCmp (gbqual->qual, "gsdb_id") == 0) {
+    /* force good */
+    rval = 1;
+  } else if (sfp->data.choice == SEQFEAT_GENE &&
+             (StringCmp (gbqual->qual, "gen_map") == 0 ||
+              StringCmp (gbqual->qual, "cyt_map") == 0 ||
+              StringCmp (gbqual->qual, "rad_map") == 0)) {
+    rval = 1;
+  } else if (sfp->data.choice == SEQFEAT_CDREGION
+             && StringCmp (gbqual->qual, "orig_transcript_id") == 0) {
+    rval = 1;
+  } else if (sfp->data.choice == SEQFEAT_RNA && 
+             (StringCmp (gbqual->qual, "orig_protein_id") == 0 ||
+              StringCmp (gbqual->qual, "orig_transcript_id") == 0)) {
+    rval = 1;
+  } else if ((val = GBQualNameValid (gbqual->qual)) == -1) {
+    rval = -1;
+  } else if (sfp->data.choice == SEQFEAT_CDREGION
+             && val == GBQUAL_codon_start) {
+    crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+    if (crp != NULL) {
+      if (crp->frame > 0) {
+        rval = eWrongQualReason_conflicting_codon_start + 2;
+      } else {
+        rval = eWrongQualReason_bad_codon_start_value + 2;
+      }
+    }
+  } else if (IsGbIndexQualPairValid (index, val)) {
+    rval = 1;
+  } else {
+    rval = 0;
+  }
+  return rval;
+}
+
 
 static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPtr sfp, ImpFeatPtr ifp)
 
@@ -17992,6 +19303,7 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
   CharPtr         str;
   CharPtr         tmp;
   Int2            val;
+  Int4            qvalid;
 
   if (vsp == NULL || gcp == NULL || sfp == NULL || ifp == NULL)
     return;
@@ -18092,8 +19404,16 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
         }
       }
     }
+    if (StringHasNoText(sfp->comment) && sfp->qual == NULL && sfp->dbxref == NULL) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NeedsNote, "A note or other qualifier is required for a misc_feature");
+    }
   }
   for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next) {
+    qvalid = IsQualValidForFeature (gbqual, sfp);
+    if (qvalid == 0) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnImpFeat, "Wrong qualifier %s for feature %s", gbqual->qual, key);
+    }
+
     if (StringCmp (gbqual->qual, "gsdb_id") == 0) {
       continue;
     }
@@ -18105,26 +19425,6 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UnknownImpFeatQual, "NULL qualifier");
       }
     } else if (index != -1) {
-      found = FALSE;
-      for (i = 0; i < ParFlat_GBFeat[index].opt_num; i++) {
-        qual = ParFlat_GBFeat[index].opt_qual[i];
-        if (qual == val) {
-          found = TRUE;
-          break;
-        }
-      }
-      if (!found) {
-        for (i = 0; i < ParFlat_GBFeat[index].mand_num; i++) {
-          qual = ParFlat_GBFeat[index].mand_qual[i];
-          if (qual == val) {
-            found = TRUE;
-            break;
-          }
-        }
-        if (!found) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnImpFeat, "Wrong qualifier %s for feature %s", gbqual->qual, key);
-        }
-      }
       if (gbqual->val != NULL) {
         if (val == GBQUAL_rpt_type) {
           failed = FALSE;
@@ -18245,7 +19545,7 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
           if (!found) {
             ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "%s is not a legal value for qualifier %s", gbqual->val, gbqual->qual);
           }
-        } else if (val == GBQUAL_mobile_element) {
+        } else if (val == GBQUAL_mobile_element_type) {
           found = FALSE;
           str = NULL;
           for (i = 0; legal_mobile_element_strings[i] != NULL; i++) {
@@ -18383,6 +19683,7 @@ static void ValidateNonImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
   CharPtr    str;
   CharPtr    tmp;
   Int2       val;
+  Int4       qvalid;
 
   if (vsp == NULL || gcp == NULL || sfp == NULL)
     return;
@@ -18395,6 +19696,13 @@ static void ValidateNonImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
   }
   index = GBFeatKeyNameValid (&key, FALSE);
   for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next) {
+    qvalid = IsQualValidForFeature (gbqual, sfp);
+    if (qvalid == 0) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "Wrong qualifier %s for feature %s", gbqual->qual, key);
+    } else if (qvalid > 1) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, sWrongQualReasons[qvalid - 2]);
+    }
+    
     if (StringCmp (gbqual->qual, "gsdb_id") == 0) {
       continue;
     }
@@ -18406,31 +19714,18 @@ static void ValidateNonImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
           if (StringCmp (gbqual->qual, "cyt_map") == 0) continue;
           if (StringCmp (gbqual->qual, "rad_map") == 0) continue;
         }
+        if (sfp->data.choice == SEQFEAT_CDREGION) {
+          if (StringCmp (gbqual->qual, "orig_transcript_id") == 0) continue;
+        }
+        if (sfp->data.choice == SEQFEAT_RNA) {
+          if (StringCmp (gbqual->qual, "orig_protein_id") == 0) continue;
+          if (StringCmp (gbqual->qual, "orig_transcript_id") == 0) continue;
+        }
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UnknownFeatureQual, "Unknown qualifier %s", gbqual->qual);
       } else {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UnknownFeatureQual, "NULL qualifier");
       }
     } else if (index != -1) {
-      found = FALSE;
-      for (i = 0; i < ParFlat_GBFeat[index].opt_num; i++) {
-        qual = ParFlat_GBFeat[index].opt_qual[i];
-        if (qual == val) {
-          found = TRUE;
-          break;
-        }
-      }
-      if (!found) {
-        for (i = 0; i < ParFlat_GBFeat[index].mand_num; i++) {
-          qual = ParFlat_GBFeat[index].mand_qual[i];
-          if (qual == val) {
-            found = TRUE;
-            break;
-          }
-        }
-        if (!found) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "Wrong qualifier %s for feature %s", gbqual->qual, key);
-        }
-      }
       if (gbqual->val != NULL) {
         if (val == GBQUAL_rpt_type) {
           failed = FALSE;
@@ -18674,6 +19969,7 @@ static Boolean PartialAtSpliceSiteOrGap (ValidStructPtr vsp, SeqLocPtr head, Uin
     ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_Range,
               "Unable to check splice consensus because feature outside range of sequence");
     */
+    BioseqUnlock (bsp);
     return FALSE;
   }
 
@@ -18940,6 +20236,7 @@ static Boolean TwoListsHaveCommonItem (
   return FALSE;
 }
 
+
 static void CheckTrnaCodons (
   ValidStructPtr vsp,
   GatherContextPtr gcp,
@@ -18950,15 +20247,12 @@ static void CheckTrnaCodons (
 {
   Uint1           aa = 0;
   Uint1           anticodon [4];
-  BioseqPtr       bsp;
   Char            ch;
   Int2            code = 0;
   CharPtr         codes = NULL;
   Uint1           codon [4];
   CharPtr         complementBase = " TVGH  CD  M KN   YSAABW R ";
-  Uint1           from;
   CharPtr         gen_code_name = NULL;
-  GeneticCodePtr  gncp;
   Int2            i;
   Uint2           idx;
   Uint1           index;
@@ -18972,7 +20266,6 @@ static void CheckTrnaCodons (
   StreamCache     sc;
   ErrSev          sev = SEV_ERROR;
   SeqLocPtr       slp;
-  SeqMapTablePtr  smtp;
   CharPtr         str;
   Uint1           taa;
   CharPtr         three_letter_aa = NULL;
@@ -18986,35 +20279,7 @@ static void CheckTrnaCodons (
 
   /* extract indicated amino acid */
 
-  aa = 0;
-  if (trp->aatype == 2) {
-    aa = trp->aa;
-  } else {
-    from = 0;
-    switch (trp->aatype) {
-    case 0:
-      from = 0;
-      break;
-    case 1:
-      from = Seq_code_iupacaa;
-      break;
-    case 2:
-      from = Seq_code_ncbieaa;
-      break;
-    case 3:
-      from = Seq_code_ncbi8aa;
-      break;
-    case 4:
-      from = Seq_code_ncbistdaa;
-      break;
-    default:
-      break;
-    }
-    smtp = SeqMapTableFind (Seq_code_ncbieaa, from);
-    if (smtp != NULL) {
-      aa = SeqMapTableConvert (smtp, trp->aa);
-    }
-  }
+  aa = GetAaFromtRNA (trp);
 
   three_letter_aa = Get3LetterSymbol (NULL, Seq_code_ncbieaa, NULL, aa);
   if (StringHasNoText (three_letter_aa)) {
@@ -19022,22 +20287,8 @@ static void CheckTrnaCodons (
   }
 
   /* find genetic code table */
+  codes = GetCodesFortRNA(sfp, &code);
 
-  bsp = GetBioseqGivenSeqLoc (sfp->location, gcp->entityID);
-  BioseqToGeneticCode (bsp, &code, NULL, NULL, NULL, 0, NULL);
-
-  gncp = GeneticCodeFind (code, NULL);
-  if (gncp == NULL) {
-    gncp = GeneticCodeFind (1, NULL);
-    code = 1;
-  }
-  if (gncp == NULL) return;
-
-  for (vnp = (ValNodePtr) gncp->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice != 3) continue;
-    codes = (CharPtr) vnp->data.ptrvalue;
-    break;
-  }
   if (codes == NULL) return;
 
   for (vnp = genetic_code_name_list; vnp != NULL; vnp = vnp->next) {
@@ -19413,17 +20664,35 @@ static void CheckCDSPartial (ValidStructPtr vsp, SeqFeatPtr sfp)
   Boolean            partial3;
   SeqDescrPtr        sdp;
   ErrSev             sev;
+  Boolean            need_to_unlock = FALSE;
 
   if (vsp == NULL || sfp == NULL) return;
   if (sfp->product == NULL) return;
   if (!vsp->useSeqMgrIndexes) return;
   bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (bsp == NULL && vsp->farFetchCDSproducts) {
+    bsp = BioseqLockById (SeqLocId(sfp->product));
+    if (bsp != NULL) {
+      need_to_unlock = TRUE;
+    }
+  }
   if (bsp == NULL) return;
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &context);
-  if (sdp == NULL) return;
+  if (sdp == NULL) {
+    if (need_to_unlock) {
+      BioseqUnlock(bsp);
+    }
+    return;
+  }
   mip = (MolInfoPtr) sdp->data.ptrvalue;
-  if (mip == NULL) return;
+  if (mip == NULL) {
+    if (need_to_unlock) {
+      BioseqUnlock (bsp);
+    }
+    return;
+  }
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+
   switch (mip->completeness) {
     case 0 : /* unknown */
       break;
@@ -19483,6 +20752,9 @@ static void CheckCDSPartial (ValidStructPtr vsp, SeqFeatPtr sfp)
     default :
       break;
   }
+  if (need_to_unlock) {
+    BioseqUnlock (bsp);
+  }
 }
 
 static void CheckForCommonCDSProduct (ValidStructPtr vsp, SeqFeatPtr sfp)
@@ -19509,6 +20781,7 @@ static void CheckForCommonCDSProduct (ValidStructPtr vsp, SeqFeatPtr sfp)
   crp = (CdRegionPtr) sfp->data.value.ptrvalue;
   if (crp != NULL && crp->orf)
     return;
+  
   grp = SeqMgrGetGeneXref (sfp);
   if (grp == NULL || (!SeqMgrGeneIsSuppressed (grp))) {
     gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
@@ -20970,7 +22243,7 @@ static ValNodePtr ValidateGoTermQualifier (
               ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadGeneOntologyFormat, "Bad data format for GO term qualifier PMID");
             }
             break;
-          case 4 :
+          case 5 :
             if (ufp->choice == 1) {
               evidence = (CharPtr) ufp->data.ptrvalue;
             } else {
@@ -21778,10 +23051,94 @@ static void ValidateRna (SeqFeatPtr sfp, ValidStructPtr vsp, GatherContextPtr gc
 }
 
 
+NLM_EXTERN Boolean IsGeneXrefRedundant (SeqFeatPtr sfp)
+{
+  GeneRefPtr grp;
+  SeqFeatPtr sfpx;
+  GeneRefPtr grpx;
+  Boolean    redundantgenexref = FALSE;
+  CharPtr    syn1, syn2;
+  DummySmfeData dsd;
+  Int2          count;
+  SeqMgrFeatContext fcontext;
+
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp == NULL) {
+    return FALSE;
+  }
+  if (grp != NULL && SeqMgrGeneIsSuppressed (grp)) return FALSE;
+
+  sfpx = SeqMgrGetOverlappingGene (sfp->location, &fcontext);
+  if (sfpx == NULL || sfpx->data.choice != SEQFEAT_GENE)
+    return FALSE;
+  grpx = (GeneRefPtr) sfpx->data.value.ptrvalue;
+  if (grpx == NULL)
+    return FALSE;
+
+  if (StringDoesHaveText (grp->locus_tag) && StringDoesHaveText (grp->locus_tag)) {
+    if (StringICmp (grp->locus_tag, grpx->locus_tag) == 0) {
+      redundantgenexref = TRUE;
+    }
+  } else if (StringDoesHaveText (grp->locus) && StringDoesHaveText (grp->locus)) {
+    if (StringICmp (grp->locus, grpx->locus) == 0) {
+      redundantgenexref = TRUE;
+    }
+  } else if (grp->syn != NULL && grpx->syn != NULL) {
+    syn1 = (CharPtr) grp->syn->data.ptrvalue;
+    syn2 = (CharPtr) grpx->syn->data.ptrvalue;
+    if ((StringDoesHaveText (syn1)) && StringDoesHaveText (syn2)) {
+      if (StringICmp (syn1, syn2) == 0) {
+        redundantgenexref = TRUE;
+      }
+    }
+  }
+  if (redundantgenexref) {
+    MemSet ((Pointer) &dsd, 0, sizeof (DummySmfeData));
+    dsd.max = INT4_MAX;
+    dsd.num_at_max = 0;
+    dsd.equivalent_genes = FALSE;
+    dsd.grp_at_max = NULL;
+    count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_GENE, NULL, 0,
+                                             LOCATION_SUBSET, (Pointer) &dsd, DummySMFEProc);
+    if (dsd.num_at_max > 1) {
+      redundantgenexref = FALSE;
+    }
+  }
+  return redundantgenexref;
+}
+
+
+static void CheckCodingRegionAndProteinFeaturePartials (SeqFeatPtr cds, ValidStructPtr vsp)
+{
+  BioseqPtr protbsp;
+  SeqFeatPtr prot;
+  SeqMgrFeatContext context;
+  Boolean cds_partial5, cds_partial3, prot_partial5, prot_partial3;
+
+  if (cds == NULL || cds->data.choice != SEQFEAT_CDREGION || vsp == NULL) {
+    return;
+  }
+
+  protbsp = BioseqFindFromSeqLoc (cds->product);
+  if (protbsp == NULL) {
+    return;
+  }
+  prot = SeqMgrGetNextFeature (protbsp, NULL, 0, FEATDEF_PROT, &context);
+  if (prot == NULL) {
+    return;
+  }
+  CheckSeqLocForPartial (cds->location, &cds_partial5, &cds_partial3);
+  CheckSeqLocForPartial (prot->location, &prot_partial5, &prot_partial3);
+  if ((cds_partial5 && !prot_partial5) || (!cds_partial5 && prot_partial5)
+    || (cds_partial3 && !prot_partial3) || (!cds_partial3 && prot_partial3)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialsInconsistent, "Coding region and protein feature partials conflict");
+  }
+}
+
+
 NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
 {
   Int2            type, i, j;
-  static char    *parterr[2] = { "PartialProduct", "PartialLocation" };
   static char    *parterrs[4] = {
     "Start does not include first/last residue of sequence",
     "Stop does not include first/last residue of sequence",
@@ -21826,7 +23183,7 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
   SeqFeatPtr      sfpx = NULL, sfpy = NULL, prt;
   SeqFeatPtr      operon;
   Boolean         redundantgenexref;
-  SeqMgrFeatContext fcontext;
+  SeqMgrFeatContext fcontext, gcontext;
   CharPtr         syn1, syn2, label = NULL, genexref_label;
   Uint2           oldEntityID;
   Uint4           oldItemID;
@@ -21862,9 +23219,7 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
   Boolean         farFetchProd;
   Boolean         skip;
   Boolean         is_nc = FALSE;
-  Boolean         no_nonconsensus_except = TRUE;
   VariationRefPtr  vrfp;
-
 
   vsp = (ValidStructPtr) (gcp->userdata);
   sfp = (SeqFeatPtr) (gcp->thisitem);
@@ -21902,14 +23257,7 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
   partials[0] = SeqLocPartialCheckEx (sfp->product, farFetchProd);
   partials[1] = SeqLocPartialCheck (sfp->location);
 
-  if (sfp->excpt) {
-    if (StringISearch (sfp->except_text, "nonconsensus splice site") != NULL ||
-        StringISearch (sfp->except_text, "heterogeneous population sequenced") != NULL ||
-        StringISearch (sfp->except_text, "low-quality sequence region") != NULL ||
-        StringISearch (sfp->except_text, "artificial location") != NULL) {
-      no_nonconsensus_except = FALSE;
-    }
-  }
+  CheckCodingRegionAndProteinFeaturePartials (sfp, vsp);
 
   if ((partials[0] != SLP_COMPLETE) || (partials[1] != SLP_COMPLETE) || (sfp->partial)) {       /* partialness */
     /* a feature on a partial sequence should be partial -- if often isn't */
@@ -21919,11 +23267,7 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
     /* a partial feature, with complete location, but partial product */
     else if ((sfp->partial) && (sfp->product != NULL) && (partials[1] == SLP_COMPLETE) && (sfp->product->choice == SEQLOC_WHOLE)
              && (partials[0] != SLP_COMPLETE)) {
-      if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-        /* skip in gpipe genomic */
-      } else {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem, "When SeqFeat.product is a partial Bioseq, SeqFeat.location should also be partial");
-      }
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem, "When SeqFeat.product is a partial Bioseq, SeqFeat.location should also be partial");
     }
     /* gene on segmented set is now 'order', should also be partial */
     else if (type == SEQFEAT_GENE && sfp->product == NULL && partials[1] == SLP_INTERNAL) {
@@ -21959,8 +23303,6 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
         tmp = StringMove (tmp, "FALSE");
       if (bsp == NULL && LocationIsFar (sfp->product) && NoFetchFunctions ()) {
         vsp->far_fetch_failure = TRUE;
-      } else if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-        /* ignore inconsistent partial warnings in genomic gpipe sequence */
       } else {
         ValidErr (vsp, sev, ERR_SEQ_FEAT_PartialsInconsistent, buf);
       }
@@ -21984,11 +23326,7 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
         tmp = StringMove (tmp, "TRUE");
       else
         tmp = StringMove (tmp, "FALSE");
-      if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-        /* ignore inconsistent partial warnings in genomic gpipe sequence */
-      } else {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialsInconsistent, buf);
-      }
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialsInconsistent, buf);
     }
     /* 5' or 3' partial location giving unclassified partial product */
     else if (((partials [1] & SLP_START) != 0 || ((partials [1] & SLP_STOP) != 0)) && ((partials [0] & SLP_OTHER) != 0) && sfp->partial) {
@@ -21996,40 +23334,67 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
     }
 
     /* may have other error bits set as well */
-    for (i = 0; i < 2; i++) {
-      errtype = SLP_NOSTART;
-      for (j = 0; j < 4; j++) {
-        bypassGeneTest = FALSE;
-        if (partials[i] & errtype) {
-          if (i == 1 && j < 2 && IsCddFeat (sfp)) {
+
+    /* PartialProduct */
+    errtype = SLP_NOSTART;
+    for (j = 0; j < 4; j++) {
+      bypassGeneTest = FALSE;
+      if (partials[0] & errtype) {
+        if (sfp->data.choice == SEQFEAT_CDREGION && sfp->excpt &&
+                   StringStr (sfp->except_text, "rearrangement required for product") != NULL) {
+        } else if (sfp->data.choice == SEQFEAT_CDREGION && j == 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+                "PartialProduct: 5' partial is not at start AND is not at consensus splice site");
+        } else if (sfp->data.choice == SEQFEAT_CDREGION && j == 1) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+                "PartialProduct: 3' partial is not at stop AND is not at consensus splice site");
+        } else {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+            "PartialProduct: %s", parterrs[j]);
+        }
+      }
+      errtype <<= 1;
+    }
+
+    /* PartialLocation */
+    errtype = SLP_NOSTART;
+    for (j = 0; j < 4; j++) {
+      bypassGeneTest = FALSE;
+      if (partials[1] & errtype) {
+        if (j == 3) {
+          if (LocationIsFar (sfp->location) && NoFetchFunctions ()) {
+            vsp->far_fetch_failure = TRUE;
+          } else if (sfp->data.choice == SEQFEAT_CDREGION && sfp->excpt &&
+                     StringStr (sfp->except_text, "rearrangement required for product") != NULL) {
+          } else {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+              "PartialLocation: Improper use of partial (greater than or less than)");
+          }
+        } else if (j == 2) {
+          if (LocationIsFar (sfp->location) && NoFetchFunctions ()) {
+            vsp->far_fetch_failure = TRUE;
+          } else {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+              "PartialLocation: Internal partial intervals do not include first/last residue of sequence");
+          }
+        } else {
+          if (IsCddFeat (sfp)) {
             /* suppresses  warning */
-          } else if (i == 1 && j < 2 && sfp->data.choice == SEQFEAT_GENE && SameAsCDS (sfp, errtype, NULL)) {
-            /*
-            ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
-              "%s: %s",
-              parterr[i], parterrs[j]);
-            */
-          } else if (i == 1 && j < 2 && sfp->data.choice == SEQFEAT_GENE && SameAsMRNA (sfp, errtype)) {
-          } else if (i == 1 && j < 2 && sfp->idx.subtype == FEATDEF_mRNA && SameAsCDS (sfp, errtype, &bypassGeneTest)) {
-          } else if (i == 1 && j < 2 && sfp->idx.subtype == FEATDEF_mRNA && (! bypassGeneTest) && SameAsGene (sfp)) {
-
-          } else if (i == 1 && j < 2 && sfp->idx.subtype == FEATDEF_exon && SameAsMRNA (sfp, errtype)) {
-
+          } else if (sfp->data.choice == SEQFEAT_GENE && SameAsCDS (sfp, errtype, NULL)) {
+          } else if (sfp->data.choice == SEQFEAT_GENE && SameAsMRNA (sfp, errtype)) {
+          } else if (sfp->idx.subtype == FEATDEF_mRNA && SameAsCDS (sfp, errtype, &bypassGeneTest)) {
+          } else if (sfp->idx.subtype == FEATDEF_mRNA && (! bypassGeneTest) && SameAsGene (sfp)) {
+          } else if (sfp->idx.subtype == FEATDEF_exon && SameAsMRNA (sfp, errtype)) {
           } else if (LocationIsFar (sfp->location) && NoFetchFunctions ()) {
             vsp->far_fetch_failure = TRUE;
-
-          } else if (i == 1 && j < 2 && sfp->data.choice == SEQFEAT_CDREGION && SameAsMRNA (sfp, errtype) &&
+          } else if (sfp->data.choice == SEQFEAT_CDREGION && SameAsMRNA (sfp, errtype) &&
                      PartialAtSpliceSiteOrGap (vsp, sfp->location, errtype, &isgap, &badseq)) {
-          } else if (i == 1 && j < 2 && PartialAtSpliceSiteOrGap (vsp, sfp->location, errtype, &isgap, &badseq)) {
+          } else if (PartialAtSpliceSiteOrGap (vsp, sfp->location, errtype, &isgap, &badseq)) {
             if (! isgap) {
               if (sfp->idx.subtype != FEATDEF_CDS || SplicingNotExpected (sfp)) {
-                if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep && i == 1 && (j == 0 || j == 1 || j == 2)) {
-                  /* ignore in genomic gpipe sequence */
-                } else {
-                  ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
-                            "%s: %s (but is at consensus splice site)",
-                            parterr[i], parterrs[j]);
-                }
+                ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
+                            "PartialLocation: %s (but is at consensus splice site)",
+                            parterrs[j]);
               } else if (sfp->idx.subtype == FEATDEF_CDS) {
                 bsp = BioseqFindFromSeqLoc (sfp->location);
                 if (bsp != NULL) {
@@ -22039,71 +23404,41 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
                     if (mip != NULL) {
                       if (mip->biomol == MOLECULE_TYPE_MRNA) {
                         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
-                                  "%s: %s (but is at consensus splice site, but is on an mRNA that is already spliced)",
-                                  parterr[i], parterrs[j]);
+                                  "PartialLocation: %s (but is at consensus splice site, but is on an mRNA that is already spliced)",
+                                  parterrs[j]);
                       }
                     }
                   }
                 }
               }
             }
-          } else if (i == 1 && j < 2 && badseq) {
+          } else if (badseq) {
             ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
-              "%s: %s (and is at bad sequence)",
-              parterr[i], parterrs[j]);
+              "PartialLocation: %s (and is at bad sequence)",
+              parterrs[j]);
           } else if (sfp->data.choice == SEQFEAT_CDREGION && sfp->excpt &&
                      StringStr (sfp->except_text, "rearrangement required for product") != NULL) {
           } else if (sfp->data.choice == SEQFEAT_CDREGION && j == 0) {
-            if (no_nonconsensus_except) {
-              if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-                /* skip in gpipe genomic */
-              } else {
-                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
-                  "%s: %s", parterr[i], "5' partial is not at start AND"
-                  " is not at consensus splice site");
-              }
-            }
-          } else if (sfp->data.choice == SEQFEAT_CDREGION && j == 1) {
-            if (no_nonconsensus_except) {
-              if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-                /* skip in gpipe genomic */
-              } else {
-                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
-                  "%s: %s", parterr[i], "3' partial is not at stop AND"
-                  " is not at consensus splice site");
-              }
-            }
-          } else if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep && i == 1 && (j == 0 || j == 1 || j == 2)) {
-            /* ignore start/stop not at end in genomic gpipe sequence */
-          } else {
             ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
-              "%s: %s", parterr[i], parterrs[j]);
+                  "PartialLocation: 5' partial is not at start AND is not at consensus splice site");
+          } else if (sfp->data.choice == SEQFEAT_CDREGION && j == 1) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+                  "PartialLocation: 3' partial is not at stop AND is not at consensus splice site");
+          } else if (j == 0) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+              "PartialLocation: Start does not include first/last residue of sequence");
+          } else if (j == 1) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+              "PartialLocation: Stop does not include first/last residue of sequence");
           }
         }
-        errtype <<= 1;
       }
+      errtype <<= 1;
     }
 
   }
 
   CheckForIllegalDbxref (vsp, gcp, sfp->dbxref);
-  /*
-  for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
-    id = -1;
-    db = vnp->data.ptrvalue;
-    if (db && db->db) {
-      for (i = 0; i < DBNUM; i++) {
-        if (StringCmp (db->db, dbtag[i]) == 0) {
-          id = i;
-          break;
-        }
-      }
-      if (id == -1 || (type != SEQFEAT_CDREGION && id < 4)) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", db->db);
-      }
-    }
-  }
-  */
 
   switch (type) {
   case 1:                      /* Gene-ref */
@@ -22209,6 +23544,17 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
           if (StringHasNoText (str)) continue;
           if (StringDoesHaveText (grp->locus) && StringCmp (grp->locus, str) == 0) {
             ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "gene synonym has same value as gene locus");
+          }
+        }
+      }
+      if (grp->syn != NULL) {
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+        for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          sfpx = SeqMgrGetFeatureByLabel (bsp, str, SEQFEAT_GENE, 0, NULL);
+          if (sfpx != NULL && sfpx != sfp) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IdenticalGeneSymbolAndSynonym, "gene synonym has same value (%s) as locus of another gene feature", str);
           }
         }
       }
@@ -22325,6 +23671,12 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
         i = SeqLocCompare (cbp->loc, sfp->location);
         if ((i != SLC_A_IN_B) && (i != SLC_A_EQ_B)) {
           ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_Range, "Code-break location not in coding region");
+        } else if (sfp->product != NULL) {
+          slp = dnaLoc_to_aaLoc (sfp, cbp->loc, TRUE, NULL, TRUE);
+          if (slp == NULL) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_Range, "Code-break location not in coding region - may be frame problem");
+          }
+          SeqLocFree (slp);
         }
         if (prevcbp != NULL) {
           i = SeqLocCompare (cbp->loc, prevcbp->loc);
@@ -23005,7 +24357,7 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
       dsd.grp_at_max = NULL;
       count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_GENE, NULL, 0,
                                                LOCATION_SUBSET, (Pointer) &dsd, DummySMFEProc);
-      if (dsd.num_at_max > 1) {
+      if (dsd.num_at_max > 1 && sfp->idx.subtype != FEATDEF_repeat_region && sfp->idx.subtype != FEATDEF_mobile_element) {
         if (dsd.equivalent_genes) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GeneXrefNeeded,
                     "Feature overlapped by %d identical-length equivalent genes but has no cross-reference", (int) dsd.num_at_max);
@@ -23062,14 +24414,28 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
       }
     }
 
-    sfpx = SeqMgrGetOverlappingGene (sfp->location, &fcontext);
+    sfpx = NULL;
+    if (SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &fcontext) == sfp) {
+      if (fcontext.bad_order || fcontext.mixed_strand) {
+        sfpx = SeqMgrGetOverlappingFeatureEx (sfp->location, FEATDEF_GENE, NULL, 0, NULL, LOCATION_SUBSET, &gcontext, TRUE);
+      } else if (vsp->has_multi_int_genes) {
+        sfpx = SeqMgrGetOverlappingFeatureEx (sfp->location, FEATDEF_GENE, NULL, 0, NULL, LOCATION_SUBSET, &gcontext, TRUE);
+        if (sfpx == NULL && (vsp->has_seg_bioseqs || vsp->is_embl_ddbj_in_sep || vsp->is_old_gb_in_sep)) {
+          sfpx = SeqMgrGetOverlappingGene (sfp->location, &gcontext);
+        }
+      } else {
+        sfpx = SeqMgrGetOverlappingGene (sfp->location, &gcontext);
+      }
+    } else {
+      sfpx = SeqMgrGetOverlappingGene (sfp->location, &gcontext);
+    }
     if (sfpx == NULL || sfpx->data.choice != SEQFEAT_GENE)
       return;
     grpx = (GeneRefPtr) sfpx->data.value.ptrvalue;
     if (grpx == NULL)
       return;
     redundantgenexref = FALSE;
-    label = fcontext.label;
+    label = gcontext.label;
     if (StringDoesHaveText (grp->locus_tag) && StringDoesHaveText (grp->locus_tag)) {
       if (StringICmp (grp->locus_tag, grpx->locus_tag) == 0) {
         redundantgenexref = TRUE;
@@ -23356,22 +24722,14 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
           has_errors = TRUE;
           other_than_mismatch = TRUE;
           if (report_errors || rna_editing) {
-            if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-              /* suppress if gpipe genomic */
-            } else {
-              ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail is 100%s polyA", (long) mlen, farstr, (long) plen, "%");
-            }
+            ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail is 100%s polyA", (long) mlen, farstr, (long) plen, "%");
           }
           plen = mlen; /* if it passes polyA test, allow base-by-base comparison on common length */
         } else {
           has_errors = TRUE;
           other_than_mismatch = TRUE;
           if (report_errors || rna_editing) {
-            if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-              /* suppress if gpipe genomic */
-            } else {
-              ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail >= 95%s polyA", (long) mlen, farstr, (long) plen, "%");
-            }
+            ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail >= 95%s polyA", (long) mlen, farstr, (long) plen, "%");
           }
           plen = mlen; /* if it passes polyA test, allow base-by-base comparison on common length */
         }
@@ -23407,14 +24765,6 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     MemFree (pdseq);
   }
 
-erret:
-
-  MemFree (mrseq);
-
-  if (unlockProd) {
-    BioseqUnlock (bsp);
-  }
-
   if (! report_errors) {
     if (! has_errors) {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UnnecessaryException, "mRNA has exception but passes transcription test");
@@ -23428,6 +24778,15 @@ erret:
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UnqualifiedException, "mRNA has unqualified transcribed product replaced exception");
     }
   }
+
+erret:
+
+  MemFree (mrseq);
+
+  if (unlockProd) {
+    BioseqUnlock (bsp);
+  }
+
 }
 
 /*****************************************************************************
@@ -23605,6 +24964,12 @@ static void ValidateTranslExcept (
   MemFree (protseq);
 }
 
+typedef struct cdsmismatch {
+  Int4 pos;
+  Int2 cds_residue;
+  Int2 prot_residue;
+} CDSMismatchData, PNTR CDSMismatchPtr;
+
 NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
 
 {
@@ -23618,6 +24983,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   CdRegionPtr     crp;
   SeqIdPtr        protid = NULL;
   Int2            residue1, residue2, stop_count = 0, mismatch = 0, ragged = 0;
+  CDSMismatchData mismatches[11];
   Boolean         got_stop = FALSE;
   /*
   SeqPortPtr      spp = NULL;
@@ -23638,7 +25004,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   Boolean         partial5 = FALSE;
   Boolean         partial3 = FALSE;
   Boolean         rna_editing = FALSE;
-  CharPtr         nuclocstr, farstr = "";
+  CharPtr         nuclocstr, farstr = "", loc2str;
   CodeBreakPtr    cbp;
   Int4            pos1, pos2, pos;
   SeqLocPtr       tmp;
@@ -23803,12 +25169,6 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
       prot1len = prot1seq->length;
   }
 
-  if (annotated_by_transcript_or_proteomic) {
-    if (1.2 * prot2len < prot1len) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_TransLen, "Protein product length [%ld] is more than 120%% of the %stranslation length [%ld]", prot1len, farstr, prot2len);
-    }
-  }
-
   if (alt_start && gccode == 1) {
     /* sev = SEV_WARNING; */
     sev = SEV_NONE; /* only enable for RefSeq, leave old code in for now */
@@ -23969,6 +25329,12 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     }
   }
 
+  if (annotated_by_transcript_or_proteomic) {
+    if (1.2 * prot2len < prot1len) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_TransLen, "Protein product length [%ld] is more than 120%% of the %stranslation length [%ld]", prot1len, farstr, prot2len);
+    }
+  }
+
   /*
   prot2len = BSLen (newprot);
   len = prot2len;
@@ -23995,15 +25361,9 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         sev = SEV_WARNING;
       }
       if (report_errors || unclassified_except) {
-        if (! unclassified_except) {
-          ValidErr (vsp, sev, ERR_SEQ_FEAT_StartCodon,
-                    "Illegal start codon (and %ld internal stops). Probably wrong genetic code [%d]", (long) stop_count, gccode);
-        }
-        if (unclassified_except && vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-          /* suppress if gpipe genomic */
-        } else {
-          ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops (and illegal start codon). Genetic code [%d]", (long) stop_count, gccode);
-        }
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_StartCodon,
+                  "Illegal start codon (and %ld internal stops). Probably wrong genetic code [%d]", (long) stop_count, gccode);
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops (and illegal start codon). Genetic code [%d]", (long) stop_count, gccode);
       }
     } else if (got_x) {
       has_errors = TRUE;
@@ -24013,15 +25373,9 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         sev = SEV_WARNING;
       }
       if (report_errors || unclassified_except) {
-        if (! unclassified_except) {
-          ValidErr (vsp, sev, ERR_SEQ_FEAT_StartCodon,
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_StartCodon,
                     "Ambiguous start codon (and %ld internal stops). Possibly wrong genetic code [%d]", (long) stop_count, gccode);
-        }
-        if (unclassified_except && vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-          /* suppress if gpipe genomic */
-        } else {
-          ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops (and ambiguous start codon). Genetic code [%d]", (long) stop_count, gccode);
-        }
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops (and ambiguous start codon). Genetic code [%d]", (long) stop_count, gccode);
       }
     } else {
       has_errors = TRUE;
@@ -24057,11 +25411,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
             sev = SEV_REJECT;
           }
         }
-        if (unclassified_except && vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-          /* suppress if gpipe genomic */
-        } else {
-          ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops. Genetic code [%d]", (long) stop_count, gccode);
-        }
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops. Genetic code [%d]", (long) stop_count, gccode);
       }
     }
     prot_ok = FALSE;
@@ -24070,13 +25420,13 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   } else if (got_dash) {
     has_errors = TRUE;
     other_than_mismatch = TRUE;
-    if (report_errors && ! unclassified_except) {
+    if (report_errors) {
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Illegal start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
     }
   } else if (got_x && (! partial5)) {
     has_errors = TRUE;
     other_than_mismatch = TRUE;
-    if (report_errors && ! unclassified_except) {
+    if (report_errors) {
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Ambiguous start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
     }
   }
@@ -24205,12 +25555,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
             sev = SEV_WARNING;
           }
         }
-        if (mismatch == 10) {
-          has_errors = TRUE;
-          if (report_errors && (! mismatch_except)) {
-            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_MisMatchAA, "More than 10 mismatches. Genetic code [%d]", gccode);
-          }
-        } else if (i == 0) {
+        if (i == 0) {
           if ((sfp->partial) && (!no_beg) && (!no_end)) { /* ok, it's partial */
             has_errors = TRUE;
             other_than_mismatch = TRUE;
@@ -24222,9 +25567,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
             other_than_mismatch = TRUE;
             if (report_errors) {
               if (! got_dash) {
-                if (! unclassified_except){
-                  ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Illegal start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
-                }
+                ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Illegal start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
               }
             }
           } else if (residue1 == 'X') {
@@ -24232,51 +25575,63 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
             other_than_mismatch = TRUE;
             if (report_errors) {
               if (! got_x) {
-                if (! unclassified_except){
-                  ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Ambiguous start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
-                }
+                ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Ambiguous start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
               }
             }
           } else {
-            nuclocstr = MapToNTCoords (sfp, protid, i);
-            if (nuclocstr != NULL) {
-              has_errors = TRUE;
-              if (report_errors && (! mismatch_except)) {
-                ValidErr (vsp, sev, ERR_SEQ_FEAT_MisMatchAA,
-                          "%sResidue %ld in protein [%c] != translation [%c] at %s", farstr, (long) (i + 1), (char) residue2, (char) residue1, nuclocstr);
-              }
-            } else {
-              has_errors = TRUE;
-              if (report_errors && (! mismatch_except)) {
-                ValidErr (vsp, sev, ERR_SEQ_FEAT_MisMatchAA,
-                          "%sResidue %ld in protein [%c] != translation [%c]", farstr, (long) (i + 1), (char) residue2, (char) residue1);
-              }
-            }
-            MemFree (nuclocstr);
-          }
-        } else if (mismatch < 10) {
-          nuclocstr = MapToNTCoords (sfp, protid, i);
-          if (nuclocstr != NULL) {
             has_errors = TRUE;
-            if (report_errors && (! mismatch_except)) {
-              ValidErr (vsp, sev, ERR_SEQ_FEAT_MisMatchAA,
-                        "%sResidue %ld in protein [%c] != translation [%c] at %s", farstr, (long) (i + 1), (char) residue2, (char) residue1, nuclocstr);
-            }
+            mismatches[mismatch].pos = i;
+            mismatches[mismatch].cds_residue = residue1;
+            mismatches[mismatch].prot_residue = residue2;
+            mismatch++;
+          }
+        } else {
+          has_errors = TRUE;
+          if (mismatch >= 10) {
+            mismatches[10].pos = i;
+            mismatches[10].cds_residue = residue1;
+            mismatches[10].prot_residue = residue2;
           } else {
-            has_errors = TRUE;
-            if (report_errors && (! mismatch_except)) {
-              ValidErr (vsp, sev, ERR_SEQ_FEAT_MisMatchAA,
-                        "%sResidue %ld in protein [%c] != translation [%c]", farstr, (long) (i + 1), (char) residue2, (char) residue1);
-            }
+            mismatches[mismatch].pos = i;
+            mismatches[mismatch].cds_residue = residue1;
+            mismatches[mismatch].prot_residue = residue2;
           }
-          MemFree (nuclocstr);
+          mismatch++;
         }
-        mismatch++;
       }
     }
-    /*
-    spp = SeqPortFree (spp);
-    */
+
+    if (report_errors && !mismatch_except) {
+      if (mismatch > 10) {
+        if (report_errors && !mismatch_except) {
+          nuclocstr = MapToNTCoords (sfp, protid, mismatches[0].pos);
+          loc2str = MapToNTCoords (sfp, protid, mismatches[10].pos);
+          ValidErr (vsp, sev, ERR_SEQ_FEAT_MisMatchAA,
+            "%d mismatches found.  First mismatch at %ld, residue in protein [%c] != translation [%c]%s%s.  Last mismatch at %ld, residue in protein [%c] != translation [%c]%s%s.  Genetic code [%d]",
+            mismatch, 
+            (long) (mismatches[0].pos + 1), mismatches[0].prot_residue, mismatches[0].cds_residue, 
+            nuclocstr == NULL ? "" : " at ", nuclocstr == NULL ? "" : nuclocstr,
+            (long) (mismatches[10].pos + 1), mismatches[10].prot_residue, mismatches[10].cds_residue, 
+            loc2str == NULL ? "" : " at ", loc2str == NULL ? "" : loc2str,
+            gccode);
+          nuclocstr = MemFree (nuclocstr);
+          loc2str = MemFree (loc2str);
+        }
+      } else {
+        for (i = 0; i < mismatch; i++) {
+          nuclocstr = MapToNTCoords (sfp, protid, mismatches[i].pos);
+          ValidErr (vsp, sev, ERR_SEQ_FEAT_MisMatchAA,
+                    "%sResidue %ld in protein [%c] != translation [%c]%s%s", farstr, 
+                      (long) (mismatches[i].pos + 1), 
+                      (char) mismatches[i].prot_residue, 
+                      (char) mismatches[i].cds_residue,
+                      nuclocstr == NULL ? "" : " at ",
+                      nuclocstr == NULL ? "" : nuclocstr);
+          nuclocstr = MemFree (nuclocstr);
+        }
+      }
+    }
+
   } else {
     has_errors = TRUE;
     other_than_mismatch = TRUE;
@@ -24291,21 +25646,13 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         has_errors = TRUE;
         other_than_mismatch = TRUE;
         if (report_errors) {
-          if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-            /* suppress if gpipe genomic */
-          } else {
-            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "End of location should probably be partial");
-          }
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "End of location should probably be partial");
         }
       } else {
         has_errors = TRUE;
         other_than_mismatch = TRUE;
         if (report_errors) {
-          if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-            /* suppress if gpipe genomic */
-          } else {
-            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "This SeqFeat should not be partial");
-          }
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "This SeqFeat should not be partial");
         }
       }
       show_stop = FALSE;
@@ -24390,6 +25737,55 @@ erret:
   }
 }
 
+
+static void mRNAMatchesCompleteCDSEnd (SeqFeatPtr mrna, BoolPtr p5, BoolPtr p3)
+{
+  Boolean partial5, partial3;
+  SeqFeatPtr cds;
+  Uint2 strand;
+
+  if (p5 != NULL) {
+    *p5 = FALSE;
+  } 
+  if (p3 != NULL) {
+    *p3 = FALSE;
+  }
+
+  cds = GetCDSformRNA (mrna);
+
+  if (mrna == NULL || cds == NULL) {
+    return;
+  }
+
+  strand = SeqLocStrand (mrna->location);
+
+  CheckSeqLocForPartial (cds->location, &partial5, &partial3);
+  if (p5 != NULL && !partial5) {
+    if (strand == Seq_strand_minus) {
+      if (SeqLocStop (cds->location) == SeqLocStop (mrna->location)) {
+        *p5 = TRUE;
+      }
+    } else {
+      if (SeqLocStart (cds->location) == SeqLocStart (mrna->location)) {
+        *p5 = TRUE;
+      }
+    }
+  }
+   
+  if (p3 != NULL && !partial3) {
+    if (strand == Seq_strand_minus) {
+      if (SeqLocStart (cds->location) == SeqLocStart (mrna->location)) {
+        *p3 = TRUE;
+      }
+    } else {
+      if (SeqLocStop (cds->location) == SeqLocStop (mrna->location)) {
+        *p3 = TRUE;
+      }
+    }
+  }
+}
+
+
 /*****************************************************************************
 *
 *   SpliceCheck(sfp)
@@ -24407,7 +25803,7 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
   /*
   SeqPortPtr      spp = NULL;
   */
-  SeqIdPtr        last_sip = NULL, sip, id;
+  SeqIdPtr        last_sip = NULL, sip;
   Int2            total, ctr;
   BioseqPtr       bsp = NULL;
   Int4            strt, stp, len = 0, donor, acceptor;
@@ -24417,16 +25813,14 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
                   report_errors = TRUE, checkExonDonor, checkExonAcceptor, pseudo;
   int             severity;
   Uint2           partialflag;
-  Boolean         gpsOrRefSeq = FALSE;
   SeqEntryPtr     sep;
-  BioseqSetPtr    bssp;
-  TextSeqIdPtr    tsip;
   StreamCache     sc;
   SeqInt          sint;
   ValNode         vn;
   SeqMgrFeatContext  context;
   SeqFeatPtr      mrna, gene;
   GeneRefPtr      grp;
+  Boolean         ignore_partial_mrna_5 = FALSE, ignore_partial_mrna_3 = FALSE;
 
   if (sfp == NULL)
     return;
@@ -24498,15 +25892,14 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
   firstPartial = FALSE;
   lastPartial = FALSE;
 
+  if (sfp->idx.subtype == FEATDEF_mRNA) {
+    mRNAMatchesCompleteCDSEnd (sfp, &ignore_partial_mrna_5, &ignore_partial_mrna_3);
+  }
+
+
   /* genomic product set or NT_ contig always relaxes to SEV_WARNING */
 
   sep = vsp->sep;
-  if (sep != NULL && IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
-      gpsOrRefSeq = TRUE;
-    }
-  }
 
   slp = SeqLocFindPart (head, slp, EQUIV_IS_ONE);
   while (slp != NULL) {
@@ -24520,31 +25913,7 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
     if (sip == NULL)
       break;
 
-    /* genomic product set or NT_ contig always relaxes to SEV_WARNING */
     bsp = BioseqFind (sip);
-    if (bsp != NULL) {
-      for (id = bsp->id; id != NULL; id = id->next) {
-        if (id->choice == SEQID_OTHER) {
-          tsip = (TextSeqIdPtr) id->data.ptrvalue;
-          if (tsip != NULL && tsip->accession != NULL) {
-            /*
-            if (StringNICmp (tsip->accession, "NT_", 3) == 0) {
-              gpsOrRefSeq = TRUE;
-            } else if (StringNICmp (tsip->accession, "NC_", 3) == 0) {
-              gpsOrRefSeq = TRUE;
-            } else if (StringNICmp (tsip->accession, "NG_", 3) == 0) {
-              gpsOrRefSeq = TRUE;
-            } else if (StringNICmp (tsip->accession, "NM_", 3) == 0) {
-              gpsOrRefSeq = TRUE;
-            } else if (StringNICmp (tsip->accession, "NR_", 3) == 0) {
-              gpsOrRefSeq = TRUE;
-            }
-            */
-            gpsOrRefSeq = TRUE;
-          }
-        }
-      }
-    }
 
     if ((ctr == 1) || (!SeqIdMatch (sip, last_sip))) {
       /* spp = SeqPortFree (spp); */
@@ -24639,7 +26008,11 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
       }
     }
 
-    if (((checkExonDonor && (!lastPartial)) || ctr < total) && (stp < (len - 2))) {   /* check donor on all but last exon and on sequence */
+    if (((checkExonDonor && (!lastPartial)) 
+         || ctr < total 
+         || (ctr == total && lastPartial && (sfp->idx.subtype != FEATDEF_mRNA || !ignore_partial_mrna_3))) 
+        && (stp < (len - 2))) 
+    {   /* check donor on all but last exon and on sequence */
       tbuf[0] = '\0';
       StreamCacheSetPosition (&sc, stp + 1);
       residue1 = StreamCacheGetResidue (&sc);
@@ -24672,11 +26045,7 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
               }
             }
           } else {
-            if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-              severity = SEV_INFO;
-            } else if (gpsOrRefSeq) {
-              severity = SEV_WARNING;
-            } else if (checkExonDonor) {
+            if (checkExonDonor) {
               severity = SEV_WARNING;
             } else if (reportAsError) {
               severity = SEV_ERROR;
@@ -24708,7 +26077,11 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
       }
     }
 
-    if (((checkExonAcceptor && (!firstPartial)) || ctr != 1) && (strt > 1)) {
+    if (((checkExonAcceptor && (!firstPartial))
+         || ctr != 1 
+         || (ctr == 1 && firstPartial && (sfp->idx.subtype != FEATDEF_mRNA || !ignore_partial_mrna_5))) 
+        && (strt > 1)) 
+    {
       StreamCacheSetPosition (&sc, strt - 2);
       residue1 = StreamCacheGetResidue (&sc);
       residue2 = StreamCacheGetResidue (&sc);
@@ -24722,11 +26095,7 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
         has_errors = TRUE;
       } else if (IS_residue (residue1) && IS_residue (residue2)) {
         if (residue1 != 'A' || residue2 != 'G') {
-          if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
-            severity = SEV_INFO;
-          } else if (gpsOrRefSeq) {
-            severity = SEV_WARNING;
-          } else if (checkExonAcceptor) {
+          if (checkExonAcceptor) {
             severity = SEV_WARNING;
           } else if (reportAsError) {
             severity = SEV_ERROR;
@@ -24876,6 +26245,7 @@ NLM_EXTERN void ValidateSeqLoc (ValidStructPtr vsp, SeqLocPtr slp, CharPtr prefi
   Uint1           strand2 = 0, strand1;
   ErrSev          sev, oldsev;
   SeqIntPtr       sip1, sip2, prevsip;
+  SeqBondPtr      sbp;
   SeqPntPtr       spp;
   PackSeqPntPtr   pspp;
   SeqIdPtr        id1 = NULL, id2 = NULL;
@@ -24979,6 +26349,21 @@ NLM_EXTERN void ValidateSeqLoc (ValidStructPtr vsp, SeqLocPtr slp, CharPtr prefi
       tmpval = PackSeqPntCheck (pspp);
       prevsip = NULL;
       break;
+    case SEQLOC_BOND:
+      sbp = (SeqBondPtr) tmp->data.ptrvalue;
+      if (sbp != NULL) {
+        spp = (SeqPntPtr) sbp->a;
+        if (spp != NULL) {
+          tmpval = SeqPntCheck (spp);
+        }
+        /* if already failed, no need to check second point */
+        if (tmpval) {
+          spp = (SeqPntPtr) sbp->b;
+          if (spp != NULL) {
+            tmpval = SeqPntCheck (spp);
+          }
+        }
+      }
     case SEQLOC_NULL:
       break;
     default:

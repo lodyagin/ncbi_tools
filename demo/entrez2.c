@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.33 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
@@ -61,7 +61,7 @@
 
 #include <entrez2.h>
 
-#define ENTREZ_APP_VERSION "11.0"
+#define ENTREZ_APP_VERSION "11.2"
 
 #define MAX_QUERY_FORMS 256
 
@@ -864,6 +864,7 @@ Int2 Main (void)
   time_t   starttime = 0;
   time_t   stoptime = 0;
   Char     str [64];
+  STimeout timeout = { 0, 100000 };
   Boolean  useNormalServ = FALSE;
   Boolean  useTestServ = FALSE;
   Boolean  useURL = FALSE;
@@ -1060,6 +1061,8 @@ Int2 Main (void)
       Message (MSG_OK, "Internet connection attempt timed out, exiting");
       return 1;
     }
+    /* wait 0.1 seconds between attempts to avoid hogging machine */
+    SOCK_Poll (0, 0, &timeout, 0);
     NetTestCheckQueue (&bouncequeue);
   }
   QUERY_CloseQueue (&bouncequeue);

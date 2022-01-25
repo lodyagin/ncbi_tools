@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_http_connector.c,v 6.19 2010/01/27 06:49:45 kazimird Exp $
+/* $Id: test_ncbi_http_connector.c,v 6.20 2011/06/10 03:39:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -116,7 +116,7 @@ int main(void)
     /* SOCK_SetDataLoggingAPI(eOn); */
 
     /* Run the tests */
-    flags = fHCC_KeepHeader | fHCC_UrlCodec | fHCC_UrlEncodeArgs;
+    flags = fHTTP_KeepHeader | fHTTP_UrlCodec | fHTTP_UrlEncodeArgs;
     connector = HTTP_CreateConnector(0, user_header, flags);
     CONN_TestConnector(connector, &timeout, data_file, fTC_SingleBouncePrint);
 
@@ -124,11 +124,11 @@ int main(void)
     connector = HTTP_CreateConnector(0, user_header, flags);
     CONN_TestConnector(connector, &timeout, data_file, fTC_SingleBounceCheck);
 
-    flags = fHCC_AutoReconnect;
+    flags = fHTTP_AutoReconnect;
     connector = HTTP_CreateConnector(0, user_header, flags);
     CONN_TestConnector(connector, &timeout, data_file, fTC_Everything);
 
-    flags = fHCC_AutoReconnect | fHCC_UrlCodec;
+    flags = fHTTP_AutoReconnect | fHTTP_UrlCodec;
     connector = HTTP_CreateConnector(0, user_header, flags);
     CONN_TestConnector(connector, &timeout, data_file, fTC_Everything);
 

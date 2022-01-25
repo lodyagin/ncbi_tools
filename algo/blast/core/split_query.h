@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE__SPLIT_QUERY_H
 #define ALGO_BLAST_CORE__SPLIT_QUERY_H
 
-/*  $Id: split_query.h,v 1.4 2010/06/25 17:14:31 kazimird Exp $
+/*  $Id: split_query.h,v 1.5 2010/10/29 12:34:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -82,6 +82,13 @@ SSplitQueryBlk* SplitQueryBlkNew(Uint4 num_chunks, Boolean gapped_merge);
  */
 NCBI_XBLAST_EXPORT
 SSplitQueryBlk* SplitQueryBlkFree(SSplitQueryBlk* squery_blk);
+
+/** Determines whether HSPs on different diagnonals may be merged
+ * @param squery_blk split query block structure [in]
+ * @return TRUE if possible, FALSE otherwise
+ */
+NCBI_XBLAST_EXPORT
+Boolean SplitQueryBlk_AllowGap(SSplitQueryBlk* squery_blk);
 
 /** Set the query chunk's bounds with respect to the full sized concatenated 
  * query 

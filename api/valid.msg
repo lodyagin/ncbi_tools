@@ -243,6 +243,10 @@ This sequence contains long stretches of Ns.
 $^   HighNContentPercent, 69
 This sequence contains a high percentage of Ns.
 
+$^   BadSegmentedSeq, 70
+Segmented sequences should have gap or virtual in between real components.
+
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -510,6 +514,21 @@ Viral lineage information conflicts with MolInfo.
 $^   MissingKeyword, 76
 Expected keyword was not found.
 
+$^   FakeStructuredComment, 77
+Comment descriptor may have been formatted to look like structured comment.
+
+$^   StructuredCommentPrefixOrSuffixMissing, 78
+Structured comments should have a prefix or suffix.
+
+$^   LatLonWater, 79
+The lat_lon coordinate map in a body of water.
+
+$^   LatLonOffshore, 80
+The lat_lon coordinate is probably in a minor or unnamed body of water.
+
+$^   MissingPersonalCollectionName, 81
+The personal collection does not indicate the name of the collector.
+
 
 $$ GENERIC, 3
 
@@ -655,6 +674,13 @@ pop/phy/mut/eco set.
 
 $^   SingleItemSet, 27
 Only a single Bioseq was found in this BioseqSet. Is that what was intended?
+
+$^   MisplacedMolInfo, 28
+Mol-info should not be on a pop/phy/mut/eco/wgs/genbank/genprod set.
+
+$^   ImproperlyNestedSets, 29
+A pop/phy/mut/eco/wgs set has an unexpected internal set other than nuc-prot,
+seg-set, or parts set.
 
 
 $$ SEQ_FEAT, 5
@@ -1333,6 +1359,20 @@ The CDS is not contained within the cross-referenced mRNA.
 
 $^ LocusCollidesWithLocusTag, 176
 A gene locus is identical with a gene locus_tag.
+
+$^   IdenticalGeneSymbolAndSynonym, 177
+The gene synonym is the same as the locus of a different gene.
+
+$^   NeedsNote, 178
+A misc_feature requires a note.
+
+$^ RptUnitRangeProblem, 179
+The value of the rpt_unit_range qualifier is not inside the parent feature location.
+
+$^ TooManyInferenceAccessions, 180
+There are too many inference qualifier accessions to have their versions verified by
+network access.
+
 
 $$ SEQ_ALIGN, 6
 

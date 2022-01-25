@@ -2,7 +2,7 @@
 #define API_ACEREAD__H
 
 /*
- * $Id: aceread.h,v 1.13 2010/03/03 18:46:08 bollin Exp $
+ * $Id: aceread.h,v 1.14 2010/08/30 12:39:23 bollin Exp $
  *
  * ===========================================================================
  *
@@ -69,8 +69,8 @@ typedef struct gapinfo {
 
 extern TGapInfoPtr GapInfoNew (void);
 extern void GapInfoFree (TGapInfoPtr g);
-extern TGapInfoPtr GapInfoFromSequenceString (char *seq_str, char *gap_chars);
-extern void RemoveGapCharsFromSequenceString (char *seq_str, char *gap_chars);
+extern TGapInfoPtr GapInfoFromSequenceString (char *seq_str, char gap_char);
+extern void RemoveGapCharsFromSequenceString (char *seq_str, char gap_char);
 extern int SeqPosFromTilingPos (int tiling_pos, TGapInfoPtr gap_info);
 extern int TilingPosFromSeqPos (int seq_pos, TGapInfoPtr gap_info);
 
@@ -291,6 +291,9 @@ ProcessLargeACEFileForContigFastaAndQualScores
  * ==========================================================================
  *
  * $Log: aceread.h,v $
+ * Revision 1.14  2010/08/30 12:39:23  bollin
+ * Performance improvements for aceread_tst
+ *
  * Revision 1.13  2010/03/03 18:46:08  bollin
  * use unsigned int to keep track of the number of contigs.
  *

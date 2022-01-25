@@ -1,4 +1,4 @@
-/* $Id: blast_diagnostics.c,v 1.9 2006/01/23 16:28:06 papadopo Exp $
+/* $Id: blast_diagnostics.c,v 1.10 2011/06/13 18:24:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_diagnostics.c,v 1.9 2006/01/23 16:28:06 papadopo Exp $";
+    "$Id: blast_diagnostics.c,v 1.10 2011/06/13 18:24:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_diagnostics.h>
@@ -51,6 +51,34 @@ BlastDiagnostics* Blast_DiagnosticsFree(BlastDiagnostics* diagnostics)
       sfree(diagnostics);
    }
    return NULL;
+}
+
+BlastDiagnostics* Blast_DiagnosticsCopy(const BlastDiagnostics* diagnostics)
+{
+    BlastDiagnostics* retval = NULL;
+    if (diagnostics == NULL) {
+        return retval;
+    }
+    retval = Blast_DiagnosticsInit();
+    if (diagnostics->ungapped_stat) {
+        memcpy((void*)retval->ungapped_stat, (void*)diagnostics->ungapped_stat,
+               sizeof(*retval->ungapped_stat));
+    } else {
+      sfree(diagnostics->ungapped_stat);
+    }
+    if (diagnostics->gapped_stat) {
+        memcpy((void*)retval->gapped_stat, (void*)diagnostics->gapped_stat,
+               sizeof(*retval->gapped_stat));
+    } else {
+      sfree(diagnostics->gapped_stat);
+    }
+    if (diagnostics->cutoffs) {
+        memcpy((void*)retval->cutoffs, (void*)diagnostics->cutoffs,
+               sizeof(*retval->cutoffs));
+    } else {
+      sfree(diagnostics->cutoffs);
+    }
+    return retval;
 }
 
 BlastDiagnostics* Blast_DiagnosticsInit() 

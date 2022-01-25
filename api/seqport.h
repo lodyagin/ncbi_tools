@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.62 $
+* $Revision: 6.64 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -172,6 +172,7 @@ NLM_EXTERN Boolean LIBCALL SeqPortSetUpAlphabet PROTO((SeqPortPtr spp, Uint1 cur
 *   SeqPortStream (bsp, flags, userdata, proc)
 *   SeqPortStreamInt (bsp, start, stop, strand, flags, userdata, proc)
 *   SeqPortStreamLoc (slp, flags, userdata, proc)
+*   SeqPortStreamLit (lit, flags, userdata, proc)
 *       Efficient functions to stream through sequence
 *
 ********************************************************************************/
@@ -198,6 +199,8 @@ typedef unsigned long StreamFlgType;
 
 #define STREAM_HTML_SPANS     256 /* show span tags at begining of each line */
 
+#define STREAM_ALL_FASTA_IDS  512 /* in FASTA streamer, show all Seq-ids */
+
 NLM_EXTERN Int4 SeqPortStream (
   BioseqPtr bsp,
   StreamFlgType flags,
@@ -217,6 +220,13 @@ NLM_EXTERN Int4 SeqPortStreamInt (
 
 NLM_EXTERN Int4 SeqPortStreamLoc (
   SeqLocPtr slp,
+  StreamFlgType flags,
+  Pointer userdata,
+  SeqPortStreamProc proc
+);
+
+NLM_EXTERN Int4 SeqPortStreamLit (
+  SeqLitPtr lit,
   StreamFlgType flags,
   Pointer userdata,
   SeqPortStreamProc proc

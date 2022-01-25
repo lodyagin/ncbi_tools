@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_multiseq.c,v 1.27 2007/05/16 18:11:11 camacho Exp $
+/*  $Id: seqsrc_multiseq.c,v 1.28 2011/05/26 20:59:45 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.27 2007/05/16 18:11:11 camacho Exp $";
+static char const rcsid[] = "$Id: seqsrc_multiseq.c,v 1.28 2011/05/26 20:59:45 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/seqsrc_multiseq.h>
@@ -231,14 +231,12 @@ s_MultiSeqGetIsProt(void* multiseq_handle, void* ignoreme)
  * @return return codes defined in blast_seqsrc.h
  */
 static Int2 
-s_MultiSeqGetSequence(void* multiseq_handle, void* args)
+s_MultiSeqGetSequence(void* multiseq_handle, BlastSeqSrcGetSeqArg* seq_args)
 {
     MultiSeqInfo* seq_info = (MultiSeqInfo*) multiseq_handle;
-    BlastSeqSrcGetSeqArg* seq_args = (BlastSeqSrcGetSeqArg*) args;
     Int4 index;
 
     ASSERT(seq_info);
-    ASSERT(args);
 
     if (seq_info->num_seqs == 0 || !seq_args)
         return BLAST_SEQSRC_ERROR;
@@ -267,9 +265,8 @@ s_MultiSeqGetSequence(void* multiseq_handle, void* args)
  * @param args Pointer to BlastSeqSrcGetSeqArg structure [in]
  */
 static void
-s_MultiSeqReleaseSequence(void* multiseq_handle, void* args)
+s_MultiSeqReleaseSequence(void* multiseq_handle, BlastSeqSrcGetSeqArg* seq_args)
 {
-    BlastSeqSrcGetSeqArg* seq_args = (BlastSeqSrcGetSeqArg*) args;
     ASSERT(seq_args);
     if (seq_args->seq->sequence_start_allocated)
        sfree(seq_args->seq->sequence_start);

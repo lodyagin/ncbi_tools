@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   	prototypes for portable string routines
@@ -112,6 +112,7 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringISearch PROTO((const char FAR *str, con
 NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText PROTO((const char FAR *str));
 NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringDoesHaveText PROTO((const char FAR *str));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TrimSpacesAroundString PROTO((Nlm_CharPtr str));
+NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_CompressSpaces PROTO((Nlm_CharPtr str));
 
 /* Printing 8-byte integer into platform-independent array of 8 bytes
    memory allocated for this storage */
@@ -352,6 +353,7 @@ NLM_EXTERN char * LIBCALL Nlm_StrLower PROTO((char *string));
 #define StringHasNoText Nlm_StringHasNoText
 #define StringDoesHaveText Nlm_StringDoesHaveText
 #define TrimSpacesAroundString Nlm_TrimSpacesAroundString
+#define CompressSpaces Nlm_CompressSpaces 
 
 #define LabelCopy Nlm_LabelCopy
 #define LabelCopyExtra Nlm_LabelCopyExtra

@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.114 2010/06/25 17:14:31 kazimird Exp $
+/* $Id: blast_hits.h,v 1.122 2011/05/31 16:09:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -425,8 +425,10 @@ Blast_HSPListSaveHSP(BlastHSPList* hsp_list, BlastHSP* hsp);
  * are set for each HSP.
  * @param query_info Auxiliary query information - needed only for effective
  *                   search space calculation if it is not provided [in]
+ * @param subject_length Subject length - needed for Spouge's new FSC [in]
  * @param hsp_list List of HSPs for one subject sequence [in] [out]
  * @param gapped_calculation Is this for a gapped or ungapped search? [in]
+ * @param RPS_prelim Is this for a RPS preliminary search? [in]
  * @param sbp Structure containing statistical information [in]
  * @param gap_decay_rate Adjustment parameter to compensate for the effects of
  * performing multiple tests when linking HSPs. No adjustment is made if 0. [in]
@@ -436,8 +438,10 @@ Blast_HSPListSaveHSP(BlastHSPList* hsp_list, BlastHSP* hsp);
  */
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPListGetEvalues(const BlastQueryInfo* query_info,
+                             Int4 subject_length,
                              BlastHSPList* hsp_list,
                              Boolean gapped_calculation, 
+                             Boolean RPS_prelim,
                              const BlastScoreBlk* sbp, double gap_decay_rate,
                              double scaling_factor);
 
@@ -475,6 +479,15 @@ void Blast_HSPListPHIGetBitScores(BlastHSPList* hsp_list, BlastScoreBlk* sbp);
 */
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPListReapByEvalue(BlastHSPList* hsp_list, 
+                               const BlastHitSavingOptions* hit_options);
+
+/** Discard the HSPs above the raw threshold from the HSP list 
+ * @param hsp_list List of HSPs for one subject sequence [in] [out]
+ * @param hit_options Options block containing the e-value cut-off [in]
+ * -RMH-
+ */
+NCBI_XBLAST_EXPORT
+Int2 Blast_HSPListReapByRawScore(BlastHSPList* hsp_list,
                                const BlastHitSavingOptions* hit_options);
 
 /** Cleans out the NULLed out HSP's from the HSP array that
@@ -777,6 +790,12 @@ PHIBlast_HSPResultsSplit(const BlastHSPResults* results,
 NCBI_XBLAST_EXPORT
 Int4
 PhiBlastGetEffectiveNumberOfPatterns(const BlastQueryInfo *query_info);
+
+/** Apply Cross_match like masklevel to HSP list.  -RMH-
+ */
+Int2 Blast_HSPResultsApplyMasklevel(BlastHSPResults *results,
+                                    const BlastQueryInfo *query_info,
+                                    Int4 masklevel, Int4 query_length);
 
 #ifdef __cplusplus
 }

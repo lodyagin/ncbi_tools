@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.388 $
+* $Revision: 6.410 $
 *
 * File Description: 
 *
@@ -390,6 +390,12 @@ extern Int2 AboutBoxHeight (void)
   return hgt;
 }
 
+static void DoNetConf (ButtoN b)
+
+{
+  NetConfigureProc ((IteM) b);
+}
+
 extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
                                BtnActnProc startFa2htgs,
                                BtnActnProc startPhrap,
@@ -452,14 +458,11 @@ extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
     d = HiddenGroup (k, 4, 0, ChangeDestination);
     RadioButton (d, "GenBank");
     RadioButton (d, "EMBL");
-    RadioButton (d, "DDBJ");
     if (GetAppParam ("SEQUIN", "PREFERENCES", "DATABASE", NULL, str, sizeof (str))) {
       if (StringICmp (str, "GenBank") == 0) {
         SetValue (d, 1);
       } else if (StringICmp (str, "EMBL") == 0) {
         SetValue (d, 2);
-      } else if (StringICmp (str, "DDBJ") == 0) {
-        SetValue (d, 3);
       } else {
         SetValue (d, 1);
       }
@@ -489,6 +492,9 @@ extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
     SetObjectExtra (b, sfp, NULL);
     if (fetchFromNet != NULL) {
       b = PushButton (c, "Download From Entrez", fetchFromNet);
+      SetObjectExtra (b, sfp, NULL);
+    } else {
+      b = PushButton (c, "Network Configure", DoNetConf);
       SetObjectExtra (b, sfp, NULL);
     }
     b = PushButton (c, "Show Help", showHelp);
@@ -805,6 +811,7 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
   FormatFormPtr  ffp;
   GrouP          g1, g2, g3;
   GrouP          h;
+  GrouP          wizards = NULL;
   PrompT         ppt;
   Char           str [32];
   WindoW         w;
@@ -835,6 +842,7 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
         allowGenomicPlusCDNA = TRUE;
       }
     }
+
 
     ppt = StaticPrompt (g1, "Submission type", 0, 0, programFont, 'l');
     ffp->package = HiddenGroup (g1, 2, 0, EnableOrDisableFormats);
@@ -881,7 +889,7 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
     b = PushButton (c, " Next Form >> ", goToNext);
     SetObjectExtra (b, ffp, NULL);
 
-    AlignObjects (ALIGN_LEFT, (HANDLE) g1, (HANDLE) g2, (HANDLE) g3, NULL);
+    AlignObjects (ALIGN_LEFT, (HANDLE) g1, (HANDLE) g2, (HANDLE) g3, (HANDLE) wizards, NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) h, (HANDLE) c, NULL);
 
     RealizeWindow (w);
@@ -8427,7 +8435,7 @@ static void ChangeStrandSmart (ButtoN b)
 }
 
 
-static Int2 CorrectRNAStrandednessForEntityID (Uint2 entityID, Boolean use_smart)
+NLM_EXTERN Int2 CorrectRNAStrandednessForEntityID (Uint2 entityID, Boolean use_smart)
 
 {
   SeqEntryPtr             sep;
@@ -11295,7 +11303,7 @@ static ValNodePtr FindCompleteDeletions (ValNodePtr item_list, Boolean do_all, V
   ValNodePtr       list = NULL, vnp;
   BioseqPtr        bsp = NULL;
   SeqLocPtr        delete_loc;
-  Int4             len, loc_left = -1, loc_right = -1;
+  Int4             loc_left = -1, loc_right = -1;
   
   vnp = item_list;
   while (vnp != NULL)
@@ -11988,7 +11996,7 @@ static Int2 LIBCALLBACK BarcodeToolMsgFunc (OMMsgStructPtr ommsp)
 static void RefreshBarcodeList (Pointer data)
 {
   BarcodeToolPtr vstp;
-  ValNodePtr pass_fail_list = NULL, vnp;
+  ValNodePtr pass_list = NULL;
   Int4       num_fail = 0, num_pass = 0;
   Char       msg[30];
 
@@ -11998,22 +12006,13 @@ static void RefreshBarcodeList (Pointer data)
   PointerToDialog (vstp->clickable_list, NULL);
   vstp->item_list = BarcodeTestResultsListFree (vstp->item_list);
 
-  vstp->item_list = GetBarcodeFailedAccessionList(vstp->top_sep, vstp->cfg);
+  vstp->item_list = GetBarcodePassFail(vstp->top_sep, vstp->cfg);
+  pass_list = BarcodeTestResultsExtractPass(&(vstp->item_list));
+  num_pass = ValNodeLen (pass_list);
+  pass_list = BarcodeTestResultsListFree (pass_list);
+  num_fail = ValNodeLen (vstp->item_list);
   PointerToDialog (vstp->clickable_list, vstp->item_list);  
 
-  pass_fail_list = GetBarcodePassFail (vstp->top_sep, vstp->cfg);
-  for (vnp = pass_fail_list; vnp != NULL; vnp = vnp->next) 
-  {
-    if (PassBarcodeTests(vnp->data.ptrvalue)) 
-    {
-      num_pass ++;
-    }
-    else
-    {
-      num_fail++;
-    }
-  }
-  pass_fail_list = BarcodeTestResultsListFree (pass_fail_list);
   sprintf (msg, "%d pass, %d fail", num_pass, num_fail);
   SetTitle (vstp->pass_fail_summary, msg);
 }
@@ -12248,24 +12247,24 @@ static void RemoveBarcodeKeywordsFromLowTrace (ButtoN b)
 {
   BarcodeToolPtr vstp;
   LogInfoPtr     lip;
-  ValNodePtr     object_list;
-  SeqEntryPtr    sep;
+  ValNodePtr     vnp;
+  BarcodeTestResultsPtr res;
+  Char                  id_txt[100];
 
   vstp = (BarcodeToolPtr) GetObjectExtra (b);
   if (vstp == NULL) return;
 
-  sep = GetTopSeqEntryForEntityID (vstp->input_entityID);
-  object_list = GetBarcodeLowTraceList(sep);
-
-  if (object_list == NULL)
-  {
-    Message (MSG_ERROR, "No low-trace entries found");
-    return;
-  }
-  
   lip = OpenLog ("BARCODE Keywords Removed");
-  RemoveBarcodeKeywordsFromObjectList (lip->fp, object_list);
-  object_list = ValNodeFree (object_list);
+  for (vnp = vstp->item_list; vnp != NULL; vnp = vnp->next) {
+    res = (BarcodeTestResultsPtr) vnp->data.ptrvalue;
+    if (res->failed_tests[eBarcodeTest_LowTrace]) {
+      if (RemoveBarcodeKeywordFromBioseq (res->bsp))
+      {
+        SeqIdWrite (SeqIdFindBest (res->bsp->id, SEQID_GENBANK), id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
+        fprintf (lip->fp, "%s\n", id_txt);
+      }
+    }
+  }
 
   RefreshBarcodeList (vstp);
   RedrawBarcodeTool (vstp);  
@@ -12275,7 +12274,6 @@ static void RemoveBarcodeKeywordsFromLowTrace (ButtoN b)
   ObjMgrSendMsg (OM_MSG_UPDATE, vstp->input_entityID, 0, 0);
   Update();
 
-  lip->data_in_log = TRUE;
   CloseLog (lip);
   lip = FreeLog (lip);
 }
@@ -12420,6 +12418,54 @@ extern void BarcodeTestIbolComplianceReport (ButtoN b)
   lip = OpenLog ("BARCODE Compliance");
   WriteBarcodeTestComplianceEx (lip->fp, object_list, TRUE);
   lip->data_in_log = TRUE;
+  CloseLog (lip);
+  lip = FreeLog (lip);
+  object_list = BarcodeTestResultsListFree (object_list);
+}
+
+
+static void BarcodeTestMissingPrimerAndCountryReport (ButtoN b)
+{
+  BarcodeToolPtr vstp;
+  ValNodePtr     object_list, vnp;
+  BarcodeTestResultsPtr res;
+  CharPtr               barcode_id, genbank_id, what;
+  LogInfoPtr     lip;
+
+  vstp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (vstp == NULL) return;
+
+  object_list = GetBarcodePassFail (vstp->top_sep, vstp->cfg);
+  lip = OpenLog ("BARCODE Compliance");
+  for (vnp = object_list; vnp != NULL; vnp = vnp->next)
+  {
+    res = (BarcodeTestResultsPtr) vnp->data.ptrvalue;
+    barcode_id = BarcodeTestBarcodeIdString (res->bsp);
+    genbank_id = BarcodeTestGenbankIdString (res->bsp);
+    if (res->failed_tests[eBarcodeTest_Primers]) {
+      if (res->failed_tests[eBarcodeTest_Country]) {
+        what = "primers and country";
+      } else {
+        what = "primers";
+      }
+    } else if (res->failed_tests[eBarcodeTest_Country]) {
+      what = "country";
+    } else {
+      what = NULL;
+    }
+
+    if (what != NULL) {
+      fprintf (lip->fp, "%s\t%s\t Missing %s\n", barcode_id, genbank_id, what);
+      lip->data_in_log = TRUE;
+    }
+
+    barcode_id = MemFree (barcode_id);
+    genbank_id = MemFree (genbank_id);
+  }
+
+  if (!lip->data_in_log) {
+    Message (MSG_OK, "No sequences are missing primers or country");
+  }
   CloseLog (lip);
   lip = FreeLog (lip);
   object_list = BarcodeTestResultsListFree (object_list);
@@ -13098,28 +13144,6 @@ typedef struct stripreportcollect {
 } StripReportCollectData, PNTR StripReportCollectPtr;
 
 
-static void FindMissingKeywordsCallback (BioseqPtr bsp, Pointer data)
-{
-  Char             id_buf[255];
-  StripReportCollectPtr  s;
-  BarcodeTestResultsPtr  res;
-  CharPtr                reasons, tmp;
-
-  if (bsp == NULL || !HasBARCODETech (bsp) || (s = (StripReportCollectPtr) data) == NULL || BioseqHasBarcodeKeyword(bsp)) {
-    return;
-  } else {
-    res = BarcodeTestResultsForBioseq(bsp, s->cfg);
-    reasons = GetBarcodeTestFailureReasons (res);
-    res = BarcodeTestResultsFree (res);
-
-    SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_buf, PRINTID_TEXTID_ACC_ONLY, sizeof (id_buf) - 1);
-
-    ValNodeAddPointer (&(s->strip_report_list), 0, StripReportNew(id_buf, reasons));
-    reasons = MemFree (reasons);
-  }
-}
-
-
 static void ProcessOneFrameFindFile (CharPtr filename, Pointer userdata)
 
 {
@@ -13198,13 +13222,16 @@ static void MakeBarcodeStripReport (ButtoN b)
 {
   BarcodeToolPtr drfp;
   StripReportCollectData sd;
-  ValNodePtr     vnp;
+  ValNodePtr     list, vnp;
   SeqEntryPtr    sep;
   LogInfoPtr     lip;
   Char           path [PATH_MAX];
   CharPtr        cp;
   StripReportPtr sp;
   Boolean        require_keyword;
+  BarcodeTestResultsPtr  res;
+  CharPtr                reasons;
+  Char                   id_buf[255];
 
   drfp = (BarcodeToolPtr) GetObjectExtra (b);
   if (drfp == NULL) return;
@@ -13218,11 +13245,22 @@ static void MakeBarcodeStripReport (ButtoN b)
   }
   require_keyword = sd.cfg->require_keyword;
   sd.cfg->require_keyword = FALSE;
-  VisitBioseqsInSep (sep, &sd, FindMissingKeywordsCallback);
+  list = GetBarcodePassFail (sep, sd.cfg);
   sd.cfg->require_keyword = require_keyword;
   if (drfp->cfg == NULL) {
     sd.cfg = BarcodeTestConfigFree (sd.cfg);
   }
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    res = (BarcodeTestResultsPtr) vnp->data.ptrvalue;
+    if (res != NULL && !BioseqHasBarcodeKeyword(res->bsp)) {
+      reasons = GetBarcodeTestFailureReasons (res);
+      SeqIdWrite (SeqIdFindBest (res->bsp->id, SEQID_GENBANK), id_buf, PRINTID_TEXTID_ACC_ONLY, sizeof (id_buf) - 1);
+      ValNodeAddPointer (&(sd.strip_report_list), 0, StripReportNew(id_buf, reasons));
+      reasons = MemFree (reasons);
+    }
+  }
+  list = BarcodeTestResultsListFree(list);
 
   path [0] = '\0';
   if (GetInputFileName (path, sizeof (path), NULL, "TEXT")) {    
@@ -13321,9 +13359,7 @@ extern void BarcodeTestTool (IteM i)
   c4 = HiddenGroup (h, 6, 0, NULL);
   SetGroupSpacing (c4, 10, 10);
 
-  b = PushButton (c4, "Compliance Report", BarcodeTestComplianceReport);
-  SetObjectExtra (b, drfp, NULL);
-  b = PushButton (c4, "iBOL Compliance Report", BarcodeTestIbolComplianceReport);
+  b = PushButton (c4, "Compliance Report", BarcodeTestIbolComplianceReport);
   SetObjectExtra (b, drfp, NULL);  
   b = PushButton (c4, "Failure Report", BarcodeReportButton);
   SetObjectExtra (b, drfp, NULL);
@@ -13333,8 +13369,8 @@ extern void BarcodeTestTool (IteM i)
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c4, "Barcode Strip Report", MakeBarcodeStripReport);
   SetObjectExtra (b, drfp, NULL);
-
-
+  b = PushButton (c4, "Missing Country and Primers Report", BarcodeTestMissingPrimerAndCountryReport);
+  SetObjectExtra (b, drfp, NULL);
 
   c5 = HiddenGroup (h, 5, 0, NULL);
   SetGroupSpacing (c5, 10, 10);
@@ -13357,8 +13393,10 @@ extern void BarcodeTestTool (IteM i)
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c3, "Remove BARCODE Tech from Selected", RemoveSelectedTechBtn);
   SetObjectExtra (b, drfp, NULL);
+#if 0
   b = PushButton (c3, "Remove BARCODE Keyword from Low Trace", RemoveBarcodeKeywordsFromLowTrace);
   SetObjectExtra (b, drfp, NULL);
+#endif
 
   c = HiddenGroup (h, 4, 0, NULL);
   SetGroupSpacing (c, 10, 10);
@@ -14315,91 +14353,6 @@ static void CleanupLatLonTool (GraphiC g, VoidPtr data)
     ObjMgrFreeUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
   }
   StdCleanupFormProc (g, data);
-}
-
-
-static void AddAltitudeToSubSourceNote (BioSourcePtr biop, CharPtr extra_text)
-{
-  SubSourcePtr ssp;
-  CharPtr      new_note, new_note_fmt = "%s%saltitude:%s";
-
-  if (biop == NULL || StringHasNoText (extra_text))
-  {
-    return;
-  }
-
-  ssp = biop->subtype;
-  while (ssp != NULL && ssp->subtype != SUBSRC_other)
-  {
-    ssp = ssp->next;
-  }
-  if (ssp == NULL) 
-  {
-    ssp = SubSourceNew ();
-    ssp->subtype = SUBSRC_other;
-    ssp->next = biop->subtype;
-    biop->subtype = ssp;
-  }
-  new_note = (CharPtr) MemNew (sizeof (Char) * (StringLen (ssp->name)
-                                                + StringLen (extra_text)
-                                                + StringLen (new_note_fmt)));
-  sprintf (new_note, new_note_fmt, ssp->name == NULL ? "" : ssp->name,
-                                   ssp->name == NULL ? "" : "; ",
-                                   extra_text);
-  ssp->name = MemFree (ssp->name);
-  ssp->name = new_note;
-}
-
-
-static void LatLonAutocorrectList (FILE *fp, ValNodePtr object_list)
-{
-  ValNodePtr vnp;
-  SeqDescrPtr sdp;
-  BioSourcePtr biop;
-  SubSourcePtr bad_ssp;
-  CharPtr      fix, extra_text;
-
-  if (fp == NULL || object_list == NULL) return;
-
-  for (vnp = object_list; vnp != NULL; vnp = vnp->next)
-  {
-    if (vnp->choice != OBJ_SEQDESC) continue;
-    sdp = vnp->data.ptrvalue;
-    if (sdp != NULL && sdp->choice == Seq_descr_source)
-    {
-      biop = (BioSourcePtr) sdp->data.ptrvalue;
-      bad_ssp = FindBadLatLon (biop);
-      if (bad_ssp != NULL)
-      {
-        fix = FixLatLonFormat (bad_ssp->name);
-        if (fix != NULL) 
-        {
-          extra_text = StringChr (fix, ',');
-          if (extra_text != NULL)
-          {
-            *extra_text = 0;
-            extra_text++;
-            while (isspace (*extra_text)) 
-            {
-              extra_text++;
-            }
-          }
-          fprintf (fp, "Corrected %s to %s\n", bad_ssp->name, fix);
-          bad_ssp->name = MemFree (bad_ssp->name);
-          bad_ssp->name = fix;
-          if (extra_text != NULL) 
-          {
-            AddAltitudeToSubSourceNote (biop, extra_text);
-            fprintf (fp, "Moved %s to subsource note\n", extra_text);
-          }
-        }
-        else
-        {
-          fprintf (fp, "Unable to correct %s\n", bad_ssp->name);
-        }
-      }
-    }
-  }
 }
 
 
@@ -15426,7 +15379,13 @@ extern void ListFailedTaxonomyLookups (IteM i)
 
 static void FindTaxnames (SeqDescrPtr sdp, Pointer data)
 {
-  if (sdp != NULL && data != NULL && sdp->choice == Seq_descr_source) {
+  BioSourcePtr biop;
+
+  if (sdp != NULL && data != NULL 
+      && sdp->choice == Seq_descr_source 
+      && (biop = (BioSourcePtr) sdp->data.ptrvalue) != NULL
+      && biop->org != NULL
+      && (!HasTaxonomyID(biop) || StringNCmp (biop->org->taxname, "uncultured", 10) != 0)) {
     ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQDESC, sdp);
   }
 }
@@ -15460,6 +15419,7 @@ static void RefreshTaxFixTool (Pointer data)
 
 NLM_EXTERN BioSourcePtr GetBioSourceFromObject (Uint1 choice, Pointer data);
 
+
 static void TaxFixAutocorrectList (FILE *fp, ValNodePtr tax_fix_list)
 {
   ValNodePtr vnp;
@@ -15480,6 +15440,7 @@ static void TaxFixAutocorrectList (FILE *fp, ValNodePtr tax_fix_list)
         biop->org = OrgRefNew();
       }
       fprintf (fp, "Corrected %s to %s\n", biop->org->taxname == NULL ? "missing name" : biop->org->taxname, t->suggested_fix);
+      RemoveOldName(biop->org);
       SetTaxNameAndRemoveTaxRef (biop->org, StringSave (t->suggested_fix));
     }
   }
@@ -15495,7 +15456,7 @@ static void TaxFixAutocorrect (ButtoN b)
   drfp = (BarcodeToolPtr) GetObjectExtra (b);
   if (drfp == NULL) return;
 
-  ApplyBulkEditorToObjectList (drfp->clickable_list);
+  ApplyBulkEditorToObjectList (drfp->clickable_list, FALSE);
 
   object_list = DialogToPointer (drfp->clickable_list);
 
@@ -15519,6 +15480,8 @@ static void TaxFixAutocorrect (ButtoN b)
     object_list = ValNodeFree (object_list);
   }
 
+  ForceCleanupEntityID (drfp->input_entityID);
+  Select (drfp->form);
   RefreshTaxFixTool (drfp);
   RedrawBarcodeTool (drfp);  
 
@@ -15573,7 +15536,7 @@ static void AddTextToFix (CharPtr text, BarcodeToolPtr drfp)
     return;
   }
 
-  ApplyBulkEditorToObjectList (drfp->clickable_list);
+  ApplyBulkEditorToObjectList (drfp->clickable_list, FALSE);
   PointerToDialog (drfp->clickable_list, NULL);
 
   for (vnp = drfp->item_list; vnp != NULL; vnp = vnp->next) {
@@ -15630,7 +15593,7 @@ static void TaxFixCopyNameToCorrection (ButtoN b)
   drfp = (BarcodeToolPtr) GetObjectExtra (b);
   if (drfp == NULL) return;
 
-  ApplyBulkEditorToObjectList (drfp->clickable_list);
+  ApplyBulkEditorToObjectList (drfp->clickable_list, FALSE);
   PointerToDialog (drfp->clickable_list, NULL);
 
   for (vnp = drfp->item_list; vnp != NULL; vnp = vnp->next) {
@@ -15641,6 +15604,52 @@ static void TaxFixCopyNameToCorrection (ButtoN b)
     t->suggested_fix = MemFree (t->suggested_fix);
     t->suggested_fix = StringSave (t->taxname);
   }
+  PointerToDialog (drfp->clickable_list, drfp->item_list);
+  RedrawBarcodeTool (drfp);  
+}
+
+
+static CharPtr s_UntrimmableWords[] = { "sp.", "cf.", "aff.", "bacterium", "archaeon", NULL };
+
+static void TrimTaxFix (ButtoN b)
+{
+  BarcodeToolPtr    drfp;
+  ValNodePtr        vnp;
+  TaxFixItemPtr     t;
+  CharPtr           word_break;
+  Int4              i;
+  Boolean           no_fix;
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+
+  ApplyBulkEditorToObjectList (drfp->clickable_list, FALSE);
+  PointerToDialog (drfp->clickable_list, NULL);
+
+  for (vnp = drfp->item_list; vnp != NULL; vnp = vnp->next) {
+    t = (TaxFixItemPtr) vnp->data.ptrvalue;
+    if (t == NULL) {
+      continue;
+    }
+    no_fix = FALSE;
+    word_break = StringRChr (t->suggested_fix, ' ');
+    if (word_break == NULL
+      || word_break == t->suggested_fix
+      || word_break - t->suggested_fix == 10 && StringNICmp (t->suggested_fix, "uncultured ", 11) == 0) {
+      /* not trimming this one */
+      no_fix = TRUE;
+    } else {
+      for (i = 0; s_UntrimmableWords[i] != NULL && !no_fix; i++) {
+        if (StringCmp (word_break + 1, s_UntrimmableWords[i]) == 0) {
+          no_fix = TRUE;
+        }
+      }
+    }
+    if (!no_fix) {
+      *word_break = 0;
+    }
+  }
+        
   PointerToDialog (drfp->clickable_list, drfp->item_list);
   RedrawBarcodeTool (drfp);  
 }
@@ -15699,7 +15708,7 @@ extern void TaxFixTool (IteM i)
   drfp->bfp = bfp;
   drfp->input_entityID = bfp->input_entityID;
   drfp->top_sep = GetTopSeqEntryForEntityID (drfp->input_entityID);
-  w = FixedWindow (-50, -33, -10, -10, "Tax Fix Tool", StdCloseWindowProc);
+  w = FixedWindow (-50, -33, -10, -10, "Uncultured Tax Fix Tool", StdCloseWindowProc);
   SetObjectExtra (w, drfp, CleanupTaxFixTool);
   drfp->form = (ForM) w;
   drfp->formmessage = BarcodeToolMessage;
@@ -15731,7 +15740,7 @@ extern void TaxFixTool (IteM i)
 
   RefreshTaxFixTool (drfp);
 
-  c = HiddenGroup (h, 7, 0, NULL);
+  c = HiddenGroup (h, 8, 0, NULL);
   SetGroupSpacing (c, 10, 10);
 
   b = PushButton (c, "Apply Corrections", TaxFixAutocorrect);
@@ -15744,6 +15753,8 @@ extern void TaxFixTool (IteM i)
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c, "Add bacterium", TaxFixAddBacterium);
   SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Trim Suggestion", TrimTaxFix);
+  SetObjectExtra (b, drfp, NULL);
   b = PushButton (c, "Copy Taxname to Correction", TaxFixCopyNameToCorrection);
   SetObjectExtra (b, drfp, NULL);
 
@@ -15752,6 +15763,7 @@ extern void TaxFixTool (IteM i)
   AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) c, NULL);
 
   RealizeWindow (w);
+  SetBulkEditorSortColumn (drfp->clickable_list, 1);
   
   Show (w);
 
@@ -16134,16 +16146,23 @@ static void GetBestTrimIntervalForBioseq (BioseqPtr bsp, Pointer userdata)
 }
 
 
+typedef struct trimnopts {
+  ValNodePtr best_list;
+  Int4 max_dist;
+  Int4 min_stretch_len;
+} TrimNOptsData, PNTR TrimNOptsPtr;
+
 static void GetTrimIntervalWithoutNStretchesAtEnds (BioseqPtr bsp, Pointer userdata)
 {
-  ValNodePtr PNTR best_list;
-  Int2       ctr, pos, i, begin = 0, chop5 = -1, chop3 = -1;
+  TrimNOptsPtr opts;
+  Int2       ctr;
+  Int4       pos, i, begin = 0, chop5 = -1, chop3 = -1;
   Char       buf1[51];
   Int4       len = 50, this_stretch = 0;
   StreamFlgType flags = STREAM_CORRECT_INVAL | STREAM_EXPAND_GAPS;
   NTrimIntervalPtr ntrim;
 
-  if (bsp == NULL || (best_list = (ValNodePtr PNTR) userdata) == NULL) {
+  if (bsp == NULL || (opts = (TrimNOptsPtr) userdata) == NULL) {
     return;
   }
 
@@ -16158,10 +16177,13 @@ static void GetTrimIntervalWithoutNStretchesAtEnds (BioseqPtr bsp, Pointer userd
         }
         this_stretch++;
       } else {
-        if (begin < 20 && this_stretch >= 5) {
+        if (this_stretch >= opts->min_stretch_len) {
+          i = i;
+        }
+        if (begin < opts->max_dist && this_stretch >= opts->min_stretch_len) {
           chop5 = pos + i;
         }
-        if (pos + i > bsp->length - 20 && this_stretch >= 5) {
+        if (pos + i > bsp->length - opts->max_dist && this_stretch >= opts->min_stretch_len) {
           chop3 = begin - 1;
         }
         this_stretch = 0;
@@ -16170,9 +16192,17 @@ static void GetTrimIntervalWithoutNStretchesAtEnds (BioseqPtr bsp, Pointer userd
     pos += len;
   }
   if (chop5 > -1 || chop3 > -1) {
+    if (chop5 > -1 && chop3 > -1 && chop5 + chop3 > bsp->length - 200) {
+      if (chop3 > chop5) {
+        chop3 = -1;
+      } else {
+        chop5 = -1;
+      }
+    }
+        
     ntrim = NTrimIntervalNew (chop5 > -1 ? chop5 : 0, bsp);
     NTrimIntervalSetStop (ntrim, chop3 > -1 ? chop3 : bsp->length - 1);
-    ValNodeAddPointer (best_list, 0, ntrim);
+    ValNodeAddPointer (&(opts->best_list), 0, ntrim);
   }
 }
 
@@ -16187,6 +16217,8 @@ typedef struct seqtrimtool {
   TexT min_len;
   /* controls for end trimming */
   DialoG end_display;
+  TexT max_dist;
+  TexT min_stretch_len;
 } SeqTrimToolData, PNTR SeqTrimToolPtr;
 
 
@@ -16210,6 +16242,7 @@ static void RefreshSequenceTrimTool (Pointer data)
   CharPtr str;
   Char    buf[50];
   Int2    page;
+  TrimNOptsData opts;
 
   SeqTrimToolPtr vstp = (SeqTrimToolPtr) data;
 
@@ -16242,7 +16275,15 @@ static void RefreshSequenceTrimTool (Pointer data)
     PointerToDialog (vstp->clickable_list, NULL);
     vstp->item_list = ValNodeFreeData (vstp->item_list);
 
-    VisitBioseqsInSep (vstp->top_sep, &(vstp->item_list), GetTrimIntervalWithoutNStretchesAtEnds);
+    MemSet (&opts, 0, sizeof (TrimNOptsData));
+    str = SaveStringFromText (vstp->max_dist);
+    opts.max_dist = atoi (str);
+    str = MemFree (str);
+    str = SaveStringFromText (vstp->min_stretch_len);
+    opts.min_stretch_len = atoi (str);
+    str = MemFree (str);
+    VisitBioseqsInSep (vstp->top_sep, &opts, GetTrimIntervalWithoutNStretchesAtEnds);
+    vstp->item_list = opts.best_list;
 
     PointerToDialog (vstp->clickable_list, vstp->item_list);
 
@@ -16500,6 +16541,13 @@ NLM_EXTERN void FindBestNTrimSites (IteM i)
   drfp->pages[1] = HiddenGroup (page_grp, -1, 0, NULL);
   /* page for trimming ends with stretches */
   drfp->end_display = TrimSequenceEndDisplay(drfp->pages[1]);
+  opts = HiddenGroup (drfp->pages[1], 2, 0, NULL);
+  SetGroupSpacing (opts, 10, 10);
+  StaticPrompt (opts, "Maximum distance between N stretch and sequence end", 0, dialogTextHeight, programFont, 'r');
+  drfp->max_dist =DialogText (opts, "50", 10, NULL);
+  StaticPrompt (opts, "Minimum length of N stretch", 0, dialogTextHeight, programFont, 'r');
+  drfp->min_stretch_len = DialogText (opts, "15", 10, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->end_display, (HANDLE) opts, NULL);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) drfp->pages[0], (HANDLE) drfp->pages[1], NULL);
 
@@ -16638,7 +16686,7 @@ NLM_EXTERN void ApplyArticles (IteM i)
     FileClose (fp);
     cp = StringRChr (path, '\\');
     if (cp == NULL) {
-      cp = StringRChr (path, '//');
+      cp = StringRChr (path, '/');
     }
     if (cp != NULL) {
       *(cp +1) = 0;

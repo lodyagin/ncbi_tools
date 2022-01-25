@@ -182,7 +182,7 @@ static AsnType atx[322] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[96],NULL,0,NULL} ,
   {411, "Author" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[97],0,&atx[170]} ,
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[98],NULL,0,&atx[99]} ,
-  {413, "Person-id" ,1,0,0,0,0,0,1,0,NULL,&atx[15],NULL,0,&atx[128]} ,
+  {414, "Person-id" ,1,0,0,0,0,0,1,0,NULL,&atx[15],NULL,0,&atx[128]} ,
   {0, "level" ,128,1,0,1,0,0,0,0,NULL,&atx[42],&avnx[7],0,&atx[100]} ,
   {0, "role" ,128,2,0,1,0,0,0,0,NULL,&atx[42],&avnx[9],0,&atx[101]} ,
   {0, "affil" ,128,3,0,1,0,0,0,0,NULL,&atx[102],NULL,0,&atx[115]} ,
@@ -212,7 +212,7 @@ static AsnType atx[322] = {
   {0, "imp" ,128,1,0,0,0,0,0,0,NULL,&atx[126],NULL,0,NULL} ,
   {428, "Imprint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[127],0,&atx[161]} ,
   {0, "date" ,128,0,0,0,0,0,0,0,NULL,&atx[128],NULL,0,&atx[129]} ,
-  {414, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[0],NULL,0,&atx[184]} ,
+  {415, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[0],NULL,0,&atx[184]} ,
   {0, "volume" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[130]} ,
   {0, "issue" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[131]} ,
   {0, "pages" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[132]} ,
@@ -252,13 +252,13 @@ static AsnType atx[322] = {
   {0, "ids" ,128,3,0,1,0,0,0,0,NULL,&atx[166],NULL,0,NULL} ,
   {423, "ArticleIdSet" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[167],0,&atx[144]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[168],NULL,0,NULL} ,
-  {416, "ArticleId" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[169],0,&atx[172]} ,
+  {417, "ArticleId" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[169],0,&atx[172]} ,
   {0, "pubmed" ,128,0,0,0,0,0,0,0,NULL,&atx[170],NULL,0,&atx[171]} ,
-  {412, "PubMedId" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[98]} ,
+  {412, "PubMedId" ,1,0,0,0,0,1,0,0,NULL,&atx[6],NULL,0,&atx[174]} ,
   {0, "medline" ,128,1,0,0,0,0,0,0,NULL,&atx[172],NULL,0,&atx[173]} ,
-  {417, "MedlineUID" ,1,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[174]} ,
+  {418, "MedlineUID" ,1,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[176]} ,
   {0, "doi" ,128,2,0,0,0,0,0,0,NULL,&atx[174],NULL,0,&atx[175]} ,
-  {418, "DOI" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[176]} ,
+  {413, "DOI" ,1,0,0,0,0,1,0,0,NULL,&atx[2],NULL,0,&atx[98]} ,
   {0, "pii" ,128,3,0,0,0,0,0,0,NULL,&atx[176],NULL,0,&atx[177]} ,
   {419, "PII" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[178]} ,
   {0, "pmcid" ,128,4,0,0,0,0,0,0,NULL,&atx[178],NULL,0,&atx[179]} ,
@@ -268,7 +268,7 @@ static AsnType atx[322] = {
   {0, "pmpid" ,128,6,0,0,0,0,0,0,NULL,&atx[182],NULL,0,&atx[183]} ,
   {422, "PmPid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[166]} ,
   {0, "other" ,128,7,0,0,0,0,0,0,NULL,&atx[184],NULL,0,NULL} ,
-  {415, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,&atx[17],NULL,0,&atx[168]} ,
+  {416, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,&atx[17],NULL,0,&atx[168]} ,
   {404, "Cit-pat" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[186],0,&atx[205]} ,
   {0, "title" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[187]} ,
   {0, "authors" ,128,1,0,0,0,0,0,0,NULL,&atx[92],NULL,0,&atx[188]} ,
@@ -602,6 +602,8 @@ static AsnModulePtr amp = ampx;
 
 #define PUBMEDID &at[170]
 
+#define DOI &at[174]
+
 #define ARTICLEID &at[168]
 #define ARTICLEID_pubmed &at[169]
 #define ARTICLEID_medline &at[171]
@@ -613,8 +615,6 @@ static AsnModulePtr amp = ampx;
 #define ARTICLEID_other &at[183]
 
 #define MEDLINEUID &at[172]
-
-#define DOI &at[174]
 
 #define PII &at[176]
 

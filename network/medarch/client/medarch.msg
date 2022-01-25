@@ -10,11 +10,12 @@ $^   MedlineMatchIgnored, 7, SEV_ERROR
 $^   MuidMissmatch, 8, SEV_WARNING
 $^   NoConsortAuthors, 9, SEV_WARNING
 $^   DiffConsortAuthors, 10, SEV_WARNING
-$^   PmidMismatch, 11, SEV_WARNING
+$^   PmidMissmatch, 11, SEV_WARNING
 $^   Multiple_pmid, 12, SEV_WARNING
 $^   FailedToGetPub, 13, SEV_ERROR
 $^   MedArchMatchIgnored, 14, SEV_ERROR
 $^   SuccessfulPmidLookup, 15, SEV_INFO
 $^   PmidNotFound, 16, SEV_WARNING
+$^   NoPmidJournalNotInPubMed, 17, SEV_INFO
 $$ PRINT, 2
 $^   Failed, 1, SEV_WARNING

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.22 $
+* $Revision: 1.23 $
 *
 * File Description: 
 *
@@ -183,10 +183,12 @@ NLM_EXTERN ValNodePtr GetOrganismTaxLookupFailuresInSeqEntry (SeqEntryPtr sep);
 typedef struct taxfixitem {
   Uint1 data_choice;
   Pointer data;
+  OrgRefPtr orig_org;
   OrgRefPtr response_org;
   CharPtr taxname;
   CharPtr suggested_fix;
   CharPtr rank;
+  Boolean is_uncultured;
 } TaxFixItemData, PNTR TaxFixItemPtr;
 
 NLM_EXTERN TaxFixItemPtr TaxFixItemNew (void);

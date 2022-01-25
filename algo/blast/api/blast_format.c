@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.118 2009/06/16 20:39:39 madden Exp $
+/* $Id: blast_format.c,v 1.119 2011/05/26 20:59:45 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_format.c,v 1.118 2009/06/16 20:39:39 madden Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.119 2011/05/26 20:59:45 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_format.h>
@@ -648,7 +648,7 @@ static Int4** s_LoadMatrix(const char* name)
     int i, j;
     int dim = 0;
     const char* pchars = NULL;
-    SNCBIPackedScoreMatrix* pack_matrix = 
+    const SNCBIPackedScoreMatrix* pack_matrix = 
        NCBISM_GetStandardMatrix(name?name:BLAST_DEFAULT_MATRIX);
 
     if (pack_matrix == NULL)

@@ -1,5 +1,5 @@
 /*
- * $Id: aceread.c,v 1.19 2010/05/26 15:13:01 bollin Exp $
+ * $Id: aceread.c,v 1.23 2010/12/13 16:28:14 bollin Exp $
  *
  * ===========================================================================
  *
@@ -154,7 +154,7 @@ static int s_IsGapChar (char ch, char *gap_chars)
 
 
 /* The Trace Archive Gap String is a list of the number of nucleotides to skip before adding the next gap */
-extern TGapInfoPtr GapInfoFromSequenceString (char *seq_str, char *gap_chars)
+extern TGapInfoPtr GapInfoFromSequenceString (char *seq_str, char gap_char)
 { 
     char * cp;
     int    num_gaps = 0, pos, gap_num = 0;
@@ -165,7 +165,7 @@ extern TGapInfoPtr GapInfoFromSequenceString (char *seq_str, char *gap_chars)
     /* first determine number of gaps */
     cp = seq_str;
     while (*cp != 0) {
-        if (s_IsGapChar(*cp, gap_chars)) {
+        if (*cp == gap_char) {
             num_gaps++;
         }
         cp++;
@@ -178,7 +178,7 @@ extern TGapInfoPtr GapInfoFromSequenceString (char *seq_str, char *gap_chars)
         cp = seq_str;
         pos = 0;
         while (*cp != 0) {
-            if (s_IsGapChar(*cp, gap_chars)) {
+            if (*cp == gap_char) {
                 g->gap_offsets[gap_num] = pos;
                 gap_num++;
                 pos = 0;
@@ -191,18 +191,18 @@ extern TGapInfoPtr GapInfoFromSequenceString (char *seq_str, char *gap_chars)
     return g;
 }
 
-extern void RemoveGapCharsFromSequenceString (char *seq_str, char *gap_chars)
+extern void RemoveGapCharsFromSequenceString (char *seq_str, char gap_char)
 {
     char *cp_src, *cp_dst;
 
-    if (seq_str == NULL || gap_chars == NULL) {
+    if (seq_str == NULL) {
       return;
     }
 
     cp_src = seq_str;
     cp_dst = seq_str;
     while (*cp_src != 0) {
-        if (!s_IsGapChar(*cp_src, gap_chars)) {
+        if (*cp_src != gap_char) {
             *cp_dst = *cp_src;
             cp_dst++;
         }
@@ -755,10 +755,66 @@ extern void ACEFileFree (TACEFilePtr afp)
 
 static char s_IsSeqChar (char ch)
 {
-    if (ch == '*' || ch == '-' || isalpha (ch)) {
-        return 1;
-    } else {
-        return 0;
+    switch (ch) {
+        case '*':
+        case '-':
+        case 'A':
+        case 'B':
+        case 'C':
+        case 'D':
+        case 'E':
+        case 'F':
+        case 'G':
+        case 'H':
+        case 'I':
+        case 'J':
+        case 'K':
+        case 'L':
+        case 'M':
+        case 'N':
+        case 'O':
+        case 'P':
+        case 'Q':
+        case 'R':
+        case 'S':
+        case 'T':
+        case 'U':
+        case 'V':
+        case 'W':
+        case 'X':
+        case 'Y':
+        case 'Z':
+        case 'a':
+        case 'b':
+        case 'c':
+        case 'd':
+        case 'e':
+        case 'f':
+        case 'g':
+        case 'h':
+        case 'i':
+        case 'j':
+        case 'k':
+        case 'l':
+        case 'm':
+        case 'n':
+        case 'o':
+        case 'p':
+        case 'q':
+        case 'r':
+        case 's':
+        case 't':
+        case 'u':
+        case 'v':
+        case 'w':
+        case 'x':
+        case 'y':
+        case 'z':
+            return 1;
+            break;
+        default:
+            return 0;
+            break;
     }
 }
 
@@ -1228,13 +1284,13 @@ static void s_CalculateContigOffsets (TContigPtr contig)
 }
 
 
-static int s_GetUngappedSeqLen (char *str, char *gap_chars)
+static int s_GetUngappedSeqLen (char *str, char gap_char)
 {
     int len = 0;
 
     if (str == NULL) return 0;
     while (*str != 0) {
-        if (!s_IsGapChar (*str, gap_chars)) {
+        if (*str != gap_char) {
             len++;
         }
         str++;
@@ -1250,6 +1306,8 @@ static char * s_AddToTagComment (char *orig, char *extra)
 
     if (orig == NULL) {
         tag = extra;
+    } else if (extra == NULL) {
+        tag = orig;
     } else {
         tag_len = strlen (orig) + strlen (extra) + 1;
         tag = malloc (sizeof (char) * (tag_len + 1));
@@ -1400,10 +1458,10 @@ static TContigPtr s_ReadContig
     }
 
     /* record actual length of consensus seq */
-    contig->consensus_seq_len = s_GetUngappedSeqLen (contig->consensus_seq, "*");
+    contig->consensus_seq_len = s_GetUngappedSeqLen (contig->consensus_seq, '*');
 
     /* calculate gap info */
-    contig->gaps = GapInfoFromSequenceString (contig->consensus_seq, "*");
+    contig->gaps = GapInfoFromSequenceString (contig->consensus_seq, '*');
     
     /* read quality scores */
     if (make_qual_scores) {
@@ -1453,8 +1511,8 @@ static TContigPtr s_ReadContig
                 return NULL;
             }
             s_AdjustContigReadForTerminalNs (contig->reads[read_num]);
-            contig->reads[read_num]->read_len = s_GetUngappedSeqLen (contig->reads[read_num]->read_seq, "*");
-            contig->reads[read_num]->gaps = GapInfoFromSequenceString (contig->reads[read_num]->read_seq, "*");
+            contig->reads[read_num]->read_len = s_GetUngappedSeqLen (contig->reads[read_num]->read_seq, '*');
+            contig->reads[read_num]->gaps = GapInfoFromSequenceString (contig->reads[read_num]->read_seq, '*');
             read_num++;
             report_read_num = read_num - 1;
         } else if (linestring [0] == 'Q' && linestring[1] == 'A' && isspace (linestring[2])) {
@@ -1668,7 +1726,7 @@ static void s_WriteContig (FILE *fp, TContigPtr contig)
     }
     fprintf (fp, "\n");
     for (i = 0; i < contig->num_reads; i++) {
-        fprintf (fp, "RD %s %d\n", contig->reads[i]->read_id, strlen (contig->reads[i]->read_seq));
+        fprintf (fp, "RD %s %d\n", contig->reads[i]->read_id, (int) strlen (contig->reads[i]->read_seq));
         s_WriteSeq (fp, contig->reads[i]->read_seq);
         fprintf (fp, "\n");
     }
@@ -2013,9 +2071,9 @@ ReadContigFromString
         read->read_stop = read->read_len;
         if (n_is_gap) {
             /* adjust for gaps */
-            read->gaps = GapInfoFromSequenceString (read->read_seq, "N");
+            read->gaps = GapInfoFromSequenceString (read->read_seq, 'N');
             if (read->gaps->num_gaps > 0) {
-                RemoveGapCharsFromSequenceString (read->read_seq, "N");
+                RemoveGapCharsFromSequenceString (read->read_seq, 'N');
                 read->read_stop -= read->gaps->num_gaps;
                 read->read_len -= read->gaps->num_gaps;
             }

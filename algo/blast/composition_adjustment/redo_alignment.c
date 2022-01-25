@@ -31,7 +31,7 @@
  */
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: redo_alignment.c,v 1.13 2007/10/25 15:55:36 kazimird Exp $";
+    "$Id: redo_alignment.c,v 1.14 2010/09/13 12:49:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <stdlib.h>
@@ -1081,7 +1081,7 @@ Blast_RedoOneMatch(BlastCompo_Alignment ** alignments,
                                            &subject, &window->subject_range,
                                            matchingSeq->length,
                                            gapping_params);
-                    if (newAlign->score >= params->cutoff_s) {
+                    if (newAlign && newAlign->score >= params->cutoff_s) {
                         s_WithDistinctEnds(&newAlign, &alignments[query_index],
                                            callbacks->free_align_traceback);
                     } else {

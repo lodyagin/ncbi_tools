@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.c,v 1.37 2009/05/27 17:39:36 kazimird Exp $
+/*  $Id: blast_seqsrc.c,v 1.40 2011/01/07 18:34:39 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 #ifndef SKIP_DOXYGEN_PROCESSING
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_seqsrc.c,v 1.37 2009/05/27 17:39:36 kazimird Exp $";
+    "$Id: blast_seqsrc.c,v 1.40 2011/01/07 18:34:39 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 #endif
 
@@ -67,6 +67,10 @@ struct BlastSeqSrc {
     GetStrFnPtr       GetName;        /**< Get the name of the database */
     GetBoolFnPtr      GetIsProt;      /**< Find if database is a protein or 
                                          nucleotide */
+
+   /* Functions that supports partial sequence fetching */
+    GetBoolFnPtr      GetSupportsPartialFetching; /**< Find if database supports partial fetching */
+    SetSeqRangeFnPtr  SetSeqRange;    /**< Setting ranges for partial fetching */
 
    /* Functions that deal with individual sequences */
     GetSeqBlkFnPtr    GetSequence;    /**< Retrieve individual sequence */
@@ -237,6 +241,26 @@ BlastSeqSrcGetIsProt(const BlastSeqSrc* seq_src)
     ASSERT(seq_src);
     ASSERT(seq_src->GetIsProt);
     return (*seq_src->GetIsProt)(seq_src->DataStructure, NULL);
+}
+
+Boolean
+BlastSeqSrcGetSupportsPartialFetching(const BlastSeqSrc* seq_src)
+{
+    ASSERT(seq_src);
+    if (seq_src->GetSupportsPartialFetching) {
+        return (*seq_src->GetSupportsPartialFetching)(seq_src->DataStructure, NULL);
+    }
+    return FALSE;
+}
+
+void
+BlastSeqSrcSetSeqRanges(const BlastSeqSrc* seq_src,
+                        BlastSeqSrcSetRangesArg* arg)
+{
+    ASSERT(seq_src);
+    if (seq_src->SetSeqRange) {
+        (*seq_src->SetSeqRange)(seq_src->DataStructure, arg);
+    }
 }
 
 Int2
@@ -412,6 +436,93 @@ BlastSeqSrcResetChunkIterator(BlastSeqSrc* seq_src)
     (*seq_src->ResetChunkIterator)(seq_src->DataStructure);
 }
 
+BlastSeqSrcSetRangesArg *
+BlastSeqSrcSetRangesArgNew(Int4 num_ranges)
+{
+    BlastSeqSrcSetRangesArg * retv = (BlastSeqSrcSetRangesArg *)
+                          malloc(sizeof(BlastSeqSrcSetRangesArg));
+    retv->num_ranges = num_ranges;
+    retv->ranges = (Int4 *) malloc(2*num_ranges*sizeof(Int4));
+    return retv;
+}
+
+void
+BlastSeqSrcSetRangesArgFree(BlastSeqSrcSetRangesArg *arg)
+{
+    sfree(arg->ranges);
+    sfree(arg);
+}
+
+BlastHSPRangeList *
+BlastHSPRangeListNew(Int4 begin, Int4 end, BlastHSPRangeList *next) 
+{
+    BlastHSPRangeList *retv = (BlastHSPRangeList *)
+                          malloc(sizeof(BlastHSPRangeList));
+    retv->begin = begin;
+    retv->end = end;
+    retv->next = next;
+    return retv;
+}
+
+BlastHSPRangeList *
+BlastHSPRangeListAddRange(BlastHSPRangeList *list,
+                          Int4 begin, Int4 end) 
+{
+    BlastHSPRangeList *q, *p;
+    begin = MAX(0, begin - BLAST_SEQSRC_OVERHANG);
+    end += BLAST_SEQSRC_OVERHANG;
+
+    /* special case: an empty list, or insert from front */
+    if (!list  || begin <= list->begin) {
+        return BlastHSPRangeListNew(begin, end, list);
+    }
+
+    p = list;
+    q = p;
+    /* sorting in begin order */
+    while (p && begin > p->begin) {
+        q = p;
+        p = p->next;
+    }
+    q->next = BlastHSPRangeListNew(begin, end, p);
+    return list;
+}
+
+void
+BlastHSPRangeBuildSetRangesArg(BlastHSPRangeList *list,
+                               BlastSeqSrcSetRangesArg *arg)
+{
+    BlastHSPRangeList *p = list->next;
+    Int4 i=0;
+    ASSERT(arg);
+    arg->ranges[0] = list->begin;
+    arg->ranges[1] = list->end;
+    while (p) {
+        ASSERT(p->begin >= arg->ranges[2*i]);
+        if (p->begin > arg->ranges[2*i+1] + BLAST_SEQSRC_MINGAP) {
+            /* insert as a new range */
+            ++i;
+            arg->ranges[i*2] = p->begin;
+            arg->ranges[i*2+1] = p->end;
+        } else if (p->end > arg->ranges[2*i+1]) {
+            /* merge into the previous range */
+            arg->ranges[i*2+1] = p->end;
+        }
+        p = p->next;
+    }
+    arg->num_ranges = i+1;
+}
+
+void BlastHSPRangeListFree(BlastHSPRangeList *list)
+{
+    BlastHSPRangeList *p = list;
+    while(p) {
+        list = p->next;
+        sfree(p);
+        p = list;
+    }
+}
+
 /*****************************************************************************/
 
 /* The following macros implement the "member functions" of the BlastSeqSrc
@@ -458,6 +569,9 @@ DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt8FnPtr, GetTotLenStats)
 
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetStrFnPtr, GetName)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetBoolFnPtr, GetIsProt)
+
+DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetBoolFnPtr, GetSupportsPartialFetching)
+DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(SetSeqRangeFnPtr, SetSeqRange)
 
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetSeqBlkFnPtr, GetSequence)
 DEFINE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(GetInt4FnPtr, GetSeqLen)

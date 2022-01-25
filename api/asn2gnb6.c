@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.227 $
+* $Revision: 1.257 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -477,6 +477,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "HMP",
   "HOMD",
   "HSSP",
+  "IKMC",
   "IMGT/GENE-DB",
   "IMGT/HLA",
   "IMGT/LIGM",
@@ -517,6 +518,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "SGN",
   "SoyBase",
   "SubtiList",
+  "TAIR",
   "taxon",
   "TIGRFAM",
   "UniGene",
@@ -547,6 +549,7 @@ NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
   "GRIN",
   "HMP",
   "HOMD",
+  "IKMC",
   "IMGT/HLA",
   "IMGT/LIGM",
   "JCM",
@@ -562,6 +565,7 @@ NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
 
 NLM_EXTERN CharPtr legalRefSeqDbXrefs [] = {
   "BEEBASE",
+  "BioProject",
   "CCDS",
   "CGNC",
   "CloneID",
@@ -573,7 +577,6 @@ NLM_EXTERN CharPtr legalRefSeqDbXrefs [] = {
   "PBR",
   "REBASE",
   "SK-FST",
-  "TAIR",
   "VBRC",
   NULL
 };
@@ -996,7 +999,7 @@ NLM_EXTERN CharPtr FormatSourceBlock (
   /* If the organelle prefix is already on the */
   /* name, don't add it.                       */
 
-  if (StringNCmp (organelle, taxname, StringLen (organelle)) == 0)
+  if (StringNICmp (organelle, taxname, StringLen (organelle)) == 0)
     organelle = "";
 
   if (StringHasNoText (common)) {
@@ -1228,13 +1231,13 @@ NLM_EXTERN CharPtr FormatOrganismBlock (
     } else {
       FFAddOneString(temp, taxname, FALSE, FALSE, TILDE_IGNORE);
     }
-    FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+    FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     FFRecycleString(ajp, temp);
 
     temp = FFGetString(ajp);
     FFStartPrint(temp, afp->format, 12, 12, NULL, 0, 5, 5, "OC", FALSE);
     FFAddTextToString(temp, NULL, lineage, NULL, TRUE, FALSE, TILDE_TO_SPACES);
-    FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+    FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     FFRecycleString(ajp, temp);
     /* optionally populate gbseq for XML-ized GenBank format */
 
@@ -1258,14 +1261,14 @@ NLM_EXTERN CharPtr FormatOrganismBlock (
   } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
     FFStartPrint(temp, afp->format, 12, 12, NULL, 0, 5, 5, "OC", FALSE);
     FFAddTextToString(temp, NULL, lineage, NULL, TRUE, FALSE, TILDE_TO_SPACES);
-    FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "OC");
+    FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "OC");
     FFRecycleString(ajp, temp);
     if ( !StringHasNoText(organelle) ) {
       temp = FFGetString(ajp);
       if ( temp != NULL ) {
         FFStartPrint(temp, afp->format, 12, 12, NULL, 0, 5, 5, "OG", FALSE);
         FFAddTextToString(temp, NULL, organelle, NULL, TRUE, FALSE, TILDE_TO_SPACES);
-        FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "OG");
+        FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "OG");
         FFRecycleString(ajp, temp);
       }
     }
@@ -1428,9 +1431,9 @@ static CharPtr StrucCommentFFEndPrint (
   if ( (ffstring == NULL) || (ajp == NULL) ) return NULL;
 
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
-    FFLineWrap (temp, ffstring, gb_init_indent, gb_cont_indent, ASN2FF_GB_MAX - 12, NULL);
+    FFLineWrap (ajp, temp, ffstring, gb_init_indent, gb_cont_indent, ASN2FF_GB_MAX - 12, NULL);
   } else {
-    FFLineWrap (temp, ffstring, eb_init_indent, eb_cont_indent, ASN2FF_EMBL_MAX - 5, eb_line_prefix);
+    FFLineWrap (ajp, temp, ffstring, eb_init_indent, eb_cont_indent, ASN2FF_EMBL_MAX - 5, eb_line_prefix);
   }
   result = FFToCharPtr (temp);
   FFRecycleString (ajp, temp);
@@ -1572,6 +1575,10 @@ static CharPtr GetStrForStructuredComment (
         FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
         FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
       } else if (GetWWW (ajp) && StringCmp (field, "url") == 0) {
+        AddCommentWithURLlinks (ajp, ffstring, NULL, str, NULL);
+      } else if (GetWWW (ajp) && StringNICmp (str, "http://", 7) == 0) {
+        AddCommentWithURLlinks (ajp, ffstring, NULL, str, NULL);
+      } else if (GetWWW (ajp) && StringNICmp (str, "https://", 8) == 0) {
         AddCommentWithURLlinks (ajp, ffstring, NULL, str, NULL);
       } else {
         FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
@@ -1830,7 +1837,7 @@ static void CatenateCommentInGbseq (
   if (gbseq->comment == NULL) {
     gbseq->comment = cpy;
   } else {
-    tmp = (CharPtr) MemNew (StringLen (gbseq->comment) + StringLen (str) + 10);
+    tmp = (CharPtr) MemNew (StringLen (gbseq->comment) + StringLen (cpy) + 10);
     if (tmp == NULL) return;
     StringCpy (tmp, gbseq->comment);
     if (ajp->oldXmlPolicy) {
@@ -3696,15 +3703,20 @@ static CharPtr FullNameFromInstCode (CharPtr code)
 
 #define s_atcc_base  "http://www.atcc.org/SearchCatalogs/linkin?id="
 #define s_bcrc_base  "http://strain.bcrc.firdi.org.tw/BSAS/controller?event=SEARCH&bcrc_no="
-#define s_ccmp_base  "http://ccmp.bigelow.org/SD/display.php?strain=CCMP"
+#define s_cbs_base   "http://www.cbs.knaw.nl/collections/BioloMICS.aspx?Fields=All&ExactMatch=T&Table=CBS+strain+database&Name=CBS+"
+#define s_ccap_base  "http://www.ccap.ac.uk/strain_info.php?Strain_No="
+#define s_ccmp_base  "https://ccmp.bigelow.org/node/1/strain/CCMP"
 #define s_ccug_base  "http://www.ccug.se/default.cfm?page=search_record.cfm&db=mc&s_tests=1&ccugno="
+#define s_cori_base  "http://ccr.coriell.org/Sections/Search/Sample_Detail.aspx?Ref="
 #define s_dsmz_base  "http://www.dsmz.de/microorganisms/search_no.php?q="
 #define s_fsu_base   "http://www.prz.uni-jena.de/data.php?fsu="
 #define s_icmp_base  "http://nzfungi.landcareresearch.co.nz/icmp/results_cultures.asp?ID=&icmpVAR="
+#define s_kctc_base  "http://www.brc.re.kr/English/_SearchView.aspx?sn="
 #define s_ku_base    "http://collections.nhm.ku.edu/"
-#define s_pcc_base   "http://www.pasteur.fr/recherche/banques/PCC/docs/pcc"
+#define s_pcc_base   "http://www.crbip.pasteur.fr/fiches/fichecata.jsp?crbip=PCC+"
 #define s_pcmb_base  "http://www2.bishopmuseum.org/HBS/PCMB/results3.asp?searchterm3="
 #define s_pdd_base   "http://nzfungi.landcareresearch.co.nz/html/data_collections_details.asp?CID="
+#define s_sag_base   "http://sagdb.uni-goettingen.de/detailedList.php?str_number="
 #define s_tgrc_base  "http://tgrc.ucdavis.edu/Data/Acc/AccDetail.aspx?AccessionNum="
 #define s_uam_base   "http://arctos.database.museum/guid/"
 #define s_ypm_base   "http://peabody.research.yale.edu/cgi-bin/Query.Ledger?"
@@ -3723,7 +3735,6 @@ static CharPtr FullNameFromInstCode (CharPtr code)
 #define s_ypmorn_pfx "LE=orn&ID="
 
 #define s_bcrc_sfx  "&type_id=6&keyword=;;"
-#define s_pcc_sfx   ".htm"
 
 typedef struct vouch {
   CharPtr  sites;
@@ -3736,17 +3747,23 @@ typedef struct vouch {
 static VouchData Nlm_spec_vouchers [] = {
   {  "ATCC",              s_atcc_base,  FALSE,  NULL,          NULL        },
   {  "BCRC",              s_bcrc_base,  FALSE,  NULL,          s_bcrc_sfx  },
+  {  "CBS",               s_cbs_base,   FALSE,  NULL,          NULL        },
+  {  "CCAP",              s_ccap_base,  FALSE,  NULL,          NULL        },
   {  "CCMP",              s_ccmp_base,  FALSE,  NULL,          NULL        },
   {  "CCUG",              s_ccug_base,  FALSE,  NULL,          NULL        },
+  {  "Coriell",           s_cori_base,  FALSE,  NULL,          NULL        },
   {  "CRCM:Bird",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "DGR:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "DGR:Ento",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "DGR:Fish",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "DGR:Herp",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "DGR:Mamm",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
+  {  "DMNS:Bird",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
+  {  "DMNS:Mamm",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "DSM",               s_dsmz_base,  FALSE,  NULL,          NULL        },
   {  "FSU<DEU>",          s_fsu_base,   FALSE,  NULL,          NULL        },
   {  "ICMP",              s_icmp_base,  FALSE,  NULL,          NULL        },
+  {  "KCTC",              s_kctc_base,  FALSE,  NULL,          NULL        },
   {  "KU:I",              s_ku_base,    FALSE,  s_kui_pfx,     NULL        },
   {  "KU:IT",             s_ku_base,    FALSE,  s_kuit_pfx,    NULL        },
   {  "KWP:Ento",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
@@ -3762,10 +3779,11 @@ static VouchData Nlm_spec_vouchers [] = {
   {  "MVZ:Page",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "MVZObs:Herp",       s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "NBSB:Bird",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "PCC",               s_pcc_base,   FALSE,  NULL,          s_pcc_sfx   },
+  {  "PCC",               s_pcc_base,   FALSE,  NULL,          NULL        },
   {  "PCMB",              s_pcmb_base,  FALSE,  NULL,          NULL        },
   {  "PDD",               s_pdd_base,   FALSE,  NULL,          NULL        },
   {  "PSU<USA-OR>:Mamm",  s_uam_base,   FALSE,  s_psu_pfx,     NULL        },
+  {  "SAG",               s_sag_base,   FALSE,  NULL,          NULL        },
   {  "TGRC",              s_tgrc_base,  FALSE,  NULL,          NULL        },
   {  "UAM:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
   {  "UAM:Bryo",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
@@ -4061,14 +4079,16 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   BioSourcePtr       biop = NULL;
   BioseqPtr          bsp;
   BioseqSetPtr       bssp;
-  Char               buf [80];
+  Char               buf [128], pfx [512], sfx [128];
   CharPtr            common = NULL;
+  Int4               currGi = 0;
   DbtagPtr           dbt;
   SeqMgrDescContext  dcontext;
   SeqMgrFeatContext  fcontext;
   GBFeaturePtr       gbfeat = NULL;
   GBSeqPtr           gbseq;
   Int2               i;
+  IntAsn2gbSectPtr   iasp;
   Uint1              idx;
   IntSrcBlockPtr     isp;
   Boolean            is_desc = TRUE;
@@ -4121,6 +4141,9 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   qvp = afp->qvp;
   if (qvp == NULL) return NULL;
 
+  pfx [0] = '\0';
+  sfx [0] = '\0';
+
   if (ajp->gbseq) {
     gbseq = &asp->gbseq;
   } else {
@@ -4164,6 +4187,26 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   if ( ffstring == NULL ) return NULL;
 
   FFStartPrint (ffstring, afp->format, 5, 21, NULL, 0, 5, 21, "FT", FALSE);
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_GI) {
+      currGi = (Int4) sip->data.intvalue;
+    }
+  }
+
+  iasp = (IntAsn2gbSectPtr) asp;
+
+  if (iasp != NULL && GetWWW (ajp) && ajp->mode == ENTREZ_MODE &&
+      (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
+    if (! iasp->feat_js_prefix_added) {
+      sprintf (pfx, "<span id=\"feature_%ld_source_%ld\" class=\"feature\"><script>if (typeof(oData) == \"undefined\") oData = []; oData.push ({gi:%s,acc:\"%s\",features: {}});</script>",
+               (long) currGi, (long) isp->source_count, iasp->gi, iasp->acc);
+      iasp->feat_js_prefix_added = TRUE;
+    } else {
+      sprintf (pfx, "<span id=\"feature_%ld_source_%ld\" class=\"feature\">", (long) currGi, (long) isp->source_count);
+    }
+  }
+
   FFAddOneString (ffstring, "source", FALSE, FALSE, TILDE_IGNORE);
   FFAddNChar(ffstring, ' ', 21 - 5 - StringLen("source"), FALSE);
 
@@ -4878,7 +4921,12 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
 
   /* and then deal with the various note types separately (not in order table) */
 
-  str = FFEndPrint(ajp, ffstring, afp->format, 21, 21, 5, 21, "FT"); 
+  if (GetWWW (ajp) && ajp->mode == ENTREZ_MODE &&
+      (ajp->format == GENBANK_FMT || ajp->format == GENPEPT_FMT)) {
+    sprintf (sfx, "</span>");
+  }
+
+  str = FFEndPrintEx (ajp, ffstring, afp->format, 21, 21, 5, 21, "FT", pfx, sfx); 
 
   /* optionally populate gbseq for XML-ized GenBank format */
 
@@ -5034,12 +5082,12 @@ static void PrintSeqLine (
     sprintf (pos, "%9ld", (long) (start + 1));
     FFAddOneString(ffstring, pos, FALSE, FALSE, TILDE_TO_SPACES);
     FFAddOneChar(ffstring, ' ', FALSE);
-    if (ajp != NULL && ajp->seqspans) {
+    if (ajp != NULL && GetWWW (ajp)) {
       sprintf (tmp, "<span class=\"ff_line\" id=\"gi_%ld_%ld\">", (long) gi, (long) (start + 1));
       FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_TO_SPACES);
     }
     FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
-    if (ajp != NULL && ajp->seqspans) {
+    if (ajp != NULL && GetWWW (ajp)) {
       FFAddOneString(ffstring, "</span>", FALSE, FALSE, TILDE_TO_SPACES);
     }
     FFAddOneChar(ffstring, '\n', FALSE);
@@ -5117,7 +5165,7 @@ static void PrintGenome (
   Boolean      first = TRUE;
   SeqIdPtr     freeid = NULL, sid = NULL, newid = NULL;
   SeqLocPtr    slp = NULL;
-  Int4         from = 0, to = 0, start = 0, stop = 0, gi = 0;
+  Int4         start = 0, stop = 0, gi = 0;
   BioseqPtr    bsp = NULL;
   Int2         p1 = 0, p2 = 0;
 
@@ -5125,12 +5173,11 @@ static void PrintGenome (
   gibuf [0] = '\0';
   vbuf [0] = '\0';
   for (slp = slp_head; slp; slp = slp->next) {
-    from = to = 0;
     sid = SeqLocId (slp);
-    if (slp->choice == SEQLOC_INT || slp->choice == SEQLOC_WHOLE) {
-      start = from = SeqLocStart (slp);
-      stop = to = SeqLocStop (slp);
-    } else if (slp->choice == SEQLOC_NULL){
+    if (slp->choice == SEQLOC_INT || slp->choice == SEQLOC_PNT || slp->choice == SEQLOC_WHOLE) {
+      start = SeqLocStart (slp);
+      stop = SeqLocStop (slp);
+    } else if (slp->choice == SEQLOC_NULL) {
       sprintf (vbuf, ",%s", "gap()");
       FFAddOneString (ffstring, vbuf, FALSE, FALSE, TILDE_IGNORE);
       continue;
@@ -5230,6 +5277,82 @@ static void PrintGenome (
   }
 }
 
+static DeltaSeqPtr RevCompDelta (
+  DeltaSeqPtr seq_ext
+)
+
+{
+  DeltaSeqPtr  dsp;
+  ValNodePtr   head = NULL;
+  Int4         from, to, tmp;
+  SeqLocPtr    nslp, slp;
+  Boolean      partial5, partial3;
+  SeqIntPtr    sintp;
+  SeqLitPtr    slitp, slip;
+  ValNodePtr   vnp;
+
+  for (dsp = seq_ext; dsp != NULL; dsp = dsp->next) {
+    vnp = NULL;
+
+    if (dsp->choice == 1) {
+
+      slp = (SeqLocPtr) dsp->data.ptrvalue;
+      if (slp != NULL) {
+
+        if (slp->choice == SEQLOC_NULL) {
+
+          nslp = ValNodeAddPointer (NULL, SEQLOC_NULL, NULL);
+
+          vnp = ValNodeAddPointer (NULL, 1, nslp);
+
+        } else if (slp->choice == SEQLOC_INT) {
+
+          sintp = (SeqIntPtr) slp->data.ptrvalue;
+          if (sintp != NULL) {
+            CheckSeqLocForPartial (slp, &partial5, &partial3);
+            from = sintp->from;
+            to = sintp->to;
+            if (sintp->strand != Seq_strand_minus) {
+              tmp = from;
+              from = to;
+              to = tmp;
+            }
+            nslp = AddIntervalToLocation (NULL, sintp->id, from, to, partial3, partial5);
+
+            vnp = ValNodeAddPointer (NULL, 1, nslp);
+
+          }
+        }
+      }
+
+    } else if (dsp->choice == 2) {
+
+      slitp = (SeqLitPtr) dsp->data.ptrvalue;
+      if (slitp != NULL && slitp->seq_data == NULL) {
+        slip = SeqLitNew ();
+        if (slip != NULL) {
+          slip->length = slitp->length;
+          /* not copying fuzz */
+          slip->seq_data_type = slitp->seq_data_type;
+          vnp = ValNodeAddPointer (NULL, 2, (Pointer) slip);
+        }
+      } else {
+        ValNodeFree (head);
+        return NULL;
+      }
+    }
+
+    /* save in new list in reverse order */
+
+    if (vnp != NULL) {
+      vnp->next = head;
+      head = vnp;
+    }
+  }
+
+  return head;
+}
+
 NLM_EXTERN CharPtr FormatContigBlock (
   Asn2gbFormatPtr afp,
   BaseBlockPtr bbp
@@ -5239,13 +5362,19 @@ NLM_EXTERN CharPtr FormatContigBlock (
   IntAsn2gbJobPtr  ajp;
   Asn2gbSectPtr    asp;
   BioseqPtr        bsp;
+  DeltaSeqPtr      delta_head = NULL;
   DeltaSeqPtr      dsp;
+  DeltaSeqPtr      dspnext;
   IntFuzzPtr       fuzz;
   GBSeqPtr         gbseq;
   Boolean          is_na;
   SeqLitPtr        litp;
+  DeltaSeqPtr      new_delta = NULL;
   CharPtr          prefix = NULL;
+  Boolean          rev_comp = FALSE;
   Boolean          segWithParts = FALSE;
+  SeqIntPtr        sintp;
+  SeqLocPtr        slp;
   SeqLocPtr        slp_head = NULL;
   CharPtr          str;
   Char             tmp [16];
@@ -5266,6 +5395,18 @@ NLM_EXTERN CharPtr FormatContigBlock (
   if ( ffstring == NULL ) return NULL;
 
   is_na = ISA_na (bsp->mol);
+
+  if (ajp->ajp.slp != NULL) {
+    slp = ajp->ajp.slp;
+    if (slp->choice == SEQLOC_INT) {
+      sintp = (SeqIntPtr) slp->data.ptrvalue;
+      if (sintp != NULL) {
+        if (sintp->from == 0 && sintp->to == bsp->length - 1 && sintp->strand == Seq_strand_minus) {
+          rev_comp = TRUE;
+        }
+      }
+    }
+  }
 
   FFStartPrint (ffstring, afp->format, 0, 0, "CONTIG", 12, 5, 5, "CO", FALSE);
   /*
@@ -5292,7 +5433,14 @@ NLM_EXTERN CharPtr FormatContigBlock (
 
   } else if (bsp->seq_ext_type == 4) {
 
-    for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp=dsp->next) {
+    if (rev_comp) {
+      new_delta = RevCompDelta ((DeltaSeqPtr) bsp->seq_ext);
+      delta_head = new_delta;
+    } else {
+      delta_head = (DeltaSeqPtr) bsp->seq_ext;
+    }
+
+    for (dsp = delta_head; dsp != NULL; dsp = dsp->next) {
       if (dsp->choice == 1) {
 
         slp_head = (SeqLocPtr) dsp->data.ptrvalue;
@@ -5357,6 +5505,16 @@ NLM_EXTERN CharPtr FormatContigBlock (
     CleanQualValue (gbseq->contig);
     Asn2gnbkCompressSpaces (gbseq->contig);
     StripAllSpaces (gbseq->contig);
+  }
+
+  if (new_delta != NULL) {
+    dsp = new_delta;
+    while (dsp != NULL) {
+      dspnext = dsp->next;
+      dsp->next = NULL;
+      DeltaSeqFree (dsp);
+      dsp = dsp->next;
+    }
   }
 
   return str;
@@ -5536,8 +5694,11 @@ static Int2 ProcessGapSpecialFormat (
   Char      gi_buf [16];
   Boolean   is_na;
   Char      pad;
+  Char      rgn_buf [64];
   SeqIdPtr  sip;
+  SeqLocPtr slp;
   Int2      startgapgap = 0, endgap = 0;
+  Int4      from, to;
 
   is_na = ISA_na (bsp->mol);
   if (is_na) {
@@ -5574,6 +5735,13 @@ static Int2 ProcessGapSpecialFormat (
         sprintf(fmt_buf, "?fmt_mask=%ld", (long) EXPANDED_GAP_DISPLAY);
         if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
           StringCat (fmt_buf, "&report=gbwithparts");
+          if (ajp->ajp.slp != NULL) {
+            slp = ajp->ajp.slp;
+            from = SeqLocStart (slp) + 1;
+            to = SeqLocStop (slp) + 1;
+            sprintf (rgn_buf, "&from=%ld&to=%ld", (long) from, (long) to);
+            StringCat (fmt_buf, rgn_buf);
+          }
         }
         FFAddOneString (ffstring, "    <a href=\"", FALSE, FALSE, TILDE_IGNORE);
         if (is_na) {
@@ -5592,6 +5760,7 @@ static Int2 ProcessGapSpecialFormat (
     FixGapAtStart (buf, ' ');
   } else if (startgapgap > 0) {
     FixGapAtStart (buf, pad);
+    startgapgap = 0;
   }
 
   endgap = GapAtEnd (buf);
@@ -5870,13 +6039,15 @@ NLM_EXTERN CharPtr FormatSlashBlock (
 )
 
 {
-  IntAsn2gbJobPtr  ajp;
-  Asn2gbSectPtr    asp;
-  GBFeaturePtr     currf, headf, nextf;
-  GBReferencePtr   currr, headr, nextr;
-  GBSeqPtr         gbseq, gbtmp;
-  IndxPtr          index;
-  INSDSeq          is;
+  IntAsn2gbJobPtr   ajp;
+  Asn2gbSectPtr     asp;
+  GBFeaturePtr      currf, headf, nextf;
+  GBReferencePtr    currr, headr, nextr;
+  Uint1             featdeftype;
+  GBSeqPtr          gbseq, gbtmp;
+  IntAsn2gbSectPtr  iasp;
+  IndxPtr           index;
+  INSDSeq           is;
   /*
   Int2              moltype, strandedness, topology;
   */
@@ -5886,6 +6057,8 @@ NLM_EXTERN CharPtr FormatSlashBlock (
   if (ajp == NULL) return NULL;
   asp = afp->asp;
   if (asp == NULL) return NULL;
+
+  iasp = (IntAsn2gbSectPtr) asp;
 
   /* sort and unique indexes */
 
@@ -6017,7 +6190,15 @@ NLM_EXTERN CharPtr FormatSlashBlock (
     GBSeqFree (gbtmp);
   }
 
-  /* slash always has string pre-allocated by add slash block function */
+  /* then clean up javascript components */
+
+  iasp->gi = MemFree (iasp->gi);
+  iasp->acc = MemFree (iasp->acc);
+  for (featdeftype = 0; featdeftype < FEATDEF_MAX; featdeftype++) {
+    iasp->feat_key [featdeftype] = MemFree (iasp->feat_key [featdeftype]);
+  }
+
+  /* slash has string pre-allocated by add slash block function */
 
   return StringSaveNoNull (bbp->string);
 }

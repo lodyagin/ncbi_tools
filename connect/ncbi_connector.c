@@ -1,4 +1,4 @@
-/* $Id: ncbi_connector.c,v 6.9 2007/10/17 15:25:43 kazimird Exp $
+/* $Id: ncbi_connector.c,v 6.11 2011/04/17 02:44:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,30 +26,32 @@
  * Author:  Anton Lavrentiev
  *
  * File Description:
- *   This is generally not for the public use.
  *   Implementation of functions of meta-connector.
+ *   This is generally not a public interface.
  *
  */
 
 #include "ncbi_priv.h"
 #include <connect/ncbi_connector.h>
 
-
-#define NCBI_USE_ERRCODE_X  Connect_MetaConn
+#define NCBI_USE_ERRCODE_X   Connect_Conn
 
 /* Standard logging message
  */
-#define METACONN_LOG(subcode, level, descr)             \
-  CORE_LOGF_X(subcode, level,                             \
-            ("%s (connector \"%s\", error \"%s\")",     \
-            descr, (*meta->get_type)(meta->c_get_type), \
-            IO_StatusStr(status)))
+#define METACONN_LOG(subcode, level, message)                   \
+  CORE_LOGF_X(subcode, level,                                   \
+              ("%s (connector \"%s\", error \"%s\")", message,  \
+               meta->get_type                                   \
+               ? meta->get_type(meta->c_get_type)               \
+               : "UNDEF", IO_StatusStr(status)))
 
 
 extern EIO_Status METACONN_Remove
 (SMetaConnector* meta,
  CONNECTOR       connector)
 {
+    assert(meta);
+
     if (connector) {
         CONNECTOR x_conn;
         
@@ -59,7 +61,7 @@ extern EIO_Status METACONN_Remove
         }
         if (!x_conn) {
             EIO_Status status = eIO_Unknown;
-            METACONN_LOG(1, eLOG_Error,
+            METACONN_LOG(34, eLOG_Error,
                          "[METACONN_Remove]  Connector is not in connection");
             return status;
         }
@@ -67,16 +69,14 @@ extern EIO_Status METACONN_Remove
 
     while (meta->list) {
         CONNECTOR victim = meta->list;
-
-        meta->list = victim->next;
-        victim->meta = 0;
-        victim->next = 0;
+        meta->list       = victim->next;
+        victim->meta     = 0;
+        victim->next     = 0;
         if (victim->destroy)
             victim->destroy(victim);
         if (victim == connector)
             break;
     }
-
     return eIO_Success;
 }
 
@@ -85,12 +85,12 @@ extern EIO_Status METACONN_Add
 (SMetaConnector* meta,
  CONNECTOR       connector)
 {
-    assert(connector && meta);
+    assert(meta  &&  connector);
 
     if (connector->next  ||  !connector->setup) {
         EIO_Status status = eIO_Unknown;
-        METACONN_LOG(2, eLOG_Error,
-                     "[METACONN_Add]  Input connector is in use/uninitable");
+        METACONN_LOG(35, eLOG_Error,
+                     "[METACONN_Add]  Connector is in use/uninitable");
         return status;
     }
 
@@ -98,6 +98,5 @@ extern EIO_Status METACONN_Add
     connector->meta = meta;
     connector->next = meta->list;
     meta->list = connector;
-
     return eIO_Success;
 }

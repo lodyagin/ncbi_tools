@@ -1,4 +1,4 @@
-/*  $Id: ncbi_lb.c,v 1.12 2008/02/14 16:25:55 kazimird Exp $
+/* $Id: ncbi_lb.c,v 1.13 2011/04/17 02:44:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,8 +34,7 @@
 #include <assert.h>
 #include <stdlib.h>
 
-
-#define NCBI_USE_ERRCODE_X   Connect_LB
+#define NCBI_USE_ERRCODE_X   Connect_LBSM
 
 
 size_t LB_Select(SERV_ITER     iter,          void*  data,

@@ -1,4 +1,4 @@
-/* $Id: na_ungapped.c,v 1.39 2010/07/27 18:24:31 kazimird Exp $
+/* $Id: na_ungapped.c,v 1.43 2011/07/12 17:54:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: na_ungapped.c,v 1.39 2010/07/27 18:24:31 kazimird Exp $";
+    "$Id: na_ungapped.c,v 1.43 2011/07/12 17:54:32 kazimird Exp $";
 #endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/na_ungapped.h>
@@ -710,10 +710,24 @@ s_BlastnDiagTableExtendInitialHit(BLAST_SequenceBlk * query,
             Int4 context = BSearchContextInfo(q_off, query_info);
             cutoffs = word_params->cutoffs + context;
             ungapped_data = &dummy_ungapped_data;
-            s_NuclUngappedExtend(query, subject, matrix, q_off, s_end, s_off,
+
+            /* 
+             * Skip use of the scoring table and go straight to the matrix
+             * based extension if matrix_only_scoring is set.  Used by
+             * app rmblastn.
+             * -RMH-
+             */
+            if ( word_params->options->program_number == eBlastTypeBlastn &&
+                 word_params->matrix_only_scoring )
+            {
+               s_NuclUngappedExtendExact(query, subject, matrix, q_off,
+                                  s_off, -(cutoffs->x_dropoff), ungapped_data);
+            }else {
+               s_NuclUngappedExtend(query, subject, matrix, q_off, s_end, s_off,
                                  -(cutoffs->x_dropoff), ungapped_data,
                                  word_params->nucl_score_table,
                                  cutoffs->reduced_nucl_cutoff_score);
+            }
 
             if (off_found || ungapped_data->score >= cutoffs->cutoff_score) {
                 BlastUngappedData *final_data =
@@ -865,11 +879,25 @@ s_BlastnDiagHashExtendInitialHit(BLAST_SequenceBlk * query,
             Int4 context = BSearchContextInfo(q_off, query_info);
             cutoffs = word_params->cutoffs + context;
             ungapped_data = &dummy_ungapped_data;
-            s_NuclUngappedExtend(query, subject, matrix, q_off, s_end,
+
+            /* 
+             * Skip use of the scoring table and go straight to the matrix
+             * based extension if matrix_only_scoring is set.  Used by
+             * app rmblastn.
+             * -RMH-
+             */
+            if ( word_params->options->program_number == eBlastTypeBlastn &&                          word_params->matrix_only_scoring )
+            {
+                s_NuclUngappedExtendExact(query, subject, matrix, q_off,
+                                  s_off, -(cutoffs->x_dropoff), ungapped_data);
+            }else {
+                s_NuclUngappedExtend(query, subject, matrix, q_off, s_end,
                                  s_off, -(cutoffs->x_dropoff),
                                  ungapped_data,
                                  word_params->nucl_score_table,
                                  cutoffs->reduced_nucl_cutoff_score);
+            }
+
             if (off_found || ungapped_data->score >= cutoffs->cutoff_score) {
                 BlastUngappedData *final_data =
                     (BlastUngappedData *) malloc(sizeof(BlastUngappedData));
@@ -1350,7 +1378,7 @@ s_BlastSmallNaExtendAlignedOneByte(const BlastOffsetPair * offset_pairs,
            technically be negative, but the compressed version
            of the query has extra pad bytes before q[0] */
 
-        if (s_offset > 0) {
+        if ( (s_offset > 0) && (q_offset > 0) ) {
             Uint1 q_byte = q[q_offset - 4];
             Uint1 s_byte = s[s_offset / COMPRESSION_RATIO - 1];
             ext_left = s_ExactMatchExtendLeft[q_byte ^ s_byte];
@@ -1359,7 +1387,7 @@ s_BlastSmallNaExtendAlignedOneByte(const BlastOffsetPair * offset_pairs,
 
         /* look for up to 4 exact matches to the right of the seed */
 
-        if (ext_left < ext_to) {
+        if ((ext_left < ext_to) && ((q_offset + lut_word_length) < query->length)) {
             Uint1 q_byte = q[q_offset + lut_word_length];
             Uint1 s_byte = s[(s_offset + lut_word_length) / COMPRESSION_RATIO];
             Int4 ext_right = s_ExactMatchExtendRight[q_byte ^ s_byte];
@@ -1583,13 +1611,18 @@ Int2 BlastNaWordFinder(BLAST_SequenceBlk * subject,
     scan_range[2] = subject->length - lut_word_length; /*end pos (inclusive) of scan*/
 
     /* if sequence is masked, fall back to generic scanner and extender */
-    if (subject->mask_type) {
-        scansub = (TNaScanSubjectFunction) 
+    if (subject->mask_type != eNoSubjMasking) {
+        if (lookup_wrap->lut_type == eMBLookupTable &&
+            ((BlastMBLookupTable *) lookup_wrap->lut)->discontiguous) {
+            /* discontiguous scan subs assumes any (non-aligned starting offset */
+        } else {
+            scansub = (TNaScanSubjectFunction) 
                   BlastChooseNucleotideScanSubjectAny(lookup_wrap);
-        if (extend != (TNaExtendFunction)s_BlastNaExtendDirect) {
-             extend = (lookup_wrap->lut_type == eSmallNaLookupTable) 
+            if (extend != (TNaExtendFunction)s_BlastNaExtendDirect) {
+                 extend = (lookup_wrap->lut_type == eSmallNaLookupTable) 
                     ? (TNaExtendFunction)s_BlastSmallNaExtend
                     : (TNaExtendFunction)s_BlastNaExtend;
+            }
         }
         /* generic scanner permits any (non-aligned) starting offset */
         scan_range[1] = subject->seq_ranges[0].left + word_length - lut_word_length;

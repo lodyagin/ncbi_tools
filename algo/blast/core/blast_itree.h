@@ -1,4 +1,4 @@
-/* $Id: blast_itree.h,v 1.7 2010/05/06 18:54:32 kazimird Exp $
+/* $Id: blast_itree.h,v 1.8 2011/02/09 14:39:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -82,7 +82,10 @@ typedef struct BlastIntervalTree {
 /** How HSPs added to an interval tree are indexed */
 typedef enum EITreeIndexMethod {
     eQueryOnly,              /**< Index by query offset only */
-    eQueryAndSubject         /**< Index by query and then by subject offset */
+    eQueryAndSubject,        /**< Index by query and then by subject offset */
+    eQueryOnlyStrandIndifferent /**< Index by query offset only.  Also do not
+                                     distinguish between query strands for 
+                                     region definition. -RMH- */
 } EITreeIndexMethod;
 
 /** Initialize an interval tree structure
@@ -160,6 +163,15 @@ Int4
 BlastIntervalTreeNumRedundant(const BlastIntervalTree *tree, 
                               const BlastHSP *hsp,
                               const BlastQueryInfo *query_info);
+
+// -RMH-
+Int4
+BlastIntervalTreeMasksHSP(const BlastIntervalTree *tree,
+                              const BlastHSP *hsp,
+                              const BlastQueryInfo *query_info,
+                              Int4 subtree_index,
+                              Int4 masklevel );
+
 
 #ifdef __cplusplus
 }

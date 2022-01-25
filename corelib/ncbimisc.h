@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.21 $
+* $Revision: 6.34 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -74,6 +74,8 @@ NLM_EXTERN CharPtr LIBCALL Nlm_Int8tostr PROTO((Nlm_Int8 value, int opts));
 
 /* Sorting */
 NLM_EXTERN void LIBCALL Nlm_HeapSort PROTO((VoidPtr base, size_t nel, size_t width, int (LIBCALLBACK *cmp) (VoidPtr, VoidPtr) ));
+/* Stable Sorting */
+NLM_EXTERN void LIBCALL Nlm_StableMergeSort PROTO((VoidPtr base, size_t nel, size_t width, int (LIBCALLBACK *cmp) (VoidPtr, VoidPtr) ));
 
 /* Platform name */
 NLM_EXTERN const Nlm_Char* Nlm_PlatformName(void);
@@ -204,11 +206,13 @@ NLM_EXTERN ValNodePtr  LIBCALL ValNodeAdd PROTO((ValNodePtr PNTR head));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeLink PROTO((ValNodePtr PNTR head, ValNodePtr newnode));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_CharPtr str));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeCopyStr PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, const char* str));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeCopyStrEx PROTO((ValNodePtr PNTR head, ValNodePtr PNTR tail, Nlm_Int2 choice, const char* str));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddInt PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int4 value));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddBigInt (ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Int8 value);
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddBoolean PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_Boolean value));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddFloat PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_FloatHi value));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddPointer PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_VoidPtr value));
+NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddPointerEx PROTO((ValNodePtr PNTR head, ValNodePtr PNTR tail, Nlm_Int2 choice, Nlm_VoidPtr value));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeAddFunction PROTO((ValNodePtr PNTR head, Nlm_Int2 choice, Nlm_FnPtr value));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeFree PROTO((ValNodePtr vnp));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeFreeData PROTO((ValNodePtr vnp));
@@ -216,11 +220,15 @@ NLM_EXTERN ValNodePtr  LIBCALL ValNodeExtract PROTO((ValNodePtr PNTR headptr, Nl
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeExtractList PROTO((ValNodePtr PNTR headptr, Nlm_Int2 choice));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeFindNext PROTO((ValNodePtr head, ValNodePtr curr, Nlm_Int2 choice));
 NLM_EXTERN ValNodePtr  LIBCALL ValNodeSort PROTO((ValNodePtr list, int (LIBCALLBACK *compar) (VoidPtr, VoidPtr)));
+NLM_EXTERN Nlm_Boolean  LIBCALL ValNodeIsSorted PROTO((ValNodePtr list, int (LIBCALLBACK *compar) (VoidPtr, VoidPtr)));
 NLM_EXTERN void LIBCALL ValNodeUnique PROTO ((ValNodePtr PNTR list, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )), ValNodePtr (LIBCALLBACK *valnodefree ) PROTO ((ValNodePtr))));
+NLM_EXTERN ValNodePtr LIBCALL ValNodeDupList PROTO((ValNodePtr orig, ValNodePtr (LIBCALLBACK *copy )PROTO ((ValNodePtr))));
 NLM_EXTERN void LIBCALL ValNodePurge PROTO ((ValNodePtr PNTR list, Nlm_Boolean (LIBCALLBACK *do_remove ) PROTO ((ValNodePtr)), ValNodePtr (LIBCALLBACK *valnodefree ) PROTO ((ValNodePtr))));
 NLM_EXTERN void LIBCALL ValNodeInsert PROTO ((ValNodePtr PNTR list, ValNodePtr new_item, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr ))));
 NLM_EXTERN int LIBCALL ValNodeCompare PROTO ((ValNodePtr vnp1, ValNodePtr vnp2, int (LIBCALLBACK *compar) (VoidPtr, VoidPtr)));
 NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrs PROTO((ValNodePtr list));
+NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrsEx PROTO((ValNodePtr list, Nlm_CharPtr separator));
+NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrsExEx PROTO((ValNodePtr list, Nlm_CharPtr separator, Nlm_CharPtr pfx, Nlm_CharPtr sfx));
 
 /* convenience structure for holding head and tail of ValNode list for efficient tail insertion */
 typedef struct valnodeblock {
@@ -293,6 +301,7 @@ typedef struct _Choice_ {
 #define Ltostr	Nlm_Ltostr
 #define Ultostr	Nlm_Ultostr
 #define HeapSort	Nlm_HeapSort
+#define StableMergeSort Nlm_StableMergeSort
 
 #if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
 NLM_EXTERN void Nlm_CtoPstr PROTO((Nlm_CharPtr str));
@@ -369,6 +378,75 @@ NLM_EXTERN void LIBCALL Nlm_MD5Transform PROTO((Nlm_Uint4 buf[4], Nlm_Uint4 in[1
 /* Error codes for the CTX_NCBIMISC context */
 
 Uint4 Nlm_GetChecksum(CharPtr p);
+
+
+/* Simple XML Parsing */
+
+typedef struct xmlobj {
+  Nlm_CharPtr    name;
+  Nlm_CharPtr    contents;
+  struct xmlobj  *attributes;
+  struct xmlobj  *children;
+  struct xmlobj  *next;
+} Nlm_XmlObj, PNTR Nlm_XmlObjPtr;
+
+#define XmlObj Nlm_XmlObj
+#define XmlObjPtr Nlm_XmlObjPtr
+
+NLM_EXTERN Nlm_XmlObjPtr ParseXmlString (
+  Nlm_CharPtr str
+);
+
+NLM_EXTERN void WriteXmlObject (
+  Nlm_XmlObjPtr xop,
+  FILE *fp
+);
+
+NLM_EXTERN void WriteXmlObjectEx (
+  Nlm_XmlObjPtr xop,
+  FILE *fp,
+  Nlm_Boolean useTabs,
+  Nlm_Boolean altSelfClose
+);
+
+NLM_EXTERN Nlm_XmlObjPtr FreeXmlObject (
+  Nlm_XmlObjPtr xop
+);
+
+typedef void (*VisitXmlNodeFunc) (Nlm_XmlObjPtr xop, Nlm_XmlObjPtr parent, Nlm_Int2 level, Nlm_VoidPtr userdata);
+
+/* VisitXmlNodes does a recursive exploration from the root node */
+
+NLM_EXTERN Nlm_Int4 VisitXmlNodes (
+  Nlm_XmlObjPtr xop,
+  Nlm_VoidPtr userdata,
+  VisitXmlNodeFunc callback,
+  Nlm_CharPtr nodeFilter,
+  Nlm_CharPtr parentFilter,
+  Nlm_CharPtr attrTagFilter,
+  Nlm_CharPtr attrValFilter,
+  Nlm_Int2 maxDepth
+);
+
+/* VisitXmlAttributes just scans attributes on the current node */
+
+NLM_EXTERN Nlm_Int4 VisitXmlAttributes (
+  Nlm_XmlObjPtr xop,
+  Nlm_VoidPtr userdata,
+  VisitXmlNodeFunc callback,
+  Nlm_CharPtr attrTagFilter,
+  Nlm_CharPtr attrValFilter
+);
+
+/*
+Note: Use <urlquery.h> QUERY_CopyResultsToString (conn) to get XML string
+directly from network connection without going through file intermediate.
+*/
+
+NLM_EXTERN Nlm_CharPtr XmlFileToString (
+  FILE *ifp
+);
+
 
 #ifdef __cplusplus
 }

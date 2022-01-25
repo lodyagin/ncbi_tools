@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_BUFFER__H
 #define CONNECT___NCBI_BUFFER__H
 
-/*  $Id: ncbi_buffer.h,v 6.12 2007/05/22 11:25:57 kazimird Exp $
+/* $Id: ncbi_buffer.h,v 6.13 2010/09/30 13:24:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -122,8 +122,9 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ BUF_Append
 
 /*!
  * Add new data to the end of "*pBuf" (to be read last).
- * On error (failed memory allocation), return zero value.
- * NOTE:  if "*pBuf" == NULL then create it.
+ * On error (failed memory allocation), return zero value;
+ * otherwise return non-zero (i.e. including when "size" passed as 0).
+ * NOTE:  if "*pBuf" == NULL then create it if necessary (e.g. if size != 0).
  */
 extern NCBI_XCONNECT_EXPORT /*bool*/int BUF_Write
 (BUF*        pBuf,
@@ -171,7 +172,7 @@ extern NCBI_XCONNECT_EXPORT size_t BUF_PeekAt
 
 /*!
  * Call "callback" on up to "size" bytes stored in "buf" (starting at position
- * "pos"), each chunk separately. Pass data as opaque parameter to callback.
+ * "pos"), in chunks.  Pass "cbdata" as an opaque parameter to "callback".
  * Return the # of processed bytes (can be less than "size").
  * Return zero and do nothing if "buf" is NULL or "pos" >= BUF_Size(buf).
  * Do nothing and return min(BUF_Size(buf)-pos, size) if "callback" is NULL.
@@ -179,8 +180,8 @@ extern NCBI_XCONNECT_EXPORT size_t BUF_PeekAt
 extern NCBI_XCONNECT_EXPORT size_t BUF_PeekAtCB
 (BUF         buf,
  size_t      pos,
- void       (*callback)(void*, void*, size_t),
- void*       data,
+ void       (*callback)(void* cbdata, void* buf, size_t size),
+ void*       cbdata,
  size_t      size
  );
 
@@ -201,6 +202,7 @@ extern NCBI_XCONNECT_EXPORT size_t BUF_Read
 
 /*!
  * Make the buffer empty.
+ * NOTE: do nothing if "buf" == NULL
  */
 extern NCBI_XCONNECT_EXPORT void BUF_Erase(BUF buf);
 

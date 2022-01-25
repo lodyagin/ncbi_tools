@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.31 $
+* $Revision: 1.32 $
 *
 * File Description: 
 *
@@ -340,7 +340,8 @@ NLM_EXTERN Boolean PubSeqFetchEnableEx (
   Boolean seqidtogi,
   Boolean gitoseqid,
   Boolean precache,
-  Boolean seqidset
+  Boolean seqidset,
+  Int4 flags
 );
 
 NLM_EXTERN void PubSeqFetchDisable (

@@ -32,7 +32,7 @@ objmmdb3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module MMDB-Features
-*    Generated using ASNCODE Revision: 6.8 at Mar 6, 2000  9:42 AM
+*    Generated using ASNCODE Revision: 6.17 at Feb 3, 2011 12:29 PM
 *
 **************************************************/
 
@@ -254,7 +254,6 @@ ChemGraphPntrsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -771,6 +770,209 @@ erret:
 
 /**************************************************
 *
+*    ChemGraphInteractionNew()
+*
+**************************************************/
+NLM_EXTERN 
+ChemGraphInteractionPtr LIBCALL
+ChemGraphInteractionNew(void)
+{
+   ChemGraphInteractionPtr ptr = MemNew((size_t) sizeof(ChemGraphInteraction));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ChemGraphInteractionFree()
+*
+**************************************************/
+NLM_EXTERN 
+ChemGraphInteractionPtr LIBCALL
+ChemGraphInteractionFree(ChemGraphInteractionPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   RealValueFree(ptr -> distance_threshold);
+   AsnGenericUserSeqOfFree(ptr -> interactors, (AsnOptFreeFunc) BiostrucMoleculePntrFree);
+   AsnGenericChoiceSeqOfFree(ptr -> residue_contacts, (AsnOptFreeFunc) ChemGraphPntrsFree);
+   AsnGenericChoiceSeqOfFree(ptr -> atom_contacts, (AsnOptFreeFunc) ChemGraphPntrsFree);
+   AsnGenericUserSeqOfFree(ptr -> atom_distance, (AsnOptFreeFunc) RealValueFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ChemGraphInteractionAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ChemGraphInteractionPtr LIBCALL
+ChemGraphInteractionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ChemGraphInteractionPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmmdb3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ChemGraphInteraction ::= (self contained) */
+      atp = AsnReadId(aip, amp, CHEM_GRAPH_INTERACTION);
+   } else {
+      atp = AsnLinkType(orig, CHEM_GRAPH_INTERACTION);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ChemGraphInteractionNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CHEM_GRAPH_INTERACTION_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CHEM_GRAPH_INTERACTION_distance_threshold) {
+      ptr -> distance_threshold = RealValueAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CHEM_GRAPH_INTERACTION_interactors) {
+      ptr -> interactors = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) BiostrucMoleculePntrAsnRead, (AsnOptFreeFunc) BiostrucMoleculePntrFree);
+      if (isError && ptr -> interactors == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CHEM_GRAPH_INTERACTION_residue_contacts) {
+      ptr -> residue_contacts = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ChemGraphPntrsAsnRead, (AsnOptFreeFunc) ChemGraphPntrsFree);
+      if (isError && ptr -> residue_contacts == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CHEM_GRAPH_INTERACTION_atom_contacts) {
+      ptr -> atom_contacts = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ChemGraphPntrsAsnRead, (AsnOptFreeFunc) ChemGraphPntrsFree);
+      if (isError && ptr -> atom_contacts == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CHEM_GRAPH_INTERACTION_atom_distance) {
+      ptr -> atom_distance = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) RealValueAsnRead, (AsnOptFreeFunc) RealValueFree);
+      if (isError && ptr -> atom_distance == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ChemGraphInteractionFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ChemGraphInteractionAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ChemGraphInteractionAsnWrite(ChemGraphInteractionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmmdb3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CHEM_GRAPH_INTERACTION);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> type || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> type;
+      retval = AsnWrite(aip, CHEM_GRAPH_INTERACTION_type,  &av);
+   }
+   if (ptr -> distance_threshold != NULL) {
+      if ( ! RealValueAsnWrite(ptr -> distance_threshold, aip, CHEM_GRAPH_INTERACTION_distance_threshold)) {
+         goto erret;
+      }
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> interactors, (AsnWriteFunc) BiostrucMoleculePntrAsnWrite, aip, CHEM_GRAPH_INTERACTION_interactors, CHEM_GRAPH_INTERACTION_interactors_E);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> residue_contacts, (AsnWriteFunc) ChemGraphPntrsAsnWrite, aip, CHEM_GRAPH_INTERACTION_residue_contacts, CHEM_GRAPH_INTERACTION_residue_contacts_E);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> atom_contacts, (AsnWriteFunc) ChemGraphPntrsAsnWrite, aip, CHEM_GRAPH_INTERACTION_atom_contacts, CHEM_GRAPH_INTERACTION_atom_contacts_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> atom_distance, (AsnWriteFunc) RealValueAsnWrite, aip, CHEM_GRAPH_INTERACTION_atom_distance, CHEM_GRAPH_INTERACTION_atom_distance_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    SphereNew()
 *
 **************************************************/
@@ -815,7 +1017,6 @@ SphereAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    SpherePtr ptr;
 
@@ -984,7 +1185,6 @@ ConeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    ConePtr ptr;
 
@@ -1165,7 +1365,6 @@ CylinderAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    CylinderPtr ptr;
 
@@ -1351,7 +1550,6 @@ BrickAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    BrickPtr ptr;
 
@@ -1756,7 +1954,6 @@ BiostrucFeatureSetDescrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -1976,6 +2173,9 @@ Location_locationFree(ValNodePtr anp)
    case Location_location_alignment:
       ChemGraphAlignmentFree(anp -> data.ptrvalue);
       break;
+   case Location_location_interaction:
+      ChemGraphInteractionFree(anp -> data.ptrvalue);
+      break;
    case Location_location_similarity:
       RegionSimilarityFree(anp -> data.ptrvalue);
       break;
@@ -1998,7 +2198,6 @@ BiostrucFeatureAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    BiostrucFeaturePtr ptr;
 
@@ -2102,7 +2301,6 @@ Location_locationAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -2151,6 +2349,10 @@ Location_locationAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    else if (atp == BIOSTRUC_FEATURE_location_alignment) {
       choice = Location_location_alignment;
       func = (AsnReadFunc) ChemGraphAlignmentAsnRead;
+   }
+   else if (atp == BIOSTRUC_FEATURE_location_interaction) {
+      choice = Location_location_interaction;
+      func = (AsnReadFunc) ChemGraphInteractionAsnRead;
    }
    else if (atp == BIOSTRUC_FEATURE_location_similarity) {
       choice = Location_location_similarity;
@@ -2298,6 +2500,10 @@ Location_locationAsnWrite(Location_locationPtr anp, AsnIoPtr aip, AsnTypePtr ori
       writetype = BIOSTRUC_FEATURE_location_alignment;
       func = (AsnWriteFunc) ChemGraphAlignmentAsnWrite;
       break;
+   case Location_location_interaction:
+      writetype = BIOSTRUC_FEATURE_location_interaction;
+      func = (AsnWriteFunc) ChemGraphInteractionAsnWrite;
+      break;
    case Location_location_similarity:
       writetype = BIOSTRUC_FEATURE_location_similarity;
       func = (AsnWriteFunc) RegionSimilarityAsnWrite;
@@ -2412,7 +2618,6 @@ Property_propertyAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -2584,7 +2789,6 @@ ColorPropAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    ColorPropPtr ptr;
 
@@ -2772,7 +2976,6 @@ CameraAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    CameraPtr ptr;
 
@@ -3116,7 +3319,6 @@ RegionPntrsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    RegionPntrsPtr ptr;
 
@@ -3610,7 +3812,6 @@ OtherFeatureAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    OtherFeaturePtr ptr;
 
@@ -3727,6 +3928,170 @@ OtherFeatureAsnWrite(OtherFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, OTHER_FEATURE_set,  &av);
    av.intvalue = ptr -> feature;
    retval = AsnWrite(aip, OTHER_FEATURE_feature,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    BiostrucMoleculePntrNew()
+*
+**************************************************/
+NLM_EXTERN 
+BiostrucMoleculePntrPtr LIBCALL
+BiostrucMoleculePntrNew(void)
+{
+   BiostrucMoleculePntrPtr ptr = MemNew((size_t) sizeof(BiostrucMoleculePntr));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    BiostrucMoleculePntrFree()
+*
+**************************************************/
+NLM_EXTERN 
+BiostrucMoleculePntrPtr LIBCALL
+BiostrucMoleculePntrFree(BiostrucMoleculePntrPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   BiostrucIdFree(ptr -> biostruc_id);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    BiostrucMoleculePntrAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+BiostrucMoleculePntrPtr LIBCALL
+BiostrucMoleculePntrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   BiostrucMoleculePntrPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmmdb3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* BiostrucMoleculePntr ::= (self contained) */
+      atp = AsnReadId(aip, amp, BIOSTRUC_MOLECULE_PNTR);
+   } else {
+      atp = AsnLinkType(orig, BIOSTRUC_MOLECULE_PNTR);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = BiostrucMoleculePntrNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == BIOSTRUC_MOLECULE_PNTR_biostruc_id) {
+      ptr -> biostruc_id = BiostrucIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BIOSTRUC_MOLECULE_PNTR_molecule_id) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> molecule_id = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = BiostrucMoleculePntrFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    BiostrucMoleculePntrAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+BiostrucMoleculePntrAsnWrite(BiostrucMoleculePntrPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmmdb3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, BIOSTRUC_MOLECULE_PNTR);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> biostruc_id != NULL) {
+      if ( ! BiostrucIdAsnWrite(ptr -> biostruc_id, aip, BIOSTRUC_MOLECULE_PNTR_biostruc_id)) {
+         goto erret;
+      }
+   }
+   av.intvalue = ptr -> molecule_id;
+   retval = AsnWrite(aip, BIOSTRUC_MOLECULE_PNTR_molecule_id,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -4291,7 +4656,6 @@ ResidueIntervalPntrAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    ResidueIntervalPntrPtr ptr;
 
@@ -4639,7 +5003,6 @@ RegionBoundaryAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -4830,7 +5193,6 @@ AlignStatsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    AlignStatsPtr ptr;
 
@@ -5030,6 +5392,166 @@ erret:
 
 /**************************************************
 *
+*    RealValueNew()
+*
+**************************************************/
+NLM_EXTERN 
+RealValuePtr LIBCALL
+RealValueNew(void)
+{
+   RealValuePtr ptr = MemNew((size_t) sizeof(RealValue));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    RealValueFree()
+*
+**************************************************/
+NLM_EXTERN 
+RealValuePtr LIBCALL
+RealValueFree(RealValuePtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    RealValueAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+RealValuePtr LIBCALL
+RealValueAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   RealValuePtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmmdb3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* RealValue ::= (self contained) */
+      atp = AsnReadId(aip, amp, REALVALUE);
+   } else {
+      atp = AsnLinkType(orig, REALVALUE);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = RealValueNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == REALVALUE_scale_factor) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> scale_factor = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == REALVALUE_scaled_integer_value) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> scaled_integer_value = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = RealValueFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    RealValueAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+RealValueAsnWrite(RealValuePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmmdb3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, REALVALUE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> scale_factor;
+   retval = AsnWrite(aip, REALVALUE_scale_factor,  &av);
+   av.intvalue = ptr -> scaled_integer_value;
+   retval = AsnWrite(aip, REALVALUE_scaled_integer_value,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    ModelSpacePointNew()
 *
 **************************************************/
@@ -5072,7 +5594,6 @@ ModelSpacePointAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    ModelSpacePointPtr ptr;
 
@@ -5209,167 +5730,6 @@ erret:
 
 /**************************************************
 *
-*    RealValueNew()
-*
-**************************************************/
-NLM_EXTERN 
-RealValuePtr LIBCALL
-RealValueNew(void)
-{
-   RealValuePtr ptr = MemNew((size_t) sizeof(RealValue));
-
-   return ptr;
-
-}
-
-
-/**************************************************
-*
-*    RealValueFree()
-*
-**************************************************/
-NLM_EXTERN 
-RealValuePtr LIBCALL
-RealValueFree(RealValuePtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   return MemFree(ptr);
-}
-
-
-/**************************************************
-*
-*    RealValueAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-RealValuePtr LIBCALL
-RealValueAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   RealValuePtr ptr;
-
-   if (! loaded)
-   {
-      if (! objmmdb3AsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* RealValue ::= (self contained) */
-      atp = AsnReadId(aip, amp, REALVALUE);
-   } else {
-      atp = AsnLinkType(orig, REALVALUE);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = RealValueNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == REALVALUE_scale_factor) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> scale_factor = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == REALVALUE_scaled_integer_value) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> scaled_integer_value = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = RealValueFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    RealValueAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-RealValueAsnWrite(RealValuePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objmmdb3AsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, REALVALUE);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   av.intvalue = ptr -> scale_factor;
-   retval = AsnWrite(aip, REALVALUE_scale_factor,  &av);
-   av.intvalue = ptr -> scaled_integer_value;
-   retval = AsnWrite(aip, REALVALUE_scaled_integer_value,  &av);
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
 *    MoveFree()
 *
 **************************************************/
@@ -5412,7 +5772,6 @@ MoveAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -5586,7 +5945,6 @@ RotMatrixAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    RotMatrixPtr ptr;
 
@@ -5819,7 +6177,6 @@ TransMatrixAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    TransMatrixPtr ptr;
 
@@ -5998,7 +6355,6 @@ GLMatrixAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    GLMatrixPtr ptr;
 

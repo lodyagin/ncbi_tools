@@ -5,7 +5,7 @@
 <!-- if you use the following meta tags, uncomment them.
  <meta name="author" content="sequindoc">
  <META NAME="keywords" CONTENT="national center for biotechnology information, ncbi, national library of medicine, nlm, national institutes of health, nih, database, archive, bookshelf, pubmed, pubmed central, bioinformatics, biomedicine, sequence submission, sequin, bankit, submitting sequences">
- <META NAME="description" CONTENT="Sequin is a stand-alone software tool developed by the National Center for Biotechnology Information (NCBI) for submitting and updating entries to the GenBank, EMBL, or DDBJ sequence databases. "> -->
+ <META NAME="description" CONTENT="Sequin is a stand-alone software tool developed by the National Center for Biotechnology Information (NCBI) for submitting and updating entries to the GenBank or EMBL sequence databases. "> -->
  <link rel="stylesheet" href="ncbi_sequin.css">
 
 </HEAD> 
@@ -44,7 +44,7 @@
 >Introduction
 
 #Sequin is a program designed to aid in the submission of sequences to
-the GenBank, EMBL, and DDBJ sequence databases.  It was written at the
+the GenBank or EMBL sequence databases.  It was written at the
 National Center for Biotechnology Information, part of the National
 Library of Medicine at the National Institutes of Health.  This section
 of the help document provides a basic overview of how to submit
@@ -96,12 +96,21 @@ presented below.
 
 >Welcome to Sequin Form
 
-#First, indicate with one of the three radio buttons whether you are
-submitting the sequence to the GenBank, EMBL, or DDBJ database.  If you
+#First, indicate with one of the radio buttons whether you are
+submitting the sequence to the GenBank or EMBL database.  If you
 are working on a sequence submission for the first time, click on
 "Start New Submission".  If you are modifying an existing submission
 record, click on "Read Existing Record". If you would like to quit from
 Sequin, click on "Quit Program".
+
+#The "Network Configure" button will guide you through the set-up
+process to run Sequin in its network-aware mode.  Doing so allows
+the program to exchange information with NCBI (GenBank) over the
+Internet.  Details are provided in the 
+<A HREF="#NetConfigure">
+instructions
+</A>
+later in the help documentation. 
 
 #You can also "Read Existing Record" to read in a FASTA-formatted sequence
 file for analysis purposes.  The sequence will be displayed in Sequin and can
@@ -241,6 +250,214 @@ sequencing was performed.  This is not necessarily the same as the
 workplace of the person described on the Contact page.  This information
 will show up in the reference section of the record, with the title
 Direct Submission.
+
+>Preparing the Sequences Form
+
+#Use the radio buttons to select the type of dialogs used to prepare your
+submission.  The NormalSubmission Dialog can be used for all types of
+submissions.  Instructions continue with the
+<A HREF="#SequenceFormatForm">
+Sequence Format Form 
+</A>
+.
+
+#The Submission Wizards should only be used for virus sequences or uncultured 
+samples (environmental sequences).  These wizards will guide you to provide all
+required source information for these types of submissions and will assist
+with annotation. 
+
+>Wizard Import Nucleotide FASTA
+
+#The requirements for samples to be submitted using the Submission Wizard
+are listed in the dialog box. 
+
+#Use the Import Nucleotide FASTA button to import your properly formatted
+<A HREF="#FASTAFormatforNucleotideSequences">
+FASTA file 
+</A>
+. You will see a window containing information about the imported
+sequence(s). Please check the number of sequences, Sequence IDs (SeqIDs)
+and length of each sequence to make sure they are correct.
+
+>Virus Wizard Type of Virus
+#Use this page to select the type of virus sequence(s) you are submitting. If you are not submitting any of the specific types listed or you are submitting a mixed set of sequences from different viruses, select the "Not listed above or mixed set of different viruses" radio button.
+
+>Wizard Source Organism Information
+
+#All wizard submissions have specific source requirements. General information for inputting source information will be followed by specific requirements for each type of wizard submission.
+
+#If you did not add source information using the
+<A HREF="#FASTAFormatforNucleotideSequences">
+FASTA definition line
+</A>
+you must do so in this form.  If you entered source information in the FASTA definition lines, minimal input will be
+necessary on this form.  However, if there are any issues with the
+imported information, they will be listed on the right side of the form. 
+Please review the problems and edit the information.  You can display
+only the rows with problems by selecting the "Show only sequences with
+errors" radio button.
+
+#You can set the same source qualifier value for all sequences by filling in the top row of boxes and using the appropriate
+Apply button. You can also use the Copy from SeqID button to apply the sequence IDs to the qualifier indicated in the table if this information was used as the sequences ID in the original FASTA file.
+
+#The required information can also be directly typed into the spreadsheet
+in the middle of the form or imported from a tab-delimited table using
+the Import Source Table button.  Click on the Source Table Help button
+to open a text dialog with information on making a tab-delimited source
+table.
+
+#If you have made any changes on this form, please use the Recheck Errors
+button to validate the new information.  Any problems will be listed on
+the right side of the spreadsheet.  You can use the Show only sequences
+with errors radio button to list only those sequences that did not pass
+the validation.
+
+A complete list of available source
+<A HREF="http://www.ncbi.nlm.nih.gov/Sequin/modifiers.html">
+modifiers
+</A> 
+and their format is available.
+
+*Uncultured Sample Wizard Source Information
+
+#All sequences must list the organism name, isolation source or host, and a unique clone name. Optional modifiers can be added to provide additional information, if known. The organism name should not contain the entire lineage information. See the NCBI
+<A HREF="http://www.ncbi.nlm.nih.gov/Taxonomy/">
+Taxonomy Browser
+</A> for more information about the organism names. 
+
+#The clone name is used for both traditional clones and PCR product sample IDs. The clone names must be unique within the submission. In addition, information about the environment from which the sequences were isolated should be supplied within the isolation source field. If the source organism was isolated from within a host organism, this should be supplied in the host field. 
+
+*Virus Wizard Source Information
+
+Each type of virus submission has specific requirments. In addition to the specific requirements listed below, you will need to provide unique source information (such as unique strain or isolate names/IDs) for each sequence if all of your sequences are from the same gene/region.  
+
+**Norovirus, Sapovirus (Caliciviridae)
+
+#Norovirus or Sapovirus (Caliciviridae) sequences must list the organism name, isolate, collection date, country, and host or isolation source. Please use the Add isolation-source button if the source of the virus is better described as an isolation source rather than host. Optional modifiers can be added to provide additional information. 
+
+**Foot-and-mouth disease virus
+
+#Foot-and-mouth disease virus sequences must list the organism name and isolate. Please use the other qualifiers in the table to provide additional information about the source.
+
+**Influenza virus
+
+#Influenza virus sequences must list the organism name, properly formatted strain, collection date and host or isolation source. Influenza A viruses also must list the serotype. Please use the other qualifiers in the table to provide additional information about the source.
+
+**Rotavirus
+
+#Rotavirus sequences must list the organism name, isolate, collection date, country, and host or isolation source. Please use the Add isolation-source button if the source of the virus is better described as an isolation source rather than host. Optional modifiers can be added to provide additional information. 
+
+**Not listed above or mixed set of different viruses
+
+#All other virus sequences must list the organism name and isolate. Please use the other qualifiers in the table to provide additional information about the source.
+
+
+>Uncultured Sample Wizard Primer Type
+
+#Use this page to select the type of primers used in PCR amplification of
+the samples.
+
+>Virus Wizard Molecule Information
+
+#Use this page to select the molecule type that was isolated and sequenced in your experiment. The topology of the molecule can also be changed in this window. Only set the topology to circular if you are submitting a complete, circular viral genome or segment. Single genes or fragments of viral genomes should not be set to a circular topology. 
+
+#If you selected mRNA as the molecule type you will be prompted for more information about your samples.  
+
+>Uncultured Sample Wizard Annotation
+
+#Use the radio buttons to select the option that best describes the
+sequences.  After completing all dialogs for each section, you will be
+directed to leave the Wizard and transferred to the
+<A HREF="#TheRecordViewer">
+ record viewer
+</A>
+.  You must do so to complete your submission.  However, you cannot return
+to the Wizard once you have exited.
+
+*Single rRNA, ITS, or IGS
+
+#Select this option if the sequences contain a single ribosomal RNA, one
+internal transcribed spacer or one intergenic spacer across the entire
+sequence.  Once you have selected this button, a new dialog will appear
+with radio buttons to select the type of organism from which the
+sequences were derived.  Once the organism type is selected, a dialog
+listing common types of rRNA, ITS or IGS will appear.  Select the
+appropriate radio button.  If none of the choices are appropriate,
+select Something else and type in a description of what the sequences
+contain.
+
+*Multiple rRNA, ITS, or IGS regions where spans are unknown
+
+#Select this option if the sequences contain more than one ribosomal RNA,
+internal transcribed spacer(s) and/or intergenic spacer and you are
+unsure of the nucleotide locations of each feature.  Once you have
+selected this button, a new dialog will appear with radio buttons to
+select the type of organism from which the sequences were derived.  Once
+the organism type is selected, a dialog listing common types of rRNA,
+ITS and IGS will appear.  Select the appropriate radio button.  If none
+of the choices are appropriate, select Something else and type in a
+description of what the sequences contain.
+
+*Multiple rRNA, ITS, or IGS where spans are known
+
+#Select this option if the sequences contain more than one ribosomal RNA,
+internal transcribed spacer(s) and/or intergenic spacer and you know the
+nucleotide spans of each feature.  Once this option is selected, you
+will be prompted to exit the wizard and the record viewer will open.  A
+text dialog will open with instructions for importing a five-column,
+tab-delimited table containing the feature locations.
+
+*Coding Region (CDS)
+
+#Select this option if the sequences encode a single protein across the
+entire length of the sequence.  Once you have selected this button, a
+new dialog will appear with text boxes to input the protein name,
+protein description, gene symbol and comments.  Only the protein name is
+required, other fields are optional.  If the coding region is partial,
+check the appropriate 5' or 3' boxes near the top of the dialog as
+appropriate. 
+
+*Something else, multiple features
+
+#Select this option if the sequences do not contain one of the features
+types listed in the annotation dialog or you wish to apply the
+annotation with a five-column, tab-delimited table.  Upon selecting this
+option you will be prompted to exit the wizard and the record viewer
+will open.
+
+>Virus Wizard Annotation
+
+#Use the radio buttons to select the option that best describes the sequences. After completing all dialogs for each section, you will be directed to leave the Wizard and transferred to the 
+<A HREF="TheRecordViewer">
+record viewer
+</A>
+. You must do so to complete your submission. However, you cannot return to the Wizard once you have exited. 
+
+*Single coding region across the entire sequence
+
+#Select this option if the sequences contain a single coding region across the entire length of all of the sequences. Once you have selected this button, a new dialog will appear with text boxes to input the protein name, protein description, gene symbol and comments. Only the protein name is required, other fields are optional. If the coding region is partial, check the appropriate 5' or 3' boxes near the top of the dialog as appropriate.
+
+*Single non-coding feature across the entire sequence
+
+#Select this option if the sequences contain a single non-coding feature across the entire length of all of the sequences. Once of you have selected this button, a new dialog will appear listing common types of non-coding features. Select the appropriate radio button. If none of the choices listed are appropriate, select Something else and a free text box will appear for you to type a description of what the sequences contain.
+ 
+*Multiple features per sequence (coding regions, LTRs, etc.)
+
+#Select this option if the sequences contain more than one feature and you know the nucleotide spans of each feature. Once this option is selected, you will be prompted to exit the wizard and the record viewer will open. A text dialog will open with instructions for importing a five-column, tab-delimited feature table containing the feature locations. You may also add the feature annotation using the menu options.
+
+
+
+
+>Wizard rRNA Chimera Checking
+
+#If you selected the annotation of 16S ribosomal RNA sequences from
+bacteria or archaea, an additional dialog will appear asking if the
+sequences have been screened with a chimera check program.  If you have
+used a chimera check program, please provide the name and version if
+applicable.  Note that BLAST is not a chimera check program.   If you
+have screened the sequences for chimeras, please be sure to remove all
+suspected chimera sequences before submission.
+
 
 >Sequence Format Form
 
@@ -1406,7 +1623,6 @@ databases are:
 
 !-GenBank:  gb-sub@ncbi.nlm.nih.gov 
 !-EMBL:  datasubs@ebi.ac.uk 
-!-DDBJ: ddbjsub@ddbj.nig.ac.jp
 
 #After your entry is complete, close the record viewer.  You will be
 returned to the Welcome to Sequin form and can begin another entry.
@@ -1658,16 +1874,12 @@ features and qualifiers rather than a generic comment descriptor.
 **Title
 
 #This descriptor contains the information that will go on the Definition
-line of the database entry.  If you supplied a title for your
-nucleotide sequence when you imported it into Sequin, that information
-is here.  If you wish to change the Definition line, or if you did not
-supply a title when you submitted the sequence, edit this Descriptor.
-For more information on creating proper Definition lines, please see
-the Sequin help documentation for the 
-
-<A HREF="#NucleotideDefinitionLine(Title)">
-Nucleotide Definition Line (Title)
-</A>.
+line of the database entry.  If you supplied a title for your nucleotide
+sequence when you imported it into Sequin, that information is here.  If
+you wish to change the Definition line, or if you did not supply a title
+when you submitted the sequence, edit this Descriptor.  Note that
+nucleotide definition lines follow a standard format and may be changed
+by the staff when your submission is processed.
 
 **Molecule Description
 
@@ -1992,13 +2204,15 @@ Experiment section.  Please be as brief as possible.
 #The Inference section allows for information to be added in cases where
 the feature is annotated based solely on sequence similarity or
 prediction software. In order to fill in text, you must select one of
-the options from the Category pull-down menu.  Different pull-down and
-text boxes will appear depending on the selection you choose from the
-Category menu.  If you select one of the 'similar to' categories, you
-must include the name of the database and the corresponding accession
-number of the sequence used as the basis for the annotation.  If you
-choose one of the prediction categories, you must include the name and
-version of the prediction program used as the basis for the annotation.
+the options from the Type pull-down menu.  The Category field is
+optional and indicates which category of data is inferred.  Different
+pull-down and text boxes will appear depending on the selection you
+choose from the Type menu.  If you select one of the 'similar to'
+categories, you must include the name of the database and the
+corresponding accession number of the sequence used as the basis for the
+annotation.  If you choose one of the prediction categories, you must
+include the name and version of the prediction program used as the basis
+for the annotation.
 
 #For example, if your annotation of a coding region was based on
 similarity to the sequence and annotation in GenBank Accession number
@@ -2138,6 +2352,10 @@ fill in the Protein Product or SeqID selections.
 Protein Information to launch the Protein feature forms. The protein
 name must have already been filled out on the Protein subpage.
 
+#If you have changed the nucleotide location spans of the coding region,
+check Update mRNA Span on Accept.  This will adjust the mRNA feature
+locations as well.
+
 #Checking retranslate on accept will translate the nucleotide sequence
 according to the interval(s) indicated on the Locations page when you
 click on Accept to exit the editor.  This new translation will replace
@@ -2198,11 +2416,6 @@ occurs, and select the amino acid that is actually represented in the
 protein from the pop-up list. Sequin will change the amino acid number
 to a nucleotide interval.  Please provide some explanation for the
 exception in a comment.
-
-*conflict
-
-#Independent determinations of the "same" sequence differ at this site
-or region.
 
 *D-loop
 
@@ -2282,8 +2495,8 @@ protein_bind).
 *misc_difference
 
 #Feature sequence is different from that presented in the entry and
-cannot be described by any other Difference key (conflict, unsure,
- mutation, variation, allele, or modified_base).
+cannot be described by any other Difference key (unsure, mutation,
+variation, or modified_base).
 
 *misc_feature
 
@@ -2314,6 +2527,14 @@ polyA_signal, enhancer, attenuator, terminator, and rep_origin).
 
 #Any secondary or tertiary structure or conformation that cannot be
 described by other Structure keys (stem_loop and D-loop).
+
+*mobile_element
+
+#Region of genome containing an element capable of or derived from
+movement from one location to another in the genome.  The
+mobile_element_type qualifier is mandatory and a pull-down menu lists
+approved types.  The name of the specific element can be given in the
+text box.
 
 *modified_base
 
@@ -2393,7 +2614,7 @@ transcription.
 *repeat_region
 
 #Region of genome containing repeating units.  Some qualifiers such as
-rpt_type, mobile_element and satellite have controlled vocabularies.  These
+rpt_type and satellite have controlled vocabularies.  These
 qualifiers have check boxes or pull-down menus to ensure that the
 correct format is used.
 
@@ -2640,6 +2861,14 @@ page.  You may add multiple modifiers to describe the source organism.
 #Clicking on the X button to the right of the text box will remove the
 text and clear the modifier from the pull-down in that line.
 
+#If the sequence was determined from a PCR product, check the PCR primers
+box at the bottom of the page.  This will launch a separate editor where
+you can enter the direction, name and sequence of all PCR primers.  The
+Set field allows you to group which primers were used in the same PCR
+reaction.  All primers used in the same reaction should list the same
+number under Set.  This dialog is for PCR primers only, not for
+sequencing or other primers.
+
 #The following is a description of the available modifiers:
 
 #-Cell-line:  Cell line from which sequence derives.
@@ -2677,11 +2906,6 @@ using this modifier; the text box will change to TRUE upon selection of this
 modifier from the pull-down list
 
 #-Frequency:  Frequency of occurrence of a feature.
-
-#-Fwd-PCR-primer-name:  Name or designation of forward primer used for
-amplification.
-
-#-Fwd-PCR-primer-seq:  Sequence of forward primer used for amplification.
 
 #-Genotype:  Genotype of the organism.
 
@@ -2733,11 +2957,6 @@ immunoglobulin family, this qualifier is used to denote that the sequence
 is from rearranged DNA.  You cannot include extra text when using this
 modifier; the text box will change to TRUE upon selection of this modifier
 from the pull-down list.
-
-#-Rev-PCR-primer-name:  Name or description of reverse primer used for
-amplification.
-
-#-Rev-PCR-primer-seq:  Sequence of reverse primer used for amplification.
 
 #-Segment: Name of viral genome fragmented into two or more nucleic acid
 molecules.
@@ -4054,7 +4273,7 @@ be entered as the location relative to the alignment coordinates.
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service
 Desk</A></P>
-<P CLASS=medium1>Revised March 2, 2010
+<P CLASS=medium1>Revised January 12, 2010
 
 </CENTER>
 

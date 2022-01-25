@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.110 $
+* $Revision: 6.115 $
 *
 * File Description: 
 *
@@ -391,7 +391,7 @@ extern CharPtr GetRowListCellText (ValNodePtr row_list, Int4 row, Int4 column);
 extern FonT GetTableDisplayDefaultFont (void);
 
 
-#define TALL_SELECTION_LIST 8
+#define TALL_SELECTION_LIST 6
 #define SHORT_SELECTION_LIST 4
 /* err_msg is the message to put in the results from TestDialog if nothing is selected */
 /* choice_list should be a valnode list of strings to use for the names of the choices. */
@@ -492,6 +492,15 @@ extern void ValNodeSimpleDataFree (ValNodePtr vnp);
 extern ValNodePtr ValNodeStringCopy (ValNodePtr vnp);
 extern Boolean ValNodeChoiceMatch (ValNodePtr vnp1, ValNodePtr vnp2);
 extern Boolean ValNodeStringMatch (ValNodePtr vnp1, ValNodePtr vnp2);
+
+/* choice list is a list of strings */
+extern DialoG StringComboDialog
+(GrouP h,
+ ValNodePtr               choice_list,
+ Int2                     list_height,
+ Int2                     list_width,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata);
 
 extern DialoG SequenceSelectionDialog 
 (GrouP h,
@@ -659,6 +668,7 @@ extern DialoG EditApplyDialog
 typedef struct inferenceparsedata
 {
   CharPtr category;
+  CharPtr type;
   Boolean same_species;
   CharPtr first_field;
   CharPtr second_field;
@@ -669,7 +679,7 @@ extern CharPtr InferenceTextFromStruct (InferenceParsePtr ipp);
 
 typedef struct inferencefieldedit
 {
-  CharPtr field_category;
+  CharPtr field_type;
   Int4 field_choice;
   EditApplyPtr edit_apply;
 } InferenceFieldEditData, PNTR InferenceFieldEditPtr;
@@ -679,8 +689,9 @@ extern InferenceFieldEditPtr InferenceFieldEditFree (InferenceFieldEditPtr ifep)
 typedef enum {
   eInferenceRemove = 0,
   eInferenceEditCategory,
-  eInferenceApplyCategoryFields,
-  eInferenceEditCategoryFields,
+  eInferenceEditType,
+  eInferenceApplyTypeFields,
+  eInferenceEditTypeFields,
   eNumInferenceEditActions } EInferenceEditAction;
 
 
@@ -688,6 +699,8 @@ typedef struct inferenceedit {
   EInferenceEditAction action;
   CharPtr category_from;
   CharPtr category_to;
+  CharPtr type_from;
+  CharPtr type_to;
 
   InferenceFieldEditPtr field_edit;
 } InferenceEditData, PNTR InferenceEditPtr;
@@ -770,8 +783,11 @@ NLM_EXTERN Boolean FixSpecialCharactersForObject (Uint2 datatype, Pointer objdat
 /* for functions that act on all open records */
 NLM_EXTERN ValNodePtr GetBaseFormList (void);
 NLM_EXTERN ValNodePtr GetViewedSeqEntryList (void);
+NLM_EXTERN SeqEntryPtr RestoreFromFileEx (CharPtr path, Boolean convert_seqsubmit_to_pub);
 NLM_EXTERN SeqEntryPtr RestoreFromFile (CharPtr path);
+NLM_EXTERN Uint2 RestoreEntityIDFromFileEx (CharPtr path, Uint2 entityID, Boolean convert_seqsubmit_to_pub);
 NLM_EXTERN Uint2 RestoreEntityIDFromFile (CharPtr path, Uint2 entityID);
+
 
 NLM_EXTERN Int2 PanelOffsetFromCharOffsetEx (DoC doc, FonT font, Int2 item, Int2 col, Int2 char_offset);
 NLM_EXTERN Int2 GetTextSelectCharOffsetEx (PoinT pt, DoC doc, FonT font, Int2 item, Int2 row, Int2 col);

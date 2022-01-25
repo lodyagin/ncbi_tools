@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -634,6 +634,7 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdDup (SeqIdPtr oldid)
 		case SEQID_TPE:
 		case SEQID_TPD:
         case SEQID_GPIPE:
+        case SEQID_NAMED_ANNOT_TRACK:
 			at = (TextSeqIdPtr)oldid->data.ptrvalue;
             bt = TextSeqIdNew();
 			if (bt == NULL) return NULL;

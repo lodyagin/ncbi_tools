@@ -64,6 +64,8 @@ NLM_EXTERN Boolean empty_citgen PROTO((CitGenPtr  cit));
 
 NLM_EXTERN void EntryStripSerialNumber PROTO((SeqEntryPtr sep));
 
+NLM_EXTERN void ForceStripSerialNumber PROTO((SeqEntryPtr sep));
+
 NLM_EXTERN void VnpHeapSort PROTO ((ValNodePtr PNTR vnp, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr ))));	
 
 NLM_EXTERN SeqFeatPtr remove_feat PROTO((SeqFeatPtr head, SeqFeatPtr x));

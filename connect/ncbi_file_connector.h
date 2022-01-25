@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_FILE_CONNECTOR__H
 #define CONNECT___NCBI_FILE_CONNECTOR__H
 
-/*  $Id: ncbi_file_connector.h,v 6.4 2003/04/09 17:58:50 siyan Exp $
+/* $Id: ncbi_file_connector.h,v 6.5 2011/06/02 14:14:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -54,35 +54,35 @@ extern "C" {
  * Return NULL on error.
  */
 extern NCBI_XCONNECT_EXPORT CONNECTOR FILE_CreateConnector
-(const char* in_file_name,   /* to read data from */
- const char* out_file_name   /* to write the read data to */
+(const char* inp_filename,  /* to read data from         */
+ const char* out_filename   /* to write the read data to */
  );
 
 
 /* Open mode for the output data file
  */
 typedef enum {
-    eFCM_Truncate, /* create new or replace existing file */
-    eFCM_Seek,     /* seek before the first i/o */
-    eFCM_Append    /* add after the end of file */
-} EFileConnMode;
+    eFCM_Truncate,  /* create new or replace existing file               */
+    eFCM_Append,    /* add at the end of file                            */
+    eFCM_Seek       /* seek to specified position before doing first I/O */
+} EFILE_ConnMode;
 
 
 /* Extended file connector attributes
  */
 typedef struct {
-    size_t        r_pos;  /* file position to start reading at */
-    EFileConnMode w_mode; /* how to open output file */
-    size_t        w_pos;  /* eFCM_Seek mode only: begin to write at "w_pos" */
-} SFileConnAttr;
+    EFILE_ConnMode w_mode;  /* how to open output file                   */
+    TNCBI_BigCount w_pos;   /* eFCM_Seek only: begin to write at "w_pos" */
+    TNCBI_BigCount r_pos;   /* file position to start reading at         */
+} SFILE_ConnAttr;
 
 
 /* An extended version of FILE_CreateConnector().
  */
 extern NCBI_XCONNECT_EXPORT CONNECTOR FILE_CreateConnectorEx
-(const char*          in_file_name,
- const char*          out_file_name,
- const SFileConnAttr* attr
+(const char*           inp_filename,
+ const char*           out_filename,
+ const SFILE_ConnAttr* attr
  );
 
 
@@ -92,24 +92,5 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR FILE_CreateConnectorEx
 
 
 /* @} */
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_file_connector.h,v $
- * Revision 6.4  2003/04/09 17:58:50  siyan
- * Added doxygen support
- *
- * Revision 6.3  2003/01/08 01:59:32  lavr
- * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
- *
- * Revision 6.2  2002/09/19 18:00:42  lavr
- * Header file guard macro changed; log moved to the end
- *
- * Revision 6.1  2000/04/12 15:18:10  vakatov
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_FILE_CONNECTOR__H */

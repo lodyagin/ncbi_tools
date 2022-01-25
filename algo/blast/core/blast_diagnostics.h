@@ -1,4 +1,4 @@
-/* $Id: blast_diagnostics.h,v 1.11 2006/11/21 16:37:13 papadopo Exp $
+/* $Id: blast_diagnostics.h,v 1.12 2011/06/13 18:24:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -92,6 +92,9 @@ BlastDiagnostics* Blast_DiagnosticsFree(BlastDiagnostics* diagnostics);
 
 /** Initialize the BlastDiagnostics structure and all its substructures. */
 BlastDiagnostics* Blast_DiagnosticsInit(void);
+
+/** Free the BlastDiagnostics structure and all substructures. */
+BlastDiagnostics* Blast_DiagnosticsCopy(const BlastDiagnostics* diagnostics);
 
 /** Initialize the BlastDiagnostics structure for a multi-threaded search.
  * @param mt_lock Mutex locking mechanism to be used for updates. [in]

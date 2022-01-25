@@ -71,6 +71,7 @@
 #define ERR_SEQ_INST_DSmRNA  1,67
 #define ERR_SEQ_INST_HighNContentStretch  1,68
 #define ERR_SEQ_INST_HighNContentPercent  1,69
+#define ERR_SEQ_INST_BadSegmentedSeq  1,70
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -148,6 +149,11 @@
 #define ERR_SEQ_DESCR_BioSourceNeedsChromosome  2,74
 #define ERR_SEQ_DESCR_MolInfoConflictsWithBioSource  2,75
 #define ERR_SEQ_DESCR_MissingKeyword  2,76
+#define ERR_SEQ_DESCR_FakeStructuredComment  2,77
+#define ERR_SEQ_DESCR_StructuredCommentPrefixOrSuffixMissing  2,78
+#define ERR_SEQ_DESCR_LatLonWater  2,79
+#define ERR_SEQ_DESCR_LatLonOffshore  2,80
+#define ERR_SEQ_DESCR_MissingPersonalCollectionName  2,81
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -192,6 +198,8 @@
 #define ERR_SEQ_PKG_NucProtSetHasTitle  4,25
 #define ERR_SEQ_PKG_ComponentMissingTitle  4,26
 #define ERR_SEQ_PKG_SingleItemSet  4,27
+#define ERR_SEQ_PKG_MisplacedMolInfo  4,28
+#define ERR_SEQ_PKG_ImproperlyNestedSets  4,29
 #define ERR_SEQ_FEAT  5,0
 #define ERR_SEQ_FEAT_InvalidForType  5,1
 #define ERR_SEQ_FEAT_PartialProblem  5,2
@@ -369,6 +377,10 @@
 #define ERR_SEQ_FEAT_GeneXrefStrandProblem  5,174
 #define ERR_SEQ_FEAT_CDSmRNAXrefLocationProblem  5,175
 #define ERR_SEQ_FEAT_LocusCollidesWithLocusTag  5,176
+#define ERR_SEQ_FEAT_IdenticalGeneSymbolAndSynonym  5,177
+#define ERR_SEQ_FEAT_NeedsNote  5,178
+#define ERR_SEQ_FEAT_RptUnitRangeProblem  5,179
+#define ERR_SEQ_FEAT_TooManyInferenceAccessions  5,180
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

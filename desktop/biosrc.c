@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.96 $
+* $Revision: 6.103 $
 *
 * File Description: 
 *
@@ -143,6 +143,9 @@ typedef struct genbiopage {
 
   DialoG          subsrc_val_dlg;
   DialoG          orgmod_val_dlg;
+  ButtoN          pcr_primer_btn;
+  GrouP           pcr_primer_grp;
+  DialoG          pcr_primer_dlg;
 
   CharPtr         origTaxName;
   Boolean         stripOldName;
@@ -1853,6 +1856,7 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
     PointerToDialog (gbp->mod, NULL);
     PointerToDialog (gbp->subsrc_val_dlg, NULL);
     PointerToDialog (gbp->orgmod_val_dlg, NULL);
+    PointerToDialog (gbp->pcr_primer_dlg, NULL);
     
     if (biop != NULL) {
       vn.choice = SrcLocFromGenome (biop->genome);
@@ -1902,6 +1906,11 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
       }
 
       PointerToDialog (gbp->subsrc_val_dlg, biop->subtype);
+      if (biop->pcr_primers != NULL) {
+        SetStatus (gbp->pcr_primer_btn, TRUE);
+        PointerToDialog (gbp->pcr_primer_dlg, biop->pcr_primers);
+        Show (gbp->pcr_primer_grp);
+      }
     }
     if (orp != NULL) {
       if (! TextHasNoText (gbp->taxName)) {
@@ -2188,6 +2197,9 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
       }
 
       biop->subtype = DialogToPointer (gbp->subsrc_val_dlg);
+      if (GetStatus (gbp->pcr_primer_btn)) {
+        biop->pcr_primers = DialogToPointer (gbp->pcr_primer_dlg);
+      }
 
       RemoveTextFromTextFreeSubSourceModifiers (biop, NULL);     
 
@@ -3086,6 +3098,13 @@ static CharPtr modTabsUns [] = {
   "Source", "Organism", "GenBank", "Unstructured", NULL
 };
 
+typedef enum {
+  eModTabSource = 0,
+  eModTabOrganism = 1,
+  eModTabGenBank = 2,
+  eModTabUnstructured = 3
+} EModTab;
+
 static CharPtr miscTabs1 [] = {
   "Cross-Refs", NULL
 };
@@ -3179,6 +3198,269 @@ static EnumFieldAssocPtr EnumListFromQualNameAssoc (Nlm_QualNameAssocPtr qp)
   eap[i].value = 0;
   return eap;
 }
+
+
+Uint2 pcr_primer_dlg_types [] = {
+  TAGLIST_TEXT, TAGLIST_POPUP, TAGLIST_TEXT, TAGLIST_TEXT
+};
+
+Uint2 pcr_primer_dlg_widths [] = {
+  3, 4, 10, 20
+};
+
+static ENUM_ALIST(pcr_primer_dlg_alist)
+  {" ",    0},
+  {"Fwd",  1},
+  {"Rev",  2},
+END_ENUM_ALIST
+
+static EnumFieldAssocPtr pcr_primer_dlg_popups [] = {
+  NULL, pcr_primer_dlg_alist, NULL, NULL 
+};
+
+
+static void PCRReactionSetPtrToPCRPrimerDialog (DialoG d, Pointer data)
+
+{
+  ValNodePtr      head;
+  Int2            j;
+  CharPtr         str;
+  CharPtr         fmt = "%d\t2\t%s\t%s\n";
+  TagListPtr      tlp;
+  ValNodePtr      vnp;
+  PCRReactionSetPtr ps;
+  PCRPrimerPtr      pp;
+  Int4              set_num = 1;
+
+  tlp = (TagListPtr) GetObjectExtra (d);
+  if (tlp == NULL) {
+    return;
+  }
+  ps = (PCRReactionSetPtr) data;
+  head = NULL;
+  if (ps == NULL) {
+    str = (CharPtr) MemNew (sizeof (Char) * StringLen (fmt));
+    sprintf (str, "%d\t1\t\t\n", set_num);
+    ValNodeAddPointer (&head, 0, str);
+    str = (CharPtr) MemNew (sizeof (Char) * StringLen (fmt));
+    sprintf (str, "%d\t2\t\t\n", set_num);
+    ValNodeAddPointer (&head, 0, str);
+  } else {
+    while (ps != NULL) {      
+      if (ps->forward == NULL) {
+        str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + 15));
+        sprintf (str, "%d\t1\t\t\n", set_num);
+        ValNodeAddPointer (&head, 0, str);
+      } else {
+        pp = ps->forward;
+        while (pp != NULL) {
+          str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + 15 + StringLen (pp->name) + StringLen (pp->seq)));
+          sprintf (str, "%d\t1\t%s\t%s\n", 
+                   set_num,
+                   pp->name == NULL ? "" : pp->name,
+                   pp->seq == NULL ? "" : pp->seq);
+          ValNodeAddPointer (&head, 0, str);
+          pp = pp->next;
+        }
+      }
+      if (ps->reverse == NULL) {
+        str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + 15));
+        sprintf (str, "%d\t2\t\t\n", set_num);
+        ValNodeAddPointer (&head, 0, str);
+      } else {
+        pp = ps->reverse;
+        while (pp != NULL) {
+          str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + 15 + StringLen (pp->name) + StringLen (pp->seq)));
+          sprintf (str, "%d\t2\t%s\t%s\n", 
+                   set_num,
+                   pp->name == NULL ? "" : pp->name,
+                   pp->seq == NULL ? "" : pp->seq);
+          ValNodeAddPointer (&head, 0, str);
+          pp = pp->next;
+        }
+      }
+      ps = ps->next;
+      set_num++;
+    }
+  }
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+  tlp->vnp = head;
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+  for (j = 0, vnp = tlp->vnp; vnp != NULL; j++, vnp = vnp->next) {
+  }
+  tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows + 1));
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+}
+
+
+static PCRPrimerPtr PCRPrimerFromRow (CharPtr row)
+{
+  CharPtr p_name, p_seq;
+  PCRPrimerPtr pp = NULL;
+
+  p_name = ExtractTagListColumn (row, 2);
+  p_seq = ExtractTagListColumn (row, 3);
+
+  if (StringHasNoText (p_name) && StringHasNoText (p_seq)) {
+    p_name = MemFree (p_name);
+    p_seq = MemFree (p_seq);
+  } else {
+    pp = PCRPrimerNew ();
+    pp->name = p_name;
+    pp->seq = p_seq;
+  }
+  return pp;
+}
+
+
+static void AddPrimerToSet (PCRReactionSetPtr PNTR p_set, Int4 set_num, int dir, PCRPrimerPtr pp)
+{
+  PCRReactionSetPtr prev = NULL;
+  PCRReactionSetPtr ps;
+  PCRPrimerPtr      last;
+  Int4              num = 1;
+
+  if (p_set == NULL || pp == NULL) {
+    return;
+  }
+  ps = *p_set;
+  while (num < set_num) {
+    if (ps == NULL) {
+      ps = PCRReactionSetNew ();
+      if (prev == NULL) {
+        *p_set = ps;
+      } else {
+        prev->next = ps;
+      }
+    }
+    prev = ps;
+    num++;
+    ps = ps->next;
+  }
+  if (ps == NULL) {
+    ps = PCRReactionSetNew ();
+    if (prev == NULL) {
+      *p_set = ps;
+    } else {
+      prev->next = ps;
+    }
+  }
+  if (dir == 2) {
+    /* add to reverse */
+    if (ps->reverse == NULL) {
+      ps->reverse = pp;
+    } else {
+      last = ps->reverse;
+      while (last->next != NULL) {
+        last = last->next;
+      }
+      last->next = pp;
+    }
+  } else {
+    /* add to forward */
+    if (ps->forward == NULL) {
+      ps->forward = pp;
+    } else {
+      last = ps->forward;
+      while (last->next != NULL) {
+        last = last->next;
+      }
+      last->next = pp;
+    }
+  }
+}
+
+static Pointer PCRPrimerDialogToPCRReactionSetPtr (DialoG d)
+
+{
+  CharPtr       str;
+  TagListPtr    tlp;
+  CharPtr       tmp;
+  int           val;
+  ValNodePtr    vnp;
+  PCRReactionSetPtr ps_list = NULL;
+  PCRPrimerPtr      pp;
+  Int4              set_num = 1;
+
+  tlp = (TagListPtr) GetObjectExtra (d);
+  if (tlp != NULL && tlp->vnp != NULL) {
+    for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+      /* get set number */
+      str = (CharPtr) vnp->data.ptrvalue;
+      tmp = ExtractTagListColumn (str, 0);
+      if (tmp != NULL && sscanf (tmp, "%d", &val) == 1 && val != 0) {
+        set_num = val;
+      }
+      MemFree (tmp);
+      /* get name and sequence */
+      pp = PCRPrimerFromRow (str);
+      if (pp != NULL) {        
+        /* get direction */
+        tmp = ExtractTagListColumn (str, 1);
+        if (tmp == NULL || sscanf (tmp, "%d", &val) != 1 || val != 2) {
+          val = 1;
+        }
+
+        /* add to set */
+        AddPrimerToSet (&ps_list, set_num, val, pp);
+      }
+    }
+  }
+  /* TODO - before returning, need to delete any empty sets */
+  return (Pointer) ps_list;
+}
+
+
+static GrouP MakePCRPrimerGroup (GrouP g, GenBioPagePtr gbp)
+{
+  GrouP      grp, q;
+  PrompT     p1, p2, p3, p4;
+  TagListPtr tlp;
+
+  if (gbp == NULL) {
+    return NULL;
+  }
+  grp = HiddenGroup (g, -1, 0, NULL);
+  SetGroupSpacing (grp, 3, 10);
+  q = HiddenGroup (grp, 4, 0, NULL);
+  p1 = StaticPrompt (q, "Set", 0, 0, programFont, 'c');
+  p2 = StaticPrompt (q, "Dir", 4 * stdCharWidth, 0, programFont, 'c');
+  p3 = StaticPrompt (q, "Name", pcr_primer_dlg_widths[2] * stdCharWidth, 0, programFont, 'c');
+  p4 = StaticPrompt (q, "Sequence", pcr_primer_dlg_widths[3] * stdCharWidth, 0, programFont, 'c');
+
+  gbp->pcr_primer_dlg = CreateTagListDialogEx3 (grp, 4, 4, 2,
+                                      pcr_primer_dlg_types, pcr_primer_dlg_widths, pcr_primer_dlg_popups,
+                                      TRUE, FALSE, 
+                                      PCRReactionSetPtrToPCRPrimerDialog, 
+                                      PCRPrimerDialogToPCRReactionSetPtr,
+                                      NULL, NULL, FALSE, TRUE);
+
+  tlp = (TagListPtr) GetObjectExtra (gbp->pcr_primer_dlg);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [0], (HANDLE) p1, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [1], (HANDLE) p2, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [2], (HANDLE) p3, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) p4, NULL);
+
+  return grp;
+}
+
+
+static void ShowPCRPrimers (ButtoN b)
+{
+  GenBioPagePtr  gbp;
+
+  gbp = (GenBioPagePtr) GetObjectExtra (b);
+  if (gbp == NULL) {
+    return;
+  }
+  if (GetStatus (b)) {
+    Show (gbp->pcr_primer_grp);
+  } else {
+    Hide (gbp->pcr_primer_grp);
+  }
+}
+
 
 static void CleanupBioSourceDialog (GraphiC g, VoidPtr data)
 
@@ -3412,27 +3694,35 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     }
     k = HiddenGroup (pages [1], 0, 0, NULL);
 
-    gbp->modGrp [0] = HiddenGroup (k, -1, 0, NULL);
-    SetGroupSpacing (gbp->modGrp [0], 10, 10);
+    gbp->modGrp [eModTabSource ] = HiddenGroup (k, -1, 0, NULL);
+    SetGroupSpacing (gbp->modGrp [eModTabSource ], 10, 10);
 
-    g = HiddenGroup (gbp->modGrp [0], -1, 0, NULL);
+    g = HiddenGroup (gbp->modGrp [eModTabSource ], -1, 0, NULL);
     SetGroupSpacing (g, 3, 10);
     gbp->subsrc_val_dlg = CreateSubSourceDialog (g, gbp->subsource_alists[0]);
 
-    gbp->modGrp [1] = HiddenGroup (k, -1, 0, NULL);
-    SetGroupSpacing (gbp->modGrp [1], 10, 10);
+    gbp->pcr_primer_btn = CheckBox (g, "PCR primers", ShowPCRPrimers);
+    SetObjectExtra (gbp->pcr_primer_btn, gbp, NULL);
+    gbp->pcr_primer_grp = MakePCRPrimerGroup (g, gbp);
+    SetGroupSpacing (gbp->pcr_primer_grp, 3, 10);
+    Hide (gbp->pcr_primer_grp);
 
-    g = HiddenGroup (gbp->modGrp [1], -1, 0, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) gbp->subsrc_val_dlg, (HANDLE) gbp->pcr_primer_btn, (HANDLE) gbp->pcr_primer_grp, NULL);
+
+    gbp->modGrp [eModTabOrganism] = HiddenGroup (k, -1, 0, NULL);
+    SetGroupSpacing (gbp->modGrp [eModTabOrganism], 10, 10);
+
+    g = HiddenGroup (gbp->modGrp [eModTabOrganism], -1, 0, NULL);
     SetGroupSpacing (g, 3, 10);
 
     gbp->orgmod_val_dlg = CreateOrgModDialog (g, gbp->orgmod_alists[0], gbp->taxName);
 
-    Hide (gbp->modGrp [1]);
+    Hide (gbp->modGrp [eModTabOrganism]);
 
-    gbp->modGrp [2] = HiddenGroup (k, -1, 0, NULL);
-    SetGroupSpacing (gbp->modGrp [2], 10, 10);
+    gbp->modGrp [eModTabGenBank] = HiddenGroup (k, -1, 0, NULL);
+    SetGroupSpacing (gbp->modGrp [eModTabGenBank], 10, 10);
 
-    g = HiddenGroup (gbp->modGrp [2], 2, 0, NULL);
+    g = HiddenGroup (gbp->modGrp [eModTabGenBank], 2, 0, NULL);
     SetGroupSpacing (g, 3, 10);
 
     StaticPrompt (g, "Assigned Acronym", 0, stdLineHeight, programFont, 'l');
@@ -3442,24 +3732,24 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     StaticPrompt (g, "Assigned Synonym", 0, stdLineHeight, programFont, 'l');
     gbp->gbsyn = StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
 
-    Hide (gbp->modGrp [2]);
+    Hide (gbp->modGrp [eModTabGenBank]);
 
-    gbp->modGrp [3] = HiddenGroup (k, -1, 0, NULL);
-    SetGroupSpacing (gbp->modGrp [3], 10, 10);
+    gbp->modGrp [eModTabUnstructured] = HiddenGroup (k, -1, 0, NULL);
+    SetGroupSpacing (gbp->modGrp [eModTabUnstructured], 10, 10);
 
     if (showUnstructMods) {
-      f3 = HiddenGroup (gbp->modGrp [3], 0, 2, NULL);
+      f3 = HiddenGroup (gbp->modGrp [eModTabUnstructured], 0, 2, NULL);
       StaticPrompt (f3, "Unstructured Modifiers", 0, 0, programFont, 'c');
       gbp->mod = CreateVisibleStringDialog (f3, 3, -1, 15);
     }
 
-    Hide (gbp->modGrp [3]);
+    Hide (gbp->modGrp [eModTabUnstructured]);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) tbs,
-                  (HANDLE) gbp->modGrp [0],
-                  (HANDLE) gbp->modGrp [1],
-                  (HANDLE) gbp->modGrp [2],
-                  (HANDLE) gbp->modGrp [3], NULL);
+                  (HANDLE) gbp->modGrp [eModTabSource],
+                  (HANDLE) gbp->modGrp [eModTabOrganism],
+                  (HANDLE) gbp->modGrp [eModTabGenBank],
+                  (HANDLE) gbp->modGrp [eModTabUnstructured], NULL);
 
     Hide (pages [1]);
 
@@ -4474,5 +4764,6 @@ extern EnumFieldAssocPtr GetSubSourceAndOrgModEnum (Boolean get_discouraged, Boo
 {
   return GetModifiersEnum (TRUE, TRUE, get_discouraged, get_discontinued);
 }
+
 
 

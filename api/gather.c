@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.56 $
+* $Revision: 6.57 $
 *
 * File Description: 
 *
@@ -181,6 +181,11 @@ NLM_EXTERN Boolean SeqLocOffset (SeqLocPtr seq_loc, SeqLocPtr sfp_loc, GatherRan
     return FALSE;
   }
 
+  if( sfp_loc->choice == SEQLOC_NULL || 
+      sfp_loc->choice == SEQLOC_EMPTY ) 
+  {
+    return FALSE;
+  }
 
   if(ck_extreme(sfp_loc, &across_zero))
   {

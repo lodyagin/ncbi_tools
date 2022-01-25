@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.75 $
+* $Revision: 6.76 $
 *
 * File Description: 
 *
@@ -114,7 +114,8 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
               subtype != FEATDEF_gap &&
               subtype != FEATDEF_misc_RNA &&
               subtype != FEATDEF_satellite &&
-              subtype != FEATDEF_repeat_unit) {
+              subtype != FEATDEF_repeat_unit &&
+              subtype != FEATDEF_conflict) {
             if (allowPeptideFeats ||
                 (subtype != FEATDEF_mat_peptide &&
                  subtype != FEATDEF_sig_peptide &&

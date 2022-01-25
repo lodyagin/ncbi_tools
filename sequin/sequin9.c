@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.484 $
+* $Revision: 6.493 $
 *
 * File Description: 
 *
@@ -972,7 +972,7 @@ extern void SubmitToNCBI (IteM i)
                              "/cgi-bin/Sequin/testcgi.cgi", "request=echo",
                              progname, 30, eMIME_T_NcbiData, eMIME_AsnBinary,
                              eENCOD_Url,
-                             fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);
+                             fHTTP_UrlDecodeInput | fHTTP_UrlEncodeOutput);
 
   fp = FileOpen (path, "rb");
   QUERY_CopyFileToQuery (conn, fp);
@@ -1207,7 +1207,7 @@ static void FinishURLProc (NewObjectPtr nop, CharPtr arguments, CharPtr path)
                              nop->host_path, arguments,
                              progname, nop->timeoutsec,
                              eMIME_T_NcbiData, subtype, eENCOD_Url,
-                             fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);
+                             fHTTP_UrlDecodeInput | fHTTP_UrlEncodeOutput);
   if (conn == NULL) return;
 
   fp = FileOpen (path, "r");
@@ -4856,22 +4856,25 @@ static void RemoveOldFeatsInRegion (
   }
 }
 
-static void RemoveOldFeats (BioseqPtr bsp)
+static Boolean RemoveOldFeats (BioseqPtr bsp)
 
 {
   SeqMgrFeatContext  context;
   SeqFeatPtr         sfp;
+  Boolean            rval = FALSE;
 
-  if (bsp == NULL) return;
+  if (bsp == NULL) return FALSE;
 
   sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &context);
 
   while (sfp != NULL) 
   {
     sfp->idx.deleteme = TRUE;
+    rval = TRUE;
     MarkProductForDeletion (sfp->product);
     sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
   }
+  return rval;
 }
 
 
@@ -11000,8 +11003,8 @@ extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_st
     last_cbp->next = new_cbp;
   }
   
-  /* add comment if there is one */
-  if (cds_comment != NULL)
+  /* add comment if there is one, unless it's already there */
+  if (cds_comment != NULL && StringISearch (sfp->comment, cds_comment) == NULL)
   {
   	if (StringHasNoText (sfp->comment))
   	{
@@ -11010,12 +11013,12 @@ extern void AddTranslExcept (SeqFeatPtr sfp, CharPtr cds_comment, Boolean use_st
   	}
   	else
   	{
-      comment_len = StringLen (sfp->comment) + StringLen (cds_comment) + 2;
+      comment_len = StringLen (sfp->comment) + StringLen (cds_comment) + 3;
       new_comment = (CharPtr) MemNew (sizeof (Char) * comment_len);
       if (new_comment != NULL)
       {
       	StringCpy (new_comment, sfp->comment);
-      	StringCat (new_comment, ";");
+      	StringCat (new_comment, "; ");
       	StringCat (new_comment, cds_comment);
       	sfp->comment = MemFree (sfp->comment);
       	sfp->comment = new_comment;
@@ -11196,6 +11199,8 @@ typedef struct updatepair
   Boolean     revcomp;
   BioseqPtr   orig_bsp;
   BioseqPtr   update_bsp;
+  Boolean     feature_update_successful;
+  SeqAnnotPtr newfeat_sap;
 } UpdatePairData, PNTR UpdatePairPtr;
 
 /* These structures hold information about how to perform the updates.
@@ -11225,13 +11230,67 @@ typedef enum {
   eFeatureRemoveAll
 } EFeatureRemoveType;
 
+typedef struct featureimportoptions
+{
+  Uint1      feature_import_type;
+  ValNodePtr feature_types;
+} FeatureImportOptionsData, PNTR FeatureImportOptionsPtr;
+
+
+static FeatureImportOptionsPtr FeatureImportOptionsNew (void)
+{
+  FeatureImportOptionsPtr f;
+
+  f = (FeatureImportOptionsPtr) MemNew (sizeof (FeatureImportOptionsData));
+  f->feature_import_type = eFeatureUpdateNoChange;
+  f->feature_types = NULL;
+  return f;
+}
+
+
+static FeatureImportOptionsPtr FeatureImportOptionsFree (FeatureImportOptionsPtr f)
+{
+  if (f != NULL) {
+    f->feature_types = ValNodeFree (f->feature_types);
+    f = MemFree (f);
+  }
+  return f;
+}
+
+
 typedef struct submitterupdateoptions
 {
-  ESequenceUpdateType   sequence_update_type;
-  EFeatureUpdateType    feature_update_type;
-  EFeatureRemoveType    feature_remove_type;
-  Boolean               ignore_alignment;
+  ESequenceUpdateType     sequence_update_type;
+  FeatureImportOptionsPtr feature_import_options;
+  EFeatureRemoveType      feature_remove_type;
+  Boolean                 ignore_alignment;
 } SubmitterUpdateOptionsData, PNTR SubmitterUpdateOptionsPtr;
+
+
+static SubmitterUpdateOptionsPtr SubmitterUpdateOptionsFree (SubmitterUpdateOptionsPtr s)
+{
+  if (s != NULL) {
+    s->feature_import_options = FeatureImportOptionsFree(s->feature_import_options);
+    s = MemFree (s);
+  }
+  return s;
+}
+
+
+static Boolean AreSubmitterOptsValid (SubmitterUpdateOptionsPtr opts)
+{
+  if (opts == NULL
+      || (opts->sequence_update_type == eSequenceUpdateNoChange
+          && (opts->feature_import_options == NULL
+              || opts->feature_import_options->feature_import_type == eFeatureUpdateNoChange
+              || opts->feature_import_options->feature_import_type == eFeatureRemoveNone))) 
+  {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
 
 typedef struct indexer_options
 {
@@ -11255,7 +11314,7 @@ static UpdateOptionsPtr UpdateOptionsFree (UpdateOptionsPtr uop)
 {
   if (uop != NULL)
   {
-  	uop->submitter_opts = MemFree (uop->submitter_opts);
+  	uop->submitter_opts = SubmitterUpdateOptionsFree (uop->submitter_opts);
   	uop->indexer_opts = MemFree (uop->indexer_opts);
   	uop = MemFree (uop);
   }
@@ -11266,7 +11325,7 @@ static UpdateOptionsPtr UpdateOptionsFree (UpdateOptionsPtr uop)
  * RemoveFeatsInAlignedRegion
  * RemoveFeatsNotInAlignedRegion
  */
-static void 
+static Boolean 
 RemoveFeatsInAlignedRegion 
 (BioseqPtr                 orig_bsp,
  UpdateAlignmentLengthsPtr ualp)
@@ -11275,8 +11334,9 @@ RemoveFeatsInAlignedRegion
   SeqMgrFeatContext  context;
   Int4               left, right;
   SeqFeatPtr         sfp;
+  Boolean            rval = FALSE;
 
-  if (orig_bsp == NULL || ualp == NULL) return;
+  if (orig_bsp == NULL || ualp == NULL) return FALSE;
 
   left = ualp->old5;
   right = ualp->old5 + ualp->olda;
@@ -11287,14 +11347,16 @@ RemoveFeatsInAlignedRegion
 
     if (context.right >= left && context.left <= right) {
       sfp->idx.deleteme = TRUE;
+      rval = TRUE;
       MarkProductForDeletion (sfp->product);
     }
 
     sfp = SeqMgrGetNextFeature (orig_bsp, sfp, 0, 0, &context);
   }
+  return rval;
 }
 
-static void 
+static Boolean 
 RemoveFeatsNotInAlignedRegion 
 (BioseqPtr                 orig_bsp,
  UpdateAlignmentLengthsPtr ualp)
@@ -11303,8 +11365,9 @@ RemoveFeatsNotInAlignedRegion
   SeqMgrFeatContext  context;
   Int4               left, right;
   SeqFeatPtr         sfp;
+  Boolean            rval = FALSE;
 
-  if (orig_bsp == NULL || ualp == NULL) return;
+  if (orig_bsp == NULL || ualp == NULL) return FALSE;
 
   left = ualp->old5;
   right = ualp->old5 + ualp->olda;
@@ -11315,11 +11378,13 @@ RemoveFeatsNotInAlignedRegion
 
     if (context.right < left || context.left > right) {
       sfp->idx.deleteme = TRUE;
+      rval = TRUE;
       MarkProductForDeletion (sfp->product);
     }
 
     sfp = SeqMgrGetNextFeature (orig_bsp, sfp, 0, 0, &context);
   }
+  return rval;
 }
 
 /* This function adjusts an alignment based on updates to the sequence. */
@@ -12436,13 +12501,35 @@ ImportFeatureProduct
   }
 }
 
+
+static Boolean IsFeatureOkForFeatureTypes (SeqFeatPtr sfp, ValNodePtr list)
+{
+  Int4 ftype;
+  Boolean rval = FALSE;
+
+  if (sfp == NULL) {
+    rval = FALSE;
+  } else if (list == NULL) {
+    rval = TRUE;
+  } else {
+    ftype = GetFeatureTypeFromFeatdef (sfp->idx.subtype);
+    while (list != NULL && !rval) {
+      if (list->choice == ftype) {
+        rval = TRUE;
+      }
+      list = list->next;
+    }
+  }
+  return rval;
+}
+
+
 static Boolean 
 ImportFeaturesWithOffset 
 (UpdatePairPtr             upp,
  UpdateOptionsPtr          uop,
  UpdateAlignmentLengthsPtr ualp,
-  Int4         offset,
-  SeqAnnotPtr PNTR sapp)
+  Int4         offset)
 
 {
   CodeBreakPtr       cbp;
@@ -12459,11 +12546,16 @@ ImportFeaturesWithOffset
   tRNAPtr            trp;
 
   if (upp == NULL || uop == NULL || ualp == NULL) return FALSE;
-
+  upp->newfeat_sap = NULL;
   SeqEntrySetScope (NULL);
 
   sfp = SeqMgrGetNextFeature (upp->update_bsp, NULL, 0, 0, &context);
-  if (sfp == NULL) return FALSE;
+
+  if (sfp == NULL) 
+  {
+    /* no features to update, done */
+    return TRUE;
+  }
 
   if (uop->indexer_opts != NULL 
       && uop->indexer_opts->keep_protein_ids
@@ -12490,6 +12582,13 @@ ImportFeaturesWithOffset
     if (sfp->data.choice == SEQFEAT_USER)
     {
       /* this is where we will continue if this is a RefTrack object */
+    }
+
+    /* skip if it's not in the list of feature types */
+    if (uop->submitter_opts->feature_import_options != NULL
+        && !IsFeatureOkForFeatureTypes(sfp, uop->submitter_opts->feature_import_options->feature_types)) 
+    {
+      continue;
     }
     dup = AsnIoMemCopy ((Pointer) sfp,
                         (AsnReadFunc) SeqFeatAsnRead,
@@ -12545,9 +12644,7 @@ ImportFeaturesWithOffset
 
   ReplaceBioSourceAndPubs (top, sdp);
 
-  if (sapp != NULL) {
-    *sapp = sap;
-  }
+  upp->newfeat_sap = sap;
 
   return TRUE;
 }
@@ -12603,8 +12700,7 @@ static Int4 GetMaxPositionForUpdate
 static Boolean ImportFeaturesViaAlignment 
 (UpdatePairPtr             upp,
  UpdateOptionsPtr          uop,
- UpdateAlignmentLengthsPtr ualp,
- SeqAnnotPtr PNTR          sapp)
+ UpdateAlignmentLengthsPtr ualp)
 
 {
   CodeBreakPtr       cbp, prevcbp, nextcbp;
@@ -12625,6 +12721,7 @@ static Boolean ImportFeaturesViaAlignment
   Boolean            partial5, partial3;
 
   if (upp == NULL || uop == NULL || ualp == NULL) return FALSE;
+  upp->newfeat_sap = NULL;
 
   SeqEntrySetScope (NULL);
 
@@ -12650,7 +12747,12 @@ static Boolean ImportFeaturesViaAlignment
 
   while (sfp != NULL) {
 
-    if (context.right >= from && context.left <= to) {
+    if (uop->submitter_opts->feature_import_options != NULL
+        && !IsFeatureOkForFeatureTypes(sfp, uop->submitter_opts->feature_import_options->feature_types)) 
+    {
+      /* skip if it's not in the list of feature types */
+    } else if (context.right >= from && context.left <= to) {
+      /* only use if in correct range */
       split = FALSE;
       newloc = GetPropagatedLocation (sfp->location, upp->update_bsp, upp->orig_bsp, 
                                       max_position, upp->salp);
@@ -12733,9 +12835,7 @@ static Boolean ImportFeaturesViaAlignment
 
   ReplaceBioSourceAndPubs (top, sdp);
 
-  if (sapp != NULL) {
-    *sapp = sap;
-  }
+  upp->newfeat_sap = sap;
 
   return TRUE;
 }
@@ -12877,12 +12977,11 @@ static void ResolveDuplicateUpdateFeats
       || newfeat_sap == NULL 
       || uop == NULL
       || uop->submitter_opts == NULL
-      || uop->submitter_opts->feature_update_type == eFeatureUpdateAll) 
+      || uop->submitter_opts->feature_import_options == NULL
+      || uop->submitter_opts->feature_import_options->feature_import_type == eFeatureUpdateAll)
   {
     return;
   }
-
-  SeqMgrIndexFeatures (0, (Pointer) bsp);
 
   lastsfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &context);
   if (lastsfp == NULL) return;
@@ -12898,7 +12997,7 @@ static void ResolveDuplicateUpdateFeats
         && (context.sap == newfeat_sap || lastcontext.sap == newfeat_sap)
         && AreFeaturesDuplicates (&context, &lastcontext))
     {
-      if (uop->submitter_opts->feature_update_type == eFeatureUpdateAllReplaceDups) { /* keep new */
+      if (uop->submitter_opts->feature_import_options->feature_import_type == eFeatureUpdateAllReplaceDups) { /* keep new */
         if (context.sap == newfeat_sap) {
           lastsfp->idx.deleteme = TRUE;
           MarkProductForDeletion (lastsfp->product);
@@ -12906,7 +13005,7 @@ static void ResolveDuplicateUpdateFeats
           sfp->idx.deleteme = TRUE;
           MarkProductForDeletion (sfp->product);
         }
-      } else if (uop->submitter_opts->feature_update_type == eFeatureUpdateAllExceptDups) { /* keep old */
+      } else if (uop->submitter_opts->feature_import_options->feature_import_type == eFeatureUpdateAllExceptDups) { /* keep old */
         if (context.sap == newfeat_sap) {
           sfp->idx.deleteme = TRUE;
           MarkProductForDeletion (sfp->product);
@@ -12915,7 +13014,7 @@ static void ResolveDuplicateUpdateFeats
           MarkProductForDeletion (lastsfp->product);
         }
 
-      } else if (uop->submitter_opts->feature_update_type == eFeatureUpdateAllMergeDups) { /* merge */
+      } else if (uop->submitter_opts->feature_import_options->feature_import_type == eFeatureUpdateAllMergeDups) { /* merge */
         if (context.sap == newfeat_sap) {
           FuseFeatures (sfp, lastsfp);
           lastsfp->idx.deleteme = TRUE;
@@ -13174,22 +13273,23 @@ UpdateOrExtendOneSequenceEx
   ValNodePtr   prot_feat_list = NULL;
   ValNodePtr   transl_except_list = NULL;
   Boolean      sequence_update_successful = FALSE;
-  Boolean      feature_update_successful = FALSE;
-  SeqEntryPtr  sep;
   Boolean      rval = FALSE;
   Int4         feature_update_offset;
-  SeqAnnotPtr  newfeat_sap = NULL;
   Int4         orig_seq_len;
   Uint2        update_entityID;
   Char         id_txt [128];
   Boolean      deleted_features = FALSE;
   Boolean      trim_quality_scores = FALSE;
+  SeqFeatPtr   sfp;
+  SeqMgrFeatContext context;
+  Boolean           any_cds = FALSE;
 
   if (upp == NULL || upp->orig_bsp == NULL || upp->update_bsp == NULL
       || uop == NULL || uop->submitter_opts == NULL)
   {
     return FALSE;
-  }
+  }  
+  upp->feature_update_successful = FALSE;
   
   update_entityID = upp->update_bsp->idx.entityID; 
 
@@ -13216,20 +13316,26 @@ UpdateOrExtendOneSequenceEx
     }        
   }
   
+  if ((sfp = SeqMgrGetNextFeature (upp->orig_bsp, NULL, SEQFEAT_CDREGION, 0, &context)) != NULL) 
+  {
+    any_cds = TRUE;
+  } 
+  else if ((sfp = SeqMgrGetNextFeature (upp->update_bsp, NULL, SEQFEAT_CDREGION, 0, &context)) != NULL)
+  {
+    any_cds = TRUE;
+  }
+
   /* remove features */
   switch (uop->submitter_opts->feature_remove_type)
   {
     case eFeatureRemoveAll:
-      RemoveOldFeats (upp->orig_bsp);
-      deleted_features = TRUE;
+      deleted_features = RemoveOldFeats (upp->orig_bsp);
       break;
     case eFeatureRemoveAligned:
-      RemoveFeatsInAlignedRegion (upp->orig_bsp, ualp);
-      deleted_features = TRUE;
+      deleted_features = RemoveFeatsInAlignedRegion (upp->orig_bsp, ualp);
       break;
     case eFeatureRemoveNotAligned:
-      RemoveFeatsNotInAlignedRegion (upp->orig_bsp, ualp);
-      deleted_features = TRUE;
+      deleted_features = RemoveFeatsNotInAlignedRegion (upp->orig_bsp, ualp);
       break;
     default:
       break;
@@ -13284,7 +13390,8 @@ UpdateOrExtendOneSequenceEx
   }
   
   /* update features */
-  if (uop->submitter_opts->feature_update_type != eFeatureUpdateNoChange)
+  if (uop->submitter_opts->feature_import_options != NULL
+      && uop->submitter_opts->feature_import_options->feature_import_type != eFeatureUpdateNoChange)
   {
     if (! SeqMgrFeaturesAreIndexed (update_entityID))
       SeqMgrIndexFeatures (update_entityID, NULL);
@@ -13304,14 +13411,13 @@ UpdateOrExtendOneSequenceEx
           feature_update_offset = ualp->old5 - ualp->new5;
         }
       }
-      feature_update_successful = ImportFeaturesWithOffset (upp, uop, ualp,
-                                                            feature_update_offset,
-                                                            &newfeat_sap);
-      rval &= feature_update_successful;
+      upp->feature_update_successful = ImportFeaturesWithOffset (upp, uop, ualp,
+                                                            feature_update_offset);
+      rval &= upp->feature_update_successful;
     }
     else
     {
-      feature_update_successful = ImportFeaturesViaAlignment (upp, uop, ualp, &newfeat_sap);
+      upp->feature_update_successful = ImportFeaturesViaAlignment (upp, uop, ualp);
     }
   }
 
@@ -13324,7 +13430,7 @@ UpdateOrExtendOneSequenceEx
 
 
   if (uop->indexer_opts != NULL && uop->indexer_opts->add_cit_subs
-      && (feature_update_successful
+      && (upp->feature_update_successful
           || (sequence_update_successful 
               && ! AreSequenceResiduesIdentical(upp->orig_bsp, upp->update_bsp))))
      
@@ -13335,14 +13441,15 @@ UpdateOrExtendOneSequenceEx
   /* update proteins for coding regions on the updated sequence */
   if (sequence_update_successful
       && uop->indexer_opts != NULL
-      && uop->indexer_opts->update_proteins)
+      && uop->indexer_opts->update_proteins
+      && any_cds)
   {
     SeqMgrClearFeatureIndexes (entityID, upp->orig_bsp);
     SeqMgrIndexFeatures (entityID, NULL);
     UpdateProteinsForUpdatedCodingRegions (upp->orig_bsp, transl_except_list,
                                            uop->indexer_opts, entityID,
                                            log_fp, data_in_log);
-    FixProtRefPtrs (prot_feat_list);        
+    FixProtRefPtrs (prot_feat_list);   
   }
   
   if (trim_quality_scores && (uop->indexer_opts == NULL || !uop->indexer_opts->update_quality_scores)) {
@@ -13360,20 +13467,6 @@ UpdateOrExtendOneSequenceEx
  
   prot_feat_list = ValNodeFree (prot_feat_list);
   transl_except_list = ValNodeFree (transl_except_list);
-  if (feature_update_successful
-      && uop->submitter_opts->feature_update_type > eFeatureUpdateNoChange
-      && uop->submitter_opts->feature_remove_type != eFeatureRemoveAll)
-  {
-    /* resolve features unless the policy was to remove all the old ones */
-  
-    sep = GetTopSeqEntryForEntityID (entityID);
-    /* need to set scope to make sure we mark the right bioseq for deletion */
-    SeqEntrySetScope (sep);
-    ResolveDuplicateUpdateFeats (upp->orig_bsp, uop, newfeat_sap);
-    SeqEntrySetScope (NULL);
-    DeleteMarkedObjects (entityID, 0, NULL);
-    SeqMgrClearFeatureIndexes (entityID, NULL);
-  }
 
   /* Note - we do not remove the update sequence here - that will happen when
    * the UpdateSequence form is removed.
@@ -13393,7 +13486,27 @@ UpdateOrExtendOneSequence
  FILE                      *log_fp,
  BoolPtr                   data_in_log)
 {
-  return UpdateOrExtendOneSequenceEx (upp, uop, ualp, entityID, log_fp, data_in_log, FALSE);
+  Boolean rval;
+  SeqEntryPtr sep;
+
+  rval = UpdateOrExtendOneSequenceEx (upp, uop, ualp, entityID, log_fp, data_in_log, FALSE);
+
+  if (upp->feature_update_successful
+      && uop->submitter_opts->feature_import_options != NULL
+      && uop->submitter_opts->feature_import_options->feature_import_type > eFeatureUpdateNoChange
+      && uop->submitter_opts->feature_import_options->feature_import_type != eFeatureRemoveAll)
+  {
+    /* resolve features unless the policy was to remove all the old ones */
+  
+    sep = GetTopSeqEntryForEntityID (entityID);
+    /* need to set scope to make sure we mark the right bioseq for deletion */
+    SeqEntrySetScope (sep);
+    ResolveDuplicateUpdateFeats (upp->orig_bsp, uop, upp->newfeat_sap);
+    SeqEntrySetScope (NULL);
+    DeleteMarkedObjects (entityID, 0, NULL);
+    SeqMgrClearFeatureIndexes (entityID, NULL);
+  }
+  return rval;
 }
 
 
@@ -14366,7 +14479,7 @@ static void UpdatePairToUpdateTitlesDialog (DialoG d, Pointer data)
   else if (upp->salp == NULL && dlg->is_update)
   {
     SeqIdWrite (SeqIdFindBest (upp->orig_bsp->id, SEQID_GENBANK), id_txt, 
-                PRINTID_REPORT, sizeof (id_txt) - 50);
+                PRINTID_REPORT, sizeof (id_txt));
     if (dlg->is_indexer)
     {
       sprintf (ppt_txt, "No alignment for %s", id_txt);
@@ -14386,7 +14499,7 @@ static void UpdatePairToUpdateTitlesDialog (DialoG d, Pointer data)
   {
     /* update sequence title prompts */ 
     SeqIdWrite (SeqIdFindBest (dlg->update_bsp->id, SEQID_GENBANK), id_txt, 
-                               PRINTID_REPORT, sizeof (id_txt) - 50);
+                               PRINTID_REPORT, sizeof (id_txt));
     if (dlg->is_indexer)
     {
       sprintf (ppt_txt, "New sequence: %s", id_txt);
@@ -14401,7 +14514,7 @@ static void UpdatePairToUpdateTitlesDialog (DialoG d, Pointer data)
     }
   
     SeqIdWrite (SeqIdFindBest (dlg->orig_bsp->id, SEQID_GENBANK), id_txt, 
-                               PRINTID_REPORT, sizeof (id_txt) - 50);
+                               PRINTID_REPORT, sizeof (id_txt));
     if (dlg->is_indexer)
     {
       sprintf (ppt_txt, "Old sequence: %s", id_txt);
@@ -14838,11 +14951,258 @@ static DialoG UpdatePreviewDialog (GrouP parent, Boolean is_indexer)
   return (DialoG) p;
 }
 
+
+typedef struct submitterfeatureimportoptionsdialog
+{
+  DIALOG_MESSAGE_BLOCK
+
+  GrouP feature_update_type;
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;
+} SubmitterFeatureImportOptionsDlgData, PNTR SubmitterFeatureImportOptionsDlgPtr;
+
+
+static void SubmitterFeatureImportOptionsToDialog (DialoG d, Pointer data)
+{
+  SubmitterFeatureImportOptionsDlgPtr dlg;
+  FeatureImportOptionsPtr f;
+
+  dlg = (SubmitterFeatureImportOptionsDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  if ((f = (FeatureImportOptionsPtr) data) == NULL) {
+    SetValue (dlg->feature_update_type, eFeatureUpdateNoChange);
+  } else {
+    SetValue (dlg->feature_update_type, f->feature_import_type);
+  }
+}
+
+
+static Pointer SubmitterFeatureImportOptionsFromDialog (DialoG d)
+{
+  SubmitterFeatureImportOptionsDlgPtr dlg;
+  FeatureImportOptionsPtr f;
+
+  dlg = (SubmitterFeatureImportOptionsDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  f = FeatureImportOptionsNew ();
+  f->feature_import_type = GetValue (dlg->feature_update_type);
+  return f;
+}
+
+
+static void ChangeSubmitterFeatureImportOptionsDialogGroup (GrouP g)
+{
+  SubmitterFeatureImportOptionsDlgPtr dlg;
+
+  dlg = (SubmitterFeatureImportOptionsDlgPtr) GetObjectExtra (g);
+  if (dlg == NULL) {
+    return;
+  }
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static DialoG 
+SubmitterFeatureImportOptionsDialog 
+(GrouP                parent,
+ Nlm_ChangeNotifyProc change_notify,
+ Pointer              change_userdata)
+{
+  SubmitterFeatureImportOptionsDlgPtr dlg;
+  GrouP                  p;
+  
+  dlg = (SubmitterFeatureImportOptionsDlgPtr) MemNew (sizeof (SubmitterFeatureImportOptionsDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = NormalGroup (parent, 1, 0, "Import Features", programFont, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SubmitterFeatureImportOptionsToDialog;
+  dlg->fromdialog = SubmitterFeatureImportOptionsFromDialog;
+  
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+      
+  dlg->feature_update_type = HiddenGroup (p, 0, 6, ChangeSubmitterFeatureImportOptionsDialogGroup);
+  SetObjectExtra (dlg->feature_update_type, dlg, NULL);
+  RadioButton (dlg->feature_update_type, "Do not import features");
+  RadioButton (dlg->feature_update_type, "Import all except duplicates");
+  RadioButton (dlg->feature_update_type, "Import all, merge duplicates");
+  RadioButton (dlg->feature_update_type, "Import all, replace duplicates");
+  RadioButton (dlg->feature_update_type, "Import all, including duplicates");
+  SetValue (dlg->feature_update_type, eFeatureUpdateNoChange);
+  
+  return (DialoG) p;
+}
+
+
+typedef struct indexerfeatureimportoptionsdialog
+{
+  DIALOG_MESSAGE_BLOCK
+
+  ButtoN do_import_btn;
+  DialoG feature_types;
+  GrouP  feature_update_type;
+
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;
+} IndexerFeatureImportOptionsDlgData, PNTR IndexerFeatureImportOptionsDlgPtr;
+
+
+static void IndexerFeatureImportOptionsToDialog (DialoG d, Pointer data)
+{
+  IndexerFeatureImportOptionsDlgPtr dlg;
+  FeatureImportOptionsPtr f;
+
+  dlg = (IndexerFeatureImportOptionsDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  if ((f = (FeatureImportOptionsPtr) data) == NULL || f->feature_import_type == eFeatureUpdateNoChange) {
+    SetStatus (dlg->do_import_btn, FALSE);
+    Disable (dlg->feature_types);
+    Disable (dlg->feature_update_type);
+  } else {
+    SetStatus (dlg->do_import_btn, TRUE);
+    if (f->feature_types == NULL) {
+      SendMessageToDialog (dlg->feature_types, NUM_VIB_MSG + 1);
+    } else {
+      PointerToDialog (dlg->feature_types, f->feature_types);
+    }
+    SetValue (dlg->feature_update_type, f->feature_import_type - 1);
+  }
+}
+
+
+static Pointer IndexerFeatureImportOptionsFromDialog (DialoG d)
+{
+  IndexerFeatureImportOptionsDlgPtr dlg;
+  FeatureImportOptionsPtr f = NULL;
+
+  dlg = (IndexerFeatureImportOptionsDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  if (GetStatus (dlg->do_import_btn)) {
+    f = FeatureImportOptionsNew ();
+    f->feature_import_type = GetValue (dlg->feature_update_type) + 1;
+    f->feature_types = DialogToPointer (dlg->feature_types);
+    if (f->feature_types != NULL && (f->feature_types->choice == FEATDEF_ANY || f->feature_types->choice == 0)) {
+      f->feature_types = ValNodeFree (f->feature_types);
+    }
+  }
+  return f;
+}
+
+
+static void ChangeIndexerFeatureImportOptionsDialogGroup (GrouP g)
+{
+  IndexerFeatureImportOptionsDlgPtr dlg;
+
+  dlg = (IndexerFeatureImportOptionsDlgPtr) GetObjectExtra (g);
+  if (dlg == NULL) {
+    return;
+  }
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static void ChangeIndexerFeatureImportOptionsDialogBtn (ButtoN b)
+{
+  IndexerFeatureImportOptionsDlgPtr dlg;
+  ValNodePtr tmp;
+
+  dlg = (IndexerFeatureImportOptionsDlgPtr) GetObjectExtra (b);
+  if (dlg == NULL) {
+    return;
+  }
+  if (GetStatus (dlg->do_import_btn)) {
+    Enable (dlg->feature_update_type);
+    Enable (dlg->feature_types);
+    tmp = DialogToPointer (dlg->feature_types);
+    if (tmp == NULL) {
+      SendMessageToDialog (dlg->feature_types, NUM_VIB_MSG + 1);
+    } else {
+      tmp = ValNodeFree (tmp);
+    }
+  } else {
+    Disable (dlg->feature_update_type);
+    Disable (dlg->feature_types);
+  }
+
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify)(dlg->change_userdata);
+  }
+}
+
+
+static DialoG 
+IndexerFeatureImportOptionsDialog 
+(GrouP                parent,
+ Nlm_ChangeNotifyProc change_notify,
+ Pointer              change_userdata)
+{
+  IndexerFeatureImportOptionsDlgPtr dlg;
+  GrouP                  p;
+  
+  dlg = (IndexerFeatureImportOptionsDlgPtr) MemNew (sizeof (IndexerFeatureImportOptionsDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = NormalGroup (parent, 3, 0, "Import Features", programFont, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = IndexerFeatureImportOptionsToDialog;
+  dlg->fromdialog = IndexerFeatureImportOptionsFromDialog;
+  
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+      
+  dlg->do_import_btn = CheckBox (p, "Import features", ChangeIndexerFeatureImportOptionsDialogBtn);
+  SetObjectExtra (dlg->do_import_btn, dlg, NULL);
+  dlg->feature_types = FeatureTypeDialogMulti (p, change_notify, change_userdata);
+  SendMessageToDialog (dlg->feature_types, NUM_VIB_MSG + 1);
+  dlg->feature_update_type = HiddenGroup (p, 0, 6, ChangeIndexerFeatureImportOptionsDialogGroup);
+  SetObjectExtra (dlg->feature_update_type, dlg, NULL);
+  RadioButton (dlg->feature_update_type, "Except duplicates");
+  RadioButton (dlg->feature_update_type, "Merge duplicates");
+  RadioButton (dlg->feature_update_type, "Replace duplicates");
+  RadioButton (dlg->feature_update_type, "Including duplicates");
+  SetValue (dlg->feature_update_type, 1);
+  
+  return (DialoG) p;
+}
+
+
 typedef struct submitterupdateoptionsdialog
 {
   DIALOG_MESSAGE_BLOCK
   GrouP                sequence_update_type;
-  GrouP                feature_update_type;
+  DialoG               feature_update_options;
   GrouP                feature_remove_type;
   
   ButtoN               sequence_update_btns [eSequenceUpdateExtend3];
@@ -14873,14 +15233,14 @@ static void SubmitterUpdateOptionsToDialog (DialoG d, Pointer data)
     if (suop == NULL)
     {
       SetValue (dlg->sequence_update_type, eSequenceUpdateNoChange);
-      SetValue (dlg->feature_update_type, eFeatureUpdateNoChange);
+      PointerToDialog (dlg->feature_update_options, NULL);
       SetValue (dlg->feature_remove_type, eFeatureRemoveNone);
       SetStatus (dlg->ignore_alignment, FALSE);
     }
     else
     {
       SetValue (dlg->sequence_update_type, suop->sequence_update_type);
-      SetValue (dlg->feature_update_type, suop->feature_update_type);
+      PointerToDialog (dlg->feature_update_options, suop->feature_import_options);
       SetValue (dlg->feature_remove_type, suop->feature_remove_type);
       SetStatus (dlg->ignore_alignment, suop->ignore_alignment);
     }
@@ -14890,7 +15250,7 @@ static void SubmitterUpdateOptionsToDialog (DialoG d, Pointer data)
   	if (suop == NULL)
   	{
   	  SetValue (dlg->sequence_update_type, 1);
-      SetValue (dlg->feature_update_type, eFeatureUpdateNoChange);
+      PointerToDialog (dlg->feature_update_options, NULL);
       SetValue (dlg->feature_remove_type, eFeatureRemoveNone);  	  
   	}
   	else
@@ -14904,7 +15264,7 @@ static void SubmitterUpdateOptionsToDialog (DialoG d, Pointer data)
         SetValue (dlg->sequence_update_type, 1);
   	  }
   	  
-      SetValue (dlg->feature_update_type, suop->feature_update_type);
+      PointerToDialog (dlg->feature_update_options, suop->feature_import_options);
       SetValue (dlg->feature_remove_type, suop->feature_remove_type);
   	}
   }
@@ -14951,7 +15311,7 @@ static Pointer SubmitterUpdateOptionsFromDialog (DialoG d)
       }
     }
     
-    suop->feature_update_type = (EFeatureUpdateType) GetValue (dlg->feature_update_type);
+    suop->feature_import_options = DialogToPointer (dlg->feature_update_options);
     suop->feature_remove_type = (EFeatureRemoveType) GetValue (dlg->feature_remove_type);
     
     if (dlg->do_update)
@@ -14986,7 +15346,7 @@ static void DisableSubmitterImportFeatureOptions (DialoG d)
     return;
   }
   
-  Disable (dlg->feature_update_type);
+  Disable (dlg->feature_update_options);
 }
 
 static void EnableSubmitterImportFeatureOptions (DialoG d)
@@ -14999,7 +15359,7 @@ static void EnableSubmitterImportFeatureOptions (DialoG d)
     return;
   }
   
-  Enable (dlg->feature_update_type);
+  Enable (dlg->feature_update_options);
 }
 
 static void DisableSubmitterRemoveFeatureOptions (DialoG d)
@@ -15214,15 +15574,12 @@ SubmitterUpdateOptionsDialog
   RadioButton (dlg->feature_remove_type, "Remove outside aligned area");
   RadioButton (dlg->feature_remove_type, "Remove all");
   SetValue (dlg->feature_remove_type, eFeatureRemoveNone);
-    
-  g = NormalGroup (k, 1, 0, "Import Features", programFont, NULL);
-  dlg->feature_update_type = HiddenGroup (g, 0, 6, NULL);
-  RadioButton (dlg->feature_update_type, "Do not import features");
-  RadioButton (dlg->feature_update_type, "Import all except duplicates");
-  RadioButton (dlg->feature_update_type, "Import all, merge duplicates");
-  RadioButton (dlg->feature_update_type, "Import all, replace duplicates");
-  RadioButton (dlg->feature_update_type, "Import all, including duplicates");
-  SetValue (dlg->feature_update_type, eFeatureUpdateNoChange);
+  
+  if (is_indexer) {
+    dlg->feature_update_options = IndexerFeatureImportOptionsDialog (k, NULL, NULL);
+  } else {
+    dlg->feature_update_options = SubmitterFeatureImportOptionsDialog (k, NULL, NULL);
+  }
   
   if (is_indexer)
   {
@@ -16018,6 +16375,7 @@ typedef struct unmatchedsequencedialog
   ParData  ParFmt;
   ColData  ColFmt;
   Int4     dlg_height;
+  Int4     selected;
 } UnmatchedSequenceDialogData, PNTR UnmatchedSequenceDialogPtr;
 
 static void ListToUnmatchedSequenceDialog (DialoG d, Pointer userdata)
@@ -16056,17 +16414,62 @@ static void ListToUnmatchedSequenceDialog (DialoG d, Pointer userdata)
   
 }
 
+
+/* clicking on a column in the title indicates that we should sort by this column. */
+static void ClickUnmatchedSequence (DoC d, PoinT pt)
+{
+  UnmatchedSequenceDialogPtr dlg;
+  Int2             item;
+  Int2             row;
+  Int2             col;
+  RecT             r;
+
+  MapDocPoint (d, pt, &item, &row, &col, NULL);
+  if (item < 1) {
+    return;
+  }
+  dlg = (UnmatchedSequenceDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  if (dlg->selected == item) {
+    dlg->selected = 0;
+  } else {
+    dlg->selected = item;
+  }
+  /* inval to redraw */
+  ObjectRect (dlg->doc, &r);
+  InvalRect (&r);  
+  Update ();
+}
+
+
+static Boolean HighlightUnmatchedSequence (DoC d, Int2 item, Int2 row, Int2 col)
+
+{
+  UnmatchedSequenceDialogPtr dlg;
+
+  dlg = (UnmatchedSequenceDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return FALSE;
+
+  if (item == dlg->selected) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
 static DialoG 
 UnmatchedSequenceDialog 
 (GrouP           parent, 
  Nlm_BtnActnProc map_btn_proc,
- Pointer         change_userdata)
+ Pointer         change_userdata,
+ Nlm_BtnActnProc connect_btn_proc)
 {
   UnmatchedSequenceDialogPtr dlg;
-  GrouP                      p;
+  GrouP                      p, button_grp = NULL;
   RecT                       r;
   PrompT                     ppt = NULL;
-  ButtoN                     b = NULL;
+  ButtoN                     b;
   
   dlg = (UnmatchedSequenceDialogPtr) MemNew (sizeof (UnmatchedSequenceDialogData));
   if (dlg == NULL)
@@ -16089,6 +16492,10 @@ UnmatchedSequenceDialog
     ppt = StaticPrompt (p, "Unmatched Sequences", 0, 0, programFont, 'l');
   }
   dlg->doc = DocumentPanel (p, stdCharWidth * 10, stdLineHeight * 5);
+  SetObjectExtra (dlg->doc, dlg, NULL);
+  SetDocProcs (dlg->doc, ClickUnmatchedSequence, NULL, NULL, NULL);
+  SetDocShade (dlg->doc, NULL, NULL, HighlightUnmatchedSequence, NULL);
+  dlg->selected = 0;
 
   /* initialize document paragraph format */
   dlg->ParFmt.openSpace = FALSE;
@@ -16116,19 +16523,44 @@ UnmatchedSequenceDialog
   dlg->ColFmt.last = TRUE;
 
 
-  if (map_btn_proc != NULL)
+  if (map_btn_proc != NULL || connect_btn_proc != NULL)
   {
-    /* add button for loading map */
-    b = PushButton (p, "Load Map", map_btn_proc);
-    SetObjectExtra (b, change_userdata, NULL);
+    button_grp = HiddenGroup (p, 2, 0, NULL);
+    SetGroupSpacing (button_grp, 10, 10);
+
+    if (map_btn_proc != NULL) 
+    {
+      /* add button for loading map */
+      b = PushButton (button_grp, "Load Map", map_btn_proc);
+      SetObjectExtra (b, change_userdata, NULL);
+    }
+    if (connect_btn_proc != NULL)
+    {
+      /* add button for loading map */
+      b = PushButton (button_grp, "Map Selected", connect_btn_proc);
+      SetObjectExtra (b, change_userdata, NULL);
+    }
+
     ObjectRect (b, &r);
     dlg->dlg_height += 10 + r.bottom - r.top;
   }
   
-  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) dlg->doc, (HANDLE) b, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) dlg->doc, (HANDLE) button_grp, NULL);
   
   return (DialoG) p;
 }
+
+
+static Int4 GetUnmatchedSequenceDialogSelection (DialoG d)
+{
+  UnmatchedSequenceDialogPtr dlg;
+
+  dlg = (UnmatchedSequenceDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return -1;
+
+  return dlg->selected - 1;
+}
+
 
 static void 
 ChangePreviewSequenceSelectionDialogHeights 
@@ -16563,6 +16995,7 @@ MultiSequenceUpdatePreview
  Nlm_ChangeNotifyProc change_notify,
  Pointer              change_userdata,
  Nlm_BtnActnProc      map_btn_proc,
+ Nlm_BtnActnProc      connect_btn_proc,
  Boolean              is_indexer)
 {
   MultiSequenceUpdatePreviewDialogPtr dlg; 
@@ -16606,9 +17039,9 @@ MultiSequenceUpdatePreview
       SetObjectExtra (dlg->remove_identical_btn, change_userdata, NULL);      
     }
 
-    dlg->unmatched_list_dlg = UnmatchedSequenceDialog (k, map_btn_proc, change_userdata);
+    dlg->unmatched_list_dlg = UnmatchedSequenceDialog (k, map_btn_proc, change_userdata, connect_btn_proc);
     
-    dlg->no_updates_list_dlg = UnmatchedSequenceDialog (k, NULL, NULL);
+    dlg->no_updates_list_dlg = UnmatchedSequenceDialog (k, NULL, NULL, NULL);
   }
   
   dlg->extend_preview_dlg = NULL;
@@ -16625,6 +17058,35 @@ MultiSequenceUpdatePreview
   
   return (DialoG) p;
 }
+
+
+static Int4 GetMultiSequenceUpdatePreviewUnmatchedSelection (DialoG d)
+{
+  MultiSequenceUpdatePreviewDialogPtr dlg; 
+
+  dlg = (MultiSequenceUpdatePreviewDialogPtr) GetObjectExtra (d);
+  if (dlg != NULL)
+  {
+    return GetUnmatchedSequenceDialogSelection (dlg->unmatched_list_dlg);
+  } else {
+    return -1;
+  }
+}
+
+
+static Int4 GetMultiSequenceUpdatePreviewNoUpdateSelection (DialoG d)
+{
+  MultiSequenceUpdatePreviewDialogPtr dlg; 
+
+  dlg = (MultiSequenceUpdatePreviewDialogPtr) GetObjectExtra (d);
+  if (dlg != NULL)
+  {
+    return GetUnmatchedSequenceDialogSelection (dlg->no_updates_list_dlg);
+  } else {
+    return -1;
+  }
+}
+
 
 static void AddUniqueUpdateSequenceIDs (SeqEntryPtr sep)
 {
@@ -16994,6 +17456,7 @@ static SeqEntryPtr ReadUpdateSequences (Boolean is_na)
     
     if (sep_list == NULL)
     {
+      Message (MSG_ERROR, "Unable to read sequences from %s, please check formatting", path);
       return NULL;
     }
     else if (chars_stripped)
@@ -17063,6 +17526,7 @@ typedef struct updatemultisequenceform
   ValNodePtr update_entityID_list;  /* This list is used to remove sequences and sets loaded for update */
 } UpdateMultiSequenceFormData, PNTR UpdateMultiSequenceFormPtr;
 
+
 static void DoTestUpdateOneSequence (ButtoN b)
 {
   UpdateMultiSequenceFormPtr usfp;
@@ -17092,10 +17556,7 @@ static void DoTestUpdateOneSequence (ButtoN b)
   }
   
   uop = DialogToPointer (usfp->options_dialog);   
-  if (uop == NULL || uop->submitter_opts == NULL
-      || (uop->submitter_opts->sequence_update_type == eSequenceUpdateNoChange
-          && uop->submitter_opts->feature_update_type == eFeatureUpdateNoChange
-          && uop->submitter_opts->feature_remove_type == eFeatureRemoveNone))
+  if (uop == NULL || !AreSubmitterOptsValid(uop->submitter_opts))
   {
     Message (MSG_ERROR, "Invalid options selected!");
     uop = UpdateOptionsFree (uop);
@@ -17325,6 +17786,40 @@ static ValNodePtr GetUpdatesWithoutAlignments (ValNodePtr orig_bioseq_list, ValN
 }
 
 
+typedef struct featureupdateinfo {
+  BioseqPtr orig_bsp;
+  BioseqPtr update_bsp;
+} FeatureUpdateInfoData, PNTR FeatureUpdateInfoPtr;
+
+
+static FeatureUpdateInfoPtr FeatureUpdateNew (BioseqPtr orig_bsp, BioseqPtr update_bsp)
+{
+  FeatureUpdateInfoPtr f;
+
+  f = (FeatureUpdateInfoPtr) MemNew (sizeof (FeatureUpdateInfoData));
+  f->orig_bsp = orig_bsp;
+  f->update_bsp = update_bsp;
+  return f;
+}
+
+
+typedef struct resolveduplicatefeats {
+  BioseqPtr orig_bsp;
+  SeqAnnotPtr newfeat_sap;
+} ResolveDuplicateFeatsData, PNTR ResolveDuplicateFeatsPtr;
+
+
+static ResolveDuplicateFeatsPtr ResolveDuplicateFeatsNew (BioseqPtr bsp, SeqAnnotPtr sap)
+{
+  ResolveDuplicateFeatsPtr r;
+
+  r = (ResolveDuplicateFeatsPtr) MemNew (sizeof (ResolveDuplicateFeatsData));
+  r->orig_bsp = bsp;
+  r->newfeat_sap = sap;
+  return r;
+}
+
+
 static void UpdateAllSequences (ButtoN b)
 {
   UpdateMultiSequenceFormPtr usfp;
@@ -17338,6 +17833,10 @@ static void UpdateAllSequences (ButtoN b)
   Uint2                      update_entityID = 0;
   ValNodePtr                 no_aln_list;
   CharPtr                    msg;
+  ValNodeBlock               dupfeats;
+  ValNodePtr                 vnp;
+  ResolveDuplicateFeatsPtr   r;
+  SeqEntryPtr                sep;
 
   usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (b);
   if (usfp == NULL)
@@ -17375,6 +17874,8 @@ static void UpdateAllSequences (ButtoN b)
     }
   }
     
+  InitValNodeBlock (&dupfeats, NULL);
+
   for (orig_vnp = usfp->orig_bioseq_list, update_vnp = usfp->update_bioseq_list;
        orig_vnp != NULL && update_vnp != NULL;
        orig_vnp = orig_vnp->next, update_vnp = update_vnp->next)
@@ -17404,6 +17905,9 @@ static void UpdateAllSequences (ButtoN b)
                                                    usfp->lip == NULL ? NULL : usfp->lip->fp,
                                                    usfp->lip == NULL ? NULL : &(usfp->lip->data_in_log),
                                                    TRUE);
+    if (upd.feature_update_successful) {
+      ValNodeAddPointerToEnd (&dupfeats, 0, ResolveDuplicateFeatsNew ((BioseqPtr)(orig_vnp->data.ptrvalue), upd.newfeat_sap));
+    }
     upd.salp = SeqAlignFree (upd.salp);
     
     SeqIdWrite (upd.orig_bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
@@ -17424,8 +17928,27 @@ static void UpdateAllSequences (ButtoN b)
     }
     
   }
-  uop = UpdateOptionsFree (uop);
 
+  if (dupfeats.head != NULL
+      && uop->submitter_opts->feature_import_options != NULL
+      && uop->submitter_opts->feature_import_options->feature_import_type > eFeatureUpdateNoChange
+      && uop->submitter_opts->feature_import_options->feature_import_type != eFeatureRemoveAll)
+  {
+    /* resolve features unless the policy was to remove all the old ones */
+  
+    sep = GetTopSeqEntryForEntityID (usfp->input_entityID);
+    /* need to set scope to make sure we mark the right bioseq for deletion */
+    SeqEntrySetScope (sep);
+    for (vnp = dupfeats.head; vnp != NULL; vnp = vnp->next) 
+    {
+      r = (ResolveDuplicateFeatsPtr) vnp->data.ptrvalue;
+      ResolveDuplicateUpdateFeats (r->orig_bsp, uop, r->newfeat_sap);
+    }
+    SeqEntrySetScope (NULL);
+    DeleteMarkedObjects (usfp->input_entityID, 0, NULL);
+  }
+
+  uop = UpdateOptionsFree (uop);
   
   SeqMgrClearFeatureIndexes (usfp->input_entityID, NULL);
   ObjMgrSetDirtyFlag (usfp->input_entityID, TRUE);
@@ -17986,6 +18509,57 @@ static void LoadUpdateSequenceMapFileBtn (ButtoN b)
 }
 
 
+static void ConnectSelectedUpdateSequencesBtn (ButtoN b)
+{
+  UpdateMultiSequenceFormPtr usfp;
+  Int4 pos1;
+  Int4 pos2;
+  ValNodePtr update_vnp;
+  MultiSequenceUpdateData    msud;
+  
+  usfp = (UpdateMultiSequenceFormPtr) GetObjectExtra (b);
+  if (usfp == NULL) {
+    return;
+  }
+
+  pos1 = GetMultiSequenceUpdatePreviewUnmatchedSelection (usfp->update_preview);
+  pos2 = GetMultiSequenceUpdatePreviewNoUpdateSelection (usfp->update_preview);
+
+  if (pos1 < 0 || pos2  < 0) {
+    return;
+  }
+
+  /* remap */
+  /* remove Bioseq from no update list and add to list of originals */
+  update_vnp = ExtractNthValNode (&(usfp->no_updates_list), pos2);
+  if (update_vnp == NULL) {
+    return;
+  }
+  ValNodeLink (&(usfp->orig_bioseq_list), update_vnp);
+  /* remove Bioseq from unmatched list and add to list of updates */
+  update_vnp = ExtractNthValNode (&(usfp->unmatched_updates_list), pos1);
+  ValNodeLink (&(usfp->update_bioseq_list), update_vnp);
+  /* update preview */
+  msud.orig_bioseq_list = usfp->orig_bioseq_list;
+  msud.update_bioseq_list = usfp->update_bioseq_list;     
+  msud.unmatched_updates_list = usfp->unmatched_updates_list;
+  msud.no_updates_list = usfp->no_updates_list;                                          
+  PointerToDialog (usfp->update_preview, &msud);                                                 
+
+  ReportIdenticalUpdateSequences (usfp->orig_bioseq_list, usfp->update_bioseq_list);
+  if (BioseqListHasFeatures (usfp->update_bioseq_list)) {
+    EnableImportFeatureOptions(usfp->options_dialog);
+  } else {
+    DisableImportFeatureOptions (usfp->options_dialog);        
+  }  
+  if (BioseqListHasFeatures (usfp->orig_bioseq_list)) {
+    EnableRemoveFeatureOptions (usfp->options_dialog);
+  } else {
+    DisableRemoveFeatureOptions (usfp->options_dialog);
+  }
+}
+
+
 static void UndoUpdates (ButtoN b)
 {
   UpdateMultiSequenceFormPtr usfp;
@@ -18207,6 +18781,7 @@ static void TestUpdateSequenceSet (IteM i, Boolean is_indexer, Boolean do_update
                                                      UpdateSequenceSelectionChange,
                                                      usfp,
                                                      LoadUpdateSequenceMapFileBtn,
+                                                     ConnectSelectedUpdateSequencesBtn,
                                                      is_indexer);
 
   if (! do_update)
@@ -18340,10 +18915,7 @@ static void DoUpdateSingleSequence (ButtoN b)
   }
 
   uop = DialogToPointer (ssufp->options_dlg);   
-  if (uop == NULL || uop->submitter_opts == NULL
-      || (uop->submitter_opts->sequence_update_type == eSequenceUpdateNoChange
-          && uop->submitter_opts->feature_update_type == eFeatureUpdateNoChange
-          && uop->submitter_opts->feature_remove_type == eFeatureRemoveNone))
+  if (uop == NULL || !AreSubmitterOptsValid(uop->submitter_opts))
   {
     Message (MSG_ERROR, "Invalid options selected!");
     uop = UpdateOptionsFree (uop);
@@ -18573,7 +19145,11 @@ UpdateSingleSequence
      * import all except duplicates
      */
     if (!is_indexer) {
-      uop->submitter_opts->feature_update_type = eFeatureUpdateAllExceptDups;
+      if (uop->submitter_opts->feature_import_options == NULL) {
+        uop->submitter_opts->feature_import_options = FeatureImportOptionsNew ();
+      }
+      uop->submitter_opts->feature_import_options->feature_import_type = eFeatureUpdateAllExceptDups;
+      uop->submitter_opts->feature_import_options->feature_types = ValNodeFree (uop->submitter_opts->feature_import_options->feature_types);
       PointerToDialog (ssufp->options_dlg, uop);
       uop = UpdateOptionsFree (uop);
     }

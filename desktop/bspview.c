@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.145 $
+* $Revision: 6.156 $
 *
 * File Description: 
 *
@@ -80,6 +80,10 @@
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
+
+#define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macroapi.h>
 
 extern ForM smartBioseqViewForm;
 ForM smartBioseqViewForm = NULL;
@@ -2004,6 +2008,7 @@ static void ChangeTarget (Handle targ)
   }
 }
 
+
 extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId)
 
 {
@@ -2015,10 +2020,14 @@ extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId)
   Char               str [128];
   Char               tmp [128];
   Boolean            tryJustAccn = TRUE;
-  Int2               val;
+  Int2               val, curr_val, possible_val;
+  SeqEntryPtr        sep;
+  Int4               s_len, l_len;
+  CharPtr            tmp_id;
 
   bfp = (BioseqViewFormPtr) fp;
   if (bfp == NULL || StringHasNoText (seqId) || bfp->targetAlist == NULL) return;
+
   if (StringChr (seqId, '.') != NULL) {
     tryJustAccn = FALSE;
   }
@@ -2042,27 +2051,89 @@ extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId)
       }
     }
   }
-  /* try local ID */
-  sip = MakeSeqID (seqId);
+
+  sep = GetTopSeqEntryForEntityID (fp->input_entityID);
+  sip = CreateSeqIdFromText (seqId, sep);
   bsp = BioseqFind (sip);
   SeqIdFree (sip);
-  if (bsp == NULL) return;
-  sip = SeqIdFindWorst (bsp->id);
-  SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-  seqId = StringChr (tmp, '|');
-  if (seqId == NULL) {
-    seqId = tmp;
-  } else {
-    seqId++;
+  if (bsp != NULL) {
+    sip = SeqIdFindWorst (bsp->id);
+    SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
+    seqId = StringChr (tmp, '|');
+    if (seqId == NULL) {
+      seqId = tmp;
+    } else {
+      seqId++;
+    }
+    for (ap = bfp->targetAlist, val = 1; ap != NULL && ap->name != NULL; ap++, val++) {
+      StringNCpy (str, ap->name, sizeof (str));
+      if (StringICmp (str, seqId) == 0) {
+        SetValue (bfp->targetControl, val);
+        ChangeTarget ((Handle) bfp->targetControl);
+        return;
+      }
+    }
   }
+  /* no luck so far, see if this is the end of anything in the list */
+  s_len = StringLen (seqId);
   for (ap = bfp->targetAlist, val = 1; ap != NULL && ap->name != NULL; ap++, val++) {
     StringNCpy (str, ap->name, sizeof (str));
-    if (StringICmp (str, seqId) == 0) {
+    l_len = StringLen (str);
+    if (l_len > s_len && StringICmp (str + l_len - s_len, seqId) == 0) {
       SetValue (bfp->targetControl, val);
       ChangeTarget ((Handle) bfp->targetControl);
       return;
     }
+  }  
+  /* fooey.  look for the string anywhere in the list, starting with the next one from the current position */
+  curr_val = GetValue (bfp->targetControl);
+  possible_val = 0;
+  for (ap = bfp->targetAlist, val = 1; ap != NULL && ap->name != NULL; ap++, val++) {
+    StringNCpy (str, ap->name, sizeof (str));
+    l_len = StringLen (str);
+    if (l_len > s_len && StringISearch (str, seqId) != NULL) {
+      if (val > curr_val) {
+        SetValue (bfp->targetControl, val);
+        ChangeTarget ((Handle) bfp->targetControl);
+        return;
+      } else if (possible_val == 0) {
+        possible_val = val;
+      }
+    }
+  }  
+  if (possible_val > 0) {
+    SetValue (bfp->targetControl, possible_val);
+    ChangeTarget ((Handle) bfp->targetControl);
   }
+
+  /* maybe it's a BankIt ID without Seq1 */
+  if (StringISearch (seqId, "Seq") == NULL) {
+    tmp_id = (CharPtr) MemNew (sizeof (Char) * (StringLen (seqId) + 6));
+    sprintf (tmp_id, "%s/Seq1", seqId);
+    sip = CreateSeqIdFromText (tmp_id, sep);
+    tmp_id = MemFree (tmp_id);
+    bsp = BioseqFind (sip);
+    SeqIdFree (sip);
+    if (bsp != NULL) {
+      sip = SeqIdFindWorst (bsp->id);
+      SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
+      seqId = StringChr (tmp, '|');
+      if (seqId == NULL) {
+        seqId = tmp;
+      } else {
+        seqId++;
+      }
+      for (ap = bfp->targetAlist, val = 1; ap != NULL && ap->name != NULL; ap++, val++) {
+        StringNCpy (str, ap->name, sizeof (str));
+        if (StringICmp (str, seqId) == 0) {
+          SetValue (bfp->targetControl, val);
+          ChangeTarget ((Handle) bfp->targetControl);
+          return;
+        }
+      }
+    }
+  }
+
 }
 
 extern BioseqPtr GetBioseqViewTarget (BaseFormPtr fp)
@@ -3909,6 +3980,43 @@ extern ForM ReplaceToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createTo
   return (ForM) w;
 }
 
+extern ForM ReplaceToolFormWithDataForBioseqView (BaseFormPtr bafp, BuildToolbarProc createToolBar, Pointer data)
+
+{
+  BioseqViewFormPtr  bfp;
+  GrouP              g;
+  CharPtr            ptr;
+  Char               str [256];
+  WindoW             w;
+  Int2               left, top;
+
+  bfp = (BioseqViewFormPtr) bafp;
+  if (bfp == NULL || createToolBar == NULL) return NULL;
+  if (bfp->toolForm != NULL) {
+    bfp->toolForm = Remove (bfp->toolForm);
+  }
+  
+  GetTitle (bfp->form, str, sizeof (str));
+  TrimSpacesAroundString (str);
+  ptr = StringStr (str, " - ");
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+  if (StringHasNoText (str)) {
+    StringCpy (str, "ToolBar");
+  }
+  
+  GetToolBarRect (&left, &top);
+  w = FixedWindow (left, top, -10, -10, str, ToolFormHideWindowProc);
+  if (w == NULL) return NULL;
+  g = HiddenGroup (w, -1, 0, NULL);
+  SetObjectExtra (g, bfp, NULL);
+  createToolBar (g, data);
+  RealizeWindow (w);
+  bfp->toolForm = (ForM) w;
+  return (ForM) w;
+}
+
 extern ForM RemoveSeqEntryViewer (ForM f)
 
 {
@@ -4029,6 +4137,183 @@ extern Int2 LIBCALLBACK NewSeqEntryViewGenFunc (Pointer data)
   Select (w);
   return OM_MSG_RET_DONE;
 }
+
+
+static void HasAccessionCallback (BioseqPtr bsp, Pointer data)
+{
+  BoolPtr p_rval;
+  SeqIdPtr sip;
+  Boolean found = FALSE;
+
+  if (bsp == NULL 
+      || (p_rval = (BoolPtr) data) == NULL 
+      || !(*p_rval)
+      || ISA_aa (bsp->mol)) {
+    return;
+  }
+
+  for (sip = bsp->id; sip != NULL && !found; sip = sip->next) {
+    if (sip->choice == SEQID_GENBANK) {
+      found = TRUE;
+    }
+  }
+  *p_rval = found;
+}
+
+
+static void HasGICallback (BioseqPtr bsp, Pointer data)
+{
+  BoolPtr p_rval;
+  SeqIdPtr sip;
+  Boolean found = FALSE;
+
+  if (bsp == NULL 
+      || (p_rval = (BoolPtr) data) == NULL 
+      || (*p_rval)
+      || ISA_aa (bsp->mol)) {
+    return;
+  }
+
+  for (sip = bsp->id; sip != NULL && !found; sip = sip->next) {
+    if (sip->choice == SEQID_GI) {
+      found = TRUE;
+    }
+  }
+  *p_rval = found;
+}
+
+
+static Boolean AllSequencesHaveAccessionsButNoGis (SeqEntryPtr sep)
+{
+  Boolean rval = FALSE;
+  Boolean has_accession = TRUE;
+  Boolean has_gi = FALSE;
+  VisitBioseqsInSep (sep, &has_accession, HasAccessionCallback);
+  if (has_accession) {
+    VisitBioseqsInSep (sep, &has_gi, HasGICallback);
+    if (!has_gi) {
+      rval = TRUE;
+    }
+  }
+
+  return rval;
+}
+
+
+static void HasConflictingIDsCallback (BioseqPtr bsp, Pointer data)
+{
+  BoolPtr p_rval;
+  SeqIdPtr sip1;
+  BioseqPtr bsp2;
+  DbtagPtr  dbt;
+
+  if (bsp == NULL || (p_rval = (BoolPtr) data) == NULL || *p_rval) {
+    return;
+  }
+
+  for (sip1 = bsp->id; sip1 != NULL; sip1 = sip1->next) {
+    bsp2 = BioseqFindSpecial (sip1);
+    if (bsp2 != NULL && bsp2 != bsp) {
+      if (sip1->choice == SEQID_GENERAL 
+          && (dbt = (DbtagPtr) sip1->data.ptrvalue) != NULL
+          && StringICmp (dbt->db, "NCBIFILE") == 0) {
+        continue;
+      }
+      *p_rval = TRUE;
+    }
+  }
+}
+
+
+static Boolean HasConflictingIds (SeqEntryPtr sep)
+{
+  Boolean rval = FALSE;
+
+  VisitBioseqsInSep (sep, &rval, HasConflictingIDsCallback);
+  return rval;
+}
+
+
+NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object)
+{
+  AsnIoPtr     aip;
+  Char         buf [PATH_MAX];
+  ValNodePtr   action_list;
+  SeqEntryPtr  sep;
+  Uint2        entityID;
+  LogInfoPtr   lip;
+
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID(bfp->input_entityID);
+  if (sep == NULL) {
+    return;
+  }
+  if (add_object && !AllSequencesHaveAccessionsButNoGis(sep)) {
+    return;
+  }
+  if (HasConflictingIds(sep)) {
+    Message (MSG_ERROR, "Can't run autofix - there are colliding local IDs.");
+    return;
+  }
+
+  if (! FindPath("ncbi", "ncbi", "data", buf, sizeof (buf)))
+  {
+    Message (MSG_ERROR, "Failed to find Auto-fix script");
+    return;
+  }
+
+  StringCat(buf, "autofix.prt");
+
+  aip = AsnIoOpen (buf, "r");
+  if (aip == NULL) {
+    Message (MSG_ERROR, "Unable to open %s", buf);
+    return;
+  }
+
+  action_list = MacroActionListAsnRead (aip, NULL);
+  AsnIoClose (aip);
+
+  if (action_list == NULL) {
+    Message (MSG_ERROR, "Unable to read action list from %s.", buf);
+    return;
+  }
+
+  WatchCursor();
+  Update();
+  lip = OpenLog ("AutoFix Actions");
+  entityID = ObjMgrGetEntityIDForChoice(sep);
+  lip->data_in_log |= ApplyMacroToSeqEntryEx (sep, action_list, lip->fp);
+  if (add_object) {
+    AddNcbiAutofixUserObject(sep);
+  }
+  ObjMgrSetDirtyFlag (entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  CloseLog(lip);
+  lip = FreeLog(lip);
+  ArrowCursor ();
+  Update ();  
+}
+
+
+NLM_EXTERN void AutofixOnStartup (BaseFormPtr bfp)
+{
+  Char        str [256];
+  SeqEntryPtr sep;
+
+  CacheAppParam (FALSE);
+  if (GetAppParam ("SEQUINCUSTOM", "SETTINGS", "AUTOFIX", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+      if (FindNcbiAutofixUserObject(sep) == NULL) {
+        RunAutoFixScript (bfp, TRUE);
+        ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+        ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+      }
+    }
+  }
+}
+
 
 extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
 
@@ -4186,6 +4471,9 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
     }
   }
   Select (w);
+
+  AutofixOnStartup ((BaseFormPtr) bfp);
+
   return OM_MSG_RET_DONE;
 }
 

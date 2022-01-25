@@ -1,4 +1,4 @@
-/* $Id: ncbi_core_c.c,v 6.21 2008/10/17 15:59:05 lavr Exp $
+/* $Id: ncbi_core_c.c,v 6.25 2011/01/20 17:08:07 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,8 @@
 #include <connect/ncbi_util.h>
 #include <ncbienv.h>
 #include <ncbierr.h>
+#include <ncbiprop.h>
+#include <ncbistr.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -65,7 +67,8 @@ static void s_REG_Get(void* user_data,
 {
     const char* conf_file = (const char*) user_data;
     char* dflt = *value ? strdup(value) : 0;
-    Nlm_GetAppParam(conf_file, section, name, dflt, value, val_size);
+    Nlm_GetAppParam(conf_file, section, name, dflt, value,
+                    val_size < INT2_MAX ? (Nlm_Int2) val_size : INT2_MAX);
     if (dflt)
         free(dflt);
 }
@@ -228,80 +231,17 @@ extern MT_LOCK MT_LOCK_c2c(TNlmRWlock lock, int/*bool*/ pass_ownership)
 
 extern void CONNECT_Init(const char* conf_file)
 {
+    const char* appname;
+
     g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
     srand(g_NCBI_ConnectRandomSeed);
 
     CORE_SetLOCK(MT_LOCK_c2c(0, 1/*true*/));
     CORE_SetLOG(LOG_c2c());
     CORE_SetREG(REG_c2c(conf_file));
+
+    /* replace app name now */
+    appname = GetProgramName();
+    if (Nlm_StringDoesHaveText(appname))
+        strrncpy0(g_CORE_AppName, appname, NCBI_CORE_APPNAME_MAXLEN);
 }
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: ncbi_core_c.c,v $
- * Revision 6.21  2008/10/17 15:59:05  lavr
- * REG_Set() made to return a value
- *
- * Revision 6.20  2008/10/16 19:12:55  lavr
- * Id left justified
- *
- * Revision 6.19  2007/10/18 15:29:26  ivanovp
- * Connect and ctools libraries are changed to use new error and log posting system with error codes and subcodes. JIRA: CXX-3
- *
- * Revision 6.18  2007/06/25 15:33:04  lavr
- * +eMT_TryLock[Read]
- *
- * Revision 6.17  2006/03/07 17:24:54  lavr
- * Remove g_NCBI_ConnectSrandAddent for good
- *
- * Revision 6.16  2005/12/07 22:18:20  lavr
- * Use strdup() instead of malloc()+strcpy()
- *
- * Revision 6.15  2005/07/26 20:00:33  lavr
- * Retroactively provide s_NCBI_ConnectSrandAddent() temporarily
- *
- * Revision 6.14  2005/07/11 18:51:34  lavr
- * Spell ADDEND
- *
- * Revision 6.13  2005/05/03 11:59:00  ivanov
- * Removing #include <connect/ncbi_priv.h>
- *
- * Revision 6.12  2005/05/03 11:51:13  ivanov
- * Include ncbi_priv.h instead of ncbi_socket.h
- *
- * Revision 6.11  2005/05/02 16:28:02  lavr
- * CONNECT_Init() to set global random seed
- *
- * Revision 6.10  2005/04/20 20:38:42  lavr
- * +"ncbi_assert.h"
- *
- * Revision 6.9  2002/10/31 17:53:33  lavr
- * Clear error in case of a trace message
- *
- * Revision 6.8  2002/09/24 18:07:12  lavr
- * Declare s_LOCK_Handler static in the first place of declaration
- *
- * Revision 6.7  2002/07/05 17:52:46  lavr
- * LOCK handler to return -1 in case of an empty lock object
- *
- * Revision 6.6  2002/07/03 19:53:40  lavr
- * Do not consult environment in registry searches (use only GetAppParam())
- *
- * Revision 6.5  2002/07/02 21:20:53  lavr
- * Use INFO severity for tracing; patch for registry lookup in environment
- *
- * Revision 6.4  2002/06/12 16:41:37  lavr
- * +CONNECT_Init()
- *
- * Revision 6.3  2002/05/08 19:04:37  kans
- * needed to include connect/ncbi_ansi_ext.h
- *
- * Revision 6.2  2002/05/07 18:44:45  lavr
- * Refined API; Change log moved to the end
- *
- * Revision 6.1  2002/05/07 18:17:54  lavr
- * Initial revision
- *
- * ===========================================================================
- */

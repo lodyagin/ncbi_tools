@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.306 2010/06/08 15:29:02 lavr Exp $
+#	$Id: makeall.unx,v 6.307 2011/02/04 18:04:54 kans Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -735,6 +735,7 @@ copy :
 	$(SRCCOPY) ../$(ASNDIR)/*.h ../include
 	$(SRCCOPY) ../api/*.h ../include
 	$(SRCCOPY) ../api/*.c .
+	$(SRCCOPY) ../api/*.inc .
 	$(SRCCOPY) ../cdromlib/*.h ../include
 	$(SRCCOPY) ../cdromlib/*.c .
 	$(SRCCOPY) ../vibrant/*.h ../include

@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.239 2010/08/05 16:13:14 kans Exp $
+#	$Id: makenet.unx,v 6.246 2011/04/26 15:32:34 ucko Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -265,7 +265,7 @@ SRC40 = objtax1.c taxutil.c tc2dproc.c txcdproc.c parttree.c taxcs.c taxblast.c
 
 SRC41 = id1gen.c id1arch.c accid1.c
 
-SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c gicache.c
+SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c gicache.c acclinkos.c
 
 SRC43 = os_mtutils.c already_running.c
 
@@ -313,7 +313,7 @@ OBJ40 = objtax1.o taxutil.o tc2dproc.o txcdproc.o parttree.o taxcs.o taxblast.o
 
 OBJ41 = id1gen.o id1arch.o accid1.o 
 
-OBJ42 = accpubseq.o ctliberr.o ctlibutils.o password.o gipropmmap.o gicache.o
+OBJ42 = accpubseq.o ctliberr.o ctlibutils.o password.o gipropmmap.o gicache.o acclinkos.o
 
 OBJ43 = os_mtutils.o already_running.o
 
@@ -393,7 +393,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL: copy nocopy Tentrez sequin Psequin sbtedit streamer Ssequin elecpcr asn2fast asn2asn cleanasn cleanasn_psf cspeedtest sugint Nbatch Nbatch3 Nentrcmd seqget idfetch test_nc bi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf raw2delt aceread_tst asn2all gene2xml asnval asnval_psf asndisc asndisc_psf asnbarval demo_aceread_tst asnmacro asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq src_chk src_chk_psf tbl_chk tbl_chk_psf
+.NO_PARALLEL: copy nocopy Tentrez sequin Psequin sbtedit streamer Ssequin elecpcr asn2fast asn2asn cleanasn cleanasn_psf cspeedtest sqn2agp sugint Nbatch Nbatch3 Nentrcmd seqget idfetch test_nc bi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf raw2delt aceread_tst asn2all gene2xml asnval asnval_psf asndisc asndisc_psf asnbarval demo_aceread_tst asnmacro asnstrip flint xlint diffshift gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq src_chk src_chk_psf tbl_chk tbl_chk_psf
 
 .WAIT:
 	echo Waiting...go
@@ -525,6 +525,7 @@ copy :
 	$(SRCCOPY) ../demo/asn2asn.c .
 	$(SRCCOPY) ../demo/cleanasn.c .
 	$(SRCCOPY) ../demo/cspeedtest.c .
+	$(SRCCOPY) ../demo/sqn2agp.c .
 	$(SRCCOPY) ../demo/sugint.c .
 	$(SRCCOPY) ../demo/fetchent.c .
 	$(SRCCOPY) ../demo/udvmain.c .
@@ -544,6 +545,8 @@ copy :
 	$(SRCCOPY) ../demo/tbl2asn.c .
 	$(SRCCOPY) ../demo/raw2delt.c .
 	$(SRCCOPY) ../demo/flint.c .
+	$(SRCCOPY) ../demo/xlint.c .
+	$(SRCCOPY) ../demo/diffshift.c .
 	$(SRCCOPY) ../demo/gbseqget.c .
 	$(SRCCOPY) ../demo/insdseqget.c .
 	$(SRCCOPY) ../demo/nps2gps.c .
@@ -893,7 +896,7 @@ $(ULIB44) : $(OBJ44)
 # Since Sybase needs special include, and becuase of the TLIB/DLIB trick
 #  this will not be invoked unless BLIB42 defined on the make line, we
 #  can safely have an NCBI-only rule here
-# SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c
+# SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c acclinkos.c
 
 ctlibutils.o : ctlibutils.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c ctlibutils.c
@@ -920,6 +923,8 @@ os_mtutils.o : os_mtutils.c
 idload_lib.o : idload_lib.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c idload_lib.c
 
+acclinkos.o : acclinkos.c
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c acclinkos.c
 
 ## make applications
 ##
@@ -1091,6 +1096,16 @@ flint :	flint.c
 	$(CC) -g -o flint $(LDFLAGS) flint.c $(LIB41) $(NETCLILIB) \
 		$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS)
 
+# xlint program (xlint)
+xlint :	xlint.c
+	$(CC) -g -o xlint $(LDFLAGS) xlint.c $(LIB41) $(NETCLILIB) \
+		$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# diffshift program (diffshift)
+diffshift :	diffshift.c
+	$(CC) -g -o diffshift $(LDFLAGS) diffshift.c $(LIB41) $(NETCLILIB) \
+		$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS)
+
 # gbseqget program (gbseqget)
 gbseqget :	gbseqget.c
 	$(CC) -g -o gbseqget $(LDFLAGS) gbseqget.c $(LIB41) $(NETCLILIB) \
@@ -1177,6 +1192,11 @@ cleanasn_psf : cleanasn.c
 
 cspeedtest : cspeedtest.c
 	$(CC) -o cspeedtest $(LDFLAGS) cspeedtest.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# demo program (sqn2agp)
+
+sqn2agp : sqn2agp.c
+	$(CC) -o sqn2agp $(LDFLAGS) sqn2agp.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # demo program (sugint)
 

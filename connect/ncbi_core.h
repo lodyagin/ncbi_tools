@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CORE__H
 #define CONNECT___NCBI_CORE__H
 
-/* $Id: ncbi_core.h,v 6.36 2008/12/01 16:34:35 kazimird Exp $
+/* $Id: ncbi_core.h,v 6.38 2011/04/17 02:39:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -86,13 +86,14 @@ extern "C" {
  *  EIO_WriteMethod
  */
 typedef enum {
-    eIO_ReadPlain,   /**< read presently available data only                 */
-    eIO_ReadPeek,    /**< same eIO_ReadPlain but leave data in input queue   */
-    eIO_ReadPersist, /**< try to read exactly "n" bytes; wait for enough data*/
-    /* deprecated */
-    eIO_Plain   = eIO_ReadPlain,
-    eIO_Peek    = eIO_ReadPeek,
-    eIO_Persist = eIO_ReadPersist
+    eIO_ReadPlain,      /**< read readily available data only, wait if none  */
+    eIO_ReadPeek,       /**< do eIO_ReadPlain but leave data in input queue  */
+    eIO_ReadPersist,    /**< read exactly as much as requested, w/waits      */
+    eIO_ReadSupplement  /**< do eIO_ReadPlain but return extended status     */
+    /* deprecated -- DO NOT USE! */
+    /*eIO_Plain   = eIO_ReadPlain,*/
+    /*eIO_Peek    = eIO_ReadPeek,*/
+    /*eIO_Persist = eIO_ReadPersist*/
 } EIO_ReadMethod;
 
 
@@ -101,17 +102,18 @@ typedef enum {
  *  EIO_ReadMethod
  */
 typedef enum {
-    eIO_WritePlain,    /**< write as much as possible, report back how much  */
-    eIO_WritePersist,  /**< write exactly as much as specified               */
-    eIO_WriteOutOfBand /**< write out-of-band chunk of urgent data           */
+    eIO_WritePlain,     /**< write as much as possible, report back how much */
+    eIO_WritePersist,   /**< write exactly as much as specified              */
+    eIO_WriteOutOfBand, /**< write out-of-band chunk of urgent data          */
+    eIO_WriteSupplement /**< do eIO_WritePlain but return extended status    */
 } EIO_WriteMethod;
 
 
 /** I/O event (or direction).
  * @par <b>NOTE:</b>
  *  Internally, these constants are used as bit-values,
- *  and thus should not be changed in this header.  However, user code
- *  should not rely on the values of these constants.
+ *  and thus should not be changed in this header.  On the other hand,
+ *  user code should not rely on the values of these constants, either.
  * @sa
  *  SOCK_Wait, SOCK_Poll, CONN_Wait, SOCK_SetTimeout, CONN_SetTimeout
  */
@@ -127,13 +129,12 @@ typedef enum {
 /** I/O status.
  */
 typedef enum {
-    eIO_Success = 0,  /**< everything is fine, no errors occurred            */
+    eIO_Success = 0,  /**< everything is fine, no error occurred             */
     eIO_Timeout,      /**< timeout expired before any I/O succeeded          */
     eIO_Closed,       /**< peer has closed the connection                    */
-    eIO_Interrupt,    /**< signal received while an I/O was in progress      */
+    eIO_Interrupt,    /**< signal received while I/O was in progress         */
     eIO_InvalidArg,   /**< bad argument value(s)                             */
     eIO_NotSupported, /**< the requested operation is not supported          */
-
     eIO_Unknown       /**< unknown (most probably -- fatal) error            */
 } EIO_Status;
 
@@ -264,7 +265,7 @@ extern NCBI_XCONNECT_EXPORT MT_LOCK MT_LOCK_Delete(MT_LOCK lk);
  * @sa
  *  MT_LOCK_Create, FMT_LOCK_Handler, EMT_Lock
  */
-#define MT_LOCK_Do(lk, how)  (lk ? MT_LOCK_DoInternal(lk, how) : -1)
+#define MT_LOCK_Do(lk, how)  ((lk) ? MT_LOCK_DoInternal((lk), (how)) : -1)
 extern NCBI_XCONNECT_EXPORT int/*bool*/ MT_LOCK_DoInternal
 (MT_LOCK  lk,
  EMT_Lock how

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.46 $
+* $Revision: 6.50 $
 *
 * File Description:
 *       Vibrant slate (universal drawing environment) functions
@@ -39,6 +39,16 @@
 *
 * ==========================================================================
 */
+
+#ifdef _WIN32
+#  /* Ensure availability of WM_MOUSEWHEEL, available from NT 4.0 on */
+#  if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0400
+#    undef _WIN32_WINNT
+#  endif
+#  ifndef _WIN32_WINNT
+#    define _WIN32_WINNT 0x0400
+#  endif
+#endif
 
 #include <vibtypes.h>
 #include <vibprocs.h>
@@ -1055,7 +1065,7 @@ static void Nlm_ShowSlate (Nlm_GraphiC s, Nlm_Boolean setFlag, Nlm_Boolean saveP
     h = Nlm_GetSlateHandle ((Nlm_SlatE) s);
 #ifdef WIN_MAC
 #ifdef WIN_MAC_QUARTZ
-	Nlm_SetGraphicNeedsDisplay (s);
+    Nlm_SetGraphicNeedsDisplay (s);
 #else
     Nlm_DoDraw (s);
 #endif
@@ -1128,9 +1138,9 @@ static void Nlm_HideSlate (Nlm_GraphiC s, Nlm_Boolean setFlag, Nlm_Boolean saveP
 #ifdef WIN_MAC
   if (Nlm_AllParentsButWindowVisible (s)) {
 #ifdef WIN_MAC_QUARTZ
-	Nlm_SetGraphicNeedsDisplay (s);
+    Nlm_SetGraphicNeedsDisplay (s);
 #else
-	Nlm_GetRect (s, &r);
+    Nlm_GetRect (s, &r);
     if (vsb != NULL) {
       r.right += Nlm_vScrollBarWidth;
     }
@@ -1740,7 +1750,7 @@ static void Nlm_SetSlatePosition(Nlm_GraphiC s, Nlm_RectPtr r,
 
 
 static void Nlm_SetPanelPosition (Nlm_GraphiC p, Nlm_RectPtr r,
-				  Nlm_Boolean savePort, Nlm_Boolean force)
+                                  Nlm_Boolean savePort, Nlm_Boolean force)
 {
   Nlm_RecT    oldRect;
   Nlm_WindoW  tempPort;
@@ -2591,37 +2601,37 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
 #ifdef WIN_MAC
   {
     /* use OpenGL context's own color map (but set window's cmap to same...)  (thiessen) */
-  	Nlm_Int2        i;
-  	RGBColor        col;
-  	GLint cme[4];
+    Nlm_Int2 i;
+    RGBColor col;
+    GLint cme[4];
     AGLContext ctx = aglGetCurrentContext();
-  	WindowPtr OGLwin = (WindowPtr) aglGetDrawable(ctx);
+    WindowPtr OGLwin = (WindowPtr) aglGetDrawable(ctx);
 
-		if ( wdata.cMap != NULL ){
-			if ( wdata.cMapStatus ){
-			  SetPalette( OGLwin, NULL, FALSE);
-			}
-			DisposePalette ( wdata.cMap );
-			wdata.cMap = NULL;
-		}
-		wdata.cMapStatus = 0;
-		if ( totalColors!=0 ) {
-			wdata.cMap = NewPalette(totalColors,(CTabHandle)0,pmTolerant,0);
-			if ( wdata.cMap != NULL ) {
-			  for( i=0; i<totalColors; i++ ) {
-			    col.red   = (Nlm_Uint2)red[i]<<8 | (Nlm_Uint2)red[i];
-			    col.green = (Nlm_Uint2)green[i]<<8 | (Nlm_Uint2)green[i];
-			    col.blue  = (Nlm_Uint2)blue[i]<<8 | (Nlm_Uint2)blue[i];
-			    SetEntryColor(wdata.cMap,i,&col);
-			    /* agl expects rgb colors from [0..65535] */
-			    cme[0]=i; cme[1]=col.red*256; cme[2]=col.green*256; cme[3]=col.blue*256;
-			    aglSetInteger(ctx,AGL_COLORMAP_ENTRY,cme);
-			  }
-			  SetPalette( OGLwin, wdata.cMap, FALSE);
-			  ActivatePalette ( OGLwin );
-			  wdata.cMapStatus = 1;
-			}
-		}
+    if ( wdata.cMap != NULL ){
+      if ( wdata.cMapStatus ){
+        SetPalette( OGLwin, NULL, FALSE);
+      }
+      DisposePalette ( wdata.cMap );
+      wdata.cMap = NULL;
+    }
+    wdata.cMapStatus = 0;
+    if ( totalColors!=0 ) {
+      wdata.cMap = NewPalette(totalColors,(CTabHandle)0,pmTolerant,0);
+      if ( wdata.cMap != NULL ) {
+        for( i=0; i<totalColors; i++ ) {
+          col.red   = (Nlm_Uint2)red[i]<<8 | (Nlm_Uint2)red[i];
+          col.green = (Nlm_Uint2)green[i]<<8 | (Nlm_Uint2)green[i];
+          col.blue  = (Nlm_Uint2)blue[i]<<8 | (Nlm_Uint2)blue[i];
+          SetEntryColor(wdata.cMap,i,&col);
+          /* agl expects rgb colors from [0..65535] */
+          cme[0]=i; cme[1]=col.red*256; cme[2]=col.green*256; cme[3]=col.blue*256;
+          aglSetInteger(ctx,AGL_COLORMAP_ENTRY,cme);
+        }
+        SetPalette( OGLwin, wdata.cMap, FALSE);
+        ActivatePalette ( OGLwin );
+        wdata.cMapStatus = 1;
+      }
+    }
   }
 #endif
 
@@ -2945,7 +2955,7 @@ void Nlm_SetOGLContext(Nlm_SlateTool a, Nlm_Boolean *im,
 /* Callback for 3DSlate that tells OpenGL window has been resized */
 static void Nlm_OGLResizeViewport(Widget w,
                                   XtPointer client_data,
-				                  XtPointer call_data)
+                                  XtPointer call_data)
 {
   Nlm_RecT r;
 
@@ -2987,8 +2997,8 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
 #ifdef WIN_MSWIN
   PIXELFORMATDESCRIPTOR pfd;
   int pf;
-  HDC hDC;				/* device context */
-  HGLRC hRC;				/* opengl context */
+  HDC hDC;                /* device context */
+  HGLRC hRC;              /* opengl context */
   int BitsPixel;
 #endif /* WIN_MSWIN */
 
@@ -3008,43 +3018,43 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
     SetProp (h, (LPSTR) "Nlm_VibrantProp", (Nlm_HandleTool) s);
   }
 
-	hDC = GetDC(h);
+  hDC = GetDC(h);
 
-    BitsPixel = GetDeviceCaps(hDC, BITSPIXEL);  /* number of bits per pixel */
-    /* there is no guarantee that the contents of the stack that become
-       the pfd are zeroed, therefore _make sure_ to clear these bits. */
-    memset(&pfd, 0, sizeof(PIXELFORMATDESCRIPTOR));
-    pfd.nSize        = sizeof(PIXELFORMATDESCRIPTOR);
-    pfd.nVersion     = 1;
-    pfd.dwFlags      = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    pfd.cColorBits   = BitsPixel;
-    pfd.dwLayerMask  = PFD_MAIN_PLANE;
+  BitsPixel = GetDeviceCaps(hDC, BITSPIXEL);  /* number of bits per pixel */
+  /* there is no guarantee that the contents of the stack that become
+     the pfd are zeroed, therefore _make sure_ to clear these bits. */
+  memset(&pfd, 0, sizeof(PIXELFORMATDESCRIPTOR));
+  pfd.nSize        = sizeof(PIXELFORMATDESCRIPTOR);
+  pfd.nVersion     = 1;
+  pfd.dwFlags      = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+  pfd.cColorBits   = BitsPixel;
+  pfd.dwLayerMask  = PFD_MAIN_PLANE;
 
-    /* use colorindex mode if less that 16 bits per pixel */
-    if (BitsPixel < 16) {
-        pfd.iPixelType   = PFD_TYPE_COLORINDEX;
-        *IndexMode = TRUE;
-    }
-    else {
-        pfd.iPixelType   = PFD_TYPE_RGBA;
-        *IndexMode = FALSE;
-    }
+  /* use colorindex mode if less that 16 bits per pixel */
+  if (BitsPixel < 16) {
+      pfd.iPixelType   = PFD_TYPE_COLORINDEX;
+      *IndexMode = TRUE;
+  }
+  else {
+      pfd.iPixelType   = PFD_TYPE_RGBA;
+      *IndexMode = FALSE;
+  }
 
-    pf = ChoosePixelFormat(hDC, &pfd);
-    if (pf == 0) {
-	MessageBox(NULL, "ChoosePixelFormat() failed:  "
-		   "Cannot find a suitable pixel format.", "Error", MB_OK);
-    }
+  pf = ChoosePixelFormat(hDC, &pfd);
+  if (pf == 0) {
+  MessageBox(NULL, "ChoosePixelFormat() failed:  "
+         "Cannot find a suitable pixel format.", "Error", MB_OK);
+  }
 
-    if (SetPixelFormat(hDC, pf, &pfd) == FALSE) {
-	MessageBox(NULL, "SetPixelFormat() failed:  "
-		   "Cannot set format specified.", "Error", MB_OK);
-    }
+  if (SetPixelFormat(hDC, pf, &pfd) == FALSE) {
+  MessageBox(NULL, "SetPixelFormat() failed:  "
+         "Cannot set format specified.", "Error", MB_OK);
+  }
 
-    /*DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);*/
+  /*DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);*/
 
-	hRC = wglCreateContext(hDC);
-    wglMakeCurrent(hDC, hRC);
+  hRC = wglCreateContext(hDC);
+  wglMakeCurrent(hDC, hRC);
 /* Do not ReleaseDC(h, hDC).  GL owns this */
 
 #endif
@@ -3092,52 +3102,52 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
 
     for (i=0; Nlm_OGLColorPreferences[i][0] != -1; i++) {
 
-    	na = 0;
-    	attrib[na++] = AGL_MINIMUM_POLICY;
-    	attrib[na++] = AGL_ROBUST;
+      na = 0;
+      attrib[na++] = AGL_MINIMUM_POLICY;
+      attrib[na++] = AGL_ROBUST;
       if (Nlm_OGLColorPreferences[i][0]) attrib[na++] = AGL_DOUBLEBUFFER;
 
-	    if (Nlm_OGLColorPreferences[i][1]) {
-	      attrib[na++] = AGL_BUFFER_SIZE;
-	      attrib[na++] = Nlm_OGLColorPreferences[i][1];
-	      *IndexMode = TRUE;
-	    } else {
-		    attrib[na++] = AGL_RGBA;
-		    attrib[na++] = AGL_RED_SIZE;
-		    attrib[na++] = Nlm_OGLColorPreferences[i][2];
-		    attrib[na++] = AGL_GREEN_SIZE;
-		    attrib[na++] = Nlm_OGLColorPreferences[i][2];
-		    attrib[na++] = AGL_BLUE_SIZE;
-		    attrib[na++] = Nlm_OGLColorPreferences[i][2];
-		    *IndexMode = FALSE;
-		  }
+      if (Nlm_OGLColorPreferences[i][1]) {
+        attrib[na++] = AGL_BUFFER_SIZE;
+        attrib[na++] = Nlm_OGLColorPreferences[i][1];
+        *IndexMode = TRUE;
+      } else {
+          attrib[na++] = AGL_RGBA;
+          attrib[na++] = AGL_RED_SIZE;
+          attrib[na++] = Nlm_OGLColorPreferences[i][2];
+          attrib[na++] = AGL_GREEN_SIZE;
+          attrib[na++] = Nlm_OGLColorPreferences[i][2];
+          attrib[na++] = AGL_BLUE_SIZE;
+          attrib[na++] = Nlm_OGLColorPreferences[i][2];
+          *IndexMode = FALSE;
+        }
 
-	    if (Nlm_OGLColorPreferences[i][3]) {
-	    	attrib[na++] = AGL_DEPTH_SIZE;
-	    	attrib[na++] = Nlm_OGLColorPreferences[i][3];
-	    }
+      if (Nlm_OGLColorPreferences[i][3]) {
+          attrib[na++] = AGL_DEPTH_SIZE;
+          attrib[na++] = Nlm_OGLColorPreferences[i][3];
+      }
 
-	    attrib[na++] = AGL_NONE;
+      attrib[na++] = AGL_NONE;
 
-	    if ((fmt=aglChoosePixelFormat(NULL, 0, attrib)) == NULL) {
-	      continue;
-	    }
-	    if ((ctx=aglCreateContext(fmt,NULL)) == NULL) {
-	      aglDestroyPixelFormat(fmt);
-	      continue;
-	    }
-	    if (!aglSetDrawable(ctx,h)) {
-	      aglDestroyPixelFormat(fmt);
-	      aglDestroyContext(ctx);
-	      continue;
-	    }
-	    success = aglSetCurrentContext(ctx);
-	    aglDestroyPixelFormat(fmt);
-	    if (success == GL_TRUE) {
-	    	break;
-	    } else {
-	      aglDestroyContext(ctx);
-	    }
+      if ((fmt=aglChoosePixelFormat(NULL, 0, attrib)) == NULL) {
+        continue;
+      }
+      if ((ctx=aglCreateContext(fmt,NULL)) == NULL) {
+        aglDestroyPixelFormat(fmt);
+        continue;
+      }
+      if (!aglSetDrawable(ctx,h)) {
+        aglDestroyPixelFormat(fmt);
+        aglDestroyContext(ctx);
+        continue;
+      }
+      success = aglSetCurrentContext(ctx);
+      aglDestroyPixelFormat(fmt);
+      if (success == GL_TRUE) {
+          break;
+      } else {
+        aglDestroyContext(ctx);
+      }
 
     }
     if (success == GL_FALSE) return;
@@ -4139,6 +4149,7 @@ static void MyCls_OnKillFocus (HWND hwnd, HWND hwndNewFocus)
   Nlm_ChangeSlateFocus(s, FALSE);
 }
 
+#define SQN_GET_WHEEL_DELTA_WPARAM(wparam) ((short)HIWORD (wparam))
 
 static LRESULT CALLBACK EXPORT SlateProc(HWND hwnd, UINT message,
                                   WPARAM wParam, LPARAM lParam)
@@ -4148,6 +4159,8 @@ static LRESULT CALLBACK EXPORT SlateProc(HWND hwnd, UINT message,
   HDC          tempHDC;
   HWND         tempHWnd;
   Nlm_Boolean  clearRecent;  /* dgg */
+  Nlm_BaR      vsb;
+  int          zDelta;
 
   if ( Nlm_VibrantDisabled() )
     return DefWindowProc(hwnd, message, wParam, lParam);
@@ -4192,6 +4205,18 @@ static LRESULT CALLBACK EXPORT SlateProc(HWND hwnd, UINT message,
         if ( !Nlm_HandleSlateInput(s, Nlm_KeydownToChar( wParam )) )
           rsult = DefWindowProc(hwnd, message, wParam, lParam);
         break;
+    case WM_MOUSEWHEEL:
+      {
+        zDelta = SQN_GET_WHEEL_DELTA_WPARAM(wParam);
+        if (zDelta > 0) {
+          vsb = Nlm_GetSlateVScrollBar( s );
+          Nlm_Scroll(vsb, SCROLL_PAGEUP);
+        } else if (zDelta < 0) {
+          vsb = Nlm_GetSlateVScrollBar( s );
+          Nlm_Scroll(vsb, SCROLL_PAGEDN);
+        }
+      }
+      break;
     case WM_CHAR:
       handlechar = FALSE;
       HANDLE_WM_CHAR(hwnd, wParam, lParam, MyCls_OnChar);
@@ -4248,8 +4273,8 @@ extern Nlm_Boolean Nlm_RegisterSlates (void)
 /*wc.hCursor = LoadCursor (NULL, IDC_ARROW);      M.I */
   wc.hCursor = NULL;                           /* M.I */
   wc.hbrBackground = Nlm_hasBackColor ?
-                       	CreateSolidBrush( Nlm_crBackColor ) :
-                       	CreateSolidBrush( GetSysColor(COLOR_WINDOW));
+                           CreateSolidBrush( Nlm_crBackColor ) :
+                           CreateSolidBrush( GetSysColor(COLOR_WINDOW));
   wc.lpszMenuName = NULL;
   sprintf (slateclass, "Nlm_SlateClass%ld", (long) (int) Nlm_currentHInst);
   wc.lpszClassName = slateclass;

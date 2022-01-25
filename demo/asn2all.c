@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.76 $
+* $Revision: 1.89 $
 *
 * File Description:
 *
@@ -53,7 +53,7 @@
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "6.3"
+#define ASN2ALL_APP_VER "7.7"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
 
@@ -86,6 +86,7 @@ typedef enum {
   FLATFILE_FORMAT = 1,
   FASTA_FORMAT,
   CDS_FORMAT,
+  GENE_FORMAT,
   TABLE_FORMAT,
   TINY_FORMAT,
   INSDSEQ_FORMAT,
@@ -110,6 +111,14 @@ typedef struct appflags {
   Boolean       extended;
   Boolean       failed;
   Uint4         cdsID;
+  Uint4         geneID;
+  Int4          filterLen;
+  ValNodePtr    filterList;
+  CharPtr PNTR  filterArray;
+  Boolean       go_on;
+  Int4          from;
+  Int4          to;
+  Uint1         strand;
   FILE          *nt;
   FILE          *aa;
   AsnIoPtr      an;
@@ -289,6 +298,167 @@ static void DoTransFasta (
   }
 }
 
+static void DoGeneFasta (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  AppFlagPtr         afp;
+  Char               buf [32];
+  SeqMgrFeatContext  fcontext;
+  SeqFeatPtr         sfp;
+
+  if (bsp == NULL || ! ISA_na (bsp->mol)) return;
+  afp = (AppFlagPtr) userdata;
+  if (afp == NULL) return;
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &fcontext);
+  while (sfp != NULL) {
+    afp->geneID++;
+    sprintf (buf, "_gene_%ld", (long) afp->geneID);
+    GeneFastaStream (sfp, afp->nt,
+                     STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                     afp->linelen, 0, 0, TRUE, buf);
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_GENE, 0, &fcontext);
+  }
+}
+
+  Int4          filterLen;
+  ValNodePtr    filterList;
+  CharPtr PNTR  filterArray;
+
+static Boolean IdInFilter (
+  CharPtr id,
+  AppFlagPtr afp
+)
+
+{
+  CharPtr PNTR  array;
+  Int2          L, R, mid;
+
+  if (StringHasNoText (id) || afp == NULL) return FALSE;
+
+  array = afp->filterArray;
+  if (array == NULL) return FALSE;
+
+  L = 0;
+  R = afp->filterLen - 1;
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    if (StringICmp (array [mid], id) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (StringICmp (array [R], id) == 0) return TRUE;
+
+  return FALSE;
+}
+
+static void CheckFilter (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  AppFlagPtr  afp;
+  Char        id [64];
+  CharPtr     ptr;
+  SeqIdPtr    sip;
+
+  if (bsp == NULL || userdata == NULL) return;
+  afp = (AppFlagPtr) userdata;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id));
+    ptr = StringChr (id, '.');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    if (IdInFilter (id, afp)) {
+      afp->go_on = TRUE;
+      return;
+    }
+  }
+}
+
+static void GetFirstGoodBioseq (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  BioseqPtr PNTR bspp;
+
+  bspp = (BioseqPtr PNTR) userdata;
+  if (*bspp != NULL) return;
+  *bspp = bsp;
+}
+
+static SeqLocPtr AfpToSeqLoc (
+  SeqEntryPtr sep,
+  AppFlagPtr afp
+)
+
+{
+  BioseqPtr   bsp = NULL;
+  Int4        from;
+  SeqIntPtr   sintp;
+  SeqLocPtr   slp = NULL;
+  Uint1       strand;
+  Int4        to;
+
+  if (sep == NULL || afp == NULL) return NULL;
+
+  if ((afp->from < 1 || afp->to < 1) && afp->strand == Seq_strand_plus) return NULL;
+
+  if (afp->nt != NULL && afp->aa == NULL) {
+    VisitSequencesInSep (sep, (Pointer) &bsp, VISIT_NUCS, GetFirstGoodBioseq);
+  } else if (afp->aa != NULL && afp->nt == NULL) {
+    VisitSequencesInSep (sep, (Pointer) &bsp, VISIT_PROTS, GetFirstGoodBioseq);
+  }
+  if (bsp == NULL) return NULL;
+
+  from = afp->from;
+  to = afp->to;
+  strand = afp->strand;
+
+  if (strand == Seq_strand_minus && from == 0 && to == 0) {
+	from = 1;
+	to = bsp->length;
+  }
+  if (from < 0) {
+	from = 1;
+  } else if (from > bsp->length) {
+	from = bsp->length;
+  }
+  if (to < 0) {
+	to = 1;
+  } else if (to > bsp->length) {
+	to = bsp->length;
+  }
+
+  sintp = SeqIntNew ();
+  if (sintp == NULL) return NULL;
+
+  sintp->from = from - 1;
+  sintp->to = to - 1;
+  sintp->strand = strand;
+  sintp->id = SeqIdFindBest (bsp->id, 0);
+
+  slp = ValNodeNew (NULL);
+  if (slp == NULL) return NULL;
+
+  slp->choice = SEQLOC_INT;
+  slp->data.ptrvalue = (Pointer) sintp;
+
+  return slp;
+}
+
 static void FormatRecord (
   SeqEntryPtr sep,
   AppFlagPtr afp,
@@ -302,10 +472,17 @@ static void FormatRecord (
   FlgType      flags = 0;
   Boolean      is_far = FALSE;
   LckType      locks = 0;
+  SeqLocPtr    slp = NULL;
   SeqEntryPtr  top;
   ValNodePtr   vnp;
 
   if (sep == NULL || afp == NULL) return;
+
+  if (afp->filterArray != NULL) {
+    afp->go_on = FALSE;
+    VisitBioseqsInSep (sep, (Pointer) afp, CheckFilter);
+    if (! afp->go_on) return;
+  }
 
   VisitBioseqsInSep (sep, (Pointer) &is_far, IsItFar);
 
@@ -321,14 +498,16 @@ static void FormatRecord (
     flags |= REFSEQ_CONVENTIONS | SHOW_TRANCRIPTION | SHOW_PEPTIDE;
   }
 
+  slp = AfpToSeqLoc (sep, afp);
+
   switch (afp->format) {
     case FLATFILE_FORMAT :
       if (afp->nt != NULL) {
-        SeqEntryToGnbk (sep, NULL, GENBANK_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, GENBANK_FMT, afp->mode, NORMAL_STYLE,
                         flags, locks, custom, NULL, afp->nt);
       }
       if (afp->aa != NULL) {
-        SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, GENPEPT_FMT, afp->mode, NORMAL_STYLE,
                         flags, 0, custom, NULL, afp->aa);
       }
       break;
@@ -337,13 +516,21 @@ static void FormatRecord (
         if (afp->nearpolicy == 1 ||
             (afp->nearpolicy == 2 && (! is_far)) ||
             (afp->nearpolicy == 3 && is_far)) {
-          SeqEntryFastaStream (sep, afp->nt, STREAM_EXPAND_GAPS, afp->linelen,
-                               0, 0, TRUE, FALSE, FALSE);
+          if (slp != NULL) {
+            SeqLocFastaStream (slp, afp->nt, STREAM_EXPAND_GAPS, afp->linelen, 0, 0);
+          } else {
+            SeqEntryFastaStream (sep, afp->nt, STREAM_EXPAND_GAPS, afp->linelen,
+                                 0, 0, TRUE, FALSE, FALSE);
+          }
         }
       }
       if (afp->aa != NULL) {
-        SeqEntryFastaStream (sep, afp->aa, STREAM_EXPAND_GAPS, afp->linelen,
-                             0, 0, FALSE, TRUE, FALSE);
+        if (slp != NULL) {
+          SeqLocFastaStream (slp, afp->aa, STREAM_EXPAND_GAPS, afp->linelen, 0, 0);
+        } else {
+          SeqEntryFastaStream (sep, afp->aa, STREAM_EXPAND_GAPS, afp->linelen,
+                               0, 0, FALSE, TRUE, FALSE);
+        }
       }
       break;
     case CDS_FORMAT :
@@ -366,9 +553,20 @@ static void FormatRecord (
         }
       }
       break;
+    case GENE_FORMAT :
+      if (afp->nt != NULL) {
+        entityID = ObjMgrGetEntityIDForChoice (sep);
+        top = GetTopSeqEntryForEntityID (entityID);
+        if (top != NULL) {
+          SeqMgrIndexFeatures (0, top->data.ptrvalue);
+          afp->geneID = 0;
+          VisitBioseqsInSep (top, (Pointer) afp, DoGeneFasta);
+        }
+      }
+      break;
     case TABLE_FORMAT :
       if (afp->nt != NULL) {
-        SeqEntryToGnbk (sep, NULL, FTABLE_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, FTABLE_FMT, afp->mode, NORMAL_STYLE,
                         flags, locks, 0, NULL, afp->nt);
       }
       if (afp->aa != NULL) {
@@ -385,11 +583,11 @@ static void FormatRecord (
       break;
     case INSDSEQ_FORMAT :
       if (afp->an != NULL) {
-        SeqEntryToGnbk (sep, NULL, GENBANK_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, GENBANK_FMT, afp->mode, NORMAL_STYLE,
                         flags, locks, custom, &(afp->xtran), NULL);
       }
       if (afp->ap != NULL) {
-        SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, afp->mode, NORMAL_STYLE,
+        SeqEntryToGnbk (sep, slp, GENPEPT_FMT, afp->mode, NORMAL_STYLE,
                         flags, 0, custom, &(afp->xtrap), NULL);
       }
       break;
@@ -413,6 +611,8 @@ static void FormatRecord (
     default :
       break;
   }
+
+  SeqLocFree (slp);
 }
 
 static void ProcessSingleRecord (
@@ -884,6 +1084,96 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
   return sep;
 }
 
+static Boolean IsAllDigits (CharPtr str)
+
+{
+  CharPtr cp;
+
+  if (StringHasNoText (str)) return FALSE;
+
+  cp = str;
+  while (*cp != 0 && isdigit (*cp)) {
+    cp++;
+  }
+  if (*cp == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+static void ReadFilterFile (
+  CharPtr filterfile,
+  AppFlagPtr afp
+)
+
+{
+  CharPtr PNTR  array;
+  FileCache     fc;
+  FILE          *fp;
+  ValNodePtr    head = NULL;
+  Int4          i;
+  ValNodePtr    last = NULL;
+  Int4          len;
+  Char          line [1023];
+  CharPtr       ptr;
+  CharPtr       str;
+  Char          tmp [64];
+  ValNodePtr    vnp;
+
+  if (StringHasNoText (filterfile) || afp == NULL) return;
+
+
+  fp = FileOpen (filterfile, "r");
+  if (fp == NULL) return;
+
+  if (FileCacheSetup (&fc, fp)) {
+    for (str = FileCacheGetString (&fc, line, sizeof (line));
+         str != NULL;
+         str = FileCacheGetString (&fc, line, sizeof (line))) {
+      TrimSpacesAroundString (str);
+      if (StringHasNoText (str)) continue;
+
+      if (IsAllDigits (str)) {
+        sprintf (tmp, "%s", str);
+        str = tmp;
+      }
+      ptr = StringChr (str, '.');
+      if (ptr != NULL) {
+        *ptr = '\0';
+      }
+
+      vnp = ValNodeCopyStr (&last, 0, str);
+      if (head == NULL) {
+        head = vnp;
+      }
+      last = vnp;
+    }
+  }
+
+  FileClose (fp);
+
+  if (head == NULL) return;
+
+  if (! ValNodeIsSorted (head, SortVnpByString)) {
+    head = ValNodeSort (head, SortVnpByString);
+  }
+  ValNodeUnique (&head, SortVnpByString, ValNodeFreeData);
+
+  len = ValNodeLen (head);
+  array = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (len + 1));
+  if (array == NULL) return;
+
+  for (i = 0, vnp = head; i < len && vnp != NULL; i++, vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    array [i] = str;
+  }
+  afp->filterLen = len;
+  afp->filterList = head;
+  afp->filterArray = array;
+}
+
 static CharPtr helpLines [] = {
   "asn2all is primarily intended for generating reports from the binary",
   "ASN.1 Bioseq-set release files downloaded from the NCBI ftp site",
@@ -944,24 +1234,30 @@ static void DisplayHelpText (
 
 /* Args structure contains command-line arguments */
 
-#define p_argInputPath    0
-#define i_argInputFile    1
-#define o_argNtOutFile    2
-#define v_argAaOutFile    3
-#define x_argSuffix       4
-#define f_argFormat       5
-#define a_argType         6
-#define b_argBinary       7
-#define c_argCompressed   8
-#define r_argRemote       9
-#define k_argLocal       10
-#define d_argAsnIdx      11
-#define l_argLockFar     12
-#define T_argThreads     13
-#define n_argNear        14
-#define X_argExtended    15
-#define A_argAccession   16
-#define h_argHelp        17
+typedef enum {
+  p_argInputPath = 0,
+  i_argInputFile,
+  o_argNtOutFile,
+  v_argAaOutFile,
+  x_argSuffix,
+  f_argFormat,
+  a_argType,
+  b_argBinary,
+  c_argCompressed,
+  r_argRemote,
+  k_argLocal,
+  d_argAsnIdx,
+  l_argLockFar,
+  T_argThreads,
+  n_argNear,
+  X_argExtended,
+  A_argAccession,
+  F_argFilterFile,
+  h_argHelp,
+  J_argFrom,
+  K_argTo,
+  M_argStrand,
+} Arguments;
 
 
 Args myargs [] = {
@@ -979,6 +1275,7 @@ Args myargs [] = {
    "      g GenBank/GenPept\n"
    "      f FASTA\n"
    "      d CDS FASTA\n"
+   "      e Gene FASTA\n"
    "      t Feature Table\n"
    "      y TinySet XML\n"
    "      s INSDSet XML\n"
@@ -1017,16 +1314,24 @@ Args myargs [] = {
     TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
   {"Extended Qualifier Output", "F", NULL, NULL,
     TRUE, 'X', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Accession to Fetch", NULL, NULL, NULL,
+  {"Accession to Fetch (or Accession,retcode,flags where flags -1 fetches external features)", NULL, NULL, NULL,
     TRUE, 'A', ARG_STRING, 0.0, 0, NULL},
+  {"Accession Filter File", NULL, NULL, NULL,
+    TRUE, 'F', ARG_FILE_IN, 0.0, 0, NULL},
   {"Display Help Message", "F", NULL, NULL,
     TRUE, 'h', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"SeqLoc From", "0", NULL, NULL,
+    TRUE, 'J', ARG_INT, 0.0, 0, NULL},
+  {"SeqLoc To", "0", NULL, NULL,
+    TRUE, 'K', ARG_INT, 0.0, 0, NULL},
+  {"SeqLoc Minus Strand", "F", NULL, NULL,
+    TRUE, 'M', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
 
 {
-  CharPtr      asnin, aaout, directory, suffix, ntout, accn, asnidx, str;
+  CharPtr      asnin, aaout, directory, suffix, ntout, accn, filterfile, asnidx, str;
   AppFlagData  afd;
   Char         app [64], format, nearpolicy, type, xmlbuf [128];
   DataVal      av;
@@ -1098,6 +1403,7 @@ Int2 Main (void)
   asnidx = (CharPtr) myargs [d_argAsnIdx].strvalue;
   indexed = (Boolean) StringDoesHaveText (asnidx);
   accn = (CharPtr) myargs [A_argAccession].strvalue;
+  filterfile = (CharPtr) myargs [F_argFilterFile].strvalue;
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   asnin = (CharPtr) myargs [i_argInputFile].strvalue;
@@ -1147,6 +1453,9 @@ Int2 Main (void)
       break;
     case 'd' :
       afd.format = CDS_FORMAT;
+      break;
+    case 'e' :
+      afd.format = GENE_FORMAT;
       break;
     case 't' :
       afd.format = TABLE_FORMAT;
@@ -1214,6 +1523,14 @@ Int2 Main (void)
       break;
   }
 
+  afd.from = myargs [J_argFrom].intvalue;
+  afd.to = myargs [K_argTo].intvalue;
+  if (myargs [M_argStrand].intvalue) {
+    afd.strand = Seq_strand_minus;
+  } else {
+    afd.strand = Seq_strand_plus;
+  }
+
   str = myargs [n_argNear].strvalue;
   TrimSpacesAroundString (str);
   if (StringDoesHaveText (str)) {
@@ -1261,6 +1578,7 @@ Int2 Main (void)
     case FLATFILE_FORMAT :
     case FASTA_FORMAT :
     case CDS_FORMAT :
+    case GENE_FORMAT :
     case TABLE_FORMAT :
       if (! StringHasNoText (ntout)) {
         afd.nt = FileOpen (ntout, "w");
@@ -1377,6 +1695,10 @@ Int2 Main (void)
       break;
   }
 
+  if (StringDoesHaveText (filterfile)) {
+    ReadFilterFile (filterfile, &afd);
+  }
+
   /* process input file or download accession */
 
   if (StringDoesHaveText (accn)) {
@@ -1459,6 +1781,10 @@ Int2 Main (void)
 
   if (afd.format == CACHE_COMPONENTS) {
     CreateAsnIndex (ntout, NULL, TRUE);
+  }
+
+  if (afd.filterList != NULL) {
+    ValNodeFreeData (afd.filterList);
   }
 
   /* close fetch functions */

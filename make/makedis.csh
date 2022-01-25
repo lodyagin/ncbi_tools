@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh 179886 2010-01-04 17:28:02Z ucko $
+# $Id: makedis.csh 214533 2010-12-06 15:06:34Z ucko $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -224,7 +224,7 @@ case FreeBSD:
 	set platform=freebsd
 	set HAVE_MOTIF=0
 	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
-		/usr/include/X11 )
+		/usr/include/X11 /usr/local/include )
 		if (-d $i/Xm) then
 			set HAVE_MOTIF=1
 			echo Motif found at $i/Xm

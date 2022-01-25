@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.65 $
+* $Revision: 6.69 $
 *
 * File Description: 
 *
@@ -378,6 +378,10 @@ extern IteM CreateLegendItem (MenU m, BaseFormPtr bfp);
 
 extern ForM MakeToolFormForBioseqView (BaseFormPtr bfp, GrpActnProc createToolBar);
 extern ForM ReplaceToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createToolBar);
+
+typedef void (*BuildToolbarProc) PROTO((Nlm_GrouP, Pointer));
+extern ForM ReplaceToolFormWithDataForBioseqView (BaseFormPtr bafp, BuildToolbarProc createToolBar, Pointer data);
+
 extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId);
 extern BioseqPtr GetBioseqViewTarget (BaseFormPtr fp);
 
@@ -411,6 +415,10 @@ extern int LIBCALLBACK SortByVnpDataIntvalue (VoidPtr ptr1, VoidPtr ptr2);
 
 extern void ShowGeneList (ButtoN b);
 extern void EnableDisableLegendItem (BioseqViewPtr bvp, Boolean enable);
+
+NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object);
+NLM_EXTERN void AutofixOnStartup (BaseFormPtr bfp);
+
 
 #ifdef __cplusplus
 }

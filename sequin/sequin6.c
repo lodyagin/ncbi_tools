@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.355 $
+* $Revision: 6.373 $
 *
 * File Description: 
 *
@@ -7231,6 +7231,19 @@ static void CommonApplyToAllProcMenuItem (IteM i, Int2 type)
   CommonApplyToAllProc (bfp, type);
 }
 
+
+extern void ApplyCDSBtn (ButtoN b)
+{
+  BaseFormPtr bfp;
+
+  bfp = (BaseFormPtr) GetObjectExtra (b);
+  if (bfp == NULL) {
+    return;
+  }
+  CommonApplyToAllProc (bfp, ADD_CDS);
+}
+
+
 extern void ApplyTitle (IteM i)
 
 {
@@ -7426,6 +7439,108 @@ static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
   }
 }
 
+
+static CharPtr ContactNameFromSubmitForm (SubmitFormPtr sbfp)
+{
+  Char            str [128];
+  CharPtr         txt;
+  Uint2           suffixVal;
+  Char            sfx [32];
+
+  if (sbfp == NULL) {
+    return NULL;
+  }
+
+  str [0] = '\0';
+  txt = SaveStringFromText (sbfp->firstname);
+  StringCat (str, txt);
+  StringCat (str, "\t");
+  MemFree (txt);
+  txt = SaveStringFromText (sbfp->middleinit);
+  StringCat (str, txt);
+  StringCat (str, "\t");
+  MemFree (txt);
+  txt = SaveStringFromText (sbfp->lastname);
+  StringCat (str, txt);
+  StringCat (str, "\t");
+  MemFree (txt);
+  suffixVal = GetValue (sbfp->suffix);
+  sprintf (sfx, "%d", (int) (suffixVal - 1));
+  StringCat (str, sfx);
+  StringCat (str, "\n");
+  txt = StringSave (str);
+  return txt;
+}
+
+
+static void SetContactNameFromString (SubmitFormPtr sbfp, CharPtr txt)
+{
+  CharPtr tmp;
+
+  if (sbfp == NULL) {
+    return;
+  }
+  tmp = ExtractTagListColumn (txt, 0);
+  SetTitle (sbfp->firstname, tmp);
+  tmp = MemFree (tmp);
+  tmp = ExtractTagListColumn (txt, 1);
+  SetTitle (sbfp->middleinit, tmp);
+  tmp = MemFree (tmp);
+  tmp = ExtractTagListColumn (txt, 2);
+  SetTitle (sbfp->lastname, tmp);
+  tmp = MemFree (tmp);
+}
+
+
+static void FixSubmitFormSpecialCharacters (SubmitFormPtr sbfp)
+{
+  ValNodePtr list = NULL;
+  CharPtr         citsubtitle;
+  AffilPtr        affil;
+  CharPtr         firstname;
+  CharPtr         middleinit;
+  CharPtr         lastname;
+
+  if (sbfp == NULL) {
+    return;
+  }
+
+  citsubtitle = SaveStringFromText (sbfp->title);
+  SpecialCharFindWithContext (&citsubtitle, &list, NULL, NULL);
+
+  firstname = SaveStringFromText (sbfp->firstname);
+  middleinit = SaveStringFromText (sbfp->middleinit);
+  lastname = SaveStringFromText (sbfp->lastname);
+
+  SpecialCharFindWithContext (&firstname, &list, NULL, NULL);
+  SpecialCharFindWithContext (&middleinit, &list, NULL, NULL);
+  SpecialCharFindWithContext (&lastname, &list, NULL, NULL);
+
+  affil = (AffilPtr) DialogToPointer (sbfp->phonefaxemail);
+  if (affil != NULL) {
+    SpecialCharFindWithContext (&(affil->fax), &list, NULL, NULL);
+    SpecialCharFindWithContext (&(affil->phone), &list, NULL, NULL);
+    SpecialCharFindWithContext (&(affil->email), &list, NULL, NULL);
+  }
+
+  if (list != NULL) {
+    FixSpecialCharactersForStringsInList (list, "You must replace all non-ASCII characters.", TRUE);
+    SetTitle (sbfp->title, citsubtitle);
+    SetTitle (sbfp->firstname, firstname);
+    SetTitle (sbfp->middleinit, middleinit);
+    SetTitle (sbfp->lastname, lastname);
+    PointerToDialog (sbfp->phonefaxemail, affil);
+    FreeContextList (list);
+  }
+
+  citsubtitle = MemFree (citsubtitle);
+  firstname = MemFree (firstname);
+  middleinit = MemFree (middleinit);
+  lastname = MemFree (lastname);
+  affil = AffilFree (affil);
+}
+
+
 static Pointer SubmitFormToSequinBlockPtr (ForM f)
 
 {
@@ -7435,14 +7550,12 @@ static Pointer SubmitFormToSequinBlockPtr (ForM f)
   PersonIdPtr     pid;
   SubmitFormPtr   sbfp;
   SequinBlockPtr  sbp;
-  Char            sfx [32];
-  Char            str [128];
-  Uint2           suffixVal;
   CharPtr         txt;
 
   sbp = NULL;
   sbfp = (SubmitFormPtr) GetObjectExtra (f);
   if (sbfp != NULL) {
+    FixSubmitFormSpecialCharacters(sbfp);
     sbp = (SequinBlockPtr) MemNew (sizeof (SequinBlock));
     if (sbp != NULL) {
       sbp->citsubtitle = SaveStringFromTextAndStripNewlines (sbfp->title);
@@ -7452,24 +7565,7 @@ static Pointer SubmitFormToSequinBlockPtr (ForM f)
         ap->name = pid;
         if (pid != NULL) {
           pid->choice = 2;
-          str [0] = '\0';
-          txt = SaveStringFromText (sbfp->firstname);
-          StringCat (str, txt);
-          StringCat (str, "\t");
-          MemFree (txt);
-          txt = SaveStringFromText (sbfp->middleinit);
-          StringCat (str, txt);
-          StringCat (str, "\t");
-          MemFree (txt);
-          txt = SaveStringFromText (sbfp->lastname);
-          StringCat (str, txt);
-          StringCat (str, "\t");
-          MemFree (txt);
-          suffixVal = GetValue (sbfp->suffix);
-          sprintf (sfx, "%d", (int) (suffixVal - 1));
-          StringCat (str, sfx);
-          StringCat (str, "\n");
-          txt = StringSave (str);
+          txt = ContactNameFromSubmitForm (sbfp);
           nsp = AuthorSpreadsheetStringToNameStdPtr (txt);
           MemFree (txt);
           pid->data = nsp;
@@ -8356,10 +8452,8 @@ static void CopyContactToAuthors (SubmitFormPtr sbfp)
   ValNodePtr   names;
   NameStdPtr   nsp;
   PersonIdPtr  pid;
-  Char         sfx [32];
-  Char         str [128];
-  Uint2        suffixVal;
   CharPtr      txt;
+  ValNodePtr   list = NULL;
 
   if (sbfp == NULL) return;
   ap = NULL;
@@ -8376,28 +8470,8 @@ static void CopyContactToAuthors (SubmitFormPtr sbfp)
         ap->name = pid;
         if (pid != NULL) {
           pid->choice = 2;
-          str [0] = '\0';
-          txt = SaveStringFromText (sbfp->firstname);
-          StringCat (str, txt);
-          StringCat (str, "\t");
-          MemFree (txt);
-          txt = SaveStringFromText (sbfp->middleinit);
-          StringCat (str, txt);
-          StringCat (str, "\t");
-          MemFree (txt);
-          txt = SaveStringFromText (sbfp->lastname);
-          StringCat (str, txt);
-          StringCat (str, "\t");
-          MemFree (txt);
-          suffixVal = GetValue (sbfp->suffix);
-          sprintf (sfx, "%d", (int) (suffixVal - 1));
-          /*
-          txt = SaveStringFromText (sbfp->suffix);
-          MemFree (txt);
-          */
-          StringCat (str, sfx);
-          StringCat (str, "\n");
-          txt = StringSave (str);
+          FixSubmitFormSpecialCharacters (sbfp);
+          txt = ContactNameFromSubmitForm (sbfp);
           nsp = AuthorSpreadsheetStringToNameStdPtr (txt);
           MemFree (txt);
           pid->data = nsp;
@@ -8913,7 +8987,7 @@ static void ParseCodonsFromtRNACommentProc (SeqFeatPtr sfp, Pointer userdata)
 {
   RnaRefPtr rrp;
   tRNAPtr   trna;
-  CharPtr   cp;
+  CharPtr   cp, sep;
   CharPtr   codon_name;
   Char      codon[4];
   Int4      k, q;
@@ -8935,7 +9009,11 @@ static void ParseCodonsFromtRNACommentProc (SeqFeatPtr sfp, Pointer userdata)
     cp = StringStr (sfp->comment, "codon recognized");
   }
   if (cp == NULL) return;
-  cp = StringStr (cp, "=");
+  sep = StringStr (cp, "=");
+  if (sep == NULL) {
+    sep = StringStr (cp, ":");
+  }
+  cp = sep;
   if (cp == NULL) {
     Message (MSG_ERROR, "Unable to read codon from %s", sfp->comment);
     return;
@@ -9680,7 +9758,7 @@ extern void ParseFileToSource (IteM i)
 static void TrimOrgNameCallback (BioSourcePtr biop, Pointer userdata)
 {
   OrgRefPtr     orp;
-  CharPtr       tmp;
+  CharPtr       tmp, cp;
   CharPtr       word_break;
   Int4          space_len;
 
@@ -9690,8 +9768,12 @@ static void TrimOrgNameCallback (BioSourcePtr biop, Pointer userdata)
   if (orp == NULL || StringHasNoText (orp->taxname)) return;
 
   tmp = StringSave (orp->taxname);
+  cp = tmp;
+  if (StringNICmp (tmp, "uncultured ", 11) == 0) {
+    cp = tmp + 11;
+  }
 
-  word_break = StringStr (tmp, " ");
+  word_break = StringStr (cp, " ");
   if (word_break == NULL) return;
   
   space_len = StringSpn (word_break, " ");
@@ -9750,15 +9832,20 @@ typedef struct addmodlistitem {
 } AddModListItem, PNTR AddModListItemPtr;
 
 static AddModListItem mods_list[] = {
+{ TRUE, ORGMOD_strain, "Strain", NULL },
+{ TRUE, ORGMOD_isolate, "Isolate", NULL },
 { TRUE, ORGMOD_authority, "Authority", NULL },
 { TRUE, ORGMOD_bio_material, "Bio-material", NULL },
 { TRUE, ORGMOD_biovar, "Biovar", "bv." },
 { FALSE, SUBSRC_clone, "Clone", NULL },
+{ FALSE, SUBSRC_collection_date, "Collection-date", NULL },
+{ FALSE, SUBSRC_country, "Country", NULL },
 { TRUE, ORGMOD_culture_collection, "Culture-collection", NULL },
 { TRUE, ORGMOD_forma, "Forma", "f." },
 { TRUE, ORGMOD_forma_specialis, "Forma-specialis", "f. sp." },
 { FALSE, SUBSRC_genotype, "Genotype", NULL },
 { FALSE, SUBSRC_haplotype, "Haplotype", NULL },
+{ TRUE, ORGMOD_nat_host, "Host", NULL },
 { TRUE, ORGMOD_isolate, "Isolate", NULL },
 { TRUE, ORGMOD_pathovar, "Pathovar", "pv."},
 { TRUE, ORGMOD_serotype, "Serotype", NULL },
@@ -9768,26 +9855,6 @@ static AddModListItem mods_list[] = {
 { TRUE, ORGMOD_sub_species, "Sub-species", "subsp." },
 { TRUE, ORGMOD_variety, "Variety", "var." }
 };
-
-
-static Boolean HasTaxonomyID (BioSourcePtr biop)
-{
-  ValNodePtr  db;
-  DbtagPtr    dbt;
-  Boolean     rval = FALSE;
-
-  if (biop == NULL || biop->org == NULL) {
-    return FALSE;
-  }
-  for (db = biop->org->db; db != NULL && !rval; db = db->next) {
-    dbt = (DbtagPtr) db->data.ptrvalue;
-    if (dbt != NULL && dbt->db != NULL &&
-      StringICmp (dbt->db, "taxon") == 0) {
-      rval = TRUE;
-    }
-  }
-  return rval;
-}
 
 
 static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
@@ -12059,7 +12126,7 @@ extern void SendHelpScrollMessage (ForM f, CharPtr heading, CharPtr section)
 typedef struct applycdsframe 
 {
   FEATURE_FORM_BLOCK
-  DialoG constraint;
+  DialoG constraint_dlg;
   PopuP  current_frame_popup;
   PopuP  new_frame_popup;
   ButtoN retranslate_btn;
@@ -12067,20 +12134,21 @@ typedef struct applycdsframe
   Int4 current_frame_flag;
   Int4 new_frame;
   Boolean retranslate_flag;
+  ConstraintChoiceSetPtr constraint;
   LogInfoPtr lip;
 } ApplyCDSFrameData, PNTR ApplyCDSFramePtr;
 
-static void ApplyCDSFrameProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+static void ApplyCDSFrameCallback (SeqFeatPtr sfp, Pointer userdata)
 {
   CdRegionPtr       crp;
   ApplyCDSFramePtr acfp;
   
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION || userdata == NULL)
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION 
+      || (acfp = (ApplyCDSFramePtr) userdata) == NULL
+      || !DoesObjectMatchConstraintChoiceSet (OBJ_SEQFEAT, sfp, acfp->constraint))
   {
     return;
   }
-  
-  acfp = (ApplyCDSFramePtr) userdata;
   
   crp = (CdRegionPtr) sfp->data.value.ptrvalue;
   if (crp == NULL)
@@ -12108,7 +12176,6 @@ static void ApplyCDSFrameProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fs
 static void DoApplyCDSFrame (ButtoN b)
 {
   ApplyCDSFramePtr acfp;
-  FilterSetPtr     fsp;
   SeqEntryPtr      sep;
   
   acfp = (ApplyCDSFramePtr) GetObjectExtra (b);
@@ -12127,19 +12194,15 @@ static void DoApplyCDSFrame (ButtoN b)
   Update ();
   
   acfp->lip = OpenLog ("Ambiguous frames");
-
-  
-  fsp = (FilterSetPtr) DialogToPointer (acfp->constraint);
+  acfp->constraint = DialogToPointer (acfp->constraint_dlg);
   
   acfp->current_frame_flag = GetValue (acfp->current_frame_popup);
   acfp->new_frame = GetValue (acfp->new_frame_popup);
   acfp->retranslate_flag = GetStatus (acfp->retranslate_btn);
-  
-  OperateOnSeqEntryConstrainedObjects (sep, fsp, ApplyCDSFrameProc, NULL,
-                                       SEQFEAT_CDREGION, 0, 0, acfp);
 
+  VisitFeaturesInSep (sep, acfp, ApplyCDSFrameCallback);
 
-  fsp = FilterSetFree (fsp);
+  acfp->constraint = ConstraintChoiceSetFree (acfp->constraint);
 
   ArrowCursor ();
   Update ();
@@ -12207,7 +12270,8 @@ extern void ApplyCDSFrame (IteM i)
   
   SetValue (acfp->current_frame_popup, 4);
   
-  acfp->constraint = FilterGroup (g, TRUE, FALSE, FALSE, FALSE, FALSE, "Where coding region");
+  acfp->constraint_dlg = ComplexConstraintDialog (g, NULL, NULL);
+  ChangeComplexConstraintFieldType (acfp->constraint_dlg, FieldType_cds_gene_prot, NULL, Macro_feature_type_cds);
 
   acfp->retranslate_btn = CheckBox (g, "Retranslate adjusted coding regions", NULL);
   SetStatus (acfp->retranslate_btn, TRUE);
@@ -12818,7 +12882,7 @@ static Boolean TrimLocationForIntersectingFeatures (SeqLocPtr PNTR p_slp, ValNod
       feat_left = feat_right;
       feat_right = tmp;
     }
-    if (feat_left <= orig_left && feat_right >= orig_left && feat_right < orig_right)
+    if (feat_left <= orig_left && feat_right >= orig_left && feat_right <= orig_right)
     {
       /* trim on left */
       if (new_left < feat_right + 1)
@@ -12826,7 +12890,7 @@ static Boolean TrimLocationForIntersectingFeatures (SeqLocPtr PNTR p_slp, ValNod
         new_left = feat_right + 1;
       }
     }
-    else if (feat_left <= orig_right && feat_right >= orig_right && feat_left > orig_left)
+    else if (feat_left <= orig_right && feat_right >= orig_right && feat_left >= orig_left)
     {
       /* trim on right */
       if (new_right > feat_left - 1)
@@ -13054,12 +13118,12 @@ extern void ResolveFeatureOverlaps (IteM i)
   StaticPrompt (g, "Trim features of type", 0, popupMenuHeight, programFont, 'c');
   dlg->trim_type = FeatureSelectionDialogEx (g, FALSE, sep, ChangeTrimFeatureType, dlg);
   dlg->trim_constraint = ComplexConstraintDialog (g, NULL, NULL);
-  ChangeComplexConstraintFieldType (dlg->trim_constraint, FieldType_feature_field, NULL, Feature_type_any);
+  ChangeComplexConstraintFieldType (dlg->trim_constraint, FieldType_feature_field, NULL, Macro_feature_type_any);
 
   StaticPrompt (g, "Where they overlap features of type", 0, popupMenuHeight, programFont, 'c');
   dlg->intersect_type = FeatureSelectionDialogEx (g, FALSE, sep, ChangeIntersectFeatureType, dlg);
   dlg->intersect_constraint = ComplexConstraintDialog (g, NULL, NULL);
-  ChangeComplexConstraintFieldType (dlg->intersect_constraint, FieldType_feature_field, NULL, Feature_type_any);
+  ChangeComplexConstraintFieldType (dlg->intersect_constraint, FieldType_feature_field, NULL, Macro_feature_type_any);
 
   /* Accept and Cancel buttons */
 
@@ -13385,13 +13449,134 @@ static void GetBioSourceAndSeqIdPairs (BioseqPtr bsp, Pointer data)
 }
 
 
+static CharPtr MakeFluCommentIdList (ValNodePtr vnp_start, ValNodePtr vnp_end)
+{
+  FluCommentListPtr  f;
+  ValNodePtr         id_list = NULL;
+  ValNodePtr         vnp, vnp_a;
+  Int4               prefix_len, count, last_number, new_number, id_len;
+  Char               id_buf[255];
+  CharPtr            id_start, id_next, last_id;
+  SeqIdPtr           sip;
+  Boolean            mismatch = FALSE;
+  Int4               list_len = 0;
+  CharPtr            list = NULL;
+
+  if (vnp_start == NULL || vnp_start->next == vnp_end) {
+    return NULL;
+  }
+
+  /* make temporary list of id strings */
+  for (vnp_a = vnp_start; vnp_a != vnp_end; vnp_a = vnp_a->next) {
+    f = (FluCommentListPtr) vnp_a->data.ptrvalue;
+    sip = SeqIdFindBest (f->bsp->id, SEQID_GENBANK);
+    SeqIdWrite (sip, id_buf, PRINTID_TEXTID_ACC_ONLY, sizeof (id_buf) - 1);
+    ValNodeAddPointer (&id_list, 0, StringSave (id_buf));
+  }
+
+  /* sort id_list */
+  id_list = ValNodeSort (id_list, SortVnpByString);
+
+  /* calculate length of id list */
+  vnp_a = id_list;
+  while (vnp_a != NULL) {
+    id_start = vnp_a->data.ptrvalue;
+    list_len += StringLen (vnp_a->data.ptrvalue) + 2;
+    prefix_len = StringCSpn (id_start, "1234567890");
+    if (prefix_len == 0) {
+      vnp_a = vnp_a->next;
+    } else if (StringSpn (id_start + prefix_len, "1234567890") != StringLen (id_start + prefix_len)) {
+      vnp_a = vnp_a->next;
+    } else {
+      last_number = atoi (id_start + prefix_len);
+      count = 1;
+      vnp = vnp_a->next;
+      mismatch = FALSE;
+      while (vnp != NULL && !mismatch) {
+        id_next = vnp->data.ptrvalue;
+        if (StringNICmp (id_next, id_start, prefix_len) != 0) {
+          mismatch = TRUE;
+        } else if (StringSpn (id_next + prefix_len, "1234567890") != StringLen (id_next + prefix_len)) {
+          mismatch = TRUE;
+        } else if ((new_number = atoi (id_next + prefix_len)) != last_number + 1) {
+          mismatch = TRUE;
+        } else {
+          count++;
+          last_number = new_number;
+          id_len = StringLen (id_next);
+          vnp = vnp->next;
+        }
+      }
+      if (count > 1) {
+        list_len += id_len + 2;
+      }
+      vnp_a = vnp;
+    }
+  }
+
+  /* allocate memory */
+  list = (CharPtr) MemNew (sizeof (Char) * list_len);
+  list[0] = 0;
+
+  /* make list */
+  vnp_a = id_list;
+  while (vnp_a != NULL) {
+    if (list[0] != 0) {
+      StringCat (list, ", ");
+    }
+    id_start = vnp_a->data.ptrvalue;
+    StringCat (list, id_start);
+    prefix_len = StringCSpn (id_start, "1234567890");
+    if (prefix_len == 0) {
+      vnp_a = vnp_a->next;
+    } else if (StringSpn (id_start + prefix_len, "1234567890") != StringLen (id_start + prefix_len)) {
+      vnp_a = vnp_a->next;
+    } else {
+      last_number = atoi (id_start + prefix_len);
+      count = 1;
+      vnp = vnp_a->next;
+      mismatch = FALSE;
+      while (vnp != NULL && !mismatch) {
+        id_next = vnp->data.ptrvalue;
+        if (StringNICmp (id_next, id_start, prefix_len) != 0) {
+          mismatch = TRUE;
+        } else if (StringSpn (id_next + prefix_len, "1234567890") != StringLen (id_next + prefix_len)) {
+          mismatch = TRUE;
+        } else if ((new_number = atoi (id_next + prefix_len)) != last_number + 1) {
+          mismatch = TRUE;
+        } else {
+          count++;
+          last_number = new_number;
+          last_id = id_next;
+          id_len = StringLen (id_next);
+          vnp = vnp->next;
+        }
+      }
+      if (count > 1) {
+        if (count == 2) {
+          StringCat (list, ", ");
+          StringCat (list, last_id);
+        } else {
+          StringCat (list, "-");
+          StringCat (list, last_id);
+        }
+      }
+      vnp_a = vnp;
+    }
+  }
+
+  id_list = ValNodeFreeData (id_list);
+
+  return list;
+}
+
+
 static void AddCommentsToList (ValNodePtr vnp_start, ValNodePtr vnp_end, CharPtr last_taxname)
 {
-  Char               id_buf[255];
   CharPtr            id_list_txt;
-  CharPtr            comment_fmt = "GenBank Accession Numbers %s represent sequences from the 8 segments of %s";
+  CharPtr            comment_fmt = "GenBank Accession Numbers %s represent sequences from the %d segments of %s";
   CharPtr            comment;
-  Int4               comment_len;
+  Int4               comment_len = 0, num_segments = 0;
   SeqDescrPtr        sdp;
   FluCommentListPtr  f;
   ValNodePtr         vnp_a;
@@ -13401,31 +13586,16 @@ static void AddCommentsToList (ValNodePtr vnp_start, ValNodePtr vnp_end, CharPtr
   } else if (vnp_start->next == vnp_end) {
     /* only one in the group, don't bother with comment */
   } else {
-    /* get lengths of IDs */
-    comment_len = 0;
+    /* get number of segments */
     for (vnp_a = vnp_start; vnp_a != vnp_end; vnp_a = vnp_a->next) {
-      f = (FluCommentListPtr) vnp_a->data.ptrvalue;
-      if (f != NULL && f->bsp != NULL) {
-        SeqIdWrite (SeqIdFindBest (f->bsp->id, SEQID_GENBANK), id_buf, PRINTID_REPORT, sizeof (id_buf) - 1);
-        comment_len += StringLen (id_buf) + 2;
-      }
+      num_segments++;
     }
-    /* make list */
-    id_list_txt = (CharPtr) MemNew (sizeof (Char) * (comment_len));
-    id_list_txt[0] = 0;
-    for (vnp_a = vnp_start; vnp_a != vnp_end; vnp_a = vnp_a->next) {
-      f = (FluCommentListPtr) vnp_a->data.ptrvalue;
-      if (f != NULL && f->bsp != NULL) {
-        SeqIdWrite (SeqIdFindBest (f->bsp->id, SEQID_GENBANK), id_buf, PRINTID_REPORT, sizeof (id_buf) - 1);
-        StringCat (id_list_txt, id_buf);
-        if (vnp_a->next != vnp_end) {
-          StringCat (id_list_txt, ", ");
-        }
-      }
-    }
+
+    id_list_txt = MakeFluCommentIdList (vnp_start, vnp_end);
+
     /* make comment */
-    comment = (CharPtr) MemNew (sizeof (Char) * (StringLen (comment_fmt) + comment_len + StringLen (last_taxname) ));
-    sprintf (comment, comment_fmt, id_list_txt, last_taxname);
+    comment = (CharPtr) MemNew (sizeof (Char) * (StringLen (comment_fmt) + 15 + StringLen (id_list_txt) + StringLen (last_taxname) ));
+    sprintf (comment, comment_fmt, id_list_txt, num_segments, last_taxname);
     id_list_txt = MemFree (id_list_txt);
     /* add comments */
     for (vnp_a = vnp_start; vnp_a != vnp_end; vnp_a = vnp_a->next) {
@@ -13814,5 +13984,1815 @@ NLM_EXTERN void RemoveFeaturesLikeGaps (IteM i)
 }
 
 
+NLM_EXTERN void SplitPCRPrimersByPositionMenuItem (IteM i)
+{
+  BaseFormPtr          bfp;
+  SeqEntryPtr          sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) {
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  SplitPCRPrimersByPosition (sep);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);  
+}
 
 
+typedef struct splitpcrprimersbyconstraintform {
+  FORM_MESSAGE_BLOCK
+
+  DialoG fwd_constraint;
+  DialoG rev_constraint;
+} SplitPCRPrimersByConstraintFormData, PNTR SplitPCRPrimersByConstraintFormPtr;
+
+
+static void SplitPCRPrimersByConstraintAccept (ButtoN b)
+{
+  SplitPCRPrimersByConstraintFormPtr frm;
+  StringConstraintPtr fwd_scp, rev_scp;
+  SeqEntryPtr sep;
+
+  frm = (SplitPCRPrimersByConstraintFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  fwd_scp = DialogToPointer (frm->fwd_constraint);
+  rev_scp = DialogToPointer (frm->rev_constraint);
+  sep = GetTopSeqEntryForEntityID (frm->input_entityID);
+
+  SplitPCRPrimersByConstraints (sep, fwd_scp, rev_scp);
+  fwd_scp = StringConstraintFree (fwd_scp);
+  rev_scp = StringConstraintFree (rev_scp);
+  ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, frm->input_entityID, 0, 0);  
+  Remove (frm->form);
+}
+
+  
+NLM_EXTERN void SplitPCRPrimersByConstraintsMenuItem (IteM i)
+{
+  BaseFormPtr          bfp;
+  SplitPCRPrimersByConstraintFormPtr frm;
+  WindoW              w;
+  GrouP               h, g, c;
+  ButtoN              b;
+  PrompT              ppt;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) {
+    return;
+  }
+
+  frm = (SplitPCRPrimersByConstraintFormPtr) MemNew (sizeof (SplitPCRPrimersByConstraintFormData));
+
+  w = FixedWindow (-50, -33, -10, -10, "Convert BioSource Dbxrefs to Feature Dbxrefs", StdCloseWindowProc);
+  SetObjectExtra (w, frm, StdCleanupExtraProc);
+  frm->form = (ForM) w;
+  frm->input_entityID = bfp->input_entityID;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  ppt = StaticPrompt (h, "Choose string constraints for forward and reverse primer names for new sets", 0, dialogTextHeight, programFont, 'l');
+  g = HiddenGroup (h, 0, 2, NULL);
+  SetGroupSpacing (g, 10, 10);
+  frm->fwd_constraint = StringConstraintDialog (g, "Forward", FALSE, NULL, NULL);
+  frm->rev_constraint = StringConstraintDialog (g, "Reverse", FALSE, NULL, NULL);
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton (c, "Accept", SplitPCRPrimersByConstraintAccept);
+  SetObjectExtra (b, frm, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) g, (HANDLE) c, NULL);
+  Show (w);
+  Select (w);
+}
+
+
+NLM_EXTERN void MergePCRPrimerSetsMenuItem (IteM i)
+{
+  BaseFormPtr          bfp;
+  SeqEntryPtr          sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) {
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  MergePCRPrimers (sep);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);  
+}
+
+
+static void ConvertToDelayedGenProdSetQualifiersCallback (SeqFeatPtr sfp, Pointer data)
+{
+  GBQualPtr gbq;
+
+  if (sfp == NULL) {
+    return;
+  } else if (sfp->idx.subtype != FEATDEF_CDS && sfp->idx.subtype != FEATDEF_mRNA) {
+    return;
+  }
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "protein_id") == 0) {
+      gbq->qual = MemFree (gbq->qual);
+      gbq->qual = StringSave ("orig_protein_id");
+    } else if (StringICmp (gbq->qual, "transcript_id") == 0) {
+      gbq->qual = MemFree (gbq->qual);
+      gbq->qual = StringSave ("orig_transcript_id");
+    }
+  }
+}
+
+
+NLM_EXTERN void ConvertToDelayedGenProdSetQualifiers (IteM i)
+{
+  BaseFormPtr          bfp;
+  SeqEntryPtr          sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) {
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  VisitFeaturesInSep (sep, NULL, ConvertToDelayedGenProdSetQualifiersCallback);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);  
+}
+
+
+#define NUM_FEAT_ED_PAGES 2
+
+#define NUM_FEAT_ED_ACTIONS 8
+
+typedef struct feated
+{
+  FORM_MESSAGE_BLOCK
+  DialoG  feature_type;
+  DialoG  constraint;
+  DialoG  accept_cancel;
+
+  /* for evidence */  
+  Int4    evidence_val;
+      
+  /* for exceptions */
+  PopuP   explanation_choice;
+  ButtoN  move_to_comment;
+  GrouP   product_choice;
+  TexT    other_explanation;
+  CharPtr explanation_text;
+  Boolean do_move_to_comment;
+  Int4    product_val;
+  
+  /* for partials */
+  PopuP  convert_choice;
+  PopuP  partial5_choice;
+  ButtoN extend5_btn;
+  PopuP  partial3_choice;
+  ButtoN extend3_btn;
+  ButtoN retranslate_btn;
+  ButtoN adjust_gene_btn;
+  Int4   orderjoinpolicy;
+  Int4   leftpolicy;
+  Int4   rightpolicy;
+  Boolean extend5;
+  Boolean extend3;
+  Boolean retranslate;
+  Boolean adjust_gene;
+  
+  /* for strand */
+  PopuP  from_strand;
+  PopuP  to_strand;
+  Uint1  from_strand_val;
+  Uint1  to_strand_val;
+
+  GrouP  action_grps [NUM_FEAT_ED_ACTIONS];
+  ButtoN action_btns [NUM_FEAT_ED_ACTIONS];
+  GrouP  action_choice_grp;
+  
+  /* for citations */
+  DialoG     citation_list;
+  ButtoN     explanation_constraint;
+  PopuP      explanation_constraint_choice;
+  ButtoN     citation_translation;
+  Boolean    use_explanation_constraint;
+  Int4       explanation_constraint_choice_val;
+  Boolean    use_product_match;
+
+  /* for experiment */
+  GrouP      experiment_action;
+  TexT       experiment_text;
+  
+  /* for pseudo */
+  GrouP      pseudo_action;
+  Boolean    pseudo_val;
+  
+  /* for inferences */
+  DialoG     inference_dlg;
+} FeatEdData, PNTR FeatEdPtr;
+
+
+static void FeatEdChangeNotify (Pointer userdata)
+{
+  FeatEdPtr mp;
+  ValNodePtr      err_list = NULL;
+  CharPtr         str;
+
+  mp = (FeatEdPtr) userdata;
+  if (mp == NULL) return;
+  
+  if (mp->explanation_choice != NULL)
+  {
+    if (GetValue (mp->explanation_choice) == 9 
+        && ((mp->action_btns[1] == NULL && mp->action_choice_grp == NULL)
+            || (mp->action_btns[1] != NULL && GetStatus (mp->action_btns[1]))
+            || (mp->action_choice_grp != NULL && GetValue (mp->action_choice_grp) == 2)))
+    {
+      Enable (mp->other_explanation);
+      str = SaveStringFromText (mp->other_explanation);
+      if (StringHasNoText (str))
+      {
+        DisableAcceptCancelDialogAccept (mp->accept_cancel);
+        str = MemFree (str);
+        return;
+      }
+      str = MemFree (str);
+    }
+    else
+    {
+      Disable (mp->other_explanation);
+    }
+  }
+  
+  if (GetValue (mp->action_choice_grp) == FEAT_ED_INFERENCE)
+  {
+    ValNodeLink (&err_list, TestDialog (mp->inference_dlg));
+  }
+  
+  if (err_list == NULL)
+  {
+    EnableAcceptCancelDialogAccept (mp->accept_cancel);
+  }
+  else
+  {
+    DisableAcceptCancelDialogAccept (mp->accept_cancel);
+  }
+  ValNodeFree (err_list);  
+}
+
+
+static void FeatEdClear (Pointer data)
+{
+  FeatEdPtr mp;
+
+  mp = (FeatEdPtr) data;
+  if (mp == NULL) return;
+ 
+  SetFeatureTypeInFeatureTypeDialog(mp->feature_type, Macro_feature_type_any);
+  PointerToDialog (mp->constraint, NULL);
+
+  if (mp->explanation_choice != NULL)
+  {
+    SetValue (mp->explanation_choice, 1);
+  }
+  if (mp->move_to_comment != NULL)
+  {
+    SetStatus (mp->move_to_comment, FALSE);
+  }
+  if (mp->product_choice != NULL)
+  {
+    SetValue (mp->product_choice, 3);
+  }
+  if (mp->other_explanation != NULL)
+  {
+    SetTitle (mp->other_explanation, "");
+    Disable (mp->other_explanation);
+  }
+  
+  if (mp->convert_choice != NULL)
+  {
+    SetValue (mp->convert_choice, 1);
+  }
+  if (mp->partial5_choice != NULL)
+  {
+    SetValue (mp->partial5_choice, 8);
+  }
+  if (mp->extend5_btn != NULL)
+  {
+    SetStatus (mp->extend5_btn, FALSE);
+  }
+  if (mp->partial3_choice != NULL)
+  {
+    SetValue (mp->partial3_choice, 7);
+  }
+  if (mp->extend3_btn != NULL)
+  {
+    SetStatus (mp->extend3_btn, FALSE);
+  }
+  if (mp->retranslate_btn != NULL)
+  {
+    SetStatus (mp->retranslate_btn, FALSE);
+  }
+  if (mp->adjust_gene_btn != NULL) 
+  {
+    SetStatus (mp->adjust_gene_btn, FALSE);
+  }
+
+  /* for strand */
+  if (mp->from_strand != NULL)
+  {
+    SetValue (mp->from_strand, 1);
+  }
+  if (mp->to_strand != NULL)
+  {
+    SetValue (mp->to_strand, 1);
+  }
+
+  /* for experiment */
+  if (mp->experiment_text != NULL)
+  {
+    SetTitle (mp->experiment_text, "");
+  }
+  
+  /* for pseudo */
+  if (mp->pseudo_action != NULL)
+  {
+    SetValue (mp->pseudo_action, 1);
+  }
+
+  FeatEdChangeNotify (mp);
+}
+
+
+static void FeatEdClearText (Pointer data)
+{
+  FeatEdPtr     mp;
+
+  mp = (FeatEdPtr) data;
+  if (mp == NULL) return;
+   
+  /* for explanation */
+  if (mp->other_explanation != NULL)
+  {
+    SetTitle (mp->other_explanation, "");
+  }
+
+  /* for experiment */
+  if (mp->experiment_text != NULL)
+  {
+    SetTitle (mp->experiment_text, "");
+  }
+
+  FeatEdChangeNotify (mp);
+}
+
+static GrouP FeaturePseudoGroup (GrouP h, FeatEdPtr mp)
+{
+  GrouP g;
+  
+  if (mp == NULL)
+  {
+    return NULL;
+  }
+  
+  g = HiddenGroup (h, 0, 0, NULL);
+
+  mp->pseudo_action = HiddenGroup (g, 2, 0, NULL);
+  SetGroupSpacing (mp->pseudo_action, 10, 10);
+  RadioButton (mp->pseudo_action, "Set Pseudo");
+  RadioButton (mp->pseudo_action, "Clear Pseudo");
+  SetValue (mp->pseudo_action, 1);
+  
+  return g;  
+}
+
+static GrouP FeatureEvidenceGroup (GrouP h, FeatEdPtr mp)
+{
+  GrouP g;
+  
+  if (mp == NULL)
+  {
+    return NULL;
+  }
+
+  g = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  
+  StaticPrompt (g, "Click Accept to clear feature evidence.", 0, dialogTextHeight, systemFont, 'l');
+  
+  return g;
+}
+
+
+static void FeatExplanationChange (PopuP p)
+{
+  FeatEdPtr mp;
+
+  mp = (FeatEdPtr) GetObjectExtra (p);
+  if (mp == NULL) return;
+  
+  if (GetValue (mp->explanation_choice) == 9)
+  {
+    Enable (mp->other_explanation);
+  }
+  else
+  {
+    Disable (mp->other_explanation);
+  }
+  
+  FeatEdChangeNotify (mp);
+}
+
+static void FeatOtherExplanationChange (TexT t)
+{
+  FeatEdPtr mp;
+ 
+  mp = (FeatEdPtr) GetObjectExtra (t);
+  FeatEdChangeNotify (mp);
+}
+
+static CharPtr exception_explanations[] = 
+{
+  "RNA Editing", "reasons given in citation", "ribosomal slippage",
+  "trans splicing", "artificial frameshift", "nonconsensus splice site",
+  "rearrangement required", "other->"
+};
+
+static Int4 num_exception_explanations = sizeof (exception_explanations) / sizeof (CharPtr);
+
+static GrouP FeatureExceptionGroup (GrouP h, FeatEdPtr mp)
+{
+  GrouP  g, k1, k2;
+  Int4   i;
+  
+  if (mp == NULL)
+  {
+    return NULL;
+  }
+  g = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  
+  k1 = HiddenGroup (g, 3, 0, NULL);
+  SetGroupSpacing (k1, 10, 10);
+  StaticPrompt (k1, "Set Explanation to ", 0, dialogTextHeight, systemFont, 'l');
+  mp->explanation_choice = PopupList (k1, TRUE, FeatExplanationChange);
+  SetObjectExtra (mp->explanation_choice, mp, NULL);
+  PopupItem (mp->explanation_choice, " ");
+  for (i = 0; i < num_exception_explanations; i++)
+  {
+    PopupItem (mp->explanation_choice, exception_explanations [i]);
+  }
+  SetValue (mp->explanation_choice, 1);
+  mp->other_explanation = DialogText (k1, "", 10, FeatOtherExplanationChange);
+  Disable (mp->other_explanation);
+  SetObjectExtra (mp->other_explanation, mp, NULL);
+
+  k2 = HiddenGroup (g, 2, 0, NULL);
+  SetGroupSpacing (k2, 10, 10);
+  StaticPrompt (k2, "Where feature product is", 0, dialogTextHeight, systemFont, 'l');
+  mp->product_choice = HiddenGroup (k2, 3, 0, NULL);
+  RadioButton (mp->product_choice, "Present");
+  RadioButton (mp->product_choice, "Absent");
+  RadioButton (mp->product_choice, "Either");
+  SetValue (mp->product_choice, 3);
+  
+  mp->move_to_comment = CheckBox (g, "Move explanation to comment", NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) k1,
+                              (HANDLE) k2,
+                              (HANDLE) mp->move_to_comment,
+                              NULL);
+  
+  return g;
+}
+
+static void ChangeExplanationConstraint (ButtoN b)
+{
+  FeatEdPtr mp;
+  
+  mp = (FeatEdPtr) GetObjectExtra (b);
+  if (mp == NULL)
+  {
+    return;
+  }
+  if (GetStatus (mp->explanation_constraint))
+  {
+    Enable (mp->explanation_constraint_choice);
+  }
+  else
+  {
+    Disable (mp->explanation_constraint_choice);
+  }  
+}
+
+static GrouP FeatureEditorCitationGroup (GrouP h, FeatEdPtr mp)
+{
+  GrouP  g, k1, k2;
+  Int4   i;
+  
+  if (mp == NULL)
+  {
+    return NULL;
+  }
+  g = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  
+  /* need citation selector */
+  mp->citation_list = FeatCitEditDialog (g, mp->input_entityID);
+  PointerToDialog (mp->citation_list, NULL);
+
+  k1 = HiddenGroup (g, 3, 0, NULL);
+  SetGroupSpacing (k1, 10, 10);
+  mp->explanation_constraint = CheckBox (k1, "Where explanation is", ChangeExplanationConstraint);
+  SetObjectExtra (mp->explanation_constraint, mp, NULL);
+  SetStatus (mp->explanation_constraint, TRUE);
+  mp->explanation_constraint_choice = PopupList (k1, TRUE, NULL);
+  PopupItem (mp->explanation_constraint_choice, "Any");
+  PopupItem (mp->explanation_constraint_choice, " ");
+  for (i = 0; i < num_exception_explanations; i++)
+  {
+    PopupItem (mp->explanation_constraint_choice, exception_explanations [i]);
+  }
+  SetValue (mp->explanation_constraint_choice, 4);
+
+  k2 = HiddenGroup (g, 2, 0, NULL);
+  SetGroupSpacing (k2, 10, 10);
+  mp->citation_translation = CheckBox (k2, "Where translation does not match product", NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) mp->citation_list,
+                              (HANDLE) k1,
+                              (HANDLE) k2,
+                              (HANDLE) mp->citation_translation,
+                              NULL);
+  
+  return g;
+}
+
+
+static GrouP FeatureEditorPartialGroup (GrouP h, FeatEdPtr mp)
+{
+  GrouP g, g1, g2,k1, k2, top;
+  
+  if (mp == NULL)
+  {
+    return NULL;
+  }
+  
+  top = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (top, 10, 10);
+
+  g = HiddenGroup (top, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  
+  StaticPrompt (g, "Partials:", 0, dialogTextHeight, systemFont, 'l');
+  g1 = NormalGroup (g, 1, 0, "", programFont, NULL);
+  k1 = HiddenGroup (g1, 2, 0, NULL);
+
+  SetGroupSpacing (k1, 10, 10);
+  StaticPrompt (k1, "5' partial:", 0, dialogTextHeight, systemFont, 'l');
+  mp->partial5_choice = PopupList (k1, TRUE, NULL);
+  PopupItem (mp->partial5_choice, "Set");
+  PopupItem (mp->partial5_choice, "Set only if at 5' end");
+  PopupItem (mp->partial5_choice, "Set if bad start codon");
+  PopupItem (mp->partial5_choice, "Set if CDS frame > 1");
+  PopupItem (mp->partial5_choice, "Clear");
+  PopupItem (mp->partial5_choice, "Clear if not at 5' end");
+  PopupItem (mp->partial5_choice, "Clear if good start codon");
+  PopupItem (mp->partial5_choice, "Do not change");
+  SetValue (mp->partial5_choice, 8);
+  
+  mp->extend5_btn = CheckBox (g1, "Extend to 5' end of sequence if setting 5' partial", NULL);
+
+  StaticPrompt (g1, "", 0, dialogTextHeight, systemFont, 'l');
+
+  k2 = HiddenGroup (g1, 2, 0, NULL);
+  SetGroupSpacing (k2, 10, 10);
+  StaticPrompt (k2, "3' partial:", 0, dialogTextHeight, systemFont, 'l');
+  mp->partial3_choice = PopupList (k2, TRUE, NULL);
+  PopupItem (mp->partial3_choice, "Set");
+  PopupItem (mp->partial3_choice, "Set only if at 3' end");
+  PopupItem (mp->partial3_choice, "Set if bad stop codon");
+  PopupItem (mp->partial3_choice, "Clear");
+  PopupItem (mp->partial3_choice, "Clear if not at 3' end");
+  PopupItem (mp->partial3_choice, "Clear if good stop codon");
+  PopupItem (mp->partial3_choice, "Do not change");
+  SetValue (mp->partial3_choice, 7);
+  
+  mp->extend3_btn = CheckBox (g1, "Extend to 3' end of sequence if setting 3' partial", NULL);
+
+  StaticPrompt (g, "Join/Order/Merge:", 0, dialogTextHeight, systemFont, 'l');
+  g2 = NormalGroup (g, 1, 0, "", programFont, NULL);
+  mp->convert_choice = PopupList (g2, TRUE, NULL);
+  PopupItem (mp->convert_choice, "Do not convert location");
+  PopupItem (mp->convert_choice, "Convert location to join");
+  PopupItem (mp->convert_choice, "Convert location to order");
+  PopupItem (mp->convert_choice, "Convert location to single interval");
+  SetValue (mp->convert_choice, 1);
+
+  mp->retranslate_btn = CheckBox (top, "Retranslate coding regions", NULL);
+  mp->adjust_gene_btn = CheckBox (top, "Adjust gene location", NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) mp->retranslate_btn, (HANDLE) mp->adjust_gene_btn, NULL);
+  
+  return top;
+}
+
+#define FEATED_STRAND_ANY_REVERSE 1
+#define FEATED_STRAND_UNKNOWN     2
+#define FEATED_STRAND_PLUS        3
+#define FEATED_STRAND_MINUS       4
+#define FEATED_STRAND_BOTH        5
+
+static GrouP FeatureEditorStrandGroup (GrouP h, FeatEdPtr mp)
+{
+  GrouP  g;
+  
+  if (mp == NULL)
+  {
+    return NULL;
+  }
+  g = HiddenGroup (h, 5, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "Convert location strand", 0, dialogTextHeight, systemFont, 'l');
+  StaticPrompt (g, "From", 0, dialogTextHeight, systemFont, 'l');
+  mp->from_strand = PopupList (g, TRUE, NULL);
+  PopupItem (mp->from_strand, "Any");
+  PopupItem (mp->from_strand, "Unknown");
+  PopupItem (mp->from_strand, "Plus");
+  PopupItem (mp->from_strand, "Minus");
+  PopupItem (mp->from_strand, "Both");
+  SetValue (mp->from_strand, FEATED_STRAND_PLUS); 
+  StaticPrompt (g, "To", 0, dialogTextHeight, systemFont, 'l');
+  mp->to_strand = PopupList (g, TRUE, NULL);
+  PopupItem (mp->to_strand, "Reverse");
+  PopupItem (mp->to_strand, "Unknown");
+  PopupItem (mp->to_strand, "Plus");
+  PopupItem (mp->to_strand, "Minus");
+  PopupItem (mp->to_strand, "Both");
+  SetValue (mp->to_strand, FEATED_STRAND_MINUS); 
+  return g;
+}
+
+
+static void ChangeExperimentAction (GrouP g)
+{
+  FeatEdPtr mp;
+  mp = (FeatEdPtr) GetObjectExtra (g);
+  if (mp != NULL)
+  {
+    if (GetValue (mp->experiment_action) == 1)
+    {
+      Enable (mp->experiment_text);
+    }
+    else
+    {
+      Disable (mp->experiment_text);
+    }
+  }
+}
+
+static GrouP FeatureEditorExperimentGroup (GrouP h, FeatEdPtr mp)
+{
+  if (mp == NULL)
+  {
+    return NULL;
+  }
+  mp->experiment_action = HiddenGroup (h, 2, 0, ChangeExperimentAction);
+  SetObjectExtra (mp->experiment_action, mp, NULL);
+  SetGroupSpacing (mp->experiment_action, 10, 10);
+  RadioButton (mp->experiment_action, "Set Experiment");
+  mp->experiment_text = DialogText (mp->experiment_action, "", 20, NULL);
+  RadioButton (mp->experiment_action, "Remove Experiment");
+  SetValue (mp->experiment_action, 1);
+  return mp->experiment_action;
+}
+
+static GrouP FeatureEditorInferenceGroup (GrouP h, FeatEdPtr mp)
+{
+  GrouP g;
+
+  g = HiddenGroup (h, 1, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+
+  mp->inference_dlg = CreateInferenceEditDialog (g, FeatEdChangeNotify, mp);
+  return g;
+}
+
+static void ChangeFeatureEditorActionGroup (GrouP g)
+{
+  FeatEdPtr mp;
+  Int4            i;
+  
+  mp = (FeatEdPtr) GetObjectExtra (g);
+  if (mp == NULL)
+  {
+    return;
+  }
+  
+  for (i = 0; i < NUM_FEAT_ED_ACTIONS; i++)
+  {
+    Hide (mp->action_grps[i]);
+  }
+  
+  i = GetValue (mp->action_choice_grp);
+  if (i > 0 && i < NUM_FEAT_ED_ACTIONS + 1)
+  {
+    Show (mp->action_grps [i-1]);
+  }
+
+  FeatEdChangeNotify (mp);
+  
+}
+
+static GrouP FeatureEditorActionGroup (GrouP h, FeatEdPtr mp, Int4 first_action)
+{
+  GrouP g, k, n = NULL;
+  PrompT p1;
+  SeqEntryPtr sep;
+  
+  if (mp == NULL)
+  {
+    return NULL;
+  }
+  g = HiddenGroup (h, -1, 0, NULL);
+
+  sep = GetTopSeqEntryForEntityID(mp->input_entityID);
+  p1 = StaticPrompt (g, "For", 0, dialogTextHeight, systemFont, 'l');
+  mp->feature_type = FeatureTypeDialogMulti (g, FeatEdChangeNotify, mp);
+  
+  k = HiddenGroup (g, -1, 0, NULL);
+  mp->action_choice_grp = HiddenGroup (g, NUM_FEAT_ED_ACTIONS, 0, ChangeFeatureEditorActionGroup);
+  SetObjectExtra (mp->action_choice_grp, mp, NULL);
+  RadioButton (mp->action_choice_grp, "Evidence");
+  RadioButton (mp->action_choice_grp, "Exceptions");
+  RadioButton (mp->action_choice_grp, "Location");
+  RadioButton (mp->action_choice_grp, "Strands");
+  RadioButton (mp->action_choice_grp, "Citations");
+  RadioButton (mp->action_choice_grp, "Experiment");
+  RadioButton (mp->action_choice_grp, "Inference");
+  RadioButton (mp->action_choice_grp, "Pseudo");
+  if (first_action >= 1 && first_action <= NUM_FEAT_ED_ACTIONS)
+  {
+    SetValue (mp->action_choice_grp, first_action);
+  }
+  else
+  {
+    SetValue (mp->action_choice_grp, FEAT_ED_PSEUDO);
+  }
+    
+  n = HiddenGroup (g, 0, 0, NULL);
+  mp->action_grps [0] = FeatureEvidenceGroup (n, mp);
+  mp->action_grps[1] = FeatureExceptionGroup (n, mp);
+  mp->action_grps[2] = FeatureEditorPartialGroup (n, mp);
+  mp->action_grps[3] = FeatureEditorStrandGroup (n, mp);
+  mp->action_grps[4] = FeatureEditorCitationGroup (n, mp);
+  mp->action_grps[5] = FeatureEditorExperimentGroup (n, mp);
+  mp->action_grps[6] = FeatureEditorInferenceGroup (n, mp);
+  mp->action_grps[7] = FeaturePseudoGroup (n, mp);
+  AlignObjects (ALIGN_CENTER, (HANDLE) mp->action_grps [0],
+                              (HANDLE) mp->action_grps [1],
+                              (HANDLE) mp->action_grps [2],
+                              (HANDLE) mp->action_grps [3],
+                              (HANDLE) mp->action_grps [4], 
+                                            (HANDLE) mp->action_grps [5],
+                                            (HANDLE) mp->action_grps [6],
+                                            (HANDLE) mp->action_grps [7],
+                              NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) mp->action_choice_grp, (HANDLE) n, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) p1,
+                              (HANDLE) mp->feature_type,
+                              (HANDLE) k, (HANDLE) n, NULL);
+      
+  return g;
+}
+
+static void DoPseudoFeatureProc (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
+{
+  FeatEdPtr mp;
+
+  if (sfp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  mp = (FeatEdPtr) userdata;
+  
+  sfp->pseudo = mp->pseudo_val;  
+}
+
+
+static Boolean DoesInferenceMatchCategory (CharPtr inf_cat, CharPtr match_cat)
+{
+  if (StringHasNoText (inf_cat)) return FALSE;
+
+  if (StringHasNoText (match_cat) 
+      || StringICmp (match_cat, "ANY") == 0
+      || StringICmp (inf_cat, match_cat) == 0)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+
+}
+
+
+static void DoInferenceFeatureProc (SeqFeatPtr sfp, Pointer userdata)
+{
+  InferenceEditPtr iep;
+  GBQualPtr        gbqual, gbqual_last = NULL, gbqual_next;
+  CharPtr          new_val;
+  InferenceParsePtr ipp;
+  Boolean           changed;
+  ApplyValueData    avd;
+
+  iep = (InferenceEditPtr) userdata;
+
+  if (iep == NULL || sfp == NULL) return;
+
+  /* apply requested changes */
+  gbqual = sfp->qual;
+  while (gbqual != NULL)
+  {
+    gbqual_next = gbqual->next;
+    if (StringCmp (gbqual->qual, "inference") == 0)
+    {
+      if (iep->action == eInferenceRemove)
+      {
+        if (gbqual_last == NULL)
+        {
+          sfp->qual = gbqual->next;
+        }
+        else
+        {
+          gbqual_last->next = gbqual->next;
+        }
+        gbqual->next = NULL;
+        GBQualFree (gbqual);
+      }
+      else
+      {
+        /* perform editing here */
+        ipp = ParseInferenceText (gbqual->val);
+        changed = FALSE;
+        if (ipp != NULL)
+        {
+          switch (iep->action)
+          {
+            case eInferenceEditCategory:
+              if (DoesInferenceMatchCategory(ipp->category, iep->category_from))
+              {
+                ipp->category = MemFree (ipp->category);
+                ipp->category = StringSave (iep->category_to);
+                changed = TRUE;
+              }
+              break;
+            case eInferenceEditType:
+              if (DoesInferenceMatchCategory(ipp->type, iep->type_from))
+              {
+                ipp->type = MemFree (ipp->type);
+                ipp->type = StringSave (iep->type_to);
+                changed = TRUE;
+              }
+              break;
+            case eInferenceApplyTypeFields:
+            case eInferenceEditTypeFields:
+              if (iep->field_edit != NULL 
+                  && iep->field_edit->edit_apply != NULL
+                  && DoesInferenceMatchCategory (ipp->type, iep->field_edit->field_type))
+              {
+                avd.where_to_replace = EditApplyFindLocation_anywhere;
+                avd.field_list = NULL;
+                avd.etp = NULL;
+                AddEditApplyDataToApplyValue (iep->action == eInferenceApplyTypeFields ? 1 : 2,
+                                              iep->field_edit->edit_apply, &avd);
+                if (iep->field_edit->field_choice == 0)
+                {
+                  ipp->first_field = HandleApplyValue (ipp->first_field, &avd);
+                }
+                else
+                {
+                  ipp->second_field = HandleApplyValue (ipp->second_field, &avd);
+                }
+                avd.text_to_replace = MemFree (avd.text_to_replace);
+                avd.new_text = MemFree (avd.new_text);
+                changed = TRUE;
+              }
+              break;
+            default:
+              break;
+          }
+          if (changed)
+          {
+            new_val = InferenceTextFromStruct (ipp);
+            gbqual->val = MemFree (gbqual->val);
+            gbqual->val = new_val;
+          }
+        }
+        gbqual_last = gbqual;
+      }
+    }
+    else
+    {
+      gbqual_last = gbqual;
+    }
+    gbqual = gbqual_next;
+  }
+}
+
+
+static void DoEvidenceFeatureProc (SeqFeatPtr sfp, Pointer userdata)
+{
+  FeatEdPtr mp;
+
+  if (sfp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  mp = (FeatEdPtr) userdata;
+  
+  sfp->exp_ev = (Uint1) mp->evidence_val;
+}
+
+
+static void DoExceptionFeatureProc (SeqFeatPtr sfp, Pointer userdata)
+{
+  FeatEdPtr  mp;
+  ExistingTextData etd;
+  CharPtr          old_explanation = NULL;
+
+  if (sfp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  mp = (FeatEdPtr) userdata;
+  
+  if ((mp->product_val == 1 && sfp->product != NULL)
+      || (mp->product_val == 2 && sfp->product == NULL)
+      || mp->product_val == 3)
+  {
+    /* first, take care of any pre-existing exception explanation */
+    old_explanation = sfp->except_text;
+    sfp->except_text = NULL;
+    if (mp->do_move_to_comment)
+    {
+      etd.existing_text_choice = eExistingTextChoiceAppendSemi;
+      sfp->comment = HandleExistingText (sfp->comment, old_explanation, &etd);
+      old_explanation = NULL;
+    }
+    else
+    {
+      old_explanation = MemFree (old_explanation);
+    }
+    
+    if (StringHasNoText (mp->explanation_text))
+    {
+      sfp->excpt = FALSE;
+    }
+    else
+    {
+      sfp->excpt = TRUE;
+      sfp->except_text = StringSave (mp->explanation_text);
+    }
+  }
+}
+
+#define DO_NOT_CONVERT             1
+#define CONVERT_TO_JOIN            2
+#define CONVERT_TO_ORDER           3
+#define CONVERT_TO_SINGLE_INTERVAL 4
+
+static void DoPartialFeatureProc (SeqFeatPtr sfp, Pointer userdata)
+{
+  FeatEdPtr mp;
+  Boolean      partial5, partial3;
+  Boolean      dash_at_end = FALSE;
+  Boolean      star_at_end = FALSE;
+  ByteStorePtr bs;
+  CharPtr      prot;
+  CharPtr      ptr;
+  Char         first_char = '\0', ch;
+  Boolean      hasNulls;
+  SeqLocPtr    slp, firstSlp = NULL, lastSlp = NULL;
+  Uint1        strand;
+  Boolean      atEnd, moved5 = FALSE;
+  BioseqPtr    bsp;
+  CdRegionPtr  crp = NULL;
+  SeqFeatPtr   gene = NULL;
+  
+  if (sfp == NULL || sfp->location == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  mp = (FeatEdPtr) userdata;
+  
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+
+  if (mp->adjust_gene && sfp->data.choice != SEQFEAT_GENE) {
+    gene = GetGeneForFeature (sfp);
+  }
+
+  if (sfp->idx.subtype == FEATDEF_CDS) 
+  {
+    crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+    bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+    if (bs != NULL) 
+    {
+      prot = BSMerge (bs, NULL);
+      bs = BSFree (bs);
+      if (prot != NULL) 
+      {
+        first_char = *prot;
+        ptr = prot;
+        ch = *ptr;
+        if (ch == '-') 
+        {
+          dash_at_end = TRUE;
+        }
+        while (ch != '\0') 
+        {
+          /* *ptr = TO_UPPER (ch); */
+          if (ch == '*') 
+          {
+            star_at_end = TRUE;
+          } else {
+            star_at_end = FALSE;
+          }
+          ptr++;
+          ch = *ptr;
+        }
+      }
+      prot = MemFree (prot);
+    }
+  }
+
+    /* If requested, convert joins to orders */
+    /* or orders to joins.                   */
+
+    hasNulls = LocationHasNullsBetween (sfp->location);
+    switch (mp->orderjoinpolicy) 
+    {
+      case CONVERT_TO_JOIN :
+        if (hasNulls) 
+        {
+          slp = SeqLocMerge (bsp, sfp->location, NULL, FALSE, FALSE, FALSE);
+            sfp->location = SeqLocFree (sfp->location);
+            sfp->location = slp;
+            if (bsp->repr == Seq_repr_seg) 
+            {
+              slp = SegLocToPartsEx (bsp, sfp->location, FALSE);
+              sfp->location = SeqLocFree (sfp->location);
+              sfp->location = slp;
+              hasNulls = LocationHasNullsBetween (sfp->location);
+              sfp->partial = (sfp->partial || hasNulls);
+            }
+            FreeAllFuzz (sfp->location);
+            SetSeqLocPartial (sfp->location, partial5, partial3);
+        }
+        break;
+      case CONVERT_TO_ORDER :
+        if (!hasNulls) 
+        {
+            slp = SeqLocMerge (bsp, sfp->location, NULL, FALSE, FALSE, TRUE);
+        sfp->location = SeqLocFree (sfp->location);
+            sfp->location = slp;
+            if (bsp->repr == Seq_repr_seg) 
+            {
+              slp = SegLocToPartsEx (bsp, sfp->location, TRUE);
+              sfp->location = SeqLocFree (sfp->location);
+              sfp->location = slp;
+              hasNulls = LocationHasNullsBetween (sfp->location);
+              sfp->partial = (sfp->partial || hasNulls);
+            }
+            FreeAllFuzz (sfp->location);
+            SetSeqLocPartial (sfp->location, partial5, partial3);
+        }
+        break;
+      case CONVERT_TO_SINGLE_INTERVAL :
+        slp = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
+        sfp->location = SeqLocFree (sfp->location);
+        sfp->location = slp;
+          SetSeqLocPartial (sfp->location, partial5, partial3);
+      default:
+        break;
+    }
+
+  /* find first and last location parts in a multi-part location */
+  slp = SeqLocFindNext (sfp->location, NULL);
+  while (slp != NULL) 
+  {
+    if (firstSlp == NULL) 
+    {
+      firstSlp = slp;
+    }
+    lastSlp = slp;
+    slp = SeqLocFindNext (sfp->location, slp);
+  }
+
+  /* Set the 5' partial */
+
+  if (firstSlp != NULL) 
+  {
+    strand = SeqLocStrand (firstSlp);
+    atEnd = FALSE;
+    if (strand == Seq_strand_minus) 
+    {
+      if (GetOffsetInBioseq (firstSlp, bsp, SEQLOC_START) == bsp->length - 1)
+          {
+        atEnd = TRUE;
+      }
+    } else {
+      if (GetOffsetInBioseq (firstSlp, bsp, SEQLOC_START) == 0) 
+      {
+        atEnd = TRUE;
+      }
+    }
+    switch (mp->leftpolicy) 
+    {
+      case 1 :
+        partial5 = TRUE;
+        if (! atEnd && mp->extend5)
+        {
+          moved5 = TRUE;
+          ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+        }
+        break;
+      case 2 :
+        if (atEnd) 
+        {
+          partial5 = TRUE;
+        }
+        break;
+      case 3 :
+        if (crp != NULL && (crp->frame > 1 || first_char != 'M')) 
+        {
+          partial5 = TRUE;
+          if (! atEnd && mp->extend5)
+          {
+            ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+            moved5 = TRUE;
+          }
+        }
+        break;
+      case 4:
+        if (crp != NULL && crp->frame > 1)
+        {
+          partial5 = TRUE;
+          if (! atEnd && mp->extend5)
+          {
+            ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+            moved5 = TRUE;
+          }
+        }
+        break;
+      case 5 :
+        partial5 = FALSE;
+        break;
+      case 6 :
+        if (! atEnd) 
+        {
+          partial5 = FALSE;
+        }
+        break;
+      case 7 :
+        if (crp != NULL && crp->frame == 1 && first_char == 'M')
+        {
+          partial5 = FALSE;
+        }
+        break;
+      default :
+        break;
+    }
+  }
+
+  /* Set the 3' partial */
+
+  if (lastSlp != NULL) 
+  {
+    strand = SeqLocStrand (firstSlp);
+    atEnd = FALSE;
+    if (strand == Seq_strand_minus) 
+    {
+      if (GetOffsetInBioseq (lastSlp, bsp, SEQLOC_STOP) == 0) 
+      {
+        atEnd = TRUE;
+      }
+    } 
+    else 
+    {
+      if (GetOffsetInBioseq (lastSlp, bsp, SEQLOC_STOP) == bsp->length - 1) 
+      {
+        atEnd = TRUE;
+      }
+    }
+    switch (mp->rightpolicy) 
+    {
+      case 1 :
+        partial3 = TRUE;
+        if (! atEnd && mp->extend3)
+        {
+          ExtendSeqLocToEnd (sfp->location, bsp, FALSE);
+        }
+        break;
+      case 2 :
+        if (atEnd) 
+        {
+          partial3 = TRUE;
+        }
+        break;
+      case 3 :
+        if ((! star_at_end) && crp != NULL) 
+        {
+          partial3 = TRUE;
+          if (! atEnd && mp->extend3)
+          {
+            ExtendSeqLocToEnd (sfp->location, bsp, FALSE);
+          }
+        }
+        break;
+      case 4 :
+        partial3 = FALSE;
+        break;
+      case 5 :
+        if (! atEnd) 
+        {
+          partial3 = FALSE;
+        }
+        break;
+      case 6 :
+        if (star_at_end && crp != NULL) 
+        {
+          partial3 = FALSE;
+        }
+        break;
+      default :
+        break;
+    }
+  }
+
+  SetSeqLocPartial (sfp->location, partial5, partial3);
+  sfp->partial = (partial5 || partial3 ||
+                  LocationHasNullsBetween (sfp->location));
+  if (partial5 && moved5)
+  {
+       SetBestFrame (sfp);
+  }
+
+  /* set protein partials for coding regions */
+  if (sfp->idx.subtype == FEATDEF_CDS) 
+  {
+    ResynchCDSPartials (sfp, NULL);
+  }
+
+  if (mp->retranslate) {
+    RetranslateOneCDS (sfp, sfp->idx.entityID, TRUE, TRUE);
+  }
+  if (gene != NULL) {
+    gene->location = SeqLocFree (gene->location);
+    gene->location = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
+    SetSeqLocPartial (gene->location, partial5, partial3);
+    gene->partial = partial5 || partial3;
+  }
+}
+
+
+static Boolean DoesStrandMatch (Int4 strand_choice, Uint1 strand_val)
+{
+  Boolean rval = FALSE;
+  
+  switch (strand_choice)
+  {
+    case FEATED_STRAND_ANY_REVERSE:
+      rval = TRUE;
+      break;
+    case FEATED_STRAND_UNKNOWN:
+      if (strand_val == Seq_strand_unknown)
+      {
+        rval = TRUE;
+      }
+      break;
+    case FEATED_STRAND_PLUS:
+      if (strand_val == Seq_strand_plus)
+      {
+        rval = TRUE;
+      }
+      break;
+    case FEATED_STRAND_MINUS:
+      if (strand_val == Seq_strand_minus)
+      {
+        rval = TRUE;
+      }
+      break;
+    case FEATED_STRAND_BOTH:
+      if (strand_val == Seq_strand_both)
+      {
+        rval = TRUE;
+      }
+      break;
+  }
+  return rval;
+}
+
+static Uint1 GetNewStrandValue (Int4 strand_choice, Uint1 strand_val)
+{
+  Uint1 rval = Seq_strand_unknown;
+  
+  switch (strand_choice)
+  {
+    case FEATED_STRAND_ANY_REVERSE:
+      switch (strand_val)
+      {
+        case Seq_strand_plus:
+          rval = Seq_strand_minus;
+          break;
+        case Seq_strand_minus:
+          rval = Seq_strand_plus;
+          break;
+        default:
+          rval = strand_val;
+          break;
+      }
+      break;
+    case FEATED_STRAND_UNKNOWN:
+      rval = Seq_strand_unknown;
+      break;
+    case FEATED_STRAND_PLUS:
+      rval = Seq_strand_plus;
+      break;
+    case FEATED_STRAND_MINUS:
+      rval = Seq_strand_minus;
+      break;
+    case FEATED_STRAND_BOTH:
+      rval = Seq_strand_both;
+      break;
+  }  
+  return rval;
+}
+
+static void ConvertLocationStrand (SeqLocPtr slp, Int4 fromStrand, Int4 toStrand)
+{
+  SeqLocPtr      loc;
+  PackSeqPntPtr  psp;
+  SeqBondPtr     sbp;
+  SeqIntPtr      sinp;
+  SeqPntPtr      spp;
+
+  while (slp != NULL) {
+    switch (slp->choice) {
+      case SEQLOC_NULL :
+        break;
+      case SEQLOC_EMPTY :
+      case SEQLOC_WHOLE :
+        break;
+      case SEQLOC_INT :
+        sinp = (SeqIntPtr) slp->data.ptrvalue;
+        if (sinp != NULL && DoesStrandMatch (fromStrand, sinp->strand)) 
+        {
+          sinp->strand = GetNewStrandValue (toStrand, sinp->strand);
+        }
+        break;
+      case SEQLOC_PNT :
+        spp = (SeqPntPtr) slp->data.ptrvalue;
+        if (spp != NULL && DoesStrandMatch (fromStrand, spp->strand))
+        {
+          spp->strand = GetNewStrandValue (toStrand, spp->strand);
+        }
+        break;
+      case SEQLOC_PACKED_PNT :
+        psp = (PackSeqPntPtr) slp->data.ptrvalue;
+        if (psp != NULL && DoesStrandMatch (fromStrand, psp->strand)) 
+        {
+          psp->strand = GetNewStrandValue (toStrand, psp->strand);
+        }
+        break;
+      case SEQLOC_PACKED_INT :
+      case SEQLOC_MIX :
+      case SEQLOC_EQUIV :
+        loc = (SeqLocPtr) slp->data.ptrvalue;
+        while (loc != NULL) {
+          ConvertLocationStrand (loc, fromStrand, toStrand);
+          loc = loc->next;
+        }
+        break;
+      case SEQLOC_BOND :
+        sbp = (SeqBondPtr) slp->data.ptrvalue;
+        if (sbp != NULL) {
+          spp = (SeqPntPtr) sbp->a;
+          if (spp != NULL && DoesStrandMatch (fromStrand, spp->strand)) 
+          {
+            spp->strand = GetNewStrandValue (toStrand, spp->strand);
+          }
+          spp = (SeqPntPtr) sbp->b;
+          if (spp != NULL && DoesStrandMatch (fromStrand, spp->strand)) 
+          {
+            spp->strand = GetNewStrandValue (toStrand, spp->strand);
+          }
+        }
+        break;
+      case SEQLOC_FEAT :
+        break;
+      default :
+        break;
+    }
+    slp = slp->next;
+  }
+}
+
+static void DoStrandFeatureProc (SeqFeatPtr sfp, Pointer userdata)
+{
+  FeatEdPtr mp;
+  
+  if (sfp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  mp = (FeatEdPtr) userdata;
+  
+  ConvertLocationStrand (sfp->location, mp->from_strand_val, mp->to_strand_val);
+  
+}
+
+static void DoCitationFeatureProc (SeqFeatPtr sfp, Pointer userdata)
+{
+  FeatEdPtr mp;
+  ByteStorePtr    bs;
+  BioseqPtr       protbsp;
+  CharPtr         seq1 = NULL, seq2 = NULL;
+  Boolean         add_citations = TRUE;
+  
+  if (sfp == NULL || userdata == NULL)
+  {
+    return;
+  }
+  
+  mp = (FeatEdPtr) userdata;
+  
+  if (mp->use_explanation_constraint && mp->explanation_constraint_choice_val != 1)
+  {
+    /* do not continue unless feature matches explanation constraint */
+    if (StringHasNoText (sfp->except_text))
+    {
+      if (mp->explanation_constraint_choice_val != 2)
+      {
+        add_citations = FALSE;
+      }
+    }
+    else if (mp->explanation_constraint_choice_val > num_exception_explanations + 2)
+    {
+      add_citations = FALSE;
+    }
+    else if (StringICmp (sfp->except_text, 
+             exception_explanations [mp->explanation_constraint_choice_val - 3]) != 0)
+    {
+      add_citations = FALSE;
+    }
+  }
+
+  if (mp->use_product_match)
+  {
+    /* do not continue unless translation does not match product */
+    if (sfp->data.choice != SEQFEAT_CDREGION)
+    {
+      add_citations = FALSE;
+    }
+    else if (sfp->product != NULL)
+    {
+      protbsp = BioseqFindFromSeqLoc (sfp->product);
+      seq1 = GetSequenceByBsp (protbsp);
+      bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+      if (bs != NULL)
+      {
+        seq2 = BSMerge (bs, NULL);
+      }
+      bs = BSFree (bs);
+      if (StringICmp (seq1, seq2) == 0)
+      {
+        add_citations = FALSE;
+      }
+      seq1 = MemFree (seq1);
+      seq2 = MemFree (seq2);
+    }
+  }
+
+  /* add citations to feature */
+  if (add_citations)
+  {
+    sfp->cit = PubSetFree (sfp->cit);
+    sfp->cit = DialogToPointer (mp->citation_list);
+  }
+  
+}
+
+
+static ValNodePtr MakeRemoveFeatureFieldAction (Uint2 ftype, Int4 legalqual, DialoG constraint_dlg)
+{
+  ValNodePtr      single_macro = NULL;
+  RemoveActionPtr remove;
+  AECRActionPtr   act;
+
+  remove = RemoveActionNew();
+  remove->field = MakeFeatureFieldField (ftype, legalqual);
+  act = AECRActionNew();
+  act->constraint = DialogToPointer (constraint_dlg);
+  act->action = ValNodeNew (NULL);
+  act->action->choice = ActionChoice_remove;
+  act->action->data.ptrvalue = remove;
+  single_macro = ValNodeNew (NULL);
+  single_macro->choice = MacroActionChoice_aecr;
+  single_macro->data.ptrvalue = act;
+  return single_macro;
+}
+
+
+static ValNodePtr 
+MakeApplyFeatureFieldAction 
+(Uint2 ftype, Int4 legalqual, CharPtr val, DialoG constraint_dlg, SeqEntryPtr sep)
+{
+  ValNodePtr      single_macro = NULL;
+  ApplyActionPtr  apply;
+  AECRActionPtr   act;
+  ValNodePtr      sample_list;
+  AECRSamplePtr   sample;
+
+  apply = ApplyActionNew();
+  apply->field = MakeFeatureFieldField (ftype, legalqual);
+  apply->value = StringSave (val);
+  act = AECRActionNew();
+  act->constraint = DialogToPointer (constraint_dlg);
+  act->action = ValNodeNew (NULL);
+  act->action->choice = ActionChoice_apply;
+  act->action->data.ptrvalue = apply;
+  apply->existing_text = ExistingTextOption_replace_old;
+  if (sep != NULL) {
+    sample_list = GetAECRSampleList (act, sep);
+    sample = GetFieldSampleFromList (sample_list, apply->field);
+    sample_list = AECRSampleListFree (sample_list);
+    if (sample != NULL && sample->num_found > 0) {
+      apply->existing_text = TwoStepExistingText (sample->num_found, IsFieldTypeNonText(apply->field), AllowFieldMulti (apply->field));
+    }
+    sample = AECRSampleFree (sample);
+  }
+  if (apply->existing_text == 0) {
+    act = AECRActionFree (act);
+  } else {
+    single_macro = ValNodeNew (NULL);
+    single_macro->choice = MacroActionChoice_aecr;
+    single_macro->data.ptrvalue = act;
+  }
+  return single_macro;
+}
+
+
+static void 
+FeatureEditorDoOneAction 
+(SeqEntryPtr     sep, 
+ Uint2           ftype, 
+ FeatEdPtr mp,
+ Int4            action_choice)
+{
+  Int4            exception_choice;
+  ValNodePtr      vnp;
+  MsgAnswer       ans;
+  Boolean         also_remove_evidence = FALSE;
+  InferenceEditPtr iep;
+  AECRActionPtr   act = NULL;
+  ValNodePtr      sample_list;
+  ValNodePtr      single_field;
+  AECRSamplePtr   sample;
+  ValNodePtr      macro_list = NULL;
+  ValNodePtr      object_list = NULL;
+  CharPtr         val;
+  VisitFeaturesFunc callback_func = NULL;
+
+  switch (action_choice) 
+  {
+    case FEAT_ED_EXPERIMENT:
+      if (TextHasNoText (mp->experiment_text)) {
+        macro_list = MakeRemoveFeatureFieldAction (ftype, Feat_qual_legal_experiment, mp->constraint);
+      } else {
+        val = SaveStringFromText (mp->experiment_text);
+        macro_list = MakeApplyFeatureFieldAction (ftype, Feat_qual_legal_experiment, val, mp->constraint, sep);
+        val = MemFree (val);
+      }
+      break;
+    case FEAT_ED_INFERENCE:
+      iep = DialogToPointer (mp->inference_dlg);
+      if (iep->action == eInferenceRemove)
+      {
+        macro_list = MakeRemoveFeatureFieldAction (ftype, Feat_qual_legal_inference, mp->constraint);
+        vnp = MakeApplyFeatureFieldAction (ftype, Feat_qual_legal_evidence, "X", mp->constraint, NULL);
+        sample_list = GetAECRSampleList (vnp->data.ptrvalue, sep);
+        single_field = MakeFeatureFieldField (ftype, Feat_qual_legal_evidence);
+        sample = GetFieldSampleFromList (sample_list, single_field);
+        single_field = FieldTypeFree (single_field);
+        sample_list = AECRSampleListFree (sample_list);
+        if (sample != NULL && sample->num_found > 0) {
+          ans = Message (MSG_YNC, "There are evidence qualifiers on your features, which are displayed as inference qualifiers in the flat file.  Would you like to remove them as well?");
+          if (ans == ANS_CANCEL)
+          {
+            macro_list = MacroActionListFree (macro_list);
+          } 
+          else if (ans == ANS_YES) 
+          {
+            also_remove_evidence = TRUE;
+            mp->evidence_val = 0;
+          }
+        }
+        sample = AECRSampleFree (sample);
+      }
+      else 
+      {
+        macro_list = MakeApplyFeatureFieldAction (ftype, Feat_qual_legal_inference, "X", mp->constraint, NULL);
+      }
+      if (macro_list != NULL)
+      {
+        object_list = GetObjectListForAECRAction (sep, macro_list->data.ptrvalue);
+        macro_list = MacroActionListFree (macro_list);
+        for (vnp = object_list; vnp != NULL; vnp = vnp->next) 
+        {
+          DoInferenceFeatureProc (vnp->data.ptrvalue, iep);
+          if (also_remove_evidence) 
+          {
+            DoEvidenceFeatureProc (vnp->data.ptrvalue, mp);
+          }
+        }
+        object_list = FreeObjectList (object_list);
+
+      }
+      iep = InferenceEditFree (iep);
+
+      break;
+    case FEAT_ED_PSEUDO:
+      if (GetValue (mp->pseudo_action) == 1)
+      {
+        macro_list = MakeApplyFeatureFieldAction (ftype, Feat_qual_legal_pseudo, "TRUE", mp->constraint, NULL);
+      } 
+      else
+      {
+        macro_list = MakeRemoveFeatureFieldAction (ftype, Feat_qual_legal_pseudo, mp->constraint);
+      }
+      break;
+    case FEAT_ED_EVIDENCE:
+      macro_list = MakeRemoveFeatureFieldAction (ftype, Feat_qual_legal_evidence, mp->constraint);
+      break;
+    case FEAT_ED_EXCEPTION:
+      mp->do_move_to_comment = GetStatus (mp->move_to_comment);
+      mp->product_val = GetValue (mp->product_choice);
+      exception_choice = GetValue (mp->explanation_choice);
+      if (exception_choice == 1)
+      {
+        mp->explanation_text = NULL;
+      }
+      else if (exception_choice > 1 && exception_choice < num_exception_explanations + 1)
+      {
+        mp->explanation_text = StringSave (exception_explanations [exception_choice - 2]);
+      }
+      else if (exception_choice == num_exception_explanations + 1)
+      {
+        mp->explanation_text = SaveStringFromText (mp->other_explanation);
+      }
+      callback_func = DoExceptionFeatureProc;
+      break;
+    case FEAT_ED_PARTIAL:
+      mp->orderjoinpolicy = GetValue (mp->convert_choice);
+      mp->leftpolicy = GetValue (mp->partial5_choice);
+      mp->rightpolicy = GetValue (mp->partial3_choice);
+      mp->extend5 = GetStatus (mp->extend5_btn);
+      mp->extend3 = GetStatus (mp->extend3_btn);
+      mp->retranslate = GetStatus (mp->retranslate_btn);
+      mp->adjust_gene = GetStatus (mp->adjust_gene_btn);
+      callback_func = DoPartialFeatureProc;
+      break;
+    case FEAT_ED_STRAND:
+      mp->from_strand_val = (Uint1) GetValue (mp->from_strand);
+      mp->to_strand_val = (Uint1) GetValue (mp->to_strand);
+      callback_func = DoStrandFeatureProc;
+      break;
+    case FEAT_ED_CITATION:
+      mp->use_explanation_constraint = GetStatus (mp->explanation_constraint);
+      mp->explanation_constraint_choice_val = GetValue (mp->explanation_constraint_choice);
+      mp->use_product_match = GetStatus (mp->citation_translation);
+      callback_func = DoCitationFeatureProc;
+      break;
+  }
+
+  if (callback_func != NULL) 
+  {
+    macro_list = MakeApplyFeatureFieldAction (ftype, Feat_qual_legal_note, "X", mp->constraint, NULL);
+    object_list = GetObjectListForAECRAction (sep, macro_list->data.ptrvalue);
+    macro_list = MacroActionListFree (macro_list);
+    for (vnp = object_list; vnp != NULL; vnp = vnp->next) 
+    {
+      callback_func (vnp->data.ptrvalue, mp);
+    }
+    object_list = FreeObjectList (object_list);
+  }
+  
+  if (macro_list != NULL) 
+  {
+    ApplyMacroToSeqEntry (sep, macro_list);
+    macro_list = MacroActionListFree (macro_list);
+  }
+
+  mp->explanation_text = MemFree (mp->explanation_text);
+}
+
+static Boolean FeatureEditorAction (Pointer userdata)
+{
+  FeatEdPtr mp;
+  Uint2           ftype;
+  Int4            action_choice;
+  SeqEntryPtr     sep;
+
+  mp = (FeatEdPtr) userdata;
+  if (mp == NULL)
+  {
+    return FALSE;
+  }
+
+  sep = GetTopSeqEntryForEntityID (mp->input_entityID);
+  if (sep == NULL)
+  {
+    return FALSE;
+  }
+
+  WatchCursor ();
+  Update ();
+  
+  ftype = GetFeatureTypeFromFeatureTypeDialog (mp->feature_type);
+    
+  action_choice = GetValue (mp->action_choice_grp);
+  FeatureEditorDoOneAction (sep, ftype, mp, action_choice);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (mp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, mp->input_entityID, 0, 0);  
+  return TRUE;
+}
+
+NLM_EXTERN void FeatureEditorBaseForm (BaseFormPtr bfp, Int4 first_action)
+{
+  FeatEdPtr mp;
+  WindoW          w;
+  GrouP           h, g;
+
+  if (bfp == NULL) return;
+  mp = (FeatEdPtr) MemNew (sizeof (FeatEdData));
+  if (mp == NULL) return;
+  
+  w = FixedWindow (-50, -33, -10, -10, "Feature Editor", StdCloseWindowProc);
+  SetObjectExtra (w, mp, StdCleanupFormProc);
+  mp->form = (ForM) w;
+  mp->input_entityID = bfp->input_entityID;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  
+  g = FeatureEditorActionGroup (h, mp, first_action);
+  
+  mp->constraint = ComplexConstraintDialog (h, NULL, NULL);
+  ChangeComplexConstraintFieldType (mp->constraint, FieldType_molinfo_field, NULL, Macro_feature_type_any);                    
+  mp->accept_cancel = AcceptCancelDialog (h, FeatureEditorAction, NULL, 
+                                          FeatEdClear, 
+                                          FeatEdClearText, 
+                                          (Pointer)mp, w);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g,
+                              (HANDLE) mp->constraint,
+                              (HANDLE) mp->accept_cancel, NULL);
+  
+  ChangeFeatureEditorActionGroup (mp->action_choice_grp);
+  Show (w);
+}

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.44 $
+* $Revision: 6.47 $
 *
 * File Description: 
 *
@@ -550,7 +550,6 @@ static Entrez2ReplyPtr EntrezSpecialSynchronousQuery (
   CharPtr          env_machine = NULL;
   CharPtr          env_path = NULL;
   CharPtr          env_port = NULL;
-  CharPtr          env_service = NULL;
   int              val = 0;
 
   if (e2rq == NULL) return NULL;
@@ -707,7 +706,9 @@ NLM_EXTERN CharPtr DBGetNameFromID (Int2 dbId)
   /*--------------------------*/
 
   for (e2db = e2ip->db_info, count = 0; e2db != NULL; e2db = e2db->next, count++) {
-    if (count == dbId) return e2db->db_name;
+    if (count != dbId) continue;
+    if (StringHasNoText (e2db->db_name)) continue;
+    return e2db->db_name;
   }
 
   return NULL;
@@ -1023,6 +1024,7 @@ EnumFieldAssocPtr CreateDatabaseAlist (Entrez2InfoPtr e2ip)
   if (e2ip == NULL || e2ip->db_count < 1) return NULL;
 
   for (e2db = e2ip->db_info; e2db != NULL; e2db = e2db->next) {
+    if (StringHasNoText (e2db->db_menu)) continue;
     choice = (Uint1) DBGetIDFromName (e2db->db_name);
     ValNodeCopyStr (&head, choice, e2db->db_menu);
   }
@@ -1053,6 +1055,7 @@ EnumFieldAssocPtr CreateFieldAlist (Entrez2DbInfoPtr e2db)
 
   dbId = DBGetIDFromName (e2db->db_name);
   for (fieldInfo = e2db->fields; fieldInfo != NULL; fieldInfo = fieldInfo->next) {
+    if (StringHasNoText (fieldInfo->field_name)) continue;
     choice = (Uint1) FieldGetIDFromName (dbId, fieldInfo->field_name);
     ValNodeCopyStr (&head, choice, fieldInfo->field_menu);
   }
@@ -1085,6 +1088,7 @@ static EnumFieldAssocPtr CreateAllFieldsAlist (Entrez2InfoPtr e2ip)
   for (e2db = e2ip->db_info; e2db != NULL; e2db = e2db->next) {
     dbId = DBGetIDFromName (e2db->db_name);
     for (fieldInfo = e2db->fields; fieldInfo != NULL; fieldInfo = fieldInfo->next) {
+      if (StringHasNoText (fieldInfo->field_name)) continue;
       choice = (Uint1) FieldGetIDFromName (dbId, fieldInfo->field_name);
       ValNodeCopyStr (&head, choice, fieldInfo->field_name);
     }
@@ -6589,7 +6593,7 @@ NLM_EXTERN Entrez2InfoPtr Query_GetInfo (void)
   /* Validate EntrezInfo contents */
   /*------------------------------*/
 
-  if (! ValidateEntrez2InfoPtr (s_masterE2ip, &head)) {
+  if (! ValidateEntrez2InfoPtrExEx (s_masterE2ip, &head, TRUE, TRUE)) {
     TmpNam (path);
     fp = FileOpen (path, "w");
     if (fp != NULL) {

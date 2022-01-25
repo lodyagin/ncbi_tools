@@ -1,4 +1,4 @@
---$Revision: 6.35 $
+--$Revision: 6.47 $
 --**********************************************************************
 --
 --  NCBI Sequence Feature elements
@@ -10,7 +10,7 @@
 NCBI-Seqfeat DEFINITIONS ::=
 BEGIN
 
-EXPORTS Seq-feat, Feat-id, Genetic-code;
+EXPORTS Seq-feat, Feat-id, Genetic-code, ModelEvidenceSupport;
 
 IMPORTS Gene-ref FROM NCBI-Gene
         Prot-ref FROM NCBI-Protein
@@ -18,10 +18,11 @@ IMPORTS Gene-ref FROM NCBI-Gene
         Variation-ref FROM NCBI-Variation
         BioSource FROM NCBI-BioSource
         RNA-ref FROM NCBI-RNA
-        Seq-loc, Giimport-id FROM NCBI-Seqloc
+        Seq-id, Seq-loc, Giimport-id FROM NCBI-Seqloc
         Pubdesc, Numbering, Heterogen FROM NCBI-Sequence
         Rsite-ref FROM NCBI-Rsite
         Txinit FROM NCBI-TxInit
+        DOI, PubMedId FROM NCBI-Biblio
         Pub-set FROM NCBI-Pub
         Object-id, Dbtag, User-object FROM NCBI-General;
 
@@ -57,7 +58,9 @@ Seq-feat ::= SEQUENCE {
     pseudo BOOLEAN OPTIONAL ,     -- annotated on pseudogene?
     except-text VisibleString OPTIONAL , -- explain if except=TRUE
     ids SET OF Feat-id OPTIONAL ,       -- set of Ids; will replace 'id' field
-    exts SET OF User-object OPTIONAL }  -- set of extensions; will replace 'ext' field
+    exts SET OF User-object OPTIONAL , -- set of extensions; will replace 'ext' field
+    support SeqFeatSupport OPTIONAL  -- will replace /experiment, /inference, model-evidence
+}
 
 SeqFeatData ::= CHOICE {
     gene Gene-ref ,
@@ -122,6 +125,82 @@ SeqFeatData ::= CHOICE {
 SeqFeatXref ::= SEQUENCE {       -- both optional because can have one or both
     id Feat-id OPTIONAL ,        -- the feature copied
     data SeqFeatData OPTIONAL }  -- the specific data
+
+SeqFeatSupport ::= SEQUENCE {
+  experiment SET OF ExperimentSupport OPTIONAL ,
+  inference SET OF InferenceSupport OPTIONAL ,
+  model-evidence SET OF ModelEvidenceSupport OPTIONAL
+}
+
+EvidenceCategory ::= INTEGER {
+  not-set (0) ,
+  coordinates (1) ,
+  description (2) ,
+  existence (3)
+}
+
+ExperimentSupport ::= SEQUENCE {
+  category EvidenceCategory OPTIONAL ,
+  explanation VisibleString ,
+  pmids SET OF PubMedId OPTIONAL ,
+  dois SET OF DOI OPTIONAL
+}
+
+Program-id ::= SEQUENCE {
+  name VisibleString ,
+  version VisibleString OPTIONAL
+}
+
+EvidenceBasis ::= SEQUENCE {
+  programs SET OF Program-id OPTIONAL ,
+  accessions SET OF Seq-id OPTIONAL
+}
+
+InferenceSupport ::= SEQUENCE {
+  category EvidenceCategory OPTIONAL ,
+  type INTEGER {
+    not-set (0) ,
+    similar-to-sequence (1) ,
+    similar-to-aa (2) ,
+    similar-to-dna (3) ,
+    similar-to-rna (4) ,
+    similar-to-mrna (5) ,
+    similiar-to-est (6) ,
+    similar-to-other-rna (7) ,
+    profile (8) ,
+    nucleotide-motif (9) ,
+    protein-motif (10) ,
+    ab-initio-prediction (11) ,
+    alignment (12) ,
+    other (255)
+  } DEFAULT not-set ,
+  other-type VisibleString OPTIONAL ,
+  same-species BOOLEAN DEFAULT FALSE ,
+  basis EvidenceBasis ,
+  pmids SET OF PubMedId OPTIONAL ,
+  dois SET OF DOI OPTIONAL
+}
+
+ModelEvidenceItem ::= SEQUENCE {
+  id Seq-id ,
+  exon-count INTEGER OPTIONAL ,
+  exon-length INTEGER OPTIONAL ,
+  full-length BOOLEAN DEFAULT FALSE ,
+  supports-all-exon-combo BOOLEAN DEFAULT FALSE
+}
+
+ModelEvidenceSupport ::= SEQUENCE {
+  method VisibleString OPTIONAL ,
+  mrna SET OF ModelEvidenceItem OPTIONAL ,
+  est SET OF ModelEvidenceItem OPTIONAL ,
+  protein SET OF ModelEvidenceItem OPTIONAL ,
+  identification Seq-id OPTIONAL ,
+  dbxref SET OF Dbtag OPTIONAL ,
+  exon-count INTEGER OPTIONAL ,
+  exon-length INTEGER OPTIONAL ,
+  full-length BOOLEAN DEFAULT FALSE ,
+  supports-all-exon-combo BOOLEAN DEFAULT FALSE
+}
 
 --*** CdRegion ***********************************************
 --*
@@ -246,12 +325,15 @@ END
 NCBI-Variation DEFINITIONS ::=
 BEGIN
 
-EXPORTS Variation-ref, Variation-inst;
+EXPORTS Variation-ref, Variation-inst, VariantProperties,
+        Population-data, Phenotype;
 
 IMPORTS Int-fuzz, User-object, Object-id, Dbtag FROM NCBI-General
         Seq-literal FROM NCBI-Sequence
+        SubSource FROM NCBI-BioSource
         Seq-loc FROM NCBI-Seqloc
         Pub FROM NCBI-Pub;
+
 
 -- --------------------------------------------------------------------------
 -- Historically, the dbSNP definitions document data structures used in the
@@ -264,10 +346,11 @@ VariantProperties ::= SEQUENCE {
     version INTEGER,
 
     -- NOTE:
-    -- The format for each of these values is as an integer
-    -- Unless otherwise noted, these integers represent a bitwise OR of the
-    -- possible values, and as such, these values represent the specific bit
-    -- flags that may be set for each of the possible attributes here.
+    -- The format for most of these values is as an integer
+    -- Unless otherwise noted, these integers represent a bitwise OR (= simple
+    -- sum) of the possible values, and as such, these values represent the
+    -- specific bit flags that may be set for each of the possible attributes
+    -- here.
 
     resource-link INTEGER {
         preserved        (1), -- Clinical, Pubmed, Cited, (0x01)
@@ -316,7 +399,13 @@ VariantProperties ::= SEQUENCE {
                             -- (0x10)
         down-regulator(32), -- the variant causes decreased transcription
                             -- (0x20)
-        methylation(64)
+        methylation   (64),
+        stop-gain     (128), -- reference codon is not stop codon, but the snp
+                             -- variant allele changes the codon to a
+                             -- terminating codon.
+        stop-loss     (256)  -- reverse of STOP-GAIN: reference codon is a
+                             -- stop codon, but a snp variant allele changes
+                             -- the codon to a non-terminating codon.
     } OPTIONAL,
 
     mapping INTEGER {
@@ -327,7 +416,8 @@ VariantProperties ::= SEQUENCE {
         is-assembly-specific  (4)  -- Only maps to 1 assembly (0x04)
     } OPTIONAL,
 
-    -- This is *NOT* a bitfield
+    -- map-weight captures specificity of placement
+    -- NOTE: This is *NOT* a bitfield
     map-weight INTEGER {
         is-uniquely-placed(1),
         placed-twice-on-same-chrom(2),
@@ -341,8 +431,8 @@ VariantProperties ::= SEQUENCE {
         above-5pct-all    (2), -- >5% minor allele freq in each and all
                                -- populations (0x02)
         above-5pct-1plus  (4), -- >5% minor allele freq in 1+ populations (0x04)
-        validated         (8), -- Bit is set if the variant has 2+ minor allele
-                               -- count based on freq or genotype data
+        validated         (8), -- Bit is set if the variant has a minor allele
+                               -- observed in two or more separate chromosomes
         above-1pct-all   (16), -- >1% minor allele freq in each and all
                                -- populations (0x10)
         above-1pct-1plus (32)  -- >1% minor allele freq in 1+ populations (0x20)
@@ -353,15 +443,19 @@ VariantProperties ::= SEQUENCE {
         has-genotypes    (2)  -- SNP has individual genotype (0x02)
     } OPTIONAL,
 
-    project-data SET OF SEQUENCE {
-        -- project IDs are IDs from BioProjects
-        -- in order to report information about project relationships, we
-        -- require projects to be registered
-        -- This field in many ways duplicates dbxrefs; however, the
-        -- intention of this field is to more adequately reflects
-        -- ownership and data source
-        project-ids SET OF INTEGER
-    } OPTIONAL,
+    -- project IDs are IDs from BioProjects
+    -- in order to report information about project relationships, we
+    -- require projects to be registered
+    -- This field in many ways duplicates dbxrefs; however, the
+    -- intention of this field is to more adequately reflect
+    -- ownership and data source
+    --
+    -- 11/9/2010: DO NOT USE
+    -- This field was changed in the spec in a breaking way; using it will
+    -- break clients.  We are officially suppressing / abandoning this field.
+    -- Clients who need to use this should instead place the data in
+    -- Seq-feat.dbxref, using the db name 'BioProject'
+    project-data SET OF INTEGER OPTIONAL,
 
     quality-check INTEGER {
         contig-allele-missing   (1), -- Reference sequence allele at the mapped
@@ -381,7 +475,53 @@ VariantProperties ::= SEQUENCE {
         unknown         (0),
         likely-artifact (1),
         other           (255)
-    } OPTIONAL
+    } OPTIONAL,
+
+    -- has this variant been validated?
+    -- While a boolean flag offers no subtle distinctions of validation
+    -- methods, occasionally it is only known as a single boolean value
+    -- NOTE: this flag is redundant and should be omitted if more comprehensive
+    -- validation information is present
+    other-validation BOOLEAN OPTIONAL,
+
+    -- origin of this allele, if known
+    -- note that these are powers-of-two, and represent bits; thus, we can
+    -- represent more than one state simultaneously through a bitwise OR
+    allele-origin INTEGER {
+        unknown         (0),
+        germline        (1),
+        somatic         (2),
+        inherited       (4),
+        paternal        (8),
+        maternal        (16),
+        de-novo         (32),
+        biparental      (64),
+        uniparental     (128),
+        not-tested      (256),
+        tested-inconclusive (512),
+
+        -- stopper - 2^31
+        other           (1073741824)
+    } OPTIONAL,
+
+    -- observed allele state, if known
+    -- NOTE: THIS IS NOT A BITFIELD!
+    allele-state INTEGER {
+        unknown         (0),
+        homozygous      (1),
+        heterozygous    (2),
+        hemizygous      (3),
+        nullizygous     (4),
+        other           (255)
+    } OPTIONAL,
+
+    -- NOTE:
+    -- 'allele-frequency' here refers to the minor allele frequency of the
+    -- default population
+    allele-frequency REAL OPTIONAL,
+
+    -- is this variant the ancestral allele?
+    is-ancestral-allele BOOLEAN OPTIONAL
 }
 
 Phenotype ::= SEQUENCE {
@@ -397,6 +537,8 @@ Phenotype ::= SEQUENCE {
         probable-non-pathogenic (3),
         probable-pathogenic     (4),
         pathogenic              (5),
+        drug-response           (6),
+        histocompatibility      (7),
         other                   (255)
     } OPTIONAL
 }
@@ -406,13 +548,24 @@ Population-data ::= SEQUENCE {
     population VisibleString,
     genotype-frequency REAL OPTIONAL,
     chromosomes-tested INTEGER OPTIONAL,
-    sample-ids SET OF Object-id OPTIONAL
+    sample-ids SET OF Object-id OPTIONAL,
+    allele-frequency REAL OPTIONAL,
+
+    -- This field is an explicit bit-field
+    -- Valid values should be a bitwise combination (= simple sum)
+    -- of any of the values below
+    flags INTEGER {
+        is-default-population   (1),
+        is-minor-allele         (2),
+        is-rare-allele          (4)
+    } OPTIONAL
 }
 
 Ext-loc ::= SEQUENCE {
     id Object-id,
     location Seq-loc
 }
+
 
 Variation-ref ::= SEQUENCE {
     -- ids (i.e., SNP rsid / ssid, dbVar nsv/nssv)
@@ -480,35 +633,43 @@ Variation-ref ::= SEQUENCE {
     -- describe individual alleles.
 
     -- population data
+    -- DEPRECATED - do not use
     population-data SET OF Population-data OPTIONAL,
 
     -- variant properties bit fields
     variant-prop VariantProperties OPTIONAL,
 
     -- has this variant been validated?
+    -- DEPRECATED: new field = VariantProperties.other-validation
     validated BOOLEAN OPTIONAL,
 
     -- link-outs to GeneTests database
+    -- DEPRECATED - do not use
     clinical-test SET OF Dbtag OPTIONAL,
 
     -- origin of this allele, if known
+    -- note that these are powers-of-two, and represent bits; thus, we can
+    -- represent more than one state simultaneously through a bitwise OR
+    -- DEPRECATED: new field = VariantProperties.allele-origin
     allele-origin INTEGER {
         unknown         (0),
         germline        (1),
         somatic         (2),
-        inherited       (3),
-        paternal        (4),
-        maternal        (5),
-        de-novo         (6),
-        biparental      (7),
-        uniparental     (8),
-        not-tested      (9),
-        tested-inconclusive (10),
+        inherited       (4),
+        paternal        (8),
+        maternal        (16),
+        de-novo         (32),
+        biparental      (64),
+        uniparental     (128),
+        not-tested      (256),
+        tested-inconclusive (512),
 
-        other           (255)
+        -- stopper - 2^31
+        other           (1073741824)
     } OPTIONAL,
 
     -- observed allele state, if known
+    -- DEPRECATED: new field = VariantProperties.allele-state
     allele-state INTEGER {
         unknown         (0),
         homozygous      (1),
@@ -518,15 +679,21 @@ Variation-ref ::= SEQUENCE {
         other           (255)
     } OPTIONAL,
 
+    -- NOTE:
+    -- 'allele-frequency' here refers to the minor allele frequency of the
+    -- default population
+    -- DEPRECATED: new field = VariantProperties.allele-frequency
     allele-frequency REAL OPTIONAL,
 
     -- is this variant the ancestral allele?
+    -- DEPRECATED: new field = VariantProperties.is-ancestral-allele
     is-ancestral-allele BOOLEAN OPTIONAL,
 
     -- publication support.
     -- Note: made this pub instead of pub-equiv, since
     -- Pub can be pub-equiv and pub-equiv is a set of pubs, but it looks like
     -- Pub is more often used as top-level container
+    -- DEPRECATED - do not use; use Seq-feat.dbxref instead
     pub Pub OPTIONAL,
 
     data CHOICE {
@@ -556,11 +723,18 @@ Variation-ref ::= SEQUENCE {
                                  -- e.g. g.[476C>T(+)183G>C]
                 population  (7), -- population
                 alleles     (8), -- set represents a set of observed alleles
+                package     (9), -- set represents a package of observations at
+                                 -- a given location, generally containing
+                                 -- asserted + reference
                 other       (255)
             },
             variations SET OF Variation-ref,
             name  VisibleString OPTIONAL
-        }
+        },
+
+        -- variant is a complex and undescribed change at the location
+        -- This type of variant is known to occur in dbVar submissions
+        complex NULL
     },
 
     consequence SET OF CHOICE {
@@ -591,14 +765,29 @@ Variation-ref ::= SEQUENCE {
     } OPTIONAL,
 
     -- Observed location, if different from the parent set or feature.location.
+    -- DEPRECATED - do not use
     location        Seq-loc OPTIONAL,
 
     -- reference other locs, e.g. mapped source
+    -- DEPRECATED - do not use
     ext-locs SET OF Ext-loc OPTIONAL,
 
-    ext             User-object OPTIONAL
+    -- DEPRECATED - do not use; use Seq-feat.exts instead
+    ext             User-object OPTIONAL,
+
+    somatic-origin SET OF SEQUENCE {
+        -- description of the somatic origin itself
+        source SubSource OPTIONAL,
+        -- condition related to this origin's type
+        condition SEQUENCE {
+            description VisibleString OPTIONAL,
+            -- reference to BioTerm / other descriptive database
+            object-id SET OF Dbtag OPTIONAL
+        } OPTIONAL
+    } OPTIONAL
 
 }
+
 
 Delta-item ::= SEQUENCE {
     seq CHOICE {
@@ -683,7 +872,19 @@ Variation-inst ::= SEQUENCE {
     },
 
     -- Sequence that replaces the location, in biological order.
-    delta SEQUENCE OF Delta-item
+    delta SEQUENCE OF Delta-item,
+
+    -- 'observation' is used to label items in a Variation-ref package
+    -- This field is explicitly a bit-field, so the bitwise OR (= sum) of any
+    -- of the values may be observed.
+    observation INTEGER {
+        asserted        (1),   -- inst represents the asserted base at a
+                               -- position
+        reference       (2),   -- inst represents the reference base at the
+                               -- position
+        variant         (4)    -- inst represent the observed variant at a
+                               -- given position
+    } OPTIONAL
 }
 
 END
@@ -944,7 +1145,7 @@ END
 NCBI-BioSource DEFINITIONS ::=
 BEGIN
 
-EXPORTS BioSource;
+EXPORTS BioSource, SubSource;
 
 IMPORTS Org-ref FROM NCBI-Organism;
 
@@ -1053,6 +1254,8 @@ SubSource ::= SEQUENCE {
         mating-type (38) ,
         linkage-group (39) ,
         haplogroup (40) ,
+        whole-replicon (41) ,
+        phenotype (42) ,
         other (255) } ,
     name VisibleString ,
     attrib VisibleString OPTIONAL }    -- attribution/source of this name

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.145 $
+* $Revision: 6.157 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -55,7 +55,7 @@
 /* asn2gnbi.h needed to test PUBSEQGetAccnVer in accpubseq.c */
 #include <asn2gnbi.h>
 
-#define ASN2GB_APP_VER "8.5"
+#define ASN2GB_APP_VER "9.7"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -1759,14 +1759,24 @@ static void ProcessOneSeqEntry (
   LckType locks,
   CstType custom,
   XtraPtr extra,
+  Int4 from,
+  Int4 to,
+  Uint1 strand,
+  Uint4 itemID,
   Boolean do_tiny_seq,
   Boolean do_fasta_stream
 )
 
 
 {
-  AsnIoPtr  aip;
-  FILE      *ofp = NULL;
+  AsnIoPtr    aip;
+  BioseqPtr   bsp;
+  Uint2       entityID;
+  FILE        *ofp = NULL;
+  SeqFeatPtr  sfp;
+  SeqInt      sint;
+  SeqLocPtr   slp = NULL;
+  ValNode     vn;
 
   if (sep == NULL) return;
 
@@ -1778,6 +1788,45 @@ static void ProcessOneSeqEntry (
     ofp = FileOpen (outputFile, "w");
   }
 
+  if ((from > 0 && to > 0) || strand == Seq_strand_minus) {
+    bsp = NULL;
+    if (format == GENPEPT_FMT) {
+      VisitSequencesInSep (sep, (Pointer) &bsp, VISIT_PROTS, GetFirstGoodBioseq);
+    } else {
+      VisitSequencesInSep (sep, (Pointer) &bsp, VISIT_NUCS, GetFirstGoodBioseq);
+    }
+    if (bsp != NULL) {
+      if (strand == Seq_strand_minus && from == 0 && to == 0) {
+        from = 1;
+        to = bsp->length;
+      }
+      if (from < 0) {
+        from = 1;
+      } else if (from > bsp->length) {
+        from = bsp->length;
+      }
+      if (to < 0) {
+        to = 1;
+      } else if (to > bsp->length) {
+        to = bsp->length;
+      }
+      MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+      MemSet ((Pointer) &sint, 0, sizeof (SeqInt));
+      sint.from = from - 1;
+      sint.to = to - 1;
+      sint.strand = strand;
+      sint.id = SeqIdFindBest (bsp->id, 0);
+      vn.choice = SEQLOC_INT;
+      vn.data.ptrvalue = (Pointer) &sint;
+      slp = &vn;
+    }
+  } else if (itemID > 0) {
+    sfp = SeqMgrGetDesiredFeature (entityID, 0, itemID, 0, NULL, NULL);
+    if (sfp != NULL) {
+      slp = sfp->location;
+    }
+  }
+
   if (do_tiny_seq) {
     aip = AsnIoNew (ASNIO_TEXT_OUT | ASNIO_XML, ofp, NULL, NULL, NULL);
     VisitBioseqsInSep (sep, (Pointer) aip, SaveTinySeqs);
@@ -1787,9 +1836,9 @@ static void ProcessOneSeqEntry (
     VisitBioseqsInSep (sep, (Pointer) aip, SaveTinyStreams);
     AsnIoFree (aip, FALSE);
   } else {
-    SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, custom, extra, ofp);
+    SeqEntryToGnbk (sep, slp, format, mode, style, flags, locks, custom, extra, ofp);
     if (altformat != 0) {
-      SeqEntryToGnbk (sep, NULL, altformat, mode, style, flags, locks, custom, extra, ofp);
+      SeqEntryToGnbk (sep, slp, altformat, mode, style, flags, locks, custom, extra, ofp);
     }
   }
   if (ofp != NULL) {
@@ -2044,9 +2093,9 @@ Args myargs [] = {
     TRUE, 'l', ARG_FILE_OUT, 0.0, 0, NULL},
   {"Remote Fetching", "F", NULL, NULL,
     TRUE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Accession to Fetch", NULL, NULL, NULL,
+  {"Accession to Fetch (or Accession,retcode,flags where flags -1 fetches external features)", NULL, NULL, NULL,
     TRUE, 'A', ARG_STRING, 0.0, 0, NULL},
-  {"Fetch Remote Annotations", "F", NULL, NULL,
+  {"Remote Annotation Fetch Test (use -A Accession,0,-1 instead)", "F", NULL, NULL,
     TRUE, 'F', ARG_BOOLEAN, 0.0, 0, NULL},
 #ifdef OS_UNIX
 #ifdef PROC_I80X86
@@ -2415,7 +2464,8 @@ Int2 Main (
       if (sep != NULL) {
         ProcessOneSeqEntry (sep, myargs [o_argOutputFile].strvalue,
                             format, altformat, mode, style, flags, locks,
-                            custom, extra, do_tiny_seq, do_fasta_stream);
+                            custom, extra, from, to, strand, itemID,
+                            do_tiny_seq, do_fasta_stream);
         SeqEntryFree (sep);
       }
     }

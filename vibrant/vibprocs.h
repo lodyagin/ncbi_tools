@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -185,6 +185,8 @@ void        Nlm_SetWindowConfigureCallback PROTO((Nlm_WindoW w));
 /* Dual screen functions control centering where the window left parameter is negative */
 
 Nlm_Boolean Nlm_HasDualScreen (void);
+Nlm_Boolean Nlm_IsRemoteDesktop (void);
+
 void Nlm_UseFullScreen (void);
 void Nlm_UseLeftScreen (void);
 void Nlm_UseRightScreen (void);

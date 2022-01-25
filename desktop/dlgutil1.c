@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.162 $
+* $Revision: 6.173 $
 *
 * File Description: 
 *
@@ -58,6 +58,11 @@
 #include <cdrgn.h>
 #include <findrepl.h>
 #include <pubdesc.h>
+
+#define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macroapi.h>
+#include <macrodlg.h>
 
 /* for formatting */
 #include <asn2gnbp.h>
@@ -1728,7 +1733,8 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   Boolean         rsult;
   SeqAnnotPtr     sap;
   SeqEntryPtr     sep;
-  SeqFeatPtr      sfp;
+  SeqFeatPtr      sfp = NULL;
+  SeqFeatPtr      new_gene = NULL;
   SeqLocPtr       slp;
   CharPtr         str;
   Char            symbol [128];
@@ -1849,7 +1855,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           }
         }
       }
-      if (CheckSeqLocForPartial (sfp->location, NULL, NULL)) {
+      if (/* CheckSeqLocForPartial (sfp->location, NULL, NULL) */ SeqLocPartialCheck (sfp->location) != SLP_COMPLETE) {
         sfp->partial = TRUE;
       }
       sfp->cit = DialogToPointer (ffp->featcits);
@@ -1983,6 +1989,12 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         }
         AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
         FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
+
+        /* adjust mRNA location and product name here */
+        if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION) {
+          UpdatemRNAAfterEditing (ffp->data, sfp->location, sfp->location);
+        }
+
         ompc.output_itemtype = OBJ_SEQFEAT;
         if (ompc.input_itemtype == OBJ_BIOSEQ) {
           bsp = GetBioseqGivenIDs (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype);
@@ -2015,6 +2027,11 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
       } else {
         GatherItem (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype,
                     (Pointer) &old_location, GetOldFeatureLocation);
+
+        /* adjust mRNA location and product name here, using old location */
+        if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION) {
+          UpdatemRNAAfterEditing (ffp->data, old_location == NULL ? sfp->location : old_location, sfp->location);
+        }
       
         rd.ffp = ffp;
         rd.sfp = sfp;
@@ -2071,30 +2088,30 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
               ValNodeAddPointer (&(grp->syn), 0, SaveStringFromText (ffp->geneSynonym));
             }
             if (grp != NULL) {
-              sfp = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
-              if (sfp != NULL) {
-                sfp->data.value.ptrvalue = (Pointer) grp;
-                FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
-                sfp->location = SeqLocFree (sfp->location);
-                sfp->location = DialogToPointer (ffp->location);
-                bsp = GetBioseqGivenSeqLoc (sfp->location, ffp->input_entityID);
+              new_gene = CreateNewFeature (sep, NULL, SEQFEAT_GENE, NULL);
+              if (new_gene != NULL) {
+                new_gene->data.value.ptrvalue = (Pointer) grp;
+                FixSpecialCharactersForObject (OBJ_SEQFEAT, new_gene, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
+                new_gene->location = SeqLocFree (new_gene->location);
+                new_gene->location = DialogToPointer (ffp->location);
+                bsp = GetBioseqGivenSeqLoc (new_gene->location, ffp->input_entityID);
                 if (bsp != NULL) {
-                  hasNulls = LocationHasNullsBetween (sfp->location);
-                  gslp = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
+                  hasNulls = LocationHasNullsBetween (new_gene->location);
+                  gslp = SeqLocMerge (bsp, new_gene->location, NULL, TRUE, FALSE, FALSE);
                   if (gslp != NULL) {
-                    CheckSeqLocForPartial (sfp->location, &noLeft, &noRight);
-                    sfp->location = SeqLocFree (sfp->location);
-                    sfp->location = gslp;
+                    CheckSeqLocForPartial (new_gene->location, &noLeft, &noRight);
+                    new_gene->location = SeqLocFree (new_gene->location);
+                    new_gene->location = gslp;
                     if (bsp->repr == Seq_repr_seg) {
-                      gslp = SegLocToPartsEx (bsp, sfp->location, TRUE);
-                      sfp->location = SeqLocFree (sfp->location);
-                      sfp->location = gslp;
-                      hasNulls = LocationHasNullsBetween (sfp->location);
-                      sfp->partial = (sfp->partial || hasNulls);
+                      gslp = SegLocToPartsEx (bsp, new_gene->location, TRUE);
+                      new_gene->location = SeqLocFree (new_gene->location);
+                      new_gene->location = gslp;
+                      hasNulls = LocationHasNullsBetween (new_gene->location);
+                      new_gene->partial = (new_gene->partial || hasNulls);
                     }
-                    FreeAllFuzz (sfp->location);
-                    SetSeqLocPartial (sfp->location, noLeft, noRight);
-                    sfp->partial = (sfp->partial || noLeft || noRight);
+                    FreeAllFuzz (new_gene->location);
+                    SetSeqLocPartial (new_gene->location, noLeft, noRight);
+                    new_gene->partial = (new_gene->partial || noLeft || noRight);
                   }
                 }
               }
@@ -3199,11 +3216,13 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
     p4 = StaticPrompt (k, "Last Name", 0, 0, programFont, 'c');
     p5 = StaticPrompt (k, "Sfx", 0, 0, programFont, 'c');
 
-    adp->stdAuthor = CreateTagListDialog (adp->stdGrp, rows, 4, spacing,
-                                          author_types, std_author_widths,
-                                          author_popups,
-                                          StdAuthListPtrToAuthorDialog,
-                                          AuthorDialogToStdAuthListPtr);
+    adp->stdAuthor = CreateTagListDialogEx3 (adp->stdGrp, rows, 4, spacing,
+                                             author_types, std_author_widths,
+                                             author_popups,
+                                             TRUE, FALSE,
+                                             StdAuthListPtrToAuthorDialog,
+                                             AuthorDialogToStdAuthListPtr,
+                                             NULL, NULL, FALSE, TRUE);
     adp->type = 1;
 
     tlp = (TagListPtr) GetObjectExtra (adp->strAuthor);
@@ -8400,7 +8419,7 @@ extern DialoG ValueListDialog (GrouP h, Uint2 num_rows, Int2 width, ValNodePtr c
   Int4            i;
 
   p = HiddenGroup (h, 3, 0, NULL);
-  SetGroupSpacing (p, 2, 2);
+  SetGroupSpacing (p, 3, 3);
   dlg = (ValueListDialogPtr) MemNew (sizeof(ValueListDialogData));
 
   SetObjectExtra (p, dlg, CleanupValueListDialog);
@@ -9041,7 +9060,25 @@ NLM_EXTERN ValNodePtr GetViewedSeqEntryList (void)
 }
 
 
-NLM_EXTERN SeqEntryPtr RestoreFromFile (CharPtr path)
+static void AddCitSubFromSeqSubmit (SeqEntryPtr sep, SeqSubmitPtr ssp)
+{
+  SeqDescPtr    sdp;
+  PubdescPtr    pdp;
+
+  if (sep == NULL || ssp == NULL || ssp->sub == NULL || ssp->sub->cit == NULL) {
+    return;
+  }
+
+  pdp = PubdescNew ();
+  ValNodeAddPointer (&(pdp->pub), PUB_Sub, ssp->sub->cit);
+  ssp->sub->cit = NULL;
+
+  sdp = CreateNewDescriptor (sep, Seq_descr_pub);
+  sdp->data.ptrvalue = pdp;
+}
+
+
+NLM_EXTERN SeqEntryPtr RestoreFromFileEx (CharPtr path, Boolean convert_seqsubmit_to_pub)
 
 {
   BioseqPtr     bsp;
@@ -9051,6 +9088,7 @@ NLM_EXTERN SeqEntryPtr RestoreFromFile (CharPtr path)
   Uint2         entityID;
   SeqEntryPtr   rsult;
   SeqEntryPtr   sep;
+  SeqSubmitPtr  ssp;
 
   rsult = NULL;
   if (path != NULL && path [0] != '\0') {
@@ -9086,6 +9124,10 @@ NLM_EXTERN SeqEntryPtr RestoreFromFile (CharPtr path)
             rsult->data.ptrvalue = sep->data.ptrvalue;
             sep->data.ptrvalue = NULL;
             if (datatype == OBJ_SEQSUB) {
+              ssp = (SeqSubmitPtr) dataptr;
+              if (convert_seqsubmit_to_pub) {
+                AddCitSubFromSeqSubmit(rsult, ssp);
+              }
               SeqSubmitFree ((SeqSubmitPtr) dataptr);
             } else {
               SeqEntryFree (sep);
@@ -9104,13 +9146,19 @@ NLM_EXTERN SeqEntryPtr RestoreFromFile (CharPtr path)
 }
 
 
-NLM_EXTERN Uint2 RestoreEntityIDFromFile (CharPtr path, Uint2 entityID)
+NLM_EXTERN SeqEntryPtr RestoreFromFile (CharPtr path)
+{
+  return RestoreFromFileEx (path, FALSE);
+}
+
+
+NLM_EXTERN Uint2 RestoreEntityIDFromFileEx (CharPtr path, Uint2 entityID, Boolean convert_seqsubmit_to_pub)
 {
   SeqEntryPtr scope, oldsep, currsep;
   Uint2 newid = 0;
 
   scope = SeqEntrySetScope (NULL);
-  oldsep = RestoreFromFile (path);
+  oldsep = RestoreFromFileEx (path, convert_seqsubmit_to_pub);
   currsep = GetTopSeqEntryForEntityID (entityID);
   if (oldsep == NULL || currsep == NULL) {
     SeqEntrySetScope (scope);
@@ -9120,6 +9168,12 @@ NLM_EXTERN Uint2 RestoreEntityIDFromFile (CharPtr path, Uint2 entityID)
     newid = ObjMgrGetEntityIDForChoice (currsep);
   }
   return newid;
+}
+
+
+NLM_EXTERN Uint2 RestoreEntityIDFromFile (CharPtr path, Uint2 entityID)
+{
+  return RestoreEntityIDFromFileEx (path, entityID, FALSE);
 }
 
 
@@ -9139,126 +9193,7 @@ NLM_EXTERN void CloseLog (LogInfoPtr lip)
 }
 
 
-extern CharPtr ValNodeSeqIdName (ValNodePtr vnp)
-{
-  Char buf[100];
-
-  if (vnp == NULL || vnp->data.ptrvalue == NULL)
-  {
-    return NULL;
-  }
-  else
-  {
-    SeqIdWrite (vnp->data.ptrvalue, buf, PRINTID_FASTA_SHORT, sizeof (buf) - 1);
-    return StringSave (buf);
-  }
-}
-
-
-extern void ValNodeSeqIdFree (ValNodePtr vnp)
-{
-  if (vnp != NULL && vnp->data.ptrvalue != NULL)
-  {
-    vnp->data.ptrvalue = SeqIdFree (vnp->data.ptrvalue);
-  }
-}
-
-
-extern ValNodePtr ValNodeSeqIdCopy (ValNodePtr vnp)
-{
-  ValNodePtr vnp_copy = NULL;
-  if (vnp != NULL)
-  {
-    ValNodeAddPointer (&vnp_copy, vnp->choice, SeqIdDup (vnp->data.ptrvalue));
-  }
-  return vnp_copy;
-}
-
-extern Boolean ValNodeSeqIdMatch (ValNodePtr vnp1, ValNodePtr vnp2)
-{
-  if (vnp1 == NULL || vnp2 == NULL)
-  {
-    return FALSE;
-  }
-  if (SeqIdComp (vnp1->data.ptrvalue, vnp2->data.ptrvalue) == SIC_YES) 
-  {
-    return TRUE;
-  } 
-  else 
-  {
-    return FALSE;
-  }
-}
-
-
-static ValNodePtr ValNodeSeqIdListFree (ValNodePtr list)
-{
-  ValNodePtr list_next;
-
-  while (list != NULL) {
-    list_next = list->next;
-    list->next = NULL;
-    list->data.ptrvalue = SeqIdFree (list->data.ptrvalue);
-    list = ValNodeFree (list);
-    list = list_next;
-  }
-  return list;
-}
-
-
-static ValNodePtr ValNodeSeqIdListCopy (ValNodePtr list)
-{
-  ValNodePtr vnp, list_copy = NULL, list_prev = NULL;
-
-  while (list != NULL) {
-    vnp = ValNodeNew (list_prev);
-    vnp->data.ptrvalue = SeqIdDup (list->data.ptrvalue);
-    if (list_copy == NULL) {
-      list_copy = vnp;
-    }
-    list_prev = vnp;
-    list = list->next;
-  }
-  return list_copy;
-}
-
-
-static ValNodePtr SeqIdListToValNodeSeqIdList (SeqIdPtr sip_list)
-{
-  SeqIdPtr sip;
-  ValNodePtr list = NULL, vnp_p = NULL, vnp;
-
-  for (sip = sip_list; sip != NULL; sip = sip->next) {
-    vnp = ValNodeNew (vnp_p);
-    if (vnp_p == NULL) {
-      list = vnp;
-    }
-    vnp->data.ptrvalue = SeqIdDup (sip);
-    vnp_p = vnp;
-  }
-  return list;
-}
-
-
-static SeqIdPtr ValNodeSeqIdListToSeqIdList (ValNodePtr vnp_list)
-{
-  ValNodePtr vnp;
-  SeqIdPtr sip_list = NULL, sip_prev = NULL, sip;
-
-  for (vnp = vnp_list; vnp != NULL; vnp = vnp->next) {
-    sip = SeqIdDup (vnp->data.ptrvalue);
-    if (sip_prev == NULL) {
-      sip_list = sip;
-    } else {
-      sip_prev->next = sip;
-    }
-    sip_prev = sip;
-  }
-  return sip_list;
-}
-
-
-static void EditIdList (SeqIdPtr PNTR sip_list, SeqIdPtr all_list)
+static Boolean EditIdList (SeqIdPtr PNTR sip_list, SeqIdPtr all_list)
 {
   ModalAcceptCancelData acd;
   DialoG                dlg;
@@ -9267,7 +9202,7 @@ static void EditIdList (SeqIdPtr PNTR sip_list, SeqIdPtr all_list)
   GrouP                 h, c;
   ValNodePtr            tmp;
   
-  if (sip_list == NULL || *sip_list == NULL) return;
+  if (sip_list == NULL || *sip_list == NULL) return FALSE;
 
   w = MovableModalWindow(-20, -13, -10, -10, "Constraint", NULL);
   h = HiddenGroup (w, -1, 0, NULL);
@@ -9311,6 +9246,7 @@ static void EditIdList (SeqIdPtr PNTR sip_list, SeqIdPtr all_list)
     tmp = ValNodeSeqIdListFree(tmp);
   }
   Remove (w);
+  return acd.accepted;
 }
 
 
@@ -9332,7 +9268,7 @@ static Boolean EditOneDescriptor (SeqDescPtr sdp)
 typedef struct descriptorstreameditordlg {
   DIALOG_MESSAGE_BLOCK
 
-  DialoG pubdesc_table;
+  DoC    pub_doc;
 
   ValNodePtr               desc_stream_list;
   ValNodePtr               sip_list;
@@ -9341,36 +9277,7 @@ typedef struct descriptorstreameditordlg {
 } DescriptorStreamEditorDlgData, PNTR DescriptorStreamEditorDlgPtr;
 
 
-static Boolean HasAllIds (SeqIdPtr sip_list, ValNodePtr all_sip)
-{
-  Boolean found = FALSE, any_missing = FALSE;
-  ValNodePtr vnp;
-
-  if (sip_list == NULL || all_sip == NULL) {
-    return FALSE;
-  }
-
-  while (sip_list != NULL) {
-    found = FALSE;
-    for (vnp = all_sip; vnp != NULL && !found; vnp = vnp->next) {
-      if (vnp->choice == 0 && SeqIdComp (vnp->data.ptrvalue, sip_list) == SIC_YES) {
-        vnp->choice = 1;
-        found = TRUE;
-      }
-    }
-    sip_list = sip_list->next;
-  }
-  for (vnp = all_sip; vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 0) {
-      any_missing = TRUE;
-    }
-    vnp->choice = 0;
-  }
-  return !any_missing;
-}
-
-
-#define k_WideColumnWidth 40
+#define k_WideColumnWidth 50
 
 
 static CharPtr GetDescriptorFlatFileText (SeqDescPtr sdp)
@@ -9428,10 +9335,40 @@ static CharPtr GetDescriptorFlatFileText (SeqDescPtr sdp)
 
 static CharPtr GetDescriptorText (SeqDescPtr sdp, StdPrintOptionsPtr spop)
 {
-  CharPtr text;
+  CharPtr text = NULL, tmp;
+  ValNode pub_field;
+  PubdescPtr pdp;
 
   if (sdp == NULL) {
     return NULL;
+  } else if (sdp->choice == Seq_descr_pub) {
+    MemSet (&pub_field, 0, sizeof (ValNode));
+    pub_field.choice = FieldType_pub;
+    pub_field.data.intvalue = Publication_field_title;
+    text = GetFieldValueForObject (OBJ_SEQDESC, sdp, &pub_field, NULL);
+    if (text == NULL) {
+      pub_field.data.intvalue = Publication_field_cit;
+      text = GetFieldValueForObject (OBJ_SEQDESC, sdp, &pub_field, NULL);
+      if (text == NULL) {
+        pub_field.data.intvalue = Publication_field_authors;
+        text = GetFieldValueForObject (OBJ_SEQDESC, sdp, &pub_field, NULL);
+      }
+    }
+    if ((pdp = (PubdescPtr) sdp->data.ptrvalue) != NULL
+        && pdp->pub != NULL
+        && pdp->pub->choice == PUB_Sub) {
+      if (text == NULL) {
+        text = StringSave ("CitSub");
+      } else {
+        tmp = (CharPtr) MemNew (sizeof (Char) * (StringLen (text) + 8));
+        sprintf (tmp, "CitSub:%s", text);
+        text = MemFree (text);
+        text = tmp;
+      }
+    }
+    if (text == NULL) {
+      text = StringSave ("No information for pub");
+    }
   } else {
     text = GetDescriptorFlatFileText (sdp);
     if (text == NULL) 
@@ -9457,174 +9394,216 @@ static CharPtr GetDescriptorText (SeqDescPtr sdp, StdPrintOptionsPtr spop)
 }
 
 
-static void 
-AddOnePublicationToTableDisplayList 
-(ValNodePtr PNTR    row_list, 
- DescStreamPtr      d,
- StdPrintOptionsPtr spop,
- ValNodePtr         sip_list)
-
+static void AddOnePublicationToPubDoc (DoC doc,  DescStreamPtr d, ParPtr ParFmt, ColPtr ColFmt)
 {
-  ValNodePtr     new_row = NULL;
-  Char           buf[k_WideColumnWidth];
+  Char    txt[300];
+  CharPtr tmp;
+  Char    buf[k_WideColumnWidth];
 
-  if (row_list == NULL || d == NULL)
-  {
+  if (doc == NULL || d == NULL) {
     return;
   }
 
+
   if (d->replace == NULL) {
-    ValNodeAddPointer (&new_row, 4, StringSave ("    "));
-    ValNodeAddPointer (&new_row, 8, StringSave ("Undelete"));
+    sprintf (txt, " \tUndelete\t");
   } else {
-    ValNodeAddPointer (&new_row, 4, StringSave ("Edit"));
-    ValNodeAddPointer (&new_row, 8, StringSave ("Delete"));
+    sprintf (txt, "Edit\tDelete\t");
   }
 
   if (d->orig == NULL) {
-    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave ("New"));
+    StringCat (txt, "New\t");
   } else {
-    ValNodeAddPointer (&new_row, k_WideColumnWidth, GetDescriptorText (d->orig, spop));
+    tmp = GetDescriptorText (d->orig, spop);
+    if (StringLen (tmp) > k_WideColumnWidth) {
+      tmp[k_WideColumnWidth] = 0;
+    }
+    StringCat (txt, tmp);
+    StringCat (txt, "\t");
+    tmp = MemFree (tmp);
   }
 
   if (d->replace == NULL) {
-    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave ("Deleted"));
+    StringCat (txt, "Deleted\t");
   } else {
-    ValNodeAddPointer (&new_row, k_WideColumnWidth, GetDescriptorText (d->replace, spop));
+    tmp = GetDescriptorText (d->replace, spop);
+    if (StringLen (tmp) > k_WideColumnWidth) {
+      tmp[k_WideColumnWidth] = 0;
+    }
+    StringCat (txt, tmp);
+    StringCat (txt, "\t");
+    tmp = MemFree (tmp);
   }
 
   if (d->owners == NULL) {
-    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave ("No owners - will be deleted"));
-  } else if (HasAllIds(d->owners, sip_list)) {
-    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave ("All"));
+    StringCat (txt, "No owners - will be deleted\t");
+  } else if (d->on_all) {
+    StringCat (txt, "All\t");
   } else {
     SeqIdWrite (d->owners, buf, PRINTID_FASTA_ALL, sizeof (buf) - 1);
-    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave (buf));
+    StringCat (txt, buf);
+    StringCat (txt, "\t");
   }
 
   if (d->num_dependent == 0) {
-    ValNodeAddPointer (&new_row, 20, StringSave (""));
+    StringCat (txt, " \n");
   } else {
-    sprintf (buf, "%d featcit", d->num_dependent);
-    ValNodeAddPointer (&new_row, 20, StringSave (buf));
+    sprintf (buf, "%d featcit\n", d->num_dependent);
+    StringCat (txt, buf);
   }
-    
-  ValNodeAddPointer (row_list, 0, new_row);
+
+  AppendText (doc, txt, ParFmt, ColFmt, programFont);
 }
-
-
-static ValNodePtr AddNewControls (void)
-{
-  ValNodePtr row = NULL;
-
-  ValNodeAddPointer (&row, 4, StringSave ("    "));
-  ValNodeAddPointer (&row, 8, StringSave ("        "));
-  ValNodeAddPointer (&row, k_WideColumnWidth, StringSave ("Add new publication"));
-  return row;
-}
-
 
 static void PublicationListDialogRedraw (DescriptorStreamEditorDlgPtr dlg)
 {
-  StdPrintOptionsPtr       spop = NULL;
-  ValNodePtr               row_list = NULL, vnp;
+  ValNodePtr         vnp;
+  RecT               r;
+  WindoW             temport;
+  Int4               i;
+  ParData            ParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
+  ColData            ColFmt[] = 
+  {
+    {0, 0, 5, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, 9, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, k_WideColumnWidth, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, k_WideColumnWidth, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, k_WideColumnWidth, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, k_WideColumnWidth, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, 20, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, TRUE}
+  };
 
   if (dlg == NULL)
   {
     return;
   }
   
-  spop = StdPrintOptionsNew (NULL);
-  if (spop == NULL) 
-  {
-    Message (MSG_FATAL, "StdPrintOptionsNew failed");
-    return;
+  Reset (dlg->pub_doc);
+
+  SelectFont (programFont);
+  for (i = 0; i < sizeof (ColFmt) / sizeof (ColData); i++) {
+    ColFmt[i].pixWidth = ColFmt[i].charWidth * CharWidth('0');
   }
-  
-  spop->newline = ";";
-  spop->indent = "";
   
   /* make row list for table display and update table display */
   for (vnp = dlg->desc_stream_list;
        vnp != NULL;
        vnp = vnp->next)
   {
-    AddOnePublicationToTableDisplayList (&row_list, vnp->data.ptrvalue, spop, dlg->sip_list);
+    AddOnePublicationToPubDoc (dlg->pub_doc, vnp->data.ptrvalue, &ParFmt, ColFmt);
   }
-  ValNodeAddPointer (&row_list, 0, AddNewControls());
-  PointerToDialog (dlg->pubdesc_table, row_list);
-  row_list = FreeTableDisplayRowList (row_list);
-  spop = StdPrintOptionsFree (spop);
-  
-  
+  AppendText (dlg->pub_doc, " \t \tAdd new publication\n", &ParFmt, ColFmt, programFont);
+
+
+  temport = SavePort (dlg->pub_doc);
+  Select (dlg->pub_doc);
+  ObjectRect (dlg->pub_doc, &r);
+  InvalRect (&r);  
+  RestorePort (temport);
+  Update ();
+
+
 }
 
 
-static void PublicationListDblClick (PoinT cell_coord, CharPtr header_text, CharPtr cell_text, Pointer userdata)
+static Boolean ShadePubButtons (DoC d, Int2 item, Int2 row, Int2 col)
+
 {
   DescriptorStreamEditorDlgPtr dlg;
-  ValNodePtr                   vnp;
-  Int4                         d_num;
-  DescStreamPtr                d;
-  
-  dlg = (DescriptorStreamEditorDlgPtr) userdata;
-  if (dlg == NULL)
-  {
-    return;
+  Boolean    shade = FALSE;
+
+  dlg = (DescriptorStreamEditorDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL || dlg->desc_stream_list == NULL) {
+    return FALSE;
   }
+  if (item < 1) {
+    shade = FALSE;
+  } else if (item == ValNodeLen (dlg->desc_stream_list) + 1) {
+    if (col == 3) {
+      shade = TRUE;
+    } else {
+      shade = FALSE;
+    }
+  } else if (col == 1 || col == 2) {
+    shade = TRUE;
+  }
+  return shade;  
+}
+
+
+static void ClickPubDoc (DoC d, PoinT pt)
+{
+  DescriptorStreamEditorDlgPtr dlg;
+  Int2                         item, row, col;
+  RecT                         rct;
+  DescStreamPtr                ds;
+  ValNodePtr                   vnp;
+  Boolean                      changed = FALSE;
+  Int2                         d_num;
   
-  for (vnp = dlg->desc_stream_list, d_num = 0;
-       vnp != NULL && d_num < cell_coord.y;
+  dlg = (DescriptorStreamEditorDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  
+  MapDocPoint (d, pt, &item, &row, &col, &rct);
+  if (item == 0) return;
+  for (vnp = dlg->desc_stream_list, d_num = 1;
+       vnp != NULL && d_num < item;
        vnp = vnp->next, d_num++)
   {
   }
-  
-  if (vnp == NULL || (d = (DescStreamPtr) vnp->data.ptrvalue) == NULL)
-  {
-    if (cell_coord.y == d_num && cell_coord.x == 2) 
+
+  if (vnp == NULL || (ds = (DescStreamPtr) vnp->data.ptrvalue) == NULL) {
+    /* add new publication */
+    ds = DescStreamNew (NULL, NULL);
+    ds->replace = SeqDescrNew (NULL);
+    ds->replace->choice = Seq_descr_pub;
+    ds->replace->data.ptrvalue = PubdescNew ();
+    if (EditOneDescriptor (ds->replace))
     {
-      d = DescStreamNew (NULL, NULL);
-      d->replace = SeqDescrNew (NULL);
-      d->replace->choice = Seq_descr_pub;
-      d->replace->data.ptrvalue = PubdescNew ();
-      if (EditOneDescriptor (d->replace))
-      {
-        d->owners = ValNodeSeqIdListToSeqIdList (dlg->sip_list);
-        ValNodeAddPointer (&(dlg->desc_stream_list), 0, d);
-      }
-      else
-      {
-        d = DescStreamFree (d);
-      }
+      ds->owners = ValNodeSeqIdListToSeqIdList (dlg->sip_list);
+      ValNodeAddPointer (&(dlg->desc_stream_list), 0, ds);
+      changed = TRUE;
+    }
+    else
+    {
+      ds = DescStreamFree (ds);
+    }
+  } else {
+
+    switch (col) {
+      case 1:
+      case 3:
+      case 4:
+        /* edit */
+        changed = EditOneDescriptor (ds->replace);
+        break;
+      case 2:
+        /* delete */
+        if (ds->replace == NULL) {
+          ds->replace = AsnIoMemCopy (ds->orig, (AsnReadFunc) SeqDescAsnRead, (AsnWriteFunc) SeqDescAsnWrite);
+        } else {
+          if (ANS_YES != Message (MSG_YN, "Are you sure you want to delete the publication?"))
+          {
+            return;
+          }
+          ds->replace = SeqDescFree (ds->replace);
+          changed = TRUE;
+        }
+        break;
+      case 5:
+        /* edit owner list */
+        if (EditIdList (&(ds->owners), dlg->sip_list)) {
+          ds->on_all = IdListsMatch(ds->owners, dlg->sip_list);
+          changed = TRUE;
+        }
+        break;
     } 
-    else 
-    {
-      return;
-    }
-  } 
-  else if (cell_coord.x == 1)
-  {
-    if (d->replace == NULL) {
-      d->replace = AsnIoMemCopy (d->orig, (AsnReadFunc) SeqDescAsnRead, (AsnWriteFunc) SeqDescAsnWrite);
-    } else {
-      if (ANS_YES != Message (MSG_YN, "Are you sure you want to delete the publication?"))
-      {
-        return;
-      }
-      d->replace = SeqDescFree (d->replace);
-    }
   }
-  else if (cell_coord.x == 4) 
-  {
-    /* edit owner list */
-    EditIdList (&(d->owners), dlg->sip_list);
+
+
+  if (changed) {
+    PublicationListDialogRedraw (dlg);
   }
-  else
-  {
-    EditOneDescriptor (d->replace);
-  }
-  PublicationListDialogRedraw (dlg);
- 
 }
 
 
@@ -9692,11 +9671,12 @@ NLM_EXTERN DialoG DescriptorStreamEditor (GrouP h,  Nlm_ChangeNotifyProc change_
   dlg->fromdialog = DialogToDescriptorStream;
   dlg->change_notify = change_notify;
   dlg->change_userdata = change_userdata;
+  SelectFont (programFont);
 
-  dlg->pubdesc_table = TableDisplayDialog (p, stdCharWidth * 110, stdLineHeight * 16, 0, 2,
-                                       PublicationListDblClick, dlg,
-                                       NULL, NULL);
-
+  dlg->pub_doc = DocumentPanel (p, CharWidth('0') * 150, stdLineHeight * 12);
+  SetObjectExtra (dlg->pub_doc, dlg, NULL);
+  SetDocProcs (dlg->pub_doc, ClickPubDoc, NULL, NULL, NULL);
+  SetDocShade (dlg->pub_doc, NULL, NULL, ShadePubButtons, NULL);
 
   return (DialoG) p;
 }

@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_buffer.c,v 6.10 2003/02/25 16:26:58 lavr Exp $
+/* $Id: test_ncbi_buffer.c,v 6.11 2011/03/19 03:04:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,7 +26,7 @@
  * Author:  Denis Vakatov
  *
  * File Description:
- *   Test suite for "ncbi_buffer.[ch]", the memory-resident FIFO storage area
+ *   Test suite for "ncbi_buffer.[ch]", a memory-resident FIFO storage area
  *
  */
 
@@ -38,9 +38,10 @@
 #include "test_assert.h"
 
 
-static unsigned s_Rand(void)
-{   /* a uniform random number generator */
-    static unsigned s_Random = 1;
+/* a (primitive) uniform random number generator :-) */
+static unsigned int s_Rand(void)
+{
+    static unsigned int s_Random = 1;
     s_Random = s_Random * 1103515245 + 12345;
     return (s_Random / 65536) % 32768;
 }
@@ -48,7 +49,7 @@ static unsigned s_Rand(void)
 
 extern int main(void)
 {
-#  define X_MAX_N_IO  (unsigned) 4
+#  define X_MAX_N_IO  (unsigned)  4
 #  define X_MAX_READ  (size_t)   (3 * BUF_DEF_CHUNK_SIZE)
 #  define X_TIMES     (unsigned) (s_Rand() % X_MAX_N_IO)
 #  define X_BYTES     (size_t)   (s_Rand() % X_MAX_READ)
@@ -65,9 +66,14 @@ extern int main(void)
         assert(BUF_Peek(buf, charbuf, sizeof(charbuf)) == 2);
         assert(BUF_PushBack(&buf, (const char*) "BB", 2));
         assert(BUF_PushBack(&buf, (const char*) "aa", 2));
-        assert(BUF_Write(&buf, (const char*) "23", 3));
+        assert(BUF_Write(&buf, (const char*) "23\0", 3));
         assert(BUF_Read(buf, charbuf, sizeof(charbuf)) == 9);
         assert(strcmp(charbuf, (const char*) "aaBB0123") == 0);
+        assert(BUF_Prepend(&buf, "Hello World\0", 12));
+        assert(BUF_Read(buf, 0, 6) == 6);
+        assert(BUF_PushBack(&buf, "Goodbye ", 8));
+        assert(BUF_Read(buf, charbuf, sizeof(charbuf)) == 14);
+        assert(strcmp(charbuf, (const char*) "Goodbye World") == 0);
         BUF_Destroy(buf);
         buf = 0;
     }}
@@ -117,7 +123,7 @@ extern int main(void)
 
             /* read (or just discard) the data */
             if (do_peek  &&  s_Rand() % 2 == 0)
-                n_bytes = BUF_Read(buf, 0, n_bytes);
+                n_bytes = BUF_Read(buf, 0,       n_bytes);
             else
                 n_bytes = BUF_Read(buf, charbuf, n_bytes);
 
@@ -132,7 +138,7 @@ extern int main(void)
                 assert(BUF_PushBack
                        (&buf, charbuf + n_bytes - n_pushback, n_pushback));
                 assert(BUF_Read
-                       (buf, charbuf + n_bytes - n_pushback, n_pushback));
+                       ( buf, charbuf + n_bytes - n_pushback, n_pushback));
             }
 
             /* write the read data to the output stream */
@@ -154,7 +160,7 @@ extern int main(void)
             assert(BUF_PushBack
                    (&buf, charbuf + n_bytes - n_pushback, n_pushback));
             assert(BUF_Read
-                   (buf, tmp, n_pushback) == n_pushback);
+                   ( buf, tmp, n_pushback) == n_pushback);
             memcpy(charbuf + n_bytes - n_pushback, tmp, n_pushback);
         }}
         fprintf(stderr, "\t\tBUF_Read/flush %5lu\n", (unsigned long) n_bytes);
@@ -210,48 +216,8 @@ extern int main(void)
         }
     }}
 
-
     /* cleanup & exit */
     BUF_Destroy(buf1);
     BUF_Destroy(buf);
     return 0;
 }
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: test_ncbi_buffer.c,v $
- * Revision 6.10  2003/02/25 16:26:58  lavr
- * Log moved to end; code re-indented
- *
- * Revision 6.9  2003/01/08 02:01:27  lavr
- * BUF_Destroy() made not returning a value
- *
- * Revision 6.8  2002/03/22 19:46:30  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.7  2002/01/16 21:23:14  vakatov
- * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
- *
- * Revision 6.6  2001/04/23 18:07:22  vakatov
- * + BUF_PeekAt()
- *
- * Revision 6.5  2000/03/24 23:12:12  vakatov
- * Starting the development quasi-branch to implement CONN API.
- * All development is performed in the NCBI C++ tree only, while
- * the NCBI C tree still contains "frozen" (see the last revision) code.
- *
- * Revision 6.4  2000/02/23 22:34:37  vakatov
- * Can work both "standalone" and as a part of NCBI C++ or C toolkits
- *
- * Revision 6.3  1999/11/22 16:12:54  vakatov
- * Allow to #include ncbi_buffer.h as a local
- *
- * Revision 6.2  1999/11/12 17:31:51  vakatov
- * Cosmetics -- get rid of an extra warning in Release build
- *
- * Revision 6.1  1999/10/12 16:33:50  vakatov
- * Moved all TEST suite code from "ncbi_buffer.c" to "test/test_ncbi_buffer.c"
- *
- * ===========================================================================
- */

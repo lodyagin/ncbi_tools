@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_heapmgr.c,v 6.21 2010/02/05 20:35:04 kazimird Exp $
+/* $Id: test_ncbi_heapmgr.c,v 6.22 2011/06/10 03:44:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,11 +35,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#if 0
-#  define eLOG_Warning eLOG_Fatal
-#  define eLOG_Error   eLOG_Fatal
-#  include "../ncbi_heapmgr.c"
-#endif
 /* This header must go last */
 #include "test_assert.h"
 

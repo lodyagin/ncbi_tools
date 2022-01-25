@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.153 2010/03/23 15:44:41 kazimird Exp $
+/* $Id: blast_setup.c,v 1.158 2011/06/13 17:34:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.153 2010/03/23 15:44:41 kazimird Exp $";
+    "$Id: blast_setup.c,v 1.158 2011/06/13 17:34:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_setup.h>
@@ -50,18 +50,35 @@ Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
                             Blast_Message** error_return)
 {
     Int4 index = 0;
+    Int2 retval = 0;
 
     if (sbp == NULL || scoring_options == NULL) {
         Blast_PerrorWithLocation(error_return, BLASTERR_INVALIDPARAM, -1);
         return 1;
     }
 
+    /* Fill values for gumbel parameters*/
+    if (program == eBlastTypeBlastn) {
+        /* TODO gumbel parameters are not supported for nucleotide search yet  
+        retval = 
+                Blast_KarlinBlkNuclGappedCalc(sbp->kbp_gap_std[index],
+                    scoring_options->gap_open, scoring_options->gap_extend, 
+                    scoring_options->reward, scoring_options->penalty, 
+                    sbp->kbp_std[index], &(sbp->round_down), error_return); */
+        if (sbp->gbp) sfree(sbp->gbp->p);
+        sfree(sbp->gbp);
+    } else if (sbp->gbp) {
+        retval = Blast_GumbelBlkCalc(sbp->gbp,
+                    scoring_options->gap_open, scoring_options->gap_extend,
+                    sbp->name, error_return);
+    }
+    if (retval)  return retval;
+
     /* Allocate and fill values for a gapped Karlin block, given the scoring
        options, then copy it for all the query contexts, as long as they're
        contexts that will be searched (i.e.: valid) */
     for (index = query_info->first_context;
          index <= query_info->last_context; index++) {
-        Int2 retval = 0;
 
         if ( !query_info->contexts[index].is_valid ) {
             continue;
@@ -71,11 +88,26 @@ Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
 
         /* At this stage query sequences are nucleotide only for blastn */
         if (program == eBlastTypeBlastn) {
-            retval = 
+          /* If reward/penalty are both zero the calling program is
+           * indicating that a matrix must be used to score both the
+           * ungapped and gapped alignments.  If this is the case
+           * set reward/penalty to allowed values so that extraneous
+           * KA stats can be performed without error. -RMH-
+           */
+            if ( scoring_options->reward == 0 &&  scoring_options->penalty == 0 )
+            {
+              retval =
                 Blast_KarlinBlkNuclGappedCalc(sbp->kbp_gap_std[index],
-                    scoring_options->gap_open, scoring_options->gap_extend, 
-                    scoring_options->reward, scoring_options->penalty, 
+                    scoring_options->gap_open, scoring_options->gap_extend,
+                    BLAST_REWARD, BLAST_PENALTY,
                     sbp->kbp_std[index], &(sbp->round_down), error_return);
+            }else {
+              retval =
+                Blast_KarlinBlkNuclGappedCalc(sbp->kbp_gap_std[index],
+                    scoring_options->gap_open, scoring_options->gap_extend,
+                    scoring_options->reward, scoring_options->penalty,
+                    sbp->kbp_std[index], &(sbp->round_down), error_return);
+            }
         } else {
             retval = 
                 Blast_KarlinBlkGappedCalc(sbp->kbp_gap_std[index],
@@ -307,11 +339,32 @@ Blast_ScoreBlkMatrixInit(EBlastProgramType program_number,
         return 1;
     }
 
+    /* Matrix only scoring is used to disable the greedy extension 
+       optimisations which avoid use of a full-matrix.  This is 
+       currently only turned on in RMBlastN -RMH-  */
+    sbp->matrix_only_scoring = FALSE;
+
     if (program_number == eBlastTypeBlastn) {
 
         BLAST_ScoreSetAmbigRes(sbp, 'N');
-        sbp->penalty = scoring_options->penalty;
-        sbp->reward = scoring_options->reward;
+
+        /* If reward/penalty are both zero the calling program is
+         * indicating that a matrix must be used to score both the
+         * ungapped and gapped alignments.  Set the new 
+         * matrix_only_scoring.  For now reset reward/penalty to 
+         * allowed blastn values so that extraneous KA stats can be 
+         * performed without error. -RMH-
+         */
+        if ( scoring_options->penalty == 0 && scoring_options->reward == 0 )
+        {
+           sbp->matrix_only_scoring = TRUE;
+           sbp->penalty = BLAST_PENALTY;
+           sbp->reward = BLAST_REWARD;
+        }else {
+           sbp->penalty = scoring_options->penalty;
+           sbp->reward = scoring_options->reward;
+        }
+
         if (scoring_options->matrix && *scoring_options->matrix != NULLB) {
  
             sbp->read_in_matrix = TRUE;
@@ -367,6 +420,11 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
 
     *sbpp = sbp;
     sbp->scale_factor = scale_factor;
+
+    /* Flag to indicate if we are using cross_match-like complexity
+       adjustments on the raw scores.  RMBlastN is the currently 
+       the only program using this flag. -RMH- */
+    sbp->complexity_adjusted_scoring = scoring_options->complexity_adjusted_scoring;
 
     status = Blast_ScoreBlkMatrixInit(program_number, scoring_options, sbp, get_path);
     if (status) {
@@ -610,8 +668,8 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
            Int8 effective_search_space = db_length - (db_num_seqs*(query_info->contexts[index].length_adjustment));
            query_info->contexts[index].eff_searchsp = effective_search_space;
         }
-       
-       return 0;
+
+        return 0;
    }
 
    /* N.B.: the old code used kbp_gap_std instead of the kbp_gap alias (which
@@ -640,13 +698,28 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
           * only need one of them.
           */
          if (program_number == eBlastTypeBlastn) {
-             Blast_GetNuclAlphaBeta(scoring_options->reward, 
-                                    scoring_options->penalty, 
-                                    scoring_options->gap_open, 
-                                    scoring_options->gap_extend, 
-                                    sbp->kbp_std[index], 
+             /* Setting reward and penalty to zero is being used to indicate
+              * that matrix scoring should be used for ungapped and gapped
+              * alignment.  For now reward/penalty are being reset to the
+              * default blastn values to not disturb the KA calcs  -RMH- */
+             if ( scoring_options->reward == 0 && scoring_options->penalty == 0 )
+             {
+                 Blast_GetNuclAlphaBeta(BLAST_REWARD,
+                                    BLAST_PENALTY,
+                                    scoring_options->gap_open,
+                                    scoring_options->gap_extend,
+                                    sbp->kbp_std[index],
                                     scoring_options->gapped_calculation,
                                     &alpha, &beta);
+             }else {
+                 Blast_GetNuclAlphaBeta(scoring_options->reward,
+                                    scoring_options->penalty,
+                                    scoring_options->gap_open,
+                                    scoring_options->gap_extend,
+                                    sbp->kbp_std[index],
+                                    scoring_options->gapped_calculation,
+                                    &alpha, &beta);
+             }
          } else {
              BLAST_GetAlphaBeta(sbp->name, &alpha, &beta,
                                 scoring_options->gapped_calculation, 
@@ -733,10 +806,42 @@ BLAST_GapAlignSetUp(EBlastProgramType program_number,
 {
    Int2 status = 0;
    Uint4 max_subject_length;
-   Int8 total_length;
-   Int4 num_seqs;
+   Int8 total_length = -1;
+   Int4 num_seqs = -1;
 
-   BLAST_GetSubjectTotals(seq_src, &total_length, &num_seqs);
+   if (seq_src) {
+      total_length = BlastSeqSrcGetTotLenStats(seq_src);
+      if (total_length <= 0)
+          total_length = BlastSeqSrcGetTotLen(seq_src);
+
+      /* Set the database length for new FSC */
+      if (sbp->gbp) {
+          Int8 dbl = total_length;
+          /* if a database length is overriden and we are
+             not in bl2seq mode */
+          if (dbl && eff_len_options->db_length) {
+              dbl = eff_len_options->db_length;
+          }
+          sbp->gbp->db_length = 
+              (Blast_SubjectIsTranslated(program_number))?
+              dbl/3 : dbl;
+      }
+
+      if (total_length > 0) {
+          num_seqs = BlastSeqSrcGetNumSeqsStats(seq_src);
+          if (num_seqs <= 0)
+              num_seqs = BlastSeqSrcGetNumSeqs(seq_src);
+      } else {
+          /* Not a database search; each subject sequence is considered
+             individually */
+          Int4 oid = 0;  /* Get length of first sequence. */
+          if ( (total_length = BlastSeqSrcGetSeqLen(seq_src, (void*) &oid)) < 0) {
+              total_length = -1;
+              num_seqs = -1;
+          }
+          num_seqs = 1;
+      }
+   }
 
    /* Initialize the effective length parameters with real values of
       database length and number of sequences */

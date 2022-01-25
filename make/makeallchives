@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives 117677 2008-01-18 17:07:17Z vakatov $
+# $Id: makeallchives 279005 2011-04-26 15:38:15Z bollin $
 #
 #
 # Creates all archives from a directory above 'ncbi'
@@ -28,7 +28,7 @@ datafiles="humrep.fsa lineages.txt sequin.hlp asn2ff.prt bstdt.val \
    KShopp.flt KSkyte.flt KSpur.flt KSpyr.flt \
    BLOSUM45 BLOSUM80 PAM30 PAM70 KSpcc.mat \
    ecnum_ambiguous.txt ecnum_specific.txt UniVec.nhr UniVec.nin UniVec.nsq \
-   UniVec_Core.nhr UniVec_Core.nin UniVec_Core.nsq"
+   UniVec_Core.nhr UniVec_Core.nin UniVec_Core.nsq organelle_products.prt"
 
 configfiles="nlmstmanrc sequinrc ncbidtrc"
 

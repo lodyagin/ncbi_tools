@@ -1,4 +1,4 @@
-/*  $Id: ncbi_ansi_ext.c,v 6.19 2006/03/07 18:15:14 lavr Exp $
+/* $Id: ncbi_ansi_ext.c,v 6.23 2011/06/21 18:49:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,7 +37,7 @@
 
 #ifndef HAVE_STRDUP
 
-extern char* strdup(const char* str)
+char* strdup(const char* str)
 {
     size_t size = strlen(str) + 1;
     char*   res = (char*) malloc(size);
@@ -51,7 +51,7 @@ extern char* strdup(const char* str)
 
 #ifndef HAVE_STRNDUP
 
-extern char* strndup(const char* str, size_t n)
+char* strndup(const char* str, size_t n)
 {
     const char* end = n   ? memchr(str, '\0', n) : 0;
     size_t     size = end ? (size_t)(end - str)  : n;
@@ -69,7 +69,7 @@ extern char* strndup(const char* str, size_t n)
 #ifndef HAVE_STRCASECMP
 
 /* We assume that we're using ASCII-based charsets */
-extern int strcasecmp(const char* s1, const char* s2)
+int strcasecmp(const char* s1, const char* s2)
 {
     const unsigned char* p1 = (const unsigned char*) s1;
     const unsigned char* p2 = (const unsigned char*) s2;
@@ -89,7 +89,7 @@ extern int strcasecmp(const char* s1, const char* s2)
 }
 
 
-extern int strncasecmp(const char* s1, const char* s2, size_t n)
+int strncasecmp(const char* s1, const char* s2, size_t n)
 {
     const unsigned char* p1 = (const unsigned char*) s1;
     const unsigned char* p2 = (const unsigned char*) s2;
@@ -111,7 +111,7 @@ extern int strncasecmp(const char* s1, const char* s2, size_t n)
 #endif /*HAVE_STRCASECMP*/
 
 
-extern char* strupr(char* s)
+char* strupr(char* s)
 {
     unsigned char* t = (unsigned char*) s;
 
@@ -123,7 +123,7 @@ extern char* strupr(char* s)
 }
 
 
-extern char* strlwr(char* s)
+char* strlwr(char* s)
 {
     unsigned char* t = (unsigned char*) s;
 
@@ -135,73 +135,37 @@ extern char* strlwr(char* s)
 }
 
 
-extern char* strncpy0(char* s1, const char* s2, size_t n)
+char* strncpy0(char* s1, const char* s2, size_t n)
 {
     *s1 = '\0';
     return strncat(s1, s2, n);
 }
 
 
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_ansi_ext.c,v $
- * Revision 6.19  2006/03/07 18:15:14  lavr
- * Optimize strndup()
- *
- * Revision 6.18  2006/03/07 17:54:44  ivanov
- * Fixed compilation error in strndup
- *
- * Revision 6.17  2006/03/07 17:18:51  lavr
- * +strndup
- *
- * Revision 6.16  2004/10/08 16:16:24  ivanov
- * Removed extra ")"
- *
- * Revision 6.15  2004/10/08 15:45:19  lavr
- * Make lower-case comparisons in no-case functions
- *
- * Revision 6.14  2002/10/29 22:18:29  lavr
- * Comply with man strdup(2) in the implementation of strdup() here
- *
- * Revision 6.13  2002/10/28 18:55:26  lavr
- * Fix change log to remove duplicate log entry for R6.12
- *
- * Revision 6.12  2002/10/28 18:52:07  lavr
- * Conditionalize definitions of strdup() and str[n]casecmp()
- *
- * Revision 6.11  2002/10/28 15:41:56  lavr
- * Use "ncbi_ansi_ext.h" privately
- *
- * Revision 6.10  2002/09/24 15:05:45  lavr
- * Log moved to end
- *
- * Revision 6.9  2002/03/19 22:12:28  lavr
- * strcasecmp and strncasecmp are optimized (for ASCII range)
- *
- * Revision 6.8  2001/12/04 15:57:22  lavr
- * Tiny style adjustement
- *
- * Revision 6.7  2000/12/28 21:27:52  lavr
- * ANSI C++ compliant use of malloc (explicit casting of result)
- *
- * Revision 6.6  2000/11/07 21:45:16  lavr
- * Removed isupper/islower checking in strlwr/strupr
- *
- * Revision 6.5  2000/11/07 21:19:38  vakatov
- * Compilation warning fixed;  plus, some code beautification...
- *
- * Revision 6.4  2000/10/18 21:15:53  lavr
- * strupr and strlwr added
- *
- * Revision 6.3  2000/10/06 16:40:23  lavr
- * <string.h> included now in <connect/ncbi_ansi_ext.h>
- * conditional preprocessor statements removed
- *
- * Revision 6.2  2000/05/17 16:11:02  lavr
- * Reorganized for use of HAVE_* defines
- *
- * Revision 6.1  2000/05/15 19:03:41  lavr
- * Initial revision
- *
- * ==========================================================================
- */
+char* strrncpy0(char* s1, const char* s2, size_t n)
+{
+    char* end = (char*) memchr(s2, '\0', n);
+    if (end)
+        n = (size_t)(end - s2);
+    s1 += n;
+    s2 += n;
+    *s1 = '\0';
+    while (n-- > 0)
+        *--s1 = *--s2;
+    return s1;
+}
+
+
+#ifndef HAVE_MEMRCHR
+/* suboptimal but working implementation */
+void* memrchr(const void* s, int c, size_t n)
+{
+    unsigned char* e = (unsigned char*) s + n;
+    size_t i;
+    for (i = 0;  i < n;  i++) {
+        if (*--e == (unsigned char) c)
+            return e;
+    }
+    return 0;
+}
+#endif/*!HAVE_MEMRCHR*/

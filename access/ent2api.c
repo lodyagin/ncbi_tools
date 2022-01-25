@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.117 $
+* $Revision: 1.134 $
 *
 * File Description: 
 *
@@ -962,14 +962,140 @@ static int LIBCALLBACK SortVnpByStr (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
-NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
+static ValNodePtr SplitAtSpaces (CharPtr str)
+
+{
+  Char        ch;
+  CharPtr     ptr;
+  CharPtr     tmp;
+  ValNodePtr  head = NULL;
+  ValNodePtr  tail = NULL;
+
+  if (StringHasNoText (str)) return NULL;
+
+  tmp = StringSave (str);
+  if (tmp == NULL) return NULL;
+
+  str = tmp;
+  while (str != NULL) {
+    ptr = str;
+    ch = *ptr;
+    while (ch == ' ') {
+      ptr++;
+      ch = *ptr;
+    }
+    while (ch != '\0' && ch != ' ' && ch != '/' && ch != '-') {
+      ptr++;
+      ch = *ptr;
+    }
+    if (ch != '\0') {
+      *ptr = '\0';
+      ptr++;
+    } else {
+      ptr = NULL;
+    }
+    if (StringDoesHaveText (str)) {
+      TrimSpacesAroundString (str);
+      ValNodeCopyStrEx (&head, &tail, 0, str);
+    }
+    str = ptr;
+  }
+
+  MemFree (tmp);
+
+  return head;
+}
+
+static Boolean LowerCaseWords (CharPtr str)
+
+{
+  Char        ch;
+  ValNodePtr  head, vnp;
+  Boolean     rsult = FALSE;
+
+  if (StringHasNoText (str)) return FALSE;
+  head = SplitAtSpaces (str);
+  if (head == NULL) return FALSE;
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    if (StringCmp (str, "eISSN") == 0) continue;
+    if (StringCmp (str, "pISSN") == 0) continue;
+    if (StringCmp (str, "mRNA") == 0) continue;
+    if (vnp != head && vnp->next != NULL) {
+      if (StringCmp (str, "a") == 0) continue;
+      if (StringCmp (str, "as") == 0) continue;
+      if (StringCmp (str, "by") == 0) continue;
+      if (StringCmp (str, "for") == 0) continue;
+      if (StringCmp (str, "in") == 0) continue;
+      if (StringCmp (str, "of") == 0) continue;
+    }
+    ch = *str;
+    if (IS_ALPHA (ch)) {
+      if (IS_LOWER (ch)) {
+        rsult = TRUE;
+      }
+    }
+  }
+
+  ValNodeFreeData (head);
+  return rsult;
+}
+
+static Boolean MixedCaseWords (CharPtr str)
+
+{
+  Char        ch;
+  ValNodePtr  head, vnp;
+  Boolean     have_seen_lower;
+  Boolean     rsult = FALSE;
+
+  if (StringHasNoText (str)) return FALSE;
+  head = SplitAtSpaces (str);
+  if (head == NULL) return FALSE;
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    if (StringCmp (str, "eISSN") == 0) continue;
+    if (StringCmp (str, "pISSN") == 0) continue;
+    if (StringCmp (str, "mRNA") == 0) continue;
+    if (StringCmp (str, "PubMed") == 0) continue;
+    if (StringCmp (str, "MeSH") == 0) continue;
+    if (StringCmp (str, "LocusLink") == 0) continue;
+    if (StringCmp (str, "UniGene") == 0) continue;
+    if (StringCmp (str, "UniSTS") == 0) continue;
+    have_seen_lower = FALSE;
+    ch = *str;
+    while (ch != '\0') {
+      if (IS_ALPHA (ch)) {
+        if (IS_UPPER (ch)) {
+          if (have_seen_lower) {
+            rsult = TRUE;
+          }
+        } else if (IS_LOWER (ch)) {
+          have_seen_lower = TRUE;
+        }
+      }
+      str++;
+      ch = *str;
+    }
+  }
+
+  ValNodeFreeData (head);
+  return rsult;
+}
+
+NLM_EXTERN Boolean ValidateEntrez2InfoPtrExEx (
   Entrez2InfoPtr e2ip,
   ValNodePtr PNTR head,
-  Boolean checkMenuNameVariants
+  Boolean checkMenuNameVariants,
+  Boolean checkMenuNameFormat
 )
 
 {
-  Char                       buf [128];
+  Char                       buf [512];
   Char                       ch;
   CharPtr                    db;
   Int2                       dbcount;
@@ -1029,6 +1155,9 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
     dbcount++;
 
     db = e2db->db_name;
+    if (StringICmp (db, "gtr") == 0) continue;
+    if (StringICmp (db, "genomeprj") == 0) continue;
+
     if (StringHasNoText (db)) {
       rsult = FALSE;
       if (StringHasNoText (e2db->db_menu)) {
@@ -1082,7 +1211,14 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
           StringICmp (db, "seqannot") != 0 &&
           StringICmp (db, "toolkit") != 0 &&
           StringICmp (db, "blastdbinfo") != 0 &&
-          StringICmp (db, "virus") != 0) {
+          StringICmp (db, "virus") != 0 &&
+          StringICmp (db, "toolkitall") != 0 &&
+          StringICmp (db, "gencoll") != 0 &&
+          StringICmp (db, "images") != 0 &&
+          StringICmp (db, "geo") != 0 &&
+          StringICmp (db, "journals") != 0 &&
+          StringICmp (db, "genomeprj") != 0 &&
+          StringICmp (db, "gtr") != 0) {
         sprintf (buf, "Database %s has no links", db);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
@@ -1288,6 +1424,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
   }
 
   menuhead = ValNodeSort (menuhead, SortVnpByStr);
+
   last = NULL;
   lastvnp = NULL;
   for (vnp = menuhead; vnp != NULL; vnp = vnp->next) {
@@ -1311,8 +1448,10 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "Rank") == 0 && StringICmp (str, "Ranked standard deviation") == 0) {
             } else if (StringICmp (last, "Book") == 0 && StringICmp (str, "Book's Topic") == 0) {
             } else if (StringICmp (last, "Gene Name") == 0 && StringICmp (str, "Gene Name or Description") == 0) {
+            } else if (StringICmp (last, "Gene Name") == 0 && StringICmp (str, "Gene Name or Alias") == 0) {
             } else if (StringICmp (last, "Submitter") == 0 && StringICmp (str, "Submitter Handle") == 0) {
             } else if (StringICmp (last, "Abstract") == 0 && StringICmp (str, "Abstract/Index Tags") == 0) {
+            } else if (StringICmp (last, "Author") == 0 && StringICmp (str, "Author Cluster ID") == 0) {
             } else if (StringICmp (last, "Author") == 0 && StringICmp (str, "Author Full Name") == 0) {
             } else if (StringICmp (last, "Expression") == 0 && StringICmp (str, "Expression Level") == 0) {
             } else if (StringICmp (last, "Chromosome") == 0 && StringICmp (str, "Chromosome GI") == 0) {
@@ -1339,6 +1478,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "Reference SNP") == 0 && StringICmp (str, "Reference SNP ID") == 0) {
             } else if (StringICmp (last, "Analysis") == 0 && StringICmp (str, "Analysis ID") == 0) {
             } else if (StringICmp (last, "Document") == 0 && StringICmp (str, "Document ID") == 0) {
+            } else if (StringICmp (last, "Study") == 0 && StringICmp (str, "Study Accession") == 0) {
             } else if (StringICmp (last, "Study") == 0 && StringICmp (str, "Study ID") == 0) {
             } else if (StringICmp (last, "Variable") == 0 && StringICmp (str, "Variable ID") == 0) {
             } else if (StringICmp (last, "COG") == 0 && StringICmp (str, "COG group") == 0) {
@@ -1355,6 +1495,32 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "Platform") == 0 && StringICmp (str, "Platform Reporter Type") == 0) {
             } else if (StringICmp (last, "Database") == 0 && StringICmp (str, "Database Name") == 0) {
             } else if (StringICmp (last, "Date") == 0 && StringICmp (str, "Date Discontinued") == 0) {
+            } else if (StringICmp (last, "Accession") == 0 && StringICmp (str, "AccessionID") == 0) {
+            } else if (StringICmp (last, "CategorizedComment") == 0 && StringICmp (str, "CategorizedCommentTitle") == 0) {
+            } else if (StringICmp (last, "Journal") == 0 && StringICmp (str, "JournalName") == 0) {
+            } else if (StringICmp (last, "Project") == 0 && StringICmp (str, "Project ID") == 0) {
+            } else if (StringICmp (last, "Study") == 0 && StringICmp (str, "Study Has SRA Components") == 0) {
+            } else if (StringICmp (last, "Subject") == 0 && StringICmp (str, "Subject Terms") == 0) {
+            } else if (StringICmp (last, "Accession") == 0 && StringICmp (str, "Accession Version") == 0) {
+            } else if (StringICmp (last, "Allele") == 0 && StringICmp (str, "Allele Origin") == 0) {
+            } else if (StringICmp (last, "Allele") == 0 && StringICmp (str, "Allele Type") == 0) {
+            } else if (StringICmp (last, "Attribute") == 0 && StringICmp (str, "Attribute Name") == 0) {
+            } else if (StringICmp (last, "Chromosome") == 0 && StringICmp (str, "Chromosome Accession") == 0) {
+            } else if (StringICmp (last, "Figure Caption") == 0 && StringICmp (str, "Figure Caption Title") == 0) {
+            } else if (StringICmp (last, "Genome Project") == 0 && StringICmp (str, "Genome Projects ID") == 0) {
+            } else if (StringICmp (last, "Journal") == 0 && StringICmp (str, "Journal Author") == 0) {
+            } else if (StringICmp (last, "Library") == 0 && StringICmp (str, "Library Abbreviation") == 0) {
+            } else if (StringICmp (last, "Method Type") == 0 && StringICmp (str, "Method Type Category") == 0) {
+            } else if (StringICmp (last, "Method Type") == 0 && StringICmp (str, "Method Type Weight") == 0) {
+            } else if (StringICmp (last, "Sample") == 0 && StringICmp (str, "Sample Count") == 0) {
+            } else if (StringICmp (last, "Study") == 0 && StringICmp (str, "Study Sccession") == 0) {
+            } else if (StringICmp (last, "Subject") == 0 && StringICmp (str, "Subject Phenotype Status") == 0) {
+            } else if (StringICmp (last, "Validation Result") == 0 && StringICmp (str, "Validation Result Weight") == 0) {
+            } else if (StringICmp (last, "Alias") == 0 && StringICmp (str, "Alias for a variant") == 0) {
+            } else if (StringICmp (last, "CID") == 0 && StringICmp (str, "CIDCount") == 0) {
+            } else if (StringICmp (last, "SID") == 0 && StringICmp (str, "SIDCount") == 0) {
+            } else if (StringICmp (last, "BioProject") == 0 && StringICmp (str, "BioProject ID") == 0) {
+            } else if (StringICmp (last, "Project") == 0 && StringICmp (str, "Project Accession") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);
@@ -1371,11 +1537,43 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
     last = str;
     lastvnp = vnp;
   }
+
+  if (checkMenuNameFormat) {
+    for (vnp = menuhead; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      if (LowerCaseWords (str)) {
+        sprintf (buf, "Lower-case words in field %s [%s]", str, dbnames [vnp->choice]);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+    }
+    for (vnp = menuhead; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      if (MixedCaseWords (str)) {
+        sprintf (buf, "Mixed-case words in field %s [%s]", str, dbnames [vnp->choice]);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
+    }
+  }
+
   ValNodeFreeData (menuhead);
 
   return rsult;
 }
 
+
+NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
+  Entrez2InfoPtr e2ip,
+  ValNodePtr PNTR head,
+  Boolean checkMenuNameVariants
+)
+
+{
+  return ValidateEntrez2InfoPtrExEx (e2ip, head, checkMenuNameVariants, FALSE);
+}
 
 NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
   Entrez2InfoPtr e2ip,
@@ -1383,7 +1581,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
 )
 
 {
-  return ValidateEntrez2InfoPtrEx (e2ip, head, FALSE);
+  return ValidateEntrez2InfoPtrExEx (e2ip, head, FALSE, FALSE);
 }
 
 /* network connection test functions */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.620 $
+* $Revision: 6.669 $
 *
 * File Description: 
 *
@@ -235,6 +235,7 @@ extern void ConsolidateLikeModifiersWithoutSemicolons (IteM i);
 
 extern void CountryLookupWithoutCapFix (IteM i);
 extern void CountryLookupWithCapFix (IteM i);
+NLM_EXTERN void FixMouseStrains (IteM i);
 extern void ExtractProteinFeaturesFromNote (IteM i);
 extern void ConvertPseudoCDSToMiscFeat (IteM i);
 extern void ProcessPseudoMiscFeat (IteM i);
@@ -407,6 +408,7 @@ extern void PrefixDefLines (IteM i);
 extern void MRnaFromCdsProc (Uint2 entityID);
 extern void BioseqViewFormToolBar (GrouP h);
 extern void BioseqViewFormWGSToolBar (GrouP h);
+extern void BioseqViewFormCustomToolBar (GrouP h);
 extern Boolean DoBuildContig (void);
 extern void SetGenome (PopuP p);
 extern PopuP ReplaceBioSourceGencodePopup (DialoG d, PopuP gencode);
@@ -671,16 +673,8 @@ typedef struct sequencesform {
   ButtoN          partialmRNA5;
   ButtoN          partialmRNA3;
 
-  GrouP           annotType;
-  GrouP           annotGrp;
-  ButtoN          partialLft;
-  ButtoN          partialRgt;
-  TexT            geneName;
-  PrompT          protOrRnaPpt;
-  TexT            protOrRnaName;
-  PrompT          protDescPpt;
-  TexT            protDesc;
-  TexT            featcomment;
+  DialoG          feature_info;
+
   TexT            defline;
   ButtoN          orgPrefix;
 
@@ -710,6 +704,8 @@ typedef struct sequencesform {
   NucProtAssocPtr nuc_prot_assoc_list;
 
 } SequencesForm, PNTR SequencesFormPtr;
+
+NLM_EXTERN Boolean IsAnnotTabEmpty (SequencesFormPtr sqfp);
 
 extern ValNodePtr InsertMostUsedFeatureValNodes (ValNodePtr old_list);
 
@@ -797,6 +793,7 @@ extern void RemoveGenomeProjectIDs (IteM i);
 
 extern CharPtr SourceQualValNodeName (ValNodePtr vnp);
 extern ValNodePtr SourceQualValNodeDataCopy (ValNodePtr vnp);
+NLM_EXTERN ValNodePtr LIBCALL SourceQualValNodeCopy (ValNodePtr vnp);
 extern Boolean SourceQualValNodeMatch (ValNodePtr vnp1, ValNodePtr vnp2);
 
 extern ValNodePtr GetSourceQualDescList (Boolean get_subsrc, Boolean get_orgmod, Boolean get_discouraged, Boolean get_discontinued);
@@ -1324,7 +1321,6 @@ CreateListMessage
  CharPtr    msg_after, 
  ValNodePtr id_list);
 
-extern void StringToLower (CharPtr str);
 
 extern Boolean ExportSubmitterBlockTemplate (SeqEntryPtr sep, SeqDescrPtr sdp);
 extern DialoG OrganismSelectionDialog (GrouP parent, CharPtr org_name);
@@ -1350,14 +1346,6 @@ extern GetSamplePtr GetSampleNew (void);
 extern GetSamplePtr GetSampleFree (GetSamplePtr gsp);
 
 
-extern GetSamplePtr
-GetSampleForSeqEntry
-(SeqEntryPtr   sep,
- Uint2         entityID, 
- ParseFieldPtr dst_field_data,
- FilterSetPtr  fsp);
-
-
 extern void ApplyGDSKeyword (IteM i);
 extern void ApplyTPAInferentialKeyword (IteM i);
 extern void ApplyTPAExperimentalKeyword (IteM i);
@@ -1372,7 +1360,7 @@ extern Int2 LIBCALLBACK CorrectRNAStrandednessUseSmart (Pointer data);
 extern void AddGeneFeatureFromTitle (SeqEntryPtr nucsep, CharPtr ttl,  SeqLocPtr slp);
 extern SeqFeatPtr AddProteinFeatureFromDefline (SeqEntryPtr psep, CharPtr title);
 extern void AddCodingRegionFieldsFromProteinTitle (CdRegionPtr crp, CharPtr title, CharPtr PNTR pcomment);
-extern Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num);
+extern Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num, ValNodePtr preferred_list);
 
 extern SeqEntryPtr 
 ImportSequencesFromFileEx
@@ -1627,14 +1615,13 @@ ExtractFromTitleToBioSourceCommonName
  BioSourcePtr biop);
 
 extern void CDSmRNALinkTool (IteM i);
-extern void RemoveFeatureLink (SeqFeatPtr sfp1, SeqFeatPtr sfp2);
-extern void LinkTwoFeatures (SeqFeatPtr dst, SeqFeatPtr sfp);
 
 extern void CombineToCreatePseudoGene (IteM i);
 
 extern void BulkEditCDS (IteM i);
 extern void BulkEditGene (IteM i);
 extern void BulkEditRNA (IteM i);
+extern void BulkEditSource (IteM i);
 
 extern void BulkEditorFeatList (Uint2 entityID, ValNodePtr feat_list);
 extern void BulkEditorDescrList (Uint2 entityID, ValNodePtr descr_list);
@@ -1689,7 +1676,6 @@ extern TSequenceInfoPtr GetAlignmentOptions (Uint1Ptr moltype, TSequenceInfoPtr 
 
 extern void tRNAScanUpdate (IteM i);
 extern void ListFailedTaxonomyLookups (IteM i);
-extern SeqFeatPtr GetGeneForFeature (SeqFeatPtr sfp);
 
 extern void LoadFeatureFieldTable (IteM i);
 
@@ -1720,11 +1706,10 @@ extern void AbbreviateCitSubAffilStates (IteM i);
 extern void RemoveQualityScores (BioseqPtr bsp, FILE *log_fp, BoolPtr data_in_log);
 extern void NewLoadFeatureQualifierTable (IteM i);
 extern void NewLoadSourceQualifierTable (IteM i);
+extern void NewLoadFeatureQualifierTableToolBtn (ButtoN b);
 NLM_EXTERN void CreateTableReaderWindowWithStructuredComments (IteM i);
 extern void ListAllSequences (BioseqPtr bsp, Pointer userdata);
 extern void ChooseCategories (ValNodePtr value_list, Boolean do_choose);
-extern void ChooseCategoriesByStringConstraint (ValNodePtr value_list, StringConstraintXPtr scp, Boolean do_choose);
-extern void CapitalizeFirstLetterOfEveryWord (CharPtr pString);
 
 typedef void (*BulkSetFieldFunc) PROTO ((Pointer, Pointer));
 typedef Pointer (*BulkSetFieldStringFunc) PROTO ((Pointer, ApplyValuePtr));
@@ -1768,8 +1753,21 @@ CreateBulkEditorDialog
  Boolean             collapse_by_default,
  ClickableCallback   single_click_func,
  ClickableCallback   double_click_func);
+NLM_EXTERN DialoG 
+CreateBulkEditorDialogEx 
+(GrouP               h,
+ BulkEdFieldPtr      field_list,
+ ValNodePtr          feat_list,
+ SeqEntryPtr         sep, 
+ Boolean             collapse_by_default,
+ ClickableCallback   single_click_func,
+ ClickableCallback   double_click_func,
+ Pointer             metadata,
+ Boolean             show_only_present);
 
-NLM_EXTERN void ApplyBulkEditorToObjectList (DialoG d);
+NLM_EXTERN void ApplyBulkEditorToObjectList (DialoG d, Boolean do_log);
+
+NLM_EXTERN void SetBulkEditorSortColumn (DialoG d, Int4 col);
 
 NLM_EXTERN void FlipSequenceIntervals (IteM i);
 
@@ -1808,6 +1806,7 @@ extern void ReorderSetByAccessionMenuItem (IteM i);
 extern void DescriptorPropagateMenuItem (IteM i);
 NLM_EXTERN void RepackagePartsMenuItem (IteM i);
 extern void NewSegregateBioseqSetMenuItem (IteM i);
+NLM_EXTERN void SegregateBioseqSetEntityID (Uint2 entityID);
 extern void SequesterSequencesMenuItem (IteM i);
 extern void GetRidOfSegGapMenuItem (IteM i);
 extern void GenerateSeqAlignMenuItem (IteM i);
@@ -1867,6 +1866,7 @@ NLM_EXTERN void AddFeatureBetween (IteM i);
 NLM_EXTERN void ChangeQualifierCase (IteM i);
 NLM_EXTERN void ExternalApplyMoleculeType (IteM i);
 NLM_EXTERN void ApplyGenomeAssemblyComment (IteM i);
+NLM_EXTERN void ApplyAssemblyComment (IteM i);
 NLM_EXTERN void SetReleaseDate(IteM i);
 NLM_EXTERN void NewRemoveTextOutsideString (IteM i);
 
@@ -1875,6 +1875,7 @@ NLM_EXTERN Boolean ValidateTPAHistAlign (BioseqPtr bsp, ValNodePtr PNTR errors);
 NLM_EXTERN void RemoveOldTPAAccessions (UserObjectPtr uop);
 NLM_EXTERN UserObjectPtr GetTPAAssembly (BioseqPtr bsp);
 NLM_EXTERN void SortTPAAssembly (SeqAlignPtr PNTR salp);
+NLM_EXTERN void DisAllowFarFetchForTPAValidation (IteM i);
 
 NLM_EXTERN void TruncateByProtAlign (IteM i);
 NLM_EXTERN void FrameShiftFinder (IteM i);
@@ -1889,10 +1890,105 @@ NLM_EXTERN void AdjustForConsensusSplice (IteM i);
 NLM_EXTERN void ExplodeRNA (IteM i);
 NLM_EXTERN void RemoveFeaturesLikeGaps (IteM i);
 
+NLM_EXTERN void WithdrawSequences (IteM i);
 
-#ifdef OS_MSWIN
-NLM_EXTERN Int4 RunSilent(const char *cmdline);
-#endif
+NLM_EXTERN SeqEntryPtr GetSequencesFromFile (CharPtr path, SeqEntryPtr current_list);
+NLM_EXTERN CharPtr FindValueFromPairInDefline (CharPtr mod_name, CharPtr def_line);
+
+/* This structure holds a list of IDs and titles for a set of sequences.
+ * It can be used to represent the new list of sequences being imported,
+ * the existing list of sequences being imported, suggested changes for
+ * a list of sequences, etc.
+ */
+typedef struct idandtitleedit 
+{
+  CharPtr PNTR id_list;
+  CharPtr PNTR title_list;
+  BoolPtr      is_seg;
+  Int4         num_sequences;
+  Boolean      nuc_only;
+} IDAndTitleEditData, PNTR IDAndTitleEditPtr;
+
+NLM_EXTERN IDAndTitleEditPtr IDAndTitleEditFree (IDAndTitleEditPtr iatep);
+NLM_EXTERN IDAndTitleEditPtr SeqEntryListToIDAndTitleEditEx (SeqEntryPtr list, Boolean nuc_only);
+NLM_EXTERN Boolean ApplyIDAndTitleEditToSeqEntryList (SeqEntryPtr list, IDAndTitleEditPtr iatep);
+NLM_EXTERN void RemoveSourceModifiersFromIdAndTitleEdit (IDAndTitleEditPtr iatep);
+NLM_EXTERN CharPtr GetValueFromTitle (CharPtr mod_name, CharPtr title);
+NLM_EXTERN void RemoveValueFromDefline (CharPtr mod_name, CharPtr def_line);
+NLM_EXTERN CharPtr ReplaceValueInOneDefLine (CharPtr orig_defline, CharPtr value_name, CharPtr new_value);
+NLM_EXTERN Boolean ImportModifiersToIDAndTitleEdit (IDAndTitleEditPtr iatep);
+NLM_EXTERN Boolean ImportModifiersToIDAndTitleEditEx (IDAndTitleEditPtr iatep, ValNodePtr preferred_list);
+NLM_EXTERN void SetSequencesForSubmissionForm (WindoW w, SeqEntryPtr sep_list, Int4 page);
+
+NLM_EXTERN void SplitPCRPrimersByPositionMenuItem (IteM i);
+NLM_EXTERN void SplitPCRPrimersByConstraintsMenuItem (IteM i);
+NLM_EXTERN void MergePCRPrimerSetsMenuItem (IteM i);
+
+NLM_EXTERN Boolean SourceAssistantForDeflines (SeqEntryPtr seq_list, Int4 doc_width, Int2 seqPackage);
+NLM_EXTERN void AddOneSourceQualDesc (ValNodePtr PNTR list, CharPtr name, Boolean is_orgmod, Uint1 subtype, Uint1 subfield);
+
+extern void FixiPCRPrimerSeqsMenuItem (IteM i);
+NLM_EXTERN CharPtr GetPresentModifierNames (CharPtr str);
+NLM_EXTERN void ApplyNamedRNABaseForm (BaseFormPtr bfp, CharPtr rnaName);
+
+typedef enum feature_editor_actions
+{
+  FEAT_ED_EVIDENCE = 1,
+  FEAT_ED_EXCEPTION,
+  FEAT_ED_PARTIAL,
+  FEAT_ED_STRAND,
+  FEAT_ED_CITATION,
+  FEAT_ED_EXPERIMENT,
+  FEAT_ED_INFERENCE,
+  FEAT_ED_PSEUDO
+} EFeatureEditorActions;
+
+NLM_EXTERN void FeatureEditorBaseForm (BaseFormPtr bfp, Int4 first_action);
+NLM_EXTERN void ChangeQualifierCaseBaseForm (BaseFormPtr bfp);
+NLM_EXTERN void RemoveUnpublishedPublicationsBaseForm (BaseFormPtr bfp);
+NLM_EXTERN void LoadOrganismModifierTableBaseForm (BaseFormPtr bfp, Boolean IsTaxConsult);
+NLM_EXTERN void RemoveAllSourceNoteBaseForm (BaseFormPtr bfp);
+NLM_EXTERN void ApplyIsolationSourceBaseForm (BaseFormPtr bfp);
+NLM_EXTERN Int2 CorrectRNAStrandednessForEntityID (Uint2 entityID, Boolean use_smart);
+
+NLM_EXTERN void RetranslateCdRegionsChooseFrameWithNoStop (IteM i);
+NLM_EXTERN DialoG SegregateIdDialog (GrouP g);
+NLM_EXTERN void ChooseCategoriesForSegregateIdDialog(DialoG d, ValNodePtr list);
+NLM_EXTERN DialoG SegregateConstraintDialog (GrouP g);
+NLM_EXTERN void ChooseCategoriesForSegregateConstraintDialog(DialoG d, ValNodePtr list);
+NLM_EXTERN void UnchooseCategoriesForSegregateConstraintDialog(DialoG d, ValNodePtr list);
+
+NLM_EXTERN void BulkCDSSetProtein (Pointer target, Pointer data);
+
+NLM_EXTERN ValNodePtr GetUniqueValuesForStructuredCommentField (SeqEntryPtr sep, CharPtr field_name);
+NLM_EXTERN ValNodePtr GetStructuredCommentFieldNames (SeqEntryPtr sep);
+
+NLM_EXTERN void ConvertToDelayedGenProdSetQualifiers (IteM i);
+NLM_EXTERN void ClearSelectedItem (BaseFormPtr bfp);
+
+NLM_EXTERN void RemoveIllegalQuals (IteM i);
+NLM_EXTERN void RemoveWrongQuals (IteM i);
+NLM_EXTERN void MoveIllegalQuals (IteM i);
+NLM_EXTERN void MoveWrongQuals (IteM i);
+NLM_EXTERN void RemoveBadQualsCommon (Uint2 entityID, Boolean wrong, Boolean illegal, Boolean move_to_note);
+NLM_EXTERN void CreateProteinIDs (IteM i);
+NLM_EXTERN void AddLocusTagGenes (IteM i);
+
+typedef void (*MenuOrButtonFunc) PROTO ((BaseFormPtr));
+NLM_EXTERN void ButtonOrMenuItemTemplate (IteM i, MenuOrButtonFunc func);
+NLM_EXTERN void ButtonOrMenuButtonTemplate (ButtoN b, MenuOrButtonFunc func);
+
+extern void RemoveSequencesFromRecordBtn (ButtoN b);
+extern void RemovePubConsortiumsBtn (ButtoN b);
+extern void ApplyCDSBtn (ButtoN b);
+extern void LoadTaxConsultBtn (ButtoN b);
+extern void LoadTaxTableReaderBtn (ButtoN b);
+
+NLM_EXTERN void 
+AddEditApplyDataToApplyValue 
+(Int4 action_choice,
+ EditApplyPtr edit_apply, 
+ ApplyValuePtr avp);
 
 
 #ifdef __cplusplus

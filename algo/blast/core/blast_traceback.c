@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.c,v 1.214 2010/05/06 18:54:32 kazimird Exp $
+/* $Id: blast_traceback.c,v 1.231 2011/05/31 16:09:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_traceback.c,v 1.214 2010/05/06 18:54:32 kazimird Exp $";
+    "$Id: blast_traceback.c,v 1.231 2011/05/31 16:09:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_traceback.h>
@@ -308,7 +308,7 @@ s_HSPListPostTracebackUpdate(EBlastProgramType program_number,
          are rounded down to the nearest even number. */
       Blast_HSPListAdjustOddBlastnScores(hsp_list, kGapped, sbp);
 
-      Blast_HSPListGetEvalues(query_info, hsp_list, kGapped, sbp, 0,
+      Blast_HSPListGetEvalues(query_info, subject_length, hsp_list, kGapped, FALSE, sbp, 0,
                               scale_factor);
    }
 
@@ -355,6 +355,9 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
    Uint1* translation_buffer = NULL;
    Int4 * frame_offsets   = NULL;
    Int4 * frame_offsets_a = NULL;
+   Int4 matcounts[32];  // -RMH-
+   Int4 ridx, bidx, queryIdx, count, t_counts; // -RMH-
+   double t_factor, t_sum, adj_score; // -RMH-
    const Boolean is_rpsblast = Blast_ProgramIsRpsBlast(program_number);
    const Boolean kIsOutOfFrame = score_options->is_ooframe;
    const Boolean kGreedyTraceback = (ext_options->eTbackExt == eGreedyTbck);
@@ -364,6 +367,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
    const Boolean kSmithWaterman = (ext_options->eTbackExt == 
                                    eSmithWatermanTbckFull);
    BlastQueryInfo* query_info = query_info_in;
+   Int4 stat_length = subject_blk->length;
    Int4 offsets[2];
    Int4 num_initial_hsps = hsp_list->hspcnt;
    BlastIntervalTree* tree = NULL;
@@ -474,6 +478,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
          Int4 adjusted_s_length;
          const Uint1* adjusted_subject;
          Int4 cutoff;
+         Boolean delete_hsp = FALSE;
 
          if (kTranslateSubject) {
             if (program_number == eBlastTypeRpsTblastn) {
@@ -495,19 +500,21 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
                  hsp_new = Blast_HSPFree(hsp_new);
             } else
             	 subject = Blast_HSPGetTargetTranslation(target_t, hsp, &subject_length);
+            if (subject_length > 0) stat_length = subject_length;
          }
 
          if (!kIsOutOfFrame && (((hsp->query.gapped_start == 0 && 
                                   hsp->subject.gapped_start == 0) ||
                  !BLAST_CheckStartForGappedAlignment(hsp, query, 
                                                      subject, sbp)))) {
-            Int4 max_offset = 
-               BlastGetStartForGappedAlignment(query, subject, sbp,
-                  hsp->query.offset, hsp->query.end - hsp->query.offset,
-                  hsp->subject.offset, hsp->subject.end - hsp->subject.offset);
-            q_start = max_offset;
-            s_start = 
-               (hsp->subject.offset - hsp->query.offset) + max_offset;
+            Boolean retval = 
+               BlastGetOffsetsForGappedAlignment(query, subject, sbp,
+                   hsp, &q_start, &s_start);
+            if (!retval)
+            {  /* Unable to find start for this HSP */
+               hsp_array[index] = Blast_HSPFree(hsp);
+               continue;
+            }
             hsp->query.gapped_start = q_start;
             hsp->subject.gapped_start = s_start;
          } else {
@@ -582,38 +589,78 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
          if (fence_error) {
              break;
          }
-         
-         if (gap_align->score >= cutoff) {
-            Boolean delete_hsp = FALSE;
-            Blast_HSPUpdateWithTraceback(gap_align, hsp);
 
-            if (kGreedyTraceback) {
-               /* Low level greedy algorithm ignores ambiguities, so the score
-                * needs to be reevaluated. */
-                delete_hsp = 
+         // -RMH- testing complexity adjustment
+         if ( sbp->complexity_adjusted_scoring &&
+              sbp->matrix->freqs &&
+              gap_align->edit_script ) {
+
+             queryIdx = 0;
+             t_factor = 0;         
+             t_sum = 0;
+             t_counts = 0;
+
+             /* support both protein/dna */
+             for ( ridx = 0; ridx < 32; ridx++ )
+                 matcounts[ridx] = 0;
+
+             // Calculate aligned query composition
+             for ( ridx = 0; ridx < gap_align->edit_script->size; ridx++ ) {
+                 if ( gap_align->edit_script->op_type[ridx] == eGapAlignSub ) {
+                     for( bidx = 0; bidx < gap_align->edit_script->num[ridx]; bidx++ ) {
+                         matcounts[*(query + gap_align->query_start + queryIdx)]++;
+                         queryIdx++;
+                     }
+                 }else if ( gap_align->edit_script->op_type[ridx]
+                            == eGapAlignIns ) {
+                     queryIdx += gap_align->edit_script->num[ridx];
+                 }
+              }
+
+              for ( ridx = 0; ridx < sbp->alphabet_size; ridx++ )
+                  if ( matcounts[ ridx ]  &&
+                       sbp->matrix->freqs[ ridx ] > 0 &&                       
+                       log( sbp->matrix->freqs[ ridx ] ) != 0 ) {
+                      count = matcounts[ ridx ];
+                      t_factor += count * log( count );
+                      t_sum    += count * log( sbp->matrix->freqs[ ridx ] );
+                      t_counts += count;
+                  }
+              t_factor -= t_counts * log( t_counts );
+              t_sum    -= t_factor;
+              adj_score = gap_align->score + t_sum / sbp->matrix->lambda + .999;
+
+              if ( adj_score < 0 )
+                  adj_score = 0;
+             //printf("Score = %d, Complexity Adjusted = %d\n", gap_align->score, (Int4)adj_score );
+             gap_align->score = adj_score;
+         }
+         // -RMH-: Done
+         
+         Blast_HSPUpdateWithTraceback(gap_align, hsp);
+
+         if (kGreedyTraceback) {
+            /* Low level greedy algorithm ignores ambiguities, so the score
+             * needs to be reevaluated. */
+             delete_hsp = 
                     Blast_HSPReevaluateWithAmbiguitiesGapped(hsp, query, 
                         adjusted_subject, hit_params, score_params, sbp);
-            }
-            if (!delete_hsp) {
-                /* Calculate number of identities and check if this HSP meets the
-                   percent identity and length criteria. */
-                delete_hsp = 
+         }
+         if (!delete_hsp) {
+             /* Calculate number of identities and check if this HSP meets the
+                percent identity and length criteria. */
+             delete_hsp = 
                     Blast_HSPTestIdentityAndLength(program_number, hsp, query_nomask, 
                                                    adjusted_subject, 
                                                    score_options, hit_options);
-            }
-            if (!delete_hsp) {
-               Blast_HSPAdjustSubjectOffset(hsp, start_shift);
-               status = BlastIntervalTreeAddHSP(hsp, tree, query_info, 
+         }
+         if (!delete_hsp) {
+            Blast_HSPAdjustSubjectOffset(hsp, start_shift);
+            status = BlastIntervalTreeAddHSP(hsp, tree, query_info, 
                                        eQueryAndSubject);
-               if (status)
-                  return status;
-            } else {
-               hsp_array[index] = Blast_HSPFree(hsp);
-            }
+         if (status)
+            return status;
          } else {
-            /* Score is below threshold */
-            gap_align->edit_script = GapEditScriptDelete(gap_align->edit_script);
             hsp_array[index] = Blast_HSPFree(hsp);
          }
       } else {
@@ -693,7 +740,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
        }
        s_HSPListPostTracebackUpdate(program_number, hsp_list, query_info_in, 
                                     score_params, hit_params, sbp, 
-                                    subject_blk->length);
+                                    stat_length);
    }
    
    return 0;
@@ -974,6 +1021,8 @@ Int2 s_RPSComputeTraceback(EBlastProgramType program_number,
    BLAST_SequenceBlk* one_query = NULL;
    BlastQueryInfo* concat_db_info = NULL;
    Boolean make_up_kbp = FALSE;
+   Int4 index;
+   Int4 valid_kb_index = -1;
 
    if (!hsp_stream || !seq_src || !results) {
       return -1;
@@ -991,22 +1040,32 @@ Int2 s_RPSComputeTraceback(EBlastProgramType program_number,
    encoding = Blast_TracebackGetEncoding(program_number);
    memset((void*) &seq_arg, 0, sizeof(seq_arg));
 
-   /* the first Karlin block must be valid for traceback to
-      be performed; if it is not valid (i.e. if the first query
-      was completely masked), make up a valid Karlin block.
-      This is possible because all gapped Karlin blocks currently
-      look the same */
+   /* At this point, any of the (concatenated) contexts in query_info
+      may be invalid and their corresponding Karlin blocks will be NULL.
 
-   if (sbp->kbp_gap[0] == NULL) {
-       Int4 index;
-       for (index = query_info->first_context; 
-                        index <= query_info->last_context; index++) {
-           if (sbp->kbp_gap[index] != NULL) {
-               sbp->kbp_gap[0] = sbp->kbp_gap[index];
-               break;
-           }
-       }
-       make_up_kbp = TRUE;
+      All non-NULL Karlin blocks are distinct structures in memory,
+      but happen to contain the same information.
+
+      The downstream traceback code operates on one query-subject pair
+      at a time, and as such only knows about the first six Karlin blocks. */
+
+   /* find the first valid Karlin block */
+   for (index = query_info->first_context; 
+        index <= query_info->last_context; index++) {
+      if (sbp->kbp_gap[index] != NULL) {
+         valid_kb_index = index;
+         break;
+         }
+      }
+
+   ASSERT(valid_kb_index != -1);
+
+   /* ensure that the first six Karlin blocks are populated */
+   for (index = 0 ; index < 6 && index < sbp->number_of_contexts; index++) {
+      if (sbp->kbp_gap[index] == NULL) {
+         sbp->kbp_gap[index] = Blast_KarlinBlkNew();
+         Blast_KarlinBlkCopy(sbp->kbp_gap[index], sbp->kbp_gap[valid_kb_index]);
+      }
    }
 
    while (BlastHSPStreamRead(hsp_stream, &hsp_list) 
@@ -1180,10 +1239,11 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
                                   score_params, ext_params, hit_params, 
                                   psi_options, results);
    } else {
-      Int4 i;
+      Int4 i, j;
       BlastSeqSrcGetSeqArg seq_arg;
       EBlastEncoding encoding = Blast_TracebackGetEncoding(program_number);
       Boolean perform_traceback = score_params->options->gapped_calculation;
+      Boolean perform_partial_fetch =  BlastSeqSrcGetSupportsPartialFetching(seq_src);
       const Boolean kPhiBlast = Blast_ProgramIsPhiBlast(program_number);
       BlastHSPStreamResultBatch *batch = 
                       Blast_HSPStreamResultBatchInit(query_info->num_queries);
@@ -1205,6 +1265,50 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
          /* traceback will require fetching the subject sequence */
 
          if (perform_traceback) {
+
+             /* set up partial fetching */
+             if (perform_partial_fetch) {
+
+                Int4 oid = batch->hsplist_array[0]->oid;
+                Int4 num_hsps = 0;
+                BlastHSPRangeList *range_list = NULL;
+                BlastSeqSrcSetRangesArg *arg = NULL;
+    
+                /* iterate through the hsps and add ranges */
+                for (i = 0; i < batch->num_hsplists; i++) {
+                    hsp_list = batch->hsplist_array[i];
+                    num_hsps += hsp_list->hspcnt;
+
+                    for (j = 0; j < hsp_list->hspcnt; j++) {
+                        BlastHSP *hsp = hsp_list->hsp_array[j];
+                        Int4 begin = hsp->subject.offset;
+                        Int4 end = hsp->subject.end;
+
+                        if (Blast_SubjectIsTranslated(program_number)) {
+                            // increase the range to offset frame shift approximations
+                            begin = (begin -2) *CODON_LENGTH;
+                            end   = (end +2) *CODON_LENGTH;
+                            if (hsp->subject.frame < 0) {
+                                Int4 len = BlastSeqSrcGetSeqLen(seq_src, &oid);
+                                Int4 begin_new = len - end;
+                                end  = len - begin;
+                                begin = begin_new;
+                            }
+                        }
+
+                        range_list = BlastHSPRangeListAddRange(range_list, begin, end);
+                    }
+                }
+
+                arg = BlastSeqSrcSetRangesArgNew(num_hsps);
+                arg->oid = oid;
+                
+                BlastHSPRangeBuildSetRangesArg(range_list, arg);
+                BlastSeqSrcSetSeqRanges(seq_src, arg);
+                BlastHSPRangeListFree(range_list);
+                BlastSeqSrcSetRangesArgFree(arg);
+            }
+
             seq_arg.oid = batch->hsplist_array[0]->oid;
             seq_arg.encoding = encoding;
             seq_arg.check_oid_exclusion = TRUE;
@@ -1331,6 +1435,38 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
       BlastSequenceBlkFree(seq_arg.seq);
    }
 
+   // -RMH-: Apply masklevel filter
+   if ( results && hit_params->mask_level < 101 )
+   {
+     //printf("Masklevel being invoked at level: %d\n", hit_params->mask_level );
+                          
+     Int4 totalCnt = 0;   
+     Int4 rmIdx;          
+     Int4 hspIdx;         
+     for ( rmIdx = 0; rmIdx < results->num_queries; rmIdx++ )
+     {                    
+       if ( results->hitlist_array[rmIdx] == NULL )
+         continue;
+       for ( hspIdx = 0; hspIdx < results->hitlist_array[rmIdx]->hsplist_count; hspIdx++ )
+        totalCnt += results->hitlist_array[rmIdx]->hsplist_array[hspIdx]->hspcnt;  
+     }
+     //printf("Before masklevel total = %d\n", totalCnt );
+   
+     Blast_HSPResultsApplyMasklevel( results, query_info,
+                                     hit_params->mask_level, query->length );
+
+     totalCnt = 0;
+     for ( rmIdx = 0; rmIdx < results->num_queries; rmIdx++ )
+     {
+       if ( results->hitlist_array[rmIdx] == NULL )
+         continue;
+       for ( hspIdx = 0; hspIdx < results->hitlist_array[rmIdx]->hsplist_count; hspIdx++ )
+        totalCnt += results->hitlist_array[rmIdx]->hsplist_array[hspIdx]->hspcnt;
+     }
+     //printf("After masklevel total = %d\n", totalCnt );
+   }
+   // -RMH-: end of change
+
    /* Re-sort the hit lists according to their best e-values, because
       they could have changed. Only do this for a database search. */
    if (BlastSeqSrcGetTotLen(seq_src) > 0)
@@ -1361,6 +1497,25 @@ Blast_RunTracebackSearch(EBlastProgramType program,
    BlastHSPStream* hsp_stream, const BlastRPSInfo* rps_info,
    SPHIPatternSearchBlk* pattern_blk, BlastHSPResults** results)
 {
+   return Blast_RunTracebackSearchWithInterrupt(program,
+          query, query_info, seq_src, score_options, ext_options,
+          hit_options, eff_len_options, db_options, psi_options, sbp,
+          hsp_stream, rps_info, pattern_blk, results, NULL, NULL);
+}
+
+Int2 
+Blast_RunTracebackSearchWithInterrupt(EBlastProgramType program, 
+   BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
+   const BlastSeqSrc* seq_src, const BlastScoringOptions* score_options,
+   const BlastExtensionOptions* ext_options,
+   const BlastHitSavingOptions* hit_options,
+   const BlastEffectiveLengthsOptions* eff_len_options,
+   const BlastDatabaseOptions* db_options, 
+   const PSIBlastOptions* psi_options, BlastScoreBlk* sbp,
+   BlastHSPStream* hsp_stream, const BlastRPSInfo* rps_info,
+   SPHIPatternSearchBlk* pattern_blk, BlastHSPResults** results,
+   TInterruptFnPtr interrupt_search,  SBlastProgress* progress_info)
+{
    Int2 status = 0;
    BlastScoringParameters* score_params = NULL; /**< Scoring parameters */
    BlastExtensionParameters* ext_params = NULL; /**< Gapped extension 
@@ -1384,7 +1539,7 @@ Blast_RunTracebackSearch(EBlastProgramType program,
       BLAST_ComputeTraceback(program, hsp_stream, query, query_info,
                              seq_src, gap_align, score_params, ext_params, 
                              hit_params, eff_len_params, db_options, psi_options,
-                             rps_info, pattern_blk, results, 0, 0);
+                             rps_info, pattern_blk, results, interrupt_search, progress_info);
 
    /* Do not destruct score block here */
    gap_align->sbp = NULL;

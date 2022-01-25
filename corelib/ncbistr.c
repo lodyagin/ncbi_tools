@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *   	portable string routines
@@ -422,6 +422,57 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TrimSpacesAroundString (Nlm_CharPtr str)
     ch = *ptr;
     while (ch != '\0') {
       if (ch > ' ') {
+        dst = NULL;
+      } else if (dst == NULL) {
+        dst = ptr;
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    if (dst != NULL) {
+      *dst = '\0';
+    }
+  }
+  return str;
+}
+
+NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_CompressSpaces (Nlm_CharPtr str)
+
+{
+  Nlm_Char     ch;
+  Nlm_CharPtr  dst;
+  Nlm_Char     last;
+  Nlm_CharPtr  ptr;
+
+  if (str != NULL && str [0] != '\0') {
+    dst = str;
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0' && ch <= ' ') {
+      ptr++;
+      ch = *ptr;
+    }
+    while (ch != '\0') {
+      *dst = ch;
+      dst++;
+      ptr++;
+      last = ch;
+      ch = *ptr;
+      if (ch != '\0' && ch < ' ') {
+        *ptr = ' ';
+        ch = *ptr;
+      }
+      while (ch != '\0' && last <= ' ' && ch <= ' ') {
+        ptr++;
+        ch = *ptr;
+      }
+    }
+    *dst = '\0';
+    dst = NULL;
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch != ' ') {
         dst = NULL;
       } else if (dst == NULL) {
         dst = ptr;

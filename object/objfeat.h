@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.29 $
+* $Revision: 6.39 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -112,6 +112,172 @@ NLM_EXTERN Boolean        LIBCALL SeqFeatXrefAsnWrite PROTO((SeqFeatXrefPtr sfxp
 NLM_EXTERN SeqFeatXrefPtr LIBCALL SeqFeatXrefAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN SeqFeatXrefPtr LIBCALL SeqFeatXrefFree PROTO((SeqFeatXrefPtr sfxp));
 				   /* free frees whole chain of SeqFeatXref */
+
+
+
+/**************************************************
+*
+*    ModelEvidenceSupport
+*
+**************************************************/
+typedef struct modelEvidenceSupport {
+   Uint4 OBbits__;
+   CharPtr   method;
+   ValNodePtr   mrna;
+   ValNodePtr   est;
+   ValNodePtr   protein;
+   ValNodePtr   identification;
+   ValNodePtr   dbxref;
+#define OB__ModelEvidenceSupport_exon_count 0
+
+   Int4   exon_count;
+#define OB__ModelEvidenceSupport_exon_length 1
+
+   Int4   exon_length;
+   Uint1   full_length;
+   Uint1   supports_all_exon_combo;
+} ModelEvidenceSupport, PNTR ModelEvidenceSupportPtr;
+
+
+NLM_EXTERN ModelEvidenceSupportPtr LIBCALL ModelEvidenceSupportFree PROTO ((ModelEvidenceSupportPtr ));
+NLM_EXTERN ModelEvidenceSupportPtr LIBCALL ModelEvidenceSupportNew PROTO (( void ));
+NLM_EXTERN ModelEvidenceSupportPtr LIBCALL ModelEvidenceSupportAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ModelEvidenceSupportAsnWrite PROTO (( ModelEvidenceSupportPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ExperimentSupport
+*
+**************************************************/
+typedef struct experimentSupport {
+   Uint4 OBbits__;
+#define OB__ExperimentSupport_category 0
+
+   Int4   category;
+   CharPtr   explanation;
+   ValNodePtr   pmids;
+   ValNodePtr   dois;
+} ExperimentSupport, PNTR ExperimentSupportPtr;
+
+
+NLM_EXTERN ExperimentSupportPtr LIBCALL ExperimentSupportFree PROTO ((ExperimentSupportPtr ));
+NLM_EXTERN ExperimentSupportPtr LIBCALL ExperimentSupportNew PROTO (( void ));
+NLM_EXTERN ExperimentSupportPtr LIBCALL ExperimentSupportAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ExperimentSupportAsnWrite PROTO (( ExperimentSupportPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ProgramId
+*
+**************************************************/
+typedef struct program_id {
+   Uint4 OBbits__;
+   CharPtr   name;
+   CharPtr   version;
+} ProgramId, PNTR ProgramIdPtr;
+
+
+NLM_EXTERN ProgramIdPtr LIBCALL ProgramIdFree PROTO ((ProgramIdPtr ));
+NLM_EXTERN ProgramIdPtr LIBCALL ProgramIdNew PROTO (( void ));
+NLM_EXTERN ProgramIdPtr LIBCALL ProgramIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ProgramIdAsnWrite PROTO (( ProgramIdPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    EvidenceBasis
+*
+**************************************************/
+typedef struct evidenceBasis {
+   Uint4 OBbits__;
+   ValNodePtr   programs;
+   ValNodePtr   accessions;
+} EvidenceBasis, PNTR EvidenceBasisPtr;
+
+
+NLM_EXTERN EvidenceBasisPtr LIBCALL EvidenceBasisFree PROTO ((EvidenceBasisPtr ));
+NLM_EXTERN EvidenceBasisPtr LIBCALL EvidenceBasisNew PROTO (( void ));
+NLM_EXTERN EvidenceBasisPtr LIBCALL EvidenceBasisAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL EvidenceBasisAsnWrite PROTO (( EvidenceBasisPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    InferenceSupport
+*
+**************************************************/
+typedef struct inferenceSupport {
+   Uint4 OBbits__;
+#define OB__InferenceSupport_category 0
+
+   Int4   category;
+   Int4   type;
+   CharPtr   other_type;
+   Uint1   same_species;
+   EvidenceBasisPtr   basis;
+   ValNodePtr   pmids;
+   ValNodePtr   dois;
+} InferenceSupport, PNTR InferenceSupportPtr;
+
+
+NLM_EXTERN InferenceSupportPtr LIBCALL InferenceSupportFree PROTO ((InferenceSupportPtr ));
+NLM_EXTERN InferenceSupportPtr LIBCALL InferenceSupportNew PROTO (( void ));
+NLM_EXTERN InferenceSupportPtr LIBCALL InferenceSupportAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL InferenceSupportAsnWrite PROTO (( InferenceSupportPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ModelEvidenceItem
+*
+**************************************************/
+typedef struct modelEvidenceItem {
+   Uint4 OBbits__;
+   ValNodePtr   id;
+#define OB__ModelEvidenceItem_exon_count 0
+
+   Int4   exon_count;
+#define OB__ModelEvidenceItem_exon_length 1
+
+   Int4   exon_length;
+   Uint1   full_length;
+   Uint1   supports_all_exon_combo;
+} ModelEvidenceItem, PNTR ModelEvidenceItemPtr;
+
+
+NLM_EXTERN ModelEvidenceItemPtr LIBCALL ModelEvidenceItemFree PROTO ((ModelEvidenceItemPtr ));
+NLM_EXTERN ModelEvidenceItemPtr LIBCALL ModelEvidenceItemNew PROTO (( void ));
+NLM_EXTERN ModelEvidenceItemPtr LIBCALL ModelEvidenceItemAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ModelEvidenceItemAsnWrite PROTO (( ModelEvidenceItemPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SeqFeatSupport
+*
+**************************************************/
+typedef struct seqFeatSupport {
+   Uint4 OBbits__;
+   ValNodePtr   experiment;
+   ValNodePtr   inference;
+   ValNodePtr   model_evidence;
+} SeqFeatSupport, PNTR SeqFeatSupportPtr;
+
+
+NLM_EXTERN SeqFeatSupportPtr LIBCALL SeqFeatSupportFree PROTO ((SeqFeatSupportPtr ));
+NLM_EXTERN SeqFeatSupportPtr LIBCALL SeqFeatSupportNew PROTO (( void ));
+NLM_EXTERN SeqFeatSupportPtr LIBCALL SeqFeatSupportAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SeqFeatSupportAsnWrite PROTO (( SeqFeatSupportPtr , AsnIoPtr, AsnTypePtr));
+
+
 /*****************************************************************************
 *
 *   SeqFeat
@@ -180,6 +346,7 @@ typedef struct seqfeat {
 	CharPtr except_text;   /* explanation of biological exception */
 	ValNodePtr ids;
 	UserObjectPtr exts;
+    SeqFeatSupportPtr support; /* will replace /experiment, /inference, model-evidence */
     struct seqfeat PNTR next;
 	GatherIndex idx;      /* internal gather/objmgr tracking fields */
 } SeqFeat, PNTR SeqFeatPtr;
@@ -258,6 +425,9 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatSetAsnRead PROTO((AsnIoPtr aip, AsnTypePtr 
 /** used only SeqAnnotAsnWriteExtra **/
 NLM_EXTERN Boolean    LIBCALL SeqFeatSetAsnWriteExtra PROTO((SeqFeatPtr anp, AsnIoPtr aip,
 					AsnTypePtr set, AsnTypePtr element, ValNodePtr extras));
+
+
+
 /*****************************************************************************
 *
 *   CodeBreak
@@ -852,6 +1022,12 @@ typedef struct population_data {
 
    Int4   chromosomes_tested;
    ValNodePtr   sample_ids;
+#define OB__Population_data_allele_frequency 2
+
+   FloatHi   allele_frequency;
+#define OB__Population_data_flags 3
+
+   Int4   flags;
 } PopulationData, PNTR PopulationDataPtr;
 
 
@@ -859,25 +1035,6 @@ NLM_EXTERN PopulationDataPtr LIBCALL PopulationDataFree PROTO ((PopulationDataPt
 NLM_EXTERN PopulationDataPtr LIBCALL PopulationDataNew PROTO (( void ));
 NLM_EXTERN PopulationDataPtr LIBCALL PopulationDataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL PopulationDataAsnWrite PROTO (( PopulationDataPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ProjectData
-*
-**************************************************/
-
-typedef struct struct_ProjectData {
-   Uint4 OBbits__;
-   ValNodePtr   project_ids;
-} ProjectData, PNTR ProjectDataPtr;
-
-
-NLM_EXTERN ProjectDataPtr LIBCALL ProjectDataFree PROTO ((ProjectDataPtr ));
-NLM_EXTERN ProjectDataPtr LIBCALL ProjectDataNew PROTO (( void ));
-NLM_EXTERN ProjectDataPtr LIBCALL ProjectDataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ProjectDataAsnWrite PROTO (( ProjectDataPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -910,13 +1067,28 @@ typedef struct struct_VariantProperties {
 #define OB__VariantProperties_genotype 6
 
    Int4   genotype;
-   ProjectDataPtr   project_data;
+   ValNodePtr   project_data;
 #define OB__VariantProperties_quality_check 7
 
    Int4   quality_check;
 #define OB__VariantProperties_confidence 8
 
    Int4   confidence;
+#define OB__VariantProperties_other_validation 9
+
+   Uint1   other_validation;
+#define OB__VariantProperties_allele_origin 10
+
+   Int4   allele_origin;
+#define OB__VariantProperties_allele_state 11
+
+   Int4   allele_state;
+#define OB__VariantProperties_allele_frequency 12
+
+   FloatHi   allele_frequency;
+#define OB__VariantProperties_is_ancestral_allele 13
+
+   Uint1   is_ancestral_allele;
 } VariantProperties, PNTR VariantPropertiesPtr;
 
 
@@ -946,6 +1118,39 @@ NLM_EXTERN ExtLocPtr LIBCALL ExtLocAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ExtLocAsnWrite PROTO (( ExtLocPtr , AsnIoPtr, AsnTypePtr));
 
 
+/**************************************************
+*
+*    SomaticOriginCondition
+*
+**************************************************/
+
+typedef struct somatic_origin_condition {
+   Uint4 OBbits__;
+   CharPtr   description;
+   ValNodePtr   object_id;
+} SomaticOriginCondition, PNTR SomaticOriginConditionPtr;
+
+NLM_EXTERN SomaticOriginConditionPtr LIBCALL SomaticOriginConditionFree PROTO ((SomaticOriginConditionPtr ));
+NLM_EXTERN SomaticOriginConditionPtr LIBCALL SomaticOriginConditionNew PROTO (( void ));
+NLM_EXTERN SomaticOriginConditionPtr LIBCALL SomaticOriginConditionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SomaticOriginConditionAsnWrite PROTO (( SomaticOriginConditionPtr , AsnIoPtr, AsnTypePtr));
+
+/**************************************************
+*
+*    SomaticOrigin
+*
+**************************************************/
+
+typedef struct somatic_origin {
+   Uint4 OBbits__;
+   SubSourcePtr   source;
+   SomaticOriginConditionPtr condition;
+} SomaticOrigin, PNTR SomaticOriginPtr;
+
+NLM_EXTERN SomaticOriginPtr LIBCALL SomaticOriginFree PROTO ((SomaticOriginPtr ));
+NLM_EXTERN SomaticOriginPtr LIBCALL SomaticOriginNew PROTO (( void ));
+NLM_EXTERN SomaticOriginPtr LIBCALL SomaticOriginAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SomaticOriginAsnWrite PROTO (( SomaticOriginPtr , AsnIoPtr, AsnTypePtr));
 
 /**************************************************
 *
@@ -988,6 +1193,7 @@ typedef struct variation_ref {
    ValNodePtr   location;
    ValNodePtr   ext_locs;
    UserObjectPtr   ext;
+   ValNodePtr   somatic_origin;
 } VariationRef, PNTR VariationRefPtr;
 
 
@@ -1064,6 +1270,7 @@ typedef ValNode VarRefData;
 #define VarRefData_uniparental_disomy 3
 #define VarRefData_instance 4
 #define VarRefData_set 5
+#define VarRefData_complex 6
 
 NLM_EXTERN VarRefDataPtr LIBCALL VarRefDataFree PROTO ((VarRefDataPtr ));
 NLM_EXTERN VarRefDataPtr LIBCALL VarRefDataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
@@ -1121,6 +1328,9 @@ typedef struct variation_inst {
    Uint4 OBbits__;
    Int4   type;
    ValNodePtr   delta;
+#define OB__Variation_inst_observation 0
+
+   Int4   observation;
 } VariationInst, PNTR VariationInstPtr;
 
 

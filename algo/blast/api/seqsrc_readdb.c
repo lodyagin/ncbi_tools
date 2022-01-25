@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.c,v 1.59 2008/01/02 14:00:35 madden Exp $
+/*  $Id: seqsrc_readdb.c,v 1.60 2011/05/26 20:59:45 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.59 2008/01/02 14:00:35 madden Exp $";
+static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.60 2011/05/26 20:59:45 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/seqsrc_readdb.h>
@@ -163,10 +163,9 @@ s_ReaddbGetIsProt(void* readdb_handle, void* ignoreme)
  * @return return codes defined in blast_seqsrc.h
  */
 static Int2 
-s_ReaddbGetSequence(void* readdb_handle, void* args)
+s_ReaddbGetSequence(void* readdb_handle, BlastSeqSrcGetSeqArg* readdb_args)
 {
     ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
-    BlastSeqSrcGetSeqArg* readdb_args = (BlastSeqSrcGetSeqArg*) args;
     Int4 oid = -1, len = 0, buflen = 0;
     Uint1 *buf = NULL;
     EBlastEncoding encoding = eBlastEncodingError;
@@ -217,9 +216,8 @@ s_ReaddbGetSequence(void* readdb_handle, void* args)
  * @param args Pointer to BlastSeqSrcGetSeqArg structure [in]
  */
 static void
-s_ReaddbReleaseSequence(void* readdb_handle, void* args)
+s_ReaddbReleaseSequence(void* readdb_handle, BlastSeqSrcGetSeqArg* readdb_args)
 {
-    BlastSeqSrcGetSeqArg* readdb_args = (BlastSeqSrcGetSeqArg*) args;
     ASSERT(readdb_args);
     BlastSequenceBlkClean(readdb_args->seq);
 }

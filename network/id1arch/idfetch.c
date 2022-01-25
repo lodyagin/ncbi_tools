@@ -49,7 +49,7 @@ static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids);
 static void EntrezQuery(char *query);
 
 static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
-                               Boolean is_na, Boolean count_only);
+                               Boolean is_na);
 static Boolean IdFetch_func1(CharPtr data, Int2 maxplex);
 static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex);
 
@@ -64,7 +64,8 @@ Args myargs[] = {
 4=genpept (Seq-entry only)\n\t\t\t\
 5=fasta (table for history)\n\t\t\t\
 6=quality scores (Seq-entry only)\n\t\t\t\
-7=Entrez DocSums\n","1", "1", "7", FALSE, 't', ARG_INT, 0.0, 0, NULL } ,
+7=Entrez DocSums\n\t\t\t\
+8=fasta reverse complement\n","1", "1", "8", FALSE, 't', ARG_INT, 0.0, 0, NULL } ,
 {"Database to use (special meaning for -q flag: n - nucleotide, p - protein)",NULL,NULL,NULL,TRUE,'d',ARG_STRING,0.0,0,NULL},
 	{"Entity number (retrieval number) to dump" ,"0",NULL,NULL,TRUE,'e',ARG_INT,0.0,0,NULL},
         {"Type of lookup:\t\
@@ -109,6 +110,7 @@ int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 
 static Nlm_Int2 Nlm_WhichArg PROTO(( Nlm_Char which, Nlm_Int2 numargs, Nlm_ArgPtr ap));
 static void MyBioseqToFasta(BioseqPtr bsp, Pointer userdata);
+static void MyBioseqToRevCompFasta(BioseqPtr bsp, Pointer userdata);
 
 static Boolean CreateMaxPlexParam(void);
 static Int4 GetIntervalAccession( const Char* pAccession, Char* pResult);
@@ -284,6 +286,7 @@ Int2 Main()
     case 5:
     case 6:
     case 7:
+    case 8:
       fp = FileOpen((CharPtr)myargs[fileoutarg].strvalue, outmode);
       if(fp == NULL)
       {
@@ -609,7 +612,11 @@ void EntrezQuery(char *query)
   int i;
   count = BEGetUidsFromQuery(query,
                              &ids,
-                             0 == strcmp(myargs[dbarg].strvalue, "n"), FALSE);
+                             0 == strcmp(myargs[dbarg].strvalue, "n"));
+
+  if (count == -1)
+    ErrPostEx(SEV_ERROR, 0, 0, "Entrez query failed: [%s]", query);
+
   for(i = 0; i < count; ++i)
   {
     if(ids[i] == -1)
@@ -988,6 +995,28 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
         break;
       }
       break;
+    case 8:
+      switch(myargs[infotypearg].intvalue){
+      case 0:
+        if(bsp){
+		    MyBioseqToRevCompFasta(bsp,(Pointer)fp);
+        }
+        else
+        {
+		    VisitBioseqsInSep(sep,(Pointer)fp, MyBioseqToRevCompFasta);
+        }
+        break;
+      case 2:
+        SeqIdWrite(sip_ret, buf, PRINTID_FASTA_LONG, sizeof(buf) - 1);
+        fprintf(fp, "%s\n", buf);
+        break;
+
+      case 3:
+      case 4:
+        SeqHistPrintTable(ishp,fp);
+        break;
+      }
+      break;
     }
   }
 DONE:
@@ -1049,61 +1078,54 @@ static Nlm_Int2 Nlm_WhichArg( Nlm_Char which, Nlm_Int2 numargs, Nlm_ArgPtr ap)
    just number of such hits in the Entrez database */
 
 static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids, 
-                               Boolean is_na, Boolean count_only)
+                               Boolean is_na)
 {
-  Entrez2ReplyPtr e2ry;
   Entrez2RequestPtr  e2rq;
   E2ReplyPtr e2rp;
+  Int4 total = 0;
   Int4 count = 0;
+  Int4 max_uids = 5000000;
+  Int4 offset = 0;
   Entrez2BooleanReplyPtr e2br;
   Entrez2IdListPtr e2idlist;
 
   *uids = NULL;
 
-  e2rq = EntrezCreateBooleanRequest(!count_only, FALSE,
-                                    is_na? "Nucleotide" : "Protein",
-                                    query, 0, 0, NULL, 0, 0);
+  do {
+    e2rq = EntrezCreateBooleanRequest(TRUE, FALSE,
+                                      is_na? "Nucleotide" : "Protein",
+                                      query, 0, 0, NULL, max_uids, offset);
 
-  e2ry = MyEntrezSynchronousQuery(e2rq);
+    e2br = EntrezExtractBooleanReply(MyEntrezSynchronousQuery(e2rq));
+    Entrez2RequestFree(e2rq);
 
-  if(e2ry == NULL)
-  {
-    ErrPostEx(SEV_ERROR, 0, 0, "NULL returned from EntrezSynchronousQuery()");
-    return -1;
-  }
+    /* get the total number of uids */
+    if (e2br != NULL)
+      total = e2br->count;
+    else
+      return -1;
 
-  if((e2rp = e2ry->reply) == NULL)
-  {
-    ErrPostEx(SEV_ERROR, 0, 0, "Invalid ASN.1: E2ReplyPtr==NULL");
-    return -1;
-  }
+    /* allocate the destination buffer */
+    if (*uids == NULL)
+      *uids = MemNew(sizeof(Int4)*total);
+       
+    if (*uids == NULL)
+      return -1;
 
-  switch(e2rp->choice)
-  {
-
-  case E2Reply_error:
-    ErrPostEx(SEV_ERROR, 0, 0, (CharPtr) e2rp->data.ptrvalue);
-    count = -1;
-    break;
-  case E2Reply_eval_boolean:
-    e2br = (Entrez2BooleanReplyPtr) e2rp->data.ptrvalue;
-    count = e2br->count;
-    if((e2idlist = e2br->uids) != NULL) {
+    /* find the number of uids retrieved in this batch */
+    if((e2idlist = e2br->uids) != NULL)
       count = e2idlist->num;
-      *uids = MemNew(sizeof(Int4)*count);
-      BSSeek((ByteStorePtr) e2idlist->uids, 0, SEEK_SET);
-      BSRead((ByteStorePtr) e2idlist->uids, *uids, sizeof(Int4)*count);
+    else
+      return -1;
 
-    }
-    break;
-  default:
-    ErrPostEx(SEV_ERROR, 0, 0, "Invalid reply type from the server: %d", e2rp->choice);
-    count = -1;
-    break;
-  }
-  Entrez2ReplyFree(e2ry);
-  Entrez2RequestFree(e2rq);
-  return count;
+    /* copy the uids to the destination */
+    BSSeek((ByteStorePtr) e2idlist->uids, 0, SEEK_SET);
+    BSRead((ByteStorePtr) e2idlist->uids, *uids + offset, sizeof(Int4)*count);
+    Entrez2BooleanReplyFree(e2br);
+    offset += count;
+  } while (offset < total);
+
+  return total;
 }
 
 #define FASTA_LINE_SIZE         70
@@ -1143,6 +1165,65 @@ MyBioseqToFasta(BioseqPtr bsp, Pointer userdata)
         MemSet ((Pointer) &vn, 0, sizeof (ValNode));
         
         si.from = start;  si.to = stop;  si.strand = 0;
+        si.id = SeqIdFindBest (bsp->id, 0);
+        
+        vn.choice = SEQLOC_INT;
+        vn.data.ptrvalue = (Pointer) &si;
+        
+        SeqLocFastaStream (&vn, fp, STREAM_ALLOW_NEG_GIS |  
+                           STREAM_EXPAND_GAPS | SUPPRESS_VIRT_SEQ, FASTA_LINE_SIZE, 0, 0);
+#else
+		spp = SeqPortNew(bsp,start,stop,0, (ISA_na(bsp->mol))?Seq_code_iupacna:Seq_code_ncbieaa);
+		if(spp==NULL) return;
+		SeqPortSet_do_virtual(spp, TRUE);
+		while (FastaSeqLineEx(spp, buf, FASTA_LINE_SIZE, ISA_na(bsp->mol),TRUE)) {
+			fprintf(fp,"%s\n", buf);
+			buf[0] = '\0';
+		}
+		if(spp) {
+			SeqPortFree(spp);
+			spp=NULL;
+		}
+#endif
+		start=stop+1;
+	}
+    SeqMgrFreeCache();                                                                                                                    
+    ObjMgrReap(ObjMgrGet());                                                                                                              
+    ObjMgrFreeCache(0);
+}
+
+static void
+MyBioseqToRevCompFasta(BioseqPtr bsp, Pointer userdata)
+{
+#ifdef SEQPORT_2_SEQSTREAM
+        SeqInt   si;
+        ValNode  vn;
+#else
+        SeqPortPtr      spp=NULL;
+#endif
+        Char            buf[2048];
+        Char         	str[200];
+        ValNodePtr      vnp;
+        MolInfoPtr      mip=NULL;
+	FILE PNTR fp=(FILE PNTR)userdata;
+	Int4    start=0,step=FASTA_LINE_SIZE*FASTA_LINES_IN_CHUNK,stop;
+
+	for(vnp=bsp->descr;vnp;vnp=vnp->next){
+                if(vnp->choice==Seq_descr_molinfo){
+                        mip = (MolInfoPtr)(vnp->data.ptrvalue);
+                }
+        }
+	SeqIdWrite(bsp->id,str,PRINTID_FASTA_LONG,199);
+	if(!CreateDefLine(NULL, bsp, buf, sizeof(buf), mip?mip->tech:0, NULL, NULL)) return;
+	fprintf(fp, ">%s %s\n", str,buf);
+	while(start < bsp->length){
+		stop=start+step-1;
+		if(stop >= bsp->length) stop=bsp->length-1;
+#ifdef SEQPORT_2_SEQSTREAM
+        MemSet ((Pointer) &si, 0, sizeof (SeqInt));
+        MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+        
+        si.from = start;  si.to = stop;  si.strand = Seq_strand_minus;
         si.id = SeqIdFindBest (bsp->id, 0);
         
         vn.choice = SEQLOC_INT;

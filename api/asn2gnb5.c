@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.171 $
+* $Revision: 1.185 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -149,6 +149,7 @@ static UrlData Nlm_url_base [] = {
   {"dictyBase",             "http://dictybase.org/db/cgi-bin/gene_page.pl?dictybaseid="},
   {"ECOCYC",                "http://biocyc.org/ECOLI/new-image?type=GENE&object="},
   {"EcoGene",               "http://ecogene.org/geneInfo.php?eg_id="},
+  {"ENSEMBL",               "http://www.ensembl.org/id/"},
   {"ERIC",                  "http://www.ericbrc.org/genbank/dbxref/"},
   {"FANTOM_DB",             "http://fantom.gsc.riken.jp/db/annotate/main.cgi?masterid="},
   {"FLYBASE",               "http://flybase.bio.indiana.edu/.bin/fbidq.html?"},
@@ -165,6 +166,7 @@ static UrlData Nlm_url_base [] = {
   {"HOMD",                  "http://www.homd.org/"},
   {"HPRD",                  "http://www.hprd.org/protein/"},
   {"HSSP",                  "http://srs.ebi.ac.uk/srsbin/cgi-bin/wgetz?-newId+-e+hssp-ID:"},
+  {"IKMC",                  "http://www.knockoutmouse.org/martsearch/project/"},
   {"IMGT/GENE-DB",          "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+"},
   {"IMGT/LIGM",             "http://imgt.cines.fr:8104/cgi-bin/IMGTlect.jv?query=202+"},
   {"InterimID",             "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
@@ -175,7 +177,7 @@ static UrlData Nlm_url_base [] = {
   {"JCM",                   "http://www.jcm.riken.go.jp/cgi-bin/jcm/jcm_number?JCM="},
   {"JGIDB",                 "http://genome.jgi-psf.org/cgi-bin/jgrs?id="},
   {"LocusID",               "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
-  {"MaizeGDB",              "http://www.maizegdb.org/supersearch.php?show=loc&pattern="},
+  {"MaizeGDB",              "http://www.maizegdb.org/cgi-bin/displaylocusrecord.cgi?"},
   {"MGI",                   "http://www.informatics.jax.org/searches/accession_report.cgi?id=MGI:"},
   {"MIM",                   "http://www.ncbi.nlm.nih.gov/entrez/dispomim.cgi?id="},
   {"miRBase",               "http://www.mirbase.org/cgi-bin/mirna_entry.pl?acc="},
@@ -198,7 +200,7 @@ static UrlData Nlm_url_base [] = {
   {"RATMAP",                "http://ratmap.gen.gu.se/ShowSingleLocus.htm?accno="},
   {"REBASE",                "http://rebase.neb.com/rebase/enz/"},
   {"RFAM",                  "http://www.sanger.ac.uk/cgi-bin/Rfam/getacc?"},
-  {"RGD",                   "http://rgd.mcw.edu/query/query.cgi?id="},
+  {"RGD",                   "http://rgd.mcw.edu/generalSearch/RgdSearch.jsp?quickSearch=1&searchKeyword="},
   {"RiceGenes",             "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Marker&object="},
   {"SEED",                  "http://www.theseed.org/linkin.cgi?id="},
   {"SGD",                   "http://db.yeastgenome.org/cgi-bin/SGD/locus.pl?locus="},
@@ -262,9 +264,7 @@ static void FF_www_get_url (
 {
   CharPtr  base = NULL, prefix = NULL, profix = NULL, ident = NULL, suffix = NULL, url = NULL, ptr, str;
   Char     ch, buf [128], id [20], taxname [128];
-  /*
   Boolean  is_numeric;
-  */
   Int2     R;
 
   if (ffstring == NULL || StringHasNoText (db) || StringHasNoText (identifier)) return;
@@ -369,7 +369,6 @@ static void FF_www_get_url (
       url = "http://www.jbirc.aist.go.jp/hinv/hinvsys/servlet/ExecServlet?KEN_INDEX=0&KEN_TYPE=31&KEN_STR=";
     }
 
-
   } else if (StringCmp (db, "HOMD") == 0) {
 
     if (StringStr (identifier, "tax_") != NULL ) {
@@ -389,6 +388,31 @@ static void FF_www_get_url (
       if (StringCmp (taxname, "Mus musculus") == 0) {
         url = "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Mus+musculus&query=2+";
       }
+    }
+
+  } else if (StringCmp (db, "MaizeGDB") == 0) {
+
+    is_numeric = TRUE;
+    str = identifier;
+    ch = *str;
+    while (ch != '\0') {
+      if (! IS_DIGIT (ch)) {
+        is_numeric = FALSE;
+      }
+      str++;
+      ch = *str;
+    }
+
+    if (is_numeric) {
+      prefix = "id=";
+    } else {
+      prefix = "term=";
+    }
+
+  } else if (StringCmp (db, "miRBase") == 0) {
+
+    if (StringStr (identifier, "MIMAT") != NULL) {
+      url = "http://www.mirbase.org/cgi-bin/mature.pl?mature_acc=";
     }
 
   } else if (StringCmp (db, "niaEST") == 0) {
@@ -1538,7 +1562,7 @@ static CharPtr FormatCitJour (
       if (dp->data [1] != 0) {
         sprintf (year, " (%ld)", (long) (1900 + dp->data [1]));
       }
-    } else {
+    } else if (StringDoesHaveText (dp->str) && StringCmp (dp->str, "?") != 0) {
       StringCpy (year, " (");
       StringNCat (year, dp->str, 4);
       StringCat (year, ")");
@@ -2427,6 +2451,7 @@ static CharPtr FormatCitPat (
 static CharPtr FormatCitGen (
   FmtType format,
   Boolean dropBadCitGens,
+  Boolean is_ed,
   Boolean noAffilOnUnpub,
   CitGenPtr cgp
 )
@@ -2452,7 +2477,7 @@ static CharPtr FormatCitGen (
 
       /* !!! temporarily put date in unpublished citation for QA !!! */
 
-      if (dropBadCitGens) {
+      if (dropBadCitGens && is_ed) {
         year [0] = '\0';
         dp = cgp->date;
         if (dp != NULL) {
@@ -2560,7 +2585,7 @@ static CharPtr FormatCitGen (
   }
 
   if (! StringHasNoText (pages)) {
-    if (format == GENBANK_FMT) {
+    if (format == GENBANK_FMT || format == GENPEPT_FMT) {
       AddValNodeString (&head, ", ", pages, NULL);
     } else if (format == EMBL_FMT) {
       AddValNodeString (&head, ":", pages, NULL);
@@ -2635,6 +2660,7 @@ static CharPtr GetPubJournal (
   FmtType format,
   ModType mode,
   Boolean dropBadCitGens,
+  Boolean is_ed,
   Boolean noAffilOnUnpub,
   Boolean citArtIsoJta,
   PubdescPtr pdp,
@@ -2668,7 +2694,7 @@ static CharPtr GetPubJournal (
               break; /* skip just serial number */
             }
           }
-          journal = FormatCitGen (format, dropBadCitGens, noAffilOnUnpub, cgp);
+          journal = FormatCitGen (format, dropBadCitGens, is_ed, noAffilOnUnpub, cgp);
         }
         break;
       case PUB_Sub :
@@ -3154,6 +3180,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   ImprintPtr         imp;
   IndxPtr            index;
   IntRefBlockPtr     irp;
+  Boolean            is_ed = FALSE;
   size_t             len;
   SeqLocPtr          loc = NULL;
   MedlineEntryPtr    mep;
@@ -3334,7 +3361,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
 
     if (rbp->sites == 0) {
-      FFLineWrap(ffstring, temp, 0, 5, ASN2FF_EMBL_MAX, "RN");   
+      FFLineWrap(ajp, ffstring, temp, 0, 5, ASN2FF_EMBL_MAX, "RN");   
       FFRecycleString(ajp, temp);
       temp = FFGetString(ajp);
       FFStartPrint(temp, afp->format, 0, 0, NULL, 0, 5, 5, "RP", FALSE);
@@ -3345,15 +3372,15 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
       FFAddOneString (temp, "(sites)", FALSE, FALSE, TILDE_TO_SPACES);
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else {
-      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RP");
+      FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RP");
     }
   } else if (rbp->sites == 3) {
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else {
-      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RP");
+      FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RP");
     }
   } else {
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
@@ -3410,9 +3437,9 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
       FFAddOneString (temp, ")", FALSE, FALSE, TILDE_TO_SPACES);
     }
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else {
-      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RP");
+      FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RP");
     }
   }
 
@@ -3461,9 +3488,9 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     }
 
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else {
-      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RA");
+      FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RA");
     }
   }
   MemFree (str);
@@ -3476,9 +3503,9 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     FFStartPrint (temp, afp->format, 2, 12, "CONSRTM", 12, 5, 5, "RG", FALSE);
     FFAddTextToString (temp, NULL, consortium, suffix, FALSE, FALSE, TILDE_TO_SPACES);
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else {
-      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RG");
+      FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RG");
     }
   }
   MemFree (consortium);
@@ -3509,7 +3536,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
       FFStartPrint (temp, afp->format, 2, 12, "TITLE", 12, 5, 5, "RT", FALSE);
 
       FFAddTextToString (temp, prefix, str, suffix, FALSE, FALSE, TILDE_TO_SPACES);
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     }
   } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
     FFStartPrint (temp, afp->format, 2, 12, "TITLE", 12, 5, 5, "RT", FALSE);
@@ -3520,7 +3547,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     } else {
       FFAddOneChar (temp, ';', FALSE);
     }
-    FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RT");
+    FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RT");
   }
 
   if (gbseq != NULL) {
@@ -3551,14 +3578,17 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         sip->choice == SEQID_TPD) {
       strict_isojta = TRUE;
     }
+    if (sip->choice == SEQID_EMBL || sip->choice == SEQID_DDBJ) {
+      is_ed = TRUE;
+    }
   }
   if (! strict_isojta) {
     citArtIsoJta = FALSE;
   }
 
   str = GetPubJournal (afp->format, ajp->mode, ajp->flags.dropBadCitGens,
-                       ajp->flags.noAffilOnUnpub, citArtIsoJta, pdp, csp,
-                       bsp->id, index, ajp);
+                       is_ed, ajp->flags.noAffilOnUnpub, citArtIsoJta,
+                       pdp, csp, bsp->id, index, ajp);
   if (str == NULL) {
     str = StringSave ("Unpublished");
   }
@@ -3598,9 +3628,9 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
   MemFree (str);
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-    FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+    FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
   } else {
-    FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RL");
+    FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RL");
   }
 
   if (gbseq != NULL) {
@@ -3643,11 +3673,11 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
       FF_www_muid (ajp, temp, muid);
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
       sprintf (buf, "MEDLINE; %ld.", (long) muid);
       FFAddOneString (temp, buf, FALSE, FALSE, TILDE_TO_SPACES);
-      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RX");
+      FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RX");
     }
   }
 
@@ -3658,11 +3688,11 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     FFStartPrint (temp, afp->format, 3, 12, "PUBMED", 12, 5, 5, "RX", FALSE);
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
       FF_www_muid (ajp, temp, pmid);
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
       sprintf (buf, "PUBMED; %ld.", (long) pmid);
       FFAddOneString (temp, buf, FALSE, FALSE, TILDE_TO_SPACES);
-      FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RX");
+      FFLineWrap(ajp, ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RX");
     }
   }
   FFRecycleString(ajp, temp);
@@ -3684,7 +3714,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         FFStartPrint (temp, afp->format, 2, 12, "REMARK", 12, 5, 5, NULL, FALSE);
         /* FFAddOneString (temp, csp->descr, FALSE, TRUE, TILDE_EXPAND); */
         AddCommentWithURLlinks(ajp, temp, NULL, csp->descr, NULL);
-        FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+        FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
       }
     }
 
@@ -3747,7 +3777,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
           } else {
             FFAddOneString (temp, buf, FALSE, FALSE, TILDE_EXPAND);
           }
-          FFLineWrap (ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+          FFLineWrap (ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
           prefix = NULL;
         }
       }
@@ -3771,7 +3801,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
         FFAddOneString (temp, pdp->comment, FALSE, TRUE, TILDE_EXPAND);
         /* AddCommentWithURLlinks(ajp, temp, NULL, pdp->comment, NULL); */
-        FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+        FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
         prefix = NULL;
 
         if (gbseq != NULL) {
@@ -3809,7 +3839,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
       remprefix = "; ";
       FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
       FFAddOneString (temp, buf, FALSE, FALSE, TILDE_EXPAND);
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
       prefix = NULL;
 
       /* gibbsq comment section (fields may be copied from degenerate pubdesc) */
@@ -3830,7 +3860,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         remprefix = "; ";
         FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
         FFAddOneString (temp, buf, TRUE, TRUE, TILDE_EXPAND);
-        FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+        FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
         prefix = NULL;
       }
 
@@ -3845,7 +3875,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         remprefix = "; ";
         FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
         FFAddOneString (temp, "Polyadenylate residues occurring in the figure were omitted from the sequence.", TRUE, TRUE, TILDE_EXPAND);
-        FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+        FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
         prefix = NULL;
       }
 
@@ -3865,7 +3895,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         remprefix = "; ";
         FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
         FFAddOneString (temp, buf, TRUE, TRUE, TILDE_EXPAND);
-        FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+        FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
         prefix = NULL;
       }
 
@@ -3906,7 +3936,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
                   if (StringDoesHaveText (crp->exp)) {
                     FFAddTextToString (temp, ":[", crp->exp, "]", FALSE, TRUE, TILDE_EXPAND);
                   }
-                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+                  FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
                   prefix = NULL;
                 } else if (crp->type == 3) {
                   FFRecycleString(ajp, temp);
@@ -3933,7 +3963,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
                   if (StringDoesHaveText (crp->exp)) {
                     FFAddTextToString (temp, ":[", crp->exp, "]", FALSE, TRUE, TILDE_EXPAND);
                   }
-                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+                  FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
                   prefix = NULL;
                 } else if (crp->type == 4) {
                   FFRecycleString(ajp, temp);
@@ -3960,7 +3990,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
                   if (StringDoesHaveText (crp->exp)) {
                     FFAddTextToString (temp, " to:[", crp->exp, "]", FALSE, TRUE, TILDE_EXPAND);
                   }
-                  FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+                  FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
                   prefix = NULL;
                 }
               }
@@ -3982,7 +4012,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
             FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
             /* FFAddOneString (temp, csp->descr, FALSE, TRUE, TILDE_EXPAND); */
             AddCommentWithURLlinks(ajp, temp, NULL, csp->descr, NULL);
-            FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+            FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
             prefix = NULL;
           }
         }
@@ -4007,7 +4037,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
       remprefix = "; ";
       FFStartPrint (temp, afp->format, 2, 12, prefix, 12, 5, 5, NULL, FALSE);
       FFAddOneString (temp, pubstatnote, FALSE, FALSE, TILDE_EXPAND);
-      FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+      FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
       prefix = NULL;
     }
 
@@ -4036,7 +4066,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
           FFAddOneString (temp, "DOI: ", FALSE, FALSE, TILDE_EXPAND);
           FFAddOneString (temp, doi, FALSE, FALSE, TILDE_EXPAND);
         }
-        FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
+        FFLineWrap(ajp, ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
         prefix = NULL;
       }
     }

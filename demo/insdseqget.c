@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/4/02
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description:  Demo to fetch by accession, write INSDSet XML
 *
@@ -54,6 +54,10 @@
 #include <ent2api.h>
 #include <pmfapi.h>
 #include <asn2gnbp.h>
+
+#define INSDSEQGET_APP_VER "1.1"
+
+CharPtr INSDSEQGET_APPLICATION = INSDSEQGET_APP_VER;
 
 static CharPtr ReadALine (
   CharPtr str,
@@ -398,6 +402,7 @@ Int2 Main (void)
 
 {
   AsnIoPtr    aip;
+  Char        app [64];
   AsnTypePtr  atp;
   FILE        *dfp = NULL;
   Boolean     do_nuc = FALSE;
@@ -439,7 +444,8 @@ Int2 Main (void)
     return 1;
   }
 
-  if (! GetArgs ("insdseqget", sizeof (myargs) / sizeof (Args), myargs)) {
+  sprintf (app, "insdseqget %s", INSDSEQGET_APPLICATION);
+  if (! GetArgs (app, sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
   }
 

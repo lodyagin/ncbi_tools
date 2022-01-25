@@ -1,4 +1,4 @@
---$Revision: 1.68 $
+--$Revision: 1.118 $
 --**********************************************************************
 --
 --  NCBI ASN.1 macro editing language specifications
@@ -10,7 +10,7 @@
 NCBI-Macro DEFINITIONS ::=
 BEGIN
 
-EXPORTS AECR-action, Parse-action, Macro-action-list;
+EXPORTS AECR-action, Parse-action, Macro-action-list, Suspect-rule-set;
 
 -- simple constraints --
 
@@ -21,12 +21,29 @@ String-location ::= ENUMERATED {
     ends (4) ,
     inlist (5) }
 
+Word-substitution ::= SEQUENCE {
+    word VisibleString OPTIONAL ,
+    synonyms SET OF VisibleString OPTIONAL ,
+    case-sensitive BOOLEAN DEFAULT FALSE ,
+    whole-word BOOLEAN DEFAULT FALSE }
+
+Word-substitution-set ::= SET OF Word-substitution
+
 String-constraint ::= SEQUENCE {
-    match-text VisibleString ,
+    match-text VisibleString OPTIONAL ,
     match-location String-location DEFAULT contains ,
     case-sensitive BOOLEAN DEFAULT FALSE ,
+    ignore-space BOOLEAN DEFAULT FALSE ,
+    ignore-punct BOOLEAN DEFAULT FALSE ,
+    ignore-words Word-substitution-set OPTIONAL ,
     whole-word BOOLEAN DEFAULT FALSE ,
-    not-present BOOLEAN DEFAULT FALSE }
+    not-present BOOLEAN DEFAULT FALSE ,
+    is-all-caps BOOLEAN DEFAULT FALSE ,
+    is-all-lower BOOLEAN DEFAULT FALSE ,
+    is-all-punct BOOLEAN DEFAULT FALSE ,
+    ignore-weasel BOOLEAN DEFAULT FALSE }
+
+String-constraint-set ::= SET OF String-constraint
 
 Strand-constraint ::= ENUMERATED {
     any (0) ,
@@ -71,7 +88,7 @@ Object-type-constraint ::= ENUMERATED {
 
 -- feature values --
 
-Feature-type ::= ENUMERATED {
+Macro-feature-type ::= ENUMERATED {
     any (0) ,
     gene (1) ,
     org (2) ,
@@ -165,7 +182,8 @@ Feature-type ::= ENUMERATED {
     operon (90) ,
     oriT (91) ,
     ncRNA (92) ,
-    tmRNA (93) }
+    tmRNA (93) ,
+    mobile-element (94) }
 
 Feat-qual-legal ::= ENUMERATED {
     allele (1) ,
@@ -236,7 +254,9 @@ Feat-qual-legal ::= ENUMERATED {
     satellite-type (66) ,
     satellite-name (67) ,
     location (68) ,
-    tag-peptide (69) }
+    tag-peptide (69) ,
+    mobile-element-type-type (70) ,
+    name (71) }
 
 Feat-qual-legal-val ::= SEQUENCE {
     qual Feat-qual-legal ,
@@ -252,19 +272,20 @@ Feat-qual-choice ::= CHOICE {
     illegal-qual String-constraint }
 
 Feature-field ::= SEQUENCE {
-    type Feature-type ,
+    type Macro-feature-type ,
     field Feat-qual-choice }
 
 Feature-field-legal ::= SEQUENCE {
-    type Feature-type ,
+    type Macro-feature-type ,
     field Feat-qual-legal }
 
 Feature-field-pair ::= SEQUENCE {
-    type Feature-type ,
+    type Macro-feature-type ,
     field-from Feat-qual-choice ,
     field-to Feat-qual-choice }
 
 Rna-feat-type ::= CHOICE {
+    any NULL ,
     preRNA NULL ,
     mRNA NULL ,
     tRNA NULL ,
@@ -394,7 +415,8 @@ Source-qual ::= ENUMERATED {
     linkage-group (93) ,
     haplogroup (94),
     all-quals (95),
-    dbxref (96) 
+    dbxref (96) ,
+    taxid (97)
 }
 
 Source-qual-pair ::= SEQUENCE {
@@ -497,7 +519,7 @@ Molecule-type ::= ENUMERATED {
   transcribed-RNA (8) ,
   ncRNA (9) ,
   transfer-messenger-RNA (10) ,
-  other (11) }
+  macro-other (11) }
 
 Technique-type ::= ENUMERATED {
   unknown (0) , 
@@ -602,6 +624,10 @@ Molinfo-field-pair ::= CHOICE {
 
 Molinfo-field-list ::= SET OF Molinfo-field
 
+Molinfo-field-constraint ::= SEQUENCE {
+    field Molinfo-field ,
+    is-not BOOLEAN DEFAULT FALSE }
+
 -- publication fields --
 
 Publication-field ::=  ENUMERATED {
@@ -648,6 +674,18 @@ Misc-field ::= ENUMERATED {
     defline (3) ,
     keyword (4)
     }
+
+-- dblink fields --
+DBLink-field-type ::= ENUMERATED {
+  trace-assembly (1) ,
+  bio-sample (2) ,
+  probe-db (3) ,
+  sequence-read-archve (4) }
+
+DBLink-field-pair ::= SEQUENCE {
+  from DBLink-field-type ,
+  to DBLink-field-type
+  }
      
 -- complex constraints --
 
@@ -665,7 +703,9 @@ Pub-field-constraint ::= SEQUENCE {
 Pub-field-special-constraint-type ::= CHOICE {
   is-present NULL ,
   is-not-present NULL ,
-  is-all-caps NULL }
+  is-all-caps NULL ,
+  is-all-lower NULL ,
+  is-all-punct NULL }
 
 Pub-field-special-constraint ::= SEQUENCE {
   field Publication-field ,
@@ -731,11 +771,33 @@ Quantity-constraint ::= CHOICE {
   greater-than INTEGER ,
   less-than INTEGER }
 
+Feature-strandedness-constraint ::= ENUMERATED {
+  any (0) ,
+  minus-only (1) ,
+  plus-only (2) ,
+  at-least-one-minus (3) ,
+  at-least-one-plus (4) ,
+  no-minus (5) ,
+  no-plus (6) }
+
 Sequence-constraint ::= SEQUENCE {
     seqtype Sequence-constraint-mol-type-constraint OPTIONAL ,
     id String-constraint OPTIONAL ,
-    feature Feature-type ,
-    num-features Quantity-constraint OPTIONAL }
+    feature Macro-feature-type ,
+    num-features Quantity-constraint OPTIONAL ,
+    length Quantity-constraint OPTIONAL ,
+    strandedness Feature-strandedness-constraint DEFAULT any }
+
+Match-type-constraint ::= ENUMERATED {
+  dont-care (0) ,
+  yes (1) ,
+  no (2) }
+
+Translation-constraint ::= SEQUENCE {
+  actual-strings String-constraint-set ,
+  transl-strings String-constraint-set ,
+  internal-stops Match-type-constraint DEFAULT dont-care ,
+  num-mismatches Quantity-constraint OPTIONAL }
 
 Constraint-choice ::= CHOICE {
     string String-constraint ,
@@ -745,7 +807,10 @@ Constraint-choice ::= CHOICE {
     cdsgeneprot-qual CDSGeneProt-qual-constraint ,
     cdsgeneprot-pseudo CDSGeneProt-pseudo-constraint ,
     sequence Sequence-constraint ,
-    pub Publication-constraint }
+    pub Publication-constraint ,
+    molinfo Molinfo-field-constraint ,
+    field-missing Field-type ,
+    translation Translation-constraint }
 
 Constraint-choice-set ::= SET OF Constraint-choice
 
@@ -771,7 +836,8 @@ Field-edit-location ::= ENUMERATED {
 Field-edit ::= SEQUENCE {
     find-txt VisibleString ,
     repl-txt VisibleString OPTIONAL ,
-    location Field-edit-location DEFAULT anywhere }
+    location Field-edit-location DEFAULT anywhere ,
+    case-insensitive BOOLEAN DEFAULT FALSE }
 
 Field-type ::= CHOICE {
     source-qual Source-qual-choice ,
@@ -781,7 +847,8 @@ Field-type ::= CHOICE {
     molinfo-field Molinfo-field ,
     pub Publication-field ,
     struc-comment-field Structured-comment-field ,
-    misc Misc-field }
+    misc Misc-field ,
+    dblink DBLink-field-type }
 
 Field-pair-type ::= CHOICE {
     source-qual Source-qual-pair ,
@@ -789,7 +856,8 @@ Field-pair-type ::= CHOICE {
     rna-field Rna-qual-pair ,
     cds-gene-prot CDSGeneProt-field-pair ,
     molinfo-field Molinfo-field-pair ,
-    struc-comment-field Structured-comment-field-pair } 
+    struc-comment-field Structured-comment-field-pair ,
+    dblink DBLink-field-pair} 
 
 ExistingTextOption ::= ENUMERATED {
   replace-old (1) ,
@@ -823,6 +891,13 @@ Cap-change ::= ENUMERATED {
     firstcap (3) ,
     firstcaprestnochange (4) }
 
+Text-transform ::= CHOICE {
+  edit Field-edit ,
+  caps Cap-change ,
+  remove Text-portion }
+
+Text-transform-set ::= SET OF Text-transform
+
 Convert-action ::= SEQUENCE {
     fields Field-pair-type ,
     strip-name BOOLEAN DEFAULT FALSE ,
@@ -844,6 +919,7 @@ AECRParse-action ::= SEQUENCE {
     remove-from-parsed BOOLEAN DEFAULT FALSE ,
     remove-left BOOLEAN DEFAULT FALSE ,
     remove-right BOOLEAN DEFAULT FALSE ,
+    transform Text-transform-set OPTIONAL ,
     existing-text ExistingTextOption }
 
 Remove-action ::= SEQUENCE {
@@ -871,6 +947,13 @@ Parse-src-org ::= SEQUENCE {
     field Parse-src-org-choice ,
     type Object-type-constraint DEFAULT any }
 
+-- For Parse-src-general-id tag, specify the db of the id from which you
+-- want to retrieve the tag.  If empty or null, any db will do.
+Parse-src-general-id ::= CHOICE {
+    whole-text NULL ,
+    db NULL ,
+    tag VisibleString }
+
 Parse-src ::= CHOICE {
     defline NULL ,
     flatfile NULL ,
@@ -879,7 +962,8 @@ Parse-src ::= CHOICE {
     comment NULL ,
     bankit-comment NULL ,
     structured-comment VisibleString ,
-    file-id NULL }
+    file-id NULL ,
+    general-id Parse-src-general-id }
 
 Parse-dst-org ::= SEQUENCE {
     field Source-qual-choice ,
@@ -898,6 +982,7 @@ Parse-action ::= SEQUENCE {
     dest Parse-dest ,
     capitalization Cap-change DEFAULT none ,
     remove-from-parsed BOOLEAN DEFAULT FALSE ,
+    transform Text-transform-set OPTIONAL ,
     existing-text ExistingTextOption }
 
 
@@ -916,7 +1001,7 @@ Sequence-list-choice ::= CHOICE {
     all NULL }
     
 Apply-feature-action ::= SEQUENCE {
-    type Feature-type ,
+    type Macro-feature-type ,
     partial5 BOOLEAN DEFAULT FALSE ,
     partial3 BOOLEAN DEFAULT FALSE ,
     plus-strand BOOLEAN DEFAULT TRUE ,
@@ -930,7 +1015,7 @@ Apply-feature-action ::= SEQUENCE {
     src-fields Source-qual-val-set OPTIONAL }
 
 Remove-feature-action ::= SEQUENCE {
-    type Feature-type ,
+    type Macro-feature-type ,
     constraint Constraint-choice-set OPTIONAL }
 
 -- for convert features --
@@ -992,8 +1077,8 @@ Convert-feature-dst-options ::= CHOICE {
 
 
 Convert-feature-action ::= SEQUENCE {
-  type-from Feature-type ,
-  type-to Feature-type ,
+  type-from Macro-feature-type ,
+  type-to Macro-feature-type ,
   src-options Convert-feature-src-options OPTIONAL ,
   dst-options Convert-feature-dst-options OPTIONAL ,
   leave-original BOOLEAN ,
@@ -1047,6 +1132,18 @@ Partial-3-clear-constraint ::= ENUMERATED {
   not-at-end (1) ,
   good-end (2) }
 
+Partial-both-set-constraint ::= ENUMERATED {
+  all (0) ,
+  at-end (1) }
+
+Partial-both-set-action ::= SEQUENCE {
+  constraint Partial-both-set-constraint ,
+  extend BOOLEAN }
+
+Partial-both-clear-constraint ::= ENUMERATED {
+  all (0) ,
+  not-at-end (1) }
+  
 Convert-location-type ::= ENUMERATED {
   join (1) ,
   order (2) ,
@@ -1058,13 +1155,16 @@ Location-edit-type ::= CHOICE {
   clear-5-partial Partial-5-clear-constraint ,
   set-3-partial Partial-3-set-action ,
   clear-3-partial Partial-3-clear-constraint ,
+  set-both-partial Partial-both-set-action ,
+  clear-both-partial Partial-both-clear-constraint ,
   convert Convert-location-type ,
   extend-5 NULL ,
   extend-3 NULL }
 
 Edit-feature-location-action ::= SEQUENCE {
-  type Feature-type ,
+  type Macro-feature-type ,
   action Location-edit-type ,
+  retranslate-cds BOOLEAN OPTIONAL ,
   constraint Constraint-choice-set OPTIONAL }
 
 Molinfo-block ::= SEQUENCE {
@@ -1103,7 +1203,73 @@ Fix-pub-caps-action ::= SEQUENCE {
   title BOOLEAN OPTIONAL ,
   authors BOOLEAN OPTIONAL ,
   affiliation BOOLEAN OPTIONAL ,
+  affil-country BOOLEAN OPTIONAL ,
+  punct-only BOOLEAN DEFAULT FALSE ,
   constraint Constraint-choice-set OPTIONAL }
+
+Sort-order ::= ENUMERATED {
+  short-to-long (1) ,
+  long-to-short (2) ,
+  alphabetical (3) }
+
+Sort-fields-action ::= SEQUENCE {
+  field Field-type ,
+  order Sort-order ,
+  constraint Constraint-choice-set OPTIONAL }
+  
+Fix-caps-action ::= CHOICE {
+  pub Fix-pub-caps-action ,
+  src-country NULL ,
+  mouse-strain NULL ,
+  src-qual Source-qual }
+
+Fix-format-action ::= CHOICE {
+  collection-date NULL ,
+  lat-lon NULL ,
+  primers NULL ,
+  protein-name NULL }
+
+Remove-duplicate-feature-action ::= SEQUENCE {
+  type Macro-feature-type ,
+  ignore-partials BOOLEAN ,
+  case-sensitive BOOLEAN ,
+  remove-proteins BOOLEAN ,
+  rd-constraint Constraint-choice-set OPTIONAL }
+
+Gene-xref-suppression-type ::= ENUMERATED {
+  any (0) ,
+  suppressing (1) ,
+  non-suppressing (2) }
+
+Gene-xref-necessary-type ::= ENUMERATED {
+  any (0) ,
+  necessary (1) ,
+  unnecessary (2) }
+
+Gene-xref-type ::= SEQUENCE {
+  feature Macro-feature-type ,
+  suppression Gene-xref-suppression-type ,
+  necessary Gene-xref-necessary-type }
+  
+Xref-type ::= CHOICE {
+  gene Gene-xref-type }
+
+Remove-xrefs-action ::= SEQUENCE {
+  xref-type Xref-type ,
+  constraint Constraint-choice-set OPTIONAL } 
+
+Make-gene-xref-action ::= SEQUENCE {
+  feature Macro-feature-type ,
+  constraint Constraint-choice-set OPTIONAL } 
+
+Author-fix-type ::= ENUMERATED {
+  truncate-middle-initials (1) ,
+  strip-suffix (2) ,
+  move-middle-to-first (3) }
+
+Author-fix-action ::= SEQUENCE {
+  fix-type Author-fix-type ,
+  constraint Constraint-choice-set OPTIONAL }  
 
 Macro-action-choice ::= CHOICE {
   aecr AECR-action ,
@@ -1121,9 +1287,74 @@ Macro-action-choice ::= CHOICE {
   synchronize-cds-partials NULL ,
   adjust-for-consensus-splice NULL ,
   fix-pub-caps Fix-pub-caps-action ,
-  remove-seg-gaps NULL }
+  remove-seg-gaps NULL ,
+  sort-fields Sort-fields-action ,
+  apply-molinfo-block Molinfo-block ,
+  fix-caps Fix-caps-action ,
+  fix-format Fix-format-action ,
+  fix-spell NULL ,
+  remove-duplicate-features Remove-duplicate-feature-action ,
+  remove-lineage-notes NULL ,
+  remove-xrefs Remove-xrefs-action ,
+  make-gene-xrefs Make-gene-xref-action ,
+  make-bold-xrefs NULL ,
+  fix-author Author-fix-action }
 
 
 Macro-action-list ::= SET OF Macro-action-choice
+
+
+Search-func ::= CHOICE {
+  string-constraint String-constraint ,
+  contains-plural NULL ,
+  n-or-more-brackets-or-parentheses INTEGER ,
+  three-numbers NULL ,
+  underscore NULL ,
+  prefix-and-numbers VisibleString ,
+  all-caps NULL ,
+  unbalanced-paren NULL ,
+  too-long INTEGER ,
+  has-term VisibleString }
+
+Simple-replace ::= SEQUENCE {
+  replace VisibleString OPTIONAL,
+  whole-string BOOLEAN DEFAULT FALSE ,
+  weasel-to-putative BOOLEAN DEFAULT FALSE }
+
+Replace-func ::= CHOICE {
+  simple-replace Simple-replace ,
+  haem-replace VisibleString }
+
+Replace-rule ::= SEQUENCE {
+  replace-func Replace-func ,
+  move-to-note BOOLEAN DEFAULT FALSE }
+
+Fix-type ::= ENUMERATED {
+  none (0) ,
+  typo (1) ,
+  quickfix (2) ,
+  no-organelle-for-prokaryote (3),
+  might-be-nonfunctional (4),
+  database (5),
+  remove-organism-name (6),
+  inappropriate-symbol (7),
+  evolutionary-relationship (8),
+  use-protein (9),
+  hypothetical (10),
+  british (11),
+  description (12),
+  gene (13) }  
+  
+
+Suspect-rule ::= SEQUENCE {
+  find Search-func ,
+  except Search-func OPTIONAL ,
+  feat-constraint Constraint-choice-set OPTIONAL ,
+  rule-type Fix-type DEFAULT none ,
+  replace Replace-rule OPTIONAL }  
+
+Suspect-rule-set ::= SET OF Suspect-rule
+
+
 
 END

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.27 $
+* $Revision: 1.32 $
 *
 * File Description:
 *
@@ -61,7 +61,12 @@
 #include <tax3api.h>
 #endif
 
-#define ASNDISC_APP_VER "1.2"
+#define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macroapi.h>
+
+
+#define ASNDISC_APP_VER "1.3"
 
 CharPtr ASNDISC_APPLICATION = ASNDISC_APP_VER;
 
@@ -949,6 +954,9 @@ typedef enum {
   S_argSummaryReport,
   B_argBigSequenceReport,
   N_argProductNameFile,
+  P_argReportType,
+  w_argSuspectProductRuleFile,
+  L_argUseLineage,
   C_argMaxCount
 } DRFlagNum;
 
@@ -1014,6 +1022,10 @@ Args myargs [] = {
   TRUE, 'B', ARG_BOOLEAN, 0.0, 0, NULL},
   {"File with list of product names to check", "", NULL, NULL,
     TRUE, 'N', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Report type (g - Genome, b - Big Sequence, m - MegaReport)", "", NULL, NULL, TRUE, 'P', ARG_STRING, 0.0, 0, NULL},
+  {"Suspect product rule file name", "", NULL, NULL,
+    TRUE, 'w', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Lineage to use", "", NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},
   {"Max Count", "0", NULL, NULL,
     TRUE, 'C', ARG_INT, 0.0, 0, NULL},
 };
@@ -1042,19 +1054,103 @@ static CharPtr GetTestNameList (CharPtr intro)
 }
 
 
-static Boolean ValidateNameList (CharPtr filename, FILE *outputfile)
+static Boolean IsEntrezGene (CharPtr str)
+{
+  CharPtr cp;
+  Boolean rval = FALSE;
+
+  if (StringHasNoText (str)) {
+    return FALSE;
+  }
+  cp = str + StringSpn (str, " \t");
+  if (StringNCmp (cp, "Entrezgene", 10) == 0) {
+    cp += 10;
+    cp += StringSpn (cp, " ");
+    if (StringNCmp (cp, "::=", 3) == 0) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+static Boolean ValidateNameList (CharPtr filename, CharPtr rule_file, FILE *outputfile)
 {
   FILE *fp;
+  FileCache fc;
+  Int4      pos;
+  CharPtr   str;
+  Char      line [4096];
+  Boolean   is_entrezgene;
+  SuspectRuleSetPtr rule_list = NULL;
+  AsnIoPtr          aip;
+  Boolean           rval = FALSE;
+
+  if (!StringHasNoText (rule_file)) {
+    aip = AsnIoOpen (rule_file, "r");
+    if (aip == NULL) {
+      Message (MSG_FATAL, "Unable to open %s", rule_file);
+      return FALSE;
+    } else {
+      rule_list = SuspectRuleSetAsnRead (aip, NULL);
+      AsnIoClose (aip);
+      if (rule_list == NULL) {
+        Message (MSG_FATAL, "Unable to read rule list from %s.", rule_file);
+        return FALSE;
+      }
+    }
+  }
 
   fp = FileOpen (filename, "r");
   if (fp == NULL) {
     Message (MSG_FATAL, "Cannot open %s", filename);
-    return FALSE;
   } else {
-    FindSuspectProductNamesInNameList (fp, outputfile);
+    /* determine what kind of file it is - if not EntrezGene ASN.1, treat as simple list */
+    FileCacheSetup (&fc, fp);
+    pos = FileCacheTell (&fc);
+    str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+
+    if (str == NULL) {
+      Message (MSG_FATAL, "File %s is empty", filename);
+    } else {
+      is_entrezgene = IsEntrezGene (str);
+      FileCacheFree (&fc, FALSE);
+      fseek (fp, pos, SEEK_SET);
+
+      if (is_entrezgene) {
+        if (FindSuspectProductNamesInEntrezGene(fp, rule_list, outputfile)) {
+          rval = TRUE;
+        } else {
+          Message (MSG_FATAL, "Unable to read EntrezGene from %s", filename);
+        }
+      } else {
+        FindSuspectProductNamesInNameList (fp, rule_list, outputfile);
+        rval = TRUE;
+      }
+    }
     FileClose (fp);
-    return TRUE;
   }
+  rule_list = SuspectRuleSetFree (rule_list);
+  return rval;
+}
+
+
+static void SetReportLineage (CharPtr lineage)
+{
+  if (StringHasNoText (lineage)) {
+    SetAppProperty("ReportLineage", NULL);
+  } else {
+    if (StringICmp (lineage, "e") == 0) {
+      SetAppProperty("ReportLineage", StringSave ("Eukaryota"));
+    } else if (StringICmp (lineage, "v") == 0) {
+      SetAppProperty("ReportLineage", StringSave ("Viruses"));
+    } else if (StringICmp (lineage, "b") == 0) {
+      SetAppProperty("ReportLineage", StringSave ("Bacteria"));
+    } else {
+      SetAppProperty("ReportLineage", StringSave (myargs[L_argUseLineage].strvalue));
+    }
+  }
+
 }
 
 
@@ -1062,18 +1158,20 @@ Int2 Main (void)
 
 {
   Char         app [64];
-  CharPtr      asnidx, directory, infile, outfile, str, suffix, output_dir, product_name_file;
+  CharPtr      asnidx, directory, infile, outfile, str, suffix, output_dir, product_name_file, product_rule_file;
   CharPtr      enabled_list, disabled_list, err_msg;
   Boolean      batch, binary, compressed, dorecurse,
                indexed, local, lock, remote, usethreads;
   Int2         type = 0;
   DRFlagData   dfd;
   Boolean      big_sequence_report;
+  CharPtr      report_type;
 
   /* standard setup */
 
   ErrSetFatalLevel (SEV_MAX);
   ErrSetMessageLevel (SEV_MAX);
+  ErrSetLogLevel (SEV_ERROR);
   ErrClearOptFlags (EO_SHOW_USERSTR);
   ErrSetLogfile ("stderr", ELOG_APPEND);
   ErrSetOpts (ERR_IGNORE, ERR_LOG_ON);
@@ -1123,6 +1221,12 @@ Int2 Main (void)
   outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
   output_dir = (CharPtr) myargs [r_argOutputDir].strvalue;
   product_name_file = (CharPtr) myargs [N_argProductNameFile].strvalue;
+  product_rule_file = (CharPtr) myargs [w_argSuspectProductRuleFile].strvalue;
+  report_type = (CharPtr) myargs [P_argReportType].strvalue;
+
+  /* forced lineage */
+  SetReportLineage(myargs[L_argUseLineage].strvalue);
+
   if (StringDoesHaveText (outfile) && StringDoesHaveText (output_dir)) {
     Message (MSG_FATAL, "-o and -q are incompatible: specify the output file name with the full path.");
     return 1;
@@ -1147,15 +1251,44 @@ Int2 Main (void)
   /* set up Discrepancy Report Configuration */
   dfd.global_report = GlobalDiscrepReportNew ();
   dfd.global_report->test_config = DiscrepancyConfigNew();
-  DisableTRNATests (dfd.global_report->test_config);
+
 
   ExpandDiscrepancyReportTestsFromString ((CharPtr) myargs [X_argExpandCategories].strvalue, TRUE, dfd.global_report->output_config);
   dfd.global_report->output_config->summary_report = (Boolean) myargs [S_argSummaryReport].intvalue;
 
   big_sequence_report = (Boolean) myargs [B_argBigSequenceReport].intvalue;
+  if (StringHasNoText (report_type)) {
+    /* default to big sequence report or genomes */
+  } else if (big_sequence_report && StringCmp (report_type, "b") != 0) {
+    Message (MSG_FATAL, "Cannot combine -B with another report type");
+    return 1;
+  } else {
+    if (StringCmp (report_type, "b") != 0 && StringCmp (report_type, "g") != 0 && StringCmp (report_type, "m") != 0) {
+      Message (MSG_FATAL, "Unknown report type");
+    }
+    if (StringCmp (report_type, "b") == 0) {
+      big_sequence_report = TRUE;
+    }
+  }
 
   enabled_list = (CharPtr) myargs [e_argEnableTests].strvalue;
   disabled_list = (CharPtr) myargs [d_argDisableTests].strvalue;
+
+  if (StringHasNoText (enabled_list)) {
+    if (StringHasNoText (report_type) || StringCmp (report_type, "m") != 0) {
+      DisableTRNATests (dfd.global_report->test_config);
+    }
+
+    if (big_sequence_report) {
+      ConfigureForBigSequence (dfd.global_report->test_config);
+    } else if (StringCmp (report_type, "m") == 0) {
+      ConfigureForReportType(dfd.global_report->test_config, eReportTypeMegaReport);
+    } else {
+      ConfigureForGenomes (dfd.global_report->test_config);
+    }
+  } else {
+    SetDiscrepancyReportTestsFromString ("ALL", FALSE, dfd.global_report->test_config);
+  }
 
 
 #ifdef INTERNAL_NCBI_ASNDISC
@@ -1166,28 +1299,11 @@ Int2 Main (void)
   if (StringDoesHaveText (enabled_list) && StringDoesHaveText (disabled_list)) {
     err_msg = StringSave ("Cannot specify both -e and -d.  Choose -e to enable only a few tests and disable the rest, choose -d to disable only a few tests and enable the rest.");
   } else if (StringDoesHaveText (disabled_list)) {
-    if (big_sequence_report) {
-      ConfigureForBigSequence (dfd.global_report->test_config);
-    } else {
-      ConfigureForGenomes (dfd.global_report->test_config);
-    }
-
-    /* now disable tests from string */
+    /* disable tests from string */
     err_msg = SetDiscrepancyReportTestsFromString (disabled_list, FALSE, dfd.global_report->test_config);
   } else if (StringDoesHaveText (enabled_list)) {
-    if (big_sequence_report) {
-      ConfigureForBigSequence (dfd.global_report->test_config);
-    } else {
-      ConfigureForGenomes (dfd.global_report->test_config);
-    }
-    /* now enable tests from string */
+    /* enable tests from string */
     err_msg = SetDiscrepancyReportTestsFromString (enabled_list, TRUE, dfd.global_report->test_config);
-  } else {
-    if (big_sequence_report) {
-      ConfigureForBigSequence (dfd.global_report->test_config);
-    } else {
-      ConfigureForGenomes (dfd.global_report->test_config);
-    }
   }
   if (err_msg != NULL) {
     Message (MSG_FATAL, err_msg);
@@ -1262,7 +1378,7 @@ Int2 Main (void)
   }
 
   if (!StringHasNoText (product_name_file)) {
-    ValidateNameList (product_name_file, dfd.outfp);
+    ValidateNameList (product_name_file, product_rule_file, dfd.outfp);
     if (StringHasNoText (directory) && (StringHasNoText (infile) || StringCmp (infile, "stdin") == 0)) {
       if (dfd.outfp != NULL) {
         FileClose (dfd.outfp);
