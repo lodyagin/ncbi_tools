@@ -273,6 +273,10 @@ $^   UnwantedCompleteFlag, 26
 The Mol-info.completeness flag should not be set on a genomic sequence unless
 the title also says it is a complete sequence or complete genome.
 
+$^   CollidingPublications, 27
+Multiple publication descriptors with the same PMID or MUID apply to a Bioseq.
+The lower-level ones are redundant, and should be removed.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1

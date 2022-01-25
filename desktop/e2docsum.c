@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.48 $
+* $Revision: 6.49 $
 *
 * File Description: 
 *
@@ -1295,6 +1295,10 @@ static CharPtr Query_FetchFields (DoC d, Int2 item, Pointer ptr)
 /*                                                                  */
 /*==================================================================*/
 
+static CharPtr file_is_too_long_mssg =
+"The record is too large to display in this format in the document summary window.\n\
+Please double click here to launch a separate viewer that can display this record.";
+
 static CharPtr FileToString (CharPtr path)
 
 {
@@ -1307,16 +1311,20 @@ static CharPtr FileToString (CharPtr path)
   ptr = NULL;
   len = FileLength (path);
   if (len > 0 && len < MAXALLOC) {
-    fp = FileOpen (path, "r");
-    if (fp != NULL) {
-      ptr = MemNew (sizeof (Char) * (size_t) (len + 4));
-      if (ptr != NULL) {
-        actual = FileRead (ptr, 1, (size_t) len, fp);
-        if (actual > 0 && actual <= len) {
-          ptr [actual] = '\0';
+    if (len > 65000) {
+      ptr = StringSave (file_is_too_long_mssg);
+    } else {
+      fp = FileOpen (path, "r");
+      if (fp != NULL) {
+        ptr = MemNew (sizeof (Char) * (size_t) (len + 4));
+        if (ptr != NULL) {
+          actual = FileRead (ptr, 1, (size_t) len, fp);
+          if (actual > 0 && actual <= len) {
+            ptr [actual] = '\0';
+          }
         }
-      }
       FileClose (fp);
+      }
     }
   }
   return ptr;

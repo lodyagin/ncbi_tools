@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.h,v 1.13 2004/03/12 15:18:53 coulouri Exp $
+/* $Id: blast_seqalign.h,v 1.16 2004/06/08 17:47:24 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions to convert BLAST results to the SeqAlign form
 
 ******************************************************************************
- * $Revision: 1.13 $
+ * $Revision: 1.16 $
  * */
 #ifndef __BLAST_SEQALIGN__
 #define __BLAST_SEQALIGN__
@@ -55,17 +55,14 @@ extern "C" {
  * @param program_number Type of BLAST program [in]
  * @param results The BLAST results [in]
  * @param query_slp List of query SeqLoc's [in]
- * @param bssp Pointer to the BLAST database wrapper structure [in]
- * @param subject_slp Subject SeqLoc (for two sequences search) [in]
- * @param score_options Scoring options block [in]
- * @param sbp Scoring and statistical information [in]
+ * @param seq_src Pointer to the BLAST database wrapper structure [in]
  * @param is_gapped Is this a gapped alignment search? [in]
+ * @param is_ooframe Is this a search with out-of-frame gapping? [in]
  * @param head_seqalign List of SeqAlign's [out]
  */
 Int2 BLAST_ResultsToSeqAlign(Uint1 program_number, BlastHSPResults* results, 
-        SeqLocPtr query_slp, BlastSeqSrc* bssp, SeqLocPtr subject_slp, 
-        BlastScoringOptions* score_options, BlastScoreBlk* sbp,
-        Boolean is_gapped, SeqAlignPtr* head_seqalign);
+        SeqLocPtr query_slp, BlastSeqSrc* seq_src, 
+        Boolean is_gapped, Boolean is_ooframe, SeqAlignPtr* head_seqalign);
 
 Boolean GapCollectDataForSeqalign(GapEditBlock* edit_block,
                                   GapEditScript* curr_in, Int4 numseg,

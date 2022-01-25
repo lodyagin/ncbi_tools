@@ -1,44 +1,58 @@
-/* $Id: greedy_align.c,v 1.16 2004/03/29 20:57:57 dondosha Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================
-*
-* File Name:  $RCSfile: greedy_align.c,v $
-*
-* Author:  Webb Miller and Co.
-* Adopted for NCBI standard libraries by Sergey Shavirin
-*
-* Initial Creation Date: 10/27/1999
-*
-* $Revision: 1.16 $
-*
-* File Description: Greedy gapped alignment functions
-*/
+/* $Id: greedy_align.c,v 1.19 2004/05/19 14:52:03 camacho Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Webb Miller and Co. Adopted for NCBI libraries by Sergey Shavirin
+ *
+ * Initial Creation Date: 10/27/1999
+ *
+ */
 
-static char const rcsid[] = "$Id: greedy_align.c,v 1.16 2004/03/29 20:57:57 dondosha Exp $";
+/** @file greedy_align.c
+ * Greedy gapped alignment functions
+ */
+
+static char const rcsid[] = 
+    "$Id: greedy_align.c,v 1.19 2004/05/19 14:52:03 camacho Exp $";
 
 #include <algo/blast/core/greedy_align.h>
 #include <algo/blast/core/blast_util.h> /* for NCBI2NA_UNPACK_BASE macros */
+
+enum {
+    EDIT_OP_MASK = 0x3,
+    EDIT_OP_ERR  = 0x0,
+    EDIT_OP_INS  = 0x1,
+    EDIT_OP_DEL  = 0x2,
+    EDIT_OP_REP  = 0x3
+};
+
+enum {         /* half of the (fixed) match score */
+    ERROR_FRACTION=2,  /* 1/this */
+    MAX_SPACE=1000000,
+    sC = 0, sI = 1, sD = 2, LARGE=100000000
+};
+
 
 /* -------- From original file edit.c ------------- */
 
@@ -205,14 +219,14 @@ static MBGapEditScript *edit_script_reverse_inplace(MBGapEditScript *es)
     return es;
 }
 
-MBSpace* MBSpaceNew()
+SMBSpace* MBSpaceNew()
 {
-    MBSpace* p;
+    SMBSpace* p;
     Int4 amount;
     
-    p = (MBSpace*) malloc(sizeof(MBSpace));
+    p = (SMBSpace*) malloc(sizeof(SMBSpace));
     amount = MAX_SPACE;
-    p->space_array = (ThreeVal*) malloc(sizeof(ThreeVal)*amount);
+    p->space_array = (SThreeVal*) malloc(sizeof(SThreeVal)*amount);
     if (p->space_array == NULL) {
        sfree(p);
        return NULL;
@@ -224,7 +238,7 @@ MBSpace* MBSpaceNew()
     return p;
 }
 
-static void refresh_mb_space(MBSpace* sp)
+static void refresh_mb_space(SMBSpace* sp)
 {
    while (sp) {
       sp->used = 0;
@@ -232,9 +246,9 @@ static void refresh_mb_space(MBSpace* sp)
    }
 }
 
-void MBSpaceFree(MBSpace* sp)
+void MBSpaceFree(SMBSpace* sp)
 {
-   MBSpace* next_sp;
+   SMBSpace* next_sp;
 
    while (sp) {
       next_sp = sp->next;
@@ -244,9 +258,9 @@ void MBSpaceFree(MBSpace* sp)
    }
 }
 
-static ThreeVal* get_mb_space(MBSpace* S, Int4 amount)
+static SThreeVal* get_mb_space(SMBSpace* S, Int4 amount)
 {
-    ThreeVal* s;
+    SThreeVal* s;
     if (amount < 0) 
         return NULL;  
     
@@ -296,7 +310,7 @@ static Int4 gdb3(Int4* a, Int4* b, Int4* c)
     return g;
 }
 
-static Int4 get_lastC(ThreeVal** flast_d, Int4* lower, Int4* upper, 
+static Int4 get_lastC(SThreeVal** flast_d, Int4* lower, Int4* upper, 
                       Int4* d, Int4 diag, Int4 Mis_cost, Int4* row1)
 {
     Int4 row;
@@ -318,7 +332,7 @@ static Int4 get_lastC(ThreeVal** flast_d, Int4* lower, Int4* upper,
     }
 }
 
-static Int4 get_last_ID(ThreeVal** flast_d, Int4* lower, Int4* upper, 
+static Int4 get_last_ID(SThreeVal** flast_d, Int4* lower, Int4* upper, 
                         Int4* d, Int4 diag, Int4 GO_cost, 
                         Int4 GE_cost, Int4 IorD)
 {
@@ -337,14 +351,14 @@ static Int4 get_last_ID(ThreeVal** flast_d, Int4* lower, Int4* upper,
     return IorD;
 }
 
-static Int4 get_lastI(ThreeVal** flast_d, Int4* lower, Int4* upper, 
+static Int4 get_lastI(SThreeVal** flast_d, Int4* lower, Int4* upper, 
                       Int4* d, Int4 diag, Int4 GO_cost, Int4 GE_cost)
 {
     return get_last_ID(flast_d, lower, upper, d, diag, GO_cost, GE_cost, sI);
 }
 
 
-static int get_lastD(ThreeVal** flast_d, Int4* lower, Int4* upper, 
+static int get_lastD(SThreeVal** flast_d, Int4* lower, Int4* upper, 
                      Int4* d, Int4 diag, Int4 GO_cost, Int4 GE_cost)
 {
     return get_last_ID(flast_d, lower, upper, d, diag, GO_cost, GE_cost, sD);
@@ -389,9 +403,10 @@ Int4 BLAST_GreedyAlign(const Uint1* s1, Int4 len1,
 			  Boolean reverse, Int4 xdrop_threshold, 
 			  Int4 match_cost, Int4 mismatch_cost,
 			  Int4* e1, Int4* e2, 
-			  GreedyAlignMem* gamp, MBGapEditScript *S,
+			  SGreedyAlignMem* gamp, MBGapEditScript *S,
                           Uint1 rem)
 {
+#define ICEIL(x,y) ((((x)-1)/(y))+1)
     Int4 col,			/* column number */
         d,				/* current distance */
         k,				/* current diagonal */
@@ -411,7 +426,7 @@ Int4 BLAST_GreedyAlign(const Uint1* s1, Int4 len1,
     Int4 x, cur_max, b_diag = 0, best_diag = INT4_MAX/2;
     Int4* max_row_free = gamp->max_row_free;
     char nlower = 0, nupper = 0;
-    MBSpace* space = gamp->space;
+    SMBSpace* space = gamp->space;
     Int4 max_len = len2;
  
     MAX_D = (Int4) (len1/ERROR_FRACTION + 1);
@@ -558,7 +573,7 @@ Int4 BLAST_GreedyAlign(const Uint1* s1, Int4 len1,
 	if (S==NULL)
 	   flast_d[d] = flast_d[d - 2];
 	else {
-           /* space array consists of ThreeVal structures which are 
+           /* space array consists of SThreeVal structures which are 
               3 times larger than Int4, so divide requested amount by 3
            */
 	   flast_d[d] = (Int4*) get_mb_space(space, (fupper-flower+7)/3);
@@ -601,7 +616,7 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* s1, Int4 len1,
 				 Int4 match_score, Int4 mismatch_score, 
 				 Int4 gap_open, Int4 gap_extend,
 				 Int4* e1, Int4* e2, 
-				 GreedyAlignMem* gamp, MBGapEditScript *S,
+				 SGreedyAlignMem* gamp, MBGapEditScript *S,
                                  Uint1 rem)
 {
     Int4 col,			/* column number */
@@ -612,7 +627,7 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* s1, Int4 len1,
         MAX_D, 			/* maximum cost */
         ORIGIN,
         return_val = 0;
-    ThreeVal** flast_d;	/* rows containing the last d */
+    SThreeVal** flast_d;	/* rows containing the last d */
     Int4* max_row_free = gamp->max_row_free;
     Int4* max_row;		/* reached for cost d=0, ... len1.  */
     Int4 Mis_cost, GO_cost, GE_cost;
@@ -623,7 +638,7 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* s1, Int4 len1,
     
     Int4 x, cur_max, b_diag = 0, best_diag = INT4_MAX/2;
     char nlower = 0, nupper = 0;
-    MBSpace* space = gamp->space;
+    SMBSpace* space = gamp->space;
     Int4 stop_condition;
     Int4 max_d;
     Int4* uplow_free;

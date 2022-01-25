@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
@@ -1062,10 +1062,20 @@ static void VSMDragAndDrop(VSMWinPtr vsmwp, Uint2 entityID, Uint2 itemID, Uint2 
 	ompc.input_itemtype = vsmwp->itemtype1;
  	ompc.do_not_reload_from_cache = TRUE;
 
+
 	if (! DetachDataForProc(&ompc, FALSE))
 	{
 		ErrShow();
 		return;
+	}
+
+	if (ompc.input_choicetype)
+	{
+	    WarnIfAlignment (ompc.input_choicetype, ompc.input_choice, ompc.input_entityID);
+	}
+	else
+	{
+	    WarnIfAlignment (ompc.input_itemtype, ompc.input_data, ompc.input_entityID);
 	}
 
 	if (! ompc.whole_entity)   /* just a part gone, so need an update */

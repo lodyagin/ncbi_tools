@@ -25,6 +25,9 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.32  2004/05/25 18:41:35  kans
+ removed obsolete STREAM_SEQ_PORT_FIRST flag
+
  Revision 1.31  2004/02/18 22:18:45  yaschenk
  adding recognition of gnl|sat_name|ent seqids
 
@@ -1016,7 +1019,7 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
     case 3:
       AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
       if(!SeqEntryToGnbk(sep,NULL,GENBANK_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
-         LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY|STREAM_SEQ_PORT_FIRST,0,NULL,fp)){
+         LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY,0,NULL,fp)){
         ErrPostEx(SEV_WARNING,0,0,
                   "GenBank Format does not exist for this sequence ");
         retval=FALSE;
@@ -1026,7 +1029,7 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
     case 4:
       AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
       if(!SeqEntryToGnbk(sep,NULL,GENPEPT_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
-        LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY|STREAM_SEQ_PORT_FIRST,0,NULL,fp))
+        LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY,0,NULL,fp))
       {
         ErrPostEx(SEV_WARNING,0,0,
                   "GenPept Format does not exist for this sequence");

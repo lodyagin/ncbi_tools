@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.c,v 1.6 2004/05/05 15:30:13 dondosha Exp $
+/* $Id: twoseq_api.c,v 1.13 2004/06/08 17:47:24 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -40,10 +40,15 @@
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_engine.h>
 #include <algo/blast/core/mb_lookup.h>
+#include <algo/blast/core/blast_filter.h>
+#include <algo/blast/core/hspstream_collector.h>
 #include <algo/blast/api/multiseq_src.h>
 #include <algo/blast/api/blast_seqalign.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/twoseq_api.h>
+#include <algo/blast/api/blast_returns.h>
+/* For the AdjustOffSetsInSeqalign function */
+#include <sequtil.h>
 
 Int2 BLAST_SummaryOptionsInit(BLAST_SummaryOptions **options)
 {
@@ -64,6 +69,9 @@ Int2 BLAST_SummaryOptionsInit(BLAST_SummaryOptions **options)
     new_options->gapped_calculation = TRUE;
     new_options->nucleotide_match = 1;
     new_options->nucleotide_mismatch = -3;
+    new_options->word_threshold = 0;
+    new_options->init_seed_method = eDefaultSeedType;
+
     *options = new_options;
     return 0;
 } 
@@ -87,7 +95,7 @@ BLAST_FillOptions(Uint1 program_number,
     BlastEffectiveLengthsOptions* eff_len_options,
     PSIBlastOptions* psi_options,
     BlastDatabaseOptions* db_options, 
-    BlastSeqSrc* seq_src, Int4 query_length,
+    Int4 query_length,
     Int4 subject_length, RPSInfo *rps_info)
 {
     Boolean do_megablast = FALSE;
@@ -107,11 +115,12 @@ BLAST_FillOptions(Uint1 program_number,
         /* If one of the sequences is large enough,
            set up a megablast search */
 
-        if (query_length > MEGABLAST_CUTOFF || 
+        if (basic_options->hint == eFast ||
+            query_length > MEGABLAST_CUTOFF || 
             subject_length > MEGABLAST_CUTOFF) {
             do_megablast = TRUE;
             if (basic_options->gapped_calculation)
-                greedy_align = TRUE;       /* one-pass, no ungapped */
+                greedy_align = 1;       /* one-pass, no ungapped */
         }
 
         /* For a megablast search or a blastn search with
@@ -122,20 +131,21 @@ BLAST_FillOptions(Uint1 program_number,
 
         /* If megablast was turned on but the input indicates
            a sensitive search is desired, switch to discontiguous
-           megablast (hardwired to the 12-of-21 optimal template) */
+           megablast (hardwired to the 11-of-21 optimal template) */
 
-        if (word_size == 0 && do_megablast && 
-            basic_options->hint == eSensitive) {
-            word_size = 12;
+        if (do_megablast && basic_options->hint == eSensitive) {
+           if (word_size == 0)
+              word_size = 11;
             do_discontig = TRUE;
             do_ag_blast = FALSE;
         }
     }
+    
 
     BLAST_FillLookupTableOptions(lookup_options, 
                                  program_number, 
                                  do_megablast,
-                                 0,              /* default threshold */
+                                 basic_options->word_threshold,
                                  word_size,
                                  do_ag_blast,
                                  0,              /* no variable wordsize */ 
@@ -158,24 +168,27 @@ BLAST_FillOptions(Uint1 program_number,
  
     BLAST_FillInitialWordOptions(word_options, 
                                  program_number, 
-                                 greedy_align, 
+                                 (Boolean)greedy_align, 
                                  0,      /* default for ungapped extensions */
                                  0,              /* no variable wordsize */ 
                                  do_ag_blast,
                                  do_megablast,
                                  0);     /* default ungapped X dropoff */
  
+    /* If we need to enforce a single-hit method, reset window size to 0. 
+       To enforce two-hit method, set window size to a default non-zero 
+       value */
+    if (basic_options->init_seed_method == eOneHit)
+       word_options->window_size = 0;
+    else if (basic_options->init_seed_method == eTwoHits)
+       word_options->window_size = BLAST_WINDOW_SIZE_PROT;
+
     BLAST_FillExtensionOptions(ext_options, 
                                program_number, 
                                greedy_align, 
-                               0,        /* default gapped X dropoff */
+                               basic_options->gap_x_dropoff,
                                0);       /* default final X dropoff */
  
-    if (greedy_align == 1) {
-        ext_options->algorithm_type = EXTEND_GREEDY;
-        word_options->ungapped_extension = FALSE;
-    }
-
     if (basic_options->matrix == NULL)
         matrix = "BLOSUM62";
     else
@@ -183,12 +196,12 @@ BLAST_FillOptions(Uint1 program_number,
 
     BLAST_FillScoringOptions(score_options, 
                              program_number, 
-                             greedy_align, 
+                             (Boolean)greedy_align, 
                              basic_options->nucleotide_mismatch,
                              basic_options->nucleotide_match,
                              matrix,
-                             0,               /* default gap open penalty */
-                             0);              /* default gap extend penalty */
+                             basic_options->gap_open,
+                             basic_options->gap_extend);
  
     score_options->gapped_calculation = basic_options->gapped_calculation;
  
@@ -197,23 +210,95 @@ BLAST_FillOptions(Uint1 program_number,
                                0);    /* default number of alignments saved */
   
     hit_options->percent_identity = 0;   /* no percent identity cutoff */
-    
-    BLAST_FillEffectiveLengthsOptions(eff_len_options, 
-                                      1,             /* one sequence */
-                                      subject_length, /* this long */
-                                      0);        /* default search space */
+  
+    eff_len_options->db_length = basic_options->db_length;
+
     return 0;
 }
 
 Int2 
-BLAST_TwoSequencesSearch(const BLAST_SummaryOptions *basic_options,
-               BioseqPtr bsp1, BioseqPtr bsp2, SeqAlign **seqalign_out)
+BLAST_TwoSequencesSearch(BLAST_SummaryOptions *basic_options,
+                         BioseqPtr bsp1, BioseqPtr bsp2, 
+                         SeqAlign **seqalign_out)
 {
+    Uint1 program_type = blast_type_undefined;
     SeqLocPtr query_slp = NULL;      /* sequence variables */
     SeqLocPtr subject_slp = NULL;
+    Boolean seq1_is_aa, seq2_is_aa;
+    Int2 status = 0;
+
+    /* sanity checks */
+
+    *seqalign_out = NULL;
+    if (bsp1 == NULL || bsp2 == NULL)
+        return 0;
+
+    seq1_is_aa = ISA_aa(bsp1->mol);
+    seq2_is_aa = ISA_aa(bsp2->mol);
+
+    /* Find program type consistent with the sequences. */
+    if (!seq1_is_aa && !seq2_is_aa) {
+       if (basic_options->program == eTblastx)
+          program_type = blast_type_tblastx;
+       else
+          program_type = blast_type_blastn;
+    } else if (seq1_is_aa && seq2_is_aa) {
+       program_type = blast_type_blastp;
+    } else if (!seq1_is_aa && seq2_is_aa) {
+       program_type = blast_type_blastx;
+    } else if (seq1_is_aa && !seq2_is_aa) {
+       program_type = blast_type_tblastn;
+    }
+
+    /* Check if program type in options is consistent with the one determined
+       from sequences. */
+    if (basic_options->program == eChoose)
+       basic_options->program = program_type;
+    else if (basic_options->program != program_type)
+       return -1;
+
+    /* Convert the bioseqs into seqlocs. */
+
+    ValNodeAddPointer(&query_slp, SEQLOC_WHOLE,
+                      SeqIdDup(SeqIdFindBest(bsp1->id, SEQID_GI)));
+    if (!query_slp)
+       return -1;
+    ValNodeAddPointer(&subject_slp, SEQLOC_WHOLE,
+                      SeqIdDup(SeqIdFindBest(bsp2->id, SEQID_GI)));
+    if (!subject_slp)
+       return -1;
+
+    status = BLAST_TwoSeqLocSets(basic_options, query_slp, subject_slp, 
+                                 seqalign_out, NULL, NULL);
+    SeqLocFree(query_slp);
+    SeqLocFree(subject_slp);
+
+    return status;
+}
+
+static Int4 SeqLocListLen(SeqLoc* seqloc)
+{
+   Int4 length = 0;
+
+   for ( ; seqloc; seqloc = seqloc->next)
+      length += SeqLocLen(seqloc);
+
+   return length;
+}
+
+/** Compares one list of SeqLoc's against another list of SeqLoc's using the
+ * BLAST algorithm.
+ */
+Int2 
+BLAST_TwoSeqLocSets(const BLAST_SummaryOptions *basic_options,
+                    SeqLoc* query_seqloc, SeqLoc* subject_seqloc, 
+                    SeqAlign **seqalign_out,
+                    SeqLoc** filter_out,
+                    BLAST_SummaryReturn* *extra_returns)
+{
+    Uint1 program_type;
     BlastSeqSrc *seq_src = NULL;
     BLAST_SequenceBlk *query = NULL;
-    Uint1 program_type;
     BlastQueryInfo* query_info = NULL;
 
     ListNode* lookup_segments = NULL;      /* query filtering structures */
@@ -229,39 +314,31 @@ BLAST_TwoSequencesSearch(const BLAST_SummaryOptions *basic_options,
     BlastEffectiveLengthsOptions* eff_len_options = NULL;
     BlastScoreBlk* sbp = NULL;
     BlastHSPResults* results = NULL;
-    BlastReturnStat* return_stats = NULL;
+    BlastDiagnostics* diagnostics = NULL;
     PSIBlastOptions* psi_options = NULL;
     BlastDatabaseOptions* db_options = NULL;
     RPSInfo *rps_info = NULL;
-
-    Int2 status;
-
-    /* sanity checks */
-
-    *seqalign_out = NULL;
-    if (bsp1 == NULL || bsp2 == NULL)
-        return 0;
-
-    if (bsp1->mol != bsp2->mol)
-        return 0;
-
-    /* decide which blast program to execute */
+    Int2 status = 0;
+    BlastHSPStream* hsp_stream;
 
     switch(basic_options->program) {
-    case eBlastp:
-        program_type = blast_type_blastp;
-        break;
     case eBlastn:
-        program_type = blast_type_blastn;
-        break;
-    case eChoose:
-        if (ISA_aa(bsp1->mol))
-            program_type = blast_type_blastp;
-        else
-            program_type = blast_type_blastn;
-        break;
+       program_type = blast_type_blastn;
+       break;
+    case eBlastp:
+       program_type = blast_type_blastp;
+       break;
+    case eBlastx:
+       program_type = blast_type_blastx;
+       break;
+    case eTblastn:
+       program_type = blast_type_tblastn;
+       break;
+    case eTblastx:
+       program_type = blast_type_tblastx;
+       break;
     default:
-        return -1;
+       return -1;
     }
 
     /* fill in the engine-specific options */
@@ -273,34 +350,33 @@ BLAST_TwoSequencesSearch(const BLAST_SummaryOptions *basic_options,
     if (status != 0)
         goto bail_out;
 
+    if (program_type == blast_type_tblastn || 
+        program_type == blast_type_tblastx) {
+       if ((status = BLAST_GeneticCodeFind(db_options->genetic_code,
+                                           &db_options->gen_code_string)))
+          return status;
+    }
+
+    seq_src = MultiSeqSrcInit(subject_seqloc, program_type);
+    if (seq_src == NULL)
+        goto bail_out;
+
     status = BLAST_FillOptions(program_type, basic_options, 
                  lookup_options, query_options, word_options, 
                  ext_options, hit_options, score_options, 
                  eff_len_options, psi_options, db_options, 
-                 NULL, bsp1->length, bsp2->length, rps_info);
+                 SeqLocListLen(query_seqloc), 
+                 BLASTSeqSrcGetMaxSeqLen(seq_src), 
+                 rps_info);
     if (status != 0)
         goto bail_out;
 
-    /* Convert the bioseqs into seqlocs. */
-
-    ValNodeAddPointer(&query_slp, SEQLOC_WHOLE,
-                      SeqIdDup(SeqIdFindBest(bsp1->id, SEQID_GI)));
-    ValNodeAddPointer(&subject_slp, SEQLOC_WHOLE,
-                      SeqIdDup(SeqIdFindBest(bsp2->id, SEQID_GI)));
-    if (query_slp == NULL || subject_slp == NULL) {
-        status = -1;
-        goto bail_out;
-    }
 
     /* convert the seqlocs into SequenceBlks, and fill in query_info */
 
-    status = BLAST_SetUpQuery(program_type, query_slp, query_options,
+    status = BLAST_SetUpQuery(program_type, query_seqloc, query_options,
                      &query_info, &query);
     if (status != 0)
-        goto bail_out;
-
-    seq_src = MultiSeqSrcInit(subject_slp, program_type);
-    if (seq_src == NULL)
         goto bail_out;
 
     /* perform final setup */
@@ -311,37 +387,58 @@ BLAST_TwoSequencesSearch(const BLAST_SummaryOptions *basic_options,
        goto bail_out;
 
     status = BLAST_MainSetUp(program_type, query_options, score_options,
-                    hit_options, query, query_info, &lookup_segments,
+                    hit_options, query, query_info, 1.0, &lookup_segments,
                     &filter_loc, &sbp, NULL);
     if (status != 0)
        goto bail_out;
 
-    return_stats = (BlastReturnStat*) calloc(1, sizeof(BlastReturnStat));
-    if (return_stats == NULL)
-        goto bail_out;
+    if (extra_returns) {
+       if ((diagnostics = Blast_DiagnosticsInit()) == NULL)
+          goto bail_out;
+    }
 
-    Blast_HSPResultsInit(query_info->num_queries, &results);
     LookupTableWrapInit(query, lookup_options,
                         lookup_segments, sbp, &lookup_wrap, NULL);
 
+    /* Initialize the HSPList collector stream. Results should not be sorted
+       before reading from it. */
+    hsp_stream = 
+       Blast_HSPListCollectorInit(program_type, hit_options, 
+                                  query_info->num_queries, FALSE);
     /* finally, do the search */
 
     status = BLAST_SearchEngine(program_type, query, query_info,
                 seq_src, sbp, score_options, lookup_wrap, word_options, 
                 ext_options, hit_options, eff_len_options,
-                psi_options, db_options, results, return_stats);
+                psi_options, db_options, hsp_stream, diagnostics, &results);
+
+    hsp_stream = BlastHSPStreamFree(hsp_stream);
     if (status != 0)
        goto bail_out;
 
     /* Convert results to the SeqAlign form */
 
-    status = BLAST_ResultsToSeqAlign(program_type, results, query_slp, NULL, 
-         subject_slp, score_options, sbp, score_options->gapped_calculation,
-         seqalign_out);
+    status = BLAST_ResultsToSeqAlign(program_type, results, query_seqloc, 
+                seq_src, score_options->gapped_calculation,
+                score_options->is_ooframe, seqalign_out);
 
 bail_out:
-    if (return_stats)
-        sfree(return_stats);
+    AdjustOffSetsInSeqAlign(*seqalign_out, query_seqloc, subject_seqloc);
+
+    if (!status && extra_returns) {
+       Blast_SummaryReturnFill(program_type, score_options, sbp, 
+                               lookup_options, word_options, ext_options, 
+                               hit_options, eff_len_options, query_info, 
+                               seq_src, diagnostics, extra_returns);
+    }
+
+    if (filter_out) {
+       *filter_out = 
+          BlastMaskLocToSeqLoc(program_type, filter_loc, query_seqloc);
+    }
+
+    Blast_DiagnosticsFree(diagnostics);
+    BlastMaskLocFree(filter_loc);
     BlastSeqSrcFree(seq_src);
     LookupTableWrapFree(lookup_wrap);
     ListNodeFreeData(lookup_segments);
@@ -358,8 +455,9 @@ bail_out:
     BlastEffectiveLengthsOptionsFree(eff_len_options);
     PSIBlastOptionsFree(psi_options);
     BlastDatabaseOptionsFree(db_options);
-    SeqLocFree(query_slp);
-    SeqLocFree(subject_slp);
 
     return status;
 }
+
+
+

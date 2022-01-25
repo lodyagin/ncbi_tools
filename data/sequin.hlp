@@ -4,8 +4,9 @@
 
   
 <!-- if you use the following meta tags, uncomment them.
- <META NAME="keywords" CONTENT="Sequin">
- <META NAME="description" CONTENT="Sequin is a stand-alone software tool developed by the NCBI for submitting and updating entries to the GenBank, EMBL, or DDBJ sequence databases. "> -->
+ <meta name="author" content="sequindoc">
+ <META NAME="keywords" CONTENT="national center for biotechnology information, ncbi, national library of medicine, nlm, national institutes of health, nih, database, archive, bookshelf, pubmed, pubmed central, bioinformatics, biomedicine, sequence submission, sequin, bankit, submitting sequences">
+ <META NAME="description" CONTENT="Sequin is a stand-alone software tool developed by the National Center for Biotechnology Information (NCBI) for submitting and updating entries to the GenBank, EMBL, or DDBJ sequence databases. "> -->
  <link rel="stylesheet" href="ncbi_sequin.css">
 
 
@@ -371,9 +372,14 @@ Annotation Database
 .
 
 #In order to be released into the TPA database, the sequence must appear in a
-peer-reviewed publication in a biological journal.  You will be asked later in
-the submission process to provide the GenBank Accession number(s) of the
-primary sequence(s) from which your TPA submission was derived.
+peer-reviewed publication in a biological journal.  If you select this
+option, a pop-up box will appear upon the completion of the Sequence Format
+form.  You must provide some description of the biological experiments used
+as evidence for the annotation of your TPA submission in this box. 
+
+#You will be asked later in the submission process to provide the GenBank
+Accession number(s) of the primary sequence(s) from which your TPA
+submission was derived.
 
 >Organism and Sequences Form
 
@@ -546,12 +552,31 @@ Source Modifiers form
 </A> 
  which follows the Organism and Sequences Form.
  
-#If you are submitting a set of aligned sequences and one of those
-sequences is already present in the GenBank/EMBL/DDBJ database, you must
-mark that sequence so that it does not receive a new Accession number. 
-Instead of supplying that sequence with a new Sequence Identifier, give
-it the identifier accU12345, where U12345 is the Accession number of the
-sequence.
+#If you are submitting a set of aligned sequences, you can specify sequence
+characters used in your alignment on this page.  Sequin requires that you
+define any non-IUPAC nucleotide characters in your alignment file.  The
+five types of variable characters are listed under Sequence Characters.
+
+#Every sequence within an alignment file must contain the same number of
+characters (nucleotides + gaps).  Gap characters are used to represent the
+spaces between contiguous nucleotides in an alignment.  Gaps that appear at
+the beginning or end of a sequence are treated differently than gaps that
+appear between nucleotides and each must be defined.  GenBank prefers to
+use a hyphen (-) to represent gaps. If you use a different character to
+represent a gap, you will need to add this character to the list in the
+Beginning Gap, Middle Gap, or End Gap boxes.
+
+#Ambiguous characters represent nucleotides that are known to exist, but
+whose identity has not been experimentally validated.  GenBank prefers to
+use 'n' to represent any ambiguous nucleotides.  If you are using a
+different character to represent an ambiguous base, you will need to add
+this character to the list in the Ambiguous/Unknown box.  Sequin will
+convert these characters to 'n's when your file is imported.
+
+#Match characters denote nucleotides that are identical in every member of
+an alignment.  GenBank prefers the use of a colon (:) to represent match
+characters.  If you are using a different character to represent a match
+character, you will need to add this character to the list in the Match box.
 
 **Molecule
 
@@ -787,15 +812,18 @@ ovarian cancer susceptibility protein (BRCA1) mRNA, complete cds.
 **FASTA+GAP Format for Aligned Nucleotide Sequences
 
 #A number of programs output sets of aligned sequences in FASTA format.
-Frequently, to align these sequences, gaps must be inserted.  In
-FASTA+GAP format, gaps can be indicated by a "-".  Do not use the ? character
-to represent ambiguous bases within sequences in the alignment because Sequin
-removes non-IUPAC characters when it imports sequences. Each sequence,
-including gaps, must be the same length.  The gaps will only show up in the
-alignment, not in the individual sequence in the database.
+Frequently, to align these sequences, gaps must be inserted.  Specify
+relevant gap and ambiguous characters in the appropriate box on the 
 
-#Sequences in FASTA+GAP format resemble FASTA sequences.  The previous section
-on 
+<A HREF="#NucleotidePage">
+Nucleotide Page
+</A>
+ 
+form.  Each sequence, including gaps, must be the same length.  The gaps
+will only show up in the alignment, not in the individual sequence in the
+database.
+
+#Sequences in FASTA+GAP format resemble FASTA sequences.  The previous section on 
 
 <A HREF="#FASTAFormatforNucleotideSequences">
 FASTA Format for Nucleotide Sequences
@@ -854,13 +882,13 @@ Sequence IDs, followed by the sequences. Specifically, the sequence
 identifier for the first sequence is A-0V-1-A.  Note that subsequent
 blocks of sequence do not contain the Sequence ID.  
 
-#Do not use the ? character to represent 
-ambiguous bases within sequences in the alignment because Sequin
-removes non-IUPAC characters when it imports sequences. Ambiguous bases should 
-be indicated as IUPAC characters such as N.  PHYLIP files should contain - rather
-than ? to indicate "missing" at the 5' and 3' ends of sequences. 
+#Specify relevant gap and ambiguous characters in the appropriate box on the 
+<A HREF="#NucleotidePage">
+Nucleotide Page
+</A>
+form. 
 
-#You can modify this format so that Sequin can
+#You can modify the PHYLIP format so that Sequin can
 determine the correct organism and any other modifiers for each
 sequence.  An example of such modifications are below in the section on 
 <A HREF="#SourceModifiersforPHYLIPandNEXUS">
@@ -912,12 +940,17 @@ the sequence alignment. The following five lines contain the Sequence IDs,
 followed by the sequences. Specifically, the sequence identifier for the first
 sequence is A-0V-1-A. Note that subsequent blocks of sequence also contain the
 Sequence ID. Also, Sequin will replace the "?" characters in the sequences
-with "N"s since they are defined as "missing" data in the header.  However, if
-the 'missing' parameter is not included, or wrongly defined in the header,
-then the "?" characters are stripped from the data. This is a common cause of
-data corruption since the stripping of these characters effectively results in
-the loss of data.
+with "N"s since they are defined as "missing" data in the header.  You
+should specify relevant gap and ambiguous characters in the appropriate box
+on the 
 
+<A HREF="#NucleotidePage">
+
+Nucleotide Page
+
+</A>
+
+form.
 #The following is an example of NEXUS Contiguous format.
 
 !#NEXUS
@@ -2868,17 +2901,6 @@ sequence will appear.
 
 #-Submission
 
-**Scope
-
-Please select one option using the radio buttons:
-
-#-Refers to the entire sequence  
-
-#-Refers to part of the sequence  
-
-#-Cites a feature on the sequence: Please do not select this option without
-providing the nucleotide spans of the feature to which the publication refers.
-
 #After you have filled out the Citation on Entry form, click on
 "Proceed" to see the next form.
 
@@ -3138,6 +3160,32 @@ features should be updated.  In cases where the new and old records contain
 duplicate features, you may chose to retain the new and/or old feature or 
 merge the duplicated features into one.
 
+#The check boxes at the bottom of the form allow you to specify actions to
+be taken regarding coding regions and references when updating the
+sequence.  Add Cit-subs for Updated Sequences is used by the database staff
+to append reference information regarding the updating of publicly
+available sequences.  Please do not use this function.  By default, Update
+Proteins for Updated Sequences is selected.  Sequin will attempt to
+clean-up conceptual translations of annotated coding regions based on the
+updated nucleotide sequence.  You can also select options which will
+truncate retranslated proteins at stops, extend retranslated proteins
+without stops or extend retranslated proteins without starts.  The Correct
+CDS genes function adjusts the corresponding gene span based on the new
+coding region span.   In any case, all annotated coding regions should be
+manually reviewed following a sequence update.   
+
+*Extend Sequence
+
+#This selection functions similar to the 
+
+<A HREF="#UpdateSequence">
+Update Sequence
+</A>
+
+function.  However, you can extend the existing sequence in either the 5'
+or 3' direction in cases where there is no overlap between the existing and
+new sequences. 
+ 
 *Feature Propagate
 
 #This selection allows you to propagate any annotated feature from 
@@ -3161,7 +3209,10 @@ translation after the stop codon on the source entry by chosing to
 translate the CDS after partial 3' boundary.  If the CDS that you
 are propagating to other records is partial on either end, you should
 select the 'Cleanup CDS partials after propagation' check box.  This
-will retain the partial nature of the CDS features on all records.
+will retain the partial nature of the CDS features on all records.  The
+fuse adjacent propagated intervals function will create one feature from
+two of the same type that contain abutting nucleotide intervals due to the
+nature of the alignment used for propagation.
 
 *Add Sequence
 
@@ -3184,7 +3235,8 @@ cannot edit the sequence in this way.
 *Find FlatFile
 
 #Under this command, you can find strings of letters in
-all fields of your submission.
+all fields of your submission.  You can use the Find First and Find Next
+buttons to identify the specified text sequentially through the flatfile. 
 
 *Find by Gene
 
@@ -3476,7 +3528,7 @@ entitled
 Descriptors,
 </A>
 above.
-#The Generate Defintion Line option will generate a title for your
+#The Generate Definition Line option will generate a title for your
 sequence based on the information provided in the record.  This option will
 work
 for single sequences as well as sets of sequences, and can handle complex
@@ -3966,7 +4018,7 @@ ALT="Table of Contents" ALIGN=top BORDER=2></A>
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service
 Desk</A></P>
-<P CLASS=medium1>Revised January 30, 2004
+<P CLASS=medium1>Revised June 15, 2004
 
 </CENTER>
 

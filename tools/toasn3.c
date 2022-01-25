@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.82 2003/06/18 21:52:21 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.83 2004/05/14 16:10:34 kans Exp $";
 
 /*****************************************************************************
 *
@@ -4900,9 +4900,11 @@ static void GetCdRegionsWithPeptides (SeqEntryPtr sep, Pointer data, Int4 index,
 		}
 		for (sfp = sap->data; sfp != NULL; sfp = sfp->next) {
 			if (sfp->data.choice == SEQFEAT_CDREGION) {
-				tmp = ValNodeNew(NULL);
-				tmp->data.ptrvalue = sfp;
-				sfap->cds = tie_next(sfap->cds, tmp);
+			    if (! sfp->pseudo) {
+			    	tmp = ValNodeNew(NULL);
+				    tmp->data.ptrvalue = sfp;
+				    sfap->cds = tie_next(sfap->cds, tmp);
+			    }
 			}
 			if (sfp->data.choice == SEQFEAT_IMP) {
 				ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;

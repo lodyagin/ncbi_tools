@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salptool.c,v 6.35 2004/04/28 20:32:52 bollin Exp $";
+static char const rcsid[] = "$Id: salptool.c,v 6.36 2004/06/10 18:59:36 bollin Exp $";
 
 #include <sequtil.h> /* SeqIdDupList */
 #include <salpedit.h>
@@ -2939,7 +2939,9 @@ static Boolean check_dbid_seqalign (SeqAlignPtr salp)
         while (!found && sip != NULL) 
         {
            next = sip->next;
+           sip->next = NULL;
            SeqIdWrite (sip, str, PRINTID_FASTA_LONG, 50);
+           sip->next = next;
            tmp = StringStr (str, "acc");
            if (tmp!=NULL) {
               tmp++; tmp++; tmp++;

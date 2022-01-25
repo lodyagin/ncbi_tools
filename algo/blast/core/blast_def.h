@@ -1,41 +1,36 @@
-/* $Id: blast_def.h,v 1.40 2004/04/16 14:12:33 papadopo Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/* $Id: blast_def.h,v 1.42 2004/05/19 14:52:01 camacho Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ * 
+ * Author: Ilya Dondoshansky
+ *
+ */
 
-/*****************************************************************************
+/** @file blast_def.h
+ * Definitions of major structures used throughout BLAST
+ */
 
-File name: blast_def.h
-
-Author: Ilya Dondoshansky
-
-Contents: Definitions of major structures used throughout BLAST
-
-Detailed Contents: 
-
-******************************************************************************
- * $Revision: 1.40 $
- * */
 #ifndef __BLAST_DEF__
 #define __BLAST_DEF__
 
@@ -76,6 +71,9 @@ void __sfree(void** x); /* implemented in lib/util.c */
 /** Number of frames to which we translate in translating searches */
 #ifndef NUM_FRAMES
 #define NUM_FRAMES 6
+#endif
+#ifndef NUM_STRANDS
+#define NUM_STRANDS 2
 #endif
 
 /********************* Structure definitions ********************************/
@@ -140,26 +138,6 @@ typedef struct SSeqRange {
  * location interval in the sequence.
  */
 #define BlastSeqLoc ListNode
-
-/** Return statistics from the BLAST search */
-typedef struct BlastReturnStat {
-   Int8 db_hits; /**< Number of successful lookup table hits */
-   Int4 init_extends; /**< Number of initial words found and extended */
-   Int4 good_init_extends; /**< Number of successful initial extensions */
-   Int4 prelim_gap_no_contest; /**< Number of HSPs better than e-value 
-                                  threshold before gapped extension */
-   Int4 prelim_gap_passed; /**< Number of HSPs better than e-value threshold
-                              after preliminary gapped extension */
-   Int4 number_of_seqs_better_E; /**< Number of sequences with best HSP passing
-                                    the e-value threshold */
-   Int4 x_drop_ungapped; /**< Raw value of the x-dropoff for ungapped 
-                            extensions */
-   Int4 x_drop_gap; /**< Raw value of the x-dropoff for preliminary gapped 
-                       extensions */
-   Int4 x_drop_gap_final; /**< Raw value of the x-dropoff for gapped 
-                             extensions with traceback */
-   Int4 gap_trigger; /**< Minimal raw score for starting gapped extension */
-} BlastReturnStat;
 
 #ifdef __cplusplus
 }

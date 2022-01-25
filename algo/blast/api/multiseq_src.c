@@ -1,4 +1,4 @@
-/*  $Id: multiseq_src.c,v 1.5 2004/04/28 19:50:02 dondosha Exp $
+/*  $Id: multiseq_src.c,v 1.6 2004/06/08 17:46:35 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,7 @@
 *
 */
 
-static char const rcsid[] = "$Id: multiseq_src.c,v 1.5 2004/04/28 19:50:02 dondosha Exp $";
+static char const rcsid[] = "$Id: multiseq_src.c,v 1.6 2004/06/08 17:46:35 dondosha Exp $";
 
 #include <algo/blast/api/multiseq_src.h>
 #include <algo/blast/core/blast_util.h>
@@ -57,7 +57,7 @@ static MultiSeqInfo* MultiSeqInfoNew(const SeqLoc* seqloc_list, Uint1 program)
 	index < num_seqs; ++index, seqloc_ptr = seqloc_ptr->next) {
       retval->seqloc_array[index] = seqloc_ptr;
       BLAST_SetUpSubject(program, seqloc_ptr, &retval->seqblk_array[index]);
-      max_length = MAX(max_length, retval->seqblk_array[index]->length);
+      max_length = MAX(max_length, (Uint4)retval->seqblk_array[index]->length);
    }
    retval->max_length = max_length;
 

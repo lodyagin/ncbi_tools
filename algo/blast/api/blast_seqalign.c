@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.c,v 1.31 2004/04/19 15:03:20 papadopo Exp $
+/* $Id: blast_seqalign.c,v 1.35 2004/06/08 17:47:24 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Conversion of BLAST results to the SeqAlign form
 
 ******************************************************************************
- * $Revision: 1.31 $
+ * $Revision: 1.35 $
  * */
 
-static char const rcsid[] = "$Id: blast_seqalign.c,v 1.31 2004/04/19 15:03:20 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_seqalign.c,v 1.35 2004/06/08 17:47:24 dondosha Exp $";
 
 #include <algo/blast/api/blast_seqalign.h>
 
@@ -46,14 +46,12 @@ extern ScorePtr MakeBlastScore (ScorePtr PNTR old, CharPtr scoretype,
                                 Nlm_FloatHi prob, Int4 score);
 
 static ScorePtr 
-GetScoreSetFromBlastHsp(Uint1 program_number, BlastHSP* hsp, 
-   BlastScoreBlk* sbp, BlastScoringOptions* score_options)
+GetScoreSetFromBlastHsp(BlastHSP* hsp)
 {
    ScorePtr	score_set=NULL;
    double	prob;
    Int4		score;
    char*	scoretype;
-   Blast_KarlinBlk* kbp;
 
    score = hsp->score;
    if (score > 0)
@@ -77,16 +75,9 @@ GetScoreSetFromBlastHsp(Uint1 program_number, BlastHSP* hsp,
       MakeBlastScore(&score_set, scoretype, prob, 0);
    }
 
-   if (!score_options->gapped_calculation) {
-      kbp = sbp->kbp[hsp->context];
-   } else {
-      kbp = sbp->kbp_gap[hsp->context];
-   }
-
    /* Calculate bit score from the raw score */
-   prob = ((hsp->score*kbp->Lambda) - kbp->logK)/NCBIMATH_LN2;
-   if (prob >= 0.)
-      MakeBlastScore(&score_set, "bit_score", prob, 0);
+   if (hsp->bit_score >= 0.)
+      MakeBlastScore(&score_set, "bit_score", hsp->bit_score, 0);
    
    if (hsp->num_ident > 0)
       MakeBlastScore(&score_set, "num_ident", 0.0, hsp->num_ident);
@@ -121,10 +112,8 @@ static Int2 AddGiListToScoreSet(ScorePtr score_set, ValNodePtr gi_list)
 ************************************************************************/
 
 static DenseDiagPtr
-BLAST_HSPToDenseDiag(Uint1 program_number, DenseDiagPtr* old, 
-   BlastHSP* hsp, Boolean reverse,
-   Int4 query_length, Int4 subject_length, BlastScoreBlk* sbp, 
-   BlastScoringOptions* score_options)
+BLAST_HSPToDenseDiag(DenseDiagPtr* old, BlastHSP* hsp, Boolean reverse,
+                     Int4 query_length, Int4 subject_length)
 {
 	DenseDiagPtr		ddp, new;
 
@@ -180,8 +169,7 @@ BLAST_HSPToDenseDiag(Uint1 program_number, DenseDiagPtr* old,
 			new->starts[1] = subject_length - hsp->subject.offset - hsp->subject.length;
 		}
 	}
-	new->scores = 
-      GetScoreSetFromBlastHsp(program_number, hsp, sbp, score_options);
+	new->scores = GetScoreSetFromBlastHsp(hsp);
 
 /* Go to the end of the chain, and then attach "new" */
 	if (*old)
@@ -210,10 +198,8 @@ BLAST_HSPToDenseDiag(Uint1 program_number, DenseDiagPtr* old,
 *
 ************************************************************************/
 static StdSeg*
-BLAST_HSPToStdSeg(Uint1 program_number, StdSeg** old, 
-   BlastHSP* hsp, Int4 query_length, Int4 subject_length, SeqIdPtr sip, 
-   Boolean reverse, BlastScoreBlk* sbp, 
-   BlastScoringOptions* score_options)
+BLAST_HSPToStdSeg(StdSeg** old, BlastHSP* hsp, Int4 query_length, 
+                  Int4 subject_length, SeqIdPtr sip, Boolean reverse)
 {
 	StdSeg*		ssp,* new;
 	SeqIdPtr		query_sip, subject_sip;
@@ -288,8 +274,7 @@ BLAST_HSPToStdSeg(Uint1 program_number, StdSeg** old,
 	}
 	new->loc = slp;
 
-	new->scores = 
-      GetScoreSetFromBlastHsp(program_number, hsp, sbp, score_options);
+	new->scores = GetScoreSetFromBlastHsp(hsp);
 
 /* Go to the end of the chain, and then attach "new" */
 	if (*old)
@@ -327,9 +312,8 @@ BLAST_HSPToStdSeg(Uint1 program_number, StdSeg** old,
 static Int2 
 BLAST_UngappedHSPToSeqAlign(Uint1 program_number, 
    BlastHSPList* hsp_list, SeqIdPtr query_id, 
-   SeqIdPtr subject_id, BlastScoreBlk* sbp, Int4 query_length,
-   Int4 subject_length, BlastScoringOptions* score_options, 
-   SeqAlignPtr* seqalign_ptr)
+   SeqIdPtr subject_id, Int4 query_length,
+   Int4 subject_length, SeqAlignPtr* seqalign_ptr)
 {
    BlastHSP* hsp;
    DenseDiagPtr	ddp_head=NULL, ddp;
@@ -361,13 +345,12 @@ BLAST_UngappedHSPToSeqAlign(Uint1 program_number,
       sip->next = SeqIdDup(subject_id);
 
       if (getdensediag) {
-         ddp = BLAST_HSPToDenseDiag(program_number, &ddp_head, hsp, FALSE,
-                  query_length, subject_length, sbp, score_options);
+         ddp = BLAST_HSPToDenseDiag(&ddp_head, hsp, FALSE, query_length, 
+                                    subject_length);
          ddp->id = sip;
       } else {
-         ssp = BLAST_HSPToStdSeg(program_number, &ssp_head, hsp, 
-                  query_length, subject_length, sip, FALSE, sbp, 
-                  score_options);
+         ssp = BLAST_HSPToStdSeg(&ssp_head, hsp, query_length, 
+                                 subject_length, sip, FALSE);
          ssp->ids = sip;
       }
       sip = NULL; /* This SeqIdPtr is now on the SeqAlign. */
@@ -454,8 +437,8 @@ Boolean GapCollectDataForSeqalign(GapEditBlock* edit_block,
     index=0;
     for (i = 0, curr=curr_in; curr && i < numseg; curr=curr->next, i++) {
         switch(curr->op_type) {
-        case GAPALIGN_DECLINE:
-        case GAPALIGN_SUB:
+        case eGapAlignDecline:
+        case eGapAlignSub:
             if (strand1 != Seq_strand_minus) {
                 if(translate1 == FALSE)
                     begin1 = get_current_pos(start1, curr->num);
@@ -494,7 +477,7 @@ Boolean GapCollectDataForSeqalign(GapEditBlock* edit_block,
             
             break;
             
-        case GAPALIGN_DEL:
+        case eGapAlignDel:
             begin1 = -1;
             if (strand2 != Seq_strand_minus) {
                 if(translate2 == FALSE)
@@ -528,7 +511,7 @@ Boolean GapCollectDataForSeqalign(GapEditBlock* edit_block,
             
             break;
             
-        case GAPALIGN_INS:
+        case eGapAlignIns:
             if (strand1 != Seq_strand_minus) {
                 if(translate1 == FALSE)
                     begin1 = get_current_pos(start1, curr->num);
@@ -581,7 +564,7 @@ static void GapCorrectUASequence(GapEditBlock* edit_block)
 
     for (curr=edit_block->esp; curr; curr = curr->next) {
 
-        if(curr->op_type == GAPALIGN_DECLINE && last_indel == TRUE) {
+        if(curr->op_type == eGapAlignDecline && last_indel == TRUE) {
             /* This is invalid condition and regions should be
                exchanged */
 
@@ -596,7 +579,7 @@ static void GapCorrectUASequence(GapEditBlock* edit_block)
         
         last_indel = FALSE;
         
-        if(curr->op_type == GAPALIGN_INS || curr->op_type == GAPALIGN_DEL) {
+        if(curr->op_type == eGapAlignIns || curr->op_type == eGapAlignDel) {
             last_indel = TRUE;
             curr_last2 = curr_last;
         }
@@ -769,14 +752,14 @@ GapEditBlockToSeqAlign(GapEditBlock* edit_block, SeqIdPtr subject_id, SeqIdPtr q
 
     for (curr=edit_block->esp; curr; curr = curr->next) {
         numseg++;
-        if(/*edit_block->discontinuous && */curr->op_type == GAPALIGN_DECLINE)
+        if(/*edit_block->discontinuous && */curr->op_type == eGapAlignDecline)
            is_disc_align = TRUE;
     }
     
     start1 = edit_block->start1;
     start2 = edit_block->start2;
     
-    /* If no GAPALIGN_DECLINE regions exists output seqalign will be
+    /* If no eGapAlignDecline regions exists output seqalign will be
        regular Den-Seg or Std-seg */
     if(is_disc_align == FALSE) {
         /* Please note, that edit_block passed only for data like
@@ -812,11 +795,11 @@ GapEditBlockToSeqAlign(GapEditBlock* edit_block, SeqIdPtr subject_id, SeqIdPtr q
             for (numseg = 0, curr = curr_last; 
                  curr; curr = curr->next, numseg++) {
 
-                if(curr->op_type == GAPALIGN_DECLINE) {
+                if(curr->op_type == eGapAlignDecline) {
                     if(numseg != 0) { /* End of aligned area */
                         break;
                     } else {
-                        while(curr && curr->op_type == GAPALIGN_DECLINE) {
+                        while(curr && curr->op_type == eGapAlignDecline) {
                             numseg++;
                             curr = curr->next; 
                         }
@@ -935,7 +918,7 @@ BLAST_OOFEditBlockToSeqAlign(Uint1 program, GapEditBlock* edit_block,
         slp2 = NULL;
         
         switch (curr->op_type) {
-        case 0: /* deletion of three nucleotides. */
+        case eGapAlignDel: /* deletion of three nucleotides. */
             
             first_shift = FALSE;
 
@@ -960,7 +943,7 @@ BLAST_OOFEditBlockToSeqAlign(Uint1 program, GapEditBlock* edit_block,
             
             break;
 
-        case 6: /* insertion of three nucleotides. */
+        case eGapAlignIns: /* insertion of three nucleotides. */
 
             /* If gap is followed after frameshift - we have to
                add this element for the alignment to be correct */
@@ -1070,7 +1053,7 @@ BLAST_OOFEditBlockToSeqAlign(Uint1 program, GapEditBlock* edit_block,
             
             break;
 
-        case 3: /* Substitution. */
+        case eGapAlignSub: /* Substitution. */
 
             first_shift = FALSE;
 
@@ -1090,14 +1073,8 @@ BLAST_OOFEditBlockToSeqAlign(Uint1 program, GapEditBlock* edit_block,
             /* Nucleotide scale shifted by op_type */
             seq_int2 = SeqIntNew();
 
-            /* Adjusting last segment and new start point in
-               nucleotide coordinates */
-            /* if(seq_int2_last != NULL) {
-               seq_int2_last->to = seq_int2_last->to - (3 - curr->op_type);
-               start2 = start2 - (3 - curr->op_type);
-               } */
-            
-            seq_int2->from = get_current_pos(&start2, curr->num*curr->op_type);
+            seq_int2->from = 
+               get_current_pos(&start2, curr->num*(Uint1)curr->op_type);
             seq_int2->to = start2 - 1;
 
 		/* Chop off three bases and one residue at a time.
@@ -1125,10 +1102,10 @@ BLAST_OOFEditBlockToSeqAlign(Uint1 program, GapEditBlock* edit_block,
             seq_int2_last = seq_int2; /* Will be used to adjust "to" value */
             
             break;
-        case 1:	/* gap of two nucleotides. */
-        case 2: /* Gap of one nucleotide. */
-        case 4: /* Insertion of one nucleotide. */
-        case 5: /* Insertion of two nucleotides. */
+        case eGapAlignDel2:	/* gap of two nucleotides. */
+        case eGapAlignDel1: /* Gap of one nucleotide. */
+        case eGapAlignIns1: /* Insertion of one nucleotide. */
+        case eGapAlignIns2: /* Insertion of two nucleotides. */
 
             if(first_shift == TRUE) { /* Second frameshift in a row */
                 /* Protein coordinates */
@@ -1147,7 +1124,8 @@ BLAST_OOFEditBlockToSeqAlign(Uint1 program, GapEditBlock* edit_block,
                 /* Nucleotide scale shifted by op_type */
                 seq_int2 = SeqIntNew();
 
-                seq_int2->from = get_current_pos(&start2, curr->op_type);
+                seq_int2->from = 
+                   get_current_pos(&start2, (Uint1)curr->op_type);
                 seq_int2->to = start2 - 1;
 
                 if(seq_int2->to >= original_length2) {
@@ -1181,10 +1159,8 @@ BLAST_OOFEditBlockToSeqAlign(Uint1 program, GapEditBlock* edit_block,
             /* If this substitution is following simple frameshift
                we do not need to start new segment, but may continue
                old one */
-            /* printf("curr_num = %d (%d)\n",  curr->num, curr->op_type); */
-
             if(seq_int2_last != NULL) {
-                get_current_pos(&start2, curr->num*(curr->op_type-3));
+                get_current_pos(&start2, curr->num*((Uint1)curr->op_type-3));
                 if(strand2 != Seq_strand_minus) {
                     seq_int2_last->to = start2 - 1;
                 } else {
@@ -1206,13 +1182,14 @@ BLAST_OOFEditBlockToSeqAlign(Uint1 program, GapEditBlock* edit_block,
                         seq_int1_last++;
                 }
 
-            } else if (curr->op_type > 3) {
+            } else if ((Uint1)curr->op_type > 3) {
                 /* Protein piece is empty */
                 ValNodeAddPointer(&slp1, SEQLOC_EMPTY, SeqIdDup(id1));
                 /* Simulating insertion of nucleotides */
                 seq_int2 = SeqIntNew();
-                seq_int2->from = get_current_pos(&start2, 
-                                                 curr->num*(curr->op_type-3));
+                seq_int2->from = 
+                   get_current_pos(&start2, 
+                                   curr->num*((Uint1)curr->op_type-3));
                 seq_int2->to = start2 - 1;
                 
                 if(seq_int2->to >= original_length2) {
@@ -1279,9 +1256,8 @@ BLAST_OOFEditBlockToSeqAlign(Uint1 program, GapEditBlock* edit_block,
 
 static Int2 
 BLAST_GapInfoToSeqAlign(Uint1 program_number, BlastHSPList* hsp_list, 
-   SeqIdPtr query_id, SeqIdPtr subject_id, BlastScoreBlk* sbp, 
-   Int4 query_length, BlastScoringOptions* score_options, 
-   SeqAlignPtr* head_seqalign)
+   SeqIdPtr query_id, SeqIdPtr subject_id, Int4 query_length, 
+   Boolean is_ooframe, SeqAlignPtr* head_seqalign)
 {
    Int2 status = 0;
    BlastHSP** hsp_array;
@@ -1294,7 +1270,7 @@ BLAST_GapInfoToSeqAlign(Uint1 program_number, BlastHSPList* hsp_list,
 
    for (index=0; index<hsp_list->hspcnt; index++) { 
       hsp_array[index]->gap_info->original_length1 = query_length;
-      if (score_options->is_ooframe) {
+      if (is_ooframe) {
          seqalign = BLAST_OOFEditBlockToSeqAlign(program_number, 
                        hsp_array[index]->gap_info, 
                        query_id, subject_id);
@@ -1310,9 +1286,7 @@ BLAST_GapInfoToSeqAlign(Uint1 program_number, BlastHSPList* hsp_list,
          last_seqalign->next = seqalign;
          last_seqalign = last_seqalign->next;
       }
-      seqalign->score = 
-         GetScoreSetFromBlastHsp(program_number, hsp_array[index], sbp, 
-                                 score_options);
+      seqalign->score = GetScoreSetFromBlastHsp(hsp_array[index]);
    }
 
    return status;
@@ -1320,9 +1294,8 @@ BLAST_GapInfoToSeqAlign(Uint1 program_number, BlastHSPList* hsp_list,
 
 Int2 BLAST_ResultsToSeqAlign(Uint1 program_number, 
         BlastHSPResults* results, SeqLocPtr query_slp, 
-        BlastSeqSrc* bssp, SeqLocPtr subject_slp,
-        BlastScoringOptions* score_options, BlastScoreBlk* sbp,
-        Boolean is_gapped, SeqAlignPtr* head_seqalign)
+        BlastSeqSrc* seq_src, Boolean is_gapped, Boolean is_ooframe, 
+        SeqAlignPtr* head_seqalign)
 {
    Int4 query_index, subject_index;
    SeqLocPtr slp = query_slp;
@@ -1331,13 +1304,16 @@ Int2 BLAST_ResultsToSeqAlign(Uint1 program_number,
    BlastHSPList* hsp_list;
    SeqAlignPtr seqalign = NULL, last_seqalign = NULL;
    Int4 subject_length = 0;
+   ListNode* seqid_wrap = NULL;
+   char* bad_id_str = NULL; /* In case an unknown id is returned from sequence
+                               source */
    
    *head_seqalign = NULL;
+   if (!results)
+      return 0;
 
-   if (!bssp) {
-      subject_id = SeqLocId(subject_slp);
-      subject_length = SeqLocLen(subject_slp);
-   }
+   if (!seq_src)
+      return -1;
 
    for (query_index = 0; slp && query_index < results->num_queries; 
         ++query_index, slp = slp->next) {
@@ -1351,22 +1327,30 @@ Int2 BLAST_ResultsToSeqAlign(Uint1 program_number,
          hsp_list = hit_list->hsplist_array[subject_index];
          if (!hsp_list)
             continue;
-         if (bssp) {
-            char* id_str = BLASTSeqSrcGetSeqIdStr(bssp, (void*) &hsp_list->oid);
-            subject_id = SeqIdParse(id_str);
-            subject_length = BLASTSeqSrcGetSeqLen(bssp, (void*) &hsp_list->oid); 
-            sfree(id_str);
+         bad_id_str = NULL;
+         seqid_wrap = BLASTSeqSrcGetSeqId(seq_src, (void*) &hsp_list->oid);
+         if (seqid_wrap->choice == BLAST_SEQSRC_C_SEQID) {
+            subject_id = (SeqId*) seqid_wrap->ptr;
+            ListNodeFree(seqid_wrap);
+         } else {
+            /* Should not happen: wrong type of subject id returned;
+               Create a fake local id. */
+            bad_id_str = strdup("lcl|unknown");
+            subject_id = SeqIdParse(bad_id_str);
          }
+         subject_length = 
+            BLASTSeqSrcGetSeqLen(seq_src, (void*) &hsp_list->oid); 
          if (is_gapped) {
             BLAST_GapInfoToSeqAlign(program_number, hsp_list, query_id, 
-               subject_id, sbp, SeqLocLen(slp), score_options, &seqalign);
+               subject_id, SeqLocLen(slp), is_ooframe, &seqalign);
          } else {
             BLAST_UngappedHSPToSeqAlign(program_number, hsp_list, query_id,
-               subject_id, sbp, SeqLocLen(slp), subject_length, 
-               score_options, &seqalign);
+               subject_id, SeqLocLen(slp), subject_length, &seqalign);
          }                      
 
-         if (bssp)
+         /* If unknown seqid was allocated here, free it, since it has been 
+            duplicated in the Seq-align */
+         if (bad_id_str)
             SeqIdSetFree(subject_id);
 
          if (seqalign) {

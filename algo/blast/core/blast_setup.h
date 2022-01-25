@@ -1,45 +1,38 @@
-/* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/*  $Id: blast_setup.h,v 1.40 2004/06/16 14:53:03 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author:  Tom Madden
+ *
+ */
 
-/*****************************************************************************
-
-File name: blast_setup.h
-
-Author: Tom Madden
-
-Contents: Utilities initialize/setup BLAST.
-
-$Revision: 1.36 $
-
-******************************************************************************/
+/** @file blast_setup.h
+ * Utilities initialize/setup BLAST.
+ */
 
 #ifndef __BLAST_SETUP__
 #define __BLAST_SETUP__
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_options.h>
@@ -47,14 +40,20 @@ extern "C" {
 #include <algo/blast/core/blast_extend.h>
 #include <algo/blast/core/blast_gapalign.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** "Main" setup routine for BLAST. Calculates all information for BLAST search
  * that is dependent on the ASN.1 structures.
+ * @todo FIXME: this function only filters query and sets up score block structure
  * @param program_number Type of BLAST program (0=blastn, ...). [in]
  * @param qsup_options options for query setup. [in]
  * @param scoring_options options for scoring. [in]
  * @param hit_options options for saving hits. [in]
  * @param query_blk BLAST_SequenceBlk* for the query. [in]
  * @param query_info The query information block [in]
+ * @param scale_factor Multiplier for cutoff and dropoff scores [in]
  * @param lookup_segments Start/stop locations for non-masked query 
  *                        segments [out]
  * @param filter_slp_out Filtering/masking locations. [out]
@@ -66,9 +65,12 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
         const BlastScoringOptions* scoring_options,
         const BlastHitSavingOptions* hit_options,
         BLAST_SequenceBlk* query_blk,
-        BlastQueryInfo* query_info, BlastSeqLoc* *lookup_segments,
+        BlastQueryInfo* query_info, 
+        double scale_factor,
+        BlastSeqLoc* *lookup_segments,
         BlastMaskLoc* *filter_slp_out,
-        BlastScoreBlk* *sbpp, Blast_Message* *blast_message);
+        BlastScoreBlk* *sbpp, 
+        Blast_Message* *blast_message);
 
 /** BlastScoreBlkGappedFill, fills the ScoreBlkPtr for a gapped search.  
  *      Should be moved to blast_stat.c in the future.
@@ -108,6 +110,7 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
  * @param hit_options options for saving hits. [in]
  * @param query_info The query information block [in]
  * @param sbp Contains scoring information. [in]
+ * @param score_params Parameters for scoring [out]
  * @param ext_params Parameters for gapped extension [out]
  * @param hit_params Parameters for saving hits [out]
  * @param eff_len_params Parameters for search space calculations [out]
@@ -122,6 +125,7 @@ BLAST_GapAlignSetUp(Uint1 program_number,
    const BlastHitSavingOptions* hit_options,
    BlastQueryInfo* query_info, 
    BlastScoreBlk* sbp, 
+   BlastScoringParameters** score_params,
    BlastExtensionParameters** ext_params,
    BlastHitSavingParameters** hit_params,
    BlastEffectiveLengthsParameters** eff_len_params,
@@ -144,14 +148,14 @@ BLAST_GapAlignSetUp(Uint1 program_number,
  *                       with the current sequence data [in] [out]
  */
 Int2 BLAST_OneSubjectUpdateParameters(Uint1 program_number,
-                    Uint4 subject_length,
-                    const BlastScoringOptions* scoring_options,
-                    BlastQueryInfo* query_info, 
-                    BlastScoreBlk* sbp, 
-                    const BlastExtensionParameters* ext_params,
-                    BlastHitSavingParameters* hit_params,
-                    BlastInitialWordParameters* word_params,
-                    BlastEffectiveLengthsParameters* eff_len_params);
+    Uint4 subject_length,
+    const BlastScoringOptions* scoring_options,
+    BlastQueryInfo* query_info, 
+    BlastScoreBlk* sbp, 
+    const BlastExtensionParameters* ext_params,
+    BlastHitSavingParameters* hit_params,
+    BlastInitialWordParameters* word_params,
+    BlastEffectiveLengthsParameters* eff_len_params);
 
 /** BlastScoreBlkMatrixInit, fills score matrix parameters in the ScoreBlkPtr
  *      Should be moved to blast_stat.c in the future.
@@ -163,14 +167,19 @@ Int2 BLAST_OneSubjectUpdateParameters(Uint1 program_number,
 
 Int2
 BlastScoreBlkMatrixInit(Uint1 program_number, 
-   const BlastScoringOptions* scoring_options,
-   BlastScoreBlk* sbp);
+    const BlastScoringOptions* scoring_options,
+    BlastScoreBlk* sbp);
 
 
 Int2
-BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info, 
-    const BlastScoringOptions* scoring_options, Uint1 program_number, Boolean phi_align, 
-    BlastScoreBlk* *sbpp, Blast_Message* *blast_message);
+BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, 
+    BlastQueryInfo* query_info, 
+    const BlastScoringOptions* scoring_options, 
+    Uint1 program_number, 
+    Boolean phi_align, 
+    BlastScoreBlk* *sbpp, 
+    double scale_factor, 
+    Blast_Message* *blast_message);
 
 #ifdef __cplusplus
 }
@@ -180,6 +189,21 @@ BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_inf
 /*
  *
 * $Log: blast_setup.h,v $
+* Revision 1.40  2004/06/16 14:53:03  dondosha
+* Moved extern "C" after the #includes
+*
+* Revision 1.39  2004/05/19 14:52:01  camacho
+* 1. Added doxygen tags to enable doxygen processing of algo/blast/core
+* 2. Standardized copyright, CVS $Id string, $Log and rcsid formatting and i
+*    location
+* 3. Added use of @todo doxygen keyword
+*
+* Revision 1.38  2004/05/17 16:38:08  camacho
+* Make function declarations more readable
+*
+* Revision 1.37  2004/05/07 15:36:40  papadopo
+* add scale factor as input argument to BlastMainSetup and GetScoreBlk
+*
 * Revision 1.36  2004/03/30 15:49:07  madden
 * Add prototype for BlastSetup_GetScoreBlock
 *

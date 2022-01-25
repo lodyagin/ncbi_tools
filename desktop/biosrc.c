@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.48 $
+* $Revision: 6.49 $
 *
 * File Description: 
 *
@@ -1907,11 +1907,11 @@ EnumFieldAssocPtr subsource_alists [] = {
 };
 
 Uint2 orgmod_widths [] = {
-  0, 15
+  0, 25
 };
 
 Uint2 subsource_widths [] = {
-  0, 15
+  0, 25
 };
 
 Uint2 orgmod_types [] = {

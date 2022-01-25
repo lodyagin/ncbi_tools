@@ -62,11 +62,23 @@ SOURCE=..\..\..\..\..\algo\blast\api\blast_input.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\api\blast_returns.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\api\blast_tabular.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\api\blast_seq.c
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\api\blast_seqalign.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\api\hspstream_queue.c
 # End Source File
 # Begin Source File
 
@@ -94,11 +106,23 @@ SOURCE=..\..\..\..\..\algo\blast\api\blast_input.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\api\blast_returns.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\api\blast_tabular.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\api\blast_seq.h
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\api\blast_seqalign.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\api\hspstream_queue.h
 # End Source File
 # Begin Source File
 

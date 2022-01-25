@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_seq.c,v 1.39 2004/04/16 14:44:07 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.40 2004/05/14 17:20:50 dondosha Exp $";
 /*
 * ===========================================================================
 *
@@ -33,7 +33,7 @@ Author: Ilya Dondoshansky
 Contents: Functions converting between SeqLocs and structures used in BLAST.
 
 ******************************************************************************
- * $Revision: 1.39 $
+ * $Revision: 1.40 $
  * */
 
 #include <seqport.h>
@@ -274,7 +274,7 @@ static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program,
    Uint4 max_length = 0;
 
    if (translate)
-      num_frames = 6;
+      num_frames = NUM_FRAMES;
    else if (is_na)
       num_frames = 2;
    else
@@ -302,14 +302,14 @@ static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program,
    }
 
    if ((context_offsets = (Int4*) 
-      malloc((total_contexts+1)*sizeof(Int4))) == NULL)
+      calloc((total_contexts+1), sizeof(Int4))) == NULL)
       return -1;
 
    if ((query_info->eff_searchsp_array = 
-      (Int8*) malloc(total_contexts*sizeof(Int8))) == NULL)
+      (Int8*) calloc(total_contexts, sizeof(Int8))) == NULL)
       return -1;
    if ((query_info->length_adjustments =
-        (Int4*) malloc(total_contexts*sizeof(Int4))) == NULL)
+        (Int4*) calloc(total_contexts, sizeof(Int4))) == NULL)
        return -1;
 
    context_offsets[0] = 0;
@@ -542,7 +542,7 @@ BLAST_GetSequence(SeqLocPtr slp, BlastQueryInfo* query_info,
       }
    }
 
-   if (num_frames == 6) {
+   if (num_frames == NUM_FRAMES) {
       /* Sequence must be translated in 6 frames. This can only happen
          for query - subject sequences are translated later. */
       Int4 gc;
@@ -639,7 +639,7 @@ Int2 BLAST_SetUpQuery(Uint1 program_number, SeqLocPtr query_slp,
       num_frames = 1;
    } else { 
       encoding = NCBI4NA_ENCODING;
-      num_frames = 6;
+      num_frames = NUM_FRAMES;
    }
 
    if ((status=BLAST_GetSequence(query_slp, *query_info, query_options,

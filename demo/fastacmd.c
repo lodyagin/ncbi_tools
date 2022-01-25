@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: fastacmd.c,v 6.29 2003/05/30 17:31:09 coulouri Exp $";
+static char const rcsid[] = "$Id: fastacmd.c,v 6.30 2004/05/13 20:54:45 coulouri Exp $";
 
-/* $Id: fastacmd.c,v 6.29 2003/05/30 17:31:09 coulouri Exp $
+/* $Id: fastacmd.c,v 6.30 2004/05/13 20:54:45 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: fastacmd.c,v 6.29 2003/05/30 17:31:09 coulouri
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.30  2004/05/13 20:54:45  coulouri
+* spell 'loci' correctly
+*
 * Revision 6.29  2003/05/30 17:31:09  coulouri
 * add rcsid
 *
@@ -157,10 +160,10 @@ static Args myargs [] = {
       "         T - protein   \n"
       "         F - nucleotide", 
       "G", NULL,NULL,TRUE,'p',ARG_STRING,0.0,0,NULL},
-    { "Search string: GIs, accessions and locuses may be used delimited\n"
+    { "Search string: GIs, accessions and loci may be used delimited\n"
       "      by comma.",                                        /* 2 */
       NULL, NULL, NULL, TRUE, 's', ARG_STRING, 0.0, 0, NULL},
-    { "Input file wilth GIs/accessions/locuses for batch\n"
+    { "Input file wilth GIs/accessions/loci for batch\n"
       "      retrieval",/* 3 */
       NULL, NULL, NULL, TRUE, 'i', ARG_STRING, 0.0, 0, NULL},
     { "Retrieve duplicate accessions",                          /* 4 */

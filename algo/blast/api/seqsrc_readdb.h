@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.h,v 1.9 2004/02/18 19:38:20 dondosha Exp $
+/*  $Id: seqsrc_readdb.h,v 1.10 2004/06/07 17:15:18 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -68,6 +68,13 @@ BlastSeqSrc* ReaddbSeqSrcNew(BlastSeqSrc* bssp, void* args);
  * @return NULL
  */
 BlastSeqSrc* ReaddbSeqSrcFree(BlastSeqSrc* bssp);
+
+/** Readdb sequence source copier: 
+ * creates a new copy of the ReadDBFILE structure by calling readdb_attach.
+ * @param bssp BlastSeqSrc structure to copy [in]
+ * @return New BlastSeqSrc structure
+ */
+BlastSeqSrc* ReaddbSeqSrcCopy(BlastSeqSrc* bssp);
 
 /** Initialize the sequence source structure.
  * @param dbname BLAST database name [in]

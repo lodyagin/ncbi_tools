@@ -1,51 +1,45 @@
-static char const rcsid[] = "$Id: blast_seg.c,v 1.21 2004/04/05 16:09:27 camacho Exp $";
-/*
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE                          
-*               National Center for Biotechnology Information
-*                                                                          
-*  This software/database is a "United States Government Work" under the   
-*  terms of the United States Copyright Act.  It was written as part of    
-*  the author's official duties as a United States Government employee and 
-*  thus cannot be copyrighted.  This software/database is freely available 
-*  to the public for use. The National Library of Medicine and the U.S.    
-*  Government have not placed any restriction on its use or reproduction.  
-*                                                                          
-*  Although all reasonable efforts have been taken to ensure the accuracy  
-*  and reliability of the software and data, the NLM and the U.S.          
-*  Government do not and cannot warrant the performance or results that    
-*  may be obtained by using this software or data. The NLM and the U.S.    
-*  Government disclaim all warranties, express or implied, including       
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.                                                                
-*                                                                          
-*  Please cite the author in any work or product based on this material.   
-*
-* ===========================================================================
-*
-* File Name:  blast_seg.c
-*
-* Author(s): Ilya Dondoshansky
-*   
-* Version Creation Date: 05/28/2003
-*
-* $Revision: 1.21 $
-*
-* File Description: A utility to find low complexity AA regions.
-*                   This parallels functionality of seg.c from the C toolkit,
-*                   but without using the structures generated from ASN.1 spec.
-* ==========================================================================
-*/
+/* $Id: blast_seg.c,v 1.23 2004/05/24 15:51:34 madden Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE                          
+ *               National Center for Biotechnology Information
+ *                                                                          
+ *  This software/database is a "United States Government Work" under the   
+ *  terms of the United States Copyright Act.  It was written as part of    
+ *  the author's official duties as a United States Government employee and 
+ *  thus cannot be copyrighted.  This software/database is freely available 
+ *  to the public for use. The National Library of Medicine and the U.S.    
+ *  Government have not placed any restriction on its use or reproduction.  
+ *                                                                          
+ *  Although all reasonable efforts have been taken to ensure the accuracy  
+ *  and reliability of the software and data, the NLM and the U.S.          
+ *  Government do not and cannot warrant the performance or results that    
+ *  may be obtained by using this software or data. The NLM and the U.S.    
+ *  Government disclaim all warranties, express or implied, including       
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.                                                                
+ *                                                                          
+ *  Please cite the author in any work or product based on this material.   
+ *
+ * ===========================================================================
+ *
+ * Author: Ilya Dondoshansky
+ *
+ */
+
+/** @file blast_seg.c
+ * A utility to find low complexity AA regions. This parallels functionality 
+ * of seg.c from the C toolkit, but without using the structures generated 
+ * from ASN.1 spec.
+ * @todo FIXME needs comments
+ */
+
+static char const rcsid[] = 
+    "$Id: blast_seg.c,v 1.23 2004/05/24 15:51:34 madden Exp $";
 
 #include <algo/blast/core/blast_seg.h>
 
-#ifdef WIN16
-float
-#else
-double
-#endif
-  lnfact[] = 
+double lnfact[] = 
   {
    0.000000, 0.000000, 0.693147, 1.791759, 3.178054, 4.787492, 6.579251, 8.525161, 
    10.604603, 12.801827, 15.104413, 17.502308, 19.987214, 22.552164, 25.191221, 27.899271, 
@@ -1300,20 +1294,47 @@ double
    82108.927837 
   }; 
 
+#define AA20    2
+
+#define LN20    2.9957322735539909
+
+#define CHAR_SET 128
+
+typedef struct SSequence
+  {
+   struct SSequence* parent;
+   char* seq;
+   Alpha* palpha;
+   Int4 start;
+   Int4 length;
+   Int4 bogus;
+   Boolean punctuation;
+   Int4* composition;
+   Int4* state;
+   double entropy;
+} SSequence;
+
+typedef struct SSeg
+  {
+   int begin;
+   int end;
+   struct SSeg *next;
+  } SSeg;
+
 /*---------------------------------------------------------------(SeqNew)---*/
 
-static Sequence* SeqNew(void)
+static SSequence* SeqNew(void)
 {
-   Sequence* seq;
+   SSequence* seq;
 
-   seq = (Sequence*) calloc(1, sizeof(Sequence));
+   seq = (SSequence*) calloc(1, sizeof(SSequence));
    if (seq==NULL)
      {
       /* raise error flag and etc. */
       return(seq);
      }
 
-   seq->parent = (Sequence*) NULL;
+   seq->parent = (SSequence*) NULL;
    seq->seq = (char*) NULL;
    seq->palpha = (Alpha*) NULL;
    seq->start = seq->length = 0;
@@ -1341,7 +1362,7 @@ static void AlphaFree (Alpha* palpha)
 
 /*--------------------------------------------------------------(SeqFree)---*/
 
-static void SeqFree(Sequence* seq)
+static void SeqFree(SSequence* seq)
 {
    if (seq==NULL) return;
 
@@ -1353,11 +1374,11 @@ static void SeqFree(Sequence* seq)
    return;
 }
 
-/*--------------------------------------------------------------(SegFree)---*/
+/*--------------------------------------------------------------(SSegFree)---*/
 
-static void SegFree(Seg* seg)
+static void SegFree(SSeg* seg)
 {
-   Seg* nextseg;
+   SSeg* nextseg;
 
    while (seg)
      {
@@ -1371,7 +1392,7 @@ static void SegFree(Seg* seg)
 
 /*--------------------------------------------------------------(hasdash)---*/
 
-static Boolean hasdash(Sequence* win)
+static Boolean hasdash(SSequence* win)
 {
 	register char	*seq, *seqmax;
 
@@ -1399,7 +1420,7 @@ static int state_cmp(const void* s1, const void* s2)
 
 /*---------------------------------------------------------------(compon)---*/
 
-static void compon(Sequence* win)
+static void compon(SSequence* win)
 
 {
 	Int4* comp;
@@ -1430,7 +1451,7 @@ static void compon(Sequence* win)
 
 /*--------------------------------------------------------------(stateon)---*/
 
-static void stateon(Sequence* win)
+static void stateon(SSequence* win)
 
 {
 	Int4 letter, nel, c;
@@ -1458,16 +1479,16 @@ static void stateon(Sequence* win)
 
 /*--------------------------------------------------------------(openwin)---*/
 
-static Sequence* openwin(Sequence* parent, Int4 start, Int4 length)
+static SSequence* openwin(SSequence* parent, Int4 start, Int4 length)
 {
-   Sequence* win;
+   SSequence* win;
 
    if (start<0 || length<0 || start+length>parent->length)
      {
-      return((Sequence*) NULL);
+      return((SSequence*) NULL);
      }
 
-   win = (Sequence*) calloc(1, sizeof(Sequence));
+   win = (SSequence*) calloc(1, sizeof(SSequence));
 
 /*---                                          ---[set links, up and down]---*/
 
@@ -1553,7 +1574,7 @@ static void incrementsv(Int4* sv, Int4 class)
 
 /*------------------------------------------------------------(shiftwin1)---*/
 
-static Int4 shiftwin1(Sequence* win)
+static Int4 shiftwin1(SSequence* win)
 {
 	Int4 j, length;
 	Int4* comp;
@@ -1589,7 +1610,7 @@ static Int4 shiftwin1(Sequence* win)
 
 /*-------------------------------------------------------------(closewin)---*/
 
-static void closewin(Sequence* win)
+static void closewin(SSequence* win)
 {
    if (win==NULL) return;
 
@@ -1602,7 +1623,7 @@ static void closewin(Sequence* win)
 
 /*----------------------------------------------------------------(enton)---*/
 
-static void enton(Sequence* win)
+static void enton(SSequence* win)
 
   {
    if (win->state==NULL) {stateon(win);}
@@ -1613,9 +1634,9 @@ static void enton(Sequence* win)
   }
 
 /*---------------------------------------------------------------(seqent)---*/
-static double* seqent(Sequence* seq, Int4 window, Int4 maxbogus)
+static double* seqent(SSequence* seq, Int4 window, Int4 maxbogus)
 {
-   Sequence* win;
+   SSequence* win;
    double* H;
    Int4 i, first, last, downset, upset;
 
@@ -1665,9 +1686,9 @@ static double* seqent(Sequence* seq, Int4 window, Int4 maxbogus)
 /*------------------------------------------------------------(appendseg)---*/
 
 static void
-appendseg(Seg* segs, Seg* seg)
+appendseg(SSeg* segs, SSeg* seg)
 
-  {Seg* temp;
+  {SSeg* temp;
 
    temp = segs;
    while (TRUE)
@@ -1816,11 +1837,11 @@ fprintf(stderr, "%lf %lf %lf\n", ans, ans1, ans2);
 
 /*-----------------------------------------------------------------(trim)---*/
 
-static void trim(Sequence* seq, Int4* leftend, Int4* rightend,
+static void trim(SSequence* seq, Int4* leftend, Int4* rightend,
                  SegParameters* sparamsp)
 
   {
-   Sequence* win;
+   SSequence* win;
    double prob, minprob;
    Int4 shift, len, i;
    Int4 lend, rend;
@@ -1875,11 +1896,11 @@ static void trim(Sequence* seq, Int4* leftend, Int4* rightend,
 
 /*---------------------------------------------------------------(SegSeq)---*/
 
-static void SegSeq(Sequence* seq, SegParameters* sparamsp, Seg* *segs,
+static void SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
                    Int4 offset)
 {
-   Seg* seg,* leftsegs;
-   Sequence* leftseq;
+   SSeg* seg,* leftsegs;
+   SSequence* leftseq;
    Int4 window;
    double locut, hicut;
    Int4 maxbogus;
@@ -1926,7 +1947,7 @@ static void SegSeq(Sequence* seq, SegParameters* sparamsp, Seg* *segs,
             rend = leftend - 1;
 
             leftseq = openwin(seq, lend, rend-lend+1);
-            leftsegs = (Seg*) NULL;
+            leftsegs = (SSeg*) NULL;
             SegSeq(leftseq, sparamsp, &leftsegs, offset+lend);
             if (leftsegs!=NULL)
               {
@@ -1936,18 +1957,18 @@ static void SegSeq(Sequence* seq, SegParameters* sparamsp, Seg* *segs,
             closewin(leftseq);
 
 /*          trim(openwin(seq, lend, rend-lend+1), &lend, &rend);
-            seg = (Seg*) calloc(1, sizeof(Seg));
+            seg = (SSeg*) calloc(1, sizeof(SSeg));
             seg->begin = lend;
             seg->end = rend;
-            seg->next = (Seg*) NULL;
+            seg->next = (SSeg*) NULL;
             if (segs==NULL) segs = seg;
             else appendseg(segs, seg);  */
            }
 
-         seg = (Seg*) calloc(1, sizeof(Seg));
+         seg = (SSeg*) calloc(1, sizeof(SSeg));
          seg->begin = leftend + offset;
          seg->end = rightend + offset;
-         seg->next = (Seg*) NULL;
+         seg->next = (SSeg*) NULL;
 
          if (*segs==NULL) *segs = seg;
          else appendseg(*segs, seg);
@@ -1966,9 +1987,9 @@ static void SegSeq(Sequence* seq, SegParameters* sparamsp, Seg* *segs,
 	hilenmin also does something, but we need to ask Scott Federhen what?
 */
 
-static void mergesegs(Sequence* seq, Seg* segs, Boolean overlaps)
+static void mergesegs(SSequence* seq, SSeg* segs, Boolean overlaps)
 {
-   Seg* seg,* nextseg;
+   SSeg* seg,* nextseg;
    Int4 hilenmin;		/* hilenmin yet unset */
    Int4 len;
 
@@ -2020,7 +2041,7 @@ static void mergesegs(Sequence* seq, Seg* segs, Boolean overlaps)
    return;
 }
 
-static Int2 SegsToBlastSeqLoc(Seg* segs, Int4 offset, BlastSeqLoc** seg_locs)
+static Int2 SegsToBlastSeqLoc(SSeg* segs, Int4 offset, BlastSeqLoc** seg_locs)
 {
    SSeqRange* dip;
    BlastSeqLoc* last_slp = NULL,* head_slp = NULL;
@@ -2176,8 +2197,8 @@ static Alpha* AlphaCopy (Alpha* palpha)
 Int2 SeqBufferSeg (Uint1* sequence, Int4 length, Int4 offset,
                      SegParameters* sparamsp, BlastSeqLoc** seg_locs)
 {
-   Sequence* seqwin;
-   Seg* segs;
+   SSequence* seqwin;
+   SSeg* segs;
    Boolean params_allocated = FALSE;
    
    SegParametersCheck (sparamsp);
@@ -2206,7 +2227,7 @@ Int2 SeqBufferSeg (Uint1* sequence, Int4 length, Int4 offset,
    
    /* seg the sequence */
    
-   segs = (Seg*) NULL;
+   segs = (SSeg*) NULL;
    SegSeq (seqwin, sparamsp, &segs, 0);
 
    /* merge the segment if desired. */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.44 $
+* $Revision: 6.45 $
 *
 * File Description: 
 *
@@ -44,6 +44,9 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
+* Revision 6.45  2004/05/06 19:31:09  chenj
+* fixed the bug in fnPBSFtoPSA() to use 2 chars for domain id
+*
 * Revision 6.44  2003/12/03 02:11:28  kans
 * added defines missing from Mac OS 10.3 headers
 *
@@ -3204,6 +3207,7 @@ SeqAnnotPtr LIBCALL fnPBSFtoPSA (BiostrucFeaturePtr pbsfSelected)
   MemFree (pcPDB);
   
   /* get the embedded PDB code of the hit */
+ if (iDomain < 10) {
   pcPDB = StringSave (PDBNAME_DEFAULT);
   iDomain = 0;
   cChain = '-';
@@ -3214,6 +3218,20 @@ SeqAnnotPtr LIBCALL fnPBSFtoPSA (BiostrucFeaturePtr pbsfSelected)
   pcPDB[3] = pbsfSelected->name[10];
   cChain = pbsfSelected->name[11];
   iDomain = atoi ((char *) &pbsfSelected->name[12]);
+ }
+ else {		/* have at least 10 domains in 1 str., added by J. Chen */
+  pcPDB = StringSave (PDBNAME_DEFAULT);
+  iDomain = 0;
+  cChain = '-';
+ 
+  pcPDB[0] = pbsfSelected->name[8];
+  pcPDB[1] = pbsfSelected->name[9];
+  pcPDB[2] = pbsfSelected->name[10];
+  pcPDB[3] = pbsfSelected->name[11];
+  cChain = pbsfSelected->name[12];
+  iDomain = atoi ((char *) &pbsfSelected->name[13]);
+ }
+
 /*slavesip = MakePDBSeqId2 (pcPDB, cChain, iDomain, TRUE);  */
   slavesip = MakePDBSeqId2 (pcPDB, cChain, iDomain, FALSE);
   
@@ -3340,7 +3358,7 @@ SeqAnnotPtr LIBCALL fnPBSFtoPSA (BiostrucFeaturePtr pbsfSelected)
      count++;
      if(salp->segs == NULL) salp->segs = (Pointer) ddp;
      else {
-        ddp_tmp = salp->segs;
+        ddp_tmp = (DenseDiagPtr) salp->segs;
         while(ddp_tmp->next) ddp_tmp = ddp_tmp->next;
         ddp_tmp->next = ddp;
      }
@@ -3401,7 +3419,7 @@ SeqAnnotPtr LIBCALL BiostrToSeqAnnotSet (BiostrucAnnotSetPtr set,
   while(pbsfs)
   {
      feature=pbsfs->features;
-     strcpy(pcMaster, pbsfs->descr->data.ptrvalue);
+     strcpy(pcMaster, (char *)pbsfs->descr->data.ptrvalue);
      /*if master name matched*/
     if(strcmp(pcMaster, pdbname_master) == 0) /* I had this commented out */
     {
@@ -4177,7 +4195,7 @@ printf("in BiostrucAddFeature \n");
 /*psfsThis->pvnDescr = (ValNodePtr) pbsfsThis->descr; */ /* link stub for descr */
 /*pbsfsThis->descr = NULL; */ /* detach and save from free-ing descr  */
                /* yanli comment the above two line out, instead do the following */
-  psfsThis->pvnDescr = AsnIoMemCopy((ValNodePtr) pbsfsThis->descr, (AsnReadFunc)BiostrucFeatureSetDescrAsnRead, (AsnWriteFunc)BiostrucFeatureSetDescrAsnWrite); 
+  psfsThis->pvnDescr = (ValNodePtr)AsnIoMemCopy((ValNodePtr) pbsfsThis->descr, (AsnReadFunc)BiostrucFeatureSetDescrAsnRead, (AsnWriteFunc)BiostrucFeatureSetDescrAsnWrite); 
 
   pvnThis = NULL;
   pvnThis = ValNodeFindNext(psfsThis->pvnDescr, NULL,  BiostrucFeatureSetDescr_name); 

@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.8 2003/12/19 18:12:37 coulouri Exp $
+/* $Id: wblast2.c,v 1.9 2004/05/14 17:25:07 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,15 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.8 $
+* $Revision: 1.9 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.9  2004/05/14 17:25:07  dondosha
+* Allow use of new BLAST engine
+*
 * Revision 1.8  2003/12/19 18:12:37  coulouri
 * fix name collision in aix
 *
@@ -192,8 +195,15 @@
 
 #include <blastpat.h>
 #ifndef BL2SEQ_STANDALONE
-#include <objBlobj.h>
 #include <qblastnet.h>
+#endif
+
+#if 1
+#define USE_NEW_BLAST
+#endif
+
+#ifdef USE_NEW_BLAST
+#include <algo/blast/api/twoseq_api.h>
 #endif
 
 #define MY_BLOSUM62 0
@@ -1153,8 +1163,8 @@ static void PrintOutScore(SeqAlignPtr sap, Boolean is_aa, Int4Ptr PNTR matrix, V
 {
 	Int4 number, score;
 	Nlm_FloatHi bit_score, evalue; 
-        CharPtr eval_buff_ptr;
-	static Char eval_buff[10], bit_score_buff[10];
+   CharPtr eval_buff_ptr;
+	Char eval_buff[10], bit_score_buff[10];
 	AlignSumPtr asp;
 	Int2 percent_identical, percent_positive;
         ValNodePtr bs_list;
@@ -1166,32 +1176,12 @@ static void PrintOutScore(SeqAlignPtr sap, Boolean is_aa, Int4Ptr PNTR matrix, V
 
 	printf("<pre>\n");
 	GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
-
+   
+   /* Evalue buffer for printing may be shifted if a digit is knocked off
+      before e. */
 	eval_buff_ptr = eval_buff;
-	if (evalue < 1.0e-180) {
-		sprintf(eval_buff, "0.0");
-	} else if (evalue < 1.0e-99) {
-		sprintf(eval_buff, "%2.0le", evalue);
-		eval_buff_ptr++;	/* Knock off digit. */
-	} else if (evalue < 0.0009) {
-		sprintf(eval_buff, "%3.0le", evalue);
-	} else if (evalue < 0.1) {
-		sprintf(eval_buff, "%4.3lf", evalue);
-	} else if (evalue < 1.0) {
-		sprintf(eval_buff, "%3.2lf", evalue);
-	} else if (evalue < 10.0) {
-		sprintf(eval_buff, "%2.1lf", evalue);
-	} else {
-		sprintf(eval_buff, "%5.0lf", evalue);
-	}
-
-	if (bit_score > 9999) {
-		sprintf(bit_score_buff, "%4.3le", bit_score);
-	} else if (bit_score > 99.9) {
-		sprintf(bit_score_buff, "%4.0ld", (long) bit_score);
-	} else {
-		sprintf(bit_score_buff, "%4.1lf", bit_score);
-	}
+   ScoreAndEvalueToBuffers(bit_score, evalue, bit_score_buff, 
+                           &eval_buff_ptr, TRUE);
 
 	if (number == 1) {
 		printf("Score = %s bits (%ld), Expect = %s<BR>", 
@@ -1997,6 +1987,57 @@ static void* ConnectionThreadRun(void *p)
 }
 #endif
 
+#ifdef USE_NEW_BLAST
+static void BLASTOptions2SummaryOptions(BLAST_OptionsBlk* options,
+                                        Char* progname,
+                                        BLAST_SummaryOptions* s_options)
+{
+   if (!options || !s_options)
+      return;
+
+   if (options->is_megablast_search)
+      s_options->hint = eFast;
+
+   if (!strcmp(progname, "blastn"))
+      s_options->program = eBlastn;
+   else if (!strcmp(progname, "blastp"))
+      s_options->program = eBlastp;
+   else if (!strcmp(progname, "blastx"))
+      s_options->program = eBlastx;
+   else if (!strcmp(progname, "tblastn"))
+      s_options->program = eTblastn;
+   else if (!strcmp(progname, "tblastx"))
+      s_options->program = eTblastx;
+   else
+      s_options->program = eChoose;
+   
+   s_options->strand = options->strand_option;
+   s_options->cutoff_evalue = options->expect_value;
+   if (options->matrix)
+      s_options->matrix = strdup(options->matrix);
+
+
+   if (options->filter_string)
+      s_options->filter_string = strdup(options->filter_string);
+   else /* If filtering option not set, assume no filtering! */
+      s_options->filter_string = strdup("F");
+
+   s_options->word_size = options->wordsize;
+   s_options->gapped_calculation = options->gapped_calculation;
+   s_options->nucleotide_match = options->reward;
+   s_options->nucleotide_mismatch = options->penalty;
+   s_options->gap_open = options->gap_open;
+   s_options->gap_extend = options->gap_extend;
+   s_options->gap_x_dropoff = options->gap_x_dropoff;
+   s_options->db_length = options->db_length;
+   s_options->word_threshold = options->threshold_second;
+   /* If window size is set to 0, enforce single hit method for initial 
+      words */
+   if (options->window_size == 0)
+      s_options->init_seed_method = eOneHit;
+}
+#endif
+
 #define BL2SEQ_CPU_LIMIT 240
 
 Int2 Main(void)
@@ -2009,7 +2050,7 @@ Int2 Main(void)
     Int4 from=0, to=0, ffrom=0, tto=0;
     Int2 wordsize, filter=0;
     Int2 mtrx = 0, color=1;
-    SeqAlignPtr seqalign, sap, sapnext;
+    SeqAlignPtr seqalign = NULL, sap, sapnext;
     SeqAnnotPtr hsat= NULL, sat, satnext;
     FloatHi	expect;
     Boolean is_prot=FALSE, is_aa1=FALSE, is_aa2=FALSE, is_na1=TRUE, is_na2=TRUE;
@@ -2019,8 +2060,8 @@ Int2 Main(void)
     BLAST_OptionsBlkPtr options = NULL;
     Int4 ll, len1, len2, txoption;
     SeqIdPtr sip;
-    Int4Ptr PNTR txmatrix;
-    BLAST_MatrixPtr blast_matrix;
+    Int4Ptr PNTR txmatrix = NULL;
+    BLAST_MatrixPtr blast_matrix = NULL;
     SeqPortPtr spp;
     Uint1 code1, code2;
     ValNodePtr vnp, error_return=NULL;
@@ -2037,7 +2078,7 @@ Int2 Main(void)
     Uint1        align_type;
     
     ValNodePtr	   other_returns, mask, mask_head;
-    CharPtr		   buffer;
+    CharPtr		   buffer = NULL;
     BLAST_KarlinBlkPtr ka_params=NULL, ka_gap_params=NULL;
     TxDfDbInfoPtr      dbinfo = NULL;
     BlastTimeKeeper    time_keeper;
@@ -2057,6 +2098,11 @@ Int2 Main(void)
     void *thrstat;
     CharPtr program_log, user_IP;
     int pid, time_start, results_size = 0;
+#endif
+
+#ifdef USE_NEW_BLAST 
+    BLAST_SummaryOptions* s_options = NULL;
+    BLAST_SummaryReturn* s_return = NULL;
 #endif
 
 #ifdef RLIMIT_CPU
@@ -2134,6 +2180,12 @@ Int2 Main(void)
     
     progname = theInfo->program;
     
+    /* For tblastx, we still do a protein search, even though both sequences
+       are nucleotide. */
+    if (!(StringICmp(progname, "tblastx")))
+       is_prot = TRUE;
+
+
     if ((chptr = WWWGetValueByName(theInfo->info, "MEGABLAST")) != NULL)
        is_megablast = TRUE;
     options = BLASTOptionNewEx(progname, TRUE, is_megablast);
@@ -2545,9 +2597,14 @@ Int2 Main(void)
     logmsg(0);
 #endif
 
+#ifndef USE_NEW_BLAST
     seqalign =  BlastTwoSequencesByLocEx(slp1, slp2, progname, 
                                          options, &other_returns, NULL);
-
+#else
+       BLAST_SummaryOptionsInit(&s_options);
+       BLASTOptions2SummaryOptions(options, progname, s_options);
+       BLAST_TwoSeqLocSets(s_options, slp1, slp2, &seqalign, &mask, &s_return);
+#endif
     run_status = WBLAST2_FORMAT;    
     /*	seqalign =  BlastTwoSequencesEx(query_bsp, subject_bsp, progname, 
         options, &other_returns, NULL);*/
@@ -2576,6 +2633,7 @@ Int2 Main(void)
         return 0;
     }
 
+#ifndef USE_NEW_BLAST
     mask = NULL;
     for (vnp=other_returns; vnp; vnp = vnp->next) {
         switch (vnp->choice) {
@@ -2611,6 +2669,7 @@ Int2 Main(void)
     }	
     
     ValNodeFree(other_returns);
+#endif
     
     to = (to >0) ? to : fake_bsp->length;
     tto = (tto >0) ? tto : subject_bsp->length;
@@ -2964,6 +3023,7 @@ Int2 Main(void)
     if (txmatrix)
         txmatrix = TxMatrixDestruct(txmatrix);
     dbinfo = TxDfDbInfoDestruct(dbinfo);
+#ifndef USE_NEW_BLAST
     if (ka_params) {
         PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 
                           70, stdout, FALSE);
@@ -2983,6 +3043,19 @@ Int2 Main(void)
         mask = mask->next;
     }
     ValNodeFree(mask_head);
+#else
+    if (s_return->ka_params) {
+       PrintKAParameters(s_return->ka_params->Lambda, s_return->ka_params->K, 
+                         s_return->ka_params->H, 70, stdout, FALSE);
+    }
+    if (s_return->ka_params_gap) {
+       PrintKAParameters(s_return->ka_params_gap->Lambda, 
+                         s_return->ka_params_gap->K, 
+                         s_return->ka_params_gap->H, 70, stdout, TRUE);
+    }
+    PrintTildeSepLines(s_return->params_buffer, 70, stdout);
+    
+#endif
     CreateTailHTML();
     run_status = WBLAST2_DONE;
     options = BLASTOptionDelete(options);

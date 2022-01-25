@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.96 $
+* $Revision: 6.98 $
 *
 * File Description: 
 *
@@ -163,6 +163,11 @@ NLM_EXTERN SeqLocPtr SeqLocMerge (BioseqPtr target,
 NLM_EXTERN SeqLocPtr SeqLocMergeEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr from,
                                     Boolean single_interval, Boolean fuse_joints,
                                     Boolean merge_overlaps, Boolean add_null);
+
+NLM_EXTERN SeqLocPtr SeqLocMergeExEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr from,
+                                      Boolean single_interval, Boolean fuse_joints,
+                                      Boolean merge_overlaps, Boolean add_null,
+                                      Boolean ignore_mixed);
 
 NLM_EXTERN Boolean CheckSeqLocForPartial (SeqLocPtr location, BoolPtr p5ptr, BoolPtr p3ptr);
 NLM_EXTERN void SetSeqLocPartial (SeqLocPtr location, Boolean partial5, Boolean partial3);
@@ -307,6 +312,10 @@ NLM_EXTERN Boolean SerialNumberInString (CharPtr str);
 
 NLM_EXTERN int LIBCALLBACK SortVnpByString (VoidPtr ptr1, VoidPtr ptr2);
 NLM_EXTERN ValNodePtr UniqueValNode (ValNodePtr list);
+
+/* for sorting valnode list by data.intvalue */
+
+NLM_EXTERN int LIBCALLBACK SortByIntvalue (VoidPtr ptr1, VoidPtr ptr2);
 
 /* keytag sorts/uniques and then owns valnode character list */
 

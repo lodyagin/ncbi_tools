@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.131 $
+* $Revision: 6.133 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.133  2004/06/02 20:11:14  kans
+* In SeqEntryToFasta, if defline is >?unk100, make special local ID, recognized by tbl2asn
+*
+* Revision 6.132  2004/05/07 20:55:54  kans
+* MakeCompleteChromTitle handles organelles with multiple chromosomes, e.g., Guillardia theta nucleomorph
+*
 * Revision 6.131  2004/05/03 15:32:07  kans
 * BioseqFastaStream uses larger buffer for seqid because some RefSeqs use more than 41 characters for FASTA_LONG
 *
@@ -2551,12 +2557,19 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
             }
         } else {
             /* Unknown Seq-id */ 
-            bsp->id = MakeSeqID ("lcl|gap");
-            bsp->repr = Seq_repr_virtual;
             
             ptr = defline + 1;
             while (IS_WHITESP(*ptr))
                 ptr++;
+
+            if (StringNCmp (ptr, "unk100", 6) == 0) {
+              bsp->id = MakeSeqID ("lcl|unk100");
+              ptr += 3;
+            } else {
+              bsp->id = MakeSeqID ("lcl|gap");
+            }
+            bsp->repr = Seq_repr_virtual;
+
             if(*ptr != '\0' && sscanf(ptr, "%ld", &len) == 1 && len > 0) {
                 bsp->length =  (Int4) len;
             } else {
@@ -3839,7 +3852,7 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 comple
 	SubSourcePtr  ssp;
 	CharPtr       name = NULL, chr = NULL, orgnl = NULL,
 	              seg = NULL, pls = NULL, def = NULL;
-	Int2          deflen = 70; /* starts with space for all fixed text */
+	Int2          deflen = 80; /* starts with space for all fixed text */
 	Char          ch;
 	Boolean       plasmid;
 	Uint1         genome;
@@ -3957,6 +3970,16 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 comple
 		StringCat (def, name);
 	}
 	if (orgnl != NULL) {
+        if (chr != NULL) {
+            StringCat (def, " ");
+            StringCat (def, orgnl);
+            StringCat (def, " chromosome ");
+            StringCat(def, chr);
+            StringCat (def, completeseq);
+            ch = *def;
+            *def = TO_UPPER (ch);
+            return def;
+        }
 		StringCat (def, " ");
 		StringCat (def, orgnl);
 		StringCat (def, completegen);

@@ -1,41 +1,38 @@
-/* $Id: blast_extend.c,v 1.60 2004/04/27 15:56:53 coulouri Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/* $Id: blast_extend.c,v 1.64 2004/05/24 13:26:27 madden Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Ilya Dondoshansky
+ *
+ */
 
-/*****************************************************************************
+/** @file blast_extend.c
+ * Functions to initialize structures used for BLAST extension
+ */
 
-File name: blast_extend.c
-
-Author: Ilya Dondoshansky
-
-Contents: Functions to initialize structures used for BLAST extension
-
-******************************************************************************
- * $Revision: 1.60 $
- * */
-
-static char const rcsid[] = "$Id: blast_extend.c,v 1.60 2004/04/27 15:56:53 coulouri Exp $";
+static char const rcsid[] = 
+    "$Id: blast_extend.c,v 1.64 2004/05/24 13:26:27 madden Exp $";
 
 #include <algo/blast/core/blast_extend.h>
 #include <algo/blast/core/blast_options.h>
@@ -116,12 +113,12 @@ BLAST_DiagTableNew (Int4 qlen, Boolean multiple_hits, Int4 window_size)
 /* Description in blast_extend.h */
 Int2 BlastExtendWordNew(Uint4 query_length,
    const BlastInitialWordOptions* word_options,
-   Uint4 subject_length, BLAST_ExtendWord** ewp_ptr)
+   Uint4 subject_length, Blast_ExtendWord** ewp_ptr)
 {
-   BLAST_ExtendWord* ewp;
+   Blast_ExtendWord* ewp;
    Int4 index, i;
 
-   *ewp_ptr = ewp = (BLAST_ExtendWord*) calloc(1, sizeof(BLAST_ExtendWord));
+   *ewp_ptr = ewp = (Blast_ExtendWord*) calloc(1, sizeof(Blast_ExtendWord));
 
    if (!ewp) {
       return -1;
@@ -142,10 +139,10 @@ Int2 BlastExtendWordNew(Uint4 query_length,
       stack_table->stack_index = (Int4*) calloc(num_stacks, sizeof(Int4));
       stack_table->stack_size = (Int4*) malloc(num_stacks*sizeof(Int4));
       stack_table->estack = 
-         (MbStack**) malloc(num_stacks*sizeof(MbStack*));
+         (MB_Stack**) malloc(num_stacks*sizeof(MB_Stack*));
       for (index=0; index<num_stacks; index++) {
          stack_table->estack[index] = 
-            (MbStack*) malloc(stack_size*sizeof(MbStack));
+            (MB_Stack*) malloc(stack_size*sizeof(MB_Stack));
          stack_table->stack_size[index] = stack_size;
       }
       stack_table->num_stacks = num_stacks;
@@ -222,20 +219,21 @@ Boolean BLAST_SaveInitialHit(BlastInitHitList* init_hitlist,
  * @param s_off The offset in the subject sequence [in]
  * @param init_hitlist The structure containing information about all 
  *                     initial hits [in] [out]
+ * @return Has this hit been extended? 
  */
-static Int2
+static Boolean
 MB_ExtendInitialHit(BLAST_SequenceBlk* query, 
    BLAST_SequenceBlk* subject, LookupTableWrap* lookup,
    const BlastInitialWordParameters* word_params, 
-   Int4** matrix, BLAST_ExtendWord* ewp, Int4 q_off, Int4 s_off,
+   Int4** matrix, Blast_ExtendWord* ewp, Int4 q_off, Int4 s_off,
    BlastInitHitList* init_hitlist) 
 {
    Int4 index, index1, step;
    MBLookupTable* mb_lt = (MBLookupTable*) lookup->lut;
-   MbStack* estack;
+   MB_Stack* estack;
    Int4 diag, stack_top;
    Int4 window, word_extra_length, scan_step;
-   Boolean new_hit, hit_ready, two_hits, do_ungapped_extension;
+   Boolean new_hit, hit_ready = FALSE, two_hits, do_ungapped_extension;
    BLAST_DiagTable* diag_table = ewp->diag_table;
    MB_StackTable* stack_table = ewp->stack_table;
    BlastUngappedData* ungapped_data = NULL;
@@ -264,9 +262,8 @@ MB_ExtendInitialHit(BLAST_SequenceBlk* query,
       diag_array_elem = &diag_array[diag];
       step = s_pos - diag_array_elem->last_hit;
       if (step <= 0)
-         return 0;
+         return FALSE;
 
-      hit_ready = FALSE;
       if (!two_hits) {
          /* Single hit version */
          new_hit = (step > scan_step);
@@ -333,9 +330,8 @@ MB_ExtendInitialHit(BLAST_SequenceBlk* query,
          if (estack[index].diag == s_off - q_off) {
             if (step <= 0) {
                stack_table->stack_index[index1] = stack_top + 1;
-               return 0;
+               return FALSE;
             }
-            hit_ready = FALSE;
             if (!two_hits) {
                /* Single hit version */
                new_hit = (step > scan_step);
@@ -390,7 +386,7 @@ MB_ExtendInitialHit(BLAST_SequenceBlk* query,
 
             /* In case the size of this stack changed */
             stack_table->stack_index[index1] = stack_top + 1;	 
-            return 0;
+            return hit_ready;
          } else if (step <= scan_step || (step <= window && 
                       estack[index].length >= word_extra_length)) {
             /* Hit from a different diagonal, and it can be continued */
@@ -406,10 +402,10 @@ MB_ExtendInitialHit(BLAST_SequenceBlk* query,
       /* Need an extra slot on the stack for this hit */
       if (++stack_top >= stack_table->stack_size[index1]) {
          /* Stack about to overflow - reallocate memory */
-         MbStack* ptr;
-         if (!(ptr = (MbStack*)realloc(estack,
-                     2*stack_table->stack_size[index1]*sizeof(MbStack)))) {
-            return 1;
+         MB_Stack* ptr;
+         if (!(ptr = (MB_Stack*)realloc(estack,
+                     2*stack_table->stack_size[index1]*sizeof(MB_Stack)))) {
+            return FALSE;
          } else {
             stack_table->stack_size[index1] *= 2;
             estack = stack_table->estack[index1] = ptr;
@@ -422,6 +418,7 @@ MB_ExtendInitialHit(BLAST_SequenceBlk* query,
       stack_table->stack_index[index1] = stack_top + 1;
       /* Save the hit if it already qualifies */
       if (!two_hits && (word_extra_length == 0)) {
+         hit_ready = TRUE;
          if (do_ungapped_extension) {
             /* Perform ungapped extension */
             BlastnWordUngappedExtend(query, subject, matrix, q_off, s_off, 
@@ -446,7 +443,7 @@ MB_ExtendInitialHit(BLAST_SequenceBlk* query,
       }
    }
 
-   return 0;
+   return hit_ready;
 }
 
 /** Update the word extension structure after scanning of each subject sequence
@@ -454,7 +451,7 @@ MB_ExtendInitialHit(BLAST_SequenceBlk* query,
  * @param subject_length The length of the subject sequence that has just been
  *        processed [in]
  */
-static Int2 BlastNaExtendWordExit(BLAST_ExtendWord* ewp, Int4 subject_length)
+static Int2 BlastNaExtendWordExit(Blast_ExtendWord* ewp, Int4 subject_length)
 {
    BLAST_DiagTable* diag_table;
    Int4 diag_array_length, i;
@@ -487,7 +484,7 @@ static Int2 BlastNaExtendWordExit(BLAST_ExtendWord* ewp, Int4 subject_length)
  * @param subject_length The length of the subject sequence that has just been
  *        processed [in]
  */
-static Int2 MB_ExtendWordExit(BLAST_ExtendWord* ewp, Int4 subject_length)
+static Int2 MB_ExtendWordExit(Blast_ExtendWord* ewp, Int4 subject_length)
 {
    if (!ewp)
       return -1;
@@ -619,12 +616,13 @@ BlastnWordUngappedExtend(BLAST_SequenceBlk* query,
  * @param s_off The offset in the subject sequence [in]
  * @param init_hitlist The structure containing information about all 
  *                     initial hits [in] [out]
+ * @return Has this hit been extended? 
  */
-static Int2
+static Boolean
 BlastnExtendInitialHit(BLAST_SequenceBlk* query, 
    BLAST_SequenceBlk* subject, Uint4 min_step,
    const BlastInitialWordParameters* word_params, 
-   Int4** matrix, BLAST_ExtendWord* ewp, Int4 q_off, Int4 s_end,
+   Int4** matrix, Blast_ExtendWord* ewp, Int4 q_off, Int4 s_end,
    Int4 s_off, BlastInitHitList* init_hitlist)
 {
    Int4 diag, real_diag;
@@ -697,20 +695,22 @@ BlastnExtendInitialHit(BLAST_SequenceBlk* query,
       if (new_hit)
          diag_array_elem->diag_level = 0;
    }
-   return 0;
+
+   return hit_ready;
 }
 
 /* Description in blast_extend.h */
-Int4 BlastNaWordFinder(BLAST_SequenceBlk* subject, 
+Int2 BlastNaWordFinder(BLAST_SequenceBlk* subject, 
 		       BLAST_SequenceBlk* query,
 		       LookupTableWrap* lookup_wrap,
 		       Int4** matrix,
 		       const BlastInitialWordParameters* word_params,
-		       BLAST_ExtendWord* ewp,
+		       Blast_ExtendWord* ewp,
 		       Uint4* q_offsets,
 		       Uint4* s_offsets,
 		       Int4 max_hits,
-		       BlastInitHitList* init_hitlist)
+		       BlastInitHitList* init_hitlist, 
+             BlastUngappedStats* ungapped_stats)
 {
    LookupTable* lookup = (LookupTable*) lookup_wrap->lut;
    Uint1* s_start = subject->sequence;
@@ -719,6 +719,7 @@ Int4 BlastNaWordFinder(BLAST_SequenceBlk* subject,
    Uint1* s;
    Uint1* q_start = query->sequence;
    Int4 hitsfound, total_hits = 0;
+   Int4 hits_extended = 0;
    Uint4 word_size, compressed_wordsize, reduced_word_length;
    Uint4 extra_bytes_needed;
    Uint2 extra_bases, left, right;
@@ -775,17 +776,22 @@ Int4 BlastNaWordFinder(BLAST_SequenceBlk* subject,
 
          if (left + right >= extra_bases) {
             /* Check if this diagonal has already been explored. */
-            BlastnExtendInitialHit(query, subject, 0, 
-               word_params, matrix, ewp, q_offsets[i], 
-               s_offsets[i] + word_size + right, 
-               s_offsets[i], init_hitlist);
+            if (BlastnExtendInitialHit(query, subject, 0, 
+                   word_params, matrix, ewp, q_offsets[i], 
+                   s_offsets[i] + word_size + right, 
+                   s_offsets[i], init_hitlist))
+               ++hits_extended;
          }
       }
       start_offset = next_start;
    }
 
    BlastNaExtendWordExit(ewp, subject->length);
-   return total_hits;
+
+   Blast_UngappedStatsUpdate(ungapped_stats, total_hits, hits_extended, 
+                             init_hitlist->total);
+
+   return 0;
 } 
 
 /** Extend an exact match in both directions up to the provided 
@@ -876,17 +882,17 @@ BlastNaExactMatchExtend(Uint1* q_start, Uint1* s_start,
  *            extent of already processed hits on each diagonal [in]
  * @param init_hitlist Structure to keep the extended hits. 
  *                     Must be allocated outside of this function [in] [out]
+ * @return Number of hits extended. 
  */
-static void 
+static Int4 
 BlastNaExtendRightAndLeft(Uint4* q_offsets, Uint4* s_offsets, Int4 num_hits, 
                           const BlastInitialWordParameters* word_params,
                           LookupTableWrap* lookup_wrap,
                           BLAST_SequenceBlk* query, BLAST_SequenceBlk* subject,
-                          Int4** matrix, BLAST_ExtendWord* ewp, 
+                          Int4** matrix, Blast_ExtendWord* ewp, 
                           BlastInitHitList* init_hitlist)
 {
    Int4 index;
-
    Uint4 query_length = query->length;
    Uint4 subject_length = subject->length;
    Uint1* q_start = query->sequence;
@@ -901,6 +907,7 @@ BlastNaExtendRightAndLeft(Uint4* q_offsets, Uint4* s_offsets, Int4 num_hits,
    Boolean do_ungapped_extension = word_params->options->ungapped_extension;
    Boolean variable_wordsize = 
       (Boolean) word_params->options->variable_wordsize;
+   Int4 hits_extended = 0;
 
    if (lookup_wrap->lut_type == MB_LOOKUP_TABLE) {
       MBLookupTable* lut = (MBLookupTable*)lookup_wrap->lut;
@@ -929,38 +936,42 @@ BlastNaExtendRightAndLeft(Uint4* q_offsets, Uint4* s_offsets, Int4 num_hits,
       
       if (BlastNaExactMatchExtend(q, s, max_bases_left, 
                                   max_bases_right, word_length, 
-                                  !variable_wordsize, &extended_right)) 
+                                  (Boolean) !variable_wordsize, &extended_right)) 
       {
          /* Check if this diagonal has already been explored and save
             the hit if needed. */
-         BlastnExtendInitialHit(query, subject, min_step,
+         if (BlastnExtendInitialHit(query, subject, min_step,
                                 word_params, matrix, ewp, q_offsets[index], 
                                 s_off + extended_right, s_offsets[index], 
-                                init_hitlist);
+                                init_hitlist))
+            ++hits_extended;
       }
    }
+   return hits_extended;
 }
 
 /* Description in blast_extend.h */
-Int4 MB_WordFinder(BLAST_SequenceBlk* subject,
+Int2 MB_WordFinder(BLAST_SequenceBlk* subject,
 		   BLAST_SequenceBlk* query,
 		   LookupTableWrap* lookup_wrap,
 		   Int4** matrix, 
 		   const BlastInitialWordParameters* word_params,
-		   BLAST_ExtendWord* ewp,
+		   Blast_ExtendWord* ewp,
 		   Uint4* q_offsets,
 		   Uint4* s_offsets,
 		   Int4 max_hits,
-		   BlastInitHitList* init_hitlist)
+		   BlastInitHitList* init_hitlist, 
+         BlastUngappedStats* ungapped_stats)
 {
    const BlastInitialWordOptions* word_options = word_params->options;
    /* Pointer to the beginning of the first word of the subject sequence */
    MBLookupTable* mb_lt = (MBLookupTable*) lookup_wrap->lut;
    Int4 hitsfound=0;
-   Int4 hit_counter=0, index;
+   Int4 total_hits=0, index;
    Int4 start_offset, next_start, last_start, last_end;
    Int4 subject_length = subject->length;
    Boolean ag_blast;
+   Int4 hits_extended = 0;
 
    ag_blast = (Boolean) (word_options->extension_method == eRightAndLeft);
 
@@ -994,41 +1005,49 @@ Int4 MB_WordFinder(BLAST_SequenceBlk* subject,
 	    q_offsets, s_offsets, max_hits, &next_start);
       }
       if (ag_blast) {
-         BlastNaExtendRightAndLeft(q_offsets, s_offsets, hitsfound, 
+         hits_extended += 
+            BlastNaExtendRightAndLeft(q_offsets, s_offsets, hitsfound, 
                                    word_params, lookup_wrap, query, subject, 
                                    matrix, ewp, init_hitlist);
       } else {
          for (index = 0; index < hitsfound; ++index) {
-            MB_ExtendInitialHit(query, subject, lookup_wrap, word_params,
-               matrix, ewp, q_offsets[index], s_offsets[index], init_hitlist);
+            if (MB_ExtendInitialHit(query, subject, lookup_wrap, word_params,
+                                    matrix, ewp, q_offsets[index], 
+                                    s_offsets[index], init_hitlist))
+               ++hits_extended;
          }
       }
       /* next_start returned from the ScanSubject points to the beginning
          of the word */
       start_offset = next_start;
-      hit_counter += hitsfound;
+      total_hits += hitsfound;
    }
 
    MB_ExtendWordExit(ewp, subject_length);
 
-   return hit_counter;
+   Blast_UngappedStatsUpdate(ungapped_stats, total_hits, hits_extended, 
+                             init_hitlist->total);
+
+   return 0;
 }
 
 /* Description in blast_extend.h */
-Int4 BlastNaWordFinder_AG(BLAST_SequenceBlk* subject, 
+Int2 BlastNaWordFinder_AG(BLAST_SequenceBlk* subject, 
 			  BLAST_SequenceBlk* query,
 			  LookupTableWrap* lookup_wrap, 
 			  Int4** matrix,
 			  const BlastInitialWordParameters* word_params,
-			  BLAST_ExtendWord* ewp,
+			  Blast_ExtendWord* ewp,
 			  Uint4* q_offsets,
 			  Uint4* s_offsets,
 			  Int4 max_hits,
-			  BlastInitHitList* init_hitlist)
+			  BlastInitHitList* init_hitlist, 
+           BlastUngappedStats* ungapped_stats)
 {
    Int4 hitsfound, total_hits = 0;
    Int4 start_offset, end_offset, next_start;
    LookupTable* lookup = (LookupTable*) lookup_wrap->lut;
+   Int4 hits_extended = 0;
 
    start_offset = 0;
    end_offset = subject->length - COMPRESSION_RATIO*lookup->reduced_wordsize;
@@ -1041,7 +1060,8 @@ Int4 BlastNaWordFinder_AG(BLAST_SequenceBlk* subject,
       
       total_hits += hitsfound;
 
-      BlastNaExtendRightAndLeft(q_offsets, s_offsets, hitsfound, 
+      hits_extended += 
+         BlastNaExtendRightAndLeft(q_offsets, s_offsets, hitsfound, 
                                 word_params, lookup_wrap, query, subject, 
                                 matrix, ewp, init_hitlist);
 
@@ -1049,7 +1069,11 @@ Int4 BlastNaWordFinder_AG(BLAST_SequenceBlk* subject,
    }
 
    BlastNaExtendWordExit(ewp, subject->length);
-   return total_hits;
+
+   Blast_UngappedStatsUpdate(ungapped_stats, total_hits, hits_extended, 
+                             init_hitlist->total);
+
+   return 0;
 } 
 
 /** Deallocate memory for the diagonal table structure */
@@ -1079,7 +1103,7 @@ static MB_StackTable* MBStackTableFree(MB_StackTable* stack_table)
    return NULL;
 }
 
-BLAST_ExtendWord* BlastExtendWordFree(BLAST_ExtendWord* ewp)
+Blast_ExtendWord* BlastExtendWordFree(Blast_ExtendWord* ewp)
 {
    BlastDiagTableFree(ewp->diag_table);
    MBStackTableFree(ewp->stack_table);

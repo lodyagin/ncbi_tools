@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.6 $
+* $Revision: 1.13 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1269,6 +1269,10 @@ NLM_EXTERN void AddPrimaryBlock (
       if (gbseq != NULL) {
         gbseq->primary = StringSave (str);
       }
+
+      if (awp->afp != NULL) {
+        DoImmediateFormat (awp->afp, (BaseBlockPtr) bbp);
+      }
     }
     MemFree (str);
   }
@@ -1382,7 +1386,7 @@ NLM_EXTERN void AddCommentBlock (
   IntAsn2gbJobPtr    ajp;
   BioseqPtr          bsp;
   Char               buf [128];
-  CommentBlockPtr    cbp = NULL;
+  CommentBlockPtr    cbp;
   Char               ch;
   Boolean            didGenome = FALSE;
   Boolean            didRefTrack = FALSE;
@@ -1398,7 +1402,6 @@ NLM_EXTERN void AddCommentBlock (
   CharPtr            genomeBuildNumber = NULL;
   CharPtr            genomeVersionNumber = NULL;
   Int4               gi = 0;
-  CommentBlockPtr    gsdbcbp = NULL;
   Int4               gsdbid = 0;
   Boolean            has_gaps = FALSE;
   Boolean            hasRefTrackStatus = FALSE;
@@ -1518,6 +1521,10 @@ NLM_EXTERN void AddCommentBlock (
               cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
               FFRecycleString(ajp, ffstring);
               ffstring = FFGetString(ajp);
+
+              if (awp->afp != NULL) {
+                DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+              }
             }
           }
 
@@ -1559,6 +1566,10 @@ NLM_EXTERN void AddCommentBlock (
               cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
               FFRecycleString(ajp, ffstring);
               ffstring = FFGetString(ajp);
+
+              if (awp->afp != NULL) {
+                DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+              }
             }
 
           } else if (! hasRefTrackStatus) {
@@ -1627,6 +1638,10 @@ NLM_EXTERN void AddCommentBlock (
               cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
               FFRecycleString(ajp, ffstring);
               ffstring = FFGetString(ajp);
+
+              if (awp->afp != NULL) {
+                DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+              }
             }
           }
 
@@ -1729,6 +1744,10 @@ NLM_EXTERN void AddCommentBlock (
               cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
               FFRecycleString(ajp, ffstring);
               ffstring = FFGetString(ajp);
+
+              if (awp->afp != NULL) {
+                DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+              }
             }
           }
         } else {
@@ -1779,14 +1798,33 @@ NLM_EXTERN void AddCommentBlock (
       /* show GSDB sequence identifier */
 
       if (dbt != NULL && StringCmp (dbt->db, "GSDB") == 0 && dbt->tag != NULL) {
-        gsdbcbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-        if (gsdbcbp != NULL) {
-          gsdbcbp->first = first;
+        cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+        if (cbp != NULL) {
+          cbp->first = first;
+          first = FALSE;
 
           /* string will be created after we know if there are additional comments */
 
           gsdbid = dbt->tag->id;
-          first = FALSE;
+          sprintf (buf, "GSDB:S:%ld.", (long) gsdbid);
+
+          if (cbp->first) {
+            FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+          } else {
+            FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+          }
+
+          /* CheckEndPunctuation, ConvertDoubleQuotes, and ExpandTildes already taken into account */
+
+          FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+
+          cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
+          FFRecycleString(ajp, ffstring);
+          ffstring = FFGetString(ajp);
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+          }
         }
       }
 
@@ -1829,6 +1867,10 @@ NLM_EXTERN void AddCommentBlock (
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12,5, 5, "CC");
           FFRecycleString(ajp, ffstring);
           ffstring = FFGetString(ajp);
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+          }
         }
       }
     }
@@ -1866,6 +1908,10 @@ NLM_EXTERN void AddCommentBlock (
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12,5, 5, "CC");
             FFRecycleString(ajp, ffstring);
             ffstring = FFGetString(ajp);
+
+            if (awp->afp != NULL) {
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+            }
           }
           MemFree (str);
           didTPA = TRUE;
@@ -1896,6 +1942,10 @@ NLM_EXTERN void AddCommentBlock (
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12,5, 5, "CC");
             FFRecycleString(ajp, ffstring);
             ffstring = FFGetString(ajp);
+
+            if (awp->afp != NULL) {
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+            }
           }
           MemFree (str);
         }
@@ -1927,6 +1977,10 @@ NLM_EXTERN void AddCommentBlock (
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12,5, 5, "CC");
             FFRecycleString(ajp, ffstring);
             ffstring = FFGetString(ajp);
+
+            if (awp->afp != NULL) {
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+            }
           }
           /* do not free static str from GetStatusForRefTrack */
           didRefTrack = TRUE;
@@ -1957,6 +2011,10 @@ NLM_EXTERN void AddCommentBlock (
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
             FFRecycleString(ajp, ffstring);
             ffstring = FFGetString(ajp);
+
+            if (awp->afp != NULL) {
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+            }
           }
           MemFree (str);
           didGenome = TRUE;
@@ -2000,6 +2058,10 @@ NLM_EXTERN void AddCommentBlock (
         cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
         FFRecycleString(ajp, ffstring);
         ffstring = FFGetString(ajp);
+
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+        }
       }
     }
   }
@@ -2038,6 +2100,10 @@ NLM_EXTERN void AddCommentBlock (
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
           FFRecycleString(ajp, ffstring);
           ffstring = FFGetString(ajp);
+
+            if (awp->afp != NULL) {
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+            }
         }
       }
     }
@@ -2071,6 +2137,10 @@ NLM_EXTERN void AddCommentBlock (
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
           FFRecycleString(ajp, ffstring);
           ffstring = FFGetString(ajp);
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+          }
         }
       }
     }
@@ -2090,6 +2160,10 @@ NLM_EXTERN void AddCommentBlock (
         cbp->itemtype = OBJ_SEQDESC;
         cbp->first = first;
         first = FALSE;
+
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+        }
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_comment, &dcontext);
@@ -2129,6 +2203,10 @@ NLM_EXTERN void AddCommentBlock (
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
             FFRecycleString(ajp, ffstring);
             ffstring = FFGetString(ajp);
+
+            if (awp->afp != NULL) {
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+            }
           }
         }
       }
@@ -2160,6 +2238,10 @@ NLM_EXTERN void AddCommentBlock (
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
           FFRecycleString(ajp, ffstring);
           ffstring = FFGetString(ajp);
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+          }
         }
       }
     }
@@ -2175,6 +2257,10 @@ NLM_EXTERN void AddCommentBlock (
         cbp->itemtype = OBJ_SEQDESC;
         cbp->first = first;
         first = FALSE;
+
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+        }
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_comment, &dcontext);
@@ -2189,6 +2275,10 @@ NLM_EXTERN void AddCommentBlock (
       cbp->itemtype = OBJ_SEQDESC;
       cbp->first = first;
       first = FALSE;
+
+      if (awp->afp != NULL) {
+        DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+      }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_maploc, &dcontext);
   }
@@ -2203,6 +2293,10 @@ NLM_EXTERN void AddCommentBlock (
         cbp->itemtype = OBJ_SEQDESC;
         cbp->first = first;
         first = FALSE;
+
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+        }
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_region, &dcontext);
@@ -2240,6 +2334,10 @@ NLM_EXTERN void AddCommentBlock (
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
             FFRecycleString(ajp, ffstring);
             ffstring = FFGetString(ajp);
+
+            if (awp->afp != NULL) {
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+            }
           }
         }
 
@@ -2270,6 +2368,10 @@ NLM_EXTERN void AddCommentBlock (
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
           FFRecycleString(ajp, ffstring);
           ffstring = FFGetString(ajp);
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+          }
         }
 
       } else {
@@ -2298,6 +2400,10 @@ NLM_EXTERN void AddCommentBlock (
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
             FFRecycleString(ajp, ffstring);
             ffstring = FFGetString(ajp);
+
+            if (awp->afp != NULL) {
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+            }
           }
         }
       }
@@ -2319,6 +2425,10 @@ NLM_EXTERN void AddCommentBlock (
         cbp->itemtype = OBJ_SEQFEAT;
         cbp->first = first;
         first = FALSE;
+
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+        }
       }
     }
     sfp = SeqMgrGetNextFeature (parent, sfp, SEQFEAT_COMMENT, 0, &fcontext);
@@ -2348,34 +2458,13 @@ NLM_EXTERN void AddCommentBlock (
       cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
       FFRecycleString(ajp, ffstring);
       ffstring = FFGetString(ajp);
+
+      if (awp->afp != NULL) {
+        DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+      }
     }
   }
   ValNodeFreeData (head);
-
-  if (gsdbcbp != NULL) {
-
-    /* if there were no subsequent comments, do not add period after GSDB id */
-
-    if (cbp == NULL) {
-      sprintf (buf, "GSDB:S:%ld", (long) gsdbid);
-    } else {
-      sprintf (buf, "GSDB:S:%ld.", (long) gsdbid);
-    }
-
-    if (gsdbcbp->first) {
-      FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
-    } else {
-      FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
-    }
-
-    /* CheckEndPunctuation, ConvertDoubleQuotes, and ExpandTildes already taken into account */
-
-    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
-
-    gsdbcbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
-    FFRecycleString(ajp, ffstring);
-    ffstring = FFGetString(ajp);
-  }
 
   FFRecycleString(ajp, ffstring);
 }
@@ -2396,27 +2485,31 @@ NLM_EXTERN void AddFeatHeaderBlock (
   bbp = Asn2gbAddBlock (awp, FEATHEADER_BLOCK, sizeof (BaseBlock));
   if (bbp == NULL) return;
 
-  if (awp->format == FTABLE_FMT) return;
+  if (awp->format != FTABLE_FMT) {
+    ffstring = FFGetString(ajp);
+    if ( ffstring == NULL ) return;
 
-  ffstring = FFGetString(ajp);
-  if ( ffstring == NULL ) return;
+    FFStartPrint (ffstring, awp->format, 0, 12, "FEATURES", 21, 5, 0, "FH", TRUE);
 
-  FFStartPrint (ffstring, awp->format, 0, 12, "FEATURES", 21, 5, 0, "FH", TRUE);
+    if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
+      FFAddOneString (ffstring, "Key", FALSE, FALSE, TILDE_IGNORE);
+      FFAddNChar(ffstring, ' ', 13 , FALSE);
+    }
 
-  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
-    FFAddOneString (ffstring, "Key", FALSE, FALSE, TILDE_IGNORE);
-    FFAddNChar(ffstring, ' ', 13 , FALSE);
+    FFAddOneString (ffstring, "Location/Qualifiers", FALSE, FALSE, TILDE_TO_SPACES);
+
+    if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
+      FFAddNewLine(ffstring);
+      FFAddNewLine(ffstring);
+    }
+
+    bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 21, 5, 0, "FH");
+    FFRecycleString(ajp, ffstring);
   }
 
-  FFAddOneString (ffstring, "Location/Qualifiers", FALSE, FALSE, TILDE_TO_SPACES);
-
-  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
-    FFAddNewLine(ffstring);
-    FFAddNewLine(ffstring);
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
   }
-
-  bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 21, 5, 0, "FH");
-  FFRecycleString(ajp, ffstring);
 }
 
 static Uint2 ComputeSourceHash (
@@ -3269,6 +3362,10 @@ NLM_EXTERN void AddSourceFeatBlock (
     }
     FFRecycleString(ajp, ffstring);
 
+    if (awp->afp != NULL) {
+      DoImmediateFormat (awp->afp, (BaseBlockPtr) bbp);
+    }
+
     /* optionally populate gbseq for XML-ized GenBank format */
 
     if (gbseq != NULL) {
@@ -3402,6 +3499,15 @@ NLM_EXTERN void AddSourceFeatBlock (
     awp->blockList = vnp;
   }
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      isp = (IntSrcBlockPtr) vnp->data.ptrvalue;
+      if (isp == NULL) continue;
+      DoImmediateFormat (awp->afp, (BaseBlockPtr) isp);
+    }
+  }
+
 }
 
 static Boolean IsCDD (
@@ -3535,6 +3641,10 @@ static void GetFeatsOnCdsProduct (
             ifp->mapToPep = FALSE;
             ifp->firstfeat = awp->firstfeat;
             awp->firstfeat = FALSE;
+
+            if (awp->afp != NULL) {
+              DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
+            }
           }
         }
 
@@ -3992,6 +4102,11 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   awp->firstfeat = FALSE;
   awp->featseen = TRUE;
 
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
+  }
+
   /* optionally map CDS from cDNA onto genomic */
 
   if (awp->isGPS && ISA_na (bsp->mol) && awp->copyGpsCdsUp &&
@@ -4016,6 +4131,10 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
           ifp->mapToPep = FALSE;
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
+          }
         }
       }
     }
@@ -4218,6 +4337,10 @@ NLM_EXTERN void AddFeatureBlock (
                 ifp->isCDS = TRUE;
                 ifp->firstfeat = awp->firstfeat;
                 awp->firstfeat = FALSE;
+
+                if (awp->afp != NULL) {
+                  DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
+                }
               }
             }
           }
@@ -4268,6 +4391,10 @@ NLM_EXTERN void AddFeatureBlock (
         ifp->isCDS = TRUE;
         ifp->firstfeat = awp->firstfeat;
         awp->firstfeat = FALSE;
+
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
+        }
       }
     }
     prot = SeqMgrGetPROTgivenProduct (bsp, &fcontext);
@@ -4298,6 +4425,10 @@ NLM_EXTERN void AddFeatureBlock (
           ifp->mapToPep = TRUE;
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
+
+          if (awp->afp != NULL) {
+            DoImmediateFormat (awp->afp, (BaseBlockPtr) fbp);
+          }
         }
       }
     }

@@ -1,40 +1,39 @@
+/* $Id: blast_setup.c,v 1.89 2004/06/15 14:51:51 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Tom Madden
+ *
+ */
+
+/** @file blast_setup.c
+ * Utilities initialize/setup BLAST.
+ */
+
+
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.83 2004/04/29 19:53:39 papadopo Exp $";
-/* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
-
-/*****************************************************************************
-
-File name: blast_setup.c
-
-Author: Tom Madden
-
-Contents: Utilities initialize/setup BLAST.
-
-$Revision: 1.83 $
-
-******************************************************************************/
+    "$Id: blast_setup.c,v 1.89 2004/06/15 14:51:51 dondosha Exp $";
 
 #include <algo/blast/core/blast_setup.h>
 #include <algo/blast/core/blast_util.h>
@@ -333,8 +332,6 @@ BlastScoreBlkMatrixInit(Uint1 program_number,
                   const BlastScoringOptions* scoring_options,
                   BlastScoreBlk* sbp)
 {
-   Int2 status = 0;
-
    if (!sbp || !scoring_options)
       return 1;
 
@@ -357,7 +354,6 @@ BlastScoreBlkMatrixInit(Uint1 program_number,
                   (long) sbp->reward, (long) sbp->penalty);
           sbp->name = strdup(buffer);
        }
-       status = BLAST_ScoreBlkMatFill(sbp, scoring_options->matrix_path);
 
     } else {
        char* p = NULL;
@@ -368,19 +364,26 @@ BlastScoreBlkMatrixInit(Uint1 program_number,
        /* protein matrices are in all caps by convention */
        for (p = sbp->name; *p != NULLB; p++)
           *p = toupper(*p);
-       status = BLAST_ScoreBlkMatFill(sbp, scoring_options->matrix_path);
    }
 
-   return status;
+   return BLAST_ScoreBlkMatFill(sbp, scoring_options->matrix_path);
 }
 
 
 Int2 
-BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info, const BlastScoringOptions* scoring_options, Uint1 program_number, Boolean phi_align, BlastScoreBlk* *sbpp, Blast_Message* *blast_message)
+BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, 
+                         BlastQueryInfo* query_info, 
+                         const BlastScoringOptions* scoring_options, 
+                         Uint1 program_number, 
+                         Boolean phi_align, 
+                         BlastScoreBlk* *sbpp, 
+                         double scale_factor, 
+                         Blast_Message* *blast_message)
 {
     BlastScoreBlk* sbp;
     Int2 status=0;      /* return value. */
     Int4 context; /* loop variable. */
+    Boolean query_valid = FALSE;
 
     if (sbpp == NULL)
        return 1;
@@ -394,48 +397,53 @@ BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_inf
        return 1;
 
     *sbpp = sbp;
+    sbp->scale_factor = scale_factor;
 
     status = BlastScoreBlkMatrixInit(program_number, scoring_options, sbp);
     if (status != 0)
        return status;
 
-    for (context = query_info->first_context;
-         context <= query_info->last_context; ++context) {
-      
-        Int4 context_offset;
-        Int4 query_length;
-        Uint1 *buffer;              /* holds sequence */
-
-        /* For each query, check if forward strand is present */
-        if ((query_length = BLAST_GetQueryLength(query_info, context)) < 0)
-            continue;
-
-        context_offset = query_info->context_offsets[context];
-        buffer = &query_blk->sequence[context_offset];
-
-        if (!phi_align &&
-           (status = BLAST_ScoreBlkFill(sbp, (char *) buffer,
-                                        query_length, context))) {
-            Blast_MessageWrite(blast_message, BLAST_SEV_ERROR, 2, 1, 
-                   "Query completely filtered; nothing left to search");
-            return status;
-        }
-    }
-
-
     /* Fills in block for gapped blast. */
     if (phi_align) {
        PHIScoreBlkFill(sbp, scoring_options, blast_message);
-    } else if (scoring_options->gapped_calculation) {
-       status = BlastScoreBlkGappedFill(sbp, scoring_options, 
-                                        program_number, query_info);
-       if (status) {
+    } else {
+       for (context = query_info->first_context;
+            context <= query_info->last_context; ++context) {
+      
+          Int4 context_offset;
+          Int4 query_length;
+          Uint1 *buffer;              /* holds sequence */
+
+          /* For each query, check if forward strand is present */
+          if ((query_length = BLAST_GetQueryLength(query_info, context)) < 0)
+             continue;
+
+          context_offset = query_info->context_offsets[context];
+          buffer = &query_blk->sequence[context_offset];
+
+          if ((status = BLAST_ScoreBlkFill(sbp, (char *) buffer,
+                                           query_length, context)) == 0) {
+             query_valid = TRUE;
+          }
+       }
+
+       if (!query_valid) {
           Blast_MessageWrite(blast_message, BLAST_SEV_ERROR, 2, 1, 
-                             "Unable to initialize scoring block");
+             "Query completely filtered; nothing left to search");
           return status;
        }
+
+       if (scoring_options->gapped_calculation) {
+          status = BlastScoreBlkGappedFill(sbp, scoring_options, 
+                                           program_number, query_info);
+          if (status) {
+             Blast_MessageWrite(blast_message, BLAST_SEV_ERROR, 2, 1, 
+                                "Unable to initialize scoring block");
+             return status;
+          }
+       }
     }
-   
+
     /* Get "ideal" values if the calculated Karlin-Altschul params bad. */
     if (program_number == blast_type_blastx ||
         program_number == blast_type_tblastx ||
@@ -465,29 +473,40 @@ BlastSetup_GetScoreBlock(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_inf
 }
 
 Int2 BLAST_MainSetUp(Uint1 program_number,
-                     const QuerySetUpOptions * qsup_options,
-                     const BlastScoringOptions * scoring_options,
-                     const BlastHitSavingOptions * hit_options,
-                     BLAST_SequenceBlk * query_blk,
-                     BlastQueryInfo * query_info,
-                     BlastSeqLoc ** lookup_segments, BlastMaskLoc * *filter_out,
-                     BlastScoreBlk * *sbpp, Blast_Message * *blast_message)
+    const QuerySetUpOptions *qsup_options,
+    const BlastScoringOptions *scoring_options,
+    const BlastHitSavingOptions *hit_options,
+    BLAST_SequenceBlk *query_blk,
+    BlastQueryInfo *query_info,
+    double scale_factor,
+    BlastSeqLoc **lookup_segments, 
+    BlastMaskLoc **filter_out,
+    BlastScoreBlk **sbpp, 
+    Blast_Message **blast_message)
 {
     Boolean mask_at_hash = FALSE; /* mask only for making lookup table? */
     Int2 status = 0;            /* return value */
     BlastMaskLoc *filter_maskloc = NULL;   /* Local variable for mask locs. */
 
 
-    if ((status=BlastSetUp_GetFilteringLocations(query_blk, query_info, program_number, qsup_options->filter_string, 
-       &filter_maskloc, &mask_at_hash, blast_message)))
-    {
+    status = BlastSetUp_GetFilteringLocations(query_blk, 
+                                              query_info, 
+                                              program_number, 
+                                              qsup_options->filter_string, 
+                                              &filter_maskloc, 
+                                              &mask_at_hash, 
+                                              blast_message);
+    if (status) {
         return status;
     } 
 
     if (!mask_at_hash)
     {
-        if ((status=BlastSetUp_MaskQuery(query_blk, query_info, filter_maskloc, program_number)) != 0)
+        status = BlastSetUp_MaskQuery(query_blk, query_info, filter_maskloc, 
+                                      program_number);
+        if (status != 0) {
             return status;
+        }
     }
 
     /* If there was a lower case mask, its contents have now been moved to 
@@ -504,12 +523,16 @@ Int2 BLAST_MainSetUp(Uint1 program_number,
         BLAST_InitDNAPSequence(query_blk, query_info);
     }
 
-    BLAST_ComplementMaskLocations(program_number, query_info, filter_maskloc, lookup_segments);
+    BLAST_ComplementMaskLocations(program_number, query_info, filter_maskloc, 
+                                  lookup_segments);
 
 
-    if ((status=BlastSetup_GetScoreBlock(query_blk, query_info, scoring_options, program_number, 
-           hit_options->phi_align, sbpp, blast_message)) > 0)
+    status = BlastSetup_GetScoreBlock(query_blk, query_info, scoring_options, 
+                                      program_number, hit_options->phi_align, 
+                                      sbpp, scale_factor, blast_message);
+    if (status > 0) {
         return status;
+    }
 
     return 0;
 }
@@ -574,42 +597,40 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
                                    current context */
        kbp = kbp_ptr[index];
 
-      if (eff_len_options->searchsp_eff) {
-         effective_search_space = eff_len_options->searchsp_eff;
-      } else {
-         if ( (query_length = BLAST_GetQueryLength(query_info, index)) <= 0) {
-             continue;
-         }
-         /* Use the correct Karlin block. For blastn, two identical Karlin
-            blocks are allocated for each sequence (one per strand), but we
-            only need one of them.
-         */
-         if (program_number != blast_type_blastn &&
-             scoring_options->gapped_calculation) {
+       if ( (query_length = BLAST_GetQueryLength(query_info, index)) > 0) {
+          /* Use the correct Karlin block. For blastn, two identical Karlin
+             blocks are allocated for each sequence (one per strand), but we
+             only need one of them.
+          */
+          if (program_number != blast_type_blastn &&
+              scoring_options->gapped_calculation) {
              BLAST_ComputeLengthAdjustment(kbp->K, kbp->logK,
                                            alpha/kbp->Lambda, beta,
                                            query_length, db_length,
                                            db_num_seqs, &length_adjustment);
-         } else {
+          } else {
              BLAST_ComputeLengthAdjustment(kbp->K, kbp->logK, 1/kbp->H, 0,
                                            query_length, db_length,
                                            db_num_seqs, &length_adjustment);
-         }        
-     
-         effective_search_space =
-             (query_length - length_adjustment) * 
-             (db_length - db_num_seqs*length_adjustment);
+          }        
+          /* If overriding search space value is provided in options, 
+             do not calculate it. */
+          if (eff_len_options->searchsp_eff) {
+             effective_search_space = eff_len_options->searchsp_eff;
+          } else {
+             effective_search_space =
+                (query_length - length_adjustment) * 
+                (db_length - db_num_seqs*length_adjustment);
 
-         /* For translated RPS blast, the DB size is left unchanged
-            and the query size is divided by 3 (for conversion to 
-            a protein sequence) and multiplied by 6 (for 6 frames) */
-
-         if (program_number == blast_type_rpstblastn)
-            effective_search_space *= (Int8)(NUM_FRAMES / CODON_LENGTH);
-      }
-      query_info->eff_searchsp_array[index] = effective_search_space;
-      query_info->length_adjustments[index] = length_adjustment;
-
+             /* For translated RPS blast, the DB size is left unchanged
+                and the query size is divided by 3 (for conversion to 
+                a protein sequence) and multiplied by 6 (for 6 frames) */
+             if (program_number == blast_type_rpstblastn)
+                effective_search_space *= (Int8)(NUM_FRAMES / CODON_LENGTH);
+          }
+       }
+       query_info->eff_searchsp_array[index] = effective_search_space;
+       query_info->length_adjustments[index] = length_adjustment;
    }
 
    return 0;
@@ -617,17 +638,18 @@ Int2 BLAST_CalcEffLengths (Uint1 program_number,
 
 Int2 
 BLAST_GapAlignSetUp(Uint1 program_number,
-                    const BlastSeqSrc* seq_src,
-                    const BlastScoringOptions* scoring_options,
-                    const BlastEffectiveLengthsOptions* eff_len_options,
-                    const BlastExtensionOptions* ext_options,
-                    const BlastHitSavingOptions* hit_options,
-                    BlastQueryInfo* query_info, 
-                    BlastScoreBlk* sbp, 
-                    BlastExtensionParameters** ext_params,
-                    BlastHitSavingParameters** hit_params,
-                    BlastEffectiveLengthsParameters** eff_len_params,
-                    BlastGapAlignStruct** gap_align)
+    const BlastSeqSrc* seq_src,
+    const BlastScoringOptions* scoring_options,
+    const BlastEffectiveLengthsOptions* eff_len_options,
+    const BlastExtensionOptions* ext_options,
+    const BlastHitSavingOptions* hit_options,
+    BlastQueryInfo* query_info, 
+    BlastScoreBlk* sbp, 
+    BlastScoringParameters** score_params,
+    BlastExtensionParameters** ext_params,
+    BlastHitSavingParameters** hit_params,
+    BlastEffectiveLengthsParameters** eff_len_params,
+    BlastGapAlignStruct** gap_align)
 {
    Int2 status = 0;
    Uint4 max_subject_length;
@@ -652,6 +674,8 @@ BLAST_GapAlignSetUp(Uint1 program_number,
                     *eff_len_params, sbp, query_info)) != 0)
       return status;
 
+   BlastScoringParametersNew(scoring_options, sbp, score_params);
+
    BlastExtensionParametersNew(program_number, ext_options, sbp, 
                                query_info, ext_params);
 
@@ -662,9 +686,8 @@ BLAST_GapAlignSetUp(Uint1 program_number,
       maximal subject sequence length */
    max_subject_length = BLASTSeqSrcGetMaxSeqLen(seq_src);
 
-   if ((status = BLAST_GapAlignStructNew(scoring_options, *ext_params, 
-                    max_subject_length, query_info->max_length, sbp, 
-                    gap_align)) != 0) {
+   if ((status = BLAST_GapAlignStructNew(*score_params, *ext_params, 
+                    max_subject_length, sbp, gap_align)) != 0) {
       return status;
    }
 
@@ -688,7 +711,8 @@ Int2 BLAST_OneSubjectUpdateParameters(Uint1 program_number,
       return status;
    /* Update cutoff scores in hit saving parameters */
    BlastHitSavingParametersUpdate(program_number, ext_params,
-                                  sbp, query_info, hit_params);
+                                  sbp, query_info, 
+                                  hit_params);
    
    if (word_params) {
       /* Update cutoff scores in initial word parameters */

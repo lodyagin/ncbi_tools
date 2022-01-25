@@ -28,13 +28,19 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.53 $
+* $Revision: 6.55 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.55  2004/05/20 19:46:25  bollin
+* removed unused variables
+*
+* Revision 6.54  2004/05/11 13:19:49  bollin
+* update the dimension of the shared alignment after adding a sequence.
+*
 * Revision 6.53  2004/04/13 14:43:07  kskatz
 * Final resolution of revisions 6.51 and 6.52: reverted 6.52; then  cleaned up readability of AlnMgr2SeqPortRead() and ensured that it will never call SeqPortRead for a length > AM_SEQPORTSIZE
 *
@@ -1184,6 +1190,7 @@ NLM_EXTERN void AlnMgr2IndexSeqAlignEx(SeqAlignPtr sap, Boolean replace_gi)
    if (replace_gi) {
      SAM_ReplaceGI(sap);
    }
+
    AlnMgr2IndexLite(sap);
    AlnMgr2DecomposeToPairwise(sap);
    amaip = (AMAlignIndex2Ptr)(sap->saip);
@@ -1670,7 +1677,6 @@ static void AlnMgr2HidePairwiseConflicts(SeqAlignPtr sap)
    SeqIdPtr         sip12;
    SeqIdPtr         sip21;
    SeqIdPtr         sip22;
-   Boolean          start;
    Int4             start11;
    Int4             start12;
    Int4             start21;
@@ -3036,7 +3042,7 @@ NLM_EXTERN void AlnMgr2AddInNewPairwiseSA(SeqAlignPtr parent, SeqAlignPtr sap)
   Int4 Pos, POS, max_POS;
   Int4 A_end, B_beg;
   Int4 anchor, Anchor;
-  Int4 max_len, row;
+  Int4 row;
   SeqIdPtr sip, extra_sip;
   AMSeqPieceSetPtr a_set, A_set, b_set, B_set_head, B_set;
   AMSeqPiecePtr a, A, b, B;
@@ -3481,6 +3487,9 @@ NLM_EXTERN void AlnMgr2AddInNewPairwiseSA(SeqAlignPtr parent, SeqAlignPtr sap)
   AMSeqPieceSetFree(b_set);
 
   amaip->sharedaln->segs = DSP;
+  /* update the dim for the shared_aln to match the new DensegPtr */
+  amaip->sharedaln->dim = DSP->dim;
+  
   DenseSegFree(Dsp);
 }
 
@@ -5619,9 +5628,7 @@ NLM_EXTERN Boolean AlnMgr2GetNextAlnBit(SeqAlignPtr sap, AlnMsg2Ptr amp) /* NEXT
    Int4             endoffset;
    Boolean          found;
    Int4             i;
-   Int4             ilen;
    Int4             index;
-   Int4             insert;
    Int4             intfrom;
    Int4             intto;
    Int4             j;

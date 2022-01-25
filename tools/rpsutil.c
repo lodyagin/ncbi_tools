@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsutil.c,v 6.69 2004/03/18 15:09:22 papadopo Exp $";
+static char const rcsid[] = "$Id: rpsutil.c,v 6.70 2004/05/13 16:58:28 kans Exp $";
 
-/* $Id: rpsutil.c,v 6.69 2004/03/18 15:09:22 papadopo Exp $
+/* $Id: rpsutil.c,v 6.70 2004/05/13 16:58:28 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: rpsutil.c,v 6.69 2004/03/18 15:09:22 papadopo 
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.69 $
+* $Revision: 6.70 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.70  2004/05/13 16:58:28  kans
+* in AnnotateRegionsFromCDD, do not put cdd->ShortName into comment if same as cdd->Definition
+*
 * Revision 6.69  2004/03/18 15:09:22  papadopo
 * use the score as a tiebreaker during final sort of seqaligns in RPS blast
 *
@@ -2985,7 +2988,7 @@ NLM_EXTERN void AnnotateRegionsFromCDD (
           AddFieldToCddUserObject (uop, "evalue", NULL, 0, cdd->evalue);
           AddFieldToCddUserObject (uop, "bit_score", NULL, 0, cdd->bit_score);
         }
-        if (cdd->ShortName != NULL) {
+        if (cdd->ShortName != NULL && StringICmp (cdd->ShortName, cdd->Definition) != 0) {
           len = StringLen (cdd->ShortName) + 10;
           str = MemNew (len);
           if (str != NULL) {

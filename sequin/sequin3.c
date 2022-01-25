@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.377 $
+* $Revision: 6.384 $
 *
 * File Description: 
 *
@@ -1074,6 +1074,57 @@ static void RemoveAllGeneXrefs (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
+static void DoRefreshGeneXrefs (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  SeqFeatXrefPtr    curr;
+  GeneRefPtr        grp, grpfeat;
+  SeqFeatPtr        gene;
+  SeqMgrFeatContext fcontext;
+  BioseqPtr         bsp;
+
+  if (sfp == NULL) return;
+
+  for (curr = sfp->xref; curr != NULL; curr = curr->next)
+  {
+    if (curr->data.choice == SEQFEAT_GENE) {
+      grp = (GeneRefPtr) curr->data.value.ptrvalue;
+      if (grp != NULL)
+      {
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+        gene = SeqMgrGetFeatureByLabel (bsp, grp->locus, SEQFEAT_GENE, 0, &fcontext);
+        if (gene != NULL && gene->data.choice == SEQFEAT_GENE) {
+          grpfeat = (GeneRefPtr) gene->data.value.ptrvalue;
+          if (grpfeat != NULL) {
+            GeneRefFree (grp);
+            grp = GeneRefDup (grpfeat);
+            curr->data.value.ptrvalue = grp;
+          }
+        }
+      }
+    }
+  }
+}
+
+static void RefreshGeneXRefs (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  VisitFeaturesInSep (sep, NULL, DoRefreshGeneXrefs);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 static ValNodePtr RemoveDbxrefList (ValNodePtr vnp)
 
 {
@@ -1634,7 +1685,47 @@ static void RawSeqToDeltaSeq (IteM i)
   if (bfp == NULL) return;
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
-  VisitBioseqsInSep (sep, (Pointer) bfp, ConvertNsToGaps);
+  VisitBioseqsInSep (sep, NULL, ConvertNsToGaps);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void RawSeqToDeltaSeqUnknownLengthGaps (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  Int4         unknown_gap_size = 100;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  VisitBioseqsInSep (sep, &unknown_gap_size, ConvertNsToGaps);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void RawSeqToDeltaSeqUnknown100LengthGaps (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  Int4         unknown_gap_size = -1;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  VisitBioseqsInSep (sep, &unknown_gap_size, ConvertNsToGaps);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
@@ -10314,6 +10405,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Genus-Species Fixup", GenSpecTaxonFixup);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
+  i = CommandItem (s, "Country Fixup", CountryLookup);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
   i = CommandItem (s, "Set Source Focus", SetSourceFocus);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Clear Source Focus", ClearSourceFocus);
@@ -10370,6 +10464,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Remove Graphs", RemoveGraph);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Remove Proteins", RemoveProteins);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Remove Proteins and Renormalize Nuc-Prot Sets", RemoveProteinsAndRenormalize);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Remove Source Qual", RemoveSource);
@@ -10566,6 +10662,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     i = CommandItem (s, "Resolve Colliding Local IDs", ResolveExistingLocalIDs);
     SetObjectExtra (i, bfp, NULL);
   }
+  SeparatorItem (s);
+  i = CommandItem (s, "Refresh Gene Xrefs", RefreshGeneXRefs);
+  SetObjectExtra (i, bfp, NULL);
 
   s = SubMenu (m, "Edit/ E");
   i = CommandItem (s, "Edit Qualifiers", EditQualifier);
@@ -10624,7 +10723,7 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   s = SubMenu (m, "Transform/ T");
   i = CommandItem (s, "Correct CDS Genetic Codes", CorrectCDSGenCodes);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Correct CDS Propagate Crud", FixCdsAfterPropagate);
+  i = CommandItem (s, "Cleanup CDS partials after propagation", FixCdsAfterPropagate);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Trim Ns from Bioseqs", TrimNsFromNucs);
@@ -10799,7 +10898,12 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
     SeparatorItem (s);
   }
-  i = CommandItem (s, "Raw Sequence with Ns to Delta Sequence", RawSeqToDeltaSeq);
+  x = SubMenu (s, "Raw Sequence with Ns to Delta Sequence");
+  i = CommandItem (x, "All Known Length Gaps", RawSeqToDeltaSeq);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Unknown Length Gaps for 100 Ns", RawSeqToDeltaSeqUnknownLengthGaps);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Unknown Length 100 Gaps for All Ns", RawSeqToDeltaSeqUnknown100LengthGaps);
   SetObjectExtra (i, bfp, NULL);
 
   s = SubMenu (m, "Misc/ M");

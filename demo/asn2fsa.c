@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.13 $
+* $Revision: 1.16 $
 *
 * File Description:
 *
@@ -60,6 +60,10 @@
 #ifdef INTERNAL_NCBI_ASN2FSA
 #include <accpubseq.h>
 #endif
+
+#define ASN2FSA_APP_VER "1.0"
+
+CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
 static ValNodePtr  requested_uid_list = NULL;
 static TNlmMutex   requested_uid_mutex = NULL;
@@ -265,6 +269,7 @@ typedef struct fastaflags {
   FILE     *aa;
   FILE     *ql;
   FILE     *fr;
+  FILE     *logfp;
 } FastaFlagData, PNTR FastaFlagPtr;
 
 static VoidPtr DoAsyncLookup (
@@ -405,6 +410,9 @@ static ValNodePtr DoLockFarComponents (
 
   if (NlmThreadsAvailable () && ffp->useThreads) {
     rsult = AsyncLockFarComponents (sep, ffp);
+  } else if (ffp->useThreads) {
+    Message (MSG_POST, "Threads not available in this executable");
+    rsult = LockFarComponents (sep);
   } else {
     rsult = LockFarComponents (sep);
   }
@@ -673,13 +681,16 @@ static void ProcessMultipleRecord (
   AsnIoPtr       aip;
   AsnModulePtr   amp;
   AsnTypePtr     atp, atp_bss, atp_desc, atp_se;
+  BioseqPtr      bsp;
   ValNodePtr     bsplist;
-  Char           cmmd [256], file [FILENAME_MAX], path [PATH_MAX];
+  Char           buf [64], cmmd [256], file [FILENAME_MAX], path [PATH_MAX], longest [64];
   Char           path1 [PATH_MAX], path2 [PATH_MAX], path3 [PATH_MAX];
   StreamFlgType  flags = 0;
   FILE           *fp, *tfp;
+  Int4           numrecords = 0;
+  SeqEntryPtr    fsep, sep;
   ObjMgrPtr      omp;
-  SeqEntryPtr    sep;
+  time_t         starttime, stoptime, worsttime;
 #ifdef OS_UNIX
   CharPtr        gzcatprog;
   int            ret;
@@ -796,9 +807,27 @@ static void ProcessMultipleRecord (
     flags = STREAM_EXPAND_GAPS;
   }
 
+  longest [0] = '\0';
+  worsttime = 0;
+
   while ((atp = AsnReadId (aip, amp, atp)) != NULL) {
     if (atp == atp_se) {
       sep = SeqEntryAsnRead (aip, atp);
+
+      starttime = GetSecs ();
+      buf [0] = '\0';
+
+      if (ffp->logfp != NULL) {
+        fsep = FindNthBioseq (sep, 1);
+        if (fsep != NULL && fsep->choice == 1) {
+          bsp = (BioseqPtr) fsep->data.ptrvalue;
+          if (bsp != NULL) {
+            SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
+            fprintf (ffp->logfp, "%s\n", buf);
+            fflush (ffp->logfp);
+          }
+        }
+      }
 
       bsplist = NULL;
       if (ffp->lock) {
@@ -820,6 +849,13 @@ static void ProcessMultipleRecord (
 
       bsplist = UnlockFarComponents (bsplist);
 
+      stoptime = GetSecs ();
+      if (stoptime - starttime > worsttime && StringDoesHaveText (buf)) {
+        worsttime = stoptime - starttime;
+        StringCpy (longest, buf);
+      }
+      numrecords++;
+
       SeqEntryFree (sep);
       omp = ObjMgrGet ();
       ObjMgrReapOne (omp);
@@ -840,6 +876,13 @@ static void ProcessMultipleRecord (
 #else
   FileClose (fp);
 #endif
+
+  if (ffp->logfp != NULL && (! StringHasNoText (longest))) {
+    fprintf (ffp->logfp, "Longest processing time %ld seconds on %s\n",
+             (long) worsttime, longest);
+    fprintf (ffp->logfp, "Total number of records %ld\n", (long) numrecords);
+    fflush (ffp->logfp);
+  }
 
   sprintf (cmmd, "rm %s; rm %s; rm %s", path1, path2, path3);
   system (cmmd);
@@ -939,6 +982,7 @@ static void FileRecurse (
 #define h_argFarOutFile   20
 #define e_argLineLength   21
 #define T_argThreads      22
+#define L_argLogFile      23
 
 Args myargs [] = {
   {"Path to ASN.1 Files", NULL, NULL, NULL,
@@ -987,21 +1031,22 @@ Args myargs [] = {
     TRUE, 'e', ARG_INT, 0.0, 0, NULL},
   {"Use Threads", "F", NULL, NULL,
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Log File", NULL, NULL, NULL,
+    TRUE, 'L', ARG_FILE_OUT, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
 
 {
+  Char           app [64], sfx [32];
   CharPtr        base, blastdb, directory, fastaidx, ntout,
-                 aaout, qlout, frout, ptr, str, suffix;
+                 aaout, qlout, frout, logfile, ptr, str, suffix;
   Boolean        batch, binary, blast, compressed, dorecurse,
                  expandgaps, fargenomicqual, fasta, local, lock,
                  masterstyle, qualgapzero, remote, usethreads;
   FastaFlagData  ffd;
-  FILE           *fp = NULL;
   Int2           linelen, type = 0;
   time_t         run_time, start_time, stop_time;
-  Char           sfx [32];
 
   /* standard setup */
 
@@ -1034,7 +1079,8 @@ Int2 Main (void)
 
   /* process command line arguments */
 
-  if (! GetArgs ("asn2fsa", sizeof (myargs) / sizeof (Args), myargs)) {
+  sprintf (app, "asn2fsa %s", ASN2FSA_APPLICATION);
+  if (! GetArgs (app, sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
   }
 
@@ -1054,7 +1100,7 @@ Int2 Main (void)
   local = (Boolean) myargs [k_argLocalFetch].intvalue;
   lock = (Boolean) myargs [l_argLockFar].intvalue;
   linelen = (Int2) myargs [e_argLineLength].intvalue;
-  usethreads = (Int2) myargs [T_argThreads].intvalue;
+  usethreads = (Boolean) myargs [T_argThreads].intvalue;
 
   expandgaps = (Boolean) myargs [g_argExpandGaps].intvalue;
   masterstyle = (Boolean) myargs [m_argMaster].intvalue;
@@ -1091,6 +1137,8 @@ Int2 Main (void)
   qlout = (CharPtr) myargs [q_argQlOutFile].strvalue;
   frout = (CharPtr) myargs [h_argFarOutFile].strvalue;
 
+  logfile = (CharPtr) myargs [L_argLogFile].strvalue;
+
   /* default to stdout for nucleotide output if nothing specified */
 
   if (StringHasNoText (ntout) &&
@@ -1118,6 +1166,7 @@ Int2 Main (void)
   ffd.aa = NULL;
   ffd.ql = NULL;
   ffd.fr = NULL;
+  ffd.logfp = NULL;
 
   if (! StringHasNoText (ntout)) {
     ffd.nt = FileOpen (ntout, "w");
@@ -1152,6 +1201,14 @@ Int2 Main (void)
     ffd.lock = TRUE;
   }
 
+  if (! StringHasNoText (logfile)) {
+    ffd.logfp = FileOpen (logfile, "w");
+    if (ffd.logfp == NULL) {
+      Message (MSG_FATAL, "Unable to open log file");
+      return 1;
+    }
+  }
+
   /* register fetch functions */
 
   if (remote) {
@@ -1161,6 +1218,7 @@ Int2 Main (void)
       return 1;
     }
     ffd.usePUBSEQ = TRUE;
+    ffd.useThreads = FALSE;
 #else
     PubSeqFetchEnable ();
 #endif
@@ -1227,6 +1285,12 @@ Int2 Main (void)
 
   stop_time = GetSecs ();
   run_time = stop_time - start_time;
+
+  if (ffd.logfp != NULL) {
+    fprintf (ffd.logfp, "Finished in %ld seconds\n", (long) run_time);
+    FileClose (ffd.logfp);
+  }
+
   Message (MSG_POST, "Ran in %ld seconds", (long) run_time);
 
   /* close fetch functions */

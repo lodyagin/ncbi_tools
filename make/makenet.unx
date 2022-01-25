@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.172 2004/05/05 02:01:08 kans Exp $
+#	$Id: makenet.unx,v 6.175 2004/05/17 17:56:58 dondosha Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -1484,11 +1484,13 @@ nph-viewgif.cgi : viewgif.c
 
 wblast2.REAL : wblast2.c
 	$(CC) -o wblast2.REAL $(LDFLAGS) -DBL2SEQ_STANDALONE wblast2.c \
-	$(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(LIB61) $(LIB23) $(LIB2) $(LIB60) $(LIB1) $(OTHERLIBS)
+
 
 wblast2_cs.REAL : wblast2.c
 	$(CC) -o wblast2_cs.REAL $(LDFLAGS) -DNCBI_ENTREZ_CLIENT -DBL2SEQ_STANDALONE \
-	wblast2.c $(LIB41) $(LIB6) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+	wblast2.c $(LIB41) $(LIB6) $(LIB61) $(LIB23) $(LIB2) $(LIB60) $(LIB1) \
+	$(OTHERLIBS)
 
 bl2bag.cgi : bl2bag.c
 	$(CC) -o bl2bag.cgi $(LDFLAGS) bl2bag.c $(LIB1) $(OTHERLIBS)

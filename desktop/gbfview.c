@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.73 $
+* $Revision: 6.75 $
 *
 * File Description: 
 *
@@ -896,37 +896,40 @@ static void LookForTpa (
 static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
 
 {
-  BioseqPtr        bsp;
-  CstType          custom = 0;
-  DoC              doc;
-  Boolean          doLockFarComponents = FALSE;
-  Uint2            entityID;
-  FonT             fnt;
-  FILE             *fp;
-  Boolean          hastpaaligns;
-  Int2             into;
-  Boolean          isAEorCH;
-  Boolean          isGED;
-  Boolean          isNTorNW;
-  Boolean          isNC;
-  Boolean          isTPA;
-  Int2             item;
-  ErrSev           level;
-  Boolean          lockFar = FALSE;
-  Boolean          lookupFar = FALSE;
-  ModType          mode = SEQUIN_MODE;
-  SeqEntryPtr      oldsep;
-  Char             path [PATH_MAX];
-  BaR              sb = NULL;
-  SeqEntryPtr      sep;
-  Int4             startsAt;
-  CharPtr          str;
-  StlType          style = NORMAL_STYLE;
-  SeqViewProcsPtr  svpp;
-  SeqEntryPtr      topsep;
-  TexT             txt;
-  SeqEntryPtr      usethetop = NULL;
-  Int2             val;
+  BioseqPtr          bsp;
+  SeqMgrFeatContext  context;
+  CstType            custom = 0;
+  DoC                doc;
+  Boolean            doLockFarComponents = FALSE;
+  Uint2              entityID;
+  Int4               feats_with_product_count;
+  FonT               fnt;
+  FILE               *fp;
+  Boolean            hastpaaligns;
+  Int2               into;
+  Boolean            isAEorCH;
+  Boolean            isGED;
+  Boolean            isNTorNW;
+  Boolean            isNC;
+  Boolean            isTPA;
+  Int2               item;
+  ErrSev             level;
+  Boolean            lockFar = FALSE;
+  Boolean            lookupFar = FALSE;
+  ModType            mode = SEQUIN_MODE;
+  SeqEntryPtr        oldsep;
+  Char               path [PATH_MAX];
+  BaR                sb = NULL;
+  SeqEntryPtr        sep;
+  SeqFeatPtr         sfp;
+  Int4               startsAt;
+  CharPtr            str;
+  StlType            style = NORMAL_STYLE;
+  SeqViewProcsPtr    svpp;
+  SeqEntryPtr        topsep;
+  TexT               txt;
+  SeqEntryPtr        usethetop = NULL;
+  Int2               val;
 
   if (bvp == NULL) return;
   if (bvp->hasTargetControl && bvp->ffModeCtrl != NULL) {
@@ -1033,11 +1036,33 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
       doLockFarComponents = TRUE;
     }
   }
+
+  if (mode == ENTREZ_MODE) {
+    doLockFarComponents = FALSE;
+    lockFar = FALSE;
+    lookupFar = FALSE;
+    flags = flags ^ (SHOW_CONTIG_FEATURES | SHOW_CONTIG_SOURCES | SHOW_FAR_TRANSLATION);
+  }
+
   if (doLockFarComponents) {
     entityID = ObjMgrGetEntityIDForPointer (bsp);
     sep = GetTopSeqEntryForEntityID (entityID);
     if (bvp->bsplist == NULL && lockFar) {
       bvp->bsplist = LockFarComponentsEx (sep, TRUE, FALSE, FALSE, NULL);
+    }
+    if (lookupFar) {
+      feats_with_product_count = 0;
+      sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &context);
+      while (sfp != NULL) {
+        if (sfp->product != NULL) {
+          feats_with_product_count++;
+        }
+        sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
+      }
+      if (feats_with_product_count > 500) {
+        /* too many to lookup with current caching implementation */
+        lookupFar = FALSE;
+      }
     }
     if (lookupFar) {
       hastpaaligns = FALSE;

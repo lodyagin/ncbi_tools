@@ -1,4 +1,4 @@
-/* $Id: blast_format.h,v 1.20 2004/04/22 22:15:40 dondosha Exp $
+/* $Id: blast_format.h,v 1.22 2004/06/07 18:40:48 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions needed for formatting of BLAST results
 
 ******************************************************************************
- * $Revision: 1.20 $
+ * $Revision: 1.22 $
  * */
 #ifndef __BLAST_FORMAT__
 #define __BLAST_FORMAT__
@@ -48,10 +48,11 @@ extern "C" {
 #include <ncbi.h>
 #include <asn.h>
 #include <bxmlobj.h>
-#include <readdb.h>
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_hits.h>
-#include <algo/blast/api/seqsrc_readdb.h>
+#include <algo/blast/core/blast_seqsrc.h>
+#include <algo/blast/core/blast_diagnostics.h>   
+#include <algo/blast/api/twoseq_api.h>
 
 /** Options for formatting BLAST results 
  */
@@ -117,7 +118,7 @@ typedef struct MBXml {
 Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
         char* blast_program, Int4 num_queries, 
         SeqLocPtr query_slp, BlastMaskLoc* mask_loc, 
-        BlastFormattingOptions* format_options, Boolean is_ooframe);
+        const BlastFormattingOptions* format_options, Boolean is_ooframe);
 
 /** Print the summary at the end of the BLAST report.
  * @param program_number Type of BLAST program [in]
@@ -128,20 +129,23 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
  * @param word_options Word finding options and parameters [in]
  * @param ext_options Extension options and parameters [in]
  * @param hit_options Hit saving options [in]
+ * @param eff_len_options Effective lengths options, containing user-specified
+ *                        values for database length or eff. search space [in]
  * @param query_info Query information [in]
- * @param dbname BLAST database name [in]
- * @param return_stats Data about this run [in]
- * @param db_is_na TRUE if a nucleotide database [in]
+ * @param seq_src Source of subject sequences [in]
+ * @param diagnostics Data about this run [in]
  */
 Int2 PrintOutputFooter(Uint1 program_number, 
-        BlastFormattingOptions* format_options, 
-        BlastScoringOptions* score_options, BlastScoreBlk* sbp,
-        LookupTableOptions* lookup_options,
-        BlastInitialWordOptions* word_options,
-        BlastExtensionOptions* ext_options,
-        BlastHitSavingOptions* hit_options,
-        BlastQueryInfo* query_info, char* dbname, 
-        BlastReturnStat* return_stats, Boolean db_is_na); 
+        const BlastFormattingOptions* format_options, 
+        const BlastScoringOptions* score_options, 
+        const BlastScoreBlk* sbp,
+        const LookupTableOptions* lookup_options,
+        const BlastInitialWordOptions* word_options,
+        const BlastExtensionOptions* ext_options,
+        const BlastHitSavingOptions* hit_options,
+        const BlastEffectiveLengthsOptions* eff_len_options,
+        const BlastQueryInfo* query_info, const BlastSeqSrc* seq_src,
+        const BlastDiagnostics* diagnostics);
 
 /** Prints the top part of the traditional BLAST output, including version, 
  * reference(s) and database information.
@@ -151,13 +155,17 @@ Int2 PrintOutputFooter(Uint1 program_number,
  * @param dbname BLAST database name [in]
  * @param is_protein Is the database protein or nucleotide? [in]
  */
-Int2 BLAST_PrintOutputHeader(BlastFormattingOptions* format_options,
+Int2 BLAST_PrintOutputHeader(const BlastFormattingOptions* format_options,
         Boolean is_megablast, char* dbname, Boolean is_protein);
 
 void BLAST_PrintIntermediateResults(BlastHSPResults* results, 
         BlastQueryInfo* query_info, SeqLocPtr query_slp, 
-        ReadDBFILEPtr rdfp, SeqIdPtr seqid, BlastScoreBlk* sbp, 
+        BlastSeqSrc* seq_src, BlastScoreBlk* sbp, 
         char* filename);
+void 
+Blast_SeqIdGetDefLine(SeqIdPtr sip, char* descr, char** buffer_ptr, 
+                Boolean ncbi_gi, Boolean accession_only, 
+                Boolean seqid_only, Boolean believe_local_id);
 
 
 #ifdef __cplusplus

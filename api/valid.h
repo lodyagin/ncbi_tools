@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.13  2004/05/06 19:42:22  kans
+* new function GetValidCountryList for access to country code list, which is now NULL terminated
+*
 * Revision 6.12  2003/12/02 15:37:37  kans
 * added vsp->seqSubmitParent for use by tbl2asn, which usually has a Seq-submit wrapper that is added on-the-fly and not indexed
 *
@@ -186,6 +189,8 @@ NLM_EXTERN ValidStructPtr ValidStructFree (ValidStructPtr vsp);
 NLM_EXTERN void ReportNonAscii PROTO((ValidStructPtr vsp, SeqEntryPtr sep));
 NLM_EXTERN void SpellCallBack (char * str);
 NLM_EXTERN Boolean IsNuclAcc (CharPtr name);
+
+NLM_EXTERN CharPtr PNTR GetValidCountryList (void);
 
 #ifdef __cplusplus
 }

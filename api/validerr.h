@@ -74,6 +74,7 @@
 #define ERR_SEQ_DESCR_UnnecessaryBioSourceFocus  2,24
 #define ERR_SEQ_DESCR_RefGeneTrackingWithoutStatus  2,25
 #define ERR_SEQ_DESCR_UnwantedCompleteFlag  2,26
+#define ERR_SEQ_DESCR_CollidingPublications  2,27
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2

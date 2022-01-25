@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.144 $
+* $Revision: 6.148 $
 *
 * File Description: 
 *
@@ -7195,9 +7195,11 @@ static Boolean CDSMeetsStringConstraint (SeqFeatPtr sfp,
 extern Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
 				      CharPtr     findThisStr)
 {
-  GBQualPtr gbqp;
-  GeneRefPtr grp;
-  RnaRefPtr rrp;
+  GBQualPtr         gbqp;
+  GeneRefPtr        grp;
+  RnaRefPtr         rrp;
+  SeqMgrFeatContext context;
+  Boolean           have_context = FALSE;
 
   /* If no string constraint, then everyone matches */
 
@@ -7226,6 +7228,15 @@ extern Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
       gbqp = gbqp->next;
     }
 
+  if (SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &context) != NULL)
+  {
+  	if (StringISearch (context.label, findThisStr))
+  	{
+  	  return TRUE;
+  	}
+  	have_context = TRUE;
+  }
+
   if (sfp->data.choice == SEQFEAT_GENE)
   {
     grp = sfp->data.value.ptrvalue;
@@ -7249,6 +7260,15 @@ extern Boolean MeetsStringConstraint (SeqFeatPtr  sfp,
     if (rrp->ext.choice == 1) {
       if (StringISearch ((CharPtr) rrp->ext.value.ptrvalue, findThisStr))
         return TRUE;
+    }
+    else if (rrp->type == 3 && rrp->ext.choice == 2 && have_context) 
+    {
+      /* look for the label as it appears to the user */
+      if (StringNCmp(findThisStr, "tRNA-", 5) == 0
+          && StringISearch (context.label, findThisStr + 5))
+      {
+      	return TRUE;
+      }
     }
   }
 
@@ -8123,7 +8143,7 @@ static void MarkProteinCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, In
   }
 }
 
-extern void RemoveProteins (IteM i)
+extern void RemoveProteinsAndOptionallyRenormalize (IteM i, Boolean renormalize)
 
 {
   BaseFormPtr    bfp;
@@ -8167,10 +8187,24 @@ extern void RemoveProteins (IteM i)
   ValNodeFree (vnp);
   SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
   RestoreSeqEntryObjMgrData (sep, omdptop, &omdata);
+  if (renormalize) 
+  {
+    RenormalizeNucProtSets (sep, TRUE);
+  }
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   ObjMgrDeSelect (0, 0, 0, 0, NULL);
   Update ();
+}
+
+extern void RemoveProteins (IteM i)
+{
+  RemoveProteinsAndOptionallyRenormalize (i, FALSE);
+}
+
+extern void RemoveProteinsAndRenormalize (IteM i)
+{
+  RemoveProteinsAndOptionallyRenormalize (i, TRUE);
 }
 
 #define EDIT_FIVE_PRIME  1
@@ -9009,7 +9043,7 @@ WriteAlignmentInterleaveToFile
               MemSet (printed_line, ' ', printed_line_len - 2);
               label_pos = alnlabels + (row - 1) * (label_len + 1) * sizeof (Char);
               MemCpy (printed_line, label_pos, StringLen (label_pos));
-              AlignmentIntervalToString (salp, row, start, stop, 1, FALSE, 
+              AlignmentIntervalToString (salp, row, start, stop, 1, TRUE, 
                                          seqbuf, alnbuf, &alnbuf_len);
               MemCpy (printed_line + label_len + 1, alnbuf, alnbuf_len);
               fprintf (fp, printed_line);
@@ -9028,8 +9062,95 @@ WriteAlignmentInterleaveToFile
   }
 }
 
+static void WriteAlignmentContiguousToFile
+(SeqAlignPtr salp,
+ FILE *fp)
+{
+  Int4         num_segments;
+  SeqAlignPtr  tmp_salp;
+  Int4         idx;
+  CharPtr PNTR alnlabels = NULL;
+  Int4Ptr      label_len = NULL;
+  Int4Ptr      aln_len = NULL;
+  Uint1Ptr     alnbuf = NULL;
+  Uint1Ptr     seqbuf = NULL;
+  CharPtr      printed_line = NULL;
+  Int4         alnbuf_len;
+  Int4         printed_line_len;
+  CharPtr      label_pos;
+  Int4         row, start, stop;
+  Int4         seq_chars_per_row = 80;
+  
+  if (salp == NULL || fp == NULL) return;
+  
+  num_segments = 0;
+  for (tmp_salp = salp; tmp_salp != NULL; tmp_salp = tmp_salp->next)
+  {
+  	num_segments++;
+  }
+  
+  
+  /* get labels and lengths for all segments */
+  alnlabels = (CharPtr PNTR) MemNew (sizeof (CharPtr) * num_segments);
+  label_len = (Int4Ptr) MemNew (sizeof (Int4) * num_segments);
+  aln_len = (Int4Ptr) MemNew (sizeof (Int4) * num_segments);
+  if (alnlabels != NULL && label_len != NULL && aln_len != NULL)
+  {  	
+    for (tmp_salp = salp, idx = 0; tmp_salp != NULL, idx < num_segments; tmp_salp = tmp_salp->next, idx++)
+    {
+  	  alnlabels [idx] = GetSeqAlignLabels (tmp_salp, &label_len[idx]);
+      aln_len [idx]= AlnMgr2GetAlnLength(tmp_salp, FALSE);
+
+    }
+
+    /* get buffers */
+    alnbuf = (Uint1Ptr) MemNew (seq_chars_per_row * sizeof (Uint1));
+    seqbuf = (Uint1Ptr) MemNew (seq_chars_per_row * sizeof (Uint1));
+    printed_line_len = seq_chars_per_row + 3;
+    printed_line = (CharPtr) MemNew (printed_line_len * sizeof (Char));
+    if (alnbuf != NULL && seqbuf != NULL && printed_line != NULL) {
+      printed_line [ printed_line_len - 1] = 0;
+      printed_line [ printed_line_len - 2] = '\n';
+
+      for (row = 1; row <= salp->dim; row++) {
+        if (salp->next != NULL)
+        {
+          fprintf (fp, "[\n");
+        }
+        for (tmp_salp = salp, idx = 0; tmp_salp != NULL, idx < num_segments; tmp_salp = tmp_salp->next, idx++)
+        {
+          label_pos = alnlabels [idx] + (row - 1) * (label_len[idx] + 1) * sizeof (Char);
+          fprintf (fp, ">%s\n", label_pos);
+          start = 0;
+          stop = seq_chars_per_row - 1;
+          while (start < aln_len [idx]) {
+            MemSet (printed_line, ' ', printed_line_len - 2);
+            AlignmentIntervalToString (tmp_salp, row, start, stop, 1, TRUE, 
+                                       seqbuf, alnbuf, &alnbuf_len);
+            MemCpy (printed_line, alnbuf, alnbuf_len);
+            fprintf (fp, printed_line);
+            start = stop + 1;
+            stop += seq_chars_per_row;
+          }
+          fprintf (fp, "\n");
+        }
+        if (salp->next != NULL)
+        {
+          fprintf (fp, "]\n");
+        }
+      }
+    }
+    MemFree (alnbuf);
+    MemFree (seqbuf);
+    MemFree (printed_line);
+  }
+  MemFree (label_len);  
+  MemFree (alnlabels);
+  MemFree (aln_len);
+}
+
 static void 
-WriteAlignmentContiguousToFile 
+OldWriteAlignmentContiguousToFile 
 (SeqAlignPtr salp,
  FILE *fp)
 {
@@ -9085,26 +9206,83 @@ WriteAlignmentContiguousToFile
   }
 }
 
+static SetAlignmentDim (SeqAlignPtr salp)
+{
+  AMAlignIndex2Ptr amaip;
+  DenseSegPtr      dsp;
+  
+  if (salp == NULL || salp->dim > 0 || salp->saip == NULL) return;
+  
+  if (salp->saip->indextype == INDEX_PARENT)
+  {
+    amaip = (AMAlignIndex2Ptr)(salp->saip);
+    salp->dim = amaip->sharedaln->dim;
+  }
+  else if (salp->saip->indextype == INDEX_CHILD)
+  {
+    dsp = (DenseSegPtr)(salp->segs);
+  	salp->dim = dsp->dim;
+  }
+}  
+
+static void IndexAlignmentSet (SeqAlignPtr salp)
+{
+  SeqAlignPtr tmp_salp, next_salp;
+  
+  if (salp == NULL || salp->saip != NULL) return;
+  
+  if (salp->next != NULL && salp->dim > 2)
+  {
+  	for (tmp_salp = salp; tmp_salp != NULL; tmp_salp = tmp_salp->next)
+  	{
+  	  next_salp = tmp_salp->next;
+  	  tmp_salp->next = NULL;
+      if (tmp_salp->segtype == SAS_DENSEG  &&  tmp_salp->next == NULL) {
+        AlnMgr2IndexSingleChildSeqAlign(tmp_salp);
+      } else {
+        AlnMgr2IndexSeqAlign(tmp_salp);
+      }  		
+      SetAlignmentDim (tmp_salp);
+      tmp_salp->next = next_salp;
+  	}
+  }
+  else
+  {
+    if (salp->segtype == SAS_DENSEG  &&  salp->next == NULL) {
+      AlnMgr2IndexSingleChildSeqAlign(salp);
+    } else {
+      AlnMgr2IndexSeqAlign(salp);
+    }  
+    SetAlignmentDim (salp);		
+  }	
+}
+
 static void WriteSeqEntryAlignmentToFile (SeqEntryPtr sep, FILE *fp, Boolean Interleave)
 {
   BioseqSetPtr bssp;
   SeqAnnotPtr  sap;
-  SeqAlignPtr  salp;
+  SeqAlignPtr  salp = NULL;
 
   if (sep == NULL || ! IS_Bioseq_set (sep)) return;
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
   if (bssp == NULL) return;
   for (sap = bssp->annot; sap != NULL; sap = sap->next) {
     if (sap->type == 2) {
-      salp = (SeqAlignPtr) sap->data;
-      if (salp->saip == NULL) {
-        AlnMgr2IndexSingleChildSeqAlign (salp);
-      }
+      salp = SeqAlignListDup((SeqAlignPtr) sap->data);
+      IndexAlignmentSet (salp);
+
       if (Interleave) {
+        if (salp->next != NULL)
+        {
+          Message (MSG_ERROR, "Unable to write segmented alignments as interleave");
+          return;
+        }
         WriteAlignmentInterleaveToFile (salp, fp);
       } else {
         WriteAlignmentContiguousToFile (salp, fp);
       }
+      SeqAlignFree (salp);
+      salp = NULL;
     }
   }
 

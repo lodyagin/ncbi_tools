@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.168 $
+* $Revision: 6.172 $
 *
 * File Description: 
 *
@@ -1095,7 +1095,7 @@ End Gap: When some of the sequences in an alignment are shorter \
 or longer than others, end gap characters are added to the end \
 of the sequence to maintain the correct spacing.  These will \
 not appear in your sequence file.\n\
-Missing: These characters are used to represent \
+Ambiguous/Unknown: These characters are used to represent \
 indeterminate/ambiguous nucleotides.  These will appear in your \
 sequence file as 'n'.\n\
 Match: These characters are used to indicate positions where \
@@ -1187,6 +1187,7 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
 
         CountTitlesWithoutOrganisms (sep);
       } else {
+        SendHelpScrollMessage (helpForm, "Organism and Sequences Form", "Nucleotide Page");
         SetPhylipDocInstructions (ppp);
       }
     } else {
@@ -1259,7 +1260,7 @@ static DialoG CreatePhylipDialog (GrouP h, CharPtr title, CharPtr text,
     a = NormalGroup (m, 4, 0, "Sequence Characters", systemFont, NULL);
     StaticPrompt (a, "Beginning Gap", 0, dialogTextHeight, systemFont, 'c');
     ppp->beginning_gap = DialogText (a, "-.Nn?", 5, NULL);
-    StaticPrompt (a, "Missing", 0, dialogTextHeight, systemFont, 'c');
+    StaticPrompt (a, "Ambiguous/Unknown", 0, dialogTextHeight, systemFont, 'c');
     ppp->missing = DialogText (a, "?Nn", 5, NULL);
     StaticPrompt (a, "Middle Gap", 0, dialogTextHeight, systemFont, 'c');
     ppp->middle_gap = DialogText (a, "-.", 5, NULL);
@@ -7848,6 +7849,8 @@ extern void SqnNewAlign (BioseqPtr bsp1, BioseqPtr bsp2, SeqAlignPtr PNTR salp)
   
 }
 
+/* This section of code is for the Remove Sequences From Alignments function. */
+
 typedef struct alignmentsequencelist {
   SeqIdPtr sip;
   Char     descr[255];
@@ -7860,12 +7863,70 @@ typedef struct removeseqfromaligndata {
   SeqEntryPtr sep;
 } RemoveSeqFromAlignData, PNTR RemoveSeqFromAlignPtr;
 
-static void RemoveOneSequenceFromAlignment (SeqIdPtr sip, SeqAlignPtr salp)
+/* This function will remove DenDiag and pairwise alignments if they contain
+ * the sequence identified by sip, otherwise it will remove the sequence from
+ * the alignment.
+ */
+static SeqAlignPtr RemoveOneSequenceFromAlignment (SeqIdPtr sip, SeqAlignPtr salphead)
 {
-  if (FindSeqIdinSeqAlign (salp, sip)) {
-    SeqAlignIDCache (salp, sip);
+  Uint4       seqid_order;
+  SeqIdPtr    tmpsip;
+  SeqAlignPtr salp, salp_next, prev_salp, remove_salp, last_remove;
+  
+  if (!FindSeqIdinSeqAlign (salphead, sip)) return;
+  
+  salp = salphead;
+  prev_salp = NULL;
+  remove_salp = NULL;
+  last_remove = NULL;
+  while (salp != NULL)
+  {
+    salp_next = salp->next;
+    tmpsip = SeqIdPtrFromSeqAlign (salp);
+    seqid_order = SeqIdOrderInBioseqIdList(sip, tmpsip);
+    if (seqid_order == 0)
+    {
+      /* do nothing for this subalignment */
+      prev_salp = salp;
+    }
+    else if (salp->dim == 2 || salphead->segtype ==1)
+    {
+      /* This is for a pairwise alignment or a DENDIAG alignment */
+      if (prev_salp == NULL)
+      {
+      	salphead = salp->next;
+      }
+      else
+      {
+      	prev_salp->next = salp->next;
+      }
+      /* save the alignments that we want to free in a list and get rid of them
+       * at the end - freeing them beforehand causes problems with listing the
+       * IDs in the alignment.
+       */
+      salp->next = NULL;
+      if (remove_salp == NULL)
+      {
+      	remove_salp = salp;
+      }
+      else
+      {
+      	last_remove->next = salp;
+      }
+      last_remove = salp;
+    }
+    else 
+    {
+      SeqAlignBioseqDeleteById (salphead, sip);  
+      prev_salp = salp;
+    }
+    salp = salp_next;
   }
+  /* Now we can free the alignment */
+  SeqAlignFree (remove_salp);
+  return salphead;
 }
+
 static void RemoveSequenceFromAlignmentsCallback (SeqAnnotPtr sap, Pointer userdata)
 {
   SeqAlignPtr salp;
@@ -7875,19 +7936,94 @@ static void RemoveSequenceFromAlignmentsCallback (SeqAnnotPtr sap, Pointer userd
   salp = (SeqAlignPtr) sap->data;
   if (salp == NULL) return;
   sip = (SeqIdPtr) userdata;
-  RemoveOneSequenceFromAlignment (sip, salp);
+  sap->data = RemoveOneSequenceFromAlignment (sip, salp);
+  /* if we've deleted all of the alignments, get rid of the annotation as well */
+  if (sap->data == NULL)
+  {
+  	sap->idx.deleteme = TRUE;
+  }
+}
+
+typedef struct checkforremovesequencefromalignments
+{
+  Boolean  found_problem;
+  SeqIdPtr sip;
+} CheckForRemoveSequenceFromAlignmentsData, PNTR CheckForRemoveSequenceFromAlignmentsPtr;
+
+/* This is the callback function for looking for pairwise alignments.
+/* If we delete the first sequence in a pairwise alignment, we end up deleting
+ * the entire alignment because that sequence is paired with every other sequence.
+ */
+static void CheckForRemoveSequenceFromAlignmentsProblemsCallback (SeqAnnotPtr sap, Pointer userdata)
+{
+  CheckForRemoveSequenceFromAlignmentsPtr p;
+  SeqAlignPtr salphead, salp;
+  Uint4       seqid_order;
+  SeqIdPtr    tmpsip;
+  
+  if (sap == NULL || sap->type != 2
+      || (p = (CheckForRemoveSequenceFromAlignmentsPtr)userdata) == NULL
+      || p->found_problem)
+  {
+  	return;
+  }
+  salphead = (SeqAlignPtr) sap->data;
+  if (salphead == NULL) return;
+  
+  if (!FindSeqIdinSeqAlign (salphead, p->sip))
+  {
+  	return;
+  }
+  for (salp = salphead; salp != NULL; salp = salp->next)
+  {
+    tmpsip = SeqIdPtrFromSeqAlign (salp);
+    seqid_order = SeqIdOrderInBioseqIdList(p->sip, tmpsip);
+    if (seqid_order == 0)
+    {
+      continue;
+    }
+    else if (seqid_order == 1 && salp->dim == 2)
+    {
+      p->found_problem = TRUE;      
+    }
+  }
 }
 
 static void DoRemoveSequencesFromAlignment (ButtoN b)
 {
   RemoveSeqFromAlignPtr    rp;
+  WindoW                   w;
   ValNodePtr               vnp;
   Int2                     val;
   AlignmentSequenceListPtr aslp;
-
+  CheckForRemoveSequenceFromAlignmentsData data;
+  
   if (b == NULL) return;
   rp = (RemoveSeqFromAlignPtr) GetObjectExtra (b);
   if (rp == NULL) return;
+  
+  w = (WindoW) rp->form;
+  Hide (w);
+  /* first, check for pairwise alignments */
+  val = 1;
+  for (vnp = rp->sequence_list; vnp != NULL; vnp = vnp->next) {
+    aslp = vnp->data.ptrvalue;
+	if (aslp == NULL) continue;
+	if (GetItemStatus (rp->sequence_list_ctrl, val)) {
+	  data.sip = aslp->sip;
+	  data.found_problem = FALSE;
+	  VisitAnnotsInSep (rp->sep, (Pointer) &data, CheckForRemoveSequenceFromAlignmentsProblemsCallback);
+	  if (data.found_problem)
+	  {
+	  	Message (MSG_ERROR, "One of the selected sequences is the first in a pairwise alignment."
+	  	"  You must convert the alignment to a multiple alignment before trying to remove this sequence.");
+        Remove (rp->form);  
+        return;
+	  }
+	}
+	val++;
+  }
+
   val = 1;
   for (vnp = rp->sequence_list; vnp != NULL; vnp = vnp->next) {
     aslp = vnp->data.ptrvalue;
@@ -7897,11 +8033,39 @@ static void DoRemoveSequencesFromAlignment (ButtoN b)
 	}
 	val++;
   }
+ 
+  ValNodeFree (rp->sequence_list);
+  rp->sequence_list = NULL; 
+  DeleteMarkedObjects (rp->input_entityID, 0, NULL);
   ObjMgrSetDirtyFlag (rp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, rp->input_entityID, 0, 0);
   Remove (rp->form);  
 }
 
+/* This function is used so that a sequence ID will only appear once in the list,
+ * even if it appears in more than one alignment or subalignment.
+ */
+static Boolean IsIDAlreadyInList (SeqIdPtr sip, ValNodePtr list)
+{
+  ValNodePtr vnp;
+  AlignmentSequenceListPtr aslp;
+  
+  if (sip == NULL) return FALSE;
+  
+  for (vnp = list; vnp != NULL; vnp = vnp->next)
+  {
+    aslp = (AlignmentSequenceListPtr) vnp->data.ptrvalue;
+    if (aslp != NULL && SeqIdComp (aslp->sip, sip) == SIC_YES)
+    {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/* This function creates the list of sequence IDs and descriptions to use in 
+ * the Remove Sequences From Alignments dialog.
+ */
 static void ListSequencesInAlignmentsCallback (SeqAnnotPtr sap, Pointer userdata)
 {
   SeqAlignPtr salp;
@@ -7914,11 +8078,13 @@ static void ListSequencesInAlignmentsCallback (SeqAnnotPtr sap, Pointer userdata
 
   if (sap == NULL || sap->type != 2 || userdata == NULL) return;
   salp = (SeqAlignPtr) sap->data;
-  if (salp == NULL) return;
-  list = (ValNodePtr PNTR)userdata;
-  sip_list = SeqAlignIDList (salp);
-  if (sip_list == NULL) return;
-  for (sip = sip_list; sip != NULL; sip = sip->next) {
+  while (salp != NULL) 
+  {
+    list = (ValNodePtr PNTR)userdata;
+    sip_list = SeqAlignIDList (salp);
+    if (sip_list == NULL) return;
+    for (sip = sip_list; sip != NULL; sip = sip->next) {
+      if (IsIDAlreadyInList (sip, *list)) continue;
       aslp = (AlignmentSequenceListPtr) MemNew (sizeof (AlignmentSequenceListData));
 	  if (aslp == NULL) return;
 	  aslp->sip = sip;
@@ -7933,7 +8099,7 @@ static void ListSequencesInAlignmentsCallback (SeqAnnotPtr sap, Pointer userdata
 			  offset ++;
 			}
 		    SeqIdWrite (bsp_sip, aslp->descr + offset, PRINTID_TEXTID_ACCESSION, 254 - offset);
-			offset += StringLen (aslp->descr);
+			offset = StringLen (aslp->descr);
 		  }
 	  } else {
         SeqIdWrite (sip, aslp->descr, PRINTID_TEXTID_ACCESSION, 254);	    
@@ -7942,7 +8108,9 @@ static void ListSequencesInAlignmentsCallback (SeqAnnotPtr sap, Pointer userdata
 	  vnp->data.ptrvalue = aslp;
 	  if (*list == NULL) {
 		  *list = vnp;
-	  }
+	  }	  
+    }
+    salp = salp->next;
   }
 }
 
@@ -7992,6 +8160,7 @@ extern void RemoveSequencesFromAlignment (IteM i)
 
   rp = (RemoveSeqFromAlignPtr) MemNew (sizeof (RemoveSeqFromAlignData));
   if (rp == NULL) return;
+  rp->input_entityID = bfp->input_entityID;
   rp->sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (rp->sep == NULL) {
 	MemFree (rp);
@@ -8035,4 +8204,5 @@ extern void RemoveSequencesFromAlignment (IteM i)
   Update ();
 }
 
+/* End of Remove Sequences From Alignments function code. */
 

@@ -58,6 +58,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\aa_ungapped.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\blast_diagnostics.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\blast_dust.c
 # End Source File
 # Begin Source File
@@ -86,7 +90,15 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_hits.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\blast_hspstream.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\blast_inline.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_kappa.c
 # End Source File
 # Begin Source File
 
@@ -99,6 +111,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_message.c
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\blast_options.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_psi.c
 # End Source File
 # Begin Source File
 
@@ -142,6 +158,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\greedy_align.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\hspstream_collector.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\link_hsps.c
 # End Source File
 # Begin Source File
@@ -154,7 +174,7 @@ SOURCE=..\..\..\..\..\algo\blast\core\lookup_wrap.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\..\algo\blast\core\matrix_freq_ratios.h
+SOURCE=..\..\..\..\..\algo\blast\core\matrix_freq_ratios.c
 # End Source File
 # Begin Source File
 
@@ -194,6 +214,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_def.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\blast_diagnostics.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\blast_dust.h
 # End Source File
 # Begin Source File
@@ -222,6 +246,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_hits.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\blast_hspstream.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\blast_lookup.h
 # End Source File
 # Begin Source File
@@ -231,6 +259,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\blast_message.h
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\blast_options.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\blast_psi.h
 # End Source File
 # Begin Source File
 
@@ -274,6 +306,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\greedy_align.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\core\hspstream_collector.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\core\link_hsps.h
 # End Source File
 # Begin Source File
@@ -283,6 +319,10 @@ SOURCE=..\..\..\..\..\algo\blast\core\lookup_util.h
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\core\lookup_wrap.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\core\matrix_freq_ratios.h
 # End Source File
 # Begin Source File
 

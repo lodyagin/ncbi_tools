@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.213 $
+* $Revision: 1.217 $
 *
 * File Description: 
 *
@@ -69,16 +69,16 @@ static void ListClauses (
   Boolean    suppress_final_and
 );
 
-static void LabelClauses (
-  ValNodePtr clause_list,
-  Uint1 biomol,
-  BioseqPtr bsp
-);
+static void LabelClauses 
+( ValNodePtr clause_list,
+  Uint1      biomol,
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag);
 
-static CharPtr GetProductName (
-  SeqFeatPtr cds,
-  BioseqPtr bsp
-);
+static CharPtr GetProductName 
+( SeqFeatPtr cds,
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag);
 
 #define DEFLINE_FEATLIST    1
 #define DEFLINE_CLAUSEPLUS  2
@@ -112,8 +112,8 @@ typedef struct featureclause {
 
 FeatureClausePtr NewFeatureClause (
   SeqFeatPtr sfp,
-  BioseqPtr bsp
-);
+  BioseqPtr bsp,
+  Boolean   suppress_locus_tag);
 
 static void PluralizeConsolidatedClauseDescription (
   FeatureClausePtr fcp
@@ -126,7 +126,8 @@ typedef Boolean (LIBCALLBACK *ShouldRemoveFunction) (
   BioseqPtr        bsp,
   Boolean          isLonely,
   Boolean          isRequested,
-  Boolean          isSegment
+  Boolean          isSegment,
+  Boolean          suppress_locus_tag
 );
 
 /* This section of the code contains some functions for dealing with
@@ -344,6 +345,8 @@ static ModifierItemGlobalData DefLineModifiers[] = {
   { "Isolation-source"     , FALSE, SUBSRC_isolation_source     , FALSE },
   { "Lab-host"             , FALSE, SUBSRC_lab_host             , FALSE },
   { "Map"                  , FALSE, SUBSRC_map                  , FALSE },
+  {	"Note-OrgMod"          , TRUE,  ORGMOD_other                , FALSE },
+  {	"Note-SubSrc"          , FALSE, SUBSRC_other                , FALSE },
   { "Old-lineage"          , TRUE , ORGMOD_old_lineage          , FALSE },
   { "Old-name"             , TRUE , ORGMOD_old_name             , FALSE },
   { "Pathovar"             , TRUE , ORGMOD_pathovar             , FALSE },
@@ -407,6 +410,8 @@ typedef enum {
   DEFLINE_POS_Isolation_source,
   DEFLINE_POS_Lab_host,
   DEFLINE_POS_Map,
+  DEFLINE_POS_Note_orgmod,
+  DEFLINE_POS_Note_subsrc,
   DEFLINE_POS_Old_lineage,
   DEFLINE_POS_Old_name,
   DEFLINE_POS_Pathovar,
@@ -2316,16 +2321,15 @@ static Boolean LIBCALLBACK IsGene (
   return TRUE;
 }
 
-static CharPtr GetGeneName (
-GeneRefPtr grp
-)
+static CharPtr GetGeneName (GeneRefPtr grp, Boolean suppress_locus_tag)
 {
   ValNodePtr syn;
 
   if (grp == NULL) return NULL;
   if (SeqMgrGeneIsSuppressed (grp)) return NULL;
   if (StringDoesHaveText (grp->locus)) return grp->locus;
-  if (StringDoesHaveText (grp->locus_tag)) return grp->locus_tag;
+  if (! suppress_locus_tag && StringDoesHaveText (grp->locus_tag)) 
+      return grp->locus_tag;
   if (StringDoesHaveText (grp->desc)) return grp->desc;
   for (syn = grp->syn; syn != NULL; syn = syn->next)
   {
@@ -2335,9 +2339,7 @@ GeneRefPtr grp
   return NULL;
 }
 
-static CharPtr GetAlleleName (
-GeneRefPtr grp
-)
+static CharPtr GetAlleleName (GeneRefPtr grp, Boolean suppress_locus_tag)
 {
   size_t  lenallele;
   size_t  lengenename;
@@ -2346,7 +2348,7 @@ GeneRefPtr grp
 
   if (grp == NULL) return NULL;
   if (StringHasNoText (grp->allele)) return NULL;
-  gene_name = GetGeneName (grp);
+  gene_name = GetGeneName (grp, suppress_locus_tag);
   if (StringHasNoText (gene_name)) return NULL;
   lenallele = StringLen (grp->allele);
   lengenename = StringLen (gene_name);
@@ -2378,20 +2380,20 @@ GeneRefPtr grp
 /* This function compares the gene names and allele names of the gene
  * to see if they match.
  */
-static Boolean DoGenesMatch (
-  GeneRefPtr grp1,
-  GeneRefPtr grp2
-)
+static Boolean DoGenesMatch 
+(GeneRefPtr grp1,
+ GeneRefPtr grp2,
+ Boolean suppress_locus_tag)
 {
   CharPtr name1;
   CharPtr name2;
 
-  name1 = GetGeneName (grp1);
-  name2 = GetGeneName (grp2);
+  name1 = GetGeneName (grp1, suppress_locus_tag);
+  name2 = GetGeneName (grp2, suppress_locus_tag);
   if (StringCmp (name1, name2) != 0) return FALSE;
   
-  name1 = GetAlleleName (grp1);
-  name2 = GetAlleleName (grp2);
+  name1 = GetAlleleName (grp1, suppress_locus_tag);
+  name2 = GetAlleleName (grp2, suppress_locus_tag);
   if ((name1 == NULL && name2 != NULL)
     || (name1 != NULL && name2 == NULL))
   {
@@ -3710,8 +3712,8 @@ static void GroupAltSplicedExons (
  */
 static void ExpandAltSplicedExons (
   ValNodePtr clause_list,
-  BioseqPtr  bsp
-)
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag)
 {
   ValNodePtr clause, rest_of_list, featlist, new_clause;
   FeatureClausePtr fcp, new_fcp;
@@ -3744,7 +3746,7 @@ static void ExpandAltSplicedExons (
       {
         new_clause = ValNodeNew (clause);
         if (new_clause == NULL) return;
-        new_fcp = NewFeatureClause (featlist->data.ptrvalue, bsp);
+        new_fcp = NewFeatureClause (featlist->data.ptrvalue, bsp, suppress_locus_tag);
         if (new_fcp == NULL) return;
         new_fcp->grp = fcp->grp;
         new_fcp->is_alt_spliced = fcp->is_alt_spliced;
@@ -3765,7 +3767,7 @@ static void ExpandAltSplicedExons (
     }
     else
     {
-      ExpandAltSplicedExons (fcp->featlist, bsp);
+      ExpandAltSplicedExons (fcp->featlist, bsp, suppress_locus_tag);
     }
   }
 }
@@ -3777,11 +3779,11 @@ static void ExpandAltSplicedExons (
  * than one clause, while other features should really only belong to
  * one clause.
  */
-static Boolean AddGeneToClauses (
-  SeqFeatPtr gene,
+static Boolean AddGeneToClauses 
+( SeqFeatPtr gene,
   CharPtr    gene_productname,
-  ValNodePtr clause_list
-)
+  ValNodePtr clause_list,
+  Boolean    suppress_locus_tag)
 {
   ValNodePtr    clause;
   FeatureClausePtr fcp;
@@ -3817,7 +3819,7 @@ static Boolean AddGeneToClauses (
         }
       }
 
-      if (fcp->grp != NULL && DoGenesMatch (fcp->grp, grp))
+      if (fcp->grp != NULL && DoGenesMatch (fcp->grp, grp, suppress_locus_tag))
       {
         used_gene = TRUE;
         if (gene_productname != NULL
@@ -3849,9 +3851,7 @@ static Boolean AddGeneToClauses (
 /* This function iterates through the list of features and calls
  * AddGeneToClauses for each gene feature it finds.
  */
-static void GroupGenes (
-  ValNodePtr PNTR clause_list
-)
+static void GroupGenes (ValNodePtr PNTR clause_list, Boolean suppress_locus_tag)
 {
   ValNodePtr  vnp;
   ValNodePtr  featlist;
@@ -3870,7 +3870,7 @@ static void GroupGenes (
     {
       AddGeneToClauses (featlist->data.ptrvalue,
                         fcp->feature_label_data.productname,
-                        vnp->next);
+                        vnp->next, suppress_locus_tag);
     }
   } 
 }
@@ -3883,11 +3883,11 @@ static void GroupGenes (
  * mRNA can apply to more than one clause, while other features should 
  * really only belong to one clause.
  */
-static Boolean AddmRNAToClauses (
-  SeqFeatPtr mRNA,
+static Boolean AddmRNAToClauses 
+( SeqFeatPtr mRNA,
   ValNodePtr clause_list,
-  BioseqPtr bsp
-)
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag)
 {
   ValNodePtr    clause;
   FeatureClausePtr fcp;
@@ -3900,7 +3900,7 @@ static Boolean AddmRNAToClauses (
   if (clause_list == NULL) return FALSE;
 
   used_mRNA = FALSE;
-  productname = GetProductName (mRNA, bsp);
+  productname = GetProductName (mRNA, bsp, suppress_locus_tag);
   if (productname == NULL) return TRUE;
 
   for (clause = clause_list; clause != NULL; clause = clause->next)
@@ -3953,7 +3953,8 @@ static Boolean AddmRNAToClauses (
  */
 static void GroupmRNAs (
   ValNodePtr PNTR clause_list,
-  BioseqPtr  bsp
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag
 )
 {
   ValNodePtr  vnp;
@@ -3971,7 +3972,7 @@ static void GroupmRNAs (
       && featlist->choice == DEFLINE_FEATLIST
       && IsmRNA (featlist->data.ptrvalue))
     {
-      if (AddmRNAToClauses (featlist->data.ptrvalue, *clause_list, bsp))
+      if (AddmRNAToClauses (featlist->data.ptrvalue, *clause_list, bsp, suppress_locus_tag))
       {
         fcp->delete_me = TRUE;
       }
@@ -4130,10 +4131,10 @@ static CharPtr GetFeatureTypeWord (
  * If none of the above conditions apply, the sequence indexing context label
  * will be used to obtain the product name for the feature.
  */
-static CharPtr GetProductName (
-  SeqFeatPtr cds,
-  BioseqPtr bsp
-)
+static CharPtr GetProductName 
+( SeqFeatPtr cds,
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag)
 {
   CharPtr protein_name;
   CharPtr semicolon;
@@ -4172,7 +4173,7 @@ static CharPtr GetProductName (
   {
     grp = (GeneRefPtr) cds->data.value.ptrvalue;
     if (grp == NULL) return NULL;
-    gene_name = GetGeneName (grp);
+    gene_name = GetGeneName (grp, suppress_locus_tag);
     if (grp->desc != NULL
       && StringCmp (grp->desc, gene_name) != 0)
     {
@@ -4222,8 +4223,8 @@ static CharPtr GetProductName (
 static FeatureClausePtr FindProductInFeatureList (
   FeatureClausePtr fcp,
   ValNodePtr       clause_list,
-  matchFunction    itemmatch
-)
+  matchFunction    itemmatch,
+  Boolean          suppress_locus_tag)
 {
   ValNodePtr       vnp;
   FeatureClausePtr vnp_fcp;
@@ -4233,7 +4234,7 @@ static FeatureClausePtr FindProductInFeatureList (
     if (vnp->choice == DEFLINE_CLAUSEPLUS && vnp->data.ptrvalue != NULL)
     {
       vnp_fcp = vnp->data.ptrvalue;
-      if (DoGenesMatch (vnp_fcp->grp, fcp->grp)
+      if (DoGenesMatch (vnp_fcp->grp, fcp->grp, suppress_locus_tag)
         && vnp_fcp->featlist != NULL
         && vnp_fcp->featlist->choice == DEFLINE_FEATLIST
         && itemmatch (vnp_fcp->featlist->data.ptrvalue))
@@ -4242,7 +4243,8 @@ static FeatureClausePtr FindProductInFeatureList (
       }
       else
       {
-        vnp_fcp = FindProductInFeatureList (fcp, vnp_fcp->featlist, itemmatch);
+        vnp_fcp = FindProductInFeatureList (fcp, vnp_fcp->featlist,
+                                            itemmatch, suppress_locus_tag);
         if (vnp_fcp != NULL) return vnp_fcp;
       }
     }
@@ -4258,10 +4260,10 @@ static FeatureClausePtr FindProductInFeatureList (
  * If there is a gene and a product, the description will be the name of
  * the product followed by the name of the gene in parentheses.
  */
-static CharPtr GetGeneProtDescription (
-  FeatureClausePtr fcp,
-  BioseqPtr        bsp
-)
+static CharPtr GetGeneProtDescription 
+( FeatureClausePtr fcp,
+  BioseqPtr        bsp,
+  Boolean          suppress_locus_tag)
 {
   SeqFeatPtr    sfp;
   CharPtr    protein_name;
@@ -4285,7 +4287,7 @@ static CharPtr GetGeneProtDescription (
   }
   else
   {
-    protein_name = GetProductName (sfp, bsp);
+    protein_name = GetProductName (sfp, bsp, suppress_locus_tag);
     if (protein_name == NULL && IsGene (sfp))
     {
       
@@ -4296,7 +4298,7 @@ static CharPtr GetGeneProtDescription (
     description_length += StringLen (protein_name);
   }
      
-  gene_name = GetGeneName (fcp->grp);
+  gene_name = GetGeneName (fcp->grp, suppress_locus_tag);
   if (gene_name != NULL)
   {
     description_length += StringLen (gene_name);
@@ -4339,10 +4341,10 @@ static matchFunction productfeatures[] = {
 /* This function finds gene features without products and looks for 
  * features that might provide products for them.
  */
-static void FindGeneProducts (
-  ValNodePtr clause_list,
-  BioseqPtr  bsp
-)
+static void FindGeneProducts 
+( ValNodePtr clause_list,
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag)
 {
   ValNodePtr       vnp;
   FeatureClausePtr fcp, productfcp;
@@ -4364,7 +4366,8 @@ static void FindGeneProducts (
         for (i=0; i < NumProductFeatureTypes && productfcp == NULL; i++)
         {
           productfcp = FindProductInFeatureList (fcp, clause_list,
-                                                 productfeatures[i]);
+                                                 productfeatures[i],
+                                                 suppress_locus_tag);
         }
         if (productfcp != NULL)
         {
@@ -4377,7 +4380,8 @@ static void FindGeneProducts (
           else
           {
             fcp->feature_label_data.productname
-                  = GetProductName (productfcp->featlist->data.ptrvalue, bsp);
+                  = GetProductName (productfcp->featlist->data.ptrvalue, 
+                                    bsp, suppress_locus_tag);
           }
           if (fcp->feature_label_data.description != NULL)
           {
@@ -4385,12 +4389,12 @@ static void FindGeneProducts (
             fcp->feature_label_data.description = NULL;
           }
           fcp->feature_label_data.description =
-            GetGeneProtDescription (fcp, bsp);
+            GetGeneProtDescription (fcp, bsp, suppress_locus_tag);
         }
       }
       else
       {
-        FindGeneProducts (fcp->featlist, bsp);
+        FindGeneProducts (fcp->featlist, bsp, suppress_locus_tag);
       }
     }
   }
@@ -4434,10 +4438,10 @@ static CharPtr GetExonDescription (
   return label;
 }
 
-static CharPtr GetFeatureDescription (
-  FeatureClausePtr fcp,
-  BioseqPtr bsp
-)
+static CharPtr GetFeatureDescription 
+( FeatureClausePtr fcp,
+  BioseqPtr        bsp,
+  Boolean          suppress_locus_tag)
 {
   SeqFeatPtr    sfp;
 
@@ -4488,7 +4492,7 @@ static CharPtr GetFeatureDescription (
   }
   else
   {
-    return GetGeneProtDescription (fcp, bsp);
+    return GetGeneProtDescription (fcp, bsp, suppress_locus_tag);
   }
 }
 
@@ -4548,11 +4552,11 @@ static void LIBCALLBACK GetPromoterFeatureLabel (
  * subfeatures of the clause, or the interval could be a combination of the
  * last two items if the feature is a CDS.
  */
-static CharPtr GetGenericInterval (
-  FeatureClausePtr fcp,
-  Uint1 biomol,
-  BioseqPtr bsp
-)
+static CharPtr GetGenericInterval 
+( FeatureClausePtr fcp,
+  Uint1            biomol,
+  BioseqPtr        bsp,
+  Boolean          suppress_locus_tag)
 {
   CharPtr interval;
   Boolean partial5, partial3;
@@ -4589,7 +4593,7 @@ static CharPtr GetGenericInterval (
     {
       suppress_final_and = TRUE;
     }
-    LabelClauses (featlist, biomol, bsp);
+    LabelClauses (featlist, biomol, bsp, suppress_locus_tag);
     ListClauses (featlist, &strings, FALSE, suppress_final_and);
     subfeatlist = MergeValNodeStrings (strings, FALSE);
 	ValNodeFreeData (strings);
@@ -4647,12 +4651,12 @@ static CharPtr GetGenericInterval (
  * for more of the specific feature types, to reduce the number of times
  * that the feature must be identified as being a certain type.
  */ 
-static void LIBCALLBACK GetGenericFeatureLabel (
-  FeatureClausePtr fcp,
-  BioseqPtr       bsp,
-  Uint1           biomol,
-  FeatureLabelPtr flp
-)
+static void LIBCALLBACK GetGenericFeatureLabel 
+( FeatureClausePtr fcp,
+  BioseqPtr        bsp,
+  Uint1            biomol,
+  FeatureLabelPtr  flp,
+  Boolean          suppress_locus_tag)
 {
   SeqFeatPtr main_feat;
   
@@ -4673,13 +4677,13 @@ static void LIBCALLBACK GetGenericFeatureLabel (
   }
   if (flp->productname == NULL)
   {
-    flp->productname = GetProductName (main_feat, bsp);
+    flp->productname = GetProductName (main_feat, bsp, suppress_locus_tag);
   }
   if (flp->description == NULL
     && (! IsMiscRNA (main_feat)
       || StringStr (flp->productname, "spacer") == NULL ))
   {
-    flp->description = GetFeatureDescription (fcp, bsp);
+    flp->description = GetFeatureDescription (fcp, bsp, suppress_locus_tag);
   }
 
 }
@@ -4711,11 +4715,11 @@ typedef enum {
  NumDefLineFeatLabels
 } DefLineFeatLabel;
 
-static void LabelFeature (
-  BioseqPtr       bsp,
-  Uint1           biomol,
-  FeatureClausePtr new_clauseplus
-)
+static void LabelFeature 
+( BioseqPtr        bsp,
+  Uint1            biomol,
+  FeatureClausePtr new_clauseplus,
+  Boolean          suppress_locus_tag)
 {
   Int4             i;
   SeqFeatPtr       main_feat;
@@ -4726,11 +4730,12 @@ static void LabelFeature (
   {
     main_feat = (SeqFeatPtr) new_clauseplus->featlist->data.ptrvalue;
     
-    new_clauseplus->allelename = GetAlleleName (new_clauseplus->grp);
+    new_clauseplus->allelename = GetAlleleName (new_clauseplus->grp,
+                                                suppress_locus_tag);
     if (new_clauseplus->interval == NULL)
     {
       new_clauseplus->interval =
-                  GetGenericInterval (new_clauseplus, biomol, bsp);
+                  GetGenericInterval (new_clauseplus, biomol, bsp, suppress_locus_tag);
     }
 
     for (i=0; i < NumDefLineFeatLabels; i++)
@@ -4745,7 +4750,7 @@ static void LabelFeature (
     }
 
     GetGenericFeatureLabel ( new_clauseplus, bsp, biomol, 
-                           &new_clauseplus->feature_label_data);
+                           &new_clauseplus->feature_label_data, suppress_locus_tag);
     return;
   }
 }
@@ -4919,11 +4924,11 @@ static void TrimUnwantedWordsFromAltSpliceProductName (
  * must have the same gene, must share a complete interval, and must have
  * similarly named products.
  */
-static CharPtr MeetAltSpliceRules (
-  FeatureClausePtr cdsfcp1,
+static CharPtr MeetAltSpliceRules 
+( FeatureClausePtr cdsfcp1,
   FeatureClausePtr cdsfcp2,
-  BioseqPtr bsp
-)
+  BioseqPtr        bsp,
+  Boolean          suppress_locus_tag)
 {
   SeqFeatPtr cds1, cds2;
   CharPtr match_string;
@@ -4937,7 +4942,7 @@ static CharPtr MeetAltSpliceRules (
 
   cds1 = cdsfcp1->featlist->data.ptrvalue;
   cds2 = cdsfcp2->featlist->data.ptrvalue;
-  if (! DoGenesMatch (cdsfcp1->grp, cdsfcp2->grp))
+  if (! DoGenesMatch (cdsfcp1->grp, cdsfcp2->grp, suppress_locus_tag))
     return NULL;
 
   if ( (res = TestFeatOverlap (cds1, cds2, COMMON_INTERVAL)) != -1)
@@ -5048,10 +5053,10 @@ static void MoveSubclauses (
 /* a comment and a data.choice value that indicates alt splicing */
 /* we remove the second alternatively spliced CDS feature from the list */
 
-static void FindAltSplices (
-  ValNodePtr clause_list,
-  BioseqPtr bsp
-)
+static void FindAltSplices 
+( ValNodePtr clause_list,
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag)
 {
   FeatureClausePtr  fcp1, fcp2;
   ValNodePtr cdsclause1, cdsclause2;
@@ -5069,7 +5074,7 @@ static void FindAltSplices (
     if (fcp1->feature_label_data.productname == NULL)
     {
       fcp1->feature_label_data.productname = 
-           GetProductName (fcp1->featlist->data.ptrvalue, bsp);
+           GetProductName (fcp1->featlist->data.ptrvalue, bsp, suppress_locus_tag);
     }
     searchclause = cdsclause1->next;
     cdsclause2 = FindNextCDSClause (searchclause);
@@ -5079,9 +5084,9 @@ static void FindAltSplices (
       if (fcp2->feature_label_data.productname == NULL)
       {
         fcp2->feature_label_data.productname =
-           GetProductName (fcp2->featlist->data.ptrvalue, bsp);
+           GetProductName (fcp2->featlist->data.ptrvalue, bsp, suppress_locus_tag);
       }
-      combined_protein_name = MeetAltSpliceRules (fcp1, fcp2, bsp);
+      combined_protein_name = MeetAltSpliceRules (fcp1, fcp2, bsp, suppress_locus_tag);
       if (combined_protein_name != NULL)
       {
         /* get rid of variant, splice variant, splice product, isoform, etc.*/
@@ -5134,18 +5139,18 @@ static void FindAltSplices (
   DeleteFeatureClauses (&clause_list);
 }
 
-static void LabelClauses (
-  ValNodePtr clause_list,
-  Uint1 biomol,
-  BioseqPtr bsp
-)
+static void LabelClauses 
+( ValNodePtr clause_list,
+  Uint1      biomol,
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag)
 {
   ValNodePtr clause;
  
   clause = clause_list;
   while (clause != NULL)
   { 
-    LabelFeature ( bsp, biomol, clause->data.ptrvalue);
+    LabelFeature ( bsp, biomol, clause->data.ptrvalue, suppress_locus_tag);
     clause = clause->next;
   }
 }
@@ -5176,10 +5181,10 @@ static CharPtr separators [] = {
 
 #define num_separators 3
 
-static ValNodePtr GetMiscRNAelements (
-  SeqFeatPtr misc_rna,
-  BioseqPtr  bsp
-)
+static ValNodePtr GetMiscRNAelements 
+( SeqFeatPtr misc_rna,
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag)
 {
   CharPtr buffer;
   Int4    i, best_i;
@@ -5198,7 +5203,7 @@ static ValNodePtr GetMiscRNAelements (
   to_free = NULL;
 
   if (misc_rna == NULL) return NULL;
-  buffer = GetProductName (misc_rna, bsp);
+  buffer = GetProductName (misc_rna, bsp, suppress_locus_tag);
   to_free = buffer;
   if (buffer == NULL) 
   {
@@ -5265,7 +5270,7 @@ static ValNodePtr GetMiscRNAelements (
          word_i++) {}
     if (word_i < NUM_MISC_RNA_WORDS)
     {
-      fcp = NewFeatureClause ( misc_rna, bsp);
+      fcp = NewFeatureClause ( misc_rna, bsp, suppress_locus_tag);
       if (fcp == NULL) return NULL;
       if (word_i == MISC_RNA_WORD_INTERNAL_SPACER
         || word_i == MISC_RNA_WORD_EXTERNAL_SPACER
@@ -5345,8 +5350,8 @@ static ValNodePtr GetMiscRNAelements (
  */
 static void ReplaceRNAClauses (
   ValNodePtr PNTR clause_list,
-  BioseqPtr       bsp
-)
+  BioseqPtr       bsp,
+  Boolean         suppress_locus_tag)
 {
   FeatureClausePtr fcp;
   SeqFeatPtr main_feat;
@@ -5368,7 +5373,7 @@ static void ReplaceRNAClauses (
   
     if (IsrRNA (main_feat) || IsMiscRNA (main_feat))
     {
-      replacement_clauses = GetMiscRNAelements ( main_feat, bsp );
+      replacement_clauses = GetMiscRNAelements ( main_feat, bsp, suppress_locus_tag );
       if (replacement_clauses != NULL)
       {
         for (vnp = replacement_clauses; vnp->next != NULL; vnp = vnp->next) {}
@@ -6309,7 +6314,7 @@ static void ListClauses (
                       "pseudogene mRNA")==0)
       && clause_len > StringLen ("precursor")
       && StringCmp ( thisclause->feature_label_data.description
-                     + clause_len - StringLen ("precursor"),
+                     + clause_len - StringLen ("precursor") - 1,
                      "precursor") == 0)
     {
       print_comma_between_description_and_typeword = TRUE;
@@ -6483,7 +6488,8 @@ static Boolean LIBCALLBACK ShouldRemoveExon (
   BioseqPtr bsp,
   Boolean isLonely,
   Boolean isRequested,
-  Boolean isSegment
+  Boolean isSegment,
+  Boolean suppress_locus_tag
 )
 {
   Boolean partial3, partial5;
@@ -6513,13 +6519,13 @@ static Boolean LIBCALLBACK ShouldRemoveCDS (
   BioseqPtr bsp,
   Boolean isLonely,
   Boolean isRequested,
-  Boolean isSegment
-)
+  Boolean isSegment,
+  Boolean suppress_locus_tag)
 {
   CharPtr description;
   Boolean retval = FALSE;
 
-  description = GetGeneProtDescription (this_fcp, bsp);
+  description = GetGeneProtDescription (this_fcp, bsp, suppress_locus_tag);
   if (StringHasNoText (description))
   {
     retval = TRUE;
@@ -6534,7 +6540,8 @@ static Boolean LIBCALLBACK ShouldRemoveNoncodingProductFeat (
   FeatureClausePtr this_fcp,
   BioseqPtr bsp, Boolean isLonely,
   Boolean isRequested,
-  Boolean isSegment
+  Boolean isSegment,
+  Boolean suppress_locus_tag
 )
 {
   if (isRequested) return FALSE;
@@ -6547,7 +6554,8 @@ static Boolean LIBCALLBACK ShouldRemovePromoter (
   FeatureClausePtr this_fcp,
   BioseqPtr bsp, Boolean isLonely,
   Boolean isRequested,
-  Boolean isSegment
+  Boolean isSegment,
+  Boolean suppress_locus_tag
 )
 {
   if (isLonely || isRequested) return FALSE;
@@ -6561,7 +6569,8 @@ static Boolean LIBCALLBACK ShouldRemoveLTR (
   BioseqPtr bsp,
   Boolean isLonely,
   Boolean isRequested,
-  Boolean isSegment
+  Boolean isSegment,
+  Boolean suppress_locus_tag
 )
 {
   if (isLonely || isRequested)
@@ -6577,7 +6586,8 @@ static Boolean LIBCALLBACK ShouldRemove3UTR (
   BioseqPtr bsp,
   Boolean isLonely,
   Boolean isRequested,
-  Boolean isSegment
+  Boolean isSegment,
+  Boolean suppress_locus_tag
 )
 {
   if (isLonely || isRequested)
@@ -6593,7 +6603,8 @@ static Boolean LIBCALLBACK ShouldRemove5UTR (
   BioseqPtr bsp,
   Boolean isLonely,
   Boolean isRequested,
-  Boolean isSegment
+  Boolean isSegment,
+  Boolean suppress_locus_tag
 )
 {
   if (isLonely || isRequested)
@@ -6608,28 +6619,29 @@ static Boolean LIBCALLBACK ShouldRemoveIntron (
   FeatureClausePtr this_fcp,
   BioseqPtr bsp, Boolean isLonely,
   Boolean isRequested,
-  Boolean isSegment
+  Boolean isSegment,
+  Boolean suppress_locus_tag
 )
 {
   if (isLonely || isRequested) return FALSE;
   else return TRUE;
 }
 
-static Boolean LIBCALLBACK ShouldRemoveGeneric (
-  SeqFeatPtr sfp,
+static Boolean LIBCALLBACK ShouldRemoveGeneric 
+( SeqFeatPtr sfp,
   FeatureClausePtr parent_fcp,
   FeatureClausePtr this_fcp,
   BioseqPtr bsp,
   Boolean isLonely,
   Boolean isRequested,
-  Boolean isSegment
-)
+  Boolean isSegment,
+  Boolean suppress_locus_tag)
 {
   CharPtr productname;
   Boolean rval;
 
   rval = FALSE;
-  if (IsMiscRNA (sfp) && ( productname = GetProductName (sfp, bsp)) != NULL)
+  if (IsMiscRNA (sfp) && ( productname = GetProductName (sfp, bsp, suppress_locus_tag)) != NULL)
   {
     if (StringStr (productname, "trans-spliced leader") != NULL)
     {
@@ -6688,6 +6700,7 @@ typedef struct deflinefeaturerequestlist {
   Boolean                remove_subfeatures;
   DefLineType            feature_list_type;
   Int4                   misc_feat_parse_rule;
+  Boolean                suppress_locus_tags;
 } DeflineFeatureRequestList, PNTR DeflineFeatureRequestListPtr;
 
 static void InitFeatureRequests (
@@ -6704,6 +6717,7 @@ static void InitFeatureRequests (
   feature_requests->remove_subfeatures = FALSE;
   feature_requests->feature_list_type = DEFLINE_USE_FEATURES;
   feature_requests->misc_feat_parse_rule = 2;
+  feature_requests->suppress_locus_tags = FALSE;
 }
 
 static Boolean RemoveCondition (
@@ -6722,17 +6736,19 @@ static Boolean RemoveCondition (
   {
     if (remove_items[i].itemmatch (sfp))
       return remove_items[i].ShouldRemove (sfp, parent_fcp, this_fcp, bsp,
-      isLonely, feature_requests->items[i].keep, isSegment);
+                                           isLonely, feature_requests->items[i].keep,
+                                           isSegment,
+                                           feature_requests->suppress_locus_tags);
   }
   return ShouldRemoveGeneric(sfp, parent_fcp, this_fcp, bsp, isLonely, FALSE,
-                             isSegment);
+                             isSegment, feature_requests->suppress_locus_tags);
 }
 
-static Boolean FindOtherGeneClause (
-  ValNodePtr feature_list,
+static Boolean FindOtherGeneClause 
+( ValNodePtr feature_list,
   ValNodePtr me,
-  GeneRefPtr grp
-)
+  GeneRefPtr grp,
+  Boolean    suppress_locus_tag)
 {
   ValNodePtr vnp;
   FeatureClausePtr fcp;
@@ -6747,11 +6763,11 @@ static Boolean FindOtherGeneClause (
       fcp = vnp->data.ptrvalue;
       if (fcp->delete_me) continue;
       if ( fcp->grp == grp
-        || (fcp->grp != NULL && DoGenesMatch (fcp->grp, grp)))
+        || (fcp->grp != NULL && DoGenesMatch (fcp->grp, grp, suppress_locus_tag)))
       {
         return TRUE;
       }
-      if ( FindOtherGeneClause (fcp->featlist, me, grp))
+      if ( FindOtherGeneClause (fcp->featlist, me, grp, suppress_locus_tag))
       {
         return TRUE;
       }
@@ -6760,11 +6776,11 @@ static Boolean FindOtherGeneClause (
   return FALSE;
 }
  
-static void RemoveGenesMentionedElsewhere (
-  ValNodePtr PNTR feature_list,
-  ValNodePtr search_list,
-  Boolean    delete_now
-)
+static void RemoveGenesMentionedElsewhere 
+( ValNodePtr PNTR feature_list,
+  ValNodePtr      search_list,
+  Boolean         delete_now,
+  Boolean         suppress_locus_tag)
 {
   ValNodePtr vnp;
   FeatureClausePtr fcp;
@@ -6780,13 +6796,13 @@ static void RemoveGenesMentionedElsewhere (
       }
       if ( IsGene (fcp->featlist->data.ptrvalue)
         && fcp->featlist->next == NULL
-        && FindOtherGeneClause ( search_list, vnp, fcp->grp))
+        && FindOtherGeneClause ( search_list, vnp, fcp->grp, suppress_locus_tag))
       {
         fcp->delete_me = TRUE;
       }
       else
       {
-        RemoveGenesMentionedElsewhere ( &(fcp->featlist), search_list, FALSE);
+        RemoveGenesMentionedElsewhere ( &(fcp->featlist), search_list, FALSE, suppress_locus_tag);
       }
     }
   }
@@ -7295,8 +7311,8 @@ static void ConsolidateClauses (
   ValNodePtr PNTR list,
   BioseqPtr  bsp,
   Uint1      biomol,
-  Boolean    delete_now
-)
+  Boolean    delete_now,
+  Boolean    suppress_locus_tag)
 {
   ValNodePtr       vnp;
   FeatureClausePtr fcp;
@@ -7317,14 +7333,14 @@ static void ConsolidateClauses (
       continue;
     }
 
-    ConsolidateClauses (&(fcp->featlist), bsp, biomol, FALSE);
+    ConsolidateClauses (&(fcp->featlist), bsp, biomol, FALSE, suppress_locus_tag);
 
     if (last_cds_fcp == NULL)
     {
       last_cds_fcp = fcp;
       if (fcp->feature_label_data.description == NULL)
       {
-        last_desc = GetGeneProtDescription (fcp, bsp);
+        last_desc = GetGeneProtDescription (fcp, bsp, suppress_locus_tag);
       }
       else
       {
@@ -7344,7 +7360,7 @@ static void ConsolidateClauses (
     {
       if (fcp->feature_label_data.description == NULL)
       {
-        new_desc = GetGeneProtDescription (fcp, bsp);
+        new_desc = GetGeneProtDescription (fcp, bsp, suppress_locus_tag);
       }
       else
       {
@@ -7385,7 +7401,7 @@ static void ConsolidateClauses (
           MemFree (last_cds_fcp->interval);
         }
         last_cds_fcp->interval =
-                  GetGenericInterval (last_cds_fcp, biomol, bsp);
+                  GetGenericInterval (last_cds_fcp, biomol, bsp, suppress_locus_tag);
         MemFree (new_desc);
       }
       else
@@ -7405,8 +7421,8 @@ static void ConsolidateClauses (
 
 static void CountUnknownGenes (
   ValNodePtr PNTR clause_list,
-  BioseqPtr bsp
-)
+  BioseqPtr       bsp,
+  Boolean         suppress_locus_tag)
 {
   FeatureClausePtr fcp, new_fcp;
   ValNodePtr vnp, new_vnp;
@@ -7423,8 +7439,8 @@ static void CountUnknownGenes (
       && (fcp = vnp->data.ptrvalue) != NULL
       && ! fcp->is_unknown) 
     {
-      CountUnknownGenes (&(fcp->featlist), bsp);
-      gene_name = GetGeneProtDescription (fcp, bsp);
+      CountUnknownGenes (&(fcp->featlist), bsp, suppress_locus_tag);
+      gene_name = GetGeneProtDescription (fcp, bsp, suppress_locus_tag);
       if (StringCmp (gene_name, "unknown") == 0
         && fcp->featlist != NULL
         && fcp->featlist->choice == DEFLINE_FEATLIST)
@@ -7433,7 +7449,8 @@ static void CountUnknownGenes (
         {
           new_vnp = ValNodeNew (*clause_list);
           if (new_vnp == NULL) return;
-          new_fcp = NewFeatureClause (fcp->featlist->data.ptrvalue, bsp);
+          new_fcp = NewFeatureClause (fcp->featlist->data.ptrvalue, 
+                                      bsp, suppress_locus_tag);
           new_fcp->is_unknown = TRUE;
           new_vnp->choice = DEFLINE_CLAUSEPLUS;
           new_vnp->data.ptrvalue = new_fcp;
@@ -7481,10 +7498,10 @@ static void ReplaceDefinitionLine (
   MemFree (defline);
 }
 
-FeatureClausePtr NewFeatureClause (
-  SeqFeatPtr sfp,
-  BioseqPtr  bsp
-)
+FeatureClausePtr NewFeatureClause 
+( SeqFeatPtr sfp,
+  BioseqPtr  bsp,
+  Boolean    suppress_locus_tag)
 {
   FeatureClausePtr fcp;
   Boolean          partial5, partial3;
@@ -7530,7 +7547,7 @@ FeatureClausePtr NewFeatureClause (
   }
   if (IsCDS (sfp))
   {
-    fcp->feature_label_data.productname = GetProductName (sfp, bsp);
+    fcp->feature_label_data.productname = GetProductName (sfp, bsp, suppress_locus_tag);
   }
   fcp->featlist = ValNodeNew (NULL);
   if (fcp->featlist == NULL)
@@ -7545,9 +7562,7 @@ FeatureClausePtr NewFeatureClause (
   return fcp;
 }
 
-static ValNodePtr GetFeatureList (
-  BioseqPtr bsp
-)
+static ValNodePtr GetFeatureList (BioseqPtr bsp, Boolean suppress_locus_tag)
 {
   ValNodePtr        head, vnp;
   SeqFeatPtr        sfp;
@@ -7563,7 +7578,7 @@ static ValNodePtr GetFeatureList (
   {
     if (IsRecognizedFeature (sfp))
     {
-      fcp = NewFeatureClause (sfp, bsp);
+      fcp = NewFeatureClause (sfp, bsp, suppress_locus_tag);
       if (fcp == NULL) return NULL;
       fcp->numivals = fcontext.numivals;
       fcp->ivals = fcontext.ivals;
@@ -7834,7 +7849,8 @@ static Boolean IntervalIntersectsIvals
 static ValNodePtr GrabTraversingGenes 
 (ValNodePtr              parent_feature_list,
  SeqMgrSegmentContextPtr context,
- BioseqPtr               parent_bsp)
+ BioseqPtr               parent_bsp,
+ Boolean                 suppress_locus_tag)
 {
   FeatureClausePtr  fcp, new_fcp;
   ValNodePtr        clause;
@@ -7855,7 +7871,8 @@ static ValNodePtr GrabTraversingGenes
         &&  fcp->ivals != NULL && fcp->numivals > 0)
     {
       if (IntervalIntersectsIvals (fcp->numivals, fcp->ivals, context)) {
-        new_fcp = NewFeatureClause (fcp->featlist->data.ptrvalue, parent_bsp);
+        new_fcp = NewFeatureClause (fcp->featlist->data.ptrvalue, parent_bsp,
+                                    suppress_locus_tag);
         if (new_fcp == NULL) return FALSE;
         vnp = ValNodeNew (segment_feature_list);
         if (vnp == NULL) return FALSE;
@@ -7883,8 +7900,7 @@ static CharPtr BuildFeatureClauses (
 
 static Boolean LIBCALLBACK GetFeatureClauseForSeg (
   SeqLocPtr slp,
-  SeqMgrSegmentContextPtr context
-)
+  SeqMgrSegmentContextPtr context)
 {
   SegmentDefLineFeatureClausePtr sdlp;
   ValNodePtr        clause, tmp_parent_list;
@@ -7932,7 +7948,8 @@ static Boolean LIBCALLBACK GetFeatureClauseForSeg (
            && stop >= context->cumOffset)
       {
         new_fcp = NewFeatureClause (fcp->featlist->data.ptrvalue,
-                                    sdlp->parent_bsp);
+                                    sdlp->parent_bsp, 
+                                    sdlp->feature_requests->suppress_locus_tags);
         if (new_fcp == NULL) return FALSE;
         vnp = ValNodeNew (segment_feature_list);
         if (vnp == NULL) return FALSE;
@@ -7945,7 +7962,8 @@ static Boolean LIBCALLBACK GetFeatureClauseForSeg (
 
   if (segment_feature_list == NULL) {
     segment_feature_list = GrabTraversingGenes (sdlp->parent_feature_list,
-                                                context, sdlp->parent_bsp);
+                                                context, sdlp->parent_bsp,
+                                                sdlp->feature_requests->suppress_locus_tags);
   }
 
   entityID = ObjMgrGetEntityIDForPointer (bsp);
@@ -7996,15 +8014,15 @@ static CharPtr BuildFeatureClauses (
   if (feature_requests->feature_list_type == DEFLINE_USE_FEATURES
     && ( ! isSegment || (seg_feature_list != NULL && *seg_feature_list != NULL)))
   {
-    GroupmRNAs (feature_list, bsp);
+    GroupmRNAs (feature_list, bsp, feature_requests->suppress_locus_tags);
 
     /* genes are added to other clauses */
-    GroupGenes (feature_list);
+    GroupGenes (feature_list, feature_requests->suppress_locus_tags);
 
     if (! feature_requests->suppress_alt_splice_phrase)
     {
       /* find alt-spliced CDSs */
-      FindAltSplices (*feature_list, bsp);
+      FindAltSplices (*feature_list, bsp, feature_requests->suppress_locus_tags);
     }
 
     GroupAltSplicedExons (feature_list, bsp, TRUE);
@@ -8012,9 +8030,9 @@ static CharPtr BuildFeatureClauses (
     /* now group clauses */
     GroupAllClauses ( feature_list, bsp );
 
-    ExpandAltSplicedExons (*feature_list, bsp);
+    ExpandAltSplicedExons (*feature_list, bsp, feature_requests->suppress_locus_tags);
 
-    FindGeneProducts (*feature_list, bsp);
+    FindGeneProducts (*feature_list, bsp, feature_requests->suppress_locus_tags);
 
     if (seg_feature_list != NULL && *seg_feature_list != NULL)
     {
@@ -8027,7 +8045,8 @@ static CharPtr BuildFeatureClauses (
     /* remove exons and other unwanted features */
     RemoveUnwantedFeatures (feature_list, bsp, isSegment, feature_requests);
 
-    RemoveGenesMentionedElsewhere (feature_list, *feature_list, TRUE);
+    RemoveGenesMentionedElsewhere (feature_list, *feature_list, TRUE,
+                                   feature_requests->suppress_locus_tags);
 
     if (feature_requests->remove_subfeatures)
     {
@@ -8036,7 +8055,7 @@ static CharPtr BuildFeatureClauses (
 
     DeleteOperonSubfeatures (feature_list, TRUE);
 
-    CountUnknownGenes (feature_list, bsp);
+    CountUnknownGenes (feature_list, bsp, feature_requests->suppress_locus_tags);
 
     if (feature_requests->misc_feat_parse_rule == 1)
     {
@@ -8047,7 +8066,7 @@ static CharPtr BuildFeatureClauses (
       RemoveUnwantedMiscFeats (feature_list, TRUE);
     }
 
-    ReplaceRNAClauses (feature_list, bsp);
+    ReplaceRNAClauses (feature_list, bsp, feature_requests->suppress_locus_tags);
 
     /* take any exons on the minus strand */
     /* and reverse their order within the clause */
@@ -8055,9 +8074,11 @@ static CharPtr BuildFeatureClauses (
 
     RenameExonSequences ( feature_list, bsp, TRUE);
 
-    LabelClauses (*feature_list, molecule_type, bsp);
+    LabelClauses (*feature_list, molecule_type, bsp, 
+                  feature_requests->suppress_locus_tags);
 
-    ConsolidateClauses (feature_list, bsp, molecule_type, TRUE);
+    ConsolidateClauses (feature_list, bsp, molecule_type, TRUE,
+                        feature_requests->suppress_locus_tags);
 
     /* this allows genes to be listed together even if they are from */
     /* separate sequences */
@@ -8096,17 +8117,26 @@ static Int2 GetProductFlagFromCDSProductNames (BioseqPtr bsp)
   SeqFeatPtr        cds = NULL;
   Int2              product_flag;
   Int2              i;
+  CharPtr           found;
+  Char              ch;
 
   product_flag = 0;
-  for (cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, 0, &context); cds != NULL && product_flag == 0; cds = cds->next)
+  for (cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, 0, &context);
+       cds != NULL && product_flag == 0;
+       cds = cds->next)
   {
-	for (i = 1; organelleByPopup[i] != NULL && product_flag == 0; i++)
-	{
-      if (StringStr (context.label, organelleByPopup[i]))
-	  {
-	    product_flag = i;
-	  }
-	}
+    for (i = 1; organelleByPopup[i] != NULL && product_flag == 0; i++)
+    {
+      found = StringStr (context.label, organelleByPopup[i]);
+      if (found != NULL)
+      {
+        ch = *(found + StringLen (organelleByPopup[i]));
+        if (ch == 0 || ch == ' ')
+        {
+          product_flag = i;
+        }
+      }
+    }
   }
 
   return product_flag;
@@ -8162,7 +8192,8 @@ static void BuildDefLineFeatClauseList (
 
       sdld.parent_bsp = bsp;
       sdld.molecule_type = GetMoleculeType (bsp, entityID);
-      sdld.parent_feature_list = GetFeatureList (bsp);
+      sdld.parent_feature_list = GetFeatureList (bsp, 
+                                                 feature_requests->suppress_locus_tags);
 
       sdld.feature_requests =  feature_requests;
       sdld.product_flag = product_flag;
@@ -8201,7 +8232,7 @@ static void BuildDefLineFeatClauseList (
   if (bsp == NULL) return;
   if ( SpecialHandlingForSpecialTechniques (bsp)) return;
   molecule_type = GetMoleculeType (bsp, entityID);
-  head = GetFeatureList (bsp);
+  head = GetFeatureList (bsp, feature_requests->suppress_locus_tags);
 
   /* get default product flag if necessary */
   if (product_flag == -1 || product_flag == DEFAULT_ORGANELLE_CLAUSE) {
@@ -8280,6 +8311,7 @@ typedef struct deflineformdata {
   GrouP     featureOptsGrp;
   PopuP     misc_feat_parse_rule;
   ButtoN    alternate_splice_flag;
+  ButtoN    suppress_locus_tags;
 } DefLineFormData, PNTR DefLineFormPtr;
 
 static void DefLineFormMessageProc (ForM f, Int2 mssg)
@@ -8434,6 +8466,9 @@ static void DoAutoDefLine (ButtoN b)
 
   dlfp->feature_requests.remove_subfeatures = 
                  GetStatus (dlfp->remove_subfeatures);
+
+  dlfp->feature_requests.suppress_locus_tags = 
+                 GetStatus (dlfp->suppress_locus_tags);
 
   dlfp->feature_requests.misc_feat_parse_rule = 
                  GetValue (dlfp->misc_feat_parse_rule);
@@ -8796,6 +8831,10 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
             "Suppress transposon and insertion sequence subfeatures", NULL);
   SetStatus (dlfp->remove_subfeatures, FALSE);
 
+  dlfp->suppress_locus_tags = CheckBox (dlfp->featureOptsGrp, 
+            "Suppress locus tags", NULL);
+  SetStatus (dlfp->suppress_locus_tags, FALSE);
+
   g = NormalGroup (dlfp->featureOptsGrp, 3, 0,
                    "Optional Features", programFont, NULL);
   
@@ -8824,6 +8863,7 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
                  (HANDLE) dlfp->alternate_splice_flag,
                  (HANDLE) dlfp->suppress_alt_splice_phrase,
                  (HANDLE) dlfp->remove_subfeatures,
+                 (HANDLE) dlfp->suppress_locus_tags,
                  (HANDLE) g,
                  (HANDLE) r,
                  NULL);

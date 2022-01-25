@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objloc.c,v $
+* Revision 6.8  2004/05/12 20:41:56  kans
+* set aip->io_failure in several erret blocks for compatibility of old object loaders with new ones
+*
 * Revision 6.7  2004/04/01 13:43:08  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -802,6 +805,7 @@ ret:
     AsnUnlinkType(elementtype);
     return first;
 erret:
+    aip->io_failure = TRUE;
     first = SeqIdSetFree(first);
     goto ret;
 }
@@ -1953,6 +1957,7 @@ ret:
     AsnUnlinkType(element);
 	return first;
 erret:
+    aip->io_failure = TRUE;
     first = SeqLocSetFree(first);
     goto ret;
 }

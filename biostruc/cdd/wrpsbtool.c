@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.c,v 1.23 2004/04/13 19:42:09 bauer Exp $
+/* $Id: wrpsbtool.c,v 1.25 2004/05/24 17:36:34 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.23 $
+* $Revision: 1.25 $
 *
 * File Description:
 *         tools for WWW-RPS BLAST 
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.c,v $
+* Revision 1.25  2004/05/24 17:36:34  bauer
+* call WRPSBCl3SortAlignment
+*
+* Revision 1.24  2004/05/10 18:58:37  bauer
+* alignment sorting turned on for CDD v2.00
+*
 * Revision 1.23  2004/04/13 19:42:09  bauer
 * fix URL for Cn3D launching via cddsrv.cgi
 *
@@ -1889,8 +1895,7 @@ AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr prune,
   }
 /*  if (Nlm_StrCmp(myargs[1].strvalue,"cdd_prop")==0) bDbIsOasis = FALSE; */
   
-  sap = prune->sap;
-/*  sap = WRPSBCl3SortAlignment(prune->sap); */
+  sap = WRPSBCl3SortAlignment(prune->sap);
   while (sap) {
     iCount++;
     aapThis = (AlignmentAbstractPtr)MemNew(sizeof(AlignmentAbstract));

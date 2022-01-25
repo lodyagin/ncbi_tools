@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.62 $
+* $Revision: 6.64 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.64  2004/06/02 15:53:17  bollin
+* fixed Nlm_ProcessKeyPress for MOTIF to handle arrow keys
+*
+* Revision 6.63  2004/06/02 14:54:33  bollin
+* fixed Nlm_ProcessKeyPress to also handle arrow keys
+*
 * Revision 6.62  2004/04/14 19:14:06  sinyakov
 * WIN_MSWIN: support X-Windows-like -bg color command line option
 *
@@ -7230,12 +7236,21 @@ extern void Nlm_KeyboardView (Nlm_KeyProc key)
 static void Nlm_ProcessKeyPress (LPMSG lpMsg)
 
 {
-  Nlm_Char  ch;
+  Nlm_Char  ch, sp_ch;
+  
+  if (keyAction == NULL) return;
 
-  if (lpMsg->message == WM_CHAR) {
-    ch = (Nlm_Char) lpMsg->wParam;
-    if (keyAction != NULL) {
-      keyAction (ch);
+  ch = (Nlm_Char) lpMsg->wParam;
+  if (lpMsg->message == WM_CHAR) 
+  {
+    keyAction (ch);
+  }
+  else if (lpMsg->message == WM_KEYDOWN)
+  {
+    sp_ch = Nlm_KeydownToChar (ch);
+    if (sp_ch != 0)
+    {
+	  keyAction (sp_ch);	
     }
   }
 }
@@ -7245,15 +7260,16 @@ static void Nlm_ProcessKeyPress (LPMSG lpMsg)
 static void Nlm_ProcessKeyPress (XEvent *event)
 
 {
-  Nlm_Char buffer[2];
+  Nlm_Char ch;
 
-  if (event->type == KeyPress  &&  keyAction != NULL  &&
-      XLookupString(&event->xkey, buffer, sizeof(buffer), NULL, NULL) == 1) {
-      Nlm_ctrlKey  = ((event->xkey.state & ControlMask) != 0);
-      Nlm_shftKey  = ((event->xkey.state & ShiftMask  ) != 0);
-      Nlm_cmmdKey = FALSE;
-      Nlm_optKey = FALSE;
-      keyAction( *buffer );
+  if (event->type == KeyPress  &&  keyAction != NULL)
+  {
+    ch = Nlm_GetInputChar (&event->xkey);
+    Nlm_ctrlKey  = ((event->xkey.state & ControlMask) != 0);
+    Nlm_shftKey  = ((event->xkey.state & ShiftMask  ) != 0);
+    Nlm_cmmdKey = FALSE;
+    Nlm_optKey = FALSE;
+    keyAction( ch );
   }
 }
 #endif

@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.34 2004/04/13 16:52:26 bollin Exp $
+/* $Id: seqpanel.c,v 6.35 2004/05/20 20:10:20 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -42,7 +42,7 @@
 
 enum ESeqNum   { eNumNone=1, eNumSide=2, eNumTop=3 };
 enum ELineType { eTypeTopSeqNumbers, eTypeTopScaleMarks, eTypeSequence, 
-                 eTypeAlignSequence, eTypeFeature };
+                 eTypeAlignSequence, eTypeFeature, eTypeAlignDivider };
 enum EDrawGrid { eDrawGridOn=1, eDrawGridOff=2 };
 enum EShowFeatures { eShowFeaturesOn=1, eShowFeaturesOff=2, eShowFeaturesAll=3 };
 
@@ -214,22 +214,57 @@ static SeqPanLinePtr PNTR CreateSeqPanelLines(Int2 lineLength, BioseqViewPtr bvp
   Int4               lCount  = 0, i, j;
   Int4               pCount;                     /* Total number of paragraphs */
   Int4               alnRows = -1;
-  Int4               alnValidRows = 0;
+  Int4Ptr            alnValidRows = NULL;
   Int4               featRows = 1;
+  SeqAlignPtr        tmp_salp;
+  Int4Ptr            lines_per_alignment = NULL;
+  Int4               num_alignments;
+  Int4               aln_idx;
+  SeqParaGPtr   PNTR ref_offset;
   
   if (bvp->seqAlignMode) {
-    fLines  = GetValue(bvp->newNumControl) == eNumTop ? 2 : 0;  
     alnRows = AlnMgr2GetNumRows(bvp->salp);  /* size of the alignment */
-    if (bvp->viewWholeEntity  ||  GetValue(bvp->newFeatControl) == eShowFeaturesAll) featRows = alnRows; /* show features for all rows */
-    pCount  = floor((AlnMgr2GetAlnLength(bvp->salp, FALSE)-1) / lineLength) + 1; /* alignment length */ 
-    for (j = 1; j != alnRows + 1; j++) {  /* AlnMgr counts from 1, not 0    */
-      SeqIdPtr  tmp_sip = AlnMgr2GetNthSeqIdPtr(bvp->salp, j);
-      BioseqPtr tmp_bsp = BioseqLockById(tmp_sip);
-      if (tmp_bsp != NULL) {
-        alnValidRows++;  /* count avaliable alignments */
-        BioseqUnlock (tmp_bsp);
+    fLines  = GetValue(bvp->newNumControl) == eNumTop ? 2 : 0;  
+    pCount = 0;
+    num_alignments = 0;
+    for (tmp_salp = bvp->salp; tmp_salp != NULL; tmp_salp = tmp_salp->next)
+    {
+      num_alignments ++;
+    }
+    lines_per_alignment = (Int4Ptr) MemNew (sizeof (Int4) * num_alignments);
+    if (lines_per_alignment == NULL) return;
+    alnValidRows = (Int4Ptr) MemNew (sizeof (Int4) * num_alignments);
+    if (alnValidRows == NULL)
+    {
+      MemFree (lines_per_alignment);
+      return;
+    }
+    for (i=0; i < num_alignments; i++)
+    {
+      lines_per_alignment [i] = 0;
+      alnValidRows [i] = 0;
+    }
+    for (tmp_salp = bvp->salp, aln_idx = 0; tmp_salp != NULL; tmp_salp = tmp_salp->next, aln_idx++)
+    {
+      lines_per_alignment [aln_idx] = floor((AlnMgr2GetAlnLength(tmp_salp, FALSE)-1) / lineLength) + 1; /* alignment length */ 
+      pCount  += lines_per_alignment [aln_idx];  
+      if (bvp->viewWholeEntity  ||  GetValue(bvp->newFeatControl) == eShowFeaturesAll) 
+      {
+      	if (featRows == 1)
+      	  featRows = alnRows;
+      	else
+      	  featRows += alnRows;
+      } /* show features for all rows */
+
+      for (j = 1; j != alnRows + 1; j++) {  /* AlnMgr counts from 1, not 0    */
+        SeqIdPtr  tmp_sip = AlnMgr2GetNthSeqIdPtr(tmp_salp, j);
+        BioseqPtr tmp_bsp = BioseqLockById(tmp_sip);
+        if (tmp_bsp != NULL) {
+          alnValidRows [aln_idx]++;  /* count avaliable alignments */
+          BioseqUnlock (tmp_bsp);
+        }
+        SeqIdFree (tmp_sip);
       }
-      SeqIdFree (tmp_sip);
     }
   } else {
     fLines  = GetValue(bvp->newNumControl) == eNumTop ? 3 : 1;  
@@ -241,68 +276,112 @@ static SeqPanLinePtr PNTR CreateSeqPanelLines(Int2 lineLength, BioseqViewPtr bvp
     ref[i] = (SeqParaGPtr) MemNew(sizeof(SeqParaG));
     ref[i]->pFeatList = (ValNodePtr*) MemNew( (size_t)(sizeof(ValNodePtr)*featRows) );
   }
+  ref_offset = ref;
   
   if (GetValue(bvp->newFeatControl) != eShowFeaturesOff) {
     if (bvp->seqAlignMode) {  /* in alignment mode */
-      for (i = 1; i != alnRows + 1; i++) {
-        SeqIdPtr  sip_tmp = AlnMgr2GetNthSeqIdPtr(bvp->salp, i);
-        BioseqPtr bsp_tmp = BioseqLockById(sip_tmp);
+      for (tmp_salp = bvp->salp, aln_idx = 0; tmp_salp != NULL; tmp_salp = tmp_salp->next, aln_idx ++)
+      {
+        for (i = 1; i != alnRows + 1; i++) {
+          SeqIdPtr  sip_tmp = AlnMgr2GetNthSeqIdPtr(tmp_salp, i);
+          BioseqPtr bsp_tmp = BioseqLockById(sip_tmp);
 
-        if (bsp_tmp != NULL) {
-          if (bvp->viewWholeEntity  ||  GetValue(bvp->newFeatControl) == eShowFeaturesAll) {
-            FillFeatureInfo(bvp, bsp_tmp, lineLength, pCount, i, i - 1, ref);  /* show features for each seq in alignment */
-          } else if (i == bvp->TargetRow) {
-            FillFeatureInfo(bvp, bsp_tmp, lineLength, pCount, i, 0,     ref);  /* show features for target seq in alignment */
-          }
-          BioseqUnlock (bsp_tmp);
-        }  /* bsp_tmp != NULL */
-        SeqIdFree    (sip_tmp);
-      }  /* for */
+          if (bsp_tmp != NULL) {
+            /* TODO: Need to calculate better values for passing to FillFeatureInfo */
+            if (bvp->viewWholeEntity  ||  GetValue(bvp->newFeatControl) == eShowFeaturesAll) {
+              FillFeatureInfo(bvp, bsp_tmp, lineLength, lines_per_alignment [aln_idx], i, i - 1, ref_offset);  /* show features for each seq in alignment */
+            } else if (i == bvp->TargetRow) {
+              FillFeatureInfo(bvp, bsp_tmp, lineLength, lines_per_alignment [aln_idx], i, 0, ref_offset);  /* show features for target seq in alignment */
+            }
+            BioseqUnlock (bsp_tmp);
+          }  /* bsp_tmp != NULL */
+          SeqIdFree    (sip_tmp);
+        }  /* for */
+        ref_offset += lines_per_alignment [aln_idx];
+      }
     } else {
       FillFeatureInfo(bvp, bsp, lineLength, pCount, 0, 0, ref);
     }  
   }  /* done with features */
 
 
-
   bvp->TotalLines = 0; /* go through all pararaphs and count total */
-  for (i = 0; i < pCount; i++) {
-    Int4 sub_total = 0;
-    for (j = 0; j < featRows; j++) sub_total += ValNodeLen(ref[i]->pFeatList[j]); 
-    bvp->TotalLines += fLines + sub_total + (alnRows == -1 ? 0 : alnValidRows); /* reserve space for alignment */
+  if (bvp->seqAlignMode)
+  {
+    for (tmp_salp = bvp->salp, aln_idx = 0; tmp_salp != NULL; tmp_salp = tmp_salp->next, aln_idx ++)
+    {
+      for (i = 0; i < lines_per_alignment [aln_idx]; i++) {
+        Int4 sub_total = 0;
+        for (j = 0; j < featRows; j++) sub_total += ValNodeLen(ref[i]->pFeatList[j]); 
+        bvp->TotalLines += fLines + sub_total + (alnRows == -1 ? 0 : alnValidRows[aln_idx]); /* reserve space for alignment */
+      }
+      /* add one more for divider */
+      if (tmp_salp->next != NULL) bvp->TotalLines ++;
+    }
+  	
+  }
+  else
+  {
+    for (i = 0; i < pCount; i++) {
+      Int4 sub_total = 0;
+      for (j = 0; j < featRows; j++) sub_total += ValNodeLen(ref[i]->pFeatList[j]); 
+      bvp->TotalLines += fLines + sub_total;
+    }
   }
 
+
   splp = (SeqPanLinePtr*) MemNew( (size_t)(sizeof(SeqPanLinePtr)*bvp->TotalLines) );
-  for (i = 0; i < pCount; i++) {
-    if (fLines > 1) { /* Numbers on top */
-      splp[lCount++] = MakeSeqPanLine(eTypeTopSeqNumbers, i);
-      splp[lCount++] = MakeSeqPanLine(eTypeTopScaleMarks, i);
-    }
-    
-    if (bvp->seqAlignMode) {  
-      for (j = 1; j != alnRows + 1; j++) {  /* AlnMgr counts from 1, not 0    */
-        SeqIdPtr  tmp_sip = AlnMgr2GetNthSeqIdPtr(bvp->salp, j);
-        BioseqPtr tmp_bsp = BioseqLockById(tmp_sip);
-        
-        if (tmp_bsp != NULL) {
-          SeqPanLinePtr plp = MakeSeqPanLine(eTypeAlignSequence, i); /* Add align sequence line*/
-          plp->row          = j;  /* Index position in the alignment (row) */
-          splp[lCount++]    = plp;
-          BioseqUnlock (tmp_bsp);
-          
-          if (bvp->viewWholeEntity  ||  GetValue(bvp->newFeatControl) == eShowFeaturesAll) {
-            MakeFeatureLine(&lCount, i, j, j - 1, ref, splp); /* Add feature line       */
-          } else if (j == bvp->TargetRow) {
-            MakeFeatureLine(&lCount, i, j, 0,     ref, splp);
-          }
+  if (bvp->seqAlignMode)
+  {
+    ref_offset = ref;
+    for (tmp_salp = bvp->salp, aln_idx = 0; tmp_salp != NULL; tmp_salp = tmp_salp->next, aln_idx ++)
+    {
+      for (i = 0; i < lines_per_alignment [aln_idx]; i++)
+      {
+        if (fLines > 1) { /* Numbers on top */
+          splp[lCount++] = MakeSeqPanLine(eTypeTopSeqNumbers, i);
+          splp[lCount++] = MakeSeqPanLine(eTypeTopScaleMarks, i);
         }
-        SeqIdFree(tmp_sip);
+    
+        for (j = 1; j != alnRows + 1; j++) {  /* AlnMgr counts from 1, not 0    */
+          SeqIdPtr  tmp_sip = AlnMgr2GetNthSeqIdPtr(tmp_salp, j);
+          BioseqPtr tmp_bsp = BioseqLockById(tmp_sip);
+        
+          if (tmp_bsp != NULL) {
+            SeqPanLinePtr plp = MakeSeqPanLine(eTypeAlignSequence, i); /* Add align sequence line*/
+            plp->row          = j;  /* Index position in the alignment (row) */
+            splp[lCount++]    = plp;
+            BioseqUnlock (tmp_bsp);
+          
+            if (bvp->viewWholeEntity  ||  GetValue(bvp->newFeatControl) == eShowFeaturesAll) {
+              MakeFeatureLine(&lCount, i, j, j - 1, ref_offset, splp); /* Add feature line       */
+            } else if (j == bvp->TargetRow) {
+              MakeFeatureLine(&lCount, i, j, 0,     ref_offset, splp);
+            }
+          }
+          SeqIdFree(tmp_sip);
+        }      	
       }
-    } else {  /* Add usual sequence and features if not in alignment mode */
+      /* add divider line between alignments */
+      if (tmp_salp->next != NULL)
+      {
+      	splp[lCount++] = MakeSeqPanLine (eTypeAlignDivider, i);
+      }
+      ref_offset += lines_per_alignment [aln_idx];    	
+    }
+  	
+  }
+  else
+  {
+    for (i = 0; i < pCount; i++) {
+      if (fLines > 1) { /* Numbers on top */
+        splp[lCount++] = MakeSeqPanLine(eTypeTopSeqNumbers, i);
+        splp[lCount++] = MakeSeqPanLine(eTypeTopScaleMarks, i);
+      }
       splp[lCount++] = MakeSeqPanLine(eTypeSequence, i);  /* Add sequence line      */
-      MakeFeatureLine(&lCount, i, 0, 0, ref, splp);      /* Add feature line       */
-    }  /* bvp->seqAlignMode */
-  }  /* for */
+      MakeFeatureLine(&lCount, i, 0, 0, ref, splp);      /* Add feature line       */  
+    }
+  }/* bvp->seqAlignMode */
 
   for (i = 0; i < pCount; i++) {
     for (j = 0; j < featRows; j++) ValNodeFree (ref[i]->pFeatList[j]);
@@ -310,6 +389,8 @@ static SeqPanLinePtr PNTR CreateSeqPanelLines(Int2 lineLength, BioseqViewPtr bvp
     MemFree (ref[i]);
   }
   MemFree (ref);
+  MemFree (lines_per_alignment);
+  MemFree (alnValidRows);
   return splp;
 }
 
@@ -488,30 +569,111 @@ static void PopulateSeqView (BioseqViewPtr bvp)
   PopulateSeqAlnView(bvp);
 }
 
-
 static void PopulateAlnView (BioseqViewPtr bvp)
 {
   SeqIdPtr sip = bvp->bsp->id;
+  SeqIdPtr tmpsip;
+  SeqLocPtr slp;
+  SeqEntryPtr sep;
+  SeqAlignPtr tmp_salp, next_salp;
+  
   bvp->seqAlignMode = TRUE;
   bvp->SeqStartPosX = 150;
+  
+  /* if we're switching between segments we might need to load a
+   * different alignment */
+  if (bvp->salp != NULL)
+  {
+    if ((bvp->bsp->repr != Seq_repr_seg && bvp->salp->next != NULL)
+  	  || (bvp->TargetRow = AlnMgr2GetFirstNForSip (bvp->salp, sip)) == -1)
+  	{
+  	  bvp->salp = SeqAlignFree (bvp->salp);
+  	}
+  	else
+  	{
+  	  PopulateSeqAlnView(bvp);
+  	  return;	
+  	}
+  }
+  
   if (bvp->salp == NULL  &&  bvp->seqAlignMode) { /* Try to find an alignment */
-    bvp->salp = SeqAlignListDup((SeqAlignPtr) FindSeqAlignInSeqEntry(bvp->bsp->seqentry, OBJ_SEQALIGN));
+    /* need conglomerate view if we're looking at a segmented sequence */
+    if (bvp->bsp->repr == Seq_repr_seg)
+    {
+      slp = (SeqLocPtr) bvp->bsp->seq_ext;
+      while (slp != NULL && bvp->salp == NULL)
+      {
+        tmpsip = SeqLocId (slp);
+        sep = SeqEntryFind (tmpsip);
+        bvp->salp = SeqAlignListDup((SeqAlignPtr) FindSeqAlignInSeqEntry(sep, OBJ_SEQALIGN));
+        slp = slp->next;
+      }
+    }
+    else
+    {    	
+      bvp->salp = SeqAlignListDup((SeqAlignPtr) FindSeqAlignInSeqEntry(bvp->bsp->seqentry, OBJ_SEQALIGN));
+    }
+    
     if (bvp->salp == NULL) {  /* No alignment found or bug in AlignMgr (which is more likely). Switch to sequence mode */
       PopulateSeqView(bvp);
       return;
     }
-    if (bvp->salp->segtype == SAS_DENSEG  &&  bvp->salp->next == NULL) {
-      AlnMgr2IndexSingleChildSeqAlign(bvp->salp);
-    } else {
-      AlnMgr2IndexSeqAlign(bvp->salp);
+    
+    if (bvp->bsp->repr == Seq_repr_seg)
+    {
+      /* if segmented set, index each segment individually */
+      tmp_salp = bvp->salp;
+      while (tmp_salp != NULL)
+      {
+        next_salp = tmp_salp->next;
+        tmp_salp->next = NULL;
+        if (tmp_salp->segtype == SAS_DENSEG) {
+          AlnMgr2IndexSingleChildSeqAlign(tmp_salp);
+        } else {
+          AlnMgr2IndexSeqAlign(tmp_salp);
+        }
+        tmp_salp->next = next_salp;
+        tmp_salp = next_salp;
+      }
+    }
+    else
+    {
+      /* do not incorporate other segments in segmented alignment */
+      if (!is_dim2seqalign (bvp->salp) && bvp->salp->next != NULL)
+      {
+        bvp->salp->next = SeqAlignFree (bvp->salp->next);
+      }    
+    
+      if (bvp->salp->segtype == SAS_DENSEG  &&  bvp->salp->next == NULL) {
+        AlnMgr2IndexSingleChildSeqAlign(bvp->salp);
+      } else {
+        AlnMgr2IndexSeqAlign(bvp->salp);
+      }
     }
   }
   bvp->TargetRow = ROW_UNDEFINED;
-  while (sip  &&  bvp->TargetRow == ROW_UNDEFINED) {
-    bvp->TargetRow = AlnMgr2GetFirstNForSip(bvp->salp, sip);
-    sip = sip->next;
+  if (bvp->bsp->repr == Seq_repr_seg)
+  {
+    slp = (SeqLocPtr) bvp->bsp->seq_ext;
+    while (slp != NULL && bvp->TargetRow == ROW_UNDEFINED)
+    {
+      tmpsip = SeqLocId (slp);
+      while (tmpsip  &&  bvp->TargetRow == ROW_UNDEFINED)
+      {
+        bvp->TargetRow = AlnMgr2GetFirstNForSip(bvp->salp, tmpsip);
+        tmpsip = tmpsip->next;
+      }
+      slp = slp->next;
+    }
   }
-
+  else
+  {
+    while (sip  &&  bvp->TargetRow == ROW_UNDEFINED) {
+      bvp->TargetRow = AlnMgr2GetFirstNForSip(bvp->salp, sip);
+      sip = sip->next;
+    }  	
+  }
+  
   PopulateSeqAlnView(bvp);
 }
 
@@ -557,6 +719,17 @@ static void DrawTopSeqNums(Int2 x, Int2 y, Int4 line, BioseqViewPtr bvp)
   }
 }
 
+static void DrawAlignmentDivider (Int2 x, Int2 y, BioseqViewPtr bvp)
+{
+  Int2 block, ctr=0;
+  char buf[20];
+  
+  Magenta ();
+  for (block = 0;  block != bvp->BlocksAtLine  &&  ctr >= 0;  block++) {
+    sprintf(buf, "~~~~~~~~~~");
+    PaintStringEx (buf, x+SEQ_X_OFFSET+bvp->SeqStartPosX+(block+1)*SEQ_GROUP_SIZE*bvp->CharWidth+block*bvp->CharWidth - bvp->CharWidth*StrLen(buf), y);
+  }
+}
 
 static void DrawSeqSideLineNumbers(Int2 x, Int2 y, Int4 line, BioseqViewPtr bvp)
 {
@@ -718,6 +891,7 @@ AlignmentIntervalToString
 
   MemSet(alnbuf, '-', alnbuf_len); /* assume all gaps and fill the sequence later */
   MemSet(seqbuf, 0, alnbuf_len);
+  if (target_row < 0) return;
 
   if (stop > aln_len) {
     MemSet (alnbuf + aln_len - start, 0, stop - aln_len);
@@ -847,20 +1021,28 @@ AlignmentIntervalToString
   }
 }
 
-static void DrawAlignment(Int2 x, Int2 y, Int4 line, Int4 row, Uint1Ptr buf, Uint1Ptr seqbuf, Uint1Ptr alnbuf, BioseqViewPtr bvp)
+static void DrawAlignment
+(Int2 x, Int2 y, Int4 line, Int4 row, Uint1Ptr buf, Uint1Ptr seqbuf,
+ Uint1Ptr alnbuf, BioseqViewPtr bvp, Int4 aln_idx)
 {
-  Int2       block;
-  Char       alnlabel[13];
-  SeqIdPtr   sip     = AlnMgr2GetNthSeqIdPtr(bvp->salp, row);
-  BioseqPtr  bsp     = BioseqLockById(sip);
-  Int4       start   = line * bvp->CharsAtLine;
-  Int4       stop    = start + bvp->BlocksAtLine * SEQ_GROUP_SIZE;
-  Int4       alnbuf_len;
-  SeqIdPtr   best_id;
+  Int2        block;
+  Char        alnlabel[13];
+  SeqIdPtr    sip     = AlnMgr2GetNthSeqIdPtr(bvp->salp, row);
+  BioseqPtr   bsp     = BioseqLockById(sip);
+  Int4        start   = line * bvp->CharsAtLine;
+  Int4        stop    = start + bvp->BlocksAtLine * SEQ_GROUP_SIZE;
+  Int4        alnbuf_len;
+  SeqIdPtr    best_id;
+  SeqAlignPtr tmp_salp;
+  Int4        i;
+  
+  for (i=0, tmp_salp = bvp->salp; i < aln_idx && tmp_salp != NULL; i++, tmp_salp = tmp_salp->next)
+  {  	
+  }
+  if (tmp_salp == NULL) return;
 
-  AlignmentIntervalToString (bvp->salp, row, start, stop, bvp->TargetRow,
+  AlignmentIntervalToString (tmp_salp, row, start, stop, bvp->TargetRow,
                              bvp->viewWholeEntity, seqbuf, alnbuf, &alnbuf_len);
-
   
   /* finally draw everything */
   best_id = SeqIdFindBestAccession (bsp->id);
@@ -1148,6 +1330,8 @@ static void onDrawSeqPanel (PaneL p)
   RecT          r;
   Int4          line;
   Int2          x, y;
+  Int4          aln_idx;
+  Int4          start;
  
   bvp = GetBioseqViewPtr (p);
   bsp = bvp->bsp;
@@ -1165,7 +1349,18 @@ static void onDrawSeqPanel (PaneL p)
   y = r.top  + bvp->CharHeight + SEQ_Y_OFFSET;
   
   SelectFont ((FonT)(bvp->displayFont));  
-  for (line = GetBarValue(sb); line < bvp->TotalLines  &&  y <= r.bottom-2*SEQ_Y_OFFSET; line++) {
+  aln_idx = 0;
+  start = GetBarValue (sb);
+  for (line = 0; line < start && line < bvp->TotalLines; line++)
+  {
+    splp = bvp->SeqPanLines[line];
+    if (splp->lineType == eTypeAlignDivider)
+    {
+      aln_idx++;
+    }
+  }
+  
+  for (line = start; line < bvp->TotalLines  &&  y <= r.bottom-2*SEQ_Y_OFFSET; line++) {
     if (IsInRange(y, updateRect.top,updateRect.bottom) || 
         IsInRange(y+bvp->LineHeight,updateRect.top,updateRect.bottom))
     {
@@ -1187,9 +1382,13 @@ static void onDrawSeqPanel (PaneL p)
           break;
         case eTypeAlignSequence:
           DrawAlignSideLineNumbers(x, y, splp->bioSeqLine, splp->row, bvp);
-          DrawAlignment(x, y, splp->bioSeqLine, splp->row, buf, seqbuf, alnbuf, bvp);                /* Draw the alignment   */
+          DrawAlignment(x, y, splp->bioSeqLine, splp->row, buf, seqbuf, alnbuf, bvp, aln_idx);                /* Draw the alignment   */
           if (bvp->DrawGrid) DrawLtGrid(x, y+bvp->LineSpace/2, r.right, y+bvp->LineSpace/2);
           break;
+      	case eTypeAlignDivider:
+      	  DrawAlignmentDivider (x, y, bvp);
+      	  aln_idx++;
+      	  break;
         case eTypeFeature:
           if (bvp->DrawGrid) DrawLtGrid(x, y+bvp->LineSpace/2, r.right, y+bvp->LineSpace/2);
           DrawFeature(x, y, splp->bioSeqLine, splp->row, splp->idx, splp->protProduct, bsp, bvp);    /* Draw Features        */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.57 $
+* $Revision: 6.60 $
 *
 * File Description: 
 *
@@ -2272,9 +2272,9 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
     x = HiddenGroup (cfp->protTextGrp, 2, 0, NULL);
     SetGroupSpacing (x, 3, 5);
     StaticPrompt (x, "Name", 0, dialogTextHeight, programFont, 'l');
-    cfp->protNameText = DialogText (x, "", 15, NULL);
+    cfp->protNameText = DialogText (x, "", 25, NULL);
     StaticPrompt (x, "Description", 0, dialogTextHeight, programFont, 'l');
-    cfp->protDescText = DialogText (x, "", 15, NULL);
+    cfp->protDescText = DialogText (x, "", 25, NULL);
     cfp->protPromptGrp = HiddenGroup (f, -1, 0, NULL);
     StaticPrompt (cfp->protPromptGrp,
                   "Press Edit Protein Feature to change protein name",
@@ -2841,7 +2841,7 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
                                                   StdFeatIntEdPartialCallback);
     cfp->pages [LOCATION_PAGE] = s;
     Hide (cfp->pages [LOCATION_PAGE]);
-    cfp->locvisited = FALSE;
+    cfp->locvisited = TRUE;
 
     AlignObjects (ALIGN_CENTER, (HANDLE) cfp->pages [CODING_REGION_PAGE],
                   (HANDLE) cfp->pages [COMMON_PAGE],
@@ -4210,11 +4210,11 @@ static DialoG CreateProtDialog (GrouP h, CharPtr title, ProtRefPtr prp, SeqFeatP
     ppp->protGrp [0] = HiddenGroup (k, -1, 0, NULL);
     g = HiddenGroup (ppp->protGrp [0], 0, 10, NULL);
     StaticPrompt (g, "Protein Names", 0, 0, programFont, 'c');
-    ppp->name = CreateVisibleStringDialog (g, 3, -1, 15);
+    ppp->name = CreateVisibleStringDialog (g, 3, -1, 25);
 
     f = HiddenGroup (ppp->protGrp [0], 0, 4, NULL);
     StaticPrompt (f, "Description", 0, dialogTextHeight, programFont, 'c');
-    ppp->desc = DialogText (f, "", 20, NULL);
+    ppp->desc = DialogText (f, "", 25, NULL);
 
     r = HiddenGroup (ppp->protGrp [0], 2, 0, NULL);
     StaticPrompt (r, "Processing", 0, dialogTextHeight, programFont, 'l');
@@ -4242,7 +4242,7 @@ static DialoG CreateProtDialog (GrouP h, CharPtr title, ProtRefPtr prp, SeqFeatP
 
     ppp->protGrp [2] = HiddenGroup (k, 0, 10, NULL);
     StaticPrompt (ppp->protGrp [2], "Activity", 0, 0, programFont, 'c');
-    ppp->activity = CreateVisibleStringDialog (ppp->protGrp [2], 3, -1, 15);
+    ppp->activity = CreateVisibleStringDialog (ppp->protGrp [2], 3, -1, 25);
     Hide (ppp->protGrp [2]);
 
     ppp->protGrp [3] = HiddenGroup (k, -1, 0, NULL);
@@ -5219,11 +5219,6 @@ static void PopulateAAPopup (PopuP AAitem)
     sprintf (item, "%c    %s", ch, str);
     PopupItem (AAitem, item);
   }
-  i = '*';
-  ch = GetSymbolForResidue (sctp, i);
-  str = (CharPtr) GetNameForResidue (sctp, i);
-  sprintf (item, "%c    %s", ch, str);
-  PopupItem (AAitem, item);
   SetValue (AAitem, 1); 
 }
 

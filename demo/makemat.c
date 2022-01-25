@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: makemat.c,v 6.13 2003/05/30 17:31:09 coulouri Exp $";
+static char const rcsid[] = "$Id: makemat.c,v 6.14 2004/05/14 12:10:06 camacho Exp $";
 
 /*
 * ===========================================================================
@@ -180,6 +180,10 @@ static Boolean takeMatrixCheckpoint(compactSearchItems * compactSearch,
         localChar = getRes(compactSearch->query[i]);
 
         fprintf(checkFile,"%c",localChar);
+
+        /* The following 2 lines are needed to preserve compatibility with the
+         * checkpoint file libraries distributed with IMPALA (from personal
+         * communication with IMPALA's author) */
         posSearch->posMatrix[i][Xchar] = Xscore;
         posSearch->posPrivateMatrix[i][Xchar] = Xscore * scalingFactor;
     }  
@@ -322,6 +326,8 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
         BlastScoreBlkMatFill(sbp, underlyingMatrixName);
         compactSearch->matrix = sbp->matrix;
         compactSearch->gapped_calculation = TRUE;
+        /* Note that these two assignments are not really needed for
+         * makemat's operation and thus their values are irrelevant */
         compactSearch->pseudoCountConst = 10;
         compactSearch->ethresh = 0.001;
         BlastScoreBlkFill(sbp,  (CharPtr) query, queryLength, 0);

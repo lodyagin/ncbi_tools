@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.16 2003/11/20 22:09:26 dondosha Exp $
+/* $Id: txalign.h,v 6.17 2004/05/14 15:38:09 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,9 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.17  2004/05/14 15:38:09  dondosha
+* Made function ScoreAndEvalueToBuffers public
+*
 * Revision 6.16  2003/11/20 22:09:26  dondosha
 * Added a PrindDefLinesFromSeqAlignWithPath function with an argument to provide root path for image links
 *
@@ -584,6 +587,11 @@ NLM_EXTERN Boolean LIBCALL PrintDefLinesFromSeqAlignWithPath PROTO((
 		    CharPtr blast_type,
                     CharPtr www_root_path
 		    ));
+
+NLM_EXTERN void LIBCALL 
+ScoreAndEvalueToBuffers PROTO((FloatHi bit_score, FloatHi evalue, 
+                        CharPtr bit_score_buf, CharPtr PNTR evalue_buf,
+                        Boolean knock_off_allowed));
 
 /*
 	Fills in the slots with score, bit_score, etc. from the SeqAlign.

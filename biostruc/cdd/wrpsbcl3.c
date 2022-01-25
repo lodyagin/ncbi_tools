@@ -1,4 +1,4 @@
-/* $Id: wrpsbcl3.c,v 1.38 2004/03/10 14:36:02 bauer Exp $
+/* $Id: wrpsbcl3.c,v 1.41 2004/06/09 13:37:47 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.38 $
+* $Revision: 1.41 $
 *
 * File Description:
 *         WWW-RPS BLAST client
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbcl3.c,v $
+* Revision 1.41  2004/06/09 13:37:47  bauer
+* fixed typo in citation
+*
+* Revision 1.40  2004/05/24 17:33:51  bauer
+* fixed typo in citation
+*
+* Revision 1.39  2004/05/10 18:58:37  bauer
+* alignment sorting turned on for CDD v2.00
+*
 * Revision 1.38  2004/03/10 14:36:02  bauer
 * cosmetic change to no-hits page
 *
@@ -628,17 +637,17 @@ static Boolean WRPSBDrawSearchPage()
   databases[1] = CDDSearch2;
   databases[2] = CDDSearch3;
   databases[3] = CDDSearch4;
+  databases[4] = CDDSearch5;
   datab_nam[0] = CDDSname1;
   datab_nam[1] = CDDSname2;
   datab_nam[2] = CDDSname3;
   datab_nam[3] = CDDSname4; 
+  datab_nam[4] = CDDSname5; 
   if (Nlm_StrCmp(CDDlocat,"inhouse")==0) {
-    databases[4] = CDDSearch5;
     databases[5] = CDDSearch6;
     databases[6] = CDDSearch7;
-    datab_nam[6] = CDDSname7;
-    datab_nam[4] = CDDSname5; 
     datab_nam[5] = CDDSname6; 
+    datab_nam[6] = CDDSname7;
   }
 
 
@@ -733,7 +742,7 @@ static Boolean WRPSBDrawSearchPage()
   printf("<b><a href=\"http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=PubMed&list_uids=12520028&dopt=Abstract\">Citing CD-Search</a>:</b>\n");
   printf(" Marchler-Bauer A, Anderson JB, DeWeese-Scott C, Fedorova ND, Geer LY, He S, Hurwitz DI, Jackson JD, Jacobs AR,\n");
   printf(" Lanczycki CJ, Liebert CA, Liu C, Madej T, Marchler GH, Mazumder R, Nikolskaya AN, Panchenko AR, Rao BS, Shoemaker BA,\n");
-  printf(" Simonyan V, Song JS, Thiessen RA, Vasudevan S, Wang Y, Yamashita RA, Yin JJ, and Bryant SH (2003), \n");
+  printf(" Simonyan V, Song JS, Thiessen PA, Vasudevan S, Wang Y, Yamashita RA, Yin JJ, and Bryant SH (2003), \n");
   printf("\"<i>CDD: a curated Entrez database of conserved domain alignments</i>\",\n");
   printf(" <b>Nucleic Acids Res. 31</b>:383-387.\n");
  
@@ -1358,7 +1367,7 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
     printf("<b><a href=\"http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=PubMed&list_uids=12520028&dopt=Abstract\">Citing CD-Search</a>:</b>\n");
     printf(" Marchler-Bauer A, Anderson JB, DeWeese-Scott C, Fedorova ND, Geer LY, He S, Hurwitz DI, Jackson JD, Jacobs AR,\n");
     printf(" Lanczycki CJ, Liebert CA, Liu C, Madej T, Marchler GH, Mazumder R, Nikolskaya AN, Panchenko AR, Rao BS, Shoemaker BA,\n");
-    printf(" Simonyan V, Song JS, Thiessen RA, Vasudevan S, Wang Y, Yamashita RA, Yin JJ, and Bryant SH (2003), \n");
+    printf(" Simonyan V, Song JS, Thiessen PA, Vasudevan S, Wang Y, Yamashita RA, Yin JJ, and Bryant SH (2003), \n");
     printf("\"<i>CDD: a curated Entrez database of conserved domain alignments</i>\",\n");
     printf(" <b>Nucleic Acids Res. 31</b>:383-387.\n");
   }
@@ -1374,7 +1383,7 @@ void QRPSBWait(CharPtr rid, Int4 iGraphMode, Int4 iPairMode, Int4 HowLong, Nlm_F
 {
   CharPtr  cTitle;
   
-  cTitle = MemNew(sizeof(char) * 50);
+  cTitle = MemNew(sizeof(char) * 256);
   sprintf(cTitle,"CD-Search request %s",rid);
   WRPSBSearchHead(cTitle,"Pending Conserved Domain Search Request",FALSE, FALSE);
   printf("<BR>\n");
@@ -1384,7 +1393,7 @@ void QRPSBWait(CharPtr rid, Int4 iGraphMode, Int4 iPairMode, Int4 HowLong, Nlm_F
            HowLong,URLcgi,QRPSBNAME,rid,iGraphMode,iPairMode,expect,nhits,HowLong);
   }
   printf("<br>\n");
-  printf("<h2>Waiting for BLAST-queue to finish</H2>\n",rid);
+  printf("<h2>Waiting for BLAST-queue to finish</H2>\n");
   printf("<FORM ACTION=\"%s\" METHOD=POST" ">\n", QRPSBNAME);
   printf("<INPUT TYPE=\"HIDDEN\" name=\"GRAPH\" value=\"%d\">\n",iGraphMode);
   printf("<INPUT TYPE=\"HIDDEN\" name=\"PAIR\" value=\"%d\">\n",iPairMode);

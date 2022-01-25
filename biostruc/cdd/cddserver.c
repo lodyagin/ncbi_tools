@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.44 2004/04/01 13:43:05 lavr Exp $
+/* $Id: cddserver.c,v 1.45 2004/05/10 20:55:57 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.44 $
+* $Revision: 1.45 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.45  2004/05/10 20:55:57  bauer
+* fixed problem with CAV
+*
 * Revision 1.44  2004/04/01 13:43:05  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -1688,6 +1691,7 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
   fprintf(table,"</td>\n");
   dtp = CddGetCreateDate(pcdd);
   utp = CddGetUpdateDate(pcdd);
+  if (NULL == dtp && NULL!= utp) dtp = utp;
   fprintf(table,"        <td align=\"RIGHT\" class=\"medium1\" NOWRAP><strong>Created:</strong></td>\n");
   if (utp) {
     fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" NOWRAP>%2d-%3s-%4d</td>\n",(int)dtp->data[3],NCBI_months[dtp->data[2]-1],(int)dtp->data[1]+1900);
@@ -2122,19 +2126,22 @@ static Boolean CddUseThisMMDBid(ValNodePtr location, CddSumPtr pcds)
 /* use Paul's function to output HTML or Text-formatted alignments           */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
+Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, Int2 iPDB,
                            CharPtr QuerySeq, CharPtr QueryAlign, CharPtr dbversion,
 			   CddPtr pcdd, Boolean bHasPdb, FloatHi tbit, Uint2 pwidth,
                            Int4 iQueryGi, CharPtr QueryName, Int4 iFeatNum, CddSumPtr pcds,
 			   Int4 alen, Int4 nTaxIds, Int4Ptr iTaxids, ValNodePtr txids,
 			   CdTreeNodePtr pcdtree)
 {
-  Uint4                 size = 2 * FileLength(CDDalign);
+  Uint4                 size;
   Uint4                 uCAVoptions = 0;
   BytePtr               buf;
+  Nlm_ByteStorePtr      bsp = NULL;
+  AsnIoBSPtr            aibp = NULL;
   BiostrucAnnotSetPtr   basp;
   BiostrucFeatureSetPtr bfsp;
   AsnIoMemPtr           aimp;
+  AsnIoPtr              aip;   /* debugging */
   CddDescrPtr           pCddesc;
   CharPtr               cCurrDesc;
   Char                  source[PATH_MAX];
@@ -2160,12 +2167,6 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
     piSize = (Int4Ptr) GetAlignmentSize(salp);
     size = (Uint4) (piSize[0] * (8000 + piSize[1] * 400));
   }
-  buf = MemNew(size);
-  aimp = (AsnIoMemPtr) AsnIoMemOpen("wb",buf,size);
-  if (NULL == aimp) return(FALSE);
-  if (!NcbiMimeAsn1AsnWrite(pvnNcbi,aimp->aip,NULL)) return(FALSE);
-  AsnIoFlush(aimp->aip);
-  AsnIoMemClose(aimp);
 
   if (CddHasAnnotation(pcdd)) {
     aap = pcdd->alignannot;
@@ -2216,6 +2217,32 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
     printf("        <td width=\"100%%\"> \n");
     printf("<PRE>\n");
   }
+  bsp = Nlm_BSNew(1024);
+  aibp = AsnIoBSOpen((char *)"wb",bsp);
+  NcbiMimeAsn1AsnWrite(pvnNcbi,aibp->aip,NULL);
+  AsnIoFlush(aibp->aip);
+  AsnIoBSClose(aibp); aibp = NULL;
+  size = Nlm_BSLen(bsp);
+  
+  buf = (BytePtr)MemNew(size);
+  Nlm_BSSeek(bsp,0,0);
+  if (Nlm_BSRead(bsp,buf,size) != size) {
+    CddHtmlError("Error creating buffer for Alignment viewer!");
+  }
+  Nlm_BSFree(bsp); bsp = NULL;
+  
+/* old code, with 'static' buf size  
+  aimp = (AsnIoMemPtr) AsnIoMemOpen("wb",buf,size);
+  if (NULL == aimp) return(FALSE);
+  if (!NcbiMimeAsn1AsnWrite(pvnNcbi,aimp->aip,NULL)) return(FALSE);
+  AsnIoFlush(aimp->aip);
+  AsnIoMemClose(aimp);
+*/
+/* debugging code 
+  aip = AsnIoOpen("CAV_debug_data","w");
+  NcbiMimeAsn1AsnWrite(pvnNcbi,aip,NULL);
+  AsnIoClose(aip);
+*/
   CAV_DisplayMultiple(buf, uCAVoptions, pwidth, tbit, NULL, nFeatures, pafeat);
   MemFree(buf);
   if (iPDB != 2 && iPDB != 8) printf("</PRE>\n");
@@ -2746,7 +2773,7 @@ Int2 Main()
   SeqAlignPtr              salpCopy, salpFlat;
   SeqAlignPtr              salpQuery          = NULL;
   SeqAnnotPtr              psaCAlignHead      = NULL;
-  SeqAnnotPtr              sap;
+  SeqAnnotPtr              sap, sapTemp       = NULL;
   SeqEntryPtr              sep, sequences     = NULL;
   SeqEntryPtr              sepQuery           = NULL;
   SeqIdPtr                 sip, sipNew, sipQuery, sipRet;
@@ -3051,7 +3078,7 @@ Int2 Main()
       CddHtmlError("Error setting environment variable BLASTDB");
     }
     www_arg = WWWGetValueByIndex(www_info,indx);
-    Qstatus = (Int2) QBlastGetResults(www_arg,&salpTemp,&bspQuery,&blast_program,&blast_database,&other_returns, &error_returns);
+    Qstatus = (Int2) QBlastGetResults(www_arg,&sapTemp,&bspQuery,&blast_program,&blast_database,&other_returns, &error_returns);
     if (Qstatus != 0) CddHtmlError("Could not retrieve query sequence from BLAST queue!");
     sipQuery = bspQuery->id;
     oidp = ObjectIdNew();
@@ -3984,7 +4011,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
   if (iSeqStrMode == CDDSEQUONLY) {
     CddFixSequenceFormat(pbsaSeq->sequences);
-    if (!CddInvokeAlignView(pvnNcbi,CDDalign,iPDB,QuerySeq,QueryAlign,dbversion,
+    if (!CddInvokeAlignView(pvnNcbi,iPDB,QuerySeq,QueryAlign,dbversion,
                             pcdd,bHasPdb,tbit,pwidth,iQueryGi,QueryName,iFeatNum,
 			    pcds,alen,nTaxIds,iTaxids,txids,pcdtree)) 
       CddHtmlError("Could not display alignment");

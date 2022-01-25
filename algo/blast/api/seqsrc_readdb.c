@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.c,v 1.27 2004/04/28 19:39:01 dondosha Exp $
+/*  $Id: seqsrc_readdb.c,v 1.29 2004/06/07 17:14:58 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 *
 */
 
-static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.27 2004/04/28 19:39:01 dondosha Exp $";
+static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.29 2004/06/07 17:14:58 dondosha Exp $";
 
 #include <algo/blast/api/seqsrc_readdb.h>
 #include <algo/blast/core/blast_def.h>
@@ -197,8 +197,10 @@ static Int2 ReaddbRetSequence(void* readdb_handle, void* args)
 
     ASSERT(readdb_args);
 
-    if (readdb_args->seq->sequence_start_allocated)
+    if (readdb_args->seq->sequence_start_allocated) {
        sfree(readdb_args->seq->sequence_start);
+       readdb_args->seq->sequence_start_allocated = FALSE;
+    }
     return 0;
 }
 
@@ -215,21 +217,26 @@ static char* ReaddbGetSeqIdStr(void* readdb_handle, void* args)
     ReadDBFILEPtr rdfp = (ReadDBFILEPtr) readdb_handle;
     Int4* oid = (Int4*) args;
     SeqIdPtr sip = NULL;
+    char* descr = NULL;
     char *seqid_str = NULL;
 
     if (!rdfp || !oid)
         return NULL;
 
-    if ( !(seqid_str = (char*) malloc(sizeof(char)*SEQIDLEN_MAX)))
-        return NULL;
-
-    if (!readdb_get_descriptor(rdfp, *oid, &sip, NULL)) {
+    if (!readdb_get_descriptor(rdfp, *oid, &sip, &descr)) {
         sfree(seqid_str);
         return NULL;
     }
 
-    SeqIdWrite(sip, seqid_str, PRINTID_FASTA_LONG, SEQIDLEN_MAX-1);
-
+    if (sip->choice != SEQID_GENERAL ||
+        strcmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
+       if ( !(seqid_str = (char*) malloc(sizeof(char)*SEQIDLEN_MAX)))
+          return NULL;
+       SeqIdWrite(sip, seqid_str, PRINTID_FASTA_LONG, SEQIDLEN_MAX-1);
+       sfree(descr);
+    } else {
+       seqid_str = strtok(descr, " \t\n\r");
+    }
     sip = SeqIdSetFree(sip);
 
     return seqid_str;
@@ -445,6 +452,7 @@ BlastSeqSrc* ReaddbSeqSrcNew(BlastSeqSrc* retval, void* args)
     /* Initialize the BlastSeqSrc structure fields with user-defined function
      * pointers and rdfp */
     SetDeleteFnPtr(retval, &ReaddbSeqSrcFree);
+    SetCopyFnPtr(retval, &ReaddbSeqSrcCopy);
     SetDataStructure(retval, (void*) rdfp);
     SetGetNumSeqs(retval, &ReaddbGetNumSeqs);
     SetGetMaxSeqLen(retval, &ReaddbGetMaxLength);
@@ -478,9 +486,11 @@ BlastSeqSrc* ReaddbSeqSrcNew(BlastSeqSrc* retval, void* args)
        while (rdfp && rdfp->stop < rargs->final_db_seq)
           rdfp = rdfp->next;
        /* Set last sequence for this and all subsequent rdfp's to the one
-          in the arguments, making the subsequent rdfp's ranges empty. */
+          in the arguments, making the subsequent rdfp's ranges empty. 
+          Note that final_db_seq in arguments is 1 beyond the last sequence
+          number to search. */
        for ( ; rdfp; rdfp = rdfp->next)
-          rdfp->stop = rargs->final_db_seq;
+          rdfp->stop = rargs->final_db_seq - 1;
     }
 
     return retval;
@@ -493,6 +503,20 @@ BlastSeqSrc* ReaddbSeqSrcFree(BlastSeqSrc* bssp)
     readdb_destruct((ReadDBFILEPtr)GetDataStructure(bssp));
     sfree(bssp);
     return NULL;
+}
+
+BlastSeqSrc* ReaddbSeqSrcCopy(BlastSeqSrc* bssp)
+{
+   ReadDBFILE* rdfp = NULL;
+
+   if (!bssp) 
+      return NULL;
+
+   rdfp = readdb_attach((ReadDBFILEPtr)GetDataStructure(bssp));
+
+   SetDataStructure(bssp, (void*) rdfp);
+    
+   return bssp;
 }
 
 BlastSeqSrc* 

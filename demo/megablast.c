@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.113 2004/04/29 19:56:00 dondosha Exp $";
+static char const rcsid[] = "$Id: megablast.c,v 6.114 2004/05/27 17:37:30 dondosha Exp $";
 
-/* $Id: megablast.c,v 6.113 2004/04/29 19:56:00 dondosha Exp $
+/* $Id: megablast.c,v 6.114 2004/05/27 17:37:30 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,9 @@ static char const rcsid[] = "$Id: megablast.c,v 6.113 2004/04/29 19:56:00 dondos
 ************************************************************************** 
  * $Revision 6.13$ *  
  * $Log: megablast.c,v $
+ * Revision 6.114  2004/05/27 17:37:30  dondosha
+ * Do not call GapXEditBlockDelete in formatting callback - this is now done when HSPs are freed
+ *
  * Revision 6.113  2004/04/29 19:56:00  dondosha
  * Mask filtered locations in query sequence lines in XML output
  *
@@ -653,7 +656,6 @@ MegaBlastPrintSegments(VoidPtr ptr)
       hsp = search->current_hitlist->hsp_array[hsp_index];
       if (hsp==NULL || (search->pbp->cutoff_e > 0 && 
                         hsp->evalue > search->pbp->cutoff_e)) {
-         GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
 	 continue;
       }
       context = hsp->context;
@@ -748,7 +750,6 @@ MegaBlastPrintSegments(VoidPtr ptr)
       GXECollectDataForSeqalign(hsp->gap_info, hsp->gap_info->esp, numseg,
 				&start, &length, &strands, 
 				&q_off, &hsp->subject.offset);
-      GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
 
       if (start[0] < 0) {
          length[0] += start[0];

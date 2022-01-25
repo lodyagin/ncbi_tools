@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: fwd_check.sh,v 1.15 2004/01/16 19:03:45 lavr Exp $
+# $Id: fwd_check.sh,v 1.19 2004/06/07 19:36:33 lavr Exp $
 # Author:   Denis Vakatov (vakatov@ncbi,nlm.nih.gov)
 # Modified: Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
 #
@@ -22,13 +22,13 @@ cat <<EOF
 ;130.14.22.30	5810	RETIRED
 130.14.22.31	5812	RETIRED
 130.14.22.32	5811	RETIRED
-130.14.22.12	5845	INTERNAL
-130.14.29.112	5860	RESERVED
+;130.14.22.12	5845	RETIRED
+130.14.25.13	5860	INTERNAL
 130.14.29.112	5861	OK
 130.14.29.112	5862	OK
 130.14.29.112	5863	OK
-130.14.29.112	5864	RESERVED
-130.14.29.112	5865	RESERVED
+130.14.29.112	5864	OK
+130.14.29.112	5865	OK
 130.14.29.112	5866	RESERVED
 130.14.29.112	5867	RESERVED
 130.14.29.112	5868	RESERVED
@@ -49,7 +49,7 @@ while read x_host x_port x_status ; do
     guard=$!
     wait $pid >/dev/null 2>&1
     kill $guard >/dev/null 2>&1
-    grep -s 'NCBI Firewall Daemon:  Invalid ticket\. Connection closed\.' /tmp/$$ >/dev/null 2>&1
+    grep -s 'NCBI Firewall Daemon:  Invalid ticket\.  *Connection closed\.' /tmp/$$ >/dev/null 2>&1
     if test $? -eq 0 ; then
         echo "${x_host}:${x_port}	${x_status}"
     else

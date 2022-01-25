@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: kappa.c,v 6.39 2004/03/31 18:12:13 papadopo Exp $";
+static char const rcsid[] = "$Id: kappa.c,v 6.41 2004/06/14 21:11:05 papadopo Exp $";
 
-/* $Id: kappa.c,v 6.39 2004/03/31 18:12:13 papadopo Exp $ 
+/* $Id: kappa.c,v 6.41 2004/06/14 21:11:05 papadopo Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,9 +34,24 @@ Authors: Alejandro Schaffer, Mike Gertz
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.39 $
+ $Revision: 6.41 $
 
  $Log: kappa.c,v $
+ Revision 6.41  2004/06/14 21:11:05  papadopo
+ From Michael Gertz:
+ - Added several casts where casts occur in blast_kappa.c.  These casts
+      should have no real effect; the log of blast_kappa.c indicates that
+      they suppress compiler warnings.
+ - Changed the type of one variable that holds a score from
+      Nlm_FloatHi to Int4.
+ - moved the definition Kappa_ForbiddenRanges and relevant
+      routines earlier in the file.
+ - fixed some comments.
+ - made a few (~5) changes in whitespace.
+
+ Revision 6.40  2004/06/03 16:10:50  dondosha
+ Fix in Kappa_SearchParametersNew: allocate correct number of rows for matrices
+
  Revision 6.39  2004/03/31 18:12:13  papadopo
  Mike Gertz' refactoring of RedoAlignmentCore
 
@@ -326,7 +341,7 @@ Kappa_MatchRecordInsertSeqAlign(
 
   newSW =
     SWResultsNew(self->sequence, newScore, self->score, newEvalue,
-                 self->eValue, (NULL == self->alignments),
+                 self->eValue, (Boolean) (NULL == self->alignments),
                  localScalingFactor * lambda, logK,
                  self->subject_index, self->id);
 
@@ -631,7 +646,7 @@ SWheapInsert(SWheap * self,
   }
   if(self->array != NULL) {
     /* "self" is currently a list. Add the new alignments to the end */
-    SWheapRecord *heapRecord;   /* destination for the new alignments */ 
+    SWheapRecord *heapRecord;   /* destination for the new alignments */
     heapRecord                  = &self->array[++self->n];
     heapRecord->bestEvalue      = matchRecord->eValue;
     heapRecord->theseAlignments = matchRecord->alignments;
@@ -650,7 +665,7 @@ SWheapInsert(SWheap * self,
         Int4 newCapacity;       /* capacity the heap will have after
                                  * it is resized */
         newCapacity      = MAX(SWHEAP_MIN_RESIZE + self->capacity,
-                               SWHEAP_RESIZE_FACTOR * self->capacity);
+                               (Int4) (SWHEAP_RESIZE_FACTOR * self->capacity));
         self->heapArray  = (SWheapRecord *)
           MemMore(self->heapArray, (newCapacity + 1) * sizeof(SWheapRecord));
         self->capacity   = newCapacity;
@@ -673,7 +688,7 @@ SWheapInsert(SWheap * self,
         /* the new alignments must be discarded */
         discardedAlignments = matchRecord->alignments;
       } else {
-        /* the largest element in the heap must be discarded */
+        /* The largest element in the heap must be discarded. */
         SWheapRecord *heapRecord;     /* destination for the new alignments */
         discardedAlignments         = self->heapArray[1].theseAlignments;
 
@@ -685,7 +700,7 @@ SWheapInsert(SWheap * self,
       }
       /* end else the largest element in the heap must be discarded */
       while(discardedAlignments != NULL) {
-        /* There are discarded alignments that have not been freed */
+        /* There are discarded alignments that have not been freed. */
         SWResults *thisAlignment;     /* the head of the list of
                                        * discarded alignments */
         thisAlignment        = discardedAlignments;
@@ -696,9 +711,9 @@ SWheapInsert(SWheap * self,
         MemFree(thisAlignment);
       }
       /* end while there are discarded alignments that have not been freed */
-    } 
+    }
     /* end else some set of alignments must be discarded */
-    
+
     self->worstEvalue = self->heapArray[1].bestEvalue;
     KAPPA_ASSERT(SWheapIsValid(self->heapArray, 1, self->n));
   }
@@ -765,13 +780,13 @@ SWheapPop(SWheap * self)
     last  = &self->heapArray[self->n];
 
     results = first->theseAlignments;
-    
+
     first->theseAlignments = last->theseAlignments;
     first->bestEvalue      = last->bestEvalue;
 
     SWheapifyDown(self->heapArray, 1, --self->n);
   }
-  
+
   KAPPA_ASSERT(SWheapIsValid(self->heapArray, 1, self->n));
 
   return results;
@@ -1324,6 +1339,96 @@ static Int4 BLspecialSmithWatermanFindStart(Uint1 * matchSeq,
    *queryStart = bestQueryPos;
    return(bestScore);
 }
+
+
+/**
+ * An instance of Kappa_ForbiddenRanges is used by the Smith-Waterman
+ * algorithm to represent ranges in the database that are not to be
+ * aligned.
+ */
+struct Kappa_ForbiddenRanges {
+  Int4    *numForbidden;        /* how many forbidden ranges at each db
+                                 * position */
+  Int4   **ranges;              /* forbidden ranges for each database
+                                 * position */
+  Int4     queryLength;         /* length of the query sequence */
+};
+typedef struct Kappa_ForbiddenRanges Kappa_ForbiddenRanges;
+
+
+/* Initialize a new, empty Kappa_ForbiddenRanges */
+static void
+Kappa_ForbiddenRangesInitialize(
+  Kappa_ForbiddenRanges * self, /* object to be initialized */
+  Int4 queryLength              /* the length of the query */
+) {
+  Int4 f;
+  self->queryLength  = queryLength;
+  self->numForbidden = (Int4 *) MemNew(queryLength * sizeof(Int4));
+  self->ranges       = (Int4 **) MemNew(queryLength * sizeof(Int4 *));
+
+  for(f = 0; f < queryLength; f++) {
+    self->numForbidden[f] = 0;
+    self->ranges[f]       = (Int4 *) MemNew(2 * sizeof(Int4));
+    self->ranges[f][0]    = 0;
+    self->ranges[f][1]    = 0;
+  }
+}
+
+
+/* Reset self to be empty */
+static void
+Kappa_ForbiddenRangesClear(Kappa_ForbiddenRanges * self)
+{
+  Int4 f;
+  for(f = 0; f < self->queryLength; f++) {
+    self->numForbidden[f] = 0;
+  }
+}
+
+
+/* Add some ranges to self */
+static void
+Kappa_ForbiddenRangesPush(
+  Kappa_ForbiddenRanges * self,
+  Int4 queryStart,             /* start of the alignment in the query
+                                  sequence */
+  Int4 queryAlignmentExtent,   /* length of the alignment in the query
+                                  sequence */
+  Int4 matchStart,             /* start of the alignment in the
+                                  subject sequence */
+  Int4 matchAlignmentExtent)   /* length of the alignment in the
+                                  subject sequence */
+{
+  Int4 f;
+  for(f = queryStart; f < (queryStart + queryAlignmentExtent); f++) {
+    Int4 last = 2 * self->numForbidden[f];
+    if(0 != last) {    /* we must resize the array */
+      self->ranges[f] =
+        (Int4 *) MemMore(self->ranges[f], (last + 2) * sizeof(Int4));
+    }
+    self->ranges[f][last]     = matchStart;
+    self->ranges[f][last + 1] = matchStart + matchAlignmentExtent;
+
+    self->numForbidden[f]++;
+  }
+}
+
+
+/**
+ * Release the storage associated with the fields of self, but do not
+ * delete self
+ */
+static void
+Kappa_ForbiddenRangesRelease(Kappa_ForbiddenRanges * self)
+{
+  Int4 f;
+  for(f = 0; f < self->queryLength; f++)  MemFree(self->ranges[f]);
+
+  MemFree(self->ranges);       self->ranges       = NULL;
+  MemFree(self->numForbidden); self->numForbidden = NULL;
+}
+
 
 /*The following procedure computes the number of identities in an
  * alignment of query_seq to the matching sequence stored in
@@ -2119,88 +2224,6 @@ Kappa_MatchingSequenceRelease(Kappa_MatchingSequence * self)
 }
 
 
-/* An instance of Kappa_ForbiddenRanges is used by the Smith-Waterman
- * algorithm to represent ranges in the database that are not to be
- * aligned.
- */
-
-struct Kappa_ForbiddenRanges { Int4 *numForbidden; /* how many
-  forbidden ranges at each db * position */
-  Int4 **ranges;                /* forbidden ranges for each database
-                                 * position */
-  Int4   queryLength;
-};
-typedef struct Kappa_ForbiddenRanges Kappa_ForbiddenRanges;
-
-
-/* Initialize a new, empty Kappa_ForbiddenRanges */
-static void
-Kappa_ForbiddenRangesInitialize(
-  Kappa_ForbiddenRanges * self, /* object to be initialized */
-  Int4 queryLength              /* the length of the query */
-) {
-  Int4 f;
-  self->queryLength  = queryLength;
-  self->numForbidden = (Int4 *) MemNew(queryLength * sizeof(Int4));
-  self->ranges       = (Int4 **) MemNew(queryLength * sizeof(Int4 *));
-
-  for(f = 0; f < queryLength; f++) {
-    self->numForbidden[f] = 0;
-    self->ranges[f]       = (Int4 *) MemNew(2 * sizeof(Int4));
-    self->ranges[f][0]    = 0;
-    self->ranges[f][1]    = 0;
-  }
-}
-
-
-/* Reset self to be empty */
-static void
-Kappa_ForbiddenRangesClear(Kappa_ForbiddenRanges * self)
-{
-  Int4 f;
-  for(f = 0; f < self->queryLength; f++) {
-    self->numForbidden[f] = 0;
-  }
-}
-
-
-/* Add some ranges to self */
-static void
-Kappa_ForbiddenRangesPush(
-  Kappa_ForbiddenRanges * self,
-  Int4 queryStart,      /* start of the alignment in the query sequence */
-  Int4 queryAlignmentExtent,   /* length of the alignment in the query sequence */
-  Int4 matchStart,      /* start of the alignment in the subject sequence */
-  Int4 matchAlignmentExtent)   /* length of the alignment in the subject  sequence */
-{
-  Int4 f;
-  for(f = queryStart; f < (queryStart + queryAlignmentExtent); f++) {
-    Int4 last = 2 * self->numForbidden[f];
-    if(0 != last) {    /* we must resize the array */
-      self->ranges[f] =
-        (Int4 *) MemMore(self->ranges[f], (last + 2) * sizeof(Int4));
-    }
-    self->ranges[f][last]     = matchStart;
-    self->ranges[f][last + 1] = matchStart + matchAlignmentExtent;
-
-    self->numForbidden[f]++;
-  }
-}
-
-
-/* Release the storage associated with the fields of self, but do not 
- * delete self */
-static void
-Kappa_ForbiddenRangesRelease(Kappa_ForbiddenRanges * self)
-{
-  Int4 f;
-  for(f = 0; f < self->queryLength; f++)  MemFree(self->ranges[f]);
-  
-  MemFree(self->ranges);       self->ranges       = NULL;
-  MemFree(self->numForbidden); self->numForbidden = NULL;
-}
-
-
 /* Redo a S-W alignment using an x-drop alignment.  The result will
  * usually be the same as the S-W alignment. The call to ALIGN
  * attempts to force the endpoints of the alignment to match the
@@ -2225,10 +2248,12 @@ Kappa_SWFindFinalEndsUsingXdrop(
                                          * scoring system has been
                                          * scaled in order to obtain
                                          * greater precision */
-  Int4 * queryAlignmentExtent, /* length of the alignment in the query sequence,
-                           as computed by the x-drop algorithm */
-  Int4 * matchAlignmentExtent, /* length of the alignment in the subject sequence,
-                           as computed by the x-drop algorithm */
+  Int4 * queryAlignmentExtent, /* length of the alignment in the query
+                                  sequence, as computed by the x-drop
+                                  algorithm */
+  Int4 * matchAlignmentExtent, /* length of the alignment in the
+                                  subject sequence, as computed by the
+                                  x-drop algorithm */
   Int4 ** reverseAlignScript,   /* alignment information (script)
                                  * returned by a x-drop alignment algorithm */
   BLAST_Score * newScore        /* alignment score computed by the
@@ -2242,7 +2267,7 @@ Kappa_SWFindFinalEndsUsingXdrop(
     Int4 *alignScript;          /* the alignment script that will be
                                    generated below by the ALIGN
                                    routine. */
-    
+
     *reverseAlignScript = alignScript =
       (Int4 *) MemNew((matchLength + queryLength + 3) * sizeof(Int4));
 
@@ -2346,8 +2371,8 @@ Kappa_SearchParametersNew(
   
   if(adjustParameters) {
     sp->kbp_gap_orig = BlastKarlinBlkCreate();
-    sp->startMatrix  = allocateScaledMatrix(rows);
-    sp->origMatrix   = allocateScaledMatrix(rows);
+    sp->startMatrix  = allocateScaledMatrix(sp->mRows);
+    sp->origMatrix   = allocateScaledMatrix(sp->mRows);
     
     sp->resProb    =
       (Nlm_FloatHi *) MemNew(PROTEIN_ALPHABET * sizeof(Nlm_FloatHi));
@@ -2796,7 +2821,7 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
             Int4 *reverseAlignScript;   
 
             gap_align->x_parameter =
-              options->gap_x_dropoff_final * NCBIMATH_LN2 / kbp->Lambda;
+              (Int4) (options->gap_x_dropoff_final * NCBIMATH_LN2/kbp->Lambda);
 
             Kappa_SWFindFinalEndsUsingXdrop(query, queryLength, queryStart,
                                             queryEnd,
@@ -2862,7 +2887,7 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
                                  * non-SW case */
 
         search->pbp->gap_x_dropoff_final =
-          options->gap_x_dropoff_final * NCBIMATH_LN2 / kbp->Lambda;
+          (Int4) (options->gap_x_dropoff_final * NCBIMATH_LN2 / kbp->Lambda);
         /* recall that index is the counter corresponding to
          * thisMatch; by aliasing, thisMatch will get updated during
          * the following call to BlastGetGapAlgnTbck, so that
@@ -2887,12 +2912,12 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
                                                  * query to the
                                                  * current database
                                                  * sequence */
-            Nlm_FloatHi bestScore;      /* the score of the highest
+            Int4 bestScore;             /* the score of the highest
                                          * scoring alignment */
             numNewAlignments = thisMatch->hspcnt;  
             bestScore =
-              Nlm_Nint(((Nlm_FloatHi) thisMatch->hsp_array[0].score) /
-                       localScalingFactor);
+              (Int4) Nlm_Nint(((Nlm_FloatHi) thisMatch->hsp_array[0].score) /
+                              localScalingFactor);
 
             Kappa_MatchRecordInitialize(&matchRecord, bestEvalue, bestScore,
                                         matchingSeq.sequence,

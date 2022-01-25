@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.169 $
+* $Revision: 6.171 $
 *
 * File Description:
 *
@@ -3266,7 +3266,7 @@ static void BlastCDD (BioseqPtr bsp, Pointer userdata)
 
   /* do blast search */
 
-  salp = BlastBioseqNet (bl3hp, bsp, "blastp", "oasis_sap", options,
+  salp = BlastBioseqNet (bl3hp, bsp, "blastp", "cdd", options,
                          NULL, &error_returns, NULL);
 
   /* BlastErrorPrintExtra (error_returns, TRUE, stdout); */
@@ -3314,7 +3314,7 @@ extern void SimpleCDDBlastProc (IteM i)
 
   /* blast fetch enable needed to retrieve by general SeqID */
 
-  BlastNetBioseqFetchEnable (bl3hp, "oasis_sap", FALSE, TRUE);
+  BlastNetBioseqFetchEnable (bl3hp, "cdd", FALSE, TRUE);
 
   bf.bl3hp = bl3hp;
   bf.options = options;
@@ -3330,7 +3330,7 @@ extern void SimpleCDDBlastProc (IteM i)
 
   BlastFini (bl3hp);
   options = BLASTOptionDelete (options);
-  BlastNetBioseqFetchDisable (bl3hp, "oasis_sap", FALSE);
+  BlastNetBioseqFetchDisable (bl3hp, "cdd", FALSE);
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
@@ -9301,14 +9301,14 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
         if (ssp != NULL) {
           foundit = StringISearch (ssp->name, sfp->findStr);
 		  while (foundit != NULL) {
-		    offset = foundit - ssp->name;
+		    offset = foundit - ssp->name + 1;
             EditSourceString (&(ssp->name), sfp, foundit);
 			foundit = StringISearch (ssp->name + offset, sfp->findStr);
           }
         } else if (mod != NULL) {
           foundit = StringISearch (mod->subname, sfp->findStr);
  		  while (foundit != NULL) {
-		    offset = foundit - mod->subname;
+		    offset = foundit - mod->subname + 1;
             EditSourceString (&(mod->subname), sfp, foundit);
 			foundit = StringISearch (mod->subname + offset, sfp->findStr);
           }

@@ -1,39 +1,38 @@
-/* $Id: blast_engine.c,v 1.126 2004/05/05 15:27:44 dondosha Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/* $Id: blast_engine.c,v 1.143 2004/06/14 15:37:37 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Ilya Dondoshansky
+ *
+ */
 
-/*****************************************************************************
+/** @file blast_engine.c
+ * High level BLAST functions
+ */
 
-File name: blast_engine.c
-
-Author: Ilya Dondoshansky
-
-Contents: High level BLAST functions
-
-******************************************************************************/
-
-static char const rcsid[] = "$Id: blast_engine.c,v 1.126 2004/05/05 15:27:44 dondosha Exp $";
+static char const rcsid[] = 
+    "$Id: blast_engine.c,v 1.143 2004/06/14 15:37:37 dondosha Exp $";
 
 #include <algo/blast/core/blast_engine.h>
 #include <algo/blast/core/lookup_wrap.h>
@@ -44,6 +43,30 @@ static char const rcsid[] = "$Id: blast_engine.c,v 1.126 2004/05/05 15:27:44 don
 #include <algo/blast/core/blast_traceback.h>
 #include <algo/blast/core/phi_extend.h>
 #include <algo/blast/core/link_hsps.h>
+
+/** Structure to be passed to BLAST_SearchEngineCore, containing pointers 
+    to various preallocated structures and arrays. */
+typedef struct BlastCoreAuxStruct {
+
+   Blast_ExtendWord* ewp; /**< Structure for keeping track of diagonal
+                               information for initial word matches */
+   BlastWordFinderType WordFinder; /**< Word finder function pointer */
+   BlastGetGappedScoreType GetGappedScore; /**< Gapped extension function
+                                              pointer */
+   BlastInitHitList* init_hitlist; /**< Placeholder for HSPs after 
+                                        ungapped extension */
+   BlastHSPList* hsp_list; /**< Placeholder for HSPs after gapped 
+                                extension */
+   Uint4* query_offsets; /**< Placeholder for initial word match query 
+                              offsets */
+   Uint4* subject_offsets; /**< Placeholder for initial word match  
+                              subject offsets */
+   Uint1* translation_buffer; /**< Placeholder for translated subject
+                                   sequences */
+   Uint1* translation_table; /**< Translation table for forward strand */
+   Uint1* translation_table_rc; /**< Translation table for reverse 
+                                     strand */
+} BlastCoreAuxStruct;
 
 /** Deallocates all memory in BlastCoreAuxStruct */
 static BlastCoreAuxStruct* 
@@ -117,44 +140,59 @@ static void TranslateHSPsToDNAPCoord(Uint1 program,
  * query against one subject sequence. Translation of the subject sequence
  * into 6 frames is done inside, if necessary. If subject sequence is 
  * too long, it can be split into several chunks. 
+ * @ param program_number BLAST program type [in]
+ * @param query Query sequence structure [in]
+ * @param query_info Query information [in]
+ * @param subject Subject sequence structure [in]
+ * @param lookup Lookup table [in]
+ * @param gap_align Structure for gapped alignment information [in]
+ * @param score_params Scoring parameters [in]
+ * @param word_params Initial word finding and ungapped extension 
+ *                    parameters [in]
+ * @param ext_params Gapped extension parameters [in]
+ * @param hit_params Hit saving parameters [in]
+ * @param db_options Database options [in]
+ * @param diagnostics Hit counts and other diagnostics [in] [out]
+ * @param aux_struct Structure containing different auxiliary data and memory
+ *                   for the preliminary stage of the BLAST search [in]
+ * @param hsp_list_out List of HSPs found for a given subject sequence [in]
  */
 static Int2
 BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query, 
    BlastQueryInfo* query_info, BLAST_SequenceBlk* subject, 
    LookupTableWrap* lookup, BlastGapAlignStruct* gap_align, 
-   const BlastScoringOptions* score_options, 
+   BlastScoringParameters* score_params, 
    BlastInitialWordParameters* word_params, 
    BlastExtensionParameters* ext_params, 
    BlastHitSavingParameters* hit_params, 
-   const PSIBlastOptions* psi_options, 
    const BlastDatabaseOptions* db_options,
-   BlastReturnStat* return_stats,
+   BlastDiagnostics* diagnostics,
    BlastCoreAuxStruct* aux_struct,
    BlastHSPList** hsp_list_out)
 {
    BlastInitHitList* init_hitlist = aux_struct->init_hitlist;
    BlastHSPList* hsp_list = aux_struct->hsp_list;
-   BLAST_ExtendWord* ewp = aux_struct->ewp;
-   Uint4* query_offsets = aux_struct->query_offsets;
-   Uint4* subject_offsets = aux_struct->subject_offsets;
    Uint1* translation_buffer = NULL;
    Int4* frame_offsets = NULL;
-   Int4 num_chunks, chunk, total_subject_length, offset;
    BlastHitSavingOptions* hit_options = hit_params->options;
+   BlastScoringOptions* score_options = score_params->options;
    BlastHSPList* combined_hsp_list = NULL;
    Int2 status = 0;
-   Boolean translated_subject;
    Int4 context, first_context, last_context;
-   Int4 orig_length = subject->length, prot_length = 0;
+   Int4 orig_length = subject->length;
    Uint1* orig_sequence = subject->sequence;
    Int4 **matrix;
    Int4 hsp_num_max;
+   BlastUngappedStats* ungapped_stats = NULL;
+   BlastGappedStats* gapped_stats = NULL;
+   Boolean prelim_traceback = 
+      (ext_params->options->ePrelimGapExt == eGreedyWithTracebackExt);
 
-   translated_subject = (program_number == blast_type_tblastn
+   const Boolean k_translated_subject = (program_number == blast_type_tblastn
                          || program_number == blast_type_tblastx
                          || program_number == blast_type_rpstblastn);
 
-   if (translated_subject) {
+   if (k_translated_subject) {
       first_context = 0;
       last_context = 5;
       if (score_options->is_ooframe) {
@@ -184,9 +222,19 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
 
    hsp_num_max = (hit_options->hsp_num_max ? hit_options->hsp_num_max : INT4_MAX);
 
+   if (diagnostics) {
+      ungapped_stats = diagnostics->ungapped_stat;
+      gapped_stats = diagnostics->gapped_stat;
+   }
+
    /* Loop over frames of the subject sequence */
    for (context=first_context; context<=last_context; context++) {
-      if (translated_subject) {
+      Int4 chunk; /* loop variable below. */
+      Int4 num_chunks; /* loop variable below. */
+      Int4 offset = 0; /* Used as offset into subject sequence (if chunked) */
+      Int4 total_subject_length; /* Length of subject sequence used when split. */
+
+      if (k_translated_subject) {
          subject->frame = BLAST_ContextToFrame(blast_type_blastx, context);
          subject->sequence = 
             translation_buffer + frame_offsets[context] + 1;
@@ -199,7 +247,6 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
       /* Split subject sequence into chunks if it is too long */
       num_chunks = (subject->length - DBSEQ_CHUNK_OVERLAP) / 
          (MAX_DBSEQ_LEN - DBSEQ_CHUNK_OVERLAP) + 1;
-      offset = 0;
       total_subject_length = subject->length;
       
       for (chunk = 0; chunk < num_chunks; ++chunk) {
@@ -217,23 +264,22 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
          
          BlastInitHitListReset(init_hitlist);
          
-         return_stats->db_hits +=
-            aux_struct->WordFinder(subject, query, lookup, 
-               matrix, word_params, ewp, query_offsets, 
-               subject_offsets, GetOffsetArraySize(lookup), init_hitlist);
+         aux_struct->WordFinder(subject, query, lookup, 
+            matrix, word_params, aux_struct->ewp, aux_struct->query_offsets, 
+            aux_struct->subject_offsets, GetOffsetArraySize(lookup), 
+            init_hitlist, ungapped_stats);
             
          if (init_hitlist->total == 0)
             continue;
          
-         return_stats->init_extends += init_hitlist->total;
-         
          if (score_options->gapped_calculation) {
+            Int4 prot_length = 0;
             if (score_options->is_ooframe) {
                /* Convert query offsets in all HSPs into the mixed-frame  
                   coordinates */
                TranslateHSPsToDNAPCoord(program_number, init_hitlist, 
                   query_info, subject->frame, orig_length, offset);
-               if (translated_subject) {
+               if (k_translated_subject) {
                   prot_length = subject->length;
                   subject->length = 2*orig_length + 1;
                }
@@ -245,9 +291,9 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
              * are saved.
             */
             aux_struct->GetGappedScore(program_number, query, query_info, 
-               subject, gap_align, score_options, ext_params, hit_params, 
-               init_hitlist, &hsp_list);
-            if (score_options->is_ooframe && translated_subject)
+               subject, gap_align, score_params, ext_params, hit_params, 
+               init_hitlist, &hsp_list, gapped_stats);
+            if (score_options->is_ooframe && k_translated_subject)
                subject->length = prot_length;
          } else {
             BLAST_GetUngappedHSPList(init_hitlist, query_info, subject,
@@ -256,8 +302,6 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
 
          if (hsp_list->hspcnt == 0)
             continue;
-         
-         return_stats->good_init_extends += hsp_list->hspcnt;
          
          /* The subject ordinal id is not yet filled in this HSP list */
          hsp_list->oid = subject->oid;
@@ -270,14 +314,19 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
          /* Allow merging of HSPs either if traceback is already 
             available, or if it is an ungapped search */
          Blast_HSPListsMerge(hsp_list, &combined_hsp_list, hsp_num_max, offset,
-            (hsp_list->traceback_done || !score_options->gapped_calculation));
+            (Boolean)(prelim_traceback || !score_options->gapped_calculation));
       } /* End loop on chunks of subject sequence */
       
       Blast_HSPListAppend(combined_hsp_list, hsp_list_out, hsp_num_max);
       combined_hsp_list = Blast_HSPListFree(combined_hsp_list);
    } /* End loop on frames */
 
+   /* Restore the original contents of the subject block */
+   subject->length = orig_length;
+   subject->sequence = orig_sequence;
+
    hsp_list = *hsp_list_out;
+
    if (hit_params->do_sum_stats == TRUE) {
       status = BLAST_LinkHsps(program_number, hsp_list, query_info,
                               subject, gap_align->sbp, hit_params, 
@@ -293,40 +342,47 @@ BLAST_SearchEngineCore(Uint1 program_number, BLAST_SequenceBlk* query,
          requires precomputation that has not been done yet */
       if (program_number != blast_type_rpsblast &&
           program_number != blast_type_rpstblastn)
-         status = Blast_HSPListGetEvalues(program_number, query_info, 
-                     hsp_list, score_options->gapped_calculation, 
-                     gap_align->sbp);
+         status = Blast_HSPListGetEvalues(query_info, hsp_list, 
+                     score_options->gapped_calculation, gap_align->sbp);
    }
    
    /* Discard HSPs that don't pass the e-value test */
    status = Blast_HSPListReapByEvalue(hsp_list, hit_options);
-   
+
+   if (gapped_stats && hsp_list && hsp_list->hspcnt > 0) {
+      ++gapped_stats->num_seqs_passed;
+      gapped_stats->good_extensions += hsp_list->hspcnt;
+   }
+
    if (translation_buffer) {
        sfree(translation_buffer);
    }
    if (frame_offsets) {
        sfree(frame_offsets);
    }
-      
-   /* Restore the original contents of the subject block */
-   subject->length = orig_length;
-   subject->sequence = orig_sequence;
 
    return status;
 }
 
 static Int2 
-FillReturnXDropoffsInfo(BlastReturnStat* return_stats, 
+FillReturnCutoffsInfo(BlastRawCutoffs* return_cutoffs, 
+   BlastScoringParameters* score_params, 
    BlastInitialWordParameters* word_params, 
    BlastExtensionParameters* ext_params)
 {
-   if (!return_stats)
+   /* since the cutoff score here will be used for display
+      putposes, strip out any internal scaling of the scores */
+
+   Int4 scale_factor = (Int4)score_params->scale_factor;
+
+   if (!return_cutoffs)
       return -1;
 
-   return_stats->x_drop_ungapped = word_params->x_dropoff;
-   return_stats->x_drop_gap = ext_params->gap_x_dropoff;
-   return_stats->x_drop_gap_final = ext_params->gap_x_dropoff_final;
-   return_stats->gap_trigger = ext_params->gap_trigger;
+   return_cutoffs->x_drop_ungapped = word_params->x_dropoff / scale_factor;
+   return_cutoffs->x_drop_gap = ext_params->gap_x_dropoff / scale_factor;
+   return_cutoffs->x_drop_gap_final = ext_params->gap_x_dropoff_final / 
+                                                        scale_factor;
+   return_cutoffs->gap_trigger = ext_params->gap_trigger / scale_factor;
 
    return 0;
 }
@@ -346,6 +402,7 @@ FillReturnXDropoffsInfo(BlastReturnStat* return_stats,
  * @param query_info The query information block [in]
  * @param sbp Contains scoring information. [in]
  * @param gap_align Gapped alignment information and allocated memory [out]
+ * @param score_params Parameters for scoring [out]
  * @param word_params Parameters for initial word processing [out]
  * @param ext_params Parameters for gapped extension [out]
  * @param hit_params Parameters for saving hits [out]
@@ -365,6 +422,7 @@ BLAST_SetUpAuxStructures(Uint1 program_number,
    BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
    BlastScoreBlk* sbp, 
    BlastGapAlignStruct** gap_align, 
+   BlastScoringParameters** score_params,
    BlastInitialWordParameters** word_params,
    BlastExtensionParameters** ext_params,
    BlastHitSavingParameters** hit_params,
@@ -395,7 +453,7 @@ BLAST_SetUpAuxStructures(Uint1 program_number,
 
    if ((status = BLAST_GapAlignSetUp(program_number, seq_src, 
                     scoring_options, eff_len_options, ext_options, 
-                    hit_options, query_info, sbp,
+                    hit_options, query_info, sbp, score_params,
                     ext_params, hit_params, eff_len_params, gap_align)) != 0)
       return status;
       
@@ -424,7 +482,7 @@ BLAST_SetUpAuxStructures(Uint1 program_number,
    /* Pick which gapped alignment algorithm to use. */
    if (phi_lookup)
       aux_struct->GetGappedScore = PHIGetGappedScore;
-   else if (ext_options->algorithm_type == EXTEND_DYN_PROG)
+   else if (ext_options->ePrelimGapExt == eDynProgExt)
       aux_struct->GetGappedScore = BLAST_GetGappedScore;
    else
       aux_struct->GetGappedScore = BLAST_MbGetGappedScore;
@@ -432,8 +490,6 @@ BLAST_SetUpAuxStructures(Uint1 program_number,
    aux_struct->hsp_list = Blast_HSPListNew(hit_options->hsp_num_max);
    return status;
 }
-
-#define BLAST_DB_CHUNK_SIZE 1024
 
 Int4 
 BLAST_RPSSearchEngine(Uint1 program_number, 
@@ -447,84 +503,46 @@ BLAST_RPSSearchEngine(Uint1 program_number,
    const BlastEffectiveLengthsOptions* eff_len_options,
    const PSIBlastOptions* psi_options, 
    const BlastDatabaseOptions* db_options,
-   BlastHSPResults* results, BlastReturnStat* return_stats)
+   BlastHSPStream* hsp_stream, BlastDiagnostics* diagnostics, 
+   BlastHSPResults** results)
 {
    BlastCoreAuxStruct* aux_struct = NULL;
-   BlastHSPList* hsp_list;
-   BlastInitialWordParameters* word_params;
-   BlastExtensionParameters* ext_params;
-   BlastHitSavingParameters* hit_params;
+   BlastHSPList* hsp_list = NULL;
+   BlastScoringParameters* score_params = NULL;
+   BlastInitialWordParameters* word_params = NULL;
+   BlastExtensionParameters* ext_params = NULL;
+   BlastHitSavingParameters* hit_params = NULL;
    BlastEffectiveLengthsParameters* eff_len_params = NULL;
    BlastGapAlignStruct* gap_align;
    Int2 status = 0;
-
-   BlastHitSavingOptions *internal_hit_options = 
-				(BlastHitSavingOptions *)hit_options;
-   BlastScoringOptions *internal_score_options = 
-				(BlastScoringOptions *)score_options;
-   PSIBlastOptions *internal_psi_options = 
-				(PSIBlastOptions *)psi_options;
-
    Int8 dbsize;
    Int4 num_db_seqs;
    Uint4 avg_subj_length = 0;
    RPSLookupTable *lookup = (RPSLookupTable *)lookup_wrap->lut;
-   double scale_factor;
    BlastQueryInfo concat_db_info;
    BLAST_SequenceBlk concat_db;
    RPSAuxInfo *rps_info;
-   BlastHSPResults prelim_results;
    Uint1 *orig_query_seq = NULL;
+   BlastRawCutoffs* raw_cutoffs = NULL;
 
    if (program_number != blast_type_rpsblast &&
        program_number != blast_type_rpstblastn)
       return -1;
-   if (results->num_queries != 1)
-      return -2;
 
    if ((status =
        BLAST_SetUpAuxStructures(program_number, seq_src,
-          internal_score_options, eff_len_options, lookup_wrap, word_options,
-          ext_options, internal_hit_options, query, query_info, sbp,
-          &gap_align, &word_params, &ext_params,
+          score_options, eff_len_options, lookup_wrap, word_options,
+          ext_options, hit_options, query, query_info, sbp,
+          &gap_align, &score_params, &word_params, &ext_params,
           &hit_params, &eff_len_params, &aux_struct)) != 0)
       return status;
 
-   FillReturnXDropoffsInfo(return_stats, word_params, ext_params);
-
    /* modify scoring and gap alignment structures for
-      use with RPS blast.
-
-      FIXME these should not all be done here, but scattered
-      among the relevant initialization functions */
+      use with RPS blast. */
 
    rps_info = lookup->rps_aux_info;
-   scale_factor = rps_info->scale_factor;
-   internal_psi_options->scalingFactor = scale_factor;
    gap_align->positionBased = TRUE;
    gap_align->sbp->posMatrix = lookup->rps_pssm;
-   word_params->cutoff_score = (Int4)(scale_factor *
-                                     (double)word_params->cutoff_score);
-   word_params->x_dropoff = (Int4)(scale_factor *
-                                     (double)word_params->x_dropoff);
-   internal_hit_options->cutoff_score = (Int4)(scale_factor *
-                             (double)internal_hit_options->cutoff_score);
-   internal_score_options->gap_open = (Int4)(scale_factor *
-                                   (double)rps_info->gap_open_penalty);
-   internal_score_options->gap_extend = (Int4)(scale_factor *
-                                   (double)rps_info->gap_extend_penalty);
-   hit_params->cutoff_score = (Int4)(scale_factor *
-                                   (double)hit_params->cutoff_score);
-   hit_params->cutoff_small_gap = (Int4)(scale_factor *
-                                   (double)hit_params->cutoff_small_gap);
-   hit_params->cutoff_big_gap = (Int4)(scale_factor *
-                                   (double)hit_params->cutoff_big_gap);
-   gap_align->gap_x_dropoff = (Int4)(scale_factor *
-                                   (double)gap_align->gap_x_dropoff);
-   ext_params->gap_x_dropoff = (Int4)(scale_factor *
-                                   (double)ext_params->gap_x_dropoff);
-   ext_params->gap_x_dropoff_final = (Int4)(scale_factor *
-                                   (double)ext_params->gap_x_dropoff_final);
 
    /* determine the total number of residues in the db.
       This figure must also include one trailing NULL for
@@ -561,10 +579,6 @@ BLAST_RPSSearchEngine(Uint1 program_number,
    concat_db_info.last_context = num_db_seqs - 1;
    concat_db_info.context_offsets = lookup->rps_seq_offsets;
 
-   prelim_results.num_queries = num_db_seqs;
-   prelim_results.hitlist_array = (BlastHitList **)calloc(num_db_seqs,
-                                             sizeof(BlastHitList *));
-
    /* Change the table of diagonals that will be used for the
       search; we need a diag table that can fit the entire
       concatenated DB */
@@ -584,24 +598,22 @@ BLAST_RPSSearchEngine(Uint1 program_number,
       E-values cannot be calculated after hits are found. */
 
    BLAST_SearchEngineCore(program_number, &concat_db, &concat_db_info, 
-         query, lookup_wrap, gap_align, internal_score_options, 
-         word_params, ext_params, hit_params, internal_psi_options, 
-         db_options, return_stats, aux_struct, &hsp_list);
+         query, lookup_wrap, gap_align, score_params, 
+         word_params, ext_params, hit_params, db_options, 
+         diagnostics, aux_struct, &hsp_list);
 
-   /* save the resulting list of HSPs. 'query' and 'subject' are
+   /* Fill the cutoff values in the diagnostics structure */
+   if (diagnostics->cutoffs)
+      raw_cutoffs = diagnostics->cutoffs;
+
+   FillReturnCutoffsInfo(raw_cutoffs, score_params, word_params, ext_params);
+
+   /* Save the resulting list of HSPs. 'query' and 'subject' are
       still reversed */
-
    if (hsp_list && hsp_list->hspcnt > 0) {
-      return_stats->prelim_gap_passed += hsp_list->hspcnt;
       /* Save the HSPs into a hit list */
-      Blast_HSPResultsSaveHitList(program_number, &prelim_results, hsp_list, hit_params);
+      BlastHSPStreamWrite(hsp_stream, &hsp_list);
    }
-
-   /* Change the results from a single hsplist with many 
-      contexts to many hsplists each with a single context.
-      'query' and 'subject' offsets are still reversed. */
-
-   Blast_HSPResultsRPSUpdate(results, &prelim_results);
 
    /* for a translated search, throw away the packed version
       of the query and replace with the original (excluding the
@@ -615,15 +627,10 @@ BLAST_RPSSearchEngine(Uint1 program_number,
    /* Do the traceback. After this call, query and 
       subject have reverted to their traditional meanings. */
 
-   BLAST_RPSTraceback(program_number, results, &concat_db, 
+   BLAST_RPSTraceback(program_number, hsp_stream, &concat_db, 
             &concat_db_info, query, query_info, gap_align, 
-            internal_score_options, ext_params, hit_params, db_options, 
-            internal_psi_options, rps_info->karlin_k);
-
-   /* The traceback calculated the E values, so it's safe
-      to sort the results now */
-
-   Blast_HSPResultsSortByEvalue(results);
+            score_params, ext_params, hit_params, db_options, 
+            rps_info->karlin_k, results);
 
    /* free the internal structures used */
    /* Do not destruct score block here */
@@ -632,15 +639,16 @@ BLAST_RPSSearchEngine(Uint1 program_number,
       query->sequence_start = orig_query_seq;
       query->sequence = orig_query_seq + 1;
    }
-   sfree(prelim_results.hitlist_array);
    gap_align->sbp->posMatrix = NULL;
    gap_align->positionBased = FALSE;
    gap_align->sbp = NULL;
    BLAST_GapAlignStructFree(gap_align);
    BlastCoreAuxStructFree(aux_struct);
+   sfree(score_params);
    sfree(hit_params);
    sfree(ext_params);
    sfree(word_params);
+   sfree(eff_len_params);
    return status;
 }
 
@@ -656,10 +664,12 @@ BLAST_SearchEngine(Uint1 program_number,
    const BlastEffectiveLengthsOptions* eff_len_options,
    const PSIBlastOptions* psi_options, 
    const BlastDatabaseOptions* db_options,
-   BlastHSPResults* results, BlastReturnStat* return_stats)
+   BlastHSPStream* hsp_stream, BlastDiagnostics* diagnostics,
+   BlastHSPResults** results)
 {
    BlastCoreAuxStruct* aux_struct = NULL;
-   BlastHSPList* hsp_list; 
+   BlastHSPList* hsp_list = NULL; 
+   BlastScoringParameters* score_params = NULL;
    BlastInitialWordParameters* word_params = NULL;
    BlastExtensionParameters* ext_params = NULL;
    BlastHitSavingParameters* hit_params = NULL;
@@ -669,16 +679,19 @@ BLAST_SearchEngine(Uint1 program_number,
    Int2 status = 0;
    BlastSeqSrcIterator* itr = NULL;
    Int8 db_length = 0;
+   BlastRawCutoffs* raw_cutoffs = NULL;
+   Boolean prelim_traceback;
    
    if ((status = 
        BLAST_SetUpAuxStructures(program_number, seq_src,
           score_options, eff_len_options, lookup_wrap, word_options, 
           ext_options, hit_options, query, query_info, sbp, 
-          &gap_align, &word_params, &ext_params, 
+          &gap_align, &score_params, &word_params, &ext_params, 
           &hit_params, &eff_len_params, &aux_struct)) != 0)
       return status;
 
-   FillReturnXDropoffsInfo(return_stats, word_params, ext_params);
+   prelim_traceback = (ext_options->ePrelimGapExt == eGreedyWithTracebackExt);
+
    memset((void*) &seq_arg, 0, sizeof(seq_arg));
 
    /* Encoding is set so there are no sentinel bytes, and protein/nucleotide
@@ -712,58 +725,75 @@ BLAST_SearchEngine(Uint1 program_number,
             return status;
       }
 
-      /* Calculate cutoff scores for linking HSPs */
-      if (hit_params->do_sum_stats) {
+      /* Calculate cutoff scores for linking HSPs. Do this only for ungapped
+         translated searches. */
+      if (hit_params->do_sum_stats && program_number != blast_type_blastn &&
+          !score_options->gapped_calculation) {
          CalculateLinkHSPCutoffs(program_number, query_info, sbp, 
-                                 hit_params, db_length, seq_arg.seq->length, 
-                                 psi_options);
+            hit_params, ext_params, db_length, seq_arg.seq->length); 
       }
 
       BLAST_SearchEngineCore(program_number, query, query_info,
-         seq_arg.seq, lookup_wrap, gap_align, score_options, word_params, 
-         ext_params, hit_params, psi_options, db_options,
-         return_stats, aux_struct, &hsp_list);
+         seq_arg.seq, lookup_wrap, gap_align, score_params, word_params, 
+         ext_params, hit_params, db_options, diagnostics, aux_struct, 
+         &hsp_list);
  
       if (hsp_list && hsp_list->hspcnt > 0) {
-         return_stats->prelim_gap_passed += hsp_list->hspcnt;
          if (program_number == blast_type_blastn) {
-            status = 
-               Blast_HSPListReevaluateWithAmbiguities(hsp_list, query, 
-                  seq_arg.seq, hit_options, query_info, sbp, score_options, 
-                  seq_src);
+            if (prelim_traceback || !score_options->gapped_calculation) {
+               status = 
+                  Blast_HSPListReevaluateWithAmbiguities(hsp_list, query, 
+                     seq_arg.seq, hit_options, query_info, sbp, score_params, 
+                     seq_src);
+            }
+            /* Check for HSP inclusion */
+            status = Blast_HSPListUniqSort(hsp_list);
          }
-         /* Save the HSPs into a hit list */
-         Blast_HSPResultsSaveHitList(program_number, results, hsp_list, hit_params);
+         /* Calculate and fill the bit scores, but only if final scores are
+            already available, i.e. either traceback has already been done,
+            or this is an ungapped search. */
+         if (prelim_traceback || !score_options->gapped_calculation) {
+            Blast_HSPListGetBitScores(hsp_list, 
+               score_options->gapped_calculation, sbp);
+         }
+         /* Save the results. */
+         BlastHSPStreamWrite(hsp_stream, &hsp_list);
       }
-         /*BlastSequenceBlkClean(subject);*/
    }
    
    itr = BlastSeqSrcIteratorFree(itr);
    BlastSequenceBlkFree(seq_arg.seq);
 
+   /* Fill the cutoff values in the diagnostics structure */
+   if (diagnostics->cutoffs)
+      raw_cutoffs = diagnostics->cutoffs;
+
+   FillReturnCutoffsInfo(raw_cutoffs, score_params, word_params, ext_params);
+
+
    if (hit_options->phi_align) {
       /* Save the product of effective occurrencies of pattern in query and
          occurrencies of pattern in database */
-      gap_align->sbp->effective_search_sp *= return_stats->db_hits;
+      Int8 db_hits = 1;
+      if (diagnostics && diagnostics->ungapped_stat)
+         db_hits = diagnostics->ungapped_stat->lookup_hits;
+      gap_align->sbp->effective_search_sp *= db_hits;
    }
 
-   /* Now sort the hit lists for all queries, but only if this is a database
-      search. */
-   if (db_length > 0)
-      Blast_HSPResultsSortByEvalue(results);
+   /* Prohibit any subsequent writing to the HSP stream. */
+   BlastHSPStreamClose(hsp_stream);
 
-   if (!ext_options->skip_traceback && score_options->gapped_calculation) {
-      status = 
-         BLAST_ComputeTraceback(program_number, results, query, query_info,
-            seq_src, gap_align, score_options, ext_params, hit_params,
-            eff_len_params, db_options, psi_options);
-   }
+   status = 
+      BLAST_ComputeTraceback(program_number, hsp_stream, query, query_info,
+         seq_src, gap_align, score_params, ext_params, hit_params,
+         eff_len_params, db_options, psi_options, results);
 
    /* Do not destruct score block here */
    gap_align->sbp = NULL;
    BLAST_GapAlignStructFree(gap_align);
    BlastCoreAuxStructFree(aux_struct);
 
+   sfree(score_params);
    sfree(hit_params);
    sfree(ext_params);
    sfree(word_params);

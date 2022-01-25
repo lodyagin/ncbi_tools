@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.11 $
+* $Revision: 1.16 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -168,7 +168,7 @@ static Char link_niaest [MAX_WWWBUF];
 #define DEF_LINK_NIAEST "http://lgsun.grc.nia.nih.gov/cgi-bin/pro3?sname1="
 
 static Char link_worm_base [MAX_WWWBUF];
-#define DEF_LINK_WORM_BASE "http://www.wormbase.org/db/get?class=Sequence;name="
+#define DEF_LINK_WORM_BASE "http://www.wormbase.org/db/gene/gene?class=CDS;name="
 
 static Char link_worfdb [MAX_WWWBUF];
 #define DEF_LINK_WORFDB "http://worfdb.dfci.harvard.edu/search.pl?form=1&search="
@@ -212,11 +212,27 @@ static Char link_rebase [MAX_WWWBUF];
 NLM_EXTERN Char link_encode [MAX_WWWBUF];
 #define DEF_LINK_ENCODE  "http://www.nhgri.nih.gov/10005107"
 
-NLM_EXTERN Char link_pgn [MAX_WWWBUF];
+static Char link_pgn [MAX_WWWBUF];
 #define DEF_LINK_PGN  "http://pgn.cornell.edu/cgi-bin/search/seq_search_result.pl?identifier="
 
-NLM_EXTERN Char link_subtilist [MAX_WWWBUF];
+static Char link_subtilist [MAX_WWWBUF];
 #define DEF_LINK_SUBTILIST  "http://genolist.pasteur.fr/SubtiList/genome.cgi?external_query+"
+
+NLM_EXTERN Char link_go [MAX_WWWBUF];
+#define DEF_LINK_GO "http://db.yeastgenome.org/cgi-bin/SGD/GO/go.pl?goid="
+
+static Char link_hinvdb [MAX_WWWBUF];
+#define DEF_LINK_HINVDB "http://www.h-invitational.jp"
+
+static Char link_hinvdbhit [MAX_WWWBUF];
+#define DEF_LINK_HINVDBHIT "http://www.jbirc.aist.go.jp/hinv/hinvsys/servlet/ExecServlet?KEN_INDEX=0&KEN_TYPE=30&KEN_STR="
+
+static Char link_hinvdbhix [MAX_WWWBUF];
+#define DEF_LINK_HINVDBHIX "http://www.jbirc.aist.go.jp/hinv/hinvsys/servlet/ExecServlet?KEN_INDEX=0&KEN_TYPE=31&KEN_STR="
+
+static Char link_asap [MAX_WWWBUF];
+#define DEF_LINK_ASAP "https://asap.ahabs.wisc.edu/annotation/php/feature_info.php?FeatureID="
+
 
 /* www utility functions */
 
@@ -293,6 +309,11 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ENCODE", DEF_LINK_ENCODE, link_encode, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_PGN", DEF_LINK_PGN, link_pgn, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_SUBTILIST", DEF_LINK_SUBTILIST, link_subtilist, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GO", DEF_LINK_GO, link_go, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HINVDB", DEF_LINK_HINVDB, link_hinvdb, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HINVDBHIT", DEF_LINK_HINVDBHIT, link_hinvdbhit, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HINVDBHIX", DEF_LINK_HINVDBHIX, link_hinvdbhix, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ASAP", DEF_LINK_ASAP, link_asap, MAX_WWWBUF);
 }
 
 
@@ -498,6 +519,24 @@ static void FF_www_db_xref_rebase (
   FFAddTextToString(ffstring, ".html>", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
+static void FF_www_db_xref_hinvdb (
+  StringItemPtr ffstring,
+  CharPtr db, 
+  CharPtr identifier
+)
+{
+  CharPtr link = link_hinvdb;
+  
+  if ( StringStr(identifier, "HIT") != NULL ) {
+    link = link_hinvdbhit;
+  }
+  if ( StringStr(identifier, "HIX") != NULL ) {
+    link = link_hinvdbhix;
+  }
+
+  FF_www_db_xref_std(ffstring, db, identifier, link);
+}
+
 
 static void Do_www_db_xref(
   IntAsn2gbJobPtr ajp,
@@ -587,6 +626,12 @@ static void Do_www_db_xref(
     FF_www_db_xref_std(ffstring, db, identifier, link_pgn);
   } else if ( StringCmp(db , "SubtiList") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_subtilist);
+  } else if ( StringCmp(db , "GO") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_go);
+  } else if ( StringCmp(db , "H-InvDB") == 0) {
+    FF_www_db_xref_hinvdb(ffstring, db, identifier);
+  } else if ( StringCmp(db , "ASAP") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_asap);
 
   } else {  
     /* default: no link just the text */
@@ -3001,6 +3046,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   Int4               gibbsq;
   GBReferencePtr     gbref = NULL;
   GBSeqPtr           gbseq;
+  ValNodePtr         head;
   Int2               i;
   ImprintPtr         imp;
   IndxPtr            index;
@@ -3030,6 +3076,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   CharPtr            str;
   Boolean            strict_isojta;
   CharPtr            suffix = NULL;
+  BioseqPtr          target;
   CharPtr            tmp;
   Boolean            trailingPeriod = TRUE;
   ValNodePtr         vnp;
@@ -3041,8 +3088,33 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   if (ajp == NULL) return NULL;
   asp = afp->asp;
   if (asp == NULL) return NULL;
+  target = asp->target;
   bsp = asp->bsp;
-  if (bsp == NULL) return NULL;
+  if (target == NULL || bsp == NULL) return NULL;
+
+  /* five-column feature table uses special code for formatting */
+
+  if (ajp->format == FTABLE_FMT) {
+    irp = (IntRefBlockPtr) bbp;
+    if (irp->loc != NULL) {
+      if (irp->rb.pmid != 0 || irp->rb.muid != 0) {
+        head = NULL;
+        PrintFtableIntervals (&head, target, irp->loc, "REFERENCE");
+        if (irp->rb.pmid != 0) {
+          sprintf (buf, "\t\t\tpmid\t%ld\n", (long) irp->rb.pmid);
+          ValNodeCopyStr (&head, 0, buf);
+        } else if (irp->rb.muid != 0) {
+          sprintf (buf, "\t\t\tmuid\t%ld\n", (long) irp->rb.muid);
+          ValNodeCopyStr (&head, 0, buf);
+        }
+        str = MergeFFValNodeStrs (head);
+        ValNodeFreeData (head);
+      }
+    }
+    return str;
+  }
+
+  /* otherwise do regular flatfile formatting */
 
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return NULL;

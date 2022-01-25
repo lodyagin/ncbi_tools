@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.43  2004/05/12 18:55:33  kans
+* StreamCache takes SeqLocPtr as well as BioseqPtr optional arguments, slp version is equivalent of SeqPortNewByLoc
+*
 * Revision 6.42  2004/04/27 20:09:26  kans
 * StreamCacheGetResidue returns Uint1 because Char might be signed, preventing IS_residue from working
 *
@@ -394,7 +397,7 @@ NLM_EXTERN void SeqPortStreamLoc (
 
 /*******************************************************************************
 *	
-*   StreamCacheSetup (bsp, flags, scp)
+*   StreamCacheSetup (bsp, slp, flags, scp)
 *   StreamCacheGetResidue (scp)
 *   StreamCacheSetPosition (scp, pos)
 *       SeqPort functional replacement implemented on top of SeqPortStreams
@@ -403,6 +406,7 @@ NLM_EXTERN void SeqPortStreamLoc (
 
 typedef struct streamcache {
   BioseqPtr     bsp;
+  SeqLocPtr     slp;
   Char          buf [4004];
   Int2          ctr;
   Int2          total;
@@ -413,6 +417,7 @@ typedef struct streamcache {
 
 NLM_EXTERN Boolean StreamCacheSetup (
   BioseqPtr bsp,
+  SeqLocPtr slp,
   StreamFlgType flags,
   StreamCache PNTR scp
 );

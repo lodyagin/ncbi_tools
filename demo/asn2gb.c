@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.61 $
+* $Revision: 6.64 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -49,6 +49,10 @@
 #include <sqnutils.h>
 #include <explore.h>
 #include <asn2gnbp.h>
+
+#define ASN2GB_APP_VER "2.0"
+
+CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
 static void SaveSeqEntry (
   SeqEntryPtr sep,
@@ -145,6 +149,7 @@ static Int2 HandleSingleRecord (
   CharPtr inputFile,
   CharPtr outputFile,
   FmtType format,
+  FmtType altformat,
   ModType mode,
   StlType style,
   FlgType flags,
@@ -323,6 +328,9 @@ static Int2 HandleSingleRecord (
         AsnIoFree (aip, FALSE);
       } else {
         SeqEntryToGnbk (sep, slp, format, mode, style, flags, locks, custom, extra, ofp);
+        if (altformat != 0) {
+          SeqEntryToGnbk (sep, slp, altformat, mode, style, flags, locks, custom, extra, ofp);
+        }
       }
       if (ofp != NULL) {
         FileClose (ofp);
@@ -469,6 +477,7 @@ static void CompareFlatFiles (
   SeqEntryPtr sep,
   FILE* fp,
   FmtType format,
+  FmtType altformat,
   ModType mode,
   StlType style,
   FlgType flags,
@@ -496,6 +505,9 @@ static void CompareFlatFiles (
   if (batch == 1) {
 
     SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, custom, extra, fp);
+    if (altformat != 0) {
+      SeqEntryToGnbk (sep, NULL, altformat, mode, style, flags, locks, custom, extra, fp);
+    }
     return; /* just make report, nothing to diff */
 
   } else if (batch == 2) {
@@ -591,6 +603,9 @@ static void CompareFlatFiles (
 #else
 
   SeqEntryToGnbk (sep, NULL, format, mode, style, flags, locks, custom, extra, fp);
+  if (altformat != 0) {
+    SeqEntryToGnbk (sep, NULL, altformat, mode, style, flags, locks, custom, extra, fp);
+  }
 #endif
 }
 
@@ -648,6 +663,7 @@ static Int2 HandleMultipleRecords (
   CharPtr inputFile,
   CharPtr outputFile,
   FmtType format,
+  FmtType altformat,
   ModType mode,
   StlType style,
   FlgType flags,
@@ -883,8 +899,8 @@ static Int2 HandleMultipleRecords (
           starttime = GetSecs ();
           useGbdjoin = (Boolean) (format == GENBANK_FMT && (! hasRefSeq));
           CompareFlatFiles (path1, path2, path3, sep, ofp,
-                            format, mode, style, flags, locks, custom,
-                            extra, batch, gbdjoin, useGbdjoin);
+                            format, altformat, mode, style, flags, locks,
+                            custom, extra, batch, gbdjoin, useGbdjoin);
           stoptime = GetSecs ();
           if (stoptime - starttime > worsttime) {
             worsttime = stoptime - starttime;
@@ -968,7 +984,7 @@ Args myargs [] = {
     FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
   {"Output File Name", "stdout", NULL, NULL,
     FALSE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
-  {"Format (b GenBank, e EMBL, p GenPept, t Feature Table, x GBSet)", "b", NULL, NULL,
+  {"Format (b GenBank, e EMBL, p GenPept, t Feature Table, x INSDSet)", "b", NULL, NULL,
     FALSE, 'f', ARG_STRING, 0.0, 0, NULL},
   {"Mode (r Release, e Entrez, s Sequin, d Dump)", "s", NULL, NULL,
     FALSE, 'm', ARG_STRING, 0.0, 0, NULL},
@@ -1033,6 +1049,8 @@ Int2 Main (
 {
   CharPtr     accn = NULL;
   AsnIoPtr    aip = NULL;
+  FmtType     altformat = (FmtType) 0;
+  Char        app [64];
   AsnTypePtr  atp = NULL;
   Int2        batch = 0;
   Boolean     binary = FALSE;
@@ -1054,8 +1072,6 @@ Int2 Main (
   CharPtr     logfile = NULL;
   FILE        *logfp = NULL;
   ModType     mode = SEQUIN_MODE;
-  Char        path [PATH_MAX];
-  CharPtr     progname;
   Boolean     propOK = FALSE;
   Int2        rsult = 0;
   time_t      runtime, starttime, stoptime;
@@ -1096,17 +1112,10 @@ Int2 Main (
     return 1;
   }
 
-  ProgramPath (path, sizeof (path));
-  progname = StringRChr (path, DIRDELIMCHR);
-  if (progname != NULL) {
-    progname++;
-  } else {
-    progname = "asn2gb";
-  }
-
   /* process command line arguments */
 
-  if (! GetArgs (progname, sizeof (myargs) / sizeof (Args), myargs)) {
+  sprintf (app, "asn2gb %s", ASN2GB_APPLICATION);
+  if (! GetArgs (app, sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
   }
 
@@ -1131,7 +1140,11 @@ Int2 Main (
   }
 
   str = myargs [f_argFormat].strvalue;
-  if (StringICmp (str, "b") == 0) {
+  if (StringICmp (str, "bp") == 0 || StringICmp (str, "pb") == 0) {
+    format = GENBANK_FMT;
+    altformat = GENPEPT_FMT;
+
+  } else if (StringICmp (str, "b") == 0) {
     format = GENBANK_FMT;
   } else if (StringICmp (str, "e") == 0) {
     format = EMBL_FMT;
@@ -1304,13 +1317,13 @@ Int2 Main (
   if (batch != 0 || accn != NULL) {
     rsult = HandleMultipleRecords (myargs [i_argInputFile].strvalue,
                                    myargs [o_argOutputFile].strvalue,
-                                   format, mode, style, flags, locks,
+                                   format, altformat, mode, style, flags, locks,
                                    custom, extra, batch, binary, compressed,
                                    propOK, gbdjoin, accn, logfp);
   } else {
     rsult = HandleSingleRecord (myargs [i_argInputFile].strvalue,
                                 myargs [o_argOutputFile].strvalue,
-                                format, mode, style, flags, locks,
+                                format, altformat, mode, style, flags, locks,
                                 custom, extra, type, binary, compressed,
                                 from, to, strand, itemID, do_tiny_seq, do_fasta_stream);
   }
@@ -1322,12 +1335,11 @@ Int2 Main (
   }
 
   stoptime = GetSecs ();
+  runtime = stoptime - starttime;
   if (logfp != NULL) {
-    fprintf (logfp, "Finished in %ld seconds\n",
-             (long) (stoptime - starttime));
+    fprintf (logfp, "Finished in %ld seconds\n", (long) runtime);
     FileClose (logfp);
   }
-  runtime = stoptime - starttime;
   Message (MSG_POST, "Ran in %ld seconds", (long) runtime);
 
   if (myargs [r_argRemote].intvalue) {

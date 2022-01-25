@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.48 2004/05/03 15:24:04 dondosha Exp $
+/* $Id: blast_format.c,v 1.51 2004/06/07 18:40:34 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,18 +34,19 @@ Contents: Formatting of BLAST results (SeqAlign)
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.48 $
+ * $Revision: 1.51 $
  * */
 
-static char const rcsid[] = "$Id: blast_format.c,v 1.48 2004/05/03 15:24:04 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.51 2004/06/07 18:40:34 dondosha Exp $";
 
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_util.h>
+#include <algo/blast/core/blast_seqsrc.h>
+#include <algo/blast/api/blast_returns.h>
 #include <sequtil.h>
 #include <txalign.h>
-#include <readdb.h>
 
 extern Uint1 LIBCALL 
 BlastGetTypes PROTO((char* blast_program, Boolean* query_is_na, 
@@ -91,19 +92,23 @@ extern CharPtr LIBCALL BlastGetReference (Boolean html);
 extern CharPtr LIBCALL BlastGetVersionNumber PROTO((void));
 extern CharPtr LIBCALL BlastGetReleaseDate PROTO((void));
 
-typedef struct TxDfDbInfo {
-   struct TxDfDbInfo* next;
-   Boolean   is_protein;
-   char*   name;
-   char*   definition;
-   char*   date;
-   Int8   total_length;
-   Int4   number_seqs;
-   Boolean subset;      /* Print the subset message. */
-} TxDfDbInfo, *TxDfDbInfoPtr;
+/** This function is defined in distrib/tools/blastool.c; 1st argument is
+ * a pointer to TxDfDbInfo, defined in blastpri.h, which is identical to 
+ * BLAST_DbSummary, defined in algo/blast/api/blast_returns.h
+ */
+extern Boolean LIBCALL 
+PrintDbReport PROTO((BLAST_DbSummary* dbinfo, Int4 line_length, FILE *outfp));
+
+/** The following 3 functions are from distrib/tools/readdb.h */
+extern Boolean LIBCALL 
+ReadDBBioseqFetchEnable PROTO((CharPtr program, CharPtr dbname, Boolean is_na,
+                               Boolean now));
+
+extern void LIBCALL ReadDBBioseqFetchDisable PROTO((void));
 
 extern Boolean LIBCALL 
-PrintDbReport PROTO((TxDfDbInfo* dbinfo, Int4 line_length, FILE *outfp));
+PrintDbInformation PROTO((CharPtr database, Boolean is_aa, Int4 line_length,
+                          FILE *outfp, Boolean html));
 
 Int2 BlastFormattingOptionsNew(Uint1 program_number, char* file_out, 
         Int4 num_descriptions, Int4 num_alignments, Int4 align_view, 
@@ -395,7 +400,7 @@ static MBXml* MBXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
 Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
         char* blast_program, Int4 num_queries, 
         SeqLocPtr query_slp, BlastMaskLoc* blast_mask, 
-        BlastFormattingOptions* format_options, Boolean is_ooframe)
+        const BlastFormattingOptions* format_options, Boolean is_ooframe)
 {  
    SeqAlignPtr seqalign = head, sap, next_seqalign;
    SeqLocPtr mask_loc, next_mask_loc = NULL, tmp_loc = NULL, mask_loc_head;
@@ -598,277 +603,20 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
    return 0;
 }
 
-static TxDfDbInfo* LIBCALL
-TxDfDbInfoDestruct (TxDfDbInfo* dbinfo)
-{
-        TxDfDbInfo* next;
-
-        if (dbinfo == NULL)
-                return NULL;
-
-        while (dbinfo)
-        {
-                sfree(dbinfo->name);
-                sfree(dbinfo->definition);
-                sfree(dbinfo->date);
-                next = dbinfo->next;
-                sfree(dbinfo);
-                dbinfo = next;
-        }
-
-        return dbinfo;
-}
-
-static TxDfDbInfo* BLAST_GetDbInfo(ReadDBFILEPtr rdfp)
-{
-   TxDfDbInfo* dbinfo,* head = NULL,* dbinfo_var = NULL;
-   char* chptr;
-
-   while (rdfp) {
-      dbinfo = calloc(1, sizeof(TxDfDbInfo));
-      dbinfo->name = strdup(readdb_get_filename(rdfp));	
-      
-      if((chptr = readdb_get_title(rdfp)) == NULL)
-         chptr = readdb_get_filename(rdfp);
-      dbinfo->definition = strdup(chptr);	
-      
-      dbinfo->date = strdup(readdb_get_date(rdfp));	
-
-      dbinfo->is_protein = readdb_is_prot(rdfp);
-      
-      if (rdfp->aliaslen)
-         dbinfo->total_length = rdfp->aliaslen;
-      else
-         dbinfo->total_length = readdb_get_dblen(rdfp);
-      if (rdfp->aliasnseq)
-         dbinfo->number_seqs = rdfp->aliasnseq;
-      else
-         dbinfo->number_seqs = readdb_get_num_entries(rdfp);
-      if (head == NULL) {
-         head = dbinfo;
-         dbinfo_var = dbinfo;
-      } else {
-         dbinfo_var->next = dbinfo;
-         dbinfo_var = dbinfo_var->next;
-      }
-      rdfp = rdfp->next;
-   }
-   return head;
-}
-/*
-        adds the new string to the buffer, separating by a tilde.
-        Checks the size of the buffer for FormatBlastParameters and
-        allocates longer replacement if needed.
-*/
-
-static Boolean
-add_string_to_bufferEx(char* buffer, char* *old, Int2* old_length, Boolean add_tilde)
-
-{
-        char* new,* ptr;
-        Int2 length, new_length;
-
-        length = (StringLen(*old));
-
-        if((Int2)(StringLen(buffer)+length+3) > *old_length)
-        {
-                new_length = *old_length + 255;
-                new = calloc(new_length, sizeof(char));
-                if (*old_length > 0 && *old != NULL)
-                {
-                        memcpy(new, *old, *old_length);
-                        sfree(*old);
-                }
-                *old = new;
-                *old_length = new_length;
-        }
-
-        ptr = *old;
-        ptr += length;
-        if (add_tilde)
-        {
-                *ptr = '~';
-                ptr++;
-        }
-
-        while (*buffer != NULLB)
-        {
-                *ptr = *buffer;
-                buffer++; ptr++;
-        }
-
-        return TRUE;
-}
-
-static Boolean
-add_string_to_buffer(char* buffer, char* *old, Int2* old_length)
-
-{
-        return add_string_to_bufferEx(buffer, old, old_length, TRUE);
-}
-
-
-
-/*
-	Formats the BLAST parameters for the BLAST report.
-	One char* is returned, newlines are indicated by tildes ('~').
-*/	
-
-
-static char*
-FormatBlastParameters(Uint1 program_number, 
-   BlastScoringOptions* score_options,
-   BlastScoreBlk* sbp, LookupTableOptions* lookup_options,
-   BlastInitialWordOptions* word_options,
-   BlastExtensionOptions* ext_options,
-   BlastHitSavingOptions* hit_options,
-   BlastQueryInfo* query_info, ReadDBFILEPtr rdfp, 
-   BlastReturnStat* return_stats)
-{
-   Int4 cutoff = 0;
-   char buffer[128];
-   char* ret_buffer;
-   Int2 ret_buffer_length;
-   Int4 num_entries;
-   Int8 total_length;
-   Int4 qlen;
-   double evalue;
-   Boolean single_query = (query_info->last_context <= 1);
-   Blast_KarlinBlk* kbp;
-   
-   ret_buffer = NULL;
-   ret_buffer_length = 0;
-   
-   
-   if (score_options->matrix) {
-      sprintf(buffer, "Matrix: %s", score_options->matrix);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   }
-
-   if (score_options->gapped_calculation) {
-      sprintf(buffer, "Gap Penalties: Existence: %ld, Extension: %ld",
-              (long) score_options->gap_open, 
-              (long) score_options->gap_extend);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   }
-   
-   if (rdfp) {
-      readdb_get_totals_ex(rdfp, &total_length, &num_entries, TRUE);
-   } else {
-      num_entries = 1;
-      total_length = 1000;
-   }
-
-   sprintf(buffer, "Number of Sequences: %ld", (long) num_entries);
-   add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   if (return_stats) {
-      sprintf(buffer, "Number of Hits to DB: %s", 
-              Nlm_Int8tostr((Int8) return_stats->db_hits, 1));
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   
-      sprintf(buffer, "Number of extensions: %ld", 
-              (long) return_stats->init_extends);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      sprintf(buffer, "Number of successful extensions: %ld", 
-              (long) return_stats->good_init_extends);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-
-      if (hit_options->expect_value > 0.1) {
-         sprintf(buffer, "Number of sequences better than %4.1f: %ld", 
-                 hit_options->expect_value, 
-                 (long) return_stats->number_of_seqs_better_E);
-      } else {
-         sprintf(buffer, "Number of sequences better than %3.1e: %ld", 
-                 hit_options->expect_value, 
-                 (long) return_stats->number_of_seqs_better_E);
-      }
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   
-      if (score_options->gapped_calculation) {
-         sprintf(buffer, 
-                 "Number of HSP's better than %4.1f without gapping: %ld", 
-                 hit_options->expect_value, 
-                 (long) return_stats->prelim_gap_no_contest);
-         add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-         sprintf(buffer, 
-                 "Number of HSP's successfully gapped in prelim test: %ld", 
-                 (long) return_stats->prelim_gap_passed);
-         add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      }
-   }
-   /* Total query length does not include the first and last sentinel byte */
-   qlen = query_info->context_offsets[query_info->last_context+1] - 1;
-   sprintf(buffer, "length of query: %ld", (long)qlen);
-   add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   sprintf(buffer, "length of database: %s", Nlm_Int8tostr (total_length, 1));
-   add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   
-   if (single_query) {
-      sprintf(buffer, "effective search space used: %s",
-         Nlm_Int8tostr(
-            query_info->eff_searchsp_array[query_info->first_context], 1));
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   }
-   sprintf(buffer, "T: %ld", (long) lookup_options->threshold);
-   add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   sprintf(buffer, "A: %ld", (long) word_options->window_size);
-   add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   
-   if (!score_options->gapped_calculation)
-      kbp = sbp->kbp[query_info->first_context];
-   else
-      kbp = sbp->kbp_gap[query_info->first_context];
-   
-   sprintf(buffer, "X1: %ld (%4.1f bits)", 
-           (long)return_stats->x_drop_ungapped, word_options->x_dropoff);
-   add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   if (score_options->gapped_calculation) {
-      sprintf(buffer, "X2: %ld (%4.1f bits)", 
-              (long)return_stats->x_drop_gap, ext_options->gap_x_dropoff);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      sprintf(buffer, "X3: %ld (%4.1f bits)", 
-              (long)return_stats->x_drop_gap_final,
-              ext_options->gap_x_dropoff_final);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      
-      sprintf(buffer, "S1: %ld (%4.1f bits)", 
-              (long)return_stats->gap_trigger, ext_options->gap_trigger);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   }
-   
-   cutoff = 0;
-   if (single_query) {
-      Int4 context = query_info->first_context;
-      double searchsp = (double) query_info->eff_searchsp_array[context];
-
-      /* For translated RPS blast the search space must be scaled down */
-      if (program_number == blast_type_rpstblastn)
-         searchsp = searchsp / NUM_FRAMES;
-
-      evalue = hit_options->expect_value;
-      BLAST_Cutoffs(&cutoff, &evalue, kbp, searchsp, FALSE, 0);
-      sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, 
-              (((cutoff)*(kbp->Lambda))-(kbp->logK))/NCBIMATH_LN2);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-   }
-   return ret_buffer;
-}
-
 Int2 PrintOutputFooter(Uint1 program_number, 
-        BlastFormattingOptions* format_options, 
-        BlastScoringOptions* score_options, BlastScoreBlk* sbp,
-        LookupTableOptions* lookup_options,
-        BlastInitialWordOptions* word_options,
-        BlastExtensionOptions* ext_options,
-        BlastHitSavingOptions* hit_options,
-        BlastQueryInfo* query_info, char* dbname, 
-        BlastReturnStat* return_stats,
-        Boolean db_is_na) 
+        const BlastFormattingOptions* format_options, 
+        const BlastScoringOptions* score_options, const BlastScoreBlk* sbp,
+        const LookupTableOptions* lookup_options,
+        const BlastInitialWordOptions* word_options,
+        const BlastExtensionOptions* ext_options,
+        const BlastHitSavingOptions* hit_options,
+        const BlastEffectiveLengthsOptions* eff_len_options,
+        const BlastQueryInfo* query_info, const BlastSeqSrc* seq_src,
+        const BlastDiagnostics* diagnostics) 
 {
    FILE *outfp;
-   TxDfDbInfo* dbinfo_head,* dbinfo;
+   BLAST_DbSummary* dbinfo_head,* dbinfo;
    char* params_buffer;
-   ReadDBFILEPtr rdfp = NULL;
 
    if (!format_options || !format_options->outfp)
       return -1;
@@ -882,14 +630,12 @@ Int2 PrintOutputFooter(Uint1 program_number,
       fprintf(outfp, "<PRE>\n");
    init_buff_ex(85);
 
-   if (dbname && (rdfp = readdb_new(dbname, !db_is_na))) {
-      dbinfo_head = BLAST_GetDbInfo(rdfp);
+   dbinfo_head = Blast_GetDbSummary(seq_src);
 
-      for (dbinfo = dbinfo_head; dbinfo; dbinfo = dbinfo->next) {
-         PrintDbReport(dbinfo, 70, outfp);
-      }
-      dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
+   for (dbinfo = dbinfo_head; dbinfo; dbinfo = dbinfo->next) {
+      PrintDbReport(dbinfo, 70, outfp);
    }
+   dbinfo_head = Blast_DbSummaryFree(dbinfo_head);
    
    if (sbp && sbp->kbp) {
       Blast_KarlinBlk* ka_params;
@@ -908,20 +654,19 @@ Int2 PrintOutputFooter(Uint1 program_number,
    }
    
    params_buffer = 
-      FormatBlastParameters(program_number, score_options, sbp, 
-         lookup_options, word_options, ext_options, hit_options, query_info, 
-         rdfp, return_stats);
+      Blast_GetParametersBuffer(program_number, score_options, sbp, 
+                                lookup_options, word_options, ext_options, 
+                                hit_options, eff_len_options, query_info, 
+                                seq_src, diagnostics);
 
    PrintTildeSepLines(params_buffer, 70, outfp);
    sfree(params_buffer);
    free_buff();
    
-   readdb_destruct(rdfp);
-
    return 0;
 }
 
-Int2 BLAST_PrintOutputHeader(BlastFormattingOptions* format_options,
+Int2 BLAST_PrintOutputHeader(const BlastFormattingOptions* format_options,
         Boolean is_megablast, char* dbname, Boolean is_protein)
 {
    if (format_options->align_view < 7) {
@@ -965,23 +710,14 @@ Int2 BLAST_PrintOutputHeader(BlastFormattingOptions* format_options,
 
 #define BUFFER_LENGTH 256
 
-static void 
-PrintSeqDefline(SeqIdPtr sip, char* descr, char** buffer_ptr, 
+void 
+Blast_SeqIdGetDefLine(SeqIdPtr sip, char* descr, char** buffer_ptr, 
    Boolean ncbi_gi, Boolean accession_only, Boolean seqid_only,
    Boolean believe_local_id)
 {
-   char* seqid_buffer = NULL, *title = NULL, *defline_buffer;
+   char* seqid_buffer = NULL, *title = NULL, *defline_buffer = NULL;
    Int4 gi;
    Boolean numeric_sip_type = FALSE;
-
-   if (!descr) {
-      /* Get the title */
-      BioseqPtr bsp = BioseqLockById(sip);
-      title = strdup(BioseqGetTitle(bsp));
-      BioseqUnlock(bsp);
-   } else {
-      title = descr;
-   }
 
    if ((believe_local_id || sip->choice != SEQID_LOCAL) && 
        (sip->choice != SEQID_GENERAL ||
@@ -998,8 +734,20 @@ PrintSeqDefline(SeqIdPtr sip, char* descr, char** buffer_ptr,
             GetAccessionFromSeqId(SeqIdFindBestAccession(sip), 
                                   &gi, &seqid_buffer);
       }
-   } else if (seqid_only && title) {
-      seqid_buffer = StringTokMT(title, " \t\n\r", &title); 
+   } else {
+      if (!descr) {
+         /* Get the title */
+         BioseqPtr bsp = BioseqLockById(sip);
+         if (bsp) {
+            title = strdup(BioseqGetTitle(bsp));
+            BioseqUnlock(bsp);
+         }
+      } else {
+         title = descr;
+      }
+
+      if (seqid_only) 
+         seqid_buffer = StringTokMT(title, " \t\n\r", &title); 
    }
    
    if (numeric_sip_type && !seqid_buffer) {
@@ -1021,35 +769,13 @@ PrintSeqDefline(SeqIdPtr sip, char* descr, char** buffer_ptr,
    *buffer_ptr = defline_buffer;
 }
 
-static void ScoreAndEvalueToBuffers(double bit_score, double evalue, 
-               char* *bit_score_buf, char* *evalue_buf)
-{
-   if (evalue < 1.0e-180)
-      sprintf(*evalue_buf, "0.0");
-   else if (evalue < 1.0e-99)
-      sprintf(*evalue_buf, "%2.0e", evalue);
-   else if (evalue < 0.0009) 
-         sprintf(*evalue_buf, "%3.1e", evalue);
-   else if (evalue < 1.0) 
-      sprintf(*evalue_buf, "%4.3f", evalue);
-   else 
-      sprintf(*evalue_buf, "%5.1f", evalue);
-   
-   if (bit_score > 9999)
-      sprintf(*bit_score_buf, "%4.3e", bit_score);
-   else if (bit_score > 99.9)
-      sprintf(*bit_score_buf, "%4.1f", bit_score);
-   else
-      sprintf(*bit_score_buf, "%4.2f", bit_score);
-}
-
 /* This function might serve as a starting point for a callback function 
  * that prints results before the traceback stage, e.g. the on-the-fly 
  * tabular output, a la the -D3 option of the old megablast.
  */
 void BLAST_PrintIntermediateResults(BlastHSPResults* results, 
         BlastQueryInfo* query_info, SeqLocPtr query_slp, 
-        ReadDBFILEPtr rdfp, SeqIdPtr seqid, BlastScoreBlk* sbp, 
+        BlastSeqSrc* seq_src, BlastScoreBlk* sbp, 
         char* filename)
 {
    Int4 query_index, hit_index, hsp_index;
@@ -1061,33 +787,24 @@ void BLAST_PrintIntermediateResults(BlastHSPResults* results,
    Int4 q_start, q_end, s_start, s_end;
    FILE *outfp;
    SeqLocPtr slp;
-   char* subject_descr;
    Blast_KarlinBlk* kbp;
-   char* bit_score_buff,* eval_buff;
-   double bit_score;
+   char bit_score_buff[10], eval_buff[10];
+   char* eval_buff_ptr = NULL;
    BlastHSP* hsp;
+   ListNode* seqid_wrap = NULL;
 
-   if (!results || !query_info || !query_slp || (!rdfp && !seqid) || 
+   if (!results || !query_info || !query_slp || !seq_src || 
        !sbp || !filename)
       return;
 
    outfp = FileOpen(filename, "w");
-
-   eval_buff = (char *) malloc(10);
-   bit_score_buff = (char *) malloc(10);
-   
-   if (!rdfp) {
-      /* Two sequences case */
-      subject_id = seqid;
-      subject_descr = NULL;
-   }
 
    for (query_index = 0, slp = query_slp; 
         query_index < results->num_queries && slp; 
         ++query_index, slp = slp->next) {
       hit_list = results->hitlist_array[query_index];
       query_id = SeqLocId(slp);
-      PrintSeqDefline(query_id, NULL, &query_buffer, TRUE, FALSE, FALSE,
+      Blast_SeqIdGetDefLine(query_id, NULL, &query_buffer, TRUE, FALSE, FALSE,
                       FALSE);
       fprintf(outfp, "#Query = %s\n\n", query_buffer);
       sfree(query_buffer);
@@ -1100,11 +817,16 @@ void BLAST_PrintIntermediateResults(BlastHSPResults* results,
          for (hit_index = 0; hit_index < hit_list->hsplist_count; 
               ++hit_index) {
             hsp_list = hit_list->hsplist_array[hit_index];
-            if (rdfp) {
-               readdb_get_descriptor(rdfp, hsp_list->oid, &subject_id,
-                                     &subject_descr);
+            BLASTSeqSrcGetSeqId(seq_src, (void*) &hsp_list->oid);
+            if (seqid_wrap->choice == BLAST_SEQSRC_C_SEQID) {
+               subject_id = (SeqId*) seqid_wrap->ptr;
+               ListNodeFree(seqid_wrap);
+            } else {
+               /* Could not retrieve id for this subject sequence. This should
+                  never happen, but if it does, skip this HSP. */
+               continue;
             }
-            PrintSeqDefline(subject_id, subject_descr, &subject_buffer, 
+            Blast_SeqIdGetDefLine(subject_id, NULL, &subject_buffer, 
                             TRUE, FALSE, FALSE, TRUE);
             fprintf(outfp, ">%s\n\n", subject_buffer);
             sfree(subject_buffer);
@@ -1124,19 +846,18 @@ void BLAST_PrintIntermediateResults(BlastHSPResults* results,
                }
 
                kbp = sbp->kbp[hsp->context];
-               bit_score = (hsp->score*kbp->Lambda - kbp->logK) / 
-                  NCBIMATH_LN2;
 
-               ScoreAndEvalueToBuffers(bit_score, hsp->evalue, 
-                  &bit_score_buff, &eval_buff);
+               eval_buff_ptr = eval_buff;
+
+               ScoreAndEvalueToBuffers(hsp->bit_score, hsp->evalue, 
+                  bit_score_buff, &eval_buff_ptr, TRUE);
 
                fprintf(outfp, "[%ld %ld] [%ld %ld] %s %s\n", 
                        (long)q_start, (long)q_end, (long)s_start, (long)s_end,
-                       bit_score_buff, eval_buff);
+                       bit_score_buff, eval_buff_ptr);
             }
          }
       }
    }
    FileClose(outfp);
 }
-

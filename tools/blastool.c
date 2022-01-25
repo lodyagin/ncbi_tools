@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastool.c,v 6.264 2004/04/30 15:25:20 dondosha Exp $";
+static char const rcsid[] = "$Id: blastool.c,v 6.268 2004/05/21 13:53:04 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,20 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.264 $
+* $Revision: 6.268 $
 * $Log: blastool.c,v $
+* Revision 6.268  2004/05/21 13:53:04  dondosha
+* Use BLAST_HSPFree to free BLAST_HSP structures, hence no need to call GapXEditBlockDelete in multiple places
+*
+* Revision 6.267  2004/05/14 15:38:11  dondosha
+* Use newly public function ScoreAndEvalueToBuffers from txalign.h instead of a static function
+*
+* Revision 6.266  2004/05/14 14:41:03  bealer
+* - Er. I mean .002, as per blastpgp.
+*
+* Revision 6.265  2004/05/14 14:39:45  bealer
+* - Adjust ethresh to .001 for PSI blast.
+*
 * Revision 6.264  2004/04/30 15:25:20  dondosha
 * Added argument in call to BXMLGetHspFromSeqAlign
 *
@@ -4933,28 +4945,6 @@ BlastGetNumIdentical(Uint1Ptr query, Uint1Ptr subject, Int4 q_start,
    return ident;
 }
 
-static void ScoreAndEvalueToBuffers(FloatHi bit_score, FloatHi evalue, 
-                                  CharPtr *bit_score_buf, CharPtr *evalue_buf)
-{
-   if (evalue < 1.0e-180)
-      sprintf(*evalue_buf, "0.0");
-   else if (evalue < 1.0e-99)
-      sprintf(*evalue_buf, "%2.0le", evalue);
-   else if (evalue < 0.0009) 
-         sprintf(*evalue_buf, "%3.1le", evalue);
-   else if (evalue < 1.0) 
-      sprintf(*evalue_buf, "%4.3lf", evalue);
-   else 
-      sprintf(*evalue_buf, "%5.1lf", evalue);
-   
-   if (bit_score > 9999)
-      sprintf(*bit_score_buf, "%4.3le", bit_score);
-   else if (bit_score > 99.9)
-      sprintf(*bit_score_buf, "%4.1lf", bit_score);
-   else
-      sprintf(*bit_score_buf, "%4.2lf", bit_score);
-}
-
 /* 
    Function to print results in tab-delimited format, given a SeqAlign list.
    q_shift and s_shift are the offsets in query and subject in case of a
@@ -5006,7 +4996,8 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
    Int4 numseg, num_gap_opens, num_mismatches, num_ident, score;
    Int4 number, align_length, index, i;
    Int4 q_start, q_end, s_start, s_end;
-   CharPtr eval_buff, bit_score_buff;
+   Char bit_score_buff[10];
+   CharPtr eval_buff;
    Boolean is_translated;
    SeqIdPtr query_id, old_query_id = NULL, subject_id, old_subject_id = NULL;
    BioseqPtr subject_bsp=NULL;
@@ -5022,8 +5013,6 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
    is_translated = (StringCmp(blast_program, "blastn") &&
                     StringCmp(blast_program, "blastp"));
    
-   eval_buff = Malloc(10);
-   bit_score_buff = Malloc(10);
    if (is_translated) {
       asp = MemNew(sizeof(AlignSum));
       asp->matrix = load_default_matrix();
@@ -5031,13 +5020,16 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
       asp->ooframe = is_ooframe;
    }
 
-
    if (is_ungapped)
       sap_tmp = SeqAlignNew();
 
    slp = query_slp;
    if (query_bsp)
       query_id = query_bsp->id;
+
+   /* Evalue buffer is dynamically allocated to avoid compiler warnings 
+      in calls to ScoreAndEvalueToBuffers. */
+   eval_buff = Malloc(10);
 
    for (sap = seqalign; sap; sap = sap->next) {
       if (query_slp)
@@ -5113,8 +5105,10 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
 
       GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
 
+      /* Do not allow knocking off digit in evalue buffer, so parsers are 
+         not confused. */
       ScoreAndEvalueToBuffers(bit_score, evalue, 
-                              &bit_score_buff, &eval_buff);
+                              bit_score_buff, &eval_buff, FALSE);
 
       /* Loop on segments within this seqalign (in ungapped case) */
       while (TRUE) {
@@ -5158,7 +5152,7 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                sap_tmp->segs = ssp;
                GetScoreAndEvalue(sap_tmp, &score, &bit_score, &evalue, &number);
                ScoreAndEvalueToBuffers(bit_score, evalue, 
-                                       &bit_score_buff, &eval_buff);
+                                       bit_score_buff, &eval_buff, FALSE);
                find_score_in_align(sap_tmp, 1, asp);
             } else
                find_score_in_align(sap, 1, asp);
@@ -5200,7 +5194,7 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
             sap_tmp->segs = ddp;
             GetScoreAndEvalue(sap_tmp, &score, &bit_score, &evalue, &number);
             ScoreAndEvalueToBuffers(bit_score, evalue, 
-                                    &bit_score_buff, &eval_buff);
+                                    bit_score_buff, &eval_buff, FALSE);
 
             align_length = ddp->len;
             if (ddp->strands[0] == Seq_strand_minus) {
@@ -5254,6 +5248,8 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
       }
    }
 
+   eval_buff = MemFree(eval_buff);
+
    if (is_ungapped)
       sap_tmp = MemFree(sap_tmp);
 
@@ -5261,8 +5257,7 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
       free_default_matrix(asp->matrix);
       MemFree(asp);
    }
-   MemFree(eval_buff);
-   MemFree(bit_score_buff);
+
    BioseqUnlock(subject_bsp);
    if (query_slp)
       BioseqUnlock(query_bsp);
@@ -5280,7 +5275,8 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
    Int4 num_mismatches, num_gap_opens, align_length, num_ident;
    Uint1Ptr query_seq, subject_start=NULL, subject_seq, rev_subject=NULL;
    FloatHi perc_ident, bit_score, evalue;
-   Char eval_buff[10], bit_score_buff[10];
+   Char bit_score_buff[10];
+   CharPtr eval_buff = NULL;
    Int4 length=0, query_length, subject_length=0, rev_subject_length=0;
    Int4 q_start, q_end, s_start, s_end, q_shift=0, s_shift=0;
    CharPtr subject_descr = NULL;
@@ -5510,12 +5506,6 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
 
    subject_id = SeqIdSetFree(subject_id);
 
-   for (index=0; index<hspcnt; index++) {
-      if (search->current_hitlist->hsp_array[index] != NULL)
-         search->current_hitlist->hsp_array[index]->gap_info = 
-            GapXEditBlockDelete(search->current_hitlist->hsp_array[index]->gap_info);
-   }
-
    if (is_translated || !search->pbp->gapped_calculation) {
       asp = MemNew(sizeof(AlignSum));
       asp->matrix = NULL;
@@ -5524,6 +5514,10 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
       if (is_translated)
          AdjustOffSetsInSeqAlign(seqalign, search->query_slp, subject_slp);
    }
+
+   /* Evalue buffer is dynamically allocated to avoid compiler warnings 
+      in calls to ScoreAndEvalueToBuffers. */
+   eval_buff = Malloc(10);
 
    /* Now print the tab-delimited fields, using seqalign */
    for (sap = seqalign; sap; sap = sap->next) {
@@ -5534,23 +5528,10 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
 
       GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
 
-      if (evalue < 1.0e-180)
-         sprintf(eval_buff, "0.0");
-      else if (evalue < 1.0e-99)
-         sprintf(eval_buff, "%2.0le", evalue);
-      else if (evalue < 0.0009) 
-         sprintf(eval_buff, "%3.1le", evalue);
-      else if (evalue < 1.0) 
-         sprintf(eval_buff, "%4.3lf", evalue);
-      else 
-         sprintf(eval_buff, "%5.1lf", evalue);
-      
-      if (bit_score > 9999)
-         sprintf(bit_score_buff, "%4.3le", bit_score);
-      else if (bit_score > 99.9)
-         sprintf(bit_score_buff, "%4.1lf", bit_score);
-      else
-         sprintf(bit_score_buff, "%4.2lf", bit_score);
+      /* Do not allow knocking off digit in evalue buffer, so parsers are 
+         not confused. */
+      ScoreAndEvalueToBuffers(bit_score, evalue, 
+                              bit_score_buff, &eval_buff, FALSE);
 
       query_seq = search->context[search->first_context].query->sequence;
 
@@ -5647,6 +5628,8 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
               q_end, s_start, s_end, eval_buff, bit_score_buff);
    }
 
+   eval_buff = MemFree(eval_buff);
+
    if (is_translated) {
       free_default_matrix(asp->matrix);
       MemFree(asp);
@@ -5705,7 +5688,8 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
    BLAST_KarlinBlkPtr kbp;
    Uint1Ptr query_seq, subject_seq = NULL;
    FloatHi perc_ident, bit_score;
-   Char eval_buff[10], bit_score_buff[10];
+   Char bit_score_buff[10];
+   CharPtr eval_buff = NULL;
    GapXEditScriptPtr esp;
    Int4 q_start, q_end, s_start, s_end, query_length, numseg;
    Int4 q_off, q_shift = 0, s_off, s_shift = 0;
@@ -5771,12 +5755,14 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
    /* Get offset shift if query is a subsequence */
    q_shift = SeqLocStart(search->query_slp);
 
+   /* Evalue buffer is dynamically allocated to avoid compiler warnings 
+      in calls to ScoreAndEvalueToBuffers. */
+   eval_buff = Malloc(10);
+
    for (hsp_index=0; hsp_index<search->current_hitlist->hspcnt; hsp_index++) {
       hsp = search->current_hitlist->hsp_array[hsp_index];
       if (hsp==NULL || (search->pbp->cutoff_e > 0 && 
                         hsp->evalue > search->pbp->cutoff_e)) {
-         hsp->gap_info = 
-            GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
 	 continue;
       }
       context = hsp->context;
@@ -5847,8 +5833,6 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
          hsp->evalue = 
             BlastKarlinStoE_simple(hsp->score, kbp, searchsp_eff);
          if (hsp->evalue > search->pbp->cutoff_e) {
-            hsp->gap_info = 
-               GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
             continue;
          }
       }
@@ -5892,8 +5876,6 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
       GXECollectDataForSeqalign(hsp->gap_info, hsp->gap_info->esp, numseg,
 				&start, &length, &strands, 
 				&q_off, &s_off);
-      hsp->gap_info = 
-         GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
 
       if (start[0] < 0) {
          length[0] += start[0];
@@ -5977,24 +5959,10 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
       s_start += s_shift;
       s_end += s_shift;
 
-      if (hsp->evalue < 1.0e-180)
-         sprintf(eval_buff, "0.0");
-      else if (hsp->evalue < 1.0e-99)
-         sprintf(eval_buff, "%2.0le", hsp->evalue);
-      else if (hsp->evalue < 0.0009) 
-         sprintf(eval_buff, "%3.1le", hsp->evalue);
-      else if (hsp->evalue < 1.0) 
-         sprintf(eval_buff, "%4.3lf", hsp->evalue);
-      else 
-         sprintf(eval_buff, "%5.1lf", hsp->evalue);
-      
-      if (bit_score > 9999)
-         sprintf(bit_score_buff, "%4.3le", bit_score);
-      else if (bit_score > 99.9)
-         sprintf(bit_score_buff, "%4.1lf", bit_score);
-      else
-         sprintf(bit_score_buff, "%4.2lf", bit_score);
-
+      /* Do not allow knocking off digit in evalue buffer, so parsers are 
+         not confused. */
+      ScoreAndEvalueToBuffers(bit_score, hsp->evalue, 
+                              bit_score_buff, &eval_buff, FALSE);
 
       if (print_sequences) {
          if (numeric_sip_type) {
@@ -6043,6 +6011,8 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
       MemFree(subject_buffer);
    MemFree(subject_descr);
    MemFree(buffer);
+   MemFree(eval_buff);
+
    sip = SeqIdSetFree(sip);
    fflush(fp);
    return 0;
@@ -7029,7 +6999,7 @@ BLAST_Wizard(
 
         /* set some defaults for backward compat. with blastcgicmd.cpp */
         if(!StringCmp(service, "psi"))
-            out->ethresh = 0.005;
+            out->ethresh = 0.002;
 	else if (!StringCmp(service, "rpsblast"))
             out->is_rps_blast = TRUE;
 
@@ -7159,7 +7129,7 @@ BLAST_Wizard(
     if(!strcmp(service, "psi")) {
         out->ethresh = mask->ethresh ?
             options->ethresh :
-            0.005;
+            0.002;
         out->tweak_parameters = mask->tweak_parameters ?
             options->tweak_parameters :
             TRUE;

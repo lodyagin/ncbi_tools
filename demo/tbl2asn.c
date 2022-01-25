@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.85 $
+* $Revision: 6.88 $
 *
 * File Description: 
 *
@@ -1428,12 +1428,14 @@ static Uint2 ProcessDeltaSet (
   Uint2          entityID;
   SeqEntryPtr    firstsep, lastsep, nextsep, sep, topsep;
   IntFuzzPtr     ifp;
+  Boolean        is_unk100;
+  ObjectIdPtr    oip;
   ObjMgrDataPtr  omdptop;
   ObjMgrData     omdata;
   Uint2          parenttype;
   Pointer        parentptr;
   CharPtr        seqbuf;
-  SeqIdPtr       sip;
+  SeqIdPtr       sip, virtid;
   SeqLitPtr      slp;
   ValNodePtr     vnp;
 
@@ -1491,7 +1493,7 @@ static Uint2 ProcessDeltaSet (
   bsp = FindNucBioseq (firstsep);
   if (bsp == NULL) return 0;
 
-  sip = SeqIdDup (bsp->id);
+  sip = SeqIdSetDup (bsp->id);
   vnp = ValNodeExtract (&(bsp->descr), Seq_descr_title);
 
   deltabsp = BioseqNew ();
@@ -1554,8 +1556,21 @@ static Uint2 ProcessDeltaSet (
 
       slp->length = bsp->length;
       ValNodeAddPointer ((ValNodePtr PNTR) &(deltabsp->seq_ext), (Int2) 2, (Pointer) slp);
-      if (slp->length < 1) {
-        slp->length = 0;
+
+      is_unk100 = FALSE;
+      virtid = bsp->id;
+      if (virtid != NULL && virtid->choice == SEQID_LOCAL) {
+        oip = (ObjectIdPtr) virtid->data.ptrvalue;
+        if (oip != NULL) {
+          if (StringCmp (oip->str, "unk100") == 0) {
+            is_unk100 = TRUE;
+          }
+        }
+      }
+      if (slp->length < 1 || is_unk100) {
+        if (slp->length < 1) {
+          slp->length = 0;
+        }
         ifp = IntFuzzNew ();
         ifp->choice = 4;
         slp->fuzz = ifp;
@@ -3126,6 +3141,7 @@ Int2 Main (void)
 
 {
   AsnIoPtr        aip = NULL;
+  Char            app [64];
   CharPtr         base;
   AsnTypePtr      bssp_atp = NULL;
   CitSubPtr       csp;
@@ -3185,7 +3201,8 @@ Int2 Main (void)
 
   /* process command line arguments */
 
-  if (! GetArgs ("tbl2asn", sizeof (myargs) / sizeof (Args), myargs)) {
+  sprintf (app, "tbl2asn %s", TBL2ASN_APPLICATION);
+  if (! GetArgs (app, sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
   }
 

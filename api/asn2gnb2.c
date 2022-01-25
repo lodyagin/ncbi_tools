@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.4 $
+* $Revision: 1.11 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -413,14 +413,18 @@ NLM_EXTERN void AddLocusBlock (
   CharPtr            ebmol;
   EMBLBlockPtr       ebp;
   SeqMgrFeatContext  fcontext;
+  Boolean            first = TRUE;
   GBBlockPtr         gbp;
   Char               gene [32];
   Boolean            genome_view;
   GBSeqPtr           gbseq;
+  Int4               gi = 0;
+  Char               gi_buf [16];
   Char               id [41];
   Int2               imol = 0;
   IndxPtr            index;
   Int2               istrand;
+  Boolean            is_aa;
   Boolean            is_nm = FALSE;
   Boolean            is_np = FALSE;
   Boolean            is_nz = FALSE;
@@ -436,10 +440,13 @@ NLM_EXTERN void AddLocusBlock (
   Uint1              origin;
   OrgRefPtr          orp;
   BioseqPtr          parent;
+  CharPtr            prefix = NULL;
   SeqDescrPtr        sdp;
   SeqFeatPtr         sfp;
   SeqIdPtr           sip;
   SubSourcePtr       ssp;
+  CharPtr            str;
+  CharPtr            suffix = NULL;
   Uint1              tech;
   Uint1              topology;
   TextSeqIdPtr       tsip;
@@ -896,6 +903,7 @@ NLM_EXTERN void AddLocusBlock (
     /* Print the "LOCUS_NEW" line, if requested */
 
     if (awp->newLocusLine) {
+
       FFStartPrint (ffstring, awp->format, 0, 0, "LOCUS", 12, 0, 0, NULL, FALSE);
       parent = awp->parent;
 
@@ -926,6 +934,7 @@ NLM_EXTERN void AddLocusBlock (
     /* Else print the "LOCUS" line */
 
     else {
+
       FFStartPrint (ffstring, awp->format, 0, 0, "LOCUS", 12, 0, 0, NULL, FALSE);
 
       if (parent->repr == Seq_repr_seg)
@@ -943,7 +952,9 @@ NLM_EXTERN void AddLocusBlock (
     }
 
   } else if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
+
     FFStartPrint (ffstring, awp->format, 0, 0, NULL, 0, 5, 0, "ID", FALSE);
+
     FFAddOneString (ffstring, locus, FALSE, FALSE, TILDE_IGNORE);
     loclen = StringLen(locus);
     if (14 - 5 - loclen > 0) {
@@ -1030,8 +1041,60 @@ NLM_EXTERN void AddLocusBlock (
     gbseq->update_date = StringSave (date);
   }
 
-  bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 0, 5, 0, "ID");
+  suffix = FFEndPrint(ajp, ffstring, awp->format, 12, 0, 5, 0, "ID");
   FFRecycleString(ajp, ffstring);
+
+  if (awp->contig && (! awp->showconfeats) && awp->smartconfeats && GetWWW (ajp) &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    is_aa = ISA_aa (bsp->mol);
+    gi = 0;
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      if (sip->choice == SEQID_GI) {
+        gi = (Int4) sip->data.intvalue;
+      }
+    }
+    if (gi > 0) {
+      ffstring = FFGetString(ajp);
+
+      sprintf(gi_buf, "%ld", (long) gi);
+      FFAddOneString(ffstring, "<a href=", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, link_feat, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
+      if ( is_aa ) {
+        FFAddOneString(ffstring, "&view=gpwithparts>", FALSE, FALSE, TILDE_IGNORE);
+      } else {
+        FFAddOneString(ffstring, "&view=gbwithparts>", FALSE, FALSE, TILDE_IGNORE);
+      }
+      if (bsp->length > 1000000) {
+        FFAddOneString(ffstring, "Click here to see all features and the sequence of this contig record.", FALSE, FALSE, TILDE_IGNORE);
+      } else {
+        FFAddOneString(ffstring, "Click here to see the sequence of this contig record.", FALSE, FALSE, TILDE_IGNORE);
+      }
+      FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+
+      prefix = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "??");
+
+      FFRecycleString(ajp, ffstring);
+    }
+  }
+
+  if (StringDoesHaveText (prefix)) {
+    loclen = StringLen (prefix) + StringLen (suffix);
+    str = (CharPtr) MemNew (loclen + 10);
+    if (str != NULL) {
+      StringCpy (str, prefix);
+      StringCat (str, "\n\n");
+      StringCat (str, suffix);
+    }
+    bbp->string = str;
+  } else {
+    bbp->string = suffix;
+  }
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 NLM_EXTERN void AddDeflineBlock (
@@ -1112,6 +1175,10 @@ NLM_EXTERN void AddDeflineBlock (
   }
 
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 static void FF_www_accession (
@@ -1385,6 +1452,10 @@ NLM_EXTERN void AddAccessionBlock (
 
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "AC");
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 NLM_EXTERN void AddVersionBlock (
@@ -1551,6 +1622,10 @@ NLM_EXTERN void AddVersionBlock (
   }
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "SV");
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 /* only displaying PID in GenPept format */
@@ -2361,115 +2436,6 @@ static Boolean FF_www_dbsource(
   return TRUE;
 }
 
-static CharPtr CleanQualValue (
-  CharPtr str
-)
-
-{
-  Char     ch;
-  CharPtr  dst;
-  CharPtr  ptr;
-
-  if (str == NULL || str [0] == '\0') return NULL;
-
-  dst = str;
-  ptr = str;
-  ch = *ptr;
-  while (ch != '\0') {
-    if (ch == '\n' || ch == '\r' || ch == '\t' || ch == '"') {
-      *dst = ' ';
-      dst++;
-    } else {
-      *dst = ch;
-      dst++;
-    }
-    ptr++;
-    ch = *ptr;
-  }
-  *dst = '\0';
-
-  return str;
-}
-
-static CharPtr Asn2gnbkCompressSpaces (CharPtr str)
-
-{
-  Char     ch;
-  CharPtr  dst;
-  Char     last;
-  CharPtr  ptr;
-
-  if (str != NULL && str [0] != '\0') {
-    dst = str;
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0' && ch <= ' ') {
-      ptr++;
-      ch = *ptr;
-    }
-    while (ch != '\0') {
-      *dst = ch;
-      dst++;
-      ptr++;
-      last = ch;
-      ch = *ptr;
-      if (ch != '\0' && ch < ' ') {
-        *ptr = ' ';
-        ch = *ptr;
-      }
-      while (ch != '\0' && last <= ' ' && ch <= ' ') {
-        ptr++;
-        ch = *ptr;
-      }
-    }
-    *dst = '\0';
-    dst = NULL;
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0') {
-      if (ch != ' ') {
-        dst = NULL;
-      } else if (dst == NULL) {
-        dst = ptr;
-      }
-      ptr++;
-      ch = *ptr;
-    }
-    if (dst != NULL) {
-      *dst = '\0';
-    }
-  }
-  return str;
-}
-
-static CharPtr StripAllSpaces (
-  CharPtr str
-)
-
-{
-  Char     ch;
-  CharPtr  dst;
-  CharPtr  ptr;
-
-  if (str == NULL || str [0] == '\0') return NULL;
-
-  dst = str;
-  ptr = str;
-  ch = *ptr;
-  while (ch != '\0') {
-    if (ch == ' ' || ch == '\t') {
-    } else {
-      *dst = ch;
-      dst++;
-    }
-    ptr++;
-    ch = *ptr;
-  }
-  *dst = '\0';
-
-  return str;
-}
-
 NLM_EXTERN void AddDbsourceBlock (
   Asn2gbWorkPtr awp
 )
@@ -2638,6 +2604,10 @@ NLM_EXTERN void AddDbsourceBlock (
 
   bbp->string = str;
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 NLM_EXTERN void AddDateBlock (
@@ -2704,6 +2674,10 @@ NLM_EXTERN void AddDateBlock (
 
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 0, 0, 5, 5, "DT");
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 
@@ -3055,6 +3029,10 @@ NLM_EXTERN void AddKeywordsBlock (
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "KW");
 
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 NLM_EXTERN void AddSegmentBlock (
@@ -3119,6 +3097,10 @@ NLM_EXTERN void AddSegmentBlock (
 
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "XX");
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 NLM_EXTERN void AddSourceBlock (
@@ -3193,6 +3175,10 @@ NLM_EXTERN void AddSourceBlock (
       }
     }
   }
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 NLM_EXTERN void AddOrganismBlock (
@@ -3251,6 +3237,10 @@ NLM_EXTERN void AddOrganismBlock (
         }
       }
     }
+  }
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
   }
 }
 
@@ -4360,6 +4350,14 @@ NLM_EXTERN Boolean AddReferenceBlock (
     awp->blockList = vnp;
   }
 
+  if (awp->afp != NULL) {
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      rbp = (RefBlockPtr) vnp->data.ptrvalue;
+      if (rbp == NULL) continue;
+      DoImmediateFormat (awp->afp, (BaseBlockPtr) rbp);
+    }
+  }
+
   return TRUE;
 }
 
@@ -4461,6 +4459,10 @@ NLM_EXTERN void AddWGSBlock (
                 bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 0, 0, NULL);
                 FFRecycleString(ajp, ffstring);
               }
+
+              if (awp->afp != NULL) {
+                DoImmediateFormat (awp->afp, bbp);
+              }
             }
           }
         }
@@ -4544,26 +4546,21 @@ NLM_EXTERN void AddGenomeBlock (
 
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 0, 0, NULL);
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 NLM_EXTERN void AddBasecountBlock (
-  Asn2gbWorkPtr awp,
-  CharPtr bases
+  Asn2gbWorkPtr awp
 )
 
 {
   IntAsn2gbJobPtr  ajp;
-  Int4             base_count [5];
   BaseBlockPtr     bbp;
   BioseqPtr        bsp;
-  Char             buf [80];
-  Char             ch;
-  Int2             i;
-  Int4             len;
-  StringItemPtr    ffstring;
-  CharPtr          ptr;
-  CharPtr          str;
-
+ 
   if (awp == NULL) return;
   ajp = awp->ajp;
   if (ajp == NULL) return;
@@ -4572,71 +4569,9 @@ NLM_EXTERN void AddBasecountBlock (
 
   bbp = Asn2gbAddBlock (awp, BASECOUNT_BLOCK, sizeof (BaseBlock));
 
-  if (bases == NULL || ajp->ajp.slp != NULL) return;
-  len = bsp->length;
-  for (i = 0; i < 5; i++) {
-    base_count [i] = 0;
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
   }
-
-  ptr = bases;
-  ch = *ptr;
-  while (ch != '\0') {
-    ch = TO_UPPER (ch);
-    switch (ch) {
-      case 'A' :
-        (base_count [0])++;
-        break;
-      case 'C' :
-        (base_count [1])++;
-        break;
-      case 'G' :
-        (base_count [2])++;
-        break;
-      case 'T' :
-        (base_count [3])++;
-        break;
-      default :
-        (base_count [4])++;
-        break;
-    }
-    ptr++;
-    ch = *ptr;
-  }
-
-  if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
-
-    if (base_count [4] == 0) {
-      sprintf (buf, "%7ld a%7ld c%7ld g%7ld t",
-               (long) base_count [0], (long) base_count [1],
-               (long) base_count [2], (long) base_count [3]);
-    } else {
-      sprintf (buf, "%7ld a%7ld c%7ld g%7ld t%7ld others",
-               (long) base_count [0], (long) base_count [1],
-               (long) base_count [2], (long) base_count [3],
-               (long) base_count [4]);
-    }
-
-  } else if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
-
-    sprintf (buf, "Sequence %ld BP; %ld A; %ld C; %ld G; %ld T; %ld other;",
-             (long) len,
-             (long) base_count [0], (long) base_count [1],
-             (long) base_count [2], (long) base_count [3],
-             (long) base_count [4]);
-  }
-
-  ffstring = FFGetString (ajp);
-  if ( ffstring == NULL ) return;
-
-  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
-    FFAddOneString(ffstring, "XX\n", FALSE, FALSE, TILDE_IGNORE);
-  }
-  FFStartPrint (ffstring, awp->format, 0, 0, "BASE COUNT", 12, 5, 5, "SQ", FALSE);
-  FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
-  str = FFEndPrint(ajp, ffstring, awp->format, 12, 0, 5, 5, "SQ");
-  FFRecycleString(ajp, ffstring);
-
-  bbp->string = StringSave (str);
 }
 
 NLM_EXTERN void AddOriginBlock (
@@ -4691,26 +4626,25 @@ NLM_EXTERN void AddOriginBlock (
 
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 0, 12, 0, 0, NULL);
   FFRecycleString(ajp, ffstring);
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 #define BASES_PER_BLOCK 1200
 
 NLM_EXTERN void AddSequenceBlock (
-  Asn2gbWorkPtr awp,
-  CharPtr bases
+  Asn2gbWorkPtr awp
 )
 
 {
   IntAsn2gbJobPtr  ajp;
   BioseqPtr        bsp;
-  Int4             i;
-  Int4             j;
   Int4             len;
-  CharPtr          ptr;
   SeqBlockPtr      sbp;
   Int4             start;
   Int4             stop;
-  CharPtr          str;
 
   if (awp == NULL) return;
   ajp = awp->ajp;
@@ -4736,12 +4670,15 @@ NLM_EXTERN void AddSequenceBlock (
 
     sbp->start = 0;
     sbp->stop = len;
+
+    if (awp->afp != NULL) {
+      DoImmediateFormat (awp->afp, (BaseBlockPtr) sbp);
+    }
+
     return;
   }
 
   /* otherwise populate individual sequence blocks for given range */
-
-  ptr = bases;
 
   for (start = 0; start < len; start += BASES_PER_BLOCK) {
     sbp = (SeqBlockPtr) Asn2gbAddBlock (awp, SEQUENCE_BLOCK, sizeof (SeqBlock));
@@ -4759,17 +4696,8 @@ NLM_EXTERN void AddSequenceBlock (
     sbp->start = start;
     sbp->stop = stop;
 
-    if (ptr != NULL) {
-      str = MemNew (sizeof (Char) * (BASES_PER_BLOCK + 2));
-      if (str != NULL) {
-        sbp->bases = str;
-        j = stop - start;
-        for (i = 0; i < j; i++) {
-          *str = *ptr;
-          ptr++;
-          str++;
-        }
-      }
+    if (awp->afp != NULL) {
+      DoImmediateFormat (awp->afp, (BaseBlockPtr) sbp);
     }
   }
 }
@@ -4784,6 +4712,10 @@ NLM_EXTERN void AddContigBlock (
   if (awp == NULL) return;
 
   bbp = Asn2gbAddBlock (awp, CONTIG_BLOCK, sizeof (BaseBlock));
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 
 NLM_EXTERN void AddSlashBlock (
@@ -4803,5 +4735,9 @@ NLM_EXTERN void AddSlashBlock (
   StringNCpy(str, "//\n", 4);
 
   bbp->string = str;
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
 }
 

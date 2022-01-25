@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.63 $
+* $Revision: 1.64 $
 *
 * File Description: 
 *
@@ -1236,12 +1236,15 @@ static CharPtr pubseqfetchproc = "PubSeqBioseqFetch";
 static CharPtr pubseqseqidtogi = "PubSeqSeqIdForGi";
 static CharPtr pubseqgitoseqid = "PubSeqGiForSeqId";
 
+static Boolean  fetch_fail_warn = FALSE;
+static Boolean  fetch_fail_warn_set = FALSE;
+
 static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
 
 {
   BioseqPtr         bsp;
   Int4              flags = -1;
-  Char              id [41];
+  Char              id [64];
   OMUserDataPtr     omdp = NULL;
   OMProcControlPtr  ompcp;
   ObjMgrProcPtr     ompp;
@@ -1250,6 +1253,12 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
   SeqIdPtr          sid;
   SeqIdPtr          sip;
   Int4              uid = 0;
+#ifdef OS_UNIX
+  BioseqPtr         firstbsp;
+  SeqEntryPtr       firstsep;
+  ObjMgrPtr         omp;
+  CharPtr           str;
+#endif
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL) return OM_MSG_RET_ERROR;
@@ -1277,6 +1286,39 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
 
   if (sep == NULL) return OM_MSG_RET_OK;
   bsp = BioseqFindInSeqEntry (sip, sep);
+
+#ifdef OS_UNIX
+  if (bsp == NULL) {
+
+    if (! fetch_fail_warn_set) {
+      str = (CharPtr) getenv ("PUBSEQ_FETCH_FAIL_WARN");
+      if (StringDoesHaveText (str)) {
+        if (StringICmp (str, "TRUE") == 0) {
+          fetch_fail_warn = TRUE;
+        }
+      }
+      fetch_fail_warn_set = TRUE;
+    }
+
+    if (fetch_fail_warn) {
+      firstsep = FindNthBioseq (sep, 1);
+      if (firstsep != NULL && IS_Bioseq (firstsep)) {
+        firstbsp = (BioseqPtr) firstsep->data.ptrvalue;
+        if (firstbsp != NULL && firstbsp->id != NULL) {
+          SeqIdWrite (firstbsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+          ErrPostEx (SEV_ERROR, 0, 0, "PubSeqBioseqFetchFunc requested gi %ld, got %s", uid, id);
+          omp = ObjMgrGet ();
+          if (omp != NULL) {
+            ErrPostEx (SEV_ERROR, 0, 0, "ObjMgr highEid %d totobj %d currobj %d maxtemp %d tempcnt %d hold %d",
+                       (int) omp->HighestEntityID, (int) omp->totobj, (int) omp->currobj,
+                       (int) omp->maxtemp, (int) omp->tempcnt, (int) omp->hold);
+          }
+        }
+      }
+    }
+  }
+#endif
+
   ompcp->output_data = (Pointer) bsp;
   ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
 

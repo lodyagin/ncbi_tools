@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.134 $
+* $Revision: 6.138 $
 *
 * File Description: 
 *
@@ -227,6 +227,8 @@ extern void AppendOrReplaceString (
 extern void ConsolidateOrganismNotes (IteM i);
 extern void ConsolidateLikeModifiersWithSemicolons (IteM i);
 extern void ConsolidateLikeModifiersWithoutSemicolons (IteM i);
+
+extern void CountryLookup (IteM i);
 
 extern void ExtendPartialFeatures (IteM i);
 extern void TrimOrganismName (IteM i);
@@ -485,6 +487,8 @@ extern void SetupEditSecondary (MenU m, BaseFormPtr bfp);
 extern void EditLocusProc (IteM i);
 extern void ConvertToLocalProc (IteM i);
 
+extern ValNodePtr BuildDescriptorValNodeList (void);
+
 extern void RemoveFeature (IteM i);
 extern void RemoveDescriptor (IteM i);
 
@@ -499,6 +503,8 @@ extern void MakeExonsFromMRNAIntervals (IteM i);
 
 extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByTextWindow (Pointer data);
+extern Int2 LIBCALLBACK CreateSegregateByFeatureWindow (Pointer data);
+extern Int2 LIBCALLBACK CreateSegregateByDescriptorWindow (Pointer data);
 extern Int2 LIBCALLBACK RemoveExtraneousSets (Pointer data);
 extern void RemoveOrphanProteins (Uint2 entityID, SeqEntryPtr sep);
 extern void ParseAsnOrFlatfileToAnywhere (IteM i);
@@ -552,6 +558,7 @@ extern void DownloadAndExtendProc (ButtoN b);
 extern void UpdateSeqAfterDownload (BaseFormPtr bfp, BioseqPtr oldbsp, BioseqPtr newbsp);
 extern void ExtendSeqAfterDownload (BaseFormPtr bfp, BioseqPtr oldbsp, BioseqPtr newbsp);
 extern void NewUpdateSequence (IteM i);
+extern void NewUpdateSequenceNewBlast (IteM i);
 extern void NewExtendSequence (IteM i);
 
 extern void FastaNucDirectToSeqEdProc (IteM i);
@@ -562,6 +569,7 @@ extern void ParseAntiCodonsFromtRNAComment (IteM i);
 extern void RemoveAlignment (IteM i);
 extern void RemoveGraph (IteM i);
 extern void RemoveProteins (IteM i);
+extern void RemoveProteinsAndRenormalize (IteM i);
 
 extern void GlobalAddTranslExcept (IteM i);
 

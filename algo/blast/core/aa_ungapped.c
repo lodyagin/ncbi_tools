@@ -1,83 +1,81 @@
-/* $Id: aa_ungapped.c,v 1.29 2004/03/10 17:33:10 papadopo Exp $
+/* $Id: aa_ungapped.c,v 1.33 2004/06/08 17:30:06 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ */
 
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================
+/** @file aa_ungapped.c
+ * @todo FIXME Need description
+ */
 
-*/
-
-static char const rcsid[] = "$Id: aa_ungapped.c,v 1.29 2004/03/10 17:33:10 papadopo Exp $";
+static char const rcsid[] = 
+    "$Id: aa_ungapped.c,v 1.33 2004/06/08 17:30:06 dondosha Exp $";
 
 #include <algo/blast/core/aa_ungapped.h>
 
-Int4 BlastAaWordFinder(BLAST_SequenceBlk* subject,
+Int2 BlastAaWordFinder(BLAST_SequenceBlk* subject,
                        BLAST_SequenceBlk* query,
                        LookupTableWrap* lut_wrap,
                        Int4** matrix,
                        const BlastInitialWordParameters* word_params,
-                       BLAST_ExtendWord* ewp,
-		       Uint4* query_offsets,
-		       Uint4* subject_offsets,
-		       Int4 offset_array_size,
-                       BlastInitHitList* init_hitlist)
+                       Blast_ExtendWord* ewp,
+                       Uint4* query_offsets,
+                       Uint4* subject_offsets,
+                       Int4 offset_array_size,
+                       BlastInitHitList* init_hitlist, 
+                       BlastUngappedStats* ungapped_stats)
 {
-  Int4 hits=0;
+  Int2 status=0;
 
   /* find the word hits and do ungapped extensions */
 
   if (ewp->diag_table->multiple_hits)
     {
-      hits = BlastAaWordFinder_TwoHit(subject,
-				      query,
-				      lut_wrap,
-				      ewp->diag_table,
-				      matrix,
-				      word_params->cutoff_score,
-				      word_params->x_dropoff,
-				      query_offsets,
-				      subject_offsets,
-				      offset_array_size,
-				      init_hitlist);
+      status = BlastAaWordFinder_TwoHit(subject, query,
+                                        lut_wrap, ewp->diag_table,
+                                        matrix,
+                                        word_params->cutoff_score,
+                                        word_params->x_dropoff,
+                                        query_offsets, subject_offsets,
+                                        offset_array_size,
+                                        init_hitlist, ungapped_stats);
     }
   else
     {
-      hits = BlastAaWordFinder_OneHit(subject,
-				      query,
-				      lut_wrap,
-				      ewp->diag_table,
-				      matrix,
-				      word_params->cutoff_score,
-				      word_params->x_dropoff,
-				      query_offsets,
-				      subject_offsets,
-				      offset_array_size,
-				      init_hitlist);
+      status = BlastAaWordFinder_OneHit(subject, query,
+                                        lut_wrap, ewp->diag_table,
+                                        matrix,
+                                        word_params->cutoff_score,
+                                        word_params->x_dropoff,
+                                        query_offsets, subject_offsets,
+                                        offset_array_size,
+                                        init_hitlist, ungapped_stats);
     }
 
-  return hits;
+  return status;
 }
 
-Int4 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
+Int2 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
 			      const BLAST_SequenceBlk* query,
 			      const LookupTableWrap* lookup_wrap,
 			      BLAST_DiagTable* diag,
@@ -87,7 +85,8 @@ Int4 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
 			      Uint4 * NCBI_RESTRICT query_offsets,
 			      Uint4 * NCBI_RESTRICT subject_offsets,
 			      Int4 array_size,
-			      BlastInitHitList* ungapped_hsps)
+			      BlastInitHitList* ungapped_hsps, 
+               BlastUngappedStats* ungapped_stats)
 {
    LookupTable* lookup=NULL;
    RPSLookupTable* rps_lookup=NULL;
@@ -105,6 +104,7 @@ Int4 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
    Int4 diag_offset, diag_coord, diag_mask;
    DiagStruct* diag_array;
    Boolean right_extend;
+   Int4 hits_extended = 0;
 
    if (diag == NULL)
       return -1;
@@ -177,6 +177,8 @@ Int4 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
                                         &hsp_len, use_pssm,
                                         wordsize, &right_extend, &s_last_off);
 
+               ++hits_extended;
+
                /* if the hsp meets the score threshold, report it */
                if (score >= cutoff)
                   BlastSaveInitHsp(ungapped_hsps, hsp_q, hsp_s,
@@ -206,10 +208,12 @@ Int4 BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk* subject,
    /* increment the offset in the diagonal array */
    DiagUpdate(diag, subject->length + window); 
  
-   return totalhits;
+   Blast_UngappedStatsUpdate(ungapped_stats, totalhits, hits_extended, 
+                             ungapped_hsps->total);
+   return 0;
 }
 
-Int4 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
+Int2 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
 			      const BLAST_SequenceBlk* query,
 			      const LookupTableWrap* lookup_wrap,
 			      BLAST_DiagTable* diag,
@@ -219,7 +223,8 @@ Int4 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
 			      Uint4 * NCBI_RESTRICT query_offsets,
 			      Uint4 * NCBI_RESTRICT subject_offsets,
 			      Int4 array_size,
-                              BlastInitHitList* ungapped_hsps)
+               BlastInitHitList* ungapped_hsps, 
+               BlastUngappedStats* ungapped_stats)
 {
    LookupTable* lookup=NULL;
    RPSLookupTable* rps_lookup=NULL;
@@ -235,6 +240,7 @@ Int4 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
    Int4 score;
    Int4 diag_offset, diag_coord, diag_mask, diff;
    DiagStruct* diag_array;
+   Int4 hits_extended = 0;
 
    if (!diag) 
       return -1;
@@ -276,6 +282,7 @@ Int4 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
          /* do an extension, but only if we have not already extended
             this far */
          if (diff > 0) {
+            ++hits_extended;
             score=BlastAaExtendOneHit(matrix, subject, query,
                      subject_offsets[i], query_offsets[i], dropoff,
                      &hsp_q, &hsp_s, &hsp_len, use_pssm, &s_last_off);
@@ -294,7 +301,9 @@ Int4 BlastAaWordFinder_OneHit(const BLAST_SequenceBlk* subject,
    /* increment the offset in the diagonal array (no windows used) */
    DiagUpdate(diag, subject->length); 
  
-   return totalhits;
+   Blast_UngappedStatsUpdate(ungapped_stats, totalhits, hits_extended, 
+                             ungapped_hsps->total);
+   return 0;
 }
 
 Int4 BlastAaExtendRight(Int4 ** matrix,
@@ -404,7 +413,6 @@ Int4 BlastPSSMExtendRight(Int4 ** matrix,
 
 Int4 BlastPSSMExtendLeft(Int4 ** matrix,
 		       const BLAST_SequenceBlk* subject,
-		       Int4 query_size,
 		       Int4 s_off,
 		       Int4 q_off,
 		       Int4 dropoff,
@@ -450,7 +458,7 @@ Int4 BlastAaExtendOneHit(Int4 ** matrix,
   Int4 left_disp, right_disp;
 
   if (use_pssm) {
-     left_score = BlastPSSMExtendLeft(matrix, subject, query->length, 
+     left_score = BlastPSSMExtendLeft(matrix, subject, 
                            s_off, q_off, dropoff, &left_disp);
      right_score = BlastPSSMExtendRight(matrix, subject, query->length, 
                            s_off+1, q_off+1, dropoff, &right_disp, 
@@ -471,20 +479,21 @@ Int4 BlastAaExtendOneHit(Int4 ** matrix,
   return right_score;
 }
 
-Int4 BlastAaExtendTwoHit(Int4 ** matrix,
-                         const BLAST_SequenceBlk* subject,
-                         const BLAST_SequenceBlk* query,
-                         Int4 s_left_off,
-                         Int4 s_right_off,
-                         Int4 q_right_off,
-                         Int4 dropoff,
-			 Int4* hsp_q,
-			 Int4* hsp_s,
-			 Int4* hsp_len,
-                         Boolean use_pssm,
-                         Int4 word_size,
-                         Boolean *right_extend,
-                         Int4 *s_last_off)
+Int4 
+BlastAaExtendTwoHit(Int4 ** matrix,
+                    const BLAST_SequenceBlk* subject,
+                    const BLAST_SequenceBlk* query,
+                    Int4 s_left_off,
+                    Int4 s_right_off,
+                    Int4 q_right_off,
+                    Int4 dropoff,
+                    Int4* hsp_q,
+                    Int4* hsp_s,
+                    Int4* hsp_len,
+                    Boolean use_pssm,
+                    Int4 word_size,
+                    Boolean *right_extend,
+                    Int4 *s_last_off)
 {
    Int4 left_d = 0, right_d = 0; /* left and right displacements */
    Int4 left_score = 0, right_score = 0; /* left and right scores */
@@ -514,7 +523,7 @@ Int4 BlastAaExtendTwoHit(Int4 ** matrix,
 
    /* first, try to extend left, from the second hit to the first hit. */
    if (use_pssm)
-      left_score = BlastPSSMExtendLeft(matrix, subject, query->length,
+      left_score = BlastPSSMExtendLeft(matrix, subject,
     			     s_right_off, q_right_off, dropoff, &left_d);
    else
       left_score = BlastAaExtendLeft(matrix, subject, query,

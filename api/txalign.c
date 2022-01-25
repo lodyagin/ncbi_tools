@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.81 2003/11/25 16:24:03 dondosha Exp $
+/* $Id: txalign.c,v 6.83 2004/05/14 16:31:03 kans Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,19 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.81 $
+* $Revision: 6.83 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.83  2004/05/14 16:31:03  kans
+* ScoreAndEvalueToBuffers had a typo in OS_MAC specific code
+*
+* Revision 6.82  2004/05/14 15:38:09  dondosha
+* Made function ScoreAndEvalueToBuffers public
+*
 * Revision 6.81  2003/11/25 16:24:03  dondosha
 * Use query number for synchronizeCheck; do not show structure link if RID not available
 *
@@ -4587,6 +4593,62 @@ Tx_PrintDefLine(BlastDefLinePtr bdsp, CharPtr buffer, Int4 length)
 	return TRUE;
 }
 
+NLM_EXTERN void LIBCALL 
+ScoreAndEvalueToBuffers(FloatHi bit_score, FloatHi evalue, 
+                        CharPtr bit_score_buf, CharPtr PNTR evalue_buf,
+                        Boolean knock_off_allowed)
+{
+#ifdef OS_MAC
+   if (evalue < 1.0e-180) {
+      sprintf(*evalue_buf, "0.0");
+   } else if (evalue < 1.0e-99) {
+      sprintf(*evalue_buf, "%2.0Le", evalue);
+      if (knock_off_allowed)
+         (*evalue_buf)++; /* Knock off digit. */
+   } else if (evalue < 0.0009) {
+      sprintf(*evalue_buf, "%3.0Le", evalue);
+   } else if (evalue < 0.1) {
+      sprintf(*evalue_buf, "%4.3Lf", evalue);
+   } else if (evalue < 1.0) { 
+      sprintf(*evalue_buf, "%3.2Lf", evalue);
+   } else if (evalue < 10.0) {
+      sprintf(*evalue_buf, "%2.1Lf", evalue);
+   } else { 
+      sprintf(*evalue_buf, "%5.0Lf", evalue);
+   }
+   if (bit_score > 9999)
+      sprintf(bit_score_buf, "%4.3Le", bit_score);
+   else if (bit_score > 99.9)
+      sprintf(bit_score_buf, "%4.0ld", (long)bit_score);
+   else /* %4.1Lf is bad on 68K Mac, so cast to long */
+      sprintf(bit_score_buf, "%4.0ld", (long)bit_score);
+#else
+   if (evalue < 1.0e-180) {
+      sprintf(*evalue_buf, "0.0");
+   } else if (evalue < 1.0e-99) {
+      sprintf(*evalue_buf, "%2.0le", evalue);
+      if (knock_off_allowed)
+         (*evalue_buf)++; /* Knock off digit. */
+   } else if (evalue < 0.0009) {
+      sprintf(*evalue_buf, "%3.0le", evalue);
+   } else if (evalue < 0.1) {
+      sprintf(*evalue_buf, "%4.3lf", evalue);
+   } else if (evalue < 1.0) { 
+      sprintf(*evalue_buf, "%3.2lf", evalue);
+   } else if (evalue < 10.0) {
+      sprintf(*evalue_buf, "%2.1lf", evalue);
+   } else { 
+      sprintf(*evalue_buf, "%5.0lf", evalue);
+   }
+   if (bit_score > 9999)
+      sprintf(bit_score_buf, "%4.3le", bit_score);
+   else if (bit_score > 99.9)
+      sprintf(bit_score_buf, "%4.0ld", (long)bit_score);
+   else
+      sprintf(bit_score_buf, "%4.1lf", bit_score);
+#endif
+}
+
 NLM_EXTERN Boolean LIBCALL
 PrintDefLinesFromSeqAlignWithPath(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp, Uint4 options,
 		Int4 mode, Int2Ptr marks, Int4 number_of_descriptions,
@@ -5032,91 +5094,24 @@ PrintDefLinesFromSeqAlignWithPath(SeqAlignPtr seqalign, Int4 line_length, FILE *
             *(ptr + pos) = NULLB;
         }
         
-#ifdef OS_MAC
         if (txsp->found_score) {
             evalue = txsp->evalue;
-            eval_buff_ptr = eval_buff;
-            if (evalue < 1.0e-180) {
-                sprintf(eval_buff, "0.0");
-            } else if (evalue < 1.0e-99) {
-                sprintf(eval_buff, "%2.0Le", evalue);
-                eval_buff_ptr++; 	/* Knock off digit. */
-            } else if (evalue < 0.0009) {
-                sprintf(eval_buff, "%3.0Le", evalue);
-            } else if (evalue < 0.1) {
-                sprintf(eval_buff, "%4.3Lf", evalue);
-            } else if (evalue < 1.0) {
-                sprintf(eval_buff, "%3.2Lf", evalue);
-            } else if (evalue < 10.0) {
-                sprintf(eval_buff, "%2.1Lf", evalue);
-            } else {
-                sprintf(eval_buff, "%5.0Lf", evalue);
-            }
-	
             bit_score = txsp->bit_score;
-            if (bit_score > 9999) {
-                sprintf(bit_score_buff, "%4.3Le", bit_score);
-            } else if (bit_score > 99.9) {
-                sprintf(bit_score_buff, "%4.0ld", (long) bit_score);
-            } else {
-                sprintf(bit_score_buff, "%4.0ld", (long) bit_score); /* %4.0Lf is bad on 68K Mac, so cast to long */
-            }
-            
-            if (options & TXALIGN_HTML) {
-                if (gi != 0)
-                    sprintf(id_buffer, "%ld", (long) gi);
-                else
-                    sprintf(id_buffer, "%s", txsp->buffer_id);
-                bit_score_buff_ptr = bit_score_buff; 
-                if (*bit_score_buff_ptr == ' ') {
-                    bit_score_buff_ptr++;
-                    sprintf(buffer1, " <a href = #%s>%s</a>", id_buffer, bit_score_buff_ptr);
-                } else {
-                    sprintf(buffer1, "<a href = #%s>%s</a>", id_buffer, bit_score_buff_ptr);
-                }
-            } else {
-                sprintf(buffer1, "%s", bit_score_buff);
-            }
-            
-          
-#else
-        if (txsp->found_score) {
-            evalue = txsp->evalue;
+
             eval_buff_ptr = eval_buff;
-            if (evalue < 1.0e-180) {
-                sprintf(eval_buff, "0.0");
-            } else if (evalue < 1.0e-99) {
-                sprintf(eval_buff, "%2.0le", evalue);
-                eval_buff_ptr++; 	/* Knock off digit. */
-            } else if (evalue < 0.0009) {
-                sprintf(eval_buff, "%3.0le", evalue);
-            } else if (evalue < 0.1) {
-                sprintf(eval_buff, "%4.3lf", evalue);
-            } else if (evalue < 1.0) {
-                sprintf(eval_buff, "%3.2lf", evalue);
-            } else if (evalue < 10.0) {
-                sprintf(eval_buff, "%2.1lf", evalue);
-            } else {
-                sprintf(eval_buff, "%2.0lf", evalue);
-            }
-            
-            bit_score = txsp->bit_score;
-            if (bit_score > 9999) {
-                sprintf(bit_score_buff, "%4.3le", bit_score);
-            } else if (bit_score > 99.9) {
-                sprintf(bit_score_buff, "%4.0ld", (long) bit_score);
-            } else {
-                sprintf(bit_score_buff, "%4.0lf", bit_score);
-            }
-            
+            ScoreAndEvalueToBuffers(bit_score, evalue, bit_score_buff, 
+                                    &eval_buff_ptr, TRUE);
+
             if (options & TXALIGN_HTML) {
                 if (gi != 0)
                     sprintf(id_buffer, "%ld", (long) gi);
                 else {
-                    /*
-                      sprintf(id_buffer, "%s", txsp->buffer_id);
-                    */
-                    MuskSeqIdWrite(txsp->id, id_buffer, BUFFER_LENGTH, PRINTID_TEXTID_ACCESSION, FALSE, FALSE);
+#ifdef OS_MAC
+                    sprintf(id_buffer, "%s", txsp->buffer_id);
+#else
+                    MuskSeqIdWrite(txsp->id, id_buffer, BUFFER_LENGTH, 
+                                   PRINTID_TEXTID_ACCESSION, FALSE, FALSE);
+#endif
                 }
                 bit_score_buff_ptr = bit_score_buff; 
                 if (*bit_score_buff_ptr == ' ') {
@@ -5128,8 +5123,7 @@ PrintDefLinesFromSeqAlignWithPath(SeqAlignPtr seqalign, Int4 line_length, FILE *
             } else {
                 sprintf(buffer1, "%s", bit_score_buff);
             }
-
-#endif	    
+            
 	    /*adjust N position*/
             strLen=StringLen(eval_buff_ptr);
 	    extraSpace=strLen<maxEvalWidth?(maxEvalWidth-strLen):0;
@@ -5808,58 +5802,10 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     }
     ff_EndPrint();
     eval_buff_ptr = eval_buff;
-#ifdef OS_MAC
-    if (evalue < 1.0e-180) {
-        sprintf(eval_buff, "0.0");
-    } else if (evalue < 1.0e-99) {
-        sprintf(eval_buff, "%2.0Le", evalue);
-        eval_buff_ptr++;	/* Knock off digit. */
-    } else if (evalue < 0.0009) {
-        sprintf(eval_buff, "%3.0Le", evalue);
-    } else if (evalue < 0.1) {
-        sprintf(eval_buff, "%4.3Lf", evalue);
-    } else if (evalue < 1.0) {
-        sprintf(eval_buff, "%3.2Lf", evalue);
-    } else if (evalue < 10.0) {
-        sprintf(eval_buff, "%2.1Lf", evalue);
-    } else {
-        sprintf(eval_buff, "%5.0Lf", evalue);
-    }
+
+    ScoreAndEvalueToBuffers(bit_score, evalue, bit_score_buff, 
+                            &eval_buff_ptr, TRUE);
     
-    if (bit_score > 9999) {
-        sprintf(bit_score_buff, "%4.3Le", bit_score);
-    } else if (bit_score > 99.9) {
-        sprintf(bit_score_buff, "%4.0ld", (long) bit_score);
-    } else {
-        sprintf(bit_score_buff, "%4.0ld", (long) bit_score); /* %4.1Lf is bad on 68K Mac, so cast to long */
-    }
-#else
-    if (evalue < 1.0e-180) {
-        sprintf(eval_buff, "0.0");
-    } else if (evalue < 1.0e-99) {
-        sprintf(eval_buff, "%2.0le", evalue);
-        eval_buff_ptr++;	/* Knock off digit. */
-    } else if (evalue < 0.0009) {
-        sprintf(eval_buff, "%3.0le", evalue);
-    } else if (evalue < 0.1) {
-        sprintf(eval_buff, "%4.3lf", evalue);
-    } else if (evalue < 1.0) {
-        sprintf(eval_buff, "%3.2lf", evalue);
-    } else if (evalue < 10.0) {
-        sprintf(eval_buff, "%2.1lf", evalue);
-    } else {
-        sprintf(eval_buff, "%5.0lf", evalue);
-    }
-
-    if (bit_score > 9999) {
-        sprintf(bit_score_buff, "%4.3le", bit_score);
-    } else if (bit_score > 99.9) {
-        sprintf(bit_score_buff, "%4.0ld", (long) bit_score);
-    } else {
-        sprintf(bit_score_buff, "%4.1lf", bit_score);
-    }
-#endif
-
     if(asop->html_hot_link == TRUE && *id_buffer != NULLB) {
 
         Int4 m_from, m_to, t_from, t_to;

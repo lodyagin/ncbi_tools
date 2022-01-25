@@ -1,36 +1,39 @@
-/*  $Id: blast_seqsrc.c,v 1.18 2004/04/28 19:37:16 dondosha Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================
-*
-* Author:  Christiam Camacho
-*
-* File Description:
-*   Definition of ADT to retrieve sequences for the BLAST engine
-*
-*/
+/*  $Id: blast_seqsrc.c,v 1.20 2004/06/07 17:12:06 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author:  Christiam Camacho
+ *
+ *
+ */
 
-static char const rcsid[] = "$Id: blast_seqsrc.c,v 1.18 2004/04/28 19:37:16 dondosha Exp $";
+/** @file blast_seqsrc.c
+ * Definition of ADT to retrieve sequences for the BLAST engine
+ */
+
+static char const rcsid[] = 
+    "$Id: blast_seqsrc.c,v 1.20 2004/06/07 17:12:06 dondosha Exp $";
 
 #include <algo/blast/core/blast_seqsrc.h>
 
@@ -39,6 +42,7 @@ struct BlastSeqSrc {
 
     BlastSeqSrcConstructor NewFnPtr;       /**< Constructor */
     BlastSeqSrcDestructor  DeleteFnPtr;    /**< Destructor */
+    BlastSeqSrcCopier      CopyFnPtr;      /**< Copier */
 
    /* Functions to get information about database as a whole */
     GetInt4FnPtr      GetNumSeqs;     /**< Get number of sequences in set */
@@ -111,6 +115,27 @@ BlastSeqSrc* BlastSeqSrcFree(BlastSeqSrc* bssp)
     return (BlastSeqSrc*) (*destructor_fnptr)(bssp);
 }
 
+BlastSeqSrc* BlastSeqSrcCopy(const BlastSeqSrc* bssp)
+{
+    BlastSeqSrcCopier copy_fnptr = NULL;
+    BlastSeqSrc* retval;
+
+    if (!bssp) {
+        return NULL;
+    }
+
+    if ( !(retval = (BlastSeqSrc*) BlastMemDup(bssp, sizeof(BlastSeqSrc)))) {
+        return NULL;
+    }
+
+    /* If copy function is not provided, just return a copy of the structure */
+    if ( !(copy_fnptr = (*bssp->CopyFnPtr))) {
+        return retval;
+    }
+
+    return (BlastSeqSrc*) (*copy_fnptr)(retval);
+}
+
 /******************** BlastSeqSrcIterator API *******************************/
 
 BlastSeqSrcIterator* BlastSeqSrcIteratorNew(unsigned int chunk_sz)
@@ -179,6 +204,7 @@ void Set##member(data_structure_type var, member_type arg) \
 /* Note there's no ; after these macros! */
 DEFINE_MEMBER_FUNCTIONS(BlastSeqSrcConstructor, NewFnPtr, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(BlastSeqSrcDestructor, DeleteFnPtr, BlastSeqSrc*)
+DEFINE_MEMBER_FUNCTIONS(BlastSeqSrcCopier, CopyFnPtr, BlastSeqSrc*)
 
 DEFINE_MEMBER_FUNCTIONS(void*, DataStructure, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqs, BlastSeqSrc*)

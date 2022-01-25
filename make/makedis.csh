@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.99 2004/05/03 18:12:03 beloslyu Exp $
+# $Id: makedis.csh,v 1.100 2004/05/13 17:13:54 ucko Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -163,6 +163,9 @@ case Linux:
 		breaksw
 	case "i?86":
 		set platform=linux-x86
+		breaksw
+	case "alpha":
+		set platform=linux-alpha
 		breaksw
 	default:
 		set platform=linux

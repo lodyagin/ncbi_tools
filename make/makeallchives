@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives,v 1.73 2004/02/24 14:49:49 beloslyu Exp $
+# $Id: makeallchives,v 1.74 2004/06/16 19:17:52 beloslyu Exp $
 #
 #
 # Creates all archives from a directory above 'ncbi'
@@ -68,7 +68,7 @@ If you have not done so already, please refer to the
 file at ftp://ftp.ncbi.nih.gov/entrez/README
 EOF
 		f="entrez entrez2 blastcl3 ../doc/firewall.html"		
-		(cd ncbi/build; test -f Nentrez && ln Nentrez entrez)
+		(cd ncbi/build; test -f Nentrez && ln -f Nentrez entrez)
 		;;
 	sequin)
 		f="sequin tbl2asn asn2gb"
@@ -91,14 +91,11 @@ EOF
 		f="fa2htgs"
 		;;
 	blast)
-		f="blastall blastpgp seedtop formatdb fastacmd copymat makemat \
-impala megablast blastclust rpsblast bl2seq ../doc/impala.txt \
-../doc/blast.txt ../doc/megablast.txt ../doc/blastclust.txt ../doc/rpsblast.txt \
-../doc/formatdb.txt ../doc/fastacmd.txt ../doc/README-qm"
+		f="blastall blastpgp seedtop formatdb fastacmd copymat makemat impala megablast blastclust rpsblast bl2seq ../doc/blast/bl2seq.html ../doc/blast/blast.html ../doc/blast/blastall.html ../doc/blast/blastclust.html ../doc/blast/blastdb.html ../doc/blast/blastftp.html ../doc/blast/blastpgp.html ../doc/blast/fastacmd.html ../doc/blast/filter.html ../doc/blast/formatdb.html ../doc/blast/impala.html ../doc/blast/index.html ../doc/blast/megablast.html ../doc/blast/netblast.html ../doc/blast/rpsblast.html"
 		rm -f archive/blast/data/sequin.hlp
 		;;
 	netblast)
-		f="blastcl3 ../doc/firewall.html ../doc/netblast.txt"
+		f="blastcl3 ../doc/firewall.html ../doc/blast/netblast.html"
 		;;
 	*)
 		;;

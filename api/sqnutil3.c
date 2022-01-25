@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -1817,10 +1817,9 @@ extern void AbstractReportError (
 
 }
 
-static void AddDefLinesToAlignmentSequences (
-  TAlignmentFilePtr afp,
-  SeqEntryPtr sep_head
-)
+static void AddDefLinesToAlignmentSequences 
+(TAlignmentFilePtr afp,
+ SeqEntryPtr sep_head)
 {
   BioseqSetPtr bssp;
   SeqEntryPtr  sep;
@@ -1828,7 +1827,12 @@ static void AddDefLinesToAlignmentSequences (
   ValNodePtr   sdp;
   CharPtr      new_title;
   Int4         new_title_len;
-  
+  Int4         curr_seg;
+  Int4         num_sets = 1;
+  Boolean      one_defline_per_sequence = TRUE;
+  Boolean      all_extra_empty;
+
+ 
   if (afp == NULL || sep_head == NULL || ! IS_Bioseq_set (sep_head))
   {
     return;
@@ -1838,32 +1842,96 @@ static void AddDefLinesToAlignmentSequences (
   {
     return;
   }
-  
   bssp = sep_head->data.ptrvalue;
+  
+  /* find out if all of our deflines are real */
+  if (afp->num_segments > 1 && afp->num_deflines == afp->num_sequences)
+  {
+    one_defline_per_sequence = FALSE;
+    num_sets = afp->num_sequences / afp->num_segments;
+    all_extra_empty = TRUE;
+    for (curr_seg = num_sets; curr_seg < afp->num_deflines && all_extra_empty; curr_seg ++)
+    {
+      if (afp->deflines [curr_seg] != NULL)
+      {
+        all_extra_empty = FALSE;
+      }
+    }
+  	if (all_extra_empty)
+  	{
+  		one_defline_per_sequence = TRUE;
+  	}
+  }
+  
   for (sep = bssp->seq_set, index = 0;
        sep != NULL && (index < afp->num_deflines || index < afp->num_organisms);
        sep = sep->next, index++)
   {
     new_title_len = 0;
-    if (index < afp->num_organisms) {
-      new_title_len += StringLen (afp->organisms [index]) + 1;
+    /* get lengths for organisms for this sequence */
+    
+    if (afp->num_segments > 1 && afp->num_organisms == afp->num_sequences)
+    {
+      /* have one organism per segment, in which case use only the first one */
+      curr_seg = index * afp->num_segments;
     }
-    if (index < afp->num_deflines && afp->deflines [index] != NULL) {
-      new_title_len += StringLen (afp->deflines [index]) + 1;
+    else
+    { /* otherwise one organism per sequence */
+      curr_seg = index;
     }
+    if (curr_seg < afp->num_organisms)
+    {
+      new_title_len += StringLen (afp->organisms [curr_seg]) + 1;
+    }
+
+    /* get lengths for deflines for this sequence */
+    if (! one_defline_per_sequence)
+    { /* have one defline per segment, in which use only the first one */
+      curr_seg = index * afp->num_segments;
+    }
+    else
+    { /* otherwise one defline per sequence */
+      curr_seg = index;	
+    }
+    if (curr_seg < afp->num_deflines) 
+    {
+      new_title_len += StringLen (afp->deflines [curr_seg]) + 1;
+    }
+  	
     if (new_title_len > 0) {
       new_title = (CharPtr) MemNew (new_title_len);
       if (new_title == NULL) return;
       new_title [0] = 0;
-      if (index < afp->num_organisms) {
-        StringCat (new_title, afp->organisms [index]);
+      
+      /* list organisms at beginning of new defline */
+      if (afp->num_segments > 1 && afp->num_organisms == afp->num_sequences)
+      { /* have one organism per segment, in which case use only first one */
+        curr_seg = index * afp->num_segments;
+      }
+      else
+      { /* otherwise one organism per sequence */
+      	curr_seg = index;
+      }
+
+      if (curr_seg < afp->num_organisms) {
+        StringCat (new_title, afp->organisms [curr_seg]);
         if (new_title_len > StringLen (new_title) + 1)
         {
           StringCat (new_title, " ");
         }
       }
-      if (index < afp->num_deflines && afp->deflines [index] != NULL) {
-        StringCat (new_title, afp->deflines [index]);
+      
+      if (!one_defline_per_sequence)
+      { /* have one defline per segment, in which case all go to same sequence */
+        curr_seg = index * afp->num_segments;
+      }
+      else 
+      {
+      	curr_seg = index;
+      }
+      if (curr_seg < afp->num_deflines) 
+      {
+    	StringCat (new_title, afp->deflines [curr_seg]);
       }
 
       sdp = CreateNewDescriptor (sep, Seq_descr_title);
@@ -1875,32 +1943,283 @@ static void AddDefLinesToAlignmentSequences (
     }
   }
 }
+    
+
+static SeqEntryPtr 
+MakeDeltaSetFromAlignment 
+(SeqEntryPtr sep_list,
+ TAlignmentFilePtr afp,
+ Uint1 moltype,
+ Int4  gap_length
+ )
+{
+  BioseqPtr    bsp, deltabsp;
+  SeqEntryPtr  this_list, last_sep, next_list, sep, nextsep;
+  SeqEntryPtr  topsep, last_delta_sep;
+  SeqIdPtr     sip;
+  Int4         curr_seg;
+  Int4         num_sets = 0;
+  CharPtr      seqbuf;
+  ValNodePtr   vnp;
+  SeqLitPtr    slp;
+  IntFuzzPtr   ifp;
+  SeqEntryPtr  delta_list = NULL;
+  
+  delta_list = NULL;
+  last_delta_sep = NULL;
+  this_list = sep_list;
+  while (this_list != NULL)
+  {
+    last_sep = this_list;
+    curr_seg = 0;
+    while (last_sep != NULL && curr_seg < afp->num_segments - 1)
+    {
+    	last_sep = last_sep->next;
+    	curr_seg++;
+    }
+    if (last_sep == NULL) return NULL;
+    next_list = last_sep->next;
+    last_sep->next = NULL;
+  
+    bsp = (BioseqPtr)this_list->data.ptrvalue;
+    if (bsp == NULL) return NULL;
+
+    sip = SeqIdDup (bsp->id);
+    vnp = ValNodeExtract (&(bsp->descr), Seq_descr_title);
+
+    deltabsp = BioseqNew ();
+    if (deltabsp == NULL) return NULL;
+    deltabsp->repr = Seq_repr_delta;
+    deltabsp->seq_ext_type = 4;
+    deltabsp->mol = moltype;
+    deltabsp->length = 0;
+
+    topsep = SeqEntryNew ();
+    if (topsep == NULL) return NULL;
+    topsep->choice = 1;
+    topsep->data.ptrvalue = (Pointer) deltabsp;
+
+    for (sep = this_list; sep != NULL; sep = nextsep) {
+      nextsep = sep->next;
+      sep->next = NULL;
+
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      if (bsp == NULL) continue;
+
+      if (bsp->repr == Seq_repr_raw) {
+        BioseqRawConvert (bsp, Seq_code_iupacna);
+        seqbuf = BSMerge ((ByteStorePtr) bsp->seq_data, NULL);
+        slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+        if (slp == NULL) continue;
+
+        slp->length = bsp->length;
+        ValNodeAddPointer ((ValNodePtr PNTR) &(deltabsp->seq_ext), (Int2) 2, (Pointer) slp);
+        slp->seq_data = BSNew (slp->length);
+        slp->seq_data_type = Seq_code_iupacna;
+        AddBasesToByteStore (slp->seq_data, seqbuf);
+        MemFree(seqbuf);
+
+        deltabsp->length += slp->length;
+
+      } else if (bsp->repr == Seq_repr_virtual) {
+        slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+        if (slp == NULL) continue;
+        slp->length = bsp->length;
+        if (slp == NULL) continue;
+
+        slp->length = bsp->length;
+        ValNodeAddPointer ((ValNodePtr PNTR) &(deltabsp->seq_ext), (Int2) 2, (Pointer) slp);
+        if (slp->length < 1) {
+          slp->length = 0;
+          ifp = IntFuzzNew ();
+          ifp->choice = 4;
+          slp->fuzz = ifp;
+        }
+
+        deltabsp->length += slp->length;
+      }
+      SeqEntryFree (sep);
+      
+      if (nextsep != NULL)
+      {
+        /* add gap */
+        slp = (SeqLitPtr) MemNew (sizeof (SeqLit));
+        if (slp == NULL) continue;
+        slp->length = gap_length;
+        ValNodeAddPointer ((ValNodePtr PNTR) &(deltabsp->seq_ext), (Int2) 2, (Pointer) slp);
+        deltabsp->length += slp->length;        
+      }
+    }
+
+    ValNodeLink (&(deltabsp->descr), vnp);
+    deltabsp->id = sip;
+    
+    if (last_delta_sep == NULL)
+    {
+    	delta_list = topsep;
+    }
+    else 
+    {
+        last_delta_sep->next = topsep;	
+    }
+    last_delta_sep = topsep;
+    
+    this_list = next_list;	
+  }
+  return delta_list;
+}
+
+static void RenameSegSet (SeqEntryPtr sep)
+{
+  BioseqSetPtr bssp, seg_bssp;
+  SeqEntryPtr  seg_sep;
+  BioseqPtr    main_bsp = NULL;
+  BioseqPtr    seg_bsp = NULL;
+  Char         new_id_str [255];
+  
+  if (sep == NULL || !IS_Bioseq_set (sep) || (bssp = sep->data.ptrvalue) == NULL
+      || bssp->_class != BioseqseqSet_class_segset)
+  {
+  	return;
+  }
+  
+  sep = bssp->seq_set;
+  while (sep != NULL && (seg_bsp == NULL || main_bsp == NULL))
+  {
+  	if (IS_Bioseq (sep))
+  	{
+  	  main_bsp = (BioseqPtr) sep->data.ptrvalue;
+  	}
+  	else if (IS_Bioseq_set (sep))
+  	{
+  	  seg_bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  	  if (seg_bssp != NULL && seg_bssp->_class == BioseqseqSet_class_parts)
+  	  {
+  	  	seg_sep = seg_bssp->seq_set;
+  	  	while (seg_sep != NULL && seg_bsp == NULL)
+  	  	{
+  	  	  if (IS_Bioseq (seg_sep))
+  	  	  {
+  	  	    seg_bsp = seg_sep->data.ptrvalue;
+  	      }
+  	      seg_sep = seg_sep->next;
+  	    }
+  	  }
+  	}
+  	sep = sep->next;
+  }
+  if (main_bsp == NULL || seg_bsp == NULL)
+  {
+  	return;
+  }
+  SeqIdWrite (seg_bsp->id, new_id_str, PRINTID_FASTA_SHORT, sizeof (new_id_str) - 7);
+  StringCat (new_id_str, "_master");
+  SeqIdFree (main_bsp->id);
+  main_bsp->id = MakeSeqID (new_id_str);
+}
+
+static SeqEntryPtr 
+MakeSegmentedSetFromAlignment 
+(SeqEntryPtr sep_list,
+ TAlignmentFilePtr afp,
+ Uint1 moltype)
+{
+  SeqEntryPtr  this_list, last_sep, next_list, nextsep, last_segset;
+  Int4         curr_seg;
+  Int4         num_sets = 0;
+  
+  this_list = sep_list;
+  sep_list = NULL;
+  last_segset = NULL;
+  while (this_list != NULL)
+  {
+    last_sep = this_list;
+    curr_seg = 0;
+    while (last_sep != NULL && curr_seg < afp->num_segments - 1)
+    {
+      if (!IS_Bioseq (last_sep)) return NULL;
+      last_sep = last_sep->next;
+      curr_seg++;
+    }
+    if (last_sep == NULL) return NULL;
+    next_list = last_sep->next;
+    last_sep->next = NULL;
+    
+    last_sep = this_list->next;
+    this_list->next = NULL;
+    while (last_sep != NULL)
+    {
+      nextsep = last_sep->next;
+      last_sep->next = NULL;
+      AddSeqEntryToSeqEntry (this_list, last_sep, FALSE);
+      last_sep = nextsep;
+    }
+
+    /* fix IDs for seg sets */    
+    RenameSegSet (this_list);
+    
+    if (sep_list == NULL) 
+    {
+      sep_list = this_list;
+    }
+    else
+    {
+      last_segset->next = this_list;
+    }
+    last_segset = this_list;
+    
+    this_list = next_list;	
+  }
+  return sep_list; 	
+}
 
 extern SeqEntryPtr MakeSequinDataFromAlignment (TAlignmentFilePtr afp, Uint1 moltype) 
 {
-  SeqAnnotPtr sap;
-  SeqEntryPtr sep_list, sep, sep_prev;
-  SeqIdPtr    sip_list, sip, sip_prev;
-  ValNodePtr  seqvnp, vnp;
-  Int4        index, len;
+  SeqIdPtr    PNTR sip_list;
+  SeqIdPtr    PNTR sip_prev;
+  SeqAnnotPtr sap = NULL;
+  SeqAlignPtr salp, salp_list, salp_last;
+  ValNodePtr  PNTR seqvnp;
+  SeqEntryPtr sep_list;
+  SeqEntryPtr sep, sep_prev;
+  SeqIdPtr    sip;
+  ValNodePtr  vnp;
+  Int4        index, len, curr_seg, num_sets;
 
   if (afp == NULL) return NULL;
   
   if (afp->num_sequences == 0) return NULL;
+  if (afp->num_segments < 1) return NULL;
+  
+  sip_list = (SeqIdPtr PNTR) MemNew (afp->num_segments * sizeof (SeqIdPtr));  
+  sip_prev = (SeqIdPtr PNTR) MemNew (afp->num_segments * sizeof (SeqIdPtr));  
+  seqvnp = (ValNodePtr PNTR) MemNew (afp->num_segments * sizeof (ValNodePtr));  
+  if (sip_list == NULL || sip_prev == NULL || seqvnp == NULL)
+  {
+    MemFree (sip_list);
+    MemFree (sip_prev);
+  	MemFree (seqvnp);
+  	return NULL;
+  }
+ 
+  for (curr_seg = 0; curr_seg < afp->num_segments; curr_seg ++)
+  {
+    sip_list [curr_seg] = NULL;
+    sip_prev [curr_seg] = NULL;
+  	seqvnp [curr_seg] = NULL;
+  }
 
-  seqvnp = NULL;
-  sip_list = NULL;
-  sip_prev = NULL;
   sep_list = NULL;
   sep_prev = NULL;
+  curr_seg = 0;
   for (index = 0; index < afp->num_sequences; index++) {
     sip = MakeSeqID (afp->ids [index]);
-    if (sip_prev == NULL) {
-      sip_list = sip;
+    if (sip_prev[curr_seg] == NULL) {
+      sip_list[curr_seg] = sip;
     } else {
-      sip_prev->next = sip;
+      sip_prev[curr_seg]->next = sip;
     }
-    sip_prev = sip;
+    sip_prev[curr_seg] = sip;
     len = (Int4) StringLen (afp->sequences [index]);
     sep = StringToSeqEntry (afp->sequences [index], sip, len, moltype);
     if (sep != NULL) {
@@ -1910,17 +2229,74 @@ extern SeqEntryPtr MakeSequinDataFromAlignment (TAlignmentFilePtr afp, Uint1 mol
         sep_prev->next = sep;
       }
       sep_prev = sep;
-      vnp = ValNodeNew (seqvnp);
-      if (seqvnp == NULL) seqvnp = vnp;
+      vnp = ValNodeNew (seqvnp[curr_seg]);
+      if (seqvnp[curr_seg] == NULL) seqvnp[curr_seg] = vnp;
       vnp->data.ptrvalue = afp->sequences [index];
     }
+    curr_seg ++;
+    if (curr_seg >= afp->num_segments) 
+    {
+      curr_seg = 0;
+    }
   }
-  sap = LocalAlignToSeqAnnotDimn (seqvnp, sip_list, NULL, afp->num_sequences,
-                                  0, NULL, FALSE);
-  sep_list = make_seqentry_for_seqentry (sep_list);
-  SeqAlignAddInSeqEntry (sep_list, sap);
-  ValNodeFree (seqvnp);
+  
+  if (afp->num_segments == 1) 
+  {
+    sap = LocalAlignToSeqAnnotDimn (seqvnp[0], sip_list[0], NULL, afp->num_sequences,
+                                    0, NULL, FALSE);
+    sep_list = make_seqentry_for_seqentry (sep_list);
+    SeqAlignAddInSeqEntry (sep_list, sap);  	
+  } 
+  else 
+  {
+    sep_list = MakeSegmentedSetFromAlignment (sep_list, afp, moltype);
+    sep_list = make_seqentry_for_seqentry (sep_list);
+    num_sets = afp->num_sequences / afp->num_segments;
+    salp_list = NULL;
+    salp_last = NULL;
+
+    for (curr_seg = 0; curr_seg < afp->num_segments; curr_seg++)
+    {      
+      sap = LocalAlignToSeqAnnotDimn (seqvnp[curr_seg], sip_list[curr_seg], NULL, num_sets,
+                                    0, NULL, FALSE);
+      if (sap != NULL)
+      {
+        salp = (SeqAlignPtr) sap->data;
+        if (salp != NULL)
+        {
+      	  if (salp_last == NULL)
+      	  {
+      	    salp_list = salp;
+      	  }
+      	  else 
+      	  {
+      	    salp_last->next = salp;
+      	  }
+      	  salp_last = salp;
+        }
+        sap->data = NULL;
+        SeqAnnotFree (sap);  
+      }
+    }
+    if (salp_list != NULL)
+    {
+      sap = SeqAnnotNew ();
+      sap->type = 2;
+      sap->data = (Pointer) salp_list;
+      SeqAlignAddInSeqEntry (sep_list, sap);
+    }
+  }
+
+  for (curr_seg = 0; curr_seg < afp->num_segments; curr_seg ++)
+  {
+    ValNodeFree (seqvnp [curr_seg]);
+  }
+  MemFree (seqvnp);
+  MemFree (sip_list);
+  MemFree (sip_prev);
+
   AddDefLinesToAlignmentSequences (afp, sep_list);
+
   return sep_list;
 }
 

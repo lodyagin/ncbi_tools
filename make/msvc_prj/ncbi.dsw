@@ -102,9 +102,6 @@ Package=<4>
     Project_Dep_Name demo_fastacmd
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name demo_fmerge
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name demo_formatdb
     End Project Dependency
     Begin Project Dependency
@@ -272,6 +269,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name demo_flint
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_insdseqget
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -407,6 +407,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name blastapi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -459,6 +462,18 @@ Package=<4>
 
 ###############################################################################
 
+Project: "connect"=.\connect\connect.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
 Project: "ddvlib"=.\ddv\ddvlib\ddvlib.dsp - Package Owner=<4>
 
 Package=<5>
@@ -490,6 +505,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -577,6 +595,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -800,6 +821,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -836,6 +860,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name netcli
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -859,6 +886,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -938,6 +968,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1013,6 +1046,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1066,6 +1102,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -1142,6 +1181,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1172,6 +1214,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1198,6 +1243,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -1274,6 +1322,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1348,30 +1399,6 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbinacc
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbiobj
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbi
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name ncbimain
-    End Project Dependency
-}}}
-
-###############################################################################
-
-Project: "demo_fmerge"=.\demo\fmerge\demo_fmerge.dsp - Package Owner=<4>
-
-Package=<5>
-{{{
-}}}
-
-Package=<4>
-{{{
-    Begin Project Dependency
-    Project_Dep_Name ncbitool
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbiobj
@@ -1478,6 +1505,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name netcli
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1496,6 +1526,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1513,6 +1546,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -1549,6 +1585,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name netentr
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -1621,6 +1660,42 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_insdseqget"=.\demo\insdseqget\demo_insdseqget.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbiid1
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
     End Project Dependency
 }}}
 
@@ -1733,6 +1808,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1793,6 +1871,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbiacc
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1825,6 +1906,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -1922,6 +2006,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -1972,6 +2059,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -2047,6 +2137,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -2201,6 +2294,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -2224,6 +2320,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -2300,6 +2399,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -2348,6 +2450,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -2371,6 +2476,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -2507,6 +2615,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -2554,6 +2665,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -2648,6 +2762,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name blastapi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -2714,6 +2831,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name blastapi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -2728,6 +2848,9 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -2837,6 +2960,9 @@ Package=<5>
 
 Package=<4>
 {{{
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -2984,6 +3110,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -2998,6 +3127,9 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -3014,6 +3146,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -3028,6 +3163,9 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -3044,6 +3182,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -3058,6 +3199,9 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -3074,6 +3218,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -3088,6 +3235,9 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -3107,6 +3257,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -3121,6 +3274,9 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -3140,6 +3296,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -3154,6 +3313,9 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -3173,6 +3335,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name ncbi
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -3187,6 +3352,9 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 
@@ -3205,6 +3373,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name connect
     End Project Dependency
 }}}
 

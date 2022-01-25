@@ -113,15 +113,16 @@ Still others are expected to be rarely used, or are for testing new features.
 #define DDBJ_VARIANT_FORMAT    4096
 #define USE_OLD_SOURCE_ORG     8192
 
+GBSeq XML has been replaced by INSDSeq XML.  The CREATE_XML_GBSEQ_FILE flag
+will actually produce INSDSeq.  The original GBSeq can be generated during
+the transition period by adding the following flag.
+
+#define PRODUCE_OLD_GBSEQ     16384
+
 
 LOCKS are bits for controlling program performance, and are also ORed together.
 
-Sequin hangs onto a job pointer and does paragraph formatting in random order,
-so it should free the segment's SeqPort after each sequence block is printed.
-
-#define FREE_SEQPORT_EACH_TIME    1
-
-Another set is for locking far segmented or delta components, far feature
+One flag set is for locking far segmented or delta components, far feature
 location Bioseqs, or far feature product Bioseqs in advance. This prevents
 the object manager from uncaching components at an inopportune time, causing
 unnecessary thrashing. Far component Bioseqs are needed for displaying the
@@ -131,7 +132,7 @@ sequence.
 #define LOCK_FAR_LOCATIONS        4
 #define LOCK_FAR_PRODUCTS         8
 
-A third set attempts to do bulk accession to gi lookups in advance, which is
+Another set attempts to do bulk accession to gi lookups in advance, which is
 possible if PubSeqFetchEnable was called by the application. Remote fetching
 in asn2gb uses this new access mechanism. Far component IDs are needed for
 the CONTIG line, far location IDs for feature location joins, and far product
@@ -141,11 +142,6 @@ IDs for the /protein_id and /transcript_id accessions.
 #define LOOKUP_FAR_LOCATIONS     32
 #define LOOKUP_FAR_PRODUCTS      64
 #define LOOKUP_FAR_HISTORY      128
-
-A final flag causes the sequence to be read by streaming at setup time, to
-speed up calculation of the base count and formatting of the sequence blocks.
-
-#define STREAM_SEQ_PORT_FIRST   256
 
 To use PubSeqFetchEnable, the application should #include <pmfapi.h>.
 
@@ -202,7 +198,7 @@ with the Sequin archive. The most commonly used arguments are shown below.
   -i  Input File Name
   -o  Output File Name
 
-  -f  Format (b GenBank, e EMBL, p GenPept, t Feature Table, x GBSet)
+  -f  Format (b GenBank, e EMBL, p GenPept, t Feature Table, x INSDSet)
   -m  Mode (r Release, e Entrez, s Sequin, d Dump)
   -s  Style (n Normal, s Segment, m Master, c Contig)
   -g  Bit Flags (1 HTML, 2 XML, 4 ContigFeats, 8 ContigSrcs, 16 FarTransl)

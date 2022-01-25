@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.48 $
+* $Revision: 6.49 $
 *
 * File Description: 
 *
@@ -1264,7 +1264,7 @@ static void ChangeCannedMessage (PopuP p)
       SetStatus (ffp->exception, TRUE);
       break;
     case 5 :
-      SetTitle (ffp->exceptText, "trans splicing");
+      SetTitle (ffp->exceptText, "trans-splicing");
       SetStatus (ffp->exception, TRUE);
       break;
     case 6 :
@@ -1419,7 +1419,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       PopupItem (canned, "RNA editing");
       PopupItem (canned, "reasons given in citation");
       PopupItem (canned, "ribosomal slippage");
-      PopupItem (canned, "trans splicing");
+      PopupItem (canned, "trans-splicing");
       PopupItem (canned, "artificial frameshift");
       PopupItem (canned, "nonconsensus splice site");
       PopupItem (canned, "rearrangement required");
@@ -1433,8 +1433,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
         } else if (StringICmp (sfp->except_text, "ribosomal slippage") == 0 ||
                    StringICmp (sfp->except_text, "ribosome slippage") == 0) {
           SetValue (canned, 4);
-        } else if (StringICmp (sfp->except_text, "trans splicing") == 0 ||
-                   StringICmp (sfp->except_text, "trans-splicing") == 0) {
+        } else if (StringICmp (sfp->except_text, "trans-splicing") == 0 ||
+                   StringICmp (sfp->except_text, "trans splicing") == 0) {
           SetValue (canned, 5);
         } else if (StringICmp (sfp->except_text, "artificial frameshift") == 0) {
           SetValue (canned, 6);

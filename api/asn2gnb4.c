@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.11 $
+* $Revision: 1.18 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -135,6 +135,7 @@ static FtQualType feat_qual_order [] = {
   FTQUAL_organism,
   FTQUAL_label,
   FTQUAL_cds_product,
+  FTQUAL_extra_products,
   FTQUAL_protein_id,
   FTQUAL_transcript_id,
   FTQUAL_db_xref, 
@@ -218,6 +219,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
   { "evidence",       Qual_class_evidence      },
   { "exception",      Qual_class_string        },
   { "exception_note", Qual_class_string        },
+  { "product",        Qual_class_valnode       },
   { "figure",         Qual_class_string        },
   { "frequency",      Qual_class_quote         },
   { "function",       Qual_class_quote         },
@@ -1347,13 +1349,9 @@ static CharPtr validRefSeqExceptionString [] = {
   "RNA editing",
   "reasons given in citation",
   "ribosomal slippage",
-  "ribosome slippage",
-  "trans splicing",
   "trans-splicing",
   "alternative processing",
-  "alternate processing",
   "artificial frameshift",
-  "non-consensus splice site",
   "nonconsensus splice site",
   "rearrangement required for product",
   "modified codon recognition",
@@ -1431,7 +1429,7 @@ NLM_EXTERN Int2 ValidateAccn (
     if (numAlpha == 3 && numDigits == 5) return 0;
     if (numAlpha == 4 && numDigits == 8) return 0;
   } else if (numUndersc == 1) {
-    if (numAlpha != 2 || (numDigits != 6 && numDigits != 8)) return -2;
+    if (numAlpha != 2 || (numDigits != 6 && numDigits != 8 && numDigits != 9)) return -2;
     if (accession [0] == 'N' || accession [0] == 'X' || accession [0] == 'Z') {
       if (accession [1] == 'M' ||
           accession [1] == 'C' ||
@@ -1575,20 +1573,27 @@ NLM_EXTERN CharPtr goFieldType [] = {
 };
 
 static CharPtr GetGOtext (
-  UserFieldPtr topufp
+  UserFieldPtr topufp,
+  IntAsn2gbJobPtr ajp
 )
 
 {
-  CharPtr       evidence = NULL;
-  Char          gid [32];
-  CharPtr       goid = NULL;
-  Int2          j;
-  ObjectIdPtr   oip;
-  Int4          pmid = 0;
-  CharPtr       str;
-  CharPtr       textstr = NULL;
-  Char          tmp [32];
-  UserFieldPtr  ufp;
+  CharPtr        evidence = NULL;
+  StringItemPtr  ffstring;
+  Char           gid [32];
+  CharPtr        goid = NULL;
+  Boolean        is_www;
+  Int2           j;
+  ObjectIdPtr    oip;
+  Int4           pmid = 0;
+  CharPtr        ptr;
+  CharPtr        str;
+  CharPtr        textstr = NULL;
+  Char           tmp [32];
+  UserFieldPtr   ufp;
+
+  if (topufp == NULL || ajp == NULL) return NULL;
+  is_www = GetWWW (ajp);
 
   for (ufp = topufp; ufp != NULL; ufp = ufp->next) {
     oip = ufp->label;
@@ -1627,13 +1632,31 @@ static CharPtr GetGOtext (
   }
   /* if (StringHasNoText (textstr)) return NULL; */
 
-  str = (CharPtr) MemNew (StringLen (textstr) + StringLen (goid) + StringLen (evidence) + 50);
+  str = (CharPtr) MemNew (StringLen (textstr) + StringLen (goid) + StringLen (evidence) + StringLen (link_go) + 80);
   if (str == NULL) return NULL;
 
   StringCpy (str, textstr);
   if (! StringHasNoText (goid)) {
     StringCat (str, " [goid ");
-    StringCat (str, goid);
+    if (is_www) {
+      ffstring = FFGetString (ajp);
+      if (ffstring != NULL) {
+        FFAddOneString(ffstring, "<a href=", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString(ffstring, link_go, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString(ffstring, goid, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneChar(ffstring, '>', FALSE); 
+        FFAddOneString(ffstring, goid, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+        ptr = FFToCharPtr (ffstring);
+        FFRecycleString (ajp, ffstring);
+        StringCat (str, ptr);
+        MemFree (ptr);
+      } else {
+        StringCat (str, goid);
+      }
+    } else {
+      StringCat (str, goid);
+    }
     StringCat (str, "]");
   }
   if (! StringHasNoText (evidence)) {
@@ -1751,6 +1774,26 @@ static void LIBCALLBACK SaveGBSeqSequence (
   *tmpp = tmp;
 }
 
+static int LIBCALLBACK SortVnpByInt (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+
+  if (vnp1->data.intvalue > vnp2->data.intvalue) {
+    return 1;
+  } else if (vnp1->data.intvalue < vnp2->data.intvalue) {
+    return -1;
+  }
+
+  return 0;
+}
+
 static void FormatFeatureBlockQuals (
   StringItemPtr    ffstring,
   IntAsn2gbJobPtr  ajp,
@@ -1784,9 +1827,7 @@ static void FormatFeatureBlockQuals (
   CodeBreakPtr       cbp;
   Char               ch;
   Uint1              choice;
-  /*
-  Uint1              code = Seq_code_ncbieaa;
-  */
+  ValNodePtr         citlist;
   Int4               gi;
   Boolean            hadProtDesc = FALSE;
   DbtagPtr           dbt;
@@ -1823,9 +1864,6 @@ static void FormatFeatureBlockQuals (
   SeqIdPtr           sip;
   SeqLocPtr          slp;
   Boolean            split;
-  /*
-  SeqPortPtr         spp;
-  */
   CharPtr            start;
   CharPtr            str;
   Boolean            suppress_period;
@@ -2525,8 +2563,16 @@ static void FormatFeatureBlockQuals (
       case Qual_class_pubset :
         vnp = qvp [idx].vnp;
         if (vnp != NULL && asp != NULL && asp->referenceArray != NULL) {
+          citlist = NULL;
           for (ppr = vnp->data.ptrvalue; ppr != NULL; ppr = ppr->next) {
             j = MatchRef (ppr, asp->referenceArray, asp->numReferences);
+            if (j > 0) {
+              ValNodeAddInt (&citlist, 0, (Int4) j);
+            }
+          }
+          citlist = ValNodeSort (citlist, SortVnpByInt);
+          for (vnp = citlist; vnp != NULL; vnp = vnp->next) {
+            j = (Int2) vnp->data.intvalue;
             if (j > 0) {
               sprintf (numbuf, "%d", (int) j);
               FFAddTextToString(ffstring, "/citation=[", numbuf, "]",
@@ -2534,6 +2580,7 @@ static void FormatFeatureBlockQuals (
               FFAddOneChar(ffstring, '\n', FALSE);
             }
           }
+          citlist = ValNodeFree (citlist);
         }
         break;
 
@@ -2677,7 +2724,7 @@ static void FormatFeatureBlockQuals (
                   ajp->relModeError = TRUE;
                 }
               } else {
-                sip = GetSeqIdForGI(gi);
+                sip = GetSeqIdForGI (gi);
                 if (sip != NULL && SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
                   if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                     FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
@@ -2777,29 +2824,6 @@ static void FormatFeatureBlockQuals (
                 FFAddOneChar(ffstring, '\n', FALSE);
               }
               MemFree (str);
-              /*
-              spp = SeqPortNewByLoc (sfp->product, code);
-              if (spp != NULL) {
-                SeqPortSet_do_virtual (spp, TRUE);
-                while ((residue = SeqPortGetResidue (spp)) != SEQPORT_EOF) {
-                  if (! (IS_residue (residue))) continue;
-                  if (residue == INVALID_RESIDUE) {
-                    residue = (Uint1) 'X';
-                  }
-                  *protein_seq = residue;
-                  protein_seq++;
-                }
-                if (! StringHasNoText (str)) {
-                  FFAddTextToString(ffstring, "/translation=\"", str, "\"", 
-                                    FALSE, TRUE, TILDE_TO_SPACES);
-                  FFAddOneChar(ffstring, '\n', FALSE);
-                }
-                MemFree (str);
-              } else {
-                ajp->relModeError = TRUE;
-              }
-              SeqPortFree (spp);
-              */
             } else {
               ajp->relModeError = TRUE;
             }
@@ -2876,7 +2900,7 @@ static void FormatFeatureBlockQuals (
                   for (entry = qvp [jdx].ufp; entry != NULL; entry = entry->next) {
                     if (entry == NULL || entry->choice != 11) break;
                     ufp = (UserFieldPtr)  entry->data.ptrvalue;
-                    str = GetGOtext (ufp);
+                    str = GetGOtext (ufp, ajp);
                     if (! StringHasNoText (str)) {
                       FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals[jdx].name, "=",
                                         FALSE, TRUE, TILDE_IGNORE);
@@ -2997,7 +3021,7 @@ static void FormatFeatureBlockQuals (
                 for (entry = qvp [jdx].ufp; entry != NULL; entry = entry->next) {
                   if (entry == NULL || entry->choice != 11) break;
                   ufp = (UserFieldPtr)  entry->data.ptrvalue;
-                  str = GetGOtext (ufp);
+                  str = GetGOtext (ufp, ajp);
                   if (! StringHasNoText (str)) {
                     if (StringCmp (prefix, "; ") == 0) {
                       prefix = ";\n";
@@ -3241,7 +3265,7 @@ static void FormatFeatureBlockQuals (
                                           FALSE, FALSE, TILDE_IGNORE);
                       }
                     } else {
-                      sip = GetSeqIdForGI(gi);
+                      sip = GetSeqIdForGI (gi);
                       if (sip != NULL && SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
                         if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                           FFAddTextToString(unique, prefix, "transcript found in: ", seqid,
@@ -4264,7 +4288,11 @@ static CharPtr FormatFeatureBlockEx (
             if (vnp != NULL && (! StringHasNoText ((CharPtr) vnp->data.ptrvalue))) {
               qvp [FTQUAL_cds_product].str = (CharPtr) vnp->data.ptrvalue;
               vnp = vnp->next;
-              qvp [FTQUAL_prot_names].vnp = vnp;
+              if (ajp->flags.extraProductsToNote) {
+                qvp [FTQUAL_prot_names].vnp = vnp;
+              } else {
+                qvp [FTQUAL_extra_products].vnp = vnp;
+              }
             }
             qvp [FTQUAL_prot_desc].str = prp->desc;
             qvp [FTQUAL_prot_activity].vnp = prp->activity;
@@ -4998,8 +5026,10 @@ NLM_EXTERN CharPtr FormatFeatureBlock (
   BioseqPtr          bsp;
   SeqMgrFeatContext  fcontext;
   FmtType            format;
+  ValNodePtr         head;
   QualValPtr         qvp;
   SeqFeatPtr         sfp;
+  CharPtr            str;
   BioseqPtr          target;
 
   if (afp == NULL || bbp == NULL) return NULL;
@@ -5019,8 +5049,68 @@ NLM_EXTERN CharPtr FormatFeatureBlock (
   sfp = SeqMgrGetDesiredFeature (bbp->entityID, NULL, bbp->itemID, 0, NULL, &fcontext);
   if (sfp == NULL) return NULL;
 
+  /* five-column feature table uses special code for formatting */
+
+  if (ajp->format == FTABLE_FMT) {
+    head = NULL;
+    PrintFtableLocAndQuals (ajp, &head, target, sfp, &fcontext);
+    str = MergeFFValNodeStrs (head);
+    ValNodeFreeData (head);
+    return str;
+  }
+
+  /* otherwise do regular flatfile formatting */
+
   return FormatFeatureBlockEx (ajp, asp, bsp, target, sfp, &fcontext, qvp,
                                format, (IntFeatBlockPtr) bbp, ISA_aa (bsp->mol), TRUE);
+}
+
+NLM_EXTERN CharPtr FormatFeatHeaderBlock (
+  Asn2gbFormatPtr afp,
+  BaseBlockPtr bbp
+)
+
+{
+  IntAsn2gbJobPtr  ajp;
+  Asn2gbSectPtr    asp;
+  BioseqPtr        bsp;
+  Char             id [64];
+  SeqIdPtr         sip;
+  SeqIdPtr         sip2;
+  CharPtr          str = NULL;
+  BioseqPtr        target;
+  Char             tmp [53];
+
+  if (afp == NULL || bbp == NULL) return NULL;
+  ajp = afp->ajp;
+  if (ajp == NULL) return NULL;
+  asp = afp->asp;
+  if (asp == NULL) return NULL;
+  target = asp->target;
+  bsp = asp->bsp;
+  if (target == NULL || bsp == NULL) return NULL;
+
+  /* five-column feature table uses special code for formatting */
+
+  if (ajp->format == FTABLE_FMT) {
+    sip = SeqIdFindBest (target->id, 0);
+    if (sip != NULL && sip->choice == SEQID_GI) {
+      sip2 = GetSeqIdForGI (sip->data.intvalue);
+      if (sip2 != NULL) {
+        sip = sip2;
+      }
+    }
+    SeqIdWrite (sip, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+    if (! StringHasNoText (id)) {
+      sprintf (tmp, ">Feature %s\n", id);
+      str = StringSave (tmp);
+    }
+    return str;
+  }
+
+  /* otherwise do regular flatfile formatting */
+
+  return StringSaveNoNull (bbp->string);
 }
 
 

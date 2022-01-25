@@ -1,4 +1,4 @@
-/* $Id: blast_driver.c,v 1.40 2004/05/05 15:30:33 dondosha Exp $
+/* $Id: blast_driver.c,v 1.46 2004/06/08 17:47:43 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Main function for running BLAST
 
 ******************************************************************************
- * $Revision: 1.40 $
+ * $Revision: 1.46 $
  * */
 
-static char const rcsid[] = "$Id: blast_driver.c,v 1.40 2004/05/05 15:30:33 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_driver.c,v 1.46 2004/06/08 17:47:43 dondosha Exp $";
 
 #include <ncbi.h>
 #include <sqnutils.h>
@@ -46,6 +46,8 @@ static char const rcsid[] = "$Id: blast_driver.c,v 1.40 2004/05/05 15:30:33 dond
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_engine.h>
+#include <algo/blast/core/hspstream_collector.h>
+#include <algo/blast/api/hspstream_queue.h>
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/api/blast_input.h>
 #include <algo/blast/api/blast_format.h>
@@ -53,6 +55,7 @@ static char const rcsid[] = "$Id: blast_driver.c,v 1.40 2004/05/05 15:30:33 dond
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/seqsrc_readdb.h>
 #include <algo/blast/api/multiseq_src.h>
+#include <algo/blast/api/blast_tabular.h>
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
@@ -97,7 +100,8 @@ typedef enum {
    ARG_FORMAT,
    ARG_HTML,
    ARG_ASNOUT,
-   ARG_OIDRANGE
+   ARG_OIDRANGE,
+   ARG_TABULAR
 } BlastArguments;
 
 static Args myargs[] = {
@@ -199,7 +203,9 @@ static Args myargs[] = {
    { "Range of ordinal ids in the BLAST database to search.\n"
      "Format: \"oid1 oid2\"; ',', ':' or ';' can also be used as delimiters\n" 
      "Full database is searched if range not provided.", /* ARG_OIDRANGE */
-     NULL, NULL, NULL, TRUE, 'R', ARG_STRING, 0.0, 0, NULL}
+     NULL, NULL, NULL, TRUE, 'R', ARG_STRING, 0.0, 0, NULL},
+   { "Produce on-the-fly tabular output",
+     "0", NULL, NULL, FALSE, 'B', ARG_INT, 0.0, 0, NULL} /* ARG_TABULAR */
 };
 
 static Int2 BLAST_FillRPSInfo( RPSInfo **ppinfo, Nlm_MemMap **rps_mmap,
@@ -314,10 +320,9 @@ BLAST_FillOptions(LookupTableOptions* lookup_options,
 {
    char* blast_program;
    Boolean ag_blast = TRUE, variable_wordsize = FALSE, mb_lookup = FALSE;
-   Boolean greedy_extension = FALSE;
+   Int4 greedy_extension = 0;
+   Boolean greedy_with_ungapped = FALSE;
    Boolean is_gapped = FALSE;
-   Int8 totlen = 0;
-   Int4 numseqs = 0;
    Uint1 program_number;
    Int2 status;
    Boolean use_pssm = FALSE;
@@ -340,7 +345,8 @@ BLAST_FillOptions(LookupTableOptions* lookup_options,
          mb_lookup = TRUE;
          variable_wordsize = FALSE;
       }
-      greedy_extension = (Boolean) myargs[ARG_GREEDY].intvalue;
+      greedy_extension = MIN(myargs[ARG_GREEDY].intvalue, 2);
+      greedy_with_ungapped = (myargs[ARG_GREEDY].intvalue == 3);
    }
 
    BLAST_FillLookupTableOptions(lookup_options, program_number, mb_lookup,
@@ -372,42 +378,26 @@ BLAST_FillOptions(LookupTableOptions* lookup_options,
       query_setup_options->genetic_code = myargs[ARG_GENCODE].intvalue;
 
    BLAST_FillInitialWordOptions(word_options, program_number, 
-      greedy_extension, myargs[ARG_WINDOW].intvalue, variable_wordsize, 
-      ag_blast, mb_lookup, myargs[ARG_XDROP_UNGAPPED].intvalue);
+      (greedy_extension && !greedy_with_ungapped), 
+      myargs[ARG_WINDOW].intvalue, variable_wordsize, ag_blast, mb_lookup, 
+      myargs[ARG_XDROP_UNGAPPED].intvalue);
 
    BLAST_FillExtensionOptions(ext_options, program_number, greedy_extension, 
       myargs[ARG_XDROP].intvalue, myargs[ARG_XDROP_FINAL].intvalue);
 
-   if (greedy_extension) {
-       switch (myargs[ARG_GREEDY].intvalue) {
-       case 1:
-           ext_options->algorithm_type = EXTEND_GREEDY;
-           word_options->ungapped_extension = FALSE;
-           break;
-       case 2:
-           ext_options->algorithm_type = EXTEND_GREEDY_NO_TRACEBACK;
-           word_options->ungapped_extension = FALSE;
-           break;
-       case 3:
-           ext_options->algorithm_type = EXTEND_GREEDY_NO_TRACEBACK;
-           word_options->ungapped_extension = TRUE;
-           break;
-       default:
-           break;
-       }
-   }
-
    if (program_number == blast_type_rpsblast ||
-       program_number == blast_type_rpstblastn)
-      BLAST_FillScoringOptions(score_options, program_number, greedy_extension, 
+       program_number == blast_type_rpstblastn) {
+      BLAST_FillScoringOptions(score_options, program_number, FALSE,
                 myargs[ARG_MISMATCH].intvalue, myargs[ARG_MATCH].intvalue,
                 "BLOSUM62", rps_info->aux_info.gap_open_penalty,
                 rps_info->aux_info.gap_extend_penalty);
-   else
-      BLAST_FillScoringOptions(score_options, program_number, greedy_extension, 
+   } else {
+      BLAST_FillScoringOptions(score_options, program_number, 
+                (Boolean)greedy_extension, 
                 myargs[ARG_MISMATCH].intvalue, myargs[ARG_MATCH].intvalue,
                 myargs[ARG_MATRIX].strvalue, myargs[ARG_GAPOPEN].intvalue,
                 myargs[ARG_GAPEXT].intvalue);
+   }
 
    if (program_number != blast_type_tblastx)
       is_gapped = !myargs[ARG_UNGAPPED].intvalue;
@@ -426,8 +416,9 @@ BLAST_FillOptions(LookupTableOptions* lookup_options,
    hit_options->percent_identity = myargs[ARG_PERC_IDENT].floatvalue;
    hit_options->longest_intron = myargs[ARG_INTRON].intvalue;
 
-   BLAST_FillEffectiveLengthsOptions(eff_len_options, 
-      numseqs, totlen, (Int8) myargs[ARG_SEARCHSP].floatvalue);
+   if (myargs[ARG_SEARCHSP].floatvalue != 0) {
+      eff_len_options->searchsp_eff = (Int8) myargs[ARG_SEARCHSP].floatvalue; 
+   }
 
    if (db_options && (program_number == blast_type_tblastn ||
                       program_number == blast_type_rpstblastn ||
@@ -458,7 +449,7 @@ Int2 Nlm_Main(void)
    BlastHitSavingOptions* hit_options;
    char* dbname = NULL;
    LookupTableWrap* lookup_wrap;
-   Int2 status;
+   Int2 status = 0;
    QuerySetUpOptions* query_options=NULL;	
    BlastEffectiveLengthsOptions* eff_len_options=NULL;
    BlastMaskLoc* lcase_mask = NULL;
@@ -472,7 +463,7 @@ Int2 Nlm_Main(void)
    SeqAlign* seqalign;
    BlastFormattingOptions* format_options;
    Boolean done;
-   BlastReturnStat* return_stats;
+   BlastDiagnostics* diagnostics;
    Int4 ctr = 0;
    PSIBlastOptions* psi_options = NULL;
    BlastDatabaseOptions* db_options = NULL;
@@ -485,6 +476,11 @@ Int2 Nlm_Main(void)
    Nlm_MemMapPtr rps_mmap = NULL;
    Nlm_MemMapPtr rps_pssm_mmap = NULL;
    RPSInfo *rps_info = NULL;
+   double scale_factor;
+   BlastHSPStream* hsp_stream = NULL;
+   Boolean tabular_output;
+   TNlmThread format_thread;
+   BlastTabularFormatData* tf_data = NULL;
 
    if (! GetArgs (buf, NUMARG, myargs))
       return (1);
@@ -496,11 +492,13 @@ Int2 Nlm_Main(void)
    
    ErrSetMessageLevel(SEV_WARNING);
    
-   if ((outfp = fopen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
+   if ((outfp = FileOpen(myargs[ARG_OUT].strvalue, "w")) == NULL) {
       ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", 
                 myargs[ARG_OUT].strvalue);
      return (1);
    }
+
+   tabular_output = (Boolean)myargs[ARG_TABULAR].intvalue;
    
    blast_program = strdup(myargs[ARG_PROGRAM].strvalue);
    BlastProgram2Number(myargs[ARG_PROGRAM].strvalue, &program_number);
@@ -525,7 +523,7 @@ Int2 Nlm_Main(void)
    if (!myargs[ARG_DB].strvalue) {
       FILE *infp2;
       char *subject_file = strdup(myargs[ARG_SUBJECT].strvalue);
-      if ((infp2 = fopen(subject_file, "r")) == NULL) {
+      if ((infp2 = FileOpen(subject_file, "r")) == NULL) {
          ErrPostEx(SEV_FATAL, 1, 0, 
                    "blast: Unable to open second input file %s\n", 
                    subject_file);
@@ -535,7 +533,7 @@ Int2 Nlm_Main(void)
 
       BLAST_GetQuerySeqLoc(infp2, db_is_na, 0, 0, 0, NULL, &subject_slp, 
                            0, NULL);
-      fclose(infp2);
+      FileClose(infp2);
       
       seq_src = MultiSeqSrcInit(subject_slp, program_number);
 
@@ -558,34 +556,39 @@ Int2 Nlm_Main(void)
       if (BLAST_FillRPSInfo(&rps_info, &rps_mmap, 
                             &rps_pssm_mmap, myargs[ARG_DB].strvalue) != 0)
          ErrPostEx(SEV_FATAL, 1, 0,  "RPS Blast setup failed");
+      scale_factor = rps_info->aux_info.scale_factor;
+   }
+   else {
+      scale_factor = 1.0;
    }
 
    BLAST_FillOptions(lookup_options, query_options, word_options, 
       ext_options, hit_options, score_options, eff_len_options, 
       psi_options, db_options, seq_src, rps_info);
+   if (!tabular_output) {
+      if ((status = BlastFormattingOptionsNew(program_number, 
+                       myargs[ARG_OUT].strvalue, 
+                       myargs[ARG_DESCRIPTIONS].intvalue, 
+                       myargs[ARG_ALIGNMENTS].intvalue, 
+                       myargs[ARG_FORMAT].intvalue, &format_options)) != 0)
+         return status;
+      format_options->html = (Boolean) myargs[ARG_HTML].intvalue;
 
-   if ((status = BlastFormattingOptionsNew(program_number, 
-                    myargs[ARG_OUT].strvalue, 
-                    myargs[ARG_DESCRIPTIONS].intvalue, 
-                    myargs[ARG_ALIGNMENTS].intvalue, 
-                    myargs[ARG_FORMAT].intvalue, &format_options)) != 0)
-      return status;
-   format_options->html = (Boolean) myargs[ARG_HTML].intvalue;
+      if (seq_src) {
+         dbname = BLASTSeqSrcGetName(seq_src);
 
-   if (seq_src) {
-      dbname = BLASTSeqSrcGetName(seq_src);
-
-      BLAST_PrintOutputHeader(format_options, 
-         myargs[ARG_GREEDY].intvalue, dbname, !db_is_na);
+         BLAST_PrintOutputHeader(format_options, 
+            myargs[ARG_GREEDY].intvalue, dbname, !db_is_na);
+      }
    }
 
-   if ((infp = fopen(myargs[ARG_QUERY].strvalue, "r")) == NULL) {
+   if ((infp = FileOpen(myargs[ARG_QUERY].strvalue, "r")) == NULL) {
       ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", 
                 myargs[ARG_QUERY].strvalue);
       return (1);
    }
    
-   return_stats = (BlastReturnStat*) calloc(1, sizeof(BlastReturnStat));
+   diagnostics = Blast_DiagnosticsInit();
 
    translated_query = (program_number == blast_type_blastx || 
                        program_number == blast_type_tblastx);
@@ -622,7 +625,7 @@ Int2 Nlm_Main(void)
 
       status = 
          BLAST_MainSetUp(program_number, query_options, score_options, 
-            hit_options, query, query_info, &lookup_segments, 
+            hit_options, query, query_info, scale_factor, &lookup_segments, 
             &filter_loc, &sbp, &blast_message);
 
       if (translated_query) {
@@ -638,42 +641,75 @@ Int2 Nlm_Main(void)
          return status;
       }
 
-      Blast_HSPResultsInit(query_info->num_queries, &results);
       LookupTableWrapInit(query, lookup_options, 
                           lookup_segments, sbp, &lookup_wrap, rps_info);
     
-      if (rps_blast)
+      if (!tabular_output) {
+         Int4 num_results = (rps_blast ? BLASTSeqSrcGetNumSeqs(seq_src) : 
+                             query_info->num_queries);
+         /* Results in the collector stream should be sorted only for a
+            database search. The latter is true if and only if the sequence
+            source has non-zero database length. */
+         Boolean sort_on_read = (BLASTSeqSrcGetTotLen(seq_src) != 0);
+         hsp_stream = 
+            Blast_HSPListCollectorInit(program_number, hit_options, 
+                                       num_results, sort_on_read);
+      } else {
+         hsp_stream = Blast_HSPListQueueInit();
+         tf_data = Blast_TabularFormatDataInit(program_number, hsp_stream, 
+                      seq_src, query, query_info, score_options, sbp, 
+                      eff_len_options, ext_options, hit_options, db_options, 
+                      query_slp, outfp);
+         /* Start the formatting thread */
+         if((format_thread = 
+             NlmThreadCreate(Blast_TabularFormatThread, (void*) tf_data))
+            == NULL_thread) {
+            fprintf(stderr, 
+                    "Cannot create thread for formatting tabular output\n");
+            return 1;
+         }
+      }
+
+      if (rps_blast) {
          BLAST_RPSSearchEngine(program_number, query, query_info, 
             seq_src, sbp, score_options, lookup_wrap, 
             word_options, ext_options, hit_options, eff_len_options, 
-            psi_options, db_options, results, return_stats);
-      else
+            psi_options, db_options, hsp_stream, diagnostics, 
+            (tabular_output ? NULL : &results));
+      } else {
          BLAST_SearchEngine(program_number, query, query_info, 
             seq_src, sbp, score_options, lookup_wrap, 
             word_options, ext_options, hit_options, eff_len_options, 
-            psi_options, db_options, results, return_stats);
+            psi_options, db_options, hsp_stream, diagnostics, 
+            (tabular_output ? NULL : &results));
+      }
 
+      if (tabular_output) {
+         void* join_status = NULL;
+         NlmThreadJoin(format_thread, &join_status);
+      }
+
+      hsp_stream = BlastHSPStreamFree(hsp_stream);
       lookup_wrap = LookupTableWrapFree(lookup_wrap);
 
       if (rps_blast) {
-	 Nlm_MemMapFini(rps_mmap);
-	 Nlm_MemMapFini(rps_pssm_mmap);
+         Nlm_MemMapFini(rps_mmap);
+         Nlm_MemMapFini(rps_pssm_mmap);
          sfree(rps_info->aux_info.karlin_k);
          sfree(rps_info->aux_info.orig_score_matrix);
-	 sfree(rps_info);
+         sfree(rps_info);
       }
 
       /* The following works because the ListNodes' data point to simple
          double-integer structures */
       lookup_segments = ListNodeFreeData(lookup_segments);
-
+      if (!tabular_output) {
       /* Convert results to the SeqAlign form */
       BLAST_ResultsToSeqAlign(program_number, results, query_slp, seq_src, 
-         subject_slp, score_options, sbp, score_options->gapped_calculation,
+         score_options->gapped_calculation, score_options->is_ooframe, 
          &seqalign);
 
       results = Blast_HSPResultsFree(results);
-      seq_src = BlastSeqSrcFree(seq_src);
       
       if (myargs[ARG_ASNOUT].strvalue) {
          AsnIoPtr asnout = AsnIoOpen(myargs[ARG_ASNOUT].strvalue, (char*)"w");
@@ -686,21 +722,21 @@ Int2 Nlm_Main(void)
       status = BLAST_FormatResults(seqalign, dbname, 
                   blast_program, query_info->num_queries, query_slp,
                   filter_loc, format_options, score_options->is_ooframe);
-
-      BlastMaskLocFree(filter_loc);
-
       PrintOutputFooter(program_number, format_options, score_options, sbp, 
-         lookup_options, word_options, ext_options, hit_options, query_info, 
-         dbname, return_stats, db_is_na);
-
+                        lookup_options, word_options, ext_options, 
+                        hit_options, eff_len_options, query_info, 
+                        seq_src, diagnostics);
+      } /* if not tabular output */
       query = BlastSequenceBlkFree(query);
+      BlastMaskLocFree(filter_loc);
       query_info = BlastQueryInfoFree(query_info);
       BlastScoreBlkFree(sbp);
       query_slp = SeqLocSetFree(query_slp);
    } /* End loop on sets of queries */
    
+   seq_src = BlastSeqSrcFree(seq_src);
    subject_slp = SeqLocSetFree(subject_slp);
-   sfree(return_stats);
+   Blast_DiagnosticsFree(diagnostics);
    LookupTableOptionsFree(lookup_options);
    BlastQuerySetUpOptionsFree(query_options);
    BlastExtensionOptionsFree(ext_options);
@@ -710,11 +746,14 @@ Int2 Nlm_Main(void)
    BlastEffectiveLengthsOptionsFree(eff_len_options);
    PSIBlastOptionsFree(psi_options);
    BlastDatabaseOptionsFree(db_options);
-   
-   BlastFormattingOptionsFree(format_options);
+   if (!tabular_output) { 
+      BlastFormattingOptionsFree(format_options);
+   } else {
+      FileClose(outfp);
+   }
 
    if (infp)
-      fclose(infp);
+      FileClose(infp);
    
    sfree(dbname);
    sfree(blast_program);

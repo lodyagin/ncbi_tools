@@ -1,46 +1,45 @@
-/* $Id: blast_util.c,v 1.66 2004/04/19 18:34:19 madden Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/* $Id: blast_util.c,v 1.71 2004/06/07 14:23:04 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Ilya Dondoshansky
+ *
+ */
 
-/*****************************************************************************
+/** @file blast_util.c
+ * Various BLAST utilities
+ */
 
-File name: blast_util.c
 
-Author: Ilya Dondoshansky
-
-Contents: Various BLAST utilities
-
-******************************************************************************
- * $Revision: 1.66 $
- * */
+static char const rcsid[] = 
+    "$Id: blast_util.c,v 1.71 2004/06/07 14:23:04 dondosha Exp $";
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_encoding.h>
 #include <algo/blast/core/blast_filter.h>
 
-static char const rcsid[] = "$Id: blast_util.c,v 1.66 2004/04/19 18:34:19 madden Exp $";
 
 Int2
 BlastSetUp_SeqBlkNew (const Uint1* buffer, Int4 length, Int4 context,
@@ -672,7 +671,25 @@ Int2 BLAST_ContextToFrame(Uint1 prog_number, Int4 context_number)
    return frame;
 }
 
-Int4 BLAST_GetQueryLength(BlastQueryInfo* query_info, Int4 context)
+Int4 
+Blast_GetQueryIndexFromContext(Int4 context, Uint1 program)
+{
+   Int4 index = 0;
+   switch (program) {
+   case blast_type_blastn:
+      index = context/NUM_STRANDS; break;
+   case blast_type_blastp: case blast_type_tblastn: 
+   case blast_type_rpsblast: case blast_type_rpstblastn:
+      index = context; break;
+   case blast_type_blastx: case blast_type_tblastx:
+      index = context/NUM_FRAMES; break;
+   default:
+      break;
+   }
+   return index;
+}
+
+Int4 BLAST_GetQueryLength(const BlastQueryInfo* query_info, Int4 context)
 {
    return query_info->context_offsets[context+1] -
       query_info->context_offsets[context] - 1;
@@ -685,6 +702,20 @@ BlastQueryInfo* BlastQueryInfoFree(BlastQueryInfo* query_info)
    sfree(query_info->eff_searchsp_array);
    sfree(query_info);
    return NULL;
+}
+
+BlastQueryInfo* BlastQueryInfoDup(BlastQueryInfo* query_info)
+{
+   BlastQueryInfo* retval = BlastMemDup(query_info, sizeof(BlastQueryInfo));
+   Int4 num_contexts = query_info->last_context + 1;
+
+   retval->context_offsets = 
+      BlastMemDup(query_info->context_offsets, (num_contexts+1)*sizeof(Int4));
+   retval->length_adjustments = 
+      BlastMemDup(query_info->length_adjustments, num_contexts*sizeof(Int4));
+   retval->eff_searchsp_array = 
+      BlastMemDup(query_info->eff_searchsp_array, num_contexts*sizeof(Int8));
+   return retval;
 }
 
 /** Convert a sequence in ncbi4na or blastna encoding into a packed sequence
@@ -915,8 +946,8 @@ Int2 BLAST_GetAllTranslations(const Uint1* nucl_seq, Uint1 encoding,
       seq = mixed_seq;
       for (index = 0; index < NUM_FRAMES; index += CODON_LENGTH) {
          for (i = 0; i <= nucl_length; ++i) {
-            context = i % 3;
-            offset = i / 3;
+            context = i % CODON_LENGTH;
+            offset = i / CODON_LENGTH;
             *seq++ = translation_buffer[frame_offsets[index+context]+offset];
          }
       }
@@ -970,7 +1001,7 @@ int GetPartialTranslation(const Uint1* nucl_seq,
       for (index = 1; index <= 3; ++index) {
          length = 
             BLAST_GetTranslation(nucl_seq, nucl_seq_rev, 
-               nucl_length, frame_sign*index, translation_buffer+offset, 
+               nucl_length, (short)(frame_sign*index), translation_buffer+offset, 
                genetic_code);
          frame_offsets[index-1] = offset;
          offset += length + 1;

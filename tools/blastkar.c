@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastkar.c,v 6.100 2004/04/28 14:36:00 madden Exp $";
+static char const rcsid[] = "$Id: blastkar.c,v 6.101 2004/06/07 20:03:23 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -49,8 +49,11 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.100 $
+ * $Revision: 6.101 $
  * $Log: blastkar.c,v $
+ * Revision 6.101  2004/06/07 20:03:23  coulouri
+ * use floating point constants for comparisons with floating point variables
+ *
  * Revision 6.100  2004/04/28 14:36:00  madden
  * Changes from Mike Gertz:
  * - I created the new routine BlastGapDecayDivisor that computes a
@@ -3209,7 +3212,7 @@ BlastKarlinLtoH(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda)
   }
 
   scale = Nlm_Powi( etonlam, high );
-  if( scale > 0 ) {
+  if( scale > 0.0 ) {
     H = lambda * sum/scale;
   } else { /* Underflow of exp( -lambda * high ) */
     H = lambda * exp( lambda * high + log(sum) );
@@ -3421,7 +3424,7 @@ BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi    lambda, Nlm_FloatHi H)
     /* Look for the greatest common divisor ("delta" in Appendix of PNAS 87 of
        Karlin&Altschul (1990) */
     for (i = 1, divisor = -low; i <= range && divisor > 1; ++i) {
-        if (probArrayStartLow[i])
+        if (probArrayStartLow[i] != 0.0)
             divisor = Nlm_Gcd(divisor, i);
     }
 
@@ -3691,7 +3694,7 @@ BlastKarlinLambdaNR(BLAST_ScoreFreqPtr sfp)
 	sprob = sfp->sprob;
 	/* Find greatest common divisor of all scores */
 	for (i = 1, d = -low; i <= high-low && d > 1; ++i) {
-		if (sprob[i+low] != 0) {
+		if (sprob[i+low] != 0.0) {
 			d = Nlm_Gcd(d, i);
 		}
 	}

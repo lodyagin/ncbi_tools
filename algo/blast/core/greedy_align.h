@@ -1,39 +1,37 @@
-/* $Id: greedy_align.h,v 1.8 2003/08/11 14:57:16 dondosha Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/* $Id: greedy_align.h,v 1.11 2004/05/19 14:52:01 camacho Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Ilya Dondoshansky
+ *
+ */
 
-/*****************************************************************************
+/** @file greedy_align.h
+ * Copy of mbalign.h from ncbitools library 
+ * @todo FIXME need better file description
+ */
 
-File name: greedy_align.h
-
-Author: Ilya Dondoshansky
-
-Contents: Copy of mbalign.h from ncbitools library
-
-******************************************************************************
- * $Revision: 1.8 $
- * */
 #ifndef _GREEDY_H_
 #define _GREEDY_H_
 
@@ -54,54 +52,38 @@ MBGapEditScript *MBGapEditScriptFree(MBGapEditScript *es);
 MBGapEditScript *MBGapEditScriptNew(void);
 MBGapEditScript *MBGapEditScriptAppend(MBGapEditScript *es, MBGapEditScript *et);
 
-enum {
-    EDIT_OP_MASK = 0x3,
-    EDIT_OP_ERR  = 0x0,
-    EDIT_OP_INS  = 0x1,
-    EDIT_OP_DEL  = 0x2,
-    EDIT_OP_REP  = 0x3
-};
-
-enum {         /* half of the (fixed) match score */
-    ERROR_FRACTION=2,  /* 1/this */
-    MAX_SPACE=1000000,
-    sC = 0, sI = 1, sD = 2, LARGE=100000000
-};
-
-#define ICEIL(x,y) ((((x)-1)/(y))+1)
-
 /* ----- pool allocator ----- */
-typedef struct ThreeVal {
+
+/** @todo FIXME Need to determine what the members of this structure mean.
+ * Can these be combined with the BlastGapDP structure? @sa BlastGapDP
+ */
+typedef struct SThreeVal {
     Int4 I, C, D;
-} ThreeVal;
+} SThreeVal;
 
-typedef struct MBSpace {
-    ThreeVal* space_array;
+typedef struct SMBSpace {
+    SThreeVal* space_array;
     Int4 used, size;
-    struct MBSpace *next;
-} MBSpace;
+    struct SMBSpace *next;
+} SMBSpace;
 
-#define EDIT_VAL(op) (op >> 2)
+SMBSpace* MBSpaceNew(void);
+void MBSpaceFree(SMBSpace* sp);
 
-#define EDIT_OPC(op) (op & EDIT_OP_MASK)
-
-MBSpace* MBSpaceNew(void);
-void MBSpaceFree(MBSpace* sp);
-
-typedef struct GreedyAlignMem {
+typedef struct SGreedyAlignMem {
    Int4** flast_d;
    Int4* max_row_free;
-   ThreeVal** flast_d_affine;
+   SThreeVal** flast_d_affine;
    Int4* uplow_free;
-   MBSpace* space;
-} GreedyAlignMem;
+   SMBSpace* space;
+} SGreedyAlignMem;
 
 Int4 
 BLAST_GreedyAlign (const Uint1* s1, Int4 len1,
 			     const Uint1* s2, Int4 len2,
 			     Boolean reverse, Int4 xdrop_threshold, 
 			     Int4 match_cost, Int4 mismatch_cost,
-			     Int4* e1, Int4* e2, GreedyAlignMem* abmp, 
+			     Int4* e1, Int4* e2, SGreedyAlignMem* abmp, 
 			     MBGapEditScript *S, Uint1 rem);
 Int4 
 BLAST_AffineGreedyAlign (const Uint1* s1, Int4 len1,
@@ -110,7 +92,7 @@ BLAST_AffineGreedyAlign (const Uint1* s1, Int4 len1,
 				  Int4 match_cost, Int4 mismatch_cost,
 				  Int4 gap_open, Int4 gap_extend,
 				  Int4* e1, Int4* e2, 
-				  GreedyAlignMem* abmp, 
+				  SGreedyAlignMem* abmp, 
 				  MBGapEditScript *S, Uint1 rem);
 
 #ifdef __cplusplus

@@ -29,13 +29,22 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.147 $
+* $Revision: 6.150 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.150  2004/06/04 17:31:34  kans
+* added CN and CO accession prefixes
+*
+* Revision 6.149  2004/05/27 15:37:31  kans
+* fixed typo in WHICH_db_accession - new 12-character RefSeq test used wrong comparison for underscore test
+*
+* Revision 6.148  2004/05/25 20:46:18  kans
+* WHICH_db_accession handles 12-character RefSeq accessions
+*
 * Revision 6.147  2004/03/30 20:29:33  kans
 * in static std_order array within SeqIdBestRank, demoted gibbsq, gibbmt, and patent
 *
@@ -8794,7 +8803,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"CD") == 0) || 
 	      (StringICmp(temp,"CF") == 0) || 
 	      (StringICmp(temp,"CK") == 0) || 
-	      (StringICmp(temp,"CL") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"CN") == 0) || 
+	      (StringICmp(temp,"CO") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -8946,28 +8956,50 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           s++;
       }
       break;
-    case 12: /* whole genome shotgun 12-character accession, four letters + 8 digits */
-      if(!IS_ALPHA(*s) || !IS_ALPHA(*(s+1)) || !IS_ALPHA(*(s+2)) || !IS_ALPHA(*(s+3)))
-          break;
-      temp[0] = *s; s++;
-      temp[1] = *s; s++;
-      temp[2] = *s; s++;
-      temp[3] = *s; s++;
-      temp[4] = '\0';
-      if ((StringNICmp(temp,"A", 1) == 0)) { 
+    case 12:
+      if(IS_ALPHA(*s) && IS_ALPHA(*(s+1)) && IS_ALPHA(*(s+2)) && IS_ALPHA(*(s+3))) {
+        /* whole genome shotgun 12-character accession, four letters + 8 digits */
+        temp[0] = *s; s++;
+        temp[1] = *s; s++;
+        temp[2] = *s; s++;
+        temp[3] = *s; s++;
+        temp[4] = '\0';
+        if ((StringNICmp(temp,"A", 1) == 0)) { 
           retcode = ACCN_NCBI_WGS;
-      } else if ((StringNICmp(temp,"B", 1) == 0)) {
+        } else if ((StringNICmp(temp,"B", 1) == 0)) {
           retcode = ACCN_DDBJ_WGS;
-      } else if ((StringNICmp(temp,"C", 1) == 0)) {
+        } else if ((StringNICmp(temp,"C", 1) == 0)) {
           retcode = ACCN_EMBL_WGS;
-      } else
+        } else
           retval = FALSE;
-      while (*s) {
+        while (*s) {
           if (! IS_DIGIT(*s)) {
               retval = FALSE;
               break;
           }
           s++;
+        }
+      } else if(IS_ALPHA(*s) && IS_ALPHA(*(s+1)) && (*(s+2)=='_')) {
+        /* New 12-character accession, two letters +"_"+ 9 digits */
+        temp[0] = *s; s++;
+        temp[1] = *s; s++;
+        temp[2] = NULLB; s++;
+      
+        if ((StringICmp(temp,"NP") == 0)) { 
+          retcode = ACCN_REFSEQ_PROT;
+        } else if ((StringICmp(temp,"NM") == 0)) { 
+          retcode = ACCN_REFSEQ_mRNA;
+        } else if (IS_ALPHA(*temp) && IS_ALPHA(*(temp+1))) {
+          retcode =ACCN_REFSEQ | ACCN_AMBIGOUS_MOL;
+        } else
+          retval = FALSE;
+        while (*s) {
+          if (! IS_DIGIT(*s)) {
+              retval = FALSE;
+              break;
+          }
+          s++;
+        }
       }
       break;
   default:   

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.210 $
+* $Revision: 6.214 $
 *
 * File Description: 
 *
@@ -74,6 +74,7 @@
 #include <aliparse.h>
 #include <spidey.h>
 #include <ent2api.h>
+#include <valid.h>
 
 #define REGISTER_UPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Update Segmented Set","UpdateSegSet",0,0,0,0,NULL,UpdateSegSet,PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -96,6 +97,10 @@
 #define REGISTER_DELETE_BY_TEXT ObjMgrProcLoadEx (OMPROC_FILTER, "Delete By Text","DeleteByText",0,0,0,0,NULL,CreateDeleteByTextWindow,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_SEGREGATE_BY_TEXT ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Text","SegregateByText",0,0,0,0,NULL,CreateSegregateByTextWindow,PROC_PRIORITY_DEFAULT, "Indexer")
+
+#define REGISTER_SEGREGATE_BY_FEATURE ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Feature","SegregateByFeature",0,0,0,0,NULL,CreateSegregateByFeatureWindow,PROC_PRIORITY_DEFAULT, "Indexer")
+
+#define REGISTER_SEGREGATE_BY_DESCRIPTOR ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Descriptor","SegregateByDescriptor",0,0,0,0,NULL,CreateSegregateByDescriptorWindow,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_CONVERTSEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Convert SeqAlign","ConvertSeqAlign",0,0,0,0,NULL,ConvertToTrueMultipleAlignment,PROC_PRIORITY_DEFAULT, "Alignment")
 
@@ -6509,6 +6514,8 @@ extern void SetupSequinFilters (void)
 
   if (indexerVersion) {
     REGISTER_DELETE_BY_TEXT;
+    REGISTER_SEGREGATE_BY_FEATURE;
+    REGISTER_SEGREGATE_BY_DESCRIPTOR;
     REGISTER_SEGREGATE_BY_TEXT;
     REGISTER_FIND_NON_ACGT;
     REGISTER_BSP_INDEX;
@@ -8144,6 +8151,95 @@ extern void ConsolidateOrganismNotes (IteM i)
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
   VisitBioSourcesInSep (sep, NULL, ConsolidateOrganismNotesProc);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void CountryLookupProc (BioSourcePtr biop, Pointer userdata)
+{
+  CharPtr PNTR  list;
+  CharPtr PNTR  ptr;
+  SubSourcePtr  ssp;
+  CharPtr       cp, before, newname;
+  Int4          len_cntry, len_qual, len_name;
+
+  if (biop == NULL || (list = (CharPtr PNTR)userdata) == NULL)
+  {
+  	return;
+  }
+
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) 
+  {
+  	if (ssp->subtype != SUBSRC_country || ssp->name == NULL) continue;
+    for (ptr = list; ptr != NULL && *ptr != NULL; ptr++)
+    {
+      len_cntry = StringLen (*ptr);
+      cp = StringStr (ssp->name, *ptr);
+      if (cp != NULL && !isalpha (cp [len_cntry])) 
+      {
+        len_qual = StringLen (ssp->name);
+      	if (cp == ssp->name)
+      	{
+      	  if (len_cntry == len_qual || ssp->name [len_cntry] == ':')
+      	  {
+      	    /* exact match, don't need to do anything */
+      	    return;
+      	  }
+    	  ssp->name [len_cntry] = ':';
+      	  return;
+      	}
+      	else
+      	{
+      	  if (isalpha (*(cp - 1)))
+      	  {
+      	    /* not really a match, part of another word */
+      		continue;
+      	  }
+      	  else
+      	  {
+      	    newname = (CharPtr) MemNew (len_qual + 3);
+      	  	*(cp - 1) = 0;
+      	  	before = StringSave (ssp->name);
+      	  	StringNCpy (newname, *ptr, len_cntry);
+      	  	newname [len_cntry] = ':';
+      	  	newname [len_cntry + 1] = ' ';
+      	  	StringNCpy (newname + len_cntry + 2, before, StringLen (before));
+      	  	StringCpy (newname + len_cntry + 2 + StringLen (before), cp + len_cntry);
+      	  	len_name = StringLen (newname);
+      	  	while (isspace (newname[len_name - 1]) || ispunct (newname [len_name - 1])) 
+      	  	{
+      	  	  newname [len_name - 1] = 0;
+      	  	  len_name --;
+      	  	}
+      	  	before = MemFree (before);
+      	  	MemFree (ssp->name);
+      	  	ssp->name = newname;
+      	  }
+      	}
+      }
+  	}
+  }  
+}
+
+extern void CountryLookup (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+  CharPtr PNTR list;
+
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  
+  list = GetValidCountryList ();
+  if (list == NULL) return;
+  VisitBioSourcesInSep (sep, list, CountryLookupProc);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }

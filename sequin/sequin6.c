@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.162 $
+* $Revision: 6.164 $
 *
 * File Description: 
 *
@@ -75,6 +75,7 @@ END_ENUM_ALIST
 #define IMPORT_FEAT_TYPE      7
 #define DEFLINE_TYPE          8
 #define FEATURE_NOTE_TYPE     9
+#define PUBLICATION_TYPE      10
 
 #define NUMBER_OF_TYPES               7
 #define NUMBER_OF_TYPES_WITH_DEFLINE  8
@@ -91,8 +92,26 @@ static ENUM_ALIST(target_field_alist)
   {"DefLine",              DEFLINE_TYPE},
 END_ENUM_ALIST
 
-#define NUMBER_OF_SEGREGATE_TYPES 9
+#define NUMBER_OF_SEGREGATE_TYPES 10
+#define NUMBER_OF_PARSE_TYPES 9
+
 static ENUM_ALIST(segregate_target_field_alist)
+  {" ",                    0},
+  {"Gene",                 GENE_TYPE},
+  {"CDS",                  CDS_TYPE},
+  {"Prot",                 PROT_TYPE},
+  {"RNA",                  RNA_TYPE},
+  {"BioSource",            BIOSOURCE_TYPE},
+  {"OrgMod and SubSource", ORGMOD_SUBSOURCE_TYPE},
+  {"Import Feature",       IMPORT_FEAT_TYPE},
+  {"DefLine",              DEFLINE_TYPE},
+  {"Feature Note",         FEATURE_NOTE_TYPE},
+  {"Publication",          PUBLICATION_TYPE},
+END_ENUM_ALIST
+
+#define NUMBER_OF_PARSE_TYPES 9
+
+static ENUM_ALIST(parse_target_field_alist)
   {" ",                    0},
   {"Gene",                 GENE_TYPE},
   {"CDS",                  CDS_TYPE},
@@ -105,6 +124,16 @@ static ENUM_ALIST(segregate_target_field_alist)
   {"Feature Note",         FEATURE_NOTE_TYPE},
 END_ENUM_ALIST
 
+#define PUBLICATION_PUBLISHED_FIELD 1
+#define PUBLICATION_INPRESS_FIELD   2
+#define PUBLICATION_UNPUB_FIELD     3
+
+static ENUM_ALIST (publication_field_alist)
+  {" ",                0},
+  {"Published",        PUBLICATION_PUBLISHED_FIELD},
+  {"In Press",         PUBLICATION_INPRESS_FIELD},
+  {"Unpublished",      PUBLICATION_UNPUB_FIELD},
+END_ENUM_ALIST
 
 #define EXT_NUMBER_OF_TYPES       7
 
@@ -350,7 +379,7 @@ static ENUM_ALIST (subsource_subtype_and_note_alist)
 END_ENUM_ALIST
 
 
-#define NUM_SUBTARGET_POPUPS 10
+#define NUM_SUBTARGET_POPUPS 11
 
 static GbFeatName ParseQualifierList[] = {
  {"allele", Class_text}, {"anticodon", Class_pos_aa},
@@ -1618,6 +1647,246 @@ static Boolean DoFeaturesContainText_Callback
   return found;
 }
 
+typedef struct objstringdata 
+{
+  CharPtr match;
+  Boolean found;	
+} ObjStringData, PNTR ObjStringPtr;
+
+static void LIBCALLBACK AsnWriteRemoveForDCallBack (AsnExpOptStructPtr pAEOS)
+
+{
+  CharPtr        pchFind;
+  CharPtr        pchSource;
+  ObjStringPtr   osp;
+
+  osp = (ObjStringPtr) pAEOS->data;
+  if (ISA_STRINGTYPE (AsnFindBaseIsa (pAEOS->atp))) {
+	pchSource = (CharPtr) pAEOS->dvp->ptrvalue;
+	pchFind = osp->match;
+	if (StringSearch (pchSource, pchFind) != NULL) {
+	  osp->found = TRUE;
+	}
+  }
+}
+
+static Boolean ObjectHasSubstring (ObjMgrTypePtr omtp, AsnIoPtr aip, Pointer ptr, ObjStringPtr osp)
+
+{
+  osp->found = FALSE;
+  (omtp->asnwrite) (ptr, aip, NULL);
+  return osp->found;
+}
+
+static Uint1 GetPubStatus (PubdescPtr pdp)
+{
+  ValNodePtr vnp;
+  CitGenPtr  cgp;
+  CitArtPtr  cap;
+  CitJourPtr cjp;
+  CitBookPtr cbp;
+  CitSubPtr  csp;
+  MedlineEntryPtr mlp;
+  ImprintPtr ip = NULL;
+  Uint1      status = 255; /* 255 is currently not a valid status */
+  
+  if (pdp == NULL) return status;
+  
+  for (vnp = pdp->pub; vnp != NULL && ip == NULL; vnp = vnp->next)
+  {
+  	switch (vnp->choice)
+  	{
+  	  case PUB_Gen:
+        cgp = (CitGenPtr) vnp->data.ptrvalue;
+  	    if (cgp != NULL && StringICmp (cgp->cit, "Unpublished"))
+  	    {
+  	  	  return PUB_STATUS_UNPUBLISHED;
+  	    }
+  	    break;
+  	  case PUB_Article:
+  	  case PUB_Medline:
+  	    if (vnp->choice == PUB_Article)
+  	    {
+  	      cap = (CitArtPtr) vnp->data.ptrvalue;
+  	    }
+  	    else
+  	    {
+  	      cap = NULL;
+  	      mlp = (MedlineEntryPtr) vnp->data.ptrvalue;
+  	      if (mlp != NULL)
+  	      {
+  	        cap = mlp->cit;
+  	      }
+  	    }
+  	    if (cap != NULL && cap->from == 1)
+  	    {
+  	      cjp = (CitJourPtr) cap->fromptr;
+  	      if (cjp != NULL)
+  	      {
+  	      	ip = cjp->imp;
+  	      }
+  	    }
+  	    break;
+  	  case PUB_Man:
+      case PUB_Book:
+        cbp = (CitBookPtr) vnp->data.ptrvalue;
+        if (cbp != NULL)
+        {
+          ip = cbp->imp;
+        }
+        break;
+  	  case PUB_Sub:
+  	    csp = (CitSubPtr) vnp->data.ptrvalue;
+  	    if (csp != NULL)
+  	    {
+  	      ip = csp->imp;
+  	    }
+  	    break; 
+  	}
+  }
+  if (ip != NULL)
+  {
+  	status = ip->prepub;
+  }
+  return status;  
+}
+
+static Boolean DoesPubStatusMatch (PubdescPtr pdp, ConvertFormPtr cfp)
+{
+  Uint1 pub_status;
+  
+  if (pdp == NULL || cfp == NULL) return FALSE;
+  if (cfp->subtype == 0) return TRUE;
+  
+  pub_status = GetPubStatus (pdp);
+  
+  if (cfp->subtype == PUBLICATION_PUBLISHED_FIELD 
+      && pub_status == PUB_STATUS_PUBLISHED)
+  {
+  	return TRUE;
+  }
+  else if (cfp->subtype == PUBLICATION_INPRESS_FIELD
+      && pub_status == PUB_STATUS_IN_PRESS)
+  {
+  	return TRUE;
+  }
+  else if (cfp->subtype == PUBLICATION_UNPUB_FIELD
+      && pub_status == PUB_STATUS_UNPUBLISHED)
+  {
+  	return TRUE;
+  }
+  else
+  {
+  	return FALSE;
+  }
+}
+
+static Boolean DoesSequenceHavePubWithText (BioseqPtr bsp, ConvertFormPtr cfp)
+{
+  AsnExpOptPtr      aeop;
+  AsnIoPtr          aip;
+  ObjStringData     osd;
+  SeqMgrDescContext dcontext;
+  SeqDescrPtr       sdp;
+  SeqMgrFeatContext fcontext;
+  SeqFeatPtr        sfp;
+  Boolean           rval = FALSE;
+  ObjMgrPtr         omp;
+  ObjMgrTypePtr     omtp;
+  PubdescPtr        pdp;
+
+  if (bsp == NULL || cfp == NULL) return FALSE;
+  omp = ObjMgrGet ();
+  if (omp == NULL) return FALSE;
+  omtp = ObjMgrTypeFind (omp, OBJ_SEQDESC, NULL, NULL);
+  if (omtp == NULL) return FALSE;
+  
+  aip = AsnIoNullOpen ();
+  aeop = AsnExpOptNew (aip, NULL, NULL, AsnWriteRemoveForDCallBack);
+  if (aeop != NULL) {
+    aeop->user_data = (Pointer) &osd;
+  }
+  osd.match = cfp->deleteStr;
+
+  /* look for publication descriptors */
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_pub, &dcontext);
+  while (sdp != NULL && !rval) {
+    if (ObjectHasSubstring (omtp, aip, (Pointer) sdp, &osd)) {
+      pdp = (PubdescPtr) sdp->data.ptrvalue;
+      if (DoesPubStatusMatch (pdp, cfp))
+      {
+        rval = TRUE;
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_pub, &dcontext);
+  }
+  
+  if (!rval)
+  { 
+    omtp = ObjMgrTypeFind (omp, OBJ_SEQFEAT, NULL, NULL);
+    if (omtp != NULL) 
+    {	
+      /* look for publication features */
+      sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_PUB, &fcontext);
+      while (sfp != NULL && !rval) 
+      {
+        if (ObjectHasSubstring (omtp, aip, (Pointer) sfp, &osd))
+        {
+          pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+          if (DoesPubStatusMatch (pdp, cfp))
+          {
+            rval = TRUE;
+          }
+        }
+        sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_PUB, &fcontext);
+      }
+    }
+  }
+  
+  AsnIoClose (aip); 
+  return rval;
+}
+
+static Boolean DoesNucProtSetHavePubWithText (BioseqSetPtr bssp, ConvertFormPtr cfp)
+{
+  AsnExpOptPtr      aeop;
+  AsnIoPtr          aip;
+  ObjStringData     osd;
+  SeqDescrPtr       sdp;
+  Boolean           rval = FALSE;
+  ObjMgrPtr         omp;
+  ObjMgrTypePtr     omtp;
+  PubdescPtr        pdp;
+  
+  if (bssp == NULL || cfp == NULL) return FALSE;  
+  omp = ObjMgrGet ();
+  if (omp == NULL) return FALSE;
+  omtp = ObjMgrTypeFind (omp, OBJ_SEQDESC, NULL, NULL);
+  if (omtp == NULL) return FALSE;
+
+  aip = AsnIoNullOpen ();
+  aeop = AsnExpOptNew (aip, NULL, NULL, AsnWriteRemoveForDCallBack);
+  if (aeop != NULL) {
+    aeop->user_data = (Pointer) &osd;
+  }
+  osd.match = cfp->deleteStr;
+
+  /* look for publication descriptors */
+  sdp = bssp->descr;
+  while (sdp != NULL && !rval) {
+    if (sdp->choice == Seq_descr_pub && ObjectHasSubstring (omtp, aip, (Pointer) sdp, &osd)) {
+      pdp = (PubdescPtr) sdp->data.ptrvalue;
+      if (DoesPubStatusMatch (pdp, cfp))
+      {
+        rval = TRUE;
+      }
+    }
+    sdp = sdp->next;
+  }
+  
+  AsnIoClose (aip); 
+  return rval;
+}
 
 static Boolean DoesSequenceContainText (BioseqPtr bsp, ConvertFormPtr cfp)
 {
@@ -1659,6 +1928,9 @@ static Boolean DoesSequenceContainText (BioseqPtr bsp, ConvertFormPtr cfp)
         found = TRUE;
       }
       break;
+  	case PUBLICATION_TYPE :
+  	  found = DoesSequenceHavePubWithText (bsp, cfp);
+  	  break;
     default:
       break;
   }
@@ -1671,6 +1943,10 @@ static Boolean DoesNucProtSetContainText (BioseqSetPtr bssp, ConvertFormPtr cfp)
   BioseqPtr   bsp;
 
   if (bssp == NULL) return FALSE;
+  if (cfp->type == PUBLICATION_TYPE && DoesNucProtSetHavePubWithText (bssp, cfp))
+  {
+  	return TRUE;
+  }
   for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
     if (IS_Bioseq (sep)) {
       bsp = (BioseqPtr) sep->data.ptrvalue;
@@ -1879,8 +2155,13 @@ static void SegregateByText_Callback (ButtoN b)
   }
   else
     cfp->type = (Int2) val;
-
-  if (cfp->type != DEFLINE_TYPE && cfp->type != FEATURE_NOTE_TYPE) {
+  
+  if (cfp->type == PUBLICATION_TYPE)
+  {
+    GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val);
+    cfp->subtype = (Int2) val;
+  }
+  else if (cfp->type != DEFLINE_TYPE && cfp->type != FEATURE_NOTE_TYPE) {
     GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val);
     if (0 == val) {
       Remove (cfp->form);
@@ -1957,7 +2238,7 @@ static void SetSegregateAcceptButton (Handle a)
       SafeDisable (cfp->accept);
       return;
     }
-  } else if (val != DEFLINE_TYPE) {
+  } else if (val != DEFLINE_TYPE && val != PUBLICATION_TYPE) {
     cfp->type = (Int2) val;
   
     if (!GetEnumPopup (cfp->subtarget [cfp->type],
@@ -2125,6 +2406,7 @@ extern Int2 LIBCALLBACK CreateSegregateByTextWindow (Pointer data)
   cfp->alists [BIOSOURCE_TYPE]        = orgref_field_alist;
   cfp->alists [ORGMOD_SUBSOURCE_TYPE] = subsource_and_orgmod_note_subtype_alist;
   cfp->alists [IMPORT_FEAT_TYPE]      = impfeat_field_alist;
+  cfp->alists [PUBLICATION_TYPE]      = publication_field_alist;
   cfp->feature_list = BuildFeatureValNodeList (TRUE, "All", 255, TRUE, FALSE);
 
   x = HiddenGroup (p, 0, 0, NULL);
@@ -2175,6 +2457,468 @@ extern Int2 LIBCALLBACK CreateSegregateByTextWindow (Pointer data)
   Select (cfp->accept);
   Update ();
   return OM_MSG_RET_OK;
+}
+
+
+typedef struct segregatefeatdata {
+  FEATURE_FORM_BLOCK
+
+  PopuP        type_popup;
+  ValNodePtr   type_list;
+  ButtoN       accept;
+  
+  BioseqSetPtr target_set;
+  Uint2        segregate_type;
+  Boolean      is_feat;
+} SegregateFeatData, PNTR SegregateFeatPtr;
+
+static void CleanupSegregateFeatPage (GraphiC g, VoidPtr data)
+
+{
+  SegregateFeatPtr  sfp;
+
+  sfp = (SegregateFeatPtr) data;
+  MemFree (sfp);
+  StdCleanupFormProc (g, data);
+}
+
+static Boolean DoesSequenceContainFeatureType (BioseqPtr bsp, SegregateFeatPtr sfp)
+{
+  SeqMgrFeatContext context;
+  SeqFeatPtr        feat;
+  
+  feat = NULL;
+  while ((feat = SeqMgrGetNextFeature (bsp, feat, 0, 0, &context)) != NULL)
+  {
+  	if (feat->idx.subtype == sfp->segregate_type)
+  	{
+  	  return TRUE;
+  	}
+  }
+  return FALSE;
+}
+
+static Boolean DoesNucProtSetContainFeatureType (BioseqSetPtr bssp, SegregateFeatPtr sfp)
+{
+  SeqEntryPtr sep;
+  BioseqPtr   bsp;
+
+  if (bssp == NULL) return FALSE;
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    if (IS_Bioseq (sep)) {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      if (DoesSequenceContainFeatureType (bsp, sfp)) {
+        return TRUE;
+      }
+    }
+  }
+  return FALSE;	
+}
+
+static Boolean DoesSequenceContainDescriptorType (BioseqPtr bsp, SegregateFeatPtr sfp)
+{
+  SeqMgrDescContext context;
+  SeqDescPtr        desc;
+  
+  if((desc = SeqMgrGetNextDescriptor (bsp, NULL, sfp->segregate_type, &context)) != NULL)
+  {
+	return TRUE;
+  }
+  return FALSE;
+}
+
+typedef struct checkdescdata {
+  Uint2   segregate_type;
+  Boolean found;
+} CheckDescData, PNTR CheckDescPtr;
+
+static void DoesSetContainDescriptorType_Callback (SeqDescPtr sdp, Pointer userdata)
+{
+  CheckDescPtr p;
+  
+  if (sdp == NULL || userdata == NULL) return;
+  p = (CheckDescPtr) userdata;
+  if (p->found) return;
+  if (sdp->choice == p->segregate_type) p->found = TRUE;
+}
+
+static Boolean DoesNucProtSetContainDescriptorType (BioseqSetPtr bssp, SegregateFeatPtr sfp)
+{
+  CheckDescData d;
+
+  if (bssp == NULL) return FALSE;
+  d.found = FALSE;
+  d.segregate_type = sfp->segregate_type;
+  VisitDescriptorsInSet (bssp, &d, DoesSetContainDescriptorType_Callback);
+  return d.found;	
+}
+
+static Boolean WantToSegregateSequence (BioseqPtr bsp, SegregateFeatPtr sfp)
+{
+  if (bsp == NULL || sfp == NULL) return FALSE;
+  if (sfp->is_feat)
+  {
+  	return DoesSequenceContainFeatureType (bsp, sfp);
+  }
+  else
+  {
+  	return DoesSequenceContainDescriptorType (bsp, sfp);
+  }
+}
+
+static Boolean WantToSegregateNucProtSet (BioseqSetPtr bssp, SegregateFeatPtr sfp)
+{
+  if (bssp == NULL || sfp == NULL) return FALSE;
+  if (sfp->is_feat)
+  {
+  	return DoesNucProtSetContainFeatureType (bssp, sfp);
+  }
+  else
+  {
+  	return DoesNucProtSetContainDescriptorType (bssp, sfp);
+  }
+}
+
+/*=========================================================================*/
+/*                                                                         */
+/* SegregateItemsByFeature () - Given a feature type, move bioseqs         */
+/*                        containing those features to a new popset.       */
+/*                                                                         */
+/*=========================================================================*/
+
+static void SegregateItemsByFeatureOrDescriptor 
+(SeqEntryPtr      seqlist,
+ SegregateFeatPtr sfp,
+ BioseqSetPtr     set1,
+ BioseqSetPtr     set2)
+{
+  
+  BioseqPtr         bsp;
+  BioseqSetPtr      this_bssp;
+  SeqEntryPtr       this_list;
+  SeqEntryPtr       sep, next_sep;
+  SeqEntryPtr       set1last, set2last;
+
+
+  if (sfp == NULL || set1 == NULL || set2 == NULL || seqlist == NULL)
+    return;
+
+  set1last = set1->seq_set;
+  while (set1last != NULL && set1last->next != NULL) {
+    set1last = set1last->next;
+  }
+  set2last = set2->seq_set;
+  while (set2last != NULL && set2last->next != NULL) {
+    set2last = set2last->next;
+  }
+
+  sep = seqlist;
+  while (sep != NULL) {
+    next_sep = sep->next;
+    if (IS_Bioseq_set (sep)) {
+      this_bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      if (this_bssp->_class == BioseqseqSet_class_nuc_prot) {
+        if (WantToSegregateNucProtSet (this_bssp, sfp)) {
+          if (set2last == NULL) {
+            set2->seq_set = sep;
+          } else {
+            set2last->next = sep;
+          }
+          set2last = sep;
+        } else {
+          if (set1last == NULL) {
+            set1->seq_set = sep;
+          } else {
+            set1last->next = sep;
+          }
+          set1last = sep;
+        }
+        sep->next = NULL;
+      } else {
+        this_list = this_bssp->seq_set;
+        this_bssp->seq_set = NULL;
+        SegregateItemsByFeatureOrDescriptor (this_list, sfp, set1, set2);
+      }
+    } else if (IS_Bioseq (sep)) {
+      bsp = (BioseqPtr) sep->data.ptrvalue;
+      if (WantToSegregateSequence (bsp, sfp)) {
+        if (set2last == NULL) {
+          set2->seq_set = sep;
+        } else {
+          set2last->next = sep;
+        }
+        set2last = sep;
+      } else {
+        if (set1last == NULL) {
+          set1->seq_set = sep;
+        } else {
+          set1last->next = sep;
+        }
+        set1last = sep;
+      }
+      sep->next = NULL;
+    }
+    sep = next_sep;
+  }
+}
+
+
+/*=========================================================================*/
+/*                                                                         */
+/* SegregateByFeatureOrDescriptor_Callback () - Segregates sequences that  */
+/*                            contain a selected feature.                  */
+/*                                                                         */
+/*=========================================================================*/
+
+static void SegregateByFeatureOrDescriptor_Callback (ButtoN b)
+{
+  SegregateFeatPtr  sfp;
+  SeqEntryPtr       sep;
+  SeqEntryPtr       tmp1, tmp2;
+  UIEnum            val;
+  BioseqSetPtr      bssp;
+  BioseqSetPtr      parent_set;
+  SeqEntryPtr       seqlist;
+  BioseqSetPtr      newset1, newset2;
+  ObjMgrDataPtr     omdptop;
+  ObjMgrData        omdata;
+  Uint2             parenttype;
+  Pointer           parentptr;
+  SeqEntryPtr       last_sep;
+  ValNodePtr        vnp;
+
+  /* Check the initial conditions and get the sequence */
+  sfp = (SegregateFeatPtr) GetObjectExtra (b);
+  if (sfp == NULL || sfp->input_entityID == 0 || sfp->target_set == NULL) {
+    Remove (sfp->form);
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (sfp->input_entityID); 
+  if (sep == NULL) {
+    Remove (sfp->form);
+    return;
+  }
+
+  SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
+  GetSeqEntryParent (sep, &parentptr, &parenttype);
+
+  bssp = sfp->target_set;
+
+  parent_set = (BioseqSetPtr)(bssp->idx.parentptr);
+  seqlist = bssp->seq_set;
+  bssp->seq_set = NULL;
+
+  if (parent_set == NULL || parent_set->seq_set == NULL) {
+    newset1 = BioseqSetNew ();
+    if (newset1 == NULL) return;
+    newset2 = BioseqSetNew ();
+    if (newset2 == NULL) return;
+    newset1->_class = bssp->_class;
+    newset2->_class = bssp->_class;
+    tmp1 = SeqEntryNew ();
+    if (tmp1 == NULL) return;
+    tmp1->choice = 2;
+    tmp1->data.ptrvalue = (Pointer) newset1;
+    tmp2 = SeqEntryNew ();
+    if (tmp2 == NULL) return;
+    tmp2->choice = 2;
+    tmp2->data.ptrvalue = (Pointer) newset2;
+    bssp->seq_set = tmp1;
+    tmp1->next = tmp2;
+    bssp->_class = BioseqseqSet_class_genbank;
+    /* Propagate descriptors down */
+    ValNodeLink (&(newset1->descr),
+                 AsnIoMemCopy ((Pointer) bssp->descr,
+                               (AsnReadFunc) SeqDescrAsnRead,
+                               (AsnWriteFunc) SeqDescrAsnWrite));
+    ValNodeLink (&(newset2->descr),
+                 AsnIoMemCopy ((Pointer) bssp->descr,
+                               (AsnReadFunc) SeqDescrAsnRead,
+                               (AsnWriteFunc) SeqDescrAsnWrite));
+    bssp->descr = SeqDescrFree (bssp->descr);
+  } else {
+    last_sep = parent_set->seq_set;
+    newset1 = bssp;
+    newset2 = BioseqSetNew ();
+    if (newset2 == NULL) return;
+    newset2->_class = newset1->_class;
+    tmp1 = SeqEntryNew ();
+    if (tmp1 == NULL) return;
+    tmp1->choice = 2;
+    tmp1->data.ptrvalue = (Pointer) newset2;
+    while (last_sep != NULL && last_sep->next != NULL) {
+      last_sep = last_sep->next;
+    }
+    if (last_sep == NULL) return;
+    last_sep->next = tmp1;
+    /* copy descriptors horizontally */
+    ValNodeLink (&(newset2->descr),
+                 AsnIoMemCopy ((Pointer) bssp->descr,
+                               (AsnReadFunc) SeqDescrAsnRead,
+                               (AsnWriteFunc) SeqDescrAsnWrite));
+  }
+
+  /* Get the feature to look for */
+  val = GetValue (sfp->type_popup);
+  for (vnp = sfp->type_list; vnp != NULL && val > 1; vnp = vnp->next, val--)
+  {  	
+  }
+  if (vnp == NULL || val != 1)
+  {
+    Remove (sfp->form);
+    return;
+  }
+  sfp->segregate_type = vnp->choice;
+  
+  /* Display the 'working' cursor */
+
+  WatchCursor ();
+  Update ();
+
+  /* Do the search and move sequences */
+  SegregateItemsByFeatureOrDescriptor (seqlist, sfp, newset1, newset2);
+
+  /* Remove the window and update things */
+  SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
+  RestoreSeqEntryObjMgrData (sep, omdptop, &omdata); 
+  ObjMgrSetDirtyFlag (sfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, sfp->input_entityID, 0, 0);
+
+  ArrowCursor ();
+  Update ();
+  Remove (sfp->form);
+
+  /* Return successfully */
+  return;
+}
+
+
+/*=========================================================================*/
+/*                                                                         */
+/* CreateSegregateByFeatureWindow () - Creates and then displays the window*/
+/*                        for getting segregate by text info from the user.*/
+/*                                                                         */
+/*=========================================================================*/
+
+static Int2 LIBCALLBACK CreateSegregateByFeatureOrDescriptorWindow (Pointer data, Boolean is_feat)
+{
+  GrouP              c;
+  SegregateFeatPtr   sfp;
+  GrouP              g;
+  GrouP              h;
+  OMProcControlPtr   ompcp;
+  StdEditorProcsPtr  sepp;
+  WindoW             w;
+  ValNodePtr         vnp;
+
+  /* Check parameters and get a pointer to the current data */
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL)
+    return OM_MSG_RET_ERROR;
+
+  if (ompcp->input_itemtype != OBJ_BIOSEQSET || ompcp->input_data == NULL) {
+    Message (MSG_ERROR, "Must select Bioseq Set!");
+    return OM_MSG_RET_ERROR;
+  }
+
+  /* Create a new window, and a struct */
+  /* to pass around the data in.       */
+
+  sfp = (SegregateFeatPtr) MemNew (sizeof (SegregateFeatData));
+  if (sfp == NULL)
+    return OM_MSG_RET_ERROR;
+  sfp->is_feat = is_feat;
+
+  if (sfp->is_feat)
+  {
+    w = FixedWindow (-50, -33, -10, -10, "Segregate By Feature",
+	                 StdCloseWindowProc);
+  }
+  else
+  {
+    w = FixedWindow (-50, -33, -10, -10, "Segregate By Descriptor",
+	                 StdCloseWindowProc);
+  }
+		   
+  SetObjectExtra (w, sfp, CleanupSegregateFeatPage);
+  sfp->form = (ForM) w;
+
+  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+  if (sepp != NULL) {
+    SetActivate (w, sepp->activateForm);
+    sfp->appmessage = sepp->handleMessages;
+  }
+
+  sfp->input_entityID = ompcp->input_entityID;
+  sfp->input_itemID = ompcp->input_itemID;
+  sfp->input_itemtype = ompcp->input_itemtype;
+  sfp->target_set = (BioseqSetPtr)ompcp->input_data;
+
+  sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+  if (sepp != NULL) {
+    SetActivate (w, sepp->activateForm);
+    sfp->appmessage = sepp->handleMessages;
+  }
+
+  /* Add the popup lists */
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  g = HiddenGroup (h, 3, 0, NULL);
+
+  if (sfp->is_feat)
+  {
+    StaticPrompt (g, "Segregate sequences with the feature", 0, dialogTextHeight,
+	              programFont, 'l');
+    sfp->type_list = BuildFeatureValNodeList (TRUE, NULL, 0, TRUE, FALSE);
+  }
+  else
+  {
+    StaticPrompt (g, "Segregate sequences with the descriptor", 0, dialogTextHeight,
+	              programFont, 'l');
+	sfp->type_list = BuildDescriptorValNodeList ();
+  }
+
+  sfp->type_popup = PopupList (g, TRUE, NULL);
+  SetObjectExtra (sfp->type_popup, sfp, NULL);
+  for (vnp = sfp->type_list; vnp != NULL; vnp = vnp->next)
+  {
+    PopupItem (sfp->type_popup, (CharPtr) vnp->data.ptrvalue);
+  }
+  SetValue (sfp->type_popup, 1);
+
+  /* Add Accept and Cancel buttons */
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  sfp->accept = DefaultButton (c, "Accept", SegregateByFeatureOrDescriptor_Callback);
+  SetObjectExtra (sfp->accept, sfp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+
+  /* Line things up nicely */
+
+  AlignObjects (ALIGN_LEFT, (HANDLE) g, (HANDLE) c, (HANDLE) h, NULL);
+
+  /* Display the window now */
+
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+  Select (sfp->accept);
+  Update ();
+  return OM_MSG_RET_OK;
+}
+
+extern Int2 LIBCALLBACK CreateSegregateByFeatureWindow (Pointer data)
+{
+  return CreateSegregateByFeatureOrDescriptorWindow (data, TRUE);
+}
+
+extern Int2 LIBCALLBACK CreateSegregateByDescriptorWindow (Pointer data)
+{
+  return CreateSegregateByFeatureOrDescriptorWindow (data, FALSE);
 }
 
 static CharPtr SaveOrReplaceStringCopy (ConvertFormPtr cfp, CharPtr str, CharPtr current)
@@ -2919,7 +3663,7 @@ static void ConvertFromFlatFile (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
   } else return;
 
-  ajp = asn2gnbk_setup (bsp, bssp, NULL, format, SEQUIN_MODE, NORMAL_STYLE, 0, 0, 0, NULL);
+  ajp = asn2gnbk_setup (bsp, bssp, NULL, (FmtType)format, SEQUIN_MODE, NORMAL_STYLE, 0, 0, 0, NULL);
   if (ajp != NULL) {
     goOn = TRUE;
     for (index = 0; index < ajp->numParagraphs && goOn; index++) {
@@ -3618,7 +4362,7 @@ static void BuildParseToAnywhereDialog (IteM i, Int4 parsetype)
   SetObjectExtra (w, cfp, CleanupParseForm);
   cfp->form = (ForM) w;
   cfp->formmessage = ConvertMessageProc;
-  cfp->target_alist = segregate_target_field_alist;
+  cfp->target_alist = parse_target_field_alist;
   cfp->set_accept_proc = (PupActnProc) SetSegregateAcceptButton;
 
   sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
@@ -3688,7 +4432,7 @@ static void BuildParseToAnywhereDialog (IteM i, Int4 parsetype)
 
   x = HiddenGroup (p, 0, 0, NULL);
 
-  for (j = 1; j <= NUMBER_OF_SEGREGATE_TYPES; j++) {
+  for (j = 1; j <= NUMBER_OF_PARSE_TYPES; j++) {
     if (j == ORGMOD_SUBSOURCE_TYPE) {
       cfp->subtarget [j] =	(PopuP) SingleList (x, 10, 8, (LstActnProc) cfp->set_accept_proc);
       SetObjectExtra (cfp->subtarget [j], cfp, NULL);

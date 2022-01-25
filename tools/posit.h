@@ -1,4 +1,4 @@
-/* $Id: posit.h,v 6.23 2001/08/29 19:05:03 madden Exp $
+/* $Id: posit.h,v 6.24 2004/05/14 12:13:09 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,14 @@ Author: Alejandro Schaffer
 
 Contents: header file for position-based BLAST.
 
-$Revision: 6.23 $
+$Revision: 6.24 $
 
 *****************************************************************************/
 /*
 * $Log: posit.h,v $
+* Revision 6.24  2004/05/14 12:13:09  camacho
+* Made posDemographics non-static for testing purposes.
+*
 * Revision 6.23  2001/08/29 19:05:03  madden
 * added parameter posComputationCalled in outputPosComputation
 *
@@ -257,6 +260,10 @@ void LIBCALL posConvergenceTest PROTO((posSearchItems *posSearch, BlastSearchBlk
 void LIBCALL posCancel(posSearchItems *posSearch, compactSearchItems * compactSearch, Int4 first, Int4 second, Int4 matchStart, Int4 intervalLength);
 
 void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * compactSearch);
+
+void LIBCALL posDemographics(posSearchItems *posSearch, 
+                             compactSearchItems * compactSearch, 
+                             SeqAlignPtr listOfSeqAligns);
 
 /*Cleanup position-specific  data structures after one pass*/
 void LIBCALL posCleanup PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch));

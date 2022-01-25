@@ -1,43 +1,35 @@
-/* $Id: blast_options.h,v 1.67 2004/04/29 15:09:49 madden Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/* $Id: blast_options.h,v 1.80 2004/06/09 14:10:54 camacho Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author:  Tom Madden
+ *
+ */
 
-/*****************************************************************************
-
-File name: blast_options.h
-
-Author: Tom Madden
-
-Contents: BLAST options
-
-Detailed Contents: 
-
-	- Options to be used for different tasks of the BLAST search
-
-******************************************************************************
- * $Revision: 1.67 $
- * */
+/** @file blast_options.h
+ * Options to be used for different stages of the BLAST search.
+ */
 
 #ifndef __BLASTOPTIONS__
 #define __BLASTOPTIONS__
@@ -57,82 +49,110 @@ extern "C" {
  */
 
 /** "window" between hits to trigger an extension. */
-#define BLAST_WINDOW_SIZE_PROT 40
-#define BLAST_WINDOW_SIZE_NUCL 0
-#define BLAST_WINDOW_SIZE_MEGABLAST 0
-#define BLAST_WINDOW_SIZE_DISC 40
+#define BLAST_WINDOW_SIZE_PROT 40  /**< default window (all protein searches) */
+#define BLAST_WINDOW_SIZE_NUCL 0   /**< default window size (blastn) */
+#define BLAST_WINDOW_SIZE_MEGABLAST 0   /**< default window size 
+                                          (contiguous megablast) */
+#define BLAST_WINDOW_SIZE_DISC 40  /**< default window size 
+                                          (discontiguous megablast) */
 
 /** length of word to trigger an extension. */
-#define BLAST_WORDSIZE_PROT 3
-#define BLAST_WORDSIZE_NUCL 11
-#define BLAST_WORDSIZE_MEGABLAST 28
-#define BLAST_VARWORD_NUCL 0
-#define BLAST_VARWORD_MEGABLAST 1
+#define BLAST_WORDSIZE_PROT 3   /**< default word size (all protein searches) */
+#define BLAST_WORDSIZE_NUCL 11   /**< default word size (blastn) */
+#define BLAST_WORDSIZE_MEGABLAST 28   /**< default word size (contiguous 
+                                          megablast; for discontig megablast
+                                          the word size is explicitly 
+                                          overridden) */
+#define BLAST_VARWORD_NUCL 0  /**< blastn with variable wordsize */
+#define BLAST_VARWORD_MEGABLAST 1 /**< megablast with variable wordsize */
 
 /** Protein gap costs are the defaults for the BLOSUM62 scoring matrix.
  * More gap costs are listed in BLASTOptionSetGapParams 
  */
 
 /** cost for the existence of a gap.*/
-#define BLAST_GAP_OPEN_PROT 11
-#define BLAST_GAP_OPEN_NUCL 5
-#define BLAST_GAP_OPEN_MEGABLAST 0
+#define BLAST_GAP_OPEN_PROT 11 /**< default gap open penalty (all 
+                                    protein searches) */
+#define BLAST_GAP_OPEN_NUCL 5 /**< default gap open penalty (blastn) */
+#define BLAST_GAP_OPEN_MEGABLAST 0 /**< default gap open penalty (megablast
+                                        with greedy gapped alignment) */
 
 /** cost to extend a gap. */
-#define BLAST_GAP_EXTN_PROT 1
-#define BLAST_GAP_EXTN_NUCL 2
-#define BLAST_GAP_EXTN_MEGABLAST 0
+#define BLAST_GAP_EXTN_PROT 1 /**< default gap open penalty (all 
+                                   protein searches) */
+#define BLAST_GAP_EXTN_NUCL 2 /**< default gap open penalty (blastn) */
+#define BLAST_GAP_EXTN_MEGABLAST 0 /**< default gap open penalty (megablast)
+                                        with greedy gapped alignment) */
 
-/** neighboring word score thresholds */
-#define BLAST_WORD_THRESHOLD_BLASTP 11
-#define BLAST_WORD_THRESHOLD_BLASTN 0
-#define BLAST_WORD_THRESHOLD_BLASTX 12
-#define BLAST_WORD_THRESHOLD_TBLASTN 13
-#define BLAST_WORD_THRESHOLD_TBLASTX 13
-#define BLAST_WORD_THRESHOLD_MEGABLAST 0
+/** neighboring word score thresholds; a threshold of zero
+ *  means that only query and subject words that match exactly
+ *  will go into the BLAST lookup table when it is generated 
+ */
+#define BLAST_WORD_THRESHOLD_BLASTP 11 /**< default neighboring threshold
+                                         (blastp/rpsblast) */
+#define BLAST_WORD_THRESHOLD_BLASTN 0 /**< default threshold (blastn) */
+#define BLAST_WORD_THRESHOLD_BLASTX 12 /**< default threshold (blastx) */
+#define BLAST_WORD_THRESHOLD_TBLASTN 13 /**< default neighboring threshold 
+                                          (tblastn/rpstblastn) */
+#define BLAST_WORD_THRESHOLD_TBLASTX 13 /**< default threshold (tblastx) */
+#define BLAST_WORD_THRESHOLD_MEGABLAST 0 /**< default threshold (megablast) */
 
-/** dropoff for ungapped extension */
-#define BLAST_UNGAPPED_X_DROPOFF_PROT 7
-#define BLAST_UNGAPPED_X_DROPOFF_NUCL 20
+/** default dropoff for ungapped extension; ungapped extensions
+ *  will stop when the score for the extension has dropped from
+ *  the current best score by at least this much 
+ */
+#define BLAST_UNGAPPED_X_DROPOFF_PROT 7 /**< ungapped dropoff score for all
+                                             searches except blastn */
+#define BLAST_UNGAPPED_X_DROPOFF_NUCL 20 /**< ungapped dropoff score for 
+                                              blastn (and megablast) */
 
-/** dropoff for gapped extension */
-#define BLAST_GAP_X_DROPOFF_PROT 15
-#define BLAST_GAP_X_DROPOFF_NUCL 30
-#define BLAST_GAP_X_DROPOFF_GREEDY 30
-#define BLAST_GAP_X_DROPOFF_TBLASTX 0
+/** default dropoff for preliminary gapped extensions */
+#define BLAST_GAP_X_DROPOFF_PROT 15 /**< default dropoff (all protein-
+                                         based gapped extensions) */
+#define BLAST_GAP_X_DROPOFF_NUCL 30 /**< default dropoff for non-greedy
+                                         nucleotide gapped extensions */
+#define BLAST_GAP_X_DROPOFF_GREEDY 30 /**< default dropoff for greedy
+                                         nucleotide gapped extensions */
+#define BLAST_GAP_X_DROPOFF_TBLASTX 0 /**< default dropoff for tblastx */
 
-/** minimal score for triggering gapped extension */
-#define BLAST_GAP_TRIGGER_PROT 22.0
-#define BLAST_GAP_TRIGGER_NUCL 25.0 
+/** default bit score that will trigger gapped extension */
+#define BLAST_GAP_TRIGGER_PROT 22.0 /**< default bit score that will trigger
+                                         a gapped extension for all protein-
+                                         based searches */
+#define BLAST_GAP_TRIGGER_NUCL 25.0  /**< default bit score that will trigger
+                                         a gapped extension for blastn */
 
-/** dropoff for the final gapped extension with traceback */
-#define BLAST_GAP_X_DROPOFF_FINAL_PROT 25
-#define BLAST_GAP_X_DROPOFF_FINAL_NUCL 50
-#define BLAST_GAP_X_DROPOFF_FINAL_TBLASTX 0
+/** default dropoff for the final gapped extension with traceback */
+#define BLAST_GAP_X_DROPOFF_FINAL_PROT 25 /**< default dropoff (all protein-
+                                               based gapped extensions) */
+#define BLAST_GAP_X_DROPOFF_FINAL_NUCL 50 /**< default dropoff for nucleotide
+                                               gapped extensions) */
+#define BLAST_GAP_X_DROPOFF_FINAL_TBLASTX 0 /**< default dropoff for tblastx */
 
-/** reward and penalty only apply to blastn/megablast */
-#define BLAST_PENALTY -3
-#define BLAST_REWARD 1
+/** default reward and penalty (only applies to blastn/megablast) */
+#define BLAST_PENALTY -3        /**< default nucleotide mismatch score */
+#define BLAST_REWARD 1          /**< default nucleotide match score */
 
-/** expect value cutoff */
-#define BLAST_EXPECT_VALUE 10.0
+#define BLAST_EXPECT_VALUE 10.0 /**< by default, alignments whose expect
+                                     value exceeds this number are discarded */
 
 /** Types of the lookup table */
-#define MB_LOOKUP_TABLE 1
-#define NA_LOOKUP_TABLE 2
-#define AA_LOOKUP_TABLE 3
-#define PHI_AA_LOOKUP 4
-#define PHI_NA_LOOKUP 5
-#define RPS_LOOKUP_TABLE 6
+#define MB_LOOKUP_TABLE 1  /**< megablast lookup table (includes both
+                                contiguous and discontiguous megablast) */
+#define NA_LOOKUP_TABLE 2  /**< blastn lookup table */
+#define AA_LOOKUP_TABLE 3  /**< standard protein (blastp) lookup table */
+#define PHI_AA_LOOKUP 4  /**< protein lookup table specialized for phi-blast */
+#define PHI_NA_LOOKUP 5  /**< nucleotide lookup table for phi-blast */
+#define RPS_LOOKUP_TABLE 6 /**< RPS lookup table (rpsblast and rpstblastn) */
 
 /** Defaults for PSI-BLAST options */
-#define PSI_ETHRESH 0.005
-#define PSI_MAX_NUM_PASSES 1
+#define PSI_INCLUSION_ETHRESH 0.002
 #define PSI_PSEUDO_COUNT_CONST 9
-#define PSI_SCALING_FACTOR 32
 
 /** Default genetic code for query and/or database */
-#define BLAST_GENETIC_CODE 1
+#define BLAST_GENETIC_CODE 1  /**< Use the standard genetic code for converting
+                                   groups of three nucleotide bases to protein
+                                   letters */
 
 /** Default parameters for linking HSPs */
 #define BLAST_GAP_PROB 0.5
@@ -171,16 +191,23 @@ typedef struct QuerySetUpOptions {
                              [t]blastx only */
 } QuerySetUpOptions;
 
+/** specifies the data structures used for bookkeeping
+ *  during computation of ungapped extensions 
+ */
 typedef enum SeedContainerType {
-    eDiagArray,         /**< FIXME: EXTEND_WORD_DIAG_ARRAY */
-    eMbStacks,          /**< FIXME: EXTEND_WORD_MB_STACKS */
-    eMaxContainerType
+    eDiagArray,         /**< use diagonal structures */
+    eMbStacks,          /**< use stacks (megablast only) */
+    eMaxContainerType   /**< maximum value for this enumeration */
 } SeedContainerType;
 
+/** when performing mini-extensions on hits from the
+ *  blastn or megablast lookup table, this determines
+ *  the direction in which the mini-extension is attempted 
+ */
 typedef enum SeedExtensionMethod {
-    eRight,             /**< FIXME: EXTEND_WORD_BLASTN */
-    eRightAndLeft,      /**< FIXME: EXTEND_WORD_AG */
-    eMaxSeedExtensionMethod
+    eRight,             /**< extend only to the right */
+    eRightAndLeft,      /**< extend to left and right (used with AG method) */
+    eMaxSeedExtensionMethod   /**< maximum value for this enumeration */
 } SeedExtensionMethod;
 
 /** Options needed for initial word finding and processing */
@@ -199,11 +226,14 @@ typedef struct BlastInitialWordOptions {
                          extension */
 } BlastInitialWordOptions;
 
-#define UNGAPPED_CUTOFF_E_BLASTN 0.05
-#define UNGAPPED_CUTOFF_E_BLASTP 1e-300
-#define UNGAPPED_CUTOFF_E_BLASTX 1.0
-#define UNGAPPED_CUTOFF_E_TBLASTN 1.0
-#define UNGAPPED_CUTOFF_E_TBLASTX 1e-300
+/** Expect values corresponding to the default cutoff
+ *  scores for ungapped alignments 
+ */
+#define UNGAPPED_CUTOFF_E_BLASTN 0.05  /**< default ungapped evalue (blastn) */
+#define UNGAPPED_CUTOFF_E_BLASTP 1e-300 /**< default ungapped evalue (blastp) */
+#define UNGAPPED_CUTOFF_E_BLASTX 1.0  /**< default ungapped evalue (blastx) */
+#define UNGAPPED_CUTOFF_E_TBLASTN 1.0  /**< default ungapped evalue (tblastn) */
+#define UNGAPPED_CUTOFF_E_TBLASTX 1e-300  /**< default ungapped evalue (tblastx) */
 
 /** Parameter block that contains a pointer to BlastInitialWordOptions
  * and parsed values for those options that require it 
@@ -215,6 +245,27 @@ typedef struct BlastInitialWordParameters {
    Int4 cutoff_score; /**< Cutoff score for saving ungapped hits. */
 } BlastInitialWordParameters;
 	
+/** The algorithm to be used for preliminary
+ *  gapped extensions
+ */
+typedef enum EBlastPrelimGapExt {
+    eDynProgExt,                /**< standard affine gapping */
+    eGreedyExt,                 /**< Greedy extension (megaBlast) */
+    eGreedyWithTracebackExt     /**< Greedy extension with Traceback
+                               calculated. */
+} EBlastPrelimGapExt;
+
+/** The algorithm to be used for final gapped
+ *  extensions with traceback
+ */
+typedef enum EBlastTbackExt {
+    eDynProgTbck,          /**< standard affine gapping */
+    eGreedyTbck,           /**< Greedy extension (megaBlast) */
+    eSmithWatermanTbck,    /**< Smith-waterman finds optimal scores, then 
+                                ALIGN_EX to find alignment. */
+    eSkipTbck              /**< Traceback information is not needed */
+} EBlastTbackExt;
+
 /** Options used for gapped extension 
  *  These include:
  *  a. Penalties for various types of gapping;
@@ -226,20 +277,32 @@ typedef struct BlastExtensionOptions {
    double gap_x_dropoff; /**< X-dropoff value for gapped extension (in bits) */
    double gap_x_dropoff_final;/**< X-dropoff value for the final gapped 
                                   extension (in bits) */
-   double gap_trigger;/**< Score in bits for starting gapped extension */
-   Int4 algorithm_type; /**< E.g. for blastn: dynamic programming; 
-                           greedy without traceback; greedy with traceback */
-   Boolean skip_traceback; /**< Is traceback information needed in results? */
+   double gap_trigger; /**< Score in bits for starting gapped extension */
+   EBlastPrelimGapExt ePrelimGapExt; /**< type of preliminary gapped extension (normally) for calculating
+                              score. */
+   EBlastTbackExt eTbackExt; /**< type of traceback extension. */
+   Boolean compositionBasedStats; /**< if TRUE use composition-based stats. */
 } BlastExtensionOptions;
 
+/** Computed values used as parameters for gapped alignments */
 typedef struct BlastExtensionParameters {
-   BlastExtensionOptions* options;
+   BlastExtensionOptions* options; /**< The original (unparsed) options. */
    Int4 gap_x_dropoff; /**< X-dropoff value for gapped extension (raw) */
    Int4 gap_x_dropoff_final;/**< X-dropoff value for the final gapped 
                                extension (raw) */
    Int4 gap_trigger; /**< Minimal raw score for starting gapped extension */
 } BlastExtensionParameters;
 
+/** Should sum statistics be performed? If not set, the engine decides this
+ * question based on the program and gapped calculation option.
+ */
+typedef enum ESumStatsMode {
+   eSumStatsNotSet = 0, /**< Let the engine decide, based on the program and 
+                           gapped calculation option. */
+   eSumStatsFalse, /**< Do not use sum statistics. */
+   eSumStatsTrue   /**< Use sum statistics. */
+} ESumStatsMode;
+ 
 /** Options used when evaluating and saving hits
  *  These include: 
  *  a. Restrictions on the number of hits to be saved;
@@ -274,17 +337,15 @@ typedef struct BlastHitSavingOptions {
    /********************************************************************/
    /* Merge all these in a structure for clarity? */
    /* applicable to all, except blastn */
-   Boolean do_sum_stats; /**< Force sum statistics to be used to combine 
-                            HSPs */
+   ESumStatsMode do_sum_stats; /**< Force sum statistics to be used to combine 
+                                  HSPs */
    /* tblastn w/ sum statistics */
    Int4 longest_intron; /**< The longest distance between HSPs allowed for
                            combining via sum statistics with uneven gaps */
    /********************************************************************/
 
-   Int4 min_hit_length;
-   Boolean is_neighboring; /**< FIXME: neighboring is specified by a percent 
-                             identity and a minimum hit length */
-
+   Int4 min_hit_length;    /**< optional minimum alignment length; alignments
+                                not at least this long are discarded */
    Boolean phi_align;   /**< Is this a PHI BLAST search? */
 } BlastHitSavingOptions;
 
@@ -330,6 +391,22 @@ typedef struct BlastScoringOptions {
                         gapping */
 } BlastScoringOptions;
 
+/** Scoring parameters block
+ *  Contains scoring-related information that is actually used
+ *  for the blast search
+ */
+typedef struct BlastScoringParameters {
+   BlastScoringOptions *options; /**< User-provided values for these params */
+   Int2 reward;      /**< Reward for a match */
+   Int2 penalty;     /**< Penalty for a mismatch */
+   Int4 gap_open;    /**< Extra penalty for starting a gap (scaled version) */
+   Int4 gap_extend;  /**< Penalty for each gap residue  (scaled version) */
+   Int4 decline_align; /**< Cost for declining alignment  (scaled version) */
+   Int4 shift_pen;   /**< Penalty for shifting a frame in out-of-frame 
+                        gapping (scaled version) */
+   double scale_factor; /**< multiplier for all cutoff scores */
+} BlastScoringParameters;
+
 /** Options for setting up effective lengths and search spaces.  
  * The values are those the user has specified to override the real sizes.
  */
@@ -361,17 +438,22 @@ typedef struct BlastEffectiveLengthsParameters {
  *  Some of these possibly should be transfered elsewhere  
  */
 typedef struct PSIBlastOptions {
-   double ethresh;       /**< PSI-BLAST */
-   Int4 maxNumPasses;     /**< PSI-BLAST */
-   Int4 pseudoCountConst; /**< PSI-BLAST */
-   Boolean composition_based_stat;/**< PSI-BLAST */
-   double scalingFactor; /**< Scaling factor used when constructing PSSM for
-                             RPS-BLAST */
-   Boolean use_best_align; /**< Use only alignments chosen by user for PSSM
-                              computation: WWW PSI-BLAST only */
-   Boolean smith_waterman;  /**< PSI-BLAST */
-   Boolean discontinuous;   /**< PSI-BLAST */
-   Boolean is_rps_blast;    /**< RPS-BLAST */
+    /** Pseudocount constant. Needed for the computing the PSSM residue 
+     * frequencies */
+    Int4 pseudo_count;
+
+    /*** The following options are used at the API layer to specify how the
+     * multiple sequence alignment is built from pairwise alignments. These
+     * could go in their own structure in the future. */
+
+    /** Minimum evalue for inclusion in PSSM calculation. Needed for the first
+     * stage of the PSSM calculation algorithm */
+    double inclusion_ethresh;
+
+    /** If set to TRUE, use the best alignment when multiple HSPs are found 
+     * in a query-subject alignment (i.e.: HSP with the lowest e-value), else
+     * use all HSPs in a query-subject alignment. */
+    Boolean use_best_alignment;
 } PSIBlastOptions;
 
 /** Options used to create the ReadDBFILE structure 
@@ -430,7 +512,7 @@ BlastInitialWordOptionsNew(Uint1 program,
 /** Fill non-default values in the BlastInitialWordOptions structure.
  * @param options The options structure [in] [out] 
  * @param program Program number (blastn, blastp, etc.) [in]
- * @param greedy Settings should assume greedy alignments [in]
+ * @param greedy Settings should assume greedy alignments. [in]
  * @param window_size Size of a largest window between 2 words for the two-hit
  *                    version [in]
  * @param variable_wordsize Will only full bytes of the compressed sequence be
@@ -510,7 +592,8 @@ BlastExtensionOptionsNew(Uint1 program, BlastExtensionOptions* *options);
 /** Fill non-default values in the BlastExtensionOptions structure.
  * @param options The options structure [in] [out]
  * @param program Program number (blastn, blastp, etc.) [in]
- * @param greedy Settings should assume greedy alignments [in]
+ * @param greedy In how many stages of the search greedy alignment is 
+ *               used (values 0, 1, 2)? [in]
  * @param x_dropoff X-dropoff parameter value for preliminary gapped 
  *                  extensions [in]
  * @param x_dropoff_final X-dropoff parameter value for final gapped 
@@ -518,7 +601,7 @@ BlastExtensionOptionsNew(Uint1 program, BlastExtensionOptions* *options);
 */
 Int2
 BLAST_FillExtensionOptions(BlastExtensionOptions* options, 
-   Uint1 program, Boolean greedy, double x_dropoff, 
+   Uint1 program, Int4 greedy, double x_dropoff, 
    double x_dropoff_final);
 
 
@@ -576,7 +659,6 @@ BLAST_FillScoringOptions(BlastScoringOptions* options, Uint1 program,
    Boolean greedy_extension, Int4 penalty, Int4 reward, const char *matrix, 
    Int4 gap_open, Int4 gap_extend);
 
-
 /** Validate contents of BlastScoringOptions.
  * @param program_number Type of BLAST program [in]
  * @param options Options to be validated [in]
@@ -587,10 +669,25 @@ BlastScoringOptionsValidate(Uint1 program_number,
    const BlastScoringOptions* options, Blast_Message* *blast_msg);
 
 /** Produces copy of "old" options, with new memory allocated.
- * @param contains copied BlastScoringOptions upon return [out]
- * @param BlastScoringOptions to be copied [in]
+ * @param new_opt Contains copied BlastScoringOptions upon return [out]
+ * @param old_opt BlastScoringOptions to be copied [in]
 */
 Int2 BlastScoringOptionsDup(BlastScoringOptions* *new_opt, const BlastScoringOptions* old_opt);
+
+/**  Deallocate memory for BlastScoringParameters.
+ * @param parameters Structure to free [in]
+ */
+BlastScoringParameters* BlastScoringParametersFree(
+                                     BlastScoringParameters* parameters);
+
+/** Calculate scaled cutoff scores and gap penalties
+ * @param options Already allocated scoring options [in]
+ * @param sbp Structure containing scale factor [in]
+ * @param parameters Scoring parameters [out]
+ */
+Int2 BlastScoringParametersNew(const BlastScoringOptions *options,
+                               BlastScoreBlk* sbp, 
+                               BlastScoringParameters* *parameters);
 
 /** Deallocate memory for BlastEffectiveLengthsOptions*. 
  * @param options Structure to free [in]
@@ -813,16 +910,16 @@ Int2 BLAST_ValidateOptions(Uint1 program_number,
  * @param sbp Scoring statistical parameters [in]
  * @param hit_params Hit saving parameters, including all cutoff 
  *                   scores [in] [out]
+ * @param ext_params Extension parameters (gap_trigger used) [in]
  * @param db_length Total length of database (non-database search if 0) [in]
  * @param subject_length Length of the subject sequence. [in]
- * @param psi_options PSI BLAST options, containing scaling factor [in]
  * 
 */
 void
 CalculateLinkHSPCutoffs(Uint1 program, BlastQueryInfo* query_info, 
    BlastScoreBlk* sbp, BlastHitSavingParameters* hit_params, 
-   Int8 db_length, Int4 subject_length, 
-   const PSIBlastOptions* psi_options);
+   BlastExtensionParameters* ext_params,
+   Int8 db_length, Int4 subject_length);
 
 #ifdef __cplusplus
 }

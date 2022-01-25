@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.142 2004/04/29 19:56:00 dondosha Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.143 2004/05/13 18:42:44 coulouri Exp $";
 
-/* $Id: blastall.c,v 6.142 2004/04/29 19:56:00 dondosha Exp $
+/* $Id: blastall.c,v 6.143 2004/05/13 18:42:44 coulouri Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,9 @@ static char const rcsid[] = "$Id: blastall.c,v 6.142 2004/04/29 19:56:00 dondosh
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.143  2004/05/13 18:42:44  coulouri
+ * disable -B for blastcl3
+ *
  * Revision 6.142  2004/04/29 19:56:00  dondosha
  * Mask filtered locations in query sequence lines in XML output
  *
@@ -762,8 +765,10 @@ static Args myargs[] = {
     sizeof(myargs) itself
    made optional=TRUE but this may change?
 */
+#ifndef BLAST_CS_API
     { "Number of concatenated queries, for blastn and tblastn", /* 40 */
       "0", NULL, NULL, TRUE, 'B', ARG_INT, 0.0, 0, NULL}
+#endif
 };
 
 #ifdef BLAST_CS_API

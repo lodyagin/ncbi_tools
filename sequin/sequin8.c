@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.255 $
+* $Revision: 6.256 $
 *
 * File Description: 
 *
@@ -3343,6 +3343,27 @@ static int LIBCALLBACK SortMostUsedDescriptorsFirst (VoidPtr ptr1, VoidPtr ptr2)
   }
 }
 
+extern ValNodePtr BuildDescriptorValNodeList (void)
+{
+  Int4 j;
+  ValNodePtr vnp;
+  ValNodePtr head = NULL;
+  
+  for (j = 1; descNames [j] != NULL; j++) {
+    if (StringHasNoText (descNames [j])) continue;
+    vnp = ValNodeNew (head);
+    if (head == NULL) {
+      head = vnp;
+    }
+    if (vnp != NULL) {
+      vnp->choice = j;
+      vnp->data.ptrvalue = StringSave (descNames [j]);
+    }
+  }
+  head = SortValNode (head, SortMostUsedDescriptorsFirst);
+  return head;
+}
+
 static void RemoveAsnObject (IteM i, Boolean feature)
 
 {
@@ -3413,18 +3434,7 @@ static void RemoveAsnObject (IteM i, Boolean feature)
   if (feature) {
     head = BuildFeatureValNodeList (TRUE, "All", ALL_FEATURES, TRUE, FALSE);
   } else {
-    for (j = 1; descNames [j] != NULL; j++) {
-      if (StringHasNoText (descNames [j])) continue;
-      vnp = ValNodeNew (head);
-      if (head == NULL) {
-        head = vnp;
-      }
-      if (vnp != NULL) {
-        vnp->choice = j;
-        vnp->data.ptrvalue = StringSave (descNames [j]);
-      }
-    }
-    head = SortValNode (head, SortMostUsedDescriptorsFirst);
+    head = BuildDescriptorValNodeList();
   }
   if (head != NULL) {
 

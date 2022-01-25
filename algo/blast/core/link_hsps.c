@@ -1,44 +1,42 @@
-/* $Id: link_hsps.c,v 1.31 2004/05/05 15:27:45 dondosha Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/* $Id: link_hsps.c,v 1.36 2004/06/08 17:30:07 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Ilya Dondoshansky
+ *
+ */
 
-/*****************************************************************************
+/** @file link_hsps.c
+ * Functions to link with use of sum statistics
+ */
 
-File name: link_hsps.c
-
-Author: Ilya Dondoshansky
-
-Contents: Functions to link with use of sum statistics
-
-Detailed Contents: 
-
-******************************************************************************/
+static char const rcsid[] = 
+    "$Id: link_hsps.c,v 1.36 2004/06/08 17:30:07 dondosha Exp $";
 
 #include <algo/blast/core/link_hsps.h>
 #include <algo/blast/core/blast_util.h>
 
-static char const rcsid[] = "$Id: link_hsps.c,v 1.31 2004/05/05 15:27:45 dondosha Exp $";
 
 /** Methods used to "order" the HSP's. */
 #define BLAST_NUMBER_OF_ORDERING_METHODS 2
@@ -551,7 +549,7 @@ link_hsps(Uint1 program_number, BlastHSPList* hsp_list,
                        program_number == blast_type_tblastx);
    if (program_number == blast_type_tblastn ||
        program_number == blast_type_tblastx)
-      num_subject_frames = 2;
+      num_subject_frames = NUM_STRANDS;
    else
       num_subject_frames = 1;
 
@@ -576,7 +574,7 @@ link_hsps(Uint1 program_number, BlastHSPList* hsp_list,
 	ignore_small_gaps = hit_params->ignore_small_gaps;
 	
 	if (translated_query)
-		num_query_frames = 2*query_info->num_queries;
+		num_query_frames = NUM_STRANDS*query_info->num_queries;
 	else
 		num_query_frames = query_info->num_queries;
    
@@ -636,12 +634,16 @@ link_hsps(Uint1 program_number, BlastHSPList* hsp_list,
       length_adjustment = query_info->length_adjustments[query_context];
       query_length = BLAST_GetQueryLength(query_info, query_context);
       query_length = MAX(query_length - length_adjustment, 1);
+      subject_length = subject->length; /* in nucleotides even for tblast[nx] */
       /* If subject is translated, length adjustment is given in nucleotide
          scale. */
       if (program_number == blast_type_tblastn || 
           program_number == blast_type_tblastx)
+      {
          length_adjustment /= CODON_LENGTH;
-      subject_length = MAX(subject->length - length_adjustment, 1);
+         subject_length /= CODON_LENGTH;
+      }
+      subject_length = MAX(subject_length - length_adjustment, 1);
 
       lh_helper[0].ptr = hp_start;
       lh_helper[0].q_off_trim = 0;
@@ -996,7 +998,7 @@ link_hsps(Uint1 program_number, BlastHSPList* hsp_list,
                          best[1]->hsp_link.xsum[1],
                          query_length, subject_length,
                          BLAST_GapDecayDivisor(gap_decay_rate,
-                                              best[1]->hsp_link.num[0]));
+                                              best[1]->hsp_link.num[1]));
 
             if( best[1]->hsp_link.num[1] > 1 ) {
               if( 1 - gap_prob == 0 || (prob[1] /= 1 - gap_prob) > INT4_MAX ) {
@@ -1399,8 +1401,8 @@ BLAST_LinkHsps(Uint1 program_number, BlastHSPList* hsp_list,
       } else {
          /* Calculate individual HSP e-values first - they'll be needed to
             compare with sum e-values. */
-         Blast_HSPListGetEvalues(program_number, query_info, 
-                                    hsp_list, gapped_calculation, sbp);
+         Blast_HSPListGetEvalues(query_info, hsp_list, 
+                                 gapped_calculation, sbp);
          
          new_link_hsps(program_number, hsp_list, query_info, subject, sbp, 
                        hit_params);

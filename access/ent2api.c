@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.64 $
+* $Revision: 1.65 $
 *
 * File Description: 
 *
@@ -1285,6 +1285,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
             } else if (StringICmp (last, "Rank") == 0 && StringICmp (str, "Ranked standard deviation") == 0) {
             } else if (StringICmp (last, "Book") == 0 && StringICmp (str, "Book's Topic") == 0) {
             } else if (StringICmp (last, "Gene Name") == 0 && StringICmp (str, "Gene Name or Description") == 0) {
+            } else if (StringICmp (last, "Submitter") == 0 && StringICmp (str, "Submitter Handle") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);

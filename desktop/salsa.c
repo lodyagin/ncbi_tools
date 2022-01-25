@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.159 $
+* $Revision: 6.160 $
 *
 * File Description: 
 *
@@ -3418,6 +3418,7 @@ static Boolean SetupAlignDataSap (EditAlignDataPtr adp, SeqAlignPtr salp_origina
 
   if (adp == NULL || salp_original == NULL)
      return FALSE;
+  
   /*************************************/
   /** check if all ->type are NOT 0
   *** if all 0 -> all cached from CN3D viewer
@@ -3428,6 +3429,12 @@ static Boolean SetupAlignDataSap (EditAlignDataPtr adp, SeqAlignPtr salp_origina
   if (newsalp== NULL)
      return FALSE;
   /**************************************/
+  if (salp_original->segtype == SAS_DISC)
+  {
+  	salp_original = (SeqAlignPtr) salp_original->segs;
+  }
+
+  
   if ( salp_original->segtype == 1 ) 
   {
      adp->blocks = create_list_alignedsegs (salp_original);
@@ -4110,6 +4117,7 @@ static ForM CreateSeqAlignEditForm (Int2 left, Int2 top, CharPtr windowname, Seq
   
   if (salp==NULL)
      return NULL;
+  
   moltype = SeqAlignMolType(salp);
   if (moltype == 0)
      return NULL;
@@ -5164,6 +5172,85 @@ extern Int2 LIBCALLBACK AlgEditFunc (Pointer data)
   return OM_MSG_RET_ERROR;
 }
 
+/* opens window for editing alignment */
+static Int2 
+FinishOpeningEditAlignmentWindow 
+(SeqAlignPtr salp,
+ OMProcControlPtr ompcp)
+{
+  SelStruct           ss;
+  Char                str [64];
+  WindoW              w;
+  SeqEditViewFormPtr  wdp = NULL;
+  OMUserDataPtr       omudp;
+  SeqAnnotPtr         sap;
+
+  ss.entityID = ompcp->input_entityID;
+  ss.itemID = ompcp->input_itemID;
+  ss.itemtype = ompcp->input_itemtype;
+  ss.regiontype =0;
+  ss.region = NULL;
+	
+  SeqIdWrite (SeqAlignId(salp, 0), str, PRINTID_REPORT, 64);
+  w = (WindoW) CreateSeqAlignEditForm (-40, -90, str, salp, &ss);
+  if (w != NULL) 
+  {
+    wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
+    if (wdp != NULL) 
+    {
+      wdp->input_entityID = ompcp->input_entityID;
+      wdp->input_itemID = ompcp->input_itemID;
+      wdp->input_itemtype = ompcp->input_itemtype;
+      wdp->this_itemtype = OBJ_SEQALIGN;
+      wdp->this_subtype = 0;
+      wdp->procid = ompcp->proc->procid;
+      wdp->proctype = ompcp->proc->proctype;
+      wdp->userkey = OMGetNextUserKey ();
+      omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid, OMPROC_EDIT, wdp->userkey);
+      if (omudp != NULL) 
+      {
+        omudp->userdata.ptrvalue = (Pointer) wdp;
+        omudp->messagefunc = BioseqEditMsgFunc;
+      }
+      checkEntityIDForMsg (wdp);
+    }
+    Show (w);
+    Update ();
+    CaptureSlateFocus ((SlatE) wdp->pnl);
+    Select (w);
+
+    if (salp->segtype == 1) {
+      SeqAlignPtr tmp, newsalp;
+      Boolean ok;
+      EditAlignDataPtr   adp;
+
+      adp = GetAlignDataPanel(wdp->pnl);
+      for ( tmp=salp; tmp!=NULL; tmp=tmp->next)
+      {
+        if (tmp->type<1)
+        {
+          sap=adp->sap_original;
+          if (sap)
+          {
+            newsalp = (SeqAlignPtr)sap->data;
+            ok = SeqAlignIDCache (newsalp, SeqAlignId (tmp, 1));
+            if (ok)
+            {
+/*
+              if (adp->sap1_original)
+                 SeqAlignIDCache ((SeqAlignPtr)adp->sap1_original->data, SeqIdFindBest (bsp->id, 0));
+*/
+              repopulate_panel (w, adp, newsalp);
+            }
+          }
+        }
+      }
+    }
+    return OM_MSG_RET_DONE;
+  }
+  return OM_MSG_RET_ERROR;
+}
+
 /************************************************
 ***
 ***   AnnotAlgEditFunc : to launch SEQANNOT editor
@@ -5171,14 +5258,10 @@ extern Int2 LIBCALLBACK AlgEditFunc (Pointer data)
 ************************************************/
 extern Int2 LIBCALLBACK AnnotAlgEditFunc (Pointer data)
 {
-  WindoW              w;
   SeqAnnotPtr         sap;
   SeqAlignPtr         salp = NULL;
-  SeqEditViewFormPtr  wdp = NULL;
   OMProcControlPtr    ompcp;
-  OMUserDataPtr       omudp;
-  Char                str [64];
-  SelStruct           ss;
+  Int2                rval = OM_MSG_RET_ERROR;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) {
@@ -5217,70 +5300,19 @@ extern Int2 LIBCALLBACK AnnotAlgEditFunc (Pointer data)
 
   if (salp == NULL)
      return OM_MSG_RET_ERROR;
-  ss.entityID = ompcp->input_entityID;
-  ss.itemID = ompcp->input_itemID;
-  ss.itemtype = ompcp->input_itemtype;
-  ss.regiontype =0;
-  ss.region = NULL;
-
-  SeqIdWrite (SeqAlignId(salp, 0), str, PRINTID_REPORT, 64);
-  w = (WindoW) CreateSeqAlignEditForm (-40, -90, str, salp, &ss);
-  if (w != NULL) 
+  if (salp->dim == 2)
   {
-     wdp = (SeqEditViewFormPtr) GetObjectExtra (w);
-     if (wdp != NULL) 
-     {
-        wdp->input_entityID = ompcp->input_entityID;
-        wdp->input_itemID = ompcp->input_itemID;
-        wdp->input_itemtype = ompcp->input_itemtype;
-        wdp->this_itemtype = OBJ_SEQALIGN;
-        wdp->this_subtype = 0;
-        wdp->procid = ompcp->proc->procid;
-        wdp->proctype = ompcp->proc->proctype;
-        wdp->userkey = OMGetNextUserKey ();
-        omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid, OMPROC_EDIT, wdp->userkey);
-        if (omudp != NULL) 
-        {
-           omudp->userdata.ptrvalue = (Pointer) wdp;
-           omudp->messagefunc = BioseqEditMsgFunc;
-        }
-        checkEntityIDForMsg (wdp);
-     }
-     Show (w);
-     Update ();
-     CaptureSlateFocus ((SlatE) wdp->pnl);
-     Select (w);
-
-if (salp->segtype == 1) {
-SeqAlignPtr tmp, newsalp;
-Boolean ok;
-EditAlignDataPtr   adp;
-
-  adp = GetAlignDataPanel(wdp->pnl);
-  for ( tmp=salp; tmp!=NULL; tmp=tmp->next)
+  	rval = FinishOpeningEditAlignmentWindow (salp, ompcp);
+  }
+  else
   {
-     if (tmp->type<1)
-     {
-        sap=adp->sap_original;
-        if (sap)
-        {
-           newsalp = (SeqAlignPtr)sap->data;
-           ok = SeqAlignIDCache (newsalp, SeqAlignId (tmp, 1));
-           if (ok)
-           {
-/*
-              if (adp->sap1_original)
-                 SeqAlignIDCache ((SeqAlignPtr)adp->sap1_original->data, SeqIdFindBest (bsp->id, 0));
-*/
-              repopulate_panel (w, adp, newsalp);
-           }
-        }
-     }
+    while (salp != NULL)
+    {
+  	  rval = FinishOpeningEditAlignmentWindow (salp, ompcp);
+  	  salp = salp->next;
+    }
   }
-}
-     return OM_MSG_RET_DONE;
-  }
-  return OM_MSG_RET_ERROR;
+  return rval;
 }
 
 extern Int2 LIBCALLBACK AlgViewFunc (Pointer data)

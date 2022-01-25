@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.168 $
+* $Revision: 6.178 $
 *
 * File Description: 
 *
@@ -737,14 +737,16 @@ static SeqLocPtr SeqLocFromRange (SeqLocRangePtr head, BioseqPtr target,
   return slp;
 }
 
-NLM_EXTERN SeqLocPtr SeqLocMergeEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr from,
+NLM_EXTERN SeqLocPtr SeqLocMergeExEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr from,
                        Boolean single_interval, Boolean fuse_joints,
-                       Boolean merge_overlaps, Boolean add_null)
+                       Boolean merge_overlaps, Boolean add_null, Boolean ignore_mixed)
 
 {
+  SeqLocRangePtr  curr;
   SeqLocRangePtr  slrp;
   SeqLocRangePtr  head;
   SeqLocRangePtr  last;
+  Boolean         mixed;
   Boolean         partial5;
   Boolean         partial3;
   SeqLocPtr       slp;
@@ -767,26 +769,52 @@ NLM_EXTERN SeqLocPtr SeqLocMergeEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr fr
     last->next = CollectRanges (target, from);
   }
   if (head != NULL) {
+
+    /* test for mixed strands */
+    mixed = FALSE;
     strand = head->strand;
-    head = SortRanges (head, FALSE);
-    head = MergeOverlaps (head, fuse_joints, merge_overlaps);
-    if (single_interval) {
+    curr = head->next;
+    while (curr != NULL) {
+      if (curr->strand == Seq_strand_minus) {
+        if (strand == Seq_strand_plus || strand == Seq_strand_unknown) {
+          mixed = TRUE;
+        }
+      } else {
+        if (strand == Seq_strand_minus) {
+          mixed = TRUE;
+        }
+      }
+      curr = curr->next;
+    }
+
+    /* but can override mixed strands behavior */
+    if (ignore_mixed) {
+      mixed = FALSE;
+    }
+
+    if (! mixed) {
+      strand = head->strand;
+      head = SortRanges (head, FALSE);
+      head = MergeOverlaps (head, fuse_joints, merge_overlaps);
+      if (single_interval) {
+        last = head;
+        while (last->next != NULL) {
+          last = last->next;
+        }
+        head->left = MIN (head->left, last->left);
+        head->right = MAX (head->right, last->right);
+        head->next = SeqLocRangeFree (head->next);
+      }
       last = head;
-      while (last->next != NULL) {
+      while (last != NULL) {
+        last->strand = strand;
         last = last->next;
       }
-      head->left = MIN (head->left, last->left);
-      head->right = MAX (head->right, last->right);
-      head->next = SeqLocRangeFree (head->next);
+      if (strand == Seq_strand_minus) {
+        head = SortRanges (head, TRUE);
+      }
     }
-    last = head;
-    while (last != NULL) {
-      last->strand = strand;
-      last = last->next;
-    }
-    if (strand == Seq_strand_minus) {
-      head = SortRanges (head, TRUE);
-    }
+
     for (slrp = head; slrp != NULL; slrp = slrp->next) {
       if (slrp->left < 0) {
         slrp->left += target->length;
@@ -801,12 +829,20 @@ NLM_EXTERN SeqLocPtr SeqLocMergeEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr fr
   return slp;
 }
 
+NLM_EXTERN SeqLocPtr SeqLocMergeEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr from,
+                       Boolean single_interval, Boolean fuse_joints,
+                       Boolean merge_overlaps, Boolean add_null)
+
+{
+  return SeqLocMergeExEx (target, to, from, single_interval, fuse_joints, merge_overlaps, add_null, FALSE);
+}
+
 NLM_EXTERN SeqLocPtr SeqLocMerge (BioseqPtr target, SeqLocPtr to, SeqLocPtr from,
                        Boolean single_interval, Boolean fuse_joints,
                        Boolean add_null)
 
 {
-  return SeqLocMergeEx (target, to, from, single_interval, fuse_joints, TRUE, add_null);
+  return SeqLocMergeExEx (target, to, from, single_interval, fuse_joints, TRUE, add_null, FALSE);
 }
 
 NLM_EXTERN Boolean SeqLocBadSortOrder (BioseqPtr bsp, SeqLocPtr slp)
@@ -1049,7 +1085,6 @@ HasPubSrcComDescriptors
   BioseqPtr           bsp;
   BioseqSetPtr        bssp;
   ValNodePtr          list = NULL;
-  AsnExpOptPtr        aeop;
   Boolean             rval = FALSE;
 
   if (sep == NULL || sep->data.ptrvalue == NULL) return FALSE;
@@ -1866,6 +1901,98 @@ NLM_EXTERN ProtRefPtr ParseTitleIntoProtRef (
   return prp;
 }
 
+static Boolean ParseAccessionRange (
+  CharPtr accn,
+  CharPtr prefix,
+  Int4Ptr startp,
+  Int4Ptr stopp,
+  Int2Ptr digitsp
+)
+
+{
+  Char      ch;
+  Int2      digits;
+  CharPtr   ptr, tmp;
+  Int4      start, stop;
+  long int  val;
+
+  if (StringHasNoText (accn)) return FALSE;
+  if (prefix == NULL || startp == NULL || stopp == NULL || digitsp == NULL) return FALSE;
+
+  ptr = accn;
+  ch = *ptr;
+  while (IS_ALPHA (ch)) {
+    *prefix = ch;
+    prefix++;
+    ptr++;
+    ch = *ptr;
+  }
+  *prefix = '\0';
+
+  tmp = StringChr (ptr, '-');
+  if (tmp == NULL) return FALSE;
+  *tmp = '\0';
+  tmp++;
+
+  if (sscanf (ptr, "%ld", &val) != 1 || val < 1) return FALSE;
+  start = (Int4) val;
+
+  digits = 0;
+  while (IS_DIGIT (ch)) {
+    digits++;
+    ptr++;
+    ch = *ptr;
+  }
+
+  ptr = tmp;
+  ch = *ptr;
+  while (IS_ALPHA (ch)) {
+    ptr++;
+    ch = *ptr;
+  }
+
+  if (sscanf (ptr, "%ld", &val) != 1 || val < 1) return FALSE;
+  stop = (Int4) val;
+
+  *startp = start;
+  *stopp = stop;
+  *digitsp = digits;
+
+  return TRUE;
+}
+
+static void DoAddToSecAccn (
+  GBBlockPtr gbp,
+  CharPtr accn
+)
+
+{
+  Int2  digits, j;
+  Int4  idx;
+  Char  numbers [32];
+  Char  prefix [16];
+  Int4  start, stop;
+  Char  tmp [64];
+
+  if (StringChr (accn, '-') != NULL) {
+    if (ParseAccessionRange (accn, prefix, &start, &stop, &digits)) {
+      for (idx = start; idx <= stop; idx++) {
+        sprintf (numbers, "%*ld", digits, (long) idx);
+        for (j = 0; j < digits && numbers [j] != '\0'; j++) {
+          if (numbers [j] == ' ') {
+            numbers [j] = '0';
+          }
+        }
+        StringCpy (tmp, prefix);
+        StringCat (tmp, numbers);
+        ValNodeCopyStr (&(gbp->extra_accessions), 0, tmp);
+      }
+    }
+  } else {
+    ValNodeCopyStr (&(gbp->extra_accessions), 0, accn);
+  }
+}
+
 NLM_EXTERN GBBlockPtr ParseTitleIntoGenBank (
   SqnTagPtr stp,
   GBBlockPtr gbp
@@ -1899,7 +2026,7 @@ NLM_EXTERN GBBlockPtr ParseTitleIntoGenBank (
         *ptr = '\0';
         if (! StringHasNoText (last)) {
           TrimSpacesAroundString (last);
-          ValNodeCopyStr (&(gbp->extra_accessions), 0, last);
+          DoAddToSecAccn (gbp, last);
         }
         ptr++;
         last = ptr;
@@ -1911,7 +2038,7 @@ NLM_EXTERN GBBlockPtr ParseTitleIntoGenBank (
     }
     if (! StringHasNoText (last)) {
       TrimSpacesAroundString (last);
-      ValNodeCopyStr (&(gbp->extra_accessions), 0, last);
+      DoAddToSecAccn (gbp, last);
     }
     MemFree (tmp);
   }
@@ -1947,6 +2074,38 @@ static void AddStringToSeqHist (
   tsip->accession = StringSave (str);
 }
 
+static void DoAddToSeqHist (
+  SeqHistPtr shp,
+  CharPtr accn
+)
+
+{
+  Int2  digits, j;
+  Int4  idx;
+  Char  numbers [32];
+  Char  prefix [16];
+  Int4  start, stop;
+  Char  tmp [64];
+
+  if (StringChr (accn, '-') != NULL) {
+    if (ParseAccessionRange (accn, prefix, &start, &stop, &digits)) {
+      for (idx = start; idx <= stop; idx++) {
+        sprintf (numbers, "%*ld", digits, (long) idx);
+        for (j = 0; j < digits && numbers [j] != '\0'; j++) {
+          if (numbers [j] == ' ') {
+            numbers [j] = '0';
+          }
+        }
+        StringCpy (tmp, prefix);
+        StringCat (tmp, numbers);
+        AddStringToSeqHist (shp, tmp);
+      }
+    }
+  } else {
+    AddStringToSeqHist (shp, accn);
+  }
+}
+
 NLM_EXTERN SeqHistPtr ParseStringIntoSeqHist (
   SeqHistPtr shp,
   CharPtr str
@@ -1973,7 +2132,7 @@ NLM_EXTERN SeqHistPtr ParseStringIntoSeqHist (
         *ptr = '\0';
         if (! StringHasNoText (last)) {
           TrimSpacesAroundString (last);
-          AddStringToSeqHist (shp, last);
+          DoAddToSeqHist (shp, last);
         }
         ptr++;
         last = ptr;
@@ -1985,7 +2144,7 @@ NLM_EXTERN SeqHistPtr ParseStringIntoSeqHist (
     }
     if (! StringHasNoText (last)) {
       TrimSpacesAroundString (last);
-      AddStringToSeqHist (shp, last);
+      DoAddToSeqHist (shp, last);
     }
     MemFree (tmp);
   }
@@ -2026,7 +2185,7 @@ NLM_EXTERN SeqHistPtr ParseTitleIntoSeqHist (
         *ptr = '\0';
         if (! StringHasNoText (last)) {
           TrimSpacesAroundString (last);
-          AddStringToSeqHist (shp, last);
+          DoAddToSeqHist (shp, last);
         }
         ptr++;
         last = ptr;
@@ -2038,7 +2197,7 @@ NLM_EXTERN SeqHistPtr ParseTitleIntoSeqHist (
     }
     if (! StringHasNoText (last)) {
       TrimSpacesAroundString (last);
-      AddStringToSeqHist (shp, last);
+      DoAddToSeqHist (shp, last);
     }
     MemFree (tmp);
   }
@@ -2837,7 +2996,7 @@ static void  AddNucToContig (CharPtr accnString, Int4 from, Int4 to,
       sip->choice = (Uint1) SEQID_GI;
       sip->data.intvalue = val;
     } else {
-      sip = SeqIdFromAccession (accnString, 0, NULL);
+      sip = SeqIdFromAccessionDotVersion (accnString);
       if (sip == NULL) {
         sip = ValNodeNew (NULL);
         tsip = TextSeqIdNew ();
@@ -4446,6 +4605,23 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
       }
     } else if (sfp->data.choice == SEQFEAT_CDREGION && StringCmp (qual, "secondary_accession") == 0) {
       bail = FALSE;
+    } else if (sfp->data.choice == SEQFEAT_RNA &&
+               (StringCmp (qual, "codon_recognized") == 0 || StringCmp (qual, "codons_recognized") == 0)) {
+      rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+      if (rrp != NULL && rrp->type == 3) {
+        StringNCpy_0 ((CharPtr) codon, val, sizeof (codon));
+        if (StringLen ((CharPtr) codon) == 3) {
+          for (j = 0; j < 3; j++) {
+            if (codon [j] == 'U') {
+              codon [j] = 'T';
+            }
+          }
+          trna = (tRNAPtr) rrp->ext.value.ptrvalue;
+          if (trna != NULL) {
+            ParseDegenerateCodon (trna, (Uint1Ptr) codon);
+          }
+        }
+      }
     } else if (ifp != NULL && StringICmp (ifp->key, "variation") == 0 && ParseQualIntoSnpUserObject (sfp, qual, val)) {
     } else if (ifp != NULL && StringICmp (ifp->key, "STS") == 0 && ParseQualIntoStsUserObject (sfp, qual, val)) {
     } else if (ifp != NULL && StringICmp (ifp->key, "misc_feature") == 0 && ParseQualIntoCloneUserObject (sfp, qual, val)) {
@@ -4624,8 +4800,6 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
       return;
     } else if (qnum == GBQUAL_transl_except) {
       if (ParseCodeBreak (sfp, val, offset)) return;
-    } else if (qnum == GBQUAL_anticodon) {
-      if (ParseAnticodon (sfp, val, offset)) return;
     } else if (qnum == GBQUAL_codon_start) {
       crp = (CdRegionPtr) sfp->data.value.ptrvalue;
       if (sscanf (val, "%d", &num) == 1 && crp != NULL) {
@@ -4633,6 +4807,8 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
           crp->frame = (Uint1) num;
         }
       }
+    } else if (qnum == GBQUAL_pseudo) {
+      sfp->pseudo = TRUE;
     }
   } else if (sfp->data.choice == SEQFEAT_PROT) {
     if (qnum == GBQUAL_function || qnum == GBQUAL_EC_number || qnum == GBQUAL_product) {
@@ -4706,6 +4882,10 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
         rrp->ext.value.ptrvalue = StringSave (val);
       }
       return;
+    } else if (qnum == GBQUAL_anticodon) {
+      if (ParseAnticodon (sfp, val, offset)) return;
+    } else if (qnum == GBQUAL_pseudo) {
+      sfp->pseudo = TRUE;
     }
   } else if (sfp->data.choice == SEQFEAT_BIOSRC) {
     if (ParseQualIntoBioSource (sfp, qual, val)) return;
@@ -7242,7 +7422,7 @@ NLM_EXTERN void PrintQualityScoresForContig (
     } else if (dsp->choice == 2) {
 
       slitp = (SeqLitPtr) dsp->data.ptrvalue;
-      if (slitp == NULL || slitp->seq_data != NULL) continue;
+      if (slitp == NULL /* || slitp->seq_data != NULL */) continue;
       for (i = 0; i < slitp->length; i++) {
         PrintAScore (fp, gap, &linepos);
       }

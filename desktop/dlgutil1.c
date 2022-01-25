@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.43 $
+* $Revision: 6.44 $
 *
 * File Description: 
 *
@@ -50,6 +50,7 @@
 #include <gbfeat.h>
 #include <gbftdef.h>
 #include <edutil.h>
+#include <explore.h>
 
 #define NUMBER_OF_SUFFIXES    8
 
@@ -1008,9 +1009,12 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   Char            ch;
   Char            desc [128];
   Int2            expev;
+  SeqMgrFeatContext  fcontext;
   FeatureFormPtr  ffp;
+  SeqFeatPtr      gene;
   GeneGatherList  ggl;
   GeneRefPtr      grp;
+  GeneRefPtr      grpfeat;
   GatherScope     gs;
   SeqLocPtr       gslp;
   Boolean         hasNulls;
@@ -1029,6 +1033,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
   SeqEntryPtr     sep;
   SeqFeatPtr      sfp;
   SeqLocPtr       slp;
+  CharPtr         str;
   Char            symbol [128];
   Int2            usexref;
   Int2            val;
@@ -1152,7 +1157,17 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
             }
             if (vnp != NULL) {
               if (vnp->choice == 1) {
-                grp = CreateNewGeneRef ((CharPtr) vnp->data.ptrvalue, NULL, NULL, FALSE);
+                str = (CharPtr) vnp->data.ptrvalue;
+                if (StringDoesHaveText (str)) {
+                  grp = CreateNewGeneRef (str, NULL, NULL, FALSE);
+                  gene = SeqMgrGetFeatureByLabel (bsp, str, SEQFEAT_GENE, 0, &fcontext);
+                  if (gene != NULL && gene->data.choice == SEQFEAT_GENE) {
+                    grpfeat = (GeneRefPtr) gene->data.value.ptrvalue;
+                    if (grpfeat != NULL) {
+                      grp->locus_tag = StringSaveNoNull (grpfeat->locus_tag);
+                    }
+                  }
+                }
               } else if (vnp->choice == 3) {
                 grp = GeneRefNew ();
                 if (grp != NULL) {

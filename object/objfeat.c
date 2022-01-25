@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -512,6 +512,7 @@ ret:
 	AsnUnlinkType(orig);       /* unlink local tree */
 	return sfp;
 erret:
+    aip->io_failure = TRUE;
     sfp = SeqFeatFree(sfp);
     goto ret;
 }

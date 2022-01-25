@@ -1,39 +1,39 @@
-/* $Id: phi_lookup.c,v 1.12 2004/04/05 16:09:27 camacho Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/* $Id: phi_lookup.c,v 1.15 2004/06/08 17:30:07 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Ilya Dondoshansky
+ *
+ */
 
-/*****************************************************************************
+/** @file phi_lookup.c
+ * Functions for accessing the lookup table for PHI-BLAST
+ * @todo FIXME needs doxygen comments and lines shorter than 80 characters
+ */
 
-File name: phi_lookup.c
-
-Author: Ilya Dondoshansky
-
-Contents: Functions for accessing the lookup table for PHI-BLAST
-
-******************************************************************************
- * $Revision: 1.12 $
- * */
+static char const rcsid[] = 
+    "$Id: phi_lookup.c,v 1.15 2004/06/08 17:30:07 dondosha Exp $";
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_util.h>
@@ -41,10 +41,23 @@ Contents: Functions for accessing the lookup table for PHI-BLAST
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/blast_message.h>
 
-static char const rcsid[] = "$Id: phi_lookup.c,v 1.12 2004/04/05 16:09:27 camacho Exp $";
 
 #define seedepsilon 0.00001
 #define allone  ((1 << ALPHABET_SIZE) - 1)
+
+typedef struct seedSearchItems {
+    double  charMultiple[ALPHABET_SIZE];
+    double  paramC; /*used in e-value computation*/
+    double  paramLambda; /*used in e-value computation*/
+    double  paramK; /*used in the bit score computation*/
+    Int4         cutoffScore; /*lower bound for what is a hit*/
+    double  standardProb[ALPHABET_SIZE]; /*probability of each letter*/
+    char         order[ASCII_SIZE];
+    char         pchars[ALPHABET_SIZE+1];
+    char         name_space[BUF_SIZE];  /*name of a pattern*/
+    char         pat_space[PATTERN_SPACE_SIZE];  /*string description
+                                                   of pattern*/
+} seedSearchItems;
 
 /*Initialize the order of letters in the alphabet, the score matrix,
 and the row sums of the score matrix. matrixToFill is the
@@ -402,8 +415,8 @@ init_pattern(Uint1 *pattern, Boolean is_dna, BlastScoreBlk* sbp,
              patternSearchItems* *pattern_info,
              Blast_Message* *error_msg)
 {
-    Uint4 i; /*index over string describing the pattern*/
-    Uint4 j; /*index for position in pattern*/
+    Int4 i; /*index over string describing the pattern*/
+    Int4 j; /*index for position in pattern*/
     Int4 charIndex; /*index over characters in alphabet*/
     Int4 secondIndex; /*second index into pattern*/
     Int4 numIdentical; /*number of consec. positions with identical specification*/
@@ -413,7 +426,7 @@ init_pattern(Uint1 *pattern, Boolean is_dna, BlastScoreBlk* sbp,
                         set of characters*/
     Int4 minWildcard, maxWildcard; /*used for variable number of wildcard
                                      positions*/
-    Uint4  tj=0; /*temporary copy of j*/
+    Int4  tj=0; /*temporary copy of j*/
     Int4 tempInputPatternMasked[MaxP]; /*local copy of parts
             of inputPatternMasked*/
     Uint1 c;  /*character occurring in pattern*/
@@ -447,7 +460,7 @@ init_pattern(Uint1 *pattern, Boolean is_dna, BlastScoreBlk* sbp,
       patternSearch->inputPatternMasked[i] = 0; 
       localPattern[i] = 0;
     }
-    for (i = 0, j = 0; i < strlen((Char *) pattern); i++) {
+    for (i = 0, j = 0; i < (Int4)strlen((Char *) pattern); i++) {
       if ((c=pattern[i]) == '-' || c == '\n' || c == '.' || c =='>' || c ==' ' 
 || c == '<')  /*spacers that mean nothing*/
 	continue;
@@ -608,7 +621,7 @@ init_pattern(Uint1 *pattern, Boolean is_dna, BlastScoreBlk* sbp,
       that character can occur in*/
     for (charIndex = 0; charIndex < ALPHABET_SIZE; charIndex++) {
       thisMask = 0;
-      for (charSetMask = 0; charSetMask < j; charSetMask++) {
+      for (charSetMask = 0; charSetMask < (Uint4)j; charSetMask++) {
 	if ((1<< charIndex) & patternSearch->inputPatternMasked[charSetMask]) 
 	  thisMask |= (1 << charSetMask);
       }

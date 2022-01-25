@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: posit.c,v 6.61 2003/08/04 20:43:55 dondosha Exp $";
+static char const rcsid[] = "$Id: posit.c,v 6.63 2004/06/08 14:03:48 camacho Exp $";
 
-/* $Id: posit.c,v 6.61 2003/08/04 20:43:55 dondosha Exp $
+/* $Id: posit.c,v 6.63 2004/06/08 14:03:48 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,16 @@ static char const rcsid[] = "$Id: posit.c,v 6.61 2003/08/04 20:43:55 dondosha Ex
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.61 $ 
+  $Revision: 6.63 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.63  2004/06/08 14:03:48  camacho
+ * Alejandro Schaffer's fix to spread out gap costs in posDemographics.
+ *
+ * Revision 6.62  2004/05/14 12:13:09  camacho
+ * Made posDemographics non-static for testing purposes.
+ *
  * Revision 6.61  2003/08/04 20:43:55  dondosha
  * Test for selenocysteines when comparing checkpoint sequences with query
  *
@@ -904,7 +910,9 @@ void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * com
 /*Compute general information about the sequences that matched on the
   i-th pass such as how many matched at each query position and what letter
   matched*/
-static void posDemographics(posSearchItems *posSearch, compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns)
+void LIBCALL posDemographics(posSearchItems *posSearch, 
+                             compactSearchItems * compactSearch, 
+                             SeqAlignPtr listOfSeqAligns)
 {
    Uint1Ptr q; /*pointers into query */
    Uint1Ptr s; /*pointer into a matching string */
@@ -990,24 +998,29 @@ static void posDemographics(posSearchItems *posSearch, compactSearchItems * comp
 	     if ((GAP_HERE) == subjectOffset) { /*XX*/
                    for(c = 0, qplace = queryOffset;
                        c < matchLength; c++, qplace++) {
-                       posSearch->posDescMatrix[seqIndex + 1][qplace].used = TRUE;
-                       posSearch->posDescMatrix[seqIndex + 1][qplace].letter = GAP_CHAR;
-                       posSearch->posDescMatrix[seqIndex + 1][qplace].e_value = 1.0;
+                     /*Keep the following test if spreading out gap costs, 
+                       so that in that case a lower E-value non-gap trumps
+                       a higher E-value gap; if not spreading out gap costs
+                       then comment out the test, so that a higher E-value
+                       gap trumps a lower E-value letter*/
+		     if (!posSearch->posDescMatrix[seqIndex+1][qplace].used)
+		       {
+			 posSearch->posDescMatrix[seqIndex + 1][qplace].used = TRUE;
+			 posSearch->posDescMatrix[seqIndex + 1][qplace].letter = GAP_CHAR;
+			 posSearch->posDescMatrix[seqIndex + 1][qplace].e_value = 1.0;
+		       }
                    }
                }
                else {  /*no gap*/
                    for(c = 0, qplace = queryOffset, splace = subjectOffset;
                        c < matchLength; c++, qplace++, splace++) {
-                       if ((!posSearch->posDescMatrix[seqIndex+1][qplace].used) ||
-                           (thisEvalue 
-                            < posSearch->posDescMatrix[seqIndex+1][qplace].e_value)) 
-                           if (!posSearch->posDescMatrix[seqIndex+1][qplace].used)
-                               {
-                                   posSearch->posDescMatrix[seqIndex+1][qplace].letter = (Int1) s[splace]; 
-                                   posSearch->posDescMatrix[seqIndex+1][qplace].used = TRUE; 
-                                   posSearch->posDescMatrix[seqIndex+1][qplace].e_value = 
-                                       thisEvalue;
-                               }
+		     if (!posSearch->posDescMatrix[seqIndex+1][qplace].used)
+		       {
+			 posSearch->posDescMatrix[seqIndex+1][qplace].letter = (Int1) s[splace]; 
+			 posSearch->posDescMatrix[seqIndex+1][qplace].used = TRUE; 
+			 posSearch->posDescMatrix[seqIndex+1][qplace].e_value = 
+			   thisEvalue;
+		       }
                    }
                }
            startQ += 2;

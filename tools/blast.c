@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blast.c,v 6.405 2004/04/28 14:37:06 madden Exp $";
+static char const rcsid[] = "$Id: blast.c,v 6.406 2004/05/21 13:53:37 dondosha Exp $";
 
-/* $Id: blast.c,v 6.405 2004/04/28 14:37:06 madden Exp $
+/* $Id: blast.c,v 6.406 2004/05/21 13:53:37 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -49,9 +49,12 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.405 $
+ * $Revision: 6.406 $
  *
  * $Log: blast.c,v $
+ * Revision 6.406  2004/05/21 13:53:37  dondosha
+ * Fix in BLASTMergeHitLists
+ *
  * Revision 6.405  2004/04/28 14:37:06  madden
  * Changes from Mike Gertz
  *  - modified the link_hsps routine to apply the gap_prob parameter to
@@ -2709,7 +2712,7 @@ CheckForRequiredRegion (BlastSearchBlkPtr search, Boolean strict)
 				if (hsp->query.offset > search->required_start ||
 					hsp->query.end < search->required_end)
 				{
-					hsp_array[index] = MemFree(hsp_array[index]);
+					hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
 				}
 				else
 				{
@@ -2727,7 +2730,7 @@ CheckForRequiredRegion (BlastSearchBlkPtr search, Boolean strict)
 				}
 				else
 				{
-					hsp_array[index] = MemFree(hsp_array[index]);
+					hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
 				}
 					
 					
@@ -2980,7 +2983,7 @@ BlastReevaluateWithAmbiguities (BlastSearchBlkPtr search, Int4 sequence_number)
 		}
 		else
 		{ /* Delete if this is now below the cutoff score. */
-			hsp_array[index] = MemFree(hsp_array[index]);
+			hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
 		}
 
 		if (StringCmp(search->prog_name, "blastn") != 0)
@@ -6108,11 +6111,10 @@ static BLAST_HitListPtr
 BLASTMergeHitLists(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist1, 
                    BLAST_HitListPtr hitlist2, Int4 start, Boolean merge_hsps)
 {
-   BLAST_HSPPtr hsp, PNTR hspp1, PNTR hspp2;
+   BLAST_HSPPtr hsp, hsp_var, PNTR hspp1, PNTR hspp2;
    Int4 index, index1, index2;
    Int4 hspcnt1, hspcnt2, new_hspcnt = 0;
    BLAST_HSPPtr PNTR new_hsp_array;
-   Int4Ptr index_array1, index_array2;
 
    if (hitlist1 == NULL) {
       hitlist1 = (BLAST_HitListPtr)
@@ -6129,27 +6131,31 @@ BLASTMergeHitLists(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist1,
    }
 
    hspcnt1 = hspcnt2 = 0;
-   hspp1 = (BLAST_HSPPtr PNTR) MemNew(hitlist1->hspcnt*sizeof(BLAST_HSPPtr));
-   hspp2 = (BLAST_HSPPtr PNTR) MemNew(hitlist2->hspcnt*sizeof(BLAST_HSPPtr));
-   index_array1 = (Int4Ptr) MemNew(hitlist1->hspcnt*sizeof(Int4));
-   index_array2 = (Int4Ptr) MemNew(hitlist2->hspcnt*sizeof(Int4));
 
-   for (index=0; index<hitlist1->hspcnt; index++) {
+   /* Put all HSPs that intersect the overlap region at the front of the
+      respective HSP arrays. */
+   for (index = 0; index < hitlist1->hspcnt; index++) {
       hsp = hitlist1->hsp_array[index];
       if (hsp->subject.end > start) {
-         index_array1[hspcnt1] = index;
-         hspp1[hspcnt1++] = hsp;
-      } else
-         new_hspcnt++;
+         /* At least part of this HSP lies in the overlap strip. */
+         hsp_var = hitlist1->hsp_array[hspcnt1];
+         hitlist1->hsp_array[hspcnt1] = hsp;
+         hitlist1->hsp_array[index] = hsp_var;
+         ++hspcnt1;
+      }
    }
-   for (index=0; index<hitlist2->hspcnt; index++) {
+   for (index = 0; index < hitlist2->hspcnt; index++) {
       hsp = hitlist2->hsp_array[index];
       if (hsp->subject.offset < start + DBSEQ_CHUNK_OVERLAP) {
-         index_array2[hspcnt2] = index;
-         hspp2[hspcnt2++] = hsp;
-      } else
-         new_hspcnt++;
+         /* At least part of this HSP lies in the overlap strip. */
+         hsp_var = hitlist2->hsp_array[hspcnt2];
+         hitlist2->hsp_array[hspcnt2] = hsp;
+         hitlist2->hsp_array[index] = hsp_var;
+         ++hspcnt2;
+      }
    }
+   hspp1 = hitlist1->hsp_array;
+   hspp2 = hitlist2->hsp_array;
 
    HeapSort(hspp1, hspcnt1, sizeof(BLAST_HSPPtr), diag_compare_hsps);
    HeapSort(hspp2, hspcnt2, sizeof(BLAST_HSPPtr), diag_compare_hsps);
@@ -6164,75 +6170,75 @@ BLASTMergeHitLists(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist1,
             if (merge_hsps) {
                if (BLASTMergeHsps(search, hspp1[index], hspp2[index1], 
                                   start)) {
-                  /* Point the corresponding element of the full first HSP
-                     array to the new HSP */
-                  hitlist1->hsp_array[index_array1[index]] = hspp1[index];
-                  /* Free the corresponding element of the full second 
-                     HSP array. */
-                  hitlist2->hsp_array[index_array2[index1]] = 
-                     hspp2[index1] = BLAST_HSPFree(hspp2[index1]);
-                  break;
+                  /* Free the second HSP. */
+                  hspp2[index1] = BLAST_HSPFree(hspp2[index1]);
                }
             } else { /* No gap information available */
                if (BLASTHspContained(hspp1[index], hspp2[index1])) {
-                  hspp1[index] = MemFree(hspp1[index]);
-                  /* Point the corresponding element of the full first HSP
-                     array to the new HSP; free the element of the second
-                     array. */
-                  hitlist1->hsp_array[index_array1[index]] = hspp2[index1];
-                  hitlist2->hsp_array[index_array2[index1]] = 
-                     hspp2[index1] = NULL;
+                  /* Point the first HSP to the new HSP; */
+                  hspp1[index] = BLAST_HSPFree(hspp1[index]);
+                  hspp1[index] = hspp2[index1];
+                  hspp2[index1] = NULL;
+                  /* This HSP has been removed, so break out of the inner 
+                     loop */
+                  break;
                } else if (BLASTHspContained(hspp2[index1], hspp1[index])) {
-                  /* Just free the corresponding element of the second 
-                     HSP array */
-                  hitlist2->hsp_array[index_array2[index1]] = 
-                     hspp2[index1] = BLAST_HSPFree(hspp2[index1]);
+                  hspp2[index1] = BLAST_HSPFree(hspp2[index1]);
                }
             }
+         } else {
+            /* This and remaining HSPs are too far from the one being 
+               checked */
+            break;
          }
       }
    }
 
-   new_hspcnt += hspcnt1;
-   for (index=0; index<hspcnt2; index++) {
-      if (hspp2[index] != NULL)
-         new_hspcnt++;
-   }
-   
-   hspp1 = MemFree(hspp1);
-   hspp2 = MemFree(hspp2);
-   index_array1 = MemFree(index_array1);
-   index_array2 = MemFree(index_array2);
+   HspArrayPurge(hitlist2->hsp_array, hitlist2->hspcnt, FALSE);
 
+   /* The new number of HSPs is now the sum of the remaining counts in the 
+      two lists, but if there is a restriction on the number of HSPs to keep,
+      it might have to be reduced. */
+   new_hspcnt = hitlist2->hspcnt + hitlist1->hspcnt;
+   if (search->pbp->hsp_num_max)
+      new_hspcnt = MIN(new_hspcnt, search->pbp->hsp_num_max);
+   
    if (new_hspcnt >= hitlist1->hspmax-1 && hitlist1->do_not_reallocate == FALSE) {
-      new_hsp_array = (BLAST_HSPPtr PNTR) Realloc(hitlist1->hsp_array, new_hspcnt*2*sizeof(BLAST_HSPPtr));
+      Int4 new_allocated = 2*new_hspcnt;
+      if (search->pbp->hsp_num_max)
+         new_allocated = MIN(new_allocated, search->pbp->hsp_num_max);
+      new_hsp_array = (BLAST_HSPPtr PNTR) 
+         Realloc(hitlist1->hsp_array, new_allocated*sizeof(BLAST_HSPPtr));
       if (new_hsp_array == NULL) {
          ErrPostEx(SEV_WARNING, 0, 0, "UNABLE to reallocate in BlastSaveCurrentHsp for ordinal id %ld, continuing with fixed array of %ld HSP's", (long) search->subject_id, (long) hitlist1->hspmax);
          hitlist1->do_not_reallocate = TRUE; 
       } else {
          hitlist1->hsp_array = new_hsp_array;
-         hitlist1->hspmax = 2*new_hspcnt;
+         hitlist1->hspmax = new_allocated;
       }
+      new_hspcnt = MIN(new_hspcnt, hitlist1->hspmax);
    }
 
-   if (new_hspcnt <= hitlist1->hspmax) {
-      /* Capacity is enough to save all HSPs from both arrays */
+   if (new_hspcnt >= hitlist2->hspcnt + hitlist1->hspcnt) {
+      /* All HSPs from both arrays are saved */
       for (index=hitlist1->hspcnt, index1=0; 
            index1<hitlist2->hspcnt; index1++) {
          if (hitlist2->hsp_array[index1] != NULL)
             hitlist1->hsp_array[index++] = hitlist2->hsp_array[index1];
       }
    } else {
-      /* All HSPs cannot be saved; sort both arrays by score and save only
-         hspmax best ones */
-      new_hsp_array = (BLAST_HSPPtr PNTR) 
-         Malloc(hitlist1->hspmax*sizeof(BLAST_HSPPtr));
-      HeapSort(hitlist1->hsp_array, hitlist1->hspcnt, sizeof(BLAST_HSPPtr),
-               score_compare_hsps);
-      HeapSort(hitlist2->hsp_array, hitlist2->hspcnt, sizeof(BLAST_HSPPtr),
+      /* Not all HSPs are be saved; sort both arrays by score and save only
+         the new_hspcnt best ones. 
+         For the merged set of HSPs, allocate array the same size as in the 
+         old HSP list. */
+      new_hsp_array = (BLAST_HSP**) 
+         malloc(hitlist1->hspmax*sizeof(BLAST_HSP*));
+      HeapSort(hitlist1->hsp_array, hitlist1->hspcnt, 
+               sizeof(BLAST_HSP*), score_compare_hsps);
+      HeapSort(hitlist2->hsp_array, hitlist2->hspcnt, sizeof(BLAST_HSP*),
                score_compare_hsps);
       index1 = index2 = 0;
-      for (index = 0; index < hitlist1->hspmax; ++index) {
+      for (index = 0; index < new_hspcnt; ++index) {
          if (index1 < hitlist1->hspcnt &&
              (index2 >= hitlist2->hspcnt ||
              (hitlist1->hsp_array[index1]->score >= 
@@ -6254,11 +6260,12 @@ BLASTMergeHitLists(BlastSearchBlkPtr search, BLAST_HitListPtr hitlist1,
             BLAST_HSPFree(hitlist2->hsp_array[index2]);
       }
       /* Point hitlist1's HSP array to the new one */
+      hitlist1->hsp_array = (BLAST_HSP**) MemFree(hitlist1->hsp_array);
       hitlist1->hsp_array = new_hsp_array;
    }
    
    hitlist1->hspcnt = index;
-   /* Second hitlist now does not own any HSPs at all */
+   /* Second HSP list now does not own any HSPs */
    hitlist2->hspcnt = 0;
 
    return hitlist1;
@@ -9553,6 +9560,17 @@ int LIBCALLBACK RPSResultHspScoreCmp(VoidPtr v1, VoidPtr v2)
         return 1;
     else if (h1->score > h2->score)
         return -1;
+
+    if( h1->subject_offset < h2->subject_offset )
+       return 1;
+    if( h1->subject_offset > h2->subject_offset )
+          return -1;
+
+    if( h1->subject_length < h2->subject_length )
+       return 1;
+    if( h1->subject_length > h2->subject_length )
+       return -1;
+
     else return 0;
 }
 /*

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.450 $
+* $Revision: 6.458 $
 *
 * File Description: 
 *
@@ -129,7 +129,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "5.22"
+#define SEQ_APP_VER "5.25"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -1099,7 +1099,7 @@ static void SmartResetProc (IteM i)
             status = sm_usr_data->header->status;
             sm_usr_data->header->status = SMStatClosed;
             SMSendMsgToClient(sm_usr_data);
-            sm_usr_data->header->status = status;
+            sm_usr_data->header->status = (SMStatusCode)status;
             return;
         }
     }
@@ -3084,7 +3084,7 @@ static void PrintExtraErrorInstructions (FILE *fp, CharPtr message)
 "\nMiddle gap characters are used to maintain the spacing "
 "inside an alignment.  These are not nucleotides and will "
 "not appear as part of your sequence file.\n"
-"Missing characters are used to represent indeterminate/ambiguous "
+"Ambiguous/unknown characters are used to represent indeterminate/ambiguous "
 "nucleotides.  These will appear in your sequence file as 'n'.\n"
 "Match characters are used to indicate positions where "
 "sequences are identical to the first sequence.  These will be "
@@ -3131,9 +3131,25 @@ static void WalkErrorList (TErrorInfoPtr list, FILE *fp)
 
 }
 
+static Int4 CountNucleotides (CharPtr sequence)
+{
+  Int4    num = 0;
+  CharPtr cp;
+  
+  if (sequence == NULL) return 0;	
+  for (cp = sequence; *cp != 0; cp++)
+  {
+  	if (*cp != '-') 
+  	{
+  	  num++;
+  	}
+  }
+  return num;
+}
+
 static void PrintAlignmentSummary (TAlignmentFilePtr afp, FILE *fp)
 {
-  Int4         index;
+  Int4 index;
 
   if (fp == NULL) return;
 
@@ -3142,18 +3158,35 @@ static void PrintAlignmentSummary (TAlignmentFilePtr afp, FILE *fp)
   } else {
     fprintf (fp, "Found %d sequences\n", afp->num_sequences);
     fprintf (fp, "Found %d organisms\n", afp->num_organisms);
-    for (index = 0; index < afp->num_sequences; index++)
+    if (afp->num_sequences == afp->num_segments * afp->num_organisms)
     {
-      fprintf (fp, "\t%s\t", afp->ids [index]);
-      if (index < afp->num_organisms) {
-        fprintf (fp, "%s\n", afp->organisms [index]);
-      } else {
-        fprintf (fp, "No organism information\n");
-      }
+      for (index = 0; index < afp->num_sequences; index++)
+      {
+        fprintf (fp, "\t%s\t%d nucleotides\t", afp->ids [index],
+                 CountNucleotides (afp->sequences[index]));
+        if (index / afp->num_segments < afp->num_organisms) {
+          fprintf (fp, "%s\n", afp->organisms [index / afp->num_segments]);
+        } else {
+          fprintf (fp, "No organism information\n");
+        }
+      }    	
     }
-    while (index < afp->num_organisms) {
-      fprintf (fp, "Unclaimed organism: %s\n", afp->organisms [index]);
-      index++;
+    else
+    {
+      for (index = 0; index < afp->num_sequences; index++)
+      {
+        fprintf (fp, "\t%s\t%d nucleotides\t", afp->ids [index], 
+                 CountNucleotides (afp->sequences[index]));
+        if (index < afp->num_organisms) {
+          fprintf (fp, "%s\n", afp->organisms [index]);
+        } else {
+          fprintf (fp, "No organism information\n");
+        }
+      }
+      while (index < afp->num_organisms) {
+        fprintf (fp, "Unclaimed organism: %s\n", afp->organisms [index]);
+        index++;
+      }	
     }
   }
 }
@@ -3194,19 +3227,33 @@ typedef struct alphabetformdata {
 
 static Boolean DoSequenceLengthsMatch (TAlignmentFilePtr afp)
 {
-  int    seq_index;
-  Int4   seq_len;
+  int     seq_index;
+  int     curr_seg;
+  Int4Ptr seq_len;
+  Boolean rval;
 
   if (afp == NULL || afp->sequences == NULL || afp->num_sequences == 0) {
     return TRUE;
   }
-  seq_len = StringLen (afp->sequences[0]);
-  for (seq_index = 1; seq_index < afp->num_sequences; seq_index++) {
-    if (StringLen (afp->sequences[seq_index]) != seq_len) {
-      return FALSE;
-    }
+
+  seq_len = (Int4Ptr) MemNew (sizeof (Int4) * afp->num_segments);
+  if (seq_len == NULL) return FALSE;
+  for (seq_index = 0; seq_index < afp->num_segments; seq_index ++)
+  {
+    seq_len [seq_index] = StringLen (afp->sequences[seq_index]);
   }
-  return TRUE;
+
+  curr_seg = 0;
+  rval = TRUE;
+  for (seq_index = afp->num_segments; seq_index < afp->num_sequences && rval; seq_index++) {
+    if (StringLen (afp->sequences[seq_index]) != seq_len[curr_seg]) {
+      rval = FALSE;
+    }
+	curr_seg ++;
+	if (curr_seg >= afp->num_segments) curr_seg = 0;
+  }
+  MemFree (seq_len);
+  return rval;
 }
 
 extern SeqEntryPtr 
@@ -3260,7 +3307,7 @@ SeqEntryFromAlignmentFile
   if (afp != NULL) {
     if (afp->num_organisms == 0 && no_org_err_msg != NULL) {
       Message (MSG_ERROR, no_org_err_msg);
-    } else if (afp->num_organisms != 0 && afp->num_organisms != afp->num_sequences) {
+    } else if (afp->num_organisms != 0 && afp->num_organisms != afp->num_sequences && afp->num_organisms * afp->num_segments != afp->num_sequences) {
       Message (MSG_ERROR, "Number of organisms must match number of sequences!");
     } else {
       ans = ANS_YES;
@@ -3405,16 +3452,16 @@ static void BuildGetAlphabetDialog (IteM i)
   SetGroupSpacing (h, 10, 10);
   
   g = HiddenGroup (h, 2, 4, NULL);
-  StaticPrompt (g, "Missing", 0, dialogTextHeight, programFont, 'c');
-  afp->missing = DialogText (g, "?", 5, NULL);
+  StaticPrompt (g, "Ambiguous/Unknown", 0, dialogTextHeight, programFont, 'c');
+  afp->missing = DialogText (g, "?Nn", 5, NULL);
   StaticPrompt (g, "Match", 0, dialogTextHeight, programFont, 'c');
   afp->match = DialogText (g, ".", 5, NULL);
   StaticPrompt (g, "Beginning Gap", 0, dialogTextHeight, programFont, 'c');
-  afp->beginning_gap = DialogText (g, "-.nN", 5, NULL);
+  afp->beginning_gap = DialogText (g, "-.?nN", 5, NULL);
   StaticPrompt (g, "Middle Gap", 0, dialogTextHeight, programFont, 'c');
-  afp->middle_gap = DialogText (g, "-nN", 5, NULL);
+  afp->middle_gap = DialogText (g, "-", 5, NULL);
   StaticPrompt (g, "End Gap", 0, dialogTextHeight, programFont, 'c');
-  afp->end_gap = DialogText (g, "-?", 5, NULL);
+  afp->end_gap = DialogText (g, "-.?nN", 5, NULL);
   StaticPrompt (g, "Sequence Type", 0, dialogTextHeight, programFont, 'c');
   afp->sequence_type = PopupList (g, TRUE, NULL);
   PopupItem (afp->sequence_type, "Nucleotide");
@@ -4356,8 +4403,6 @@ static void CloseProc (BaseFormPtr bfp)
   OMUserDataPtr  omudp;
   ObjMgrDataPtr  tmp;
 #ifdef USE_SMARTNET
-  ObjMgrDataPtr  PNTR omdp;
-  int fd;
   SMUserDataPtr sm_usr_data = NULL;
 #endif
 
@@ -9801,15 +9846,20 @@ static void s_GetTpaInfo (SequencesFormPtr sqfp)
   Update ();
 }
 
+static CharPtr  tpaString = NULL;
+
 static void FinishPuttingTogether (ForM f)
 
 {
-  BaseFormPtr   bfp;
-  BioseqSetPtr  bssp;
-  Uint2         entityID = 0;
-  Int2          handled;
-  SeqEntryPtr   sep = NULL;
+  BaseFormPtr       bfp;
+  BioseqSetPtr      bssp;
+  Uint2             entityID = 0;
+  Int2              handled;
+  ObjMgrDataPtr     omdp;
+  SubmitBlockPtr    sbp;
+  SeqEntryPtr       sep = NULL;
   SequencesFormPtr  sqfp;
+  SeqSubmitPtr      ssp;
 
   bfp = (BaseFormPtr) GetObjectExtra (f);
   if (bfp != NULL) {
@@ -9821,6 +9871,22 @@ static void FinishPuttingTogether (ForM f)
       }
 /*#endif*/
       entityID = PackageFormResults (globalsbp, sep, TRUE);
+      sqfp = (SequencesFormPtr) bfp;
+      if (SEQ_TPA_SUBMISSION == sqfp->submType && entityID > 0) {
+        omdp = ObjMgrGetData (entityID);
+        if (omdp != NULL && omdp->datatype == OBJ_SEQSUB) {
+          ssp = (SeqSubmitPtr) omdp->dataptr;
+          if (ssp != NULL && ssp->datatype == 1) {
+            sbp = ssp->sub;
+            if (sbp != NULL) {
+              if (sbp->comment == NULL && StringDoesHaveText (tpaString)) {
+                sbp->comment = tpaString;
+                tpaString = NULL;
+              }
+            }
+          }
+        }
+      }
       globalsbp = NULL;
       WatchCursor ();
       seqviewprocs.forceSeparateViewer = TRUE;
@@ -9931,23 +9997,12 @@ static void BackToFormat (ButtoN b)
   }
 }
 
-static void GetOrgAndSeq (ButtoN b)
+static void FinishOrgAndSeq (void)
 
 {
-  FormatBlockPtr  fbp;
-  MonitorPtr      mon;
-  ForM            w;
+  MonitorPtr  mon;
+  ForM        w;
 
-  WatchCursor ();
-  Hide (formatForm);
-  fbp = (FormatBlockPtr) FormToPointer (formatForm);
-  if (fbp != NULL) {
-    globalFormatBlock.seqPackage = fbp->seqPackage;
-    globalFormatBlock.seqFormat = fbp->seqFormat;
-    globalFormatBlock.numSeqs = fbp->numSeqs;
-    globalFormatBlock.submType = fbp->submType;
-  }
-  MemFree (fbp);
   WatchCursor ();
   mon = MonitorStrNewEx ("Sequin New Submission", 30, FALSE);
   MonitorStrValue (mon, "Creating Sequences Form");
@@ -9968,6 +10023,27 @@ static void GetOrgAndSeq (ButtoN b)
     Message (MSG_FATAL, "Unable to create window.");
   }
   Update ();
+}
+
+static void BackToSubmitter (ButtoN b)
+
+{
+  MsgAnswer    ans;
+
+  ans = Message (MSG_OKC, "Are you sure?  Format information will be lost.");
+  if (ans == ANS_CANCEL) return;
+  Hide (formatForm);
+  Update ();
+  PointerToForm (initSubmitForm, globalsbp);
+  globalsbp = SequinBlockFree (globalsbp);
+  Show (initSubmitForm);
+  Select (initSubmitForm);
+  SendHelpScrollMessage (helpForm, "Submitting Authors Form", NULL);
+  Update ();
+  globalFormatBlock.seqPackage = SEQ_PKG_SINGLE;
+  globalFormatBlock.seqFormat = SEQ_FMT_FASTA;
+  globalFormatBlock.numSeqs = 0;
+  globalFormatBlock.submType = SEQ_ORIG_SUBMISSION;
 }
 
 static void GetFormat (ButtoN b)
@@ -9995,25 +10071,118 @@ static void GetFormat (ButtoN b)
   Update ();
 }
 
-static void BackToSubmitter (ButtoN b)
+static WindoW   tpaWindow = NULL;
+static TexT     tpaText = NULL;
+static ButtoN   tpaNext = NULL;
+/* tpaString defined above FinishPuttingTogether */
+
+static void TpaPrev (ButtoN b)
 
 {
-  MsgAnswer    ans;
+  Hide (tpaWindow);
+  tpaString = MemFree (tpaString);
+  SetTitle (tpaText, "");
+  Show (formatForm);
+  Select (formatForm);
+  SendHelpScrollMessage (helpForm, "Sequence Format Form", NULL);
+  Update ();
+}
 
-  ans = Message (MSG_OKC, "Are you sure?  Format information will be lost.");
-  if (ans == ANS_CANCEL) return;
+static void TpaNext (ButtoN b)
+
+{
+  tpaString = MemFree (tpaString);
+  tpaString = SaveStringFromText (tpaText);
+  if (StringHasNoText (tpaString)) {
+    Message (MSG_OK, "The requested information is required in order for you to be able to proceed with a TPA submission");
+    return;
+  }
+  Hide (tpaWindow);
+  WatchCursor ();
+  FinishOrgAndSeq ();
+}
+
+static void TpaText (TexT t)
+
+{
+  if (TextHasNoText (t)) {
+    SafeDisable (tpaNext);
+  } else {
+    SafeEnable (tpaNext);
+  }
+}
+
+static CharPtr tpaMssg = "\
+Third party annotation records require a publication describing the biological \
+experiments used as evidence for the annotation.  Please provide information \
+regarding the nature of these experiments.";
+
+static void DoTpaForm (void)
+
+{
+  GrouP   c, h, p;
+
+  if (tpaWindow == NULL) {
+    tpaWindow = FixedWindow (-50, -33, -10, -10, "TPA Evidence", NULL);
+    h = HiddenGroup (tpaWindow, -1, 0, NULL);
+    SetGroupSpacing (h, 10, 10);
+
+    p = MultiLinePrompt (h, tpaMssg, 30 * stdCharWidth, programFont);
+
+    tpaText = ScrollText (h, 30, 5, programFont, TRUE, TpaText);
+
+    c = HiddenGroup (h, 2, 0, NULL);
+    PushButton (c, "<< Prev Form", TpaPrev);
+    tpaNext = PushButton (c, "Next Form >>", TpaNext);
+
+    AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) tpaText, (HANDLE) c, NULL);
+
+    RealizeWindow (tpaWindow);
+  }
+  tpaString = MemFree (tpaString);
+  SafeSetTitle (tpaText, "");
+  SafeDisable (tpaNext);
+  Show (tpaWindow);
+  Select (tpaWindow);
+}
+
+static void GetOrgAndSeq (ButtoN b)
+
+{
+  /*
+  MsgAnswer       ans;
+  */
+  FormatBlockPtr  fbp;
+  Boolean         is_tpa = FALSE;
+
   Hide (formatForm);
-  Update ();
-  PointerToForm (initSubmitForm, globalsbp);
-  globalsbp = SequinBlockFree (globalsbp);
-  Show (initSubmitForm);
-  Select (initSubmitForm);
-  SendHelpScrollMessage (helpForm, "Submitting Authors Form", NULL);
-  Update ();
-  globalFormatBlock.seqPackage = SEQ_PKG_SINGLE;
-  globalFormatBlock.seqFormat = SEQ_FMT_FASTA;
-  globalFormatBlock.numSeqs = 0;
-  globalFormatBlock.submType = SEQ_ORIG_SUBMISSION;
+  fbp = (FormatBlockPtr) FormToPointer (formatForm);
+  if (fbp != NULL) {
+    globalFormatBlock.seqPackage = fbp->seqPackage;
+    globalFormatBlock.seqFormat = fbp->seqFormat;
+    globalFormatBlock.numSeqs = fbp->numSeqs;
+    globalFormatBlock.submType = fbp->submType;
+    is_tpa = (Boolean) (globalFormatBlock.submType == SEQ_TPA_SUBMISSION);
+  }
+  MemFree (fbp);
+  if (is_tpa) {
+    DoTpaForm ();
+    /*
+    ans = Message (MSG_YN, "%s", tpaMssg);
+    if (ans == ANS_YES) {
+      WatchCursor ();
+      FinishOrgAndSeq ();
+    } else {
+      Show (formatForm);
+      Select (formatForm);
+      SendHelpScrollMessage (helpForm, "Sequence Format Form", NULL);
+      Update ();
+    }
+    */
+  } else {
+    WatchCursor ();
+    FinishOrgAndSeq ();
+  }
 }
 
 static void BackToStartup (ButtoN b)

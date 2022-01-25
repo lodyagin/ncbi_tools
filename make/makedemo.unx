@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.68 2004/01/02 22:05:16 coulouri Exp $
+#	$Id: makedemo.unx,v 6.69 2004/05/13 18:23:15 coulouri Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -97,7 +97,7 @@ EXE1 = testcore makeset \
 	dosimple asn2ff getseq getfeat checksub asndhuff \
 	entrcmd errhdr cdscan findspl \
 	ncbisort fa2htgs fastacmd formatdb blast blastall blastpgp \
-	testval seedtop fmerge makemat copymat impala \
+	testval seedtop makemat copymat impala \
 	megablast vecscreen gil2bin tbl2asn blastclust rpsblast \
 	asn2xml debruijn \
 	test_regexp demo_regexp demo_regexp_grep
@@ -107,7 +107,7 @@ SRC1 = testcore.c makeset.c \
     getseq.c getfeat.c checksub.c asndhuff.c \
     entrcmd.c errhdr.c cdscan.c findspl.c \
     ncbisort.c fa2htgs.c fastacmd.c formatdb.c blast_driver.c blastall.c \
-    blastpgp.c testval.c seedtop.c fmerge.c makemat.c copymat.c profiles.c \
+    blastpgp.c testval.c seedtop.c makemat.c copymat.c profiles.c \
 	megablast.c vecscreen.c gil2bin.c tbl2asn.c blastclust.c rpsblast.c \
 	asn2xml.c debruijn.c \
 	pcretest.c pcredemo.c pcregrep.c
@@ -270,11 +270,6 @@ fastacmd : fastacmd.c
 
 formatdb : formatdb.c
 	$(CC) -o formatdb $(LDFLAGS) formatdb.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
-
-# fmerge
-
-fmerge : fmerge.c
-	$(CC) -o fmerge $(LDFLAGS) fmerge.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # blast (reincarnation of blastall from algo/blast sources)
 

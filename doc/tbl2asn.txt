@@ -203,6 +203,11 @@ GenBank flatfile.
 
                         transl_except   (pos:591..593,aa:Sec)
 
+The codon recognized and anticodon position of tRNAs can also be given.
+
+                        codon_recognized   TGG
+                        anticodon   (pos:7591..7593,aa:Trp)
+
 In addition to the standard qualifiers seen in GenBank format, several other
 tokens are used to direct values to specific fields in the ASN.1 data. 
 These include gene_syn, gene_desc, locus_tag, prot_desc, prot_note,
@@ -214,6 +219,31 @@ features for packaging.
 
                         protein_id      lcl|sde3p
                         transcript_id   lcl|sde3m
+
+Exceptional biological situations can be annotated by use of the exception
+qualifier.  For example
+
+                        exception       ribosomal slippage
+
+The following are legal exception qualifier values
+
+  RNA editing
+  reasons given in citation
+  ribosomal slippage
+  trans-splicing
+  alternative processing
+  artificial frameshift
+  nonconsensus splice site
+  rearrangement required for product
+  modified codon recognition
+  alternative start codon
+
+Since the International Nucleotide Sequence Database collaboration only
+allows "RNA editing" and "reasons given in citation" to appear in release
+mode, other exceptions are mapped to the /note qualifier in the flatfile.
+However, each exception text string turns off specific validator tests that
+would otherwise produce warning messages, so they should be entered as
+exception qualifiers.
 
 Gene Ontology (GO) terms can be indicated with the following qualifiers
 

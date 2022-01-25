@@ -1,57 +1,63 @@
-/* $Id: gapinfo.h,v 1.5 2003/08/11 14:57:16 dondosha Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's offical duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
+/* $Id: gapinfo.h,v 1.12 2004/06/16 14:53:03 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's offical duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Ilya Dondoshansky
+ *
+ */
 
-/*****************************************************************************
-
-File name: gapinfo.h
-
-Author: Ilya Dondoshansky
-
-Contents: Structures definitions from gapxdrop.h in ncbitools
-
-******************************************************************************
- * $Revision: 1.5 $
- * */
+/** @file gapinfo.h
+ * Structures definitions from gapxdrop.h in ncbitools 
+ * @todo FIXME: doxygen comments
+ */
 
 #ifndef __GAPINFO__
 #define __GAPINFO__
 
+#include <algo/blast/core/blast_def.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <algo/blast/core/blast_def.h>
 
-#define GAPALIGN_SUB ((Uint1)0)  /*op types within the edit script*/
-#define GAPALIGN_INS ((Uint1)1)
-#define GAPALIGN_DEL ((Uint1)2)
-#define GAPALIGN_DECLINE ((Uint1)3)
+/** Operation types within the edit script*/
+typedef enum EGapAlignOpType { 
+   eGapAlignDel = 0, /**< Deletion: a gap in query */
+   eGapAlignDel2 = 1,/**< Frame shift deletion of two nucleotides */
+   eGapAlignDel1 = 2,/**< Frame shift deletion of one nucleotide */
+   eGapAlignSub = 3, /**< Substitution */
+   eGapAlignIns1 = 4,/**< Frame shift insertion of one nucleotide */
+   eGapAlignIns2 = 5,/**< Frame shift insertion of two nucleotides */
+   eGapAlignIns = 6, /**< Insertion: a gap in subject */
+   eGapAlignDecline = 7 /**< Non-aligned region */
+} EGapAlignOpType;
 
+/** Edit script: linked list of correspondencies between two sequences */
 typedef struct GapEditScript {
-        Uint1 op_type;  /* GAPALIGN_SUB, GAPALIGN_INS, or GAPALIGN_DEL */
-        Int4 num;       /* Number of operations */
-        struct GapEditScript* next;
+   EGapAlignOpType op_type;    /**< Type of operation */
+   Int4 num;                   /**< Number of operations */
+   struct GapEditScript* next; /**< Pointer to next link */
 } GapEditScript;
 
 typedef struct GapEditBlock {

@@ -1,36 +1,39 @@
-/*  $Id: blast_seqsrc.h,v 1.18 2004/04/28 19:36:57 dondosha Exp $
-* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================
-*
-* Author:  Christiam Camacho
-*
-* Contents: Declaration of ADT to retrieve sequences for the BLAST engine.
-*
-*/
+/*  $Id: blast_seqsrc.h,v 1.20 2004/06/07 17:11:34 dondosha Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author:  Christiam Camacho
+ *
+ */
+
+/** @file blast_seqsrc.h
+ * Declaration of ADT to retrieve sequences for the BLAST engine.
+ */
 
 #ifndef BLAST_SEQSRC_H
 #define BLAST_SEQSRC_H
+
 #include <algo/blast/core/blast_def.h>
 
 #ifdef __cplusplus
@@ -64,6 +67,12 @@ typedef BlastSeqSrc* (*BlastSeqSrcConstructor) (BlastSeqSrc*, void*);
 /** Function pointer typedef to deallocate a BlastSeqSrc structure.
  * Argument is the BlastSeqSrc structure to free, always returns NULL. */
 typedef BlastSeqSrc* (*BlastSeqSrcDestructor) (BlastSeqSrc*);
+
+/** Function pointer typedef to modify whatever is necessary in a copy of a 
+ * BlastSeqSrc structure to achieve multi-thread safety.
+ * Argument is the already copied BlastSeqSrc structure; 
+ * returns the modified structure. */
+typedef BlastSeqSrc* (*BlastSeqSrcCopier) (BlastSeqSrc*);
 
 /** Function pointer typedef to return a 4-byte integer.
  * First argument is the BlastSeqSrc structure used, second argument is
@@ -220,6 +229,10 @@ BlastSeqSrc* BlastSeqSrcNew(const BlastSeqSrcNewInfo* bssn_info);
  */
 BlastSeqSrc* BlastSeqSrcFree(BlastSeqSrc* bssp);
 
+/** Copy function: needed to guarantee thread safety. 
+ */
+BlastSeqSrc* BlastSeqSrcCopy(const BlastSeqSrc* seq_src);
+
 /** Convenience macros call function pointers (TODO: needs to be more robust)
  * Currently, this defines the API */
 #define BLASTSeqSrcGetNumSeqs(bssp) \
@@ -268,6 +281,7 @@ void Set##member(data_structure_type var, member_type arg) \
 
 DECLARE_MEMBER_FUNCTIONS(BlastSeqSrcConstructor, NewFnPtr, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(BlastSeqSrcDestructor, DeleteFnPtr, BlastSeqSrc*);
+DECLARE_MEMBER_FUNCTIONS(BlastSeqSrcCopier, CopyFnPtr, BlastSeqSrc*);
 
 DECLARE_MEMBER_FUNCTIONS(void*, DataStructure, BlastSeqSrc*);
 DECLARE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqs, BlastSeqSrc*);

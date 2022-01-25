@@ -29,13 +29,22 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.52 $
+* $Revision: 6.55 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: objmgr.c,v $
+* Revision 6.55  2004/06/09 01:56:43  kans
+* initialize assigned id array from all functions that use it
+*
+* Revision 6.54  2004/06/08 20:48:09  kans
+* changed entityID recycling from small array of integers to bit array of all possible values
+*
+* Revision 6.53  2004/06/08 18:19:01  kans
+* ObjMgrFreeCacheFunc frees all TL_CACHED, and frees TL_LOADED if type == 0
+*
 * Revision 6.52  2004/04/21 19:40:51  kans
 * ObjMgrReap calculate tempcnt based on temp loaded records, but excluded locked ones - more work still to do in other functions to completely avoid unnecessary thrashing
 *
@@ -545,65 +554,135 @@ NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindByData (ObjMgrPtr omp, Pointer ptr)
 	return NULL;
 }
 
-#define ENTITY_ID_STACK_SIZE  100
+static Uint4    assignedIDsArray [2050];
+static Int2     assignedIDStackPt = 0;
+static Boolean  assignedIDsInited = FALSE;
 
-static Uint2 recycledEntityIDs [ENTITY_ID_STACK_SIZE];
-static Int4  recycledIDStackPt = 0;
+static Uint4    assignedIDsBitIdx [32];
 
-extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp);
-extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp)
+static Uint2 ObjMgrInitAssignedIDArray (void)
 
 {
-	Int4  i;
+  Uint4  bit;
+  Int2   jdx;
 
-	if (entityID < 1) return;
-	if (omp != NULL) {
-		for (i = 0; i < recycledIDStackPt; i++) {
-			if (entityID == recycledEntityIDs [i]) {
-				recycledEntityIDs [i] = 0; /* remove from recycle list */
-				if (recycledIDStackPt > i + 1) {
-					recycledIDStackPt--;
-					recycledEntityIDs [i] = recycledEntityIDs [recycledIDStackPt];
-				} else {
-					recycledIDStackPt--;
-				}
-			}
-		}
-	}
+  if (! assignedIDsInited) {
+    MemSet ((Pointer) &assignedIDsArray, 0, sizeof assignedIDsArray);
+    MemSet ((Pointer) &assignedIDsBitIdx, 0, sizeof (assignedIDsBitIdx));
+  
+    /* initialize bit index array */
+
+    bit = 1;
+    for (jdx = 0; jdx < 32; jdx++) {
+      assignedIDsBitIdx [jdx] = bit;
+      bit = bit << 1;
+    }
+  
+    /* entityID 0 is not available for use */
+
+    assignedIDsArray [0] = assignedIDsBitIdx [0];
+
+    assignedIDStackPt = 0;
+    assignedIDsInited = TRUE;
+  }
 }
 
 static Uint2 ObjMgrNextAvailEntityID (ObjMgrPtr omp)
 
 {
-	Uint2      entityID = 0;
-	if (omp != NULL) {
-		if (recycledIDStackPt > 0) {
-			recycledIDStackPt--;
-			entityID = recycledEntityIDs [recycledIDStackPt];
-		} else {
-			entityID = ++(omp->HighestEntityID);
-		}
-	}
-	return entityID;
+  Uint2  entityID;
+  Int2   idx, jdx;
+  Uint4  val;
+
+  if (! assignedIDsInited) {
+    ObjMgrInitAssignedIDArray ();
+  }
+
+  /* find first 32 bit word with an available entityID */
+
+  idx = assignedIDStackPt;
+  while (idx < 2048 && assignedIDsArray [idx] == 0xFFFFFFFF) {
+    idx++;
+  }
+  if (idx >= 2048) return 0;
+
+  /* reset starting point, everything below should be in use */
+
+  assignedIDStackPt = idx;
+
+  /* find first empty bit in array element */
+
+  val = assignedIDsArray [idx];
+  jdx = 0;
+  while (jdx < 32 && (val & assignedIDsBitIdx [jdx]) != 0) {
+    jdx++;
+  }
+  if (jdx >= 32) return 0;
+
+  /* set bit to mark new entityID as in use */
+
+  assignedIDsArray [idx] |= assignedIDsBitIdx [jdx];
+
+  /* calculate entityID */
+
+  entityID = (Uint2) ((Int4) idx) * 32L + (Int4) jdx;
+
+  if (omp != NULL && omp->HighestEntityID < entityID) {
+    omp->HighestEntityID = entityID;
+  }
+
+  return entityID;
 }
 
 static void ObjMgrRecycleEntityID (Uint2 entityID, ObjMgrPtr omp)
 
 {
+  Int2   idx, jdx;
 
-	Int4  i;
+  if (! assignedIDsInited) {
+    ObjMgrInitAssignedIDArray ();
+  }
 
-	if (entityID < 1) return;
-	if (omp != NULL) {
-		/* check to see if entity is already on stack (e.g., entity 1), abort if so */
-		for (i = 0; i < recycledIDStackPt; i++) {
-			if (entityID == recycledEntityIDs [i]) return;
-		}
-		if (recycledIDStackPt < ENTITY_ID_STACK_SIZE) {
-			recycledEntityIDs [recycledIDStackPt] = entityID;
-			recycledIDStackPt++;
-		}
-	}
+  if (entityID < 1) return;
+
+  idx = (Int2) (entityID / 32);
+  jdx = (Int2) (entityID % 32);
+
+  if (idx >= 2048 || idx < 0) return;
+  if (jdx >= 32 || jdx < 0) return;
+
+  /* clear bit to mark old entityID as available */
+
+  assignedIDsArray [idx] ^= assignedIDsBitIdx [jdx];
+
+  /* reset starting point, everything below should be in use */
+
+  if (idx < assignedIDStackPt) {
+    assignedIDStackPt = idx;
+  }
+}
+
+extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp);
+extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp)
+
+{
+  Int2   idx, jdx;
+
+  if (! assignedIDsInited) {
+    ObjMgrInitAssignedIDArray ();
+  }
+
+  if (entityID < 1) return;
+
+  idx = (Int2) (entityID / 32);
+  jdx = (Int2) (entityID % 32);
+
+  if (idx >= 2048 || idx < 0) return;
+  if (jdx >= 32 || jdx < 0) return;
+
+  /* set bit to restore old entityID status to in use */
+
+  assignedIDsArray [idx] |= assignedIDsBitIdx [jdx];
 }
 
 NLM_EXTERN Uint2 LIBCALL ObjMgrAddEntityID (ObjMgrPtr omp, ObjMgrDataPtr omdp)
@@ -2268,7 +2347,8 @@ static Boolean NEAR ObjMgrFreeCacheFunc (ObjMgrPtr omp, Uint2 type, Uint2Ptr ret
     {
 		omdp = omdpp[i];
 		if ((omdp->parentptr == NULL) &&     /* top level */
-			(omdp->tempload == TL_CACHED))   /* cached */
+			(omdp->tempload == TL_CACHED ||   /* cached or */
+			(type == 0 && omdp->tempload == TL_LOADED)))   /* unlocked but not cached out */
 		{
 			if ((! type) ||
 				(ObjMgrMatch(type, omdp->datatype)) ||

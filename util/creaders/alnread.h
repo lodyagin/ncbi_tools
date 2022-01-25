@@ -2,7 +2,7 @@
 #define UTIL_CREADERS___ALNREAD__H
 
 /*
- * $Id: alnread.h,v 1.2 2004/02/05 15:43:32 bollin Exp $
+ * $Id: alnread.h,v 1.3 2004/05/20 19:39:40 bollin Exp $
  *
  * ===========================================================================
  *
@@ -107,6 +107,7 @@ typedef struct SAlignmentFile {
     int     num_sequences;
     int     num_organisms;
     int     num_deflines;
+    int     num_segments;
     char ** ids;
     char ** sequences;
     char ** organisms;
@@ -140,6 +141,10 @@ extern NCBI_CREADERS_EXPORT TAlignmentFilePtr ReadAlignmentFile (
  * ==========================================================================
  *
  * $Log: alnread.h,v $
+ * Revision 1.3  2004/05/20 19:39:40  bollin
+ * added num_segments member to SAlignmentFile structure to allow reading of
+ * alignments of segmented sets.
+ *
  * Revision 1.2  2004/02/05 15:43:32  bollin
  * fixed portability issue for windows function pointers
  *

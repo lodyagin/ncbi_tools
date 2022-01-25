@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: mblast.c,v 6.202 2004/03/31 17:58:51 papadopo Exp $";
+static char const rcsid[] = "$Id: mblast.c,v 6.204 2004/05/27 17:35:56 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -40,9 +40,15 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.202 $
+ * $Revision: 6.204 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.204  2004/05/27 17:35:56  dondosha
+ * Do not flag HSPs for deletion in sorting before doing inclusion tests
+ *
+ * Revision 6.203  2004/05/21 13:53:04  dondosha
+ * Use BLAST_HSPFree to free BLAST_HSP structures, hence no need to call GapXEditBlockDelete in multiple places
+ *
  * Revision 6.202  2004/03/31 17:58:51  papadopo
  * Mike Gertz' changes for length adjustment calculations
  *
@@ -3292,99 +3298,113 @@ static int LIBCALLBACK
 diag_compare_hsps(VoidPtr v1, VoidPtr v2)
 
 {
-	BLAST_HSPPtr h1, h2;
-	BLAST_HSPPtr PNTR hp1, PNTR hp2;
-
-	hp1 = (BLAST_HSPPtr PNTR) v1;
-	hp2 = (BLAST_HSPPtr PNTR) v2;
-	h1 = *hp1;
-	h2 = *hp2;
-	
-	if (h1==NULL && h2==NULL) return 0;
-	else if (h1==NULL) return 1;
-	else if (h2==NULL) return -1;
-
-        /* Separate different queries and/or strands */
-        if (h1->context < h2->context)
-           return -1;
-        else if (h1->context > h2->context)
-           return 1;
-
-	/* If the two HSP's have same coordinates, they are equal */
-	if (h1->query.offset == h2->query.offset && 
-	    h1->query.end == h2->query.end && 
-	    h1->subject.offset == h2->subject.offset &&
-	    h1->subject.end == h2->subject.end)
-	   return 0;
-
-	/* Check if one HSP is contained in the other, if so, 
-	   leave only the longer one, given it has lower evalue */
-	if (h1->query.offset >= h2->query.offset && 
-	    h1->query.end <= h2->query.end &&  
-	    h1->subject.offset >= h2->subject.offset && 
-	    h1->subject.end <= h2->subject.end && 
-            h1->evalue >= h2->evalue) { 
-	   *hp1 = BLAST_HSPFree(h1);
-	   return 1; 
-	} else if (h1->query.offset <= h2->query.offset &&  
-		   h1->query.end >= h2->query.end &&  
-		   h1->subject.offset <= h2->subject.offset && 
-		   h1->subject.end >= h2->subject.end && 
-                   h1->evalue <= h2->evalue) { 
-	   *hp2 = BLAST_HSPFree(h2);
-	   return -1; 
-	}
-
-        return (h1->query.offset - h1->subject.offset) -
-           (h2->query.offset - h2->subject.offset);
+   BLAST_HSPPtr h1, h2;
+   BLAST_HSPPtr PNTR hp1, PNTR hp2;
+   
+   hp1 = (BLAST_HSPPtr PNTR) v1;
+   hp2 = (BLAST_HSPPtr PNTR) v2;
+   h1 = *hp1;
+   h2 = *hp2;
+   
+   if (h1==NULL && h2==NULL) return 0;
+   else if (h1==NULL) return 1;
+   else if (h2==NULL) return -1;
+   
+   /* Separate different queries and/or strands */
+   if (h1->context < h2->context)
+      return -1;
+   else if (h1->context > h2->context)
+      return 1;
+   
+   return (h1->query.offset - h1->subject.offset) -
+      (h2->query.offset - h2->subject.offset);
 }
+
+typedef enum E_HSPInclusionStatus {
+   e_Equal = 0,      /**< Identical */
+   e_FirstInSecond,  /**< First included in rectangle formed by second */
+   e_SecondInFirst,  /**< Second included in rectangle formed by first */
+   e_DiagNear,       /**< Diagonals are near, but neither HSP is included in
+                       the other. */
+   e_DiagDistant     /**< Diagonals are far apart, or different contexts */
+} E_HSPInclusionStatus;
+
+/** HSP inclusion criterion for megablast: one HSP must be included in a
+ * diagonal strip of a certain width around the other, and also in a rectangle
+ * formed by the other HSP's endpoints.
+ */
+static E_HSPInclusionStatus 
+BLAST_HSPInclusionTest(BLAST_HSP* hsp1, BLAST_HSP* hsp2)
+{
+   if (hsp1->context != hsp2->context || 
+       !MB_HSP_CLOSE(hsp1->query.offset, hsp2->query.offset,
+                     hsp1->subject.offset, hsp2->subject.offset, 
+                     2*MB_DIAG_NEAR))
+      return e_DiagDistant;
+
+   if (hsp1->query.offset == hsp2->query.offset && 
+       hsp1->query.end == hsp2->query.end &&  
+       hsp1->subject.offset == hsp2->subject.offset && 
+       hsp1->subject.end == hsp2->subject.end && 
+       hsp1->score == hsp2->score) {
+      return e_Equal;
+   } else if (hsp1->query.offset >= hsp2->query.offset && 
+       hsp1->query.end <= hsp2->query.end &&  
+       hsp1->subject.offset >= hsp2->subject.offset && 
+       hsp1->subject.end <= hsp2->subject.end && 
+       hsp1->score < hsp2->score) { 
+      return e_FirstInSecond;
+   } else if (hsp1->query.offset <= hsp2->query.offset &&  
+              hsp1->query.end >= hsp2->query.end &&  
+              hsp1->subject.offset <= hsp2->subject.offset && 
+              hsp1->subject.end >= hsp2->subject.end && 
+              hsp1->score >= hsp2->score) { 
+      return e_SecondInFirst;
+   }
+   return e_DiagNear;
+}
+
+/** How many HSPs to check for inclusion for each new HSP? */
+#define MAX_NUM_CHECK_INCLUSION 20
 
 static void
 BlastSortUniqHspArray(BLAST_HitListPtr hitlist)
 {
-   Int4 index, new_hspcnt, index1, q_off, s_off, q_end, s_end, index2;
+   Int4 index, new_hspcnt, index1, index2;
    BLAST_HSPPtr PNTR hsp_array = hitlist->hsp_array;
    Boolean shift_needed = FALSE;
-   Int2 context;
-   FloatHi evalue;
+   E_HSPInclusionStatus inclusion_status = e_DiagNear;
 
    HeapSort(hitlist->hsp_array, hitlist->hspcnt, sizeof(BLAST_HSPPtr), 
             diag_compare_hsps);
+
    for (index=1, new_hspcnt=0; index<hitlist->hspcnt; index++) {
       if (hsp_array[index]==NULL) 
 	 continue;
-      q_off = hsp_array[index]->query.offset;
-      s_off = hsp_array[index]->subject.offset;
-      q_end = hsp_array[index]->query.end;
-      s_end = hsp_array[index]->subject.end;
-      evalue = hsp_array[index]->evalue;
-      context = hsp_array[index]->context;
-      for (index1 = new_hspcnt; index1 >= 0 && 
-              hsp_array[index1]->context == context && new_hspcnt-index1 < 10 && 
-           MB_HSP_CLOSE(q_off, hsp_array[index1]->query.offset,
-                        s_off, hsp_array[index1]->subject.offset, 
-                        2*MB_DIAG_NEAR);
+      inclusion_status = e_DiagNear;
+      for (index1 = new_hspcnt; inclusion_status != e_DiagDistant &&
+           index1 >= 0 && new_hspcnt-index1 < MAX_NUM_CHECK_INCLUSION;
            index1--) {
-         if (q_off >= hsp_array[index1]->query.offset && 
-             s_off >= hsp_array[index1]->subject.offset && 
-             q_end <= hsp_array[index1]->query.end && 
-             s_end <= hsp_array[index1]->subject.end &&
-             evalue >= hsp_array[index1]->evalue) {
+         inclusion_status = 
+            BLAST_HSPInclusionTest(hsp_array[index], hsp_array[index1]);
+         if (inclusion_status == e_FirstInSecond || 
+             inclusion_status == e_Equal) {
+            /* Free the new HSP and break out of the inclusion test loop */
             hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
             break;
-         } else if (q_off <= hsp_array[index1]->query.offset && 
-             s_off <= hsp_array[index1]->subject.offset && 
-             q_end >= hsp_array[index1]->query.end && 
-             s_end >= hsp_array[index1]->subject.end &&
-             evalue <= hsp_array[index1]->evalue) {
+         } else if (inclusion_status == e_SecondInFirst) {
             hsp_array[index1] = BLAST_HSPFree(hsp_array[index1]);
             shift_needed = TRUE;
          }
       }
       
+      /* If some lower indexed HSPs have been removed, shift the subsequent 
+         HSPs */
       if (shift_needed) {
+         /* Find the first non-NULL HSP, going backwards */
          while (index1 >= 0 && !hsp_array[index1])
             index1--;
+         /* Go forward, and shift any non-NULL HSPs */
          for (index2 = ++index1; index1 <= new_hspcnt; index1++) {
             if (hsp_array[index1])
                hsp_array[index2++] = hsp_array[index1];
@@ -3683,8 +3703,7 @@ Boolean ReevaluateScoreWithAmbiguities(BlastSearchBlkPtr search,
             hsp->gap_info->esp = first_esp;
          }
          if (last_esp->next != NULL) {
-            GapXEditScriptDelete(last_esp->next);
-            last_esp->next = NULL;
+            last_esp->next = GapXEditScriptDelete(last_esp->next);
          }
          last_esp->num = last_esp_num;
          BlastHSPGetNumIdentical(search, hsp, NULL, &hsp->num_ident, 
@@ -3692,12 +3711,6 @@ Boolean ReevaluateScoreWithAmbiguities(BlastSearchBlkPtr search,
       }
    } else {
       delete_hsp = TRUE;
-   }
-
-   if (delete_hsp) { /* This HSP is now below the cutoff */
-      if (first_esp != NULL && first_esp != hsp->gap_info->esp)
-         GapXEditScriptDelete(first_esp);
-      hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
    }
 
    return delete_hsp;
@@ -3820,7 +3833,7 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search)
          ReevaluateScoreWithAmbiguities(search, subject_start, hsp);
 
       if (delete_hsp) { /* This HSP is now below the cutoff */
-         hsp_array[index] = MemFree(hsp_array[index]);
+         hsp_array[index] = BLAST_HSPFree(hsp);
          purge = TRUE;
       }
    }
@@ -3836,7 +3849,6 @@ MegaBlastReevaluateWithAmbiguities(BlastSearchBlkPtr search)
 
    if (current_hitlist->hspcnt > 1)
       BlastSortUniqHspArray(current_hitlist);
-
    
    if (search->pbp->hsp_num_max && 
        search->pbp->hsp_num_max < search->current_hitlist->hspcnt && 
@@ -4019,7 +4031,6 @@ MegaBlastSaveCurrentHitlist(BlastSearchBlkPtr search)
            if (search->pbp->mb_params->perc_identity > 0) {
               if (MegaBlastGetHspPercentIdentity(search, hsp) < 
                   search->pbp->mb_params->perc_identity) {
-  		 hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
                  index1++;
                  if (index1 >= hspmax)
                     break;
@@ -4052,7 +4063,6 @@ MegaBlastSaveCurrentHitlist(BlastSearchBlkPtr search)
                        been completed */
                     new_size = search->pbp->hsp_num_max;
                     if (new_size <= hsp_array_sizes[query_index]) {
-                       hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
                        do_not_reallocate[query_index] = TRUE;
                        continue;
                     }
@@ -4070,7 +4080,6 @@ MegaBlastSaveCurrentHitlist(BlastSearchBlkPtr search)
                  }
               } else {
 		/* hsp_array is already full and reallocation not allowed */
-    		 hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
                  continue;
 	      }
            } else 
@@ -4116,6 +4125,9 @@ MegaBlastSaveCurrentHitlist(BlastSearchBlkPtr search)
                  hsp->subject.gapped_start;
            }
            hsp_array[hsp_index].gap_info = hsp->gap_info;
+           /* Edit block pointer has been copied; remove it from hsp to avoid
+              double freeing */
+           hsp->gap_info = NULL;
            hsp_array[hsp_index].context = hsp->context; 
            hsp_array[hsp_index].query_offset = hsp->query.offset;
            hsp_array[hsp_index].query_length = hsp->query.length;

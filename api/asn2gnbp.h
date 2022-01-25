@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.29 $
+* $Revision: 6.31 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *

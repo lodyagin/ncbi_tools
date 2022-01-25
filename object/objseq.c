@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -888,6 +888,7 @@ ret:
     AsnUnlinkType(orig);       /* unlink local tree */
 	return bsp;
 erret:
+    aip->io_failure = TRUE;
     bsp = BioseqFree(bsp);
     goto ret;
 }
@@ -1667,6 +1668,7 @@ ret:
 	AsnUnlinkType(orig);       /* unlink local tree */
 	return first;
 erret:
+    aip->io_failure = TRUE;
     first = SeqDescrFree(first);
     goto ret;
 }
@@ -1852,6 +1854,7 @@ ret:
 	AsnUnlinkType(orig);       /* unlink local tree */
 	return anp;
 erret:
+    aip->io_failure = TRUE;
     anp = SeqDescFree(anp);
     goto ret;
 }
@@ -2980,6 +2983,7 @@ ret:
 	AsnUnlinkType(orig);       /* unlink local tree */
 	return sap;
 erret:
+    aip->io_failure = TRUE;
     sap = SeqAnnotFree(sap);
     goto ret;
 }

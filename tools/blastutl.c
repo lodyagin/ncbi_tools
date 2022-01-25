@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.434 2004/04/22 16:40:32 dondosha Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.438 2004/06/01 20:34:06 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,24 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.434 $
+$Revision: 6.438 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.438  2004/06/01 20:34:06  dondosha
+* Fix in previous change; memory leak fix
+*
+* Revision 6.437  2004/05/27 17:36:24  dondosha
+* Minor fix for previous 2 changes
+*
+* Revision 6.436  2004/05/25 21:42:47  dondosha
+* Fix in previous change: in some cases edit block should not be freed when BLAST_HSP is freed
+*
+* Revision 6.435  2004/05/21 13:53:04  dondosha
+* Use BLAST_HSPFree to free BLAST_HSP structures, hence no need to call GapXEditBlockDelete in multiple places
+*
 * Revision 6.434  2004/04/22 16:40:32  dondosha
 * Set search->subject_id to correct ordinal id, needed for finding splice junctions in HSP links at traceback stage
 *
@@ -4598,7 +4610,7 @@ BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
            }
            
            for (index=0; index<hspcnt; index++) 
-              MemFree(hspp[index]);
+              hspp[index] = MemFree(hspp[index]);
            hspp = MemFree(hspp);
 	}
 #endif  /* Clustering hits */
@@ -6176,7 +6188,7 @@ BlastHitListDestruct(BLAST_HitListPtr hitlist)
 
         for (index=0; index<hspcnt_max; index++)
         {
-           hsp_array[index] = MemFree(hsp_array[index]);
+           hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
         }
 
         hitlist->hsp_array = MemFree(hsp_array);
@@ -7717,7 +7729,6 @@ CopyHSPToResultHsp(BLAST_KarlinBlkPtr kbp, BLAST_HSPPtr hsp, BLASTResultHspPtr r
 	result_hsp->subject_gapped_start = hsp->subject.gapped_start;
 	result_hsp->context = hsp->context;
 	result_hsp->gap_info = hsp->gap_info;
-
 	/* Not set in the other type of HSP? */
 	result_hsp->hspset_cnt = 0;
 
@@ -8111,12 +8122,14 @@ CheckGappedAlignmentsForOverlap(BlastSearchBlkPtr search, BLAST_HSPPtr *hsp_arra
 		{
 			if (hsp_array[index]->score > hsp_array[index+increment]->score)
 			{
-				hsp_array[index+increment] = MemFree(hsp_array[index+increment]);
+				hsp_array[index+increment] = 
+                                   BLAST_HSPFree(hsp_array[index+increment]);
 				increment++;
 			}
 			else
 			{
-				hsp_array[index] = MemFree(hsp_array[index]);
+				hsp_array[index] = 
+                                   BLAST_HSPFree(hsp_array[index]);
 				index++;
 				increment = 1;
 			}
@@ -8149,12 +8162,14 @@ CheckGappedAlignmentsForOverlap(BlastSearchBlkPtr search, BLAST_HSPPtr *hsp_arra
 		{
 			if (hsp_array[index]->score > hsp_array[index+increment]->score)
 			{
-				hsp_array[index+increment] = MemFree(hsp_array[index+increment]);
+				hsp_array[index+increment] = 
+                                   BLAST_HSPFree(hsp_array[index+increment]);
 				increment++;
 			}
 			else
 			{
-				hsp_array[index] = MemFree(hsp_array[index]);
+				hsp_array[index] = 
+                                   BLAST_HSPFree(hsp_array[index]);
 				index++;
 				increment = 1;
 			}
@@ -8464,7 +8479,7 @@ BlastGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subjec
 		}
 		else
 		{ /* Contained within another HSP, delete. */
-			hsp_array[index] = MemFree(hsp_array[index]);
+			hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
 		}
 	}
 	helper = MemFree(helper);
@@ -8626,7 +8641,7 @@ BlastNtGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subj
 		}
 		else
 		{ /* Contained within another HSP, delete. */
-			hsp_array[index] = MemFree(hsp_array[index]);
+			hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
 		}
 	}
 	helper = MemFree(helper);
@@ -9274,7 +9289,9 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
 	    } else {
                query_id = search->query_id;
             }
-            CopyHSPToResultHsp(search->sbp->kbp_gap[search->first_context], hsp, &result_hsp);
+            CopyHSPToResultHsp(search->sbp->kbp_gap[search->first_context], 
+                               hsp, &result_hsp);
+
 	    if (new_subject_seqid) {
                 if (search->pbp->explode_seqids)
                     seqid_tmp = gi_list;
@@ -9485,6 +9502,8 @@ SumBlastGetGappedAlignmentEx (BlastSearchBlkPtr search, Int4 hit_number, Boolean
        	                        	high_score = hsp_array[index]->score;
 				CopyHSPToResultHsp(search->sbp->kbp_gap[search->first_context], hsp_array[index], &(result_hsp_array[index1]));
 				index1++;
+                                /* Do not free edit block, just the 
+                                   BLAST_HSP structure. */
 				hsp_array[index] = MemFree(hsp_array[index]);
 			}
 		}
@@ -9569,7 +9588,8 @@ BlastGetGapAlgnTbck (BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse,
 	for (index=0; index<hspcnt; index++)
 	{
 		hsp_array[index] = MemNew(sizeof(BLAST_HSP));
-		CopyResultHspToHSP(&(result_hitlist->hsp_array[index]), hsp_array[index]);
+		CopyResultHspToHSP(&(result_hitlist->hsp_array[index]), 
+                                   hsp_array[index]);
 	}
 	HeapSort(hsp_array,hspcnt,sizeof(BLAST_HSPPtr), score_compare_hsps);
 
@@ -9601,16 +9621,24 @@ BlastGetGapAlgnTbck (BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse,
 				current_evalue = hsp_array[index]->evalue;
 			if (high_score < hsp_array[index]->score)
                                	high_score = hsp_array[index]->score;
+
 			CopyHSPToResultHsp(search->sbp->kbp_gap[search->first_context], hsp_array[index], &(result_hsp_array[index1]));
 			index1++;
+                        /* Do not free edit block, just the BLAST_HSP 
+                           structure */
 			hsp_array[index] = MemFree(hsp_array[index]);
 		}
 	}
 	hsp_array = MemFree(hsp_array);
 
+	if (result_hitlist->hsp_array) {
+           /* Delete any edit blocks from a previous traceback. */
+           for (index=0; index< result_hitlist->hspcnt; ++index)
+              GapXEditBlockDelete(result_hitlist->hsp_array[index].gap_info);
+
+           MemFree(result_hitlist->hsp_array);
+        }
 	result_hitlist->hspcnt = index1;	
-	if (result_hitlist->hsp_array)
-		MemFree(result_hitlist->hsp_array);
 	result_hitlist->hsp_array = result_hsp_array;
 	result_hitlist->best_evalue = current_evalue;
 	result_hitlist->high_score = high_score;
@@ -10185,7 +10213,7 @@ BlastHitListPurge(BLAST_HitListPtr hitlist)
 		hspcnt_max = hitlist->hspcnt_max;
 
 	for (index=0; index<hspcnt_max; index++) {
-           hsp_array[index] = MemFree(hsp_array[index]);
+           hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
         }	
 
 	hitlist->hspcnt = 0;
@@ -10298,7 +10326,7 @@ CheckHspOverlap (BLAST_HSPPtr PNTR hsp_array, BLAST_HSPPtr hsp2, Int4 hspcnt, Bo
 		}
 		else
 		{
-			hsp_array[index] = MemFree(hsp_array[index]);
+			hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
 			*hsp_deleted = TRUE;
 		}
 	}
@@ -10472,13 +10500,13 @@ bove.*/
 	{
 		if (new_index >= hspcnt)
 		{ /* this HSP is less significant than others on a full list.*/
-			new_hsp = MemFree(new_hsp);
+			new_hsp = BLAST_HSPFree(new_hsp);
 			return;
 		}
 		else
 		{ /* Delete the last HPS on the list. */
 			hspcnt = --current_hitlist->hspcnt;
-			hsp_array[hspcnt] = MemFree(hsp_array[hspcnt]);
+			hsp_array[hspcnt] = BLAST_HSPFree(hsp_array[hspcnt]);
 		}
 	}
 	current_hitlist->hspcnt++;
@@ -10781,7 +10809,7 @@ bove.*/
 		else
 		{ /* Delete the last HPS on the list. */
 			hspcnt = --current_hitlist->hspcnt;
-			hsp_array[hspcnt] = MemFree(hsp_array[hspcnt]);
+			hsp_array[hspcnt] = BLAST_HSPFree(hsp_array[hspcnt]);
 		}
 	}
 	current_hitlist->hspcnt++;

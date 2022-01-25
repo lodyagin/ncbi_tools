@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.296 $
+* $Revision: 6.300 $
 *
 * File Description: 
 *
@@ -1402,6 +1402,28 @@ NLM_EXTERN int LIBCALLBACK SortVnpByString (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
+NLM_EXTERN int LIBCALLBACK SortByIntvalue (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  Int4        val1;
+  Int4        val2;
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  val1 = (Int4) vnp1->data.intvalue;
+  val2 = (Int4) vnp2->data.intvalue;
+  if (val1 > val2) {
+    return 1;
+  } else if (val1 < val2) {
+    return -1;
+  }
+  return 0;
+}
+
 NLM_EXTERN ValNodePtr UniqueValNode (ValNodePtr list)
 
 {
@@ -1769,7 +1791,7 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
     GetSeqEntryParent (target, &parentptr, &parenttype);
     sfp = first;
     while (sfp != NULL) {
-      if (sfp->data.choice == SEQFEAT_RNA && sfp->product == NULL) {
+      if (sfp->data.choice == SEQFEAT_RNA && sfp->product == NULL && (! sfp->pseudo)) {
         gbq = sfp->qual;
         prevqual = (GBQualPtr PNTR) &(sfp->qual);
         id [0] = '\0';
@@ -1910,7 +1932,7 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
       next = xref->next;
       if (xref->data.choice == SEQFEAT_PROT &&
           sfp->data.choice == SEQFEAT_CDREGION &&
-          sfp->product == NULL) {
+          sfp->product == NULL && (! sfp->pseudo)) {
         prp = (ProtRefPtr) xref->data.value.ptrvalue;
         xref->data.value.ptrvalue = NULL;
         if (prp != NULL) {
@@ -2867,8 +2889,13 @@ static void CleanupTrna (SeqFeatPtr sfp, tRNAPtr trp)
   if (trp == NULL) return;
 
   if (sfp != NULL && sfp->comment != NULL && trp->codon [0] == 255) {
+    codon [0] = '\0';
     if (StringNICmp (sfp->comment, "codon recognized: ", 18) == 0) {
       StringNCpy_0 (codon, sfp->comment + 18, sizeof (codon));
+    } else if (StringNICmp (sfp->comment, "codons recognized: ", 19) == 0) {
+      StringNCpy_0 (codon, sfp->comment + 19, sizeof (codon));
+    }
+    if (StringDoesHaveText (codon)) {
       if (StringLen (codon) > 3 && codon [3] == ';') {
         codon [3] = '\0';
         okayToFree = FALSE;
@@ -5871,6 +5898,75 @@ static Boolean InformativeString (CharPtr str)
   return TRUE;
 }
 
+static void CleanUpExceptText (SeqFeatPtr sfp)
+
+{
+  ValNodePtr  head, vnp;
+  size_t      len;
+  CharPtr     prefix, ptr, str, tmp;
+
+  if (sfp == NULL || sfp->except_text == NULL) return;
+  if (StringStr (sfp->except_text, "ribosome slippage") == NULL &&
+      StringStr (sfp->except_text, "trans splicing") == NULL &&
+      StringStr (sfp->except_text, "alternate processing") == NULL &&
+      StringStr (sfp->except_text, "non-consensus splice site") == NULL) return;
+
+  head = NULL;
+  str = sfp->except_text;
+  tmp = str;
+  while (! StringHasNoText (tmp)) {
+    ptr = StringChr (tmp, ',');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr++;
+    }
+    TrimSpacesAroundString (tmp);
+    ValNodeCopyStr (&head, 0, tmp);
+    tmp = ptr;
+  }
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    tmp = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (tmp)) continue;
+    if (StringCmp (tmp, "ribosome slippage") == 0) {
+      vnp->data.ptrvalue = MemFree (tmp);
+      vnp->data.ptrvalue = StringSave ("ribosomal slippage");
+    } else if (StringCmp (tmp, "trans splicing") == 0) {
+      vnp->data.ptrvalue = MemFree (tmp);
+      vnp->data.ptrvalue = StringSave ("trans-splicing");
+    } else if (StringCmp (tmp, "alternate processing") == 0) {
+      vnp->data.ptrvalue = MemFree (tmp);
+      vnp->data.ptrvalue = StringSave ("alternative processing");
+    } else if (StringCmp (tmp, "non-consensus splice site") == 0) {
+      vnp->data.ptrvalue = MemFree (tmp);
+      vnp->data.ptrvalue = StringSave ("nonconsensus splice site");
+    }
+  }
+
+  len = 0;
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    tmp = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (tmp)) continue;
+    len += StringLen (tmp) + 2;
+  }
+
+  str = (CharPtr) MemNew (len + 2);
+  if (str == NULL) return;
+
+  prefix = "";
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    tmp = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (tmp)) continue;
+    StringCat (str, prefix);
+    StringCat (str, tmp);
+    prefix = ", ";
+  }
+
+  sfp->except_text = MemFree (sfp->except_text);
+  sfp->except_text = str;
+
+  ValNodeFreeData (head);
+}
+
 static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodePtr PNTR publist)
 
 {
@@ -5904,6 +6000,9 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
   CleanVisString (&(sfp->comment));
   CleanVisString (&(sfp->title));
   CleanVisString (&(sfp->except_text));
+  if (StringDoesHaveText (sfp->except_text)) {
+    CleanUpExceptText (sfp);
+  }
   CleanDoubleQuote (sfp->comment);
   if (StringCmp (sfp->comment, ".") == 0) {
     sfp->comment = MemFree (sfp->comment);

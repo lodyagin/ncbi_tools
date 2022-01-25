@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.214 $
+* $Revision: 6.215 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.215  2004/05/13 19:38:08  kans
+* SeqLocMergeExEx takes ignore_mixed so gene by overlap can ignore trans splicing confusion
+*
 * Revision 6.214  2004/05/04 17:34:23  bollin
 * initialize variables
 *
@@ -5544,7 +5547,7 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
         single_interval = (Boolean) (item->subtype == FEATDEF_GENE ||
                                      item->subtype == FEATDEF_PUB);
         */
-        loc = SeqLocMergeEx (bsp, sfp->location, NULL, FALSE, FALSE, FALSE, FALSE);
+        loc = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, FALSE, FALSE, FALSE, TRUE);
 
         if (exindx->flip) {
           sip = SeqIdFindBest (bsp->id, 0);
@@ -6890,7 +6893,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats)
 
           /* map to segmented bioseq coordinates if necessary */
 
-          segloc = SeqLocMergeEx (nuc, dnaloc, NULL, FALSE, TRUE, FALSE, FALSE);
+          segloc = SeqLocMergeExEx (nuc, dnaloc, NULL, FALSE, TRUE, FALSE, FALSE, TRUE);
 
           SeqLocFree (dnaloc);
           if (segloc != NULL) {
@@ -8037,7 +8040,7 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
     hier = feat->overlap;
   }
 
-  loc = SeqLocMergeEx (bsp, slp, NULL, FALSE, /* TRUE */ FALSE, FALSE, FALSE);
+  loc = SeqLocMergeExEx (bsp, slp, NULL, FALSE, /* TRUE */ FALSE, FALSE, FALSE, TRUE);
   strand = SeqLocStrand (loc);
   if (overlapType == CHECK_INTERVALS) {
     tmp = NULL;

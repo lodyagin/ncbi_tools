@@ -1,286 +1,57 @@
-static char const rcsid[] = "$Id: blast_stat.c,v 1.66 2004/05/04 13:00:02 madden Exp $";
+/* $Id: blast_stat.c,v 1.82 2004/06/10 13:21:24 madden Exp $
+ * ===========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ===========================================================================
+ *
+ * Author: Tom Madden
+ *
+ */
 
-/* ===========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ===========================================================================*/
-/*****************************************************************************
+/** @file blast_stat.c
+ * Functions to calculate BLAST probabilities etc.
+ * Detailed Contents:
+ *
+ *	- allocate and deallocate structures used by BLAST to calculate
+ *	probabilities etc.
+ *
+ *	- calculate residue frequencies for query and "average" database.
+ *
+ *	- read in matrix or load it from memory.
+ *
+ *  - calculate sum-p from a collection of HSP's, for both the case
+ *	  of a "small" gap and a "large" gap, when give a total score and the
+ *	  number of HSP's.
+ *
+ *	- calculate expect values for p-values.
+ *
+ *	- calculate pseuod-scores from p-values.
+ *
+ * @todo FIXME needs doxygen comments
+ */
 
-File name: blast_stat.c
+static char const rcsid[] = 
+    "$Id: blast_stat.c,v 1.82 2004/06/10 13:21:24 madden Exp $";
 
-Author: Tom Madden
-
-Contents: Functions to calculate BLAST probabilities etc.
-
-Detailed Contents:
-
-	- allocate and deallocate structures used by BLAST to calculate
-	probabilities etc.
-
-	- calculate residue frequencies for query and "average" database.
-
-	- read in matrix.
-
-        - calculate sum-p from a collection of HSP's, for both the case
-	of a "small" gap and a "large" gap, when give a total score and the
-	number of HSP's.
-
-	- calculate expect values for p-values.
-
-	- calculate pseuod-scores from p-values.
-
-****************************************************************************** 
- * $Revision: 1.66 $
- * $Log: blast_stat.c,v $
- * Revision 1.66  2004/05/04 13:00:02  madden
- * Change BlastKarlinBlkStandardCalcEx to more descriptive Blast_KarlinBlkIdealCalc, make public
- *
- * Revision 1.65  2004/04/30 14:39:44  papadopo
- * 1. Remove unneeded #defines
- * 2. use BLAST_SCORE_RANGE_MAX during RPS PSSM creation instead of
- * 	(possibly incompatible) RPS_SCORE_MAX
- * 3. return NULL instead of FALSE on an error
- *
- * Revision 1.64  2004/04/30 12:58:49  camacho
- * Replace RPSKarlinLambdaNR by Blast_KarlinLambdaNR
- *
- * Revision 1.63  2004/04/29 20:32:38  papadopo
- * remove RPS_SCORE_MIN, since it turned out to be a workaround for a bug that has since been fixed
- *
- * Revision 1.62  2004/04/29 19:58:03  camacho
- * Use generic matrix allocator/deallocator from blast_psi_priv.h
- *
- * Revision 1.61  2004/04/28 14:40:23  madden
- * Changes from Mike Gertz:
- * - I created the new routine BLAST_GapDecayDivisor that computes a
- *   divisor used to weight the evalue of a collection of distinct
- *   alignments.
- * - I removed  BLAST_GapDecay and BLAST_GapDecayInverse which had become
- *   redundant.
- * - I modified the BLAST_Cutoffs routine so that it uses the value
- *   returned by BLAST_GapDecayDivisor to weight evalues.
- * - I modified BLAST_SmallGapSumE, BLAST_LargeGapSumE and
- *   BLAST_UnevenGapSumE no longer refer to the gap_prob parameter.
- *   Replaced the gap_decay_rate parameter of each of these routines with
- *   a weight_divisor parameter.  Added documentation.
- *
- * Revision 1.60  2004/04/23 19:06:33  camacho
- * Do NOT use lowercase names for #defines
- *
- * Revision 1.59  2004/04/23 13:49:20  madden
- * Cleaned up ifndef in BlastKarlinLHtoK
- *
- * Revision 1.58  2004/04/23 13:21:25  madden
- * Rewrote BlastKarlinLHtoK to do the following and more:
- * 1. fix a bug whereby the wrong formula was used when high score == 1
- *    and low score == -1;
- * 2. fix a methodological error of truncating the first sum
- *    and trying to make it converge quickly by adding terms
- *    of a geometric progression, even though the geometric progression
- *    estimate is not correct in all cases;
- *    the old adjustment code is left in for historical purposes but
- *    #ifdef'd out
- * 3. Eliminate the Boolean bi_modal_score variable.  The old test that
- *    set the value of bi_modal_score would frequently fail to choose the
- *    correct value due to rounding error.
- * 4. changed numerous local variable names to make them more meaningful;
- * 5. added substantial comments to explain what the procedure
- *    is doing and what each variable represents
- *
- * Revision 1.57  2004/04/19 12:58:18  madden
- * Changed BLAST_KarlinBlk to Blast_KarlinBlk to avoid conflict with blastkar.h structure, renamed some functions to start with Blast_Karlin, made Blast_KarlinBlkDestruct public
- *
- * Revision 1.56  2004/04/12 18:57:31  madden
- * Rename BLAST_ResFreq to Blast_ResFreq, make Blast_ResFreqNew, Blast_ResFreqDestruct, and Blast_ResFreqStdComp non-static
- *
- * Revision 1.55  2004/04/08 13:53:10  papadopo
- * fix doxygen warning
- *
- * Revision 1.54  2004/04/07 03:06:16  camacho
- * Added blast_encoding.[hc], refactoring blast_stat.[hc]
- *
-v * Revision 1.53  2004/04/05 18:53:35  madden
- * Set dimensions if matrix from memory
- *
- * Revision 1.52  2004/04/01 14:14:02  lavr
- * Spell "occurred", "occurrence", and "occurring"
- *
- * Revision 1.51  2004/03/31 17:50:09  papadopo
- * Mike Gertz' changes for length adjustment calculations
- *
- * Revision 1.50  2004/03/11 18:52:41  camacho
- * Remove THREADS_IMPLEMENTED
- *
- * Revision 1.49  2004/03/10 18:00:06  camacho
- * Remove outdated references to blastkar
- *
- * Revision 1.48  2004/03/05 17:52:33  papadopo
- * Allow 32-bit context numbers for queries
- *
- * Revision 1.47  2004/03/04 21:07:51  papadopo
- * add RPS BLAST functionality
- *
- * Revision 1.46  2004/02/19 21:16:48  dondosha
- * Use enum type for severity argument in Blast_MessageWrite
- *
- * Revision 1.45  2003/12/05 16:03:57  camacho
- * Remove compiler warnings
- *
- * Revision 1.44  2003/11/28 22:39:11  camacho
- * + static keyword to BlastKarlinLtoH
- *
- * Revision 1.43  2003/11/28 15:03:48  camacho
- * Added static keyword to BlastKarlinLtoH
- *
- * Revision 1.42  2003/11/26 19:12:13  madden
- * code to simplify some routines and use NlmKarlinLambdaNR in place of BlastKarlinLambdaBis (following Mike Gertzs changes to blastkar.c )
- *
- * Revision 1.41  2003/11/24 23:18:32  dondosha
- * Added gap_decay_rate argument to BLAST_Cutoffs; removed BLAST_Cutoffs_simple
- *
- * Revision 1.40  2003/11/19 15:17:42  dondosha
- * Removed unused members from Karlin block structure
- *
- * Revision 1.39  2003/10/16 15:55:22  coulouri
- * fix uninitialized variables
- *
- * Revision 1.38  2003/10/16 15:52:08  coulouri
- * fix uninitialized variables
- *
- * Revision 1.37  2003/10/15 16:59:43  coulouri
- * type correctness fixes
- *
- * Revision 1.36  2003/10/02 22:08:34  dondosha
- * Corrections for one-strand translated searches
- *
- * Revision 1.35  2003/09/26 19:01:59  madden
- * Prefix ncbimath functions with BLAST_
- *
- * Revision 1.34  2003/09/09 14:21:39  coulouri
- * change blastkar.h to blast_stat.h
- *
- * Revision 1.33  2003/09/02 21:12:07  camacho
- * Fix small memory leak
- *
- * Revision 1.32  2003/08/26 15:23:51  dondosha
- * Rolled back previous change as it is not necessary any more
- *
- * Revision 1.31  2003/08/25 22:29:07  dondosha
- * Default matrix loading is defined only in C++ toolkit
- *
- * Revision 1.30  2003/08/25 18:05:41  dondosha
- * Moved assert statement after variables declarations
- *
- * Revision 1.29  2003/08/25 16:23:33  camacho
- * +Loading protein scoring matrices from utils/tables
- *
- * Revision 1.28  2003/08/11 15:01:59  dondosha
- * Added algo/blast/core to all #included headers
- *
- * Revision 1.27  2003/08/01 17:27:04  dondosha
- * Renamed external functions to avoid collisions with ncbitool library; made other functions static
- *
- * Revision 1.26  2003/07/31 18:48:49  dondosha
- * Use Int4 instead of BLAST_Score
- *
- * Revision 1.25  2003/07/31 17:48:06  madden
- * Remove call to FileLength
- *
- * Revision 1.24  2003/07/31 14:31:41  camacho
- * Replaced Char for char
- *
- * Revision 1.23  2003/07/31 14:19:28  camacho
- * Replaced FloatHi for double
- *
- * Revision 1.22  2003/07/31 00:32:37  camacho
- * Eliminated Ptr notation
- *
- * Revision 1.21  2003/07/30 22:08:09  dondosha
- * Process of finding path to the matrix is moved out of the blast library
- *
- * Revision 1.20  2003/07/30 21:52:41  camacho
- * Follow conventional structure definition
- *
- * Revision 1.19  2003/07/30 19:39:14  camacho
- * Remove PNTRs
- *
- * Revision 1.18  2003/07/30 17:58:25  dondosha
- * Changed ValNode to ListNode
- *
- * Revision 1.17  2003/07/30 17:15:00  dondosha
- * Minor fixes for very strict compiler warnings
- *
- * Revision 1.16  2003/07/30 17:06:40  camacho
- * Removed old cvs log
- *
- * Revision 1.15  2003/07/30 16:32:02  madden
- * Use ansi functions when possible
- *
- * Revision 1.14  2003/07/30 15:29:37  madden
- * Removed MemSets
- *
- * Revision 1.13  2003/07/29 14:42:31  coulouri
- * use strdup() instead of StringSave()
- *
- * Revision 1.12  2003/07/28 19:04:15  camacho
- * Replaced all MemNews for calloc
- *
- * Revision 1.11  2003/07/28 03:41:49  camacho
- * Use f{open,close,gets} instead of File{Open,Close,Gets}
- *
- * Revision 1.10  2003/07/25 21:12:28  coulouri
- * remove constructions of the form "return sfree();" and "a=sfree(a);"
- *
- * Revision 1.9  2003/07/25 18:58:43  camacho
- * Avoid using StrUpper and StringHasNoText
- *
- * Revision 1.8  2003/07/25 17:25:43  coulouri
- * in progres:
- *  * use malloc/calloc/realloc instead of Malloc/Calloc/Realloc
- *  * add sfree() macro and __sfree() helper function to util.[ch]
- *  * use sfree() instead of MemFree()
- *
- * Revision 1.7  2003/07/24 22:37:33  dondosha
- * Removed some unused function parameters
- *
- * Revision 1.6  2003/07/24 22:01:44  camacho
- * Removed unused variables
- *
- * Revision 1.5  2003/07/24 21:31:06  dondosha
- * Changed to calls to BlastConstructErrorMessage to API from blast_message.h
- *
- * Revision 1.4  2003/07/24 20:38:30  dondosha
- * Removed LIBCALL etc. macros
- *
- * Revision 1.3  2003/07/24 17:37:46  dondosha
- * Removed MakeBlastScore function that is dependent on objalign.h
- *
- * Revision 1.2  2003/07/24 15:50:49  dondosha
- * Commented out mutex operations
- *
- * Revision 1.1  2003/07/24 15:18:09  dondosha
- * Copy of blastkar.h from ncbitools library, stripped of dependency on ncbiobj
- *
- * */
 #include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_util.h>
 #include <util/tables/raw_scoremat.h>
@@ -288,39 +59,53 @@ v * Revision 1.53  2004/04/05 18:53:35  madden
 #include "blast_psi_priv.h"
 
 /* OSF1 apparently doesn't like this. */
-#if defined(HUGE_VAL) && !defined(OS_UNIX_OSF1)
-#define BLASTKAR_HUGE_VAL HUGE_VAL
+#if defined(HUGE_VAL) && !defined(OS_UNIX_OSF1) 
+#define BLASTKAR_HUGE_VAL HUGE_VAL /**< Rename HUGE_VAL for OSF1. */
 #else
-#define BLASTKAR_HUGE_VAL 1.e30
+#define BLASTKAR_HUGE_VAL 1.e30 /**< Redefine HUGE_VAL for OSF1. */
 #endif
 
 
-/* Allocates and Deallocates the two-dimensional matrix. */
-static BLASTMatrixStructure* BlastMatrixAllocate (Int2 alphabet_size);
+/** Allocates and Deallocates the two-dimensional matrix. 
+ * @param alphabet_size the number of letters in the alphabet
+ * @return the allocated matrix
+ */
+static SBLASTMatrixStructure* BlastMatrixAllocate (Int2 alphabet_size);
 
 /* performs sump calculation, used by BlastSumPStd */
 static double BlastSumPCalc (int r, double s);
 
-#define COMMENT_CHR	'#'
-#define TOKSTR	" \t\n\r"
 #define BLAST_MAX_ALPHABET 40 /* ncbistdaa is only 26, this should be enough */
 
-/*
-	How many of the first bases are not ambiguous
-	(it's four, of course).
-*/
-#define NUMBER_NON_AMBIG_BP 4
+#define BLAST_SCORE_RANGE_MAX   (BLAST_SCORE_MAX - BLAST_SCORE_MIN)
 
-/* Used in BlastKarlinBlkGappedCalc */
-typedef double array_of_8[8];
+/****************************************************************************
+For more accuracy in the calculation of K, set K_SUMLIMIT to 0.00001.
+For high speed in the calculation of K, use a K_SUMLIMIT of 0.001
+Note:  statistical significance is often not greatly affected by the value
+of K, so high accuracy is generally unwarranted.
+*****************************************************************************/
+#define BLAST_KARLIN_K_SUMLIMIT_DEFAULT 0.0001 /**< K_SUMLIMIT_DEFAULT == sumlimit used in BlastKarlinLHtoK() */
 
-/* Used to temporarily store matrix values for retrieval. */
+#define BLAST_KARLIN_LAMBDA_ACCURACY_DEFAULT    (1.e-5) /**< LAMBDA_ACCURACY_DEFAULT == accuracy to which Lambda should be calc'd */
+
+#define BLAST_KARLIN_LAMBDA_ITER_DEFAULT        17 /**< LAMBDA_ITER_DEFAULT == no. of iterations in LambdaBis = ln(accuracy)/ln(2)*/
+
+#define BLAST_KARLIN_LAMBDA0_DEFAULT    0.5 /**< Initial guess for the value of Lambda in BlastKarlinLambdaNR */
+
+#define BLAST_KARLIN_K_ITER_MAX 100 /**< upper limit on iterations for BlastKarlinLHtoK */
+#define BLAST_SUMP_EPSILON_DEFAULT 0.002 /**< accuracy for SumP calculations */
+
+
+typedef double array_of_8[8]; /**< Holds values (gap-opening, extension, etc.) for a matrix. */
+
+/** Used to temporarily store matrix values for retrieval. */
 
 typedef struct MatrixInfo {
-	char*		name;			/* name of matrix (e.g., BLOSUM90). */
-	array_of_8 	*values;		/* The values (below). */
-	Int4		*prefs;			/* Preferences for display. */
-	Int4		max_number_values;	/* number of values (e.g., BLOSUM90_VALUES_MAX). */
+	char*		name;			/**< name of matrix (e.g., BLOSUM90). */
+	array_of_8 	*values;		/**< The values (gap-opening, extension etc.). */
+	Int4		*prefs;			/**< Preferences for display. */
+	Int4		max_number_values;	/**< number of values (e.g., BLOSUM90_VALUES_MAX). */
 } MatrixInfo;
 
 
@@ -398,7 +183,7 @@ add two lines before the return at the end of the function:
 	
 	
 
-#define BLOSUM45_VALUES_MAX 14
+#define BLOSUM45_VALUES_MAX 14 /**< Number of different combinations supported for BLOSUM45. */
 static double  blosum45_values[BLOSUM45_VALUES_MAX][8] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.2291, 0.0924, 0.2514, 0.9113, -5.7},
     {13, 3, (double) INT2_MAX, 0.207, 0.049, 0.14, 1.5, -22},
@@ -414,7 +199,7 @@ static double  blosum45_values[BLOSUM45_VALUES_MAX][8] = {
     {18, 1, (double) INT2_MAX, 0.198, 0.032, 0.10, 2.0, -43},
     {17, 1, (double) INT2_MAX, 0.189, 0.024, 0.079, 2.4, -57},
     {16, 1, (double) INT2_MAX, 0.176, 0.016, 0.063, 2.8, -67},
-};
+};  /**< Supported values (gap-existence, extension, etc.) for BLOSUM45. */
 
 static Int4 blosum45_prefs[BLOSUM45_VALUES_MAX] = {
 BLAST_MATRIX_NOMINAL,
@@ -434,7 +219,7 @@ BLAST_MATRIX_NOMINAL
 };
 
 
-#define BLOSUM50_VALUES_MAX 16
+#define BLOSUM50_VALUES_MAX 16 /**< Number of different combinations supported for BLOSUM50. */
 static double  blosum50_values[BLOSUM50_VALUES_MAX][8] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.2318, 0.112, 0.3362, 0.6895, -4.0},
     {13, 3, (double) INT2_MAX, 0.212, 0.063, 0.19, 1.1, -16},
@@ -452,7 +237,7 @@ static double  blosum50_values[BLOSUM50_VALUES_MAX][8] = {
     {17, 1, (double) INT2_MAX, 0.198, 0.037, 0.12, 1.6, -33},
     {16, 1, (double) INT2_MAX, 0.186, 0.025, 0.10, 1.9, -42},
     {15, 1, (double) INT2_MAX, 0.171, 0.015, 0.063, 2.7, -76},
-};
+};  /**< Supported values (gap-existence, extension, etc.) for BLOSUM50. */
 
 static Int4 blosum50_prefs[BLOSUM50_VALUES_MAX] = {
 BLAST_MATRIX_NOMINAL,
@@ -473,7 +258,7 @@ BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL
 };
 
-#define BLOSUM62_VALUES_MAX 12
+#define BLOSUM62_VALUES_MAX 12 /**< Number of different combinations supported for BLOSUM62. */
 static double  blosum62_values[BLOSUM62_VALUES_MAX][8] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.3176, 0.134, 0.4012, 0.7916, -3.2},
     {11, 2, (double) INT2_MAX, 0.297, 0.082, 0.27, 1.1, -10},
@@ -487,7 +272,7 @@ static double  blosum62_values[BLOSUM62_VALUES_MAX][8] = {
     {11, 1, (double) INT2_MAX, 0.267, 0.041, 0.14, 1.9, -30},
     {10, 1, (double) INT2_MAX, 0.243, 0.024, 0.10, 2.5, -44},
     {9, 1, (double) INT2_MAX, 0.206, 0.010, 0.052, 4.0, -87},
-};
+}; /**< Supported values (gap-existence, extension, etc.) for BLOSUM62. */
 
 static Int4 blosum62_prefs[BLOSUM62_VALUES_MAX] = {
     BLAST_MATRIX_NOMINAL,
@@ -505,7 +290,7 @@ static Int4 blosum62_prefs[BLOSUM62_VALUES_MAX] = {
 };
 
 
-#define BLOSUM80_VALUES_MAX 10
+#define BLOSUM80_VALUES_MAX 10 /**< Number of different combinations supported for BLOSUM80. */
 static double  blosum80_values[BLOSUM80_VALUES_MAX][8] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.3430, 0.177, 0.6568, 0.5222, -1.6},
     {25, 2, (double) INT2_MAX, 0.342, 0.17, 0.66, 0.52, -1.6},
@@ -517,7 +302,7 @@ static double  blosum80_values[BLOSUM80_VALUES_MAX][8] = {
     {11, 1, (double) INT2_MAX, 0.314, 0.095, 0.35, 0.90, -9},
     {10, 1, (double) INT2_MAX, 0.299, 0.071, 0.27, 1.1, -14},
     {9, 1, (double) INT2_MAX, 0.279, 0.048, 0.20, 1.4, -19},
-};
+}; /**< Supported values (gap-existence, extension, etc.) for BLOSUM80. */
 
 static Int4 blosum80_prefs[BLOSUM80_VALUES_MAX] = {
     BLAST_MATRIX_NOMINAL,
@@ -531,7 +316,7 @@ static Int4 blosum80_prefs[BLOSUM80_VALUES_MAX] = {
     BLAST_MATRIX_NOMINAL
 };
 
-#define BLOSUM90_VALUES_MAX 8
+#define BLOSUM90_VALUES_MAX 8 /**< Number of different combinations supported for BLOSUM90. */
 static double  blosum90_values[BLOSUM90_VALUES_MAX][8] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.3346, 0.190, 0.7547, 0.4434, -1.4},
     {9, 2, (double) INT2_MAX, 0.310, 0.12, 0.46, 0.67, -6},
@@ -541,7 +326,7 @@ static double  blosum90_values[BLOSUM90_VALUES_MAX][8] = {
     {11, 1, (double) INT2_MAX, 0.302, 0.093, 0.39, 0.78, -8},
     {10, 1, (double) INT2_MAX, 0.290, 0.075, 0.28, 1.04, -15},
     {9, 1, (double) INT2_MAX, 0.265, 0.044, 0.20, 1.3, -19},
-};
+};  /**< Supported values (gap-existence, extension, etc.) for BLOSUM90. */
 
 static Int4 blosum90_prefs[BLOSUM90_VALUES_MAX] = {
 	BLAST_MATRIX_NOMINAL,
@@ -554,7 +339,7 @@ static Int4 blosum90_prefs[BLOSUM90_VALUES_MAX] = {
 	BLAST_MATRIX_NOMINAL
 };
 
-#define PAM250_VALUES_MAX 16
+#define PAM250_VALUES_MAX 16 /**< Number of different combinations supported for PAM250. */
 static double  pam250_values[PAM250_VALUES_MAX][8] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.2252, 0.0868, 0.2223, 0.98, -5.0},
     {15, 3, (double) INT2_MAX, 0.205, 0.049, 0.13, 1.6, -23},
@@ -572,7 +357,7 @@ static double  pam250_values[PAM250_VALUES_MAX][8] = {
     {19, 1, (double) INT2_MAX, 0.192, 0.029, 0.083, 2.3, -52},
     {18, 1, (double) INT2_MAX, 0.183, 0.021, 0.070, 2.6, -60},
     {17, 1, (double) INT2_MAX, 0.171, 0.014, 0.052, 3.3, -86},
-};
+}; /**< Supported values (gap-existence, extension, etc.) for PAM250. */
 
 static Int4 pam250_prefs[PAM250_VALUES_MAX] = {
 BLAST_MATRIX_NOMINAL,
@@ -593,7 +378,7 @@ BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL
 };
 
-#define PAM30_VALUES_MAX 7
+#define PAM30_VALUES_MAX 7 /**< Number of different combinations supported for PAM30. */
 static double  pam30_values[PAM30_VALUES_MAX][8] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.3400, 0.283, 1.754, 0.1938, -0.3},
     {7, 2, (double) INT2_MAX, 0.305, 0.15, 0.87, 0.35, -3},
@@ -602,7 +387,7 @@ static double  pam30_values[PAM30_VALUES_MAX][8] = {
     {10, 1, (double) INT2_MAX, 0.309, 0.15, 0.88, 0.35, -3},
     {9, 1, (double) INT2_MAX, 0.294, 0.11, 0.61, 0.48, -6},
     {8, 1, (double) INT2_MAX, 0.270, 0.072, 0.40, 0.68, -10},
-};
+}; /**< Supported values (gap-existence, extension, etc.) for PAM30. */
 
 static Int4 pam30_prefs[PAM30_VALUES_MAX] = {
 BLAST_MATRIX_NOMINAL,
@@ -615,7 +400,7 @@ BLAST_MATRIX_NOMINAL,
 };
 
 
-#define PAM70_VALUES_MAX 7
+#define PAM70_VALUES_MAX 7 /**< Number of different combinations supported for PAM70. */
 static double  pam70_values[PAM70_VALUES_MAX][8] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.3345, 0.229, 1.029, 0.3250,   -0.7},
     {8, 2, (double) INT2_MAX, 0.301, 0.12, 0.54, 0.56, -5},
@@ -624,7 +409,7 @@ static double  pam70_values[PAM70_VALUES_MAX][8] = {
     {11, 1, (double) INT2_MAX, 0.305, 0.12, 0.52, 0.59, -6},
     {10, 1, (double) INT2_MAX, 0.291, 0.091, 0.41, 0.71, -9},
     {9, 1, (double) INT2_MAX, 0.270, 0.060, 0.28, 0.97, -14},
-};
+}; /**< Supported values (gap-existence, extension, etc.) for PAM70. */
 
 static Int4 pam70_prefs[PAM70_VALUES_MAX] = {
 BLAST_MATRIX_NOMINAL,
@@ -638,7 +423,7 @@ BLAST_MATRIX_NOMINAL
 
 
 
-#define BLOSUM62_20_VALUES_MAX 65
+#define BLOSUM62_20_VALUES_MAX 65 /**< Number of different combinations supported for BLOSUM62 with 1/20 bit scaling. */
 static double  blosum62_20_values[BLOSUM62_20_VALUES_MAX][8] = {
     {(double) INT2_MAX, (double) INT2_MAX, (double) INT2_MAX, 0.03391, 0.125, 0.4544, 0.07462, -3.2},
     {100, 12, (double) INT2_MAX, 0.0300, 0.056, 0.21, 0.14, -15},
@@ -705,7 +490,7 @@ static double  blosum62_20_values[BLOSUM62_20_VALUES_MAX][8] = {
     {110,13,3, 0.0279, 0.034, 0.10, 0.27, -50},
     {115,12,3, 0.0282, 0.035, 0.12, 0.24, -42},
     {120,11,3, 0.0286, 0.037, 0.12, 0.24, -44},
-};
+}; /**< Supported values (gap-existence, extension, etc.) for BLOSUM62_20. */
 
 static Int4 blosum62_20_prefs[BLOSUM62_20_VALUES_MAX] = {
 BLAST_MATRIX_NOMINAL,
@@ -815,9 +600,10 @@ BlastScoreBlkNew(Uint1 alphabet, Int4 number_of_contexts)
 		}
 		sbp->matrix = sbp->matrix_struct->matrix;
 		sbp->maxscore = (Int4 *) calloc(BLAST_MATRIX_SIZE, sizeof(Int4));
+        sbp->scale_factor = 1.0;
 		sbp->number_of_contexts = number_of_contexts;
-		sbp->sfp = (BLAST_ScoreFreq**) 
-         calloc(sbp->number_of_contexts, sizeof(BLAST_ScoreFreq*));
+		sbp->sfp = (Blast_ScoreFreq**) 
+         calloc(sbp->number_of_contexts, sizeof(Blast_ScoreFreq*));
 		sbp->kbp_std = (Blast_KarlinBlk**)
          calloc(sbp->number_of_contexts, sizeof(Blast_KarlinBlk*));
 		sbp->kbp_gap_std = (Blast_KarlinBlk**)
@@ -831,8 +617,8 @@ BlastScoreBlkNew(Uint1 alphabet, Int4 number_of_contexts)
 	return sbp;
 }
 
-static BLAST_ScoreFreq*
-BlastScoreFreqDestruct(BLAST_ScoreFreq* sfp)
+Blast_ScoreFreq*
+Blast_ScoreFreqDestruct(Blast_ScoreFreq* sfp)
 {
 	if (sfp == NULL)
 		return NULL;
@@ -855,8 +641,12 @@ Blast_KarlinBlkDestruct(Blast_KarlinBlk* kbp)
 	return kbp;
 }
 
-static BLASTMatrixStructure*
-BlastMatrixDestruct(BLASTMatrixStructure* matrix_struct)
+/** Deallocates the SBLASTMatrix structure. 
+ * @param matrix_struct the object to be deallocated [in]
+ * @return NULL;
+ */
+static SBLASTMatrixStructure*
+BlastMatrixDestruct(SBLASTMatrixStructure* matrix_struct)
 
 {
 
@@ -878,7 +668,7 @@ BlastScoreBlkFree(BlastScoreBlk* sbp)
     
     for (index=0; index<sbp->number_of_contexts; index++) {
         if (sbp->sfp)
-            sbp->sfp[index] = BlastScoreFreqDestruct(sbp->sfp[index]);
+            sbp->sfp[index] = Blast_ScoreFreqDestruct(sbp->sfp[index]);
         if (sbp->kbp_std)
             sbp->kbp_std[index] = Blast_KarlinBlkDestruct(sbp->kbp_std[index]);
         if (sbp->kbp_gap_std)
@@ -967,29 +757,37 @@ BLAST_ScoreSetAmbigRes(BlastScoreBlk* sbp, char ambiguous_res)
 	return 0;
 }
 
-/* 
-	Fill in the matrix for blastn using the penaly and rewards
-
-	The query sequence alphabet is blastna, the subject sequence
-	is ncbi2na.  The alphabet blastna is defined in blastkar.h
-	and the first four elements of blastna are identical to ncbi2na.
-
-	The query is in the first index, the subject is the second.
-        if matrix==NULL, it is allocated and returned.
+/** Fill in the matrix for blastn using the penaly and rewards
+ * The query sequence alphabet is blastna, the subject sequence
+ * is ncbi2na.  The alphabet blastna is defined in blast_stat.h
+ * and the first four elements of blastna are identical to ncbi2na.
+ * if sbp->matrix==NULL, it is allocated.
+ * @param sbp the BlastScoreBlk on which reward, penalty, and matrix will be set [in|out]
+ * @return zero on success.
 */
 
-static Int4 **BlastScoreBlkMatCreateEx(Int4 **matrix,Int4 penalty, 
-                                       Int4 reward)
+static Int2 BlastScoreBlkMatCreate(BlastScoreBlk* sbp)
 {
 
 	Int2	index1, index2, degen;
 	Int2 degeneracy[BLASTNA_SIZE+1];
+        Int4 reward; /* reward for match of bases. */
+        Int4 penalty; /* cost for mismatch of bases. */
+        Int4** matrix; /* matrix to be populated. */
+        const int k_number_non_ambig_bp = 4; /* How many of the first bases are ambiguous (four, of course). */
+
+        ASSERT(sbp);
+
+        reward = sbp->reward;
+        penalty = sbp->penalty;
+        matrix = sbp->matrix;
 	
         if(!matrix) {
-            BLASTMatrixStructure* matrix_struct;
+            SBLASTMatrixStructure* matrix_struct;
             matrix_struct =BlastMatrixAllocate((Int2) BLASTNA_SIZE);
-            matrix = matrix_struct->matrix;
+            matrix = sbp->matrix = matrix_struct->matrix;
         }
+
 	for (index1 = 0; index1<BLASTNA_SIZE; index1++) /* blastna */
 		for (index2 = 0; index2<BLASTNA_SIZE; index2++) /* blastna */
 			matrix[index1][index2] = 0;
@@ -998,13 +796,13 @@ static Int4 **BlastScoreBlkMatCreateEx(Int4 **matrix,Int4 penalty,
 	/* ncbi4na gives them the value 1, 2, 4, and 8.  */
 
 	/* Set the first four bases to degen. one */
-	for (index1=0; index1<NUMBER_NON_AMBIG_BP; index1++)
+	for (index1=0; index1<k_number_non_ambig_bp; index1++)
 		degeneracy[index1] = 1;
 
-	for (index1=NUMBER_NON_AMBIG_BP; index1<BLASTNA_SIZE; index1++) /* blastna */
+	for (index1=k_number_non_ambig_bp; index1<BLASTNA_SIZE; index1++) /* blastna */
 	{
 		degen=0;
-		for (index2=0; index2<NUMBER_NON_AMBIG_BP; index2++) /* ncbi2na */
+		for (index2=0; index2<k_number_non_ambig_bp; index2++) /* ncbi2na */
 		{
 			if (BLASTNA_TO_NCBI4NA[index1] & BLASTNA_TO_NCBI4NA[index2])
 				degen++;
@@ -1040,33 +838,16 @@ static Int4 **BlastScoreBlkMatCreateEx(Int4 **matrix,Int4 penalty,
 	for (index1=0; index1<BLASTNA_SIZE; index1++) /* blastna */
            matrix[index1][BLASTNA_SIZE-1] = INT4_MIN / 2;
 
-	return matrix;
-}
-/* 
-	Fill in the matrix for blastn using the penaly and rewards on
-	the BlastScoreBlk*.
-
-	The query sequence alphabet is blastna, the subject sequence
-	is ncbi2na.  The alphabet blastna is defined in blastkar.h
-	and the first four elements of blastna are identical to ncbi2na.
-
-	The query is in the first index, the subject is the second.
-*/
-static Int2 BlastScoreBlkMatCreate(BlastScoreBlk* sbp)
-{
-   sbp->matrix = BlastScoreBlkMatCreateEx(sbp->matrix,sbp->penalty, sbp->reward);
 	sbp->mat_dim1 = BLASTNA_SIZE;
 	sbp->mat_dim2 = BLASTNA_SIZE;
 
 	return 0;
 }
 
-/* 
-	Read in the matrix from the FILE *fp.
-
-	This function ASSUMES that the matrices are in the ncbistdaa
-	format.  BLAST should be able to use any alphabet, though it
-	is expected that ncbistdaa will be used.
+/** Read in the matrix from the FILE *fp.
+ * This function ASSUMES that the matrices are in the ncbistdaa
+ * @param sbp the BlastScoreBlk with the matrix to be populated [in|out]
+ * @return zero on success
 */
 
 static Int2
@@ -1085,6 +866,8 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
     double	xscore;
     register int	index1, index2;
     Int2 status;
+    const char k_comment_chr = '#';
+    const char* k_token_str = " \t\n\r";
     
     matrix = sbp->matrix;	
     
@@ -1108,15 +891,15 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
             return 2;
         }
 
-        if (buf[0] == COMMENT_CHR) {
+        if (buf[0] == k_comment_chr) {
             /* save the comment line in a linked list */
             *strchr(buf, '\n') = NULLB;
             ListNodeCopyStr(&sbp->comments, 0, buf+1);
             continue;
         }
-        if ((cp = strchr(buf, COMMENT_CHR)) != NULL)
+        if ((cp = strchr(buf, k_comment_chr)) != NULL)
             *cp = NULLB;
-        lp = (char*)strtok(buf, TOKSTR);
+        lp = (char*)strtok(buf, k_token_str);
         if (lp == NULL) /* skip blank lines */
             continue;
         while (lp != NULL) {
@@ -1128,7 +911,7 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
               ch = *lp;
            }
             a2chars[a2cnt++] = ch;
-            lp = (char*)strtok(NULL, TOKSTR);
+            lp = (char*)strtok(NULL, k_token_str);
         }
         
         break;	/* Exit loop after reading one line. */
@@ -1139,20 +922,20 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
     }
 
     if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
-        sbp->mat_dim2 = a2cnt;
+        sbp->mat_dim2 = sbp->alphabet_size;
     }
     while (fgets(buf, sizeof(buf), fp) != NULL)  {
         ++lineno;
         if ((cp = strchr(buf, '\n')) == NULL) {
             return 2;
         }
-        if ((cp = strchr(buf, COMMENT_CHR)) != NULL)
+        if ((cp = strchr(buf, k_comment_chr)) != NULL)
             *cp = NULLB;
-        if ((lp = (char*)strtok(buf, TOKSTR)) == NULL)
+        if ((lp = (char*)strtok(buf, k_token_str)) == NULL)
             continue;
         ch = *lp;
         cp = (char*) lp;
-        if ((cp = strtok(NULL, TOKSTR)) == NULL) {
+        if ((cp = strtok(NULL, k_token_str)) == NULL) {
             return 2;
         }
         if (a1cnt >= DIM(a1chars)) {
@@ -1176,13 +959,13 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
             strcpy(temp, cp);
             
             if (strcasecmp(temp, "na") == 0)  {
-                score = BLAST_SCORE_1MIN;
+                score = BLAST_SCORE_MIN;
             } else  {
                 if (sscanf(temp, "%lg", &xscore) != 1) {
                     return 2;
                 }
 				/*xscore = MAX(xscore, BLAST_SCORE_1MIN);*/
-                if (xscore > BLAST_SCORE_1MAX || xscore < BLAST_SCORE_1MIN) {
+                if (xscore > BLAST_SCORE_MAX || xscore < BLAST_SCORE_MIN) {
                     return 2;
                 }
                 xscore += (xscore >= 0. ? 0.5 : -0.5);
@@ -1191,7 +974,7 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
             
             m[(int)a2chars[index2++]] = score;
             
-            cp = strtok(NULL, TOKSTR);
+            cp = strtok(NULL, k_token_str);
         }
     }
     
@@ -1200,7 +983,7 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
     }
     
     if (sbp->alphabet_code != BLASTNA_SEQ_CODE) {
-        sbp->mat_dim1 = a1cnt;
+        sbp->mat_dim1 = sbp->alphabet_size;
     }
     
     return 0;
@@ -1213,8 +996,8 @@ BlastScoreBlkMaxScoreSet(BlastScoreBlk* sbp)
 	Int4 ** matrix; 
 	Int2 index1, index2;
 
-	sbp->loscore = BLAST_SCORE_1MAX;
-        sbp->hiscore = BLAST_SCORE_1MIN;
+	sbp->loscore = BLAST_SCORE_MAX;
+        sbp->hiscore = BLAST_SCORE_MIN;
 	matrix = sbp->matrix;
 	for (index1=0; index1<sbp->alphabet_size; index1++)
 	{
@@ -1238,10 +1021,10 @@ BlastScoreBlkMaxScoreSet(BlastScoreBlk* sbp)
 /* If the lo/hi-scores are BLAST_SCORE_MIN/BLAST_SCORE_MAX, (i.e., for
 gaps), then use other scores. */
 
-	if (sbp->loscore < BLAST_SCORE_1MIN)
-		sbp->loscore = BLAST_SCORE_1MIN;
-	if (sbp->hiscore > BLAST_SCORE_1MAX)
-		sbp->hiscore = BLAST_SCORE_1MAX;
+	if (sbp->loscore < BLAST_SCORE_MIN)
+		sbp->loscore = BLAST_SCORE_MIN;
+	if (sbp->hiscore > BLAST_SCORE_MAX)
+		sbp->hiscore = BLAST_SCORE_MAX;
 
 	return 0;
 }
@@ -1302,7 +1085,6 @@ BLAST_ScoreBlkMatFill(BlastScoreBlk* sbp, char* matrix_path)
     Int2 status = 0;
     
     if (sbp->read_in_matrix) {
-        
         if (matrix_path && *matrix_path != NULLB) {
 
             FILE *fp = NULL;
@@ -1391,9 +1173,11 @@ Blast_ResFreqNew(const BlastScoreBlk* sbp)
 	return rfp;
 }
 
+/** Records probability of letter appearing in sequence.
+*/
 typedef struct BLAST_LetterProb {
-		char	ch;
-		double	p;
+		char	ch; /**< residue */
+		double	p;  /**< probability of residue. */
 	} BLAST_LetterProb;
 
 #if 0
@@ -1513,17 +1297,8 @@ Blast_ResFreqNormalize(const BlastScoreBlk* sbp, Blast_ResFreq* rfp, double norm
 	return 0;
 }
 
-/*
-	Fills a buffer with the 'standard' alphabet (given by 
-	STD_AMINO_ACID_FREQS[index].ch).
-
-	Return value is the number of residues in alphabet.  
-	Negative returns upon error.
-*/
-
-static Int2
-BlastGetStdAlphabet (Uint1 alphabet_code, Uint1* residues, Uint4 residues_size)
-
+Int2
+Blast_GetStdAlphabet(Uint1 alphabet_code, Uint1* residues, Uint4 residues_size)
 {
 	Int2 index;
 
@@ -1556,7 +1331,7 @@ Blast_ResFreqStdComp(const BlastScoreBlk* sbp, Blast_ResFreq* rfp)
 	if (sbp->protein_alphabet == TRUE)
 	{
 		residues = (Uint1*) calloc(DIM(STD_AMINO_ACID_FREQS), sizeof(Uint1));
-		retval = BlastGetStdAlphabet(sbp->alphabet_code, residues, DIM(STD_AMINO_ACID_FREQS));
+		retval = Blast_GetStdAlphabet(sbp->alphabet_code, residues, DIM(STD_AMINO_ACID_FREQS));
 		if (retval < 1)
 			return retval;
 
@@ -1580,8 +1355,18 @@ Blast_ResFreqStdComp(const BlastScoreBlk* sbp, Blast_ResFreq* rfp)
 	return 0;
 }
 
-static BLAST_ResComp*
-BlastResCompDestruct(BLAST_ResComp* rcp)
+/** 
+Intermediate structure to store the composition of a sequence
+*/
+
+typedef struct Blast_ResComp {
+    Uint1	alphabet_code; /**< indicates alphabet. */
+    Int4*	comp; 	/**< store composition of a string. */
+    Int4*   comp0;	/**< Same array as above, starts at zero. */
+} Blast_ResComp;
+
+static Blast_ResComp*
+BlastResCompDestruct(Blast_ResComp* rcp)
 {
 	if (rcp == NULL)
 		return NULL;
@@ -1594,15 +1379,15 @@ BlastResCompDestruct(BLAST_ResComp* rcp)
 }
 
 /* 
-	Allocated the BLAST_ResComp* for a given alphabet.  Only the
+	Allocated the Blast_ResComp* for a given alphabet.  Only the
 	alphabets ncbistdaa and ncbi4na should be used by BLAST.
 */
-static BLAST_ResComp*
+static Blast_ResComp*
 BlastResCompNew(BlastScoreBlk* sbp)
 {
-	BLAST_ResComp*	rcp;
+	Blast_ResComp*	rcp;
 
-	rcp = (BLAST_ResComp*) calloc(1, sizeof(BLAST_ResComp));
+	rcp = (Blast_ResComp*) calloc(1, sizeof(Blast_ResComp));
 	if (rcp == NULL)
 		return NULL;
 
@@ -1626,7 +1411,7 @@ array is allocated.  */
 	Store the composition of a (query) string.  
 */
 static Int2
-BlastResCompStr(BlastScoreBlk* sbp, BLAST_ResComp* rcp, char* str, Int4 length)
+BlastResCompStr(BlastScoreBlk* sbp, Blast_ResComp* rcp, char* str, Int4 length)
 {
 	char*	lp,* lpmax;
 	Int2 index;
@@ -1676,7 +1461,8 @@ Blast_ResFreqClr(const BlastScoreBlk* sbp, Blast_ResFreq* rfp)
 	Calculate the residue frequencies associated with the provided ResComp
 */
 static Int2
-Blast_ResFreqResComp(BlastScoreBlk* sbp, Blast_ResFreq* rfp, BLAST_ResComp* rcp)
+Blast_ResFreqResComp(BlastScoreBlk* sbp, Blast_ResFreq* rfp, 
+                     Blast_ResComp* rcp)
 {
 	Int2	alphabet_max, index;
 	double	sum = 0.;
@@ -1705,7 +1491,7 @@ Blast_ResFreqResComp(BlastScoreBlk* sbp, Blast_ResFreq* rfp, BLAST_ResComp* rcp)
 static Int2
 Blast_ResFreqString(BlastScoreBlk* sbp, Blast_ResFreq* rfp, char* string, Int4 length)
 {
-	BLAST_ResComp* rcp;
+	Blast_ResComp* rcp;
 	
 	rcp = BlastResCompNew(sbp);
 
@@ -1722,7 +1508,7 @@ static Int2
 BlastScoreChk(Int4 lo, Int4 hi)
 {
 	if (lo >= 0 || hi <= 0 ||
-			lo < BLAST_SCORE_1MIN || hi > BLAST_SCORE_1MAX)
+			lo < BLAST_SCORE_MIN || hi > BLAST_SCORE_MAX)
 		return 1;
 
 	if (hi - lo > BLAST_SCORE_RANGE_MAX)
@@ -1731,16 +1517,16 @@ BlastScoreChk(Int4 lo, Int4 hi)
 	return 0;
 }
 
-static BLAST_ScoreFreq*
-BlastScoreFreqNew(Int4 score_min, Int4 score_max)
+Blast_ScoreFreq*
+Blast_ScoreFreqNew(Int4 score_min, Int4 score_max)
 {
-	BLAST_ScoreFreq*	sfp;
+	Blast_ScoreFreq*	sfp;
 	Int4	range;
 
 	if (BlastScoreChk(score_min, score_max) != 0)
 		return NULL;
 
-	sfp = (BLAST_ScoreFreq*) calloc(1, sizeof(BLAST_ScoreFreq));
+	sfp = (Blast_ScoreFreq*) calloc(1, sizeof(Blast_ScoreFreq));
 	if (sfp == NULL)
 		return NULL;
 
@@ -1748,12 +1534,12 @@ BlastScoreFreqNew(Int4 score_min, Int4 score_max)
 	sfp->sprob = (double*) calloc(range, sizeof(double));
 	if (sfp->sprob == NULL) 
 	{
-		BlastScoreFreqDestruct(sfp);
+		Blast_ScoreFreqDestruct(sfp);
 		return NULL;
 	}
 
 	sfp->sprob0 = sfp->sprob;
-	sfp->sprob -= score_min;
+	sfp->sprob -= score_min;        /* center around 0 */
 	sfp->score_min = score_min;
 	sfp->score_max = score_max;
 	sfp->obs_min = sfp->obs_max = 0;
@@ -1761,8 +1547,16 @@ BlastScoreFreqNew(Int4 score_min, Int4 score_max)
 	return sfp;
 }
 
+/** Calculates the score frequencies.
+ *
+ * @param sbp object with scoring information [in]
+ * @param sfp object to hold frequency information [in|out]
+ * @param rfp1 letter frequencies for first sequence (query) [in]
+ * @param rfp2 letter frequencies for second sequence (database) [in]
+ * @return zero on success
+ */
 static Int2
-BlastScoreFreqCalc(BlastScoreBlk* sbp, BLAST_ScoreFreq* sfp, Blast_ResFreq* rfp1, Blast_ResFreq* rfp2)
+BlastScoreFreqCalc(BlastScoreBlk* sbp, Blast_ScoreFreq* sfp, Blast_ResFreq* rfp1, Blast_ResFreq* rfp2)
 {
 	Int4 **	matrix;
 	Int4	score, obs_min, obs_max;
@@ -1824,14 +1618,11 @@ BlastScoreFreqCalc(BlastScoreBlk* sbp, BLAST_ScoreFreq* sfp, Blast_ResFreq* rfp1
 }
 
 
-#define DIMOFP0	(iterlimit*range + 1)
-#define DIMOFP0_MAX (BLAST_KARLIN_K_ITER_MAX*BLAST_SCORE_RANGE_MAX+1)
-
 
 #define SMALL_LAMBDA_THRESHOLD 20 /*defines special case in K computation*/
                                 /*threshold is on exp(-Lambda)*/
 
-/*The following procedure computes K. The input includes Lambda, H,
+/** The following procedure computes K. The input includes Lambda, H,
  *  and an array of probabilities for each score.
  *  There are distinct closed form for three cases:
  *  1. high score is 1 low score is -1
@@ -1856,10 +1647,15 @@ BlastScoreFreqCalc(BlastScoreBlk* sbp, BLAST_ScoreFreq* sfp, Blast_ResFreq* rfp1
  * and tried to replace the tail of the computation of outerSum
  * by a geometric series, but the base of the geometric series
  * was not accurately estimated in some cases.
+ *
+ * @param sfp object holding scoring frequency information [in]
+ * @param lambda a Karlin-Altschul parameter [in]
+ * @param H a Karlin-Altschul parameter [in]
+ * @return K, another Karlin-Altschul parameter
  */
 
 static double
-BlastKarlinLHtoK(BLAST_ScoreFreq* sfp, double lambda, double H)
+BlastKarlinLHtoK(Blast_ScoreFreq* sfp, double lambda, double H)
 {
     /*The next array stores the probabilities of getting each possible
       score in an alignment of fixed length; the array is shifted
@@ -1918,7 +1714,7 @@ BlastKarlinLHtoK(BLAST_ScoreFreq* sfp, double lambda, double H)
     /* Look for the greatest common divisor ("delta" in Appendix of PNAS 87 of
        Karlin&Altschul (1990) */
     for (i = 1, divisor = -low; i <= range && divisor > 1; ++i) {
-        if (probArrayStartLow[i])
+        if (probArrayStartLow[i] != 0.0)
             divisor = BLAST_Gcd(divisor, i);
     }
 
@@ -1951,11 +1747,8 @@ BlastKarlinLHtoK(BLAST_ScoreFreq* sfp, double lambda, double H)
     sumlimit  = BLAST_KARLIN_K_SUMLIMIT_DEFAULT;
     iterlimit = BLAST_KARLIN_K_ITER_MAX;
 
-    if (DIMOFP0 > DIMOFP0_MAX) {
-        return -1.;
-    }
     alignmentScoreProbabilities =
-        (double *)calloc(DIMOFP0, sizeof(*alignmentScoreProbabilities));
+        (double *)calloc((iterlimit*range + 1), sizeof(*alignmentScoreProbabilities));
     if (alignmentScoreProbabilities == NULL)
         return -1.;
 
@@ -2157,7 +1950,7 @@ NlmKarlinLambdaNR( double* probs, Int4 d, Int4 low, Int4 high, double lambda0, d
 
 
 double
-Blast_KarlinLambdaNR(BLAST_ScoreFreq* sfp, double initialLambdaGuess)
+Blast_KarlinLambdaNR(Blast_ScoreFreq* sfp, double initialLambdaGuess)
 {
 	Int4	low;			/* Lowest score (must be negative)  */
 	Int4	high;			/* Highest score (must be positive) */
@@ -2176,7 +1969,7 @@ Blast_KarlinLambdaNR(BLAST_ScoreFreq* sfp, double initialLambdaGuess)
 	sprob = sfp->sprob;
 	/* Find greatest common divisor of all scores */
 	for (i = 1, d = -low; i <= high-low && d > 1; ++i) {
-		if (sprob[i+low] != 0) {
+		if (sprob[i+low] != 0.0) {
 			d = BLAST_Gcd(d, i);
 		}
 	}
@@ -2190,13 +1983,14 @@ Blast_KarlinLambdaNR(BLAST_ScoreFreq* sfp, double initialLambdaGuess)
 	return returnValue;
 }
 
-/*
-	BlastKarlinLtoH
-
-	Calculate H, the relative entropy of the p's and q's
-*/
+/** Calculate H, the relative entropy of the p's and q's
+ *
+ * @param sfp object containing scoring frequency information [in]
+ * @param lambda a Karlin-Altschul parameter [in]
+ * @return H, a Karlin-Altschul parameter
+ */
 static double 
-BlastKarlinLtoH(BLAST_ScoreFreq* sfp, double	lambda)
+BlastKarlinLtoH(Blast_ScoreFreq* sfp, double	lambda)
 {
 	Int4	score;
 	double	H, etonlam, sum, scale;
@@ -2216,7 +2010,7 @@ BlastKarlinLtoH(BLAST_ScoreFreq* sfp, double	lambda)
   }
 
   scale = BLAST_Powi( etonlam, high );
-  if( scale > 0 ) {
+  if( scale > 0.0 ) {
     H = lambda * sum/scale;
   } else { /* Underflow of exp( -lambda * high ) */
     H = lambda * exp( lambda * high + log(sum) );
@@ -2287,8 +2081,8 @@ See:  Karlin, S. & Altschul, S.F. "Methods for Assessing the Statistical
     as the previous formula.
 
 *******************************************************************************/
-static Int2
-BlastKarlinBlkCalc(Blast_KarlinBlk* kbp, BLAST_ScoreFreq* sfp)
+Int2
+Blast_KarlinBlkCalc(Blast_KarlinBlk* kbp, Blast_ScoreFreq* sfp)
 {
 	
 
@@ -2321,11 +2115,7 @@ BlastKarlinBlkCalc(Blast_KarlinBlk* kbp, BLAST_ScoreFreq* sfp)
 
 ErrExit:
 	kbp->Lambda = kbp->H = kbp->K = -1.;
-#ifdef BLASTKAR_HUGE_VAL
 	kbp->logK = BLASTKAR_HUGE_VAL;
-#else
-	kbp->logK = 1.e30;
-#endif
 	return 1;
 }
 
@@ -2347,10 +2137,10 @@ BLAST_ScoreBlkFill(BlastScoreBlk* sbp, char* query, Int4 query_length, Int4 cont
 	stdrfp = Blast_ResFreqNew(sbp);
 	Blast_ResFreqStdComp(sbp, stdrfp);
 	Blast_ResFreqString(sbp, rfp, query, query_length);
-	sbp->sfp[context_number] = BlastScoreFreqNew(sbp->loscore, sbp->hiscore);
+	sbp->sfp[context_number] = Blast_ScoreFreqNew(sbp->loscore, sbp->hiscore);
 	BlastScoreFreqCalc(sbp, sbp->sfp[context_number], rfp, stdrfp);
 	sbp->kbp_std[context_number] = Blast_KarlinBlkCreate();
-	retval = BlastKarlinBlkCalc(sbp->kbp_std[context_number], sbp->sfp[context_number]);
+	retval = Blast_KarlinBlkCalc(sbp->kbp_std[context_number], sbp->sfp[context_number]);
 	if (retval)
 	{
 		rfp = Blast_ResFreqDestruct(rfp);
@@ -2358,7 +2148,7 @@ BLAST_ScoreBlkFill(BlastScoreBlk* sbp, char* query, Int4 query_length, Int4 cont
 		return retval;
 	}
 	sbp->kbp_psi[context_number] = Blast_KarlinBlkCreate();
-	retval = BlastKarlinBlkCalc(sbp->kbp_psi[context_number], sbp->sfp[context_number]);
+	retval = Blast_KarlinBlkCalc(sbp->kbp_psi[context_number], sbp->sfp[context_number]);
 	rfp = Blast_ResFreqDestruct(rfp);
 	stdrfp = Blast_ResFreqDestruct(stdrfp);
 
@@ -2377,17 +2167,17 @@ Blast_KarlinBlkIdealCalc(BlastScoreBlk* sbp)
 {
 	Blast_KarlinBlk* kbp_ideal;
 	Blast_ResFreq* stdrfp;
-	BLAST_ScoreFreq* sfp;
+	Blast_ScoreFreq* sfp;
 
 	stdrfp = Blast_ResFreqNew(sbp);
 	Blast_ResFreqStdComp(sbp, stdrfp);
-	sfp = BlastScoreFreqNew(sbp->loscore, sbp->hiscore);
+	sfp = Blast_ScoreFreqNew(sbp->loscore, sbp->hiscore);
 	BlastScoreFreqCalc(sbp, sfp, stdrfp, stdrfp);
 	kbp_ideal = Blast_KarlinBlkCreate();
-	BlastKarlinBlkCalc(kbp_ideal, sfp);
+	Blast_KarlinBlkCalc(kbp_ideal, sfp);
 	stdrfp = Blast_ResFreqDestruct(stdrfp);
 
-	sfp = BlastScoreFreqDestruct(sfp);
+	sfp = Blast_ScoreFreqDestruct(sfp);
 
 	return kbp_ideal;
 }
@@ -2434,17 +2224,17 @@ Blast_KarlinBlkCreate(void)
 	return kbp;
 }
 
-static BLASTMatrixStructure*
+static SBLASTMatrixStructure*
 BlastMatrixAllocate(Int2 alphabet_size)
 
 {
-	BLASTMatrixStructure* matrix_struct;
+	SBLASTMatrixStructure* matrix_struct;
 	Int2 index;
 
 	if (alphabet_size <= 0 || alphabet_size >= BLAST_MATRIX_SIZE)
 		return NULL;
 
-	matrix_struct =	(BLASTMatrixStructure*) calloc(1, sizeof(BLASTMatrixStructure));
+	matrix_struct =	(SBLASTMatrixStructure*) calloc(1, sizeof(SBLASTMatrixStructure));
 
 	if (matrix_struct == NULL)
 		return NULL;
@@ -2457,9 +2247,10 @@ BlastMatrixAllocate(Int2 alphabet_size)
 	return matrix_struct;
 }
 
-/*
-	Deallocates MatrixInfo*
-*/
+/** Deallocates MatrixInfo as well as name string.
+ * @param matrix_info the object to be deallocated [in]
+ * @return NULL pointer
+ */
 
 static MatrixInfo*
 MatrixInfoDestruct(MatrixInfo* matrix_info)
@@ -2473,12 +2264,16 @@ MatrixInfoDestruct(MatrixInfo* matrix_info)
 	return NULL;
 }
 
-/*
-	Makes New MatrixInfo*
-*/
+/** Allocates New MatrixInfo*
+ * @param name name of matrix [in]
+ * @param array_of_8 contains information on a matrix [in]
+ * @param prefs contains information on a which values are preferred [in]
+ * @param max_number size of those arrays [in]
+ * @return pointer to the allocated MatrixInfo
+ */
 
 static MatrixInfo*
-MatrixInfoNew(char* name, array_of_8 *values, Int4* prefs, Int4 max_number)
+MatrixInfoNew(const char* name, array_of_8 *values, Int4* prefs, Int4 max_number)
 
 {
 	MatrixInfo* matrix_info;
@@ -2492,6 +2287,10 @@ MatrixInfoNew(char* name, array_of_8 *values, Int4* prefs, Int4 max_number)
 	return matrix_info;
 }
 
+/** Free linked list of MatrixValues and all associated data
+ * @param vnp linked list of MatrixValues [in]
+ * @return NULL pointer
+ */
 static ListNode*
 BlastMatrixValuesDestruct(ListNode* vnp)
 
@@ -2510,12 +2309,10 @@ BlastMatrixValuesDestruct(ListNode* vnp)
 	return head;
 }
 
-/*
-	ListNode* BlastLoadMatrixValues (void)
-	
-	Loads all the matrix values, returns a ListNode* chain that contains
-	MatrixInfo*'s.
-
+/** Loads all the matrix values, returns a ListNode* chain that contains
+ *  MatrixInfo*'s.
+ * @return list of MatrixInfos.
+ *
 */
 static ListNode* 
 BlastLoadMatrixValues (void)
@@ -2951,7 +2748,7 @@ below.
 static Int4
 BlastKarlinEtoS_simple(double	E,	/* Expect value */
 	Blast_KarlinBlk*	kbp,
-	double	searchsp)	/* size of search space */
+	Int8	searchsp)	/* size of search space */
 {
 
 	double	Lambda, K, H; /* parameters for Karlin statistics */
@@ -2994,13 +2791,12 @@ BLAST_GapDecayDivisor(double decayrate, unsigned nsegs )
 /*
 	BlastCutoffs
 	Calculate the cutoff score, S, and the highest expected score.
-	WRG (later modified by TLM).
 */
 Int2
 BLAST_Cutoffs(Int4 *S, /* cutoff score */
 	double* E, /* expected no. of HSPs scoring at or above S */
 	Blast_KarlinBlk* kbp,
-	double searchsp, /* size of search space. */
+	Int8 searchsp, /* size of search space. */
 	Boolean dodecay,  /* TRUE ==> use gapdecay feature */
    double gap_decay_rate)
 {
@@ -3066,7 +2862,7 @@ BLAST_Cutoffs(Int4 *S, /* cutoff score */
 double
 BLAST_KarlinStoE_simple(Int4 S,
 		Blast_KarlinBlk* kbp,
-		double	searchsp)	/* size of search space. */
+		Int8	searchsp)	/* size of search space. */
 {
 	double	Lambda, K, H; /* parameters for Karlin statistics */
 
@@ -3077,7 +2873,7 @@ BLAST_KarlinStoE_simple(Int4 S,
 		return -1.;
 	}
 
-	return searchsp * exp((double)(-Lambda * S) + kbp->logK);
+	return (double) searchsp * exp((double)(-Lambda * S) + kbp->logK);
 }
 
 /*
@@ -3164,18 +2960,21 @@ BlastSumP(Int4 r, double s)
 	return BlastSumPCalc(r, s);
 }
 
-/*
-    BlastSumPCalc
-
-    Evaluate the following double integral, where r = number of segments
-    and s = the adjusted score in nats:
-
-                    (r-2)         oo           oo
-     Prob(r,s) =   r              -            -   (r-2)
-                 -------------   |   exp(-y)  |   x   exp(-exp(x - y/r)) dx dy
-                 (r-1)! (r-2)!  U            U
-                                s            0
-*/
+/**
+ *
+ *   Evaluate the following double integral, where r = number of segments
+ *
+ *   and s = the adjusted score in nats:
+ *
+ *                   (r-2)         oo           oo
+ *    Prob(r,s) =   r              -            -   (r-2)
+ *                -------------   |   exp(-y)  |   x   exp(-exp(x - y/r)) dx dy
+ *                (r-1)! (r-2)!  U            U
+ *                               s            0
+ * @param r number of segments
+ * @param s adjusted score in nats
+ * @return P value
+ */
 static double
 BlastSumPCalc(int r, double s)
 {
@@ -3260,10 +3059,8 @@ BlastSumPCalc(int r, double s)
 
 	do {
 		d = BLAST_RombergIntegrate(g, args, s, t, epsilon, 0, itmin);
-#ifdef BLASTKAR_HUGE_VAL
 		if (d == BLASTKAR_HUGE_VAL)
 			return d;
-#endif
 	} while (s < mean && d < 0.4 && itmin++ < 4);
 
 	return (d < 1. ? d : 1.);
@@ -3288,10 +3085,8 @@ f(double	x, void*	vp)
 	register double	y;
 
 	y = exp(x - ARG_SDIVR);
-#ifdef BLASTKAR_HUGE_VAL
 	if (y == BLASTKAR_HUGE_VAL)
 		return 0.;
-#endif
 	if (ARG_R2 == 0.)
 		return exp(ARG_ADJ2 - y);
 	if (x == 0.)
@@ -3437,6 +3232,40 @@ BLAST_LargeGapSumE(
     return sum_e;
 }
 
+/**  Given a sequence of 'length' amino acid residues, compute the
+ *   probability of each residue and put that in the array resProb
+ *
+ * @param sequence the sequence to be computed upon [in]
+ * @param length the length of the sequence [in]
+ * @param resProb the object to be filled in [in|out]
+ */
+
+void 
+Blast_FillResidueProbability(const Uint1* sequence, Int4 length, double * resProb)
+{
+    Int4 frequency[PSI_ALPHABET_SIZE];  /*frequency of each letter*/
+    Int4 i;                             /*index*/
+    Int4 denominator;                   /*length not including X's*/
+
+    denominator = length;
+    for(i = 0; i < PSI_ALPHABET_SIZE; i++)
+        frequency[i] = 0;
+
+    for(i = 0; i < length; i++) {
+        if (sequence[i] != AMINOACID_TO_NCBISTDAA['X'])
+            frequency[sequence[i]]++;
+        else
+            denominator--;
+    }
+
+    for(i = 0; i < PSI_ALPHABET_SIZE; i++) {
+        if (frequency[i] == 0)
+            resProb[i] = 0.0;
+        else
+            resProb[i] = ((double) frequency[i]) /((double) denominator);
+    }
+}
+
 /*------------------- RPS BLAST functions --------------------*/
 
 static double
@@ -3476,12 +3305,13 @@ RPSfindUngappedLambda(Char *matrixName)
    for indexing convenience the field storing scoreArray points to the
         entry for score 0, so that referring to the -k index corresponds to
         score -k 
+ FIXME: This can be replaced by _PSIComputeScoreProbabilities??
 */
 
 static void
 RPSFillScores(Int4 **matrix, Int4 matrixLength, 
               double *queryProbArray, double *scoreArray,  
-              BLAST_ScoreFreq* return_sfp, Int4 range)
+              Blast_ScoreFreq* return_sfp, Int4 range)
 {
     Int4 minScore, maxScore;    /*observed minimum and maximum scores */
     Int4 i,j;                   /* indices */
@@ -3523,35 +3353,6 @@ RPSFillScores(Int4 **matrix, Int4 matrixLength,
         return_sfp->score_avg += i * return_sfp->sprob[i];
 }
 
-/*  Given a sequence of 'length' amino acid residues, compute the
-    probability of each residue and put that in the array resProb*/
-
-static void 
-RPSFillResidueProbability(Uint1 * sequence, Int4 length, double * resProb)
-{
-    Int4 frequency[PSI_ALPHABET_SIZE];  /*frequency of each letter*/
-    Int4 i;                             /*index*/
-    Int4 denominator;                   /*length not including X's*/
-
-    denominator = length;
-    for(i = 0; i < PSI_ALPHABET_SIZE; i++)
-        frequency[i] = 0;
-
-    for(i = 0; i < length; i++) {
-        if (sequence[i] != AMINOACID_TO_NCBISTDAA['X'])
-            frequency[sequence[i]]++;
-        else
-            denominator--;
-    }
-
-    for(i = 0; i < PSI_ALPHABET_SIZE; i++) {
-        if (frequency[i] == 0)
-            resProb[i] = 0.0;
-        else
-            resProb[i] = ((double) frequency[i]) /((double) denominator);
-    }
-}
-
 /* Calculate a new PSSM, using composition-based statistics, for use
    with RPS BLAST. This function produces a PSSM for a single RPS DB
    sequence (of size db_seq_length) and incorporates information from 
@@ -3567,7 +3368,7 @@ RPSCalculatePSSM(double scalingFactor, Int4 rps_query_length,
 {
     double *scoreArray;         /*array of score probabilities*/
     double *resProb;            /*array of probabilities for each residue*/
-    BLAST_ScoreFreq * return_sfp;/*score frequency pointers to compute lambda*/
+    Blast_ScoreFreq * return_sfp;/*score frequency pointers to compute lambda*/
     Int4* * returnMatrix;        /*the PSSM to return */
     double initialUngappedLambda; 
     double scaledInitialUngappedLambda; 
@@ -3578,9 +3379,9 @@ RPSCalculatePSSM(double scalingFactor, Int4 rps_query_length,
 
     resProb = (double *)malloc(PSI_ALPHABET_SIZE * sizeof(double));
     scoreArray = (double *)malloc(BLAST_SCORE_RANGE_MAX * sizeof(double));
-    return_sfp = (BLAST_ScoreFreq *)malloc(sizeof(BLAST_ScoreFreq));
+    return_sfp = (Blast_ScoreFreq *)malloc(sizeof(Blast_ScoreFreq));
 
-    RPSFillResidueProbability(rps_query_seq, rps_query_length, resProb);
+    Blast_FillResidueProbability(rps_query_seq, rps_query_length, resProb);
 
     RPSFillScores(posMatrix, db_seq_length, resProb, scoreArray, 
                  return_sfp, BLAST_SCORE_RANGE_MAX);
@@ -3669,7 +3470,9 @@ BLAST_ComputeLengthAdjustment(double K,
 {
     Int4 i;                     /* iteration index */
     const Int4 maxits = 20;     /* maximum allowed iterations */
-    double m = query_length, n = db_length, N = db_num_seqs;
+    double m = (double) query_length;
+    double n = (double) db_length;
+    double N = (double) db_num_seqs;
 
     double ell;                 /* A float value of the length adjustment */
     double ss;                  /* effective size of the search space */
@@ -3742,3 +3545,293 @@ BLAST_ComputeLengthAdjustment(double K,
 
     return converged ? 0 : 1;
 }
+
+/*
+ * ===========================================================================
+ *
+ * $Log: blast_stat.c,v $
+ * Revision 1.82  2004/06/10 13:21:24  madden
+ * Rename RPSFillResidueProbability to Blast_FillResidueProbability, made public.
+ * Removed usage of BLAST_SCORE_1MIN/MAX, simply use BLAST_SCORE_MIN/MAX instead
+ * Removed useless defines DIMOFP0 and DIMOFP0_MAX
+ * Moved over some defines from blast_stat.h
+ *
+ * Revision 1.81  2004/06/08 15:05:05  madden
+ * Doxygen fixes
+ *
+ * Revision 1.80  2004/06/07 20:03:34  coulouri
+ * use floating point constants for comparisons with floating point variables
+ *
+ * Revision 1.79  2004/06/07 14:44:01  madden
+ * Doxygen fixes
+ *
+ * Revision 1.78  2004/06/07 14:20:41  dondosha
+ * Set matrix dimensions to 26 when matrix is read from a file, to make it the same as when matrix is loaded from a library
+ *
+ * Revision 1.77  2004/05/24 15:09:40  camacho
+ * Fixed conflict
+ *
+ * Revision 1.76  2004/05/24 13:26:27  madden
+ * Fix PC compiler warnings
+ *
+ * Revision 1.75  2004/05/20 16:29:30  madden
+ * Make searchsp an Int8 consistent with rest of blast
+ *
+ * Revision 1.74  2004/05/19 15:34:38  dondosha
+ * Moved Blast_ResComp definition from header file
+ *
+ * Revision 1.73  2004/05/19 14:52:03  camacho
+ * 1. Added doxygen tags to enable doxygen processing of algo/blast/core
+ * 2. Standardized copyright, CVS $Id string, $Log and rcsid formatting and i
+ *    location
+ * 3. Added use of @todo doxygen keyword
+ *
+ * Revision 1.72  2004/05/17 10:37:38  camacho
+ * Rename BLAST_ScoreFreq, BLASTMatrixStructure and BLAST_ResComp to avoid conflicts with C toolkit
+ *
+ * Revision 1.71  2004/05/07 15:23:47  papadopo
+ * add initialization of scale factor to ScoreBlkNew
+ *
+ * Revision 1.70  2004/05/06 15:59:29  camacho
+ * Made Blast_KarlinBlkCalc non-static
+ *
+ * Revision 1.69  2004/05/06 15:05:13  camacho
+ * Fix to previous commit
+ *
+ * Revision 1.68  2004/05/06 14:44:27  camacho
+ * Made Blast_ScoreFreqDestruct non-static
+ *
+ * Revision 1.67  2004/05/05 21:16:24  camacho
+ * Make Blast_GetStdAlphabet and Blast_ScoreFreqNew non-static
+ *
+ * Revision 1.66  2004/05/04 13:00:02  madden
+ * Change BlastKarlinBlkStandardCalcEx to more descriptive Blast_KarlinBlkIdealCalc, make public
+ *
+ * Revision 1.65  2004/04/30 14:39:44  papadopo
+ * 1. Remove unneeded #defines
+ * 2. use BLAST_SCORE_RANGE_MAX during RPS PSSM creation instead of
+ * 	(possibly incompatible) RPS_SCORE_MAX
+ * 3. return NULL instead of FALSE on an error
+ *
+ * Revision 1.64  2004/04/30 12:58:49  camacho
+ * Replace RPSKarlinLambdaNR by Blast_KarlinLambdaNR
+ *
+ * Revision 1.63  2004/04/29 20:32:38  papadopo
+ * remove RPS_SCORE_MIN, since it turned out to be a workaround for a bug that has since been fixed
+ *
+ * Revision 1.62  2004/04/29 19:58:03  camacho
+ * Use generic matrix allocator/deallocator from blast_psi_priv.h
+ *
+ * Revision 1.61  2004/04/28 14:40:23  madden
+ * Changes from Mike Gertz:
+ * - I created the new routine BLAST_GapDecayDivisor that computes a
+ *   divisor used to weight the evalue of a collection of distinct
+ *   alignments.
+ * - I removed  BLAST_GapDecay and BLAST_GapDecayInverse which had become
+ *   redundant.
+ * - I modified the BLAST_Cutoffs routine so that it uses the value
+ *   returned by BLAST_GapDecayDivisor to weight evalues.
+ * - I modified BLAST_SmallGapSumE, BLAST_LargeGapSumE and
+ *   BLAST_UnevenGapSumE no longer refer to the gap_prob parameter.
+ *   Replaced the gap_decay_rate parameter of each of these routines with
+ *   a weight_divisor parameter.  Added documentation.
+ *
+ * Revision 1.60  2004/04/23 19:06:33  camacho
+ * Do NOT use lowercase names for #defines
+ *
+ * Revision 1.59  2004/04/23 13:49:20  madden
+ * Cleaned up ifndef in BlastKarlinLHtoK
+ *
+ * Revision 1.58  2004/04/23 13:21:25  madden
+ * Rewrote BlastKarlinLHtoK to do the following and more:
+ * 1. fix a bug whereby the wrong formula was used when high score == 1
+ *    and low score == -1;
+ * 2. fix a methodological error of truncating the first sum
+ *    and trying to make it converge quickly by adding terms
+ *    of a geometric progression, even though the geometric progression
+ *    estimate is not correct in all cases;
+ *    the old adjustment code is left in for historical purposes but
+ *    #ifdef'd out
+ * 3. Eliminate the Boolean bi_modal_score variable.  The old test that
+ *    set the value of bi_modal_score would frequently fail to choose the
+ *    correct value due to rounding error.
+ * 4. changed numerous local variable names to make them more meaningful;
+ * 5. added substantial comments to explain what the procedure
+ *    is doing and what each variable represents
+ *
+ * Revision 1.57  2004/04/19 12:58:18  madden
+ * Changed BLAST_KarlinBlk to Blast_KarlinBlk to avoid conflict with blastkar.h structure, renamed some functions to start with Blast_Karlin, made Blast_KarlinBlkDestruct public
+ *
+ * Revision 1.56  2004/04/12 18:57:31  madden
+ * Rename BLAST_ResFreq to Blast_ResFreq, make Blast_ResFreqNew, Blast_ResFreqDestruct, and Blast_ResFreqStdComp non-static
+ *
+ * Revision 1.55  2004/04/08 13:53:10  papadopo
+ * fix doxygen warning
+ *
+ * Revision 1.54  2004/04/07 03:06:16  camacho
+ * Added blast_encoding.[hc], refactoring blast_stat.[hc]
+ *
+v * Revision 1.53  2004/04/05 18:53:35  madden
+ * Set dimensions if matrix from memory
+ *
+ * Revision 1.52  2004/04/01 14:14:02  lavr
+ * Spell "occurred", "occurrence", and "occurring"
+ *
+ * Revision 1.51  2004/03/31 17:50:09  papadopo
+ * Mike Gertz' changes for length adjustment calculations
+ *
+ * Revision 1.50  2004/03/11 18:52:41  camacho
+ * Remove THREADS_IMPLEMENTED
+ *
+ * Revision 1.49  2004/03/10 18:00:06  camacho
+ * Remove outdated references to blastkar
+ *
+ * Revision 1.48  2004/03/05 17:52:33  papadopo
+ * Allow 32-bit context numbers for queries
+ *
+ * Revision 1.47  2004/03/04 21:07:51  papadopo
+ * add RPS BLAST functionality
+ *
+ * Revision 1.46  2004/02/19 21:16:48  dondosha
+ * Use enum type for severity argument in Blast_MessageWrite
+ *
+ * Revision 1.45  2003/12/05 16:03:57  camacho
+ * Remove compiler warnings
+ *
+ * Revision 1.44  2003/11/28 22:39:11  camacho
+ * + static keyword to BlastKarlinLtoH
+ *
+ * Revision 1.43  2003/11/28 15:03:48  camacho
+ * Added static keyword to BlastKarlinLtoH
+ *
+ * Revision 1.42  2003/11/26 19:12:13  madden
+ * code to simplify some routines and use NlmKarlinLambdaNR in place of BlastKarlinLambdaBis (following Mike Gertzs changes to blastkar.c )
+ *
+ * Revision 1.41  2003/11/24 23:18:32  dondosha
+ * Added gap_decay_rate argument to BLAST_Cutoffs; removed BLAST_Cutoffs_simple
+ *
+ * Revision 1.40  2003/11/19 15:17:42  dondosha
+ * Removed unused members from Karlin block structure
+ *
+ * Revision 1.39  2003/10/16 15:55:22  coulouri
+ * fix uninitialized variables
+ *
+ * Revision 1.38  2003/10/16 15:52:08  coulouri
+ * fix uninitialized variables
+ *
+ * Revision 1.37  2003/10/15 16:59:43  coulouri
+ * type correctness fixes
+ *
+ * Revision 1.36  2003/10/02 22:08:34  dondosha
+ * Corrections for one-strand translated searches
+ *
+ * Revision 1.35  2003/09/26 19:01:59  madden
+ * Prefix ncbimath functions with BLAST_
+ *
+ * Revision 1.34  2003/09/09 14:21:39  coulouri
+ * change blastkar.h to blast_stat.h
+ *
+ * Revision 1.33  2003/09/02 21:12:07  camacho
+ * Fix small memory leak
+ *
+ * Revision 1.32  2003/08/26 15:23:51  dondosha
+ * Rolled back previous change as it is not necessary any more
+ *
+ * Revision 1.31  2003/08/25 22:29:07  dondosha
+ * Default matrix loading is defined only in C++ toolkit
+ *
+ * Revision 1.30  2003/08/25 18:05:41  dondosha
+ * Moved assert statement after variables declarations
+ *
+ * Revision 1.29  2003/08/25 16:23:33  camacho
+ * +Loading protein scoring matrices from utils/tables
+ *
+ * Revision 1.28  2003/08/11 15:01:59  dondosha
+ * Added algo/blast/core to all #included headers
+ *
+ * Revision 1.27  2003/08/01 17:27:04  dondosha
+ * Renamed external functions to avoid collisions with ncbitool library; made other functions static
+ *
+ * Revision 1.26  2003/07/31 18:48:49  dondosha
+ * Use Int4 instead of BLAST_Score
+ *
+ * Revision 1.25  2003/07/31 17:48:06  madden
+ * Remove call to FileLength
+ *
+ * Revision 1.24  2003/07/31 14:31:41  camacho
+ * Replaced Char for char
+ *
+ * Revision 1.23  2003/07/31 14:19:28  camacho
+ * Replaced FloatHi for double
+ *
+ * Revision 1.22  2003/07/31 00:32:37  camacho
+ * Eliminated Ptr notation
+ *
+ * Revision 1.21  2003/07/30 22:08:09  dondosha
+ * Process of finding path to the matrix is moved out of the blast library
+ *
+ * Revision 1.20  2003/07/30 21:52:41  camacho
+ * Follow conventional structure definition
+ *
+ * Revision 1.19  2003/07/30 19:39:14  camacho
+ * Remove PNTRs
+ *
+ * Revision 1.18  2003/07/30 17:58:25  dondosha
+ * Changed ValNode to ListNode
+ *
+ * Revision 1.17  2003/07/30 17:15:00  dondosha
+ * Minor fixes for very strict compiler warnings
+ *
+ * Revision 1.16  2003/07/30 17:06:40  camacho
+ * Removed old cvs log
+ *
+ * Revision 1.15  2003/07/30 16:32:02  madden
+ * Use ansi functions when possible
+ *
+ * Revision 1.14  2003/07/30 15:29:37  madden
+ * Removed MemSets
+ *
+ * Revision 1.13  2003/07/29 14:42:31  coulouri
+ * use strdup() instead of StringSave()
+ *
+ * Revision 1.12  2003/07/28 19:04:15  camacho
+ * Replaced all MemNews for calloc
+ *
+ * Revision 1.11  2003/07/28 03:41:49  camacho
+ * Use f{open,close,gets} instead of File{Open,Close,Gets}
+ *
+ * Revision 1.10  2003/07/25 21:12:28  coulouri
+ * remove constructions of the form "return sfree();" and "a=sfree(a);"
+ *
+ * Revision 1.9  2003/07/25 18:58:43  camacho
+ * Avoid using StrUpper and StringHasNoText
+ *
+ * Revision 1.8  2003/07/25 17:25:43  coulouri
+ * in progres:
+ *  * use malloc/calloc/realloc instead of Malloc/Calloc/Realloc
+ *  * add sfree() macro and __sfree() helper function to util.[ch]
+ *  * use sfree() instead of MemFree()
+ *
+ * Revision 1.7  2003/07/24 22:37:33  dondosha
+ * Removed some unused function parameters
+ *
+ * Revision 1.6  2003/07/24 22:01:44  camacho
+ * Removed unused variables
+ *
+ * Revision 1.5  2003/07/24 21:31:06  dondosha
+ * Changed to calls to BlastConstructErrorMessage to API from blast_message.h
+ *
+ * Revision 1.4  2003/07/24 20:38:30  dondosha
+ * Removed LIBCALL etc. macros
+ *
+ * Revision 1.3  2003/07/24 17:37:46  dondosha
+ * Removed MakeBlastScore function that is dependent on objalign.h
+ *
+ * Revision 1.2  2003/07/24 15:50:49  dondosha
+ * Commented out mutex operations
+ *
+ * Revision 1.1  2003/07/24 15:18:09  dondosha
+ * Copy of blastkar.h from ncbitools library, stripped of dependency on ncbiobj
+ *
+ * ===========================================================================
+ */

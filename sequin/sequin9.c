@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.254 $
+* $Revision: 6.260 $
 *
 * File Description: 
 *
@@ -4445,7 +4445,8 @@ static TransTablePtr GetTranslationTable (CdRegionPtr crp, Boolean PNTR table_is
 
 static CharPtr ExtendProtein5
 (SeqFeatPtr sfp,
- Uint2      input_entityID)
+ Uint2      input_entityID,
+ Boolean    force_partial)
 {
   CdRegionPtr   crp;
   TransTablePtr tbl = NULL;
@@ -4486,8 +4487,14 @@ static CharPtr ExtendProtein5
   strand = SeqLocStrand (sfp->location);
   sip = SeqLocId (sfp->location);
   offset = -1;
+
+  start = GetOffsetInBioseq (test_slp, nucBsp, SEQLOC_START);
+  if (start == 0)
+  {
+  	stop_looking = TRUE;
+  }
  
-  while (! found_start && ! found_stop && ! stop_looking) {
+  while (((! found_start && ! found_stop) || force_partial) && ! stop_looking) {
     start = GetOffsetInBioseq (test_slp, nucBsp, SEQLOC_START);
     stop = GetOffsetInBioseq (test_slp, nucBsp, SEQLOC_STOP);
     if (strand == Seq_strand_minus) {
@@ -4537,7 +4544,7 @@ static CharPtr ExtendProtein5
       MemFree (bases);
     }
   }
-
+  
   SeqLocFree (test_slp);
   if (! found_stop) { 
     start = GetOffsetInBioseq (sfp->location, nucBsp, SEQLOC_START);
@@ -4552,12 +4559,16 @@ static CharPtr ExtendProtein5
       CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
       SetSeqLocPartial (sfp->location, TRUE, partial3);
       sfp->partial = TRUE;
+      if (crp->frame == 0)
+      {
+        crp->frame = 1;
+      }
       if (strand == Seq_strand_minus) {
         sfp->location = ExpandSeqLoc (stop, nucBsp->length - 1, strand, nucBsp, sfp->location);
-        crp->frame = (nucBsp->length - 1 - start) % 3 + 1;
+        crp->frame = (nucBsp->length - 1 - start + crp->frame - 1) % 3 + 1;
       } else {
         sfp->location = ExpandSeqLoc (0, stop, strand, nucBsp, sfp->location);
-        crp->frame = start % 3 + 1;
+        crp->frame = (start + crp->frame - 1) % 3 + 1;
       }
     }
   }
@@ -4573,7 +4584,8 @@ static CharPtr ExtendProtein5
 
 static CharPtr ExtendProtein3 
 (SeqFeatPtr sfp,
- Uint2      input_entityID)
+ Uint2      input_entityID,
+ Boolean    force_partial)
 {
   BioseqPtr nucBsp;
   Int4      max_stop, min_start, start, stop;
@@ -4609,7 +4621,14 @@ static CharPtr ExtendProtein3
   contains_stop = FALSE;
   contains_start = FALSE;
   newprot = NULL;
-  while (! contains_stop &&
+  /* need to initialize newprot in case we're already at the edge */
+  if ((strand != Seq_strand_minus && stop == max_stop)
+      || (strand == Seq_strand_minus && stop == min_start))
+  {
+  	newprot = FixProteinString (sfp, strand, FALSE, &truncated,
+                              &contains_start, &contains_stop);
+  }
+  while ((! contains_stop || force_partial) &&
          (   (strand == Seq_strand_minus && stop > min_start) 
           || (strand != Seq_strand_minus && stop < max_stop)))
   {
@@ -4634,7 +4653,7 @@ static CharPtr ExtendProtein3
                               &contains_start, &contains_stop);
   }
 
-  if (! contains_stop) {
+  if (! contains_stop || force_partial) {
     start = GetOffsetInBioseq (sfp->location, nucBsp, SEQLOC_START);
     stop = GetOffsetInBioseq (sfp->location, nucBsp, SEQLOC_STOP);
     if (strand == Seq_strand_minus) {
@@ -4673,6 +4692,8 @@ PrepareUpdatePtrForProtein
   Uint1         strand;
   SeqLocPtr     newloc;
   BioseqPtr     nucBsp;
+  Boolean       partial5, partial3;
+
  
   if (sfp == NULL
     || sfp->idx.subtype != FEATDEF_CDS
@@ -4683,7 +4704,9 @@ PrepareUpdatePtrForProtein
   {
     return NULL;
   }
-
+  
+  CheckSeqLocForPartial (sfp->location, &partial3, &partial5);
+  
   nucBsp = GetBioseqGivenSeqLoc (sfp->location, input_entityID);
   if (nucBsp == NULL) return NULL;
   newloc = SeqLocMerge (nucBsp, sfp->location, NULL, FALSE, FALSE, FALSE);
@@ -4701,17 +4724,18 @@ PrepareUpdatePtrForProtein
                               &contains_start, &contains_stop);
 
   /* Must do 3' end first, otherwise may truncate at stops introduced by expanding 5' end for partiality */
-  if (! contains_stop && extend_proteins3 && transl_except_len == 0) {
+  if ((! contains_stop && extend_proteins3 && transl_except_len == 0)
+      || ((extend_proteins3 || partial3) && !truncate_proteins)) {
     MemFree (newprot);
-    newprot = ExtendProtein3 (sfp, input_entityID);
+    newprot = ExtendProtein3 (sfp, input_entityID, partial3 && !truncate_proteins);
     if (newprot == NULL) return NULL;
     *extended3 = TRUE;
   } else {
     *extended3 = FALSE;
   }
-  if (! contains_start && extend_proteins5) {
+  if (! contains_start && (extend_proteins5 || partial5)) {
     MemFree (newprot);
-    newprot = ExtendProtein5 (sfp, input_entityID);
+    newprot = ExtendProtein5 (sfp, input_entityID, partial5);
     if (newprot == NULL) return NULL;
     *extended5 = TRUE;
   } else {
@@ -6818,7 +6842,7 @@ static void DetermineButtonState (UpsDataPtr   udp,
 
   /* Replace */
 
-  else if (udp->new5 >= udp->old5 && udp->new3 >= udp->old3) {
+  else {
     SetValue (udp->rmc, 1);
     Disable (*extend5ButtonPtr);
     Disable (*extend3ButtonPtr);
@@ -6827,7 +6851,7 @@ static void DetermineButtonState (UpsDataPtr   udp,
   }
 
   /* Patch */
-
+/* This section removed - do not set patch as a default
   else if (udp->new5 <= udp->old5 && udp->new3 <= udp->old3) {
     SetValue (udp->rmc, 4);
     Disable (*extend5ButtonPtr);
@@ -6836,14 +6860,13 @@ static void DetermineButtonState (UpsDataPtr   udp,
     udp->recomb2 = udp->aln_length;
 
     /* If patch sequence matches, must be feature propagation only */
-
-    if (StringNICmp (udp->seq1 + udp->old5 - udp->new5,
+/*  if (StringNICmp (udp->seq1 + udp->old5 - udp->new5,
 		     udp->seq2,
 		     StringLen (udp->seq2)) == 0) {
       SetValue (udp->sfb, 2);
       Disable (udp->sfb);
     }
-  }
+  } */
 
   /* If no features, must be sequence update only */
 
@@ -7561,7 +7584,7 @@ static Int2 UpdateNextBioseqInFastaSet (UpsDataPtr udp)
 /*                                                                     */
 /*=====================================================================*/
 
-extern void UpdateFastaSetEx (IteM i, Boolean use_new_blast)
+static void UpdateFastaSetEx (IteM i, Boolean use_new_blast)
 {
   BaseFormPtr   bfp;
   FILE         *fp;
@@ -7788,13 +7811,13 @@ extern void NewExtendSequence (IteM i)
   NewUpdateOrExtendSequence (i, FALSE, FALSE);
 }
 
-extern void NewExtendSequenceNewBlast (IteM i)
+static void NewExtendSequenceNewBlast (IteM i)
 
 {
   NewUpdateOrExtendSequence (i, FALSE, TRUE);
 }
 
-extern void UpdateSeqAfterDownloadEx 
+static void UpdateSeqAfterDownloadEx 
 (BaseFormPtr bfp,
  BioseqPtr oldbsp,
  BioseqPtr newbsp,
@@ -7870,7 +7893,7 @@ extern void UpdateSeqAfterDownload
   UpdateSeqAfterDownloadEx (bfp, oldbsp, newbsp, FALSE);
 }
 
-extern void ExtendSeqAfterDownloadEx
+static void ExtendSeqAfterDownloadEx
 (BaseFormPtr bfp,
  BioseqPtr oldbsp,
  BioseqPtr newbsp,
@@ -9018,6 +9041,7 @@ static ForM FeaturePropagateForm (
   fdp->transPast = CheckBox (g, "Translate CDS after partial 3' boundary", NULL);
 
   fdp->fixCDS = CheckBox (g, "Cleanup CDS partials after propagation", NULL);
+  SetStatus (fdp->fixCDS, TRUE);
 
   fdp->fuseJoints = CheckBox (g, "Fuse adjacent propagated intervals", NULL);
   SetStatus (fdp->fuseJoints, TRUE);
@@ -10104,11 +10128,6 @@ NLM_EXTERN SeqAlignPtr Sqn_LocalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, Boo
    AlnMgr2IndexLite(sap);  /* reindex the alignments */
    sap_final = ACT_CleanUpAlignments(sap, bsp1->length, bsp2->length);
    return sap_final;
-}
-
-NLM_EXTERN SeqAlignPtr Sqn_LocalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp)
-{
-  return Sqn_LocalAlign2SeqEx (bsp1, bsp2, revcomp, FALSE);
 }
 
 /* End of implementation of the new BLAST library .
