@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.206 $
+* $Revision: 6.216 $
 *
 * File Description: 
 *
@@ -1193,6 +1193,7 @@ static Boolean ShouldSuppressGBQual(Uint1 subtype, CharPtr qual_name)
       return TRUE;
     }
   }
+
   return FALSE;
 }
     
@@ -1211,15 +1212,18 @@ static Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGB
       qual == GBQUAL_insertion_seq ||
       qual == GBQUAL_label ||
       qual == GBQUAL_locus_tag ||
+      qual == GBQUAL_non_functional ||
       qual == GBQUAL_note ||
       qual == GBQUAL_partial ||
       qual == GBQUAL_product ||
       qual == GBQUAL_pseudo ||
+      qual == GBQUAL_pseudogene ||
       qual == GBQUAL_rpt_unit ||
       qual == GBQUAL_transposon ||
       qual == GBQUAL_experiment ||
       qual == GBQUAL_trans_splicing ||
       qual == GBQUAL_ribosomal_slippage ||
+      qual == GBQUAL_standard_name ||
       qual == GBQUAL_inference) {
     return FALSE;
   }
@@ -1241,7 +1245,7 @@ static Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGB
 static CharPtr TrimCommasAndAtSignsAroundGBString (CharPtr str)
 
 {
-  Uchar    ch;	/* to use 8bit characters in multibyte languages */
+  Uchar    ch;  /* to use 8bit characters in multibyte languages */
   CharPtr  dst;
   CharPtr  ptr;
 
@@ -3395,6 +3399,72 @@ extern void ModalThirdOptionButton (ButtoN b)
   }
 }
 
+
+NLM_EXTERN Int4 
+ThreeOptionsDlg
+(CharPtr title_txt,
+ CharPtr explain_txt,
+ CharPtr opt1,
+ CharPtr opt2,
+ CharPtr opt3)
+{
+  WindoW w;
+  GrouP  h, c;
+  ButtoN b;
+  GrouP  p;
+  ModalAcceptCancelData acd;
+  
+  
+  w = MovableModalWindow (-20, -13, -10, -10, title_txt, NULL);
+  h = HiddenGroup(w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  p = MultiLinePrompt (h, explain_txt, 300, programFont);
+    
+  c = HiddenGroup (h, 3, 0, NULL);
+  b = PushButton (c, opt1, ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, opt2, ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  
+  if (!StringHasNoText (opt3)) {
+    b = PushButton (c, opt3, ModalThirdOptionButton);
+    SetObjectExtra (b, &acd, NULL);
+  }
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) p,
+                              (HANDLE) c, 
+                              NULL);
+
+  Show (w);
+  Select (w);
+  
+  acd.cancelled = FALSE;
+  acd.third_option = FALSE;
+  acd.accepted = FALSE;
+  while (!acd.accepted && ! acd.cancelled && !acd.third_option)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  Remove (w);
+  
+  if (acd.accepted)
+  {
+    return 1;
+  }
+  else if (acd.cancelled)
+  {
+    return 2;
+  }
+  else
+  {
+    return 3;
+  }
+}
+
+
 typedef struct tabledisplay 
 {
   DIALOG_MESSAGE_BLOCK
@@ -3582,7 +3652,7 @@ static void RowsToTableDisplayDialog (DialoG d, Pointer userdata)
 {
   TableDisplayPtr dlg;
   RecT            r;
-	WindoW          temport;
+    WindoW          temport;
 
   dlg = (TableDisplayPtr) GetObjectExtra (d);
   if (dlg == NULL)
@@ -4367,10 +4437,10 @@ MultiSelectDialog
   dlg->listCol.left = FALSE;
   dlg->listCol.last = TRUE;  
   
-	AppendText (dlg->doc, "All", &(dlg->listPar), &(dlg->listCol), programFont);
+    AppendText (dlg->doc, "All", &(dlg->listPar), &(dlg->listCol), programFont);
   for (vnp = choice_list; vnp != NULL; vnp = vnp->next)
   {
-	  AppendText (dlg->doc, vnp->data.ptrvalue, &(dlg->listPar), &(dlg->listCol), programFont);
+      AppendText (dlg->doc, vnp->data.ptrvalue, &(dlg->listPar), &(dlg->listCol), programFont);
   }
   SetDocAutoAdjust (dlg->doc, FALSE);
   SetDocProcs (dlg->doc, SelectChoice, NULL, NULL, NULL);
@@ -5233,7 +5303,7 @@ GetSequenceChoiceList
   }
   else
   {
-  	bssp = (BioseqSetPtr) sep->data.ptrvalue;
+      bssp = (BioseqSetPtr) sep->data.ptrvalue;
     for (sep = bssp->seq_set; sep != NULL; sep = sep->next) 
     {
       GetSequenceChoiceList (sep, list, show_nucs, show_prots);
@@ -6963,7 +7033,7 @@ extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertB
       StringCat (str, first);
       StringCat (str, ":");
       StringCat (str, second);
-      if (StringCmp (prefix, "alignment") == 0 && accession_list != NULL) {
+      if (StringCmp (prefix, "alignment") == 0 && StringDoesHaveText (accession_list)) {
         StringCat (str, ":");
         StringCat (str, accession_list);
       }
@@ -7773,7 +7843,7 @@ extern DialoG EditApplyDialog
  Pointer                  change_userdata)
 {
   EditApplyDlgPtr dlg;
-  GrouP           p, p1;
+  GrouP           p, p1 = NULL;
   ButtoN          b;
   ValNodePtr      cpy;
   
@@ -8478,7 +8548,7 @@ static void PointerToClickableItemListDlg (DialoG d, Pointer data)
   dlg->col_fmt[2].pixWidth = (r.right - r.left - dlg->col_fmt[0].pixWidth) / 3;
   dlg->col_fmt[3].pixWidth = (r.right - r.left - dlg->col_fmt[0].pixWidth) / 3;
 
-  dlg->item_list = ValNodeFree (dlg->item_list);
+  dlg->item_list = ClickableItemObjectListFree (dlg->item_list);
   dlg->item_list = (ValNodePtr) data; 
  
   if (dlg->item_list == NULL)
@@ -8577,7 +8647,7 @@ static void CleanupClickableItemListDlg (GraphiC g, VoidPtr data)
 
   dlg = (ClickableItemListDlgPtr) data;
   if (dlg != NULL) {
-    dlg->item_list = ValNodeFree (dlg->item_list);
+    dlg->item_list = ClickableItemObjectListFree (dlg->item_list);
   } 
   StdCleanupExtraProc (g, data);
 }
@@ -9176,7 +9246,7 @@ static void PopulateClickableItemList (DialoG d, ClickableItemPtr cip)
   if (d == NULL) return;
   if (cip != NULL)
   {
-    ValNodeLinkCopy (&list, cip->item_list);
+    ValNodeLink (&list, ClickableItemObjectListCopy (cip->item_list));
   }
   PointerToDialog (d, list);
 
@@ -9911,7 +9981,9 @@ extern void ScrollToPreviousClickableTextDescription (CharPtr txt, DialoG d)
     while (vnp != NULL && vnp->next != NULL) {
       vnp = vnp->next;
     }
-    row_offset = vnp->data.intvalue;
+    if (vnp != NULL) {
+      row_offset = vnp->data.intvalue;
+    }
   } else {
     row_offset = vnp_prev->data.intvalue;
   }
@@ -10477,7 +10549,7 @@ static void ChangeCollectionDateMonth (PopuP p)
 
 static Int4 PopulateYearPopup (PopuP p)
 {
-	Nlm_DayTime dt;
+    Nlm_DayTime dt;
   Char        year_str[20];
   Int4        start_year, i, end_year;
 
@@ -11513,6 +11585,9 @@ static void StringToSingleGBQualEditDialog (DialoG d, Pointer data)
       Disable (dlg->editor);
     }
   }
+  if (dlg->tlp_callback != NULL) {
+    (dlg->tlp_callback)(dlg->callback_data);
+  }
 }
 
 static Pointer SingleGBQualEditDialogToString (DialoG d)
@@ -11934,6 +12009,73 @@ static GBQualPtr CopyGBQualList (GBQualPtr origgbq)
   return head;
 }
 
+
+static void ChangeRptTypeForSatellite (Pointer data)
+{
+  NewFieldPagePtr fpf;
+  GBQualPtr       gbq_it;
+  Int4            i;
+  Int4            rpt_type_num = -1;
+  Boolean         tandem = FALSE, found_satellite = FALSE;
+  CharPtr         val, new_val, src;
+  CharPtr         fmt = "(tandem,%s)";
+
+  fpf = (NewFieldPagePtr) data;
+
+  if (fpf == NULL) {
+    return;
+  }
+
+  /* find satellite qualifier, get type */
+  for (gbq_it = fpf->new_gbq, i = 0; gbq_it != NULL; gbq_it = gbq_it->next, i++) {
+    if (StringICmp (gbq_it->qual, "satellite") == 0) {
+      val = DialogToPointer (fpf->editors[i]);
+      if (StringCmp (val, "microsatellite") == 0 
+          || StringCmp (val, "minisatellite") == 0
+          || StringNICmp (val, "microsatellite:", 15) == 0
+          || StringNICmp (val, "minisatellite:", 14) == 0) {
+        tandem = TRUE;
+      }
+      val = MemFree (val);
+      found_satellite = TRUE;
+    } else if (StringICmp (gbq_it->qual, "rpt_type") == 0) {
+      rpt_type_num = i;
+    }
+  }
+
+  /* now set rpt_type */
+  if (found_satellite && rpt_type_num > -1) {
+    val = DialogToPointer (fpf->editors[rpt_type_num]);
+
+    if (tandem) {
+      if (StringISearch (val, "tandem") == NULL) {
+        /* add tandem */
+        if (StringHasNoText (val)) {
+          PointerToDialog (fpf->editors[rpt_type_num], "tandem");
+        } else {
+          src = StringChr (val, '}');
+          if (src != NULL) {
+            *src = 0;
+          }
+          src = val;
+          if (*src == '{') {
+            src++;
+          }
+          new_val = (CharPtr) MemNew (sizeof (Char) * (StringLen (src) + StringLen (fmt)));                        
+          sprintf (new_val, fmt, src);
+          PointerToDialog (fpf->editors[rpt_type_num], new_val);
+          new_val = MemFree (new_val);
+        }
+      }
+    }
+
+    /* set */
+
+    val = MemFree (val);
+  }
+}
+
+
 extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean allowProductGBQual)
 {
   NewFieldPagePtr fpf;
@@ -12038,7 +12180,8 @@ extern DialoG NewCreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Bool
         StaticPrompt (g, gbq_it->qual, 0, dialogTextHeight, programFont, 'l');
         fpf->editors[j] = CreateSingleGBQualEditDialog (g, NULL, gbq_it->qual,
                                                         j < num_legal ? FALSE : TRUE,
-                                                        NULL, NULL);
+                                                        StringCmp (gbq_it->qual, "satellite") == 0 ? ChangeRptTypeForSatellite : NULL,
+                                                        StringCmp (gbq_it->qual, "satellite") == 0 ? fpf : NULL);
         PointerToDialog (fpf->editors[j], gbq_it->val);
         j++;
       }   
@@ -12765,7 +12908,7 @@ static void ClickFeatureReplaceList (DoC d, PoinT pt)
   Int2             col;
   FeatureReplaceListDlgPtr dlg;
   Int4             offset;
-  Int2             first_shown;
+  Int2             first_shown = 0;
   RecT             r;
   BaR              vbar;
   Int4             scroll_pos;
@@ -13094,7 +13237,7 @@ static void ClickFeatureSelectList (DoC d, PoinT pt)
 
 {
   Int2             item, numItems;
-  Int2             first_shown;
+  Int2             first_shown = 0;
   Int2             row;
   Int2             col;
   Int4             offset;

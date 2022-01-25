@@ -31,7 +31,7 @@ objmacroAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Macro
-*    Generated using ASNCODE Revision: 6.16 at May 12, 2009  9:09 AM
+*    Generated using ASNCODE Revision: 6.17 at Jul 26, 2010  2:39 PM
 *
 **************************************************/
 
@@ -737,6 +737,191 @@ erret:
 
 /**************************************************
 *
+*    LocationPosConstraintFree()
+*
+**************************************************/
+NLM_EXTERN 
+LocationPosConstraintPtr LIBCALL
+LocationPosConstraintFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    LocationPosConstraintAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+LocationPosConstraintPtr LIBCALL
+LocationPosConstraintAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* LocationPosConstraint ::= (self contained) */
+      atp = AsnReadId(aip, amp, LOCATION_POS_CONSTRAINT);
+   } else {
+      atp = AsnLinkType(orig, LOCATION_POS_CONSTRAINT);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == POS_CONSTRAINT_dist_from_end) {
+      choice = LocationPosConstraint_dist_from_end;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == CONSTRAINT_max_dist_from_end) {
+      choice = LocationPosConstraint_max_dist_from_end;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == CONSTRAINT_min_dist_from_end) {
+      choice = LocationPosConstraint_min_dist_from_end;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    LocationPosConstraintAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+LocationPosConstraintAsnWrite(LocationPosConstraintPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, LOCATION_POS_CONSTRAINT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case LocationPosConstraint_dist_from_end:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, POS_CONSTRAINT_dist_from_end, &av);
+      break;
+   case LocationPosConstraint_max_dist_from_end:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, CONSTRAINT_max_dist_from_end, &av);
+      break;
+   case LocationPosConstraint_min_dist_from_end:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, CONSTRAINT_min_dist_from_end, &av);
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
 *    LocationConstraintNew()
 *
 **************************************************/
@@ -750,6 +935,7 @@ LocationConstraintNew(void)
    ptr -> seq_type = 0;
    ptr -> partial5 = 0;
    ptr -> partial3 = 0;
+   ptr -> location_type = 0;
    return ptr;
 
 }
@@ -768,6 +954,8 @@ LocationConstraintFree(LocationConstraintPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
+   LocationPosConstraintFree(ptr -> end5);
+   LocationPosConstraintFree(ptr -> end3);
    return MemFree(ptr);
 }
 
@@ -847,6 +1035,27 @@ LocationConstraintAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> partial3 = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CONSTRAINT_location_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> location_type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == LOCATION_CONSTRAINT_end5) {
+      ptr -> end5 = LocationPosConstraintAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == LOCATION_CONSTRAINT_end3) {
+      ptr -> end3 = LocationPosConstraintAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -906,6 +1115,18 @@ LocationConstraintAsnWrite(LocationConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr o
    retval = AsnWrite(aip, LOCATION_CONSTRAINT_partial5,  &av);
    av.intvalue = ptr -> partial3;
    retval = AsnWrite(aip, LOCATION_CONSTRAINT_partial3,  &av);
+   av.intvalue = ptr -> location_type;
+   retval = AsnWrite(aip, CONSTRAINT_location_type,  &av);
+   if (ptr -> end5 != NULL) {
+      if ( ! LocationPosConstraintAsnWrite(ptr -> end5, aip, LOCATION_CONSTRAINT_end5)) {
+         goto erret;
+      }
+   }
+   if (ptr -> end3 != NULL) {
+      if ( ! LocationPosConstraintAsnWrite(ptr -> end3, aip, LOCATION_CONSTRAINT_end3)) {
+         goto erret;
+      }
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -5662,6 +5883,356 @@ erret:
 
 /**************************************************
 *
+*    PubFieldSpecialConstraintTypeFree()
+*
+**************************************************/
+NLM_EXTERN 
+PubFieldSpecialConstraintTypePtr LIBCALL
+PubFieldSpecialConstraintTypeFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    PubFieldSpecialConstraintTypeAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+PubFieldSpecialConstraintTypePtr LIBCALL
+PubFieldSpecialConstraintTypeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* PubFieldSpecialConstraintType ::= (self contained) */
+      atp = AsnReadId(aip, amp, FIELD_SPECIAL_CONSTRAINT_TYPE);
+   } else {
+      atp = AsnLinkType(orig, FIELD_SPECIAL_CONSTRAINT_TYPE);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == CONSTRAINT_TYPE_is_present) {
+      choice = PubFieldSpecialConstraintType_is_present;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == CONSTRAINT_TYPE_is_not_present) {
+      choice = PubFieldSpecialConstraintType_is_not_present;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == CONSTRAINT_TYPE_is_all_caps) {
+      choice = PubFieldSpecialConstraintType_is_all_caps;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    PubFieldSpecialConstraintTypeAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+PubFieldSpecialConstraintTypeAsnWrite(PubFieldSpecialConstraintTypePtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, FIELD_SPECIAL_CONSTRAINT_TYPE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case PubFieldSpecialConstraintType_is_present:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, CONSTRAINT_TYPE_is_present, &av);
+      break;
+   case PubFieldSpecialConstraintType_is_not_present:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, CONSTRAINT_TYPE_is_not_present, &av);
+      break;
+   case PubFieldSpecialConstraintType_is_all_caps:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, CONSTRAINT_TYPE_is_all_caps, &av);
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    PubFieldSpecialConstraintNew()
+*
+**************************************************/
+NLM_EXTERN 
+PubFieldSpecialConstraintPtr LIBCALL
+PubFieldSpecialConstraintNew(void)
+{
+   PubFieldSpecialConstraintPtr ptr = MemNew((size_t) sizeof(PubFieldSpecialConstraint));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    PubFieldSpecialConstraintFree()
+*
+**************************************************/
+NLM_EXTERN 
+PubFieldSpecialConstraintPtr LIBCALL
+PubFieldSpecialConstraintFree(PubFieldSpecialConstraintPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   PubFieldSpecialConstraintTypeFree(ptr -> constraint);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    PubFieldSpecialConstraintAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+PubFieldSpecialConstraintPtr LIBCALL
+PubFieldSpecialConstraintAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   PubFieldSpecialConstraintPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* PubFieldSpecialConstraint ::= (self contained) */
+      atp = AsnReadId(aip, amp, PUB_FIELD_SPECIAL_CONSTRAINT);
+   } else {
+      atp = AsnLinkType(orig, PUB_FIELD_SPECIAL_CONSTRAINT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = PubFieldSpecialConstraintNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == FIELD_SPECIAL_CONSTRAINT_field) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> field = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SPECIAL_CONSTRAINT_constraint) {
+      ptr -> constraint = PubFieldSpecialConstraintTypeAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = PubFieldSpecialConstraintFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    PubFieldSpecialConstraintAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+PubFieldSpecialConstraintAsnWrite(PubFieldSpecialConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, PUB_FIELD_SPECIAL_CONSTRAINT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> field;
+   retval = AsnWrite(aip, FIELD_SPECIAL_CONSTRAINT_field,  &av);
+   if (ptr -> constraint != NULL) {
+      if ( ! PubFieldSpecialConstraintTypeAsnWrite(ptr -> constraint, aip, SPECIAL_CONSTRAINT_constraint)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    PublicationConstraintNew()
 *
 **************************************************/
@@ -5690,6 +6261,7 @@ PublicationConstraintFree(PublicationConstraintPtr ptr)
       return NULL;
    }
    PubFieldConstraintFree(ptr -> field);
+   PubFieldSpecialConstraintFree(ptr -> special_field);
    return MemFree(ptr);
 }
 
@@ -5755,6 +6327,13 @@ PublicationConstraintAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CONSTRAINT_special_field) {
+      ptr -> special_field = PubFieldSpecialConstraintAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -5810,6 +6389,11 @@ PublicationConstraintAsnWrite(PublicationConstraintPtr ptr, AsnIoPtr aip, AsnTyp
    retval = AsnWrite(aip, PUBLICATION_CONSTRAINT_type,  &av);
    if (ptr -> field != NULL) {
       if ( ! PubFieldConstraintAsnWrite(ptr -> field, aip, PUBLICATION_CONSTRAINT_field)) {
+         goto erret;
+      }
+   }
+   if (ptr -> special_field != NULL) {
+      if ( ! PubFieldSpecialConstraintAsnWrite(ptr -> special_field, aip, CONSTRAINT_special_field)) {
          goto erret;
       }
    }
@@ -7141,6 +7725,191 @@ erret:
 
 /**************************************************
 *
+*    QuantityConstraintFree()
+*
+**************************************************/
+NLM_EXTERN 
+QuantityConstraintPtr LIBCALL
+QuantityConstraintFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    QuantityConstraintAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+QuantityConstraintPtr LIBCALL
+QuantityConstraintAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* QuantityConstraint ::= (self contained) */
+      atp = AsnReadId(aip, amp, QUANTITY_CONSTRAINT);
+   } else {
+      atp = AsnLinkType(orig, QUANTITY_CONSTRAINT);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == QUANTITY_CONSTRAINT_equals) {
+      choice = QuantityConstraint_equals;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == CONSTRAINT_greater_than) {
+      choice = QuantityConstraint_greater_than;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == QUANTITY_CONSTRAINT_less_than) {
+      choice = QuantityConstraint_less_than;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    QuantityConstraintAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+QuantityConstraintAsnWrite(QuantityConstraintPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, QUANTITY_CONSTRAINT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case QuantityConstraint_equals:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, QUANTITY_CONSTRAINT_equals, &av);
+      break;
+   case QuantityConstraint_greater_than:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, CONSTRAINT_greater_than, &av);
+      break;
+   case QuantityConstraint_less_than:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, QUANTITY_CONSTRAINT_less_than, &av);
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
 *    SequenceConstraintNew()
 *
 **************************************************/
@@ -7170,6 +7939,7 @@ SequenceConstraintFree(SequenceConstraintPtr ptr)
    }
    SequenceConstraintMolTypeConstraintFree(ptr -> seqtype);
    StringConstraintFree(ptr -> id);
+   QuantityConstraintFree(ptr -> num_features);
    return MemFree(ptr);
 }
 
@@ -7242,6 +8012,13 @@ SequenceConstraintAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> feature = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CONSTRAINT_num_features) {
+      ptr -> num_features = QuantityConstraintAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -7305,6 +8082,11 @@ SequenceConstraintAsnWrite(SequenceConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
    av.intvalue = ptr -> feature;
    retval = AsnWrite(aip, SEQUENCE_CONSTRAINT_feature,  &av);
+   if (ptr -> num_features != NULL) {
+      if ( ! QuantityConstraintAsnWrite(ptr -> num_features, aip, CONSTRAINT_num_features)) {
+         goto erret;
+      }
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -7673,6 +8455,194 @@ erret:
 
 /**************************************************
 *
+*    TextMarkerFree()
+*
+**************************************************/
+NLM_EXTERN 
+TextMarkerPtr LIBCALL
+TextMarkerFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case TextMarker_free_text:
+      MemFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    TextMarkerAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+TextMarkerPtr LIBCALL
+TextMarkerAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* TextMarker ::= (self contained) */
+      atp = AsnReadId(aip, amp, TEXT_MARKER);
+   } else {
+      atp = AsnLinkType(orig, TEXT_MARKER);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == TEXT_MARKER_free_text) {
+      choice = TextMarker_free_text;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.ptrvalue = av.ptrvalue;
+   }
+   else if (atp == TEXT_MARKER_digits) {
+      choice = TextMarker_digits;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == TEXT_MARKER_letters) {
+      choice = TextMarker_letters;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    TextMarkerAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+TextMarkerAsnWrite(TextMarkerPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, TEXT_MARKER);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case TextMarker_free_text:
+      av.ptrvalue = anp->data.ptrvalue;
+      retval = AsnWrite(aip, TEXT_MARKER_free_text, &av);
+      break;
+   case TextMarker_digits:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, TEXT_MARKER_digits, &av);
+      break;
+   case TextMarker_letters:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, TEXT_MARKER_letters, &av);
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
 *    TextPortionNew()
 *
 **************************************************/
@@ -7702,8 +8672,8 @@ TextPortionFree(TextPortionPtr ptr)
    if(ptr == NULL) {
       return NULL;
    }
-   MemFree(ptr -> left_text);
-   MemFree(ptr -> right_text);
+   TextMarkerFree(ptr -> left_marker);
+   TextMarkerFree(ptr -> right_marker);
    return MemFree(ptr);
 }
 
@@ -7755,11 +8725,11 @@ TextPortionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == TEXT_PORTION_left_text) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
+   if (atp == TEXT_PORTION_left_marker) {
+      ptr -> left_marker = TextMarkerAsnRead(aip, atp);
+      if (aip -> io_failure) {
          goto erret;
       }
-      ptr -> left_text = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == TEXT_PORTION_include_left) {
@@ -7769,11 +8739,11 @@ TextPortionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> include_left = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == TEXT_PORTION_right_text) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
+   if (atp == TEXT_PORTION_right_marker) {
+      ptr -> right_marker = TextMarkerAsnRead(aip, atp);
+      if (aip -> io_failure) {
          goto erret;
       }
-      ptr -> right_text = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == TEXT_PORTION_include_right) {
@@ -7855,15 +8825,17 @@ TextPortionAsnWrite(TextPortionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
 
-   if (ptr -> left_text != NULL) {
-      av.ptrvalue = ptr -> left_text;
-      retval = AsnWrite(aip, TEXT_PORTION_left_text,  &av);
+   if (ptr -> left_marker != NULL) {
+      if ( ! TextMarkerAsnWrite(ptr -> left_marker, aip, TEXT_PORTION_left_marker)) {
+         goto erret;
+      }
    }
    av.boolvalue = ptr -> include_left;
    retval = AsnWrite(aip, TEXT_PORTION_include_left,  &av);
-   if (ptr -> right_text != NULL) {
-      av.ptrvalue = ptr -> right_text;
-      retval = AsnWrite(aip, TEXT_PORTION_right_text,  &av);
+   if (ptr -> right_marker != NULL) {
+      if ( ! TextMarkerAsnWrite(ptr -> right_marker, aip, TEXT_PORTION_right_marker)) {
+         goto erret;
+      }
    }
    av.boolvalue = ptr -> include_right;
    retval = AsnWrite(aip, TEXT_PORTION_include_right,  &av);
@@ -8639,6 +9611,7 @@ ConvertActionNew(void)
 
    ptr -> strip_name = 0;
    ptr -> keep_original = 0;
+   ptr -> capitalization = 0;
    return ptr;
 
 }
@@ -8730,6 +9703,13 @@ ConvertActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> keep_original = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == CONVERT_ACTION_capitalization) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> capitalization = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == CONVERT_ACTION_existing_text) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -8797,6 +9777,8 @@ ConvertActionAsnWrite(ConvertActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, CONVERT_ACTION_strip_name,  &av);
    av.boolvalue = ptr -> keep_original;
    retval = AsnWrite(aip, CONVERT_ACTION_keep_original,  &av);
+   av.intvalue = ptr -> capitalization;
+   retval = AsnWrite(aip, CONVERT_ACTION_capitalization,  &av);
    av.intvalue = ptr -> existing_text;
    retval = AsnWrite(aip, CONVERT_ACTION_existing_text,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
@@ -10948,6 +11930,13 @@ LocationChoiceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.boolvalue = av.boolvalue;
    }
+   else if (atp == LOCATION_CHOICE_point) {
+      choice = LocationChoice_point;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -11016,6 +12005,10 @@ LocationChoiceAsnWrite(LocationChoicePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case LocationChoice_whole_sequence:
       av.boolvalue = anp->data.boolvalue;
       retval = AsnWrite(aip, LOCATION_CHOICE_whole_sequence, &av);
+      break;
+   case LocationChoice_point:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, LOCATION_CHOICE_point, &av);
       break;
    }
    if (writetype != NULL) {
@@ -13264,6 +14257,20 @@ LocationEditTypeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.intvalue = av.intvalue;
    }
+   else if (atp == LOCATION_EDIT_TYPE_extend_5) {
+      choice = LocationEditType_extend_5;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == LOCATION_EDIT_TYPE_extend_3) {
+      choice = LocationEditType_extend_3;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -13348,6 +14355,14 @@ LocationEditTypeAsnWrite(LocationEditTypePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case LocationEditType_convert:
       av.intvalue = anp->data.intvalue;
       retval = AsnWrite(aip, LOCATION_EDIT_TYPE_convert, &av);
+      break;
+   case LocationEditType_extend_5:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, LOCATION_EDIT_TYPE_extend_5, &av);
+      break;
+   case LocationEditType_extend_3:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, LOCATION_EDIT_TYPE_extend_3, &av);
       break;
    }
    if (writetype != NULL) {
@@ -14052,6 +15067,189 @@ erret:
 
 /**************************************************
 *
+*    FixPubCapsActionNew()
+*
+**************************************************/
+NLM_EXTERN 
+FixPubCapsActionPtr LIBCALL
+FixPubCapsActionNew(void)
+{
+   FixPubCapsActionPtr ptr = MemNew((size_t) sizeof(FixPubCapsAction));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    FixPubCapsActionFree()
+*
+**************************************************/
+NLM_EXTERN 
+FixPubCapsActionPtr LIBCALL
+FixPubCapsActionFree(FixPubCapsActionPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   ConstraintChoiceSetFree(ptr -> constraint);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    FixPubCapsActionAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+FixPubCapsActionPtr LIBCALL
+FixPubCapsActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   FixPubCapsActionPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* FixPubCapsAction ::= (self contained) */
+      atp = AsnReadId(aip, amp, FIX_PUB_CAPS_ACTION);
+   } else {
+      atp = AsnLinkType(orig, FIX_PUB_CAPS_ACTION);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = FixPubCapsActionNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == FIX_PUB_CAPS_ACTION_title) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> title = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == FIX_PUB_CAPS_ACTION_authors) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> authors = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == FIX_PUB_CAPS_ACTION_affiliation) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> affiliation = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == FIX_PUB_CAPS_ACTION_constraint) {
+      ptr -> constraint = ConstraintChoiceSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = FixPubCapsActionFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    FixPubCapsActionAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+FixPubCapsActionAsnWrite(FixPubCapsActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, FIX_PUB_CAPS_ACTION);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.boolvalue = ptr -> title;
+   retval = AsnWrite(aip, FIX_PUB_CAPS_ACTION_title,  &av);
+   av.boolvalue = ptr -> authors;
+   retval = AsnWrite(aip, FIX_PUB_CAPS_ACTION_authors,  &av);
+   av.boolvalue = ptr -> affiliation;
+   retval = AsnWrite(aip, FIX_PUB_CAPS_ACTION_affiliation,  &av);
+   if (ptr -> constraint != NULL) {
+      if ( ! ConstraintChoiceSetAsnWrite(ptr -> constraint, aip, FIX_PUB_CAPS_ACTION_constraint)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    MacroActionChoiceFree()
 *
 **************************************************/
@@ -14093,6 +15291,9 @@ MacroActionChoiceFree(ValNodePtr anp)
       break;
    case MacroActionChoice_autodef:
       AutodefActionFree(anp -> data.ptrvalue);
+      break;
+   case MacroActionChoice_fix_pub_caps:
+      FixPubCapsActionFree(anp -> data.ptrvalue);
       break;
    }
    return MemFree(anp);
@@ -14181,6 +15382,59 @@ MacroActionChoiceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    else if (atp == MACRO_ACTION_CHOICE_autodef) {
       choice = MacroActionChoice_autodef;
       func = (AsnReadFunc) AutodefActionAsnRead;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_removesets) {
+      choice = MacroActionChoice_removesets;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == trim_junk_from_primer_seq) {
+      choice = MacroActionChoice_trim_junk_from_primer_seq;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == trim_stop_from_complete_cds) {
+      choice = MacroActionChoice_trim_stop_from_complete_cds;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == CHOICE_fix_usa_and_states) {
+      choice = MacroActionChoice_fix_usa_and_states;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == synchronize_cds_partials) {
+      choice = MacroActionChoice_synchronize_cds_partials;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == adjust_for_consensus_splice) {
+      choice = MacroActionChoice_adjust_for_consensus_splice;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == ACTION_CHOICE_fix_pub_caps) {
+      choice = MacroActionChoice_fix_pub_caps;
+      func = (AsnReadFunc) FixPubCapsActionAsnRead;
+   }
+   else if (atp == ACTION_CHOICE_remove_seg_gaps) {
+      choice = MacroActionChoice_remove_seg_gaps;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
    }
    anp->choice = choice;
    if (func != NULL)
@@ -14274,6 +15528,38 @@ MacroActionChoiceAsnWrite(MacroActionChoicePtr anp, AsnIoPtr aip, AsnTypePtr ori
    case MacroActionChoice_autodef:
       writetype = MACRO_ACTION_CHOICE_autodef;
       func = (AsnWriteFunc) AutodefActionAsnWrite;
+      break;
+   case MacroActionChoice_removesets:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, MACRO_ACTION_CHOICE_removesets, &av);
+      break;
+   case MacroActionChoice_trim_junk_from_primer_seq:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, trim_junk_from_primer_seq, &av);
+      break;
+   case MacroActionChoice_trim_stop_from_complete_cds:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, trim_stop_from_complete_cds, &av);
+      break;
+   case MacroActionChoice_fix_usa_and_states:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, CHOICE_fix_usa_and_states, &av);
+      break;
+   case MacroActionChoice_synchronize_cds_partials:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, synchronize_cds_partials, &av);
+      break;
+   case MacroActionChoice_adjust_for_consensus_splice:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, adjust_for_consensus_splice, &av);
+      break;
+   case MacroActionChoice_fix_pub_caps:
+      writetype = ACTION_CHOICE_fix_pub_caps;
+      func = (AsnWriteFunc) FixPubCapsActionAsnWrite;
+      break;
+   case MacroActionChoice_remove_seg_gaps:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, ACTION_CHOICE_remove_seg_gaps, &av);
       break;
    }
    if (writetype != NULL) {

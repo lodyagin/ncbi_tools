@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKETP__H
 #define CONNECT___NCBI_SOCKETP__H
 
-/* $Id: ncbi_socketp.h,v 1.11 2009/03/02 20:14:30 kazimird Exp $
+/* $Id: ncbi_socketp.h,v 1.19 2010/05/01 15:54:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,7 +36,7 @@
 #include "ncbi_config.h"
 /* OS must be specified in the command-line ("-D....") or in the conf. header
  */
-#if !defined(NCBI_OS_UNIX) && !defined(NCBI_OS_MSWIN)
+#if !defined(NCBI_OS_UNIX)  &&  !defined(NCBI_OS_MSWIN)
 #  error "Unknown OS, must be one of NCBI_OS_UNIX, NCBI_OS_MSWIN!"
 #endif /*supported platforms*/
 
@@ -47,21 +47,25 @@
 /* Pull in a minial set of platform-specific system headers here.
  */
 
-#if defined(NCBI_OS_MSWIN)
+#ifdef NCBI_OS_MSWIN
 #  include <winsock2.h>
-#elif defined(NCBI_OS_UNIX)
+#else /*NCBI_OS_UNIX*/
 #  include <sys/socket.h>
 #  include <sys/time.h>
-#endif
+#endif /*NCBI_OS_MSWIN*/
 
 /* Portable error codes.
  */
 #include <errno.h>
 
-#if   defined(NCBI_OS_MSWIN)
+#ifdef NCBI_OS_MSWIN
 
 typedef SOCKET TSOCK_Handle;
 typedef HANDLE TRIGGER_Handle;
+
+#  ifdef _WIN64
+#    pragma pack(push, 4)
+#  endif /*_WIN64*/
 
 #  define SOCK_EINTR          WSAEINTR
 #  define SOCK_EWOULDBLOCK    WSAEWOULDBLOCK/*EAGAIN*/
@@ -80,7 +84,7 @@ typedef HANDLE TRIGGER_Handle;
 #  define SOCK_SHUTDOWN_WR    SD_SEND
 #  define SOCK_SHUTDOWN_RDWR  SD_BOTH
 
-#else
+#else /*NCBI_OS_UNIX*/
 
 typedef int TSOCK_Handle;
 typedef int TRIGGER_Handle;
@@ -112,7 +116,7 @@ typedef int TRIGGER_Handle;
 #  endif /*SHUT_RDWR*/
 #  define SOCK_SHUTDOWN_RDWR  SHUT_RDWR
 
-#endif
+#endif /*NCBI_OS_MSWIN*/
 
 #if   defined(ENFILE)
 #  define SOCK_ETOOMANY       ENFILE
@@ -151,11 +155,13 @@ typedef unsigned char TSOCK_Type;
 /* Event trigger
  */
 typedef struct TRIGGER_tag {
-    TRIGGER_Handle   fd;        /* OS-specific trigger handle                */
-    unsigned int     id;        /* the internal ID (cf. "s_ID_Counter")      */
+    TRIGGER_Handle     fd;      /* OS-specific trigger handle                */
+    unsigned int       id;      /* the internal ID (cf. "s_ID_Counter")      */
 
-    volatile int     isset;     /* trigger state (UNIX only, otherwise MBZ)  */
-    volatile int     isset_;    /* CAUTION: "isset" pointer protrusion area! */
+    union {
+        volatile void* ptr;     /* trigger state (UNIX only, otherwise MBZ)  */
+        int            int_[2]; /* pointer storage area w/proper alignment   */
+    } isset;
 
     /* type, status, EOF, log, read-on-write etc bit-field indicators */
     TSOCK_Type          type;   /* eTrigger                                  */
@@ -172,7 +178,7 @@ typedef struct TRIGGER_tag {
     unsigned        reserved:8; /* MBZ                                       */
 
 #ifdef NCBI_OS_UNIX
-    int              out;       /* write end of the pipe                     */
+    int                out;     /* write end of the pipe                     */
 #endif /*NCBI_OS_UNIX*/
 } TRIGGER_struct;
 
@@ -184,7 +190,7 @@ typedef struct LSOCK_tag {
     unsigned int     id;        /* the internal ID (see also "s_ID_Counter") */
 
     unsigned int     n_accept;  /* total number of accepted clients          */
-    unsigned short   n_log;     /* MSWIN: run-away connect warning counter   */
+    unsigned short   away;      /* MSWIN: run-away connect warning counter   */
     unsigned short   port;      /* port on which listening (host byte order) */
 
     /* type, status, EOF, log, read-on-write etc bit-field indicators */
@@ -199,17 +205,15 @@ typedef struct LSOCK_tag {
     EBIO_Status     w_status:3; /* MBZ (NB: eIO_Success)                     */
     unsigned/*bool*/ pending:1; /* MBZ                                       */
 
-    unsigned          unused:1; /* MBZ                                       */
-#ifdef NCBI_OS_MSWIN
-    unsigned        readable:1; /* =1 if known to have a pending accept      */
-    unsigned        reserved:6; /* MBZ                                       */
+#ifndef NCBI_OS_MSWIN
+    unsigned        reserved:8; /* MBZ                                       */
 #else
-    unsigned        reserved:7; /* MBZ                                       */
-#endif /*NCBI_OS_MSWIN*/
+    unsigned        reserved:5; /* MBZ                                       */
+    unsigned        readable:1; /* =1 if known to have a pending accept      */
+    unsigned          unused:2; /* MBZ                                       */
 
-#ifdef NCBI_OS_MSWIN
 	WSAEVENT         event;     /* event bound to I/O                        */
-#endif /*NCBI_OS_MSWIN*/
+#endif /*!NCBI_OS_MSWIN*/
 
     void*            context;   /* per-server credentials                    */
 
@@ -252,20 +256,18 @@ typedef struct SOCK_tag {
     EBIO_Status     w_status:3; /* write status:  eIO_Closed if was shut down*/
     unsigned/*bool*/ pending:1; /* =1 if connection is still initing         */
 
-    unsigned       connected:1; /* =1 if remote end-point is fully connected */
-#ifdef NCBI_OS_MSWIN
-    unsigned        readable:1; /* =1 if known to be readable                */
-    unsigned        closeing:1; /* =1 if FD_CLOSE posted (as ugly as spelled)*/
-    unsigned        writable:1; /* =1 if known to be writeable               */
-    unsigned        reserved:4; /* MBZ                                       */
-#else
-    unsigned        reserved:6; /* MBZ                                       */
     unsigned       crossexec:1; /* =1 if close-on-exec must NOT be set       */
-#endif /*NCBI_OS_MSWIN*/
+    unsigned       connected:1; /* =1 if remote end-point is fully connected */
+#ifndef NCBI_OS_MSWIN
+    unsigned        reserved:6; /* MBZ                                       */
+#else
+    unsigned        reserved:3; /* MBZ                                       */
+    unsigned        readable:1; /* =1 if known to be readable                */
+    unsigned        writable:1; /* =1 if known to be writeable               */
+    unsigned         closing:1; /* =1 if FD_CLOSE posted                     */
 
-#ifdef NCBI_OS_MSWIN
 	WSAEVENT         event;     /* event bound to I/O                        */
-#endif /*NCBI_OS_MSWIN*/
+#endif /*!NCBI_OS_MSWIN*/
 
     void*            session;   /* secure session id if secure, else 0       */
 
@@ -328,6 +330,11 @@ typedef struct SOCK_tag {
  * not eIO_Closed |       1       |  Read hit EOF (and [maybe later] r_status)
  * ---------------+---------------+--------------------------------------------
  */
+
+
+#if defined(NCBI_OS_MSWIN)  &&  defined(_WIN64)
+#  pragma pack(pop)
+#endif /*NCBI_OS_MSWIN && _WIN64*/
 
 
 #endif /* CONNECT___NCBI_SOCKETP__H */

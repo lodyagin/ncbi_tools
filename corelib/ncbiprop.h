@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06-04-93
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   	Application Property functions.
@@ -41,6 +41,9 @@
 * 06-14-94 Schuler     Added GetProgramName and SetProgramName macros
 *
 * $Log: ncbiprop.h,v $
+* Revision 6.2  2009/08/17 19:37:47  lavr
+* SetProgramName to use StringSave()
+*
 * Revision 6.1  2001/04/12 22:42:42  vakatov
 * Define #GetProgramName and #SetProgramName only if they have not
 * been defined yet
@@ -108,7 +111,8 @@ NLM_EXTERN long  LIBCALL Nlm_GetAppProcessID PROTO((void));
 #endif
 
 #if !defined(SetProgramName)
-#  define SetProgramName(x)  MemFree(SetAppProperty("ProgramName",(void*)(x)))
+#  define SetProgramName(x)  MemFree(SetAppProperty("ProgramName",  \
+                                                    (void*)StringSave(x)))
 #endif
 
 #ifdef __cplusplus

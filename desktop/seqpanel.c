@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.225 2008/07/07 18:52:31 bollin Exp $
+/* $Id: seqpanel.c,v 6.228 2010/08/02 17:43:05 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -178,6 +178,9 @@ typedef struct seqedformdata
                                              * when the alignment panel is removed using
                                              * UnlockFarComponents.
                                              */  
+  Nlm_ChangeNotifyProc on_close_func;       /* This is called when the window is being closed. */
+  Pointer              on_close_data;       /* Argument for on_close_func */
+
 } SeqEdFormData, PNTR SeqEdFormPtr;
 
 typedef struct seqpanpara 
@@ -4305,12 +4308,10 @@ static void ExportSequenceText (SeqEdFormPtr sefp, Int4 from, Int4 to, FILE *fp)
             if (ctr > 0) 
             {
               /* set end to NULL if at end of sequence */
-              if (ctr < bvp->CharsAtLine) MemSet(buf+ctr, '\0', 1);
-              /* convert to lowercase */
-              for (i = SEQ_ED_PRINT_SEQ_OFFSET; i < ctr + SEQ_ED_PRINT_SEQ_OFFSET; i++)
+              if (ctr < bvp->CharsAtLine) 
               {
-              	buf[i] = TO_LOWER (buf[i]);
-              } 
+                MemSet(file_line + SEQ_ED_PRINT_SEQ_OFFSET + ctr, '\0', 1);
+              }
               
               SeqEdPrintTextLineToFile ((CharPtr)file_line, from, to, seq_pos, fp);
 
@@ -4350,6 +4351,28 @@ static void ExportSequenceText (SeqEdFormPtr sefp, Int4 from, Int4 to, FILE *fp)
           case eTypeFrame6:
             PrintTranslatedFrame((CharPtr)file_line, splp->bioSeqLine, 6, bvp);
             SeqEdPrintTextLineToFile ((CharPtr)file_line, from, to, seq_pos, fp);
+            break;
+          case eTypeSequenceComplement:
+            MemSet (file_line, ' ', bvp->CharsAtLine + SEQ_ED_PRINT_SEQ_OFFSET);
+            seq_pos = (c_n * SEQ_PAN_CHAPTER_SIZE + p_n) * bvp->CharsAtLine;
+            sprintf (label, "complement");
+            StringNCpy ((CharPtr)file_line, label, StringLen (label));
+
+            ctr = 0;
+            SeqPortSeek (spp, seq_pos, SEEK_SET);
+            /* clear last message, might have read to end with last sequence line */
+            spp->lastmsg = 0;
+            ctr = SeqPortRead (spp, file_line + SEQ_ED_PRINT_SEQ_OFFSET, bvp->CharsAtLine);
+            if (ctr > 0) 
+            {
+              /* set end to NULL if at end of sequence */
+              if (ctr < bvp->CharsAtLine) MemSet(file_line + SEQ_ED_PRINT_SEQ_OFFSET + ctr, '\0', 1);
+
+              /* complement */
+              complement_string (file_line + SEQ_ED_PRINT_SEQ_OFFSET);
+              
+              SeqEdPrintTextLineToFile ((CharPtr)file_line, from, to, seq_pos, fp);
+            }  
             break;
         }
       }
@@ -6785,11 +6808,27 @@ static void CleanupSeqEdForm (GraphiC g, VoidPtr data)
     }
     BioseqUnlock (sefp->bfp->bvd.bsp);
     
-    sefp->locked_aln_bioseqs = UnlockFarComponents (sefp->locked_aln_bioseqs);    
+    sefp->locked_aln_bioseqs = UnlockFarComponents (sefp->locked_aln_bioseqs);
+    if (sefp->on_close_func != NULL) {
+      (sefp->on_close_func)(sefp->on_close_data);
+    }
   }
 
   StdCleanupFormProc (g, data);
 }
+
+
+NLM_EXTERN void RemoveSeqEdCloseFunc (WindoW w)
+{
+  SeqEdFormPtr  sefp;
+
+  sefp = (SeqEdFormPtr) GetObjectExtra (w);
+  if (sefp != NULL) {
+    sefp->on_close_func = NULL;
+    sefp->on_close_data = NULL;
+  }
+}
+ 
 
 static void onCloseSeqEdPanel (PaneL p)
 {
@@ -8297,7 +8336,7 @@ static Int4 GetScrollPosForAlnPos (Int4 aln_pos, BioseqViewPtr bvp)
   return display_line;
 }
 
-static void SeqAlnScrollToAlnPos (SeqEdFormPtr sefp, Int4 pos)
+static void SeqAlnScrollToAlnPosEx (SeqEdFormPtr sefp, Int4 pos, Int4 seq_num)
 {
   BaR          sb;
   Int4         scroll_pos, bmax;
@@ -8326,6 +8365,10 @@ static void SeqAlnScrollToAlnPos (SeqEdFormPtr sefp, Int4 pos)
   bmax = GetBarMax (sb);
 
   scroll_pos = GetScrollPosForAlnPos (pos, &(sefp->bfp->bvd));
+  if (seq_num > -1) {
+    /* need to skip two in order to move past header rows for block */
+    scroll_pos += seq_num + 2;
+  }
   if (scroll_pos > bmax)
   {
     scroll_pos = bmax;
@@ -8338,6 +8381,24 @@ static void SeqAlnScrollToAlnPos (SeqEdFormPtr sefp, Int4 pos)
   inval_panel (sefp->bfp->bvd.seqView, -1, -1);	
   RestorePort (temport);
 }
+
+
+static void SeqAlnScrollToAlnPos (SeqEdFormPtr sefp, Int4 pos)
+{
+  SeqAlnScrollToAlnPosEx (sefp, pos, -1);
+}
+
+
+NLM_EXTERN void SeqAlnWindowScrollToAlnPos (WindoW w, Int4 aln_pos, Int4 seq_num)
+{
+  SeqEdFormPtr sefp;
+
+  sefp = (SeqEdFormPtr) GetObjectExtra (w);
+  if (sefp != NULL) {
+    SeqAlnScrollToAlnPosEx (sefp, aln_pos, seq_num);
+  }
+}
+    
 
 static void SeqAlnGoToAlnPosBtn (ButtoN b)
 {
@@ -8353,6 +8414,7 @@ static void SeqAlnGoToAlnPosBtn (ButtoN b)
   {
   	return;
   }
+  aln_pos -= 1;
   
   SeqAlnScrollToAlnPos (sefp, aln_pos);
 }
@@ -9413,7 +9475,9 @@ static void CreateAlnMenus (WindoW w, Boolean enable_feat_prop, Boolean allow_fe
   
 }
 
-extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqAlignPtr salp, Uint2 entityID)
+extern ForM CreateAlnEditorWindowEx 
+(Int2 left, Int2 top, CharPtr windowname, SeqAlignPtr salp, Uint2 entityID,
+ Nlm_ChangeNotifyProc on_close_func, Pointer on_close_data)
 {
   SeqEdFormPtr       sefp;
   WindoW             w;
@@ -9436,6 +9500,9 @@ extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqA
   {
     return NULL;
   }
+
+  sefp->on_close_func = on_close_func;
+  sefp->on_close_data = on_close_data;
   
   sefp->annot = GetSeqAnnotForAlignment (salp);
   
@@ -9555,6 +9622,12 @@ extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqA
   }
 
   return (ForM) w;
+}
+
+
+extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqAlignPtr salp, Uint2 entityID)
+{
+  return CreateAlnEditorWindowEx (left, top, windowname, salp, entityID, NULL, NULL);
 }
 
 

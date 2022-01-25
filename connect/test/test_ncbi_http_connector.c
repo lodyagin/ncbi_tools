@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_http_connector.c,v 6.18 2004/11/23 15:04:39 lavr Exp $
+/* $Id: test_ncbi_http_connector.c,v 6.19 2010/01/27 06:49:45 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +30,10 @@
  *
  */
 
-#include "ncbi_conntest.h"
-#include "../ncbi_ansi_ext.h"
 #include <connect/ncbi_http_connector.h>
-#include <connect/ncbi_util.h>
+#include "../ncbi_ansi_ext.h"
+#include "../ncbi_priv.h"               /* CORE logging facilities */
+#include "ncbi_conntest.h"
 /* This header must go last */
 #include "test_assert.h"
 
@@ -101,6 +101,7 @@ int main(void)
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
+
     data_file = fopen("test_ncbi_http_connector.log", "ab");
     assert(data_file);
 
@@ -134,67 +135,8 @@ int main(void)
     /* Cleanup and Exit */
     CORE_SetREG(0);
     fclose(data_file);
+
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
     CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_http_connector.c,v $
- * Revision 6.18  2004/11/23 15:04:39  lavr
- * Use public bounce.cgi from "www"
- *
- * Revision 6.17  2004/11/22 20:27:32  lavr
- * Weird 5.123456 timeout restored to the form it used to be
- *
- * Revision 6.16  2004/11/22 20:25:27  lavr
- * "yar" replaced with "graceland"
- *
- * Revision 6.15  2004/04/01 14:14:02  lavr
- * Spell "occurred", "occurrence", and "occurring"
- *
- * Revision 6.14  2003/11/04 12:26:06  lavr
- * s_GetReg() marked with ARGSUSED, because user_data is not used in there
- *
- * Revision 6.13  2003/05/14 03:58:43  lavr
- * Match changes in respective APIs of the tests
- *
- * Revision 6.12  2003/04/15 14:06:09  lavr
- * Changed ray.nlm.nih.gov -> ray.ncbi.nlm.nih.gov
- *
- * Revision 6.11  2002/12/04 16:59:21  lavr
- * Open log file in append mode
- *
- * Revision 6.10  2002/11/22 15:09:40  lavr
- * Replace all occurrences of "ray" with "yar"
- *
- * Revision 6.9  2002/10/28 15:47:12  lavr
- * Use "ncbi_ansi_ext.h" privately and use strncpy0()
- *
- * Revision 6.8  2002/03/22 19:47:16  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.7  2002/01/16 21:23:15  vakatov
- * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
- *
- * Revision 6.6  2001/01/11 16:42:50  lavr
- * Registry Get/Set methods got the 'user_data' argument, forgotten earlier
- *
- * Revision 6.5  2001/01/08 23:48:51  lavr
- * REQ_METHOD "any" added to SConnNetInfo
- *
- * Revision 6.4  2000/11/15 17:29:52  vakatov
- * Fixed path to the test CGI application.
- *
- * Revision 6.3  2000/09/27 15:58:17  lavr
- * Registry entries adjusted
- *
- * Revision 6.2  2000/05/30 23:25:03  vakatov
- * Cosmetic fix for the C++ compilation
- *
- * Revision 6.1  2000/04/21 19:57:02  vakatov
- * Initial revision
- *
- * ==========================================================================
- */

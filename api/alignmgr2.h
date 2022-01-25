@@ -28,13 +28,16 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.h,v $
+* Revision 6.22  2010/04/22 11:15:13  bollin
+* Increased number of possible protein residues.
+*
 * Revision 6.21  2003/10/09 13:46:39  rsmith
 * Add AlnMgr2GetFirstNForSipList.
 *
@@ -124,7 +127,7 @@ extern "C" {
 
 /* defines for frequency matrix sizes */
 #define AM_NUCSIZE   6
-#define AM_PROTSIZE  26
+#define AM_PROTSIZE  30
 
 /* max seqport window */
 #define AM_SEQPORTSIZE 20000

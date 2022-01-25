@@ -1,7 +1,7 @@
 #ifndef _TOPORG_
 #define _TOPORG_
 
-/*  $Id: toporg.h,v 6.7 2009/06/03 18:30:57 kans Exp $
+/*  $Id: toporg.h,v 6.10 2010/01/27 19:02:40 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -45,7 +45,7 @@ extern "C" {
 
 /* increment NCBI_CLEANUP_VERSION on every BSEC or SSEC change */
 
-#define NCBI_CLEANUP_VERSION 4
+#define NCBI_CLEANUP_VERSION 7
 
 #define Seq_descr_GIBB_mod_dna         0
 #define Seq_descr_GIBB_mod_rna         1

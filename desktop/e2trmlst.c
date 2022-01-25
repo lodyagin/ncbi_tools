@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.43 $
+* $Revision: 6.44 $
 *
 * File Description: 
 *
@@ -1851,35 +1851,37 @@ static Int2 FindLineOfText (CharPtr text, CharPtr str)
 
   /* Do a binary search for the search string */
 
-  left = 1;
-  right = numLines;
-  while (left <= right) {
-    mid = (left + right) / 2;
-    compare = StringICmp (lookfor, index [mid - 1]);
-    if (compare <= 0)
-      right = mid - 1;
-    if (compare >= 0)
-      left = mid + 1;
-  }
+  if (index != NULL) {
+    left = 1;
+    right = numLines;
+    while (left <= right) {
+      mid = (left + right) / 2;
+      compare = StringICmp (lookfor, index [mid - 1]);
+      if (compare <= 0)
+        right = mid - 1;
+      if (compare >= 0)
+        left = mid + 1;
+    }
 
-  if (left <= right + 1) {
-    len = StringLen (lookfor);
-    compare = StringNICmp (lookfor, index [mid - 1], len);
-    if (compare > 0) {
-      mid++;
+    if (left <= right + 1) {
+      len = StringLen (lookfor);
+      compare = StringNICmp (lookfor, index [mid - 1], len);
+      if (compare > 0) {
+        mid++;
+        /*
+        if (mid <= numLines) {
+      compare = StringNICmp (lookfor, index [mid - 1], len);
+      if (compare > 0)
+        mid = 0;
+        } else
+      mid = 0;
+        */
+      }
       /*
-      if (mid <= numLines) {
-	compare = StringNICmp (lookfor, index [mid - 1], len);
-	if (compare > 0)
-	  mid = 0;
-      } else
-	mid = 0;
+      else
+        mid = 0;
       */
     }
-    /*
-    else
-      mid = 0;
-    */
   }
   
   /* Clean up and return */
@@ -1896,10 +1898,10 @@ static Int2 FindLineOfText (CharPtr text, CharPtr str)
 /*==================================================================*/
 
 static void ScrollToText (FormInfoPtr pFormInfo,
-			  CharPtr     str,
-			  Int2        page,
-			  Boolean     hard,
-			  Boolean     exact)
+              CharPtr     str,
+              Int2        page,
+              Boolean     hard,
+              Boolean     exact)
 
 {
   Int2     compare, oldItem, oldRow, perfect, row;
@@ -1959,7 +1961,7 @@ static void ScrollToText (FormInfoPtr pFormInfo,
   if (!RowIsVisible (pFormInfo->availDoc, page, row, NULL, NULL)) {
     ForceFormat (pFormInfo->availDoc, page);    /* forces UpdateLineStarts */
     GetItemParams4 (pFormInfo->availDoc, page, &startsAt, NULL, NULL,
-		    NULL, NULL);
+            NULL, NULL);
     GetDocParams4 (pFormInfo->availDoc, NULL, &numLines);
     startsAt += row - 1;
     sb = GetSlateVScrollBar ((SlatE) pFormInfo->availDoc);
@@ -1983,7 +1985,7 @@ static void ScrollToText (FormInfoPtr pFormInfo,
       pFormInfo->availRow = row;
       InvalDocRows (pFormInfo->availDoc, oldItem, oldRow, oldRow);
       InvalDocRows (pFormInfo->availDoc, pFormInfo->availItem,
-		    pFormInfo->availRow, pFormInfo->availRow);
+            pFormInfo->availRow, pFormInfo->availRow);
     }
     if (exact) {
       if (perfect == 0)
@@ -2082,11 +2084,11 @@ static void ProcessSelectionTerm (FormInfoPtr pFormInfo, CharPtr str)
   /* the term selection box            */
 
   else if (pFormInfo->okayToAccept &&
-	   pFormInfo->availItem > 0 &&
-	   pFormInfo->availRow > 0) {
+       pFormInfo->availItem > 0 &&
+       pFormInfo->availRow > 0) {
 
     text = GetDocText (pFormInfo->availDoc, pFormInfo->availItem,
-		       pFormInfo->availRow, E2_TERM_COL);
+               pFormInfo->availRow, E2_TERM_COL);
     if (NULL == text)
       return;
 
@@ -2098,17 +2100,17 @@ static void ProcessSelectionTerm (FormInfoPtr pFormInfo, CharPtr str)
 
     if (StringICmp (termText, text) == 0) {
       if (StringICmp (str, text) == 0) {
-	MemFree (text);
-	text = GetDocText (pFormInfo->availDoc, pFormInfo->availItem,
-			   pFormInfo->availRow, E2_COUNT_COL);
-	TrimSpacesAroundString (text);
-	StrToLong (text, &iTermCount);
-	MemFree (text);
-	Query_AddBoolTerm (pFormInfo->form, pFormInfo->currDb,
-			   pFormInfo->currField, str, STATE_ON,
-			   iTermCount);
-	Select (pFormInfo->termText);
-	pFormInfo->okayToAccept = FALSE;
+    MemFree (text);
+    text = GetDocText (pFormInfo->availDoc, pFormInfo->availItem,
+               pFormInfo->availRow, E2_COUNT_COL);
+    TrimSpacesAroundString (text);
+    StrToLong (text, &iTermCount);
+    MemFree (text);
+    Query_AddBoolTerm (pFormInfo->form, pFormInfo->currDb,
+               pFormInfo->currField, str, STATE_ON,
+               iTermCount);
+    Select (pFormInfo->termText);
+    pFormInfo->okayToAccept = FALSE;
       }
     }
 
@@ -2652,7 +2654,7 @@ static void Accept_Callback (ButtoN b)
   switch (pFormInfo->currMode) {
     case TRANSLATE_MODE:
       Query_TranslateAndAddBoolTerm (pFormInfo->form, pFormInfo->currDb,
-				     pFormInfo->currField, str, STATE_ON, 0);
+                     pFormInfo->currField, str, STATE_ON, 0);
       SafeSetTitle (pFormInfo->termText, "");
       if (Visible (pFormInfo->termText))
         Select (pFormInfo->termText);
@@ -3211,7 +3213,7 @@ static void TextAction (TexT t)
     Reset (pFormInfo->availDoc);
     for (i = 0; i < 7; i++)
       AppendText (pFormInfo->availDoc, " \n", &availParFmt, availColFmt,
-		  systemFont);
+          systemFont);
     InvalDocument (pFormInfo->availDoc);
     pFormInfo->textChanged = FALSE;
     pFormInfo->okayToAccept = FALSE;
@@ -3225,7 +3227,7 @@ static void TextAction (TexT t)
     pFormInfo->textChanged = TRUE;
     pFormInfo->okayToAccept = FALSE;
     if (pFormInfo->availCurrentPage > 0 &&
-	pFormInfo->currMode == SELECTION_MODE)
+    pFormInfo->currMode == SELECTION_MODE)
       ScrollToText (pFormInfo, str, pFormInfo->availCurrentPage, TRUE, TRUE);
     Update ();
   }
@@ -5920,7 +5922,7 @@ static void AddTermToList (FormInfoPtr pFormInfo, StateDataPtr newTerm, Int2 ite
   /*----------------------------------*/
 
   newTerm->group = GROUP_SINGLE;
-  if (merge) {
+  if (merge && currTerm != NULL) {
     switch (currTerm->group) {
       case GROUP_SINGLE:
         currTerm->group = GROUP_FIRST;

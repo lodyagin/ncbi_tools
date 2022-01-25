@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.13 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vsmutil.h,v $
+* Revision 6.16  2010/06/28 18:03:35  bollin
+* Added checkbox to Validator window to temporarily turn off tax validation.
+*
+* Revision 6.15  2010/02/03 16:56:11  bollin
+* Added Segregate button to Validator.
+*
+* Revision 6.14  2009/09/15 18:48:26  kans
+* pass shftKey to notify callback
+*
 * Revision 6.13  2009/05/01 18:10:51  kans
 * added featureID field to ValidErrorFunc callback type
 *
@@ -90,7 +99,7 @@ extern "C" {
 typedef void (LIBCALLBACK *ErrNotifyProc) PROTO((
               ErrSev sev, int errcode, int subcode,
               Uint2 entityID, Uint4 itemID, Uint2 itemtype,
-              Boolean select, Boolean dblClick));
+              Boolean select, Boolean dblClick, Boolean shftKey));
 
 typedef void (LIBCALLBACK *SequesterProc) PROTO((Uint2 entityID, ValNodePtr bsp_list));
                                                  
@@ -106,9 +115,14 @@ extern WindoW CreateValidateWindowExEx (ErrNotifyProc notify, CharPtr title,
                                       Boolean okaytosetviewtarget);
 extern WindoW CreateValidateWindowExExEx (ErrNotifyProc notify, CharPtr title,
                                       FonT font, ErrSev sev, Int2 verbose,
-                                      BaseFormPtr bfp, FormActnFunc revalProc, FormActnFunc continueProc,
+                                      BaseFormPtr bfp, 
+                                      FormActnFunc revalProc, 
+                                      FormActnFunc revalNoTaxProc, 
+                                      FormActnFunc continueProc,
                                       SequesterProc sequesterProc,
+                                      SequesterProc segregateProc,
                                       Boolean okaytosetviewtarget);
+extern Boolean IsTaxValidationRequested (WindoW w);
 extern void ShowValidateWindow (void);
 extern void ShowValidateDoc (void);
 extern void HideValidateDoc (void);

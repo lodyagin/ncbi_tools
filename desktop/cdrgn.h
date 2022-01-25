@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cdrgn.h,v $
+* Revision 6.14  2009/09/02 15:08:39  bollin
+* New RNA editing.
+*
 * Revision 6.13  2008/01/17 21:18:09  bollin
 * Fixes for RNA dialog for ncRNA product/class handling
 *
@@ -118,10 +121,7 @@ extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
                            Uint2 subtype, FormActnFunc actproc);
 extern Int2 LIBCALLBACK RnaGenFunc (Pointer data);
 
-extern void AddRnaSpecificQuals (SeqFeatPtr sfp, DialoG d);
 extern void ConvertProductQualToRnaRefName (SeqFeatPtr sfp);
-extern void SetRnaSpecificQuals (SeqFeatPtr sfp, DialoG d);
-extern void ConvertToOldRNAFormat (SeqFeatPtr sfp);
 
 extern SeqLocPtr TruncateLocation (SeqLocPtr head, Int4 len);
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.13 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
@@ -487,6 +487,10 @@ NLM_EXTERN CharPtr complement_string (CharPtr str)
          else if (*strp == 't') *strp = 'a';
          else if (*strp == 'c') *strp = 'g';
          else if (*strp == 'g') *strp = 'c';
+         else if (*strp == 'A') *strp = 'T';
+         else if (*strp == 'T') *strp = 'A';
+         else if (*strp == 'C') *strp = 'G';
+         else if (*strp == 'G') *strp = 'C';
   }
   *strp = '\0';
   return str;
@@ -1090,16 +1094,65 @@ typedef struct ccid {
   BioseqPtr   bsp;
 } CcId, PNTR CcIdPtr;
 
+
+NLM_EXTERN void ReplaceSeqIdWithSeqIdInFeat (SeqIdPtr old_id, SeqIdPtr new_id, SeqFeatPtr sfp)
+{
+  SeqIdPtr      current_sip;
+  RnaRefPtr     rrp;
+  tRNAPtr       trp;
+  CodeBreakPtr  cbp;
+  CdRegionPtr   crp;  
+  
+  if (sfp == NULL || old_id == NULL || new_id == NULL)
+  {
+    return;
+  }
+
+  current_sip = SeqLocId (sfp->location);
+  if (SeqIdIn (current_sip, old_id))
+  {
+    sfp->location = SeqLocReplaceID (sfp->location, new_id);
+  }
+  current_sip = SeqLocId (sfp->product);
+  if (SeqIdIn (current_sip, old_id))
+  {
+    sfp->product = SeqLocReplaceID (sfp->product, new_id);
+  }
+  if (sfp->data.choice == SEQFEAT_RNA 
+      && (rrp = (RnaRefPtr) sfp->data.value.ptrvalue) != NULL
+      && rrp->ext.choice == 2
+      && (trp = (tRNAPtr) rrp->ext.value.ptrvalue) != NULL
+      && trp->anticodon != NULL) 
+  {
+    current_sip = SeqLocId (trp->anticodon);
+    if (SeqIdIn (current_sip, old_id))
+    {
+      trp->anticodon = SeqLocReplaceID (trp->anticodon, new_id);
+    }
+  }
+  else if (sfp->data.choice == SEQFEAT_CDREGION
+           && (crp = (CdRegionPtr) sfp->data.value.ptrvalue) != NULL) 
+  {
+    for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+      current_sip = SeqLocId (cbp->loc);
+      if (SeqIdIn (current_sip, old_id))
+      {
+        cbp->loc = SeqLocReplaceID (cbp->loc, new_id);
+      }
+    }
+  }
+}
+
+
 typedef struct replaceseqid
 {
   SeqIdPtr old_id;
   SeqIdPtr new_id;  
 } ReplaceSeqIdData, PNTR ReplaceSeqIdPtr;
 
-static void ReplaceSeqIdCallback (SeqFeatPtr sfp, Pointer userdata)
+static void ReplaceSeqIdFeatCallback (SeqFeatPtr sfp, Pointer userdata)
 {
   ReplaceSeqIdPtr rsip;
-  SeqIdPtr        current_sip;
   
   if (sfp == NULL || userdata == NULL)
   {
@@ -1110,12 +1163,31 @@ static void ReplaceSeqIdCallback (SeqFeatPtr sfp, Pointer userdata)
   {
     return;
   }
-  current_sip = SeqLocId (sfp->location);
+  ReplaceSeqIdWithSeqIdInFeat (rsip->old_id, rsip->new_id, sfp);
+}
+
+
+static void ReplaceSeqIdInGraphCallback (SeqGraphPtr sgp, Pointer userdata)
+{
+  ReplaceSeqIdPtr rsip;
+  SeqIdPtr        current_sip;
+  
+  if (sgp == NULL || sgp->loc == NULL || userdata == NULL)
+  {
+    return;
+  }
+  rsip = (ReplaceSeqIdPtr) userdata;
+  if (rsip->old_id == NULL || rsip->new_id == NULL)
+  {
+    return;
+  }
+  current_sip = SeqLocId (sgp->loc);
   if (SeqIdIn (current_sip, rsip->old_id))
   {
-    sfp->location = SeqLocReplaceID (sfp->location, rsip->new_id);
+    sgp->loc = SeqLocReplaceID (sgp->loc, rsip->new_id);
   }
 }
+
 
 static void SeqAnnotReplaceID (SeqAnnotPtr sap, SeqIdPtr newsip)
 {
@@ -1150,7 +1222,7 @@ NLM_EXTERN BioseqPtr BioseqReplaceID (BioseqPtr bsp, SeqIdPtr newsip)
   rsid.old_id = bsp->id;
   rsid.new_id = newsip;
   
-  VisitFeaturesInSep (sep, &rsid, ReplaceSeqIdCallback);
+  VisitFeaturesInSep (sep, &rsid, ReplaceSeqIdFeatCallback);
   SeqIdFree (bsp->id);
   bsp->id = SeqIdDup (newsip);
   SeqMgrReplaceInBioseqIndex (bsp);
@@ -1176,10 +1248,11 @@ NLM_EXTERN void ReplaceSeqIdWithSeqId (SeqIdPtr sip_old, SeqIdPtr sip_new, SeqEn
 
   bsp = BioseqFind (sip_old);
   
-  VisitFeaturesInSep (sep, &rsid, ReplaceSeqIdCallback);
+  VisitFeaturesInSep (sep, &rsid, ReplaceSeqIdFeatCallback);
+  VisitGraphsInSep (sep, &rsid, ReplaceSeqIdInGraphCallback);
   if (bsp != NULL) {
     sip = bsp->id;
-    while (!SeqIdComp (sip, sip_old)) {
+    while (SeqIdComp (sip, sip_old) != SIC_YES) {
       prev = sip;
       sip = sip->next;
     }
@@ -3496,18 +3569,18 @@ static Uint2 GetEntityIDForBioseqSet (void)
 */
 
 
-NLM_EXTERN void CleanUpSegGap (SeqAlignPtr sap)
+NLM_EXTERN Boolean CleanUpSegGap (SeqAlignPtr sap)
 {
    DenseSegPtr  dsp;
    DenseSegPtr  dsp_new;
-   Boolean      found;
+   Boolean      found, any_found = FALSE;
    Int4         i;
    Int4         j;
    Int4         k;
    Int4         numgap;
 
    if (sap == NULL || sap->segtype != SAS_DENSEG)
-      return;
+      return FALSE;
    dsp = (DenseSegPtr)(sap->segs);
    numgap = 0;
    for (i=0; i<dsp->numseg; i++)
@@ -3522,7 +3595,7 @@ NLM_EXTERN void CleanUpSegGap (SeqAlignPtr sap)
          numgap++;
    }
    if (numgap == 0)
-      return;
+      return FALSE;
    dsp_new = DenseSegNew();
    dsp_new->dim = dsp->dim;
    dsp_new->ids = dsp->ids;
@@ -3549,11 +3622,48 @@ NLM_EXTERN void CleanUpSegGap (SeqAlignPtr sap)
          }
          dsp_new->lens[k] = dsp->lens[i];
          k++;
+         any_found = TRUE;
       }
    }
    DenseSegFree(dsp);
    sap->segs = (Pointer)(dsp_new);
-   return;
+   return any_found;
 }
 
 
+static void NoMoreSegGapForOneAlignment (SeqAlignPtr sap, Pointer userdata)
+{
+  SeqAlignPtr       salp;
+  Int4Ptr           p_i;
+
+  salp = sap;
+  while (salp != NULL)
+  {
+    if (salp->saip != NULL)
+    {
+       SeqAlignIndexFree(salp->saip);
+       salp->saip = NULL;
+    } else {
+       AlnMgr2IndexSingleChildSeqAlign(salp); /* make sure it's dense-seg */
+       SeqAlignIndexFree(salp->saip);
+       salp->saip = NULL;
+    }
+    if (CleanUpSegGap(salp)) {
+      if ((p_i = (Int4Ptr) userdata) != NULL) {
+        (*p_i)++;
+      }
+    }
+    AlnMgr2IndexSingleChildSeqAlign(salp);
+    salp = salp->next;
+  }
+}
+
+
+NLM_EXTERN Int4 RemoveSegGapsInSeqEntry (SeqEntryPtr sep)
+{
+  Int4 num_affected = 0;
+
+  VisitAlignmentsInSep (sep, &num_affected, NoMoreSegGapForOneAlignment);
+
+  return num_affected;
+}

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.100 $
+* $Revision: 6.102 $
 *
 * File Description: 
 *
@@ -803,7 +803,7 @@ static CharPtr FFPrintFunc (DoC d, Int2 index, Pointer data)
         if (! InBioseqViewEntityList (bbp->entityID, bvp)) {
           ValNodeAddInt (&(bvp->entityList), 0, (Int4) bbp->entityID);
           omudp = ObjMgrAddUserData (bbp->entityID, bfp->procid,
-	                                 OMPROC_VIEW, bfp->userkey);
+                                     OMPROC_VIEW, bfp->userkey);
           if (omudp != NULL) {
             omudp->userdata.ptrvalue = (Pointer) bfp;
             omudp->messagefunc = BioseqViewMsgFunc;
@@ -1186,6 +1186,25 @@ static void LookForTpa (
   *hastpaP = TRUE;
 }
 
+static void LookForTsa (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
+
+{
+  BoolPtr     hastsaP;
+  MolInfoPtr  mip;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_molinfo) return;
+  mip = (MolInfoPtr) sdp->data.ptrvalue;
+  if (mip == NULL) return;
+
+  if (mip->tech != MI_TECH_tsa) return;
+
+  hastsaP = (BoolPtr) userdata;
+  *hastsaP = TRUE;
+}
+
 static void LookForFarBsp (
   BioseqPtr bsp,
   Pointer userdata
@@ -1271,6 +1290,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   Boolean            forceOnlyNearFeats = FALSE;
   FILE               *fp;
   Boolean            hastpaaligns;
+  Boolean            hastsaaligns;
   Int2               into;
   Boolean            isAEorCH;
   Boolean            isGED;
@@ -1457,8 +1477,10 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
     }
     if (lookupFar) {
       hastpaaligns = FALSE;
+      hastsaaligns = FALSE;
       VisitDescriptorsInSep (sep, (Pointer) &hastpaaligns, LookForTpa);
-      LookupFarSeqIDs (sep, TRUE, TRUE, TRUE, FALSE, hastpaaligns, FALSE, TRUE);
+      VisitDescriptorsInSep (sep, (Pointer) &hastsaaligns, LookForTsa);
+      LookupFarSeqIDs (sep, TRUE, TRUE, TRUE, FALSE, hastpaaligns || hastsaaligns, FALSE, TRUE);
     }
   }
 
@@ -1618,13 +1640,13 @@ static void PopulateFasta (BioseqViewPtr bvp)
   FonT             fnt;
   FILE             *fp;
   Uint1            group_segs;
-  Int2             into;
-  Int2             item;
+  Int2             into = 0;
+  Int2             item = 0;
   Boolean          master_style;
   Char             path [PATH_MAX];
   BaR              sb = NULL;
   SeqEntryPtr      sep;
-  Int4             startsAt;
+  Int4             startsAt = 0;
   SeqViewProcsPtr  svpp;
   TexT             txt;
 
@@ -1840,7 +1862,7 @@ static void PopulateQuality (BioseqViewPtr bvp)
   FonT         fnt;
   FILE         *fp;
   Int2         into;
-  Int2         item;
+  Int2         item = 0;
   Char         path [PATH_MAX];
   BaR          sb = NULL;
   SeqEntryPtr  sep;
@@ -1937,15 +1959,15 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbse
   FmtType      format = GENBANK_FMT;
   GBSeq        gbsq;
   GBSet        gbst;
-  Int2         into;
-  Int2         item;
+  Int2         into = 0;
+  Int2         item = 0;
   Boolean      lockFar = FALSE;
   Boolean      lookupFar = FALSE;
   ModType      mode = SEQUIN_MODE;
   Char         path [PATH_MAX];
   BaR          sb = NULL;
   SeqEntryPtr  sep;
-  Int4         startsAt;
+  Int4         startsAt = 0;
   StlType      style = NORMAL_STYLE;
   TexT         txt;
   Int2         val;

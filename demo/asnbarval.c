@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.6 $
+* $Revision: 1.7 $
 *
 * File Description:
 *
@@ -82,6 +82,7 @@ typedef struct brflags {
   ValNodePtr            sep_list;
   ValNodePtr            bsplist;
   BarcodeTestConfigData bcd;
+  Boolean comprehensive;
 } BRFlagData, PNTR BRFlagPtr;
 
 #ifdef INTERNAL_NCBI_ASNBARVAL
@@ -552,9 +553,13 @@ static void ProcessSeqEntryList (BRFlagPtr drfp, CharPtr filename)
   for (vnp = drfp->sep_list; vnp != NULL; vnp = vnp->next) {
     sep = (SeqEntryPtr) vnp->data.ptrvalue;
     pass_fail_list = GetBarcodePassFail (sep, &(drfp->bcd));
-    WriteBarcodeTestCompliance (ofp, pass_fail_list);
+    if (drfp->comprehensive) {
+      WriteBarcodeTestComprehensive (ofp, pass_fail_list);
+    } else {
+      WriteBarcodeTestCompliance (ofp, pass_fail_list);
+    }
+    pass_fail_list = BarcodeTestResultsListFree (pass_fail_list);
   }
-  pass_fail_list = BarcodeTestResultsListFree (pass_fail_list);
   for (vnp = drfp->sep_list; vnp != NULL; vnp = vnp->next) {
     sep = vnp->data.ptrvalue;
     SeqEntryFree (sep);
@@ -918,6 +923,7 @@ typedef enum {
   k_argLocalFetch,
   I_argAsnIdx,
   T_argThreads,
+  R_argComprehensiveReport,
   C_argMaxCount
 } BRFlagNum;
 
@@ -960,6 +966,8 @@ Args myargs [] = {
     TRUE, 'I', ARG_STRING, 0.0, 0, NULL},
   {"Use Threads", "F", NULL, NULL,
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Comprehensive Report", "F", NULL, NULL,
+    TRUE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Max Count", "0", NULL, NULL,
     TRUE, 'C', ARG_INT, 0.0, 0, NULL},
 };
@@ -1108,6 +1116,8 @@ Int2 Main (void)
   indexed = (Boolean) StringDoesHaveText (asnidx);
   usethreads = (Boolean) myargs [T_argThreads].intvalue;
   dfd.farFetchCDSproducts = (Boolean) myargs [Z_argRemoteCDS].intvalue;
+
+  dfd.comprehensive = (Boolean) myargs [R_argComprehensiveReport].intvalue;
 
   /* maximum Percent Ns */
   max_n = myargs [n_argMaxPercentN].intvalue;

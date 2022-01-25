@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -38,100 +38,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
-* 06-15-93 Schuler     SGML functions moved to ncbisgml.c
-* 06-15-93 Schuler     Added macros for Gestalt functins.
-*
-* $Log: ncbimisc.h,v $
-* Revision 6.20  2008/12/04 15:05:11  bollin
-* Added ValNodeInsert, which inserts a new ValNode into a sorted list at the
-* correct position.
-*
-* Revision 6.19  2008/09/11 20:30:37  bollin
-* Added ValNodePurge function.
-*
-* Revision 6.18  2008/07/21 20:15:22  bollin
-* Added ValNodeCompare function.
-*
-* Revision 6.17  2008/04/04 13:15:48  bollin
-* Added ValNodeUnique function
-*
-* Revision 6.16  2006/11/09 17:47:16  kans
-* added ValNodeMergeStrs
-*
-* Revision 6.15  2006/10/17 14:16:48  lavr
-* ValNodeCopyStr() to take "const char*"
-*
-* Revision 6.14  2002/12/17 16:45:09  kans
-* CtoPstr and PtoCstr if OS_MAC or OS_UNIX_DARWIN
-*
-* Revision 6.13  1999/09/22 23:08:26  kans
-* added extended flag to valnode for SeqDesc, maybe later SeqId and SeqLoc
-*
-* Revision 6.12  1999/07/29 15:58:48  kans
-* added bigintvalue, ValNodeAddBigInt (PD)
-*
-* Revision 6.11  1999/04/23 16:25:36  shavirin
-* Added definition of the function Nlm_GetChecksum()
-*
-* Revision 6.10  1999/04/14 19:37:23  madden
-* Add Nlm_ prefix to Int8
-*
-* Revision 6.9  1999/04/14 15:31:07  madden
-* add Nlm_Int8tostr function
-*
-* Revision 6.8  1999/03/11 16:21:51  kans
-* ValNodeSort is more visible copy of jzmisc SortValNode
-*
-* Revision 6.7  1999/01/27 01:59:52  kans
-* cleaned up comment problem
-*
-* Revision 6.6  1999/01/21 20:08:37  ostell
-* added SwitchUint2 and 4, added integer bytestores
-*
-* Revision 6.5  1999/01/07 20:18:51  victorov
-* MD5 functions declarations fixed
-*
-* Revision 6.4  1999/01/07 15:20:58  victorov
-* added Nlm_ prefix to MD5 functions to avoid conflicts
-*
-* Revision 6.3  1999/01/06 22:49:27  victorov
-* added MD5 hash calculator
-*
-* Revision 6.2  1998/10/13 20:49:40  vakatov
-* + Nlm_PlatformName()
-*
-* Revision 6.1  1998/04/08 16:49:59  kans
-* ValNodeLen returns Int4
-*
-* Revision 6.0  1997/08/25 18:16:49  madden
-* Revision changed to 6.0
-*
-* Revision 5.3  1997/01/28 21:26:51  epstein
-* move doubly-linked list handling functions from ni_list.[ch]
-*
- * Revision 5.2  1996/12/10  16:09:16  kans
- * added ValNodeLen function
- *
- * Revision 5.1  1996/12/03  21:48:33  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 5.0  1996/05/28  13:18:57  ostell
- * Set to revision 5.0
- *
- * Revision 4.2  1996/03/27  15:45:53  epstein
- * make byte-swapping macros safer on big-endian systems
- *
- * Revision 4.1  1996/03/26  16:31:00  epstein
- * migrate byte-swapping functions to ncbimisc.[ch]
- *
- * Revision 4.0  1995/07/26  13:46:50  ostell
- * force revision to 4.0
- *
- * Revision 2.14  1995/05/15  18:45:58  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -315,6 +221,12 @@ NLM_EXTERN void LIBCALL ValNodePurge PROTO ((ValNodePtr PNTR list, Nlm_Boolean (
 NLM_EXTERN void LIBCALL ValNodeInsert PROTO ((ValNodePtr PNTR list, ValNodePtr new_item, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr ))));
 NLM_EXTERN int LIBCALL ValNodeCompare PROTO ((ValNodePtr vnp1, ValNodePtr vnp2, int (LIBCALLBACK *compar) (VoidPtr, VoidPtr)));
 NLM_EXTERN Nlm_CharPtr LIBCALL ValNodeMergeStrs PROTO((ValNodePtr list));
+
+/* convenience structure for holding head and tail of ValNode list for efficient tail insertion */
+typedef struct valnodeblock {
+  ValNodePtr  head;
+  ValNodePtr  tail;
+} ValNodeBlock, PNTR ValNodeBlockPtr;
 
 /*** old prototypes ******
 NLM_EXTERN ValNodePtr LIBCALL ValNodeLink PROTO((ValNodePtr vnp, ValNodePtr newnode));

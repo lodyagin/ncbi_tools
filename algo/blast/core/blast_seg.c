@@ -1,4 +1,4 @@
-/* $Id: blast_seg.c,v 1.39 2009/02/03 18:14:30 kazimird Exp $
+/* $Id: blast_seg.c,v 1.43 2009/09/14 18:49:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE                          
@@ -36,7 +36,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_seg.c,v 1.39 2009/02/03 18:14:30 kazimird Exp $";
+    "$Id: blast_seg.c,v 1.43 2009/09/14 18:49:32 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_seg.h>
@@ -1778,31 +1778,6 @@ s_SeqEntropy(SSequence* seq, Int4 window, Int4 maxbogus)
    return(H);
 }
 
-/** Appends second arg to end of first one.
- * @param segs structure to be appended to [in]
- * @param seg structure to append [in]
- */
-static void
-s_AppendSeg(SSeg* segs, SSeg* seg)
-{
-   SSeg* temp = segs;
-
-   while (TRUE)
-   {
-      if (temp->next==NULL)
-      {
-         temp->next = seg;
-         break;
-      }
-      else
-      {
-         temp = temp->next;
-      }
-   }
-
-   return;
-}
-
 /*---------------------------------------------------------------(s_FindLow)---*/
 
 /** Finds the first element above hicut, looks from i to limit.
@@ -1850,6 +1825,16 @@ static Int4 s_FindHigh(Int4 i, Int4 limit, double hicut, double* H)
    return(j-1);
   }
 
+/** calculate log(n!) using either tabulated data or Sterling's formula
+ * @param n [in]
+ * @return log(n!)
+ */
+static double
+s_lnfact(Int4 n) {
+  if (n < sizeof(lnfact)/sizeof(*lnfact))
+     return lnfact[n];
+  else return ((n+0.5)*log(n) - n + 0.9189385332);
+}
 
 /** calculate "K2" entropy per equation 3 of Wootton and Federhen
  * (Comput. Chem. 17, 149 (1993).
@@ -1864,12 +1849,11 @@ s_LnPerm(const Int4* sv, Int4 window_length)
    double ans;
    Int4 i;
 
-   ASSERT(window_length < sizeof(lnfact)/sizeof(*lnfact));
-   ans = lnfact[window_length];
+   ans = s_lnfact(window_length);
 
    for (i=0; sv[i]!=0; i++) 
      {
-      ans -= lnfact[sv[i]];
+      ans -= s_lnfact(sv[i]);
      }
 
    return(ans);
@@ -1892,7 +1876,6 @@ s_LnAss(const Int4* sv, Int4 alphasize)
 	int	class, total;
 	int    i;
 
-    ASSERT(alphasize < sizeof(lnfact)/sizeof(*lnfact));
 	ans = lnfact[alphasize];
 	if (sv[0] == 0)
 		return ans;
@@ -1903,7 +1886,7 @@ s_LnAss(const Int4* sv, Int4 alphasize)
 	svim1 = sv[0];
 	for (i=0;; svim1 = svi) {
 	        if (++i==alphasize) {
-		        ans -= lnfact[class];
+		        ans -= s_lnfact(class);
 			break;
 		      }
 		else if ((svi = *++sv) == svim1) {
@@ -1912,9 +1895,9 @@ s_LnAss(const Int4* sv, Int4 alphasize)
 		}
 		else {
 			total -= class;
-			ans -= lnfact[class];
+			ans -= s_lnfact(class);
 			if (svi == 0) {
-				ans -= lnfact[total];
+				ans -= s_lnfact(total);
 				break;
 			}
 			else {
@@ -1983,10 +1966,6 @@ s_Trim(SSequence* seq, Int4* leftend, Int4* rightend, const SegParameters* spara
    if ((seq->length-maxtrim)>minlen) 
         minlen = seq->length-maxtrim;
 
-   /* probably a nucleotide sequence.  s_GetProb cannot handle */
-   if (seq->length > sizeof(lnfact)/sizeof(*lnfact))
-      return -1;
-
    minprob = 1.;
    for (len=seq->length; len>minlen; len--)
    {
@@ -2026,7 +2005,7 @@ s_Trim(SSequence* seq, Int4* leftend, Int4* rightend, const SegParameters* spara
  * @param offset offset of sequence passed in [in]
  */
 static Int2 
-s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
+s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg **segs,
                    Int4 offset)
 {
    SSeg* seg = (SSeg*) NULL;
@@ -2070,8 +2049,8 @@ s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
          rightend = hii + upset - 1;
 
          temp_seq = s_OpenWin(seq, leftend, rightend-leftend+1);
-         status = s_Trim(temp_seq, &leftend, &rightend,
-              sparamsp);
+         status = s_Trim(temp_seq, &leftend, &rightend, sparamsp);
+
          if (status < 0) {
              s_CloseWin(temp_seq);
              break;
@@ -2087,10 +2066,12 @@ s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
             status = s_SegSeq(leftseq, sparamsp, &leftsegs, offset+lend);
             if (status < 0)
               return status;
+
+            /* prepend here, order will be restored in s_SegToSeqLoc */
             if (leftsegs!=NULL)
             {
-               if (*segs==NULL) *segs = leftsegs;
-               else s_AppendSeg(*segs, leftsegs);
+               leftsegs->next = *segs;
+               *segs = leftsegs;
             }
             s_CloseWin(leftseq);
 
@@ -2099,11 +2080,8 @@ s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
          seg = (SSeg*) calloc(1, sizeof(SSeg));
          seg->begin = leftend + offset;
          seg->end = rightend + offset;
-         seg->next = (SSeg*) NULL;
-
-         if (*segs==NULL) *segs = seg;
-         else s_AppendSeg(*segs, seg);
-
+         seg->next = *segs;
+         *segs = seg;
          i = MIN(hii, rightend+downset);
          lowlim = i + 1;
         }
@@ -2122,50 +2100,31 @@ static void
 s_MergeSegs(SSequence* seq, SSeg* segs)
 {
    SSeg* seg,* nextseg;
-   Int4 hilenmin;		/* hilenmin yet unset */
-   Int4 len;
+   Int4 hilenmin;              /* hilenmin yet unset */
 
    hilenmin = 0;               /* hilenmin - temporary default */
 
    if (segs==NULL) return;
 
-   if (segs->begin<hilenmin) segs->begin = 0;
+   if (seq->length -1 - segs->end < hilenmin) 
+       segs->end = seq->length -1;
 
    seg = segs;
    nextseg = seg->next;
 
-   while (nextseg!=NULL)
-     {
-      if (seg->end>=nextseg->begin && seg->end>=nextseg->end)
-        {
+   while (nextseg!=NULL) {
+      if (seg->begin - nextseg->end - 1 < hilenmin) {
+         if (seg->end < nextseg->end) seg->end = nextseg->end;
+         if (seg->begin > nextseg->begin) seg->begin = nextseg->begin;
          seg->next = nextseg->next;
          sfree(nextseg);
-         nextseg = seg->next;
-         continue;
-        }
-      if (seg->end>=nextseg->begin)               /* overlapping segments */
-        {
-         seg->end = nextseg->end;
-         seg->next = nextseg->next;
-         sfree(nextseg);
-         nextseg = seg->next;
-         continue;
-        }
-      len = nextseg->begin - seg->end - 1;
-      if (len<hilenmin)                            /* short hient segment */
-        {
-         seg->end = nextseg->end;
-         seg->next = nextseg->next;
-         sfree(nextseg);
-         nextseg = seg->next;
-         continue;
-        }
-      seg = nextseg;
+      } else {
+         seg = nextseg;
+      }
       nextseg = seg->next;
-     }
+   }
 
-   len = seq->length - seg->end - 1;
-   if (len<hilenmin) seg->end = seq->length - 1;
+   if (seg->begin < hilenmin) seg->begin = 0;
 
    return;
 }
@@ -2181,12 +2140,12 @@ static Int2
 s_SegsToBlastSeqLoc(SSeg* segs, Int4 offset, BlastSeqLoc** seg_locs)
 {
    for ( ; segs; segs = segs->next) {
-      Int4 left = segs->begin + offset;
-      Int4 right = segs->end + offset;
-
-      /* Check that allocation succeeded. */
-      if (BlastSeqLocNew(seg_locs, left, right) == NULL)
-          break;
+      BlastSeqLoc *loc = (BlastSeqLoc*) calloc(1, sizeof(BlastSeqLoc));
+      loc->ssr = (SSeqRange*) calloc(1,sizeof(SSeqRange));
+      loc->ssr->left = segs->begin + offset;
+      loc->ssr->right = segs->end  + offset;
+      loc->next = *seg_locs;
+      *seg_locs = loc;
    }
    /* If not all segs have been processed, it means that memory allocation 
       failed, hence return error status. */

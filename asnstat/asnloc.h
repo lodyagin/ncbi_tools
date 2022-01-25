@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnloc.h64";
+static char * asnfilename = "asnloc.h65";
 static AsnValxNode avnx[7] = {
     {3,NULL,32,0.0,NULL } ,
     {20,"unknown" ,0,0.0,&avnx[2] } ,
@@ -19,7 +19,7 @@ static AsnValxNode avnx[7] = {
     {20,"both-rev" ,4,0.0,&avnx[6] } ,
     {20,"other" ,255,0.0,NULL } };
 
-static AsnType atx[92] = {
+static AsnType atx[94] = {
   {401, "Seq-id" ,1,0,0,0,0,1,0,0,NULL,&atx[45],&atx[1],0,&atx[46]} ,
   {0, "local" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {409, "Object-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[60]} ,
@@ -54,9 +54,9 @@ static AsnType atx[92] = {
   {0, "ddbj" ,128,12,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[32]} ,
   {0, "prf" ,128,13,0,0,0,0,0,0,NULL,&atx[14],NULL,0,&atx[33]} ,
   {0, "pdb" ,128,14,0,0,0,0,0,0,NULL,&atx[34],NULL,0,&atx[40]} ,
-  {417, "PDB-seq-id" ,1,0,0,0,0,0,0,0,NULL,&atx[12],&atx[35],0,&atx[36]} ,
+  {417, "PDB-seq-id" ,1,0,0,0,0,0,0,0,NULL,&atx[12],&atx[35],0,&atx[92]} ,
   {0, "mol" ,128,0,0,0,0,0,0,0,NULL,&atx[36],NULL,0,&atx[37]} ,
-  {418, "PDB-mol-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],NULL,0,&atx[80]} ,
+  {419, "PDB-mol-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],NULL,0,&atx[80]} ,
   {0, "chain" ,128,1,0,0,1,0,0,0,&avnx[0],&atx[4],NULL,0,&atx[38]} ,
   {0, "rel" ,128,2,0,1,0,0,0,0,NULL,&atx[39],NULL,0,NULL} ,
   {412, "Date" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[26]} ,
@@ -100,21 +100,23 @@ static AsnType atx[92] = {
   {0, "points" ,128,3,0,0,0,0,0,0,NULL,&atx[65],&atx[78],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[4],NULL,0,NULL} ,
   {0, "mix" ,128,7,0,0,0,0,0,0,NULL,&atx[80],NULL,0,&atx[82]} ,
-  {419, "Seq-loc-mix" ,1,0,0,0,0,0,0,0,NULL,&atx[65],&atx[81],0,&atx[83]} ,
+  {420, "Seq-loc-mix" ,1,0,0,0,0,0,0,0,NULL,&atx[65],&atx[81],0,&atx[83]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[46],NULL,0,NULL} ,
   {0, "equiv" ,128,8,0,0,0,0,0,0,NULL,&atx[83],NULL,0,&atx[86]} ,
-  {420, "Seq-loc-equiv" ,1,0,0,0,0,0,0,0,NULL,&atx[85],&atx[84],0,&atx[87]} ,
+  {421, "Seq-loc-equiv" ,1,0,0,0,0,0,0,0,NULL,&atx[85],&atx[84],0,&atx[87]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[46],NULL,0,NULL} ,
   {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "bond" ,128,9,0,0,0,0,0,0,NULL,&atx[87],NULL,0,&atx[90]} ,
-  {421, "Seq-bond" ,1,0,0,0,0,0,0,0,NULL,&atx[12],&atx[88],0,NULL} ,
+  {422, "Seq-bond" ,1,0,0,0,0,0,0,0,NULL,&atx[12],&atx[88],0,NULL} ,
   {0, "a" ,128,0,0,0,0,0,0,0,NULL,&atx[67],NULL,0,&atx[89]} ,
   {0, "b" ,128,1,0,1,0,0,0,0,NULL,&atx[67],NULL,0,NULL} ,
   {0, "feat" ,128,10,0,0,0,0,0,0,NULL,&atx[91],NULL,0,NULL} ,
-  {414, "Feat-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[14]} };
+  {414, "Feat-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[14]} ,
+  {418, "Seq-id-set" ,1,0,0,0,0,0,0,0,NULL,&atx[85],&atx[93],0,&atx[36]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Seqloc" , "asnloc.h64",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Seqloc" , "asnloc.h65",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -208,6 +210,9 @@ static AsnModulePtr amp = ampx;
 #define PDB_SEQ_ID_mol &at[35]
 #define PDB_SEQ_ID_chain &at[37]
 #define PDB_SEQ_ID_rel &at[38]
+
+#define SEQ_ID_SET &at[92]
+#define SEQ_ID_SET_E &at[93]
 
 #define PDB_MOL_ID &at[36]
 

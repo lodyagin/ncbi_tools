@@ -1,4 +1,4 @@
-/* $Id: blast_message.h,v 1.19 2008/07/23 18:55:44 kazimird Exp $
+/* $Id: blast_message.h,v 1.20 2010/03/23 16:04:51 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -153,6 +153,9 @@ void Blast_PerrorEx(Blast_Message* *msg,
 
 /** BLAST search was interrupted via a user-provided callback */
 #define BLASTERR_INTERRUPTED                        103
+
+/** Could not calculate Karlin-Altschul statistics for any context. */
+#define BLASTERR_NOVALIDKARLINALTSCHUL              104
 
 /** The option is not supported with the specified program. */
 #define BLASTERR_OPTION_PROGRAM_INVALID             201  

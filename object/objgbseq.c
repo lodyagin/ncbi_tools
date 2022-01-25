@@ -31,7 +31,7 @@ objgbseqAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-GBSeq
-*    Generated using ASNCODE Revision: 6.16 at Jan 15, 2009  2:16 PM
+*    Generated using ASNCODE Revision: 6.17 at May 26, 2010 12:37 PM
 *
 **************************************************/
 
@@ -63,7 +63,6 @@ NLM_EXTERN
 GBSetPtr LIBCALL
 GBSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -119,7 +118,6 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 GBSetAsnWrite(GBSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
-   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -202,13 +200,16 @@ GBSeqFree(GBSeqPtr ptr)
    MemFree(ptr -> taxonomy);
    AsnGenericUserSeqOfFree(ptr -> references, (AsnOptFreeFunc) GBReferenceFree);
    MemFree(ptr -> comment);
-   GBTagsetFree(ptr -> tagset);
+   AsnGenericUserSeqOfFree(ptr -> comment_set, (AsnOptFreeFunc) GBCommentFree);
+   AsnGenericUserSeqOfFree(ptr -> struc_comments, (AsnOptFreeFunc) GBStrucCommentFree);
    MemFree(ptr -> primary);
    MemFree(ptr -> source_db);
    MemFree(ptr -> database_reference);
    AsnGenericUserSeqOfFree(ptr -> feature_table, (AsnOptFreeFunc) GBFeatureFree);
+   AsnGenericUserSeqOfFree(ptr -> feature_set, (AsnOptFreeFunc) GBFeatureSetFree);
    MemFree(ptr -> sequence);
    MemFree(ptr -> contig);
+   AsnGenericUserSeqOfFree(ptr -> alt_seq, (AsnOptFreeFunc) GBAltSeqDataFree);
    return MemFree(ptr);
 }
 
@@ -428,9 +429,16 @@ GBSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> comment = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == GBSEQ_tagset) {
-      ptr -> tagset = GBTagsetAsnRead(aip, atp);
-      if (aip -> io_failure) {
+   if (atp == GBSEQ_comment_set) {
+      ptr -> comment_set = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBCommentAsnRead, (AsnOptFreeFunc) GBCommentFree);
+      if (isError && ptr -> comment_set == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBSEQ_struc_comments) {
+      ptr -> struc_comments = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBStrucCommentAsnRead, (AsnOptFreeFunc) GBStrucCommentFree);
+      if (isError && ptr -> struc_comments == NULL) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
@@ -463,6 +471,13 @@ GBSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GBSEQ_feature_set) {
+      ptr -> feature_set = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBFeatureSetAsnRead, (AsnOptFreeFunc) GBFeatureSetFree);
+      if (isError && ptr -> feature_set == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == GBSEQ_sequence) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -475,6 +490,13 @@ GBSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> contig = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBSEQ_alt_seq) {
+      ptr -> alt_seq = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBAltSeqDataAsnRead, (AsnOptFreeFunc) GBAltSeqDataFree);
+      if (isError && ptr -> alt_seq == NULL) {
+         goto erret;
+      }
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -610,11 +632,8 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> comment;
       retval = AsnWrite(aip, GBSEQ_comment,  &av);
    }
-   if (ptr -> tagset != NULL) {
-      if ( ! GBTagsetAsnWrite(ptr -> tagset, aip, GBSEQ_tagset)) {
-         goto erret;
-      }
-   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> comment_set, (AsnWriteFunc) GBCommentAsnWrite, aip, GBSEQ_comment_set, GBSEQ_comment_set_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> struc_comments, (AsnWriteFunc) GBStrucCommentAsnWrite, aip, GBSEQ_struc_comments, GBSEQ_struc_comments_E);
    if (ptr -> primary != NULL) {
       av.ptrvalue = ptr -> primary;
       retval = AsnWrite(aip, GBSEQ_primary,  &av);
@@ -628,6 +647,7 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnWrite(aip, GBSEQ_database_reference,  &av);
    }
    AsnGenericUserSeqOfAsnWrite(ptr -> feature_table, (AsnWriteFunc) GBFeatureAsnWrite, aip, GBSEQ_feature_table, GBSEQ_feature_table_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> feature_set, (AsnWriteFunc) GBFeatureSetAsnWrite, aip, GBSEQ_feature_set, GBSEQ_feature_set_E);
    if (ptr -> sequence != NULL) {
       av.ptrvalue = ptr -> sequence;
       retval = AsnWrite(aip, GBSEQ_sequence,  &av);
@@ -636,6 +656,7 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> contig;
       retval = AsnWrite(aip, GBSEQ_contig,  &av);
    }
+   AsnGenericUserSeqOfAsnWrite(ptr -> alt_seq, (AsnWriteFunc) GBAltSeqDataAsnWrite, aip, GBSEQ_alt_seq, GBSEQ_alt_seq_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -894,14 +915,14 @@ erret:
 
 /**************************************************
 *
-*    GBTagsetNew()
+*    GBCommentNew()
 *
 **************************************************/
 NLM_EXTERN 
-GBTagsetPtr LIBCALL
-GBTagsetNew(void)
+GBCommentPtr LIBCALL
+GBCommentNew(void)
 {
-   GBTagsetPtr ptr = MemNew((size_t) sizeof(GBTagset));
+   GBCommentPtr ptr = MemNew((size_t) sizeof(GBComment));
 
    return ptr;
 
@@ -910,39 +931,37 @@ GBTagsetNew(void)
 
 /**************************************************
 *
-*    GBTagsetFree()
+*    GBCommentFree()
 *
 **************************************************/
 NLM_EXTERN 
-GBTagsetPtr LIBCALL
-GBTagsetFree(GBTagsetPtr ptr)
+GBCommentPtr LIBCALL
+GBCommentFree(GBCommentPtr ptr)
 {
 
    if(ptr == NULL) {
       return NULL;
    }
-   MemFree(ptr -> authority);
-   MemFree(ptr -> version);
-   MemFree(ptr -> url);
-   GBTagsFree(ptr -> tags);
+   MemFree(ptr -> type);
+   AsnGenericUserSeqOfFree(ptr -> paragraphs, (AsnOptFreeFunc) GBCommentParagraphFree);
    return MemFree(ptr);
 }
 
 
 /**************************************************
 *
-*    GBTagsetAsnRead()
+*    GBCommentAsnRead()
 *
 **************************************************/
 NLM_EXTERN 
-GBTagsetPtr LIBCALL
-GBTagsetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+GBCommentPtr LIBCALL
+GBCommentAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
-   GBTagsetPtr ptr;
+   GBCommentPtr ptr;
 
    if (! loaded)
    {
@@ -955,17 +974,17 @@ GBTagsetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       return NULL;
    }
 
-   if (orig == NULL) {         /* GBTagset ::= (self contained) */
-      atp = AsnReadId(aip, amp, GBTAGSET);
+   if (orig == NULL) {         /* GBComment ::= (self contained) */
+      atp = AsnReadId(aip, amp, GBCOMMENT);
    } else {
-      atp = AsnLinkType(orig, GBTAGSET);
+      atp = AsnLinkType(orig, GBCOMMENT);
    }
    /* link in local tree */
    if (atp == NULL) {
       return NULL;
    }
 
-   ptr = GBTagsetNew();
+   ptr = GBCommentNew();
    if (ptr == NULL) {
       goto erret;
    }
@@ -976,30 +995,16 @@ GBTagsetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == GBTAGSET_authority) {
+   if (atp == GBCOMMENT_type) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
-      ptr -> authority = av.ptrvalue;
+      ptr -> type = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == GBTAGSET_version) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> version = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GBTAGSET_url) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> url = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GBTAGSET_tags) {
-      ptr -> tags = GBTagsAsnRead(aip, atp);
-      if (aip -> io_failure) {
+   if (atp == GBCOMMENT_paragraphs) {
+      ptr -> paragraphs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBCommentParagraphAsnRead, (AsnOptFreeFunc) GBCommentParagraphFree);
+      if (isError && ptr -> paragraphs == NULL) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
@@ -1016,7 +1021,7 @@ ret:
 
 erret:
    aip -> io_failure = TRUE;
-   ptr = GBTagsetFree(ptr);
+   ptr = GBCommentFree(ptr);
    goto ret;
 }
 
@@ -1024,11 +1029,11 @@ erret:
 
 /**************************************************
 *
-*    GBTagsetAsnWrite()
+*    GBCommentAsnWrite()
 *
 **************************************************/
 NLM_EXTERN Boolean LIBCALL 
-GBTagsetAsnWrite(GBTagsetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+GBCommentAsnWrite(GBCommentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
@@ -1045,7 +1050,7 @@ GBTagsetAsnWrite(GBTagsetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       return FALSE;
    }
 
-   atp = AsnLinkType(orig, GBTAGSET);   /* link local tree */
+   atp = AsnLinkType(orig, GBCOMMENT);   /* link local tree */
    if (atp == NULL) {
       return FALSE;
    }
@@ -1055,23 +1060,175 @@ GBTagsetAsnWrite(GBTagsetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
 
-   if (ptr -> authority != NULL) {
-      av.ptrvalue = ptr -> authority;
-      retval = AsnWrite(aip, GBTAGSET_authority,  &av);
+   if (ptr -> type != NULL) {
+      av.ptrvalue = ptr -> type;
+      retval = AsnWrite(aip, GBCOMMENT_type,  &av);
    }
-   if (ptr -> version != NULL) {
-      av.ptrvalue = ptr -> version;
-      retval = AsnWrite(aip, GBTAGSET_version,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> paragraphs, (AsnWriteFunc) GBCommentParagraphAsnWrite, aip, GBCOMMENT_paragraphs, GBCOMMENT_paragraphs_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
    }
-   if (ptr -> url != NULL) {
-      av.ptrvalue = ptr -> url;
-      retval = AsnWrite(aip, GBTAGSET_url,  &av);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    GBStrucCommentNew()
+*
+**************************************************/
+NLM_EXTERN 
+GBStrucCommentPtr LIBCALL
+GBStrucCommentNew(void)
+{
+   GBStrucCommentPtr ptr = MemNew((size_t) sizeof(GBStrucComment));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    GBStrucCommentFree()
+*
+**************************************************/
+NLM_EXTERN 
+GBStrucCommentPtr LIBCALL
+GBStrucCommentFree(GBStrucCommentPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
    }
-   if (ptr -> tags != NULL) {
-      if ( ! GBTagsAsnWrite(ptr -> tags, aip, GBTAGSET_tags)) {
-         goto erret;
+   MemFree(ptr -> name);
+   AsnGenericUserSeqOfFree(ptr -> items, (AsnOptFreeFunc) GBStrucCommentItemFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    GBStrucCommentAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+GBStrucCommentPtr LIBCALL
+GBStrucCommentAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   GBStrucCommentPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return NULL;
       }
    }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* GBStrucComment ::= (self contained) */
+      atp = AsnReadId(aip, amp, GBSTRUCCOMMENT);
+   } else {
+      atp = AsnLinkType(orig, GBSTRUCCOMMENT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = GBStrucCommentNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == GBSTRUCCOMMENT_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBSTRUCCOMMENT_items) {
+      ptr -> items = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBStrucCommentItemAsnRead, (AsnOptFreeFunc) GBStrucCommentItemFree);
+      if (isError && ptr -> items == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = GBStrucCommentFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    GBStrucCommentAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+GBStrucCommentAsnWrite(GBStrucCommentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, GBSTRUCCOMMENT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, GBSTRUCCOMMENT_name,  &av);
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> items, (AsnWriteFunc) GBStrucCommentItemAsnWrite, aip, GBSTRUCCOMMENT_items, GBSTRUCCOMMENT_items_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1118,6 +1275,7 @@ GBFeatureFree(GBFeaturePtr ptr)
    AsnGenericUserSeqOfFree(ptr -> intervals, (AsnOptFreeFunc) GBIntervalFree);
    MemFree(ptr -> operator__);
    AsnGenericUserSeqOfFree(ptr -> quals, (AsnOptFreeFunc) GBQualifierFree);
+   AsnGenericUserSeqOfFree(ptr -> xrefs, (AsnOptFreeFunc) GBXrefFree);
    return MemFree(ptr);
 }
 
@@ -1220,6 +1378,13 @@ GBFeatureAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GBFEATURE_xrefs) {
+      ptr -> xrefs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBXrefAsnRead, (AsnOptFreeFunc) GBXrefFree);
+      if (isError && ptr -> xrefs == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1291,6 +1456,335 @@ GBFeatureAsnWrite(GBFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnWrite(aip, GBFEATURE_partial3,  &av);
    }
    AsnGenericUserSeqOfAsnWrite(ptr -> quals, (AsnWriteFunc) GBQualifierAsnWrite, aip, GBFEATURE_quals, GBFEATURE_quals_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> xrefs, (AsnWriteFunc) GBXrefAsnWrite, aip, GBFEATURE_xrefs, GBFEATURE_xrefs_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    GBFeatureSetNew()
+*
+**************************************************/
+NLM_EXTERN 
+GBFeatureSetPtr LIBCALL
+GBFeatureSetNew(void)
+{
+   GBFeatureSetPtr ptr = MemNew((size_t) sizeof(GBFeatureSet));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    GBFeatureSetFree()
+*
+**************************************************/
+NLM_EXTERN 
+GBFeatureSetPtr LIBCALL
+GBFeatureSetFree(GBFeatureSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> annot_source);
+   AsnGenericUserSeqOfFree(ptr -> features, (AsnOptFreeFunc) GBFeatureFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    GBFeatureSetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+GBFeatureSetPtr LIBCALL
+GBFeatureSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   GBFeatureSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* GBFeatureSet ::= (self contained) */
+      atp = AsnReadId(aip, amp, GBFEATURESET);
+   } else {
+      atp = AsnLinkType(orig, GBFEATURESET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = GBFeatureSetNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == GBFEATURESET_annot_source) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> annot_source = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBFEATURESET_features) {
+      ptr -> features = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBFeatureAsnRead, (AsnOptFreeFunc) GBFeatureFree);
+      if (isError && ptr -> features == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = GBFeatureSetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    GBFeatureSetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+GBFeatureSetAsnWrite(GBFeatureSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, GBFEATURESET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> annot_source != NULL) {
+      av.ptrvalue = ptr -> annot_source;
+      retval = AsnWrite(aip, GBFEATURESET_annot_source,  &av);
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> features, (AsnWriteFunc) GBFeatureAsnWrite, aip, GBFEATURESET_features, GBFEATURESET_features_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    GBAltSeqDataNew()
+*
+**************************************************/
+NLM_EXTERN 
+GBAltSeqDataPtr LIBCALL
+GBAltSeqDataNew(void)
+{
+   GBAltSeqDataPtr ptr = MemNew((size_t) sizeof(GBAltSeqData));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    GBAltSeqDataFree()
+*
+**************************************************/
+NLM_EXTERN 
+GBAltSeqDataPtr LIBCALL
+GBAltSeqDataFree(GBAltSeqDataPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> name);
+   AsnGenericUserSeqOfFree(ptr -> items, (AsnOptFreeFunc) GBAltSeqItemFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    GBAltSeqDataAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+GBAltSeqDataPtr LIBCALL
+GBAltSeqDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   GBAltSeqDataPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* GBAltSeqData ::= (self contained) */
+      atp = AsnReadId(aip, amp, GBALTSEQDATA);
+   } else {
+      atp = AsnLinkType(orig, GBALTSEQDATA);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = GBAltSeqDataNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == GBALTSEQDATA_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBALTSEQDATA_items) {
+      ptr -> items = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBAltSeqItemAsnRead, (AsnOptFreeFunc) GBAltSeqItemFree);
+      if (isError && ptr -> items == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = GBAltSeqDataFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    GBAltSeqDataAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+GBAltSeqDataAsnWrite(GBAltSeqDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, GBALTSEQDATA);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, GBALTSEQDATA_name,  &av);
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> items, (AsnWriteFunc) GBAltSeqItemAsnWrite, aip, GBALTSEQDATA_items, GBALTSEQDATA_items_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1349,7 +1843,6 @@ GBXrefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    GBXrefPtr ptr;
 
@@ -1472,128 +1965,14 @@ erret:
 
 /**************************************************
 *
-*    GBTagsFree()
+*    GBCommentParagraphNew()
 *
 **************************************************/
 NLM_EXTERN 
-GBTagsPtr LIBCALL
-GBTagsFree(GBTagsPtr ptr)
+GBCommentParagraphPtr LIBCALL
+GBCommentParagraphNew(void)
 {
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) GBTagFree);
-   return NULL;
-}
-
-
-/**************************************************
-*
-*    GBTagsAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-GBTagsPtr LIBCALL
-GBTagsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   GBTagsPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* GBTags ::= (self contained) */
-      atp = AsnReadId(aip, amp, GBTAGS);
-   } else {
-      atp = AsnLinkType(orig, GBTAGS);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   func = NULL;
-
-   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBTagAsnRead, (AsnOptFreeFunc) GBTagFree);
-   if (isError && ptr  == NULL) {
-      goto erret;
-   }
-
-
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = GBTagsFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    GBTagsAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-GBTagsAsnWrite(GBTagsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, GBTAGS);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) GBTagAsnWrite, aip, atp, GBTAGS_E);
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    GBTagNew()
-*
-**************************************************/
-NLM_EXTERN 
-GBTagPtr LIBCALL
-GBTagNew(void)
-{
-   GBTagPtr ptr = MemNew((size_t) sizeof(GBTag));
+   GBCommentParagraphPtr ptr = MemNew((size_t) sizeof(GBCommentParagraph));
 
    return ptr;
 
@@ -1602,38 +1981,36 @@ GBTagNew(void)
 
 /**************************************************
 *
-*    GBTagFree()
+*    GBCommentParagraphFree()
 *
 **************************************************/
 NLM_EXTERN 
-GBTagPtr LIBCALL
-GBTagFree(GBTagPtr ptr)
+GBCommentParagraphPtr LIBCALL
+GBCommentParagraphFree(GBCommentParagraphPtr ptr)
 {
 
    if(ptr == NULL) {
       return NULL;
    }
-   MemFree(ptr -> name);
-   MemFree(ptr -> value);
-   MemFree(ptr -> unit);
+   AsnGenericUserSeqOfFree(ptr -> items, (AsnOptFreeFunc) GBCommentItemFree);
    return MemFree(ptr);
 }
 
 
 /**************************************************
 *
-*    GBTagAsnRead()
+*    GBCommentParagraphAsnRead()
 *
 **************************************************/
 NLM_EXTERN 
-GBTagPtr LIBCALL
-GBTagAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+GBCommentParagraphPtr LIBCALL
+GBCommentParagraphAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
-   GBTagPtr ptr;
+   GBCommentParagraphPtr ptr;
 
    if (! loaded)
    {
@@ -1646,17 +2023,17 @@ GBTagAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       return NULL;
    }
 
-   if (orig == NULL) {         /* GBTag ::= (self contained) */
-      atp = AsnReadId(aip, amp, GBTAG);
+   if (orig == NULL) {         /* GBCommentParagraph ::= (self contained) */
+      atp = AsnReadId(aip, amp, GBCOMMENTPARAGRAPH);
    } else {
-      atp = AsnLinkType(orig, GBTAG);
+      atp = AsnLinkType(orig, GBCOMMENTPARAGRAPH);
    }
    /* link in local tree */
    if (atp == NULL) {
       return NULL;
    }
 
-   ptr = GBTagNew();
+   ptr = GBCommentParagraphNew();
    if (ptr == NULL) {
       goto erret;
    }
@@ -1667,25 +2044,11 @@ GBTagAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == GBTAG_name) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
+   if (atp == GBCOMMENTPARAGRAPH_items) {
+      ptr -> items = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBCommentItemAsnRead, (AsnOptFreeFunc) GBCommentItemFree);
+      if (isError && ptr -> items == NULL) {
          goto erret;
       }
-      ptr -> name = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GBTAG_value) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> value = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GBTAG_unit) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> unit = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -1700,7 +2063,7 @@ ret:
 
 erret:
    aip -> io_failure = TRUE;
-   ptr = GBTagFree(ptr);
+   ptr = GBCommentParagraphFree(ptr);
    goto ret;
 }
 
@@ -1708,11 +2071,169 @@ erret:
 
 /**************************************************
 *
-*    GBTagAsnWrite()
+*    GBCommentParagraphAsnWrite()
 *
 **************************************************/
 NLM_EXTERN Boolean LIBCALL 
-GBTagAsnWrite(GBTagPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+GBCommentParagraphAsnWrite(GBCommentParagraphPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, GBCOMMENTPARAGRAPH);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   AsnGenericUserSeqOfAsnWrite(ptr -> items, (AsnWriteFunc) GBCommentItemAsnWrite, aip, GBCOMMENTPARAGRAPH_items, GBCOMMENTPARAGRAPH_items_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    GBCommentItemNew()
+*
+**************************************************/
+NLM_EXTERN 
+GBCommentItemPtr LIBCALL
+GBCommentItemNew(void)
+{
+   GBCommentItemPtr ptr = MemNew((size_t) sizeof(GBCommentItem));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    GBCommentItemFree()
+*
+**************************************************/
+NLM_EXTERN 
+GBCommentItemPtr LIBCALL
+GBCommentItemFree(GBCommentItemPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> value);
+   MemFree(ptr -> url);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    GBCommentItemAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+GBCommentItemPtr LIBCALL
+GBCommentItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   GBCommentItemPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* GBCommentItem ::= (self contained) */
+      atp = AsnReadId(aip, amp, GBCOMMENTITEM);
+   } else {
+      atp = AsnLinkType(orig, GBCOMMENTITEM);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = GBCommentItemNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == GBCOMMENTITEM_value) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> value = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBCOMMENTITEM_url) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> url = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = GBCommentItemFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    GBCommentItemAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+GBCommentItemAsnWrite(GBCommentItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
@@ -1729,7 +2250,7 @@ GBTagAsnWrite(GBTagPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       return FALSE;
    }
 
-   atp = AsnLinkType(orig, GBTAG);   /* link local tree */
+   atp = AsnLinkType(orig, GBCOMMENTITEM);   /* link local tree */
    if (atp == NULL) {
       return FALSE;
    }
@@ -1739,17 +2260,191 @@ GBTagAsnWrite(GBTagPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
 
-   if (ptr -> name != NULL) {
-      av.ptrvalue = ptr -> name;
-      retval = AsnWrite(aip, GBTAG_name,  &av);
+   if (ptr -> value != NULL) {
+      av.ptrvalue = ptr -> value;
+      retval = AsnWrite(aip, GBCOMMENTITEM_value,  &av);
+   }
+   if (ptr -> url != NULL) {
+      av.ptrvalue = ptr -> url;
+      retval = AsnWrite(aip, GBCOMMENTITEM_url,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    GBStrucCommentItemNew()
+*
+**************************************************/
+NLM_EXTERN 
+GBStrucCommentItemPtr LIBCALL
+GBStrucCommentItemNew(void)
+{
+   GBStrucCommentItemPtr ptr = MemNew((size_t) sizeof(GBStrucCommentItem));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    GBStrucCommentItemFree()
+*
+**************************************************/
+NLM_EXTERN 
+GBStrucCommentItemPtr LIBCALL
+GBStrucCommentItemFree(GBStrucCommentItemPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> tag);
+   MemFree(ptr -> value);
+   MemFree(ptr -> url);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    GBStrucCommentItemAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+GBStrucCommentItemPtr LIBCALL
+GBStrucCommentItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   GBStrucCommentItemPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* GBStrucCommentItem ::= (self contained) */
+      atp = AsnReadId(aip, amp, GBSTRUCCOMMENTITEM);
+   } else {
+      atp = AsnLinkType(orig, GBSTRUCCOMMENTITEM);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = GBStrucCommentItemNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == GBSTRUCCOMMENTITEM_tag) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> tag = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBSTRUCCOMMENTITEM_value) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> value = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBSTRUCCOMMENTITEM_url) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> url = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = GBStrucCommentItemFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    GBStrucCommentItemAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+GBStrucCommentItemAsnWrite(GBStrucCommentItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objgbseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, GBSTRUCCOMMENTITEM);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> tag != NULL) {
+      av.ptrvalue = ptr -> tag;
+      retval = AsnWrite(aip, GBSTRUCCOMMENTITEM_tag,  &av);
    }
    if (ptr -> value != NULL) {
       av.ptrvalue = ptr -> value;
-      retval = AsnWrite(aip, GBTAG_value,  &av);
+      retval = AsnWrite(aip, GBSTRUCCOMMENTITEM_value,  &av);
    }
-   if (ptr -> unit != NULL) {
-      av.ptrvalue = ptr -> unit;
-      retval = AsnWrite(aip, GBTAG_unit,  &av);
+   if (ptr -> url != NULL) {
+      av.ptrvalue = ptr -> url;
+      retval = AsnWrite(aip, GBSTRUCCOMMENTITEM_url,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -1808,7 +2503,6 @@ GBIntervalAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    GBIntervalPtr ptr;
 
@@ -2019,7 +2713,6 @@ GBQualifierAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    GBQualifierPtr ptr;
 
@@ -2142,14 +2835,14 @@ erret:
 
 /**************************************************
 *
-*    GBTagsetRulesNew()
+*    GBAltSeqItemNew()
 *
 **************************************************/
 NLM_EXTERN 
-GBTagsetRulesPtr LIBCALL
-GBTagsetRulesNew(void)
+GBAltSeqItemPtr LIBCALL
+GBAltSeqItemNew(void)
 {
-   GBTagsetRulesPtr ptr = MemNew((size_t) sizeof(GBTagsetRules));
+   GBAltSeqItemPtr ptr = MemNew((size_t) sizeof(GBAltSeqItem));
 
    return ptr;
 
@@ -2158,40 +2851,41 @@ GBTagsetRulesNew(void)
 
 /**************************************************
 *
-*    GBTagsetRulesFree()
+*    GBAltSeqItemFree()
 *
 **************************************************/
 NLM_EXTERN 
-GBTagsetRulesPtr LIBCALL
-GBTagsetRulesFree(GBTagsetRulesPtr ptr)
+GBAltSeqItemPtr LIBCALL
+GBAltSeqItemFree(GBAltSeqItemPtr ptr)
 {
 
    if(ptr == NULL) {
       return NULL;
    }
-   MemFree(ptr -> authority);
-   MemFree(ptr -> version);
-   GBTagNamesFree(ptr -> mandatorytags);
-   GBTagNamesFree(ptr -> optionaltags);
-   GBTagNamesFree(ptr -> uniquetags);
+   GBIntervalFree(ptr -> interval);
+   MemFree(ptr -> gap_type);
+   MemFree(ptr -> gap_linkage);
+   MemFree(ptr -> gap_comment);
+   MemFree(ptr -> first_accn);
+   MemFree(ptr -> last_accn);
+   MemFree(ptr -> value);
    return MemFree(ptr);
 }
 
 
 /**************************************************
 *
-*    GBTagsetRulesAsnRead()
+*    GBAltSeqItemAsnRead()
 *
 **************************************************/
 NLM_EXTERN 
-GBTagsetRulesPtr LIBCALL
-GBTagsetRulesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+GBAltSeqItemPtr LIBCALL
+GBAltSeqItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
-   GBTagsetRulesPtr ptr;
+   GBAltSeqItemPtr ptr;
 
    if (! loaded)
    {
@@ -2204,17 +2898,17 @@ GBTagsetRulesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       return NULL;
    }
 
-   if (orig == NULL) {         /* GBTagsetRules ::= (self contained) */
-      atp = AsnReadId(aip, amp, GBTAGSETRULES);
+   if (orig == NULL) {         /* GBAltSeqItem ::= (self contained) */
+      atp = AsnReadId(aip, amp, GBALTSEQITEM);
    } else {
-      atp = AsnLinkType(orig, GBTAGSETRULES);
+      atp = AsnLinkType(orig, GBALTSEQITEM);
    }
    /* link in local tree */
    if (atp == NULL) {
       return NULL;
    }
 
-   ptr = GBTagsetRulesNew();
+   ptr = GBAltSeqItemNew();
    if (ptr == NULL) {
       goto erret;
    }
@@ -2225,47 +2919,69 @@ GBTagsetRulesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == GBTAGSETRULES_authority) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> authority = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GBTAGSETRULES_version) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> version = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GBTAGSETRULES_mandatorytags) {
-      ptr -> mandatorytags = GBTagNamesAsnRead(aip, atp);
+   if (atp == GBALTSEQITEM_interval) {
+      ptr -> interval = GBIntervalAsnRead(aip, atp);
       if (aip -> io_failure) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == GBTAGSETRULES_optionaltags) {
-      ptr -> optionaltags = GBTagNamesAsnRead(aip, atp);
-      if (aip -> io_failure) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GBTAGSETRULES_uniquetags) {
-      ptr -> uniquetags = GBTagNamesAsnRead(aip, atp);
-      if (aip -> io_failure) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GBTAGSETRULES_extensible) {
+   if (atp == GBALTSEQITEM_isgap) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
       }
-      ptr -> extensible = av.boolvalue;
+      ptr -> isgap = av.boolvalue;
       ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBALTSEQITEM_gap_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> gap_length = av.intvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBALTSEQITEM_gap_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> gap_type = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBALTSEQITEM_gap_linkage) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> gap_linkage = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBALTSEQITEM_gap_comment) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> gap_comment = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBALTSEQITEM_first_accn) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> first_accn = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBALTSEQITEM_last_accn) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> last_accn = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBALTSEQITEM_value) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> value = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -2280,7 +2996,7 @@ ret:
 
 erret:
    aip -> io_failure = TRUE;
-   ptr = GBTagsetRulesFree(ptr);
+   ptr = GBAltSeqItemFree(ptr);
    goto ret;
 }
 
@@ -2288,11 +3004,11 @@ erret:
 
 /**************************************************
 *
-*    GBTagsetRulesAsnWrite()
+*    GBAltSeqItemAsnWrite()
 *
 **************************************************/
 NLM_EXTERN Boolean LIBCALL 
-GBTagsetRulesAsnWrite(GBTagsetRulesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+GBAltSeqItemAsnWrite(GBAltSeqItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
@@ -2309,7 +3025,7 @@ GBTagsetRulesAsnWrite(GBTagsetRulesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       return FALSE;
    }
 
-   atp = AsnLinkType(orig, GBTAGSETRULES);   /* link local tree */
+   atp = AsnLinkType(orig, GBALTSEQITEM);   /* link local tree */
    if (atp == NULL) {
       return FALSE;
    }
@@ -2319,263 +3035,44 @@ GBTagsetRulesAsnWrite(GBTagsetRulesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
 
-   if (ptr -> authority != NULL) {
-      av.ptrvalue = ptr -> authority;
-      retval = AsnWrite(aip, GBTAGSETRULES_authority,  &av);
-   }
-   if (ptr -> version != NULL) {
-      av.ptrvalue = ptr -> version;
-      retval = AsnWrite(aip, GBTAGSETRULES_version,  &av);
-   }
-   if (ptr -> mandatorytags != NULL) {
-      if ( ! GBTagNamesAsnWrite(ptr -> mandatorytags, aip, GBTAGSETRULES_mandatorytags)) {
+   if (ptr -> interval != NULL) {
+      if ( ! GBIntervalAsnWrite(ptr -> interval, aip, GBALTSEQITEM_interval)) {
          goto erret;
       }
    }
-   if (ptr -> optionaltags != NULL) {
-      if ( ! GBTagNamesAsnWrite(ptr -> optionaltags, aip, GBTAGSETRULES_optionaltags)) {
-         goto erret;
-      }
+   if (ptr -> isgap || (ptr -> OBbits__ & (1<<0) )){   av.boolvalue = ptr -> isgap;
+      retval = AsnWrite(aip, GBALTSEQITEM_isgap,  &av);
    }
-   if (ptr -> uniquetags != NULL) {
-      if ( ! GBTagNamesAsnWrite(ptr -> uniquetags, aip, GBTAGSETRULES_uniquetags)) {
-         goto erret;
-      }
+   if (ptr -> gap_length || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> gap_length;
+      retval = AsnWrite(aip, GBALTSEQITEM_gap_length,  &av);
    }
-   if (ptr -> extensible || (ptr -> OBbits__ & (1<<0) )){   av.boolvalue = ptr -> extensible;
-      retval = AsnWrite(aip, GBTAGSETRULES_extensible,  &av);
+   if (ptr -> gap_type != NULL) {
+      av.ptrvalue = ptr -> gap_type;
+      retval = AsnWrite(aip, GBALTSEQITEM_gap_type,  &av);
+   }
+   if (ptr -> gap_linkage != NULL) {
+      av.ptrvalue = ptr -> gap_linkage;
+      retval = AsnWrite(aip, GBALTSEQITEM_gap_linkage,  &av);
+   }
+   if (ptr -> gap_comment != NULL) {
+      av.ptrvalue = ptr -> gap_comment;
+      retval = AsnWrite(aip, GBALTSEQITEM_gap_comment,  &av);
+   }
+   if (ptr -> first_accn != NULL) {
+      av.ptrvalue = ptr -> first_accn;
+      retval = AsnWrite(aip, GBALTSEQITEM_first_accn,  &av);
+   }
+   if (ptr -> last_accn != NULL) {
+      av.ptrvalue = ptr -> last_accn;
+      retval = AsnWrite(aip, GBALTSEQITEM_last_accn,  &av);
+   }
+   if (ptr -> value != NULL) {
+      av.ptrvalue = ptr -> value;
+      retval = AsnWrite(aip, GBALTSEQITEM_value,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    GBTagNamesFree()
-*
-**************************************************/
-NLM_EXTERN 
-GBTagNamesPtr LIBCALL
-GBTagNamesFree(GBTagNamesPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   AsnGenericBaseSeqOfFree(ptr,ASNCODE_PTRVAL_SLOT);
-   return NULL;
-}
-
-
-/**************************************************
-*
-*    GBTagNamesAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-GBTagNamesPtr LIBCALL
-GBTagNamesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   GBTagNamesPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* GBTagNames ::= (self contained) */
-      atp = AsnReadId(aip, amp, GBTAGNAMES);
-   } else {
-      atp = AsnLinkType(orig, GBTAGNAMES);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   func = NULL;
-
-   ptr  = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
-   if (isError && ptr  == NULL) {
-      goto erret;
-   }
-
-
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = GBTagNamesFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    GBTagNamesAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-GBTagNamesAsnWrite(GBTagNamesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, GBTAGNAMES);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   retval = AsnGenericBaseSeqOfAsnWrite(ptr, ASNCODE_PTRVAL_SLOT, aip, atp, GBTAGNAMES_E);
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    GBTagsetRuleSetFree()
-*
-**************************************************/
-NLM_EXTERN 
-GBTagsetRuleSetPtr LIBCALL
-GBTagsetRuleSetFree(GBTagsetRuleSetPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) GBTagsetRulesFree);
-   return NULL;
-}
-
-
-/**************************************************
-*
-*    GBTagsetRuleSetAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-GBTagsetRuleSetPtr LIBCALL
-GBTagsetRuleSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   GBTagsetRuleSetPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* GBTagsetRuleSet ::= (self contained) */
-      atp = AsnReadId(aip, amp, GBTAGSETRULESET);
-   } else {
-      atp = AsnLinkType(orig, GBTAGSETRULESET);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   func = NULL;
-
-   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBTagsetRulesAsnRead, (AsnOptFreeFunc) GBTagsetRulesFree);
-   if (isError && ptr  == NULL) {
-      goto erret;
-   }
-
-
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = GBTagsetRuleSetFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    GBTagsetRuleSetAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-GBTagsetRuleSetAsnWrite(GBTagsetRuleSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, GBTAGSETRULESET);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) GBTagsetRulesAsnWrite, aip, atp, GBTAGSETRULESET_E);
    retval = TRUE;
 
 erret:

@@ -29,24 +29,13 @@
 *
 * Version Creation Date:   1/19/93
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: mapping.c,v $
-* Revision 6.4  1999/10/04 17:16:31  kans
-* include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
 *
-* Revision 6.3  1999/08/06 19:29:45  vakatov
-* "NormalizeBox()":  bottom >= top!
-*
-* Revision 6.2  1999/08/06 18:42:32  vakatov
-* Moved "NormalizeBox()" from "viewer.c" to "mappingp.[ch]" & made it public
-*
-* Revision 6.1  1998/06/12 16:40:24  kans
-* fixed warnings detected by unix compiler
 * ==========================================================================
 */
 
@@ -168,6 +157,7 @@ extern void Nlm_MapRectToWorldBox
 
 static Int4 MapX (Int4 pntX, VScalePtr scale)
 {
+  if (scale == NULL || scale->scaleX == 0) return 0;
   return (Int4) scale->view.left + (pntX - scale->port.left) / scale->scaleX;
 }
 
@@ -180,6 +170,7 @@ static Int4 MapX (Int4 pntX, VScalePtr scale)
 
 static Int4 MapY (Int4 pntY, VScalePtr scale)
 {
+  if (scale == NULL || scale->scaleY == 0) return 0;
   return (Int4)scale->view.bottom - (pntY - scale->port.bottom)/scale->scaleY;
 }
 

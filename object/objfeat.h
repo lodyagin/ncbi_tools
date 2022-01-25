@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.29 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -157,6 +157,7 @@ NLM_EXTERN SeqFeatXrefPtr LIBCALL SeqFeatXrefFree PROTO((SeqFeatXrefPtr sfxp));
 	19 = het data.value.ptrvalue=CharPtr Heterogen   -- cofactor, prosthetic grp, etc, bound to seq
 	20 = biosrc, data.value.ptrvalue = BioSource
     21 = cloneref, data.value.ptrvalue = CloneRef
+    22 = variation, data.value.ptrvalue = VariationRef
 *   
 *
 *****************************************************************************/
@@ -221,8 +222,9 @@ NLM_EXTERN SeqFeatXrefPtr LIBCALL SeqFeatToXref PROTO((SeqFeatPtr sfp));
 #define SEQFEAT_HET             19
 #define SEQFEAT_BIOSRC          20
 #define SEQFEAT_CLONEREF        21
+#define SEQFEAT_VARIATIONREF    22
 
-#define SEQFEAT_MAX 22 /* size of array needed for seqfeat filter parameters */
+#define SEQFEAT_MAX 23 /* size of array needed for seqfeat filter parameters */
 
 /*****************************************************************************
 *
@@ -545,7 +547,8 @@ typedef struct orgname {
 	OrgModPtr mod;   /* OrgMods */
 	CharPtr lineage;  /* lineage to this org */
 	Uint1 gcode,      /* genetic code using GenBank keys */
-		  mgcode;      /* mitochondrial genetic code using GenBank keys..0=none */
+		  mgcode,      /* mitochondrial genetic code using GenBank keys..0=none */
+		  pgcode;      /* plastid genetic code using GenBank keys..0=none */
 	CharPtr div;       /* GenBank division code */
 	struct orgname PNTR next;   /* for MultiOrgName */
 } OrgName, PNTR OrgNamePtr;
@@ -809,7 +812,335 @@ NLM_EXTERN CloneRefPtr LIBCALL CloneRefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL CloneRefAsnWrite PROTO (( CloneRefPtr , AsnIoPtr, AsnTypePtr));
 
 
+/**************************************************
+*
+*    Phenotype
+*
+**************************************************/
+typedef struct phenotype {
+   struct phenotype PNTR next;
+   Uint4 OBbits__;
+   CharPtr   source;
+   CharPtr   term;
+   ValNodePtr  xref;
+#define OB__Phenotype_clinical_significance 0
 
+   Int4   clinical_significance;
+} Phenotype, PNTR PhenotypePtr;
+
+
+NLM_EXTERN PhenotypePtr LIBCALL PhenotypeFree PROTO ((PhenotypePtr ));
+NLM_EXTERN PhenotypePtr LIBCALL PhenotypeNew PROTO (( void ));
+NLM_EXTERN PhenotypePtr LIBCALL PhenotypeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL PhenotypeAsnWrite PROTO (( PhenotypePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    PopulationData
+*
+**************************************************/
+typedef struct population_data {
+   struct population_data PNTR next;
+   Uint4 OBbits__;
+   CharPtr   population;
+#define OB__Population_data_genotype_frequency 0
+
+   FloatHi   genotype_frequency;
+#define OB__Population_data_chromosomes_tested 1
+
+   Int4   chromosomes_tested;
+   ValNodePtr   sample_ids;
+} PopulationData, PNTR PopulationDataPtr;
+
+
+NLM_EXTERN PopulationDataPtr LIBCALL PopulationDataFree PROTO ((PopulationDataPtr ));
+NLM_EXTERN PopulationDataPtr LIBCALL PopulationDataNew PROTO (( void ));
+NLM_EXTERN PopulationDataPtr LIBCALL PopulationDataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL PopulationDataAsnWrite PROTO (( PopulationDataPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ProjectData
+*
+**************************************************/
+
+typedef struct struct_ProjectData {
+   Uint4 OBbits__;
+   ValNodePtr   project_ids;
+} ProjectData, PNTR ProjectDataPtr;
+
+
+NLM_EXTERN ProjectDataPtr LIBCALL ProjectDataFree PROTO ((ProjectDataPtr ));
+NLM_EXTERN ProjectDataPtr LIBCALL ProjectDataNew PROTO (( void ));
+NLM_EXTERN ProjectDataPtr LIBCALL ProjectDataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ProjectDataAsnWrite PROTO (( ProjectDataPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    VariantProperties
+*
+**************************************************/
+typedef struct struct_VariantProperties {
+   Uint4 OBbits__;
+   Int4   version;
+#define OB__VariantProperties_resource_link 0
+
+   Int4   resource_link;
+#define OB__VariantProperties_gene_location 1
+
+   Int4   gene_location;
+#define OB__VariantProperties_effect 2
+
+   Int4   effect;
+#define OB__VariantProperties_mapping 3
+
+   Int4   mapping;
+#define OB__VariantProperties_map_weight 4
+
+   Int4   map_weight;
+#define OB__frequency_based_validation 5
+
+   Int4   freq_based_validation;
+#define OB__VariantProperties_genotype 6
+
+   Int4   genotype;
+   ProjectDataPtr   project_data;
+#define OB__VariantProperties_quality_check 7
+
+   Int4   quality_check;
+#define OB__VariantProperties_confidence 8
+
+   Int4   confidence;
+} VariantProperties, PNTR VariantPropertiesPtr;
+
+
+NLM_EXTERN VariantPropertiesPtr LIBCALL VariantPropertiesFree PROTO ((VariantPropertiesPtr ));
+NLM_EXTERN VariantPropertiesPtr LIBCALL VariantPropertiesNew PROTO (( void ));
+NLM_EXTERN VariantPropertiesPtr LIBCALL VariantPropertiesAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL VariantPropertiesAsnWrite PROTO (( VariantPropertiesPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ExtLoc
+*
+**************************************************/
+typedef struct ext_loc {
+   struct ext_loc PNTR next;
+   Uint4 OBbits__;
+   ObjectIdPtr   id;
+   SeqLocPtr   location;
+} ExtLoc, PNTR ExtLocPtr;
+
+
+NLM_EXTERN ExtLocPtr LIBCALL ExtLocFree PROTO ((ExtLocPtr ));
+NLM_EXTERN ExtLocPtr LIBCALL ExtLocNew PROTO (( void ));
+NLM_EXTERN ExtLocPtr LIBCALL ExtLocAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ExtLocAsnWrite PROTO (( ExtLocPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    VariationRef
+*
+**************************************************/
+typedef struct variation_ref {
+   struct variation_ref PNTR next;
+   Uint4 OBbits__;
+   DbtagPtr   id;
+   DbtagPtr   parent_id;
+   ObjectIdPtr   sample_id;
+   ValNodePtr   other_ids;
+   CharPtr   name;
+   ValNodePtr   synonyms;
+   CharPtr   description;
+   ValNodePtr   phenotype;
+   ValNodePtr   method;
+   ValNodePtr   population_data;
+   VariantPropertiesPtr   variant_prop;
+#define OB__Variation_ref_validated 0
+
+   Uint1   validated;
+   ValNodePtr   clinical_test;
+#define OB__Variation_ref_allele_origin 1
+
+   Int4   allele_origin;
+#define OB__Variation_ref_allele_state 2
+
+   Int4   allele_state;
+#define OB__Variation_ref_allele_frequency 3
+
+   FloatHi   allele_frequency;
+#define OB__Variation_ref_is_ancestral_allele 4
+
+   Uint1   is_ancestral_allele;
+   ValNodePtr   pub;
+   ValNodePtr   data;
+   ValNodePtr   consequence;
+   ValNodePtr   location;
+   ValNodePtr   ext_locs;
+   UserObjectPtr   ext;
+} VariationRef, PNTR VariationRefPtr;
+
+
+NLM_EXTERN VariationRefPtr LIBCALL VariationRefFree PROTO ((VariationRefPtr ));
+NLM_EXTERN VariationRefPtr LIBCALL VariationRefNew PROTO (( void ));
+NLM_EXTERN VariationRefPtr LIBCALL VariationRefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL VariationRefAsnWrite PROTO (( VariationRefPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr ConsequencePtr;
+typedef ValNode Consequence;
+
+NLM_EXTERN ConsequencePtr LIBCALL ConsequenceFree PROTO ((ConsequencePtr ));
+NLM_EXTERN ConsequencePtr LIBCALL ConsequenceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ConsequenceAsnWrite PROTO (( ConsequencePtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr Consequence_elementPtr;
+typedef ValNode Consequence_element;
+
+#define Consequence_unknown 1
+#define Consequence_splicing 2
+#define Consequence_note 3
+#define Consequence_variation 4
+#define Consequence_Consequence_Frameshift 5
+#define Consequence_Consequence_LossOfHeterozygosity 6
+
+NLM_EXTERN Consequence_elementPtr LIBCALL Consequence_elementFree PROTO ((Consequence_elementPtr ));
+NLM_EXTERN Consequence_elementPtr LIBCALL Consequence_elementAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Consequence_elementAsnWrite PROTO (( Consequence_elementPtr , AsnIoPtr, AsnTypePtr));
+
+/**************************************************
+*
+*    Consequence_loss_of_heterozygosity
+*
+**************************************************/
+
+typedef struct consequence_LossOfHeterozygosity {
+   Uint4 OBbits__;
+   CharPtr   reference;
+   CharPtr   test;
+} Consequence_loss_of_heterozygosity, PNTR Consequence_loss_of_heterozygosityPtr;
+
+NLM_EXTERN Consequence_loss_of_heterozygosityPtr LIBCALL Consequence_loss_of_heterozygosityFree PROTO ((Consequence_loss_of_heterozygosityPtr ));
+NLM_EXTERN Consequence_loss_of_heterozygosityPtr LIBCALL Consequence_loss_of_heterozygosityNew PROTO (( void ));
+NLM_EXTERN Consequence_loss_of_heterozygosityPtr LIBCALL Consequence_loss_of_heterozygosityAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Consequence_loss_of_heterozygosityAsnWrite PROTO (( Consequence_loss_of_heterozygosityPtr , AsnIoPtr, AsnTypePtr));
+
+
+/**************************************************
+*
+*    Consequence_frameshift
+*
+**************************************************/
+
+typedef struct consequence_Frameshift {
+   Uint4 OBbits__;
+#define OB__frameshift_phase 0
+
+   Int4   phase;
+#define OB__frameshift_x_length 1
+
+   Int4   x_length;
+} Consequence_frameshift, PNTR Consequence_frameshiftPtr;
+
+NLM_EXTERN Consequence_frameshiftPtr LIBCALL Consequence_frameshiftFree PROTO ((Consequence_frameshiftPtr ));
+NLM_EXTERN Consequence_frameshiftPtr LIBCALL Consequence_frameshiftNew PROTO (( void ));
+NLM_EXTERN Consequence_frameshiftPtr LIBCALL Consequence_frameshiftAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Consequence_frameshiftAsnWrite PROTO (( Consequence_frameshiftPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr VarRefDataPtr;
+typedef ValNode VarRefData;
+
+#define VarRefData_unknown 1
+#define VarRefData_note 2
+#define VarRefData_uniparental_disomy 3
+#define VarRefData_instance 4
+#define VarRefData_set 5
+
+NLM_EXTERN VarRefDataPtr LIBCALL VarRefDataFree PROTO ((VarRefDataPtr ));
+NLM_EXTERN VarRefDataPtr LIBCALL VarRefDataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL VarRefDataAsnWrite PROTO (( VarRefDataPtr , AsnIoPtr, AsnTypePtr));
+
+
+/**************************************************
+*
+*    Data_set
+*
+**************************************************/
+
+typedef struct varRefData_Set {
+   Uint4 OBbits__;
+   Int4   type;
+   ValNodePtr   variations;
+   CharPtr   name;
+} VarRefDataSet, PNTR VarRefDataSetPtr;
+
+NLM_EXTERN VarRefDataSetPtr LIBCALL VarRefDataSetFree PROTO ((VarRefDataSetPtr ));
+NLM_EXTERN VarRefDataSetPtr LIBCALL VarRefDataSetNew PROTO (( void ));
+NLM_EXTERN VarRefDataSetPtr LIBCALL VarRefDataSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL VarRefDataSetAsnWrite PROTO (( VarRefDataSetPtr , AsnIoPtr, AsnTypePtr));
+
+
+/**************************************************
+*
+*    DeltaItem
+*
+**************************************************/
+typedef struct delta_item {
+   struct delta_item PNTR next;
+   Uint4 OBbits__;
+   ValNodePtr   Seq_seq;
+#define OB__Delta_item_multiplier 0
+
+   Int4   multiplier;
+   IntFuzzPtr   multiplier_fuzz;
+   Int4   action;
+} DeltaItem, PNTR DeltaItemPtr;
+
+
+NLM_EXTERN DeltaItemPtr LIBCALL DeltaItemFree PROTO ((DeltaItemPtr ));
+NLM_EXTERN DeltaItemPtr LIBCALL DeltaItemNew PROTO (( void ));
+NLM_EXTERN DeltaItemPtr LIBCALL DeltaItemAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL DeltaItemAsnWrite PROTO (( DeltaItemPtr , AsnIoPtr, AsnTypePtr));
+
+
+/**************************************************
+*
+*    VariationInst
+*
+**************************************************/
+typedef struct variation_inst {
+   Uint4 OBbits__;
+   Int4   type;
+   ValNodePtr   delta;
+} VariationInst, PNTR VariationInstPtr;
+
+
+NLM_EXTERN VariationInstPtr LIBCALL VariationInstFree PROTO ((VariationInstPtr ));
+NLM_EXTERN VariationInstPtr LIBCALL VariationInstNew PROTO (( void ));
+NLM_EXTERN VariationInstPtr LIBCALL VariationInstAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL VariationInstAsnWrite PROTO (( VariationInstPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+typedef ValNodePtr Seq_seqPtr;
+typedef ValNode Seq_seq;
+
+#define Seq_seq_literal 1
+#define Seq_seq_loc 2
+#define Seq_seq_this__ 3
+
+NLM_EXTERN Seq_seqPtr LIBCALL Seq_seqFree PROTO ((Seq_seqPtr ));
+NLM_EXTERN Seq_seqPtr LIBCALL Seq_seqAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL Seq_seqAsnWrite PROTO (( Seq_seqPtr , AsnIoPtr, AsnTypePtr));
 
 
 

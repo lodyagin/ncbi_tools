@@ -1288,6 +1288,8 @@ static void FindReplFeats (
   RnaRefPtr      rrp;
   Uint1          subtype;
   tRNAPtr        trp;
+  RNAGenPtr      rgp;
+  RNAQualPtr     rq;
 
   if (sfp == NULL) return;
 
@@ -1370,6 +1372,13 @@ static void FindReplFeats (
       } else if (rrp->ext.choice == 2) {
         trp = (tRNAPtr) rrp->ext.value.ptrvalue;
         VisitSeqIdsInSeqLoc (trp->anticodon, userdata, FindReplSeqId);
+      } else if (rrp->ext.choice == 3) {
+        rgp = (RNAGenPtr) rrp->ext.value.ptrvalue;
+        FindReplString(&(rgp->_class), fsp);
+        FindReplString(&(rgp->product), fsp);
+        for (rq = rgp->quals; rq != NULL; rq = rq->next) {
+          FindReplString(&(rq->val), fsp);
+        }
       }
       break;
     case SEQFEAT_PUB :
@@ -1950,8 +1959,10 @@ NLM_EXTERN void StringActionInEntity (
         break;
       case OBJ_BIOSEQ :
         sep = (SeqEntryPtr) omdp->choice;
+        break;
       case OBJ_BIOSEQSET :
         sep = (SeqEntryPtr) omdp->choice;
+        break;
       default :
         break;
     }
@@ -2275,8 +2286,10 @@ NLM_EXTERN void FindStringsInEntity (
         break;
       case OBJ_BIOSEQ :
         sep = (SeqEntryPtr) omdp->choice;
+        break;
       case OBJ_BIOSEQSET :
         sep = (SeqEntryPtr) omdp->choice;
+        break;
       default :
         break;
     }

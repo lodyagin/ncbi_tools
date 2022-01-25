@@ -1,4 +1,4 @@
-/*  $Id: blast_hspstream.h,v 1.9 2009/05/27 17:39:36 kazimird Exp $
+/*  $Id: blast_hspstream.h,v 1.10 2010/07/16 18:45:46 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -105,6 +105,7 @@ typedef struct BlastHSPStream {
    /* support for writer and pipes */
    BlastHSPWriter* writer;         /**< writer to be applied when writing*/
    Boolean writer_initialized;     /**< Is writer already initialized? */
+   Boolean writer_finalized;       /**< Is writer ever finalized? */
    BlastHSPPipe *pre_pipe;         /**< registered preliminary pipeline (unused
                                     for now) */
    BlastHSPPipe *tback_pipe;       /**< registered traceback pipeline */

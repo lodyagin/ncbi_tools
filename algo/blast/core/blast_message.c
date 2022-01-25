@@ -1,4 +1,4 @@
-/* $Id: blast_message.c,v 1.25 2008/07/17 17:55:44 kazimird Exp $
+/* $Id: blast_message.c,v 1.26 2010/03/23 15:44:41 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_message.c,v 1.25 2008/07/17 17:55:44 kazimird Exp $";
+    "$Id: blast_message.c,v 1.26 2010/03/23 15:44:41 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h>
@@ -179,6 +179,13 @@ Blast_PerrorEx(Blast_Message* *msg,
     case BLASTERR_INTERRUPTED:
         new_msg->message = strdup("BLAST search interrupted at user's request");
         new_msg->severity = eBlastSevInfo;
+        new_msg->context = context;
+        break;
+    case BLASTERR_NOVALIDKARLINALTSCHUL:
+        new_msg->message = strdup("Warning: Could not calculate ungapped Karlin-Altschul "
+                               "parameters due to an invalid query sequence or its translation. "
+                               "Please verify the query sequence(s) and/or filtering options");
+        new_msg->severity = eBlastSevError;
         new_msg->context = context;
         break;
 

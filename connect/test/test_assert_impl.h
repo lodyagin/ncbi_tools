@@ -1,7 +1,7 @@
-#ifndef TEST_ASSERT_IMPL__H
-#define TEST_ASSERT_IMPL__H
+#ifndef COMMON__TEST_ASSERT_IMPL__H
+#define COMMON__TEST_ASSERT_IMPL__H
 
-/*  $Id: test_assert_impl.h,v 1.3 2009/01/22 17:59:35 kazimird Exp $
+/* $Id: test_assert_impl.h,v 1.6 2009/09/21 16:24:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,14 +39,18 @@
 #endif /*TEST_ASSERT__H*/
 
 #if defined(NCBI_OS_MSWIN)
-#  ifdef   _ASSERT
-#    undef _ASSERT
+#  ifndef NCBI_MSWIN_NO_POPUP
+#    ifdef   _ASSERT
+#      undef _ASSERT
+#    endif
+#    define  Type aType
 #  endif
-#  define  Type aType
 #  include <crtdbg.h>
 #  include <stdio.h>
 #  include <windows.h>
-#  undef   Type
+#  ifndef NCBI_MSWIN_NO_POPUP
+#    undef   Type
+#  endif
 
 /* Suppress popup messages on execution errors.
  * NOTE: Windows-specific, suppresses all error message boxes in both runtime
@@ -63,9 +67,11 @@ static LONG CALLBACK _SEH_Handler(EXCEPTION_POINTERS* ep)
 
 static int _SuppressDiagPopupMessages(void)
 {
+#ifndef NCBI_MSWIN_NO_POPUP_EVER
     /* Check environment variable for silent abort app at error */
     const char* value = getenv("DIAG_SILENT_ABORT");
     if (value  &&  (*value == 'Y'  ||  *value == 'y')) {
+#endif
         /* Windows GPF errors */
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
                      SEM_NOOPENFILEERRORBOX);
@@ -83,7 +89,9 @@ static int _SuppressDiagPopupMessages(void)
 
         /* Exceptions */
         SetUnhandledExceptionFilter(_SEH_Handler);
+#ifndef NCBI_MSWIN_NO_POPUP_EVER
     }
+#endif
     return 0;
 }
 
@@ -91,7 +99,7 @@ static int _SuppressDiagPopupMessages(void)
  * base RTL init, which happens at preceding levels in alphabetical order.
  */
 #  if _MSC_VER >= 1400
-#    pragma section( ".CRT$XIV", read)
+#    pragma section(".CRT$XIV", read)
 #  endif
 #  pragma data_seg(".CRT$XIV")
 static int (*_SDPM)(void) = _SuppressDiagPopupMessages;
@@ -99,6 +107,10 @@ static int (*_SDPM)(void) = _SuppressDiagPopupMessages;
 
 #endif /*defined(NCBI_OS_...)*/
 
+
+/* Emulate <corelib/mswin_no_popup.h> if specified
+ */
+#ifndef NCBI_MSWIN_NO_POPUP
 
 #ifdef   NDEBUG
 #  undef NDEBUG
@@ -134,9 +146,12 @@ static int (*_SDPM)(void) = _SuppressDiagPopupMessages;
 #  undef _ASSERT
 #endif
 #define  _ASSERT assert
-#ifdef _DEBUG_ARG
-#  undef _DEBUG_ARG
-#endif
-#define _DEBUG_ARG(arg) arg
 
-#endif  /* TEST_ASSERT_IMPL__H */
+#ifdef   _TROUBLE
+#  undef _TROUBLE
+#endif
+#define  _TROUBLE assert(0)
+
+#endif /* NCBI_MSWIN_NO_POPUP */
+
+#endif /* COMMON__TEST_ASSERT_IMPL__H */

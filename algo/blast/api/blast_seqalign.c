@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.c,v 1.62 2007/02/26 14:52:50 papadopo Exp $
+/* $Id: blast_seqalign.c,v 1.64 2010/02/12 20:54:54 maning Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_seqalign.c,v 1.62 2007/02/26 14:52:50 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_seqalign.c,v 1.64 2010/02/12 20:54:54 maning Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_seqalign.h>
@@ -712,7 +712,7 @@ s_GapMakeSeqAlign(SeqIdPtr query_id, SeqIdPtr subject_id,
 
 SeqAlignPtr
 BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp, 
-                   SeqIdPtr subject_id, SeqIdPtr query_id,
+                   SeqIdPtr query_id, SeqIdPtr subject_id,
                    Int4 query_length, Int4 subject_length)
 
 {
@@ -1271,8 +1271,8 @@ s_HSPListToSeqAlignGapped(EBlastProgramType program_number,
          /* The following line is needed for negative frames of translated 
             query */
          seqalign = 
-             BlastHSPToSeqAlign(program_number, hsp_array[index], subject_id, 
-                                query_id, query_length, subject_length);
+             BlastHSPToSeqAlign(program_number, hsp_array[index], query_id, 
+                                subject_id, query_length, subject_length);
       }
       if (index==0) {
          *head_seqalign = last_seqalign = seqalign;

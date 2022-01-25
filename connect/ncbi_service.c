@@ -1,4 +1,4 @@
-/* $Id: ncbi_service.c,v 6.108 2009/03/26 15:34:34 kazimird Exp $
+/* $Id: ncbi_service.c,v 6.114 2010/04/01 14:15:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -58,28 +58,40 @@ ESwitch SERV_DoFastOpens(ESwitch on)
 
 static char* s_ServiceName(const char* service, size_t depth)
 {
-    char*  s;
     char   buf[128];
     char   srv[128];
     size_t len;
+    char*  s;
 
-    if (++depth > 8 || !service || !*service ||
+    if (depth > 7) {
+        CORE_LOGF_X(7, eLOG_Error,
+                    ("[%s]  Maximal service name recursion depth reached: %lu",
+                     service, (unsigned long) depth));
+        return 0/*failure*/;
+    }
+    if (!service  ||  !*service  ||
         (len = strlen(service)) + sizeof(CONN_SERVICE_NAME) >= sizeof(buf)) {
+        CORE_LOGF_X(8, eLOG_Error,
+                    ("%s%s%s%s service name",
+                     !service  ||  !*service ? "" : "[",
+                     !service ? "" : service,
+                     !service  ||  !*service ? "" : "]  ",
+                     !service ? "NULL" : !*service ? "Empty" : "Too long"));
         return 0/*failure*/;
     }
     s = (char*) memcpy(buf, service, len) + len;
     *s++ = '_';
     memcpy(s, CONN_SERVICE_NAME, sizeof(CONN_SERVICE_NAME));
-    /* Looking for "service_CONN_SERVICE_NAME" in environment */
+    /* Looking for "service_CONN_SERVICE_NAME" in the environment */
     if (!(s = getenv(strupr(buf)))  ||  !*s) {
         /* Looking for "CONN_SERVICE_NAME" in registry's section [service] */
         buf[len++] = '\0';
         CORE_REG_GET(buf, buf + len, srv, sizeof(srv), 0);
-        if (!*srv)
-            return strdup(service);
-    } else
-        strncpy0(srv, s, sizeof(srv) - 1);
-    return s_ServiceName(srv, depth);
+        s = srv;
+    }
+    if (!*s  ||  strcasecmp(s, service) == 0)
+        return strdup(service);
+    return s_ServiceName(s, ++depth);
 }
 
 
@@ -130,14 +142,11 @@ inline
 #endif /*__GNUC__*/
 static int/*bool*/ s_IsMapperConfigured(const char* service, const char* key)
 {
-    char str[80];
+    char val[32];
     if (s_Fast)
         return 0;
-    ConnNetInfo_GetValue(service, key, str, sizeof(str), 0);
-    return *str  &&  (strcmp(str, "1") == 0  ||
-                      strcasecmp(str, "true") == 0  ||
-                      strcasecmp(str, "yes" ) == 0  ||
-                      strcasecmp(str, "on"  ) == 0);
+    ConnNetInfo_GetValue(service, key, val, sizeof(val), 0);
+    return ConnNetInfo_Boolean(val);
 }
 
 
@@ -235,15 +244,15 @@ static SERV_ITER s_Open(const char*          service,
     } else
         do_dispd = 0/*false*/;
     /* Ugly optimization not to access the registry more than necessary */
-    if ((!s_IsMapperConfigured(service, REG_CONN_LOCAL_ENABLE)  ||
-         !(op = SERV_LOCAL_Open(iter, info, host_info)))  &&
-        (!do_lbsmd  ||
+    if ((!s_IsMapperConfigured(service, REG_CONN_LOCAL_ENABLE)               ||
+         !(op = SERV_LOCAL_Open(iter, info, host_info)))                 &&
+        (!do_lbsmd                                                           ||
          !(do_lbsmd= !s_IsMapperConfigured(service, REG_CONN_LBSMD_DISABLE)) ||
          !(op = SERV_LBSMD_Open(iter, info, host_info,
-                                !do_dispd  ||
+                                !do_dispd                                    ||
                                 !(do_dispd = !s_IsMapperConfigured
                                   (service, REG_CONN_DISPD_DISABLE)))))  &&
-        (!do_dispd  ||
+        (!do_dispd                                                           ||
          !(do_dispd= !s_IsMapperConfigured(service, REG_CONN_DISPD_DISABLE)) ||
          !(op = SERV_DISPD_Open(iter, net_info, info, host_info)))) {
         if (!do_lbsmd  &&  !do_dispd) {
@@ -578,35 +587,16 @@ static void s_SetDefaultReferer(SERV_ITER iter, SConnNetInfo* net_info)
 {
     char* str, *referer = 0;
 
-    if (strcasecmp(iter->op->name, "DISPD") == 0) {
-        const char* host = net_info->host;
-        const char* path = net_info->path;
-        const char* args = net_info->args;
-        char        port[8];
-
-        if (net_info->port)
-            sprintf(port, ":%hu", net_info->port);
-        else
-            *port = '\0';
-        if (!(referer = (char*) malloc(8 + 1 + 1 + strlen(host) + strlen(port)
-                                       + strlen(path) + strlen(args)))) {
-            return;
-        }
-        if (net_info->scheme == eURL_Https)
-            strcpy(referer, "https://"/*8*/);
-        else
-            strcpy(referer, "http://"/*7*/);
-        strcat(strcat(strcat(referer, host), port), path);
-        if (*args)
-            strcat(strcat(referer, "?"), args);
-    } else if ((str = strdup(iter->op->name)) != 0) {
+    if (strcasecmp(iter->op->name, "DISPD") == 0)
+        referer = ConnNetInfo_URL(net_info);
+    else if ((str = strdup(iter->op->name)) != 0) {
         const char* host = net_info->client_host;
         const char* args = net_info->args;
         const char* name = iter->name;
 
-        if (!*net_info->client_host  &&
-            !SOCK_gethostbyaddr(0, net_info->client_host,
-                                sizeof(net_info->client_host))) {
+        if (!*net_info->client_host
+            &&  !SOCK_gethostbyaddr(0, net_info->client_host,
+                                    sizeof(net_info->client_host))) {
             SOCK_gethostname(net_info->client_host,
                              sizeof(net_info->client_host));
         }
@@ -772,6 +762,10 @@ unsigned short SERV_ServerPort(const char*  name,
     SSERV_Info*    info;
     unsigned short port;
 
+    /* FIXME:  SERV_LOCALHOST may not need to be resolved here,
+     *         but taken from LBSMD table (or resolved later in DISPD/LOCAL
+     *         if needed).
+     */
     if (!host  ||  host == SERV_LOCALHOST)
         host = SOCK_GetLocalHostAddress(eDefault);
     if (!(info = s_GetInfo(name, fSERV_Standalone | fSERV_Promiscuous,

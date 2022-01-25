@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.h,v 1.31 2006/06/09 17:40:41 papadopo Exp $
+/* $Id: blast_seqalign.h,v 1.32 2010/02/12 20:36:18 maning Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -112,15 +112,15 @@ GapCollectDataForSeqalign(BlastHSP* hsp, GapEditScript* esp, Int4 start,
  * deletions).  
  * @param program Type of BLAST program [in]
  * @param hsp HSP structure to convert. [in]
- * @param subject_id Seq-id of the subject sequence [in]
  * @param query_id Seq-id of the query sequence [in]
+ * @param subject_id Seq-id of the subject sequence [in]
  * @param query_length Length of query sequence [in]
  * @param subject_length Length of subject sequence [in]
  * @return Seq-align corresponding to this alignment.
  */
 SeqAlignPtr
 BlastHSPToSeqAlign(EBlastProgramType program, BlastHSP* hsp, 
-                   SeqIdPtr subject_id, SeqIdPtr query_id,
+                   SeqIdPtr query_id, SeqIdPtr subject_id,
                    Int4 query_length, Int4 subject_length);
 
 

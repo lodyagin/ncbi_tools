@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.142 $
+* $Revision: 6.145 $
 *
 * File Description: 
 *
@@ -230,29 +230,29 @@ extern Boolean IsADeltaBioseq (SeqEntryPtr sep)
 
 static SeqIdPtr get_db_sip (SeqFeatPtr sfp)
 {
-	GeneRefPtr grp;
-	ValNodePtr db;
-	DbtagPtr db_tag;
-	ObjectIdPtr obj_id;
-	CharPtr acc;
+    GeneRefPtr grp;
+    ValNodePtr db;
+    DbtagPtr db_tag;
+    ObjectIdPtr obj_id;
+    CharPtr acc;
 
-	if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE) return NULL;
-	grp = sfp->data.value.ptrvalue;
-	if (grp == NULL) return NULL;
-	for (db=grp->db; db!=NULL; db=db->next)
-	{
-		db_tag = db->data.ptrvalue;
-		if(StringICmp(db_tag->db, "GenBank") == 0)
-		{
-			obj_id = db_tag->tag;
-			acc = obj_id->str;
-			return gb_id_make(NULL, acc);
-		}
-	}
+    if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE) return NULL;
+    grp = sfp->data.value.ptrvalue;
+    if (grp == NULL) return NULL;
+    for (db=grp->db; db!=NULL; db=db->next)
+    {
+        db_tag = db->data.ptrvalue;
+        if(StringICmp(db_tag->db, "GenBank") == 0)
+        {
+            obj_id = db_tag->tag;
+            acc = obj_id->str;
+            return gb_id_make(NULL, acc);
+        }
+    }
 
-	return NULL;
+    return NULL;
 }
-	
+    
 static Boolean NamedAlignmentProc (GatherContextPtr gcp)
 
 {
@@ -351,6 +351,7 @@ static void AddOneBlastAlignment (BioseqPtr subject, BioseqPtr query)
   SeqAnnotPtr          curr;
   BLAST_OptionsBlkPtr  options = NULL;
   SeqAlignPtr          prev;
+  CharPtr              program_name = NULL;
   SeqAlignPtr          salp;
   SeqAnnotPtr          sap;
   SeqAnnotPtr PNTR     sapp;
@@ -363,7 +364,8 @@ static void AddOneBlastAlignment (BioseqPtr subject, BioseqPtr query)
   if (ISA_na (subject->mol)) {
     if (! ISA_na (query->mol)) return;
     align_type = 1;
-    options = BLASTOptionNew ("blastn", TRUE);
+    program_name = "blastn";
+    options = BLASTOptionNew (program_name, TRUE);
     if (options != NULL) {
       options->gapped_calculation = TRUE;
       options->db_length = 100000000;
@@ -376,14 +378,15 @@ static void AddOneBlastAlignment (BioseqPtr subject, BioseqPtr query)
   } else if (ISA_aa (subject->mol)) {
     if (! ISA_aa (query->mol)) return;
     align_type = 2;
-    options = BLASTOptionNew ("blastp", TRUE);
+    program_name = "blastp";
+    options = BLASTOptionNew (program_name, TRUE);
     if (options != NULL) {
       options->gapped_calculation = TRUE;
       options->db_length = 20000000;
       options->threshold_second = 12;
     }
   } else return;
-  search = BLASTSetUpSearch (subject, options->program_name, 0, 0, NULL, options, NULL);
+  search = BLASTSetUpSearch (subject, program_name, 0, 0, NULL, options, NULL);
 
   salp = BlastSequencesOnTheFly (search, query);
   if (salp != NULL) {
@@ -1379,72 +1382,72 @@ static void LIBCALL ExportBioseqViewFormToFile (Pointer formDataPtr, CharPtr fil
 static Boolean ShortDefFastaFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 buflen, Pointer data)
 
 {
-	Int2  code;
-	CharPtr  buffer;
-	Uint2  entityID;
-	FILE * fp;
-	size_t  len;
-	Char  org [200];
-	/* CharPtr  ptr; */
-	SeqEntryPtr  sep;
-	Char  tmp [16];
+    Int2  code;
+    CharPtr  buffer;
+    Uint2  entityID;
+    FILE * fp;
+    size_t  len;
+    Char  org [200];
+    /* CharPtr  ptr; */
+    SeqEntryPtr  sep;
+    Char  tmp [16];
 
-	fp = (FILE *)data;
+    fp = (FILE *)data;
 
-	switch (key)
-	{
-		case FASTA_ID:
-			fprintf(fp, ">%s ", buf);
-			break;
-		case FASTA_DEFLINE:
-			entityID = ObjMgrGetEntityIDForPointer (bsp);
-			sep = GetBestTopParentForData (entityID, bsp);
-			code = SeqEntryToGeneticCode (sep, NULL, org, sizeof (org) - 21);
-			if (! StringHasNoText (org)) {
-				StringCat (org, "]");
-				if (code > 0) {
-			 		sprintf (tmp, " [code=%d]", (int) code);
-			 		StringCat (org, tmp);
-				}
-			}
-			len = StringLen (buf) + StringLen (org) + 20;
-			buffer = MemNew (len);
-			/*
-			ptr = StringChr (buf, ' ');
-			if (ptr != NULL) {
-			  *ptr = '\0';
-			  ptr++;
-			}
-			StringCpy (buffer, buf);
-			*/
-			if (org [0] != '\0') {
-			  StringCat (buffer, "[org=");
-			  StringCat (buffer, org);
-			  if (! StringHasNoText (buf)) {
-			    StringCat (buffer, " ");
-			  }
-			}
-			if (! StringHasNoText (buf)) {
-			  StringCat (buffer, buf);
-			}
-			if (StringLen (buffer) > 253) {
-			  buffer [251] = '.';
-			  buffer [252] = '.';
-			  buffer [253] = '.';
-			  buffer [254] = '\0';
-			}
-			fprintf(fp, "%s\n", buffer);
-			MemFree (buffer);
-			break;
-		case FASTA_SEQLINE:
-			fprintf(fp, "%s\n", buf);
-			break;
-		case FASTA_EOS:   /* end of sequence */
-			break;
-		default:
-			break;
-	}
-	return TRUE;
+    switch (key)
+    {
+        case FASTA_ID:
+            fprintf(fp, ">%s ", buf);
+            break;
+        case FASTA_DEFLINE:
+            entityID = ObjMgrGetEntityIDForPointer (bsp);
+            sep = GetBestTopParentForData (entityID, bsp);
+            code = SeqEntryToGeneticCode (sep, NULL, org, sizeof (org) - 21);
+            if (! StringHasNoText (org)) {
+                StringCat (org, "]");
+                if (code > 0) {
+                     sprintf (tmp, " [code=%d]", (int) code);
+                     StringCat (org, tmp);
+                }
+            }
+            len = StringLen (buf) + StringLen (org) + 20;
+            buffer = MemNew (len);
+            /*
+            ptr = StringChr (buf, ' ');
+            if (ptr != NULL) {
+              *ptr = '\0';
+              ptr++;
+            }
+            StringCpy (buffer, buf);
+            */
+            if (org [0] != '\0') {
+              StringCat (buffer, "[org=");
+              StringCat (buffer, org);
+              if (! StringHasNoText (buf)) {
+                StringCat (buffer, " ");
+              }
+            }
+            if (! StringHasNoText (buf)) {
+              StringCat (buffer, buf);
+            }
+            if (StringLen (buffer) > 253) {
+              buffer [251] = '.';
+              buffer [252] = '.';
+              buffer [253] = '.';
+              buffer [254] = '\0';
+            }
+            fprintf(fp, "%s\n", buffer);
+            MemFree (buffer);
+            break;
+        case FASTA_SEQLINE:
+            fprintf(fp, "%s\n", buf);
+            break;
+        case FASTA_EOS:   /* end of sequence */
+            break;
+        default:
+            break;
+    }
+    return TRUE;
 }
 
 extern Boolean SeqnSeqEntrysToFasta (SeqEntryPtr sep, FILE *fp, Boolean is_na, Uint1 group_segs)
@@ -1470,7 +1473,7 @@ extern Boolean SeqnSeqEntrysToFasta (SeqEntryPtr sep, FILE *fp, Boolean is_na, U
     mfa.do_virtual = FALSE;
     mfa.tech = 0;
     mfa.no_sequence = FALSE;
-    mfa.formatdb	= FALSE;
+    mfa.formatdb    = FALSE;
 
     tfa.mfp = &mfa;
     tfa.is_na = is_na;
@@ -1666,6 +1669,26 @@ static void AdjustDynamicGraphicViewer (BioseqViewPtr bvp)
     }
   }
 }
+
+
+NLM_EXTERN void HideBioseqView (WindoW w)
+{
+  BioseqViewFormPtr bfp;
+  BioseqPagePtr     bpp;
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (w);
+  if (bfp != NULL) {
+    WatchCursor ();
+    bfp->bvd.scaleNotCalculated = TRUE;
+    bfp->bvd.moveToOldPos = FALSE;
+    bpp = bfp->currentBioseqPage;
+    if (bpp != NULL && bpp->show != NULL) {
+      bpp->show (&(bfp->bvd), FALSE);
+    }
+    Update ();
+  }
+}
+
 
 static void ChangeBioseqViewTabs (VoidPtr data, Int2 newval, Int2 oldval)
 
@@ -2927,7 +2950,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
         if (svpp->initNucLabel != NULL) {
           bpp = bfp->bioseqNucPageList;
           str = svpp->initNucLabel;
-          if (bsp->length > 350000) {
+          if (bsp != NULL && bsp->length > 350000) {
             /*
             if (is_nc) {
               str = "GenBank";
@@ -3007,7 +3030,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
       h = HiddenGroup (d, 0, 0, NULL);
     } else {
       d = HiddenGroup (g, -2, 0, NULL);
-      if (svpp->hasDuplicateButton) {
+      if (svpp != NULL && svpp->hasDuplicateButton) {
         dp = PushButton (d, "Duplicate", DuplicateViewProc);
         SetObjectExtra (dp, bfp, NULL);
       }
@@ -3849,6 +3872,43 @@ extern ForM MakeToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createToolB
   return (ForM) w;
 }
 
+extern ForM ReplaceToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createToolBar)
+
+{
+  BioseqViewFormPtr  bfp;
+  GrouP              g;
+  CharPtr            ptr;
+  Char               str [256];
+  WindoW             w;
+  Int2               left, top;
+
+  bfp = (BioseqViewFormPtr) bafp;
+  if (bfp == NULL || createToolBar == NULL) return NULL;
+  if (bfp->toolForm != NULL) {
+    bfp->toolForm = Remove (bfp->toolForm);
+  }
+  
+  GetTitle (bfp->form, str, sizeof (str));
+  TrimSpacesAroundString (str);
+  ptr = StringStr (str, " - ");
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+  if (StringHasNoText (str)) {
+    StringCpy (str, "ToolBar");
+  }
+  
+  GetToolBarRect (&left, &top);
+  w = FixedWindow (left, top, -10, -10, str, ToolFormHideWindowProc);
+  if (w == NULL) return NULL;
+  g = HiddenGroup (w, -1, 0, NULL);
+  SetObjectExtra (g, bfp, NULL);
+  createToolBar (g);
+  RealizeWindow (w);
+  bfp->toolForm = (ForM) w;
+  return (ForM) w;
+}
+
 extern ForM RemoveSeqEntryViewer (ForM f)
 
 {
@@ -3951,7 +4011,7 @@ extern Int2 LIBCALLBACK NewSeqEntryViewGenFunc (Pointer data)
     }
     bfp->userkey = OMGetNextUserKey ();
     omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid,
-	                           ompcp->proc->proctype, bfp->userkey);
+                               ompcp->proc->proctype, bfp->userkey);
     if (omudp != NULL) {
       omudp->userdata.ptrvalue = (Pointer) bfp;
       omudp->messagefunc = BioseqViewMsgFunc;
@@ -4104,8 +4164,8 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
     }
     bfp->userkey = OMGetNextUserKey ();
     omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid,
-	                           ompcp->proc->proctype, bfp->userkey);	                           
-	                           
+                               ompcp->proc->proctype, bfp->userkey);                               
+                               
     if (omudp != NULL) {
       omudp->userdata.ptrvalue = (Pointer) bfp;
       omudp->messagefunc = BioseqViewMsgFunc;

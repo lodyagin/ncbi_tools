@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.54 $
+* $Revision: 6.56 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -165,11 +165,14 @@ typedef struct validstruct {
     Boolean is_htg_in_sep;         /* record has technique of htgs 0 through htgs 3 */
     Boolean is_barcode_sep;        /* record has technique barcode */
     Boolean is_refseq_in_sep;      /* record has seqid of type other (refseq) */
+    Boolean is_gpipe_in_sep;       /* record has seqid of type gpipe */
     Boolean is_gps_in_sep;         /* record has genomic product set */
+    Boolean other_sets_in_sep;     /* record has pop/phy/mut/eco/wgs set */
     Boolean is_embl_ddbj_in_sep;   /* record has embl or ddbj seqid */
     Boolean is_insd_in_sep;        /* record has genbank/embl/ddbj or tpg/tpe/tpd seqid */
     Boolean only_lcl_gnl_in_sep;   /* record has seqid of only local or general */
     Boolean has_gnl_prot_sep;      /* protein Bioseq has general seqid */
+    Boolean bsp_genomic_in_sep;    /* biosource.genome == genomic */
     Boolean is_smupd_in_sep;       /* record in INSD internal processing */
     Boolean feat_loc_has_gi;       /* at least one feature has a gi location reference */
     Boolean feat_prod_has_gi;      /* at least one feature has a gi product reference */
@@ -208,6 +211,8 @@ NLM_EXTERN Boolean VoucherInstitutionIsValid (CharPtr inst);
 NLM_EXTERN void ECNumberFSAFreeAll (void);
 
 NLM_EXTERN Boolean HasTpaUserObject (BioseqPtr bsp);
+
+NLM_EXTERN Boolean CountryBoxesOverlap (CharPtr country1, CharPtr country2);
 
 #ifdef __cplusplus
 }

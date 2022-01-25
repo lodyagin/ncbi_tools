@@ -29,147 +29,15 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *   	portable string routines
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: ncbistr.c,v $
-* Revision 6.16  2006/10/17 02:02:31  lavr
-* Fix a typo
-*
-* Revision 6.15  2006/10/16 21:06:27  lavr
-* String{HasNo|DoesHave}Text() to accept const pointer
-*
-* Revision 6.14  2006/09/12 16:22:55  ludwigf
-* CHANGED: Internal logic on LabelCopy() to no longer touch memory outside
-*  the buffer it is given to operate on.
-* NOTE: This change was necessary as there are instances in the code calling
-*  that function that are not aware that LabelCopy() expects to also own
-*  the bytes adjacent to the given buffer range.
-*
-* Revision 6.13  2003/12/03 02:10:24  kans
-* added defines missing from Mac OS 10.3 headers
-*
-* Revision 6.12  2003/09/15 16:21:32  kans
-* moved StringDoesHaveText from sqnutils3.c
-*
-* Revision 6.11  2002/01/16 16:58:38  camacho
-* Changed type of buflen parameter in LabelCopy from Int2 to Uint4
-*
-* Revision 6.10  2001/01/05 22:43:58  shavirin
-* Added functions, that transfer Uint8 values to platform-independent
-* objects and back.
-*
-* Revision 6.9  2000/12/04 23:48:02  kans
-* trim spaces around string now handles trailing tabs, newlines, etc.
-*
-* Revision 6.8  2000/11/30 22:46:07  lavr
-* Added the following functions for conversions of Int8 and Uint8
-* to strings and back; test suite attached at the end of the file.
-* Nlm_Int8ToString, Nlm_Uint8ToString, Nlm_StringToInt8, Nlm_StringToUint8
-*
-* Revision 6.7  2000/08/28 18:36:25  vakatov
-* un-const casts in some functions to pass C++ compilation
-*
-* Revision 6.6  1999/04/15 20:24:06  vakatov
-* Dont use "list" name as it can clash with the standard "list<>" template
-* on some raw C++ compilers
-*
-* Revision 6.5  1999/03/11 16:10:00  kans
-* StringHasNoText and TrimSpacesAroundString moved from vibforms
-*
-* Revision 6.4  1998/11/23 00:09:47  kans
-* fixed bug in StringTokMT (found by Hugues)
-*
-* Revision 6.3  1998/10/07 19:09:00  kans
-* added Nlm_StringTokMT, multithread-safe version
-*
-* Revision 6.2  1997/11/26 21:26:25  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.1  1997/10/29 02:44:52  vakatov
-* Type castings to pass through the C++ compiler
-*
-* Revision 5.5  1997/07/16 19:49:18  vakatov
-* Added Nlm_StringPrintable() function
-*
-* Revision 5.4  1997/04/11 17:57:25  brandon
-* added StrIPCmp, StrNIPCmp
-*
- * Revision 5.3  1997/03/04  22:01:12  vakatov
- * Added a set of functions to format(stream2text), unformat(text2stream)
- * and adjust(rule_line) text and test/demo code #TEST_TEXT_FMT for these
- *
- * Revision 5.2  1997/01/03  15:56:28  vakatov
- * Added auxiliary function Nlm_StringNCpy_0() -- that guarantees the
- * resulting string be '\0'-terminated
- *
- * Revision 5.1  1996/12/03  21:48:33  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 4.12  1996/05/22  18:04:14  kans
- * changed nulls to '\0' in new string functions
- *
- * Revision 4.11  1996/05/22  14:46:19  brandon
- * Fixed SkipToString, SkipPastString to work with short strings
- *
- * Revision 4.10  1996/05/07  13:22:37  kans
- * more protection for stringsearch
- *
- * Revision 4.9  1996/05/06  15:07:58  kans
- * fixed StringISearch to set d [] based on TO_UPPER, not to crash if nonASCII
- *
- * Revision 4.8  1996/03/14  03:42:44  epstein
- * change String variables to theString to work around SGI4 problem
- *
- * Revision 4.7  1996/01/05  02:29:37  ostell
- * provided return value for TruncateStringCopy()
- *
- * Revision 4.6  1996/01/03  21:04:46  epstein
- * modify StringSubString() API and add other new functions, per Brandon
- *
- * Revision 4.5  1996/01/02  14:17:32  ostell
- * added a number of Brandons functions
- *
- * Revision 4.4  1995/12/28  15:41:56  epstein
- * added Brylawskin to revision history and author list
- *
- * Revision 4.3  1995/12/27  20:53:48  epstein
- * add Brandon's string-management functions
- *
- * Revision 4.2  1995/10/28  15:03:20  ostell
- * added casts to quiet DOS compile warnings
- *
- * Revision 4.1  1995/10/16  13:43:29  epstein
- * fix brain-dmanaged string-compare logic to handle null strings correctly
- *
- * Revision 2.12  1995/07/18  19:56:10  tatiana
- * add Nlm_LabelCopyNext()
- *
- * Revision 2.11  1995/05/30  13:19:37  kans
- * fixed StringSearch algorithm - check until i <= strLen, not just < strLen
- *
-* 3/4/91   Kans        Stricter typecasting for GNU C and C++.
-* 09-19-91 Schuler     Changed all types expressing sizes to size_t.
-* 09-19-91 Schuler     Changed return type for compare functions to int.
-* 09-19-91 Schuler     Changed all functions to _cdecl calling convention.
-* 09-19-91 Schuler     Where possible, NCBI functions call the actual ANSI
-*                       functions after checking for NULL pointers.
-* 09-19-91 Schuler     Debug-class error posted on any NULL argument.
-* 09-19-91 Schuler     StringSave() calls MemGet() instead of MemNew().
-* 09-19-91 Schuler     StringSave(NULL) returns NULL.
-* 10-17-91 Schuler     Removed ErrPost() calls on NULL arguments.
-* 10-17-91 Schuler     Added Nlm_StringCnt(),Nlm_StringStr(),Nlm_StringTok()
-* 11-18-91 Schuler     Added more ANSI-style functions
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
-* 05-27-93 Schuler     Added const qualifiers to match ANSI cognates
-* 06-14-94 Schuler     Added StrUpper() and StrLower() functions
-* 03-08-95 Kans        Added StringSearch and StringISearch
-* 12-27-95 Brylawski   Added a variety of functions, including search-and-
-*                      replace functions.
+* Date     Name        Description of modification
+* -------  ----------  -----------------------------------------------------
 *
 * ==========================================================================
 */
@@ -674,6 +542,96 @@ NLM_EXTERN Nlm_Int2 LIBCALL Nlm_MeshStringICmp (const char FAR *str1, const char
    Englewood Cliffs, NJ., 1986, p. 69.  The original had an error, where
    UNTIL (j < 0) OR (p[j] # s[i]) should be UNTIL (j < 0) OR (p[j] # s[k]). */
 
+/* New functions allow array data to be precomputed and kept for multiple uses */
+
+NLM_EXTERN Nlm_Boolean Nlm_SetupSubString (
+  const char FAR *sub,
+  Nlm_Boolean caseCounts,
+  Nlm_SubStringData PNTR data
+)
+
+{
+  int     ch;
+  int     j;
+  size_t  subLen;
+
+  if (data == NULL) return FALSE;
+  MemSet ((Nlm_VoidPtr) data, 0, sizeof (Nlm_SubStringData));
+  if (sub == NULL || sub [0] == '\0') return FALSE;
+
+  subLen = Nlm_StringLen (sub);
+
+  for (ch = 0; ch < 256; ch++) {
+    data->d [ch] = subLen;
+  }
+  for (j = 0; j < (int)(subLen - 1); j++) {
+    ch = (int) (caseCounts ? sub [j] : TO_UPPER (sub [j]));
+    if (ch >= 0 && ch <= 255) {
+      data->d [ch] = subLen - j - 1;
+    }
+  }
+
+  data->subLen = subLen;
+  data->caseCounts = caseCounts;
+  data->initialized = TRUE;
+  data->sub = sub;
+
+  return TRUE;
+}
+
+NLM_EXTERN Nlm_CharPtr Nlm_SearchSubString (
+  const char FAR *str,
+  Nlm_SubStringData PNTR data
+)
+
+{
+  Nlm_Boolean     caseCounts;
+  int             ch;
+  int             i;
+  int             j;
+  int             k;
+  size_t          strLen;
+  size_t          subLen;
+  const char FAR  *sub;
+
+  if (str == NULL || str [0] == '\0') return NULL;
+  if (data == NULL || ! data->initialized) return NULL;
+
+  strLen = Nlm_StringLen (str);
+  subLen = data->subLen;
+  if (strLen < subLen) return NULL;
+
+  caseCounts = data->caseCounts;
+  sub = data->sub;
+  if (sub == NULL || sub [0] == '\0') return NULL;
+
+  i = subLen;
+  do {
+	j = subLen;
+	k = i;
+	do {
+	  k--;
+	  j--;
+	} while (j >= 0 &&
+			 (caseCounts ? sub [j] : TO_UPPER (sub [j])) ==
+			 (caseCounts ? str [k] : TO_UPPER (str [k])));
+	if (j >= 0) {
+	  ch = (int) (caseCounts ? str [i - 1] : TO_UPPER (str [i - 1]));
+	  if (ch >= 0 && ch <= 255) {
+		i += data->d [ch];
+	  } else {
+		i++;
+	  }
+	}
+  } while (j >= 0 && i <= (int) strLen);
+  if (j < 0) {
+	i -= subLen;
+	return (Nlm_CharPtr) (str + i);
+  }
+
+  return NULL;
+}
+
 static Nlm_CharPtr Nlm_FindSubString (const char FAR *str, const char FAR *sub,
                                       Nlm_Boolean caseCounts)
 
@@ -698,7 +656,7 @@ static Nlm_CharPtr Nlm_FindSubString (const char FAR *str, const char FAR *sub,
         if (ch >= 0 && ch <= 255) {
           d [ch] = subLen - j - 1;
         }
-     }
+      }
       i = subLen;
       do {
         j = subLen;

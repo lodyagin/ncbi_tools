@@ -29,13 +29,16 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.16 $
+ * $Revision: 6.17 $
  *
  * File Description: 
  *
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: urlquery.h,v $
+ * Revision 6.17  2009/09/18 19:58:40  lavr
+ * +QUERY_QueueSize()
+ *
  * Revision 6.16  2006/10/17 02:19:07  lavr
  * Use "const char*" wherever appropriate
  *
@@ -217,11 +220,18 @@ typedef Nlm_Boolean (LIBCALLBACK *QueryResultProc) (
   CONN conn, Nlm_VoidPtr userdata, EIO_Status status
 );
 
-/* Opaque handle type.  Variable must be kept by application and initialized
- * to NULL.
- */
+/* Opaque handle type.
+   Variable must be kept by application and initialized to NULL.
+*/
 struct SQueueTag;
 typedef struct SQueueTag* QUEUE;  /* queue handle */
+
+/*
+  Return number of currently queued connections.
+*/
+NLM_EXTERN Nlm_Int4 QUERY_QueueSize (
+  QUEUE q
+);
 
 /*
   Records connection, completion routine, and user data in queue.
@@ -238,7 +248,7 @@ NLM_EXTERN void QUERY_AddToQueue (
   Checks queued connections (with CONN_Wait), calls completion routine, then
   removes query from queue and closes connection (if closeConn was TRUE).
   Application is responsible for calling QUERY_CheckQueue() every once in a
-  while, typically with a timer.
+  while, typically with a timer.  Returns the number of pending connections.
 */
 NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
   QUEUE* q

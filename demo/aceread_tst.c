@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/22/08
 *
-* $Revision: 1.26 $
+* $Revision: 1.30 $
 *
 * File Description: 
 *
@@ -85,7 +85,8 @@ typedef enum {
   c_argChunkSize,
   n_argReadNameType,
   z_argIncludeReads,
-  l_argLimitNumContigs
+  l_argLimitNumContigs,
+  e_argReturnErrCode
 } EArgNum;
 
 Args myargs [] = {
@@ -131,6 +132,8 @@ Args myargs [] = {
     TRUE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Limit number of contigs to read", NULL, NULL, NULL,
     TRUE, 'l', ARG_INT, 0.0, 0, NULL},
+  {"Return error code", "F", NULL, NULL,
+    TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 
@@ -1356,15 +1359,17 @@ static void ReadLargeAceFile
   }
   rbd.current_data = NULL;
 
-  ProcessLargeACEFileForContigFastaAndQualScores ( AbstractReadFunction, &rbd, 
-                                                          qual_scores_out == NULL ? make_qual_scores : TRUE,
-                                                          has_errors, ProcessContigCountCallback, &file_count_list);
+  if (!ProcessLargeACEFileForContigFastaAndQualScores ( AbstractReadFunction, &rbd, 
+                                                        qual_scores_out == NULL ? make_qual_scores : TRUE,
+                                                        has_errors, ProcessContigCountCallback, &file_count_list)) {
+    goto escape;
+  }
 
   FileClose (rbd.fp);
   rbd.fp = NULL;
 
   /* prepare XML output */
-  if (c.xml_base != NULL) {
+  if (!StringHasNoText (c.xml_base)) {
     if (chunk_size < 1) {
       summ = SummarizeContigCountList (file_count_list.list);
       c.xml_out = FileOpen (c.xml_base, "w");
@@ -1429,7 +1434,7 @@ static void ReadLargeAceFile
       } else if (datatype == OBJ_SUBMIT_BLOCK) {
         c.sbp = (SubmitBlockPtr) dataptr;
       } else if (datatype == OBJ_SEQDESC) {
-        sdp = (SeqDescrPtr) datatype;
+        sdp = (SeqDescrPtr) dataptr;
         if (sdp->choice == Seq_descr_source) {
           has_source = TRUE;
         }
@@ -1570,6 +1575,7 @@ Int2 Main (void)
   SeqSubmitPtr ssp;
   CharPtr      id_substitution_file = NULL;
   Int4         taxon_id = 0;
+  Boolean      return_err_code = FALSE;
 
   /* standard setup */
 
@@ -1640,6 +1646,7 @@ Int2 Main (void)
   suppress_lookup = (Boolean) myargs [L_argSuppressIdLookup].intvalue;
   srr_ids = (Boolean) myargs[R_argSRRids].intvalue;
   fasta_out = (Boolean) myargs[f_argFASTA].intvalue;
+  return_err_code = (Boolean) myargs[e_argReturnErrCode].intvalue;
 
   /* ASN.1 file to validate against */
   asn_file = (CharPtr) myargs [V_argValidateAgainstAsn1File].strvalue;
@@ -1651,13 +1658,13 @@ Int2 Main (void)
                                &assembly,
                                &taxon_id)) {
     Message (MSG_FATAL, "Error reading TSA fields");
-    return 1;
+    return return_err_code ? 1 : 0;
   }
 
   if (!StringHasNoText (xmlfile) && (StringHasNoText (center_name) || taxon_id < 1)) {
     PrintACEFormatErrorXML ("Must specify center name and taxid for XML output", NULL, &has_errors);
     printf ("</aceread>\n");
-    return 1;
+    return return_err_code ? 1 : 0;
   }        
 
   len = StringLen (infile);
@@ -1691,7 +1698,7 @@ Int2 Main (void)
                       (Boolean) myargs [z_argIncludeReads].intvalue);
     if (has_errors) {
       printf ("</aceread>\n");
-      return 1;
+      return return_err_code ? 1 : 0;
     } else {
       return 0;
     }
@@ -1701,7 +1708,7 @@ Int2 Main (void)
     f = FileOpen (id_substitution_file, "r");
     if (f == NULL) {
       Message (MSG_FATAL, "Unable to open %s", id_substitution_file);
-      return 1;
+      return return_err_code ? 1 : 0;
     }
   }
 
@@ -1709,7 +1716,7 @@ Int2 Main (void)
     rbd.fp = FileOpen (infile, "r");
     if (rbd.fp == NULL) {
       Message (MSG_FATAL, "Unable to open %s", infile);
-      return 1;
+      return return_err_code ? 1 : 0;
     }
 
     rbd.current_data = NULL;
@@ -1718,7 +1725,7 @@ Int2 Main (void)
     rbd.fp = FileOpen (infile, "r");
     if (rbd.fp == NULL) {
       Message (MSG_FATAL, "Unable to open %s", infile);
-      return 1;
+      return return_err_code ? 1 : 0;
     }
 
     rbd.current_data = NULL;
@@ -1727,13 +1734,13 @@ Int2 Main (void)
     rbd.fp = OpenAceFile (infile);
     if (rbd.fp == NULL) {
       Message (MSG_FATAL, "Unable to open %s", infile);
-      return 1;
+      return return_err_code ? 1 : 0;
     }
     rbd.current_data = NULL;
     afp = ReadACEFile ( AbstractReadFunction, &rbd, make_qual_scores, &has_errors);
   } else {
     Message (MSG_FATAL, "Unrecognized format: %s\n", format);
-    return 1;
+    return return_err_code ? 1 : 0;
   }
   FileClose (rbd.fp);
   if (afp == NULL) {

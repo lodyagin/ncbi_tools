@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.60 $
+* $Revision: 6.62 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -196,6 +196,8 @@ typedef unsigned long StreamFlgType;
 
 #define STREAM_ALLOW_NEG_GIS  128 /* for internal use only by NCBI ID group */
 
+#define STREAM_HTML_SPANS     256 /* show span tags at begining of each line */
+
 NLM_EXTERN Int4 SeqPortStream (
   BioseqPtr bsp,
   StreamFlgType flags,
@@ -238,6 +240,7 @@ typedef struct streamcache {
   Int4          offset;
   Int4          length;
   StreamFlgType flags;
+  Boolean       failed;
 } StreamCache, PNTR StreamCachePtr;
 
 NLM_EXTERN Boolean StreamCacheSetup (

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.97 $
+* $Revision: 6.98 $
 *
 * File Description: 
 *
@@ -3040,10 +3040,10 @@ static SeqLocPtr MapSubLoc
               sinp->from = ival->start2;
               sinp->to = ival->stop2;
               sinp->strand = strand;
-              sinp->id = prop_sip;
-              prop_sip = NULL;
+              sinp->id = SeqIdDup (prop_sip);
               ValNodeAddPointer (&prop_loc, SEQLOC_INT, (Pointer) sinp);
             }
+            prop_sip = SeqIdFree (prop_sip);
           } else {
             sinp = SeqIntNew ();
             sinp->from = ival_head->start2;

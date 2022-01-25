@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 4/21/94
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   Generic routines shared by object loaders which are automatically
@@ -41,6 +41,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asngenob.c,v $
+* Revision 6.3  2010/04/29 22:01:17  kans
+* added AsnGenericValNodeSet functions to aid in manual object loader tweaking
+*
 * Revision 6.2  2000/12/12 15:56:12  ostell
 * added support BigInt
 *
@@ -396,3 +399,109 @@ NLM_EXTERN Boolean LIBCALL AsnGenericChoiceSeqOfFree (Pointer ptr, AsnOptFreeFun
 
    return retval;
 }
+
+
+NLM_EXTERN ValNodePtr LIBCALL AsnGenericValNodeSetAsnRead (
+  AsnIoPtr aip,
+  AsnModulePtr amp,
+  AsnTypePtr orig,
+  BoolPtr isError,
+  AsnReadFunc readfunc,
+  AsnOptFreeFunc freefunc
+)
+
+{
+  AsnTypePtr  atp = orig, start_atp;
+  DataVal     av;
+  Pointer     val;
+  ValNodePtr  vnp, head = NULL, last = NULL;
+
+  if (isError != NULL) {
+    *isError = FALSE;
+  }
+  if (aip == NULL || readfunc == NULL || freefunc == NULL) return NULL;
+
+  if (AsnReadVal (aip, atp, &av) <= 0) goto erret; /* read START STRUCT */
+
+  start_atp = orig;
+  atp = start_atp;
+
+  while ((atp = AsnReadId (aip, amp, atp)) != start_atp) {
+    val = (Pointer) readfunc (aip, atp);
+    if (val == NULL) goto erret;
+    vnp = ValNodeAddPointer (&last, 0, val);
+    if (head == NULL) {
+      head = vnp;
+    }
+    last = vnp;
+  }
+
+  if (AsnReadVal (aip, atp, &av) <= 0) goto erret; /* read END STRUCT */
+
+ret:
+  return (Pointer) head;
+
+erret:
+  head = AsnGenericValNodeSetFree (head, freefunc);
+
+  if (isError != NULL) {
+    *isError = TRUE;
+  }
+
+  goto ret;
+}
+
+NLM_EXTERN Boolean LIBCALL AsnGenericValNodeSetAsnWrite (
+  ValNodePtr ptr,
+  AsnWriteFunc writefunc,
+  AsnIoPtr aip,
+  AsnTypePtr bag_atp,
+  AsnTypePtr element_atp
+)
+
+{
+  Boolean     retval = FALSE;
+  Pointer     val;
+  ValNodePtr  vnp;
+
+  if (aip == NULL || writefunc == NULL) return FALSE;
+  if (ptr == NULL && bag_atp != NULL && bag_atp->optional) return TRUE;
+
+  if (! AsnOpenStruct (aip, bag_atp, ptr)) goto ret; /* write START STRUCT */
+
+  for (vnp = ptr; vnp != NULL; vnp = vnp->next) {
+    val = (Pointer) vnp->data.ptrvalue;
+    if (val == NULL) goto ret;
+    if (! writefunc (val, aip, element_atp)) goto ret;
+  }
+
+  if (! AsnCloseStruct (aip, bag_atp, ptr)) goto ret; /* write END STRUCT */
+
+  retval = TRUE;
+
+ret:
+   return retval;
+}
+
+NLM_EXTERN ValNodePtr LIBCALL AsnGenericValNodeSetFree (
+  ValNodePtr ptr,
+  AsnOptFreeFunc freefunc
+)
+
+{
+  ValNodePtr  vnp, next;
+
+  if (ptr == NULL || freefunc == NULL) return NULL;
+
+  for (vnp = ptr; vnp != NULL; vnp = next) {
+    next = vnp->next;
+    vnp->next = NULL;
+    if (vnp->data.ptrvalue != NULL) {
+      freefunc (vnp->data.ptrvalue);
+    }
+    ValNodeFree (vnp);
+  }
+
+  return NULL;
+}
+

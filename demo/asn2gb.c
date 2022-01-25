@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.134 $
+* $Revision: 6.145 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -48,13 +48,14 @@
 #include <sequtil.h>
 #include <sqnutils.h>
 #include <explore.h>
+#include <gather.h>
 #include <toasn3.h>
 #include <asn2gnbp.h>
 
 /* asn2gnbi.h needed to test PUBSEQGetAccnVer in accpubseq.c */
 #include <asn2gnbi.h>
 
-#define ASN2GB_APP_VER "7.2"
+#define ASN2GB_APP_VER "8.5"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -1237,24 +1238,30 @@ static void CompareFlatFiles (
 
     if (FindNucBioseq (sep) != NULL) {
 
-      sprintf (cmmd, "./oldasn2gb -i %s -o %s -m e -g 1", path3, path1);
+      sprintf (cmmd, "./oldasn2gb -i %s -o %s", path3, path1);
       system (cmmd);
 
-      sprintf (cmmd, "./newasn2gb -i %s -o %s -m e -g 1", path3, path2);
+      sprintf (cmmd, "./newasn2gb -i %s -o %s", path3, path2);
       system (cmmd);
 
     } else {
 
-      sprintf (cmmd, "./oldasn2gb -f p -i %s -o %s -m e -g 1", path3, path1);
+      sprintf (cmmd, "./oldasn2gb -f p -i %s -o %s", path3, path1);
       system (cmmd);
 
-      sprintf (cmmd, "./newasn2gb -f p -i %s -o %s -m e -g 1", path3, path2);
+      sprintf (cmmd, "./newasn2gb -f p -i %s -o %s", path3, path2);
       system (cmmd);
 
     }
 
     sprintf (cmmd, "diff -b %s %s > %s", path1, path2, path3);
     diff = system (cmmd);
+
+    fsep = FindNthBioseq (sep, 1);
+    if (fsep == NULL || fsep->choice != 1) return;
+    bsp = (BioseqPtr) fsep->data.ptrvalue;
+    if (bsp == NULL) return;
+    SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
 
     if (diff > 0) {
       sprintf (cmmd, "cat %s", path3);
@@ -1355,7 +1362,7 @@ static Int2 HandleMultipleRecords (
 {
   AsnIoPtr        aip;
   AsnModulePtr    amp;
-  AsnTypePtr      atp, atp_bss, atp_desc, atp_sbp, atp_se, atp_ssp;
+  AsnTypePtr      atp, atp_bss, atp_desc, atp_sbp, atp_se = NULL, atp_ssp;
   Boolean         atp_se_seen = FALSE;
   BioseqPtr       bsp;
   BioseqSetPtr    bssp;
@@ -1430,9 +1437,25 @@ static Int2 HandleMultipleRecords (
     return 1;
   }
 
-  atp_se = AsnFind ("Bioseq-set.seq-set.E");
+  if (type == 4) {
+    atp_se = AsnFind ("Bioseq-set.seq-set.E");
+    if (atp_se == NULL) {
+      Message (MSG_POSTERR, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
+      return 1;
+    }
+  } else if (type == 5) {
+    atp_se = AsnFind ("Seq-submit.data.entrys.E");
+    if (atp_se == NULL) {
+      Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-submit.data.entrys.E");
+      return 1;
+    }
+  } else {
+    Message (MSG_POSTERR, "Batch processing type not set properly");
+    return 1;
+  }
+
   if (atp_se == NULL) {
-    Message (MSG_POSTERR, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
+    Message (MSG_POSTERR, "Unable to find ASN.1 type for atp_se");
     return 1;
   }
 
@@ -1480,7 +1503,7 @@ static Int2 HandleMultipleRecords (
     return 1;
   }
 
-  if ((batch == 1 || batch == 4 || batch == 5 || format != GENBANK_FMT) &&
+  if ((batch == 1 || batch == 4 || batch == 5 || batch == 7 || format != GENBANK_FMT) &&
       (extra == NULL || extra->gbseq == NULL)) {
     ofp = FileOpen (outputFile, "w");
     if (ofp == NULL) {
@@ -1912,6 +1935,7 @@ static ValNodePtr PubSeqRemoteLock (
     if (sep != NULL && IS_Bioseq (sep)) {
       bsp = (BioseqPtr) sep->data.ptrvalue;
       if (bsp != NULL) {
+        AssignIDsInEntity (0, OBJ_SEQENTRY, (Pointer) sep);
         VisitAnnotsInSep (sep, NULL, MarkLocalAnnots);
         DeleteMarkedObjects (0, OBJ_BIOSEQ, (Pointer) bsp);
         sap = bsp->annot;
@@ -2361,7 +2385,7 @@ Int2 Main (
       return 1;
     }
     xtra.aip = aip;
-    if ((Boolean) ((flags & PRODUCE_OLD_GBSEQ) != 0)) {
+    if ((Boolean) (((flags & PRODUCE_OLD_GBSEQ) != 0)) || ((custom & OLD_GBSEQ_XML) != 0)) {
       do_insdseq = FALSE;
     }
     if (do_insdseq) {

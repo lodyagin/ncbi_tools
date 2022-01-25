@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.479 $
+* $Revision: 6.484 $
 *
 * File Description: 
 *
@@ -62,6 +62,10 @@
 #include <assert.h>
 #include <pmfapi.h>
 #include <vsm.h>
+#define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macrodlg.h>
+#include <macroapi.h>
 
 /*-------------------*/
 /* Defined Constants */
@@ -3035,7 +3039,7 @@ extern void RemoveQualityScores
 static Boolean ExpandSeqGraph (SeqGraphPtr sgp)
 {
   Int4    oldpos = 0, newpos = 0, i;
-  Pointer new_values;
+  Pointer new_values = NULL;
   Int4    new_numval;
   Int2    cur_byte;
 
@@ -3064,6 +3068,7 @@ static Boolean ExpandSeqGraph (SeqGraphPtr sgp)
 
   /* copy and expand */
   while (oldpos < sgp->numval) {
+    cur_byte = 0;
     if (sgp->flags[2] == SEQGRAPH_BS) {
       cur_byte = BSGetByte ((ByteStorePtr) sgp->values);
     }
@@ -3099,10 +3104,10 @@ static Boolean ExpandSeqGraph (SeqGraphPtr sgp)
 static Boolean TruncateSeqGraphValues (SeqGraphPtr sgp, Int4 len, Boolean onleft)
 {
   Int4    oldpos, newpos = 0;
-  Pointer new_values;
+  Pointer new_values = NULL;
   Int4    new_numval;
   Int2    cur_byte;
-  Int4    imin, imax;
+  Int4    imin = 0, imax = 0;
   FloatHi fmin, fmax;
 
   if (sgp == NULL) return TRUE;
@@ -7225,7 +7230,7 @@ AddVariationFeaturesToLog
     total_buf = PrepareVariationFeatureLogEntry (sfp, salp);
     if (!StringHasNoText (total_buf))
     {
-      fprintf (fp, total_buf);
+      fprintf (fp, "%s", total_buf);
       if (data_in_log != NULL)
       {
         *data_in_log = TRUE;
@@ -7301,7 +7306,7 @@ static void AcceptRMCOrExtend (ButtoN b)
 
 static void DoAcceptRMCOrExtendSet (UpsDataPtr udp)
 {
-  Int2         sfbval;
+  Int2         sfbval = 0;
   Boolean      log_is_local = FALSE;
   Boolean      update_proteins = FALSE;
   Boolean      do_update = TRUE;
@@ -9726,7 +9731,7 @@ extern void ExtendAllSequencesInSet (IteM i)
   Char               path [PATH_MAX];
   Pointer            dataptr;
   Uint2              datatype;
-  SeqEntryPtr        nwsep, topsep;
+  SeqEntryPtr        nwsep = NULL, topsep;
   SeqSubmitPtr       ssp;
   BioseqPtr          nbsp;
   BioseqPtr          bsp;
@@ -9887,7 +9892,7 @@ static void NewUpdateOrExtendSequence (IteM i, Boolean do_update)
   MsgAnswer     ans;
   BaseFormPtr   bfp;
   BioseqPtr     bsp, nbsp;
-  Pointer       dataptr;
+  Pointer       dataptr = NULL;
   Uint2         datatype;
   FILE          *fp;
   Char          path [PATH_MAX];
@@ -11141,6 +11146,7 @@ extern void AddTranslExceptWithComment (IteM i)
   clear_btn = PushButton (h, "Clear Comment", ClearComment);
   SetObjectExtra (clear_btn, ap, NULL);
   ap->strict_checking_btn = CheckBox (h, "Overhang must be T or TA", NULL);
+  SetStatus (ap->strict_checking_btn, TRUE);
   ap->extend_btn = CheckBox (h, "Extend for T/TA overhang", NULL);
   ap->adjust_gene_btn = CheckBox (h, "Adjust gene to match coding region location", NULL);
   SetStatus (ap->adjust_gene_btn, TRUE);
@@ -12087,9 +12093,11 @@ UpdateSequencePatchRaw
                              flags, (Pointer) (str + ctr), NULL);
   }
 
-  /* take old 3' */
-  ctr += SeqPortStreamInt (upp->orig_bsp, ualp->old5 + ualp->olda, upp->orig_bsp->length - 1, Seq_strand_plus,
-                    flags, (Pointer) (str + ctr), NULL);
+  /* take old 3' (if any) */
+  if (ualp->old5 + ualp->olda < upp->orig_bsp->length) {
+    ctr += SeqPortStreamInt (upp->orig_bsp, ualp->old5 + ualp->olda, upp->orig_bsp->length - 1, Seq_strand_plus,
+                      flags, (Pointer) (str + ctr), NULL);
+  }
   
   str[ctr] = '\0';
   
@@ -14342,13 +14350,13 @@ static void UpdatePairToUpdateTitlesDialog (DialoG d, Pointer data)
     {
       sprintf (ppt_txt, "No update sequence for %s", id_txt);
       SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
-      sprintf (ppt_txt, "Length %ld", upp->orig_bsp->length);
+      sprintf (ppt_txt, "Length %ld", (long) upp->orig_bsp->length);
       SetTitle (dlg->new_sequence_length_ppt, ppt_txt);
     }
     else
     {
       sprintf (ppt_txt, "No update sequence for %s (length %ld)", 
-               id_txt, upp->orig_bsp->length);
+               id_txt, (long) upp->orig_bsp->length);
       SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
     }
     SafeHide (dlg->old_sequence_id_ppt);    
@@ -14363,12 +14371,12 @@ static void UpdatePairToUpdateTitlesDialog (DialoG d, Pointer data)
     {
       sprintf (ppt_txt, "No alignment for %s", id_txt);
       SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
-      sprintf (ppt_txt, "Length: %ld", dlg->orig_bsp->length);
+      sprintf (ppt_txt, "Length: %ld", (long) dlg->orig_bsp->length);
       SetTitle (dlg->new_sequence_length_ppt, ppt_txt);
     }
     else
     {
-      sprintf (ppt_txt, "No alignment for %s Length: %ld", id_txt, dlg->orig_bsp->length);
+      sprintf (ppt_txt, "No alignment for %s Length: %ld", id_txt, (long) dlg->orig_bsp->length);
       SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
     }
     SafeHide (dlg->old_sequence_id_ppt);    
@@ -14383,12 +14391,12 @@ static void UpdatePairToUpdateTitlesDialog (DialoG d, Pointer data)
     {
       sprintf (ppt_txt, "New sequence: %s", id_txt);
       SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
-      sprintf (ppt_txt, "Length: %ld", dlg->update_bsp->length);
+      sprintf (ppt_txt, "Length: %ld", (long) dlg->update_bsp->length);
       SetTitle (dlg->new_sequence_length_ppt, ppt_txt);
     }
     else
     {
-      sprintf (ppt_txt, "New sequence: %s Length: %ld", id_txt, dlg->update_bsp->length);
+      sprintf (ppt_txt, "New sequence: %s Length: %ld", id_txt, (long) dlg->update_bsp->length);
       SetTitle (dlg->new_sequence_id_ppt, ppt_txt);
     }
   
@@ -14398,12 +14406,12 @@ static void UpdatePairToUpdateTitlesDialog (DialoG d, Pointer data)
     {
       sprintf (ppt_txt, "Old sequence: %s", id_txt);
       SetTitle (dlg->old_sequence_id_ppt, ppt_txt);
-      sprintf (ppt_txt, "Length: %ld", dlg->orig_bsp->length);
+      sprintf (ppt_txt, "Length: %ld", (long) dlg->orig_bsp->length);
       SetTitle (dlg->old_sequence_length_ppt, ppt_txt);
     }
     else
     {
-      sprintf (ppt_txt, "Old sequence: %s Length: %ld", id_txt, dlg->orig_bsp->length);
+      sprintf (ppt_txt, "Old sequence: %s Length: %ld", id_txt, (long) dlg->orig_bsp->length);
       SetTitle (dlg->old_sequence_id_ppt, ppt_txt);
     }
   
@@ -16648,12 +16656,24 @@ static void AddUniqueUpdateSequenceIDs (SeqEntryPtr sep)
   AddUniqueUpdateSequenceIDs (sep->next);
 }
 
+
+static Boolean MatchToBankIt (SeqIdPtr sip1, SeqIdPtr sip2)
+{
+  if (sip1 == NULL || sip1->choice != SEQID_LOCAL) {
+    return FALSE;
+  }
+}
+
+
 static Boolean SeqIdListsOverlap (SeqIdPtr sip1, SeqIdPtr sip2)
 { 
-  SeqIdPtr sip_tmp, sip_next;
+  SeqIdPtr sip_next;
   Char     tmp_id_str [MAX_ID_LEN + 5];
   Boolean  rval = FALSE;
-  
+  StringConstraint scd;
+
+  MemSet (&scd, 0, sizeof (StringConstraint));
+
   while (sip1 != NULL && !rval)
   {
     if (SeqIdIn (sip1, sip2))
@@ -16662,18 +16682,13 @@ static Boolean SeqIdListsOverlap (SeqIdPtr sip1, SeqIdPtr sip2)
     }
     else if (sip1->choice == SEQID_LOCAL)
     {
-      /* check to see if user just forgot to put "gb|" at the front of the IDs */
       sip_next = sip1->next;
       sip1->next = NULL;
-      StringCpy (tmp_id_str, "gb|");
-      SeqIdWrite (sip1, tmp_id_str + 3, PRINTID_REPORT, sizeof (tmp_id_str) - 4);     
-      sip_tmp = MakeSeqID (tmp_id_str);
-      if (SeqIdIn (sip_tmp, sip2))
-      {
-        rval = TRUE;
-      }
-      sip_tmp = SeqIdFree (sip_tmp);
+      SeqIdWrite (sip1, tmp_id_str, PRINTID_REPORT, sizeof (tmp_id_str) - 1);     
       sip1->next = sip_next;
+      scd.match_text = tmp_id_str;
+      scd.match_location = String_location_equals;
+      rval = DoesSeqIDListMeetStringConstraint (sip2, &scd);
     }
     sip1 = sip1->next;
   }
@@ -16917,7 +16932,7 @@ static SeqEntryPtr ReadASNUpdateSequences (FILE *fp, BoolPtr chars_stripped)
 {
   Pointer      dataptr;
   Uint2        datatype;
-  SeqEntryPtr  sep;
+  SeqEntryPtr  sep = NULL;
   SeqSubmitPtr ssp;
   
   /* Read in one sequence from the file */

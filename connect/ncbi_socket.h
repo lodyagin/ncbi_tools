@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKET__H
 #define CONNECT___NCBI_SOCKET__H
 
-/* $Id: ncbi_socket.h,v 6.71 2009/05/04 15:54:29 kazimird Exp $
+/* $Id: ncbi_socket.h,v 6.75 2010/05/06 16:49:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -75,7 +75,7 @@
  *  SOCK_Status
  *  SOCK_Write
  *  SOCK_Abort
- *  SOCK_GetLocalPort
+ *  SOCK_GetLocalPort[Ex]
  *  SOCK_GetPeerAddress
  *  SOCK_GetPeerAddressString
  *
@@ -125,6 +125,11 @@
  *  SOCK_GetLoopbackAddress
  *  SOCK_StringToHostPort
  *  SOCK_HostPortToString
+ *
+ * Utility:
+ *
+ *  SOCK_SetSelectInternalRestartTimeout
+ *  SOCK_SetIOWaitSysAPI
  *
  *  Secure:
  *
@@ -320,12 +325,41 @@ extern NCBI_XCONNECT_EXPORT void SOCK_SetReuseAddress
  *  [in]  Break down long waits on I/O into smaller chunks of at most "timeout"
  *  duration each.  This can help recover "hanging" sockets from indefinite
  *  wait and allow them to report an exceptional I/O condition.
+ * @return
+ *   Previous value of the timeout
  * @sa
  *  SOCK_Wait, SOCK_Poll
  */
 extern NCBI_XCONNECT_EXPORT const STimeout*
 SOCK_SetSelectInternalRestartTimeout
 (const STimeout* timeout);
+
+
+/** Selector of I/O wait system API:  auto, poll(), or select().
+ * @sa
+ *  SOCK_SetIOWaitSysAPI
+ */
+typedef enum {
+    eSOCK_IOWaitSysAPIAuto,   /** default; use some euristics to choose API */
+    eSOCK_IOWaitSysAPIPoll,   /** always use poll()                         */
+    eSOCK_IOWaitSysAPISelect  /** always use select()                       */
+} ESOCK_IOWaitSysAPI;
+
+/** This is a helper call that can improve I/O behavior (ignored for Windows).
+ * @param api
+ *  [in]  Default behavior is to wait on I/O such a way that accomodates the
+ *  requested sockets accordingly.  There is a known limitation of select()
+ *  API that requires all sockets to have low-level IO descriptors less than
+ *  1024, but works faster than poll() API that does not have limits on the
+ *  numeric values of the descriptors.  Either API can be enforced here.
+ * @return
+ *  Previous value of the API selector
+ * @sa
+ *  SOCK_Wait, SOCK_Poll
+ */
+extern NCBI_XCONNECT_EXPORT ESOCK_IOWaitSysAPI
+SOCK_SetIOWaitSysAPI
+(ESOCK_IOWaitSysAPI api);
 
 
 /** By default (on UNIX platforms) the SOCK API functions automagically call
@@ -459,7 +493,7 @@ typedef enum {
     fSOCK_ReadOnWrite       = 0x100,
     fSOCK_InterruptOnSignal = 0x200
 } ESOCK_Flags;
-typedef unsigned int TSOCK_Flags;
+typedef unsigned int TSOCK_Flags;  /** Bitwise "OR" of ESOCK_Flags */
 
 
 /******************************************************************************
@@ -529,8 +563,23 @@ extern NCBI_XCONNECT_EXPORT EIO_Status LSOCK_Create
  *  all I/O timeouts are infinite by default.
  * @param sock
  *  [out] handle of the accepted socket
+ * @param flags
+ *  [in]  properties for the accepted socket to have
  * @sa
- *  SOCK_Create, SOCK_Close
+ *  SOCK_Create, SOCK_Close, TSOCK_Flags
+ */
+extern NCBI_XCONNECT_EXPORT EIO_Status LSOCK_AcceptEx
+(LSOCK           lsock,    
+ const STimeout* timeout, 
+ SOCK*           sock,
+ TSOCK_Flags     flags
+ );
+
+
+/** [SERVER-side]  Accept connection from a client.
+ * Same as LSOCK_AcceptEx(.,.,.,fSOCK_LogDefault)
+ * @sa
+ *  LSOCK_AcceptEx
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status LSOCK_Accept
 (LSOCK           lsock,    
@@ -586,7 +635,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status LSOCK_GetOSHandle
  * @param init_data
  *  [in]  initial output data segment (may be NULL)
  * @param init_size
- *  [in]  size of initial data segment (may be 0) 
+ *  [in]  size of initial data segment (may be 0)
  * @param flags
  *  [in]  additional socket requirements
  * @sa
@@ -699,11 +748,12 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CreateOnTop
  *        if "port" is zero then connect to the same port # as before.
  *
  * @li <b>NOTE 1:</b> "new" socket inherits old I/O timeouts;
- * @li <b>NOTE 2:</b> the call is only applicable to stream [not datagram] sockets.
- * @li <b>NOTE 3:</b> "timeout"==NULL is infinite; "timeout"=={0,0} causes no wait for
- *        connection to be established and to return immediately.
- * @li <b>NOTE 4:</b> UNIX sockets can only be reconnected to the same file thus both
- *        host and port have to be passed as 0s.
+ * @li <b>NOTE 2:</b> the call is only applicable to stream [not datagram]
+          sockets.
+ * @li <b>NOTE 3:</b> "timeout"==NULL is infinite; "timeout"=={0,0} causes
+ *        no wait for connection to be established and to return immediately.
+ * @li <b>NOTE 4:</b> UNIX sockets can only be reconnected to the same file
+ *        thus both host and port have to be passed as 0s.
  * @param sock
  *  [in]  handle of the socket to reconnect
  * @param host
@@ -813,7 +863,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Wait
  */
 typedef struct {
     SOCK      sock;   /** [in]          SOCK to poll (NULL if not to poll)  */
-    EIO_Event event;  /** [in]  one of: eIO_Read, eIO_Write, eIO_ReadWrite  */
+    EIO_Event event;  /** [in]  one of: eIO_Open/Read/Write/ReadWrite       */
     EIO_Event revent; /** [out] one of: eIO_Open/Read/Write/ReadWrite/Close */
 } SSOCK_Poll;
 
@@ -823,30 +873,36 @@ typedef struct {
  * or until timeout expires (wait indefinitely if timeout is passed NULL).
  * Return eIO_Success if at least one socket was found ready;  eIO_Timeout
  * if timeout expired;  eIO_Unknown if underlying system call(s) failed.
- * @li <b>NOTE 1:</b> For a socket found not ready for an operation, eIO_Open is returned
- *        in its "revent"; for a failing socket, eIO_Close is returned;
- * @li <b>NOTE 2:</b> This call may return eIO_InvalidArg if
+ * @li <b>NOTE 1:</b> NULL sockets as well as non-NULL sockets with eIO_Open
+ *        requested in their "event" do not get polled;
+ * @li <b>NOTE 2:</b> For a socket found not ready for an operation, eIO_Open
+ *        is returned in its "revent"; for a failing socket, eIO_Close
+ *        is returned;
+ * @li <b>NOTE 3:</b> This call may return eIO_InvalidArg if
  *        - parameters to the call are inconsistent;
- *        - a non-NULL socket polled with a bad "event" (eIO_Open, eIO_Close).
+ *        - a non-NULL socket polled with a bad "event" (eIO_Close).
  *        With this return code, the calling program cannot rely on "revent"
- *        fields the "polls" array as they might not be properly updated.
- * @li <b>NOTE 3:</b> If either both "n" and "polls" are NULL, or all sockets in "polls"
- *        are NULL, then the returned result is either
- *        eIO_Timeout (after the specified amount of time was spent idle), or
- *        eIO_Interrupted (if signal came while the waiting was in progress).
- * @li <b>NOTE 4:</b> For datagram sockets, the readiness for reading is determined by
- *        message data latched since last message receive call (DSOCK_RecvMsg).
- * @li <b>NOTE 5:</b> This call allows intermixture of stream and datagram sockets.
- * @li <b>NOTE 6:</b> This call can cause some socket I/O in those sockets marked for
- *        read-on-write and those with pending connection or output data.
+ *        fields in the "polls" array as they might not be properly updated.
+ * @li <b>NOTE 4:</b> If either both "n" and "polls" are NULL, or all sockets
+ *        in "polls" are NULL, then the returned result is either:
+ *        - eIO_Timeout (after the specified amount of time was spent idle), or
+ *        - eIO_Interrupted (if signal came while the waiting was in progress).
+ * @li <b>NOTE 5:</b> For datagram sockets, the readiness for reading is
+ *        determined by message data latched since last message receive call
+ *        (DSOCK_RecvMsg).
+ * @li <b>NOTE 6:</b> This call allows intermixture of stream and
+ *        datagram sockets.
+ * @li <b>NOTE 7:</b> This call can cause some socket I/O in those sockets
+ *        marked for read-on-write and those with pending connection or
+ *        output data.
  * @param n
- *  [in]  # of SSOCK_Poll elems in "polls"  
+ *  [in]  # of SSOCK_Poll elems in "polls"
  * @param polls[]
- *  [in|out] array of query/result structures   
+ *  [in|out] array of query/result structures
  * @param timeout
  *  [in]  max time to wait (infinite if NULL)
  * @param n_ready
- *  [out] # of ready sockets  (may be NULL) 
+ *  [out] # of ready sockets  (may be NULL)
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Poll
 (size_t          n,         
@@ -870,13 +926,13 @@ typedef struct {
 
 /**
  * @param n
- * 
+ *
  * @param polls[]
- *   
+ *
  * @param timeout
- * 
+ *
  * @param n_ready
- * 
+ *
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status POLLABLE_Poll
 (size_t          n,
@@ -888,7 +944,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status POLLABLE_Poll
 
 /**
  * @return
- *  Return 0 if conversion cannot be made; otherwise converted handle 
+ *  Return 0 if conversion cannot be made; otherwise converted handle
  */
 extern NCBI_XCONNECT_EXPORT POLLABLE POLLABLE_FromSOCK   (SOCK);
 extern NCBI_XCONNECT_EXPORT POLLABLE POLLABLE_FromLSOCK  (LSOCK);
@@ -900,13 +956,13 @@ extern NCBI_XCONNECT_EXPORT TRIGGER  POLLABLE_ToTRIGGER(POLLABLE);
 
 /** Specify timeout for the connection i/o (see SOCK_[Read|Write|Close] funcs).
  * If "timeout" is NULL then set the timeout to be infinite;
- * @li <b>NOTE:</b> the default timeout is infinite (wait "ad infinitum" on I/O).
+ * @li <b>NOTE:</b> the default timeout is infinite (to wait indefinitely).
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param event
  *  [in]  one of:  eIO_[Read/Write/ReadWrite/Close]
  * @param timeout
- *  [in]  new timeout value to set  
+ *  [in]  new timeout value to set
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_SetTimeout
 (SOCK            sock,
@@ -916,14 +972,15 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_SetTimeout
 
 
 /** Get the connection's i/o timeout (or NULL, if the timeout is infinite).
- * @li <b>NOTE 1:</b>  the returned timeout is guaranteed to be pointing to a valid
- *         (and correct) structure in memory at least until the SOCK is closed
+ * @li <b>NOTE 1:</b>  the returned timeout is guaranteed to be pointing to
+ *         a valid structure in memory at least until the SOCK is closed
  *         or SOCK_SetTimeout is called for this "sock".
- * @li <b>NOTE 2:</b>  eIO_ReadWrite timeout is the least of eIO_Read and eIO_Write ones.
+ * @li <b>NOTE 2:</b>  eIO_ReadWrite timeout is the least of
+ *         eIO_Read and eIO_Write ones.
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param event
- *  [in]  one of:  eIO_[Read/Write/Close] 
+ *  [in]  one of:  eIO_[Read/Write/Close]
  */
 extern NCBI_XCONNECT_EXPORT const STimeout* SOCK_GetTimeout
 (SOCK      sock,
@@ -931,7 +988,7 @@ extern NCBI_XCONNECT_EXPORT const STimeout* SOCK_GetTimeout
  );
 
 
-/** Read/peek up to "size" bytes from "sock" to the mem.buffer pointed by "buf".
+/** Read/peek up to "size" bytes from "sock" to a buffer pointed to by "buf".
  * In "*n_read", return the number of successfully read bytes.
  * Read method "how" can be either of the following:
  * eIO_ReadPlain   -- read as many as "size" bytes and return (eIO_Success);
@@ -954,7 +1011,7 @@ extern NCBI_XCONNECT_EXPORT const STimeout* SOCK_GetTimeout
  * Both mothods return any other code when no data at all were available.
  * eIO_ReadPersist differs from the other two methods as it can return an
  * error condition even if some data were actually obtained from the socket.
- * Hence, as a rule of thumb, an application should always check the number
+ * Hence, as the *rule of thumb*, an application should always check the number
  * of read bytes BEFORE checking the return status, which merely advises
  * whether it is okay to read again.
  *
@@ -964,25 +1021,26 @@ extern NCBI_XCONNECT_EXPORT const STimeout* SOCK_GetTimeout
  *   eIO_Read[Persist] -- discard up to "size" bytes from internal buffer
  *                        and socket (check "*n_read" to know how many).
  *
- * @li <b>NOTE 1:</b> "Read" and "peek" methods differ:  if "read" is performed and not
- *        enough but some data available immediately from the internal buffer,
- *        then the call completes with eIO_Success status.  For "peek", if
- *        not all requested data were available, the real I/O occurs to pick up
- *        additional data (if any) from the system. Keep this difference in
- *        mind when programming loops that heavily use "peek"s without "read"s.
- * @li <b>NOTE 2:</b> If on input "size" == 0, then "*n_read" is set to 0, and the
- *        return value can be either of eIO_Success, eIO_Closed or
+ * @li <b>NOTE 1:</b> "Read" and "peek" methods differ:  if "read" is
+ *        performed and not enough but only some data available immediately
+ *        from the internal buffer, then the call still completes with
+ *        eIO_Success status.  For "peek", if not all requested data were
+ *        available, the real I/O occurs to pick up additional data (if any)
+ *        from the system.  Keep this difference in mind when programming
+ *        loops that heavily use "peek"s without "read"s.
+ * @li <b>NOTE 2:</b> If on input "size" == 0, then "*n_read" is set to 0,
+ *        and the return value can be either of eIO_Success, eIO_Closed or
  *        eIO_Unknown depending on connection status of the socket.
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param buf
- *  [out] data buffer to read to 
+ *  [out] data buffer to read to
  * @param size
- *  [in] max # of bytes to read to "buf" 
+ *  [in] max # of bytes to read to "buf"
  * @param n_read
  *  [out] # of bytes read  (can be NULL)
  * @param how
- *  [in]  how to read the data 
+ *  [in]  how to read the data
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Read
 (SOCK           sock,
@@ -1004,13 +1062,13 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Read
  * return.  Note that there will be no terminating '\0' in this
  * (and the only) case, which the caller can easily distinguish.
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param buf
- *  [out] data buffer to read to 
+ *  [out] data buffer to read to
  * @param size
  *  [in] max # of bytes to read to "buf"
  * @param n_read
- *  [out] # of bytes read  (can be NULL) 
+ *  [out] # of bytes read  (can be NULL)
  * @return
  *  Return code eIO_Success upon successful completion, other - upon
  *  an error.  Note that *n_read must be analyzed prior to return code,
@@ -1029,11 +1087,11 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_ReadLine
  * internal read buffer). These can be any data, not necessarily the data
  * previously read from the socket.
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param buf
- *  [in]  data to push back to the socket's local buffer 
+ *  [in]  data to push back to the socket's local buffer
  * @param size
- *  [in]  # of bytes (starting at "buf") to push back 
+ *  [in]  # of bytes (starting at "buf") to push back
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_PushBack
 (SOCK        sock,
@@ -1045,7 +1103,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_PushBack
 /** Return low-level socket I/O status of *last* socket operation.
  * This call does not perform any I/O or socket related system calls.
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param direction
  *  [in]  one of:  eIO_Open, eIO_Read, eIO_Write
  * @return
@@ -1076,11 +1134,11 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Status
 
 /** Write "size" bytes from buffer "buf" to "sock".
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param buf
- *  [in] data to write to the socket 
+ *  [in] data to write to the socket
  * @param size
- *  [in] # of bytes (starting at "buf") to write 
+ *  [in] # of bytes (starting at "buf") to write
  * @param n_written
  *  [out] # of written bytes (can be NULL)
  * @param how
@@ -1098,15 +1156,17 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Status
  *                other code denotes an error, but some bytes might have
  *                been sent nevertheless (always check *n_written to know).
  *
- * @li <b>NOTE 1:</b> With eIO_WritePlain the call returns eIO_Success iff some data
- *        were actually written to the socket. If no data could be written
- *        (and perhaps timeout expired) this call always returns an error.
- * @li <b>NOTE 2:</b> eIO_WritePlain and eIO_WritePersist differs that the latter can
- *        flag an error condition even if some data were actually written
+ * @li <b>NOTE 1:</b> With eIO_WritePlain the call returns eIO_Success iff
+ *        some data were actually written to the socket.  If no data could
+ *        be written (and perhaps timeout expired) this call always returns
+ *        an error.
+ * @li <b>NOTE 2:</b> eIO_WritePlain and eIO_WritePersist differ that
+ *        the latter can flag an error condition even if some data were
+ *        actually written
  *        (see "the rule of thumb" in the comments for SOCK_Read() above).
- * @li <b>NOTE 3:</b> if "size"==0, return value can be eIO_Success if no pending data
- *        left in the socket, or eIO_Timeout if there are still data pending.
- *        In either case, "*n_written" is set to 0 on return.
+ * @li <b>NOTE 3:</b> if "size"==0, return value can be eIO_Success if no
+ *        pending data left in the socket, or eIO_Timeout if there are still
+ *        data pending.  In either case, "*n_written" is set to 0 on return.
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Write
 (SOCK            sock,
@@ -1133,14 +1193,46 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_Abort
  );
 
 
-/** Get local port of the socket.
+/** Get local port of the socket (true or cached / stored).
+ * For most users, a simpler SOCK_GetLocalPort() call is going to be the
+ * most suitable.  This call allows to inquire the network level about
+ * a temporary port number assigned when a socket was created as a result
+ * of accepting the connection (otherwise, the listening socket port number
+ * gets returned as the local port).  For connecting sockets, both "trueport"
+ * and no "trueport" results are identical (with the exception that "trueport"
+ * causes an additional system call, and the result is not stored).
  * @param sock
- *  [in] socket handle 
+ *  [in] socket handle
+ * @param trueport
+ *  [in] non-zero causes to refetch / no-cache port from the network layer
  * @param byte_order
  *  [in] port byte order
  * @return
  *  If "network_byte_order" is true(non-zero) then return the port in the
  *  network byte order; otherwise return it in the local host byte order.
+ * @sa
+ *  SOCK_GetLocalPort
+ */
+extern NCBI_XCONNECT_EXPORT unsigned short SOCK_GetLocalPortEx
+(SOCK            sock,
+ int/*bool*/     trueport,
+ ENH_ByteOrder   byte_order          
+ );
+
+
+/** Get local port of the socket.
+ * The returned port number is also cached within "sock" so all following
+ * inquires for the local port do not cause any system calls to occur.
+ * Has exactly same effect as SOCK_GetLocalPortEx(sock, 0, byte_order)
+ * @param sock
+ *  [in] socket handle
+ * @param byte_order
+ *  [in] port byte order
+ * @return
+ *  If "network_byte_order" is true(non-zero) then return the port in the
+ *  network byte order; otherwise return it in the local host byte order.
+ * @sa
+ *  SOCK_GetLocalPortEx
  */
 extern NCBI_XCONNECT_EXPORT unsigned short SOCK_GetLocalPort
 (SOCK            sock,
@@ -1150,9 +1242,9 @@ extern NCBI_XCONNECT_EXPORT unsigned short SOCK_GetLocalPort
 
 /** Get host and port of the socket's peer.
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param host
- *  [out] the peer's host (can be NULL) 
+ *  [out] the peer's host (can be NULL)
  * @param port
  *  [out] the peer's port (can be NULL)
  * @param byte_order
@@ -1173,11 +1265,11 @@ extern NCBI_XCONNECT_EXPORT void SOCK_GetPeerAddress
  * For INET domain sockets, the result is of the form "aaa.bbb.ccc.ddd:ppppp";
  * for UNIX domain socket, the result is the name of the socket's file.
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param buf
  *  [out] pointer to provided buffer to store the text to
  * @param buflen
- *  [in]  usable size of the buffer above 
+ *  [in]  usable size of the buffer above
  * @param format
  *  [in]  what parts of address to include
  * @return
@@ -1208,11 +1300,11 @@ extern NCBI_XCONNECT_EXPORT char* SOCK_GetPeerAddressString
 /** Get an OS-dependent native socket handle to use by platform-specific API.
  * FYI:  on MS-Windows it will be "SOCKET", on other platforms -- "int".
  * @param sock
- *   Socket handle
+ *  [in]  socket handle
  * @param handle_buf
- *  pointer to a memory area to put the OS handle at
+ *  [out] pointer to a memory area to put the OS handle at
  * @param handle_size
- *  the exact(!) size of the expected OS handle
+ *  [in]  the exact(!) size of the expected OS handle
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_GetOSHandle
 (SOCK   sock,
@@ -1226,10 +1318,10 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_GetOSHandle
  * (and cache it in the internal socket buffer) when the write operation
  * is not immediately available, call this func with "on_off" == eOn.
  * @param on_off
- * 
+ *
  * @return
  *  Prior setting.
-*/
+ */
 extern NCBI_XCONNECT_EXPORT ESwitch SOCK_SetReadOnWriteAPI
 (ESwitch on_off
  );
@@ -1239,9 +1331,9 @@ extern NCBI_XCONNECT_EXPORT ESwitch SOCK_SetReadOnWriteAPI
  * To reset to the global default behavior (as set by
  * SOCK_SetReadOnWriteAPI), call this function with "on_off" == eDefault.
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param on_off
- *  
+ *
  * @return
  *  Prior setting.
  */
@@ -1260,9 +1352,9 @@ extern NCBI_XCONNECT_EXPORT ESwitch SOCK_SetReadOnWrite
  * (like in case of short transactions otherwise held by the system
  * to be possibly coalesced into larger chunks).
  * @param sock
- *  [in]  socket handle 
+ *  [in]  socket handle
  * @param on_off
- *  
+ *
  * NB: use true to disable; false to enable
  */
 extern NCBI_XCONNECT_EXPORT void SOCK_DisableOSSendDelay
@@ -1419,7 +1511,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status DSOCK_RecvMsg
  * @param sock
  *  [in] SOCK from DSOCK_Create[Ex]()
  * @param direction
- *  [in] either of eIO_Read|eIO_Write
+ *  [in] either of eIO_Read, eIO_Write
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status DSOCK_WipeMsg
 (SOCK            sock,                 
@@ -1430,7 +1522,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status DSOCK_WipeMsg
  * @param sock
  *  [in] SOCK from DSOCK_Create[Ex]()
  * @param broadcast
- *  [in] set(1)/unset(0) bcast capab
+ *  [in] set(1)/unset(0) broadcast capability
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status DSOCK_SetBroadcast
 (SOCK            sock,                  
@@ -1446,7 +1538,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status DSOCK_SetBroadcast
 
 /**
  * @param sock
- *  [in]  socket handle 
+ *  [in] socket handle
  * @return 
  *  Non-zero value if socket "sock" was created by DSOCK_Create[Ex]().
  *  Return zero otherwise.
@@ -1456,7 +1548,7 @@ extern NCBI_XCONNECT_EXPORT int/**bool*/ SOCK_IsDatagram(SOCK sock);
 
 /**
  * @param sock
- *  [in]  socket handle 
+ *  [in] socket handle
  * @return
  *  Non-zero value if socket "sock" was created by SOCK_Create[Ex]().
  *  Return zero otherwise.
@@ -1466,7 +1558,7 @@ extern NCBI_XCONNECT_EXPORT int/**bool*/ SOCK_IsClientSide(SOCK sock);
 
 /**
  * @param sock
- *  [in]  socket handle 
+ *  [in] socket handle
  * @return
  *  Non-zero value if socket "sock" was created by LSOCK_Accept().
  *  Return zero otherwise.
@@ -1476,7 +1568,7 @@ extern NCBI_XCONNECT_EXPORT int/**bool*/ SOCK_IsServerSide(SOCK sock);
 
 /**
  * @param sock
- *  [in]  socket handle 
+ *  [in] socket handle
  * @return
  *  Non-zero value if socket "sock" is a UNIX family named socket
  *  Return zero otherwise.
@@ -1486,7 +1578,7 @@ extern NCBI_XCONNECT_EXPORT int/**bool*/ SOCK_IsUNIX(SOCK sock);
 
 /**
  * @param sock
- *  [in]  socket handle 
+ *  [in] socket handle
  * @return
  *  Non-zero value if socket "sock" is using Secure Socket Layer (SSL).
  *  Return zero otherwise.
@@ -1504,7 +1596,7 @@ extern NCBI_XCONNECT_EXPORT int/**bool*/ SOCK_IsSecure(SOCK sock);
  * @param name
  *  [out] (guaranteed to be '\0'-terminated)
  * @param namelen
- *  [in] max # of bytes allowed to put to "name" 
+ *  [in]  max # of bytes allowed to put to "name" 
  * @return
  *  Zero on success, non-zero on error.  See BSD gethostname().
  *  On error "name" returned emptied (name[0] == '\0').
@@ -1517,11 +1609,11 @@ extern NCBI_XCONNECT_EXPORT int SOCK_gethostname
 
 /**
  * @param addr
- *  [in] must be in the network byte-order
+ *  [in]  must be in the network byte-order
  * @param buf
  *  [out] to be filled by smth. like "123.45.67.89\0"
  * @param buflen
- *  [in] max # of bytes to put to "buf"
+ *  [in]  max # of bytes to put to "buf"
  * @return
  *  Zero on success, non-zero on error.  Vaguely related to BSD's
  *  inet_ntoa(). On error "buf" returned emptied (buf[0] == '\0').
@@ -1560,7 +1652,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ SOCK_isip
 
 /** See man for the BSDisms, htonl() and htons().
  * @param value
- * 
+ *
  */
 extern NCBI_XCONNECT_EXPORT unsigned int SOCK_HostToNetLong
 (unsigned int value
@@ -1570,7 +1662,7 @@ extern NCBI_XCONNECT_EXPORT unsigned int SOCK_HostToNetLong
 
 /** 
  * @param value
- * 
+ *
  */
 extern NCBI_XCONNECT_EXPORT unsigned short SOCK_HostToNetShort
 (unsigned short value
@@ -1604,7 +1696,7 @@ unsigned short SOCK_htons(unsigned short);
  *  @li <b>NOTE:</b> "0.0.0.0" and "255.255.255.255" are considered invalid.
  */
 extern NCBI_XCONNECT_EXPORT unsigned int SOCK_gethostbyname
-(const char* hostname \
+(const char* hostname
  );
 
 
@@ -1612,11 +1704,11 @@ extern NCBI_XCONNECT_EXPORT unsigned int SOCK_gethostbyname
  * the provided buffer with the name, which the address corresponds to
  * (in case of multiple names the primary name is used).
  * @param addr
- *  [in] host address in network byte order
+ *  [in]  host address in network byte order
  * @param name
  *  [out] buffer to put the name to 
  * @param namelen
- *  [in] size (bytes) of the buffer above 
+ *  [in]  size (bytes) of the buffer above 
  * @return
  *  Value 0
  *  means error, while success is denoted by the 'name' argument returned.
@@ -1675,13 +1767,13 @@ extern NCBI_XCONNECT_EXPORT const char* SOCK_StringToHostPort
 /** Print host:port into provided buffer string, not to exceed 'buflen' size.
  * Suppress printing host if parameter 'host' is zero.
  * @param host
- * 
+ *
  * @param port
- * 
+ *
  * @param buf
- * 
+ *
  * @param buflen
- * 
+ *
  * @return
  *  Number of bytes printed.
  */

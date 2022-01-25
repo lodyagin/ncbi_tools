@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_socket.c,v 6.40 2009/05/04 15:54:29 kazimird Exp $
+/* $Id: test_ncbi_socket.c,v 6.53 2010/06/10 19:19:46 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,16 +30,8 @@
  *
  */
 
-#include "../ncbi_config.h"
-#include "../ncbi_priv.h"
-
-/* OS must be specified in the command-line ("-D....") or in the conf. header
- */
-#if !defined(NCBI_OS_UNIX) && !defined(NCBI_OS_MSWIN)
-#  error "Unknown OS, must be one of NCBI_OS_UNIX, NCBI_OS_MSWIN!"
-#endif
-
 #include <connect/ncbi_socket.h>
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <stdlib.h>
 #include <string.h>
 #if defined(NCBI_OS_UNIX)
@@ -53,6 +45,12 @@
 #endif
 /* This header must go last */
 #include "test_assert.h"
+
+/* OS must be specified in the command-line ("-D....") or in the conf. header
+ */
+#if !defined(NCBI_OS_UNIX) && !defined(NCBI_OS_MSWIN)
+#  error "Unknown OS, must be one of NCBI_OS_UNIX, NCBI_OS_MSWIN!"
+#endif
 
 #define MIN_PORT 4096
 #define DEF_PORT 5555
@@ -124,7 +122,6 @@ static void TEST__client_1(SOCK sock)
     assert(SOCK_Status(sock, eIO_Read) == eIO_Success);
     assert(strcmp(buf, s_S1) == 0);
 
-    SOCK_SetDataLoggingAPI(eDefault);
     SOCK_SetDataLogging(sock, eDefault);
 
     /* Send a very big binary blob */
@@ -249,7 +246,6 @@ static void TEST__server_1(SOCK sock)
                            &n_io_done, eIO_ReadPersist);
         assert(status == eIO_Success  &&  n_io_done == DO_LOG_SIZE);
         SOCK_SetDataLogging(sock, eDefault);
-        SOCK_SetDataLoggingAPI(eDefault);
 
         for (n_io = 0;  n_io < BIG_BLOB_SIZE;  n_io++)
             assert(blob[n_io] == (unsigned char) n_io);
@@ -258,8 +254,6 @@ static void TEST__server_1(SOCK sock)
 
     /* Receive a very big binary blob, and write data back */
     {{
-#define DO_LOG_SIZE    300
-#define DONT_LOG_SIZE  BIG_BLOB_SIZE - DO_LOG_SIZE
         unsigned char* blob = (unsigned char*) malloc(BIG_BLOB_SIZE);
         int i;
         for (i = 0;  i < 10;  i++) {
@@ -300,13 +294,13 @@ static void TEST__server_1(SOCK sock)
  *      "TEST__server_2(SOCK sock)"
  */
 
-static void s_DoubleTimeout(STimeout *to) {
-    if (!to->sec  &&  !to->usec) {
-        to->usec = 1;
-    } else {
-        to->sec   = 2 * to->sec + (2 * to->usec) / 1000000;
+static void s_DoubleTimeout(STimeout *to)
+{
+    if (to->sec | to->usec) {
+        to->sec  = (2 * to->usec) / 1000000 + 2 * to->sec;
         to->usec = (2 * to->usec) % 1000000;
-    }
+    } else
+        to->usec = 1;
 }
 
 
@@ -320,7 +314,9 @@ static void TEST__client_2(SOCK sock)
     size_t     n_io, n_io_done, i;
     char       buf[W_FIELD * N_FIELD + 1];
 
-    CORE_LOG(eLOG_Note, "TEST__client_2(TC2)");
+    CORE_LOGF(eLOG_Note,
+              ("TEST__client_2(TC2) @:%hu",
+               SOCK_GetLocalPort(sock, eNH_HostByteOrder)));
 
     /* fill out a buffer to send to server */
     memset(buf, 0, sizeof(buf));
@@ -333,7 +329,7 @@ static void TEST__client_2(SOCK sock)
         char        buf1[sizeof(buf)];
         STimeout    w_to, r_to;
         int/*bool*/ w_timeout_on = (int)(i%2); /* if to start from     */
-        int/*bool*/ r_timeout_on = (int)(i%3); /* zero or inf. timeout */
+        int/*bool*/ r_timeout_on = (int)(i%2); /* zero or inf. timeout */
         char*       x_buf;
 
         /* set timeout */
@@ -347,9 +343,12 @@ static void TEST__client_2(SOCK sock)
         if ((i % N_RECONNECT) == 0) {
             size_t j = i / N_RECONNECT;
             do {
+                SOCK_SetDataLogging(sock, eOn);
                 status = SOCK_Reconnect(sock, 0, 0, 0);
+                SOCK_SetDataLogging(sock, eDefault);
                 CORE_LOGF(eLOG_Note,
-                          ("TEST__client_2::reconnect: i=%lu, j=%lu, status=%s",
+                          ("TC2::reconnect @:%hu: i=%lu, j=%lu, status=%s",
+                           SOCK_GetLocalPort(sock, eNH_HostByteOrder),
                            (unsigned long) i, (unsigned long) j,
                            IO_StatusStr(status)));
                 assert(status == eIO_Success);
@@ -375,11 +374,10 @@ static void TEST__client_2(SOCK sock)
             CORE_LOGF(eLOG_Note,
                       ("TC2::write:"
                        " i=%d, status=%7s, n_io=%5lu, n_io_done=%5lu"
-                       " timeout(%d): %5lu sec, %6lu msec",
-                       (int)i, IO_StatusStr(status),
-                       (unsigned long)n_io, (unsigned long)n_io_done,
-                       (int)w_timeout_on,
-                       (unsigned long)w_to.sec, (unsigned long)w_to.usec));
+                       " timeout(%d): %5u.%06us",
+                       (int) i, IO_StatusStr(status),
+                       (unsigned long) n_io, (unsigned long) n_io_done,
+                       (int) w_timeout_on, w_to.sec, w_to.usec));
             if ( !w_timeout_on ) {
                 assert(status == eIO_Success  &&  n_io_done == n_io);
             } else {
@@ -400,7 +398,7 @@ static void TEST__client_2(SOCK sock)
         /* get back the just sent data */
         r_to.sec  = 0;
         r_to.usec = 0;
-        status = SOCK_SetTimeout(sock, eIO_Read, (r_timeout_on ? &r_to : 0));
+        status = SOCK_SetTimeout(sock, eIO_Read, r_timeout_on ? &r_to : 0);
         assert(status == eIO_Success);
 
         x_buf = buf1;
@@ -424,12 +422,12 @@ static void TEST__client_2(SOCK sock)
                 CORE_LOG(eLOG_Fatal, "TC2::read: connection closed");
             }
             CORE_LOGF(eLOG_Note,
-                      ("TC2::read:"
+                      ("TC2::read: "
                        " i=%d, status=%7s, n_io=%5lu, n_io_done=%5lu"
-                       " timeout(%d): %5u sec, %6u usec",
-                       (int)i, IO_StatusStr(status),
-                       (unsigned long)n_io, (unsigned long)n_io_done,
-                       (int)r_timeout_on, r_to.sec, r_to.usec));
+                       " timeout(%d): %5u.%06us",
+                       (int) i, IO_StatusStr(status),
+                       (unsigned long) n_io, (unsigned long) n_io_done,
+                       (int) r_timeout_on, r_to.sec, r_to.usec));
             if ( !r_timeout_on ) {
                 assert(status == eIO_Success  &&  n_io_done > 0);
             } else {
@@ -593,6 +591,8 @@ static void TEST__client(const char*     server_host,
     /* Connect to server */
     status = SOCK_Create(server_host, server_port, timeout, &sock);
     assert(status == eIO_Success);
+    verify(SOCK_SetTimeout(sock, eIO_ReadWrite, timeout) == eIO_Success);
+    verify(SOCK_SetTimeout(sock, eIO_Close,     timeout) == eIO_Success);
 
     /* Test the simplest randezvous(plain request-reply)
      * The two peer functions are:
@@ -610,7 +610,7 @@ static void TEST__client(const char*     server_host,
     status = SOCK_Close(sock);
     assert(status == eIO_Success  ||  status == eIO_Closed);
 
-    CORE_LOG(eLOG_Note, "TEST COMPLETED");
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
 }
 
 
@@ -636,8 +636,6 @@ static void TEST__server(unsigned short port)
         assert(status == eIO_Success);
 
         assert(SOCK_GetPeerAddressString  (sock, full,sizeof(full)));
-        SOCK_GetPeerAddressStringEx(sock, addr,sizeof(addr),eSAF_IP);
-        printf("ADDR = %s\n", addr);
         assert(SOCK_GetPeerAddressStringEx(sock, addr,sizeof(addr),eSAF_IP));
         assert(SOCK_GetPeerAddressStringEx(sock, port,sizeof(port),eSAF_Port));
         assert(strcmp(full, strcat(strcat(addr, ":"), port)) == 0);
@@ -917,14 +915,6 @@ extern int main(int argc, char** argv)
     argc = 3;
 #endif
 
-    /* Printout local hostname */
-    {{
-        char local_host[64];
-        assert(SOCK_gethostname(local_host, sizeof(local_host)) == 0);
-        CORE_LOGF(eLOG_Note,
-                  ("Running NCBISOCK test on host \"%s\"", local_host));
-    }}
-
     /* Parse cmd.-line args and decide whether it's a client or a server
      */
     switch ( argc ) {
@@ -936,9 +926,23 @@ extern int main(int argc, char** argv)
         CORE_SetLOCK(0);
         CORE_SetLOCK( MT_LOCK_Create(&TEST_LockUserData,
                                      TEST_LockHandler, TEST_LockCleanup) );
+
+        SOCK_SetDataLoggingAPI(eOn);
+        assert(SOCK_InitializeAPI() == eIO_Success);
+        SOCK_SetDataLoggingAPI(eOff);
+
+        {{
+            char local_host[64];
+            assert(SOCK_gethostname(local_host, sizeof(local_host)) == 0);
+            CORE_LOGF(eLOG_Note,
+                      ("Running NCBISOCK test on host \"%s\"", local_host));
+        }}
+
         TEST_gethostby();
 
         TEST_SOCK_isip();
+
+        assert(SOCK_ShutdownAPI() == eIO_Success);
 
         CORE_SetLOCK(0);
         break;

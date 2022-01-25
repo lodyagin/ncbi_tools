@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.112 $
+* $Revision: 1.123 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -138,8 +138,10 @@ typedef struct int_asn2gb_job {
   Boolean         masterStyle;
   Boolean         newSourceOrg;
   Boolean         produceInsdSeq;
+  Boolean         oldXmlPolicy;
   Boolean         refseqConventions;
   ValNodePtr      lockedBspList;
+  ValNodePtr      fargaps;
   ValNodePtr      gapvnp;
   ValNodePtr      remotevnp;
   Asn2gbLockFunc  remotelock;
@@ -157,11 +159,13 @@ typedef struct int_asn2gb_job {
   Boolean         www;
   Boolean         specialGapFormat;
   Boolean         hideGoTerms;
+  Boolean         multiIntervalGenes;
   Boolean         reindex;
   Int4            seqGapCurrLen;
   ValNodePtr      gihead;
   ValNodePtr      gitail;
   TextFsaPtr      bad_html_fsa;
+  Boolean         seqspans;
 } IntAsn2gbJob, PNTR IntAsn2gbJobPtr;
 
 /* array for assigning biosource and feature data fields to qualifiers */
@@ -306,6 +310,8 @@ typedef struct asn2gbwork {
 
   Char             basename [SEQID_MAX_LEN];
 
+  ValNodePtr       currfargap;
+
   SeqFeatPtr       lastsfp;
   SeqAnnotPtr      lastsap;
   Int4             lastleft;
@@ -384,14 +390,16 @@ typedef struct int_src_block {
 
 typedef struct int_feat_block {
   FeatBlock  fb;
-  Boolean     mapToNuc;
-  Boolean     mapToProt;
-  Boolean     mapToGen;
-  Boolean     mapToMrna;
-  Boolean     mapToPep;
-  Boolean     isCDS;     /* set if using IntCdsBlock */
-  Boolean     isPrt;     /* set if using IntPrtBlock */
-  Boolean     firstfeat;
+  Boolean    mapToNuc;
+  Boolean    mapToProt;
+  Boolean    mapToGen;
+  Boolean    mapToMrna;
+  Boolean    mapToPep;
+  Boolean    isCDS;     /* set if using IntCdsBlock */
+  Boolean    isPrt;     /* set if using IntPrtBlock */
+  Boolean    firstfeat;
+  Int4       left;
+  Int4       right;
 } IntFeatBlock, PNTR IntFeatBlockPtr;
 
 /* internal cds block has fields on top of IntFeatBlock fields */
@@ -600,6 +608,7 @@ NLM_EXTERN SourceType orgModToSourceIdx [41];
 typedef enum {
   FTQUAL_allele = 1,
   FTQUAL_anticodon,
+  FTQUAL_artificial_location,
   FTQUAL_bond,
   FTQUAL_bond_type,
   FTQUAL_bound_moiety,
@@ -785,6 +794,8 @@ NLM_EXTERN BaseBlockPtr Asn2gbAddBlock (
 NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp);
 NLM_EXTERN void FiniWWW (IntAsn2gbJobPtr ajp);
 NLM_EXTERN Boolean GetWWW (IntAsn2gbJobPtr ajp);
+
+NLM_EXTERN Boolean CommentHasSuspiciousHtml (IntAsn2gbJobPtr ajp, CharPtr searchString);
 
 NLM_EXTERN StringItemPtr FFGetString (IntAsn2gbJobPtr ajp);
 NLM_EXTERN void FFRecycleString (IntAsn2gbJobPtr ajp, StringItemPtr ffstring);
@@ -1018,7 +1029,8 @@ NLM_EXTERN CharPtr FFFlatLoc (
   IntAsn2gbJobPtr ajp,
   BioseqPtr bsp,
   SeqLocPtr location,
-  Boolean masterStyle
+  Boolean masterStyle,
+  Boolean isGap
 );
 
 NLM_EXTERN void FF_www_featloc(StringItemPtr ffstring, CharPtr loc);
@@ -1131,6 +1143,7 @@ NLM_EXTERN void AddFeatureBlock (
 NLM_EXTERN void AddLocusBlock (
   Asn2gbWorkPtr awp,
   Boolean willshowwgs,
+  Boolean willshowcage,
   Boolean willshowgenome,
   Boolean willshowcontig,
   Boolean willshowsequence
@@ -1180,6 +1193,9 @@ NLM_EXTERN void AddSourceFeatBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddWGSBlock (
+  Asn2gbWorkPtr awp
+);
+NLM_EXTERN void AddCAGEBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddGenomeBlock (

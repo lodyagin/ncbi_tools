@@ -1,4 +1,4 @@
-/*  $Id: ncbi_file_connector.c,v 6.14 2006/01/11 20:21:22 lavr Exp $
+/* $Id: ncbi_file_connector.c,v 6.15 2010/02/01 13:54:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,8 +47,8 @@
 /* All internal data necessary to perform the (re)connect and i/o
  */
 typedef struct {
-    char*         inp_file_name;
-    char*         out_file_name;
+    const char*   inp_file_name;
+    const char*   out_file_name;
     FILE*         finp;
     FILE*         fout;
     SFileConnAttr attr;
@@ -87,11 +87,6 @@ extern "C" {
     static void        s_Setup      (SMetaConnector* meta,
                                      CONNECTOR       connector);
     static void        s_Destroy    (CONNECTOR       connector);
-#  ifdef IMPLEMENTED__CONN_WaitAsync
-    static EIO_Status s_VT_WaitAsync(void*                   connector,
-                                     FConnectorAsyncHandler  func,
-                                     SConnectorAsyncHandler* data);
-#  endif
 #ifdef __cplusplus
 } /* extern "C" */
 #endif /* __cplusplus */
@@ -111,29 +106,32 @@ static EIO_Status s_VT_Open
  const STimeout* timeout)
 {
     SFileConnector* xxx = (SFileConnector*) connector->handle;
-    const char*     mode = 0;
+    const char*     mode;
 
-    /* if connected already, and trying to reconnect */
-    if (xxx->finp  &&  xxx->fout)
-        return eIO_Success;
+    assert(!xxx->finp  &&  !xxx->fout);
 
     /* open file for output */
     switch ( xxx->attr.w_mode ) {
     case eFCM_Truncate:
-        mode = "wb";  break;
-    case eFCM_Seek: /* mode = "rb+"; break; */
+        mode = "wb";
+        break;
+    case eFCM_Seek:
+        /* mode = "rb+"; break; */
     case eFCM_Append:
-        mode = "ab";  break;
+        mode = "ab";
+        break;
+    default:
+        return eIO_InvalidArg;
     }
 
-    if (!xxx->out_file_name  ||
-        !(xxx->fout = fopen(xxx->out_file_name, mode))) {
+    if (!xxx->out_file_name
+        ||  !(xxx->fout = fopen(xxx->out_file_name, mode))) {
         return eIO_Unknown;
     }
 
     /* open file for input */
-    if (!xxx->inp_file_name  ||
-        !(xxx->finp = fopen(xxx->inp_file_name, "rb"))) {
+    if (!xxx->inp_file_name
+        ||  !(xxx->finp = fopen(xxx->inp_file_name, "rb"))) {
         fclose(xxx->fout);
         xxx->fout = 0;
         return eIO_Unknown;
@@ -142,54 +140,6 @@ static EIO_Status s_VT_Open
     /* Due to shortage of portable 'fseek' call ignore positioning for now;
      * only 0/EOF are in use for writing, and only 0 for reading
      */
-    return eIO_Success;
-}
-
-
-/*ARGSUSED*/
-static EIO_Status s_VT_Write
-(CONNECTOR       connector,
- const void*     buf,
- size_t          size,
- size_t*         n_written,
- const STimeout* timeout)
-{
-    SFileConnector* xxx = (SFileConnector*) connector->handle;
-
-    if ( !size ) {
-        *n_written = 0;
-        return eIO_Success;
-    }
-
-    *n_written = fwrite(buf, 1, size, xxx->fout);
-    if ( !*n_written ) {
-        return eIO_Unknown;
-    }
-
-    return eIO_Success;
-}
-
-
-/*ARGSUSED*/
-static EIO_Status s_VT_Read
-(CONNECTOR       connector,
- void*           buf,
- size_t          size,
- size_t*         n_read,
- const STimeout* timeout)
-{
-    SFileConnector* xxx = (SFileConnector*) connector->handle;
-
-    if ( !size ) {
-        *n_read = 0;
-        return eIO_Success;
-    }
-
-    *n_read = fread(buf, 1, size, xxx->finp);
-    if ( !*n_read ) {
-        return feof(xxx->finp) ? eIO_Closed : eIO_Unknown;
-    }
-
     return eIO_Success;
 }
 
@@ -205,16 +155,57 @@ static EIO_Status s_VT_Wait
 
 
 /*ARGSUSED*/
+static EIO_Status s_VT_Write
+(CONNECTOR       connector,
+ const void*     buf,
+ size_t          size,
+ size_t*         n_written,
+ const STimeout* timeout)
+{
+    SFileConnector* xxx = (SFileConnector*) connector->handle;
+
+    assert(xxx->fout  &&  *n_written == 0);
+
+    if (!size)
+        return eIO_Success;
+
+    *n_written = fwrite(buf, 1, size, xxx->fout);
+
+    return *n_written ? eIO_Success : eIO_Unknown;
+}
+
+
+/*ARGSUSED*/
 static EIO_Status s_VT_Flush
 (CONNECTOR       connector,
  const STimeout* timeout)
 {
     SFileConnector* xxx = (SFileConnector*) connector->handle;
 
-    if (fflush(xxx->fout) != 0)
-        return eIO_Unknown;
+    assert(xxx->fout);
 
-    return eIO_Success;
+    return fflush(xxx->fout) != 0 ? eIO_Unknown : eIO_Success;
+}
+
+
+/*ARGSUSED*/
+static EIO_Status s_VT_Read
+(CONNECTOR       connector,
+ void*           buf,
+ size_t          size,
+ size_t*         n_read,
+ const STimeout* timeout)
+{
+    SFileConnector* xxx = (SFileConnector*) connector->handle;
+
+    assert(xxx->finp  &&  *n_read == 0);
+
+    if (!size)
+        return eIO_Success;
+
+    *n_read = fread(buf, 1, size, xxx->finp);
+
+    return *n_read ? eIO_Success : feof(xxx->finp) ? eIO_Closed : eIO_Unknown;
 }
 
 
@@ -223,12 +214,20 @@ static EIO_Status s_VT_Status
  EIO_Event dir)
 {
     SFileConnector* xxx = (SFileConnector*) connector->handle;
-    assert(dir == eIO_Read || dir == eIO_Write);
-    if (dir == eIO_Read)
-        return feof(xxx->finp) ? eIO_Closed :
-        (ferror(xxx->finp) ? eIO_Unknown : eIO_Success);
-    else
-        return ferror(xxx->fout) ?  eIO_Unknown : eIO_Success;
+
+    switch (dir) {
+    case eIO_Read:
+        assert(xxx->finp);
+        return feof(xxx->finp) ? eIO_Closed
+            : ferror(xxx->finp) ? eIO_Unknown : eIO_Success;
+    case eIO_Write:
+        assert(xxx->fout);
+        return ferror(xxx->fout) ? eIO_Unknown : eIO_Success;
+    default:
+        assert(0);
+        break;
+    }
+    return eIO_InvalidArg;
 }
 
 
@@ -238,10 +237,15 @@ static EIO_Status s_VT_Close
  const STimeout* timeout)
 {
     SFileConnector* xxx = (SFileConnector*) connector->handle;
+    EIO_Status status;
 
-    fclose(xxx->finp);
+    assert(xxx->finp  &&  xxx->fout);
+
+    if (fclose(xxx->finp) != 0)
+        status = eIO_Unknown;
     xxx->finp = 0;
-    fclose(xxx->fout);
+    if (fclose(xxx->fout) != 0)
+        status = eIO_Unknown;
     xxx->fout = 0;
     return eIO_Success;
 }
@@ -252,18 +256,15 @@ static void s_Setup
  CONNECTOR       connector)
 {
     /* initialize virtual table */
-    CONN_SET_METHOD(meta, get_type,   s_VT_GetType,   connector);
-    CONN_SET_METHOD(meta, open,       s_VT_Open,      connector);
-    CONN_SET_METHOD(meta, wait,       s_VT_Wait,      connector);
-    CONN_SET_METHOD(meta, write,      s_VT_Write,     connector);
-    CONN_SET_METHOD(meta, flush,      s_VT_Flush,     connector);
-    CONN_SET_METHOD(meta, read,       s_VT_Read,      connector);
-    CONN_SET_METHOD(meta, status,     s_VT_Status,    connector);
-    CONN_SET_METHOD(meta, close,      s_VT_Close,     connector);
-#ifdef IMPLEMENTED__CONN_WaitAsync
-    CONN_SET_METHOD(meta, wait_async, s_VT_WaitAsync, connector);
-#endif
-    meta->default_timeout = 0/*infinite*/;
+    CONN_SET_METHOD(meta, get_type, s_VT_GetType, connector);
+    CONN_SET_METHOD(meta, open,     s_VT_Open,    connector);
+    CONN_SET_METHOD(meta, wait,     s_VT_Wait,    connector);
+    CONN_SET_METHOD(meta, write,    s_VT_Write,   connector);
+    CONN_SET_METHOD(meta, flush,    s_VT_Flush,   connector);
+    CONN_SET_METHOD(meta, read,     s_VT_Read,    connector);
+    CONN_SET_METHOD(meta, status,   s_VT_Status,  connector);
+    CONN_SET_METHOD(meta, close,    s_VT_Close,   connector);
+    meta->default_timeout = kInfiniteTimeout;
 }
 
 
@@ -271,11 +272,17 @@ static void s_Destroy
 (CONNECTOR connector)
 {
     SFileConnector* xxx = (SFileConnector*) connector->handle;
-    
-    free(xxx->inp_file_name);
-    free(xxx->out_file_name);
-    free(xxx);
     connector->handle = 0;
+
+    if (xxx->inp_file_name) {
+        free((void*) xxx->inp_file_name);
+        xxx->inp_file_name = 0;
+    }
+    if (xxx->out_file_name) {
+        free((void*) xxx->out_file_name);
+        xxx->out_file_name = 0;
+    }
+    free(xxx);
     free(connector);
 }
 
@@ -308,7 +315,7 @@ extern CONNECTOR FILE_CreateConnectorEx
     xxx->finp          = 0;
     xxx->fout          = 0;
 
-    memcpy(&xxx->attr, attr, sizeof(SFileConnAttr));
+    memcpy(&xxx->attr, attr, sizeof(xxx->attr));
 
     /* initialize connector data */
     ccc->handle  = xxx;
@@ -319,53 +326,3 @@ extern CONNECTOR FILE_CreateConnectorEx
 
     return ccc;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_file_connector.c,v $
- * Revision 6.14  2006/01/11 20:21:22  lavr
- * Uniform creation/fill-up of connector structures
- *
- * Revision 6.13  2005/04/20 18:15:59  lavr
- * +<assert.h>
- *
- * Revision 6.12  2003/05/31 05:14:56  lavr
- * Add ARGSUSED where args are meant to be unused
- *
- * Revision 6.11  2003/05/14 03:55:53  lavr
- * Slight VT table reformatting
- *
- * Revision 6.10  2002/10/28 15:46:20  lavr
- * Use "ncbi_ansi_ext.h" privately
- *
- * Revision 6.9  2002/10/22 15:11:24  lavr
- * Zero connector's handle to crash if revisited
- *
- * Revision 6.8  2002/09/24 15:06:00  lavr
- * Log moved to end
- *
- * Revision 6.7  2002/04/26 16:32:36  lavr
- * Added setting of default timeout in meta-connector's setup routine
- *
- * Revision 6.6  2001/12/04 15:56:35  lavr
- * Use strdup() instead of explicit strcpy(malloc(...), ...)
- *
- * Revision 6.5  2001/01/25 17:04:43  lavr
- * Reversed:: DESTROY method calls free() to delete connector structure
- *
- * Revision 6.4  2001/01/23 23:11:20  lavr
- * Status virtual method implemented
- *
- * Revision 6.3  2001/01/11 16:38:16  lavr
- * free(connector) removed from s_Destroy function
- * (now always called from outside, in METACONN_Remove)
- *
- * Revision 6.2  2000/12/29 17:55:53  lavr
- * Adapted for use of new connector structure.
- *
- * Revision 6.1  2000/04/12 15:18:13  vakatov
- * Initial revision
- *
- * ==========================================================================
- */

@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_ftp_connector.c,v 1.17 2008/10/21 19:25:44 kazimird Exp $
+/* $Id: test_ncbi_ftp_connector.c,v 1.26 2010/06/04 14:59:37 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,14 @@
  *
  */
 
-#include "../ncbi_ansi_ext.h"
-#include "../ncbi_priv.h"
-#include <connect/ncbi_connection.h>
 #include <connect/ncbi_connutil.h>
 #include <connect/ncbi_ftp_connector.h>
+#include "../ncbi_ansi_ext.h"
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <stdlib.h>
+#ifdef HAVE_GETTIMEOFDAY
+#  include <sys/time.h>
+#endif /*HAVE_GETTIMEOFDAY*/
 #include <time.h>
 /* This header must go last */
 #include "test_assert.h"
@@ -45,6 +47,18 @@
 #define TEST_USER "ftp"
 #define TEST_PASS "none"
 #define TEST_PATH ((char*) 0)
+
+
+static double s_GetTime(void)
+{
+#ifdef HAVE_GETTIMEOFDAY
+    struct timeval t;
+    return gettimeofday(&t, 0) == 0 ? t.tv_sec + t.tv_usec / 1000000.0 : 0.0;
+#else
+    time_t t = time(0);
+    return (double)((unsigned long) t);
+#endif /*HAVE_GETTIMEOFDAY*/
+}
 
 
 int main(int argc, char* argv[])
@@ -59,6 +73,7 @@ int main(int argc, char* argv[])
     FILE*         data_file;
     size_t        size, n;
     EIO_Status    status;
+    double        elapse;
     CONN          conn;
 
     g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
@@ -68,20 +83,19 @@ int main(int argc, char* argv[])
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
-    data_file = fopen("test_ncbi_ftp_connector.out", "wb");
+    data_file = fopen("test_ncbi_ftp_connector.dat", "wb");
     assert(data_file);
 
     assert((net_info = ConnNetInfo_Create(0)) != 0);
     if (net_info->debug_printout == eDebugPrintout_Some)
         flag |= fFCDC_LogControl;
-    else if (net_info->debug_printout == eDebugPrintout_Data)
-        flag |= fFCDC_LogData;
-    else {
+    else if (net_info->debug_printout == eDebugPrintout_Data) {
         char val[32];
-        ConnNetInfo_GetValue(0, REG_CONN_DEBUG_PRINTOUT, val, sizeof(val), "");
-        if (strcasecmp(val, "ALL") == 0)
-            flag |= fFCDC_LogAll;
+        ConnNetInfo_GetValue(0, REG_CONN_DEBUG_PRINTOUT, val, sizeof(val),
+                             DEF_CONN_DEBUG_PRINTOUT);
+        flag |= strcasecmp(val, "all") == 0 ? fFCDC_LogAll : fFCDC_LogData;
     }
+    flag |= fFCDC_UseFeatures;
 
     if (TEST_PORT) {
         sprintf(buf, ":%hu", TEST_PORT);
@@ -111,13 +125,23 @@ int main(int argc, char* argv[])
     if (CONN_Write(conn, "aaa", 3, &n, eIO_WritePlain) != eIO_Success)
         CORE_LOG(eLOG_Fatal, "Cannot write FTP command");
 
-    if (CONN_Wait(conn, eIO_Read, net_info->timeout) != eIO_Unknown)
+    if (CONN_Wait(conn, eIO_Read, net_info->timeout) != eIO_NotSupported)
         CORE_LOG(eLOG_Fatal, "Test failed in waiting on READ");
-    CORE_LOG(eLOG_Note, "Unrecognized command was correctly rejected");
+    CORE_LOG(eLOG_Note, "Unrecognized command correctly rejected");
 
     if (CONN_Write(conn, "LIST\nSIZE", 9, &n, eIO_WritePlain) != eIO_Unknown)
         CORE_LOG(eLOG_Fatal, "Test failed to reject multiple commands");
-    CORE_LOG(eLOG_Note, "Multiple commands were correctly rejected");
+    CORE_LOG(eLOG_Note, "Multiple commands correctly rejected");
+
+    status = CONN_Write(conn, "SIZE 1GB\n", 9, &n, eIO_WritePersist);
+    if (status == eIO_Success) {
+        char buf[128];
+        CONN_ReadLine(conn, buf, sizeof(buf) - 1, &n);
+        CORE_LOGF(eLOG_Note, ("SIZE file: %.*s", (int) n, buf));
+    } else {
+        CORE_LOGF(eLOG_Note, ("SIZE command not accepted: %s",
+                              IO_StatusStr(status)));
+    }
 
     if (CONN_Write(conn, "LIST", 4, &n, eIO_WritePlain) != eIO_Success)
         CORE_LOG(eLOG_Fatal, "Cannot write LIST command");
@@ -129,10 +153,12 @@ int main(int argc, char* argv[])
         if (n != 0) {
             printf("%.*s", (int) n, buf);
             first = 0/*false*/;
+            fflush(stdout);
         }
     } while (status == eIO_Success);
-    if (first) {
-        printf("<EOF>\n");
+    if (first  ||  status != eIO_Closed) {
+        printf("<%s>\n", status != eIO_Success ? IO_StatusStr(status) : "EOF");
+        fflush(stdout);
     }
 
     if (CONN_Write(conn, "NLST\r\n", 6, &n, eIO_WritePlain) != eIO_Success)
@@ -145,10 +171,25 @@ int main(int argc, char* argv[])
         if (n != 0) {
             printf("%.*s", (int) n, buf);
             first = 0/*false*/;
-        }
+            fflush(stdout);
+        } else
+            assert(status != eIO_Success);
     } while (status == eIO_Success);
-    if (first) {
-        printf("<EOF>\n");
+    if (first  ||  status != eIO_Closed) {
+        printf("<%s>\n", status != eIO_Success ? IO_StatusStr(status) : "EOF");
+        fflush(stdout);
+    }
+
+    if (CONN_Write(conn, "SIZE ", 5, &n, eIO_WritePlain) != eIO_Success)
+        CORE_LOG(eLOG_Fatal, "Cannot write SIZE directory command");
+    size = strlen(kChdir + 4);
+    if (CONN_Write(conn, kChdir + 4, size, &n, eIO_WritePersist)==eIO_Success){
+        char buf[128];
+        CONN_ReadLine(conn, buf, sizeof(buf) - 1, &n);
+        CORE_LOGF(eLOG_Note, ("SIZE directory returned: %.*s", (int) n, buf));
+    } else {
+        CORE_LOGF(eLOG_Note, ("SIZE directory not accepted: %s",
+                              IO_StatusStr(status)));
     }
 
     if (CONN_Write(conn, kChdir, sizeof(kChdir) - 1, &n, eIO_WritePlain)
@@ -157,23 +198,51 @@ int main(int argc, char* argv[])
                                (int) sizeof(kChdir) - 2, kChdir));
     }
 
+    size = strlen(kFile + 5);
+    if ((status = CONN_Write(conn, "MDTM ", 5, &n, eIO_WritePlain))
+        == eIO_Success  &&
+        (status = CONN_Write(conn, kFile + 5, size, &n, eIO_WritePersist))
+        == eIO_Success) {
+        unsigned long val;
+        char buf[128];
+        CONN_ReadLine(conn, buf, sizeof(buf) - 1, &n);
+        if (n  &&  sscanf(buf, "%lu", &val) > 0) {
+            struct tm* tm;
+            time_t t = (time_t) val;
+            if ((tm = localtime(&t)) != 0)
+                n = strftime(buf, sizeof(buf), "%m/%d/%Y %H:%M:%S", tm);
+        }
+        CORE_LOGF(eLOG_Note, ("MDTM returned: %.*s", (int) n, buf));
+    } else {
+        CORE_LOGF(eLOG_Note, ("MDTM command not accepted: %s",
+                              IO_StatusStr(status)));
+    }
+
     if (CONN_Write(conn, kFile, sizeof(kFile) - 1, &n, eIO_WritePersist)
         != eIO_Success) {
         CORE_LOGF(eLOG_Fatal, ("Cannot write %s", kFile));
     }
 
     size = 0;
+    elapse = s_GetTime();
     do {
         status = CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPlain);
         if (n != 0) {
             fwrite(buf, n, 1, data_file);
+            fflush(data_file);
             size += n;
-        }
-        if (argc > 1  &&  rand() % 100 == 0) {
-            aborting = 1;
-            break;
+            rand();
+            if (argc > 1  &&  rand() % 100 == 0) {
+                aborting = 1;
+                break;
+            }
+        } else {
+            assert(status != eIO_Success);
+            if (status != eIO_Closed  ||  !size)
+                CORE_LOGF(eLOG_Error, ("Read error: %s",IO_StatusStr(status)));
         }
     } while (status == eIO_Success);
+    elapse = s_GetTime() - elapse;
 
     if (!aborting  ||  (rand() & 1) == 0) {
         if (CONN_Write(conn, "NLST blah*", 10, &n, eIO_WritePlain)
@@ -188,10 +257,12 @@ int main(int argc, char* argv[])
             if (n != 0) {
                 printf("%.*s", (int) n, buf);
                 first = 0/*false*/;
+                fflush(stdout);
             }
         } while (status == eIO_Success);
         if (first) {
             printf("<EOF>\n");
+            fflush(stdout);
         }
     }
 
@@ -202,14 +273,16 @@ int main(int argc, char* argv[])
 
     /* Cleanup and exit */
     fclose(data_file);
-    if (aborting) {
-        remove("test_ncbi_ftp_connector.out");
-    } else {
-        CORE_LOGF(eLOG_Note, ("%lu bytes downloaded", (unsigned long) size));
-    }
-
-    CORE_LOG(eLOG_Note, "Test completed");
+    if (!aborting) {
+        CORE_LOGF(size ? eLOG_Note : eLOG_Fatal,
+                  ("%lu byte(s) downloaded in %.2f second(s) @ %.2fKB/s",
+                   (unsigned long) size, elapse,
+                   (unsigned long) size / (1024 * (elapse ? elapse : 1.0))));
+    } else
+        remove("test_ncbi_ftp_connector.dat");
     ConnNetInfo_Destroy(net_info);
+
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
     CORE_SetLOG(0);
     return 0;
 }

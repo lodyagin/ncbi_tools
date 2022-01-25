@@ -1,4 +1,4 @@
-/* $Id: ncbi_priv.c,v 6.14 2008/12/01 16:34:35 kazimird Exp $
+/* $Id: ncbi_priv.c,v 6.15 2010/02/03 19:09:43 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -60,6 +60,32 @@ extern int g_NCBI_ConnectSrandAddend(void)
     return SOCK_GetLocalHostAddress(eDefault);
 #endif /*NCBI_OS_...*/ 
 }
+
+
+#ifdef _DEBUG
+
+static MT_LOCK s_CoreLock = 0;
+
+extern int g_NCBI_CoreCheckLock(void)
+{
+    /* save last lock accessed */
+    s_CoreLock = g_CORE_MT_Lock;
+    return 1/*success*/;
+}
+
+
+extern int g_NCBI_CoreCheckUnlock(void)
+{
+    /* check that unlock operates on the same lock */
+    if (s_CoreLock != g_CORE_MT_Lock) {
+        CORE_LOG(eLOG_Critical, "Inconsistent use of CORE MT-Lock detected");
+        assert(0);
+        return 0/*failure*/;
+    }
+    return 1/*success*/;
+}
+
+#endif /*_DEBUG*/
 
 
 extern const char* g_CORE_Sprintf(const char* fmt, ...)

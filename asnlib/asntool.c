@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:
 *   Main routine for asntool.  Uses the ASN.1 library routines to perform
@@ -43,6 +43,9 @@
 *
 *
 * $Log: asntool.c,v $
+* Revision 6.17  2009/11/05 16:54:12  gouriano
+* Added option to use quoted syntax form to include headers. JIRA: CXX-1402
+*
 * Revision 6.16  2005/01/24 17:12:11  kans
 * added force_choice_struct (-V) to force struct plus object instead of ValNode for choices - for compatibility with old hand-coded object loaders
 *
@@ -138,7 +141,7 @@ extern void AsnTxtReadValFile PROTO((AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr ai
 extern void AsnBinReadValFile PROTO((AsnTypePtr atp, AsnIoPtr aip, AsnIoPtr aipout,
 				     AsnIoPtr encode, AsnIoPtr xaipout));
 
-#define NUMARGS 26
+#define NUMARGS 27
 
 Args asnargs[NUMARGS] = {
 	{"ASN.1 Module File",NULL,NULL,NULL,FALSE,'m',ARG_FILE_IN,0.0,0,NULL},
@@ -172,6 +175,8 @@ Args asnargs[NUMARGS] = {
    {"Force choice to use structure instead of ValNodePtr","F",NULL,NULL,TRUE,'V',ARG_BOOLEAN,0.0,0,NULL},
    /*-- not used now {"Asnload directory [for parsetrees]", NULL, NULL, NULL, TRUE, 'd', ARG_FILE_IN, 0.0, 0, NULL}, -----------*/
 
+   {"Use quoted syntax form for generated include files","F",NULL,NULL,TRUE,'Q',ARG_BOOLEAN,0.0,0,NULL},
+
 };
 
 Int2 Main (void)
@@ -190,7 +195,7 @@ Int2 Main (void)
 	, S_argDebugFileName = 18, I_argExtraIncludeName = 19
 	, Z_argBitTwiddle = 20, K_argLoadName = 21
 	, J_objMgrEntry = 22, L_objMgrLabel = 23, P_argXMLmodulePrefix = 24
-	, V_argChoiceStruct = 25;
+	, V_argChoiceStruct = 25, Q_argQuoted = 26;
 
 	AsnIoPtr aip = NULL,
 		aipout = NULL,
@@ -517,6 +522,7 @@ Int2 Main (void)
 	    } else {
 		(acip -> bug_fp) = FileOpen ("stderr", "w");
 	    }
+	    acip -> use_quoted_include = asnargs[Q_argQuoted ].intvalue != 0;
 	    AsnCode(acip);
 	}
 	

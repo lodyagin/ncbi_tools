@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.79 $
+* $Revision: 6.84 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -119,6 +119,7 @@ typedef unsigned long FlgType;
 #define SPECIAL_GAP_DISPLAY    65536
 
 #define FORCE_PRIMARY_BLOCK   131072
+#define FORCE_ALLOW_FAR_FEATS 262144
 
 /* locking behavior for system performance */
 
@@ -169,6 +170,9 @@ typedef unsigned long CstType;
 
 #define HIDE_EVIDENCE_QUALS   524288
 
+#define NEW_XML_POLICY       1048576
+#define OLD_GBSEQ_XML        2097152
+
 /* opaque pointer for special extensions */
 
 struct XtraData;
@@ -203,6 +207,12 @@ NLM_EXTERN Boolean BioseqToGnbk (
 );
 
 NLM_EXTERN CharPtr GetFlatFileAffilString (AffilPtr afp);
+
+NLM_EXTERN void PrintFTCodeBreak (
+  ValNodePtr PNTR head,
+  CodeBreakPtr cbp,
+  BioseqPtr target
+);
 
 #ifdef __cplusplus
 }

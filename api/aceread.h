@@ -2,7 +2,7 @@
 #define API_ACEREAD__H
 
 /*
- * $Id: aceread.h,v 1.12 2008/12/02 18:58:24 bollin Exp $
+ * $Id: aceread.h,v 1.13 2010/03/03 18:46:08 bollin Exp $
  *
  * ===========================================================================
  *
@@ -143,7 +143,7 @@ extern TContigPtr ContigNew (void);
 extern void ContigFree (TContigPtr c);
    
 typedef struct SACEFile {
-    int        num_contigs;
+    unsigned int num_contigs;
     TContigPtr * contigs;
 } SACEFile, * TACEFilePtr;
 
@@ -291,6 +291,9 @@ ProcessLargeACEFileForContigFastaAndQualScores
  * ==========================================================================
  *
  * $Log: aceread.h,v $
+ * Revision 1.13  2010/03/03 18:46:08  bollin
+ * use unsigned int to keep track of the number of contigs.
+ *
  * Revision 1.12  2008/12/02 18:58:24  bollin
  * Added argument to WriteTraceAssemblyHeader for assembly type.
  *

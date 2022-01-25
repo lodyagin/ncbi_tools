@@ -1,4 +1,4 @@
-/* $Id: index_ungapped.c,v 1.1 2007/03/30 14:56:05 kazimird Exp $
+/* $Id: index_ungapped.c,v 1.2 2009/10/01 17:55:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,7 +42,7 @@
 
     @return NULL.
   */
-ir_fp_entry * ir_fp_entry_destroy( ir_fp_entry * e )
+static ir_fp_entry * ir_fp_entry_destroy( ir_fp_entry * e )
 {
     if( e != 0 ) {
         free( e->entries );
@@ -57,7 +57,7 @@ ir_fp_entry * ir_fp_entry_destroy( ir_fp_entry * e )
 
     @return Pointer to a newly allocated free memory block.
 */
-ir_fp_entry * ir_fp_entry_create( void )
+static ir_fp_entry * ir_fp_entry_create( void )
 {
     ir_fp_entry * result = (ir_fp_entry *)malloc( sizeof( ir_fp_entry ) );
     

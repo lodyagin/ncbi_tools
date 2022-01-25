@@ -1,4 +1,4 @@
-/* $Id: blast_stat.c,v 1.163 2008/11/03 20:59:44 kazimird Exp $
+/* $Id: blast_stat.c,v 1.165 2009/09/30 17:19:47 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_stat.c,v 1.163 2008/11/03 20:59:44 kazimird Exp $";
+    "$Id: blast_stat.c,v 1.165 2009/09/30 17:19:47 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_stat.h>
@@ -774,6 +774,33 @@ SPsiBlastScoreMatrixNew(size_t ncols)
     }
 
     return retval;
+}
+
+int
+BlastScoreBlkCheck(BlastScoreBlk* sbp)
+{
+    int index = 0;
+    Boolean found = FALSE;
+
+    if (sbp == NULL)
+       return -1;
+    
+    if (sbp->kbp == NULL || sbp->sfp == NULL)
+      return 1;
+
+    for (index=0; index<sbp->number_of_contexts; index++)
+    {
+       if (sbp->kbp[index] || sbp->sfp[index])
+       {
+           found = TRUE;
+           break;
+       }
+    }
+
+    if (found)
+	return 0;
+    else
+        return 1;
 }
 
 /*

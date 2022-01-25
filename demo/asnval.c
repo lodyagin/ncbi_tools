@@ -29,11 +29,11 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.98 $
+* $Revision: 1.111 $
 *
 * File Description:
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
@@ -56,11 +56,12 @@
 #include <lsqfetch.h>
 #include <valid.h>
 #include <pmfapi.h>
+#include <gbftdef.h>
 #ifdef INTERNAL_NCBI_ASN2VAL
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "7.3"
+#define ASNVAL_APP_VER "8.6"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -84,8 +85,10 @@ typedef struct valflags {
   Boolean  inferenceAccnCheck;
   Boolean  testLatLonSubregion;
   Boolean  strictLatLonCountry;
+  Boolean  rubiscoTest;
   Boolean  indexerVersion;
   Boolean  automatic;
+  Boolean  catenated;
   Boolean  batch;
   Boolean  binary;
   Boolean  compressed;
@@ -134,7 +137,7 @@ extern Pointer ReadFromDirSub (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityI
 
   if (dirsubfetchcmd == NULL) {
     if (GetAppParam ("SEQUIN", "DIRSUB", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
-    	dirsubfetchcmd = StringSaveNoNull (cmmd);
+        dirsubfetchcmd = StringSaveNoNull (cmmd);
     }
   }
   if (dirsubfetchcmd == NULL) return NULL;
@@ -191,7 +194,7 @@ static Int2 LIBCALLBACK DirSubBioseqFetchFunc (Pointer data)
 
   if (dirsubfetchcmd == NULL) {
     if (GetAppParam ("SEQUIN", "DIRSUB", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
-    	dirsubfetchcmd = StringSaveNoNull (cmmd);
+        dirsubfetchcmd = StringSaveNoNull (cmmd);
     }
   }
   if (dirsubfetchcmd == NULL) return OM_MSG_RET_ERROR;
@@ -258,7 +261,7 @@ extern Pointer ReadFromSmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID
 
   if (smartfetchcmd == NULL) {
     if (GetAppParam ("SEQUIN", "SMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
-    	smartfetchcmd = StringSaveNoNull (cmmd);
+        smartfetchcmd = StringSaveNoNull (cmmd);
     }
   }
   if (smartfetchcmd == NULL) return NULL;
@@ -315,7 +318,7 @@ static Int2 LIBCALLBACK SmartBioseqFetchFunc (Pointer data)
 
   if (smartfetchcmd == NULL) {
     if (GetAppParam ("SEQUIN", "SMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
-    	smartfetchcmd = StringSaveNoNull (cmmd);
+        smartfetchcmd = StringSaveNoNull (cmmd);
     }
   }
   if (smartfetchcmd == NULL) return OM_MSG_RET_ERROR;
@@ -382,7 +385,7 @@ extern Pointer ReadFromTPASmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entit
 
   if (tpasmartfetchcmd == NULL) {
     if (GetAppParam ("SEQUIN", "TPASMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
-    	tpasmartfetchcmd = StringSaveNoNull (cmmd);
+        tpasmartfetchcmd = StringSaveNoNull (cmmd);
     }
   }
   if (tpasmartfetchcmd == NULL) return NULL;
@@ -439,7 +442,7 @@ static Int2 LIBCALLBACK TPASmartBioseqFetchFunc (Pointer data)
 
   if (tpasmartfetchcmd == NULL) {
     if (GetAppParam ("SEQUIN", "TPASMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
-    	tpasmartfetchcmd = StringSaveNoNull (cmmd);
+        tpasmartfetchcmd = StringSaveNoNull (cmmd);
     }
   }
   if (tpasmartfetchcmd == NULL) return OM_MSG_RET_ERROR;
@@ -483,6 +486,57 @@ static Boolean TPASmartFetchEnable (void)
   return TRUE;
 }
 #endif
+
+static void LookForBigFarSeqs (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  Int4         count = 0;
+  DeltaSeqPtr  dsp;
+  Boolean      is_ddbj = FALSE;
+  SeqIdPtr     sip;
+  BoolPtr      toomanyfarP;
+
+  if (bsp == NULL || userdata == NULL) return;
+
+  if (bsp->repr != Seq_repr_delta) return;
+  if (bsp->seq_ext_type != 4) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_DDBJ) {
+      is_ddbj = TRUE;
+    }
+  }
+
+  if (! is_ddbj) return;
+
+  for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp = dsp->next) {
+    if (dsp->choice == 1) {
+      count++;
+    }
+  }
+
+  if (count > 10000) {
+    toomanyfarP = (BoolPtr) userdata;
+    *toomanyfarP = TRUE;
+  }
+}
+
+static Boolean TooManyFarComponents (
+  SeqEntryPtr sep
+)
+
+{
+  Boolean  toomanyfar = FALSE;
+
+  if (sep == NULL) return FALSE;
+
+  VisitBioseqsInSep (sep, (Pointer) &toomanyfar, LookForBigFarSeqs);
+
+  return toomanyfar;
+}
 
 static ValNodePtr DoLockFarComponents (
   SeqEntryPtr sep,
@@ -579,7 +633,7 @@ static CharPtr GetXmlHeaderText (ErrSev cutoff)
   CharPtr         xml_header = NULL;
   CharPtr         xml_4_fmt = "asnval version=\"%s\" severity_cutoff=\"%s\"";
 
-  xml_header = (CharPtr) MemNew (sizeof (Char) * (10 + StringLen (xml_4_fmt) + 
+  xml_header = (CharPtr) MemNew (sizeof (Char) * (10 + StringLen (xml_4_fmt) +
                 StringLen (ASNVAL_APPLICATION) + StringLen (severityLabel[cutoff])));
   sprintf (xml_header, xml_4_fmt, ASNVAL_APPLICATION, severityLabel[cutoff]);
   return xml_header;
@@ -769,6 +823,7 @@ static void DoValidation (
   vsp->inferenceAccnCheck = vfp->inferenceAccnCheck;
   vsp->testLatLonSubregion = vfp->testLatLonSubregion;
   vsp->strictLatLonCountry = vfp->strictLatLonCountry;
+  vsp->rubiscoTest = vfp->rubiscoTest;
   vsp->indexerVersion = vfp->indexerVersion;
 
   if (ofp == NULL && vfp->outfp != NULL) {
@@ -826,7 +881,7 @@ static void ProcessSingleRecord (
   BioseqSetPtr   bssp;
   Char           buf [64], path [PATH_MAX];
   Pointer        dataptr = NULL;
-  Uint2          datatype, entityID = 0;
+  Uint2          datatype = 0, entityID = 0;
   FILE           *fp, *ofp = NULL;
   SeqEntryPtr    fsep, sep;
   ObjMgrPtr      omp;
@@ -944,19 +999,21 @@ static void ProcessSingleRecord (
 
       if (vfp->outpath != NULL) {
         ErrSetLogfile (vfp->outpath, ELOG_APPEND);
-      } else if (vfp->verbosity == 0) {
+      } else if (vfp->verbosity == 0 || vfp->verbosity == 1) {
         ErrSetLogfile (path, ELOG_APPEND);
       } else if (vfp->outfp == NULL) {
         ofp = FileOpen (path, "w");
       }
 
       bsplist = NULL;
-    
-      if (vfp->inferenceAccnCheck) {
-        LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
-      }
-      if (vfp->lock) {
-        bsplist = DoLockFarComponents (sep, vfp);
+
+      if (! TooManyFarComponents (sep)) {
+        if (vfp->inferenceAccnCheck) {
+          LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+        }
+        if (vfp->lock) {
+          bsplist = DoLockFarComponents (sep, vfp);
+        }
       }
 
       DoValidation (sep, vfp, ofp);
@@ -1164,7 +1221,7 @@ static void ProcessMultipleRecord (
 
   if (vfp->outpath != NULL) {
     ErrSetLogfile (vfp->outpath, ELOG_APPEND);
-  } else if (vfp->verbosity == 0) {
+  } else if (vfp->verbosity == 0 || vfp->verbosity == 1) {
     ErrSetLogfile (path, ELOG_APPEND);
   } else if (vfp->outfp == NULL) {
     ofp = FileOpen (path, "w");
@@ -1181,7 +1238,7 @@ static void ProcessMultipleRecord (
       SeqMgrHoldIndexing (TRUE);
       sep = SeqEntryAsnRead (aip, atp);
       SeqMgrHoldIndexing (FALSE);
-    
+
       /* propagate submission citation as descriptor onto each Seq-entry */
 
       if (subcit != NULL && sep != NULL && sep->data.ptrvalue != NULL) {
@@ -1221,12 +1278,14 @@ static void ProcessMultipleRecord (
           }
 
           bsplist = NULL;
-    
-          if (vfp->inferenceAccnCheck) {
-            LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
-          }
-          if (vfp->lock) {
-            bsplist = DoLockFarComponents (sep, vfp);
+
+          if (! TooManyFarComponents (sep)) {
+            if (vfp->inferenceAccnCheck) {
+              LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+            }
+            if (vfp->lock) {
+              bsplist = DoLockFarComponents (sep, vfp);
+            }
           }
 
           DoValidation (sep, vfp, ofp);
@@ -1405,7 +1464,7 @@ static void ValidWrapper (
 
   if (vfp->outpath != NULL) {
     ErrSetLogfile (vfp->outpath, ELOG_APPEND);
-  } else if (vfp->verbosity == 0) {
+  } else if (vfp->verbosity == 0 || vfp->verbosity == 1) {
     ErrSetLogfile (vfp->path, ELOG_APPEND);
   } else if (vfp->outfp == NULL) {
     ofp = FileOpen (vfp->path, "w");
@@ -1413,14 +1472,16 @@ static void ValidWrapper (
 
   bsplist = NULL;
 
-  sev = ErrSetMessageLevel (SEV_WARNING);
-  if (vfp->inferenceAccnCheck) {
-    LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+  if (! TooManyFarComponents (sep)) {
+    sev = ErrSetMessageLevel (SEV_WARNING);
+    if (vfp->inferenceAccnCheck) {
+      LookupFarSeqIDs (sep, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE);
+    }
+    if (vfp->lock) {
+      bsplist = DoLockFarComponents (sep, vfp);
+    }
+    ErrSetMessageLevel (sev);
   }
-  if (vfp->lock) {
-    bsplist = DoLockFarComponents (sep, vfp);
-  }
-  ErrSetMessageLevel (sev);
 
   DoValidation (sep, vfp, ofp);
 
@@ -1450,7 +1511,12 @@ static void ProcessOneRecord (
 )
 
 {
-  ValFlagPtr  vfp;
+  Pointer      dataptr;
+  Uint2        datatype;
+  Uint2        entityID;
+  FILE         *fp;
+  SeqEntryPtr  sep;
+  ValFlagPtr   vfp;
 
   vfp = (ValFlagPtr) userdata;
   if (vfp == NULL) return;
@@ -1463,6 +1529,15 @@ static void ProcessOneRecord (
   if (vfp->automatic) {
     StringNCpy_0 (vfp->path, filename, sizeof (vfp->path));
     ReadSequenceAsnFile (filename, vfp->binary, vfp->compressed, (Pointer) vfp, ValidWrapper);
+  } else if (vfp->catenated) {
+    fp = FileOpen (filename, "r");
+    if (fp != NULL) {
+      while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+        sep = GetTopSeqEntryForEntityID (entityID);
+        ValidWrapper (sep, vfp);
+      }
+      FileClose (fp);
+    }
   } else if (vfp->batch) {
     ProcessMultipleRecord (filename, vfp);
   } else {
@@ -1472,43 +1547,46 @@ static void ProcessOneRecord (
 
 /* Args structure contains command-line arguments */
 
-#define p_argInputPath     0
-#define i_argInputFile     1
-#define o_argOutputFile    2
-#define x_argSuffix        3
-#define u_argRecurse       4
-#define R_argSeverity      5
-#define Q_argLowCutoff     6
-#define P_argHighCutoff    7
-#define E_argOnlyThisErr   8
-#define A_argAlignments    9
-#define J_argIsoJta       10
-#define Z_argRemoteCDS    11
-#define X_argExonSplice   12
-#define G_argInfAccns     13
-#define N_argLatLonStrict 14
-#define M_argMatchTag     15
-#define Y_argCheckOld     16
-#define e_argIgnoreExcept 17
-#define v_argVerbosity    18
-#define a_argType         19
-#define b_argBinary       20
-#define c_argCompressed   21
-#define r_argRemote       22
-#define k_argLocalFetch   23
-#define d_argAsnIdx       24
-#define l_argLockFar      25
-#define T_argThreads      26
-#define L_argLogFile      27
-#define K_argSummmary     28
-#define S_argSkipCount    29
-#define B_argBarcodeVal   30
-#define C_argMaxCount     31
+typedef enum {
+  p_argInputPath = 0,
+  i_argInputFile,
+  o_argOutputFile,
+  f_argFilter,
+  x_argSuffix,
+  u_argRecurse,
+  R_argSeverity,
+  Q_argLowCutoff,
+  P_argHighCutoff,
+  E_argOnlyThisErr,
+  A_argAlignments,
+  J_argIsoJta,
+  Z_argRemoteCDS,
+  X_argExonSplice,
+  G_argInfAccns,
+  N_argLatLonStrict,
+  M_argMatchTag,
+  Y_argCheckOld,
+  e_argIgnoreExcept,
+  v_argVerbosity,
+  a_argType,
+  b_argBinary,
+  c_argCompressed,
+  r_argRemote,
+  k_argLocalFetch,
+  d_argAsnIdx,
+  l_argLockFar,
+  T_argThreads,
+  L_argLogFile,
+  K_argSummmary,
+  S_argSkipCount,
+  B_argBarcodeVal,
+  C_argMaxCount,
 #ifdef INTERNAL_NCBI_ASN2VAL
-#define w_argSeqSubParent 32
-#define H_argAccessHUP    33
-#define y_argAIndexer     34
+  w_argSeqSubParent,
+  H_argAccessHUP,
+  y_argAIndexer,
 #endif
+} Arguments;
 
 #define LAT_LON_STATE    1
 #define LAT_LON_STRICT   2
@@ -1520,11 +1598,13 @@ Args myargs [] = {
     TRUE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
   {"Single Output File", NULL, NULL, NULL,
     TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
+  {"Substring Filter", NULL, NULL, NULL,
+    TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
   {"File Selection Substring", ".ent", NULL, NULL,
     TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
   {"Recurse", "F", NULL, NULL,
     TRUE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Severity for Error in Return Code", "4", "0", "4",
+  {"Severity for Error in Return Code", "4", "0", "6",
     FALSE, 'R', ARG_INT, 0.0, 0, NULL},
   {"Lowest Severity for Error to Show", "3", "0", "4",
     FALSE, 'Q', ARG_INT, 0.0, 0, NULL},
@@ -1552,7 +1632,7 @@ Args myargs [] = {
     TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Verbosity", "1", "0", "4",
     FALSE, 'v', ARG_INT, 0.0, 0, NULL},
-  {"ASN.1 Type (a Automatic, z Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
+  {"ASN.1 Type (a Automatic, c Catenated, z Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Batch File is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -1592,12 +1672,13 @@ Int2 Main (void)
 
 {
   Char         app [64];
-  CharPtr      asnidx, directory, infile, logfile, outfile, str, suffix;
-  Boolean      automatic, batch, binary, compressed, dorecurse,
+  CharPtr      asnidx, directory, filter, infile, logfile, outfile, str, suffix;
+  Boolean      automatic, batch, binary, catenated, compressed, dorecurse,
                indexed, local, lock, remote, summary, usethreads;
 #ifdef INTERNAL_NCBI_ASN2VAL
   Boolean      hup = FALSE;
 #endif
+  ValNodePtr   parflat_list, vnp;
   time_t       run_time, start_time, stop_time;
   Int2         type = 0, val;
   ValFlagData  vfd;
@@ -1634,6 +1715,17 @@ Int2 Main (void)
     return 1;
   }
 
+  parflat_list = Validate_ParFlat_GBFeat ();
+  if (parflat_list != NULL) {
+    Message (MSG_POSTERR, "Validate_ParFlat_GBFeat warnings");
+    for (vnp = parflat_list; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      Message (MSG_POSTERR, "%s", str);
+    }
+    ValNodeFreeData (parflat_list);
+  }
+
   /* process command line arguments */
 
   sprintf (app, "asnval %s", ASNVAL_APPLICATION);
@@ -1647,6 +1739,7 @@ Int2 Main (void)
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   suffix = (CharPtr) myargs [x_argSuffix].strvalue;
+  filter = (CharPtr) myargs [f_argFilter].strvalue;
   infile = (CharPtr) myargs [i_argInputFile].strvalue;
   outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
   dorecurse = (Boolean) myargs [u_argRecurse].intvalue;
@@ -1701,6 +1794,7 @@ Int2 Main (void)
 #endif
 
   automatic = FALSE;
+  catenated = FALSE;
   batch = FALSE;
   binary = (Boolean) myargs [b_argBinary].intvalue;
   compressed = (Boolean) myargs [c_argCompressed].intvalue;
@@ -1709,6 +1803,9 @@ Int2 Main (void)
   if (StringICmp (str, "a") == 0) {
     type = 1;
     automatic = TRUE;
+  } else if (StringICmp (str, "c") == 0) {
+    type = 1;
+    catenated = TRUE;
   } else if (StringICmp (str, "z") == 0) {
     type = 1;
   } else if (StringICmp (str, "e") == 0) {
@@ -1749,6 +1846,7 @@ Int2 Main (void)
   /* populate parameter structure */
 
   vfd.automatic = automatic;
+  vfd.catenated = catenated;
   vfd.batch = batch;
   vfd.binary = binary;
   vfd.compressed = compressed;
@@ -1765,7 +1863,7 @@ Int2 Main (void)
   vfd.numrecords = 0;
 
   if (! StringHasNoText (outfile)) {
-    if (vfd.verbosity == 0) {
+    if (vfd.verbosity == 0 || vfd.verbosity == 1) {
       vfd.outpath = outfile;
     } else {
       vfd.outfp = FileOpen (outfile, "w");
@@ -1823,7 +1921,7 @@ Int2 Main (void)
 
   if (StringDoesHaveText (directory)) {
 
-    DirExplore (directory, NULL, suffix, dorecurse, ProcessOneRecord, (Pointer) &vfd);
+    DirExplore (directory, filter, suffix, dorecurse, ProcessOneRecord, (Pointer) &vfd);
 
   } else if (StringDoesHaveText (infile)) {
 

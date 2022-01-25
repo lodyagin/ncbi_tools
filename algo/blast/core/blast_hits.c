@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.226 2009/07/13 18:19:32 kazimird Exp $
+/* $Id: blast_hits.c,v 1.234 2010/07/30 17:44:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.226 2009/07/13 18:19:32 kazimird Exp $";
+    "$Id: blast_hits.c,v 1.234 2010/07/30 17:44:35 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
@@ -142,7 +142,7 @@ Blast_HSPInit(Int4 query_start, Int4 query_end, Int4 subject_start,
    *ret_hsp = NULL;
 
    if (new_hsp == NULL)
-	return -1;
+	return BLASTERR_MEMORY;
 
 
    new_hsp->query.offset = query_start;
@@ -875,6 +875,7 @@ Blast_HSPGetTargetTranslation(SBlastTargetTranslation* target_t,
                               const BlastHSP* hsp, Int4* translated_length)
 {
     Int4 context = -1;
+    Int4 start, stop;
 
     ASSERT(target_t != NULL);
 
@@ -882,12 +883,14 @@ Blast_HSPGetTargetTranslation(SBlastTargetTranslation* target_t,
        return NULL;
 
     context = BLAST_FrameToContext(hsp->subject.frame, target_t->program_number);
+    start = target_t->range[2*context];
+    stop = target_t->range[2*context+1];
 
-    if (target_t->partial == TRUE) /* partial == FALSE translation has already been done. */
+    /* skip translation if full translation has already been done */
+    if (target_t->partial && (start || 
+        (stop < target_t->subject_blk->length / CODON_LENGTH -3))) 
     {  
     	 const int kMaxTranslation = 2100; /* Needs to be divisible by three (?) */
-         Int4 start = target_t->range[2*context];
-         Int4 stop = target_t->range[2*context+1];
          Int4 nucl_length = 0;
          Int4 translation_length = 0;
          Int4 nucl_start = 0;
@@ -896,17 +899,21 @@ Blast_HSPGetTargetTranslation(SBlastTargetTranslation* target_t,
     	 Int4 start_shift = 0;
 
          /* HSP coordinates are in terms of protein sequences. */
-         if (hsp->subject.offset < 0 ) {
+         if (hsp->subject.offset < 0) {
              nucl_start = 0;
              nucl_end = target_t->subject_blk->length;
          } else {
              nucl_start = MAX(0, 3*hsp->subject.offset - kMaxTranslation);
              nucl_end = MIN(target_t->subject_blk->length, 3*hsp->subject.end + kMaxTranslation);
+             /* extend to the end of the sequence if close */
+             if (target_t->subject_blk->length - nucl_end <= 21) {
+                 nucl_end = target_t->subject_blk->length;
+             }
          }
 
          nucl_length = nucl_end - nucl_start;
 
-         translation_length = 1+nucl_length/3;
+         translation_length = 1+nucl_length/CODON_LENGTH;
          start_shift = nucl_start/CODON_LENGTH;
 
          if (hsp->subject.frame < 0)
@@ -1202,9 +1209,16 @@ s_HSPEndDiag(const BlastHSP *hsp)
  * @return TRUE if a merge was performed, FALSE if not
  */
 static Boolean 
-s_BlastMergeTwoHSPs(BlastHSP* hsp1, BlastHSP* hsp2)
+s_BlastMergeTwoHSPs(BlastHSP* hsp1, BlastHSP* hsp2, Boolean allow_gap)
 {
    ASSERT(!hsp1->gap_info || !hsp2->gap_info);
+
+   /* do not merge off-diagonal hsps for ungapped search */
+   if (!allow_gap && 
+       hsp1->subject.offset - hsp2->subject.offset -hsp1->query.offset + hsp2->query.offset) 
+   {  
+       return FALSE;
+   }
 
    /* combine the boundaries of the two HSPs, 
       assuming they intersect at all */
@@ -1216,6 +1230,7 @@ s_BlastMergeTwoHSPs(BlastHSP* hsp1, BlastHSP* hsp2)
                         hsp2->query.end,
                         hsp1->subject.offset, hsp1->subject.end,
                         hsp2->subject.end)) {
+
       hsp1->query.offset = MIN(hsp1->query.offset, hsp2->query.offset);
       hsp1->subject.offset = MIN(hsp1->subject.offset, hsp2->subject.offset);
       hsp1->query.end = MAX(hsp1->query.end, hsp2->query.end);
@@ -1406,6 +1421,7 @@ s_BlastHSPListInsertHSPInHeap(BlastHSPList* hsp_list,
     }
 }
 
+#ifndef NDEBUG
 /** Verifies that the best_evalue field on the BlastHSPList is correct.
  * @param hsp_list object to check [in]
  * @return TRUE if OK, FALSE otherwise.
@@ -1430,6 +1446,7 @@ s_BlastCheckBestEvalue(const BlastHSPList* hsp_list)
 
     return TRUE;
 }
+#endif /* _DEBUG */
 
 /** Gets the best (lowest) evalue from the BlastHSPList.
  * @param hsp_list object containing the evalues [in]
@@ -1676,7 +1693,7 @@ static int s_SortHSPListByOid(const void *x, const void *y)
 Int2 Blast_HitListMerge(BlastHitList** old_hit_list_ptr,
                         BlastHitList** combined_hit_list_ptr,
                         Int4 contexts_per_query, Int4 *split_offsets,
-                        Int4 chunk_overlap_size)
+                        Int4 chunk_overlap_size, Boolean allow_gap)
 {
     Int4 i, j;
     Boolean query_is_split;
@@ -1744,7 +1761,8 @@ Int2 Blast_HitListMerge(BlastHitList** old_hit_list_ptr,
                                     hitlist2->hsplist_array + j,
                                     hsplist2->hsp_max, split_offsets,
                                     contexts_per_query,
-                                    chunk_overlap_size);
+                                    chunk_overlap_size,
+                                    allow_gap);
             }
             else {
                 Blast_HSPListAppend(hitlist1->hsplist_array + i,
@@ -2002,7 +2020,7 @@ Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program,
 }
 
 Int2 
-Blast_HSPListReevaluateWithAmbiguitiesUngapped(EBlastProgramType program, 
+Blast_HSPListReevaluateUngapped(EBlastProgramType program, 
    BlastHSPList* hsp_list, BLAST_SequenceBlk* query_blk, 
    BLAST_SequenceBlk* subject_blk, 
    const BlastInitialWordParameters* word_params,
@@ -2014,9 +2032,10 @@ Blast_HSPListReevaluateWithAmbiguitiesUngapped(EBlastProgramType program,
    const Uint1* subject_start = NULL;
    Uint1* query_start;
    Int4 index, context, hspcnt;
-   Boolean purge, delete_hsp;
+   Boolean purge;
    Int2 status = 0;
    const Boolean kTranslateSubject = Blast_SubjectIsTranslated(program);
+   const Boolean kNucleotideSubject = Blast_SubjectIsNucleotide(program);
    SBlastTargetTranslation* target_t = NULL;
 
    ASSERT(!score_params->options->gapped_calculation);
@@ -2038,17 +2057,22 @@ Blast_HSPListReevaluateWithAmbiguitiesUngapped(EBlastProgramType program,
    if (seq_src) {
       /* Wrap subject sequence block into a BlastSeqSrcGetSeqArg structure, which is 
          needed by the BlastSeqSrc API. */
-      BlastSeqSrcGetSeqArg seq_arg;
-      memset((void*) &seq_arg, 0, sizeof(seq_arg));
-      seq_arg.oid = subject_blk->oid;
-      seq_arg.encoding =
-         (kTranslateSubject ? eBlastEncodingNcbi4na : eBlastEncodingNucleotide);
-      seq_arg.seq = subject_blk;
-      /* Return the packed sequence to the database */
-      BlastSeqSrcReleaseSequence(seq_src, &seq_arg);
-      /* Get the unpacked sequence */
-      if ((status=BlastSeqSrcGetSequence(seq_src, &seq_arg)))
+      /* If this was a protein subject, leave as is. */
+      if (kNucleotideSubject)
+      {
+      	BlastSeqSrcGetSeqArg seq_arg;
+      	memset((void*) &seq_arg, 0, sizeof(seq_arg));
+      	seq_arg.oid = subject_blk->oid;
+      	seq_arg.encoding =
+       	  (kTranslateSubject ? eBlastEncodingNcbi4na : eBlastEncodingNucleotide);
+        seq_arg.check_oid_exclusion = TRUE;
+      	seq_arg.seq = subject_blk;
+      	/* Return the packed sequence to the database */
+      	BlastSeqSrcReleaseSequence(seq_src, &seq_arg);
+      	/* Get the unpacked sequence */
+      	if ((status=BlastSeqSrcGetSequence(seq_src, &seq_arg)))
           return status;
+       }
    }
 
    if (kTranslateSubject) {
@@ -2059,11 +2083,15 @@ Blast_HSPListReevaluateWithAmbiguitiesUngapped(EBlastProgramType program,
                    score_params->options->is_ooframe, &target_t);
    } else {
       /* Store sequence in blastna encoding in sequence_start */
-      subject_start = subject_blk->sequence_start + 1;
+      if (subject_blk->sequence_start)
+          subject_start = subject_blk->sequence_start + 1;
+      else
+          subject_start = subject_blk->sequence;
    }
 
    purge = FALSE;
    for (index = 0; index < hspcnt; ++index) {
+      Boolean delete_hsp = FALSE;
       if (hsp_array[index] == NULL)
          continue;
       else
@@ -2077,13 +2105,17 @@ Blast_HSPListReevaluateWithAmbiguitiesUngapped(EBlastProgramType program,
       if (kTranslateSubject)
          subject_start = Blast_HSPGetTargetTranslation(target_t, hsp, NULL);
 
-      delete_hsp = 
-         Blast_HSPReevaluateWithAmbiguitiesUngapped(hsp, query_start, 
-            subject_start, word_params, sbp, kTranslateSubject);
+      if (kNucleotideSubject) {
+         delete_hsp = 
+             Blast_HSPReevaluateWithAmbiguitiesUngapped(hsp, query_start, 
+                subject_start, word_params, sbp, kTranslateSubject);
+      }
    
       if (!delete_hsp) {
+          const Uint1* query_nomask = query_blk->sequence_nomask +
+              query_info->contexts[context].query_offset;
           delete_hsp = 
-              Blast_HSPTestIdentityAndLength(program, hsp, query_start, 
+              Blast_HSPTestIdentityAndLength(program, hsp, query_nomask, 
                                              subject_start, 
                                              score_params->options, 
                                              hit_params->options);
@@ -2227,7 +2259,8 @@ Int2 Blast_HSPListAppend(BlastHSPList** old_hsp_list_ptr,
 Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list_ptr, 
                    BlastHSPList** combined_hsp_list_ptr,
                    Int4 hsp_num_max, Int4 *split_offsets, 
-                   Int4 contexts_per_query, Int4 chunk_overlap_size)
+                   Int4 contexts_per_query, Int4 chunk_overlap_size,
+                   Boolean allow_gap)
 {
    BlastHSPList* combined_hsp_list = *combined_hsp_list_ptr;
    BlastHSPList* hsp_list = *hsp_list_ptr;
@@ -2351,7 +2384,7 @@ Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list_ptr,
             }
    
             if (ABS(end_diag - start_diag) < OVERLAP_DIAG_CLOSE) {
-               if (s_BlastMergeTwoHSPs(hsp1, hsp2)) {
+               if (s_BlastMergeTwoHSPs(hsp1, hsp2, allow_gap)) {
                   /* Free the second HSP. */
                   hspp2[index2] = Blast_HSPFree(hsp2);
                }
@@ -2607,7 +2640,9 @@ Int2 Blast_HitListUpdate(BlastHitList* hit_list,
 {
    hsp_list->best_evalue = s_BlastGetBestEvalue(hsp_list);
 
-   ASSERT(s_BlastCheckBestEvalue(hsp_list) == TRUE);
+#ifndef NDEBUG
+   ASSERT(s_BlastCheckBestEvalue(hsp_list) == TRUE); /* NCBI_FAKE_WARNING */
+#endif /* _DEBUG */
  
    if (hit_list->hsplist_count < hit_list->hsplist_max) {
       /* If the array of HSP lists for this query is not yet allocated, 
@@ -2798,98 +2833,6 @@ static int s_SortHspWrapEvalue(const void *x, const void *y)
     return (wrap2->hsp->score - wrap1->hsp->score);
 }
 
-
-Int2 Blast_HSPResultsPerformCulling(BlastHSPResults *results,
-                                    const BlastQueryInfo *query_info,
-                                    Int4 culling_limit, Int4 query_length)
-{
-   Int4 i, j, k, m;
-   Int4 hsp_count;
-   SHspWrap *hsp_array;
-   BlastIntervalTree *tree;
-
-   /* set up the interval tree; subject offsets are not needed */
-
-   tree = Blast_IntervalTreeInit(0, query_length + 1, 0, 0);
-
-   for (i = 0; i < results->num_queries; i++) {
-      BlastHitList *hitlist = results->hitlist_array[i];
-      if (hitlist == NULL)
-         continue;
-
-      /* count the number of HSPs in this hitlist. If this is
-         less than the culling limit, no HSPs will be pruned */
-
-      for (j = hsp_count = 0; j < hitlist->hsplist_count; j++) {
-         BlastHSPList *hsplist = hitlist->hsplist_array[j];
-         hsp_count += hsplist->hspcnt;
-      }
-      if (hsp_count < culling_limit)
-          continue;
-
-      /* empty each HSP into a combined HSP array, then
-         sort the array by e-value */
-
-      hsp_array = (SHspWrap *)malloc(hsp_count * sizeof(SHspWrap));
-
-      for (j = k = 0; j < hitlist->hsplist_count; j++) {
-         BlastHSPList *hsplist = hitlist->hsplist_array[j];
-         for (m = 0; m < hsplist->hspcnt; k++, m++) {
-            BlastHSP *hsp = hsplist->hsp_array[m];
-            hsp_array[k].hsplist = hsplist;
-            hsp_array[k].hsp = hsp;
-         }
-         hsplist->hspcnt = 0;
-      }
-
-      qsort(hsp_array, hsp_count, sizeof(SHspWrap), s_SortHspWrapEvalue);
-
-      /* Starting with the best HSP, use the interval tree to
-         check that the query range of each HSP in the list has
-         not already been enveloped by too many higher-scoring
-         HSPs. If this is not the case, add the HSP back into results */
-
-      Blast_IntervalTreeReset(tree);
-
-      for (j = 0; j < hsp_count; j++) {
-         BlastHSPList *hsplist = hsp_array[j].hsplist;
-         BlastHSP *hsp = hsp_array[j].hsp;
-
-         if (BlastIntervalTreeNumRedundant(tree, 
-                         hsp, query_info) >= culling_limit) {
-             Blast_HSPFree(hsp);
-         }
-         else {
-             BlastIntervalTreeAddHSP(hsp, tree, query_info, eQueryOnly);
-             Blast_HSPListSaveHSP(hsplist, hsp);
-
-             /* the first HSP added back into an HSPList
-                automatically has the best e-value */
-             if (hsplist->hspcnt == 1)
-                 hsplist->best_evalue = hsp->evalue;
-         }
-      }
-      sfree(hsp_array);
-
-      /* remove any HSPLists that are still empty after the 
-         culling process. Sort any remaining lists by score */
-
-      for (j = 0; j < hitlist->hsplist_count; j++) {
-         BlastHSPList *hsplist = hitlist->hsplist_array[j];
-         if (hsplist->hspcnt == 0) {
-             hitlist->hsplist_array[j] = 
-                   Blast_HSPListFree(hitlist->hsplist_array[j]);
-         }
-         else {
-             Blast_HSPListSortByScore(hitlist->hsplist_array[j]);
-         }
-      }
-      Blast_HitListPurgeNullHSPLists(hitlist);
-   }
-
-   tree = Blast_IntervalTreeFree(tree);
-   return 0;
-}
 
 Int2 Blast_HSPResultsInsertHSPList(BlastHSPResults* results, 
         BlastHSPList* hsp_list, Int4 hitlist_size)

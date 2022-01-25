@@ -6,6 +6,20 @@ Solaris, and Windows) and is distributed in the asn1-converters area of the
 NCBI public ftp site. From asn1-converters, navigate into by_program and
 then gene2xml, and download and extract the appropriate file.
 
+The following versions of gene2xml have been made available:
+
+  Version 1.3  March 1, 2010
+
+    Report write failures
+
+  Version 1.2  February 1, 2010
+
+    Adds new choices with these values:
+      ncRNA (8)
+      tmRNA (9)
+      miscRNA (10)
+    Adds elements RNA-gen, RNA-qual, RNA-qual-set
+
 Entrez Gene data are stored as compressed binary Entrezgene-Set ASN.1 files
 on the NCBI ftp site, and have the suffix .ags.gz. These are several-fold
 smaller than compressed XML files, resulting in a significant savings of
@@ -13,6 +27,11 @@ disk storage and network bandwidth. Normal processing by gene2xml produces
 text XML files with the same name but with .xgs as the suffix.
 
 The command-line arguments to gene2xml are described below.
+
+  -   Version and Argument Display
+
+Displays the version of the gene2xml program and its arguments and their
+descriptions.
 
   -p  Path to Files [String]  Optional
 
@@ -112,20 +131,20 @@ for brevity in this documentation.
             </Date_std>
           </Date>
         </Gene-track_create-date>
-		<Gene-track_update-date>
-		  <Date>
-			<Date_std>
-			  <Date-std>
-				<Date-std_year>2005</Date-std_year>
-				<Date-std_month>4</Date-std_month>
-				<Date-std_day>27</Date-std_day>
-				<Date-std_hour>21</Date-std_hour>
-				<Date-std_minute>45</Date-std_minute>
-				<Date-std_second>0</Date-std_second>
-			  </Date-std>
-			</Date_std>
-		  </Date>
-		</Gene-track_update-date>
+        <Gene-track_update-date>
+          <Date>
+            <Date_std>
+              <Date-std>
+                <Date-std_year>2005</Date-std_year>
+                <Date-std_month>4</Date-std_month>
+                <Date-std_day>27</Date-std_day>
+                <Date-std_hour>21</Date-std_hour>
+                <Date-std_minute>45</Date-std_minute>
+                <Date-std_second>0</Date-std_second>
+              </Date-std>
+            </Date_std>
+          </Date>
+        </Gene-track_update-date>
       </Gene-track>
     </Entrezgene_track-info>
     <Entrezgene_type value="protein-coding">6</Entrezgene_type>

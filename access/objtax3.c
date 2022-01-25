@@ -32,7 +32,7 @@ objtax3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Taxon3
-*    Generated using ASNCODE Revision: 6.14 at Jul 8, 2004 11:45 AM
+*    Generated using ASNCODE Revision: 6.17 at Dec 8, 2009  9:36 AM
 *
 **************************************************/
 
@@ -214,6 +214,9 @@ T3RequestFree(ValNodePtr anp)
    case T3Request_org:
       OrgRefFree(anp -> data.ptrvalue);
       break;
+   case T3Request_join:
+      SequenceOfIntFree(anp -> data.ptrvalue);
+      break;
    }
    return MemFree(anp);
 }
@@ -232,7 +235,6 @@ T3RequestAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -287,6 +289,10 @@ T3RequestAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    else if (atp == T3REQUEST_org) {
       choice = T3Request_org;
       func = (AsnReadFunc) OrgRefAsnRead;
+   }
+   else if (atp == T3REQUEST_join) {
+      choice = T3Request_join;
+      func = (AsnReadFunc) SequenceOfIntAsnRead;
    }
    anp->choice = choice;
    if (func != NULL)
@@ -361,6 +367,10 @@ T3RequestAsnWrite(T3RequestPtr anp, AsnIoPtr aip, AsnTypePtr orig)
       writetype = T3REQUEST_org;
       func = (AsnWriteFunc) OrgRefAsnWrite;
       break;
+   case T3Request_join:
+      writetype = T3REQUEST_join;
+      func = (AsnWriteFunc) SequenceOfIntAsnWrite;
+      break;
    }
    if (writetype != NULL) {
       retval = (* func)(pnt, aip, writetype);   /* write it out */
@@ -374,6 +384,118 @@ erret:
    AsnUnlinkType(orig);       /* unlink local tree */
    return retval;
 }
+
+
+/**************************************************
+*
+*    SequenceOfIntFree()
+*
+**************************************************/
+NLM_EXTERN 
+SequenceOfIntPtr LIBCALL
+SequenceOfIntFree(SequenceOfIntPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericBaseSeqOfFree(ptr,ASNCODE_INTVAL_SLOT);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    SequenceOfIntAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SequenceOfIntPtr LIBCALL
+SequenceOfIntAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SequenceOfIntPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objtax3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SequenceOfInt ::= (self contained) */
+      atp = AsnReadId(aip, amp, SEQUENCEOFINT);
+   } else {
+      atp = AsnLinkType(orig, SEQUENCEOFINT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SequenceOfIntFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SequenceOfIntAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SequenceOfIntAsnWrite(SequenceOfIntPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objtax3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SEQUENCEOFINT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr, ASNCODE_INTVAL_SLOT, aip, atp, SEQUENCEOFINT_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
 
 
 /**************************************************
@@ -571,7 +693,6 @@ T3ReplyAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -748,7 +869,6 @@ T3ErrorAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    T3ErrorPtr ptr;
 
@@ -1159,7 +1279,6 @@ T3StatusFlagsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    T3StatusFlagsPtr ptr;
 
@@ -1240,7 +1359,6 @@ Value_valueAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    AsnTypePtr atp;
    ValNodePtr anp;
    Uint1 choice;
-   Boolean isError = FALSE;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -1485,7 +1603,6 @@ T3RefreshFlagsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    T3RefreshFlagsPtr ptr;
 

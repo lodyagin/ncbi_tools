@@ -1,7 +1,7 @@
 #ifndef CTOOLS___ASN_CONNECTION__H
 #define CTOOLS___ASN_CONNECTION__H
 
-/*  $Id: asn_connection.h,v 1.9 2004/11/23 16:14:25 lavr Exp $
+/*  $Id: asn_connection.h,v 1.10 2009/08/13 14:58:22 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  * Author:  Denis Vakatov, Anton Lavrentiev
  *
  * File Description:
- *    Build C Toolkit ANS streams on top of CONN (connection).
+ *    Build C Toolkit ASN streams on top of CONN (connection).
  *
  */
 
@@ -68,7 +68,7 @@ typedef enum {
  * Return ASN stream pointer on success, or 0 on error.
  * NOTE: Returned stream is valid while the underlying conn exists. After call
  *       to CONN_Close() the stream becomes invalid, and should not be used.
- *       Don't destroy the ASN stream explicitly using AsnIoFree or AsnIoFree!
+ *       Don't destroy the ASN stream explicitly using AsnIoFree!
  */
 AsnIoPtr CreateAsnConn
 (CONN               conn,
@@ -88,7 +88,7 @@ AsnIoPtr CreateAsnConn
  * NOTE: Returned ASN stream pointers are valid as long as connection
  *       handle exists, that is after the connection handle is passed to
  *       CONN_Close(), both pointers become invalid, and should not be used.
- *       Don't destroy the ASN streams explicitly using AsnIoFree or AsnIoFree!
+ *       Don't destroy the ASN streams explicitly using AsnIoFree!
  */
 CONN CreateAsnConn_ServiceEx
 (const char*           service,
@@ -124,6 +124,9 @@ CONN CreateAsnConn_Service
 /*
  * ===========================================================================
  * $Log: asn_connection.h,v $
+ * Revision 1.10  2009/08/13 14:58:22  lavr
+ * Inline doc fixed of duplicates
+ *
  * Revision 1.9  2004/11/23 16:14:25  lavr
  * +<connect/ncbi_service_connector.h>
  *

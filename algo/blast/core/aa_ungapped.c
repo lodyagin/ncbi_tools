@@ -1,4 +1,4 @@
-/* $Id: aa_ungapped.c,v 1.59 2007/03/07 19:25:34 kazimird Exp $
+/* $Id: aa_ungapped.c,v 1.62 2010/07/27 18:24:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: aa_ungapped.c,v 1.59 2007/03/07 19:25:34 kazimird Exp $";
+    "$Id: aa_ungapped.c,v 1.62 2010/07/27 18:24:31 kazimird Exp $";
 #endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/aa_ungapped.h>
@@ -459,8 +459,6 @@ s_BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk * subject,
     Int4 i;
     Int4 hits = 0;
     Int4 totalhits = 0;
-    Int4 first_offset = 0;
-    Int4 last_offset;
     Int4 score;
     Int4 hsp_q, hsp_s, hsp_len = 0;
     Int4 window;
@@ -473,6 +471,7 @@ s_BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk * subject,
     BlastUngappedCutoffs *cutoffs;
     BLAST_DiagTable * diag = ewp->diag_table;
     TAaScanSubjectFunction scansub;
+    Int4 scan_range[3];
 
     ASSERT(diag != NULL);
 
@@ -497,12 +496,15 @@ s_BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk * subject,
         scansub = (TAaScanSubjectFunction)(lookup->scansub_callback);
         wordsize = lookup->word_length;
     }
-    last_offset = subject->length - wordsize;
 
-    while (first_offset <= last_offset) {
+    scan_range[0] = 0;
+    scan_range[1] = subject->seq_ranges[0].left;
+    scan_range[2] = subject->seq_ranges[0].right - wordsize;
+
+    while (scan_range[1] <= scan_range[2]) {
         /* scan the subject sequence for hits */
-        hits = scansub(lookup_wrap, subject, &first_offset,
-                                  offset_pairs, array_size);
+        hits = scansub(lookup_wrap, subject, 
+                                  offset_pairs, array_size, scan_range);
 
         totalhits += hits;
         /* for each hit, */
@@ -712,8 +714,6 @@ s_BlastAaWordFinder_OneHit(const BLAST_SequenceBlk * subject,
     Int4 wordsize;
     Int4 hits = 0;
     Int4 totalhits = 0;
-    Int4 first_offset = 0;
-    Int4 last_offset;
     Int4 hsp_q, hsp_s, hsp_len;
     Int4 s_last_off;
     Int4 i;
@@ -723,6 +723,7 @@ s_BlastAaWordFinder_OneHit(const BLAST_SequenceBlk * subject,
     Int4 hits_extended = 0;
     BLAST_DiagTable * diag = ewp->diag_table;
     TAaScanSubjectFunction scansub;
+    Int4 scan_range[3];
 
     ASSERT(diag != NULL);
 
@@ -745,12 +746,15 @@ s_BlastAaWordFinder_OneHit(const BLAST_SequenceBlk * subject,
         scansub = (TAaScanSubjectFunction)(lookup->scansub_callback);
         wordsize = lookup->word_length;
     }
-    last_offset = subject->length - wordsize;
 
-    while (first_offset <= last_offset) {
+    scan_range[0] = 0;
+    scan_range[1] = subject->seq_ranges[0].left;
+    scan_range[2] = subject->seq_ranges[0].right - wordsize;
+
+    while (scan_range[1] <= scan_range[2]) {
         /* scan the subject sequence for hits */
-        hits = scansub(lookup_wrap, subject, &first_offset,
-                       offset_pairs, array_size);
+        hits = scansub(lookup_wrap, subject,
+                       offset_pairs, array_size, scan_range);
 
         totalhits += hits;
         /* for each hit, */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.66 $
+* $Revision: 6.74 $
 *
 * File Description: 
 *
@@ -114,7 +114,9 @@ typedef struct validextra {
   ValNodePtr     errorfilter;
   BaseFormPtr    bfp;
   FormActnFunc   revalProc;
+  FormActnFunc   revalNoTaxProc;
   ButtoN         revalBtn;
+  ButtoN         skipTaxBtn;
   FormActnFunc   continueProc;
   ButtoN         continueBtn;
   Boolean        okaytosetviewtarget;
@@ -132,6 +134,7 @@ typedef struct validextra {
   Int2           selected_text_anchor_row;
   Int4           selected_text_anchor_offset;
   SequesterProc  sequesterProc;
+  SequesterProc  segregateProc;
 } ValidExtra, PNTR ValidExtraPtr;
 
 static WindoW  validWindow = NULL;
@@ -443,7 +446,7 @@ static void ValDoNotify (ValidExtraPtr vep, Int2 item, Boolean select, Boolean t
       }
       (vep->notify) ((ErrSev) sev, errcode, subcode,
                      (Uint2) entityID, itemID, (Uint2) itemtype,
-                     select, vep->dblClick);
+                     select, vep->dblClick, vep->shftKey);
     }
     MemFree (str);
   }
@@ -825,11 +828,11 @@ static void RepopVal (PopuP p)
 
 static CharPtr FormatConsensusSpliceReport (CharPtr doc_line)
 {
-  CharPtr cp, cp2, feat_start, feat_end = NULL;
-  CharPtr report_str = NULL;
-  CharPtr msg_abbrev = NULL;
-  Char    ch, ch_2;
-  Int4    pos;
+  CharPtr   cp, cp2, feat_start, feat_end = NULL;
+  CharPtr   report_str = NULL;
+  CharPtr   msg_abbrev = NULL;
+  Char      ch, ch_2;
+  long int  pos;
 
   cp = StringChr (doc_line, '\n');
   if (StringSearch (cp, "(AG) not found") != NULL) {
@@ -1068,7 +1071,7 @@ extern Boolean WriteBadSpecificHostTable (ValNodePtr bad_biop_list, FILE *fp)
   BioseqSetPtr bssp;
   SeqFeatPtr   sfp;
   SeqDescrPtr  sdp;
-  BioSourcePtr biop;
+  BioSourcePtr biop = NULL;
   ObjValNodePtr ovp;
   CharPtr       spec_host = NULL;
   OrgModPtr     mod = NULL;
@@ -1663,7 +1666,7 @@ static void MakeValidatorReport (ButtoN b)
   if (consensus_splice_list != NULL) {
     fprintf (fp, "Not Splice Consensus\n");
     for (vnp = consensus_splice_list; vnp != NULL; vnp = vnp->next) {
-      fprintf (fp, "%s\n", vnp->data.ptrvalue);
+      fprintf (fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
     }
     fprintf (fp, "\n");
     found_any = TRUE;
@@ -1728,6 +1731,30 @@ static void SequesterByValidatorErrors (ButtoN b)
   }
 
   (vep->sequesterProc) (entityID, bsp_list);
+  bsp_list = ValNodeFree (bsp_list);
+}
+
+
+static void SegregateByValidatorErrors (ButtoN b)
+{
+  ValidExtraPtr  vep;
+  ValNodePtr     bsp_list;
+  BioseqPtr      bsp;
+  Uint2          entityID = 0;
+
+  vep = (ValidExtraPtr) GetObjectExtra (b);
+  if (vep == NULL || vep->segregateProc == NULL) return;
+  bsp_list = CollectBioseqsByValidatorReportTypes (vep);
+  if (bsp_list == NULL) {
+    Message (MSG_ERROR, "No Bioseqs selected!");
+    return;
+  }
+  if (bsp_list->choice == OBJ_BIOSEQ && bsp_list->data.ptrvalue != NULL) {
+    bsp = (BioseqPtr) bsp_list->data.ptrvalue;
+    entityID = bsp->idx.entityID;
+  }
+
+  (vep->segregateProc) (entityID, bsp_list);
   bsp_list = ValNodeFree (bsp_list);
 }
 
@@ -1915,9 +1942,16 @@ static void RevalidateProc (ButtoN b)
     vep->clicked = 0;
     vep->selected = 0;
     vep->dblClick = FALSE;
+    vep->shftKey = FALSE;
     bfp = vep->bfp;
-    if (bfp != NULL && vep->revalProc != NULL) {
-      vep->revalProc (bfp->form);
+    if (bfp != NULL) {
+      if (GetStatus (vep->skipTaxBtn)) {
+        if (vep->revalNoTaxProc != NULL) {
+          (vep->revalNoTaxProc)(bfp->form);
+        }
+      } else if (vep->revalProc != NULL) {
+        vep->revalProc (bfp->form);
+      }
     }
   }
 }
@@ -1941,6 +1975,7 @@ static void ContinueProc (ButtoN b)
     vep->clicked = 0;
     vep->selected = 0;
     vep->dblClick = FALSE;
+    vep->shftKey = FALSE;
     bfp = vep->bfp;
     if (bfp != NULL && vep->continueProc != NULL) {
       vep->continueProc (bfp->form);
@@ -1981,6 +2016,7 @@ static void SetVerbosityAndRepopulate (PopuP p)
     vep->clicked = 0;
     vep->selected = 0;
     vep->dblClick = FALSE;
+    vep->shftKey = FALSE;
     RepopVal (p);
     /*
     bfp = vep->bfp;
@@ -2138,8 +2174,12 @@ static CharPtr howToClickText =
 /* CreateValidateWindowEx is hidden, allowing a revalidate button */
 extern WindoW CreateValidateWindowExExEx (ErrNotifyProc notify, CharPtr title,
                                     FonT font, ErrSev sev, Int2 verbose,
-                                    BaseFormPtr bfp, FormActnFunc revalProc, FormActnFunc continueProc,
+                                    BaseFormPtr bfp, 
+                                    FormActnFunc revalProc, 
+                                    FormActnFunc revalNoTaxProc, 
+                                    FormActnFunc continueProc,
                                     SequesterProc sequesterProc,
+                                    SequesterProc segregateProc,
                                     Boolean okaytosetviewtarget)
 
 {
@@ -2245,12 +2285,21 @@ extern WindoW CreateValidateWindowExExEx (ErrNotifyProc notify, CharPtr title,
         */
         Break (w);
 
-        q = HiddenGroup (w, -2, 0, NULL);
+        q = HiddenGroup (w, -4, 0, NULL);
         StaticPrompt (q, "Filter", 0, popupMenuHeight, programFont, 'l');
         vep->filter = PopupList (q, FALSE, RepopVal);
         SetObjectExtra (vep->filter, vep, NULL);
         PopupItem (vep->filter, "ALL");
+        /* note - have to add this line to get the "Skip Tax Validation" checkbox
+         * to appear in the right place - otherwise when vep->filter is resized
+         * after new error categories are added, the checkbox covers/is covered by it.
+         */
+        PopupItem (vep->filter, "LONGEST_EXPECTED: MolInfoConflictsWith");
         SetValue (vep->filter, 1);
+
+        vep->skipTaxBtn = CheckBox (q, "Skip Tax Validation", NULL);
+        Hide (vep->skipTaxBtn);          
+
         Break (w);
 
         f = HiddenGroup (w, 6, 0, NULL);
@@ -2290,6 +2339,7 @@ extern WindoW CreateValidateWindowExExEx (ErrNotifyProc notify, CharPtr title,
         vep->clicked = 0;
         vep->selected = 0;
         vep->dblClick = FALSE;
+        vep->shftKey = FALSE;
 
         valColFmt [0].pixWidth = stdCharWidth * 5;
         valColFmt [1].pixWidth = stdCharWidth * 6;
@@ -2305,7 +2355,7 @@ extern WindoW CreateValidateWindowExExEx (ErrNotifyProc notify, CharPtr title,
 
         vep->summary = StaticPrompt (w, "", stdCharWidth * 30, 0, systemFont, 'c');
 
-        btn_grp = HiddenGroup (w, 3, 0, NULL);
+        btn_grp = HiddenGroup (w, 4, 0, NULL);
         SetGroupSpacing (btn_grp, 10, 10);
         if (indexerVersion) {
           b = PushButton (btn_grp, "Report", MakeValidatorReport);
@@ -2313,6 +2363,11 @@ extern WindoW CreateValidateWindowExExEx (ErrNotifyProc notify, CharPtr title,
           if (sequesterProc != NULL) {
             vep->sequesterProc = sequesterProc;
             b = PushButton (btn_grp, "Sequester", SequesterByValidatorErrors);
+            SetObjectExtra (b, vep, NULL);
+          }
+          if (segregateProc != NULL) {
+            vep->segregateProc = segregateProc;
+            b = PushButton (btn_grp, "Segregate", SegregateByValidatorErrors);
             SetObjectExtra (b, vep, NULL);
           }
         }
@@ -2339,6 +2394,13 @@ extern WindoW CreateValidateWindowExExEx (ErrNotifyProc notify, CharPtr title,
       } else {
         SafeHide (vep->revalBtn);
       }
+      vep->revalNoTaxProc = revalNoTaxProc;
+      if (vep->revalNoTaxProc != NULL) {
+        SafeShow (vep->skipTaxBtn);
+      } else {
+        SafeHide (vep->skipTaxBtn);
+        SetStatus (vep->skipTaxBtn, FALSE);
+      }
       vep->continueProc = continueProc;
       if (vep->continueProc != NULL) {
         SafeShow (vep->continueBtn);
@@ -2358,8 +2420,8 @@ extern WindoW CreateValidateWindowExEx (ErrNotifyProc notify, CharPtr title,
 {
   return CreateValidateWindowExExEx (notify, title,
                                     font, sev, verbose,
-                                    bfp, revalProc, continueProc,
-                                    NULL,
+                                    bfp, revalProc, NULL, continueProc,
+                                    NULL, NULL,
                                     okaytosetviewtarget);
 }
 
@@ -2378,10 +2440,27 @@ extern WindoW CreateValidateWindow (ErrNotifyProc notify, CharPtr title,
   return CreateValidateWindowEx (notify, title, font, sev, verbose, NULL, NULL, FALSE);
 }
 
+extern Boolean IsTaxValidationRequested (WindoW w)
+
+{
+  ValidExtraPtr vep;
+
+  if (w == NULL) {
+    return TRUE;
+  } else if ((vep = (ValidExtraPtr)GetObjectExtra (w)) == NULL) {
+    return TRUE;
+  } else if (vep->skipTaxBtn == NULL) {
+    return TRUE;
+  } else {
+    return !GetStatus (vep->skipTaxBtn);
+  }
+}
+
+
 extern void ShowValidateDoc (void)
 
 {
-  Char           str [64];
+  Char           str [80];
   ValidExtraPtr  vep;
 
   if (validWindow == NULL) return;
@@ -2441,12 +2520,12 @@ extern void ShowValidateWindow (void)
       }
     }
     if (! Visible (validWindow)) {
-      if (vep->totalcount > 0) {
+      if (vep != NULL && vep->totalcount > 0) {
         Show (validWindow);
       }
     }
     if (Visible (validWindow)) {
-      if (Visible (vep->doc)) {
+      if (vep != NULL && Visible (vep->doc)) {
         Select (validWindow);
       }
     }

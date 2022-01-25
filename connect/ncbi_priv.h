@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_PRIV__H
 #define CONNECT___NCBI_PRIV__H
 
-/* $Id: ncbi_priv.h,v 6.45 2009/07/06 18:49:30 kazimird Exp $
+/* $Id: ncbi_priv.h,v 6.52 2010/05/22 15:09:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -66,14 +66,29 @@ extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectSrandAddend(void);
  *  Multi-Thread SAFETY
  */
 
+
+#ifdef _DEBUG
+extern NCBI_XCONNECT_EXPORT int g_NCBI_CoreCheckLock  (void);
+extern NCBI_XCONNECT_EXPORT int g_NCBI_CoreCheckUnlock(void);
+#  define CORE_CHECK_LOCK   g_NCBI_CoreCheckLock()
+#  define CORE_CHECK_UNLOCK g_NCBI_CoreCheckUnlock()
+#else
+#  define CORE_CHECK_LOCK   1/*TRUE*/
+#  define CORE_CHECK_UNLOCK 1/*TRUE*/
+#endif
+
+
 /* Always use the following macros and functions to access "g_CORE_MT_Lock",
- * dont access/change it directly!
+ * do not access/change it directly!
  */
 extern NCBI_XCONNECT_EXPORT MT_LOCK g_CORE_MT_Lock;
 
-#define CORE_LOCK_WRITE  verify(MT_LOCK_Do(g_CORE_MT_Lock, eMT_Lock    ))
-#define CORE_LOCK_READ   verify(MT_LOCK_Do(g_CORE_MT_Lock, eMT_LockRead))
-#define CORE_UNLOCK      verify(MT_LOCK_Do(g_CORE_MT_Lock, eMT_Unlock  ))
+#define CORE_LOCK_WRITE  verify(CORE_CHECK_LOCK  &&                     \
+                                MT_LOCK_Do(g_CORE_MT_Lock, eMT_Lock    ))
+#define CORE_LOCK_READ   verify(CORE_CHECK_LOCK  &&                     \
+                                MT_LOCK_Do(g_CORE_MT_Lock, eMT_LockRead))
+#define CORE_UNLOCK      verify(CORE_CHECK_UNLOCK  &&                   \
+                                MT_LOCK_Do(g_CORE_MT_Lock, eMT_Unlock  ))
 
 
 
@@ -229,15 +244,15 @@ extern NCBI_XCONNECT_EXPORT const char* g_CORE_Sprintf(const char* fmt, ...)
  */
 NCBI_C_DEFINE_ERRCODE_X(Connect_Connection, 301,  32);
 NCBI_C_DEFINE_ERRCODE_X(Connect_MetaConn,   302,   2);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Util,       303,  12);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Util,       303,  14);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Dispd,      304,   2);
-NCBI_C_DEFINE_ERRCODE_X(Connect_FTP,        305,   2);
+NCBI_C_DEFINE_ERRCODE_X(Connect_FTP,        305,   4);
 NCBI_C_DEFINE_ERRCODE_X(Connect_HeapMgr,    306,  33);
 NCBI_C_DEFINE_ERRCODE_X(Connect_HTTP,       307,  20);
 NCBI_C_DEFINE_ERRCODE_X(Connect_LB,         308,   0);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Sendmail,   309,  31);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Service,    310,   6);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Socket,     311, 143);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Service,    310,   8);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Socket,     311, 147);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Crypt,      312,   6);
 NCBI_C_DEFINE_ERRCODE_X(Connect_LocalNet,   313,  11);
 NCBI_C_DEFINE_ERRCODE_X(Connect_Mghbn,      319,  16);

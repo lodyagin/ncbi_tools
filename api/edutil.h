@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/2/94
 *
-* $Revision: 6.21 $
+* $Revision: 6.23 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,16 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.h,v $
+* Revision 6.23  2010/07/12 12:21:49  bollin
+* Introduced a version of BioseqDelete that uses idx.deleteme to remove features
+* (instead of freeing them immediately), and fixed bugs in VecScreenTool when
+* entire Bioseqs are deleted.
+*
+* Revision 6.22  2010/06/11 12:03:22  bollin
+* Added iBOL compliance report, which marks items with low trace as failing.
+* Also checking in first draft of functions to reverse Quality Scores, not using
+* until we can verify that they work for float and int graphs.
+*
 * Revision 6.21  2009/03/04 16:34:15  bollin
 * Added function for removing contigs from scaffolds.
 *
@@ -211,6 +221,7 @@ extern "C" {
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL BioseqDelete (SeqIdPtr target, Int4 from, Int4 to, Boolean do_feat, Boolean do_split);
+NLM_EXTERN Boolean LIBCALL BioseqDeleteEx (SeqIdPtr target, Int4 from, Int4 to, Boolean do_feat, Boolean do_split, Boolean mark_deleted_feat);
 
 
 
@@ -381,6 +392,7 @@ NLM_EXTERN Boolean LIBCALL SeqInsertByLoc (SeqIdPtr target, Int4 offset, SeqLocP
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqDeleteByLoc (SeqLocPtr slp, Boolean do_feat, Boolean do_split);
+NLM_EXTERN Boolean LIBCALL SeqDeleteByLocEx (SeqLocPtr slp, Boolean do_feat, Boolean do_split, Boolean mark_deleted_feat);
 
 
 /*****************************************************************************
@@ -496,6 +508,7 @@ NLM_EXTERN Int4 LIBCALL ISADeltaSeqsToSeqLoc (SeqLocPtr slp);
 *   
 *****************************************************************************/
 NLM_EXTERN Boolean	LIBCALL SeqEntryDelFeat PROTO((SeqEntryPtr sep, SeqIdPtr sip, Int4 from, Int4 to, Boolean do_split));
+NLM_EXTERN Boolean	LIBCALL SeqEntryDelFeatEx PROTO((SeqEntryPtr sep, SeqIdPtr sip, Int4 from, Int4 to, Boolean do_split, Boolean mark_deleted_feat));
 
 /*****************************************************************************
 *
@@ -731,6 +744,10 @@ SeqEdGetNextFeature
 
 /* this enum describes the kind of motion for feature adjusts */
 typedef enum { eLeftEnd=1, eRightEnd, eSlide } EMoveType;
+
+/* this function moves just the location */
+NLM_EXTERN Boolean SeqEdAdjustFeatureInterval
+(SeqLocPtr slp, Int4 change, EMoveType move_type, Int4 interval_offset, BioseqPtr bsp);
 
 /* This function moves a feature location */
 NLM_EXTERN void SeqEdFeatureAdjust

@@ -1,4 +1,4 @@
-/*  $Id: socket_io_bouncer.c,v 6.11 2009/04/10 23:04:30 kazimird Exp $
+/* $Id: socket_io_bouncer.c,v 6.16 2010/06/10 19:19:46 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,10 @@
  *
  */
 
+#include <connect/ncbi_connutil.h>
+#include <connect/ncbi_util.h>
 #include "../ncbi_ansi_ext.h"
 #include "../ncbi_assert.h"
-#include <connect/ncbi_connutil.h>
-#include <connect/ncbi_socket.h>
-#include <connect/ncbi_util.h>
-#include <stdio.h>
 /* This header must go last */
 #include "test_assert.h"
 

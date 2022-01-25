@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_file_connector.c,v 6.7 2008/10/20 16:55:43 kazimird Exp $
+/* $Id: test_ncbi_file_connector.c,v 6.10 2010/02/05 20:35:04 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +30,9 @@
  *
  */
 
-#include "../ncbi_assert.h"
 #include <connect/ncbi_connection.h>
 #include <connect/ncbi_file_connector.h>
-#include <connect/ncbi_util.h>
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <stdlib.h>
 /* This header must go last */
 #include "test_assert.h"
@@ -65,6 +64,8 @@ int main(int argc, const char* argv[])
     inp_file = argv[1];
 
     /* log and data log streams */
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
     /* run the test */
@@ -109,6 +110,7 @@ int main(int argc, const char* argv[])
     
     /* cleanup, exit */
     verify(CONN_Close(conn) == eIO_Success);
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
     CORE_SetLOG(0);
     return 0;
 }

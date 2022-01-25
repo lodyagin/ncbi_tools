@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/30/07
 *
-* $Revision: 1.15 $
+* $Revision: 1.16 $
 *
 * File Description: 
 *
@@ -720,7 +720,6 @@ static EjourData mla2_ejour_list [] = {
  {"Hum. Genomics",                                              2004 },
  {"Infect. Agents Cancer",                                         0 },
  {"J. Exp. Clin. Assist. Reprod.",                                 0 },
- {"J. Plankton Res.",                                              0 },
  {"JOP",                                                           0 },
  {"Kinetoplastid Biol Dis",                                        0 },
  {"Malar. J.",                                                     0 },

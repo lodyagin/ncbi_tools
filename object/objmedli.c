@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager for module NCBI-Medline
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objmedli.c,v $
+* Revision 6.5  2009/10/02 19:44:49  kans
+* address clang static analyzer warnings
+*
 * Revision 6.4  1998/08/26 17:43:17  kans
 * fixed -v -fd warnings in label functions
 *
@@ -223,7 +226,7 @@ NLM_EXTERN MedlineMeshPtr LIBCALL MedlineMeshAsnRead (AsnIoPtr aip, AsnTypePtr o
 	MedlineMeshPtr mmp=NULL;
 	DataVal av;
 	AsnTypePtr atp, oldatp;
-    ValNodePtr first, anp;
+    ValNodePtr first, anp = NULL;
 
 	if (! loaded)
 	{
@@ -740,7 +743,7 @@ NLM_EXTERN MedlineEntryPtr LIBCALL MedlineEntryAsnRead (AsnIoPtr aip, AsnTypePtr
                 if (anp == NULL) goto erret;
                 if (mep->xref == NULL)
                     mep->xref = anp;
-                else
+                else if (anplast != NULL)
                     anplast->next = anp;
                 anplast = anp;
             }

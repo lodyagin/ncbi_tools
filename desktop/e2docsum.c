@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.56 $
+* $Revision: 6.57 $
 *
 * File Description: 
 *
@@ -2586,6 +2586,7 @@ static void AddBlastAlignment (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Uint2
   Int2                 i;
   BLAST_OptionsBlkPtr  options = NULL;
   SeqAlignPtr          prev;
+  CharPtr              program_name = NULL;
   BioseqPtr            query;
   SeqAlignPtr          salp;
   SeqAnnotPtr          sap;
@@ -2599,7 +2600,8 @@ static void AddBlastAlignment (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Uint2
     return;
   if (ISA_na (subject->mol)) {
     align_type = 1;
-    options = BLASTOptionNew ("blastn", TRUE);
+    program_name = "blastn";
+    options = BLASTOptionNew (program_name, TRUE);
     if (options != NULL) {
       options->gapped_calculation = TRUE;
       options->db_length = 100000000;
@@ -2611,7 +2613,8 @@ static void AddBlastAlignment (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Uint2
     }
   } else if (ISA_aa (subject->mol)) {
     align_type = 2;
-    options = BLASTOptionNew ("blastp", TRUE);
+    program_name = "blastp";
+    options = BLASTOptionNew (program_name, TRUE);
     if (options != NULL) {
       options->gapped_calculation = TRUE;
       options->db_length = 20000000;
@@ -2619,7 +2622,7 @@ static void AddBlastAlignment (Int4 uid, Int2 numAlign, Int4Ptr alignuids, Uint2
     }
   } else
     return;
-  search = BLASTSetUpSearch (subject, options->program_name, 0, 0, NULL, options, NULL);
+  search = BLASTSetUpSearch (subject, program_name, 0, 0, NULL, options, NULL);
 
   for (i = 0; i < numAlign; i++) {
     if (alignuids [i] != uid) {

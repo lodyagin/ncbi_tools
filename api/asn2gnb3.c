@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.113 $
+* $Revision: 1.129 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -73,8 +73,6 @@ static CharPtr link_encode = "http://www.nhgri.nih.gov/10005107";
 
 static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
 static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
-
-static CharPtr link_gold_stamp_id = "http://genomesonline.org/GOLD_CARDS/";
 
 
 /* ********************************************************************** */
@@ -411,7 +409,8 @@ static CharPtr GetMolInfoCommentString (
 }
 
 static CharPtr GetStrForBankit (
-  UserObjectPtr uop
+  UserObjectPtr uop,
+  Boolean dumpMode
 )
 
 {
@@ -428,6 +427,8 @@ static CharPtr GetStrForBankit (
     if (StringCmp(oip->str, "UniVecComment") == 0) {
       uvc = ufp->data.ptrvalue;
     } else if (StringCmp(oip->str, "AdditionalComment") == 0) {
+      bic = ufp->data.ptrvalue;
+    } else if (StringCmp(oip->str, "SmartComment") == 0 && dumpMode) {
       bic = ufp->data.ptrvalue;
     }
   }
@@ -457,7 +458,7 @@ static CharPtr reftxt5 = " This record has been curated by ";
 static CharPtr reftxt6 = " This record is predicted by automated computational analysis.";
 static CharPtr reftxt7 = " This record is provided to represent a collection of whole genome shotgun sequences.";
 static CharPtr reftxt9 = " This record is derived from an annotated genomic sequence (";
-static CharPtr reftxt21 = "NCBI contigs are derived from assembled genomic sequence data.";
+static CharPtr reftxt21 = " NCBI contigs are derived from assembled genomic sequence data.";
 static CharPtr reftxt22 = " Features on this sequence have been produced for build ";
 static CharPtr reftxt23 = " of the NCBI's genome annotation";
 static CharPtr reftxt41 = " This record is based on preliminary annotation provided by ";
@@ -743,7 +744,7 @@ static void AddStrForRefTrack (
         FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
       }
 
-      FFAddOneString (ffstring, "].  ", FALSE, FALSE, TILDE_EXPAND);
+      FFAddOneString (ffstring, "].", FALSE, FALSE, TILDE_EXPAND);
     }
     if (generated) {
       FFAddOneString (ffstring, reftxtg, FALSE, FALSE, TILDE_IGNORE);
@@ -1299,11 +1300,13 @@ static CharPtr GetPrimaryStrForDelta (
 static CharPtr GetStrForTpaOrRefSeqHist (
   BioseqPtr bsp,
   Boolean isRefSeq,
-  Boolean isTsa
+  Boolean isTsa,
+  Boolean forcePrimaryBlock
 )
 
 {
   Boolean      accn;
+  Char         bfr [100];
   Char         buf [100];
   DbtagPtr     dbt;
   Int4         gi;
@@ -1339,12 +1342,16 @@ static CharPtr GetStrForTpaOrRefSeqHist (
       if (sip != NULL) {
         id = NULL;
         accn = FALSE;
+        buf [0] = '\0';
         if (sip->choice == SEQID_GI) {
           gi = (Int4) sip->data.intvalue;
           if (GetAccnVerFromServer (gi, buf)) {
             accn = TRUE;
           } else {
             id = GetSeqIdForGI (gi);
+          }
+          if (id == NULL && forcePrimaryBlock) {
+            id = SeqIdDup (sip);
           }
         } else {
           id = SeqIdDup (sip);
@@ -1363,58 +1370,58 @@ static CharPtr GetStrForTpaOrRefSeqHist (
             sprintf (tmp, "~%ld-%ld                                        ",
                      (long) (oldstop + 1), (long) (start));
             tmp [21] = '\0';
-            StringCpy (buf, "                                        ");
+            StringCpy (bfr, "                                        ");
             k = 0;
             if (StreamCacheSetup (bsp, NULL, 0, &sc)) {
               if (start - oldstop < 15) {
                 StreamCacheSetPosition (&sc, oldstop);
-                buf [k] = '"';
+                bfr [k] = '"';
                 k++;
                 max = start - oldstop;
                 for (j = 0; j < max; j++) {
                   residue = StreamCacheGetResidue (&sc);
-                  buf [k] = (Char) residue;
+                  bfr [k] = (Char) residue;
                   k++;
                 }
-                buf [k] = '"';
+                bfr [k] = '"';
                 k++;
               } else {
                 StreamCacheSetPosition (&sc, oldstop);
-                buf [k] = '"';
+                bfr [k] = '"';
                 k++;
                 for (j = 0; j < 4; j++) {
                   residue = StreamCacheGetResidue (&sc);
-                  buf [k] = (Char) residue;
+                  bfr [k] = (Char) residue;
                   k++;
                 }
-                buf [k] = '.';
+                bfr [k] = '.';
                 k++;
-                buf [k] = '.';
+                bfr [k] = '.';
                 k++;
-                buf [k] = '.';
+                bfr [k] = '.';
                 k++;
                 StreamCacheSetPosition (&sc, start - 4);
                 for (j = 0; j < 4; j++) {
                   residue = StreamCacheGetResidue (&sc);
-                  buf [k] = (Char) residue;
+                  bfr [k] = (Char) residue;
                   k++;
                 }
-                buf [k] = '"';
+                bfr [k] = '"';
                 k++;
               }
             } else {
               /*
-              StringCpy (buf, "inserted base(s)");
+              StringCpy (bfr, "inserted base(s)");
               */
             }
-            buf [k] = '\0';
-            StringCat (buf, "                                        ");
-            buf [18] = '\0';
-            StringCat (tmp, buf);
-            sprintf (buf, " %ld-%ld                                        ",
+            bfr [k] = '\0';
+            StringCat (bfr, "                                        ");
+            bfr [18] = '\0';
+            StringCat (tmp, bfr);
+            sprintf (bfr, " %ld-%ld                                        ",
                      (long) 1, (long) (start - oldstop));
-            buf [21] = '\0';
-            StringCat (tmp, buf);
+            bfr [21] = '\0';
+            StringCat (tmp, bfr);
             ValNodeCopyStr (&head, 0, tmp);
           }
           oldstop = stop + 1;
@@ -1576,183 +1583,6 @@ static CharPtr GetStrForGenome (
   /* !!! need to implement !!! */
 
   return NULL;
-}
-
-static CharPtr StrucCommentFFEndPrint (
-  IntAsn2gbJobPtr ajp,
-  StringItemPtr ffstring,
-  FmtType format,
-  Int2 gb_init_indent,
-  Int2 gb_cont_indent,
-  Int2 eb_init_indent,
-  Int2 eb_cont_indent,
-  CharPtr eb_line_prefix
-)
-{
-  StringItemPtr temp = FFGetString(ajp);
-  CharPtr result;
-
-  if ( (ffstring == NULL) || (ajp == NULL) ) return NULL;
-
-  if (format == GENBANK_FMT || format == GENPEPT_FMT) {
-    FFLineWrap (temp, ffstring, gb_init_indent, gb_cont_indent, ASN2FF_GB_MAX - 12, NULL);
-  } else {
-    FFLineWrap (temp, ffstring, eb_init_indent, eb_cont_indent, ASN2FF_EMBL_MAX - 5, eb_line_prefix);
-  }
-  result = FFToCharPtr (temp);
-  FFRecycleString (ajp, temp);
-  return result;
-}
-
-static CharPtr GetStrForStructuredComment (
-  Asn2gbWorkPtr awp,
-  IntAsn2gbJobPtr ajp,
-  UserObjectPtr uop,
-  BioseqPtr bsp
-)
-
-{
-  UserFieldPtr   curr;
-  StringItemPtr  ffstring;
-  CharPtr        field;
-  ValNodePtr     head = NULL;
-  size_t         len;
-  size_t         max = 0;
-  ObjectIdPtr    oip;
-  CharPtr        prefix = NULL;
-  CharPtr        str;
-  CharPtr        suffix = NULL;
-  CharPtr        tmp;
-
-  if (awp == NULL || ajp == NULL || uop == NULL) return NULL;
-  if ((oip = uop->type) == NULL) return NULL;
-  if (StringCmp (oip->str, "StructuredComment") != 0) return NULL;
-
-  ffstring = FFGetString (ajp);
-  if (ffstring == NULL) return NULL;
-
-  for (curr = uop->data; curr != NULL; curr = curr->next) {
-   if (curr->choice != 1) continue;
-    oip = curr->label;
-    if (oip == NULL) continue;
-    field = oip->str;
-    if (StringHasNoText (field)) continue;
-    if (StringCmp (field, "StructuredCommentPrefix") == 0) {
-      str = (CharPtr) curr->data.ptrvalue;
-      if (StringDoesHaveText (str)) {
-        prefix = str;
-      }
-      continue;
-    }
-    if (StringCmp (field, "StructuredCommentSuffix") == 0) {
-      str = (CharPtr) curr->data.ptrvalue;
-      if (StringDoesHaveText (str)) {
-        suffix = str;
-      }
-      continue;
-    }
-    len = StringLen (field);
-    if (len > max) {
-      max = len;
-    }
-  }
-
-  if (StringHasNoText (prefix)) {
-    prefix = "##Metadata-START##";
-  }
-  if (StringHasNoText (suffix)) {
-    suffix = "##Metadata-END##";
-  }
-
-  if (StringDoesHaveText (prefix)) {
-    tmp = (CharPtr) MemNew (StringLen (prefix) + 4);
-    if (tmp != NULL) {
-      sprintf (tmp, "%s\n", prefix);
-      ValNodeAddStr (&head, 0, tmp);  
-    }
-  }
-  if (max > 79) {
-    for (curr = uop->data; curr != NULL; curr = curr->next) {
-     if (curr->choice != 1) continue;
-      oip = curr->label;
-      if (oip == NULL) continue;
-      field = oip->str;
-      if (StringHasNoText (field)) continue;
-      if (StringCmp (field, "StructuredCommentPrefix") == 0) continue;
-      if (StringCmp (field, "StructuredCommentSuffix") == 0) continue;
-      str = (CharPtr) curr->data.ptrvalue;
-      if (StringHasNoText (str)) continue;
-      ValNodeCopyStr (&head, 0, field);
-      ValNodeCopyStr (&head, 0, " ");
-      ValNodeCopyStr (&head, 0, str);
-      ValNodeCopyStr (&head, 0, "\n");
-    }
-  } else {
-    for (curr = uop->data; curr != NULL; curr = curr->next) {
-     if (curr->choice != 1) continue;
-      oip = curr->label;
-      if (oip == NULL) continue;
-      field = oip->str;
-      if (StringHasNoText (field)) continue;
-      if (StringCmp (field, "StructuredCommentPrefix") == 0) continue;
-      if (StringCmp (field, "StructuredCommentSuffix") == 0) continue;
-      str = (CharPtr) curr->data.ptrvalue;
-      if (StringHasNoText (str)) continue;
-      len = max + StringLen (str) + 4;
-      FFStartPrint (ffstring, GENBANK_FMT, 0, max + 1, field, max + 1, 0, max + 1, field, TRUE);
-      if (GetWWW (ajp) && StringCmp (field, "GOLD Stamp ID") == 0 && StringNCmp (str, "Gi", 2) == 0) {
-        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-        FF_Add_NCBI_Base_URL (ffstring, link_gold_stamp_id);
-        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
-        FFAddOneString (ffstring, ".html", FALSE, FALSE, TILDE_EXPAND);
-        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
-        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-      } else {
-        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
-      }
-      /*
-      FFAddOneString (ffstring, "\n", FALSE, FALSE, TILDE_EXPAND);
-      */
-      tmp = StrucCommentFFEndPrint (ajp, ffstring, awp->format, max + 1, max + 1, 0, max + 1, NULL);
-      ValNodeCopyStr (&head, 0, tmp);
-      MemFree (tmp);
-      FFRecycleString (ajp, ffstring);
-      ffstring = FFGetString (ajp);
-      /*
-      tmp = (CharPtr) MemNew (len);
-      if (tmp == NULL) continue;
-      StringCpy (tmp, field);
-      len = StringLen (tmp);
-      while (len < max) {
-        tmp [len] = ' ';
-        len++;
-      }
-      tmp [len] = '\0';
-      StringCat (tmp, " ");
-      StringCat (tmp, str);
-      StringCat (tmp, "\n");
-      ValNodeCopyStr (&head, 0, tmp);
-      MemFree (tmp);
-      */
-    }
-  }
-  if (StringDoesHaveText (suffix)) {
-    tmp = (CharPtr) MemNew (StringLen (suffix) + 4);
-    if (tmp != NULL) {
-      sprintf (tmp, "%s\n", suffix);
-      ValNodeAddStr (&head, 0, tmp);  
-    }
-  }
-
-  if (head == NULL) return NULL;
-
-  str = MergeFFValNodeStrs (head);
-  ValNodeFreeData (head);
-
-  FFRecycleString (ajp, ffstring);
-
-  return str;
 }
 
 static void AddAltPrimaryBlock (
@@ -2022,7 +1852,7 @@ NLM_EXTERN void AddPrimaryBlock (
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return;
 
-  str = GetStrForTpaOrRefSeqHist (bsp, isRefSeq, isTsa);
+  str = GetStrForTpaOrRefSeqHist (bsp, isRefSeq, isTsa, awp->forcePrimaryBlock);
   if (str != NULL) {
 
     bbp = (BaseBlockPtr) Asn2gbAddBlock (awp, PRIMARY_BLOCK, sizeof (BaseBlock));
@@ -2212,6 +2042,7 @@ NLM_EXTERN void AddCommentBlock (
   Boolean            is_other = FALSE;
   Boolean            is_tpa = FALSE;
   Boolean            is_wgs = FALSE;
+  Boolean            isRefSeqStandard = FALSE;
   SeqLitPtr          litp;
   ObjectIdPtr        localID = NULL;
   Char               locusID [32];
@@ -2227,6 +2058,7 @@ NLM_EXTERN void AddCommentBlock (
   /*
   SeqFeatPtr         sfp;
   */
+  Boolean            showedLocalID = FALSE;
   Boolean            showGBBSource = FALSE;
   SeqIdPtr           sip;
   CharPtr            str;
@@ -2234,7 +2066,7 @@ NLM_EXTERN void AddCommentBlock (
   Char               tmp [32];
   TextSeqIdPtr       tsip;
   UserFieldPtr       ufp;
-  UserObjectPtr      uop = NULL;
+  UserObjectPtr      uop;
   CharPtr            wgsaccn = NULL;
   CharPtr            wgsname = NULL;
   StringItemPtr      ffstring = NULL;
@@ -2349,7 +2181,7 @@ NLM_EXTERN void AddCommentBlock (
               if ( GetWWW(ajp) ) {
                 FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
               }
-              FFAddOneString (ffstring, ": ", FALSE, FALSE, TILDE_IGNORE);
+              FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
 
               FFAddOneString (ffstring, reftxt22, FALSE, FALSE, TILDE_EXPAND);
               FFAddOneString (ffstring, genomeBuildNumber, FALSE, FALSE, TILDE_EXPAND);
@@ -2457,7 +2289,7 @@ NLM_EXTERN void AddCommentBlock (
               if ( GetWWW(ajp) ) {
                 FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
               }
-              FFAddOneString (ffstring, ":  ", FALSE, FALSE, TILDE_IGNORE);
+              FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
 
               if (! StringHasNoText (genomeBuildNumber)) {
                 FFAddOneString (ffstring, reftxt22, FALSE, FALSE, TILDE_EXPAND);
@@ -2651,6 +2483,29 @@ NLM_EXTERN void AddCommentBlock (
 
       is_tpa = TRUE;
 
+      tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+      if (tsip != NULL && tsip->accession != NULL) {
+        acclen = StringLen (tsip->accession);
+        if (acclen == 12) {
+          is_wgs = TRUE;
+          if (StringCmp (tsip->accession + 6, "000000") == 0) {
+            wgsaccn = tsip->accession;
+            wgsname = tsip->name; /* master accession has 8 zeroes, name has project version plus 6 zeroes */
+          }
+        } else if (acclen == 13) {
+          is_wgs = TRUE;
+          if (StringCmp (tsip->accession + 6, "0000000") == 0) {
+            wgsaccn = tsip->accession;
+            wgsname = tsip->name; /* master accession has 9 zeroes, name has project version plus 7 zeroes */
+          }
+        } else if (ajp->newSourceOrg && StringLen (tsip->accession) == 6) {
+          ch = tsip->accession [0];
+          if (ch == 'J' || ch == 'K' || ch == 'L' || ch == 'M') {
+            showGBBSource = TRUE;
+          }
+        }
+      }
+
     } else if (sip->choice == SEQID_GENBANK || sip->choice == SEQID_EMBL || sip->choice == SEQID_DDBJ) {
 
       is_collab = TRUE;
@@ -2733,11 +2588,13 @@ NLM_EXTERN void AddCommentBlock (
         if (! StringHasNoText (localID->str)) {
           if (StringLen (localID->str) < 1000) {
             sprintf (buf, "LocalID: %s", localID->str);
+            showedLocalID = TRUE;
           } else {
             sprintf (buf, "LocalID string too large");
           }
         } else {
           sprintf (buf, "LocalID: %ld", (long) localID->id);
+          showedLocalID = TRUE;
         }
 
         cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
@@ -2851,7 +2708,12 @@ NLM_EXTERN void AddCommentBlock (
       }
 
       if (! ajp->flags.hideBankItComment) {
-        str = GetStrForBankit (uop);
+        str = GetStrForBankit (uop, (Boolean) (awp->mode == DUMP_MODE));
+        if (str != NULL && showedLocalID && awp->mode == SEQUIN_MODE) {
+          if (StringNICmp (str, "Bankit Comment: LocalID:", 24) == 0) {
+            str = NULL;
+          }
+        }
         if (str != NULL) {
 
           cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
@@ -2956,6 +2818,62 @@ NLM_EXTERN void AddCommentBlock (
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL) {
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop != NULL) {
+      oip = uop->type;
+      if (oip != NULL && StringCmp (oip->str, "RefSeqGene") == 0) {
+        for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+          oip = ufp->label;
+          if (oip != NULL && StringCmp(oip->str, "Status") == 0 && ufp->choice == 1) {
+            str = (CharPtr) ufp->data.ptrvalue;
+            if (str != NULL && StringICmp (str, "Reference Standard") == 0) {
+              isRefSeqStandard = TRUE;
+            }
+          }
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+  if (isRefSeqStandard) {
+    cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+    if (cbp != NULL) {
+
+      cbp->entityID = awp->entityID;
+      cbp->first = first;
+      first = FALSE;
+
+      if (cbp->first) {
+        FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+      } else {
+        FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+      }
+
+        FFAddOneString (ffstring, "This sequence is a reference standard in the ",
+                        FALSE, FALSE, TILDE_IGNORE);
+      if ( GetWWW(ajp) ) {
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, "http://www.ncbi.nlm.nih.gov/RefSeq/RSG");
+        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "RefSeqGene", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+      } else {
+        FFAddOneString (ffstring, "RefSeqGene", FALSE, FALSE, TILDE_IGNORE);
+      }
+      FFAddOneString (ffstring, " project.", FALSE, FALSE, TILDE_IGNORE);
+
+      cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
+      FFRecycleString(ajp, ffstring);
+      ffstring = FFGetString(ajp);
+
+      if (awp->afp != NULL) {
+        DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+      }
+    }
   }
 
   if (bsp->repr == Seq_repr_delta && bsp->seq_ext_type == 4 && is_wgs) {
@@ -3275,13 +3193,10 @@ NLM_EXTERN void AddCommentBlock (
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
   while (sdp != NULL) {
-
     uop = (UserObjectPtr) sdp->data.ptrvalue;
     if (uop != NULL) {
-
-      str = GetStrForStructuredComment (awp, ajp, uop, bsp);
-      if (str != NULL) {
-
+      oip = uop->type;
+      if (oip != NULL && StringCmp (oip->str, "StructuredComment") == 0) {
         cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
         if (cbp != NULL) {
 
@@ -3291,24 +3206,10 @@ NLM_EXTERN void AddCommentBlock (
           cbp->first = first;
           first = FALSE;
 
-          if (cbp->first) {
-            FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
-          } else {
-            FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
-            FFAddOneString (ffstring, "\n", FALSE, FALSE, TILDE_EXPAND);
-          }
-
-          FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
-
-          cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
-          FFRecycleString(ajp, ffstring);
-          ffstring = FFGetString(ajp);
-
           if (awp->afp != NULL) {
             DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
           }
         }
-        MemFree (str);
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
@@ -4381,7 +4282,7 @@ NLM_EXTERN void AddSourceFeatBlock (
       }
     }
 
-    str = FFFlatLoc (ajp, bsp, &vn, (Boolean) (awp->style == MASTER_STYLE));
+    str = FFFlatLoc (ajp, bsp, &vn, (Boolean) (awp->style == MASTER_STYLE), FALSE);
     if ( GetWWW(ajp) ) {
       FF_www_featloc (ffstring, str);
     } else {
@@ -4732,6 +4633,8 @@ static void GetFeatsOnCdsProduct (
             ifp->mapToGen = FALSE;
             ifp->mapToMrna = FALSE;
             ifp->mapToPep = FALSE;
+            ifp->left = 0;
+            ifp->right = 0;
             ifp->firstfeat = awp->firstfeat;
             awp->firstfeat = FALSE;
 
@@ -4809,7 +4712,7 @@ static void GetRemoteFeatsOnCdsProduct (
       if (sap->type != 1) continue;
       for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
         publist = NULL;
-        CleanUpSeqFeat (sfp, FALSE, FALSE, TRUE, &publist);
+        CleanUpSeqFeat (sfp, FALSE, FALSE, TRUE, TRUE, &publist);
         sfp->idx.subtype = FindFeatDefType (sfp);
         ValNodeFreeData (publist);
         ValNodeAddPointer (&head, 0, (Pointer) sfp);
@@ -4897,6 +4800,8 @@ static void GetRemoteFeatsOnCdsProduct (
             ifp->mapToGen = FALSE;
             ifp->mapToMrna = FALSE;
             ifp->mapToPep = FALSE;
+            ifp->left = 0;
+            ifp->right = 0;
             ifp->firstfeat = awp->firstfeat;
             awp->firstfeat = FALSE;
 
@@ -5347,6 +5252,18 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       }
       break;
 
+    case FEATDEF_operon:
+      /* operon requires FTQUAL_operon */
+      gbq = sfp->qual;
+      while (gbq != NULL) {
+        if (StringICmp (gbq->qual, "operon") == 0 && (StringDoesHaveText (gbq->val))) {
+          okay = TRUE;
+          break;
+        }
+        gbq = gbq->next;
+      }
+      break;
+
     case FEATDEF_ncRNA:
       /* ncRNA requires FTQUAL_ncRNA_class */
       gbq = sfp->qual;
@@ -5419,8 +5336,11 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   ifp->mapToGen = FALSE;
   ifp->mapToMrna = FALSE;
   ifp->mapToPep = FALSE;
+  ifp->left = 0;
+  ifp->right = 0;
   ifp->firstfeat = awp->firstfeat;
   awp->firstfeat = FALSE;
+
   /* this allows remote SNP, CDD, MGC, etc., not to be treated as local annotation */
   if (awp->entityID != fbp->entityID || fbp->itemID <= awp->localFeatCount) {
     awp->featseen = TRUE;
@@ -5443,7 +5363,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
             is_whole = TRUE;
           } else if (slp->choice == SEQLOC_INT) {
             sintp = (SeqIntPtr) slp->data.ptrvalue;
-            if (sintp != NULL &&
+            if (sintp != NULL && 
+                bsp != NULL &&
                 sintp->from == 0 &&
                 sintp->to == bsp->length - 1) {
               is_whole = TRUE;
@@ -5472,7 +5393,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
 
   /* optionally map CDS from cDNA onto genomic */
 
-  if (awp->isGPS && ISA_na (bsp->mol) && awp->copyGpsCdsUp &&
+  if (awp->isGPS && bsp != NULL && ISA_na (bsp->mol) && awp->copyGpsCdsUp &&
       fcontext->featdeftype == FEATDEF_mRNA) {
     sip = SeqLocIdForProduct (sfp->product);
     bsp = BioseqFind (sip);
@@ -5492,6 +5413,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
           ifp->mapToGen = TRUE;
           ifp->mapToMrna = FALSE;
           ifp->mapToPep = FALSE;
+          ifp->left = 0;
+          ifp->right = 0;
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
 
@@ -5605,16 +5528,19 @@ static Boolean LIBCALLBACK GetFeatsOnSeg (
   Uint4            accntype;
   IntAsn2gbJobPtr  ajp;
   Asn2gbWorkPtr    awp;
+  BaseBlockPtr     bbp;
   BioseqPtr        bsp;
   time_t           currTime;
   Uint2            entityID;
   Int4             from;
+  ValNodePtr       gap;
   Int4             gi;
   Int4             left;
   SeqLocPtr        loc;
   CharPtr          ptr;
   Int4             right;
   SeqIdPtr         sip;
+  CharPtr          str;
   Int4             to;
   WgsAccnPtr       wap = NULL;
 
@@ -5623,6 +5549,26 @@ static Boolean LIBCALLBACK GetFeatsOnSeg (
   if (awp == NULL) return FALSE;
   ajp = awp->ajp;
   if (ajp == NULL) return FALSE;
+
+  gap = awp->currfargap;
+  if (gap != NULL) {
+    awp->currfargap = gap->next;
+
+    str = (CharPtr) gap->data.ptrvalue;
+    if (StringDoesHaveText (str)) {
+
+      bbp = Asn2gbAddBlock (awp, FEATHEADER_BLOCK, sizeof (BaseBlock));
+      if (bbp != NULL) {
+
+        bbp->entityID = awp->entityID;
+        bbp->string = StringSave (str);
+
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, bbp);
+        }
+      }
+    }
+  }
 
   /* do not fetch outside of desired component */
 
@@ -5809,6 +5755,8 @@ NLM_EXTERN void AddFeatureBlock (
                 ifp->mapToMrna = TRUE;
                 ifp->mapToPep = FALSE;
                 ifp->isCDS = TRUE;
+                ifp->left = 0;
+                ifp->right = 0;
                 ifp->firstfeat = awp->firstfeat;
                 awp->firstfeat = FALSE;
 
@@ -5852,6 +5800,8 @@ NLM_EXTERN void AddFeatureBlock (
           awp->farFeatStartTime = GetSecs ();
         }
 
+        awp->currfargap = ajp->fargaps;
+
         /* if farFeatsSuppress first collect features on remote segments in MASTER_STYLE */
 
         SeqMgrExploreSegments (bsp, (Pointer) awp, GetFeatsOnSeg);
@@ -5894,6 +5844,8 @@ NLM_EXTERN void AddFeatureBlock (
           ifp->mapToMrna = FALSE;
           ifp->mapToPep = FALSE;
           ifp->isCDS = TRUE;
+          ifp->left = 0;
+          ifp->right = 0;
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
 
@@ -5919,6 +5871,8 @@ NLM_EXTERN void AddFeatureBlock (
           ifp->mapToMrna = FALSE;
           ifp->mapToPep = FALSE;
           ifp->isCDS = TRUE;
+          ifp->left = 0;
+          ifp->right = 0;
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
 
@@ -5954,6 +5908,8 @@ NLM_EXTERN void AddFeatureBlock (
           ifp->mapToGen = FALSE;
           ifp->mapToMrna = FALSE;
           ifp->mapToPep = TRUE;
+          ifp->left = 0;
+          ifp->right = 0;
           ifp->firstfeat = awp->firstfeat;
           awp->firstfeat = FALSE;
 
@@ -5978,6 +5934,8 @@ NLM_EXTERN void AddFeatureBlock (
       if (awp->farFeatTimeLimit) {
         awp->farFeatStartTime = GetSecs ();
       }
+
+      awp->currfargap = ajp->fargaps;
 
       /* if not farFeatsSuppress now collect features on remote segments in MASTER_STYLE */
 

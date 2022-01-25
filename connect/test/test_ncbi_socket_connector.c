@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_socket_connector.c,v 6.11 2009/04/10 23:04:30 kazimird Exp $
+/* $Id: test_ncbi_socket_connector.c,v 6.13 2010/02/05 20:35:05 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,11 +30,11 @@
  *
  */
 
-#include "ncbi_conntest.h"
-#include "../ncbi_ansi_ext.h"
-#include "../ncbi_priv.h"
 #include <connect/ncbi_socket_connector.h>
 #include <connect/ncbi_connutil.h>
+#include "../ncbi_ansi_ext.h"
+#include "../ncbi_priv.h"               /* CORE logging facilities */
+#include "ncbi_conntest.h"
 #include <stdlib.h>
 /* This header must go last */
 #include "test_assert.h"
@@ -71,12 +71,13 @@ int main(int argc, const char* argv[])
     char          tmo[32];
     SOCK          sock;
 
-    /* registry */
-    CORE_SetREG(REG_Create(0, s_REG_Get, 0, 0, 0));
     /* log and data log streams */
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
+
+    /* registry */
+    CORE_SetREG(REG_Create(0, s_REG_Get, 0, 0, 0));
 
     assert((net_info = ConnNetInfo_Create(0)) != 0);
 
@@ -170,7 +171,9 @@ int main(int argc, const char* argv[])
     /* cleanup, exit */
     ConnNetInfo_Destroy(net_info);
     fclose(data_file);
-    CORE_SetLOG(0);
     CORE_SetREG(0);
+
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
+    CORE_SetLOG(0);
     return 0/*okay*/;
 }

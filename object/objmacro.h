@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Macro
-*    Generated using ASNCODE Revision: 6.16 at May 12, 2009  9:09 AM
+*    Generated using ASNCODE Revision: 6.17 at Jul 26, 2010  2:39 PM
 *
 **************************************************/
 
@@ -127,6 +127,23 @@ NLM_EXTERN Boolean LIBCALL StringConstraintAsnWrite PROTO (( StringConstraintPtr
 #define Partial_constraint_partial 1
 #define Partial_constraint_complete 2
 
+/* following #defines are for enumerated type, not used by object loaders */
+#define Location_type_constraint_any 0
+#define Location_type_constraint_single_interval 1
+#define Location_type_constraint_joined 2
+#define Location_type_constraint_ordered 3
+
+typedef ValNodePtr LocationPosConstraintPtr;
+typedef ValNode LocationPosConstraint;
+#define LocationPosConstraint_dist_from_end 1
+#define LocationPosConstraint_max_dist_from_end 2
+#define LocationPosConstraint_min_dist_from_end 3
+
+
+NLM_EXTERN LocationPosConstraintPtr LIBCALL LocationPosConstraintFree PROTO ((LocationPosConstraintPtr ));
+NLM_EXTERN LocationPosConstraintPtr LIBCALL LocationPosConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL LocationPosConstraintAsnWrite PROTO (( LocationPosConstraintPtr , AsnIoPtr, AsnTypePtr));
+
 
 
 /**************************************************
@@ -139,6 +156,9 @@ typedef struct struct_Location_constraint {
    Uint2   seq_type;
    Uint2   partial5;
    Uint2   partial3;
+   Uint2   location_type;
+   ValNodePtr   end5;
+   ValNodePtr   end3;
 } LocationConstraint, PNTR LocationConstraintPtr;
 
 
@@ -316,6 +336,8 @@ NLM_EXTERN Boolean LIBCALL LocationConstraintAsnWrite PROTO (( LocationConstrain
 #define Feat_qual_legal_satellite 65
 #define Feat_qual_legal_satellite_type 66
 #define Feat_qual_legal_satellite_name 67
+#define Feat_qual_legal_location 68
+#define Feat_qual_legal_tag_peptide 69
 
 
 
@@ -457,6 +479,7 @@ NLM_EXTERN Boolean LIBCALL RnaFeatTypeAsnWrite PROTO (( RnaFeatTypePtr , AsnIoPt
 #define Rna_field_gene_locus_tag 10
 #define Rna_field_gene_synonym 11
 #define Rna_field_gene_comment 12
+#define Rna_field_tag_peptide 13
 
 
 
@@ -1066,6 +1089,35 @@ NLM_EXTERN PubFieldConstraintPtr LIBCALL PubFieldConstraintNew PROTO (( void ));
 NLM_EXTERN PubFieldConstraintPtr LIBCALL PubFieldConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL PubFieldConstraintAsnWrite PROTO (( PubFieldConstraintPtr , AsnIoPtr, AsnTypePtr));
 
+typedef ValNodePtr PubFieldSpecialConstraintTypePtr;
+typedef ValNode PubFieldSpecialConstraintType;
+#define PubFieldSpecialConstraintType_is_present 1
+#define PubFieldSpecialConstraintType_is_not_present 2
+#define PubFieldSpecialConstraintType_is_all_caps 3
+
+
+NLM_EXTERN PubFieldSpecialConstraintTypePtr LIBCALL PubFieldSpecialConstraintTypeFree PROTO ((PubFieldSpecialConstraintTypePtr ));
+NLM_EXTERN PubFieldSpecialConstraintTypePtr LIBCALL PubFieldSpecialConstraintTypeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL PubFieldSpecialConstraintTypeAsnWrite PROTO (( PubFieldSpecialConstraintTypePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    PubFieldSpecialConstraint
+*
+**************************************************/
+typedef struct struct_Pub_field_special_constraint {
+   Uint2   field;
+   ValNodePtr   constraint;
+} PubFieldSpecialConstraint, PNTR PubFieldSpecialConstraintPtr;
+
+
+NLM_EXTERN PubFieldSpecialConstraintPtr LIBCALL PubFieldSpecialConstraintFree PROTO ((PubFieldSpecialConstraintPtr ));
+NLM_EXTERN PubFieldSpecialConstraintPtr LIBCALL PubFieldSpecialConstraintNew PROTO (( void ));
+NLM_EXTERN PubFieldSpecialConstraintPtr LIBCALL PubFieldSpecialConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL PubFieldSpecialConstraintAsnWrite PROTO (( PubFieldSpecialConstraintPtr , AsnIoPtr, AsnTypePtr));
+
 
 
 /**************************************************
@@ -1076,6 +1128,7 @@ NLM_EXTERN Boolean LIBCALL PubFieldConstraintAsnWrite PROTO (( PubFieldConstrain
 typedef struct struct_Publication_constraint {
    Uint2   type;
    struct struct_Pub_field_constraint PNTR   field;
+   struct struct_Pub_field_special_constraint PNTR   special_field;
 } PublicationConstraint, PNTR PublicationConstraintPtr;
 
 
@@ -1218,6 +1271,17 @@ NLM_EXTERN SequenceConstraintMolTypeConstraintPtr LIBCALL SequenceConstraintMolT
 NLM_EXTERN SequenceConstraintMolTypeConstraintPtr LIBCALL SequenceConstraintMolTypeConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL SequenceConstraintMolTypeConstraintAsnWrite PROTO (( SequenceConstraintMolTypeConstraintPtr , AsnIoPtr, AsnTypePtr));
 
+typedef ValNodePtr QuantityConstraintPtr;
+typedef ValNode QuantityConstraint;
+#define QuantityConstraint_equals 1
+#define QuantityConstraint_greater_than 2
+#define QuantityConstraint_less_than 3
+
+
+NLM_EXTERN QuantityConstraintPtr LIBCALL QuantityConstraintFree PROTO ((QuantityConstraintPtr ));
+NLM_EXTERN QuantityConstraintPtr LIBCALL QuantityConstraintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL QuantityConstraintAsnWrite PROTO (( QuantityConstraintPtr , AsnIoPtr, AsnTypePtr));
+
 
 
 /**************************************************
@@ -1229,6 +1293,7 @@ typedef struct struct_Sequence_constraint {
    ValNodePtr   seqtype;
    struct struct_String_constraint PNTR   id;
    Uint2   feature;
+   ValNodePtr   num_features;
 } SequenceConstraint, PNTR SequenceConstraintPtr;
 
 
@@ -1273,6 +1338,17 @@ NLM_EXTERN Boolean LIBCALL ConstraintChoiceSetAsnWrite PROTO (( ConstraintChoice
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 
+typedef ValNodePtr TextMarkerPtr;
+typedef ValNode TextMarker;
+#define TextMarker_free_text 1
+#define TextMarker_digits 2
+#define TextMarker_letters 3
+
+
+NLM_EXTERN TextMarkerPtr LIBCALL TextMarkerFree PROTO ((TextMarkerPtr ));
+NLM_EXTERN TextMarkerPtr LIBCALL TextMarkerAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL TextMarkerAsnWrite PROTO (( TextMarkerPtr , AsnIoPtr, AsnTypePtr));
+
 
 
 /**************************************************
@@ -1281,9 +1357,9 @@ NLM_EXTERN Boolean LIBCALL ConstraintChoiceSetAsnWrite PROTO (( ConstraintChoice
 *
 **************************************************/
 typedef struct struct_Text_portion {
-   CharPtr   left_text;
+   ValNodePtr   left_marker;
    Uint1   include_left;
-   CharPtr   right_text;
+   ValNodePtr   right_marker;
    Uint1   include_right;
    Uint1   inside;
    Uint1   case_sensitive;
@@ -1386,6 +1462,13 @@ NLM_EXTERN EditActionPtr LIBCALL EditActionNew PROTO (( void ));
 NLM_EXTERN EditActionPtr LIBCALL EditActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL EditActionAsnWrite PROTO (( EditActionPtr , AsnIoPtr, AsnTypePtr));
 
+/* following #defines are for enumerated type, not used by object loaders */
+#define Cap_change_none 0
+#define Cap_change_tolower 1
+#define Cap_change_toupper 2
+#define Cap_change_firstcap 3
+#define Cap_change_firstcaprestnochange 4
+
 
 
 /**************************************************
@@ -1397,6 +1480,7 @@ typedef struct struct_Convert_action {
    ValNodePtr   fields;
    Uint1   strip_name;
    Uint1   keep_original;
+   Uint2   capitalization;
    Uint2   existing_text;
 } ConvertAction, PNTR ConvertActionPtr;
 
@@ -1496,12 +1580,6 @@ NLM_EXTERN ActionChoicePtr LIBCALL ActionChoiceFree PROTO ((ActionChoicePtr ));
 NLM_EXTERN ActionChoicePtr LIBCALL ActionChoiceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ActionChoiceAsnWrite PROTO (( ActionChoicePtr , AsnIoPtr, AsnTypePtr));
 
-/* following #defines are for enumerated type, not used by object loaders */
-#define Cap_change_none 0
-#define Cap_change_tolower 1
-#define Cap_change_toupper 2
-#define Cap_change_firstcap 3
-
 typedef ValNodePtr ParseSrcOrgChoicePtr;
 typedef ValNode ParseSrcOrgChoice;
 #define ParseSrcOrgChoice_source_qual 1
@@ -1599,6 +1677,7 @@ typedef ValNodePtr LocationChoicePtr;
 typedef ValNode LocationChoice;
 #define LocationChoice_interval 1
 #define LocationChoice_whole_sequence 2
+#define LocationChoice_point 3
 
 
 NLM_EXTERN LocationChoicePtr LIBCALL LocationChoiceFree PROTO ((LocationChoicePtr ));
@@ -1899,6 +1978,8 @@ typedef ValNode LocationEditType;
 #define LocationEditType_set_3_partial 4
 #define LocationEditType_clear_3_partial 5
 #define LocationEditType_convert 6
+#define LocationEditType_extend_5 7
+#define LocationEditType_extend_3 8
 
 
 NLM_EXTERN LocationEditTypePtr LIBCALL LocationEditTypeFree PROTO ((LocationEditTypePtr ));
@@ -1998,6 +2079,26 @@ NLM_EXTERN AutodefActionPtr LIBCALL AutodefActionNew PROTO (( void ));
 NLM_EXTERN AutodefActionPtr LIBCALL AutodefActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL AutodefActionAsnWrite PROTO (( AutodefActionPtr , AsnIoPtr, AsnTypePtr));
 
+
+
+/**************************************************
+*
+*    FixPubCapsAction
+*
+**************************************************/
+typedef struct struct_Fix_pub_caps_action {
+   Uint1   title;
+   Uint1   authors;
+   Uint1   affiliation;
+   ValNodePtr   constraint;
+} FixPubCapsAction, PNTR FixPubCapsActionPtr;
+
+
+NLM_EXTERN FixPubCapsActionPtr LIBCALL FixPubCapsActionFree PROTO ((FixPubCapsActionPtr ));
+NLM_EXTERN FixPubCapsActionPtr LIBCALL FixPubCapsActionNew PROTO (( void ));
+NLM_EXTERN FixPubCapsActionPtr LIBCALL FixPubCapsActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL FixPubCapsActionAsnWrite PROTO (( FixPubCapsActionPtr , AsnIoPtr, AsnTypePtr));
+
 typedef ValNodePtr MacroActionChoicePtr;
 typedef ValNode MacroActionChoice;
 #define MacroActionChoice_aecr 1
@@ -2008,6 +2109,14 @@ typedef ValNode MacroActionChoice;
 #define MacroActionChoice_edit_location 6
 #define MacroActionChoice_remove_descriptor 7
 #define MacroActionChoice_autodef 8
+#define MacroActionChoice_removesets 9
+#define MacroActionChoice_trim_junk_from_primer_seq 10
+#define MacroActionChoice_trim_stop_from_complete_cds 11
+#define MacroActionChoice_fix_usa_and_states 12
+#define MacroActionChoice_synchronize_cds_partials 13
+#define MacroActionChoice_adjust_for_consensus_splice 14
+#define MacroActionChoice_fix_pub_caps 15
+#define MacroActionChoice_remove_seg_gaps 16
 
 
 NLM_EXTERN MacroActionChoicePtr LIBCALL MacroActionChoiceFree PROTO ((MacroActionChoicePtr ));

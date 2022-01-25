@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.184 $
+* $Revision: 6.185 $
 *
 * File Description: 
 *
@@ -7516,7 +7516,6 @@ NLM_EXTERN void CalculateAlignmentOffsets (SeqEntryPtr sepnew, SeqEntryPtr sepol
       {
         strand=Seq_strand_plus;
         len = offset;
-        offset = 0;
       }
       SeqAlignStartUpdate (salpnew, sip_temp, abs(offset), len, strand);	    	
     }  	

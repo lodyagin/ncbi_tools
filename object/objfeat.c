@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.44 $
+* $Revision: 6.55 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -54,6 +54,7 @@ static char *this_file = __FILE__;
 #include <asnfeat.h>        /* the AsnTool header */
 #include <objmgr.h>
 #include <objfdef.h>
+#include <objseq.h>
 
 static Boolean loaded = FALSE;
 
@@ -795,6 +796,9 @@ NLM_EXTERN void LIBCALL SeqFeatDataFree(ChoicePtr cp)
         case SEQFEAT_CLONEREF:
             CloneRefFree((CloneRefPtr)pnt);
             break;
+        case SEQFEAT_VARIATIONREF:
+            VariationRefFree((VariationRefPtr)pnt);
+            break;
     }
     return;
 }
@@ -915,6 +919,10 @@ NLM_EXTERN Boolean LIBCALL SeqFeatDataAsnWrite (ChoicePtr cp, AsnIoPtr aip, AsnT
             break;
         case SEQFEAT_CLONEREF:
             if (! CloneRefAsnWrite((CloneRefPtr)pnt, aip, SEQFEATDATA_clone))
+                goto erret;
+            break;
+        case SEQFEAT_VARIATIONREF:
+            if (! VariationRefAsnWrite((VariationRefPtr)pnt, aip, SEQFEATDATA_variation))
                 goto erret;
             break;
     }
@@ -1094,6 +1102,13 @@ NLM_EXTERN Boolean LIBCALL SeqFeatDataAsnRead (AsnIoPtr aip, AsnTypePtr orig, Ch
     {
         cp->choice = SEQFEAT_CLONEREF ;
         cp->value.ptrvalue = (Pointer)CloneRefAsnRead(aip, atp);
+        if (cp->value.ptrvalue == NULL)
+            goto erret;
+    }
+    else if (atp == SEQFEATDATA_variation)
+    {
+        cp->choice = SEQFEAT_VARIATIONREF ;
+        cp->value.ptrvalue = (Pointer)VariationRefAsnRead(aip, atp);
         if (cp->value.ptrvalue == NULL)
             goto erret;
     }
@@ -2525,7 +2540,7 @@ NLM_EXTERN RnaRefPtr LIBCALL RnaRefFree (RnaRefPtr rrp)
 NLM_EXTERN Boolean LIBCALL RnaRefAsnWrite (RnaRefPtr rrp, AsnIoPtr aip, AsnTypePtr orig)
 {
     DataVal av;
-    AsnTypePtr atp, tmp;
+    AsnTypePtr atp, tmp = NULL;
     tRNAPtr trna;
     RNAGenPtr rgp;
     Int2 i;
@@ -4227,6 +4242,19 @@ NLM_EXTERN Boolean LIBCALL OrgNameAsnWrite (OrgNamePtr onp, AsnIoPtr aip, AsnTyp
          }      
     }
 
+    if (onp->pgcode)
+    {
+          if (aip->spec_version == 3)    /* ASN3 strip new value */
+          {
+              ErrPostEx(SEV_ERROR,0,0,"ASN3:  OrgName.pgcode stripped");
+          }
+          else
+          {
+        av.intvalue = (Int4)(onp->pgcode);
+        if (! AsnWrite(aip, ORGNAME_pgcode, &av)) goto erret;
+         }      
+    }
+
 
     if (! AsnCloseStruct(aip, atp, (Pointer)onp))
         goto erret;
@@ -4353,6 +4381,15 @@ NLM_EXTERN OrgNamePtr LIBCALL OrgNameAsnRead (AsnIoPtr aip, AsnTypePtr orig)
               }
               else
                 onp->div = (CharPtr)(av.ptrvalue);
+           }
+            else if (atp == ORGNAME_pgcode)
+            {
+               if (aip->spec_version == 3)    /* ASN3 strip new value */
+              {
+                  ErrPostEx(SEV_ERROR,0,0,"ASN3:  OrgName.pgcode stripped");
+              }
+              else
+                onp->pgcode = (Uint1)av.intvalue;
            }
         }
     }
@@ -7782,6 +7819,3033 @@ CloneSeqAsnWrite(CloneSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       }
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    VariationRefNew()
+*
+**************************************************/
+NLM_EXTERN 
+VariationRefPtr LIBCALL
+VariationRefNew(void)
+{
+   VariationRefPtr ptr = MemNew((size_t) sizeof(VariationRef));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Consequence_loss_of_heterozygosityNew()
+*
+**************************************************/
+NLM_EXTERN 
+Consequence_loss_of_heterozygosityPtr LIBCALL
+Consequence_loss_of_heterozygosityNew(void)
+{
+   Consequence_loss_of_heterozygosityPtr ptr = MemNew((size_t) sizeof(Consequence_loss_of_heterozygosity));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    VariationRefFree()
+*
+**************************************************/
+NLM_EXTERN 
+VariationRefPtr LIBCALL
+VariationRefFree(VariationRefPtr ptr)
+{
+   if(ptr == NULL) {
+      return NULL;
+   }
+   DbtagFree(ptr -> id);
+   DbtagFree(ptr -> parent_id);
+   ObjectIdFree(ptr -> sample_id);
+   AsnGenericValNodeSetFree(ptr -> other_ids, (AsnOptFreeFunc) DbtagFree);
+   /*
+   AsnGenericUserSeqOfFree(ptr -> other_ids, (AsnOptFreeFunc) DbtagFree);
+   */
+   MemFree(ptr -> name);
+   /*
+   AsnGenericValNodeSetFree(ptr -> synonyms, (AsnOptFreeFunc) MemFree);
+   */
+   AsnGenericBaseSeqOfFree(ptr -> synonyms ,ASNCODE_PTRVAL_SLOT);
+   MemFree(ptr -> description);
+   AsnGenericValNodeSetFree(ptr -> phenotype, (AsnOptFreeFunc) PhenotypeFree);
+   /*
+   AsnGenericUserSeqOfFree(ptr -> phenotype, (AsnOptFreeFunc) PhenotypeFree);
+   */
+   AsnGenericBaseSeqOfFree(ptr -> method ,ASNCODE_INTVAL_SLOT);
+   AsnGenericValNodeSetFree(ptr -> population_data, (AsnOptFreeFunc) PopulationDataFree);
+   /*
+   AsnGenericUserSeqOfFree(ptr -> population_data, (AsnOptFreeFunc) PopulationDataFree);
+   */
+   VariantPropertiesFree(ptr -> variant_prop);
+   AsnGenericValNodeSetFree(ptr -> clinical_test, (AsnOptFreeFunc) DbtagFree);
+   /*
+   AsnGenericUserSeqOfFree(ptr -> clinical_test, (AsnOptFreeFunc) DbtagFree);
+   */
+   PubFree(ptr -> pub);
+   VarRefDataFree(ptr -> data);
+   ConsequenceFree(ptr -> consequence);
+   SeqLocFree(ptr -> location);
+   AsnGenericValNodeSetFree(ptr -> ext_locs, (AsnOptFreeFunc) ExtLocFree);
+   /*
+   AsnGenericUserSeqOfFree(ptr -> ext_locs, (AsnOptFreeFunc) ExtLocFree);
+   */
+   UserObjectFree(ptr -> ext);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ConsequenceFree()
+*
+**************************************************/
+NLM_EXTERN 
+ConsequencePtr LIBCALL
+ConsequenceFree(ValNodePtr anp)
+{
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   AsnGenericChoiceSeqOfFree(anp, (AsnOptFreeFunc) Consequence_elementFree);    
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    VariationRefAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+VariationRefPtr LIBCALL
+VariationRefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   VariationRefPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* VariationRef ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIATION_REF);
+   } else {
+      atp = AsnLinkType(orig, VARIATION_REF);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = VariationRefNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == VARIATION_REF_id) {
+      ptr -> id = DbtagAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_parent_id) {
+      ptr -> parent_id = DbtagAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_sample_id) {
+      ptr -> sample_id = ObjectIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_other_ids) {
+      ptr -> other_ids = AsnGenericValNodeSetAsnRead (aip, amp, atp, &isError, (AsnReadFunc) DbtagAsnRead, (AsnOptFreeFunc) DbtagFree);
+      /*
+      ptr -> other_ids = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DbtagAsnRead, (AsnOptFreeFunc) DbtagFree);
+      */
+      if (isError && ptr -> other_ids == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_synonyms) {
+      /*
+      ptr -> synonyms = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) NULL, (AsnOptFreeFunc) MemFree);
+      */
+      ptr -> synonyms = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+      if (isError && ptr -> synonyms == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_description) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> description = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_phenotype) {
+      ptr -> phenotype = AsnGenericValNodeSetAsnRead (aip, amp, atp, &isError, (AsnReadFunc) PhenotypeAsnRead, (AsnOptFreeFunc) PhenotypeFree);
+      /*
+      ptr -> phenotype = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) PhenotypeAsnRead, (AsnOptFreeFunc) PhenotypeFree);
+      */
+      if (isError && ptr -> phenotype == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_method) {
+      ptr -> method = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> method == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_population_data) {
+      ptr -> population_data = AsnGenericValNodeSetAsnRead (aip, amp, atp, &isError, (AsnReadFunc) PopulationDataAsnRead, (AsnOptFreeFunc) PopulationDataFree);
+      /*
+      ptr -> population_data = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) PopulationDataAsnRead, (AsnOptFreeFunc) PopulationDataFree);
+      */
+      if (isError && ptr -> population_data == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_variant_prop) {
+      ptr -> variant_prop = VariantPropertiesAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_validated) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> validated = av.boolvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_clinical_test) {
+      ptr -> clinical_test = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DbtagAsnRead, (AsnOptFreeFunc) DbtagFree);
+      /*
+      ptr -> clinical_test = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DbtagAsnRead, (AsnOptFreeFunc) DbtagFree);
+      */
+      if (isError && ptr -> clinical_test == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_allele_origin) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> allele_origin = av.intvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_allele_state) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> allele_state = av.intvalue;
+      ptr -> OBbits__ |= 1<<2;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_allele_frequency) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> allele_frequency = av.realvalue;
+      ptr -> OBbits__ |= 1<<3;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == REF_is_ancestral_allele) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_ancestral_allele = av.boolvalue;
+      ptr -> OBbits__ |= 1<<4;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_pub) {
+      ptr -> pub = PubAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_data) {
+      ptr -> data = VarRefDataAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_consequence) {
+      ptr -> consequence =  ConsequenceAsnRead(aip, atp);
+      if (isError && ptr -> consequence == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_location) {
+      ptr -> location = SeqLocAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_ext_locs) {
+      ptr -> ext_locs = AsnGenericValNodeSetAsnRead (aip, amp, atp, &isError, (AsnReadFunc) ExtLocAsnRead, (AsnOptFreeFunc) ExtLocFree);
+      /*
+      ptr -> ext_locs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ExtLocAsnRead, (AsnOptFreeFunc) ExtLocFree);
+      */
+      if (isError && ptr -> ext_locs == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_ext) {
+      ptr -> ext = UserObjectAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = VariationRefFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ConsequenceAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ConsequencePtr LIBCALL
+ConsequenceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+
+
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Boolean isError = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Consequence_element ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIATION_REF_consequence);
+   } else {
+      atp = AsnLinkType(orig, VARIATION_REF_consequence);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp =
+   AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError,
+   (AsnReadFunc) Consequence_elementAsnRead, (AsnOptFreeFunc) Consequence_elementFree);
+   if (isError) 
+   goto erret;
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    VariationRefAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+VariationRefAsnWrite(VariationRefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, VARIATION_REF);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> id != NULL) {
+      if ( ! DbtagAsnWrite(ptr -> id, aip, VARIATION_REF_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> parent_id != NULL) {
+      if ( ! DbtagAsnWrite(ptr -> parent_id, aip, VARIATION_REF_parent_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> sample_id != NULL) {
+      if ( ! ObjectIdAsnWrite(ptr -> sample_id, aip, VARIATION_REF_sample_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> other_ids != NULL) {
+     AsnGenericValNodeSetAsnWrite (ptr -> other_ids, (AsnWriteFunc) DbtagAsnWrite, aip, VARIATION_REF_other_ids, VARIATION_REF_other_ids_E);
+     /*
+     AsnGenericUserSeqOfAsnWrite(ptr -> other_ids, (AsnWriteFunc) DbtagAsnWrite, aip, VARIATION_REF_other_ids, VARIATION_REF_other_ids_E);
+     */
+   }
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, VARIATION_REF_name,  &av);
+   }
+   if (ptr -> synonyms != NULL) {
+     retval = AsnGenericBaseSeqOfAsnWrite(ptr -> synonyms ,ASNCODE_PTRVAL_SLOT, aip, VARIATION_REF_synonyms, VARIATION_REF_synonyms_E);
+   }
+   if (ptr -> description != NULL) {
+      av.ptrvalue = ptr -> description;
+      retval = AsnWrite(aip, VARIATION_REF_description,  &av);
+   }
+   if (ptr -> phenotype != NULL) {
+     AsnGenericValNodeSetAsnWrite (ptr -> phenotype, (AsnWriteFunc) PhenotypeAsnWrite, aip, VARIATION_REF_phenotype, VARIATION_REF_phenotype_E);
+     /*
+     AsnGenericUserSeqOfAsnWrite(ptr -> phenotype, (AsnWriteFunc) PhenotypeAsnWrite, aip, VARIATION_REF_phenotype, VARIATION_REF_phenotype_E);
+     */
+   }
+   if (ptr -> method != NULL) {
+     retval = AsnGenericBaseSeqOfAsnWrite(ptr -> method ,ASNCODE_INTVAL_SLOT, aip, VARIATION_REF_method, VARIATION_REF_method_E);
+   }
+   if (ptr -> population_data != NULL) {
+     AsnGenericValNodeSetAsnWrite (ptr -> population_data, (AsnWriteFunc) PopulationDataAsnWrite, aip, VARIATION_REF_population_data, VARIATION_REF_population_data_E);
+     /*
+     AsnGenericUserSeqOfAsnWrite(ptr -> population_data, (AsnWriteFunc) PopulationDataAsnWrite, aip, VARIATION_REF_population_data, VARIATION_REF_population_data_E);
+     */
+   }
+   if (ptr -> variant_prop != NULL) {
+      if ( ! VariantPropertiesAsnWrite(ptr -> variant_prop, aip, VARIATION_REF_variant_prop)) {
+         goto erret;
+      }
+   }
+   if (ptr -> validated || (ptr -> OBbits__ & (1<<0) )){   av.boolvalue = ptr -> validated;
+      retval = AsnWrite(aip, VARIATION_REF_validated,  &av);
+   }
+   if (ptr -> clinical_test != NULL) {
+     AsnGenericValNodeSetAsnWrite (ptr -> clinical_test, (AsnWriteFunc) DbtagAsnWrite, aip, VARIATION_REF_clinical_test, VARIATION_REF_clinical_test_E);
+     /*
+     AsnGenericUserSeqOfAsnWrite(ptr -> clinical_test, (AsnWriteFunc) DbtagAsnWrite, aip, VARIATION_REF_clinical_test, VARIATION_REF_clinical_test_E);
+     */
+   }
+   if (ptr -> allele_origin || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> allele_origin;
+      retval = AsnWrite(aip, VARIATION_REF_allele_origin,  &av);
+   }
+   if (ptr -> allele_state || (ptr -> OBbits__ & (1<<2) )){   av.intvalue = ptr -> allele_state;
+      retval = AsnWrite(aip, VARIATION_REF_allele_state,  &av);
+   }
+   if (ptr -> allele_frequency || (ptr -> OBbits__ & (1<<3) )){   av.realvalue = ptr -> allele_frequency;
+      retval = AsnWrite(aip, VARIATION_REF_allele_frequency,  &av);
+   }
+   if (ptr -> is_ancestral_allele || (ptr -> OBbits__ & (1<<4) )){   av.boolvalue = ptr -> is_ancestral_allele;
+      retval = AsnWrite(aip, REF_is_ancestral_allele,  &av);
+   }
+   if (ptr -> pub != NULL) {
+      if ( ! PubAsnWrite(ptr -> pub, aip, VARIATION_REF_pub)) {
+         goto erret;
+      }
+   }
+   if (ptr -> data != NULL) {
+      if ( ! VarRefDataAsnWrite(ptr -> data, aip, VARIATION_REF_data)) {
+         goto erret;
+      }
+   }
+   if (ptr -> consequence != NULL) {
+     retval = ConsequenceAsnWrite(ptr -> consequence, aip,VARIATION_REF_consequence);
+   }
+   if (ptr -> location != NULL) {
+      if ( ! SeqLocAsnWrite(ptr -> location, aip, VARIATION_REF_location)) {
+         goto erret;
+      }
+   }
+   if (ptr -> ext_locs != NULL) {
+     AsnGenericValNodeSetAsnWrite (ptr -> ext_locs, (AsnWriteFunc) ExtLocAsnWrite, aip, VARIATION_REF_ext_locs, VARIATION_REF_ext_locs_E);
+     /*
+     AsnGenericUserSeqOfAsnWrite(ptr -> ext_locs, (AsnWriteFunc) ExtLocAsnWrite, aip, VARIATION_REF_ext_locs, VARIATION_REF_ext_locs_E);
+     */
+   }
+   if (ptr -> ext != NULL) {
+      if ( ! UserObjectAsnWrite(ptr -> ext, aip, VARIATION_REF_ext)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ConsequenceAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ConsequenceAsnWrite(ValNodePtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, VARIATION_REF_consequence);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   retval = AsnGenericChoiceSeqOfAsnWrite(anp, 
+   (AsnWriteFunc) Consequence_elementAsnWrite, aip, atp, VARIATION_REF_consequence_E);
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    Consequence_elementAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Consequence_elementAsnWrite(Consequence_elementPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, VARIATION_REF_consequence_E);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case Consequence_unknown:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, REF_consequence_E_unknown, &av);
+      break;
+   case Consequence_splicing:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, REF_consequence_E_splicing, &av);
+      break;
+   case Consequence_note:
+      av.ptrvalue = anp->data.ptrvalue;
+      retval = AsnWrite(aip, REF_consequence_E_note, &av);
+      break;
+   case Consequence_variation:
+      writetype = REF_consequence_E_variation;
+      func = (AsnWriteFunc) VariationRefAsnWrite;
+      break;
+   case Consequence_Consequence_Frameshift:
+      writetype = REF_consequence_E_frameshift;
+      func = (AsnWriteFunc) Consequence_frameshiftAsnWrite;
+      break;
+   case Consequence_Consequence_LossOfHeterozygosity:
+      writetype = E_loss_of_heterozygosity;
+      func = (AsnWriteFunc) Consequence_loss_of_heterozygosityAsnWrite;
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    Consequence_loss_of_heterozygosityAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Consequence_loss_of_heterozygosityAsnWrite(Consequence_loss_of_heterozygosityPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, E_loss_of_heterozygosity);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> reference != NULL) {
+      av.ptrvalue = ptr -> reference;
+      retval = AsnWrite(aip, of_heterozygosity_reference,  &av);
+   }
+   if (ptr -> test != NULL) {
+      av.ptrvalue = ptr -> test;
+      retval = AsnWrite(aip, E_loss_of_heterozygosity_test,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Consequence_frameshiftAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Consequence_frameshiftAsnWrite(Consequence_frameshiftPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, REF_consequence_E_frameshift);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> phase || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> phase;
+      retval = AsnWrite(aip, consequence_E_frameshift_phase,  &av);
+   }
+   if (ptr -> x_length || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> x_length;
+      retval = AsnWrite(aip, E_frameshift_x_length,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Data_setAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+VarRefDataSetAsnWrite(VarRefDataSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, VARIATION_REF_data_set);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, VARIATION_REF_data_set_type,  &av);
+   AsnGenericValNodeSetAsnWrite(ptr -> variations, (AsnWriteFunc) VariationRefAsnWrite, aip, REF_data_set_variations, REF_data_set_variations_E);
+   /*
+   AsnGenericUserSeqOfAsnWrite(ptr -> variations, (AsnWriteFunc) VariationRefAsnWrite, aip, REF_data_set_variations, REF_data_set_variations_E);
+   */
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, VARIATION_REF_data_set_name,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    VarRefDataAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+VarRefDataAsnWrite( VarRefDataPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, VARIATION_REF_data);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case VarRefData_unknown:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, VARIATION_REF_data_unknown, &av);
+      break;
+   case VarRefData_note:
+      av.ptrvalue = anp->data.ptrvalue;
+      retval = AsnWrite(aip, VARIATION_REF_data_note, &av);
+      break;
+   case VarRefData_uniparental_disomy:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, REF_data_uniparental_disomy, &av);
+      break;
+   case VarRefData_instance:
+      writetype = VARIATION_REF_data_instance;
+      func = (AsnWriteFunc) VariationInstAsnWrite;
+      break;
+   case VarRefData_set:
+      writetype = VARIATION_REF_data_set;
+      func = (AsnWriteFunc) VarRefDataSetAsnWrite;
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Consequence_elementAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Consequence_elementPtr LIBCALL
+Consequence_elementAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Consequence_element ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIATION_REF_consequence_E);
+   } else {
+      atp = AsnLinkType(orig, VARIATION_REF_consequence_E);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == REF_consequence_E_unknown) {
+      choice = Consequence_unknown;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == REF_consequence_E_splicing) {
+      choice = Consequence_splicing;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == REF_consequence_E_note) {
+      choice = Consequence_note;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.ptrvalue = av.ptrvalue;
+   }
+   else if (atp == REF_consequence_E_variation) {
+      choice = Consequence_variation;
+      func = (AsnReadFunc) VariationRefAsnRead;
+   }
+   else if (atp == REF_consequence_E_frameshift) {
+      choice = Consequence_Consequence_Frameshift;
+      func = (AsnReadFunc) Consequence_frameshiftAsnRead;
+   }
+   else if (atp == E_loss_of_heterozygosity) {
+      choice = Consequence_Consequence_LossOfHeterozygosity;
+      func = (AsnReadFunc) Consequence_loss_of_heterozygosityAsnRead;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    Consequence_loss_of_heterozygosityAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Consequence_loss_of_heterozygosityPtr LIBCALL
+Consequence_loss_of_heterozygosityAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   Consequence_loss_of_heterozygosityPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Consequence_loss_of_heterozygosity ::= (self contained) */
+      atp = AsnReadId(aip, amp, E_loss_of_heterozygosity);
+   } else {
+      atp = AsnLinkType(orig, E_loss_of_heterozygosity);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = Consequence_loss_of_heterozygosityNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == of_heterozygosity_reference) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> reference = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == E_loss_of_heterozygosity_test) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> test = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Consequence_loss_of_heterozygosityFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Consequence_frameshiftAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Consequence_frameshiftPtr LIBCALL
+Consequence_frameshiftAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   Consequence_frameshiftPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Consequence_frameshift ::= (self contained) */
+      atp = AsnReadId(aip, amp, REF_consequence_E_frameshift);
+   } else {
+      atp = AsnLinkType(orig, REF_consequence_E_frameshift);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = Consequence_frameshiftNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == consequence_E_frameshift_phase) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> phase = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == E_frameshift_x_length) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> x_length = av.intvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = Consequence_frameshiftFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Data_setFree()
+*
+**************************************************/
+NLM_EXTERN 
+VarRefDataSetPtr LIBCALL
+VarRefDataSetFree(VarRefDataSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericValNodeSetFree (ptr -> variations, (AsnOptFreeFunc) VariationRefFree);
+   /*
+   AsnGenericUserSeqOfFree(ptr -> variations, (AsnOptFreeFunc) VariationRefFree);
+   */
+   MemFree(ptr -> name);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    VarRefDataFree()
+*
+**************************************************/
+NLM_EXTERN 
+VarRefDataPtr LIBCALL
+VarRefDataFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case VarRefData_note:
+      MemFree(anp -> data.ptrvalue);
+      break;
+   case VarRefData_instance:
+      VariationInstFree(anp -> data.ptrvalue);
+      break;
+   case VarRefData_set:
+      VarRefDataSetFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    Data_setNew()
+*
+**************************************************/
+NLM_EXTERN 
+VarRefDataSetPtr LIBCALL
+VarRefDataSetNew(void)
+{
+   VarRefDataSetPtr ptr = MemNew((size_t) sizeof(VarRefData));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    Data_setAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+VarRefDataSetPtr LIBCALL
+VarRefDataSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   VarRefDataSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Data_set ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIATION_REF_data_set);
+   } else {
+      atp = AsnLinkType(orig, VARIATION_REF_data_set);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = VarRefDataSetNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == VARIATION_REF_data_set_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == REF_data_set_variations) {
+      ptr -> variations = AsnGenericValNodeSetAsnRead (aip, amp, atp, &isError, (AsnReadFunc) VariationRefAsnRead, (AsnOptFreeFunc) VariationRefFree);
+      /*
+      ptr -> variations = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) VariationRefAsnRead, (AsnOptFreeFunc) VariationRefFree);
+      */
+      if (isError && ptr -> variations == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_REF_data_set_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = VarRefDataSetFree(ptr);
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    VarRefDataAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+VarRefDataPtr LIBCALL
+VarRefDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* data ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIATION_REF_data);
+   } else {
+      atp = AsnLinkType(orig, VARIATION_REF_data);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == VARIATION_REF_data_unknown) {
+      choice = VarRefData_unknown;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == VARIATION_REF_data_note) {
+      choice = VarRefData_note;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.ptrvalue = av.ptrvalue;
+   }
+   else if (atp == REF_data_uniparental_disomy) {
+      choice = VarRefData_uniparental_disomy;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == VARIATION_REF_data_instance) {
+      choice = VarRefData_instance;
+      func = (AsnReadFunc) VariationInstAsnRead;
+   }
+   else if (atp == VARIATION_REF_data_set) {
+      choice = VarRefData_set;
+      func = (AsnReadFunc) VarRefDataSetAsnRead;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Consequence_elementFree()
+*
+**************************************************/
+NLM_EXTERN 
+Consequence_elementPtr LIBCALL
+Consequence_elementFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case Consequence_note:
+      MemFree(anp -> data.ptrvalue);
+      break;
+   case Consequence_variation:
+      VariationRefFree(anp -> data.ptrvalue);
+      break;
+   case Consequence_Consequence_Frameshift:
+      Consequence_frameshiftFree(anp -> data.ptrvalue);
+      break;
+   case Consequence_Consequence_LossOfHeterozygosity:
+      Consequence_loss_of_heterozygosityFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    Consequence_loss_of_heterozygosityFree()
+*
+**************************************************/
+NLM_EXTERN 
+Consequence_loss_of_heterozygosityPtr LIBCALL
+Consequence_loss_of_heterozygosityFree(Consequence_loss_of_heterozygosityPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> reference);
+   MemFree(ptr -> test);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Consequence_frameshiftFree()
+*
+**************************************************/
+NLM_EXTERN 
+Consequence_frameshiftPtr LIBCALL
+Consequence_frameshiftFree(Consequence_frameshiftPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Consequence_frameshiftNew()
+*
+**************************************************/
+NLM_EXTERN 
+Consequence_frameshiftPtr LIBCALL
+Consequence_frameshiftNew(void)
+{
+   Consequence_frameshiftPtr ptr = MemNew((size_t) sizeof(Consequence_frameshift));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    VariationInstNew()
+*
+**************************************************/
+NLM_EXTERN 
+VariationInstPtr LIBCALL
+VariationInstNew(void)
+{
+   VariationInstPtr ptr = MemNew((size_t) sizeof(VariationInst));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    VariationInstFree()
+*
+**************************************************/
+NLM_EXTERN 
+VariationInstPtr LIBCALL
+VariationInstFree(VariationInstPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericValNodeSetFree (ptr -> delta, (AsnOptFreeFunc) DeltaItemFree);
+   /*
+   AsnGenericUserSeqOfFree(ptr -> delta, (AsnOptFreeFunc) DeltaItemFree);
+   */
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    VariationInstAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+VariationInstPtr LIBCALL
+VariationInstAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   VariationInstPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* VariationInst ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIATION_INST);
+   } else {
+      atp = AsnLinkType(orig, VARIATION_INST);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = VariationInstNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == VARIATION_INST_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIATION_INST_delta) {
+      ptr -> delta = AsnGenericValNodeSetAsnRead (aip, amp, atp, &isError, (AsnReadFunc) DeltaItemAsnRead, (AsnOptFreeFunc) DeltaItemFree);
+      /*
+      ptr -> delta = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DeltaItemAsnRead, (AsnOptFreeFunc) DeltaItemFree);
+      */
+      if (isError && ptr -> delta == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = VariationInstFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    VariationInstAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+VariationInstAsnWrite(VariationInstPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, VARIATION_INST);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, VARIATION_INST_type,  &av);
+   AsnGenericValNodeSetAsnWrite (ptr -> delta, (AsnWriteFunc) DeltaItemAsnWrite, aip, VARIATION_INST_delta, VARIATION_INST_delta_E);
+   /*
+   AsnGenericUserSeqOfAsnWrite(ptr -> delta, (AsnWriteFunc) DeltaItemAsnWrite, aip, VARIATION_INST_delta, VARIATION_INST_delta_E);
+   */
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ProjectDataNew()
+*
+**************************************************/
+NLM_EXTERN 
+ProjectDataPtr LIBCALL
+ProjectDataNew(void)
+{
+   ProjectDataPtr ptr = MemNew((size_t) sizeof(ProjectData));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    VariantPropertiesNew()
+*
+**************************************************/
+NLM_EXTERN 
+VariantPropertiesPtr LIBCALL
+VariantPropertiesNew(void)
+{
+   VariantPropertiesPtr ptr = MemNew((size_t) sizeof(VariantProperties));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ProjectDataFree()
+*
+**************************************************/
+NLM_EXTERN 
+ProjectDataPtr LIBCALL
+ProjectDataFree(ProjectDataPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericBaseSeqOfFree(ptr -> project_ids ,ASNCODE_INTVAL_SLOT);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+/**************************************************
+*
+*    VariantPropertiesFree()
+*
+**************************************************/
+NLM_EXTERN 
+VariantPropertiesPtr LIBCALL
+VariantPropertiesFree(VariantPropertiesPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   ProjectDataFree(ptr -> project_data);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ProjectDataAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ProjectDataPtr LIBCALL
+ProjectDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   ProjectDataPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ProjectData ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIANTPROPERTIES_project_data);
+   } else {
+      atp = AsnLinkType(orig, VARIANTPROPERTIES_project_data);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ProjectDataNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == project_data_E_project_ids) {
+      ptr -> project_ids = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> project_ids == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ProjectDataFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    VariantPropertiesAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+VariantPropertiesPtr LIBCALL
+VariantPropertiesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   VariantPropertiesPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* VariantProperties ::= (self contained) */
+      atp = AsnReadId(aip, amp, VARIANTPROPERTIES);
+   } else {
+      atp = AsnLinkType(orig, VARIANTPROPERTIES);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = VariantPropertiesNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == VARIANTPROPERTIES_version) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> version = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_resource_link) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> resource_link = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_gene_location) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> gene_location = av.intvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_effect) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> effect = av.intvalue;
+      ptr -> OBbits__ |= 1<<2;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_mapping) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> mapping = av.intvalue;
+      ptr -> OBbits__ |= 1<<3;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_map_weight) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> map_weight = av.intvalue;
+      ptr -> OBbits__ |= 1<<4;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == frequency_based_validation) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> freq_based_validation = av.intvalue;
+      ptr -> OBbits__ |= 1<<5;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_genotype) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> genotype = av.intvalue;
+      ptr -> OBbits__ |= 1<<6;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_project_data) {
+      ptr -> project_data =  ProjectDataAsnRead(aip, atp);
+      if (ptr -> project_data == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_quality_check) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> quality_check = av.intvalue;
+      ptr -> OBbits__ |= 1<<7;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == VARIANTPROPERTIES_confidence) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> confidence = av.intvalue;
+      ptr -> OBbits__ |= 1<<8;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = VariantPropertiesFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ProjectDataAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ProjectDataAsnWrite(ProjectDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, VARIANTPROPERTIES_project_data);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> project_ids ,ASNCODE_INTVAL_SLOT, aip, project_data_E_project_ids, project_data_E_project_ids_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    VariantPropertiesAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+VariantPropertiesAsnWrite(VariantPropertiesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, VARIANTPROPERTIES);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> version;
+   retval = AsnWrite(aip, VARIANTPROPERTIES_version,  &av);
+   if (ptr -> resource_link || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> resource_link;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_resource_link,  &av);
+   }
+   if (ptr -> gene_location || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> gene_location;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_gene_location,  &av);
+   }
+   if (ptr -> effect || (ptr -> OBbits__ & (1<<2) )){   av.intvalue = ptr -> effect;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_effect,  &av);
+   }
+   if (ptr -> mapping || (ptr -> OBbits__ & (1<<3) )){   av.intvalue = ptr -> mapping;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_mapping,  &av);
+   }
+   if (ptr -> map_weight || (ptr -> OBbits__ & (1<<4) )){   av.intvalue = ptr -> map_weight;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_map_weight,  &av);
+   }
+   if (ptr -> freq_based_validation || (ptr -> OBbits__ & (1<<5) )){   av.intvalue = ptr -> freq_based_validation;
+      retval = AsnWrite(aip, frequency_based_validation,  &av);
+   }
+   if (ptr -> genotype || (ptr -> OBbits__ & (1<<6) )){   av.intvalue = ptr -> genotype;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_genotype,  &av);
+   }
+   retval = ProjectDataAsnWrite(ptr -> project_data, aip,VARIANTPROPERTIES_project_data);
+   if (ptr -> quality_check || (ptr -> OBbits__ & (1<<7) )){   av.intvalue = ptr -> quality_check;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_quality_check,  &av);
+   }
+   if (ptr -> confidence || (ptr -> OBbits__ & (1<<8) )){   av.intvalue = ptr -> confidence;
+      retval = AsnWrite(aip, VARIANTPROPERTIES_confidence,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    PhenotypeNew()
+*
+**************************************************/
+NLM_EXTERN 
+PhenotypePtr LIBCALL
+PhenotypeNew(void)
+{
+   PhenotypePtr ptr = MemNew((size_t) sizeof(Phenotype));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    PhenotypeFree()
+*
+**************************************************/
+NLM_EXTERN 
+PhenotypePtr LIBCALL
+PhenotypeFree(PhenotypePtr ptr)
+{
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> source);
+   MemFree(ptr -> term);
+   /*
+   AsnGenericUserSeqOfFree(ptr -> xref, (AsnOptFreeFunc) DbtagFree);
+   */
+   AsnGenericValNodeSetFree (ptr->xref, (AsnOptFreeFunc) DbtagFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    PhenotypeAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+PhenotypePtr LIBCALL
+PhenotypeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   PhenotypePtr ptr;
+   Boolean isError = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Phenotype ::= (self contained) */
+      atp = AsnReadId(aip, amp, PHENOTYPE);
+   } else {
+      atp = AsnLinkType(orig, PHENOTYPE);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = PhenotypeNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == PHENOTYPE_source) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> source = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PHENOTYPE_term) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> term = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PHENOTYPE_xref) {
+      ptr->xref = AsnGenericValNodeSetAsnRead (aip, amp, atp, &isError, (AsnReadFunc) DbtagAsnRead, (AsnOptFreeFunc) DbtagFree);
+      /*
+      ptr -> xref = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) DbtagAsnRead, (AsnOptFreeFunc) DbtagFree);
+      */
+      if (isError && ptr -> xref == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == PHENOTYPE_clinical_significance) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> clinical_significance = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = PhenotypeFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    PhenotypeAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+PhenotypeAsnWrite(PhenotypePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, PHENOTYPE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> source != NULL) {
+      av.ptrvalue = ptr -> source;
+      retval = AsnWrite(aip, PHENOTYPE_source,  &av);
+   }
+   if (ptr -> term != NULL) {
+      av.ptrvalue = ptr -> term;
+      retval = AsnWrite(aip, PHENOTYPE_term,  &av);
+   }
+   AsnGenericValNodeSetAsnWrite (ptr->xref, (AsnWriteFunc) DbtagAsnWrite, aip, PHENOTYPE_xref, PHENOTYPE_xref_E);
+   /*
+   AsnGenericUserSeqOfAsnWrite(ptr -> xref, (AsnWriteFunc) DbtagAsnWrite, aip, PHENOTYPE_xref, PHENOTYPE_xref_E);
+   */
+   if (ptr -> clinical_significance || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> clinical_significance;
+      retval = AsnWrite(aip, PHENOTYPE_clinical_significance,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    PopulationDataNew()
+*
+**************************************************/
+NLM_EXTERN 
+PopulationDataPtr LIBCALL
+PopulationDataNew(void)
+{
+   PopulationDataPtr ptr = MemNew((size_t) sizeof(PopulationData));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    PopulationDataFree()
+*
+**************************************************/
+NLM_EXTERN 
+PopulationDataPtr LIBCALL
+PopulationDataFree(PopulationDataPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> population);
+   AsnGenericValNodeSetFree (ptr -> sample_ids, (AsnOptFreeFunc) ObjectIdFree);
+   /*
+   AsnGenericChoiceSeqOfFree(ptr -> sample_ids, (AsnOptFreeFunc) ObjectIdFree);
+   */
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    PopulationDataAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+PopulationDataPtr LIBCALL
+PopulationDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   PopulationDataPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* PopulationData ::= (self contained) */
+      atp = AsnReadId(aip, amp, POPULATION_DATA);
+   } else {
+      atp = AsnLinkType(orig, POPULATION_DATA);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = PopulationDataNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == POPULATION_DATA_population) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> population = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == DATA_genotype_frequency) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> genotype_frequency = av.realvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == DATA_chromosomes_tested) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> chromosomes_tested = av.intvalue;
+      ptr -> OBbits__ |= 1<<1;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == POPULATION_DATA_sample_ids) {
+      ptr -> sample_ids = AsnGenericValNodeSetAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ObjectIdAsnRead, (AsnOptFreeFunc) ObjectIdFree);
+      /*
+      ptr -> sample_ids = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) ObjectIdAsnRead, (AsnOptFreeFunc) ObjectIdFree);
+      */
+      if (isError && ptr -> sample_ids == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = PopulationDataFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    PopulationDataAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+PopulationDataAsnWrite(PopulationDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, POPULATION_DATA);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> population != NULL) {
+      av.ptrvalue = ptr -> population;
+      retval = AsnWrite(aip, POPULATION_DATA_population,  &av);
+   }
+   if (ptr -> genotype_frequency || (ptr -> OBbits__ & (1<<0) )){   av.realvalue = ptr -> genotype_frequency;
+      retval = AsnWrite(aip, DATA_genotype_frequency,  &av);
+   }
+   if (ptr -> chromosomes_tested || (ptr -> OBbits__ & (1<<1) )){   av.intvalue = ptr -> chromosomes_tested;
+      retval = AsnWrite(aip, DATA_chromosomes_tested,  &av);
+   }
+   AsnGenericValNodeSetAsnWrite(ptr -> sample_ids, (AsnWriteFunc) ObjectIdAsnWrite, aip, POPULATION_DATA_sample_ids, POPULATION_DATA_sample_ids_E);
+   /*
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> sample_ids, (AsnWriteFunc) ObjectIdAsnWrite, aip, POPULATION_DATA_sample_ids, POPULATION_DATA_sample_ids_E);
+   */
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    ExtLocNew()
+*
+**************************************************/
+NLM_EXTERN 
+ExtLocPtr LIBCALL
+ExtLocNew(void)
+{
+   ExtLocPtr ptr = MemNew((size_t) sizeof(ExtLoc));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    ExtLocFree()
+*
+**************************************************/
+NLM_EXTERN 
+ExtLocPtr LIBCALL
+ExtLocFree(ExtLocPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   ObjectIdFree(ptr -> id);
+   SeqLocFree(ptr -> location);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    ExtLocAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+ExtLocPtr LIBCALL
+ExtLocAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   ExtLocPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* ExtLoc ::= (self contained) */
+      atp = AsnReadId(aip, amp, EXT_LOC);
+   } else {
+      atp = AsnLinkType(orig, EXT_LOC);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = ExtLocNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == EXT_LOC_id) {
+      ptr -> id = ObjectIdAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == EXT_LOC_location) {
+      ptr -> location = SeqLocAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = ExtLocFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    ExtLocAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+ExtLocAsnWrite(ExtLocPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, EXT_LOC);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> id != NULL) {
+      if ( ! ObjectIdAsnWrite(ptr -> id, aip, EXT_LOC_id)) {
+         goto erret;
+      }
+   }
+   if (ptr -> location != NULL) {
+      if ( ! SeqLocAsnWrite(ptr -> location, aip, EXT_LOC_location)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    DeltaItemNew()
+*
+**************************************************/
+NLM_EXTERN 
+DeltaItemPtr LIBCALL
+DeltaItemNew(void)
+{
+   DeltaItemPtr ptr = MemNew((size_t) sizeof(DeltaItem));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    DeltaItemFree()
+*
+**************************************************/
+NLM_EXTERN 
+DeltaItemPtr LIBCALL
+DeltaItemFree(DeltaItemPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   Seq_seqFree(ptr -> Seq_seq);
+   IntFuzzFree(ptr -> multiplier_fuzz);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    Seq_seqFree()
+*
+**************************************************/
+NLM_EXTERN 
+Seq_seqPtr LIBCALL
+Seq_seqFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case Seq_seq_literal:
+      SeqLitFree(anp -> data.ptrvalue);
+      break;
+   case Seq_seq_loc:
+      SeqLocFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    DeltaItemAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+DeltaItemPtr LIBCALL
+DeltaItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   AsnReadFunc func;
+   DeltaItemPtr ptr;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* DeltaItem ::= (self contained) */
+      atp = AsnReadId(aip, amp, DELTA_ITEM);
+   } else {
+      atp = AsnLinkType(orig, DELTA_ITEM);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = DeltaItemNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == DELTA_ITEM_seq) {
+      ptr -> Seq_seq = Seq_seqAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == DELTA_ITEM_multiplier) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> multiplier = av.intvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == DELTA_ITEM_multiplier_fuzz) {
+      ptr -> multiplier_fuzz = IntFuzzAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == DELTA_ITEM_action) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> action = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = DeltaItemFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    Seq_seqAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+Seq_seqPtr LIBCALL
+Seq_seqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Seq_seq ::= (self contained) */
+      atp = AsnReadId(aip, amp, DELTA_ITEM_seq);
+   } else {
+      atp = AsnLinkType(orig, DELTA_ITEM_seq);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == DELTA_ITEM_seq_literal) {
+      choice = Seq_seq_literal;
+      func = (AsnReadFunc) SeqLitAsnRead;
+   }
+   else if (atp == DELTA_ITEM_seq_loc) {
+      choice = Seq_seq_loc;
+      func = (AsnReadFunc) SeqLocAsnRead;
+   }
+   else if (atp == DELTA_ITEM_seq_this) {
+      choice = Seq_seq_this__;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    DeltaItemAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+DeltaItemAsnWrite(DeltaItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, DELTA_ITEM);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> Seq_seq != NULL) {
+      if ( ! Seq_seqAsnWrite(ptr -> Seq_seq, aip, DELTA_ITEM_seq)) {
+         goto erret;
+      }
+   }
+   if (ptr -> multiplier || (ptr -> OBbits__ & (1<<0) )){   av.intvalue = ptr -> multiplier;
+      retval = AsnWrite(aip, DELTA_ITEM_multiplier,  &av);
+   }
+   if (ptr -> multiplier_fuzz != NULL) {
+      if ( ! IntFuzzAsnWrite(ptr -> multiplier_fuzz, aip, DELTA_ITEM_multiplier_fuzz)) {
+         goto erret;
+      }
+   }
+   av.intvalue = ptr -> action;
+   retval = AsnWrite(aip, DELTA_ITEM_action,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    Seq_seqAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+Seq_seqAsnWrite(Seq_seqPtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! SeqFeatAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, DELTA_ITEM_seq);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case Seq_seq_literal:
+      writetype = DELTA_ITEM_seq_literal;
+      func = (AsnWriteFunc) SeqLitAsnWrite;
+      break;
+   case Seq_seq_loc:
+      writetype = DELTA_ITEM_seq_loc;
+      func = (AsnWriteFunc) SeqLocAsnWrite;
+      break;
+   case Seq_seq_this__:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, DELTA_ITEM_seq_this, &av);
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
       goto erret;
    }
    retval = TRUE;

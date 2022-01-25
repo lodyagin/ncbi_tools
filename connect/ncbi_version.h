@@ -1,7 +1,7 @@
-#ifndef CONNECT_DAEMONS___VERSION__H
-#define CONNECT_DAEMONS___VERSION__H
+#ifndef CONNECT___NCBI_VERSION__H
+#define CONNECT___NCBI_VERSION__H
 
-/* $Id: version.h,v 1.2 2009/02/05 14:54:29 kazimird Exp $
+/* $Id: ncbi_version.h,v 1.3 2010/06/02 18:39:41 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,13 +31,15 @@
  * File Description:
  *   Daemon collection version number
  *
- *   UNIX only !!!
- *
  */
+
+#include <connect/connect_export.h>
+#include "ncbi_config.h"
 
 #ifdef   NCBI_CXX_TOOLKIT
 #  include <common/ncbi_package_ver.h>
 #endif /*NCBI_CXX_TOOLKIT*/
+
 
 #ifdef NCBI_PACKAGE
 
@@ -51,7 +53,7 @@
 
 #  define   NETDAEMONS_MAJOR        2
 #  define   NETDAEMONS_MINOR        0
-#  define   NETDAEMONS_PATCH        1
+#  define   NETDAEMONS_PATCH        2
 
 #  ifdef NCBI_CXX_TOOLKIT
 #    define NETDAEMONS_VERSION_STR  NCBI_PACKAGE_VERSION_COMPOSE_STR    \
@@ -71,16 +73,54 @@
 
 #endif /*NCBI_PACKAGE*/
 
-#define   NETDAEMONS_VERSION_OF(ma, mi, pa)  ((unsigned int)              \
-                                              ((ma)*100000 + (mi)*1000 + (pa)))
 
-#define   NETDAEMONS_MAJOR_OF(ver)  ( (ver) / 100000)
-#define   NETDAEMONS_MINOR_OF(ver)  (((ver) / 1000) % 100)
-#define   NETDAEMONS_PATCH_OF(ver)  ( (ver) % 1000)
+#define NETDAEMONS_VERSION_OF(ma, mi, pa)  ((unsigned int)              \
+                                            ((ma)*100000 + (mi)*1000 + (pa)))
 
-#define   NETDAEMONS_VERSION_INT    NETDAEMONS_VERSION_OF               \
-                                   (NETDAEMONS_MAJOR,                   \
-                                    NETDAEMONS_MINOR,                   \
-                                    NETDAEMONS_PATCH)
+#define NETDAEMONS_MAJOR_OF(ver)           ( (ver) / 100000)
+#define NETDAEMONS_MINOR_OF(ver)           (((ver) / 1000) % 100)
+#define NETDAEMONS_PATCH_OF(ver)           ( (ver) % 1000)
 
-#endif /*CONNECT_DAEMONS___VERSION__H*/
+#define NETDAEMONS_VERSION_INT             NETDAEMONS_VERSION_OF        \
+                                           (NETDAEMONS_MAJOR,           \
+                                            NETDAEMONS_MINOR,           \
+                                            NETDAEMONS_PATCH)
+
+
+#ifdef NCBI_CXX_TOOLKIT
+
+#  if !defined(NDEBUG)  ||  defined(_DEBUG)
+#    if NCBI_PLATFORM_BITS == 64
+#      define NETDAEMONS_VERSION    NETDAEMONS_VERSION_STR "/64[DEBUG]"
+#    else
+#      define NETDAEMONS_VERSION    NETDAEMONS_VERSION_STR "[DEBUG]"
+#    endif /*NCBI_PLATFORM_BITS==64*/
+#  else
+#    if NCBI_PLATFORM_BITS == 64
+#      define NETDAEMONS_VERSION    NETDAEMONS_VERSION_STR "/64"
+#    else
+#      define NETDAEMONS_VERSION    NETDAEMONS_VERSION_STR
+#    endif /*NCBI_PLATFORM_BITS==64*/
+#  endif /*!NDEBUG || _DEBUG*/
+
+#else
+
+#  define NETDAEMONS_VERSION        NETDAEMONS_VERSION_STR
+
+#endif /*NCBI_CXX_TOOLKIT*/
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+extern NCBI_XCONNECT_EXPORT
+const char* g_VersionStr(const char* revision);
+
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
+#endif /*CONNECT___NCBI_VERSION__H*/

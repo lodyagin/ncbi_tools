@@ -11,9 +11,19 @@
 
   <body>
 <pre>
+
+WARNING: We now encourage BLAST users to use the BLAST+ applications, that can be downloaded at
+ftp://ftp.ncbi.nlm.nih.gov/blast/executables/LATEST .  There is an extensive user manual about the
+BLAST+ applications at ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/user_manual.pdf as well
+as a publication at http://www.ncbi.nlm.nih.gov/pubmed/20003500?dopt=Citation
+
+This document is no longer actively maintained.
+
+
+
 README for stand-alone BLAST
 
-$Date: 2007/10/29 13:30:52 $
+$Date: 2010/03/26 14:52:10 $
 
 Table of contents
 -----------------
@@ -35,11 +45,8 @@ NCBI provides binaries for the following platforms:
 
 Apple MacOS X (ppc32/ia32)
 FreeBSD 4.5 (ia32)
-IBM AIX 5.1 (ppc64)
 Linux (kernel 2.6, glibc 2.3) (ia32, ia64, x64)
 Microsoft Windows 2000 (ia32)
-SGI IRIX 6.5 (mips64)
-Sun Solaris 9 (ia32)
 Sun Solaris 10 (sparc64)
 Sun Solaris 10 (x64)
 
@@ -265,17 +272,6 @@ If you have any questions please send them to the
 blast-help@ncbi.nlm.nih.gov e-mail address.
 
 
-SGI Note:
----------
-
-SGI recommends the following threads patches on IRIX6 systems:
-
-   For 6.2 systems, install SG0001404, SG0001645, SG0002000, SG0002420 and SG0002458 (in that order)
-   For 6.3 systems, install SG0001645, SG0002420 and SG0002458 (in that order)
-   For 6.4 systems, install SG0002194, SG0002420 and SG0002458 (in that order)
-
-These patches can be obtained by calling SGI customer service or from the web: http://support.sgi.com/
-
 System recommendations:
 ----------------------
 
@@ -294,24 +290,4 @@ program. All of the FASTA databases together are about 1.5 Gig, the BLAST
 databases produced from this will probably be about another Gig or so. 4 Gig
 of disk space, to make room for software and output, is probably a pretty
 good bet.
-
-OSF1 and limit
---------------
-
-Some OSF1 users have encountered "out of memory" problems when running searches
-even though there seems to be plenty of memory on the machine and the search
-runs well on other platforms.  The error message would look something like:
-
-[blastall] FATAL ERROR: CoreLib [001.000]  gi|509180|emb|X71670.1|MMP17SAR: Failed to allocate 480 bytes
-
-Often it is sufficient to simply raise the "datasize" limit, which specifies
-the maximum allowed heap size.  The "datasize" limit can be changed by executing:
-
-limit datasize unlimited
-
-Note that this change only applies to the current session, so it is advisable to place
-this command in some file sourced at startup, such as .login or .cshrc.
-</pre>
-  </body>
-</html>
 

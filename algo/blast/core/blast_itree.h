@@ -1,4 +1,4 @@
-/* $Id: blast_itree.h,v 1.6 2006/11/21 17:03:23 papadopo Exp $
+/* $Id: blast_itree.h,v 1.7 2010/05/06 18:54:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -115,8 +115,9 @@ Blast_IntervalTreeReset(BlastIntervalTree *tree);
  * @param tree The tree to update [in][out]
  * @param query_info Structure with query offset information [in]
  * @param index_method How HSP will be indexed within the tree [in]
+ * @return zero if succes, otherwise indicates an error
  */
-void 
+Int2 
 BlastIntervalTreeAddHSP(BlastHSP *hsp, 
                         BlastIntervalTree *tree,
                         const BlastQueryInfo *query_info,

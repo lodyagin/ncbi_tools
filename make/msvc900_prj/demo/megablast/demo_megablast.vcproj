@@ -77,7 +77,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/megablast.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -171,7 +171,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/megablast.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -264,7 +264,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/megablast.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -358,7 +358,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/megablast.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -453,7 +453,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/megablast.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -547,7 +547,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/megablast.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -640,7 +640,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/megablast.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -734,7 +734,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/megablast.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"

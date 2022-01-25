@@ -1,9 +1,9 @@
---$Revision: 6.7 $
+--$Revision: 6.10 $
 --*********************************************************
 --
 -- ASN.1 and XML for the components of a GenBank format sequence
 -- J.Ostell 2002
--- Updated 15 January 2009
+-- Updated 25 May 2010
 --
 --*********************************************************
 
@@ -27,8 +27,8 @@ BEGIN
 --    fields do not have full substructure defined here where there is
 --    already a standard GenBank format string. For example:
 --
---    Date  DD-Mon-YYYY
---    Authors   LastName, Intials (with periods)
+--   Date  DD-Mon-YYYY
+--   Authors   LastName, Intials (with periods)
 --   Journal   JounalName Volume (issue), page-range (year)
 --   FeatureLocations as per GenBank feature table, but FeatureIntervals
 --    may also be provided as a convenience
@@ -111,22 +111,23 @@ GBSeq ::= SEQUENCE {
     taxonomy VisibleString OPTIONAL ,
     references SEQUENCE OF GBReference OPTIONAL ,
     comment VisibleString OPTIONAL ,
-    tagset GBTagset OPTIONAL ,
+    comment-set SEQUENCE OF GBComment OPTIONAL ,
+    struc-comments SEQUENCE OF GBStrucComment OPTIONAL ,
     primary VisibleString OPTIONAL ,
     source-db VisibleString OPTIONAL ,
     database-reference VisibleString OPTIONAL ,
     feature-table SEQUENCE OF GBFeature OPTIONAL ,
-    sequence VisibleString OPTIONAL ,  -- Optional for other dump forms
-    contig VisibleString OPTIONAL
+    feature-set SEQUENCE OF GBFeatureSet OPTIONAL ,
+    sequence VisibleString OPTIONAL ,  -- Optional for contig, wgs, etc.
+    contig VisibleString OPTIONAL ,
+    alt-seq SEQUENCE OF GBAltSeqData OPTIONAL
 }
-
-GBSecondary-accn ::= VisibleString
 
 GBSeqid ::= VisibleString
 
-GBKeyword ::= VisibleString
+GBSecondary-accn ::= VisibleString
 
-GBAuthor ::= VisibleString
+GBKeyword ::= VisibleString
 
 GBReference ::= SEQUENCE {
     reference VisibleString ,
@@ -135,29 +136,46 @@ GBReference ::= SEQUENCE {
     consortium VisibleString OPTIONAL ,
     title VisibleString OPTIONAL ,
     journal VisibleString ,
-    xref SET OF GBXref OPTIONAL ,
+    xref SEQUENCE OF GBXref OPTIONAL ,
     pubmed INTEGER OPTIONAL ,
     remark VisibleString OPTIONAL
 }
+
+GBAuthor ::= VisibleString
 
 GBXref ::= SEQUENCE {
     dbname VisibleString ,
     id VisibleString
 }
 
-GBTagset ::= SEQUENCE {
-    authority VisibleString OPTIONAL ,
-    version VisibleString OPTIONAL ,
-    url VisibleString OPTIONAL ,
-    tags GBTags OPTIONAL
+GBComment ::= SEQUENCE {
+    type VisibleString OPTIONAL ,
+    paragraphs SEQUENCE OF GBCommentParagraph
 }
 
-GBTags ::= SEQUENCE OF GBTag
+GBCommentParagraph ::= SEQUENCE {
+    items SEQUENCE OF GBCommentItem
+}
 
-GBTag ::= SEQUENCE {
-    name VisibleString OPTIONAL ,
+GBCommentItem ::= SEQUENCE {
     value VisibleString OPTIONAL ,
-    unit VisibleString OPTIONAL
+    url VisibleString OPTIONAL
+}
+
+GBStrucComment ::= SEQUENCE {
+    name VisibleString OPTIONAL ,
+    items SEQUENCE OF GBStrucCommentItem
+}
+
+GBStrucCommentItem ::= SEQUENCE {
+    tag VisibleString OPTIONAL ,
+    value VisibleString OPTIONAL ,
+    url VisibleString OPTIONAL
+}
+
+GBFeatureSet ::= SEQUENCE {
+    annot-source VisibleString OPTIONAL ,
+    features SEQUENCE OF GBFeature
 }
 
 GBFeature ::= SEQUENCE {
@@ -167,7 +185,8 @@ GBFeature ::= SEQUENCE {
     operator VisibleString OPTIONAL ,
     partial5 BOOLEAN OPTIONAL ,
     partial3 BOOLEAN OPTIONAL ,
-    quals SEQUENCE OF GBQualifier OPTIONAL
+    quals SEQUENCE OF GBQualifier OPTIONAL ,
+    xrefs SEQUENCE OF GBXref OPTIONAL
 }
 
 GBInterval ::= SEQUENCE {
@@ -184,18 +203,22 @@ GBQualifier ::= SEQUENCE {
     value VisibleString OPTIONAL
 }
 
-GBTagsetRules ::= SEQUENCE {
-    authority VisibleString OPTIONAL ,
-    version VisibleString OPTIONAL ,
-    mandatorytags GBTagNames OPTIONAL ,
-    optionaltags GBTagNames OPTIONAL ,
-    uniquetags GBTagNames OPTIONAL ,
-    extensible BOOLEAN OPTIONAL
+GBAltSeqData ::= SEQUENCE {
+    name VisibleString ,  -- e.g., contig, wgs, scaffold, cage, genome
+    items SEQUENCE OF GBAltSeqItem OPTIONAL
 }
 
-GBTagNames ::= SEQUENCE OF VisibleString
-
-GBTagsetRuleSet ::= SEQUENCE OF GBTagsetRules
+GBAltSeqItem ::= SEQUENCE {
+    interval GBInterval OPTIONAL ,
+    isgap BOOLEAN OPTIONAL ,
+    gap-length INTEGER OPTIONAL ,
+    gap-type VisibleString OPTIONAL ,
+    gap-linkage VisibleString OPTIONAL ,
+    gap-comment VisibleString OPTIONAL ,
+    first-accn VisibleString OPTIONAL ,
+    last-accn VisibleString OPTIONAL ,
+    value VisibleString OPTIONAL
+}
 
 END
 

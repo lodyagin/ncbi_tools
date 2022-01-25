@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.15 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -42,83 +42,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 04-20-93 Schuler     LIBCALL calling convention
-* 05-13-93 Schuler     Changed definitions of AsnReadFunc and AsnWriteFunc to
-*                      use the LIBCALL calling convention.
-* 02-24-94 Schuler     AsnTypeStringToHex moved here (from asntypes.h)
-*
-* $Log: asn.h,v $
-* Revision 6.11  2003/12/03 19:31:09  gouriano
-* Corrected DTD generation (a different approach)
-*
-* Revision 6.10  2003/09/15 16:16:32  kans
-* added AsnWriteEx, AsnTxtWriteEx, and AsnPrintStream
-*
-* Revision 6.9  2002/05/20 23:13:39  ivanov
-* Fixed overburn memory AsnIo buf in the AsnPrint*() -- increased
-* buffers reserved room
-*
-* Revision 6.8  2001/10/11 14:39:08  ostell
-* added support for XMLModulePrefix
-*
-* Revision 6.7  2000/12/12 15:56:08  ostell
-* added support BigInt
-*
-* Revision 6.6  2000/07/25 20:30:59  ostell
-* added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
-*
-* Revision 6.5  2000/05/12 20:44:01  ostell
-* make changes to collect comments from spec and print in DTD
-*
-* Revision 6.4  2000/05/10 03:12:36  ostell
-* added support for XML DTD and XML data output
-*
-* Revision 6.3  1998/02/27 17:22:18  vakatov
-* [WIN32 DLL]  Declared some functions as NLM_EXTERN(DLL-exportable)
-*
-* Revision 6.2  1998/01/09 15:54:08  shavirin
-* Added definition of hash calculating function
-*
-* Revision 6.1  1997/10/28 15:13:23  epstein
-* add AsnFindNthPieceOfObject
-*
-* Revision 6.0  1997/08/25 18:09:34  madden
-* Revision changed to 6.0
-*
-* Revision 5.3  1997/04/24 12:47:49  ostell
-* in AsnTypeStringToHex, allowed argument "left" to be NULL
-*
- * Revision 5.2  1997/04/23  21:23:03  ostell
- * changed BitHex reading routine to strip internal spaces and allow for linewraps at
- * any spacing.
- *
- * Revision 5.1  1996/12/03  21:43:48  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.2  1996/02/18  16:45:36  ostell
- * changed fix_non_print behavior and added option 3
- *
- * Revision 4.1  1995/12/21  14:00:51  ostell
- * added AsnIoFree()
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.27  1995/06/29  15:58:51  epstein
- * add OP_NCBIOBJSTR for complex handling when reading biostrucs
- *
- * Revision 2.26  95/05/24  19:08:49  ostell
- * added spec_version to AsnIoPtr. This is used to set a non-zero asn.1
- * spec version number on a particular stream. The object loaders check this
- * number and remove new asn1 elements on either read or write. This allows
- * filtering of data that conforms to a not yet public spec.
- *
- * Revision 2.25  1995/05/15  18:38:28  ostell
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -229,7 +152,7 @@ typedef struct asnmodule {
 #define ASNIO_CARRIER   32         /* is a pure iterator */
 #define ASNIO_XML       64
 
-#define ASNIO_TEXT_IN	21         /* AsnIo.type */
+#define ASNIO_TEXT_IN	21         /* AsnIo.type for files */
 #define ASNIO_TEXT_OUT	25
 #define ASNIO_BIN_IN	22
 #define ASNIO_BIN_OUT	26
@@ -310,6 +233,9 @@ typedef struct asnio {
 	Int2 spec_version;      /* used for filtering between asn.1 spec versions */
 	Boolean no_newline;     /* to suppress internal newlines in long XML strings */
 	Boolean XMLModuleWritten; /* to put header on first XML DTD only */
+    /* the following fields are used for easier ASN.1 comparisons, not normal operations */
+	Boolean asn_no_newline;  /* to suppress internal newlines in long ASN.1 strings */
+	Boolean asn_alt_struct;  /* structure ending braces on separate lines */
 } AsnIo, PNTR AsnIoPtr;
 
 
@@ -505,6 +431,26 @@ NLM_EXTERN Boolean LIBCALL AsnGenericUserSeqOfFree PROTO ((Pointer ptr, AsnOptFr
 NLM_EXTERN Pointer LIBCALL AsnGenericChoiceSeqOfAsnRead PROTO ((AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr orig, BoolPtr isError, AsnReadFunc readfunc, AsnOptFreeFunc freefunc));
 NLM_EXTERN Boolean LIBCALL AsnGenericChoiceSeqOfAsnWrite PROTO ((Pointer ptr, AsnWriteFunc writefunc, AsnIoPtr aip, AsnTypePtr bag_atp, AsnTypePtr element_atp));
 NLM_EXTERN Boolean LIBCALL AsnGenericChoiceSeqOfFree PROTO ((Pointer ptr, AsnOptFreeFunc freefunc));
+
+NLM_EXTERN ValNodePtr LIBCALL AsnGenericValNodeSetAsnRead (
+  AsnIoPtr aip,
+  AsnModulePtr amp,
+  AsnTypePtr orig,
+  BoolPtr isError,
+  AsnReadFunc readfunc,
+  AsnOptFreeFunc freefunc
+);
+NLM_EXTERN Boolean LIBCALL AsnGenericValNodeSetAsnWrite (
+  ValNodePtr ptr,
+  AsnWriteFunc writefunc,
+  AsnIoPtr aip,
+  AsnTypePtr bag_atp,
+  AsnTypePtr element_atp
+);
+NLM_EXTERN ValNodePtr LIBCALL AsnGenericValNodeSetFree (
+  ValNodePtr ptr,
+  AsnOptFreeFunc freefunc
+);
 
 /*** asnbufo.c ***/
 NLM_EXTERN Boolean LIBCALL AsnBufWrite PROTO ((AsnIoPtr aip, AsnTypePtr atp, CharPtr buf, size_t buflen));

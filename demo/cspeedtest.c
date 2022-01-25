@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/17/07
 *
-* $Revision: 1.22 $
+* $Revision: 1.25 $
 *
 * File Description: 
 *
@@ -57,14 +57,7 @@
 #include <valid.h>
 #include <suggslp.h>
 
-NLM_EXTERN CharPtr NewCreateDefLine (
-  ItemInfoPtr iip,
-  BioseqPtr bsp,
-  Boolean ignoreTitle,
-  Boolean extProtTitle
-);
-
-#define CSPEEDTEST_APP_VER "2.0"
+#define CSPEEDTEST_APP_VER "2.1"
 
 CharPtr CSPEEDTEST_APPLICATION = CSPEEDTEST_APP_VER;
 
@@ -333,7 +326,8 @@ static void DoFastaDefline (
 
 static void DoNewFastaDefline (
   BioseqPtr bsp,
-  Pointer userdata
+  Pointer userdata,
+  Boolean ignoreExisting
 )
 
 {
@@ -361,7 +355,7 @@ static void DoNewFastaDefline (
 
   id [0] = '\0';
   SeqIdWrite (bsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
-  title = NewCreateDefLine (NULL, bsp, FALSE, FALSE);
+  title = NewCreateDefLine (NULL, bsp, ignoreExisting, FALSE);
   if (StringHasNoText (title)) {
     title = StringSave ("?");
   }
@@ -371,6 +365,24 @@ static void DoNewFastaDefline (
   }
 
   MemFree (title);
+}
+
+static void DoNewFastaExist (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  DoNewFastaDefline (bsp, userdata, FALSE);
+}
+
+static void DoNewFastaRegen (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  DoNewFastaDefline (bsp, userdata, TRUE);
 }
 
 static void DoFastaComp (
@@ -574,6 +586,43 @@ static void MarkTitles (
   ovn->idx.deleteme = TRUE;
 }
 
+static void RemoveTitles (
+  SeqEntryPtr sep,
+  Pointer mydata,
+  Int4 index,
+  Int2 indent
+)
+
+{
+  BioseqPtr         bsp;
+  BioseqSetPtr      bssp;
+  SeqDescrPtr PNTR  prev = NULL;
+  SeqDescrPtr       sdp = NULL, next = NULL;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    sdp = bsp->descr;
+    prev = &(bsp->descr);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    sdp = bssp->descr;
+    prev = &(bssp->descr);
+  } else return;
+
+  while (sdp != NULL) {
+    next = sdp->next;
+    if (sdp->choice == Seq_descr_title) {
+      *prev = sdp->next;
+      sdp->next = NULL;
+      SeqDescFree (sdp);
+    } else {
+      prev = (SeqDescrPtr PNTR) &(sdp->next);
+    }
+    sdp = next;
+  }
+}
+
 static void DoProcess (
   SeqEntryPtr sep,
   Uint2 entityID,
@@ -587,9 +636,17 @@ static void DoProcess (
 
   if (sep == NULL || cfp == NULL) return;
 
-  if (StringChr (cfp->clean, 't') != NULL) {
+  if (StringChr (cfp->clean, 'm') != NULL) {
     VisitDescriptorsInSep (sep, NULL, MarkTitles);
+  }
+  if (StringChr (cfp->clean, 'd') != NULL) {
     DeleteMarkedObjects (entityID, 0, NULL);
+  }
+  if (StringChr (cfp->clean, 'c') != NULL) {
+    SeqMgrClearFeatureIndexes (entityID, NULL);
+  }
+  if (StringChr (cfp->clean, 't') != NULL) {
+    SeqEntryExplore (sep, NULL, RemoveTitles);
   }
   if (StringChr (cfp->clean, 'a') != NULL) {
     AssignIDsInEntity (entityID, 0, NULL);
@@ -602,7 +659,7 @@ static void DoProcess (
   }
 
   if (StringChr (cfp->index, 'f') != NULL) {
-    SeqMgrIndexFeatures (entityID, 0);
+    SeqMgrIndexFeatures (entityID, NULL);
   }
 
   if (StringChr (cfp->seq, 'c') != NULL) {
@@ -616,7 +673,7 @@ static void DoProcess (
   }
   if (StringChr (cfp->seq, 'S') != NULL) {
     if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
-      SeqMgrIndexFeatures (entityID, 0);
+      SeqMgrIndexFeatures (entityID, NULL);
     }
     VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaSeq);
   }
@@ -628,24 +685,26 @@ static void DoProcess (
   }
   if (StringChr (cfp->seq, 'D') != NULL) {
     if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
-      SeqMgrIndexFeatures (entityID, 0);
+      SeqMgrIndexFeatures (entityID, NULL);
     }
     VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaDefline);
   }
   if (StringChr (cfp->seq, 'T') != NULL) {
     VisitDescriptorsInSep (sep, NULL, MarkTitles);
     DeleteMarkedObjects (entityID, 0, NULL);
-    SeqMgrIndexFeatures (entityID, 0);
+    SeqMgrIndexFeatures (entityID, NULL);
     VisitBioseqsInSep (sep, (Pointer) cfp, DoFastaDefline);
   }
   if (StringChr (cfp->seq, 'x') != NULL) {
-    VisitBioseqsInSep (sep, (Pointer) cfp, DoNewFastaDefline);
+    VisitBioseqsInSep (sep, (Pointer) cfp, DoNewFastaExist);
   }
   if (StringChr (cfp->seq, 'X') != NULL) {
+    /*
     VisitDescriptorsInSep (sep, NULL, MarkTitles);
     DeleteMarkedObjects (entityID, 0, NULL);
-    SeqMgrIndexFeatures (entityID, 0);
-    VisitBioseqsInSep (sep, (Pointer) cfp, DoNewFastaDefline);
+    SeqMgrIndexFeatures (entityID, NULL);
+    */
+    VisitBioseqsInSep (sep, (Pointer) cfp, DoNewFastaRegen);
   }
   
   if (StringChr (cfp->seq, 'f') != NULL) {
@@ -660,13 +719,13 @@ static void DoProcess (
   }
   if (StringChr (cfp->feat, 'g') != NULL) {
     if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
-      SeqMgrIndexFeatures (entityID, 0);
+      SeqMgrIndexFeatures (entityID, NULL);
     }
     VisitFeaturesInSep (sep, (Pointer) cfp, DoGeneOverlapPrintTest);
   }
   if (StringChr (cfp->feat, 'h') != NULL) {
     if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
-      SeqMgrIndexFeatures (entityID, 0);
+      SeqMgrIndexFeatures (entityID, NULL);
     }
     VisitFeaturesInSep (sep, (Pointer) cfp, DoGeneOverlapSpeedTest);
   }
@@ -682,13 +741,15 @@ static void DoProcess (
   }
   if (StringChr (cfp->feat, 's') != NULL) {
     if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
-      SeqMgrIndexFeatures (entityID, 0);
+      SeqMgrIndexFeatures (entityID, NULL);
     }
     cfp->nucbsp = FindNucBioseq (sep);
     if (cfp->nucbsp != NULL) {
       BioseqToGeneticCode (cfp->nucbsp, &(cfp->genCode), NULL, NULL, NULL, 0, NULL);
       SeqIdWrite (cfp->nucbsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
-      fprintf (cfp->ofp, "%s\n", id);
+      if (cfp->ofp != NULL) {
+        fprintf (cfp->ofp, "%s\n", id);
+      }
       VisitBioseqsInSep (sep, (Pointer) cfp, DoSuggestIntervals);
       cfp->nucbsp = NULL;
       cfp->genCode = 0;
@@ -696,14 +757,16 @@ static void DoProcess (
   }
   if (StringChr (cfp->feat, 'S') != NULL) {
     if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
-      SeqMgrIndexFeatures (entityID, 0);
+      SeqMgrIndexFeatures (entityID, NULL);
     }
     cfp->nucbsp = FindNucBioseq (sep);
     if (cfp->nucbsp != NULL) {
       BioseqToGeneticCode (cfp->nucbsp, &(cfp->genCode), NULL, NULL, NULL, 0, NULL);
       SetBatchSuggestNucleotide (cfp->nucbsp, cfp->genCode);
       SeqIdWrite (cfp->nucbsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
-      fprintf (cfp->ofp, "%s\n", id);
+      if (cfp->ofp != NULL) {
+        fprintf (cfp->ofp, "%s\n", id);
+      }
       VisitBioseqsInSep (sep, (Pointer) cfp, DoSuggestIntervals);
       ClearBatchSuggestNucleotide ();
       cfp->nucbsp = NULL;
@@ -721,7 +784,7 @@ static void DoProcess (
 
   if (StringChr (cfp->verify, 'v') != NULL) {
     if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
-      SeqMgrIndexFeatures (entityID, 0);
+      SeqMgrIndexFeatures (entityID, NULL);
     }
     vsp = ValidStructNew ();
     if (vsp != NULL) {
@@ -740,7 +803,7 @@ static void DoProcess (
   }
   if (StringChr (cfp->verify, 'b') != NULL) {
     if (SeqMgrFeaturesAreIndexed (entityID) == 0) {
-      SeqMgrIndexFeatures (entityID, 0);
+      SeqMgrIndexFeatures (entityID, NULL);
     }
     SeqEntryToGnbk (sep, NULL, GENBANK_FMT, SEQUIN_MODE, NORMAL_STYLE,
                     0, 0, 0, NULL, cfp->ofp);
@@ -1213,6 +1276,9 @@ Args myargs [] = {
    "      wb Write Binary ASN.1", NULL, NULL, NULL,
     TRUE, 'O', ARG_STRING, 0.0, 0, NULL},
   {"Cleanup\n"
+   "      m Mark Titles\n"
+   "      d Delete Marked Objects\n"
+   "      c Clear Feature Indexes\n"
    "      t Remove Titles\n"
    "      a AssignIDsInEntity\n"
    "      b BasicSeqEntryCleanup\n"

@@ -1,5 +1,5 @@
 #
-# $Id: linux_icc.ncbi.mk,v 1.8 2009/02/04 14:24:03 lavr Exp $
+# $Id: linux_icc.ncbi.mk,v 1.9 2010/02/05 19:46:19 ucko Exp $
 #
 # ICC 8.x with optimization options for Pentium 4 processor
 
@@ -25,7 +25,7 @@ NCBI_VIBFLAG = -I/usr/X11R6/include -L/usr/X11R6/lib -DWIN_MOTIF
 NCBI_VIBLIBS = -lXm -lXmu -lXt -lX11 -lXext
 #warning! If you have only dynamic version of Motif or Lesstif
 #you should delete -Wl,-Bstatic sentence from the next line:
-NCBI_DISTVIBLIBS = -L/usr/X11R6/lib -Wl,-Bstatic -lXm -Wl,-Bdynamic -lXmu -lXt -lX11 -lXext -lXp
+NCBI_DISTVIBLIBS = -L/usr/X11R6/lib -Wl,-Bstatic -lXm -Wl,-Bdynamic -lXft -lfontconfig -ljpeg -lpng -lXmu -lXt -lX11 -lXext -lXp
 NCBI_OTHERLIBS = -lm
 NCBI_RANLIB = ranlib
 # Used by makedis.csh

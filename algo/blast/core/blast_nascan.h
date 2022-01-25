@@ -1,4 +1,4 @@
-/* $Id: blast_nascan.h,v 1.6 2009/05/27 17:39:36 kazimird Exp $
+/* $Id: blast_nascan.h,v 1.7 2009/10/01 16:04:52 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,10 +42,9 @@ extern "C" {
 /** Generic prototype for nucleotide subject scanning routines */
 typedef Int4 (*TNaScanSubjectFunction)(const LookupTableWrap* lookup_wrap,
                                   const BLAST_SequenceBlk* subject,
-                                  Int4 start_offset,
                                   BlastOffsetPair* NCBI_RESTRICT offset_pairs,
                                   Int4 max_hits, 
-                                  Int4* end_offset);
+                                  Int4* scan_range);
 
 /** Choose the most appropriate function to scan through
  * nucleotide subject sequences

@@ -1,4 +1,4 @@
-/* $Id: blast_aascan.c,v 1.13 2009/05/27 17:39:36 kazimird Exp $
+/* $Id: blast_aascan.c,v 1.16 2010/07/23 14:36:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_aascan.c,v 1.13 2009/05/27 17:39:36 kazimird Exp $";
+    "$Id: blast_aascan.c,v 1.16 2010/07/23 14:36:34 kazimird Exp $";
 #endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 /**
@@ -46,22 +46,20 @@ static char const rcsid[] =
  *
  * @param lookup_wrap the lookup table [in]
  * @param subject the subject sequence [in]
- * @param offset the offset in the subject at which to begin scanning [in/out]
  * @param offset_pairs Array to which hits will be copied [out]
  * @param array_size length of the offset arrays [in]
  * @return The number of hits found.
  */
 static Int4 s_BlastAaScanSubject(const LookupTableWrap * lookup_wrap,
                                  const BLAST_SequenceBlk * subject,
-                                 Int4 * offset,
                                  BlastOffsetPair * NCBI_RESTRICT offset_pairs,
-                                 Int4 array_size)
+                                 Int4 array_size,
+                                 Int4 * s_range)
 {
     Int4 index;
     Uint1 *s = NULL;
     Uint1 *s_first = NULL;
     Uint1 *s_last = NULL;
-    Int4 s_range[5]; 
     Int4 numhits = 0;           /* number of hits found for a given subject
                                    offset */
     Int4 totalhits = 0;         /* cumulative number of hits found */
@@ -78,12 +76,6 @@ static Int4 s_BlastAaScanSubject(const LookupTableWrap * lookup_wrap,
     bbc = (AaLookupBackboneCell *) lookup->thick_backbone;
     ovfl = (Int4 *) lookup->overflow;
     word_length = lookup->word_length;
-	
-    s_range[0] = 0;
-    s_range[1] = *offset;
-    s_range[2] = subject->length - word_length;
-    s_range[3] = 0;
-    s_range[4] = subject->length;
 
     while (s_DetermineScanningOffsets(subject, word_length, word_length, s_range)) {
     s_first=subject->sequence + s_range[1];
@@ -131,7 +123,7 @@ static Int4 s_BlastAaScanSubject(const LookupTableWrap * lookup_wrap,
             } else
                 /* not enough space in the destination array; return early */
             {
-                *offset = s - subject->sequence;
+                s_range[1] = s - subject->sequence;
                 return totalhits;
             }
         }
@@ -140,23 +132,20 @@ static Int4 s_BlastAaScanSubject(const LookupTableWrap * lookup_wrap,
     } /* end while */
 
     /* if we get here, we fell off the end of the sequence */
-    *offset = subject->length - word_length + 1;
-
     return totalhits;
 }
 
 /** same function for small lookup table */
 static Int4 s_BlastSmallAaScanSubject(const LookupTableWrap * lookup_wrap,
                                  const BLAST_SequenceBlk * subject,
-                                 Int4 * offset,
                                  BlastOffsetPair * NCBI_RESTRICT offset_pairs,
-                                 Int4 array_size)
+                                 Int4 array_size,
+                                 Int4 * s_range)
 {
     Int4 index;
     Uint1 *s = NULL;
     Uint1 *s_first = NULL;
     Uint1 *s_last = NULL;
-    Int4 s_range[5];
     Int4 numhits = 0;           /* number of hits found for a given subject
                                    offset */
     Int4 totalhits = 0;         /* cumulative number of hits found */
@@ -173,17 +162,11 @@ static Int4 s_BlastSmallAaScanSubject(const LookupTableWrap * lookup_wrap,
     bbc = (AaLookupSmallboneCell *) lookup->thick_backbone;
     ovfl = (Uint2 *) lookup->overflow;
     word_length = lookup->word_length;
-	
-    s_range[0] = 0;
-    s_range[1] = *offset;
-    s_range[2] = subject->length - word_length;
-    s_range[3] = 0;
-    s_range[4] = subject->length;
 
     while (s_DetermineScanningOffsets(subject, word_length, word_length, s_range)) {
     s_first=subject->sequence + s_range[1];
     s_last=subject->sequence + s_range[2];
-	
+
     /* prime the index */
     index = ComputeTableIndex(word_length - 1,
                               lookup->charsize, s_first);
@@ -226,17 +209,15 @@ static Int4 s_BlastSmallAaScanSubject(const LookupTableWrap * lookup_wrap,
             } else
                 /* not enough space in the destination array; return early */
             {
-		*offset = s - subject->sequence;
-		return totalhits;
+                s_range[1] = s - subject->sequence;
+                return totalhits;
             }
         }
     } /* end for */
     s_range[1] = s - subject->sequence;
+
     } /* end while */
-
     /* if we get here, we fell off the end of the sequence */
-    *offset = subject->length - word_length + 1;
-
     return totalhits;
 }
 
@@ -258,16 +239,15 @@ static Int4 s_BlastSmallAaScanSubject(const LookupTableWrap * lookup_wrap,
 static Int4 s_BlastCompressedAaScanSubject(
                               const LookupTableWrap * lookup_wrap,
                               const BLAST_SequenceBlk * subject,
-                              Int4 * offset,
                               BlastOffsetPair * NCBI_RESTRICT offset_pairs,
-                              Int4 array_size)
+                              Int4 array_size,
+                              Int4 * s_range)
 {
     Int4 index=0;
     Int4 preshift; /* used for 2-stage index calculation */
     Uint1 *s = NULL;
     Uint1 *s_first = NULL;
     Uint1 *s_last = NULL;
-    Int4 s_range[5];
     Int4 numhits = 0;     /* number of hits found for one subject offset */
     Int4 totalhits = 0;         /* cumulative number of hits found */
     PV_ARRAY_TYPE *pv;
@@ -285,12 +265,6 @@ static Int4 s_BlastCompressedAaScanSubject(
     ASSERT(lookup_wrap->lut_type == eCompressedAaLookupTable);
     lookup = (BlastCompressedAaLookupTable *) lookup_wrap->lut;
     word_length = lookup->word_length;
-
-    s_range[0] = 0;
-    s_range[1] = *offset;
-    s_range[2] = subject->length - word_length;
-    s_range[3] = 0;
-    s_range[4] = subject->length;
 
     while (s_DetermineScanningOffsets(subject, word_length, word_length, s_range)) {
     s_first=subject->sequence + s_range[1];
@@ -439,8 +413,8 @@ static Int4 s_BlastCompressedAaScanSubject(
           } 
           else
               /* not enough space in the destination array */
-	 {
-              *offset = s - subject->sequence;
+          {
+              s_range[1] = s - subject->sequence;
               return totalhits;
           }
        }
@@ -449,8 +423,6 @@ static Int4 s_BlastCompressedAaScanSubject(
     } /* end while */
 
     /* if we get here, we fell off the end of the sequence */
-    *offset = subject->length - word_length + 1;
-
     return totalhits;
 }
 

@@ -1,5 +1,5 @@
 #
-# $Id: darwin.ncbi.mk,v 1.14 2005/12/01 19:52:56 rsmith Exp $
+# $Id: darwin.ncbi.mk,v 1.15 2010/07/18 14:24:23 ucko Exp $
 #
 # Tested on Darwin localhost 1.2 Darwin Kernel Version 1.2: Wed Aug 30 23:32:53 PDT 2000;
 # root:xnu/xnu-103.obj~1/RELEASE_PPC  Power Macintosh powerpc
@@ -10,7 +10,8 @@ NCBI_MAKE_SHELL = /bin/sh
 NCBI_AR=ar
 NCBI_CC = cc -pipe
 #NCBI_CFLAGS1 = -c -g -no-cpp-precomp
-NCBI_CFLAGS1 = -c -no-cpp-precomp -Wno-long-double
+#NCBI_CFLAGS1 = -c -no-cpp-precomp -Wno-long-double
+NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -framework CoreServices -O2
 NCBI_OPTFLAG = -O2
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin

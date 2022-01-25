@@ -1,4 +1,4 @@
-/* $Id: blast_filter.h,v 1.42 2008/11/03 20:59:44 kazimird Exp $
+/* $Id: blast_filter.h,v 1.46 2010/05/12 12:54:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -54,7 +54,8 @@ NCBI_XBLAST_EXPORT
 extern const Uint1 kProtMask;
 
 /** Repeats filtering default options. */
-#define REPEATS_SEARCH_EVALUE 0.1       /**< Default e-value threshold */
+#define REPEATS_SEARCH_EVALUE 0.1       /**< Default e-value threshold, keep for C toolkit */
+#define REPEATS_SEARCH_MINSCORE 26       /**< Default score cutoff */
 #define REPEATS_SEARCH_PENALTY -1       /**< Default mismatch penalty */
 #define REPEATS_SEARCH_REWARD 1       /**< Default match reward */
 #define REPEATS_SEARCH_GAP_OPEN 2       /**< Default gap opening cost */

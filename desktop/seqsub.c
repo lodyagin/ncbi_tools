@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.38 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *
@@ -2366,7 +2366,7 @@ extern Int2 LIBCALLBACK SubmitBlockGenFunc (Pointer data)
     sbfp->proctype = ompcp->proc->proctype;
     sbfp->userkey = OMGetNextUserKey ();
     omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid,
-	                           OMPROC_EDIT, sbfp->userkey);
+                               OMPROC_EDIT, sbfp->userkey);
 
     if (omudp != NULL) {
       omudp->userdata.ptrvalue = (Pointer) sbfp;
@@ -2534,13 +2534,11 @@ static ENUM_ALIST(molinfo_biomol_nucX_alist)
   {"mRNA [cDNA]",            3},
   {"Ribosomal RNA",          4},
   {"Transfer RNA",           5},
-  {"Small nuclear RNA",      6},
-  {"Small cytoplasmic RNA",  7},
   {"Other-Genetic",          9},
   {"Genomic-mRNA",          10},
   {"cRNA",                  11},
-  {"Small nucleolar RNA",   12},
   {"Transcribed RNA",       13},
+  {"ncRNA",                 14},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -3571,7 +3569,7 @@ static Boolean ExportSeqSubmitForm (ForM f, CharPtr filename)
   aip = AsnIoNew(ASNIO_TEXT_OUT, fp, NULL, NULL, NULL);
   SubmitBlockAsnWrite (ssp->sub, aip, NULL);
   
-	AsnIoFlush(aip);
+  AsnIoFlush(aip);
   AsnIoReset(aip);
 
   /* write out comment and pub descriptors */
@@ -3579,7 +3577,7 @@ static Boolean ExportSeqSubmitForm (ForM f, CharPtr filename)
   while (write_sdp != NULL)
   {
     SeqDescAsnWrite (write_sdp, aip, NULL);  
-	  AsnIoFlush(aip);
+    AsnIoFlush(aip);
     AsnIoReset(aip);
     write_sdp = write_sdp->next;
   }
@@ -3703,7 +3701,7 @@ static Boolean GetBioSourceFromSeqEntry (SeqEntryPtr sep, BioSourcePtr PNTR pbio
   BioseqPtr    bsp = NULL;
   BioseqSetPtr bssp = NULL;
   Boolean      rval = TRUE;
-  SeqDescrPtr  sdp;
+  SeqDescrPtr  sdp = NULL;
   
   if (pbiop == NULL)
   {

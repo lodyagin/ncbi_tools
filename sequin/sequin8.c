@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.540 $
+* $Revision: 6.590 $
 *
 * File Description: 
 *
@@ -747,6 +747,9 @@ extern void RecomputeSuggestedIntervalsForCDS
 
       /* correct for partial conditions */
       CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+      if (!partial5) {
+        crp->frame = 0;
+      }
 
       sfp->location = SeqLocFree (sfp->location);
       sfp->location = slp;
@@ -1799,171 +1802,6 @@ extern void ParseCodonQualToCodeBreak (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   ArrowCursor ();
   Update ();
-}
-
-static void CorrectGenCodeIndexedCallback (SeqFeatPtr sfp, Pointer userdata)
-{
-  CdRegionPtr     crp;
-  GeneticCodePtr  gc;
-  Int2Ptr         pGenCode;
-  ValNodePtr      vnp;
-  Boolean         need_replacement = FALSE;
-
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION 
-      || sfp->data.value.ptrvalue == NULL
-      || userdata == NULL) return;
- 
-  pGenCode = (Int2Ptr) userdata;
-  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-  if (crp->genetic_code != NULL
-      && crp->genetic_code->choice == 254) {
-    if (crp->genetic_code->data.ptrvalue == NULL) {
-      vnp = ValNodeNew (NULL);
-      vnp->choice = 2;
-      vnp->data.intvalue = (Int4) *pGenCode;
-    } else {
-      vnp = crp->genetic_code->data.ptrvalue;
-      if (vnp->next == NULL && vnp->choice == 2) {
-        vnp->data.intvalue = (Int4) *pGenCode;
-      } else {
-        need_replacement = TRUE;
-      }
-    }
-  } else {
-    need_replacement = TRUE;
-  }
-  if (need_replacement) {
-    gc = GeneticCodeNew ();
-    if (gc == NULL) return;
-    crp->genetic_code = GeneticCodeFree (crp->genetic_code);
-    vnp = ValNodeNew (NULL);
-    gc->data.ptrvalue = vnp;
-    if (vnp != NULL) {
-      vnp->choice = 2;
-      vnp->data.intvalue = (Int4) *pGenCode;
-    }
-    crp->genetic_code = gc;
-  }
-}
-
-static void CorrectGenCodesBioseqCallback (BioseqPtr bsp, Pointer userdata)
-{
-  SeqMgrFeatContext fcontext;
-  SeqFeatPtr        sfp;
-
-  if (bsp == NULL || userdata == NULL) return;
-  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext)) {
-    CorrectGenCodeIndexedCallback (sfp, userdata);
-  }
-
-}
-
-typedef struct gencodescan {
-  Boolean mito;
-  Boolean plastid;
-  Int2    nuclCode;
-  Int2    mitoCode;
-  Boolean already_found;
-} GenCodeScanData, PNTR GenCodeScanPtr;
-
-static void JustGetGenCodeFromOrgRef (OrgRefPtr orp, GenCodeScanPtr gp)
-{
-  if (orp == NULL || orp->orgname == NULL || gp == NULL || gp->already_found) return;
-
-  gp->nuclCode = orp->orgname->gcode;
-  gp->mitoCode = orp->orgname->mgcode;
-}
-
-static void JustGetGenCodeFromBiop (BioSourcePtr biop, GenCodeScanPtr gp)
-{
-  if (biop == NULL || gp == NULL) return;
-  if (gp->already_found && !biop->is_focus) return;
-
-  gp->mito = (Boolean) (biop->genome == GENOME_kinetoplast ||
-                        biop->genome == GENOME_mitochondrion ||
-                        biop->genome == GENOME_hydrogenosome);
-
-  gp->plastid = (Boolean) (biop->genome == GENOME_chloroplast ||
-                                biop->genome == GENOME_chromoplast ||
-                                biop->genome == GENOME_plastid ||
-                                biop->genome == GENOME_cyanelle ||
-                                biop->genome == GENOME_apicoplast ||
-                                biop->genome == GENOME_leucoplast ||
-                                biop->genome == GENOME_proplastid);
-
-  JustGetGenCodeFromOrgRef (biop->org, gp);
-  gp->already_found = TRUE;
-}
-
-
-static void JustGetGenCodeFromFeat (SeqFeatPtr sfp, Pointer userdata) 
-{
-  GenCodeScanPtr gp;
-
-  if (sfp == NULL || userdata == NULL || sfp->data.choice != SEQFEAT_BIOSRC) return;
-
-  gp = (GenCodeScanPtr) userdata;
-
-  JustGetGenCodeFromBiop (sfp->data.value.ptrvalue, gp);
-}
-
-static void JustGetGenCodeFromDesc (SeqDescrPtr sdp, Pointer userdata)
-{
-  GenCodeScanPtr gp;
-
-  if (sdp == NULL || userdata == NULL || sdp->choice != Seq_descr_source) return;
-
-  gp = (GenCodeScanPtr) userdata;
-
-  JustGetGenCodeFromBiop (sdp->data.ptrvalue, gp);
-}
-
-static Int2 JustGetGenCodeForSeqEntry (SeqEntryPtr sep) 
-{
-  GenCodeScanData gd;
-
-  gd.already_found = FALSE;
-  gd.mito = FALSE;
-  gd.mitoCode = 0;
-  gd.nuclCode = 0;
-  gd.plastid = FALSE;
-
-  VisitDescriptorsInSep (sep, &gd, JustGetGenCodeFromDesc);
-  VisitFeaturesInSep (sep, &gd, JustGetGenCodeFromFeat);
-
-  if (gd.plastid) {
-    return 11;
-  } else if (gd.mito) {
-    return gd.mitoCode;
-  } else {
-    return gd.nuclCode;
-  }
-}
-
-
-extern void CorrectGenCodes (SeqEntryPtr sep, Uint2 entityID)
-
-{
-  BioseqSetPtr  bssp;
-  Int2          genCode;
-
-  if (sep == NULL) return;
-  if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 ||
-                         (IsPopPhyEtcSet (bssp->_class)))) {
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        CorrectGenCodes (sep, entityID);
-      }
-      return;
-    }
-  }
-
-  genCode = JustGetGenCodeForSeqEntry(sep);
-  VisitFeaturesInSep (sep, &genCode, CorrectGenCodeIndexedCallback);
-  VisitBioseqsInSep (sep, &genCode, CorrectGenCodesBioseqCallback);
 }
 
 extern void CorrectCDSGenCodes (IteM i)
@@ -3361,7 +3199,7 @@ static void SelectAsnObject (IteM i, Int2 type)
   GrouP              c;
   GrouP              g;
   GrouP              h;
-  GrouP              k, m;
+  GrouP              k = NULL, m;
   ValNodePtr         head;
   Uint1              j;
   Int2               listHeight;
@@ -3488,7 +3326,7 @@ static void SelectAsnObject (IteM i, Int2 type)
 
   if (selfp->type == SLCT_FEAT || selfp->type == SLCT_DESC)
   {
-    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) k, (HANDLE) c, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, (HANDLE) k, NULL);
   }
   else
   {
@@ -3526,8 +3364,10 @@ typedef struct fuseformdata {
   FEATURE_FORM_BLOCK
 
   LisT           objlist;
+  DialoG         constraint_dlg;
   Uint2          subtype;
   ValNodePtr     head;
+  ConstraintChoiceSetPtr constraint;
 } FuseFormData, PNTR FuseFormPtr;
 
 static SeqLocPtr FuseTwoLocations (Uint2 entityID, SeqLocPtr slp1, SeqLocPtr slp2)
@@ -3843,9 +3683,10 @@ static void FuseFeatureCallback (BioseqPtr bsp, Pointer userdata)
   sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
   while (sfp != NULL)
   {
-    if (sfp->idx.subtype == ffp->subtype ||
+    if ((sfp->idx.subtype == ffp->subtype ||
            (ffp->subtype == FEATDEF_IMP &&
-            IsRealImpFeat (sfp->idx.subtype))) 
+            IsRealImpFeat (sfp->idx.subtype)))
+        && DoesObjectMatchConstraintChoiceSet(OBJ_SEQFEAT, sfp, ffp->constraint))
     {
       if (first == NULL)
       {
@@ -3896,7 +3737,9 @@ static void DoFuseFeature (ButtoN b)
   }
   if (vnp != NULL) {
     ffp->subtype = vnp->choice;
+    ffp->constraint = DialogToPointer (ffp->constraint_dlg);
     VisitBioseqsInSep (sep, ffp, FuseFeatureCallback);
+    ffp->constraint = ConstraintChoiceSetFree(ffp->constraint);
     DeleteMarkedObjects (ffp->input_entityID, 0, NULL);
   }
 
@@ -4021,12 +3864,15 @@ extern void FuseFeature (IteM i)
   }
   ffp->head = head;
 
+  ffp->constraint_dlg = ComplexConstraintDialog(h, NULL, NULL);
+  ChangeComplexConstraintFieldType (ffp->constraint_dlg, FieldType_feature_field, NULL, Feature_type_any);
+
   c = HiddenGroup (h, 4, 0, NULL);
   b = DefaultButton (c, "Accept", DoFuseFeature);
   SetObjectExtra (b, ffp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) ffp->constraint_dlg, (HANDLE) c, NULL);
   RealizeWindow (w);
   Show (w);
   Update ();
@@ -4445,6 +4291,7 @@ typedef struct dblinkdialog {
   DialoG  traceassm;
   DialoG  biosample;
   DialoG  probedb;
+  DialoG  seqreadarch;
 } DblinkDialog, PNTR DblinkDialogPtr;
 
 typedef struct dblinkform {
@@ -4478,6 +4325,7 @@ static void UserObjectPtrToDblinkDialog (
     PointerToDialog (ddp->traceassm, NULL);
     PointerToDialog (ddp->biosample, NULL);
     PointerToDialog (ddp->probedb, NULL);
+    PointerToDialog (ddp->seqreadarch, NULL);
     return;
   }
 
@@ -4535,6 +4383,24 @@ static void UserObjectPtrToDblinkDialog (
           }
           if (head != NULL) {
             PointerToDialog (ddp->probedb, (Pointer) head);
+          }
+          head = ValNodeFreeData (head);
+        }
+      }
+    } else if (StringICmp (oip->str, "Sequence Read Archive") == 0) {
+      if (curr->choice == 7) {
+        num = curr->num;
+        cpp = (CharPtr PNTR) curr->data.ptrvalue;
+        if (num > 0 && cpp != NULL) {
+          head = NULL;
+          for (i = 0; i < num; i++) {
+            str = cpp [i];
+            if (StringDoesHaveText (str)) {
+              ValNodeCopyStr (&head, 0, str);
+            }
+          }
+          if (head != NULL) {
+            PointerToDialog (ddp->seqreadarch, (Pointer) head);
           }
           head = ValNodeFreeData (head);
         }
@@ -4647,6 +4513,33 @@ static Pointer DblinkDialogToUserObjectPtr (
   }
   ValNodeFreeData (head);
 
+  head = (ValNodePtr) DialogToPointer (ddp->seqreadarch);
+  if (head != NULL) {
+    num = 0;
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      num++;
+    }
+    if (num > 0) {
+      cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * num);
+      if (cpp != NULL) {
+        i = 0;
+        for (vnp = head; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          cpp [i] = str;
+          i++;
+        }
+        if (i > 0) {
+          AddSeqReadArchiveIDsToDBLinkUserObject (uop, i, cpp);
+          okay = TRUE;
+        }
+      }
+    }
+  }
+  ValNodeFreeData (head);
+
   if (! okay) {
     uop = UserObjectFree (uop);
   }
@@ -4683,6 +4576,9 @@ static DialoG CreateDblinkDialog (
 
   StaticPrompt (x, "ProbeDB", 10 * stdCharWidth, 0, programFont, 'c');
   ddp->probedb = CreateVisibleStringDialog (x, 3, -1, 15);
+
+  StaticPrompt (x, "Sequence Read Archive", 10 * stdCharWidth, 0, programFont, 'c');
+  ddp->seqreadarch = CreateVisibleStringDialog (x, 3, -1, 15);
 
   return (DialoG) p;
 }
@@ -5833,12 +5729,56 @@ static Boolean ExportStructuredCommentForm (ForM f, CharPtr filename)
 }
 
 
+static UserObjectPtr StructuredCommentFromTabFile (CharPtr path)
+{
+  FILE *fp;
+  ValNodePtr table, tmp, header, line;
+  UserObjectPtr uop = NULL;
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    return NULL;
+  }
+
+  table = ReadTabTableFromFile (fp);
+  FileClose (fp);
+  if (table == NULL || table->next == NULL 
+      || table->data.ptrvalue == NULL
+      || table->next->data.ptrvalue == NULL) {
+    table = FreeTabTable (table);
+    return NULL;
+  }
+  tmp = FlipTabTableAxes (table);
+  table = FreeTabTable (table);
+  table = tmp;
+
+  header = table->data.ptrvalue;
+  if (header == NULL || header->data.ptrvalue == NULL || header->next == NULL) {
+    table = FreeTabTable (table);
+    return NULL;
+  }
+  line = table->next;
+
+  tmp = CreateStructuredCommentsFromRow (header, line->data.ptrvalue, NULL, NULL);
+  table = FreeTabTable (table);
+  if (tmp != NULL) {
+    uop = (UserObjectPtr) tmp->data.ptrvalue;
+    tmp->data.ptrvalue = NULL;
+    for (line = tmp->next; line != NULL; line = line->next) {
+      line->data.ptrvalue = UserObjectFree (line->data.ptrvalue);
+    }
+    tmp = ValNodeFree (tmp);
+  }
+  return uop;
+}
+
+
 static Boolean ImportStructuredCommentForm  (ForM f, CharPtr filename)
 {
   StruCommUserFormPtr  sfp;
   Char            path [PATH_MAX];
-  UserObjectPtr   uop;
-  AsnIoPtr        aip;
+  UserObjectPtr   uop = NULL;
+  AsnIoPtr        aip = NULL;
   Boolean         rval = FALSE;
 
   sfp = (StruCommUserFormPtr) GetObjectExtra (f);
@@ -5859,14 +5799,19 @@ static Boolean ImportStructuredCommentForm  (ForM f, CharPtr filename)
     Message (MSG_ERROR, "Unable to read file %s", path);
   } else {
     uop = UserObjectAsnRead (aip, NULL);
+    AsnIoClose (aip);
+    if (uop == NULL) {
+      /* try reading as though it were a table */
+      uop = StructuredCommentFromTabFile(path);
+    }
     if (uop == NULL) {
       Message (MSG_ERROR, "Unable to read structured comment ASN.1 from file");
-    } else {
-      PointerToDialog (sfp->data, uop);
-      uop = UserObjectFree (uop);
-      rval = TRUE;
     }
-    AsnIoClose (aip);
+  }
+  if (uop != NULL) {
+    PointerToDialog (sfp->data, uop);
+    uop = UserObjectFree (uop);
+    rval = TRUE;
   }
   return rval;
 }
@@ -6016,9 +5961,9 @@ static ForM CreateStruCommDescForm (Int2 left, Int2 top, Int2 width,
       b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
       SetObjectExtra (b, sfp, NULL);
     } else {
-      b = DefaultButton (c, "Replace This", StdAcceptFormButtonProc);
-      SetObjectExtra (b, sfp, NULL);
       b = PushButton (c, "Replace All", ReplaceAllStructuredCommentsButtonProc);
+      SetObjectExtra (b, sfp, NULL);
+      b = DefaultButton (c, "Replace This", StdAcceptFormButtonProc);
       SetObjectExtra (b, sfp, NULL);
     }
 
@@ -6334,7 +6279,7 @@ static SeqIdPtr SqnSeqIdFindBestAccession (SeqIdPtr sip)
 }
 
 
-static Boolean ValidateTPAHistAlign (BioseqPtr bsp, ValNodePtr PNTR errors)
+NLM_EXTERN Boolean ValidateTPAHistAlign (BioseqPtr bsp, ValNodePtr PNTR errors)
 {
   ValNodePtr new_errors;
   Boolean    retval = TRUE;
@@ -6653,7 +6598,7 @@ static void PrintTPAHistErrors (LogInfoPtr lip, ValNodePtr errors)
 
   for (vnp = errors; vnp != NULL; vnp = vnp->next)
   {
-    fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
+    fprintf (lip->fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
     lip->data_in_log = TRUE;
   }
   fprintf (lip->fp, "\n\n");
@@ -7052,7 +6997,19 @@ static Uint1 SeqAlignSortRowStrand (SeqAlignSortPtr s, Int4 row)
 static Uint1 SeqAlignSortListFindBestStrand (ValNodePtr vnp, Int4 row)
 {
   Int4 num_plus = 0, num_minus = 0, num_align, num = 0;
+  Uint4 plus_len = 0, minus_len = 0;
   SeqAlignSortPtr s;
+
+  if (vnp == NULL) {
+    return Seq_strand_plus;
+  } else if (vnp->next == NULL) {
+    s = (SeqAlignSortPtr) vnp->data.ptrvalue;
+    if (s == NULL) {
+      return Seq_strand_plus;
+    } else {
+      return SeqAlignSortRowStrand(s, row);
+    }
+  }
 
   /* count the alignments */
   num_align = ValNodeLen (vnp);
@@ -7065,15 +7022,29 @@ static Uint1 SeqAlignSortListFindBestStrand (ValNodePtr vnp, Int4 row)
     if (s != NULL) {
       if (SeqAlignSortRowStrand(s, row) == Seq_strand_minus) {
         num_minus++;
+        if (row == 1) {
+          minus_len += SeqAlignRowLen (s->row1);
+        } else {
+          minus_len += SeqAlignRowLen (s->row2);
+        }
       } else {
         num_plus++;
+        if (row == 1) {
+          plus_len += SeqAlignRowLen (s->row1);
+        } else {
+          plus_len += SeqAlignRowLen (s->row2);
+        }
       }
     }
     vnp = vnp->next;
     num++;
   }
 
-  if (num_minus > num_plus) {
+  if (num_minus == 0) {
+    return Seq_strand_plus;
+  } else if (num_plus == 0) {
+    return Seq_strand_minus;
+  } else if (minus_len / num_minus > plus_len / num_plus) {
     return Seq_strand_minus;
   } else {
     return Seq_strand_plus;
@@ -7295,6 +7266,10 @@ static ValNodePtr SeqAlignSortListMarkRepeats (ValNodePtr PNTR list, Int4 row, I
           ValNodeAddPointer (&tmp_list, 0, SeqAlignSortCopy (vnp_mark->data.ptrvalue));
           /* mark as repeat for this row */
           vnp_mark->choice = row;
+          s2 = vnp_mark->data.ptrvalue;
+          if (SeqAlignRowLen(s2->row1) == 2300) {
+            vnp_mark->choice = row;
+          }
         }
         ValNodeAddPointer (&repeat_list, 0, tmp_list);
       }
@@ -7312,6 +7287,7 @@ static ValNodePtr SeqAlignSortListMarkRepeats (ValNodePtr PNTR list, Int4 row, I
       ValNodeAddPointer (&tmp_list, 0, SeqAlignSortCopy (vnp_mark->data.ptrvalue));
       /* mark as repeat for this row */
       vnp_mark->choice = row;
+      s2 = vnp_mark->data.ptrvalue;
     }
     ValNodeAddPointer (&repeat_list, 0, tmp_list);
   }
@@ -7460,6 +7436,25 @@ static Boolean FindSeqAlignSortWithPoint (ValNodePtr list, Int4 point, Int4 row)
     }
   }
   return found;
+}
+
+
+static Int4 LengthOfLongestInterval (ValNodePtr list, Int4 row)
+{
+  Int4 max = 0, len;
+  ValNodePtr vnp;
+  SeqAlignRowPtr r;
+  SeqAlignSortPtr s;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    s = vnp->data.ptrvalue;
+    r = SeqAlignRowFromSeqAlignSort (s, row);
+    len = r->stop - r->start + 1;
+    if (len > max) {
+      max = len;
+    }
+  }
+  return max;  
 }
 
 
@@ -7721,6 +7716,58 @@ static int LIBCALLBACK SortVnpByRepeatList (VoidPtr ptr1, VoidPtr ptr2)
 }
 
 
+static void FindCompleteCoverageAlign (ValNodePtr PNTR list, Int4 row)
+{
+  SeqAlignSortPtr s;
+  ValNodePtr      vnp, prev = NULL;
+  Boolean         found = FALSE;
+  SeqIdPtr        sip;
+  BioseqPtr       bsp;
+  Int4            length;
+
+  if (list == NULL || *list == NULL) {
+    return;
+  }
+
+  vnp = *list;
+  s = (SeqAlignSortPtr) vnp->data.ptrvalue;
+  sip = AlnMgr2GetNthSeqIdPtr (s->salp, row);
+  bsp = BioseqLockById (sip);
+  if (bsp == NULL) {
+    return;
+  }
+
+  length = bsp->length;
+  BioseqUnlock(bsp);
+
+  while (vnp != NULL && !found) {
+    s = (SeqAlignSortPtr) vnp->data.ptrvalue;
+    if (s != NULL) {
+      if (row == 1) {
+        if (SeqAlignRowLen (s->row1) == length) {
+          found = TRUE;
+        }
+      } else {
+        if (SeqAlignRowLen (s->row2) == length) {
+          found = TRUE;
+        }
+      }
+    }
+    if (!found) {
+      prev = vnp;
+      vnp = vnp->next;
+    }
+  }
+
+  if (found) {
+    vnp->next = SeqAlignSortListFree (vnp->next);
+    if (prev != NULL) {
+      prev->next = NULL;
+      *list = SeqAlignSortListFree (*list);
+      *list = vnp;
+    }
+  }
+}
 
 
 static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
@@ -7732,6 +7779,7 @@ static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
   Int4           fuzz = 15;
   Int4           missing = 600;
   Int4           len1, len2;
+  Int4           best_len;
 
   if (salp == NULL || *salp == NULL || (*salp)->next == NULL) {
     return;
@@ -7741,11 +7789,16 @@ static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
 
   FindSeqAlignSortWithPoint (list, missing, 1);
 
+  FindCompleteCoverageAlign (&list, 2);
+  FindCompleteCoverageAlign (&list, 1);
+
   /* remove conflicting strands for row 1 */
   strand1 = SeqAlignSortListRemoveConflictingStrands (&list, 1);
+  best_len = LengthOfLongestInterval (list, 1);
 
   /* remove conflicting strands for row 1 */
   strand2 = SeqAlignSortListRemoveConflictingStrands (&list, 2);
+  best_len = LengthOfLongestInterval (list, 1);
 
   FindSeqAlignSortWithPoint (list, missing, 1);
 
@@ -7755,17 +7808,23 @@ static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
     row2_repeats = SeqAlignSortListMarkRepeats (&list, 2, fuzz);
     row2_repeats = ValNodeSort (row2_repeats, SortVnpByRepeatList);
     vnp = ValNodeExtractList (&list, 1);
+    best_len = LengthOfLongestInterval (vnp, 1);
     vnp = SeqAlignSortListFree (vnp);
+    best_len = LengthOfLongestInterval (list, 1);
     vnp = ValNodeExtractList (&list, 2);
+    best_len = LengthOfLongestInterval (vnp, 1);
     vnp = SeqAlignSortListFree (vnp);
+    best_len = LengthOfLongestInterval (list, 1);
 
     FindSeqAlignSortWithPoint (list, missing, 1);
 
     /* remove scaffold intervals that are out of order */
     list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
     SeqAlignSortListRemoveIntervalsOutOfOrder (&list, 1, fuzz);
+    best_len = LengthOfLongestInterval (list, 1);
     list = ValNodeSort (list, SortVnpBySeqAlignSortRow2);
     SeqAlignSortListRemoveIntervalsOutOfOrder (&list, 2, fuzz);
+    best_len = LengthOfLongestInterval (list, 1);
 
     FindSeqAlignSortWithPoint (list, missing, 1);
 
@@ -7815,6 +7874,21 @@ static void SelectBestRepeatsFromList (SeqAlignPtr PNTR salp)
   list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
   *salp = SeqAlignFromSeqAlignSortList (list);
 
+  list = SeqAlignSortListFree (list);
+}
+
+
+NLM_EXTERN void SortTPAAssembly (SeqAlignPtr PNTR salp)
+{
+  ValNodePtr list;
+
+  if (salp == NULL || *salp == NULL || (*salp)->next == NULL) {
+    return;
+  }
+
+  list = SeqAlignSortListNew (*salp);
+  list = ValNodeSort (list, SortVnpBySeqAlignSortRow1);
+  *salp = SeqAlignFromSeqAlignSortList (list);
   list = SeqAlignSortListFree (list);
 }
 
@@ -7887,6 +7961,9 @@ static void CKA_RemoveInconsistentAlnsFromSet(SeqAlignPtr sap_head, Int4 fuzz)
    SeqIdPtr      sip_head;
    Uint1         strand;
 
+   if (sap_head == NULL) {
+     return;
+   }
    lfuzz = fuzz;
    if (fuzz < 0)
       fuzz = 1;
@@ -8076,11 +8153,11 @@ static BioseqPtr ReadFromTraceDb (CharPtr number)
   SeqEntryPtr  sep = NULL;
   EIO_Status   status;
   STimeout     timeout;
-  long int     val;
+  unsigned long int     val;
 
   if (StringHasNoText (number)) return NULL;
-  if (sscanf (number, "%ld", &val) != 1) return NULL;
-  sprintf (query, "cmd=raw&query=retrieve+fasta+%ld", (long) val);
+  if (sscanf (number, "%lu", &val) != 1) return NULL;
+  sprintf (query, "cmd=raw&query=retrieve+fasta+%lu", (long) val);
   conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Traces/trace.cgi",
                              query, "Sequin", 30, eMIME_T_NcbiData,
                              eMIME_Fasta, eENCOD_None, 0);
@@ -8210,6 +8287,60 @@ static Boolean IsHUPIDAccession (BioseqPtr bsp)
 }
 
 
+static void ExamineAln (SeqAlignPtr sap)
+{
+  Int4 len, num_aln = 0;
+
+  while (sap != NULL) {
+    len = SeqAlignLength (sap);
+    num_aln++;
+    sap = sap->next;
+  }
+
+}
+
+
+static void RemoveShortAlignments (SeqAlignPtr PNTR p_salp, Int4 min_len)
+{
+  SeqAlignPtr this_aln, prev = NULL, next_aln;
+  Int4        len;
+
+  if (p_salp == NULL || (this_aln = *p_salp) == NULL) {
+    return;
+  }
+
+  len = SeqAlignLength (this_aln);
+  if (len < min_len) {
+    /* free after the first */
+    next_aln = this_aln->next;
+    this_aln->next = NULL;
+    this_aln = next_aln;
+    while (this_aln != NULL) {
+      next_aln = this_aln->next;
+      this_aln = SeqAlignFree (this_aln);
+      this_aln = next_aln;
+    }
+  } else {
+    /* free only if shorter than min_len */
+    while (this_aln != NULL) {
+      next_aln = this_aln->next;
+      if ((len = SeqAlignLength (this_aln)) < min_len) {
+        if (prev == NULL) {
+          *p_salp = next_aln;
+        } else {
+          prev->next = next_aln;
+        }
+        this_aln->next = NULL;
+        this_aln = SeqAlignFree (this_aln);
+      } else {
+        prev = this_aln;
+      }
+      this_aln = next_aln;
+    }
+  }
+}
+
+
 static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr lip)
 {
    CKA_AccPtr           acc;
@@ -8261,6 +8392,7 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr 
       } else {
         sip = SeqIdFromAccessionDotVersion(acc->accession);
         bsp_tmp = BioseqLockById(sip);
+        sip = SeqIdFree (sip);
         if (bsp_tmp != NULL) {
           need_to_unlock = TRUE;
           if (lip != NULL && lip->fp != NULL && IsHUPIDAccession (bsp_tmp)) {
@@ -8272,7 +8404,8 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr 
       if (bsp_tmp == NULL) {
         fprintf (lip->fp, "Unable to load %s", acc->accession);
         lip->data_in_log = TRUE;
-        break;
+        acc = acc->next;
+        continue;
       }
       if (bsp_tmp->id->next) {
         /* find the best accession */
@@ -8291,18 +8424,18 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr 
          break;
       }
       WatchCursor();
-      if (acc->start_acc >=0 && acc->stop_acc >=0 &&
-          acc->start_acc < bsp_tmp->length &&
-          acc->start_acc < bsp_tmp->length) {
+      if (acc->start_acc >= 0 && acc->stop_acc >= 0 &&
+          acc->start_acc < bsp->length &&
+          acc->start_acc < bsp->length) {
         SeqLocPtr slp1, slp2;
         if (acc->start_acc <= acc->stop_acc) {
-          slp1 = SeqLocIntNew
-            (acc->start_acc, acc->stop_acc, Seq_strand_plus, bsp_tmp->id);
+          slp2 = SeqLocIntNew
+            (acc->start_acc, acc->stop_acc, Seq_strand_plus, bsp->id);
         } else {
-          slp1 = SeqLocIntNew
-            (acc->stop_acc, acc->start_acc, Seq_strand_minus, bsp_tmp->id);
+          slp2 = SeqLocIntNew
+            (acc->stop_acc, acc->start_acc, Seq_strand_minus, bsp->id);
         }
-        slp2 = SeqLocIntNew(0, bsp->length-1, Seq_strand_plus, bsp->id);
+        slp1 = SeqLocIntNew(0, bsp_tmp->length-1, Seq_strand_plus, bsp_tmp->id);
         acc->sap = NULL;
         seqalign_arr = NULL;
         BLAST_TwoSeqLocSets (options, slp1, slp2, NULL, &seqalign_arr, NULL, NULL, NULL);
@@ -8323,6 +8456,12 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr 
       if (acc->sap != NULL)
          SPI_flip_sa_list(acc->sap);
       acc_new_head = NULL;
+      if (StringStr (acc->accession, "1742833740") != NULL) {
+        acc_new_head = NULL;
+      }
+      if (acc->sap != NULL && acc->sap->next != NULL && CKA_blast_allow_repeats) {
+        RemoveShortAlignments (&(acc->sap), .8 * bsp_tmp->length);
+      }
       if (acc->sap != NULL && acc->sap->next != NULL)
       {
          if (!CKA_blast_allow_repeats) {
@@ -8332,6 +8471,7 @@ static SeqAlignPtr CKA_MakeAlign(BioseqPtr bsp, CKA_AccPtr acc_head, LogInfoPtr 
          if (!CKA_blast_allow_repeats) {
            CKA_RemoveInconsistentAlnsFromSet(acc->sap, -1);
          }
+
          sap_tmp = acc->sap;
          acc->sap = (SeqAlignPtr)(acc->sap->segs);
          sap_tmp->segs = NULL;
@@ -9098,14 +9238,213 @@ static void PopulateAssemblyIntervals (ButtoN b)
       AlnMgr2IndexSingleChildSeqAlign (salp); 
       sip = AlnMgr2GetNthSeqIdPtr (salp, 2);
       SeqIdWrite (sip, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);
-      AlnMgr2GetNthSeqRangeInSA (salp, 2, &primary_start, &primary_stop);
-      AddAccessionToTpaAssemblyUserObject (uop, id_txt, primary_start, primary_stop);
+      AlnMgr2GetNthSeqRangeInSA (salp, 1, &primary_start, &primary_stop);
+      if (AlnMgr2GetNthStrand (salp, 2) == Seq_strand_minus) {
+        AddAccessionToTpaAssemblyUserObject (uop, id_txt, primary_stop, primary_start);
+      } else {
+        AddAccessionToTpaAssemblyUserObject (uop, id_txt, primary_start, primary_stop);
+      }
       sip = SeqIdFree (sip);
     }
 
     PointerToDialog (afp->data, uop);
     uop = UserObjectFree (uop);
   }
+}
+
+static void ExportTpaAccessionList (ButtoN b)
+{
+  AssemblyUserFormPtr  afp;
+  UserObjectPtr        uop;
+  Char                 path[PATH_MAX];
+  Boolean              first = TRUE;
+  UserFieldPtr         curr, ufp;
+  CharPtr              str;
+  ObjectIdPtr          oip;
+  FILE *fp;
+
+  afp = (AssemblyUserFormPtr) GetObjectExtra (b);
+  if (afp == NULL) {
+    return;
+  }
+
+  uop = (UserObjectPtr) DialogToPointer (afp->data);
+  if (uop == NULL) 
+  {
+    return;
+  }
+
+  path[0] = 0;
+  if (GetOutputFileName (path, sizeof (path), NULL)) {
+#ifdef WIN_MAC
+    fp = FileOpen (path, "r");
+    if (fp != NULL) {
+      FileClose (fp);
+    } else {
+      FileCreate (path, "TEXT", "ttxt");
+    }
+#endif
+    fp = FileOpen (path, "w");
+    if (fp == NULL) {
+      Message (MSG_ERROR, "Unable to open %s", path);
+    } else {
+      for (curr = uop->data; curr != NULL; curr = curr->next) {
+        if (curr->choice != 11) continue;
+        str = NULL;
+        for (ufp = curr->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
+          oip = ufp->label;
+          if (oip == NULL) continue;
+          if (StringICmp (oip->str, "accession") == 0 && ufp->choice == 1) {
+            str = (CharPtr) ufp->data.ptrvalue;
+            fprintf (fp, "%s%s", first ? "" : ", ", str);
+            first = FALSE;
+          }
+        }
+      }
+      fprintf (fp, "\n");
+      FileClose (fp);
+    }
+  }
+}
+
+
+static void ExportTpaAccessionTable (ButtoN b)
+{
+  AssemblyUserFormPtr  afp;
+  UserObjectPtr        uop;
+  Char                 path[PATH_MAX];
+  Boolean              first = TRUE;
+  UserFieldPtr         curr, ufp;
+  CharPtr              str;
+  Int4                 from, to;
+  ObjectIdPtr          oip;
+  FILE *fp;
+
+  afp = (AssemblyUserFormPtr) GetObjectExtra (b);
+  if (afp == NULL) {
+    return;
+  }
+
+  uop = (UserObjectPtr) DialogToPointer (afp->data);
+  if (uop == NULL) 
+  {
+    return;
+  }
+
+  path[0] = 0;
+  if (GetOutputFileName (path, sizeof (path), NULL)) {
+#ifdef WIN_MAC
+    fp = FileOpen (path, "r");
+    if (fp != NULL) {
+      FileClose (fp);
+    } else {
+      FileCreate (path, "TEXT", "ttxt");
+    }
+#endif
+    fp = FileOpen (path, "w");
+    if (fp == NULL) {
+      Message (MSG_ERROR, "Unable to open %s", path);
+    } else {
+      str = NULL;
+      from = -1;
+      to = -1;
+      for (curr = uop->data; curr != NULL; curr = curr->next) {
+        if (curr->choice != 11) continue;
+        for (ufp = curr->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
+          oip = ufp->label;
+          if (oip == NULL) continue;
+          if (StringICmp (oip->str, "accession") == 0 && ufp->choice == 1) {
+            if (!first) {
+              fprintf (fp, "%s", str);
+              if (from > -1 && to > -1) {
+                fprintf (fp, "\t%d\t%d", from + 1, to + 1);
+              }
+              fprintf (fp, "\n");
+            }
+            str = (CharPtr) ufp->data.ptrvalue;
+            from = -1;
+            to = -1;
+            first = FALSE;
+          } else if (StringICmp (oip->str, "from") == 0) {
+            from = ufp->data.intvalue;
+          } else if (StringICmp (oip->str, "to") == 0) {
+            to = ufp->data.intvalue;
+          }
+        }
+      }
+      if (str != NULL) {
+        fprintf (fp, "%s", str);
+        if (from > -1 && to > -1) {
+          fprintf (fp, "\t%d\t%d", from + 1, to + 1);
+        }
+        fprintf (fp, "\n");
+      }
+
+      FileClose (fp);
+    }
+  }
+}
+
+
+static void ImportTPATable (ButtoN b)
+{
+  AssemblyUserFormPtr  afp;
+  FILE *fp;
+  UserObjectPtr        uop;
+  Char                 path[PATH_MAX];
+  ReadBufferData rbd;
+  CharPtr        line;
+  ValNodePtr     column_list;
+  UserFieldPtr   last = NULL, row, ufp;
+
+  afp = (AssemblyUserFormPtr) GetObjectExtra (b);
+  if (afp == NULL) {
+    return;
+  }
+
+  path[0] = 0;
+  if (!GetInputFileName (path, sizeof (path), "", "TEXT")) {
+    return;
+  }
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    Message (MSG_ERROR, "Unable to open %s", path);
+    return;
+  }
+
+  uop = CreateTpaAssemblyUserObject  ();
+
+  rbd.fp = fp;
+  rbd.current_data = NULL;
+
+  line = AbstractReadFunction (&rbd);
+  while (line != NULL) 
+  {
+    column_list = ReadOneColumnList(line);
+    if (column_list != NULL) {
+      row = UserFieldNew ();
+      row->choice = 11;  
+      row->label = ObjectIdNew();
+      ufp = CreateTPAAssemblyAccessionField (column_list->data.ptrvalue);
+      row->data.ptrvalue = ufp;
+      if (column_list->next != NULL && column_list->next->next != NULL) {
+        ufp->next = CreateTPAAssemblyFromField (atoi (column_list->next->data.ptrvalue) - 1);
+        ufp->next->next = CreateTPAAssemblyToField (atoi (column_list->next->next->data.ptrvalue) - 1);
+      }
+      column_list = ValNodeFreeData (column_list);
+      if (last == NULL) {
+        uop->data = row;
+      } else {
+        last->next = row;
+      }
+      last = row;
+    }
+    line = AbstractReadFunction (&rbd);
+  }
+  FileClose (rbd.fp);
+  
+  PointerToDialog (afp->data, uop);
+  uop = UserObjectFree (uop);
 }
 
 
@@ -9117,7 +9456,7 @@ static ForM CreateAssemblyDescForm (Int2 left, Int2 top, Int2 width,
   AssemblyUserFormPtr  afp;
   ButtoN               b, pop_btn = NULL;
   GrouP                c;
-  GrouP                g;
+  GrouP                g, g2;
   StdEditorProcsPtr    sepp;
   WindoW               w;
   BioseqPtr            bsp;
@@ -9145,19 +9484,26 @@ static ForM CreateAssemblyDescForm (Int2 left, Int2 top, Int2 width,
     g = HiddenGroup (w, -1, 0, NULL);
     afp->data = CreateAssemblyDialog (g);
 
+    g2 = HiddenGroup (g, 2, 0, NULL);
     if (sdp != NULL) {
       bsp = GetSequenceForObject (OBJ_SEQDESC, sdp);
       if (bsp != NULL && bsp->hist != NULL && bsp->hist->assembly != NULL) {
-        pop_btn = PushButton (g, "Populate Intervals from Assembly Alignment", PopulateAssemblyIntervals);
+        pop_btn = PushButton (g2, "Populate Intervals from Assembly Alignment", PopulateAssemblyIntervals);
         SetObjectExtra (pop_btn, afp, NULL);
       }
     }
+    b = PushButton (g2, "Export TPA Accession List", ExportTpaAccessionList);
+    SetObjectExtra (b, afp, NULL);
+    b = PushButton (g2, "Export Interval Table", ExportTpaAccessionTable);
+    SetObjectExtra (b, afp, NULL);
+    b = PushButton (g2, "Import Interval Table", ImportTPATable);
+    SetObjectExtra (b, afp, NULL);
 
     c = HiddenGroup (w, 2, 0, NULL);
     b = DefaultButton (c, "Accept", TPAAssemblyFormAccept);
     SetObjectExtra (b, afp, NULL);
     PushButton (c, "Cancel", StdCancelButtonProc);
-    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, (HANDLE) pop_btn, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, (HANDLE) g2, NULL);
     RealizeWindow (w);
   }
   return (ForM) w;
@@ -12301,7 +12647,7 @@ static void AcceptTSAAssembly (ButtoN b)
     lip = OpenLog ("TSA Table Problems");
     if (err_list != NULL) {
       for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
-        fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
+        fprintf (lip->fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
       }
       lip->data_in_log = TRUE;
       err_list = ValNodeFreeData (err_list);
@@ -13308,7 +13654,7 @@ FindAndConvertGapFeat
   ValNodePtr vnp;
   SeqLocPtr  slp;
   SeqLitPtr  litp;
-  Int4       currpos = 0, len_diff;
+  Int4       currpos = 0, len_diff = 0;
   
   if (bsp == NULL || bsp->repr != Seq_repr_delta
       || start < 0)
@@ -14324,6 +14670,7 @@ extern void CopyLocusToLocusTag (IteM i)
 
 /* data structure and functions for a generic form displaying a clickable list */
 typedef  void  (*Nlm_AddClickableListEntityIDProc) PROTO ((ButtoN, Uint2));
+typedef  void  (*Nlm_ReorderResultsProc) PROTO ((ValNodePtr PNTR));
 
 #define CLICKABLE_LIST_FORM_BLOCK   \
   FORM_MESSAGE_BLOCK                \
@@ -14332,6 +14679,7 @@ typedef  void  (*Nlm_AddClickableListEntityIDProc) PROTO ((ButtoN, Uint2));
   ButtoN          recheck_btn;         \
   CharPtr         log_name;            \
   Nlm_AddClickableListEntityIDProc add_entity_proc;        \
+  Nlm_ReorderResultsProc reorder_results_proc;
   
 typedef struct clickablelistform {
   CLICKABLE_LIST_FORM_BLOCK
@@ -14443,6 +14791,7 @@ static void ClickableListFormMessage (ForM f, Int2 mssg)
 /* There will only be one Discrepancy Report window at a time */
 static WindoW discrepancyReportWindow = NULL;
 static WindoW oncallerReportWindow = NULL;
+static WindoW megaReportWindow = NULL;
 
 static WindoW GetWindowForReportType (EDiscrepancyReportType report_type)
 {
@@ -14454,6 +14803,9 @@ static WindoW GetWindowForReportType (EDiscrepancyReportType report_type)
       break;
     case eReportTypeOnCaller:
       w = oncallerReportWindow;
+      break;
+    case eReportTypeMegaReport:
+      w = megaReportWindow;
       break;
   }
   return w;
@@ -14468,6 +14820,9 @@ static void ClearWindowForReportType (WindoW w)
   if (oncallerReportWindow == w) {
     oncallerReportWindow = NULL;
   }
+  if (megaReportWindow == w) {
+    megaReportWindow = NULL;
+  }
 }
 
 
@@ -14480,7 +14835,29 @@ static void SetWindowForReportType (WindoW w, EDiscrepancyReportType report_type
     case eReportTypeOnCaller:
       oncallerReportWindow = w;
       break;
+    case eReportTypeMegaReport:
+      megaReportWindow = w;
+      break;
   }
+}
+
+
+static CharPtr GetReportConfigName (EDiscrepancyReportType report_type)
+{
+  CharPtr report_name = "";
+
+  switch (report_type) {
+    case eReportTypeDiscrepancy:
+      report_name = "DISCREPANCY_REPORT";
+      break;
+    case eReportTypeOnCaller:
+      report_name = "ON_CALLER_TOOL";
+      break;
+    case eReportTypeMegaReport:
+      report_name = "MEGA_REPORT";
+      break;
+  }
+  return report_name;
 }
 
 
@@ -14495,6 +14872,7 @@ typedef struct discrepancyreportform
   CLICKABLE_LIST_FORM_BLOCK
 
   DiscrepancyConfigPtr dcp;
+  Int4 report_type;
 } DiscrepancyReportFormData, PNTR DiscrepancyReportFormPtr;
 
 static void CleanupDiscrepancyReportForm (GraphiC g, VoidPtr data)
@@ -14509,13 +14887,20 @@ static void CleanupDiscrepancyReportForm (GraphiC g, VoidPtr data)
     /* find whether source qual report is open or closed */
     for (vnp = drfp->clickable_list_data; vnp != NULL; vnp = vnp->next) {
       cip = vnp->data.ptrvalue;
-      if (cip != NULL && cip->clickable_item_type == DISC_SRC_QUAL_PROBLEM) {
-        if (cip->expanded) {
-          SetAppParam ("SEQUINCUSTOM", "ONCALLERTOOL", "EXPAND_SRCQUAL_REPORT", "TRUE");
-        } else {
-          SetAppParam ("SEQUINCUSTOM", "ONCALLERTOOL", "EXPAND_SRCQUAL_REPORT", "FALSE");
+      if (cip != NULL) {
+        if (cip->clickable_item_type == DISC_SRC_QUAL_PROBLEM) {
+          if (cip->expanded) {
+            SetAppParam ("SEQUINCUSTOM", "ONCALLERTOOL", "EXPAND_SRCQUAL_REPORT", "TRUE");
+          } else {
+            SetAppParam ("SEQUINCUSTOM", "ONCALLERTOOL", "EXPAND_SRCQUAL_REPORT", "FALSE");
+          }
+        } else if (cip->clickable_item_type == ONCALLER_DEFLINE_ON_SET) {
+          if (cip->expanded) {
+            SetAppParam ("SEQUINCUSTOM", "ONCALLERTOOL", "EXPAND_DEFLINE_ON_SET", "TRUE");
+          } else {
+            SetAppParam ("SEQUINCUSTOM", "ONCALLERTOOL", "EXPAND_DEFLINE_ON_SET", "FALSE");
+          }
         }
-        break;
       }
     }
     drfp->clickable_list_data = FreeClickableList (drfp->clickable_list_data);
@@ -14559,6 +14944,31 @@ static void SelectDiscrepancyList(ButtoN b)
 }
 
 
+typedef struct discrepancyconfigpage {
+  GrouP PNTR            grp_list;
+  Int4                  num_pages;
+} DiscrepancyConfigPageData, PNTR DiscrepancyConfigPagePtr;
+
+static void ChangeDiscrepancyConfigPage (VoidPtr data, Int2 newval, Int2 oldval)
+
+{
+  DiscrepancyConfigPagePtr cfg_page;
+
+  cfg_page = (DiscrepancyConfigPagePtr) data;
+  if (cfg_page == NULL || cfg_page->grp_list == NULL) {
+    return;
+  }
+
+  if (oldval > -1 && oldval < cfg_page->num_pages) {
+    Hide (cfg_page->grp_list[oldval]);
+  }
+  if (newval > -1 && newval < cfg_page->num_pages) {
+    Show (cfg_page->grp_list[newval]);
+  }
+
+}
+
+
 /* This function returns TRUE if there was a change to the discrepancy config,
  * FALSE otherwise.
  */
@@ -14571,6 +14981,15 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp, EDiscrepancyRepo
   Int4                  i;
   ButtoN                test_options[MAX_DISC_TYPE];
   Boolean               rval = FALSE;
+  DialoG                tbs = NULL;
+  CharPtr PNTR          page_name_list = NULL;
+  Char                  page_name[50];
+  DiscrepancyConfigPageData cfg_page;
+  Int4                  num_rows = 25;
+  Int4                  num_columns = 3;
+  Int4                  num_per_page = num_rows * num_columns;
+  Int4                  num_appropriate = 0;
+  Int4                  num_on_page = 0, page_num = 0;
   
   if (dcp == NULL)
   {
@@ -14583,34 +15002,82 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp, EDiscrepancyRepo
   w = ModalWindow(-20, -13, -10, -10, NULL);
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
-  
-  g = NormalGroup (h, 0, 14, "Discrepancy Tests to Run", programFont, NULL);
-  SetGroupSpacing (g, 10, 10);
+
   for (i = 0; i < MAX_DISC_TYPE; i++)
   {
-    if (IsTestTypeAppropriateForReportType (i, report_type)) {
-      test_options[i] = CheckBox (g, GetDiscrepancyTestConfName ((DiscrepancyType) i), NULL);
-      SetStatus (test_options[i], dcp->conf_list[i]);
-    } else {
-      test_options[i] = NULL;
+    if (IsTestTypeAppropriateForReportType (i, report_type) && i != DISC_CATEGORY_HEADER) {
+      num_appropriate ++;
+    }
+  }
+
+  if (num_appropriate > num_per_page) {
+    /* set up page headers */
+    cfg_page.num_pages = num_appropriate / num_per_page;
+    if (num_appropriate % num_per_page > 0) {
+      cfg_page.num_pages ++;
+    }
+    page_name_list = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (cfg_page.num_pages + 1));
+    for (i = 0; i < cfg_page.num_pages; i++) {
+      sprintf (page_name, "Page %d", i + 1);
+      page_name_list[i] = StringSave (page_name);
+    }
+    page_name_list[i] = NULL;
+    tbs = CreateFolderTabs (h, page_name_list, 0,
+                                    0, 0, SYSTEM_FOLDER_TAB,
+                                    ChangeDiscrepancyConfigPage, &cfg_page);
+
+    g = NormalGroup (h, 0, 0, "Discrepancy Tests to Run", programFont, NULL);
+    cfg_page.grp_list = (GrouP PNTR) MemNew (sizeof (GrouP) * cfg_page.num_pages );
+    cfg_page.grp_list[page_num] = HiddenGroup (g, 0, num_rows, NULL);
+    SetGroupSpacing (cfg_page.grp_list[page_num], 10, 10);
+    for (i = 0; i < MAX_DISC_TYPE; i++)
+    {
+      if (IsTestTypeAppropriateForReportType (i, report_type) && i != DISC_CATEGORY_HEADER) {
+        if (num_on_page == num_per_page) {
+          page_num++;
+          cfg_page.grp_list[page_num] = HiddenGroup (g, 0, num_rows, NULL);
+          SetGroupSpacing (cfg_page.grp_list[page_num], 10, 10);
+        }
+        test_options[i] = CheckBox (cfg_page.grp_list[page_num], GetDiscrepancyTestConfName ((DiscrepancyType) i), NULL);
+        SetStatus (test_options[i], dcp->conf_list[i]);
+        num_on_page++;
+      } else {
+        test_options[i] = NULL;
+      }
+    }
+    for (i = 1; i < cfg_page.num_pages; i++) {
+      Hide (cfg_page.grp_list[i]);
+    }    
+  } else {
+    g = NormalGroup (h, 0, num_rows, "Discrepancy Tests to Run", programFont, NULL);
+    SetGroupSpacing (g, 10, 10);
+
+    for (i = 0; i < MAX_DISC_TYPE; i++)
+    {
+      if (IsTestTypeAppropriateForReportType (i, report_type) && i != DISC_CATEGORY_HEADER) {
+        test_options[i] = CheckBox (g, GetDiscrepancyTestConfName ((DiscrepancyType) i), NULL);
+        SetStatus (test_options[i], dcp->conf_list[i]);
+      } else {
+        test_options[i] = NULL;
+      }
     }
   }
   
-  use_feature_table_format_btn = CheckBox (h, "Use feature table format for features in report", NULL);
-  SetStatus (use_feature_table_format_btn, dcp->use_feature_table_format);
-  
-  k = HiddenGroup (h, 2, 0, NULL);
+  k = HiddenGroup (h, 3, 0, NULL);
   b = PushButton (k, "Select All", SelectDiscrepancyList);
   SetObjectExtra (b, test_options, NULL);
   b = PushButton (k, "Unselect All", UnselectDiscrepancyList);
   SetObjectExtra (b, test_options, NULL);  
+  use_feature_table_format_btn = CheckBox (k, "Use feature table format for features in report", NULL);
+  SetStatus (use_feature_table_format_btn, dcp->use_feature_table_format);
+  
   
   c = HiddenGroup (h, 3, 0, NULL);
   b = PushButton (c, "Accept", ModalAcceptButton);
   SetObjectExtra (b, &acd, NULL);
   b = PushButton (c, "Cancel", ModalCancelButton);
   SetObjectExtra (b, &acd, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) use_feature_table_format_btn, (HANDLE) k, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) k, (HANDLE) c, (HANDLE) tbs, NULL);
   
   Show(w); 
   Select (w);
@@ -14628,7 +15095,7 @@ static Boolean EditDiscrepancyConfig (DiscrepancyConfigPtr dcp, EDiscrepancyRepo
     }
     dcp->use_feature_table_format = GetStatus (use_feature_table_format_btn);
     rval = TRUE;
-    SaveDiscrepancyConfig (dcp);
+    SaveDiscrepancyConfigEx (dcp, GetReportConfigName (report_type));
   }
 
   Remove (w);
@@ -14877,7 +15344,7 @@ static void ExtendPartialsToEndOrGapCallback (ValNodePtr list, Pointer userdata)
   Update();
   lip = OpenLog ("Extended Features");
 
-  FixBacterialExtendablePartials (list, userdata, lip);
+  FixExtendablePartials (list, userdata, lip);
 
   sep_list = GetViewedSeqEntryList ();
   for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
@@ -14944,6 +15411,114 @@ static void MarkOverlappingCDSCallback (ValNodePtr list, Pointer userdata)
     ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
   }
   sep_list = ValNodeFree (sep_list);
+
+  ArrowCursor();
+  Update();
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+static void FixNonWGSSetsCallback (ValNodePtr list, Pointer userdata)
+{
+  LogInfoPtr lip;
+
+  if (Message (MSG_OKC, "Change non-WGS sets to GenBank?") == ANS_CANCEL) {
+    return;
+  }
+  WatchCursor();
+  Update();
+  lip = OpenLog ("Changed Sets");
+  FixNonWGSSets (list, userdata, lip);
+
+  ArrowCursor();
+  Update();
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+static void FixMismatchedCommentsCallback (ValNodePtr list, Pointer userdata)
+{
+  LogInfoPtr lip;
+  SeqDescrPtr sdp;
+
+  if (list == NULL || (sdp = (list->data.ptrvalue)) == NULL) {
+    return;
+  }
+  if (Message (MSG_OKC, "Make comments match %s?", sdp->data.ptrvalue) == ANS_CANCEL) {
+    return;
+  }
+  WatchCursor();
+  Update();
+  lip = OpenLog ("Changed Comments");
+  FixMismatchedComments (list, userdata, lip);
+
+  ArrowCursor();
+  Update();
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+static void FixHumanHostsCallback (ValNodePtr list, Pointer userdata)
+{
+  LogInfoPtr lip;
+
+  if (list == NULL) {
+    return;
+  }
+  if (Message (MSG_OKC, "Change 'human' host to 'Homo sapiens'") == ANS_CANCEL) {
+    return;
+  }
+  WatchCursor();
+  Update();
+  lip = OpenLog ("Changed Hosts");
+  FixHumanHosts (list, userdata, lip);
+
+  ArrowCursor();
+  Update();
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+static void FixOrderedLocationsCallback (ValNodePtr list, Pointer userdata)
+{
+  LogInfoPtr lip;
+
+  if (list == NULL) {
+    return;
+  }
+  if (Message (MSG_OKC, "Change ordered locations to join?") == ANS_CANCEL) {
+    return;
+  }
+  WatchCursor();
+  Update();
+  lip = OpenLog ("Changed Locations");
+  FixOrderedLocations (list, userdata, lip);
+
+  ArrowCursor();
+  Update();
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+static void FixPseudoDiscrepanciesCallback (ValNodePtr list, Pointer userdata)
+{
+  LogInfoPtr lip;
+
+  if (list == NULL) {
+    return;
+  }
+  if (Message (MSG_OKC, "Make overlapping genes and mRNAs pseudo?") == ANS_CANCEL) {
+    return;
+  }
+  WatchCursor();
+  Update();
+  lip = OpenLog ("Set Pseudo");
+  OncallerToolPseudoDiscrepanciesFix (list, userdata, lip);
 
   ArrowCursor();
   Update();
@@ -15152,12 +15727,22 @@ static void AddBulkEditing (ValNodePtr clickable_list)
         cip->callback_func = EditCDStRNAOverlapCallback;    
       } else if (cip->clickable_item_type == DISC_INCONSISTENT_BIOSRC_DEFLINE) {
         cip->callback_func = ApplyTagToCodingRegionsCallback; 
-      } else if (cip->clickable_item_type == DISC_BACTERIAL_PARTIAL_PROBLEMS) {
+      } else if (cip->clickable_item_type == DISC_PARTIAL_PROBLEMS) {
         cip->callback_func = ExtendPartialsToEndOrGapCallback;
       } else if (cip->clickable_item_type == DISC_BACTERIAL_PARTIAL_NONEXTENDABLE_PROBLEMS) {
         cip->callback_func = AddNonExtendableExceptionsCallback;
       } else if (cip->clickable_item_type == DISC_OVERLAPPING_CDS) {
         cip->callback_func = MarkOverlappingCDSCallback;
+      } else if (cip->clickable_item_type == DISC_NONWGS_SETS_PRESENT) {
+        cip->callback_func = FixNonWGSSetsCallback;
+      } else if (cip->clickable_item_type == DISC_MISMATCHED_COMMENTS) {
+        cip->callback_func = FixMismatchedCommentsCallback;
+      } else if (cip->clickable_item_type == DISC_HUMAN_HOST) {
+        cip->callback_func = FixHumanHostsCallback;
+      } else if (cip->clickable_item_type == ONCALLER_ORDERED_LOCATION) {
+        cip->callback_func = FixOrderedLocationsCallback;
+      } else if (cip->clickable_item_type == DISC_PSEUDO_MISMATCH) {
+        cip->callback_func = FixPseudoDiscrepanciesCallback;
       } else {
         subtype = GetSubtypeForBulkEdit (cip->item_list);
         /* Note - using FEATDEF_rRNA to represent all editable RNA features */
@@ -15170,6 +15755,279 @@ static void AddBulkEditing (ValNodePtr clickable_list)
     clickable_list = clickable_list->next;
   }
 }
+
+
+static Uint4 sOnCallerToolPriorities[] = {
+DISC_COUNT_NUCLEOTIDES,
+DISC_DUP_DEFLINE,
+DISC_MISSING_DEFLINES,
+TEST_HAS_PROJECT_ID,
+ONCALLER_DEFLINE_ON_SET,
+DISC_SRC_QUAL_PROBLEM,
+DISC_FEATURE_COUNT,
+DISC_FEATURE_MOLTYPE_MISMATCH,
+DISC_INCONSISTENT_MOLTYPES,
+DISC_CHECK_AUTH_CAPS,
+ONCALLER_CONSORTIUM,
+DISC_UNPUB_PUB_WITHOUT_TITLE,
+DISC_TITLE_AUTHOR_CONFLICT,
+DISC_SUBMITBLOCK_CONFLICT,
+DISC_CITSUBAFFIL_CONFLICT,
+DISC_MISSING_AFFIL,
+DISC_USA_STATE,
+DISC_DUP_SRC_QUAL,
+DISC_MISSING_SRC_QUAL,
+DISC_DUP_SRC_QUAL_DATA,
+DISC_MISSING_VIRAL_QUALS,
+DISC_INFLUENZA_DATE_MISMATCH,
+DISC_HUMAN_HOST,
+DISC_SPECVOUCHER_TAXNAME_MISMATCH,
+DISC_STRAIN_TAXNAME_MISMATCH,
+DISC_BACTERIA_SHOULD_NOT_HAVE_ISOLATE,
+DISC_BACTERIA_MISSING_STRAIN,
+DISC_REQUIRED_CLONE,
+ONCALLER_MULTISRC,
+DUP_DISC_ATCC_CULTURE_CONFLICT,
+ONCALLER_STRAIN_CULTURE_COLLECTION_MISMATCH,
+ONCALLER_MULTIPLE_CULTURE_COLLECTION,
+DISC_TRINOMIAL_SHOULD_HAVE_QUALIFIER,
+ONCALLER_CHECK_AUTHORITY,
+DISC_MAP_CHROMOSOME_CONFLICT,
+DISC_METAGENOMIC,
+DISC_METAGENOME_SOURCE,
+DISC_RETROVIRIDAE_DNA,
+DISC_MITOCHONDRION_REQUIRED,
+ONCALLER_SUPERFLUOUS_GENE,
+ONCALLER_GENE_MISSING,
+DISC_GENE_PARTIAL_CONFLICT,
+DISC_BAD_GENE_STRAND,
+DISC_NON_GENE_LOCUS_TAG,
+DISC_RBS_WITHOUT_GENE,
+ONCALLER_ORDERED_LOCATION,
+DISC_CDS_WITHOUT_MRNA,
+DISC_mRNA_ON_WRONG_SEQUENCE_TYPE,
+DISC_BACTERIA_SHOULD_NOT_HAVE_MRNA,
+TEST_EXON_ON_MRNA,
+DISC_CDS_HAS_NEW_EXCEPTION,
+DISC_SHORT_INTRON,
+DISC_EXON_INTRON_CONFLICT,
+DISC_PSEUDO_MISMATCH,
+DISC_RNA_NO_PRODUCT,
+DISC_BADLEN_TRNA,
+DISC_MICROSATELLITE_REPEAT_TYPE,
+DISC_POSSIBLE_LINKER,
+DISC_HAPLOTYPE_MISMATCH,
+DISC_FLATFILE_FIND_ONCALLER,
+DISC_CDS_PRODUCT_FIND,
+DISC_SUSPICIOUS_NOTE_TEXT,
+DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS,
+DISC_INTERNAL_TRANSCRIBED_SPACER_RRNA,
+ONCALLER_COMMENT_PRESENT
+};
+
+static const Uint4 kNumOnCallerToolPriority = sizeof (sOnCallerToolPriorities) / sizeof (Uint4);
+
+static Uint4 GetOnCallerToolPriority (Uint4 clickable_item_type)
+{
+  Uint4 priority = kNumOnCallerToolPriority + clickable_item_type;
+  Uint4 i;
+
+  for (i = 0; i < kNumOnCallerToolPriority; i++) {
+    if (sOnCallerToolPriorities[i] == clickable_item_type) {
+      priority = i;
+      break;
+    }
+  }
+  return priority;
+}
+
+
+static int LIBCALLBACK SortVnpByOnCallerToolPriority (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  ClickableItemPtr cip1, cip2;
+  Uint4            priority1, priority2;
+  int rval = 0;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  if (vnp1->data.ptrvalue == NULL || vnp2->data.ptrvalue == NULL) return 0;
+  
+  cip1 = vnp1->data.ptrvalue;
+  cip2 = vnp2->data.ptrvalue;
+
+  priority1 = GetOnCallerToolPriority (cip1->clickable_item_type);
+  priority2 = GetOnCallerToolPriority (cip2->clickable_item_type);
+
+  if (priority1 < priority2) {
+    rval = -1;
+  } else if (priority1 == priority2) {
+    rval = 0;
+  } else {
+    rval = 1;
+  }
+
+  return rval;
+}
+
+
+static ClickableItemPtr CreateTopLevelCategory (ValNodePtr orig, CharPtr cat_name)
+{
+  ClickableItemPtr cip, cat_cip = NULL;
+
+  if (orig == NULL || (cip = (ClickableItemPtr)orig->data.ptrvalue) == NULL) {
+    return NULL;
+  }
+
+  cat_cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+  MemSet (cat_cip, 0, sizeof (ClickableItemData));
+  cat_cip->clickable_item_type = DISC_CATEGORY_HEADER;
+  cat_cip->description = StringSave (cat_name);
+  cat_cip->expanded = TRUE;
+  ValNodeAddPointer (&(cat_cip->subcategories), 0, cip);
+  orig->data.ptrvalue = cat_cip;
+
+  return cat_cip;  
+}
+
+
+static void ReorderOnCallerResults (ValNodePtr PNTR p_clickable_list)
+{
+  ClickableItemPtr cip_mol_type = NULL, cip_cit_sub = NULL, cip_src = NULL;
+  ClickableItemPtr cip_feat = NULL, cip_suspect_text = NULL;
+  ValNodePtr vnp, v_prev = NULL, v_next;
+  ClickableItemPtr cip;
+
+  if (p_clickable_list == NULL || *p_clickable_list == NULL) {
+    return;
+  }
+
+  /* first, sort */
+  *p_clickable_list = ValNodeSort (*p_clickable_list, SortVnpByOnCallerToolPriority);
+
+  /* now accumulate results into groups */
+  for (vnp = *p_clickable_list; vnp != NULL; vnp = v_next) {
+    v_next = vnp->next;
+    cip = (vnp->data.ptrvalue);
+    switch (cip->clickable_item_type) {
+      case DISC_FEATURE_MOLTYPE_MISMATCH:
+      case DISC_INCONSISTENT_MOLTYPES:
+        if (cip_mol_type == NULL) {
+          cip_mol_type = CreateTopLevelCategory (vnp, "Molecule type tests");
+          v_prev = vnp;
+        } else {
+          ValNodeAddPointer (&(cip_mol_type->subcategories), 0, cip);
+          v_prev->next = vnp->next;
+          vnp->next = NULL;
+          vnp = ValNodeFree (vnp);
+        }
+        break;
+      case DISC_CHECK_AUTH_CAPS:
+      case ONCALLER_CONSORTIUM:
+      case DISC_UNPUB_PUB_WITHOUT_TITLE:
+      case DISC_TITLE_AUTHOR_CONFLICT:
+      case DISC_SUBMITBLOCK_CONFLICT:
+      case DISC_CITSUBAFFIL_CONFLICT:
+      case DISC_MISSING_AFFIL:
+      case DISC_USA_STATE:
+        if (cip_cit_sub == NULL) {
+          cip_cit_sub = CreateTopLevelCategory (vnp, "Cit-sub type tests");
+          v_prev = vnp;
+        } else {
+          ValNodeAddPointer (&(cip_cit_sub->subcategories), 0, cip);
+          v_prev->next = vnp->next;
+          vnp->next = NULL;
+          vnp = ValNodeFree (vnp);
+        }
+        break;
+      case DISC_DUP_SRC_QUAL:
+      case DISC_MISSING_SRC_QUAL:
+      case DISC_DUP_SRC_QUAL_DATA:
+      case DISC_MISSING_VIRAL_QUALS:
+      case DISC_INFLUENZA_DATE_MISMATCH:
+      case DISC_HUMAN_HOST:
+      case DISC_SPECVOUCHER_TAXNAME_MISMATCH:
+      case DISC_STRAIN_TAXNAME_MISMATCH:
+      case DISC_BACTERIA_SHOULD_NOT_HAVE_ISOLATE:
+      case DISC_BACTERIA_MISSING_STRAIN:
+      case DISC_REQUIRED_CLONE:
+      case ONCALLER_MULTISRC:
+      case DUP_DISC_ATCC_CULTURE_CONFLICT:
+      case ONCALLER_STRAIN_CULTURE_COLLECTION_MISMATCH:
+      case ONCALLER_MULTIPLE_CULTURE_COLLECTION:
+      case DISC_TRINOMIAL_SHOULD_HAVE_QUALIFIER:
+      case ONCALLER_CHECK_AUTHORITY:
+      case DISC_MAP_CHROMOSOME_CONFLICT:
+      case DISC_METAGENOMIC:
+      case DISC_METAGENOME_SOURCE:
+      case DISC_RETROVIRIDAE_DNA:
+      case DISC_MITOCHONDRION_REQUIRED:
+        if (cip_src == NULL) {
+          cip_src = CreateTopLevelCategory (vnp, "Source tests");
+          v_prev = vnp;
+        } else {
+          ValNodeAddPointer (&(cip_src->subcategories), 0, cip);
+          v_prev->next = vnp->next;
+          vnp->next = NULL;
+          vnp = ValNodeFree (vnp);
+        }
+        break;
+      case ONCALLER_SUPERFLUOUS_GENE:
+      case ONCALLER_GENE_MISSING:
+      case DISC_GENE_PARTIAL_CONFLICT:
+      case DISC_BAD_GENE_STRAND:
+      case DISC_NON_GENE_LOCUS_TAG:
+      case DISC_RBS_WITHOUT_GENE:
+      case ONCALLER_ORDERED_LOCATION:
+      case DISC_CDS_WITHOUT_MRNA:
+      case DISC_mRNA_ON_WRONG_SEQUENCE_TYPE:
+      case DISC_BACTERIA_SHOULD_NOT_HAVE_MRNA:
+      case TEST_EXON_ON_MRNA:
+      case DISC_CDS_HAS_NEW_EXCEPTION:
+      case DISC_SHORT_INTRON:
+      case DISC_EXON_INTRON_CONFLICT:
+      case DISC_PSEUDO_MISMATCH:
+      case DISC_RNA_NO_PRODUCT:
+      case DISC_BADLEN_TRNA:
+      case DISC_MICROSATELLITE_REPEAT_TYPE:
+        if (cip_feat == NULL) {
+          cip_feat = CreateTopLevelCategory (vnp, "Feature tests");
+          v_prev = vnp;
+        } else {
+          ValNodeAddPointer (&(cip_feat->subcategories), 0, cip);
+          v_prev->next = vnp->next;
+          vnp->next = NULL;
+          vnp = ValNodeFree (vnp);
+        }
+        break;
+      case DISC_FLATFILE_FIND_ONCALLER:
+      case DISC_CDS_PRODUCT_FIND:
+      case DISC_SUSPICIOUS_NOTE_TEXT:
+      case DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS:
+      case DISC_INTERNAL_TRANSCRIBED_SPACER_RRNA:
+      case ONCALLER_COMMENT_PRESENT:
+        if (cip_suspect_text == NULL) {
+          cip_suspect_text = CreateTopLevelCategory (vnp, "Suspect text tests");
+          v_prev = vnp;
+        } else {
+          ValNodeAddPointer (&(cip_suspect_text->subcategories), 0, cip);
+          v_prev->next = vnp->next;
+          vnp->next = NULL;
+          vnp = ValNodeFree (vnp);
+        }
+        break;
+      default:
+        v_prev = vnp;
+        break;
+    }
+  }
+  SetDiscrepancyLevels (*p_clickable_list, 0);
+}
+
 
 static void RecheckDiscrepancyProc (ButtoN b)
 {
@@ -15192,6 +16050,11 @@ static void RecheckDiscrepancyProc (ButtoN b)
     }
 
     drfp->clickable_list_data = CollectDiscrepancies (drfp->dcp, sep_list, CheckTaxNamesAgainstTaxDatabase);
+
+    /* reorder as necessary */
+    if (drfp->reorder_results_proc != NULL) {
+      (drfp->reorder_results_proc) (&(drfp->clickable_list_data));
+    }
 
     /* add bulk editing where appropriate */
     AddBulkEditing (drfp->clickable_list_data);
@@ -15234,6 +16097,11 @@ static void AddNewEntityDiscrepancyProc (ButtoN b, Uint2 new_entityID )
 
     drfp->clickable_list_data = CollectDiscrepancies (drfp->dcp, sep_list, CheckTaxNamesAgainstTaxDatabase);
     sep_list = ValNodeFree (sep_list);
+
+    /* reorder as necessary */
+    if (drfp->reorder_results_proc != NULL) {
+      (drfp->reorder_results_proc) (&(drfp->clickable_list_data));
+    }
 
     /* add bulk editing where appropriate */
     AddBulkEditing (drfp->clickable_list_data);
@@ -15414,6 +16282,12 @@ static void EditOnCallerConfigBtn (ButtoN b)
 }
 
 
+static void EditMegaReportConfigBtn (ButtoN b)
+{
+  EditReportConfigBtn (eReportTypeMegaReport);
+}
+
+
 static Nlm_BtnActnProc GetReportEditButtonProc (EDiscrepancyReportType report_type)
 {
   Nlm_BtnActnProc proc = NULL;
@@ -15424,6 +16298,9 @@ static Nlm_BtnActnProc GetReportEditButtonProc (EDiscrepancyReportType report_ty
       break;
     case eReportTypeOnCaller:
       proc = EditOnCallerConfigBtn;
+      break;
+    case eReportTypeMegaReport:
+      proc = EditMegaReportConfigBtn;
       break;
   }
   return proc;
@@ -15446,21 +16323,8 @@ static CharPtr GetReportName (EDiscrepancyReportType report_type)
     case eReportTypeOnCaller:
       report_name = "On Caller Tool";
       break;
-  }
-  return report_name;
-}
-
-
-static CharPtr GetReportConfigName (EDiscrepancyReportType report_type)
-{
-  CharPtr report_name = "";
-
-  switch (report_type) {
-    case eReportTypeDiscrepancy:
-      report_name = "DISCREPANCY_REPORT";
-      break;
-    case eReportTypeOnCaller:
-      report_name = "ON_CALLER_TOOL";
+    case eReportTypeMegaReport:
+      report_name = "Mega Report";
       break;
   }
   return report_name;
@@ -15513,6 +16377,20 @@ static void ContractAllDiscReportItems (ButtoN b)
 }
 
 
+static void UnmarkAllBtn (ButtoN b)
+{
+  DiscrepancyReportFormPtr d;
+
+  d = (DiscrepancyReportFormPtr) GetObjectExtra (b);
+  if (d == NULL) {
+    return;
+  }
+  ChooseCategories (d->clickable_list_data, FALSE);
+
+  PointerToDialog (d->clickable_list_dlg, d->clickable_list_data);
+}
+
+
 static void FixMarkedDiscrepanciesBtn (ButtoN b)
 {
   DiscrepancyReportFormPtr d;
@@ -15543,6 +16421,11 @@ static void FixMarkedDiscrepanciesBtn (ButtoN b)
   d->clickable_list_data = CollectDiscrepancies (d->dcp, sep_list, CheckTaxNamesAgainstTaxDatabase);
   sep_list = ValNodeFree (sep_list);
 
+  /* reorder as necessary */
+  if (d->reorder_results_proc != NULL) {
+    (d->reorder_results_proc) (&(d->clickable_list_data));
+  }
+
   /* add bulk editing where appropriate */
   AddBulkEditing (d->clickable_list_data);
   
@@ -15564,6 +16447,52 @@ static void MarkFixableDiscrepancies (ButtoN b)
   }
   ChooseFixableDiscrepancies (d->clickable_list_data);
   PointerToDialog (d->clickable_list_dlg, d->clickable_list_data);
+}
+
+
+/* Sequester by test */
+static void ReportSequesterButton (ButtoN b)
+{
+  ClickableItemData cid;
+  Uint2          entityID;
+  Int4              num_disc;
+  ValNodePtr        sep_list;
+
+  DiscrepancyReportFormPtr d;
+
+  d = (DiscrepancyReportFormPtr) GetObjectExtra (b);
+  if (d == NULL) {
+    return;
+  }
+
+  sep_list = GetViewedSeqEntryList ();
+  if (sep_list == NULL) {
+    return;
+  } else if (sep_list->next != NULL) {
+    Message (MSG_ERROR, "Can't sequester when viewing more than one record");
+    return;
+  } else {
+    entityID = ObjMgrGetEntityIDForChoice (sep_list->data.ptrvalue);
+  }
+  sep_list = ValNodeFree (sep_list);
+
+
+  num_disc = CountChosenDiscrepancies (d->clickable_list_data, FALSE);
+
+  if (num_disc == 0) 
+  {
+    Message (MSG_ERROR, "No discrepancies selected!");
+    return;
+  }
+
+  MemSet (&cid, 0, sizeof (ClickableItemData));
+  cid.chosen = FALSE;
+  cid.item_list = NULL;
+  cid.subcategories = d->clickable_list_data;
+
+  if (SequesterClickableItem (entityID, &cid)) {
+    SetDoReportAfterUnsequester (d->report_type);
+  }
 }
 
 
@@ -15597,13 +16526,19 @@ extern void CreateReportWindow (EDiscrepancyReportType report_type)
   
   /* read in config file */
   drfp->dcp = ReadDiscrepancyConfigEx(GetReportConfigName (report_type));
+  drfp->report_type = report_type;
 
   /* adjust for report type */
   AdjustConfigForReportType (report_type, drfp->dcp);
 
-  /* Discrepancy Report uses log file for autofix */
-  if (report_type == eReportTypeDiscrepancy) {
+  /* Discrepancy Report and MegaReport use log file for autofix */
+  if (report_type == eReportTypeDiscrepancy || report_type == eReportTypeMegaReport) {
     drfp->log_name = StringSave ("Autofix Changes");
+  }
+
+  /* On-caller Tool uses special order */
+  if (report_type == eReportTypeOnCaller) {
+    drfp->reorder_results_proc = ReorderOnCallerResults;
   }
   
   /* register to receive update messages */
@@ -15635,7 +16570,7 @@ extern void CreateReportWindow (EDiscrepancyReportType report_type)
   b = PushButton (c1, "Contract All", ContractAllDiscReportItems);
   SetObjectExtra (b, drfp, NULL);
 
-  c = HiddenGroup (h, 6, 0, NULL);
+  c = HiddenGroup (h, 8, 0, NULL);
   SetGroupSpacing (c, 10, 10);
   b = PushButton (c, "Generate Report", GenerateDiscrepancyReport);
   SetObjectExtra (b, drfp, NULL);
@@ -15643,6 +16578,8 @@ extern void CreateReportWindow (EDiscrepancyReportType report_type)
   SetObjectExtra (drfp->recheck_btn, drfp, NULL);
   if (report_type == eReportTypeOnCaller) {
     drfp->add_entity_proc = AddNewEntityDiscrepancyProc;
+  } else {
+    drfp->add_entity_proc = NULL;
   }
   b = PushButton (c, "Mark Fixable", MarkFixableDiscrepancies);
   SetObjectExtra (b, drfp, NULL);
@@ -15650,9 +16587,15 @@ extern void CreateReportWindow (EDiscrepancyReportType report_type)
   b = PushButton (c, "Fix Marked", FixMarkedDiscrepanciesBtn);
   SetObjectExtra (b, drfp, NULL);
   
+  b = PushButton (c, "Unmark All", UnmarkAllBtn);
+  SetObjectExtra (b, drfp, NULL);
+
   b = PushButton (c, "Configure", GetReportEditButtonProc (report_type));
   SetObjectExtra (b, drfp, NULL);
   
+  b = PushButton (c, "Sequester", ReportSequesterButton);
+  SetObjectExtra (b, drfp, NULL);
+
   PushButton (c, "Dismiss", StdCancelButtonProc);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list_dlg, (HANDLE) c1, (HANDLE) c, NULL);
@@ -16165,6 +17108,7 @@ typedef struct rnaits {
   /* for alignment coordinates */
   ButtoN       use_aln;
   PopuP        this_aln;
+  GrouP        gap_handling;
 
   BaseFormPtr       bfp;
   TaglistCallback   callbacks[3];
@@ -16322,12 +17266,12 @@ static CharPtr RNAITSItemToTagListString (RNA_ITS_ItemPtr rip)
   if (rip->left > -1) {
     sprintf (left_str, "%d", rip->left);
   } else {
-    sprintf (left_str, "");
+    sprintf (left_str, "%s", "");
   }
   if (rip->right > -1) {
     sprintf (right_str, "%d", rip->right);
   } else {
-    sprintf (right_str, "");
+    sprintf (right_str, "%s", "");
   }
   sprintf (new_line, "%d\t%s\t%s\n", rip->rna_type, left_str, right_str);
   return StringSave (new_line);
@@ -16727,16 +17671,15 @@ static void MakeRNA_ITSChainForBioseq (BioseqPtr bsp, Pointer userdata)
 
     rrp = RnaRefNew ();
     if (rip->rna_type == eRNA_ITS_ITS1 || rip->rna_type == eRNA_ITS_ITS2) {
-      rrp->type = RNA_TYPE_other;
+      rrp->type = RNA_TYPE_misc_RNA;
     } else {
       rrp->type = RNA_TYPE_rRNA;
     }
-    rrp->ext.choice = 1;
-
-    rrp->ext.value.ptrvalue = StringSave (RNANameFromRNAType(rip->rna_type));
     sfp = SeqFeatNew ();
     sfp->data.choice = SEQFEAT_RNA;
     sfp->data.value.ptrvalue = rrp;
+    SetRNAProductString (sfp, NULL, RNANameFromRNAType(rip->rna_type), ExistingTextOption_replace_old);
+
     /* if last endpoint not set, use end of sequence.
      * if last endpoint past end of sequence, use end of sequence.
      */
@@ -16756,7 +17699,7 @@ static void MakeRNA_ITSChainForBioseq (BioseqPtr bsp, Pointer userdata)
 /* This function will propagate the RNA features pointed to by feature_list
  * from aln_row in salp to the other rows in salp. 
 */
-static void PropagateRNAList (ValNodePtr feature_list, Int4 aln_row, SeqAlignPtr salp)
+static void PropagateRNAList (ValNodePtr feature_list, Int4 aln_row, SeqAlignPtr salp, Boolean split_at_gaps)
 {
   ValNodePtr seq_for_prop = NULL, vnp;
   Int4       i;
@@ -16774,7 +17717,7 @@ static void PropagateRNAList (ValNodePtr feature_list, Int4 aln_row, SeqAlignPtr
 
   /* propagate each feature */
   for (vnp = feature_list; vnp != NULL; vnp = vnp->next) {
-    PropagateOneFeat (vnp->data.ptrvalue, TRUE, FALSE, FALSE, FALSE, FALSE, seq_for_prop, &warned_about_master);
+    PropagateOneFeat (vnp->data.ptrvalue, split_at_gaps, FALSE, FALSE, FALSE, FALSE, seq_for_prop, &warned_about_master);
   }
 
   /* free sequence IDs in seq_for_prop */
@@ -16795,6 +17738,7 @@ static void MakeRNA_ITSChain (ButtoN b)
   Boolean            apply_to_all = FALSE, propagate = FALSE;
   SeqAlignPtr        next_salp, propagate_salp = NULL;
   Int4               salp_index, aln_row = -1;
+  Boolean            split_at_gaps = FALSE;
 
   rp = (RNAITSPtr) GetObjectExtra (b);
   if (rp == NULL) return;
@@ -16866,7 +17810,10 @@ static void MakeRNA_ITSChain (ButtoN b)
   } else {
     MakeRNA_ITSChainForBioseq (bsp, rp);
     if (propagate) {
-      PropagateRNAList (rp->feature_list, aln_row, propagate_salp);
+      if (GetValue (rp->gap_handling) == 2) {
+        split_at_gaps = TRUE;
+      }
+      PropagateRNAList (rp->feature_list, aln_row, propagate_salp, split_at_gaps);
     }
   }
   rp->feature_list = ValNodeFree (rp->feature_list);
@@ -17072,6 +18019,13 @@ extern void ApplyRNA_ITS (IteM i)
                                           rp->callbacks, rp, FALSE);
 
   rp->prev_list = NULL;
+
+  /* control for handling alignment coordinates over gaps */
+  rp->gap_handling = HiddenGroup (h, 2, 0, NULL);
+  RadioButton (rp->gap_handling, "Extend over gaps");
+  RadioButton (rp->gap_handling, "Split at gaps");
+  SetValue (rp->gap_handling, 1);
+
   /* Add Accept and Cancel buttons */
 
   c = HiddenGroup (h, 3, 0, NULL);
@@ -17084,6 +18038,7 @@ extern void ApplyRNA_ITS (IteM i)
 
   AlignObjects (ALIGN_CENTER, (HANDLE) g,
                               (HANDLE) rp->rna_list,
+                              (HANDLE) rp->gap_handling,
                               (HANDLE) c, NULL);
 
 
@@ -17352,7 +18307,7 @@ static void PopulateLinkLeftDoc (CDSmRNALinkToolPtr tp)
   ValNodePtr vnp;
   CharPtr    desc;
   Int4       col_width;
-  Int2       i = 1, item_num;
+  Int2       i = 1, item_num = 0;
   Int4       startsAt;
 
   if (tp == NULL) return;
@@ -18477,9 +19432,7 @@ static ValNodePtr DivideClickableItemListByEntityID (ValNodePtr clickable_list)
 
 
 typedef struct cdstrnatool {
-  FORM_MESSAGE_BLOCK
-  DialoG clickable_list_dlg;
-  ValNodePtr clickable_list;
+  CLICKABLE_LIST_FORM_BLOCK
   ValNodePtr overlap_list;
 } CDStRNAToolData, PNTR CDStRNAToolPtr;
 
@@ -18490,7 +19443,7 @@ static void CleanupCDStRNAToolForm (GraphiC g, VoidPtr data)
 
   dlg = (CDStRNAToolPtr) data;
   if (dlg != NULL) {
-    dlg->clickable_list = FreeClickableList (dlg->clickable_list);
+    dlg->clickable_list_data = FreeClickableList (dlg->clickable_list_data);
     dlg->overlap_list = FreeCDStRNAOverlapList (dlg->overlap_list);
     ObjMgrFreeUserData (dlg->input_entityID, dlg->procid, dlg->proctype, dlg->userkey);
   }
@@ -18527,13 +19480,13 @@ static void TrimSelectedCDS (ButtoN b)
   dlg = (CDStRNAToolPtr) GetObjectExtra (b);
   if (dlg == NULL) return;
 
-  tmp_list = GetSelectedClickableItems (dlg->clickable_list);
+  tmp_list = GetSelectedClickableItems (dlg->clickable_list_data);
 
   if (tmp_list == NULL) {
     if (ANS_CANCEL == Message (MSG_OKC, "No features selected!  Trim all?")) {
       return;
     } else {
-      tmp_list = dlg->clickable_list;
+      tmp_list = dlg->clickable_list_data;
     }
   }
 
@@ -18571,7 +19524,7 @@ static void TrimSelectedCDS (ButtoN b)
   overlap_list = FreeCDStRNAOverlapList (overlap_list);
   SendUpdatesForClickableList (tmp_list);
 
-  if (tmp_list != dlg->clickable_list) {
+  if (tmp_list != dlg->clickable_list_data) {
     tmp_list = ValNodeFree (tmp_list);
   }
 
@@ -18581,9 +19534,9 @@ static void TrimSelectedCDS (ButtoN b)
   } else {
     /* update list of overlaps (remove the trimmed ones) */
     PointerToDialog (dlg->clickable_list_dlg, NULL);
-    dlg->clickable_list = FreeClickableList (dlg->clickable_list);
-    dlg->clickable_list = ClickableListFromCDStRNAOverlapList (dlg->overlap_list);
-    PointerToDialog (dlg->clickable_list_dlg, dlg->clickable_list);
+    dlg->clickable_list_data = FreeClickableList (dlg->clickable_list_data);
+    dlg->clickable_list_data = ClickableListFromCDStRNAOverlapList (dlg->overlap_list);
+    PointerToDialog (dlg->clickable_list_dlg, dlg->clickable_list_data);
   }
 }
 
@@ -18595,8 +19548,8 @@ static void SelectAllCDS (ButtoN b)
   dlg = (CDStRNAToolPtr) GetObjectExtra (b);
   if (dlg == NULL) return;
 
-  ChooseCategories (dlg->clickable_list, TRUE);
-  PointerToDialog (dlg->clickable_list_dlg, dlg->clickable_list);
+  ChooseCategories (dlg->clickable_list_data, TRUE);
+  PointerToDialog (dlg->clickable_list_dlg, dlg->clickable_list_data);
 
 }
 
@@ -18618,7 +19571,7 @@ static void EditCDStRNAOverlap (ValNodePtr item_list)
 
   /* create window to display and correct overlaps */
   dlg = (CDStRNAToolPtr) MemNew (sizeof (CDStRNAToolData));
-  dlg->clickable_list = ClickableListFromCDStRNAOverlapList (overlap_list);
+  dlg->clickable_list_data = ClickableListFromCDStRNAOverlapList (overlap_list);
   dlg->overlap_list = overlap_list;
 
   w = FixedWindow (-50, -33, -10, -10, "CDS tRNA Overlaps", StdCloseWindowProc);
@@ -18646,7 +19599,7 @@ static void EditCDStRNAOverlap (ValNodePtr item_list)
   dlg->clickable_list_dlg = CreateClickableListDialog (h, "CDS-tRNA Overlaps", "Features",
                                                         ScrollToDiscrepancyItem, EditDiscrepancyItem, NULL,
                                                         GetDiscrepancyItemText);
-  PointerToDialog (dlg->clickable_list_dlg, dlg->clickable_list);
+  PointerToDialog (dlg->clickable_list_dlg, dlg->clickable_list_data);
 
   c = HiddenGroup (h, 4, 0, NULL);
   SetGroupSpacing (c, 10, 10);

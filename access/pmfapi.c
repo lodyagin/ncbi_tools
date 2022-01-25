@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.103 $
+* $Revision: 1.106 $
 *
 * File Description: 
 *
@@ -2212,7 +2212,7 @@ static Int2 LIBCALLBACK PubSeqSeqIdForGiFunc (Pointer data)
   }
   *ptr = '\0';
 
-  if (StringNCmp (str, "ERROR", 5) != 0) {
+  if (StringNCmp (str, "ERROR", 5) != 0 && StringNCmp (str, "<!DOCTYPE", 9) != 0) {
     sid = SeqIdParse (str);
   }
   MemFree (str);
@@ -2388,6 +2388,8 @@ NLM_EXTERN Int4 CacheAccnList (
 
   if (str == NULL) return 0;
 
+  if (StringNCmp (str, "<!DOCTYPE", 9) == 0) return 0;
+
   /* parse output */
 
   i = 0;
@@ -2404,7 +2406,10 @@ NLM_EXTERN Int4 CacheAccnList (
       ptr++;
       ch = *ptr;
     }
-    if (StringNCmp (tmp, "ERROR", 5) != 0 && StringNCmp (tmp, "Sorry", 5) != 0 && StringChr (tmp, '|') != NULL) {
+    if (StringNCmp (tmp, "ERROR", 5) != 0 &&
+        StringNCmp (tmp, "<!DOCTYPE", 9) != 0 &&
+        StringNCmp (tmp, "Sorry", 5) != 0 &&
+        StringChr (tmp, '|') != NULL) {
       ids = SeqIdParse (tmp);
       if (ids != NULL) {
         gi = 0;
@@ -2494,6 +2499,8 @@ static Int4 IntPreLoadSeqIdGiCache (
   str = GiAccVerSynchronousQuery (0, num, ids);
   if (str == NULL) return 0;
 
+  if (StringNCmp (str, "<!DOCTYPE", 9) == 0) return 0;
+
   /* parse output */
 
   i = 0;
@@ -2510,7 +2517,7 @@ static Int4 IntPreLoadSeqIdGiCache (
       ptr++;
       ch = *ptr;
     }
-    if (StringNCmp (tmp, "ERROR", 5) != 0) {
+    if (StringNCmp (tmp, "ERROR", 5) != 0 && StringNCmp (tmp, "<!DOCTYPE", 9) != 0) {
       gi = ids [i];
 
       sip = NULL;
@@ -2905,12 +2912,15 @@ static void LookupHistory (BioseqPtr bsp, Pointer userdata)
 {
   SeqHistPtr  hist;
   SeqIdPtr    sip;
+  SeqAlignPtr salp;
 
   if (bsp == NULL) return;
   hist = bsp->hist;
   if (hist == NULL) return;
   if (hist->assembly != NULL) {
-    LookupAlignments (hist->assembly, userdata);
+    for (salp = hist->assembly; salp != NULL; salp = salp->next) {
+      LookupAlignments (salp, userdata);
+    }
   }
   for (sip = hist->replace_ids; sip != NULL; sip = sip->next) {
     LookupSegments (NULL, sip, userdata);

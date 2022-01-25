@@ -1,5 +1,5 @@
 /*
- * $Id: aceread.c,v 1.16 2008/12/22 22:40:30 bollin Exp $
+ * $Id: aceread.c,v 1.19 2010/05/26 15:13:01 bollin Exp $
  *
  * ===========================================================================
  *
@@ -755,7 +755,7 @@ extern void ACEFileFree (TACEFilePtr afp)
 
 static char s_IsSeqChar (char ch)
 {
-    if (ch == '*' || isalpha (ch)) {
+    if (ch == '*' || ch == '-' || isalpha (ch)) {
         return 1;
     } else {
         return 0;
@@ -795,6 +795,8 @@ s_ReadSequenceFromFile
         while (s_IsSeqChar (*cp) && pos < len) {
             if (isalpha (*cp)) {
                 seq [pos] = toupper (*cp);
+            } else if (*cp == '-') {
+                seq [pos] = '*';
             } else {
                 seq [pos] = *cp;
             }
@@ -995,19 +997,19 @@ static EFound s_ReadAFLines
 static EFound s_ReadBaseSegs
 (TContigPtr           contig,
  int                  num_base_segs,
- char *               firstline,
+ char **              firstline,
  FReadLineFunction    readfunc,
  void *               userdata)
 {
     char * linestring;
 
-    if (contig == NULL || readfunc == NULL || num_base_segs == 0) return eNone;
+    if (contig == NULL || readfunc == NULL || num_base_segs == 0 || firstline == NULL) return eNone;
 
     contig->base_segs = malloc (sizeof (TBaseSegPtr) * num_base_segs);
     contig->num_base_segs = 0;
 
     /* get BS lines */
-    linestring = firstline;
+    linestring = *firstline;
     while (s_LineIsEmptyButNotEof (linestring)) {
         free (linestring);
         linestring = readfunc (userdata);
@@ -1022,9 +1024,10 @@ static EFound s_ReadBaseSegs
         free (linestring);
         linestring = readfunc (userdata);
     }
+    *firstline = linestring;
     if (contig->num_base_segs < num_base_segs) {
         return eTooFew;
-    } else if (linestring != NULL && linestring [0] != EOF && ! s_LineIsEmptyButNotEof (linestring)) {
+    } else if (linestring != NULL && linestring [0] == 'B' && linestring[1] == 'S') {
         return eTooMany;
     } else {
         return eJustRight;
@@ -1260,9 +1263,15 @@ static char * s_AddToTagComment (char *orig, char *extra)
 }
 
 
+typedef enum {
+    eTagCommentStatus_ok = 0,
+    eTagCommentStatus_runon
+} ETagCommentStatus;
+
 static char * s_ReadTagComment
 (FReadLineFunction    readfunc,
- void *               userdata)
+ void *               userdata,
+ ETagCommentStatus    *comment_status)
 {
     char *linestring;
     char *tag = NULL;
@@ -1286,6 +1295,11 @@ static char * s_ReadTagComment
             tag = tmp;
         }
         free (linestring);
+        if (tag_len > 1000) {
+           *comment_status = eTagCommentStatus_runon;
+           free (tag);
+           return NULL;
+        }
         linestring = readfunc (userdata);
     }
     if (cp != NULL && cp > linestring) {
@@ -1318,10 +1332,11 @@ static TContigPtr s_ReadContig
     char      *linestring;
     char      *firstline;
     char      *cp;
-    int        len = 0, read_num = 0, num_base_segs = 0;
+    int        len = 0, read_num = 0, num_base_segs = 0, report_read_num = 0;
     EFound     val;
     char       found_comp_char = 0;
     TContigPtr contig = NULL;
+    ETagCommentStatus comment_status = eTagCommentStatus_ok;
 
     if (initline == NULL) return NULL;
     firstline = *initline;
@@ -1335,7 +1350,7 @@ static TContigPtr s_ReadContig
     len = strlen (firstline + 3);
     contig->consensus_id = malloc (len + 1);
     strcpy (contig->consensus_id, firstline + 3);
- 
+
     cp = contig->consensus_id;
     while (*cp != 0 && !isspace (*cp)) {
         cp++;
@@ -1412,7 +1427,7 @@ static TContigPtr s_ReadContig
     }
  
     if (num_base_segs > 0) {
-        val = s_ReadBaseSegs (contig, num_base_segs, linestring, readfunc, userdata);
+        val = s_ReadBaseSegs (contig, num_base_segs, &linestring, readfunc, userdata);
         if (val != eJustRight) {
             s_ReportFound (val, "base segments", contig->consensus_id, has_errors);
             ContigFree (contig);
@@ -1422,7 +1437,6 @@ static TContigPtr s_ReadContig
 
     
     read_num = 0;
-    linestring = readfunc (userdata);
     while (linestring != NULL  &&  linestring [0] != EOF) {
         if (linestring [0] == 'R' && linestring[1] == 'D' && isspace (linestring [2])) {
             len = strlen (contig->reads[read_num]->read_id);
@@ -1442,26 +1456,27 @@ static TContigPtr s_ReadContig
             contig->reads[read_num]->read_len = s_GetUngappedSeqLen (contig->reads[read_num]->read_seq, "*");
             contig->reads[read_num]->gaps = GapInfoFromSequenceString (contig->reads[read_num]->read_seq, "*");
             read_num++;
+            report_read_num = read_num - 1;
         } else if (linestring [0] == 'Q' && linestring[1] == 'A' && isspace (linestring[2])) {
             if (read_num < 1) {
                 PrintACEFormatErrorXML ("Found QA line before RD!", contig->consensus_id, has_errors);
                 ContigFree (contig);
                 return NULL;
-            } else if (!ApplyQALineToRead (contig->reads[read_num - 1], linestring, contig->reads[read_num - 1]->read_id, has_errors)) {
-                PrintACEFormatErrorXML ("Error in QA line format!", contig->reads[read_num - 1]->read_id, has_errors);
+            } else if (!ApplyQALineToRead (contig->reads[report_read_num], linestring, contig->reads[report_read_num]->read_id, has_errors)) {
+                PrintACEFormatErrorXML ("Error in QA line format!", contig->reads[report_read_num]->read_id, has_errors);
                 ContigFree (contig);
                 return NULL;
             }
-        } else if (linestring[0] == 'D' && linestring[1] == 'S' && isspace (linestring[2])) {
+        } else if (linestring[0] == 'D' && linestring[1] == 'S' && (isspace (linestring[2]) || linestring[2] == 0)) {
             /* skip DS lines */
         } else if (strncmp (linestring, "RT{", 3) == 0) {
-            contig->reads[read_num - 1]->tag = s_AddToTagComment (contig->reads[read_num - 1]->tag, s_ReadTagComment (readfunc, userdata));
+            contig->reads[read_num - 1]->tag = s_AddToTagComment (contig->reads[report_read_num]->tag, s_ReadTagComment (readfunc, userdata, &comment_status));
         } else if (strncmp (linestring, "WR{", 3) == 0) {
-            contig->reads[read_num - 1]->tag = s_AddToTagComment (contig->reads[read_num - 1]->tag, s_ReadTagComment (readfunc, userdata));
+            contig->reads[read_num - 1]->tag = s_AddToTagComment (contig->reads[report_read_num]->tag, s_ReadTagComment (readfunc, userdata, &comment_status));
         } else if (strncmp (linestring, "CT{", 3) == 0) {
-            contig->tag = s_AddToTagComment (contig->tag, s_ReadTagComment (readfunc, userdata));
+            contig->tag = s_AddToTagComment (contig->tag, s_ReadTagComment (readfunc, userdata, &comment_status));
         } else if (strncmp (linestring, "WA{", 3) == 0) {
-            contig->tag = s_AddToTagComment (contig->tag, s_ReadTagComment (readfunc, userdata));
+            contig->tag = s_AddToTagComment (contig->tag, s_ReadTagComment (readfunc, userdata, &comment_status));
         } else if (linestring[0] != 0) {
             /* found next line */
             *initline = linestring;
@@ -1470,6 +1485,12 @@ static TContigPtr s_ReadContig
             return contig;
         }
         free (linestring);
+        if (comment_status == eTagCommentStatus_runon) {
+            PrintACEFormatErrorXML ("Error in CT line - comment tag is unusally long, suspect missing terminating }", contig->reads[report_read_num]->read_id, has_errors);
+            ContigFree (contig);
+            return NULL;
+        }
+
         linestring = readfunc (userdata);
     }
     *initline = NULL;

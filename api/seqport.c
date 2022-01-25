@@ -29,13 +29,13 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.177 $
+* $Revision: 6.184 $
 *
 * File Description:  Ports onto Bioseqs
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date	   Name        Description of modification
+* Date       Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 *
 * ==========================================================================
@@ -566,8 +566,8 @@ NLM_EXTERN SeqPortPtr SeqPortFree (SeqPortPtr spp)
     if (spp == NULL)
         return NULL;
 
-	if (spp->locked)              /* locked during access */
-		BioseqUnlock(spp->bsp);   /* make available for freeing */
+    if (spp->locked)              /* locked during access */
+        BioseqUnlock(spp->bsp);   /* make available for freeing */
 
     tspp = spp->segs;
     while (tspp != NULL)
@@ -577,8 +577,8 @@ NLM_EXTERN SeqPortPtr SeqPortFree (SeqPortPtr spp)
         tspp = nextspp;
     }
 
-	MemFree(spp->cache);
-	MemFree (spp->cacheq);
+    MemFree(spp->cache);
+    MemFree (spp->cacheq);
 
     MemFree(spp);
 
@@ -597,40 +597,40 @@ NLM_EXTERN SeqPortPtr SeqPortFree (SeqPortPtr spp)
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqPortSetValues (SeqPortPtr spp)
 {
-	SeqPortPtr tmp;
+    SeqPortPtr tmp;
 
-	if (spp == NULL)
-		return FALSE;
+    if (spp == NULL)
+        return FALSE;
 
-	for (tmp = spp->segs; tmp != NULL; tmp = tmp->next)
-	{
-		tmp->is_circle = spp->is_circle;
-		tmp->is_seg = spp->is_seg;
-		tmp->do_virtual = spp->do_virtual;
-		tmp->gapIsZero = spp->gapIsZero;
+    for (tmp = spp->segs; tmp != NULL; tmp = tmp->next)
+    {
+        tmp->is_circle = spp->is_circle;
+        tmp->is_seg = spp->is_seg;
+        tmp->do_virtual = spp->do_virtual;
+        tmp->gapIsZero = spp->gapIsZero;
 
-		if (tmp->segs != NULL)
-			SeqPortSetValues(tmp);
-	}
+        if (tmp->segs != NULL)
+            SeqPortSetValues(tmp);
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 
 NLM_EXTERN Boolean LIBCALL SeqPortSet_is_circle (SeqPortPtr spp, Boolean value)
 {
-	if (spp == NULL)
-		return FALSE;
-	spp->is_circle = value;
-	return SeqPortSetValues(spp);
+    if (spp == NULL)
+        return FALSE;
+    spp->is_circle = value;
+    return SeqPortSetValues(spp);
 }
 
 NLM_EXTERN Boolean LIBCALL SeqPortSet_is_seg (SeqPortPtr spp, Boolean value)
 {
-	if (spp == NULL)
-		return FALSE;
-	spp->is_seg = value;
-	return SeqPortSetValues(spp);
+    if (spp == NULL)
+        return FALSE;
+    spp->is_seg = value;
+    return SeqPortSetValues(spp);
 }
 
 /**************************************************************
@@ -641,91 +641,91 @@ NLM_EXTERN Boolean LIBCALL SeqPortSet_is_seg (SeqPortPtr spp, Boolean value)
 **************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp)
 {
-	SeqPortPtr tmp;
-	Int4 len = 0;
+    SeqPortPtr tmp;
+    Int4 len = 0;
 
-	if (spp == NULL)
-		return FALSE;
+    if (spp == NULL)
+        return FALSE;
 
 
-	if (spp->isa_virtual)
-	{
-		if (spp->do_virtual)
-			spp->totlen = spp->stop - spp->start + 1;
-		else
-			spp->totlen = 0;
-		if (spp->totlen == 0)
-			spp->isa_null = TRUE;
-		else
-			spp->isa_null = FALSE;
-	}
-	else if (spp->segs != NULL)
-	{
-		for (tmp = spp->segs; tmp != NULL; tmp = tmp->next)
-		{
-			SeqPortAdjustLength (tmp);
-			len += tmp->totlen;
-		}
-		spp->totlen = len;
-	}
-	else if (! spp->isa_null)
-		spp->totlen = spp->stop - spp->start + 1;
-	spp->curpos = -1;  /* reset to unused */
+    if (spp->isa_virtual)
+    {
+        if (spp->do_virtual)
+            spp->totlen = spp->stop - spp->start + 1;
+        else
+            spp->totlen = 0;
+        if (spp->totlen == 0)
+            spp->isa_null = TRUE;
+        else
+            spp->isa_null = FALSE;
+    }
+    else if (spp->segs != NULL)
+    {
+        for (tmp = spp->segs; tmp != NULL; tmp = tmp->next)
+        {
+            SeqPortAdjustLength (tmp);
+            len += tmp->totlen;
+        }
+        spp->totlen = len;
+    }
+    else if (! spp->isa_null)
+        spp->totlen = spp->stop - spp->start + 1;
+    spp->curpos = -1;  /* reset to unused */
 
-	return TRUE;
+    return TRUE;
 
 }
 
 NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtualEx (SeqPortPtr spp, Boolean value, Boolean gapIsZero)
 {
-	Boolean do_it = FALSE, has_virtual=FALSE;
-	SeqPortPtr tmp;
+    Boolean do_it = FALSE, has_virtual=FALSE;
+    SeqPortPtr tmp;
 
-	if (spp == NULL)
-		return FALSE;
-	
-	if (spp->isa_virtual == TRUE)
-		has_virtual = TRUE;
-	if (spp->do_virtual != value)
-		do_it = TRUE;
-	if (spp->gapIsZero != gapIsZero)
-		do_it = TRUE;
-	for (tmp = spp->segs; tmp != NULL; tmp = tmp->next)
-	{
-		if (tmp->isa_virtual == TRUE)
-			has_virtual = TRUE;
-		if (tmp->do_virtual != value)
-			do_it = TRUE;
-		if (tmp->gapIsZero != gapIsZero)
-			do_it = TRUE;
-	}
+    if (spp == NULL)
+        return FALSE;
+    
+    if (spp->isa_virtual == TRUE)
+        has_virtual = TRUE;
+    if (spp->do_virtual != value)
+        do_it = TRUE;
+    if (spp->gapIsZero != gapIsZero)
+        do_it = TRUE;
+    for (tmp = spp->segs; tmp != NULL; tmp = tmp->next)
+    {
+        if (tmp->isa_virtual == TRUE)
+            has_virtual = TRUE;
+        if (tmp->do_virtual != value)
+            do_it = TRUE;
+        if (tmp->gapIsZero != gapIsZero)
+            do_it = TRUE;
+    }
 
-	if (! do_it)   /* no change needed */
-		return TRUE;
+    if (! do_it)   /* no change needed */
+        return TRUE;
 
-	
-	spp->do_virtual = value;
-	spp->gapIsZero = gapIsZero;
-	SeqPortSetValues(spp);
-	if (has_virtual)   /* have to check the SeqPort */
-	{
-		SeqPortAdjustLength(spp);
-		SeqPortSeek(spp, 0, SEEK_SET);
-	}
+    
+    spp->do_virtual = value;
+    spp->gapIsZero = gapIsZero;
+    SeqPortSetValues(spp);
+    if (has_virtual)   /* have to check the SeqPort */
+    {
+        SeqPortAdjustLength(spp);
+        SeqPortSeek(spp, 0, SEEK_SET);
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 
 NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtual (SeqPortPtr spp, Boolean value)
 {
-	return SeqPortSet_do_virtualEx (spp, value, FALSE);
+    return SeqPortSet_do_virtualEx (spp, value, FALSE);
 }
 
 NLM_EXTERN Boolean LIBCALL SeqPortSetUpFields (SeqPortPtr spp, Int4 start, Int4 stop, Uint1 
 strand, Uint1 newcode)
 {
-	if (spp == NULL) return FALSE;
+    if (spp == NULL) return FALSE;
     spp->start = start;
     spp->stop = stop;
     spp->strand = strand;
@@ -734,12 +734,12 @@ strand, Uint1 newcode)
     spp->newcode = newcode;
     spp->sctp = SeqCodeTableFind(newcode);
 
-	return TRUE;
+    return TRUE;
 }
 NLM_EXTERN Boolean LIBCALL SeqPortSetUpAlphabet(SeqPortPtr spp, Uint1 curr_code, Uint1 
 newcode)
 {
-	if (spp == NULL) return FALSE;
+    if (spp == NULL) return FALSE;
 
         spp->oldcode = curr_code;
         spp->sctp = SeqCodeTableFind(curr_code);
@@ -770,7 +770,7 @@ newcode)
                 spp->sctp = SeqCodeTableFind(newcode);
         }
 
-		return TRUE;
+        return TRUE;
 }
 
 /*****************************************************************************
@@ -788,30 +788,30 @@ newcode)
     Uint1 curr_code, repr, tstrand = 0;
     SeqLocPtr the_segs = NULL, currseg;
     Int4 len, ctr, tlen = 0, tfrom = 0, tto = 0, xfrom, xto, tstart, tstop;
-	Char errbuf[41], idbuf[41];
-	ValNode fake;
-	Boolean done, started;
-	BioseqPtr tbsp;
-	ValNodePtr currchunk;  /* can be a SeqLoc or an element of a Delta Seq 
+    Char errbuf[41], idbuf[41];
+    ValNode fake;
+    Boolean done, started;
+    BioseqPtr tbsp;
+    ValNodePtr currchunk;  /* can be a SeqLoc or an element of a Delta Seq 
 */
-	Boolean do_multi_loc, cycle2;
-	SeqLitPtr slitp = NULL;
-	SeqIdPtr tsip;
+    Boolean do_multi_loc, cycle2;
+    SeqLitPtr slitp = NULL;
+    SeqIdPtr tsip;
 
     spp = (SeqPortPtr) MemNew(sizeof(SeqPort));
-	errbuf[0] = '\0';
+    errbuf[0] = '\0';
 
     if (bsp == NULL)     /* a NULL section */
         return spp;
 
-    spp->bsp = bsp;					/* get ready for error 
+    spp->bsp = bsp;                    /* get ready for error 
 msgs */
-	SeqIdWrite(SeqIdFindBest(bsp->id, 0), errbuf, PRINTID_FASTA_SHORT, 40);
+    SeqIdWrite(SeqIdFindBest(bsp->id, 0), errbuf, PRINTID_FASTA_SHORT, 40);
     len = BioseqGetLen(bsp);
     if (start < 0)
     {
         ErrPostEx(SEV_ERROR, 0,0  ,
-				 "SeqPortNew: %s start (%ld)< 0", errbuf, 
+                 "SeqPortNew: %s start (%ld)< 0", errbuf, 
 (long)start);
         MemFree(spp);
         return NULL;
@@ -819,8 +819,8 @@ msgs */
     if (start >= len)
     {
         ErrPostEx(SEV_ERROR,0,0,
-				 "SeqPortNew: %s start(%ld) >= len(%ld)",
-					errbuf, (long)start, (long)len);
+                 "SeqPortNew: %s start(%ld) >= len(%ld)",
+                    errbuf, (long)start, (long)len);
         MemFree(spp);
         return NULL;
     }
@@ -829,16 +829,16 @@ msgs */
     else if (stop < start)
     {
         ErrPostEx(SEV_ERROR,0,0,
-				 "SeqPortNew: %s stop(%ld) < start(%ld)",
-					errbuf, (long)stop, (long)start);
+                 "SeqPortNew: %s stop(%ld) < start(%ld)",
+                    errbuf, (long)stop, (long)start);
         MemFree(spp);
         return NULL;
     }
     else if (stop >= len)
     {
         ErrPostEx(SEV_ERROR,0,0,
-				 "SeqPortNew: %s stop(%ld) >= len(%ld)",
-					errbuf, (long)stop, (long)len);
+                 "SeqPortNew: %s stop(%ld) >= len(%ld)",
+                    errbuf, (long)stop, (long)len);
         MemFree(spp);
         return NULL;
     }
@@ -851,208 +851,208 @@ msgs */
 
     repr = Bioseq_repr(bsp);
     if ((repr == Seq_repr_virtual) ||    /* virtual sequence */
-		(repr == Seq_repr_map ))         /* map sequence */
+        (repr == Seq_repr_map ))         /* map sequence */
     {
         spp->isa_virtual = TRUE;
         spp->curpos = 0;
     }
     else if ((repr == Seq_repr_seg) ||   /* segmented */
         (repr == Seq_repr_ref) ||     /* reference */
-		(repr == Seq_repr_delta))     /* delta */
+        (repr == Seq_repr_delta))     /* delta */
     {
         spp->oldcode = 0;        /* no code, not raw */
 
         if (repr == Seq_repr_seg)  /* segmented */
-		{
-			fake.choice = SEQLOC_MIX;   /* make SEQUENCE OF Seq-loc, 
+        {
+            fake.choice = SEQLOC_MIX;   /* make SEQUENCE OF Seq-loc, 
 into one */
-			fake.data.ptrvalue = bsp->seq_ext;
-			fake.next = NULL;
-			the_segs = (SeqLocPtr)&fake;
-		}
-		else if (repr == Seq_repr_ref)        /* reference: is a Seq-loc 
+            fake.data.ptrvalue = bsp->seq_ext;
+            fake.next = NULL;
+            the_segs = (SeqLocPtr)&fake;
+        }
+        else if (repr == Seq_repr_ref)        /* reference: is a Seq-loc 
 */
-	        the_segs = (SeqLocPtr)bsp->seq_ext;
+            the_segs = (SeqLocPtr)bsp->seq_ext;
 
-		if (repr == Seq_repr_delta)   /* chain of deltas to follow */
-			currchunk = (ValNodePtr)(bsp->seq_ext);
-		else                          /* seqlocs */
-			currchunk = (ValNodePtr)SeqLocFindNext(the_segs, NULL);
+        if (repr == Seq_repr_delta)   /* chain of deltas to follow */
+            currchunk = (ValNodePtr)(bsp->seq_ext);
+        else                          /* seqlocs */
+            currchunk = (ValNodePtr)SeqLocFindNext(the_segs, NULL);
 
         currseg = NULL;
-		ctr = 0;
-		done = FALSE;
-		started = FALSE;
+        ctr = 0;
+        done = FALSE;
+        started = FALSE;
         while ((! done) && (currchunk != NULL))
         {
-			do_multi_loc = FALSE;
-			cycle2 = TRUE;     /* only really needed for complicated 
+            do_multi_loc = FALSE;
+            cycle2 = TRUE;     /* only really needed for complicated 
 delta seq locs */
-			currseg = NULL;
-			if (repr == Seq_repr_delta)
-			{
-				if (currchunk->choice == 1)  /* it's a SeqLocPtr 
+            currseg = NULL;
+            if (repr == Seq_repr_delta)
+            {
+                if (currchunk->choice == 1)  /* it's a SeqLocPtr 
 */
-				{
-					currseg = 
+                {
+                    currseg = 
 (SeqLocPtr)(currchunk->data.ptrvalue);
-					if (! IS_one_loc(currseg, FALSE)) /* 
+                    if (! IS_one_loc(currseg, FALSE)) /* 
 don't do complicated cases here */
-					{
-						do_multi_loc = TRUE;
-						currseg = 
+                    {
+                        do_multi_loc = TRUE;
+                        currseg = 
 SeqLocFindNext((SeqLocPtr)(currchunk->data.ptrvalue), NULL);
-					}
-				}
-				else                         /* it's a SeqLitPtr 
+                    }
+                }
+                else                         /* it's a SeqLitPtr 
 */
-				{
-					currseg = NULL;
-					slitp = 
+                {
+                    currseg = NULL;
+                    slitp = 
 (SeqLitPtr)(currchunk->data.ptrvalue);
-					tlen = slitp->length;
-					tstrand = Seq_strand_plus;
-					tfrom = 0;
-					tto = tlen - 1;
-				}
-			}
-			else
-				currseg = (SeqLocPtr)currchunk;
+                    tlen = slitp->length;
+                    tstrand = Seq_strand_plus;
+                    tfrom = 0;
+                    tto = tlen - 1;
+                }
+            }
+            else
+                currseg = (SeqLocPtr)currchunk;
 
-			while (cycle2)   /* normally once, except for 
+            while (cycle2)   /* normally once, except for 
 complicated delta locs */
-			{
-				if (currseg != NULL)   /* for segs and deltas of 
+            {
+                if (currseg != NULL)   /* for segs and deltas of 
 type loc */
-				{
-					tlen = SeqLocLen(currseg);
-					tstrand = SeqLocStrand(currseg);
-					tfrom = SeqLocStart(currseg);
-					tto = SeqLocStop(currseg);
-				}
-		
-				if (! started)
-				{
-					if ((ctr + tlen - 1) >= start)
-					{
-						tstart = start - ctr;
-						started = TRUE;
-					}
-					else
-						tstart = -1;
-				}
-				else
-					tstart = 0;
+                {
+                    tlen = SeqLocLen(currseg);
+                    tstrand = SeqLocStrand(currseg);
+                    tfrom = SeqLocStart(currseg);
+                    tto = SeqLocStop(currseg);
+                }
+        
+                if (! started)
+                {
+                    if ((ctr + tlen - 1) >= start)
+                    {
+                        tstart = start - ctr;
+                        started = TRUE;
+                    }
+                    else
+                        tstart = -1;
+                }
+                else
+                    tstart = 0;
 
-				if (tstart >= 0)   /* have a start */
-				{
-					if ((ctr + tlen - 1) >= stop)
-					{
-						done = TRUE;   /* hit the end */
-						tstop = ((ctr + tlen - 1) - 
+                if (tstart >= 0)   /* have a start */
+                {
+                    if ((ctr + tlen - 1) >= stop)
+                    {
+                        done = TRUE;   /* hit the end */
+                        tstop = ((ctr + tlen - 1) - 
 stop);
-					}
-					else
-						tstop = 0;
+                    }
+                    else
+                        tstop = 0;
 
-					if (tstrand == Seq_strand_minus)
-					{
-						xfrom = tfrom + tstop;
-						xto = tto - tstart;
-					}
-					else
-					{
-						xfrom = tfrom + tstart;
-						xto = tto - tstop;
-					}
+                    if (tstrand == Seq_strand_minus)
+                    {
+                        xfrom = tfrom + tstop;
+                        xto = tto - tstart;
+                    }
+                    else
+                    {
+                        xfrom = tfrom + tstart;
+                        xto = tto - tstop;
+                    }
 
-					if (currseg != NULL)    /* working off locs */
-					{
-						if (currseg->choice == SEQLOC_NULL)
-						{
-							tbsp = NULL;
-							spps = SeqPortNew(tbsp, xfrom, xto, tstrand, newcode);
-							spps->isa_null = TRUE;
-						}
-						else
-						{
-							tsip = SeqLocId(currseg);
-							tbsp = BioseqLockById(tsip);
-							if (tbsp != NULL)
-								spps = SeqPortNew(tbsp, xfrom, xto, tstrand, newcode);
-							else
-							{
-								spps = NULL;
-								if (tsip != NULL)
-									SeqIdWrite(tsip, idbuf, PRINTID_FASTA_SHORT, 40);
-								else
-									StringMove(idbuf,"seqid=NULL");
-								ErrPostEx(SEV_ERROR,0,0,
-									  "SeqPortNew: %s could not find component %s", 
-									  errbuf, idbuf);
-								return SeqPortFree(spp);
-							}
-						}
+                    if (currseg != NULL)    /* working off locs */
+                    {
+                        if (currseg->choice == SEQLOC_NULL)
+                        {
+                            tbsp = NULL;
+                            spps = SeqPortNew(tbsp, xfrom, xto, tstrand, newcode);
+                            spps->isa_null = TRUE;
+                        }
+                        else
+                        {
+                            tsip = SeqLocId(currseg);
+                            tbsp = BioseqLockById(tsip);
+                            if (tbsp != NULL)
+                                spps = SeqPortNew(tbsp, xfrom, xto, tstrand, newcode);
+                            else
+                            {
+                                spps = NULL;
+                                if (tsip != NULL)
+                                    SeqIdWrite(tsip, idbuf, PRINTID_FASTA_SHORT, 40);
+                                else
+                                    StringMove(idbuf,"seqid=NULL");
+                                ErrPostEx(SEV_ERROR,0,0,
+                                      "SeqPortNew: %s could not find component %s", 
+                                      errbuf, idbuf);
+                                return SeqPortFree(spp);
+                            }
+                        }
 
-					}
-					else
-					{
-						spps = (SeqPortPtr) MemNew(sizeof(SeqPort));
-						SeqPortSetUpFields (spps, xfrom, 
+                    }
+                    else
+                    {
+                        spps = (SeqPortPtr) MemNew(sizeof(SeqPort));
+                        SeqPortSetUpFields (spps, xfrom, 
 xto, tstrand, newcode);
-						SeqPortSetUpAlphabet(spps, 
+                        SeqPortSetUpAlphabet(spps, 
 slitp->seq_data_type, newcode);
-						if (slitp->seq_data != NULL)
-							spps->bp = (ByteStorePtr)
+                        if (slitp->seq_data != NULL)
+                            spps->bp = (ByteStorePtr)
 slitp->seq_data;
-						else
-						{
-							spps->isa_virtual = TRUE;
-						        if (slitp->length == 0)
-								spps->isa_null = TRUE;
-							else
-							{   /* default for delta gaps */
-								spps->do_virtual = TRUE;
-							}
+                        else
+                        {
+                            spps->isa_virtual = TRUE;
+                                if (slitp->length == 0)
+                                spps->isa_null = TRUE;
+                            else
+                            {   /* default for delta gaps */
+                                spps->do_virtual = TRUE;
+                            }
 
-						}
-					}
-		
-			    	if (spps == NULL)
-				    {
-					    ErrPostEx(SEV_ERROR,0,0,
-						 "SeqPortNew: %s unexpected null during recursion", 
-						 		errbuf);
-	            	    return SeqPortFree(spp);
-		            }
+                        }
+                    }
+        
+                    if (spps == NULL)
+                    {
+                        ErrPostEx(SEV_ERROR,0,0,
+                         "SeqPortNew: %s unexpected null during recursion", 
+                                 errbuf);
+                        return SeqPortFree(spp);
+                    }
 
-					if (currseg != NULL)
-						spps->locked = TRUE;
+                    if (currseg != NULL)
+                        spps->locked = TRUE;
 
-    			    if (sppcurr == NULL)
-        			    spp->segs = spps;
-	            	else
-		            	sppcurr->next = spps;
-			        sppcurr = spps;
-				}
+                    if (sppcurr == NULL)
+                        spp->segs = spps;
+                    else
+                        sppcurr->next = spps;
+                    sppcurr = spps;
+                }
 
-				ctr += tlen;
+                ctr += tlen;
 
-				if (! do_multi_loc)
-					cycle2 = FALSE;
-				else
-				{
-					currseg = 
+                if (! do_multi_loc)
+                    cycle2 = FALSE;
+                else
+                {
+                    currseg = 
 SeqLocFindNext((SeqLocPtr)(currchunk->data.ptrvalue), currseg);
-					if (currseg == NULL)
-						cycle2 = FALSE;
-				}
-			}
+                    if (currseg == NULL)
+                        cycle2 = FALSE;
+                }
+            }
 
-			if (repr == Seq_repr_delta)
-				currchunk = currchunk->next;
-			else
-				currchunk = SeqLocFindNext(the_segs, currchunk);
+            if (repr == Seq_repr_delta)
+                currchunk = currchunk->next;
+            else
+                currchunk = SeqLocFindNext(the_segs, currchunk);
         }
         if (strand == Seq_strand_minus)  /* reverse seqport order */
         {
@@ -1081,27 +1081,27 @@ SeqLocFindNext((SeqLocPtr)(currchunk->data.ptrvalue), currseg);
         }
         spp->curr = spp->segs;
 
-		  if (! started)   /* nothing found */
-		  {
-		  	 ErrPostEx(SEV_ERROR,0,0,"SeqPortNew: no data found for %s", 
-		  	 			errbuf);
-			 return SeqPortFree(spp);
-		  }
+          if (! started)   /* nothing found */
+          {
+               ErrPostEx(SEV_ERROR,0,0,"SeqPortNew: no data found for %s", 
+                           errbuf);
+             return SeqPortFree(spp);
+          }
     }
     else if ((repr == Seq_repr_raw) ||   /* sequence not by reference */
         (repr == Seq_repr_const))
     {
         curr_code = BioseqGetCode(bsp);
 
-		SeqPortSetUpAlphabet(spp, curr_code, newcode);
-		spp->bp = (ByteStorePtr) bsp->seq_data;
+        SeqPortSetUpAlphabet(spp, curr_code, newcode);
+        spp->bp = (ByteStorePtr) bsp->seq_data;
 
-	 /* allocate fast lookup caches for 2na or 4na to iupacna or 4na conversion */
+     /* allocate fast lookup caches for 2na or 4na to iupacna or 4na conversion */
 
-		if ((newcode == Seq_code_iupacna || newcode == Seq_code_ncbi4na) &&
-		    (curr_code == Seq_code_ncbi2na || curr_code == Seq_code_ncbi4na)) {
-		    spp->cacheq = (SPCacheQPtr) MemNew (sizeof (SPCacheQ));
-		}
+        if ((newcode == Seq_code_iupacna || newcode == Seq_code_ncbi4na) &&
+            (curr_code == Seq_code_ncbi2na || curr_code == Seq_code_ncbi4na)) {
+            spp->cacheq = (SPCacheQPtr) MemNew (sizeof (SPCacheQ));
+        }
 
     }
 
@@ -1120,31 +1120,31 @@ NLM_EXTERN SeqPortPtr SeqPortNewByLoc (SeqLocPtr loc, Uint1 code)
 
 {
     BioseqPtr bsp = NULL;
-	SeqPortPtr spp = NULL, sppcurr, spps;
+    SeqPortPtr spp = NULL, sppcurr, spps;
     Int4 start = 0, stop = 0;
     Uint1 strand = Seq_strand_unknown;
-	SeqLocPtr currloc = NULL;
-	CharPtr locptr, currlocptr;
+    SeqLocPtr currloc = NULL;
+    CharPtr locptr, currlocptr;
 
     if (loc == NULL)
         return spp;
 
-	               /* get the needed components */
+                   /* get the needed components */
 
-	switch (loc->choice)
-	{
+    switch (loc->choice)
+    {
         case SEQLOC_INT:      /* int */
         case SEQLOC_PNT:      /* pnt */
         case SEQLOC_PACKED_PNT:      /* packed-pnt   */
-		    start = SeqLocStart(loc);
-		    stop = SeqLocStop(loc);
-		    strand = SeqLocStrand(loc);
+            start = SeqLocStart(loc);
+            stop = SeqLocStop(loc);
+            strand = SeqLocStrand(loc);
         case SEQLOC_WHOLE:      /* whole */
-			bsp = BioseqLockById(SeqLocId(loc));  /* need the bioseq 
+            bsp = BioseqLockById(SeqLocId(loc));  /* need the bioseq 
 now */
-			if (bsp == NULL)
-				return NULL;    /* can't do it */
-	}
+            if (bsp == NULL)
+                return NULL;    /* can't do it */
+    }
 
 
 
@@ -1153,70 +1153,70 @@ now */
         case SEQLOC_EMPTY:      /* empty */
         case SEQLOC_EQUIV:     /* equiv */
         case SEQLOC_BOND:      /* bond */
-			break;
+            break;
 
         case SEQLOC_NULL:      /* null */
-			spp = SeqPortNew(NULL, FIRST_RESIDUE, LAST_RESIDUE, 0, 
+            spp = SeqPortNew(NULL, FIRST_RESIDUE, LAST_RESIDUE, 0, 
 code);
-			spp->isa_null = TRUE;
-			break;
+            spp->isa_null = TRUE;
+            break;
 
         case SEQLOC_WHOLE:      /* whole */
-    		spp = SeqPortNew(bsp, FIRST_RESIDUE, LAST_RESIDUE, 0, code);
-			if (spp != NULL)
-				spp->locked = TRUE;
-			else
-				BioseqUnlock(bsp);
-			break;
+            spp = SeqPortNew(bsp, FIRST_RESIDUE, LAST_RESIDUE, 0, code);
+            if (spp != NULL)
+                spp->locked = TRUE;
+            else
+                BioseqUnlock(bsp);
+            break;
 
         case SEQLOC_INT:      /* int */
         case SEQLOC_PNT:      /* pnt */
         case SEQLOC_PACKED_PNT:      /* packed-pnt   */
-    		spp = SeqPortNew(bsp, start, stop, strand, code);
-			if (spp != NULL)
-				spp->locked = TRUE;
-			else
-				BioseqUnlock(bsp);
-			break;
+            spp = SeqPortNew(bsp, start, stop, strand, code);
+            if (spp != NULL)
+                spp->locked = TRUE;
+            else
+                BioseqUnlock(bsp);
+            break;
 
         case SEQLOC_PACKED_INT:      /* packed seqint */
         case SEQLOC_MIX:      /* mix */
-		    spp = (SeqPortPtr) MemNew(sizeof(SeqPort));
-		    spp->totlen = SeqLocLen(loc);
-		    spp->start = 0;
-		    spp->stop = spp->totlen - 1;
-		    spp->curpos = -1;    /* not set */
-        	spp->currnum = NULL;   /* use numbering from parts */
-	        currloc = NULL;
-			sppcurr = NULL;
-    	    while ((currloc = SeqLocFindNext(loc, currloc)) != NULL)
-        	{
-            	spps = SeqPortNewByLoc(currloc, code);
-	            if (spps == NULL)
-    	        {
-					locptr = SeqLocPrint(loc);
-					currlocptr = SeqLocPrint(currloc);
-			        ErrPostEx(SEV_ERROR, 0,0  ,
-		"SeqPortNewByLoc unexpected null during recursion [loc=%s][curr=%s]",
-					locptr, currlocptr);
-					MemFree(locptr);
-					MemFree(currlocptr);
-					SeqPortFree(spp);
-            	    return NULL;
-	            }
-	            if (sppcurr == NULL)
-    	            spp->segs = spps;
-        	    else
-            	    sppcurr->next = spps;
-	            sppcurr = spps;
-	        }
-    	    spp->curr = spp->segs;
+            spp = (SeqPortPtr) MemNew(sizeof(SeqPort));
+            spp->totlen = SeqLocLen(loc);
+            spp->start = 0;
+            spp->stop = spp->totlen - 1;
+            spp->curpos = -1;    /* not set */
+            spp->currnum = NULL;   /* use numbering from parts */
+            currloc = NULL;
+            sppcurr = NULL;
+            while ((currloc = SeqLocFindNext(loc, currloc)) != NULL)
+            {
+                spps = SeqPortNewByLoc(currloc, code);
+                if (spps == NULL)
+                {
+                    locptr = SeqLocPrint(loc);
+                    currlocptr = SeqLocPrint(currloc);
+                    ErrPostEx(SEV_ERROR, 0,0  ,
+        "SeqPortNewByLoc unexpected null during recursion [loc=%s][curr=%s]",
+                    locptr, currlocptr);
+                    MemFree(locptr);
+                    MemFree(currlocptr);
+                    SeqPortFree(spp);
+                    return NULL;
+                }
+                if (sppcurr == NULL)
+                    spp->segs = spps;
+                else
+                    sppcurr->next = spps;
+                sppcurr = spps;
+            }
+            spp->curr = spp->segs;
             break;
         case SEQLOC_FEAT:
-	        ErrPostEx(SEV_ERROR, 0,0  ,
-				 "SeqLocNewByLoc: Seq-loc.feat not supported");
+            ErrPostEx(SEV_ERROR, 0,0  ,
+                 "SeqLocNewByLoc: Seq-loc.feat not supported");
             break;
-	}
+    }
 
     SeqPortAdjustLength (spp);
     SeqPortSeek(spp, 0, SEEK_SET);
@@ -1237,32 +1237,32 @@ code);
 static void ClearQCache (SeqPortPtr spp, Int4 sp)
 
 {
-	SPCacheQPtr spcpq;
+    SPCacheQPtr spcpq;
 
-	spcpq = spp->cacheq;
-	if (spcpq != NULL) {
-		spcpq->ctr = 0;
-		spcpq->total = 0; /* clear out cache parameters to force new read */
-	}
-	spp->curpos = sp;
-	spp->byte = SEQPORT_EOF;
+    spcpq = spp->cacheq;
+    if (spcpq != NULL) {
+        spcpq->ctr = 0;
+        spcpq->total = 0; /* clear out cache parameters to force new read */
+    }
+    spp->curpos = sp;
+    spp->byte = SEQPORT_EOF;
 }
 
 NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
 
 {
-	Int4 sp, curpos, left, pos, lim, diff;
-	Boolean plus_strand;
+    Int4 sp, curpos, left, pos, lim, diff;
+    Boolean plus_strand;
     Uint1 the_byte, the_residue;
     Int2 bitctr;
     SeqPortPtr curspp;
-	Uint1Ptr buf;
-	SPCachePtr spcp;
+    Uint1Ptr buf;
+    SPCachePtr spcp;
 
     if (spp == NULL)
         return 1;
 
-	spp->eos = FALSE;   /* unset flag set when moving off segment */
+    spp->eos = FALSE;   /* unset flag set when moving off segment */
 
                                 /* get position as positive offset from 0 */
     if (spp->strand == Seq_strand_minus)
@@ -1271,40 +1271,40 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
         plus_strand = TRUE;
 
     sp = spp->curpos;    /* current offset, 0 - (totlen - 1)  */
-	switch (origin)
-	{
-		case SEEK_SET:
-			spp->backing = FALSE;  /* reset.. not backing */
-			if ((offset > spp->totlen) || (offset < 0)) {
-				ClearQCache (spp, sp);
-				return 1;
-			}
-			sp = offset;
-			break;
-		case SEEK_CUR:
-			if (((sp + offset) > spp->totlen) ||
-				((sp + offset) < 0 ))
+    switch (origin)
+    {
+        case SEEK_SET:
+            spp->backing = FALSE;  /* reset.. not backing */
+            if ((offset > spp->totlen) || (offset < 0)) {
+                ClearQCache (spp, sp);
+                return 1;
+            }
+            sp = offset;
+            break;
+        case SEEK_CUR:
+            if (((sp + offset) > spp->totlen) ||
+                ((sp + offset) < 0 ))
             {
-		/** check for reverse complement backing **/
-		if ((sp + offset < 0) && (offset == -2)) 
-		{
-			if (spp->backing == 1)
-			{
-				ClearQCache(spp, -1);
-				spp->eos = TRUE; /* note backing off segment */
-				return 0;
-			}
-			if (spp->curpos == -1)  /* not set */
-				return 0;
-		}
+        /** check for reverse complement backing **/
+        if ((sp + offset < 0) && (offset == -2)) 
+        {
+            if (spp->backing == 1)
+            {
+                ClearQCache(spp, -1);
+                spp->eos = TRUE; /* note backing off segment */
+                return 0;
+            }
+            if (spp->curpos == -1)  /* not set */
+                return 0;
+        }
 
                 if (! spp->is_circle) {
-                	ClearQCache (spp, sp);
-    				return 1;
-    			}
+                    ClearQCache (spp, sp);
+                    return 1;
+                }
             }
             else
-    			sp += offset;
+                sp += offset;
             if (spp->is_circle)
             {
                 while (sp >= spp->totlen)   /* circle adjustments */
@@ -1312,80 +1312,80 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
                 while (sp < 0)
                     sp += spp->totlen;
             }
-			break;
-		case SEEK_END:
-			if ((ABS(offset) > spp->totlen) || (offset > 0)) {
-				ClearQCache (spp, sp);
-				return 1;
-			}
-			sp = spp->totlen + offset;
-			break;
-		default:
-			ClearQCache (spp, sp);
-			return 1;
-	}
+            break;
+        case SEEK_END:
+            if ((ABS(offset) > spp->totlen) || (offset > 0)) {
+                ClearQCache (spp, sp);
+                return 1;
+            }
+            sp = spp->totlen + offset;
+            break;
+        default:
+            ClearQCache (spp, sp);
+            return 1;
+    }
 
     if (sp == spp->curpos)     /* already in right position */
         return 0;
 
-	if (sp == spp->totlen)    /* seek to EOF */
-	{
+    if (sp == spp->totlen)    /* seek to EOF */
+    {
         spp->curpos = sp;
         spp->byte = SEQPORT_EOF;    /* set to nothing */
-		ClearQCache (spp, sp);
+        ClearQCache (spp, sp);
         return 0;
     }
 
     if (spp->oldcode)       /* has data, is raw or const type */
     {
 
-		/* if 2na or 4na to iupacna, now only need fast lookup caches */
-		if (spp->cacheq != NULL) {
-			ClearQCache (spp, sp);
-			return 0; /* bypass remaining code */
-		}
+        /* if 2na or 4na to iupacna, now only need fast lookup caches */
+        if (spp->cacheq != NULL) {
+            ClearQCache (spp, sp);
+            return 0; /* bypass remaining code */
+        }
 
-	/* original code using cache direct from byte store */
+    /* original code using cache direct from byte store */
 
-		if (spp->cache == NULL)     /* allocate a cache */
-			spp->cache = (SPCachePtr)MemNew(sizeof(SPCache));
-		spcp = spp->cache;
-		buf = spcp->buf;
+        if (spp->cache == NULL)     /* allocate a cache */
+            spp->cache = (SPCachePtr)MemNew(sizeof(SPCache));
+        spcp = spp->cache;
+        buf = spcp->buf;
 
         if (plus_strand)
-		{
+        {
             curpos = sp + spp->start;
-			pos = curpos / (Int4) (spp->bc);
-			lim = spp->stop / (Int4) (spp->bc);
-			diff = lim - pos + 1;
-			if (diff > 100)
-			{
-				diff = 100;
-				lim = pos + diff - 1;
-			}
-			BSSeek(spp->bp, pos, SEEK_SET);
-			spcp->total = (Int2) BSRead(spp->bp, (VoidPtr)buf, 
+            pos = curpos / (Int4) (spp->bc);
+            lim = spp->stop / (Int4) (spp->bc);
+            diff = lim - pos + 1;
+            if (diff > 100)
+            {
+                diff = 100;
+                lim = pos + diff - 1;
+            }
+            BSSeek(spp->bp, pos, SEEK_SET);
+            spcp->total = (Int2) BSRead(spp->bp, (VoidPtr)buf, 
 diff);
-			spcp->ctr = 0;
-			spp->bytepos = lim;
-		}
+            spcp->ctr = 0;
+            spp->bytepos = lim;
+        }
         else
-		{
+        {
             curpos = spp->stop - sp;
-			pos = curpos / (Int4) (spp->bc);
-			lim = spp->start / (Int4) (spp->bc);
-			diff = pos - lim + 1;
-			if (diff > 100)
-			{
-				diff = 100;
-				lim = pos - diff + 1;
-			}
-			BSSeek(spp->bp, lim, SEEK_SET);
-			spcp->total = (Int2) BSRead(spp->bp, (VoidPtr)buf, 
+            pos = curpos / (Int4) (spp->bc);
+            lim = spp->start / (Int4) (spp->bc);
+            diff = pos - lim + 1;
+            if (diff > 100)
+            {
+                diff = 100;
+                lim = pos - diff + 1;
+            }
+            BSSeek(spp->bp, lim, SEEK_SET);
+            spcp->total = (Int2) BSRead(spp->bp, (VoidPtr)buf, 
 diff);
-			spcp->ctr = (Int2)(diff - 1);
-			spp->bytepos = lim;
-		}
+            spcp->ctr = (Int2)(diff - 1);
+            spp->bytepos = lim;
+        }
         left = curpos % (Int4) (spp->bc);
         the_byte = spcp->buf[spcp->ctr];
         if ((plus_strand) || (spp->bc == 1))
@@ -1399,11 +1399,11 @@ diff);
             {
                 the_residue |= the_byte & spp->mask;
                 bitctr--;
-				if (bitctr)
-				{
-	                the_residue >>= spp->lshift;
-    	            the_byte <<= spp->lshift;
-				}
+                if (bitctr)
+                {
+                    the_residue >>= spp->lshift;
+                    the_byte <<= spp->lshift;
+                }
             }
         }
         bitctr = spp->bc;
@@ -1414,7 +1414,7 @@ diff);
         }
         spp->byte = the_residue;
         spp->bitctr = (Uint1) bitctr;
-    	spp->curpos = sp;
+        spp->curpos = sp;
         return 0;
     }
     else if ((spp->isa_virtual) || (spp->isa_null))   /* virtual or NULL */
@@ -1425,19 +1425,19 @@ diff);
     else                    /* segmented, reference sequences */
     {
  
-		if (spp->backing == 1)  /* check for backing off segment */
-		{
-			if ((spp->curr->curpos == 1) &&
-			    (! spp->curr->backing))  /* yup */
-			{
-				spp->curr->curpos = -1;  /* just set the flag */
-				spp->curpos -= 2;
-				return 0;                /* no eos needed, -1 
+        if (spp->backing == 1)  /* check for backing off segment */
+        {
+            if ((spp->curr->curpos == 1) &&
+                (! spp->curr->backing))  /* yup */
+            {
+                spp->curr->curpos = -1;  /* just set the flag */
+                spp->curpos -= 2;
+                return 0;                /* no eos needed, -1 
 will do */
-			}
-		}
+            }
+        }
 
-		curpos = 0;
+        curpos = 0;
         curspp = spp->segs;
         if (curspp == NULL) return 1;
         while ((curpos + curspp->totlen) <= sp)
@@ -1451,19 +1451,19 @@ will do */
             curpos = sp - curpos;
         else
             curpos = (curspp->totlen - 1) - (sp - curpos);
-		curspp->backing = spp->backing;
+        curspp->backing = spp->backing;
         if (! SeqPortSeek(curspp, curpos, SEEK_SET))
         {
-			curspp->backing = FALSE;
+            curspp->backing = FALSE;
             spp->curr = curspp;
-        	spp->curpos = sp;
+            spp->curpos = sp;
             return 0;
         }
         else
-		{
-			curspp->backing = FALSE;
+        {
+            curspp->backing = FALSE;
             return 1;
-		}
+        }
     }
 }
 
@@ -1612,34 +1612,34 @@ NLM_EXTERN Uint1 LIBCALL SeqPortGetResidue (SeqPortPtr spp)
     Uint1 residue = INVALID_RESIDUE, the_byte, the_residue, the_code;
     Boolean plus_strand = TRUE, moveup;
     Int2 bitctr, index;
-	Int4 pos, lim, diff;
-	SPCachePtr spcp;
-	SeqPortPtr tmp, prev;
-	SPCacheQPtr spcpq;
+    Int4 pos, lim, diff;
+    SPCachePtr spcp;
+    SeqPortPtr tmp, prev;
+    SPCacheQPtr spcpq;
 
-	if (spp != NULL)
-		spp->backing = FALSE;  /* clear it on read */
+    if (spp != NULL)
+        spp->backing = FALSE;  /* clear it on read */
 
-	if (spp != NULL && spp->cacheq != NULL && spp->curpos < spp->totlen) {
-		spcpq = spp->cacheq;
-		if (spcpq->ctr < spcpq->total) {
-			residue = spcpq->buf [spcpq->ctr];
-			spcpq->ctr++;
-			spp->curpos++;
-			return residue;
-		}
-	}
+    if (spp != NULL && spp->cacheq != NULL && spp->curpos < spp->totlen) {
+        spcpq = spp->cacheq;
+        if (spcpq->ctr < spcpq->total) {
+            residue = spcpq->buf [spcpq->ctr];
+            spcpq->ctr++;
+            spp->curpos++;
+            return residue;
+        }
+    }
 
     if ((spp == NULL) || ((spp->bp == NULL) && (spp->oldcode)))
         return SEQPORT_EOF;
 
-	if (spp->isa_null) { /* NULL interval */
-		spp->eos = TRUE; /* moving off the segment */
-		return SEQPORT_VIRT;
-	}
+    if (spp->isa_null) { /* NULL interval */
+        spp->eos = TRUE; /* moving off the segment */
+        return SEQPORT_VIRT;
+    }
 
-	if (spp->eos)       /* end of reverse complement spp */
-		return SEQPORT_EOF;
+    if (spp->eos)       /* end of reverse complement spp */
+        return SEQPORT_EOF;
 
     if (spp->curpos == spp->totlen)
     {
@@ -1653,7 +1653,7 @@ NLM_EXTERN Uint1 LIBCALL SeqPortGetResidue (SeqPortPtr spp)
             return SEQPORT_EOF;         /* EOF really */
     }
  
-    if (spp->curpos == -1)		/* backed off end */
+    if (spp->curpos == -1)        /* backed off end */
     {
         if (spp->is_circle)
         {
@@ -1684,51 +1684,51 @@ NLM_EXTERN Uint1 LIBCALL SeqPortGetResidue (SeqPortPtr spp)
         {
             if (spp->bitctr == 0)
             {
-				spcp = spp->cache;
+                spcp = spp->cache;
                 if (! plus_strand) /* need previous byte */
-				{
-					spcp->ctr--;
-					if (spcp->ctr < 0)
-					{
-						pos = spp->bytepos - 1;
-						lim = spp->start / 
+                {
+                    spcp->ctr--;
+                    if (spcp->ctr < 0)
+                    {
+                        pos = spp->bytepos - 1;
+                        lim = spp->start / 
 (Int4)(spp->bc);
-						diff = pos - lim + 1;
-						if (diff > 100)
-						{
-							diff = 100;
-							lim = pos - 100 + 1;
-						}
-						BSSeek(spp->bp, lim, SEEK_SET);
-						spcp->total = 
+                        diff = pos - lim + 1;
+                        if (diff > 100)
+                        {
+                            diff = 100;
+                            lim = pos - 100 + 1;
+                        }
+                        BSSeek(spp->bp, lim, SEEK_SET);
+                        spcp->total = 
 (Int2)BSRead(spp->bp, (VoidPtr)(spcp->buf), diff);
-						spcp->ctr = (Int2)(diff - 1);
-						spp->bytepos = lim;
-					}
-				}
-				else				/* need next 
+                        spcp->ctr = (Int2)(diff - 1);
+                        spp->bytepos = lim;
+                    }
+                }
+                else                /* need next 
 byte */
-				{
-					spcp->ctr++;
-					if (spcp->ctr >= spcp->total)
-					{
-						pos = spp->bytepos + 1;
-						lim = spp->stop / 
+                {
+                    spcp->ctr++;
+                    if (spcp->ctr >= spcp->total)
+                    {
+                        pos = spp->bytepos + 1;
+                        lim = spp->stop / 
 (Int4)(spp->bc);
-						diff = lim - pos + 1;
-						if (diff > 100)
-						{
-							diff = 100;
-							lim = pos + diff - 1;
-						}
-						BSSeek(spp->bp, pos, SEEK_SET);
-						spcp->total = 
+                        diff = lim - pos + 1;
+                        if (diff > 100)
+                        {
+                            diff = 100;
+                            lim = pos + diff - 1;
+                        }
+                        BSSeek(spp->bp, pos, SEEK_SET);
+                        spcp->total = 
 (Int2)BSRead(spp->bp, (VoidPtr)(spcp->buf), diff);
-						spcp->ctr = 0;
-						spp->bytepos = lim;
-					}
-				}
-				the_byte = spcp->buf[spcp->ctr];
+                        spcp->ctr = 0;
+                        spp->bytepos = lim;
+                    }
+                }
+                the_byte = spcp->buf[spcp->ctr];
 
                 if ((plus_strand) || (spp->bc == 1))
                     the_residue = the_byte;
@@ -1740,11 +1740,11 @@ byte */
                     {
                         the_residue |= the_byte & spp->mask;
                         bitctr--;
-						if (bitctr)
-						{
-	                        the_residue >>= spp->lshift;
-    	                    the_byte <<= spp->lshift;
-						}
+                        if (bitctr)
+                        {
+                            the_residue >>= spp->lshift;
+                            the_byte <<= spp->lshift;
+                        }
                     }       
                 }
                 spp->byte = the_residue;
@@ -1752,123 +1752,123 @@ byte */
             }
         }
 
-		if (spp->smtp == NULL)   /* no conversion, check now */
-		{
-			index = (Int2)residue - (Int2)(spp->sctp->start_at);
-			if ((index < 0) || (index >= (Int2)(spp->sctp->num)))
-				residue = INVALID_RESIDUE;
-			else if (*(spp->sctp->names[index]) == '\0')
-				residue = INVALID_RESIDUE;
-		}
+        if (spp->smtp == NULL)   /* no conversion, check now */
+        {
+            index = (Int2)residue - (Int2)(spp->sctp->start_at);
+            if ((index < 0) || (index >= (Int2)(spp->sctp->num)))
+                residue = INVALID_RESIDUE;
+            else if (*(spp->sctp->names[index]) == '\0')
+                residue = INVALID_RESIDUE;
+        }
     }
     else if (spp->isa_virtual)  /* virtual */
     {
         if (spp->do_virtual)
         {
-			if (spp->newcode)
-				the_code = spp->newcode;
-			else
-				the_code = spp->oldcode;
-			if (spp->gapIsZero && the_code == Seq_code_ncbi4na) {
-				residue = 0;
-			} else {
-				residue = GetGapCode (the_code);
-			}
-			spp->curpos++;
-			return residue;
+            if (spp->newcode)
+                the_code = spp->newcode;
+            else
+                the_code = spp->oldcode;
+            if (spp->gapIsZero && the_code == Seq_code_ncbi4na) {
+                residue = 0;
+            } else {
+                residue = GetGapCode (the_code);
+            }
+            spp->curpos++;
+            return residue;
         }
         else
         {
-			spp->curpos++;
+            spp->curpos++;
             return SEQPORT_VIRT;
         }
     }
     else              /* segmented or reference sequence */
     {
-    	residue = SeqPortGetResidue(spp->curr);
+        residue = SeqPortGetResidue(spp->curr);
         while (! IS_residue(residue))
         {
             /* spp->curr->eos = FALSE;  just in case was set */
-			moveup = FALSE;
+            moveup = FALSE;
 
-			switch (residue)
-			{
-				case SEQPORT_VIRT:
-				case SEQPORT_EOS:
-					if (spp->curr->segs == NULL)  /* this 
+            switch (residue)
+            {
+                case SEQPORT_VIRT:
+                case SEQPORT_EOS:
+                    if (spp->curr->segs == NULL)  /* this 
 did not come up a layer */
-						moveup = TRUE;
-					break;
-				case SEQPORT_EOF:
-					moveup = TRUE;
-					break;
-				default:
-					break;
-			}
+                        moveup = TRUE;
+                    break;
+                case SEQPORT_EOF:
+                    moveup = TRUE;
+                    break;
+                default:
+                    break;
+            }
 
-			if (moveup)
-			{
-				if ((spp->curr->curpos == -1) && (! 
+            if (moveup)
+            {
+                if ((spp->curr->curpos == -1) && (! 
 spp->curr->eos))   /* moving backwards, many layers deep */
-				{
-					prev = NULL;
-					for (tmp = spp->segs; tmp != spp->curr; 
+                {
+                    prev = NULL;
+                    for (tmp = spp->segs; tmp != spp->curr; 
 tmp = tmp->next)
-						prev = tmp;
-					if (prev != NULL)
-						spp->curr = prev;
-					else if (spp->is_circle)  /* go to end 
+                        prev = tmp;
+                    if (prev != NULL)
+                        spp->curr = prev;
+                    else if (spp->is_circle)  /* go to end 
 */
-					{
-						for (tmp = spp->segs; tmp->next 
+                    {
+                        for (tmp = spp->segs; tmp->next 
 != NULL; tmp = tmp->next)
-							continue;
-						spp->curr = tmp;
-					}
-					else
-						return SEQPORT_EOF;
+                            continue;
+                        spp->curr = tmp;
+                    }
+                    else
+                        return SEQPORT_EOF;
 
-					if (! plus_strand)
-						SeqPortSeek(spp->curr, 0, 
+                    if (! plus_strand)
+                        SeqPortSeek(spp->curr, 0, 
 SEEK_SET);
-					else if (! (spp->curr->isa_null))
-						SeqPortSeek(spp->curr, -1, 
+                    else if (! (spp->curr->isa_null))
+                        SeqPortSeek(spp->curr, -1, 
 SEEK_END);
-					else
-						spp->curr->curpos = -1;   /* 
+                    else
+                        spp->curr->curpos = -1;   /* 
 flag the null for next time around */
-				}
-				else                           /* moving 
+                }
+                else                           /* moving 
 forwards */
-				{
-					if (spp->curr->next != NULL)
-						spp->curr = spp->curr->next;
-					else if (spp->is_circle)
-						spp->curr = spp->segs;
-					else
-						return SEQPORT_EOF;
+                {
+                    if (spp->curr->next != NULL)
+                        spp->curr = spp->curr->next;
+                    else if (spp->is_circle)
+                        spp->curr = spp->segs;
+                    else
+                        return SEQPORT_EOF;
 
-					if (plus_strand)
-						SeqPortSeek(spp->curr, 0, 
+                    if (plus_strand)
+                        SeqPortSeek(spp->curr, 0, 
 SEEK_SET);
-					else
-						SeqPortSeek(spp->curr, -1, 
+                    else
+                        SeqPortSeek(spp->curr, -1, 
 SEEK_END);
-				}
+                }
 
-				if (spp->is_seg)
-					return SEQPORT_EOS;
-			}
+                if (spp->is_seg)
+                    return SEQPORT_EOS;
+            }
 
-			if ((residue == SEQPORT_VIRT) || (residue == 
+            if ((residue == SEQPORT_VIRT) || (residue == 
 INVALID_RESIDUE))
-				return residue;
-			residue = SeqPortGetResidue(spp->curr);
+                return residue;
+            residue = SeqPortGetResidue(spp->curr);
         }
 
         if (! plus_strand)
         {
-			spp->curr->backing++;     /* signal we are backing 
+            spp->curr->backing++;     /* signal we are backing 
 up */
             if (SeqPortSeek(spp->curr, -2, SEEK_CUR))  /* back up to "next" */
                 spp->curr->eos = TRUE;
@@ -1882,48 +1882,48 @@ up */
     if (! plus_strand)
         residue = SeqCodeTableComp(spp->sctp, residue);
 
-	spp->curpos++;
+    spp->curpos++;
     return residue;
 }
 
 /*****************************************************************************
 *
 *   GetGapCode(seqcode)
-*   	returns code to use for virtual sequence residues for sequence
+*       returns code to use for virtual sequence residues for sequence
 *         code seqcode
 *       returns INVALID_RESIDUE if seqcode invalid
 *
 *****************************************************************************/
 NLM_EXTERN Uint1 GetGapCode (Uint1 seqcode)
 {
-	Uint1 residue = INVALID_RESIDUE;
-	
-	switch (seqcode)
-	{
-		case Seq_code_iupacna:
-			residue = 'N';
-			break;
-		case Seq_code_iupacaa:
-		case Seq_code_ncbieaa:
-			residue = 'X';
-			break;
-		case Seq_code_ncbi2na:    /* there isn't ambiguity */
-			break;
-		case Seq_code_ncbi8na:
-		case Seq_code_ncbi4na:
-			residue = 15;
-			break;
-		case Seq_code_iupacaa3:  /* no 1 letter character */
-		case Seq_code_ncbipna:
-		case Seq_code_ncbipaa:
-			break;
-		case Seq_code_ncbistdaa:
-			residue = 21;
-			break;
+    Uint1 residue = INVALID_RESIDUE;
+    
+    switch (seqcode)
+    {
+        case Seq_code_iupacna:
+            residue = 'N';
+            break;
+        case Seq_code_iupacaa:
+        case Seq_code_ncbieaa:
+            residue = 'X';
+            break;
+        case Seq_code_ncbi2na:    /* there isn't ambiguity */
+            break;
+        case Seq_code_ncbi8na:
+        case Seq_code_ncbi4na:
+            residue = 15;
+            break;
+        case Seq_code_iupacaa3:  /* no 1 letter character */
+        case Seq_code_ncbipna:
+        case Seq_code_ncbipaa:
+            break;
+        case Seq_code_ncbistdaa:
+            residue = 21;
+            break;
 
-	}
+    }
 
-	return residue;
+    return residue;
 }
 
 
@@ -2012,7 +2012,7 @@ NLM_EXTERN Int2 LIBCALL SeqPortRead (SeqPortPtr spp, Uint1Ptr buf, Int2 len)
 }
 
 /*******************************************************************************
-*	
+*    
 *   SeqPortStream (bsp, flags, userdata, proc)
 *   SeqPortStreamInt (bsp, start, stop, strand, flags, userdata, proc)
 *   SeqPortStreamLoc (slp, flags, userdata, proc)
@@ -2470,6 +2470,8 @@ static Int4 SeqPortStreamSeqLoc (
 
   if (slp == NULL || sdp == NULL) return 0;
 
+  if (start < 0 || stop < 0) return 0;
+
   sip = SeqLocId (slp);
   if (sip == NULL) return 0;
 
@@ -2922,7 +2924,12 @@ static Int4 SeqPortStreamWork (
     stop = bsp->length - 1;
   }
 
-  if (start >= bsp->length || stop >= bsp->length) return 0;
+  /* if start or stop are beyond sequence length, set failed flag */
+
+  if (start >= bsp->length || stop >= bsp->length) {
+    sdp->failed = TRUE;
+    return 0;
+  }
 
   if (start > stop) return 0;
 
@@ -3071,6 +3078,11 @@ static Int4 SeqPortStreamSetup (
       to = SeqLocStop (slp);
       strand = SeqLocStrand (slp);
 
+      if (from < 0 || to < 0) {
+        sd.failed = TRUE;
+        return -1;
+      }
+
       count += SeqPortStreamSeqLoc (slp, from, to, strand, &sd, NULL);
 
       slp = SeqLocFindNext (loc, slp);
@@ -3126,7 +3138,7 @@ NLM_EXTERN Int4 SeqPortStreamLoc (
 }
 
 /*******************************************************************************
-*	
+*    
 *   StreamCacheSetup (bsp, slp, flags, scp)
 *   StreamCacheGetResidue (scp)
 *   StreamCacheSetPosition (scp, pos)
@@ -3165,6 +3177,7 @@ static Boolean StreamCacheRefreshBuffer (
 
 {
   Bioseq         bsq;
+  Int4           count;
   StreamFlgType  flags;
   SeqLocPtr      loc;
   SeqLoc         sl;
@@ -3196,8 +3209,11 @@ static Boolean StreamCacheRefreshBuffer (
 
     if (scp->bsp != NULL) {
 
-      SeqPortStreamInt (scp->bsp, scp->offset, stop - 1, Seq_strand_plus,
-                        flags, (Pointer) &(scp->buf), NULL);
+      count = SeqPortStreamInt (scp->bsp, scp->offset, stop - 1, Seq_strand_plus,
+                                flags, (Pointer) &(scp->buf), NULL);
+      if (count < 0) {
+        scp->failed = TRUE;
+      }
 
     } else if (scp->slp != NULL) {
 
@@ -3326,9 +3342,9 @@ NLM_EXTERN Boolean StreamCacheSetPosition (
 }
 
 /*******************************************************************************
-*	
-*	ProteinFromCdRegionEx ( SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
-*		replacement for old ProteinFromCdRegionEx, but using TransTableTranslateCdRegion. 
+*    
+*    ProteinFromCdRegionEx ( SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
+*        replacement for old ProteinFromCdRegionEx, but using TransTableTranslateCdRegion. 
 *
 ********************************************************************************/
 
@@ -3461,7 +3477,7 @@ NLM_EXTERN Uint1 AAForCodon (Uint1Ptr codon, CharPtr codes);
 /*****************************************************************************
 *
 *   ProteinFromCdRegion(sfp, include_stop)
-*   	produces a ByteStorePtr containing the protein sequence in
+*       produces a ByteStorePtr containing the protein sequence in
 *   ncbieaa code for the CdRegion sfp.  If include_stop, will translate
 *   through stop codons.  If NOT include_stop, will stop at first stop
 *   codon and return the protein sequence NOT including the terminating
@@ -3471,7 +3487,7 @@ NLM_EXTERN Uint1 AAForCodon (Uint1Ptr codon, CharPtr codes);
 *****************************************************************************/
 NLM_EXTERN ByteStorePtr ProteinFromCdRegion(SeqFeatPtr sfp, Boolean include_stop)
 {
-	return ProteinFromCdRegionEx(sfp, include_stop, TRUE);
+    return ProteinFromCdRegionEx(sfp, include_stop, TRUE);
 }
 
 
@@ -3479,280 +3495,280 @@ NLM_EXTERN ByteStorePtr ProteinFromCdRegion(SeqFeatPtr sfp, Boolean include_stop
 
 #if 0
 /*******************************************************************************
-*	
-*	ProteinFromCdRegionEx( SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
-*		same behavior as ProteinFromCdRegion, but another Boolean remove_trailingX
-*	specifies whether trailing X's should be removed. 
+*    
+*    ProteinFromCdRegionEx( SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
+*        same behavior as ProteinFromCdRegion, but another Boolean remove_trailingX
+*    specifies whether trailing X's should be removed. 
 *
 ********************************************************************************/
 
 NLM_EXTERN ByteStorePtr Old_ProteinFromCdRegionEx (SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
 {
-	SeqPortPtr spp = NULL;
-	ByteStorePtr bs = NULL;
-	Uint1 residue = 0;
-	Int4 pos1, pos2, pos, len;
-	Int4Ptr the_breaks = NULL;
-	Uint1Ptr the_residues = NULL;
-	Int2 num_code_break = 0, use_break;
-	SeqLocPtr tmp;
-	Int2 i;
-	Uint1 codon[3], aa;
-	CdRegionPtr crp;
-	ValNodePtr vnp;
-	GeneticCodePtr gcp;
-	CharPtr vals, codes;
-	CodeBreakPtr cbp;
-	Boolean bad_base, no_start, check_start, got_stop;
-	Uint2 part_prod = 0, part_loc = 0;
-	Boolean incompleteLastCodon;
+    SeqPortPtr spp = NULL;
+    ByteStorePtr bs = NULL;
+    Uint1 residue = 0;
+    Int4 pos1, pos2, pos, len;
+    Int4Ptr the_breaks = NULL;
+    Uint1Ptr the_residues = NULL;
+    Int2 num_code_break = 0, use_break;
+    SeqLocPtr tmp;
+    Int2 i;
+    Uint1 codon[3], aa;
+    CdRegionPtr crp;
+    ValNodePtr vnp;
+    GeneticCodePtr gcp;
+    CharPtr vals, codes;
+    CodeBreakPtr cbp;
+    Boolean bad_base, no_start, check_start, got_stop;
+    Uint2 part_prod = 0, part_loc = 0;
+    Boolean incompleteLastCodon;
 
-	if ((sfp == NULL) || (sfp->data.choice != 3))
-		return NULL;
+    if ((sfp == NULL) || (sfp->data.choice != 3))
+        return NULL;
 
-	crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-	len = SeqLocLen(sfp->location);
+    crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+    len = SeqLocLen(sfp->location);
 
-	num_code_break = 0;
-	if (crp->code_break != NULL)
-	{
-		cbp = crp->code_break;
-		while (cbp != NULL)
-		{
-			num_code_break++;
-			cbp = cbp->next;
-		}
-		the_breaks = (Int4Ptr) MemNew((size_t)(num_code_break * sizeof(Int4)));
-		the_residues = (Uint1Ptr) MemNew((size_t)(num_code_break * sizeof(Uint1)));
+    num_code_break = 0;
+    if (crp->code_break != NULL)
+    {
+        cbp = crp->code_break;
+        while (cbp != NULL)
+        {
+            num_code_break++;
+            cbp = cbp->next;
+        }
+        the_breaks = (Int4Ptr) MemNew((size_t)(num_code_break * sizeof(Int4)));
+        the_residues = (Uint1Ptr) MemNew((size_t)(num_code_break * sizeof(Uint1)));
 
-		num_code_break = 0;
-		cbp = crp->code_break;
-		while (cbp != NULL)
-		{
-			pos1 = INT4_MAX;
-			pos2 = -10;
-			tmp = NULL;
-			while ((tmp = SeqLocFindNext(cbp->loc, tmp)) != NULL)
-			{
-				pos = GetOffsetInLoc(tmp, sfp->location, 
+        num_code_break = 0;
+        cbp = crp->code_break;
+        while (cbp != NULL)
+        {
+            pos1 = INT4_MAX;
+            pos2 = -10;
+            tmp = NULL;
+            while ((tmp = SeqLocFindNext(cbp->loc, tmp)) != NULL)
+            {
+                pos = GetOffsetInLoc(tmp, sfp->location, 
 SEQLOC_START);
-				if (pos < pos1)
-					pos1 = pos;
-				pos = GetOffsetInLoc(tmp, sfp->location, 
+                if (pos < pos1)
+                    pos1 = pos;
+                pos = GetOffsetInLoc(tmp, sfp->location, 
 SEQLOC_STOP);
-				if (pos > pos2)
-					pos2 = pos;
-			}
-			pos = pos2 - pos1; /* codon length */
-			if (pos == 2 || (pos >= 0 && pos <= 1 && pos2 == len - 1))   /*  a codon */
-			/* allowing a partial codon at the end */
-			{
-				the_breaks[num_code_break] = pos1;
-				the_residues[num_code_break] = (Uint1) 
+                if (pos > pos2)
+                    pos2 = pos;
+            }
+            pos = pos2 - pos1; /* codon length */
+            if (pos == 2 || (pos >= 0 && pos <= 1 && pos2 == len - 1))   /*  a codon */
+            /* allowing a partial codon at the end */
+            {
+                the_breaks[num_code_break] = pos1;
+                the_residues[num_code_break] = (Uint1) 
 cbp->aa.value.intvalue;
-				num_code_break++;
-			}
-			else
-			{
-				ErrPost(CTX_NCBIOBJ, 1, "Invalid Code-break.loc");
-			}
+                num_code_break++;
+            }
+            else
+            {
+                ErrPost(CTX_NCBIOBJ, 1, "Invalid Code-break.loc");
+            }
 
-			cbp = cbp->next;
-		}
-	}
+            cbp = cbp->next;
+        }
+    }
 
-	gcp = NULL;
-	if (crp->genetic_code != NULL)
-	{
-		vnp = (ValNodePtr)(crp->genetic_code->data.ptrvalue);
-		while ((vnp != NULL) && (gcp == NULL))
-		{
-			switch (vnp->choice)
-			{
-			case 1:   /* name */
-				gcp = GeneticCodeFind(0, 
+    gcp = NULL;
+    if (crp->genetic_code != NULL)
+    {
+        vnp = (ValNodePtr)(crp->genetic_code->data.ptrvalue);
+        while ((vnp != NULL) && (gcp == NULL))
+        {
+            switch (vnp->choice)
+            {
+            case 1:   /* name */
+                gcp = GeneticCodeFind(0, 
 (CharPtr)vnp->data.ptrvalue);
-				break;
-			case 2:   /* id */
-				gcp = GeneticCodeFind(vnp->data.intvalue, NULL);
-				break;
-			case 3:   /* ncbieaa */
-			case 6:   /* sncbieaa */
-			case 4:   /* ncbi8aa */
-			case 5:	  /* ncbistdaa */
-			case 7:   /* sncbi8aa */
-			case 8:   /* sncbistdaa */
-			default:
-				break;
-			}
-			vnp = vnp->next;
-		}
-	}
-	if (gcp == NULL)
-		gcp = GeneticCodeFind(1, NULL);   /* use universal */
-	if (gcp == NULL)
-		goto erret;
+                break;
+            case 2:   /* id */
+                gcp = GeneticCodeFind(vnp->data.intvalue, NULL);
+                break;
+            case 3:   /* ncbieaa */
+            case 6:   /* sncbieaa */
+            case 4:   /* ncbi8aa */
+            case 5:      /* ncbistdaa */
+            case 7:   /* sncbi8aa */
+            case 8:   /* sncbistdaa */
+            default:
+                break;
+            }
+            vnp = vnp->next;
+        }
+    }
+    if (gcp == NULL)
+        gcp = GeneticCodeFind(1, NULL);   /* use universal */
+    if (gcp == NULL)
+        goto erret;
 
-	vals = NULL;
-	codes = NULL;
-	for (vnp = (ValNodePtr)gcp->data.ptrvalue; vnp != NULL; vnp = vnp->next)
-	{
-		if (vnp->choice == 6)   /* sncbieaa */
-			vals = (CharPtr)vnp->data.ptrvalue;
-		else if (vnp->choice == 3)  /* ncbieaa */
-			codes = (CharPtr)vnp->data.ptrvalue;
-	}
-	if (codes == NULL)
-		goto erret;
+    vals = NULL;
+    codes = NULL;
+    for (vnp = (ValNodePtr)gcp->data.ptrvalue; vnp != NULL; vnp = vnp->next)
+    {
+        if (vnp->choice == 6)   /* sncbieaa */
+            vals = (CharPtr)vnp->data.ptrvalue;
+        else if (vnp->choice == 3)  /* ncbieaa */
+            codes = (CharPtr)vnp->data.ptrvalue;
+    }
+    if (codes == NULL)
+        goto erret;
 
-	no_start = FALSE;
-	part_loc = SeqLocPartialCheck(sfp->location);
-	part_prod = SeqLocPartialCheck(sfp->product);
-	if ((part_loc & SLP_START) || (part_prod & SLP_START))
-		no_start = TRUE;
+    no_start = FALSE;
+    part_loc = SeqLocPartialCheck(sfp->location);
+    part_prod = SeqLocPartialCheck(sfp->product);
+    if ((part_loc & SLP_START) || (part_prod & SLP_START))
+        no_start = TRUE;
 
-	if ((vals == NULL) || (no_start) || (crp->frame > 1))  /* no special 
+    if ((vals == NULL) || (no_start) || (crp->frame > 1))  /* no special 
 starts */
-	{
-		vals = codes;
-		check_start = FALSE;
-	}
-	else
-		check_start = TRUE;
+    {
+        vals = codes;
+        check_start = FALSE;
+    }
+    else
+        check_start = TRUE;
 
-	spp = SeqPortNewByLoc(sfp->location, Seq_code_ncbi4na);
-	if (spp == NULL)
-		goto erret;
+    spp = SeqPortNewByLoc(sfp->location, Seq_code_ncbi4na);
+    if (spp == NULL)
+        goto erret;
 
-	/* len = SeqLocLen(sfp->location); - saved above */    /* size of coding region */
-	len /= 3;						   /* size of 
+    /* len = SeqLocLen(sfp->location); - saved above */    /* size of coding region */
+    len /= 3;                           /* size of 
 protein */
-	len += 1;						   /* allow 
+    len += 1;                           /* allow 
 partial codon at end */
-	bs = BSNew(len);
-	if (bs == NULL)
-		goto erret;
+    bs = BSNew(len);
+    if (bs == NULL)
+        goto erret;
 
-	if (crp->frame == 2)     /* skip partial first codon */
-		pos = 1;
-	else if (crp->frame == 3)
-		pos = 2;
-	else
-		pos = 0;
-	SeqPortSeek(spp, pos, SEEK_SET);
-	got_stop = FALSE;
+    if (crp->frame == 2)     /* skip partial first codon */
+        pos = 1;
+    else if (crp->frame == 3)
+        pos = 2;
+    else
+        pos = 0;
+    SeqPortSeek(spp, pos, SEEK_SET);
+    got_stop = FALSE;
 
-	incompleteLastCodon = FALSE;
+    incompleteLastCodon = FALSE;
 
-	do
-	{
-		use_break = -1;
-		for (i = 0; i < num_code_break; i++)
-		{
-			if (pos == the_breaks[i])
-			{
-				use_break = i;
-				i = num_code_break;
-			}
-		}
+    do
+    {
+        use_break = -1;
+        for (i = 0; i < num_code_break; i++)
+        {
+            if (pos == the_breaks[i])
+            {
+                use_break = i;
+                i = num_code_break;
+            }
+        }
 
-		bad_base = FALSE;
-		for (i = 0; i < 3; i++)
-		{
-			residue = SeqPortGetResidue(spp);
-			if (residue == SEQPORT_VIRT || residue == SEQPORT_EOS) {
-				/* skip past null NULL in seqport, get next - JK */
-				residue = SeqPortGetResidue(spp);
-			}
-			if (residue == SEQPORT_EOF)
-				break;
-			if (residue == INVALID_RESIDUE)
-				bad_base = TRUE;
-			codon[i] = residue;
-		}
-		if (! i)   /* no bases */
-			break;
-		while (i < 3)      /* incomplete last codon */
-		{
-			codon[i] = 15;   /* N */
-			i++;
-			incompleteLastCodon = TRUE;
-		}
+        bad_base = FALSE;
+        for (i = 0; i < 3; i++)
+        {
+            residue = SeqPortGetResidue(spp);
+            if (residue == SEQPORT_VIRT || residue == SEQPORT_EOS) {
+                /* skip past null NULL in seqport, get next - JK */
+                residue = SeqPortGetResidue(spp);
+            }
+            if (residue == SEQPORT_EOF)
+                break;
+            if (residue == INVALID_RESIDUE)
+                bad_base = TRUE;
+            codon[i] = residue;
+        }
+        if (! i)   /* no bases */
+            break;
+        while (i < 3)      /* incomplete last codon */
+        {
+            codon[i] = 15;   /* N */
+            i++;
+            incompleteLastCodon = TRUE;
+        }
 
-		pos += 3;
-		if (use_break >= 0)
-			aa = the_residues[use_break];
-		else if (bad_base)
-			aa = 'X';
-		else
-		{
-			aa = AAForCodon(codon, vals);
-			if (check_start)   /* first codon on possibly complete 
+        pos += 3;
+        if (use_break >= 0)
+            aa = the_residues[use_break];
+        else if (bad_base)
+            aa = 'X';
+        else
+        {
+            aa = AAForCodon(codon, vals);
+            if (check_start)   /* first codon on possibly complete 
 CDS */
-			{
-				if (aa == '-')   /* invalid start */
-				{
-				    /* if no explict partial at either end, but 
+            {
+                if (aa == '-')   /* invalid start */
+                {
+                    /* if no explict partial at either end, but 
 feature is */
-				    /* annotated as partial, then guess should 
+                    /* annotated as partial, then guess should 
 use internal */
-				    /* amino acid code */
+                    /* amino acid code */
 
-					if ((! ((part_loc & SLP_STOP) || 
+                    if ((! ((part_loc & SLP_STOP) || 
 (part_prod & SLP_STOP))) &&
-						(sfp->partial))
-						aa = AAForCodon(codon, codes);  
+                        (sfp->partial))
+                        aa = AAForCodon(codon, codes);  
 /* get internal aa */
-				}
-				check_start = FALSE;
-			}
-		}
+                }
+                check_start = FALSE;
+            }
+        }
 
-		if ((! include_stop) && (aa == '*'))
-		{
-			got_stop = TRUE;
-			break;
-		}
+        if ((! include_stop) && (aa == '*'))
+        {
+            got_stop = TRUE;
+            break;
+        }
 
-		BSPutByte(bs, (Int2)aa);
+        BSPutByte(bs, (Int2)aa);
 
-		vals = codes;     /* not a start codon anymore */
+        vals = codes;     /* not a start codon anymore */
 
-	} while (residue != SEQPORT_EOF);
+    } while (residue != SEQPORT_EOF);
 
-	if ((! got_stop) && incompleteLastCodon) {
-		BSSeek(bs, -1, SEEK_END);  /* remove last X if incomplete last codon */
-		aa = (Uint1)BSGetByte(bs);
-		if ((aa == 'X') && (BSLen(bs)))
-		{
-			BSSeek(bs, -1, SEEK_END);
-			BSDelete(bs, 1);
-			BSSeek(bs, -1, SEEK_END);
-		}
-	}
-	if ((! got_stop) && remove_trailingX)   /* only remove trailing X on partial CDS */
-	{
-		BSSeek(bs, -1, SEEK_END);  /* back up to last residue */
-		aa = (Uint1)BSGetByte(bs);
-		while ((aa == 'X') && (BSLen(bs)))
-		{
-			BSSeek(bs, -1, SEEK_END);
-			BSDelete(bs, 1);
-			BSSeek(bs, -1, SEEK_END);
-			aa = (Uint1)BSGetByte(bs);
-		}
-	}
+    if ((! got_stop) && incompleteLastCodon) {
+        BSSeek(bs, -1, SEEK_END);  /* remove last X if incomplete last codon */
+        aa = (Uint1)BSGetByte(bs);
+        if ((aa == 'X') && (BSLen(bs)))
+        {
+            BSSeek(bs, -1, SEEK_END);
+            BSDelete(bs, 1);
+            BSSeek(bs, -1, SEEK_END);
+        }
+    }
+    if ((! got_stop) && remove_trailingX)   /* only remove trailing X on partial CDS */
+    {
+        BSSeek(bs, -1, SEEK_END);  /* back up to last residue */
+        aa = (Uint1)BSGetByte(bs);
+        while ((aa == 'X') && (BSLen(bs)))
+        {
+            BSSeek(bs, -1, SEEK_END);
+            BSDelete(bs, 1);
+            BSSeek(bs, -1, SEEK_END);
+            aa = (Uint1)BSGetByte(bs);
+        }
+    }
 
-	if (! BSLen(bs)) goto erret;
+    if (! BSLen(bs)) goto erret;
 
 ret:
-	SeqPortFree(spp);
-	MemFree(the_breaks);
-	MemFree(the_residues);
-	return bs;
+    SeqPortFree(spp);
+    MemFree(the_breaks);
+    MemFree(the_residues);
+    return bs;
 erret:
-	bs = BSFree(bs);
-	goto ret;
+    bs = BSFree(bs);
+    goto ret;
 }
 #endif
 
@@ -3762,101 +3778,101 @@ erret:
 /*****************************************************************************
 *
 *   Uint1 AAForCodon (Uint1Ptr codon, CharPtr codes)
-*   	codon is 3 values in ncbi4na code
+*       codon is 3 values in ncbi4na code
 *       codes is the geneic code array to use
 *          MUST have 'X' as unknown amino acid
 *
 *****************************************************************************/
 NLM_EXTERN Uint1 AAForCodon (Uint1Ptr codon, CharPtr codes)
 {
-	register Uint1 aa = 0, taa;
-	register int i, j, k, index0, index1, index2;
-	static Uint1 mapping[4] = { 8,     /* T in ncbi4na */
-							    2,     /* C */
-						        1,     /* A */
-						        4 };   /* G */
+    register Uint1 aa = 0, taa;
+    register int i, j, k, index0, index1, index2;
+    static Uint1 mapping[4] = { 8,     /* T in ncbi4na */
+                                2,     /* C */
+                                1,     /* A */
+                                4 };   /* G */
 
 
-	for (i = 0; i < 4; i++)
-	{
-		if (codon[0] & mapping[i])
-		{
-			index0 = i * 16;
-			for (j = 0; j < 4; j++)
-			{
-				if (codon[1] & mapping[j])
-				{
-					index1 = index0 + (j * 4);
-					for (k = 0; k < 4; k++)
-					{
-						if (codon[2] & mapping[k])
-						{
-							index2 = index1 + k;
-							taa = codes[index2];
-							if (! aa)
-								aa = taa;
-							else
-							{
-								if (taa != aa)
-								{
-									aa = 
+    for (i = 0; i < 4; i++)
+    {
+        if (codon[0] & mapping[i])
+        {
+            index0 = i * 16;
+            for (j = 0; j < 4; j++)
+            {
+                if (codon[1] & mapping[j])
+                {
+                    index1 = index0 + (j * 4);
+                    for (k = 0; k < 4; k++)
+                    {
+                        if (codon[2] & mapping[k])
+                        {
+                            index2 = index1 + k;
+                            taa = codes[index2];
+                            if (! aa)
+                                aa = taa;
+                            else
+                            {
+                                if (taa != aa)
+                                {
+                                    aa = 
 'X';
-									break;
-								}
-							}
-						}
-						if (aa == 'X')
-							break;
-					}
-				}
-				if (aa == 'X')
-					break;
-			}
-		}
-		if (aa == 'X')
-			break;
-	}
-	return aa;
+                                    break;
+                                }
+                            }
+                        }
+                        if (aa == 'X')
+                            break;
+                    }
+                }
+                if (aa == 'X')
+                    break;
+            }
+        }
+        if (aa == 'X')
+            break;
+    }
+    return aa;
 }
 
-static	Uint1 codon_xref [4] = {   /* mapping from NCBI2na to codon codes */
-		2,  /* A */
-		1,  /* C */
-		3,  /* G */
-		0 }; /* T */
+static    Uint1 codon_xref [4] = {   /* mapping from NCBI2na to codon codes */
+        2,  /* A */
+        1,  /* C */
+        3,  /* G */
+        0 }; /* T */
 
 /*****************************************************************************
 *
 *   Uint1 IndexForCodon (codon, code)
-*   	returns index into genetic codes codon array, give 3 bases of the
+*       returns index into genetic codes codon array, give 3 bases of the
 *       codon in any alphabet
 *       returns INVALID_RESIDUE on failure
 *   
 *****************************************************************************/
 NLM_EXTERN Uint1 IndexForCodon (Uint1Ptr codon, Uint1 code)
 {
-	Int2 i, j;
-	SeqMapTablePtr smtp;
-	Uint1 residue, index = 0;
+    Int2 i, j;
+    SeqMapTablePtr smtp;
+    Uint1 residue, index = 0;
 
-	smtp = SeqMapTableFind(Seq_code_ncbi2na, code);
-	if (smtp == NULL) return INVALID_RESIDUE;
+    smtp = SeqMapTableFind(Seq_code_ncbi2na, code);
+    if (smtp == NULL) return INVALID_RESIDUE;
 
-	for (i=0, j=16; i < 3; i++, j /= 4)
-	{
-		residue = SeqMapTableConvert(smtp, codon[i]);
-		if (residue > 3) return INVALID_RESIDUE;
-		residue = codon_xref[residue];
-		index += (Uint1)(residue * j);
-	}
+    for (i=0, j=16; i < 3; i++, j /= 4)
+    {
+        residue = SeqMapTableConvert(smtp, codon[i]);
+        if (residue > 3) return INVALID_RESIDUE;
+        residue = codon_xref[residue];
+        index += (Uint1)(residue * j);
+    }
 
-	return index;
+    return index;
 }
 
 /*****************************************************************************
 *
 *   Boolean CodonForIndex (index, code, codon)
-*   	Fills codon (3 Uint1 array) with codon corresponding to index,
+*       Fills codon (3 Uint1 array) with codon corresponding to index,
 *       in sequence alphabet code.
 *       Index is the Genetic code index.
 *       returns TRUE on success.
@@ -3864,33 +3880,33 @@ NLM_EXTERN Uint1 IndexForCodon (Uint1Ptr codon, Uint1 code)
 *****************************************************************************/
 NLM_EXTERN Boolean CodonForIndex (Uint1 index, Uint1 code, Uint1Ptr codon)
 {
-	Int2 i, j, k;
-	SeqMapTablePtr smtp;
-	Uint1 residue;
-	
-	if (codon == NULL) return FALSE;
-	if (index > 63) return FALSE;
+    Int2 i, j, k;
+    SeqMapTablePtr smtp;
+    Uint1 residue;
+    
+    if (codon == NULL) return FALSE;
+    if (index > 63) return FALSE;
 
-	smtp = SeqMapTableFind(code, Seq_code_ncbi2na);
-	if (smtp == NULL) return FALSE;
+    smtp = SeqMapTableFind(code, Seq_code_ncbi2na);
+    if (smtp == NULL) return FALSE;
 
-	for (i = 0, j = 16; i < 3; i++, j /= 4)
-	{
-		residue = (Uint1)((Int2)index / j);
-		index -= (Uint1)(residue * j);
-		for (k = 0; k < 4; k++)
-		{
-			if (codon_xref[k] == residue)
-			{
-				residue = (Uint1)k;
-				break;
-			}
-		}
-		residue = SeqMapTableConvert(smtp, residue);
-		codon[i] = residue;
-	}
+    for (i = 0, j = 16; i < 3; i++, j /= 4)
+    {
+        residue = (Uint1)((Int2)index / j);
+        index -= (Uint1)(residue * j);
+        for (k = 0; k < 4; k++)
+        {
+            if (codon_xref[k] == residue)
+            {
+                residue = (Uint1)k;
+                break;
+            }
+        }
+        residue = SeqMapTableConvert(smtp, residue);
+        codon[i] = residue;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 /*----------- GetFrameFromLoc()-----------------*/
@@ -3898,184 +3914,184 @@ NLM_EXTERN Boolean CodonForIndex (Uint1 index, Uint1 code, Uint1Ptr codon)
 /*****************************************************************************
 *
 *   Int2 GetFrameFromLoc (slp)
-*   	returns 1,2,3 if can find the frame
-*   	0 if not
+*       returns 1,2,3 if can find the frame
+*       0 if not
 *
 *****************************************************************************/
 NLM_EXTERN Uint1 GetFrameFromLoc (SeqLocPtr slp)
 {
-	Uint1 frame = 0;
-	SeqLocPtr curr, last;
-	Boolean is_partial;
-	SeqIntPtr sip;
-	SeqPntPtr spp;
+    Uint1 frame = 0;
+    SeqLocPtr curr, last;
+    Boolean is_partial;
+    SeqIntPtr sip;
+    SeqPntPtr spp;
 
-	if (slp == NULL)
-		return frame;
+    if (slp == NULL)
+        return frame;
 
-	curr = SeqLocFindNext(slp, NULL);
+    curr = SeqLocFindNext(slp, NULL);
 
-	is_partial = FALSE;
-	switch (curr->choice)
-	{
-		case SEQLOC_INT:
-			sip = (SeqIntPtr)curr->data.ptrvalue;
-			if (sip->strand == Seq_strand_minus)
-			{
-				if (sip->if_to != NULL)
-					is_partial = TRUE;
-			}
-			else if (sip->if_from != NULL)
-				is_partial = TRUE;
-			break;
-		case SEQLOC_PNT:
-			spp = (SeqPntPtr)curr->data.ptrvalue;
-			if (spp->fuzz != NULL)
-				is_partial = TRUE;
-			break;
-		default:
-			return frame;
-	}
-		
+    is_partial = FALSE;
+    switch (curr->choice)
+    {
+        case SEQLOC_INT:
+            sip = (SeqIntPtr)curr->data.ptrvalue;
+            if (sip->strand == Seq_strand_minus)
+            {
+                if (sip->if_to != NULL)
+                    is_partial = TRUE;
+            }
+            else if (sip->if_from != NULL)
+                is_partial = TRUE;
+            break;
+        case SEQLOC_PNT:
+            spp = (SeqPntPtr)curr->data.ptrvalue;
+            if (spp->fuzz != NULL)
+                is_partial = TRUE;
+            break;
+        default:
+            return frame;
+    }
+        
 
-	if (! is_partial)
-		return (Int2) 1;    /* complete 5' end, it's frame 1 */
+    if (! is_partial)
+        return (Int2) 1;    /* complete 5' end, it's frame 1 */
 
-	is_partial = FALSE;
-	last = curr;
-	while ((curr = SeqLocFindNext(slp, last)) != NULL)
-		last = curr;
+    is_partial = FALSE;
+    last = curr;
+    while ((curr = SeqLocFindNext(slp, last)) != NULL)
+        last = curr;
 
-	switch (last->choice)
-	{
-		case SEQLOC_INT:
-			sip = (SeqIntPtr) last->data.ptrvalue;
-			if (sip->strand == Seq_strand_minus)
-			{
-				if (sip->if_from != NULL)
-					return frame;
-			}
-			else if (sip->if_to != NULL)
-				return frame;
-			break;
-		case SEQLOC_PNT:
-			spp = (SeqPntPtr) last->data.ptrvalue;
-			if (spp->fuzz != NULL)
-				return frame;
-			break;
-		default:
-			return frame;
-	}
+    switch (last->choice)
+    {
+        case SEQLOC_INT:
+            sip = (SeqIntPtr) last->data.ptrvalue;
+            if (sip->strand == Seq_strand_minus)
+            {
+                if (sip->if_from != NULL)
+                    return frame;
+            }
+            else if (sip->if_to != NULL)
+                return frame;
+            break;
+        case SEQLOC_PNT:
+            spp = (SeqPntPtr) last->data.ptrvalue;
+            if (spp->fuzz != NULL)
+                return frame;
+            break;
+        default:
+            return frame;
+    }
 
-					  /* have complete last codon, get frame 
+                      /* have complete last codon, get frame 
 from length */
-	frame = (Uint1)(SeqLocLen(slp) % 3);
-	if (frame == 0)
-		frame = 1;
-	else if (frame == 1)
-		frame = 2;
-	else
-		frame = 3;
+    frame = (Uint1)(SeqLocLen(slp) % 3);
+    if (frame == 0)
+        frame = 1;
+    else if (frame == 1)
+        frame = 2;
+    else
+        frame = 3;
 
-	return frame;
+    return frame;
 }
 
 static Boolean add_fuzziness_to_loc (SeqLocPtr slp, Boolean less)
 {
-	IntFuzzPtr ifp;
-	SeqIntPtr sint;
-	SeqPntPtr spnt;	
+    IntFuzzPtr ifp;
+    SeqIntPtr sint;
+    SeqPntPtr spnt;    
 
-	sint = NULL;
-	spnt = NULL;
+    sint = NULL;
+    spnt = NULL;
 
-	if(slp->choice == SEQLOC_INT)
-		sint = (SeqIntPtr) slp->data.ptrvalue;
-	else
-	{
-		if(slp->choice == SEQLOC_PNT)
-			spnt = (SeqPntPtr) slp->data.ptrvalue;
-		else
-			return FALSE;
-	}
-	ifp = IntFuzzNew();
-	ifp->choice = 4;
-	ifp->a = less ? 2 : 1;
+    if(slp->choice == SEQLOC_INT)
+        sint = (SeqIntPtr) slp->data.ptrvalue;
+    else
+    {
+        if(slp->choice == SEQLOC_PNT)
+            spnt = (SeqPntPtr) slp->data.ptrvalue;
+        else
+            return FALSE;
+    }
+    ifp = IntFuzzNew();
+    ifp->choice = 4;
+    ifp->a = less ? 2 : 1;
 
-	if(spnt != NULL)
-		spnt->fuzz = ifp;
-	else
-	{
-		if(less)
-			sint->if_from = ifp;
-		else
-			sint->if_to = ifp;
-	}
+    if(spnt != NULL)
+        spnt->fuzz = ifp;
+    else if (sint != NULL)
+    {
+        if(less)
+            sint->if_from = ifp;
+        else
+            sint->if_to = ifp;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 
 static Boolean load_fuzz_to_DNA(SeqLocPtr dnaLoc, SeqLocPtr aaLoc, Boolean 
 first)
 {
-	Uint1 strand;
-	SeqPntPtr spnt;
-	SeqIntPtr sint;
-	IntFuzzPtr ifp;
-	Boolean load, less;
+    Uint1 strand;
+    SeqPntPtr spnt;
+    SeqIntPtr sint;
+    IntFuzzPtr ifp;
+    Boolean load, less;
 
-	load = FALSE;
-	strand = SeqLocStrand(aaLoc);
-	if(aaLoc->choice == SEQLOC_INT)
-	{
-		sint = (SeqIntPtr) aaLoc->data.ptrvalue;
-		if((first && strand != Seq_strand_minus ) || 
-			(!first && strand == Seq_strand_minus))	/*the first 
+    load = FALSE;
+    strand = SeqLocStrand(aaLoc);
+    if(aaLoc->choice == SEQLOC_INT)
+    {
+        sint = (SeqIntPtr) aaLoc->data.ptrvalue;
+        if((first && strand != Seq_strand_minus ) || 
+            (!first && strand == Seq_strand_minus))    /*the first 
 Seq-loc*/
-		{
-			ifp = sint->if_from;
-			if(ifp && ifp->choice == 4 )
-				load = (ifp->a == 2);
-		}
-		else
-		{
-			ifp = sint->if_to;
-			if(ifp && ifp->choice == 4)
-				load = (ifp->a == 1);
-		}
-	}
-	else if(aaLoc->choice == SEQLOC_PNT)
-	{
-		spnt = (SeqPntPtr) aaLoc->data.ptrvalue;
-		ifp = spnt->fuzz;
-		if(ifp && ifp->choice == 4)
-		{
-			if(first)
-				load = (ifp->a == 2);
-			else
-				load = (ifp->a == 1);
-		}
-	}
+        {
+            ifp = sint->if_from;
+            if(ifp && ifp->choice == 4 )
+                load = (ifp->a == 2);
+        }
+        else
+        {
+            ifp = sint->if_to;
+            if(ifp && ifp->choice == 4)
+                load = (ifp->a == 1);
+        }
+    }
+    else if(aaLoc->choice == SEQLOC_PNT)
+    {
+        spnt = (SeqPntPtr) aaLoc->data.ptrvalue;
+        ifp = spnt->fuzz;
+        if(ifp && ifp->choice == 4)
+        {
+            if(first)
+                load = (ifp->a == 2);
+            else
+                load = (ifp->a == 1);
+        }
+    }
 
-	if(load)
-	{
-		if(SeqLocStrand(dnaLoc) == Seq_strand_minus)
-			less = (first == FALSE);
-		else
-			less = first;
-		add_fuzziness_to_loc (dnaLoc, less);
-		return TRUE;
-	}
-	else
-		return FALSE;
-}	
+    if(load)
+    {
+        if(SeqLocStrand(dnaLoc) == Seq_strand_minus)
+            less = (first == FALSE);
+        else
+            less = first;
+        add_fuzziness_to_loc (dnaLoc, less);
+        return TRUE;
+    }
+    else
+        return FALSE;
+}    
 
 /******************************************************************
 *
-*	aaLoc_to_dnaLoc(sfp, aa_loc)
-*	map a SeqLoc on the amino acid sequence
-*       to a Seq-loc in the	DNA sequence
+*    aaLoc_to_dnaLoc(sfp, aa_loc)
+*    map a SeqLoc on the amino acid sequence
+*       to a Seq-loc in the    DNA sequence
 *       through a CdRegion feature
 *       
 *       This now calls the more general productLoc_to_locationLoc(sfp, productLoc)
@@ -4083,14 +4099,14 @@ Seq-loc*/
 ******************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL aaLoc_to_dnaLoc(SeqFeatPtr sfp, SeqLocPtr aa_loc)
 {
-	return productLoc_to_locationLoc(sfp, aa_loc);
+    return productLoc_to_locationLoc(sfp, aa_loc);
 }
 
 /******************************************************************
 *
-*	aaLoc_to_dnaLoc(sfp, productLoc)
-*	map a SeqLoc on the product sequence
-*       to a Seq-loc in the	location sequence
+*    aaLoc_to_dnaLoc(sfp, productLoc)
+*    map a SeqLoc on the product sequence
+*       to a Seq-loc in the    location sequence
 *       through a feature.
 *
 *       if the feature is a CdRegion, converts by modulo 3
@@ -4099,70 +4115,70 @@ NLM_EXTERN SeqLocPtr LIBCALL aaLoc_to_dnaLoc(SeqFeatPtr sfp, SeqLocPtr aa_loc)
 ******************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL productLoc_to_locationLoc(SeqFeatPtr sfp, SeqLocPtr productLoc)
 {
-	SeqLocPtr head = NULL, slp, tmp, next;
-	Int4 product_start, product_stop;
-	SeqBondPtr sbp;
-	ValNode vn;
-	Boolean is_cdregion = FALSE;
+    SeqLocPtr head = NULL, slp, tmp, next;
+    Int4 product_start, product_stop;
+    SeqBondPtr sbp;
+    ValNode vn;
+    Boolean is_cdregion = FALSE;
   Boolean partial5, partial3;
 
-	if ((sfp == NULL) || (productLoc == NULL)) return head;
-	if (sfp->data.choice == 3) is_cdregion = TRUE;
-	if (sfp->product == NULL) return head;
-	if (! (SeqIdForSameBioseq(SeqLocId(productLoc), SeqLocId(sfp->product))))
-		return head;
+    if ((sfp == NULL) || (productLoc == NULL)) return head;
+    if (sfp->data.choice == 3) is_cdregion = TRUE;
+    if (sfp->product == NULL) return head;
+    if (! (SeqIdForSameBioseq(SeqLocId(productLoc), SeqLocId(sfp->product))))
+        return head;
 
-	if (productLoc->choice == SEQLOC_BOND)   /* fake this one in */
-	{
-		sbp = (SeqBondPtr)(productLoc->data.ptrvalue);
-		tmp = productInterval_to_locationIntervals(sfp, sbp->a->point, sbp->a->point, FALSE);
-		if (sbp->b == NULL)  /* one point in bond */
-			return tmp;
+    if (productLoc->choice == SEQLOC_BOND)   /* fake this one in */
+    {
+        sbp = (SeqBondPtr)(productLoc->data.ptrvalue);
+        tmp = productInterval_to_locationIntervals(sfp, sbp->a->point, sbp->a->point, FALSE);
+        if (sbp->b == NULL)  /* one point in bond */
+            return tmp;
 
-		SeqLocAdd(&head, tmp, TRUE, FALSE);
-		tmp = productInterval_to_locationIntervals(sfp, sbp->b->point, sbp->b->point, FALSE);
-		if (tmp == NULL)
-			return head;
+        SeqLocAdd(&head, tmp, TRUE, FALSE);
+        tmp = productInterval_to_locationIntervals(sfp, sbp->b->point, sbp->b->point, FALSE);
+        if (tmp == NULL)
+            return head;
 
-		vn.choice = SEQLOC_NULL;  /* make a mix with an internal NULL */
-		vn.next = NULL;
-		vn.data.ptrvalue = NULL;
+        vn.choice = SEQLOC_NULL;  /* make a mix with an internal NULL */
+        vn.next = NULL;
+        vn.data.ptrvalue = NULL;
 
-		SeqLocAdd(&head, &vn, TRUE, TRUE);  /* copy it in */
-		SeqLocAdd(&head, tmp, TRUE, FALSE); /* put real 3 base int in */
+        SeqLocAdd(&head, &vn, TRUE, TRUE);  /* copy it in */
+        SeqLocAdd(&head, tmp, TRUE, FALSE); /* put real 3 base int in */
 
-		goto ret;
-	}
+        goto ret;
+    }
 
   CheckSeqLocForPartial (productLoc, &partial5, &partial3);
-	slp = NULL;
-	while ((slp = SeqLocFindNext(productLoc, slp)) != NULL)
-	{
-		product_start = SeqLocStart(slp);
-		product_stop = SeqLocStop(slp);
-		if ((product_start >= 0) && (product_stop >= 0))
-		{
-		   tmp = productInterval_to_locationIntervals(sfp, product_start, product_stop, partial5);
-		   if(tmp != NULL)
-			load_fuzz_to_DNA(tmp, slp, TRUE);
-		   while (tmp != NULL)
-		   {
-			   next = tmp->next;
-			   tmp->next = NULL;
-			   if(next == NULL)
-				load_fuzz_to_DNA(tmp, slp, FALSE);
-			   SeqLocAdd(&head, tmp, TRUE, FALSE);
-			   tmp = next;
-		   }
-		} else if (slp->choice == SEQLOC_NULL) {
-			vn.choice = SEQLOC_NULL;  /* make a mix with an internal NULL */
-			vn.next = NULL;
-			vn.data.ptrvalue = NULL;
-			SeqLocAdd(&head, &vn, TRUE, TRUE); 
-		}
-	}
-ret:			   
-	return SeqLocPackage(head);
+    slp = NULL;
+    while ((slp = SeqLocFindNext(productLoc, slp)) != NULL)
+    {
+        product_start = SeqLocStart(slp);
+        product_stop = SeqLocStop(slp);
+        if ((product_start >= 0) && (product_stop >= 0))
+        {
+           tmp = productInterval_to_locationIntervals(sfp, product_start, product_stop, partial5);
+           if(tmp != NULL)
+            load_fuzz_to_DNA(tmp, slp, TRUE);
+           while (tmp != NULL)
+           {
+               next = tmp->next;
+               tmp->next = NULL;
+               if(next == NULL)
+                load_fuzz_to_DNA(tmp, slp, FALSE);
+               SeqLocAdd(&head, tmp, TRUE, FALSE);
+               tmp = next;
+           }
+        } else if (slp->choice == SEQLOC_NULL) {
+            vn.choice = SEQLOC_NULL;  /* make a mix with an internal NULL */
+            vn.next = NULL;
+            vn.data.ptrvalue = NULL;
+            SeqLocAdd(&head, &vn, TRUE, TRUE); 
+        }
+    }
+ret:               
+    return SeqLocPackage(head);
 }
 
 /******************************************************************
@@ -4181,88 +4197,88 @@ ret:
 NLM_EXTERN SeqLocPtr LIBCALL aaFeatLoc_to_dnaFeatLoc(SeqFeatPtr sfp,
                                                      SeqLocPtr aa_loc)
 {
-	SeqLocPtr dnaLoc = NULL;
-	Uint2 dnaPartial;
-	Int4 aaPos;
-	SeqLocPtr tmp1 = NULL, tmp2 = NULL, tmp;
-	SeqIdPtr sip;
-	CdRegionPtr crp;
-	SeqIntPtr sp1, sp2;
-	BioseqPtr bsp;
+    SeqLocPtr dnaLoc = NULL;
+    Uint2 dnaPartial;
+    Int4 aaPos;
+    SeqLocPtr tmp1 = NULL, tmp2 = NULL, tmp;
+    SeqIdPtr sip;
+    CdRegionPtr crp;
+    SeqIntPtr sp1, sp2;
+    BioseqPtr bsp;
   Boolean   aa_partialn, aa_partialc;
 
-	dnaLoc = aaLoc_to_dnaLoc(sfp, aa_loc);
-	if (dnaLoc == NULL) return dnaLoc;
+    dnaLoc = aaLoc_to_dnaLoc(sfp, aa_loc);
+    if (dnaLoc == NULL) return dnaLoc;
 
-	if (! sfp->partial)  /* no partial checks needed */
-		return dnaLoc;
+    if (! sfp->partial)  /* no partial checks needed */
+        return dnaLoc;
 
 
   CheckSeqLocForPartial (aa_loc, &aa_partialn, &aa_partialc);
-	crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
+    crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
 
-	aaPos = SeqLocStart(aa_loc);
-	if ((! aaPos) && (crp->frame > 1) && aa_partialn)   /* using first amino acid */
-	{
-		tmp1 = SeqLocFindNext(sfp->location, NULL);
-		tmp2 = SeqLocFindNext(dnaLoc, NULL);
+    aaPos = SeqLocStart(aa_loc);
+    if ((! aaPos) && (crp->frame > 1) && aa_partialn)   /* using first amino acid */
+    {
+        tmp1 = SeqLocFindNext(sfp->location, NULL);
+        tmp2 = SeqLocFindNext(dnaLoc, NULL);
 
-		if ((tmp1->choice == SEQLOC_INT) &&
+        if ((tmp1->choice == SEQLOC_INT) &&
                          (tmp2->choice == SEQLOC_INT))
-		{
-			sp1 = (SeqIntPtr)(tmp1->data.ptrvalue);
-			sp2 = (SeqIntPtr)(tmp2->data.ptrvalue);
-			if (sp1->strand ==  Seq_strand_minus)
-			{
-				sp2->to = sp1->to;  /* add partial codon */
-			}
-			else
-			{
-				sp2->from = sp1->from;
-			}
-		}
-	}
+        {
+            sp1 = (SeqIntPtr)(tmp1->data.ptrvalue);
+            sp2 = (SeqIntPtr)(tmp2->data.ptrvalue);
+            if (sp1->strand ==  Seq_strand_minus)
+            {
+                sp2->to = sp1->to;  /* add partial codon */
+            }
+            else
+            {
+                sp2->from = sp1->from;
+            }
+        }
+    }
 
-	dnaPartial = SeqLocPartialCheck(sfp->location);
-	if ((dnaPartial & SLP_STOP) && aa_partialc)   /* missing 3' end of cdregion */
-	{
-		sip = SeqLocId(aa_loc);
-		bsp = BioseqFindCore(sip);
-		if (bsp != NULL)
-		{
-			aaPos = SeqLocStop(aa_loc);
-			if (aaPos == (bsp->length - 1)) /* last amino acid */
-			{
-				tmp = NULL;
-				while ((tmp = SeqLocFindNext(sfp->location,tmp)) != NULL)
-				{
-					tmp1 = tmp;
-				}
-				tmp = NULL;
-				while ((tmp = SeqLocFindNext(dnaLoc,tmp)) != NULL)
-				{
-					tmp2 = tmp;
-				}
-			
-				if ((tmp1->choice == SEQLOC_INT) &&
-					(tmp2->choice == SEQLOC_INT))
-				{
-					sp1 = (SeqIntPtr)(tmp1->data.ptrvalue);
-					sp2 = (SeqIntPtr)(tmp2->data.ptrvalue);
-					if (sp1->strand ==  Seq_strand_minus)
-					{
-						sp2->from = sp1->from;  /* add partial codon */
-					}
-					else
-					{
-						sp2->to = sp1->to;
-					}
-				}
-			}
-	
-		}
-	}
-	return dnaLoc;
+    dnaPartial = SeqLocPartialCheck(sfp->location);
+    if ((dnaPartial & SLP_STOP) && aa_partialc)   /* missing 3' end of cdregion */
+    {
+        sip = SeqLocId(aa_loc);
+        bsp = BioseqFindCore(sip);
+        if (bsp != NULL)
+        {
+            aaPos = SeqLocStop(aa_loc);
+            if (aaPos == (bsp->length - 1)) /* last amino acid */
+            {
+                tmp = NULL;
+                while ((tmp = SeqLocFindNext(sfp->location,tmp)) != NULL)
+                {
+                    tmp1 = tmp;
+                }
+                tmp = NULL;
+                while ((tmp = SeqLocFindNext(dnaLoc,tmp)) != NULL)
+                {
+                    tmp2 = tmp;
+                }
+            
+                if (tmp1 != NULL && tmp2 != NULL && (tmp1->choice == SEQLOC_INT) &&
+                    (tmp2->choice == SEQLOC_INT))
+                {
+                    sp1 = (SeqIntPtr)(tmp1->data.ptrvalue);
+                    sp2 = (SeqIntPtr)(tmp2->data.ptrvalue);
+                    if (sp1->strand ==  Seq_strand_minus)
+                    {
+                        sp2->from = sp1->from;  /* add partial codon */
+                    }
+                    else
+                    {
+                        sp2->to = sp1->to;
+                    }
+                }
+            }
+    
+        }
+    }
+    return dnaLoc;
 }
 
 
@@ -4274,14 +4290,14 @@ NucLocFromProtInterval
  Boolean n_partial)
 {
   CdRegionPtr crp;
-  Int4        nt_before = 0, aa_before = 0, nt_this, prev_nt = 0, part_codon;
+  Int4        aa_before = 0, nt_this, prev_nt = 0, part_codon;
   SeqLocPtr   result = NULL;
   SeqLocPtr   slp = NULL; /* used for iterating through locations in the coding region */
   SeqLocPtr   loc; /* used for creating interval on NT sequence */
   Boolean     first_loc = TRUE;
   Int4        cds_int_start, cds_int_stop, cds_int_len;
   Int4        frame_start = 0;
-  Int4        aa_int_start, aa_int_stop, aa_len, this_aa, aa_needed, aa_unneeded, aa_accumulated = 0;
+  Int4        aa_int_start = 0, aa_int_stop = 0, aa_len, this_aa, aa_needed, aa_unneeded, aa_accumulated = 0;
   Int4        aa_from_this_interval;
   Uint1       strand;
 
@@ -4400,8 +4416,8 @@ NucLocFromProtInterval
         aa_accumulated += aa_from_this_interval;
 
         /* add interval to result */
-		    loc = SeqLocIntNew(aa_int_start, aa_int_stop, strand, SeqLocId(slp));
-		    SeqLocAdd(&result, loc, TRUE, FALSE);
+            loc = SeqLocIntNew(aa_int_start, aa_int_stop, strand, SeqLocId(slp));
+            SeqLocAdd(&result, loc, TRUE, FALSE);
       }
     }
 
@@ -4421,19 +4437,19 @@ NucLocFromProtInterval
 static SeqLocPtr NaLocFromNaInterval (SeqFeatPtr sfp, Int4 product_start, Int4 product_stop)
 {
   SeqLocPtr slp = NULL;
-  SeqLocPtr location_loc, loc;			/*for the sfp.location location*/
+  SeqLocPtr location_loc, loc;            /*for the sfp.location location*/
 
-  Boolean is_end;			/**is the end for process reached?**/
-  Int4 p_start=0, p_stop=0;		/**product sequence start & stop in defined
-					corresponding sfp.product **/
-  Int4 cur_pos;			/**current sfp.product sequence position in process**/
-  Int4 product_len;		/**length of the sfp.product **/
+  Boolean is_end;            /**is the end for process reached?**/
+  Int4 p_start=0, p_stop=0;        /**product sequence start & stop in defined
+                    corresponding sfp.product **/
+  Int4 cur_pos;            /**current sfp.product sequence position in process**/
+  Int4 product_len;        /**length of the sfp.product **/
 
-  Int4 d_start, d_stop;		/*the start and the stop of the sfp.location sequence*/
-  Int4 offset;			/*offset from the start of the current exon*/
+  Int4 d_start, d_stop;        /*the start and the stop of the sfp.location sequence*/
+  Int4 offset;            /*offset from the start of the current exon*/
   Int4 aa_len;
   Uint1 strand;
-  Int4 p_end_pos;	/*the end of the product sequence in the current loc*/
+  Int4 p_end_pos;    /*the end of the product sequence in the current loc*/
 
   cur_pos= product_start;
   product_len = 0;
@@ -4443,60 +4459,60 @@ static SeqLocPtr NaLocFromNaInterval (SeqFeatPtr sfp, Int4 product_start, Int4 p
   location_loc= NULL;
   while(!is_end && ((slp = SeqLocFindNext(sfp->location, slp))!=NULL))
   {
-	  product_len += SeqLocLen(slp);
+      product_len += SeqLocLen(slp);
     p_stop = product_len - 1;
 
-	  p_end_pos = p_stop;
+      p_end_pos = p_stop;
 
-	  if(p_stop >= product_stop)
-	  {
-	    p_stop = product_stop;		/**check if the end is reached**/
-	    is_end = TRUE;
-	  }
+      if(p_stop >= product_stop)
+      {
+        p_stop = product_stop;        /**check if the end is reached**/
+        is_end = TRUE;
+      }
 
-	  if(p_stop >= cur_pos)	/*get the exon*/
-	  {
-	    offset = cur_pos - p_start;
+      if(p_stop >= cur_pos)    /*get the exon*/
+      {
+        offset = cur_pos - p_start;
 
-		  strand = SeqLocStrand(slp);
-		  if(strand == Seq_strand_minus)
-		    d_start = SeqLocStop(slp) - offset;
-		  else
-		    d_start = SeqLocStart(slp) + offset;
+          strand = SeqLocStrand(slp);
+          if(strand == Seq_strand_minus)
+            d_start = SeqLocStop(slp) - offset;
+          else
+            d_start = SeqLocStart(slp) + offset;
 
-		  d_stop = d_start;
+          d_stop = d_start;
 
       aa_len = MIN(p_stop, product_stop) - cur_pos +1;
 
       if(strand == Seq_strand_minus)
-		  {
-			  if(aa_len >= 0)
-			  {
-				  d_stop -= (aa_len - 1);
-			  }
-			  else
+          {
+              if(aa_len >= 0)
+              {
+                  d_stop -= (aa_len - 1);
+              }
+              else
         {
-				  ++d_stop;
+                  ++d_stop;
         }
-  				  			
-			  d_stop = MAX(d_stop, SeqLocStart(slp));
-			  loc = SeqLocIntNew(d_stop, d_start, strand, SeqLocId(slp));
-		  }
-		  else
-		  {
-			  if(aa_len >= 0)
-			  {
-				  d_stop += (aa_len - 1);
-			  }
-			  else
-				  --d_stop;
-  				
-			  d_stop = MIN(d_stop, SeqLocStop(slp));
-			  loc = SeqLocIntNew(d_start, d_stop, strand, SeqLocId(slp));
-		  }
-		  SeqLocAdd(&location_loc, loc, TRUE, FALSE);
+                                
+              d_stop = MAX(d_stop, SeqLocStart(slp));
+              loc = SeqLocIntNew(d_stop, d_start, strand, SeqLocId(slp));
+          }
+          else
+          {
+              if(aa_len >= 0)
+              {
+                  d_stop += (aa_len - 1);
+              }
+              else
+                  --d_stop;
+                  
+              d_stop = MIN(d_stop, SeqLocStop(slp));
+              loc = SeqLocIntNew(d_start, d_stop, strand, SeqLocId(slp));
+          }
+          SeqLocAdd(&location_loc, loc, TRUE, FALSE);
 
-		  cur_pos = p_stop+1;
+          cur_pos = p_stop+1;
     }
 
     p_start = p_stop +1;
@@ -4508,9 +4524,9 @@ static SeqLocPtr NaLocFromNaInterval (SeqFeatPtr sfp, Int4 product_start, Int4 p
 
 /******************************************************************
 *
-*	productInterval_to_locationIntervals(sfp, product_start, product_stop)
-*	map the amino acid sequence to a chain of Seq-locs in the 
-*	DNA sequence through a CdRegion feature
+*    productInterval_to_locationIntervals(sfp, product_start, product_stop)
+*    map the amino acid sequence to a chain of Seq-locs in the 
+*    DNA sequence through a CdRegion feature
 *
 ******************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL 
@@ -4533,9 +4549,9 @@ static Boolean load_fuzz_to_DNA PROTO((SeqLocPtr dnaLoc, SeqLocPtr aaLoc,
 Boolean first));
 /******************************************************************
 *
-*	dnaLoc_to_aaLoc(sfp, location_loc, merge)
-*	map a SeqLoc on the DNA sequence
-*       to a Seq-loc in the	protein sequence
+*    dnaLoc_to_aaLoc(sfp, location_loc, merge)
+*    map a SeqLoc on the DNA sequence
+*       to a Seq-loc in the    protein sequence
 *       through a CdRegion feature
 *   if (merge) adjacent intervals on the amino acid sequence
 *      are merged into one. This should be the usual case.
@@ -4544,69 +4560,69 @@ Boolean first));
 NLM_EXTERN SeqLocPtr LIBCALL dnaLoc_to_aaLoc(SeqFeatPtr sfp, SeqLocPtr location_loc, Boolean 
 merge, Int4Ptr frame, Boolean allowTerminator)
 {
-	SeqLocPtr aa_loc = NULL, loc;
-	CdRegionPtr crp;
-	Int4 product_len, end_pos, frame_offset;
-	GatherRange gr;
-	Int4 a_left = 0, a_right, last_aa = -20, aa_from, aa_to;
+    SeqLocPtr aa_loc = NULL, loc;
+    CdRegionPtr crp;
+    Int4 product_len, end_pos, frame_offset;
+    GatherRange gr;
+    Int4 a_left = 0, a_right, last_aa = -20, aa_from, aa_to;
   Int4 cds_left, cds_right;
-	SeqLocPtr slp;
-	Int2 cmpval;
-	SeqIdPtr aa_sip;
-	BioseqPtr bsp;
+    SeqLocPtr slp;
+    Int2 cmpval;
+    SeqIdPtr aa_sip;
+    BioseqPtr bsp;
   Boolean partial5, partial3;
   Uint1 strand;
 
-	if ((sfp == NULL) || (location_loc == NULL)) return aa_loc;
-	if (sfp->data.choice != 3) return aa_loc;
-	if (sfp->product == NULL) return aa_loc;
+    if ((sfp == NULL) || (location_loc == NULL)) return aa_loc;
+    if (sfp->data.choice != 3) return aa_loc;
+    if (sfp->product == NULL) return aa_loc;
 
-	crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-	if(crp == NULL) return aa_loc;
+    crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+    if(crp == NULL) return aa_loc;
 
-	/* location_loc must be equal or contained in feature */
-	cmpval = SeqLocCompare(location_loc, sfp->location);
-	if (! ((cmpval == SLC_A_IN_B) || (cmpval == SLC_A_EQ_B)))
-		return aa_loc;
+    /* location_loc must be equal or contained in feature */
+    cmpval = SeqLocCompare(location_loc, sfp->location);
+    if (! ((cmpval == SLC_A_IN_B) || (cmpval == SLC_A_EQ_B)))
+        return aa_loc;
 
-	aa_sip = SeqLocId(sfp->product);
-	if (aa_sip == NULL) return aa_loc;
-	bsp = BioseqLockById(aa_sip);
-	if (bsp == NULL) return aa_loc;
-	end_pos = bsp->length - 1;
-	BioseqUnlock(bsp);
+    aa_sip = SeqLocId(sfp->product);
+    if (aa_sip == NULL) return aa_loc;
+    bsp = BioseqLockById(aa_sip);
+    if (bsp == NULL) return aa_loc;
+    end_pos = bsp->length - 1;
+    BioseqUnlock(bsp);
 
-	if(crp->frame == 0)
-		frame_offset = 0;
-	else
-		frame_offset = (Int4)crp->frame-1;
+    if(crp->frame == 0)
+        frame_offset = 0;
+    else
+        frame_offset = (Int4)crp->frame-1;
 
   cds_left = SeqLocStart (sfp->location);
   cds_right = SeqLocStop (sfp->location);
 
 
-	slp = NULL;
-	product_len = 0;
-	loc = NULL;
-	while ((slp = SeqLocFindNext(sfp->location, slp))!=NULL)
-	{
+    slp = NULL;
+    product_len = 0;
+    loc = NULL;
+    while ((slp = SeqLocFindNext(sfp->location, slp))!=NULL)
+    {
     if (SeqLocOffset(location_loc, slp, &gr, 0))
-	  {
-			SeqLocOffset(slp, location_loc, &gr, 0);
+      {
+            SeqLocOffset(slp, location_loc, &gr, 0);
 
-			a_left = gr.left + product_len;
-			a_right = gr.right + product_len;
+            a_left = gr.left + product_len;
+            a_right = gr.right + product_len;
       if (frame_offset > 0) {
         a_left -= frame_offset;
         a_right -= frame_offset;
       }
 
-			if (a_left < 0)
+            if (a_left < 0)
       {
         CheckSeqLocForPartial (slp, &partial5, &partial3);
         strand = SeqLocStrand (slp);
         if ((partial5 && strand != Seq_strand_minus) || (partial3 && strand == Seq_strand_minus)) {
-				  a_left = gr.left;
+                  a_left = gr.left;
         } else {
           a_left += 3;
         }
@@ -4614,206 +4630,208 @@ merge, Int4Ptr frame, Boolean allowTerminator)
       if (a_right > (bsp->length) * 3 - 1 && !allowTerminator) {
         CheckSeqLocForPartial (slp, &partial5, &partial3);
         strand = SeqLocStrand (slp);
-        if ((partial5 && strand != Seq_strand_minus) || (partial3 && strand == Seq_strand_minus)) {
-				  a_right = bsp->length - 1;
+        if (partial3 && a_right == bsp->length * 3) {
+          /* it's ok, leave it alone */
+        } else if ((partial5 && strand != Seq_strand_minus) || (partial3 && strand == Seq_strand_minus)) {
+                  a_right = (bsp->length * 3) - 1;
         } else {
           a_right -= 3;
         }
       }
 
-			aa_from = a_left / 3;
-			aa_to = a_right / 3;
+            aa_from = a_left / 3;
+            aa_to = a_right / 3;
 
-			if (aa_to > end_pos && !allowTerminator)
-				aa_to = end_pos;
+            if (aa_to > end_pos && !allowTerminator)
+                aa_to = end_pos;
 
-			if (merge)
-			{
-				if (aa_from <= last_aa)  /* overlap due to codons */
-					aa_from = last_aa+1;  /* set up to merge */
-			}
+            if (merge)
+            {
+                if (aa_from <= last_aa)  /* overlap due to codons */
+                    aa_from = last_aa+1;  /* set up to merge */
+            }
 
       /* NOTE - if a_left is not <= a_right, then a correction for frame may have
        * caused the location to not actually be mappable to the protein sequence.
        */
-			if ((aa_from <= aa_to || (allowTerminator && aa_from == aa_to + 1)) && a_left <= a_right)
-			{
-				if(loc != NULL)
-				{
-					if(aa_loc == NULL)
-						load_fuzz_to_DNA(loc, location_loc, TRUE);
-					SeqLocAdd(&aa_loc, loc, merge, FALSE);
-				}
-				loc = SeqLocIntNew(aa_from, aa_to, 0, aa_sip);
-				last_aa = aa_to;
-			}
+            if ((aa_from <= aa_to || (allowTerminator && aa_from == aa_to + 1)) && a_left <= a_right)
+            {
+                if(loc != NULL)
+                {
+                    if(aa_loc == NULL)
+                        load_fuzz_to_DNA(loc, location_loc, TRUE);
+                    SeqLocAdd(&aa_loc, loc, merge, FALSE);
+                }
+                loc = SeqLocIntNew(aa_from, aa_to, 0, aa_sip);
+                last_aa = aa_to;
+            }
     }
 
-    product_len += SeqLocLen(slp);		
-	}
+    product_len += SeqLocLen(slp);        
+    }
 
-	if(loc != NULL)
-	{
-		if(aa_loc == NULL)
-			load_fuzz_to_DNA(loc, location_loc, TRUE);
-		load_fuzz_to_DNA(loc, location_loc, FALSE);
-		SeqLocAdd(&aa_loc, loc, merge, FALSE);
-	}
-	if (frame != NULL)
-	    *frame = a_left % 3;
+    if(loc != NULL)
+    {
+        if(aa_loc == NULL)
+            load_fuzz_to_DNA(loc, location_loc, TRUE);
+        load_fuzz_to_DNA(loc, location_loc, FALSE);
+        SeqLocAdd(&aa_loc, loc, merge, FALSE);
+    }
+    if (frame != NULL)
+        *frame = a_left % 3;
 
-	return SeqLocPackage(aa_loc);
+    return SeqLocPackage(aa_loc);
 }
 
 /*****************************************************************************
 *
 *   BioseqHash(bsp)
-*   	Computes a (almost) unique hash code for a bioseq
+*       Computes a (almost) unique hash code for a bioseq
 *
 *****************************************************************************/
 NLM_EXTERN Uint4 BioseqHash (BioseqPtr bsp)
 {
-	Uint4 hashval = 0;
-	SeqPortPtr spp;
-	Uint1 code;
-	Int2 residue;
+    Uint4 hashval = 0;
+    SeqPortPtr spp;
+    Uint1 code;
+    Int2 residue;
 
-	if (bsp == NULL) return hashval;
+    if (bsp == NULL) return hashval;
 
-	if (ISA_na(bsp->mol))
-		code = Seq_code_iupacna;
-	else
-		code = Seq_code_ncbieaa;
+    if (ISA_na(bsp->mol))
+        code = Seq_code_iupacna;
+    else
+        code = Seq_code_ncbieaa;
 
-	spp = SeqPortNew(bsp, 0, -1, 0, code);
-	if (spp == NULL) return hashval;
+    spp = SeqPortNew(bsp, 0, -1, 0, code);
+    if (spp == NULL) return hashval;
 
-	while ((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF)
-	{
-		hashval *= 1103515245;
-		hashval += (Uint4)residue + 12345;
-	}
+    while ((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF)
+    {
+        hashval *= 1103515245;
+        hashval += (Uint4)residue + 12345;
+    }
 
-	SeqPortFree(spp);
+    SeqPortFree(spp);
 
-	return hashval;
+    return hashval;
 }
 
 
 /*-------------- BioseqRevComp () ---------------------------*/
 /***********************************************************************
 *   BioseqRevComp:   Takes the nucleic acid sequence from Bioseq
-*	Entry and gives the reverse complement sequence in place
+*    Entry and gives the reverse complement sequence in place
 *       Does not change features.
 ************************************************************************/
 NLM_EXTERN Boolean LIBCALL BioseqRevComp (BioseqPtr bsp)
 {
-	Boolean retval;
+    Boolean retval;
 
-	retval = BioseqReverse (bsp);
-	if (retval)
-		retval = BioseqComplement(bsp);
-	return retval;
+    retval = BioseqReverse (bsp);
+    if (retval)
+        retval = BioseqComplement(bsp);
+    return retval;
 }
 
 NLM_EXTERN Boolean ComplementSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp)
 {
-	SeqCodeTablePtr sctp;
-	ByteStorePtr    bysp;
-	long		    readbyte, bslen;
-	Uint1           byte = 0, byte_to, newbyte = 0, residue;
-	Uint1           comp, bitctr, mask, lshift, rshift, bc;
-	
-	if (seqtype == Seq_code_gap) return FALSE;
+    SeqCodeTablePtr sctp;
+    ByteStorePtr    bysp;
+    long            readbyte, bslen;
+    Uint1           byte = 0, byte_to, newbyte = 0, residue;
+    Uint1           comp, bitctr, mask, lshift, rshift, bc;
+    
+    if (seqtype == Seq_code_gap) return FALSE;
 
     bysp = (ByteStorePtr) sdp;
-	if (bysp == NULL)
-	{
-		ErrPostEx(SEV_ERROR,0,0, "Error:  no sequence data\n");
-		return FALSE;	  
-	}
+    if (bysp == NULL)
+    {
+        ErrPostEx(SEV_ERROR,0,0, "Error:  no sequence data\n");
+        return FALSE;      
+    }
 
-	if ((sctp = SeqCodeTableFind (seqtype)) == NULL)
-	{
-		ErrPostEx(SEV_ERROR,0,0, "Can't open table\n");
-		return FALSE;
-	}
-	switch (seqtype)		/*determine type of base encoding*/
-	{
-		case Seq_code_ncbi2na:
-			bc = 4;
-			rshift = 6;
-			lshift = 2;
-			mask = 192;
-			break;
+    if ((sctp = SeqCodeTableFind (seqtype)) == NULL)
+    {
+        ErrPostEx(SEV_ERROR,0,0, "Can't open table\n");
+        return FALSE;
+    }
+    switch (seqtype)        /*determine type of base encoding*/
+    {
+        case Seq_code_ncbi2na:
+            bc = 4;
+            rshift = 6;
+            lshift = 2;
+            mask = 192;
+            break;
 
-		case Seq_code_ncbi4na:
-			bc = 2;
-			rshift = 4;
-			lshift = 4;
-			mask = 240;
-			break;
+        case Seq_code_ncbi4na:
+            bc = 2;
+            rshift = 4;
+            lshift = 4;
+            mask = 240;
+            break;
 
                 case Seq_code_iupacna:
                 case Seq_code_ncbi8na:
-			bc = 1;
-			rshift = 0;
-			lshift = 0;
-			mask = 255;
-			break;
+            bc = 1;
+            rshift = 0;
+            lshift = 0;
+            mask = 255;
+            break;
     case Seq_code_iupacaa:
     case Seq_code_ncbi8aa:
     case Seq_code_ncbieaa:
     case Seq_code_ncbipaa:
     case Seq_code_iupacaa3:
-    case Seq_code_ncbistdaa: 			/* ignore amino acid */
+    case Seq_code_ncbistdaa:             /* ignore amino acid */
       ErrPostEx(SEV_ERROR,0,0, "Error:  cannot complement aa ; No ->mol flag on Bioseq\n");
       return FALSE;
     case Seq_code_ncbipna:
       ErrPostEx(SEV_WARNING,0,0, "Error: Don't yet know how to complement profile\n");
-			return FALSE;
-		default:
-			return FALSE;
-	}
+            return FALSE;
+        default:
+            return FALSE;
+    }
 
-	bslen = BSLen(bysp);
-	bitctr = 0;
-	readbyte = 0;
+    bslen = BSLen(bysp);
+    bitctr = 0;
+    readbyte = 0;
 
-	while (readbyte < bslen)
-	{
-		if (!bitctr)
-		{				/*get new byte*/
-			BSSeek (bysp, readbyte, SEEK_SET);
-			newbyte = byte_to = byte = residue = 0;
-			byte = (Uint1)BSGetByte (bysp);
-			bitctr = bc;
-			readbyte++;
-		}
+    while (readbyte < bslen)
+    {
+        if (!bitctr)
+        {                /*get new byte*/
+            BSSeek (bysp, readbyte, SEEK_SET);
+            newbyte = byte_to = byte = residue = 0;
+            byte = (Uint1)BSGetByte (bysp);
+            bitctr = bc;
+            readbyte++;
+        }
 
-		for (; bitctr; bitctr--)
-		{
-			residue = byte & mask;	/*mask out all but one base*/
-			residue >>= rshift;
-			byte <<= lshift;
+        for (; bitctr; bitctr--)
+        {
+            residue = byte & mask;    /*mask out all but one base*/
+            residue >>= rshift;
+            byte <<= lshift;
 
-			comp = SeqCodeTableComp (sctp, residue); /*get 
+            comp = SeqCodeTableComp (sctp, residue); /*get 
 complement*/
 
-			newbyte <<= lshift;
-			byte_to = newbyte;
-			newbyte = (comp | byte_to);	/*put complements 
+            newbyte <<= lshift;
+            byte_to = newbyte;
+            newbyte = (comp | byte_to);    /*put complements 
 together*/
 
-		}
+        }
 
-		if (readbyte)			/*put back byte with comps*/
-		{
-			BSSeek (bysp, readbyte-1, SEEK_SET);
-			BSPutByte (bysp, newbyte);
-		}
-	}
-	return TRUE;
+        if (readbyte)            /*put back byte with comps*/
+        {
+            BSSeek (bysp, readbyte-1, SEEK_SET);
+            BSPutByte (bysp, newbyte);
+        }
+    }
+    return TRUE;
   
 }
 
@@ -4858,13 +4876,13 @@ static Boolean DeltaBioseqComplement (BioseqPtr bsp)
 /*-------------- BioseqComplement () ---------------------------*/
 /***********************************************************************
 *   BioseqComplement:   Takes the nucleic acid sequence from Bioseq
-*	Entry and gives the complement sequence in place
+*    Entry and gives the complement sequence in place
 *       Does not change features.
 ************************************************************************/
 NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
 {
-	Boolean         rval = FALSE;
-	
+    Boolean         rval = FALSE;
+    
   if (bsp == NULL)
   {
     ErrPostEx(SEV_ERROR,0,0, "Error: not a BioseqPtr\n");
@@ -4873,7 +4891,7 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
   else if (ISA_aa(bsp->mol)) 
   {
     ErrPostEx(SEV_ERROR,0,0, "Error:  cannot complement aa\n");
-		rval = FALSE;  
+        rval = FALSE;  
   }
   else if (bsp->repr == Seq_repr_delta)
   {
@@ -4886,7 +4904,7 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
   else
   {
     ErrPostEx(SEV_ERROR,0,0, "Error: not a raw or delta sequence\n");
-		rval = FALSE;  
+        rval = FALSE;  
   }
   return rval;                        
 
@@ -4895,14 +4913,14 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp)
 
 NLM_EXTERN Boolean LIBCALL ReverseSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPtr sdp)
 {
-	ByteStorePtr 	bysp1, bysp2 = '\0';
-	long 		readbyte, bslen = 0;
-	Int4 		count = 0;
-	Uint1 	byte = 0, byte2, byte_to = 0, byte_to2, newbyte = 0;
-	Uint1		newbyte2, finalbyte, residue, residue2, bitctr, bc2 = 0;
-	Uint1 		bitctr2, mask, mask2, lshift, rshift, bc = 0, jagged;
-	
-	if (seqtype == Seq_code_gap) return FALSE;
+    ByteStorePtr     bysp1, bysp2 = '\0';
+    long         readbyte, bslen = 0;
+    Int4         count = 0;
+    Uint1     byte = 0, byte2, byte_to = 0, byte_to2, newbyte = 0;
+    Uint1        newbyte2, finalbyte, residue, residue2, bitctr, bc2 = 0;
+    Uint1         bitctr2, mask, mask2, lshift, rshift, bc = 0, jagged;
+    
+    if (seqtype == Seq_code_gap) return FALSE;
 
     bysp1 = (ByteStorePtr) sdp;
 
@@ -4912,51 +4930,51 @@ NLM_EXTERN Boolean LIBCALL ReverseSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPt
     return FALSE;
   }
 
-	switch (seqtype){
-		case Seq_code_ncbi2na:		/*bitshifts needed*/
-			mask = 192;
-			mask2 = 3;
-			lshift = 2;
-			rshift = 6;
+    switch (seqtype){
+        case Seq_code_ncbi2na:        /*bitshifts needed*/
+            mask = 192;
+            mask2 = 3;
+            lshift = 2;
+            rshift = 6;
                         jagged = seqlen%4;
-			switch (jagged)	/*change if jagged last byte*/
-			{
-				case 1:
-					bc = 1;
-					bc2 = 3;
-					break;
-				case 2:
-					bc = 2;
-					bc2 = 2;
-					break;
-				case 3:
-					bc = 3;
-					bc2 = 1;
-					break;
-				default:
-					bc = 4;
-					bc2 = 0;
-					break;
-			}
-			break;
-		case Seq_code_ncbi4na:
-			mask = 240;
-			mask2 = 15;
-			lshift = 4;
-			rshift = 4;
+            switch (jagged)    /*change if jagged last byte*/
+            {
+                case 1:
+                    bc = 1;
+                    bc2 = 3;
+                    break;
+                case 2:
+                    bc = 2;
+                    bc2 = 2;
+                    break;
+                case 3:
+                    bc = 3;
+                    bc2 = 1;
+                    break;
+                default:
+                    bc = 4;
+                    bc2 = 0;
+                    break;
+            }
+            break;
+        case Seq_code_ncbi4na:
+            mask = 240;
+            mask2 = 15;
+            lshift = 4;
+            rshift = 4;
                         jagged = seqlen%2;
-			switch (jagged)
-			{
-				case 1:
-					bc = 1;
-					bc2 = 1;
-					break;
-				default:
-					bc = 2;
-					bc2 = 0;
-					break;
-			}
-			break;
+            switch (jagged)
+            {
+                case 1:
+                    bc = 1;
+                    bc2 = 1;
+                    break;
+                default:
+                    bc = 2;
+                    bc2 = 0;
+                    break;
+            }
+            break;
                 case Seq_code_iupacna:
                 case Seq_code_ncbi8na:
 
@@ -4964,117 +4982,117 @@ NLM_EXTERN Boolean LIBCALL ReverseSeqData (Uint1 seqtype, Int4 seqlen, SeqDataPt
                 case Seq_code_ncbi8aa:
                 case Seq_code_ncbieaa:
                 case Seq_code_ncbistdaa:
-			bc = 1;
+            bc = 1;
                         bc2 = 0;
-			rshift = 0;
-			lshift = 0;
+            rshift = 0;
+            lshift = 0;
                         jagged = 0;
-			mask = 255;
+            mask = 255;
                         mask2 = 0;
-			break;
+            break;
                 case Seq_code_ncbipaa:
                 case Seq_code_iupacaa3:
                     ErrPostEx(SEV_ERROR,0,0, "Error:  cannot  reverse %s protein alphabet",(int)seqtype);
                     return FALSE;
                 case Seq_code_ncbipna:
                     ErrPostEx(SEV_WARNING,0,0, "Error: Don't yet know how to reverse profile\n");
-		default:		/*ignores amino acid sequence*/
-			return FALSE;
-	}
-	bysp2 = BSDup(bysp1);
-	bslen = BSLen (bysp1);
-	bitctr = bitctr2 = 0;
-	readbyte = 0;
-	count = 0;
+        default:        /*ignores amino acid sequence*/
+            return FALSE;
+    }
+    bysp2 = BSDup(bysp1);
+    bslen = BSLen (bysp1);
+    bitctr = bitctr2 = 0;
+    readbyte = 0;
+    count = 0;
 
-	if (!jagged)			/*no jagged last byte*/
-	{
-		while ((readbyte != BSLen(bysp1)))
-		{
-			count = rshift;
-			if (!bitctr)		/*get new byte*/
-			{
-				newbyte = byte_to = byte = residue = 0;
-				BSSeek (bysp2, --bslen, SEEK_SET);
-				byte = (Uint1)BSGetByte (bysp2);
-				bitctr = bc;
-				readbyte++;
-			}
+    if (!jagged)            /*no jagged last byte*/
+    {
+        while ((readbyte != BSLen(bysp1)))
+        {
+            count = rshift;
+            if (!bitctr)        /*get new byte*/
+            {
+                newbyte = byte_to = byte = residue = 0;
+                BSSeek (bysp2, --bslen, SEEK_SET);
+                byte = (Uint1)BSGetByte (bysp2);
+                bitctr = bc;
+                readbyte++;
+            }
 
-			for (;bitctr; bitctr--)
-			{
-				residue = byte & mask;
-				residue >>= count;
-				byte <<= lshift;
-				count = count - lshift;
-	
-				newbyte = (residue | byte_to);
-				byte_to = newbyte;
-			}
+            for (;bitctr; bitctr--)
+            {
+                residue = byte & mask;
+                residue >>= count;
+                byte <<= lshift;
+                count = count - lshift;
+    
+                newbyte = (residue | byte_to);
+                byte_to = newbyte;
+            }
 
-			BSSeek (bysp1, readbyte-1, SEEK_SET);
-			BSPutByte (bysp1, newbyte);
+            BSSeek (bysp1, readbyte-1, SEEK_SET);
+            BSPutByte (bysp1, newbyte);
 
-		}
-	}
-	else				/*jagged last byte*/
-	{
-		/*Gets two bytes prior to loop*/
-		newbyte = newbyte2 = byte_to = byte_to2 = 0;
-		byte2 = residue = residue2 = 0;
-		BSSeek (bysp2, bslen-2, SEEK_SET);
-		byte2 = (Uint1) BSGetByte (bysp2);	/*byte closer to beginning*/
-		byte = (Uint1) BSGetByte (bysp2);
-		bitctr = bc;
-		bitctr2 = bc2;
-		bslen = bslen - 2;
-		readbyte = 1;
+        }
+    }
+    else                /*jagged last byte*/
+    {
+        /*Gets two bytes prior to loop*/
+        newbyte = newbyte2 = byte_to = byte_to2 = 0;
+        byte2 = residue = residue2 = 0;
+        BSSeek (bysp2, bslen-2, SEEK_SET);
+        byte2 = (Uint1) BSGetByte (bysp2);    /*byte closer to beginning*/
+        byte = (Uint1) BSGetByte (bysp2);
+        bitctr = bc;
+        bitctr2 = bc2;
+        bslen = bslen - 2;
+        readbyte = 1;
 
-		while (readbyte != BSLen(bysp1))
-		{
-			count = rshift;
-			if (!bitctr)		/*when needed gets another 
+        while (readbyte != BSLen(bysp1))
+        {
+            count = rshift;
+            if (!bitctr)        /*when needed gets another 
 byte*/
-			{
-				newbyte = newbyte2 = byte_to = byte_to2 = 0;
-				byte2 = finalbyte = residue = residue2 = 0;
-				BSSeek (bysp2, --bslen, SEEK_SET);
-				byte2 = (Uint1) BSGetByte (bysp2);
-				bitctr = bc;
-				bitctr2 = bc2;
-				++readbyte;
-			}
-			for (; bitctr; bitctr--)
-			{
-				residue = byte & mask;	    /*reverses 1st 
+            {
+                newbyte = newbyte2 = byte_to = byte_to2 = 0;
+                byte2 = finalbyte = residue = residue2 = 0;
+                BSSeek (bysp2, --bslen, SEEK_SET);
+                byte2 = (Uint1) BSGetByte (bysp2);
+                bitctr = bc;
+                bitctr2 = bc2;
+                ++readbyte;
+            }
+            for (; bitctr; bitctr--)
+            {
+                residue = byte & mask;        /*reverses 1st 
 byte*/
-				residue >>= count;
-				byte <<= lshift;
-				byte_to = newbyte;
-				newbyte = (residue | byte_to);
-				count = count - lshift;
-			}
-			for (; bitctr2; bitctr2--)
-			{
-				residue2 = byte2 & mask2;   /*reverses 2nd */
-				byte2 >>= lshift;	    /*partially to 
+                residue >>= count;
+                byte <<= lshift;
+                byte_to = newbyte;
+                newbyte = (residue | byte_to);
+                count = count - lshift;
+            }
+            for (; bitctr2; bitctr2--)
+            {
+                residue2 = byte2 & mask2;   /*reverses 2nd */
+                byte2 >>= lshift;        /*partially to 
 join*/
-				newbyte2 <<= lshift;	    /*with the 1st*/
-				byte_to2 = newbyte2;
-				newbyte2 = (residue2 | byte_to2);
-			}
-			newbyte <<= (8 - (bc*lshift));	/*joins 1st & 2nd 
+                newbyte2 <<= lshift;        /*with the 1st*/
+                byte_to2 = newbyte2;
+                newbyte2 = (residue2 | byte_to2);
+            }
+            newbyte <<= (8 - (bc*lshift));    /*joins 1st & 2nd 
 bytes*/
-			finalbyte = (newbyte | newbyte2);
-			byte2 <<= (bc2 * lshift);
-			byte = byte2;
+            finalbyte = (newbyte | newbyte2);
+            byte2 <<= (bc2 * lshift);
+            byte = byte2;
 
-			BSSeek (bysp1, readbyte-1, SEEK_SET);
-			BSPutByte (bysp1, finalbyte);
-		}
-	}
-	BSFree(bysp2);
-	return TRUE;
+            BSSeek (bysp1, readbyte-1, SEEK_SET);
+            BSPutByte (bysp1, finalbyte);
+        }
+    }
+    BSFree(bysp2);
+    return TRUE;
 } /* ReverseSeqData */
 
 
@@ -5125,13 +5143,13 @@ static Boolean DeltaBioseqReverse (BioseqPtr bsp)
 /*-------------- BioseqReverse () ---------------------------*/
 /***********************************************************************
 *   BioseqReverse:   Takes nucleic acid sequence from Bioseq Entry and 
-*	reverses the whole sequence in place
+*    reverses the whole sequence in place
 *       Does not change features.
 ************************************************************************/
 NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
 {
-	Boolean       rval;
-	
+    Boolean       rval;
+    
   if (bsp == NULL)
   {
     ErrPostEx(SEV_ERROR,0,0, "Error: not a BioseqPtr\n");
@@ -5151,7 +5169,7 @@ NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp)
     rval = FALSE;  
   }
                         
-	return rval;
+    return rval;
 } /* BioseqReverse */
 
 #define SPC_BUFF_CHUNK 1024
@@ -5313,6 +5331,7 @@ NLM_EXTERN Boolean LIBCALL ContigRevComp (BioseqPtr bsp)
 {
   if (bsp == NULL) {
     ErrPostEx (SEV_ERROR, 0, 0, "ContigRevComp: empty BioseqPtr");
+    return FALSE;
   }
 
   if (bsp->repr == Seq_repr_seg && bsp->seq_ext_type == 1 && bsp->seq_ext != NULL) {
@@ -5479,7 +5498,7 @@ NLM_EXTERN SPCompressPtr SPCompressDNA(SeqPortPtr spp)
   
   if (spp == NULL || spp->newcode != Seq_code_ncbi4na)
     return NULL;
-	
+    
   spc = SPCompressNew();
   if(!GenericCompressDNA((VoidPtr) spp, (VoidPtr) spc, 
                          (Uint4) -1, /* Length of sequence unknown */
@@ -8369,7 +8388,7 @@ NLM_EXTERN CharPtr GetSequenceByBsp (BioseqPtr bsp)
 
 #if 0
   if (ISA_aa (bsp->mol)) {
-  	code = Seq_code_iupacaa;
+      code = Seq_code_iupacaa;
   }
   spp = SeqPortNew (bsp, 0, -1, 0, code);
   if (spp == NULL) {
@@ -8463,7 +8482,7 @@ static void FixGapLength (BioseqPtr bsp, Int4 offset, Int4 diff)
       extra_ns [diff] = 0;
       insertchar (extra_ns, offset, bsp->id, bsp->mol, FALSE);
     }
-  	slp = SeqLocIntNew (offset, offset + diff - 1, Seq_strand_plus, bsp->id);
+      slp = SeqLocIntNew (offset, offset + diff - 1, Seq_strand_plus, bsp->id);
     for (vnp = align_annot_list; vnp != NULL; vnp = vnp->next)
     {
       sanp = vnp->data.ptrvalue;
@@ -8476,7 +8495,7 @@ static void FixGapLength (BioseqPtr bsp, Int4 offset, Int4 diff)
   }
   else
   {
-  	slp = SeqLocIntNew (offset, offset - diff - 1, Seq_strand_plus, bsp->id);
+      slp = SeqLocIntNew (offset, offset - diff - 1, Seq_strand_plus, bsp->id);
     SeqDeleteByLoc (slp, TRUE, FALSE);
  
     for (vnp = align_annot_list; vnp != NULL; vnp = vnp->next)
@@ -8572,7 +8591,7 @@ static Int4 AddGap(Int4 gap_len,
         slp->fuzz = ifp;
         if (slp->length != 100) {
           FixGapLength (bsp, len, 100 - slp->length);
-       	  slp->length = 100;
+             slp->length = 100;
         }
       }
       added_len += slp->length;
@@ -8720,6 +8739,7 @@ NLM_EXTERN void ConvertNsToGaps (
   bsp->repr = Seq_repr_delta;
   bsp->seq_ext_type = 4;
   bsp->seq_ext = seq_ext;
+  bsp->length = len;
 
   BioseqPack (bsp);
 }
@@ -8731,23 +8751,23 @@ NLM_EXTERN void ConvertNsToGaps (
    B is really D or N, but they are close so is treated as D
    Z is really E or Q, but they are close so is treated as E
    X is hard to guess, so the calculation fails on X
-   J and O are unassigned, so fails on those
    - and * are skipped
+   water molecule is removed for in-peptide atom counts
 
-  A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S  T  U  V  W  X  Y  Z
+  A  B  C  D  E  F  G  H   I   J   K   L  M  N   O  P  Q   R  S  T  U  V   W  X  Y  Z
 */
 Uint1 C_atoms[26] =
-{ 3, 4, 3, 4, 5, 9, 2, 6, 6, 0, 6, 6, 5, 4, 0, 5, 5, 6, 3, 4, 3, 5,11, 0, 9, 5};
+{ 3, 4, 3, 4, 5, 9, 2, 6,  6,  6,  6,  6, 5, 4, 12, 5, 5,  6, 3, 4, 3, 5, 11, 0, 9, 5};
 Uint1 H_atoms[26] =
-{ 5, 5, 5, 5, 7, 9, 3, 7,11, 0,12,11, 9, 6, 0, 7, 8,12, 5, 7, 5, 9,10, 0, 9, 7};
+{ 5, 5, 5, 5, 7, 9, 3, 7, 11, 11, 12, 11, 9, 6, 19, 7, 8, 12, 5, 7, 5, 9, 10, 0, 9, 7};
 Uint1 N_atoms[26] =
-{ 1, 1, 1, 1, 1, 1, 1, 3, 1, 0, 2, 1, 1, 2, 0, 1, 2, 4, 1, 1, 1, 1, 2, 0, 1, 1};
+{ 1, 1, 1, 1, 1, 1, 1, 3,  1,  1,  2,  1, 1, 2,  3, 1, 2,  4, 1, 1, 1, 1,  2, 0, 1, 1};
 Uint1 O_atoms[26] =
-{ 1, 3, 1, 3, 3, 1, 1, 1, 1, 0, 1, 1, 1, 2, 0, 1, 2, 1, 2, 2, 1, 1, 1, 0, 2, 3};
+{ 1, 3, 1, 3, 3, 1, 1, 1,  1,  1,  1,  1, 1, 2,  2, 1, 2,  1, 2, 2, 1, 1,  1, 0, 2, 3};
 Uint1 S_atoms[26] =
-{ 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+{ 0, 0, 1, 0, 0, 0, 0, 0,  0,  0,  0,  0, 1, 0,  0, 0, 0,  0, 0, 0, 0, 0,  0, 0, 0, 0};
 Uint1 Se_atoms[26] =
-{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0};
+{ 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0, 0, 0,  0, 0, 0,  0, 0, 0, 1, 0,  0, 0, 0, 0};
 
 /**************************************************************
 *
@@ -8760,154 +8780,154 @@ NLM_EXTERN FloatHi MolWtForLoc (SeqLocPtr slp)
 {
     StreamCache sc;
     Int2 res;
-	int residue;
-	Int4	Ccnt,
-		Hcnt,
-		Ncnt,
-		Ocnt,
-		Scnt,
-		Secnt;
-	FloatHi retval = -1.0;
+    int residue;
+    Int4    Ccnt,
+        Hcnt,
+        Ncnt,
+        Ocnt,
+        Scnt,
+        Secnt;
+    FloatHi retval = -1.0;
 
     if (slp == NULL) return retval;
     StreamCacheSetup (NULL, slp, 0, &sc);
 
-	Ccnt = 0;  /* initialize counters */
-	Hcnt = 2;  /* always start with water */
-	Ocnt = 1;  /* H20 */
-	Ncnt = 0;
-	Scnt = 0;
-	Secnt = 0;
+    Ccnt = 0;  /* initialize counters */
+    Hcnt = 2;  /* always start with water */
+    Ocnt = 1;  /* H20 */
+    Ncnt = 0;
+    Scnt = 0;
+    Secnt = 0;
 
-	while ((res = StreamCacheGetResidue (&sc)) != '\0')
-	{
-	    if (IS_LOWER (res)) {
-	        res = TO_UPPER (res);
-	    }
-	    if (IS_UPPER (res)) {
-	        residue = res - 'A';
-			if (H_atoms[residue] == 0) { /* unsupported AA */
-		        return retval;    /* bail out */
-			}
-			Ccnt += C_atoms[residue];
-			Hcnt += H_atoms[residue];
-			Ncnt += N_atoms[residue];
-			Ocnt += O_atoms[residue];
-			Scnt += S_atoms[residue];
-			Secnt += Se_atoms[residue];
-		} else if (res != '-' && res != '*') {
-		    return retval;    /* bail out */
-		}
-	}
+    while ((res = StreamCacheGetResidue (&sc)) != '\0')
+    {
+        if (IS_LOWER (res)) {
+            res = TO_UPPER (res);
+        }
+        if (IS_UPPER (res)) {
+            residue = res - 'A';
+            if (H_atoms[residue] == 0) { /* unsupported AA */
+                return retval;    /* bail out */
+            }
+            Ccnt += C_atoms[residue];
+            Hcnt += H_atoms[residue];
+            Ncnt += N_atoms[residue];
+            Ocnt += O_atoms[residue];
+            Scnt += S_atoms[residue];
+            Secnt += Se_atoms[residue];
+        } else if (res != '-' && res != '*') {
+            return retval;    /* bail out */
+        }
+    }
 
-	retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
-		 (14.0067 * Ncnt) + (15.9994 * Ocnt) +
-		 (32.064 * Scnt) + (78.96 * Secnt);
+    retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
+         (14.0067 * Ncnt) + (15.9994 * Ocnt) +
+         (32.064 * Scnt) + (78.96 * Secnt);
 
-	return retval;
+    return retval;
 }
 
 NLM_EXTERN FloatHi MolWtForBsp (BioseqPtr bsp)
 {
     StreamCache sc;
     Int2 res;
-	int residue;
-	Int4	Ccnt,
-		Hcnt,
-		Ncnt,
-		Ocnt,
-		Scnt,
-		Secnt;
-	FloatHi retval = -1.0;
+    int residue;
+    Int4    Ccnt,
+        Hcnt,
+        Ncnt,
+        Ocnt,
+        Scnt,
+        Secnt;
+    FloatHi retval = -1.0;
 
     if (bsp == NULL) return retval;
     if (! ISA_aa (bsp->mol)) return retval;
     StreamCacheSetup (bsp, NULL, 0, &sc);
 
-	Ccnt = 0;  /* initialize counters */
-	Hcnt = 2;  /* always start with water */
-	Ocnt = 1;  /* H20 */
-	Ncnt = 0;
-	Scnt = 0;
-	Secnt = 0;
+    Ccnt = 0;  /* initialize counters */
+    Hcnt = 2;  /* always start with water */
+    Ocnt = 1;  /* H20 */
+    Ncnt = 0;
+    Scnt = 0;
+    Secnt = 0;
 
-	while ((res = StreamCacheGetResidue (&sc)) != '\0')
-	{
-	    if (IS_LOWER (res)) {
-	        res = TO_UPPER (res);
-	    }
-	    if (IS_UPPER (res)) {
-	        residue = res - 'A';
-			if (H_atoms[residue] == 0) { /* unsupported AA */
-		        return retval;    /* bail out */
-			}
-			Ccnt += C_atoms[residue];
-			Hcnt += H_atoms[residue];
-			Ncnt += N_atoms[residue];
-			Ocnt += O_atoms[residue];
-			Scnt += S_atoms[residue];
-			Secnt += Se_atoms[residue];
-		} else if (res != '-' && res != '*') {
-		    return retval;    /* bail out */
-		}
-	}
+    while ((res = StreamCacheGetResidue (&sc)) != '\0')
+    {
+        if (IS_LOWER (res)) {
+            res = TO_UPPER (res);
+        }
+        if (IS_UPPER (res)) {
+            residue = res - 'A';
+            if (H_atoms[residue] == 0) { /* unsupported AA */
+                return retval;    /* bail out */
+            }
+            Ccnt += C_atoms[residue];
+            Hcnt += H_atoms[residue];
+            Ncnt += N_atoms[residue];
+            Ocnt += O_atoms[residue];
+            Scnt += S_atoms[residue];
+            Secnt += Se_atoms[residue];
+        } else if (res != '-' && res != '*') {
+            return retval;    /* bail out */
+        }
+    }
 
-	retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
-		 (14.0067 * Ncnt) + (15.9994 * Ocnt) +
-		 (32.064 * Scnt) + (78.96 * Secnt);
+    retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
+         (14.0067 * Ncnt) + (15.9994 * Ocnt) +
+         (32.064 * Scnt) + (78.96 * Secnt);
 
-	return retval;
+    return retval;
 }
 
 NLM_EXTERN FloatHi MolWtForStr (CharPtr str)
 {
     Char res;
-	int residue;
-	Int4	Ccnt,
-		Hcnt,
-		Ncnt,
-		Ocnt,
-		Scnt,
-		Secnt;
-	FloatHi retval = -1.0;
+    int residue;
+    Int4    Ccnt,
+        Hcnt,
+        Ncnt,
+        Ocnt,
+        Scnt,
+        Secnt;
+    FloatHi retval = -1.0;
 
     if (str == NULL) return retval;
 
-	Ccnt = 0;  /* initialize counters */
-	Hcnt = 2;  /* always start with water */
-	Ocnt = 1;  /* H20 */
-	Ncnt = 0;
-	Scnt = 0;
-	Secnt = 0;
+    Ccnt = 0;  /* initialize counters */
+    Hcnt = 2;  /* always start with water */
+    Ocnt = 1;  /* H20 */
+    Ncnt = 0;
+    Scnt = 0;
+    Secnt = 0;
 
-	res = *str;
-	while (res != '\0')
-	{
-	    if (IS_LOWER (res)) {
-	        res = TO_UPPER (res);
-	    }
-	    if (IS_UPPER (res)) {
-	        residue = res - 'A';
-			if (H_atoms[residue] == 0) { /* unsupported AA */
-		        return retval;    /* bail out */
-			}
-			Ccnt += C_atoms[residue];
-			Hcnt += H_atoms[residue];
-			Ncnt += N_atoms[residue];
-			Ocnt += O_atoms[residue];
-			Scnt += S_atoms[residue];
-			Secnt += Se_atoms[residue];
-		} else if (res != '-' && res != '*') {
-		    return retval;    /* bail out */
-		}
-	    str++;
-	    res = *str;
-	}
+    res = *str;
+    while (res != '\0')
+    {
+        if (IS_LOWER (res)) {
+            res = TO_UPPER (res);
+        }
+        if (IS_UPPER (res)) {
+            residue = res - 'A';
+            if (H_atoms[residue] == 0) { /* unsupported AA */
+                return retval;    /* bail out */
+            }
+            Ccnt += C_atoms[residue];
+            Hcnt += H_atoms[residue];
+            Ncnt += N_atoms[residue];
+            Ocnt += O_atoms[residue];
+            Scnt += S_atoms[residue];
+            Secnt += Se_atoms[residue];
+        } else if (res != '-' && res != '*') {
+            return retval;    /* bail out */
+        }
+        str++;
+        res = *str;
+    }
 
-	retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
-		 (14.0067 * Ncnt) + (15.9994 * Ocnt) +
-		 (32.064 * Scnt) + (78.96 * Secnt);
+    retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
+         (14.0067 * Ncnt) + (15.9994 * Ocnt) +
+         (32.064 * Scnt) + (78.96 * Secnt);
 
-	return retval;
+    return retval;
 }
 

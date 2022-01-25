@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:  Object manager interface for module NCBI-General
 *
@@ -37,65 +37,6 @@
 * --------------------------------------------------------------------------
 * Date	   Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: objgen.h,v $
-* Revision 6.14  2008/09/10 15:22:46  bollin
-* Added DbtagMatchEx and ObjectIdMatchEx, which are optionally case sensitive or case insensitive.
-*
-* Revision 6.13  2005/07/08 18:18:31  kans
-* added scratch pointer to EXTRA_OBJMGR_FIELDS
-*
-* Revision 6.12  2005/05/18 17:30:16  bollin
-* added NameStdMatch and PersonIdMatch functions
-*
-* Revision 6.11  2002/07/22 20:02:16  kans
-* document person-id.consortium choice
-*
-* Revision 6.10  2002/05/08 18:57:24  kans
-* itemID is Uint4
-*
-* Revision 6.9  2000/01/20 17:04:27  beloslyu
-* new function DateClean to properly clean the date was added
-*
-* Revision 6.8  2000/01/20 15:13:16  ostell
-* added hour/minute/second fields to Date
-* added DateTimeCurr()
-*
-* Revision 6.7  1999/11/03 17:58:26  kans
-* added SeqDescrAddPointer
-*
-* Revision 6.6  1999/10/05 17:24:14  kans
-* added SeqDescrAdd
-*
-* Revision 6.5  1999/09/28 14:56:00  kans
-* rename ObjValNodeNew to SeqDescrNew
-*
-* Revision 6.4  1999/09/27 17:48:38  kans
-* using GatherIndex structure
-*
-* Revision 6.3  1999/09/24 23:09:23  kans
-* adds EXTRA_OBJMGR_FIELDS to several objects
-*
-* Revision 6.2  1999/09/23 00:07:44  kans
-* ObjValNodeNew implemented
-*
-* Revision 6.1  1999/09/22 23:37:18  kans
-* added EXTRA_OBJMGR_FIELDS and ObjValNode
-*
-* Revision 6.0  1997/08/25 18:50:00  madden
-* Revision changed to 6.0
-*
-* Revision 4.1  1997/06/19 18:41:26  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 4.0  1995/07/26 13:48:06  ostell
-* force revision to 4.0
-*
- * Revision 3.3  1995/05/15  21:22:00  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -199,6 +140,8 @@ NLM_EXTERN NCBI_DatePtr LIBCALL DateDup PROTO((NCBI_DatePtr dp));
 NLM_EXTERN Boolean      LIBCALL DateAsnWrite PROTO((NCBI_DatePtr dp, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN NCBI_DatePtr LIBCALL DateAsnRead PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Int2         LIBCALL DateMatch PROTO((DatePtr a, DatePtr b, Boolean all));
+NLM_EXTERN DatePtr      LIBCALL DateParse (CharPtr str);
+
 /*****************************************************************************
 *
 *   DateCheck (dp)

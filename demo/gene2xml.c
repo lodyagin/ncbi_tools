@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/05
 *
-* $Revision: 1.8 $
+* $Revision: 1.10 $
 *
 * File Description:
 *
@@ -48,7 +48,7 @@
 #define NLM_GENERATED_CODE_PROTO
 #include <objentgene.h>
 
-#define GENE2XMLAPP_VER "1.1"
+#define GENE2XMLAPP_VER "1.3"
 
 CharPtr GENE2XMLAPPLICATION = GENE2XMLAPP_VER;
 
@@ -220,7 +220,9 @@ static Boolean GenerateXML (
     if (atp == atp_egse) {
       egp = EntrezgeneAsnRead (aip, atp);
       if (taxid == 0 || HasDesiredTaxId (egp, taxid)) {
-        EntrezgeneAsnWrite (egp, aop, atp);
+        if (! EntrezgeneAsnWrite (egp, aop, atp)) {
+          Message (MSG_POSTERR, "EntrezgeneAsnWrite failure");
+        }
       }
       EntrezgeneFree (egp);
     } else {

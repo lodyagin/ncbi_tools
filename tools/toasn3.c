@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.112 2009/06/04 16:14:29 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.120 2010/07/15 20:09:00 kans Exp $";
 
 /*****************************************************************************
 *
@@ -133,15 +133,15 @@ static Int2 FindStr(CharPtr PNTR array, Int2 array_num, CharPtr str) {
 
 /*****************************************************************************
 *
-*   ToAsn4(sep)
+*   ToAsn4(sep, isEmblOrDdbj)
 *       Converts pubs to asn.1 spec 4.0 within SeqEntryPtr - SeqEntryPubsAsn4
 *        move tax lineage from GBblock to BioSource
 *****************************************************************************/
-Int4 ToAsn4 (SeqEntryPtr sep)
+Int4 ToAsn4 (SeqEntryPtr sep, Boolean isEmblOrDdbj)
 {
     CharPtr lineage = NULL;
     
-    SeqEntryPubsAsn4(sep);
+    SeqEntryPubsAsn4(sep, isEmblOrDdbj);
     SeqEntryExplore(sep, (Pointer) (&lineage), FindOldLineage);
     if (lineage) {
         SeqEntryExplore(sep, (Pointer) (&lineage), NewLineage);
@@ -698,16 +698,19 @@ static void HasSiteRef (SeqFeatPtr sfp, Pointer userdata)
 *   SeqEntryPubsAsn4(sep)
 *       Converts pubs to asn.1 spec 4.0 within SeqEntryPtr
 *****************************************************************************/
-Int4 SeqEntryPubsAsn4 (SeqEntryPtr sep)
+Int4 SeqEntryPubsAsn4Ex (SeqEntryPtr sep, Boolean isEmblOrDdbj, Boolean uniqueOnBioseq)
 {
+    BioseqPtr bsp = NULL;
     BioseqSetPtr bioset = NULL;
-    ValNodePtr vnp = NULL, publist= NULL, tmp, v;
-    PubdescPtr        pubdesc;
+    ValNodePtr vnp = NULL, publist, tmp, v;
+    PubdescPtr pubdesc;
     Boolean foundSitRef = FALSE;
     
-    if (!IS_Bioseq(sep)) {
+    if (IS_Bioseq(sep)) {
+        bsp = (BioseqPtr) (sep->data.ptrvalue);
+    } else if (IS_Bioseq_set(sep)) {
         bioset = (BioseqSetPtr) (sep->data.ptrvalue); /* top level set */
-    } 
+    }
     SeqEntryExplore(sep, &vnp, FindCit);
     SeqEntryExplore(sep, &vnp, ChangeCitQual);
     vnp_psp_free(vnp); 
@@ -719,7 +722,8 @@ Int4 SeqEntryPubsAsn4 (SeqEntryPtr sep)
     SeqEntryExplore(sep, NULL, DeleteSites);
 
 /* move pubs in set to the top level */
-    if (bioset && bioset->_class != 9) {
+    if (bioset && bioset->_class != 9 && (! isEmblOrDdbj)) {
+        publist = NULL;
         SeqEntryExplore(sep, (Pointer) NULL, MoveSegmPubs);
         SeqEntryExplore(sep, (Pointer) NULL, MoveNPPubs);
 /*   unique pubs on the set level*/
@@ -736,8 +740,24 @@ Int4 SeqEntryPubsAsn4 (SeqEntryPtr sep)
         }
         vnp_list_free(tmp); 
     }
+    if (uniqueOnBioseq && bsp != NULL && (! isEmblOrDdbj)) {
+/*   unique pubs on the bioseq level*/
+        publist = NULL;
+        tmp = ValNodeExtractList(&bsp->descr, Seq_descr_pub);
+        for (v = tmp; v; v = v->next) {
+            pubdesc = v->data.ptrvalue;
+            publist = AddToList(publist, NULL, pubdesc);
+        }
+        bsp->descr = ValNodeLink(&(bsp->descr), publist);
+        vnp_list_free(tmp); 
+    }
     SeqEntryExplore(sep, NULL, ChangeCitSub);
     return 0;        
+}
+
+Int4 SeqEntryPubsAsn4 (SeqEntryPtr sep, Boolean isEmblOrDdbj)
+{
+    return SeqEntryPubsAsn4Ex(sep, isEmblOrDdbj, TRUE);
 }
 
 /*****************************************************************************
@@ -752,7 +772,7 @@ void StripOld (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     OrgRefPtr    orp;
     SeqAnnotPtr    sap, ap, apnext;
     BioseqPtr    bsp = NULL;
-    BioseqSetPtr    bssp;
+    BioseqSetPtr    bssp = NULL;
     
     if (IS_Bioseq(sep)) {
         bsp = (BioseqPtr)(sep->data.ptrvalue);
@@ -787,9 +807,9 @@ void StripOld (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
             OrgRefFree(orp);
             MemFree(tmp);
         }
-        if (IS_Bioseq(sep)) {
+        if (bsp != NULL) {
             bsp->descr = vnp;
-        } else {
+        } else if (bssp != NULL) {
             bssp->descr = vnp;
         }
     }
@@ -811,9 +831,9 @@ void StripOld (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
             sap = remove_annot(sap, ap);
         }
     }
-    if (IS_Bioseq(sep)) {
+    if (bsp != NULL) {
         bsp->annot = sap;
-    } else {
+    } else if (bssp != NULL) {
         bssp->annot = sap;
     }
 }
@@ -826,8 +846,8 @@ void StripOld (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 ValNodePtr GetMultBiosource(SeqEntryPtr sep)
 {
     ValNodePtr bvnp, vnp, retval;
-    BioseqPtr bsp;
-    BioseqSetPtr bssp;
+    BioseqPtr bsp = NULL;
+    BioseqSetPtr bssp = NULL;
     
     if (sep == NULL)
         return NULL;
@@ -849,9 +869,9 @@ ValNodePtr GetMultBiosource(SeqEntryPtr sep)
         retval = NULL;
     }
     vnp = tie_next(vnp, bvnp);    
-    if (IS_Bioseq(sep)) {
+    if (bsp != NULL) {
         bsp->descr = vnp;    
-    } else {
+    } else if (bssp != NULL) {
         bssp->descr = vnp;    
     }
     return retval;    
@@ -956,7 +976,7 @@ static void RemoveEmptyTitleAndPubGenAsOnlyPub (SeqEntryPtr sep)
 Int4 SeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip_old, Boolean source_correct, Boolean taxserver, SeqEntryFunc taxfun)
 {
     return SeqEntryToAsn3Ex(sep, strip_old, source_correct, 
-            taxserver, taxfun, NULL, FALSE);
+            taxserver, taxfun, NULL, FALSE, FALSE);
 }
 static Boolean is_equiv(SeqEntryPtr sep)
 {
@@ -1038,7 +1058,16 @@ static Int2 GetUpdateDatePos (SeqEntryPtr sep)
 *        txfun - Taxon3ReplaceOrgInSeqEntry
 *        taxmerge - Tax3MergeSourceDescr
 *****************************************************************************/
-Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge, Boolean gpipeMode)
+Int4 SeqEntryToAsn3Ex (
+SeqEntryPtr sep,
+Boolean strip_old,
+Boolean source_correct,
+Boolean taxserver,
+SeqEntryFunc taxfun,
+SeqEntryFunc taxmerge,
+Boolean gpipeMode,
+Boolean isEmblOrDdbj
+)
 {
     ToAsn3 ta;
     OrgFixPtr ofp = NULL;
@@ -1079,7 +1108,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
         if(strip_old) {
             SeqEntryExplore(sep, NULL, StripOld);
         }
-        ToAsn4(sep);               /* move pubs and lineage */
+        ToAsn4(sep, isEmblOrDdbj);               /* move pubs and lineage */
         CombineBSFeat(sep);
         if (taxserver && taxfun != NULL) {
             SeqEntryExplore(sep, NULL, taxfun);
@@ -1117,7 +1146,9 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
             SeqEntryExplore(sep, NULL, MapsToGenref);
         }
         */
-        SeqEntryExplore(sep, NULL, MapsToGenref);
+        if (! isEmblOrDdbj) {
+          SeqEntryExplore(sep, NULL, MapsToGenref);
+        }
         CheckGeneticCode(sep);
         NormalizeSegSeqMolInfo (sep);
         toasn3_free(&ta);
@@ -1152,7 +1183,7 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
     if(ta.had_biosource && strip_old) {
         SeqEntryExplore(sep, NULL, StripOld);
     }
-    ToAsn4(sep);          /* move pubs and lineage */
+    ToAsn4(sep, isEmblOrDdbj);          /* move pubs and lineage */
     if (taxserver && taxfun != NULL) {
         SeqEntryExplore(sep, NULL, taxfun);
     }
@@ -1189,7 +1220,9 @@ Int4 SeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip_old, Boolean source_correc
         SeqEntryExplore(sep, NULL, MapsToGenref);
     }
     */
-    SeqEntryExplore(sep, NULL, MapsToGenref);
+    if (! isEmblOrDdbj) {
+      SeqEntryExplore(sep, NULL, MapsToGenref);
+    }
     CheckGeneticCode(sep);
     NormalizeSegSeqMolInfo (sep);
     toasn3_free(&ta);
@@ -1498,7 +1531,7 @@ Int4 BSComparisonEx(BioSourcePtr one, BioSourcePtr two, Boolean clone)
 static CharPtr GetQualValue(GBQualPtr gbqual, CharPtr qual)
 {
     GBQualPtr    q;
-    CharPtr     value;
+    CharPtr     value = NULL;
     
         for(q = gbqual; q != NULL; q = q->next) {
             if (StringCmp(q->qual, qual) == 0) {
@@ -1745,7 +1778,7 @@ void CkOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     SeqFeatPtr    sfp, tmp_sfp = NULL;
     SeqAnnotPtr    sap;
     BioseqPtr    bsp = NULL;
-    BioseqSetPtr    bssp;
+    BioseqSetPtr    bssp = NULL;
     
     tap = (ToAsn3Ptr)data;
     if (!tap->had_biosource)
@@ -1783,9 +1816,9 @@ void CkOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     }
     sap->data = tmp_sfp;
     if (tmp_sfp == NULL) {
-        if (IS_Bioseq(sep)) {
+        if (bsp != NULL) {
             bsp->annot = NULL;
-        } else {
+        } else if (bssp != NULL) {
             bssp->annot = NULL;
         }
     }
@@ -1901,7 +1934,9 @@ Int4 FixNucProtSet(SeqEntryPtr sep)
 /*   quick fix of core dump in segmented sets with multiple organisms 
     BIOSOURCE feature is created on main segmeted bioseq (not parts) !*/
         s = bseg->seq_set;
-        bsp = (BioseqPtr) s->data.ptrvalue;
+        if (s != NULL) {
+            bsp = (BioseqPtr) s->data.ptrvalue;
+        }
         descr = bseg->descr;
         sap = bseg->annot;
     }
@@ -2468,17 +2503,17 @@ void CountSourceFeat (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 *****************************************************************************/
 void CorrectSourceFeat (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
-    Boolean        whole = FALSE, new;
+    Boolean        whole = FALSE, new = FALSE;
     Int2        count=0;
     Int4        len;
     ValNodePtr    vnp0, vnp;
-    SeqFeatPtr    sfp = NULL, tmp_sfp, f, ff, fnext;
+    SeqFeatPtr    sfp = NULL, tmp_sfp = NULL, f, ff, fnext;
     SeqAnnotPtr    sap;
     BioseqPtr    bsp = NULL;
     BioseqSetPtr    bssp;
     ImpFeatPtr    imp;
     OrgRefPtr    orp;
-    CharPtr        name, org_name, f_org, ff_org;
+    CharPtr        name, org_name, f_org = NULL, ff_org = NULL;
     GBQualPtr    q;
     SeqLocPtr     slp;
     static Char        msg[51];
@@ -2629,6 +2664,7 @@ Int2 BioSourceToGeneticCode (BioSourcePtr biop)
 {
   OrgNamePtr  onp;
   OrgRefPtr   orp;
+  Uint1       pgcode;
 
   if (biop != NULL) {
     orp = biop->org;
@@ -2646,7 +2682,15 @@ Int2 BioSourceToGeneticCode (BioSourcePtr biop)
                    biop->genome == GENOME_apicoplast ||
                    biop->genome == GENOME_leucoplast ||
                    biop->genome == GENOME_proplastid) {
-          return 11;
+          if (onp->pgcode > 0) {
+            return onp->pgcode;
+          } else {
+            pgcode = GetSpecialPlastidGenCode (orp->taxname, onp->lineage);
+            if (pgcode > 0) {
+              return pgcode;
+            }
+            return 11;
+          }
         } else {
           return onp->gcode;
         }
@@ -2867,7 +2911,7 @@ static void CheckGCode (SeqFeatPtr sfp, Pointer userdata)
     Uint1    code;
     SeqFeatPtr      f;
     CdRegionPtr     cds;
-    BioseqPtr         bsp;
+    BioseqPtr         bsp = NULL;
     SeqAnnotPtr     ap;
     ValNodePtr         vnp, vnpnext;
     DbtagPtr         db;
@@ -3081,8 +3125,8 @@ static CharPtr GetQualValuePos(CharPtr qval)
 
 static Uint1 GetQualValueAa(CharPtr qval)
 {
-   CharPtr  str, eptr, ptr;
-   Uint1    aa;
+   CharPtr  str, eptr = NULL, ptr;
+   Uint1    aa = 0;
 
     str = StringStr(qval, "aa:");
     if (str != NULL) {
@@ -3092,9 +3136,11 @@ static Uint1 GetQualValueAa(CharPtr qval)
            for (eptr = str; *eptr != ')' && *eptr != ' ' && *eptr != '\0'; eptr++) continue;
     }
 
-    ptr = TextSave(str, eptr-str);
-    aa = ValidAminoAcid(ptr);
-    MemFree(ptr);  
+    if (eptr != NULL && str != NULL) {
+      ptr = TextSave(str, eptr-str);
+      aa = ValidAminoAcid(ptr);
+      MemFree(ptr);
+    }
 
     return (aa);
 
@@ -3115,7 +3161,7 @@ Boolean ImpFeatToCdregion(SeqFeatPtr sfp)
     SeqIntPtr        sip;
     SeqLocPtr         loc;
     BioseqPtr       bsp;
-    SeqIdPtr        sidp;
+    SeqIdPtr        sidp = NULL;
     
     if (sfp == NULL)
         return FALSE;
@@ -4089,7 +4135,7 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
 {
     ByteStorePtr newprot = NULL;
     BioseqPtr protseq, nucseq;
-    SeqLocPtr last=NULL, curr = NULL;
+    SeqLocPtr last= NULL, curr = NULL;
     Int4 len, remainder, aas, oldfrom, oldto, protlen, i, oldnum;
     CdRegionPtr crp;
     SeqIdPtr protid, tmp;
@@ -4101,16 +4147,16 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
     SeqLocPtr tmpslp;
     Int4 len2;
     SeqFeatPtr gene = NULL;
-    GeneRefPtr grp;
+    GeneRefPtr grp ;
     BioseqPtr bsp;
     SeqLocPtr slp;
-  Boolean        hasNulls;
-  Boolean        noLeft;
-  Boolean        noRight;
-  Boolean        noLeftFeat;
-  Boolean        noLeftGene;
-  Boolean        noRightFeat;
-  Boolean        noRightGene;
+    Boolean        hasNulls;
+    Boolean        noLeft;
+    Boolean        noRight;
+    Boolean        noLeftFeat;
+    Boolean        noLeftGene;
+    Boolean        noRightFeat;
+    Boolean        noRightGene;
 
 
     grp = SeqMgrGetGeneXref (sfp);
@@ -4176,10 +4222,11 @@ static void CdEndCheck(SeqFeatPtr sfp, FILE *fp)
         last = curr;
     }
 
-    if (last->choice != SEQLOC_INT)  /* this is too weird */
+    if (last != NULL && last->choice != SEQLOC_INT)  /* this is too weird */
     {
         return;
     }
+    if (last == NULL || last->data.ptrvalue == NULL) return;
     sip = (SeqIntPtr)(last->data.ptrvalue);
     nucseq = BioseqFind(sip->id);
     if (nucseq == NULL)
@@ -4799,7 +4846,7 @@ static void ProtFeatOnNucToImpFeat (SeqFeatPtr sfp, Pointer userdata)
   ImpFeatPtr  ifp;
   CharPtr     key = NULL;
   ProtRefPtr  prp;
-  CharPtr     str;
+  CharPtr     str = NULL;
   ValNodePtr  vnp;
 
   if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT) return;

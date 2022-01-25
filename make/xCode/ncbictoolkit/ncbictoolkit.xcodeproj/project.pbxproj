@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 45;
+	objectVersion = 46;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -770,7 +770,6 @@
 		3734FD850FF2AF7D004C8F4B /* ncbi_types.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F9690FF2AF7C004C8F4B /* ncbi_types.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD870FF2AF7D004C8F4B /* ncbi_util.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F96B0FF2AF7C004C8F4B /* ncbi_util.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD890FF2AF7D004C8F4B /* urlquery.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F96D0FF2AF7C004C8F4B /* urlquery.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		3734FD8A0FF2AF7D004C8F4B /* version.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F96E0FF2AF7C004C8F4B /* version.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD8C0FF2AF7D004C8F4B /* binary.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F9710FF2AF7C004C8F4B /* binary.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD8D0FF2AF7D004C8F4B /* corepriv.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F9720FF2AF7C004C8F4B /* corepriv.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD920FF2AF7D004C8F4B /* gifgen.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F9770FF2AF7C004C8F4B /* gifgen.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -1032,6 +1031,8 @@
 		3734FF920FF2AF7D004C8F4B /* viewer.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FB8F0FF2AF7C004C8F4B /* viewer.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FF940FF2AF7D004C8F4B /* viewer3d.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FB910FF2AF7C004C8F4B /* viewer3d.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FF950FF2AF7D004C8F4B /* viewerp.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734FB920FF2AF7C004C8F4B /* viewerp.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		3747EF8C11BE9AA50064168E /* ncbi_base64.c in Sources */ = {isa = PBXBuildFile; fileRef = 3747EF8B11BE9AA50064168E /* ncbi_base64.c */; };
+		3747EF9011BE9ABF0064168E /* ncbi_base64.h in Headers */ = {isa = PBXBuildFile; fileRef = 3747EF8F11BE9ABF0064168E /* ncbi_base64.h */; };
 		379747B10FF3C77600138501 /* connect_export.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F92B0FF2AF7C004C8F4B /* connect_export.h */; };
 		379747B20FF3C77600138501 /* ncbi_ansi_ext.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F92D0FF2AF7C004C8F4B /* ncbi_ansi_ext.h */; };
 		379747B30FF3C77600138501 /* ncbi_assert.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F92E0FF2AF7C004C8F4B /* ncbi_assert.h */; };
@@ -1070,7 +1071,6 @@
 		379747D60FF3C77600138501 /* ncbi_types.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F9690FF2AF7C004C8F4B /* ncbi_types.h */; };
 		379747D70FF3C77600138501 /* ncbi_util.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F96B0FF2AF7C004C8F4B /* ncbi_util.h */; };
 		379747D80FF3C77600138501 /* urlquery.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F96D0FF2AF7C004C8F4B /* urlquery.h */; };
-		379747D90FF3C77600138501 /* version.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F96E0FF2AF7C004C8F4B /* version.h */; };
 		379747E80FF3CA0F00138501 /* blast_api.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F7900FF2AF7C004C8F4B /* blast_api.h */; };
 		379747E90FF3CA0F00138501 /* blast_format.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F7920FF2AF7C004C8F4B /* blast_format.h */; };
 		379747EA0FF3CA0F00138501 /* blast_input.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F7940FF2AF7C004C8F4B /* blast_input.h */; };
@@ -1212,7 +1212,6 @@
 				379747D60FF3C77600138501 /* ncbi_types.h in CopyFiles */,
 				379747D70FF3C77600138501 /* ncbi_util.h in CopyFiles */,
 				379747D80FF3C77600138501 /* urlquery.h in CopyFiles */,
-				379747D90FF3C77600138501 /* version.h in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2123,7 +2122,6 @@
 		3734F9690FF2AF7C004C8F4B /* ncbi_types.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_types.h; path = ../../../connect/ncbi_types.h; sourceTree = SOURCE_ROOT; };
 		3734F96B0FF2AF7C004C8F4B /* ncbi_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_util.h; path = ../../../connect/ncbi_util.h; sourceTree = SOURCE_ROOT; };
 		3734F96D0FF2AF7C004C8F4B /* urlquery.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = urlquery.h; path = ../../../connect/urlquery.h; sourceTree = SOURCE_ROOT; };
-		3734F96E0FF2AF7C004C8F4B /* version.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = version.h; path = ../../../connect/version.h; sourceTree = SOURCE_ROOT; };
 		3734F9710FF2AF7C004C8F4B /* binary.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = binary.h; path = ../../../corelib/binary.h; sourceTree = SOURCE_ROOT; };
 		3734F9720FF2AF7C004C8F4B /* corepriv.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = corepriv.h; path = ../../../corelib/corepriv.h; sourceTree = SOURCE_ROOT; };
 		3734F9770FF2AF7C004C8F4B /* gifgen.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = gifgen.h; path = ../../../corelib/gifgen.h; sourceTree = SOURCE_ROOT; };
@@ -2385,6 +2383,8 @@
 		3734FB8F0FF2AF7C004C8F4B /* viewer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = viewer.h; path = ../../../vibrant/viewer.h; sourceTree = SOURCE_ROOT; };
 		3734FB910FF2AF7C004C8F4B /* viewer3d.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = viewer3d.h; path = ../../../vibrant/viewer3d.h; sourceTree = SOURCE_ROOT; };
 		3734FB920FF2AF7C004C8F4B /* viewerp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = viewerp.h; path = ../../../vibrant/viewerp.h; sourceTree = SOURCE_ROOT; };
+		3747EF8B11BE9AA50064168E /* ncbi_base64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ncbi_base64.c; sourceTree = "<group>"; };
+		3747EF8F11BE9ABF0064168E /* ncbi_base64.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ncbi_base64.h; sourceTree = "<group>"; };
 		8D07F2C70486CC7A007CD1D0 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8D07F2C80486CC7A007CD1D0 /* ncbictoolkit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ncbictoolkit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -2807,6 +2807,7 @@
 			isa = PBXGroup;
 			children = (
 				3716A6F30FF2A5C10081C789 /* ncbi_ansi_ext.c */,
+				3747EF8B11BE9AA50064168E /* ncbi_base64.c */,
 				3716A6F60FF2A5C10081C789 /* ncbi_buffer.c */,
 				3716A6FA0FF2A5C10081C789 /* ncbi_connection.c */,
 				3716A6FC0FF2A5C10081C789 /* ncbi_connector.c */,
@@ -3637,6 +3638,7 @@
 				3734F92B0FF2AF7C004C8F4B /* connect_export.h */,
 				3734F92D0FF2AF7C004C8F4B /* ncbi_ansi_ext.h */,
 				3734F92E0FF2AF7C004C8F4B /* ncbi_assert.h */,
+				3747EF8F11BE9ABF0064168E /* ncbi_base64.h */,
 				3734F9300FF2AF7C004C8F4B /* ncbi_buffer.h */,
 				3734F9310FF2AF7C004C8F4B /* ncbi_comm.h */,
 				3734F9320FF2AF7C004C8F4B /* ncbi_config.h */,
@@ -3672,7 +3674,6 @@
 				3734F9690FF2AF7C004C8F4B /* ncbi_types.h */,
 				3734F96B0FF2AF7C004C8F4B /* ncbi_util.h */,
 				3734F96D0FF2AF7C004C8F4B /* urlquery.h */,
-				3734F96E0FF2AF7C004C8F4B /* version.h */,
 			);
 			name = connect;
 			path = ../../../connect;
@@ -4420,7 +4421,6 @@
 				3734FD850FF2AF7D004C8F4B /* ncbi_types.h in Headers */,
 				3734FD870FF2AF7D004C8F4B /* ncbi_util.h in Headers */,
 				3734FD890FF2AF7D004C8F4B /* urlquery.h in Headers */,
-				3734FD8A0FF2AF7D004C8F4B /* version.h in Headers */,
 				3734FD8C0FF2AF7D004C8F4B /* binary.h in Headers */,
 				3734FD8D0FF2AF7D004C8F4B /* corepriv.h in Headers */,
 				3734FD920FF2AF7D004C8F4B /* gifgen.h in Headers */,
@@ -4683,6 +4683,7 @@
 				3734FF940FF2AF7D004C8F4B /* viewer3d.h in Headers */,
 				3734FF950FF2AF7D004C8F4B /* viewerp.h in Headers */,
 				3708F4940FF2B11800420775 /* ncbilcl.h in Headers */,
+				3747EF9011BE9ABF0064168E /* ncbi_base64.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4722,7 +4723,7 @@
 		0867D690FE84028FC02AAC07 /* Project object */ = {
 			isa = PBXProject;
 			buildConfigurationList = 4FADC24608B4156D00ABE55E /* Build configuration list for PBXProject "ncbictoolkit" */;
-			compatibilityVersion = "Xcode 3.1";
+			compatibilityVersion = "Xcode 3.2";
 			hasScannedForEncodings = 1;
 			mainGroup = 0867D691FE84028FC02AAC07 /* ncbictoolkit */;
 			productRefGroup = 034768DDFF38A45A11DB9C8B /* Products */;
@@ -5279,6 +5280,7 @@
 				3716AD570FF2A5C20081C789 /* vibwndws.c in Sources */,
 				3716AD580FF2A5C20081C789 /* viewer.c in Sources */,
 				3716AD5A0FF2A5C20081C789 /* viewer3d.c in Sources */,
+				3747EF8C11BE9AA50064168E /* ncbi_base64.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -5389,7 +5391,6 @@
 				);
 				ONLY_ACTIVE_ARCH = YES;
 				PREBINDING = NO;
-				SDKROOT = macosx10.5;
 			};
 			name = Debug;
 		};
@@ -5442,7 +5443,6 @@
 					"$(inherited)",
 				);
 				PREBINDING = NO;
-				SDKROOT = macosx10.5;
 			};
 			name = Release;
 		};

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/8/2009
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description: Dialogs for editing structured comment rules
 *
@@ -476,8 +476,7 @@ static Pointer CommentSetFromDialog (DialoG d)
 static void UpdateRuleList (Pointer data)
 {
   CommentSetDlgPtr dlg;
-  CommentRulePtr new_cr, replace_cr, last_cr = NULL;
-  Int4 item;
+  CommentRulePtr new_cr, last_cr = NULL;
 
   dlg = (CommentSetDlgPtr) data;
   if (dlg == NULL) {

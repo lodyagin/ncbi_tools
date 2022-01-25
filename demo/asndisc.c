@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.26 $
+* $Revision: 1.27 $
 *
 * File Description:
 *
@@ -948,6 +948,7 @@ typedef enum {
   X_argExpandCategories,
   S_argSummaryReport,
   B_argBigSequenceReport,
+  N_argProductNameFile,
   C_argMaxCount
 } DRFlagNum;
 
@@ -1011,6 +1012,8 @@ Args myargs [] = {
     TRUE, 'S', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Big Sequence Report", "F", NULL, NULL,
   TRUE, 'B', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"File with list of product names to check", "", NULL, NULL,
+    TRUE, 'N', ARG_FILE_IN, 0.0, 0, NULL},
   {"Max Count", "0", NULL, NULL,
     TRUE, 'C', ARG_INT, 0.0, 0, NULL},
 };
@@ -1039,11 +1042,27 @@ static CharPtr GetTestNameList (CharPtr intro)
 }
 
 
+static Boolean ValidateNameList (CharPtr filename, FILE *outputfile)
+{
+  FILE *fp;
+
+  fp = FileOpen (filename, "r");
+  if (fp == NULL) {
+    Message (MSG_FATAL, "Cannot open %s", filename);
+    return FALSE;
+  } else {
+    FindSuspectProductNamesInNameList (fp, outputfile);
+    FileClose (fp);
+    return TRUE;
+  }
+}
+
+
 Int2 Main (void)
 
 {
   Char         app [64];
-  CharPtr      asnidx, directory, infile, outfile, str, suffix, output_dir;
+  CharPtr      asnidx, directory, infile, outfile, str, suffix, output_dir, product_name_file;
   CharPtr      enabled_list, disabled_list, err_msg;
   Boolean      batch, binary, compressed, dorecurse,
                indexed, local, lock, remote, usethreads;
@@ -1103,6 +1122,7 @@ Int2 Main (void)
   infile = (CharPtr) myargs [i_argInputFile].strvalue;
   outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
   output_dir = (CharPtr) myargs [r_argOutputDir].strvalue;
+  product_name_file = (CharPtr) myargs [N_argProductNameFile].strvalue;
   if (StringDoesHaveText (outfile) && StringDoesHaveText (output_dir)) {
     Message (MSG_FATAL, "-o and -q are incompatible: specify the output file name with the full path.");
     return 1;
@@ -1217,7 +1237,7 @@ Int2 Main (void)
     }
   }
 
-  if (StringHasNoText (directory) && StringHasNoText (infile)) {
+  if (StringHasNoText (directory) && StringHasNoText (infile) && StringHasNoText (product_name_file)) {
     Message (MSG_FATAL, "Input path or input file must be specified");
     return 1;
   }
@@ -1239,6 +1259,38 @@ Int2 Main (void)
       Message (MSG_FATAL, "Unable to open single output file");
       return 1;
     }
+  }
+
+  if (!StringHasNoText (product_name_file)) {
+    ValidateNameList (product_name_file, dfd.outfp);
+    if (StringHasNoText (directory) && (StringHasNoText (infile) || StringCmp (infile, "stdin") == 0)) {
+      if (dfd.outfp != NULL) {
+        FileClose (dfd.outfp);
+      }
+      if (indexed) {
+        AsnIndexedLibFetchDisable ();
+      }
+
+      if (local) {
+        LocalSeqFetchDisable ();
+      }
+
+      if (remote) {
+#ifdef INTERNAL_NCBI_ASNDISC
+        PUBSEQBioseqFetchDisable ();
+#else
+        PubSeqFetchDisable ();
+#endif
+        SeqMgrSetPreCache (NULL);
+        SeqMgrSetSeqIdSetFunc (NULL);
+      }
+
+      TransTableFreeAll ();
+
+      ECNumberFSAFreeAll ();
+
+      return 0;
+    }      
   }
 
   /* register fetch functions */

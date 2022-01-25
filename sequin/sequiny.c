@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/24/96
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *    This is a companion file to sequinx.c. In order to register additional proceedures
@@ -144,7 +144,7 @@ Int2 LIBCALLBACK MyBioseqEditFunc (Pointer data)
 
 
 	                                      /* now we can send a message to ourselves */
-	                                      /* just to prove it works. The message could just
+	                                      /* just to prove it works. The message could just */
 										  /* as well be from another proceedure though */
 
 	ObjMgrSendMsg (OM_MSG_SELECT, ompcp->input_entityID, 0, 0);

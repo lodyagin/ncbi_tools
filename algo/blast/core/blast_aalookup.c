@@ -1,4 +1,4 @@
-/* $Id: blast_aalookup.c,v 1.12 2008/11/04 14:54:34 kazimird Exp $
+/* $Id: blast_aalookup.c,v 1.13 2009/10/01 17:55:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_aalookup.c,v 1.12 2008/11/04 14:54:34 kazimird Exp $";
+    "$Id: blast_aalookup.c,v 1.13 2009/10/01 17:55:38 kazimird Exp $";
 #endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 /** Structure containing information needed for adding neighboring words. 
@@ -961,7 +961,7 @@ typedef struct LetterAndScoreDifferencePair{
 } LetterAndScoreDifferencePair;
 
 /** callback for the "sort" */
-int ScoreDifferenceSort(const void * a, const void *b ){
+static int ScoreDifferenceSort(const void * a, const void *b ){
     return (((LetterAndScoreDifferencePair*)a)->diff - 
             ((LetterAndScoreDifferencePair*)b)->diff);
 }

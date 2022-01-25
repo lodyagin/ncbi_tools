@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.128 2009/05/27 17:39:36 kazimird Exp $
+/* $Id: blast_util.c,v 1.133 2010/07/27 18:24:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.128 2009/05/27 17:39:36 kazimird Exp $";
+    "$Id: blast_util.c,v 1.133 2010/07/27 18:24:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -119,10 +119,15 @@ BlastSetUp_SeqBlkNew (const Uint1* buffer, Int4 length,
         (*seq_blk)->sequence_start = (Uint1 *) buffer;
         /* The first byte is a sentinel byte. */
         (*seq_blk)->sequence = (*seq_blk)->sequence_start+1;
+
     } else {
         (*seq_blk)->sequence = (Uint1 *) buffer;
         (*seq_blk)->sequence_start = NULL;
     }
+
+    (*seq_blk)->sequence_start_nomask = (*seq_blk)->sequence_start;
+    (*seq_blk)->sequence_nomask = (*seq_blk)->sequence;
+    (*seq_blk)->nomask_allocated = FALSE;
     
     (*seq_blk)->length = length;
    
@@ -154,6 +159,9 @@ Int2 BlastSeqBlkSetSequence(BLAST_SequenceBlk* seq_blk,
     seq_blk->sequence_start_allocated = TRUE;
     seq_blk->sequence_start = (Uint1*) sequence;
     seq_blk->sequence = (Uint1*) sequence + 1;
+    seq_blk->sequence_start_nomask = seq_blk->sequence_start;
+    seq_blk->sequence_nomask = seq_blk->sequence_start_nomask + 1;
+    seq_blk->nomask_allocated = FALSE;
     seq_blk->length = seqlen;
     seq_blk->oof_sequence = NULL;
 
@@ -178,32 +186,38 @@ Int2
 BlastSeqBlkSetSeqRanges(BLAST_SequenceBlk* seq_blk,
                         SSeqRange* seq_ranges,
                         Uint4 num_seq_ranges,
-                        Boolean copy_seq_ranges)
+                        Boolean copy_seq_ranges,
+                        Int4 mask_type)
 {
+    SSeqRange* tmp;
+
     if ( !seq_blk || !seq_ranges ) {
         return -1;
     }
+
     ASSERT(num_seq_ranges >= 1);
 
+    s_BlastSequenceBlkFreeSeqRanges(seq_blk);
     if (copy_seq_ranges) {
-        SSeqRange* tmp = (SSeqRange*) calloc(num_seq_ranges,
-                                             sizeof(*seq_ranges));
-        if ( !tmp ) {
-            return -1;
-        }
-        s_BlastSequenceBlkFreeSeqRanges(seq_blk);
-        seq_blk->seq_ranges = tmp;
-        memcpy((void*) seq_blk->seq_ranges,
+        // allocate one more space for easy complimentary operations
+        seq_blk->seq_ranges_allocated = TRUE;
+        tmp = (SSeqRange *) calloc(num_seq_ranges, sizeof(SSeqRange));
+        if ( !tmp ) { return -1; }
+        memcpy((void*) tmp,
                (void*) seq_ranges,
                num_seq_ranges * sizeof(*seq_ranges));
-        seq_blk->num_seq_ranges = num_seq_ranges;
-        seq_blk->seq_ranges_allocated = TRUE;
     } else {
-        s_BlastSequenceBlkFreeSeqRanges(seq_blk);
-        seq_blk->seq_ranges = seq_ranges;
+        // CSeqDB has allocated one more space before and after seq_range
         seq_blk->seq_ranges_allocated = FALSE;
-        seq_blk->num_seq_ranges = num_seq_ranges;
+        tmp = seq_ranges;
     }
+        
+    // Fill out the boundary of the sequence to compliment the masks
+    tmp[0].left = 0;
+    tmp[num_seq_ranges - 1].right = seq_blk->length;
+    seq_blk->seq_ranges = tmp;
+    seq_blk->num_seq_ranges = num_seq_ranges; 
+    seq_blk->mask_type = mask_type;
     return 0;
 }
 
@@ -223,6 +237,10 @@ void BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk)
    if (seq_blk->oof_sequence_allocated) {
        sfree(seq_blk->oof_sequence);
        seq_blk->oof_sequence_allocated = FALSE;
+   }
+   if (seq_blk->nomask_allocated) {
+       sfree(seq_blk->sequence_start_nomask);
+       seq_blk->nomask_allocated = FALSE;
    }
    s_BlastSequenceBlkFreeSeqRanges(seq_blk);
    return;
@@ -1205,45 +1223,6 @@ Int4 BSearchInt4(Int4 n, Int4* A, Int4 size)
 	    b = m;
     }
     return b;
-}
-
-Int2
-Blast_SetUpSubjectTranslation(BLAST_SequenceBlk* subject_blk, 
-                              const Uint1* gen_code_string,
-                              Uint1** translation_buffer_ptr, 
-                              Int4** frame_offsets_ptr,
-                              Boolean* partial_translation_ptr)
-{
-   Boolean partial_translation;
-   Boolean is_ooframe = (frame_offsets_ptr == NULL);
-
-   if (!gen_code_string)
-      return -1;
-
-   if (is_ooframe && subject_blk->oof_sequence) {
-      /* If mixed-frame sequence is already available (two-sequences case),
-         then no need to translate again */
-      *partial_translation_ptr = FALSE;
-      return 0;
-   } 
-
-   *partial_translation_ptr = partial_translation = 
-      (subject_blk->length > MAX_FULL_TRANSLATION);
-      
-   if (!partial_translation) {
-      if (is_ooframe) {
-         BLAST_GetAllTranslations(subject_blk->sequence_start, 
-            eBlastEncodingNcbi4na, subject_blk->length, gen_code_string, 
-            NULL, NULL, &subject_blk->oof_sequence);
-         subject_blk->oof_sequence_allocated = TRUE;
-      } else {
-         BLAST_GetAllTranslations(subject_blk->sequence_start, 
-            eBlastEncodingNcbi4na, subject_blk->length, gen_code_string, 
-            translation_buffer_ptr, frame_offsets_ptr, NULL);
-      }
-   }
-
-   return 0;
 }
 
 SBlastTargetTranslation*

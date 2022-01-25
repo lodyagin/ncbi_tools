@@ -1,0 +1,248 @@
+Macro-action-list ::= {
+  edit-location {
+    type cds ,
+    action
+      extend-3 NULL ,
+    constraint {
+      location {
+        strand any ,
+        seq-type any ,
+        partial5 either ,
+        partial3 partial ,
+        location-type any ,
+        end3
+          max-dist-from-end 2 } ,
+      sequence {
+        seqtype
+          rna mRNA ,
+        feature any } } } ,
+  edit-location {
+    type cds ,
+    action
+      extend-5 NULL ,
+    constraint {
+      location {
+        strand any ,
+        seq-type any ,
+        partial5 partial ,
+        partial3 either ,
+        location-type any ,
+        end5
+          max-dist-from-end 2 } ,
+      sequence {
+        seqtype
+          rna mRNA ,
+        feature any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          source-qual
+            location proviral ,
+        value "TRUE" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "HIV" ,
+          match-location starts ,
+          case-sensitive TRUE ,
+          whole-word FALSE ,
+          not-present FALSE } ,
+        type-constraint any } ,
+      sequence {
+        seqtype
+          dna NULL ,
+        feature any } ,
+      source {
+        field1
+          textqual lineage ,
+        constraint {
+          match-text "Retroviridae" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          whole-word FALSE ,
+          not-present FALSE } ,
+        type-constraint any } } } ,
+  synchronize-cds-partials NULL ,
+  adjust-for-consensus-splice NULL ,
+  trim-stop-from-complete-cds NULL ,
+  trim-junk-from-primer-seq NULL ,
+  remove-seg-gaps NULL ,
+  aecr {
+    action
+      apply {
+        field
+          source-qual
+            textqual nat-host ,
+        value "Homo sapiens" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual taxname ,
+        constraint {
+          match-text "HIV" ,
+          match-location starts ,
+          case-sensitive TRUE ,
+          whole-word FALSE ,
+          not-present FALSE } ,
+        type-constraint any } } } ,
+  convert-feature {
+    type-from gene ,
+    type-to rRNA ,
+    leave-original FALSE ,
+    src-feat-constraint {
+      sequence {
+        seqtype
+          nucleotide NULL ,
+        feature gene ,
+        num-features
+          equals 1 } ,
+      string {
+        match-text "16S rRNA" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        whole-word FALSE ,
+        not-present FALSE } } } ,
+  convert-feature {
+    type-from gene ,
+    type-to rRNA ,
+    leave-original FALSE ,
+    src-feat-constraint {
+      sequence {
+        seqtype
+          nucleotide NULL ,
+        feature gene ,
+        num-features
+          equals 1 } ,
+      string {
+        match-text "16S ribosomal RNA" ,
+        match-location contains ,
+        case-sensitive TRUE ,
+        whole-word FALSE ,
+        not-present FALSE } } } ,
+  fix-pub-caps {
+    title TRUE ,
+    authors FALSE ,
+    affiliation FALSE ,
+    constraint {
+      pub {
+        type any ,
+        special-field {
+          field title ,
+          constraint
+            is-all-caps NULL } } } } ,
+  fix-pub-caps {
+    title FALSE ,
+    authors TRUE ,
+    affiliation FALSE ,
+    constraint {
+      pub {
+        type any ,
+        special-field {
+          field authors ,
+          constraint
+            is-all-caps NULL } } } } ,
+  fix-usa-and-states NULL ,
+  aecr {
+    action
+      apply {
+        field
+          feature-field {
+            type repeat-region ,
+            field
+              legal-qual rpt-type } ,
+        value "tandem" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type misc-feature ,
+            field
+              legal-qual satellite-type } ,
+        string-constraint {
+          match-text "microsatellite" ,
+          match-location equals ,
+          case-sensitive TRUE ,
+          whole-word FALSE ,
+          not-present FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          source-qual
+            textqual nat-host ,
+        value "Homo sapiens" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      source {
+        field1
+          textqual nat-host ,
+        constraint {
+          match-text "human" ,
+          match-location equals ,
+          case-sensitive FALSE ,
+          whole-word FALSE ,
+          not-present FALSE } ,
+        type-constraint any } } } ,
+  aecr {
+    action
+      apply {
+        field
+          source-qual
+            location mitochondrion ,
+        value "TRUE" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type d-loop ,
+            field
+              legal-qual note } ,
+        string-constraint {
+          match-text "control region" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          whole-word FALSE ,
+          not-present FALSE } } } } ,
+  aecr {
+    action
+      apply {
+        field
+          source-qual
+            location mitochondrion ,
+        value "TRUE" ,
+        existing-text replace-old } ,
+    also-change-mrna FALSE ,
+    constraint {
+      field {
+        field
+          feature-field {
+            type misc-feature ,
+            field
+              legal-qual note } ,
+        string-constraint {
+          match-text "control region" ,
+          match-location contains ,
+          case-sensitive TRUE ,
+          whole-word FALSE ,
+          not-present FALSE } } } } ,
+  remove-descriptor {
+    type publication ,
+    constraint {
+      pub {
+        type unpublished ,
+        special-field {
+          field title ,
+          constraint
+            is-not-present NULL } } } } }

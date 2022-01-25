@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.84 $
+* $Revision: 6.87 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -2498,7 +2498,7 @@ static Nlm_WindoW Nlm_NextVisWindow (Nlm_WindoW w)
 
 {
   WindowPtr  p;
-  WindowPtr  q;
+  WindowPtr  q = NULL;
 
   if (w == Nlm_desktopWindow) {
     return Nlm_desktopWindow;
@@ -6306,7 +6306,7 @@ static void ParseSetupArguments(HINSTANCE hInstance, Nlm_CharPtr lpszCmdLine)
     p++;
   else
     p = winfile;
-  SetAppProperty("ProgramName", p);
+  SetProgramName(p);
 
   if (!lpszCmdLine  ||  !*lpszCmdLine)
     {
@@ -7751,6 +7751,27 @@ static Nlm_Boolean FetchArg(Nlm_ArgPtr arg, const char *str,
 }
 
 
+static Nlm_Int2 NumReturnsIn (Nlm_CharPtr prompt)
+
+{
+  Nlm_Char  ch;
+  Nlm_Int2  count = 0;
+
+  if (StringHasNoText (prompt)) return 0;
+
+  ch = *prompt;
+  while (ch != '\0') {
+    if (ch == '\r' || ch == '\n') {
+      count++;
+    }
+    prompt++;
+    ch = *prompt;
+  }
+
+  return count;
+}
+
+
 static Nlm_Boolean GetArgs_ST(const char* progname,
                               Nlm_Int2 numargs, Nlm_ArgPtr ap,
                               Nlm_Boolean silent)
@@ -7791,6 +7812,8 @@ static const char* s_ValueStrings[] = {
   Nlm_HandlePtr  hp;
   Nlm_RecT       r1;
   Nlm_RecT       r2;
+  Nlm_Boolean    new_line;
+  Nlm_Boolean    largeScreen;
   Nlm_Boolean    smallScreen;
   Nlm_Char       tag [16];
   Nlm_WindoW     w;
@@ -7939,25 +7962,50 @@ static const char* s_ValueStrings[] = {
   /* Arg-Query Dialog Box */ 
   w = Nlm_FixedWindow (-50, -33, -10, -10, (Nlm_CharPtr) progname, NULL);
   smallScreen = FALSE;
+  largeScreen = FALSE;
 #ifdef WIN_MAC
-  if (Nlm_screenRect.right < 513  ||  Nlm_screenRect.bottom < 343)
+  if (Nlm_screenRect.right < 513  ||  Nlm_screenRect.bottom < 343) {
     smallScreen = TRUE;
+  }
+  if (Nlm_screenRect.right > 1200  &&  Nlm_screenRect.bottom > 800) {
+    largeScreen = TRUE;
+  }
 #endif
 #ifdef WIN_MSWIN
-  if (Nlm_screenRect.bottom < 352)
+  if (Nlm_screenRect.bottom < 352) {
     smallScreen = TRUE;
+  }
+  if (Nlm_screenRect.bottom > 800) {
+    largeScreen = TRUE;
+  }
 #endif
   g = Nlm_HiddenGroup (w, 5, 0, NULL);
   hp = (Nlm_HandlePtr) Nlm_MemNew (numargs * sizeof (Nlm_Handle));
 
   firstText = NULL;
   curarg = ap;
-  for (i = 0, j = 0; i < numargs; i++, j++, curarg++) {
-    if ((smallScreen && j >= 10) || j >= 15) {
+  for (i = 0, j = 0; i < numargs; i++, curarg++) {
+    new_line = FALSE;
+    if (smallScreen) {
+      if (j >= 10) {
+        new_line = TRUE;
+      }
+    } else if (largeScreen) {
+      if (j >= 30) {
+        new_line = TRUE;
+      }
+    } else {
+      if (j >= 15) {
+        new_line = TRUE;
+      }
+    }
+    if (new_line) {
       j = 0;
       Nlm_Advance (w);
       g = Nlm_HiddenGroup (w, 5, 0, NULL);
     }
+    j++;
+    j += NumReturnsIn ((Nlm_CharPtr) curarg->prompt);
 
     Nlm_StaticPrompt(g, (char*)s_TypeStrings[curarg->type], 0,
                      Nlm_dialogTextHeight, Nlm_systemFont, 'l');

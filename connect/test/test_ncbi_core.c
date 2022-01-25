@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_core.c,v 6.18 2008/11/28 23:59:43 kazimird Exp $
+/* $Id: test_ncbi_core.c,v 6.20 2010/02/05 20:35:04 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,8 +32,8 @@
  *
  */
 
-#include "../ncbi_assert.h"
 #include <connect/ncbi_util.h>
+#include "../ncbi_assert.h"
 #include <stdlib.h>
 #include <errno.h>
 /* This header must go last */

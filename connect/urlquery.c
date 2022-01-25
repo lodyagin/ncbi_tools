@@ -1,4 +1,4 @@
-/* $Id: urlquery.c,v 6.40 2006/10/17 02:19:07 lavr Exp $
+/* $Id: urlquery.c,v 6.49 2009/09/24 14:58:19 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,40 @@
  *
  * Version Creation Date:   4/16/98
  *
- * $Revision: 6.40 $
+ * $Revision: 6.49 $
  *
  * File Description: 
  *
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: urlquery.c,v $
+ * Revision 6.49  2009/09/24 14:58:19  lavr
+ * Fix timeout comparison bug
+ *
+ * Revision 6.48  2009/09/22 13:46:33  lavr
+ * Speedup queue insertion
+ *
+ * Revision 6.47  2009/09/21 20:38:30  lavr
+ * Properly treat timeout settings
+ *
+ * Revision 6.46  2009/09/18 19:58:40  lavr
+ * +QUERY_QueueSize()
+ *
+ * Revision 6.45  2009/09/12 01:28:49  lavr
+ * Correct comment in setting HTTP header
+ *
+ * Revision 6.44  2009/08/14 19:02:44  lavr
+ * x_SetupUserHeader() to override C-T only and to extend User-Agent
+ *
+ * Revision 6.43  2009/08/14 18:14:43  lavr
+ * Formatting
+ *
+ * Revision 6.42  2009/08/14 18:04:53  lavr
+ * StringHasText->StringDoesHaveText
+ *
+ * Revision 6.41  2009/08/14 18:02:24  lavr
+ * Use GetProgramName() when setting HTTP user-header
+ *
  * Revision 6.40  2006/10/17 02:19:07  lavr
  * Use "const char*" wherever appropriate
  *
@@ -169,82 +196,101 @@ NLM_EXTERN void QUERY_WaitForNextMacEvent (void)
 #endif
 
 
+/* Set HTTP user header */
+static void x_SetupUserHeader (
+  SConnNetInfo*  net_info,
+  const char*    appName,
+  EMIME_Type     type,
+  EMIME_SubType  subtype,
+  EMIME_Encoding encoding
+)
+{
+  const char* userAgentName = NULL;
+  char        user_header [MAX_CONTENT_TYPE_LEN + 80];
+
+  /* content-type if specified */
+  if (type < eMIME_T_Unknown) {
+    VERIFY( MIME_ComposeContentTypeEx (type, subtype, encoding,
+                                       user_header, MAX_CONTENT_TYPE_LEN) );
+    ConnNetInfo_OverrideUserHeader (net_info, user_header);
+  }
+
+  /* allow the user to specify a prog. name, otherwise get it from elsewhere */
+  if (StringHasNoText (appName)) {
+    const char* progName = GetProgramName();
+    if (StringHasNoText (progName)) {
+      char path [PATH_MAX];
+      Nlm_ProgramPath (path, sizeof (path));
+      userAgentName = StringRChr (path, DIRDELIMCHR);
+      if (userAgentName)
+        ++userAgentName;
+    } else
+      userAgentName = progName;
+  } else
+    userAgentName = appName;
+  if (StringDoesHaveText (userAgentName)) {
+    sprintf (user_header, "User-Agent: %.80s\r\n", userAgentName);
+    ConnNetInfo_ExtendUserHeader (net_info, user_header);
+  }
+}
+
+
 NLM_EXTERN CONN QUERY_OpenUrlQuery (
-  const char* host_machine,
-  Nlm_Uint2 host_port,
-  const char* host_path,
-  const char* arguments,
-  const char* appName,
-  Nlm_Uint4 timeoutsec,
-  EMIME_Type type,
-  EMIME_SubType subtype,
-  EMIME_Encoding encoding,
-  THCC_Flags flags
+  const char*     host_machine,
+  Nlm_Uint2       host_port,
+  const char*     host_path,
+  const char*     arguments,
+  const char*     appName,
+  Nlm_Uint4       timeoutsec,
+  EMIME_Type      type,
+  EMIME_SubType   subtype,
+  EMIME_Encoding  encoding,
+  THCC_Flags      flags
 )
 {
   CONN           conn;
   CONNECTOR      connector;
-  char           contentType [MAX_CONTENT_TYPE_LEN];
-  SConnNetInfo*  info;
-  char           path [PATH_MAX];
+  SConnNetInfo*  net_info;
   EIO_Status     status;
-  const char*    userAgentName = NULL;
-  char           user_header [sizeof(contentType) + 256];
 
   if (StringHasNoText (host_path))
     return NULL;
 
-  /* allow the user to specify a prog. name, otherwise get from ProgramPath */
-  if (! StringHasNoText (appName)) {
-    userAgentName = appName;
-  } else {
-    Nlm_ProgramPath (path, sizeof (path));
-    userAgentName = StringRChr (path, DIRDELIMCHR);
-    if (userAgentName != NULL) {
-      userAgentName++;
-    }
-  }
-  if (StringHasNoText (userAgentName)) {
-    userAgentName = "?";
-  }
-
-  contentType [0] = '\0';
-  if (type < eMIME_T_Unknown) {
-    VERIFY( MIME_ComposeContentTypeEx (type, subtype, encoding,
-                                       contentType, sizeof(contentType)) );
-  }
-
-  /* set HTML header with program name as user agent */
-  sprintf (user_header, "%sUser-Agent: %s\r\n", contentType, userAgentName);
-
   /* fill in connection info fields and create the connection */
-  info = ConnNetInfo_Create(0);
-  ASSERT ( info );
+  net_info = ConnNetInfo_Create(0);
+  ASSERT ( net_info );
 
-  if (! StringHasNoText (host_machine)) {
-    StringNCpy_0 (info->host, host_machine, sizeof(info->host));
+  x_SetupUserHeader (net_info, appName, type, subtype, encoding);
+
+  if (StringDoesHaveText (host_machine)) {
+    StringNCpy_0 (net_info->host, host_machine, sizeof (net_info->host));
   }
   if ( host_port ) {
-    info->port = host_port;
+    net_info->port = host_port;
   }
-  if ( !StringHasNoText (arguments)) {
-    StringNCpy_0 (info->args, arguments, sizeof(info->args));
-  }
-  StringNCpy_0 (info->path, host_path, sizeof(info->path));
-
-  if ( info->timeout ) {
-    info->timeout->sec  = timeoutsec;
-    info->timeout->usec = 0;
+  StringNCpy_0 (net_info->path, host_path, sizeof (net_info->path));
+  if (StringDoesHaveText (arguments)) {
+    StringNCpy_0 (net_info->args, arguments, sizeof (net_info->args));
   }
 
-  connector = HTTP_CreateConnector (info, user_header, flags);
-  ConnNetInfo_Destroy (info);
+  if (timeoutsec == (Nlm_Uint4)(-1L)) {
+    net_info->timeout       = 0;
+  } else if ( timeoutsec ) {
+    net_info->timeout       = &net_info->tmo;
+    net_info->timeout->sec  = timeoutsec;
+    net_info->timeout->usec = 0;
+  }
+
+  connector = HTTP_CreateConnector (net_info, NULL, flags);
+
+  ConnNetInfo_Destroy (net_info);
 
   if (connector == NULL) {
     ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in HTTP_CreateConnector");
     conn = NULL;
-  } else if ((status = CONN_Create(connector, &conn)) != eIO_Success) {
-    ErrPostEx(SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in CONN_Create");
+  } else if ((status = CONN_Create (connector, &conn)) != eIO_Success) {
+    ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in CONN_Create: %s",
+              IO_StatusStr (status));
     ASSERT (conn == NULL);
   }
 
@@ -261,22 +307,27 @@ NLM_EXTERN CONN QUERY_OpenServiceQueryEx (
 {
   CONN           conn;
   CONNECTOR      connector;
-  size_t         n_written;
   SConnNetInfo*  net_info;
+  size_t         n_written;
   EIO_Status     status;
 
   /* fill in connection info fields and create the connection */
   net_info = ConnNetInfo_Create (service);
   ASSERT ( net_info );
 
-  if (timeoutsec == (Nlm_Uint4)(-1)) {
-    net_info->timeout  = 0;
+  /* let the user agent be set with a program name */
+  x_SetupUserHeader (net_info,
+                     NULL, eMIME_T_Unknown, eMIME_Unknown, eENCOD_None);
+
+  if (timeoutsec == (Nlm_Uint4)(-1L)) {
+    net_info->timeout       = 0;
   } else if ( timeoutsec ) {
-    net_info->tmo.sec  = timeoutsec;
-    net_info->tmo.usec = 0;
-    net_info->timeout  = &net_info->tmo;
+    net_info->timeout       = &net_info->tmo;
+    net_info->timeout->sec  = timeoutsec;
+    net_info->timeout->usec = 0;
   }
-  ConnNetInfo_PostOverrideArg(net_info, arguments, 0);
+
+  ConnNetInfo_PostOverrideArg (net_info, arguments, 0);
 
   connector = SERVICE_CreateConnectorEx (service, fSERV_Any, net_info, 0);
 
@@ -286,12 +337,14 @@ NLM_EXTERN CONN QUERY_OpenServiceQueryEx (
     ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in SERVICE_CreateConnectorEx");
     conn = NULL;
   } else if ((status = CONN_Create (connector, &conn)) != eIO_Success) {
-    ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in CONN_Create");
+    ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in CONN_Create:"
+               " %s", IO_StatusStr (status));
     ASSERT (conn == NULL);
-  } else if (! StringHasNoText (parameters)) {
-    status = CONN_Write (conn, parameters, StringLen (parameters), &n_written, eIO_WritePersist);
+  } else if (StringDoesHaveText (parameters)) {
+    status = CONN_Write (conn, parameters, StringLen (parameters),
+                         &n_written, eIO_WritePersist);
     if (status != eIO_Success) {
-      ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed to write service parameters in CONN_Write");
+      ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed to write service parameters in CONN_Write: %s", IO_StatusStr (status));
       CONN_Close (conn);
       conn = NULL;
     }
@@ -316,13 +369,13 @@ NLM_EXTERN EIO_Status QUERY_SendQuery (
 )
 
 {
-  static const STimeout timeout = { 0 };
+  static const STimeout kPollTimeout = { 0 };
   EIO_Status            status;
 
   if (conn == NULL) return eIO_Closed;
 
   /* flush buffer, sending query, without waiting for response */
-  status = CONN_Wait (conn, eIO_Read, &timeout);
+  status = CONN_Wait (conn, eIO_Read, &kPollTimeout);
   return status == eIO_Timeout ? eIO_Success : status;
 }
 
@@ -468,7 +521,8 @@ NLM_EXTERN void QUERY_AddToQueue (
 {
   QueuePtr       cqp;
   QueuePtr PNTR  qptr;
-  QueuePtr       tmp;
+
+  ASSERT (queue != NULL);
 
   if (conn == NULL || resultproc == NULL) return;
 
@@ -485,20 +539,8 @@ NLM_EXTERN void QUERY_AddToQueue (
 
   /* add to polling queue */
 
-  qptr = (QueuePtr PNTR) queue;
-  if (qptr != NULL) {
-    if (*qptr != NULL) {
-      tmp = *qptr;
-      if (tmp != NULL) {
-        while (tmp->next != NULL) {
-          tmp = tmp->next;
-        }
-        tmp->next = cqp;
-      }
-    } else {
-      *qptr = cqp;
-    }
-  }
+  for (qptr = (QueuePtr PNTR) queue;  *qptr != NULL;  qptr = &(*qptr)->next);
+  *qptr = cqp;
 }
 
 
@@ -536,12 +578,12 @@ NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
   QUEUE* queue
 )
 {
+  static const STimeout kPollTimeout = { 0 };
   Nlm_Int4       count = 0;
   QueuePtr       curr;
   QueuePtr       next;
   QueuePtr PNTR  qptr;
   EIO_Status     status;
-  STimeout       timeout;
 
   qptr = (QueuePtr PNTR) queue;
   if (qptr == NULL || *qptr == NULL) return 0;
@@ -552,9 +594,7 @@ NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
     next = curr->next;
 
     if (curr->conn != NULL && (! curr->protect)) {
-      timeout.sec  = 0;
-      timeout.usec = 0;
-      status = CONN_Wait (curr->conn, eIO_Read, &timeout);
+      status = CONN_Wait (curr->conn, eIO_Read, &kPollTimeout);
 
       if (status == eIO_Success || status == eIO_Closed) {
         /* protect against reentrant calls if resultproc is GUI and processes timer */
@@ -573,6 +613,21 @@ NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
     }
 
     curr = next;
+  }
+
+  return count;
+}
+
+
+NLM_EXTERN Nlm_Int4 QUERY_QueueSize (
+  QUEUE queue
+)
+{
+  Nlm_Int4  count = 0;
+  QueuePtr  qptr;
+
+  for (qptr = (QueuePtr) queue;  qptr;  qptr = qptr->next) {
+    count++;
   }
 
   return count;

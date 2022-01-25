@@ -1,39 +1,39 @@
 /*  valid.c
 * ===========================================================================
 *
-*                            PUBLIC DOMAIN NOTICE                          
+*                            PUBLIC DOMAIN NOTICE
 *               National Center for Biotechnology Information
-*                                                                          
-*  This software/database is a "United States Government Work" under the   
-*  terms of the United States Copyright Act.  It was written as part of    
-*  the author's official duties as a United States Government employee and 
-*  thus cannot be copyrighted.  This software/database is freely available 
-*  to the public for use. The National Library of Medicine and the U.S.    
-*  Government have not placed any restriction on its use or reproduction.  
-*                                                                          
-*  Although all reasonable efforts have been taken to ensure the accuracy  
-*  and reliability of the software and data, the NLM and the U.S.          
-*  Government do not and cannot warrant the performance or results that    
-*  may be obtained by using this software or data. The NLM and the U.S.    
-*  Government disclaim all warranties, express or implied, including       
+*
+*  This software/database is a "United States Government Work" under the
+*  terms of the United States Copyright Act.  It was written as part of
+*  the author's official duties as a United States Government employee and
+*  thus cannot be copyrighted.  This software/database is freely available
+*  to the public for use. The National Library of Medicine and the U.S.
+*  Government have not placed any restriction on its use or reproduction.
+*
+*  Although all reasonable efforts have been taken to ensure the accuracy
+*  and reliability of the software and data, the NLM and the U.S.
+*  Government do not and cannot warrant the performance or results that
+*  may be obtained by using this software or data. The NLM and the U.S.
+*  Government disclaim all warranties, express or implied, including
 *  warranties of performance, merchantability or fitness for any particular
-*  purpose.                                                                
-*                                                                          
-*  Please cite the author in any work or product based on this material.   
+*  purpose.
+*
+*  Please cite the author in any work or product based on this material.
 *
 * ===========================================================================
 *
 * File Name:  valid.c
 *
 * Author:  James Ostell
-*   
+*
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.1247 $
+* $Revision: 6.1388 $
 *
 * File Description:  Sequence editing utilities
 *
-* Modifications:  
+* Modifications:
 * --------------------------------------------------------------------------
 * Date       Name        Description of modification
 * -------  ----------  -----------------------------------------------------
@@ -61,14 +61,15 @@ static char    *this_file = __FILE__;
 #include <objsub.h>
 #include <asn2gnbi.h>
 #include <explore.h>
+#include <gather.h>
 #include <subutil.h>
 #include <tofasta.h>
 #include <findrepl.h>
-#ifdef TEST_VALIDAPI
 #define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macroapi.h>
 #include <objvalid.h>
 #include <valapi.h>
-#endif
 
 /*****************************************************************************
 *
@@ -118,6 +119,7 @@ static TextFsaPtr GetReplacedECNumberFSA (void);
 static Boolean ECnumberNotInList (CharPtr str);
 static Boolean ECnumberWasDeleted (CharPtr str);
 static Boolean ECnumberWasReplaced (CharPtr str);
+static void ValidateCitSub (ValidStructPtr vsp, CitSubPtr csp);
 
 /* alignment validator */
 NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntryPtr sep, Boolean find_remote_bsp, Boolean do_hist_assembly);
@@ -169,11 +171,14 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   Boolean         is_htg_in_sep;
   Boolean         is_barcode_sep;
   Boolean         is_refseq_in_sep;
+  Boolean         is_gpipe_in_sep;
   Boolean         is_gps_in_sep;
   Boolean         is_embl_ddbj_in_sep;
+  Boolean         other_sets_in_sep;
   Boolean         is_insd_in_sep;
   Boolean         only_lcl_gnl_in_sep;
   Boolean         has_gnl_prot_sep;
+  Boolean         bsp_genomic_in_sep;
   Boolean         is_smupd_in_sep;
   Boolean         feat_loc_has_gi;
   Boolean         feat_prod_has_gi;
@@ -219,11 +224,14 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   is_htg_in_sep = vsp->is_htg_in_sep;
   is_barcode_sep = vsp->is_barcode_sep;
   is_refseq_in_sep = vsp->is_refseq_in_sep;
+  is_gpipe_in_sep = vsp->is_gpipe_in_sep;
   is_gps_in_sep = vsp->is_gps_in_sep;
+  other_sets_in_sep = vsp->other_sets_in_sep;
   is_embl_ddbj_in_sep = vsp->is_embl_ddbj_in_sep;
   is_insd_in_sep = vsp->is_insd_in_sep;
   only_lcl_gnl_in_sep = vsp->only_lcl_gnl_in_sep;
   has_gnl_prot_sep = vsp->has_gnl_prot_sep;
+  bsp_genomic_in_sep = vsp->bsp_genomic_in_sep;
   is_smupd_in_sep = vsp->is_smupd_in_sep;
   feat_loc_has_gi = vsp->feat_loc_has_gi;
   feat_prod_has_gi = vsp->feat_prod_has_gi;
@@ -266,11 +274,14 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   vsp->is_htg_in_sep = is_htg_in_sep;
   vsp->is_barcode_sep = is_barcode_sep;
   vsp->is_refseq_in_sep = is_refseq_in_sep;
+  vsp->is_gpipe_in_sep = is_gpipe_in_sep;
   vsp->is_gps_in_sep = is_gps_in_sep;
+  vsp->other_sets_in_sep = other_sets_in_sep;
   vsp->is_embl_ddbj_in_sep = is_embl_ddbj_in_sep;
   vsp->is_insd_in_sep = is_insd_in_sep;
   vsp->only_lcl_gnl_in_sep = only_lcl_gnl_in_sep;
   vsp->has_gnl_prot_sep = has_gnl_prot_sep;
+  vsp->bsp_genomic_in_sep = bsp_genomic_in_sep;
   vsp->is_smupd_in_sep = is_smupd_in_sep;
   vsp->feat_loc_has_gi = feat_loc_has_gi;
   vsp->feat_prod_has_gi = feat_prod_has_gi;
@@ -553,12 +564,14 @@ static CharPtr err1Label [] = {
   "FarFetchFailure",
   "InternalGapsInSeqRaw",
   "SelfReferentialSequence",
-  "WholeComponent", 
+  "WholeComponent",
   "TSAHistAssemblyMissing",
   "ProteinsHaveGeneralID",
   "HighNContent",
   "SeqLitDataLength0",
-  "DSmRNA"
+  "DSmRNA",
+  "HighNContentStretch",
+  "HighNContentPercent"
 };
 
 static CharPtr err2Label [] = {
@@ -627,7 +640,18 @@ static CharPtr err2Label [] = {
   "WrongVoucherType",
   "UserObjectProblem",
   "TitleHasPMID",
-  "BadKeyword"
+  "BadKeyword",
+  "NoOrganismInTitle",
+  "MissingChromosome",
+  "LatLonAdjacent",
+  "BadStrucCommInvalidFieldName",
+  "BadStrucCommInvalidFieldValue",
+  "BadStrucCommMissingField",
+  "BadStrucCommFieldOutOfOrder",
+  "BadStrucCommMultipleFields",
+  "BioSourceNeedsChromosome",
+  "MolInfoConflictsWithBioSource",
+  "MissingKeyword"
 };
 
 static CharPtr err3Label [] = {
@@ -644,7 +668,9 @@ static CharPtr err3Label [] = {
   "CollidingSerialNumbers",
   "EmbeddedScript",
   "PublicationInconsistency",
-  "SgmlPresentInText"
+  "SgmlPresentInText",
+  "UnexpectedPubStatusComment",
+  "PastReleaseDate"
 };
 
 static CharPtr err4Label [] = {
@@ -670,7 +696,12 @@ static CharPtr err4Label [] = {
   "INSDRefSeqPackaging",
   "GPSnonGPSPackaging",
   "RefSeqPopSet",
-  "BioseqSetClassNotSet"
+  "BioseqSetClassNotSet",
+  "OrphanedProtein",
+  "MissingSetTitle",
+  "NucProtSetHasTitle",
+  "ComponentMissingTitle",
+  "SingleItemSet"
 };
 
 static CharPtr err5Label [] = {
@@ -849,7 +880,8 @@ static CharPtr err5Label [] = {
   "ReplicatedGeneSequence",
   "ShortIntron",
   "GeneXrefStrandProblem",
-  "CDSmRNAXrefLocationProblem"
+  "CDSmRNAXrefLocationProblem",
+  "LocusCollidesWithLocusTag"
 };
 
 static CharPtr err6Label [] = {
@@ -968,7 +1000,7 @@ static void CustValErr (ValidStructPtr vsp, ErrSev severity, int errcode, int su
   ObjValNodePtr     ovp;
   SeqDescrPtr       sdp;
   SeqEntryPtr       sep;
-  SeqFeatPtr        sfp;
+  SeqFeatPtr        sfp = NULL;
   SeqIdPtr          sip;
   SeqLocPtr         slp;
 
@@ -1067,8 +1099,9 @@ static void CustValErr (ValidStructPtr vsp, ErrSev severity, int errcode, int su
   }
 
   if (vsp->sfp != NULL) {
+    sfp = vsp->sfp;
     label = tmp;
-    diff = FeatDefLabel (vsp->sfp, tmp, wrklen, OM_LABEL_BOTH);
+    diff = FeatDefLabel (sfp, tmp, wrklen, OM_LABEL_BOTH);
     buflen -= diff;
     tmp += diff;
     *tmp = '\0';
@@ -1192,7 +1225,7 @@ static void CustValErr (ValidStructPtr vsp, ErrSev severity, int errcode, int su
         *tmp = '\0';
       }
     }
-  
+
     if (sfp->product != NULL) {
       ctmp = NULL;
       slp = NULL;
@@ -1502,6 +1535,124 @@ NLM_EXTERN void CDECL ValidErr (ValidStructPtr vsp, int severity, int code1, int
   vsp->errbuf[0] = '\0';
 }
 
+
+static CharPtr GetUserFieldLabelString (UserFieldPtr ufp)
+{
+  Char buf[15];
+
+  if (ufp == NULL || ufp->label == NULL) {
+    return StringSave ("Unlabeled field");
+  } else if (ufp->label->id > 0) {
+    sprintf (buf, "%d", ufp->label->id);
+    return StringSave (buf);
+  } else {
+    return StringSave (ufp->label->str);
+  }
+}
+
+
+static CharPtr GetUserFieldValueString (UserFieldPtr ufp)
+{
+  Char buf[15];
+
+  if (ufp == NULL) {
+    return StringSave ("Value is missing");
+  } else if (ufp->choice == 1) {
+    return StringSave (ufp->data.ptrvalue);
+  } else if (ufp->choice == 2) {
+    sprintf (buf, "%d", ufp->data.intvalue);
+    return StringSave (buf);
+  } else {
+    return StringSave ("Bad format for value");
+  }
+}
+
+
+static ErrSev ErrorLevelFromFieldRuleSev (Uint2 severity)
+{
+  ErrSev sev = SEV_ERROR;
+  switch (severity) {
+    case Severity_level_none:
+      sev = SEV_NONE;
+      break;
+    case Severity_level_info:
+      sev = SEV_INFO;
+      break;
+    case Severity_level_warning:
+      sev = SEV_WARNING;
+      break;
+    case Severity_level_error:
+      sev = SEV_ERROR;
+      break;
+    case Severity_level_reject:
+      sev = SEV_REJECT;
+      break;
+    case Severity_level_fatal:
+      sev = SEV_FATAL;
+      break;
+  }
+  return sev;
+}
+
+static void StructuredCommentError (EFieldValid err_code, FieldRulePtr field_rule, UserFieldPtr ufp, UserFieldPtr depend_ufp, Pointer data)
+{
+  ValidStructPtr     vsp;
+  CharPtr            label, val;
+  CharPtr            depend_label, depend_val, depend_str = NULL;
+  CharPtr            depend_fmt = " when %s has value '%s'";
+  ErrSev             sev = SEV_ERROR;
+
+  if ((vsp = (ValidStructPtr) data) == NULL) {
+    return;
+  }
+
+  if (field_rule != NULL) {
+    sev = ErrorLevelFromFieldRuleSev(field_rule->severity);
+  }
+
+  if (depend_ufp != NULL) {
+    depend_label = GetUserFieldLabelString  (depend_ufp);
+    depend_val = GetUserFieldValueString (depend_ufp);
+    depend_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (depend_fmt) + StringLen (depend_label) + StringLen (depend_val)));
+    sprintf (depend_str, depend_fmt, depend_label, depend_val);
+    depend_val = MemFree (depend_val);
+    depend_label = MemFree (depend_label);
+  }
+
+  switch (err_code) {
+    case eFieldValid_Invalid:
+      label = GetUserFieldLabelString  (ufp);
+      if (field_rule == NULL) {
+        ValidErr (vsp, sev, ERR_SEQ_DESCR_BadStrucCommInvalidFieldName, "%s is not a valid field name%s", label, depend_str == NULL ? "" : depend_str);
+      } else {
+        val = GetUserFieldValueString (ufp);
+        ValidErr (vsp, sev, ERR_SEQ_DESCR_BadStrucCommInvalidFieldValue, "%s is not a valid value for %s%s", val, label, depend_str == NULL ? "" : depend_str);
+        val = MemFree (val);
+      }
+      label = MemFree (label);
+      break;
+    case eFieldValid_MissingRequiredField:
+      ValidErr (vsp, sev, ERR_SEQ_DESCR_BadStrucCommMissingField, "Required field %s is missing%s", field_rule->field_name, depend_str == NULL ? "" : depend_str);
+      break;
+    case eFieldValid_FieldOutOfOrder:
+      ValidErr (vsp, sev, ERR_SEQ_DESCR_BadStrucCommFieldOutOfOrder, "%s field is out of order%s", field_rule->field_name, depend_str == NULL ? "" : depend_str);
+      break;
+    case eFieldValid_DuplicateField:
+      ValidErr (vsp, sev, ERR_SEQ_DESCR_BadStrucCommMultipleFields, "Multiple values for %s field%s", field_rule->field_name, depend_str == NULL ? "" : depend_str);
+      break;
+    case eFieldValid_Disallowed:
+      label = GetUserFieldLabelString  (ufp);
+      ValidErr (vsp, sev, ERR_SEQ_DESCR_BadStrucCommInvalidFieldName, "%s is not a valid field name%s", label, depend_str == NULL ? "" : depend_str);
+      label = MemFree (label);
+      break;
+    default:
+      /* do nothing */
+      break;
+  }
+  depend_str = MemFree (depend_str);
+}
+
+
 /*****************************************************************************
 *
 *   Valid1GatherProc(gcp)
@@ -1512,25 +1663,28 @@ NLM_EXTERN void CDECL ValidErr (ValidStructPtr vsp, int severity, int code1, int
 static Boolean Valid1GatherProc (GatherContextPtr gcp)
 {
   ValidStructPtr     vsp;
+  UserFieldPtr       curr;
   AnnotDescrPtr      desc;
+  CharPtr            field;
   SeqAnnotPtr        sap;
-  ObjectIdPtr        oip;
   Boolean            is_blast_align;
   Int2               limit;
   SeqFeatPtr         sfp;
   ValNodePtr         sdp;
   SeqGraphPtr        sgp;
   BioSourcePtr       biop;
+  ObjectIdPtr        oip;
   PubdescPtr         pdp;
+  CharPtr            ptr;
   BioseqPtr          bsp;
   SeqIdPtr           sip;
+  CharPtr            str;
   Char               buf [64];
   Char               tmp [64];
+  ValNodePtr         vnp2;
   SeqMgrFeatContext  context;
-#ifdef TEST_VALIDAPI
-  UserObjectPtr uop;
-  EFieldValid   sc_valid;
-#endif
+  UserObjectPtr      uop;
+  EFieldValid        sc_valid;
 
   vsp = (ValidStructPtr) (gcp->userdata);
   vsp->gcp = gcp;               /* needed for ValidErr */
@@ -1688,14 +1842,44 @@ static Boolean Valid1GatherProc (GatherContextPtr gcp)
           ValidatePubdesc (vsp, gcp, pdp);
           LookForMultiplePubs (vsp, gcp, sdp);
         }
-#ifdef TEST_VALIDAPI
         if (sdp->choice == Seq_descr_user) {
           uop = sdp->data.ptrvalue;
           if (uop != NULL && uop->type != NULL && StringICmp (uop->type->str, "StructuredComment") == 0) {
-            sc_valid = IsStructuredCommentValid (uop);
+            sc_valid = IsStructuredCommentValid (uop, StructuredCommentError, vsp);
+            /* report ? */
+            for (curr = uop->data; curr != NULL; curr = curr->next) {
+              if (curr->choice != 1) continue;
+              oip = curr->label;
+              if (oip == NULL) continue;
+              field = oip->str;
+              if (StringStr (field, "::") != NULL) {
+                ValidErr (vsp, SEV_REJECT, ERR_SEQ_DESCR_BadStrucCommInvalidFieldName, "Structured comment field '%s' contains double colons", field);
+              }
+              str = (CharPtr) curr->data.ptrvalue;
+              if (StringStr (str, "::") != NULL) {
+                ValidErr (vsp, SEV_REJECT, ERR_SEQ_DESCR_BadStrucCommInvalidFieldValue, "Structured comment value '%s' contains double colons", str);
+              }
+            }
           }
         }
-#endif
+        if (sdp->choice == Seq_descr_comment) {
+          str = (CharPtr) sdp->data.ptrvalue;
+          if (StringHasNoText (str)) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_MissingText, "Comment descriptor needs text");
+          }
+          if (SerialNumberInString (str)) {
+            ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_SerialInComment,
+                      "Comment may refer to reference by serial number - attach reference specific comments to the reference REMARK instead.");
+          }
+          for (vnp2 = sdp->next; vnp2 != NULL; vnp2 = vnp2->next) {
+            if (vnp2->choice == Seq_descr_comment) {
+              ptr = (CharPtr) vnp2->data.ptrvalue;
+              if (StringDoesHaveText (ptr) && StringICmp (str, ptr) == 0) {
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_MultipleComments, "Undesired multiple comment descriptors, identical text");
+              }
+            }
+          }
+        }
         if (sdp->choice == Seq_descr_mol_type) {
           ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_InvalidForType, "MolType descriptor is obsolete");
         }
@@ -1752,7 +1936,7 @@ static void DiscrepanciesToValidationErrs (ValNodePtr discrepancy_list, Uint4 it
         }
       }
     }
-  }  
+  }
   vsp->sfp = NULL;
 }
 
@@ -1769,7 +1953,7 @@ static void ValidateGeneLocusTags (SeqEntryPtr sep, ValidStructPtr vsp)
   vn.choice = 0;
   vn.data.ptrvalue = sep;
   vn.next = NULL;
-  
+
   AddDiscrepanciesForMissingOrNonUniqueGeneLocusTagsEx (&discrepancy_list, &vn, TRUE);
 
   DiscrepanciesToValidationErrs (discrepancy_list, DISC_GENE_MISSING_LOCUS_TAG, vsp, SEV_WARNING, ERR_SEQ_FEAT_MissingGeneLocusTag, "Missing gene locus tag");
@@ -1790,7 +1974,7 @@ static void ValidateShortIntrons (SeqEntryPtr sep, ValidStructPtr vsp)
   vn.choice = 0;
   vn.data.ptrvalue = sep;
   vn.next = NULL;
-  
+
   FindShortIntrons (&discrepancy_list, &vn);
 
   DiscrepanciesToValidationErrs (discrepancy_list, DISC_SHORT_INTRON, vsp, SEV_WARNING, ERR_SEQ_FEAT_ShortIntron, "Introns should be at least 10 nt long");
@@ -2318,7 +2502,7 @@ static void CheckOneCit (SeqFeatPtr sfp, ValNodePtr ppr, VfcPtr vfp)
 
   } else if (ppr->choice == PUB_Equiv) {
     return;
-  
+
   } else {
     PubLabelUnique (ppr, buf, sizeof (buf) - 1, OM_LABEL_CONTENT, TRUE);
     lgth = StringLen (buf);
@@ -2615,213 +2799,147 @@ static void ValidateSeqIdCase (SeqEntryPtr sep, ValidStructPtr vsp)
   ValNodeFreeData (vd.headid);
 }
 
-static void LookForNC (BioseqPtr bsp, Pointer userdata)
+static void LookForBioseqFields (BioseqPtr bsp, Pointer userdata)
 
 {
-  BoolPtr       is_ncp;
-  SeqIdPtr      sip;
-  TextSeqIdPtr  tsip;
-
-  if (bsp == NULL || userdata == NULL) return;
-  is_ncp = (BoolPtr) userdata;
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice == SEQID_OTHER) {
-      tsip = (TextSeqIdPtr) sip->data.ptrvalue;
-      if (tsip != NULL && tsip->accession != NULL) {
-        /*
-        if (StringNICmp (tsip->accession, "NC_", 3) == 0) {
-          *is_ncp = TRUE;
-        }
-        */
-        *is_ncp = TRUE; /* any refseq now drops pubdesc message severity */
-      }
-    }
-  }
-}
-
-static void LookForGPS (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-
-{
-  BioseqSetPtr  bssp;
-  BoolPtr       is_gpsp;
-
-  if (sep == NULL || data == NULL) return;
-  is_gpsp = (BoolPtr) data;
-
-  if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
-      *is_gpsp = TRUE;
-    }
-  }
-}
-
-static void LookForNonGPS (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
-
-{
-  BioseqSetPtr  bssp;
-  BoolPtr       is_ngpsp;
-
-  if (sep == NULL || data == NULL) return;
-  is_ngpsp = (BoolPtr) data;
-
-  if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp == NULL) return;
-    if (bssp->_class == BioseqseqSet_class_mut_set ||
-        bssp->_class == BioseqseqSet_class_pop_set ||
-        bssp->_class == BioseqseqSet_class_phy_set ||
-        bssp->_class == BioseqseqSet_class_eco_set ||
-        bssp->_class == BioseqseqSet_class_wgs_set) {
-      *is_ngpsp = TRUE;
-    }
-  }
-}
-
-static void LookForEmblDdbj (BioseqPtr bsp, Pointer userdata)
-
-{
-  BoolPtr   is_ed;
-  SeqIdPtr  sip;
-
-  if (bsp == NULL || userdata == NULL) return;
-  is_ed = (BoolPtr) userdata;
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice == SEQID_EMBL || sip->choice == SEQID_DDBJ) {
-      *is_ed = TRUE;
-    }
-  }
-}
-
-static void LookForGEDseqID (BioseqPtr bsp, Pointer userdata)
-{
-  BoolPtr         isGEDPtr;
+  DbtagPtr        dbt;
+  Boolean         has_lcl_gnl = FALSE;
+  Boolean         has_others = FALSE;
   SeqIdPtr        sip;
+  ValidStructPtr  vsp;
 
-  isGEDPtr = (BoolPtr) userdata;
+  if (bsp == NULL || userdata == NULL) return;
+  vsp = (ValidStructPtr) userdata;
+
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     switch (sip->choice) {
-    case SEQID_GENBANK:
     case SEQID_EMBL:
     case SEQID_DDBJ:
+      vsp->is_embl_ddbj_in_sep = TRUE;
+      /* and fall through */
+    case SEQID_GENBANK:
     case SEQID_TPG:
     case SEQID_TPE:
     case SEQID_TPD:
-      *isGEDPtr = TRUE;
-      return;
+      vsp->is_insd_in_sep = TRUE;
+      break;
+    case SEQID_OTHER:
+      vsp->is_refseq_in_sep = TRUE;
+      break;
+    case SEQID_GPIPE:
+      vsp->is_gpipe_in_sep = TRUE;
+      break;
+    case SEQID_GENERAL:
+      if (ISA_aa (bsp->mol)) {
+        dbt = (DbtagPtr) sip->data.ptrvalue;
+        if (dbt == NULL) break;
+        if (IsSkippableDbtag (dbt)) break;
+        vsp->has_gnl_prot_sep = TRUE;
+      }
+      break;
     default:
       break;
     }
-  }
-}
-
-static void LookForLclGnl (BioseqPtr bsp, Pointer userdata)
-
-{
-  Boolean   has_lcl_gnl = FALSE;
-  Boolean   has_others = FALSE;
-  BoolPtr   is_lcl_gnl_P;
-  SeqIdPtr  sip;
-
-  if (bsp == NULL || userdata == NULL) return;
-  is_lcl_gnl_P = (BoolPtr) userdata;
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_LOCAL || sip->choice == SEQID_GENERAL) {
       has_lcl_gnl = TRUE;
     } else {
       has_others = TRUE;
     }
   }
-  if (has_others) {
-    *is_lcl_gnl_P = FALSE;
-    return;
-  }
-  if (has_lcl_gnl) {
-    *is_lcl_gnl_P = TRUE;
+  if (has_lcl_gnl && ! has_others) {
+    vsp->only_lcl_gnl_in_sep = TRUE;
   }
 }
 
-static void LookForProteinGnl (BioseqPtr bsp, Pointer userdata)
+static void LookForBioseqSetFields (BioseqSetPtr bssp, Pointer userdata)
 
 {
-  DbtagPtr  dbt;
-  Boolean   has_gnl_prot = FALSE;
-  BoolPtr   is_gnl_prot_P;
-  SeqIdPtr  sip;
+  ValidStructPtr  vsp;
 
-  if (bsp == NULL || userdata == NULL) return;
-  if (! ISA_aa (bsp->mol)) return;
-  is_gnl_prot_P = (BoolPtr) userdata;
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice == SEQID_GENERAL) {
-      dbt = (DbtagPtr) sip->data.ptrvalue;
-      if (dbt == NULL) continue;
-      if (IsSkippableDbtag (dbt)) continue;
-      has_gnl_prot = TRUE;
+  if (bssp == NULL || userdata == NULL) return;
+  vsp = (ValidStructPtr) userdata;
+
+  /* the switch statement is erroneously reporting gen_prod_set for a pop_set under Xcode */
+  /*
+  switch (bssp->_class) {
+  case BioseqseqSet_class_gen_prod_set:
+    vsp->is_gps_in_sep = TRUE;
+    break;
+  case BioseqseqSet_class_mut_set:
+  case BioseqseqSet_class_pop_set:
+  case BioseqseqSet_class_phy_set:
+  case BioseqseqSet_class_eco_set:
+  case BioseqseqSet_class_wgs_set:
+    break;
+    vsp->other_sets_in_sep = TRUE;
+  default:
+    break;
+  }
+  */
+
+  if (bssp->_class == BioseqseqSet_class_gen_prod_set) {
+    vsp->is_gps_in_sep = TRUE;
+  } else if (bssp->_class == BioseqseqSet_class_mut_set ||
+             bssp->_class == BioseqseqSet_class_pop_set ||
+             bssp->_class == BioseqseqSet_class_phy_set ||
+             bssp->_class == BioseqseqSet_class_eco_set ||
+             bssp->_class == BioseqseqSet_class_wgs_set) {
+    vsp->other_sets_in_sep = TRUE;
+  }
+}
+
+static void LookForSeqDescrFields (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  BioSourcePtr    biop;
+  MolInfoPtr      mip;
+  ObjectIdPtr     oip;
+  UserObjectPtr   uop;
+  ValidStructPtr  vsp;
+
+  if (sdp == NULL || userdata == NULL) return;
+  vsp = (ValidStructPtr) userdata;
+
+  switch (sdp->choice) {
+  case Seq_descr_user:
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop == NULL) break;
+    if (StringICmp (uop->_class, "SMART_V1.0") == 0) {
+      vsp->is_smupd_in_sep = TRUE;
     }
-  }
-  if (has_gnl_prot) {
-    *is_gnl_prot_P = TRUE;
-  }
-}
-
-static void LookForHTG (SeqDescrPtr sdp, Pointer userdata)
-
-{
-  BoolPtr     is_htgp;
-  MolInfoPtr  mip;
-
-  if (sdp == NULL || userdata == NULL) return;
-  if (sdp->choice != Seq_descr_molinfo) return;
-
-  mip = (MolInfoPtr) sdp->data.ptrvalue;
-  if (mip == NULL) return;
-
-  if (mip->tech == MI_TECH_htgs_1 ||
-      mip->tech == MI_TECH_htgs_2 ||
-      mip->tech == MI_TECH_htgs_3 ||
-      mip->tech == MI_TECH_htgs_0) {
-
-    is_htgp = (BoolPtr) userdata;
-    *is_htgp = TRUE; /* any htg now drops citsub missing affil message severity */
-  }
-}
-
-static void LookForBarcode (SeqDescrPtr sdp, Pointer userdata)
-
-{
-  BoolPtr     is_barcode;
-  MolInfoPtr  mip;
-
-  if (sdp == NULL || userdata == NULL) return;
-  if (sdp->choice != Seq_descr_molinfo) return;
-
-  mip = (MolInfoPtr) sdp->data.ptrvalue;
-  if (mip == NULL) return;
-
-  if (mip->tech == MI_TECH_barcode) {
-
-    is_barcode = (BoolPtr) userdata;
-    *is_barcode = TRUE; /* any barcode now drops bad country code message severity */
-  }
-}
-
-static void LookForSMUPD (SeqDescrPtr sdp, Pointer userdata)
-
-{
-  BoolPtr        is_smupdp;
-  UserObjectPtr  uop;
-
-  if (sdp == NULL || userdata == NULL) return;
-  if (sdp->choice != Seq_descr_user) return;
-
-  uop = (UserObjectPtr) sdp->data.ptrvalue;
-  if (uop == NULL) return;
-
-  if (StringICmp (uop->_class, "SMART_V1.0") == 0) {
-
-    is_smupdp = (BoolPtr) userdata;
-    *is_smupdp = TRUE;
+    oip = uop->type;
+    if (oip != NULL) {
+      if (StringICmp (oip->str, "GenomeBuild") == 0) {
+        vsp->is_gpipe_in_sep = TRUE;
+      }
+    }
+    break;
+  case Seq_descr_source:
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+    if (biop == NULL) break;
+    if (biop->genome == GENOME_genomic) {
+      vsp->bsp_genomic_in_sep = TRUE;
+    }
+    break;
+  case Seq_descr_molinfo:
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (mip == NULL) break;
+    switch (mip->tech) {
+    case MI_TECH_htgs_1:
+    case MI_TECH_htgs_2:
+    case MI_TECH_htgs_3:
+    case MI_TECH_htgs_0:
+      vsp->is_htg_in_sep = TRUE;
+      break;
+    case MI_TECH_barcode:
+      vsp->is_barcode_sep = TRUE;
+      break;
+    default:
+      break;
+    }
+    break;
+  default:
+    break;
   }
 }
 
@@ -3131,7 +3249,7 @@ static void TestDeletedOrReplacedECnumbers (ValidStructPtr vsp)
     ErrSetMessageLevel (sev);
     if (fp != NULL) {
       FileCacheSetup (&fc, fp);
-  
+
       str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
       while (str != NULL) {
         if (StringDoesHaveText (str)) {
@@ -3167,7 +3285,7 @@ static void TestDeletedOrReplacedECnumbers (ValidStructPtr vsp)
     ErrSetMessageLevel (sev);
     if (fp != NULL) {
       FileCacheSetup (&fc, fp);
-  
+
       str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
       while (str != NULL) {
         if (StringDoesHaveText (str)) {
@@ -3188,11 +3306,175 @@ static void TestDeletedOrReplacedECnumbers (ValidStructPtr vsp)
   }
 }
 
+
+typedef struct collisioninfo {
+  CharPtr str;
+  SeqIdPtr sip;
+  BioseqPtr bsp;
+} CollisionInfoData, PNTR CollisionInfoPtr;
+
+
+static CollisionInfoPtr CollisionInfoNew (SeqIdPtr sip, BioseqPtr bsp)
+{
+  CollisionInfoPtr cip = (CollisionInfoPtr) MemNew (sizeof (CollisionInfoData));
+  cip->sip = sip;
+  cip->bsp = bsp;
+  cip->str = SeqIdWholeLabel (sip, PRINTID_FASTA_SHORT);
+  return cip;
+}
+
+
+static CollisionInfoPtr CollisionInfoFree (CollisionInfoPtr cip)
+{
+  if (cip != NULL) {
+    cip->str = MemFree (cip->str);
+    cip = MemFree (cip);
+  }
+  return cip;
+}
+
+
+static Boolean IsNcbiFileId(SeqIdPtr sip)
+{
+  DbtagPtr dbtag;
+
+  if (sip == NULL || sip->choice != SEQID_GENERAL || (dbtag = sip->data.ptrvalue) == NULL) {
+    return FALSE;
+  }
+  if (StringCmp (dbtag->db, "NCBIFILE") == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static void LongCollisionCallback (BioseqPtr bsp, Pointer data)
+{
+  SeqIdPtr sip;
+
+  if (bsp == NULL || data == NULL) {
+    return;
+  }
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (!IsNcbiFileId(sip)) {
+      ValNodeAddPointer ((ValNodePtr PNTR) data, 0, CollisionInfoNew (sip, bsp));
+    }
+  }
+}
+
+
+static int LIBCALLBACK SortVnpByCollisionInfo (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  CollisionInfoPtr  cip1, cip2;
+  ValNodePtr    vnp1, vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  cip1 = (CollisionInfoPtr) vnp1->data.ptrvalue;
+  cip2 = (CollisionInfoPtr) vnp2->data.ptrvalue;
+
+  if (cip1 == NULL || cip2 == NULL) return 0;
+  return StringCmp (cip1->str, cip2->str);
+}
+
+
+static void FindLongIdsThatCollideWhenTruncated (SeqEntryPtr sep, ValidStructPtr vsp, Int4 trunc_len)
+{
+  ValNodePtr id_list = NULL, vnp, vnp_c;
+  CollisionInfoPtr  cip1, cip2;
+  BioseqPtr         oldbsp;
+
+  VisitBioseqsInSep (sep, &id_list, LongCollisionCallback);
+  id_list = ValNodeSort (id_list, SortVnpByCollisionInfo);
+  oldbsp = vsp->bsp;
+
+  for (vnp = id_list; vnp != NULL; vnp = vnp->next) {
+    cip1 = (CollisionInfoPtr) vnp->data.ptrvalue;
+    vnp_c = vnp->next;
+    while (vnp_c != NULL && (cip2 = (CollisionInfoPtr) vnp_c->data.ptrvalue) != NULL
+          && StringNCmp (cip1->str, cip2->str, trunc_len) == 0) {
+      vsp->bsp = cip2->bsp;
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_BadSeqIdFormat,
+                "First %d characters of %s and %s are identical", trunc_len, cip1->str, cip2->str);
+      vnp = vnp_c;
+      vnp_c = vnp_c->next;
+    }
+  }
+
+  vsp->bsp = oldbsp;
+  vnp = id_list;
+  while (vnp != NULL) {
+    vnp_c = vnp->next;
+    vnp->data.ptrvalue = CollisionInfoFree (vnp->data.ptrvalue);
+    vnp->next = NULL;
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_c;
+  }
+}
+
+
+static void ValLookForBigFarSeqs (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  Int4         count = 0;
+  DeltaSeqPtr  dsp;
+  Boolean      is_ddbj = FALSE;
+  SeqIdPtr     sip;
+  BoolPtr      toomanyfarP;
+
+  if (bsp == NULL || userdata == NULL) return;
+
+  if (bsp->repr != Seq_repr_delta) return;
+  if (bsp->seq_ext_type != 4) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_DDBJ) {
+      is_ddbj = TRUE;
+    }
+  }
+
+  if (! is_ddbj) return;
+
+  for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp = dsp->next) {
+    if (dsp->choice == 1) {
+      count++;
+    }
+  }
+
+  if (count > 10000) {
+    toomanyfarP = (BoolPtr) userdata;
+    *toomanyfarP = TRUE;
+  }
+}
+
+static Boolean ValTooManyFarComponents (
+  SeqEntryPtr sep
+)
+
+{
+  Boolean  toomanyfar = FALSE;
+
+  if (sep == NULL) return FALSE;
+
+  VisitBioseqsInSep (sep, (Pointer) &toomanyfar, ValLookForBigFarSeqs);
+
+  return toomanyfar;
+}
+
 NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
 
 {
   AuthListPtr     alp;
   AuthorPtr       ap;
+  DatePtr         cd, dp;
   ContactInfoPtr  cip;
   CitSubPtr       csp;
   Uint2           entityID = 0;
@@ -3207,7 +3489,6 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   Int2            i;
   Boolean         suppress_no_pubs = TRUE;
   Boolean         suppress_no_biosrc = TRUE;
-  Boolean         other_sets_in_sep = FALSE;
   FeatProb        featprob;
   GatherContextPtr gcp = NULL;
   GatherContext   gc;
@@ -3308,6 +3589,24 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   }
 
   vsp->is_htg_in_sep = FALSE;
+  vsp->is_barcode_sep = FALSE;
+  vsp->is_refseq_in_sep = FALSE;
+  vsp->is_gpipe_in_sep = FALSE;
+  vsp->is_gps_in_sep = FALSE;
+  vsp->other_sets_in_sep = FALSE;
+  vsp->is_embl_ddbj_in_sep = FALSE;
+  vsp->is_insd_in_sep = FALSE;
+  vsp->only_lcl_gnl_in_sep = FALSE;
+  vsp->has_gnl_prot_sep = FALSE;
+  vsp->bsp_genomic_in_sep = FALSE;
+  vsp->is_smupd_in_sep = FALSE;
+
+  VisitBioseqsInSep (sep, (Pointer) vsp, LookForBioseqFields);
+  VisitSetsInSep (sep, (Pointer) vsp, LookForBioseqSetFields);
+  VisitDescriptorsInSep (sep, (Pointer) vsp, LookForSeqDescrFields);
+
+  /*
+  vsp->is_htg_in_sep = FALSE;
   VisitDescriptorsInSep (sep, (Pointer) &(vsp->is_htg_in_sep), LookForHTG);
   vsp->is_barcode_sep = FALSE;
   VisitDescriptorsInSep (sep, (Pointer) &(vsp->is_barcode_sep), LookForBarcode);
@@ -3315,8 +3614,8 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   VisitDescriptorsInSep (sep, (Pointer) &(vsp->is_smupd_in_sep), LookForSMUPD);
   vsp->is_gps_in_sep = FALSE;
   SeqEntryExplore (sep, (Pointer) &(vsp->is_gps_in_sep), LookForGPS);
-  other_sets_in_sep = FALSE;
-  SeqEntryExplore (sep, (Pointer) &(other_sets_in_sep), LookForNonGPS);
+  vsp->other_sets_in_sep = FALSE;
+  SeqEntryExplore (sep, (Pointer) &(vsp->other_sets_in_sep), LookForNonGPS);
   vsp->is_refseq_in_sep = FALSE;
   VisitBioseqsInSep (sep, (Pointer) &(vsp->is_refseq_in_sep), LookForNC);
   vsp->is_embl_ddbj_in_sep = FALSE;
@@ -3327,6 +3626,7 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   VisitBioseqsInSep (sep, (Pointer) &(vsp->only_lcl_gnl_in_sep), LookForLclGnl);
   vsp->has_gnl_prot_sep = FALSE;
   VisitBioseqsInSep (sep, (Pointer) &(vsp->has_gnl_prot_sep), LookForProteinGnl);
+  */
 
   vsp->feat_loc_has_gi = featprob.loc_has_gi;
   vsp->feat_prod_has_gi = featprob.prod_has_gi;
@@ -3363,7 +3663,7 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
                 "INSD and RefSeq records should not be present in the same set");
     }
 
-    if (vsp->is_gps_in_sep && other_sets_in_sep) {
+    if (vsp->is_gps_in_sep && vsp->other_sets_in_sep) {
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_PKG_GPSnonGPSPackaging,
                 "Genomic product set and mut/pop/phy/eco set records should not be present in the same set");
     }
@@ -3383,11 +3683,13 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
       /* lock all remote genome components, locations, and products in advance */
 
       limit = vsp->validationLimit;
-      if (limit == VALIDATE_ALL || limit == VALIDATE_INST || limit == VALIDATE_HIST) {
-        farFetchProd = (Boolean) (vsp->farFetchCDSproducts || vsp->farFetchMRNAproducts);
-        oldsev = ErrSetMessageLevel (SEV_WARNING);
-        bsplist = LockFarComponentsEx (sep, TRUE, TRUE, farFetchProd, NULL);
-        ErrSetMessageLevel (oldsev);
+      if (! ValTooManyFarComponents (sep)) {
+        if (limit == VALIDATE_ALL || limit == VALIDATE_INST || limit == VALIDATE_HIST) {
+          farFetchProd = (Boolean) (vsp->farFetchCDSproducts || vsp->farFetchMRNAproducts);
+          oldsev = ErrSetMessageLevel (SEV_WARNING);
+          bsplist = LockFarComponentsEx (sep, TRUE, TRUE, farFetchProd, NULL);
+          ErrSetMessageLevel (oldsev);
+        }
       }
     }
 
@@ -3410,10 +3712,10 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
           isPDB = TRUE;
         }
       }
-  
+
       if (first) {
         TestDeletedOrReplacedECnumbers (vsp);
-  
+
         if (suppress_no_pubs && (! vsp->seqSubmitParent)) {
           omdp = ObjMgrGetData (gc.entityID);
           if (omdp == NULL || omdp->datatype != OBJ_SEQSUB) {
@@ -3428,72 +3730,76 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
             ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrgFound, "No organism name anywhere on this entire record.");
           }
         }
-  
+
         if (featprob.num_misplaced_features > 1) {
           ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_FeaturePackagingProblem, "There are %d mispackaged features in this record.", (int) featprob.num_misplaced_features);
         } else if (featprob.num_misplaced_features == 1) {
           ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_FeaturePackagingProblem, "There is %d mispackaged feature in this record.", (int) featprob.num_misplaced_features);
         }
-  
+
         if (featprob.num_misplaced_graphs > 1) {
           ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_GraphPackagingProblem, "There are %d mispackaged graphs in this record.", (int) featprob.num_misplaced_graphs);
         } else if (featprob.num_misplaced_graphs == 1) {
           ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_GraphPackagingProblem, "There is %d mispackaged graph in this record.", (int) featprob.num_misplaced_graphs);
         }
-  
+
         /*
         if (featprob.num_archaic_locations > 1) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureLocation, "There are %d archaic feature locations in this record.", (int) featprob.num_archaic_locations);
         } else if (featprob.num_archaic_locations == 1) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureLocation, "There is %d archaic feature location in this record.", (int) featprob.num_archaic_locations);
         }
-  
+
         if (featprob.num_archaic_products > 1) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureProduct, "There are %d archaic feature products in this record.", (int) featprob.num_archaic_products);
         } else if (featprob.num_archaic_products == 1) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureProduct, "There is %d archaic feature product in this record.", (int) featprob.num_archaic_products);
         }
         */
-  
+
         if (featprob.num_gene_feats == 0 && featprob.num_gene_xrefs > 0) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_OnlyGeneXrefs, "There are %ld gene xrefs and no gene features in this record.", (long) featprob.num_gene_xrefs);
         }
-  
+
         if (featprob.num_tpa_with_hist > 0 && featprob.num_tpa_without_hist > 0) {
           ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_TpaAssmeblyProblem, "There are %ld TPAs with history and %ld without history in this record.",
                     (long) featprob.num_tpa_with_hist, (long) featprob.num_tpa_without_hist);
         }
-  
+
         if (featprob.has_gi && featprob.num_tpa_without_hist > 0) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_TpaAssmeblyProblem, "There are %ld TPAs without history in this record, but the record has a gi number assignment.",
                     (long) featprob.num_tpa_without_hist);
         }
-  
+
         if (vsp->indexerVersion && vsp->has_gnl_prot_sep && (! vsp->is_refseq_in_sep)) {
           if (FindNucBioseq (sep) != NULL) {
             ValidErr (vsp, SEV_INFO, ERR_SEQ_INST_ProteinsHaveGeneralID, "INDEXER_ONLY - Protein bioseqs have general seq-id.");
           }
         }
-  
+
         first = FALSE;
       }
-  
+
       vsp->bsp = NULL;
-  
+
       topsep = GetTopSeqEntryForEntityID (gc.entityID);
       oldsep = SeqEntrySetScope (topsep);
-  
+
+      /* disabled for now
+      FindLongIdsThatCollideWhenTruncated (topsep, vsp, 30);
+      */
+
       /* do validator tests using Discrepancy Report */
       ValidateGeneLocusTags (topsep, vsp);
       ValidateShortIntrons (topsep, vsp);
-  
+
       VisitFeaturesInSep (sep, NULL, AddScratchToFeatures);
       VisitBioseqsInSep (sep, NULL, SetupFeatureScratchData);
-  
+
       /* AssignIDsInEntity (gc.entityID, 0, NULL); */
-  
+
       GatherSeqEntry (sep, (Pointer) vsp, Valid1GatherProc, &gs);
-  
+
       if (ssp != NULL) {
         if (ssp->datatype == 1) {
           vsp->bsp = NULL;
@@ -3509,6 +3815,7 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
               if (alp != NULL) {
                 ValidateAffil (vsp, alp->affil);
               }
+              ValidateCitSub (vsp, csp);
             }
             cip = sbp->contact;
             if (cip != NULL) {
@@ -3517,37 +3824,48 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
                 ValidateAffil (vsp, ap->affil);
               }
             }
+            if (sbp->hup) {
+              dp = sbp->reldate;
+              cd = DateCurr ();
+              if (dp != NULL && cd != NULL) {
+                if (DateMatch (dp, cd, FALSE) == -1) {
+                  ValidErr (vsp, SEV_WARNING, ERR_GENERIC_PastReleaseDate,
+                            "Record release date has already passed");
+                }
+              }
+              DateFree (cd);
+            }
           }
         }
       }
-  
+
       vsp->gcp = NULL;
       ValidateFeatCits (sep, vsp);
       vsp->gcp = NULL;
-  
+
       vsp->gcp = NULL;
       ValidateFeatIDs (gc.entityID, vsp);
       vsp->gcp = NULL;
-  
+
       vsp->gcp = NULL;
       ValidateSeqIdCase (sep, vsp);
       vsp->gcp = NULL;
-  
+
       if (vsp->validateAlignments) {
         vsp->gcp = NULL;
         ValidateSeqAlignWithinValidator (vsp, sep, vsp->alignFindRemoteBsp, vsp->doSeqHistAssembly);
         vsp->gcp = NULL;
       }
-  
+
       if (vsp->far_fetch_failure) {
         vsp->gcp = NULL;
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_FarFetchFailure, "Far fetch failures caused some validator tests to be bypassed");
       }
-  
+
       VisitFeaturesInSep (sep, NULL, ClearScratchOnFeatures);
-  
+
       SeqEntrySetScope (oldsep);
-  
+
       VisitDescriptorsInSep (sep, NULL, ClearPubScratchData);
     }
 
@@ -3789,6 +4107,9 @@ static void ValidateNucProtSet (BioseqSetPtr bssp, ValidStructPtr vsp)
         orp = biop->org;
         if (orp != NULL && StringDoesHaveText (orp->taxname)) return;
       }
+    } else if (sdp->choice == Seq_descr_title) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_NucProtSetHasTitle,
+                "Nuc-prot set should not have title descriptor");
     }
   }
 
@@ -3992,11 +4313,6 @@ static Boolean CheckForInconsistentBiosources (SeqEntryPtr sep, ValidStructPtr v
     return FALSE;
   }
 
-  if (StringNICmp (orp->taxname, "Influenza virus ", 16) == 0 &&
-      StringNICmp (firstorp->taxname, "Influenza virus ", 16) == 0 && StringNICmp (orp->taxname, firstorp->taxname, 17) == 0) {
-    return FALSE;
-  }
-
   if (StringICmp (orp->taxname, firstorp->taxname) == 0)
     return FALSE;
 
@@ -4165,6 +4481,68 @@ static void ValidatePopSet (BioseqSetPtr bssp, ValidStructPtr vsp)
   }
 }
 
+typedef struct mutsetsrcdata {
+  CharPtr  taxname;
+  Int2     num_not_mut_origin;
+  Boolean  failed;
+} MutSetSrcData, PNTR MutSetSrcPtr;
+
+static void CheckMutSetSources (BioSourcePtr biop, Pointer userdata)
+
+{
+  MutSetSrcPtr  mssp;
+  OrgRefPtr     orp;
+
+  if (biop == NULL || userdata == NULL) return;
+  mssp = (MutSetSrcPtr) userdata;
+
+  orp = biop->org;
+  if (orp == NULL || StringHasNoText (orp->taxname)) return;
+  if (mssp->taxname == NULL) {
+    mssp->taxname = orp->taxname;
+  } else if (StringCmp (mssp->taxname, orp->taxname) != 0) {
+    mssp->failed = TRUE;
+  }
+  if (biop->origin != ORG_MUT) {
+    (mssp->num_not_mut_origin)++;
+  }
+}
+
+static void ValidateMutSet (BioseqSetPtr bssp, ValidStructPtr vsp)
+
+{
+  BioseqSetPtr   bssp1;
+/*  MutSetSrcData  mssd; */
+  SeqEntryPtr    sep;
+
+  if (bssp->_class != BioseqseqSet_class_mut_set)
+    return;
+
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    if (!IS_Bioseq_set (sep)) continue;
+    bssp1 = sep->data.ptrvalue;
+    if (bssp1 == NULL) continue;
+
+    if (bssp1->_class == BioseqseqSet_class_genbank) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_InternalGenBankSet,
+                "Bioseq-set contains internal GenBank Bioseq-set");
+    }
+  }
+
+  LookForMolInfoInconsistency (bssp, vsp);
+
+  /* error is currently suppressed
+  MemSet ((Pointer) &mssd, 0, sizeof (MutSetSrcData));
+  VisitBioSourcesInSet (bssp, (Pointer) &mssd, CheckMutSetSources);
+  if (mssd.failed) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_InconsistentBioSources, "Mutation set contains inconsistent organisms.");
+  }
+  if (mssd.num_not_mut_origin > 1) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_InconsistentBioSources, "Mutation set contains more than one non-mutant organism.");
+  }
+  */
+}
+
 static void ValidateGenbankSet (BioseqSetPtr bssp, ValidStructPtr vsp)
 
 {
@@ -4183,7 +4561,7 @@ static void ValidateGenbankSet (BioseqSetPtr bssp, ValidStructPtr vsp)
   }
 }
 
-static void ValidatePhyMutEcoWgsSet (BioseqSetPtr bssp, ValidStructPtr vsp)
+static void ValidatePhyEcoWgsSet (BioseqSetPtr bssp, ValidStructPtr vsp)
 
 {
   BioseqSetPtr  bssp1;
@@ -4269,6 +4647,9 @@ static void ValidateBioseqSet (GatherContextPtr gcp)
   BioseqSetPtr    bssp;
   ValidStructPtr  vsp;
   SeqEntryPtr     sep;
+  SeqDescrPtr     sdp;
+  CharPtr         str;
+  Boolean         has_title = FALSE;
 
   vsp = (ValidStructPtr) (gcp->userdata);
   bssp = (BioseqSetPtr) (gcp->thisitem);
@@ -4327,10 +4708,12 @@ static void ValidateBioseqSet (GatherContextPtr gcp)
     ValidatePopSet (bssp, vsp);
     break;
   case BioseqseqSet_class_mut_set:
+    ValidateMutSet (bssp, vsp);
+    break;
   case BioseqseqSet_class_phy_set:
   case BioseqseqSet_class_eco_set:
   case BioseqseqSet_class_wgs_set:
-    ValidatePhyMutEcoWgsSet (bssp, vsp);
+    ValidatePhyEcoWgsSet (bssp, vsp);
     break;
   case BioseqseqSet_class_gen_prod_set:
     ValidateGenProdSet (bssp, vsp);
@@ -4346,7 +4729,33 @@ static void ValidateBioseqSet (GatherContextPtr gcp)
     }
     break;
   }
-  return;
+
+  switch (bssp->_class) {
+  case BioseqseqSet_class_pop_set:
+  case BioseqseqSet_class_mut_set:
+  case BioseqseqSet_class_phy_set:
+  case BioseqseqSet_class_eco_set:
+    for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {
+      if (sdp->choice != Seq_descr_title) continue;
+      str = (CharPtr) sdp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      has_title = TRUE;
+    }
+    if (! has_title && (vsp->is_insd_in_sep || vsp->is_refseq_in_sep)) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_MissingSetTitle, "Pop/Phy/Mut/Eco set does not have title");
+    }
+    sep = bssp->seq_set;
+    if (sep == NULL) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_EmptySet, "Pop/Phy/Mut/Eco set has no components");
+    } else if (sep->next == NULL) {
+      if (VisitAlignmentsInSep (sep, NULL, NULL) == 0) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_SingleItemSet, "Pop/Phy/Mut/Eco set has only one component and no alignments");
+      }
+    }
+    break;
+  default:
+    break;
+  }
 }
 
 static Boolean SuppressTrailingXMessage (BioseqPtr bsp)
@@ -4801,7 +5210,7 @@ static CharPtr GetSequencePlusGapByFeature (SeqFeatPtr sfp)
       SeqPortStreamLoc (sfp->location, EXPAND_GAPS_TO_DASHES, (Pointer) str, NULL);
     }
   }
-    
+
   return str;
 }
 
@@ -4961,6 +5370,25 @@ static CharPtr legal_refgene_status_strings [] = {
 };
 
 
+static void ReportLongSeqId (SeqIdPtr sip, ValidStructPtr vsp, Int4 max_len)
+{
+  Int4 id_len = 0;
+  CharPtr id_txt;
+
+  if (sip == NULL || vsp == NULL || IsNcbiFileId(sip)) {
+    return;
+  }
+
+  id_len = SeqIdLabelLen(sip, PRINTID_FASTA_SHORT);
+  if (id_len > max_len) {
+    id_txt = SeqIdWholeLabel (sip, PRINTID_FASTA_SHORT);
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_BadSeqIdFormat, "Sequence ID is unusually long (%d): %s", id_len, id_txt);
+    id_txt = MemFree (id_txt);
+  }
+
+}
+
+
 static void ValidateBioseqInst (GatherContextPtr gcp)
 {
   Boolean         retval = TRUE;
@@ -5012,10 +5440,15 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
   IntFuzzPtr      ifp;
   Boolean         in_gap;
   Boolean         in_N;
+  Boolean         in_nps;
   Boolean         isActiveFin = FALSE;
+  Boolean         isDDBJ = FALSE;
   Boolean         isDraft = FALSE;
+  Boolean         isEMBL = FALSE;
   Boolean         isFullTop = FALSE;
   Boolean         isGB = FALSE;
+  Boolean         isGIBBMT = FALSE;
+  Boolean         isGIBBSQ = FALSE;
   Boolean         isPatent = FALSE;
   Boolean         isPDB = FALSE;
   Boolean         isPreFin = FALSE;
@@ -5072,6 +5505,10 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
   Int4            dnalen;
   Int4            total;
   Boolean         has_barcode_keyword = FALSE;
+  CharPtr         keyword;
+  Int4            count;
+  Boolean         doNotSkip;
+  SeqMgrPtr       smp;
 
   /* set up data structures */
 
@@ -5113,8 +5550,16 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
       hasGi = TRUE;
     } else if (sip1->choice == SEQID_GENBANK) {
       isGB = TRUE;
+    } else if (sip1->choice == SEQID_EMBL) {
+      isEMBL = TRUE;
+    } else if (sip1->choice == SEQID_DDBJ) {
+      isDDBJ = TRUE;
     } else if (sip1->choice == SEQID_SWISSPROT) {
       isSwissProt = TRUE;
+    } else if (sip1->choice == SEQID_GIBBSQ) {
+      isGIBBSQ = TRUE;
+    } else if (sip1->choice == SEQID_GIBBMT) {
+      isGIBBMT = TRUE;
     }
 
     for (sip2 = sip1->next; sip2 != NULL; sip2 = sip2->next) {
@@ -5127,6 +5572,9 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
   }
 
   for (sip1 = bsp->id; sip1 != NULL; sip1 = sip1->next) {
+    /* disabled for now
+    ReportLongSeqId (sip1, vsp, 40);
+    */
     switch (sip1->choice) {
     case SEQID_TPG:
     case SEQID_TPE:
@@ -5196,9 +5644,11 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
         } else if (numletters == 3 && numdigits == 5 && ISA_aa (bsp->mol)) {
         } else if (numletters == 2 && numdigits == 6 && ISA_aa (bsp->mol) && bsp->repr == Seq_repr_seg) {
         } else if (numletters == 4 && numdigits == 8 && ISA_na (bsp->mol) &&
-                   (sip1->choice == SEQID_GENBANK || sip1->choice == SEQID_EMBL || sip1->choice == SEQID_DDBJ)) {
+                   (sip1->choice == SEQID_GENBANK || sip1->choice == SEQID_EMBL || sip1->choice == SEQID_DDBJ ||
+                    sip1->choice == SEQID_TPG || sip1->choice == SEQID_TPE || sip1->choice == SEQID_TPD)) {
         } else if (numletters == 4 && numdigits == 9 && ISA_na (bsp->mol) &&
-                   (sip1->choice == SEQID_GENBANK || sip1->choice == SEQID_EMBL || sip1->choice == SEQID_DDBJ)) {
+                   (sip1->choice == SEQID_GENBANK || sip1->choice == SEQID_EMBL || sip1->choice == SEQID_DDBJ ||
+                    sip1->choice == SEQID_TPG || sip1->choice == SEQID_TPE || sip1->choice == SEQID_TPD)) {
         } else if (numletters == 5 && numdigits == 7 && ISA_na (bsp->mol) &&
                    (sip1->choice == SEQID_GENBANK || sip1->choice == SEQID_EMBL || sip1->choice == SEQID_DDBJ)) {
         } else {
@@ -5413,7 +5863,9 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
                 olditemtype = gcp->thistype;
                 gcp->itemID = context.itemID;
                 gcp->thistype = OBJ_SEQDESC;
+                vsp->descr = vnp;
                 ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_RefGeneTrackingIllegalStatus, "RefGeneTracking object has illegal Status '%s'", str);
+                vsp->descr = NULL;
                 gcp->itemID = olditemid;
                 gcp->thistype = olditemtype;
               }
@@ -5424,19 +5876,34 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
             olditemtype = gcp->thistype;
             gcp->itemID = context.itemID;
             gcp->thistype = OBJ_SEQDESC;
+            vsp->descr = vnp;
             ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_RefGeneTrackingWithoutStatus, "RefGeneTracking object needs to have Status set");
+            vsp->descr = NULL;
             gcp->itemID = olditemid;
             gcp->thistype = olditemtype;
           }
-          if (! isRefSeq) {
-            if (! IsWgsIntermediate (vsp->sep)) {
-              olditemid = gcp->itemID;
-              olditemtype = gcp->thistype;
-              gcp->itemID = context.itemID;
-              gcp->thistype = OBJ_SEQDESC;
-              ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_RefGeneTrackingOnNonRefSeq, "RefGeneTracking object should only be in RefSeq record");
-              gcp->itemID = olditemid;
-              gcp->thistype = olditemtype;
+          if (! isRefSeq && ! vsp->is_refseq_in_sep) {
+            olditemid = gcp->itemID;
+            olditemtype = gcp->thistype;
+            gcp->itemID = context.itemID;
+            gcp->thistype = OBJ_SEQDESC;
+            vsp->descr = vnp;
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_RefGeneTrackingOnNonRefSeq, "RefGeneTracking object should only be in RefSeq record");
+            vsp->descr = NULL;
+            gcp->itemID = olditemid;
+            gcp->thistype = olditemtype;
+          }
+        }
+        if ((keyword = KeywordForStructuredCommentName (uop)) != NULL) {
+          if (IsStructuredCommentValid(uop, NULL, NULL) == eFieldValid_Valid) {
+            if (HasKeywordForStructuredCommentName(bsp, uop)) {
+              /* as it should be */
+            } else {
+              ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_MissingKeyword, "Structured Comment compliant, keyword should be added");
+            }
+          } else {
+            if (HasKeywordForStructuredCommentName(bsp, uop)) {
+              ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_BadKeyword, "Structured Comment is non-compliant, keyword should be removed");
             }
           }
         }
@@ -5718,11 +6185,15 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
             gapatstart = TRUE;
           }
         } else if (residue == 'X') {
-          trailingX++;
-          if (isFirst) {
-            leadingX = TRUE;
+          if (ISA_na (bsp->mol)) {
+            ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid nucleotide residue '%c' at position [%ld]", (char) residue, (long) (len + 1));
+          } else {
+            trailingX++;
+            if (isFirst) {
+              leadingX = TRUE;
+            }
           }
-        } else if (ISA_na (bsp->mol) && StringChr ("EFIJLPQZ", (Char) residue) != NULL) {
+        } else if (ISA_na (bsp->mol) && StringChr ("EFIJLOPQZ", (Char) residue) != NULL) {
           ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid nucleotide residue '%c' at position [%ld]", (char) residue, (long) (len + 1));
         } else if (! IS_ALPHA ((Char) residue)) {
           ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue '%c' at position [%ld]", (char) residue, (long) (len + 1));
@@ -5898,7 +6369,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
             ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_DuplicateSegmentReferences, "Segmented sequence has multiple references to %s", str);
           } else {
             ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_DuplicateSegmentReferences,
-                      "Segmented sequence has multiple references to %s that are not SEQLOC_WHOLE\n", str);
+                      "Segmented sequence has multiple references to %s that are not SEQLOC_WHOLE", str);
           }
         } else {
           last = (CharPtr) vnp->data.ptrvalue;
@@ -5910,26 +6381,28 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
     }
 
     vsp->bsp_partial_val = SeqLocPartialCheck ((SeqLocPtr) (&head));
-    if ((vsp->bsp_partial_val) && (ISA_aa (bsp->mol))) {
-      bcp = NULL;
+    if (ISA_aa (bsp->mol)) {
       got_partial = FALSE;
       if (mip != NULL) {
           switch (mip->completeness) {
           case 2:             /* partial */
             got_partial = TRUE;
+            if (!vsp->bsp_partial_val) {
+              ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_PartialInconsistent, "Complete segmented sequence with MolInfo partial");
+            }
             break;
           case 3:             /* no-left */
-            if (!(vsp->bsp_partial_val & SLP_START))
+            if (!(vsp->bsp_partial_val & SLP_START) || (vsp->bsp_partial_val && SLP_STOP))
               ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_PartialInconsistent, "No-left inconsistent with segmented SeqLoc");
             got_partial = TRUE;
             break;
           case 4:             /* no-right */
-            if (!(vsp->bsp_partial_val & SLP_STOP))
+            if (!(vsp->bsp_partial_val & SLP_STOP) || (vsp->bsp_partial_val && SLP_START))
               ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_PartialInconsistent, "No-right inconsistent with segmented SeqLoc");
             got_partial = TRUE;
             break;
           case 5:             /* no-ends */
-            if ((!(vsp->bsp_partial_val & SLP_STOP)) && (!(vsp->bsp_partial_val & SLP_START)))
+            if ((!(vsp->bsp_partial_val & SLP_STOP)) || (!(vsp->bsp_partial_val & SLP_START)))
               ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_PartialInconsistent, "No-ends inconsistent with segmented SeqLoc");
             got_partial = TRUE;
             break;
@@ -5937,11 +6410,9 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
             break;
           }
       }
-      if (!vsp->useSeqMgrIndexes) {
-        BioseqContextFree (bcp);
-      }
-      if (!got_partial)
+      if (!got_partial && vsp->bsp_partial_val) {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_PartialInconsistent, "Partial segmented sequence without MolInfo partial");
+      }
     }
   }
 
@@ -5994,157 +6465,215 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
 
   if (bsp->repr == Seq_repr_delta) {
     len = 0;
-    for (vnp = (ValNodePtr) (bsp->seq_ext), segnum = 1; vnp != NULL; vnp = vnp->next, segnum++) {
-      if (vnp->data.ptrvalue == NULL)
-        ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqDataLenWrong, "NULL pointer in delta seq_ext valnode");
-      else {
-        switch (vnp->choice) {
-        case 1:                /* SeqLocPtr */
-          slp = (SeqLocPtr) (vnp->data.ptrvalue);
-          if (slp != NULL && slp->choice == SEQLOC_WHOLE) {
-            ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_WholeComponent, "Delta seq component should not be of type whole");
-          }
-          sip3 = SeqLocId (slp);
-          if (sip3 != NULL) {
-            if (sip3->choice == SEQID_GI && sip3->data.intvalue <= 0) {
-              ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_DeltaComponentIsGi0, "Delta component is gi|0");
-            }
-            for (sip1 = bsp->id; sip1 != NULL; sip1 = sip1->next) {
-              if (SeqIdComp (sip1, sip3) == SIC_YES) {
-                ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_SelfReferentialSequence,
-                          "Self-referential delta sequence");
-              }
-            }
-          }
-          len2 = SeqLocLen (slp);
-          if (len2 < 0)
-            ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqDataLenWrong, "-1 length on seq-loc of delta seq_ext");
-          else
-            len += len2;
-          sip3 = SeqLocId (slp);
-          if (sip3 != NULL && slp != NULL && slp->choice == SEQLOC_INT) {
-            sintp = (SeqIntPtr) slp->data.ptrvalue;
-            if (sintp != NULL && (sip3->choice == SEQID_GI ||
-                                 sip3->choice == SEQID_GENBANK ||
-                                 sip3->choice == SEQID_EMBL ||
-                                 sip3->choice == SEQID_DDBJ ||
-                                 sip3->choice == SEQID_TPG ||
-                                 sip3->choice == SEQID_TPE ||
-                                 sip3->choice == SEQID_TPD ||
-                                 sip3->choice == SEQID_OTHER)) {
-              vn.choice = SEQLOC_WHOLE;
-              vn.data.ptrvalue = sip3;
-              vn.next = NULL;
-              len3 = SeqLocLen (&vn);
-              /* -1 signifies failure to lookup or not connected to lookup function */
-              if (len3 != -1) {
-                if (sintp->to >= len3) {
-                  SeqIdWrite (sip3, buf1, PRINTID_FASTA_SHORT, 40);
-                  ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqDataLenWrong,
-                            "Seq-loc extent (%ld) greater than length of %s (%ld)",
-                            (long) (sintp->to + 1), buf1, (long) len3);
-                }
-              }
-            }
-          }
-          if (len2 <= 10) {
-            str = SeqLocPrint ((SeqLocPtr) (vnp->data.ptrvalue));
-            if (str == NULL) {
-              str = StringSave ("?");
-            }
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_SeqLocLength, "Short length (%ld) on seq-loc (%s) of delta seq_ext", (long) len2, str);
-            MemFree (str);
-          }
-          break;
-        case 2:                /* SeqLitPtr */
-          slitp = (SeqLitPtr) (vnp->data.ptrvalue);
-          if (slitp->seq_data != NULL && slitp->seq_data_type != Seq_code_gap) {
-            if (slitp->length == 0) {
-              ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqLitDataLength0, "Seq-lit of length 0 in delta chain");
-            }
-            sctp = SeqCodeTableFind (slitp->seq_data_type);
-            if (sctp == NULL) {
-              ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidAlphabet, "Using illegal sequence alphabet [%d] in SeqLitPtr", (int) slitp->seq_data_type);
-              len += slitp->length;
-              break;
-            }
-
-            start_at = (Int2) (sctp->start_at);
-            num = (Int2) (sctp->num);
-
-            switch (slitp->seq_data_type) {
-            case Seq_code_iupacaa:
-            case Seq_code_iupacna:
-            case Seq_code_ncbieaa:
-            case Seq_code_ncbistdaa:
-              BSSeek ((ByteStorePtr) slitp->seq_data, 0, SEEK_SET);
-              for (len2 = 1; len2 <= (slitp->length); len2++) {
-                is_invalid = FALSE;
-                residue = BSGetByte ((ByteStorePtr) slitp->seq_data);
-                i = residue - start_at;
-                if ((i < 0) || (i >= num))
-                  is_invalid = TRUE;
-                else if (*(sctp->names[i]) == '\0')
-                  is_invalid = TRUE;
-                if (is_invalid) {
-                  if (slitp->seq_data_type == Seq_code_ncbistdaa)
-                    ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%d] at position [%ld]", (int) residue, (long) (len + len2));
-                  else
-                    ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%c] at position [%ld]", (char) residue, (long) (len + len2));
-                }
-              }
-              break;
-            default:
-              break;
-            }
-            if (mip != NULL) {
-              if (mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2) {
-                runsofn = CountAdjacentNsInInterval (gcp, bsp, len, len + slitp->length - 1);
-                if (runsofn > 80) {
-                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_InternalNsInSeqLit, "Run of %ld Ns in delta component %ld that starts at base %ld", (long) runsofn, (int) segnum, (long) (len + 1));
-                }
-              } else if (mip->tech == MI_TECH_wgs) {
-                runsofn = CountAdjacentNsInInterval (gcp, bsp, len, len + slitp->length - 1);
-                if (runsofn >= 20) {
-                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_InternalNsInSeqLit, "Run of %ld Ns in delta component %ld that starts at base %ld", (long) runsofn, (int) segnum, (long) (len + 1));
-                }
-              } else if (mip->tech == MI_TECH_composite_wgs_htgs) {
-                runsofn = CountAdjacentNsInInterval (gcp, bsp, len, len + slitp->length - 1);
-                if (runsofn > 80) {
-                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_InternalNsInSeqLit, "Run of %ld Ns in delta component %ld that starts at base %ld", (long) runsofn, (int) segnum, (long) (len + 1));
-                }
-              } else {
-                runsofn = CountAdjacentNsInInterval (gcp, bsp, len, len + slitp->length - 1);
-                if (runsofn > 100) {
-                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_InternalNsInSeqLit, "Run of %ld Ns in delta component %ld that starts at base %ld", (long) runsofn, (int) segnum, (long) (len + 1));
-                }
-              }
-            }
-          } else if (slitp->length == 0) {
-            if (isSwissProt) {
-              sev = SEV_WARNING;
-            } else {
-              sev = SEV_ERROR;
-            }
-            ifp = slitp->fuzz;
-            if (ifp == NULL || ifp->choice != 4 || ifp->a != 0) {
-              ValidErr (vsp, sev, ERR_SEQ_INST_SeqLitGapLength0, "Gap of length 0 in delta chain");
-            } else {
-              ValidErr (vsp, sev, ERR_SEQ_INST_SeqLitGapLength0, "Gap of length 0 with unknown fuzz in delta chain");
-            }
-          }
-          len += slitp->length;
-          break;
-        default:
-          ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_ExtNotAllowed, "Illegal choice [%d] in delta chain", (int) (vnp->choice));
-          break;
+    count = 0;
+    doNotSkip = TRUE;
+    for (vnp = (ValNodePtr) (bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice == 1) {
+        count++;
+      }
+    }
+    if (count > 10000) {
+      smp = SeqMgrGet ();
+      if (smp != NULL) {
+        if (smp->seq_len_lookup_func == NULL) {
+          doNotSkip = FALSE;
         }
       }
     }
-    if (bsp->length > len) {
-      ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_SeqDataLenWrong, "Bioseq.seq_data too short [%ld] for given length [%ld]", (long) (len), (long) bsp->length);
-    } else if (bsp->length < len) {
-      ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_SeqDataLenWrong, "Bioseq.seq_data is larger [%ld] than given length [%ld]", (long) (len), (long) bsp->length);
+    if (doNotSkip) {
+      for (vnp = (ValNodePtr) (bsp->seq_ext), segnum = 1; vnp != NULL; vnp = vnp->next, segnum++) {
+        if (vnp->data.ptrvalue == NULL)
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqDataLenWrong, "NULL pointer in delta seq_ext valnode");
+        else {
+          switch (vnp->choice) {
+          case 1:                /* SeqLocPtr */
+            slp = (SeqLocPtr) (vnp->data.ptrvalue);
+            if (slp != NULL && slp->choice == SEQLOC_WHOLE) {
+              ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_WholeComponent, "Delta seq component should not be of type whole");
+            }
+            sip3 = SeqLocId (slp);
+            if (sip3 != NULL) {
+              if (sip3->choice == SEQID_GI && sip3->data.intvalue <= 0) {
+                ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_DeltaComponentIsGi0, "Delta component is gi|0");
+              }
+              for (sip1 = bsp->id; sip1 != NULL; sip1 = sip1->next) {
+                if (SeqIdComp (sip1, sip3) == SIC_YES) {
+                  ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_SelfReferentialSequence,
+                            "Self-referential delta sequence");
+                }
+              }
+            }
+            len2 = SeqLocLen (slp);
+            if (len2 < 0)
+              ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqDataLenWrong, "-1 length on seq-loc of delta seq_ext");
+            else
+              len += len2;
+            sip3 = SeqLocId (slp);
+            if (sip3 != NULL && slp != NULL && slp->choice == SEQLOC_INT) {
+              sintp = (SeqIntPtr) slp->data.ptrvalue;
+              if (sintp != NULL && (sip3->choice == SEQID_GI ||
+                                   sip3->choice == SEQID_GENBANK ||
+                                   sip3->choice == SEQID_EMBL ||
+                                   sip3->choice == SEQID_DDBJ ||
+                                   sip3->choice == SEQID_TPG ||
+                                   sip3->choice == SEQID_TPE ||
+                                   sip3->choice == SEQID_TPD ||
+                                   sip3->choice == SEQID_OTHER)) {
+                vn.choice = SEQLOC_WHOLE;
+                vn.data.ptrvalue = sip3;
+                vn.next = NULL;
+                len3 = SeqLocLen (&vn);
+                /* -1 signifies failure to lookup or not connected to lookup function */
+                if (len3 != -1) {
+                  if (sintp->to >= len3) {
+                    SeqIdWrite (sip3, buf1, PRINTID_FASTA_SHORT, 40);
+                    ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_SeqDataLenWrong,
+                              "Seq-loc extent (%ld) greater than length of %s (%ld)",
+                              (long) (sintp->to + 1), buf1, (long) len3);
+                  }
+                }
+              }
+            }
+            if (len2 <= 10) {
+              str = SeqLocPrint ((SeqLocPtr) (vnp->data.ptrvalue));
+              if (str == NULL) {
+                str = StringSave ("?");
+              }
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_SeqLocLength, "Short length (%ld) on seq-loc (%s) of delta seq_ext", (long) len2, str);
+              MemFree (str);
+            }
+            break;
+          case 2:                /* SeqLitPtr */
+            slitp = (SeqLitPtr) (vnp->data.ptrvalue);
+            if (slitp->seq_data != NULL && slitp->seq_data_type != Seq_code_gap) {
+              if (slitp->length == 0) {
+                ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqLitDataLength0, "Seq-lit of length 0 in delta chain");
+              }
+              sctp = SeqCodeTableFind (slitp->seq_data_type);
+              if (sctp == NULL) {
+                ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidAlphabet, "Using illegal sequence alphabet [%d] in SeqLitPtr", (int) slitp->seq_data_type);
+                len += slitp->length;
+                break;
+              }
+
+              start_at = (Int2) (sctp->start_at);
+              num = (Int2) (sctp->num);
+
+              switch (slitp->seq_data_type) {
+              case Seq_code_iupacaa:
+              case Seq_code_iupacna:
+              case Seq_code_ncbieaa:
+              case Seq_code_ncbistdaa:
+                BSSeek ((ByteStorePtr) slitp->seq_data, 0, SEEK_SET);
+                for (len2 = 1; len2 <= (slitp->length); len2++) {
+                  is_invalid = FALSE;
+                  residue = BSGetByte ((ByteStorePtr) slitp->seq_data);
+                  i = residue - start_at;
+                  if ((i < 0) || (i >= num))
+                    is_invalid = TRUE;
+                  else if (*(sctp->names[i]) == '\0')
+                    is_invalid = TRUE;
+                  if (is_invalid) {
+                    if (slitp->seq_data_type == Seq_code_ncbistdaa)
+                      ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%d] at position [%ld]", (int) residue, (long) (len + len2));
+                    else
+                      ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%c] at position [%ld]", (char) residue, (long) (len + len2));
+                  }
+                }
+                break;
+              default:
+                break;
+              }
+              if (mip != NULL) {
+                if (mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2) {
+                  runsofn = CountAdjacentNsInInterval (gcp, bsp, len, len + slitp->length - 1);
+                  if (runsofn > 80) {
+                    ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_InternalNsInSeqLit, "Run of %ld Ns in delta component %d that starts at base %ld", (long) runsofn, segnum, (long) (len + 1));
+                  }
+                } else if (mip->tech == MI_TECH_wgs) {
+                  runsofn = CountAdjacentNsInInterval (gcp, bsp, len, len + slitp->length - 1);
+                  if (runsofn >= 20) {
+                    ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_InternalNsInSeqLit, "Run of %ld Ns in delta component %d that starts at base %ld", (long) runsofn, segnum, (long) (len + 1));
+                  }
+                } else if (mip->tech == MI_TECH_composite_wgs_htgs) {
+                  runsofn = CountAdjacentNsInInterval (gcp, bsp, len, len + slitp->length - 1);
+                  if (runsofn > 80) {
+                    ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_InternalNsInSeqLit, "Run of %ld Ns in delta component %d that starts at base %ld", (long) runsofn, segnum, (long) (len + 1));
+                  }
+                } else {
+                  runsofn = CountAdjacentNsInInterval (gcp, bsp, len, len + slitp->length - 1);
+                  if (runsofn > 100) {
+                    ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_InternalNsInSeqLit, "Run of %ld Ns in delta component %d that starts at base %ld", (long) runsofn, segnum, (long) (len + 1));
+                  }
+                }
+              }
+            } else if (slitp->length == 0) {
+              if (isSwissProt) {
+                sev = SEV_WARNING;
+              } else {
+                sev = SEV_ERROR;
+              }
+              ifp = slitp->fuzz;
+              if (ifp == NULL || ifp->choice != 4 || ifp->a != 0) {
+                ValidErr (vsp, sev, ERR_SEQ_INST_SeqLitGapLength0, "Gap of length 0 in delta chain");
+              } else {
+                ValidErr (vsp, sev, ERR_SEQ_INST_SeqLitGapLength0, "Gap of length 0 with unknown fuzz in delta chain");
+              }
+            }
+            len += slitp->length;
+            break;
+          default:
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_ExtNotAllowed, "Illegal choice [%d] in delta chain", (int) (vnp->choice));
+            break;
+          }
+        }
+      }
+      if (bsp->length > len) {
+        ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_SeqDataLenWrong, "Bioseq.seq_data too short [%ld] for given length [%ld]", (long) (len), (long) bsp->length);
+      } else if (bsp->length < len) {
+        ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_SeqDataLenWrong, "Bioseq.seq_data is larger [%ld] than given length [%ld]", (long) (len), (long) bsp->length);
+      }
+
+    } else {
+
+      for (vnp = (ValNodePtr) (bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
+        if (vnp->data.ptrvalue == NULL) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqDataLenWrong, "NULL pointer in delta seq_ext valnode");
+          continue;
+        }
+        switch (vnp->choice) {
+          case 1 :
+            slp = (SeqLocPtr) vnp->data.ptrvalue;
+            if (slp->choice == SEQLOC_WHOLE) {
+              ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_WholeComponent, "Delta seq component should not be of type whole");
+              break;
+            }
+            if (slp->choice == SEQLOC_INT) {
+              sintp = (SeqIntPtr) slp->data.ptrvalue;
+              if (sintp != NULL) {
+                len2 = sintp->to - sintp->from + 1;
+                if (len2 < 0) {
+                  ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqDataLenWrong, "-1 length on seq-loc of delta seq_ext");
+                } else {
+                  len += len2;
+                }
+              }
+            }
+            break;
+          case 2 :
+            slitp = (SeqLitPtr) vnp->data.ptrvalue;
+            len += slitp->length;
+            break;
+          default :
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_ExtNotAllowed, "Illegal choice [%d] in delta chain", (int) (vnp->choice));
+            break;
+        }
+      }
+      if (bsp->length > len) {
+        ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_SeqDataLenWrong, "Bioseq.seq_data too short [%ld] for given length [%ld]", (long) (len), (long) bsp->length);
+      } else if (bsp->length < len) {
+        ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_SeqDataLenWrong, "Bioseq.seq_data is larger [%ld] than given length [%ld]", (long) (len), (long) bsp->length);
+      }
     }
     if (mip != NULL) {
       is_gps = FALSE;
@@ -6251,16 +6780,11 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
     }
     if (non_interspersed_gaps && (! hasGi) && mip != NULL &&
         (mip->tech == MI_TECH_htgs_0 || mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2 /* || mip->tech == MI_TECH_htgs_3 */)) {
-      if (hasRefGeneTracking) {  
+      if (hasRefGeneTracking) {
         ValidErr (vsp, SEV_INFO, ERR_SEQ_INST_MissingGaps, "HTGS delta seq should have gaps between all sequence runs");
       } else {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_MissingGaps, "HTGS delta seq should have gaps between all sequence runs");
       }
-    }
-    if (num_adjacent_gaps > 1) {
-      ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_BadDeltaSeq, "There are %d adjacent gaps in delta seq", (int) num_adjacent_gaps);
-    } else if (num_adjacent_gaps > 0) {
-      ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_BadDeltaSeq, "There is %d adjacent gap in delta seq", (int) num_adjacent_gaps);
     }
     if (vnp != NULL && vnp->choice == 2) {
       slitp = (SeqLitPtr) vnp->data.ptrvalue;
@@ -6276,6 +6800,15 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
           }
         }
       }
+    }
+    sev = SEV_ERROR;
+    if (isRefSeq) {
+      sev = SEV_WARNING;
+    }
+    if (num_adjacent_gaps > 1) {
+      ValidErr (vsp, sev, ERR_SEQ_INST_BadDeltaSeq, "There are %d adjacent gaps in delta seq", (int) num_adjacent_gaps);
+    } else if (num_adjacent_gaps > 0) {
+      ValidErr (vsp, sev, ERR_SEQ_INST_BadDeltaSeq, "There is %d adjacent gap in delta seq", (int) num_adjacent_gaps);
     }
   }
 
@@ -6425,6 +6958,11 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
           }
         }
       }
+    } else {
+      if (ISA_na (bsp->mol) && vsp->other_sets_in_sep && vsp->indexerVersion) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ComponentMissingTitle,
+                  "Nucleotide component of pop/phy/mut/eco/wgs set is missing its title");
+      }
     }
   }
 
@@ -6482,6 +7020,36 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
             }
           }
           MemFree (buf);
+        }
+      }
+    }
+  }
+
+  if (ISA_aa (bsp->mol) && vsp->useSeqMgrIndexes) {
+    in_nps = FALSE;
+    if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+      bssp = (BioseqSetPtr) bsp->idx.parentptr;
+      while (bssp != NULL && bssp->_class != BioseqseqSet_class_nuc_prot) {
+        if (bssp->idx.parenttype == OBJ_BIOSEQSET) {
+          bssp = (BioseqSetPtr) bssp->idx.parentptr;
+        } else {
+          bssp = NULL;
+        }
+      }
+      if (bssp != NULL && bssp->_class == BioseqseqSet_class_nuc_prot) {
+        in_nps = TRUE;
+      }
+    }
+    if (! in_nps) {
+      if (isGB || isEMBL || isDDBJ || isRefSeq) {
+        if (! isGIBBMT && ! isGIBBSQ) {
+          olditemid = gcp->itemID;
+          olditemtype = gcp->thistype;
+          gcp->itemID = bsp->idx.itemID;
+          gcp->thistype = OBJ_BIOSEQ;
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_PKG_OrphanedProtein, "Orphaned stand-alone protein");
+          gcp->itemID = olditemid;
+          gcp->thistype = olditemtype;
         }
       }
     }
@@ -6789,7 +7357,7 @@ static void ValidateCitSub (ValidStructPtr vsp, CitSubPtr csp)
   ErrSev          sev;
 
   if (vsp == NULL || csp == NULL) return;
-  
+
   sev = SEV_ERROR;
   if (vsp->is_refseq_in_sep) {
     sev = SEV_WARNING;
@@ -7085,7 +7653,7 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
   ImprintPtr      imp;
   Boolean         last_name_bad;
   Int4            muid = 0;
-  Boolean         noVol, noPages;
+  Boolean         noVol = FALSE, noPages = FALSE;
   ValNodePtr      name;
   PersonIdPtr     pid;
   Int4            pmid = 0;
@@ -7095,13 +7663,19 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
   Int4            stop;
   CharPtr         str;
   Char            temp [64];
+  Int4            thepmid = 0;
   ValNodePtr      title;
   Int4            uid = 0;
   long int        val;
   ValNodePtr      vnp;
 
-  if (vsp == NULL || pdp == NULL)
-    return;
+  if (vsp == NULL || pdp == NULL) return;
+
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == PUB_PMid) {
+      thepmid = vnp->data.intvalue;
+    }
+  }
   for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
     switch (vnp->choice) {
     case PUB_Gen:
@@ -7127,7 +7701,7 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
           }
         }
         /* skip if just serial number */
-        if (cgp->cit == NULL && cgp->journal == NULL && cgp->date == NULL && cgp->serial_number) break;
+        if (cgp->cit == NULL && cgp->journal == NULL && cgp->date == NULL && cgp->serial_number > -1) break;
         dp = cgp->date;
         if (dp == NULL) {
           if (! unpub) {
@@ -7167,7 +7741,7 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
         }
       }
       break;
-    case PUB_Muid:
+    case PUB_PMid:
       if (pmid == 0) {
         pmid = vnp->data.intvalue;
       } else if (pmid != vnp->data.intvalue) {
@@ -7179,7 +7753,7 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
         uid = vnp->data.intvalue;
       }
       break;
-    case PUB_PMid:
+    case PUB_Muid:
       if (muid == 0) {
         muid = vnp->data.intvalue;
       } else if (muid != vnp->data.intvalue) {
@@ -7234,106 +7808,120 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
         }
       }
 
-      switch (cap->from) {
-      case 1:
-        cjp = (CitJourPtr) cap->fromptr;
-        if (cjp != NULL) {
-          hasTitle = FALSE;
-          for (title = cjp->title; title != NULL; title = title->next) {
-            if (title->choice == Cit_title_iso_jta) {
-              hasIsoJTA = TRUE;
-            }
-            if (!HasNoText ((CharPtr) title->data.ptrvalue)) {
-              hasTitle = TRUE;
-              if (title->choice == Cit_title_name) {
-                if (StringNCmp ((CharPtr) title->data.ptrvalue, "(er)", 4) == 0) {
-                  electronic_journal = TRUE;
-                }
+      if (cap != NULL) {
+        switch (cap->from) {
+        case 1:
+          cjp = (CitJourPtr) cap->fromptr;
+          if (cjp != NULL) {
+            hasTitle = FALSE;
+            for (title = cjp->title; title != NULL; title = title->next) {
+              if (title->choice == Cit_title_iso_jta) {
+                hasIsoJTA = TRUE;
               }
-            }
-          }
-          if (!hasTitle) {
-            ValidErr (vsp, SEV_ERROR, ERR_GENERIC_MissingPubInfo, "Journal title missing");
-          }
-          imp = cjp->imp;
-          if (imp != NULL) {
-            if (imp->pubstatus == PUBSTATUS_epublish || imp->pubstatus == PUBSTATUS_aheadofprint) {
-              electronic_journal = TRUE;
-            }
-            if (imp->prepub == 2) {
-              inPress = TRUE;
-            }
-            if (imp->prepub == 0 && imp->pubstatus != PUBSTATUS_aheadofprint) {
-              noVol = StringHasNoText (imp->volume);
-              noPages = StringHasNoText (imp->pages);
-              sev = SEV_ERROR;
-              if (vsp->is_refseq_in_sep) {
-                sev = SEV_WARNING;
-              }
-              if (noVol && noPages) {
-                ValidErr (vsp, sev, ERR_GENERIC_MissingPubInfo, "Journal volume and pages missing");
-              } else if (noVol) {
-                if (! electronic_journal) {
-                  ValidErr (vsp, sev, ERR_GENERIC_MissingPubInfo, "Journal volume missing");
-                }
-              } else if (noPages) {
-                ValidErr (vsp, sev, ERR_GENERIC_MissingPubInfo, "Journal pages missing");
-              }
-              if ((! noPages) && (! electronic_journal)) {
-                sev = SEV_WARNING;
-                StringNCpy_0 (temp, imp->pages, sizeof (temp));
-                ptr = StringChr (temp, '-');
-                if (ptr != NULL) {
-                  *ptr = '\0';
-                  ptr++;
-                  if (sscanf (temp, "%ld", &val) == 1) {
-                    start = (Int4) val;
-                    if (sscanf (ptr, "%ld", &val) == 1) {
-                      stop = (Int4) val;
-                      if (start == 0 || stop == 0) {
-                        ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering has zero value");
-                      } else if (start < 0 || stop < 0) {
-                        ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering has negative value");
-                      } else if (start > stop) {
-                        ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering out of order");
-                      } else if (stop > start + 50) {
-                        ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering greater than 50");
-                      }
-                    } else {
-                      ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering stop looks strange");
-                    }
-                  } else if (! IS_ALPHA (temp [0])) {
-                    ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering start looks strange");
+              if (!HasNoText ((CharPtr) title->data.ptrvalue)) {
+                hasTitle = TRUE;
+                if (title->choice == Cit_title_name) {
+                  if (StringNCmp ((CharPtr) title->data.ptrvalue, "(er)", 4) == 0) {
+                    electronic_journal = TRUE;
                   }
                 }
               }
-              dp = imp->date;
-              if (dp == NULL) {
-                ValidErr (vsp, SEV_WARNING, ERR_GENERIC_MissingPubInfo, "Publication date missing");
-              } else if (dp->str != NULL) {
-                if (StringCmp (dp->str, "?") == 0) {
-                  ValidErr (vsp, SEV_WARNING, ERR_GENERIC_MissingPubInfo, "Publication date marked as '?'");
+            }
+            if (!hasTitle) {
+              ValidErr (vsp, SEV_ERROR, ERR_GENERIC_MissingPubInfo, "Journal title missing");
+            }
+            imp = cjp->imp;
+            if (imp != NULL) {
+              if (imp->pubstatus == PUBSTATUS_epublish || imp->pubstatus == PUBSTATUS_aheadofprint) {
+                electronic_journal = TRUE;
+              }
+              if (imp->prepub == 2) {
+                inPress = TRUE;
+              }
+              if (imp->prepub == 0 && imp->pubstatus != PUBSTATUS_aheadofprint) {
+                noVol = StringHasNoText (imp->volume);
+                noPages = StringHasNoText (imp->pages);
+                sev = SEV_ERROR;
+                if (vsp->is_refseq_in_sep) {
+                  sev = SEV_WARNING;
                 }
-              } else if (dp->data [1] == 0) {
-                ValidErr (vsp, SEV_WARNING, ERR_GENERIC_MissingPubInfo, "Publication date not set");
-              } else if (DateIsBad (dp, FALSE, &baddate)) {
-                PrintBadDateError (vsp, baddate, SEV_ERROR, ERR_GENERIC_BadDate, "Publication date has error");
+                if (imp->pubstatus == PUBSTATUS_epublish) {
+                  sev = SEV_WARNING;
+                }
+                if (noVol && noPages) {
+                  ValidErr (vsp, sev, ERR_GENERIC_MissingPubInfo, "Journal volume and pages missing");
+                } else if (noVol) {
+                  if (! electronic_journal) {
+                    ValidErr (vsp, sev, ERR_GENERIC_MissingPubInfo, "Journal volume missing");
+                  }
+                } else if (noPages) {
+                  ValidErr (vsp, sev, ERR_GENERIC_MissingPubInfo, "Journal pages missing");
+                }
+                if ((! noPages) && (! electronic_journal)) {
+                  sev = SEV_WARNING;
+                  StringNCpy_0 (temp, imp->pages, sizeof (temp));
+                  ptr = StringChr (temp, '-');
+                  if (ptr != NULL) {
+                    *ptr = '\0';
+                    ptr++;
+                    if (sscanf (temp, "%ld", &val) == 1) {
+                      start = (Int4) val;
+                      if (sscanf (ptr, "%ld", &val) == 1) {
+                        stop = (Int4) val;
+                        if (start == 0 || stop == 0) {
+                          ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering has zero value");
+                        } else if (start < 0 || stop < 0) {
+                          ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering has negative value");
+                        } else if (start > stop) {
+                          ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering out of order");
+                        } else if (stop > start + 50) {
+                          ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering greater than 50");
+                        }
+                      } else {
+                        ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering stop looks strange");
+                      }
+                    } else if (! IS_ALPHA (temp [0])) {
+                      ValidErr (vsp, sev, ERR_GENERIC_BadPageNumbering, "Page numbering start looks strange");
+                    }
+                  }
+                }
+                dp = imp->date;
+                if (dp == NULL) {
+                  ValidErr (vsp, SEV_WARNING, ERR_GENERIC_MissingPubInfo, "Publication date missing");
+                } else if (dp->str != NULL) {
+                  if (StringCmp (dp->str, "?") == 0) {
+                    ValidErr (vsp, SEV_WARNING, ERR_GENERIC_MissingPubInfo, "Publication date marked as '?'");
+                  }
+                } else if (dp->data [1] == 0) {
+                  ValidErr (vsp, SEV_WARNING, ERR_GENERIC_MissingPubInfo, "Publication date not set");
+                } else if (DateIsBad (dp, FALSE, &baddate)) {
+                  PrintBadDateError (vsp, baddate, SEV_ERROR, ERR_GENERIC_BadDate, "Publication date has error");
+                }
               }
-            }
-            if (imp->pubstatus == PUBSTATUS_aheadofprint && imp->prepub != 2) {
-              if (noVol || noPages) {
-              } else {
-                ValidErr (vsp, SEV_WARNING, ERR_GENERIC_PublicationInconsistency, "Ahead-of-print without in-press");
+              if (imp->pubstatus == PUBSTATUS_aheadofprint && imp->prepub != 2) {
+                if (noVol || noPages) {
+                } else {
+                  ValidErr (vsp, SEV_WARNING, ERR_GENERIC_PublicationInconsistency, "Ahead-of-print without in-press");
+                }
               }
-            }
-            if (imp->pubstatus == PUBSTATUS_epublish && imp->prepub == 2) {
-              ValidErr (vsp, SEV_WARNING, ERR_GENERIC_PublicationInconsistency, "Electronic-only publication should not also be in-press");
+              if (imp->pubstatus == PUBSTATUS_epublish && imp->prepub == 2) {
+                ValidErr (vsp, SEV_WARNING, ERR_GENERIC_PublicationInconsistency, "Electronic-only publication should not also be in-press");
+              }
+              if (imp->pubstatus == PUBSTATUS_epublish || imp->pubstatus == PUBSTATUS_ppublish || imp->pubstatus == PUBSTATUS_aheadofprint) {
+                if (StringDoesHaveText (pdp->comment)) {
+                  if (StringStr (pdp->comment, "Publication Status") != NULL ||
+                      StringStr (pdp->comment, "Publication-Status") != NULL ||
+                      StringStr (pdp->comment, "Publication_Status") != NULL) {
+                    ValidErr (vsp, SEV_ERROR, ERR_GENERIC_UnexpectedPubStatusComment, "Publication status is in comment for pmid %ld", (long) thepmid);
+                  }
+                }
+              }
             }
           }
+          break;
+        default:
+          break;
         }
-        break;
-      default:
-        break;
       }
       break;
     case PUB_Equiv:
@@ -7378,7 +7966,7 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
             badauthor = "?";
           }
           if (last_name_bad) {
-            ValidErr (vsp, sev, ERR_SEQ_FEAT_BadCharInAuthorLastName, "Bad characters in author %s", badauthor);
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadCharInAuthorLastName, "Bad characters in author %s", badauthor);
           } else {
             ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadCharInAuthorName, "Bad characters in author %s", badauthor);
           }
@@ -7440,7 +8028,8 @@ typedef struct bioseqvalid
   Boolean         is_aa;         /* bioseq is protein? */
   Boolean         is_mrna;       /* molinfo is mrna? */
   Boolean         is_prerna;     /* molinfo is precursor rna? */
-  Boolean         is_artificial; /* biosource origin is artificial, synthetic, mutant? */
+  Boolean         is_artificial; /* biosource origin is artificial */
+  Boolean         is_synthetic;  /* biosource origin synthetic */
   Boolean         is_syn_constr; /* is organism name synthetic construct, plasmid, vector, or SYN division? */
   Boolean         got_a_pub;
   int             last_na_mol, last_na_mod, last_organelle, last_partialness, last_left_right,
@@ -7499,16 +8088,18 @@ static Boolean DeltaOrFarSeg (SeqEntryPtr sep, SeqLocPtr location)
 
 static Boolean IsLocationOrganelle (Uint1 genome)
 {
-  if (genome == GENOME_chloroplast 
-      || genome == GENOME_chromoplast 
-      || genome == GENOME_kinetoplast 
-      || genome == GENOME_mitochondrion 
-      || genome == GENOME_cyanelle 
-      || genome == GENOME_nucleomorph 
-      || genome == GENOME_apicoplast 
-      || genome == GENOME_leucoplast 
-      || genome == GENOME_proplastid 
-      || genome == GENOME_hydrogenosome) {
+  if (genome == GENOME_chloroplast
+      || genome == GENOME_chromoplast
+      || genome == GENOME_kinetoplast
+      || genome == GENOME_mitochondrion
+      || genome == GENOME_cyanelle
+      || genome == GENOME_nucleomorph
+      || genome == GENOME_apicoplast
+      || genome == GENOME_leucoplast
+      || genome == GENOME_proplastid
+      || genome == GENOME_hydrogenosome
+      || genome == GENOME_plastid
+      || genome == GENOME_chromatophore) {
     return TRUE;
   } else {
     return FALSE;
@@ -7531,9 +8122,9 @@ static Boolean IsOrganelleBioseq (BioseqPtr bsp)
 }
 
 
-static void 
-ValidateIntronEndsAtSpliceSiteOrGap 
-(ValidStructPtr vsp, 
+static void
+ValidateIntronEndsAtSpliceSiteOrGap
+(ValidStructPtr vsp,
  SeqLocPtr slp)
 {
   BioseqPtr          bsp;
@@ -7545,6 +8136,7 @@ ValidateIntronEndsAtSpliceSiteOrGap
   Char               id_buf[150];
   SeqFeatPtr         rna;
   SeqMgrFeatContext  rcontext;
+  ErrSev             sev = SEV_WARNING;
 
   if (vsp == NULL || slp == NULL) return;
   CheckSeqLocForPartial (slp, &partial5, &partial3);
@@ -7566,7 +8158,7 @@ ValidateIntronEndsAtSpliceSiteOrGap
   sip = SeqLocId (slp);
   if (sip == NULL)
     return;
-  
+
   bsp = NULL;
   if (sip != NULL && (sip->choice != SEQID_GI || sip->data.intvalue > 0)) {
     bsp = BioseqLockById (sip);
@@ -7586,6 +8178,10 @@ ValidateIntronEndsAtSpliceSiteOrGap
 
   strand = SeqLocStrand (slp);
 
+  if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+    sev = SEV_INFO;
+  }
+
   if (!partial5) {
     if (strand == Seq_strand_minus) {
       SeqPortStreamInt (bsp, stop - 1, stop, Seq_strand_minus, EXPAND_GAPS_TO_DASHES, (Pointer) buf, NULL);
@@ -7602,7 +8198,7 @@ ValidateIntronEndsAtSpliceSiteOrGap
       ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_NotSpliceConsensusDonor,
                 "Splice donor consensus (GT) not found at start of terminal intron, position %ld of %s", (long) (pos + 1), id_buf);
     } else {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NotSpliceConsensusDonor,
+      ValidErr (vsp, sev, ERR_SEQ_FEAT_NotSpliceConsensusDonor,
                 "Splice donor consensus (GT) not found at start of intron, position %ld of %s", (long) (pos + 1), id_buf);
     }
   }
@@ -7621,11 +8217,11 @@ ValidateIntronEndsAtSpliceSiteOrGap
       ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_NotSpliceConsensusAcceptor,
                 "Splice acceptor consensus (AG) not found at end of terminal intron, position %ld of %s, but at end of sequence", (long) (pos + 1), id_buf);
     } else {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NotSpliceConsensusAcceptor,
+      ValidErr (vsp, sev, ERR_SEQ_FEAT_NotSpliceConsensusAcceptor,
                 "Splice acceptor consensus (AG) not found at end of intron, position %ld of %s", (long) (pos + 1), id_buf);
     }
   }
-  BioseqUnlock (bsp);  
+  BioseqUnlock (bsp);
 }
 
 
@@ -8033,6 +8629,7 @@ static CharPtr  Nlm_valid_country_codes [] = {
   "Bermuda",
   "Bhutan",
   "Bolivia",
+  "Borneo",
   "Bosnia and Herzegovina",
   "Botswana",
   "Bouvet Island",
@@ -8158,6 +8755,7 @@ static CharPtr  Nlm_valid_country_codes [] = {
   "Mauritania",
   "Mauritius",
   "Mayotte",
+  "Mediterranean Sea",
   "Mexico",
   "Micronesia",
   "Midway Islands",
@@ -8205,6 +8803,7 @@ static CharPtr  Nlm_valid_country_codes [] = {
   "Republic of the Congo",
   "Reunion",
   "Romania",
+  "Ross Sea",
   "Russia",
   "Rwanda",
   "Saint Helena",
@@ -8228,6 +8827,7 @@ static CharPtr  Nlm_valid_country_codes [] = {
   "South Africa",
   "South Georgia and the South Sandwich Islands",
   "South Korea",
+  "Southern Ocean",
   "Spain",
   "Spratly Islands",
   "Sri Lanka",
@@ -8241,6 +8841,7 @@ static CharPtr  Nlm_valid_country_codes [] = {
   "Taiwan",
   "Tajikistan",
   "Tanzania",
+  "Tasman Sea",
   "Thailand",
   "Togo",
   "Tokelau",
@@ -8278,6 +8879,7 @@ static CharPtr  Nlm_formerly_valid_country_codes [] = {
   "British Guiana",
   "Burma",
   "Czechoslovakia",
+  "Korea",
   "Serbia and Montenegro",
   "Siam",
   "USSR",
@@ -8430,6 +9032,7 @@ static CharPtr ctry_lat_lon [] = {
   "Bermuda\tBD\t-64.9\t32.2\t-64.7\t32.4",
   "Bhutan\tBT\t88.7\t26.7\t92.1\t28.3",
   "Bolivia\tBL\t-69.7\t-22.9\t-57.5\t-9.7",
+  "Borneo\tXX\t108.6\t-4.2\t119.3\t7.4",
   "Bosnia and Herzegovina\tBK\t15.7\t42.5\t19.7\t45.3",
   "Botswana\tBC\t19.9\t-27.0\t29.4\t-17.8",
   "Bouvet Island\tBV\t3.3\t-54.5\t3.5\t-54.4",
@@ -8571,6 +9174,7 @@ static CharPtr ctry_lat_lon [] = {
   "Mauritania\tMR\t-17.1\t14.7\t-4.8\t27.3",
   "Mauritius\tMP\t57.3\t-20.6\t57.8\t-20.0\t59.5\t-16.9\t59.6\t-16.7",
   "Mayotte\tMF\t45.0\t-13.1\t45.3\t-12.6",
+  "Mediterranean Sea\tXX\t",
   "Mexico\tMX\t-118.5\t28.8\t-118.3\t29.2\t-117.3\t14.5\t-86.7\t32.7",
   "Micronesia\tFM\t138.0\t9.4\t138.2\t9.6\t139.6\t9.8\t139.8\t10.0\t140.5\t9.7\t140.5\t9.8\t147.0\t7.3\t147.0\t7.4\t149.3\t6.6\t149.3\t6.7\t151.5\t7.1\t152.0\t7.5\t153.5\t5.2\t153.8\t5.6\t157.1\t5.7\t160.7\t7.1\t162.9\t5.2\t163.0\t5.4",
   "Midway Islands\tMQ\t-178.4\t28.3\t-178.3\t28.4\t-177.4\t28.1\t-177.3\t28.2\t-174.0\t26.0\t-174.0\t26.1\t-171.8\t25.7\t-171.7\t25.8",
@@ -8620,6 +9224,7 @@ static CharPtr ctry_lat_lon [] = {
   "Republic of the Congo\tCF\t11.2\t-5.1\t18.6\t3.7",
   "Reunion\tRE\t55.2\t-21.4\t55.8\t-20.9",
   "Romania\tRO\t20.2\t43.6\t29.7\t48.3",
+  "Ross Sea\tXX\t",
   "Russia\tRS\t-180.0\t64.2\t-169.0\t71.6\t19.7\t54.3\t22.9\t55.3\t26.9\t41.1\t180.0\t81.3",
   "Rwanda\tRW\t28.8\t-2.9\t30.9\t-1.1",
   "Saint Helena\tSH\t-5.8\t-16.1\t-5.6\t-15.9",
@@ -8643,6 +9248,7 @@ static CharPtr ctry_lat_lon [] = {
   "South Africa\tSF\t16.4\t-34.9\t32.9\t-22.1",
   "South Georgia and the South Sandwich Islands\tSX\t-38.3\t-54.9\t-35.7\t-53.9",
   "South Korea\tKS\t125.0\t33.1\t129.6\t38.6",
+  "Southern Ocean\tXX\t",
   "Spain\tSP\t-9.3\t35.1\t4.3\t43.8\t-18.2\t27.6\t-13.4\t29.5",
   "Spain: Canary Islands\tXX\t-18.2\t27.6\t-13.4\t29.5",
   "Spratly Islands\tPG\t114.0\t9.6\t115.8\t11.1",
@@ -8657,6 +9263,7 @@ static CharPtr ctry_lat_lon [] = {
   "Taiwan\tTW\t119.3\t21.9\t122.0\t25.3",
   "Tajikistan\tTI\t67.3\t36.6\t75.1\t41.0",
   "Tanzania\tTZ\t29.3\t-11.8\t40.4\t-1.0",
+  "Tasman Sea\tXX\t",
   "Thailand\tTH\t97.3\t5.6\t105.6\t20.5",
   "Togo\tTO\t-0.2\t6.1\t1.8\t11.1",
   "Tokelau\tTL\t-172.6\t-9.5\t-171.1\t-8.5",
@@ -9173,6 +9780,90 @@ NLM_EXTERN Boolean IsCountryInLatLonList (
   return FALSE;
 }
 
+static Int2 GetCountryBlockIndex (
+  CharPtr country
+)
+
+{
+  CtBlockPtr       cbp;
+  CtBlockPtr PNTR  bkarray;
+  CtSetPtr         csp;
+  Int2             L, R, mid;
+
+  if (StringHasNoText (country)) return -1;
+
+  csp = GetCtSetLatLonData ();
+  if (csp == NULL) return -1;
+
+  bkarray = csp->bkarray;
+  if (bkarray == NULL) return -1;
+
+  L = 0;
+  R = csp->num_blocks - 1;
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    cbp = bkarray [mid];
+    if (cbp != NULL && StringICmp (cbp->country, country) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (R < csp->num_blocks) {
+    cbp = bkarray [R];
+    if (cbp == NULL) return -1;
+    if (StringICmp (cbp->country, country) != 0) return -1;
+    return R;
+  }
+
+  return -1;
+}
+
+NLM_EXTERN Boolean CountryBoxesOverlap (
+  CharPtr country1,
+  CharPtr country2
+)
+
+{
+  CtBlockPtr       cbp1, cbp2;
+  CtBlockPtr PNTR  bkarray;
+  CtSetPtr         csp;
+  Int4             num_blocks;
+  Int2             R1, R2, x1, x2;
+
+  R1 = GetCountryBlockIndex (country1);
+  R2 = GetCountryBlockIndex (country2);
+
+  if (R1 < 0 || R2 < 0) return FALSE;
+
+  csp = GetCtSetLatLonData ();
+  if (csp == NULL) return FALSE;
+  num_blocks = csp->num_blocks;
+
+  bkarray = csp->bkarray;
+  if (bkarray == NULL) return FALSE;
+
+  for (x1 = R1; x1 < num_blocks; x1++) {
+    cbp1 = bkarray [x1];
+    if (cbp1 == NULL) return FALSE;
+    if (StringICmp (cbp1->country, country1) != 0) break;
+
+    for (x2 = R2; x2 < num_blocks; x2++) {
+      cbp2 = bkarray [x2];
+      if (cbp2 == NULL) return FALSE;
+      if (StringICmp (cbp2->country, country2) != 0) break;
+
+      if (cbp1->maxx >= cbp2->minx && cbp1->minx <= cbp2->maxx) {
+        if (cbp1->maxy >= cbp2->miny && cbp1->miny <= cbp2->maxy) return TRUE;
+      }
+    }
+  }
+
+  return FALSE;
+}
+
 NLM_EXTERN Boolean TestLatLonForCountry (
   CharPtr country,
   FloatHi lat,
@@ -9286,6 +9977,7 @@ static CharPtr bodiesOfWater [] = {
   "Lake",
   "Narrows",
   "Ocean",
+  "Offshore",
   "Passage",
   "River",
   "Sea",
@@ -9353,258 +10045,6 @@ NLM_EXTERN Boolean StringContainsBodyOfWater (CharPtr str)
 }
 
 
-
-
-static CharPtr GetDash (CharPtr str)
-
-{
-  Char  ch;
-
-  if (str == NULL) return NULL;
-  ch = *str;
-  while (ch != '\0') {
-    if (ch == '-') return str;
-    str++;
-    ch = *str;
-  }
-
-  return NULL;
-}
-
-static CharPtr legalMonths [] = {
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-  NULL
-};
-
-
-static Boolean CollectionDateIsValid (CharPtr name)
-
-{
-  Char      ch;
-  Int2      i;
-  CharPtr   ptr1, ptr2, month = NULL, day = NULL, year = NULL;
-  Char      str [256];
-  long int  val;
-
-  if (StringHasNoText (name)) return FALSE;
-
-  StringNCpy_0 (str, name, sizeof (str));
-  ptr1 = GetDash (str);
-  if (ptr1 != NULL) {
-    *ptr1 = '\0';
-    ptr1++;
-    ptr2 = GetDash (ptr1);
-    if (ptr2 != NULL) {
-      *ptr2 = '\0';
-      ptr2++;
-      day = str;
-      month = ptr1;
-      year = ptr2;
-    } else {
-      month = str;
-      year = ptr1;
-    }
-  } else {
-    year = str;
-  }
-
-  if (day != NULL) {
-    if (sscanf (day, "%ld", &val) != 1 || val < 1 || val > 31) return FALSE;
-    if (StringLen (day) != 2 || !isdigit(day[0]) || !isdigit(day[1])) return FALSE;
-  }
-
-  if (month != NULL) {
-    for (i = 0; legalMonths [i] != NULL; i++) {
-      if (StringCmp (month, legalMonths [i]) == 0) {
-        break;
-      }
-    }
-    if (legalMonths [i] == NULL) return FALSE;
-  }
-
-  if (year != NULL) {
-    ptr1 = year;
-    ch = *ptr1;
-    while (ch != '\0') {
-      if (! (IS_DIGIT (ch))) return FALSE;
-      ptr1++;
-      ch = *ptr1;
-    }
-    if (sscanf (year, "%ld", &val) == 1) {
-      if (val >= 1700 && val < 2100) return TRUE;
-    }
-  }
-
-  return FALSE;
-}
-
-/* This mimics a portion of the DatePtr structure,
- * but allows dates with years before 1900 because
- * the year value is Int4 instead of Uint1.
- *   data [0] : Set to 1
- *        [1] - year (- 1900)
- *        [2] - month (1-12)  optional
- *        [3] - day (1-31)     optional
- * Not bothering with time.
- */
-
-typedef struct betterdate {
-    Int4 data[8];      /* see box above */
-} BetterDateData, PNTR BetterDatePtr;
-
-static BetterDatePtr BetterDateNew()
-{
-  BetterDatePtr dp;
-
-  dp = (BetterDatePtr) MemNew (sizeof (BetterDateData));
-  return dp;
-}
-
-static BetterDatePtr BetterDateFree (BetterDatePtr dp)
-{
-  if (dp != NULL) {
-    dp = MemFree (dp);
-  }
-  return dp;
-}
-
-
-static BetterDatePtr CollectionDateFromString (CharPtr name)
-{
-  Char      ch;
-  Int2      i;
-  CharPtr   ptr1, ptr2, month = NULL, day = NULL, year = NULL;
-  Char      str [256];
-  long int  day_val = 0;
-  Int2      month_num = 0;
-  long int  val, year_val = 0;
-  BetterDatePtr   dp;
-
-  if (StringHasNoText (name)) return NULL;
-
-  StringNCpy_0 (str, name, sizeof (str));
-  ptr1 = GetDash (str);
-  if (ptr1 != NULL) {
-    *ptr1 = '\0';
-    ptr1++;
-    ptr2 = GetDash (ptr1);
-    if (ptr2 != NULL) {
-      *ptr2 = '\0';
-      ptr2++;
-      day = str;
-      month = ptr1;
-      year = ptr2;
-    } else {
-      month = str;
-      year = ptr1;
-    }
-  } else {
-    year = str;
-  }
-
-  if (day != NULL) {
-    if (sscanf (day, "%ld", &day_val) != 1 || day_val < 1 || day_val > 31) return NULL;
-  }
-
-  if (month != NULL) {
-    for (i = 0; legalMonths [i] != NULL; i++) {
-      if (StringCmp (month, legalMonths [i]) == 0) {
-        month_num = i + 1;
-        break;
-      }
-    }
-    if (legalMonths [i] == NULL) return NULL;
-  }
-
-  if (year != NULL) {
-    ptr1 = year;
-    ch = *ptr1;
-    while (ch != '\0') {
-      if (! (IS_DIGIT (ch))) return NULL;
-      ptr1++;
-      ch = *ptr1;
-    }
-    if (sscanf (year, "%ld", &val) == 1) {
-      if (val < 1700 || val > 2100) return NULL;
-      year_val = val - 1900;
-    }
-    else
-    {
-      return NULL;
-    }
-  }
-
-  dp = BetterDateNew();
-  dp->data[0] = 1;
-  dp->data[1] = year_val;
-  dp->data[2] = month_num;
-  dp->data[3] = day_val;
-  return dp;
-}
-
-
-static Boolean CollectionDateIsInTheFuture (CharPtr name)
-
-{
-  DatePtr   dp_now;
-  BetterDatePtr dp_coll_date;
-  Boolean   rval = FALSE;
-
-  dp_coll_date = CollectionDateFromString (name);
-  if (dp_coll_date == NULL) return FALSE;
-
-  if (dp_coll_date->data[1] < 0)
-  {
-    /* year before 1900 */
-    dp_coll_date = BetterDateFree (dp_coll_date);
-    return FALSE;
-  }
-
-  dp_now = DateCurr();
-
-  /* compare years */
-  if (dp_now->data[1] < dp_coll_date->data[1])
-  {
-    rval = TRUE;
-  }
-  else if (dp_now->data[1] > dp_coll_date->data[1])
-  {
-    rval = FALSE;
-  }
-  /* years are equal - compare months */
-  else if (dp_now->data[2] < dp_coll_date->data[2])
-  {
-    rval = TRUE;
-  }
-  else if (dp_now->data[2] > dp_coll_date->data[2])
-  {
-    rval = FALSE;
-  }
-  /* years and months are equal - compare days */
-  else if (dp_now->data[3] < dp_coll_date->data[3])
-  {
-    rval = TRUE;
-  }
-  else
-  {
-    rval = FALSE;
-  }
-
-  dp_now = DateFree (dp_now);
-  dp_coll_date = BetterDateFree (dp_coll_date);
-  return rval;
-}
 
 
 static Boolean StringListIsUnique (ValNodePtr list)
@@ -9947,14 +10387,14 @@ static CharPtr source_qual_prefixes [] = {
   "genotype:",
   "germline:",
   "group:",
-  "haplogrop:",
+  "haplogroup:",
   "haplotype:",
   "identified_by:",
   "insertion_seq_name:",
   "isolate:",
   "isolation_source:",
   "lab_host:",
-  "lat_lon:"
+  "lat_lon:",
   "left_primer:",
   "linkage_group:",
   "map:",
@@ -10098,7 +10538,7 @@ static Boolean ValidateOrgModInTaxName (ValidStructPtr vsp, OrgModPtr mod, CharP
   /* skip second word */
   word_len = StringCSpn (cp, " ");
   cp += word_len;
-  cp += StringSpn (cp, " ");  
+  cp += StringSpn (cp, " ");
 
   f = StringSearch (cp, mod->subname);
   while (f != NULL && ((f != cp && isalpha (*(f - 1))) || isalpha (*(f + name_len)))) {
@@ -10126,10 +10566,13 @@ static CharPtr PNTR  ic_code_data = NULL;
 static Uint1 PNTR    ic_code_type = NULL;
 static Int4          ic_code_len = 0;
 
+#define BIO_MATERIAL_TYPE       1
+#define CULTURE_COLLECTION_TYPE 2
+#define SPECIMEN_VOUCHER_TYPE   4
+
 static void SetupInstCollTable (void)
 
 {
-  Char        ch;
   FileCache   fc;
   CharPtr     file = "institution_codes.txt";
   FILE        *fp = NULL;
@@ -10141,6 +10584,7 @@ static void SetupInstCollTable (void)
   ErrSev      sev;
   CharPtr     str;
   CharPtr     tmp;
+  Uint1       type;
   ValNodePtr  vnp;
 
   if (ic_code_data != NULL) return;
@@ -10151,19 +10595,19 @@ static void SetupInstCollTable (void)
     sev = ErrSetMessageLevel (SEV_ERROR);
     fp = FileOpen (path, "r");
     ErrSetMessageLevel (sev);
-  }  
-  
+  }
+
   if (fp == NULL) {
     inst_code_not_found = TRUE;
     return;
   }
-  
+
   FileCacheSetup (&fc, fp);
-  
+
   str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
   while (str != NULL) {
     if (StringDoesHaveText (str)) {
-      ch = '\0';
+      type = 0;
       ptr = StringChr (str, '\t');
       if (ptr != NULL) {
         *ptr = '\0';
@@ -10171,13 +10615,19 @@ static void SetupInstCollTable (void)
         tmp = StringChr (ptr, '\t');
         if (tmp != NULL) {
           *tmp = '\0';
-          if (ptr [1] == '\0') {
-            ch = *ptr;
+          if (StringChr (ptr, 'b') != NULL) {
+            type |= BIO_MATERIAL_TYPE;
+          }
+          if (StringChr (ptr, 'c') != NULL) {
+            type |= CULTURE_COLLECTION_TYPE;
+          }
+          if (StringChr (ptr, 's') != NULL) {
+            type |= SPECIMEN_VOUCHER_TYPE;
           }
         }
       }
       TrimSpacesAroundString (str);
-      vnp = ValNodeCopyStr (&last, (Uint1) ch, str);
+      vnp = ValNodeCopyStr (&last, type, str);
       if (ic_code_list == NULL) {
         ic_code_list = vnp;
       }
@@ -10247,9 +10697,9 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
   CharPtr  inst = NULL, id = NULL, coll = NULL, str;
   size_t   len1, len2;
   Uint1    type;
-  
+
   if (vsp == NULL || mod == NULL) return;
-  
+
   StringNCpy_0 (buf, mod->subname, sizeof (buf));
   if (StringChr (buf, ':') == NULL) {
     if (mod->subtype == ORGMOD_culture_collection) {
@@ -10257,7 +10707,7 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
     }
     return;
   }
-  if (! ParseStructuredVoucher (buf, &inst, &id)) {
+  if (! ParseStructuredVoucher (buf, &inst, &id) || inst == NULL || inst[0] == ':') {
     if (StringHasNoText (inst) || inst [0] == ':') {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadInstitutionCode, "Voucher is missing institution code");
     }
@@ -10267,17 +10717,17 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
     return;
   }
   if (inst == NULL) return;
-  
+
   str = CheckInstCollName (inst, &type);
   if (StringCmp (str, inst) == 0) {
-    if ((mod->subtype == ORGMOD_bio_material && type != 'b') ||
-        (mod->subtype == ORGMOD_culture_collection && type != 'c') ||
-        (mod->subtype == ORGMOD_specimen_voucher && type != 's')) {
-      if (type == 'b') {
+    if ((mod->subtype == ORGMOD_bio_material && (type & BIO_MATERIAL_TYPE) == 0) ||
+        (mod->subtype == ORGMOD_culture_collection && (type & CULTURE_COLLECTION_TYPE) == 0) ||
+        (mod->subtype == ORGMOD_specimen_voucher && (type & SPECIMEN_VOUCHER_TYPE) == 0)) {
+      if ((type & BIO_MATERIAL_TYPE) != 0) {
         ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_WrongVoucherType, "Institution code %s should be bio_material", inst);
-      } else if (type == 'c') {
+      } else if ((type & CULTURE_COLLECTION_TYPE) != 0) {
         ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_WrongVoucherType, "Institution code %s should be culture_collection", inst);
-      } else if (type == 's') {
+      } else if ((type & SPECIMEN_VOUCHER_TYPE) != 0) {
         ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_WrongVoucherType, "Institution code %s should be specimen_voucher", inst);
       }
     }
@@ -10285,7 +10735,7 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
   }
 
   if (StringICmp (str, inst) == 0) {
-    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadCollectionCode,
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadInstitutionCode,
               "Institution code %s exists, but correct capitalization is %s", inst, str);
     return;
   }
@@ -10315,7 +10765,7 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
   if (StringCmp (str, inst) == 0) {
     if (StringCmp (coll, "DNA") == 0) {
       /* DNA is a valid collection for any institution (using bio_material) */
-      if (type != 'b') {
+      if (mod->subtype != ORGMOD_bio_material) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_WrongVoucherType, "DNA should be bio_material");
       }
     } else {
@@ -10327,14 +10777,14 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
 
   len1 = StringLen (inst);
   len2 = StringLen (str);
-  
+
   if (len1 < len2) {
     if (StringNICmp (str, inst, len1) == 0 && str [len1] == '<') {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadInstitutionCode, "Institution code in %s:%s needs to be qualified with a <COUNTRY> designation", inst, coll);
       return;
     }
   }
-  
+
   ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadInstitutionCode, "Institution code %s:%s is not in list", inst, coll);
 }
 
@@ -10345,10 +10795,10 @@ NLM_EXTERN Boolean VoucherInstitutionIsValid (CharPtr inst)
   Uint1    type;
 
   if (StringHasNoText (inst)) return FALSE;
-  
+
   str = CheckInstCollName (inst, &type);
   if (StringCmp (str, inst) == 0) return TRUE;
-  
+
   return FALSE;
 }
 
@@ -10431,7 +10881,6 @@ static void ValidateLocationForHIV (ValidStructPtr vsp, BioSourcePtr biop, Biose
 {
   SeqDescrPtr sdp;
   SeqMgrDescContext context;
-  Boolean location_ok = FALSE;
   MolInfoPtr mip;
 
   if (vsp == NULL || biop == NULL) {
@@ -10444,18 +10893,11 @@ static void ValidateLocationForHIV (ValidStructPtr vsp, BioSourcePtr biop, Biose
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "HIV with moltype DNA should be proviral");
       }
     } else if (bsp->mol == Seq_mol_rna) {
-      if (biop->genome == GENOME_unknown) {
-        location_ok = TRUE;
-      } else if (biop->genome == GENOME_genomic) {
-        sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &context);
-        if (sdp != NULL 
-            && (mip = (MolInfoPtr) sdp->data.ptrvalue) != NULL
-            && mip->biomol == MOLECULE_TYPE_GENOMIC) {
-          location_ok = TRUE;
-            }
-      }
-      if (!location_ok) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "HIV with moltype RNA should have source location unset or set to genomic (on genomic RNA sequence)");
+      sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &context);
+      if (sdp != NULL
+          && (mip = (MolInfoPtr) sdp->data.ptrvalue) != NULL
+          && mip->biomol == MOLECULE_TYPE_MRNA) {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_BioSourceInconsistency, "HIV with mRNA molecule type is rare");
       }
     }
   }
@@ -10486,6 +10928,8 @@ static Boolean UnbalancedParentheses (CharPtr str)
     } else if (ch == ']') {
       rev_bkt++;
     }
+    if (fwd_par < rev_par) return TRUE;
+    if (fwd_bkt < rev_bkt) return TRUE;
     str++;
     ch = *str;
   }
@@ -10512,10 +10956,10 @@ static CharPtr sgml_strings [] = {
   "&Egr;",
   "&zgr;",
   "&Zgr;",
-  "&eegr"
-  "&EEgr"
-  "&thgr"
-  "&THgr"
+  "&eegr;",
+  "&EEgr;",
+  "&thgr;",
+  "&THgr;",
   "&igr;",
   "&Igr;",
   "&kgr;",
@@ -10536,7 +10980,7 @@ static CharPtr sgml_strings [] = {
   "&Rgr;",
   "&sgr;",
   "&Sgr;",
-  "&sfgr"
+  "&sfgr;",
   "&tgr;",
   "&Tgr;",
   "&ugr;",
@@ -10699,6 +11143,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
   Int2            num_rev_primer_seq = 0;
   Int2            num_fwd_primer_name = 0;
   Int2            num_rev_primer_name = 0;
+  ObjectIdPtr     oip;
   Boolean         old_country = FALSE;
   OrgNamePtr      onp;
   OrgModPtr       omp, nxtomp;
@@ -10838,7 +11283,9 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
       str = ssp->name;
       if (isAnimal || isPlant) {
         /* always use /sex, do not check values at this time */
-      } else if (isViral || isBacteria || isArchaea || isFungal) {
+      } else if (isViral) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Virus has unexpected sex qualifier");
+      } else if (isBacteria || isArchaea || isFungal) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Unexpected use of /sex qualifier");
       } else if (IsValidSexValue (str)) {
         /* otherwise expect male or female, or a few others */
@@ -10871,25 +11318,29 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
         if (biop->genome != GENOME_kinetoplast) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Plastid name subsource kinetoplast but not kinetoplast location");
         }
-      } else if (StringCmp (ssp->name, "plastid") == 0) {    
+      } else if (StringCmp (ssp->name, "plastid") == 0) {
         if (biop->genome != GENOME_plastid) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Plastid name subsource plastid but not plastid location");
         }
-      } else if (StringCmp (ssp->name, "apicoplast") == 0) {  
+      } else if (StringCmp (ssp->name, "apicoplast") == 0) {
         if (biop->genome != GENOME_apicoplast) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Plastid name subsource apicoplast but not apicoplast location");
         }
-      } else if (StringCmp (ssp->name, "leucoplast") == 0) {  
+      } else if (StringCmp (ssp->name, "leucoplast") == 0) {
         if (biop->genome != GENOME_leucoplast) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Plastid name subsource leucoplast but not leucoplast location");
         }
-      } else if (StringCmp (ssp->name, "proplastid") == 0) {  
+      } else if (StringCmp (ssp->name, "proplastid") == 0) {
         if (biop->genome != GENOME_proplastid) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Plastid name subsource proplastid but not proplastid location");
         }
+      } else if (StringCmp (ssp->name, "chromatophore") == 0) {
+        if (biop->genome != GENOME_chromatophore) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Plastid name subsource chromatophore but not chromatophore location");
+        }
       } else {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Plastid name subsource contains unrecognized value");
-      }  
+      }
     } else if (ssp->subtype == SUBSRC_collection_date) {
       if (! CollectionDateIsValid (ssp->name)) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadCollectionDate, "Collection_date format is not in DD-Mmm-YYYY format");
@@ -10990,8 +11441,6 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "bad frequency qualifier value %s", ssp->name);
         }
       }
-    } else if (ssp->subtype == SUBSRC_sex && isViral) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Virus has unexpected sex qualifier");
     } else if (ssp->subtype == SUBSRC_cell_line && isViral) {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Virus has unexpected cell_line qualifier");
     } else if (ssp->subtype == SUBSRC_cell_type && isViral) {
@@ -11060,8 +11509,19 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
                   /* passed unqualified but failed qualified country name, report at info level for now */
                   guess = GuessCountryForLatLon (lat, lon);
                   if (StringDoesHaveText (guess)) {
-                    ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState,
-                              "Lat_lon '%s' does not map to subregion '%s', but may be in '%s'", lat_lon, buf, guess);
+                    if (CountryBoxesOverlap (buf, guess)) {
+                      if (vsp->indexerVersion) {
+                        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonAdjacent,
+                                  "Lat_lon '%s' MIGHT be in '%s' instead of adjacent '%s' - SHIFT DOUBLE CLICK TO LAUNCH GOOGLE EARTH -",
+                                  lat_lon, guess, buf);
+                      } else {
+                        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState,
+                                  "Lat_lon '%s' MIGHT be in '%s' instead of '%s'", lat_lon, guess, buf);
+                      }
+                    } else {
+                      ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState,
+                                "Lat_lon '%s' does not map to subregion '%s', but may be in '%s'", lat_lon, buf, guess);
+                    }
                   } else {
                     ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonState,
                               "Lat_lon '%s' does not map to subregion '%s'", lat_lon, buf);
@@ -11096,8 +11556,19 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
           if (vsp->strictLatLonCountry || (! StringContainsBodyOfWater (countryname))) {
             guess = GuessCountryForLatLon (lat, lon);
             if (guess != NULL) {
-              ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry,
-                        "Lat_lon '%s' does not map to '%s', but may be in '%s'", lat_lon, buf, guess);
+              if (CountryBoxesOverlap (buf, guess)) {
+                if (vsp->indexerVersion) {
+                  ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonAdjacent,
+                            "Lat_lon '%s' MIGHT be in '%s' instead of adjacent '%s' - SHIFT DOUBLE CLICK TO LAUNCH GOOGLE EARTH -",
+                            lat_lon, guess, buf);
+                } else {
+                  ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry,
+                            "Lat_lon '%s' MIGHT be in '%s' instead of '%s'", lat_lon, guess, buf);
+                }
+              } else {
+                ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry,
+                          "Lat_lon '%s' does not map to '%s', but may be in '%s'", lat_lon, buf, guess);
+              }
             } else {
               ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_LatLonCountry,
                         "Lat_lon '%s' does not map to '%s'", lat_lon, buf);
@@ -11146,7 +11617,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
     ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Sex and mating type should not both be present");
   }
 
-  if (biop->org != NULL 
+  if (biop->org != NULL
       && biop->org->orgname != NULL
       && StringISearch (biop->org->orgname->lineage, "metagenomes") != NULL
       && !is_metagenomic) {
@@ -11197,6 +11668,16 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Uncultured should also have /environmental_sample");
       }
     }
+    str = orp->taxname;
+    if (StringDoesHaveText (str)) {
+      if (UnbalancedParentheses (str)) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_UnbalancedParentheses,
+                    "Unbalanced parentheses in taxname '%s'", str);
+      }
+      if (StringHasSgml (vsp, str)) {
+        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "taxname %s has SGML", str);
+      }
+    }
   }
 
   for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
@@ -11208,8 +11689,8 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
     str = ssp->name;
     if (StringHasNoText (str)) continue;
     if (UnbalancedParentheses (str)) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_UnbalancedParentheses,
-                  "Unbalanced parentheses in '%s'", str);
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_UnbalancedParentheses,
+                  "Unbalanced parentheses in subsource '%s'", str);
     }
     if (StringHasSgml (vsp, str)) {
       ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "subsource %s has SGML", str);
@@ -11227,7 +11708,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
   }
   onp = orp->orgname;
   if (onp == NULL || StringHasNoText (onp->lineage)) {
-    if (! vsp->seqSubmitParent) { /* suppress when validator run from tbl2asn */
+    if (! vsp->seqSubmitParent && vsp->indexerVersion) { /* suppress when validator run from tbl2asn or when not indexer version */
       sev = SEV_ERROR;
       if (vsp->is_refseq_in_sep) {
         for (db = orp->db; db != NULL; db = db->next) {
@@ -11256,10 +11737,11 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
     }
 
     /* warn if bacteria has organelle location */
-    if (StringCmp (onp->div, "BCT") == 0 
-        && biop->genome != GENOME_unknown 
+    if (StringCmp (onp->div, "BCT") == 0
+        && biop->genome != GENOME_unknown
         && biop->genome != GENOME_genomic
-        && biop->genome != GENOME_plasmid) {
+        && biop->genome != GENOME_plasmid
+        && biop->genome != GENOME_chromosome) {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Bacterial source should not have organelle location");
     }
 
@@ -11308,7 +11790,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
                  omp->subtype == ORGMOD_forma ||
                  omp->subtype == ORGMOD_forma_specialis ||
                  omp->subtype == ORGMOD_sub_species ||
-                 omp->subtype == ORGMOD_pathovar) {         
+                 omp->subtype == ORGMOD_pathovar) {
         ValidateOrgModInTaxName (vsp, omp, orp->taxname, varietyOK);
       } else if (omp->subtype == ORGMOD_specimen_voucher) {
         num_specimen_voucher++;
@@ -11364,6 +11846,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
         coll2++;
       }
       if (StringICmp (inst1, inst2) != 0) continue;
+      if (omp->subtype != nxtomp->subtype) continue;
       if (StringCmp (coll1, "DNA") == 0 || StringCmp (coll2, "DNA") == 0) continue;
       if (coll1 != NULL && coll2 != NULL && StringICmp (coll1, coll2) == 0) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_MultipleSourceVouchers, "Multiple vouchers with same institution:collection");
@@ -11379,8 +11862,8 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
       if (StringHasNoText (str)) continue;
       if (UnbalancedParentheses (str)) {
         if (omp->subtype == ORGMOD_old_name) continue;
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_UnbalancedParentheses,
-                  "Unbalanced parentheses in '%s'", str);
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_UnbalancedParentheses,
+                  "Unbalanced parentheses in orgmod '%s'", str);
       }
       if (StringHasSgml (vsp, str)) {
         ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "orgmod %s has SGML", str);
@@ -11434,7 +11917,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
           }
         } else if (is_rf) {
           if (vsp->is_refseq_in_sep || vsp->is_gps_in_sep) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, 
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
                       "RefSeq-specific db_xref type %s should not used on an OrgRef", dbt->db);
           } else {
             ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
@@ -11447,6 +11930,19 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
         }
       } else {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", dbt->db);
+      }
+
+      if (StringDoesHaveText (dbt->db)) {
+        if (StringHasSgml (vsp, dbt->db)) {
+          ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "dbxref database %s has SGML", dbt->db);
+        }
+      }
+
+      oip = dbt->tag;
+      if (oip != NULL && StringDoesHaveText (oip->str)) {
+        if (StringHasSgml (vsp, oip->str)) {
+          ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "dbxref value %s has SGML", oip->str);
+        }
       }
 
       /*
@@ -11711,6 +12207,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_InvalidForType, "Nucleic acid with protein sequence method");
     }
     break;
+  /*
   case Seq_descr_comment:
     str = (CharPtr) vnp->data.ptrvalue;
     if (StringHasNoText (str)) {
@@ -11729,6 +12226,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
       }
     }
     break;
+  */
   case Seq_descr_genbank:
     if (bvsp->last_gb != NULL)
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_Inconsistent, "Multiple GenBank blocks");
@@ -11831,12 +12329,14 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
     }
     if (biop != NULL && biop->origin == 5) {
       bsp = bvsp->bsp;
-      if (! IsOtherDNA (bsp)) {
+      if (! IsOtherDNA (bsp) && !ISA_aa (bsp->mol)) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_InvalidForType, "Molinfo-biomol other should be used if Biosource-location is synthetic");
       }
     }
     /* ValidateBioSource (vsp, gcp, biop, NULL, vnp); */
-    this_org = biop->org;
+    if (biop != NULL) {
+      this_org = biop->org;
+    }
     /* fall into Seq_descr_org */
   case Seq_descr_org:
     if (this_org == NULL)
@@ -11875,6 +12375,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
     for (vnp2 = vnp->next; vnp2 != NULL; vnp2 = vnp2->next) {
       if (vnp2->choice == Seq_descr_title) {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_MultipleTitles, "Undesired multiple title descriptors");
+        break;
       }
     }
     len = StringLen (str);
@@ -11911,6 +12412,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
         }
       }
     }
+    break;
   case Seq_descr_region:
     str = (CharPtr) vnp->data.ptrvalue;
     if (StringHasNoText (str)) {
@@ -11943,7 +12445,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
       switch (mip->biomol) {
       case MOLECULE_TYPE_PEPTIDE:      /* peptide */
         if (!bvsp->is_aa) {
-          ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_InvalidForType, "Nucleic acid with Molinfo-biomol = peptide");          
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_InvalidForType, "Nucleic acid with Molinfo-biomol = peptide");
         }
         break;
       case MOLECULE_TYPE_OTHER_GENETIC_MATERIAL:
@@ -12620,7 +13122,7 @@ static Boolean IsIdenticalBioSource (BioSourcePtr biop1, BioSourcePtr biop2)
     omp2 = omp2->next;
   }
   if (omp1 != NULL || omp2 != NULL) return FALSE;
-  
+
   ssp1 = biop1->subtype;
   ssp2 = biop2->subtype;
   while (ssp1 != NULL && ssp2 != NULL) {
@@ -12892,9 +13394,9 @@ static Boolean MarkMrnasFromCDSXrefs (SeqFeatPtr cds, LpDataPtr lp)
       while (R < num && StringICmp (array[R]->fid, featid) == 0) {
         item = array [R];
         feat = item->feat;
-        if (feat != NULL 
-            && !feat->ignore 
-            && feat->sfp != NULL 
+        if (feat != NULL
+            && !feat->ignore
+            && feat->sfp != NULL
             && feat->sfp->idx.subtype == FEATDEF_mRNA
             && IdXrefsAreReciprocal(cds, feat->sfp)) {
           has_xref = TRUE;
@@ -13099,7 +13601,7 @@ static void ValidateCDSmRNAmatch (
         ld.firstid [0] = '\0';
         ld.products_unique = TRUE;
         ld.featid_matched = FALSE;
-        
+
         if (sfp->excpt &&
           (StringISearch (sfp->except_text, "ribosomal slippage") != NULL ||
             StringISearch (sfp->except_text, "trans-splicing") != NULL)) {
@@ -13302,17 +13804,15 @@ static Boolean HaveUniqueFeatIDXrefs (SeqFeatXrefPtr xref1, SeqFeatXrefPtr xref2
 static Int2 WhichRNA (SeqFeatPtr sfp)
 
 {
-  GBQualPtr  gbq;
   RnaRefPtr  rrp;
   CharPtr    str;
 
   if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA) return 0;
   rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
   if (rrp == NULL) return 0;
-  if (rrp->ext.choice != 1) return 0;
-  str = (CharPtr) rrp->ext.value.ptrvalue;
+  str = GetRNARefProductString (rrp, NULL);
   if (StringHasNoText (str)) return 0;
-  if (rrp->type == 4) {
+  if (rrp->type == RNA_TYPE_rRNA) {
     if (StringNICmp (str, "small ", 6) == 0) return LEFT_RIBOSOMAL_SUBUNIT;
     if (StringNICmp (str, "18S ", 4) == 0) return LEFT_RIBOSOMAL_SUBUNIT;
     if (StringNICmp (str, "16S ", 4) == 0) return LEFT_RIBOSOMAL_SUBUNIT;
@@ -13329,14 +13829,7 @@ static Int2 WhichRNA (SeqFeatPtr sfp)
     if (StringNICmp (str, "28 ", 3) == 0) return RIGHT_RIBOSOMAL_SUBUNIT;
     if (StringNICmp (str, "23 ", 3) == 0) return RIGHT_RIBOSOMAL_SUBUNIT;
   }
-  if (rrp->type == 255) {
-    if (StringICmp (str, "misc_RNA") == 0) {
-      for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
-        if (StringICmp (gbq->qual, "product") != 0) continue;
-        if (StringHasNoText (gbq->val)) continue;
-        str = gbq->val;
-      }
-    }
+  if (rrp->type == RNA_TYPE_misc_RNA) {
     if (StringICmp (str, "internal transcribed spacer 1") == 0) return INTERNAL_SPACER_1;
     if (StringICmp (str, "internal transcribed spacer 2") == 0) return INTERNAL_SPACER_2;
     /* variant spellings */
@@ -13658,11 +14151,205 @@ static Boolean GeneXrefsDifferent (SeqFeatPtr sfp, SeqFeatPtr lastsfp)
   return FALSE;
 }
 
+
+static void CheckForGenesInconsistent (BioseqPtr bsp, ValidStructPtr vsp)
+{
+  SeqMgrFeatContext  fcontext;
+  SeqFeatPtr mrna, genomic_gene = NULL, mrna_gene = NULL;
+  GeneRefPtr genomicgrp, grp, found_grp;
+  BioseqPtr  genomic_bsp;
+  Boolean    is_error = FALSE;
+
+  mrna = SeqMgrGetRNAgivenProduct (bsp, &fcontext);
+  if (mrna != NULL) {
+    genomicgrp = SeqMgrGetGeneXref (mrna);
+    if (genomicgrp == NULL) {
+      genomic_gene = SeqMgrGetOverlappingGene (mrna->location, NULL);
+      if (genomic_gene != NULL) {
+        genomicgrp = (GeneRefPtr) genomic_gene->data.value.ptrvalue;
+      }
+    }
+    if (genomicgrp != NULL
+        && (mrna_gene = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &fcontext)) != NULL
+        && (grp = (GeneRefPtr) mrna_gene->data.value.ptrvalue) != NULL) {
+      if (StringCmp (grp->locus, genomicgrp->locus) != 0 ||
+          StringCmp (grp->allele, genomicgrp->allele) != 0 ||
+          StringCmp (grp->desc, genomicgrp->desc) != 0 ||
+          StringCmp (grp->locus_tag, genomicgrp->locus_tag) != 0) {
+        is_error = TRUE;
+        if (genomic_gene == NULL
+            && ((StringHasNoText (genomicgrp->desc) && StringDoesHaveText(grp->desc))
+                || (StringHasNoText (genomicgrp->allele) && StringDoesHaveText(grp->allele)))) {
+          genomic_bsp = BioseqFindFromSeqLoc (mrna->location);
+          if (StringDoesHaveText (genomicgrp->locus_tag)) {
+            genomic_gene = SeqMgrGetGeneByLocusTag (genomic_bsp, genomicgrp->locus_tag, &fcontext);
+            if (genomic_gene != NULL && (found_grp = (GeneRefPtr)genomic_gene->data.value.ptrvalue)
+              && StringCmp (found_grp->locus, genomicgrp->locus) != 0) {
+              genomic_gene = NULL;
+            }
+          } else if (StringDoesHaveText (genomicgrp->locus)) {
+            genomic_gene = SeqMgrGetFeatureByLabel (genomic_bsp, genomicgrp->locus, SEQFEAT_GENE, 0, &fcontext);
+            if (genomic_gene != NULL
+                && (found_grp = (GeneRefPtr)genomic_gene->data.value.ptrvalue) != NULL
+                && StringDoesHaveText (found_grp->locus_tag)) {
+              genomic_gene = NULL;
+            }
+          }
+          if (genomic_gene != NULL && (genomicgrp = (GeneRefPtr) genomic_gene->data.value.ptrvalue) != NULL
+              && StringCmp (grp->locus, genomicgrp->locus) == 0
+              && StringCmp (grp->allele, genomicgrp->allele) == 0
+              && StringCmp (grp->desc, genomicgrp->desc) == 0
+              && StringCmp (grp->locus_tag, genomicgrp->locus_tag) == 0) {
+            is_error = FALSE;
+          }
+        }
+        if (is_error) {
+          vsp->descr = NULL;
+          vsp->sfp = mrna_gene;
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GenesInconsistent, "Gene on mRNA bioseq does not match gene on genomic bioseq");
+        }
+      }
+    }
+  }
+}
+
+static void CheckForNonViralComplete (BioseqPtr bsp, ValidStructPtr vsp, GatherContextPtr gcp)
+
+{
+  BioSourcePtr       biop = NULL;
+  SeqMgrDescContext  dcontext;
+  MolInfoPtr         mip = NULL;
+  Uint2              olditemtype = 0;
+  Uint4              olditemid = 0;
+  OrgNamePtr         onp;
+  OrgRefPtr          orp;
+  ObjValNodePtr      ovp;
+  SeqDescrPtr        sdp;
+  CharPtr            title = NULL;
+
+  if (bsp == NULL || vsp == NULL) return;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+  if (sdp != NULL) {
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+  }
+  if (mip == NULL) return;
+  if (mip->biomol != MOLECULE_TYPE_GENOMIC || mip->completeness != 1) return;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_title, &dcontext);
+  if (sdp != NULL) {
+    title = (CharPtr) sdp->data.ptrvalue;
+  }
+  if (title == NULL) return;
+  if (StringStr (title, "complete genome") == NULL) return;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp != NULL) {
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+  }
+  if (biop == NULL) return;
+  if (biop->genome != GENOME_genomic && biop->genome != GENOME_unknown) return;
+
+  orp = biop->org;
+  if (orp == NULL) return;
+  onp = orp->orgname;
+  if (onp == NULL) return;
+  if (StringNICmp (onp->lineage, "Viruses; ", 9) == 0) return;
+  if (StringNICmp (onp->lineage, "Viroids; ", 9) == 0) return;
+  if (StringICmp (onp->lineage, "Viruses") == 0 && StringICmp (onp->div, "PHG") == 0) return;
+
+  if (gcp != NULL) {
+    olditemid = gcp->itemID;
+    olditemtype = gcp->thistype;
+  }
+
+  if (sdp != NULL && sdp->extended != 0) {
+    ovp = (ObjValNodePtr) sdp;
+    if (ovp != NULL && gcp != NULL) {
+      gcp->itemID = ovp->idx.itemID;
+      gcp->thistype = ovp->idx.itemtype;
+    }
+  }
+
+  ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceNeedsChromosome, "Non-viral complete genome not labeled as chromosome");
+
+  if (gcp != NULL) {
+    gcp->itemID = olditemid;
+    gcp->thistype = olditemtype;
+  }
+}
+
+
+static void LookForViralMolInfoInLineage (BioseqPtr bsp, ValidStructPtr vsp, GatherContextPtr gcp)
+{
+  SeqDescPtr        sdp;
+  SeqMgrDescContext context;
+  BioSourcePtr      biop;
+  CharPtr           lineage;
+  ObjValNodePtr     ovp;
+  Uint2             olditemtype = 0;
+  Uint4             olditemid = 0;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || vsp == NULL) return;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
+  if (sdp == NULL || (biop = (BioSourcePtr) sdp->data.ptrvalue) == NULL
+      || biop->org == NULL || biop->org->orgname == NULL
+      || (lineage = biop->org->orgname->lineage) == NULL
+      || StringNICmp (biop->org->orgname->lineage, "Viruses; ", 9) != 0) {
+    return;
+  }
+
+  if (gcp != NULL) {
+    olditemid = gcp->itemID;
+    olditemtype = gcp->thistype;
+  }
+
+  if (sdp != NULL && sdp->extended != 0) {
+    ovp = (ObjValNodePtr) sdp;
+    if (ovp != NULL && gcp != NULL) {
+      gcp->itemID = ovp->idx.itemID;
+      gcp->thistype = ovp->idx.itemtype;
+    }
+  }
+
+  vsp->bsp = bsp;
+  vsp->descr = sdp;
+
+  if ((StringSearch (lineage, " ssRNA viruses; ") != NULL
+       || StringSearch (lineage, " ssRNA negative-strand viruses; ") != NULL
+       || StringSearch (lineage, " ssRNA positive-strand viruses, no DNA stage; ") != NULL
+       || StringSearch (lineage, " unassigned ssRNA viruses; ") != NULL)
+      && (bsp->mol != Seq_mol_rna)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_MolInfoConflictsWithBioSource, "Taxonomy indicates single-stranded RNA, sequence does not agree.");
+  }
+
+  if (StringSearch (lineage, " dsRNA viruses; ") != NULL
+      && (bsp->mol != Seq_mol_rna)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_MolInfoConflictsWithBioSource, "Taxonomy indicates double-stranded RNA, sequence does not agree.");
+  }
+
+  if (StringSearch (lineage, " ssDNA viruses; ") != NULL
+      && (bsp->mol != Seq_mol_dna)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_MolInfoConflictsWithBioSource, "Taxonomy indicates single-stranded DNA, sequence does not agree.");
+  }
+
+  if (StringSearch (lineage, " dsDNA viruses; ") != NULL
+      && (bsp->mol != Seq_mol_dna)) {
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_MolInfoConflictsWithBioSource, "Taxonomy indicates double-stranded DNA, sequence does not agree.");
+  }
+
+  if (gcp != NULL) {
+    gcp->itemID = olditemid;
+    gcp->thistype = olditemtype;
+  }
+}
+
+
 static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bvsp)
 
 {
   ValidStructPtr     vsp;
-  CitSubPtr          csp;
   ObjMgrDataPtr      omdp;
   SeqSubmitPtr       ssp;
   SubmitBlockPtr     sbp;
@@ -13671,7 +14358,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   SeqMgrFeatContext  fcontext;
   Uint2              featdeftype = 0;
   Boolean            firstCDS;
-  GeneRefPtr         grp, genomicgrp, lastgrp;
+  GeneRefPtr         grp, lastgrp;
   SeqFeatPtr         last = NULL;
   Boolean            leave;
   CharPtr            label = NULL;
@@ -13709,7 +14396,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   Int4               cdsRight;
   Int4               threeUTRright;
   Int4               cdscount, genecount, utr5count, utr3count;
-  SeqFeatPtr         mrna, gene, cdsgene, utr5gene, utr3gene;
+  SeqFeatPtr         gene, cdsgene, utr5gene, utr3gene;
   PubdescPtr         pdp = NULL, lastpdp;
   SeqDescrPtr        sdp;
   SeqMgrDescContext  dcontext;
@@ -13739,6 +14426,8 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   MolInfoPtr         mip = NULL;
   SeqFeatPtr         cds;
   BioseqPtr          nbsp;
+  Boolean            last_reported;
+  Boolean            found_overlapping_peptide;
 
   gcp = bvsp->gcp;
   vsp = bvsp->vsp;
@@ -13955,12 +14644,14 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   }
 
   sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+  last_reported = FALSE;
   while (sfp != NULL) {
     leave = TRUE;
     if (last != NULL) {
       ivalssame = FALSE;
       if (fcontext.left == left && fcontext.right == right && fcontext.featdeftype == featdeftype) {
-        if (fcontext.strand == strand || strand == Seq_strand_unknown || fcontext.strand == Seq_strand_unknown) {
+        if ((fcontext.strand == Seq_strand_minus && strand == Seq_strand_minus)
+            || (fcontext.strand != Seq_strand_minus && strand != Seq_strand_minus)) {
           ivalssame = TRUE;
           if (fcontext.numivals != numivals || fcontext.ivals == NULL || ivals == NULL) {
             ivalssame = FALSE;
@@ -14138,6 +14829,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
           }
         }
       }
+      found_overlapping_peptide = FALSE;
       if (fcontext.featdeftype == FEATDEF_mat_peptide_aa ||
           fcontext.featdeftype == FEATDEF_sig_peptide_aa || fcontext.featdeftype == FEATDEF_transit_peptide_aa) {
         if (featdeftype == FEATDEF_mat_peptide_aa || featdeftype == FEATDEF_sig_peptide_aa || featdeftype == FEATDEF_transit_peptide_aa) {
@@ -14155,13 +14847,24 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
               }
             }
             vsp->descr = NULL;
-            vsp->sfp = sfp;
             if (StringDoesHaveText (buf)) {
+              if (!last_reported) {
+                vsp->sfp = last;
+                ValidErr (vsp, overlapPepSev, ERR_SEQ_FEAT_OverlappingPeptideFeat,
+                          "Signal, Transit, or Mature peptide features overlap (parent CDS is on %s)", buf);
+              }
+              vsp->sfp = sfp;
               ValidErr (vsp, overlapPepSev, ERR_SEQ_FEAT_OverlappingPeptideFeat,
                         "Signal, Transit, or Mature peptide features overlap (parent CDS is on %s)", buf);
             } else {
+              if (!last_reported) {
+                vsp->sfp = last;
+                ValidErr (vsp, overlapPepSev, ERR_SEQ_FEAT_OverlappingPeptideFeat, "Signal, Transit, or Mature peptide features overlap");
+              }
+              vsp->sfp = sfp;
               ValidErr (vsp, overlapPepSev, ERR_SEQ_FEAT_OverlappingPeptideFeat, "Signal, Transit, or Mature peptide features overlap");
             }
+            found_overlapping_peptide = TRUE;
             vsp->sfp = NULL;
             if (gcp != NULL) {
               gcp->itemID = olditemid;
@@ -14170,6 +14873,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
           }
         }
       }
+      last_reported = found_overlapping_peptide;
     }
     if (leave) {
       last = sfp;
@@ -14272,7 +14976,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
         }
       }
     }
-    lastLabel = label; 
+    lastLabel = label;
     sfp = SeqMgrGetNextGeneByLocusTag (bsp, sfp, &fcontext);
   }
 
@@ -14538,40 +15242,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
     gcp->thistype = olditemtype;
   }
 
-  mrna = SeqMgrGetRNAgivenProduct (bsp, &fcontext);
-  if (mrna != NULL) {
-    genomicgrp = SeqMgrGetGeneXref (mrna);
-    if (genomicgrp == NULL) {
-      gene = SeqMgrGetOverlappingGene (mrna->location, NULL);
-      if (gene != NULL) {
-        genomicgrp = (GeneRefPtr) gene->data.value.ptrvalue;
-      }
-    }
-    if (genomicgrp != NULL) {
-      gene = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &fcontext);
-      if (gene != NULL) {
-        grp = (GeneRefPtr) gene->data.value.ptrvalue;
-        if (grp != NULL) {
-          if (StringCmp (grp->locus, genomicgrp->locus) != 0 ||
-              StringCmp (grp->allele, genomicgrp->allele) != 0 ||
-              StringCmp (grp->desc, genomicgrp->desc) != 0 ||
-              StringCmp (grp->locus_tag, genomicgrp->locus_tag) != 0) {
-            if (gcp != NULL) {
-              gcp->itemID = fcontext.itemID;
-              gcp->thistype = OBJ_SEQFEAT;
-            }
-            vsp->descr = NULL;
-            vsp->sfp = gene;
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GenesInconsistent, "Gene on mRNA bioseq does not match gene on genomic bioseq");
-            if (gcp != NULL) {
-              gcp->itemID = olditemid;
-              gcp->thistype = olditemtype;
-            }
-          }
-        }
-      }
-    }
-  }
+  CheckForGenesInconsistent(bsp, vsp);
 
   if (ISA_na (bsp->mol)) {
     sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_gap, &fcontext);
@@ -14719,7 +15390,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
       if (lastsfp != NULL) {
         if (StringDoesHaveText (lastsfp->comment) && StringDoesHaveText (sfp->comment) && StringICmp (lastsfp->comment, sfp->comment) != 0) {
           /* different comments, so ignore */
-        } else if (IsIdenticalBioSource (biop, lastbiop) && (! bvsp->is_artificial)) {
+        } else if (IsIdenticalBioSource (biop, lastbiop) && (! bvsp->is_synthetic) && (!bvsp->is_artificial)) {
           if (gcp != NULL) {
             gcp->itemID = fcontext.itemID;
             gcp->thistype = OBJ_SEQFEAT;
@@ -14795,20 +15466,6 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
       sbp = ssp->sub;
       if (sbp != NULL) {
         bvsp->got_a_pub = TRUE;
-        csp = sbp->cit;
-        /* csp = (CitSubPtr) gcp->thisitem; */
-        if (gcp != NULL) {
-          gcp->itemID = 1;
-          gcp->thistype = OBJ_SEQSUB_CIT;
-        }
-        vsp->descr = NULL;
-        vsp->sfp = NULL;
-        vsp->bssp = NULL;
-        ValidateCitSub (vsp, csp);
-        if (gcp != NULL) {
-          gcp->itemID = olditemid;
-          gcp->thistype = olditemtype;
-        }
       }
     }
   }
@@ -14826,6 +15483,10 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   if (bsp->repr == Seq_repr_delta && ISA_na (bsp->mol)) {
     CheckBioseqForFeatsInGap (bsp, vsp);
   }
+
+  CheckForNonViralComplete (bsp, vsp, gcp);
+
+  LookForViralMolInfoInLineage (bsp, vsp, gcp);
 
   return TRUE;
 }
@@ -15037,14 +15698,17 @@ static void FindMultiGeneOverlaps (BioseqPtr bsp, ValidStructPtr vsp)
 
 }
 
-
 static void ValidateTSASequenceForNs (BioseqPtr bsp, ValidStructPtr vsp)
 {
   Int4 total = 0, max_stretch = 0;
   GatherContextPtr  gcp;
   Uint2           oldEntityID, oldItemtype;
   Uint4           oldItemID;
-  Int4            percent_N;
+  Int4            percent_N, allowed_percentN = 10;
+  SeqFeat         sf;
+  SeqInt          si;
+  CharPtr         str;
+  ValNode         vn;
 
   gcp = vsp->gcp;
 
@@ -15055,7 +15719,7 @@ static void ValidateTSASequenceForNs (BioseqPtr bsp, ValidStructPtr vsp)
   if (IsTSA (bsp)) {
     CountNsInSequence (bsp, &total, &max_stretch, FALSE);
     percent_N = (total * 100) / bsp->length;
-    if (percent_N > 5) {
+    if (percent_N > allowed_percentN) {
       vsp->bsp = bsp;
       vsp->descr = NULL;
       vsp->sfp = NULL;
@@ -15063,9 +15727,9 @@ static void ValidateTSASequenceForNs (BioseqPtr bsp, ValidStructPtr vsp)
       gcp->itemID = bsp->idx.itemID;
       gcp->thistype = OBJ_BIOSEQ;
 
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_HighNContent, "Sequence contains %d percent Ns", percent_N);
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_HighNContentPercent, "Sequence contains %d percent Ns", percent_N);
     }
-    if (max_stretch > 5) {
+    if (max_stretch > 15) {
       vsp->bsp = bsp;
       vsp->descr = NULL;
       vsp->sfp = NULL;
@@ -15073,12 +15737,100 @@ static void ValidateTSASequenceForNs (BioseqPtr bsp, ValidStructPtr vsp)
       gcp->itemID = bsp->idx.itemID;
       gcp->thistype = OBJ_BIOSEQ;
 
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_HighNContent, "Sequence has a stretch of %d Ns", max_stretch);
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_HighNContentStretch, "Sequence has a stretch of %d Ns", max_stretch);
+    } else if (bsp->length > 20) {
+      vsp->bsp = bsp;
+      vsp->descr = NULL;
+      vsp->sfp = NULL;
+      gcp->entityID = bsp->idx.entityID;
+      gcp->itemID = bsp->idx.itemID;
+      gcp->thistype = OBJ_BIOSEQ;
+
+      MemSet ((Pointer) &sf, 0, sizeof (SeqFeat));
+      MemSet ((Pointer) &si, 0, sizeof (SeqInt));
+      MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+      sf.location = &vn;
+      vn.choice = SEQLOC_INT;
+      vn.data.ptrvalue = (Pointer) &si;
+      si.id = bsp->id;
+      si.from = 0;
+      si.to = 19;
+      str = GetSequenceByFeature (&sf);
+      if (StringStr (str, "NNNNN") != NULL) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_HighNContentStretch, "Sequence has a stretch of at least 5 Ns within the first 20 bases");
+      }
+      MemFree (str);
+      si.from = bsp->length - 20;
+      si.to = bsp->length - 1;
+      str = GetSequenceByFeature (&sf);
+      if (StringStr (str, "NNNNN") != NULL) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_HighNContentStretch, "Sequence has a stretch of at least 5 Ns within the last 20 bases");
+      }
+      MemFree (str);
     }
   }
   gcp->entityID = oldEntityID;
   gcp->itemID = oldItemID;
   gcp->thistype = oldItemtype;
+}
+
+
+static void ValidateRefSeqTitle (BioseqPtr bsp, ValidStructPtr vsp, Boolean is_virus)
+{
+  SeqDescrPtr       sdp;
+  SeqMgrDescContext dcontext;
+  SeqMgrFeatContext fcontext;
+  CharPtr           taxname = NULL, title;
+  BioSourcePtr      biop;
+  SeqFeatPtr        cds, src_feat;
+  size_t            len, tlen;
+
+  if (bsp == NULL || vsp == NULL) {
+    return;
+  }
+
+  if (is_virus) return;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp != NULL
+      && (biop = (BioSourcePtr) sdp->data.ptrvalue) != NULL
+      && biop->org != NULL) {
+    taxname = biop->org->taxname;
+  }
+  if (ISA_aa(bsp->mol)) {
+    cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+    if (cds != NULL) {
+      src_feat = SeqMgrGetOverlappingSource (cds->location, &fcontext);
+      if (src_feat != NULL
+          && (biop = (BioSourcePtr) src_feat->data.value.ptrvalue) != NULL
+          && biop->org != NULL) {
+        taxname = biop->org->taxname;
+      }
+    }
+  }
+
+  if (StringDoesHaveText (taxname)) {
+    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_title, &dcontext);
+    if (sdp != NULL) {
+      title = (CharPtr) sdp->data.ptrvalue;
+      if (StringDoesHaveText (title)) {
+        len = StringLen (taxname);
+        tlen = StringLen (title);
+        if (ISA_na (bsp->mol)) {
+          if (tlen < len || StringNICmp (title, taxname, len) != 0) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrganismInTitle, "RefSeq nucleotide title does not start with organism name");
+          }
+        } else if (ISA_aa (bsp->mol)) {
+          if (tlen < len + 3 ||
+              StringNICmp (title + tlen - len - 1, taxname, len) != 0 ||
+              title [tlen - len - 2] != '[' ||
+              title [tlen - 1] != ']') {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrganismInTitle, "RefSeq protein title does not end with organism name");
+          }
+        }
+      }
+    }
+  }
 }
 
 
@@ -15116,18 +15868,26 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
   Boolean         isPDB = FALSE;
   Boolean         is_wgs = FALSE;
   Boolean         is_gb = FALSE;
+  Boolean         is_ac = FALSE;
   Boolean         is_ch_or_cm = FALSE;
   Boolean         is_nc = FALSE;
   Boolean         is_local = FALSE;
   Boolean         is_local_only = TRUE;
+  Boolean         is_organelle = FALSE;
+  Boolean         is_plasmid = FALSE;
+  Boolean         is_prokaryote = FALSE;
+  Boolean         is_refseq = FALSE;
   Boolean         is_neg_strand_virus = FALSE;
   Boolean         is_ambisense_virus = FALSE;
   Boolean         is_synthetic = FALSE;
   Boolean         is_transgenic = FALSE;
+  Boolean         is_virus = FALSE;
   Boolean         has_cds = FALSE;
+  Boolean         has_chromosome = FALSE;
   ErrSev          sev;
   SubSourcePtr    ssp;
   CharPtr         str;
+  CharPtr         taxname = NULL;
   TextSeqIdPtr    tsip;
   BioSourcePtr    biop;
   OrgRefPtr       orp;
@@ -15184,12 +15944,14 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
     if (vnp != NULL) {
       mip = (MolInfoPtr) vnp->data.ptrvalue;
     }
+
     vnp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
     if (vnp != NULL) {
       biop = (BioSourcePtr) vnp->data.ptrvalue;
       if (biop != NULL) {
         orp = biop->org;
         if (orp != NULL) {
+          taxname = orp->taxname;
           if (StringICmp (orp->taxname, "Human immunodeficiency virus") == 0 ||
               StringICmp (orp->taxname, "Human immunodeficiency virus 1") == 0 ||
               StringICmp (orp->taxname, "Human immunodeficiency virus 2") == 0) {
@@ -15212,11 +15974,24 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
               is_neg_strand_virus = TRUE;
             }
             if (StringISearch (onp->lineage, "Arenavirus") != NULL ||
+                StringISearch (onp->lineage, "Arenaviridae") != NULL ||
                 StringISearch (onp->lineage, "Phlebovirus") != NULL ||
                 StringISearch (onp->lineage, "Tospovirus") != NULL ||
                 StringISearch (onp->lineage, "Tenuivirus") != NULL) {
               is_ambisense_virus = TRUE;
             }
+            if (StringNICmp (onp->lineage, "Viruses; ", 9) == 0 ||
+                StringNICmp (onp->lineage, "Bacteria; ", 10) == 0 ||
+                StringNICmp (onp->lineage, "Archaea; ", 9) == 0 ||
+                StringCmp (onp->div, "BCT") == 0 ||
+                StringCmp (onp->div, "VRL") == 0) {
+              is_prokaryote = TRUE;
+            }
+            if (StringNICmp (onp->lineage, "Viruses; ", 9) == 0) {
+              is_virus = TRUE;
+            }
+            is_organelle = IsLocationOrganelle (biop->genome);
+            is_plasmid = (Boolean) (biop->genome == GENOME_plasmid);
             for (omp = onp->mod; omp != NULL; omp = omp->next) {
               if (omp->subtype == ORGMOD_other) {
                 if (mip != NULL && (StringICmp (omp->subname, "cRNA") == 0)) {
@@ -15247,8 +16022,10 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
             }
           }
         }
-        if (biop->origin == ORG_ARTIFICIAL || biop->origin == ORG_SYNTHETIC) {
+        if (biop->origin == ORG_ARTIFICIAL) {
           bvs.is_artificial = TRUE;
+        } else if (biop->origin == ORG_SYNTHETIC) {
+          bvs.is_synthetic = TRUE;
         }
         if (biop->origin == ORG_MUT || biop->origin == ORG_ARTIFICIAL || biop->origin == ORG_SYNTHETIC) {
           is_synthetic = TRUE;
@@ -15256,6 +16033,10 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
         for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
           if (ssp->subtype == SUBSRC_transgenic) {
             is_transgenic = TRUE;
+          } else if (ssp->subtype == SUBSRC_chromosome) {
+            if (StringDoesHaveText (ssp->name)) {
+              has_chromosome = TRUE;
+            }
           } else if (ssp->subtype == SUBSRC_other) {
             if (mip != NULL && (StringICmp (ssp->name, "cRNA") == 0)) {
               oldEntityID = gcp->entityID;
@@ -15284,6 +16065,22 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
           }
         }
       }
+    }
+
+    if (mip != NULL && mip->tech == MI_TECH_tsa && bsp->mol == MOLECULE_CLASS_DNA) {
+      oldEntityID = gcp->entityID;
+      oldItemID = gcp->itemID;
+      oldItemtype = gcp->thistype;
+
+      gcp->entityID = mipEntityID;
+      gcp->itemID = mipItemID;
+      gcp->thistype = mipItemtype;
+
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_ConflictingBiomolTech, "TSA sequence should not be DNA");
+
+      gcp->entityID = oldEntityID;
+      gcp->itemID = oldItemID;
+      gcp->thistype = oldItemtype;
     }
   }
 
@@ -15316,7 +16113,7 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
         if (StringISearch (sfp->comment, "nonfunctional") != NULL) {
           if (SeqLocStrand (sfp->location) == Seq_strand_minus) {
             if (mip->biomol != MOLECULE_TYPE_GENOMIC) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Negative-strand virus with nonfunctional minus strand misc_feature should be mRNA or cRNA");
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Negative-strand virus with nonfunctional minus strand misc_feature should be genomic");
             }
           } else {
             if (mip->biomol != MOLECULE_TYPE_MRNA && mip->biomol != MOLECULE_TYPE_CRNA && (! is_ambisense_virus)) {
@@ -15396,7 +16193,8 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
         mip->tech == MI_TECH_survey ||
         mip->tech == MI_TECH_wgs ||
         mip->tech == MI_TECH_htgs_0 || mip->tech == MI_TECH_htgs_1 ||
-        mip->tech == MI_TECH_htgs_2 || mip->tech == MI_TECH_htgs_3) {
+        mip->tech == MI_TECH_htgs_2 || mip->tech == MI_TECH_htgs_3 ||
+        mip->tech == MI_TECH_composite_wgs_htgs) {
       if (mip->tech == MI_TECH_sts && bsp->mol == Seq_mol_rna && mip->biomol == MOLECULE_TYPE_MRNA) {
         /* there are some STS sequences derived from cDNAs, so do not report these */
       } else if (mip->biomol != MOLECULE_TYPE_GENOMIC) {
@@ -15486,10 +16284,15 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
           is_ch_or_cm = TRUE;
         */
         } else if (WHICH_db_accession (tsip->accession) == ACCN_NCBI_SEGSET) {
+          /* NOTE '==' is appropriate here, rather than '|', because we
+           * really do only want to suppress if the type is exactly ACCN_NCBI_SEGSET
+           * and NOT if the type is ACCN_NCBI_SEGSET | ACCN_AMBIGOUS_MOL (prefix is AH)
+           */
           is_ch_or_cm = TRUE;
         }
       }
     } else if (sip->choice == SEQID_OTHER) {
+      is_refseq = TRUE;
       tsip = (TextSeqIdPtr) sip->data.ptrvalue;
       if (tsip != NULL && tsip->accession != NULL) {
         if (StringNCmp (tsip->accession, "NM_", 3) == 0 ||
@@ -15499,8 +16302,15 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
           is_gb = TRUE;
         } else if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
           is_nc = TRUE;
+        } else if (StringNCmp (tsip->accession, "AC_", 3) == 0) {
+          is_ac = TRUE;
         }
       }
+    }
+  }
+  if (is_nc || is_ac) {
+    if (! is_prokaryote && ! is_organelle && ! has_chromosome && ! is_plasmid) {
+      ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_MissingChromosome, "Missing chromosome qualifier on NC or AC RefSeq record");
     }
   }
   if (! is_local) {
@@ -15523,6 +16333,10 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_Inconsistent, "NC nucleotide should be genomic or cRNA");
       }
     }
+  }
+
+  if (bsp != NULL && is_refseq) {
+    ValidateRefSeqTitle (bsp, vsp, is_virus);
   }
 
   if ((!bvs.last_org) && (!vsp->suppress_no_biosrc))
@@ -15570,7 +16384,7 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
   if (mip != NULL && mip->tech == MI_TECH_tsa
       && (bsp->hist == NULL || bsp->hist->assembly == NULL)) {
     SeqIdWrite (bsp->id, buf1, PRINTID_FASTA_SHORT, sizeof (buf1) - 1);
-    ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_TSAHistAssemblyMissing, "TSA record %s should have Seq-hist.assembly", buf1);    
+    ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_TSAHistAssemblyMissing, "TSA record %s should have Seq-hist.assembly", buf1);
   }
 #endif
 
@@ -15644,7 +16458,9 @@ static void CheckPeptideOnCodonBoundary (ValidStructPtr vsp, GatherContextPtr gc
     mod2 = 2;
   }
 
-  if (mod1 != 0 && mod2 != 2) {
+  if (pos1 < 0 && pos2 < 0 && StringICmp (key, "sig_peptide") == 0) {
+    /* ignore special case of sig_peptide completely before codon_start of CDS */
+  } else if (mod1 != 0 && mod2 != 2) {
     ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PeptideFeatOutOfFrame, "Start and stop of %s are out of frame with CDS codons", key);
   } else if (mod1 != 0) {
     ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PeptideFeatOutOfFrame, "Start of %s is out of frame with CDS codons", key);
@@ -15685,142 +16501,132 @@ static CharPtr legal_mobile_element_strings [] = {
 };
 
 static CharPtr ecnum_ambig [] = {
-  "1.-.-.-", "1.-.-.n", "1.-.n.n", "1.n.n.n", "1.1.-.-", "1.1.-.n",
-  "1.1.n.n", "1.1.1.-", "1.1.1.n", "1.1.2.-", "1.1.2.n", "1.1.3.-",
-  "1.1.3.n", "1.1.4.-", "1.1.4.n", "1.1.5.-", "1.1.5.n", "1.1.99.-",
-  "1.1.99.n", "1.2.-.-", "1.2.-.n", "1.2.n.n", "1.2.1.-", "1.2.1.n",
-  "1.2.2.-", "1.2.2.n", "1.2.3.-", "1.2.3.n", "1.2.4.-", "1.2.4.n",
-  "1.2.7.-", "1.2.7.n", "1.2.99.-", "1.2.99.n", "1.3.-.-", "1.3.-.n",
-  "1.3.n.n", "1.3.1.-", "1.3.1.n", "1.3.2.-", "1.3.2.n", "1.3.3.-",
-  "1.3.3.n", "1.3.5.-", "1.3.5.n", "1.3.7.-", "1.3.7.n", "1.3.99.-",
-  "1.3.99.n", "1.4.-.-", "1.4.-.n", "1.4.n.n", "1.4.1.-", "1.4.1.n",
-  "1.4.2.-", "1.4.2.n", "1.4.3.-", "1.4.3.n", "1.4.4.-", "1.4.4.n",
-  "1.4.7.-", "1.4.7.n", "1.4.99.-", "1.4.99.n", "1.5.-.-", "1.5.-.n",
-  "1.5.n.n", "1.5.1.-", "1.5.1.n", "1.5.3.-", "1.5.3.n", "1.5.4.-",
-  "1.5.4.n", "1.5.5.-", "1.5.5.n", "1.5.7.-", "1.5.7.n", "1.5.8.-",
-  "1.5.8.n", "1.5.99.-", "1.5.99.n", "1.6.-.-", "1.6.-.n", "1.6.n.n",
-  "1.6.1.-", "1.6.1.n", "1.6.2.-", "1.6.2.n", "1.6.3.-", "1.6.3.n",
-  "1.6.4.-", "1.6.4.n", "1.6.5.-", "1.6.5.n", "1.6.6.-", "1.6.6.n",
-  "1.6.7.-", "1.6.7.n", "1.6.8.-", "1.6.8.n", "1.6.99.-", "1.6.99.n",
-  "1.7.-.-", "1.7.-.n", "1.7.n.n", "1.7.1.-", "1.7.1.n", "1.7.2.-",
-  "1.7.2.n", "1.7.3.-", "1.7.3.n", "1.7.7.-", "1.7.7.n", "1.7.99.-",
-  "1.7.99.n", "1.8.-.-", "1.8.-.n", "1.8.n.n", "1.8.1.-", "1.8.1.n",
-  "1.8.2.-", "1.8.2.n", "1.8.3.-", "1.8.3.n", "1.8.4.-", "1.8.4.n",
-  "1.8.5.-", "1.8.5.n", "1.8.6.-", "1.8.6.n", "1.8.7.-", "1.8.7.n",
-  "1.8.98.-", "1.8.98.n", "1.8.99.-", "1.8.99.n", "1.9.-.-", "1.9.-.n",
-  "1.9.n.n", "1.9.3.-", "1.9.3.n", "1.9.6.-", "1.9.6.n", "1.9.99.-",
-  "1.9.99.n", "1.10.-.-", "1.10.-.n", "1.10.n.n", "1.10.1.-",
+  "1.-.-.-", "1.1.-.-", "1.1.1.-", "1.1.1.n", "1.1.2.-", "1.1.2.n",
+  "1.1.3.-", "1.1.3.n", "1.1.4.-", "1.1.4.n", "1.1.5.-", "1.1.5.n",
+  "1.1.98.-", "1.1.98.n", "1.1.99.-", "1.1.99.n", "1.1.n.n",
+  "1.2.-.-", "1.2.1.-", "1.2.1.n", "1.2.2.-", "1.2.2.n", "1.2.3.-",
+  "1.2.3.n", "1.2.4.-", "1.2.4.n", "1.2.7.-", "1.2.7.n", "1.2.99.-",
+  "1.2.99.n", "1.2.n.n", "1.3.-.-", "1.3.1.-", "1.3.1.n", "1.3.2.-",
+  "1.3.2.n", "1.3.3.-", "1.3.3.n", "1.3.5.-", "1.3.5.n", "1.3.7.-",
+  "1.3.7.n", "1.3.99.-", "1.3.99.n", "1.3.n.n", "1.4.-.-", "1.4.1.-",
+  "1.4.1.n", "1.4.2.-", "1.4.2.n", "1.4.3.-", "1.4.3.n", "1.4.4.-",
+  "1.4.4.n", "1.4.5.-", "1.4.5.n", "1.4.7.-", "1.4.7.n", "1.4.99.-",
+  "1.4.99.n", "1.4.n.n", "1.5.-.-", "1.5.1.-", "1.5.1.n", "1.5.3.-",
+  "1.5.3.n", "1.5.4.-", "1.5.4.n", "1.5.5.-", "1.5.5.n", "1.5.7.-",
+  "1.5.7.n", "1.5.8.-", "1.5.8.n", "1.5.99.-", "1.5.99.n", "1.5.n.n",
+  "1.6.-.-", "1.6.1.-", "1.6.1.n", "1.6.2.-", "1.6.2.n", "1.6.3.-",
+  "1.6.3.n", "1.6.4.-", "1.6.4.n", "1.6.5.-", "1.6.5.n", "1.6.6.-",
+  "1.6.6.n", "1.6.7.-", "1.6.7.n", "1.6.8.-", "1.6.8.n", "1.6.99.-",
+  "1.6.99.n", "1.6.n.n", "1.7.-.-", "1.7.1.-", "1.7.1.n", "1.7.2.-",
+  "1.7.2.n", "1.7.3.-", "1.7.3.n", "1.7.5.-", "1.7.5.n", "1.7.7.-",
+  "1.7.7.n", "1.7.99.-", "1.7.99.n", "1.7.n.n", "1.8.-.-", "1.8.1.-",
+  "1.8.1.n", "1.8.2.-", "1.8.2.n", "1.8.3.-", "1.8.3.n", "1.8.4.-",
+  "1.8.4.n", "1.8.5.-", "1.8.5.n", "1.8.6.-", "1.8.6.n", "1.8.7.-",
+  "1.8.7.n", "1.8.98.-", "1.8.98.n", "1.8.99.-", "1.8.99.n",
+  "1.8.n.n", "1.9.-.-", "1.9.3.-", "1.9.3.n", "1.9.6.-", "1.9.6.n",
+  "1.9.99.-", "1.9.99.n", "1.9.n.n", "1.10.-.-", "1.10.1.-",
   "1.10.1.n", "1.10.2.-", "1.10.2.n", "1.10.3.-", "1.10.3.n",
-  "1.10.99.-", "1.10.99.n", "1.11.-.-", "1.11.-.n", "1.11.n.n",
-  "1.11.1.-", "1.11.1.n", "1.12.-.-", "1.12.-.n", "1.12.n.n",
-  "1.12.1.-", "1.12.1.n", "1.12.2.-", "1.12.2.n", "1.12.5.-",
-  "1.12.5.n", "1.12.7.-", "1.12.7.n", "1.12.98.-", "1.12.98.n",
-  "1.12.99.-", "1.12.99.n", "1.13.-.-", "1.13.-.n", "1.13.n.n",
-  "1.13.1.-", "1.13.1.n", "1.13.11.-", "1.13.11.n", "1.13.12.-",
-  "1.13.12.n", "1.13.99.-", "1.13.99.n", "1.14.-.-", "1.14.-.n",
-  "1.14.n.n", "1.14.1.-", "1.14.1.n", "1.14.2.-", "1.14.2.n",
-  "1.14.3.-", "1.14.3.n", "1.14.11.-", "1.14.11.n", "1.14.12.-",
-  "1.14.12.n", "1.14.13.-", "1.14.13.n", "1.14.14.-", "1.14.14.n",
-  "1.14.15.-", "1.14.15.n", "1.14.16.-", "1.14.16.n", "1.14.17.-",
-  "1.14.17.n", "1.14.18.-", "1.14.18.n", "1.14.19.-", "1.14.19.n",
-  "1.14.20.-", "1.14.20.n", "1.14.21.-", "1.14.21.n", "1.14.99.-",
-  "1.14.99.n", "1.15.-.-", "1.15.-.n", "1.15.n.n", "1.15.1.-",
-  "1.15.1.n", "1.16.-.-", "1.16.-.n", "1.16.n.n", "1.16.1.-",
-  "1.16.1.n", "1.16.3.-", "1.16.3.n", "1.16.8.-", "1.16.8.n",
-  "1.17.-.-", "1.17.-.n", "1.17.n.n", "1.17.1.-", "1.17.1.n",
-  "1.17.3.-", "1.17.3.n", "1.17.4.-", "1.17.4.n", "1.17.5.-",
-  "1.17.5.n", "1.17.7.-", "1.17.7.n", "1.17.99.-", "1.17.99.n",
-  "1.18.-.-", "1.18.-.n", "1.18.n.n", "1.18.1.-", "1.18.1.n",
-  "1.18.2.-", "1.18.2.n", "1.18.3.-", "1.18.3.n", "1.18.6.-",
-  "1.18.6.n", "1.18.96.-", "1.18.96.n", "1.18.99.-", "1.18.99.n",
-  "1.19.-.-", "1.19.-.n", "1.19.n.n", "1.19.6.-", "1.19.6.n",
-  "1.20.-.-", "1.20.-.n", "1.20.n.n", "1.20.1.-", "1.20.1.n",
+  "1.10.99.-", "1.10.99.n", "1.10.n.n", "1.11.-.-", "1.11.1.-",
+  "1.11.1.n", "1.11.n.n", "1.12.-.-", "1.12.1.-", "1.12.1.n",
+  "1.12.2.-", "1.12.2.n", "1.12.5.-", "1.12.5.n", "1.12.7.-",
+  "1.12.7.n", "1.12.98.-", "1.12.98.n", "1.12.99.-", "1.12.99.n",
+  "1.12.n.n", "1.13.-.-", "1.13.1.-", "1.13.1.n", "1.13.11.-",
+  "1.13.11.n", "1.13.12.-", "1.13.12.n", "1.13.99.-", "1.13.99.n",
+  "1.13.n.n", "1.14.-.-", "1.14.1.-", "1.14.1.n", "1.14.2.-",
+  "1.14.2.n", "1.14.3.-", "1.14.3.n", "1.14.11.-", "1.14.11.n",
+  "1.14.12.-", "1.14.12.n", "1.14.13.-", "1.14.13.n", "1.14.14.-",
+  "1.14.14.n", "1.14.15.-", "1.14.15.n", "1.14.16.-", "1.14.16.n",
+  "1.14.17.-", "1.14.17.n", "1.14.18.-", "1.14.18.n", "1.14.19.-",
+  "1.14.19.n", "1.14.20.-", "1.14.20.n", "1.14.21.-", "1.14.21.n",
+  "1.14.99.-", "1.14.99.n", "1.14.n.n", "1.15.-.-", "1.15.1.-",
+  "1.15.1.n", "1.15.n.n", "1.16.-.-", "1.16.1.-", "1.16.1.n",
+  "1.16.3.-", "1.16.3.n", "1.16.8.-", "1.16.8.n", "1.16.n.n",
+  "1.17.-.-", "1.17.1.-", "1.17.1.n", "1.17.3.-", "1.17.3.n",
+  "1.17.4.-", "1.17.4.n", "1.17.5.-", "1.17.5.n", "1.17.7.-",
+  "1.17.7.n", "1.17.99.-", "1.17.99.n", "1.17.n.n", "1.18.-.-",
+  "1.18.1.-", "1.18.1.n", "1.18.2.-", "1.18.2.n", "1.18.3.-",
+  "1.18.3.n", "1.18.6.-", "1.18.6.n", "1.18.96.-", "1.18.96.n",
+  "1.18.99.-", "1.18.99.n", "1.18.n.n", "1.19.-.-", "1.19.6.-",
+  "1.19.6.n", "1.19.n.n", "1.20.-.-", "1.20.1.-", "1.20.1.n",
   "1.20.4.-", "1.20.4.n", "1.20.98.-", "1.20.98.n", "1.20.99.-",
-  "1.20.99.n", "1.21.-.-", "1.21.-.n", "1.21.n.n", "1.21.3.-",
-  "1.21.3.n", "1.21.4.-", "1.21.4.n", "1.21.99.-", "1.21.99.n",
-  "1.97.-.-", "1.97.-.n", "1.97.n.n", "1.97.1.-", "1.97.1.n",
-  "1.98.-.-", "1.98.-.n", "1.98.n.n", "1.98.1.-", "1.98.1.n",
-  "1.99.-.-", "1.99.-.n", "1.99.n.n", "1.99.1.-", "1.99.1.n",
-  "1.99.2.-", "1.99.2.n", "2.-.-.-", "2.-.-.n", "2.-.n.n", "2.n.n.n",
-  "2.1.-.-", "2.1.-.n", "2.1.n.n", "2.1.1.-", "2.1.1.n", "2.1.2.-",
-  "2.1.2.n", "2.1.3.-", "2.1.3.n", "2.1.4.-", "2.1.4.n", "2.2.-.-",
-  "2.2.-.n", "2.2.n.n", "2.2.1.-", "2.2.1.n", "2.3.-.-", "2.3.-.n",
-  "2.3.n.n", "2.3.1.-", "2.3.1.n", "2.3.2.-", "2.3.2.n", "2.3.3.-",
-  "2.3.3.n", "2.4.-.-", "2.4.-.n", "2.4.n.n", "2.4.1.-", "2.4.1.n",
-  "2.4.2.-", "2.4.2.n", "2.4.99.-", "2.4.99.n", "2.5.-.-", "2.5.-.n",
-  "2.5.n.n", "2.5.1.-", "2.5.1.n", "2.6.-.-", "2.6.-.n", "2.6.n.n",
-  "2.6.1.-", "2.6.1.n", "2.6.2.-", "2.6.2.n", "2.6.3.-", "2.6.3.n",
-  "2.6.99.-", "2.6.99.n", "2.7.-.-", "2.7.-.n", "2.7.n.n", "2.7.1.-",
-  "2.7.1.n", "2.7.2.-", "2.7.2.n", "2.7.3.-", "2.7.3.n", "2.7.4.-",
-  "2.7.4.n", "2.7.5.-", "2.7.5.n", "2.7.6.-", "2.7.6.n", "2.7.7.-",
-  "2.7.7.n", "2.7.8.-", "2.7.8.n", "2.7.9.-", "2.7.9.n", "2.7.10.-",
-  "2.7.10.n", "2.7.11.-", "2.7.11.n", "2.7.12.-", "2.7.12.n",
-  "2.7.13.-", "2.7.13.n", "2.7.99.-", "2.7.99.n", "2.8.-.-", "2.8.-.n",
-  "2.8.n.n", "2.8.1.-", "2.8.1.n", "2.8.2.-", "2.8.2.n", "2.8.3.-",
-  "2.8.3.n", "2.8.4.-", "2.8.4.n", "2.9.-.-", "2.9.-.n", "2.9.n.n",
-  "2.9.1.-", "2.9.1.n", "3.-.-.-", "3.-.-.n", "3.-.n.n", "3.n.n.n",
-  "3.1.-.-", "3.1.-.n", "3.1.n.n", "3.1.1.-", "3.1.1.n", "3.1.2.-",
-  "3.1.2.n", "3.1.3.-", "3.1.3.n", "3.1.4.-", "3.1.4.n", "3.1.5.-",
-  "3.1.5.n", "3.1.6.-", "3.1.6.n", "3.1.7.-", "3.1.7.n", "3.1.8.-",
-  "3.1.8.n", "3.1.11.-", "3.1.11.n", "3.1.13.-", "3.1.13.n", "3.1.14.-",
+  "1.20.99.n", "1.20.n.n", "1.21.-.-", "1.21.3.-", "1.21.3.n",
+  "1.21.4.-", "1.21.4.n", "1.21.99.-", "1.21.99.n", "1.21.n.n",
+  "1.22.-.-", "1.22.1.-", "1.22.1.n", "1.22.n.n", "1.97.-.-",
+  "1.97.1.-", "1.97.1.n", "1.97.n.n", "1.98.-.-", "1.98.1.-",
+  "1.98.1.n", "1.98.n.n", "1.99.-.-", "1.99.1.-", "1.99.1.n",
+  "1.99.2.-", "1.99.2.n", "1.99.n.n", "1.n.n.n", "2.-.-.-", "2.1.-.-",
+  "2.1.1.-", "2.1.1.n", "2.1.2.-", "2.1.2.n", "2.1.3.-", "2.1.3.n",
+  "2.1.4.-", "2.1.4.n", "2.1.n.n", "2.2.-.-", "2.2.1.-", "2.2.1.n",
+  "2.2.n.n", "2.3.-.-", "2.3.1.-", "2.3.1.n", "2.3.2.-", "2.3.2.n",
+  "2.3.3.-", "2.3.3.n", "2.3.n.n", "2.4.-.-", "2.4.1.-", "2.4.1.n",
+  "2.4.2.-", "2.4.2.n", "2.4.99.-", "2.4.99.n", "2.4.n.n", "2.5.-.-",
+  "2.5.1.-", "2.5.1.n", "2.5.n.n", "2.6.-.-", "2.6.1.-", "2.6.1.n",
+  "2.6.2.-", "2.6.2.n", "2.6.3.-", "2.6.3.n", "2.6.99.-", "2.6.99.n",
+  "2.6.n.n", "2.7.-.-", "2.7.1.-", "2.7.1.n", "2.7.2.-", "2.7.2.n",
+  "2.7.3.-", "2.7.3.n", "2.7.4.-", "2.7.4.n", "2.7.5.-", "2.7.5.n",
+  "2.7.6.-", "2.7.6.n", "2.7.7.-", "2.7.7.n", "2.7.8.-", "2.7.8.n",
+  "2.7.9.-", "2.7.9.n", "2.7.10.-", "2.7.10.n", "2.7.11.-",
+  "2.7.11.n", "2.7.12.-", "2.7.12.n", "2.7.13.-", "2.7.13.n",
+  "2.7.99.-", "2.7.99.n", "2.7.n.n", "2.8.-.-", "2.8.1.-", "2.8.1.n",
+  "2.8.2.-", "2.8.2.n", "2.8.3.-", "2.8.3.n", "2.8.4.-", "2.8.4.n",
+  "2.8.n.n", "2.9.-.-", "2.9.1.-", "2.9.1.n", "2.9.n.n", "2.n.n.n",
+  "3.-.-.-", "3.1.-.-", "3.1.1.-", "3.1.1.n", "3.1.2.-", "3.1.2.n",
+  "3.1.3.-", "3.1.3.n", "3.1.4.-", "3.1.4.n", "3.1.5.-", "3.1.5.n",
+  "3.1.6.-", "3.1.6.n", "3.1.7.-", "3.1.7.n", "3.1.8.-", "3.1.8.n",
+  "3.1.11.-", "3.1.11.n", "3.1.13.-", "3.1.13.n", "3.1.14.-",
   "3.1.14.n", "3.1.15.-", "3.1.15.n", "3.1.16.-", "3.1.16.n",
   "3.1.21.-", "3.1.21.n", "3.1.22.-", "3.1.22.n", "3.1.23.-",
   "3.1.23.n", "3.1.24.-", "3.1.24.n", "3.1.25.-", "3.1.25.n",
   "3.1.26.-", "3.1.26.n", "3.1.27.-", "3.1.27.n", "3.1.30.-",
-  "3.1.30.n", "3.1.31.-", "3.1.31.n", "3.2.-.-", "3.2.-.n", "3.2.n.n",
-  "3.2.1.-", "3.2.1.n", "3.2.2.-", "3.2.2.n", "3.2.3.-", "3.2.3.n",
-  "3.3.-.-", "3.3.-.n", "3.3.n.n", "3.3.1.-", "3.3.1.n", "3.3.2.-",
-  "3.3.2.n", "3.4.-.-", "3.4.-.n", "3.4.n.n", "3.4.1.-", "3.4.1.n",
-  "3.4.2.-", "3.4.2.n", "3.4.3.-", "3.4.3.n", "3.4.4.-", "3.4.4.n",
-  "3.4.11.-", "3.4.11.n", "3.4.12.-", "3.4.12.n", "3.4.13.-",
-  "3.4.13.n", "3.4.14.-", "3.4.14.n", "3.4.15.-", "3.4.15.n",
-  "3.4.16.-", "3.4.16.n", "3.4.17.-", "3.4.17.n", "3.4.18.-",
-  "3.4.18.n", "3.4.19.-", "3.4.19.n", "3.4.21.-", "3.4.21.n",
-  "3.4.22.-", "3.4.22.n", "3.4.23.-", "3.4.23.n", "3.4.24.-",
-  "3.4.24.n", "3.4.25.-", "3.4.25.n", "3.4.99.-", "3.4.99.n", "3.5.-.-",
-  "3.5.-.n", "3.5.n.n", "3.5.1.-", "3.5.1.n", "3.5.2.-", "3.5.2.n",
-  "3.5.3.-", "3.5.3.n", "3.5.4.-", "3.5.4.n", "3.5.5.-", "3.5.5.n",
-  "3.5.99.-", "3.5.99.n", "3.6.-.-", "3.6.-.n", "3.6.n.n", "3.6.1.-",
-  "3.6.1.n", "3.6.2.-", "3.6.2.n", "3.6.3.-", "3.6.3.n", "3.6.4.-",
-  "3.6.4.n", "3.6.5.-", "3.6.5.n", "3.7.-.-", "3.7.-.n", "3.7.n.n",
-  "3.7.1.-", "3.7.1.n", "3.8.-.-", "3.8.-.n", "3.8.n.n", "3.8.1.-",
-  "3.8.1.n", "3.8.2.-", "3.8.2.n", "3.9.-.-", "3.9.-.n", "3.9.n.n",
-  "3.9.1.-", "3.9.1.n", "3.10.-.-", "3.10.-.n", "3.10.n.n", "3.10.1.-",
-  "3.10.1.n", "3.11.-.-", "3.11.-.n", "3.11.n.n", "3.11.1.-",
-  "3.11.1.n", "3.12.-.-", "3.12.-.n", "3.12.n.n", "3.12.1.-",
-  "3.12.1.n", "3.13.-.-", "3.13.-.n", "3.13.n.n", "3.13.1.-",
-  "3.13.1.n", "4.-.-.-", "4.-.-.n", "4.-.n.n", "4.n.n.n", "4.1.-.-",
-  "4.1.-.n", "4.1.n.n", "4.1.1.-", "4.1.1.n", "4.1.2.-", "4.1.2.n",
-  "4.1.3.-", "4.1.3.n", "4.1.99.-", "4.1.99.n", "4.2.-.-", "4.2.-.n",
-  "4.2.n.n", "4.2.1.-", "4.2.1.n", "4.2.2.-", "4.2.2.n", "4.2.3.-",
-  "4.2.3.n", "4.2.99.-", "4.2.99.n", "4.3.-.-", "4.3.-.n", "4.3.n.n",
-  "4.3.1.-", "4.3.1.n", "4.3.2.-", "4.3.2.n", "4.3.3.-", "4.3.3.n",
-  "4.3.99.-", "4.3.99.n", "4.4.-.-", "4.4.-.n", "4.4.n.n", "4.4.1.-",
-  "4.4.1.n", "4.5.-.-", "4.5.-.n", "4.5.n.n", "4.5.1.-", "4.5.1.n",
-  "4.6.-.-", "4.6.-.n", "4.6.n.n", "4.6.1.-", "4.6.1.n", "4.99.-.-",
-  "4.99.-.n", "4.99.n.n", "4.99.1.-", "4.99.1.n", "5.-.-.-", "5.-.-.n",
-  "5.-.n.n", "5.n.n.n", "5.1.-.-", "5.1.-.n", "5.1.n.n", "5.1.1.-",
+  "3.1.30.n", "3.1.31.-", "3.1.31.n", "3.1.n.n", "3.2.-.-", "3.2.1.-",
+  "3.2.1.n", "3.2.2.-", "3.2.2.n", "3.2.3.-", "3.2.3.n", "3.2.n.n",
+  "3.3.-.-", "3.3.1.-", "3.3.1.n", "3.3.2.-", "3.3.2.n", "3.3.n.n",
+  "3.4.-.-", "3.4.1.-", "3.4.1.n", "3.4.2.-", "3.4.2.n", "3.4.3.-",
+  "3.4.3.n", "3.4.4.-", "3.4.4.n", "3.4.11.-", "3.4.11.n", "3.4.12.-",
+  "3.4.12.n", "3.4.13.-", "3.4.13.n", "3.4.14.-", "3.4.14.n",
+  "3.4.15.-", "3.4.15.n", "3.4.16.-", "3.4.16.n", "3.4.17.-",
+  "3.4.17.n", "3.4.18.-", "3.4.18.n", "3.4.19.-", "3.4.19.n",
+  "3.4.21.-", "3.4.21.n", "3.4.22.-", "3.4.22.n", "3.4.23.-",
+  "3.4.23.n", "3.4.24.-", "3.4.24.n", "3.4.25.-", "3.4.25.n",
+  "3.4.99.-", "3.4.99.n", "3.4.n.n", "3.5.-.-", "3.5.1.-", "3.5.1.n",
+  "3.5.2.-", "3.5.2.n", "3.5.3.-", "3.5.3.n", "3.5.4.-", "3.5.4.n",
+  "3.5.5.-", "3.5.5.n", "3.5.99.-", "3.5.99.n", "3.5.n.n", "3.6.-.-",
+  "3.6.1.-", "3.6.1.n", "3.6.2.-", "3.6.2.n", "3.6.3.-", "3.6.3.n",
+  "3.6.4.-", "3.6.4.n", "3.6.5.-", "3.6.5.n", "3.6.n.n", "3.7.-.-",
+  "3.7.1.-", "3.7.1.n", "3.7.n.n", "3.8.-.-", "3.8.1.-", "3.8.1.n",
+  "3.8.2.-", "3.8.2.n", "3.8.n.n", "3.9.-.-", "3.9.1.-", "3.9.1.n",
+  "3.9.n.n", "3.10.-.-", "3.10.1.-", "3.10.1.n", "3.10.n.n",
+  "3.11.-.-", "3.11.1.-", "3.11.1.n", "3.11.n.n", "3.12.-.-",
+  "3.12.1.-", "3.12.1.n", "3.12.n.n", "3.13.-.-", "3.13.1.-",
+  "3.13.1.n", "3.13.n.n", "3.n.n.n", "4.-.-.-", "4.1.-.-", "4.1.1.-",
+  "4.1.1.n", "4.1.2.-", "4.1.2.n", "4.1.3.-", "4.1.3.n", "4.1.99.-",
+  "4.1.99.n", "4.1.n.n", "4.2.-.-", "4.2.1.-", "4.2.1.n", "4.2.2.-",
+  "4.2.2.n", "4.2.3.-", "4.2.3.n", "4.2.99.-", "4.2.99.n", "4.2.n.n",
+  "4.3.-.-", "4.3.1.-", "4.3.1.n", "4.3.2.-", "4.3.2.n", "4.3.3.-",
+  "4.3.3.n", "4.3.99.-", "4.3.99.n", "4.3.n.n", "4.4.-.-", "4.4.1.-",
+  "4.4.1.n", "4.4.n.n", "4.5.-.-", "4.5.1.-", "4.5.1.n", "4.5.n.n",
+  "4.6.-.-", "4.6.1.-", "4.6.1.n", "4.6.n.n", "4.99.-.-", "4.99.1.-",
+  "4.99.1.n", "4.99.n.n", "4.n.n.n", "5.-.-.-", "5.1.-.-", "5.1.1.-",
   "5.1.1.n", "5.1.2.-", "5.1.2.n", "5.1.3.-", "5.1.3.n", "5.1.99.-",
-  "5.1.99.n", "5.2.-.-", "5.2.-.n", "5.2.n.n", "5.2.1.-", "5.2.1.n",
-  "5.3.-.-", "5.3.-.n", "5.3.n.n", "5.3.1.-", "5.3.1.n", "5.3.2.-",
-  "5.3.2.n", "5.3.3.-", "5.3.3.n", "5.3.4.-", "5.3.4.n", "5.3.99.-",
-  "5.3.99.n", "5.4.-.-", "5.4.-.n", "5.4.n.n", "5.4.1.-", "5.4.1.n",
-  "5.4.2.-", "5.4.2.n", "5.4.3.-", "5.4.3.n", "5.4.4.-", "5.4.4.n",
-  "5.4.99.-", "5.4.99.n", "5.5.-.-", "5.5.-.n", "5.5.n.n", "5.5.1.-",
-  "5.5.1.n", "5.99.-.-", "5.99.-.n", "5.99.n.n", "5.99.1.-", "5.99.1.n",
-  "6.-.-.-", "6.-.-.n", "6.-.n.n", "6.n.n.n", "6.1.-.-", "6.1.-.n",
-  "6.1.n.n", "6.1.1.-", "6.1.1.n", "6.2.-.-", "6.2.-.n", "6.2.n.n",
-  "6.2.1.-", "6.2.1.n", "6.3.-.-", "6.3.-.n", "6.3.n.n", "6.3.1.-",
-  "6.3.1.n", "6.3.2.-", "6.3.2.n", "6.3.3.-", "6.3.3.n", "6.3.4.-",
-  "6.3.4.n", "6.3.5.-", "6.3.5.n", "6.4.-.-", "6.4.-.n", "6.4.n.n",
-  "6.4.1.-", "6.4.1.n", "6.5.-.-", "6.5.-.n", "6.5.n.n", "6.5.1.-",
-  "6.5.1.n", "6.6.-.-", "6.6.-.n", "6.6.n.n", "6.6.1.-", "6.6.1.n",
+  "5.1.99.n", "5.1.n.n", "5.2.-.-", "5.2.1.-", "5.2.1.n", "5.2.n.n",
+  "5.3.-.-", "5.3.1.-", "5.3.1.n", "5.3.2.-", "5.3.2.n", "5.3.3.-",
+  "5.3.3.n", "5.3.4.-", "5.3.4.n", "5.3.99.-", "5.3.99.n", "5.3.n.n",
+  "5.4.-.-", "5.4.1.-", "5.4.1.n", "5.4.2.-", "5.4.2.n", "5.4.3.-",
+  "5.4.3.n", "5.4.4.-", "5.4.4.n", "5.4.99.-", "5.4.99.n", "5.4.n.n",
+  "5.5.-.-", "5.5.1.-", "5.5.1.n", "5.5.n.n", "5.99.-.-", "5.99.1.-",
+  "5.99.1.n", "5.99.n.n", "5.n.n.n", "6.-.-.-", "6.1.-.-", "6.1.1.-",
+  "6.1.1.n", "6.1.n.n", "6.2.-.-", "6.2.1.-", "6.2.1.n", "6.2.n.n",
+  "6.3.-.-", "6.3.1.-", "6.3.1.n", "6.3.2.-", "6.3.2.n", "6.3.3.-",
+  "6.3.3.n", "6.3.4.-", "6.3.4.n", "6.3.5.-", "6.3.5.n", "6.3.n.n",
+  "6.4.-.-", "6.4.1.-", "6.4.1.n", "6.4.n.n", "6.5.-.-", "6.5.1.-",
+  "6.5.1.n", "6.5.n.n", "6.6.-.-", "6.6.1.-", "6.6.1.n", "6.6.n.n",
+  "6.n.n.n",
   NULL
 };
 
 static CharPtr ecnum_specif [] = {
-  "1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6",
-  "1.1.1.7", "1.1.1.8", "1.1.1.9", "1.1.1.10", "1.1.1.11", "1.1.1.12",
+  "1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.6", "1.1.1.7",
+  "1.1.1.8", "1.1.1.9", "1.1.1.10", "1.1.1.11", "1.1.1.12",
   "1.1.1.13", "1.1.1.14", "1.1.1.15", "1.1.1.16", "1.1.1.17",
   "1.1.1.18", "1.1.1.19", "1.1.1.20", "1.1.1.21", "1.1.1.22",
   "1.1.1.23", "1.1.1.24", "1.1.1.25", "1.1.1.26", "1.1.1.27",
@@ -15875,485 +16681,516 @@ static CharPtr ecnum_specif [] = {
   "1.1.1.282", "1.1.1.283", "1.1.1.284", "1.1.1.285", "1.1.1.286",
   "1.1.1.287", "1.1.1.288", "1.1.1.289", "1.1.1.290", "1.1.1.291",
   "1.1.1.292", "1.1.1.294", "1.1.1.295", "1.1.1.296", "1.1.1.297",
-  "1.1.2.2", "1.1.2.3", "1.1.2.4", "1.1.2.5", "1.1.3.3", "1.1.3.4",
-  "1.1.3.5", "1.1.3.6", "1.1.3.7", "1.1.3.8", "1.1.3.9", "1.1.3.10",
-  "1.1.3.11", "1.1.3.12", "1.1.3.13", "1.1.3.14", "1.1.3.15",
-  "1.1.3.16", "1.1.3.17", "1.1.3.18", "1.1.3.19", "1.1.3.20",
-  "1.1.3.21", "1.1.3.23", "1.1.3.27", "1.1.3.28", "1.1.3.29",
-  "1.1.3.30", "1.1.3.37", "1.1.3.38", "1.1.3.39", "1.1.3.40",
-  "1.1.3.41", "1.1.4.1", "1.1.4.2", "1.1.5.2", "1.1.5.3", "1.1.99.1",
-  "1.1.99.2", "1.1.99.3", "1.1.99.4", "1.1.99.6", "1.1.99.7",
-  "1.1.99.8", "1.1.99.9", "1.1.99.10", "1.1.99.11", "1.1.99.12",
-  "1.1.99.13", "1.1.99.14", "1.1.99.16", "1.1.99.18", "1.1.99.20",
-  "1.1.99.21", "1.1.99.22", "1.1.99.23", "1.1.99.24", "1.1.99.25",
-  "1.1.99.26", "1.1.99.27", "1.1.99.28", "1.1.99.29", "1.1.99.30",
-  "1.1.99.31", "1.1.99.32", "1.2.1.2", "1.2.1.3", "1.2.1.4", "1.2.1.5",
-  "1.2.1.7", "1.2.1.8", "1.2.1.9", "1.2.1.10", "1.2.1.11", "1.2.1.12",
-  "1.2.1.13", "1.2.1.15", "1.2.1.16", "1.2.1.17", "1.2.1.18",
-  "1.2.1.19", "1.2.1.20", "1.2.1.21", "1.2.1.22", "1.2.1.23",
-  "1.2.1.24", "1.2.1.25", "1.2.1.26", "1.2.1.27", "1.2.1.28",
-  "1.2.1.29", "1.2.1.30", "1.2.1.31", "1.2.1.32", "1.2.1.33",
-  "1.2.1.36", "1.2.1.38", "1.2.1.39", "1.2.1.40", "1.2.1.41",
-  "1.2.1.42", "1.2.1.43", "1.2.1.44", "1.2.1.45", "1.2.1.46",
-  "1.2.1.47", "1.2.1.48", "1.2.1.49", "1.2.1.50", "1.2.1.51",
-  "1.2.1.52", "1.2.1.53", "1.2.1.54", "1.2.1.57", "1.2.1.58",
-  "1.2.1.59", "1.2.1.60", "1.2.1.61", "1.2.1.62", "1.2.1.63",
-  "1.2.1.64", "1.2.1.65", "1.2.1.66", "1.2.1.67", "1.2.1.68",
-  "1.2.1.69", "1.2.1.70", "1.2.1.71", "1.2.1.72", "1.2.1.73", "1.2.2.1",
-  "1.2.2.2", "1.2.2.3", "1.2.2.4", "1.2.3.1", "1.2.3.3", "1.2.3.4",
-  "1.2.3.5", "1.2.3.6", "1.2.3.7", "1.2.3.8", "1.2.3.9", "1.2.3.11",
-  "1.2.3.13", "1.2.3.14", "1.2.4.1", "1.2.4.2", "1.2.4.4", "1.2.7.1",
-  "1.2.7.2", "1.2.7.3", "1.2.7.4", "1.2.7.5", "1.2.7.6", "1.2.7.7",
-  "1.2.7.8", "1.2.99.2", "1.2.99.3", "1.2.99.4", "1.2.99.5", "1.2.99.6",
-  "1.2.99.7", "1.3.1.1", "1.3.1.2", "1.3.1.3", "1.3.1.4", "1.3.1.5",
-  "1.3.1.6", "1.3.1.7", "1.3.1.8", "1.3.1.9", "1.3.1.10", "1.3.1.11",
-  "1.3.1.12", "1.3.1.13", "1.3.1.14", "1.3.1.15", "1.3.1.16",
-  "1.3.1.17", "1.3.1.18", "1.3.1.19", "1.3.1.20", "1.3.1.21",
-  "1.3.1.22", "1.3.1.24", "1.3.1.25", "1.3.1.26", "1.3.1.27",
-  "1.3.1.28", "1.3.1.29", "1.3.1.30", "1.3.1.31", "1.3.1.32",
-  "1.3.1.33", "1.3.1.34", "1.3.1.35", "1.3.1.36", "1.3.1.37",
-  "1.3.1.38", "1.3.1.39", "1.3.1.40", "1.3.1.41", "1.3.1.42",
-  "1.3.1.43", "1.3.1.44", "1.3.1.45", "1.3.1.46", "1.3.1.47",
-  "1.3.1.48", "1.3.1.49", "1.3.1.51", "1.3.1.52", "1.3.1.53",
-  "1.3.1.54", "1.3.1.56", "1.3.1.57", "1.3.1.58", "1.3.1.60",
-  "1.3.1.62", "1.3.1.63", "1.3.1.64", "1.3.1.65", "1.3.1.66",
-  "1.3.1.67", "1.3.1.68", "1.3.1.69", "1.3.1.70", "1.3.1.71",
-  "1.3.1.72", "1.3.1.73", "1.3.1.74", "1.3.1.75", "1.3.1.76",
-  "1.3.1.77", "1.3.1.78", "1.3.1.79", "1.3.1.80", "1.3.1.81",
-  "1.3.1.82", "1.3.2.3", "1.3.3.1", "1.3.3.3", "1.3.3.4", "1.3.3.5",
-  "1.3.3.6", "1.3.3.7", "1.3.3.8", "1.3.3.9", "1.3.3.10", "1.3.3.11",
-  "1.3.3.12", "1.3.5.1", "1.3.5.2", "1.3.7.1", "1.3.7.2", "1.3.7.3",
-  "1.3.7.4", "1.3.7.5", "1.3.7.6", "1.3.99.1", "1.3.99.2", "1.3.99.3",
-  "1.3.99.4", "1.3.99.5", "1.3.99.6", "1.3.99.7", "1.3.99.8",
-  "1.3.99.10", "1.3.99.12", "1.3.99.13", "1.3.99.14", "1.3.99.15",
-  "1.3.99.16", "1.3.99.17", "1.3.99.18", "1.3.99.19", "1.3.99.20",
-  "1.3.99.21", "1.3.99.22", "1.3.99.23", "1.3.99.24", "1.3.99.25",
-  "1.4.1.1", "1.4.1.2", "1.4.1.3", "1.4.1.4", "1.4.1.5", "1.4.1.7",
-  "1.4.1.8", "1.4.1.9", "1.4.1.10", "1.4.1.11", "1.4.1.12", "1.4.1.13",
-  "1.4.1.14", "1.4.1.15", "1.4.1.16", "1.4.1.17", "1.4.1.18",
-  "1.4.1.19", "1.4.1.20", "1.4.1.21", "1.4.2.1", "1.4.3.1", "1.4.3.2",
-  "1.4.3.3", "1.4.3.4", "1.4.3.5", "1.4.3.7", "1.4.3.8", "1.4.3.10",
-  "1.4.3.11", "1.4.3.12", "1.4.3.13", "1.4.3.14", "1.4.3.15",
-  "1.4.3.16", "1.4.3.19", "1.4.3.20", "1.4.3.21", "1.4.3.22", "1.4.4.2",
-  "1.4.7.1", "1.4.99.1", "1.4.99.2", "1.4.99.3", "1.4.99.4", "1.4.99.5",
+  "1.1.1.298", "1.1.1.299", "1.1.1.300", "1.1.1.301", "1.1.1.302",
+  "1.1.1.303", "1.1.1.304", "1.1.2.2", "1.1.2.3", "1.1.2.4",
+  "1.1.2.5", "1.1.3.3", "1.1.3.4", "1.1.3.5", "1.1.3.6", "1.1.3.7",
+  "1.1.3.8", "1.1.3.9", "1.1.3.10", "1.1.3.11", "1.1.3.12",
+  "1.1.3.13", "1.1.3.14", "1.1.3.15", "1.1.3.16", "1.1.3.17",
+  "1.1.3.18", "1.1.3.19", "1.1.3.20", "1.1.3.21", "1.1.3.23",
+  "1.1.3.27", "1.1.3.28", "1.1.3.29", "1.1.3.30", "1.1.3.37",
+  "1.1.3.38", "1.1.3.39", "1.1.3.40", "1.1.3.41", "1.1.4.1",
+  "1.1.4.2", "1.1.5.2", "1.1.5.3", "1.1.5.4", "1.1.5.5", "1.1.5.6",
+  "1.1.5.7", "1.1.99.1", "1.1.99.2", "1.1.99.3", "1.1.99.4",
+  "1.1.99.6", "1.1.99.7", "1.1.99.8", "1.1.99.9", "1.1.99.10",
+  "1.1.99.11", "1.1.99.12", "1.1.99.13", "1.1.99.14", "1.1.99.18",
+  "1.1.99.20", "1.1.99.21", "1.1.99.22", "1.1.99.23", "1.1.99.24",
+  "1.1.99.25", "1.1.99.26", "1.1.99.27", "1.1.99.28", "1.1.99.29",
+  "1.1.99.30", "1.1.99.31", "1.1.99.32", "1.1.99.33", "1.2.1.2",
+  "1.2.1.3", "1.2.1.4", "1.2.1.5", "1.2.1.7", "1.2.1.8", "1.2.1.9",
+  "1.2.1.10", "1.2.1.11", "1.2.1.12", "1.2.1.13", "1.2.1.15",
+  "1.2.1.16", "1.2.1.17", "1.2.1.18", "1.2.1.19", "1.2.1.20",
+  "1.2.1.21", "1.2.1.22", "1.2.1.23", "1.2.1.24", "1.2.1.25",
+  "1.2.1.26", "1.2.1.27", "1.2.1.28", "1.2.1.29", "1.2.1.30",
+  "1.2.1.31", "1.2.1.32", "1.2.1.33", "1.2.1.36", "1.2.1.38",
+  "1.2.1.39", "1.2.1.40", "1.2.1.41", "1.2.1.42", "1.2.1.43",
+  "1.2.1.44", "1.2.1.45", "1.2.1.46", "1.2.1.47", "1.2.1.48",
+  "1.2.1.49", "1.2.1.50", "1.2.1.51", "1.2.1.52", "1.2.1.53",
+  "1.2.1.54", "1.2.1.57", "1.2.1.58", "1.2.1.59", "1.2.1.60",
+  "1.2.1.61", "1.2.1.62", "1.2.1.63", "1.2.1.64", "1.2.1.65",
+  "1.2.1.66", "1.2.1.67", "1.2.1.68", "1.2.1.69", "1.2.1.70",
+  "1.2.1.71", "1.2.1.72", "1.2.1.73", "1.2.1.74", "1.2.1.75",
+  "1.2.1.76", "1.2.1.77", "1.2.1.78", "1.2.2.1", "1.2.2.2", "1.2.2.3",
+  "1.2.2.4", "1.2.3.1", "1.2.3.3", "1.2.3.4", "1.2.3.5", "1.2.3.6",
+  "1.2.3.7", "1.2.3.8", "1.2.3.9", "1.2.3.11", "1.2.3.13", "1.2.3.14",
+  "1.2.4.1", "1.2.4.2", "1.2.4.4", "1.2.7.1", "1.2.7.2", "1.2.7.3",
+  "1.2.7.4", "1.2.7.5", "1.2.7.6", "1.2.7.7", "1.2.7.8", "1.2.99.2",
+  "1.2.99.3", "1.2.99.4", "1.2.99.5", "1.2.99.6", "1.2.99.7",
+  "1.3.1.1", "1.3.1.2", "1.3.1.3", "1.3.1.4", "1.3.1.5", "1.3.1.6",
+  "1.3.1.7", "1.3.1.8", "1.3.1.9", "1.3.1.10", "1.3.1.11", "1.3.1.12",
+  "1.3.1.13", "1.3.1.14", "1.3.1.15", "1.3.1.16", "1.3.1.17",
+  "1.3.1.18", "1.3.1.19", "1.3.1.20", "1.3.1.21", "1.3.1.22",
+  "1.3.1.24", "1.3.1.25", "1.3.1.26", "1.3.1.27", "1.3.1.28",
+  "1.3.1.29", "1.3.1.30", "1.3.1.31", "1.3.1.32", "1.3.1.33",
+  "1.3.1.34", "1.3.1.35", "1.3.1.36", "1.3.1.37", "1.3.1.38",
+  "1.3.1.39", "1.3.1.40", "1.3.1.41", "1.3.1.42", "1.3.1.43",
+  "1.3.1.44", "1.3.1.45", "1.3.1.46", "1.3.1.47", "1.3.1.48",
+  "1.3.1.49", "1.3.1.51", "1.3.1.52", "1.3.1.53", "1.3.1.54",
+  "1.3.1.56", "1.3.1.57", "1.3.1.58", "1.3.1.60", "1.3.1.62",
+  "1.3.1.63", "1.3.1.64", "1.3.1.65", "1.3.1.66", "1.3.1.67",
+  "1.3.1.68", "1.3.1.69", "1.3.1.70", "1.3.1.71", "1.3.1.72",
+  "1.3.1.73", "1.3.1.74", "1.3.1.75", "1.3.1.76", "1.3.1.77",
+  "1.3.1.78", "1.3.1.79", "1.3.1.80", "1.3.1.81", "1.3.1.82",
+  "1.3.1.83", "1.3.1.84", "1.3.2.3", "1.3.3.1", "1.3.3.3", "1.3.3.4",
+  "1.3.3.5", "1.3.3.6", "1.3.3.7", "1.3.3.8", "1.3.3.9", "1.3.3.10",
+  "1.3.3.11", "1.3.3.12", "1.3.5.1", "1.3.5.2", "1.3.7.1", "1.3.7.2",
+  "1.3.7.3", "1.3.7.4", "1.3.7.5", "1.3.7.6", "1.3.99.1", "1.3.99.2",
+  "1.3.99.3", "1.3.99.4", "1.3.99.5", "1.3.99.6", "1.3.99.7",
+  "1.3.99.8", "1.3.99.10", "1.3.99.12", "1.3.99.13", "1.3.99.14",
+  "1.3.99.15", "1.3.99.16", "1.3.99.17", "1.3.99.18", "1.3.99.19",
+  "1.3.99.20", "1.3.99.21", "1.3.99.22", "1.3.99.23", "1.3.99.24",
+  "1.3.99.25", "1.4.1.1", "1.4.1.2", "1.4.1.3", "1.4.1.4", "1.4.1.5",
+  "1.4.1.7", "1.4.1.8", "1.4.1.9", "1.4.1.10", "1.4.1.11", "1.4.1.12",
+  "1.4.1.13", "1.4.1.14", "1.4.1.15", "1.4.1.16", "1.4.1.17",
+  "1.4.1.18", "1.4.1.19", "1.4.1.20", "1.4.1.21", "1.4.2.1",
+  "1.4.3.1", "1.4.3.2", "1.4.3.3", "1.4.3.4", "1.4.3.5", "1.4.3.7",
+  "1.4.3.8", "1.4.3.10", "1.4.3.11", "1.4.3.12", "1.4.3.13",
+  "1.4.3.14", "1.4.3.15", "1.4.3.16", "1.4.3.19", "1.4.3.20",
+  "1.4.3.21", "1.4.3.22", "1.4.3.23", "1.4.4.2", "1.4.5.1", "1.4.7.1",
+  "1.4.99.1", "1.4.99.2", "1.4.99.3", "1.4.99.4", "1.4.99.5",
   "1.5.1.1", "1.5.1.2", "1.5.1.3", "1.5.1.5", "1.5.1.6", "1.5.1.7",
-  "1.5.1.8", "1.5.1.9", "1.5.1.10", "1.5.1.11", "1.5.1.12", "1.5.1.15",
-  "1.5.1.16", "1.5.1.17", "1.5.1.18", "1.5.1.19", "1.5.1.20",
-  "1.5.1.21", "1.5.1.22", "1.5.1.23", "1.5.1.24", "1.5.1.25",
-  "1.5.1.26", "1.5.1.27", "1.5.1.28", "1.5.1.29", "1.5.1.30",
-  "1.5.1.31", "1.5.1.32", "1.5.1.33", "1.5.1.34", "1.5.3.1", "1.5.3.2",
-  "1.5.3.4", "1.5.3.5", "1.5.3.6", "1.5.3.7", "1.5.3.10", "1.5.3.11",
-  "1.5.3.12", "1.5.4.1", "1.5.5.1", "1.5.7.1", "1.5.8.1", "1.5.8.2",
-  "1.5.99.1", "1.5.99.2", "1.5.99.3", "1.5.99.4", "1.5.99.5",
-  "1.5.99.6", "1.5.99.8", "1.5.99.9", "1.5.99.11", "1.5.99.12",
-  "1.6.1.1", "1.6.1.2", "1.6.2.2", "1.6.2.4", "1.6.2.5", "1.6.2.6",
-  "1.6.3.1", "1.6.5.2", "1.6.5.3", "1.6.5.4", "1.6.5.5", "1.6.5.6",
-  "1.6.5.7", "1.6.6.9", "1.6.99.1", "1.6.99.3", "1.6.99.5", "1.6.99.6",
-  "1.7.1.1", "1.7.1.2", "1.7.1.3", "1.7.1.4", "1.7.1.5", "1.7.1.6",
-  "1.7.1.7", "1.7.1.9", "1.7.1.10", "1.7.1.11", "1.7.1.12", "1.7.1.13",
+  "1.5.1.8", "1.5.1.9", "1.5.1.10", "1.5.1.11", "1.5.1.12",
+  "1.5.1.15", "1.5.1.16", "1.5.1.17", "1.5.1.18", "1.5.1.19",
+  "1.5.1.20", "1.5.1.21", "1.5.1.22", "1.5.1.23", "1.5.1.24",
+  "1.5.1.25", "1.5.1.26", "1.5.1.27", "1.5.1.28", "1.5.1.29",
+  "1.5.1.30", "1.5.1.31", "1.5.1.32", "1.5.1.33", "1.5.1.34",
+  "1.5.3.1", "1.5.3.2", "1.5.3.4", "1.5.3.5", "1.5.3.6", "1.5.3.7",
+  "1.5.3.10", "1.5.3.11", "1.5.3.12", "1.5.3.13", "1.5.3.14",
+  "1.5.3.15", "1.5.3.16", "1.5.3.17", "1.5.4.1", "1.5.5.1", "1.5.7.1",
+  "1.5.8.1", "1.5.8.2", "1.5.99.1", "1.5.99.2", "1.5.99.3",
+  "1.5.99.4", "1.5.99.5", "1.5.99.6", "1.5.99.8", "1.5.99.9",
+  "1.5.99.11", "1.5.99.12", "1.5.99.13", "1.6.1.1", "1.6.1.2",
+  "1.6.2.2", "1.6.2.4", "1.6.2.5", "1.6.2.6", "1.6.3.1", "1.6.5.2",
+  "1.6.5.3", "1.6.5.4", "1.6.5.5", "1.6.5.6", "1.6.5.7", "1.6.6.9",
+  "1.6.99.1", "1.6.99.3", "1.6.99.5", "1.6.99.6", "1.7.1.1",
+  "1.7.1.2", "1.7.1.3", "1.7.1.4", "1.7.1.5", "1.7.1.6", "1.7.1.7",
+  "1.7.1.9", "1.7.1.10", "1.7.1.11", "1.7.1.12", "1.7.1.13",
   "1.7.2.1", "1.7.2.2", "1.7.2.3", "1.7.3.1", "1.7.3.2", "1.7.3.3",
-  "1.7.3.4", "1.7.3.5", "1.7.7.1", "1.7.7.2", "1.7.99.1", "1.7.99.4",
-  "1.7.99.6", "1.7.99.7", "1.7.99.8", "1.8.1.2", "1.8.1.3", "1.8.1.4",
-  "1.8.1.5", "1.8.1.6", "1.8.1.7", "1.8.1.8", "1.8.1.9", "1.8.1.10",
-  "1.8.1.11", "1.8.1.12", "1.8.1.13", "1.8.1.14", "1.8.1.15", "1.8.2.1",
-  "1.8.2.2", "1.8.3.1", "1.8.3.2", "1.8.3.3", "1.8.3.4", "1.8.3.5",
-  "1.8.4.1", "1.8.4.2", "1.8.4.3", "1.8.4.4", "1.8.4.7", "1.8.4.8",
-  "1.8.4.9", "1.8.4.10", "1.8.4.11", "1.8.4.12", "1.8.4.13", "1.8.4.14",
-  "1.8.5.1", "1.8.5.2", "1.8.7.1", "1.8.98.1", "1.8.98.2", "1.8.99.1",
-  "1.8.99.2", "1.8.99.3", "1.9.3.1", "1.9.6.1", "1.9.99.1", "1.10.1.1",
-  "1.10.2.1", "1.10.2.2", "1.10.3.1", "1.10.3.2", "1.10.3.3",
-  "1.10.3.4", "1.10.3.5", "1.10.3.6", "1.10.99.1", "1.10.99.2",
-  "1.10.99.3", "1.11.1.1", "1.11.1.2", "1.11.1.3", "1.11.1.5",
-  "1.11.1.6", "1.11.1.7", "1.11.1.8", "1.11.1.9", "1.11.1.10",
-  "1.11.1.11", "1.11.1.12", "1.11.1.13", "1.11.1.14", "1.11.1.15",
-  "1.11.1.16", "1.12.1.2", "1.12.1.3", "1.12.2.1", "1.12.5.1",
-  "1.12.7.2", "1.12.98.1", "1.12.98.2", "1.12.98.3", "1.12.99.6",
-  "1.13.11.1", "1.13.11.2", "1.13.11.3", "1.13.11.4", "1.13.11.5",
-  "1.13.11.6", "1.13.11.8", "1.13.11.9", "1.13.11.10", "1.13.11.11",
-  "1.13.11.12", "1.13.11.13", "1.13.11.14", "1.13.11.15", "1.13.11.16",
-  "1.13.11.17", "1.13.11.18", "1.13.11.19", "1.13.11.20", "1.13.11.22",
-  "1.13.11.23", "1.13.11.24", "1.13.11.25", "1.13.11.26", "1.13.11.27",
-  "1.13.11.28", "1.13.11.29", "1.13.11.30", "1.13.11.31", "1.13.11.32",
-  "1.13.11.33", "1.13.11.34", "1.13.11.35", "1.13.11.36", "1.13.11.37",
-  "1.13.11.38", "1.13.11.39", "1.13.11.40", "1.13.11.41", "1.13.11.43",
-  "1.13.11.44", "1.13.11.45", "1.13.11.46", "1.13.11.47", "1.13.11.48",
-  "1.13.11.49", "1.13.11.50", "1.13.11.51", "1.13.11.52", "1.13.11.53",
-  "1.13.11.54", "1.13.11.55", "1.13.12.1", "1.13.12.2", "1.13.12.3",
-  "1.13.12.4", "1.13.12.5", "1.13.12.6", "1.13.12.7", "1.13.12.8",
-  "1.13.12.9", "1.13.12.12", "1.13.12.13", "1.13.12.14", "1.13.12.15",
-  "1.13.99.1", "1.13.99.3", "1.14.11.1", "1.14.11.2", "1.14.11.3",
-  "1.14.11.4", "1.14.11.6", "1.14.11.7", "1.14.11.8", "1.14.11.9",
-  "1.14.11.10", "1.14.11.11", "1.14.11.12", "1.14.11.13", "1.14.11.14",
-  "1.14.11.15", "1.14.11.16", "1.14.11.17", "1.14.11.18", "1.14.11.19",
-  "1.14.11.20", "1.14.11.21", "1.14.11.22", "1.14.11.23", "1.14.11.24",
-  "1.14.11.25", "1.14.11.26", "1.14.11.27", "1.14.11.28", "1.14.12.1",
-  "1.14.12.3", "1.14.12.4", "1.14.12.5", "1.14.12.7", "1.14.12.8",
-  "1.14.12.9", "1.14.12.10", "1.14.12.11", "1.14.12.12", "1.14.12.13",
-  "1.14.12.14", "1.14.12.15", "1.14.12.16", "1.14.12.17", "1.14.12.18",
-  "1.14.12.19", "1.14.12.20", "1.14.13.1", "1.14.13.2", "1.14.13.3",
-  "1.14.13.4", "1.14.13.5", "1.14.13.6", "1.14.13.7", "1.14.13.8",
-  "1.14.13.9", "1.14.13.10", "1.14.13.11", "1.14.13.12", "1.14.13.13",
-  "1.14.13.14", "1.14.13.15", "1.14.13.16", "1.14.13.17", "1.14.13.18",
-  "1.14.13.19", "1.14.13.20", "1.14.13.21", "1.14.13.22", "1.14.13.23",
-  "1.14.13.24", "1.14.13.25", "1.14.13.26", "1.14.13.27", "1.14.13.28",
-  "1.14.13.29", "1.14.13.30", "1.14.13.31", "1.14.13.32", "1.14.13.33",
-  "1.14.13.34", "1.14.13.35", "1.14.13.36", "1.14.13.37", "1.14.13.38",
-  "1.14.13.39", "1.14.13.40", "1.14.13.41", "1.14.13.42", "1.14.13.43",
-  "1.14.13.44", "1.14.13.46", "1.14.13.47", "1.14.13.48", "1.14.13.49",
-  "1.14.13.50", "1.14.13.51", "1.14.13.52", "1.14.13.53", "1.14.13.54",
-  "1.14.13.55", "1.14.13.56", "1.14.13.57", "1.14.13.58", "1.14.13.59",
-  "1.14.13.60", "1.14.13.61", "1.14.13.62", "1.14.13.63", "1.14.13.64",
-  "1.14.13.66", "1.14.13.67", "1.14.13.68", "1.14.13.69", "1.14.13.70",
-  "1.14.13.71", "1.14.13.72", "1.14.13.73", "1.14.13.74", "1.14.13.75",
-  "1.14.13.76", "1.14.13.77", "1.14.13.78", "1.14.13.79", "1.14.13.80",
-  "1.14.13.81", "1.14.13.82", "1.14.13.83", "1.14.13.84", "1.14.13.85",
-  "1.14.13.86", "1.14.13.87", "1.14.13.88", "1.14.13.89", "1.14.13.90",
-  "1.14.13.91", "1.14.13.92", "1.14.13.93", "1.14.13.94", "1.14.13.95",
-  "1.14.13.96", "1.14.13.97", "1.14.13.98", "1.14.13.99", "1.14.13.100",
-  "1.14.13.101", "1.14.13.102", "1.14.13.103", "1.14.13.104",
-  "1.14.13.105", "1.14.13.106", "1.14.13.107", "1.14.14.1", "1.14.14.3",
-  "1.14.14.5", "1.14.14.6", "1.14.15.1", "1.14.15.2", "1.14.15.3",
-  "1.14.15.4", "1.14.15.5", "1.14.15.6", "1.14.15.7", "1.14.16.1",
-  "1.14.16.2", "1.14.16.3", "1.14.16.4", "1.14.16.5", "1.14.16.6",
-  "1.14.17.1", "1.14.17.3", "1.14.17.4", "1.14.18.1", "1.14.18.2",
-  "1.14.19.1", "1.14.19.2", "1.14.19.3", "1.14.19.4", "1.14.19.5",
-  "1.14.19.6", "1.14.20.1", "1.14.21.1", "1.14.21.2", "1.14.21.3",
-  "1.14.21.4", "1.14.21.5", "1.14.21.6", "1.14.21.7", "1.14.99.1",
-  "1.14.99.2", "1.14.99.3", "1.14.99.4", "1.14.99.7", "1.14.99.9",
-  "1.14.99.10", "1.14.99.11", "1.14.99.12", "1.14.99.14", "1.14.99.15",
-  "1.14.99.19", "1.14.99.20", "1.14.99.21", "1.14.99.22", "1.14.99.23",
-  "1.14.99.24", "1.14.99.26", "1.14.99.27", "1.14.99.28", "1.14.99.29",
-  "1.14.99.30", "1.14.99.31", "1.14.99.32", "1.14.99.33", "1.14.99.34",
-  "1.14.99.35", "1.14.99.36", "1.14.99.37", "1.14.99.38", "1.15.1.1",
-  "1.15.1.2", "1.16.1.1", "1.16.1.2", "1.16.1.3", "1.16.1.4",
-  "1.16.1.5", "1.16.1.6", "1.16.1.7", "1.16.1.8", "1.16.3.1",
-  "1.16.8.1", "1.17.1.1", "1.17.1.2", "1.17.1.3", "1.17.1.4",
-  "1.17.1.5", "1.17.3.1", "1.17.3.2", "1.17.3.3", "1.17.4.1",
-  "1.17.4.2", "1.17.5.1", "1.17.7.1", "1.17.99.1", "1.17.99.2",
-  "1.17.99.3", "1.17.99.4", "1.17.99.5", "1.18.1.1", "1.18.1.2",
-  "1.18.1.3", "1.18.1.4", "1.18.6.1", "1.19.6.1", "1.20.1.1",
-  "1.20.4.1", "1.20.4.2", "1.20.98.1", "1.20.99.1", "1.21.3.1",
+  "1.7.3.4", "1.7.3.5", "1.7.5.1", "1.7.7.1", "1.7.7.2", "1.7.99.1",
+  "1.7.99.4", "1.7.99.6", "1.7.99.7", "1.7.99.8", "1.8.1.2",
+  "1.8.1.3", "1.8.1.4", "1.8.1.5", "1.8.1.6", "1.8.1.7", "1.8.1.8",
+  "1.8.1.9", "1.8.1.10", "1.8.1.11", "1.8.1.12", "1.8.1.13",
+  "1.8.1.14", "1.8.1.15", "1.8.1.16", "1.8.2.1", "1.8.2.2", "1.8.3.1",
+  "1.8.3.2", "1.8.3.3", "1.8.3.4", "1.8.3.5", "1.8.4.1", "1.8.4.2",
+  "1.8.4.3", "1.8.4.4", "1.8.4.7", "1.8.4.8", "1.8.4.9", "1.8.4.10",
+  "1.8.4.11", "1.8.4.12", "1.8.4.13", "1.8.4.14", "1.8.5.1",
+  "1.8.5.2", "1.8.7.1", "1.8.98.1", "1.8.98.2", "1.8.99.1",
+  "1.8.99.2", "1.8.99.3", "1.9.3.1", "1.9.6.1", "1.9.99.1",
+  "1.10.1.1", "1.10.2.1", "1.10.2.2", "1.10.3.1", "1.10.3.2",
+  "1.10.3.3", "1.10.3.4", "1.10.3.5", "1.10.3.6", "1.10.99.1",
+  "1.10.99.2", "1.10.99.3", "1.11.1.1", "1.11.1.2", "1.11.1.3",
+  "1.11.1.5", "1.11.1.6", "1.11.1.7", "1.11.1.8", "1.11.1.9",
+  "1.11.1.10", "1.11.1.11", "1.11.1.12", "1.11.1.13", "1.11.1.14",
+  "1.11.1.15", "1.11.1.16", "1.11.1.17", "1.12.1.2", "1.12.1.3",
+  "1.12.2.1", "1.12.5.1", "1.12.7.2", "1.12.98.1", "1.12.98.2",
+  "1.12.98.3", "1.12.99.6", "1.13.11.1", "1.13.11.2", "1.13.11.3",
+  "1.13.11.4", "1.13.11.5", "1.13.11.6", "1.13.11.8", "1.13.11.9",
+  "1.13.11.10", "1.13.11.11", "1.13.11.12", "1.13.11.13",
+  "1.13.11.14", "1.13.11.15", "1.13.11.16", "1.13.11.17",
+  "1.13.11.18", "1.13.11.19", "1.13.11.20", "1.13.11.22",
+  "1.13.11.23", "1.13.11.24", "1.13.11.25", "1.13.11.26",
+  "1.13.11.27", "1.13.11.28", "1.13.11.29", "1.13.11.30",
+  "1.13.11.31", "1.13.11.33", "1.13.11.34", "1.13.11.35",
+  "1.13.11.36", "1.13.11.37", "1.13.11.38", "1.13.11.39",
+  "1.13.11.40", "1.13.11.41", "1.13.11.43", "1.13.11.44",
+  "1.13.11.45", "1.13.11.46", "1.13.11.47", "1.13.11.48",
+  "1.13.11.49", "1.13.11.50", "1.13.11.51", "1.13.11.52",
+  "1.13.11.53", "1.13.11.54", "1.13.11.55", "1.13.11.56", "1.13.12.1",
+  "1.13.12.2", "1.13.12.3", "1.13.12.4", "1.13.12.5", "1.13.12.6",
+  "1.13.12.7", "1.13.12.8", "1.13.12.9", "1.13.12.12", "1.13.12.13",
+  "1.13.12.14", "1.13.12.15", "1.13.12.16", "1.13.12.17", "1.13.99.1",
+  "1.13.99.3", "1.14.11.1", "1.14.11.2", "1.14.11.3", "1.14.11.4",
+  "1.14.11.6", "1.14.11.7", "1.14.11.8", "1.14.11.9", "1.14.11.10",
+  "1.14.11.11", "1.14.11.12", "1.14.11.13", "1.14.11.14",
+  "1.14.11.15", "1.14.11.16", "1.14.11.17", "1.14.11.18",
+  "1.14.11.19", "1.14.11.20", "1.14.11.21", "1.14.11.22",
+  "1.14.11.23", "1.14.11.24", "1.14.11.25", "1.14.11.26",
+  "1.14.11.27", "1.14.11.28", "1.14.12.1", "1.14.12.3", "1.14.12.4",
+  "1.14.12.5", "1.14.12.7", "1.14.12.8", "1.14.12.9", "1.14.12.10",
+  "1.14.12.11", "1.14.12.12", "1.14.12.13", "1.14.12.14",
+  "1.14.12.15", "1.14.12.16", "1.14.12.17", "1.14.12.18",
+  "1.14.12.19", "1.14.12.20", "1.14.12.21", "1.14.13.1", "1.14.13.2",
+  "1.14.13.3", "1.14.13.4", "1.14.13.5", "1.14.13.6", "1.14.13.7",
+  "1.14.13.8", "1.14.13.9", "1.14.13.10", "1.14.13.11", "1.14.13.12",
+  "1.14.13.13", "1.14.13.14", "1.14.13.15", "1.14.13.16",
+  "1.14.13.17", "1.14.13.18", "1.14.13.19", "1.14.13.20",
+  "1.14.13.21", "1.14.13.22", "1.14.13.23", "1.14.13.24",
+  "1.14.13.25", "1.14.13.26", "1.14.13.27", "1.14.13.28",
+  "1.14.13.29", "1.14.13.30", "1.14.13.31", "1.14.13.32",
+  "1.14.13.33", "1.14.13.34", "1.14.13.35", "1.14.13.36",
+  "1.14.13.37", "1.14.13.38", "1.14.13.39", "1.14.13.40",
+  "1.14.13.41", "1.14.13.42", "1.14.13.43", "1.14.13.44",
+  "1.14.13.46", "1.14.13.47", "1.14.13.48", "1.14.13.49",
+  "1.14.13.50", "1.14.13.51", "1.14.13.52", "1.14.13.53",
+  "1.14.13.54", "1.14.13.55", "1.14.13.56", "1.14.13.57",
+  "1.14.13.58", "1.14.13.59", "1.14.13.60", "1.14.13.61",
+  "1.14.13.62", "1.14.13.63", "1.14.13.64", "1.14.13.66",
+  "1.14.13.67", "1.14.13.68", "1.14.13.69", "1.14.13.70",
+  "1.14.13.71", "1.14.13.72", "1.14.13.73", "1.14.13.74",
+  "1.14.13.75", "1.14.13.76", "1.14.13.77", "1.14.13.78",
+  "1.14.13.79", "1.14.13.80", "1.14.13.81", "1.14.13.82",
+  "1.14.13.83", "1.14.13.84", "1.14.13.85", "1.14.13.86",
+  "1.14.13.87", "1.14.13.88", "1.14.13.89", "1.14.13.90",
+  "1.14.13.91", "1.14.13.92", "1.14.13.93", "1.14.13.94",
+  "1.14.13.95", "1.14.13.96", "1.14.13.97", "1.14.13.98",
+  "1.14.13.99", "1.14.13.100", "1.14.13.101", "1.14.13.102",
+  "1.14.13.103", "1.14.13.104", "1.14.13.105", "1.14.13.106",
+  "1.14.13.107", "1.14.13.108", "1.14.13.109", "1.14.13.110",
+  "1.14.13.111", "1.14.13.112", "1.14.13.113", "1.14.14.1",
+  "1.14.14.3", "1.14.14.5", "1.14.14.7", "1.14.15.1", "1.14.15.2",
+  "1.14.15.3", "1.14.15.4", "1.14.15.5", "1.14.15.6", "1.14.15.7",
+  "1.14.15.8", "1.14.16.1", "1.14.16.2", "1.14.16.3", "1.14.16.4",
+  "1.14.16.5", "1.14.16.6", "1.14.17.1", "1.14.17.3", "1.14.17.4",
+  "1.14.18.1", "1.14.18.2", "1.14.19.1", "1.14.19.2", "1.14.19.3",
+  "1.14.19.4", "1.14.19.5", "1.14.19.6", "1.14.20.1", "1.14.21.1",
+  "1.14.21.2", "1.14.21.3", "1.14.21.4", "1.14.21.5", "1.14.21.6",
+  "1.14.21.7", "1.14.99.1", "1.14.99.2", "1.14.99.3", "1.14.99.4",
+  "1.14.99.7", "1.14.99.9", "1.14.99.10", "1.14.99.11", "1.14.99.12",
+  "1.14.99.14", "1.14.99.15", "1.14.99.19", "1.14.99.20",
+  "1.14.99.21", "1.14.99.22", "1.14.99.23", "1.14.99.24",
+  "1.14.99.26", "1.14.99.27", "1.14.99.28", "1.14.99.29",
+  "1.14.99.30", "1.14.99.31", "1.14.99.32", "1.14.99.33",
+  "1.14.99.34", "1.14.99.35", "1.14.99.36", "1.14.99.37",
+  "1.14.99.38", "1.14.99.39", "1.14.99.40", "1.15.1.1", "1.15.1.2",
+  "1.16.1.1", "1.16.1.2", "1.16.1.3", "1.16.1.4", "1.16.1.5",
+  "1.16.1.6", "1.16.1.7", "1.16.1.8", "1.16.3.1", "1.16.8.1",
+  "1.17.1.1", "1.17.1.2", "1.17.1.3", "1.17.1.4", "1.17.1.5",
+  "1.17.3.1", "1.17.3.2", "1.17.3.3", "1.17.4.1", "1.17.4.2",
+  "1.17.5.1", "1.17.7.1", "1.17.99.1", "1.17.99.2", "1.17.99.3",
+  "1.17.99.4", "1.17.99.5", "1.18.1.1", "1.18.1.2", "1.18.1.3",
+  "1.18.1.4", "1.18.6.1", "1.19.6.1", "1.20.1.1", "1.20.4.1",
+  "1.20.4.2", "1.20.4.3", "1.20.98.1", "1.20.99.1", "1.21.3.1",
   "1.21.3.2", "1.21.3.3", "1.21.3.4", "1.21.3.5", "1.21.3.6",
   "1.21.4.1", "1.21.4.2", "1.21.4.3", "1.21.4.4", "1.21.99.1",
-  "1.97.1.1", "1.97.1.2", "1.97.1.3", "1.97.1.4", "1.97.1.8",
-  "1.97.1.9", "1.97.1.10", "1.97.1.11", "2.1.1.1", "2.1.1.2", "2.1.1.3",
-  "2.1.1.4", "2.1.1.5", "2.1.1.6", "2.1.1.7", "2.1.1.8", "2.1.1.9",
-  "2.1.1.10", "2.1.1.11", "2.1.1.12", "2.1.1.13", "2.1.1.14",
-  "2.1.1.15", "2.1.1.16", "2.1.1.17", "2.1.1.18", "2.1.1.19",
-  "2.1.1.20", "2.1.1.21", "2.1.1.22", "2.1.1.25", "2.1.1.26",
-  "2.1.1.27", "2.1.1.28", "2.1.1.29", "2.1.1.31", "2.1.1.32",
-  "2.1.1.33", "2.1.1.34", "2.1.1.35", "2.1.1.36", "2.1.1.37",
-  "2.1.1.38", "2.1.1.39", "2.1.1.40", "2.1.1.41", "2.1.1.42",
-  "2.1.1.43", "2.1.1.44", "2.1.1.45", "2.1.1.46", "2.1.1.47",
-  "2.1.1.48", "2.1.1.49", "2.1.1.50", "2.1.1.51", "2.1.1.52",
-  "2.1.1.53", "2.1.1.54", "2.1.1.55", "2.1.1.56", "2.1.1.57",
-  "2.1.1.59", "2.1.1.60", "2.1.1.61", "2.1.1.62", "2.1.1.63",
-  "2.1.1.64", "2.1.1.65", "2.1.1.66", "2.1.1.67", "2.1.1.68",
-  "2.1.1.69", "2.1.1.70", "2.1.1.71", "2.1.1.72", "2.1.1.74",
-  "2.1.1.75", "2.1.1.76", "2.1.1.77", "2.1.1.78", "2.1.1.79",
-  "2.1.1.80", "2.1.1.82", "2.1.1.83", "2.1.1.84", "2.1.1.85",
-  "2.1.1.86", "2.1.1.87", "2.1.1.88", "2.1.1.89", "2.1.1.90",
-  "2.1.1.91", "2.1.1.94", "2.1.1.95", "2.1.1.96", "2.1.1.97",
-  "2.1.1.98", "2.1.1.99", "2.1.1.100", "2.1.1.101", "2.1.1.102",
-  "2.1.1.103", "2.1.1.104", "2.1.1.105", "2.1.1.106", "2.1.1.107",
-  "2.1.1.108", "2.1.1.109", "2.1.1.110", "2.1.1.111", "2.1.1.112",
-  "2.1.1.113", "2.1.1.114", "2.1.1.115", "2.1.1.116", "2.1.1.117",
-  "2.1.1.118", "2.1.1.119", "2.1.1.120", "2.1.1.121", "2.1.1.122",
-  "2.1.1.123", "2.1.1.124", "2.1.1.125", "2.1.1.126", "2.1.1.127",
-  "2.1.1.128", "2.1.1.129", "2.1.1.130", "2.1.1.131", "2.1.1.132",
-  "2.1.1.133", "2.1.1.136", "2.1.1.137", "2.1.1.139", "2.1.1.140",
-  "2.1.1.141", "2.1.1.142", "2.1.1.143", "2.1.1.144", "2.1.1.145",
-  "2.1.1.146", "2.1.1.147", "2.1.1.148", "2.1.1.149", "2.1.1.150",
-  "2.1.1.151", "2.1.1.152", "2.1.1.153", "2.1.1.154", "2.1.1.155",
-  "2.1.1.156", "2.1.1.157", "2.1.1.158", "2.1.1.159", "2.1.1.160",
-  "2.1.1.161", "2.1.1.162", "2.1.2.1", "2.1.2.2", "2.1.2.3", "2.1.2.4",
-  "2.1.2.5", "2.1.2.7", "2.1.2.8", "2.1.2.9", "2.1.2.10", "2.1.2.11",
-  "2.1.3.1", "2.1.3.2", "2.1.3.3", "2.1.3.5", "2.1.3.6", "2.1.3.7",
-  "2.1.3.8", "2.1.3.9", "2.1.3.10", "2.1.3.11", "2.1.4.1", "2.1.4.2",
-  "2.2.1.1", "2.2.1.2", "2.2.1.3", "2.2.1.4", "2.2.1.5", "2.2.1.6",
-  "2.2.1.7", "2.2.1.8", "2.2.1.9", "2.3.1.1", "2.3.1.2", "2.3.1.3",
-  "2.3.1.4", "2.3.1.5", "2.3.1.6", "2.3.1.7", "2.3.1.8", "2.3.1.9",
-  "2.3.1.10", "2.3.1.11", "2.3.1.12", "2.3.1.13", "2.3.1.14",
-  "2.3.1.15", "2.3.1.16", "2.3.1.17", "2.3.1.18", "2.3.1.19",
-  "2.3.1.20", "2.3.1.21", "2.3.1.22", "2.3.1.23", "2.3.1.24",
-  "2.3.1.25", "2.3.1.26", "2.3.1.27", "2.3.1.28", "2.3.1.29",
-  "2.3.1.30", "2.3.1.31", "2.3.1.32", "2.3.1.33", "2.3.1.34",
-  "2.3.1.35", "2.3.1.36", "2.3.1.37", "2.3.1.38", "2.3.1.39",
-  "2.3.1.40", "2.3.1.41", "2.3.1.42", "2.3.1.43", "2.3.1.44",
-  "2.3.1.45", "2.3.1.46", "2.3.1.47", "2.3.1.48", "2.3.1.49",
-  "2.3.1.50", "2.3.1.51", "2.3.1.52", "2.3.1.53", "2.3.1.54",
-  "2.3.1.56", "2.3.1.57", "2.3.1.58", "2.3.1.59", "2.3.1.60",
-  "2.3.1.61", "2.3.1.62", "2.3.1.63", "2.3.1.64", "2.3.1.65",
-  "2.3.1.66", "2.3.1.67", "2.3.1.68", "2.3.1.69", "2.3.1.71",
-  "2.3.1.72", "2.3.1.73", "2.3.1.74", "2.3.1.75", "2.3.1.76",
-  "2.3.1.77", "2.3.1.78", "2.3.1.79", "2.3.1.80", "2.3.1.81",
-  "2.3.1.82", "2.3.1.83", "2.3.1.84", "2.3.1.85", "2.3.1.86",
-  "2.3.1.87", "2.3.1.88", "2.3.1.89", "2.3.1.90", "2.3.1.91",
-  "2.3.1.92", "2.3.1.93", "2.3.1.94", "2.3.1.95", "2.3.1.96",
-  "2.3.1.97", "2.3.1.98", "2.3.1.99", "2.3.1.100", "2.3.1.101",
-  "2.3.1.102", "2.3.1.103", "2.3.1.104", "2.3.1.105", "2.3.1.106",
-  "2.3.1.107", "2.3.1.108", "2.3.1.109", "2.3.1.110", "2.3.1.111",
-  "2.3.1.112", "2.3.1.113", "2.3.1.114", "2.3.1.115", "2.3.1.116",
-  "2.3.1.117", "2.3.1.118", "2.3.1.119", "2.3.1.121", "2.3.1.122",
-  "2.3.1.123", "2.3.1.125", "2.3.1.126", "2.3.1.127", "2.3.1.128",
-  "2.3.1.129", "2.3.1.130", "2.3.1.131", "2.3.1.132", "2.3.1.133",
-  "2.3.1.134", "2.3.1.135", "2.3.1.136", "2.3.1.137", "2.3.1.138",
-  "2.3.1.139", "2.3.1.140", "2.3.1.141", "2.3.1.142", "2.3.1.143",
-  "2.3.1.144", "2.3.1.145", "2.3.1.146", "2.3.1.147", "2.3.1.148",
-  "2.3.1.149", "2.3.1.150", "2.3.1.151", "2.3.1.152", "2.3.1.153",
-  "2.3.1.154", "2.3.1.155", "2.3.1.156", "2.3.1.157", "2.3.1.158",
-  "2.3.1.159", "2.3.1.160", "2.3.1.161", "2.3.1.162", "2.3.1.163",
-  "2.3.1.164", "2.3.1.165", "2.3.1.166", "2.3.1.167", "2.3.1.168",
-  "2.3.1.169", "2.3.1.170", "2.3.1.171", "2.3.1.172", "2.3.1.173",
-  "2.3.1.174", "2.3.1.175", "2.3.1.176", "2.3.1.177", "2.3.1.178",
-  "2.3.1.179", "2.3.1.180", "2.3.1.181", "2.3.1.182", "2.3.1.183",
-  "2.3.1.184", "2.3.1.185", "2.3.1.186", "2.3.1.187", "2.3.2.1",
-  "2.3.2.2", "2.3.2.3", "2.3.2.4", "2.3.2.5", "2.3.2.6", "2.3.2.7",
-  "2.3.2.8", "2.3.2.9", "2.3.2.10", "2.3.2.11", "2.3.2.12", "2.3.2.13",
+  "1.22.1.1", "1.97.1.1", "1.97.1.2", "1.97.1.3", "1.97.1.4",
+  "1.97.1.8", "1.97.1.9", "1.97.1.10", "1.97.1.11", "2.1.1.1",
+  "2.1.1.2", "2.1.1.3", "2.1.1.4", "2.1.1.5", "2.1.1.6", "2.1.1.7",
+  "2.1.1.8", "2.1.1.9", "2.1.1.10", "2.1.1.11", "2.1.1.12",
+  "2.1.1.13", "2.1.1.14", "2.1.1.15", "2.1.1.16", "2.1.1.17",
+  "2.1.1.18", "2.1.1.19", "2.1.1.20", "2.1.1.21", "2.1.1.22",
+  "2.1.1.25", "2.1.1.26", "2.1.1.27", "2.1.1.28", "2.1.1.29",
+  "2.1.1.31", "2.1.1.32", "2.1.1.33", "2.1.1.34", "2.1.1.35",
+  "2.1.1.36", "2.1.1.37", "2.1.1.38", "2.1.1.39", "2.1.1.40",
+  "2.1.1.41", "2.1.1.42", "2.1.1.43", "2.1.1.44", "2.1.1.45",
+  "2.1.1.46", "2.1.1.47", "2.1.1.48", "2.1.1.49", "2.1.1.50",
+  "2.1.1.51", "2.1.1.52", "2.1.1.53", "2.1.1.54", "2.1.1.55",
+  "2.1.1.56", "2.1.1.57", "2.1.1.59", "2.1.1.60", "2.1.1.61",
+  "2.1.1.62", "2.1.1.63", "2.1.1.64", "2.1.1.65", "2.1.1.66",
+  "2.1.1.67", "2.1.1.68", "2.1.1.69", "2.1.1.70", "2.1.1.71",
+  "2.1.1.72", "2.1.1.74", "2.1.1.75", "2.1.1.76", "2.1.1.77",
+  "2.1.1.78", "2.1.1.79", "2.1.1.80", "2.1.1.82", "2.1.1.83",
+  "2.1.1.84", "2.1.1.85", "2.1.1.86", "2.1.1.87", "2.1.1.88",
+  "2.1.1.89", "2.1.1.90", "2.1.1.91", "2.1.1.94", "2.1.1.95",
+  "2.1.1.96", "2.1.1.97", "2.1.1.98", "2.1.1.99", "2.1.1.100",
+  "2.1.1.101", "2.1.1.102", "2.1.1.103", "2.1.1.104", "2.1.1.105",
+  "2.1.1.106", "2.1.1.107", "2.1.1.108", "2.1.1.109", "2.1.1.110",
+  "2.1.1.111", "2.1.1.112", "2.1.1.113", "2.1.1.114", "2.1.1.115",
+  "2.1.1.116", "2.1.1.117", "2.1.1.118", "2.1.1.119", "2.1.1.120",
+  "2.1.1.121", "2.1.1.122", "2.1.1.123", "2.1.1.124", "2.1.1.125",
+  "2.1.1.126", "2.1.1.127", "2.1.1.128", "2.1.1.129", "2.1.1.130",
+  "2.1.1.131", "2.1.1.132", "2.1.1.133", "2.1.1.136", "2.1.1.137",
+  "2.1.1.139", "2.1.1.140", "2.1.1.141", "2.1.1.142", "2.1.1.143",
+  "2.1.1.144", "2.1.1.145", "2.1.1.146", "2.1.1.147", "2.1.1.148",
+  "2.1.1.149", "2.1.1.150", "2.1.1.151", "2.1.1.152", "2.1.1.153",
+  "2.1.1.154", "2.1.1.155", "2.1.1.156", "2.1.1.157", "2.1.1.158",
+  "2.1.1.159", "2.1.1.160", "2.1.1.161", "2.1.1.162", "2.1.1.163",
+  "2.1.1.164", "2.1.1.165", "2.1.2.1", "2.1.2.2", "2.1.2.3",
+  "2.1.2.4", "2.1.2.5", "2.1.2.7", "2.1.2.8", "2.1.2.9", "2.1.2.10",
+  "2.1.2.11", "2.1.3.1", "2.1.3.2", "2.1.3.3", "2.1.3.5", "2.1.3.6",
+  "2.1.3.7", "2.1.3.8", "2.1.3.9", "2.1.3.10", "2.1.3.11", "2.1.4.1",
+  "2.1.4.2", "2.2.1.1", "2.2.1.2", "2.2.1.3", "2.2.1.4", "2.2.1.5",
+  "2.2.1.6", "2.2.1.7", "2.2.1.8", "2.2.1.9", "2.3.1.1", "2.3.1.2",
+  "2.3.1.3", "2.3.1.4", "2.3.1.5", "2.3.1.6", "2.3.1.7", "2.3.1.8",
+  "2.3.1.9", "2.3.1.10", "2.3.1.11", "2.3.1.12", "2.3.1.13",
+  "2.3.1.14", "2.3.1.15", "2.3.1.16", "2.3.1.17", "2.3.1.18",
+  "2.3.1.19", "2.3.1.20", "2.3.1.21", "2.3.1.22", "2.3.1.23",
+  "2.3.1.24", "2.3.1.25", "2.3.1.26", "2.3.1.27", "2.3.1.28",
+  "2.3.1.29", "2.3.1.30", "2.3.1.31", "2.3.1.32", "2.3.1.33",
+  "2.3.1.34", "2.3.1.35", "2.3.1.36", "2.3.1.37", "2.3.1.38",
+  "2.3.1.39", "2.3.1.40", "2.3.1.41", "2.3.1.42", "2.3.1.43",
+  "2.3.1.44", "2.3.1.45", "2.3.1.46", "2.3.1.47", "2.3.1.48",
+  "2.3.1.49", "2.3.1.50", "2.3.1.51", "2.3.1.52", "2.3.1.53",
+  "2.3.1.54", "2.3.1.56", "2.3.1.57", "2.3.1.58", "2.3.1.59",
+  "2.3.1.60", "2.3.1.61", "2.3.1.62", "2.3.1.63", "2.3.1.64",
+  "2.3.1.65", "2.3.1.66", "2.3.1.67", "2.3.1.68", "2.3.1.69",
+  "2.3.1.71", "2.3.1.72", "2.3.1.73", "2.3.1.74", "2.3.1.75",
+  "2.3.1.76", "2.3.1.77", "2.3.1.78", "2.3.1.79", "2.3.1.80",
+  "2.3.1.81", "2.3.1.82", "2.3.1.83", "2.3.1.84", "2.3.1.85",
+  "2.3.1.86", "2.3.1.87", "2.3.1.88", "2.3.1.89", "2.3.1.90",
+  "2.3.1.91", "2.3.1.92", "2.3.1.93", "2.3.1.94", "2.3.1.95",
+  "2.3.1.96", "2.3.1.97", "2.3.1.98", "2.3.1.99", "2.3.1.100",
+  "2.3.1.101", "2.3.1.102", "2.3.1.103", "2.3.1.104", "2.3.1.105",
+  "2.3.1.106", "2.3.1.107", "2.3.1.108", "2.3.1.109", "2.3.1.110",
+  "2.3.1.111", "2.3.1.112", "2.3.1.113", "2.3.1.114", "2.3.1.115",
+  "2.3.1.116", "2.3.1.117", "2.3.1.118", "2.3.1.119", "2.3.1.121",
+  "2.3.1.122", "2.3.1.123", "2.3.1.125", "2.3.1.126", "2.3.1.127",
+  "2.3.1.128", "2.3.1.129", "2.3.1.130", "2.3.1.131", "2.3.1.132",
+  "2.3.1.133", "2.3.1.134", "2.3.1.135", "2.3.1.136", "2.3.1.137",
+  "2.3.1.138", "2.3.1.139", "2.3.1.140", "2.3.1.141", "2.3.1.142",
+  "2.3.1.143", "2.3.1.144", "2.3.1.145", "2.3.1.146", "2.3.1.147",
+  "2.3.1.148", "2.3.1.149", "2.3.1.150", "2.3.1.151", "2.3.1.152",
+  "2.3.1.153", "2.3.1.154", "2.3.1.155", "2.3.1.156", "2.3.1.157",
+  "2.3.1.158", "2.3.1.159", "2.3.1.160", "2.3.1.161", "2.3.1.162",
+  "2.3.1.163", "2.3.1.164", "2.3.1.165", "2.3.1.166", "2.3.1.167",
+  "2.3.1.168", "2.3.1.169", "2.3.1.170", "2.3.1.171", "2.3.1.172",
+  "2.3.1.173", "2.3.1.174", "2.3.1.175", "2.3.1.176", "2.3.1.177",
+  "2.3.1.178", "2.3.1.179", "2.3.1.180", "2.3.1.181", "2.3.1.182",
+  "2.3.1.183", "2.3.1.184", "2.3.1.185", "2.3.1.186", "2.3.1.187",
+  "2.3.1.188", "2.3.1.189", "2.3.1.190", "2.3.2.1", "2.3.2.2",
+  "2.3.2.3", "2.3.2.4", "2.3.2.5", "2.3.2.6", "2.3.2.7", "2.3.2.8",
+  "2.3.2.9", "2.3.2.10", "2.3.2.11", "2.3.2.12", "2.3.2.13",
   "2.3.2.14", "2.3.2.15", "2.3.3.1", "2.3.3.2", "2.3.3.3", "2.3.3.4",
   "2.3.3.5", "2.3.3.6", "2.3.3.7", "2.3.3.8", "2.3.3.9", "2.3.3.10",
-  "2.3.3.11", "2.3.3.12", "2.3.3.13", "2.3.3.14", "2.3.3.15", "2.4.1.1",
-  "2.4.1.2", "2.4.1.4", "2.4.1.5", "2.4.1.7", "2.4.1.8", "2.4.1.9",
-  "2.4.1.10", "2.4.1.11", "2.4.1.12", "2.4.1.13", "2.4.1.14",
-  "2.4.1.15", "2.4.1.16", "2.4.1.17", "2.4.1.18", "2.4.1.19",
-  "2.4.1.20", "2.4.1.21", "2.4.1.22", "2.4.1.23", "2.4.1.24",
-  "2.4.1.25", "2.4.1.26", "2.4.1.27", "2.4.1.28", "2.4.1.29",
-  "2.4.1.30", "2.4.1.31", "2.4.1.32", "2.4.1.33", "2.4.1.34",
-  "2.4.1.35", "2.4.1.36", "2.4.1.37", "2.4.1.38", "2.4.1.39",
-  "2.4.1.40", "2.4.1.41", "2.4.1.43", "2.4.1.44", "2.4.1.45",
-  "2.4.1.46", "2.4.1.47", "2.4.1.48", "2.4.1.49", "2.4.1.50",
-  "2.4.1.52", "2.4.1.53", "2.4.1.54", "2.4.1.56", "2.4.1.57",
-  "2.4.1.58", "2.4.1.60", "2.4.1.62", "2.4.1.63", "2.4.1.64",
-  "2.4.1.65", "2.4.1.66", "2.4.1.67", "2.4.1.68", "2.4.1.69",
-  "2.4.1.70", "2.4.1.71", "2.4.1.73", "2.4.1.74", "2.4.1.78",
-  "2.4.1.79", "2.4.1.80", "2.4.1.81", "2.4.1.82", "2.4.1.83",
-  "2.4.1.85", "2.4.1.86", "2.4.1.87", "2.4.1.88", "2.4.1.90",
-  "2.4.1.91", "2.4.1.92", "2.4.1.94", "2.4.1.95", "2.4.1.96",
-  "2.4.1.97", "2.4.1.99", "2.4.1.100", "2.4.1.101", "2.4.1.102",
-  "2.4.1.103", "2.4.1.104", "2.4.1.105", "2.4.1.106", "2.4.1.109",
-  "2.4.1.110", "2.4.1.111", "2.4.1.113", "2.4.1.114", "2.4.1.115",
-  "2.4.1.116", "2.4.1.117", "2.4.1.118", "2.4.1.119", "2.4.1.120",
-  "2.4.1.121", "2.4.1.122", "2.4.1.123", "2.4.1.125", "2.4.1.126",
-  "2.4.1.127", "2.4.1.128", "2.4.1.129", "2.4.1.130", "2.4.1.131",
-  "2.4.1.132", "2.4.1.133", "2.4.1.134", "2.4.1.135", "2.4.1.136",
-  "2.4.1.137", "2.4.1.138", "2.4.1.139", "2.4.1.140", "2.4.1.141",
-  "2.4.1.142", "2.4.1.143", "2.4.1.144", "2.4.1.145", "2.4.1.146",
-  "2.4.1.147", "2.4.1.148", "2.4.1.149", "2.4.1.150", "2.4.1.152",
-  "2.4.1.153", "2.4.1.155", "2.4.1.156", "2.4.1.157", "2.4.1.158",
-  "2.4.1.159", "2.4.1.160", "2.4.1.161", "2.4.1.162", "2.4.1.163",
-  "2.4.1.164", "2.4.1.165", "2.4.1.166", "2.4.1.167", "2.4.1.168",
-  "2.4.1.170", "2.4.1.171", "2.4.1.172", "2.4.1.173", "2.4.1.174",
-  "2.4.1.175", "2.4.1.176", "2.4.1.177", "2.4.1.178", "2.4.1.179",
-  "2.4.1.180", "2.4.1.181", "2.4.1.182", "2.4.1.183", "2.4.1.184",
-  "2.4.1.185", "2.4.1.186", "2.4.1.187", "2.4.1.188", "2.4.1.189",
-  "2.4.1.190", "2.4.1.191", "2.4.1.192", "2.4.1.193", "2.4.1.194",
-  "2.4.1.195", "2.4.1.196", "2.4.1.197", "2.4.1.198", "2.4.1.199",
-  "2.4.1.201", "2.4.1.202", "2.4.1.203", "2.4.1.205", "2.4.1.206",
-  "2.4.1.207", "2.4.1.208", "2.4.1.209", "2.4.1.210", "2.4.1.211",
-  "2.4.1.212", "2.4.1.213", "2.4.1.214", "2.4.1.215", "2.4.1.216",
-  "2.4.1.217", "2.4.1.218", "2.4.1.219", "2.4.1.220", "2.4.1.221",
-  "2.4.1.222", "2.4.1.223", "2.4.1.224", "2.4.1.225", "2.4.1.226",
-  "2.4.1.227", "2.4.1.228", "2.4.1.229", "2.4.1.230", "2.4.1.231",
-  "2.4.1.232", "2.4.1.234", "2.4.1.236", "2.4.1.237", "2.4.1.238",
-  "2.4.1.239", "2.4.1.240", "2.4.1.241", "2.4.1.242", "2.4.1.243",
-  "2.4.1.244", "2.4.1.245", "2.4.1.246", "2.4.2.1", "2.4.2.2",
+  "2.3.3.11", "2.3.3.12", "2.3.3.13", "2.3.3.14", "2.3.3.15",
+  "2.4.1.1", "2.4.1.2", "2.4.1.4", "2.4.1.5", "2.4.1.7", "2.4.1.8",
+  "2.4.1.9", "2.4.1.10", "2.4.1.11", "2.4.1.12", "2.4.1.13",
+  "2.4.1.14", "2.4.1.15", "2.4.1.16", "2.4.1.17", "2.4.1.18",
+  "2.4.1.19", "2.4.1.20", "2.4.1.21", "2.4.1.22", "2.4.1.23",
+  "2.4.1.24", "2.4.1.25", "2.4.1.26", "2.4.1.27", "2.4.1.28",
+  "2.4.1.29", "2.4.1.30", "2.4.1.31", "2.4.1.32", "2.4.1.33",
+  "2.4.1.34", "2.4.1.35", "2.4.1.36", "2.4.1.37", "2.4.1.38",
+  "2.4.1.39", "2.4.1.40", "2.4.1.41", "2.4.1.43", "2.4.1.44",
+  "2.4.1.45", "2.4.1.46", "2.4.1.47", "2.4.1.48", "2.4.1.49",
+  "2.4.1.50", "2.4.1.52", "2.4.1.53", "2.4.1.54", "2.4.1.56",
+  "2.4.1.57", "2.4.1.58", "2.4.1.60", "2.4.1.62", "2.4.1.63",
+  "2.4.1.64", "2.4.1.65", "2.4.1.66", "2.4.1.67", "2.4.1.68",
+  "2.4.1.69", "2.4.1.70", "2.4.1.71", "2.4.1.73", "2.4.1.74",
+  "2.4.1.78", "2.4.1.79", "2.4.1.80", "2.4.1.81", "2.4.1.82",
+  "2.4.1.83", "2.4.1.85", "2.4.1.86", "2.4.1.87", "2.4.1.88",
+  "2.4.1.90", "2.4.1.91", "2.4.1.92", "2.4.1.94", "2.4.1.95",
+  "2.4.1.96", "2.4.1.97", "2.4.1.99", "2.4.1.100", "2.4.1.101",
+  "2.4.1.102", "2.4.1.103", "2.4.1.104", "2.4.1.105", "2.4.1.106",
+  "2.4.1.109", "2.4.1.110", "2.4.1.111", "2.4.1.113", "2.4.1.114",
+  "2.4.1.115", "2.4.1.116", "2.4.1.117", "2.4.1.118", "2.4.1.119",
+  "2.4.1.120", "2.4.1.121", "2.4.1.122", "2.4.1.123", "2.4.1.125",
+  "2.4.1.126", "2.4.1.127", "2.4.1.128", "2.4.1.129", "2.4.1.130",
+  "2.4.1.131", "2.4.1.132", "2.4.1.133", "2.4.1.134", "2.4.1.135",
+  "2.4.1.136", "2.4.1.137", "2.4.1.138", "2.4.1.139", "2.4.1.140",
+  "2.4.1.141", "2.4.1.142", "2.4.1.143", "2.4.1.144", "2.4.1.145",
+  "2.4.1.146", "2.4.1.147", "2.4.1.148", "2.4.1.149", "2.4.1.150",
+  "2.4.1.152", "2.4.1.153", "2.4.1.155", "2.4.1.156", "2.4.1.157",
+  "2.4.1.158", "2.4.1.159", "2.4.1.160", "2.4.1.161", "2.4.1.162",
+  "2.4.1.163", "2.4.1.164", "2.4.1.165", "2.4.1.166", "2.4.1.167",
+  "2.4.1.168", "2.4.1.170", "2.4.1.171", "2.4.1.172", "2.4.1.173",
+  "2.4.1.174", "2.4.1.175", "2.4.1.176", "2.4.1.177", "2.4.1.178",
+  "2.4.1.179", "2.4.1.180", "2.4.1.181", "2.4.1.182", "2.4.1.183",
+  "2.4.1.184", "2.4.1.185", "2.4.1.186", "2.4.1.187", "2.4.1.188",
+  "2.4.1.189", "2.4.1.190", "2.4.1.191", "2.4.1.192", "2.4.1.193",
+  "2.4.1.194", "2.4.1.195", "2.4.1.196", "2.4.1.197", "2.4.1.198",
+  "2.4.1.199", "2.4.1.201", "2.4.1.202", "2.4.1.203", "2.4.1.205",
+  "2.4.1.206", "2.4.1.207", "2.4.1.208", "2.4.1.209", "2.4.1.210",
+  "2.4.1.211", "2.4.1.212", "2.4.1.213", "2.4.1.214", "2.4.1.215",
+  "2.4.1.216", "2.4.1.217", "2.4.1.218", "2.4.1.219", "2.4.1.220",
+  "2.4.1.221", "2.4.1.222", "2.4.1.223", "2.4.1.224", "2.4.1.225",
+  "2.4.1.226", "2.4.1.227", "2.4.1.228", "2.4.1.229", "2.4.1.230",
+  "2.4.1.231", "2.4.1.232", "2.4.1.234", "2.4.1.236", "2.4.1.237",
+  "2.4.1.238", "2.4.1.239", "2.4.1.240", "2.4.1.241", "2.4.1.242",
+  "2.4.1.243", "2.4.1.244", "2.4.1.245", "2.4.1.246", "2.4.1.247",
+  "2.4.1.248", "2.4.1.249", "2.4.1.250", "2.4.2.1", "2.4.2.2",
   "2.4.2.3", "2.4.2.4", "2.4.2.5", "2.4.2.6", "2.4.2.7", "2.4.2.8",
-  "2.4.2.9", "2.4.2.10", "2.4.2.11", "2.4.2.12", "2.4.2.14", "2.4.2.15",
-  "2.4.2.16", "2.4.2.17", "2.4.2.18", "2.4.2.19", "2.4.2.20",
-  "2.4.2.21", "2.4.2.22", "2.4.2.23", "2.4.2.24", "2.4.2.25",
-  "2.4.2.26", "2.4.2.27", "2.4.2.28", "2.4.2.29", "2.4.2.30",
-  "2.4.2.31", "2.4.2.32", "2.4.2.33", "2.4.2.34", "2.4.2.35",
-  "2.4.2.36", "2.4.2.37", "2.4.2.38", "2.4.2.39", "2.4.2.40",
-  "2.4.99.1", "2.4.99.2", "2.4.99.3", "2.4.99.4", "2.4.99.5",
-  "2.4.99.6", "2.4.99.7", "2.4.99.8", "2.4.99.9", "2.4.99.10",
-  "2.4.99.11", "2.5.1.1", "2.5.1.2", "2.5.1.3", "2.5.1.4", "2.5.1.5",
-  "2.5.1.6", "2.5.1.7", "2.5.1.8", "2.5.1.9", "2.5.1.10", "2.5.1.11",
-  "2.5.1.15", "2.5.1.16", "2.5.1.17", "2.5.1.18", "2.5.1.19",
-  "2.5.1.20", "2.5.1.21", "2.5.1.22", "2.5.1.23", "2.5.1.24",
-  "2.5.1.25", "2.5.1.26", "2.5.1.27", "2.5.1.28", "2.5.1.29",
-  "2.5.1.30", "2.5.1.31", "2.5.1.32", "2.5.1.33", "2.5.1.34",
-  "2.5.1.35", "2.5.1.36", "2.5.1.38", "2.5.1.39", "2.5.1.41",
-  "2.5.1.42", "2.5.1.43", "2.5.1.44", "2.5.1.45", "2.5.1.46",
-  "2.5.1.47", "2.5.1.48", "2.5.1.49", "2.5.1.50", "2.5.1.51",
-  "2.5.1.52", "2.5.1.53", "2.5.1.54", "2.5.1.55", "2.5.1.56",
-  "2.5.1.57", "2.5.1.58", "2.5.1.59", "2.5.1.60", "2.5.1.61",
-  "2.5.1.62", "2.5.1.63", "2.5.1.65", "2.5.1.66", "2.5.1.67",
-  "2.5.1.68", "2.5.1.69", "2.5.1.70", "2.5.1.71", "2.5.1.72", "2.6.1.1",
-  "2.6.1.2", "2.6.1.3", "2.6.1.4", "2.6.1.5", "2.6.1.6", "2.6.1.7",
-  "2.6.1.8", "2.6.1.9", "2.6.1.11", "2.6.1.12", "2.6.1.13", "2.6.1.14",
-  "2.6.1.15", "2.6.1.16", "2.6.1.17", "2.6.1.18", "2.6.1.19",
-  "2.6.1.21", "2.6.1.22", "2.6.1.23", "2.6.1.24", "2.6.1.26",
-  "2.6.1.27", "2.6.1.28", "2.6.1.29", "2.6.1.30", "2.6.1.31",
-  "2.6.1.32", "2.6.1.33", "2.6.1.34", "2.6.1.35", "2.6.1.36",
-  "2.6.1.37", "2.6.1.38", "2.6.1.39", "2.6.1.40", "2.6.1.41",
-  "2.6.1.42", "2.6.1.43", "2.6.1.44", "2.6.1.45", "2.6.1.46",
-  "2.6.1.47", "2.6.1.48", "2.6.1.49", "2.6.1.50", "2.6.1.51",
-  "2.6.1.52", "2.6.1.54", "2.6.1.55", "2.6.1.56", "2.6.1.57",
-  "2.6.1.58", "2.6.1.59", "2.6.1.60", "2.6.1.62", "2.6.1.63",
-  "2.6.1.64", "2.6.1.65", "2.6.1.66", "2.6.1.67", "2.6.1.68",
-  "2.6.1.70", "2.6.1.71", "2.6.1.72", "2.6.1.73", "2.6.1.74",
-  "2.6.1.75", "2.6.1.76", "2.6.1.77", "2.6.1.78", "2.6.1.79",
-  "2.6.1.80", "2.6.1.81", "2.6.1.82", "2.6.1.83", "2.6.1.84",
-  "2.6.1.85", "2.6.1.86", "2.6.3.1", "2.6.99.1", "2.6.99.2", "2.7.1.1",
-  "2.7.1.2", "2.7.1.3", "2.7.1.4", "2.7.1.5", "2.7.1.6", "2.7.1.7",
-  "2.7.1.8", "2.7.1.10", "2.7.1.11", "2.7.1.12", "2.7.1.13", "2.7.1.14",
-  "2.7.1.15", "2.7.1.16", "2.7.1.17", "2.7.1.18", "2.7.1.19",
-  "2.7.1.20", "2.7.1.21", "2.7.1.22", "2.7.1.23", "2.7.1.24",
-  "2.7.1.25", "2.7.1.26", "2.7.1.27", "2.7.1.28", "2.7.1.29",
-  "2.7.1.30", "2.7.1.31", "2.7.1.32", "2.7.1.33", "2.7.1.34",
-  "2.7.1.35", "2.7.1.36", "2.7.1.39", "2.7.1.40", "2.7.1.41",
-  "2.7.1.42", "2.7.1.43", "2.7.1.44", "2.7.1.45", "2.7.1.46",
-  "2.7.1.47", "2.7.1.48", "2.7.1.49", "2.7.1.50", "2.7.1.51",
-  "2.7.1.52", "2.7.1.53", "2.7.1.54", "2.7.1.55", "2.7.1.56",
-  "2.7.1.58", "2.7.1.59", "2.7.1.60", "2.7.1.61", "2.7.1.62",
-  "2.7.1.63", "2.7.1.64", "2.7.1.65", "2.7.1.66", "2.7.1.67",
-  "2.7.1.68", "2.7.1.69", "2.7.1.71", "2.7.1.72", "2.7.1.73",
-  "2.7.1.74", "2.7.1.76", "2.7.1.77", "2.7.1.78", "2.7.1.79",
-  "2.7.1.80", "2.7.1.81", "2.7.1.82", "2.7.1.83", "2.7.1.84",
-  "2.7.1.85", "2.7.1.86", "2.7.1.87", "2.7.1.88", "2.7.1.89",
-  "2.7.1.90", "2.7.1.91", "2.7.1.92", "2.7.1.93", "2.7.1.94",
-  "2.7.1.95", "2.7.1.100", "2.7.1.101", "2.7.1.102", "2.7.1.103",
-  "2.7.1.105", "2.7.1.106", "2.7.1.107", "2.7.1.108", "2.7.1.113",
-  "2.7.1.114", "2.7.1.118", "2.7.1.119", "2.7.1.121", "2.7.1.122",
-  "2.7.1.127", "2.7.1.130", "2.7.1.134", "2.7.1.136", "2.7.1.137",
-  "2.7.1.138", "2.7.1.140", "2.7.1.142", "2.7.1.143", "2.7.1.144",
-  "2.7.1.145", "2.7.1.146", "2.7.1.147", "2.7.1.148", "2.7.1.149",
-  "2.7.1.150", "2.7.1.151", "2.7.1.153", "2.7.1.154", "2.7.1.156",
-  "2.7.1.157", "2.7.1.158", "2.7.1.159", "2.7.1.160", "2.7.1.161",
-  "2.7.1.162", "2.7.2.1", "2.7.2.2", "2.7.2.3", "2.7.2.4", "2.7.2.6",
-  "2.7.2.7", "2.7.2.8", "2.7.2.10", "2.7.2.11", "2.7.2.12", "2.7.2.13",
-  "2.7.2.14", "2.7.2.15", "2.7.3.1", "2.7.3.2", "2.7.3.3", "2.7.3.4",
-  "2.7.3.5", "2.7.3.6", "2.7.3.7", "2.7.3.8", "2.7.3.9", "2.7.3.10",
-  "2.7.4.1", "2.7.4.2", "2.7.4.3", "2.7.4.4", "2.7.4.6", "2.7.4.7",
-  "2.7.4.8", "2.7.4.9", "2.7.4.10", "2.7.4.11", "2.7.4.12", "2.7.4.13",
-  "2.7.4.14", "2.7.4.15", "2.7.4.16", "2.7.4.17", "2.7.4.18",
-  "2.7.4.19", "2.7.4.20", "2.7.4.21", "2.7.4.22", "2.7.4.23",
-  "2.7.4.24", "2.7.6.1", "2.7.6.2", "2.7.6.3", "2.7.6.4", "2.7.6.5",
-  "2.7.7.1", "2.7.7.2", "2.7.7.3", "2.7.7.4", "2.7.7.5", "2.7.7.6",
-  "2.7.7.7", "2.7.7.8", "2.7.7.9", "2.7.7.10", "2.7.7.11", "2.7.7.12",
-  "2.7.7.13", "2.7.7.14", "2.7.7.15", "2.7.7.18", "2.7.7.19",
-  "2.7.7.21", "2.7.7.22", "2.7.7.23", "2.7.7.24", "2.7.7.25",
-  "2.7.7.27", "2.7.7.28", "2.7.7.30", "2.7.7.31", "2.7.7.32",
-  "2.7.7.33", "2.7.7.34", "2.7.7.35", "2.7.7.36", "2.7.7.37",
-  "2.7.7.38", "2.7.7.39", "2.7.7.40", "2.7.7.41", "2.7.7.42",
-  "2.7.7.43", "2.7.7.44", "2.7.7.45", "2.7.7.46", "2.7.7.47",
-  "2.7.7.48", "2.7.7.49", "2.7.7.50", "2.7.7.51", "2.7.7.52",
-  "2.7.7.53", "2.7.7.54", "2.7.7.55", "2.7.7.56", "2.7.7.57",
-  "2.7.7.58", "2.7.7.59", "2.7.7.60", "2.7.7.61", "2.7.7.62",
-  "2.7.7.63", "2.7.7.64", "2.7.7.65", "2.7.7.66", "2.7.7.67", "2.7.8.1",
-  "2.7.8.2", "2.7.8.3", "2.7.8.4", "2.7.8.5", "2.7.8.6", "2.7.8.7",
-  "2.7.8.8", "2.7.8.9", "2.7.8.10", "2.7.8.11", "2.7.8.12", "2.7.8.13",
-  "2.7.8.14", "2.7.8.15", "2.7.8.17", "2.7.8.18", "2.7.8.19",
-  "2.7.8.20", "2.7.8.21", "2.7.8.22", "2.7.8.23", "2.7.8.24",
-  "2.7.8.25", "2.7.8.26", "2.7.8.27", "2.7.9.1", "2.7.9.2", "2.7.9.3",
-  "2.7.9.4", "2.7.9.5", "2.7.10.1", "2.7.10.2", "2.7.11.1", "2.7.11.2",
-  "2.7.11.3", "2.7.11.4", "2.7.11.5", "2.7.11.6", "2.7.11.7",
-  "2.7.11.8", "2.7.11.9", "2.7.11.10", "2.7.11.11", "2.7.11.12",
-  "2.7.11.13", "2.7.11.14", "2.7.11.15", "2.7.11.16", "2.7.11.17",
-  "2.7.11.18", "2.7.11.19", "2.7.11.20", "2.7.11.21", "2.7.11.22",
-  "2.7.11.23", "2.7.11.24", "2.7.11.25", "2.7.11.26", "2.7.11.27",
-  "2.7.11.28", "2.7.11.29", "2.7.11.30", "2.7.11.31", "2.7.12.1",
-  "2.7.12.2", "2.7.13.1", "2.7.13.2", "2.7.13.3", "2.7.99.1", "2.8.1.1",
-  "2.8.1.2", "2.8.1.3", "2.8.1.4", "2.8.1.5", "2.8.1.6", "2.8.1.7",
-  "2.8.1.8", "2.8.2.1", "2.8.2.2", "2.8.2.3", "2.8.2.4", "2.8.2.5",
-  "2.8.2.6", "2.8.2.7", "2.8.2.8", "2.8.2.9", "2.8.2.10", "2.8.2.11",
-  "2.8.2.13", "2.8.2.14", "2.8.2.15", "2.8.2.16", "2.8.2.17",
-  "2.8.2.18", "2.8.2.19", "2.8.2.20", "2.8.2.21", "2.8.2.22",
-  "2.8.2.23", "2.8.2.24", "2.8.2.25", "2.8.2.26", "2.8.2.27",
-  "2.8.2.28", "2.8.2.29", "2.8.2.30", "2.8.2.31", "2.8.2.32",
-  "2.8.2.33", "2.8.2.34", "2.8.3.1", "2.8.3.2", "2.8.3.3", "2.8.3.5",
-  "2.8.3.6", "2.8.3.7", "2.8.3.8", "2.8.3.9", "2.8.3.10", "2.8.3.11",
-  "2.8.3.12", "2.8.3.13", "2.8.3.14", "2.8.3.15", "2.8.3.16",
-  "2.8.3.17", "2.8.4.1", "2.9.1.1", "3.1.1.1", "3.1.1.2", "3.1.1.3",
-  "3.1.1.4", "3.1.1.5", "3.1.1.6", "3.1.1.7", "3.1.1.8", "3.1.1.10",
-  "3.1.1.11", "3.1.1.13", "3.1.1.14", "3.1.1.15", "3.1.1.17",
-  "3.1.1.19", "3.1.1.20", "3.1.1.21", "3.1.1.22", "3.1.1.23",
-  "3.1.1.24", "3.1.1.25", "3.1.1.26", "3.1.1.27", "3.1.1.28",
-  "3.1.1.29", "3.1.1.30", "3.1.1.31", "3.1.1.32", "3.1.1.33",
-  "3.1.1.34", "3.1.1.35", "3.1.1.36", "3.1.1.37", "3.1.1.38",
-  "3.1.1.39", "3.1.1.40", "3.1.1.41", "3.1.1.42", "3.1.1.43",
-  "3.1.1.44", "3.1.1.45", "3.1.1.46", "3.1.1.47", "3.1.1.48",
-  "3.1.1.49", "3.1.1.50", "3.1.1.51", "3.1.1.52", "3.1.1.53",
-  "3.1.1.54", "3.1.1.55", "3.1.1.56", "3.1.1.57", "3.1.1.58",
-  "3.1.1.59", "3.1.1.60", "3.1.1.61", "3.1.1.63", "3.1.1.64",
-  "3.1.1.65", "3.1.1.66", "3.1.1.67", "3.1.1.68", "3.1.1.70",
-  "3.1.1.71", "3.1.1.72", "3.1.1.73", "3.1.1.74", "3.1.1.75",
-  "3.1.1.76", "3.1.1.77", "3.1.1.78", "3.1.1.79", "3.1.1.80",
-  "3.1.1.81", "3.1.1.82", "3.1.1.83", "3.1.2.1", "3.1.2.2", "3.1.2.3",
-  "3.1.2.4", "3.1.2.5", "3.1.2.6", "3.1.2.7", "3.1.2.10", "3.1.2.11",
-  "3.1.2.12", "3.1.2.13", "3.1.2.14", "3.1.2.15", "3.1.2.16",
-  "3.1.2.17", "3.1.2.18", "3.1.2.19", "3.1.2.20", "3.1.2.21",
-  "3.1.2.22", "3.1.2.23", "3.1.2.25", "3.1.2.26", "3.1.2.27", "3.1.3.1",
-  "3.1.3.2", "3.1.3.3", "3.1.3.4", "3.1.3.5", "3.1.3.6", "3.1.3.7",
-  "3.1.3.8", "3.1.3.9", "3.1.3.10", "3.1.3.11", "3.1.3.12", "3.1.3.13",
-  "3.1.3.14", "3.1.3.15", "3.1.3.16", "3.1.3.17", "3.1.3.18",
-  "3.1.3.19", "3.1.3.20", "3.1.3.21", "3.1.3.22", "3.1.3.23",
-  "3.1.3.24", "3.1.3.25", "3.1.3.26", "3.1.3.27", "3.1.3.28",
-  "3.1.3.29", "3.1.3.31", "3.1.3.32", "3.1.3.33", "3.1.3.34",
-  "3.1.3.35", "3.1.3.36", "3.1.3.37", "3.1.3.38", "3.1.3.39",
-  "3.1.3.40", "3.1.3.41", "3.1.3.42", "3.1.3.43", "3.1.3.44",
-  "3.1.3.45", "3.1.3.46", "3.1.3.47", "3.1.3.48", "3.1.3.49",
-  "3.1.3.50", "3.1.3.51", "3.1.3.52", "3.1.3.53", "3.1.3.54",
-  "3.1.3.55", "3.1.3.56", "3.1.3.57", "3.1.3.58", "3.1.3.59",
-  "3.1.3.60", "3.1.3.62", "3.1.3.63", "3.1.3.64", "3.1.3.66",
-  "3.1.3.67", "3.1.3.68", "3.1.3.69", "3.1.3.70", "3.1.3.71",
-  "3.1.3.72", "3.1.3.73", "3.1.3.74", "3.1.3.75", "3.1.3.76",
-  "3.1.3.77", "3.1.3.78", "3.1.3.79", "3.1.4.1", "3.1.4.2", "3.1.4.3",
-  "3.1.4.4", "3.1.4.11", "3.1.4.12", "3.1.4.13", "3.1.4.14", "3.1.4.15",
-  "3.1.4.16", "3.1.4.17", "3.1.4.35", "3.1.4.37", "3.1.4.38",
-  "3.1.4.39", "3.1.4.40", "3.1.4.41", "3.1.4.42", "3.1.4.43",
-  "3.1.4.44", "3.1.4.45", "3.1.4.46", "3.1.4.48", "3.1.4.49",
-  "3.1.4.50", "3.1.4.51", "3.1.4.52", "3.1.4.53", "3.1.5.1", "3.1.6.1",
-  "3.1.6.2", "3.1.6.3", "3.1.6.4", "3.1.6.6", "3.1.6.7", "3.1.6.8",
-  "3.1.6.9", "3.1.6.10", "3.1.6.11", "3.1.6.12", "3.1.6.13", "3.1.6.14",
-  "3.1.6.15", "3.1.6.16", "3.1.6.17", "3.1.6.18", "3.1.7.1", "3.1.7.2",
-  "3.1.7.3", "3.1.7.4", "3.1.8.1", "3.1.8.2", "3.1.11.1", "3.1.11.2",
-  "3.1.11.3", "3.1.11.4", "3.1.11.5", "3.1.11.6", "3.1.13.1",
-  "3.1.13.2", "3.1.13.3", "3.1.13.4", "3.1.13.5", "3.1.14.1",
-  "3.1.15.1", "3.1.16.1", "3.1.21.1", "3.1.21.2", "3.1.21.3",
-  "3.1.21.4", "3.1.21.5", "3.1.21.6", "3.1.21.7", "3.1.22.1",
-  "3.1.22.2", "3.1.22.4", "3.1.22.5", "3.1.25.1", "3.1.26.1",
-  "3.1.26.2", "3.1.26.3", "3.1.26.4", "3.1.26.5", "3.1.26.6",
-  "3.1.26.7", "3.1.26.8", "3.1.26.9", "3.1.26.10", "3.1.26.11",
-  "3.1.26.12", "3.1.27.1", "3.1.27.2", "3.1.27.3", "3.1.27.4",
+  "2.4.2.9", "2.4.2.10", "2.4.2.11", "2.4.2.12", "2.4.2.14",
+  "2.4.2.15", "2.4.2.16", "2.4.2.17", "2.4.2.18", "2.4.2.19",
+  "2.4.2.20", "2.4.2.21", "2.4.2.22", "2.4.2.23", "2.4.2.24",
+  "2.4.2.25", "2.4.2.26", "2.4.2.27", "2.4.2.28", "2.4.2.29",
+  "2.4.2.30", "2.4.2.31", "2.4.2.32", "2.4.2.33", "2.4.2.34",
+  "2.4.2.35", "2.4.2.36", "2.4.2.37", "2.4.2.38", "2.4.2.39",
+  "2.4.2.40", "2.4.2.41", "2.4.2.42", "2.4.99.1", "2.4.99.2",
+  "2.4.99.3", "2.4.99.4", "2.4.99.5", "2.4.99.6", "2.4.99.7",
+  "2.4.99.8", "2.4.99.9", "2.4.99.10", "2.4.99.11", "2.5.1.1",
+  "2.5.1.2", "2.5.1.3", "2.5.1.4", "2.5.1.5", "2.5.1.6", "2.5.1.7",
+  "2.5.1.9", "2.5.1.10", "2.5.1.11", "2.5.1.15", "2.5.1.16",
+  "2.5.1.17", "2.5.1.18", "2.5.1.19", "2.5.1.20", "2.5.1.21",
+  "2.5.1.22", "2.5.1.23", "2.5.1.24", "2.5.1.25", "2.5.1.26",
+  "2.5.1.27", "2.5.1.28", "2.5.1.29", "2.5.1.30", "2.5.1.31",
+  "2.5.1.32", "2.5.1.33", "2.5.1.34", "2.5.1.35", "2.5.1.36",
+  "2.5.1.38", "2.5.1.39", "2.5.1.41", "2.5.1.42", "2.5.1.43",
+  "2.5.1.44", "2.5.1.45", "2.5.1.46", "2.5.1.47", "2.5.1.48",
+  "2.5.1.49", "2.5.1.50", "2.5.1.51", "2.5.1.52", "2.5.1.53",
+  "2.5.1.54", "2.5.1.55", "2.5.1.56", "2.5.1.57", "2.5.1.58",
+  "2.5.1.59", "2.5.1.60", "2.5.1.61", "2.5.1.62", "2.5.1.63",
+  "2.5.1.65", "2.5.1.66", "2.5.1.67", "2.5.1.68", "2.5.1.69",
+  "2.5.1.70", "2.5.1.71", "2.5.1.72", "2.5.1.73", "2.5.1.74",
+  "2.5.1.75", "2.5.1.76", "2.5.1.77", "2.5.1.78", "2.5.1.79",
+  "2.5.1.80", "2.6.1.1", "2.6.1.2", "2.6.1.3", "2.6.1.4", "2.6.1.5",
+  "2.6.1.6", "2.6.1.7", "2.6.1.8", "2.6.1.9", "2.6.1.11", "2.6.1.12",
+  "2.6.1.13", "2.6.1.14", "2.6.1.15", "2.6.1.16", "2.6.1.17",
+  "2.6.1.18", "2.6.1.19", "2.6.1.21", "2.6.1.22", "2.6.1.23",
+  "2.6.1.24", "2.6.1.26", "2.6.1.27", "2.6.1.28", "2.6.1.29",
+  "2.6.1.30", "2.6.1.31", "2.6.1.32", "2.6.1.33", "2.6.1.34",
+  "2.6.1.35", "2.6.1.36", "2.6.1.37", "2.6.1.38", "2.6.1.39",
+  "2.6.1.40", "2.6.1.41", "2.6.1.42", "2.6.1.43", "2.6.1.44",
+  "2.6.1.45", "2.6.1.46", "2.6.1.47", "2.6.1.48", "2.6.1.49",
+  "2.6.1.50", "2.6.1.51", "2.6.1.52", "2.6.1.54", "2.6.1.55",
+  "2.6.1.56", "2.6.1.57", "2.6.1.58", "2.6.1.59", "2.6.1.60",
+  "2.6.1.62", "2.6.1.63", "2.6.1.64", "2.6.1.65", "2.6.1.66",
+  "2.6.1.67", "2.6.1.68", "2.6.1.70", "2.6.1.71", "2.6.1.72",
+  "2.6.1.73", "2.6.1.74", "2.6.1.75", "2.6.1.76", "2.6.1.77",
+  "2.6.1.78", "2.6.1.79", "2.6.1.80", "2.6.1.81", "2.6.1.82",
+  "2.6.1.83", "2.6.1.84", "2.6.1.85", "2.6.1.86", "2.6.3.1",
+  "2.6.99.1", "2.6.99.2", "2.7.1.1", "2.7.1.2", "2.7.1.3", "2.7.1.4",
+  "2.7.1.5", "2.7.1.6", "2.7.1.7", "2.7.1.8", "2.7.1.10", "2.7.1.11",
+  "2.7.1.12", "2.7.1.13", "2.7.1.14", "2.7.1.15", "2.7.1.16",
+  "2.7.1.17", "2.7.1.18", "2.7.1.19", "2.7.1.20", "2.7.1.21",
+  "2.7.1.22", "2.7.1.23", "2.7.1.24", "2.7.1.25", "2.7.1.26",
+  "2.7.1.27", "2.7.1.28", "2.7.1.29", "2.7.1.30", "2.7.1.31",
+  "2.7.1.32", "2.7.1.33", "2.7.1.34", "2.7.1.35", "2.7.1.36",
+  "2.7.1.39", "2.7.1.40", "2.7.1.41", "2.7.1.42", "2.7.1.43",
+  "2.7.1.44", "2.7.1.45", "2.7.1.46", "2.7.1.47", "2.7.1.48",
+  "2.7.1.49", "2.7.1.50", "2.7.1.51", "2.7.1.52", "2.7.1.53",
+  "2.7.1.54", "2.7.1.55", "2.7.1.56", "2.7.1.58", "2.7.1.59",
+  "2.7.1.60", "2.7.1.61", "2.7.1.62", "2.7.1.63", "2.7.1.64",
+  "2.7.1.65", "2.7.1.66", "2.7.1.67", "2.7.1.68", "2.7.1.69",
+  "2.7.1.71", "2.7.1.72", "2.7.1.73", "2.7.1.74", "2.7.1.76",
+  "2.7.1.77", "2.7.1.78", "2.7.1.79", "2.7.1.80", "2.7.1.81",
+  "2.7.1.82", "2.7.1.83", "2.7.1.84", "2.7.1.85", "2.7.1.86",
+  "2.7.1.87", "2.7.1.88", "2.7.1.89", "2.7.1.90", "2.7.1.91",
+  "2.7.1.92", "2.7.1.93", "2.7.1.94", "2.7.1.95", "2.7.1.100",
+  "2.7.1.101", "2.7.1.102", "2.7.1.103", "2.7.1.105", "2.7.1.106",
+  "2.7.1.107", "2.7.1.108", "2.7.1.113", "2.7.1.114", "2.7.1.118",
+  "2.7.1.119", "2.7.1.121", "2.7.1.122", "2.7.1.127", "2.7.1.130",
+  "2.7.1.134", "2.7.1.136", "2.7.1.137", "2.7.1.138", "2.7.1.140",
+  "2.7.1.142", "2.7.1.143", "2.7.1.144", "2.7.1.145", "2.7.1.146",
+  "2.7.1.147", "2.7.1.148", "2.7.1.149", "2.7.1.150", "2.7.1.151",
+  "2.7.1.153", "2.7.1.154", "2.7.1.156", "2.7.1.157", "2.7.1.158",
+  "2.7.1.159", "2.7.1.160", "2.7.1.161", "2.7.1.162", "2.7.1.163",
+  "2.7.1.164", "2.7.1.165", "2.7.2.1", "2.7.2.2", "2.7.2.3",
+  "2.7.2.4", "2.7.2.6", "2.7.2.7", "2.7.2.8", "2.7.2.10", "2.7.2.11",
+  "2.7.2.12", "2.7.2.13", "2.7.2.14", "2.7.2.15", "2.7.3.1",
+  "2.7.3.2", "2.7.3.3", "2.7.3.4", "2.7.3.5", "2.7.3.6", "2.7.3.7",
+  "2.7.3.8", "2.7.3.9", "2.7.3.10", "2.7.4.1", "2.7.4.2", "2.7.4.3",
+  "2.7.4.4", "2.7.4.6", "2.7.4.7", "2.7.4.8", "2.7.4.9", "2.7.4.10",
+  "2.7.4.11", "2.7.4.12", "2.7.4.13", "2.7.4.14", "2.7.4.15",
+  "2.7.4.16", "2.7.4.17", "2.7.4.18", "2.7.4.19", "2.7.4.20",
+  "2.7.4.21", "2.7.4.22", "2.7.4.23", "2.7.4.24", "2.7.6.1",
+  "2.7.6.2", "2.7.6.3", "2.7.6.4", "2.7.6.5", "2.7.7.1", "2.7.7.2",
+  "2.7.7.3", "2.7.7.4", "2.7.7.5", "2.7.7.6", "2.7.7.7", "2.7.7.8",
+  "2.7.7.9", "2.7.7.10", "2.7.7.11", "2.7.7.12", "2.7.7.13",
+  "2.7.7.14", "2.7.7.15", "2.7.7.18", "2.7.7.19", "2.7.7.21",
+  "2.7.7.22", "2.7.7.23", "2.7.7.24", "2.7.7.25", "2.7.7.27",
+  "2.7.7.28", "2.7.7.30", "2.7.7.31", "2.7.7.32", "2.7.7.33",
+  "2.7.7.34", "2.7.7.35", "2.7.7.36", "2.7.7.37", "2.7.7.38",
+  "2.7.7.39", "2.7.7.40", "2.7.7.41", "2.7.7.42", "2.7.7.43",
+  "2.7.7.44", "2.7.7.45", "2.7.7.46", "2.7.7.47", "2.7.7.48",
+  "2.7.7.49", "2.7.7.50", "2.7.7.51", "2.7.7.52", "2.7.7.53",
+  "2.7.7.54", "2.7.7.55", "2.7.7.56", "2.7.7.57", "2.7.7.58",
+  "2.7.7.59", "2.7.7.60", "2.7.7.61", "2.7.7.62", "2.7.7.63",
+  "2.7.7.64", "2.7.7.65", "2.7.7.66", "2.7.7.67", "2.7.7.68",
+  "2.7.8.1", "2.7.8.2", "2.7.8.3", "2.7.8.4", "2.7.8.5", "2.7.8.6",
+  "2.7.8.7", "2.7.8.8", "2.7.8.9", "2.7.8.10", "2.7.8.11", "2.7.8.12",
+  "2.7.8.13", "2.7.8.14", "2.7.8.15", "2.7.8.17", "2.7.8.18",
+  "2.7.8.19", "2.7.8.20", "2.7.8.21", "2.7.8.22", "2.7.8.23",
+  "2.7.8.24", "2.7.8.25", "2.7.8.26", "2.7.8.27", "2.7.8.28",
+  "2.7.9.1", "2.7.9.2", "2.7.9.3", "2.7.9.4", "2.7.9.5", "2.7.10.1",
+  "2.7.10.2", "2.7.11.1", "2.7.11.2", "2.7.11.3", "2.7.11.4",
+  "2.7.11.5", "2.7.11.6", "2.7.11.7", "2.7.11.8", "2.7.11.9",
+  "2.7.11.10", "2.7.11.11", "2.7.11.12", "2.7.11.13", "2.7.11.14",
+  "2.7.11.15", "2.7.11.16", "2.7.11.17", "2.7.11.18", "2.7.11.19",
+  "2.7.11.20", "2.7.11.21", "2.7.11.22", "2.7.11.23", "2.7.11.24",
+  "2.7.11.25", "2.7.11.26", "2.7.11.27", "2.7.11.28", "2.7.11.29",
+  "2.7.11.30", "2.7.11.31", "2.7.12.1", "2.7.12.2", "2.7.13.1",
+  "2.7.13.2", "2.7.13.3", "2.7.99.1", "2.8.1.1", "2.8.1.2", "2.8.1.3",
+  "2.8.1.4", "2.8.1.5", "2.8.1.6", "2.8.1.7", "2.8.1.8", "2.8.2.1",
+  "2.8.2.2", "2.8.2.3", "2.8.2.4", "2.8.2.5", "2.8.2.6", "2.8.2.7",
+  "2.8.2.8", "2.8.2.9", "2.8.2.10", "2.8.2.11", "2.8.2.13",
+  "2.8.2.14", "2.8.2.15", "2.8.2.16", "2.8.2.17", "2.8.2.18",
+  "2.8.2.19", "2.8.2.20", "2.8.2.21", "2.8.2.22", "2.8.2.23",
+  "2.8.2.24", "2.8.2.25", "2.8.2.26", "2.8.2.27", "2.8.2.28",
+  "2.8.2.29", "2.8.2.30", "2.8.2.31", "2.8.2.32", "2.8.2.33",
+  "2.8.2.34", "2.8.3.1", "2.8.3.2", "2.8.3.3", "2.8.3.5", "2.8.3.6",
+  "2.8.3.7", "2.8.3.8", "2.8.3.9", "2.8.3.10", "2.8.3.11", "2.8.3.12",
+  "2.8.3.13", "2.8.3.14", "2.8.3.15", "2.8.3.16", "2.8.3.17",
+  "2.8.4.1", "2.8.4.2", "2.9.1.1", "2.9.1.2", "3.1.1.1", "3.1.1.2",
+  "3.1.1.3", "3.1.1.4", "3.1.1.5", "3.1.1.6", "3.1.1.7", "3.1.1.8",
+  "3.1.1.10", "3.1.1.11", "3.1.1.13", "3.1.1.14", "3.1.1.15",
+  "3.1.1.17", "3.1.1.19", "3.1.1.20", "3.1.1.21", "3.1.1.22",
+  "3.1.1.23", "3.1.1.24", "3.1.1.25", "3.1.1.26", "3.1.1.27",
+  "3.1.1.28", "3.1.1.29", "3.1.1.30", "3.1.1.31", "3.1.1.32",
+  "3.1.1.33", "3.1.1.34", "3.1.1.35", "3.1.1.36", "3.1.1.37",
+  "3.1.1.38", "3.1.1.39", "3.1.1.40", "3.1.1.41", "3.1.1.42",
+  "3.1.1.43", "3.1.1.44", "3.1.1.45", "3.1.1.46", "3.1.1.47",
+  "3.1.1.48", "3.1.1.49", "3.1.1.50", "3.1.1.51", "3.1.1.52",
+  "3.1.1.53", "3.1.1.54", "3.1.1.55", "3.1.1.56", "3.1.1.57",
+  "3.1.1.58", "3.1.1.59", "3.1.1.60", "3.1.1.61", "3.1.1.63",
+  "3.1.1.64", "3.1.1.65", "3.1.1.66", "3.1.1.67", "3.1.1.68",
+  "3.1.1.70", "3.1.1.71", "3.1.1.72", "3.1.1.73", "3.1.1.74",
+  "3.1.1.75", "3.1.1.76", "3.1.1.77", "3.1.1.78", "3.1.1.79",
+  "3.1.1.80", "3.1.1.81", "3.1.1.82", "3.1.1.83", "3.1.1.84",
+  "3.1.2.1", "3.1.2.2", "3.1.2.3", "3.1.2.4", "3.1.2.5", "3.1.2.6",
+  "3.1.2.7", "3.1.2.10", "3.1.2.11", "3.1.2.12", "3.1.2.13",
+  "3.1.2.14", "3.1.2.15", "3.1.2.16", "3.1.2.17", "3.1.2.18",
+  "3.1.2.19", "3.1.2.20", "3.1.2.21", "3.1.2.22", "3.1.2.23",
+  "3.1.2.25", "3.1.2.26", "3.1.2.27", "3.1.3.1", "3.1.3.2", "3.1.3.3",
+  "3.1.3.4", "3.1.3.5", "3.1.3.6", "3.1.3.7", "3.1.3.8", "3.1.3.9",
+  "3.1.3.10", "3.1.3.11", "3.1.3.12", "3.1.3.13", "3.1.3.14",
+  "3.1.3.15", "3.1.3.16", "3.1.3.17", "3.1.3.18", "3.1.3.19",
+  "3.1.3.20", "3.1.3.21", "3.1.3.22", "3.1.3.23", "3.1.3.24",
+  "3.1.3.25", "3.1.3.26", "3.1.3.27", "3.1.3.28", "3.1.3.29",
+  "3.1.3.31", "3.1.3.32", "3.1.3.33", "3.1.3.34", "3.1.3.35",
+  "3.1.3.36", "3.1.3.37", "3.1.3.38", "3.1.3.39", "3.1.3.40",
+  "3.1.3.41", "3.1.3.42", "3.1.3.43", "3.1.3.44", "3.1.3.45",
+  "3.1.3.46", "3.1.3.47", "3.1.3.48", "3.1.3.49", "3.1.3.50",
+  "3.1.3.51", "3.1.3.52", "3.1.3.53", "3.1.3.54", "3.1.3.55",
+  "3.1.3.56", "3.1.3.57", "3.1.3.58", "3.1.3.59", "3.1.3.60",
+  "3.1.3.62", "3.1.3.63", "3.1.3.64", "3.1.3.66", "3.1.3.67",
+  "3.1.3.68", "3.1.3.69", "3.1.3.70", "3.1.3.71", "3.1.3.72",
+  "3.1.3.73", "3.1.3.74", "3.1.3.75", "3.1.3.76", "3.1.3.77",
+  "3.1.3.78", "3.1.3.79", "3.1.3.80", "3.1.4.1", "3.1.4.2", "3.1.4.3",
+  "3.1.4.4", "3.1.4.11", "3.1.4.12", "3.1.4.13", "3.1.4.14",
+  "3.1.4.15", "3.1.4.16", "3.1.4.17", "3.1.4.35", "3.1.4.37",
+  "3.1.4.38", "3.1.4.39", "3.1.4.40", "3.1.4.41", "3.1.4.42",
+  "3.1.4.43", "3.1.4.44", "3.1.4.45", "3.1.4.46", "3.1.4.48",
+  "3.1.4.49", "3.1.4.50", "3.1.4.51", "3.1.4.52", "3.1.4.53",
+  "3.1.5.1", "3.1.6.1", "3.1.6.2", "3.1.6.3", "3.1.6.4", "3.1.6.6",
+  "3.1.6.7", "3.1.6.8", "3.1.6.9", "3.1.6.10", "3.1.6.11", "3.1.6.12",
+  "3.1.6.13", "3.1.6.14", "3.1.6.15", "3.1.6.16", "3.1.6.17",
+  "3.1.6.18", "3.1.7.1", "3.1.7.2", "3.1.7.3", "3.1.7.4", "3.1.7.5",
+  "3.1.8.1", "3.1.8.2", "3.1.11.1", "3.1.11.2", "3.1.11.3",
+  "3.1.11.4", "3.1.11.5", "3.1.11.6", "3.1.13.1", "3.1.13.2",
+  "3.1.13.3", "3.1.13.4", "3.1.13.5", "3.1.14.1", "3.1.15.1",
+  "3.1.16.1", "3.1.21.1", "3.1.21.2", "3.1.21.3", "3.1.21.4",
+  "3.1.21.5", "3.1.21.6", "3.1.21.7", "3.1.22.1", "3.1.22.2",
+  "3.1.22.4", "3.1.22.5", "3.1.25.1", "3.1.26.1", "3.1.26.2",
+  "3.1.26.3", "3.1.26.4", "3.1.26.5", "3.1.26.6", "3.1.26.7",
+  "3.1.26.8", "3.1.26.9", "3.1.26.10", "3.1.26.11", "3.1.26.12",
+  "3.1.26.13", "3.1.27.1", "3.1.27.2", "3.1.27.3", "3.1.27.4",
   "3.1.27.5", "3.1.27.6", "3.1.27.7", "3.1.27.8", "3.1.27.9",
-  "3.1.27.10", "3.1.30.1", "3.1.30.2", "3.1.31.1", "3.2.1.1", "3.2.1.2",
-  "3.2.1.3", "3.2.1.4", "3.2.1.6", "3.2.1.7", "3.2.1.8", "3.2.1.10",
-  "3.2.1.11", "3.2.1.14", "3.2.1.15", "3.2.1.17", "3.2.1.18",
-  "3.2.1.20", "3.2.1.21", "3.2.1.22", "3.2.1.23", "3.2.1.24",
-  "3.2.1.25", "3.2.1.26", "3.2.1.28", "3.2.1.31", "3.2.1.32",
-  "3.2.1.33", "3.2.1.35", "3.2.1.36", "3.2.1.37", "3.2.1.38",
-  "3.2.1.39", "3.2.1.40", "3.2.1.41", "3.2.1.42", "3.2.1.43",
-  "3.2.1.44", "3.2.1.45", "3.2.1.46", "3.2.1.47", "3.2.1.48",
-  "3.2.1.49", "3.2.1.50", "3.2.1.51", "3.2.1.52", "3.2.1.53",
-  "3.2.1.54", "3.2.1.55", "3.2.1.56", "3.2.1.57", "3.2.1.58",
-  "3.2.1.59", "3.2.1.60", "3.2.1.61", "3.2.1.62", "3.2.1.63",
-  "3.2.1.64", "3.2.1.65", "3.2.1.66", "3.2.1.67", "3.2.1.68",
-  "3.2.1.70", "3.2.1.71", "3.2.1.72", "3.2.1.73", "3.2.1.74",
-  "3.2.1.75", "3.2.1.76", "3.2.1.77", "3.2.1.78", "3.2.1.80",
-  "3.2.1.81", "3.2.1.82", "3.2.1.83", "3.2.1.84", "3.2.1.85",
-  "3.2.1.86", "3.2.1.87", "3.2.1.88", "3.2.1.89", "3.2.1.91",
-  "3.2.1.92", "3.2.1.93", "3.2.1.94", "3.2.1.95", "3.2.1.96",
-  "3.2.1.97", "3.2.1.98", "3.2.1.99", "3.2.1.100", "3.2.1.101",
-  "3.2.1.102", "3.2.1.103", "3.2.1.104", "3.2.1.105", "3.2.1.106",
-  "3.2.1.107", "3.2.1.108", "3.2.1.109", "3.2.1.111", "3.2.1.112",
-  "3.2.1.113", "3.2.1.114", "3.2.1.115", "3.2.1.116", "3.2.1.117",
-  "3.2.1.118", "3.2.1.119", "3.2.1.120", "3.2.1.121", "3.2.1.122",
-  "3.2.1.123", "3.2.1.124", "3.2.1.125", "3.2.1.126", "3.2.1.127",
-  "3.2.1.128", "3.2.1.129", "3.2.1.130", "3.2.1.131", "3.2.1.132",
-  "3.2.1.133", "3.2.1.134", "3.2.1.135", "3.2.1.136", "3.2.1.137",
-  "3.2.1.139", "3.2.1.140", "3.2.1.141", "3.2.1.142", "3.2.1.143",
-  "3.2.1.144", "3.2.1.145", "3.2.1.146", "3.2.1.147", "3.2.1.149",
-  "3.2.1.150", "3.2.1.151", "3.2.1.152", "3.2.1.153", "3.2.1.154",
-  "3.2.1.155", "3.2.1.156", "3.2.1.157", "3.2.1.158", "3.2.1.159",
-  "3.2.1.161", "3.2.1.162", "3.2.1.163", "3.2.1.164", "3.2.1.165",
-  "3.2.2.1", "3.2.2.2", "3.2.2.3", "3.2.2.4", "3.2.2.5", "3.2.2.6",
-  "3.2.2.7", "3.2.2.8", "3.2.2.9", "3.2.2.10", "3.2.2.11", "3.2.2.12",
-  "3.2.2.13", "3.2.2.14", "3.2.2.15", "3.2.2.16", "3.2.2.17",
-  "3.2.2.19", "3.2.2.20", "3.2.2.21", "3.2.2.22", "3.2.2.23",
-  "3.2.2.24", "3.2.2.25", "3.2.2.26", "3.3.1.1", "3.3.1.2", "3.3.2.1",
-  "3.3.2.2", "3.3.2.4", "3.3.2.5", "3.3.2.6", "3.3.2.7", "3.3.2.8",
-  "3.3.2.9", "3.3.2.10", "3.3.2.11", "3.4.11.1", "3.4.11.2", "3.4.11.3",
+  "3.1.27.10", "3.1.30.1", "3.1.30.2", "3.1.31.1", "3.2.1.1",
+  "3.2.1.2", "3.2.1.3", "3.2.1.4", "3.2.1.6", "3.2.1.7", "3.2.1.8",
+  "3.2.1.10", "3.2.1.11", "3.2.1.14", "3.2.1.15", "3.2.1.17",
+  "3.2.1.18", "3.2.1.20", "3.2.1.21", "3.2.1.22", "3.2.1.23",
+  "3.2.1.24", "3.2.1.25", "3.2.1.26", "3.2.1.28", "3.2.1.31",
+  "3.2.1.32", "3.2.1.33", "3.2.1.35", "3.2.1.36", "3.2.1.37",
+  "3.2.1.38", "3.2.1.39", "3.2.1.40", "3.2.1.41", "3.2.1.42",
+  "3.2.1.43", "3.2.1.44", "3.2.1.45", "3.2.1.46", "3.2.1.47",
+  "3.2.1.48", "3.2.1.49", "3.2.1.50", "3.2.1.51", "3.2.1.52",
+  "3.2.1.53", "3.2.1.54", "3.2.1.55", "3.2.1.56", "3.2.1.57",
+  "3.2.1.58", "3.2.1.59", "3.2.1.60", "3.2.1.61", "3.2.1.62",
+  "3.2.1.63", "3.2.1.64", "3.2.1.65", "3.2.1.66", "3.2.1.67",
+  "3.2.1.68", "3.2.1.70", "3.2.1.71", "3.2.1.72", "3.2.1.73",
+  "3.2.1.74", "3.2.1.75", "3.2.1.76", "3.2.1.77", "3.2.1.78",
+  "3.2.1.80", "3.2.1.81", "3.2.1.82", "3.2.1.83", "3.2.1.84",
+  "3.2.1.85", "3.2.1.86", "3.2.1.87", "3.2.1.88", "3.2.1.89",
+  "3.2.1.91", "3.2.1.92", "3.2.1.93", "3.2.1.94", "3.2.1.95",
+  "3.2.1.96", "3.2.1.97", "3.2.1.98", "3.2.1.99", "3.2.1.100",
+  "3.2.1.101", "3.2.1.102", "3.2.1.103", "3.2.1.104", "3.2.1.105",
+  "3.2.1.106", "3.2.1.107", "3.2.1.108", "3.2.1.109", "3.2.1.111",
+  "3.2.1.112", "3.2.1.113", "3.2.1.114", "3.2.1.115", "3.2.1.116",
+  "3.2.1.117", "3.2.1.118", "3.2.1.119", "3.2.1.120", "3.2.1.121",
+  "3.2.1.122", "3.2.1.123", "3.2.1.124", "3.2.1.125", "3.2.1.126",
+  "3.2.1.127", "3.2.1.128", "3.2.1.129", "3.2.1.130", "3.2.1.131",
+  "3.2.1.132", "3.2.1.133", "3.2.1.134", "3.2.1.135", "3.2.1.136",
+  "3.2.1.137", "3.2.1.139", "3.2.1.140", "3.2.1.141", "3.2.1.142",
+  "3.2.1.143", "3.2.1.144", "3.2.1.145", "3.2.1.146", "3.2.1.147",
+  "3.2.1.149", "3.2.1.150", "3.2.1.151", "3.2.1.152", "3.2.1.153",
+  "3.2.1.154", "3.2.1.155", "3.2.1.156", "3.2.1.157", "3.2.1.158",
+  "3.2.1.159", "3.2.1.161", "3.2.1.162", "3.2.1.163", "3.2.1.164",
+  "3.2.1.165", "3.2.2.1", "3.2.2.2", "3.2.2.3", "3.2.2.4", "3.2.2.5",
+  "3.2.2.6", "3.2.2.7", "3.2.2.8", "3.2.2.9", "3.2.2.10", "3.2.2.11",
+  "3.2.2.12", "3.2.2.13", "3.2.2.14", "3.2.2.15", "3.2.2.16",
+  "3.2.2.17", "3.2.2.19", "3.2.2.20", "3.2.2.21", "3.2.2.22",
+  "3.2.2.23", "3.2.2.24", "3.2.2.25", "3.2.2.26", "3.2.2.27",
+  "3.2.2.28", "3.2.2.29", "3.3.1.1", "3.3.1.2", "3.3.2.1", "3.3.2.2",
+  "3.3.2.4", "3.3.2.5", "3.3.2.6", "3.3.2.7", "3.3.2.8", "3.3.2.9",
+  "3.3.2.10", "3.3.2.11", "3.4.11.1", "3.4.11.2", "3.4.11.3",
   "3.4.11.4", "3.4.11.5", "3.4.11.6", "3.4.11.7", "3.4.11.9",
   "3.4.11.10", "3.4.11.13", "3.4.11.14", "3.4.11.15", "3.4.11.16",
   "3.4.11.17", "3.4.11.18", "3.4.11.19", "3.4.11.20", "3.4.11.21",
@@ -16367,27 +17204,28 @@ static CharPtr ecnum_specif [] = {
   "3.4.17.4", "3.4.17.6", "3.4.17.8", "3.4.17.10", "3.4.17.11",
   "3.4.17.12", "3.4.17.13", "3.4.17.14", "3.4.17.15", "3.4.17.16",
   "3.4.17.17", "3.4.17.18", "3.4.17.19", "3.4.17.20", "3.4.17.21",
-  "3.4.17.22", "3.4.18.1", "3.4.19.1", "3.4.19.2", "3.4.19.3",
-  "3.4.19.5", "3.4.19.6", "3.4.19.7", "3.4.19.9", "3.4.19.11",
-  "3.4.19.12", "3.4.21.1", "3.4.21.2", "3.4.21.3", "3.4.21.4",
-  "3.4.21.5", "3.4.21.6", "3.4.21.7", "3.4.21.9", "3.4.21.10",
-  "3.4.21.12", "3.4.21.19", "3.4.21.20", "3.4.21.21", "3.4.21.22",
-  "3.4.21.25", "3.4.21.26", "3.4.21.27", "3.4.21.32", "3.4.21.34",
-  "3.4.21.35", "3.4.21.36", "3.4.21.37", "3.4.21.38", "3.4.21.39",
-  "3.4.21.41", "3.4.21.42", "3.4.21.43", "3.4.21.45", "3.4.21.46",
-  "3.4.21.47", "3.4.21.48", "3.4.21.49", "3.4.21.50", "3.4.21.53",
-  "3.4.21.54", "3.4.21.55", "3.4.21.57", "3.4.21.59", "3.4.21.60",
-  "3.4.21.61", "3.4.21.62", "3.4.21.63", "3.4.21.64", "3.4.21.65",
-  "3.4.21.66", "3.4.21.67", "3.4.21.68", "3.4.21.69", "3.4.21.70",
-  "3.4.21.71", "3.4.21.72", "3.4.21.73", "3.4.21.74", "3.4.21.75",
-  "3.4.21.76", "3.4.21.77", "3.4.21.78", "3.4.21.79", "3.4.21.80",
-  "3.4.21.81", "3.4.21.82", "3.4.21.83", "3.4.21.84", "3.4.21.85",
-  "3.4.21.86", "3.4.21.88", "3.4.21.89", "3.4.21.90", "3.4.21.91",
-  "3.4.21.92", "3.4.21.93", "3.4.21.94", "3.4.21.95", "3.4.21.96",
-  "3.4.21.97", "3.4.21.98", "3.4.21.99", "3.4.21.100", "3.4.21.101",
-  "3.4.21.102", "3.4.21.103", "3.4.21.104", "3.4.21.105", "3.4.21.106",
-  "3.4.21.107", "3.4.21.108", "3.4.21.109", "3.4.21.110", "3.4.21.111",
-  "3.4.21.112", "3.4.21.113", "3.4.21.114", "3.4.21.115", "3.4.21.116",
+  "3.4.17.22", "3.4.17.23", "3.4.18.1", "3.4.19.1", "3.4.19.2",
+  "3.4.19.3", "3.4.19.5", "3.4.19.6", "3.4.19.7", "3.4.19.9",
+  "3.4.19.11", "3.4.19.12", "3.4.21.1", "3.4.21.2", "3.4.21.3",
+  "3.4.21.4", "3.4.21.5", "3.4.21.6", "3.4.21.7", "3.4.21.9",
+  "3.4.21.10", "3.4.21.12", "3.4.21.19", "3.4.21.20", "3.4.21.21",
+  "3.4.21.22", "3.4.21.25", "3.4.21.26", "3.4.21.27", "3.4.21.32",
+  "3.4.21.34", "3.4.21.35", "3.4.21.36", "3.4.21.37", "3.4.21.38",
+  "3.4.21.39", "3.4.21.41", "3.4.21.42", "3.4.21.43", "3.4.21.45",
+  "3.4.21.46", "3.4.21.47", "3.4.21.48", "3.4.21.49", "3.4.21.50",
+  "3.4.21.53", "3.4.21.54", "3.4.21.55", "3.4.21.57", "3.4.21.59",
+  "3.4.21.60", "3.4.21.61", "3.4.21.62", "3.4.21.63", "3.4.21.64",
+  "3.4.21.65", "3.4.21.66", "3.4.21.67", "3.4.21.68", "3.4.21.69",
+  "3.4.21.70", "3.4.21.71", "3.4.21.72", "3.4.21.73", "3.4.21.74",
+  "3.4.21.75", "3.4.21.76", "3.4.21.77", "3.4.21.78", "3.4.21.79",
+  "3.4.21.80", "3.4.21.81", "3.4.21.82", "3.4.21.83", "3.4.21.84",
+  "3.4.21.85", "3.4.21.86", "3.4.21.88", "3.4.21.89", "3.4.21.90",
+  "3.4.21.91", "3.4.21.92", "3.4.21.93", "3.4.21.94", "3.4.21.95",
+  "3.4.21.96", "3.4.21.97", "3.4.21.98", "3.4.21.99", "3.4.21.100",
+  "3.4.21.101", "3.4.21.102", "3.4.21.103", "3.4.21.104",
+  "3.4.21.105", "3.4.21.106", "3.4.21.107", "3.4.21.108",
+  "3.4.21.109", "3.4.21.110", "3.4.21.111", "3.4.21.112",
+  "3.4.21.113", "3.4.21.114", "3.4.21.115", "3.4.21.116",
   "3.4.21.117", "3.4.21.118", "3.4.21.119", "3.4.21.120", "3.4.22.1",
   "3.4.22.2", "3.4.22.3", "3.4.22.6", "3.4.22.7", "3.4.22.8",
   "3.4.22.10", "3.4.22.14", "3.4.22.15", "3.4.22.16", "3.4.22.24",
@@ -16399,15 +17237,16 @@ static CharPtr ecnum_specif [] = {
   "3.4.22.50", "3.4.22.51", "3.4.22.52", "3.4.22.53", "3.4.22.54",
   "3.4.22.55", "3.4.22.56", "3.4.22.57", "3.4.22.58", "3.4.22.59",
   "3.4.22.60", "3.4.22.61", "3.4.22.62", "3.4.22.63", "3.4.22.64",
-  "3.4.22.65", "3.4.22.66", "3.4.22.67", "3.4.22.68", "3.4.23.1",
-  "3.4.23.2", "3.4.23.3", "3.4.23.4", "3.4.23.5", "3.4.23.12",
-  "3.4.23.15", "3.4.23.16", "3.4.23.17", "3.4.23.18", "3.4.23.19",
-  "3.4.23.20", "3.4.23.21", "3.4.23.22", "3.4.23.23", "3.4.23.24",
-  "3.4.23.25", "3.4.23.26", "3.4.23.28", "3.4.23.29", "3.4.23.30",
-  "3.4.23.31", "3.4.23.32", "3.4.23.34", "3.4.23.35", "3.4.23.36",
-  "3.4.23.38", "3.4.23.39", "3.4.23.40", "3.4.23.41", "3.4.23.42",
-  "3.4.23.43", "3.4.23.44", "3.4.23.45", "3.4.23.46", "3.4.23.47",
-  "3.4.23.48", "3.4.23.49", "3.4.24.1", "3.4.24.3", "3.4.24.6",
+  "3.4.22.65", "3.4.22.66", "3.4.22.67", "3.4.22.68", "3.4.22.69",
+  "3.4.22.70", "3.4.22.71", "3.4.23.1", "3.4.23.2", "3.4.23.3",
+  "3.4.23.4", "3.4.23.5", "3.4.23.12", "3.4.23.15", "3.4.23.16",
+  "3.4.23.17", "3.4.23.18", "3.4.23.19", "3.4.23.20", "3.4.23.21",
+  "3.4.23.22", "3.4.23.23", "3.4.23.24", "3.4.23.25", "3.4.23.26",
+  "3.4.23.28", "3.4.23.29", "3.4.23.30", "3.4.23.31", "3.4.23.32",
+  "3.4.23.34", "3.4.23.35", "3.4.23.36", "3.4.23.38", "3.4.23.39",
+  "3.4.23.40", "3.4.23.41", "3.4.23.42", "3.4.23.43", "3.4.23.44",
+  "3.4.23.45", "3.4.23.46", "3.4.23.47", "3.4.23.48", "3.4.23.49",
+  "3.4.23.50", "3.4.23.51", "3.4.24.1", "3.4.24.3", "3.4.24.6",
   "3.4.24.7", "3.4.24.11", "3.4.24.12", "3.4.24.13", "3.4.24.14",
   "3.4.24.15", "3.4.24.16", "3.4.24.17", "3.4.24.18", "3.4.24.19",
   "3.4.24.20", "3.4.24.21", "3.4.24.22", "3.4.24.23", "3.4.24.24",
@@ -16423,193 +17262,204 @@ static CharPtr ecnum_specif [] = {
   "3.4.24.70", "3.4.24.71", "3.4.24.72", "3.4.24.73", "3.4.24.74",
   "3.4.24.75", "3.4.24.76", "3.4.24.77", "3.4.24.78", "3.4.24.79",
   "3.4.24.80", "3.4.24.81", "3.4.24.82", "3.4.24.83", "3.4.24.84",
-  "3.4.24.85", "3.4.24.86", "3.4.25.1", "3.5.1.1", "3.5.1.2", "3.5.1.3",
-  "3.5.1.4", "3.5.1.5", "3.5.1.6", "3.5.1.7", "3.5.1.8", "3.5.1.9",
-  "3.5.1.10", "3.5.1.11", "3.5.1.12", "3.5.1.13", "3.5.1.14",
-  "3.5.1.15", "3.5.1.16", "3.5.1.17", "3.5.1.18", "3.5.1.19",
-  "3.5.1.20", "3.5.1.21", "3.5.1.22", "3.5.1.23", "3.5.1.24",
-  "3.5.1.25", "3.5.1.26", "3.5.1.27", "3.5.1.28", "3.5.1.29",
-  "3.5.1.30", "3.5.1.31", "3.5.1.32", "3.5.1.33", "3.5.1.35",
-  "3.5.1.36", "3.5.1.38", "3.5.1.39", "3.5.1.40", "3.5.1.41",
-  "3.5.1.42", "3.5.1.43", "3.5.1.44", "3.5.1.46", "3.5.1.47",
-  "3.5.1.48", "3.5.1.49", "3.5.1.50", "3.5.1.51", "3.5.1.52",
-  "3.5.1.53", "3.5.1.54", "3.5.1.55", "3.5.1.56", "3.5.1.57",
-  "3.5.1.58", "3.5.1.59", "3.5.1.60", "3.5.1.61", "3.5.1.62",
-  "3.5.1.63", "3.5.1.64", "3.5.1.65", "3.5.1.66", "3.5.1.67",
-  "3.5.1.68", "3.5.1.69", "3.5.1.70", "3.5.1.71", "3.5.1.72",
-  "3.5.1.73", "3.5.1.74", "3.5.1.75", "3.5.1.76", "3.5.1.77",
-  "3.5.1.78", "3.5.1.79", "3.5.1.81", "3.5.1.82", "3.5.1.83",
-  "3.5.1.84", "3.5.1.85", "3.5.1.86", "3.5.1.87", "3.5.1.88",
-  "3.5.1.89", "3.5.1.90", "3.5.1.91", "3.5.1.92", "3.5.1.93",
-  "3.5.1.94", "3.5.1.95", "3.5.1.96", "3.5.1.97", "3.5.1.98", "3.5.2.1",
-  "3.5.2.2", "3.5.2.3", "3.5.2.4", "3.5.2.5", "3.5.2.6", "3.5.2.7",
-  "3.5.2.9", "3.5.2.10", "3.5.2.11", "3.5.2.12", "3.5.2.13", "3.5.2.14",
-  "3.5.2.15", "3.5.2.16", "3.5.2.17", "3.5.2.18", "3.5.3.1", "3.5.3.2",
-  "3.5.3.3", "3.5.3.4", "3.5.3.5", "3.5.3.6", "3.5.3.7", "3.5.3.8",
-  "3.5.3.9", "3.5.3.10", "3.5.3.11", "3.5.3.12", "3.5.3.13", "3.5.3.14",
+  "3.4.24.85", "3.4.24.86", "3.4.24.87", "3.4.25.1", "3.4.25.2",
+  "3.5.1.1", "3.5.1.2", "3.5.1.3", "3.5.1.4", "3.5.1.5", "3.5.1.6",
+  "3.5.1.7", "3.5.1.8", "3.5.1.9", "3.5.1.10", "3.5.1.11", "3.5.1.12",
+  "3.5.1.13", "3.5.1.14", "3.5.1.15", "3.5.1.16", "3.5.1.17",
+  "3.5.1.18", "3.5.1.19", "3.5.1.20", "3.5.1.21", "3.5.1.22",
+  "3.5.1.23", "3.5.1.24", "3.5.1.25", "3.5.1.26", "3.5.1.27",
+  "3.5.1.28", "3.5.1.29", "3.5.1.30", "3.5.1.31", "3.5.1.32",
+  "3.5.1.33", "3.5.1.35", "3.5.1.36", "3.5.1.38", "3.5.1.39",
+  "3.5.1.40", "3.5.1.41", "3.5.1.42", "3.5.1.43", "3.5.1.44",
+  "3.5.1.46", "3.5.1.47", "3.5.1.48", "3.5.1.49", "3.5.1.50",
+  "3.5.1.51", "3.5.1.52", "3.5.1.53", "3.5.1.54", "3.5.1.55",
+  "3.5.1.56", "3.5.1.57", "3.5.1.58", "3.5.1.59", "3.5.1.60",
+  "3.5.1.61", "3.5.1.62", "3.5.1.63", "3.5.1.64", "3.5.1.65",
+  "3.5.1.66", "3.5.1.67", "3.5.1.68", "3.5.1.69", "3.5.1.70",
+  "3.5.1.71", "3.5.1.72", "3.5.1.73", "3.5.1.74", "3.5.1.75",
+  "3.5.1.76", "3.5.1.77", "3.5.1.78", "3.5.1.79", "3.5.1.81",
+  "3.5.1.82", "3.5.1.83", "3.5.1.84", "3.5.1.85", "3.5.1.86",
+  "3.5.1.87", "3.5.1.88", "3.5.1.89", "3.5.1.90", "3.5.1.91",
+  "3.5.1.92", "3.5.1.93", "3.5.1.94", "3.5.1.95", "3.5.1.96",
+  "3.5.1.97", "3.5.1.98", "3.5.1.99", "3.5.1.100", "3.5.1.101",
+  "3.5.1.102", "3.5.1.103", "3.5.2.1", "3.5.2.2", "3.5.2.3",
+  "3.5.2.4", "3.5.2.5", "3.5.2.6", "3.5.2.7", "3.5.2.9", "3.5.2.10",
+  "3.5.2.11", "3.5.2.12", "3.5.2.13", "3.5.2.14", "3.5.2.15",
+  "3.5.2.16", "3.5.2.17", "3.5.2.18", "3.5.3.1", "3.5.3.2", "3.5.3.3",
+  "3.5.3.4", "3.5.3.5", "3.5.3.6", "3.5.3.7", "3.5.3.8", "3.5.3.9",
+  "3.5.3.10", "3.5.3.11", "3.5.3.12", "3.5.3.13", "3.5.3.14",
   "3.5.3.15", "3.5.3.16", "3.5.3.17", "3.5.3.18", "3.5.3.19",
-  "3.5.3.20", "3.5.3.21", "3.5.3.22", "3.5.3.23", "3.5.4.1", "3.5.4.2",
-  "3.5.4.3", "3.5.4.4", "3.5.4.5", "3.5.4.6", "3.5.4.7", "3.5.4.8",
-  "3.5.4.9", "3.5.4.10", "3.5.4.11", "3.5.4.12", "3.5.4.13", "3.5.4.14",
-  "3.5.4.15", "3.5.4.16", "3.5.4.17", "3.5.4.18", "3.5.4.19",
-  "3.5.4.20", "3.5.4.21", "3.5.4.22", "3.5.4.23", "3.5.4.24",
-  "3.5.4.25", "3.5.4.26", "3.5.4.27", "3.5.4.28", "3.5.4.29",
-  "3.5.4.30", "3.5.5.1", "3.5.5.2", "3.5.5.4", "3.5.5.5", "3.5.5.6",
-  "3.5.5.7", "3.5.5.8", "3.5.99.1", "3.5.99.2", "3.5.99.3", "3.5.99.4",
-  "3.5.99.5", "3.5.99.6", "3.5.99.7", "3.6.1.1", "3.6.1.2", "3.6.1.3",
-  "3.6.1.5", "3.6.1.6", "3.6.1.7", "3.6.1.8", "3.6.1.9", "3.6.1.10",
-  "3.6.1.11", "3.6.1.12", "3.6.1.13", "3.6.1.14", "3.6.1.15",
-  "3.6.1.16", "3.6.1.17", "3.6.1.18", "3.6.1.19", "3.6.1.20",
-  "3.6.1.21", "3.6.1.22", "3.6.1.23", "3.6.1.24", "3.6.1.25",
-  "3.6.1.26", "3.6.1.27", "3.6.1.28", "3.6.1.29", "3.6.1.30",
-  "3.6.1.31", "3.6.1.39", "3.6.1.40", "3.6.1.41", "3.6.1.42",
-  "3.6.1.43", "3.6.1.44", "3.6.1.45", "3.6.1.52", "3.6.1.53", "3.6.2.1",
-  "3.6.2.2", "3.6.3.1", "3.6.3.2", "3.6.3.3", "3.6.3.4", "3.6.3.5",
-  "3.6.3.6", "3.6.3.7", "3.6.3.8", "3.6.3.9", "3.6.3.10", "3.6.3.11",
-  "3.6.3.12", "3.6.3.14", "3.6.3.15", "3.6.3.16", "3.6.3.17",
-  "3.6.3.18", "3.6.3.19", "3.6.3.20", "3.6.3.21", "3.6.3.22",
-  "3.6.3.23", "3.6.3.24", "3.6.3.25", "3.6.3.26", "3.6.3.27",
-  "3.6.3.28", "3.6.3.29", "3.6.3.30", "3.6.3.31", "3.6.3.32",
-  "3.6.3.33", "3.6.3.34", "3.6.3.35", "3.6.3.36", "3.6.3.37",
-  "3.6.3.38", "3.6.3.39", "3.6.3.40", "3.6.3.41", "3.6.3.42",
-  "3.6.3.43", "3.6.3.44", "3.6.3.46", "3.6.3.47", "3.6.3.48",
-  "3.6.3.49", "3.6.3.50", "3.6.3.51", "3.6.3.52", "3.6.3.53", "3.6.4.1",
+  "3.5.3.20", "3.5.3.21", "3.5.3.22", "3.5.3.23", "3.5.4.1",
+  "3.5.4.2", "3.5.4.3", "3.5.4.4", "3.5.4.5", "3.5.4.6", "3.5.4.7",
+  "3.5.4.8", "3.5.4.9", "3.5.4.10", "3.5.4.11", "3.5.4.12",
+  "3.5.4.13", "3.5.4.14", "3.5.4.15", "3.5.4.16", "3.5.4.17",
+  "3.5.4.18", "3.5.4.19", "3.5.4.20", "3.5.4.21", "3.5.4.22",
+  "3.5.4.23", "3.5.4.24", "3.5.4.25", "3.5.4.26", "3.5.4.27",
+  "3.5.4.28", "3.5.4.29", "3.5.4.30", "3.5.5.1", "3.5.5.2", "3.5.5.4",
+  "3.5.5.5", "3.5.5.6", "3.5.5.7", "3.5.5.8", "3.5.99.1", "3.5.99.2",
+  "3.5.99.3", "3.5.99.4", "3.5.99.5", "3.5.99.6", "3.5.99.7",
+  "3.6.1.1", "3.6.1.2", "3.6.1.3", "3.6.1.5", "3.6.1.6", "3.6.1.7",
+  "3.6.1.8", "3.6.1.9", "3.6.1.10", "3.6.1.11", "3.6.1.12",
+  "3.6.1.13", "3.6.1.14", "3.6.1.15", "3.6.1.16", "3.6.1.17",
+  "3.6.1.18", "3.6.1.19", "3.6.1.20", "3.6.1.21", "3.6.1.22",
+  "3.6.1.23", "3.6.1.24", "3.6.1.25", "3.6.1.26", "3.6.1.27",
+  "3.6.1.28", "3.6.1.29", "3.6.1.30", "3.6.1.31", "3.6.1.39",
+  "3.6.1.40", "3.6.1.41", "3.6.1.42", "3.6.1.43", "3.6.1.44",
+  "3.6.1.45", "3.6.1.52", "3.6.1.53", "3.6.2.1", "3.6.2.2", "3.6.3.1",
+  "3.6.3.2", "3.6.3.3", "3.6.3.4", "3.6.3.5", "3.6.3.6", "3.6.3.7",
+  "3.6.3.8", "3.6.3.9", "3.6.3.10", "3.6.3.11", "3.6.3.12",
+  "3.6.3.14", "3.6.3.15", "3.6.3.16", "3.6.3.17", "3.6.3.18",
+  "3.6.3.19", "3.6.3.20", "3.6.3.21", "3.6.3.22", "3.6.3.23",
+  "3.6.3.24", "3.6.3.25", "3.6.3.26", "3.6.3.27", "3.6.3.28",
+  "3.6.3.29", "3.6.3.30", "3.6.3.31", "3.6.3.32", "3.6.3.33",
+  "3.6.3.34", "3.6.3.35", "3.6.3.36", "3.6.3.37", "3.6.3.38",
+  "3.6.3.39", "3.6.3.40", "3.6.3.41", "3.6.3.42", "3.6.3.43",
+  "3.6.3.44", "3.6.3.46", "3.6.3.47", "3.6.3.48", "3.6.3.49",
+  "3.6.3.50", "3.6.3.51", "3.6.3.52", "3.6.3.53", "3.6.4.1",
   "3.6.4.2", "3.6.4.3", "3.6.4.4", "3.6.4.5", "3.6.4.6", "3.6.4.7",
-  "3.6.4.8", "3.6.4.9", "3.6.4.10", "3.6.4.11", "3.6.5.1", "3.6.5.2",
-  "3.6.5.3", "3.6.5.4", "3.6.5.5", "3.6.5.6", "3.7.1.1", "3.7.1.2",
-  "3.7.1.3", "3.7.1.4", "3.7.1.5", "3.7.1.6", "3.7.1.7", "3.7.1.8",
-  "3.7.1.9", "3.7.1.10", "3.8.1.1", "3.8.1.2", "3.8.1.3", "3.8.1.5",
-  "3.8.1.6", "3.8.1.7", "3.8.1.8", "3.8.1.9", "3.8.1.10", "3.8.1.11",
-  "3.9.1.1", "3.10.1.1", "3.10.1.2", "3.11.1.1", "3.11.1.2", "3.11.1.3",
-  "3.12.1.1", "3.13.1.1", "3.13.1.3", "4.1.1.1", "4.1.1.2", "4.1.1.3",
-  "4.1.1.4", "4.1.1.5", "4.1.1.6", "4.1.1.7", "4.1.1.8", "4.1.1.9",
-  "4.1.1.11", "4.1.1.12", "4.1.1.14", "4.1.1.15", "4.1.1.16",
-  "4.1.1.17", "4.1.1.18", "4.1.1.19", "4.1.1.20", "4.1.1.21",
-  "4.1.1.22", "4.1.1.23", "4.1.1.24", "4.1.1.25", "4.1.1.28",
-  "4.1.1.29", "4.1.1.30", "4.1.1.31", "4.1.1.32", "4.1.1.33",
-  "4.1.1.34", "4.1.1.35", "4.1.1.36", "4.1.1.37", "4.1.1.38",
-  "4.1.1.39", "4.1.1.40", "4.1.1.41", "4.1.1.42", "4.1.1.43",
-  "4.1.1.44", "4.1.1.45", "4.1.1.46", "4.1.1.47", "4.1.1.48",
-  "4.1.1.49", "4.1.1.50", "4.1.1.51", "4.1.1.52", "4.1.1.53",
-  "4.1.1.54", "4.1.1.55", "4.1.1.56", "4.1.1.57", "4.1.1.58",
-  "4.1.1.59", "4.1.1.60", "4.1.1.61", "4.1.1.62", "4.1.1.63",
-  "4.1.1.64", "4.1.1.65", "4.1.1.66", "4.1.1.67", "4.1.1.68",
-  "4.1.1.69", "4.1.1.70", "4.1.1.71", "4.1.1.72", "4.1.1.73",
-  "4.1.1.74", "4.1.1.75", "4.1.1.76", "4.1.1.77", "4.1.1.78",
-  "4.1.1.79", "4.1.1.80", "4.1.1.81", "4.1.1.82", "4.1.1.83",
-  "4.1.1.84", "4.1.1.85", "4.1.1.86", "4.1.1.87", "4.1.1.88",
-  "4.1.1.89", "4.1.2.2", "4.1.2.4", "4.1.2.5", "4.1.2.8", "4.1.2.9",
+  "3.6.4.8", "3.6.4.9", "3.6.4.10", "3.6.4.11", "3.6.4.12",
+  "3.6.4.13", "3.6.5.1", "3.6.5.2", "3.6.5.3", "3.6.5.4", "3.6.5.5",
+  "3.6.5.6", "3.7.1.1", "3.7.1.2", "3.7.1.3", "3.7.1.4", "3.7.1.5",
+  "3.7.1.6", "3.7.1.7", "3.7.1.8", "3.7.1.9", "3.7.1.10", "3.7.1.11",
+  "3.8.1.1", "3.8.1.2", "3.8.1.3", "3.8.1.5", "3.8.1.6", "3.8.1.7",
+  "3.8.1.8", "3.8.1.9", "3.8.1.10", "3.8.1.11", "3.9.1.1", "3.10.1.1",
+  "3.10.1.2", "3.11.1.1", "3.11.1.2", "3.11.1.3", "3.12.1.1",
+  "3.13.1.1", "3.13.1.3", "4.1.1.1", "4.1.1.2", "4.1.1.3", "4.1.1.4",
+  "4.1.1.5", "4.1.1.6", "4.1.1.7", "4.1.1.8", "4.1.1.9", "4.1.1.11",
+  "4.1.1.12", "4.1.1.14", "4.1.1.15", "4.1.1.16", "4.1.1.17",
+  "4.1.1.18", "4.1.1.19", "4.1.1.20", "4.1.1.21", "4.1.1.22",
+  "4.1.1.23", "4.1.1.24", "4.1.1.25", "4.1.1.28", "4.1.1.29",
+  "4.1.1.30", "4.1.1.31", "4.1.1.32", "4.1.1.33", "4.1.1.34",
+  "4.1.1.35", "4.1.1.36", "4.1.1.37", "4.1.1.38", "4.1.1.39",
+  "4.1.1.40", "4.1.1.41", "4.1.1.42", "4.1.1.43", "4.1.1.44",
+  "4.1.1.45", "4.1.1.46", "4.1.1.47", "4.1.1.48", "4.1.1.49",
+  "4.1.1.50", "4.1.1.51", "4.1.1.52", "4.1.1.53", "4.1.1.54",
+  "4.1.1.55", "4.1.1.56", "4.1.1.57", "4.1.1.58", "4.1.1.59",
+  "4.1.1.60", "4.1.1.61", "4.1.1.62", "4.1.1.63", "4.1.1.64",
+  "4.1.1.65", "4.1.1.66", "4.1.1.67", "4.1.1.68", "4.1.1.69",
+  "4.1.1.70", "4.1.1.71", "4.1.1.72", "4.1.1.73", "4.1.1.74",
+  "4.1.1.75", "4.1.1.76", "4.1.1.77", "4.1.1.78", "4.1.1.79",
+  "4.1.1.80", "4.1.1.81", "4.1.1.82", "4.1.1.83", "4.1.1.84",
+  "4.1.1.85", "4.1.1.86", "4.1.1.87", "4.1.1.88", "4.1.1.89",
+  "4.1.1.90", "4.1.2.2", "4.1.2.4", "4.1.2.5", "4.1.2.8", "4.1.2.9",
   "4.1.2.10", "4.1.2.11", "4.1.2.12", "4.1.2.13", "4.1.2.14",
   "4.1.2.17", "4.1.2.18", "4.1.2.19", "4.1.2.20", "4.1.2.21",
   "4.1.2.22", "4.1.2.23", "4.1.2.24", "4.1.2.25", "4.1.2.26",
   "4.1.2.27", "4.1.2.28", "4.1.2.29", "4.1.2.30", "4.1.2.32",
   "4.1.2.33", "4.1.2.34", "4.1.2.35", "4.1.2.36", "4.1.2.37",
-  "4.1.2.38", "4.1.2.40", "4.1.2.41", "4.1.2.42", "4.1.2.43", "4.1.3.1",
-  "4.1.3.3", "4.1.3.4", "4.1.3.6", "4.1.3.13", "4.1.3.14", "4.1.3.16",
-  "4.1.3.17", "4.1.3.22", "4.1.3.24", "4.1.3.25", "4.1.3.26",
-  "4.1.3.27", "4.1.3.30", "4.1.3.32", "4.1.3.34", "4.1.3.35",
-  "4.1.3.36", "4.1.3.38", "4.1.3.39", "4.1.3.40", "4.1.99.1",
-  "4.1.99.2", "4.1.99.3", "4.1.99.5", "4.1.99.11", "4.1.99.12",
-  "4.2.1.1", "4.2.1.2", "4.2.1.3", "4.2.1.4", "4.2.1.5", "4.2.1.6",
-  "4.2.1.7", "4.2.1.8", "4.2.1.9", "4.2.1.10", "4.2.1.11", "4.2.1.12",
-  "4.2.1.17", "4.2.1.18", "4.2.1.19", "4.2.1.20", "4.2.1.22",
-  "4.2.1.24", "4.2.1.25", "4.2.1.27", "4.2.1.28", "4.2.1.30",
-  "4.2.1.31", "4.2.1.32", "4.2.1.33", "4.2.1.34", "4.2.1.35",
-  "4.2.1.36", "4.2.1.39", "4.2.1.40", "4.2.1.41", "4.2.1.42",
-  "4.2.1.43", "4.2.1.44", "4.2.1.45", "4.2.1.46", "4.2.1.47",
-  "4.2.1.48", "4.2.1.49", "4.2.1.50", "4.2.1.51", "4.2.1.52",
-  "4.2.1.53", "4.2.1.54", "4.2.1.55", "4.2.1.56", "4.2.1.57",
-  "4.2.1.58", "4.2.1.59", "4.2.1.60", "4.2.1.61", "4.2.1.62",
-  "4.2.1.65", "4.2.1.66", "4.2.1.67", "4.2.1.68", "4.2.1.69",
-  "4.2.1.70", "4.2.1.73", "4.2.1.74", "4.2.1.75", "4.2.1.76",
-  "4.2.1.77", "4.2.1.78", "4.2.1.79", "4.2.1.80", "4.2.1.81",
-  "4.2.1.82", "4.2.1.83", "4.2.1.84", "4.2.1.85", "4.2.1.87",
-  "4.2.1.88", "4.2.1.89", "4.2.1.90", "4.2.1.91", "4.2.1.92",
-  "4.2.1.93", "4.2.1.94", "4.2.1.95", "4.2.1.96", "4.2.1.97",
-  "4.2.1.98", "4.2.1.99", "4.2.1.100", "4.2.1.101", "4.2.1.103",
-  "4.2.1.104", "4.2.1.105", "4.2.1.106", "4.2.1.107", "4.2.1.108",
-  "4.2.1.109", "4.2.1.110", "4.2.1.111", "4.2.1.112", "4.2.1.113",
-  "4.2.1.114", "4.2.1.115", "4.2.2.1", "4.2.2.2", "4.2.2.3", "4.2.2.5",
-  "4.2.2.6", "4.2.2.7", "4.2.2.8", "4.2.2.9", "4.2.2.10", "4.2.2.11",
-  "4.2.2.12", "4.2.2.13", "4.2.2.14", "4.2.2.15", "4.2.2.16",
-  "4.2.2.17", "4.2.2.18", "4.2.2.19", "4.2.2.20", "4.2.2.21",
-  "4.2.2.22", "4.2.3.1", "4.2.3.2", "4.2.3.3", "4.2.3.4", "4.2.3.5",
-  "4.2.3.6", "4.2.3.7", "4.2.3.8", "4.2.3.9", "4.2.3.10", "4.2.3.11",
-  "4.2.3.12", "4.2.3.13", "4.2.3.14", "4.2.3.15", "4.2.3.16",
-  "4.2.3.17", "4.2.3.18", "4.2.3.19", "4.2.3.20", "4.2.3.21",
-  "4.2.3.22", "4.2.3.23", "4.2.3.24", "4.2.3.25", "4.2.3.26",
-  "4.2.3.27", "4.2.3.28", "4.2.3.29", "4.2.3.30", "4.2.3.31",
-  "4.2.3.32", "4.2.3.33", "4.2.3.34", "4.2.3.35", "4.2.3.36",
-  "4.2.3.37", "4.2.3.38", "4.2.3.39", "4.2.3.40", "4.2.99.12",
-  "4.2.99.18", "4.2.99.20", "4.3.1.1", "4.3.1.2", "4.3.1.3", "4.3.1.4",
-  "4.3.1.6", "4.3.1.7", "4.3.1.9", "4.3.1.10", "4.3.1.12", "4.3.1.13",
-  "4.3.1.14", "4.3.1.15", "4.3.1.16", "4.3.1.17", "4.3.1.18",
-  "4.3.1.19", "4.3.1.20", "4.3.1.22", "4.3.1.23", "4.3.1.24",
-  "4.3.1.25", "4.3.2.1", "4.3.2.2", "4.3.2.3", "4.3.2.4", "4.3.2.5",
-  "4.3.3.1", "4.3.3.2", "4.3.3.3", "4.3.3.4", "4.3.99.2", "4.4.1.1",
+  "4.1.2.38", "4.1.2.40", "4.1.2.41", "4.1.2.42", "4.1.2.43",
+  "4.1.2.44", "4.1.2.45", "4.1.3.1", "4.1.3.3", "4.1.3.4", "4.1.3.6",
+  "4.1.3.13", "4.1.3.14", "4.1.3.16", "4.1.3.17", "4.1.3.22",
+  "4.1.3.24", "4.1.3.25", "4.1.3.26", "4.1.3.27", "4.1.3.30",
+  "4.1.3.32", "4.1.3.34", "4.1.3.35", "4.1.3.36", "4.1.3.38",
+  "4.1.3.39", "4.1.3.40", "4.1.99.1", "4.1.99.2", "4.1.99.3",
+  "4.1.99.5", "4.1.99.11", "4.1.99.12", "4.1.99.13", "4.1.99.14",
+  "4.1.99.15", "4.2.1.1", "4.2.1.2", "4.2.1.3", "4.2.1.4", "4.2.1.5",
+  "4.2.1.6", "4.2.1.7", "4.2.1.8", "4.2.1.9", "4.2.1.10", "4.2.1.11",
+  "4.2.1.12", "4.2.1.17", "4.2.1.18", "4.2.1.19", "4.2.1.20",
+  "4.2.1.22", "4.2.1.24", "4.2.1.25", "4.2.1.27", "4.2.1.28",
+  "4.2.1.30", "4.2.1.31", "4.2.1.32", "4.2.1.33", "4.2.1.34",
+  "4.2.1.35", "4.2.1.36", "4.2.1.39", "4.2.1.40", "4.2.1.41",
+  "4.2.1.42", "4.2.1.43", "4.2.1.44", "4.2.1.45", "4.2.1.46",
+  "4.2.1.47", "4.2.1.48", "4.2.1.49", "4.2.1.50", "4.2.1.51",
+  "4.2.1.52", "4.2.1.53", "4.2.1.54", "4.2.1.55", "4.2.1.56",
+  "4.2.1.57", "4.2.1.58", "4.2.1.59", "4.2.1.60", "4.2.1.61",
+  "4.2.1.62", "4.2.1.65", "4.2.1.66", "4.2.1.67", "4.2.1.68",
+  "4.2.1.69", "4.2.1.70", "4.2.1.73", "4.2.1.74", "4.2.1.75",
+  "4.2.1.76", "4.2.1.77", "4.2.1.78", "4.2.1.79", "4.2.1.80",
+  "4.2.1.81", "4.2.1.82", "4.2.1.83", "4.2.1.84", "4.2.1.85",
+  "4.2.1.87", "4.2.1.88", "4.2.1.89", "4.2.1.90", "4.2.1.91",
+  "4.2.1.92", "4.2.1.93", "4.2.1.94", "4.2.1.95", "4.2.1.96",
+  "4.2.1.97", "4.2.1.98", "4.2.1.99", "4.2.1.100", "4.2.1.101",
+  "4.2.1.103", "4.2.1.104", "4.2.1.105", "4.2.1.106", "4.2.1.107",
+  "4.2.1.108", "4.2.1.109", "4.2.1.110", "4.2.1.111", "4.2.1.112",
+  "4.2.1.113", "4.2.1.114", "4.2.1.115", "4.2.1.116", "4.2.1.117",
+  "4.2.1.118", "4.2.1.119", "4.2.1.120", "4.2.2.1", "4.2.2.2",
+  "4.2.2.3", "4.2.2.5", "4.2.2.6", "4.2.2.7", "4.2.2.8", "4.2.2.9",
+  "4.2.2.10", "4.2.2.11", "4.2.2.12", "4.2.2.13", "4.2.2.14",
+  "4.2.2.15", "4.2.2.16", "4.2.2.17", "4.2.2.18", "4.2.2.19",
+  "4.2.2.20", "4.2.2.21", "4.2.2.22", "4.2.3.1", "4.2.3.2", "4.2.3.3",
+  "4.2.3.4", "4.2.3.5", "4.2.3.6", "4.2.3.7", "4.2.3.8", "4.2.3.9",
+  "4.2.3.10", "4.2.3.11", "4.2.3.12", "4.2.3.13", "4.2.3.14",
+  "4.2.3.15", "4.2.3.16", "4.2.3.17", "4.2.3.18", "4.2.3.19",
+  "4.2.3.20", "4.2.3.21", "4.2.3.22", "4.2.3.23", "4.2.3.24",
+  "4.2.3.25", "4.2.3.26", "4.2.3.27", "4.2.3.28", "4.2.3.29",
+  "4.2.3.30", "4.2.3.31", "4.2.3.32", "4.2.3.33", "4.2.3.34",
+  "4.2.3.35", "4.2.3.36", "4.2.3.37", "4.2.3.38", "4.2.3.39",
+  "4.2.3.40", "4.2.3.41", "4.2.3.42", "4.2.3.43", "4.2.3.44",
+  "4.2.3.45", "4.2.99.12", "4.2.99.18", "4.2.99.20", "4.3.1.1",
+  "4.3.1.2", "4.3.1.3", "4.3.1.4", "4.3.1.6", "4.3.1.7", "4.3.1.9",
+  "4.3.1.10", "4.3.1.12", "4.3.1.13", "4.3.1.14", "4.3.1.15",
+  "4.3.1.16", "4.3.1.17", "4.3.1.18", "4.3.1.19", "4.3.1.20",
+  "4.3.1.22", "4.3.1.23", "4.3.1.24", "4.3.1.25", "4.3.1.26",
+  "4.3.2.1", "4.3.2.2", "4.3.2.3", "4.3.2.4", "4.3.2.5", "4.3.3.1",
+  "4.3.3.2", "4.3.3.3", "4.3.3.4", "4.3.3.5", "4.3.99.2", "4.4.1.1",
   "4.4.1.2", "4.4.1.3", "4.4.1.4", "4.4.1.5", "4.4.1.6", "4.4.1.8",
-  "4.4.1.9", "4.4.1.10", "4.4.1.11", "4.4.1.13", "4.4.1.14", "4.4.1.15",
-  "4.4.1.16", "4.4.1.17", "4.4.1.19", "4.4.1.20", "4.4.1.21",
-  "4.4.1.22", "4.4.1.23", "4.4.1.24", "4.4.1.25", "4.5.1.1", "4.5.1.2",
-  "4.5.1.3", "4.5.1.4", "4.5.1.5", "4.6.1.1", "4.6.1.2", "4.6.1.6",
-  "4.6.1.12", "4.6.1.13", "4.6.1.14", "4.6.1.15", "4.99.1.1",
-  "4.99.1.2", "4.99.1.3", "4.99.1.4", "4.99.1.5", "4.99.1.6",
-  "4.99.1.7", "5.1.1.1", "5.1.1.2", "5.1.1.3", "5.1.1.4", "5.1.1.5",
-  "5.1.1.6", "5.1.1.7", "5.1.1.8", "5.1.1.9", "5.1.1.10", "5.1.1.11",
-  "5.1.1.12", "5.1.1.13", "5.1.1.14", "5.1.1.15", "5.1.1.16",
-  "5.1.1.17", "5.1.1.18", "5.1.2.1", "5.1.2.2", "5.1.2.3", "5.1.2.4",
-  "5.1.2.5", "5.1.2.6", "5.1.3.1", "5.1.3.2", "5.1.3.3", "5.1.3.4",
-  "5.1.3.5", "5.1.3.6", "5.1.3.7", "5.1.3.8", "5.1.3.9", "5.1.3.10",
-  "5.1.3.11", "5.1.3.12", "5.1.3.13", "5.1.3.14", "5.1.3.15",
-  "5.1.3.16", "5.1.3.17", "5.1.3.18", "5.1.3.19", "5.1.3.20",
-  "5.1.3.21", "5.1.3.22", "5.1.3.23", "5.1.99.1", "5.1.99.2",
-  "5.1.99.3", "5.1.99.4", "5.1.99.5", "5.2.1.1", "5.2.1.2", "5.2.1.3",
-  "5.2.1.4", "5.2.1.5", "5.2.1.6", "5.2.1.7", "5.2.1.8", "5.2.1.9",
-  "5.2.1.10", "5.3.1.1", "5.3.1.3", "5.3.1.4", "5.3.1.5", "5.3.1.6",
-  "5.3.1.7", "5.3.1.8", "5.3.1.9", "5.3.1.12", "5.3.1.13", "5.3.1.14",
+  "4.4.1.9", "4.4.1.10", "4.4.1.11", "4.4.1.13", "4.4.1.14",
+  "4.4.1.15", "4.4.1.16", "4.4.1.17", "4.4.1.19", "4.4.1.20",
+  "4.4.1.21", "4.4.1.22", "4.4.1.23", "4.4.1.24", "4.4.1.25",
+  "4.5.1.1", "4.5.1.2", "4.5.1.3", "4.5.1.4", "4.5.1.5", "4.6.1.1",
+  "4.6.1.2", "4.6.1.6", "4.6.1.12", "4.6.1.13", "4.6.1.14",
+  "4.6.1.15", "4.99.1.1", "4.99.1.2", "4.99.1.3", "4.99.1.4",
+  "4.99.1.5", "4.99.1.6", "4.99.1.7", "4.99.1.8", "5.1.1.1",
+  "5.1.1.2", "5.1.1.3", "5.1.1.4", "5.1.1.5", "5.1.1.6", "5.1.1.7",
+  "5.1.1.8", "5.1.1.9", "5.1.1.10", "5.1.1.11", "5.1.1.12",
+  "5.1.1.13", "5.1.1.14", "5.1.1.15", "5.1.1.16", "5.1.1.17",
+  "5.1.1.18", "5.1.2.1", "5.1.2.2", "5.1.2.3", "5.1.2.4", "5.1.2.5",
+  "5.1.2.6", "5.1.3.1", "5.1.3.2", "5.1.3.3", "5.1.3.4", "5.1.3.5",
+  "5.1.3.6", "5.1.3.7", "5.1.3.8", "5.1.3.9", "5.1.3.10", "5.1.3.11",
+  "5.1.3.12", "5.1.3.13", "5.1.3.14", "5.1.3.15", "5.1.3.16",
+  "5.1.3.17", "5.1.3.18", "5.1.3.19", "5.1.3.20", "5.1.3.21",
+  "5.1.3.22", "5.1.3.23", "5.1.99.1", "5.1.99.2", "5.1.99.3",
+  "5.1.99.4", "5.1.99.5", "5.2.1.1", "5.2.1.2", "5.2.1.3", "5.2.1.4",
+  "5.2.1.5", "5.2.1.6", "5.2.1.7", "5.2.1.8", "5.2.1.9", "5.2.1.10",
+  "5.3.1.1", "5.3.1.3", "5.3.1.4", "5.3.1.5", "5.3.1.6", "5.3.1.7",
+  "5.3.1.8", "5.3.1.9", "5.3.1.12", "5.3.1.13", "5.3.1.14",
   "5.3.1.15", "5.3.1.16", "5.3.1.17", "5.3.1.20", "5.3.1.21",
   "5.3.1.22", "5.3.1.23", "5.3.1.24", "5.3.1.25", "5.3.1.26",
   "5.3.1.27", "5.3.2.1", "5.3.2.2", "5.3.3.1", "5.3.3.2", "5.3.3.3",
   "5.3.3.4", "5.3.3.5", "5.3.3.6", "5.3.3.7", "5.3.3.8", "5.3.3.9",
   "5.3.3.10", "5.3.3.11", "5.3.3.12", "5.3.3.13", "5.3.3.14",
-  "5.3.3.15", "5.3.4.1", "5.3.99.2", "5.3.99.3", "5.3.99.4", "5.3.99.5",
-  "5.3.99.6", "5.3.99.7", "5.3.99.8", "5.3.99.9", "5.4.1.1", "5.4.1.2",
-  "5.4.2.1", "5.4.2.2", "5.4.2.3", "5.4.2.4", "5.4.2.5", "5.4.2.6",
-  "5.4.2.7", "5.4.2.8", "5.4.2.9", "5.4.2.10", "5.4.3.2", "5.4.3.3",
-  "5.4.3.4", "5.4.3.5", "5.4.3.6", "5.4.3.7", "5.4.3.8", "5.4.4.1",
-  "5.4.4.2", "5.4.4.3", "5.4.99.1", "5.4.99.2", "5.4.99.3", "5.4.99.4",
-  "5.4.99.5", "5.4.99.7", "5.4.99.8", "5.4.99.9", "5.4.99.11",
-  "5.4.99.12", "5.4.99.13", "5.4.99.14", "5.4.99.15", "5.4.99.16",
-  "5.4.99.17", "5.4.99.18", "5.5.1.1", "5.5.1.2", "5.5.1.3", "5.5.1.4",
-  "5.5.1.5", "5.5.1.6", "5.5.1.7", "5.5.1.8", "5.5.1.9", "5.5.1.10",
-  "5.5.1.11", "5.5.1.12", "5.5.1.13", "5.5.1.14", "5.5.1.15",
-  "5.5.1.16", "5.99.1.1", "5.99.1.2", "5.99.1.3", "6.1.1.1", "6.1.1.2",
-  "6.1.1.3", "6.1.1.4", "6.1.1.5", "6.1.1.6", "6.1.1.7", "6.1.1.9",
-  "6.1.1.10", "6.1.1.11", "6.1.1.12", "6.1.1.13", "6.1.1.14",
-  "6.1.1.15", "6.1.1.16", "6.1.1.17", "6.1.1.18", "6.1.1.19",
-  "6.1.1.20", "6.1.1.21", "6.1.1.22", "6.1.1.23", "6.1.1.24",
-  "6.1.1.25", "6.1.1.26", "6.2.1.1", "6.2.1.2", "6.2.1.3", "6.2.1.4",
+  "5.3.3.15", "5.3.4.1", "5.3.99.2", "5.3.99.3", "5.3.99.4",
+  "5.3.99.5", "5.3.99.6", "5.3.99.7", "5.3.99.8", "5.3.99.9",
+  "5.4.1.1", "5.4.1.2", "5.4.2.1", "5.4.2.2", "5.4.2.3", "5.4.2.4",
+  "5.4.2.5", "5.4.2.6", "5.4.2.7", "5.4.2.8", "5.4.2.9", "5.4.2.10",
+  "5.4.3.2", "5.4.3.3", "5.4.3.4", "5.4.3.5", "5.4.3.6", "5.4.3.7",
+  "5.4.3.8", "5.4.4.1", "5.4.4.2", "5.4.4.3", "5.4.99.1", "5.4.99.2",
+  "5.4.99.3", "5.4.99.4", "5.4.99.5", "5.4.99.7", "5.4.99.8",
+  "5.4.99.9", "5.4.99.11", "5.4.99.12", "5.4.99.13", "5.4.99.14",
+  "5.4.99.15", "5.4.99.16", "5.4.99.17", "5.4.99.18", "5.5.1.1",
+  "5.5.1.2", "5.5.1.3", "5.5.1.4", "5.5.1.5", "5.5.1.6", "5.5.1.7",
+  "5.5.1.8", "5.5.1.9", "5.5.1.10", "5.5.1.11", "5.5.1.12",
+  "5.5.1.13", "5.5.1.14", "5.5.1.15", "5.5.1.16", "5.99.1.1",
+  "5.99.1.2", "5.99.1.3", "5.99.1.4", "6.1.1.1", "6.1.1.2", "6.1.1.3",
+  "6.1.1.4", "6.1.1.5", "6.1.1.6", "6.1.1.7", "6.1.1.9", "6.1.1.10",
+  "6.1.1.11", "6.1.1.12", "6.1.1.13", "6.1.1.14", "6.1.1.15",
+  "6.1.1.16", "6.1.1.17", "6.1.1.18", "6.1.1.19", "6.1.1.20",
+  "6.1.1.21", "6.1.1.22", "6.1.1.23", "6.1.1.24", "6.1.1.25",
+  "6.1.1.26", "6.1.1.27", "6.2.1.1", "6.2.1.2", "6.2.1.3", "6.2.1.4",
   "6.2.1.5", "6.2.1.6", "6.2.1.7", "6.2.1.8", "6.2.1.9", "6.2.1.10",
   "6.2.1.11", "6.2.1.12", "6.2.1.13", "6.2.1.14", "6.2.1.15",
   "6.2.1.16", "6.2.1.17", "6.2.1.18", "6.2.1.19", "6.2.1.20",
   "6.2.1.22", "6.2.1.23", "6.2.1.24", "6.2.1.25", "6.2.1.26",
   "6.2.1.27", "6.2.1.28", "6.2.1.30", "6.2.1.31", "6.2.1.32",
-  "6.2.1.33", "6.2.1.34", "6.2.1.35", "6.3.1.1", "6.3.1.2", "6.3.1.4",
-  "6.3.1.5", "6.3.1.6", "6.3.1.7", "6.3.1.8", "6.3.1.9", "6.3.1.10",
-  "6.3.1.11", "6.3.1.12", "6.3.2.1", "6.3.2.2", "6.3.2.3", "6.3.2.4",
-  "6.3.2.5", "6.3.2.6", "6.3.2.7", "6.3.2.8", "6.3.2.9", "6.3.2.10",
-  "6.3.2.11", "6.3.2.12", "6.3.2.13", "6.3.2.14", "6.3.2.16",
-  "6.3.2.17", "6.3.2.18", "6.3.2.19", "6.3.2.20", "6.3.2.21",
-  "6.3.2.22", "6.3.2.23", "6.3.2.24", "6.3.2.25", "6.3.2.26",
-  "6.3.2.27", "6.3.2.28", "6.3.2.29", "6.3.2.30", "6.3.3.1", "6.3.3.2",
-  "6.3.3.3", "6.3.3.4", "6.3.4.1", "6.3.4.2", "6.3.4.3", "6.3.4.4",
-  "6.3.4.5", "6.3.4.6", "6.3.4.7", "6.3.4.8", "6.3.4.9", "6.3.4.10",
-  "6.3.4.11", "6.3.4.12", "6.3.4.13", "6.3.4.14", "6.3.4.15",
-  "6.3.4.16", "6.3.4.17", "6.3.4.18", "6.3.5.1", "6.3.5.2", "6.3.5.3",
-  "6.3.5.4", "6.3.5.5", "6.3.5.6", "6.3.5.7", "6.3.5.9", "6.3.5.10",
-  "6.4.1.1", "6.4.1.2", "6.4.1.3", "6.4.1.4", "6.4.1.5", "6.4.1.6",
-  "6.4.1.7", "6.5.1.1", "6.5.1.2", "6.5.1.3", "6.5.1.4", "6.6.1.1",
-  "6.6.1.2",
+  "6.2.1.33", "6.2.1.34", "6.2.1.35", "6.2.1.36", "6.3.1.1",
+  "6.3.1.2", "6.3.1.4", "6.3.1.5", "6.3.1.6", "6.3.1.7", "6.3.1.8",
+  "6.3.1.9", "6.3.1.10", "6.3.1.11", "6.3.1.12", "6.3.1.13",
+  "6.3.2.1", "6.3.2.2", "6.3.2.3", "6.3.2.4", "6.3.2.5", "6.3.2.6",
+  "6.3.2.7", "6.3.2.8", "6.3.2.9", "6.3.2.10", "6.3.2.11", "6.3.2.12",
+  "6.3.2.13", "6.3.2.14", "6.3.2.16", "6.3.2.17", "6.3.2.18",
+  "6.3.2.19", "6.3.2.20", "6.3.2.21", "6.3.2.22", "6.3.2.23",
+  "6.3.2.24", "6.3.2.25", "6.3.2.26", "6.3.2.27", "6.3.2.28",
+  "6.3.2.29", "6.3.2.30", "6.3.2.31", "6.3.2.32", "6.3.2.33",
+  "6.3.2.34", "6.3.3.1", "6.3.3.2", "6.3.3.3", "6.3.3.4", "6.3.4.1",
+  "6.3.4.2", "6.3.4.3", "6.3.4.4", "6.3.4.5", "6.3.4.6", "6.3.4.7",
+  "6.3.4.8", "6.3.4.9", "6.3.4.10", "6.3.4.11", "6.3.4.12",
+  "6.3.4.13", "6.3.4.14", "6.3.4.15", "6.3.4.16", "6.3.4.17",
+  "6.3.4.18", "6.3.5.1", "6.3.5.2", "6.3.5.3", "6.3.5.4", "6.3.5.5",
+  "6.3.5.6", "6.3.5.7", "6.3.5.9", "6.3.5.10", "6.4.1.1", "6.4.1.2",
+  "6.4.1.3", "6.4.1.4", "6.4.1.5", "6.4.1.6", "6.4.1.7", "6.5.1.1",
+  "6.5.1.2", "6.5.1.3", "6.5.1.4", "6.6.1.1", "6.6.1.2",
   NULL
 };
 
@@ -16731,8 +17581,12 @@ static Boolean ValidateECnumber (CharPtr str)
       ptr++;
       ch = *ptr;
     } else if (ch == 'n') {
-      numdashes++;
-      is_ambig = TRUE;
+      if (numperiods == 3 && numdigits == 0 && IS_DIGIT(*(ptr + 1))) {
+        /* allow/ignore n in first position of fourth number to not mean ambiguous, if followed by digit */
+      } else {
+        numdashes++;
+        is_ambig = TRUE;
+      }
       ptr++;
       ch = *ptr;
     } else if (ch == '.') {
@@ -16832,7 +17686,7 @@ static TextFsaPtr GetECNumberFSA (CharPtr prop, CharPtr file, CharPtr PNTR local
   if (fsa != NULL) {
     if (fp != NULL) {
       FileCacheSetup (&fc, fp);
-  
+
       str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
       while (str != NULL) {
         if (StringDoesHaveText (str)) {
@@ -17042,7 +17896,7 @@ static void ValidateRptUnit (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
   if (StringICmp (key,"repeat_region") == 0 && qual == GBQUAL_rpt_unit_seq && ! multi_rpt_unit) {
     if (StringLen (gbqual->val) <= SeqLocLen (sfp->location)) {
       just_nuc_letters = TRUE;
-      for (ptr = gbqual->val, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+      for (ptr = gbqual->val, ch = *ptr; ch != '\0' && just_nuc_letters; ptr++, ch = *ptr) {
         if (StringChr ("ACGTNacgtn", ch) == NULL) {
           just_nuc_letters = FALSE;
         }
@@ -17722,7 +18576,7 @@ static void ValidateNonImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
         }
       }
       if (!found) {
-        ValidErr (vsp, sev, ERR_SEQ_FEAT_MissingQualOnFeature, 
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_MissingQualOnFeature,
                   "Missing qualifier %s for feature %s", ParFlat_GBQual_names[qual].name, key);
       }
     }
@@ -17803,7 +18657,7 @@ static Boolean PartialAtSpliceSiteOrGap (ValidStructPtr vsp, SeqLocPtr head, Uin
   sip = SeqLocId (slp);
   if (sip == NULL)
     return FALSE;
-  
+
   bsp = NULL;
   if (sip != NULL && (sip->choice != SEQID_GI || sip->data.intvalue > 0)) {
     bsp = BioseqLockById (sip);
@@ -17896,7 +18750,7 @@ static Boolean PartialAtSpliceSiteOrGap (ValidStructPtr vsp, SeqLocPtr head, Uin
         *isgapP = TRUE;
       }
       rsult = TRUE;
-    } else if (IS_residue (residue1) && IS_residue (residue2)) {
+    } else if (IS_residue (residue1) && IS_residue (residue2) && IS_ALPHA ((Char) residue1) && IS_ALPHA ((Char) residue2)) {
       if ((residue1 == 'A') && (residue2 == 'G')) {
         rsult = TRUE;
       }
@@ -18255,7 +19109,7 @@ static void CheckTrnaCodons (
     ValNodeCopyStr (&recognizes, taa, (CharPtr) codon);
 
     if (aa == 0 || aa == 255) continue;
- 
+
     /* only report if encoded amino acid does not match indicated amino acid */
 
     if (taa == aa) continue;
@@ -18470,7 +19324,7 @@ static BioseqSetPtr GetParentNPS (BioseqPtr bsp)
   while (bssp != NULL && bssp->_class != BioseqseqSet_class_nuc_prot && bssp->idx.parenttype == OBJ_BIOSEQSET) {
     bssp = (BioseqSetPtr) bssp->idx.parentptr;
   }
-  if (bssp->_class == BioseqseqSet_class_nuc_prot)
+  if (bssp != NULL && bssp->_class == BioseqseqSet_class_nuc_prot)
     return bssp;
   return NULL;
 }
@@ -18679,7 +19533,7 @@ static void CheckForCommonCDSProduct (ValidStructPtr vsp, SeqFeatPtr sfp)
         if (bssp != NULL && bssp->_class == BioseqseqSet_class_genbank) {
           sep = bssp->seq_set;
           if (sep != NULL && IS_Bioseq_set (sep)) {
-            bssp = (BioseqSetPtr) sep->data.ptrvalue; 
+            bssp = (BioseqSetPtr) sep->data.ptrvalue;
             if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set)
               return;
           }
@@ -18733,7 +19587,7 @@ static void CheckForCommonCDSProduct (ValidStructPtr vsp, SeqFeatPtr sfp)
       if (bssp != NULL && bssp->_class == BioseqseqSet_class_genbank) {
         sep = bssp->seq_set;
         if (sep != NULL && IS_Bioseq_set (sep)) {
-          bssp = (BioseqSetPtr) sep->data.ptrvalue; 
+          bssp = (BioseqSetPtr) sep->data.ptrvalue;
           if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set)
             if (BioseqFindFromSeqLoc (cds->location) != BioseqFindFromSeqLoc (sfp->location))
               return;
@@ -19009,7 +19863,7 @@ static Boolean OverlappingGeneIsPseudo (SeqFeatPtr sfp)
   return FALSE;
 }
 
-static void CheckForIllegalDbxref (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPtr sfp, ValNodePtr dbxref)
+static void CheckForIllegalDbxref (ValidStructPtr vsp, GatherContextPtr gcp, ValNodePtr dbxref)
 
 {
   DbtagPtr     db;
@@ -19077,7 +19931,7 @@ static void CheckForIllegalDbxref (ValidStructPtr vsp, GatherContextPtr gcp, Seq
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, dbxerr);
         dbxerr = MemFree (dbxerr);
       }
-      */              
+      */
     }
   }
 }
@@ -19125,6 +19979,7 @@ static CharPtr legal_exception_strings [] = {
   "heterogeneous population sequenced",
   "low-quality sequence region",
   "unextendable partial coding region",
+  "artificial location",
   NULL
 };
 
@@ -19140,15 +19995,19 @@ static CharPtr refseq_exception_strings [] = {
 static void ValidateExceptText (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPtr sfp)
 
 {
-  Boolean  found;
-  Int2     i;
-  CharPtr  ptr;
-  Boolean  reasons_given_except = FALSE;
-  Boolean  redundant_with_comment = FALSE;
-  Boolean  refseq_except = FALSE;
-  ErrSev   sev = SEV_ERROR;
-  CharPtr  str;
-  CharPtr  tmp;
+  Boolean    art_loc_except = FALSE;
+  Boolean    found;
+  GBQualPtr  gbq;
+  Int2       i;
+  Boolean    has_inference = FALSE;
+  CharPtr    ptr;
+  Boolean    reasons_given_except = FALSE;
+  Boolean    redundant_with_comment = FALSE;
+  Boolean    refseq_except = FALSE;
+  ErrSev     sev = SEV_ERROR;
+  Boolean    trans_prot_except = FALSE;
+  CharPtr    str;
+  CharPtr    tmp;
 
   str = StringSave (sfp->except_text);
   if (str == NULL) return;
@@ -19166,6 +20025,10 @@ static void ValidateExceptText (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
         found = TRUE;
         if (StringICmp (tmp, "reasons given in citation") == 0) {
           reasons_given_except = TRUE;
+        } else if (StringICmp (tmp, "annotated by transcript or proteomic data") == 0) {
+          trans_prot_except = TRUE;
+        } else if (StringICmp (tmp, "artificial location") == 0) {
+          art_loc_except = TRUE;
         }
         break;
       }
@@ -19188,7 +20051,9 @@ static void ValidateExceptText (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
       }
     }
     if (sfp->comment != NULL && StringISearch (sfp->comment, tmp) != NULL) {
-      if (StringICmp (tmp, "ribosomal slippage") != 0 && StringICmp (tmp, "trans-splicing") != 0) {
+      if (StringICmp (tmp, "ribosomal slippage") != 0 &&
+          StringICmp (tmp, "trans-splicing") != 0 &&
+          StringICmp (tmp, "artificial location") != 0) {
         redundant_with_comment = TRUE;
       } else if (StringICmp (sfp->comment, tmp) == 0) {
         redundant_with_comment = TRUE;
@@ -19210,11 +20075,30 @@ static void ValidateExceptText (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
       }
     }
     if (! found) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ExceptionProblem, "Genome processing exception should not be combined with other explanations");
+      if (! vsp->is_gpipe_in_sep) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ExceptionProblem, "Genome processing exception should not be combined with other explanations");
+      }
     }
   }
   if (reasons_given_except && sfp->cit == NULL) {
     ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ExceptionProblem, "Reasons given in citation exception does not have the required citation");
+  }
+  if (trans_prot_except) {
+    for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+      if (StringICmp (gbq->qual, "inference") == 0) {
+        has_inference = TRUE;
+      }
+    }
+    if (! has_inference) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ExceptionProblem,
+                "Annotated by transcript or proteomic data exception does not have the required inference qualifier");
+    }
+  }
+  if (art_loc_except) {
+    if (! vsp->is_embl_ddbj_in_sep) {
+      ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_ExceptionProblem,
+                "Artificial location should only be used directly by EMBL or DDBJ records");
+    }
   }
 }
 
@@ -19697,6 +20581,7 @@ static void ValidateAnticodon (ValidStructPtr vsp, SeqLocPtr slp)
       id2 = sip->id;
       from2 = sip->from;
       to2 = sip->to;
+      tmpval = SeqIntCheck (sip);
       break;
     case SEQLOC_PNT:
       spp = (SeqPntPtr) (tmp->data.ptrvalue);
@@ -19705,6 +20590,7 @@ static void ValidateAnticodon (ValidStructPtr vsp, SeqLocPtr slp)
       id2 = spp->id;
       from2 = spp->point;
       to2 = spp->point;
+      tmpval = SeqPntCheck (spp);
       break;
     case SEQLOC_NULL:
       continue;
@@ -19875,7 +20761,7 @@ static Boolean LIBCALLBACK DummySMFEProc (
   DummySmfePtr  dsp;
   GeneRefPtr    grp, grpx;
   Int4          len;
-  Boolean       redundantgenexref;
+  Boolean       redundantgenexref = FALSE;
   CharPtr       syn1, syn2;
 
   if (sfp == NULL || context == NULL) return TRUE;
@@ -20051,14 +20937,14 @@ static ValNodePtr ValidateGoTermQualifier (
         if (oip == NULL) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadGeneOntologyFormat, "No label on GO term qualifier field");
           continue;
-        } 
+        }
         for (j = 0; goFieldType [j] != NULL; j++) {
           if (StringICmp (oip->str, goFieldType [j]) == 0) break;
         }
         if (goFieldType [j] == NULL) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadGeneOntologyFormat, "Unrecognized label on GO term qualifier field %s", oip->str == NULL ? "[blank]" : oip->str);
           continue;
-        } 
+        }
         switch (j) {
           case 1 :
             if (ufp->choice == 1) {
@@ -20107,7 +20993,7 @@ static ValNodePtr ValidateGoTermQualifier (
         gsp->pmid = pmid;
         ValNodeAddPointer (&head, 0, (Pointer) gsp);
       }
-    }  
+    }
   }
 
   if (head == NULL || head->next == NULL) {
@@ -20133,7 +21019,7 @@ static void ValidateGoTermUserObject (ValidStructPtr vsp, UserObjectPtr uop)
   ObjectIdPtr oip;
   UserFieldPtr ufp;
   ValNodePtr   term_list = NULL, vnp;
-  GovStrucPtr  gsp, lastgsp;  
+  GovStrucPtr  gsp, lastgsp;
   Int4 j;
 
   if (uop == NULL || vsp == NULL) return;
@@ -20159,8 +21045,8 @@ static void ValidateGoTermUserObject (ValidStructPtr vsp, UserObjectPtr uop)
       lastgsp = term_list->data.ptrvalue;
       for (vnp = term_list->next; vnp != NULL; vnp = vnp->next) {
         gsp = vnp->data.ptrvalue;
-        if (gsp->goid != NULL 
-            && StringCmp (lastgsp->goid, gsp->goid) == 0 
+        if (gsp->goid != NULL
+            && StringCmp (lastgsp->goid, gsp->goid) == 0
             && StringCmp (lastgsp->term, gsp->term) != 0) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_InconsistentGeneOntologyTermAndId, "Inconsistent GO terms for GO ID %s", gsp->goid);
         }
@@ -20494,6 +21380,7 @@ static CharPtr badProtName [] = {
   "uncharacterized protein",
   "uncharacterized protein conserved in archaea",
   "uncharacterized protein conserved in bacteria",
+  "uniprot",
   "unique hypothetical",
   "unique hypothetical protein",
   "unknown",
@@ -20615,7 +21502,7 @@ static Boolean CouldExtendPartial (SeqLocPtr slp, Boolean partial5)
       if (str[0] == '-' || str[1] == '-' || str[2] == '-') {
         rval = TRUE;
       }
-    }    
+    }
   } else {
     pos = SeqLocStop (slp);
     if (pos > bsp->length - 2) {
@@ -20643,810 +21530,83 @@ static Boolean LocationStrandsIncompatible (
   if (slp1 == NULL || slp2 == NULL) return FALSE;
   strand1 = SeqLocStrand (slp1);
   strand2 = SeqLocStrand (slp2);
-  if (strand1 != strand2) return TRUE;
+  if (strand1 != strand2) {
+    /* if strands are mixed, need to check if interval is contained */
+    if (strand1 == Seq_strand_other) {
+      if (SeqLocCompareEx (slp1, slp2, TRUE) == SLC_B_IN_A) {
+        return FALSE;
+      }
+    } else if (strand2 == Seq_strand_other) {
+      if (SeqLocCompareEx (slp1, slp2, TRUE) == SLC_A_IN_B) {
+        return FALSE;
+      }
+    }
+    return TRUE;
+  }
   return FALSE;
 }
 
-NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
+
+static CharPtr GetGeneXrefLabel (GeneRefPtr grp)
 {
-  Int2            type, i, j;
-  static char    *parterr[2] = { "PartialProduct", "PartialLocation" };
-  static char    *parterrs[4] = {
-    "Start does not include first/last residue of sequence",
-    "Stop does not include first/last residue of sequence",
-    "Internal partial intervals do not include first/last residue of sequence",
-    "Improper use of partial (greater than or less than)"
-  };
-  Uint2           partials[2], errtype;
-  Char            buf[80];
-  CharPtr         tmp;
-  ValidStructPtr  vsp;
-  SeqFeatPtr      sfp;
-  CloneRefPtr     clrp;
-  CdRegionPtr     crp;
-  CodeBreakPtr    cbp, prevcbp;
-  CharPtr         ctmp;
-  RnaRefPtr       rrp;
-  tRNAPtr         trp;
-  GBQualPtr       gbq;
-  Boolean         pseudo, excpt, conflict, codonqual,
-                  anticodonqual, productqual, protidqual,
-                  transidqual, ovgenepseudo;
-  ImpFeatPtr      ifp;
-  GeneRefPtr      grp;
-  ProtRefPtr      prp;
-  ValNodePtr      vnp;
-  BioseqPtr       bsp;
-  BioseqContextPtr bcp = NULL;
-  BioSourcePtr    biop, dbiop;
-  OrgNamePtr      onp;
-  OrgRefPtr       orp, dorp;
-  SubSourcePtr    ssp;
-  Boolean         transgenic;
-  Int2            biopgencode;
-  Int2            cdsgencode;
-  Boolean         plastid;
-  GeneticCodePtr  gc;
-  PubdescPtr      pdp;
-  /*
-  DbtagPtr        db = NULL;
-  Int4            id = -1;
-  */
-  SeqMgrDescContext context;
-  GeneRefPtr      grpx;
-  SeqFeatPtr      sfpx = NULL, sfpy = NULL, prt;
-  SeqFeatPtr      operon;
-  Boolean         redundantgenexref;
-  SeqMgrFeatContext fcontext;
-  CharPtr         syn1, syn2, label = NULL;
-  Uint2           oldEntityID;
-  Uint4           oldItemID;
-  SeqIdPtr        sip;
-  TextSeqIdPtr    tsip;
-  BioseqPtr       protBsp;
-  ErrSev          sev;
-  Boolean         multitoken;
-  Char            ch;
-  CharPtr         ptr;
-  Int4            anticodonlen;
-  Boolean         badanticodon;
-  SeqLocPtr       slp;
-  Int2            count;
-  DummySmfeData   dsd;
-  CharPtr         str;
-  size_t          len;
-  Boolean         isgap;
-  Boolean         badseq;
-  Boolean         is_seqloc_bond;
-  SeqBondPtr      sbp;
-  SeqFeatXrefPtr  xref, matchxref;
-  SeqFeatPtr      matchsfp, origsfp;
-  Boolean         hasxref;
-  CharPtr         sfp_old_locus_tag;
-  CharPtr         gene_old_locus_tag;
-  Boolean         bypassGeneTest;
-  Boolean         dicistronic = FALSE;
-  Int2            inferenceCode;
-  Boolean         hasInference = FALSE;
-  Boolean         hasExperiment = FALSE;
-  Boolean         accn_seqid;
-  SeqDescrPtr     sdp;
-  SeqMgrDescContext dcontext;
-  MolInfoPtr      mip;
-  Boolean         farFetchProd;
-  Boolean         skip;
-  Boolean         is_nc = FALSE;
-  Boolean         no_nonconsensus_except = TRUE;
+  SeqFeat sf;
+  Char    buf[255];
+
+  MemSet (&sf, 0, sizeof (SeqFeat));
+  sf.data.choice = SEQFEAT_GENE;
+  sf.data.value.ptrvalue = grp;
+
+  FeatDefLabel (&sf, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+  return StringSave (buf);
+}
 
 
-  vsp = (ValidStructPtr) (gcp->userdata);
-  sfp = (SeqFeatPtr) (gcp->thisitem);
-  vsp->descr = NULL;
-  vsp->sfp = sfp;
-  type = (Int2) (sfp->data.choice);
+static void TestForBracketsInProductName (CharPtr str, ValidStructPtr vsp)
+{
+  size_t  len;
+  Boolean report_error = FALSE;
+  CharPtr cp;
 
-  ValidateSeqLoc (vsp, sfp->location, "Location");
-
-  ValidateSeqLoc (vsp, sfp->product, "Product");
-
-  CheckForBothOrBothRev (vsp, sfp);
-
-  if (vsp->feat_loc_has_gi) {
-    accn_seqid = FALSE;
-    VisitSeqIdsInSeqLoc (sfp->location, (Pointer) &accn_seqid, LookForAccnLocs);
-    if (accn_seqid) {
-      if (! vsp->is_smupd_in_sep) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_FeatureRefersToAccession, "Feature location refers to accession");
-      }
-    }
+  if (StringHasNoText (str)) {
+    return;
   }
 
-  if (vsp->feat_prod_has_gi) {
-    accn_seqid = FALSE;
-    VisitSeqIdsInSeqLoc (sfp->product, (Pointer) &accn_seqid, LookForAccnLocs);
-    if (accn_seqid) {
-      if (! vsp->is_smupd_in_sep) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_FeatureRefersToAccession, "Feature product refers to accession");
-      }
+  len = StringLen (str);
+  if (len > 1) {
+    if (str [len - 1] != ']') {
+      /* doesn't end with bracket */
+    } else if (len < 5) {
+      /* too short to contain special text */
+      report_error = TRUE;
+    } else if ((cp = StringRChr (str, '[')) == NULL) {
+      /* doesn't contain matched brackets */
+      report_error = TRUE;
+    } else if (StringNCmp (cp, "[NAD", 4) == 0) {
+      /* contains special text */
+    } else {
+      report_error = TRUE;
+    }
+    if (report_error) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ProteinNameEndsInBracket, "Protein name ends with bracket and may contain organism name");
     }
   }
+}
 
-  farFetchProd = (Boolean) (vsp->farFetchCDSproducts || vsp->farFetchMRNAproducts);
-  partials[0] = SeqLocPartialCheckEx (sfp->product, farFetchProd);
-  partials[1] = SeqLocPartialCheck (sfp->location);
 
-  if (sfp->excpt) {
-    if (StringISearch (sfp->except_text, "nonconsensus splice site") != NULL ||
-        StringISearch (sfp->except_text, "heterogeneous population sequenced") != NULL ||
-        StringISearch (sfp->except_text, "low-quality sequence region") != NULL) {
-      no_nonconsensus_except = FALSE;
-    }
-  }
+static void ValidateRna (SeqFeatPtr sfp, ValidStructPtr vsp, GatherContextPtr gcp)
+{
+  RnaRefPtr rrp;
+  Boolean   pseudo, ovgenepseudo = FALSE;
+  Boolean   protidqual = FALSE, transidqual = FALSE;
+  GBQualPtr gbq;
+  tRNAPtr   trp;
+  Boolean   badanticodon, anticodonqual, productqual;
+  Int4      anticodonlen;
+  SeqLocPtr slp;
+  RNAGenPtr rgp;
+  Int2      i;
+  CharPtr   str;
 
-  if ((partials[0] != SLP_COMPLETE) || (partials[1] != SLP_COMPLETE) || (sfp->partial)) {       /* partialness */
-    /* a feature on a partial sequence should be partial -- if often isn't */
-    if ((!sfp->partial) && (partials[1] != SLP_COMPLETE) && (sfp->location->choice == SEQLOC_WHOLE)) {
-      ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem, "On partial Bioseq, SeqFeat.partial should be TRUE");
-    }
-    /* a partial feature, with complete location, but partial product */
-    else if ((sfp->partial) && (sfp->product != NULL) && (partials[1] == SLP_COMPLETE) && (sfp->product->choice == SEQLOC_WHOLE)
-             && (partials[0] != SLP_COMPLETE)) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem, "When SeqFeat.product is a partial Bioseq, SeqFeat.location should also be partial");
-    }
-    /* gene on segmented set is now 'order', should also be partial */
-    else if (type == SEQFEAT_GENE && sfp->product == NULL && partials[1] == SLP_INTERNAL) {
-      if (!sfp->partial) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem, "Gene of 'order' with otherwise complete location should have partial flag set");
-      }
-    }
-    /* inconsistent combination of partial/complete product,location,partial flag - part 1 */
-    else if (((partials[0] == SLP_COMPLETE) && (sfp->product != NULL))) {
-      sev = SEV_WARNING;
-      bsp = GetBioseqGivenSeqLoc (sfp->product, gcp->entityID);
-      /* if not local bioseq product, lower severity */
-      if (bsp == NULL) {
-        sev = SEV_INFO;
-      }
-      tmp = StringMove (buf, "Inconsistent: ");
-      if (sfp->product != NULL) {
-        tmp = StringMove (tmp, "Product= ");
-        if (partials[0])
-          tmp = StringMove (tmp, "partial, ");
-        else
-          tmp = StringMove (tmp, "complete, ");
-      }
-      tmp = StringMove (tmp, "Location= ");
-      if (partials[1])
-        tmp = StringMove (tmp, "partial, ");
-      else
-        tmp = StringMove (tmp, "complete, ");
-      tmp = StringMove (tmp, "Feature.partial= ");
-      if (sfp->partial)
-        tmp = StringMove (tmp, "TRUE");
-      else
-        tmp = StringMove (tmp, "FALSE");
-      if (bsp == NULL && LocationIsFar (sfp->product) && NoFetchFunctions ()) {
-        vsp->far_fetch_failure = TRUE;
-      } else {
-        ValidErr (vsp, sev, ERR_SEQ_FEAT_PartialsInconsistent, buf);
-      }
-    /* inconsistent combination of partial/complete product,location,partial flag - part 2 */
-    } else if ((partials[1] == SLP_COMPLETE) || (!sfp->partial)) {
-      tmp = StringMove (buf, "Inconsistent: ");
-      if (sfp->product != NULL) {
-        tmp = StringMove (tmp, "Product= ");
-        if (partials[0])
-          tmp = StringMove (tmp, "partial, ");
-        else
-          tmp = StringMove (tmp, "complete, ");
-      }
-      tmp = StringMove (tmp, "Location= ");
-      if (partials[1])
-        tmp = StringMove (tmp, "partial, ");
-      else
-        tmp = StringMove (tmp, "complete, ");
-      tmp = StringMove (tmp, "Feature.partial= ");
-      if (sfp->partial)
-        tmp = StringMove (tmp, "TRUE");
-      else
-        tmp = StringMove (tmp, "FALSE");
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialsInconsistent, buf);
-    }
-    /* 5' or 3' partial location giving unclassified partial product */
-    else if (((partials [1] & SLP_START) != 0 || ((partials [1] & SLP_STOP) != 0)) && ((partials [0] & SLP_OTHER) != 0) && sfp->partial) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem, "5' or 3' partial location should not have unclassified partial in product molinfo descriptor");
-    }
-
-    /* may have other error bits set as well */
-    for (i = 0; i < 2; i++) {
-      errtype = SLP_NOSTART;
-      for (j = 0; j < 4; j++) {
-        bypassGeneTest = FALSE;
-        if (partials[i] & errtype) {
-          if (i == 1 && j < 2 && IsCddFeat (sfp)) {
-            /* suppresses  warning */
-          } else if (i == 1 && j < 2 && sfp->data.choice == SEQFEAT_GENE && SameAsCDS (sfp, errtype, NULL)) {
-            /*
-            ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
-              "%s: %s",
-              parterr[i], parterrs[j]);
-            */
-          } else if (i == 1 && j < 2 && sfp->data.choice == SEQFEAT_GENE && SameAsMRNA (sfp, errtype)) {
-          } else if (i == 1 && j < 2 && sfp->idx.subtype == FEATDEF_mRNA && SameAsCDS (sfp, errtype, &bypassGeneTest)) {
-          } else if (i == 1 && j < 2 && sfp->idx.subtype == FEATDEF_mRNA && (! bypassGeneTest) && SameAsGene (sfp)) {
-
-          } else if (i == 1 && j < 2 && sfp->idx.subtype == FEATDEF_exon && SameAsMRNA (sfp, errtype)) {
-
-          } else if (LocationIsFar (sfp->location) && NoFetchFunctions ()) {
-            vsp->far_fetch_failure = TRUE;
-          
-          } else if (i == 1 && j < 2 && sfp->data.choice == SEQFEAT_CDREGION && SameAsMRNA (sfp, errtype) &&
-                     PartialAtSpliceSiteOrGap (vsp, sfp->location, errtype, &isgap, &badseq)) {
-          } else if (i == 1 && j < 2 && PartialAtSpliceSiteOrGap (vsp, sfp->location, errtype, &isgap, &badseq)) {
-            if (! isgap) {
-              if (sfp->idx.subtype != FEATDEF_CDS || SplicingNotExpected (sfp)) {
-                ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
-                          "%s: %s (but is at consensus splice site)",
-                          parterr[i], parterrs[j]);
-              } else if (sfp->idx.subtype == FEATDEF_CDS) {
-                bsp = BioseqFindFromSeqLoc (sfp->location);
-                if (bsp != NULL) {
-                  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
-                  if (sdp != NULL) {
-                    mip = (MolInfoPtr) sdp->data.ptrvalue;
-                    if (mip != NULL) {
-                      if (mip->biomol == MOLECULE_TYPE_MRNA) {
-                        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
-                                  "%s: %s (but is at consensus splice site, but is on an mRNA that is already spliced)",
-                                  parterr[i], parterrs[j]);
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            if (badseq) {
-              ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
-                "%s: %s (and is at bad sequence)",
-                parterr[i], parterrs[j]);
-            }
-          } else if (sfp->data.choice == SEQFEAT_CDREGION && sfp->excpt &&
-                     StringStr (sfp->except_text, "rearrangement required for product") != NULL) {
-          } else if (sfp->data.choice == SEQFEAT_CDREGION && j == 0) {
-            if (no_nonconsensus_except) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
-                "%s: %s", parterr[i], "5' partial is not at start AND"
-                " is not at consensus splice site");
-            }
-          } else if (sfp->data.choice == SEQFEAT_CDREGION && j == 1) {
-            if (no_nonconsensus_except) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
-                "%s: %s", parterr[i], "3' partial is not at stop AND"
-                " is not at consensus splice site");
-            }
-          } else {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
-              "%s: %s", parterr[i], parterrs[j]);
-          }
-        }
-        errtype <<= 1;
-      }
-    }
-
-  }
-
-  CheckForIllegalDbxref (vsp, gcp, sfp, sfp->dbxref);
-  /*
-  for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
-    id = -1;
-    db = vnp->data.ptrvalue;
-    if (db && db->db) {
-      for (i = 0; i < DBNUM; i++) {
-        if (StringCmp (db->db, dbtag[i]) == 0) {
-          id = i;
-          break;
-        }
-      }
-      if (id == -1 || (type != SEQFEAT_CDREGION && id < 4)) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", db->db);
-      }
-    }
-  }
-  */
-
-  switch (type) {
-  case 1:                      /* Gene-ref */
-    grp = (GeneRefPtr) (sfp->data.value.ptrvalue);
-    if (grp != NULL) {
-      if (EmptyOrNullString (grp->locus) &&
-          EmptyOrNullString (grp->allele) && EmptyOrNullString (grp->desc) &&
-          EmptyOrNullString (grp->maploc) && EmptyOrNullString (grp->locus_tag) &&
-          grp->db == NULL && grp->syn == NULL) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GeneRefHasNoData, "There is a gene feature where all fields are empty");
-      }
-      if (StringDoesHaveText (grp->locus_tag)) {
-        multitoken = FALSE;
-        for (ptr = grp->locus_tag, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
-          if (IS_WHITESP (ch)) {
-            multitoken = TRUE;
-          }
-        }
-        if (multitoken) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_LocusTagProblem, "Gene locus_tag '%s' should be a single word without any spaces", grp->locus_tag);
-        }
-        /* check for matching old_locus_tag */
-        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
-          if (StringCmp (gbq->qual, "old_locus_tag") == 0 && StringCmp (grp->locus_tag, gbq->val) == 0) {
-            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_LocusTagProblem, "Gene locus_tag and old_locus_tag '%s' match", grp->locus_tag);
-          }
-        }
-        if (StringDoesHaveText (grp->locus) && StringICmp (grp->locus, grp->locus_tag) == 0) {
-          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_LocusTagProblem, "Gene locus and locus_tag '%s' match", grp->locus);
-        }
-      }
-      CheckForIllegalDbxref (vsp, gcp, sfp, grp->db);
-      if (StringDoesHaveText (grp->allele)) {
-        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
-          if (StringCmp (gbq->qual, "allele") == 0 && StringDoesHaveText (gbq->val)) {
-            if (StringICmp (gbq->val, grp->allele) == 0) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "Redundant allele qualifier (%s) on gene", gbq->val);
-            } else if (sfp->idx.subtype != FEATDEF_variation) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "Hidden allele qualifier (%s) on gene", gbq->val);
-            }
-          }
-        }
-      }
-      /*
-      for (vnp = grp->db; vnp != NULL; vnp = vnp->next) {
-        id = -1;
-        db = vnp->data.ptrvalue;
-        if (db && db->db) {
-          for (i = 0; i < DBNUM; i++) {
-            if (StringCmp (db->db, dbtag[i]) == 0) {
-              id = i;
-              break;
-            }
-          }
-          if (id == -1 || (type != SEQFEAT_CDREGION && id < 4)) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", db->db);
-          }
-        }
-      }
-      */
-      if (grp->locus != NULL && sfp->comment != NULL) {
-        if (StringCmp (grp->locus, sfp->comment) == 0) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "Comment has same value as gene locus");
-        }
-      }
-      if (grp->locus != NULL) {
-        if (HasBadCharacter (grp->locus)) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadInternalCharacter, "Gene locus contains undesired character");
-        }
-        if (EndsWithBadCharacter (grp->locus)) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadTrailingCharacter, "Gene locus ends with undesired character");
-        }
-        if (EndsWithHyphen (grp->locus)) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadTrailingHyphen, "Gene locus ends with hyphen");
-        }
-      }
-      if (grp->locus_tag != NULL && sfp->comment != NULL) {
-        if (StringCmp (grp->locus_tag, sfp->comment) == 0) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "Comment has same value as gene locus_tag");
-        }
-      }
-      if (StringDoesHaveText (grp->locus_tag)) {
-        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
-          if (StringCmp (gbq->qual, "old_locus_tag") == 0 && StringDoesHaveText (gbq->val)) {
-            if (StringICmp (gbq->val, grp->locus_tag) == 0) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "old_locus_tag has same value as gene locus_tag");
-            }
-          }
-        }
-      }
-      if (grp->syn != NULL && (vsp->is_refseq_in_sep /* || vsp->seqSubmitParent */)) {
-        for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
-          str = (CharPtr) vnp->data.ptrvalue;
-          if (StringHasNoText (str)) continue;
-          if (NameInList (str, badGeneSyn, sizeof (badGeneSyn) / sizeof (badGeneSyn [0]))) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "Uninformative gene synonym '%s'", str);
-          }
-        }
-      }
-      if (grp->syn != NULL && (vsp->is_refseq_in_sep || vsp->seqSubmitParent)) {
-        for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
-          str = (CharPtr) vnp->data.ptrvalue;
-          if (StringHasNoText (str)) continue;
-          if (StringDoesHaveText (grp->locus) && StringCmp (grp->locus, str) == 0) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "gene synonym has same value as gene locus");
-          }
-        }
-      }
-      if (StringDoesHaveText (grp->locus) && StringDoesHaveText (grp->desc) && StringCmp (grp->locus, grp->desc) == 0) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "gene description has same value as gene locus");
-      }
-      if (StringHasNoText (grp->locus) && StringHasNoText (grp->desc) && grp->syn != NULL) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "gene synonym without gene locus or description");
-      }
-      if (StringDoesHaveText (grp->desc) && StringStr (grp->desc,"..") != NULL) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "Possible location text (%s) on gene description", grp->desc);
-      }
-      /* - need to ignore if curated drosophila - add to vsp internal flags for efficiency?
-      if (StringDoesHaveText (grp->locus)) {
-        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
-          if (StringCmp (gbq->qual, "old_locus_tag") == 0 && StringDoesHaveText (gbq->val)) {
-            if (StringICmp (gbq->val, grp->locus) == 0) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "old_locus_tag has same value as gene locus");
-            }
-          }
-        }
-      }
-      */
-      if (StringHasSgml (vsp, grp->locus)) {
-        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "gene locus %s has SGML", grp->locus);
-      }
-      if (StringHasSgml (vsp, grp->locus_tag)) {
-        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "gene locus_tag %s has SGML", grp->locus_tag);
-      }
-      if (StringHasSgml (vsp, grp->desc)) {
-        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "gene description %s has SGML", grp->desc);
-      }
-      for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
-        str = (CharPtr) vnp->data.ptrvalue;
-        if (StringHasSgml (vsp, str)) {
-          ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "gene synonym %s has SGML", str);
-        }
-      }
-    }
-    break;
-  case 2:                      /* Org-ref */
-    break;
-  case 3:                      /* Cdregion */
-    pseudo = sfp->pseudo;       /* now also uses new feature pseudo flag */
-    excpt = FALSE;
-    conflict = FALSE;
-    codonqual = FALSE;
-    crp = (CdRegionPtr) (sfp->data.value.ptrvalue);
-    if (crp != NULL) {
-      conflict = crp->conflict;
-    }
-    protidqual = FALSE;
-    transidqual = FALSE;
-    ovgenepseudo = FALSE;
-    gbq = sfp->qual;
-    while (gbq != NULL) {
-      if (StringICmp (gbq->qual, "pseudo") == 0) {
-        pseudo = TRUE;
-      }
-      if (StringICmp (gbq->qual, "exception") == 0) {
-        excpt = TRUE;
-      }
-      if (StringICmp (gbq->qual, "codon") == 0) {
-        codonqual = TRUE;
-      }
-      if (StringICmp (gbq->qual, "protein_id") == 0) {
-        protidqual = TRUE;
-      }
-      if (StringICmp (gbq->qual, "transcript_id") == 0) {
-        transidqual = TRUE;
-      }
-      gbq = gbq->next;
-    }
-    if (protidqual) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "protein_id should not be a gbqual on a CDS feature");
-    }
-    if (transidqual) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "transcript_id should not be a gbqual on a CDS feature");
-    }
-    if (OverlappingGeneIsPseudo (sfp)) {
-      pseudo = TRUE;
-      ovgenepseudo = TRUE;
-    }
-    if ((!pseudo) && (!conflict)) {
-      CdTransCheck (vsp, sfp);
-      SpliceCheck (vsp, sfp);
-    } else if (conflict) {
-      CdConflictCheck (vsp, sfp);
-    }
-    CdsProductIdCheck (vsp, sfp);
-    crp = (CdRegionPtr) (sfp->data.value.ptrvalue);
-    if (crp != NULL) {
-      if (crp->code_break != NULL && StringISearch (sfp->except_text, "RNA editing") != NULL) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_TranslExceptAndRnaEditing, "CDS has both RNA editing /exception and /transl_except qualifiers");
-      }
-      prevcbp = NULL;
-      for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
-        i = SeqLocCompare (cbp->loc, sfp->location);
-        if ((i != SLC_A_IN_B) && (i != SLC_A_EQ_B)) {
-          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_Range, "Code-break location not in coding region");
-        }
-        if (prevcbp != NULL) {
-          i = SeqLocCompare (cbp->loc, prevcbp->loc);
-          if (i == SLC_A_EQ_B) {
-            ctmp = SeqLocPrint (cbp->loc);
-            if (ctmp != NULL) {
-              ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_DuplicateTranslExcept, "Multiple code-breaks at same location [%s]", ctmp);
-            } else {
-              ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_DuplicateTranslExcept, "Multiple code-breaks at same location");
-            }
-            MemFree (ctmp);
-          }
-        }
-        prevcbp = cbp;
-      }
-      if (excpt && (!sfp->excpt)) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ExceptInconsistent, "Exception flag should be set in coding region");
-      }
-      if (crp->orf && sfp->product != NULL) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_OrfCdsHasProduct, "An ORF coding region should not have a product");
-      }
-      if (pseudo && sfp->product != NULL) {
-        if (ovgenepseudo) {
-          if (sfp->pseudo) {
-            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PseudoCdsHasProduct, "A pseudo coding region should not have a product");
-          } else {
-            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PseudoCdsViaGeneHasProduct, "A coding region overlapped by a pseudogene should not have a product");
-          }
-        } else {
-          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PseudoCdsHasProduct, "A pseudo coding region should not have a product");
-        }
-      }
-      if (pseudo && SeqMgrGetProtXref (sfp) != NULL) {
-        if (NGorNT (vsp->sep, sfp->location, &is_nc) || IsEMBLAccn (vsp->sep, sfp->location)) {
-          sev = SEV_WARNING;
-        } else {
-          sev = SEV_ERROR;
-        }
-        ValidErr (vsp, sev, ERR_SEQ_FEAT_PseudoCdsHasProtXref, "A pseudo coding region should not have a protein xref");
-      }
-      if (codonqual) {
-        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_CodonQualifierUsed, "Use the proper genetic code, if available, or set transl_excepts on specific codons");
-      }
-      biopgencode = 0;
-      cdsgencode = 0;
-      bsp = GetBioseqGivenSeqLoc (sfp->location, gcp->entityID);
-      if (bsp != NULL) {
-        vnp = NULL;
-        if (vsp->useSeqMgrIndexes) {
-          vnp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
-        } else {
-          bcp = BioseqContextNew (bsp);
-          vnp = BioseqContextGetSeqDescr (bcp, Seq_descr_source, NULL, NULL);
-        }
-        if (vnp != NULL && vnp->data.ptrvalue != NULL) {
-          plastid = FALSE;
-          biop = (BioSourcePtr) vnp->data.ptrvalue;
-          orp = biop->org;
-          if (orp != NULL && orp->orgname != NULL) {
-            onp = orp->orgname;
-            if (biop->genome == GENOME_kinetoplast ||
-                biop->genome == GENOME_mitochondrion ||
-                biop->genome == GENOME_hydrogenosome) {
-              biopgencode = onp->mgcode;
-            } else if (biop->genome == GENOME_chloroplast ||
-                       biop->genome == GENOME_chromoplast ||
-                       biop->genome == GENOME_plastid ||
-                       biop->genome == GENOME_cyanelle ||
-                       biop->genome == GENOME_apicoplast ||
-                       biop->genome == GENOME_leucoplast ||
-                       biop->genome == GENOME_proplastid) {
-              biopgencode = 11;
-              plastid = TRUE;
-            } else {
-              biopgencode = onp->gcode;
-            }
-            gc = crp->genetic_code;
-            if (gc != NULL) {
-              for (vnp = gc->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
-                if (vnp->choice == 2) {
-                  cdsgencode = (Int2) vnp->data.intvalue;
-                }
-              }
-            }
-            if (biopgencode != cdsgencode) {
-              if (! vsp->seqSubmitParent) { /* suppress when validator run from tbl2asn */
-                if (plastid) {
-                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GenCodeMismatch,
-                            "Genetic code conflict between CDS (code %d) and BioSource.genome biological context (%s) (uses code 11)", (int) cdsgencode, plastidtxt [biop->genome]);
-                } else {
-                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GenCodeMismatch,
-                            "Genetic code conflict between CDS (code %d) and BioSource (code %d)", (int) cdsgencode, (int) biopgencode);
-                }
-              }
-            }
-          }
-        }
-        if (!vsp->useSeqMgrIndexes) {
-          BioseqContextFree (bcp);
-        }
-      }
-    }
-    /* CheckForBothStrands (vsp, sfp); */
-    CheckForBadGeneOverlap (vsp, sfp);
-    CheckForBadMRNAOverlap (vsp, sfp);
-    CheckForCommonCDSProduct (vsp, sfp);
-    CheckCDSPartial (vsp, sfp);
-    if (StringDoesHaveText (sfp->comment)) {
-      if (LookForECnumberPattern (sfp->comment)) {
-        skip = FALSE;
-        bsp = BioseqFindFromSeqLoc (sfp->product);
-        if (bsp != NULL && ISA_aa (bsp->mol)) {
-          prt = SeqMgrGetBestProteinFeature (bsp, NULL);
-          if (prt != NULL && prt->data.choice == SEQFEAT_PROT) {
-            prp = (ProtRefPtr) prt->data.value.ptrvalue;
-            if (prp != NULL) {
-              for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
-                str = (CharPtr) vnp->data.ptrvalue;
-                if (StringHasNoText (str)) continue;
-                if (StringStr (sfp->comment, str) != NULL) {
-                  skip = TRUE;
-                }
-                skip = TRUE; /* now suppress even if EC numbers are different */
-              }
-            }
-          }
-        }
-        if (! skip) {
-          ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_EcNumberProblem, "Apparent EC number in CDS comment");
-        }
-      }
-    }
-    break;
-  case 4:                      /* Prot-ref */
-    prp = (ProtRefPtr) (sfp->data.value.ptrvalue);
-    if (prp != NULL) {
-      if (prp->processed != 3 && prp->processed != 4) {
-        vnp = prp->name;
-        if ((vnp == NULL || EmptyOrNullString ((CharPtr) vnp->data.ptrvalue)) &&
-            EmptyOrNullString (prp->desc) && prp->ec == NULL && prp->activity == NULL && prp->db == NULL) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ProtRefHasNoData, "There is a protein feature where all fields are empty");
-        }
-        if (vnp != NULL) {
-          str = (CharPtr) vnp->data.ptrvalue;
-          if (StringDoesHaveText (str)) {
-            len = StringLen (str);
-            if (len > 1) {
-              if (str [len - 1] == ']') {
-                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ProteinNameEndsInBracket, "Protein name ends with bracket and may contain organism name");
-              }
-            }
-            if (StringNICmp (str, "hypothetical protein XP_", 24) == 0) {
-              bsp = GetBioseqGivenSeqLoc (sfp->location, gcp->entityID);
-              if (bsp != NULL) {
-                for (sip = bsp->id; sip != NULL; sip = sip->next) {
-                  if (sip->choice != SEQID_OTHER) continue;
-                  tsip = (TextSeqIdPtr) sip->data.ptrvalue;
-                  if (tsip == NULL) continue;
-                  if (StringICmp (tsip->accession, str + 21) != 0) {
-                    ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_HpotheticalProteinMismatch, "Hypothetical protein reference does not match accession");
-                  }
-                }
-              }
-            }
-            if (prp->ec != NULL) {
-              if (StringCmp (str, "Hypothetical protein") == 0 ||
-                  StringCmp (str, "hypothetical protein") == 0 ||
-                  StringCmp (str, "Unknown protein") == 0 ||
-                  StringCmp (str, "unknown protein") == 0) {
-                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadProteinName, "Unknown or hypothetical protein should not have EC number");
-              }
-            }
-            if (LookForECnumberPattern (str)) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Apparent EC number in protein title");
-            }
-            if (vsp->rubiscoTest && StringStr (str, "ribulose") != NULL && StringStr (str, "bisphosphate") != NULL) {
-              if (StringStr (str, "methyltransferase") == NULL && StringStr (str, "activase") == NULL) {
-                if (StringICmp (str, "ribulose-1,5-bisphosphate carboxylase/oxygenase") == 0) {
-                  /* allow standard name without large or small subunit designation - later need kingdom test */
-                } else if (StringICmp (str, "ribulose-1,5-bisphosphate carboxylase/oxygenase large subunit") != 0 &&
-                    StringICmp (str, "ribulose-1,5-bisphosphate carboxylase/oxygenase small subunit") != 0) {
-                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RubiscoProblem, "Nonstandard ribulose bisphosphate protein name");
-                }
-              }
-            }
-            if (StringHasPMID (str)) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ProteinNameHasPMID, "Protein name has internal PMID");
-            }
-          }
-          if (str != NULL && sfp->comment != NULL) {
-            if (StringCmp (str, sfp->comment) == 0) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "Comment has same value as protein name");
-            }
-          }
-          if (StringDoesHaveText (sfp->comment)) {
-            if (LookForECnumberPattern (sfp->comment)) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Apparent EC number in protein comment");
-            }
-          }
-        }
-      }
-      CheckForIllegalDbxref (vsp, gcp, sfp, prp->db);
-      /*
-      for (vnp = prp->db; vnp != NULL; vnp = vnp->next) {
-        id = -1;
-        db = vnp->data.ptrvalue;
-        if (db && db->db) {
-          for (i = 0; i < DBNUM; i++) {
-            if (StringCmp (db->db, dbtag[i]) == 0) {
-              id = i;
-              break;
-            }
-          }
-          if (id == -1 || (type != SEQFEAT_CDREGION && id < 4)) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", db->db);
-          }
-        }
-      }
-      */
-      if (prp->name == NULL && prp->processed != 3 && prp->processed != 4) {
-        if (StringDoesHaveText (prp->desc)) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NoNameForProtein, "Protein feature has description but no name");
-        } else if (prp->activity != NULL) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NoNameForProtein, "Protein feature has function but no name");
-        } else if (prp->ec != NULL) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NoNameForProtein, "Protein feature has EC number but no name");
-        } else {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NoNameForProtein, "Protein feature has no name");
-        }
-      }
-      if (prp->desc != NULL && sfp->comment != NULL) {
-        if (StringCmp (prp->desc, sfp->comment) == 0) {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "Comment has same value as protein description");
-        }
-      }
-      for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
-        str = (CharPtr) vnp->data.ptrvalue;
-        if (StringDoesHaveText (str)) {
-          if (! ValidateECnumber (str)) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadEcNumberFormat, "%s is not in proper EC_number format", str);
-          } else if (ECnumberNotInList (str)) {
-            if (ECnumberWasDeleted (str)) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadEcNumberValue, "EC_number %s was deleted", str);
-            } else if (ECnumberWasReplaced (str)) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadEcNumberValue, "EC_number %s was transferred and is no longer valid", str);
-            } else {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadEcNumberValue, "%s is not a legal value for qualifier EC_number", str);
-            }
-          }
-        } else {
-          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "EC number should not be empty");
-        }
-      }
-    }
-    if (prp->name != NULL && (vsp->is_refseq_in_sep /* || vsp->seqSubmitParent */)) {
-      for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
-        str = (CharPtr) vnp->data.ptrvalue;
-        if (StringHasNoText (str)) continue;
-          if (NameInList (str, badProtName, sizeof (badProtName) / sizeof (badProtName [0]))) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredProteinName, "Uninformative protein name '%s'", str);
-          }
-        }
-      }
-      if (prp->name != NULL) {
-        for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
-          str = (CharPtr) vnp->data.ptrvalue;
-          if (StringHasNoText (str)) continue;
-          if (HasBadCharacter (str)) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadInternalCharacter, "Protein name contains undesired character");
-          }
-          if (EndsWithBadCharacter (str)) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadTrailingCharacter, "Protein name ends with undesired character");
-          }
-          if (EndsWithHyphen (str)) {
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadTrailingHyphen, "Protein name ends with hyphen");
-          }
-        }
-      }
-      for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
-        str = (CharPtr) vnp->data.ptrvalue;
-        if (StringHasSgml (vsp, str)) {
-          ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "protein name %s has SGML", str);
-        }
-      }
-      if (StringHasSgml (vsp, prp->desc)) {
-        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "protein description %s has SGML", prp->desc);
-      }
-    break;
-  case 5:                      /* RNA-ref */
     rrp = (RnaRefPtr) (sfp->data.value.ptrvalue);
 
     pseudo = sfp->pseudo;
@@ -21608,6 +21768,872 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PseudoRnaHasProduct, "A pseudo RNA should not have a product");
       }
     }
+
+    if (rrp->ext.choice == 3
+        && (rgp = (RNAGenPtr) rrp->ext.value.ptrvalue) != NULL
+        && !StringHasNoText (rgp->_class)
+        && rrp->type != 8) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "Only ncRNA should have ncRNA-class");
+    }
+}
+
+
+NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
+{
+  Int2            type, i, j;
+  static char    *parterr[2] = { "PartialProduct", "PartialLocation" };
+  static char    *parterrs[4] = {
+    "Start does not include first/last residue of sequence",
+    "Stop does not include first/last residue of sequence",
+    "Internal partial intervals do not include first/last residue of sequence",
+    "Improper use of partial (greater than or less than)"
+  };
+  Uint2           partials[2], errtype;
+  Char            buf[80];
+  CharPtr         tmp;
+  ValidStructPtr  vsp;
+  SeqFeatPtr      sfp;
+  CloneRefPtr     clrp;
+  CdRegionPtr     crp;
+  CodeBreakPtr    cbp, prevcbp;
+  CharPtr         ctmp;
+  GBQualPtr       gbq;
+  Boolean         pseudo, excpt, conflict, codonqual,
+                  protidqual,
+                  transidqual, ovgenepseudo;
+  ImpFeatPtr      ifp;
+  GeneRefPtr      grp;
+  ProtRefPtr      prp;
+  ValNodePtr      vnp;
+  BioseqPtr       bsp;
+  BioseqContextPtr bcp = NULL;
+  BioSourcePtr    biop, dbiop;
+  OrgNamePtr      onp;
+  OrgRefPtr       orp, dorp;
+  SubSourcePtr    ssp;
+  Boolean         transgenic;
+  Int2            biopgencode;
+  Int2            cdsgencode;
+  Boolean         plastid;
+  GeneticCodePtr  gc;
+  PubdescPtr      pdp;
+  /*
+  DbtagPtr        db = NULL;
+  Int4            id = -1;
+  */
+  SeqMgrDescContext context;
+  GeneRefPtr      grpx;
+  SeqFeatPtr      sfpx = NULL, sfpy = NULL, prt;
+  SeqFeatPtr      operon;
+  Boolean         redundantgenexref;
+  SeqMgrFeatContext fcontext;
+  CharPtr         syn1, syn2, label = NULL, genexref_label;
+  Uint2           oldEntityID;
+  Uint4           oldItemID;
+  SeqIdPtr        sip;
+  TextSeqIdPtr    tsip;
+  BioseqPtr       protBsp;
+  ErrSev          sev;
+  Boolean         multitoken;
+  Char            ch;
+  CharPtr         ptr;
+  SeqLocPtr       slp;
+  Int2            count;
+  DummySmfeData   dsd;
+  CharPtr         str;
+  Boolean         isgap;
+  Boolean         badseq;
+  Boolean         is_seqloc_bond;
+  SeqBondPtr      sbp;
+  SeqFeatXrefPtr  xref, matchxref;
+  SeqFeatPtr      matchsfp, origsfp;
+  Boolean         hasxref;
+  CharPtr         sfp_old_locus_tag;
+  CharPtr         gene_old_locus_tag;
+  Boolean         bypassGeneTest;
+  Boolean         dicistronic = FALSE;
+  Int2            inferenceCode;
+  Boolean         hasInference = FALSE;
+  Boolean         hasExperiment = FALSE;
+  Boolean         accn_seqid;
+  SeqDescrPtr     sdp;
+  SeqMgrDescContext dcontext;
+  MolInfoPtr      mip;
+  Boolean         farFetchProd;
+  Boolean         skip;
+  Boolean         is_nc = FALSE;
+  Boolean         no_nonconsensus_except = TRUE;
+  VariationRefPtr  vrfp;
+
+
+  vsp = (ValidStructPtr) (gcp->userdata);
+  sfp = (SeqFeatPtr) (gcp->thisitem);
+  vsp->descr = NULL;
+  vsp->sfp = sfp;
+  type = (Int2) (sfp->data.choice);
+
+  ValidateSeqLoc (vsp, sfp->location, "Location");
+
+  ValidateSeqLoc (vsp, sfp->product, "Product");
+
+  CheckForBothOrBothRev (vsp, sfp);
+
+  if (vsp->feat_loc_has_gi) {
+    accn_seqid = FALSE;
+    VisitSeqIdsInSeqLoc (sfp->location, (Pointer) &accn_seqid, LookForAccnLocs);
+    if (accn_seqid) {
+      if (! vsp->is_smupd_in_sep) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_FeatureRefersToAccession, "Feature location refers to accession");
+      }
+    }
+  }
+
+  if (vsp->feat_prod_has_gi) {
+    accn_seqid = FALSE;
+    VisitSeqIdsInSeqLoc (sfp->product, (Pointer) &accn_seqid, LookForAccnLocs);
+    if (accn_seqid) {
+      if (! vsp->is_smupd_in_sep) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_FeatureRefersToAccession, "Feature product refers to accession");
+      }
+    }
+  }
+
+  farFetchProd = (Boolean) (vsp->farFetchCDSproducts || vsp->farFetchMRNAproducts);
+  partials[0] = SeqLocPartialCheckEx (sfp->product, farFetchProd);
+  partials[1] = SeqLocPartialCheck (sfp->location);
+
+  if (sfp->excpt) {
+    if (StringISearch (sfp->except_text, "nonconsensus splice site") != NULL ||
+        StringISearch (sfp->except_text, "heterogeneous population sequenced") != NULL ||
+        StringISearch (sfp->except_text, "low-quality sequence region") != NULL ||
+        StringISearch (sfp->except_text, "artificial location") != NULL) {
+      no_nonconsensus_except = FALSE;
+    }
+  }
+
+  if ((partials[0] != SLP_COMPLETE) || (partials[1] != SLP_COMPLETE) || (sfp->partial)) {       /* partialness */
+    /* a feature on a partial sequence should be partial -- if often isn't */
+    if ((!sfp->partial) && (partials[1] != SLP_COMPLETE) && (sfp->location->choice == SEQLOC_WHOLE)) {
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem, "On partial Bioseq, SeqFeat.partial should be TRUE");
+    }
+    /* a partial feature, with complete location, but partial product */
+    else if ((sfp->partial) && (sfp->product != NULL) && (partials[1] == SLP_COMPLETE) && (sfp->product->choice == SEQLOC_WHOLE)
+             && (partials[0] != SLP_COMPLETE)) {
+      if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+        /* skip in gpipe genomic */
+      } else {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem, "When SeqFeat.product is a partial Bioseq, SeqFeat.location should also be partial");
+      }
+    }
+    /* gene on segmented set is now 'order', should also be partial */
+    else if (type == SEQFEAT_GENE && sfp->product == NULL && partials[1] == SLP_INTERNAL) {
+      if (!sfp->partial) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem, "Gene of 'order' with otherwise complete location should have partial flag set");
+      }
+    }
+    /* inconsistent combination of partial/complete product,location,partial flag - part 1 */
+    else if (((partials[0] == SLP_COMPLETE) && (sfp->product != NULL))) {
+      sev = SEV_WARNING;
+      bsp = GetBioseqGivenSeqLoc (sfp->product, gcp->entityID);
+      /* if not local bioseq product, lower severity */
+      if (bsp == NULL) {
+        sev = SEV_INFO;
+      }
+      tmp = StringMove (buf, "Inconsistent: ");
+      if (sfp->product != NULL) {
+        tmp = StringMove (tmp, "Product= ");
+        if (partials[0])
+          tmp = StringMove (tmp, "partial, ");
+        else
+          tmp = StringMove (tmp, "complete, ");
+      }
+      tmp = StringMove (tmp, "Location= ");
+      if (partials[1])
+        tmp = StringMove (tmp, "partial, ");
+      else
+        tmp = StringMove (tmp, "complete, ");
+      tmp = StringMove (tmp, "Feature.partial= ");
+      if (sfp->partial)
+        tmp = StringMove (tmp, "TRUE");
+      else
+        tmp = StringMove (tmp, "FALSE");
+      if (bsp == NULL && LocationIsFar (sfp->product) && NoFetchFunctions ()) {
+        vsp->far_fetch_failure = TRUE;
+      } else if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+        /* ignore inconsistent partial warnings in genomic gpipe sequence */
+      } else {
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_PartialsInconsistent, buf);
+      }
+    /* inconsistent combination of partial/complete product,location,partial flag - part 2 */
+    } else if ((partials[1] == SLP_COMPLETE) || (!sfp->partial)) {
+      tmp = StringMove (buf, "Inconsistent: ");
+      if (sfp->product != NULL) {
+        tmp = StringMove (tmp, "Product= ");
+        if (partials[0])
+          tmp = StringMove (tmp, "partial, ");
+        else
+          tmp = StringMove (tmp, "complete, ");
+      }
+      tmp = StringMove (tmp, "Location= ");
+      if (partials[1])
+        tmp = StringMove (tmp, "partial, ");
+      else
+        tmp = StringMove (tmp, "complete, ");
+      tmp = StringMove (tmp, "Feature.partial= ");
+      if (sfp->partial)
+        tmp = StringMove (tmp, "TRUE");
+      else
+        tmp = StringMove (tmp, "FALSE");
+      if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+        /* ignore inconsistent partial warnings in genomic gpipe sequence */
+      } else {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialsInconsistent, buf);
+      }
+    }
+    /* 5' or 3' partial location giving unclassified partial product */
+    else if (((partials [1] & SLP_START) != 0 || ((partials [1] & SLP_STOP) != 0)) && ((partials [0] & SLP_OTHER) != 0) && sfp->partial) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem, "5' or 3' partial location should not have unclassified partial in product molinfo descriptor");
+    }
+
+    /* may have other error bits set as well */
+    for (i = 0; i < 2; i++) {
+      errtype = SLP_NOSTART;
+      for (j = 0; j < 4; j++) {
+        bypassGeneTest = FALSE;
+        if (partials[i] & errtype) {
+          if (i == 1 && j < 2 && IsCddFeat (sfp)) {
+            /* suppresses  warning */
+          } else if (i == 1 && j < 2 && sfp->data.choice == SEQFEAT_GENE && SameAsCDS (sfp, errtype, NULL)) {
+            /*
+            ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
+              "%s: %s",
+              parterr[i], parterrs[j]);
+            */
+          } else if (i == 1 && j < 2 && sfp->data.choice == SEQFEAT_GENE && SameAsMRNA (sfp, errtype)) {
+          } else if (i == 1 && j < 2 && sfp->idx.subtype == FEATDEF_mRNA && SameAsCDS (sfp, errtype, &bypassGeneTest)) {
+          } else if (i == 1 && j < 2 && sfp->idx.subtype == FEATDEF_mRNA && (! bypassGeneTest) && SameAsGene (sfp)) {
+
+          } else if (i == 1 && j < 2 && sfp->idx.subtype == FEATDEF_exon && SameAsMRNA (sfp, errtype)) {
+
+          } else if (LocationIsFar (sfp->location) && NoFetchFunctions ()) {
+            vsp->far_fetch_failure = TRUE;
+
+          } else if (i == 1 && j < 2 && sfp->data.choice == SEQFEAT_CDREGION && SameAsMRNA (sfp, errtype) &&
+                     PartialAtSpliceSiteOrGap (vsp, sfp->location, errtype, &isgap, &badseq)) {
+          } else if (i == 1 && j < 2 && PartialAtSpliceSiteOrGap (vsp, sfp->location, errtype, &isgap, &badseq)) {
+            if (! isgap) {
+              if (sfp->idx.subtype != FEATDEF_CDS || SplicingNotExpected (sfp)) {
+                if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep && i == 1 && (j == 0 || j == 1 || j == 2)) {
+                  /* ignore in genomic gpipe sequence */
+                } else {
+                  ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
+                            "%s: %s (but is at consensus splice site)",
+                            parterr[i], parterrs[j]);
+                }
+              } else if (sfp->idx.subtype == FEATDEF_CDS) {
+                bsp = BioseqFindFromSeqLoc (sfp->location);
+                if (bsp != NULL) {
+                  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+                  if (sdp != NULL) {
+                    mip = (MolInfoPtr) sdp->data.ptrvalue;
+                    if (mip != NULL) {
+                      if (mip->biomol == MOLECULE_TYPE_MRNA) {
+                        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+                                  "%s: %s (but is at consensus splice site, but is on an mRNA that is already spliced)",
+                                  parterr[i], parterrs[j]);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } else if (i == 1 && j < 2 && badseq) {
+            ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PartialProblem,
+              "%s: %s (and is at bad sequence)",
+              parterr[i], parterrs[j]);
+          } else if (sfp->data.choice == SEQFEAT_CDREGION && sfp->excpt &&
+                     StringStr (sfp->except_text, "rearrangement required for product") != NULL) {
+          } else if (sfp->data.choice == SEQFEAT_CDREGION && j == 0) {
+            if (no_nonconsensus_except) {
+              if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+                /* skip in gpipe genomic */
+              } else {
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+                  "%s: %s", parterr[i], "5' partial is not at start AND"
+                  " is not at consensus splice site");
+              }
+            }
+          } else if (sfp->data.choice == SEQFEAT_CDREGION && j == 1) {
+            if (no_nonconsensus_except) {
+              if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+                /* skip in gpipe genomic */
+              } else {
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+                  "%s: %s", parterr[i], "3' partial is not at stop AND"
+                  " is not at consensus splice site");
+              }
+            }
+          } else if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep && i == 1 && (j == 0 || j == 1 || j == 2)) {
+            /* ignore start/stop not at end in genomic gpipe sequence */
+          } else {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_PartialProblem,
+              "%s: %s", parterr[i], parterrs[j]);
+          }
+        }
+        errtype <<= 1;
+      }
+    }
+
+  }
+
+  CheckForIllegalDbxref (vsp, gcp, sfp->dbxref);
+  /*
+  for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
+    id = -1;
+    db = vnp->data.ptrvalue;
+    if (db && db->db) {
+      for (i = 0; i < DBNUM; i++) {
+        if (StringCmp (db->db, dbtag[i]) == 0) {
+          id = i;
+          break;
+        }
+      }
+      if (id == -1 || (type != SEQFEAT_CDREGION && id < 4)) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", db->db);
+      }
+    }
+  }
+  */
+
+  switch (type) {
+  case 1:                      /* Gene-ref */
+    grp = (GeneRefPtr) (sfp->data.value.ptrvalue);
+    if (grp != NULL) {
+      if (EmptyOrNullString (grp->locus) &&
+          EmptyOrNullString (grp->allele) && EmptyOrNullString (grp->desc) &&
+          EmptyOrNullString (grp->maploc) && EmptyOrNullString (grp->locus_tag) &&
+          grp->db == NULL && grp->syn == NULL) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GeneRefHasNoData, "There is a gene feature where all fields are empty");
+      }
+      if (StringDoesHaveText (grp->locus_tag)) {
+        multitoken = FALSE;
+        for (ptr = grp->locus_tag, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+          if (IS_WHITESP (ch)) {
+            multitoken = TRUE;
+          }
+        }
+        if (multitoken) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_LocusTagProblem, "Gene locus_tag '%s' should be a single word without any spaces", grp->locus_tag);
+        }
+        /* check for matching old_locus_tag */
+        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+          if (StringCmp (gbq->qual, "old_locus_tag") == 0 && StringCmp (grp->locus_tag, gbq->val) == 0) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_LocusTagProblem, "Gene locus_tag and old_locus_tag '%s' match", grp->locus_tag);
+          }
+        }
+        if (StringDoesHaveText (grp->locus) && StringICmp (grp->locus, grp->locus_tag) == 0) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_LocusTagProblem, "Gene locus and locus_tag '%s' match", grp->locus);
+        }
+      }
+      CheckForIllegalDbxref (vsp, gcp, grp->db);
+      if (StringDoesHaveText (grp->allele)) {
+        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+          if (StringCmp (gbq->qual, "allele") == 0 && StringDoesHaveText (gbq->val)) {
+            if (StringICmp (gbq->val, grp->allele) == 0) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "Redundant allele qualifier (%s) on gene", gbq->val);
+            } else if (sfp->idx.subtype != FEATDEF_variation) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "Hidden allele qualifier (%s) on gene", gbq->val);
+            }
+          }
+        }
+      }
+      /*
+      for (vnp = grp->db; vnp != NULL; vnp = vnp->next) {
+        id = -1;
+        db = vnp->data.ptrvalue;
+        if (db && db->db) {
+          for (i = 0; i < DBNUM; i++) {
+            if (StringCmp (db->db, dbtag[i]) == 0) {
+              id = i;
+              break;
+            }
+          }
+          if (id == -1 || (type != SEQFEAT_CDREGION && id < 4)) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", db->db);
+          }
+        }
+      }
+      */
+      if (grp->locus != NULL && sfp->comment != NULL) {
+        if (StringCmp (grp->locus, sfp->comment) == 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "Comment has same value as gene locus");
+        }
+      }
+      if (grp->locus != NULL) {
+        if (HasBadCharacter (grp->locus)) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadInternalCharacter, "Gene locus contains undesired character");
+        }
+        if (EndsWithBadCharacter (grp->locus)) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadTrailingCharacter, "Gene locus ends with undesired character");
+        }
+        if (EndsWithHyphen (grp->locus)) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadTrailingHyphen, "Gene locus ends with hyphen");
+        }
+      }
+      if (grp->locus_tag != NULL && sfp->comment != NULL) {
+        if (StringCmp (grp->locus_tag, sfp->comment) == 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "Comment has same value as gene locus_tag");
+        }
+      }
+      if (StringDoesHaveText (grp->locus_tag)) {
+        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+          if (StringCmp (gbq->qual, "old_locus_tag") == 0 && StringDoesHaveText (gbq->val)) {
+            if (StringICmp (gbq->val, grp->locus_tag) == 0) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "old_locus_tag has same value as gene locus_tag");
+            }
+          }
+        }
+      }
+      if (grp->syn != NULL && (vsp->is_refseq_in_sep /* || vsp->seqSubmitParent */)) {
+        for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          if (NameInList (str, badGeneSyn, sizeof (badGeneSyn) / sizeof (badGeneSyn [0]))) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "Uninformative gene synonym '%s'", str);
+          }
+        }
+      }
+      if (grp->syn != NULL && (vsp->is_refseq_in_sep || vsp->seqSubmitParent)) {
+        for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          if (StringDoesHaveText (grp->locus) && StringCmp (grp->locus, str) == 0) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "gene synonym has same value as gene locus");
+          }
+        }
+      }
+      if (StringDoesHaveText (grp->locus) && StringDoesHaveText (grp->desc) && StringCmp (grp->locus, grp->desc) == 0) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "gene description has same value as gene locus");
+      }
+      if (StringHasNoText (grp->locus) && StringHasNoText (grp->desc) && grp->syn != NULL) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "gene synonym without gene locus or description");
+      }
+      if (StringDoesHaveText (grp->desc) && StringStr (grp->desc,"..") != NULL) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "Possible location text (%s) on gene description", grp->desc);
+      }
+      /* - need to ignore if curated drosophila - add to vsp internal flags for efficiency?
+      if (StringDoesHaveText (grp->locus)) {
+        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+          if (StringCmp (gbq->qual, "old_locus_tag") == 0 && StringDoesHaveText (gbq->val)) {
+            if (StringICmp (gbq->val, grp->locus) == 0) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "old_locus_tag has same value as gene locus");
+            }
+          }
+        }
+      }
+      */
+      if (StringHasSgml (vsp, grp->locus)) {
+        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "gene locus %s has SGML", grp->locus);
+      }
+      if (StringHasSgml (vsp, grp->locus_tag)) {
+        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "gene locus_tag %s has SGML", grp->locus_tag);
+      }
+      if (StringHasSgml (vsp, grp->desc)) {
+        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "gene description %s has SGML", grp->desc);
+      }
+      for (vnp = grp->syn; vnp != NULL; vnp = vnp->next) {
+        str = (CharPtr) vnp->data.ptrvalue;
+        if (StringHasSgml (vsp, str)) {
+          ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "gene synonym %s has SGML", str);
+        }
+      }
+      if (StringDoesHaveText (grp->locus)) {
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+        sfpx = SeqMgrGetGeneByLocusTag (bsp, grp->locus, &fcontext);
+        if (sfpx != NULL) {
+          grpx = (GeneRefPtr) sfpx->data.value.ptrvalue;
+          if (grpx != NULL) {
+            if (grp == grpx) {
+              /*
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_LocusCollidesWithLocusTag, "locus collides with locus_tag in same gene");
+              */
+            } else {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_LocusCollidesWithLocusTag, "locus collides with locus_tag in another gene");
+            }
+          }
+        }
+      }
+    }
+    break;
+  case 2:                      /* Org-ref */
+    break;
+  case 3:                      /* Cdregion */
+    pseudo = sfp->pseudo;       /* now also uses new feature pseudo flag */
+    excpt = FALSE;
+    conflict = FALSE;
+    codonqual = FALSE;
+    crp = (CdRegionPtr) (sfp->data.value.ptrvalue);
+    if (crp != NULL) {
+      conflict = crp->conflict;
+    }
+    protidqual = FALSE;
+    transidqual = FALSE;
+    ovgenepseudo = FALSE;
+    gbq = sfp->qual;
+    while (gbq != NULL) {
+      if (StringICmp (gbq->qual, "pseudo") == 0) {
+        pseudo = TRUE;
+      }
+      if (StringICmp (gbq->qual, "exception") == 0) {
+        excpt = TRUE;
+      }
+      if (StringICmp (gbq->qual, "codon") == 0) {
+        codonqual = TRUE;
+      }
+      if (StringICmp (gbq->qual, "protein_id") == 0) {
+        protidqual = TRUE;
+      }
+      if (StringICmp (gbq->qual, "transcript_id") == 0) {
+        transidqual = TRUE;
+      }
+      gbq = gbq->next;
+    }
+    if (protidqual) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "protein_id should not be a gbqual on a CDS feature");
+    }
+    if (transidqual) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnFeature, "transcript_id should not be a gbqual on a CDS feature");
+    }
+    if (OverlappingGeneIsPseudo (sfp)) {
+      pseudo = TRUE;
+      ovgenepseudo = TRUE;
+    }
+    if ((!pseudo) && (!conflict)) {
+      CdTransCheck (vsp, sfp);
+      SpliceCheck (vsp, sfp);
+    } else if (conflict) {
+      CdConflictCheck (vsp, sfp);
+    }
+    CdsProductIdCheck (vsp, sfp);
+    crp = (CdRegionPtr) (sfp->data.value.ptrvalue);
+    if (crp != NULL) {
+      if (crp->code_break != NULL && StringISearch (sfp->except_text, "RNA editing") != NULL) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_TranslExceptAndRnaEditing, "CDS has both RNA editing /exception and /transl_except qualifiers");
+      }
+      prevcbp = NULL;
+      for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+        i = SeqLocCompare (cbp->loc, sfp->location);
+        if ((i != SLC_A_IN_B) && (i != SLC_A_EQ_B)) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_Range, "Code-break location not in coding region");
+        }
+        if (prevcbp != NULL) {
+          i = SeqLocCompare (cbp->loc, prevcbp->loc);
+          if (i == SLC_A_EQ_B) {
+            ctmp = SeqLocPrint (cbp->loc);
+            if (ctmp != NULL) {
+              ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_DuplicateTranslExcept, "Multiple code-breaks at same location [%s]", ctmp);
+            } else {
+              ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_DuplicateTranslExcept, "Multiple code-breaks at same location");
+            }
+            MemFree (ctmp);
+          }
+        }
+        prevcbp = cbp;
+      }
+      if (excpt && (!sfp->excpt)) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ExceptInconsistent, "Exception flag should be set in coding region");
+      }
+      if (crp->orf && sfp->product != NULL) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_OrfCdsHasProduct, "An ORF coding region should not have a product");
+      }
+      if (pseudo && sfp->product != NULL) {
+        if (ovgenepseudo) {
+          if (sfp->pseudo) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PseudoCdsHasProduct, "A pseudo coding region should not have a product");
+          } else {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PseudoCdsViaGeneHasProduct, "A coding region overlapped by a pseudogene should not have a product");
+          }
+        } else {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PseudoCdsHasProduct, "A pseudo coding region should not have a product");
+        }
+      }
+      if (pseudo && SeqMgrGetProtXref (sfp) != NULL) {
+        if (NGorNT (vsp->sep, sfp->location, &is_nc) || IsEMBLAccn (vsp->sep, sfp->location)) {
+          sev = SEV_WARNING;
+        } else {
+          sev = SEV_ERROR;
+        }
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_PseudoCdsHasProtXref, "A pseudo coding region should not have a protein xref");
+      }
+      if (codonqual) {
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_CodonQualifierUsed, "Use the proper genetic code, if available, or set transl_excepts on specific codons");
+      }
+      biopgencode = 0;
+      cdsgencode = 0;
+      bsp = GetBioseqGivenSeqLoc (sfp->location, gcp->entityID);
+      if (bsp != NULL) {
+        vnp = NULL;
+        if (vsp->useSeqMgrIndexes) {
+          vnp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
+        } else {
+          bcp = BioseqContextNew (bsp);
+          vnp = BioseqContextGetSeqDescr (bcp, Seq_descr_source, NULL, NULL);
+        }
+        if (vnp != NULL && vnp->data.ptrvalue != NULL) {
+          plastid = FALSE;
+          biop = (BioSourcePtr) vnp->data.ptrvalue;
+          orp = biop->org;
+          if (orp != NULL && orp->orgname != NULL) {
+            onp = orp->orgname;
+            if (biop->genome == GENOME_kinetoplast ||
+                biop->genome == GENOME_mitochondrion ||
+                biop->genome == GENOME_hydrogenosome) {
+              biopgencode = onp->mgcode;
+            } else if (biop->genome == GENOME_chloroplast ||
+                       biop->genome == GENOME_chromoplast ||
+                       biop->genome == GENOME_plastid ||
+                       biop->genome == GENOME_cyanelle ||
+                       biop->genome == GENOME_apicoplast ||
+                       biop->genome == GENOME_leucoplast ||
+                       biop->genome == GENOME_proplastid ||
+                       biop->genome == GENOME_chromatophore) {
+              if (onp->pgcode > 0) {
+                biopgencode = onp->pgcode;
+              } else {
+                biopgencode = 11;
+              }
+              plastid = TRUE;
+            } else {
+              biopgencode = onp->gcode;
+            }
+            gc = crp->genetic_code;
+            if (gc != NULL) {
+              for (vnp = gc->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
+                if (vnp->choice == 2) {
+                  cdsgencode = (Int2) vnp->data.intvalue;
+                }
+              }
+            }
+            if (biopgencode != cdsgencode) {
+              if (! vsp->seqSubmitParent) { /* suppress when validator run from tbl2asn */
+                if (plastid) {
+                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GenCodeMismatch,
+                            "Genetic code conflict between CDS (code %d) and BioSource.genome biological context (%s) (uses code 11)", (int) cdsgencode, plastidtxt [biop->genome]);
+                } else {
+                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GenCodeMismatch,
+                            "Genetic code conflict between CDS (code %d) and BioSource (code %d)", (int) cdsgencode, (int) biopgencode);
+                }
+              }
+            }
+          }
+        }
+        if (!vsp->useSeqMgrIndexes) {
+          BioseqContextFree (bcp);
+        }
+      }
+    }
+    /* CheckForBothStrands (vsp, sfp); */
+    CheckForBadGeneOverlap (vsp, sfp);
+    CheckForBadMRNAOverlap (vsp, sfp);
+    CheckForCommonCDSProduct (vsp, sfp);
+    CheckCDSPartial (vsp, sfp);
+    if (StringDoesHaveText (sfp->comment)) {
+      if (LookForECnumberPattern (sfp->comment)) {
+        skip = FALSE;
+        bsp = BioseqFindFromSeqLoc (sfp->product);
+        if (bsp != NULL && ISA_aa (bsp->mol)) {
+          prt = SeqMgrGetBestProteinFeature (bsp, NULL);
+          if (prt != NULL && prt->data.choice == SEQFEAT_PROT) {
+            prp = (ProtRefPtr) prt->data.value.ptrvalue;
+            if (prp != NULL) {
+              for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+                str = (CharPtr) vnp->data.ptrvalue;
+                if (StringHasNoText (str)) continue;
+                if (StringStr (sfp->comment, str) != NULL) {
+                  skip = TRUE;
+                }
+                skip = TRUE; /* now suppress even if EC numbers are different */
+              }
+            }
+          }
+        }
+        if (! skip) {
+          ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_EcNumberProblem, "Apparent EC number in CDS comment");
+        }
+      }
+    }
+    break;
+  case 4:                      /* Prot-ref */
+    prp = (ProtRefPtr) (sfp->data.value.ptrvalue);
+    if (prp != NULL) {
+      if (prp->processed != 3 && prp->processed != 4) {
+        vnp = prp->name;
+        if ((vnp == NULL || EmptyOrNullString ((CharPtr) vnp->data.ptrvalue)) &&
+            EmptyOrNullString (prp->desc) && prp->ec == NULL && prp->activity == NULL && prp->db == NULL) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ProtRefHasNoData, "There is a protein feature where all fields are empty");
+        }
+        if (vnp != NULL) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringDoesHaveText (str)) {
+            TestForBracketsInProductName (str, vsp);
+            if (StringNICmp (str, "hypothetical protein XP_", 24) == 0) {
+              bsp = GetBioseqGivenSeqLoc (sfp->location, gcp->entityID);
+              if (bsp != NULL) {
+                for (sip = bsp->id; sip != NULL; sip = sip->next) {
+                  if (sip->choice != SEQID_OTHER) continue;
+                  tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+                  if (tsip == NULL) continue;
+                  if (StringICmp (tsip->accession, str + 21) != 0) {
+                    ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_HpotheticalProteinMismatch, "Hypothetical protein reference does not match accession");
+                  }
+                }
+              }
+            }
+            if (prp->ec != NULL) {
+              if (StringCmp (str, "Hypothetical protein") == 0 ||
+                  StringCmp (str, "hypothetical protein") == 0 ||
+                  StringCmp (str, "Unknown protein") == 0 ||
+                  StringCmp (str, "unknown protein") == 0) {
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadProteinName, "Unknown or hypothetical protein should not have EC number");
+              }
+            }
+            if (LookForECnumberPattern (str)) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Apparent EC number in protein title");
+            }
+            if (vsp->rubiscoTest && StringStr (str, "ribulose") != NULL && StringStr (str, "bisphosphate") != NULL) {
+              if (StringStr (str, "methyltransferase") == NULL && StringStr (str, "activase") == NULL) {
+                if (StringICmp (str, "ribulose-1,5-bisphosphate carboxylase/oxygenase") == 0) {
+                  /* allow standard name without large or small subunit designation - later need kingdom test */
+                } else if (StringICmp (str, "ribulose-1,5-bisphosphate carboxylase/oxygenase large subunit") != 0 &&
+                    StringICmp (str, "ribulose-1,5-bisphosphate carboxylase/oxygenase small subunit") != 0) {
+                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RubiscoProblem, "Nonstandard ribulose bisphosphate protein name");
+                }
+              }
+            }
+            if (StringHasPMID (str)) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_ProteinNameHasPMID, "Protein name has internal PMID");
+            }
+          }
+          if (str != NULL && sfp->comment != NULL) {
+            if (StringCmp (str, sfp->comment) == 0) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "Comment has same value as protein name");
+            }
+          }
+          if (StringDoesHaveText (sfp->comment)) {
+            if (LookForECnumberPattern (sfp->comment)) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "Apparent EC number in protein comment");
+            }
+          }
+        }
+      }
+      CheckForIllegalDbxref (vsp, gcp, prp->db);
+      /*
+      for (vnp = prp->db; vnp != NULL; vnp = vnp->next) {
+        id = -1;
+        db = vnp->data.ptrvalue;
+        if (db && db->db) {
+          for (i = 0; i < DBNUM; i++) {
+            if (StringCmp (db->db, dbtag[i]) == 0) {
+              id = i;
+              break;
+            }
+          }
+          if (id == -1 || (type != SEQFEAT_CDREGION && id < 4)) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", db->db);
+          }
+        }
+      }
+      */
+      if (prp->name == NULL && prp->processed != 3 && prp->processed != 4) {
+        if (StringDoesHaveText (prp->desc)) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NoNameForProtein, "Protein feature has description but no name");
+        } else if (prp->activity != NULL) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NoNameForProtein, "Protein feature has function but no name");
+        } else if (prp->ec != NULL) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NoNameForProtein, "Protein feature has EC number but no name");
+        } else {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_NoNameForProtein, "Protein feature has no name");
+        }
+      }
+      if (prp->desc != NULL && sfp->comment != NULL) {
+        if (StringCmp (prp->desc, sfp->comment) == 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_RedundantFields, "Comment has same value as protein description");
+        }
+      }
+      for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+        str = (CharPtr) vnp->data.ptrvalue;
+        if (StringDoesHaveText (str)) {
+          if (! ValidateECnumber (str)) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadEcNumberFormat, "%s is not in proper EC_number format", str);
+          } else if (ECnumberNotInList (str)) {
+            if (ECnumberWasDeleted (str)) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadEcNumberValue, "EC_number %s was deleted", str);
+            } else if (ECnumberWasReplaced (str)) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadEcNumberValue, "EC_number %s was transferred and is no longer valid", str);
+            } else {
+              StringNCpy_0 (buf, str, sizeof (buf));
+              ptr = StringChr (buf, 'n');
+              if (ptr != NULL) {
+                ch = ptr [1];
+                if (IS_DIGIT (ch)) {
+                  ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_BadEcNumberValue, "%s is not a legal preliminary value for qualifier EC_number", str);
+                } else {
+                  ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadEcNumberValue, "%s is not a legal value for qualifier EC_number", str);
+                }
+              } else {
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadEcNumberValue, "%s is not a legal value for qualifier EC_number", str);
+              }
+            }
+          }
+        } else {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_EcNumberProblem, "EC number should not be empty");
+        }
+      }
+    }
+    if (prp != NULL && prp->name != NULL && (vsp->is_refseq_in_sep /* || vsp->seqSubmitParent */)) {
+      for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+        str = (CharPtr) vnp->data.ptrvalue;
+        if (StringHasNoText (str)) continue;
+          if (NameInList (str, badProtName, sizeof (badProtName) / sizeof (badProtName [0]))) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredProteinName, "Uninformative protein name '%s'", str);
+          } else if (StringStr (str, "=") != NULL ||
+                     StringStr (str, "~") != NULL ||
+                     StringISearch (str, "uniprot") != NULL ||
+                     StringISearch (str, "uniprotkb") != NULL ||
+                     StringISearch (str, "pmid") != NULL ||
+                     StringISearch (str, "dbxref") != NULL) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredProteinName, "Uninformative protein name '%s'", str);
+          }
+        }
+      }
+      if (prp != NULL && prp->name != NULL) {
+        for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          if (HasBadCharacter (str)) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadInternalCharacter, "Protein name contains undesired character");
+          }
+          if (EndsWithBadCharacter (str)) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadTrailingCharacter, "Protein name ends with undesired character");
+          }
+          if (EndsWithHyphen (str)) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadTrailingHyphen, "Protein name ends with hyphen");
+          }
+        }
+      }
+      for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+        str = (CharPtr) vnp->data.ptrvalue;
+        if (StringHasSgml (vsp, str)) {
+          ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "protein name %s has SGML", str);
+        }
+      }
+      if (StringHasSgml (vsp, prp->desc)) {
+        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_SgmlPresentInText, "protein description %s has SGML", prp->desc);
+      }
+    break;
+  case 5:                      /* RNA-ref */
+    ValidateRna(sfp, vsp, gcp);
+
     break;
   case 6:                      /* Pub */
     pdp = (PubdescPtr) sfp->data.value.ptrvalue;
@@ -21707,6 +22733,11 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
   case 21:                     /* CloneRef */
     clrp = (CloneRefPtr) sfp->data.value.ptrvalue;
     if (clrp != NULL) {
+    }
+    break;
+  case 22:                     /* VariationRef */
+    vrfp = (VariationRefPtr) sfp->data.value.ptrvalue;
+    if (vrfp != NULL) {
     }
     break;
   default:
@@ -21914,7 +22945,7 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
         }
       }
     }
-    
+
   }
 
   if (sfp->ext != NULL) {
@@ -22022,7 +23053,7 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
         }
         /* look for gene xrefs with locus_tag but no locus */
         if (StringHasNoText (grp->locus)
-            && sfpx != NULL && sfpx->data.choice == SEQFEAT_GENE 
+            && sfpx != NULL && sfpx->data.choice == SEQFEAT_GENE
             && sfpx->data.value.ptrvalue != NULL
             && StringDoesHaveText (((GeneRefPtr)sfpx->data.value.ptrvalue)->locus)) {
             ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GeneXrefWithoutLocus,
@@ -22095,7 +23126,9 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
                   ValStrandsMatch (SeqLocStrand (sfp->location), SeqLocStrand (sfpy->location))) {
                 /* cross-reference needed to disambiguate between multiple overlapping genes, ignore */
               } else {
-                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_SuspiciousGeneXref, "Curated Drosophila record should not have gene cross-reference %s", label);
+                genexref_label = GetGeneXrefLabel (grp);
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_SuspiciousGeneXref, "Curated Drosophila record should not have gene cross-reference %s", genexref_label);
+                genexref_label = MemFree (genexref_label);
               }
             }
           }
@@ -22168,6 +23201,7 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   SeqDescrPtr     sdp;
   MolInfoPtr      mip;
   TextSeqIdPtr    tsip;
+  Boolean         rna_editing = FALSE;
 
   if (sfp == NULL)
     return;
@@ -22181,6 +23215,9 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
       if (StringISearch (sfp->except_text,  bypass_mrna_trans_check [i]) != NULL) {
         report_errors = FALSE;  /* biological exception */
       }
+    }
+    if (StringISearch (sfp->except_text, "RNA editing") != NULL) {
+      rna_editing = TRUE;
     }
     if (StringStr (sfp->except_text, "unclassified transcription discrepancy") != NULL) {
       unclassified_except = TRUE;
@@ -22311,29 +23348,37 @@ NLM_EXTERN void MrnaTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         if (counta < 19 * countnona) {
           has_errors = TRUE;
           other_than_mismatch = TRUE;
-          if (report_errors) {
+          if (report_errors || rna_editing) {
             ValidErr (vsp, sev, ERR_SEQ_FEAT_TranscriptLen, "Transcript length [%ld] less than %sproduct length [%ld], and tail < 95%s polyA", (long) mlen, farstr, (long) plen, "%");
           }
           plen = mlen; /* even if it fails polyA test, allow base-by-base comparison on common length */
         } else if (counta > 0 && countnona == 0) {
           has_errors = TRUE;
           other_than_mismatch = TRUE;
-          if (report_errors) {
-            ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail is 100%s polyA", (long) mlen, farstr, (long) plen, "%");
+          if (report_errors || rna_editing) {
+            if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+              /* suppress if gpipe genomic */
+            } else {
+              ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail is 100%s polyA", (long) mlen, farstr, (long) plen, "%");
+            }
           }
           plen = mlen; /* if it passes polyA test, allow base-by-base comparison on common length */
         } else {
           has_errors = TRUE;
           other_than_mismatch = TRUE;
-          if (report_errors) {
-            ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail >= 95%s polyA", (long) mlen, farstr, (long) plen, "%");
+          if (report_errors || rna_editing) {
+            if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+              /* suppress if gpipe genomic */
+            } else {
+              ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PolyATail, "Transcript length [%ld] less than %sproduct length [%ld], but tail >= 95%s polyA", (long) mlen, farstr, (long) plen, "%");
+            }
           }
           plen = mlen; /* if it passes polyA test, allow base-by-base comparison on common length */
         }
       } else {
         has_errors = TRUE;
         other_than_mismatch = TRUE;
-        if (report_errors) {
+        if (report_errors || rna_editing) {
           ValidErr (vsp, sev, ERR_SEQ_FEAT_TranscriptLen, "Transcript length [%ld] greater than %sproduct length [%ld]", (long) mlen, farstr, (long) plen);
         }
       }
@@ -22505,6 +23550,7 @@ static CharPtr bypass_cds_trans_check [] = {
   "annotated by transcript or proteomic data",
   "heterogeneous population sequenced",
   "low-quality sequence region",
+  "artificial location",
   NULL
 };
 
@@ -22565,8 +23611,10 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   ByteStorePtr    newprot = NULL;
   CharPtr         protseq = NULL;
   BioseqPtr       prot1seq = NULL, prot2seq = NULL;
-  Int4            prot1len = 0, prot2len, i, len = 0, x_count = 0,
+  Int4            i, len = 0, x_count = 0,
                   nonx_count = 0, xcount1 = 0, xcount2 = 0;
+  Int4            prot1len = 0; /* length of protein product sequence */
+  Int4            prot2len = 0; /* length of translation of coding region */
   CdRegionPtr     crp;
   SeqIdPtr        protid = NULL;
   Int2            residue1, residue2, stop_count = 0, mismatch = 0, ragged = 0;
@@ -22576,16 +23624,20 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   */
   Uint2           part_loc = 0, part_prod = 0;
   Boolean         no_end = FALSE, no_beg = FALSE, show_stop = FALSE,
-                  got_dash = FALSE, alt_start = FALSE, done;
+                  got_dash = FALSE, alt_start = FALSE, got_x = FALSE, done;
   GBQualPtr       gb;
-  ValNodePtr      vnp, code, codebreakhead = NULL;
+  ValNodePtr      vnp, vnp2, code, codebreakhead = NULL;
   int             gccode = 0;
   Boolean         transl_except = FALSE, prot_ok = TRUE, is_nc = FALSE,
                   has_errors = FALSE, report_errors = TRUE,
                   unclassified_except = FALSE, mismatch_except = FALSE,
                   frameshift_except = FALSE, rearrange_except = FALSE,
                   other_than_mismatch = FALSE, product_replaced = FALSE,
-                  mixed_population = FALSE, low_quality = FALSE;
+                  mixed_population = FALSE, low_quality = FALSE,
+                  artificial_location = FALSE;
+  Boolean         partial5 = FALSE;
+  Boolean         partial3 = FALSE;
+  Boolean         rna_editing = FALSE;
   CharPtr         nuclocstr, farstr = "";
   CodeBreakPtr    cbp;
   Int4            pos1, pos2, pos;
@@ -22606,9 +23658,12 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   SeqDescrPtr     sdp;
   MolInfoPtr      mip;
   TextSeqIdPtr    tsip;
+  Boolean         annotated_by_transcript_or_proteomic = FALSE;
 
-  if (sfp == NULL)
-    return;
+  if (sfp == NULL) return;
+
+  crp = (CdRegionPtr) (sfp->data.value.ptrvalue);
+  if (crp == NULL) return;
 
   for (gb = sfp->qual; gb != NULL; gb = gb->next) {     /* pseuogene */
     if (!StringICmp ("pseudo", gb->qual))
@@ -22619,6 +23674,8 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     vsp->far_fetch_failure = TRUE;
     return;
   }
+
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
 
   if (sfp->excpt && (! vsp->ignoreExceptions) && (! StringHasNoText (sfp->except_text))) {
     for (i = 0; bypass_cds_trans_check [i] != NULL; i++) {
@@ -22649,9 +23706,17 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     if (StringICmp (sfp->except_text, "low-quality sequence region") == 0) {
       low_quality = TRUE;
     }
+    if (StringICmp (sfp->except_text, "artificial location") == 0) {
+      artificial_location = TRUE;
+    }
+    if (StringISearch (sfp->except_text, "RNA editing") != NULL) {
+      rna_editing = TRUE;
+    }
+  }
+  if (StringISearch (sfp->except_text, "annotated by transcript or proteomic data") != NULL) {
+    annotated_by_transcript_or_proteomic = TRUE;
   }
 
-  crp = (CdRegionPtr) (sfp->data.value.ptrvalue);
   if (crp->code_break == NULL) {        /* check for unparsed transl_except */
     for (gb = sfp->qual; gb != NULL; gb = gb->next) {
       if (StringCmp (gb->qual, "transl_except") == 0) {
@@ -22671,9 +23736,9 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
       case 1:                  /* name */
         code = GeneticCodeFind (0, (CharPtr) (vnp->data.ptrvalue));
         if (code != NULL) {
-          for (vnp = code->data.ptrvalue; ((vnp != NULL) && (!gccode)); vnp = vnp->next) {
-            if (vnp->choice == 2)       /* id */
-              gccode = (int) (vnp->data.intvalue);
+          for (vnp2 = code->data.ptrvalue; ((vnp2 != NULL) && (!gccode)); vnp2 = vnp2->next) {
+            if (vnp2->choice == 2)       /* id */
+              gccode = (int) (vnp2->data.intvalue);
           }
         }
         break;
@@ -22703,11 +23768,52 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     ValidateTranslExcept (vsp, sfp, codebreakhead, farFetchProd, crp->frame, crp->genetic_code);
   }
 
+  protid = SeqLocId (sfp->product);
+  if (protid != NULL) {
+    prot1seq = BioseqFind (protid);
+    if (prot1seq == NULL && vsp->farFetchCDSproducts) {
+      if (protid != NULL && (protid->choice != SEQID_GI || protid->data.intvalue > 0)) {
+        prot1seq = BioseqLockById (protid);
+      }
+      if (prot1seq != NULL) {
+        unlockProd = TRUE;
+        farstr = "(far) ";
+        if (sfp->partial) {
+          sdp = GetNextDescriptorUnindexed (prot1seq, Seq_descr_molinfo, NULL);
+          if (sdp != NULL && sdp->choice == Seq_descr_molinfo) {
+            mip = (MolInfoPtr) sdp->data.ptrvalue;
+            if (mip != NULL) {
+              if (mip->completeness < 2 || mip->completeness > 5) {
+                for (sip3 = prot1seq->id; sip3 != NULL; sip3 = sip3->next) {
+                  if (sip3->choice != SEQID_OTHER) continue;
+                  tsip = (TextSeqIdPtr) sip3->data.ptrvalue;
+                  if (tsip == NULL) continue;
+                  if (StringNCmp (tsip->accession, "NP_", 3) == 0) {
+                    /* if far NP_ record, return to lower severity */
+                    trans_len_sev = SEV_WARNING;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if (prot1seq != NULL)
+      prot1len = prot1seq->length;
+  }
+
+  if (annotated_by_transcript_or_proteomic) {
+    if (1.2 * prot2len < prot1len) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_TransLen, "Protein product length [%ld] is more than 120%% of the %stranslation length [%ld]", prot1len, farstr, prot2len);
+    }
+  }
+
   if (alt_start && gccode == 1) {
     /* sev = SEV_WARNING; */
     sev = SEV_NONE; /* only enable for RefSeq, leave old code in for now */
     if (Loc_is_RefSeq (sfp->location)) {
-      sev = SEV_ERROR;
+      sev = /* SEV_ERROR */ SEV_NONE; /* now also disable for RefSeq */
     } else if (Loc_is_GEDL (sfp->location)) {
       sev = SEV_NONE;
     }
@@ -22840,8 +23946,12 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     len = prot2len;
     for (i = 0; i < len; i++) {
       residue1 = protseq [i];
-      if ((i == 0) && (residue1 == '-'))
+      if (i == 0 && residue1 == '-') {
         got_dash = TRUE;
+      }
+      if (i == 0 && residue1 == 'X') {
+        got_x = TRUE;
+      }
       if (residue1 == '*') {
         if (i == (len - 1))
           got_stop = TRUE;
@@ -22885,9 +23995,33 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         sev = SEV_WARNING;
       }
       if (report_errors || unclassified_except) {
-        ValidErr (vsp, sev, ERR_SEQ_FEAT_StartCodon,
-                  "Illegal start codon (and %ld internal stops). Probably wrong genetic code [%d]", (long) stop_count, gccode);
-        ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops (and illegal start codon). Genetic code [%d]", (long) stop_count, gccode);
+        if (! unclassified_except) {
+          ValidErr (vsp, sev, ERR_SEQ_FEAT_StartCodon,
+                    "Illegal start codon (and %ld internal stops). Probably wrong genetic code [%d]", (long) stop_count, gccode);
+        }
+        if (unclassified_except && vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+          /* suppress if gpipe genomic */
+        } else {
+          ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops (and illegal start codon). Genetic code [%d]", (long) stop_count, gccode);
+        }
+      }
+    } else if (got_x) {
+      has_errors = TRUE;
+      other_than_mismatch = TRUE;
+      sev = SEV_ERROR;
+      if (unclassified_except) {
+        sev = SEV_WARNING;
+      }
+      if (report_errors || unclassified_except) {
+        if (! unclassified_except) {
+          ValidErr (vsp, sev, ERR_SEQ_FEAT_StartCodon,
+                    "Ambiguous start codon (and %ld internal stops). Possibly wrong genetic code [%d]", (long) stop_count, gccode);
+        }
+        if (unclassified_except && vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+          /* suppress if gpipe genomic */
+        } else {
+          ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops (and ambiguous start codon). Genetic code [%d]", (long) stop_count, gccode);
+        }
       }
     } else {
       has_errors = TRUE;
@@ -22923,7 +24057,11 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
             sev = SEV_REJECT;
           }
         }
-        ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops. Genetic code [%d]", (long) stop_count, gccode);
+        if (unclassified_except && vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+          /* suppress if gpipe genomic */
+        } else {
+          ValidErr (vsp, sev, ERR_SEQ_FEAT_InternalStop, "%ld internal stops. Genetic code [%d]", (long) stop_count, gccode);
+        }
       }
     }
     prot_ok = FALSE;
@@ -22932,44 +24070,20 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   } else if (got_dash) {
     has_errors = TRUE;
     other_than_mismatch = TRUE;
-    if (report_errors) {
+    if (report_errors && ! unclassified_except) {
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Illegal start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
+    }
+  } else if (got_x && (! partial5)) {
+    has_errors = TRUE;
+    other_than_mismatch = TRUE;
+    if (report_errors && ! unclassified_except) {
+      ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Ambiguous start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
     }
   }
 
   show_stop = TRUE;
 
-  protid = SeqLocId (sfp->product);
   if (protid != NULL) {
-    prot1seq = BioseqFind (protid);
-    if (prot1seq == NULL && vsp->farFetchCDSproducts) {
-      if (protid != NULL && (protid->choice != SEQID_GI || protid->data.intvalue > 0)) {
-        prot1seq = BioseqLockById (protid);
-      }
-      if (prot1seq != NULL) {
-        unlockProd = TRUE;
-        farstr = "(far) ";
-        if (sfp->partial) {
-          sdp = GetNextDescriptorUnindexed (prot1seq, Seq_descr_molinfo, NULL);
-          if (sdp != NULL && sdp->choice == Seq_descr_molinfo) {
-            mip = (MolInfoPtr) sdp->data.ptrvalue;
-            if (mip != NULL) {
-              if (mip->completeness < 2 || mip->completeness > 5) {
-                for (sip3 = prot1seq->id; sip3 != NULL; sip3 = sip3->next) {
-                  if (sip3->choice != SEQID_OTHER) continue;
-                  tsip = (TextSeqIdPtr) sip3->data.ptrvalue;
-                  if (tsip == NULL) continue;
-                  if (StringNCmp (tsip->accession, "NP_", 3) == 0) {
-                    /* if far NP_ record, return to lower severity */
-                    trans_len_sev = SEV_WARNING;
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
     if (prot1seq == NULL && (! vsp->farFetchCDSproducts)) {
       goto erret;
     }
@@ -23108,7 +24222,19 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
             other_than_mismatch = TRUE;
             if (report_errors) {
               if (! got_dash) {
-                ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Illegal start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
+                if (! unclassified_except){
+                  ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Illegal start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
+                }
+              }
+            }
+          } else if (residue1 == 'X') {
+            has_errors = TRUE;
+            other_than_mismatch = TRUE;
+            if (report_errors) {
+              if (! got_x) {
+                if (! unclassified_except){
+                  ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_StartCodon, "Ambiguous start codon used. Wrong genetic code [%d] or protein should be partial", gccode);
+                }
               }
             }
           } else {
@@ -23154,8 +24280,8 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
   } else {
     has_errors = TRUE;
     other_than_mismatch = TRUE;
-    if (report_errors) {
-      ValidErr (vsp, trans_len_sev, ERR_SEQ_FEAT_TransLen, "Given protein length [%ld] does not match %stranslation length [%ld]", prot1len, farstr, len);
+    if (report_errors || (rna_editing && (prot1len < len - 1 || prot1len > len))) {
+      ValidErr (vsp, rna_editing ? SEV_WARNING : trans_len_sev, ERR_SEQ_FEAT_TransLen, "Given protein length [%ld] does not match %stranslation length [%ld]", prot1len, farstr, len);
     }
   }
 
@@ -23165,25 +24291,34 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
         has_errors = TRUE;
         other_than_mismatch = TRUE;
         if (report_errors) {
-          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "End of location should probably be partial");
+          if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+            /* suppress if gpipe genomic */
+          } else {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "End of location should probably be partial");
+          }
         }
       } else {
         has_errors = TRUE;
         other_than_mismatch = TRUE;
         if (report_errors) {
-          ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "This SeqFeat should not be partial");
+          if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+            /* suppress if gpipe genomic */
+          } else {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "This SeqFeat should not be partial");
+          }
         }
       }
       show_stop = FALSE;
     }
   }
 
+
+
+erret:
   if (unlockProd) {
     BioseqUnlock (prot1seq);
   }
 
-
-erret:
   if (show_stop) {
     if ((!got_stop) && (!no_end)) {
       has_errors = TRUE;
@@ -23240,7 +24375,7 @@ erret:
 
   if (! report_errors) {
     if (! has_errors) {
-      if ((! frameshift_except) && (! rearrange_except) && (! mixed_population) && (! low_quality)) {
+      if ((! frameshift_except) && (! rearrange_except) && (! mixed_population) && (! low_quality) && (! artificial_location)) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UnnecessaryException, "CDS has exception but passes translation test");
       }
     } else if (unclassified_except && (! other_than_mismatch)) {
@@ -23313,7 +24448,8 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
         StringISearch (sfp->except_text, "nonconsensus splice site") != NULL ||
         StringISearch (sfp->except_text, "adjusted for low-quality genome") != NULL ||
         StringISearch (sfp->except_text, "heterogeneous population sequenced") != NULL ||
-        StringISearch (sfp->except_text, "low-quality sequence region") != NULL) {
+        StringISearch (sfp->except_text, "low-quality sequence region") != NULL ||
+        StringISearch (sfp->except_text, "artificial location") != NULL) {
       report_errors = FALSE;
     }
   }
@@ -23536,7 +24672,9 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
               }
             }
           } else {
-            if (gpsOrRefSeq) {
+            if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+              severity = SEV_INFO;
+            } else if (gpsOrRefSeq) {
               severity = SEV_WARNING;
             } else if (checkExonDonor) {
               severity = SEV_WARNING;
@@ -23584,7 +24722,9 @@ static void SpliceCheckEx (ValidStructPtr vsp, SeqFeatPtr sfp, Boolean checkAll)
         has_errors = TRUE;
       } else if (IS_residue (residue1) && IS_residue (residue2)) {
         if (residue1 != 'A' || residue2 != 'G') {
-          if (gpsOrRefSeq) {
+          if (vsp->is_gpipe_in_sep && vsp->bsp_genomic_in_sep) {
+            severity = SEV_INFO;
+          } else if (gpsOrRefSeq) {
             severity = SEV_WARNING;
           } else if (checkExonAcceptor) {
             severity = SEV_WARNING;
@@ -23730,10 +24870,11 @@ NLM_EXTERN void ValidateSeqLoc (ValidStructPtr vsp, SeqLocPtr slp, CharPtr prefi
 {
   SeqLocPtr       tmp, prev;
   Boolean         retval = TRUE, tmpval, mixed_strand = FALSE, unmarked_strand = FALSE,
-                  ordered = TRUE, adjacent = FALSE, circular = FALSE, exception = FALSE;
+                  ordered = TRUE, adjacent = FALSE, circular = FALSE, exception = FALSE,
+                  bad = FALSE;
   CharPtr         ctmp;
   Uint1           strand2 = 0, strand1;
-  ErrSev          sev;
+  ErrSev          sev, oldsev;
   SeqIntPtr       sip1, sip2, prevsip;
   SeqPntPtr       spp;
   PackSeqPntPtr   pspp;
@@ -23964,7 +25105,10 @@ NLM_EXTERN void ValidateSeqLoc (ValidStructPtr vsp, SeqLocPtr slp, CharPtr prefi
 
   if (bsp == NULL || bsp->repr != Seq_repr_seg) return;
 
-  if (SeqLocBadSortOrder (bsp, slp)) {
+  oldsev = ErrSetMessageLevel (SEV_ERROR);
+  bad = SeqLocBadSortOrder (bsp, slp);
+  ErrSetMessageLevel (oldsev);
+  if (bad) {
     ctmp = SeqLocPrint (slp);
     if (ctmp != NULL && StringLen (ctmp) > 800) {
       StringCpy (ctmp + 797, "...");
@@ -23975,7 +25119,10 @@ NLM_EXTERN void ValidateSeqLoc (ValidStructPtr vsp, SeqLocPtr slp, CharPtr prefi
 
   /* newer check for mixed strand on segmented bioseq */
 
-  if (SeqLocMixedStrands (bsp, slp)) {
+  oldsev = ErrSetMessageLevel (SEV_ERROR);
+  bad = SeqLocMixedStrands (bsp, slp);
+  ErrSetMessageLevel (oldsev);
+  if (bad) {
     ctmp = SeqLocPrint (slp);
     if (ctmp != NULL && StringLen (ctmp) > 800) {
       StringCpy (ctmp + 797, "...");

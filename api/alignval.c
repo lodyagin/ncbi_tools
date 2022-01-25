@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.72 $
+* $Revision: 6.77 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -205,8 +205,11 @@ static Int4 valmsggetseqpos(SeqAlignPtr sap, Int4 segment, SeqIdPtr sip)
    SeqLocPtr     slp;
    StdSegPtr     ssp;
 
-   if (sap == NULL || sap->segs == NULL || segment == 0)
+   if (sap == NULL || sap->segs == NULL) {
       return -1;
+   } else if (segment == 0) {
+      return 0;
+   }
    if (sap->segtype == SAS_DENSEG)
    {
       dsp = (DenseSegPtr)sap->segs;
@@ -503,8 +506,10 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       break;
 
     case Err_Segtype :
+      /* ignore new segtype warnings in genomic gpipe sequence */
+      if (useValErr && useVsp != NULL && useVsp->is_gpipe_in_sep && useVsp->bsp_genomic_in_sep) return;
       sprintf(string1, "Segs");
-      sprintf(string2, "This alignment has a undefined or unsupported Seqalign segtype %ld", (long) Intvalue);
+      sprintf(string2, "This alignment has an undefined or unsupported Seqalign segtype %ld", (long) Intvalue);
       break;
       
     case Err_Pcnt_ID :
@@ -1826,7 +1831,7 @@ static Boolean IsAlignmentTPA (SeqAlignPtr salp)
 {
   Boolean isTPA = FALSE;
   BioseqPtr bsp;
-  SeqIdPtr  sip, tmp_sip;
+  SeqIdPtr  sip = NULL, tmp_sip;
   SeqEntryPtr oldscope;
   DenseDiagPtr ddp;
   StdSegPtr    ssp;
@@ -2269,7 +2274,7 @@ static void PopulateSample (Uint1Ptr seqbuf_list, Int4Ptr start_list,
                     start_list[row], 
                     MIN (start_list[row] + sample_len - 1, bsp_list[row]->length - 1), 
                     Seq_strand_plus,
-                    0,
+                    STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
                     seqbuf_list + row * sample_len,
                     NULL);
 
@@ -2535,6 +2540,7 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
   Uint1Ptr       seqbuf_list;
   Int4           sample_len = 50;
   Int4Ptr        starts, stops;
+  Int4           match_25 = 0;
   
   if (salp == NULL) return 0;
  
@@ -2631,11 +2637,18 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
           }
         }
       }
+      if (!row_match) {
+        break;
+      }
     }
     if (row_match) {
       num_match++;
+      match_25++;
     }
     col_count++;
+    if (col_count % 25 == 0) {
+      match_25 = 0;
+    }
   }
   
   for (row = 0; row < num_rows; row++) {

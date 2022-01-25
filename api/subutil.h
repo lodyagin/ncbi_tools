@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.73 $
+* $Revision: 6.78 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -1349,6 +1349,10 @@ NLM_EXTERN Boolean MakeRNAFeature (
 #define RNA_TYPE_rRNA   4
 #define RNA_TYPE_snRNA  5
 #define RNA_TYPE_scRNA  6
+#define RNA_TYPE_snoRNA 7
+#define RNA_TYPE_ncRNA  8
+#define RNA_TYPE_tmRNA  9
+#define RNA_TYPE_misc_RNA 10
 #define RNA_TYPE_other  255
            
 /******************************************************************
@@ -1507,6 +1511,10 @@ NLM_EXTERN UserFieldPtr FindModelEvidenceField (
 NLM_EXTERN UserObjectPtr CreateTpaAssemblyUserObject (
   void
 );
+NLM_EXTERN UserFieldPtr CreateTPAAssemblyAccessionField (CharPtr accn);
+NLM_EXTERN UserFieldPtr CreateTPAAssemblyFromField (Int4 from);
+NLM_EXTERN UserFieldPtr CreateTPAAssemblyToField (Int4 to);
+
 NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (
   UserObjectPtr uop,
   CharPtr accn,
@@ -1571,6 +1579,12 @@ NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
   CharPtr PNTR values
 );
 
+NLM_EXTERN void AddSeqReadArchiveIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+);
+
 /* NcbiCleanup user object for SeriousSeqEntryCleanup time/version stamp */
 
 NLM_EXTERN UserObjectPtr CreateNcbiCleanupUserObject (
@@ -1589,8 +1603,24 @@ NLM_EXTERN void AddIntegerToNcbiCleanupUserObject (
   Int4 num
 );
 
+/* FindNcbiCleanupUserObject returns user object on top Seq-entry */
+
+NLM_EXTERN UserObjectPtr FindNcbiCleanupUserObject (
+  SeqEntryPtr sep
+);
+
 NLM_EXTERN void RemoveAllNcbiCleanupUserObjects (
   SeqEntryPtr sep
+);
+
+/* Also can put NcbiCleanupUserObject on Seq-annot Annot-desc */
+
+NLM_EXTERN UserObjectPtr FindSeqAnnotCleanupUserObj (
+  SeqAnnotPtr sap
+);
+
+NLM_EXTERN void RemoveAllSeqAnnotCleanupUserObjs (
+  SeqAnnotPtr sap
 );
 
 

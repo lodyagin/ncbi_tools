@@ -237,6 +237,11 @@ A SeqLit component of a delta Bioseq must not have 0 length.
 $^   DSmRNA, 67
 This mRNA Bioseq is not single stranded.
 
+$^   HighNContentStretch, 68
+This sequence contains long stretches of Ns.
+
+$^   HighNContentPercent, 69
+This sequence contains a high percentage of Ns.
 
 $$ SEQ_DESCR, 2
 
@@ -471,6 +476,40 @@ The title has (PMID #####) embedded in it.
 $^   BadKeyword, 65
 The keyword is not appropriate in this record.
 
+$^   NoOrganismInTitle, 66
+A RefSeq record should have the organism name at the beginning of a nucleotide
+title and bracketed at the end of a protein title.
+
+$^   MissingChromosome, 67
+An NC or AC RefSeq record should have a chromosome annotated.
+
+$^   LatLonAdjacent, 68
+The lat_lon coordinate may be in an adjacent country or in surrounding waters.
+
+$^   BadStrucCommInvalidFieldName, 69
+Structured comment is missing required fields or field values do not conform to correct format.
+
+$^   BadStrucCommInvalidFieldValue, 70
+Structured comment is missing required fields or field values do not conform to correct format.
+
+$^   BadStrucCommMissingField, 71
+Structured comment is missing required fields or field values do not conform to correct format.
+
+$^   BadStrucCommFieldOutOfOrder, 72
+Structured comment is missing required fields or field values do not conform to correct format.
+
+$^   BadStrucCommMultipleFields, 73
+Structured comment is missing required fields or field values do not conform to correct format.
+
+$^   BioSourceNeedsChromosome, 74
+Chromosome should be set on a BioSource descriptor in non-viral complete genomes.
+
+$^   MolInfoConflictsWithBioSource, 75
+Viral lineage information conflicts with MolInfo.
+
+$^   MissingKeyword, 76
+Expected keyword was not found.
+
 
 $$ GENERIC, 3
 
@@ -519,6 +558,14 @@ Some fields in the publication should not be present with other fields.
 
 $^ SgmlPresentInText, 13
 SGML markup is embedded in text.
+
+$^ UnexpectedPubStatusComment, 14
+An unexpected publication status exists for a print, online-only,
+or ahead-of-print article : Content-Of-Pubdesc.comment-String.
+
+$^ PastReleaseDate, 15
+The record has is marked as hold-until-published, but the release
+anyway date has already passed.
 
 $$ SEQ_PKG, 4
 
@@ -592,6 +639,22 @@ RefSeq records should not be packaged in a popset.
 
 $^   BioseqSetClassNotSet, 22
 The BioseqSet class field is not set.
+
+$^   OrphanedProtein, 23
+The Bioseq is an INSD or RefSeq protein erroneously not in a nuc-prot set.
+
+$^   MissingSetTitle, 24
+No title was found on a pop/phy/mut/eco set.
+
+$^   NucProtSetHasTitle, 25
+A title descriptor was found on a nuc-prot set.
+
+$^   ComponentMissingTitle, 26
+A title descriptor should be present on the components of a
+pop/phy/mut/eco set.
+
+$^   SingleItemSet, 27
+Only a single Bioseq was found in this BioseqSet. Is that what was intended?
 
 
 $$ SEQ_FEAT, 5
@@ -1267,6 +1330,9 @@ This feature has a gene xref that points to a gene on the wrong strand.
 
 $^ CDSmRNAXrefLocationProblem, 175
 The CDS is not contained within the cross-referenced mRNA.
+
+$^ LocusCollidesWithLocusTag, 176
+A gene locus is identical with a gene locus_tag.
 
 $$ SEQ_ALIGN, 6
 

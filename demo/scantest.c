@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/20/95
 *
-* $Revision: 6.57 $
+* $Revision: 6.61 $
 *
 * File Description: 
 *       template for custom scans of ASN.1 release files
@@ -1031,8 +1031,11 @@ static void ReportObsoleteDbxref (
           StringICmp (str, "UniProt/TrEMBL") == 0 ||
           StringICmp (str, "Genew") == 0 ||
           StringICmp (str, "GENEDB") == 0 ||
+          StringICmp (str, "GreengenesID") == 0 ||
+          StringICmp (str, "HMPID") == 0 ||
           StringICmp (str, "IFO") == 0 ||
-          StringICmp (str, "BHB") == 0) {
+          StringICmp (str, "BHB") == 0 ||
+          StringICmp (str, "BioHealthBase") == 0) {
         cdp->oldDbxref = TRUE;
         if (tdp->verbose) {
           TSPrintLine (tdp->fp, "OLDDBX", tdp->id, str, NULL, "\t");
@@ -1434,6 +1437,40 @@ static void CommentDescrTrailingCommaFix (
   }
 }
 
+static void LookForGeneOverlapChange (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  ChangeDataPtr  cdp;
+  SeqFeatPtr     gene1, gene2;
+  GeneRefPtr     grp;
+  ThrdDataPtr    tdp;
+
+  if (sfp == NULL) return;
+  cdp = (ChangeDataPtr) userdata;
+  if (cdp == NULL) return;
+  tdp = cdp->tdp;
+  if (tdp == NULL) return;
+
+  if (sfp->data.choice != SEQFEAT_CDREGION) return;
+
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp != NULL) return;
+
+  gene1 = SeqMgrGetOverlappingFeature (sfp->location, FEATDEF_GENE, NULL, 0, NULL, CONTAINED_WITHIN, NULL);
+  gene2 = SeqMgrGetOverlappingFeature (sfp->location, FEATDEF_GENE, NULL, 0, NULL, LOCATION_SUBSET, NULL);
+
+  if (gene1 != gene2) {
+    if (tdp->verbose) {
+      TSPrintLine (tdp->fp, "OVL", tdp->id, NULL, NULL, "\t");
+    } else {
+      TSPrintLine (tdp->fp, "OVL", tdp->id, NULL, NULL, " ");
+    }
+  }
+}
+
 static void StripBadProtTitles (
   BioseqPtr bsp,
   Pointer userdata
@@ -1535,6 +1572,7 @@ static void DoReport (
   VisitFeaturesInSep (sep, (Pointer) &cdbefore, FindCommaInGene);
   VisitFeaturesInSep (sep, (Pointer) &cdbefore, FindMuidCitations);
   VisitGraphsInSep (sep, (Pointer) &cdbefore, FindWholeGraphLocs);
+  VisitFeaturesInSep (sep, (Pointer) &cdbefore, LookForGeneOverlapChange);
 
   tmp = Se2Bs (sep);
   if (! BSEqual (bs, tmp)) {
@@ -1715,7 +1753,7 @@ static void DoReport (
       TSPrintLine (tdp->fp, "RDBX", tdp->id, NULL, NULL, " ");
     }
     if (cdbefore.srcDbxref) {
-      TSPrintLine (tdp->fp, "XXXXX", tdp->id, NULL, NULL, " ");
+      TSPrintLine (tdp->fp, "SDBX", tdp->id, NULL, NULL, " ");
     }
     if (cdbefore.capDbxref) {
       TSPrintLine (tdp->fp, "CDBX", tdp->id, NULL, NULL, " ");

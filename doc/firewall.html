@@ -48,7 +48,7 @@
       <p>&nbsp;</p>
 
 			 <p>
-				<i>Last modified:</i> $Date: 2009/04/10 01:00:09 $<br>
+				<i>Last modified:</i> $Date: 2009/12/29 04:08:40 $<br>
 				<i>Latest version: </i>
 				<a href="http://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK/firewall.html">
 				  http://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK/firewall.html</a>
@@ -81,14 +81,15 @@ If you also have a Domain Name Server (DNS) available, you can now simply press
 <p>
 If DNS is not available, uncheck the <b>Domain Name Server</b> button. If you
 are behind a firewall, set the <b>Connection</b> control to <b>Firewall</b>.
-The <b>Proxy</b> box then becomes active. If you also use a proxy server,
-type in its address. (If you have DNS, it will be of the form
-<tt>www.myproxy.myuniversity.edu</tt>. If you do not have DNS, you should use
-the numerical IP address of the form <tt>127.45.23.6</tt>.) Once you type something
-in the <b>Proxy</b> box, the <b>Port</b> box and <b>Transparent Proxy</b> button
-become active and can be filled in or changed as appropriate. (By default the
-<b>Transparent Proxy</b> button is off, indicating a CERN-like proxy.) Ask your
-network administrator for advice on the proper settings to use.
+Both the <b>HTTP Proxy</b> and the <b>Non-transparent Proxy</b> boxes then become active.
+If your site uses an HTTP proxy server, type in its address. (If you have DNS, it
+can be of the form <tt>www.myproxy.myuniversity.edu</tt>;  if you do not have DNS, you
+should enter the numerical IP address of the form <tt>127.65.43.21</tt>.)
+Once you type something in the <b>HTTP Proxy</b> box, the <b>HTTP Proxy Port</b> box
+becomes active and can be filled in.
+If your site has a non-transparent proxy server (a CERN-like proxy), enter
+its name (or address) in the <b>Non-transparent Proxy</b> box.
+Ask your network administrator for advice on the proper settings to use.
 
 <p>
 If you are in the United States, the default <b>Timeout</b> of 30 seconds should
@@ -117,6 +118,7 @@ ports in your firewall. The ports to open are:
 Firewall Port        IP Address
 --------------------------------
  5860..5870         130.14.29.112
+ 5860..5870         165.112.7.12
 </pre>
 
 <p>
@@ -124,7 +126,7 @@ If your firewall is not transparent, the firewall port number
 should be mapped to the same port number on the external host.
 
 <p>
-Even though port 5860 may not routinely be made accessible to the public,
+Even though port 5860 may not be routinely made accessible to the public,
 and is usually reserved for NCBI internal use only, it is recommended that
 the port is kept open through the firewall just as all other ports from the range,
 in case the public access will eventually be enabled on this port as well.
@@ -167,7 +169,7 @@ response from what is shown above, it indicates that the port is not configured 
 
 <p>
 <a href="http://www.ncbi.nlm.nih.gov/sites/entrez?db=Books">NCBI Bookshelf</a> provides more detailed <a
-href="http://www.ncbi.nlm.nih.gov/books/bv.fcgi?rid=toolkit.section.ch_app.Load_Balancing#ch_app.Firewall_Daemon_FWDa">Firewall
+href="http://www.ncbi.nlm.nih.gov/bookshelf/br.fcgi?book=toolkit&part=ch_app#ch_app.Firewall_Daemon_FWDa">Firewall
 Daemon Documentation</a>, and discusses its integration into the overall
 functions of NCBI dispatching facilities.
 

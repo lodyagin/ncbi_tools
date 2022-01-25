@@ -1,4 +1,4 @@
-/*  $Id: http_connector_hit.c,v 6.16 2005/04/20 18:23:11 lavr Exp $
+/* $Id: http_connector_hit.c,v 6.19 2010/02/03 19:04:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +30,9 @@
  *
  */
 
-#include "../ncbi_ansi_ext.h"
-#include "../ncbi_assert.h"
 #include <connect/ncbi_http_connector.h>
-#include <connect/ncbi_util.h>
+#include "../ncbi_ansi_ext.h"
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 /* This header must go last */
 #include "test_assert.h"
 
@@ -102,7 +101,6 @@ int main(int argc, const char* argv[])
     char   buffer[100];
     size_t n_read, n_written;
 
-
     /* Prepare to connect:  parse and check cmd.-line args, etc. */
     s_Args.host         = (argc > 1) ? argv[1] : "";
     s_Args.port         = (argc > 2) ? argv[2] : "";
@@ -116,12 +114,14 @@ int main(int argc, const char* argv[])
             "  URL args:        '%s'\n"
             "  Input data file: '%s'\n"
             "  User header:     '%s'\n"
-            " Reply(if any) from the hit URL goes to the standard output.\n\n",
+            "Reply(if any) from the hit URL goes to the standard output.\n\n",
             argv[0],
             s_Args.host, s_Args.port, s_Args.path, s_Args.args,
             inp_file, user_header);
 
     /* Log stream */
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
     /* Tune to the test URL using hard-coded pseudo-registry */
@@ -146,12 +146,25 @@ int main(int argc, const char* argv[])
     /* If the input file is specified,
      * then send its content (as the HTTP request body) to URL
      */
-    if ( *inp_file ) {
-        FILE* inp_fp = fopen(inp_file, "rb");
-        if ( !inp_fp ) {
-            fprintf(stderr, "Cannot open file '%s' for read", inp_file);
-            assert(0);
-        }
+    if (*inp_file) {
+        FILE* inp_fp;
+
+        if (strcmp(inp_file, "-") != 0) {
+            static const char kDevNull[] =
+#ifdef NCBI_OS_MSWIN
+                "NUL"
+#else
+                "/dev/null"
+#endif /*NCBI_OS_MSWIN*/
+                ;
+            if (strcmp(inp_file, "+") == 0)
+                inp_file = kDevNull;
+            if (!(inp_fp = fopen(inp_file, "rb"))) {
+                fprintf(stderr, "Cannot open file '%s' for reading", inp_file);
+                assert(0);
+            }
+        } else
+            inp_fp = stdin;
 
         for (;;) {
             n_read = fread(buffer, 1, sizeof(buffer), inp_fp);
@@ -173,16 +186,20 @@ int main(int argc, const char* argv[])
     }
 
     /* Read reply from connection, write it to standard output */
-    fprintf(stdout, "\n\n----- [BEGIN] HTTP Content -----\n");
     for (;;) {
         status = CONN_Read(conn,buffer,sizeof(buffer),&n_read,eIO_ReadPlain);
         if (status != eIO_Success)
             break;
-
+        if (connector)
+            puts("----- [BEGIN] HTTP Content -----");
         fwrite(buffer, 1, n_read, stdout);
         fflush(stdout);
+        connector = 0;
     }
-    fprintf(stdout, "\n----- [END] HTTP Content -----\n\n");
+    if (!connector) {
+        puts("\n----- [END] HTTP Content -----");
+        fclose(stdout);
+    }
 
     if (status != eIO_Closed) {
         fprintf(stderr, "Error reading from URL (%s)", IO_StatusStr(status));
@@ -192,61 +209,7 @@ int main(int argc, const char* argv[])
     /* Success:  close the connection, cleanup, and exit */
     CONN_Close(conn);
     CORE_SetREG(0);
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
     CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: http_connector_hit.c,v $
- * Revision 6.16  2005/04/20 18:23:11  lavr
- * +"../ncbi_assert.h"
- *
- * Revision 6.15  2004/11/23 15:04:26  lavr
- * Use public bounce.cgi from "www"
- *
- * Revision 6.14  2004/11/22 20:24:53  lavr
- * "yar" replaced with "graceland"
- *
- * Revision 6.13  2004/04/01 14:14:02  lavr
- * Spell "occurred", "occurrence", and "occurring"
- *
- * Revision 6.12  2004/02/23 15:23:42  lavr
- * New (last) parameter "how" added in CONN_Write() API call
- *
- * Revision 6.11  2003/04/15 14:06:09  lavr
- * Changed ray.nlm.nih.gov -> ray.ncbi.nlm.nih.gov
- *
- * Revision 6.10  2002/11/22 15:09:40  lavr
- * Replace all occurrences of "ray" with "yar"
- *
- * Revision 6.9  2002/10/28 15:47:12  lavr
- * Use "ncbi_ansi_ext.h" privately and use strncpy0()
- *
- * Revision 6.8  2002/08/07 16:38:08  lavr
- * EIO_ReadMethod enums changed accordingly; log moved to end
- *
- * Revision 6.7  2002/03/22 19:45:55  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.6  2002/01/16 21:23:14  vakatov
- * Utilize header "test_assert.h" to switch on ASSERTs in the Release mode too
- *
- * Revision 6.5  2001/01/11 16:42:45  lavr
- * Registry Get/Set methods got the 'user_data' argument, forgotten earlier
- *
- * Revision 6.4  2000/11/15 17:27:29  vakatov
- * Fixed path to the test CGI application.
- *
- * Revision 6.3  2000/09/27 16:00:24  lavr
- * Registry entries adjusted
- *
- * Revision 6.2  2000/05/30 23:24:40  vakatov
- * Cosmetic fix for the C++ compilation
- *
- * Revision 6.1  2000/04/21 19:56:28  vakatov
- * Initial revision
- *
- * ==========================================================================
- */

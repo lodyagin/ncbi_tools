@@ -1,4 +1,4 @@
-/*  $Id: hspfilter_collector.c,v 1.1 2009/06/01 15:32:08 kazimird Exp $
+/*  $Id: hspfilter_collector.c,v 1.2 2009/10/01 17:55:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: hspfilter_collector.c,v 1.1 2009/06/01 15:32:08 kazimird Exp $";
+    "$Id: hspfilter_collector.c,v 1.2 2009/10/01 17:55:38 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 
@@ -235,7 +235,6 @@ s_BlastHSPCollectorRun_RPS(void* data, BlastHSPList* hsplist_in)
    BlastHSPCollectorData * col_data = data;
    BlastHSPResults* results = col_data->results;
    BlastHSPCollectorParams* params = col_data->params;
-   EBlastProgramType program = params->program;
 
    if (!hsplist_in || hsplist_in->hspcnt == 0)
       return 0;
@@ -244,7 +243,7 @@ s_BlastHSPCollectorRun_RPS(void* data, BlastHSPList* hsplist_in)
    ASSERT(hsplist_in->query_index < results->num_queries);
 
    /* Check that program is indeed RPS Blast */
-   ASSERT(Blast_ProgramIsRpsBlast(program));
+   ASSERT(Blast_ProgramIsRpsBlast(params->program));
 
    /* If hit list for this query has not yet been allocated, do it here. */
    hit_list = results->hitlist_array[hsplist_in->query_index];

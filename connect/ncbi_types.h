@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_TYPES__H
 #define CONNECT___NCBI_TYPES__H
 
-/*  $Id: ncbi_types.h,v 6.15 2008/07/21 16:55:48 kazimird Exp $
+/* $Id: ncbi_types.h,v 6.16 2009/11/10 15:54:40 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -63,8 +63,10 @@ extern "C" {
 
 
 /** Timeout structure
+ *
+ * @sa CTimeout, g_CTimeoutToSTimeout, g_STimeoutToCTimeout
  */
-typedef struct {
+typedef struct STimeoutTag {
     unsigned int sec;  /**< seconds (truncated to the platf.-dep. max. limit)*/
     unsigned int usec; /**< microseconds (always truncated by mod. 1,000,000)*/
 } STimeout;

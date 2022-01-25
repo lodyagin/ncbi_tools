@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/8/2009
 *
-* $Revision: 1.1 $
+* $Revision: 1.3 $
 *
 * File Description: 
 *
@@ -56,14 +56,24 @@ NLM_EXTERN CommentRulePtr GetCommentRuleFromRuleSet (CharPtr prefix);
 typedef enum {
   eFieldValid_Valid = 0 ,
   eFieldValid_Invalid,
-  eFieldValid_OptionalFieldSkipped,
-  eFieldValid_MissingRequiredField
+  eFieldValid_MissingRequiredField,
+  eFieldValid_FieldOutOfOrder,
+  eFieldValid_DuplicateField,
+  eFieldValid_Disallowed
 } EFieldValid;
 
 
-NLM_EXTERN EFieldValid IsStructuredCommentValidForRule (UserObjectPtr uop, CommentRulePtr comment_rule);
+/* error code, field rule violated, value of offending field (if any), extra data provided by user */
+typedef void (*StructuredCommentCallback) PROTO ((EFieldValid, FieldRulePtr, UserFieldPtr, UserFieldPtr, Pointer));
 
-NLM_EXTERN EFieldValid IsStructuredCommentValid (UserObjectPtr uop);
+NLM_EXTERN EFieldValid 
+IsStructuredCommentValidForRule 
+(UserObjectPtr uop,
+ CommentRulePtr comment_rule,
+ StructuredCommentCallback s_callback,
+ Pointer s_callback_data);
+
+NLM_EXTERN EFieldValid IsStructuredCommentValid (UserObjectPtr uop, StructuredCommentCallback s_callback, Pointer s_callback_data);
 
 
 

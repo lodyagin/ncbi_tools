@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   Routines for outputing ASN.1 parse trees from asntool
@@ -41,6 +41,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnout.c,v $
+* Revision 6.3  2009/10/02 19:28:19  kans
+* address clang static analyzer warnings
+*
 * Revision 6.2  2001/01/10 17:42:47  beloslyu
 * fix to resolve the problem with buggy optimizer of Forte compiler on Solaris/Intel
 *
@@ -157,7 +160,7 @@ NLM_EXTERN void AsnOutput (CharPtr filename, AsnModulePtr amp, Boolean loader, I
         ld = NULL;
 
 	for (i = 0; i < 12; i++)
-		fprintf(fp, headerlines[i]);
+		fprintf(fp, "%s", headerlines[i]);
 	fprintf(fp, "static char * asnfilename = \"%s\";\n", buf);
 
 	curr_mod = amp;

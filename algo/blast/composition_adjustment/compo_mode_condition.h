@@ -1,4 +1,4 @@
-/* $Id: compo_mode_condition.h,v 1.7 2006/01/30 14:47:57 gertz Exp $
+/* $Id: compo_mode_condition.h,v 1.8 2010/03/26 14:54:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,12 +34,11 @@
 #define __COMPO_MODE_CONDITION__
 
 #include <algo/blast/core/blast_export.h>
+#include <algo/blast/composition_adjustment/composition_constants.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <algo/blast/composition_adjustment/composition_constants.h>
 
 
 /**

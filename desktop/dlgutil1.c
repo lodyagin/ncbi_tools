@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.149 $
+* $Revision: 6.162 $
 *
 * File Description: 
 *
@@ -57,6 +57,10 @@
 #include <vibforms.h>
 #include <cdrgn.h>
 #include <findrepl.h>
+#include <pubdesc.h>
+
+/* for formatting */
+#include <asn2gnbp.h>
 
 #define NUMBER_OF_SUFFIXES    8
 
@@ -139,41 +143,6 @@ ENUM_ALIST(months_alist)
   {"Dec",  12},
 END_ENUM_ALIST
 
-extern void SetDescriptorPropagate (BioseqSetPtr bssp)
-{
-  BioseqPtr         bsp;
-  SeqEntryPtr       seqentry;
-  ValNodePtr        sourcedescr;
-
-  if (bssp != NULL) {
-    sourcedescr = bssp->descr;
-    if (sourcedescr != NULL) {
-      bssp->descr = NULL;
-      seqentry = bssp->seq_set;
-      while (seqentry != NULL) {
-        if (seqentry->data.ptrvalue != NULL) {
-          if (seqentry->choice == 1) {
-            bsp = (BioseqPtr) seqentry->data.ptrvalue;
-            ValNodeLink (&(bsp->descr),
-                         AsnIoMemCopy ((Pointer) sourcedescr,
-                                       (AsnReadFunc) SeqDescrAsnRead,
-                                       (AsnWriteFunc) SeqDescrAsnWrite));
-          } else if (seqentry->choice == 2) {
-            bssp = (BioseqSetPtr) seqentry->data.ptrvalue;
-            ValNodeLink (&(bssp->descr),
-                         AsnIoMemCopy ((Pointer) sourcedescr,
-                                       (AsnReadFunc) SeqDescrAsnRead,
-                                       (AsnWriteFunc) SeqDescrAsnWrite));
-          }
-        }
-        seqentry = seqentry->next;
-      }
-      SeqDescrFree (sourcedescr);
-    }
-  }
-}
-
-
 static void CopyOneDescriptorToSeqEntry (SeqDescrPtr sdp, SeqEntryPtr sep)
 {
   BioseqPtr bsp;
@@ -255,7 +224,7 @@ extern Int2 LIBCALLBACK DescriptorPropagate (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
-extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
+extern Boolean DescFormReplaceWithoutUpdateProcEx (ForM f, Boolean feature_or_molinfo_change)
 
 {
   MsgAnswer          ans;
@@ -291,6 +260,10 @@ extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
           break;
       }
       FixSpecialCharactersForObject (OBJ_SEQDESC, sdp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
+      if (!feature_or_molinfo_change) {
+        sep = GetTopSeqEntryForEntityID (dfp->input_entityID);
+        CleanupStringsForOneDescriptor (sdp, sep);
+      }
 
       ompc.output_data = (Pointer) sdp;
       if (ompc.input_entityID == 0) {
@@ -318,10 +291,10 @@ extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
       sep = (SeqEntryPtr) ompc.input_choice;
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
       if (bssp->_class == BioseqseqSet_class_genbank) {
-	ans = Message (MSG_YN, "Do you wish to propagate the descriptor to "
-		       "the set's Bioseqs?");
-	if (ANS_YES == ans)
-	  DescriptorPropagate (&ompc);
+    ans = Message (MSG_YN, "Do you wish to propagate the descriptor to "
+               "the set's Bioseqs?");
+    if (ANS_YES == ans)
+      DescriptorPropagate (&ompc);
       }
     }
     
@@ -329,24 +302,52 @@ extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
   return rsult;
 }
 
-extern void StdDescFormActnProc (ForM f)
 
+extern Boolean DescFormReplaceWithoutUpdateProc (ForM f)
+{
+  return DescFormReplaceWithoutUpdateProcEx (f, TRUE);
+}
+
+
+static void StdDescFormActnProcEx (ForM f, Boolean feature_or_molinfo_change)
 {
   DescriptorFormPtr  dfp;
 
-  if (DescFormReplaceWithoutUpdateProc (f)) {
+  if (DescFormReplaceWithoutUpdateProcEx (f, feature_or_molinfo_change)) {
     dfp = (DescriptorFormPtr) GetObjectExtra (f);
     if (dfp != NULL) {
       GetRidOfEmptyFeatsDescStrings (dfp->input_entityID, NULL);
-      if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+      if (feature_or_molinfo_change && GetAppProperty ("InternalNcbiSequin") != NULL) {
         ExtendGeneFeatIfOnMRNA (dfp->input_entityID, NULL);
       }
+      
       ObjMgrSetDirtyFlag (dfp->input_entityID, TRUE);
-      ObjMgrSendMsg (OM_MSG_UPDATE, dfp->input_entityID,
-                     dfp->input_itemID, dfp->input_itemtype);
+      if (feature_or_molinfo_change) {
+        ObjMgrSendMsg (OM_MSG_UPDATE, dfp->input_entityID,
+                       dfp->input_itemID, dfp->input_itemtype);
+      } else {
+        ObjMgrSendMsgNoFeatureChange(OM_MSG_UPDATE, dfp->input_entityID,
+                       dfp->input_itemID, dfp->input_itemtype);
+      }
     }
   }
+
 }
+
+
+extern void StdDescFormActnProc (ForM f)
+
+{
+  StdDescFormActnProcEx (f, TRUE);
+}
+
+
+extern void StdDescFormActnProcNoFeatureChangeNoMolInfoChange (ForM f)
+
+{
+  StdDescFormActnProcEx (f, FALSE);
+}
+
 
 extern void StdDescFormCleanupProc (GraphiC g, VoidPtr data)
 
@@ -403,22 +404,22 @@ extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint4 itemID, Uint2 i
 extern Uint2 GetProcIdForItemEditor (Uint2 entityID, Uint2 itemID, Uint1 itemtype, Uint2 subinputtype)
 {
   ObjMgrPtr     omp;
-	ObjMgrProcPtr ompp=NULL;
+    ObjMgrProcPtr ompp=NULL;
   Uint2         best_procid = 0;
 
   omp = ObjMgrGet ();
 
-	while ((ompp = ObjMgrProcFindNext(omp, OMPROC_EDIT, itemtype, itemtype, ompp)) != NULL)
-	{
-		if (ompp->subinputtype == subinputtype)
-		{
-      return ompp->procid;
-		}
-		else if (! ompp->subinputtype)  /* general proc found */
+    while ((ompp = ObjMgrProcFindNext(omp, OMPROC_EDIT, itemtype, itemtype, ompp)) != NULL)
     {
-			best_procid = ompp->procid;
+        if (ompp->subinputtype == subinputtype)
+        {
+      return ompp->procid;
+        }
+        else if (! ompp->subinputtype)  /* general proc found */
+    {
+            best_procid = ompp->procid;
     }
-	}
+    }
   return best_procid;
 }
 
@@ -609,11 +610,11 @@ extern void Nlm_LaunchGeneFeatEd (ButtoN b)
       MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
       gs.seglevels = 1;
       gs.get_feats_location = TRUE;
-	  MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-	  gs.ignore[OBJ_BIOSEQ] = FALSE;
-	  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-	  gs.ignore[OBJ_SEQFEAT] = FALSE;
-	  gs.ignore[OBJ_SEQANNOT] = FALSE;
+      MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
+      gs.ignore[OBJ_BIOSEQ] = FALSE;
+      gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+      gs.ignore[OBJ_SEQFEAT] = FALSE;
+      gs.ignore[OBJ_SEQANNOT] = FALSE;
       gs.scope = GetBestTopParentForItemID (ffp->input_entityID,
                                             ffp->input_itemID,
                                             ffp->input_itemtype);
@@ -844,11 +845,11 @@ extern void PopulateGenePopup (FeatureFormPtr ffp)
     MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
     gs.seglevels = 1;
     gs.get_feats_location = TRUE;
-	MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-	gs.ignore[OBJ_BIOSEQ] = FALSE;
-	gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-	gs.ignore[OBJ_SEQFEAT] = FALSE;
-	gs.ignore[OBJ_SEQANNOT] = FALSE;
+    MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
+    gs.ignore[OBJ_BIOSEQ] = FALSE;
+    gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+    gs.ignore[OBJ_SEQFEAT] = FALSE;
+    gs.ignore[OBJ_SEQANNOT] = FALSE;
     gs.scope = GetBestTopParentForItemID (ffp->input_entityID,
                                           ffp->input_itemID,
                                           ffp->input_itemtype);
@@ -1006,7 +1007,7 @@ static void FeatIDtoText (TexT t, ChoicePtr cp)
   SetTitle (t, "");
 }
 
-static void TextToFeatID (TexT t, ChoicePtr cp)
+NLM_EXTERN void TextToFeatID (TexT t, ChoicePtr cp)
 
 {
   Boolean      all_digits = TRUE;
@@ -1079,7 +1080,7 @@ static void FeatXreftoText (TexT t, SeqFeatPtr sfp)
   SetTitle (t, "");
 }
 
-static void TextToFeatXref (TexT t, SeqFeatPtr sfp)
+NLM_EXTERN void TextToFeatXref (TexT t, SeqFeatPtr sfp)
 
 {
   Boolean         all_digits = TRUE;
@@ -1267,11 +1268,11 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
       gs.seglevels = 1;
       gs.get_feats_location = TRUE;
-	  MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-	  gs.ignore[OBJ_BIOSEQ] = FALSE;
-	  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-	  gs.ignore[OBJ_SEQFEAT] = FALSE;
-	  gs.ignore[OBJ_SEQANNOT] = FALSE;
+      MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
+      gs.ignore[OBJ_BIOSEQ] = FALSE;
+      gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+      gs.ignore[OBJ_SEQFEAT] = FALSE;
+      gs.ignore[OBJ_SEQANNOT] = FALSE;
       gs.scope = GetBestTopParentForItemID (ffp->input_entityID,
                                             ffp->input_itemID,
                                             ffp->input_itemtype);
@@ -1669,15 +1670,15 @@ extern Boolean TestInference (FeatureFormPtr ffp, CharPtr badInfQual, size_t len
     if (StringICmp (gbq->qual, "inference") != 0) continue;
     inferenceCode = ValidateInferenceQualifier (str, FALSE);
     if (inferenceCode != VALID_INFERENCE) {
-  	  if (inferenceCode < VALID_INFERENCE || inferenceCode > ACC_VERSION_NOT_PUBLIC) {
-  	    inferenceCode = VALID_INFERENCE;
-  	  }
-  	  if (badInfQual != NULL) {
+        if (inferenceCode < VALID_INFERENCE || inferenceCode > ACC_VERSION_NOT_PUBLIC) {
+          inferenceCode = VALID_INFERENCE;
+        }
+        if (badInfQual != NULL) {
         StringNCpy_0 (badInfQual, str, len);
-  	  }
-  	  if (badInfMssg != NULL) {
+        }
+        if (badInfMssg != NULL) {
         StringCpy (badInfMssg, infDetails [(int) inferenceCode]);
-  	  }
+        }
       rsult = FALSE;
       break;
     }
@@ -1940,11 +1941,6 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         sfp->qual = DialogToPointer (ffp->gbquals);
         VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
         InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
-        if (sfp->data.choice == SEQFEAT_RNA) {
-          AddRnaSpecificQuals (sfp, ffp->data);
-          /* NOTE - we will remove this line when we convert to the new data format */
-/*          ConvertToOldRNAFormat (sfp); */
-        }
 
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
@@ -1971,11 +1967,6 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         sfp->qual = DialogToPointer (ffp->gbquals);
         VisStringDialogToGbquals (sfp, ffp->experiment, "experiment");
         InferenceDialogToGBQuals (ffp->inference, sfp, TRUE);
-        if (sfp->data.choice == SEQFEAT_RNA) {
-          AddRnaSpecificQuals (sfp, ffp->data);
-          /* NOTE - we will remove this line when we convert to the new data format */
-/*          ConvertToOldRNAFormat (sfp); */
-        }
 
         sfp->ext = DialogToPointer (ffp->usrobjext);
         if (ffp->goTermUserObj != NULL) {
@@ -2029,11 +2020,6 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         rd.sfp = sfp;
         GatherItem (ompc.input_entityID, ompc.input_itemID, ompc.input_itemtype,
                     (Pointer) &rd, ReplaceFeatureExtras);
-        if (sfp->data.choice == SEQFEAT_RNA) {
-          AddRnaSpecificQuals (sfp, ffp->data);
-          /* NOTE - we will remove this line when we convert to the new data format */
-/*          ConvertToOldRNAFormat (sfp); */
-        }
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
         }
@@ -2127,11 +2113,11 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
           gs.seglevels = 1;
           gs.get_feats_location = TRUE;
-	        MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-	        gs.ignore[OBJ_BIOSEQ] = FALSE;
-	        gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-	        gs.ignore[OBJ_SEQFEAT] = FALSE;
-	        gs.ignore[OBJ_SEQANNOT] = FALSE;
+            MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
+            gs.ignore[OBJ_BIOSEQ] = FALSE;
+            gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+            gs.ignore[OBJ_SEQFEAT] = FALSE;
+            gs.ignore[OBJ_SEQANNOT] = FALSE;
           gs.scope = GetBestTopParentForItemID (ffp->input_entityID,
                                                 ffp->input_itemID,
                                                 ffp->input_itemtype);
@@ -2261,7 +2247,7 @@ extern void StdFeatFormAcceptButtonProc (ButtoN b)
       SeqEntrySetScope (oldscope);
     }
     Update ();
-    if (ffp->leave_dlg_up == NULL || ! GetStatus (ffp->leave_dlg_up))
+    if (ffp != NULL && (ffp->leave_dlg_up == NULL || ! GetStatus (ffp->leave_dlg_up)))
     {
       Remove (w);
     }
@@ -3010,7 +2996,7 @@ static AuthListPtr ReadAuthorListFromTextFile (CharPtr path)
 {
   ReadBufferData rbd;
   CharPtr        line;
-  AuthListPtr    alp;
+  AuthListPtr    alp = NULL;
   AuthorPtr      ap;
   CharPtr        cp, next_cp;
   NameStdPtr     n;
@@ -3823,7 +3809,8 @@ extern void GetAlignmentsInSeqEntryCallback (SeqAnnotPtr sap, Pointer userdata)
   salp_list = (SeqAlignPtr PNTR) userdata;
   salp = (SeqAlignPtr) sap->data;
   if (salp == NULL) return;
-  salp = SeqAlignListDup(salp);
+  if (salp->segtype == SAS_SPLICED || salp->segtype == SAS_SPARSE) return;
+  salp = AlnMgr2DupAlnAndIndexes(salp);
   AlnMgr2IndexSeqAlign(salp);
   if (*salp_list == NULL)
   {
@@ -4318,8 +4305,8 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
 
   if (location == NULL)
   {
-  	if (ipp->count == 1)
-  	{
+      if (ipp->count == 1)
+      {
        sprintf (str, "\t\t\t1\n");
        vnp = ValNodeNew (head);
        if (head == NULL) {
@@ -4327,8 +4314,8 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
        }
        if (vnp != NULL) {
          vnp->data.ptrvalue = StringSave (str);
-       }	
-  	}
+       }    
+      }
   }
   if (location != NULL) {
     CorrectIntervalEditorSeqIdEnum (ipp, location);
@@ -5882,19 +5869,19 @@ static void SetOnlySequenceAndStrand (IntervalPagePtr ipp)
       tabptr = StringChr (cp, '\t');
       if (tabptr != NULL)
       {
-      	tabptr = StringChr (tabptr + 1, '\t');
+          tabptr = StringChr (tabptr + 1, '\t');
       }
       if (tabptr != NULL)
       {
-      	cp[0] = '\t';
-      	cp++;
-      	while (*tabptr != 0)
-      	{
-      	  *cp = *tabptr;
-      	  cp++;
-      	  tabptr++;
-      	}
-      	*cp = 0;
+          cp[0] = '\t';
+          cp++;
+          while (*tabptr != 0)
+          {
+            *cp = *tabptr;
+            cp++;
+            tabptr++;
+          }
+          *cp = 0;
       }
     }
   }
@@ -6674,13 +6661,17 @@ static void ShowIntervalChoice (IntervalChoicePtr dlg)
   }
   if (GetValue (dlg->seq_or_aln) == 1)
   {
-    Show (dlg->seq_dlg);
     Hide (dlg->aln_dlg);
+    Update ();
+    Show (dlg->seq_dlg);
+    Update ();
   }
   else
   {
-    Show (dlg->aln_dlg);
     Hide (dlg->seq_dlg);
+    Update ();
+    Show (dlg->aln_dlg);
+    Update ();
   }
 }
 
@@ -8865,10 +8856,10 @@ static void AddTypeStrainProc (ButtoN b)
     return;
   }
   new_orgcomment = MemNew (old_orgcomment_len
-			+ StringLen (sep)
-			+ StringLen (ts)
-			+ org_name_len
-			+ 1);
+            + StringLen (sep)
+            + StringLen (ts)
+            + org_name_len
+            + 1);
   if (new_orgcomment == NULL)
   {
     MemFree (old_orgcomment);
@@ -8884,7 +8875,7 @@ static void AddTypeStrainProc (ButtoN b)
     StringCpy(new_orgcomment, old_orgcomment);
     StringCat(new_orgcomment, sep);
   }
-  else
+  else if (new_orgcomment != NULL)
   {
     new_orgcomment[0] = 0;
   }
@@ -9146,4 +9137,580 @@ NLM_EXTERN void CloseLog (LogInfoPtr lip)
   }
   FileRemove (lip->path);  
 }
+
+
+extern CharPtr ValNodeSeqIdName (ValNodePtr vnp)
+{
+  Char buf[100];
+
+  if (vnp == NULL || vnp->data.ptrvalue == NULL)
+  {
+    return NULL;
+  }
+  else
+  {
+    SeqIdWrite (vnp->data.ptrvalue, buf, PRINTID_FASTA_SHORT, sizeof (buf) - 1);
+    return StringSave (buf);
+  }
+}
+
+
+extern void ValNodeSeqIdFree (ValNodePtr vnp)
+{
+  if (vnp != NULL && vnp->data.ptrvalue != NULL)
+  {
+    vnp->data.ptrvalue = SeqIdFree (vnp->data.ptrvalue);
+  }
+}
+
+
+extern ValNodePtr ValNodeSeqIdCopy (ValNodePtr vnp)
+{
+  ValNodePtr vnp_copy = NULL;
+  if (vnp != NULL)
+  {
+    ValNodeAddPointer (&vnp_copy, vnp->choice, SeqIdDup (vnp->data.ptrvalue));
+  }
+  return vnp_copy;
+}
+
+extern Boolean ValNodeSeqIdMatch (ValNodePtr vnp1, ValNodePtr vnp2)
+{
+  if (vnp1 == NULL || vnp2 == NULL)
+  {
+    return FALSE;
+  }
+  if (SeqIdComp (vnp1->data.ptrvalue, vnp2->data.ptrvalue) == SIC_YES) 
+  {
+    return TRUE;
+  } 
+  else 
+  {
+    return FALSE;
+  }
+}
+
+
+static ValNodePtr ValNodeSeqIdListFree (ValNodePtr list)
+{
+  ValNodePtr list_next;
+
+  while (list != NULL) {
+    list_next = list->next;
+    list->next = NULL;
+    list->data.ptrvalue = SeqIdFree (list->data.ptrvalue);
+    list = ValNodeFree (list);
+    list = list_next;
+  }
+  return list;
+}
+
+
+static ValNodePtr ValNodeSeqIdListCopy (ValNodePtr list)
+{
+  ValNodePtr vnp, list_copy = NULL, list_prev = NULL;
+
+  while (list != NULL) {
+    vnp = ValNodeNew (list_prev);
+    vnp->data.ptrvalue = SeqIdDup (list->data.ptrvalue);
+    if (list_copy == NULL) {
+      list_copy = vnp;
+    }
+    list_prev = vnp;
+    list = list->next;
+  }
+  return list_copy;
+}
+
+
+static ValNodePtr SeqIdListToValNodeSeqIdList (SeqIdPtr sip_list)
+{
+  SeqIdPtr sip;
+  ValNodePtr list = NULL, vnp_p = NULL, vnp;
+
+  for (sip = sip_list; sip != NULL; sip = sip->next) {
+    vnp = ValNodeNew (vnp_p);
+    if (vnp_p == NULL) {
+      list = vnp;
+    }
+    vnp->data.ptrvalue = SeqIdDup (sip);
+    vnp_p = vnp;
+  }
+  return list;
+}
+
+
+static SeqIdPtr ValNodeSeqIdListToSeqIdList (ValNodePtr vnp_list)
+{
+  ValNodePtr vnp;
+  SeqIdPtr sip_list = NULL, sip_prev = NULL, sip;
+
+  for (vnp = vnp_list; vnp != NULL; vnp = vnp->next) {
+    sip = SeqIdDup (vnp->data.ptrvalue);
+    if (sip_prev == NULL) {
+      sip_list = sip;
+    } else {
+      sip_prev->next = sip;
+    }
+    sip_prev = sip;
+  }
+  return sip_list;
+}
+
+
+static void EditIdList (SeqIdPtr PNTR sip_list, SeqIdPtr all_list)
+{
+  ModalAcceptCancelData acd;
+  DialoG                dlg;
+  WindoW                w;
+  ButtoN                b;
+  GrouP                 h, c;
+  ValNodePtr            tmp;
+  
+  if (sip_list == NULL || *sip_list == NULL) return;
+
+  w = MovableModalWindow(-20, -13, -10, -10, "Constraint", NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  /* create dialog with list of sequence IDs */
+  dlg = ValNodeSelectionDialogExEx (h, ValNodeSeqIdListCopy(all_list), TALL_SELECTION_LIST, ValNodeSeqIdName,
+                                           ValNodeSeqIdFree, ValNodeSeqIdCopy,
+                                           ValNodeSeqIdMatch, "location", 
+                                           NULL, NULL, TRUE, TRUE, FALSE, NULL);
+  
+  /* populate */
+  tmp = SeqIdListToValNodeSeqIdList (*sip_list);
+  PointerToDialog (dlg, tmp);
+  tmp = ValNodeSeqIdListFree(tmp);
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  b = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg,
+                              (HANDLE) c, 
+                              NULL);
+
+  Show (w);
+  Select (w);
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (!acd.cancelled)
+  {
+    tmp = DialogToPointer (dlg);
+    *sip_list = ValNodeSeqIdListToSeqIdList (tmp);
+    tmp = ValNodeSeqIdListFree(tmp);
+  }
+  Remove (w);
+}
+
+
+static Boolean EditOneDescriptor (SeqDescPtr sdp)
+{
+  Boolean rval = FALSE;
+
+  if (sdp == NULL) 
+  {
+    return FALSE;
+  }
+  else if (sdp->choice == Seq_descr_pub) 
+  {
+    rval = EditPubdescInPlace(sdp);
+  }
+  return rval;
+}
+
+typedef struct descriptorstreameditordlg {
+  DIALOG_MESSAGE_BLOCK
+
+  DialoG pubdesc_table;
+
+  ValNodePtr               desc_stream_list;
+  ValNodePtr               sip_list;
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;
+} DescriptorStreamEditorDlgData, PNTR DescriptorStreamEditorDlgPtr;
+
+
+static Boolean HasAllIds (SeqIdPtr sip_list, ValNodePtr all_sip)
+{
+  Boolean found = FALSE, any_missing = FALSE;
+  ValNodePtr vnp;
+
+  if (sip_list == NULL || all_sip == NULL) {
+    return FALSE;
+  }
+
+  while (sip_list != NULL) {
+    found = FALSE;
+    for (vnp = all_sip; vnp != NULL && !found; vnp = vnp->next) {
+      if (vnp->choice == 0 && SeqIdComp (vnp->data.ptrvalue, sip_list) == SIC_YES) {
+        vnp->choice = 1;
+        found = TRUE;
+      }
+    }
+    sip_list = sip_list->next;
+  }
+  for (vnp = all_sip; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 0) {
+      any_missing = TRUE;
+    }
+    vnp->choice = 0;
+  }
+  return !any_missing;
+}
+
+
+#define k_WideColumnWidth 40
+
+
+static CharPtr GetDescriptorFlatFileText (SeqDescPtr sdp)
+{
+  Asn2gbJobPtr   ajp;
+  BaseBlockPtr   bbp;
+  XtraBlock      extra;
+  BioseqPtr      bsp;
+  ErrSev         level;
+  CharPtr        desc_text = NULL, cp;
+  Int4           index;
+
+  
+  if (sdp == NULL) 
+  {
+    return NULL;
+  }
+  bsp = BioseqNew ();
+  bsp->descr = AsnIoMemCopy (sdp, (AsnReadFunc) SeqDescAsnRead, (AsnWriteFunc) SeqDescAsnWrite);
+  bsp->repr = Seq_repr_raw;
+
+  level = ErrSetMessageLevel (SEV_MAX);
+
+  MemSet ((Pointer) &extra, 0, sizeof (XtraBlock));
+  ajp = asn2gnbk_setup (bsp, NULL, NULL, (FmtType)GENBANK_FMT, SEQUIN_MODE, NORMAL_STYLE, 0, 0, 0, &extra);
+  if (ajp != NULL) 
+  {
+    for (index = 0; index < ajp->numParagraphs; index++) 
+    {
+      bbp = ajp->paragraphArray [index];
+      if (bbp->blocktype == REFERENCE_BLOCK)
+      {
+        desc_text = asn2gnbk_format (ajp, (Int4) index);
+        if (desc_text != NULL) {
+          /* skip first line */
+          cp = StringChr (desc_text, 10);
+          if (cp != NULL) {
+            StringCpy (desc_text, cp + 1);
+            while ((cp = StringChr (desc_text, 10)) != NULL) {
+              *cp = '~';
+            }
+          }
+        }
+      }
+    }
+  }
+
+  ErrSetMessageLevel (level);    
+
+  ajp = asn2gnbk_cleanup (ajp);
+  bsp = BioseqFree (bsp);
+  return desc_text;  
+}
+
+
+static CharPtr GetDescriptorText (SeqDescPtr sdp, StdPrintOptionsPtr spop)
+{
+  CharPtr text;
+
+  if (sdp == NULL) {
+    return NULL;
+  } else {
+    text = GetDescriptorFlatFileText (sdp);
+    if (text == NULL) 
+    {
+      if (StdFormatPrint ((Pointer) sdp, (AsnWriteFunc) SeqDescAsnWrite,
+                                        "StdSeqDesc", spop))
+      {
+        if (StringNICmp (spop->ptr, "citation;", 9) == 0)
+        {
+          text = StringSave (spop->ptr + 9);
+        }
+        else
+        {
+          text = StringSave (spop->ptr);
+        }
+        spop->ptr = MemFree (spop->ptr);
+      } else {
+        text = StringSave ("Unable to format");
+      }
+    }
+  }
+  return text;
+}
+
+
+static void 
+AddOnePublicationToTableDisplayList 
+(ValNodePtr PNTR    row_list, 
+ DescStreamPtr      d,
+ StdPrintOptionsPtr spop,
+ ValNodePtr         sip_list)
+
+{
+  ValNodePtr     new_row = NULL;
+  Char           buf[k_WideColumnWidth];
+
+  if (row_list == NULL || d == NULL)
+  {
+    return;
+  }
+
+  if (d->replace == NULL) {
+    ValNodeAddPointer (&new_row, 4, StringSave ("    "));
+    ValNodeAddPointer (&new_row, 8, StringSave ("Undelete"));
+  } else {
+    ValNodeAddPointer (&new_row, 4, StringSave ("Edit"));
+    ValNodeAddPointer (&new_row, 8, StringSave ("Delete"));
+  }
+
+  if (d->orig == NULL) {
+    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave ("New"));
+  } else {
+    ValNodeAddPointer (&new_row, k_WideColumnWidth, GetDescriptorText (d->orig, spop));
+  }
+
+  if (d->replace == NULL) {
+    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave ("Deleted"));
+  } else {
+    ValNodeAddPointer (&new_row, k_WideColumnWidth, GetDescriptorText (d->replace, spop));
+  }
+
+  if (d->owners == NULL) {
+    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave ("No owners - will be deleted"));
+  } else if (HasAllIds(d->owners, sip_list)) {
+    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave ("All"));
+  } else {
+    SeqIdWrite (d->owners, buf, PRINTID_FASTA_ALL, sizeof (buf) - 1);
+    ValNodeAddPointer (&new_row, k_WideColumnWidth, StringSave (buf));
+  }
+
+  if (d->num_dependent == 0) {
+    ValNodeAddPointer (&new_row, 20, StringSave (""));
+  } else {
+    sprintf (buf, "%d featcit", d->num_dependent);
+    ValNodeAddPointer (&new_row, 20, StringSave (buf));
+  }
+    
+  ValNodeAddPointer (row_list, 0, new_row);
+}
+
+
+static ValNodePtr AddNewControls (void)
+{
+  ValNodePtr row = NULL;
+
+  ValNodeAddPointer (&row, 4, StringSave ("    "));
+  ValNodeAddPointer (&row, 8, StringSave ("        "));
+  ValNodeAddPointer (&row, k_WideColumnWidth, StringSave ("Add new publication"));
+  return row;
+}
+
+
+static void PublicationListDialogRedraw (DescriptorStreamEditorDlgPtr dlg)
+{
+  StdPrintOptionsPtr       spop = NULL;
+  ValNodePtr               row_list = NULL, vnp;
+
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  spop = StdPrintOptionsNew (NULL);
+  if (spop == NULL) 
+  {
+    Message (MSG_FATAL, "StdPrintOptionsNew failed");
+    return;
+  }
+  
+  spop->newline = ";";
+  spop->indent = "";
+  
+  /* make row list for table display and update table display */
+  for (vnp = dlg->desc_stream_list;
+       vnp != NULL;
+       vnp = vnp->next)
+  {
+    AddOnePublicationToTableDisplayList (&row_list, vnp->data.ptrvalue, spop, dlg->sip_list);
+  }
+  ValNodeAddPointer (&row_list, 0, AddNewControls());
+  PointerToDialog (dlg->pubdesc_table, row_list);
+  row_list = FreeTableDisplayRowList (row_list);
+  spop = StdPrintOptionsFree (spop);
+  
+  
+}
+
+
+static void PublicationListDblClick (PoinT cell_coord, CharPtr header_text, CharPtr cell_text, Pointer userdata)
+{
+  DescriptorStreamEditorDlgPtr dlg;
+  ValNodePtr                   vnp;
+  Int4                         d_num;
+  DescStreamPtr                d;
+  
+  dlg = (DescriptorStreamEditorDlgPtr) userdata;
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  for (vnp = dlg->desc_stream_list, d_num = 0;
+       vnp != NULL && d_num < cell_coord.y;
+       vnp = vnp->next, d_num++)
+  {
+  }
+  
+  if (vnp == NULL || (d = (DescStreamPtr) vnp->data.ptrvalue) == NULL)
+  {
+    if (cell_coord.y == d_num && cell_coord.x == 2) 
+    {
+      d = DescStreamNew (NULL, NULL);
+      d->replace = SeqDescrNew (NULL);
+      d->replace->choice = Seq_descr_pub;
+      d->replace->data.ptrvalue = PubdescNew ();
+      if (EditOneDescriptor (d->replace))
+      {
+        d->owners = ValNodeSeqIdListToSeqIdList (dlg->sip_list);
+        ValNodeAddPointer (&(dlg->desc_stream_list), 0, d);
+      }
+      else
+      {
+        d = DescStreamFree (d);
+      }
+    } 
+    else 
+    {
+      return;
+    }
+  } 
+  else if (cell_coord.x == 1)
+  {
+    if (d->replace == NULL) {
+      d->replace = AsnIoMemCopy (d->orig, (AsnReadFunc) SeqDescAsnRead, (AsnWriteFunc) SeqDescAsnWrite);
+    } else {
+      if (ANS_YES != Message (MSG_YN, "Are you sure you want to delete the publication?"))
+      {
+        return;
+      }
+      d->replace = SeqDescFree (d->replace);
+    }
+  }
+  else if (cell_coord.x == 4) 
+  {
+    /* edit owner list */
+    EditIdList (&(d->owners), dlg->sip_list);
+  }
+  else
+  {
+    EditOneDescriptor (d->replace);
+  }
+  PublicationListDialogRedraw (dlg);
+ 
+}
+
+
+static void DescriptorStreamToDialog (DialoG d, Pointer userdata)
+{
+  DescriptorStreamEditorDlgPtr dlg;
+  
+  dlg = (DescriptorStreamEditorDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return;
+  }
+
+  dlg->desc_stream_list = (ValNodePtr) userdata;
+
+  PublicationListDialogRedraw(dlg);
+
+
+}
+
+static Pointer DialogToDescriptorStream (DialoG d)
+{
+  DescriptorStreamEditorDlgPtr dlg;
+  ValNodePtr                   list = NULL;
+  
+  dlg = (DescriptorStreamEditorDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  return (Pointer) list;
+}
+
+
+static void CleanupDescriptorStreamEditorDlg (GraphiC g, VoidPtr data)
+{
+  DescriptorStreamEditorDlgPtr dlg;
+
+  dlg = (DescriptorStreamEditorDlgPtr) data;
+  if (dlg != NULL) {
+    dlg->sip_list = ValNodeSeqIdListFree(dlg->sip_list);
+  } 
+  StdCleanupExtraProc (g, data);
+}
+
+
+NLM_EXTERN DialoG DescriptorStreamEditor (GrouP h,  Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  DescriptorStreamEditorDlgPtr dlg;
+  GrouP           p;
+  
+  dlg = (DescriptorStreamEditorDlgPtr) MemNew (sizeof (DescriptorStreamEditorDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, CleanupDescriptorStreamEditorDlg);
+  SetGroupSpacing (p, 10, 10);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = DescriptorStreamToDialog;
+  dlg->fromdialog = DialogToDescriptorStream;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->pubdesc_table = TableDisplayDialog (p, stdCharWidth * 110, stdLineHeight * 16, 0, 2,
+                                       PublicationListDblClick, dlg,
+                                       NULL, NULL);
+
+
+  return (DialoG) p;
+}
+
+
+NLM_EXTERN void SetDescriptorStreamEditorIdList (DialoG d, SeqIdPtr sip_list)
+{
+  DescriptorStreamEditorDlgPtr dlg;
+  
+  dlg = (DescriptorStreamEditorDlgPtr) GetObjectExtra (d);
+  if (dlg != NULL) {
+    dlg->sip_list = ValNodeSeqIdListFree (dlg->sip_list);
+    dlg->sip_list = SeqIdListToValNodeSeqIdList (sip_list);
+  }
+}
+
 

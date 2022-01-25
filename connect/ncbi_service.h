@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/* $Id: ncbi_service.h,v 6.56 2009/01/23 19:44:42 kazimird Exp $
+/* $Id: ncbi_service.h,v 6.58 2010/07/29 18:19:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,7 +39,7 @@
 
 /* Revision 6.250 */
 #define SERV_CLIENT_REVISION_MAJOR  6
-#define SERV_CLIENT_REVISION_MINOR  250
+#define SERV_CLIENT_REVISION_MINOR  260
 
 
 /** @addtogroup ServiceSupport
@@ -100,12 +100,12 @@ typedef enum {
     fSERV_All               = 0x0000FFFF,
     /* Only stateless servers should be returned */
     fSERV_Stateless         = 0x00100000,
-    fSERV_Reserved_1        = 0x00200000, /*MBZ*/
+    fSERV_Reserved          = 0x00200000, /* Reserved, MBZ */
     /* Do reverse DNS translation of the would-be resulting info */
     fSERV_ReverseDns        = 0x00800000,
-    fSERV_Reserved_2        = 0x10000000, /*MBZ*/
     /* Allows to get even down services (but not the off ones!)
-     * NB: flex preference params are ignored */
+     * NB: most flex preference params are ignored */
+    fSERV_IncludeReserved   = 0x10000000, /* w/local LBSMD only */
     fSERV_IncludeDown       = 0x20000000,
     fSERV_IncludeSuppressed = 0x40000000,
     fSERV_Promiscuous       = 0x60000000

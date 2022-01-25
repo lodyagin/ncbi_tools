@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description:  Object manager for module NCBI-Pub
 *
@@ -41,6 +41,12 @@
 *
 *
 * $Log: objpub.c,v $
+* Revision 6.9  2010/03/09 16:56:39  bollin
+* Include Medline/PMID in Medline article formatting.
+*
+* Revision 6.8  2009/10/02 19:44:49  kans
+* address clang static analyzer warnings
+*
 * Revision 6.7  2005/12/29 13:46:18  bollin
 * added PubdescContentMatch function
 *
@@ -536,8 +542,8 @@ NLM_EXTERN ValNodePtr LIBCALL PubAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 	DataVal av;
 	AsnTypePtr atp;
     ValNodePtr anp=NULL;
-    Uint1 choice;
-    AsnReadFunc func;
+    Uint1 choice = 0;
+    AsnReadFunc func = NULL;
 
 	if (! loaded)
 	{
@@ -628,7 +634,7 @@ NLM_EXTERN ValNodePtr LIBCALL PubAsnRead (AsnIoPtr aip, AsnTypePtr orig)
     }
 
     anp->choice = choice;
-    if ((choice != 4) && (choice != 13))
+    if ((choice != 4) && (choice != 13) && func != NULL)
     {
         anp->data.ptrvalue = (* func)(aip, atp);
         if (anp->data.ptrvalue == NULL) goto erret;
@@ -685,10 +691,10 @@ NLM_EXTERN ValNodePtr LIBCALL PubSetFree (ValNodePtr anp)
 NLM_EXTERN Boolean LIBCALL PubSetAsnWrite (ValNodePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 {
 	DataVal av;
-	AsnTypePtr atp, settype, elementtype;
+	AsnTypePtr atp, settype = NULL, elementtype;
     Pointer pnt;
     Uint1 choice;
-    AsnWriteFunc func;
+    AsnWriteFunc func = NULL;
 	ValNodePtr oldanp;
     Boolean retval = FALSE;
 
@@ -760,7 +766,9 @@ NLM_EXTERN Boolean LIBCALL PubSetAsnWrite (ValNodePtr anp, AsnIoPtr aip, AsnType
             pnt = (Pointer)anp;
         else
             pnt = anp->data.ptrvalue;
-        if (! (*func)(pnt, aip, elementtype)) goto erret;
+        if (func != NULL) {
+          if (! (*func)(pnt, aip, elementtype)) goto erret;
+        }
         anp = anp->next;
     }
     
@@ -1458,7 +1466,7 @@ NLM_EXTERN Int2 LIBCALL PubLabelUnique (ValNodePtr pub, CharPtr buf, Int2 buflen
 			else
 				sprintf(tbuf, "NLM%ld", (long)(mep->uid));
 			diff = LabelCopyExtra(buf, tbuf, buflen, NULL, " ");
-			buflen -= diff;
+		  buflen -= diff; buf += diff;
 			cap = mep->cit;
 			goto cit_art;
 		case PUB_Article:

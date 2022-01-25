@@ -1,4 +1,4 @@
-/*  $Id: ncbi_conntest.c,v 6.11 2007/04/17 11:25:54 kazimird Exp $
+/* $Id: ncbi_conntest.c,v 6.16 2010/02/05 20:35:04 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,9 @@
  *
  */
 
-#include "ncbi_conntest.h"
-#include "../ncbi_priv.h"
 #include <connect/ncbi_connection.h>
+#include "../ncbi_priv.h"               /* CORE logging facilities */
+#include "ncbi_conntest.h"
 #include <string.h>
 /* This header must go last */
 #include "test_assert.h"
@@ -46,10 +46,10 @@
 
 /* Standard error report
  */
-#define TEST_LOG(status, descr) \
-  CORE_LOGF(status == eIO_Success ? eLOG_Note : \
-            status == eIO_Closed  ? eLOG_Warning : \
-                                    eLOG_Error, \
+#define TEST_LOG(status, descr)                                     \
+  CORE_LOGF(status == eIO_Success ? eLOG_Note :                     \
+            status == eIO_Closed  ? eLOG_Warning :                  \
+            eLOG_Error,                                             \
             ("%s (status: \"%s\")", descr, IO_StatusStr(status)))
 
 
@@ -62,6 +62,7 @@ static void s_SingleBouncePrint
 {
     static const char write_str[] = "This is a s_*BouncePrint test string.\n";
     size_t     n_written, n_read;
+    char       message[128];
     char       buf[8192];
     EIO_Status status;
 
@@ -70,14 +71,18 @@ static void s_SingleBouncePrint
     /* WRITE */
     status = CONN_Write(conn, write_str, strlen(write_str),
                         &n_written, eIO_WritePersist);
-    if (status != eIO_Success  ||  n_written != strlen(write_str))
-        TEST_LOG(status, "[s_SingleBouncePrint] Write failed!");
+    if (status != eIO_Success  ||  n_written != strlen(write_str)) {
+        TEST_LOG(status,
+                 "[s_SingleBouncePrint]  CONN_Write(persistent) failed");
+    }
     assert(n_written == strlen(write_str));
     assert(status == eIO_Success);
 
     /* READ the "bounced" data from the connection */
     status = CONN_Read(conn, buf, sizeof(buf) - 1, &n_read, eIO_ReadPersist);
-    TEST_LOG(status, "[s_SingleBouncePrint] after READ");
+    sprintf(message, "[s_SingleBouncePrint]  CONN_Read(persistent)"
+            " %lu byte%s read", (unsigned long) n_read, &"s"[n_read == 1]);
+    TEST_LOG(status, message);
 
     /* Printout to data file, if any */
     if (data_file  &&  n_read) {
@@ -91,6 +96,8 @@ static void s_SingleBouncePrint
     assert(n_read >= n_written);
     buf[n_read] = '\0';
     assert(strstr(buf, write_str));
+
+    TEST_LOG(eIO_Success, "[s_SingleBouncePrint]  ...finished");
 }
 
 
@@ -123,17 +130,17 @@ static void s_SingleBounceCheck
  const STimeout* timeout,
  FILE*           data_file)
 {
-    EIO_Status status;
     static const char sym[] = {
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
     };
+    EIO_Status status;
+    char message[128];
 
 #define TEST_N_LINES 200
 #define TEST_BUF_SIZE (TEST_N_LINES * (TEST_N_LINES + 3) / 2)
     char  buf[TEST_BUF_SIZE];
 
     TEST_LOG(eIO_Success, "[s_SingleBounceCheck]  Starting...");
-
 
     /* WRITE to the connection:  "0\n12\n345\n6789\n01234\n........"
      */
@@ -158,7 +165,9 @@ static void s_SingleBounceCheck
                 if (n_write % 5 == 3) {
                     status = CONN_Wait(conn, eIO_Write, timeout);
                     if (status != eIO_Success) {
-                        TEST_LOG(status, "The pre-WRITE CONN_Wait failed");
+                        TEST_LOG(status,
+                                 "[s_SingleBounceCheck]  CONN_Wait(write)"
+                                 " failed, retrying...");
                         assert(status == eIO_Timeout);
                     }
                 }
@@ -167,11 +176,12 @@ static void s_SingleBounceCheck
                 status = CONN_Write(conn, buf, n_write,
                                     &n_written, eIO_WritePersist);
                 if (status != eIO_Success) {
-                    TEST_LOG(status, "Write failed. Retrying...");
+                    TEST_LOG(status,
+                             "[s_SingleBounceCheck]  CONN_Write(persistent)"
+                             " failed, retrying...");
                     assert(n_written < n_write);
                     assert(status == eIO_Timeout);
-                }
-                else {
+                } else {
                     assert(n_written == n_write);
                 }
             } while (status != eIO_Success);
@@ -192,21 +202,32 @@ static void s_SingleBounceCheck
         n_to_read = TEST_BUF_SIZE/3;
 
         do {
+            TEST_LOG(eIO_Success, "[s_SingleBounceCheck]  1/3 PEEK...");
             status = CONN_Read(conn, x_buf, n_to_read, &n_read, eIO_ReadPeek);
             if (status != eIO_Success) {
-                TEST_LOG(status, "The 1/3 PEEK failed. Retrying...");
+                TEST_LOG(status,
+                         "[s_SingleBounceCheck]  1/3 CONN_Read(peek)"
+                         " failed, retrying...");
                 assert(n_read < n_to_read);
                 assert(status == eIO_Timeout);
             }
             if (n_read < n_to_read) {
-                TEST_LOG(status, "Not all of the expected data is peeked yet."
-                         " Continue...");
+                sprintf(message, "[s_SingleBounceCheck]  1/3 CONN_Read(peek)"
+                        " %lu byte%s peeked out of %lu byte%s, continuing...",
+                        (unsigned long) n_read,    &"s"[n_read    == 1],
+                        (unsigned long) n_to_read, &"s"[n_to_read == 1]);
+                TEST_LOG(status, message);
             }
         } while (n_read != n_to_read);
 
         /* READ 1st 1/3 of "bounced" data, compare it with the PEEKed data */
+        TEST_LOG(eIO_Success, "[s_SingleBounceCheck]  1/3 READ...");
         status = CONN_Read(conn, x_buf + n_to_read, n_to_read, &n_read,
                            eIO_ReadPlain);
+        if (status != eIO_Success) {
+            TEST_LOG(status,
+                     "[s_SingleBounceCheck]  1/3 CONN_Read(plain) failed");
+        }
         assert(status == eIO_Success);
         assert(n_read == n_to_read);
         assert(memcmp(x_buf, x_buf + n_to_read, n_to_read) == 0);
@@ -215,7 +236,8 @@ static void s_SingleBounceCheck
         /* WAIT on read */
         status = CONN_Wait(conn, eIO_Read, timeout);
         if (status != eIO_Success) {
-            TEST_LOG(status, "The 2/3 pre-READ CONN_Wait failed");
+            TEST_LOG(status,
+                     "[s_SingleBounceCheck]  CONN_Wait(read) failed");
             assert(status == eIO_Timeout);
         }
 
@@ -224,10 +246,14 @@ static void s_SingleBounceCheck
         n_to_read = TEST_BUF_SIZE/3;
 
         while ( n_to_read ) {
-            TEST_LOG(status, "2/3 READ...");
+            TEST_LOG(eIO_Success, "[s_SingleBounceCheck]  2/3 READ...");
             status = CONN_Read(conn, x_buf, n_to_read, &n_read, eIO_ReadPlain);
             if (status != eIO_Success) {
-                TEST_LOG(status, "The 2/3 READ failed. Retrying...");
+                sprintf(message, "[s_SingleBounceCheck]  2/3 CONN_Read(plain)"
+                        " %lu byte%s read out of %lu byte%s, retrying...",
+                        (unsigned long) n_read,    &"s"[n_read    == 1],
+                        (unsigned long) n_to_read, &"s"[n_to_read == 1]);
+                TEST_LOG(status, message);
                 assert(n_read < n_to_read);
                 assert(status == eIO_Timeout);
             } else {
@@ -241,9 +267,13 @@ static void s_SingleBounceCheck
         /* Persistently READ the 3rd 1/3 of "bounced" data */
         n_to_read = TEST_BUF_SIZE - (x_buf - buf);
 
+        TEST_LOG(eIO_Success, "[s_SingleBounceCheck]  3/3 READ...");
         status = CONN_Read(conn, x_buf, n_to_read, &n_read, eIO_ReadPersist);
         if (status != eIO_Success) {
-            TEST_LOG(status, "The 3/3 (persistent) READ failed!");
+            sprintf(message, "[s_SingleBounceCheck]  3/3 CONN_Read(persistent)"
+                    " %lu byte%s read",
+                    (unsigned long) n_read, &"s"[n_read == 1]);
+            TEST_LOG(status, message);
             assert(n_read < n_to_read);
             assert(0);
         } else {
@@ -271,27 +301,31 @@ static void s_SingleBounceCheck
     /* Now when the "bounced" data is read and tested, READ an arbitrary extra
      * data sent in by the peer and print it out to LOG file
      */
-    if ( !data_file )
-        return;
+    if ( data_file ) {
+        fprintf(data_file, "\ns_SingleBounceCheck(BEGIN EXTRA DATA)\n");
+        fflush(data_file);
+        for (;;) {
+            size_t n;
 
-    fprintf(data_file, "\ns_SingleBounceCheck(BEGIN EXTRA DATA)\n");
-    fflush(data_file);
-    for (;;) {
-        size_t n_read;
+            TEST_LOG(eIO_Success,
+                     "[s_SingleBounceCheck]  EXTRA READ...");
+            status = CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPersist);
+            TEST_LOG(status,
+                     "[s_SingleBounceCheck]  EXTRA CONN_Read(persistent)");
+            if ( n ) {
+                assert(fwrite(buf, n, 1, data_file) == 1);
+                fflush(data_file);
+            }
+            if (status == eIO_Closed  ||  status == eIO_Timeout)
+                break; /* okay */
 
-        status = CONN_Read(conn, buf, sizeof(buf), &n_read, eIO_ReadPersist);
-        TEST_LOG(status, "s_SingleBounceCheck(The extra data READ...)");
-        if ( n_read ) {
-            assert(fwrite(buf, n_read, 1, data_file) == 1);
-            fflush(data_file);
+            assert(status == eIO_Success);
         }
-        if (status == eIO_Closed  ||  status == eIO_Timeout)
-            break; /* okay */
-
-        assert(status == eIO_Success);
+        fprintf(data_file, "\ns_SingleBounceCheck(END EXTRA DATA)\n\n");
+        fflush(data_file);
     }
-    fprintf(data_file, "\ns_SingleBounceCheck(END EXTRA DATA)\n\n");
-    fflush(data_file);
+
+    TEST_LOG(eIO_Success, "[s_SingleBounceCheck]  ...finished");
 }
 
 
@@ -318,26 +352,23 @@ extern void CONN_TestConnector
      */
     assert(CONN_Create(connector, &conn) == eIO_Success);
 
-    CONN_SetTimeout(conn, eIO_Open,      timeout);
-    CONN_SetTimeout(conn, eIO_Read,      timeout);
-    CONN_SetTimeout(conn, eIO_ReadWrite, timeout);
-    CONN_SetTimeout(conn, eIO_Close,     timeout);
+    assert(CONN_SetTimeout(conn, eIO_Open,      timeout) == eIO_Success);
+    assert(CONN_SetTimeout(conn, eIO_ReadWrite, timeout) == eIO_Success);
+    assert(CONN_SetTimeout(conn, eIO_Close,     timeout) == eIO_Success);
 
     assert(CONN_ReInit(conn, connector) == eIO_Success);
 
-    CONN_SetTimeout(conn, eIO_Write, timeout);
-
     status = CONN_Wait(conn, eIO_Write, timeout);
     if (status != eIO_Success) {
-        TEST_LOG(status, "First CONN_Wait failed");
+        TEST_LOG(status, "[CONN_TestConnector]  CONN_Wait(write) failed");
         assert(status == eIO_Timeout);
     }
 
     /* Run the specified TESTs
      */
-    if ( !flags )
+    if ( !flags ) {
         flags = fTC_Everything;
-
+    }
     if (flags & fTC_SingleBouncePrint) {
         s_SingleBouncePrint(conn, data_file);
     }
@@ -352,5 +383,5 @@ extern void CONN_TestConnector
      */
     assert(CONN_Close(conn) == eIO_Success);
 
-    TEST_LOG(status, "Test completed successfully");
+    TEST_LOG(eIO_Success, "[CONN_TestConnector]  Completed");
 }

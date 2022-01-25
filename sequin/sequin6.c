@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.342 $
+* $Revision: 6.355 $
 *
 * File Description: 
 *
@@ -59,6 +59,10 @@
 #include <vsm.h>
 #include <actutils.h>
 #include <findrepl.h>
+#define NLM_GENERATED_CODE_PROTO
+#include <objmacro.h>
+#include <macrodlg.h>
+#include <macroapi.h>
 
 #define NUMBER_OF_SUFFIXES    7
 
@@ -260,8 +264,8 @@ typedef enum {
   eFieldTypeCommentDescriptor,
   eFieldTypeFeatureNote,
   eFieldTypePublication,
-  eNumFieldType
-} FieldType;
+  eFieldType_Max
+} SegregateFieldType;
 
 static CharPtr field_type_names[] = {
   "Gene",
@@ -299,9 +303,9 @@ static FieldSubfieldPtr FieldSubfieldFree (FieldSubfieldPtr f)
 typedef struct fieldsubfielddlg {
   DIALOG_MESSAGE_BLOCK
   PopuP field_list;
-  DialoG subfield_dlg[eNumFieldType];
+  DialoG subfield_dlg[eFieldType_Max];
   DialoG impfeat_type;
-  Boolean allowed_fields[eNumFieldType];
+  Boolean allowed_fields[eFieldType_Max];
   Nlm_ChangeNotifyProc     change_notify;
   Pointer                  change_userdata;
 } FieldSubfieldDlgData, PNTR FieldSubfieldDlgPtr;
@@ -314,7 +318,7 @@ static Int4 FieldNumFromListVal (Int4 list_val, BoolPtr allowed_fields)
 
   if (list_val < 1) return -1;
 
-  for (i = 0; i < eNumFieldType && field_num < 0; i++) {
+  for (i = 0; i < eFieldType_Max && field_num < 0; i++) {
     if (allowed_fields[i]) {
       if (list_val - 1 == i) {
         field_num = i;
@@ -354,7 +358,7 @@ static void ChangeFieldType (PopuP p)
   list_val = GetValue (dlg->field_list);
   field_num = FieldNumFromListVal (list_val, dlg->allowed_fields);
 
-  for (i = 0; i < eNumFieldType; i++) {
+  for (i = 0; i < eFieldType_Max; i++) {
     if (dlg->subfield_dlg[i] == NULL) continue;
     if (i == field_num) {
       Show (dlg->subfield_dlg[i]);
@@ -512,14 +516,14 @@ CreateFieldSubfieldDlg
   if (allowed_fields == NULL) {
     MemSet (dlg->allowed_fields, TRUE, sizeof (dlg->allowed_fields));
   } else {
-    for (i = 0; i < eNumFieldType; i++) {      
+    for (i = 0; i < eFieldType_Max; i++) {      
       dlg->allowed_fields[i] = allowed_fields[i];
     }
   }
 
   dlg->field_list = PopupList (p, TRUE, ChangeFieldType);
   SetObjectExtra (dlg->field_list, dlg, NULL);
-  for (i = 0; i < eNumFieldType; i++) {
+  for (i = 0; i < eFieldType_Max; i++) {
     if (dlg->allowed_fields[i]) {
       PopupItem (dlg->field_list, field_type_names[i]);
     }
@@ -578,7 +582,7 @@ CreateFieldSubfieldDlg
                               (HANDLE) g2,
                               NULL);
 
-  for (i = 0; i < eNumFieldType; i++) {
+  for (i = 0; i < eFieldType_Max; i++) {
     Hide (dlg->subfield_dlg[i]);
   }
   return (DialoG) p;
@@ -1022,14 +1026,14 @@ static void DeleteFeaturesByText_Callback (SeqEntryPtr sep,
 					   Int2        indent)
 {
   ConvertFormPtr cfp;
-  BioseqPtr      bsp;
-  BioseqSetPtr   bssp;
+  BioseqPtr      bsp = NULL;
+  BioseqSetPtr   bssp = NULL;
   SeqAnnotPtr    sap;
   SeqFeatPtr     sfp;
   GeneRefPtr     grp;
   ProtRefPtr     prp;
   RnaRefPtr      rrp;
-  Boolean        found;
+  Boolean        found = FALSE;
 
   /* Check parameters */
 
@@ -1101,13 +1105,13 @@ static void DeleteFeaturesByText_Callback (SeqEntryPtr sep,
       sfp->idx.deleteme = TRUE;
       break;
     case 2 :
-      if (IS_Bioseq (sep))
+      if (bsp != NULL)
 	bsp->idx.deleteme = TRUE;
       break;
     case 3 :
-      if (IS_Bioseq_set (sep))
+      if (bssp != NULL)
 	bssp->idx.deleteme = TRUE;
-      else {
+      else if (bsp != NULL) {
 	if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
 	  bssp = (BioseqSetPtr) bsp->idx.parentptr;
 	  bssp->idx.deleteme = TRUE;
@@ -1241,7 +1245,7 @@ static void DeleteSourceByText (SeqDescrPtr    sdp,
 				ConvertFormPtr cfp)
 
 {
-  Boolean       found;
+  Boolean       found = FALSE;
   BioseqSetPtr  bssp;
   BioSourcePtr  biop;
 
@@ -1506,7 +1510,7 @@ extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data)
   GrouP              p;
   StdEditorProcsPtr  sepp;
   WindoW             w;
-  Boolean            allowed[eNumFieldType];
+  Boolean            allowed[eFieldType_Max];
 
   /* Check parameters and get a pointer to the current data */
 
@@ -1567,7 +1571,7 @@ extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data)
 
   p = HiddenGroup (h, 6, 0, NULL);
   StaticPrompt (p, "Find string in", 0, popupMenuHeight, programFont, 'l');
-  MemSet (allowed, TRUE, sizeof (Boolean) * eNumFieldType);
+  MemSet (allowed, TRUE, sizeof (Boolean) * eFieldType_Max);
   allowed[eFieldTypeCommentDescriptor] = FALSE;
   allowed[eFieldTypeFeatureNote] = FALSE;
   allowed[eFieldTypePublication] = FALSE;
@@ -2434,7 +2438,7 @@ static void CleanupSegregatePage (GraphiC g, VoidPtr data)
 
 extern Int2 LIBCALLBACK CreateSegregateByTextWindow (Pointer data)
 {
-  Boolean            allowed[eNumFieldType];
+  Boolean            allowed[eFieldType_Max];
   GrouP              c;
   ConvertFormPtr     cfp;
   GrouP              g;
@@ -2495,7 +2499,7 @@ extern Int2 LIBCALLBACK CreateSegregateByTextWindow (Pointer data)
 
   p = HiddenGroup (h, 6, 0, NULL);
   StaticPrompt (p, "Find string in", 0, popupMenuHeight, programFont, 'l');
-  MemSet (allowed, TRUE, sizeof (Boolean) * eNumFieldType);
+  MemSet (allowed, TRUE, sizeof (Boolean) * eFieldType_Max);
   allowed[eFieldTypeCommentDescriptor] = TRUE;
 
   cfp->target_dlg = CreateFieldSubfieldDlg (p, allowed, ChangeTargetFields, cfp);
@@ -4010,7 +4014,7 @@ static void ClearRemoveOutsideText (ButtoN b)
 
 extern void RemoveTextOutsideString (IteM i)
 {
-  Boolean            allowed[eNumFieldType];
+  Boolean            allowed[eFieldType_Max];
   BaseFormPtr        bfp;
   GrouP              buttonGroup;
   ConvertFormPtr     cfp;
@@ -4088,7 +4092,7 @@ extern void RemoveTextOutsideString (IteM i)
   p2 = StaticPrompt (mainGroup, "Perform excision in", 0, popupMenuHeight, programFont, 'l');
 
   /* selecting the target field */
-  MemSet (allowed, TRUE, sizeof (Boolean) * eNumFieldType);
+  MemSet (allowed, TRUE, sizeof (Boolean) * eFieldType_Max);
   allowed[eFieldTypeFeatureNote] = FALSE;
   allowed[eFieldTypePublication] = FALSE;
   cfp->target_dlg = CreateFieldSubfieldDlg (mainGroup, allowed, ChangeTargetFields, cfp);
@@ -4134,7 +4138,7 @@ extern void RemoveTextInsideString (IteM i)
   SeqEntryPtr        sep;
   StdEditorProcsPtr  sepp;
   WindoW             w;
-  Boolean            allowed[eNumFieldType];
+  Boolean            allowed[eFieldType_Max];
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -4178,7 +4182,7 @@ extern void RemoveTextInsideString (IteM i)
 
   ppt2 = StaticPrompt (h, "Perform excision in", 0, popupMenuHeight, programFont, 'c');
   
-  MemSet (allowed, TRUE, sizeof (Boolean) * eNumFieldType);
+  MemSet (allowed, TRUE, sizeof (Boolean) * eFieldType_Max);
   allowed[eFieldTypeCommentDescriptor] = TRUE;
   allowed[eFieldTypeFeatureNote] = FALSE;
   allowed[eFieldTypePublication] = FALSE;
@@ -4528,7 +4532,12 @@ static void AdjustSeqLocForApply (SeqFeatPtr sfp, ApplyFormPtr afp)
   num_str = MemFree (num_str);
   num_str = SaveStringFromText (afp->right_end);
   if (num_str == NULL) return;
-  to = atoi (num_str);
+  if (num_str[0] == '^') {
+    is_caret = TRUE;
+    to = atoi (num_str + 1);
+  } else {
+    to = atoi (num_str);
+  }
   num_str = MemFree (num_str);
   if (from > to)
   {
@@ -4752,6 +4761,7 @@ typedef struct adjustfeatforgapdialog {
   GrouP  partial_grp;
   ButtoN trim_ends;
   ButtoN split_internal;
+  ButtoN split_in_intron;
 
   Nlm_ChangeNotifyProc     change_notify;
   Pointer                  change_userdata;
@@ -4774,17 +4784,23 @@ static void AdjustFeaturesForGapToDialog (DialoG d, Pointer udata)
     SetStatus (dlg->known_gaps, FALSE);
     SetStatus (dlg->trim_ends, FALSE);
     SetStatus (dlg->split_internal, FALSE);
+    SetStatus (dlg->split_in_intron, FALSE);
+    Disable (dlg->split_in_intron);
     SetValue (dlg->partial_grp, 2);
   } else {
     PointerToDialog (dlg->feature_select, data->feature_list);
-    SetStatus (dlg->unknown_gaps, data->unknown_gaps);
-    SetStatus (dlg->known_gaps, data->known_gaps);
-    SetStatus (dlg->split_internal, data->split_internal);
-    SetStatus (dlg->trim_ends, data->trim_ends);
+    SetStatus (dlg->unknown_gaps, data->options & eAdjustFeatForGap_unknown_gaps);
+    SetStatus (dlg->known_gaps, data->options & eAdjustFeatForGap_known_gaps);
+    SetStatus (dlg->split_internal, data->options & eAdjustFeatForGap_split_internal);
+    SetStatus (dlg->split_in_intron, data->options & eAdjustFeatForGap_split_in_intron);
+    if (!(data->options & eAdjustFeatForGap_split_internal)) {
+      Disable (dlg->split_in_intron);
+    }
+    SetStatus (dlg->trim_ends, data->options & eAdjustFeatForGap_trim_ends);
 
-    if (data->make_partial && data->partial_for_pseudo) {
+    if ((data->options & eAdjustFeatForGap_make_partial) && (data->options & eAdjustFeatForGap_partial_for_pseudo)) {
       SetValue (dlg->partial_grp, 1);
-    } else if (data->make_partial && !data->partial_for_pseudo) {
+    } else if ((data->options & eAdjustFeatForGap_make_partial) && !(data->options & eAdjustFeatForGap_partial_for_pseudo)) {
       SetValue (dlg->partial_grp, 2);
     } else {
       SetValue (dlg->partial_grp, 3);
@@ -4809,27 +4825,35 @@ static Pointer AdjustFeaturesForGapToPointer (DialoG d)
   data->feature_list = (ValNodePtr) DialogToPointer (dlg->feature_select);
   data->features_in_gap = NULL;
 
-  data->unknown_gaps = GetStatus (dlg->unknown_gaps);
-  data->known_gaps = GetStatus (dlg->known_gaps);
+  if (GetStatus (dlg->unknown_gaps)) {
+    data->options |= eAdjustFeatForGap_unknown_gaps;
+  }
+  if (GetStatus (dlg->known_gaps)) {
+    data->options |= eAdjustFeatForGap_known_gaps;
+  }
 
   grp_val = GetValue (dlg->partial_grp);
   switch (grp_val) {
     case 1:
-      data->make_partial = TRUE;
-      data->partial_for_pseudo = TRUE;
+      data->options |= eAdjustFeatForGap_make_partial | eAdjustFeatForGap_partial_for_pseudo;
       break;
     case 2:
-      data->make_partial = TRUE;
-      data->partial_for_pseudo = FALSE;
+      data->options |= eAdjustFeatForGap_make_partial;
       break;
     case 3:
-      data->make_partial = FALSE;
-      data->partial_for_pseudo = FALSE;
+      /* both false */
       break;
   }
   
-  data->split_internal = GetStatus (dlg->split_internal);
-  data->trim_ends = GetStatus (dlg->trim_ends);
+  if (GetStatus (dlg->split_internal)) {
+    data->options |= eAdjustFeatForGap_split_internal;
+    if (GetStatus (dlg->split_in_intron)) {
+      data->options |= eAdjustFeatForGap_split_in_intron;
+    }
+  }
+  if (GetStatus (dlg->trim_ends)) {
+    data->options |= eAdjustFeatForGap_trim_ends;
+  }
 
   return (Pointer) data;
 }
@@ -4860,12 +4884,12 @@ static ValNodePtr TestAdjustForGapsDialog (DialoG d)
     ValNodeAddPointer (&err_list, 0, "No features");
   }
 
-  if (!data->unknown_gaps && !data->known_gaps)
+  if (!(data->options & eAdjustFeatForGap_unknown_gaps) && !(data->options & eAdjustFeatForGap_known_gaps))
   {
     ValNodeAddPointer (&err_list, 0, "No gaps");
   }
 
-  if (!data->split_internal && !data->trim_ends)
+  if (!(data->options & eAdjustFeatForGap_split_internal) && !(data->options & eAdjustFeatForGap_trim_ends))
   {
     ValNodeAddPointer (&err_list, 0, "No action");
   }
@@ -4881,6 +4905,11 @@ static void AdjustFeaturesForGapsChangeNotifyButton (ButtoN b)
   AdjustFeatForGapDialogPtr dlg;
 
   dlg = (AdjustFeatForGapDialogPtr) GetObjectExtra (b);
+  if (GetStatus (dlg->split_internal)) {
+    Enable (dlg->split_in_intron);
+  } else {
+    Disable (dlg->split_in_intron);
+  }
   if (dlg != NULL && dlg->change_notify != NULL) {
     (dlg->change_notify) (dlg->change_userdata);
   }
@@ -4937,11 +4966,14 @@ static DialoG AdjustFeaturesForGapDialog (GrouP h, Uint2 entityID, Nlm_ChangeNot
   RadioButton (dlg->partial_grp, "Never");
   SetValue (dlg->partial_grp, 2);
 
-  g2 = HiddenGroup (p, 2, 0, NULL);
+  g2 = HiddenGroup (p, 3, 0, NULL);
   dlg->trim_ends = CheckBox (g2, "Trim ends in gaps", AdjustFeaturesForGapsChangeNotifyButton);
   SetObjectExtra (dlg->trim_ends, dlg, NULL);
   dlg->split_internal = CheckBox (g2, "Split for internal gaps", AdjustFeaturesForGapsChangeNotifyButton);
   SetObjectExtra (dlg->split_internal, dlg, NULL);
+  dlg->split_in_intron = CheckBox (g2, "(Even when gaps are in introns)", AdjustFeaturesForGapsChangeNotifyButton);
+  SetObjectExtra (dlg->split_in_intron, dlg, NULL);
+  Disable (dlg->split_in_intron);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->feature_select, (HANDLE) g, (HANDLE) dlg->partial_grp, (HANDLE) g2, NULL);
   return (DialoG) p;
@@ -4983,7 +5015,7 @@ static void FindFeaturesToBeAdjustedForGapsCallback (SeqFeatPtr sfp, Pointer dat
 
   gapped_bioseq = BioseqFind (SeqLocId (sfp->location));
 
-  LocationContainsGaps (sfp->location, gapped_bioseq, faap->afgp->unknown_gaps, faap->afgp->known_gaps, &terminal_gaps, &internal_gaps, &entirely_in_gap);
+  LocationContainsGaps (sfp->location, gapped_bioseq, faap->afgp->options, &terminal_gaps, &internal_gaps, &entirely_in_gap);
   if (entirely_in_gap)
   {
     ValNodeAddPointer (&(faap->features_in_gap), OBJ_SEQFEAT, sfp);
@@ -4994,8 +5026,8 @@ static void FindFeaturesToBeAdjustedForGapsCallback (SeqFeatPtr sfp, Pointer dat
     ValNodeAddPointer (&(faap->features_contain_gap), OBJ_SEQFEAT, sfp);
   }
 
-  if ((faap->afgp->split_internal && internal_gaps) 
-      || (faap->afgp->trim_ends && terminal_gaps)) 
+  if (((faap->afgp->options & eAdjustFeatForGap_split_internal) && internal_gaps) 
+      || ((faap->afgp->options & eAdjustFeatForGap_trim_ends) && terminal_gaps)) 
   {
     ValNodeAddPointer (&(faap->features_to_adjust), OBJ_SEQFEAT, sfp);
   }
@@ -5421,7 +5453,7 @@ static void AdjustCodingRegionLocationsForGapLocations (BioseqPtr bsp, ValNodePt
 {
   SeqFeatPtr        sfp;
   SeqMgrFeatContext fcontext;
-  BioseqPtr         protbsp = NULL, new_protbsp;
+  BioseqPtr         protbsp = NULL, new_protbsp = NULL;
   SeqFeatPtr        new_sfp;
   CdRegionPtr       crp;
   Boolean           partial5, partial3;
@@ -6435,7 +6467,6 @@ static void RealApplyBioFeatToAll (Uint2        entityID,
     
     SetApplyFeatureLocation (sfp, afp);      
     AddToComment (sfp, afp->feature_details_data->featcomment);
-    ConvertToOldRNAFormat (sfp);
 
     if (! StringHasNoText (afp->feature_details_data->geneName)) {
       if (entityID > 0 
@@ -9558,7 +9589,7 @@ static void ParseDefOrLocalIDToSource (BaseFormPtr bfp, Boolean parsedef, CharPt
   if (sep == NULL) return;
   pfp = (ParseFormPtr) MemNew (sizeof (ParseFormData));
   if (pfp == NULL) return;
-  w = FixedWindow (-50, -33, -10, -10, "Parse Def Line", StdCloseWindowProc);
+  w = FixedWindow (-50, -33, -10, -10, "Parse file to source", StdCloseWindowProc);
   SetObjectExtra (w, pfp, StdCleanupFormProc);
   pfp->form = (ForM) w;
   pfp->formmessage = ParseDeflineMessageProc;
@@ -10023,9 +10054,9 @@ static void ChangeModPopup (PopuP p)
   }
 }
 
-extern void AddModToOrg (IteM i)
+
+extern void AddModToOrgBaseForm (BaseFormPtr bfp)
 {
-  BaseFormPtr  bfp;
   AddModFormPtr amfp;
   WindoW w;
   GrouP	g;
@@ -10034,11 +10065,6 @@ extern void AddModToOrg (IteM i)
   Int2 index;
   ButtoN b;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
   if (bfp == NULL) return;
 
   amfp = (AddModFormPtr) MemNew (sizeof (AddModFormData));
@@ -10086,7 +10112,20 @@ extern void AddModToOrg (IteM i)
   RealizeWindow(w);
   Show(w);
   Update();
-  
+}
+
+
+extern void AddModToOrg (IteM i)
+{
+  BaseFormPtr  bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  AddModToOrgBaseForm (bfp);
 }
 
 typedef struct descformdata {
@@ -10109,7 +10148,23 @@ typedef struct descformdata {
   Int2           segSetCount;
   Uint2          descsubtype;
   ButtoN         createNewBtn;
+  CharPtr        user_object_tag;
 } DescFormData, PNTR DescFormPtr;
+
+
+static Boolean IsUserObjectCorrectTag (UserObjectPtr uop, CharPtr user_object_tag)
+{
+  if (uop == NULL) {
+    return FALSE;
+  } else if (user_object_tag == NULL) {
+    return TRUE;
+  } else if (StringCmp (uop->type->str, user_object_tag) == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
 
 static Boolean FindDescrFunc (GatherContextPtr gcp)
 
@@ -10122,7 +10177,8 @@ static Boolean FindDescrFunc (GatherContextPtr gcp)
   if (dfp == NULL) return TRUE;
   if (gcp->thistype == OBJ_SEQDESC) {
     vnp = (ValNodePtr) gcp->thisitem;
-    if (vnp != NULL && vnp->choice == dfp->lookfor) {
+    if (vnp != NULL && vnp->choice == dfp->lookfor 
+        && (vnp->choice != Seq_descr_user || IsUserObjectCorrectTag(vnp->data.ptrvalue, dfp->user_object_tag))) {
       dfp->oldEntityID = gcp->entityID;
       dfp->oldItemID = gcp->itemID;
       dfp->oldItemtype = gcp->thistype;
@@ -10423,7 +10479,7 @@ static void NewDescriptorMessageProc (ForM f, Int2 mssg)
   }
 }
 
-extern void NewDescriptorMenuFunc (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 descsubtype)
+extern void NewDescriptorMenuFuncEx (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 descsubtype, CharPtr user_object_tag)
 
 {
   ButtoN             b;
@@ -10454,6 +10510,9 @@ extern void NewDescriptorMenuFunc (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 de
   if (dfp == NULL) return;
   dfp->ompp = ompp;
   dfp->lookfor = ompp->subinputtype;
+  if (dfp->lookfor == Seq_descr_user) {
+    dfp->user_object_tag = user_object_tag;
+  }
   dfp->found = FALSE;
   dfp->descsubtype = descsubtype;
   bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
@@ -10544,6 +10603,12 @@ extern void NewDescriptorMenuFunc (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 de
   Update ();
 }
 
+extern void NewDescriptorMenuFunc (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 descsubtype)
+{
+  NewDescriptorMenuFuncEx (ompp, bfp, descsubtype, NULL);
+}
+
+
 static void NewDescriptorMenuProc (IteM i)
 
 {
@@ -10553,6 +10618,22 @@ static void NewDescriptorMenuProc (IteM i)
   if (nop == NULL) return;
   NewDescriptorMenuFunc (nop->ompp, nop->bfp, nop->descsubtype);
 }
+
+
+static void NewDescriptorMenuProcExtra (IteM i)
+
+{
+  NewObjectPtr  nop;
+
+  nop = (NewObjectPtr) GetObjectExtra (i);
+  if (nop == NULL) return;
+  if (nop->blurb == NULL) {
+    NewDescriptorMenuFunc (nop->ompp, nop->bfp, nop->descsubtype);
+  } else {
+    NewDescriptorMenuFuncEx (nop->ompp, nop->bfp, nop->descsubtype, nop->blurb);
+  }
+}
+
 
 extern void SetupNewDescriptorsMenu (MenU m, BaseFormPtr bfp)
 
@@ -10593,6 +10674,26 @@ extern void SetupNewDescriptorsMenu (MenU m, BaseFormPtr bfp)
                 /* skip */
               } else if (!allow_structured_comment && ompp->subinputtype == Seq_descr_user && StringCmp (ompp->proclabel, "Structured Comment") == 0) {
                 /* skip */
+              } else if (ompp->subinputtype == Seq_descr_user) {
+                i = CommandItem (m, ompp->proclabel, NewDescriptorMenuProcExtra);
+                nop = (NewObjectPtr) MemNew (sizeof (NewObjectData));
+                if (nop != NULL) {
+                  nop->ompp = ompp;
+                  nop->bfp = bfp;
+                  nop->descsubtype = ompp->subinputtype;
+                  if (StringCmp (ompp->proclabel, "DBLink") == 0) {
+                    nop->blurb = "DBLink"; 
+                  } else if (StringCmp (ompp->proclabel, "GenomeProjectsDB") == 0) {
+                    nop->blurb = "GenomeProjectsDB";
+                  } else if (StringCmp (ompp->proclabel, "Structured Comment") == 0) {
+                    nop->blurb = "StructuredComment";
+                  } else if (StringCmp (ompp->proclabel, "TPA Assembly") == 0) {
+                    nop->blurb = "TpaAssembly";
+                  } else if (StringCmp (ompp->proclabel, "RefGene Tracking") == 0) {
+                    nop->blurb = "RefGeneTracking";
+                  }
+                }
+                SetObjectExtra (i, (Pointer) nop, StdCleanupExtraProc);               
               } else {
                 i = CommandItem (m, ompp->proclabel, NewDescriptorMenuProc);
                 nop = (NewObjectPtr) MemNew (sizeof (NewObjectData));
@@ -12674,7 +12775,9 @@ extern void tRNAScanUpdate (IteM i)
 
 typedef struct resolvefeatureoverlaps {
   Uint1 trim_type;
+  ValNodePtr trim_constraint;
   Uint1 intersect_type;
+  ValNodePtr intersect_constraint;
   LogInfoPtr lip;
 } ResolveFeatureOverlapsData, PNTR ResolveFeatureOverlapsPtr;
 
@@ -12770,6 +12873,7 @@ static void ResolveFeatureOverlapsBioseqCallback (BioseqPtr bsp, Pointer data)
   r = (ResolveFeatureOverlapsPtr) data;
   if (bsp == NULL || r == NULL) return;
 
+  MemSet (&vn, 0, sizeof (ValNode));
   vn.next = NULL;
   vn.choice = OBJ_SEQFEAT;
 
@@ -12778,8 +12882,11 @@ static void ResolveFeatureOverlapsBioseqCallback (BioseqPtr bsp, Pointer data)
        sfp = SeqMgrGetNextFeature (bsp, sfp, 0, r->trim_type, &fcontext))
   {
     vn.data.ptrvalue = sfp;
+    if (!DoesObjectMatchConstraintChoiceSet(OBJ_SEQFEAT, sfp, r->trim_constraint)) {
+      continue;
+    }
     feat_desc = GetDiscrepancyItemText (&vn);
-    overlap_list = ListFeaturesOverlappingLocation (bsp, sfp->location, 0, r->intersect_type);
+    overlap_list = ListFeaturesOverlappingLocationEx (bsp, sfp->location, 0, r->intersect_type, r->intersect_constraint);
     if (TrimLocationForIntersectingFeatures (&(sfp->location), overlap_list))
     {
       if (sfp->location == NULL)
@@ -12804,7 +12911,9 @@ static void ResolveFeatureOverlapsBioseqCallback (BioseqPtr bsp, Pointer data)
 typedef struct resolvefeatureoverlapsform {
   FORM_MESSAGE_BLOCK
   DialoG trim_type;
+  DialoG trim_constraint;
   DialoG intersect_type;
+  DialoG intersect_constraint;
   DialoG accept_cancel;
 
 } ResolveFeatureOverlapsFormData, PNTR ResolveFeatureOverlapsFormPtr;
@@ -12828,8 +12937,43 @@ static void SetResolveFeatureOverlapsFormAccept (Pointer data)
   {
     EnableAcceptCancelDialogAccept (dlg->accept_cancel);
   }
+
   vnp1 = ValNodeFree (vnp1);
   vnp2 = ValNodeFree (vnp2);
+}
+
+
+static void ChangeTrimFeatureType (Pointer data)
+{
+  ResolveFeatureOverlapsFormPtr dlg;
+  ValNodePtr                    vnp;
+
+  dlg = (ResolveFeatureOverlapsFormPtr) data;
+  if (dlg == NULL) return;
+
+  vnp = DialogToPointer (dlg->trim_type);
+  if (vnp != NULL) {
+    ChangeComplexConstraintFieldType (dlg->trim_constraint, FieldType_feature_field, NULL, vnp->choice);
+  }
+  vnp = ValNodeFree (vnp);
+  SetResolveFeatureOverlapsFormAccept (data);
+}
+
+
+static void ChangeIntersectFeatureType (Pointer data)
+{
+  ResolveFeatureOverlapsFormPtr dlg;
+  ValNodePtr                    vnp;
+
+  dlg = (ResolveFeatureOverlapsFormPtr) data;
+  if (dlg == NULL) return;
+
+  vnp = DialogToPointer (dlg->intersect_type);
+  if (vnp != NULL) {
+    ChangeComplexConstraintFieldType (dlg->intersect_constraint, FieldType_feature_field, NULL, vnp->choice);
+  }
+  vnp = ValNodeFree (vnp);
+  SetResolveFeatureOverlapsFormAccept (data);
 }
 
 
@@ -12849,7 +12993,9 @@ static Boolean ResolveFeatureOverlapAction (Pointer data)
   WatchCursor();
   Update();
   r.trim_type = vnp1->choice;
+  r.trim_constraint = DialogToPointer (dlg->trim_constraint);
   r.intersect_type = vnp2->choice;
+  r.intersect_constraint = DialogToPointer (dlg->intersect_constraint);
   r.lip = OpenLog ("Trimmed Features");
 
   sep = GetTopSeqEntryForEntityID (dlg->input_entityID);
@@ -12857,6 +13003,9 @@ static Boolean ResolveFeatureOverlapAction (Pointer data)
   
   CloseLog (r.lip);
   FreeLog (r.lip);
+
+  r.trim_constraint = ConstraintChoiceSetFree (r.trim_constraint);
+  r.intersect_constraint = ConstraintChoiceSetFree (r.intersect_constraint);
 
   DeleteMarkedObjects (dlg->input_entityID, 0, NULL);
   ObjMgrSetDirtyFlag (dlg->input_entityID, TRUE);
@@ -12901,12 +13050,16 @@ extern void ResolveFeatureOverlaps (IteM i)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
-  g = HiddenGroup (h, 2, 0, NULL);
+  g = HiddenGroup (h, 3, 0, NULL);
   StaticPrompt (g, "Trim features of type", 0, popupMenuHeight, programFont, 'c');
-  dlg->trim_type = FeatureSelectionDialogEx (g, FALSE, sep, SetResolveFeatureOverlapsFormAccept, dlg);
+  dlg->trim_type = FeatureSelectionDialogEx (g, FALSE, sep, ChangeTrimFeatureType, dlg);
+  dlg->trim_constraint = ComplexConstraintDialog (g, NULL, NULL);
+  ChangeComplexConstraintFieldType (dlg->trim_constraint, FieldType_feature_field, NULL, Feature_type_any);
 
   StaticPrompt (g, "Where they overlap features of type", 0, popupMenuHeight, programFont, 'c');
-  dlg->intersect_type = FeatureSelectionDialogEx (g, FALSE, sep, SetResolveFeatureOverlapsFormAccept, dlg);
+  dlg->intersect_type = FeatureSelectionDialogEx (g, FALSE, sep, ChangeIntersectFeatureType, dlg);
+  dlg->intersect_constraint = ComplexConstraintDialog (g, NULL, NULL);
+  ChangeComplexConstraintFieldType (dlg->intersect_constraint, FieldType_feature_field, NULL, Feature_type_any);
 
   /* Accept and Cancel buttons */
 
@@ -13054,52 +13207,9 @@ extern void ConvertGeneralIdToLocalID (IteM i)
 }
 
 
-static Boolean IsUSA (CharPtr country)
-{
-  if (StringICmp (country, "USA") == 0
-      || StringICmp (country, "United States of America") == 0
-      || StringICmp (country, "U.S.A.") == 0
-      || StringICmp (country, "U S A") == 0) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-
-static void AbbreviateCitSubAffilStatesCallback (PubdescPtr pdp, Pointer data)
-{
-  ValNodePtr vnp;
-  CitSubPtr  csp;
-  CharPtr    abbrev;
-
-  if (pdp == NULL) return;
-  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == PUB_Sub) {
-      csp = (CitSubPtr) vnp->data.ptrvalue;     
-      if (csp != NULL && csp->authors != NULL 
-          && csp->authors->affil != NULL
-          && IsUSA(csp->authors->affil->country)) {
-        if (StringCmp (csp->authors->affil->country, "USA") != 0) {
-          csp->authors->affil->country = MemFree (csp->authors->affil->country);
-          csp->authors->affil->country = StringSave ("USA");
-        }
-        abbrev = GetStateAbbreviation (csp->authors->affil->sub);
-        if (abbrev != NULL) {
-          csp->authors->affil->sub = MemFree (csp->authors->affil->sub);
-          csp->authors->affil->sub = StringSave (abbrev);
-        }
-      }
-    }
-  }
-  
-}
-
-
 extern void AbbreviateCitSubAffilStates (IteM i)
 {
   BaseFormPtr        bfp;
-  SeqEntryPtr        sep;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -13109,12 +13219,7 @@ extern void AbbreviateCitSubAffilStates (IteM i)
   if (bfp == NULL)
     return;
 
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL)
-    return;
-
-  VisitPubdescsInSep (sep, NULL, AbbreviateCitSubAffilStatesCallback);
-
+  FixUsaAndStateAbbreviations(bfp->input_entityID, NULL);
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
@@ -13389,5 +13494,325 @@ NLM_EXTERN void AddFluComments (IteM i)
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);  
 }
+
+
+static CharPtr RNA_words[] = {
+  "ITS1",
+  "ITS2",
+  "5.8S",
+  "16S",
+  "18S",
+  "28S"
+};
+
+static const k_num_RNA_words = sizeof (RNA_words) / sizeof (CharPtr);
+
+
+static ValNodePtr RNAWordsFromString (CharPtr str, TextFsaPtr tags)
+{
+  Int4        state;
+  Char        ch;
+  CharPtr     ptr;
+  ValNodePtr  matches;
+  CharPtr     last_hit = NULL, last_pos = NULL;
+  Int4        match_len;
+  ValNodePtr  tokens = NULL;
+
+  if (StringHasNoText (str) || tags == NULL) {
+    return NULL;
+  }
+
+  state = 0;
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    matches = NULL;
+    state = TextFsaNext (tags, state, ch, &matches);
+    if (matches != NULL && (isspace (*(ptr + 1)) || ispunct (*(ptr + 1)) || *(ptr + 1) == 0) && (match_len = StringLen (matches->data.ptrvalue)) > 0
+        && (ptr - match_len + 1 == str || isspace (*(ptr - match_len)) || ispunct (*(ptr - match_len)))) {
+      ValNodeAddPointer (&tokens, 0, ptr - match_len + 1);
+      last_pos = ptr;
+      last_hit = (CharPtr) matches->data.ptrvalue;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+  return tokens;
+}
+
+
+static void ExpandFeatureForIntervals (SeqFeatPtr sfp)
+{
+  SeqLocPtr   slp, slp_next, orig;
+  SeqFeatPtr  sfp_new;
+  Boolean     part5, part3;
+
+  orig = sfp->location;
+  sfp->location = orig->data.ptrvalue;
+  orig->data.ptrvalue = NULL;
+  orig = SeqLocFree (orig);
+  slp = sfp->location->next;
+  sfp->location->next = NULL;
+  sfp->partial = CheckSeqLocForPartial (sfp->location, &part5, &part3);
+  while (slp != NULL) {
+    sfp_new = SeqFeatCopy (sfp);
+    sfp_new->next = sfp->next;
+    sfp->next = sfp_new;
+    sfp_new->location = SeqLocFree (sfp_new->location);
+    slp_next = slp->next;
+    slp->next = NULL;
+    sfp_new->location = slp;
+    sfp_new->partial = CheckSeqLocForPartial (sfp_new->location, &part5, &part3);
+    slp = slp_next;
+    sfp = sfp_new;
+  }
+} 
+    
+
+/* TODO - for each string, remove trailing delimiters and spaces, replace abbreviations */
+
+static void FixExplodedRNAProduct (CharPtr PNTR pProduct)
+{
+  CharPtr cp;
+  Int4    len, i;
+  Char    repl_buf[200];
+  CharPtr repl_fmt = "%s ribosomal RNA";
+
+  if (pProduct == NULL || *pProduct == NULL) {
+    return;
+  }
+
+  FindReplaceString (pProduct, " and ", "", FALSE, FALSE);
+
+  len = StringLen (*pProduct);
+  cp = *pProduct + len - 1;
+
+  while (ispunct (*cp) || isspace (*cp)) {
+    *cp = 0;
+    cp--;
+  }
+   
+  if (StringStr (*pProduct, " ribosomal RNA") != NULL) {
+    return;
+  }
+  for (i = 2; i < k_num_RNA_words; i++) {
+    sprintf (repl_buf, repl_fmt, RNA_words[i]);
+    FindReplaceString (pProduct, RNA_words[i], repl_buf, FALSE, TRUE);
+  }
+}
+
+
+static void ExplodeRNACallback (SeqFeatPtr sfp, Pointer data)
+{
+  TextFsaPtr  tags;
+  Int4        num_interval = 0, len;
+  SeqLocPtr   tmp;
+  ValNodePtr  tokens = NULL, vnp;
+  RnaRefPtr   rrp, rrp_new;
+  RNAGenPtr   rgp, rgp_new;
+  SeqFeatPtr  sfp_new;
+  CharPtr     new_product;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA || (tags = (TextFsaPtr) data) == NULL
+      || sfp->location == NULL
+      || (sfp->location->choice != SEQLOC_MIX && sfp->location->choice != SEQLOC_PACKED_INT)) {
+    return;
+  }
+
+  for (tmp = sfp->location->data.ptrvalue; tmp != NULL; tmp = tmp->next) {
+    num_interval++;
+  }
+
+  if (!StringHasNoText (sfp->comment)
+      && (tokens = RNAWordsFromString (sfp->comment, tags)) != NULL
+      && (num_interval == ValNodeLen (tokens))) {
+    ExpandFeatureForIntervals (sfp);
+    for (vnp = tokens->next, sfp_new = sfp->next; vnp != NULL && sfp_new != NULL; vnp = vnp->next, sfp_new = sfp_new->next) {
+      sfp_new->comment = MemFree (sfp_new->comment);
+      sfp_new->comment = StringSave (vnp->data.ptrvalue);
+      if (vnp->next != NULL) {
+        len = (CharPtr) vnp->next->data.ptrvalue - (CharPtr)vnp->data.ptrvalue;
+        sfp_new->comment[len] = 0;
+      }
+      FixExplodedRNAProduct(&(sfp_new->comment));
+    }
+    /* now truncate original */
+    *((CharPtr) tokens->next->data.ptrvalue) = 0;
+    FixExplodedRNAProduct(&(sfp->comment));
+    tokens = ValNodeFree (tokens);
+  } else if ((rrp = (RnaRefPtr) sfp->data.value.ptrvalue) != NULL) {
+    if (rrp->ext.choice == 1) {
+      tokens = RNAWordsFromString (rrp->ext.value.ptrvalue, tags);
+      if (num_interval == ValNodeLen (tokens)) {
+        ExpandFeatureForIntervals (sfp);
+        for (vnp = tokens->next, sfp_new = sfp->next; vnp != NULL && sfp_new != NULL; vnp = vnp->next, sfp_new = sfp_new->next) {
+          rrp_new = sfp_new->data.value.ptrvalue;
+          rrp_new->ext.value.ptrvalue = MemFree (rrp_new->ext.value.ptrvalue);
+          new_product = StringSave (vnp->data.ptrvalue);
+          if (vnp->next != NULL) {
+            len = (CharPtr) vnp->next->data.ptrvalue - (CharPtr)vnp->data.ptrvalue;
+            new_product[len] = 0;
+          }
+          FixExplodedRNAProduct (&new_product);
+          rrp_new->ext.value.ptrvalue = new_product;
+        }  
+        *((CharPtr) tokens->next->data.ptrvalue) = 0;
+        new_product = rrp->ext.value.ptrvalue;
+        FixExplodedRNAProduct (&new_product);
+        rrp->ext.value.ptrvalue = new_product;
+      }
+      tokens = ValNodeFree (tokens);
+    } else if (rrp->ext.choice == 3 && (rgp = (RNAGenPtr) rrp->ext.value.ptrvalue) != NULL) {
+      tokens = RNAWordsFromString (rgp->product, tags);
+      if (num_interval == ValNodeLen (tokens)) {
+        ExpandFeatureForIntervals (sfp);
+        for (vnp = tokens->next, sfp_new = sfp->next; vnp != NULL && sfp_new != NULL; vnp = vnp->next, sfp_new = sfp_new->next) {
+          rrp_new = sfp_new->data.value.ptrvalue;
+          rgp_new = rrp_new->ext.value.ptrvalue;
+          rgp_new->product = MemFree (rgp_new->product);
+          rgp_new->product = StringSave (vnp->data.ptrvalue);
+          if (vnp->next != NULL) {
+            len = (CharPtr) vnp->next->data.ptrvalue - (CharPtr)vnp->data.ptrvalue;
+            rgp_new->product[len] = 0;
+          }
+          FixExplodedRNAProduct(&(rgp_new->product));
+        }      
+        *((CharPtr) tokens->next->data.ptrvalue) = 0;
+        FixExplodedRNAProduct (&(rgp->product));
+      }
+      tokens = ValNodeFree (tokens);
+    }
+  }
+}
+
+
+NLM_EXTERN void ExplodeRNA (IteM i)
+{
+  BaseFormPtr        bfp;
+  SeqEntryPtr        sep;
+  TextFsaPtr         tags;
+  Int4               j;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL)
+    return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL)
+    return;
+
+  
+  tags = TextFsaNew();
+
+  for (j = 0; j < k_num_RNA_words; j++) {
+    TextFsaAdd (tags, RNA_words[j]);
+  }
+
+  VisitFeaturesInSep (sep, tags, ExplodeRNACallback);
+
+  tags = TextFsaFree (tags);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);  
+}
+
+
+static void RemoveFeaturesLikeGapsCallback (BioseqPtr bsp, Pointer userdata)
+{
+  SeqFeatPtr           sfp, gap_feat;
+  SeqMgrFeatContext    context;
+  DeltaSeqPtr          dsp;
+  SeqLocPtr            slp;
+  Int4                 pos = 0, len;
+  CharPtr              new_note;
+  ImpFeatPtr           imp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta) {
+    return;
+  }
+
+  dsp = (DeltaSeqPtr)(bsp->seq_ext);
+  sfp = SeqMgrGetNextFeature(bsp, NULL, 0, 0, &context);
+  while (dsp != NULL && sfp != NULL) {
+    while (dsp != NULL && !IsDeltaSeqGap(dsp)) {
+      if (dsp->choice == 1) {
+        pos += SeqLocLen (dsp->data.ptrvalue);
+      } else if (dsp->choice == 2) {
+        pos += ((SeqLitPtr)dsp->data.ptrvalue)->length;
+      }
+      dsp = dsp->next;
+    }
+    if (dsp != NULL) {
+      len = ((SeqLitPtr)dsp->data.ptrvalue)->length;
+      while (context.left < pos && sfp != NULL) {
+        sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
+      }
+      if (sfp != NULL) {
+        gap_feat = NULL;
+        new_note = NULL;
+        while (context.left == pos && sfp != NULL) {
+          if (context.right == pos + len - 1) {
+            if (sfp->idx.subtype == FEATDEF_gap) {
+              gap_feat = sfp;
+            } else {
+              if (sfp->comment != NULL) {
+                SetStringValue(&new_note, sfp->comment, ExistingTextOption_append_semi);
+              }
+              sfp->idx.deleteme = TRUE;
+            }
+          }
+          sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
+        }
+        /* only need to instantiate gap if there is a note to add */
+        if (new_note != NULL) {
+          if (gap_feat == NULL) {
+            slp = SeqLocIntNew (pos, pos + len - 1, Seq_strand_plus, SeqIdFindWorst (bsp->id));
+            gap_feat = CreateNewFeatureOnBioseq (bsp, SEQFEAT_IMP, slp);
+            imp = ImpFeatNew ();
+            imp->key = StringSave ("gap");
+            gap_feat->data.value.ptrvalue = imp;
+          }
+          if (gap_feat->comment == NULL) {
+            gap_feat->comment = new_note;
+          } else {
+            SetStringValue (&(gap_feat->comment), new_note, ExistingTextOption_append_semi);
+            new_note = MemFree (new_note);
+          }
+        }
+      }
+      pos += len;
+      dsp = dsp->next;
+    }
+  }
+}
+
+
+NLM_EXTERN void RemoveFeaturesLikeGaps (IteM i)
+{
+  BaseFormPtr          bfp;
+  SeqEntryPtr          sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) {
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  VisitBioseqsInSep (sep, NULL, RemoveFeaturesLikeGapsCallback);
+
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);  
+}
+
+
 
 

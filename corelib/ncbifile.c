@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.41 $
+* $Revision: 6.42 $
 *
 * File Description: 
 *     portable file routines
@@ -110,7 +110,7 @@ static char * _this_file = __FILE__;
 **
 **	File:		MoreFilesExtras.c
 **
-**	Copyright © 1992-1999 Apple Computer, Inc.
+**	Copyright (c) 1992-1999 Apple Computer, Inc.
 **	All rights reserved.
 **
 **	You may incorporate this sample code into your applications without
@@ -1158,9 +1158,9 @@ NLM_EXTERN Nlm_Int4 Nlm_DirExplore (
           sprintf (file, "%s%s", str, suffix);
           Nlm_FileBuildPath (path, NULL, file);
 
-          /* check full path/file name for desired filter */
+          /* check file name (NOT full path) for desired filter */
 
-          if (Nlm_StringHasNoText (filter) || Nlm_StringStr (path, filter) != NULL) {
+          if (Nlm_StringHasNoText (filter) || Nlm_StringStr (file, filter) != NULL) {
 
             /* process file that satisfies optional filter and suffix constraints */
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -85,6 +85,7 @@ Int2 LIBCALLBACK VSMExportNucFeatureTableSelectedFeatures (Pointer data);
 Int2 LIBCALLBACK VSMExportNucFeatureTableSelectedFeaturesSuppressProteinIDs (Pointer data);
 Int2 LIBCALLBACK VSMExportProteinFeatureTable (Pointer data);
 Int2 LIBCALLBACK VSMFastaSortedProtSave (Pointer data);
+Int2 LIBCALLBACK VSMFastaProtSaveWithProduct(Pointer data);
 Int2 LIBCALLBACK VSMDescriptorAsnSave (Pointer data);
 NLM_EXTERN void ViewSortedProteins (SeqEntryPtr sep);
 

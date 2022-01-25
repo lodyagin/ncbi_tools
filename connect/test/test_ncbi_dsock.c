@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_dsock.c,v 6.21 2008/10/20 16:55:43 kazimird Exp $
+/* $Id: test_ncbi_dsock.c,v 6.24 2010/02/05 20:35:04 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,15 +30,18 @@
  *
  */
 
-#include "../ncbi_ansi_ext.h"
-#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <connect/ncbi_connutil.h>
 #include <connect/ncbi_socket.h>
+#include "../ncbi_ansi_ext.h"
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <errno.h>
 #include <stdlib.h>
 #include <time.h>
 /* This header must go last */
 #include "test_assert.h"
+
+/* maximal UDP packet size as allowed by the standard */
+#define MAX_UDP_DGRAM_SIZE 65535
 
 #if defined(NCBI_OS_BSD) || defined(NCBI_OS_OSF1) || defined(NCBI_OS_DARWIN)
    /* FreeBSD has this limit :-/ Source: `sysctl net.inet.udp.maxdgram` */
@@ -51,8 +54,7 @@
    /* Larger sizes do not seem to work everywhere */
 #  define MAX_DGRAM_SIZE 59550
 #else
-   /* This is the maximal datagram size defined by the UDP standard */
-#  define MAX_DGRAM_SIZE 65535
+#  define MAX_DGRAM_SIZE MAX_UDP_DGRAM_SIZE
 #endif
 /* NOTE: x86_64 (AMD) kernel does not allow dgrams bigger than MTU minus
  * small overhead;  for these we use the script and pass the MTU via argv.
@@ -229,6 +231,8 @@ static int s_Client(int x_port, unsigned int max_try)
     msglen = (size_t)(((double)rand()/(double)RAND_MAX) * s_MTU);
     if (msglen < sizeof(time_t) + 10)
         msglen = sizeof(time_t) + 10;
+    if (msglen == MAX_UDP_DGRAM_SIZE)
+        msglen--;
 
     CORE_LOGF(eLOG_Note, ("[Client]  Generating a message %lu bytes long",
                           (unsigned long) msglen));
@@ -327,7 +331,8 @@ static int s_Client(int x_port, unsigned int max_try)
         return 1;
     }
 
-    CORE_LOG(eLOG_Note, "[Client]  Completed successfully");
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
+    CORE_SetLOG(0);
     return 0;
 }
 

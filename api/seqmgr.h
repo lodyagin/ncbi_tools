@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.69 $
+* $Revision: 6.72 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -845,7 +845,7 @@ NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetSfpProductList (BioseqPtr bsp);
 *
 *****************************************************************************/
 
-NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq PROTO((BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip));
+NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq PROTO((BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip, BoolPtr flip_strand));
 
 /*****************************************************************************
 *
@@ -981,6 +981,9 @@ NLM_EXTERN Boolean SeqEntryAsnOut (SeqEntryPtr sep, SeqIdPtr sip,
 NLM_EXTERN ObjMgrDataPtr SeqMgrGetOmdpForBioseq (BioseqPtr bsp);
 
 NLM_EXTERN Pointer SeqMgrGetExtraDataForOmdp (ObjMgrDataPtr omdp);
+
+NLM_EXTERN void SeqMgrRedoDescriptorIndexes (Uint2 entityID, Pointer ptr);
+NLM_EXTERN void SeqMgrRedoFeatByLabelIndexes (Uint2 entityID, Pointer ptr);
 
 
 #ifdef __cplusplus

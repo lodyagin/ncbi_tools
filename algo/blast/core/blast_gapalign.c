@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.c,v 1.195 2009/01/05 16:54:38 kazimird Exp $
+/* $Id: blast_gapalign.c,v 1.199 2010/07/06 17:29:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_gapalign.c,v 1.195 2009/01/05 16:54:38 kazimird Exp $";
+    "$Id: blast_gapalign.c,v 1.199 2010/07/06 17:29:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
@@ -2651,12 +2651,12 @@ BLAST_GreedyGappedAlignment(const Uint1* query, const Uint1* subject,
        }
 
        if (valid_seed_len_r > valid_seed_len_l) {
-           q_seed_start += valid_seed_len_r;
-           s_seed_start += valid_seed_len_r;
+           q_seed_start = q_seed_start_r + valid_seed_len_r;
+           s_seed_start = s_seed_start_r + valid_seed_len_r;
        }
        else {
-           q_seed_start -= valid_seed_len_l;
-           s_seed_start -= valid_seed_len_l;
+           q_seed_start = q_seed_start_l - valid_seed_len_l;
+           s_seed_start = s_seed_start_l - valid_seed_len_l;
        }
    }
    
@@ -3125,6 +3125,8 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
       tree = Blast_IntervalTreeInit(0, query->length+1,
                                     0, subject->length+1);
    }
+   if (!tree)
+     return BLASTERR_MEMORY;
 
    for (index=0; index<init_hitlist->total; index++)
    {
@@ -3233,6 +3235,12 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
                 continue;
             }
          } else if (is_greedy) {
+            if (init_hsp->ungapped_data) {
+                init_hsp->offsets.qs_offsets.q_off = 
+                    init_hsp->ungapped_data->q_start + init_hsp->ungapped_data->length/2;
+                init_hsp->offsets.qs_offsets.s_off = 
+                    init_hsp->ungapped_data->s_start + init_hsp->ungapped_data->length/2;
+            }
             status = BLAST_GreedyGappedAlignment(
                          query_tmp.sequence, subject->sequence, 
                          query_tmp.length, subject->length, 
@@ -3283,16 +3291,22 @@ Int2 BLAST_GetGappedScore (EBlastProgramType program_number,
                  query_frame = query_info->contexts[context].frame;
              }
 
-             Blast_HSPInit(gap_align->query_start, 
+             status = Blast_HSPInit(gap_align->query_start, 
                            gap_align->query_stop, gap_align->subject_start, 
                            gap_align->subject_stop, 
                            init_hsp->offsets.qs_offsets.q_off, 
                            init_hsp->offsets.qs_offsets.s_off, context, 
                            query_frame, subject->frame, gap_align->score, 
                            &(gap_align->edit_script), &new_hsp);
-             Blast_HSPListSaveHSP(hsp_list, new_hsp);
-             BlastIntervalTreeAddHSP(new_hsp, tree, query_info, 
+             if (status)
+                return status;
+             status = Blast_HSPListSaveHSP(hsp_list, new_hsp);
+             if (status)
+                 break;
+             status = BlastIntervalTreeAddHSP(new_hsp, tree, query_info, 
                                      eQueryAndSubject);
+             if (status)
+                 break;
          }
          else {
             /* a greedy alignment may have traceback associated with it;

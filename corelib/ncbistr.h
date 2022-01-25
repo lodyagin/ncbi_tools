@@ -29,83 +29,15 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description:
 *   	prototypes for portable string routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* $Log: ncbistr.h,v $
-* Revision 6.9  2006/10/16 21:06:27  lavr
-* String{HasNo|DoesHave}Text() to accept const pointer
-*
-* Revision 6.8  2003/09/15 16:21:32  kans
-* moved StringDoesHaveText from sqnutils3.c
-*
-* Revision 6.7  2002/01/16 16:58:38  camacho
-* Changed type of buflen parameter in LabelCopy from Int2 to Uint4
-*
-* Revision 6.6  2001/01/05 22:43:58  shavirin
-* Added functions, that transfer Uint8 values to platform-independent
-* objects and back.
-*
-* Revision 6.5  2000/11/30 22:46:08  lavr
-* Added the following functions for conversions of Int8 and Uint8
-* to strings and back; test suite attached at the end of the file.
-* Nlm_Int8ToString, Nlm_Uint8ToString, Nlm_StringToInt8, Nlm_StringToUint8
-*
-* Revision 6.4  1999/04/15 20:24:07  vakatov
-* Dont use "list" name as it can clash with the standard "list<>" template
-* on some raw C++ compilers
-*
-* Revision 6.3  1999/03/11 16:10:00  kans
-* StringHasNoText and TrimSpacesAroundString moved from vibforms
-*
-* Revision 6.2  1998/11/27 19:08:59  vakatov
-* Removed proto of StringAppend() -- it is not implemented anyway, and
-* there are more standard functions from the "String[N]Cat" family
-*
-* Revision 6.1  1998/10/07 19:09:01  kans
-* added Nlm_StringTokMT, multithread-safe version
-*
-* Revision 6.0  1997/08/25 18:17:10  madden
-* Revision changed to 6.0
-*
-* Revision 5.6  1997/07/16 19:49:20  vakatov
-* Added Nlm_StringPrintable() function
-*
-* Revision 5.5  1997/04/11 17:57:49  brandon
-* added StrIPCmp, StrNIPCmp
-*
- * Revision 5.4  1997/03/13  17:47:58  kans
- * added IS_PRINT
- *
- * Revision 5.3  1997/03/04  21:59:57  vakatov
- * Added a set of functions to format(stream2text), unformat(text2stream)
- * and adjust(rule_line) text
- *
- * Revision 5.2  1997/01/03  16:07:50  vakatov
- * +Nlm_StringNCpy_0 prototype and comment;  +Nlm_StringNCat comment
- *
- * Revision 5.1  1996/12/03  21:48:33  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 4.3  1996/05/22  14:46:47  brandon
- * Added NoCaseSkipPastString
- *
- * Revision 4.2  1996/01/03  21:04:50  epstein
- * modify StringSubString() API and add other new functions, per Brandon
- *
- * Revision 4.1  1995/12/27  20:53:51  epstein
- * add Brandon's string-management functions
- *
- * Revision 2.9  1995/07/18  19:56:55  tatiana
- * add Nlm_LabelCopyNext()
-* 09-19-91 Schuler     Added macros to alias actual ANSI string functions
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
-* 05-27-93 Schuler     Added const qualifiers to match ANSI cognates
-* 03-08-95 Kans        Added StringSearch and StringISearch
+* Date     Name        Description of modification
+* -------  ----------  -----------------------------------------------------
 *
 * ==========================================================================
 */
@@ -428,6 +360,31 @@ NLM_EXTERN char * LIBCALL Nlm_StrLower PROTO((char *string));
 #define StringToUint8 Nlm_StringToUint8
 #define Int8ToString  Nlm_Int8ToString
 #define Uint8ToString Nlm_Uint8ToString
+
+/* Search with Boyer-Moore algorithm */
+
+typedef struct substringdata {
+  int             d [256];
+  size_t          subLen;
+  Nlm_Boolean     caseCounts;
+  Nlm_Boolean     initialized;
+  const char FAR  *sub;        /* points to the original substring, not copied */
+} Nlm_SubStringData, PNTR Nlm_SubStringDataPtr;
+
+NLM_EXTERN Nlm_Boolean Nlm_SetupSubString (
+  const char FAR *sub,
+  Nlm_Boolean caseCounts,
+  Nlm_SubStringData PNTR data
+);
+NLM_EXTERN Nlm_CharPtr Nlm_SearchSubString (
+  const char FAR *str,
+  Nlm_SubStringData PNTR data
+);
+
+#define SubStringData Nlm_SubStringData
+#define SubStringDataPtr Nlm_SubStringDataPtr
+#define SetupSubString Nlm_SetupSubString
+#define SearchSubString Nlm_SearchSubString
 
 /*----------------------------------------*/
 /*      Misc Text Oriented Macros         */

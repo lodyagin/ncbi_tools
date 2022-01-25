@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Taxon3
-*    Generated using ASNCODE Revision: 6.14 at Jul 8, 2004 11:45 AM
+*    Generated using ASNCODE Revision: 6.17 at Dec 8, 2009  9:36 AM
 *
 **************************************************/
 
@@ -45,11 +45,32 @@ typedef ValNode T3Request;
 #define T3Request_taxid 1
 #define T3Request_name 2
 #define T3Request_org 3
+#define T3Request_join 4
 
 
 NLM_EXTERN T3RequestPtr LIBCALL T3RequestFree PROTO ((T3RequestPtr ));
 NLM_EXTERN T3RequestPtr LIBCALL T3RequestAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL T3RequestAsnWrite PROTO (( T3RequestPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SequenceOfInt
+*
+**************************************************/
+typedef ValNode SequenceOfInt;
+typedef ValNodePtr SequenceOfIntPtr;
+#define SequenceOfIntNew() ValNodeNew(NULL) 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN SequenceOfIntPtr LIBCALL SequenceOfIntFree PROTO ((SequenceOfIntPtr ));
+NLM_EXTERN SequenceOfIntPtr LIBCALL SequenceOfIntNew PROTO (( void ));
+NLM_EXTERN SequenceOfIntPtr LIBCALL SequenceOfIntAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SequenceOfIntAsnWrite PROTO (( SequenceOfIntPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
 
 
 

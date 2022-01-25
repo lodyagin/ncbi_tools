@@ -1,4 +1,4 @@
-/* $Id: blast_util.h,v 1.84 2009/01/07 16:29:41 kazimird Exp $
+/* $Id: blast_util.h,v 1.86 2010/07/27 18:24:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -135,6 +135,7 @@ Int2 BlastSeqBlkSetCompressedSequence(BLAST_SequenceBlk* seq_blk,
  * @param seq_ranges sequence ranges to copy [in]
  * @param num_seq_ranges number of elements in array above [in]
  * @param copy_seq_ranges set to TRUE if seq_ranges should be copied to the
+ * @param mask_type either kSoftDBMask or kHardDBMask [in]
  * BLAST_SequenceBlk and assume its ownership, set to FALSE if the pointer
  * should be copied and the ownership of the seq_ranges remains in the caller's
  * possession.
@@ -147,7 +148,8 @@ NCBI_XBLAST_EXPORT
 Int2 BlastSeqBlkSetSeqRanges(BLAST_SequenceBlk* seq_blk,
                              SSeqRange* seq_ranges,
                              Uint4 num_seq_ranges,
-                             Boolean copy_seq_ranges);
+                             Boolean copy_seq_ranges,
+                             Int4 mask_type);
                             
 /** Adds a specialized representation of sequence data to a sequence
  * block. In the specialized representation, the byte at offset i 
@@ -357,29 +359,9 @@ BLAST_StrToUpper(const char* string);
  * of partially decoded sequences.  If an alignment finds this value
  * in a subject sequence, the fence_hit flag should be used to request
  * a refetch of the whole sequence, and the alignment restarted.
+ * @note this value is repeated in seqdbgeneral.hpp
  */
 #define FENCE_SENTRY 201
-
-
-/** Translate the subject sequence into 6 frames, and create a mixed-frame 
- * sequence, if out-of-frame gapping will be used.
- * @param subject_blk Subject sequence structure [in]
- * @param gen_code_string Genetic code to use for translation [in]
- * @param translation_buffer Pointer to buffer to hold the translated 
- *                           sequence(s) [out]
- * @param frame_offsets Pointer to an array to hold offsets into the
- *                      translation buffer for each frame. Mixed-frame 
- *                      sequence is to be returned, if NULL. [in] [out]
- * @param partial_translation Should partial translations be performed later
- *                            for each HSP instead of a full translation? [out]
- */
-NCBI_XBLAST_EXPORT
-Int2
-Blast_SetUpSubjectTranslation(BLAST_SequenceBlk* subject_blk, 
-                              const Uint1* gen_code_string,
-                              Uint1** translation_buffer, 
-                              Int4** frame_offsets,
-                              Boolean* partial_translation);
 
 /** Get the number of contexts for a given program. This corresponds to the
  * number of translation frames or strands whenever applicable. 

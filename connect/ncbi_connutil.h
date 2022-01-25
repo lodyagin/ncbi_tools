@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/* $Id: ncbi_connutil.h,v 6.68 2009/06/23 16:04:40 kazimird Exp $
+/* $Id: ncbi_connutil.h,v 6.72 2010/06/08 15:14:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,8 @@
  * File Description:
  *   Auxiliary API to:
  *    1.Retrieve connection related info from the registry:
+ *       ConnNetInfo_GetValue
+ *       ConnNetInfo_Boolean
  *       SConnNetInfo
  *       ConnNetInfo_Create()
  *       ConnNetInfo_AdjustForHttpProxy()
@@ -118,13 +120,18 @@ typedef enum {
  * ATTENTION:  Do NOT fill out this structure (SConnNetInfo) "from scratch"!
  *             Instead, use ConnNetInfo_Create() described below to create
  *             it, and then fix (hard-code) some fields, if really necessary.
- * NOTE:       "scheme", "user", and "pass" are reserved (unused) fields.
+ * NOTE1:      Not every field may be fully utilized throughout the library.
+ * NOTE2:      HTTP passwords can be either clear text or Base64 encoded values
+ *             enclosed in square brackets [] (which are not Base-64 charset).
+ *             For encoding / decoding, one can use command line open ssl:
+ *             echo "password|base64value" | openssl enc {-e|-d} -base64
+ *             or an online tool (search the Web for "base64 online").
  */
 typedef struct {
     char           client_host[256]; /* effective client hostname ('\0'=def) */
     EURLScheme     scheme;           /* only pre-defined types (limited)     */
-    char           user[128];        /* username (if specified)              */
-    char           pass[128];        /* password (if any, clear text!!!)     */
+    char           user[64];         /* username (if specified)              */
+    char           pass[64];         /* password (if any)                    */
     char           host[256];        /* host to connect to                   */
     unsigned short port;             /* port to connect to, host byte order  */
     char           path[1024];       /* service: path(e.g. to  a CGI script) */
@@ -134,6 +141,8 @@ typedef struct {
     unsigned short max_try;          /* max. # of attempts to connect (>= 1) */
     char           http_proxy_host[256]; /* hostname of HTTP proxy server    */
     unsigned short http_proxy_port;      /* port #   of HTTP proxy server    */
+    char           http_proxy_user[64];  /* http proxy username              */
+    char           http_proxy_pass[64];  /* http proxy password              */
     char           proxy_host[256];  /* CERN-like (non-transp) f/w proxy srv */
     EDebugPrintout debug_printout;   /* printout some debug info             */
     int/*bool*/    stateless;        /* to connect in HTTP-like fashion only */
@@ -189,6 +198,12 @@ typedef struct {
 #define REG_CONN_HTTP_PROXY_PORT  "HTTP_PROXY_PORT"
 #define DEF_CONN_HTTP_PROXY_PORT  ""
 
+#define REG_CONN_HTTP_PROXY_USER  "HTTP_PROXY_USER"
+#define DEF_CONN_HTTP_PROXY_USER  ""
+
+#define REG_CONN_HTTP_PROXY_PASS  "HTTP_PROXY_PASS"
+#define DEF_CONN_HTTP_PROXY_PASS  ""
+
 #define REG_CONN_PROXY_HOST       "PROXY_HOST"
 #define DEF_CONN_PROXY_HOST       ""
 
@@ -227,6 +242,14 @@ extern NCBI_XCONNECT_EXPORT const char* ConnNetInfo_GetValue
  char*       value,
  size_t      value_size,
  const char* def_value
+ );
+
+
+/* Return non-zero if "str" (when non-NULL, non-empty) represents a
+ * true boolean value;  return 0 otherwise.
+ */
+extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_Boolean
+(const char* str
  );
 
 
@@ -348,7 +371,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_SetUserHeader
 
 
 /* Append user header (same as ConnNetInfo_SetUserHeader() if no previous
- * header was set, or if "header" == NULL).
+ * header was set); do nothing if the provided "header" is NULL or empty.
  * Return non-zero if successful, otherwise return 0 to indicate an error.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_AppendUserHeader
@@ -360,7 +383,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_AppendUserHeader
 /* Override user header.
  * Tags replaced (case-insensitively), and tags with empty values effectively
  * delete existing tags from the old user header, e.g. "My-Tag:\r\n" deletes
- * any appearence (if any) of "My-Tag: [<value>]" from the user header.
+ * a first appearence (if any) of "My-Tag: [<value>]" from the user header.
  * Unmatched tags with non-empty values are simply added to the existing user
  * header (as with "Append" above).
  * Return non-zero if successful, otherwise return 0 to indicate an error.
@@ -372,11 +395,13 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_OverrideUserHeader
 
 
 /* Extend user header.
- * Existings tags matching (case-insensitively) those from "header" are
- * appended with new value (separated by a comma and a space) if the added
- * value is non-empty, otherwise, the tags are left untouched. All new
- * unmatched tags from "header" with non-empty values get added to the end
- * of the user header.
+ * Existing tags matching (case-insensitively) first appearances of those
+ * from "header" get appended with new value (separated by a space) if the
+ * added value is non-empty, otherwise, the tags are left untouched.  If new
+ * tag value matches (case-insensitively) last tag value already in the
+ * header, the new value does not get added (to avoid repetitive duplicates).
+ * All new unmatched tags from "header" with non-empty values get added
+ * to the end of the user header (as with "Append" above).
  * Return non-zero if successful, otherwise return 0 to indicate an error.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_ExtendUserHeader
@@ -394,7 +419,10 @@ extern NCBI_XCONNECT_EXPORT void ConnNetInfo_DeleteUserHeader
  );
 
 
-/* Parse URL into "*info", using (service-specific, if any) defaults.
+/* Parse URL into "*info", using defaults provided via "*info".
+ * In case of a relative URL, only those URL elements provided in it,
+ * will get replaced in the resultant "*info".
+ * Return non-zero if successful, otherwise return 0 to indicate an error.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_ParseURL
 (SConnNetInfo* info,
@@ -411,11 +439,24 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_SetupStandardArgs
  );
 
 
-/* Log the contents of "*info".
+/* Log the contents of "*info" into log "log" with severity "sev".
  */
-extern NCBI_XCONNECT_EXPORT void ConnNetInfo_Log
+extern NCBI_XCONNECT_EXPORT void ConnNetInfo_LogEx
 (const SConnNetInfo* info,
+ ELOG_Level          sev,
  LOG                 log
+ );
+
+#define ConnNetInfo_Log(i, l) ConnNetInfo_LogEx((i), eLOG_Trace, (l))
+
+
+/* Reconstruct text URL out of SConnNetInfo components
+ * (username:password excluded for security reasons).
+ * Returned string must be free()'d when no longer necessary.
+ * Return NULL on error.
+ */
+extern NCBI_XCONNECT_EXPORT char* ConnNetInfo_URL
+(const SConnNetInfo* info
  );
 
 

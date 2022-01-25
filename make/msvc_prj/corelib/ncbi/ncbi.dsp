@@ -135,6 +135,10 @@ SOURCE=..\..\..\..\connect\ncbi_ansi_ext.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\connect\ncbi_base64.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\connect\ncbi_buffer.c
 # End Source File
 # Begin Source File
@@ -333,6 +337,10 @@ SOURCE=..\..\..\..\connect\urlquery.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\connect\ncbi_version.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\corelib\wwwutils.c
 # End Source File
 # End Group
@@ -394,6 +402,10 @@ SOURCE=..\..\..\..\corelib\matrix.h
 # Begin Source File
 
 SOURCE=..\..\..\..\corelib\ncbi.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_base64.h
 # End Source File
 # Begin Source File
 
@@ -582,6 +594,10 @@ SOURCE=..\..\..\..\api\undefwin.h
 # Begin Source File
 
 SOURCE=..\..\..\..\connect\urlquery.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\connect\ncbi_version.h
 # End Source File
 # End Group
 # End Target

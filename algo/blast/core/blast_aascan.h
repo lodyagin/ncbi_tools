@@ -1,4 +1,4 @@
-/* $Id: blast_aascan.h,v 1.4 2008/07/23 16:55:47 kazimird Exp $
+/* $Id: blast_aascan.h,v 1.6 2010/07/23 14:36:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,9 +44,9 @@ extern "C" {
 /** Generic prototype for nucleotide subject scanning routines */
 typedef Int4 (*TAaScanSubjectFunction)(const LookupTableWrap* lookup_wrap,
                                   const BLAST_SequenceBlk* subject,
-                                  Int4 *start_offset,
                                   BlastOffsetPair* NCBI_RESTRICT offset_pairs,
-                                  Int4 max_hits);
+                                  Int4 max_hits,
+                                  Int4 * s_range);
 
 /** Choose the most appropriate function to scan through
  * protein subject sequences

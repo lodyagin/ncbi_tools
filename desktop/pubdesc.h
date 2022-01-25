@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -101,6 +101,9 @@ extern WindoW EditCitDescDirectly (SeqDescPtr sdp);
 
 extern DialoG PublicationListDialog (GrouP parent);
 extern void EditPublicationInDialog (DialoG d, Int4 ref_num);
+
+NLM_EXTERN Boolean EditPubdescInPlace (SeqDescPtr sdp);
+
 
 #ifdef __cplusplus
 }

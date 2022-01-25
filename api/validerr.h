@@ -69,6 +69,8 @@
 #define ERR_SEQ_INST_HighNContent  1,65
 #define ERR_SEQ_INST_SeqLitDataLength0  1,66
 #define ERR_SEQ_INST_DSmRNA  1,67
+#define ERR_SEQ_INST_HighNContentStretch  1,68
+#define ERR_SEQ_INST_HighNContentPercent  1,69
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -135,6 +137,17 @@
 #define ERR_SEQ_DESCR_UserObjectProblem  2,63
 #define ERR_SEQ_DESCR_TitleHasPMID  2,64
 #define ERR_SEQ_DESCR_BadKeyword  2,65
+#define ERR_SEQ_DESCR_NoOrganismInTitle  2,66
+#define ERR_SEQ_DESCR_MissingChromosome  2,67
+#define ERR_SEQ_DESCR_LatLonAdjacent  2,68
+#define ERR_SEQ_DESCR_BadStrucCommInvalidFieldName  2,69
+#define ERR_SEQ_DESCR_BadStrucCommInvalidFieldValue  2,70
+#define ERR_SEQ_DESCR_BadStrucCommMissingField  2,71
+#define ERR_SEQ_DESCR_BadStrucCommFieldOutOfOrder  2,72
+#define ERR_SEQ_DESCR_BadStrucCommMultipleFields  2,73
+#define ERR_SEQ_DESCR_BioSourceNeedsChromosome  2,74
+#define ERR_SEQ_DESCR_MolInfoConflictsWithBioSource  2,75
+#define ERR_SEQ_DESCR_MissingKeyword  2,76
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -149,6 +162,8 @@
 #define ERR_GENERIC_EmbeddedScript  3,11
 #define ERR_GENERIC_PublicationInconsistency  3,12
 #define ERR_GENERIC_SgmlPresentInText  3,13
+#define ERR_GENERIC_UnexpectedPubStatusComment  3,14
+#define ERR_GENERIC_PastReleaseDate  3,15
 #define ERR_SEQ_PKG  4,0
 #define ERR_SEQ_PKG_NoCdRegionPtr  4,1
 #define ERR_SEQ_PKG_NucProtProblem  4,2
@@ -172,6 +187,11 @@
 #define ERR_SEQ_PKG_GPSnonGPSPackaging  4,20
 #define ERR_SEQ_PKG_RefSeqPopSet  4,21
 #define ERR_SEQ_PKG_BioseqSetClassNotSet  4,22
+#define ERR_SEQ_PKG_OrphanedProtein  4,23
+#define ERR_SEQ_PKG_MissingSetTitle  4,24
+#define ERR_SEQ_PKG_NucProtSetHasTitle  4,25
+#define ERR_SEQ_PKG_ComponentMissingTitle  4,26
+#define ERR_SEQ_PKG_SingleItemSet  4,27
 #define ERR_SEQ_FEAT  5,0
 #define ERR_SEQ_FEAT_InvalidForType  5,1
 #define ERR_SEQ_FEAT_PartialProblem  5,2
@@ -348,6 +368,7 @@
 #define ERR_SEQ_FEAT_ShortIntron  5,173
 #define ERR_SEQ_FEAT_GeneXrefStrandProblem  5,174
 #define ERR_SEQ_FEAT_CDSmRNAXrefLocationProblem  5,175
+#define ERR_SEQ_FEAT_LocusCollidesWithLocusTag  5,176
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

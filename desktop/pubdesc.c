@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.71 $
+* $Revision: 6.81 $
 *
 * File Description:
 *
@@ -48,6 +48,9 @@
 #include <toasn3.h>
 #include <mla2api.h>
 #include <dlogutil.h>
+#ifdef WIN_MOTIF
+#include <netscape.h>
+#endif
 
 #define FIRST_PAGE      0
 
@@ -152,9 +155,7 @@ typedef struct pubdescpage {
   TexT          retractExp;
 
   TexT          comment;
-  /*
   TexT          doi;
-  */
 
 /* year/month - date of issue; cpryear/cprmonth - date of application */
   TexT          pat_country;
@@ -719,9 +720,7 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
   CitSubPtr             csp;
   AuthListPtr           alp;
   ImprintPtr            imp;
-  /*
   ArticleIdPtr          doi;
-  */
   Char                  str[256];
   Int2                  serial;
   Int2                  val;
@@ -830,7 +829,6 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
               }
             }
           }
-          /*
           if (! TextHasNoText (ppp->doi)) {
             doi = ArticleIdNew ();
             if (doi != NULL) {
@@ -840,7 +838,6 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
               cap->ids = doi;
             }
           }
-          */
         }
         break;
 /* note: for Cit-book's there is cbp->otherdata which could be ValNodes */
@@ -1224,10 +1221,8 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
   CitJourPtr        cjp;
   CitPatPtr         cpp;
   CitSubPtr         csp;
-  /*
   CharPtr           doi;
   ArticleIdPtr      ids;
-  */
   PubStatusDatePtr  history;
   ImprintPtr        imp;
   Uint1             pubstatus;
@@ -1464,14 +1459,12 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
                 default:
                   break;
               }
-              /*
               for (ids = cap->ids; ids != NULL; ids = ids->next) {
                 if (ids->choice != ARTICLEID_DOI) continue;
                 doi = (CharPtr) ids->data.ptrvalue;
                 if (StringHasNoText (doi)) continue;
                 SetTitle (ppp->doi, doi);
               }
-              */
             }
             break;
           case PUB_Book:
@@ -1983,6 +1976,35 @@ static void LookupByPmidProc (ButtoN b)
   LookupCommonProc (b, TRUE, TRUE);
 }
 
+static void LookupByDOIProc (ButtoN b)
+
+{
+  Char            buf [550], doi [500];
+  PubdescPagePtr  ppp;
+#ifdef WIN_MOTIF
+  NS_Window       window = NULL;
+#endif
+
+  ppp = (PubdescPagePtr) GetObjectExtra (b);
+  if (ppp == NULL) return;
+  GetTitle (ppp->doi, doi, sizeof (doi));
+  if (StringDoesHaveText (doi)) {
+    if (StringNCmp (doi, "10.", 3) == 0) {
+      StringCpy (buf, "http://dx.doi.org/");
+      StringCat (buf, doi);
+#ifdef WIN_MAC
+      Nlm_SendURLAppleEvent (buf, NULL, NULL);
+#endif
+#ifdef WIN_MSWIN
+      Nlm_MSWin_OpenDocument (buf);
+#endif
+#ifdef WIN_MOTIF
+      NS_OpenURL (&window, buf, NULL, TRUE);
+#endif
+    }
+  }
+}
+
 static void LaunchRelaxedQuery PROTO((PubdescPtr pdp, Pointer userdata));
 
 static void LookupRelaxedProc (ButtoN b)
@@ -2001,13 +2023,33 @@ static void LookupRelaxedProc (ButtoN b)
   PubdescFree (pdp);
 }
 
+
+static void MakeJournalReport (ButtoN b)
+{
+  ValNodePtr allTitles, vnp;
+  LogInfoPtr lip;
+  CharPtr str;
+
+  allTitles = (ValNodePtr) GetObjectExtra (b);
+  lip = OpenLog ("Possible Journal Titles");
+  for (vnp = allTitles; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    fprintf (lip->fp, "%s\n", str);
+  }
+  lip->data_in_log = TRUE;
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
 static Boolean ChooseFromMultipleJournals (CharPtr rsult, size_t max, ValNodePtr allTitles)
 {
   WindoW                 w;
   GrouP                  h, c, q;
   ButtoN                 b;
   PrompT                 p;
-  CharPtr                str;
+  CharPtr                str, cp;
   Int2                   j;
   ValNodePtr             vnp;
   PopuP                  x;
@@ -2039,6 +2081,8 @@ static Boolean ChooseFromMultipleJournals (CharPtr rsult, size_t max, ValNodePtr
   SetObjectExtra (b, &acd, NULL);
   b = PushButton (c, "No", ModalCancelButton);
   SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Make Report", MakeJournalReport);
+  SetObjectExtra (b, allTitles, NULL);
   AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) q, (HANDLE) c, NULL);
 
   Show (w); 
@@ -2062,6 +2106,10 @@ static Boolean ChooseFromMultipleJournals (CharPtr rsult, size_t max, ValNodePtr
         str = (CharPtr) vnp->data.ptrvalue;
         if (StringDoesHaveText (str)) {
           StringNCpy_0 (rsult, str, max);
+          cp = StringSearch (rsult, "||");
+          if (cp != NULL) {
+            *cp = 0;
+          }
           return TRUE;
         }
       }
@@ -2099,6 +2147,7 @@ static void LookupISOJournalProc (ButtoN b)
         } else {
           Message (MSG_OK, "Unable to match journal");
         }
+        allTitles = ValNodeFreeData (allTitles);
         Update ();
       }
     }
@@ -2209,7 +2258,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
   GrouP                 c;
   GrouP                 g1, g2, g3, g4, g5, g6, g7, g8, g9, g10;
   GrouP                 g11, g12, g13, g14, g15;
-  GrouP                 g16, g17, g18, g19, g20, g21, g22, g23;
+  GrouP                 g16, g17, g18, g19, g20, g21, g22, g23, g24;
   ButtoN                lkp;
   GrouP                 m, m2, m3, m4, m5, m6, m7, m8, m9;
   GrouP                 n1, n2, n3, n4;
@@ -2690,12 +2739,13 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     StaticPrompt (g10, "Remark", (Int2) (25 * stdCharWidth), 0,
                   programFont, 'c');
     ppp->comment = ScrollText (g10, 25, 5, programFont, TRUE, NULL);
-    /*
-    g24 = HiddenGroup (g10, 2, 0, NULL);
-    StaticPrompt (g24, "D.O.I.", 0, dialogTextHeight, programFont, 'l');
+    g24 = HiddenGroup (g10, 4, 0, NULL);
+    SetGroupSpacing (g24, 10, 10);
+    StaticPrompt (g24, "DOI", 0, dialogTextHeight, programFont, 'l');
     ppp->doi = DialogText (g24, "", 12, NULL);
+    b = PushButton (g24, "Lookup By DOI", LookupByDOIProc);
+    SetObjectExtra (b, ppp, NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) ppp->comment, (HANDLE) g24, NULL);
-    */
 
     g11 = HiddenGroup (g10, -6, 0, NULL);
     if (pub_choice == PUB_UNPUB || pub_choice == PUB_ONLINE || pub_choice == PUB_SUB)
@@ -3553,11 +3603,9 @@ static void PubdescDescFormActnProc (ForM f)
     if (DescFormReplaceWithoutUpdateProc (f)) {
       UpdateRAD (&rad, pfp);
       GetRidOfEmptyFeatsDescStrings (pfp->input_entityID, NULL);
-      if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-        ExtendGeneFeatIfOnMRNA (pfp->input_entityID, NULL);
-      }
-      ObjMgrSendMsg (OM_MSG_UPDATE, pfp->input_entityID,
-                     pfp->input_itemID, pfp->input_itemtype);
+      ObjMgrSendMsgNoFeatureChange(OM_MSG_UPDATE, pfp->input_entityID,
+               pfp->input_itemID, pfp->input_itemtype);
+
     }
     CleanupRAD (&rad);
   }
@@ -5549,7 +5597,7 @@ static void PopulateWindow( WindoW w, PubdescPtr pdp)
 		    }
 
 		    alp = (AuthListPtr) cap->authors; 
-		    if (alp != NULL) {		  		 		 			
+		    if (alp != NULL && alp->choice == 1) {		  		 		 			
 		      /*get ptr to both 1st and last author*/	 
 		      auth_vnp = (ValNodePtr) alp->names; /*get the first node */ 
       		
@@ -6071,3 +6119,254 @@ extern void EditPublicationInDialog (DialoG d, Int4 ref_num)
   
   EditPublicationInList (dlg, sdp);
 }
+
+
+static Boolean EditPubdescDataInPlace (SeqDescPtr sdp, PubinitFormPtr pifp)
+{
+  Uint1                 reftype;
+  Uint1                 pub_status;
+  Int2                  pub_choice;
+  PubdescFormPtr        pfp;
+  WindoW                w;
+  ButtoN                b;
+  GrouP                 c;
+  GrouP                 h1;
+  Int2                  initPage;
+  Int2                  j;
+  CharPtr PNTR          labels;
+  Int2                  tabnumber;
+  CharPtr               tabs [NUM_TABS];
+  ModalAcceptCancelData acd;
+  Boolean               rval = FALSE;
+
+  if (pifp == NULL || pifp->form == NULL || sdp == NULL || sdp->choice != Seq_descr_pub) 
+  {
+    return FALSE;
+  }
+
+  pifp->reftype = 0;    /* sequence */
+  reftype = pifp->reftype;
+  pub_status = (Uint1) GetValue (pifp->pub_status);
+  pub_choice = GetValue (pifp->pub_choice);
+  if (pub_status > 2)
+  {
+    pub_status = 0;
+  }
+
+  pfp = (PubdescFormPtr) MemNew (sizeof (PubdescForm));
+  if (pfp == NULL) {
+    return FALSE;
+  }
+  w = FixedWindow (-50, -33, -10, -10, "Publication", StdCloseWindowProc);
+  SetObjectExtra (w, pfp, StdDescFormCleanupProc);
+  pfp->form = (ForM) w;
+  pfp->actproc = NULL /*actproc*/;
+  pfp->toform = NULL;
+  pfp->fromform = NULL;
+  pfp->testform = NULL;
+  pfp->formmessage = PubdescDescFormMessage;
+  pfp->importform = ImportPubdescForm;
+  pfp->exportform = ExportPubdescForm;
+
+#ifndef WIN_MAC
+  CreateStdEditorFormMenus (w);
+#endif
+
+
+  tabnumber = tabcounter[pub_choice];
+  pfp->tabnumber = tabnumber;
+  pfp->pub_choice = pub_choice;
+  pfp->is_feat = FALSE;
+  pfp->replaceAll = FALSE;
+  labels = pubdescFormTabs[pub_choice];
+  for (j = 0; j < NUM_TABS; j++)
+  {
+    tabs [j] = NULL;
+  }
+  for (j = 0; j < NUM_TABS && labels [j] != NULL; j++)
+  {
+    tabs [j] = labels [j];
+  }
+
+  h1 = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h1, 3, 10);
+
+  initPage = FIRST_PAGE;
+  if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+    if (pub_choice == PUB_JOURNAL) {
+      initPage = 2;
+    }
+  }
+  pfp->foldertabs = CreateFolderTabs (h1, tabs, initPage,
+                       descTabsPerLine [pub_choice], 10,
+                       SYSTEM_FOLDER_TAB,
+                       ChangePubdescPage, (Pointer) pfp);
+  pfp->currentPage = initPage;
+  pfp->data = CreatePubdescDialog (h1, NULL, pfp->pages,
+        reftype,
+        pub_status,
+        pub_choice,
+        pifp->flagPubDelta, pifp->flagSerial,
+        NULL, pfp);
+  pfp->Attribute_Page = 0;
+  pfp->Location_Page = 0;
+
+  c = HiddenGroup (h1, 4, 0, NULL);
+  b = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) pfp->foldertabs, (HANDLE) pfp->data,
+             (HANDLE) c, NULL);
+  RealizeWindow (w);
+  SendMessageToDialog (pfp->data, VIB_MSG_INIT);
+  PointerToDialog (pfp->data, (Pointer) pifp->sdp->data.ptrvalue);
+  ChangePubdescPage ((Pointer) pfp, pfp->currentPage, 0);
+  Show (w);
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    while (!acd.accepted && ! acd.cancelled)
+    {
+      ProcessExternalEvent ();
+      Update ();
+    }
+    ProcessAnEvent ();
+    if (!acd.cancelled)
+    {
+      sdp->data.ptrvalue = DialogToPointer (pfp->data);
+      rval = TRUE;
+    }
+  }
+  Remove (w);
+  return rval;
+}
+
+
+NLM_EXTERN Boolean EditPubdescInPlace (SeqDescPtr sdp)
+{
+  ButtoN                b;
+  GrouP                 c;
+  GrouP                 h1;
+  GrouP                 g1, g2, g4, g5;
+  PubdescPtr            pdp;
+  PubinitFormPtr        pifp;
+  WindoW                w;
+  ValNodePtr            vnp;
+  ModalAcceptCancelData acd;
+  Uint1                 st_value;
+  Int2                  pb_value;
+  Boolean               first = TRUE;
+  Boolean               rval = FALSE;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_pub || sdp->data.ptrvalue == NULL) {
+    return FALSE;
+  }
+  w = NULL;
+  pifp = (PubinitFormPtr) MemNew (sizeof (PubinitForm));
+  pifp->flagPubDelta = FALSE;
+  pifp->flagSerial = FALSE;
+  w = ModalWindow (-20, -33, -10, -10, NULL);
+  SetObjectExtra (w, pifp, StdCleanupFormProc);
+  pifp->form = (ForM) w;
+  pifp->actproc = NULL;
+  pifp->toform = PubdescInitPtrToPubdescInitForm;
+  pifp->fromform = NULL;
+  pifp->testform = NULL;
+
+  pifp->sep = NULL;
+  pifp->sdp = sdp;
+  pifp->sfp = NULL;
+
+  pdp = (PubdescPtr) sdp->data.ptrvalue;
+
+  h1 = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h1, 10, 20);
+  g2 = NormalGroup (h1, -1, 0, "Status", programFont, NULL);
+  g4 = HiddenGroup (g2, -4, 0, ChangePubStat);
+  pifp->pub_status = g4;
+  SetObjectExtra (g4, pifp, NULL);
+  RadioButton (g4, "Unpublished");
+  RadioButton (g4, "In Press");
+  RadioButton (g4, "Published");
+  SetValue (g4, 1);           /* unpublished */
+  g1 = NormalGroup (h1, -1, 0, "Class", programFont, NULL);
+  g5 = HiddenGroup (g1, -3, 0, ChangePublication);
+  pifp->pub_choice = g5;
+  SetObjectExtra (g5, pifp, NULL);
+
+  RadioButton (g5, "Journal");
+  RadioButton (g5, "Book Chapter");
+  RadioButton (g5, "Book");
+  RadioButton (g5, "Thesis/Monograph");
+  RadioButton (g5, "Proceedings Chapter");
+  RadioButton (g5, "Proceedings");
+  pifp->patent_btn = RadioButton (g5, "Patent");
+  RadioButton (g5, "Online Publication");
+  vnp = pdp->pub;
+  while (vnp != NULL)
+  {
+    if (vnp->choice == PUB_Sub)
+    {
+      RadioButton (g5, "Submission");
+      break;
+    }
+    vnp = vnp->next;
+  }
+
+  Disable (g5);               /* publications disabled */
+
+  c = HiddenGroup (h1, 2, 0, NULL);
+  b = PushButton (c, "Proceed", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g2, (HANDLE) g1,
+                (HANDLE) c, NULL);
+  RealizeWindow (w);
+  SendMessageToForm (pifp->form, VIB_MSG_INIT);
+  PointerToForm (pifp->form, (Pointer) sdp->data.ptrvalue);
+  
+  if (pdp->pub != NULL && pdp->pub->choice == PUB_Sub) {
+    /* can't change anything, just proceed to next form */
+    acd.accepted = TRUE;
+  } else {
+    Show (w);
+    acd.accepted = FALSE;
+  }
+
+  acd.cancelled = FALSE;
+  while ((!acd.accepted && ! acd.cancelled) || first)
+  {
+    first = FALSE;
+    while (!acd.accepted && ! acd.cancelled)
+    {
+      ProcessExternalEvent ();
+      Update ();
+    }
+    ProcessAnEvent ();
+    if (!acd.cancelled)
+    {
+      st_value = (Uint1) GetValue (pifp->pub_status);
+      pb_value = GetValue (pifp->pub_choice);
+      if (st_value > 1 && pb_value == 0) 
+      {
+        Message (MSG_ERROR, "Must choose class");
+        acd.accepted = FALSE;
+      }
+      else
+      {
+        /* go on to replace pubdesc */
+        Hide (w);
+        rval = EditPubdescDataInPlace (sdp, pifp);
+      }
+    }
+  }
+  Remove (w);
+  return rval;
+}
+

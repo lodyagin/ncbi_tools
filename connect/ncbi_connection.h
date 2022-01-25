@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNECTION__H
 #define CONNECT___NCBI_CONNECTION__H
 
-/*  $Id: ncbi_connection.h,v 6.21 2004/10/26 14:47:42 lavr Exp $
+/* $Id: ncbi_connection.h,v 6.22 2010/02/01 13:54:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -68,7 +68,7 @@ typedef struct SConnectionTag* CONN;      /* connection handle */
  * sets conn to 0, and leaves connector intact (can be used again).
  * NOTE1:  The real connection will not be established right away. Instead,
  *         it will be established at the moment of the first call to one of
- *         "Flush", "Wait", "WaitAsync", "Write", or "Read" methods.
+ *         "Flush", "Wait", "Write", or "Read" methods.
  * NOTE2:  "Connection establishment" at this level of abstraction may differ
  *         from actual link establishment at the underlying connector's level.
  * NOTE3:  Initial timeout values are set to CONN_DEFAULT_TIMEOUT, meaning
@@ -286,113 +286,11 @@ extern NCBI_XCONNECT_EXPORT EIO_Status CONN_SetCallback
 );
 
 
-#ifdef IMPLEMENTED__CONN_WaitAsync
-/* Wait for an asynchronous I/O event, then call the specified handler.
- * In the "handler" function:
- *   "event"  -- is the I/O direction where the async. event happened
- *   "status" -- must be "eIO_Success" if it is ready for I/O
- *   "data"   -- callback data (passed as "data" in CONN_WaitAsync())
- * If "handler" is NULL then discard the current handler, if any.
- * The "cleanup" function to be called right after the call to "handler" or
- * by CONN_Close(), or if the handler is reset by calling CONN_WaitAsync()
- * again -- whichever happens first.
- */
-typedef void (*FConnAsyncHandler)
-(CONN       conn,
- EIO_Event  event,
- EIO_Status status,
- void*      data
-);
-typedef void (*FConnAsyncCleanup)(void* data);
-
-extern EIO_Status CONN_WaitAsync
-(CONN              conn,      /* [in] connection handle */
- EIO_Event         event,     /* [in] I/O direction     */
- FConnAsyncHandler handler,   /* [in] callback function */
- void*             data,      /* [in] callback data     */
- FConnAsyncCleanup cleanup    /* [in] cleanup procedure */
- );
-#endif /* IMPLEMENTED__CONN_WaitAsync */
-
-
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
 
 
 /* @} */
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: ncbi_connection.h,v $
- * Revision 6.21  2004/10/26 14:47:42  lavr
- * Slight formatting
- *
- * Revision 6.20  2004/06/09 14:03:06  jcherry
- * Moved #define out of enum body (SWIG was choking on this)
- *
- * Revision 6.19  2004/05/24 19:58:29  lavr
- * +NCBI_XCONNECT_EXPORT for CONN_ReadLine()
- *
- * Revision 6.18  2004/05/24 19:53:30  lavr
- * +CONN_ReadLine()
- *
- * Revision 6.17  2004/02/23 15:23:36  lavr
- * New (last) parameter "how" added in CONN_Write() API call
- *
- * Revision 6.16  2003/05/14 03:47:12  lavr
- * +CONN_Description()
- *
- * Revision 6.15  2003/04/09 17:58:43  siyan
- * Added doxygen support
- *
- * Revision 6.14  2003/01/15 19:50:17  lavr
- * +CONN_PushBack()
- *
- * Revision 6.13  2003/01/08 01:59:32  lavr
- * DLL-ize CONNECT library for MSVC (add NCBI_XCONNECT_EXPORT)
- *
- * Revision 6.12  2002/09/19 18:00:04  lavr
- * Header file guard macro changed
- *
- * Revision 6.11  2002/09/06 15:40:32  lavr
- * More comments and notes to the API
- *
- * Revision 6.10  2002/08/07 16:27:33  lavr
- * EIO_ReadMethod enums changed accordingly; log moved to the bottom
- *
- * Revision 6.9  2001/08/20 20:00:22  vakatov
- * CONN_SetTimeout() to return "EIO_Status".
- *
- * Revision 6.8  2001/06/28 22:00:31  lavr
- * Added function: CONN_SetCallback
- * Added callback: eCONN_OnClose
- *
- * Revision 6.7  2001/04/24 21:19:29  lavr
- * Introduced CONN_DEFAULT_TIMEOUT for use as a CONNECTOR-specific timeout
- *
- * Revision 6.6  2001/03/02 20:07:33  lavr
- * Typo fixed
- *
- * Revision 6.5  2001/02/09 17:33:38  lavr
- * CONN_GetType added
- *
- * Revision 6.4  2001/01/03 22:29:22  lavr
- * Changed IOStatus -> Status
- *
- * Revision 6.3  2000/12/29 17:43:42  lavr
- * Pretty printed;
- * Reconnect renamed to ReInit with ability to close current connector
- *
- * Revision 6.2  2000/04/07 19:59:47  vakatov
- * Moved forward-declaration of CONNECTOR from "ncbi_connection.h"
- * to "ncbi_connector.h"
- *
- * Revision 6.1  2000/03/24 22:52:20  vakatov
- * Initial revision
- *
- * ===========================================================================
- */
 
 #endif /* CONNECT___NCBI_CONNECTION__H */

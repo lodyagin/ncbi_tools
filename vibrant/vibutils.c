@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.78 $
+* $Revision: 6.80 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -608,10 +608,10 @@ static MsgAnswer LIBCALLBACK Nlm_VibMessageHook (MsgKey key, ErrSev severity,
                                                  const char * caption,
                                                  const char * message)
 {
+  Nlm_CharPtr  buf = NULL;
   Nlm_Int2     rsult = 0;
 #if defined(WIN_MAC) || defined(WIN_MOTIF)
   size_t       len;
-  Nlm_CharPtr  buf = NULL;
   Nlm_ButtoN   b[3];
   Nlm_Char     ch;
   Nlm_Int2     delta;
@@ -647,7 +647,7 @@ static MsgAnswer LIBCALLBACK Nlm_VibMessageHook (MsgKey key, ErrSev severity,
       size_t curr_len = Nlm_TextLength(postText);
       size_t add_len  = Nlm_StringLen( message );
       if (curr_len < 1000000 && add_len < 1000000) {
-        char*  buf    = (char*) Nlm_MemNew(add_len+1 + curr_len + 1);
+        buf = (char*) Nlm_MemNew(add_len+1 + curr_len + 1);
         Nlm_MemCpy(buf, add_mess, add_len);
         buf[add_len++] = '\n';
         Nlm_GetTitle(postText, buf+add_len, curr_len+1);
@@ -3655,7 +3655,6 @@ extern Nlm_Boolean Nlm_ClipboardHasString (void)
 # if TARGET_API_MAC_CARBON
   OSStatus status;
   ScrapRef scrap;
-  ScrapFlavorFlags flags = 0;
   status = GetCurrentScrap(&scrap);
   
   err = TEFromScrap();
@@ -3715,7 +3714,7 @@ extern Nlm_CharPtr Nlm_ClipboardToString (void)
   return str;
 #else
   long         len;
-  Nlm_CharPtr  str;
+  Nlm_CharPtr  str = NULL;
   Handle hdl;
 
 # if TARGET_API_MAC_CARBON

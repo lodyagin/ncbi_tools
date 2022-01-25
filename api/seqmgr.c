@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.302 $
+* $Revision: 6.308 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -3761,6 +3761,7 @@ static SeqEntryPtr SeqMgrGetTopSeqEntryForEntity (Uint2 entityID)
   return NULL;
 }
 
+
 static Boolean SeqMgrClearBioseqExtraData (ObjMgrDataPtr omdp)
 
 {
@@ -4221,7 +4222,7 @@ NLM_EXTERN BioseqPtr LIBCALL SeqMgrGetParentOfPart (BioseqPtr bsp,
   SMSeqIdxPtr       segpartptr;
   SeqIdPtr          sip;
   SeqLocPtr         slp;
-  Int2              L, R, mid;
+  Int4              L, R, mid;
 
   if (context != NULL) {
     MemSet ((Pointer) context, 0, sizeof (SeqMgrSegmentContext));
@@ -4436,6 +4437,7 @@ static void GetLeftAndRightOffsetsInNearBioseq (SeqLocPtr loc, BioseqPtr in, Int
   SeqIdPtr   sip;
   Uint1      strand;
   Int4       val_left = -1, val_right = -1;
+  Boolean    left_flip = FALSE, right_flip = FALSE;
 
   if (left != NULL) {
     *left = -1;
@@ -4454,7 +4456,7 @@ static void GetLeftAndRightOffsetsInNearBioseq (SeqLocPtr loc, BioseqPtr in, Int
   }
   if (bsp != NULL) {
 #if 1
-    GetLeftAndRightOffsetsInBioseq (loc, in, &val_left, &val_right, bsp->topology == TOPOLOGY_CIRCULAR);
+    GetLeftAndRightOffsetsInBioseq (loc, in, &val_left, &val_right, bsp->topology == TOPOLOGY_CIRCULAR, &left_flip, &right_flip);
 #else
     val_left = GetOffsetInBioseqEx (loc, in, SEQLOC_LEFT_END, bsp->topology == TOPOLOGY_CIRCULAR);
     val_right = GetOffsetInBioseqEx (loc, in, SEQLOC_RIGHT_END, bsp->topology == TOPOLOGY_CIRCULAR);
@@ -6519,7 +6521,7 @@ static int LIBCALLBACK SortFeatItemListByPos (VoidPtr vp1, VoidPtr vp2)
   if (numivals > 0 && sp1->ivals != NULL && sp2->ivals != NULL) {
     for (i = 0, j = 0; i < numivals; i++) {
 
-      /* check left interval */
+      /* check biological start position */
 
       if (sp1->ivals [j] > sp2->ivals [j]) {
         return 1;
@@ -6528,7 +6530,7 @@ static int LIBCALLBACK SortFeatItemListByPos (VoidPtr vp1, VoidPtr vp2)
       }
       j++;
 
-      /* check right interval */
+      /* check biological stop position */
 
       if (sp1->ivals [j] > sp2->ivals [j]) {
         return -1; /* was 1 */
@@ -6699,7 +6701,7 @@ static int LIBCALLBACK SortFeatItemListByRev (VoidPtr vp1, VoidPtr vp2)
   if (numivals > 0 && sp1->ivals != NULL && sp2->ivals != NULL) {
     for (i = 0, j = sp1->numivals * 2, k = sp2->numivals * 2; i < numivals; i++) {
 
-      /* check right interval */
+      /* check biological stop position */
 
       k--;
       j--;
@@ -6709,7 +6711,7 @@ static int LIBCALLBACK SortFeatItemListByRev (VoidPtr vp1, VoidPtr vp2)
         return -1;
       }
 
-      /* check left interval */
+      /* check biological start position */
 
       k--;
       j--;
@@ -7881,7 +7883,7 @@ static Uint2 LIBCALL s_DoSeqMgrIndexFeatures (
       if (sap->type != 1) continue;
       for (sfp = (SeqFeatPtr) sap->data; sfp != NULL; sfp = sfp->next) {
         publist = NULL;
-        CleanUpSeqFeat (sfp, FALSE, FALSE, TRUE, &publist);
+        CleanUpSeqFeat (sfp, FALSE, FALSE, TRUE, TRUE, &publist);
         ValNodeFreeData (publist);
       }
     }
@@ -9381,7 +9383,12 @@ NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetNextDescriptor (BioseqPtr bsp, ValNodePtr
   } else {
     entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
   }
-  sep = ObjMgrGetChoiceForData (omdp->dataptr);
+
+  if (bsp != NULL && bsp->seqentry != NULL) {
+    sep = bsp->seqentry;
+  } else {  
+    sep = ObjMgrGetChoiceForData (omdp->dataptr);
+  }
 
   /* now look for next appropriate descriptor after curr in current chain */
 
@@ -9426,7 +9433,13 @@ NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetNextDescriptor (BioseqPtr bsp, ValNodePtr
         break;
     }
 
-    sep = ObjMgrGetChoiceForData (omdp->dataptr);
+    if (omdp->datatype == OBJ_BIOSEQ && bsp != NULL && bsp->seqentry != NULL) {
+      sep = bsp->seqentry;
+    } else if (omdp->datatype == OBJ_BIOSEQSET && bssp != NULL && bssp->seqentry != NULL) {
+      sep = bssp->seqentry;
+    } else {
+      sep = ObjMgrGetChoiceForData (omdp->dataptr);
+    }
     
     (context->level)++;
 
@@ -10224,7 +10237,7 @@ static SMSeqIdxPtr BinarySearchPartToSegmentMap (BioseqPtr in, Int4 pos, BioseqP
   SMSeqIdxPtr PNTR  partsBySeqId;
   SMSeqIdxPtr       segpartptr;
   CharPtr           seqIdOfPart;
-  Int2              L, R, mid;
+  Int4              L, R, mid;
 
   if (in == NULL) return NULL;
   omdp = SeqMgrGetOmdpForBioseq (in);
@@ -10302,7 +10315,7 @@ NLM_EXTERN SMSeqIdxPtr GenomePartToSegmentMap (BioseqPtr in, BioseqPtr bsp, Int4
   return BinarySearchPartToSegmentMap (in, 0, bsp, NULL, TRUE, from, to);
 }
 
-NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip)
+NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip, BoolPtr flip_strand)
 
 {
   BioseqExtraPtr  bspextra;
@@ -10312,6 +10325,9 @@ NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, 
   SMSeqIdxPtr     segpartptr;
 
   if (in == NULL) return -1;
+  if (flip_strand != NULL) {
+    *flip_strand = FALSE;
+  }
 
   /* first check to see if part has been loaded and single map up block installed */
 
@@ -10330,6 +10346,9 @@ NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, 
               /* success, immediate return with mapped up value */
 
               if (segpartptr->strand == Seq_strand_minus) {
+                if (flip_strand != NULL) {
+                  *flip_strand = FALSE;
+                }
                 return segpartptr->cumOffset + (segpartptr->to - pos);
               } else {
                 return segpartptr->cumOffset + (pos - segpartptr->from);
@@ -10398,6 +10417,9 @@ NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, 
     /* now return offset result */
 
     if (segpartptr->strand == Seq_strand_minus) {
+      if (flip_strand != NULL) {
+        *flip_strand = TRUE;
+      }
       return segpartptr->cumOffset + (segpartptr->to - pos);
     } else {
       return segpartptr->cumOffset + (pos - segpartptr->from);
@@ -10438,7 +10460,7 @@ NLM_EXTERN SeqLocPtr TrimLocInSegment (
   SeqIntPtr         sint;
   SeqLocPtr         slp;
   Uint1             strand;
-  Int2              L, R, mid;
+  Int4              L, R, mid;
   Int4              start, stop, swap;
 
   if (master == NULL || location == NULL) return NULL;
@@ -12010,4 +12032,155 @@ NLM_EXTERN SeqFeatPtr FindNthGeneOnBspByLabelOrLocusTag
   return sfp;
 }
 
+
+static Boolean SeqMgrClearBioseqExtraDataDescriptors (ObjMgrDataPtr omdp)
+{
+  BioseqExtraPtr  bspextra;
+
+  if (omdp == NULL) return FALSE;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return FALSE;
+
+  /* free sorted arrays of pointers into data blocks */
+
+  bspextra->descrsByID = MemFree (bspextra->descrsByID);
+  bspextra->descrsBySdp = MemFree (bspextra->descrsBySdp);
+  bspextra->descrsByIndex = MemFree (bspextra->descrsByIndex);
+
+  /* free list of descriptor information */
+
+  bspextra->desclisthead = ValNodeFreeData (bspextra->desclisthead);
+
+  return TRUE;
+}
+
+
+static void SeqMgrClearDescriptorIndexesProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  ObjMgrDataPtr  omdp = NULL;
+  BoolPtr        rsult;
+
+  if (sep == NULL || (! IS_Bioseq (sep))) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    omdp = SeqMgrGetOmdpForBioseq (bsp);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    omdp = SeqMgrGetOmdpForPointer (bssp);
+  } else return;
+  if (omdp != NULL && SeqMgrClearBioseqExtraDataDescriptors (omdp)) {
+    rsult = (BoolPtr) mydata;
+    *rsult = TRUE;
+  }
+}
+
+
+/* NOTE - this function does NOT do basic seqentry cleanup;
+ * it assumes that cleanup has been done already, probably
+ * on just the descriptor that was changed.
+ */
+NLM_EXTERN void SeqMgrRedoDescriptorIndexes (Uint2 entityID, Pointer ptr)
+
+{
+  Boolean        rsult = FALSE;
+  SeqEntryPtr    sep;
+
+  if (entityID == 0) {
+    entityID = ObjMgrGetEntityIDForPointer (ptr);
+  }
+  if (entityID == 0) return;
+  sep = SeqMgrGetTopSeqEntryForEntity (entityID);
+  if (sep == NULL) return;
+  SeqEntryExplore (sep, (Pointer) (&rsult), SeqMgrClearDescriptorIndexesProc);
+
+  /* finish indexing list of descriptors on each indexed bioseq */
+
+  VisitBioseqsInSep (sep, NULL, RecordDescriptorsInBioseqs);
+
+  if (IS_Bioseq_set (sep)) {
+    RecordDescriptorsOnTopSet (sep);
+  }
+
+  SeqEntryExplore (sep, NULL, IndexRecordedDescriptors);
+}
+
+
+static void SeqMgrRedoFeatByLabel (ObjMgrDataPtr omdp)
+{
+  BioseqExtraPtr      bspextra;
+  SeqFeatPtr          sfp;
+  Int4                i;
+  Char                buf [129];
+  CharPtr             ptr;
+
+  if (omdp == NULL) return;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL || bspextra->featsByLabel == NULL) return;
+
+  for (i = 0; i < bspextra->numfeats; i++) {
+    sfp = bspextra->featsByLabel[i]->sfp;
+
+    FeatDefLabel (sfp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+    ptr = buf;
+    if (sfp->data.choice == SEQFEAT_RNA) {
+      ptr = StringStr (buf, "RNA-");
+      if (ptr != NULL) {
+        ptr += 4;
+      } else {
+        ptr = buf;
+      }
+    }
+    bspextra->featsByLabel[i]->label = MemFree (bspextra->featsByLabel[i]->label);
+    bspextra->featsByLabel[i]->label = StringSaveNoNull (ptr);
+  }
+
+  HeapSort ((VoidPtr) bspextra->featsByLabel, (size_t) bspextra->numfeats, sizeof (SMFeatItemPtr), SortFeatItemListByLabel);
+}
+
+static void SeqMgrRedoFeatByLabelProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  ObjMgrDataPtr  omdp = NULL;
+
+  if (sep == NULL || (! IS_Bioseq (sep))) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    omdp = SeqMgrGetOmdpForBioseq (bsp);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    omdp = SeqMgrGetOmdpForPointer (bssp);
+  } else return;
+  SeqMgrRedoFeatByLabel (omdp);
+}
+
+
+NLM_EXTERN void SeqMgrRedoFeatByLabelIndexes (Uint2 entityID, Pointer ptr)
+{
+  Int4    ret;
+  SeqEntryPtr sep;
+
+  ret = NlmMutexLockEx (&smp_feat_index_mutex);
+  if (ret) {
+    ErrPostEx (SEV_FATAL, 0, 0, "SeqMgrIndexFeatures mutex failed [%ld]", (long) ret);
+    return;
+  }
+  if (entityID == 0) {
+    entityID = ObjMgrGetEntityIDForPointer (ptr);
+  }
+  if (entityID != 0) {
+    sep = GetTopSeqEntryForEntityID (entityID);
+    SeqEntryExplore (sep, NULL, SeqMgrRedoFeatByLabelProc);
+  }
+
+  NlmMutexUnlock (smp_feat_index_mutex);
+}
 

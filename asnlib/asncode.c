@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.17  2009/11/05 16:54:12  gouriano
+* Added option to use quoted syntax form to include headers. JIRA: CXX-1402
+*
 * Revision 6.16  2005/01/24 17:12:11  kans
 * added force_choice_struct (-V) to force struct plus object instead of ValNode for choices - for compatibility with old hand-coded object loaders
 *
@@ -144,7 +147,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.16 $";
+static char     RCS_Rev [] = "$Revision: 6.17 $";
 
 /*******************
  * Interator structure
@@ -4400,6 +4403,8 @@ AsnCode (AsnCodeInfoPtr acip)
    AsnModulePtr last_amp = acip -> last_amp;
 
    CharPtr         use_load = StringSave (loadname);
+   Char include_open = acip->use_quoted_include ? '\"' : '<';
+   Char include_close = acip->use_quoted_include ? '\"' : '>';
 
    iter -> acip = acip;
    iter -> do_opt_bits = do_bit_twiddle;
@@ -4594,10 +4599,10 @@ AsnCode (AsnCodeInfoPtr acip)
    AsnIterTakeBuf (iter);
    if (include_filename) {
       sprintf (iter->buf,
-	       "#include <%s>\n", include_filename);
+	       "#include %c%s%c\n", include_open, include_filename, include_close);
       AsnIterTakeBuf (iter);
    }
-   sprintf (iter->buf, "#include <%s>\n", include_name);
+   sprintf (iter->buf, "#include %c%s%c\n", include_open, include_name, include_close);
    AsnIterTakeBuf (iter);
    sprintf (iter->buf, "\nstatic Boolean loaded = FALSE;\n\n");
    AsnIterTakeBuf (iter);
@@ -4613,7 +4618,7 @@ AsnCode (AsnCodeInfoPtr acip)
    hold_buf = StringSave (buf);
    StringCat (buf, ".h");
    include_name = StringSave (buf);
-   sprintf (iter->buf, "#include <%s>\n\n", include_name);
+   sprintf (iter->buf, "#include %c%s%c\n\n", include_open, include_name, include_close);
    AsnIterTakeBuf (iter);
    if (object_manager_entry != NULL) {
      if (objlabel == NULL) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,6 +37,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.13  2010/06/30 15:54:38  ucko
+* Handle 64-bit Darwin builds, which require disabling WIN_MAC because
+* Carbon is 32-bit-only.
+*
 * Revision 6.12  2006/11/24 20:05:36  kans
 * include Carbon/Carbon.h if not MWERKS - attempting to simplify Xcode search paths
 *
@@ -168,6 +172,8 @@
 #include <Sound.h>
 #include <Folders.h>
 #endif
+#elif defined(OS_UNIX_DARWIN)
+#include <CoreServices/CoreServices.h>
 #endif
 
 	                   /* used in ncbifile.c *****/

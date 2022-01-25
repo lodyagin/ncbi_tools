@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.201 $
+* $Revision: 1.215 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -132,6 +132,7 @@ static FtQualType feat_qual_order [] = {
   FTQUAL_exception,
   FTQUAL_ribosomal_slippage,
   FTQUAL_trans_splicing,
+  FTQUAL_artificial_location,
 
   FTQUAL_note, 
   FTQUAL_citation,
@@ -256,130 +257,131 @@ typedef struct featurqual {
 } FeaturQual, PNTR FeaturQualPtr;
 
 static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR]  =  {
-  { "",                   Qual_class_ignore         },
-  { "allele",             Qual_class_quote          },
-  { "anticodon",          Qual_class_anti_codon     },
-  { "bond",               Qual_class_bond           },
-  { "bond_type",          Qual_class_bond           },
-  { "bound_moiety",       Qual_class_quote          },
-  { "cdd_definition",     Qual_class_string         },
-  { "product",            Qual_class_string         },
-  { "citation",           Qual_class_pubset         },
-  { "clone",              Qual_class_quote          },
-  { "coded_by",           Qual_class_seq_loc        },
-  { "compare",            Qual_class_compare        },
-  { "codon",              Qual_class_codon          },
-  { "codon_start",        Qual_class_int            },
-  { "cons_splice",        Qual_class_consplice      },
-  { "db_xref",            Qual_class_db_xref        },
-  { "derived_from",       Qual_class_seq_loc        },
-  { "direction",          Qual_class_L_R_B          },
-  { "EC_number",          Qual_class_EC_quote       },
-  { "encodes",            Qual_class_encodes        },
-  { "estimated_length",   Qual_class_number         },
-  { "evidence",           Qual_class_evidence       },
-  { "exception",          Qual_class_exception      },
-  { "exception_note",     Qual_class_exception      },
-  { "experiment",         Qual_class_quote          },
-  { "experiment",         Qual_class_string         },
-  { "product",            Qual_class_valnode        },
-  { "figure",             Qual_class_string         },
-  { "frequency",          Qual_class_quote          },
-  { "function",           Qual_class_quote          },
-  { "gene",               Qual_class_sgml           },
-  { "gene_desc",          Qual_class_string         },
-  { "allele",             Qual_class_string         },
-  { "map",                Qual_class_string         },
-  { "cyt_map",            Qual_class_map            },
-  { "gen_map",            Qual_class_map            },
-  { "rad_map",            Qual_class_map            },
-  { "gene_synonym",       Qual_class_sep_gene_syn   },
-  { "gene_synonym",       Qual_class_gene_syn       },
-  { "gene_note",          Qual_class_string         },
-  { "db_xref",            Qual_class_db_xref        },
-  { "GO_component",       Qual_class_go             },
-  { "GO_function",        Qual_class_go             },
-  { "GO_process",         Qual_class_go             },
-  { "heterogen",          Qual_class_string         },
-  { "illegal",            Qual_class_illegal        },
-  { "inference",          Qual_class_quote          },
-  { "inference",          Qual_class_string         },
-  { "inference",          Qual_class_valnode        },
-  { "inference",          Qual_class_valnode        },
-  { "insertion_seq",      Qual_class_quote          },
-  { "label",              Qual_class_label          },
-  { "locus_tag",          Qual_class_locus_tag      },
-  { "map",                Qual_class_quote          },
-  { "maploc",             Qual_class_string         },
-  { "mobile_element",     Qual_class_mobile_element },
-  { "mod_base",           Qual_class_noquote        },
-  { "model_evidence",     Qual_class_model_ev       },
-  { "calculated_mol_wt",  Qual_class_mol_wt         },
-  { "ncRNA_class",        Qual_class_quote          },
-  { "ncRNA_note",         Qual_class_string         },
-  { "ncRNA_class",        Qual_class_string         },
-  { "nomenclature",       Qual_class_nomenclature   },
-  { "nomenclature",       Qual_class_gene_nomen     },
-  { "note",               Qual_class_note           },
-  { "number",             Qual_class_number         },
-  { "old_locus_tag",      Qual_class_paren          },
-  { "operon",             Qual_class_quote          },
-  { "organism",           Qual_class_quote          },
-  { "partial",            Qual_class_boolean        },
-  { "PCR_conditions",     Qual_class_quote          },
-  { "peptide",            Qual_class_peptide        },
-  { "phenotype",          Qual_class_quote          },
-  { "product",            Qual_class_product        },
-  { "product",            Qual_class_quote          },
-  { "function",           Qual_class_valnode        },
-  { "prot_comment",       Qual_class_string         },
-  { "EC_number",          Qual_class_EC_valnode     },
-  { "prot_note",          Qual_class_string         },
-  { "prot_method",        Qual_class_method         },
-  { "prot_conflict",      Qual_class_string         },
-  { "prot_desc",          Qual_class_string         },
-  { "prot_missing",       Qual_class_string         },
-  { "name",               Qual_class_tilde          },
-  { "prot_names",         Qual_class_protnames      },
-  { "protein_id",         Qual_class_prt_id         },
-  { "pseudo",             Qual_class_boolean        },
-  { "pyrrolysine",        Qual_class_boolean        },
-  { "pyrrolysine",        Qual_class_string         },
-  { "region",             Qual_class_region         },
-  { "region_name",        Qual_class_string         },
-  { "replace",            Qual_class_replace        },
-  { "ribosomal_slippage", Qual_class_boolean        },
-  { "rpt_family",         Qual_class_quote          },
-  { "rpt_type",           Qual_class_rpt            },
-  { "rpt_unit",           Qual_class_rpt_unit       },
-  { "rpt_unit_range",     Qual_class_rpt_unit       },
-  { "rpt_unit_seq",       Qual_class_rpt_unit       },
-  { "rrna_its",           Qual_class_its            },
-  { "satellite",          Qual_class_quote          },
-  { "sec_str_type",       Qual_class_sec_str        },
-  { "selenocysteine",     Qual_class_boolean        },
-  { "selenocysteine",     Qual_class_string         },
-  { "seqannot_note",      Qual_class_string         },
-  { "seqfeat_note",       Qual_class_string         },
-  { "site",               Qual_class_site           },
-  { "site_type",          Qual_class_site           },
-  { "standard_name",      Qual_class_quote          },
-  { "tag_peptide",        Qual_class_noquote        },
-  { "tag_peptide",        Qual_class_tag_peptide    },
-  { "transcription",      Qual_class_transcription  },
-  { "transcript_id",      Qual_class_nuc_id         },
-  { "tscpt_id_note",      Qual_class_nuc_id         },
-  { "transl_except",      Qual_class_code_break     },
-  { "transl_table",       Qual_class_int            },
-  { "translation",        Qual_class_translation    },
-  { "transposon",         Qual_class_quote          },
-  { "trans_splicing",     Qual_class_boolean        },
-  { "trna_aa",            Qual_class_ignore         },
-  { "codon_recognized",   Qual_class_trna_codons    },
-  { "trna_codons",        Qual_class_trna_codons    },
-  { "UniProtKB_evidence", Qual_class_quote          },
-  { "usedin",             Qual_class_usedin         },
-  { "xtra_products",      Qual_class_xtraprds       }
+  { "",                    Qual_class_ignore         },
+  { "allele",              Qual_class_quote          },
+  { "anticodon",           Qual_class_anti_codon     },
+  { "artificial_location", Qual_class_boolean        },
+  { "bond",                Qual_class_bond           },
+  { "bond_type",           Qual_class_bond           },
+  { "bound_moiety",        Qual_class_quote          },
+  { "cdd_definition",      Qual_class_string         },
+  { "product",             Qual_class_string         },
+  { "citation",            Qual_class_pubset         },
+  { "clone",               Qual_class_quote          },
+  { "coded_by",            Qual_class_seq_loc        },
+  { "compare",             Qual_class_compare        },
+  { "codon",               Qual_class_codon          },
+  { "codon_start",         Qual_class_int            },
+  { "cons_splice",         Qual_class_consplice      },
+  { "db_xref",             Qual_class_db_xref        },
+  { "derived_from",        Qual_class_seq_loc        },
+  { "direction",           Qual_class_L_R_B          },
+  { "EC_number",           Qual_class_EC_quote       },
+  { "encodes",             Qual_class_encodes        },
+  { "estimated_length",    Qual_class_number         },
+  { "evidence",            Qual_class_evidence       },
+  { "exception",           Qual_class_exception      },
+  { "exception_note",      Qual_class_exception      },
+  { "experiment",          Qual_class_quote          },
+  { "experiment",          Qual_class_string         },
+  { "product",             Qual_class_valnode        },
+  { "figure",              Qual_class_string         },
+  { "frequency",           Qual_class_quote          },
+  { "function",            Qual_class_quote          },
+  { "gene",                Qual_class_sgml           },
+  { "gene_desc",           Qual_class_string         },
+  { "allele",              Qual_class_string         },
+  { "map",                 Qual_class_string         },
+  { "cyt_map",             Qual_class_map            },
+  { "gen_map",             Qual_class_map            },
+  { "rad_map",             Qual_class_map            },
+  { "gene_synonym",        Qual_class_sep_gene_syn   },
+  { "gene_synonym",        Qual_class_gene_syn       },
+  { "gene_note",           Qual_class_string         },
+  { "db_xref",             Qual_class_db_xref        },
+  { "GO_component",        Qual_class_go             },
+  { "GO_function",         Qual_class_go             },
+  { "GO_process",          Qual_class_go             },
+  { "heterogen",           Qual_class_string         },
+  { "illegal",             Qual_class_illegal        },
+  { "inference",           Qual_class_quote          },
+  { "inference",           Qual_class_string         },
+  { "inference",           Qual_class_valnode        },
+  { "inference",           Qual_class_valnode        },
+  { "insertion_seq",       Qual_class_quote          },
+  { "label",               Qual_class_label          },
+  { "locus_tag",           Qual_class_locus_tag      },
+  { "map",                 Qual_class_quote          },
+  { "maploc",              Qual_class_string         },
+  { "mobile_element",      Qual_class_mobile_element },
+  { "mod_base",            Qual_class_noquote        },
+  { "model_evidence",      Qual_class_model_ev       },
+  { "calculated_mol_wt",   Qual_class_mol_wt         },
+  { "ncRNA_class",         Qual_class_quote          },
+  { "ncRNA_note",          Qual_class_string         },
+  { "ncRNA_class",         Qual_class_string         },
+  { "nomenclature",        Qual_class_nomenclature   },
+  { "nomenclature",        Qual_class_gene_nomen     },
+  { "note",                Qual_class_note           },
+  { "number",              Qual_class_number         },
+  { "old_locus_tag",       Qual_class_paren          },
+  { "operon",              Qual_class_quote          },
+  { "organism",            Qual_class_quote          },
+  { "partial",             Qual_class_boolean        },
+  { "PCR_conditions",      Qual_class_quote          },
+  { "peptide",             Qual_class_peptide        },
+  { "phenotype",           Qual_class_quote          },
+  { "product",             Qual_class_product        },
+  { "product",             Qual_class_quote          },
+  { "function",            Qual_class_valnode        },
+  { "prot_comment",        Qual_class_string         },
+  { "EC_number",           Qual_class_EC_valnode     },
+  { "prot_note",           Qual_class_string         },
+  { "prot_method",         Qual_class_method         },
+  { "prot_conflict",       Qual_class_string         },
+  { "prot_desc",           Qual_class_string         },
+  { "prot_missing",        Qual_class_string         },
+  { "name",                Qual_class_tilde          },
+  { "prot_names",          Qual_class_protnames      },
+  { "protein_id",          Qual_class_prt_id         },
+  { "pseudo",              Qual_class_boolean        },
+  { "pyrrolysine",         Qual_class_boolean        },
+  { "pyrrolysine",         Qual_class_string         },
+  { "region",              Qual_class_region         },
+  { "region_name",         Qual_class_string         },
+  { "replace",             Qual_class_replace        },
+  { "ribosomal_slippage",  Qual_class_boolean        },
+  { "rpt_family",          Qual_class_quote          },
+  { "rpt_type",            Qual_class_rpt            },
+  { "rpt_unit",            Qual_class_rpt_unit       },
+  { "rpt_unit_range",      Qual_class_rpt_unit       },
+  { "rpt_unit_seq",        Qual_class_rpt_unit       },
+  { "rrna_its",            Qual_class_its            },
+  { "satellite",           Qual_class_quote          },
+  { "sec_str_type",        Qual_class_sec_str        },
+  { "selenocysteine",      Qual_class_boolean        },
+  { "selenocysteine",      Qual_class_string         },
+  { "seqannot_note",       Qual_class_string         },
+  { "seqfeat_note",        Qual_class_string         },
+  { "site",                Qual_class_site           },
+  { "site_type",           Qual_class_site           },
+  { "standard_name",       Qual_class_quote          },
+  { "tag_peptide",         Qual_class_noquote        },
+  { "tag_peptide",         Qual_class_tag_peptide    },
+  { "transcription",       Qual_class_transcription  },
+  { "transcript_id",       Qual_class_nuc_id         },
+  { "tscpt_id_note",       Qual_class_nuc_id         },
+  { "transl_except",       Qual_class_code_break     },
+  { "transl_table",        Qual_class_int            },
+  { "translation",         Qual_class_translation    },
+  { "transposon",          Qual_class_quote          },
+  { "trans_splicing",      Qual_class_boolean        },
+  { "trna_aa",             Qual_class_ignore         },
+  { "codon_recognized",    Qual_class_trna_codons    },
+  { "trna_codons",         Qual_class_trna_codons    },
+  { "UniProtKB_evidence",  Qual_class_quote          },
+  { "usedin",              Qual_class_usedin         },
+  { "xtra_products",       Qual_class_xtraprds       }
 };
 
 
@@ -955,6 +957,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_tRNA , FTQUAL_label },
   { FEATDEF_tRNA , FTQUAL_map },
   { FEATDEF_tRNA , FTQUAL_old_locus_tag },
+  { FEATDEF_tRNA , FTQUAL_operon },
   { FEATDEF_tRNA , FTQUAL_product },
   { FEATDEF_tRNA , FTQUAL_standard_name },
 
@@ -1042,6 +1045,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_D_segment , FTQUAL_standard_name },
 
   { FEATDEF_enhancer , FTQUAL_allele },
+  { FEATDEF_enhancer , FTQUAL_bound_moiety },
   { FEATDEF_enhancer , FTQUAL_label },
   { FEATDEF_enhancer , FTQUAL_map },
   { FEATDEF_enhancer , FTQUAL_old_locus_tag },
@@ -1198,6 +1202,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_primer_bind , FTQUAL_standard_name },
 
   { FEATDEF_promoter , FTQUAL_allele },
+  { FEATDEF_promoter , FTQUAL_bound_moiety },
   { FEATDEF_promoter , FTQUAL_function },
   { FEATDEF_promoter , FTQUAL_label },
   { FEATDEF_promoter , FTQUAL_map },
@@ -1444,6 +1449,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_operon , FTQUAL_standard_name },
 
   { FEATDEF_oriT , FTQUAL_allele },
+  { FEATDEF_oriT , FTQUAL_bound_moiety },
   { FEATDEF_oriT , FTQUAL_direction },
   { FEATDEF_oriT , FTQUAL_label },
   { FEATDEF_oriT , FTQUAL_map },
@@ -2657,6 +2663,7 @@ static FloatHi MolWtForProtFeat (
   CharPtr     str;
 
   if (bsp == NULL || sfp == NULL || ipp == NULL) return 0.0;
+  if (sfp->partial) return 0.0;
   prp = (ProtRefPtr) sfp->data.value.ptrvalue;
   if (prp == NULL) return 0.0;
 
@@ -2862,7 +2869,7 @@ static void FormatFeatureBlockQuals (
   Int2                 numcodons;
   Int2                 numsyns;
   ObjectIdPtr          oip;
-  Boolean              okay;
+  Boolean              okay = FALSE;
   Boolean              only_digits;
   BioseqPtr            pbsp;
   Int4                 pmid;
@@ -3689,7 +3696,7 @@ static void FormatFeatureBlockQuals (
         if (slp != NULL) {
           FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals[idx].name, "=",
                             FALSE, TRUE, TILDE_IGNORE);
-          str = FFFlatLoc (ajp, target, slp, /* ajp->masterStyle */ FALSE);
+          str = FFFlatLoc (ajp, target, slp, /* ajp->masterStyle */ FALSE, FALSE);
           FFAddTextToString(ffstring, "\"", str, "\"", 
                             FALSE, TRUE, TILDE_TO_SPACES);
           FFAddOneChar(ffstring, '\n', FALSE);
@@ -3730,11 +3737,11 @@ static void FormatFeatureBlockQuals (
                   SeqIdFree (sip);
                   if (newloc != NULL) {
                     A2GBSeqLocReplaceID (newloc, ajp->ajp.slp);
-                    str = FFFlatLoc (ajp, target, newloc, ajp->masterStyle);
+                    str = FFFlatLoc (ajp, target, newloc, ajp->masterStyle, FALSE);
                     SeqLocFree (newloc);
                   }
                 } else {
-                  str = FFFlatLoc (ajp, target, slp, ajp->masterStyle);
+                  str = FFFlatLoc (ajp, target, slp, ajp->masterStyle, FALSE);
                 }
                 if (str != NULL) {
                   residue = cbaa.value.intvalue;
@@ -3797,7 +3804,7 @@ static void FormatFeatureBlockQuals (
               }
             }
           } else {
-            tmp = FFFlatLoc (ajp, target, slp, ajp->masterStyle);
+            tmp = FFFlatLoc (ajp, target, slp, ajp->masterStyle, FALSE);
             if (tmp != NULL) {
               FFAddTextToString (ffstring, "/anticodon=(pos:", tmp, ",",
                                  FALSE, FALSE, TILDE_IGNORE);
@@ -3987,9 +3994,11 @@ static void FormatFeatureBlockQuals (
           if (! StringHasNoText (buf)) {
             if (StringICmp (buf, protein_pid_g) != 0) {
               /* already sorted and uniqued by BasicSeqEntryCleanup, per feature */
-              if (StringICmp (dbt->db, "LocusID") == 0 || StringICmp (dbt->db, "InterimID") == 0) {
-                if (FFStringSearch (ffstring, dbt->db, 0) >= 0) {
-                  okay = FALSE;
+              if (dbt != NULL) {
+                if (StringICmp (dbt->db, "LocusID") == 0 || StringICmp (dbt->db, "InterimID") == 0) {
+                  if (FFStringSearch (ffstring, dbt->db, 0) >= 0) {
+                    okay = FALSE;
+                  }
                 }
               }
               if (okay) {
@@ -5242,7 +5251,7 @@ NLM_EXTERN void AddIntervalsToGbfeat (
           gbint->accession = StringSave (accn);
           if (gbfeat->intervals == NULL) {
             gbfeat->intervals = gbint;
-          } else {
+          } else if (last != NULL) {
             last->next = gbint;
           }
           last = gbint;
@@ -5259,6 +5268,7 @@ static CharPtr validExceptionString [] = {
   "RNA editing",
   "reasons given in citation",
   "rearrangement required for product",
+  "annotated by transcript or proteomic data",
   NULL
 };
 
@@ -5277,14 +5287,15 @@ static CharPtr validRefSeqExceptionString [] = {
   "transcribed product replaced",
   "translated product replaced",
   "transcribed pseudogene",
-  "annotated by transcript or proteomic data",
+  /*
   "heterogeneous population sequenced",
   "low-quality sequence region",
+  */
   "unextendable partial coding region",
   NULL
 };
 
-/* ribosomal slippage and trans-splicing now are separate qualifiers */
+/* ribosomal slippage, trans-splicing, and artificial location now are separate qualifiers */
 
 static void ParseException (
   CharPtr original,
@@ -5294,7 +5305,8 @@ static void ParseException (
   Boolean isRelaxed,
   Uint1 subtype,
   BoolPtr riboSlipP,
-  BoolPtr transSpliceP
+  BoolPtr transSpliceP,
+  BoolPtr artLocP
 )
 
 {
@@ -5308,6 +5320,7 @@ static void ParseException (
   *exception_note = NULL;
   *riboSlipP = FALSE;
   *transSpliceP = FALSE;
+  *artLocP = FALSE;
 
   if (StringHasNoText (original)) return;
 
@@ -5340,9 +5353,6 @@ static void ParseException (
           if (StringICmp (tmp, validRefSeqExceptionString [i]) == 0) {
             if (isRefSeq || isRelaxed) {
               ValNodeCopyStr (&excpt, 0, tmp);
-            } else if (StringICmp (tmp, "annotated by transcript or proteomic data") == 0) {
-              ValNodeCopyStr (&excpt, 0, "reasons given in citation");
-              ValNodeCopyStr (&note, 0, tmp);
             } else {
               ValNodeCopyStr (&note, 0, tmp);
             }
@@ -5371,6 +5381,24 @@ static void ParseException (
               subtype == FEATDEF_5clip ||
               subtype == FEATDEF_5UTR) {
             *transSpliceP = TRUE;
+          } else {
+            ValNodeCopyStr (&note, 0, tmp);
+          }
+          found = TRUE;
+        } else if (StringICmp (tmp, "artificial location") == 0) {
+          if (subtype == FEATDEF_CDS ||
+              subtype == FEATDEF_mRNA) {
+            *artLocP = TRUE;
+          } else {
+            ValNodeCopyStr (&note, 0, tmp);
+          }
+          found = TRUE;
+        } else if (StringICmp (tmp, "heterogeneous population sequenced") == 0 ||
+                   StringICmp (tmp, "low-quality sequence region") == 0) {
+          if (subtype == FEATDEF_CDS ||
+              subtype == FEATDEF_mRNA) {
+            *artLocP = TRUE;
+            ValNodeCopyStr (&note, 0, tmp); /* also copy to note */
           } else {
             ValNodeCopyStr (&note, 0, tmp);
           }
@@ -5534,7 +5562,8 @@ static SeqFeatPtr GetOverlappingGeneInEntity (
   Uint2 entityID,
   SeqMgrFeatContextPtr fcontext,
   SeqMgrFeatContextPtr gcontext,
-  SeqLocPtr locforgene
+  SeqLocPtr locforgene,
+  IntAsn2gbJobPtr ajp
 )
 
 {
@@ -5588,6 +5617,11 @@ static SeqFeatPtr GetOverlappingGeneInEntity (
   } else {
     if (fcontext->bad_order || fcontext->mixed_strand) {
       gene = SeqMgrGetOverlappingFeature (locforgene, FEATDEF_GENE, NULL, 0, NULL, LOCATION_SUBSET, gcontext);
+    } else if (ajp->multiIntervalGenes) {
+      gene = SeqMgrGetOverlappingFeature (locforgene, FEATDEF_GENE, NULL, 0, NULL, LOCATION_SUBSET, gcontext);
+      if (gene == NULL) {
+        gene = SeqMgrGetOverlappingGene (locforgene, gcontext);
+      }
     } else {
       gene = SeqMgrGetOverlappingGene (locforgene, gcontext);
     }
@@ -5613,6 +5647,52 @@ static Boolean LocStrandsMatch (SeqLocPtr loc1, SeqLocPtr loc2)
   return FALSE;
 }
 
+/*
+static CharPtr SeqLoc2Str (
+  SeqLocPtr slp
+)
+
+{
+  AsnIoBSPtr    aibp;
+  ByteStorePtr  bs;
+  Char          ch;
+  CharPtr       ptr;
+  CharPtr       str;
+
+  if (slp == NULL) return NULL;
+
+  bs = BSNew (1000);
+  if (bs == NULL) return NULL;
+  aibp = AsnIoBSOpen ("w", bs);
+  if (aibp == NULL) return NULL;
+
+  SeqLocAsnWrite (slp, aibp->aip, NULL);
+
+  AsnIoFlush (aibp->aip);
+  AsnIoBSClose (aibp);
+
+  str = BSMerge (bs, NULL);
+  BSFree (bs);
+
+  if (str == NULL) return NULL;
+
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch == '\n' || ch == '\r' || ch == '\t') {
+      *ptr = ' ';
+    }
+    ptr++;
+    ch = *ptr;
+  }
+
+  TrimSpacesAndSemicolons (str);
+  Asn2gnbkCompressSpaces (str);
+
+  return str;
+}
+*/
+
 static CharPtr FormatFeatureBlockEx (
   IntAsn2gbJobPtr ajp,
   Asn2gbSectPtr asp,
@@ -5631,6 +5711,7 @@ static CharPtr FormatFeatureBlockEx (
   Uint1              aa;
   AnnotDescrPtr      adp;
   Boolean            annotDescCommentToComment;
+  Boolean            artLoc = FALSE;
   ValNodePtr         bad_inference = NULL;
   Int2               bondidx;
   BioseqPtr          bspx = NULL;
@@ -5668,6 +5749,7 @@ static CharPtr FormatFeatureBlockEx (
   Boolean            is_journalscan = FALSE;
   Boolean            is_other = FALSE;
   Boolean            is_misc_rna = FALSE;
+  Boolean            isGap = FALSE;
   Uint4              itemID;
   CharPtr            its_prod = NULL;
   CharPtr            key = NULL;
@@ -5728,7 +5810,11 @@ static CharPtr FormatFeatureBlockEx (
   UserObjectPtr      uop;
   ValNodePtr         vnp;
   StringItemPtr      ffstring;
-
+  /*
+  CharPtr            firstloc = NULL;
+  CharPtr            secondloc = NULL;
+  CharPtr            thirdloc = NULL;
+  */
 
   if (ajp == NULL || fcontext == NULL || qvp == NULL || ifp == NULL) return NULL;
 
@@ -5843,7 +5929,7 @@ static CharPtr FormatFeatureBlockEx (
     if (location == NULL) return NULL;
   
     sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
-    if (sep == NULL && IS_Bioseq_set (sep)) {
+    if (sep != NULL && IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
       if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
         is_gps = TRUE;
@@ -5873,9 +5959,12 @@ static CharPtr FormatFeatureBlockEx (
             is_ed = TRUE;
             break;
           case SEQID_TPG :
+            is_ged = TRUE;
+            break;
           case SEQID_TPE :
           case SEQID_TPD :
             is_ged = TRUE;
+            is_ed = TRUE;
             break;
           default :
           break;
@@ -5888,6 +5977,7 @@ static CharPtr FormatFeatureBlockEx (
     }
 
     key = FindKeyFromFeatDefType (featdeftype, TRUE);
+    isGap = (Boolean) (featdeftype == FEATDEF_gap);
   
     if (format == GENPEPT_FMT && isProt) {
       if (featdeftype == FEATDEF_REGION) {
@@ -5913,6 +6003,11 @@ static CharPtr FormatFeatureBlockEx (
       }
     }
     if (featdeftype == FEATDEF_CLONEREF) {
+      if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
+        key = "misc_feature";
+      }
+    }
+    if (featdeftype == FEATDEF_VARIATIONREF) {
       if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
         key = "misc_feature";
       }
@@ -5965,11 +6060,33 @@ static CharPtr FormatFeatureBlockEx (
         */
         SeqIdFree (sip);
         if (newloc == NULL) return NULL;
+        /*
+        firstloc = SeqLoc2Str (newloc);
+        */
         A2GBSeqLocReplaceID (newloc, ajp->ajp.slp);
-        str = FFFlatLoc (ajp, target, newloc, ajp->masterStyle);
+        /*
+        secondloc = SeqLoc2Str (newloc);
+        */
+        str = FFFlatLoc (ajp, target, newloc, ajp->masterStyle, isGap);
         SeqLocFree (newloc);
+        /*
+        thirdloc = SeqLoc2Str (ajp->ajp.slp);
+        if (StringCmp (str, "?") != 0) {
+          firstloc = MemFree (firstloc);
+          secondloc = MemFree (secondloc);
+          thirdloc = MemFree (thirdloc);
+        }
+        */
       } else {
-        str = FFFlatLoc (ajp, target, location, ajp->masterStyle);
+        str = FFFlatLoc (ajp, target, location, ajp->masterStyle, isGap);
+        /*
+        if (StringCmp (str, "?") == 0) {
+          firstloc = SeqLoc2Str (location);
+          SeqIdWrite (target->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
+          secondloc = StringSave (buf);
+          thirdloc = NULL;
+        }
+        */
       }
     } else {
       str = StringSave (imp->loc);
@@ -6006,6 +6123,11 @@ static CharPtr FormatFeatureBlockEx (
 
     location = sfp->location;
     locforgene = sfp->location;
+  }
+
+  if (location != NULL) {
+   ifp->left = GetOffsetInBioseq (location, bsp, SEQLOC_LEFT_END);
+   ifp->right = GetOffsetInBioseq (location, bsp, SEQLOC_RIGHT_END);
   }
 
   /* populate qualifier table from feature fields */
@@ -6146,9 +6268,9 @@ static CharPtr FormatFeatureBlockEx (
       /* first look for gene that exactly matches mat_peptide DNA projection */
 
       if (gene == NULL && grp == NULL && locformatpep != NULL) {
-        gene = GetOverlappingGeneInEntity (ajp->ajp.entityID, fcontext, &gcontext, locformatpep);
+        gene = GetOverlappingGeneInEntity (ajp->ajp.entityID, fcontext, &gcontext, locformatpep, ajp);
         if (gene == NULL && ajp->ajp.entityID != sfp->idx.entityID) {
-          gene = GetOverlappingGeneInEntity (sfp->idx.entityID, fcontext, &gcontext, locformatpep);
+          gene = GetOverlappingGeneInEntity (sfp->idx.entityID, fcontext, &gcontext, locformatpep, ajp);
         }
 
         if (gene != NULL) {
@@ -6175,9 +6297,9 @@ static CharPtr FormatFeatureBlockEx (
 
       if (gene == NULL && grp == NULL) {
         if (featdeftype != FEATDEF_primer_bind) {
-          gene = GetOverlappingGeneInEntity (ajp->ajp.entityID, fcontext, &gcontext, locforgene);
+          gene = GetOverlappingGeneInEntity (ajp->ajp.entityID, fcontext, &gcontext, locforgene, ajp);
           if (gene == NULL && ajp->ajp.entityID != sfp->idx.entityID) {
-            gene = GetOverlappingGeneInEntity (sfp->idx.entityID, fcontext, &gcontext, locforgene);
+            gene = GetOverlappingGeneInEntity (sfp->idx.entityID, fcontext, &gcontext, locforgene, ajp);
           }
         }
 
@@ -6760,8 +6882,8 @@ static CharPtr FormatFeatureBlockEx (
             if (rrp->ext.choice == 1) {
               if (rrp->type == 255) {
                 str = (CharPtr) rrp->ext.value.ptrvalue;
-                if (StringICmp (str, "ncRNA") == 0 ||
-                    StringICmp (str, "tmRNA") == 0) {
+                if (StringCmp (str, "ncRNA") == 0 ||
+                    StringCmp (str, "tmRNA") == 0) {
                    /* pick up product from gbqual */
                  } else if (StringICmp (str, "misc_RNA") == 0) {
                    is_misc_rna = TRUE;
@@ -6803,7 +6925,7 @@ static CharPtr FormatFeatureBlockEx (
             }
           }
         }
-        if (rrp->ext.choice == 3) {
+        if (rrp != NULL && rrp->ext.choice == 3) {
           rgp = (RNAGenPtr) rrp->ext.value.ptrvalue;
           if (rgp != NULL) {
             if (StringDoesHaveText (rgp->product)) {
@@ -7023,12 +7145,14 @@ static CharPtr FormatFeatureBlockEx (
                     (Boolean) (! ajp->flags.dropIllegalQuals),
                     sfp->idx.subtype,
                     &riboSlippage,
-                    &transSplice);
+                    &transSplice,
+                    &artLoc);
 
     qvp [FTQUAL_exception].str = exception_string;
     qvp [FTQUAL_exception_note].str = exception_note;
     qvp [FTQUAL_ribosomal_slippage].ble = riboSlippage;
     qvp [FTQUAL_trans_splicing].ble = transSplice;
+    qvp [FTQUAL_artificial_location].ble = artLoc;
 
     /*
     if (StringHasNoText (qvp [FTQUAL_exception].str)) {
@@ -7342,6 +7466,12 @@ static CharPtr FormatFeatureBlockEx (
   s_DisplayQVP(qvp, feat_qual_order);
 #endif
 
+  /*
+  qvp[FTQUAL_loc_debug_str1].str = firstloc;
+  qvp[FTQUAL_loc_debug_str2].str = secondloc;
+  qvp[FTQUAL_loc_debug_str3].str = thirdloc;
+  */
+
   /* optionally populate indexes for NCBI internal database */
 
   if (index != NULL) {
@@ -7367,6 +7497,12 @@ static CharPtr FormatFeatureBlockEx (
   /* free aa-dna or dna-aa mapped location */
 
   SeqLocFree (loc);
+
+  /*
+  MemFree (firstloc);
+  MemFree (secondloc);
+  MemFree (thirdloc);
+  */
 
   ValNodeFreeData (illegal);
   MemFree (exception_string);
@@ -7617,14 +7753,16 @@ NLM_EXTERN void DoImmediateRemoteFeatureFormat (
       fprintf (afp->fp, "%s", str);
     }
     if (afp->ffwrite != NULL) {
-      afp->ffwrite (str, afp->userdata, blocktype, sfp->idx.entityID, OBJ_SEQFEAT, sfp->idx.itemID);
+      afp->ffwrite (str, afp->userdata, blocktype, sfp->idx.entityID, OBJ_SEQFEAT,
+                    sfp->idx.itemID, fcontext.left, fcontext.right);
     }
   } else {
     if (afp->fp != NULL) {
       fprintf (afp->fp, "?\n");
     }
     if (afp->ffwrite != NULL) {
-      afp->ffwrite ("?\n", afp->userdata, blocktype, sfp->idx.entityID, OBJ_SEQFEAT, sfp->idx.itemID);
+      afp->ffwrite ("?\n", afp->userdata, blocktype, sfp->idx.entityID, OBJ_SEQFEAT,
+                    sfp->idx.itemID, fcontext.left, fcontext.right);
     }
   }
 

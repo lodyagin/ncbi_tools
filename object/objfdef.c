@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.39 $
+* $Revision: 6.41 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -700,7 +700,8 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"oriT\" , menulabel \"Origin of Transcription\" , featdef-key 93 , seqfeat-key 8 , entrygroup 5 , displaygroup 5 , molgroup na } ,\n" \
 "{ typelabel \"ncRNA\" , menulabel \"Non-coding RNA\" , featdef-key 94 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
 "{ typelabel \"tmRNA\" , menulabel \"Transfer-messenger RNA\" , featdef-key 95 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
-"{ typelabel \"CloneRef\" , menulabel \"Clone Reference\" , featdef-key 96 , seqfeat-key 21 , entrygroup 0 , displaygroup 0 , molgroup na  } } };\n";
+"{ typelabel \"CloneRef\" , menulabel \"Clone Reference\" , featdef-key 96 , seqfeat-key 21 , entrygroup 0 , displaygroup 0 , molgroup na } ,\n" \
+"{ typelabel \"VariationRef\" , menulabel \"Variation Reference\" , featdef-key 97 , seqfeat-key 22 , entrygroup 0 , displaygroup 0 , molgroup na  } } };\n";
 #endif
 
 /*****************************************************************************
@@ -985,6 +986,8 @@ NLM_EXTERN Uint1 LIBCALL FindFeatDefType(SeqFeatPtr sfp)
             return FEATDEF_BIOSRC;
         case SEQFEAT_CLONEREF:
             return FEATDEF_CLONEREF;
+        case SEQFEAT_VARIATIONREF:
+            return FEATDEF_VARIATIONREF;
     }
 
     return FEATDEF_BAD;
@@ -1338,6 +1341,8 @@ protref:    if (prp->name != NULL)
             label = (sfp->data.value.ptrvalue);
             if (StringICmp (label, "Domain") == 0 && sfp->comment != NULL) {
               label = sfp->comment;
+            } else if (StringICmp (label, "Variant") == 0 && sfp->comment != NULL) {
+              label = sfp->comment;
             }
             break;
         case SEQFEAT_COMMENT:
@@ -1396,6 +1401,8 @@ protref:    if (prp->name != NULL)
             orp = bsrcp->org;
             goto orgref;
         case SEQFEAT_CLONEREF:
+            break;
+        case SEQFEAT_VARIATIONREF:
             break;
         default:
             break;
@@ -1488,6 +1495,11 @@ NLM_EXTERN Int2 LIBCALL FeatDefLabel (SeqFeatPtr sfp, CharPtr buf, Int2 buflen, 
                    StringICmp ((CharPtr) sfp->data.value.ptrvalue, "Domain") == 0 &&
                    sfp->comment != NULL) {
             StringCpy (tbuf, "Domain");
+            typelabel = tbuf;
+        } else if (sfp->data.choice == SEQFEAT_REGION &&
+                   StringICmp ((CharPtr) sfp->data.value.ptrvalue, "Variant") == 0 &&
+                   sfp->comment != NULL) {
+            StringCpy (tbuf, "Variant");
             typelabel = tbuf;
         }
     }

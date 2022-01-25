@@ -332,6 +332,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name exe_sbtedit
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name exe_streamer
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -3163,6 +3166,42 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "exe_streamer"=.\sequin\streamer\exe_streamer.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimmdb
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbidesk
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbicdr
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name vibrant
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
     End Project Dependency
 }}}
 

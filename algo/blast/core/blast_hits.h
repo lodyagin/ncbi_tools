@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.111 2009/05/27 17:39:36 kazimird Exp $
+/* $Id: blast_hits.h,v 1.114 2010/06/25 17:14:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -57,8 +57,7 @@ typedef struct SBlastHitsParameters {
    Int4 hsp_num_max; /**< number of HSPs to save per db sequence. */
 } SBlastHitsParameters; 
 
-/** Sets up small structures used by blast_hit.c and hspstream_collector.c
- * for saving HSPs.
+/** Sets up small structures used by blast_hit.c for saving HSPs.
  * @param hit_options field hitlist_size and hsp_num_max needed, a pointer to 
  *      this structure will be stored on resulting structure.[in]
  * @param ext_options field compositionBasedStats needed here. [in]
@@ -501,11 +500,12 @@ Int4
 Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program, 
                                           BlastHSPList* hsp_list);
 
-/** Reevaluate all ungapped HSPs in an HSP list, using ambiguity information. 
- * This is/can only done either for an ungapped search, or if traceback is 
+/** Reevaluate all ungapped HSPs in an HSP list.  
+ * This is only done for an ungapped search, or if traceback is 
  * already available.
- * Subject sequence is uncompressed and saved here. Number of identities is
- * calculated for each HSP along the way. 
+ * Subject sequence is uncompressed and saved here (for nucleotide sequences). 
+ * The number of identities is calculated for each HSP along the way,
+ * hence this function is called for all programs. 
  * @param program Type of BLAST program [in]
  * @param hsp_list The list of HSPs for one subject sequence [in] [out]
  * @param query_blk The query sequence [in]
@@ -523,7 +523,7 @@ Blast_HSPListPurgeHSPsWithCommonEndpoints(EBlastProgramType program,
  */
 NCBI_XBLAST_EXPORT
 Int2 
-Blast_HSPListReevaluateWithAmbiguitiesUngapped(EBlastProgramType program, 
+Blast_HSPListReevaluateUngapped(EBlastProgramType program, 
    BlastHSPList* hsp_list, BLAST_SequenceBlk* query_blk, 
    BLAST_SequenceBlk* subject_blk, 
    const BlastInitialWordParameters* word_params,
@@ -556,6 +556,7 @@ Int2 Blast_HSPListAppend(BlastHSPList** old_hsp_list_ptr,
  * @param chunk_overlap_size The length of the overlap region between the
  *                    sequence region containing hsp_list and that
  *                    containing combined_hsp_list [in]
+ * @param allow_gap Allow merging HSPs at different diagonals [in]
  * @return 0 if HSP lists have been merged successfully, -1 otherwise.
  */
 NCBI_XBLAST_EXPORT
@@ -563,7 +564,8 @@ Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list,
                    BlastHSPList** combined_hsp_list_ptr, 
                    Int4 hsp_num_max, Int4* split_points, 
                    Int4 contexts_per_query,
-                   Int4 chunk_overlap_size);
+                   Int4 chunk_overlap_size,
+                   Boolean allow_gap);
                    
 /** Adjust subject offsets in an HSP list if only part of the subject sequence
  * was searched. Used when long subject sequence is split into more manageable
@@ -659,12 +661,13 @@ Int2 Blast_HitListUpdate(BlastHitList* hit_list, BlastHSPList* hsp_list);
  * @param chunk_overlap_size The length of the overlap region between the
  *                    sequence region containing hit_list and that
  *                    containing combined_hit_list [in]
+ * @param allow_gap Allow merging HSPs at different diagonals [in]
 */
 NCBI_XBLAST_EXPORT
 Int2 Blast_HitListMerge(BlastHitList** old_hit_list_ptr,
                         BlastHitList** combined_hit_list_ptr,
                         Int4 contexts_per_query, Int4 *split_offsets,
-                        Int4 chunk_overlap_size);
+                        Int4 chunk_overlap_size, Boolean allow_gap);
 
 /** Purges a BlastHitList of NULL HSP lists.
  * @param hit_list BLAST hit list to purge. [in] [out]
@@ -701,26 +704,6 @@ Int2 Blast_HSPResultsReverseSort(BlastHSPResults* results);
  */
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPResultsReverseOrder(BlastHSPResults* results);
-
-/** For each query sequence in the BLAST results, remove any hits
- *  whose query range is enveloped by too many other higher-scoring
- *  hits. All hits to a query sequence are considered together.
- *  For more details see Berman P. et. al, "Winnowing Sequences
- *  from a Database Search" Journal of Computational Biology
- *  vol 7(2000) pp 293-302
- *
- * @param results The collection of results to cull [in][out]
- * @param query_info Query offset information [in]
- * @param culling_limit Maximum number of hits allowed to envelop
- *                      the query range of an HSP before the HSP is removed
- * @param query_length Length of concatenated query [in]
- * @return 0 on success
- */
-NCBI_XBLAST_EXPORT
-Int2 Blast_HSPResultsPerformCulling(BlastHSPResults *results,
-                                    const BlastQueryInfo *query_info,
-                                    Int4 culling_limit,
-                                    Int4 query_length);
 
 /** Blast_HSPResultsInsertHSPList
  * Insert an HSP list to the appropriate place in the results structure.

@@ -1,4 +1,4 @@
-/* $Id: composition_constants.h,v 1.8 2006/06/29 16:50:24 gertz Exp $
+/* $Id: composition_constants.h,v 1.9 2010/03/26 14:54:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,10 @@
 
 #include <algo/blast/core/ncbi_std.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** Minimum score in a matrix */
 #define COMPO_SCORE_MIN INT2_MIN
 
@@ -46,12 +50,22 @@
     structures that are statically allocated. */
 #define COMPO_LARGEST_ALPHABET 28
 
+/* NOTE: Please keep these comments in sync with argument descriptions in
+ * CCompositionBasedStatsArgs::SetArgumentDescriptions()
+ */
+
 /** An collection of constants that specify all permissible
  * modes of composition adjustment */
 typedef enum ECompoAdjustModes {
-    eNoCompositionBasedStats       = 0,
-    eCompositionBasedStats         = 1,
-    eCompositionMatrixAdjust       = 2,
+    /** Don't use composition based statistics */
+    eNoCompositionBasedStats       = 0, 
+    /** Composition-based statistics as in NAR 29:2994-3005, 2001 */
+    eCompositionBasedStats         = 1, 
+    /** Composition-based score adjustment as in Bioinformatics 21:902-911,
+     * 2005, conditioned on sequence properties. Cannot be applied to PSSMs. */
+    eCompositionMatrixAdjust       = 2, 
+    /** Composition-based score adjustment as in Bioinformatics 21:902-911,
+     * 2005, unconditionally. Cannot be applied to PSSMs. */
     eCompoForceFullMatrixAdjust    = 3,
     eNumCompoAdjustModes
 } ECompoAdjustModes;
@@ -69,5 +83,8 @@ typedef enum EMatrixAdjustRule {
 } EMatrixAdjustRule;
 
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

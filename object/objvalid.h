@@ -17,12 +17,20 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Structured-comment-validation
-*    Generated using ASNCODE Revision: 6.16 at Apr 7, 2009  1:38 PM
+*    Generated using ASNCODE Revision: 6.16 at Dec 11, 2009  7:16 AM
 *
 **************************************************/
 
 NLM_EXTERN Boolean LIBCALL
 objvalidAsnLoad PROTO((void));
+/* following #defines are for enumerated type, not used by object loaders */
+#define Severity_level_none 0
+#define Severity_level_info 1
+#define Severity_level_warning 2
+#define Severity_level_error 3
+#define Severity_level_reject 4
+#define Severity_level_fatal 5
+
 
 
 /**************************************************
@@ -35,6 +43,7 @@ typedef struct struct_Field_rule {
    CharPtr   field_name;
    CharPtr   match_expression;
    Uint1   required;
+   Uint2   severity;
 } FieldRule, PNTR FieldRulePtr;
 
 
@@ -67,6 +76,47 @@ NLM_EXTERN Boolean LIBCALL FieldSetAsnWrite PROTO (( FieldSetPtr , AsnIoPtr, Asn
 
 /**************************************************
 *
+*    DependentFieldRule
+*
+**************************************************/
+typedef struct struct_Dependent_field_rule {
+   struct struct_Dependent_field_rule PNTR next;
+   CharPtr   match_name;
+   CharPtr   value_constraint;
+   struct struct_Field_rule PNTR   other_fields;
+   struct struct_Field_rule PNTR   disallowed_fields;
+} DependentFieldRule, PNTR DependentFieldRulePtr;
+
+
+NLM_EXTERN DependentFieldRulePtr LIBCALL DependentFieldRuleFree PROTO ((DependentFieldRulePtr ));
+NLM_EXTERN DependentFieldRulePtr LIBCALL DependentFieldRuleNew PROTO (( void ));
+NLM_EXTERN DependentFieldRulePtr LIBCALL DependentFieldRuleAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL DependentFieldRuleAsnWrite PROTO (( DependentFieldRulePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    DependentFieldSet
+*
+**************************************************/
+typedef struct struct_Dependent_field_rule DependentFieldSet;
+typedef struct struct_Dependent_field_rule PNTR DependentFieldSetPtr;
+#define DependentFieldSetNew() Dependent_field_ruleNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN DependentFieldSetPtr LIBCALL DependentFieldSetFree PROTO ((DependentFieldSetPtr ));
+NLM_EXTERN DependentFieldSetPtr LIBCALL DependentFieldSetNew PROTO (( void ));
+NLM_EXTERN DependentFieldSetPtr LIBCALL DependentFieldSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL DependentFieldSetAsnWrite PROTO (( DependentFieldSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
 *    CommentRule
 *
 **************************************************/
@@ -75,6 +125,9 @@ typedef struct struct_Comment_rule {
    CharPtr   prefix;
    Uint1   updated;
    struct struct_Field_rule PNTR   fields;
+   Uint1   require_order;
+   Uint1   allow_unlisted;
+   struct struct_Dependent_field_rule PNTR   dependent_rules;
 } CommentRule, PNTR CommentRulePtr;
 
 

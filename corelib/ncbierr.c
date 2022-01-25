@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.25 2008/01/18 17:09:13 lavr Exp $
+* $Id: ncbierr.c,v 6.26 2009/08/14 18:01:09 lavr Exp $
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,9 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.26  2009/08/14 18:01:09  lavr
+* Use {Get|Set}ProgramName()
+*
 * Revision 6.25  2008/01/18 17:09:13  lavr
 * Use SEV_MIN (instead of explicit SEV_INFO) in level setting routines
 *
@@ -782,7 +785,7 @@ NLM_EXTERN int LIBCALL Nlm_ErrShow (void)
       if (severity >= info->opts.msg_level)
         {
           size_t bytes;
-          const char *caption = (char*)GetAppProperty("ProgramName");
+          const char *caption = GetProgramName();
           char *message;
           const char *msgtext;
           char *p;

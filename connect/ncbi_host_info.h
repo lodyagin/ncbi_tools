@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_HOST_INFO__H
 #define CONNECT___NCBI_HOST_INFO__H
 
-/* $Id: ncbi_host_info.h,v 6.10 2009/02/03 16:39:35 kazimird Exp $
+/* $Id: ncbi_host_info.h,v 6.11 2009/09/30 20:24:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -56,6 +56,12 @@ extern "C" {
 
 struct SHostInfoTag;  /*forward declaration of an opaque private structure*/
 typedef struct SHostInfoTag* HOST_INFO; /*handle for the user code use*/
+
+
+/* Return official host address or 0 if unknown.
+ */
+extern NCBI_XCONNECT_EXPORT
+unsigned int HINFO_HostAddr(const HOST_INFO host_info);
 
 
 /* Return CPU count or -1 if an error occurred.

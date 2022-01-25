@@ -1,4 +1,4 @@
-/* $Id: na_ungapped.h,v 1.5 2009/05/27 17:39:36 kazimird Exp $
+/* $Id: na_ungapped.h,v 1.6 2009/10/02 15:21:51 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -56,7 +56,7 @@ typedef Int4 (*TNaExtendFunction)(const BlastOffsetPair* offset_pairs,
                     Int4** matrix, BlastQueryInfo* query_info,
                     Blast_ExtendWord* ewp, 
                     BlastInitHitList* init_hitlist,
-                    Int4 * range);
+                    Int4 range);
 
 /** Find all words for a given subject sequence and perform 
  * ungapped extensions, assuming ordinary blastn.

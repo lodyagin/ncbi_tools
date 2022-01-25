@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.c,v 1.98 2009/01/05 16:54:38 kazimird Exp $
+/* $Id: blast_kappa.c,v 1.100 2010/07/30 17:44:35 kazimird Exp $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-"$Id: blast_kappa.c,v 1.98 2009/01/05 16:54:38 kazimird Exp $";
+"$Id: blast_kappa.c,v 1.100 2010/07/30 17:44:35 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <float.h>
@@ -447,6 +447,7 @@ s_ComputeNumIdentities(const BLAST_SequenceBlk* query_blk,
                        const Uint1* gen_code_string)
 {
     Uint1* query = NULL;
+    Uint1* query_nomask = NULL;
     Uint1* subject = NULL;
     const EBlastProgramType program_number = scoring_options->program_number;
     const Boolean kIsOutOfFrame = scoring_options->is_ooframe;
@@ -465,6 +466,7 @@ s_ComputeNumIdentities(const BLAST_SequenceBlk* query_blk,
         memset((void*) &seq_arg, 0, sizeof(seq_arg));
         seq_arg.oid = hsp_list->oid;
         seq_arg.encoding = encoding;
+        seq_arg.check_oid_exclusion = TRUE;
         status = BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg);
         ASSERT(status == 0);
     }
@@ -486,8 +488,11 @@ s_ComputeNumIdentities(const BLAST_SequenceBlk* query_blk,
             Int4 context = hsp->context - hsp->context % CODON_LENGTH;
             Int4 context_offset = query_info->contexts[context].query_offset;
             query = query_blk->oof_sequence + CODON_LENGTH + context_offset;
+            query_nomask = query_blk->oof_sequence + CODON_LENGTH + context_offset;
         } else {
             query = query_blk->sequence + 
+                query_info->contexts[hsp->context].query_offset;
+            query_nomask = query_blk->sequence_nomask + 
                 query_info->contexts[hsp->context].query_offset;
         }
 
@@ -497,7 +502,7 @@ s_ComputeNumIdentities(const BLAST_SequenceBlk* query_blk,
             status = Blast_HSPGetNumIdentities(query, target_sequence, hsp, scoring_options, 0);
         }
         else
-            status = Blast_HSPGetNumIdentities(query, subject, hsp, scoring_options, 0);
+            status = Blast_HSPGetNumIdentities(query_nomask, subject, hsp, scoring_options, 0);
 
         ASSERT(status == 0);
     }
@@ -958,6 +963,7 @@ s_MatchingSequenceInitialize(BlastCompo_MatchingSequence * self,
 
         memset((void*) &seq_info->seq_arg, 0, sizeof(seq_info->seq_arg));
         seq_info->seq_arg.oid = self->index = subject_index;
+        seq_info->seq_arg.check_oid_exclusion = TRUE;
 
         if( program_number == eBlastTypeTblastn ) {
             seq_info->seq_arg.encoding = eBlastEncodingNcbi4na;

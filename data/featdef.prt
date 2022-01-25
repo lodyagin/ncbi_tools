@@ -908,6 +908,15 @@ FeatDefGroupSet ::= {
     displaygroup 0 ,
     molgroup na
   } ,
+  {                   -- variation ref
+    typelabel "VariationRef" ,
+    menulabel "Variation Reference" ,
+    featdef-key 97 ,
+    seqfeat-key 22 ,
+    entrygroup 0 ,
+    displaygroup 0 ,
+    molgroup na
+  } ,
 
 }
 }

@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.213 2009/06/15 18:34:32 kazimird Exp $
+/* $Id: blast_options.c,v 1.214 2009/08/13 19:09:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.213 2009/06/15 18:34:32 kazimird Exp $";
+    "$Id: blast_options.c,v 1.214 2009/08/13 19:09:34 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -558,6 +558,7 @@ BlastInitialWordOptionsNew(EBlastProgramType program,
       (*options)->gap_trigger = BLAST_GAP_TRIGGER_PROT;
    } else {
       (*options)->window_size = BLAST_WINDOW_SIZE_NUCL;
+      (*options)->scan_range =  BLAST_SCAN_RANGE_NUCL;
       (*options)->gap_trigger = BLAST_GAP_TRIGGER_NUCL;
       (*options)->x_dropoff = BLAST_UNGAPPED_X_DROPOFF_NUCL;
    }
@@ -586,6 +587,15 @@ BlastInitialWordOptionsValidate(EBlastProgramType program_number,
                             "x_dropoff must be greater than zero");
          return BLASTERR_OPTION_VALUE_INVALID;
    }
+
+   if (program_number == eBlastTypeBlastn && 
+       options->scan_range && !options->window_size)
+   {
+      Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
+                            "off_diagonal_range is only useful in 2-hit algorithm");
+         return BLASTERR_OPTION_VALUE_INVALID;
+   }
+                
    
    return 0;
 }

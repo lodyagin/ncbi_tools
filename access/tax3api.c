@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.46 $
+* $Revision: 1.59 $
 *
 * File Description: 
 *
@@ -63,6 +63,30 @@ static const CharPtr tax3servicename = "TaxService3";
 #else
 static const CharPtr tax3servicename = "TaxService3Test";
 #endif
+
+static void Tax3ReplyFixup (
+  Taxon3ReplyPtr t3ry
+)
+
+{
+  OrgNamePtr  onp;
+  OrgRefPtr   orp;
+  T3DataPtr   tdp;
+  T3ReplyPtr  trp;
+
+  if (t3ry == NULL) return;
+
+  for (trp = t3ry->reply; trp != NULL; trp = trp->next) {
+    if (trp->choice != T3Reply_data) continue;
+    tdp = (T3DataPtr) trp->data.ptrvalue;
+    if (tdp == NULL) continue;
+    orp = (OrgRefPtr) tdp->org;
+    if (orp == NULL) continue;
+    onp = orp->orgname;
+    if (onp == NULL) continue;
+    onp->pgcode = GetSpecialPlastidGenCode (orp->taxname, onp->lineage);
+  }
+}
 
 NLM_EXTERN CONN Tax3OpenConnection (
   void
@@ -126,6 +150,7 @@ NLM_EXTERN Taxon3ReplyPtr Tax3WaitForReply (
   if (status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen (text_tax_asn ? "r" : "rb", conn);
     t3ry = Taxon3ReplyAsnRead (aicp->aip, NULL);
+    Tax3ReplyFixup (t3ry);
     QUERY_AsnIoConnClose (aicp);
   }
   CONN_Close (conn);
@@ -143,6 +168,7 @@ NLM_EXTERN Taxon3ReplyPtr Tax3SynchronousQuery (
   AsnIoConnPtr    aicp;
   CONN            conn;
   Taxon3ReplyPtr  t3ry;
+  time_t          t1, t2, t3;
 
   if (t3rq == NULL) return NULL;
 
@@ -159,7 +185,10 @@ NLM_EXTERN Taxon3ReplyPtr Tax3SynchronousQuery (
 
   QUERY_SendQuery (conn);
 
+  t1 = time(NULL);
   t3ry = Tax3WaitForReply (conn);
+  t2 = time(NULL);
+  t3 = t2 - t1;
 
   return t3ry;
 }
@@ -215,6 +244,7 @@ NLM_EXTERN Taxon3ReplyPtr Tax3ReadReply (
   if (conn != NULL && status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen (text_tax_asn ? "r" : "rb", conn);
     t3ry = Taxon3ReplyAsnRead (aicp->aip, NULL);
+    Tax3ReplyFixup (t3ry);
     QUERY_AsnIoConnClose (aicp);
   }
   return t3ry;
@@ -246,6 +276,20 @@ NLM_EXTERN Taxon3RequestPtr CreateTaxon3Request (
   return t2rp;
 }
 
+
+static void SaveTaxon3Request (Taxon3RequestPtr t3rp, CharPtr path)
+{
+  AsnIoPtr aip;
+
+  if (t3rp != NULL) {
+    aip = AsnIoOpen (path, "w");
+    if (aip != NULL) {
+      Taxon3RequestAsnWrite (t3rp, aip, NULL);
+      AsnIoClose (aip);
+    }
+  }
+}
+
 NLM_EXTERN Taxon3RequestPtr CreateMultiTaxon3Request (ValNodePtr org_list)
 {
   ValNodePtr vnp;
@@ -259,20 +303,40 @@ NLM_EXTERN Taxon3RequestPtr CreateMultiTaxon3Request (ValNodePtr org_list)
   {
     switch (vnp->choice)
     {
-      case 1:
-        ValNodeAddInt (&(t3rp->request), 1, vnp->data.intvalue);
+      case T3Request_taxid:
+        ValNodeAddInt (&(t3rp->request), T3Request_taxid, vnp->data.intvalue);
         break;
-      case 2:
-        ValNodeCopyStr (&(t3rp->request), 2, vnp->data.ptrvalue);
+      case T3Request_name:
+        ValNodeCopyStr (&(t3rp->request), T3Request_name, vnp->data.ptrvalue);
         break;
-      case 3:
+      case T3Request_org:
         orp = AsnIoMemCopy (vnp->data.ptrvalue,
                         (AsnReadFunc) OrgRefAsnRead,
                         (AsnWriteFunc) OrgRefAsnWrite);
-        ValNodeAddPointer (&(t3rp->request), 3, (Pointer) orp);
+        ValNodeAddPointer (&(t3rp->request), T3Request_org, (Pointer) orp);
         break;
     }
   }
+
+  /* SaveTaxon3Request(t3rp, "request.txt"); */
+  return t3rp;
+}
+
+/* takes ValNode list of integers, creates request */
+NLM_EXTERN Taxon3RequestPtr CreateJoinRequest (ValNodePtr taxon_list)
+{
+  Taxon3RequestPtr t3rp;
+  ValNodePtr vnp, data = NULL;
+
+  t3rp = Taxon3RequestNew();
+  if (t3rp == NULL) return NULL;
+
+  for (vnp = taxon_list; vnp != NULL; vnp = vnp->next) {
+    ValNodeAddInt (&data, T3Request_join, vnp->data.intvalue);
+  }
+  ValNodeAddPointer ((&t3rp->request), T3Request_join, data);
+
+/*  SaveTaxon3Request(t3rp, "join_request.txt"); */
   return t3rp;
 }
 
@@ -291,6 +355,29 @@ static Boolean HasMisspellingFlag (T3DataPtr t)
   }
   return FALSE;
 }
+
+
+static Uint1 GetStatusFlags (T3DataPtr t)
+{
+  Uint1 flags = 0;
+  T3StatusFlagsPtr status;
+
+  if (t == NULL) return FALSE;
+  status = t->status;
+  while (status != NULL) {
+    if (StringCmp (status->property, "unpublished_name") == 0) {
+      flags |= eReturnedOrgFlag_unpublished;
+    } else if (StringCmp (status->property, "misspelled_name") == 0) {
+      flags |= eReturnedOrgFlag_misspelled;
+    }
+    status = status->next;
+  }
+  if (flags == 0) {
+    flags = eReturnedOrgFlag_normal;
+  }
+  return flags;
+}
+
 
 
 static int LIBCALLBACK SortVnpByOrgRef (VoidPtr ptr1, VoidPtr ptr2)
@@ -323,10 +410,14 @@ NLM_EXTERN ValNodePtr Taxon3GetOrgRefList (ValNodePtr org_list)
   ValNodePtr PNTR  ptr_array;
   ValNodePtr       vnp, vnp_rq, vnp_rp;
   Int4             i, num_orgs;
+  Uint1            choice;
+  TextFsaPtr       tags;
 
   if (org_list == NULL) {
     return NULL;
   }
+
+  tags = GetOrgModSearch();
 
   /* make a copy of the original list - we will prepare the response list by substituting the OrgRef */
   org_list = ValNodeCopyPtr (org_list);
@@ -383,11 +474,9 @@ NLM_EXTERN ValNodePtr Taxon3GetOrgRefList (ValNodePtr org_list)
             tdp = (T3DataPtr) trp->data.ptrvalue;
             if (tdp != NULL) {
               t3orp = (OrgRefPtr)(tdp->org);
-              if (HasMisspellingFlag (tdp)) {
-                ValNodeAddPointer (&response_list, eReturnedOrgFlag_misspelled, (Pointer) t3orp);
-              } else {
-                ValNodeAddPointer (&response_list, eReturnedOrgFlag_normal, (Pointer) t3orp);
-              }
+              choice = GetStatusFlags (tdp);
+              ParseTaxNameToQuals(t3orp, tags);
+              ValNodeAddPointer (&response_list, choice, (Pointer) t3orp);
               tdp->org = NULL;
             }
             break;
@@ -439,6 +528,7 @@ NLM_EXTERN ValNodePtr Taxon3GetOrgRefList (ValNodePtr org_list)
   ptr_array[num_orgs - 1]->next = NULL;
   org_list = ptr_array[0];
   ptr_array = MemFree (ptr_array);
+  tags = TextFsaFree (tags);
   
   return org_list;
 }
@@ -697,10 +787,12 @@ static void CheckSuggestedFixes (ValNodePtr tax_fix_list)
     }
     if (t != NULL) {
       t->suggested_fix = MemFree (t->suggested_fix);
-      t->suggested_fix = vnp_rp->data.ptrvalue;
-      vnp_rp->data.ptrvalue = NULL;
-      vnp_rq = vnp_rq->next;
-      vnp_rp = vnp_rp->next;
+      if (vnp_rq != NULL) {
+        t->suggested_fix = vnp_rp->data.ptrvalue;
+        vnp_rp->data.ptrvalue = NULL;
+        vnp_rq = vnp_rq->next;
+        vnp_rp = vnp_rp->next;
+      }
     }
   }
   rp_list = ValNodeFreeData (rp_list);
@@ -866,7 +958,7 @@ NLM_EXTERN OrgRefPtr Taxon3GetOrg (OrgRefPtr orp)
   OrgRefPtr        t3orp = NULL;
   T3ReplyPtr        trp;
   T3ErrorPtr        tep;
-	
+
   if (orp == NULL) return NULL;
   
   t3rq = CreateTaxon3Request (0, NULL, orp);
@@ -903,7 +995,7 @@ static Boolean DoOrgIdsMatch(BioSourcePtr b1, BioSourcePtr b2)
 {
   DbtagPtr d1 = NULL, d2 = NULL;
   ValNodePtr vnp;
-	
+
   if (b1 == NULL || b2 == NULL) 
   {
     return FALSE;
@@ -923,21 +1015,21 @@ static Boolean DoOrgIdsMatch(BioSourcePtr b1, BioSourcePtr b2)
   for (vnp = b2->org->db; vnp; vnp = vnp->next) 
   {
     d2 = (DbtagPtr) vnp->data.ptrvalue;
-	if (StringCmp(d2->db, "taxon") == 0) 
-	{
+    if (StringCmp(d2->db, "taxon") == 0) 
+    {
       break;
-	}
+    }
   }
   if (d1 && d2) 
   {
-	if (d1->tag->id == d2->tag->id) 
-	{
+    if (d1->tag->id == d2->tag->id) 
+    {
       return TRUE;
-	}
+    }
   }
   else if (StringICmp(b1->org->taxname, b2->org->taxname) == 0) 
   {
-	return TRUE;
+    return TRUE;
   }
   return FALSE;
 }
@@ -946,17 +1038,17 @@ static BioSourcePtr Tax3BioSourceMerge(BioSourcePtr host, BioSourcePtr guest)
 {
   SubSourcePtr ssp, sp, last_ssp;
   OrgModPtr omp, homp, last_omp;
-  OrgNamePtr	onp;
-	
+  OrgNamePtr    onp;
+    
   if (host == NULL && guest == NULL) 
   {
     return NULL;
   }
   if (host == NULL && guest != NULL) 
   {
-	host = AsnIoMemCopy(guest, (AsnReadFunc) BioSourceAsnRead, 
-		   						(AsnWriteFunc) BioSourceAsnWrite);
-	return host;
+    host = AsnIoMemCopy(guest, (AsnReadFunc) BioSourceAsnRead, 
+                                   (AsnWriteFunc) BioSourceAsnWrite);
+    return host;
   }
   if (host != NULL && guest == NULL) 
   {
@@ -973,12 +1065,12 @@ static BioSourcePtr Tax3BioSourceMerge(BioSourcePtr host, BioSourcePtr guest)
   last_ssp = host->subtype;
   while (last_ssp != NULL && last_ssp->next != NULL)
   {
-  	last_ssp = last_ssp->next;
+      last_ssp = last_ssp->next;
   }
   for (ssp = guest->subtype; ssp; ssp = ssp->next) 
   {
     sp = AsnIoMemCopy(ssp, (AsnReadFunc) SubSourceAsnRead, 
-		   						(AsnWriteFunc) SubSourceAsnWrite);
+                                   (AsnWriteFunc) SubSourceAsnWrite);
     if (last_ssp == NULL)
     {
       host->subtype = sp;
@@ -991,12 +1083,12 @@ static BioSourcePtr Tax3BioSourceMerge(BioSourcePtr host, BioSourcePtr guest)
   }
   if (guest->org->orgname) 
   {
-   	if ((onp = host->org->orgname)	== NULL) 
-   	{
-   	  onp = OrgNameNew();
-   	  host->org->orgname = onp;
-    }	
-    last_omp = onp->mod;		
+       if ((onp = host->org->orgname)    == NULL) 
+       {
+         onp = OrgNameNew();
+         host->org->orgname = onp;
+    }    
+    last_omp = onp->mod;        
     while (last_omp != NULL && last_omp->next != NULL)
     {
       last_omp = last_omp->next;
@@ -1004,15 +1096,15 @@ static BioSourcePtr Tax3BioSourceMerge(BioSourcePtr host, BioSourcePtr guest)
     for (omp = guest->org->orgname->mod; omp; omp = omp->next) 
     {
       homp = AsnIoMemCopy(omp, (AsnReadFunc) OrgModAsnRead, 
-		   						(AsnWriteFunc) OrgModAsnWrite);
+                                   (AsnWriteFunc) OrgModAsnWrite);
       if (last_omp == NULL)
       {
-      	onp->mod = homp;
+          onp->mod = homp;
       }
       else
       {
-      	last_omp->next = homp;
-      	last_omp = homp;
+          last_omp->next = homp;
+          last_omp = homp;
       }
     }
   }
@@ -1021,101 +1113,101 @@ static BioSourcePtr Tax3BioSourceMerge(BioSourcePtr host, BioSourcePtr guest)
 
 
 /**************************************************************************
-*	Compare BioSources in one bioseq->descr using Taxonomy to find
-*	their join parent
-*	merge if organisms are the same or create a feature if different
+*    Compare BioSources in one bioseq->descr using Taxonomy to find
+*    their join parent
+*    merge if organisms are the same or create a feature if different
 *
 **************************************************************************/
 NLM_EXTERN void Tax3MergeSourceDescr (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
-	BioseqPtr    bsp = NULL;
-	ValNodePtr   vnp, newlist;
-	SeqFeatPtr   sfp;
-	BioSourcePtr first_biop = NULL;
-	BioSourcePtr other_biop;
-	BioSourcePtr tmp_biop;
-	ObjValNodePtr ovp;
+    BioseqPtr    bsp = NULL;
+    ValNodePtr   vnp, newlist;
+    SeqFeatPtr   sfp;
+    BioSourcePtr first_biop = NULL;
+    BioSourcePtr other_biop;
+    BioSourcePtr tmp_biop;
+    ObjValNodePtr ovp;
 
-	if (!IS_Bioseq(sep)) {
-		return;
-	}
-	newlist = (ValNodePtr) data;
-	bsp = (BioseqPtr) sep->data.ptrvalue;
-	if ((bsp->repr != Seq_repr_raw) && (bsp->repr != Seq_repr_const) 
-			&& (bsp->repr != Seq_repr_delta))
-		return;
+    if (!IS_Bioseq(sep)) {
+        return;
+    }
+    newlist = (ValNodePtr) data;
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if ((bsp->repr != Seq_repr_raw) && (bsp->repr != Seq_repr_const) 
+            && (bsp->repr != Seq_repr_delta))
+        return;
 
-	if (! ISA_na(bsp->mol))
-		return;
-	
-	/* add the descriptors in newlist to the end of the list in bsp->descr*/
-	if (bsp->descr == NULL)
-	{
-	  bsp->descr = newlist;
-	}
-	else
-	{
-	  for (vnp = bsp->descr; vnp->next != NULL; vnp = vnp->next)
-	  {	
-	  }
-	  vnp->next = newlist;
-	}
-	
-	/* now find the first source descriptor in bsp->descr that has an org*/
+    if (! ISA_na(bsp->mol))
+        return;
+    
+    /* add the descriptors in newlist to the end of the list in bsp->descr*/
+    if (bsp->descr == NULL)
+    {
+      bsp->descr = newlist;
+    }
+    else
+    {
+      for (vnp = bsp->descr; vnp->next != NULL; vnp = vnp->next)
+      {    
+      }
+      vnp->next = newlist;
+    }
+    
+    /* now find the first source descriptor in bsp->descr that has an org*/
     /* note - we can't use SeqMgrGetNextDescriptor here because we have just
      * added to the descriptors, so they are not indexed. */
-	for (vnp = bsp->descr; vnp != NULL; vnp = vnp->next)
-	{
-	  if (vnp->choice != Seq_descr_source) continue;
-	  if (vnp->data.ptrvalue == NULL)
-	  {
-	  	ErrPostStr(SEV_WARNING, 0, 0, "Source descriptor missing data");
-	  	if (vnp->extended)
-	  	{
-	  	  ovp = (ObjValNodePtr) vnp;
-	  	  ovp->idx.deleteme = TRUE;
-	  	}
-	  }
-	  if (first_biop == NULL)
-	  {
-	  	first_biop = vnp->data.ptrvalue;
-	  }
-	  else
-	  {
-		other_biop = vnp->data.ptrvalue;
-		/* detach biosource pointer from descr, so that it will not be freed
-		 * when the descriptor is deleted.
-		 */
-		vnp->data.ptrvalue = NULL;
+    for (vnp = bsp->descr; vnp != NULL; vnp = vnp->next)
+    {
+      if (vnp->choice != Seq_descr_source) continue;
+      if (vnp->data.ptrvalue == NULL)
+      {
+          ErrPostStr(SEV_WARNING, 0, 0, "Source descriptor missing data");
+          if (vnp->extended)
+          {
+            ovp = (ObjValNodePtr) vnp;
+            ovp->idx.deleteme = TRUE;
+          }
+      }
+      if (first_biop == NULL)
+      {
+          first_biop = vnp->data.ptrvalue;
+      }
+      else
+      {
+        other_biop = vnp->data.ptrvalue;
+        /* detach biosource pointer from descr, so that it will not be freed
+         * when the descriptor is deleted.
+         */
+        vnp->data.ptrvalue = NULL;
         if (vnp->extended)
         {
           ovp = (ObjValNodePtr) vnp;
-	  	  ovp->idx.deleteme = TRUE;
+            ovp->idx.deleteme = TRUE;
         }
         if (DoOrgIdsMatch(first_biop, other_biop)) 
-		{
-		  /* merge the two sources */
-		  tmp_biop = Tax3BioSourceMerge(first_biop, other_biop);
-		  if (tmp_biop == NULL)
-		  {
-		  	ErrPostStr (SEV_WARNING, 0, 0, "Failed to merge biosources");
-		  }
-		  else
-		  {
-		  	first_biop = tmp_biop;
-		  }
-		  other_biop = BioSourceFree (other_biop);
-		} else {
-		  /* create a source feature */
-		  sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_BIOSRC, NULL);
-		  if (sfp != NULL)
-		  {
+        {
+          /* merge the two sources */
+          tmp_biop = Tax3BioSourceMerge(first_biop, other_biop);
+          if (tmp_biop == NULL)
+          {
+              ErrPostStr (SEV_WARNING, 0, 0, "Failed to merge biosources");
+          }
+          else
+          {
+              first_biop = tmp_biop;
+          }
+          other_biop = BioSourceFree (other_biop);
+        } else {
+          /* create a source feature */
+          sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_BIOSRC, NULL);
+          if (sfp != NULL)
+          {
             sfp->data.value.ptrvalue = other_biop;
-		  }
+          }
         }
-	  }
-	}
-	return;
+      }
+    }
+    return;
 }
 
 static Int4 GetTaxIdFromOrgRef (OrgRefPtr orp)
@@ -1187,7 +1279,7 @@ static void AddBioSourceToList (BioSourcePtr biop, Pointer userdata)
   ValNodeAddPointer (list, 4, (Pointer) biop);
 }
 
-NLM_EXTERN void Taxon3ReplaceOrgInSeqEntry (SeqEntryPtr sep, Boolean keep_syn)
+NLM_EXTERN void Taxon3ReplaceOrgInSeqEntryEx (SeqEntryPtr sep, Boolean keep_syn, Boolean replace_unpub)
 {
   ValNodePtr   biop_list = NULL;
   ValNodePtr   request_list = NULL;
@@ -1218,7 +1310,8 @@ NLM_EXTERN void Taxon3ReplaceOrgInSeqEntry (SeqEntryPtr sep, Boolean keep_syn)
     biop = (BioSourcePtr) biop_vnp->data.ptrvalue;
     swap_org = biop->org;
     response_org = response_vnp->data.ptrvalue;
-    if (response_org != NULL)
+    if (response_org != NULL
+        && (replace_unpub || !(response_vnp->choice & eReturnedOrgFlag_unpublished)))
     {
       biop->org = response_org;
       response_vnp->data.ptrvalue = NULL;
@@ -1232,6 +1325,12 @@ NLM_EXTERN void Taxon3ReplaceOrgInSeqEntry (SeqEntryPtr sep, Boolean keep_syn)
   ValNodeFree (request_list);
   ValNodeFree (response_list);
   ValNodeFree (biop_list);   
+}
+
+
+NLM_EXTERN void Taxon3ReplaceOrgInSeqEntry (SeqEntryPtr sep, Boolean keep_syn)
+{
+  Taxon3ReplaceOrgInSeqEntryEx (sep, keep_syn, TRUE);
 }
 
 
@@ -2671,5 +2770,70 @@ NLM_EXTERN ValNodePtr GetOrganismTaxLookupFailuresInSeqEntry (SeqEntryPtr sep)
   response_list = FreeOrgRefValNodeList (response_list);
 
   return failed_list;  
+}
+
+
+static void CollectTaxIds (BioSourcePtr biop, Pointer data)
+{
+  ValNodePtr vnp;
+  DbtagPtr   dbtag;
+
+  if (biop == NULL || biop->org == NULL || data == NULL) {
+    return;
+  }
+  for (vnp = biop->org->db; vnp != NULL; vnp = vnp->next) {
+    dbtag = (DbtagPtr) vnp->data.ptrvalue;
+    if (dbtag != NULL && StringCmp ("taxon", dbtag->db) == 0 && dbtag->tag->id > 0) {
+      ValNodeAddInt ((ValNodePtr PNTR) data, 0, dbtag->tag->id);
+    }
+  }
+}
+
+
+NLM_EXTERN OrgRefPtr GetCommonOrgRefForSeqEntry (SeqEntryPtr sep)
+{
+  ValNodePtr       list = NULL;
+  Taxon3RequestPtr t3rq;
+  T3ReplyPtr       trp;
+  Taxon3ReplyPtr   t3ry;
+  T3DataPtr        tdp;
+  T3ErrorPtr       tep;
+  OrgRefPtr        org = NULL;
+
+  VisitBioSourcesInSep (sep, &list, CollectTaxIds);
+  if (list == NULL) {
+    ErrPostEx (SEV_ERROR, 0, 0, "No tax IDs found - cannot create PopSet Title");
+    return NULL;
+  }
+  ValNodeUnique (&list, SortByIntvalue, ValNodeFree);
+
+  t3rq = CreateJoinRequest (list);
+  list = ValNodeFree (list);
+
+  t3ry = Tax3SynchronousQuery (t3rq);
+  Taxon3RequestFree (t3rq);
+  if (t3ry != NULL) {
+    for (trp = t3ry->reply; trp != NULL; trp = trp->next) {
+      switch (trp->choice) {
+        case T3Reply_error :
+          tep = (T3ErrorPtr) trp->data.ptrvalue;
+          if (tep != NULL) {
+            ErrPostEx (SEV_ERROR, 0, 0, tep->message);
+          }
+          break;
+        case T3Reply_data :
+          tdp = (T3DataPtr) trp->data.ptrvalue;
+          if (tdp != NULL) {
+            org = (OrgRefPtr)(tdp->org);
+            tdp->org = NULL;
+          }
+          break;
+        default :
+          break;
+      }
+    }
+    Taxon3ReplyFree (t3ry);
+  }
+  return org;
 }
 

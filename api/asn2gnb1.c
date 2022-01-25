@@ -31,7 +31,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.179 $
+* $Revision: 1.198 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -867,6 +867,7 @@ NLM_EXTERN CharPtr FFToCharPtr (StringItemPtr sip) {
 
 static CharPtr url_anchor_strings [] = {
   "</A>",
+ "</ACRONYM>",
   "<A HREF=/",
   "<A HREF=\"/",
   "<A HREF=FTP://",
@@ -875,6 +876,7 @@ static CharPtr url_anchor_strings [] = {
   "<A HREF=HTTPS://",
   "<A HREF=\"HTTP://",
   "<A HREF=\"HTTPS://",
+  "<ACRONYM TITLE=\"",
   NULL
 };
 
@@ -1132,7 +1134,8 @@ NLM_EXTERN void FFCalculateLineBreak (
   Int4 i,
        done = FALSE,
        copied = 0, 
-       start = *break_pos;
+       start = *break_pos,
+       pos = 0;
   Char ch;
   Boolean found_comma = FALSE, found_dash = FALSE, found_lb = FALSE;
   /* each candidate is a pair of buffer and position withingh this buffer */
@@ -1177,7 +1180,7 @@ NLM_EXTERN void FFCalculateLineBreak (
   start = i;
 
   while ( iter != NULL && !done ) {
-    for ( i = start; i < iter->pos; ++i ) {
+    for ( i = start; iter != NULL && i < iter->pos; ++i ) {
       if ( found_comma ) {
         candidate_sip_comma = iter;
         candidate_int_comma = i;
@@ -1226,8 +1229,9 @@ NLM_EXTERN void FFCalculateLineBreak (
       }      
     }
     start = 0;
-    if ( !done ) {
+    if ( iter != NULL && !done ) {
       prev = iter;
+      pos = prev->pos;
       iter = iter->next;
     }
   }
@@ -1235,7 +1239,7 @@ NLM_EXTERN void FFCalculateLineBreak (
   /* the order in which we examine the various candidate breaks is important */
   if ( iter == NULL && !done) { /* reached the end */
     *break_sip = prev;
-    *break_pos = prev->pos;
+    *break_pos = pos;
   } else {
     if( candidate_sip_space != NULL ) {
         *break_sip = candidate_sip_space;
@@ -2168,6 +2172,7 @@ NLM_EXTERN void DoOneSection (
   SeqMgrBioseqContext  bcontext;
   BlockMask            bkmask;
   BaseBlockPtr         PNTR blockArray;
+  Boolean              cagemaster = FALSE;
   SeqMgrDescContext    dcontext;
   Boolean              hasRefs;
   Int4                 i;
@@ -2184,6 +2189,7 @@ NLM_EXTERN void DoOneSection (
   ValNodePtr           vnp;
   Boolean              wgsmaster = FALSE;
   Boolean              wgstech = FALSE;
+  Boolean              willshowcage = FALSE;
   Boolean              willshowwgs = FALSE;
   Boolean              willshowgenome = FALSE;
   Boolean              willshowcontig = FALSE;
@@ -2275,7 +2281,10 @@ NLM_EXTERN void DoOneSection (
     for (sip = bsp->id; sip != NULL; sip = sip->next) {
       if (sip->choice == SEQID_GENBANK ||
           sip->choice == SEQID_EMBL ||
-          sip->choice == SEQID_DDBJ) {
+          sip->choice == SEQID_DDBJ ||
+          sip->choice == SEQID_TPG ||
+          sip->choice == SEQID_TPE ||
+          sip->choice == SEQID_TPD) {
         tsip = (TextSeqIdPtr) sip->data.ptrvalue;
         if (tsip != NULL && tsip->accession != NULL) {
           acclen = StringLen (tsip->accession);
@@ -2314,8 +2323,12 @@ NLM_EXTERN void DoOneSection (
     sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
     if (sdp != NULL) {
       mip = (MolInfoPtr) sdp->data.ptrvalue;
-      if (mip != NULL && mip->tech == MI_TECH_wgs) {
-        wgstech = TRUE;
+      if (mip != NULL) {
+        if (mip->tech == MI_TECH_wgs) {
+          wgstech = TRUE;
+        } else if (mip->tech == MI_TECH_other && StringCmp (mip->techexp, "cage") == 0) {
+          cagemaster = TRUE;
+        }
       }
     }
   }
@@ -2348,6 +2361,8 @@ NLM_EXTERN void DoOneSection (
 
     if (wgsmaster && wgstech) {
       willshowwgs = TRUE;
+    } else if (cagemaster) {
+      willshowcage = TRUE;
     } else if (nsgenome) {
       willshowgenome = TRUE;
     } else if (contig) {
@@ -2370,7 +2385,7 @@ NLM_EXTERN void DoOneSection (
       }
     }
 
-    AddLocusBlock (awp, willshowwgs, willshowgenome, willshowcontig, willshowsequence);
+    AddLocusBlock (awp, willshowwgs, willshowcage, willshowgenome, willshowcontig, willshowsequence);
 
     if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
 
@@ -2458,6 +2473,10 @@ NLM_EXTERN void DoOneSection (
     if (wgsmaster && wgstech) {
 
       AddWGSBlock (awp);
+
+    } else if (cagemaster) {
+
+      AddCAGEBlock (awp);
 
     } else if (nsgenome) {
 
@@ -3640,6 +3659,7 @@ static void MakeGapFeatsBase (
 
   if (bsp == NULL || bsp->repr != Seq_repr_delta) return;
   gapvnp = (ValNodePtr PNTR) userdata;
+  if (gapvnp == NULL) return;
   sip = SeqIdFindBest (bsp->id, 0);
   if (sip == NULL) return;
   /* no longer suppress on far delta contigs */
@@ -3737,20 +3757,94 @@ static void MakeGapFeats (
   MakeGapFeatsBase (bsp, userdata, FALSE);
 }
 
+static CharPtr gapstr1 = "     gap             ";
+static CharPtr gapstr2 = "                     /estimated_length=";
+static CharPtr gapstr3 = "unknown";
+
+static void MakeFarGapFeats (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  Char             buf [256];
+  Int4             currpos = 0;
+  ValNodePtr PNTR  fargaps;
+  IntFuzzPtr       fuzz;
+  SeqLitPtr        litp;
+  Boolean          notFar = FALSE;
+  SeqIdPtr         sip;
+  SeqLocPtr        slp;
+  ValNodePtr       vnp;
+
+  if (bsp == NULL || bsp->repr != Seq_repr_delta) return;
+  fargaps = (ValNodePtr PNTR) userdata;
+  if (fargaps == NULL) return;
+  sip = SeqIdFindBest (bsp->id, 0);
+  if (sip == NULL) return;
+  /* no longer suppress on far delta contigs */
+  /* if (! DeltaLitOnly (bsp)) return; */
+
+  /* empty string at beginning for GetFeatsOnSeg to skip over */
+  ValNodeAddPointer (fargaps, 0, NULL);
+
+  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 1) {
+      slp = (SeqLocPtr) vnp->data.ptrvalue;
+      if (slp == NULL) continue;
+      currpos += SeqLocLen (slp);
+    }
+    if (vnp->choice == 2) {
+      litp = (SeqLitPtr) vnp->data.ptrvalue;
+      if (litp == NULL) continue;
+      if (litp->seq_data == NULL || litp->seq_data_type == Seq_code_gap) {
+        if (litp->length > 0) {
+          fuzz = litp->fuzz;
+          if (fuzz != NULL && fuzz->choice == 4 && fuzz->a == 0) {
+            sprintf (buf, "%s%ld..%ld\n%s%s\n",
+                     gapstr1, (long) currpos + 1, (long) currpos + litp->length,
+                     gapstr2, gapstr3);
+          } else {
+            sprintf (buf, "%s%ld..%ld\n%s%ld\n",
+                     gapstr1, (long) currpos + 1, (long) currpos + litp->length,
+                     gapstr2, (long) litp->length);
+          }
+          ValNodeCopyStr (fargaps, 0, (Pointer) buf);
+        }
+      } else {
+        notFar = TRUE;
+      }
+      currpos += litp->length;
+    }
+  }
+
+  if (notFar) {
+    for (vnp = *fargaps; vnp != NULL; vnp = vnp->next) {
+      vnp->choice = 1;
+    }
+  }
+}
+
+typedef struct featpolicy {
+  Boolean  forceOnlyNearFeats;
+  Boolean  forceAllowFarFeats;
+} FeatPolicy, PNTR FeatPolicyPtr;
+
 static void LookFarFeatFetchPolicy (
   SeqDescrPtr sdp,
   Pointer userdata
 )
 
 {
-  BoolPtr        forceOnlyNearFeatsP;
+  FeatPolicyPtr  fpP;
   ObjectIdPtr    oip;
+  CharPtr        str;
   UserFieldPtr   ufp;
   UserObjectPtr  uop;
 
   if (sdp == NULL || sdp->choice != Seq_descr_user) return;
-  forceOnlyNearFeatsP = (BoolPtr) userdata;
-  if (forceOnlyNearFeatsP == NULL) return;
+  fpP = (FeatPolicyPtr) userdata;
+  if (fpP == NULL) return;
 
   uop = (UserObjectPtr) sdp->data.ptrvalue;
   if (uop == NULL) return;
@@ -3762,10 +3856,40 @@ static void LookFarFeatFetchPolicy (
     oip = ufp->label;
     if (oip == NULL || ufp->data.ptrvalue == NULL) continue;
     if (StringCmp (oip->str, "Policy") == 0) {
-      if (StringICmp ((CharPtr) ufp->data.ptrvalue, "OnlyNearFeatures") == 0) {
-        *forceOnlyNearFeatsP = TRUE;
+      str = (CharPtr) ufp->data.ptrvalue;
+      if (StringICmp (str, "OnlyNearFeatures") == 0) {
+        fpP->forceOnlyNearFeats = TRUE;
+      } else if (StringICmp (str, "AllowFarFeatures") == 0) {
+        fpP->forceAllowFarFeats = TRUE;
       }
     }
+  }
+}
+
+static void FindMultiIntervalGenes (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  BoolPtr    multiIntervalGenesP;
+  SeqLocPtr  slp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE) return;
+  multiIntervalGenesP = (BoolPtr) userdata;
+  if (multiIntervalGenesP == NULL) return;
+
+  slp = sfp->location;
+  if (slp == NULL) return;
+  switch (slp->choice) {
+    case SEQLOC_PACKED_INT :
+    case SEQLOC_PACKED_PNT :
+    case SEQLOC_MIX :
+    case SEQLOC_EQUIV :
+      *multiIntervalGenesP = TRUE;
+      break;
+    default :
+      break;
   }
 }
 
@@ -3790,7 +3914,7 @@ static CharPtr defTail = "\
 </html>\n";
 
 #define FAR_TRANS_MASK (SHOW_FAR_TRANSLATION | TRANSLATE_IF_NO_PRODUCT | ALWAYS_TRANSLATE_CDS)
-#define FEAT_FETCH_MASK (ONLY_NEAR_FEATURES | FAR_FEATURES_SUPPRESS | NEAR_FEATURES_SUPPRESS)
+#define FEAT_FETCH_MASK (ONLY_NEAR_FEATURES | FAR_FEATURES_SUPPRESS | NEAR_FEATURES_SUPPRESS | FORCE_ALLOW_FAR_FEATS)
 #define HTML_XML_ASN_MASK (CREATE_HTML_FLATFILE | CREATE_XML_GBSEQ_FILE | CREATE_ASN_GBSEQ_FILE)
 #define PUBLICATION_MASK (HIDE_GENE_RIFS | ONLY_GENE_RIFS | ONLY_REVIEW_PUBS | NEWEST_PUBS | OLDEST_PUBS | HIDE_ALL_PUBS)
 
@@ -3823,10 +3947,11 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Uint2            entityID = 0;
   Uint2            item_type = 0;
   Uint4            item_id = 0;
+  ValNodePtr       fargaps = NULL;
   CharPtr          ffhead = NULL;
   CharPtr          fftail = NULL;
   Asn2gbWriteFunc  ffwrite = NULL;
-  Boolean          forceOnlyNearFeats = FALSE;
+  FeatPolicy       featpolicy;
   ValNodePtr       gapvnp = NULL;
   GBSeqPtr         gbseq = NULL;
   Int4             i;
@@ -3856,6 +3981,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Boolean          lookupFarOthers;
   Boolean          lookupFarProd;
   Boolean          missingVersion;
+  Boolean          multiIntervalGenes = FALSE;
   Int4             nextGi = 0;
   Boolean          noLeft;
   Boolean          noRight;
@@ -3877,6 +4003,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Asn2gbSectPtr    PNTR sectionArray;
   SubmitBlockPtr   sbp;
   SeqEntryPtr      sep;
+  Boolean          seqspans = FALSE;
   SeqIntPtr        sintp;
   SeqIdPtr         sip;
   Boolean          skipMrnas = FALSE;
@@ -3912,6 +4039,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     nextGi = extra->nextGi;
     bkmask = extra->bkmask;
     reindex = extra->reindex;
+    seqspans = extra->seqspans;
   }
 
   if (slp != NULL) {
@@ -4006,10 +4134,25 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   ajp = (IntAsn2gbJobPtr) MemNew (sizeof (IntAsn2gbJob));
   if (ajp == NULL) return NULL;
 
-  VisitDescriptorsInSep (sep, (Pointer) &forceOnlyNearFeats, LookFarFeatFetchPolicy);
+  featpolicy.forceOnlyNearFeats = FALSE;
+  featpolicy.forceAllowFarFeats = FALSE;
+  VisitDescriptorsInSep (sep, (Pointer) &featpolicy, LookFarFeatFetchPolicy);
+
+  fargaps = NULL;
+  if (format != FTABLE_FMT) {
+    if (isRefSeq && isNC && VisitFeaturesInSep (sep, NULL, NULL) == 0) {
+      if ((Boolean) ((custom & HIDE_GAP_FEATS) == 0)) {
+        VisitBioseqsInSep (sep, (Pointer) &fargaps, MakeFarGapFeats);
+      }
+    }
+  }
+  if (fargaps != NULL && fargaps->choice == 1) {
+    fargaps = ValNodeFreeData (fargaps);
+  }
+  ajp->fargaps = fargaps;
 
   gapvnp = NULL;
-  if (format != FTABLE_FMT) {
+  if (fargaps == NULL && format != FTABLE_FMT) {
     if (isGED /* was isG */ || isTPG || isOnlyLocal || isRefSeq || isSP || (isGeneral && (! isGED))) {
       if ((Boolean) ((custom & HIDE_GAP_FEATS) == 0)) {
         if (isSP) {
@@ -4107,6 +4250,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   }
   ajp->bkmask = bkmask;
   ajp->reindex = reindex;
+  ajp->seqspans = seqspans;
   ajp->aip = aip;
   ajp->atp = atp;
 
@@ -4168,7 +4312,8 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   }
   ajp->seqGapCurrLen = 0;
 
-  ajp->produceInsdSeq = (Boolean) ((flags & PRODUCE_OLD_GBSEQ) == 0);
+  ajp->produceInsdSeq = (Boolean) (((flags & PRODUCE_OLD_GBSEQ) == 0) && ((custom & OLD_GBSEQ_XML) == 0));
+  ajp->oldXmlPolicy = (Boolean) ((custom & NEW_XML_POLICY) == 0);
 
   ajp->gihead = NULL;
   ajp->gitail = NULL;
@@ -4179,6 +4324,9 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
     ajp->newSourceOrg = TRUE;
   }
+
+  VisitFeaturesInSep (sep, (Pointer) &multiIntervalGenes, FindMultiIntervalGenes);
+  ajp->multiIntervalGenes = multiIntervalGenes;
 
   ajp->relModeError = FALSE;
   ajp->skipProts = skipProts;
@@ -4242,11 +4390,19 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   aw.farFeatsSuppress = FALSE;
   aw.nearFeatsSuppress = FALSE;
 
-  if (isNC) {
+  if (featpolicy.forceAllowFarFeats) {
+
+    /* do not set other flags */
+
+  } else if ((Boolean) ((flags & FEAT_FETCH_MASK) == FORCE_ALLOW_FAR_FEATS)) {
+
+    /* do not set other flags */
+
+  } else if (isNC) {
 
     if ((Boolean) ((flags & FEAT_FETCH_MASK) == ONLY_NEAR_FEATURES)) {
       aw.onlyNearFeats = TRUE;
-    } else if (forceOnlyNearFeats) {
+    } else if (featpolicy.forceOnlyNearFeats) {
       aw.onlyNearFeats = TRUE;
     } else {
       aw.nearFeatsSuppress = TRUE;
@@ -4260,14 +4416,14 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
     if ((Boolean) ((flags & FEAT_FETCH_MASK) == ONLY_NEAR_FEATURES)) {
       aw.onlyNearFeats = TRUE;
-    } else if (forceOnlyNearFeats) {
+    } else if (featpolicy.forceOnlyNearFeats) {
       aw.onlyNearFeats = TRUE;
     } else {
       aw.nearFeatsSuppress = TRUE;
     }
     ajp->showFarTransl = TRUE;
 
-  } else if (forceOnlyNearFeats) {
+  } else if (featpolicy.forceOnlyNearFeats) {
 
     aw.onlyNearFeats = TRUE;
     
@@ -4377,11 +4533,11 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     }
     if (ffhead != NULL) {
       if (fp != NULL) {
-        fprintf (fp, ffhead);
+        fprintf (fp, "%s", ffhead);
       }
     }
     if (ffwrite != NULL) {
-      ffwrite (ffhead, userdata, HEAD_BLOCK, entityID, item_type, item_id);
+      ffwrite (ffhead, userdata, HEAD_BLOCK, entityID, item_type, item_id, 0, 0);
     }
     if (is_html) {
       DoQuickLinkFormat (aw.afp, "<div class=\"sequence\">");
@@ -4428,11 +4584,11 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
     }
     if (fftail != NULL) {
       if (fp != NULL) {
-        fprintf (fp, fftail);
+        fprintf (fp, "%s", fftail);
       }
     }
     if (ffwrite != NULL) {
-      ffwrite (fftail, userdata, TAIL_BLOCK, entityID, item_type, item_id);
+      ffwrite (fftail, userdata, TAIL_BLOCK, entityID, item_type, item_id, 0, 0);
     }
   }
 
@@ -4921,7 +5077,7 @@ static void PrintFTUserObj (
   }
 }
 
-static void PrintFTCodeBreak (
+NLM_EXTERN void PrintFTCodeBreak (
   ValNodePtr PNTR head,
   CodeBreakPtr cbp,
   BioseqPtr target
@@ -4964,7 +5120,7 @@ static void PrintFTCodeBreak (
 
   slp = SeqLocFindNext (cbp->loc, NULL);
   while (slp != NULL) {
-    str = FFFlatLoc (&iaj, target, slp, FALSE);
+    str = FFFlatLoc (&iaj, target, slp, FALSE, FALSE);
     if (str != NULL) {
       residue = cbaa.value.intvalue;
       ptr = Get3LetterSymbol (&iaj, seqcode, sctp, residue);
@@ -5427,6 +5583,8 @@ NLM_EXTERN void PrintFtableLocAndQuals (
   SeqFeatPtr         prot;
   ProtRefPtr         prp = NULL;
   Boolean            pseudo;
+  RNAGenPtr          rgp;
+  RNAQualPtr         rqp;
   RnaRefPtr          rrp;
   SeqDescrPtr        sdp;
   Int4               sec_str;
@@ -5435,7 +5593,7 @@ NLM_EXTERN void PrintFtableLocAndQuals (
   Int2               siteidx;
   SeqLocPtr          slp;
   Char               str [256];
-  Char               tmp [300];
+  Char               tmp [512];
   CharPtr            tmpx;
   tRNAPtr            trp;
   ValNodePtr         vnp;
@@ -5621,7 +5779,7 @@ NLM_EXTERN void PrintFtableLocAndQuals (
             }
             break;
           case 2 :
-            trp = rrp->ext.value.ptrvalue;
+            trp = (tRNAPtr) rrp->ext.value.ptrvalue;
             if (trp != NULL) {
               FeatDefLabel (sfp, str, sizeof (str) - 1, OM_LABEL_CONTENT);
               if (! StringHasNoText (str)) {
@@ -5649,7 +5807,7 @@ NLM_EXTERN void PrintFtableLocAndQuals (
                 aa += 5;
               }
               if (slp != NULL && StringDoesHaveText (aa)) {
-                tmpx = FFFlatLoc (ajp, target, slp, ajp->masterStyle);
+                tmpx = FFFlatLoc (ajp, target, slp, ajp->masterStyle, FALSE);
                 if (tmpx != NULL) {
                   sprintf (tmp, "\t\t\tanticodon\t(pos:%s,aa:%s)\n", tmpx, aa);
                   ValNodeCopyStr (head, 0, tmp);
@@ -5661,6 +5819,25 @@ NLM_EXTERN void PrintFtableLocAndQuals (
               }
             }
             break;
+          case 3 :
+            rgp = (RNAGenPtr) rrp->ext.value.ptrvalue;
+            if (rgp != NULL) {
+              StringNCpy_0 (str, rgp->_class, sizeof (str));
+              if (StringDoesHaveText (str)) {
+                sprintf (tmp, "\t\t\tncRNA_class\t%s\n", str);
+                ValNodeCopyStr (head, 0, tmp);
+              }
+              StringNCpy_0 (str, rgp->product, sizeof (str));
+              if (StringDoesHaveText (str)) {
+                sprintf (tmp, "\t\t\tproduct\t%s\n", str);
+                ValNodeCopyStr (head, 0, tmp);
+              }
+              for (rqp = rgp->quals; rqp != NULL; rqp = rqp->next) {
+                if (StringDoesHaveText (rqp->qual) && StringDoesHaveText (rqp->val)) {
+                  AddOneFtableQual (head, rqp->qual, rqp->val);
+                }
+              }
+            }
           default :
             break;
         }
@@ -5992,10 +6169,13 @@ NLM_EXTERN void DoImmediateFormat (
   BlockType        blocktype;
   BioseqPtr        bsp;
   FormatProc       fmt;
+  IntFeatBlockPtr  ifp;
   Boolean          is_www;
+  Int4             left = 0;
   size_t           max;
   SeqEntryPtr      oldscope;
   QualValPtr       qv = NULL;
+  Int4             right = 0;
   SeqEntryPtr      sep;
   CharPtr          str = NULL;
   Uint2            itemtype;
@@ -6035,19 +6215,25 @@ NLM_EXTERN void DoImmediateFormat (
   SeqEntrySetScope (oldscope);
   BioseqUnlock (bsp);
 
+  if (blocktype == FEATURE_BLOCK && afp->ffwrite != NULL) {
+    ifp = (IntFeatBlockPtr) bbp;
+    left = ifp->left + 1;
+    right = ifp->right + 1;
+  }
+
   if (str != NULL) {
     if (afp->fp != NULL) {
       fprintf (afp->fp, "%s", str);
     }
     if (afp->ffwrite != NULL) {
-      afp->ffwrite (str, afp->userdata, blocktype, bbp->entityID, itemtype, itemID);
+      afp->ffwrite (str, afp->userdata, blocktype, bbp->entityID, itemtype, itemID, left, right);
     }
   } else {
     if (afp->fp != NULL) {
       fprintf (afp->fp, "?\n");
     }
     if (afp->ffwrite != NULL) {
-      afp->ffwrite ("?\n", afp->userdata, blocktype, bbp->entityID, itemtype, itemID);
+      afp->ffwrite ("?\n", afp->userdata, blocktype, bbp->entityID, itemtype, itemID, left, right);
     }
   }
 
@@ -6083,7 +6269,7 @@ NLM_EXTERN void DoQuickLinkFormat (
       fprintf (afp->fp, "%s", str);
     }
     if (afp->ffwrite != NULL) {
-      afp->ffwrite (str, afp->userdata, (BlockType) 0, entityID, item_type, itemID);
+      afp->ffwrite (str, afp->userdata, (BlockType) 0, entityID, item_type, itemID, 0, 0);
     }
   }
 }
@@ -6269,6 +6455,10 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
 
   if (iajp->lockedBspList != NULL) {
     UnlockFarComponents (iajp->lockedBspList);
+  }
+
+  if (iajp->fargaps != NULL) {
+    ValNodeFreeData (iajp->fargaps);
   }
 
   if (iajp->gapvnp != NULL || iajp->remotevnp != NULL) {
@@ -6494,7 +6684,7 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
         }
       }
       if (ffwrite != NULL) {
-        ffwrite (ffhead, userdata, HEAD_BLOCK, 0, 0, 0);
+        ffwrite (ffhead, userdata, HEAD_BLOCK, 0, 0, 0, 0, 0, 0, 0);
       }
 
       /* send each paragraph */
@@ -6516,14 +6706,14 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
             fprintf (fp, "%s", str);
           }
           if (ffwrite != NULL) {
-            ffwrite (str, userdata, block, 0, 0, 0);
+            ffwrite (str, userdata, block, 0, 0, 0, 0, 0);
           }
         } else {
           if (fp != NULL) {
             fprintf (fp, "?\n");
           }
           if (ffwrite != NULL) {
-            ffwrite ("?\n", userdata, block, 0, 0, 0);
+            ffwrite ("?\n", userdata, block, 0, 0, 0, 0, 0);
           }
         }
 
@@ -6541,7 +6731,7 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
         }
       }
       if (ffwrite != NULL) {
-        ffwrite (fftail, userdata, TAIL_BLOCK, 0, 0, 0);
+        ffwrite (fftail, userdata, TAIL_BLOCK, 0, 0, 0, 0, 0);
       }
     }
 #endif

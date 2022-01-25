@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.125 $
+* $Revision: 1.147 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -65,7 +65,14 @@
 
 static CharPtr link_projid = "http://www.ncbi.nlm.nih.gov/sites/entrez?db=genomeprj&cmd=Retrieve&dopt=Overview&list_uids=";
 
-static CharPtr link_wgs = "http://www.ncbi.nlm.nih.gov/sites/entrez?";
+static CharPtr link_srr = "http://www.ncbi.nlm.nih.gov/sites/entrez?db=sra&term=";
+
+static CharPtr link_accn = "http://www.ncbi.nlm.nih.gov/sites/entrez?";
+
+static CharPtr link_wgs = "http://www.ncbi.nlm.nih.gov/Traces/wgs?";
+static CharPtr link_wgsscaf = "http://www.ncbi.nlm.nih.gov/nuccore?";
+
+static CharPtr link_cage = "http://www.ncbi.nlm.nih.gov/sites/entrez?";
 
 static CharPtr link_sp = "http://www.uniprot.org/uniprot/";
 
@@ -92,8 +99,8 @@ static CharPtr strd [4] = {
 };
 
 static CharPtr gnbk_mol [16] = {
-  "    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", "snRNA", "scRNA",
-  " AA ", "DNA ", "DNA ", "cRNA ", "snoRNA", "RNA ", "RNA ", "tmRNA "
+  "    ", "DNA ", "RNA ", "mRNA", "rRNA", "tRNA", /* "snRNA" */ "RNA", /* "scRNA" */ "RNA",
+  " AA ", "DNA ", "DNA ", "cRNA ", /* "snoRNA" */ "RNA", "RNA ", "RNA ", "tmRNA "
 };
 
 /* EMBL_FMT in RELEASE_MODE or ENTREZ_MODE, otherwise use gnbk_mol */
@@ -117,8 +124,8 @@ static CharPtr gbseq_strd [4] = {
 };
 
 static CharPtr gbseq_mol [16] = {
-  "?", "DNA", "RNA", "mRNA", "rRNA", "tRNA", "snRNA", "scRNA",
-  "AA", "DNA", "DNA", "cRNA", "snoRNA", "RNA", "ncRNA", "tmRNA "
+  "?", "DNA", "RNA", "mRNA", "rRNA", "tRNA", /* "snRNA" */ "RNA", /* "scRNA" */ "RNA",
+  "AA", "DNA", "DNA", "cRNA", /* "snoRNA" */ "RNA", "RNA", /* "ncRNA" */ "RNA", "tmRNA "
 };
 
 static CharPtr gbseq_top [3] = {
@@ -385,7 +392,7 @@ static Boolean LocusHasBadChars (
   ptr = locus;
   ch = *ptr;
   while (ch != '\0') {
-    if (! IS_ALPHANUM (ch)) {
+    if (! (IS_ALPHA(ch) || IS_DIGIT(ch) || ch == '_')) {
       return TRUE;
     }
     ptr++;
@@ -424,6 +431,7 @@ static void LookupAccnForNavLink (
 NLM_EXTERN void AddLocusBlock (
   Asn2gbWorkPtr awp,
   Boolean willshowwgs,
+  Boolean willshowcage,
   Boolean willshowgenome,
   Boolean willshowcontig,
   Boolean willshowsequence
@@ -439,6 +447,7 @@ NLM_EXTERN void AddLocusBlock (
   Int2               bmol = 0;
   BioseqPtr          bsp;
   Char               buf [1024];
+  Boolean            cagemaster = FALSE;
   SeqFeatPtr         cds;
   Int4               currGi;
   Char               dataclass [10];
@@ -716,6 +725,31 @@ NLM_EXTERN void AddLocusBlock (
           }
         }
       }
+
+      if (tech == MI_TECH_other && willshowcage && bsp->repr == Seq_repr_virtual) {
+
+        /* check for TAG master record */
+
+        for (sip = bsp->id; sip != NULL; sip = sip->next) {
+          switch (sip->choice) {
+            case SEQID_GENBANK :
+            case SEQID_EMBL :
+            case SEQID_DDBJ :
+              tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+              if (tsip != NULL && tsip->accession != NULL) {
+                acclen = StringLen (tsip->accession);
+                if (acclen == 12) {
+                  if (StringCmp (tsip->accession + 5, "0000000") == 0) {
+                    cagemaster = TRUE;
+                  }
+                }
+              }
+              break;
+            default :
+              break;
+          }
+        }
+      }
     }
   }
 
@@ -764,6 +798,8 @@ NLM_EXTERN void AddLocusBlock (
     if (awp->newLocusLine) {
 
       if (wgsmaster && (! is_nz)) {
+        sprintf (len, "%ld rc", (long) length);
+      } else if (cagemaster) {
         sprintf (len, "%ld rc", (long) length);
       } else {
         sprintf (len, "%ld bp", (long) length);
@@ -1676,9 +1712,11 @@ static ValNodePtr GetSecondaryAccessions(ValNodePtr extra_access)
     if (!IsSuccessor(curr, prev)) {
       bin = ValNodeAdd(&bins);
     }
-    temp = (ValNodePtr)bin->data.ptrvalue;
-    ValNodeAddStr(&temp, 0, curr);
-    bin->data.ptrvalue = temp;
+    if (bin != NULL) {
+      temp = (ValNodePtr)bin->data.ptrvalue;
+      ValNodeAddStr(&temp, 0, curr);
+      bin->data.ptrvalue = temp;
+    }
 
     prev = curr;
   }
@@ -1770,6 +1808,9 @@ NLM_EXTERN void AddAccessionBlock (
       case SEQID_GENBANK :
       case SEQID_EMBL :
       case SEQID_DDBJ :
+      case SEQID_TPG :
+      case SEQID_TPE :
+      case SEQID_TPD :
         accn = sip;
         tsip = (TextSeqIdPtr) sip->data.ptrvalue;
         if (tsip != NULL) {
@@ -1797,11 +1838,6 @@ NLM_EXTERN void AddAccessionBlock (
       case SEQID_SWISSPROT :
       case SEQID_PRF :
       case SEQID_PDB :
-        accn = sip;
-        break;
-      case SEQID_TPG :
-      case SEQID_TPE :
-      case SEQID_TPD :
         accn = sip;
         break;
       case SEQID_GPIPE :
@@ -1860,7 +1896,7 @@ NLM_EXTERN void AddAccessionBlock (
 
   } else if (ajp->ajp.slp != NULL) {
     FF_www_accession (ajp, ffstring, buf, is_na);
-    flatloc =  FFFlatLoc (ajp, bsp, ajp->ajp.slp, ajp->masterStyle);
+    flatloc =  FFFlatLoc (ajp, bsp, ajp->ajp.slp, ajp->masterStyle, FALSE);
     FFAddTextToString (ffstring, " REGION: ", flatloc, NULL, FALSE, FALSE, TILDE_TO_SPACES);
     MemFree (flatloc);
   } else {
@@ -1927,7 +1963,7 @@ NLM_EXTERN void AddAccessionBlock (
         if (! StringHasNoText (buf)) {
           if ( GetWWW(ajp) ) {
             FFAddTextToString(ffstring, separator, "<a href=\"", NULL, FALSE, FALSE, TILDE_IGNORE);
-            FF_Add_NCBI_Base_URL (ffstring, link_wgs);
+            FF_Add_NCBI_Base_URL (ffstring, link_accn);
             FFAddTextToString(ffstring, "db=Nucleotide&cmd=Search&term=", buf, "\">", FALSE, FALSE, TILDE_IGNORE);
             FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
             FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
@@ -2220,14 +2256,59 @@ static void FF_asn2gb_www_projID (
   FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
+static void FF_asn2gb_www_SRR (
+  IntAsn2gbJobPtr ajp,
+  CharPtr buf,
+  CharPtr str
+)
+
+{
+  Char           ch;
+  StringItemPtr  ffstring;
+  CharPtr        ptr;
+  CharPtr        tmp;
+
+  if (ajp == NULL || buf == NULL || StringHasNoText (str)) return;
+
+  ffstring = FFGetString (ajp);
+  if (ffstring == NULL) return;
+
+  FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+  FF_Add_NCBI_Base_URL (ffstring, link_srr);
+  FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+
+  tmp = FFEndPrint (ajp, ffstring, ajp->format, 21, 21, 21, 21, NULL);
+  FFRecycleString (ajp, ffstring);
+
+  if (tmp != NULL) {
+    ptr = tmp;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == '\n' || ch == '\r' || ch == '\t') {
+        *ptr = ' ';
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    TrimSpacesAroundString (tmp);
+    StringCat (buf, tmp);
+    MemFree (tmp);
+  }
+}
+
 static CharPtr GetDBLinkString (
+  IntAsn2gbJobPtr ajp,
   UserObjectPtr uop
 )
 
 {
-  Char          buf1 [256];
-  Char          buf2 [256];
-  Char          buf3 [256];
+  Char          buf1 [512];
+  Char          buf2 [512];
+  Char          buf3 [512];
+  Char          buf4 [1024];
   CharPtr PNTR  cpp;
   Int4          i;
   Int4Ptr       ip;
@@ -2235,7 +2316,7 @@ static CharPtr GetDBLinkString (
   ObjectIdPtr   oip;
   CharPtr       prefix;
   CharPtr       str;
-  Char          tmp [32];
+  Char          tmp [256];
   UserFieldPtr  ufp;
   Int4          val;
 
@@ -2244,6 +2325,7 @@ static CharPtr GetDBLinkString (
   buf1 [0] = '\0';
   buf2 [0] = '\0';
   buf3 [0] = '\0';
+  buf4 [0] = '\0';
 
   for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
     oip = ufp->label;
@@ -2253,11 +2335,11 @@ static CharPtr GetDBLinkString (
       if (ufp->num > 0 && ip != NULL) {
         val = ip [0];
         if (val > 0) {
-          sprintf (buf1, "Trace Assembly Archive:%ld", (long) val);
+          sprintf (buf1, "Trace Assembly Archive: %ld", (long) val);
           for (i = 1; i < ufp->num; i++) {
             val = ip [i];
             if (val > 0) {
-              sprintf (tmp, ",%ld", (long) val);
+              sprintf (tmp, ", %ld", (long) val);
               StringCat (buf1, tmp);
             }
           }
@@ -2269,11 +2351,11 @@ static CharPtr GetDBLinkString (
       if (ufp->num > 0 && cpp != NULL) {
         str = cpp [0];
         if (StringDoesHaveText (str)) {
-          sprintf (buf2, "Bio Sample:%s", str);
+          sprintf (buf2, "Bio Sample: %s", str);
           for (i = 1; i < ufp->num; i++) {
             str = cpp [i];
             if (StringDoesHaveText (str)) {
-              sprintf (tmp, ",%s", str);
+              sprintf (tmp, ", %s", str);
               StringCat (buf2, tmp);
             }
           }
@@ -2285,12 +2367,40 @@ static CharPtr GetDBLinkString (
       if (ufp->num > 0 && cpp != NULL) {
         str = cpp [0];
         if (StringDoesHaveText (str)) {
-          sprintf (buf3, "ProbeDB:%s", str);
+          sprintf (buf3, "ProbeDB: %s", str);
           for (i = 1; i < ufp->num; i++) {
             str = cpp [i];
             if (StringDoesHaveText (str)) {
-              sprintf (tmp, ",%s", str);
+              sprintf (tmp, ", %s", str);
               StringCat (buf3, tmp);
+            }
+          }
+        }
+      }
+    }
+    if (StringICmp (oip->str, "Sequence Read Archive") == 0 && ufp->choice == 7) {
+      cpp = (CharPtr PNTR) ufp->data.ptrvalue;
+      if (ufp->num > 0 && cpp != NULL) {
+        str = cpp [0];
+        if (StringDoesHaveText (str)) {
+          tmp [0] = '\0';
+          if (ajp != NULL && GetWWW (ajp)) {
+            FF_asn2gb_www_SRR (ajp, tmp, str);
+          } else {
+            StringCpy (tmp, str);
+          }
+          sprintf (buf4, "Sequence Read Archive: %s", tmp);
+          for (i = 1; i < ufp->num; i++) {
+            str = cpp [i];
+            if (StringDoesHaveText (str)) {
+              tmp [0] = '\0';
+              if (ajp != NULL && GetWWW (ajp)) {
+                FF_asn2gb_www_SRR (ajp, tmp, str);
+              } else {
+                StringCpy (tmp, str);
+              }
+              StringCat (buf4, ", ");
+              StringCat (buf4, tmp);
             }
           }
         }
@@ -2298,9 +2408,9 @@ static CharPtr GetDBLinkString (
     }
   }
 
-  if (StringHasNoText (buf1) && StringHasNoText (buf2) && StringHasNoText (buf3)) return NULL;
+  if (StringHasNoText (buf1) && StringHasNoText (buf2) && StringHasNoText (buf3) && StringHasNoText (buf4)) return NULL;
 
-  len = StringLen (buf1) + StringLen (buf2) + StringLen (buf3);
+  len = StringLen (buf1) + StringLen (buf2) + StringLen (buf3) + StringLen (buf4);
   str = (CharPtr) MemNew (sizeof (Char) * (len + 2));
   if (str == NULL) return NULL;
 
@@ -2320,6 +2430,12 @@ static CharPtr GetDBLinkString (
   if (StringDoesHaveText (buf3)) {
     StringCat (str, prefix);
     StringCat (str, buf3);
+    prefix = "\n";
+  }
+
+  if (StringDoesHaveText (buf4)) {
+    StringCat (str, prefix);
+    StringCat (str, buf4);
     prefix = "\n";
   }
 
@@ -2413,7 +2529,7 @@ NLM_EXTERN void AddDblinkBlock (
     }
     first = FALSE;
 
-    prefix = "Project:";
+    prefix = "Project: ";
     projectID = 0;
     parentID = 0;
     for (curr = gpuop->data; curr != NULL; curr = curr->next) {
@@ -2441,7 +2557,7 @@ NLM_EXTERN void AddDblinkBlock (
               }
               ValNodeCopyStr (&head, 0, buf);
             }
-            prefix = ",";
+            prefix = ", ";
             parentID = 0;
           }
           projectID = val;
@@ -2484,7 +2600,7 @@ NLM_EXTERN void AddDblinkBlock (
   }
 
   if (dbuop != NULL) {
-    str = GetDBLinkString (dbuop);
+    str = GetDBLinkString (ajp, dbuop);
     if (StringDoesHaveText (str)) {
       bbp = Asn2gbAddBlock (awp, PROJECT_BLOCK, sizeof (BaseBlock));
       if (bbp == NULL) return;
@@ -3544,21 +3660,23 @@ NLM_EXTERN void AddDbsourceBlock (
         break;
     }
 
-    switch (sip->choice) {
-      case SEQID_PIR :
-        AddPIRBlock (ajp, ffstring, bsp);
-        break;
-      case SEQID_SWISSPROT :
-        AddSPBlock (ajp, ffstring, bsp);
-        break;
-      case SEQID_PRF :
-        AddPRFBlock (ajp, ffstring, bsp);
-        break;
-      case SEQID_PDB :
-        AddPDBBlock (ajp, ffstring, bsp);
-        break;
-      default :
-        break;
+    if (sip != NULL) {
+      switch (sip->choice) {
+        case SEQID_PIR :
+          AddPIRBlock (ajp, ffstring, bsp);
+          break;
+        case SEQID_SWISSPROT :
+          AddSPBlock (ajp, ffstring, bsp);
+          break;
+        case SEQID_PRF :
+          AddPRFBlock (ajp, ffstring, bsp);
+          break;
+        case SEQID_PDB :
+          AddPDBBlock (ajp, ffstring, bsp);
+          break;
+        default :
+          break;
+      }
     }
   }
 
@@ -3745,6 +3863,54 @@ static Boolean KeywordAlreadyInList (
   return FALSE;
 }
 
+typedef struct finstatdata {
+  CharPtr  inuserobj;
+  CharPtr  inkeyword;
+} FinStatData, PNTR FinStatPtr;
+
+static FinStatData finStatKywds [] = {
+  {"Standard-Draft",              "STANDARD_DRAFT"},
+  {"High-quality-draft",          "HIGH_QUALITY_DRAFT"},
+  {"Improved-high-quality-draft", "IMPROVED_HIGH_QUALITY_DRAFT"},
+  {"Annotation-grade",            "ANNOTATION_GRADE"},
+  {"Non-contiguous-finished",     "NON_CONTIGUOUS_FINISHED"},
+  /*
+  {"Finished",                    "FINISHED"},
+  */
+  {NULL, NULL}
+};
+
+static CharPtr GetFinishingStatus (
+  CharPtr str
+)
+
+{
+  Char     buf [64];
+  Char     ch;
+  Int2     i;
+  CharPtr  ptr;
+
+  if (StringHasNoText (str)) return NULL;
+
+  StringNCpy_0 (buf, str, sizeof (buf));
+  ptr = buf;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch == ' ') {
+      *ptr = '-';
+    }
+    ptr++;
+    ch = *ptr;
+  }
+
+  for (i = 0; finStatKywds [i].inuserobj != NULL; i++) {
+    if (StringICmp (buf, finStatKywds [i].inuserobj) == 0) {
+      return finStatKywds [i].inkeyword;
+    }
+  }
+
+  return NULL;
+}
 
 NLM_EXTERN void AddKeywordsBlock (
   Asn2gbWorkPtr awp
@@ -3757,8 +3923,11 @@ NLM_EXTERN void AddKeywordsBlock (
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
   BioSourcePtr       biop;
+  UserFieldPtr       curr;
   SeqMgrDescContext  dcontext;
   EMBLBlockPtr       ebp;
+  CharPtr            field;
+  CharPtr            finishing_status = NULL;
   GBBlockPtr         gbp;
   GBSeqPtr           gbseq;
   ValNodePtr         head = NULL;
@@ -3767,6 +3936,7 @@ NLM_EXTERN void AddKeywordsBlock (
   Boolean            is_gss = FALSE;
   Boolean            is_sts = FALSE;
   Boolean            is_env_sample = FALSE;
+  Boolean            is_genome_assembly = FALSE;
   ValNodePtr         keywords;
   CharPtr            kwd;
   MolInfoPtr         mip;
@@ -3938,6 +4108,22 @@ NLM_EXTERN void AddKeywordsBlock (
       oip = uop->type;
       if (oip != NULL && StringICmp (oip->str, "ENCODE") == 0) {
         add_encode = TRUE;
+      } else if (oip != NULL && StringICmp (oip->str, "StructuredComment") == 0) {
+        for (curr = uop->data; curr != NULL; curr = curr->next) {
+          if (curr->choice != 1) continue;
+          oip = curr->label;
+          if (oip == NULL) continue;
+          field = oip->str;
+          if (StringHasNoText (field)) continue;
+          if (StringCmp (field, "StructuredCommentPrefix") == 0) {
+            if (StringCmp ((CharPtr) curr->data.ptrvalue, "##Genome-Assembly-Data-START##") == 0) {
+              is_genome_assembly = TRUE;
+            }
+          }
+          if (StringCmp (field, "Current Finishing Status") == 0) {
+            finishing_status = GetFinishingStatus ((CharPtr) curr->data.ptrvalue);
+          }
+        }
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
@@ -3947,6 +4133,12 @@ NLM_EXTERN void AddKeywordsBlock (
       ValNodeCopyStr (&head, 0, "; ");
     }
     ValNodeCopyStr (&head, 0, "ENCODE");
+  }
+  if (is_genome_assembly && StringDoesHaveText (finishing_status)) {
+    if (head != NULL) {
+      ValNodeCopyStr (&head, 0, "; ");
+    }
+    ValNodeCopyStr (&head, 0, finishing_status);
   }
 
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
@@ -5050,7 +5242,7 @@ static void GetRefsOnBioseq (
         }
       }
       if (awp->format == FTABLE_FMT) {
-        pdp = (PubdescPtr) sdp->data.ptrvalue;
+        pdp = (PubdescPtr) sfp->data.value.ptrvalue;
         if (HasNoPmidOrMuid (pdp)) {
           takeIt = FALSE;
         }
@@ -5593,11 +5785,15 @@ NLM_EXTERN void AddWGSBlock (
 
 {
   IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
   Char               buf [80];
   SeqMgrDescContext  dcontext;
   CharPtr            first;
+  GBAltSeqItemPtr    gbaip;
+  GBAltSeqDataPtr    gbasp, asphead = NULL, asplast = NULL;
+  GBSeqPtr           gbseq;
   CharPtr            last;
   ObjectIdPtr        oip;
   SeqDescrPtr        sdp;
@@ -5611,6 +5807,8 @@ NLM_EXTERN void AddWGSBlock (
   if ( ajp == NULL ) return;
   bsp = awp->bsp;
   if (bsp == NULL) return;
+  asp = awp->asp;
+  if (asp == NULL) return;
 
   if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) return;
 
@@ -5618,6 +5816,12 @@ NLM_EXTERN void AddWGSBlock (
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
     sprintf (buf, "<a name=\"wgs_%ld\"></a>", (long) awp->currGi);
     DoQuickLinkFormat (awp->afp, buf);
+  }
+
+  if (ajp->gbseq) {
+    gbseq = &asp->gbseq;
+  } else {
+    gbseq = NULL;
   }
 
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
@@ -5651,6 +5855,33 @@ NLM_EXTERN void AddWGSBlock (
             }
           }
           if (first != NULL && last != NULL) {
+            if (gbseq != NULL) {
+              gbasp = (GBAltSeqDataPtr) MemNew (sizeof (GBAltSeqData));
+              if (gbasp != NULL) {
+                if (asphead == NULL) {
+                  asphead = gbasp;
+                }
+                if (asplast != NULL) {
+                  asplast->next = gbasp;
+                }
+                asplast = gbasp;
+                if (wgstype == 1) {
+                  gbasp->name = StringSave ("WGS");
+                } else if (wgstype == 2) {
+                  gbasp->name = StringSave ("WGS_SCAFLD");
+                } else if (wgstype == 3) {
+                  gbasp->name = StringSave ("WGS_CONTIG");
+                }
+                gbaip = GBAltSeqItemNew ();
+                if (gbaip != NULL) {
+                  gbaip->first_accn = StringSave (first);
+                  if (StringCmp (first, last) != 0) {
+                    gbaip->last_accn = StringSave (last);
+                  }
+                  gbasp->items = gbaip;
+                }
+              }
+            }
             bbp = Asn2gbAddBlock (awp, WGS_BLOCK, sizeof (BaseBlock));
             if (bbp != NULL) {
               ffstring = FFGetString (ajp);
@@ -5665,8 +5896,172 @@ NLM_EXTERN void AddWGSBlock (
               
                 if ( GetWWW(ajp) ) {
                   if (StringCmp (first, last) != 0) {
+                    if (wgstype == 1) {
+                      FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                      FF_Add_NCBI_Base_URL (ffstring, link_wgs);
+                      StringCpy (buf, first);
+                      if (buf [2] == '_') {
+                        buf [9] = '\0';
+                      } else {
+                        buf [6] = '\0';
+                      }
+                      FFAddTextToString(ffstring, "val=", buf, "\">", FALSE, FALSE, TILDE_IGNORE);
+                      sprintf (buf, "%s-%s", first, last);
+                      FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                      FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
+                    } else {
+                      FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                      FF_Add_NCBI_Base_URL (ffstring, link_wgsscaf);
+                      sprintf (buf, "%s:%s", first, last);
+                      FFAddTextToString(ffstring, "term=", buf, "[PACC]\">", FALSE, FALSE, TILDE_IGNORE);
+                      sprintf (buf, "%s-%s", first, last);
+                      FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                      FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
+                    }
+                  } else {
                     FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-                    FF_Add_NCBI_Base_URL (ffstring, link_wgs);
+                    FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+                    FFAddTextToString(ffstring, /* "val=" */ NULL, first, "\">", FALSE, FALSE, TILDE_IGNORE);
+                    sprintf (buf, "%s", first);
+                    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                    FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
+                  }
+                } else {
+                  if (StringCmp (first, last) != 0) {
+                    sprintf (buf, "%s-%s", first, last);
+                    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                  } else {
+                    sprintf (buf, "%s", first);
+                    FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
+                  }
+                }
+
+                bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 0, 0, NULL);
+                FFRecycleString(ajp, ffstring);
+              }
+
+              bbp->entityID = dcontext.entityID;
+              bbp->itemtype = OBJ_SEQDESC;
+              bbp->itemID = dcontext.itemID;
+              if (awp->afp != NULL) {
+                DoImmediateFormat (awp->afp, bbp);
+              }
+            }
+          }
+        }
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+
+  if (gbseq != NULL) {
+    gbseq->alt_seq = asphead;
+  }
+}
+
+NLM_EXTERN void AddCAGEBlock (
+  Asn2gbWorkPtr awp
+)
+
+{
+  IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
+  BaseBlockPtr       bbp;
+  BioseqPtr          bsp;
+  Char               buf [80];
+  Int2               cagetype;
+  SeqMgrDescContext  dcontext;
+  CharPtr            first;
+  GBAltSeqItemPtr    gbaip;
+  GBAltSeqDataPtr    gbasp, asphead = NULL, asplast = NULL;
+  GBSeqPtr           gbseq;
+  CharPtr            last;
+  ObjectIdPtr        oip;
+  SeqDescrPtr        sdp;
+  UserFieldPtr       ufp;
+  UserObjectPtr      uop;
+  StringItemPtr      ffstring;
+
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if ( ajp == NULL ) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
+  asp = awp->asp;
+  if (asp == NULL) return;
+
+  if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) return;
+
+  if (GetWWW (ajp) && awp->mode == ENTREZ_MODE && awp->afp != NULL &&
+      (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
+    sprintf (buf, "<a name=\"wgs_%ld\"></a>", (long) awp->currGi);
+    DoQuickLinkFormat (awp->afp, buf);
+  }
+
+  if (ajp->gbseq) {
+    gbseq = &asp->gbseq;
+  } else {
+    gbseq = NULL;
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL) {
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop != NULL) {
+      oip = uop->type;
+      first = NULL;
+      last = NULL;
+      cagetype = 0;
+      if (oip != NULL) {
+        if (StringICmp (oip->str, "CAGE-Tag-List") == 0) {
+          cagetype = 1;
+        }
+        if (cagetype != 0) {
+          for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+            oip = ufp->label;
+            if (oip == NULL || oip->str == NULL || ufp->choice != 1) continue;
+            if (StringICmp (oip->str, "CAGE_accession_first") == 0) {
+              first = (CharPtr) ufp->data.ptrvalue;
+            } else if (StringICmp (oip->str, "CAGE_accession_last") == 0) {
+              last = (CharPtr) ufp->data.ptrvalue;
+            }
+          }
+          if (first != NULL && last != NULL) {
+            if (gbseq != NULL) {
+              gbasp = (GBAltSeqDataPtr) MemNew (sizeof (GBAltSeqData));
+              if (gbasp != NULL) {
+                if (asphead == NULL) {
+                  asphead = gbasp;
+                }
+                if (asplast != NULL) {
+                  asplast->next = gbasp;
+                }
+                asplast = gbasp;
+                if (cagetype == 1) {
+                  gbasp->name = StringSave ("TAG");
+                }
+                gbaip = GBAltSeqItemNew ();
+                if (gbaip != NULL) {
+                  gbaip->first_accn = StringSave (first);
+                  if (StringCmp (first, last) != 0) {
+                    gbaip->last_accn = StringSave (last);
+                  }
+                  gbasp->items = gbaip;
+                }
+              }
+            }
+            bbp = Asn2gbAddBlock (awp, WGS_BLOCK, sizeof (BaseBlock));
+            if (bbp != NULL) {
+              ffstring = FFGetString (ajp);
+              if (ffstring != NULL) {
+                if (cagetype == 1) {
+                  FFStartPrint (ffstring, awp->format, 0, 12, "TAG", 12, 0, 0, NULL, FALSE);
+                }
+              
+                if ( GetWWW(ajp) ) {
+                  if (StringCmp (first, last) != 0) {
+                    FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                    FF_Add_NCBI_Base_URL (ffstring, link_cage);
                     FFAddTextToString(ffstring, "db=Nucleotide&cmd=Search&term=", first, NULL, FALSE, FALSE, TILDE_IGNORE);
                     FFAddTextToString(ffstring, ":", last, "[PACC]\">", FALSE, FALSE, TILDE_IGNORE);
                     sprintf (buf, "%s-%s", first, last);
@@ -5707,6 +6102,10 @@ NLM_EXTERN void AddWGSBlock (
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
   }
+
+  if (gbseq != NULL) {
+    gbseq->alt_seq = asphead;
+  }
 }
 
 NLM_EXTERN void AddGenomeBlock (
@@ -5716,11 +6115,15 @@ NLM_EXTERN void AddGenomeBlock (
 {
   CharPtr            accn;
   IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
   Char               buf [128];
   SeqMgrDescContext  dcontext;
   Boolean            first = TRUE;
+  GBAltSeqItemPtr    gbaip;
+  GBAltSeqDataPtr    gbasp, asphead = NULL, asplast = NULL;
+  GBSeqPtr           gbseq;
   CharPtr            moltype;
   ObjectIdPtr        oip;
   SeqDescrPtr        sdp;
@@ -5734,6 +6137,8 @@ NLM_EXTERN void AddGenomeBlock (
   if ( ajp == NULL ) return;
   bsp = awp->bsp;
   if (bsp == NULL) return;
+  asp = awp->asp;
+  if (asp == NULL) return;
 
   if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) return;
 
@@ -5741,6 +6146,12 @@ NLM_EXTERN void AddGenomeBlock (
       (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT)) {
     sprintf (buf, "<a name=\"genome_%ld\"></a>", (long) awp->currGi);
     DoQuickLinkFormat (awp->afp, buf);
+  }
+
+  if (ajp->gbseq) {
+    gbseq = &asp->gbseq;
+  } else {
+    gbseq = NULL;
   }
 
   bbp = Asn2gbAddBlock (awp, GENOME_BLOCK, sizeof (BaseBlock));
@@ -5773,6 +6184,30 @@ NLM_EXTERN void AddGenomeBlock (
             }
           }
           if (! StringHasNoText (accn)) {
+            if (gbseq != NULL) {
+              gbasp = (GBAltSeqDataPtr) MemNew (sizeof (GBAltSeqData));
+              if (gbasp != NULL) {
+                if (asphead == NULL) {
+                  asphead = gbasp;
+                }
+                if (asplast != NULL) {
+                  asplast->next = gbasp;
+                }
+                asplast = gbasp;
+                gbasp->name = StringSave ("GENOME");
+                gbaip = GBAltSeqItemNew ();
+                if (gbaip != NULL) {
+                  if (! StringHasNoText (moltype)) {
+                    sprintf (buf, "%s (%s)", accn, moltype);
+                    gbaip->value = StringSave (buf);
+                  } else {
+                    sprintf (buf, "%s", accn);
+                    gbaip->value = StringSave (buf);
+                  }
+                  gbasp->items = gbaip;
+                }
+              }
+            }
             if (! first) {
               FFAddNewLine(ffstring);
             }
@@ -5793,6 +6228,10 @@ NLM_EXTERN void AddGenomeBlock (
 
   if (awp->afp != NULL) {
     DoImmediateFormat (awp->afp, bbp);
+  }
+
+  if (gbseq != NULL) {
+    gbseq->alt_seq = asphead;
   }
 }
 

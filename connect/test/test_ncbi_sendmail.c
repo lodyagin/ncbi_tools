@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_sendmail.c,v 6.20 2008/03/15 11:25:53 kazimird Exp $
+/* $Id: test_ncbi_sendmail.c,v 6.25 2010/06/04 14:59:37 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,13 +30,12 @@
  *
  */
 
-#include "../ncbi_priv.h"               /* CORE logging facilities */
-#include "../ncbi_ansi_ext.h"
+#include <connect/ncbi_connutil.h>
 #include <connect/ncbi_sendmail.h>
-#include <connect/ncbi_socket.h>
+#include "../ncbi_ansi_ext.h"
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <errno.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 /* This header must go last */
 #include "test_assert.h"
@@ -74,13 +73,14 @@ int main(int argc, const char* argv[])
         "lavr@pavo",
         " \"Anton Lavrentiev\"   <lavr@pavo>  , lavr, <lavr>   ",
     };
-    const char* mx_host, *p;
     size_t i, j, k, n, m;
+    const char* mx_host;
     SSendMailInfo info;
     const char* retval;
     STimeout mx_tmo;
     char* huge_body;
     short mx_port;
+    char val[32];
     FILE* fp;
 
     g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
@@ -90,15 +90,13 @@ int main(int argc, const char* argv[])
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
-    if ((p = getenv("CONN_DEBUG_PRINTOUT")) != 0) {
-        if (strcasecmp(p, "1")    == 0  ||
-            strcasecmp(p, "ON")   == 0  ||
-            strcasecmp(p, "YES")  == 0  ||
-            strcasecmp(p, "TRUE") == 0  ||
-            strcasecmp(p, "SOME") == 0  ||
-            strcasecmp(p, "DATA") == 0) {
-            SOCK_SetDataLoggingAPI(eOn);
-        }
+    ConnNetInfo_GetValue(0, REG_CONN_DEBUG_PRINTOUT, val, sizeof(val),
+                         DEF_CONN_DEBUG_PRINTOUT);
+    if (ConnNetInfo_Boolean(val)
+        ||  (*val  &&  (strcasecmp(val, "all")  == 0  ||
+                        strcasecmp(val, "some") == 0  ||
+                        strcasecmp(val, "data") == 0))) {
+        SOCK_SetDataLoggingAPI(eOn);
     }
 
     if (argc > 1) {
@@ -289,6 +287,7 @@ int main(int argc, const char* argv[])
         CORE_LOG(eLOG_Fatal, "Test failed");
     CORE_LOGF(eLOG_Note, ("Test passed: %s", retval));
 
-    CORE_LOG(eLOG_Note, "Test completed");
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
+    CORE_SetLOG(0);
     return 0;
 }

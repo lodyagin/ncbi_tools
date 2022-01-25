@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.709 $
+* $Revision: 6.735 $
 *
 * File Description: 
 *
@@ -131,7 +131,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "9.55"
+#define SEQ_APP_VER "10.25"
 
 CharPtr SEQUIN_APPLICATION = SEQ_APP_VER;
 CharPtr SEQUIN_SERVICES = NULL;
@@ -285,6 +285,7 @@ static MenU     newPubMenu = NULL;
 static MenU     batchApplyMenu = NULL;
 static MenU     batchEditMenu = NULL;
 static MenU     specialMenu = NULL;
+static MenU     projectsMenu = NULL;
 static MenU     analysisMenu = NULL;
 static Boolean  initialFormsActive = FALSE;
 #endif
@@ -317,6 +318,7 @@ ForM  helpForm = NULL;
 static CharPtr validFailMsg =
 "Submission failed validation test.  Continue?\n\
 (Choose Validate in the Search menu to see errors.)";
+
 
 extern Int2 GetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen)
 
@@ -1334,14 +1336,123 @@ static void SaveBinSeqEntry (IteM i)
   }
 }
 
+static CharPtr google_earth_1 =
+  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" \
+  "<kml xmlns=\"http://earth.google.com/kml/2.2\">\n" \
+  "<Document>\n" \
+  "  <name>KmlFile</name>\n" \
+  "  <StyleMap id=\"default_copy0+nicon=http://maps.google.com/mapfiles/kml/pal3/icon60.png+hicon=http://maps.google.com/mapfiles/kml/pal3/icon52.png\">\n" \
+  "    <Pair>\n" \
+  "      <key>normal</key>\n" \
+  "      <styleUrl>#default_copy0+icon=http://maps.google.com/mapfiles/kml/pal3/icon60.png</styleUrl>\n" \
+  "    </Pair>\n" \
+  "    <Pair>\n" \
+  "      <key>highlight</key>\n" \
+  "      <styleUrl>#default_copy0+icon=http://maps.google.com/mapfiles/kml/pal3/icon52.png</styleUrl>\n" \
+  "    </Pair>\n" \
+  "  </StyleMap>\n" \
+  "  <Style id=\"default_copy0+icon=http://maps.google.com/mapfiles/kml/pal3/icon60.png\">\n" \
+  "    <IconStyle>\n" \
+  "      <Icon>\n" \
+  "        <href>http://maps.google.com/mapfiles/kml/pal3/icon60.png</href>\n" \
+  "      </Icon>\n" \
+  "    </IconStyle>\n" \
+  "  </Style>\n" \
+  "  <Placemark>\n";
+
+static CharPtr google_earth_2 =
+  "    <styleUrl>#default_copy0+nicon=http://maps.google.com/mapfiles/kml/pal3/icon60.png+hicon=http://maps.google.com/mapfiles/kml/pal3/icon52.png</styleUrl>\n" \
+  "    <Point>\n";
+
+static CharPtr google_earth_3 =
+  "    </Point>\n" \
+  "  </Placemark>\n" \
+  "</Document>\n" \
+  "</kml>\n";
+
+static Boolean LaunchedGoogleEarth (
+  Uint2 entityID, Uint4 itemID, Uint2 itemtype
+)
+
+{
+  BioSourcePtr       biop;
+  SeqMgrDescContext  context;
+  Boolean            format_ok = FALSE;
+  FILE               *fp;
+  FloatHi            lat = 0.0;
+  FloatHi            lon = 0.0;
+  CharPtr            lat_lon = NULL;
+  Boolean            lat_in_range = FALSE;
+  Boolean            lon_in_range = FALSE;
+  Char               path [PATH_MAX];
+  SeqDescPtr         sdp;
+  SubSourcePtr       ssp;
+#ifdef OS_UNIX
+  Char               cmmd [256];
+#endif
+
+  if (itemtype != OBJ_SEQDESC) return FALSE;
+
+  sdp = SeqMgrGetDesiredDescriptor (entityID, NULL, itemID, 0, NULL, &context);
+  if (sdp != NULL && sdp->choice == Seq_descr_source) {
+    biop = (BioSourcePtr) sdp->data.ptrvalue;
+    if (biop != NULL) {
+      for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+        if (ssp->subtype != SUBSRC_lat_lon) continue;
+        lat_lon = ssp->name;
+        if (StringHasNoText (lat_lon)) continue;
+        IsCorrectLatLonFormat (lat_lon, &format_ok, &lat_in_range, &lon_in_range);
+        if (! format_ok) continue;
+        if (! lat_in_range) continue;
+        if (! lon_in_range) continue;
+        if (! ParseLatLon (lat_lon, &lat, &lon)) continue;
+        TmpNam (path);
+        /* write to original temp file, so next temp file name will not collide */
+        fp = FileOpen (path, "w");
+        if (fp != NULL) {
+          fprintf (fp, "\n");
+          FileClose (fp);
+          RememberSqnTempFile (path);
+        }
+        /* now append .kml extension so proper application is launched */
+        StringCat (path, ".kml");
+        fp = FileOpen (path, "w");
+        if (fp != NULL) {
+          fprintf (fp, "%s", google_earth_1);
+          fprintf (fp, "    <name>%s</name>\n", lat_lon);
+          fprintf (fp, "%s", google_earth_2);
+          fprintf (fp, "      <coordinates>%lf,%lf</coordinates>\n", (double) lon, (double) lat);
+          fprintf (fp, "%s", google_earth_3);
+          FileClose (fp);
+          RememberSqnTempFile (path);
+#ifdef OS_UNIX
+          sprintf (cmmd, "open %s", path);
+          system (cmmd);
+#endif
+#ifdef WIN_MSWIN
+          Nlm_MSWin_OpenDocument (path);
+#endif
+        }
+        return TRUE;
+      }
+    }
+  }
+
+  return FALSE;
+}
+
 static void LIBCALLBACK ValidNotify (ErrSev sev, int errcode, int subcode,
                                      Uint2 entityID, Uint4 itemID, Uint2 itemtype,
-                                     Boolean select, Boolean dblClick)
+                                     Boolean select, Boolean dblClick, Boolean shftKey)
 
 {
   Int2  handled;
 
   if (dblClick && entityID > 0 && itemID > 0 && itemtype > 0) {
+    if (itemtype == OBJ_SEQDESC && shftKey) {
+      if (LaunchedGoogleEarth (entityID, itemID, itemtype)) return;
+    }
+
     WatchCursor ();
     handled = GatherProcLaunch (OMPROC_EDIT, FALSE, entityID, itemID,
                                 itemtype, 0, 0, itemtype, 0);
@@ -1420,7 +1531,7 @@ static void SmartResetProc (IteM i)
 
 static void LaunchValidatorForDone (BaseFormPtr bfp, SeqEntryPtr sep, FormActnFunc revalProc, FormActnFunc continueProc);
 static Boolean SmallInferenceAccnVer (ForM f);
-static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck, FormActnFunc revalProc, FormActnFunc doneProc);
+static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck, FormActnFunc revalProc, FormActnFunc revalNoTaxProc, FormActnFunc doneProc);
 
 #ifdef USE_SMARTNET
 static Boolean LIBCALLBACK AllGenBankOrRefSeq (BioseqPtr bsp, SeqMgrBioseqContextPtr bcontext)
@@ -1503,7 +1614,7 @@ static void SmartnetDoneValidateFunc (ForM f)
   Boolean  inferenceAccnCheck;
 
   inferenceAccnCheck = SmallInferenceAccnVer (f);
-  ValSeqEntryFormExEx (f, TRUE, VALIDATE_ALL, inferenceAccnCheck, SmartnetDoneValidateFunc, SmartnetDoneNoValidateFunc);
+  ValSeqEntryFormExEx (f, TRUE, VALIDATE_ALL, inferenceAccnCheck, SmartnetDoneValidateFunc, NULL, SmartnetDoneNoValidateFunc);
 }
 
 static void SmartnetDoneNoValidateFunc (ForM f)
@@ -1515,6 +1626,19 @@ static void SmartnetDoneNoValidateFunc (ForM f)
   SmartnetDoneFuncEx (bfp, FALSE);
 }
 
+static void RemovePgcode (BioSourcePtr biop, Pointer userdata)
+
+{
+  OrgNamePtr  onp;
+  OrgRefPtr   orp;
+
+  if (biop == NULL) return;
+  orp = biop->org;
+  if (orp == NULL) return;
+  onp = orp->orgname;
+  if (onp == NULL) return;
+  onp->pgcode = 0;
+}
 
 static void SmartnetDoneFuncEx (BaseFormPtr bfp, Boolean validate)
 
@@ -1527,6 +1651,7 @@ static void SmartnetDoneFuncEx (BaseFormPtr bfp, Boolean validate)
     Boolean       update;
     
     ObjMgrDataPtr omdp;  
+    ObjMgrPtr     omp;
     OMUserDataPtr omudp;
     SMUserDataPtr sm_usr_data;
 /*    Uint2         entityID; */
@@ -1560,7 +1685,15 @@ static void SmartnetDoneFuncEx (BaseFormPtr bfp, Boolean validate)
             
             /* ObjMgrSendMsg (OM_MSG_DEL, entityID, 0, 0); */
             ObjMgrFree(omdp->datatype, omdp->dataptr);
-            
+
+            omp = ObjMgrGet ();
+            ObjMgrReapOne (omp);
+            SeqMgrClearBioseqIndex ();
+            ObjMgrFreeCache (0);
+            FreeSeqIdGiCache ();
+
+            SeqEntrySetScope (NULL);
+
             return;
         }
 
@@ -1635,6 +1768,7 @@ static void SmartnetDoneFuncEx (BaseFormPtr bfp, Boolean validate)
             }
             SeqMgrClearFeatureIndexes (bfp->input_entityID, NULL);
 
+            VisitBioSourcesInSep (sep, NULL, RemovePgcode);
         }
 
         if(sm_usr_data->header->format == OBJ_SEQENTRY) {
@@ -1654,8 +1788,18 @@ static void SmartnetDoneFuncEx (BaseFormPtr bfp, Boolean validate)
         ObjMgrFreeUserData(entityID, 0, 0, SMART_KEY); 
         */
 
+        HideBioseqView ((WindoW) bfp->form);  
+
         /* ObjMgrSendMsg (OM_MSG_DEL, entityID, 0, 0); */
         ObjMgrFree(omdp->datatype, omdp->dataptr);
+
+        omp = ObjMgrGet ();
+        ObjMgrReapOne (omp);
+        SeqMgrClearBioseqIndex ();
+        ObjMgrFreeCache (0);
+        FreeSeqIdGiCache ();
+
+        SeqEntrySetScope (NULL);
 
         subtoolRecordDirty = FALSE;
         FileRemove (SEQUIN_EDIT_TEMP_FILE);
@@ -1697,7 +1841,7 @@ static void SubtoolDoneValidateFunc (ForM f)
   Boolean  inferenceAccnCheck;
 
   inferenceAccnCheck = SmallInferenceAccnVer (f);
-  ValSeqEntryFormExEx (f, TRUE, VALIDATE_ALL, inferenceAccnCheck, SubtoolDoneValidateFunc, SubtoolDoneNoValidateFunc);
+  ValSeqEntryFormExEx (f, TRUE, VALIDATE_ALL, inferenceAccnCheck, SubtoolDoneValidateFunc, NULL, SubtoolDoneNoValidateFunc);
 }
 
 
@@ -2292,6 +2436,7 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
   Boolean           is_species_level;
   Boolean           force_tax_consult;
   ValNodePtr        last = NULL;
+  OrgNamePtr        onp;
   OrgRefPtr         orp;
   ErrSev            sev;
   TaxLst            srclist;
@@ -2327,6 +2472,12 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
                         (AsnReadFunc) OrgRefAsnRead,
                         (AsnWriteFunc) OrgRefAsnWrite);
     vnp2 = ValNodeAddPointer (&last, 3, (Pointer) orp);
+    if (orp != NULL) {
+      onp = orp->orgname;
+      if (onp != NULL) {
+        onp->pgcode = 0;
+      }
+    }
     if (t3rq->request == NULL) {
       t3rq->request = vnp2;
     }
@@ -2459,7 +2610,7 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
   ReportBadSpecificHostValues (sep, vsp);
 }
 
-static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck, FormActnFunc revalProc, FormActnFunc doneProc)
+static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck, FormActnFunc revalProc, FormActnFunc revalNoTaxProc, FormActnFunc doneProc)
 
 {
   Boolean         allRawOrSeg = TRUE;
@@ -2499,8 +2650,9 @@ static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean i
 
         validatorWindow = CreateValidateWindowExExEx (ValidNotify, "Sequin Validation Errors",
                                                   programFont, SEV_INFO, verbosity, bfp,
-                                                  revalProc, doneProc, 
+                                                  revalProc, revalNoTaxProc, doneProc, 
                                                   doneProc == NULL && OkToSequester () ? SequesterSequenceList : NULL,
+                                                  doneProc == NULL ? SegregateSequenceList : NULL,
                                                   TRUE);
         ClearValidateWindow ();
         SeqEntryExplore (sep, (Pointer) (&allRawOrSeg), CheckForCookedBioseqs);
@@ -2541,7 +2693,7 @@ static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean i
         }
         vsp->errfunc = ValidErrCallback;
         ValidateSeqEntry (sep, vsp);
-        if (indexerVersion && useEntrez) {
+        if (indexerVersion && useEntrez && IsTaxValidationRequested(validatorWindow)) {
           SetTitle (validatorWindow, "Validating Taxonomy");
           Update ();
           TaxonValidate (sep, vsp);
@@ -2576,7 +2728,7 @@ static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean i
 static void ValSeqEntryFormEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck)
 
 {
-  ValSeqEntryFormExEx (f, doAligns, limit, inferenceAccnCheck, ValSeqEntryForm, NULL);
+  ValSeqEntryFormExEx (f, doAligns, limit, inferenceAccnCheck, ValSeqEntryForm, ValSeqEntryForm, NULL);
 }
 
 static void CountInfAccnVer (SeqFeatPtr sfp, Pointer userdata)
@@ -2628,6 +2780,7 @@ extern void ValSeqEntryForm (ForM f)
   inferenceAccnCheck = SmallInferenceAccnVer (f);
   ValSeqEntryFormEx (f, TRUE, VALIDATE_ALL, inferenceAccnCheck);
 }
+
 
 static void ValSeqEntryProc (IteM i)
 
@@ -3698,7 +3851,7 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
       each = HandleOneNewAsnProcEx (bfp, removeold, askForSubmit, path, dataptr, datatype, entityID, &updateEntityID, &err_list);
       if (err_list != NULL) {
         for (vnp_err = err_list; vnp_err != NULL; vnp_err = vnp_err->next) {
-          fprintf (lip->fp, "%s\n", vnp_err->data.ptrvalue);
+          fprintf (lip->fp, "%s\n", (CharPtr) vnp_err->data.ptrvalue);
           lip->data_in_log = TRUE;
         }
         err_list = ValNodeFreeData (err_list);
@@ -5228,6 +5381,7 @@ static void BioseqViewFormActivated (WindoW w)
   Enable (aluItem);
   Enable (submitItem);
   Enable (specialMenu);
+  Enable (projectsMenu);
   Enable (analysisMenu);
   Enable (vectorScreenItem);
   Enable (cddBlastItem);
@@ -5534,6 +5688,7 @@ static void MacDeactProc (WindoW w)
   Disable (printItem);
   Disable (restoreItem);
   Disable (specialMenu);
+  Disable (projectsMenu);
   Disable (analysisMenu);
   Disable (loadUidItem);
   Disable (saveUidItem);
@@ -5797,6 +5952,64 @@ static ValNodePtr LookupAnArticleFunc (ValNodePtr oldpep, BoolPtr success)
   return pub;
 }
 
+
+static Boolean HasMoreThanOneISOJTA (TitleMsgPtr titles)
+{
+  TitleMsgPtr tmp;
+  ValNodePtr  ttl;
+  Int4 num_found = 0;
+
+  for (tmp = titles; tmp != NULL; tmp = tmp->next) {
+    for (ttl = tmp->title; ttl != NULL; ttl = ttl->next) {
+      if (ttl->choice == Cit_title_iso_jta) {
+        if (num_found > 0) {
+          return TRUE;
+        }
+        num_found++;
+        break;
+      }
+    }
+  }
+  return FALSE;
+}
+
+
+static CharPtr GetExtendedDescription (TitleMsgPtr tmp) 
+{
+  CharPtr iso_jta = NULL, name = NULL, issn = NULL, extended = NULL;
+  ValNodePtr ttl;
+
+  if (tmp == NULL) {
+    return NULL;
+  }
+  
+  for (ttl = tmp->title; ttl != NULL; ttl = ttl->next) {
+    if (ttl->choice == Cit_title_iso_jta) {
+      iso_jta = ttl->data.ptrvalue;
+    } else if (ttl->choice == Cit_title_name) {
+      name = ttl->data.ptrvalue;
+    } else if (ttl->choice == Cit_title_issn) {
+      issn = ttl->data.ptrvalue;
+    }
+  }
+  if (iso_jta == NULL) {
+    return NULL;
+  }
+  if (name == NULL && issn == NULL) {
+    extended = StringSave (iso_jta);
+  } else if (name == NULL) {
+    extended = (CharPtr) MemNew (sizeof (Char) * (StringLen (iso_jta) + StringLen (issn) + 5));
+    sprintf (extended, "%s||(%s)", iso_jta, issn);
+  } else if (issn == NULL) {
+    extended = (CharPtr) MemNew (sizeof (Char) * (StringLen (iso_jta) + StringLen (name) + 5));
+    sprintf (extended, "%s||(%s)", iso_jta, name);
+  } else {
+    extended = (CharPtr) MemNew (sizeof (Char) * (StringLen (iso_jta) + StringLen (name) + StringLen (issn) + 6));
+    sprintf (extended, "%s||(%s:%s)", iso_jta, name, issn);
+  }
+  return extended;
+}
+
 static Boolean LookupJournalFuncNew (CharPtr title, size_t maxsize, Int1Ptr jtaType, ValNodePtr PNTR all_titlesP)
 
 {
@@ -5804,7 +6017,7 @@ static Boolean LookupJournalFuncNew (CharPtr title, size_t maxsize, Int1Ptr jtaT
   ValNodePtr       last = NULL;
   MlaBackPtr       mbp;
   MlaRequestPtr    mrp;
-  CharPtr          str;
+  CharPtr          str, end;
   TitleMsgListPtr  tlp;
   TitleMsgPtr      tmp;
   ValNodePtr       ttl;
@@ -5846,27 +6059,42 @@ static Boolean LookupJournalFuncNew (CharPtr title, size_t maxsize, Int1Ptr jtaT
       }
       tlp = Mla2ExtractJournalTitleReply (mbp);
       if (tlp != NULL) {
-        for (tmp = tlp->titles; tmp != NULL; tmp = tmp->next) {
-          for (ttl = tmp->title; ttl != NULL; ttl = ttl->next) {
-            if (ttl->choice != Cit_title_iso_jta) continue;
-            str = (CharPtr) ttl->data.ptrvalue;
-            if (StringHasNoText (str)) continue;
-            vnp = ValNodeCopyStr (&last, ttl->choice, str);
-            if (first == NULL) {
-              first = vnp;
+        if (HasMoreThanOneISOJTA (tlp->titles)) {
+          for (tmp = tlp->titles; tmp != NULL; tmp = tmp->next) {
+            str = GetExtendedDescription (tmp);
+            if (str != NULL) {
+              ValNodeAddPointer (&first, 0, str);
             }
-            last = vnp;
           }
-        }
-        if (all_titlesP != NULL) {
-          *all_titlesP = first;
+        } else {
+          for (tmp = tlp->titles; tmp != NULL; tmp = tmp->next) {
+            for (ttl = tmp->title; ttl != NULL; ttl = ttl->next) {
+              if (ttl->choice != Cit_title_iso_jta) continue;
+              str = (CharPtr) ttl->data.ptrvalue;
+              if (StringHasNoText (str)) continue;
+              vnp = ValNodeCopyStr (&last, ttl->choice, str);
+              if (first == NULL) {
+                first = vnp;
+              }
+              last = vnp;
+            }
+          }
         }
         if (first != NULL) {
           str = (CharPtr) first->data.ptrvalue;
           StringNCpy_0 (title, str, maxsize);
-          if (jtaType != NULL) {
-            *jtaType = (Int1) first->choice;
+          end = StringSearch (title, "||");
+          if (end != NULL) {
+            *end = 0;
           }
+          if (jtaType != NULL) {
+            *jtaType = Cit_title_iso_jta;
+          }
+        }
+        if (all_titlesP == NULL) {
+          first = ValNodeFreeData (first);
+        } else {
+          *all_titlesP = first;
         }
         tlp = TitleMsgListFree (tlp);
       }
@@ -6415,22 +6643,15 @@ static void ChangeTargetMessageProc (ForM f, Int2 mssg)
   }
 }
 
-static void DoChangeTarget (IteM i)
-
+extern void ChangeTargetBaseForm (BaseFormPtr bfp)
 {
   ButtoN               b;
-  BaseFormPtr          bfp;
   GrouP                c;
   ChangeTargetFormPtr  cfp;
   GrouP                g;
   StdEditorProcsPtr    sepp;
   WindoW               w;
 
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
   if (bfp == NULL) return;
 
   cfp = (ChangeTargetFormPtr) MemNew (sizeof (ChangeTargetForm));
@@ -6461,6 +6682,19 @@ static void DoChangeTarget (IteM i)
   }
   Show (w);
   Select (w);
+}
+
+static void DoChangeTarget (IteM i)
+
+{
+  BaseFormPtr          bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  ChangeTargetBaseForm (bfp);
 }
 
 static void ConfigFormMessage (ForM f, Int2 mssg)
@@ -7330,6 +7564,8 @@ static void BioseqViewFormMenus (WindoW w)
     if (extraServices) {
       m = PulldownMenu (w, "Special/ S");
       SetupSpecialMenu (m, bfp);
+      m = PulldownMenu (w, "Projects");
+      MakeSpecialProjectsMenu (m, bfp);
     }
 /*#endif*/
 
@@ -7367,6 +7603,15 @@ static void BioseqViewFormMenus (WindoW w)
     SetupBatchApplyMenu (sub, bfp);
     sub = SubMenu (m, "Batch Feature Edit");
     SetupBatchEditMenu (sub, bfp);
+    i = CommandItem (m, "Batch Apply Molecule Type", ExternalApplyMoleculeType);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (m, "Set Release Date", SetReleaseDate);
+    SetObjectExtra (i, bfp, NULL);
+    SeparatorItem (m);
+    i = CommandItem (m, "ORF Finder", FindOrf);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (m, "Import Source Table", ParseFileToSource);
+    SetObjectExtra (i, bfp, NULL);
     SeparatorItem (m);
     sub = SubMenu (m, "Publications");
     SetupNewPublicationsMenu (sub, bfp);
@@ -7374,8 +7619,6 @@ static void BioseqViewFormMenus (WindoW w)
     sub = SubMenu (m, "Descriptors");
     SetupNewDescriptorsMenu (sub, bfp);
     SeparatorItem (m);
-    i = CommandItem (m, "Generate Definition Line", AutoDef);
-    SetObjectExtra (i, bfp, NULL);
     sub = SubMenu (m, "Advanced Table Readers");
     i = CommandItem (sub, "Load Structured Comments from Table", SubmitterCreateStructuredComments);
     SetObjectExtra (i, bfp, NULL);
@@ -8849,12 +9092,22 @@ static void SetupDesktop (void)
 #endif
 #ifdef WIN_MOTIF
   if (indexerVersion) {
-    seqviewprocs.createToolBar = BioseqViewFormToolBar; /* now in separate window */
+    if (GetSequinAppParam ("SETTINGS", "WGS", NULL, str, sizeof (str))
+        && StringICmp (str, "TRUE") == 0) {
+      seqviewprocs.createToolBar = BioseqViewFormWGSToolBar;
+    } else {
+      seqviewprocs.createToolBar = BioseqViewFormToolBar;
+    }
   }
 #endif
 #ifdef WIN_MSWIN
   if (indexerVersion) {
-    seqviewprocs.createToolBar = BioseqViewFormToolBar; /* now in separate window */
+    if (GetSequinAppParam ("SETTINGS", "WGS", NULL, str, sizeof (str))
+        && StringICmp (str, "TRUE") == 0) {
+      seqviewprocs.createToolBar = BioseqViewFormWGSToolBar;
+    } else {
+      seqviewprocs.createToolBar = BioseqViewFormToolBar;
+    }
   }
 #endif
 /*#ifdef INTERNAL_NCBI_SEQUIN*/
@@ -9739,6 +9992,9 @@ static void SetupMacMenus (void)
   if (extraServices) {
     specialMenu = PulldownMenu (NULL, "Special");
     SetupSpecialMenu (specialMenu, NULL);
+    projectsMenu = PulldownMenu (NULL, "Projects");
+    MakeSpecialProjectsMenu (projectsMenu, NULL);
+
   }
 /*#endif*/
 
@@ -9783,6 +10039,11 @@ static void SetupMacMenus (void)
   SetupBatchApplyMenu (batchApplyMenu, NULL);
   batchEditMenu = SubMenu (newFeatMenu, "Batch Feature Edit");
   SetupBatchEditMenu (batchEditMenu, NULL);
+  CommandItem (newFeatMenu, "Batch Apply Molecule Type", ExternalApplyMoleculeType);
+  CommandItem (newFeatMenu, "Set Release Date", SetReleaseDate);
+  SeparatorItem (newFeatMenu);
+  CommandItem (newFeatMenu, "ORF Finder", FindOrf);
+  CommandItem (newFeatMenu, "Import Source Table", ParseFileToSource);
   SeparatorItem (newFeatMenu);
   newPubMenu = SubMenu (newFeatMenu, "Publications");
   SetupNewPublicationsMenu (newPubMenu, NULL);
@@ -9790,7 +10051,6 @@ static void SetupMacMenus (void)
   newDescMenu = SubMenu (newFeatMenu, "Descriptors");
   SetupNewDescriptorsMenu (newDescMenu, NULL);
   SeparatorItem (newFeatMenu);
-  CommandItem (newFeatMenu, "Generate Definition Line", AutoDef);
   advTableMenu = SubMenu (newFeatMenu, "Advanced Table Readers");
   CommandItem (advTableMenu, "Load Structured Comments from Table", SubmitterCreateStructuredComments);
   sucItem = CommandItem (newFeatMenu, "Sort Unique Count By Group", SUCSubmitterProc);
@@ -11096,7 +11356,7 @@ static Int2 LIBCALLBACK HUPBioseqFetchFunc (Pointer data)
   TmpNam (path);
 
 #ifdef OS_UNIX
-  sprintf (cmmd, "csh %s %s > %s", hupfetchcmd, tsip->accession, path);
+  sprintf (cmmd, "csh %s %s > %s 2>&1", hupfetchcmd, tsip->accession, path);
   system (cmmd);
 #endif
 #ifdef OS_MSWIN
@@ -12836,4 +13096,3 @@ extern void UpdateFeatures (IteM i)
   Show (w);
   Select (w);
 }
-

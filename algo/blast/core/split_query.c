@@ -1,4 +1,4 @@
-/*  $Id: split_query.c,v 1.1 2007/03/12 19:55:42 kazimird Exp $
+/*  $Id: split_query.c,v 1.2 2010/06/25 17:14:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: split_query.c,v 1.1 2007/03/12 19:55:42 kazimird Exp $";
+    "$Id: split_query.c,v 1.2 2010/06/25 17:14:31 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/split_query.h>
@@ -44,7 +44,7 @@ const Int2 kOutOfMemory = -2;
 const Int4 kInvalidContext = -1;
 
 SSplitQueryBlk* 
-SplitQueryBlkNew(Uint4 num_chunks)
+SplitQueryBlkNew(Uint4 num_chunks, Boolean gapped_merge)
 {
     SSplitQueryBlk* retval = NULL;
 
@@ -57,6 +57,7 @@ SplitQueryBlkNew(Uint4 num_chunks)
         return SplitQueryBlkFree(retval);
     }
     retval->num_chunks = num_chunks;
+    retval->gapped_merge = gapped_merge;
 
     retval->chunk_query_map = 
         (SQueriesPerChunk**) calloc(num_chunks, sizeof(SQueriesPerChunk*));
@@ -153,6 +154,12 @@ SplitQueryBlkFree(SSplitQueryBlk* squery_blk)
 
     sfree(squery_blk);
     return NULL;
+}
+
+Boolean SplitQueryBlk_AllowGap(SSplitQueryBlk* squery_blk) 
+{
+    if ( squery_blk && squery_blk->gapped_merge) return TRUE;
+    return FALSE;
 }
 
 Int2 SplitQueryBlk_SetChunkBounds(SSplitQueryBlk* squery_blk,

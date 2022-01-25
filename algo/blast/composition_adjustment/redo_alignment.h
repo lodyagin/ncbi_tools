@@ -1,4 +1,4 @@
-/* $Id: redo_alignment.h,v 1.12 2007/10/11 14:25:37 kazimird Exp $
+/* $Id: redo_alignment.h,v 1.13 2010/03/26 14:54:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,6 +43,9 @@
 #include <algo/blast/composition_adjustment/smith_waterman.h>
 #include <algo/blast/composition_adjustment/compo_heap.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * Within the composition adjustment module, an object of type
@@ -462,5 +465,9 @@ NCBI_XBLAST_EXPORT
 int BlastCompo_EarlyTermination(double evalue,
                                 BlastCompo_Heap significantMatches[],
                                 int numQueries);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

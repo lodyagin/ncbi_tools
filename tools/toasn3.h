@@ -1,7 +1,7 @@
 #ifndef _TOASN3_
 #define _TOASN3_
 
-/*  $Id: toasn3.h,v 6.14 2009/06/03 20:13:16 kans Exp $
+/*  $Id: toasn3.h,v 6.19 2010/07/21 21:56:28 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -109,10 +109,11 @@ typedef struct toasn3 {
 	Boolean had_molinfo;
 } ToAsn3, PNTR ToAsn3Ptr;
 
-Int4 ToAsn4(SeqEntryPtr sep);
-Int4 SeqEntryPubsAsn4(SeqEntryPtr sep);
+Int4 ToAsn4(SeqEntryPtr sep, Boolean isEmblOrDdbj);
+Int4 SeqEntryPubsAsn4(SeqEntryPtr sep, Boolean isEmblOrDdbj);
+Int4 SeqEntryPubsAsn4Ex(SeqEntryPtr sep, Boolean isEmblOrDdbj, Boolean uniqueOnBioseq);
 Int4 SeqEntryToAsn3(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun);
-Int4 SeqEntryToAsn3Ex(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge, Boolean gpipeMode);
+Int4 SeqEntryToAsn3Ex(SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean taxserver, SeqEntryFunc taxfun, SeqEntryFunc taxmerge, Boolean gpipeMode, Boolean isEmblOrDdbj);
 Int2 seq_loc_compare( SeqLocPtr a, SeqLocPtr b);
 void compare_quals(GBQualPtr PNTR qual1, GBQualPtr PNTR qual2);
 Boolean feat_join(SeqFeatPtr f1, SeqFeatPtr f2, SeqFeatPtr head);
@@ -214,6 +215,7 @@ extern Boolean NoBiosourceOrTaxonId (SeqEntryPtr sep);
 extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
 extern void ConvertFullLenSourceFeatToDesc (SeqEntryPtr sep);
 extern void ConvertFullLenPubFeatToDesc (SeqEntryPtr sep);
+extern void CorrectGenCodes (SeqEntryPtr sep, Uint2 entityID);
 
 /* SeriousSeqEntryCleanup combines many of the above cleanups */
 
@@ -226,6 +228,10 @@ extern void SeriousSeqEntryCleanupBulk (SeqEntryPtr sep);
 /* Genome Pipeline variant that leaves redundant gene xrefs, does not normalize descriptor order */
 
 extern void GpipeSeqEntryCleanup (SeqEntryPtr sep);
+
+/* SeriousSeqAnnotCleanup calls BasicSeqAnnotCleanup and adds a cleanup user object to annot-desc */
+
+extern void SeriousSeqAnnotCleanup (SeqAnnotPtr sap);
 
 
 #ifdef __cplusplus

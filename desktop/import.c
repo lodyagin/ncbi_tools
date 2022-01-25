@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.72 $
+* $Revision: 6.75 $
 *
 * File Description: 
 *
@@ -618,6 +618,7 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
   WindoW             w;
   GrouP              x;
   GrouP              z;
+  Boolean            indexerVersion;
 
   w = NULL;
   ifp = (ImprtFormPtr) MemNew (sizeof (ImprtForm));
@@ -729,10 +730,15 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
                   NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) ifp->foldertabs, (HANDLE) h, NULL);
 
-    c = HiddenGroup (w, 2, 0, NULL);
+    c = HiddenGroup (w, 3, 0, NULL);
     b = PushButton (c, "Accept", StdFeatFormAcceptButtonProc);
     SetObjectExtra (b, ifp, NULL);
     PushButton (c, "Cancel", StdCancelButtonProc);
+    indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
+    if (sfp == NULL && indexerVersion) {
+      ifp->leave_dlg_up = CheckBox (c, "Leave Dialog Up", NULL);
+    }
+
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
     RealizeWindow (w);
 
@@ -3681,6 +3687,7 @@ typedef struct replacevisstr {
   Uint1       subtype;
   CharPtr     deleteThis;
   CharPtr     replaceWith;
+  Boolean     replace_all;
 } ReplaceVisStrData, PNTR ReplaceVisStrPtr;
 
 static void ReplaceAllCallback (SeqDescrPtr sdp, Pointer data)
@@ -3713,6 +3720,8 @@ static void ReplaceAllVisibleStringsButtonProc (ButtoN b)
     return;
   }
 
+  sep = GetTopSeqEntryForEntityID (vfp->input_entityID);
+
   rd.subtype = vfp->subtype;
   rd.replaceWith = DialogToPointer (vfp->data);
   if (rd.replaceWith == NULL || StringHasNoText (rd.replaceWith)) {
@@ -3741,7 +3750,6 @@ static void ReplaceAllVisibleStringsButtonProc (ButtoN b)
     }
   }
 
-  sep = GetTopSeqEntryForEntityID (vfp->input_entityID);
   VisitDescriptorsInSep (sep, &rd, ReplaceAllCallback);
   
   GetRidOfEmptyFeatsDescStrings (vfp->input_entityID, NULL);

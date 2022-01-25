@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.104 $
+* $Revision: 6.110 $
 *
 * File Description: 
 *
@@ -132,10 +132,11 @@ typedef struct featform {
   FEATURE_FORM_BLOCK
 } FeatureForm, PNTR FeatureFormPtr;
 
-extern void SetDescriptorPropagate (BioseqSetPtr bssp);
 extern Int2 LIBCALLBACK DescriptorPropagate (Pointer data);
 extern Boolean DescFormReplaceWithoutUpdateProc (ForM f);
+extern Boolean DescFormReplaceWithoutUpdateProcEx (ForM f, Boolean feature_or_molinfo_change);
 extern void StdDescFormActnProc (ForM f);
+extern void StdDescFormActnProcNoFeatureChangeNoMolInfoChange (ForM f);
 
 extern void StdDescFormCleanupProc (GraphiC g, VoidPtr data);
 
@@ -373,6 +374,7 @@ typedef struct modalacceptcancel
 extern void ModalAcceptButton (ButtoN b);
 extern void ModalCancelButton (ButtoN b);
 extern void ModalThirdOptionButton (ButtoN b);
+NLM_EXTERN Int4 ThreeOptionsDlg (CharPtr title_txt, CharPtr explain_txt, CharPtr opt1, CharPtr opt2, CharPtr opt3);
 
 typedef void (*TableDisplayDblClick) PROTO((PoinT, CharPtr, CharPtr, Pointer));
 typedef Boolean (*TableDisplayLeftInRed) PROTO ((Int4, ValNodePtr, Pointer));
@@ -795,6 +797,11 @@ NLM_EXTERN Boolean AutomatchFeatures (DialoG d, ValNodePtr PNTR existing_feature
 
 NLM_EXTERN void CloseLog (LogInfoPtr lip);
 
+NLM_EXTERN void TextToFeatID (TexT t, ChoicePtr cp);
+NLM_EXTERN void TextToFeatXref (TexT t, SeqFeatPtr sfp);
+
+NLM_EXTERN DialoG DescriptorStreamEditor (GrouP h,  Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
+NLM_EXTERN void SetDescriptorStreamEditorIdList (DialoG d, SeqIdPtr sip_list);
 
 #ifdef __cplusplus
 }

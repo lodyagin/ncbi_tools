@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.64 $
+* $Revision: 1.76 $
 *
 * File Description:
 *
@@ -53,7 +53,7 @@
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "5.2"
+#define ASN2ALL_APP_VER "6.3"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
 
@@ -97,6 +97,7 @@ typedef enum {
 typedef struct appflags {
   AppFormat     format;
   Boolean       automatic;
+  Boolean       catenated;
   Boolean       batch;
   Boolean       binary;
   Boolean       compressed;
@@ -108,6 +109,7 @@ typedef struct appflags {
   ModType       mode;
   Boolean       extended;
   Boolean       failed;
+  Uint4         cdsID;
   FILE          *nt;
   FILE          *aa;
   AsnIoPtr      an;
@@ -236,37 +238,55 @@ static void IsItFar (
 }
 
 static void DoCDSFasta (
-  SeqFeatPtr sfp,
+  BioseqPtr bsp,
   Pointer userdata
 )
 
 {
-  AppFlagPtr  afp;
+  AppFlagPtr         afp;
+  Char               buf [32];
+  SeqMgrFeatContext  fcontext;
+  SeqFeatPtr         sfp;
 
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return;
+  if (bsp == NULL || ! ISA_na (bsp->mol)) return;
   afp = (AppFlagPtr) userdata;
   if (afp == NULL) return;
 
-  CdRegionFastaStream (sfp, afp->nt,
-                       STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
-                       afp->linelen, 0, 0, TRUE);
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+  while (sfp != NULL) {
+    afp->cdsID++;
+    sprintf (buf, "_cds_%ld", (long) afp->cdsID);
+    CdRegionFastaStream (sfp, afp->nt,
+                         STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                         afp->linelen, 0, 0, TRUE, buf);
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
+  }
 }
 
 static void DoTransFasta (
-  SeqFeatPtr sfp,
+  BioseqPtr bsp,
   Pointer userdata
 )
 
 {
-  AppFlagPtr  afp;
+  AppFlagPtr         afp;
+  Char               buf [32];
+  SeqMgrFeatContext  fcontext;
+  SeqFeatPtr         sfp;
 
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return;
+  if (bsp == NULL || ! ISA_na (bsp->mol)) return;
   afp = (AppFlagPtr) userdata;
   if (afp == NULL) return;
 
-  TranslationFastaStream (sfp, afp->aa,
-                          STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
-                          afp->linelen, 0, 0, TRUE);
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+  while (sfp != NULL) {
+    afp->cdsID++;
+    sprintf (buf, "_prt_%ld", (long) afp->cdsID);
+    TranslationFastaStream (sfp, afp->aa,
+                            STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                            afp->linelen, 0, 0, TRUE, buf);
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
+  }
 }
 
 static void FormatRecord (
@@ -332,7 +352,8 @@ static void FormatRecord (
         top = GetTopSeqEntryForEntityID (entityID);
         if (top != NULL) {
           SeqMgrIndexFeatures (0, top->data.ptrvalue);
-          VisitFeaturesInSep (top, (Pointer) afp, DoCDSFasta);
+          afp->cdsID = 0;
+          VisitBioseqsInSep (top, (Pointer) afp, DoCDSFasta);
         }
       }
       if (afp->aa != NULL) {
@@ -340,7 +361,8 @@ static void FormatRecord (
         top = GetTopSeqEntryForEntityID (entityID);
         if (top != NULL) {
           SeqMgrIndexFeatures (0, top->data.ptrvalue);
-          VisitFeaturesInSep (top, (Pointer) afp, DoTransFasta);
+          afp->cdsID = 0;
+          VisitBioseqsInSep (top, (Pointer) afp, DoTransFasta);
         }
       }
       break;
@@ -404,7 +426,7 @@ static void ProcessSingleRecord (
   ValNodePtr    bsplist;
   BioseqSetPtr  bssp;
   Pointer       dataptr = NULL;
-  Uint2         datatype, entityID = 0;
+  Uint2         datatype = 0, entityID = 0;
   FILE          *fp;
   ObjMgrPtr     omp;
   SeqEntryPtr   sep;
@@ -747,7 +769,12 @@ static void ProcessOneRecord (
 )
 
 {
-  AppFlagPtr  afp;
+  AppFlagPtr   afp;
+  Pointer      dataptr;
+  Uint2        datatype;
+  Uint2        entityID;
+  FILE         *fp;
+  SeqEntryPtr  sep;
 
   if (StringHasNoText (filename)) return;
   afp = (AppFlagPtr) userdata;
@@ -755,6 +782,15 @@ static void ProcessOneRecord (
 
   if (afp->automatic) {
     ReadSequenceAsnFile (filename, afp->binary, afp->compressed, (Pointer) afp, FormatWrapper);
+  } else if (afp->catenated) {
+    fp = FileOpen (filename, "r");
+    if (fp != NULL) {
+      while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+        sep = GetTopSeqEntryForEntityID (entityID);
+        FormatWrapper (sep, afp);
+      }
+      FileClose (fp);
+    }
   } else if (afp->batch) {
     ProcessMultipleRecord (filename, afp);
   } else {
@@ -763,23 +799,48 @@ static void ProcessOneRecord (
 }
 
 static SeqEntryPtr SeqEntryFromAccnOrGi (
-  CharPtr accn
+  CharPtr str,
+  AppFlagPtr afp
 )
 
 {
+  CharPtr      accn;
   Boolean      alldigits;
   BioseqPtr    bsp;
+  Char         buf [64];
   Char         ch;
+  Int4         flags = 0;
   CharPtr      ptr;
+  Int2         retcode = 0;
   SeqEntryPtr  sep = NULL;
   SeqIdPtr     sip;
+  CharPtr      tmp1 = NULL;
+  CharPtr      tmp2 = NULL;
   Int4         uid = 0;
   long int     val;
   ValNode      vn;
 
-  if (StringHasNoText (accn)) return NULL;
+  if (StringHasNoText (str)) return NULL;
+  StringNCpy_0 (buf, str, sizeof (buf));
+  TrimSpacesAroundString (buf);
 
-  TrimSpacesAroundString (accn);
+  accn = buf;
+  tmp1 = StringChr (accn, ',');
+  if (tmp1 != NULL) {
+    *tmp1 = '\0';
+    tmp1++;
+    tmp2 = StringChr (tmp1, ',');
+    if (tmp2 != NULL) {
+      *tmp2 = '\0';
+      tmp2++;
+      if (StringDoesHaveText (tmp2) && sscanf (tmp2, "%ld", &val) == 1) {
+        flags = (Int4) val;
+      }
+    }
+    if (StringDoesHaveText (tmp1) && sscanf (tmp1, "%ld", &val) == 1) {
+      retcode = (Int2) val;
+    }
+  }
 
   alldigits = TRUE;
   ptr = accn;
@@ -805,13 +866,16 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
   }
 
   if (uid > 0) {
-    sep = PubSeqSynchronousQuery (uid, 0, -1);
+    sep = PubSeqSynchronousQuery (uid, retcode, flags);
     if (sep != NULL) {
       MemSet ((Pointer) &vn, 0, sizeof (ValNode));
       vn.choice = SEQID_GI;
       vn.data.intvalue = uid;
       bsp = BioseqFind (&vn);
       if (bsp != NULL) {
+        if (afp != NULL) {
+          if (afp->format == ASN_FORMAT || afp->format == XML_FORMAT) return sep;
+        }
         sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
       }
     }
@@ -924,6 +988,7 @@ Args myargs [] = {
     TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
   {"ASN.1 Type\n"
    "      a Automatic\n"
+   "      c Catenated\n"
    "      z Any\n"
    "      e Seq-entry\n"
    "      b Bioseq\n"
@@ -1050,6 +1115,7 @@ Int2 Main (void)
   /* populate parameter structure */
 
   afd.automatic = FALSE;
+  afd.catenated = FALSE;
   afd.batch = FALSE;
   afd.binary = (Boolean) myargs [b_argBinary].intvalue;
   afd.compressed = (Boolean) myargs [c_argCompressed].intvalue;
@@ -1118,6 +1184,11 @@ Int2 Main (void)
     case 'a' :
       afd.type = 1;
       afd.automatic = TRUE;
+      break;
+    case 'c' :
+      afd.type = 1;
+      afd.catenated = TRUE;
+      break;
     case 'z' :
       afd.type = 1;
       break;
@@ -1311,7 +1382,7 @@ Int2 Main (void)
   if (StringDoesHaveText (accn)) {
 
     if (remote) {
-      sep = SeqEntryFromAccnOrGi (accn);
+      sep = SeqEntryFromAccnOrGi (accn, &afd);
       if (sep != NULL) {
         bsplist = NULL;
         if (afd.lock) {

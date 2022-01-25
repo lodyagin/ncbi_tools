@@ -1,7 +1,7 @@
 #ifndef TEST_ASSERT__H
 #define TEST_ASSERT__H
 
-/*  $Id: test_assert.h,v 6.28 2006/03/07 19:55:43 lavr Exp $
+/* $Id: test_assert.h,v 6.31 2010/05/22 22:29:49 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE

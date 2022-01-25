@@ -77,6 +77,37 @@ which can be downloaded at http://www.lesstif.org/
 We didn't check this option yet, so you can use Lesstif for your own risk.
 Besides the Motif/Lesstif the X11R6 development toolkit should be installed.
 
+Q. On Linux I got the following error on compilation of toolkit:
+gcc -pipe -o Psequin -I. -O2 -I../include -L../lib -I/usr/X11R6/include
+-L/usr/X11R6/lib -DWIN_MOTIF -UINTERNAL_NCBI_SEQUIN sequin1.c sequin2.c
+sequin3.c sequin4.c sequin5.c sequin6.c sequin7.c sequin8.c sequin9.c
+sequin10.c sequinx.c -lncbicn3d -lddvlib -lvibnet -lncbidesk -lblastapi
+-lblast -lncbimmdb -lncbitxc2 -lncbiid1 -lnetblast -lncbitool -lblastcompadj
+-lncbimla -lncbiNacc -lnetentr -lnetcli -lncbicdr -lvibrant -lncbiobj -lncbi
+-L/usr/X11R6/lib -Wl,-Bstatic -lXm -Wl,-Bdynamic -lXmu -lXt -lX11 -lXext -lXp
+-lm
+sequin6.c:262: warning: useless storage class specifier in empty declaration
+../lib/libncbi.a(ncbifile.o): In function `Nlm_TmpNam':
+ncbifile.c:(.text+0x2b4): warning: the use of `tempnam' is dangerous, better
+use `mkstemp'
+/usr/lib/libXm.a(TextIn.o): In function `SelfInsert':
+(.text+0x9828): undefined reference to `XftTextExtentsUtf8'
+[...]
+/usr/lib/libXm.a(Png.o): In function `png_load_file':
+(.text+0x4ec): undefined reference to `png_destroy_read_struct'
+collect2: ld returned 1 exit status
+make: *** [Psequin] Error 1
+A. To avoid binary-compatibility concerns in the executables we distribute,
+we normally arrange for the C Toolkit to link Motif statically on Linux.
+This arrangement has the unfortunate side effect that some users run into
+undefined symbol errors because their system's implementation has additional
+library dependencies relative to ours.  The fix is at least straightforward:
+open the relevant .../ncbi/platform/*linux*.ncbi.mk file in your favorite
+text editor and adjust the definition of NCBI_DISTVIBLIBS to omit the -Wl,-B
+flags, most critically -Wl,-Bstatic .  You can determine which file to edit
+by reviewing out.makedis.csh; there should be a line near the beginning of
+the form reading "platform is linux64" or the like.
+
 Q. On RedHat Linux 7.* I got the following error on compilation of toolkit:
 gcc -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -O2 -c  -I../include objproj.c
 {standard input}: Assembler messages:

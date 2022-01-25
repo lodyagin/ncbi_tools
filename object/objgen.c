@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:  Object manager for module NCBI-General
 *
@@ -41,77 +41,6 @@
 * 06-21-93 Schuler     Made a static copy of NCBI_months[] in this file 
 *                      (because it cannot be exported from ncbitime.c when 
 *                      it is linked as a DLL).
-*
-* $Log: objgen.c,v $
-* Revision 6.16  2008/12/30 19:58:39  bollin
-* corrected crash bug in DatePrint when month exceeds 12 (an error condition)
-*
-* Revision 6.15  2008/09/10 15:22:46  bollin
-* Added DbtagMatchEx and ObjectIdMatchEx, which are optionally case sensitive or case insensitive.
-*
-* Revision 6.14  2008/01/25 15:24:21  kans
-* in UserFieldAsnRead, finished implementing ints, reals, oss as list, does not need num in advance
-*
-* Revision 6.13  2008/01/24 23:05:55  kans
-*  User-field.strs stores strings as list, does not need num supplied in advance - have not done ints, reals, oss yet
-*
-* Revision 6.12  2005/05/18 17:30:16  bollin
-* added NameStdMatch and PersonIdMatch functions
-*
-* Revision 6.11  2004/04/01 13:43:08  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.10  2002/07/23 21:47:18  kans
-* label function for pid choice 5 consortium
-*
-* Revision 6.9  2002/07/22 19:56:49  kans
-* added support for PERSON_ID_Consortium
-*
-* Revision 6.8  2000/01/20 17:04:27  beloslyu
-* new function DateClean to properly clean the date was added
-*
-* Revision 6.7  2000/01/20 15:13:16  ostell
-* added hour/minute/second fields to Date
-* added DateTimeCurr()
-*
-* Revision 6.6  1999/11/03 17:58:26  kans
-* added SeqDescrAddPointer
-*
-* Revision 6.5  1999/10/05 17:24:14  kans
-* added SeqDescrAdd
-*
-* Revision 6.4  1999/09/28 14:56:00  kans
-* rename ObjValNodeNew to SeqDescrNew
-*
-* Revision 6.3  1999/09/23 00:07:45  kans
-* ObjValNodeNew implemented
-*
-* Revision 6.2  1998/08/24 18:28:04  kans
-* removed solaris -v -fd warnings
-*
-* Revision 6.1  1998/08/17 23:05:00  kans
-* user object asn read needed to set choices 11 and 12
-*
-* Revision 6.0  1997/08/25 18:49:56  madden
-* Revision changed to 6.0
-*
-* Revision 4.3  1997/06/19 18:41:23  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 4.2  1997/03/18 15:27:53  ostell
-* made DbtagMatch and ObjectIdMatch case insensitive
-*
- * Revision 4.1  1997/01/06  21:38:30  vakatov
- * Removed local(static) NCBI_months[12] -- use that from the "ncbitime.[ch]"
- *
- * Revision 4.0  1995/07/26  13:48:06  ostell
- * force revision to 4.0
- *
- * Revision 3.4  1995/05/15  21:22:00  ostell
- * added Log line
- *
-*
-*
 *
 * ==========================================================================
 */
@@ -744,6 +673,58 @@ NLM_EXTERN Int2 LIBCALL DateCheck (DatePtr dp)
 		return -3;
 
 	return 0;
+}
+
+NLM_EXTERN DatePtr LIBCALL DateParse (CharPtr str)
+
+{
+  Int4      day = -1, month = -1, year = -1;
+  DatePtr   dp;
+  CharPtr   ptr;
+  Char      tmp [64];
+  long int  val;
+
+  if (StringHasNoText (str)) return NULL;
+
+  StringNCpy_0 (tmp, str, sizeof (tmp));
+  ptr = StringChr (tmp, '/');
+  if (ptr == NULL) {
+    ptr = StringChr (tmp, '-');
+  }
+  if (ptr != NULL) {
+    *ptr = '\0';
+    ptr++;
+    if (sscanf (tmp, "%ld", &val) == 1) {
+      month = (Int4) val;
+    }
+    str = StringChr (ptr, '/');
+    if (str == NULL) {
+      str = StringChr (ptr, '-');
+    }
+    if (str != NULL) {
+      *str = '\0';
+      str++;
+      if (sscanf (ptr, "%ld", &val) == 1) {
+        day = (Int4) val;
+      }
+      if (sscanf (str, "%ld", &val) == 1) {
+        year = (Int4) val;
+     }
+    }
+  }
+
+  if (month < 0 || day < 0 || year < 2000) return NULL;
+  if (month > 12 || day > 31 || year > 2099) return NULL;
+
+  dp = DateNew ();
+  if (dp == NULL) return NULL;
+
+  dp->data [0] = 1;
+  dp->data [1] = (Uint1) (year - 1900);
+  dp->data [2] = (Uint1) month;
+  dp->data [3] = (Uint1) day;
+
+  return dp;
 }
 
 /*****************************************************************************

@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.c,v 1.212 2009/07/09 15:49:31 kazimird Exp $
+/* $Id: blast_traceback.c,v 1.214 2010/05/06 18:54:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_traceback.c,v 1.212 2009/07/09 15:49:31 kazimird Exp $";
+    "$Id: blast_traceback.c,v 1.214 2010/05/06 18:54:32 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_traceback.h>
@@ -344,6 +344,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
    Int4 index;
    BlastHSP* hsp;
    Uint1* query;
+   Uint1* query_nomask = NULL;
    const Uint1* subject = NULL;
    Int4 query_length;
    BlastHSP** hsp_array;
@@ -369,6 +370,7 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
    BlastHSPList * orig_hsplist = NULL;
    Boolean fence_error = FALSE;
    SBlastTargetTranslation* target_t = NULL;
+   Int2 status = 0;
    
    if (num_initial_hsps == 0) {
       return 0;
@@ -443,10 +445,13 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
           Int4 context_offset = query_info->contexts[context].query_offset;
          
           query = query_blk->oof_sequence + CODON_LENGTH + context_offset;
+          query_nomask = query;
           query_length = query_info->contexts[context+2].query_offset +
               query_info->contexts[context+2].query_length - context_offset;
       } else {
           query = query_blk->sequence + 
+              query_info->contexts[hsp->context].query_offset;
+          query_nomask = query_blk->sequence_nomask + 
               query_info->contexts[hsp->context].query_offset;
           query_length = query_info->contexts[hsp->context].query_length;
       }
@@ -593,14 +598,16 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
                 /* Calculate number of identities and check if this HSP meets the
                    percent identity and length criteria. */
                 delete_hsp = 
-                    Blast_HSPTestIdentityAndLength(program_number, hsp, query, 
+                    Blast_HSPTestIdentityAndLength(program_number, hsp, query_nomask, 
                                                    adjusted_subject, 
                                                    score_options, hit_options);
             }
             if (!delete_hsp) {
                Blast_HSPAdjustSubjectOffset(hsp, start_shift);
-               BlastIntervalTreeAddHSP(hsp, tree, query_info, 
+               status = BlastIntervalTreeAddHSP(hsp, tree, query_info, 
                                        eQueryAndSubject);
+               if (status)
+                  return status;
             } else {
                hsp_array[index] = Blast_HSPFree(hsp);
             }
@@ -654,8 +661,10 @@ Blast_TracebackFromHSPList(EBlastProgramType program_number,
                hsp_array[index] = Blast_HSPFree(hsp);
            }
            else {
-               BlastIntervalTreeAddHSP(hsp, tree, query_info, 
+               status = BlastIntervalTreeAddHSP(hsp, tree, query_info, 
                                        eQueryAndSubject);
+               if (status)
+                  return status;
            }
        }
    }

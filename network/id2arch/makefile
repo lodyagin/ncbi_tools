@@ -32,6 +32,7 @@ id2.c id2gen.h: id2.l id2.h all.l seqsplit.l
 	$(CODEGEN) -i id2map.h -l id2.l,seqsplit.l,all.l -o id2gen -d .
 	cat id2gen.c | grep -v "^ *\* *Generated" > id2.c && rm -f id2gen.c
 	cat id2gen.h | grep -v "^ *\* *Generated" > x     && mv x id2gen.h
+	@patch id2.c <id2.patch
 
 id2.l : id2.asn
 	$(ASNTOOL) -m id2.asn -l x.h
@@ -52,6 +53,7 @@ all.l :
 id2.h : id2.asn
 	$(ASNTOOL) -m id2.asn -o id2.h
 	cat id2.h | grep -v "^ *\* *Generated" >x && mv x id2.h
+
 seqsplit.h : seqsplit.asn
 	$(ASNTOOL) -m seqsplit.asn -o seqsplit.h
 

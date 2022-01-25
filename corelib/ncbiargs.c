@@ -35,6 +35,12 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbiargs.c,v $
+* Revision 6.12  2009/08/17 19:42:08  lavr
+* Formatting
+*
+* Revision 6.11  2009/08/14 18:01:09  lavr
+* Use {Get|Set}ProgramName()
+*
 * Revision 6.10  2006/10/19 14:57:03  lavr
 * Fix repetitive arg error message to show no argument value since it's empty
 *
@@ -103,6 +109,9 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
   Nlm_Boolean* resolved;
   Nlm_Int4     xx_argc = Nlm_GetArgc();
   char**       xx_argv = Nlm_GetArgv();
+
+  if (StringHasNoText(GetProgramName()))
+    SetProgramName(progname);
 
   if (!ap  ||  numargs <= 0)
     return FALSE;

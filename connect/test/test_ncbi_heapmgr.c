@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_heapmgr.c,v 6.18 2006/11/21 14:47:58 lavr Exp $
+/* $Id: test_ncbi_heapmgr.c,v 6.21 2010/02/05 20:35:04 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,8 +30,8 @@
  *
  */
 
-#include "../ncbi_priv.h"
 #include <connect/ncbi_heapmgr.h>
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -106,7 +106,8 @@ int main(int argc, const char* argv[])
     HEAP heap;
     char* c;
 
-    /* CORE_SetLOGFormatFlags(fLOG_None | fLOG_Level | fLOG_OmitNoteLevel); */
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
     if (argc > 1)
         g_NCBI_ConnectRandomSeed = atoi(argv[1]);
@@ -241,68 +242,7 @@ int main(int argc, const char* argv[])
         HEAP_Destroy(heap);
         CORE_LOGF(eLOG_Note, ("Heap %d done", j));
     }
-    CORE_LOG(eLOG_Note, "Test completed");
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
     CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_heapmgr.c,v $
- * Revision 6.18  2006/11/21 14:47:58  lavr
- * Implement correct fast freeing and fast allocation checks
- *
- * Revision 6.17  2006/11/20 17:25:00  lavr
- * Test extended to use HEAP_FreeFast() and HEAP_AttachFast()
- *
- * Revision 6.16  2006/11/20 16:42:31  lavr
- * Test extended to be more thorough
- *
- * Revision 6.15  2006/03/05 17:42:10  lavr
- * Adjust for revised API
- *
- * Revision 6.14  2005/07/11 18:24:46  lavr
- * Spell ADDEND
- *
- * Revision 6.13  2005/05/02 16:12:32  lavr
- * Use global random seed
- *
- * Revision 6.12  2003/08/25 14:58:10  lavr
- * Adjust test to take advantage of modified API
- *
- * Revision 6.11  2003/07/31 17:54:16  lavr
- * +HEAP_Trim() test
- *
- * Revision 6.10  2003/02/27 15:34:35  lavr
- * Log moved to end
- *
- * Revision 6.9  2002/04/15 19:21:44  lavr
- * +#include "../test/test_assert.h"
- *
- * Revision 6.8  2001/07/03 20:53:38  lavr
- * HEAP_Copy() test added
- *
- * Revision 6.7  2001/06/19 19:12:04  lavr
- * Type change: size_t -> TNCBI_Size; time_t -> TNCBI_Time
- *
- * Revision 6.6  2001/01/23 23:22:05  lavr
- * Patched logging (in a few places)
- *
- * Revision 6.5  2001/01/12 23:59:53  lavr
- * Message logging modified for use LOG facility only
- *
- * Revision 6.4  2000/12/29 18:23:42  lavr
- * getpagesize() replaced by a constant 4096, which is "more portable".
- *
- * Revision 6.3  2000/05/31 23:12:32  lavr
- * First try to assemble things together to get working service mapper
- *
- * Revision 6.2  2000/05/16 15:21:03  lavr
- * Cleaned up with format - argument correspondence; #include <time.h> added
- *
- * Revision 6.1  2000/05/12 19:35:13  lavr
- * First working revision
- *
- * ==========================================================================
- */

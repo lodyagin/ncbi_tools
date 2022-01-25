@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -333,6 +333,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignFree (SeqAlignPtr sap)
 	DenseDiagPtr ddp, ddpnext;
 	StdSegPtr ssp, sspnext;
 	ValNodePtr anp, next;
+    UserObjectPtr uopa, uopb;
 	
     if (sap == NULL)
         return (SeqAlignPtr)NULL;
@@ -384,7 +385,16 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignFree (SeqAlignPtr sap)
     /*
     AsnGenericChoiceSeqOfFree(sap -> id, (AsnOptFreeFunc) ObjectIdFree);
     */
+    uopa = (UserObjectPtr) sap->ext;
+    while (uopa != NULL) {
+      uopb = uopa->next;
+      uopa->next = NULL;
+      UserObjectFree (uopa);
+      uopa = uopb;
+    }
+    /*
     AsnGenericUserSeqOfFree(sap -> ext, (AsnOptFreeFunc) UserObjectFree);
+    */
 	SeqLocSetFree(sap->bounds);
     SeqIdFree(sap->master);
 
@@ -408,6 +418,7 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
     StdSegPtr ssp;
     Boolean retval = FALSE;
     ValNodePtr anp;
+    UserObjectPtr uop;
 
 	if (! loaded)
 	{
@@ -540,8 +551,19 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
 	   {
 	   	ErrPostEx(SEV_ERROR,0,0,"ASN3: SeqAlign.ext stripped");
 	   }
-	   else
-	    AsnGenericUserSeqOfAsnWrite(sap -> ext, (AsnWriteFunc) UserObjectAsnWrite, aip, SEQ_ALIGN_ext, SEQ_ALIGN_ext_E);
+	   else {
+		uop = (UserObjectPtr) sap->ext;
+        if (! AsnOpenStruct(aip, SEQ_ALIGN_ext, sap->ext)) goto erret;
+        while (uop != NULL)
+            {
+                if (! UserObjectAsnWrite(uop, aip, SEQ_ALIGN_ext_E)) goto erret;
+                uop = uop->next;
+            }
+            if (! AsnCloseStruct(aip, SEQ_ALIGN_ext, sap->ext)) goto erret;
+       }
+	    /*
+        AsnGenericUserSeqOfAsnWrite(sap -> ext, (AsnWriteFunc) UserObjectAsnWrite, aip, SEQ_ALIGN_ext, SEQ_ALIGN_ext_E);
+        */
 	}
 
 	if (! AsnCloseStruct(aip, atp, (Pointer)sap))

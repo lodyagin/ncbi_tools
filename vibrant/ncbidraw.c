@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.45 $
+* $Revision: 6.46 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -67,6 +67,12 @@
 #  endif
 #  ifdef WIN_MAC
 #    undef WIN_MAC
+#    ifdef WIN_MAC_ATSUI
+#      undef WIN_MAC_ATSUI
+#    endif
+#    ifdef WIN_MAC_QUARTZ
+#      undef WIN_MAC_QUARTZ
+#    endif
 #    define Nlm_RgnTool Handle
 #  endif
 #  ifdef WIN_MSWIN

@@ -1,4 +1,4 @@
-/* $Id: greedy_align.h,v 1.26 2007/04/17 16:55:32 kazimird Exp $
+/* $Id: greedy_align.h,v 1.27 2009/09/23 18:34:37 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -76,11 +76,13 @@ typedef struct SMBSpace {
  *  @param num_space_arrays number of array elements to allocated [in]
  *  @return Pointer to allocated structure, or NULL upon failure
  */
+NCBI_XBLAST_EXPORT
 SMBSpace* MBSpaceNew(int num_space_arrays);
 
 /** Free the space structure 
     @param sp Linked list of structures to free
 */
+NCBI_XBLAST_EXPORT
 void MBSpaceFree(SMBSpace* sp);
 
 /** All auxiliary memory needed for the greedy extension algorithm. */
@@ -122,6 +124,7 @@ typedef struct SGreedySeed {
  * @return The minimum distance between the two sequences, i.e.
  *          the number of mismatches plus gaps in the resulting alignment
  */
+NCBI_XBLAST_EXPORT
 Int4 
 BLAST_GreedyAlign (const Uint1* seq1, Int4 len1,
                    const Uint1* seq2, Int4 len2,
@@ -154,6 +157,7 @@ BLAST_GreedyAlign (const Uint1* seq1, Int4 len1,
  * @param seed Structure to remember longest run of exact matches [out]
  * @return The score of the alignment
  */
+NCBI_XBLAST_EXPORT
 Int4 
 BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
                          const Uint1* seq2, Int4 len2,

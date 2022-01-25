@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_connutil_hit.c,v 6.14 2006/04/20 14:01:43 lavr Exp $
+/* $Id: test_ncbi_connutil_hit.c,v 6.17 2010/02/05 20:35:04 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,7 @@
  */
 
 #include <connect/ncbi_connutil.h>
-#include <connect/ncbi_util.h>
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <stdlib.h>
 /* This header must go last */
 #include "test_assert.h"
@@ -66,7 +66,7 @@ int main(int argc, char** argv)
             "  URL args:        '%s'\n"
             "  Input data file: '%s'\n"
             "  User header:     '%s'\n"
-            " Reply(if any) from the hit URL goes to the standard output.\n\n",
+            "Response(if any) from the hit URL goes to standard output.\n\n",
             argv[0],
             host, (unsigned short) port, path, args, inp_file, user_header);
 
@@ -161,56 +161,8 @@ int main(int argc, char** argv)
 
     /* Success:  close the socket, cleanup, and exit */
     SOCK_Close(sock);
-    CORE_SetLOG(0);
 
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
+    CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: test_ncbi_connutil_hit.c,v $
- * Revision 6.14  2006/04/20 14:01:43  lavr
- * Cleanup to demonstrate no leaks
- *
- * Revision 6.13  2005/07/22 16:09:43  lavr
- * Add severity and timestamp to log message format
- *
- * Revision 6.12  2002/08/12 15:10:43  lavr
- * Use persistent SOCK_Write()
- *
- * Revision 6.11  2002/08/07 16:38:08  lavr
- * EIO_ReadMethod enums changed accordingly; log moved to end
- *
- * Revision 6.10  2002/04/15 19:21:44  lavr
- * +#include "../test/test_assert.h"
- *
- * Revision 6.9  2002/03/22 19:48:56  lavr
- * Removed <stdio.h>: included from ncbi_util.h or ncbi_priv.h
- *
- * Revision 6.8  2002/02/05 21:45:55  lavr
- * Included header files rearranged
- *
- * Revision 6.7  2001/03/02 20:03:57  lavr
- * Typos fixed
- *
- * Revision 6.6  2001/01/23 23:21:21  lavr
- * Added new argument to URL_Connect
- *
- * Revision 6.5  2001/01/08 22:42:14  lavr
- * eRequestMethodAny -> eRequestMethod_Any
- *
- * Revision 6.4  2000/12/29 18:24:40  lavr
- * File size is now discovered without use of stat call.
- *
- * Revision 6.3  2000/09/27 13:49:29  lavr
- * URL_Connect args adjusted
- *
- * Revision 6.2  2000/03/29 17:21:47  vakatov
- * + CORE_SetLOG(0) at the program end.
- *
- * Revision 6.1  2000/03/24 22:53:38  vakatov
- * Initial revision
- *
- * ===========================================================================
- */

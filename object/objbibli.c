@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager for module NCBI-Biblio
 *
@@ -41,6 +41,9 @@
 * 07-19-93 Ostell      Support for ASN30 added
 *
 * $Log: objbibli.c,v $
+* Revision 6.8  2009/10/02 19:44:48  kans
+* address clang static analyzer warnings
+*
 * Revision 6.7  2006/02/22 17:31:45  kans
 * fix to AuthListMatch (CB)
 *
@@ -3635,7 +3638,7 @@ NLM_EXTERN PatPriorityPtr LIBCALL PatPrioritySetFree (PatPriorityPtr ppp)
 *****************************************************************************/
 NLM_EXTERN PatPriorityPtr LIBCALL PatPrioritySetAsnRead (AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element)
 {
-	PatPriorityPtr ppp=NULL, head, last;
+	PatPriorityPtr ppp=NULL, head = NULL, last;
 	DataVal av;
 	AsnTypePtr atp;
 

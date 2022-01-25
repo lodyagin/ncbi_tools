@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.19 $
+* $Revision: 1.22 $
 *
 * File Description: 
 *
@@ -126,6 +126,8 @@ NLM_EXTERN Taxon3RequestPtr CreateTaxon3Request (
 
 NLM_EXTERN Taxon3RequestPtr CreateMultiTaxon3Request (ValNodePtr org_list);
 
+NLM_EXTERN Taxon3RequestPtr CreateJoinRequest (ValNodePtr taxon_list);
+
 NLM_EXTERN OrgRefPtr Taxon3GetOrg (OrgRefPtr orp);
 NLM_EXTERN ValNodePtr Taxon3GetOrgRefList (ValNodePtr org_list);
 NLM_EXTERN void Tax3MergeSourceDescr (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
@@ -133,15 +135,17 @@ NLM_EXTERN Int4 Taxon3GetTaxIdByOrgRef (OrgRefPtr orp);
 NLM_EXTERN OrgRefPtr Taxon3GetOrgRefByName (CharPtr orgname);
 NLM_EXTERN Int4 Taxon3GetTaxIdByName (CharPtr orgname);
 NLM_EXTERN void Taxon3ReplaceOrgInSeqEntry (SeqEntryPtr sep, Boolean keep_syn);
+NLM_EXTERN void Taxon3ReplaceOrgInSeqEntryEx (SeqEntryPtr sep, Boolean keep_syn, Boolean replace_unpub);
 
 NLM_EXTERN void Taxon3CheckOrgInSeqEntry (SeqEntryPtr sep, ValNodePtr PNTR not_found, ValNodePtr PNTR bad_match);
 NLM_EXTERN void CheckTaxNamesAgainstTaxDatabase (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list);
 
 typedef enum {
-  eReturnedOrgFlag_normal = 3,
-  eReturnedOrgFlag_misspelled = 4,
-  eReturnedOrgFlag_ambiguous = 5,
-  eReturnedOrgFlag_error
+  eReturnedOrgFlag_normal =      0x004,
+  eReturnedOrgFlag_misspelled =  0x008,
+  eReturnedOrgFlag_ambiguous =   0x010,
+  eReturnedOrgFlag_unpublished = 0x020,
+  eReturnedOrgFlag_error =       0x040
 } EReturnedOrgFlag;
 
 typedef enum {
@@ -191,6 +195,7 @@ NLM_EXTERN TaxFixItemPtr TaxFixItemFree (TaxFixItemPtr t);
 NLM_EXTERN ValNodePtr LIBCALLBACK TaxFixItemListFree (ValNodePtr vnp);
 NLM_EXTERN ValNodePtr Taxon3GetTaxFixList (ValNodePtr biop_list);
 
+NLM_EXTERN OrgRefPtr GetCommonOrgRefForSeqEntry (SeqEntryPtr sep);
 
 
 #ifdef __cplusplus

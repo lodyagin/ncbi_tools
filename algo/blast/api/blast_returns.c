@@ -1,4 +1,4 @@
-/* $Id: blast_returns.c,v 1.38 2007/07/10 15:28:07 papadopo Exp $
+/* $Id: blast_returns.c,v 1.39 2010/06/10 13:44:46 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_returns.c,v 1.38 2007/07/10 15:28:07 papadopo Exp $";
+static char const rcsid[] = "$Id: blast_returns.c,v 1.39 2010/06/10 13:44:46 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_returns.h>
@@ -110,9 +110,19 @@ Blast_GetParametersBuffer(EBlastProgramType program_number,
    }
 
    if (search_params->gapped_search) {
-      sprintf(buffer, "Gap Penalties: Existence: %ld, Extension: %ld",
-              (long) search_params->gap_open, 
-              (long) search_params->gap_extension);
+      if (search_params->gap_extension == 0 && program_number == eBlastTypeBlastn)
+      { /* Formula from PMID 10890397 applies if both gap values are zero. */
+           double gap_extension = (double) search_params->gap_extension;
+           gap_extension = -2*search_params->mismatch + search_params->match; 
+           gap_extension /= 2.0;
+           sprintf(buffer, "Gap Penalties: Existence: %ld, Extension: %4.1f",
+              (long) search_params->gap_open, gap_extension);
+      }
+      else
+      {
+           sprintf(buffer, "Gap Penalties: Existence: %ld, Extension: %ld",
+              (long) search_params->gap_open, (long) search_params->gap_extension);
+      }
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
    

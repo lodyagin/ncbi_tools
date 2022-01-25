@@ -29,13 +29,13 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.78 $
+* $Revision: 6.87 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date	   Name        Description of modification
+* Date       Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 *
 *
@@ -63,36 +63,36 @@ static char *this_file = __FILE__;
 *
 *****************************************************************************/
 static BioseqPtr NCBISubNewBioseq (
-	NCBISubPtr submission ,
-	CharPtr local_name ,
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int2 molecule_class,
-	Int2 molecule_type ,
-	Int4 length ,
-	Int2 topology ,
-	Int2 strandedness );
+    NCBISubPtr submission ,
+    CharPtr local_name ,
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int2 molecule_class,
+    Int2 molecule_type ,
+    Int4 length ,
+    Int2 topology ,
+    Int2 strandedness );
 
 static Boolean StripNonAsciiChars (CharPtr str);
 static BioseqPtr GetBioseqFromChoice (NCBISubPtr nsp, SeqEntryPtr the_seq,
                                       CharPtr local_name, CharPtr the_routine);
 static Boolean AddFeatureToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	SeqFeatPtr feature );
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    SeqFeatPtr feature );
 
 
 /*****************************************************************************
 *
 *   DefaultSubErrorFunc(msg)
-*   	default error handler
+*       default error handler
 *
 *****************************************************************************/
 NLM_EXTERN Boolean DefaultSubErrorFunc (CharPtr msg)
 {
-	Message(MSG_ERROR, msg);
-	return TRUE;
+    Message(MSG_ERROR, msg);
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -101,55 +101,55 @@ NLM_EXTERN Boolean DefaultSubErrorFunc (CharPtr msg)
 *
 *****************************************************************************/
 NLM_EXTERN NCBISubPtr NCBISubCreate (
-	CharPtr last_name,
-	CharPtr first_name,
-	CharPtr middle_name,
-	CharPtr initials,  /* separated by periods, no initial for last name */
-	CharPtr suffix,    /* Jr. Sr. III */
-	CharPtr affil,        /* e.g. "Xyz University" */
-	CharPtr div,          /* e.g. "Dept of Biology" */
-	CharPtr street,       /* e.g. "123 Academic Road" */
-	CharPtr city,         /* e.g. "Metropolis" */
-	CharPtr sub,          /* e.g. "Massachusetts" */
-	CharPtr country ,     /* e.g. "USA" */
-	CharPtr postal_code,  /* e.g."02133" */
-	CharPtr phone ,
-	CharPtr fax ,
-	CharPtr email,
-	Boolean hold_until_publish ,
-	Int2 release_month ,
-	Int2 release_day ,
-	Int2 release_year )
+    CharPtr last_name,
+    CharPtr first_name,
+    CharPtr middle_name,
+    CharPtr initials,  /* separated by periods, no initial for last name */
+    CharPtr suffix,    /* Jr. Sr. III */
+    CharPtr affil,        /* e.g. "Xyz University" */
+    CharPtr div,          /* e.g. "Dept of Biology" */
+    CharPtr street,       /* e.g. "123 Academic Road" */
+    CharPtr city,         /* e.g. "Metropolis" */
+    CharPtr sub,          /* e.g. "Massachusetts" */
+    CharPtr country ,     /* e.g. "USA" */
+    CharPtr postal_code,  /* e.g."02133" */
+    CharPtr phone ,
+    CharPtr fax ,
+    CharPtr email,
+    Boolean hold_until_publish ,
+    Int2 release_month ,
+    Int2 release_day ,
+    Int2 release_year )
 {
-	NCBISubPtr nsp;
-	SeqSubmitPtr ssp;
-	SubmitBlockPtr sbp;
-	ContactInfoPtr cip;
-	DatePtr dp;
-	AuthorPtr aup;
-	PersonIdPtr pip;
-	AffilPtr ap;
-	NameStdPtr nmstdp;
+    NCBISubPtr nsp;
+    SeqSubmitPtr ssp;
+    SubmitBlockPtr sbp;
+    ContactInfoPtr cip;
+    DatePtr dp;
+    AuthorPtr aup;
+    PersonIdPtr pip;
+    AffilPtr ap;
+    NameStdPtr nmstdp;
 
-	ErrSetOpts(ERR_ADVISE, ERR_LOG_OFF);
+    ErrSetOpts(ERR_ADVISE, ERR_LOG_OFF);
 
-	if (! SeqEntryLoad())     /* can't find ncbi files */
-	{
-		Message(MSG_ERROR, "Can't load NCBI data files");
-		return NULL;
-	}
+    if (! SeqEntryLoad())     /* can't find ncbi files */
+    {
+        Message(MSG_ERROR, "Can't load NCBI data files");
+        return NULL;
+    }
 
-	nsp = MemNew(sizeof(NCBISub));
+    nsp = MemNew(sizeof(NCBISub));
 
-	ssp = SeqSubmitNew();
-	nsp->ssp = ssp;
-	ssp->datatype = 1;    /* seqentrys */
+    ssp = SeqSubmitNew();
+    nsp->ssp = ssp;
+    ssp->datatype = 1;    /* seqentrys */
 
-	sbp = SubmitBlockNew();
-	ssp->sub = sbp;
-	sbp->hup = hold_until_publish;
+    sbp = SubmitBlockNew();
+    ssp->sub = sbp;
+    sbp->hup = hold_until_publish;
 
-	if (release_year != 0) {
+    if (release_year != 0) {
             dp = DateNew();
             if (! DateWrite(dp, release_year, release_month, 
                             release_day, NULL)) {
@@ -158,48 +158,48 @@ NLM_EXTERN NCBISubPtr NCBISubCreate (
             } else {
                 sbp->reldate = dp;
             }
-	} else if(hold_until_publish) {
-			dp = DateCurr();
-			if (dp != NULL) {
-				dp->data [3] = 0; /* force to end of month */
-				sbp->reldate = DateAdvance(dp, 12); /* one year from now */
+    } else if(hold_until_publish) {
+            dp = DateCurr();
+            if (dp != NULL) {
+                dp->data [3] = 0; /* force to end of month */
+                sbp->reldate = DateAdvance(dp, 12); /* one year from now */
             }
         }
 
-	cip = ContactInfoNew();
-	sbp->contact = cip;
+    cip = ContactInfoNew();
+    sbp->contact = cip;
 
-	nmstdp = NameStdNew();
-	nmstdp->names[0] = StringSaveNoNull(last_name);
-	nmstdp->names[1] = StringSaveNoNull(first_name);
-	nmstdp->names[2] = StringSaveNoNull(middle_name);
-	nmstdp->names[4] = StringSaveNoNull(initials);
-	nmstdp->names[5] = StringSaveNoNull(suffix);
+    nmstdp = NameStdNew();
+    nmstdp->names[0] = StringSaveNoNull(last_name);
+    nmstdp->names[1] = StringSaveNoNull(first_name);
+    nmstdp->names[2] = StringSaveNoNull(middle_name);
+    nmstdp->names[4] = StringSaveNoNull(initials);
+    nmstdp->names[5] = StringSaveNoNull(suffix);
 
-	pip = PersonIdNew();
-	pip->choice = 2;   /* name */
-	pip->data = (Pointer)nmstdp;
+    pip = PersonIdNew();
+    pip->choice = 2;   /* name */
+    pip->data = (Pointer)nmstdp;
 
-	aup = AuthorNew();
-	aup->name = pip;
+    aup = AuthorNew();
+    aup->name = pip;
 
-	cip->contact = aup;
+    cip->contact = aup;
 
-	ap = AffilNew();
+    ap = AffilNew();
     aup->affil = ap;
-	ap->choice = 2;    /* std affil */
-	ap->affil = StringSaveNoNull(affil);
-	ap->div = StringSaveNoNull(div);
-	ap->city = StringSaveNoNull(city);
-	ap->sub = StringSaveNoNull(sub);
-	ap->country = StringSaveNoNull(country);
-	ap->street = StringSaveNoNull(street);
-	ap->postal_code = StringSaveNoNull(postal_code);
-	ap->phone = StringSaveNoNull(phone);
-	ap->fax = StringSaveNoNull(fax);
-	ap->email = StringSaveNoNull(email);
+    ap->choice = 2;    /* std affil */
+    ap->affil = StringSaveNoNull(affil);
+    ap->div = StringSaveNoNull(div);
+    ap->city = StringSaveNoNull(city);
+    ap->sub = StringSaveNoNull(sub);
+    ap->country = StringSaveNoNull(country);
+    ap->street = StringSaveNoNull(street);
+    ap->postal_code = StringSaveNoNull(postal_code);
+    ap->phone = StringSaveNoNull(phone);
+    ap->fax = StringSaveNoNull(fax);
+    ap->email = StringSaveNoNull(email);
 
-	return nsp;
+    return nsp;
 }
 
 /***********************************************************************
@@ -211,85 +211,85 @@ NLM_EXTERN NCBISubPtr NCBISubCreate (
 ************************************************************************/
 
 NLM_EXTERN Boolean DefineSubmittorKey(
-	NCBISubPtr nsp,
-	CharPtr submittor_key )
+    NCBISubPtr nsp,
+    CharPtr submittor_key )
 {
-	if (nsp == NULL)
-		return FALSE;
-	if (nsp->submittor_key != NULL)
-		return FALSE;
-	nsp->submittor_key = StringSaveNoNull(submittor_key);
-	return TRUE;
+    if (nsp == NULL)
+        return FALSE;
+    if (nsp->submittor_key != NULL)
+        return FALSE;
+    nsp->submittor_key = StringSaveNoNull(submittor_key);
+    return TRUE;
 }
 
 /**** This function is obsolete.. replaced by NCBISubCreate() ****/
 
 NLM_EXTERN NCBISubPtr NCBISubBuild (
-	CharPtr name,
-	CharPtr PNTR address ,
-	CharPtr phone ,
-	CharPtr fax ,
-	CharPtr email,
-	Boolean hold_until_publish ,
-	Int2 release_month,			  /* all 0 if no hold date */
-	Int2 release_day,
-	Int2 release_year )
+    CharPtr name,
+    CharPtr PNTR address ,
+    CharPtr phone ,
+    CharPtr fax ,
+    CharPtr email,
+    Boolean hold_until_publish ,
+    Int2 release_month,              /* all 0 if no hold date */
+    Int2 release_day,
+    Int2 release_year )
 {
-	NCBISubPtr nsp;
-	SeqSubmitPtr ssp;
-	SubmitBlockPtr sbp;
-	ContactInfoPtr cip;
-	DatePtr dp;
-	ValNodePtr vnp;
+    NCBISubPtr nsp;
+    SeqSubmitPtr ssp;
+    SubmitBlockPtr sbp;
+    ContactInfoPtr cip;
+    DatePtr dp;
+    ValNodePtr vnp;
 
-	ErrSetOpts(ERR_ADVISE, ERR_LOG_OFF);
+    ErrSetOpts(ERR_ADVISE, ERR_LOG_OFF);
 
-	if (! SeqEntryLoad())     /* can't find ncbi files */
-	{
-		Message(MSG_ERROR, "Can't load NCBI data files");
-		return NULL;
-	}
+    if (! SeqEntryLoad())     /* can't find ncbi files */
+    {
+        Message(MSG_ERROR, "Can't load NCBI data files");
+        return NULL;
+    }
 
-	nsp = MemNew(sizeof(NCBISub));
+    nsp = MemNew(sizeof(NCBISub));
 
-	ssp = SeqSubmitNew();
-	nsp->ssp = ssp;
-	ssp->datatype = 1;    /* seqentrys */
+    ssp = SeqSubmitNew();
+    nsp->ssp = ssp;
+    ssp->datatype = 1;    /* seqentrys */
 
-	sbp = SubmitBlockNew();
-	ssp->sub = sbp;
-	sbp->hup = hold_until_publish;
+    sbp = SubmitBlockNew();
+    ssp->sub = sbp;
+    sbp->hup = hold_until_publish;
 
-	if (release_year != 0)
-	{
-		dp = DateNew();
-		if (! DateWrite(dp, release_year, release_month, release_day, NULL))
-		{
-			ErrShow();
-			DateFree(dp);
-		}
-		else
-			sbp->reldate = dp;
-	}
+    if (release_year != 0)
+    {
+        dp = DateNew();
+        if (! DateWrite(dp, release_year, release_month, release_day, NULL))
+        {
+            ErrShow();
+            DateFree(dp);
+        }
+        else
+            sbp->reldate = dp;
+    }
 
-	cip = ContactInfoNew();
-	sbp->contact = cip;
+    cip = ContactInfoNew();
+    sbp->contact = cip;
 
-	cip->name = StringSaveNoNull(name);
-	while (* address != NULL)
-	{
-		vnp = ValNodeNew(cip->address);
-		if (cip->address == NULL)
-			cip->address = vnp;
-		vnp->data.ptrvalue = (Pointer)(StringSaveNoNull(*address));
-		address++;
-	}
+    cip->name = StringSaveNoNull(name);
+    while (* address != NULL)
+    {
+        vnp = ValNodeNew(cip->address);
+        if (cip->address == NULL)
+            cip->address = vnp;
+        vnp->data.ptrvalue = (Pointer)(StringSaveNoNull(*address));
+        address++;
+    }
 
-	cip->phone = StringSaveNoNull(phone);
-	cip->fax = StringSaveNoNull(fax);
-	cip->email = StringSaveNoNull(email);
+    cip->phone = StringSaveNoNull(phone);
+    cip->fax = StringSaveNoNull(fax);
+    cip->email = StringSaveNoNull(email);
 
-	return nsp;
+    return nsp;
 }
 
 /*****************************************************************************
@@ -298,23 +298,23 @@ NLM_EXTERN NCBISubPtr NCBISubBuild (
 *
 *****************************************************************************/
 NLM_EXTERN Boolean AddToolToSub (
-	NCBISubPtr nsp,
-	CharPtr tool )
+    NCBISubPtr nsp,
+    CharPtr tool )
 {
-	SeqSubmitPtr ssp;
-	SubmitBlockPtr sbp;
+    SeqSubmitPtr ssp;
+    SubmitBlockPtr sbp;
 
-	if (nsp == NULL) {
-		return FALSE;
-	}
-	ssp = nsp->ssp;
-	if (ssp == NULL) {
-		return FALSE;
-	}
-	sbp = ssp->sub;
-	sbp->tool = Nlm_StringSave(tool);
+    if (nsp == NULL) {
+        return FALSE;
+    }
+    ssp = nsp->ssp;
+    if (ssp == NULL) {
+        return FALSE;
+    }
+    sbp = ssp->sub;
+    sbp->tool = Nlm_StringSave(tool);
 
-	return TRUE;
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -323,23 +323,23 @@ NLM_EXTERN Boolean AddToolToSub (
 *
 *****************************************************************************/
 NLM_EXTERN Boolean AddCommentToSub (
-	NCBISubPtr nsp,
-	CharPtr comment )
+    NCBISubPtr nsp,
+    CharPtr comment )
 {
-	SeqSubmitPtr ssp;
-	SubmitBlockPtr sbp;
+    SeqSubmitPtr ssp;
+    SubmitBlockPtr sbp;
 
-	if (nsp == NULL) {
-		return FALSE;
-	}
-	ssp = nsp->ssp;
-	if (ssp == NULL) {
-		return FALSE;
-	}
-	sbp = ssp->sub;
-	sbp->comment = Nlm_StringSave(comment);
+    if (nsp == NULL) {
+        return FALSE;
+    }
+    ssp = nsp->ssp;
+    if (ssp == NULL) {
+        return FALSE;
+    }
+    sbp = ssp->sub;
+    sbp->comment = Nlm_StringSave(comment);
 
-	return TRUE;
+    return TRUE;
 }
 /*****************************************************************************
 *
@@ -347,23 +347,23 @@ NLM_EXTERN Boolean AddCommentToSub (
 *
 *****************************************************************************/
 NLM_EXTERN Boolean AddTypeToSub (
-	NCBISubPtr nsp,
-	Uint1 type )
+    NCBISubPtr nsp,
+    Uint1 type )
 {
-	SeqSubmitPtr ssp;
-	SubmitBlockPtr sbp;
+    SeqSubmitPtr ssp;
+    SubmitBlockPtr sbp;
 
-	if (nsp == NULL) {
-		return FALSE;
-	}
-	ssp = nsp->ssp;
-	if (ssp == NULL) {
-		return FALSE;
-	}
-	sbp = ssp->sub;
-	sbp->subtype = type;
+    if (nsp == NULL) {
+        return FALSE;
+    }
+    ssp = nsp->ssp;
+    if (ssp == NULL) {
+        return FALSE;
+    }
+    sbp = ssp->sub;
+    sbp->subtype = type;
 
-	return TRUE;
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -372,27 +372,27 @@ NLM_EXTERN Boolean AddTypeToSub (
 *
 *****************************************************************************/
 NLM_EXTERN Boolean NCBISubWrite (
-	NCBISubPtr ssp,
-	CharPtr filename )
+    NCBISubPtr ssp,
+    CharPtr filename )
 {
-	AsnIoPtr aip;
-	Boolean retval = FALSE;
+    AsnIoPtr aip;
+    Boolean retval = FALSE;
 
-	aip = AsnIoOpen(filename, "w");
-	if (aip == NULL)
-	{
-		ErrShow();
-		return retval;
-	}
+    aip = AsnIoOpen(filename, "w");
+    if (aip == NULL)
+    {
+        ErrShow();
+        return retval;
+    }
 
-	if (! SeqSubmitAsnWrite(ssp->ssp, aip, NULL))
-	{
-		ErrShow();
-	}
-	else
-		retval = TRUE;
-	AsnIoClose(aip);
-	return retval;
+    if (! SeqSubmitAsnWrite(ssp->ssp, aip, NULL))
+    {
+        ErrShow();
+    }
+    else
+        retval = TRUE;
+    AsnIoClose(aip);
+    return retval;
 }
 
 /*****************************************************************************
@@ -401,11 +401,11 @@ NLM_EXTERN Boolean NCBISubWrite (
 *
 *****************************************************************************/
 NLM_EXTERN NCBISubPtr NCBISubFree (
-	NCBISubPtr ssp )
+    NCBISubPtr ssp )
 {
-	SeqSubmitFree(ssp->ssp);
-	MemFree(ssp->submittor_key);
-	return (NCBISubPtr)(MemFree(ssp));
+    SeqSubmitFree(ssp->ssp);
+    MemFree(ssp->submittor_key);
+    return (NCBISubPtr)(MemFree(ssp));
 }
 
 /*****************************************************************************
@@ -414,19 +414,19 @@ NLM_EXTERN NCBISubPtr NCBISubFree (
 *
 *****************************************************************************/
 NLM_EXTERN Boolean CitSubForSubmission (
-	NCBISubPtr submission,
-	PubPtr cit_sub )
+    NCBISubPtr submission,
+    PubPtr cit_sub )
 {
-	if ((submission == NULL) || (cit_sub == NULL)) return FALSE;
+    if ((submission == NULL) || (cit_sub == NULL)) return FALSE;
 
-	if ((cit_sub->choice != PUB_Sub) || (cit_sub->data.ptrvalue == NULL))
-	{
-		Message(MSG_ERROR, "You must give a Cit-sub to CitSubForSubmission()");
-		return FALSE;
-	}
-	submission->ssp->sub->cit = (CitSubPtr)(cit_sub->data.ptrvalue);
-	ValNodeFree(cit_sub);   /* free just the Pub part */
-	return TRUE;
+    if ((cit_sub->choice != PUB_Sub) || (cit_sub->data.ptrvalue == NULL))
+    {
+        Message(MSG_ERROR, "You must give a Cit-sub to CitSubForSubmission()");
+        return FALSE;
+    }
+    submission->ssp->sub->cit = (CitSubPtr)(cit_sub->data.ptrvalue);
+    ValNodeFree(cit_sub);   /* free just the Pub part */
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -442,173 +442,173 @@ NLM_EXTERN Boolean CitSubForSubmission (
 *
 *****************************************************************************/
 static BioseqPtr NCBISubNewBioseq (
-	NCBISubPtr submission ,
-	CharPtr local_name ,
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int2 molecule_class,
-	Int2 molecule_type ,
-	Int4 length ,
-	Int2 topology ,
-	Int2 strandedness )
+    NCBISubPtr submission ,
+    CharPtr local_name ,
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int2 molecule_class,
+    Int2 molecule_type ,
+    Int4 length ,
+    Int2 topology ,
+    Int2 strandedness )
 {
-	BioseqPtr bsp;
-	TextSeqIdPtr tsip;
-	ValNodePtr vnp;
-	ObjectIdPtr oip;
-	DbtagPtr dbt;
-	Int2 i;
-	CharPtr tmp;
-	Boolean fail;
-	MolInfoPtr mip;
+    BioseqPtr bsp;
+    TextSeqIdPtr tsip;
+    ValNodePtr vnp;
+    ObjectIdPtr oip;
+    DbtagPtr dbt;
+    Int2 i;
+    CharPtr tmp;
+    Boolean fail;
+    MolInfoPtr mip;
 
-	bsp = BioseqNew();
-	bsp->mol = (Uint1) molecule_class;
-	bsp->repr = Seq_repr_raw;   /* default case */
-/*	if (molecule_type != 0)
-	{
-		vnp = SeqDescrNew(NULL);
-		bsp->descr = vnp;
-		vnp->choice = Seq_descr_mol_type;
-		vnp->data.intvalue = molecule_type;
-	}
+    bsp = BioseqNew();
+    bsp->mol = (Uint1) molecule_class;
+    bsp->repr = Seq_repr_raw;   /* default case */
+/*    if (molecule_type != 0)
+    {
+        vnp = SeqDescrNew(NULL);
+        bsp->descr = vnp;
+        vnp->choice = Seq_descr_mol_type;
+        vnp->data.intvalue = molecule_type;
+    }
 */
-	if (molecule_type != 0)
-	{
-		vnp = SeqDescrNew(NULL);
-		bsp->descr = vnp;
-		vnp->choice = Seq_descr_molinfo;
-		mip = (MolInfoPtr) vnp->data.ptrvalue;
-		if (mip == NULL) 
-			mip = MolInfoNew();
-		mip->biomol = (Uint1)molecule_type;
-		vnp->data.ptrvalue =  (Pointer) mip;
-	}
-	bsp->length = length;
-	bsp->topology = (Uint1)topology;
-	bsp->strand = (Uint1)strandedness;
+    if (molecule_type != 0)
+    {
+        vnp = SeqDescrNew(NULL);
+        bsp->descr = vnp;
+        vnp->choice = Seq_descr_molinfo;
+        mip = (MolInfoPtr) vnp->data.ptrvalue;
+        if (mip == NULL) 
+            mip = MolInfoNew();
+        mip->biomol = (Uint1)molecule_type;
+        vnp->data.ptrvalue =  (Pointer) mip;
+    }
+    bsp->length = length;
+    bsp->topology = (Uint1)topology;
+    bsp->strand = (Uint1)strandedness;
 
-	vnp = NULL;
+    vnp = NULL;
 
-	if (local_name != NULL)
-	{
-		vnp = ValNodeNew(bsp->id);
-		if (bsp->id == NULL)
-			bsp->id = vnp;
-		oip = ObjectIdNew();
-		oip->str = StringSaveNoNull(local_name);
-		if (submission->submittor_key == NULL)   /* make a local id */
-		{
-			vnp->choice = SEQID_LOCAL;
-			vnp->data.ptrvalue = oip;
-		}
-		else
-		{
-			vnp->choice = SEQID_GENERAL;
-			dbt = DbtagNew();
-			vnp->data.ptrvalue = dbt;
-			dbt->db = StringSave(submission->submittor_key);
-			dbt->tag = oip;
-		}
-	}
+    if (local_name != NULL)
+    {
+        vnp = ValNodeNew(bsp->id);
+        if (bsp->id == NULL)
+            bsp->id = vnp;
+        oip = ObjectIdNew();
+        oip->str = StringSaveNoNull(local_name);
+        if (submission->submittor_key == NULL)   /* make a local id */
+        {
+            vnp->choice = SEQID_LOCAL;
+            vnp->data.ptrvalue = oip;
+        }
+        else
+        {
+            vnp->choice = SEQID_GENERAL;
+            dbt = DbtagNew();
+            vnp->data.ptrvalue = dbt;
+            dbt->db = StringSave(submission->submittor_key);
+            dbt->tag = oip;
+        }
+    }
 
-	if (genbank_locus != NULL)
-	{
-		fail = FALSE;
-		if (! IS_UPPER(*genbank_locus))
-			fail = TRUE;
+    if (genbank_locus != NULL)
+    {
+        fail = FALSE;
+        if (! IS_UPPER(*genbank_locus))
+            fail = TRUE;
 
-		i = 0;
-		for (tmp = genbank_locus; *tmp != '\0'; tmp++, i++)
-		{
-			if (! ((IS_UPPER(*tmp)) || (IS_DIGIT(*tmp))))
-			{
-				fail = TRUE;
-				break;
-			}
-		}
-		if ((i < 1) || (i > 10))
-			fail = TRUE;
-		if (fail)
-		{
-			Message(MSG_ERROR,
-				"A GenBank LOCUS is an upper case letter, then up to 9 upper case letters or digits [%s]",
-				genbank_locus);
-			genbank_locus = NULL;
-		}
-	}
-	if (genbank_accession != NULL)
-	{
-		fail = FALSE;
-		if (! IS_UPPER(*genbank_accession))
-			fail = TRUE;
-		tmp = genbank_accession + 1;
-		for (i = 0; i < 5; i++, tmp++)
-		{
-			if (! IS_DIGIT(*tmp))
-				fail = TRUE;
-		}
-		if (*tmp != '\0')
-			fail = TRUE;
-		if (fail)   /* not 1 + 5, could be 2 + 6 */
-		{
-			fail = FALSE;
-			tmp = genbank_accession;
-			for (i = 0; i < 2; i++, tmp++)
-			{
-				if (! IS_UPPER(*genbank_accession))
-					fail = TRUE;
-			}
+        i = 0;
+        for (tmp = genbank_locus; *tmp != '\0'; tmp++, i++)
+        {
+            if (! ((IS_UPPER(*tmp)) || (IS_DIGIT(*tmp))))
+            {
+                fail = TRUE;
+                break;
+            }
+        }
+        if ((i < 1) || (i > 10))
+            fail = TRUE;
+        if (fail)
+        {
+            Message(MSG_ERROR,
+                "A GenBank LOCUS is an upper case letter, then up to 9 upper case letters or digits [%s]",
+                genbank_locus);
+            genbank_locus = NULL;
+        }
+    }
+    if (genbank_accession != NULL)
+    {
+        fail = FALSE;
+        if (! IS_UPPER(*genbank_accession))
+            fail = TRUE;
+        tmp = genbank_accession + 1;
+        for (i = 0; i < 5; i++, tmp++)
+        {
+            if (! IS_DIGIT(*tmp))
+                fail = TRUE;
+        }
+        if (*tmp != '\0')
+            fail = TRUE;
+        if (fail)   /* not 1 + 5, could be 2 + 6 */
+        {
+            fail = FALSE;
+            tmp = genbank_accession;
+            for (i = 0; i < 2; i++, tmp++)
+            {
+                if (! IS_UPPER(*genbank_accession))
+                    fail = TRUE;
+            }
 
-			for (i = 0; i < 6; i++, tmp++)
-			{
-				if (! IS_DIGIT(*tmp))
-					fail = TRUE;
-			}
-			if (*tmp != '\0')
-				fail = TRUE;
-		}
+            for (i = 0; i < 6; i++, tmp++)
+            {
+                if (! IS_DIGIT(*tmp))
+                    fail = TRUE;
+            }
+            if (*tmp != '\0')
+                fail = TRUE;
+        }
 
-		if (fail)
-		{
-			Message(MSG_ERROR, "A GenBank accession is either an\
+        if (fail)
+        {
+            Message(MSG_ERROR, "A GenBank accession is either an\
 upper case letter + 5 digits, or 2 upper case letters + 6 digits [%s]",
-				genbank_accession);
-			genbank_accession = NULL;
-		}
-	}
+                genbank_accession);
+            genbank_accession = NULL;
+        }
+    }
 
-	if ((genbank_locus != NULL) || (genbank_accession != NULL))
-	{
-		vnp = ValNodeNew(bsp->id);
-		if (bsp->id == NULL)
-			bsp->id = vnp;
-		vnp->choice = SEQID_GENBANK;
-		tsip = TextSeqIdNew();
-		vnp->data.ptrvalue = tsip;
-		if (genbank_locus != NULL)
-			tsip->name = StringSaveNoNull(genbank_locus);
-		if (genbank_accession != NULL)
-			tsip->accession = StringSaveNoNull(genbank_accession);
-	}
+    if ((genbank_locus != NULL) || (genbank_accession != NULL))
+    {
+        vnp = ValNodeNew(bsp->id);
+        if (bsp->id == NULL)
+            bsp->id = vnp;
+        vnp->choice = SEQID_GENBANK;
+        tsip = TextSeqIdNew();
+        vnp->data.ptrvalue = tsip;
+        if (genbank_locus != NULL)
+            tsip->name = StringSaveNoNull(genbank_locus);
+        if (genbank_accession != NULL)
+            tsip->accession = StringSaveNoNull(genbank_accession);
+    }
 
-	if (gi_number > 0)
-	{
-		vnp = ValNodeNew(bsp->id);
-		if (bsp->id == NULL)
-			bsp->id = vnp;
-		vnp->choice = SEQID_GI;
-		vnp->data.intvalue = gi_number;
-	}
+    if (gi_number > 0)
+    {
+        vnp = ValNodeNew(bsp->id);
+        if (bsp->id == NULL)
+            bsp->id = vnp;
+        vnp->choice = SEQID_GI;
+        vnp->data.intvalue = gi_number;
+    }
 
-	if (vnp == NULL)   /* no ids */
-	{
-		Message(MSG_ERROR, "You must have some type of ID to create a Bioseq");
-		bsp = BioseqFree(bsp);
-	}
+    if (vnp == NULL)   /* no ids */
+    {
+        Message(MSG_ERROR, "You must have some type of ID to create a Bioseq");
+        bsp = BioseqFree(bsp);
+    }
 
-	return bsp;
+    return bsp;
 }
 
 /*****************************************************************************
@@ -617,50 +617,50 @@ upper case letter + 5 digits, or 2 upper case letters + 6 digits [%s]",
 *
 *****************************************************************************/
 NLM_EXTERN SeqEntryPtr AddSeqOnlyToSubmission (
-	NCBISubPtr submission,
-	CharPtr local_name ,
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int2 molecule_class,
-	Int2 molecule_type ,
-	Int4 length ,
-	Int2 topology ,
-	Int2 strandedness )
+    NCBISubPtr submission,
+    CharPtr local_name ,
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int2 molecule_class,
+    Int2 molecule_type ,
+    Int4 length ,
+    Int2 topology ,
+    Int2 strandedness )
 {
-	BioseqPtr bsp;
-	BioseqSetPtr targetbssp;
-	SeqEntryPtr sep, tmp;
+    BioseqPtr bsp;
+    BioseqSetPtr targetbssp;
+    SeqEntryPtr sep, tmp;
 
-	sep = SeqEntryNew();
-	sep->choice = 1;    /* Bioseq */
+    sep = SeqEntryNew();
+    sep->choice = 1;    /* Bioseq */
 
-	if (submission->ssp->data == NULL)
-		submission->ssp->data = (Pointer)sep;
-	else
-	{
-		tmp = (SeqEntryPtr) submission->ssp->data;
-		if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
-			targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
-			if (targetbssp->_class == 7 ||
-			    (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
-			    targetbssp->_class == BioseqseqSet_class_wgs_set) {
-				tmp = targetbssp->seq_set;
-			}
-		}
-		for (; tmp->next != NULL; tmp = tmp->next)
-			continue;
-		tmp->next = sep;
-	}
+    if (submission->ssp->data == NULL)
+        submission->ssp->data = (Pointer)sep;
+    else
+    {
+        tmp = (SeqEntryPtr) submission->ssp->data;
+        if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
+            targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
+            if (targetbssp->_class == 7 ||
+                (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
+                targetbssp->_class == BioseqseqSet_class_wgs_set) {
+                tmp = targetbssp->seq_set;
+            }
+        }
+        for (; tmp->next != NULL; tmp = tmp->next)
+            continue;
+        tmp->next = sep;
+    }
 
-	bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
-		genbank_accession, gi_number, molecule_class, molecule_type,
-		length, topology, strandedness);
+    bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
+        genbank_accession, gi_number, molecule_class, molecule_type,
+        length, topology, strandedness);
 
-	sep->data.ptrvalue = bsp;
-	SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
-	
-	return sep;
+    sep->data.ptrvalue = bsp;
+    SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
+    
+    return sep;
 }
 
 /*****************************************************************************
@@ -669,48 +669,48 @@ NLM_EXTERN SeqEntryPtr AddSeqOnlyToSubmission (
 *
 *****************************************************************************/
 NLM_EXTERN SeqEntryPtr AddDeltaSeqOnlyToSubmission (
-	NCBISubPtr submission,
-	CharPtr local_name ,
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int2 molecule_class,
-	Int2 molecule_type ,
-	Int4 length ,
-	Int2 topology ,
-	Int2 strandedness )
+    NCBISubPtr submission,
+    CharPtr local_name ,
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int2 molecule_class,
+    Int2 molecule_type ,
+    Int4 length ,
+    Int2 topology ,
+    Int2 strandedness )
 {
-	BioseqPtr bsp;
-	SeqEntryPtr sep;
+    BioseqPtr bsp;
+    SeqEntryPtr sep;
 
-	sep = AddSeqOnlyToSubmission(
-		submission,
-		local_name ,
-		 genbank_locus ,
-		 genbank_accession ,
-		 gi_number ,
-		 molecule_class,
-		 molecule_type ,
-		 length ,
-		 topology ,
-		 strandedness );
+    sep = AddSeqOnlyToSubmission(
+        submission,
+        local_name ,
+         genbank_locus ,
+         genbank_accession ,
+         gi_number ,
+         molecule_class,
+         molecule_type ,
+         length ,
+         topology ,
+         strandedness );
 
-	if (sep == NULL) return sep;
+    if (sep == NULL) return sep;
 
-	bsp = (BioseqPtr)(sep->data.ptrvalue);
+    bsp = (BioseqPtr)(sep->data.ptrvalue);
 
-	bsp->repr = Seq_repr_delta;
-	bsp->seq_ext_type = 4;    /* delta extension */
+    bsp->repr = Seq_repr_delta;
+    bsp->seq_ext_type = 4;    /* delta extension */
 
-	return sep;
+    return sep;
 }
 
 /* extended SeqLit that adjusts attached SeqGraphs - internal for subutil only */
 
 typedef struct extseqlit {
-	SeqLit slp;
-	BioseqPtr parentbsp;
-	SeqGraphPtr graph;
+    SeqLit slp;
+    BioseqPtr parentbsp;
+    SeqGraphPtr graph;
 } ExtSeqLit, PNTR ExtSeqLitPtr;
 
 static void ReadjustSeqLitGraphs (BioseqPtr bsp)
@@ -758,80 +758,80 @@ static void ReadjustSeqLitGraphs (BioseqPtr bsp)
 }
 
 static SeqLitPtr AddSeqLitToBioseq(
-	NCBISubPtr submission,
-	SeqEntryPtr delta_seq_entry,
-	Int4 length ,
-	Boolean isa_gap)
+    NCBISubPtr submission,
+    SeqEntryPtr delta_seq_entry,
+    Int4 length ,
+    Boolean isa_gap)
 {
-	BioseqPtr bsp;
-	ValNodePtr vnp;
-	SeqLitPtr slp;
-	IntFuzzPtr ifp;
-	ExtSeqLitPtr xslp;
+    BioseqPtr bsp;
+    ValNodePtr vnp;
+    SeqLitPtr slp;
+    IntFuzzPtr ifp;
+    ExtSeqLitPtr xslp;
 
-	if (delta_seq_entry == NULL) return FALSE;
-	if (IS_Bioseq_set(delta_seq_entry)) return FALSE;
-	if (delta_seq_entry->data.ptrvalue == NULL) return FALSE;
+    if (delta_seq_entry == NULL) return FALSE;
+    if (IS_Bioseq_set(delta_seq_entry)) return FALSE;
+    if (delta_seq_entry->data.ptrvalue == NULL) return FALSE;
 
-	bsp = (BioseqPtr)(delta_seq_entry->data.ptrvalue);
-	if (bsp->repr != Seq_repr_delta)
-	{
-		Message(MSG_ERROR, "AddToDeltaSeq: no delta seq found");
-		return FALSE;
-	}
+    bsp = (BioseqPtr)(delta_seq_entry->data.ptrvalue);
+    if (bsp->repr != Seq_repr_delta)
+    {
+        Message(MSG_ERROR, "AddToDeltaSeq: no delta seq found");
+        return FALSE;
+    }
 
-	if ((length > 0) || ((length == 0) && (isa_gap)))
-	{
-		/* slp = SeqLitNew(); */
-		slp = (SeqLitPtr) MemNew (sizeof (ExtSeqLit));
-		slp->length = length;
-		vnp = ValNodeAddPointer((ValNodePtr PNTR)&(bsp->seq_ext),(Int2) 2, (Pointer)slp);
-		if ((length == 0) && (isa_gap)) /* gap of unknown length */
-		{
-			ifp = IntFuzzNew();
-			ifp->choice = 4;    /* lim - unk*/
-			slp->fuzz = ifp;
-		}
-		xslp = (ExtSeqLitPtr) slp;
-		xslp->parentbsp = bsp;
-		
-		SpreadGapsInDeltaSeq(bsp);   /* distribute the unknown gap sizes */
+    if ((length > 0) || ((length == 0) && (isa_gap)))
+    {
+        /* slp = SeqLitNew(); */
+        slp = (SeqLitPtr) MemNew (sizeof (ExtSeqLit));
+        slp->length = length;
+        vnp = ValNodeAddPointer((ValNodePtr PNTR)&(bsp->seq_ext),(Int2) 2, (Pointer)slp);
+        if ((length == 0) && (isa_gap)) /* gap of unknown length */
+        {
+            ifp = IntFuzzNew();
+            ifp->choice = 4;    /* lim - unk*/
+            slp->fuzz = ifp;
+        }
+        xslp = (ExtSeqLitPtr) slp;
+        xslp->parentbsp = bsp;
+        
+        SpreadGapsInDeltaSeq(bsp);   /* distribute the unknown gap sizes */
 
-		ReadjustSeqLitGraphs (bsp);  /* adjust seqlit graph positions */
+        ReadjustSeqLitGraphs (bsp);  /* adjust seqlit graph positions */
 
-		return slp;
-	}
+        return slp;
+    }
 
-	return (SeqLitPtr)NULL;
+    return (SeqLitPtr)NULL;
 }
 
 NLM_EXTERN Boolean AddGapToDeltaSeq (
-	NCBISubPtr submission,
-	SeqEntryPtr delta_seq_entry,
-	Int4 length_of_gap )    /** 0 if not known */
+    NCBISubPtr submission,
+    SeqEntryPtr delta_seq_entry,
+    Int4 length_of_gap )    /** 0 if not known */
 {
-	if (AddSeqLitToBioseq(submission, delta_seq_entry, length_of_gap, TRUE) == NULL)
-		return FALSE;
-	else
-		return TRUE;
+    if (AddSeqLitToBioseq(submission, delta_seq_entry, length_of_gap, TRUE) == NULL)
+        return FALSE;
+    else
+        return TRUE;
 }
 
 NLM_EXTERN SeqLitPtr AddFakeGapToDeltaSeq (
-	NCBISubPtr submission,
-	SeqEntryPtr delta_seq_entry,
-	Int4 length_of_gap )
+    NCBISubPtr submission,
+    SeqEntryPtr delta_seq_entry,
+    Int4 length_of_gap )
 {
-	return AddSeqLitToBioseq(submission, delta_seq_entry, length_of_gap, TRUE);
+    return AddSeqLitToBioseq(submission, delta_seq_entry, length_of_gap, TRUE);
 }
 
 
 
 NLM_EXTERN SeqLitPtr AddLiteralToDeltaSeq (
-	NCBISubPtr submission,
-	SeqEntryPtr delta_seq_entry,
-	Int4 length_of_sequence )
+    NCBISubPtr submission,
+    SeqEntryPtr delta_seq_entry,
+    Int4 length_of_sequence )
 {
-	return AddSeqLitToBioseq(submission, delta_seq_entry, length_of_sequence, FALSE);
+    return AddSeqLitToBioseq(submission, delta_seq_entry, length_of_sequence, FALSE);
 }
 
 
@@ -841,394 +841,394 @@ NLM_EXTERN SeqLitPtr AddLiteralToDeltaSeq (
 *
 *****************************************************************************/
 NLM_EXTERN SeqEntryPtr AddSegmentedSeqToSubmission (
-	NCBISubPtr submission ,
-	CharPtr local_name ,
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int2 molecule_class,
-	Int2 molecule_type ,
-	Int4 length ,
-	Int2 topology ,
-	Int2 strandedness )
+    NCBISubPtr submission ,
+    CharPtr local_name ,
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int2 molecule_class,
+    Int2 molecule_type ,
+    Int4 length ,
+    Int2 topology ,
+    Int2 strandedness )
 {
-	BioseqPtr bsp;
-	BioseqSetPtr bssp, targetbssp;
-	SeqEntryPtr sep, the_set, tmp;
+    BioseqPtr bsp;
+    BioseqSetPtr bssp, targetbssp;
+    SeqEntryPtr sep, the_set, tmp;
 
-	bssp = BioseqSetNew();
-	bssp->_class = 2;       /* segset */
-	the_set = SeqEntryNew();
-	the_set->choice = 2;    /* set */
-	the_set->data.ptrvalue = bssp;
-	SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)bssp, the_set);
+    bssp = BioseqSetNew();
+    bssp->_class = 2;       /* segset */
+    the_set = SeqEntryNew();
+    the_set->choice = 2;    /* set */
+    the_set->data.ptrvalue = bssp;
+    SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)bssp, the_set);
 
-	bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
-		genbank_accession, gi_number, molecule_class, molecule_type,
-		length, topology, strandedness);
-	bsp->repr = Seq_repr_seg;
-	bsp->seq_ext_type = 1;
+    bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
+        genbank_accession, gi_number, molecule_class, molecule_type,
+        length, topology, strandedness);
+    bsp->repr = Seq_repr_seg;
+    bsp->seq_ext_type = 1;
 
-	sep = SeqEntryNew();
-	sep->choice = 1;   /* Bioseq */
-	sep->data.ptrvalue = bsp;
-	SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
+    sep = SeqEntryNew();
+    sep->choice = 1;   /* Bioseq */
+    sep->data.ptrvalue = bsp;
+    SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
 
-	bssp->seq_set = sep;
-	SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)bssp);
+    bssp->seq_set = sep;
+    SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)bssp);
 
-	if (submission->ssp->data == NULL)
-		submission->ssp->data = (Pointer)the_set;
-	else
-	{
-		tmp = (SeqEntryPtr) submission->ssp->data;
-		if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
-			targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
-			if (targetbssp->_class == 7 ||
-			    (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
-			    targetbssp->_class == BioseqseqSet_class_wgs_set) {
-				tmp = targetbssp->seq_set;
-			}
-		}
-		for (; tmp->next != NULL; tmp = tmp->next)
-			continue;
-		tmp->next = the_set;
-	}
+    if (submission->ssp->data == NULL)
+        submission->ssp->data = (Pointer)the_set;
+    else
+    {
+        tmp = (SeqEntryPtr) submission->ssp->data;
+        if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
+            targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
+            if (targetbssp->_class == 7 ||
+                (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
+                targetbssp->_class == BioseqseqSet_class_wgs_set) {
+                tmp = targetbssp->seq_set;
+            }
+        }
+        for (; tmp->next != NULL; tmp = tmp->next)
+            continue;
+        tmp->next = the_set;
+    }
 
-	return the_set;
+    return the_set;
 }
 
 NLM_EXTERN SeqEntryPtr AddSeqToSegmentedEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr segmented_seq_entry,
-	CharPtr local_name ,
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int2 molecule_class,
-	Int2 molecule_type ,
-	Int4 length ,
-	Int2 topology ,
-	Int2 strandedness )
+    NCBISubPtr submission,
+    SeqEntryPtr segmented_seq_entry,
+    CharPtr local_name ,
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int2 molecule_class,
+    Int2 molecule_type ,
+    Int4 length ,
+    Int2 topology ,
+    Int2 strandedness )
 {
-	BioseqSetPtr segset, parts = NULL, tp;
-	BioseqPtr bsp, segseq= NULL;
-	SeqEntryPtr sep, tmp, prev;
-	SeqLocPtr slp, curr;
-	SeqIntPtr sip;
+    BioseqSetPtr segset, parts = NULL, tp;
+    BioseqPtr bsp, segseq= NULL;
+    SeqEntryPtr sep, tmp, prev;
+    SeqLocPtr slp, curr;
+    SeqIntPtr sip;
 
-	if (segmented_seq_entry == NULL) return NULL;
-	if (IS_Bioseq(segmented_seq_entry)) return NULL;
-	if (segmented_seq_entry->data.ptrvalue == NULL) return NULL;
+    if (segmented_seq_entry == NULL) return NULL;
+    if (IS_Bioseq(segmented_seq_entry)) return NULL;
+    if (segmented_seq_entry->data.ptrvalue == NULL) return NULL;
 
-	segset = (BioseqSetPtr)(segmented_seq_entry->data.ptrvalue);
-	if (segset->_class != 2) return NULL;
+    segset = (BioseqSetPtr)(segmented_seq_entry->data.ptrvalue);
+    if (segset->_class != 2) return NULL;
 
-	prev = NULL;
-	for (tmp = segset->seq_set; tmp != NULL; tmp = tmp->next)
-	{
-		if (IS_Bioseq(tmp))
-		{
-			bsp = (BioseqPtr)(tmp->data.ptrvalue);
-			if (bsp->repr == Seq_repr_seg)
-				segseq = bsp;
-		}
-		else
-		{
-			tp = (BioseqSetPtr)(tmp->data.ptrvalue);
-			if (tp->_class == 4)
-				parts = tp;
-		}
-		prev = tmp;
-	}
+    prev = NULL;
+    for (tmp = segset->seq_set; tmp != NULL; tmp = tmp->next)
+    {
+        if (IS_Bioseq(tmp))
+        {
+            bsp = (BioseqPtr)(tmp->data.ptrvalue);
+            if (bsp->repr == Seq_repr_seg)
+                segseq = bsp;
+        }
+        else
+        {
+            tp = (BioseqSetPtr)(tmp->data.ptrvalue);
+            if (tp->_class == 4)
+                parts = tp;
+        }
+        prev = tmp;
+    }
 
-	if (segseq == NULL)
-	{
-		Message(MSG_ERROR, "AddSeqToSegmentedEntry: no seg seq found");
-		return NULL;
-	}
+    if (segseq == NULL)
+    {
+        Message(MSG_ERROR, "AddSeqToSegmentedEntry: no seg seq found");
+        return NULL;
+    }
 
-	if (parts == NULL)   /* first member of segset */
-	{
-		parts = BioseqSetNew();
-		parts->_class = 4;
-		sep = SeqEntryNew();
-		sep->choice = 2;
-		sep->data.ptrvalue = (Pointer)parts;
-		SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)parts, sep);
-		SeqMgrConnect(SM_BIOSEQSET, (Pointer)parts, SM_BIOSEQSET, (Pointer)segset);
-		prev->next = sep;
-	}
+    if (parts == NULL)   /* first member of segset */
+    {
+        parts = BioseqSetNew();
+        parts->_class = 4;
+        sep = SeqEntryNew();
+        sep->choice = 2;
+        sep->data.ptrvalue = (Pointer)parts;
+        SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)parts, sep);
+        SeqMgrConnect(SM_BIOSEQSET, (Pointer)parts, SM_BIOSEQSET, (Pointer)segset);
+        prev->next = sep;
+    }
 
-	prev = NULL;
-	for (tmp = parts->seq_set; tmp != NULL; tmp = tmp->next)
-	{
-		if (! IS_Bioseq(tmp))
-		{
-			Message(MSG_ERROR, "BioseqSet in Parts");
-			return NULL;
-		}
+    prev = NULL;
+    for (tmp = parts->seq_set; tmp != NULL; tmp = tmp->next)
+    {
+        if (! IS_Bioseq(tmp))
+        {
+            Message(MSG_ERROR, "BioseqSet in Parts");
+            return NULL;
+        }
 
-		prev = tmp;
-	}
+        prev = tmp;
+    }
 
-	sep = SeqEntryNew();
-	if (prev == NULL)      /* first one */
-		parts->seq_set = sep;
-	else
-		prev->next = sep;
+    sep = SeqEntryNew();
+    if (prev == NULL)      /* first one */
+        parts->seq_set = sep;
+    else
+        prev->next = sep;
 
-	bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
-		genbank_accession, gi_number, molecule_class, molecule_type,
-		length, topology, strandedness);
-	sep->choice = 1;
-	sep->data.ptrvalue = (Pointer)bsp;
+    bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
+        genbank_accession, gi_number, molecule_class, molecule_type,
+        length, topology, strandedness);
+    sep->choice = 1;
+    sep->data.ptrvalue = (Pointer)bsp;
 
-	SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
-	SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)parts);
-						/* add pointer to segmented seq */
-	if (segseq->seq_ext != NULL)
-	{
-		for (curr = (SeqLocPtr)segseq->seq_ext; curr->next != NULL; curr = curr->next)
-			continue;
-	}
-	else
-		curr = NULL;
+    SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
+    SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)parts);
+                        /* add pointer to segmented seq */
+    if (segseq->seq_ext != NULL)
+    {
+        for (curr = (SeqLocPtr)segseq->seq_ext; curr->next != NULL; curr = curr->next)
+            continue;
+    }
+    else
+        curr = NULL;
 
-	slp = ValNodeNew(NULL);
-	if (curr == NULL)
-		segseq->seq_ext = slp;
-	else
-		curr->next = slp;
-	slp->choice = SEQLOC_INT;
-	sip = SeqIntNew();
-	slp->data.ptrvalue = sip;
-	sip->id = SeqIdDup(bsp->id);
-	sip->from = 0;
-	sip->to = length - 1;
+    slp = ValNodeNew(NULL);
+    if (curr == NULL)
+        segseq->seq_ext = slp;
+    else
+        curr->next = slp;
+    slp->choice = SEQLOC_INT;
+    sip = SeqIntNew();
+    slp->data.ptrvalue = sip;
+    sip->id = SeqIdDup(bsp->id);
+    sip->from = 0;
+    sip->to = length - 1;
 
-	segseq->length += length;   /* add the segment */
+    segseq->length += length;   /* add the segment */
 
-	return sep;
+    return sep;
 }
 
 NLM_EXTERN Boolean AddGapToSegmentedEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr segmented_seq_entry,
-	Int4 length_of_gap )    /** 0 if not known */
+    NCBISubPtr submission,
+    SeqEntryPtr segmented_seq_entry,
+    Int4 length_of_gap )    /** 0 if not known */
 {
-	BioseqSetPtr segset, parts = NULL, tp;
-	BioseqPtr bsp, segseq= NULL;
-	SeqEntryPtr sep, tmp, prev;
-	ValNodePtr vnp;
-	SeqLocPtr slp, curr;
-	SeqIntPtr sip;
-	Char local_name[40];
-	Int2 mol_type=0;
+    BioseqSetPtr segset, parts = NULL, tp;
+    BioseqPtr bsp, segseq= NULL;
+    SeqEntryPtr sep, tmp, prev;
+    ValNodePtr vnp;
+    SeqLocPtr slp, curr;
+    SeqIntPtr sip;
+    Char local_name[40];
+    Int2 mol_type=0;
 
-	if (segmented_seq_entry == NULL) return FALSE;
-	if (IS_Bioseq(segmented_seq_entry)) return FALSE;
-	if (segmented_seq_entry->data.ptrvalue == NULL) return FALSE;
+    if (segmented_seq_entry == NULL) return FALSE;
+    if (IS_Bioseq(segmented_seq_entry)) return FALSE;
+    if (segmented_seq_entry->data.ptrvalue == NULL) return FALSE;
 
-	segset = (BioseqSetPtr)(segmented_seq_entry->data.ptrvalue);
-	if (segset->_class != 2) return FALSE;
+    segset = (BioseqSetPtr)(segmented_seq_entry->data.ptrvalue);
+    if (segset->_class != 2) return FALSE;
 
-	prev = NULL;
-	for (tmp = segset->seq_set; tmp != NULL; tmp = tmp->next)
-	{
-		if (IS_Bioseq(tmp))
-		{
-			bsp = (BioseqPtr)(tmp->data.ptrvalue);
-			if (bsp->repr == Seq_repr_seg)
-				segseq = bsp;
-		}
-		else
-		{
-			tp = (BioseqSetPtr)(tmp->data.ptrvalue);
-			if (tp->_class == 4)
-				parts = tp;
-		}
-		prev = tmp;
-	}
+    prev = NULL;
+    for (tmp = segset->seq_set; tmp != NULL; tmp = tmp->next)
+    {
+        if (IS_Bioseq(tmp))
+        {
+            bsp = (BioseqPtr)(tmp->data.ptrvalue);
+            if (bsp->repr == Seq_repr_seg)
+                segseq = bsp;
+        }
+        else
+        {
+            tp = (BioseqSetPtr)(tmp->data.ptrvalue);
+            if (tp->_class == 4)
+                parts = tp;
+        }
+        prev = tmp;
+    }
 
-	if (segseq == NULL)
-	{
-		Message(MSG_ERROR, "AddGapToSegmentedEntry: no seg seq found");
-		return FALSE;
-	}
+    if (segseq == NULL)
+    {
+        Message(MSG_ERROR, "AddGapToSegmentedEntry: no seg seq found");
+        return FALSE;
+    }
 
-	if ((parts == NULL) && (length_of_gap <= 0))
-	{
-		Message(MSG_ERROR, "Do not start or end a segmented set with unknown gaps");
-		return FALSE;
-	}
+    if ((parts == NULL) && (length_of_gap <= 0))
+    {
+        Message(MSG_ERROR, "Do not start or end a segmented set with unknown gaps");
+        return FALSE;
+    }
 
-	if (length_of_gap > 0)     /* add a virtual sequence */
-	{
-		if (parts == NULL)   /* first member of segset */
-		{
-			parts = BioseqSetNew();
-			parts->_class = 4;
-			sep = SeqEntryNew();
-			sep->choice = 2;
-			sep->data.ptrvalue = (Pointer)parts;
-			prev->next = sep;
-		}
+    if (length_of_gap > 0)     /* add a virtual sequence */
+    {
+        if (parts == NULL)   /* first member of segset */
+        {
+            parts = BioseqSetNew();
+            parts->_class = 4;
+            sep = SeqEntryNew();
+            sep->choice = 2;
+            sep->data.ptrvalue = (Pointer)parts;
+            prev->next = sep;
+        }
 
-		prev = NULL;
-		for (tmp = parts->seq_set; tmp != NULL; tmp = tmp->next)
-		{
-			if (! IS_Bioseq(tmp))
-			{
-				Message(MSG_ERROR, "BioseqSet in Parts");
-				return FALSE;
-			}
+        prev = NULL;
+        for (tmp = parts->seq_set; tmp != NULL; tmp = tmp->next)
+        {
+            if (! IS_Bioseq(tmp))
+            {
+                Message(MSG_ERROR, "BioseqSet in Parts");
+                return FALSE;
+            }
 
-			prev = tmp;
-		}
+            prev = tmp;
+        }
 
-		sep = SeqEntryNew();
-		if (prev == NULL)      /* first one */
-			parts->seq_set = sep;
-		else
-			prev->next = sep;
+        sep = SeqEntryNew();
+        if (prev == NULL)      /* first one */
+            parts->seq_set = sep;
+        else
+            prev->next = sep;
 
-		for (vnp = segseq->descr; vnp != NULL; vnp = vnp->next)
-		{
-			if (vnp->choice == Seq_descr_mol_type)
-			{
-				mol_type = (Int2)(vnp->data.intvalue);
-				break;
-			}
-		}
+        for (vnp = segseq->descr; vnp != NULL; vnp = vnp->next)
+        {
+            if (vnp->choice == Seq_descr_mol_type)
+            {
+                mol_type = (Int2)(vnp->data.intvalue);
+                break;
+            }
+        }
 
-		submission->gap_count++;
-		sprintf(local_name, "Gap_%d", (int)(submission->gap_count));
+        submission->gap_count++;
+        sprintf(local_name, "Gap_%d", (int)(submission->gap_count));
 
-		bsp = NCBISubNewBioseq (submission , local_name, NULL,
-			NULL, 0, mol_type, (Int2)(segseq->mol), length_of_gap,
-			(Int2)(segseq->topology), (Int2)(segseq->strand));
-		bsp->repr = Seq_repr_virtual;
-		sep->choice = 1;
-		sep->data.ptrvalue = (Pointer)bsp;
-		SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
+        bsp = NCBISubNewBioseq (submission , local_name, NULL,
+            NULL, 0, mol_type, (Int2)(segseq->mol), length_of_gap,
+            (Int2)(segseq->topology), (Int2)(segseq->strand));
+        bsp->repr = Seq_repr_virtual;
+        sep->choice = 1;
+        sep->data.ptrvalue = (Pointer)bsp;
+        SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
 
-		SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)parts);
-	}
-					/* add pointer to segmented seq */
-	if (segseq->seq_ext != NULL)
-	{
-		for (curr = (SeqLocPtr)segseq->seq_ext; curr->next != NULL; curr = curr->next)
-			continue;
-	}
-	else
-		curr = NULL;
+        SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)parts);
+    }
+                    /* add pointer to segmented seq */
+    if (segseq->seq_ext != NULL)
+    {
+        for (curr = (SeqLocPtr)segseq->seq_ext; curr->next != NULL; curr = curr->next)
+            continue;
+    }
+    else
+        curr = NULL;
 
-	slp = ValNodeNew(NULL);
-	if (curr == NULL)
-		segseq->seq_ext = slp;
-	else
-		curr->next = slp;
-	if (length_of_gap > 0)
-	{
-		slp->choice = SEQLOC_INT;
-		sip = SeqIntNew();
-		slp->data.ptrvalue = sip;
-		sip->id = SeqIdDup(bsp->id);
-		sip->from = 0;
-		sip->to = length_of_gap - 1;
-	}
-	else
-	{
-		slp->choice = SEQLOC_NULL;
-	}
+    slp = ValNodeNew(NULL);
+    if (curr == NULL)
+        segseq->seq_ext = slp;
+    else
+        curr->next = slp;
+    if (length_of_gap > 0)
+    {
+        slp->choice = SEQLOC_INT;
+        sip = SeqIntNew();
+        slp->data.ptrvalue = sip;
+        sip->id = SeqIdDup(bsp->id);
+        sip->from = 0;
+        sip->to = length_of_gap - 1;
+    }
+    else
+    {
+        slp->choice = SEQLOC_NULL;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddReferenceToSegmentedEntry (
-	NCBISubPtr submission ,
-	SeqEntryPtr segmented_seq_entry,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int4 from ,
-	Int4 to ,
-	Boolean on_plus_strand )
+    NCBISubPtr submission ,
+    SeqEntryPtr segmented_seq_entry,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int4 from ,
+    Int4 to ,
+    Boolean on_plus_strand )
 {
-	BioseqSetPtr segset;
-	BioseqPtr bsp, segseq= NULL;
-	SeqEntryPtr tmp, prev;
-	SeqLocPtr slp, curr;
-	SeqIntPtr sip;
-	TextSeqIdPtr tsip;
+    BioseqSetPtr segset;
+    BioseqPtr bsp, segseq= NULL;
+    SeqEntryPtr tmp, prev;
+    SeqLocPtr slp, curr;
+    SeqIntPtr sip;
+    TextSeqIdPtr tsip;
 
 
-	if (segmented_seq_entry == NULL) return FALSE;
-	if (IS_Bioseq(segmented_seq_entry)) return FALSE;
-	if (segmented_seq_entry->data.ptrvalue == NULL) return FALSE;
+    if (segmented_seq_entry == NULL) return FALSE;
+    if (IS_Bioseq(segmented_seq_entry)) return FALSE;
+    if (segmented_seq_entry->data.ptrvalue == NULL) return FALSE;
 
-	segset = (BioseqSetPtr)(segmented_seq_entry->data.ptrvalue);
-	if (segset->_class != 2) return FALSE;
+    segset = (BioseqSetPtr)(segmented_seq_entry->data.ptrvalue);
+    if (segset->_class != 2) return FALSE;
 
-	prev = NULL;
-	for (tmp = segset->seq_set; tmp != NULL; tmp = tmp->next)
-	{
-		if (IS_Bioseq(tmp))
-		{
-			bsp = (BioseqPtr)(tmp->data.ptrvalue);
-			if (bsp->repr == Seq_repr_seg)
-				segseq = bsp;
-		}
-		prev = tmp;
-	}
+    prev = NULL;
+    for (tmp = segset->seq_set; tmp != NULL; tmp = tmp->next)
+    {
+        if (IS_Bioseq(tmp))
+        {
+            bsp = (BioseqPtr)(tmp->data.ptrvalue);
+            if (bsp->repr == Seq_repr_seg)
+                segseq = bsp;
+        }
+        prev = tmp;
+    }
 
-	if (segseq == NULL)
-	{
-		Message(MSG_ERROR, "AddRefToSegmentedEntry: no seg seq found");
-		return FALSE;
-	}
+    if (segseq == NULL)
+    {
+        Message(MSG_ERROR, "AddRefToSegmentedEntry: no seg seq found");
+        return FALSE;
+    }
 
-				/* add pointer to segmented seq */
-	if (segseq->seq_ext != NULL)
-	{
-		for (curr = (SeqLocPtr)segseq->seq_ext; curr->next != NULL; curr = curr->next)
-			continue;
-	}
-	else
-		curr = NULL;
+                /* add pointer to segmented seq */
+    if (segseq->seq_ext != NULL)
+    {
+        for (curr = (SeqLocPtr)segseq->seq_ext; curr->next != NULL; curr = curr->next)
+            continue;
+    }
+    else
+        curr = NULL;
 
-	slp = ValNodeNew(NULL);
-	if (curr == NULL)
-		segseq->seq_ext = slp;
-	else
-		curr->next = slp;
+    slp = ValNodeNew(NULL);
+    if (curr == NULL)
+        segseq->seq_ext = slp;
+    else
+        curr->next = slp;
 
-	slp->choice = SEQLOC_INT;
-	sip = SeqIntNew();
-	slp->data.ptrvalue = sip;
-	sip->from = from;
-	sip->to = to;
-	if (on_plus_strand)
-		sip->strand = Seq_strand_plus;
-	else
-		sip->strand = Seq_strand_minus;
+    slp->choice = SEQLOC_INT;
+    sip = SeqIntNew();
+    slp->data.ptrvalue = sip;
+    sip->from = from;
+    sip->to = to;
+    if (on_plus_strand)
+        sip->strand = Seq_strand_plus;
+    else
+        sip->strand = Seq_strand_minus;
 
-	curr = ValNodeNew(NULL);
-	sip->id = curr;
-	if (gi_number > 0)    /* gis are better */
-	{
-		curr->choice = SEQID_GI;
-		curr->data.intvalue = gi_number;
-	}
-	else
-	{
-		curr->choice = SEQID_GENBANK;
-		tsip = TextSeqIdNew();
-		tsip->accession = StringSaveNoNull(genbank_accession);
-		curr->data.ptrvalue = tsip;
-	}
+    curr = ValNodeNew(NULL);
+    sip->id = curr;
+    if (gi_number > 0)    /* gis are better */
+    {
+        curr->choice = SEQID_GI;
+        curr->data.intvalue = gi_number;
+    }
+    else
+    {
+        curr->choice = SEQID_GENBANK;
+        tsip = TextSeqIdNew();
+        tsip->accession = StringSaveNoNull(genbank_accession);
+        curr->data.ptrvalue = tsip;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -1237,57 +1237,57 @@ NLM_EXTERN Boolean AddReferenceToSegmentedEntry (
 *
 *****************************************************************************/
 static SeqEntryPtr AddPopPhyMutSetToSubmission (
-	NCBISubPtr submission, Uint1 choice )
+    NCBISubPtr submission, Uint1 choice )
 
 {
-	BioseqSetPtr bssp;
-	SeqEntryPtr tmp, the_set;
+    BioseqSetPtr bssp;
+    SeqEntryPtr tmp, the_set;
 
-	bssp = BioseqSetNew();
-	bssp->_class = choice;       /* pop-set, phy-set, or mut-set */
-	the_set = SeqEntryNew();
-	the_set->choice = 2;    /* set */
-	the_set->data.ptrvalue = bssp;
-	SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)bssp, the_set);
+    bssp = BioseqSetNew();
+    bssp->_class = choice;       /* pop-set, phy-set, or mut-set */
+    the_set = SeqEntryNew();
+    the_set->choice = 2;    /* set */
+    the_set->data.ptrvalue = bssp;
+    SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)bssp, the_set);
 
-	if (submission->ssp->data == NULL)
-		submission->ssp->data = (Pointer)the_set;
-	else
-	{
-		for (tmp = (SeqEntryPtr) submission->ssp->data; tmp->next != NULL; tmp = tmp->next)
-			continue;
-		tmp->next = the_set;
-	}
+    if (submission->ssp->data == NULL)
+        submission->ssp->data = (Pointer)the_set;
+    else
+    {
+        for (tmp = (SeqEntryPtr) submission->ssp->data; tmp->next != NULL; tmp = tmp->next)
+            continue;
+        tmp->next = the_set;
+    }
 
-	return the_set;
+    return the_set;
 }
 
 NLM_EXTERN SeqEntryPtr AddPopSetToSubmission (
-	NCBISubPtr submission )
+    NCBISubPtr submission )
 
 {
-	return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_pop_set);
+    return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_pop_set);
 }
 
 NLM_EXTERN SeqEntryPtr AddPhySetToSubmission (
-	NCBISubPtr submission )
+    NCBISubPtr submission )
 
 {
-	return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_phy_set);
+    return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_phy_set);
 }
 
 NLM_EXTERN SeqEntryPtr AddMutSetToSubmission (
-	NCBISubPtr submission )
+    NCBISubPtr submission )
 
 {
-	return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_mut_set);
+    return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_mut_set);
 }
 
 NLM_EXTERN SeqEntryPtr AddGenBankSetToSubmission (
-	NCBISubPtr submission )
+    NCBISubPtr submission )
 
 {
-	return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_genbank);
+    return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_genbank);
 }
 
 /*****************************************************************************
@@ -1296,307 +1296,307 @@ NLM_EXTERN SeqEntryPtr AddGenBankSetToSubmission (
 *
 *****************************************************************************/
 NLM_EXTERN SeqEntryPtr AddNucProtToSubmission (
-	NCBISubPtr submission )
+    NCBISubPtr submission )
 {
-	BioseqSetPtr bssp, targetbssp;
-	SeqEntryPtr tmp, the_set;
+    BioseqSetPtr bssp, targetbssp;
+    SeqEntryPtr tmp, the_set;
 
-	bssp = BioseqSetNew();
-	bssp->_class = 1;       /* nuc-prot */
-	the_set = SeqEntryNew();
-	the_set->choice = 2;    /* set */
-	the_set->data.ptrvalue = bssp;
-	SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)bssp, the_set);
+    bssp = BioseqSetNew();
+    bssp->_class = 1;       /* nuc-prot */
+    the_set = SeqEntryNew();
+    the_set->choice = 2;    /* set */
+    the_set->data.ptrvalue = bssp;
+    SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)bssp, the_set);
 
-	if (submission->ssp->data == NULL)
-		submission->ssp->data = (Pointer)the_set;
-	else
-	{
-		tmp = (SeqEntryPtr) submission->ssp->data;
-		if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
-			targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
-			if (targetbssp->_class == 7 ||
-			    (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
-			    targetbssp->_class == BioseqseqSet_class_wgs_set) {
-				tmp = targetbssp->seq_set;
-			}
-		}
-		for (; tmp->next != NULL; tmp = tmp->next)
-			continue;
-		tmp->next = the_set;
-	}
+    if (submission->ssp->data == NULL)
+        submission->ssp->data = (Pointer)the_set;
+    else
+    {
+        tmp = (SeqEntryPtr) submission->ssp->data;
+        if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
+            targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
+            if (targetbssp->_class == 7 ||
+                (targetbssp->_class >= 13 && targetbssp->_class <= 16) ||
+                targetbssp->_class == BioseqseqSet_class_wgs_set) {
+                tmp = targetbssp->seq_set;
+            }
+        }
+        for (; tmp->next != NULL; tmp = tmp->next)
+            continue;
+        tmp->next = the_set;
+    }
 
-	return the_set;
+    return the_set;
 }
 
 NLM_EXTERN SeqEntryPtr AddSeqToNucProtEntry (   /** add unsegmented nuc or prot bioseq */
-	NCBISubPtr submission,
-	SeqEntryPtr nuc_prot_entry,
-	CharPtr local_name ,
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int2 molecule_class,
-	Int2 molecule_type ,
-	Int4 length ,
-	Int2 topology ,
-	Int2 strandedness )
+    NCBISubPtr submission,
+    SeqEntryPtr nuc_prot_entry,
+    CharPtr local_name ,
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int2 molecule_class,
+    Int2 molecule_type ,
+    Int4 length ,
+    Int2 topology ,
+    Int2 strandedness )
 {
-	BioseqSetPtr nucprot, tp;
-	BioseqPtr bsp;
-	SeqEntryPtr sep, tmp, prev, tmp2;
-	Boolean is_nuc;
+    BioseqSetPtr nucprot, tp;
+    BioseqPtr bsp;
+    SeqEntryPtr sep, tmp, prev, tmp2;
+    Boolean is_nuc;
 
-	if (nuc_prot_entry == NULL) return NULL;
-	if (IS_Bioseq(nuc_prot_entry)) return NULL;
-	if (nuc_prot_entry->data.ptrvalue == NULL) return NULL;
+    if (nuc_prot_entry == NULL) return NULL;
+    if (IS_Bioseq(nuc_prot_entry)) return NULL;
+    if (nuc_prot_entry->data.ptrvalue == NULL) return NULL;
 
-	nucprot = (BioseqSetPtr)(nuc_prot_entry->data.ptrvalue);
-	if (nucprot->_class != 1) return NULL;
+    nucprot = (BioseqSetPtr)(nuc_prot_entry->data.ptrvalue);
+    if (nucprot->_class != 1) return NULL;
 
-	if (ISA_na(molecule_class))
-		is_nuc = TRUE;
-	else
-		is_nuc = FALSE;
+    if (ISA_na(molecule_class))
+        is_nuc = TRUE;
+    else
+        is_nuc = FALSE;
 
-	prev = NULL;
-	for (tmp = nucprot->seq_set; tmp != NULL; tmp = tmp->next)
-	{
-		if (is_nuc)   /* check for multiple nucleotides */
-		{
-			if (IS_Bioseq(tmp))
-			{
-				bsp = (BioseqPtr)(tmp->data.ptrvalue);
-				if (ISA_na(bsp->mol))
-				{
-					Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
-					return NULL;
-				}
-			}
-			else
-			{
-				tp = (BioseqSetPtr)(tmp->data.ptrvalue);
-				if (tp->_class == 2)  /* seg-set */
-				{
-					for (tmp2 = tp->seq_set; tmp2 != NULL; tmp2 = tmp2->next)
-					{
-						if (IS_Bioseq(tmp2))
-						{
-							bsp = (BioseqPtr)(tmp2->data.ptrvalue);
-							if (ISA_na(bsp->mol))
-							{
-								Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
-								return NULL;
-							}
-						}
-					}
-				}
-			}
-		}
-		prev = tmp;
-	}
+    prev = NULL;
+    for (tmp = nucprot->seq_set; tmp != NULL; tmp = tmp->next)
+    {
+        if (is_nuc)   /* check for multiple nucleotides */
+        {
+            if (IS_Bioseq(tmp))
+            {
+                bsp = (BioseqPtr)(tmp->data.ptrvalue);
+                if (ISA_na(bsp->mol))
+                {
+                    Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
+                    return NULL;
+                }
+            }
+            else
+            {
+                tp = (BioseqSetPtr)(tmp->data.ptrvalue);
+                if (tp->_class == 2)  /* seg-set */
+                {
+                    for (tmp2 = tp->seq_set; tmp2 != NULL; tmp2 = tmp2->next)
+                    {
+                        if (IS_Bioseq(tmp2))
+                        {
+                            bsp = (BioseqPtr)(tmp2->data.ptrvalue);
+                            if (ISA_na(bsp->mol))
+                            {
+                                Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
+                                return NULL;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        prev = tmp;
+    }
 
-	sep = SeqEntryNew();
-	if (prev == NULL)      /* first one */
-		nucprot->seq_set = sep;
-	else
-		prev->next = sep;
+    sep = SeqEntryNew();
+    if (prev == NULL)      /* first one */
+        nucprot->seq_set = sep;
+    else
+        prev->next = sep;
 
-	bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
-		genbank_accession, gi_number, molecule_class, molecule_type,
-		length, topology, strandedness);
-	sep->choice = 1;
-	sep->data.ptrvalue = (Pointer)bsp;
-	SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
-	SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)nucprot);
+    bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
+        genbank_accession, gi_number, molecule_class, molecule_type,
+        length, topology, strandedness);
+    sep->choice = 1;
+    sep->data.ptrvalue = (Pointer)bsp;
+    SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
+    SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)nucprot);
 
-	return sep;
+    return sep;
 
 }
-			  /** add segmented nuc or prot bioseq set */
+              /** add segmented nuc or prot bioseq set */
 
 NLM_EXTERN SeqEntryPtr AddSegmentedSeqToNucProtEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr nuc_prot_entry ,
-	CharPtr local_name ,
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int2 molecule_class,
-	Int2 molecule_type ,
-	Int4 length ,
-	Int2 topology ,
-	Int2 strandedness )
+    NCBISubPtr submission,
+    SeqEntryPtr nuc_prot_entry ,
+    CharPtr local_name ,
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int2 molecule_class,
+    Int2 molecule_type ,
+    Int4 length ,
+    Int2 topology ,
+    Int2 strandedness )
 {
-	BioseqSetPtr nucprot, tp;
-	BioseqPtr bsp;
-	SeqEntryPtr sep, tmp, prev, tmp2, the_set;
-	Boolean is_nuc;
-	BioseqSetPtr bssp;
+    BioseqSetPtr nucprot, tp;
+    BioseqPtr bsp;
+    SeqEntryPtr sep, tmp, prev, tmp2, the_set;
+    Boolean is_nuc;
+    BioseqSetPtr bssp;
 
-	if (nuc_prot_entry == NULL) return NULL;
-	if (IS_Bioseq(nuc_prot_entry)) return NULL;
-	if (nuc_prot_entry->data.ptrvalue == NULL) return NULL;
+    if (nuc_prot_entry == NULL) return NULL;
+    if (IS_Bioseq(nuc_prot_entry)) return NULL;
+    if (nuc_prot_entry->data.ptrvalue == NULL) return NULL;
 
-	nucprot = (BioseqSetPtr)(nuc_prot_entry->data.ptrvalue);
-	if (nucprot->_class != 1) return NULL;
+    nucprot = (BioseqSetPtr)(nuc_prot_entry->data.ptrvalue);
+    if (nucprot->_class != 1) return NULL;
 
-	if (ISA_na(molecule_class))
-		is_nuc = TRUE;
-	else
-		is_nuc = FALSE;
+    if (ISA_na(molecule_class))
+        is_nuc = TRUE;
+    else
+        is_nuc = FALSE;
 
-	prev = NULL;
-	for (tmp = nucprot->seq_set; tmp != NULL; tmp = tmp->next)
-	{
-		if (is_nuc)   /* check for multiple nucleotides */
-		{
-			if (IS_Bioseq(tmp))
-			{
-				bsp = (BioseqPtr)(tmp->data.ptrvalue);
-				if (ISA_na(bsp->mol))
-				{
-					Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
-					return NULL;
-				}
-			}
-			else
-			{
-				tp = (BioseqSetPtr)(tmp->data.ptrvalue);
-				if (tp->_class == 2)  /* seg-set */
-				{
-					for (tmp2 = tp->seq_set; tmp2 != NULL; tmp2 = tmp2->next)
-					{
-						if (IS_Bioseq(tmp2))
-						{
-							bsp = (BioseqPtr)(tmp2->data.ptrvalue);
-							if (ISA_na(bsp->mol))
-							{
-								Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
-								return NULL;
-							}
-						}
-					}
-				}
-			}
-		}
-		prev = tmp;
-	}
+    prev = NULL;
+    for (tmp = nucprot->seq_set; tmp != NULL; tmp = tmp->next)
+    {
+        if (is_nuc)   /* check for multiple nucleotides */
+        {
+            if (IS_Bioseq(tmp))
+            {
+                bsp = (BioseqPtr)(tmp->data.ptrvalue);
+                if (ISA_na(bsp->mol))
+                {
+                    Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
+                    return NULL;
+                }
+            }
+            else
+            {
+                tp = (BioseqSetPtr)(tmp->data.ptrvalue);
+                if (tp->_class == 2)  /* seg-set */
+                {
+                    for (tmp2 = tp->seq_set; tmp2 != NULL; tmp2 = tmp2->next)
+                    {
+                        if (IS_Bioseq(tmp2))
+                        {
+                            bsp = (BioseqPtr)(tmp2->data.ptrvalue);
+                            if (ISA_na(bsp->mol))
+                            {
+                                Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
+                                return NULL;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        prev = tmp;
+    }
 
-	bssp = BioseqSetNew();
-	bssp->_class = 2;       /* segset */
-	the_set = SeqEntryNew();
-	the_set->choice = 2;    /* set */
-	the_set->data.ptrvalue = bssp;
-	if (prev == NULL)      /* first one */
-		nucprot->seq_set = the_set;
-	else
-		prev->next = the_set;
-	SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)bssp, the_set);
-	SeqMgrConnect(SM_BIOSEQSET, (Pointer)bssp, SM_BIOSEQSET, (Pointer)nucprot);
+    bssp = BioseqSetNew();
+    bssp->_class = 2;       /* segset */
+    the_set = SeqEntryNew();
+    the_set->choice = 2;    /* set */
+    the_set->data.ptrvalue = bssp;
+    if (prev == NULL)      /* first one */
+        nucprot->seq_set = the_set;
+    else
+        prev->next = the_set;
+    SeqMgrSeqEntry(SM_BIOSEQSET, (Pointer)bssp, the_set);
+    SeqMgrConnect(SM_BIOSEQSET, (Pointer)bssp, SM_BIOSEQSET, (Pointer)nucprot);
 
-	bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
-		genbank_accession, gi_number, molecule_class, molecule_type,
-		length, topology, strandedness);
-	bsp->repr = Seq_repr_seg;
-	bsp->seq_ext_type = 1;
+    bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
+        genbank_accession, gi_number, molecule_class, molecule_type,
+        length, topology, strandedness);
+    bsp->repr = Seq_repr_seg;
+    bsp->seq_ext_type = 1;
 
-	sep = SeqEntryNew();
-	sep->choice = 1;   /* Bioseq */
-	sep->data.ptrvalue = bsp;
-	bssp->seq_set = sep;
-	SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
-	SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)bssp);
+    sep = SeqEntryNew();
+    sep->choice = 1;   /* Bioseq */
+    sep->data.ptrvalue = bsp;
+    bssp->seq_set = sep;
+    SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
+    SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)bssp);
 
 
-	return the_set;
+    return the_set;
 }
 
 NLM_EXTERN SeqEntryPtr AddDeltaSeqToNucProtEntry (   /** add delta nuc bioseq */
-	NCBISubPtr submission,
-	SeqEntryPtr nuc_prot_entry,
-	CharPtr local_name ,
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number ,
-	Int2 molecule_class,
-	Int2 molecule_type ,
-	Int4 length ,
-	Int2 topology ,
-	Int2 strandedness )
+    NCBISubPtr submission,
+    SeqEntryPtr nuc_prot_entry,
+    CharPtr local_name ,
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number ,
+    Int2 molecule_class,
+    Int2 molecule_type ,
+    Int4 length ,
+    Int2 topology ,
+    Int2 strandedness )
 {
-	BioseqSetPtr nucprot, tp;
-	BioseqPtr bsp;
-	SeqEntryPtr sep, tmp, prev, tmp2;
-	Boolean is_nuc;
+    BioseqSetPtr nucprot, tp;
+    BioseqPtr bsp;
+    SeqEntryPtr sep, tmp, prev, tmp2;
+    Boolean is_nuc;
 
-	if (nuc_prot_entry == NULL) return NULL;
-	if (IS_Bioseq(nuc_prot_entry)) return NULL;
-	if (nuc_prot_entry->data.ptrvalue == NULL) return NULL;
+    if (nuc_prot_entry == NULL) return NULL;
+    if (IS_Bioseq(nuc_prot_entry)) return NULL;
+    if (nuc_prot_entry->data.ptrvalue == NULL) return NULL;
 
-	nucprot = (BioseqSetPtr)(nuc_prot_entry->data.ptrvalue);
-	if (nucprot->_class != 1) return NULL;
+    nucprot = (BioseqSetPtr)(nuc_prot_entry->data.ptrvalue);
+    if (nucprot->_class != 1) return NULL;
 
-	if (ISA_na(molecule_class))
-		is_nuc = TRUE;
-	else
-		is_nuc = FALSE;
+    if (ISA_na(molecule_class))
+        is_nuc = TRUE;
+    else
+        is_nuc = FALSE;
 
-	prev = NULL;
-	for (tmp = nucprot->seq_set; tmp != NULL; tmp = tmp->next)
-	{
-		if (is_nuc)   /* check for multiple nucleotides */
-		{
-			if (IS_Bioseq(tmp))
-			{
-				bsp = (BioseqPtr)(tmp->data.ptrvalue);
-				if (ISA_na(bsp->mol))
-				{
-					Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
-					return NULL;
-				}
-			}
-			else
-			{
-				tp = (BioseqSetPtr)(tmp->data.ptrvalue);
-				if (tp->_class == 2)  /* seg-set */
-				{
-					for (tmp2 = tp->seq_set; tmp2 != NULL; tmp2 = tmp2->next)
-					{
-						if (IS_Bioseq(tmp2))
-						{
-							bsp = (BioseqPtr)(tmp2->data.ptrvalue);
-							if (ISA_na(bsp->mol))
-							{
-								Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
-								return NULL;
-							}
-						}
-					}
-				}
-			}
-		}
-		prev = tmp;
-	}
+    prev = NULL;
+    for (tmp = nucprot->seq_set; tmp != NULL; tmp = tmp->next)
+    {
+        if (is_nuc)   /* check for multiple nucleotides */
+        {
+            if (IS_Bioseq(tmp))
+            {
+                bsp = (BioseqPtr)(tmp->data.ptrvalue);
+                if (ISA_na(bsp->mol))
+                {
+                    Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
+                    return NULL;
+                }
+            }
+            else
+            {
+                tp = (BioseqSetPtr)(tmp->data.ptrvalue);
+                if (tp->_class == 2)  /* seg-set */
+                {
+                    for (tmp2 = tp->seq_set; tmp2 != NULL; tmp2 = tmp2->next)
+                    {
+                        if (IS_Bioseq(tmp2))
+                        {
+                            bsp = (BioseqPtr)(tmp2->data.ptrvalue);
+                            if (ISA_na(bsp->mol))
+                            {
+                                Message(MSG_ERROR, "AddSeqToNucProt: adding more than one nucleotide seq");
+                                return NULL;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        prev = tmp;
+    }
 
-	sep = SeqEntryNew();
-	if (prev == NULL)      /* first one */
-		nucprot->seq_set = sep;
-	else
-		prev->next = sep;
+    sep = SeqEntryNew();
+    if (prev == NULL)      /* first one */
+        nucprot->seq_set = sep;
+    else
+        prev->next = sep;
 
-	bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
-		genbank_accession, gi_number, molecule_class, molecule_type,
-		length, topology, strandedness);
-	sep->choice = 1;
-	sep->data.ptrvalue = (Pointer)bsp;
-	SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
-	SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)nucprot);
+    bsp = NCBISubNewBioseq (submission , local_name, genbank_locus,
+        genbank_accession, gi_number, molecule_class, molecule_type,
+        length, topology, strandedness);
+    sep->choice = 1;
+    sep->data.ptrvalue = (Pointer)bsp;
+    SeqMgrSeqEntry(SM_BIOSEQ, (Pointer)bsp, sep);
+    SeqMgrConnect(SM_BIOSEQ, (Pointer)bsp, SM_BIOSEQSET, (Pointer)nucprot);
 
-	bsp->repr = Seq_repr_delta;
-	bsp->seq_ext_type = 4;    /* delta extension */
+    bsp->repr = Seq_repr_delta;
+    bsp->seq_ext_type = 4;    /* delta extension */
 
-	return sep;
+    return sep;
 
 }
 
@@ -1611,7 +1611,7 @@ static Uint1Ptr GetDNAConv(void)
    CharPtr         ptr;
    Int2            i;
 
-   dnaconv = MemNew((size_t)255);		   /* DNA */
+   dnaconv = MemNew((size_t)255);           /* DNA */
    MemSet((CharPtr)dnaconv, (Uint1)1, (size_t)255); /* everything an error */
    dnaconv[32] = 0;  /* blank */
    sctp = SeqCodeTableFind((Uint1)Seq_code_iupacna);
@@ -1633,7 +1633,7 @@ static Uint1Ptr GetProteinConv(void)
    CharPtr         ptr;
    Int2            i;
 
-   protconv = MemNew((size_t)255);		   /* proteins */
+   protconv = MemNew((size_t)255);           /* proteins */
    MemSet((CharPtr)protconv, (Uint1)1, (size_t)255); /* everything an error */
    protconv[32] = 0;  /* blank */
    sctp = SeqCodeTableFind((Uint1)Seq_code_iupacaa);
@@ -1647,65 +1647,65 @@ static Uint1Ptr GetProteinConv(void)
 
 NLM_EXTERN Boolean AddBasesToByteStore (ByteStorePtr bsp, CharPtr the_bases)
 {
-	Uint1 PNTR buf;
-	Uint1 PNTR bu;
-	Uint1    residue;
-	Uint1Ptr dnaconv;
-	CharPtr tmp;
+    Uint1 PNTR buf;
+    Uint1 PNTR bu;
+    Uint1    residue;
+    Uint1Ptr dnaconv;
+    CharPtr tmp;
 
-	dnaconv = GetDNAConv();
-	buf = MemNew(StringLen(the_bases) + 1);
-	bu = buf;
-	for (tmp = the_bases; *tmp != '\0'; tmp++)
-	{
-		*tmp = TO_UPPER(*tmp);
-		if (*tmp == 'U') *tmp = 'T';
-		if (*tmp == 'X') *tmp = 'N';
-		residue = dnaconv[*tmp];
-		if (residue > 2) {
-			*bu++ = residue;
-		} else if (residue == 1 && IS_ALPHA(*tmp)) {
-			*bu++ = 'N';
-		} else {
-			ErrPostEx(SEV_ERROR, 0,0, "Illegal character in Bioseq [%c]", *tmp);
-		}
-	}
-	BSWrite(bsp, buf, (Int4) (bu - buf));
-	MemFree(buf);
-	MemFree(dnaconv);
-	
-	return TRUE;
+    dnaconv = GetDNAConv();
+    buf = MemNew(StringLen(the_bases) + 1);
+    bu = buf;
+    for (tmp = the_bases; *tmp != '\0'; tmp++)
+    {
+        *tmp = TO_UPPER(*tmp);
+        if (*tmp == 'U') *tmp = 'T';
+        if (*tmp == 'X') *tmp = 'N';
+        residue = dnaconv[*tmp];
+        if (residue > 2) {
+            *bu++ = residue;
+        } else if (residue == 1 && IS_ALPHA(*tmp)) {
+            *bu++ = 'N';
+        } else {
+            ErrPostEx(SEV_ERROR, 0,0, "Illegal character in Bioseq [%c]", *tmp);
+        }
+    }
+    BSWrite(bsp, buf, (Int4) (bu - buf));
+    MemFree(buf);
+    MemFree(dnaconv);
+    
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddAAsToByteStore (ByteStorePtr bsp, CharPtr the_aas)
 {
-	Uint1 PNTR buf;
-	Uint1 PNTR bu;
-	Uint1    residue;
-	Uint1Ptr aaconv;
-	CharPtr tmp;
+    Uint1 PNTR buf;
+    Uint1 PNTR bu;
+    Uint1    residue;
+    Uint1Ptr aaconv;
+    CharPtr tmp;
 
-	aaconv = GetProteinConv();
-	buf = MemNew(StringLen(the_aas) + 1);
-	bu = buf;
-	for (tmp = the_aas; *tmp != '\0'; tmp++)
-	{
-		*tmp = TO_UPPER(*tmp);
-		residue = aaconv[*tmp];
-		if (residue > 2) {
-			*bu++ = residue;
-		} else if (residue == 1 && IS_ALPHA(*tmp)) {
-			*bu++ = 'X';
-		} else {
-			ErrPostEx(SEV_ERROR, 0,0, "Illegal character in Bioseq [%c]", *tmp);
-		}
-	}
+    aaconv = GetProteinConv();
+    buf = MemNew(StringLen(the_aas) + 1);
+    bu = buf;
+    for (tmp = the_aas; *tmp != '\0'; tmp++)
+    {
+        *tmp = TO_UPPER(*tmp);
+        residue = aaconv[*tmp];
+        if (residue > 2) {
+            *bu++ = residue;
+        } else if (residue == 1 && IS_ALPHA(*tmp)) {
+            *bu++ = 'X';
+        } else {
+            ErrPostEx(SEV_ERROR, 0,0, "Illegal character in Bioseq [%c]", *tmp);
+        }
+    }
 
-	BSWrite(bsp, buf, (Int4) (bu - buf));
-	MemFree(buf);
-	MemFree(aaconv);
+    BSWrite(bsp, buf, (Int4) (bu - buf));
+    MemFree(buf);
+    MemFree(aaconv);
 
-	return TRUE;
+    return TRUE;
 }
 
 /*****************************************************************************
@@ -1714,81 +1714,81 @@ NLM_EXTERN Boolean AddAAsToByteStore (ByteStorePtr bsp, CharPtr the_aas)
 *
 *****************************************************************************/
 NLM_EXTERN Boolean AddBasesToBioseq (
-	NCBISubPtr submission ,
-	SeqEntryPtr the_seq ,
-	CharPtr the_bases )
+    NCBISubPtr submission ,
+    SeqEntryPtr the_seq ,
+    CharPtr the_bases )
 {
-	BioseqPtr bsp;
+    BioseqPtr bsp;
 
-	if ((the_seq == NULL) || (the_bases == NULL))
-		return FALSE;
+    if ((the_seq == NULL) || (the_bases == NULL))
+        return FALSE;
 
-	if (! IS_Bioseq(the_seq))
-	{
-		Message(MSG_ERROR, "Adding bases to a Bioseq-set");
-		return FALSE;
-	}
+    if (! IS_Bioseq(the_seq))
+    {
+        Message(MSG_ERROR, "Adding bases to a Bioseq-set");
+        return FALSE;
+    }
 
-	bsp = (BioseqPtr)(the_seq->data.ptrvalue);
+    bsp = (BioseqPtr)(the_seq->data.ptrvalue);
 
-	if (! ISA_na(bsp->mol))
-	{
-		Message(MSG_ERROR, "Adding bases to a protein");
-		return FALSE;
-	}
+    if (! ISA_na(bsp->mol))
+    {
+        Message(MSG_ERROR, "Adding bases to a protein");
+        return FALSE;
+    }
 
-	if (bsp->repr != Seq_repr_raw)
-	{
-		Message(MSG_ERROR, "Adding residues to non-raw Bioseq");
-		return FALSE;
-	}
+    if (bsp->repr != Seq_repr_raw)
+    {
+        Message(MSG_ERROR, "Adding residues to non-raw Bioseq");
+        return FALSE;
+    }
 
-	if (bsp->seq_data == NULL)
-	{
-		bsp->seq_data = (SeqDataPtr) BSNew(bsp->length);
-		bsp->seq_data_type = Seq_code_iupacna;
-	}
+    if (bsp->seq_data == NULL)
+    {
+        bsp->seq_data = (SeqDataPtr) BSNew(bsp->length);
+        bsp->seq_data_type = Seq_code_iupacna;
+    }
 
-	return AddBasesToByteStore((ByteStorePtr) bsp->seq_data, the_bases);
+    return AddBasesToByteStore((ByteStorePtr) bsp->seq_data, the_bases);
 }
 
 NLM_EXTERN Boolean AddAminoAcidsToBioseq (
-	NCBISubPtr submission ,
-	SeqEntryPtr the_seq ,
-	CharPtr the_aas )
+    NCBISubPtr submission ,
+    SeqEntryPtr the_seq ,
+    CharPtr the_aas )
 {
-	BioseqPtr bsp;
+    BioseqPtr bsp;
 
-	if ((the_seq == NULL) || (the_aas == NULL))
-		return FALSE;
+    if ((the_seq == NULL) || (the_aas == NULL))
+        return FALSE;
 
-	if (! IS_Bioseq(the_seq))
-	{
-		Message(MSG_ERROR, "Adding amino acids to a Bioseq-set");
-		return FALSE;
-	}
+    if (! IS_Bioseq(the_seq))
+    {
+        Message(MSG_ERROR, "Adding amino acids to a Bioseq-set");
+        return FALSE;
+    }
 
-	bsp = (BioseqPtr)(the_seq->data.ptrvalue);
+    bsp = (BioseqPtr)(the_seq->data.ptrvalue);
 
-	if (ISA_na(bsp->mol))
-	{
-		Message(MSG_ERROR, "Adding amino acids to a nucleotide");
-		return FALSE;
-	}
+    if (ISA_na(bsp->mol))
+    {
+        Message(MSG_ERROR, "Adding amino acids to a nucleotide");
+        return FALSE;
+    }
 
-	if (bsp->repr != Seq_repr_raw)
-	{
-		Message(MSG_ERROR, "Adding residues to non-raw Bioseq");
-		return FALSE;
-	}
+    if (bsp->repr != Seq_repr_raw)
+    {
+        Message(MSG_ERROR, "Adding residues to non-raw Bioseq");
+        return FALSE;
+    }
 
-	if (bsp->seq_data == NULL)
-	{
-		bsp->seq_data = (SeqDataPtr) BSNew(bsp->length);
-		bsp->seq_data_type = Seq_code_ncbieaa;
-	}
+    if (bsp->seq_data == NULL)
+    {
+        bsp->seq_data = (SeqDataPtr) BSNew(bsp->length);
+        bsp->seq_data_type = Seq_code_ncbieaa;
+    }
 
-	return AddAAsToByteStore((ByteStorePtr) bsp->seq_data, the_aas);
+    return AddAAsToByteStore((ByteStorePtr) bsp->seq_data, the_aas);
 }
 
 
@@ -1798,40 +1798,40 @@ NLM_EXTERN Boolean AddAminoAcidsToBioseq (
 *
 *****************************************************************************/
 NLM_EXTERN Boolean AddBasesToLiteral (
-	NCBISubPtr submission ,
-	SeqLitPtr the_literal ,
-	CharPtr the_bases )
+    NCBISubPtr submission ,
+    SeqLitPtr the_literal ,
+    CharPtr the_bases )
 {
-	if ((the_literal== NULL) || (the_bases == NULL))
-		return FALSE;
+    if ((the_literal== NULL) || (the_bases == NULL))
+        return FALSE;
 
 
-	if (the_literal->seq_data == NULL)
-	{
-		the_literal->seq_data = (SeqDataPtr) BSNew(the_literal->length);
-		the_literal->seq_data_type = Seq_code_iupacna;
-	}
+    if (the_literal->seq_data == NULL)
+    {
+        the_literal->seq_data = (SeqDataPtr) BSNew(the_literal->length);
+        the_literal->seq_data_type = Seq_code_iupacna;
+    }
 
-	return AddBasesToByteStore((ByteStorePtr) the_literal->seq_data, the_bases);
+    return AddBasesToByteStore((ByteStorePtr) the_literal->seq_data, the_bases);
 }
 
 NLM_EXTERN Boolean AddAminoAcidsToLiteral (
-	NCBISubPtr submission ,
-	SeqLitPtr the_literal ,
-	CharPtr the_aas )
+    NCBISubPtr submission ,
+    SeqLitPtr the_literal ,
+    CharPtr the_aas )
 {
 
-	if ((the_literal == NULL) || (the_aas == NULL))
-		return FALSE;
+    if ((the_literal == NULL) || (the_aas == NULL))
+        return FALSE;
 
 
-	if (the_literal->seq_data == NULL)
-	{
-		the_literal->seq_data = (SeqDataPtr) BSNew(the_literal->length);
-		the_literal->seq_data_type = Seq_code_ncbieaa;
-	}
+    if (the_literal->seq_data == NULL)
+    {
+        the_literal->seq_data = (SeqDataPtr) BSNew(the_literal->length);
+        the_literal->seq_data_type = Seq_code_ncbieaa;
+    }
 
-	return AddAAsToByteStore((ByteStorePtr) the_literal->seq_data, the_aas);
+    return AddAAsToByteStore((ByteStorePtr) the_literal->seq_data, the_aas);
 }
 
 /*****************************************************************************
@@ -1842,79 +1842,79 @@ NLM_EXTERN Boolean AddAminoAcidsToLiteral (
 
 static Boolean StripNonAsciiChars (CharPtr str)
 {
-	Boolean retval = TRUE;
+    Boolean retval = TRUE;
 
-	while (*str != '\0')
-	{
-		if ((*str < ' ') || (*str > '~'))
-		{
-			retval = FALSE;
-			if (*str == '\n' || *str == '\r')
-				*str = '~';
-			else
-				*str = '#';
-		}
-		str++;
-	}
-	return retval;
+    while (*str != '\0')
+    {
+        if ((*str < ' ') || (*str > '~'))
+        {
+            retval = FALSE;
+            if (*str == '\n' || *str == '\r')
+                *str = '~';
+            else
+                *str = '#';
+        }
+        str++;
+    }
+    return retval;
 }
 
 NLM_EXTERN ValNodePtr NewDescrOnSeqEntry (SeqEntryPtr entry, Int2 type)
 {
-	ValNodePtr vnp;
-	BioseqPtr bsp;
-	BioseqSetPtr bssp;
+    ValNodePtr vnp;
+    BioseqPtr bsp;
+    BioseqSetPtr bssp;
 
-	if (entry == NULL)
-		return NULL;
+    if (entry == NULL)
+        return NULL;
 
-	if (IS_Bioseq(entry))
-	{
-		bsp = (BioseqPtr)(entry->data.ptrvalue);
-		vnp = SeqDescrAdd(&(bsp->descr));
-	}
-	else
-	{
-		bssp = (BioseqSetPtr)(entry->data.ptrvalue);
-		vnp = SeqDescrAdd(&(bssp->descr));
-	}
-	if (vnp != NULL)
-		vnp->choice = (Uint1)type;
-	return vnp;
+    if (IS_Bioseq(entry))
+    {
+        bsp = (BioseqPtr)(entry->data.ptrvalue);
+        vnp = SeqDescrAdd(&(bsp->descr));
+    }
+    else
+    {
+        bssp = (BioseqSetPtr)(entry->data.ptrvalue);
+        vnp = SeqDescrAdd(&(bssp->descr));
+    }
+    if (vnp != NULL)
+        vnp->choice = (Uint1)type;
+    return vnp;
 }
 
 NLM_EXTERN ValNodePtr GetDescrOnSeqEntry (SeqEntryPtr entry, Int2 type)
 {
-	ValNodePtr vnp;
-	BioseqPtr bsp;
-	BioseqSetPtr bssp;
+    ValNodePtr vnp;
+    BioseqPtr bsp;
+    BioseqSetPtr bssp;
 
-	if (entry == NULL)
-		return NULL;
+    if (entry == NULL)
+        return NULL;
 
-	if (IS_Bioseq(entry))
-	{
-		bsp = (BioseqPtr)(entry->data.ptrvalue);
-		for (vnp = bsp->descr; vnp; vnp = vnp->next) {
-			if (vnp->choice == (Uint1)type) {
-				return vnp;
-			}
-		}
-		vnp = SeqDescrAdd(&(bsp->descr));
-	}
-	else
-	{
-		bssp = (BioseqSetPtr)(entry->data.ptrvalue);
-		for (vnp = bssp->descr; vnp; vnp = vnp->next) {
-			if (vnp->choice == (Uint1)type) {
-				return vnp;
-			}
-		}
-		vnp = SeqDescrAdd(&(bssp->descr));
-	}
-	if (vnp != NULL)
-		vnp->choice = (Uint1)type;
-	return vnp;
+    if (IS_Bioseq(entry))
+    {
+        bsp = (BioseqPtr)(entry->data.ptrvalue);
+        for (vnp = bsp->descr; vnp; vnp = vnp->next) {
+            if (vnp->choice == (Uint1)type) {
+                return vnp;
+            }
+        }
+        vnp = SeqDescrAdd(&(bsp->descr));
+    }
+    else
+    {
+        bssp = (BioseqSetPtr)(entry->data.ptrvalue);
+        for (vnp = bssp->descr; vnp; vnp = vnp->next) {
+            if (vnp->choice == (Uint1)type) {
+                return vnp;
+            }
+        }
+        vnp = SeqDescrAdd(&(bssp->descr));
+    }
+    if (vnp != NULL)
+        vnp->choice = (Uint1)type;
+    return vnp;
 }
 
 static SeqIdPtr SubutilMakeAc2GBSeqId (CharPtr accession)
@@ -1937,49 +1937,49 @@ static SeqIdPtr SubutilMakeAc2GBSeqId (CharPtr accession)
 
 NLM_EXTERN Boolean AddSecondaryAccnToEntry (
 NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	CharPtr accn )
+    SeqEntryPtr entry ,
+    CharPtr accn )
 
 {
-	BioseqPtr bsp;
-	ValNodePtr vnp;
-	GBBlockPtr gbp;
-	CharPtr p;
-	Int4 i, j;
-	SeqHistPtr shp;
-	SeqIdPtr sip;
+    BioseqPtr bsp;
+    ValNodePtr vnp;
+    GBBlockPtr gbp;
+    CharPtr p;
+    Int4 i, j;
+    SeqHistPtr shp;
+    SeqIdPtr sip;
 
-	if ((entry == NULL) || (accn == NULL))
-		return FALSE;
+    if ((entry == NULL) || (accn == NULL))
+        return FALSE;
 
-	if (! IS_Bioseq(entry))
-		return FALSE;
+    if (! IS_Bioseq(entry))
+        return FALSE;
 
-	bsp = (BioseqPtr)(entry->data.ptrvalue);
-	if (bsp == NULL)
-		return FALSE;
+    bsp = (BioseqPtr)(entry->data.ptrvalue);
+    if (bsp == NULL)
+        return FALSE;
 
-	vnp = GetDescrOnSeqEntry (entry, Seq_descr_genbank);
-	if (vnp == NULL) {
-		vnp = NewDescrOnSeqEntry (entry, Seq_descr_genbank);
-		if (vnp != NULL) {
-			vnp->data.ptrvalue = (Pointer) GBBlockNew ();
-		}
-	}
-	if (vnp == NULL) return FALSE;
-	gbp = (GBBlockPtr) vnp->data.ptrvalue;
-	/* jwc added */
+    vnp = GetDescrOnSeqEntry (entry, Seq_descr_genbank);
+    if (vnp == NULL) {
+        vnp = NewDescrOnSeqEntry (entry, Seq_descr_genbank);
+        if (vnp != NULL) {
+            vnp->data.ptrvalue = (Pointer) GBBlockNew ();
+        }
+    }
+    if (vnp == NULL) return FALSE;
+    gbp = (GBBlockPtr) vnp->data.ptrvalue;
+    /* jwc added */
     if (gbp == NULL) { 
       vnp->data.ptrvalue = (Pointer) GBBlockNew (); 
       gbp = vnp->data.ptrvalue; 
     } 
-	/* end of jwc added */
-	if (gbp == NULL) return FALSE;
+    /* end of jwc added */
+    if (gbp == NULL) return FALSE;
 
-	shp = bsp->hist; 
+    shp = bsp->hist; 
 
-	p = accn;
-	for (i = 0; isalnum(*p) && *p != '\0'; ++p, ++i) continue;
+    p = accn;
+    for (i = 0; isalnum(*p) && *p != '\0'; ++p, ++i) continue;
 
                /* check one_letter+5digits or two_letter+6digits */
        if (i == 6 || i == 8)
@@ -2021,223 +2021,223 @@ NCBISubPtr submission,
           return FALSE;
        }
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddTitleToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	CharPtr title )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    CharPtr title )
 {
-	ValNodePtr vnp;
+    ValNodePtr vnp;
 
-	if ((submission == NULL) || (entry == NULL) || (title == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL) || (title == NULL))
+        return FALSE;
 
-	vnp = NewDescrOnSeqEntry (entry, Seq_descr_title);
+    vnp = NewDescrOnSeqEntry (entry, Seq_descr_title);
 
-	vnp->data.ptrvalue = (Pointer)(StringSaveNoNull(title));
-	StripNonAsciiChars((CharPtr)(vnp->data.ptrvalue));
-	return TRUE;
+    vnp->data.ptrvalue = (Pointer)(StringSaveNoNull(title));
+    StripNonAsciiChars((CharPtr)(vnp->data.ptrvalue));
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddCommentToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	CharPtr comment )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    CharPtr comment )
 {
-	ValNodePtr vnp;
+    ValNodePtr vnp;
 
-	if ((submission == NULL) || (entry == NULL) || (comment == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL) || (comment == NULL))
+        return FALSE;
 
-	vnp = NewDescrOnSeqEntry (entry, Seq_descr_comment);
+    vnp = NewDescrOnSeqEntry (entry, Seq_descr_comment);
 
-	vnp->data.ptrvalue = (Pointer)(StringSaveNoNull(comment));
-	StripNonAsciiChars((CharPtr)(vnp->data.ptrvalue));
-	return TRUE;
+    vnp->data.ptrvalue = (Pointer)(StringSaveNoNull(comment));
+    StripNonAsciiChars((CharPtr)(vnp->data.ptrvalue));
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddOrganismToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	CharPtr scientific_name ,
-	CharPtr common_name ,
-	CharPtr virus_name ,
-	CharPtr strain ,
-	CharPtr synonym1,
-	CharPtr synonym2,
-	CharPtr synonym3)
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    CharPtr scientific_name ,
+    CharPtr common_name ,
+    CharPtr virus_name ,
+    CharPtr strain ,
+    CharPtr synonym1,
+    CharPtr synonym2,
+    CharPtr synonym3)
 {
-	ValNodePtr vnp;
-	OrgRefPtr orp;
-	Char buf[80];
+    ValNodePtr vnp;
+    OrgRefPtr orp;
+    Char buf[80];
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = NewDescrOnSeqEntry (entry, Seq_descr_org);
+    vnp = NewDescrOnSeqEntry (entry, Seq_descr_org);
 
-	orp = OrgRefNew();
-	vnp->data.ptrvalue = (Pointer)orp;
+    orp = OrgRefNew();
+    vnp->data.ptrvalue = (Pointer)orp;
 
-	orp->taxname = StringSaveNoNull(scientific_name);
-	orp->common = StringSaveNoNull(common_name);
-	if (virus_name != NULL)    /* kludge for old Org-ref */
-	{
-		orp->taxname = StringSaveNoNull(virus_name);
-		ValNodeCopyStr(&orp->syn, 0, scientific_name);
-	}
+    orp->taxname = StringSaveNoNull(scientific_name);
+    orp->common = StringSaveNoNull(common_name);
+    if (virus_name != NULL)    /* kludge for old Org-ref */
+    {
+        orp->taxname = StringSaveNoNull(virus_name);
+        ValNodeCopyStr(&orp->syn, 0, scientific_name);
+    }
 
-	if (strain != NULL)
-	{
-		sprintf(buf, "strain=%.70s", strain);
-		ValNodeCopyStr(&orp->mod, 0, buf);
-	}
+    if (strain != NULL)
+    {
+        sprintf(buf, "strain=%.70s", strain);
+        ValNodeCopyStr(&orp->mod, 0, buf);
+    }
 
-	ValNodeCopyStr(&orp->syn, 0, synonym1);
-	ValNodeCopyStr(&orp->syn, 0, synonym2);
-	ValNodeCopyStr(&orp->syn, 0, synonym3);
+    ValNodeCopyStr(&orp->syn, 0, synonym1);
+    ValNodeCopyStr(&orp->syn, 0, synonym2);
+    ValNodeCopyStr(&orp->syn, 0, synonym3);
 
- 	return TRUE;
+     return TRUE;
 }
 
 NLM_EXTERN Boolean AddOrganismToEntryEx (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	CharPtr scientific_name ,
-	CharPtr common_name ,
-	CharPtr virus_name ,
-	CharPtr strain ,
-	CharPtr synonym1,
-	CharPtr synonym2,
-	CharPtr synonym3,
-	CharPtr taxonomy,
-	Int4 taxid)
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    CharPtr scientific_name ,
+    CharPtr common_name ,
+    CharPtr virus_name ,
+    CharPtr strain ,
+    CharPtr synonym1,
+    CharPtr synonym2,
+    CharPtr synonym3,
+    CharPtr taxonomy,
+    Int4 taxid)
 
 {
-	ValNodePtr vnp;
-	BioSourcePtr bio;
-	OrgRefPtr orp;
-	OrgModPtr orm;
-	OrgNamePtr onp = NULL;
-	DbtagPtr dbt;
-	ObjectIdPtr oip;
-	
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    ValNodePtr vnp;
+    BioSourcePtr bio;
+    OrgRefPtr orp;
+    OrgModPtr orm;
+    OrgNamePtr onp = NULL;
+    DbtagPtr dbt;
+    ObjectIdPtr oip;
+    
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
+    vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
 
-	bio = vnp->data.ptrvalue;
-	if (bio == NULL) {
-		bio = BioSourceNew();
-	}
-	if ((orp = bio->org) == NULL)
-		orp = OrgRefNew();
+    bio = vnp->data.ptrvalue;
+    if (bio == NULL) {
+        bio = BioSourceNew();
+    }
+    if ((orp = bio->org) == NULL)
+        orp = OrgRefNew();
 
-	orp->taxname = StringSaveNoNull(scientific_name);
-	orp->common = StringSaveNoNull(common_name);
-	if (virus_name != NULL)    /* kludge for old Org-ref */
-	{
-		orp->taxname = StringSaveNoNull(virus_name);
-		ValNodeCopyStr(&orp->syn, 0, scientific_name);
-	}
+    orp->taxname = StringSaveNoNull(scientific_name);
+    orp->common = StringSaveNoNull(common_name);
+    if (virus_name != NULL)    /* kludge for old Org-ref */
+    {
+        orp->taxname = StringSaveNoNull(virus_name);
+        ValNodeCopyStr(&orp->syn, 0, scientific_name);
+    }
 
-	if (taxonomy != NULL) {
-		onp = OrgNameNew();
-		onp->lineage = StringSave(taxonomy);
-	}
-	if (strain != NULL)
-	{
-		orm = OrgModNew();
-		orm->subtype = 2;  /* strain */
-		orm->subname = StringSave(strain);
-		if (onp == NULL) {
-			onp = OrgNameNew();
-		}
-		onp->mod = orm;
-	}
-	if (onp != NULL) {
-		orp->orgname = onp;
-	}
-	ValNodeCopyStr(&orp->syn, 0, synonym1);
-	ValNodeCopyStr(&orp->syn, 0, synonym2);
-	ValNodeCopyStr(&orp->syn, 0, synonym3);
-	bio->org = orp;
-	vnp->data.ptrvalue = (Pointer)bio;
+    if (taxonomy != NULL) {
+        onp = OrgNameNew();
+        onp->lineage = StringSave(taxonomy);
+    }
+    if (strain != NULL)
+    {
+        orm = OrgModNew();
+        orm->subtype = 2;  /* strain */
+        orm->subname = StringSave(strain);
+        if (onp == NULL) {
+            onp = OrgNameNew();
+        }
+        onp->mod = orm;
+    }
+    if (onp != NULL) {
+        orp->orgname = onp;
+    }
+    ValNodeCopyStr(&orp->syn, 0, synonym1);
+    ValNodeCopyStr(&orp->syn, 0, synonym2);
+    ValNodeCopyStr(&orp->syn, 0, synonym3);
+    bio->org = orp;
+    vnp->data.ptrvalue = (Pointer)bio;
 
-	if (taxid > 0) {
-		dbt = DbtagNew ();
-		if (dbt != NULL) {
-			oip = ObjectIdNew ();
-			if (oip != NULL) {
-				dbt->db = StringSave ("taxon");
-				dbt->tag = oip;
-				oip->id = taxid;
-				ValNodeAddPointer (&orp->db, 0, (Pointer) dbt);
-			}
-		}
-	}
+    if (taxid > 0) {
+        dbt = DbtagNew ();
+        if (dbt != NULL) {
+            oip = ObjectIdNew ();
+            if (oip != NULL) {
+                dbt->db = StringSave ("taxon");
+                dbt->tag = oip;
+                oip->id = taxid;
+                ValNodeAddPointer (&orp->db, 0, (Pointer) dbt);
+            }
+        }
+    }
 
- 	return TRUE;
+     return TRUE;
 }
 
 NLM_EXTERN Boolean AddOrganismToEntryNew (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	CharPtr scientific_name ,
-	CharPtr common_name ,
-	CharPtr virus_name ,
-	CharPtr strain ,
-	CharPtr synonym1,
-	CharPtr synonym2,
-	CharPtr synonym3,
-	CharPtr taxonomy)
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    CharPtr scientific_name ,
+    CharPtr common_name ,
+    CharPtr virus_name ,
+    CharPtr strain ,
+    CharPtr synonym1,
+    CharPtr synonym2,
+    CharPtr synonym3,
+    CharPtr taxonomy)
 {
-	return AddOrganismToEntryEx (submission, entry, scientific_name,
+    return AddOrganismToEntryEx (submission, entry, scientific_name,
                                  common_name, virus_name, strain,
                                  synonym1, synonym2, synonym3,
                                  taxonomy, 0);
 }
 
 NLM_EXTERN Boolean SetGeneticCodeForEntry (
-	NCBISubPtr submission,
+    NCBISubPtr submission,
         SeqEntryPtr entry,
         Uint1 genetic_code,  /* for cytoplasm */
         Uint1 mito_code )   /* for mitochondria */
 {
-	ValNodePtr vnp;
-	BioSourcePtr bio;
-	OrgRefPtr orp;
-	OrgNamePtr onp = NULL;
-	
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    ValNodePtr vnp;
+    BioSourcePtr bio;
+    OrgRefPtr orp;
+    OrgNamePtr onp = NULL;
+    
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
+    vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
 
-	bio = vnp->data.ptrvalue;
-	if (bio == NULL) {
-		bio = BioSourceNew();
-		vnp->data.ptrvalue = bio;
-	}
-	if ((orp = bio->org) == NULL)
-	{
-		orp = OrgRefNew();
-		bio->org = orp;
-	}
+    bio = vnp->data.ptrvalue;
+    if (bio == NULL) {
+        bio = BioSourceNew();
+        vnp->data.ptrvalue = bio;
+    }
+    if ((orp = bio->org) == NULL)
+    {
+        orp = OrgRefNew();
+        bio->org = orp;
+    }
 
-	if ((onp = orp->orgname) == NULL)
-	{
-		onp = OrgNameNew();
-		orp->orgname = onp;
-	}
+    if ((onp = orp->orgname) == NULL)
+    {
+        onp = OrgNameNew();
+        orp->orgname = onp;
+    }
 
-	onp->gcode = genetic_code;
-	onp->mgcode = mito_code;
+    onp->gcode = genetic_code;
+    onp->mgcode = mito_code;
 
-	return TRUE;
+    return TRUE;
 }
 
 static void SubExpandSemicolonedKeyword (ValNodePtr vnp)
@@ -2286,344 +2286,344 @@ static void SubExpandSemicolonedKeyword (ValNodePtr vnp)
 }
 
 NLM_EXTERN Boolean AddGenBankBlockToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	CharPtr taxonomy ,
-	CharPtr division ,
-	CharPtr keyword1 ,
-	CharPtr keyword2 ,
-	CharPtr keyword3 )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    CharPtr taxonomy ,
+    CharPtr division ,
+    CharPtr keyword1 ,
+    CharPtr keyword2 ,
+    CharPtr keyword3 )
 {
-	ValNodePtr vnp, tmp;
-	GBBlockPtr gbp;
+    ValNodePtr vnp, tmp;
+    GBBlockPtr gbp;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = NewDescrOnSeqEntry (entry, Seq_descr_genbank);
+    vnp = NewDescrOnSeqEntry (entry, Seq_descr_genbank);
 
-	gbp = GBBlockNew();
-	vnp->data.ptrvalue = (Pointer)gbp;
+    gbp = GBBlockNew();
+    vnp->data.ptrvalue = (Pointer)gbp;
 
-	gbp->taxonomy = StringSaveNoNull(taxonomy);
-	gbp->div = StringSaveNoNull(division);
+    gbp->taxonomy = StringSaveNoNull(taxonomy);
+    gbp->div = StringSaveNoNull(division);
 
-	ValNodeCopyStr(&gbp->keywords, 0, keyword1);
-	ValNodeCopyStr(&gbp->keywords, 0, keyword2);
-	ValNodeCopyStr(&gbp->keywords, 0, keyword3);
+    ValNodeCopyStr(&gbp->keywords, 0, keyword1);
+    ValNodeCopyStr(&gbp->keywords, 0, keyword2);
+    ValNodeCopyStr(&gbp->keywords, 0, keyword3);
 
-	for (tmp = gbp->keywords; tmp != NULL; tmp = tmp->next) {
-		SubExpandSemicolonedKeyword (tmp);
-	}
+    for (tmp = gbp->keywords; tmp != NULL; tmp = tmp->next) {
+        SubExpandSemicolonedKeyword (tmp);
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddGIBBmethodToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	Int2	 method )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    Int2     method )
 {
-	ValNodePtr vnp;
+    ValNodePtr vnp;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = NewDescrOnSeqEntry (entry, Seq_descr_method);
+    vnp = NewDescrOnSeqEntry (entry, Seq_descr_method);
 
-	vnp->data.intvalue = method;
+    vnp->data.intvalue = method;
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddGenomeToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	Int2	 type )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    Int2     type )
 {
-	ValNodePtr vnp;
-	BioSourcePtr bio;
+    ValNodePtr vnp;
+    BioSourcePtr bio;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
+    vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
 
-	bio = (BioSourcePtr) vnp->data.ptrvalue;
-	if (bio == NULL) {
-		bio = BioSourceNew();
-	}
-	bio->genome = (Uint1)type;
-	bio->origin = ORG_DEFAULT;	/* unknown */
-	vnp->data.ptrvalue = (Pointer) bio;
-	
-	return TRUE;
+    bio = (BioSourcePtr) vnp->data.ptrvalue;
+    if (bio == NULL) {
+        bio = BioSourceNew();
+    }
+    bio->genome = (Uint1)type;
+    bio->origin = ORG_DEFAULT;    /* unknown */
+    vnp->data.ptrvalue = (Pointer) bio;
+    
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddSubSourceToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	Int2	 type ,
-	CharPtr value)
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    Int2     type ,
+    CharPtr value)
 {
-	BioSourcePtr bio;
-	SubSourcePtr curr, tmp;
-	ValNodePtr vnp;
+    BioSourcePtr bio;
+    SubSourcePtr curr, tmp;
+    ValNodePtr vnp;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
+    vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
 
-	bio = (BioSourcePtr) vnp->data.ptrvalue;
-	if (bio == NULL) {
-		return FALSE;
-	}
-	tmp = SubSourceNew();
+    bio = (BioSourcePtr) vnp->data.ptrvalue;
+    if (bio == NULL) {
+        return FALSE;
+    }
+    tmp = SubSourceNew();
         if (bio->subtype == NULL)
-		bio->subtype = tmp;
-	else
-	{
-		for (curr = bio->subtype; curr->next != NULL; curr = curr->next)
-			continue;
-		curr->next = tmp;
-	}
+        bio->subtype = tmp;
+    else
+    {
+        for (curr = bio->subtype; curr->next != NULL; curr = curr->next)
+            continue;
+        curr->next = tmp;
+    }
 
-	tmp->subtype = (Uint1)type;
-	tmp->name = StringSaveNoNull(value);
-	
-	return TRUE;
+    tmp->subtype = (Uint1)type;
+    tmp->name = StringSaveNoNull(value);
+    
+    return TRUE;
 }
 
 
 NLM_EXTERN Boolean AddOrgModToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	Int2	 type ,
-	CharPtr value)
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    Int2     type ,
+    CharPtr value)
 {
-	BioSourcePtr bio;
-	OrgRefPtr orp;
-	OrgNamePtr onp;
-	OrgModPtr curr, tmp;
-	ValNodePtr vnp;
+    BioSourcePtr bio;
+    OrgRefPtr orp;
+    OrgNamePtr onp;
+    OrgModPtr curr, tmp;
+    ValNodePtr vnp;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
+    vnp = GetDescrOnSeqEntry (entry, Seq_descr_source);
 
-	bio = (BioSourcePtr) vnp->data.ptrvalue;
-	if (bio == NULL) {
-		return FALSE;
-	}
-	if (bio->org == NULL)
-	{
-		return FALSE;
-	}
-	orp = bio->org;
-	if (orp->orgname == NULL) {
-		orp->orgname = OrgNameNew ();
-	}
-	if (orp->orgname == NULL)
-		return FALSE;
-	onp = orp->orgname;
-	tmp = OrgModNew();
+    bio = (BioSourcePtr) vnp->data.ptrvalue;
+    if (bio == NULL) {
+        return FALSE;
+    }
+    if (bio->org == NULL)
+    {
+        return FALSE;
+    }
+    orp = bio->org;
+    if (orp->orgname == NULL) {
+        orp->orgname = OrgNameNew ();
+    }
+    if (orp->orgname == NULL)
+        return FALSE;
+    onp = orp->orgname;
+    tmp = OrgModNew();
         if (onp->mod == NULL)
-		onp->mod = tmp;
-	else
-	{
-		for (curr = onp->mod; curr->next != NULL; curr = curr->next)
-			continue;
-		curr->next = tmp;
-	}
+        onp->mod = tmp;
+    else
+    {
+        for (curr = onp->mod; curr->next != NULL; curr = curr->next)
+            continue;
+        curr->next = tmp;
+    }
 
-	tmp->subtype = (Uint1)type;
-	tmp->subname = StringSaveNoNull(value);
-	
-	return TRUE;
+    tmp->subtype = (Uint1)type;
+    tmp->subname = StringSaveNoNull(value);
+    
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddBiomolToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	Int2	 type )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    Int2     type )
 {
-	ValNodePtr vnp;
-	MolInfoPtr mip;
+    ValNodePtr vnp;
+    MolInfoPtr mip;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = GetDescrOnSeqEntry (entry, Seq_descr_molinfo);
+    vnp = GetDescrOnSeqEntry (entry, Seq_descr_molinfo);
 
-	mip = (MolInfoPtr) vnp->data.ptrvalue;
-	if (mip == NULL) 
-		mip = MolInfoNew();
-	mip->biomol = (Uint1)type;
-	vnp->data.ptrvalue =  (Pointer) mip;
-	
-	return TRUE;
+    mip = (MolInfoPtr) vnp->data.ptrvalue;
+    if (mip == NULL) 
+        mip = MolInfoNew();
+    mip->biomol = (Uint1)type;
+    vnp->data.ptrvalue =  (Pointer) mip;
+    
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddTechToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	Int2	 tech )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    Int2     tech )
 {
-	ValNodePtr vnp;
-	MolInfoPtr mip;
+    ValNodePtr vnp;
+    MolInfoPtr mip;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = GetDescrOnSeqEntry (entry, Seq_descr_molinfo);
+    vnp = GetDescrOnSeqEntry (entry, Seq_descr_molinfo);
 
-	mip = (MolInfoPtr) vnp->data.ptrvalue;
-	if (mip == NULL) 
-		mip = MolInfoNew();
-	mip->tech = (Uint1)tech;
-	vnp->data.ptrvalue = (Pointer) mip;
-	
-	return TRUE;
+    mip = (MolInfoPtr) vnp->data.ptrvalue;
+    if (mip == NULL) 
+        mip = MolInfoNew();
+    mip->tech = (Uint1)tech;
+    vnp->data.ptrvalue = (Pointer) mip;
+    
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddCompleteToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	Int2	 complete )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    Int2     complete )
 {
-	ValNodePtr vnp;
-	MolInfoPtr mip;
+    ValNodePtr vnp;
+    MolInfoPtr mip;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = GetDescrOnSeqEntry (entry, Seq_descr_molinfo);
+    vnp = GetDescrOnSeqEntry (entry, Seq_descr_molinfo);
 
-	mip = (MolInfoPtr) vnp->data.ptrvalue;
-	if (mip == NULL) 
-		mip = MolInfoNew();
-	mip->completeness = (Uint1)complete;
-	vnp->data.ptrvalue = (Pointer) mip;
-	
-	return TRUE;
+    mip = (MolInfoPtr) vnp->data.ptrvalue;
+    if (mip == NULL) 
+        mip = MolInfoNew();
+    mip->completeness = (Uint1)complete;
+    vnp->data.ptrvalue = (Pointer) mip;
+    
+    return TRUE;
 }
 
 NLM_EXTERN void AddCompleteness(NCBISubPtr submission, SeqEntryPtr sep, SeqFeatPtr sfp)
 {
-	Uint2	retval;
-	Boolean	partial = FALSE;
+    Uint2    retval;
+    Boolean    partial = FALSE;
 
-	retval = SeqLocPartialCheck(sfp->location);
-	if ((retval & SLP_START) && (retval & SLP_STOP)) {
-		AddCompleteToEntry(submission, sep, 5);   /* no_ends */
-		partial = TRUE;
-	} else if (retval & SLP_START) {
-		AddCompleteToEntry(submission, sep, 3);   /* no_left */
-		partial = TRUE;
-	} else if (retval & SLP_STOP) {
-		AddCompleteToEntry(submission, sep, 4);  /* no_right */
-		partial = TRUE;
-	} else if (retval & (SLP_OTHER | SLP_INTERNAL)) {
-		AddCompleteToEntry(submission, sep, 2);  /* partial */
-		partial = TRUE;
-	} else if (!partial && sfp->partial) {
-		AddCompleteToEntry(submission, sep, 2);  /* partial */
-	}
+    retval = SeqLocPartialCheck(sfp->location);
+    if ((retval & SLP_START) && (retval & SLP_STOP)) {
+        AddCompleteToEntry(submission, sep, 5);   /* no_ends */
+        partial = TRUE;
+    } else if (retval & SLP_START) {
+        AddCompleteToEntry(submission, sep, 3);   /* no_left */
+        partial = TRUE;
+    } else if (retval & SLP_STOP) {
+        AddCompleteToEntry(submission, sep, 4);  /* no_right */
+        partial = TRUE;
+    } else if (retval & (SLP_OTHER | SLP_INTERNAL)) {
+        AddCompleteToEntry(submission, sep, 2);  /* partial */
+        partial = TRUE;
+    } else if (!partial && sfp->partial) {
+        AddCompleteToEntry(submission, sep, 2);  /* partial */
+    }
 }
 
 NLM_EXTERN Boolean AddCreateDateToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	Int2 month ,
-	Int2 day ,
-	Int2 year )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    Int2 month ,
+    Int2 day ,
+    Int2 year )
 {
-	ValNodePtr vnp;
-	DatePtr dp;
+    ValNodePtr vnp;
+    DatePtr dp;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	vnp = NewDescrOnSeqEntry (entry, Seq_descr_create_date);
+    vnp = NewDescrOnSeqEntry (entry, Seq_descr_create_date);
 
-	dp = DateNew();
-	DateWrite(dp, year, month, day, NULL);
-	vnp->data.ptrvalue = (Pointer)dp;
+    dp = DateNew();
+    DateWrite(dp, year, month, day, NULL);
+    vnp->data.ptrvalue = (Pointer)dp;
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddModifierToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	Int2 modifier )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    Int2 modifier )
 {
-	ValNodePtr vnp, tmp;
-	BioseqPtr bsp;
-	BioseqSetPtr bssp;
+    ValNodePtr vnp, tmp;
+    BioseqPtr bsp;
+    BioseqSetPtr bssp;
 
-	if ((submission == NULL) || (entry == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL))
+        return FALSE;
 
-	if (IS_Bioseq(entry))
-	{
-		bsp = (BioseqPtr)(entry->data.ptrvalue);
-		tmp = bsp->descr;
-	}
-	else
-	{
-		bssp = (BioseqSetPtr)(entry->data.ptrvalue);
-		tmp = bssp->descr;
-	}
+    if (IS_Bioseq(entry))
+    {
+        bsp = (BioseqPtr)(entry->data.ptrvalue);
+        tmp = bsp->descr;
+    }
+    else
+    {
+        bssp = (BioseqSetPtr)(entry->data.ptrvalue);
+        tmp = bssp->descr;
+    }
 
-	vnp = NULL;
-	while (tmp != NULL)
-	{
-		if (tmp->choice == Seq_descr_modif)  /* have one already */
-		{
-			vnp = SeqDescrNew((ValNodePtr)(tmp->data.ptrvalue));
-			break;
-		}
-		tmp = tmp->next;
-	}
+    vnp = NULL;
+    while (tmp != NULL)
+    {
+        if (tmp->choice == Seq_descr_modif)  /* have one already */
+        {
+            vnp = SeqDescrNew((ValNodePtr)(tmp->data.ptrvalue));
+            break;
+        }
+        tmp = tmp->next;
+    }
 
-	if (vnp == NULL)   /* first one */
-	{
-		tmp = NewDescrOnSeqEntry (entry, Seq_descr_modif);
-		vnp = SeqDescrNew((ValNodePtr)(tmp->data.ptrvalue));
-		tmp->data.ptrvalue = (Pointer)vnp;
-	}
+    if (vnp == NULL)   /* first one */
+    {
+        tmp = NewDescrOnSeqEntry (entry, Seq_descr_modif);
+        vnp = SeqDescrNew((ValNodePtr)(tmp->data.ptrvalue));
+        tmp->data.ptrvalue = (Pointer)vnp;
+    }
 
-	vnp->data.intvalue = (Int4)modifier;
+    vnp->data.intvalue = (Int4)modifier;
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddPubToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	PubPtr pub )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    PubPtr pub )
 {
-	ValNodePtr vnp;
-	PubdescPtr pdp;
+    ValNodePtr vnp;
+    PubdescPtr pdp;
 
-	if ((submission == NULL) || (entry == NULL) || (pub == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL) || (pub == NULL))
+        return FALSE;
 
-	vnp = NewDescrOnSeqEntry (entry, Seq_descr_pub);
-	pdp = PubdescNew();
-	if (pub->choice == PUB_Equiv)   /* already a Pub-equiv */
-	{
-		pdp->pub = (ValNodePtr)(pub->data.ptrvalue);
-		MemFree(pub);
-	}
-	else                     /* make a Pub-equiv of one member */
-		pdp->pub = pub;
-	vnp->data.ptrvalue = (Pointer)pdp;
+    vnp = NewDescrOnSeqEntry (entry, Seq_descr_pub);
+    pdp = PubdescNew();
+    if (pub->choice == PUB_Equiv)   /* already a Pub-equiv */
+    {
+        pdp->pub = (ValNodePtr)(pub->data.ptrvalue);
+        MemFree(pub);
+    }
+    else                     /* make a Pub-equiv of one member */
+        pdp->pub = pub;
+    vnp->data.ptrvalue = (Pointer)pdp;
 
-	return TRUE;
+    return TRUE;
 }
 NLM_EXTERN PubPtr CitSubBuild (NCBISubPtr submission, Int2 month,
                                Int2 day, Int2 year, Int2 medium)
@@ -2728,160 +2728,160 @@ NLM_EXTERN PubPtr CitArtBuild (
 }
 
 NLM_EXTERN Boolean AddAuthorToPub (    /* call once for each author, in order */
-	NCBISubPtr submission,
-	PubPtr the_pub,
-	CharPtr last_name,
-	CharPtr first_name,
-	CharPtr middle_name,
-	CharPtr initials,  /* separated by periods, no initial for last name */
-	CharPtr suffix )   /* Jr. Sr. III */
+    NCBISubPtr submission,
+    PubPtr the_pub,
+    CharPtr last_name,
+    CharPtr first_name,
+    CharPtr middle_name,
+    CharPtr initials,  /* separated by periods, no initial for last name */
+    CharPtr suffix )   /* Jr. Sr. III */
 {
-	CitGenPtr cgp;
-	CitSubPtr csp;
-	CitArtPtr cap;
-	AuthListPtr alp;
-	AuthorPtr ap;
-	PersonIdPtr pip;
-	NameStdPtr nsp;
-	ValNodePtr vnp;
+    CitGenPtr cgp;
+    CitSubPtr csp;
+    CitArtPtr cap;
+    AuthListPtr alp;
+    AuthorPtr ap;
+    PersonIdPtr pip;
+    NameStdPtr nsp;
+    ValNodePtr vnp;
 
-	if ((submission == NULL) || (the_pub == NULL) || (last_name == NULL))
-		return FALSE;
+    if ((submission == NULL) || (the_pub == NULL) || (last_name == NULL))
+        return FALSE;
 
-	switch (the_pub->choice)
-	{
-		case PUB_Sub:
-			csp = (CitSubPtr)(the_pub->data.ptrvalue);
-			if (csp->authors == NULL)
-			{
-				csp->authors = AuthListNew();
-				csp->authors->choice = 1;   /* std */
-			}
-			alp = csp->authors;
-			break;
-		case PUB_Gen:
-			cgp = (CitGenPtr)(the_pub->data.ptrvalue);
-			if (cgp->authors == NULL)
-			{
-				cgp->authors = AuthListNew();
-				cgp->authors->choice = 1;   /* std */
-			}
-			alp = cgp->authors;
-			break;
-		case PUB_Article:
-			cap = (CitArtPtr)(the_pub->data.ptrvalue);
-			if (cap->authors == NULL)
-			{
-				cap->authors = AuthListNew();
-				cap->authors->choice = 1;   /* std */
-			}
-			alp = cap->authors;
-			break;
-		default:
-			Message(MSG_ERROR, "AddAuthorToPub: Unsupported Pub type [%d]",
-				(int)the_pub->choice);
-			return FALSE;
-	}
+    switch (the_pub->choice)
+    {
+        case PUB_Sub:
+            csp = (CitSubPtr)(the_pub->data.ptrvalue);
+            if (csp->authors == NULL)
+            {
+                csp->authors = AuthListNew();
+                csp->authors->choice = 1;   /* std */
+            }
+            alp = csp->authors;
+            break;
+        case PUB_Gen:
+            cgp = (CitGenPtr)(the_pub->data.ptrvalue);
+            if (cgp->authors == NULL)
+            {
+                cgp->authors = AuthListNew();
+                cgp->authors->choice = 1;   /* std */
+            }
+            alp = cgp->authors;
+            break;
+        case PUB_Article:
+            cap = (CitArtPtr)(the_pub->data.ptrvalue);
+            if (cap->authors == NULL)
+            {
+                cap->authors = AuthListNew();
+                cap->authors->choice = 1;   /* std */
+            }
+            alp = cap->authors;
+            break;
+        default:
+            Message(MSG_ERROR, "AddAuthorToPub: Unsupported Pub type [%d]",
+                (int)the_pub->choice);
+            return FALSE;
+    }
 
-	nsp = NameStdNew();
-	nsp->names[0] = StringSaveNoNull(last_name);
-	nsp->names[1] = StringSaveNoNull(first_name);
-	nsp->names[2] = StringSaveNoNull(middle_name);
-	nsp->names[4] = StringSaveNoNull(initials);
-	nsp->names[5] = StringSaveNoNull(suffix);
+    nsp = NameStdNew();
+    nsp->names[0] = StringSaveNoNull(last_name);
+    nsp->names[1] = StringSaveNoNull(first_name);
+    nsp->names[2] = StringSaveNoNull(middle_name);
+    nsp->names[4] = StringSaveNoNull(initials);
+    nsp->names[5] = StringSaveNoNull(suffix);
 
-	pip = PersonIdNew();
-	pip->choice = 2;   /* name */
-	pip->data = (Pointer)nsp;
+    pip = PersonIdNew();
+    pip->choice = 2;   /* name */
+    pip->data = (Pointer)nsp;
 
-	ap = AuthorNew();
-	ap->name = pip;
+    ap = AuthorNew();
+    ap->name = pip;
 
-	vnp = ValNodeAdd(&alp->names);
-	vnp->data.ptrvalue = (Pointer)ap;
+    vnp = ValNodeAdd(&alp->names);
+    vnp->data.ptrvalue = (Pointer)ap;
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddAffiliationToPub (  /* call once per pub */
-	NCBISubPtr submission,
-	PubPtr the_pub,
-	CharPtr affil,        /* e.g. "Xyz University" */
-	CharPtr div,          /* e.g. "Dept of Biology" */
-	CharPtr street,       /* e.g. "123 Academic Road" */
-	CharPtr city,         /* e.g. "Metropolis" */
-	CharPtr sub,          /* e.g. "Massachusetts" */
-	CharPtr country,      /* e.g. "USA" */
-	CharPtr postal_code ) /* e.g. "01234" */
+    NCBISubPtr submission,
+    PubPtr the_pub,
+    CharPtr affil,        /* e.g. "Xyz University" */
+    CharPtr div,          /* e.g. "Dept of Biology" */
+    CharPtr street,       /* e.g. "123 Academic Road" */
+    CharPtr city,         /* e.g. "Metropolis" */
+    CharPtr sub,          /* e.g. "Massachusetts" */
+    CharPtr country,      /* e.g. "USA" */
+    CharPtr postal_code ) /* e.g. "01234" */
 {
-	CitGenPtr cgp;
-	CitSubPtr csp;
-	CitArtPtr cap;
-	AuthListPtr alp;
-	AffilPtr ap;
+    CitGenPtr cgp;
+    CitSubPtr csp;
+    CitArtPtr cap;
+    AuthListPtr alp;
+    AffilPtr ap;
 
-	if ((submission == NULL) || (the_pub == NULL))
-		return FALSE;
+    if ((submission == NULL) || (the_pub == NULL))
+        return FALSE;
 
-	switch (the_pub->choice)
-	{
-		case PUB_Sub:
-			csp = (CitSubPtr)(the_pub->data.ptrvalue);
-			if (csp->authors == NULL)
-			{
-				csp->authors = AuthListNew();
-				csp->authors->choice = 1;   /* std */
-			}
-			alp = csp->authors;
-			break;
-		case PUB_Gen:
-			cgp = (CitGenPtr)(the_pub->data.ptrvalue);
-			if (cgp->authors == NULL)
-			{
-				cgp->authors = AuthListNew();
-				cgp->authors->choice = 1;   /* std */
-			}
-			alp = cgp->authors;
-			break;
-		case PUB_Article:
-			cap = (CitArtPtr)(the_pub->data.ptrvalue);
-			if (cap->authors == NULL)
-			{
-				cap->authors = AuthListNew();
-				cap->authors->choice = 1;   /* std */
-			}
-			alp = cap->authors;
-			break;
-		default:
-			Message(MSG_ERROR, "AddAffilToPub: Unsupported Pub type [%d]",
-				(int)the_pub->choice);
-			return FALSE;
-	}
+    switch (the_pub->choice)
+    {
+        case PUB_Sub:
+            csp = (CitSubPtr)(the_pub->data.ptrvalue);
+            if (csp->authors == NULL)
+            {
+                csp->authors = AuthListNew();
+                csp->authors->choice = 1;   /* std */
+            }
+            alp = csp->authors;
+            break;
+        case PUB_Gen:
+            cgp = (CitGenPtr)(the_pub->data.ptrvalue);
+            if (cgp->authors == NULL)
+            {
+                cgp->authors = AuthListNew();
+                cgp->authors->choice = 1;   /* std */
+            }
+            alp = cgp->authors;
+            break;
+        case PUB_Article:
+            cap = (CitArtPtr)(the_pub->data.ptrvalue);
+            if (cap->authors == NULL)
+            {
+                cap->authors = AuthListNew();
+                cap->authors->choice = 1;   /* std */
+            }
+            alp = cap->authors;
+            break;
+        default:
+            Message(MSG_ERROR, "AddAffilToPub: Unsupported Pub type [%d]",
+                (int)the_pub->choice);
+            return FALSE;
+    }
 
-	if (alp->affil != NULL)
-	{
-		Message(MSG_ERROR, "AddAffilToPub: Pub already has affil");
-		return FALSE;
-	}
+    if (alp->affil != NULL)
+    {
+        Message(MSG_ERROR, "AddAffilToPub: Pub already has affil");
+        return FALSE;
+    }
 
-	ap = AffilNew();
+    ap = AffilNew();
     alp->affil = ap;
     if (affil != NULL && div == NULL && city == NULL && sub == NULL
-    	&& country == NULL && street == NULL && postal_code == NULL) {
-		ap->choice = 1;    /* str affil */
-		ap->affil = StringSaveNoNull(affil);
+        && country == NULL && street == NULL && postal_code == NULL) {
+        ap->choice = 1;    /* str affil */
+        ap->affil = StringSaveNoNull(affil);
     } else {
-		ap->choice = 2;    /* std affil */
-		ap->affil = StringSaveNoNull(affil);
-		ap->div = StringSaveNoNull(div);
-		ap->city = StringSaveNoNull(city);
-		ap->sub = StringSaveNoNull(sub);
-		ap->country = StringSaveNoNull(country);
-		ap->street = StringSaveNoNull(street);
-		ap->postal_code = StringSaveNoNull(postal_code);
-	}
+        ap->choice = 2;    /* std affil */
+        ap->affil = StringSaveNoNull(affil);
+        ap->div = StringSaveNoNull(div);
+        ap->city = StringSaveNoNull(city);
+        ap->sub = StringSaveNoNull(sub);
+        ap->country = StringSaveNoNull(country);
+        ap->street = StringSaveNoNull(street);
+        ap->postal_code = StringSaveNoNull(postal_code);
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 
@@ -2891,297 +2891,297 @@ NLM_EXTERN Boolean AddAffiliationToPub (  /* call once per pub */
 *
 *****************************************************************************/
 static Boolean AddFeatureToEntry (
-	NCBISubPtr submission,
-	SeqEntryPtr entry ,
-	SeqFeatPtr feature )
+    NCBISubPtr submission,
+    SeqEntryPtr entry ,
+    SeqFeatPtr feature )
 {
-	SeqFeatPtr sfp;
-	SeqAnnotPtr sap;
-	BioseqPtr bsp;
-	BioseqSetPtr bssp;
+    SeqFeatPtr sfp;
+    SeqAnnotPtr sap;
+    BioseqPtr bsp;
+    BioseqSetPtr bssp;
 
-	if ((submission == NULL) || (entry == NULL) || (feature == NULL))
-		return FALSE;
+    if ((submission == NULL) || (entry == NULL) || (feature == NULL))
+        return FALSE;
 
-	if (IS_Bioseq(entry))
-	{
-		bsp = (BioseqPtr)(entry->data.ptrvalue);
-		for (sap = bsp->annot; sap != NULL; sap = sap->next)
-		{
-			if (sap->type == 1)   /* feature table */
-				break;
-		}
-		if (sap == NULL)
-		{
-			sap = SeqAnnotNew();
-			sap->type = 1;
-			bsp->annot = sap;
-		}
-	}
-	else
-	{
-		bssp = (BioseqSetPtr)(entry->data.ptrvalue);
-		for (sap = bssp->annot; sap != NULL; sap = sap->next)
-		{
-			if (sap->type == 1)   /* feature table */
-				break;
-		}
-		if (sap == NULL)
-		{
-			sap = SeqAnnotNew();
-			sap->type = 1;
-			bssp->annot = sap;
-		}
-	}
+    if (IS_Bioseq(entry))
+    {
+        bsp = (BioseqPtr)(entry->data.ptrvalue);
+        for (sap = bsp->annot; sap != NULL; sap = sap->next)
+        {
+            if (sap->type == 1)   /* feature table */
+                break;
+        }
+        if (sap == NULL)
+        {
+            sap = SeqAnnotNew();
+            sap->type = 1;
+            bsp->annot = sap;
+        }
+    }
+    else
+    {
+        bssp = (BioseqSetPtr)(entry->data.ptrvalue);
+        for (sap = bssp->annot; sap != NULL; sap = sap->next)
+        {
+            if (sap->type == 1)   /* feature table */
+                break;
+        }
+        if (sap == NULL)
+        {
+            sap = SeqAnnotNew();
+            sap->type = 1;
+            bssp->annot = sap;
+        }
+    }
 
-	sfp = (SeqFeatPtr)(sap->data);
-	if (sfp == NULL)
-		sap->data = (Pointer)feature;
-	else
-	{
-		while (sfp->next != NULL)
-			sfp = sfp->next;
-		sfp->next = feature;
-	}
+    sfp = (SeqFeatPtr)(sap->data);
+    if (sfp == NULL)
+        sap->data = (Pointer)feature;
+    else
+    {
+        while (sfp->next != NULL)
+            sfp = sfp->next;
+        sfp->next = feature;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN SeqFeatPtr FeatureBuild (
-	NCBISubPtr submission,
-	SeqEntryPtr entry_to_put_feature,
-	Boolean feature_is_partial,
-	Uint1 evidence_is_experimental,
-	Boolean biological_exception,
-	CharPtr comment )
+    NCBISubPtr submission,
+    SeqEntryPtr entry_to_put_feature,
+    Boolean feature_is_partial,
+    Uint1 evidence_is_experimental,
+    Boolean biological_exception,
+    CharPtr comment )
 {
-	SeqFeatPtr sfp;
+    SeqFeatPtr sfp;
 
-	if (entry_to_put_feature == NULL) return NULL;
+    if (entry_to_put_feature == NULL) return NULL;
 
-	sfp = SeqFeatNew();
+    sfp = SeqFeatNew();
 
-	sfp->partial = feature_is_partial;
-	if ((evidence_is_experimental == EVIDENCE_EXPERIMENTAL)
-		|| (evidence_is_experimental == EVIDENCE_NOT_EXPERIMENTAL))
-	{
-		sfp->exp_ev = evidence_is_experimental;
-	}
-	sfp->excpt = biological_exception;
-	if (comment != NULL)
-	{
-		if (*comment != '\0')
-			sfp->comment = StringSaveNoNull(comment);
-	}
+    sfp->partial = feature_is_partial;
+    if ((evidence_is_experimental == EVIDENCE_EXPERIMENTAL)
+        || (evidence_is_experimental == EVIDENCE_NOT_EXPERIMENTAL))
+    {
+        sfp->exp_ev = evidence_is_experimental;
+    }
+    sfp->excpt = biological_exception;
+    if (comment != NULL)
+    {
+        if (*comment != '\0')
+            sfp->comment = StringSaveNoNull(comment);
+    }
 
-	AddFeatureToEntry(submission, entry_to_put_feature, sfp);
+    AddFeatureToEntry(submission, entry_to_put_feature, sfp);
 
-	return sfp;
+    return sfp;
 }
 
 
 NLM_EXTERN Boolean AddIntervalToFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr sfp,
-	SeqEntryPtr the_seq ,
-	CharPtr local_name ,
-	Int4 from ,
-	Int4 to ,
-	Boolean on_plus_strand ,
-	Boolean start_before_from ,
-	Boolean stop_after_to )
+    NCBISubPtr submission,
+    SeqFeatPtr sfp,
+    SeqEntryPtr the_seq ,
+    CharPtr local_name ,
+    Int4 from ,
+    Int4 to ,
+    Boolean on_plus_strand ,
+    Boolean start_before_from ,
+    Boolean stop_after_to )
 {
-	BioseqPtr bsp;
-	Int4 tmp_from, tmp_to;
-	Int2 tmp_fuzz_from, tmp_fuzz_to, fuzz_from, fuzz_to, strand;
+    BioseqPtr bsp;
+    Int4 tmp_from, tmp_to;
+    Int2 tmp_fuzz_from, tmp_fuzz_to, fuzz_from, fuzz_to, strand;
 
 
-	if (sfp == NULL) return FALSE;
+    if (sfp == NULL) return FALSE;
 
-	bsp = GetBioseqFromChoice(submission, the_seq, local_name, "AddIntervalToFeature");
-	if (bsp == NULL) return FALSE;
+    bsp = GetBioseqFromChoice(submission, the_seq, local_name, "AddIntervalToFeature");
+    if (bsp == NULL) return FALSE;
 
-	if (to == -1)
-		to = BioseqGetLen(bsp);
+    if (to == -1)
+        to = BioseqGetLen(bsp);
 
-	    /** allow to input numbering from 1 */
+        /** allow to input numbering from 1 */
 
-	to -= 1;
-	from -= 1;
-	fuzz_from = -1;     /* not-set */
-	fuzz_to = -1;
-	if (! on_plus_strand)
-	{
-		strand = Seq_strand_minus;
-		tmp_from = from;
-		from = to;
-		to = tmp_from;
-		if (start_before_from)
-			fuzz_to = 1;    /* gt */
-		if (stop_after_to)
-			fuzz_from = 2;  /* lt */
-	}
-	else
-	{
-		strand = 0;
-		if (start_before_from)
-			fuzz_from = 2;    /* lt */
-		if (stop_after_to)
-			fuzz_to = 1;  /* gt */
+    to -= 1;
+    from -= 1;
+    fuzz_from = -1;     /* not-set */
+    fuzz_to = -1;
+    if (! on_plus_strand)
+    {
+        strand = Seq_strand_minus;
+        tmp_from = from;
+        from = to;
+        to = tmp_from;
+        if (start_before_from)
+            fuzz_to = 1;    /* gt */
+        if (stop_after_to)
+            fuzz_from = 2;  /* lt */
+    }
+    else
+    {
+        strand = 0;
+        if (start_before_from)
+            fuzz_from = 2;    /* lt */
+        if (stop_after_to)
+            fuzz_to = 1;  /* gt */
 
-	}
+    }
 
-	if (to < from)    /* go around origin on circular sequence */
-	{
-		if ((bsp->topology != 2) && (bsp->topology != 3))
-		{
-			Message(MSG_ERROR, "Attempt to go around origin of non-circular sequence");
-			return FALSE;
-		}
-		tmp_fuzz_from = -1;
-		tmp_fuzz_to = -1;
+    if (to < from)    /* go around origin on circular sequence */
+    {
+        if ((bsp->topology != 2) && (bsp->topology != 3))
+        {
+            Message(MSG_ERROR, "Attempt to go around origin of non-circular sequence");
+            return FALSE;
+        }
+        tmp_fuzz_from = -1;
+        tmp_fuzz_to = -1;
 
-		if (on_plus_strand)
-		{
-			tmp_from = from;
-			tmp_to = (BioseqGetLen(bsp) - 1);
-			from = 0;
-			tmp_fuzz_from = fuzz_from;
-			fuzz_from = -1;
-		}
-		else
-		{
-			tmp_from = 0;
-			tmp_to = to;
-			to = (BioseqGetLen(bsp) - 1);
-			tmp_fuzz_to = fuzz_to;
-			fuzz_to = -1;
-		}
+        if (on_plus_strand)
+        {
+            tmp_from = from;
+            tmp_to = (BioseqGetLen(bsp) - 1);
+            from = 0;
+            tmp_fuzz_from = fuzz_from;
+            fuzz_from = -1;
+        }
+        else
+        {
+            tmp_from = 0;
+            tmp_to = to;
+            to = (BioseqGetLen(bsp) - 1);
+            tmp_fuzz_to = fuzz_to;
+            fuzz_to = -1;
+        }
 
-		if (! AddIntToSeqFeat(sfp, tmp_from, tmp_to, bsp, tmp_fuzz_from, tmp_fuzz_to, strand))
-			return FALSE;
-	}
+        if (! AddIntToSeqFeat(sfp, tmp_from, tmp_to, bsp, tmp_fuzz_from, tmp_fuzz_to, strand))
+            return FALSE;
+    }
 
-	return AddIntToSeqFeat(sfp, from, to, bsp, fuzz_from, fuzz_to, strand);
+    return AddIntToSeqFeat(sfp, from, to, bsp, fuzz_from, fuzz_to, strand);
 }
 
 NLM_EXTERN Boolean AddIntToSeqLoc (SeqLocPtr PNTR old_slp, Int4 from, Int4 to, SeqIdPtr sip,
-							Int2 fuzz_from, Int2 fuzz_to, Int2 strand)
+                            Int2 fuzz_from, Int2 fuzz_to, Int2 strand)
 {
-	SeqLocPtr slp, tmp, tmp2;
-	SeqIntPtr sintp;
-	IntFuzzPtr ifp;
+    SeqLocPtr slp, tmp, tmp2;
+    SeqIntPtr sintp;
+    IntFuzzPtr ifp;
 
   if (old_slp == NULL)
   {
     return FALSE;
   }
   
-	sintp = SeqIntNew();
-	sintp->from = from;
-	sintp->to = to;
-	sintp->id = SeqIdDup(sip);
-	sintp->strand = (Uint1)strand;
-	if (fuzz_from >= 0)
-	{
-		ifp = IntFuzzNew();
-		ifp->choice = 4;   /* lim */
-		ifp->a = (Int4)fuzz_from;
-		sintp->if_from = ifp;
-	}
-	if (fuzz_to >= 0)
-	{
-		ifp = IntFuzzNew();
-		ifp->choice = 4;   /* lim */
-		ifp->a = (Int4)fuzz_to;
-		sintp->if_to = ifp;
-	}
+    sintp = SeqIntNew();
+    sintp->from = from;
+    sintp->to = to;
+    sintp->id = SeqIdDup(sip);
+    sintp->strand = (Uint1)strand;
+    if (fuzz_from >= 0)
+    {
+        ifp = IntFuzzNew();
+        ifp->choice = 4;   /* lim */
+        ifp->a = (Int4)fuzz_from;
+        sintp->if_from = ifp;
+    }
+    if (fuzz_to >= 0)
+    {
+        ifp = IntFuzzNew();
+        ifp->choice = 4;   /* lim */
+        ifp->a = (Int4)fuzz_to;
+        sintp->if_to = ifp;
+    }
 
-	slp = ValNodeNew(NULL);
-	slp->choice = SEQLOC_INT;
-	slp->data.ptrvalue = (Pointer)sintp;
+    slp = ValNodeNew(NULL);
+    slp->choice = SEQLOC_INT;
+    slp->data.ptrvalue = (Pointer)sintp;
 
-	if (*old_slp == NULL)
-	{
-		*old_slp = slp;
-		return TRUE;
-	}
+    if (*old_slp == NULL)
+    {
+        *old_slp = slp;
+        return TRUE;
+    }
 
-	tmp = *old_slp;
-	if (tmp->choice == SEQLOC_MIX)   /* second one already */
-	{
-		tmp2 = (ValNodePtr)(tmp->data.ptrvalue);
-		while (tmp2->next != NULL)
-			tmp2 = tmp2->next;
-		tmp2->next = slp;
-	}
-	else                             /* create a chain */
-	{
-		tmp2 = ValNodeNew(NULL);
-		tmp2->choice = SEQLOC_MIX;
-		tmp2->data.ptrvalue = (Pointer)tmp;
-		tmp->next = slp;
-		*old_slp = tmp2;
-	}
+    tmp = *old_slp;
+    if (tmp->choice == SEQLOC_MIX)   /* second one already */
+    {
+        tmp2 = (ValNodePtr)(tmp->data.ptrvalue);
+        while (tmp2->next != NULL)
+            tmp2 = tmp2->next;
+        tmp2->next = slp;
+    }
+    else                             /* create a chain */
+    {
+        tmp2 = ValNodeNew(NULL);
+        tmp2->choice = SEQLOC_MIX;
+        tmp2->data.ptrvalue = (Pointer)tmp;
+        tmp->next = slp;
+        *old_slp = tmp2;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddIntToSeqFeat (SeqFeatPtr sfp, Int4 from, Int4 to, BioseqPtr bsp,
-							Int2 fuzz_from, Int2 fuzz_to, Int2 strand)
+                            Int2 fuzz_from, Int2 fuzz_to, Int2 strand)
 {
   return AddIntToSeqLoc (&(sfp->location), from, to, SeqIdFindBest(bsp->id, 0),
-							fuzz_from, fuzz_to, strand);
+                            fuzz_from, fuzz_to, strand);
 }
 
 NLM_EXTERN Boolean AddPntToSeqLoc (SeqLocPtr PNTR p_slp, Int4 point, BioseqPtr bsp, Int2 fuzz, Int2 strand)
 {
-	SeqLocPtr slp, tmp, tmp2;
-	SeqPntPtr spp;
-	IntFuzzPtr ifp;
+    SeqLocPtr slp, tmp, tmp2;
+    SeqPntPtr spp;
+    IntFuzzPtr ifp;
 
   if (p_slp == NULL) return FALSE;
 
-	spp = SeqPntNew();
-	spp->point = point;
-	spp->id = SeqIdDup(SeqIdFindBest(bsp->id, 0));
-	spp->strand = (Uint1)strand;
-	if (fuzz >= 0)
-	{
-		ifp = IntFuzzNew();
-		ifp->choice = 4;   /* lim */
-		ifp->a = (Int4) fuzz;
-		spp->fuzz = ifp;
-	}
+    spp = SeqPntNew();
+    spp->point = point;
+    spp->id = SeqIdDup(SeqIdFindBest(bsp->id, 0));
+    spp->strand = (Uint1)strand;
+    if (fuzz >= 0)
+    {
+        ifp = IntFuzzNew();
+        ifp->choice = 4;   /* lim */
+        ifp->a = (Int4) fuzz;
+        spp->fuzz = ifp;
+    }
 
-	slp = ValNodeNew(NULL);
-	slp->choice = SEQLOC_PNT;
-	slp->data.ptrvalue = (Pointer)spp;
+    slp = ValNodeNew(NULL);
+    slp->choice = SEQLOC_PNT;
+    slp->data.ptrvalue = (Pointer)spp;
 
-	if (*p_slp == NULL)
-	{
-		*p_slp = slp;
-		return TRUE;
-	}
+    if (*p_slp == NULL)
+    {
+        *p_slp = slp;
+        return TRUE;
+    }
 
-	tmp = *p_slp;
-	if (tmp->choice == SEQLOC_MIX)   /* second one already */
-	{
-		tmp2 = (ValNodePtr)(tmp->data.ptrvalue);
-		while (tmp2->next != NULL)
-			tmp2 = tmp2->next;
-		tmp2->next = slp;
-	}
-	else                             /* create a chain */
-	{
-		tmp2 = ValNodeNew(NULL);
-		tmp2->choice = SEQLOC_MIX;
-		tmp2->data.ptrvalue = (Pointer)tmp;
-		tmp->next = slp;
-		*p_slp = tmp2;
-	}
+    tmp = *p_slp;
+    if (tmp->choice == SEQLOC_MIX)   /* second one already */
+    {
+        tmp2 = (ValNodePtr)(tmp->data.ptrvalue);
+        while (tmp2->next != NULL)
+            tmp2 = tmp2->next;
+        tmp2->next = slp;
+    }
+    else                             /* create a chain */
+    {
+        tmp2 = ValNodeNew(NULL);
+        tmp2->choice = SEQLOC_MIX;
+        tmp2->data.ptrvalue = (Pointer)tmp;
+        tmp->next = slp;
+        *p_slp = tmp2;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddPntToSeqFeat (SeqFeatPtr sfp, Int4 point, BioseqPtr bsp, Int2 fuzz, Int2 strand)
@@ -3191,214 +3191,214 @@ NLM_EXTERN Boolean AddPntToSeqFeat (SeqFeatPtr sfp, Int4 point, BioseqPtr bsp, I
 
 static BioseqPtr GetBioseqFromChoice (NCBISubPtr nsp, SeqEntryPtr the_seq, CharPtr local_name, CharPtr the_routine)
 {
-	BioseqPtr bsp;
-	ValNode vn;
-	ObjectId oid;
-	Dbtag dbt;
+    BioseqPtr bsp;
+    ValNode vn;
+    ObjectId oid;
+    Dbtag dbt;
 
-	if (the_seq != NULL)
-	{
-		if (! IS_Bioseq(the_seq))
-		{
-			Message(MSG_ERROR, "%s: Gave Seq-entry which is not a Bioseq",
-				the_routine);
-			return NULL;
-		}
-		bsp = (BioseqPtr)(the_seq->data.ptrvalue);
-	}
-	else if (local_name != NULL)
-	{
-		vn.next = NULL;
-		oid.str = local_name;
-		if (nsp->submittor_key == NULL)
-		{
-			vn.choice = SEQID_LOCAL;
-			vn.data.ptrvalue = (Pointer)(& oid);
-		}
-		else
-		{
-			vn.choice = SEQID_GENERAL;
-			vn.data.ptrvalue = (Pointer)(& dbt);
-			dbt.db = nsp->submittor_key;
-			dbt.tag = & oid;
-		}
+    if (the_seq != NULL)
+    {
+        if (! IS_Bioseq(the_seq))
+        {
+            Message(MSG_ERROR, "%s: Gave Seq-entry which is not a Bioseq",
+                the_routine);
+            return NULL;
+        }
+        bsp = (BioseqPtr)(the_seq->data.ptrvalue);
+    }
+    else if (local_name != NULL)
+    {
+        vn.next = NULL;
+        oid.str = local_name;
+        if (nsp->submittor_key == NULL)
+        {
+            vn.choice = SEQID_LOCAL;
+            vn.data.ptrvalue = (Pointer)(& oid);
+        }
+        else
+        {
+            vn.choice = SEQID_GENERAL;
+            vn.data.ptrvalue = (Pointer)(& dbt);
+            dbt.db = nsp->submittor_key;
+            dbt.tag = & oid;
+        }
 
-		bsp = BioseqFind((SeqIdPtr)(& vn));
-		if (bsp == NULL)
-		{
-			Message(MSG_ERROR, "%s: Can't find Bioseq [%s]",
-				the_routine, local_name);
-			return NULL;
-		}
+        bsp = BioseqFind((SeqIdPtr)(& vn));
+        if (bsp == NULL)
+        {
+            Message(MSG_ERROR, "%s: Can't find Bioseq [%s]",
+                the_routine, local_name);
+            return NULL;
+        }
 
-	}
-	else
-	{
-		Message(MSG_ERROR, "%s: No the_seq or local_name given",
-			the_routine);
-		return NULL;
-	}
+    }
+    else
+    {
+        Message(MSG_ERROR, "%s: No the_seq or local_name given",
+            the_routine);
+        return NULL;
+    }
 
-	return bsp;
+    return bsp;
 }
 
 NLM_EXTERN Boolean AddPointToFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr sfp,
-	SeqEntryPtr the_seq ,
-	CharPtr local_name ,
-	Int4 location ,
-	Boolean on_plus_strand ,
-	Boolean is_after_location ,
-	Boolean is_before_location )
+    NCBISubPtr submission,
+    SeqFeatPtr sfp,
+    SeqEntryPtr the_seq ,
+    CharPtr local_name ,
+    Int4 location ,
+    Boolean on_plus_strand ,
+    Boolean is_after_location ,
+    Boolean is_before_location )
 {
-	BioseqPtr bsp;
-	SeqLocPtr slp, tmp, tmp2;
-	SeqPntPtr spp;
-	IntFuzzPtr ifp;
+    BioseqPtr bsp;
+    SeqLocPtr slp, tmp, tmp2;
+    SeqPntPtr spp;
+    IntFuzzPtr ifp;
 
 
-	if (sfp == NULL) return FALSE;
+    if (sfp == NULL) return FALSE;
 
-	bsp = GetBioseqFromChoice(submission, the_seq, local_name, "AddPointToFeature");
-	if (bsp == NULL) return FALSE;
+    bsp = GetBioseqFromChoice(submission, the_seq, local_name, "AddPointToFeature");
+    if (bsp == NULL) return FALSE;
 
-	spp = SeqPntNew();
-	if (location == -1)
-		location = BioseqGetLen(bsp);
-	spp->point = location - 1;
-	
-	spp->id = SeqIdDup(SeqIdFindBest(bsp->id, 0));
-	if (! on_plus_strand)
-		spp->strand = Seq_strand_minus;
-	if (is_before_location)
-	{
-		ifp = IntFuzzNew();
-		ifp->choice = 4;   /* lim */
-		ifp->a = 2;        /* lt */
-		spp->fuzz = ifp;
-	}
-	else if (is_after_location)
-	{
-		ifp = IntFuzzNew();
-		ifp->choice = 4;   /* lim */
-		ifp->a = 1;        /* gt */
-		spp->fuzz = ifp;
-	}
+    spp = SeqPntNew();
+    if (location == -1)
+        location = BioseqGetLen(bsp);
+    spp->point = location - 1;
+    
+    spp->id = SeqIdDup(SeqIdFindBest(bsp->id, 0));
+    if (! on_plus_strand)
+        spp->strand = Seq_strand_minus;
+    if (is_before_location)
+    {
+        ifp = IntFuzzNew();
+        ifp->choice = 4;   /* lim */
+        ifp->a = 2;        /* lt */
+        spp->fuzz = ifp;
+    }
+    else if (is_after_location)
+    {
+        ifp = IntFuzzNew();
+        ifp->choice = 4;   /* lim */
+        ifp->a = 1;        /* gt */
+        spp->fuzz = ifp;
+    }
 
-	slp = ValNodeNew(NULL);
-	slp->choice = SEQLOC_PNT;
-	slp->data.ptrvalue = (Pointer)spp;
+    slp = ValNodeNew(NULL);
+    slp->choice = SEQLOC_PNT;
+    slp->data.ptrvalue = (Pointer)spp;
 
-	if (sfp->location == NULL)
-	{
-		sfp->location = slp;
-		return TRUE;
-	}
+    if (sfp->location == NULL)
+    {
+        sfp->location = slp;
+        return TRUE;
+    }
 
-	tmp = sfp->location;
-	if (tmp->choice == SEQLOC_MIX)   /* second one already */
-	{
-		tmp2 = (ValNodePtr)(tmp->data.ptrvalue);
-		while (tmp2->next != NULL)
-			tmp2 = tmp2->next;
-		tmp2->next = slp;
-	}
-	else                             /* create a chain */
-	{
-		tmp2 = ValNodeNew(NULL);
-		tmp2->choice = SEQLOC_MIX;
-		tmp2->data.ptrvalue = (Pointer)tmp;
-		tmp->next = slp;
-		sfp->location = tmp2;
-	}
-	return TRUE;
+    tmp = sfp->location;
+    if (tmp->choice == SEQLOC_MIX)   /* second one already */
+    {
+        tmp2 = (ValNodePtr)(tmp->data.ptrvalue);
+        while (tmp2->next != NULL)
+            tmp2 = tmp2->next;
+        tmp2->next = slp;
+    }
+    else                             /* create a chain */
+    {
+        tmp2 = ValNodeNew(NULL);
+        tmp2->choice = SEQLOC_MIX;
+        tmp2->data.ptrvalue = (Pointer)tmp;
+        tmp->next = slp;
+        sfp->location = tmp2;
+    }
+    return TRUE;
 }
 
 NLM_EXTERN Boolean MakeCommentFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr feature )
+    NCBISubPtr submission,
+    SeqFeatPtr feature )
 {
-	if (feature == NULL) return FALSE;
+    if (feature == NULL) return FALSE;
 
-	if (feature->data.choice)
-	{
-		Message(MSG_ERROR, "MakeCommentFeature: feature already has data");
-		return FALSE;
-	}
+    if (feature->data.choice)
+    {
+        Message(MSG_ERROR, "MakeCommentFeature: feature already has data");
+        return FALSE;
+    }
 
-	if (feature->comment == NULL)
-	{
-		Message(MSG_ERROR, "MakeCommentFeature: no comment provided to FeatureBuild");
-		return FALSE;
-	}
+    if (feature->comment == NULL)
+    {
+        Message(MSG_ERROR, "MakeCommentFeature: no comment provided to FeatureBuild");
+        return FALSE;
+    }
 
- 	feature->data.choice = SEQFEAT_COMMENT;   /* comment */
+     feature->data.choice = SEQFEAT_COMMENT;   /* comment */
 
-	return TRUE;
+    return TRUE;
 }
 
 
 NLM_EXTERN Boolean MakeCdRegionFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr feature,
-	Int2 frame ,
-	Int2 genetic_code ,			
-	SeqEntryPtr protein_product , 	 /* give id of protein. if NULL, call */
-	CharPtr local_id_for_protein )  /* function below to create by transl */
+    NCBISubPtr submission,
+    SeqFeatPtr feature,
+    Int2 frame ,
+    Int2 genetic_code ,            
+    SeqEntryPtr protein_product ,      /* give id of protein. if NULL, call */
+    CharPtr local_id_for_protein )  /* function below to create by transl */
 {
-	BioseqPtr bsp;
-	CdRegionPtr crp;
-	ValNodePtr vnp;
-	Char buf[41];
+    BioseqPtr bsp;
+    CdRegionPtr crp;
+    ValNodePtr vnp;
+    Char buf[41];
 
-	if (feature == NULL) return FALSE;
+    if (feature == NULL) return FALSE;
 
-	if (feature->data.choice)
-	{
-		Message(MSG_ERROR, "MakeCdRegionFeature: feature already has data");
-		return FALSE;
-	}
+    if (feature->data.choice)
+    {
+        Message(MSG_ERROR, "MakeCdRegionFeature: feature already has data");
+        return FALSE;
+    }
 
-	crp = CdRegionNew();
-	crp->frame = (Uint1)frame;
-	if (genetic_code)
-	{
-		crp->genetic_code = GeneticCodeNew();
-		vnp = ValNodeAdd ((ValNodePtr PNTR)&(crp->genetic_code->data.ptrvalue));
-		vnp->choice = 2;
-		vnp->data.intvalue = (Int4)genetic_code;
-	}
+    crp = CdRegionNew();
+    crp->frame = (Uint1)frame;
+    if (genetic_code)
+    {
+        crp->genetic_code = GeneticCodeNew();
+        vnp = ValNodeAdd ((ValNodePtr PNTR)&(crp->genetic_code->data.ptrvalue));
+        vnp->choice = 2;
+        vnp->data.intvalue = (Int4)genetic_code;
+    }
 
-	feature->data.choice = 3;   /* cdregion */
-	feature->data.value.ptrvalue = (Pointer)crp;
+    feature->data.choice = 3;   /* cdregion */
+    feature->data.value.ptrvalue = (Pointer)crp;
 
-	if ((protein_product != NULL) || (local_id_for_protein != NULL))
-	{
-		bsp = GetBioseqFromChoice (submission, protein_product, local_id_for_protein,
-			"MakeCdRegionFeature");
-		if (bsp != NULL)
-		{
-			if (! ISA_aa(bsp->mol))
-			{
-				SeqIdWrite(bsp->id, buf, PRINTID_FASTA_LONG, 40);
-				Message(MSG_ERROR, "Using non-protein [%s] for cdregion product",
-					buf);
-			}
-			else
-			{
-				vnp = ValNodeNew(NULL);
-				feature->product = vnp;
-				vnp->choice = SEQLOC_WHOLE;
-				vnp->data.ptrvalue = SeqIdDup(SeqIdFindBest(bsp->id, 0));
-			}
-		}
-	}
+    if ((protein_product != NULL) || (local_id_for_protein != NULL))
+    {
+        bsp = GetBioseqFromChoice (submission, protein_product, local_id_for_protein,
+            "MakeCdRegionFeature");
+        if (bsp != NULL)
+        {
+            if (! ISA_aa(bsp->mol))
+            {
+                SeqIdWrite(bsp->id, buf, PRINTID_FASTA_LONG, 40);
+                Message(MSG_ERROR, "Using non-protein [%s] for cdregion product",
+                    buf);
+            }
+            else
+            {
+                vnp = ValNodeNew(NULL);
+                feature->product = vnp;
+                vnp->choice = SEQLOC_WHOLE;
+                vnp->data.ptrvalue = SeqIdDup(SeqIdFindBest(bsp->id, 0));
+            }
+        }
+    }
 
-	return TRUE;
+    return TRUE;
 }
            
-		   
+           
 /******************************************************************
 *
 *   A Code-break allows an exception to be made in the translation
@@ -3411,59 +3411,59 @@ NLM_EXTERN Boolean MakeCdRegionFeature (
 ******************************************************************/
 
 NLM_EXTERN Boolean AddCodeBreakToCdRegion (
-	NCBISubPtr submission,
-	SeqFeatPtr sfp,
-	SeqEntryPtr the_seq ,
-	CharPtr local_name ,
-	Int4 from ,
-	Int4 to ,
-	Boolean on_plus_strand ,
-	CharPtr AA_for_protein )
+    NCBISubPtr submission,
+    SeqFeatPtr sfp,
+    SeqEntryPtr the_seq ,
+    CharPtr local_name ,
+    Int4 from ,
+    Int4 to ,
+    Boolean on_plus_strand ,
+    CharPtr AA_for_protein )
 {
-	SeqFeat sf;
-	CodeBreakPtr cbp, tmp;
-	CdRegionPtr crp;
+    SeqFeat sf;
+    CodeBreakPtr cbp, tmp;
+    CdRegionPtr crp;
 
 
-	if ((submission == NULL) || (sfp == NULL) || (AA_for_protein == NULL))
-		return FALSE;
-	if (sfp->data.choice != 3) return FALSE;
+    if ((submission == NULL) || (sfp == NULL) || (AA_for_protein == NULL))
+        return FALSE;
+    if (sfp->data.choice != 3) return FALSE;
 
-	if (on_plus_strand)
-	{
-		if ((to - from) != 2) return FALSE;
-	}
-	else
-	{
-		if ((from - to) != 2) return FALSE;
-	}
+    if (on_plus_strand)
+    {
+        if ((to - from) != 2) return FALSE;
+    }
+    else
+    {
+        if ((from - to) != 2) return FALSE;
+    }
 
-	MemSet(&sf, 0, sizeof(SeqFeat));
+    MemSet(&sf, 0, sizeof(SeqFeat));
 
-	if (! AddIntervalToFeature(submission, &sf, the_seq, local_name, from, to, on_plus_strand, FALSE,FALSE))
-		return FALSE;
+    if (! AddIntervalToFeature(submission, &sf, the_seq, local_name, from, to, on_plus_strand, FALSE,FALSE))
+        return FALSE;
 
-	cbp = CodeBreakNew();
+    cbp = CodeBreakNew();
 
-	cbp->loc = sf.location;
-	cbp->aa.choice = 1;   /* ncbieaa */
-	cbp->aa.value.intvalue = (Int4)TO_UPPER(*AA_for_protein);
+    cbp->loc = sf.location;
+    cbp->aa.choice = 1;   /* ncbieaa */
+    cbp->aa.value.intvalue = (Int4)TO_UPPER(*AA_for_protein);
 
-	crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
-	if (crp->code_break == NULL)
-		crp->code_break = cbp;
-	else
-	{
-		for (tmp = crp->code_break; tmp->next != NULL; tmp = tmp->next)
-			continue;
-		tmp->next = cbp;
-	}
+    crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
+    if (crp->code_break == NULL)
+        crp->code_break = cbp;
+    else
+    {
+        for (tmp = crp->code_break; tmp->next != NULL; tmp = tmp->next)
+            continue;
+        tmp->next = cbp;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
            
-		   
+           
 /******************************************************************
 *
 *   Special function to make protein from CdRegion feature
@@ -3471,234 +3471,234 @@ NLM_EXTERN Boolean AddCodeBreakToCdRegion (
 ******************************************************************/
 
 NLM_EXTERN SeqEntryPtr TranslateCdRegion (
-	NCBISubPtr submission ,
-	SeqFeatPtr cdregion_feature ,
-	SeqEntryPtr nuc_prot_entry_to_put_sequence ,
-	CharPtr local_name ,             /* for protein sequence */
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number )
+    NCBISubPtr submission ,
+    SeqFeatPtr cdregion_feature ,
+    SeqEntryPtr nuc_prot_entry_to_put_sequence ,
+    CharPtr local_name ,             /* for protein sequence */
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number )
 {
-	SeqEntryPtr sep;
-	BioseqPtr bsp;
-	ByteStorePtr bp;
-	Int4 protlen;
-	ValNodePtr vnp;
-	Uint2	retval;
-	Boolean	partial = FALSE;
+    SeqEntryPtr sep;
+    BioseqPtr bsp;
+    ByteStorePtr bp;
+    Int4 protlen;
+    ValNodePtr vnp;
+    Uint2    retval;
+    Boolean    partial = FALSE;
 
-	if ((cdregion_feature == NULL) || (nuc_prot_entry_to_put_sequence == NULL))
-		return NULL;
+    if ((cdregion_feature == NULL) || (nuc_prot_entry_to_put_sequence == NULL))
+        return NULL;
 
-	bp = ProteinFromCdRegion (cdregion_feature, FALSE);
-	if (bp == NULL)
-	{
-		Message(MSG_ERROR, "TranslateCdRegion: Couldn't translate CdRegion");
-		return NULL;
-	}
+    bp = ProteinFromCdRegion (cdregion_feature, FALSE);
+    if (bp == NULL)
+    {
+        Message(MSG_ERROR, "TranslateCdRegion: Couldn't translate CdRegion");
+        return NULL;
+    }
 
-	protlen = BSLen(bp);
+    protlen = BSLen(bp);
 
-	sep = AddSeqToNucProtEntry (submission , nuc_prot_entry_to_put_sequence,
-		local_name, genbank_locus,
-		genbank_accession, gi_number, MOLECULE_CLASS_PROTEIN,
-		MOLECULE_TYPE_PEPTIDE ,	protlen, 0, 0);
+    sep = AddSeqToNucProtEntry (submission , nuc_prot_entry_to_put_sequence,
+        local_name, genbank_locus,
+        genbank_accession, gi_number, MOLECULE_CLASS_PROTEIN,
+        MOLECULE_TYPE_PEPTIDE ,    protlen, 0, 0);
 
-	AddGIBBmethodToEntry(submission, sep, METHOD_concept_transl);
+    AddGIBBmethodToEntry(submission, sep, METHOD_concept_transl);
 
-	retval = SeqLocPartialCheck(cdregion_feature->location);
-	if (retval & SLP_START) {
-		AddModifierToEntry(submission, sep, MODIF_no_left);
-		partial = TRUE;
-	}
-	if (retval & SLP_STOP) {
-		AddModifierToEntry(submission, sep, MODIF_no_right);
-		partial = TRUE;
-	}
-	if (retval & (SLP_OTHER | SLP_INTERNAL)) {
-		AddModifierToEntry(submission, sep, MODIF_partial);
-		partial = TRUE;
-	}
-	if (!partial && cdregion_feature->partial) {
-		AddModifierToEntry(submission, sep, MODIF_partial);
-	}
+    retval = SeqLocPartialCheck(cdregion_feature->location);
+    if (retval & SLP_START) {
+        AddModifierToEntry(submission, sep, MODIF_no_left);
+        partial = TRUE;
+    }
+    if (retval & SLP_STOP) {
+        AddModifierToEntry(submission, sep, MODIF_no_right);
+        partial = TRUE;
+    }
+    if (retval & (SLP_OTHER | SLP_INTERNAL)) {
+        AddModifierToEntry(submission, sep, MODIF_partial);
+        partial = TRUE;
+    }
+    if (!partial && cdregion_feature->partial) {
+        AddModifierToEntry(submission, sep, MODIF_partial);
+    }
 
-	bsp = (BioseqPtr)(sep->data.ptrvalue);
+    bsp = (BioseqPtr)(sep->data.ptrvalue);
 
-	bsp->seq_data = (SeqDataPtr) bp;
-	bsp->seq_data_type = Seq_code_iupacaa;
+    bsp->seq_data = (SeqDataPtr) bp;
+    bsp->seq_data_type = Seq_code_iupacaa;
 
-	vnp = ValNodeNew(NULL);
-	cdregion_feature->product = vnp;
-	vnp->choice = SEQLOC_WHOLE;
-	vnp->data.ptrvalue = SeqIdDup(SeqIdFindBest(bsp->id, 0));
+    vnp = ValNodeNew(NULL);
+    cdregion_feature->product = vnp;
+    vnp->choice = SEQLOC_WHOLE;
+    vnp->data.ptrvalue = SeqIdDup(SeqIdFindBest(bsp->id, 0));
 
-	return sep;
+    return sep;
 }
 
 
 static SeqEntryPtr TranslateCdRegionNew (
-	NCBISubPtr submission ,
-	SeqFeatPtr cdregion_feature ,
-	SeqEntryPtr nuc_prot_entry_to_put_sequence ,
-	CharPtr local_name ,             /* for protein sequence */
-	CharPtr genbank_locus ,
-	CharPtr genbank_accession ,
-	Int4 gi_number )
+    NCBISubPtr submission ,
+    SeqFeatPtr cdregion_feature ,
+    SeqEntryPtr nuc_prot_entry_to_put_sequence ,
+    CharPtr local_name ,             /* for protein sequence */
+    CharPtr genbank_locus ,
+    CharPtr genbank_accession ,
+    Int4 gi_number )
 {
-	SeqEntryPtr sep;
-	BioseqPtr bsp;
-	ByteStorePtr bp;
-	Int4 protlen;
-	ValNodePtr vnp;
+    SeqEntryPtr sep;
+    BioseqPtr bsp;
+    ByteStorePtr bp;
+    Int4 protlen;
+    ValNodePtr vnp;
 
-	if ((cdregion_feature == NULL) || (nuc_prot_entry_to_put_sequence == NULL))
-		return NULL;
+    if ((cdregion_feature == NULL) || (nuc_prot_entry_to_put_sequence == NULL))
+        return NULL;
 
-	bp = ProteinFromCdRegion (cdregion_feature, FALSE);
-	if (bp == NULL)
-	{
-		Message(MSG_ERROR, "TranslateCdRegion: Couldn't translate CdRegion");
-		return NULL;
-	}
+    bp = ProteinFromCdRegion (cdregion_feature, FALSE);
+    if (bp == NULL)
+    {
+        Message(MSG_ERROR, "TranslateCdRegion: Couldn't translate CdRegion");
+        return NULL;
+    }
 
-	protlen = BSLen(bp);
+    protlen = BSLen(bp);
 
-	sep = AddSeqToNucProtEntry (submission , nuc_prot_entry_to_put_sequence,
-		local_name, genbank_locus,
-		genbank_accession, gi_number, MOLECULE_CLASS_PROTEIN,
-		MOLECULE_TYPE_PEPTIDE ,	protlen, 0, 0);
+    sep = AddSeqToNucProtEntry (submission , nuc_prot_entry_to_put_sequence,
+        local_name, genbank_locus,
+        genbank_accession, gi_number, MOLECULE_CLASS_PROTEIN,
+        MOLECULE_TYPE_PEPTIDE ,    protlen, 0, 0);
 
-	AddBiomolToEntry(submission, sep, 8);  /* peptide */
-	AddTechToEntry(submission, sep, 8); /* concept_transl */
+    AddBiomolToEntry(submission, sep, 8);  /* peptide */
+    AddTechToEntry(submission, sep, 8); /* concept_transl */
 
-	AddCompleteness(submission, sep, cdregion_feature);
-	bsp = (BioseqPtr)(sep->data.ptrvalue);
+    AddCompleteness(submission, sep, cdregion_feature);
+    bsp = (BioseqPtr)(sep->data.ptrvalue);
 
-	bsp->seq_data = (SeqDataPtr) bp;
-	bsp->seq_data_type = Seq_code_iupacaa;
+    bsp->seq_data = (SeqDataPtr) bp;
+    bsp->seq_data_type = Seq_code_iupacaa;
 
-	vnp = ValNodeNew(NULL);
-	cdregion_feature->product = vnp;
-	vnp->choice = SEQLOC_WHOLE;
-	vnp->data.ptrvalue = SeqIdDup(SeqIdFindBest(bsp->id, 0));
+    vnp = ValNodeNew(NULL);
+    cdregion_feature->product = vnp;
+    vnp->choice = SEQLOC_WHOLE;
+    vnp->data.ptrvalue = SeqIdDup(SeqIdFindBest(bsp->id, 0));
 
-	return sep;
+    return sep;
 }
 
 
 NLM_EXTERN Boolean MakeRNAFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr feature,
-	Int2 rna_type ,
-	Boolean is_pseudo_gene,
-	CharPtr rna_name ,
-	CharPtr AA_for_tRNA ,
-	CharPtr codon_for_tRNA )
+    NCBISubPtr submission,
+    SeqFeatPtr feature,
+    Int2 rna_type ,
+    Boolean is_pseudo_gene,
+    CharPtr rna_name ,
+    CharPtr AA_for_tRNA ,
+    CharPtr codon_for_tRNA )
 {
-	RnaRefPtr rrp;
-	tRNAPtr trp;
-	Int2 i, index, j, wobble;
-	CharPtr tmp;
-	Char base;
+    RnaRefPtr rrp;
+    tRNAPtr trp;
+    Int2 i, index, j, wobble;
+    CharPtr tmp;
+    Char base;
 
-	if (feature == NULL) return FALSE;
+    if (feature == NULL) return FALSE;
 
-	if (feature->data.choice)
-	{
-		Message(MSG_ERROR, "MakeRNAFeature: feature already has data");
-		return FALSE;
-	}
+    if (feature->data.choice)
+    {
+        Message(MSG_ERROR, "MakeRNAFeature: feature already has data");
+        return FALSE;
+    }
 
-	rrp = RnaRefNew();
-	feature->data.choice = 5;
-	feature->data.value.ptrvalue = (Pointer)rrp;
+    rrp = RnaRefNew();
+    feature->data.choice = 5;
+    feature->data.value.ptrvalue = (Pointer)rrp;
 
-	rrp->type = (Uint1) rna_type;
-	rrp->pseudo = is_pseudo_gene;
-	if (rna_name != NULL)
-	{
-		rrp->ext.choice = 1;
-		rrp->ext.value.ptrvalue = (Pointer)StringSaveNoNull(rna_name);
-	}
-	else if (rna_type == RNA_TYPE_tRNA)
-	{
-		if ((AA_for_tRNA != NULL ) || (codon_for_tRNA != NULL))
-		{
-			trp = MemNew(sizeof(tRNA));
-			rrp->ext.choice = 2;
-			rrp->ext.value.ptrvalue = (Pointer)trp;
-			for (i = 0; i < 6; i++)
-				trp->codon[i] = 255;
-			if (AA_for_tRNA != '\0')
-			{
-				trp->aatype = 1;    /* iupacaa */
-				trp->aa = ValidAminoAcid(AA_for_tRNA);
-		/*		trp->aa = (Uint1)TO_UPPER(*AA_for_tRNA);*/
-			}
-			if (codon_for_tRNA != NULL)
-			{
-				wobble = 1; /* assume no wobble */
-				for (j = 0; j < wobble; j++)
-				{
-					tmp = codon_for_tRNA;
-					index = 0;
-					for (i = 16; i > 0; i /= 4, tmp++)
-					{
-						base = TO_UPPER(*tmp);
-						switch (base)
-						{
-							case 'U':
-								base = 'T';
-								break;
-							case 'R':
-								if (j==0)
-								 base = 'A';
-								else
-								 base = 'G';
-								wobble = 2;
-								break;
-							case 'Y':
-								if (j==0)
-								 base = 'T';
-								else
-								 base = 'C';
-								wobble = 2;
-								break;
-							default:
-								break;
-						}
+    rrp->type = (Uint1) rna_type;
+    rrp->pseudo = is_pseudo_gene;
+    if (rna_name != NULL)
+    {
+        rrp->ext.choice = 1;
+        rrp->ext.value.ptrvalue = (Pointer)StringSaveNoNull(rna_name);
+    }
+    else if (rna_type == RNA_TYPE_tRNA)
+    {
+        if ((AA_for_tRNA != NULL ) || (codon_for_tRNA != NULL))
+        {
+            trp = MemNew(sizeof(tRNA));
+            rrp->ext.choice = 2;
+            rrp->ext.value.ptrvalue = (Pointer)trp;
+            for (i = 0; i < 6; i++)
+                trp->codon[i] = 255;
+            if (AA_for_tRNA != '\0')
+            {
+                trp->aatype = 1;    /* iupacaa */
+                trp->aa = ValidAminoAcid(AA_for_tRNA);
+        /*        trp->aa = (Uint1)TO_UPPER(*AA_for_tRNA);*/
+            }
+            if (codon_for_tRNA != NULL)
+            {
+                wobble = 1; /* assume no wobble */
+                for (j = 0; j < wobble; j++)
+                {
+                    tmp = codon_for_tRNA;
+                    index = 0;
+                    for (i = 16; i > 0; i /= 4, tmp++)
+                    {
+                        base = TO_UPPER(*tmp);
+                        switch (base)
+                        {
+                            case 'U':
+                                base = 'T';
+                                break;
+                            case 'R':
+                                if (j==0)
+                                 base = 'A';
+                                else
+                                 base = 'G';
+                                wobble = 2;
+                                break;
+                            case 'Y':
+                                if (j==0)
+                                 base = 'T';
+                                else
+                                 base = 'C';
+                                wobble = 2;
+                                break;
+                            default:
+                                break;
+                        }
 
-						switch (base)
-						{
-							case 'T':
-								break;    /* 0 */
-							case 'C':
-								index += (i * 1);
-								break;
-							case 'A':
-								index += (i * 2);
-								break;
-							case 'G':
-								index += (i * 3);
-								break;
-							default:
-								Message(MSG_ERROR, "Invalid tRNA codon [%s]",
-									codon_for_tRNA);
-								return TRUE;
-						}
-					}
-					trp->codon[j] = (Uint1)index;
-				}
-			}
-		}
-	}
+                        switch (base)
+                        {
+                            case 'T':
+                                break;    /* 0 */
+                            case 'C':
+                                index += (i * 1);
+                                break;
+                            case 'A':
+                                index += (i * 2);
+                                break;
+                            case 'G':
+                                index += (i * 3);
+                                break;
+                            default:
+                                Message(MSG_ERROR, "Invalid tRNA codon [%s]",
+                                    codon_for_tRNA);
+                                return TRUE;
+                        }
+                    }
+                    trp->codon[j] = (Uint1)index;
+                }
+            }
+        }
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
            
-		   
+           
 /******************************************************************
 *
 *  Once you have made a tRNA feature, you may optionally add 
@@ -3711,453 +3711,453 @@ NLM_EXTERN Boolean MakeRNAFeature (
 ******************************************************************/
 
 NLM_EXTERN Boolean AddAntiCodonTotRNA (
-	NCBISubPtr submission,
-	SeqFeatPtr sfp,
-	SeqEntryPtr the_seq ,
-	CharPtr local_name ,
-	Int4 from ,
-	Int4 to ,
-	Boolean on_plus_strand )
+    NCBISubPtr submission,
+    SeqFeatPtr sfp,
+    SeqEntryPtr the_seq ,
+    CharPtr local_name ,
+    Int4 from ,
+    Int4 to ,
+    Boolean on_plus_strand )
 {
-	SeqFeat sf;
-	RnaRefPtr rrp;
-	tRNAPtr trp;
+    SeqFeat sf;
+    RnaRefPtr rrp;
+    tRNAPtr trp;
 
-	if ((submission == NULL) || (sfp == NULL))
-		return FALSE;
-	if (sfp->data.choice != 5) return FALSE;
+    if ((submission == NULL) || (sfp == NULL))
+        return FALSE;
+    if (sfp->data.choice != 5) return FALSE;
 
-	rrp = (RnaRefPtr)(sfp->data.value.ptrvalue);
-	if (rrp->type != RNA_TYPE_tRNA)
-		return FALSE;
+    rrp = (RnaRefPtr)(sfp->data.value.ptrvalue);
+    if (rrp->type != RNA_TYPE_tRNA)
+        return FALSE;
 
-	MemSet(&sf, 0, sizeof(SeqFeat));
+    MemSet(&sf, 0, sizeof(SeqFeat));
 
-	if (! AddIntervalToFeature(submission, &sf, the_seq, local_name, from, to, on_plus_strand, FALSE,FALSE))
-		return FALSE;
+    if (! AddIntervalToFeature(submission, &sf, the_seq, local_name, from, to, on_plus_strand, FALSE,FALSE))
+        return FALSE;
 
-	if (rrp->ext.choice != 2)   /* not extension yet */
-	{
-		trp = MemNew(sizeof(tRNA));
-		rrp->ext.choice = 2;
-		rrp->ext.value.ptrvalue = (Pointer)trp;
-	}
-	else
-		trp = (tRNAPtr)(rrp->ext.value.ptrvalue);
+    if (rrp->ext.choice != 2)   /* not extension yet */
+    {
+        trp = MemNew(sizeof(tRNA));
+        rrp->ext.choice = 2;
+        rrp->ext.value.ptrvalue = (Pointer)trp;
+    }
+    else
+        trp = (tRNAPtr)(rrp->ext.value.ptrvalue);
 
-	trp->anticodon = sf.location;
+    trp->anticodon = sf.location;
 
-	return TRUE;
+    return TRUE;
 }
 
 
 NLM_EXTERN Boolean MakeGeneFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr feature,
-	CharPtr gene_symbol_for_locus ,
-	CharPtr allele ,
-	CharPtr descriptive_name ,
-	CharPtr map_location ,
-	Boolean is_pseudo_gene ,
-	CharPtr genetic_database ,
-	CharPtr gene_id_in_genetic_database ,
-	CharPtr synonym1 ,
-	CharPtr synonym2 ,
-	CharPtr synonym3 )
+    NCBISubPtr submission,
+    SeqFeatPtr feature,
+    CharPtr gene_symbol_for_locus ,
+    CharPtr allele ,
+    CharPtr descriptive_name ,
+    CharPtr map_location ,
+    Boolean is_pseudo_gene ,
+    CharPtr genetic_database ,
+    CharPtr gene_id_in_genetic_database ,
+    CharPtr synonym1 ,
+    CharPtr synonym2 ,
+    CharPtr synonym3 )
 {
-	GeneRefPtr grp;
-	ValNodePtr vnp;
-	DbtagPtr dbt;
-	ObjectIdPtr oip;
+    GeneRefPtr grp;
+    ValNodePtr vnp;
+    DbtagPtr dbt;
+    ObjectIdPtr oip;
 
-	if (feature == NULL) return FALSE;
+    if (feature == NULL) return FALSE;
 
-	if (feature->data.choice)
-	{
-		Message(MSG_ERROR, "MakeGeneFeature: feature already has data");
-		return FALSE;
-	}
+    if (feature->data.choice)
+    {
+        Message(MSG_ERROR, "MakeGeneFeature: feature already has data");
+        return FALSE;
+    }
 
-	grp = GeneRefNew();
-	feature->data.choice = 1;
-	feature->data.value.ptrvalue = grp;
+    grp = GeneRefNew();
+    feature->data.choice = 1;
+    feature->data.value.ptrvalue = grp;
 
-	grp->locus = StringSaveNoNull(gene_symbol_for_locus);
-	grp->allele = StringSaveNoNull(allele);
-	grp->desc = StringSaveNoNull(descriptive_name);
-	grp->maploc = StringSaveNoNull(map_location);
-	grp->pseudo = is_pseudo_gene;
-	if ((genetic_database != NULL) && (gene_id_in_genetic_database != NULL))
-	{
-		vnp = ValNodeAdd(&grp->db);
-		dbt = DbtagNew();
-		vnp->data.ptrvalue = dbt;
-		dbt->db = StringSaveNoNull(genetic_database);
-		oip = ObjectIdNew();
-		dbt->tag = oip;
-		oip->str = StringSaveNoNull(gene_id_in_genetic_database);
-	}
+    grp->locus = StringSaveNoNull(gene_symbol_for_locus);
+    grp->allele = StringSaveNoNull(allele);
+    grp->desc = StringSaveNoNull(descriptive_name);
+    grp->maploc = StringSaveNoNull(map_location);
+    grp->pseudo = is_pseudo_gene;
+    if ((genetic_database != NULL) && (gene_id_in_genetic_database != NULL))
+    {
+        vnp = ValNodeAdd(&grp->db);
+        dbt = DbtagNew();
+        vnp->data.ptrvalue = dbt;
+        dbt->db = StringSaveNoNull(genetic_database);
+        oip = ObjectIdNew();
+        dbt->tag = oip;
+        oip->str = StringSaveNoNull(gene_id_in_genetic_database);
+    }
 
-	ValNodeCopyStr(&grp->syn, 0, synonym1);
-	ValNodeCopyStr(&grp->syn, 0, synonym2);
-	ValNodeCopyStr(&grp->syn, 0, synonym3);
+    ValNodeCopyStr(&grp->syn, 0, synonym1);
+    ValNodeCopyStr(&grp->syn, 0, synonym2);
+    ValNodeCopyStr(&grp->syn, 0, synonym3);
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean MakeProteinFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr feature ,
-	CharPtr protein_name1,
-	CharPtr protein_name2,
-	CharPtr protein_name3,
-	CharPtr descriptive_name,
-	CharPtr ECnum1,
-	CharPtr ECnum2,
-	CharPtr activity1,
-	CharPtr activity2,
-	CharPtr protein_database,
-	CharPtr id_in_protein_database)
+    NCBISubPtr submission,
+    SeqFeatPtr feature ,
+    CharPtr protein_name1,
+    CharPtr protein_name2,
+    CharPtr protein_name3,
+    CharPtr descriptive_name,
+    CharPtr ECnum1,
+    CharPtr ECnum2,
+    CharPtr activity1,
+    CharPtr activity2,
+    CharPtr protein_database,
+    CharPtr id_in_protein_database)
 {
-	ProtRefPtr prp;
-	ValNodePtr vnp;
-	DbtagPtr dbt;
-	ObjectIdPtr oip;
-	CharPtr tmp;
-	Int2 i;
+    ProtRefPtr prp;
+    ValNodePtr vnp;
+    DbtagPtr dbt;
+    ObjectIdPtr oip;
+    CharPtr tmp;
+    Int2 i;
 
-	if (feature == NULL) return FALSE;
+    if (feature == NULL) return FALSE;
 
-	if (feature->data.choice)
-	{
-		Message(MSG_ERROR, "MakeProteinFeature: feature already has data");
-		return FALSE;
-	}
+    if (feature->data.choice)
+    {
+        Message(MSG_ERROR, "MakeProteinFeature: feature already has data");
+        return FALSE;
+    }
 
-	prp = ProtRefNew();
-	feature->data.choice = 4;
-	feature->data.value.ptrvalue = prp;
+    prp = ProtRefNew();
+    feature->data.choice = 4;
+    feature->data.value.ptrvalue = prp;
 
-	ValNodeCopyStr(&prp->name, 0, protein_name1);
-	ValNodeCopyStr(&prp->name, 0, protein_name2);
-	ValNodeCopyStr(&prp->name, 0, protein_name3);
+    ValNodeCopyStr(&prp->name, 0, protein_name1);
+    ValNodeCopyStr(&prp->name, 0, protein_name2);
+    ValNodeCopyStr(&prp->name, 0, protein_name3);
 
-	prp->desc = StringSaveNoNull(descriptive_name);
+    prp->desc = StringSaveNoNull(descriptive_name);
 
-	tmp = ECnum1;
-	for (i = 0; i < 2; i++)
-	{
-		if (tmp != NULL)
-		{			/* skip any leading E.C. type stuff */
-		 	while ((! IS_DIGIT(*tmp)))
-			{
-				if (*tmp == '\0') break;
-				tmp++;
-			}
-			if (*tmp != '\0')
-				ValNodeCopyStr(&prp->ec, 0, tmp);
-		}
-		tmp = ECnum2;
-	}
+    tmp = ECnum1;
+    for (i = 0; i < 2; i++)
+    {
+        if (tmp != NULL)
+        {            /* skip any leading E.C. type stuff */
+             while ((! IS_DIGIT(*tmp)))
+            {
+                if (*tmp == '\0') break;
+                tmp++;
+            }
+            if (*tmp != '\0')
+                ValNodeCopyStr(&prp->ec, 0, tmp);
+        }
+        tmp = ECnum2;
+    }
 
-	ValNodeCopyStr(&prp->activity, 0, activity1);
-	ValNodeCopyStr(&prp->activity, 0, activity2);
+    ValNodeCopyStr(&prp->activity, 0, activity1);
+    ValNodeCopyStr(&prp->activity, 0, activity2);
 
-	if ((protein_database != NULL) && (id_in_protein_database != NULL))
-	{
-		vnp = ValNodeAdd(&prp->db);
-		dbt = DbtagNew();
-		vnp->data.ptrvalue = dbt;
-		dbt->db = StringSaveNoNull(protein_database);
-		oip = ObjectIdNew();
-		dbt->tag = oip;
-		oip->str = StringSaveNoNull(id_in_protein_database);
-	}
+    if ((protein_database != NULL) && (id_in_protein_database != NULL))
+    {
+        vnp = ValNodeAdd(&prp->db);
+        dbt = DbtagNew();
+        vnp->data.ptrvalue = dbt;
+        dbt->db = StringSaveNoNull(protein_database);
+        oip = ObjectIdNew();
+        dbt->tag = oip;
+        oip->str = StringSaveNoNull(id_in_protein_database);
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean MakeRegionFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr feature ,
-	CharPtr region_name )
+    NCBISubPtr submission,
+    SeqFeatPtr feature ,
+    CharPtr region_name )
 {
-	if (feature == NULL) return FALSE;
+    if (feature == NULL) return FALSE;
 
-	if (feature->data.choice)
-	{
-		Message(MSG_ERROR, "MakeRegionFeature: feature already has data");
-		return FALSE;
-	}
+    if (feature->data.choice)
+    {
+        Message(MSG_ERROR, "MakeRegionFeature: feature already has data");
+        return FALSE;
+    }
 
-	feature->data.choice = 9;
-	feature->data.value.ptrvalue = (Pointer)StringSaveNoNull(region_name);
-	return TRUE;
+    feature->data.choice = 9;
+    feature->data.value.ptrvalue = (Pointer)StringSaveNoNull(region_name);
+    return TRUE;
 }
 
 NLM_EXTERN Boolean MakeSiteFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr feature ,
-	Int2 site_type )
+    NCBISubPtr submission,
+    SeqFeatPtr feature ,
+    Int2 site_type )
 {
-	if (feature == NULL) return FALSE;
+    if (feature == NULL) return FALSE;
 
-	if (feature->data.choice)
-	{
-		Message(MSG_ERROR, "MakeSiteFeature: feature already has data");
-		return FALSE;
-	}
+    if (feature->data.choice)
+    {
+        Message(MSG_ERROR, "MakeSiteFeature: feature already has data");
+        return FALSE;
+    }
 
-	feature->data.choice = 12;
-	feature->data.value.intvalue = (Int4)site_type;
-	return TRUE;
+    feature->data.choice = 12;
+    feature->data.value.intvalue = (Int4)site_type;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean MakeImpFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr feature ,
-	CharPtr key )
+    NCBISubPtr submission,
+    SeqFeatPtr feature ,
+    CharPtr key )
 {
-	ImpFeatPtr ifp;
+    ImpFeatPtr ifp;
 
-	if (feature == NULL) return FALSE;
+    if (feature == NULL) return FALSE;
 
-	if (feature->data.choice)
-	{
-		Message(MSG_ERROR, "MakeImpFeature: feature already has data");
-		return FALSE;
-	}
+    if (feature->data.choice)
+    {
+        Message(MSG_ERROR, "MakeImpFeature: feature already has data");
+        return FALSE;
+    }
 
-	ifp = ImpFeatNew();
-	ifp->key = StringSaveNoNull(key);
+    ifp = ImpFeatNew();
+    ifp->key = StringSaveNoNull(key);
 
-	feature->data.choice = 8;
-	feature->data.value.ptrvalue = (Pointer)ifp;
-	return TRUE;
+    feature->data.choice = 8;
+    feature->data.value.ptrvalue = (Pointer)ifp;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean AddQualToImpFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr imp_feature ,
-	CharPtr qualifier ,
-	CharPtr value )
+    NCBISubPtr submission,
+    SeqFeatPtr imp_feature ,
+    CharPtr qualifier ,
+    CharPtr value )
 {
-	GBQualPtr gbp, tmp;
+    GBQualPtr gbp, tmp;
 
-	if ((imp_feature == NULL) || (qualifier == NULL))
-		return FALSE;
+    if ((imp_feature == NULL) || (qualifier == NULL))
+        return FALSE;
 
-	gbp = GBQualNew();
-	gbp->qual = StringSaveNoNull(qualifier);
-	gbp->val = StringSaveNoNull(value);
+    gbp = GBQualNew();
+    gbp->qual = StringSaveNoNull(qualifier);
+    gbp->val = StringSaveNoNull(value);
 
-	if (imp_feature->qual == NULL)
-		imp_feature->qual = gbp;
-	else
-	{
-		for (tmp = imp_feature->qual; tmp->next != NULL; tmp = tmp->next)
-			continue;
-		tmp->next = gbp;
-	}
+    if (imp_feature->qual == NULL)
+        imp_feature->qual = gbp;
+    else
+    {
+        for (tmp = imp_feature->qual; tmp->next != NULL; tmp = tmp->next)
+            continue;
+        tmp->next = gbp;
+    }
 
-	return TRUE;
+    return TRUE;
 }
 
 NLM_EXTERN Boolean MakePubFeature (
-	NCBISubPtr submission,
-	SeqFeatPtr feature,
-	PubPtr pub )
+    NCBISubPtr submission,
+    SeqFeatPtr feature,
+    PubPtr pub )
 {
 
-	PubdescPtr pdp;
+    PubdescPtr pdp;
 
-	if (feature == NULL) return FALSE;
+    if (feature == NULL) return FALSE;
 
-	if (feature->data.choice)
-	{
-		Message(MSG_ERROR, "MakePubFeature: feature already has data");
-		return FALSE;
-	}
+    if (feature->data.choice)
+    {
+        Message(MSG_ERROR, "MakePubFeature: feature already has data");
+        return FALSE;
+    }
 
-	feature->data.choice = 6;
-	pdp = PubdescNew();
-	if (pub->choice == PUB_Equiv)   /* already a Pub-equiv */
-	{
-		pdp->pub = (ValNodePtr)(pub->data.ptrvalue);
-		MemFree(pub);
-	}
-	else                     /* make a Pub-equiv of one member */
-		pdp->pub = pub;
-	feature->data.value.ptrvalue = (Pointer)pdp;
+    feature->data.choice = 6;
+    pdp = PubdescNew();
+    if (pub->choice == PUB_Equiv)   /* already a Pub-equiv */
+    {
+        pdp->pub = (ValNodePtr)(pub->data.ptrvalue);
+        MemFree(pub);
+    }
+    else                     /* make a Pub-equiv of one member */
+        pdp->pub = pub;
+    feature->data.value.ptrvalue = (Pointer)pdp;
 
-	return TRUE;
+    return TRUE;
 }
 
 /*****************************************************************************
 *
 *   AddPhrapGraphInternal (submission, bsp, phrap_values, offset, num_values)
-*   	Converts phrap byte array to a SeqGraph, adds to Bioseq.
+*       Converts phrap byte array to a SeqGraph, adds to Bioseq.
 *
 *****************************************************************************/
 static SeqAnnotPtr NewPhrapGraphSeqAnnot (CharPtr name, SeqGraphPtr sgp)
 
 {
-	SeqAnnotPtr  sap = NULL;
+    SeqAnnotPtr  sap = NULL;
 
-	if (sgp == NULL) return NULL;
-	sap = SeqAnnotNew ();
-	if (sap == NULL) return NULL;
+    if (sgp == NULL) return NULL;
+    sap = SeqAnnotNew ();
+    if (sap == NULL) return NULL;
 
-	ValNodeAddPointer (&(sap->desc), Annot_descr_name, StringSave (name));
-	sap->type = 3;
-	sap->data = (Pointer) sgp;
+    ValNodeAddPointer (&(sap->desc), Annot_descr_name, StringSave (name));
+    sap->type = 3;
+    sap->data = (Pointer) sgp;
 
   return sap;
 }
 
 static SeqGraphPtr AddPhrapGraphInternal (
-	NCBISubPtr submission,
-	BioseqPtr bsp ,
-	BytePtr phrap_values ,
-	Int4 offset ,
-	Int4 num_values )
+    NCBISubPtr submission,
+    BioseqPtr bsp ,
+    BytePtr phrap_values ,
+    Int4 offset ,
+    Int4 num_values )
 {
-	SeqGraphPtr sgp = NULL;
-	ByteStorePtr bs = NULL;
-	Int2 max = INT2_MIN;
-	Int2 min = INT2_MAX;
-	BytePtr bp;
-	Int4 i;
-	Int2 val;
-	SeqIntPtr sintp;
-	SeqAnnotPtr sap;
-	SeqGraphPtr lastsgp;
+    SeqGraphPtr sgp = NULL;
+    ByteStorePtr bs = NULL;
+    Int2 max = INT2_MIN;
+    Int2 min = INT2_MAX;
+    BytePtr bp;
+    Int4 i;
+    Int2 val;
+    SeqIntPtr sintp;
+    SeqAnnotPtr sap;
+    SeqGraphPtr lastsgp;
 
-	if (bsp == NULL) return NULL;
-	bs = BSNew (num_values);
-	if (bs == NULL) return NULL;
-	BSWrite (bs, (Pointer) phrap_values, num_values);
+    if (bsp == NULL) return NULL;
+    bs = BSNew (num_values);
+    if (bs == NULL) return NULL;
+    BSWrite (bs, (Pointer) phrap_values, num_values);
 
-	sgp = SeqGraphNew ();
-	if (sgp == NULL) {
-		BSFree (bs);
-		return FALSE;
-	}
-	sgp->numval = BSLen (bs);
-	BSPutByte (bs, EOF);
-	sgp->title = StringSave ("Phrap Quality");
+    sgp = SeqGraphNew ();
+    if (sgp == NULL) {
+        BSFree (bs);
+        return FALSE;
+    }
+    sgp->numval = BSLen (bs);
+    BSPutByte (bs, EOF);
+    sgp->title = StringSave ("Phrap Quality");
 
-	for (i = 0, bp = phrap_values; i < num_values; i++, bp++) {
-		val = (Uint1) *bp;
-		max = MAX (max, (Int2) val);
-		min = MIN (min, (Int2) val);
-	}
-	sgp->flags [0] = 0;
-	sgp->compr = 1;
-	sgp->flags [1] = 0;
-	sgp->flags [2] = 3;
-	sgp->axis.intvalue = 0;
-	sgp->min.intvalue = min;
-	sgp->max.intvalue = max;
-	sgp->a = 1.0;
-	sgp->b = 0;
-	sgp->values = (Pointer) bs;
+    for (i = 0, bp = phrap_values; i < num_values; i++, bp++) {
+        val = (Uint1) *bp;
+        max = MAX (max, (Int2) val);
+        min = MIN (min, (Int2) val);
+    }
+    sgp->flags [0] = 0;
+    sgp->compr = 1;
+    sgp->flags [1] = 0;
+    sgp->flags [2] = 3;
+    sgp->axis.intvalue = 0;
+    sgp->min.intvalue = min;
+    sgp->max.intvalue = max;
+    sgp->a = 1.0;
+    sgp->b = 0;
+    sgp->values = (Pointer) bs;
 
-	sintp = SeqIntNew ();
-	sintp->from = offset;
-	sintp->to = num_values - offset - 1;
-	sintp->id = SeqIdDup (bsp->id);
-	ValNodeAddPointer (&(sgp->loc), SEQLOC_INT, (Pointer) sintp);
+    sintp = SeqIntNew ();
+    sintp->from = offset;
+    sintp->to = num_values - offset - 1;
+    sintp->id = SeqIdDup (bsp->id);
+    ValNodeAddPointer (&(sgp->loc), SEQLOC_INT, (Pointer) sintp);
 
-	for (sap = bsp->annot; sap != NULL; sap = sap->next) {
-		if (sap->type == 3) {
-			for (lastsgp = sap->data; lastsgp->next != NULL; lastsgp = lastsgp->next) {
-				continue;
-			}
-			lastsgp->next = sgp;
-			break;
-		}
-	}
-	if (sap == NULL) {
-		if (bsp->annot != NULL) {
-			for (sap = bsp->annot; sap->next != NULL; sap = sap->next) {
-				continue;
-			}
-			sap->next = NewPhrapGraphSeqAnnot ("Graphs", sgp);
-		} else {
-			bsp->annot = NewPhrapGraphSeqAnnot ("Graphs", sgp);
-		}
-	}
+    for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+        if (sap->type == 3) {
+            for (lastsgp = sap->data; lastsgp->next != NULL; lastsgp = lastsgp->next) {
+                continue;
+            }
+            lastsgp->next = sgp;
+            break;
+        }
+    }
+    if (sap == NULL) {
+        if (bsp->annot != NULL) {
+            for (sap = bsp->annot; sap->next != NULL; sap = sap->next) {
+                continue;
+            }
+            sap->next = NewPhrapGraphSeqAnnot ("Graphs", sgp);
+        } else {
+            bsp->annot = NewPhrapGraphSeqAnnot ("Graphs", sgp);
+        }
+    }
 
-	return sgp;
+    return sgp;
 }
 
 NLM_EXTERN Boolean AddPhrapGraph (
-	NCBISubPtr submission,
-	SeqEntryPtr the_seq ,
-	CharPtr local_name ,
-	BytePtr phrap_values )
+    NCBISubPtr submission,
+    SeqEntryPtr the_seq ,
+    CharPtr local_name ,
+    BytePtr phrap_values )
 {
-	BioseqPtr    bsp;
-	SeqGraphPtr  sgp;
+    BioseqPtr    bsp;
+    SeqGraphPtr  sgp;
 
-	bsp = GetBioseqFromChoice(submission, the_seq, local_name, "AddPhrapGraph");
-	sgp =  AddPhrapGraphInternal (submission, bsp, phrap_values, 0, bsp->length);
-	return (Boolean) (sgp != NULL);
+    bsp = GetBioseqFromChoice(submission, the_seq, local_name, "AddPhrapGraph");
+    sgp =  AddPhrapGraphInternal (submission, bsp, phrap_values, 0, bsp->length);
+    return (Boolean) (sgp != NULL);
 }
 
 NLM_EXTERN Boolean AddPhrapGraphToSeqLit (
-	NCBISubPtr submission,
-	SeqLitPtr slp ,
-	BytePtr phrap_values )
+    NCBISubPtr submission,
+    SeqLitPtr slp ,
+    BytePtr phrap_values )
 {
-	BioseqPtr     bsp;
-	SeqGraphPtr   sgp;
-	ExtSeqLitPtr  xslp;
+    BioseqPtr     bsp;
+    SeqGraphPtr   sgp;
+    ExtSeqLitPtr  xslp;
 
-	if (slp == NULL) return FALSE;
-	xslp = (ExtSeqLitPtr) slp;
-	bsp = xslp->parentbsp;
-	sgp = AddPhrapGraphInternal (submission, bsp, phrap_values, 0, slp->length);
-	if (sgp != NULL) {
-		xslp->graph = sgp;
-		ReadjustSeqLitGraphs (bsp);  /* adjust seqlit graph positions */
-		return TRUE;
-	}
-	return FALSE;
+    if (slp == NULL) return FALSE;
+    xslp = (ExtSeqLitPtr) slp;
+    bsp = xslp->parentbsp;
+    sgp = AddPhrapGraphInternal (submission, bsp, phrap_values, 0, slp->length);
+    if (sgp != NULL) {
+        xslp->graph = sgp;
+        ReadjustSeqLitGraphs (bsp);  /* adjust seqlit graph positions */
+        return TRUE;
+    }
+    return FALSE;
 }
 
 /*****************************************************************************
 *
 *   NCBISubValidate (nsp, errfile)
-*   	Validate a submission
+*       Validate a submission
 *
 *****************************************************************************/
 NLM_EXTERN Int2 NCBISubValidate (NCBISubPtr nsp, FILE * errfile)
 {
-	Int2 numerrors = 0, i;
-	ValidStructPtr vsp;
-	SeqEntryPtr sep;
+    Int2 numerrors = 0, i;
+    ValidStructPtr vsp;
+    SeqEntryPtr sep;
 
-	vsp = ValidStructNew();
-	vsp->useSeqMgrIndexes = TRUE;
-	SetAppProperty ("NcbiSubutilValidation", (void *) 1024);
-	
-	  /**** errfile is no longer supported ****
-	vsp->errfile = errfile;
+    vsp = ValidStructNew();
+    vsp->useSeqMgrIndexes = TRUE;
+    SetAppProperty ("NcbiSubutilValidation", (void *) 1024);
+    
+      /**** errfile is no longer supported ****
+    vsp->errfile = errfile;
       ****************************************/
       
-	for (sep = (SeqEntryPtr)(nsp->ssp->data); sep != NULL; sep = sep->next)
-	{
-	 	ValidateSeqEntry(sep, vsp);
-		for (i = 0; i <=3; i++)
-		{
-			numerrors += vsp->errors[i];
-		}
-		ValidStructClear(vsp);
-	}
-	ValidStructFree(vsp);
-	return numerrors;
+    for (sep = (SeqEntryPtr)(nsp->ssp->data); sep != NULL; sep = sep->next)
+    {
+         ValidateSeqEntry(sep, vsp);
+        for (i = 0; i <=3; i++)
+        {
+            numerrors += vsp->errors[i];
+        }
+        ValidStructClear(vsp);
+    }
+    ValidStructFree(vsp);
+    return numerrors;
 }
 
 /* reference gene project user object manipulation */
@@ -4394,7 +4394,7 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
   UserFieldPtr  last;
   UserFieldPtr  prev = NULL;
   ObjectIdPtr   oip;
-  UserFieldPtr  ufp;
+  UserFieldPtr  ufp = NULL;
 
   if (uop == NULL || field == NULL) return;
   oip = uop->type;
@@ -5062,6 +5062,55 @@ NLM_EXTERN UserObjectPtr CreateTpaAssemblyUserObject (void)
   return uop;
 }
 
+
+
+NLM_EXTERN UserFieldPtr CreateTPAAssemblyAccessionField (CharPtr accn)
+{
+  UserFieldPtr ufp;
+  ObjectIdPtr  oip;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("accession");
+  ufp->label = oip;
+  ufp->choice = 1; /* visible string */
+  ufp->data.ptrvalue = (Pointer) StringSave (accn);
+
+  return ufp;
+}
+
+NLM_EXTERN UserFieldPtr CreateTPAAssemblyFromField (Int4 from)
+{
+  UserFieldPtr ufp;
+  ObjectIdPtr  oip;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("from");
+  ufp->label = oip;
+  ufp->choice = 2; /* int */
+  ufp->data.intvalue = from;
+
+  return ufp;
+}
+
+
+NLM_EXTERN UserFieldPtr CreateTPAAssemblyToField (Int4 to)
+{
+  UserFieldPtr ufp;
+  ObjectIdPtr  oip;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("to");
+  ufp->label = oip;
+  ufp->choice = 2; /* int */
+  ufp->data.intvalue = to;
+
+  return ufp;
+}
+
+
 NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (UserObjectPtr uop, CharPtr accn, Int4 from, Int4 to)
 
 {
@@ -5094,34 +5143,19 @@ NLM_EXTERN void AddAccessionToTpaAssemblyUserObject (UserObjectPtr uop, CharPtr 
 
   if (curr == NULL || curr->choice != 11) return;
 
-  ufp = UserFieldNew ();
-  oip = ObjectIdNew ();
-  oip->str = StringSave ("accession");
-  ufp->label = oip;
-  ufp->choice = 1; /* visible string */
-  ufp->data.ptrvalue = (Pointer) StringSave (accn);
+  ufp = CreateTPAAssemblyAccessionField(accn);
 
   curr->data.ptrvalue = (Pointer) ufp;
   prev = ufp;
 
   if (from == 0 && to == 0) return;
 
-  ufp = UserFieldNew ();
-  oip = ObjectIdNew ();
-  oip->str = StringSave ("from");
-  ufp->label = oip;
-  ufp->choice = 2; /* int */
-  ufp->data.intvalue = from;
+  ufp = CreateTPAAssemblyFromField(from);
 
   prev->next = ufp;
   prev = ufp;
 
-  ufp = UserFieldNew ();
-  oip = ObjectIdNew ();
-  oip->str = StringSave ("to");
-  ufp->label = oip;
-  ufp->choice = 2; /* int */
-  ufp->data.intvalue = to;
+  ufp = CreateTPAAssemblyToField (to);
 
   prev->next = ufp;
 }
@@ -5489,6 +5523,59 @@ NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
   curr->data.ptrvalue = (Pointer) cpp;
 }
 
+NLM_EXTERN void AddSeqReadArchiveIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+)
+
+{
+  CharPtr PNTR   cpp;
+  UserFieldPtr   curr;
+  Int4           i;
+  UserFieldPtr   prev = NULL;
+  ObjectIdPtr    oip;
+
+  if (uop == NULL || values == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Sequence Read Archive") == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("Sequence Read Archive");
+    curr->label = oip;
+    curr->choice = 7; /* sequence of string */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 7) return;
+
+  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
+  if (cpp == NULL) return;
+
+  curr->num = num;
+  for (i = 0; i < num; i++) {
+    cpp [i] = StringSaveNoNull (values [i]);
+  }
+  curr->data.ptrvalue = (Pointer) cpp;
+}
+
 NLM_EXTERN UserObjectPtr CreateNcbiCleanupUserObject (
   void
 )
@@ -5575,12 +5662,48 @@ NLM_EXTERN void AddIntegerToNcbiCleanupUserObject (
   }
 }
 
+static void GetNcbiCleanupDescr (
+  SeqDescrPtr sdp,
+  Pointer userdata
+)
+
+{
+  ObjectIdPtr        oip;
+  UserObjectPtr      uop;
+  UserObjectPtr PNTR uopp;
+
+  if (sdp->choice != Seq_descr_user) return;
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "NcbiCleanup") != 0) return;
+  uopp = (UserObjectPtr PNTR) userdata;
+  if (uopp == NULL) return;
+  *uopp = uop;
+}
+
+NLM_EXTERN UserObjectPtr FindNcbiCleanupUserObject (
+  SeqEntryPtr sep
+)
+
+{
+  UserObjectPtr  uop = NULL;
+
+  if (sep == NULL) return NULL;
+
+  VisitDescriptorsOnSep (sep, (Pointer) &uop, GetNcbiCleanupDescr);
+
+  return uop;
+}
+
 static void ClearNcbiCleanupDescr (
   SeqDescrPtr sdp,
   Pointer userdata
 )
 
 {
+  BoolPtr        bp;
   ObjectIdPtr    oip;
   ObjValNodePtr  ovp;
   UserObjectPtr  uop;
@@ -5593,7 +5716,20 @@ static void ClearNcbiCleanupDescr (
   if (sdp->extended != 0) {
     ovp = (ObjValNodePtr) sdp;
     ovp->idx.deleteme = TRUE;
+    bp = (BoolPtr) userdata;
+    if (bp != NULL) {
+      *bp = TRUE;
+    }
   }
+}
+
+static void ClearSeqAnnotCleanupObj (
+  SeqAnnotPtr sap,
+  Pointer userdata
+)
+
+{
+  RemoveAllSeqAnnotCleanupUserObjs (sap);
 }
 
 NLM_EXTERN void RemoveAllNcbiCleanupUserObjects (
@@ -5601,9 +5737,77 @@ NLM_EXTERN void RemoveAllNcbiCleanupUserObjects (
 )
 
 {
+  Boolean  do_delete = FALSE;
   if (sep == NULL) return;
 
-  VisitDescriptorsInSep (sep, NULL, ClearNcbiCleanupDescr);
-  DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
+  VisitDescriptorsInSep (sep, (Pointer) &do_delete, ClearNcbiCleanupDescr);
+  VisitAnnotsInSep (sep, NULL, ClearSeqAnnotCleanupObj);
+  if (do_delete) {
+    DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
+  }
+}
+
+static Boolean IsAnnotDescCleanupUserObj (
+  AnnotDescrPtr adp
+)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  if (adp->choice != Annot_descr_user) return FALSE;
+  uop = (UserObjectPtr) adp->data.ptrvalue;
+  if (uop == NULL) return FALSE;
+  oip = uop->type;
+  if (oip == NULL) return FALSE;
+  if (StringICmp (oip->str, "NcbiCleanup") == 0) return TRUE;
+
+  return FALSE;
+}
+
+NLM_EXTERN UserObjectPtr FindSeqAnnotCleanupUserObj (
+  SeqAnnotPtr sap
+)
+
+{
+  AnnotDescrPtr  adp;
+  UserObjectPtr  uop;
+
+  if (sap == NULL) return NULL;
+
+  for (adp = sap->desc; adp != NULL; adp = adp->next) {
+    if (IsAnnotDescCleanupUserObj (adp)) {
+      uop = (UserObjectPtr) adp->data.ptrvalue;
+      return uop;
+    }
+  }
+
+  return NULL;
+}
+
+NLM_EXTERN void RemoveAllSeqAnnotCleanupUserObjs (
+  SeqAnnotPtr sap
+)
+
+{
+  AnnotDescrPtr       adp;
+  AnnotDescrPtr       next;
+  AnnotDescrPtr PNTR  prev;
+
+  if (sap == NULL) return;
+
+  prev = &(sap->desc);
+  adp = sap->desc;
+  while (adp != NULL) {
+    next = adp->next;
+    if (IsAnnotDescCleanupUserObj (adp)) {
+      *prev = adp->next;
+      adp->next = NULL;
+      AnnotDescFree (adp);
+    } else {
+      prev = (AnnotDescrPtr PNTR) &(adp->next);
+    }
+    adp = next;
+  }
 }
 

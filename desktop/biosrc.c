@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.93 $
+* $Revision: 6.96 $
 *
 * File Description: 
 *
@@ -120,6 +120,7 @@ typedef struct genbiopage {
   DoC             orglist;
   Int2            nuclGC;
   Int2            mitoGC;
+  Int2            pstdGC;
   Int4            taxID;
   DialoG          genome;
   PopuP           origin;
@@ -127,6 +128,7 @@ typedef struct genbiopage {
   PopuP           simplecode;
   PopuP           gcode;
   PopuP           mgcode;
+  PopuP           pgcode;
   TexT            lineage;
   TexT            gbDiv;
   DialoG          db;
@@ -1403,17 +1405,24 @@ static void ChangeGencodePopups (GenBioPagePtr gbp)
                    genome == GENOME_cyanelle ||
                    genome == GENOME_apicoplast ||
                    genome == GENOME_leucoplast ||
-                   genome == GENOME_proplastid) {
-          SafeSetValue (gbp->simplecode, gcIdToIndex [11]);
+                   genome == GENOME_proplastid ||
+                   genome == GENOME_chromatophore) {
+          if (gbp->pstdGC > 0) {
+            SafeSetValue (gbp->simplecode, gcIdToIndex [gbp->pstdGC]);
+          } else {
+            SafeSetValue (gbp->simplecode, gcIdToIndex [11]);
+          }
         } else {
           SafeSetValue (gbp->simplecode, gcIdToIndex [gbp->nuclGC]);
         }
       }
       SafeSetValue (gbp->gcode, gcIdToIndex [gbp->nuclGC]);
       SafeSetValue (gbp->mgcode, gcIdToIndex [gbp->mitoGC]);
+      SafeSetValue (gbp->pgcode, gcIdToIndex [gbp->pstdGC]);
     } else {
       SafeSetValue (gbp->gcode, gcIdToIndex [gbp->nuclGC]);
       SafeSetValue (gbp->mgcode, gcIdToIndex [gbp->mitoGC]);
+      SafeSetValue (gbp->pgcode, gcIdToIndex [gbp->pstdGC]);
     }
   }
 }
@@ -1428,6 +1437,7 @@ static void SetCodes (GenBioPagePtr gbp, Int2 row, Boolean changepopups)
     StrToInt (str, &gbp->nuclGC);
     CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 4);
     StrToInt (str, &gbp->mitoGC);
+    gbp->pstdGC = 0;
     CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 5);
     SafeSetTitle (gbp->gbDiv, str);
     CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 6);
@@ -1463,6 +1473,7 @@ static void AutoScrollTax (GenBioPagePtr gbp, TexT t, Boolean isSciName,
   if (gbp != NULL && t != NULL) {
     gbp->nuclGC = 0;
     gbp->mitoGC = 0;
+    gbp->pstdGC = 0;
     gbp->taxID = 0;
     SafeSetTitle (gbp->gbDiv, "");
     GetTitle (t, str, sizeof (str) - 2);
@@ -1630,6 +1641,7 @@ static void ReleaseTaxName (DoC d, PoinT pt)
   if (gbp != NULL) {
     gbp->nuclGC = 0;
     gbp->mitoGC = 0;
+    gbp->pstdGC = 0;
     gbp->taxID = 0;
     SafeSetTitle (gbp->gbDiv, "");
     MapDocPoint (d, pt, &item, &row, NULL, NULL);
@@ -1822,6 +1834,7 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
     gbp->clickedOrg = 0;
     gbp->nuclGC = 0;
     gbp->mitoGC = 0;
+    gbp->pstdGC = 0;
     gbp->taxID = 0;
     SafeSetTitle (gbp->gbDiv, "");
     SafeSetValue (gbp->genome, 2);
@@ -1829,6 +1842,7 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
     SafeSetStatus (gbp->is_focus, FALSE);
     SafeSetValue (gbp->gcode, 1);
     SafeSetValue (gbp->mgcode, 1);
+    SafeSetValue (gbp->pgcode, 1);
     SafeSetValue (gbp->simplecode, 1);
     SafeSetTitle (gbp->gbacr, "");
     SafeSetTitle (gbp->gbana, "");
@@ -1899,6 +1913,7 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
         SafeSetTitle (gbp->gbDiv, "");
         SafeSetValue (gbp->gcode, 1);
         SafeSetValue (gbp->mgcode, 1);
+        SafeSetValue (gbp->pgcode, 1);
         SafeSetValue (gbp->simplecode, 1);
       }
     }
@@ -1909,6 +1924,9 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
       }
       if (onp->mgcode > 0) {
         gbp->mitoGC = onp->mgcode;
+      }
+      if (onp->pgcode > 0) {
+        gbp->pstdGC = onp->pgcode;
       }
       if (gbp->simplecode != NULL) {
         vnp = DialogToPointer (gbp->genome);
@@ -1923,7 +1941,8 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
                      genome == GENOME_cyanelle ||
                      genome == GENOME_apicoplast ||
                      genome == GENOME_leucoplast ||
-                     genome == GENOME_proplastid) {
+                     genome == GENOME_proplastid ||
+                     genome == GENOME_chromatophore) {
             SafeSetValue (gbp->simplecode, gcIdToIndex [11]);
           } else {
             SafeSetValue (gbp->simplecode, gcIdToIndex [onp->gcode]);
@@ -1931,9 +1950,11 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
         }
         SafeSetValue (gbp->gcode, gcIdToIndex [onp->gcode]);
         SafeSetValue (gbp->mgcode, gcIdToIndex [onp->mgcode]);
+        SafeSetValue (gbp->pgcode, gcIdToIndex [onp->pgcode]);
       } else {
         SafeSetValue (gbp->gcode, gcIdToIndex [onp->gcode]);
         SafeSetValue (gbp->mgcode, gcIdToIndex [onp->mgcode]);
+        SafeSetValue (gbp->pgcode, gcIdToIndex [onp->pgcode]);
       }
     }
     RestorePort (tempPort);
@@ -2035,14 +2056,17 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
               if (genome == 4 || genome == 5) {
                 onp->mgcode = gcIndexToId [GetValue (gbp->simplecode)];
                 onp->gcode = gcIndexToId [GetValue (gbp->gcode)];
+                onp->pgcode = gcIndexToId [GetValue (gbp->pgcode)];
               } else {
                 onp->gcode = gcIndexToId [GetValue (gbp->simplecode)];
                 onp->mgcode = gcIndexToId [GetValue (gbp->mgcode)];
+                onp->pgcode = gcIndexToId [GetValue (gbp->pgcode)];
               }
             }
           } else {
             onp->gcode = gcIndexToId [GetValue (gbp->gcode)];
             onp->mgcode = gcIndexToId [GetValue (gbp->mgcode)];
+            onp->pgcode = gcIndexToId [GetValue (gbp->pgcode)];
           }
           if (! TextHasNoText (gbp->gbDiv)) {
             onp->div = SaveStringFromText (gbp->gbDiv);
@@ -2157,7 +2181,7 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
             }
           }
           if (onp->lineage == NULL && onp->mod == NULL &&
-              onp->gcode == 0 && onp->mgcode == 0) {
+              onp->gcode == 0 && onp->mgcode == 0 && onp->pgcode == 0) {
             orp->orgname = OrgNameFree (orp->orgname);
           }
         }
@@ -2176,7 +2200,8 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
           && biop->genome != GENOME_plastid
           && biop->genome != GENOME_apicoplast
           && biop->genome != GENOME_leucoplast
-          && biop->genome != GENOME_proplastid)
+          && biop->genome != GENOME_proplastid
+          && biop->genome != GENOME_chromatophore)
       {
         tmpssp = biop->subtype;
         while (tmpssp != NULL)
@@ -2406,8 +2431,12 @@ extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
     gbp->mgcode = PopupList (x, TRUE, NULL);
     PopulateGeneticCodePopup (gbp->mgcode);
     SetValue (gbp->mgcode, 1);
+    gbp->pgcode = PopupList (x, TRUE, NULL);
+    PopulateGeneticCodePopup (gbp->pgcode);
+    SetValue (gbp->pgcode, 1);
     Hide (gbp->gcode);
     Hide (gbp->mgcode);
+    Hide (gbp->pgcode);
 
     SelectFont (systemFont);
   }
@@ -3326,6 +3355,10 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     gbp->mgcode = PopupList (f, TRUE, NULL);
     PopulateGeneticCodePopup (gbp->mgcode);
     SetValue (gbp->mgcode, 1);
+    StaticPrompt (f, "Plastid", 0, popupMenuHeight, programFont, 'l');
+    gbp->pgcode = PopupList (f, TRUE, NULL);
+    PopulateGeneticCodePopup (gbp->pgcode);
+    SetValue (gbp->pgcode, 1);
 
     Hide (gbp->orgGrp [2]);
 
@@ -3764,6 +3797,7 @@ static void BioSourceDescFormAcceptButtonProc (ButtoN b)
 
 {
   if (OkayToAcceptBioSource (b)) {
+
     StdAcceptFormButtonProc (b);
   }
 }
@@ -4267,7 +4301,11 @@ extern Int2 LIBCALLBACK BioSourceGenFunc (Pointer data)
   } else if (sdp != NULL) {
     w = (WindoW) CreateBioSourceDescForm (-50, -33, -10, -10,
                                           "Organism Information", sdp, sep,
+#if 0
                                           StdDescFormActnProc, NULL);
+#else
+                                          StdDescFormActnProcNoFeatureChangeNoMolInfoChange, NULL);
+#endif
   } else {
     itemtype = proc->inputtype;
     subtype = proc->subinputtype;

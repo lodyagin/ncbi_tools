@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.35 $
+* $Revision: 6.39 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -204,7 +204,8 @@ NLM_EXTERN Int4 CdRegionFastaStream (
   Int2 linelen,
   Int2 blocklen,
   Int2 grouplen,
-  Boolean do_defline
+  Boolean do_defline,
+  CharPtr idSuffix
 );
 
 NLM_EXTERN Int4 TranslationFastaStream (
@@ -214,7 +215,8 @@ NLM_EXTERN Int4 TranslationFastaStream (
   Int2 linelen,
   Int2 blocklen,
   Int2 grouplen,
-  Boolean do_defline
+  Boolean do_defline,
+  CharPtr idSuffix
 );
 
 NLM_EXTERN Int4 SeqEntryFastaStream (
@@ -459,6 +461,16 @@ Int4 GetOrderBySeqId(Int4 choice, Boolean is_prot);
 *****************************************************************************/
 NLM_EXTERN void NC_Cleanup (Uint2 entityID, Pointer ptr);
 NLM_EXTERN void ClearGenBankKeywords (Uint2 entityID, Pointer ptr);
+
+/*****************************************************************************
+*
+*   InstantiateNCTitle (entityID, ptr) and InstantiateNMTitles (entityID, ptr)
+*     allows NC and NM titles to be kept as Seq_descr_title rather than always
+*     being generated on the fly
+*
+*****************************************************************************/
+NLM_EXTERN void InstantiateNCTitle (Uint2 entityID, Pointer ptr);
+NLM_EXTERN void InstantiateNMTitles (Uint2 entityID, Pointer ptr);
 
 /*****************************************************************************
 *

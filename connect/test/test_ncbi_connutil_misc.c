@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_connutil_misc.c,v 6.28 2009/02/07 02:29:30 kazimird Exp $
+/* $Id: test_ncbi_connutil_misc.c,v 6.36 2010/06/08 15:14:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,10 @@
  *
  */
 
-#include "../ncbi_ansi_ext.h"
-#include "../ncbi_priv.h"
 #include <connect/ncbi_connutil.h>
-#include <connect/ncbi_util.h>
+#include "../ncbi_ansi_ext.h"
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 /* This header must go last */
 #include "test_assert.h"
@@ -242,6 +240,7 @@ static void TEST_MIME(void)
 static void TEST_ConnNetInfo(void)
 {
     size_t n;
+    char* url;
     SConnNetInfo* net_info;
 
     CORE_LOG(eLOG_Note, "ConnNetInfo test started");
@@ -260,20 +259,43 @@ static void TEST_ConnNetInfo(void)
     assert(strcmp(net_info->path, "/ro.t/p@th")              == 0);
     assert(strcmp(net_info->args, "arg/arg:arg@arg:arg/arg") == 0);
 
-    assert(ConnNetInfo_ParseURL(net_info, "http://www/path"
-                                "?arg:arg@arg"));
-    assert(       net_info->scheme       == eURL_Http);
-    assert(      *net_info->user                 == 0);
-    assert(      *net_info->pass                 == 0);
-    assert(strcmp(net_info->host, "www")         == 0);
-    assert(       net_info->port                 == 0);
-    assert(strcmp(net_info->path, "/path")       == 0);
-    assert(strcmp(net_info->args, "arg:arg@arg") == 0);
+    assert(ConnNetInfo_ParseURL(net_info, "https://www/path"
+                                "?arg:arg@arg#frag"));
+    assert(       net_info->scheme           == eURL_Https);
+    assert(      *net_info->user                      == 0);
+    assert(      *net_info->pass                      == 0);
+    assert(strcmp(net_info->host, "www")              == 0);
+    assert(       net_info->port                      == 0);
+    assert(strcmp(net_info->path, "/path")            == 0);
+    assert(strcmp(net_info->args, "arg:arg@arg#frag") == 0);
+
+    assert(ConnNetInfo_ParseURL(net_info, "/path1?arg1#frag2"));
+    assert(strcmp(net_info->args, "arg1#frag2")       == 0);
+
+    assert(ConnNetInfo_ParseURL(net_info, "path0/0"));
+    assert(strcmp(net_info->path, "/path0/0")         == 0);
+    assert(strcmp(net_info->args, "#frag2")           == 0);
+
+    assert(ConnNetInfo_ParseURL(net_info, "#frag3"));
+    assert(strcmp(net_info->args, "#frag3")           == 0);
+
+    assert(ConnNetInfo_ParseURL(net_info, "path2"));
+    assert(strcmp(net_info->path, "/path0/path2")     == 0);
+    assert(strcmp(net_info->args, "#frag3")           == 0);
+
+    assert(ConnNetInfo_ParseURL(net_info, "/path3?arg3"));
+    assert(strcmp(net_info->path, "/path3")           == 0);
+    assert(strcmp(net_info->args, "arg3#frag3")       == 0);
+
+    url = ConnNetInfo_URL(net_info);
+    assert(url);
+    assert(strcmp(url, "https://www/path3?arg3#frag3") == 0);
+    free(url);
 
     printf("HTTP User Header:\n\"%s\"\n",
            net_info->http_user_header ? net_info->http_user_header : "<NONE>");
     ConnNetInfo_AppendUserHeader(net_info,
-                                 "My-Tag1: Value1\r\n"
+                                 "My-Tag1:Value1\r\n"
                                  "My-Tag2: Value2\r\n"
                                  "My-Tag3: Value3\r\n");
     printf("HTTP User Header after append:\n\"%s\"\n",
@@ -289,6 +311,12 @@ static void TEST_ConnNetInfo(void)
                                  "My-Tag4: Value 4.1\r\n"
                                  "My-Tag5: \t \r\n"
                                  "My-Tag6: Value 6\r\n");
+    ConnNetInfo_ExtendUserHeader(net_info,
+                                 "My-Tag4: Value 4.1\r\n"
+                                 "My-Tag6: Value 6\r\n");
+    ConnNetInfo_ExtendUserHeader(net_info,
+                                 "My-Tag4:Value 4\r\n"
+                                 "My-Tag6:Value 6\r\n");
     printf("HTTP User Header after extend:\n\"%s\"\n",
            net_info->http_user_header ? net_info->http_user_header : "<NONE>");
     ConnNetInfo_SetUserHeader(net_info, 0);
@@ -329,7 +357,7 @@ static void TEST_ConnNetInfo(void)
     ConnNetInfo_DeleteAllArgs(net_info, "a=b&p=q&f=d");
     printf("HTTP Arg after delete-all: \"%s\"\n", net_info->args);
 
-    ConnNetInfo_Log(net_info, CORE_GetLOG());
+    ConnNetInfo_LogEx(net_info, eLOG_Note, CORE_GetLOG());
 
     ConnNetInfo_Destroy(net_info);
 
@@ -347,7 +375,8 @@ int main(void)
     g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
     srand(g_NCBI_ConnectRandomSeed);
 
-    CORE_SetLOGFormatFlags(fLOG_Short | fLOG_DateTime | fLOG_OmitNoteLevel);
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
     CORE_LOG(eLOG_Note, "Miscellaneous tests started");
@@ -356,8 +385,7 @@ int main(void)
     TEST_MIME();
     TEST_ConnNetInfo();
 
-    CORE_LOG(eLOG_Note, "All tests completed");
-
+    CORE_LOG(eLOG_Note, "All tests completed successfully");
     CORE_SetLOG(0);
     return 0;
 }

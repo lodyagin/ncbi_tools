@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.41 $
+* $Revision: 6.43 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,183 +39,6 @@
 * -------  ----------  -----------------------------------------------------
 *
 *
-* $Log: objmgr.h,v $
-* Revision 6.41  2006/08/08 20:20:19  kans
-* added ObjMgrReportProc, internals of ObjMgrReportFunc that takes file pointer
-*
-* Revision 6.40  2006/08/03 20:18:14  bollin
-* will remove desktop views if only desktop views remain
-*
-* Revision 6.39  2006/07/13 17:06:38  bollin
-* use Uint4 instead of Uint2 for itemID values
-* removed unused variables
-* resolved compiler warnings
-*
-* Revision 6.38  2005/04/08 21:23:08  kans
-* added ObjMgrStatusString function for debugging
-*
-* Revision 6.37  2004/04/01 13:43:05  lavr
-* Spell "occurred", "occurrence", and "occurring"
-*
-* Revision 6.36  2002/07/30 14:41:45  kans
-* removed omdp->rearranged
-*
-* Revision 6.35  2002/07/29 21:30:17  kans
-* added rearranged flag to omdp
-*
-* Revision 6.34  2002/07/01 14:29:03  kans
-* changed totobj, currobj to Uint4
-*
-* Revision 6.33  2002/05/31 21:53:27  yaschenk
-* changing lookup by EntityID to array[][]
-*
-* Revision 6.32  2001/12/26 20:54:14  kans
-* added defines for OM_OPT_RECORD_SUPPRESSED and OM_OPT_RECORD_DEAD
-*
-* Revision 6.31  2001/11/19 15:26:19  kans
-* added ObjMgrDeleteAllInRecord, still need to bail in ObjMgrDelete if bulkIndexFree, then call from BioseqFree and BioseqSetFree
-*
-* Revision 6.30  2001/11/15 18:15:48  kans
-* set bsp->omdp at creation, SeqMgrDeleteIndexesInRecord sets omdp->bulkIndexFree
-*
-* Revision 6.29  2001/05/31 22:58:25  kans
-* added ObjMgrReapOne, DEFAULT_MAXOBJ, autoclean reaps and frees one entity at a time, as needed
-*
-* Revision 6.28  2001/05/31 22:33:03  kans
-* added autoclean and maxobj to ObjMgr structure, ObjMgrAddFunc optionally calls ObjMgrReap and ObjMgrFreeCache to completely clear out least recently accessed objects if currobj >= maxobj
-*
-* Revision 6.27  2001/02/16 21:34:49  ostell
-* changed GetSecs() to ObjMgrTouchCnt() to reduce system calls
-*
-* Revision 6.26  2000/11/28 22:59:02  kans
-* omdp->lockcnt now a Uint2 to avoid overflow when locking accessions repeatedly referenced by genomic contig
-*
-* Revision 6.25  2000/11/28 21:43:55  kans
-* added ObjMgrReportFunc for debugging
-*
-* Revision 6.24  2000/10/30 21:26:09  shavirin
-* Changes and fixes for some MT-safety related problems.
-*
-* Revision 6.23  2000/04/07 15:01:24  durand
-* added UPDATE_TYPE_NEWSEQ define
-*
-* Revision 6.22  2000/03/02 21:11:05  lewisg
-* use bandalign for import sequence, make standalone ddv use viewmgr, make dialogs modal, send color update
-*
-* Revision 6.21  2000/02/10 17:05:52  kans
-* added UPDATE_TYPE_CN3D
-*
-* Revision 6.20  2000/02/10 16:53:55  kans
-* added UPDATE_TYPE_VIEWMGR define (presumably in the right place)
-*
-* Revision 6.19  1999/12/06 22:38:52  durand
-* add UPDATE_TYPE_CARETPOS to be used by DDV
-*
-* Revision 6.18  1999/12/03 23:17:23  lewisg
-* Patrick's new global update msg, argument passing when launching ddv, experimental editing
-*
-* Revision 6.17  1999/11/18 00:21:42  lewisg
-* draw speedups and selection on mouseup
-*
-* Revision 6.16  1999/10/29 18:53:08  durand
-* add DDVUpdateMSG typedef
-*
-* Revision 6.15  1999/10/15 20:56:40  lewisg
-* append DDV_ColorGlobal as userdata.  free memory when cn3d terminates.
-*
-* Revision 6.14  1999/09/27 20:03:15  kans
-* added rowID to OMMsgStruct, new ObjMgrSendRowMsg function
-*
-* Revision 6.13  1999/08/11 15:17:54  kans
-* added ObjMgrFreeByEntityID
-*
-* Revision 6.12  1999/07/06 17:17:28  ywang
-* add message OM_MSG_FLUSH
-*
- * Revision 6.11  1998/09/28  19:54:12  kans
- * made ObjMgrDump debugging function public, no longer conditionally compiled
- *
-* Revision 6.10  1998/07/01 19:11:51  kans
-* added fromProcID, toProcID, OM_MSG_PROCESS, ObjMgrSendProcMsg, time of indexing, ObjMgrGetProcID, moved protFeat and cdsOrRnaFeat to seqmgr structure
-*
-* Revision 6.9  1998/06/30 21:40:52  kans
-* added seqmgr feature indexed time stamp to omdp
-*
-* Revision 6.8  1998/06/29 20:35:53  kans
-* added reap and reload extra functions
-*
-* Revision 6.7  1998/06/29 00:23:54  kans
-* several changes to new indexing functions
-*
-* Revision 6.6  1998/06/27 22:23:44  kans
-* improvements and further implementation of new indexing, exploration functions
-*
-* Revision 6.5  1998/06/26 22:36:19  kans
-* initial work on tracking sorted features, and cds and prot links, for rapid collection
-*
-* Revision 6.4  1998/05/29 20:34:11  chappey
-* New objmgr messages OM_MSG_HIDE, OM_MSG_SHOW
-*
-* Revision 6.3  1998/03/24 23:55:33  kans
-* added OBJ_PROJECT define
-*
-* Revision 6.2  1997/11/19 22:14:39  ostell
-* added support for multithreaded programs
-*
-* Revision 6.1  1997/09/11 15:55:49  ostell
-* Added support for SetColor messages
-*
-* Revision 6.0  1997/08/25 18:06:49  madden
-* Revision changed to 6.0
-*
-* Revision 5.2  1997/06/19 18:38:31  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.1  1997/06/02 17:04:14  kans
-* added ObjMgrProcLoadEx
-*
-* Revision 5.0  1996/05/28 13:23:23  ostell
-* Set to revision 5.0
-*
- * Revision 4.10  1996/02/28  04:53:06  ostell
- * added ObjMgrHold suport
- *
- * Revision 4.8  1996/01/05  14:39:12  ostell
- * fix for control chars in comment
- *
- * Revision 4.6  1995/12/27  18:39:17  ostell
- * added OBJ_BIOSEQ_DELTA
- *
- * Revision 4.5  1995/12/22  14:45:45  ostell
- * added do_not_reload_from_cache to OmProcControl so that DataGet
- * functions from gather can control this behvior
- * added protection from recursion in ObjMgrDelete
- *
- * Revision 4.4  1995/12/06  14:58:12  ostell
- * added OBJ_SEQHIST_ALIGN
- *
- * Revision 4.3  1995/10/03  15:50:37  ostell
- * added support for selection by region.. now fully implemented
- *
- * Revision 4.2  1995/09/30  03:38:31  ostell
- * Changed ObjMgrMessage functions to pass a structure
- * Added support for selecting regions
- * Added ability to remove entity when no more views on it
- *
- * Revision 4.1  1995/09/25  18:06:41  ostell
- * added ObjMgrGenericAsnTextRead
- *
- * Revision 4.0  1995/07/26  13:49:01  ostell
- * force revision to 4.0
- *
- * Revision 1.18  1995/07/08  15:21:01  ostell
- * Added ObjMgrSetOptions() and related functions
- * Added support for delete of entity when no more user data on it
- * Added support for DirtyFlag
- *
- * Revision 1.17  1995/05/15  21:46:05  ostell
- * added Log line
- *
 *
 *
 * ==========================================================================
@@ -445,6 +268,8 @@ typedef struct ddvupdatemsg{
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL ObjMgrSendMsg PROTO((Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype));
+NLM_EXTERN Boolean LIBCALL ObjMgrSendMsgNoFeatureChange PROTO((Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype));
+NLM_EXTERN Boolean LIBCALL ObjMgrSendMsgOnlyFeatLabelChange PROTO((Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype));
 
 NLM_EXTERN Boolean LIBCALL ObjMgrSendProcMsg PROTO((Uint2 msg, Uint2 entityID, Uint4 itemID, Uint2 itemtype,
                                                     Uint2 fromProcID, Uint2 toProcID, Pointer procmsgdata));

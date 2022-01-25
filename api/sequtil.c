@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.285 $
+* $Revision: 6.304 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -4946,7 +4946,7 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
                 num++;
                 slp = slp->next;
             }
-            if (average) {
+            if (average && num != 0) {
                 len /= num;
             }
             break;
@@ -5067,6 +5067,166 @@ NLM_EXTERN Uint1 StrandCmp (Uint1 strand)
     return strand;
 }
 
+
+static Boolean DoStrandsMatch(Uint1 strand1, Uint2 strand2)
+{
+  if (strand1 == Seq_strand_minus && strand2 == Seq_strand_minus) {
+    return TRUE;
+  } else if (strand1 != Seq_strand_minus && strand2 != Seq_strand_minus) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static SeqLocPtr SeqLocMixFromPackedSeqPnt (PackSeqPntPtr pspp)
+{
+    SeqPntPtr pnt;
+    SeqLocPtr list = NULL, slp = NULL;
+    Uint1     i;
+
+    if (pspp == NULL) 
+    {
+        return NULL;
+    }
+
+    while (pspp != NULL) 
+    {
+        for (i = 0; i < pspp->used; i++) 
+        {
+            pnt = SeqPntNew();
+            pnt->id = SeqIdDup (pspp->id);
+            pnt->strand = pspp->strand;
+            pnt->point = pspp->pnts[i];
+            ValNodeAddPointer (&list, SEQLOC_PNT, pnt);
+        }
+        pspp = pspp->next;
+    }
+    slp = ValNodeNew (NULL);
+    slp->choice = SEQLOC_MIX;
+    slp->data.ptrvalue = list;
+    return slp;
+}
+
+
+static SeqLocPtr SeqLocMixFromSeqBond (SeqBondPtr sbp)
+{
+  SeqPntPtr pnt;
+  SeqLocPtr list = NULL, slp = NULL;
+
+  if (sbp == NULL || (sbp->a == NULL && sbp->b == NULL)) {
+    return NULL;
+  }
+  if (sbp->a != NULL) {
+    pnt = AsnIoMemCopy (sbp->a, (AsnReadFunc) SeqPntAsnRead, (AsnWriteFunc) SeqPntAsnWrite);
+    ValNodeAddPointer (&list, SEQLOC_PNT, pnt);
+  }
+  if (sbp->b != NULL) {
+    pnt = AsnIoMemCopy (sbp->b, (AsnReadFunc) SeqPntAsnRead, (AsnWriteFunc) SeqPntAsnWrite);
+    ValNodeAddPointer (&list, SEQLOC_PNT, pnt);
+  }
+  slp = ValNodeNew (NULL);
+  slp->choice = SEQLOC_MIX;
+  slp->data.ptrvalue = list;
+  return slp;
+}
+
+
+static Int2 CompareMultiPartLocToMultiPartLoc (SeqLocPtr a, SeqLocPtr b, Boolean compare_strand)
+{
+  Boolean got_one = FALSE;   /* for any overlap */
+  SeqLocPtr slp, slp2;
+  Int2 retval = SLC_NO_MATCH,
+        retval2 = SLC_NO_MATCH;
+
+  if (a == NULL || b == NULL) {
+    return SLC_NO_MATCH;
+  }
+  if (a->choice != SEQLOC_MIX && a->choice != SEQLOC_EQUIV && a->choice != SEQLOC_PACKED_INT) {
+    return SLC_NO_MATCH;
+  }
+  if (b->choice != SEQLOC_MIX && b->choice != SEQLOC_EQUIV && b->choice != SEQLOC_PACKED_INT) {
+    return SLC_NO_MATCH;
+  }
+                
+  slp = (SeqLocPtr)a->data.ptrvalue;  /* check for identity */
+  slp2 = (SeqLocPtr)b->data.ptrvalue;
+  retval = SeqLocCompareEx(slp, slp2, compare_strand);
+  slp = slp->next;
+  slp2 = slp2->next;
+  while ((slp != NULL) && (slp2 != NULL) && (retval == SLC_A_EQ_B))
+  {
+      retval = SeqLocCompareEx(slp, slp2, compare_strand);
+      slp = slp->next;
+      slp2 = slp2->next;
+  }
+  if ((slp == NULL) && (slp2 == NULL) && (retval == SLC_A_EQ_B))
+      return retval;
+
+  slp = (SeqLocPtr)a->data.ptrvalue;    /* check for a in b */
+  slp2 = (SeqLocPtr)b->data.ptrvalue;
+  while ((slp != NULL) && (slp2 != NULL))
+  {
+      retval2 = SeqLocCompareEx(slp, slp2, compare_strand);
+      if (retval2 > SLC_NO_MATCH)
+          got_one = TRUE;
+      switch (retval2)
+      {
+          case SLC_NO_MATCH:
+              slp2 = slp2->next;
+              break;
+          case SLC_A_EQ_B:
+              slp2 = slp2->next;
+              slp = slp->next;
+              break;
+          case SLC_A_IN_B:
+              slp = slp->next;
+              break;
+          case SLC_B_IN_A:
+          case SLC_A_OVERLAP_B:
+              slp2 = NULL;
+              break;
+      }
+  }
+  if (slp == NULL)    /* a all in b */
+      return SLC_A_IN_B;
+
+  slp2 = (SeqLocPtr)a->data.ptrvalue;    /* check for b in a */
+  slp = (SeqLocPtr)b->data.ptrvalue;
+  while ((slp != NULL) && (slp2 != NULL))
+  {
+      retval2 = SeqLocCompareEx(slp, slp2, compare_strand);
+      if (retval2 > SLC_NO_MATCH)
+          got_one = TRUE;
+      switch (retval2)
+      {
+          case SLC_NO_MATCH:
+              slp2 = slp2->next;
+              break;
+          case SLC_A_EQ_B:
+              slp2 = slp2->next;
+              slp = slp->next;
+              break;
+          case SLC_A_IN_B:
+              slp = slp->next;
+              break;
+          case SLC_B_IN_A:
+          case SLC_A_OVERLAP_B:
+              slp2 = NULL;
+              break;
+      }
+  }
+  if (slp == NULL)    /* a all in b */
+      return SLC_B_IN_A;
+
+  if (got_one)
+      return SLC_A_OVERLAP_B;
+
+  return retval;
+}
+
+
 /*****************************************************************************
 *
 *   SeqLocCompare(a, b)
@@ -5079,12 +5239,13 @@ NLM_EXTERN Uint1 StrandCmp (Uint1 strand)
 *   
 *
 *****************************************************************************/
-NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
+NLM_EXTERN Int2 SeqLocCompareEx (SeqLocPtr a, SeqLocPtr b, Boolean compare_strand)   /* seqloc */
 
 {
     BioseqPtr bsp;
     Int4 len = -1L, i, j, num, num2, point, hits;
-    SeqLocPtr slp, slp2;
+    Uint1 strand;
+    SeqLocPtr slp, tmp_a = NULL, tmp_b = NULL;
     ValNode tmp;
     SeqBondPtr sbp;
     SeqIntPtr sip, sip2;
@@ -5113,96 +5274,56 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
     {
         case SEQLOC_MIX:    /* mix -- more than one seq */
         case SEQLOC_EQUIV:    /* equiv -- ditto */
-        case SEQLOC_PACKED_INT:    /* packed int */
+        case SEQLOC_PACKED_INT:    /* packed int */ 
+        case SEQLOC_PACKED_PNT: /* packed points (need to convert to SEQLOC_MIX) */
+        case SEQLOC_BOND: /* bond (need to convert to SEQLOC_MIX) */
+            if (a->choice == SEQLOC_PACKED_PNT) 
+            {
+                tmp_a = SeqLocMixFromPackedSeqPnt ((PackSeqPntPtr)a->data.ptrvalue);
+                a = tmp_a;
+            } 
+            else if (a->choice == SEQLOC_BOND) 
+            {
+                tmp_a = SeqLocMixFromSeqBond ((SeqBondPtr)a->data.ptrvalue);
+                a = tmp_a;
+            }
             if ((b->choice == SEQLOC_MIX) ||  /* check for identity */
                 (b->choice == SEQLOC_EQUIV) ||
-                (b->choice == SEQLOC_PACKED_INT))
+                (b->choice == SEQLOC_PACKED_INT) ||
+                (b->choice == SEQLOC_PACKED_PNT) ||
+                (b->choice == SEQLOC_BOND))
             {
-                got_one = FALSE;   /* for any overlap */
-                slp = (SeqLocPtr)a->data.ptrvalue;  /* check for identity */
-                slp2 = (SeqLocPtr)b->data.ptrvalue;
-                retval = SeqLocCompare(slp, slp2);
-                slp = slp->next;
-                slp2 = slp2->next;
-                while ((slp != NULL) && (slp2 != NULL) && (retval == SLC_A_EQ_B))
+                if (b->choice == SEQLOC_PACKED_PNT) 
                 {
-                    retval = SeqLocCompare(slp, slp2);
-                    slp = slp->next;
-                    slp2 = slp2->next;
+                    tmp_b = SeqLocMixFromPackedSeqPnt ((PackSeqPntPtr)b->data.ptrvalue);
+                    b = tmp_b;
                 }
-                if ((slp == NULL) && (slp2 == NULL) && (retval == SLC_A_EQ_B))
-                    return retval;
-
-                slp = (SeqLocPtr)a->data.ptrvalue;    /* check for a in b */
-                slp2 = (SeqLocPtr)b->data.ptrvalue;
-                while ((slp != NULL) && (slp2 != NULL))
+                else if (b->choice == SEQLOC_BOND)
                 {
-                    retval2 = SeqLocCompare(slp, slp2);
-                    if (retval2 > SLC_NO_MATCH)
-                        got_one = TRUE;
-                    switch (retval2)
-                    {
-                        case SLC_NO_MATCH:
-                            slp2 = slp2->next;
-                            break;
-                        case SLC_A_EQ_B:
-                            slp2 = slp2->next;
-                            slp = slp->next;
-                            break;
-                        case SLC_A_IN_B:
-                            slp = slp->next;
-                            break;
-                        case SLC_B_IN_A:
-                        case SLC_A_OVERLAP_B:
-                            slp2 = NULL;
-                            break;
-                    }
+                    tmp_b = SeqLocMixFromSeqBond ((SeqBondPtr)b->data.ptrvalue);
+                    b = tmp_b;
                 }
-                if (slp == NULL)    /* a all in b */
-                    return SLC_A_IN_B;
-
-                slp2 = (SeqLocPtr)a->data.ptrvalue;    /* check for b in a */
-                slp = (SeqLocPtr)b->data.ptrvalue;
-                while ((slp != NULL) && (slp2 != NULL))
-                {
-                    retval2 = SeqLocCompare(slp, slp2);
-                    if (retval2 > SLC_NO_MATCH)
-                        got_one = TRUE;
-                    switch (retval2)
-                    {
-                        case SLC_NO_MATCH:
-                            slp2 = slp2->next;
-                            break;
-                        case SLC_A_EQ_B:
-                            slp2 = slp2->next;
-                            slp = slp->next;
-                            break;
-                        case SLC_A_IN_B:
-                            slp = slp->next;
-                            break;
-                        case SLC_B_IN_A:
-                        case SLC_A_OVERLAP_B:
-                            slp2 = NULL;
-                            break;
-                    }
+                retval = CompareMultiPartLocToMultiPartLoc (a, b, compare_strand);
+                if (retval != SLC_NO_MATCH) {
+                  tmp_a = SeqLocFree (tmp_a);
+                  tmp_b = SeqLocFree (tmp_b);
+                  return retval;
                 }
-                if (slp == NULL)    /* a all in b */
-                    return SLC_B_IN_A;
-
-                if (got_one)
-                    return SLC_A_OVERLAP_B;
             }
 
             slp = (SeqLocPtr)a->data.ptrvalue; /* check for any overlap */
-            retval = SeqLocCompare(slp, b);
+            retval = SeqLocCompareEx(slp, b, compare_strand);
             slp = slp->next;
             while (slp != NULL)
             {
-                retval2 = SeqLocCompare(slp, b);
+                retval2 = SeqLocCompareEx(slp, b, compare_strand);
                 retval = (Int2) rettable[retval][retval2];
                 slp = slp->next;
             }
+            tmp_a = SeqLocFree (tmp_a);
+            tmp_b = SeqLocFree (tmp_b);
             return retval;
+            break;
         default:
             break;
     }
@@ -5212,15 +5333,16 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
         case SEQLOC_EQUIV:    /* equiv -- ditto */
         case SEQLOC_PACKED_INT:    /* packed int */
             slp = (SeqLocPtr)b->data.ptrvalue;
-            retval = SeqLocCompare(a, slp);
+            retval = SeqLocCompareEx(a, slp, compare_strand);
             slp = slp->next;
             while (slp != NULL)
             {
-                retval2 = SeqLocCompare(a, slp);
+                retval2 = SeqLocCompareEx(a, slp, compare_strand);
                 retval = (Int2)rettable2[retval][retval2];
                 slp = slp->next;
             }
             return retval;
+            break;
         default:
             break;
     }
@@ -5245,11 +5367,11 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
             sbp = (SeqBondPtr)a->data.ptrvalue;
             tmp.choice = SEQLOC_PNT;    /* check the points */
             tmp.data.ptrvalue = (Pointer)sbp->a;
-            retval = SeqLocCompare(&tmp, b);
+            retval = SeqLocCompareEx(&tmp, b, compare_strand);
             if (sbp->b != NULL)
             {
                 tmp.data.ptrvalue = (Pointer)sbp->b;
-                retval2 = SeqLocCompare(&tmp, b);
+                retval2 = SeqLocCompareEx(&tmp, b, compare_strand);
                 retval = (Int2) rettable[retval][retval2];
             }
             break;
@@ -5265,7 +5387,7 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     {
                         if (SeqIdForSameBioseq(sbp->b->id, sidp))
                             retval2 = SLC_B_IN_A;
-                        retval = (Int2) rettable[retval][retval2];
+                        retval = (Int2) rettable2[retval][retval2];
                     }
                     break;
                 case SEQLOC_WHOLE:    /* whole */
@@ -5299,8 +5421,32 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                         retval = SLC_B_IN_A;
                     break;
                 case SEQLOC_PACKED_PNT:    /* packed pnt */
-                    if (SeqIdForSameBioseq(sidp, ((PackSeqPntPtr)b->data.ptrvalue)->id))
-                        retval = SLC_B_IN_A;
+                    got_one = FALSE;
+                    missed_one = FALSE;
+                    for (pspp = (PackSeqPntPtr)b->data.ptrvalue;
+                         pspp != NULL;
+                         pspp = pspp->next) 
+                    {
+                        if (SeqIdForSameBioseq(sidp, pspp->id))
+                        {
+                            got_one = TRUE;
+                        } 
+                        else
+                        {
+                            missed_one = TRUE;
+                        }
+                    }
+                    if (got_one) 
+                    {
+                        if (missed_one) 
+                        {   
+                            retval = SLC_A_OVERLAP_B;
+                        } 
+                        else
+                        {
+                            retval = SLC_B_IN_A;
+                        }
+                    }
                     break;
                 default:
                     break;
@@ -5316,18 +5462,24 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     if (SeqIdForSameBioseq(sbp->a->id, sidp))
                     {
                         if ((sip->from <= sbp->a->point) &&
-                            (sip->to >= sbp->a->point))
+                            (sip->to >= sbp->a->point) &&
+                            (!compare_strand || DoStrandsMatch(sip->strand, sbp->a->strand))) 
+                        {
                             retval = SLC_B_IN_A;
+                        }
                     }
                     if (sbp->b != NULL)
                     {
                         if (SeqIdForSameBioseq(sbp->b->id, sidp))
                         {
                             if ((sip->from <= sbp->b->point) &&
-                                (sip->to >= sbp->b->point))
-                                retval = SLC_B_IN_A;
+                                (sip->to >= sbp->b->point) &&
+                                (!compare_strand || DoStrandsMatch(sip->strand, sbp->b->strand)))
+                            {
+                                  retval2 = SLC_B_IN_A;
+                            }
                         }
-                        retval = (Int2) rettable[retval][retval2];
+                        retval = (Int2) rettable2[retval][retval2];
                     }
                     break;
                 case SEQLOC_WHOLE:    /* whole */
@@ -5353,11 +5505,12 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     break;
                 case SEQLOC_INT:    /* int */
                     sip2 = (SeqIntPtr)b->data.ptrvalue;
-                    if (SeqIdForSameBioseq(sidp, sip2->id))
+                    if (SeqIdForSameBioseq(sidp, sip2->id) 
+                        && (!compare_strand || DoStrandsMatch (sip->strand, sip2->strand)))
                     {
-                        if ((sip->from == sip2->from) && (sip->to == sip2->to))
+                        if ((sip->from == sip2->from) && (sip->to == sip2->to)) 
                             retval = SLC_A_EQ_B;
-                        else if ((sip->from <= sip2->from) && (sip->to >= sip2->to))
+                        else if ((sip->from <= sip2->from) && (sip->to >= sip2->to)) 
                             retval = SLC_B_IN_A;
                         else if ((sip->from >= sip2->from) && (sip->to <= sip2->to))
                             retval = SLC_A_IN_B;
@@ -5368,7 +5521,8 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     }
                     break;
                 case SEQLOC_PNT:    /* pnt */
-                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
+                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id)
+                        && (!compare_strand || DoStrandsMatch (sip->strand, ((SeqPntPtr)b->data.ptrvalue)->strand)))
                     {
                         point = ((SeqPntPtr)b->data.ptrvalue)->point;
                         if ((point >= sip->from) && (point <= sip->to))
@@ -5377,34 +5531,35 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     break;
                 case SEQLOC_PACKED_PNT:    /* packed pnt */
                     pspp = (PackSeqPntPtr)b->data.ptrvalue;
-                    if (SeqIdForSameBioseq(sidp, pspp->id))
+                    got_one = FALSE;
+                    missed_one = FALSE;
+                    while (pspp != NULL)
                     {
-                        got_one = FALSE;
-                        missed_one = FALSE;
-                        num = PackSeqPntNum(pspp);
-                        for (i = 0; i < num; i++)
+                        if (SeqIdForSameBioseq(sidp, pspp->id)
+                            && (!compare_strand || DoStrandsMatch (sip->strand, pspp->strand)))
                         {
-                            point = PackSeqPntGet(pspp, i);
-                            if ((point < sip->from) || (point > sip->to))
+                            num = pspp->used;
+                            for (i = 0; i < num; i++)
                             {
-                                missed_one = TRUE;
-                                if (got_one)
-                                    i = num;
-                            }
-                            else
-                            {
-                                got_one = TRUE;
-                                if (missed_one)
-                                    i = num;
+                                point = pspp->pnts[i];
+                                if ((point < sip->from) || (point > sip->to))
+                                {
+                                    missed_one = TRUE;
+                                }
+                                else
+                                {
+                                    got_one = TRUE;
+                                }
                             }
                         }
-                        if (got_one)
-                        {
-                            if (missed_one)
-                                retval = SLC_A_OVERLAP_B;
-                            else
-                                retval = SLC_B_IN_A;
-                        }
+                        pspp = pspp->next;
+                    }
+                    if (got_one)
+                    {
+                        if (missed_one)
+                            retval = SLC_A_OVERLAP_B;
+                        else
+                            retval = SLC_B_IN_A;
                     }
                     break;
                 default:
@@ -5414,23 +5569,26 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
         case SEQLOC_PNT:    /* pnt */
             sidp = ((SeqPntPtr)a->data.ptrvalue)->id;
             point = ((SeqPntPtr)a->data.ptrvalue)->point;
+            strand = ((SeqPntPtr)a->data.ptrvalue)->strand;
             switch (b->choice)
             {
                 case SEQLOC_BOND:   /* bond -- 2 seqs */
                     sbp = (SeqBondPtr)b->data.ptrvalue;
-                    if (SeqIdForSameBioseq(sbp->a->id, sidp))
+                    if (SeqIdForSameBioseq(sbp->a->id, sidp)
+                        && (!compare_strand || DoStrandsMatch (sbp->a->strand, strand)))
                     {
                         if (point == sbp->a->point)
                             retval = SLC_A_EQ_B;
                     }
                     if (sbp->b != NULL)
                     {
-                        if (SeqIdForSameBioseq(sbp->b->id, sidp))
+                        if (SeqIdForSameBioseq(sbp->b->id, sidp)
+                            && (!compare_strand || DoStrandsMatch (sbp->b->strand, strand)))
                         {
                             if (point == sbp->b->point)
-                                retval = SLC_A_EQ_B;
+                                retval2 = SLC_A_EQ_B;
                         }
-                        retval = (Int2) rettable[retval][retval2];
+                        retval = (Int2) rettable2[retval][retval2];
                     }
                     break;
                 case SEQLOC_WHOLE:    /* whole */
@@ -5439,7 +5597,8 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     break;
                 case SEQLOC_INT:    /* int */
                     sip2 = (SeqIntPtr)b->data.ptrvalue;
-                    if (SeqIdForSameBioseq(sidp, sip2->id))
+                    if (SeqIdForSameBioseq(sidp, sip2->id)
+                        && (!compare_strand || DoStrandsMatch (sip2->strand, strand)))
                     {
                         if ((point == sip2->from) && (point == sip2->to))
                             retval = SLC_A_EQ_B;
@@ -5448,7 +5607,8 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     }
                     break;
                 case SEQLOC_PNT:    /* pnt */
-                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
+                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id)
+                        && (!compare_strand || DoStrandsMatch (strand, ((SeqPntPtr)b->data.ptrvalue)->strand)))
                     {
                         if (point == ((SeqPntPtr)b->data.ptrvalue)->point)
                             retval = SLC_A_EQ_B;
@@ -5456,16 +5616,40 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     break;
                 case SEQLOC_PACKED_PNT:    /* packed pnt */
                     pspp = (PackSeqPntPtr)b->data.ptrvalue;
-                    if (SeqIdForSameBioseq(sidp, pspp->id))
-                    {
-                        num = PackSeqPntNum(pspp);
-                        for (i = 0; i < num; i++)
+                    got_one = FALSE;
+                    missed_one = FALSE;
+                    while (pspp != NULL) {
+                        if (SeqIdForSameBioseq(sidp, pspp->id)
+                            && (!compare_strand || DoStrandsMatch (strand, pspp->strand)))
                         {
-                            if (point == PackSeqPntGet(pspp, i))
+                            num = pspp->used;
+                            for (i = 0; i < num; i++)
                             {
-                                retval = SLC_A_IN_B;
-                                i = num;     /* only check one */
+                                if (point == pspp->pnts[i])
+                                {
+                                    got_one = TRUE;                                    
+                                }
+                                else
+                                {
+                                    missed_one = TRUE;
+                                }
                             }
+                        }
+                        else
+                        {
+                            missed_one = TRUE;
+                        }
+                        pspp = pspp->next;
+                    }
+                    if (got_one) 
+                    {
+                        if (missed_one) 
+                        {
+                            retval = SLC_A_IN_B;
+                        }
+                        else
+                        {
+                            retval = SLC_A_EQ_B;
                         }
                     }
                     break;
@@ -5481,7 +5665,8 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
             {
                 case SEQLOC_BOND:   /* bond -- 2 seqs */
                     sbp = (SeqBondPtr)b->data.ptrvalue;
-                    if (SeqIdForSameBioseq(sbp->a->id, sidp))
+                    if (SeqIdForSameBioseq(sbp->a->id, sidp)
+                        && (!compare_strand || DoStrandsMatch (pspp->strand, sbp->a->strand)))
                     {
                         point = sbp->a->point;
                         for (i = 0; i < num; i++)
@@ -5495,7 +5680,8 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     }
                     if (sbp->b != NULL)
                     {
-                        if (SeqIdForSameBioseq(sbp->b->id, sidp))
+                        if (SeqIdForSameBioseq(sbp->b->id, sidp)
+                            && (!compare_strand || DoStrandsMatch(pspp->strand, sbp->b->strand)))
                         {
                             point = sbp->b->point;
                             for (i = 0; i < num; i++)
@@ -5518,7 +5704,8 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     break;
                 case SEQLOC_INT:    /* int */
                     sip = (SeqIntPtr)b->data.ptrvalue;
-                    if (SeqIdForSameBioseq(sidp, sip->id))
+                    if (SeqIdForSameBioseq(sidp, sip->id)
+                        && (!compare_strand || DoStrandsMatch(sip->strand, pspp->strand)))
                     {
                         got_one = FALSE;
                         missed_one = FALSE;
@@ -5548,7 +5735,8 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     }
                     break;
                 case SEQLOC_PNT:    /* pnt */
-                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id))
+                    if (SeqIdForSameBioseq(sidp, ((SeqPntPtr)b->data.ptrvalue)->id)
+                        && (!compare_strand || DoStrandsMatch (pspp->strand, ((SeqPntPtr)b->data.ptrvalue)->strand)))
                     {
                         point = ((SeqPntPtr)b->data.ptrvalue)->point;
                         for (i = 0; i < num; i++)
@@ -5563,7 +5751,8 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
                     break;
                 case SEQLOC_PACKED_PNT:    /* packed pnt */
                     pspp2 = (PackSeqPntPtr)b->data.ptrvalue;
-                    if (SeqIdForSameBioseq(sidp, pspp->id))
+                    if (SeqIdForSameBioseq(sidp, pspp->id)
+                        && (!compare_strand || DoStrandsMatch(pspp->strand, pspp2->strand)))
                     {
                         num2 = PackSeqPntNum(pspp2);
                         if (num == num2)   /* check for identity */
@@ -5606,6 +5795,1047 @@ NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
     return retval;
 }
 
+
+NLM_EXTERN Int2 SeqLocCompare (SeqLocPtr a, SeqLocPtr b)   /* seqloc */
+{
+  return SeqLocCompareEx (a, b, FALSE);
+}
+
+
+static Uint1 ComplementLocCompare (Uint1 val)
+{
+  if (val == SLC_A_IN_B) {
+    val = SLC_B_IN_A;
+  } else if (val == SLC_B_IN_A) {
+    val = SLC_A_IN_B;
+  }
+  return val;
+}
+
+
+static Boolean CheckSeqLocCompResults (SeqLocPtr a, SeqLocPtr b, Uint1 allow_strand, Uint1 check_strand)
+{
+  Boolean rval = TRUE;
+
+  if (SeqLocCompare(a, b) != allow_strand) {
+    rval = FALSE;
+  } else if (SeqLocCompareEx(a, b, TRUE) != check_strand) {
+    rval = FALSE;
+  } else if (SeqLocCompare(b, a) != ComplementLocCompare(allow_strand)) {
+    rval = FALSE;
+  } else if (SeqLocCompareEx(b, a, TRUE) != ComplementLocCompare(check_strand)) {
+    rval = FALSE;
+  }
+  return rval;
+}
+
+
+NLM_EXTERN Boolean UnitTestSeqLocCompare (void)
+{
+  SeqLocPtr a, b;
+  SeqIdPtr sip, sip2 = NULL;
+  SeqIntPtr sint1, sint2, sint3, sint4;
+  TextSeqIdPtr tsip, tsip2 = NULL;
+  ValNodePtr list = NULL, list2 = NULL;
+  SeqPntPtr pnt1, pnt2, pnt3, pnt4;
+  PackSeqPntPtr pspp1, pspp2;
+  SeqBondPtr sbp1, sbp2;
+  Boolean    rval = FALSE;
+
+  a = ValNodeNew (NULL);
+
+  b = ValNodeNew (NULL);
+
+  tsip = TextSeqIdNew ();
+  tsip->accession = StringSave ("AY123456");
+  sip = ValNodeNew (NULL);
+  sip->choice = SEQID_GENBANK;
+  sip->data.ptrvalue = tsip;
+
+  tsip2 = TextSeqIdNew ();
+  tsip2->accession = StringSave ("AY123457");
+  sip2 = ValNodeNew (NULL);
+  sip2->choice = SEQID_GENBANK;
+  sip2->data.ptrvalue = tsip2;
+
+  sint1 = SeqIntNew ();
+  sint1->id = sip;
+  sint1->from = 0;
+  sint1->to = 10;
+
+  sint2 = SeqIntNew ();
+  sint2->id = sip;
+  sint2->from = 15;
+  sint2->to = 25;
+
+  sint3 = SeqIntNew ();
+  sint3->id = sip;
+  sint3->from = 0;
+  sint3->to = 10;
+
+  sint4 = SeqIntNew ();
+  sint4->id = sip;
+  sint4->from = 15;
+  sint4->to = 25;
+
+  pnt1 = SeqPntNew ();
+  pnt1->id = sip;
+  pnt1->point = 5;
+
+  pnt2 = SeqPntNew ();
+  pnt2->id = sip;
+  pnt2->point = 16;
+
+  pnt3 = SeqPntNew ();
+  pnt3->id = sip;
+  pnt3->point = 5;
+
+  pnt4 = SeqPntNew ();
+  pnt4->id = sip;
+  pnt4->point = 16;
+
+  sbp1 = SeqBondNew ();
+  sbp1->a = pnt1;
+  sbp1->b = pnt2;
+
+  sbp2 = SeqBondNew ();
+  sbp2->a = pnt3;
+  sbp2->b = pnt4;
+
+  pspp1 = PackSeqPntNew ();
+  pspp1->id = sip;
+  pspp1->used = 2;
+  pspp1->pnts[0] = 5;
+  pspp1->pnts[1] = 16;
+
+  pspp2 = PackSeqPntNew ();
+  pspp2->id = sip;
+  pspp2->used = 2;
+  pspp2->pnts[0] = 5;
+  pspp2->pnts[1] = 16;
+
+  /* NULL */
+  /* NULL vs NULL */
+  a->choice = SEQLOC_NULL;
+  b->choice = SEQLOC_NULL;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  /* NULL vs EMPTY */
+  b->choice = SEQLOC_EMPTY;
+  b->data.ptrvalue = sip;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* NULL vs WHOLE */
+  b->choice = SEQLOC_WHOLE;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* NULL vs INT */
+  b->choice = SEQLOC_INT;
+  b->data.ptrvalue = sint1;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* NULL vs PACKED INT */
+  ValNodeAddPointer (&list, SEQLOC_INT, sint1);
+  ValNodeAddPointer (&list, SEQLOC_INT, sint2);
+  b->choice = SEQLOC_PACKED_INT;
+  b->data.ptrvalue = list;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  list = ValNodeFree (list);
+
+  /* NULL vs point */
+  b->choice = SEQLOC_PNT;
+  b->data.ptrvalue = pnt1;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* NULL vs. packed pnt */
+  b->choice = SEQLOC_PACKED_PNT;
+  b->data.ptrvalue = pspp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* NULL vs MIX */
+  list = ValNodeNew (NULL);
+  list->choice = SEQLOC_INT;
+  list->data.ptrvalue = sint1;
+  b->choice = SEQLOC_MIX;
+  b->data.ptrvalue = list;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  list = ValNodeFree (list);
+
+  /* NULL vs BOND */
+  b->choice = SEQLOC_BOND;
+  b->data.ptrvalue = sbp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* EMPTY vs EMPTY */
+  a->choice = SEQLOC_EMPTY;
+  a->data.ptrvalue = sip;
+  b->choice = SEQLOC_EMPTY;
+  b->data.ptrvalue = sip;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  b->data.ptrvalue = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* EMPTY vs WHOLE */
+  b->choice = SEQLOC_WHOLE;
+  b->data.ptrvalue = sip;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* EMPTY vs INT */
+  b->choice = SEQLOC_INT;
+  sint1->id = sip;
+  b->data.ptrvalue = sint1;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* EMPTY vs packed-int */
+  list = NULL;
+  ValNodeAddPointer (&list, 0, sint1);
+  ValNodeAddPointer (&list, 0, sint2);
+  b->choice = SEQLOC_PACKED_INT;
+  b->data.ptrvalue = list;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  list = ValNodeFree (list);
+
+  /* EMPTY vs point */
+  b->choice = SEQLOC_PNT;
+  b->data.ptrvalue = pnt1;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* EMPTY vs. packed pnt */
+  b->choice = SEQLOC_PACKED_PNT;
+  b->data.ptrvalue = pspp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* EMPTY vs MIX */
+  list = ValNodeNew (NULL);
+  list->choice = SEQLOC_INT;
+  list->data.ptrvalue = sint1;
+  b->choice = SEQLOC_MIX;
+  b->data.ptrvalue = list;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  list = ValNodeFree (list);
+
+  /* EMPTY vs BOND */
+  b->choice = SEQLOC_BOND;
+  b->data.ptrvalue = sbp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  a->choice = SEQLOC_WHOLE;
+  /* WHOLE vs INT */
+  b->choice = SEQLOC_INT;
+  sint1->id = sip;
+  sint1->from = 0;
+  sint1->to = 10;
+  sint1->strand = Seq_strand_plus;
+  b->data.ptrvalue = sint1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->from = 0;
+  sint1->to = 484;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->id = sip;
+  sint1->from = 0;
+  sint1->to = 10;
+  sint1->strand = 0;
+
+  /* WHOLE vs packed int */
+  list = NULL;
+  ValNodeAddPointer (&list, SEQLOC_INT, sint1);
+  ValNodeAddPointer (&list, SEQLOC_INT, sint2);
+  b->choice = SEQLOC_PACKED_INT;
+  b->data.ptrvalue = list;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint2->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  list = ValNodeFree (list);
+  sint1->id = sip;
+  sint2->id = sip;
+
+  /* WHOLE vs pnt */
+  b->choice = SEQLOC_PNT;
+  b->data.ptrvalue = pnt1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = 0;
+  pnt1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->id = sip;
+
+  /* WHOLE vs SEQLOC_PACKED_PNT */
+  b->choice = SEQLOC_PACKED_PNT;
+  b->data.ptrvalue = pspp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = 0;
+  pspp1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->next = pspp2;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    pspp1->next = NULL;
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->next = NULL;
+  pspp1->id = sip;
+
+  /* WHOLE vs SEQLOC_MIX */
+  list = NULL;
+  ValNodeAddPointer (&list, SEQLOC_INT, sint1);
+  ValNodeAddPointer (&list, SEQLOC_INT, sint2);
+  b->choice = SEQLOC_MIX;
+  b->data.ptrvalue = list;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint2->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->id = sip;
+  sint2->id = sip;
+  list = ValNodeFree (list);
+
+  /* WHOLE vs SEQLOC_BOND */
+  b->choice = SEQLOC_BOND;
+  b->data.ptrvalue = sbp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = 0;
+  sbp1->a->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->id = sip;
+  sbp1->b->id = sip;
+
+  /* INT */
+  a->choice = SEQLOC_INT;
+  a->data.ptrvalue = sint3;
+  /* INT vs SEQLOC_INT */
+  b->choice = SEQLOC_INT;
+  b->data.ptrvalue = sint1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->to = 9;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->to = 11;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->from = 1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->from = 0;
+  sint1->to = 10;
+
+  /* INT vs PACKED_INT */
+  list = NULL;
+  ValNodeAddPointer (&list, SEQLOC_INT, sint1);
+  ValNodeAddPointer (&list, SEQLOC_INT, sint2);
+  b->choice = SEQLOC_PACKED_INT;
+  b->data.ptrvalue = list;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->to = 11;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->from = 1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->from = 11;
+  sint1->to = 24;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->from = 0;
+  sint1->to = 10;
+  list = ValNodeFree (list);
+
+  /* INT vs PNT */
+  b->choice = SEQLOC_PNT;
+  b->data.ptrvalue = pnt1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = 0;
+  pnt1->point = 13;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = 0;
+  pnt1->point = 5;
+  pnt1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->id = sip;
+
+  /* INT vs PACKED_PNT */
+  b->choice = SEQLOC_PACKED_PNT;
+  b->data.ptrvalue = pspp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = 0;
+  pspp1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->next = pspp2;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    pspp1->next = NULL;
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->next = NULL;
+  pspp1->id = sip;
+  pspp1->pnts[1] = 9;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = 0;
+  pspp1->pnts[1] = 16;
+
+  /* INT vs BOND */
+  b->choice = SEQLOC_BOND;
+  b->data.ptrvalue = sbp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = 0;
+  sbp1->b->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  sbp1->b->strand = 0;
+  sbp1->b->point = 9;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = 0;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = 0;
+
+  sbp1->a->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->id = sip;
+  sbp1->b->id = sip;
+  sbp1->b->point = 16;
+
+  /* PACKED_INT */
+  a->choice = SEQLOC_PACKED_INT;
+  ValNodeAddPointer (&list2, SEQLOC_INT, sint3);
+  ValNodeAddPointer (&list2, SEQLOC_INT, sint4);
+  a->data.ptrvalue = list2;
+
+  /* PACKED_INT vs PACKED_INT */
+  b->choice = SEQLOC_PACKED_INT;
+  ValNodeAddPointer (&list, SEQLOC_INT, sint1);
+  ValNodeAddPointer (&list, SEQLOC_INT, sint2);
+  b->data.ptrvalue = list;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint2->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint2->strand = 0;
+  sint1->from = 1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->strand = 0;
+  sint1->from = 11;
+  sint1->to = 14;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sint1->from = 0;
+  sint1->to = 10;
+
+  /* PACKED_INT vs PNT */
+  b->choice = SEQLOC_PNT;
+  b->data.ptrvalue = pnt1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = 0;
+  pnt1->point = 11;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->point = 16;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+
+  /* PACKED_INT vs SEQLOC_PACKED_PNT */
+  b->choice = SEQLOC_PACKED_PNT;
+  b->data.ptrvalue = pspp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = 0;
+  pspp1->pnts[0] = 11;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = 0;
+  pspp1->pnts[0] = 5;
+  pspp1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->next = pspp2;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    pspp1->next = NULL;
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->id = sip;
+  pspp1->next = NULL;
+
+
+  /* PACKED_INT vs SEQLOC_BOND */
+  b->choice = SEQLOC_BOND;
+  b->data.ptrvalue = sbp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = 0;
+  sbp1->b->strand = 0;
+  sbp1->a->point = 11;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = 0;
+  sbp1->b->point = 13;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->point = 5;
+  sbp1->b->point = 16;
+
+  list2 = ValNodeFree (list2);
+
+  /* PNT */
+  a->choice = SEQLOC_PNT;
+  a->data.ptrvalue = pnt3;
+
+  /* PNT vs PNT */
+  b->choice = SEQLOC_PNT;
+  b->data.ptrvalue = pnt1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->strand = 0;
+  pnt1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->id = sip;
+  pnt1->point = 6;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pnt1->point = 5;
+
+  /* PNT vs PACKED_PNT */
+  b->choice = SEQLOC_PACKED_PNT;
+  b->data.ptrvalue = pspp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = 0;
+  pspp1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->next = pspp2;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    pspp1->next = NULL;
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->next = NULL;
+  pspp1->id = sip;
+  pspp1->pnts[0] = 6;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->pnts[0] = 4;
+  pspp1->pnts[1] = 5;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->pnts[0] = 5;
+  pspp1->pnts[1] = 16;
+
+  /* PNT vs BOND */
+  b->choice = SEQLOC_BOND;
+  b->data.ptrvalue = sbp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = 0;
+  pnt3->point = 16;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = Seq_strand_minus;  
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = 0;
+  pnt3->point = 5;
+  sbp1->a->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->id = sip;
+
+  /* PACKED_PNT */
+  a->choice = SEQLOC_PACKED_PNT;
+  a->data.ptrvalue = pspp2;
+  /* PACKED_PNT vs PACKED_PNT */
+  b->choice = SEQLOC_PACKED_PNT;
+  b->data.ptrvalue = pspp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->strand = 0;
+  pspp1->pnts[0] = 6;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->pnts[0] = 5;
+  pspp1->pnts[1] = 17;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->pnts[1] = 16;
+  pspp1->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->next = pspp2;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    pspp1->next = NULL;
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->next = NULL;
+  pspp1->id = sip;
+  pspp1->used = 3;
+  pspp1->pnts[2] = 23;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_IN_B, SLC_A_IN_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp1->used = 2;
+
+  /* PACKED_PNT vs BOND */
+  b->choice = SEQLOC_BOND;
+  b->data.ptrvalue = sbp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp2->used = 3;
+  pspp2->pnts[2] = 23;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp2->used = 2;
+  pspp2->id = sip2;
+  if (!CheckSeqLocCompResults(a, b, SLC_NO_MATCH, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp2->next = pspp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_B_IN_A, SLC_B_IN_A)) {
+    pspp2->next = NULL;
+    goto UnitTestSeqLocCompare_end;
+  }
+  pspp2->next = NULL;
+  pspp2->id = sip;
+  sbp1->a->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = 0;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = 0;
+  sbp1->a->point = 4;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->point = 5;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->point = 5;
+  sbp1->b->point = 16;
+
+  /* BOND */
+  a->choice = SEQLOC_BOND;
+  a->data.ptrvalue = sbp2;
+  /* BOND vs BOND */
+  b->choice = SEQLOC_BOND;
+  b->data.ptrvalue = sbp1;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_EQ_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = Seq_strand_minus;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_NO_MATCH)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->strand = 0;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_EQ_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->strand = 0;
+  sbp1->a->point = 4;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->b->point = 5;
+  if (!CheckSeqLocCompResults(a, b, SLC_A_OVERLAP_B, SLC_A_OVERLAP_B)) {
+    goto UnitTestSeqLocCompare_end;
+  }
+  sbp1->a->point = 5;
+  sbp1->b->point = 16;
+
+  rval = TRUE;
+
+UnitTestSeqLocCompare_end:
+  sint1->id = NULL;
+  sint1 = SeqIntFree (sint1);
+  sint2->id = NULL;
+  sint2 = SeqIntFree (sint2);
+  sint3->id = NULL;
+  sint3 = SeqIntFree (sint3);
+  sint4->id = NULL;
+  sint4 = SeqIntFree (sint4);
+  pnt1->id = NULL;
+  pnt1 = SeqPntFree (pnt1);
+  pnt2->id = NULL;
+  pnt2 = SeqPntFree (pnt2);
+  pspp1->id = NULL;
+  pspp1 = PackSeqPntFree (pspp1);
+  pspp2->id = NULL;
+  pspp2 = PackSeqPntFree (pspp2);
+  sbp1->a = NULL;
+  sbp1->b = NULL;
+  sbp1 = SeqBondFree (sbp1);
+  sbp2->a = NULL;
+  sbp2->b = NULL;
+  sbp2 = SeqBondFree (sbp2);
+
+  sip = SeqIdFree (sip);
+  sip2 = SeqIdFree(sip2);
+  a = ValNodeFree (a);
+  b = ValNodeFree (b);
+  return rval;
+}
+
+/* returns the number of unique nucleotides covered by slp */
+static Int4 SeqLocCoverage (SeqLocPtr slp)
+{
+  Int4Ptr ivals;
+  Int4    numivals = 0;
+  SeqLocPtr tmp;
+  SeqIdPtr sip;
+  SeqIdPtr PNTR id_list;
+  Int4     coverage = 0, i = 0, from, to, j, k;
+  Int4     i_from, i_to, j_from, j_to;
+  Boolean  added_to_prev;
+
+  tmp = NULL;
+  while ((tmp = SeqLocFindNext (slp, tmp)) != NULL) {
+    numivals++;
+  }
+  if (numivals > 0) {
+    ivals = MemNew (sizeof (Int4) * (numivals * 2));
+    id_list = (SeqIdPtr PNTR) MemNew (sizeof (SeqIdPtr) * numivals);
+    tmp = NULL;
+    i = 0;
+    while ((tmp = SeqLocFindNext (slp, tmp)) != NULL) {
+      from = SeqLocStart (tmp);
+      to = SeqLocStop (tmp);
+      sip = SeqLocId (tmp);
+      id_list [i / 2] = sip;
+      ivals [i] = from;
+      i++;
+      ivals [i] = to;
+      i++;
+    }
+    /* now combine overlapping intervals */
+    for (j = 0; j < numivals; j++) {
+      i = j + 1;
+      while (i < numivals) {
+        added_to_prev = FALSE;
+        if (SeqIdComp (sip, id_list[j]) == SIC_YES) {
+          i_from = ivals[2 * i];
+          i_to = ivals[2 * i + 1];
+          j_from = ivals[2 * j];
+          j_to = ivals[2 * j + 1];
+
+          if ((i_from <= j_from && i_to >= j_from) 
+              || (i_from <= j_to && i_to >= j_to)
+              || (i_from >= j_from && i_to <= j_to)) {
+            ivals[2 * j] = MIN (i_from, j_from);
+            ivals[2 * j + 1] = MAX (i_to, j_to);
+            /* delete position i by moving everything above down */
+            for (k = i + 1; k < numivals / 2; k++) {
+              ivals[2 * (k -1)] = ivals[2 * k];
+              ivals[2 * (k - 1) + 1] = ivals[2 * k + 1];
+              id_list[k - 1] = id_list[k];
+            }
+            numivals --;
+            added_to_prev = TRUE;
+          }
+        }
+        if (added_to_prev) {
+          /* do not increment i */
+        } else {
+          i++;
+        }
+      }
+    }
+    /* now add up lengths of intervals */
+    for (j = 0; j < numivals; j++) {
+      coverage += ivals [2 * j + 1] - ivals [2 * j] + 1;
+    }
+    ivals = MemFree (ivals);
+    id_list = MemFree (id_list);
+  }
+  return coverage;
+}
+
+
 /*****************************************************************************
 *
 *   SeqLocAinB(a, b)
@@ -5632,7 +6862,7 @@ NLM_EXTERN Int4 SeqLocAinB (SeqLocPtr a, SeqLocPtr b)
             diff = 0;
             break;
         case SLC_A_IN_B:
-            diff = (SeqLocLen(b) - SeqLocLen(a));
+            diff = (SeqLocCoverage(b) - SeqLocCoverage(a));
             break;
         default:
             break;
@@ -5895,6 +7125,16 @@ NLM_EXTERN Uint2 SeqLocPartialCheckEx (SeqLocPtr head, Boolean farFetch)
                                 }
                             }
                         }
+                    } else if (ifp->choice == 2) /* range */ {
+                        if (sip->strand == Seq_strand_minus) {
+                            if (slp == last) {
+                                retval |= SLP_STOP;
+                            }
+                        } else {
+                            if (slp == first) {
+                                retval |= SLP_START;
+                            }
+                        }
                     }
 
                 }
@@ -5950,6 +7190,16 @@ NLM_EXTERN Uint2 SeqLocPartialCheckEx (SeqLocPtr head, Boolean farFetch)
                                     else
                                         retval |= SLP_NOINTERNAL;
                                 }
+                            }
+                        }
+                    } else if (ifp->choice == 2) /* range */ {
+                        if (sip->strand == Seq_strand_minus) {
+                            if (slp == first) {
+                                retval |= SLP_START;
+                            }
+                        } else {
+                            if (slp == last) {
+                                retval |= SLP_STOP;
                             }
                         }
                     }
@@ -6144,7 +7394,7 @@ static Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_
 Boolean GetThePointForOffsetEx(SeqLocPtr of, SeqPntPtr target, Uint1 which_end, Boolean is_circular);
 Boolean GetPointsForLeftAndRightOffsets(SeqLocPtr of, SeqPntPtr left, SeqPntPtr right, Boolean is_circular);
 static Int4 CheckOffsetInLoc(SeqLocPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr the_id);
-NLM_EXTERN Int4 CheckPointInBioseq(SeqPntPtr sp, BioseqPtr in);
+NLM_EXTERN Int4 CheckPointInBioseq(SeqPntPtr sp, BioseqPtr in, BoolPtr flip_strand);
 
 /*****************************************************************************
 *
@@ -6201,7 +7451,7 @@ NLM_EXTERN Int4 GetOffsetInBioseq (SeqLocPtr of, BioseqPtr in, Uint1 which_end)
     if (! GetThePointForOffset(of, &sp, which_end))
         return -1L;
 
-    return CheckPointInBioseq(&sp, in);
+    return CheckPointInBioseq(&sp, in, NULL);
 }
 
 
@@ -6215,11 +7465,11 @@ NLM_EXTERN Int4 GetOffsetInBioseqEx (SeqLocPtr of, BioseqPtr in, Uint1 which_end
     if (! GetThePointForOffsetEx(of, &sp, which_end, is_circular))
         return -1L;
 
-    return CheckPointInBioseq(&sp, in);
+    return CheckPointInBioseq(&sp, in, NULL);
 }
 
 
-NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4Ptr left, Int4Ptr right, Boolean is_circular)
+NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4Ptr left, Int4Ptr right, Boolean is_circular, BoolPtr left_flip, BoolPtr right_flip)
 {
     SeqPnt l, r;
 
@@ -6236,10 +7486,10 @@ NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4
         return;
     }
     if (left != NULL) {
-        *left = CheckPointInBioseq (&l, in);
+        *left = CheckPointInBioseq (&l, in, left_flip);
     }
     if (right != NULL) {
-        *right = CheckPointInBioseq (&r, in);
+        *right = CheckPointInBioseq (&r, in, right_flip);
     }
 }
 
@@ -6248,7 +7498,7 @@ NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4
 *   CheckPointInBioseq(pnt, in)
 *
 *****************************************************************************/
-NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
+NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in, BoolPtr flip_strand)
 {
     ValNode sl;
     BioseqPtr bsp;
@@ -6294,7 +7544,7 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
              locked = TRUE;
      }
     if (in->repr == Seq_repr_seg || in->repr == Seq_repr_delta) {
-        retval = SeqMgrMapPartToSegmentedBioseq (in, sp->point, bsp, sp->id);
+        retval = SeqMgrMapPartToSegmentedBioseq (in, sp->point, bsp, sp->id, flip_strand);
     }
     if (retval == -1) {
         retval = CheckOffsetInLoc(slp, sp->point, bsp, sp->id);
@@ -6320,7 +7570,7 @@ NLM_EXTERN Int4 CheckPointInBioseq (SeqPntPtr sp, BioseqPtr in)
                 {
                     case Seq_repr_ref:   /* could have more levels */
                     case Seq_repr_seg:
-                        offset2 = CheckPointInBioseq(sp, bsp);
+                        offset2 = CheckPointInBioseq(sp, bsp, flip_strand);
                         if (offset2 >= 0)   /* got it */
                         {
                             strt = SeqLocStart(curr);
@@ -9258,7 +10508,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           (StringICmp(temp,"GH") == 0) || 
           (StringICmp(temp,"GO") == 0) || 
           (StringICmp(temp,"GR") == 0) || 
-          (StringICmp(temp,"GT") == 0) ) {                /* NCBI EST */
+          (StringICmp(temp,"GT") == 0) || 
+          (StringICmp(temp,"GW") == 0) || 
+          (StringICmp(temp,"HO") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0) ||
                      (StringICmp(temp,"GF") == 0)) {      /* NCBI STS */
@@ -9272,7 +10524,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"EF") == 0) ||
                      (StringICmp(temp,"EU") == 0) ||
                      (StringICmp(temp,"FJ") == 0) ||
-                     (StringICmp(temp,"GQ") == 0)) {      /* NCBI direct submission */
+                     (StringICmp(temp,"GQ") == 0) ||
+                     (StringICmp(temp,"GU") == 0) ||
+                     (StringICmp(temp,"HM") == 0) ||
+                     (StringICmp(temp,"HQ") == 0)) {      /* NCBI direct submission */
               retcode = ACCN_NCBI_DIRSUB;
           } else if ((StringICmp(temp,"AE") == 0) ||
                      (StringICmp(temp,"CP") == 0) ||
@@ -9292,12 +10547,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"GL") == 0)) {      /* NCBI segmented set header Bioseq */
               retcode = ACCN_NCBI_SEGSET;
           } else if ((StringICmp(temp,"AS") == 0) ||
-                     (StringICmp(temp,"GU") == 0) ||
-                     (StringICmp(temp,"GV") == 0) ||
-                     (StringICmp(temp,"GW") == 0) ||
-                     (StringICmp(temp,"GX") == 0) ||
-                     (StringICmp(temp,"GY") == 0) ||
-                     (StringICmp(temp,"GZ") == 0)) {      /* NCBI "other" */
+                     (StringICmp(temp,"HR") == 0) ||
+                     (StringICmp(temp,"HS") == 0)) {      /* NCBI "other" */
               retcode = ACCN_NCBI_OTHER;
           } else if ((StringICmp(temp,"AD") == 0)) {      /* NCBI accessions assigned to GSDB entries */
               retcode = ACCN_NCBI_GSDB;
@@ -9321,13 +10572,21 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"ET") == 0) ||
                      (StringICmp(temp,"FH") == 0) ||
                      (StringICmp(temp,"FI") == 0) ||
-                     (StringICmp(temp,"GS") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"GS") == 0) ||
+                     (StringICmp(temp,"HN") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0) ||
                      (StringICmp(temp,"DZ") == 0) ||
                      (StringICmp(temp,"EA") == 0) ||
                      (StringICmp(temp,"GC") == 0) ||
-                     (StringICmp(temp,"GP") == 0)) {      /* NCBI patent */
+                     (StringICmp(temp,"GP") == 0) ||
+                     (StringICmp(temp,"GV") == 0) ||
+                     (StringICmp(temp,"GX") == 0) ||
+                     (StringICmp(temp,"GY") == 0) ||
+                     (StringICmp(temp,"GZ") == 0) ||
+                     (StringICmp(temp,"HJ") == 0) ||
+                     (StringICmp(temp,"HK") == 0) ||
+                     (StringICmp(temp,"HL") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
           } else if((StringICmp(temp,"BC")==0)) {         /* NCBI long cDNA project : MGC */
               retcode = ACCN_NCBI_cDNA;
@@ -9338,15 +10597,23 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"GJ") == 0) ||
                      (StringICmp(temp,"GK") == 0)) {      /* NCBI third-party annotation */
               retcode = ACCN_NCBI_TPA;
-          } else if((StringICmp(temp,"EZ") == 0)) {
-              retcode = ACCN_NCBI_TSA;
           } else if ((StringICmp(temp,"BN") == 0)) {      /* EMBL third-party annotation */
               retcode = ACCN_EMBL_TPA;
           } else if ((StringICmp(temp,"BR") == 0)) {      /* DDBJ third-party annotation */
               retcode = ACCN_DDBJ_TPA;
+          } else if((StringICmp(temp,"EZ") == 0) ||
+                    (StringICmp(temp,"HP") == 0)) {
+              retcode = ACCN_NCBI_TSA;
+          } else if((StringICmp(temp,"FX") == 0)) {
+              retcode = ACCN_DDBJ_TSA;
           } else if ((StringICmp(temp,"AJ") == 0) ||
                      (StringICmp(temp,"AM") == 0) ||
-                     (StringICmp(temp,"FM") == 0)) {     /* EMBL direct submission */
+                     (StringICmp(temp,"FM") == 0) ||
+                     (StringICmp(temp,"HE") == 0) ||
+                     (StringICmp(temp,"HF") == 0) ||
+                     (StringICmp(temp,"HG") == 0) ||
+                     (StringICmp(temp,"HH") == 0) ||
+                     (StringICmp(temp,"HI") == 0)) {     /* EMBL direct submission */
               retcode = ACCN_EMBL_DIRSUB;
           } else if ((StringICmp(temp,"AL") == 0) ||
                      (StringICmp(temp,"BX") == 0)||
@@ -9381,7 +10648,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"DB") == 0) ||
                      (StringICmp(temp,"DC") == 0) ||
                      (StringICmp(temp,"DK") == 0) ||
-                     (StringICmp(temp,"FS") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"FS") == 0) ||
+                     (StringICmp(temp,"FY") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;
@@ -9401,18 +10669,16 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"DJ") == 0) || 
                      (StringICmp(temp,"DL") == 0) || 
                      (StringICmp(temp,"DM") == 0) || 
-                     (StringICmp(temp,"FU") == 0)) {      /* DDBJ patent division */
+                     (StringICmp(temp,"FU") == 0) || 
+                     (StringICmp(temp,"FV") == 0) || 
+                     (StringICmp(temp,"FW") == 0) || 
+                     (StringICmp(temp,"FZ") == 0)) {      /* DDBJ patent division */
               retcode = ACCN_DDBJ_PATENT;
           } else if ((StringICmp(temp,"DE") == 0) ||
                      (StringICmp(temp,"DH") == 0) || 
                      (StringICmp(temp,"FT") == 0)) {      /* DDBJ GSS */
               retcode = ACCN_DDBJ_GSS;
-          } else if ((StringICmp(temp,"FV") == 0) || 
-                     (StringICmp(temp,"FW") == 0) || 
-                     (StringICmp(temp,"FX") == 0) || 
-                     (StringICmp(temp,"FY") == 0) || 
-                     (StringICmp(temp,"FZ") == 0) || 
-                     (StringICmp(temp,"GA") == 0) || 
+          } else if ((StringICmp(temp,"GA") == 0) || 
                      (StringICmp(temp,"GB") == 0)) {      /* DDBJ unassigned */
               retcode = ACCN_DDBJ_OTHER;
           } else {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.44 $
+* $Revision: 6.46 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -264,7 +264,9 @@ typedef void (*Asn2gbWriteFunc) (
   BlockType blocktype,
   Uint2 entityID,
   Uint2 itemtype,
-  Uint4 itemID
+  Uint4 itemID,
+  Int4 left,
+  Int4 right
 );
 
 typedef ValNodePtr (*Asn2gbLockFunc) (SeqIdPtr sip, Pointer remotedata);
@@ -286,6 +288,7 @@ typedef struct XtraData {
   Int4             nextGi;
   BlockMask        bkmask;
   Boolean          reindex;
+  Boolean          seqspans;
 } XtraBlock;
 
 

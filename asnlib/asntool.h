@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 12/3/97
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   Includes for building asntool and libraries
@@ -40,6 +40,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asntool.h,v $
+* Revision 6.4  2009/11/05 16:54:12  gouriano
+* Added option to use quoted syntax form to include headers. JIRA: CXX-1402
+*
 * Revision 6.3  2005/01/24 17:12:11  kans
 * added force_choice_struct (-V) to force struct plus object instead of ValNode for choices - for compatibility with old hand-coded object loaders
 *
@@ -73,6 +76,7 @@ typedef struct struct_AsnCodeInfo {
    CharPtr object_label; /* label (defaults to object_manager_entry) */
    AsnModulePtr amp;         /* standard ncbi usage, all modules */
    AsnModulePtr last_amp;    /* stop generating code when get to this module */
+   Boolean use_quoted_include;
 } AsnCodeInfo, PNTR AsnCodeInfoPtr;
 
 void AsnCode    PROTO ((AsnCodeInfoPtr acip));

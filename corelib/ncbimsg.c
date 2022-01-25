@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/13/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.15 $
 *
 * File Description:
 *   	user alert and error messages
@@ -54,6 +54,12 @@
 *                      input will be read properly.
 *
 * $Log: ncbimsg.c,v $
+* Revision 6.15  2009/08/14 18:14:35  lavr
+* Heed a warning
+*
+* Revision 6.14  2009/08/14 18:01:09  lavr
+* Use {Get|Set}ProgramName()
+*
 * Revision 6.13  2008/04/04 20:36:46  kans
 * cast MessageBox to (MsgAnswer) in Windows version to silence CodeWarrior warning
 *
@@ -284,7 +290,7 @@ va_dcl
 NLM_EXTERN MsgAnswer CDECL Nlm_Message (Nlm_Int2 sevkey, const char *fmt, ...)
 #endif
 {
-  char *caption = (char*) GetAppProperty("ProgramName");
+  const char *caption = GetProgramName();
   MsgKey key = KEY_OK;
   ErrSev sev = SEV_INFO;
   MsgAnswer ans;

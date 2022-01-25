@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.130 $
+* $Revision: 6.132 $
 *
 * File Description:
 *
@@ -100,6 +100,7 @@ typedef struct viewerInstanceData {
   Uint4           featureCount;
   ValNodePtr      featVNP;      /* data.ptrvalue == RelevantFeatureItem [RELEVANT_FEATS_PER_CHUNK] */
   ValNodePtr      BSPsegmentVNP;
+  ValNodePtr      BSPsegmentTail;
   AppearancePtr   AppPtr;
   FilterPtr       FltPtr;
   LayoutAlgorithm overrideLayout;
@@ -2690,67 +2691,67 @@ static CharPtr GetSeqAnnotName(SeqAnnotPtr sap)
         return descPtr->data.ptrvalue;
     }
     /* if an alignment look for a Blast Type or a Hist Seqalign user object */
-  	if(sap->type ==2) /* not an alignment annotation */
-  	{
-    	UserObjectPtr uop;
-    	ObjectIdPtr oip;
-    	UserFieldPtr ufp;
+      if(sap->type ==2) /* not an alignment annotation */
+      {
+        UserObjectPtr uop;
+        ObjectIdPtr oip;
+        UserFieldPtr ufp;
  
-    	for (descPtr = sap->desc; descPtr; descPtr = descPtr->next)
-    	{
-    		if (Annot_descr_user == descPtr->choice)
-    		{
-    			
-    			for (uop = descPtr->data.ptrvalue; uop; uop = uop->next)
-    			{
-    				if (uop->type)
-    				{
-    					oip = uop->type;
-    					
-    					if (StringCmp(oip->str, "Blast Type") == 0)
-    					{
-    						ufp = uop->data;
-    						if (ufp && ufp->choice == 2)
-    						{
-    							oip = ufp->label;
-    							if (oip && oip->str)
-    							{
-    							  return oip->str;
-    							}
-    						}
-    					}	
-    				}	
-    			}
-    		}
-    	}
-    	for (descPtr = sap->desc; descPtr; descPtr = descPtr->next)
-    	{
-    		if (Annot_descr_user == descPtr->choice)
-    		{
-    			
-    			for (uop = descPtr->data.ptrvalue; uop; uop = uop->next)
-    			{
-    				if (uop->type)
-    				{
-    					oip = uop->type;
-    					
-    					if (StringCmp(oip->str, "Hist Seqalign") == 0)
-    					{
-    						ufp = uop->data;
-    						if (ufp && ufp->choice == 4 && ufp->data.boolvalue)
-    						{
-    							oip = ufp->label;
-    							if (oip && oip->str)
-    							{
-    								return oip->str;
-    							}
-    						}
-    					}
-    				}	
-    			}
-    		}
-    	}
-  	}
+        for (descPtr = sap->desc; descPtr; descPtr = descPtr->next)
+        {
+            if (Annot_descr_user == descPtr->choice)
+            {
+                
+                for (uop = descPtr->data.ptrvalue; uop; uop = uop->next)
+                {
+                    if (uop->type)
+                    {
+                        oip = uop->type;
+                        
+                        if (StringCmp(oip->str, "Blast Type") == 0)
+                        {
+                            ufp = uop->data;
+                            if (ufp && ufp->choice == 2)
+                            {
+                                oip = ufp->label;
+                                if (oip && oip->str)
+                                {
+                                  return oip->str;
+                                }
+                            }
+                        }    
+                    }    
+                }
+            }
+        }
+        for (descPtr = sap->desc; descPtr; descPtr = descPtr->next)
+        {
+            if (Annot_descr_user == descPtr->choice)
+            {
+                
+                for (uop = descPtr->data.ptrvalue; uop; uop = uop->next)
+                {
+                    if (uop->type)
+                    {
+                        oip = uop->type;
+                        
+                        if (StringCmp(oip->str, "Hist Seqalign") == 0)
+                        {
+                            ufp = uop->data;
+                            if (ufp && ufp->choice == 4 && ufp->data.boolvalue)
+                            {
+                                oip = ufp->label;
+                                if (oip && oip->str)
+                                {
+                                    return oip->str;
+                                }
+                            }
+                        }
+                    }    
+                }
+            }
+        }
+      }
   }
   return NULL;
 }
@@ -3468,7 +3469,7 @@ static RelevantFeatureItemPtr GetNextRFIPinFeatureFilter (
 {
   ValNodePtr              currentRFIPblockVNP;
   FeatureFilterStatePtr   featSP;
-  RelevantFeatureItemPtr  RFIP;
+  RelevantFeatureItemPtr  RFIP = NULL;
   ViewerContextPtr        vContext;
   FilterItemPtr           currentFIP;
   FilterPtr               FP;
@@ -3717,7 +3718,7 @@ static Uint2 GeneProductsLayoutInternal (
   RelevantFeatureItemPtr  RFIP, RFIPcds, RFIPmrna, tRFIP;
   InternalRowPtr          thisRow, thisRow2, lastRow;
   ValNodePtr              fifoHead = NULL, fifoTail = NULL;
-  ValNodePtr              bumpedListHead, bumpedListTail;
+  ValNodePtr              bumpedListHead = NULL, bumpedListTail = NULL;
   ValNodePtr              potCDSvnp, potRNAvnp;
   ValNodePtr              GroupsHead = NULL, GroupsTailVNP, MemberTailVNP;
   ValNodePtr              groupVNP, featVNP;
@@ -4572,11 +4573,17 @@ static Boolean LIBCALLBACK Asn2gphSegmentExploreProc (
   AppearancePtr      AP;
   BioseqAppearanceItemPtr BioAIP;
   BioseqPtr          bsp;
+  ValNodePtr         vnp;
 
   if ((RFIP = MemNew (sizeof (RelevantFeatureItem))) == NULL) return FALSE;
   vContext = context->userdata;
   bsp = vContext->BSP;
-  ValNodeAddPointer (&vContext->BSPsegmentVNP, 0, RFIP);
+  vnp = ValNodeAddPointer (&vContext->BSPsegmentTail, 0, RFIP);
+  if (vContext->BSPsegmentVNP == NULL) {
+    vContext->BSPsegmentVNP = vnp;
+  }
+  vContext->BSPsegmentTail = vnp;
+  /* ValNodeAddPointer (&vContext->BSPsegmentVNP, 0, RFIP); */
   sip = SeqLocId (slp);
   if (sip != NULL && sip->choice == SEQID_GI /* && BioseqFindCore (sip) != NULL */) {
     gi = sip->data.intvalue;
@@ -4638,6 +4645,7 @@ static Int4 DrawBioseqSegments (
   Uint2         oldMaxScale;
 
   vContext->BSPsegmentVNP = NULL;
+  vContext->BSPsegmentTail = NULL;
   SeqMgrExploreSegments (vContext->BSP, vContext, Asn2gphSegmentExploreProc);
   listHead = vContext->BSPsegmentVNP;
   segmentCount = 0;
@@ -4700,6 +4708,7 @@ static Int4 DrawBioseqSegments (
   }
   ValNodeFreeData (listHead);
   vContext->BSPsegmentVNP = NULL;
+  vContext->BSPsegmentTail = NULL;
   vContext->AppPtr->FeaturesAppearanceItem[0] = oldAIPzero;
   vContext->FltPtr->MaxScaleWithLabels = oldMaxScale;
   return 2 * rowHeight + 7 + FIP->IntraRowPaddingPixels + FIP->GroupPadding;
@@ -5724,52 +5733,52 @@ static void
 AccumSegments(IntervalAccumulatorPtr accum, AccumNodePtr new_nodes)
 {
 
-	AccumNodePtr prev_node = accum->nodes; 	/* add our node right before this one. */
+    AccumNodePtr prev_node = accum->nodes;     /* add our node right before this one. */
   AccumValue_t old_weight = 0;    /* the weight of the last old node passed. */
-	AccumValue_t in_weight = 0; 		/* the weight of the last new node entered. */
-	
-	AccumNodePtr in_node;
-	
-	in_node = new_nodes;
+    AccumValue_t in_weight = 0;         /* the weight of the last new node entered. */
+    
+    AccumNodePtr in_node;
+    
+    in_node = new_nodes;
   /* skip header node in the input, if we have one. */
-	if (in_node->weight == 0  &&  in_node->coord == 0)
-	  in_node = in_node->next;
-		
+    if (in_node->weight == 0  &&  in_node->coord == 0)
+      in_node = in_node->next;
+        
   for (; in_node != NULL; in_node = in_node->next) {
-	
-		/* we are adding in_node now. */
-		
-		/* Find where to insert in_node.  */
-		/* while extending the range of the last node added. */
-		while (prev_node->next != NULL  && 
-			   in_node->coord > prev_node->next->coord) {
-			prev_node = prev_node->next;
-			old_weight = prev_node->weight;
-			AccumulateWeight(prev_node, in_weight, accum->accumOp); 
-		}
-		in_weight = in_node->weight;
+    
+        /* we are adding in_node now. */
+        
+        /* Find where to insert in_node.  */
+        /* while extending the range of the last node added. */
+        while (prev_node->next != NULL  && 
+               in_node->coord > prev_node->next->coord) {
+            prev_node = prev_node->next;
+            old_weight = prev_node->weight;
+            AccumulateWeight(prev_node, in_weight, accum->accumOp); 
+        }
+        in_weight = in_node->weight;
 
-		/* insert at node. */
-		if (in_node->coord == prev_node->next->coord) {
-		  prev_node = prev_node->next;
-			old_weight = prev_node->weight;
-			AccumulateWeight(prev_node, in_weight, accum->accumOp); 
-		} else {
-		  AccumulateWeight(in_node, old_weight, accum->accumOp);
-  		InsertNodeAfter(prev_node, in_node->coord, in_node->weight);
-  		prev_node = prev_node->next; /* skip the one we just inserted. */
-		} 
-	}
-	
-	ASSERT(in_weight > 0);
+        /* insert at node. */
+        if (in_node->coord == prev_node->next->coord) {
+          prev_node = prev_node->next;
+            old_weight = prev_node->weight;
+            AccumulateWeight(prev_node, in_weight, accum->accumOp); 
+        } else {
+          AccumulateWeight(in_node, old_weight, accum->accumOp);
+          InsertNodeAfter(prev_node, in_node->coord, in_node->weight);
+          prev_node = prev_node->next; /* skip the one we just inserted. */
+        } 
+    }
+    
+    ASSERT(in_weight > 0);
   /* extend last range to the end of the accumulator. 
-	if (in_weight > 0) {
-		while (prev_node->next != NULL) {
-			prev_node = prev_node->next;
-			AccumulateWeight(prev_node, in_weight, accum->accumOp); 
-		}
-	}
-	*/
+    if (in_weight > 0) {
+        while (prev_node->next != NULL) {
+            prev_node = prev_node->next;
+            AccumulateWeight(prev_node, in_weight, accum->accumOp); 
+        }
+    }
+    */
 }
 
 
@@ -5783,13 +5792,13 @@ GetMaxWeight(const IntervalAccumulatorPtr IAP)
   AccumNodePtr node; 
   AccumValue_t max_weight = 0;
 
-	for (node = IAP->nodes->next; /* skip the header node. */
-	     node->next != NULL;  /* skip the last (dummy) node. */
-	     node = node->next) { 
+    for (node = IAP->nodes->next; /* skip the header node. */
+         node->next != NULL;  /* skip the last (dummy) node. */
+         node = node->next) { 
     if (max_weight < node->weight)
       max_weight = node->weight;
-	}
-	return max_weight;
+    }
+    return max_weight;
 }
 
 
@@ -6516,7 +6525,7 @@ NLM_EXTERN SegmenT CreateGraphicViewFromBsp (
       sintp = (SeqIntPtr) location->data.ptrvalue;
       if (sintp != NULL && sintp->from == 0 && sintp->to == bsp->length - 1) {
         location = NULL;
-      } else {
+      } else if (sintp != NULL) {
         from = sintp->from;
         to = sintp->to;
         allFeatures = FALSE;

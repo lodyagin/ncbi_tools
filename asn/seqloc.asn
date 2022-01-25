@@ -1,4 +1,4 @@
---$Revision: 6.4 $
+--$Revision: 6.5 $
 --**********************************************************************
 --
 --  NCBI Sequence location and identifier elements
@@ -43,6 +43,8 @@ Seq-id ::= CHOICE {
     gpipe Textseq-id ,           -- Internal NCBI genome pipeline processing ID
     named-annot-track Textseq-id -- Internal named annotation tracking ID
 }
+
+Seq-id-set ::= SET OF Seq-id
 
 
 Patent-seq-id ::= SEQUENCE {

@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.541 2009/02/24 18:19:36 coulouri Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.544 2009/12/22 12:54:28 madden Exp $";
 
-/* $Id: readdb.c,v 6.541 2009/02/24 18:19:36 coulouri Exp $ */
+/* $Id: readdb.c,v 6.544 2009/12/22 12:54:28 madden Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.541 $
+* $Revision: 6.544 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,15 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.544  2009/12/22 12:54:28  madden
+* Try stripped off path for microbial db, JIRA WB-313
+*
+* Revision 6.543  2009/09/17 15:41:43  madden
+* Consolidate checking of paths, JIRA SB-368
+*
+* Revision 6.542  2009/08/25 13:45:23  madden
+* Work with database with no GI ISAM, JIRA SB-367
+*
 * Revision 6.541  2009/02/24 18:19:36  coulouri
 * correct Nlm_StringTokMT invocation; fixes JIRA SB-181
 *
@@ -2700,25 +2709,37 @@ Int4ListReadFromFileEx (CharPtr lookup_dir,CharPtr fname)
     return listp;
 }
 
-Int4ListPtr LIBCALL
-Int4ListReadFromFile PROTO((CharPtr fname))
+/* read configuration and check file in all places */
+static void s_GetBlastDirInfo(char *blast_dir, char *path_delim)
 {
-    Int4ListPtr listp = NULL;
-    Char *wrk_buf,  blast_dir[PATH_MAX];
-    Char *one_blast_dir ;
-    Char path_delim[2];
     CharPtr envp = NULL;
-
     /* read configuration... */
-    memset(blast_dir,0,sizeof(blast_dir));
+    memset(blast_dir, 0, sizeof(blast_dir));
     if ((envp = getenv("BLASTDB")) == NULL) {
+      /* This checks current directory, user home directory, then path pointed to by $NCBI. */ 
       Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, blast_dir, PATH_MAX);
     }
     else {
       StringCpy(blast_dir, envp);
     }
-    /* parse pathes and check files*/
+
     StringCpy(path_delim,":");
+
+    return;
+} 
+
+Int4ListPtr LIBCALL
+Int4ListReadFromFile PROTO((CharPtr fname))
+{
+    Int4ListPtr listp = NULL;
+    Char *wrk_buf;  
+    char blast_dir[PATH_MAX];
+    Char *one_blast_dir ;
+    char path_delim[2];
+
+    s_GetBlastDirInfo(blast_dir, path_delim);
+
+    /* parse paths and check files*/
     for( one_blast_dir = Nlm_StringTokMT(blast_dir,(char*)path_delim, (char **)&wrk_buf);
 	 one_blast_dir != NULL;
 	 one_blast_dir = Nlm_StringTokMT (NULL,(char*)path_delim, (char **)&wrk_buf) )
@@ -3480,21 +3501,15 @@ return NULL;
 
 CharPtr    FindBlastDBFile (CharPtr filename)
 {
-    Char *wrk_buf,  blast_dir[PATH_MAX];
+    Char *wrk_buf;  
+    char blast_dir[PATH_MAX];
     Char *one_blast_dir ;
-    Char path_delim[2];
-    CharPtr envp = NULL, found_name = NULL;
+    char path_delim[2];
+    CharPtr found_name = NULL;
 
-    /* read configuration and find file in all places */
-    memset(blast_dir,0,sizeof(blast_dir));
-    if ((envp = getenv("BLASTDB")) == NULL) {
-      Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, blast_dir, PATH_MAX);
-    }
-    else {
-      StringCpy(blast_dir, envp);
-    }
-    /* parse pathes and lookup filename */
-    StringCpy(path_delim,":");
+    s_GetBlastDirInfo(blast_dir, path_delim);
+
+    /* parse paths and lookup filename */
     for( one_blast_dir = Nlm_StringTokMT (blast_dir,(char*)path_delim, (char **)&wrk_buf);
 	 one_blast_dir != NULL;
 	 one_blast_dir = Nlm_StringTokMT (NULL,(char*)path_delim, (char **)&wrk_buf) )
@@ -3869,24 +3884,15 @@ static ReadDBFILEPtr
 readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonIndexHeadPtr cih)
 {
     ReadDBFILEPtr ret_rdfp = NULL;
-    Char *wrk_buf,  blast_dir[PATH_MAX];
+    Char *wrk_buf;  
+    char blast_dir[PATH_MAX];
     Char *one_blast_dir;
-    Char path_delim[2];
-    CharPtr envp = NULL;
+    char path_delim[2];
     if( (ret_rdfp = readdb_new_internalEx(NULL,filename,is_prot,init_state,cih)) ){
 	return ret_rdfp;
     }
 
-    /* read configuration and check file in all places */
-    memset(blast_dir,0,sizeof(blast_dir));
-    if ((envp = getenv("BLASTDB")) == NULL) {
-      Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", NULL, blast_dir, PATH_MAX);
-    }
-    else {
-      StringCpy(blast_dir, envp);
-    }
-    /* put all passes to ValNode list */
-    StringCpy(path_delim,":");
+    s_GetBlastDirInfo(blast_dir, path_delim);
 
     for( one_blast_dir = Nlm_StringTokMT (blast_dir,(char*)path_delim, (char **)&wrk_buf);
 	 one_blast_dir != NULL;
@@ -3895,6 +3901,9 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
 	ret_rdfp = readdb_new_internalEx( one_blast_dir,filename,is_prot,init_state,cih);
 	if( ret_rdfp )  return ret_rdfp;
 
+        /* Try it again, stripping any path off the filename. */
+        ret_rdfp = readdb_new_internalEx( one_blast_dir, Nlm_FileNameFind(filename),is_prot,init_state,cih);
+	if( ret_rdfp )  return ret_rdfp;
     }
     return NULL;
 }
@@ -5132,6 +5141,7 @@ static Boolean readdb_find_best_id(SeqIdPtr sip, Int4Ptr gi, CharPtr tmpbuf)
     return TRUE;
 }
 
+#define READDB_TMPBUFF_SIZE 81
 /*
   Returnes Int4 sequence_number by SeqIdPtr using SISAM indexes:
   
@@ -5147,13 +5157,15 @@ readdb_seqid2fasta(ReadDBFILEPtr rdfp, SeqIdPtr sip)
 {
     ISAMErrorCode error;
     Int4 Value;
-    Char tmpbuff[81];
     CharPtr key_out = NULL, data = NULL;
     Uint4 index;
     Int4 gi = 0;
     CharPtr chptr = NULL;
     SeqIdPtr bestid;
     TextSeqIdPtr tsip = NULL;
+
+    Char tmpbuff[READDB_TMPBUFF_SIZE];
+    CharPtr seqid_buff_ptr = tmpbuff;
 
     if(rdfp->sisam_opt == NULL || sip == NULL)
         return -1;
@@ -5162,7 +5174,7 @@ readdb_seqid2fasta(ReadDBFILEPtr rdfp, SeqIdPtr sip)
     bestid = SeqIdFindBest(sip, SEQID_GI);
     if (bestid && bestid->choice == SEQID_GI)
     {
-    return readdb_gi2seq(rdfp, bestid->data.intvalue, NULL);
+        return readdb_gi2seq(rdfp, bestid->data.intvalue, NULL);
     }
 
     while (rdfp)
@@ -5178,13 +5190,14 @@ readdb_seqid2fasta(ReadDBFILEPtr rdfp, SeqIdPtr sip)
         }
 
         if(rdfp->sparse_idx) {
-            readdb_find_best_id(sip, &gi, tmpbuff);
+            readdb_find_best_id(sip, &gi, seqid_buff_ptr);
             if(gi != 0) {
                     return readdb_gi2seq(rdfp, gi, NULL);
             }
         } else {
+            Int4 i;
 
-               switch (sip->choice) {
+            switch (sip->choice) {
             case SEQID_EMBL:      /* embl */
             case SEQID_DDBJ:      /* ddbj */
             case SEQID_GENBANK:   /* genbank */
@@ -5202,31 +5215,30 @@ readdb_seqid2fasta(ReadDBFILEPtr rdfp, SeqIdPtr sip)
                 break;
             }
 
-        /* We have to clear name if both accession and name exists */
-        if(tsip != NULL && tsip->accession != NULL && tsip->name != NULL) {
-            chptr = tsip->name;
-            tsip->name = NULL;
-        }
-        
-        if((SeqIdWrite(sip, tmpbuff, 
-                       PRINTID_FASTA_SHORT, sizeof(tmpbuff))) == NULL) {
-            return -1;
-        }
-        
-        /* Returning back name */
-        if(chptr != NULL) {
-            tsip->name = chptr;
-        }
-    }
+            if(tsip != NULL) {
+                Int4 dummy_gi = 0; /* Not used, should have been handled above. */
+                GetAccessionVersionFromSeqId(sip, &gi, &seqid_buff_ptr, TRUE);
+            } else {
+                if((SeqIdWrite(sip, seqid_buff_ptr, 
+                       PRINTID_FASTA_SHORT, READDB_TMPBUFF_SIZE-1)) == NULL)
+                return -1;
+            }
 
-    NlmMutexLockEx(&isamsearch_mutex);
-        if((error = SISAMSearch(rdfp->sisam_opt, tmpbuff, 0, &key_out,
+            for(i = 0; seqid_buff_ptr[i] != '\0'; i++)
+                seqid_buff_ptr[i] = TO_LOWER(seqid_buff_ptr[i]);
+        }
+
+        NlmMutexLockEx(&isamsearch_mutex);
+        if((error = SISAMSearch(rdfp->sisam_opt, seqid_buff_ptr, 0, &key_out,
                                 &data, &index)) < 0) {
             ErrPostEx(SEV_WARNING, 0, 0, "Failed to search string index "
                       "ISAM Error code is %d\n", error);
             return error;
         }
-    NlmMutexUnlock(isamsearch_mutex);
+        NlmMutexUnlock(isamsearch_mutex);
+
+        if (tmpbuff != seqid_buff_ptr)
+          MemFree(seqid_buff_ptr); /* seqid_buff_ptr allocated in GetAccessionVersionFromSeqId. */
         
         MemFree(key_out); /* We need no this for now */
         

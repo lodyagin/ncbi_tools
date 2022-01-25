@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.lnx,v $
+* Revision 6.11  2010/05/21 16:40:19  lavr
+* _GNU_SOURCE -> ncbilcl.lnx
+*
 * Revision 6.10  2009/07/07 20:21:43  ucko
 * Don't bother with #cpu() or #machine() checks, which are redundant and
 * moreover yield noisy deprecation warnings with GCC 4.4.
@@ -139,6 +142,7 @@
 
 /* good for the EGCS C/C++ compiler on Linux(e.g. putenv(), tempnam() proto) */
 #define _SVID_SOURCE 1
+#define _GNU_SOURCE 1
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.5 $
+* $Revision: 1.6 $
 *
 * File Description: 
 *
@@ -558,7 +558,7 @@ Args myargs [] = {
   {"Input is Seq-entry", "F", NULL, NULL,
     TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Output is binary", "F", NULL, NULL,
-    TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
+    TRUE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Macro file", "NULL", NULL, NULL,
     TRUE, 'm', ARG_FILE_IN, 0.0, 0, NULL}
 };

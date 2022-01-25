@@ -1,4 +1,4 @@
-/* $Id: seqpanel.h,v 6.21 2008/07/02 16:39:38 bollin Exp $
+/* $Id: seqpanel.h,v 6.23 2010/05/04 12:23:03 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -56,6 +56,13 @@ extern ForM CreateSeqEditorWindow (Int2 left, Int2 top, CharPtr windowname, Bios
 
 NLM_EXTERN SeqAlignPtr Sequin_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
 extern ForM CreateAlnEditorWindow (Int2 left, Int2 top, CharPtr windowname, SeqAlignPtr salp, Uint2 entityID);
+extern ForM 
+CreateAlnEditorWindowEx 
+(Int2 left, Int2 top, CharPtr windowname, SeqAlignPtr salp, Uint2 entityID,
+ Nlm_ChangeNotifyProc on_close_func, Pointer on_close_data);
+NLM_EXTERN void RemoveSeqEdCloseFunc (WindoW w);
+NLM_EXTERN void SeqAlnWindowScrollToAlnPos (WindoW w, Int4 aln_pos, Int4 seq_num);
+
 NLM_EXTERN CharPtr FeatureLocationAlignment (SeqFeatPtr sfp, SeqAlignPtr salp, Int4 begin, Int4 fin);
 extern void FlipAlignment (SeqAlignPtr salp);
 

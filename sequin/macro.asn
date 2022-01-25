@@ -1,4 +1,4 @@
---$Revision: 1.54 $
+--$Revision: 1.68 $
 --**********************************************************************
 --
 --  NCBI ASN.1 macro editing language specifications
@@ -43,11 +43,25 @@ Partial-constraint ::= ENUMERATED {
     partial (1) ,
     complete (2) }
 
+Location-type-constraint ::= ENUMERATED {
+    any (0) ,
+    single-interval (1) ,
+    joined (2) ,
+    ordered (3) }
+
+Location-pos-constraint ::= CHOICE {
+    dist-from-end INTEGER ,
+    max-dist-from-end INTEGER ,
+    min-dist-from-end INTEGER }
+
 Location-constraint ::= SEQUENCE {
     strand Strand-constraint DEFAULT any ,
     seq-type Seqtype-constraint DEFAULT any ,
     partial5 Partial-constraint DEFAULT either ,
-    partial3 Partial-constraint DEFAULT either }
+    partial3 Partial-constraint DEFAULT either ,
+    location-type Location-type-constraint DEFAULT any ,
+    end5 Location-pos-constraint OPTIONAL ,
+    end3 Location-pos-constraint OPTIONAL }
 
 Object-type-constraint ::= ENUMERATED {
     any (0) ,
@@ -220,7 +234,9 @@ Feat-qual-legal ::= ENUMERATED {
     gene-comment (64) ,
     satellite (65) ,
     satellite-type (66) ,
-    satellite-name (67) }
+    satellite-name (67) ,
+    location (68) ,
+    tag-peptide (69) }
 
 Feat-qual-legal-val ::= SEQUENCE {
     qual Feat-qual-legal ,
@@ -269,7 +285,8 @@ Rna-field ::= ENUMERATED {
     gene-maploc (9) ,
     gene-locus-tag (10) ,
     gene-synonym (11) ,
-    gene-comment (12) }
+    gene-comment (12) ,
+    tag-peptide (13) }
     
 
 Rna-qual ::= SEQUENCE {
@@ -644,10 +661,20 @@ Pub-type ::= ENUMERATED {
 Pub-field-constraint ::= SEQUENCE {
   field Publication-field ,
   constraint String-constraint }
+
+Pub-field-special-constraint-type ::= CHOICE {
+  is-present NULL ,
+  is-not-present NULL ,
+  is-all-caps NULL }
+
+Pub-field-special-constraint ::= SEQUENCE {
+  field Publication-field ,
+  constraint Pub-field-special-constraint-type }
   
 Publication-constraint ::= SEQUENCE {
   type Pub-type ,
-  field Pub-field-constraint OPTIONAL }
+  field Pub-field-constraint OPTIONAL ,
+  special-field Pub-field-special-constraint OPTIONAL }
 
 Source-constraint ::= SEQUENCE {
   field1 Source-qual-choice OPTIONAL ,
@@ -699,10 +726,16 @@ Sequence-constraint-mol-type-constraint ::= CHOICE {
   rna Sequence-constraint-rnamol ,
   protein NULL }
 
+Quantity-constraint ::= CHOICE {
+  equals INTEGER ,
+  greater-than INTEGER ,
+  less-than INTEGER }
+
 Sequence-constraint ::= SEQUENCE {
     seqtype Sequence-constraint-mol-type-constraint OPTIONAL ,
     id String-constraint OPTIONAL ,
-    feature Feature-type }
+    feature Feature-type ,
+    num-features Quantity-constraint OPTIONAL }
 
 Constraint-choice ::= CHOICE {
     string String-constraint ,
@@ -716,10 +749,15 @@ Constraint-choice ::= CHOICE {
 
 Constraint-choice-set ::= SET OF Constraint-choice
 
+Text-marker ::= CHOICE {
+    free-text VisibleString ,
+    digits NULL ,
+    letters NULL }
+
 Text-portion ::= SEQUENCE {
-    left-text VisibleString OPTIONAL ,
+    left-marker Text-marker  OPTIONAL ,
     include-left BOOLEAN ,
-    right-text VisibleString OPTIONAL ,
+    right-marker Text-marker  OPTIONAL ,
     include-right BOOLEAN ,
     inside BOOLEAN ,
     case-sensitive BOOLEAN DEFAULT FALSE ,
@@ -778,10 +816,18 @@ Edit-action ::= SEQUENCE {
     edit Field-edit ,
     field Field-type }
 
+Cap-change ::= ENUMERATED {
+    none (0) ,
+    tolower (1) ,
+    toupper (2) ,
+    firstcap (3) ,
+    firstcaprestnochange (4) }
+
 Convert-action ::= SEQUENCE {
     fields Field-pair-type ,
     strip-name BOOLEAN DEFAULT FALSE ,
     keep-original BOOLEAN DEFAULT FALSE ,
+    capitalization Cap-change DEFAULT none ,
     existing-text ExistingTextOption }
 
 Copy-action ::= SEQUENCE {
@@ -816,12 +862,6 @@ AECR-action ::= SEQUENCE {
     action Action-choice ,
     also-change-mrna BOOLEAN DEFAULT FALSE ,
     constraint Constraint-choice-set OPTIONAL }
-
-Cap-change ::= ENUMERATED {
-    none (0) ,
-    tolower (1) ,
-    toupper (2) ,
-    firstcap (3) }
 
 Parse-src-org-choice ::= CHOICE {
     source-qual Source-qual ,
@@ -867,7 +907,8 @@ Location-interval ::= SEQUENCE {
 
 Location-choice ::= CHOICE {
     interval Location-interval ,
-    whole-sequence NULL }
+    whole-sequence NULL ,
+    point INTEGER }
 
 Sequence-list ::= SET OF VisibleString
 Sequence-list-choice ::= CHOICE {
@@ -1017,7 +1058,9 @@ Location-edit-type ::= CHOICE {
   clear-5-partial Partial-5-clear-constraint ,
   set-3-partial Partial-3-set-action ,
   clear-3-partial Partial-3-clear-constraint ,
-  convert Convert-location-type }
+  convert Convert-location-type ,
+  extend-5 NULL ,
+  extend-3 NULL }
 
 Edit-feature-location-action ::= SEQUENCE {
   type Feature-type ,
@@ -1056,6 +1099,12 @@ Autodef-action ::= SEQUENCE {
   modifiers SET OF Source-qual OPTIONAL ,
   clause-list-type Autodef-list-type }
 
+Fix-pub-caps-action ::= SEQUENCE {
+  title BOOLEAN OPTIONAL ,
+  authors BOOLEAN OPTIONAL ,
+  affiliation BOOLEAN OPTIONAL ,
+  constraint Constraint-choice-set OPTIONAL }
+
 Macro-action-choice ::= CHOICE {
   aecr AECR-action ,
   parse Parse-action ,
@@ -1064,7 +1113,15 @@ Macro-action-choice ::= CHOICE {
   convert-feature Convert-feature-action ,
   edit-location Edit-feature-location-action ,
   remove-descriptor Remove-descriptor-action ,
-  autodef Autodef-action }
+  autodef Autodef-action ,
+  removesets NULL ,
+  trim-junk-from-primer-seq NULL ,
+  trim-stop-from-complete-cds NULL ,
+  fix-usa-and-states NULL ,
+  synchronize-cds-partials NULL ,
+  adjust-for-consensus-splice NULL ,
+  fix-pub-caps Fix-pub-caps-action ,
+  remove-seg-gaps NULL }
 
 
 Macro-action-list ::= SET OF Macro-action-choice

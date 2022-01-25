@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/17/2005
 *
-* $Revision: 1.5 $
+* $Revision: 1.6 $
 *
 * File Description: 
 * This file provides the Main function for the standalone Submission Template
@@ -590,7 +590,7 @@ static Int4 TaxLookup (SeqEntryPtr sep, Boolean strip, Boolean correct,
   }
 
   oldscope = SeqEntrySetScope (sep);
-  rsult = SeqEntryToAsn3Ex (sep, strip, correct, TRUE, NULL, Tax3MergeSourceDescr, FALSE);
+  rsult = SeqEntryToAsn3Ex (sep, strip, correct, TRUE, NULL, Tax3MergeSourceDescr, FALSE, FALSE);
   DeleteMarkedObjects (0, OBJ_SEQENTRY, sep);
   SeqEntrySetScope (oldscope);
   return rsult;

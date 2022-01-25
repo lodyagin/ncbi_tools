@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_memory_connector.c,v 6.5 2006/03/30 17:46:40 lavr Exp $
+/* $Id: test_ncbi_memory_connector.c,v 6.7 2010/01/28 15:34:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,9 +30,9 @@
  *
  */
 
-#include "ncbi_conntest.h"
 #include <connect/ncbi_memory_connector.h>
-#include <connect/ncbi_util.h>
+#include "../ncbi_priv.h"               /* CORE logging facilities */
+#include "ncbi_conntest.h"
 /* This header must go last */
 #include "test_assert.h"
 
@@ -44,6 +44,8 @@ int main(void)
     FILE*           data_file;
 
     /* Log and data-log streams */
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
     data_file = fopen("test_ncbi_memory_connector.log", "wb");
     assert(data_file);
@@ -57,28 +59,7 @@ int main(void)
 
     /* Cleanup and Exit */
     fclose(data_file);
+    CORE_LOG(eLOG_Note, "TEST completed successfully");
     CORE_SetLOG(0);
     return 0;
 }
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_ncbi_memory_connector.c,v $
- * Revision 6.5  2006/03/30 17:46:40  lavr
- * Adjust for lock-less MEMORY_Connector API
- *
- * Revision 6.4  2002/12/04 16:58:49  lavr
- * Move change log to end
- *
- * Revision 6.3  2002/03/22 19:47:31  lavr
- * Test_assert.h made last among the include files
- *
- * Revision 6.2  2002/02/20 20:53:48  lavr
- * Use xconntest to perform standard tests
- *
- * Revision 6.1  2002/02/20 19:14:40  lavr
- * Initial revision
- *
- * ==========================================================================
- */

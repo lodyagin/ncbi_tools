@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_http_get.c,v 6.19 2008/11/10 17:14:42 kazimird Exp $
+/* $Id: test_ncbi_http_get.c,v 6.26 2010/06/08 15:14:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,17 +30,17 @@
  *
  */
 
-#include "../ncbi_ansi_ext.h"
-#include "../ncbi_priv.h"
 #include <connect/ncbi_gnutls.h>
 #include <connect/ncbi_http_connector.h>
 #include <connect/ncbi_util.h>
+#include "../ncbi_ansi_ext.h"
+#include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <errno.h>
 #include <stdlib.h>
 #include <time.h>
-#ifdef NCBI_OS_UNIX
+#if defined(NCBI_OS_UNIX)  &&  defined(HAVE_USLEEP)
 #  include <unistd.h>
-#endif
+#endif /*NCBI_OS_UNIX && HAVE_USLEEP*/
 /* This header must go last */
 #include "test_assert.h"
 
@@ -75,20 +75,14 @@ int main(int argc, char* argv[])
         fp = 0;
 
     ConnNetInfo_GetValue(0, "RECONNECT", blk, 32, "");
-    if (*blk  &&  (strcmp    (blk, "1")    == 0  ||
-                   strcasecmp(blk, "ON")   == 0  ||
-                   strcasecmp(blk, "YES")  == 0  ||
-                   strcasecmp(blk, "TRUE") == 0)) {
+    if (ConnNetInfo_Boolean(blk)) {
         CORE_LOG(eLOG_Note, "Reconnect mode acknowledged");
         flags = fHCC_AutoReconnect;
     } else
         flags = 0;
 
     ConnNetInfo_GetValue(0, "USESSL", blk, 32, "");
-    if (*blk  &&  (strcmp    (blk, "1")    == 0  ||
-                   strcasecmp(blk, "ON")   == 0  ||
-                   strcasecmp(blk, "YES")  == 0  ||
-                   strcasecmp(blk, "TRUE") == 0)) {
+    if (ConnNetInfo_Boolean(blk)) {
 #ifdef HAVE_LIBGNUTLS
         CORE_LOG(eLOG_Note,    "SSL request acknowledged");
         SOCK_SetupSSL(NcbiSetupGnuTls);
@@ -128,38 +122,42 @@ int main(int argc, char* argv[])
     t = time(0);
     do {
         status = CONN_Wait(conn, eIO_Read, net_info->timeout);
-        if (status != eIO_Success) {
-            if (status != eIO_Timeout)
-                break;
-            if ((net_info->timeout  &&
-                 (net_info->timeout->sec | net_info->timeout->usec))
-                ||  (unsigned long)(time(0) - t) > DEF_CONN_TIMEOUT)
+        if (status == eIO_Timeout) {
+            if  ((net_info->timeout  &&
+                  (net_info->timeout->sec | net_info->timeout->usec))
+                 ||  (unsigned long)(time(0) - t) > DEF_CONN_TIMEOUT) {
                 CORE_LOG(eLOG_Fatal, "Timed out");
-#ifdef NCBI_OS_UNIX
+            }
+#if defined(NCBI_OS_UNIX)  &&  defined(HAVE_USLEEP)
             usleep(500);
-#endif /*NCBI_OS_UNIX*/
+#endif /*NCBI_OS_UNIX && HAVE_USLEEP*/
             continue;
         }
-
-        status = CONN_ReadLine(conn, blk, sizeof(blk), &n);
+        if (status == eIO_Success)
+            status = CONN_ReadLine(conn, blk, sizeof(blk), &n);
+        else
+            n = 0;
+        if (n) {
+            connector = 0/*as bool, visited*/;
+            fwrite(blk, 1, n, stdout);
+            if (status != eIO_Timeout)
+                fputc('\n', stdout);
+            fflush(stdout);
+            if (n == sizeof(blk)  &&  status != eIO_Closed)
+                CORE_LOGF(eLOG_Warning, ("Line too long, continuing..."));
+        }
         if (status == eIO_Timeout)
             continue;
-        if (status != eIO_Success  &&  status != eIO_Closed)
+        if (status != eIO_Success  &&  (status != eIO_Closed  ||  connector))
             CORE_LOGF(eLOG_Fatal, ("Read error: %s", IO_StatusStr(status)));
-        if (n == sizeof(blk))
-            CORE_LOGF(eLOG_Warning, ("Line too long, continuing..."));
-        if (n) {
-            fwrite(blk, 1, n, stdout);
-            fputc('\n', stdout);
-            fflush(stdout);
-        }
+
     } while (status == eIO_Success  ||  status == eIO_Timeout);
 
     ConnNetInfo_Destroy(net_info);
     CORE_LOG(eLOG_Note, "Closing connection");
     CONN_Close(conn);
 
-    CORE_LOG(eLOG_Note, "Completed");
+    CORE_LOG(eLOG_Note, "Completed successfully");
     CORE_SetLOG(0);
     return 0;
 }

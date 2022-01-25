@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh 155379 2009-03-23 17:10:14Z coulouri $
+# $Id: makedis.csh 179886 2010-01-04 17:28:02Z ucko $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -54,7 +54,7 @@ if ( "X$tar_file" != "X" && "$tar_file" != "-") then
 	endif
 
 	ls -l $tar_file
-	tar xvf $tar_file
+	tar xf $tar_file
 else
 	# make sure that ncbi/build directory exists
 	if ( ! -d "ncbi/build" ) then
@@ -450,7 +450,7 @@ EoF
 endif
 
 set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
-   LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
+   LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
    LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" AR=\"$NCBI_AR\" CC=\"$NCBI_CC\" $DEMO_VIB'
 eval echo $CMD
 eval echo $CMD | sh 
@@ -469,7 +469,7 @@ rm -f $mtapps
 
 
 set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
-   LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
+   LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
    LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" AR=\"$NCBI_AR\" CC=\"$NCBI_CC\"  \
    THREAD_OBJ=$NCBI_THREAD_OBJ THREAD_OTHERLIBS=\"$NCBI_MT_OTHERLIBS\" \
    $DEMO_VIB $mtapps'

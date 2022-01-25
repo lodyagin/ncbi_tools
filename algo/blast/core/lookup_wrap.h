@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.h,v 1.18 2008/01/31 23:55:42 kazimird Exp $
+/* $Id: lookup_wrap.h,v 1.19 2009/12/16 19:49:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,11 +50,17 @@ typedef struct LookupTableWrap {
    void* lut; /**< Pointer to the actual lookup table structure */
    void* read_indexed_db; /**< function used to retrieve hits
                               from an indexed database */
+   void* lookup_callback;    /**< function used to look up an
+                                  index->q_off pair */
 } LookupTableWrap;
+
+/** Function pointer type to check the presence of index->q_off pair */
+typedef Boolean (*T_Lookup_Callback)(const LookupTableWrap *, Int4, Int4);
 
 /** Create the lookup table for all query words.
  * @param query The query sequence [in]
  * @param lookup_options What kind of lookup table to build? [in]
+ * @param query_options options for query setup [in]
  * @param lookup_segments Locations on query to be used for lookup table
  *                        construction [in]
  * @param sbp Scoring block containing matrix [in]

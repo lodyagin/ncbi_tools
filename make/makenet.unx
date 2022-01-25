@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.233 2009/08/05 20:06:36 ucko Exp $
+#	$Id: makenet.unx,v 6.239 2010/08/05 16:13:14 kans Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -229,11 +229,11 @@ VIB_POST_LINK = :
 
 SRC6  = ni_lib_.c ni_service.c ni_debug.c ni_error.c
 
-SRC7 =	netentr.c netlib.c objneten.c
+SRC7 = netentr.c netlib.c objneten.c
 
-SRC8 =	accentr.c accutils.c
+SRC8 = accentr.c accutils.c
 
-SRC9 =	$(SRC8)
+SRC9 = $(SRC8)
 
 SRC11 = objmla.c medarch.c medutil.c
 
@@ -279,11 +279,11 @@ NET_LIBS_SRC = $(SRC6) $(SRC7) $(SRC8) $(SRC9)
 
 OBJ6  = ni_lib_.o ni_debug.o ni_service.o ni_error.o
 
-OBJ7 =	netentr.o netlib.o objneten.o
+OBJ7 = netentr.o netlib.o objneten.o
 
-OBJ8 =	Naccentr.o accutils.o
+OBJ8 = Naccentr.o accutils.o
 
-OBJ9 =	Caccentr.o accutils.o
+OBJ9 = Caccentr.o accutils.o
 
 OBJ11 = objmla.o medarch.o medutil.o
 
@@ -327,17 +327,19 @@ OBJDDV = ddvmain.o
 
 OBJUDV = udvmain.o
 
-EXESUGGSRV =	suggsrv
+EXESUGGSRV = suggsrv
 
-EXEQUERY =	query
+EXEQUERY = query
 
-EXENQUERY =	Nquery
+EXENQUERY = Nquery
 
-EXESEQUIN =	sequin
+EXESEQUIN = sequin
 
-EXEPSEQUIN =	Psequin
+EXEPSEQUIN = Psequin
 
-EXESBTEDIT =    sbtedit
+EXESBTEDIT = sbtedit
+
+EXESTREAMER = streamer
 
 SRCDDV = ddvmain.c
 
@@ -358,6 +360,8 @@ SRCSEQUIN = sequin1.c sequin2.c sequin3.c sequin4.c sequin5.c sequin6.c \
 
 SRCSBTEDIT = sbtedit.c
 
+SRCSTREAMER = streamer.c
+
 CLI_SRC = $(SRCDDV) $(SRCUDV)
 
 CLIENTS = suggcli
@@ -365,7 +369,7 @@ CLIENTS =
 
 SERV_SRC = $(SRCENTSRV)
 
-SERVERS = $(EXESUGGSRV) $(EXEQUERY) $(EXESEQUIN) $(EXEPSEQUIN) $(EXESBTEDIT) $(EXENQUERY)
+SERVERS = $(EXESUGGSRV) $(EXEQUERY) $(EXESEQUIN) $(EXEPSEQUIN) $(EXESBTEDIT) $(EXESTREAMER) $(EXENQUERY)
 
 ALL_SRC = $(NET_LIBS_SRC) $(CLI_SRC) $(SERV_SRC)
 
@@ -378,8 +382,8 @@ ln-if-absent:	../make/ln-if-absent
 	ln -s ../make/ln-if-absent .
 
 nocopy : sources $(BLIB6) $(BLIB7) $(BLIB8) $(BLIB9) \
-   $(DLIB31) $(DLIB33) $(NCBI_SHLIBS) $(CLIENTS) $(VIB) \
-   $(DLIB42) $(DLIB43) $(DLIB44)
+	$(DLIB31) $(DLIB33) $(NCBI_SHLIBS) $(CLIENTS) $(VIB) \
+	$(DLIB42) $(DLIB43) $(DLIB44)
 
 sources : $(ALL_SRC)
 
@@ -389,7 +393,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL: copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn cspeedtest sugint Nbatch Nbatch3 Nentrcmd seqget idfetch test_nc bi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf raw2delt aceread_tst asn2all gene2xml asnval asnval_psf asndisc asndisc_psf demo_aceread_tst asnmacro asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq src_chk src_chk_psf
+.NO_PARALLEL: copy nocopy Tentrez sequin Psequin sbtedit streamer Ssequin elecpcr asn2fast asn2asn cleanasn cleanasn_psf cspeedtest sugint Nbatch Nbatch3 Nentrcmd seqget idfetch test_nc bi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf raw2delt aceread_tst asn2all gene2xml asnval asnval_psf asndisc asndisc_psf asnbarval demo_aceread_tst asnmacro asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq src_chk src_chk_psf tbl_chk tbl_chk_psf
 
 .WAIT:
 	echo Waiting...go
@@ -533,6 +537,7 @@ copy :
 	$(SRCCOPY) ../demo/gene2xml.c .
 	$(SRCCOPY) ../demo/asnval.c .
 	$(SRCCOPY) ../demo/asndisc.c .
+	$(SRCCOPY) ../demo/asnbarval.c .
 	$(SRCCOPY) ../demo/aceread_tst.c .
 	$(SRCCOPY) ../demo/asnmacro.c .
 	$(SRCCOPY) ../demo/asnstrip.c .
@@ -554,6 +559,7 @@ copy :
 	$(SRCCOPY) ../demo/blastall.c .
 	$(SRCCOPY) ../demo/blast_driver.c .
 	$(SRCCOPY) ../demo/src_chk.c .
+	$(SRCCOPY) ../demo/tbl_chk.c .
 	$(SRCCOPY) $(SRCUTILCOPY) .
 	-$(SRCCOPY) ../network/entrez/server/*.* .
 	-$(SRCCOPY) ../network/suggest/server/*.* .
@@ -927,18 +933,18 @@ ddv    : $(OBJDDV)
 
 udv    : $(OBJUDV)
 	$(CC) -o udv $(LDFLAGS) $(OBJUDV) $(LIB41) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
-    $(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) \
+	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) \
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) \
 	$(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 Nentrez : entrez.c $(ULIB31)
 	$(CC) -o Nentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
-    $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # left this in (Tentrez) for script backwards compatibility
 Tentrez : entrez.c $(ULIB31)
 	$(CC) -o Tentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) \
-    $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 
 # demo program (network version of "seqget")
@@ -1058,6 +1064,12 @@ asndisc_psf :	asndisc.c
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
 
+# asnbarval program (asnbarval)
+asnbarval :	asnbarval.c
+	$(CC) -g -o asnbarval $(LDFLAGS) asnbarval.c $(THREAD_OBJ) $(LIB41) \
+		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
 # demo_aceread_tst program (demo_aceread_tst)
 demo_aceread_tst :	aceread_tst.c
 	$(CC) -g -o demo_aceread_tst $(LDFLAGS) aceread_tst.c $(THREAD_OBJ) $(LIB41) \
@@ -1107,8 +1119,7 @@ trna2tbl :	trna2tbl.c
 # Entrez2 service test program (testent2)
 testent2 :	testent2.c
 	$(CC) -g -o testent2 $(LDFLAGS) testent2.c $(LIB23) $(LIBCOMPADJ) \
-		$(LIB22) $(LIB20) $(LIB61) $(LIB60) $(LIB2) $(LIB1) \
-		$(OTHERLIBS)
+		$(LIB22) $(LIB61) $(LIB60) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # network Entrez2 application (entrez2)
 entrez2 :	entrez2.c
@@ -1154,6 +1165,13 @@ asn2asn : asn2asn.c
 
 cleanasn : cleanasn.c
 	$(CC) -o cleanasn $(LDFLAGS) cleanasn.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# cleanasn_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
+# should be used only internally within NCBI.
+cleanasn_psf : cleanasn.c
+	$(CC) -DINTERNAL_NCBI_CLEANASN -g -o cleanasn_psf $(LDFLAGS) cleanasn.c \
+		$(LIB_PS) $(LIB41) $(LIB23) $(LIB6) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(NCBI_SYBLIBS_CT) $(OTHERLIBS)
 
 # demo program (cspeedtest)
 
@@ -1398,6 +1416,18 @@ sbtedit : $(SRCSBTEDIT) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
 	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) sbtedit
 
+# 'streamer' Sequinesque Stream Editor
+streamer : $(SRCSTREAMER) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
+	$(BLIBCOMPADJ) $(BLIB45) $(BLIB30) $(BLIB20) \
+	$(BLIB22) $(BLIB40) $(BLIB41) $(BLIB36) \
+	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
+	$(BLIB2) $(BLIB1) $(ULIB31)
+	$(CC) -o streamer -I. $(LDFLAGS) -UINTERNAL_NCBI_SEQUIN $(SRCSTREAMER) \
+	$(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) \
+	$(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB11) \
+	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(VIB_POST_LINK) streamer
+
 salogif.o:	salogif.c
 	$(CC) $(CFLAGS) salogif.c
 
@@ -1470,6 +1500,16 @@ src_chk : src_chk.c
 
 src_chk_psf : src_chk.c 
 	$(CC) -DINTERNAL_NCBI_SRC_CHK -g -o src_chk_psf $(LDFLAGS) src_chk.c \
+		$(LIB_PS) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(NCBI_SYBLIBS_CT) $(OTHERLIBS)
+
+# tbl_chk
+
+tbl_chk : tbl_chk.c 
+	$(CC) -o tbl_chk $(LDFLAGS) tbl_chk.c $(LIB2) $(LIB1) $(OTHERLIBS) 
+
+tbl_chk_psf : tbl_chk.c 
+	$(CC) -DINTERNAL_NCBI_TBL_CHK -g -o tbl_chk_psf $(LDFLAGS) tbl_chk.c \
 		$(LIB_PS) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
 		$(NCBI_SYBLIBS_CT) $(OTHERLIBS)
 

@@ -1,4 +1,4 @@
-/*  $Id: blast_stat.h,v 1.88 2008/11/03 20:59:44 kazimird Exp $
+/*  $Id: blast_stat.h,v 1.89 2009/09/24 16:09:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -208,6 +208,14 @@ typedef struct Blast_ResFreq {
     double* prob;       /**< letter probs, (possible) non-zero offset. */
     double* prob0;            /**< probs, zero offset. */
 } Blast_ResFreq;
+
+/** 
+ * Check that score blk is valid, returns zero if it is.
+ * @param sbp ScoreBlk to check [in]
+ * @return zero if valid
+*/
+NCBI_XBLAST_EXPORT
+int BlastScoreBlkCheck(BlastScoreBlk* sbp);
 
 /**
  *   Allocates and initializes BlastScoreBlk

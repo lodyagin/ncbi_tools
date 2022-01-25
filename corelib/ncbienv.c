@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.46 $
+* $Revision: 6.49 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,16 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.49  2010/06/30 15:54:38  ucko
+* Handle 64-bit Darwin builds, which require disabling WIN_MAC because
+* Carbon is 32-bit-only.
+*
+* Revision 6.48  2009/08/17 19:56:13  lavr
+* Delete explicit cast from SetProgramName() argument
+*
+* Revision 6.47  2009/08/14 18:01:09  lavr
+* Use {Get|Set}ProgramName()
+*
 * Revision 6.46  2007/05/04 13:43:59  kans
 * GetOpSysString now checks for Windows VISTA
 *
@@ -1932,7 +1942,7 @@ static int    targc = 0;
 static char **targv = NULL;
 
 
-#if defined(WIN_MAC)
+#if defined(WIN_MAC) || defined(OS_UNIX_DARWIN)
 static FSSpec       apFileSpec;
 static Str255       apName;
 static Handle       apParam;
@@ -1953,7 +1963,7 @@ static Nlm_Boolean Nlm_SetupArguments_ST_Mac(void)
   Nlm_PtoCstr ((Nlm_Char*) apFileSpec.name);
   Nlm_PtoCstr ((Nlm_Char*) apName);
 
-  SetAppProperty("ProgramName",(void*)apName);
+  SetProgramName(apName);
 #endif
   return TRUE;
 }
@@ -2047,7 +2057,7 @@ static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
   }
 }
 #endif /* defined(OS_UNIX_DARWIN) */
-#endif /* defined(WIN_MAC) */
+#endif /* defined(WIN_MAC) || defined(OS_UNIX_DARWIN) */
 
 
 #if defined(OS_MSWIN) || defined(OS_VMS)
@@ -2145,10 +2155,8 @@ NLM_EXTERN Nlm_Boolean Nlm_ParseCmdLineArguments
     return FALSE;
 
   /* Figure out program name */
-  if ( !prog_name )
-    prog_name = (const char *) GetAppProperty("ProgramName");
-  if ( !prog_name )
-    prog_name = "";
+  if (!prog_name  &&  !(prog_name = GetProgramName()))
+     prog_name = "";
 
   /* Special case -- no cmd.-line parameters */
   if ( cmd_line ) {
@@ -2240,15 +2248,16 @@ NLM_EXTERN void Nlm_SetupArguments(int argc, char *argv[])
 {
   NlmMutexLockEx( &corelibMutex );
   wasSetup = TRUE;
-#if defined(WIN_MAC)
+#if defined(WIN_MAC) || defined(OS_UNIX_DARWIN)
   wasSetup = Nlm_SetupArguments_ST_Mac();
 #elif defined(OS_UNIX)
   {{
     char *p;
-    if ((p = strrchr(argv[0],DIRDELIMCHR)) != NULL)  p++;
+    if ((p = strrchr(argv[0],DIRDELIMCHR)) != NULL)
+      p++;
     else
       p = argv[0];
-    SetAppProperty("ProgramName", (void*)p);  
+    SetProgramName(p);
   }}
 #endif
   targc = argc;
@@ -2419,7 +2428,7 @@ NLM_EXTERN Nlm_CharPtr Nlm_GetOpSysString (void)
   int          mib [2];
   Nlm_Char     model [32];
 #endif
-  long         sysVer;
+  Nlm_Int4     sysVer;
 #endif
   Nlm_CharPtr  str = "unknown";
 

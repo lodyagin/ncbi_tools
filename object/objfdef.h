@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -314,8 +314,9 @@ NLM_EXTERN FeatDefPtr LIBCALL FeatDefFindNext PROTO((FeatDefPtr curr, Uint1Ptr k
 #define FEATDEF_ncRNA 94
 #define FEATDEF_tmRNA 95
 #define FEATDEF_CLONEREF 96
+#define FEATDEF_VARIATIONREF 97
 
-#define FEATDEF_MAX 97 /* size of array needed for featdef filter parameters */
+#define FEATDEF_MAX 98 /* size of array needed for featdef filter parameters */
 
 
 #ifdef __cplusplus

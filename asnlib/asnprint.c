@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.24 $
+* $Revision: 6.27 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -39,105 +39,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 3/4/91   Kans        Stricter typecasting for GNU C and C++
-*
-* $Log: asnprint.c,v $
-* Revision 6.24  2008/05/28 15:07:41  gouriano
-* Corrected alignment of output in AsnPrintString. Jira CXX-119
-*
-* Revision 6.23  2007/12/03 18:15:31  gouriano
-* Corrected line length in AsnPrintString
-*
-* Revision 6.22  2004/12/08 04:39:38  beloslyu
-* c++ comment changed to c-style one. Anrdrei, please be careful
-*
-* Revision 6.21  2004/08/17 19:34:42  kans
-* AsnPrintOctets uses BSRead instead of BSGetByte for significant speed increase
-*
-* Revision 6.20  2003/12/03 19:31:09  gouriano
-* Corrected DTD generation (a different approach)
-*
-* Revision 6.19  2003/12/02 19:52:48  gouriano
-* Corrected DTD generation
-*
-* Revision 6.18  2003/09/15 16:16:32  kans
-* added AsnWriteEx, AsnTxtWriteEx, and AsnPrintStream
-*
-* Revision 6.17  2002/06/10 15:19:16  kans
-* AsnPrintString checks for NULL input string, reports error and returns FALSE
-*
-* Revision 6.16  2002/03/08 20:13:10  ivanov
-* Fixed AsnPrintNewLine(), AsnPrintString() -- accurate print XML
-*
-* Revision 6.15  2001/10/11 14:39:08  ostell
-* added support for XMLModulePrefix
-*
-* Revision 6.14  2001/03/28 01:25:38  juran
-* Removed unused variable.
-*
-* Revision 6.13  2000/12/12 15:56:14  ostell
-* added support BigInt
-*
-* Revision 6.12  2000/07/27 12:28:04  ostell
-* fixed PUBLIC identifier for DTDs in XML
-*
-* Revision 6.11  2000/07/25 20:30:58  ostell
-* added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
-*
-* Revision 6.10  2000/06/29 20:15:15  ostell
-* minor typos fixed
-*
-* Revision 6.9  2000/05/26 14:55:31  ostell
-* remove apostrophes and H from OCTETS for XML
-*
-* Revision 6.8  2000/05/22 15:01:06  ostell
-* added check to AsnXMLTag for ENUM in SETOF/SEQOF
-*
-* Revision 6.7  2000/05/12 20:44:01  ostell
-* make changes to collect comments from spec and print in DTD
-*
-* Revision 6.6  2000/05/11 21:35:44  ostell
-* made elements and ennumerated prettier in DTD
-*
-* Revision 6.5  2000/05/10 15:30:01  ostell
-* fixed CHOICE poping multiple levels deep for XML
-*
-* Revision 6.4  2000/05/10 04:34:12  ostell
-* couple more xml fixes
-*
-* Revision 6.3  2000/05/10 03:12:37  ostell
-* added support for XML DTD and XML data output
-*
-* Revision 6.2  1999/07/15 18:52:52  shavirin
-* Fixed mantissa overflow in the function AsnPrintReal().
-*
-* Revision 6.1  1998/06/12 19:27:53  kans
-* fixed unix compiler warnings
-*
-* Revision 6.0  1997/08/25 18:10:18  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1996/12/03 21:43:48  vakatov
-* Adopted for 32-bit MS-Windows DLLs
-*
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.1  1996/02/18  16:45:36  ostell
- * changed fix_non_print behavior and added option 3
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.17  1995/07/13  14:28:37  madden
- * Changed tbuf in AsnPrintInteger from 11 to 20.
- *
- * Revision 2.16  1995/07/13  14:19:06  madden
- * Changed tbuf in AsnPrintInteger from 10 to 11 bytes.
- *
- * Revision 2.15  1995/05/15  18:38:28  ostell
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -1207,7 +1108,7 @@ NLM_EXTERN void AsnPrintIndent (Boolean increase, AsnIoPtr aip)
 *       indent to the proper level on the next line
 *
 *****************************************************************************/
-NLM_EXTERN void AsnPrintNewLine (AsnIoPtr aip)
+static void AsnPrintNewLineInt (AsnIoPtr aip, Boolean addAsnComma)
 
 {
 	Int1    tpos, indent;
@@ -1256,7 +1157,7 @@ NLM_EXTERN void AsnPrintNewLine (AsnIoPtr aip)
             /* not first line of struct */
             if (aip->first[aip->indent_level] == FALSE)
             {
-                if (!(aip->type & ASNIO_XML))   /* add commas */
+                if (!(aip->type & ASNIO_XML) && addAsnComma)   /* add commas */
                 {
                     *tmp = ' '; tmp++;
                     *tmp = ','; tmp++;
@@ -1298,6 +1199,12 @@ NLM_EXTERN void AsnPrintNewLine (AsnIoPtr aip)
     }
 	aip->no_newline = FALSE;   /* reset to normal */
 	return;
+}
+
+NLM_EXTERN void AsnPrintNewLine (AsnIoPtr aip)
+
+{
+  AsnPrintNewLineInt (aip, TRUE);
 }
 
 
@@ -1677,7 +1584,7 @@ NLM_EXTERN Boolean AsnPrintString (CharPtr the_string, AsnIoPtr aip)
             /* Print new line */
 
             aip->first[aip->indent_level] = TRUE;   /* no commas */
-            if ( isXML )                /* don't split XML lines */
+            if ( isXML || aip->asn_no_newline )                /* don't split XML lines */
                 aip->no_newline = TRUE;
             AsnPrintNewLine(aip);       
             aip->offset = aip->offset - aip->linepos + cnt_save;
@@ -1856,6 +1763,11 @@ NLM_EXTERN void AsnPrintCloseStruct (AsnIoPtr aip, AsnTypePtr atp)
             AsnXMLTerm(aip, atp2);
             
 		}
+    } else if (aip->asn_alt_struct) {
+		AsnPrintNewLineInt (aip, FALSE);
+	    AsnPrintIndent (FALSE, aip);
+	    AsnTypeSetIndent (FALSE, aip, atp);
+	    AsnPrintChar ('}', aip);
     } else {
 	    AsnPrintChar(' ', aip);
 	    AsnPrintChar('}', aip);

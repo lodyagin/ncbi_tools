@@ -63,6 +63,10 @@ SOURCE=..\..\..\connect\ncbi_ansi_ext.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\connect\ncbi_base64.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\connect\ncbi_buffer.c
 # End Source File
 # Begin Source File
@@ -209,6 +213,10 @@ SOURCE=..\..\..\connect\ncbi_util.c
 # Begin Group "Header Files"
 
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Source File
+
+SOURCE=..\..\..\connect\ncbi_base64.h
+# End Source File
 # Begin Source File
 
 SOURCE=..\..\..\connect\ncbi_buffer.h
