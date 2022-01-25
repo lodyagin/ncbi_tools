@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatrpsdb.c,v 1.16 2005/05/20 18:57:51 camacho Exp $";
+static char const rcsid[] = "$Id: formatrpsdb.c,v 1.18 2005/06/20 19:43:03 papadopo Exp $";
 
 /*****************************************************************************
 
@@ -38,6 +38,14 @@ static char const rcsid[] = "$Id: formatrpsdb.c,v 1.16 2005/05/20 18:57:51 camac
 
 ***************************************************************************
     $Log: formatrpsdb.c,v $
+    Revision 1.18  2005/06/20 19:43:03  papadopo
+    explicitly specify use of PSSMs during lookup table construction
+
+    Revision 1.17  2005/06/08 19:25:53  camacho
+    New feature to allow formatdb to add taxonomy ids to BLAST databases
+    generated from FASTA input
+    BugzID: 6
+
     Revision 1.16  2005/05/20 18:57:51  camacho
     Update to use new signature to BLAST_FillLookupTableOptions
 
@@ -650,6 +658,7 @@ Int2 RPSAddFirstSequence(RPS_DbInfo *info,
         ErrPostEx(SEV_ERROR, 0, 0, "Cannot allocate lookup table");
         return 1;
     }
+    info->lookup->use_pssm = TRUE;  /* manually turn on use of PSSMs */
 
     /* Perform generic query setup */
 
@@ -1082,7 +1091,7 @@ Int2 Main(void)
         }
 
         bsp = (BioseqPtr)(sep->data.ptrvalue);
-        bdp = FDBGetDefAsnFromBioseq(bsp);
+        bdp = FDBGetDefAsnFromBioseq(bsp, NULL);
         if (FDBAddBioseq(fdbp, bsp, bdp)) {
             ErrPostEx(SEV_ERROR, 0, 0, "DB update failed for file '%s'", tmp);
             break;

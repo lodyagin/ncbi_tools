@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.11 $
+* $Revision: 1.16 $
 *
 * File Description:
 *
@@ -60,7 +60,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "1.3"
+#define ASNVAL_APP_VER "1.5"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -506,38 +506,6 @@ static ValNodePtr DoLockFarComponents (
   return rsult;
 }
 
-static Boolean DeltaLitOnly (
-  BioseqPtr bsp
-)
-
-{
-  ValNodePtr  vnp;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
-  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 1) return FALSE;
-  }
-  return TRUE;
-}
-
-static Boolean SegHasParts (
-  BioseqPtr bsp
-)
-
-{
-  BioseqSetPtr  bssp;
-  SeqEntryPtr   sep;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_seg) return FALSE;
-  sep = bsp->seqentry;
-  if (sep == NULL) return FALSE;
-  sep = sep->next;
-  if (sep == NULL || (! IS_Bioseq_set (sep))) return FALSE;
-  bssp = (BioseqSetPtr) sep->data.ptrvalue;
-  if (bssp != NULL && bssp->_class == BioseqseqSet_class_parts) return TRUE;
-  return FALSE;
-}
-
 static CharPtr severityLabel [] = {
   "NONE", "INFO", "WARN", "ERROR", "REJECT", "FATAL", "MAX", NULL
 };
@@ -710,9 +678,7 @@ static void DoValidation (
 }
 
 static void ProcessSingleRecord (
-  CharPtr directory,
-  CharPtr base,
-  CharPtr suffix,
+  CharPtr filename,
   ValFlagPtr vfp
 )
 
@@ -721,29 +687,20 @@ static void ProcessSingleRecord (
   BioseqPtr      bsp;
   ValNodePtr     bsplist;
   BioseqSetPtr   bssp;
-  Char           buf [64], file [FILENAME_MAX], path [PATH_MAX];
+  Char           buf [64], path [PATH_MAX];
   Pointer        dataptr = NULL;
   Uint2          datatype, entityID = 0;
   FILE           *fp, *ofp = NULL;
   SeqEntryPtr    fsep, sep;
+  ObjMgrPtr      omp;
+  CharPtr        ptr;
   time_t         starttime, stoptime;
 
+  if (StringHasNoText (filename)) return;
   if (vfp == NULL) return;
 
-  if (base == NULL) {
-    base = "";
-  }
-  if (suffix == NULL) {
-    suffix = "";
-  }
-  StringNCpy_0 (path, directory, sizeof (path));
-  sprintf (file, "%s%s", base, suffix);
-  FileBuildPath (path, NULL, file);
-
-  if (StringHasNoText (path)) return;
-
   if (vfp->type == 1) {
-    fp = FileOpen (path, "r");
+    fp = FileOpen (filename, "r");
     if (fp == NULL) {
       Message (MSG_POSTERR, "Failed to open '%s'", path);
       return;
@@ -756,9 +713,9 @@ static void ProcessSingleRecord (
     entityID = ObjMgrRegister (datatype, dataptr);
 
   } else if (vfp->type >= 2 && vfp->type <= 5) {
-    aip = AsnIoOpen (path, vfp->binary? "rb" : "r");
+    aip = AsnIoOpen (filename, vfp->binary? "rb" : "r");
     if (aip == NULL) {
-      Message (MSG_POSTERR, "AsnIoOpen failed for input file '%s'", path);
+      Message (MSG_POSTERR, "AsnIoOpen failed for input file '%s'", filename);
       return;
     }
 
@@ -793,7 +750,7 @@ static void ProcessSingleRecord (
   }
 
   if (entityID < 1 || dataptr == NULL) {
-    Message (MSG_POSTERR, "Data read failed for input file '%s'", path);
+    Message (MSG_POSTERR, "Data read failed for input file '%s'", filename);
     return;
   }
 
@@ -839,17 +796,17 @@ static void ProcessSingleRecord (
         }
       }
 
-      if (base == NULL) {
-        base = "";
+      StringNCpy_0 (path, filename, sizeof (path));
+      ptr = StringRChr (path, '.');
+      if (ptr != NULL) {
+        *ptr = '\0';
       }
-      StringNCpy_0 (path, directory, sizeof (path));
-      sprintf (file, "%s%s", base, ".val");
-      FileBuildPath (path, NULL, file);
+      StringCat (path, ".val");
 
       if (vfp->outpath != NULL) {
-        ErrSetLogfile (vfp->outpath, 0);
+        ErrSetLogfile (vfp->outpath, ELOG_APPEND);
       } else if (vfp->verbosity == 0) {
-        ErrSetLogfile (path, 0);
+        ErrSetLogfile (path, ELOG_APPEND);
       } else if (vfp->outfp == NULL) {
         ofp = FileOpen (path, "w");
       }
@@ -883,12 +840,15 @@ static void ProcessSingleRecord (
   }
 
   ObjMgrFree (datatype, dataptr);
+
+  omp = ObjMgrGet ();
+  ObjMgrReapOne (omp);
+  ObjMgrFreeCache (0);
+  FreeSeqIdGiCache ();
 }
 
 static void ProcessMultipleRecord (
-  CharPtr directory,
-  CharPtr base,
-  CharPtr suffix,
+  CharPtr filename,
   ValFlagPtr vfp
 )
 
@@ -898,11 +858,12 @@ static void ProcessMultipleRecord (
   AsnTypePtr     atp, atp_bss, atp_desc, atp_se;
   BioseqPtr      bsp;
   ValNodePtr     bsplist;
-  Char           buf [64], file [FILENAME_MAX], path [PATH_MAX], longest [64];
+  Char           buf [64], path [PATH_MAX], longest [64];
   FILE           *fp, *ofp = NULL;
   Int4           numrecords = 0;
   SeqEntryPtr    fsep, sep;
   ObjMgrPtr      omp;
+  CharPtr        ptr;
   time_t         starttime, stoptime, worsttime;
 #ifdef OS_UNIX
   Char           cmmd [256];
@@ -911,19 +872,8 @@ static void ProcessMultipleRecord (
   Boolean        usedPopen = FALSE;
 #endif
 
+  if (StringHasNoText (filename)) return;
   if (vfp == NULL) return;
-
-  if (base == NULL) {
-    base = "";
-  }
-  if (suffix == NULL) {
-    suffix = "";
-  }
-  StringNCpy_0 (path, directory, sizeof (path));
-  sprintf (file, "%s%s", base, suffix);
-  FileBuildPath (path, NULL, file);
-
-  if (StringHasNoText (path)) return;
 
 #ifndef OS_UNIX
   if (vfp->compressed) {
@@ -960,18 +910,18 @@ static void ProcessMultipleRecord (
   if (vfp->compressed) {
     gzcatprog = getenv ("NCBI_UNCOMPRESS_BINARY");
     if (gzcatprog != NULL) {
-      sprintf (cmmd, "%s %s", gzcatprog, path);
+      sprintf (cmmd, "%s %s", gzcatprog, filename);
     } else {
       ret = system ("gzcat -h >/dev/null 2>&1");
       if (ret == 0) {
-        sprintf (cmmd, "gzcat %s", path);
+        sprintf (cmmd, "gzcat %s", filename);
       } else if (ret == -1) {
         Message (MSG_POSTERR, "Unable to fork or exec gzcat in ScanBioseqSetRelease");
         return;
       } else {
         ret = system ("zcat -h >/dev/null 2>&1");
         if (ret == 0) {
-          sprintf (cmmd, "zcat %s", path);
+          sprintf (cmmd, "zcat %s", filename);
         } else if (ret == -1) {
           Message (MSG_POSTERR, "Unable to fork or exec zcat in ScanBioseqSetRelease");
           return;
@@ -984,19 +934,19 @@ static void ProcessMultipleRecord (
     fp = popen (cmmd, /* vfp->binary? "rb" : */ "r");
     usedPopen = TRUE;
   } else {
-    fp = FileOpen (path, vfp->binary? "rb" : "r");
+    fp = FileOpen (filename, vfp->binary? "rb" : "r");
   }
 #else
-  fp = FileOpen (path, vfp->binary? "rb" : "r");
+  fp = FileOpen (filename, vfp->binary? "rb" : "r");
 #endif
   if (fp == NULL) {
-    Message (MSG_POSTERR, "FileOpen failed for input file '%s'", path);
+    Message (MSG_POSTERR, "FileOpen failed for input file '%s'", filename);
     return;
   }
 
   aip = AsnIoNew (vfp->binary? ASNIO_BIN_IN : ASNIO_TEXT_IN, fp, NULL, NULL, NULL);
   if (aip == NULL) {
-    Message (MSG_ERROR, "AsnIoNew failed for input file '%s'", path);
+    Message (MSG_ERROR, "AsnIoNew failed for input file '%s'", filename);
     return;
   }
 
@@ -1005,17 +955,17 @@ static void ProcessMultipleRecord (
   longest [0] = '\0';
   worsttime = 0;
 
-  if (base == NULL) {
-    base = "";
+  StringNCpy_0 (path, filename, sizeof (path));
+  ptr = StringRChr (path, '.');
+  if (ptr != NULL) {
+    *ptr = '\0';
   }
-  StringNCpy_0 (path, directory, sizeof (path));
-  sprintf (file, "%s%s", base, ".val");
-  FileBuildPath (path, NULL, file);
+  StringCat (path, ".val");
 
   if (vfp->outpath != NULL) {
-    ErrSetLogfile (vfp->outpath, 0);
+    ErrSetLogfile (vfp->outpath, ELOG_APPEND);
   } else if (vfp->verbosity == 0) {
-    ErrSetLogfile (path, 0);
+    ErrSetLogfile (path, ELOG_APPEND);
   } else if (vfp->outfp == NULL) {
     ofp = FileOpen (path, "w");
   }
@@ -1065,6 +1015,7 @@ static void ProcessMultipleRecord (
       omp = ObjMgrGet ();
       ObjMgrReapOne (omp);
       ObjMgrFreeCache (0);
+      FreeSeqIdGiCache ();
     } else {
       AsnReadVal (aip, atp, NULL);
     }
@@ -1095,72 +1046,21 @@ static void ProcessMultipleRecord (
 }
 
 static void ProcessOneRecord (
-  CharPtr directory,
-  CharPtr base,
-  CharPtr suffix,
-  ValFlagPtr vfp
+  CharPtr filename,
+  Pointer userdata
 )
 
 {
+  ValFlagPtr  vfp;
+
+  vfp = (ValFlagPtr) userdata;
   if (vfp == NULL) return;
 
   if (vfp->batch) {
-    ProcessMultipleRecord (directory, base, suffix, vfp);
+    ProcessMultipleRecord (filename, vfp);
   } else {
-    ProcessSingleRecord (directory, base, suffix, vfp);
+    ProcessSingleRecord (filename, vfp);
   }
-}
-
-static void FileRecurse (
-  CharPtr directory,
-  CharPtr subdir,
-  CharPtr suffix,
-  Boolean dorecurse,
-  ValFlagPtr vfp
-)
-
-{
-  Char        path [PATH_MAX];
-  CharPtr     ptr, str;
-  ValNodePtr  head, vnp;
-
-  /* get list of all files in source directory */
-
-  head = DirCatalog (directory);
-
-  for (vnp = head; vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 0) {
-      if (StringHasNoText (subdir) || StringStr (directory, subdir) != NULL) {
-        str = (CharPtr) vnp->data.ptrvalue;
-        if (! StringHasNoText (str)) {
-
-          /* does filename have desired substring? */
-
-          ptr = StringStr (str, suffix);
-          if (ptr != NULL) {
-            *ptr = '\0';
-
-            /* process file that has desired suffix (usually .ent) */
-
-            ProcessOneRecord (directory, str, suffix, vfp);
-          }
-        }
-      }
-    } else if (vnp->choice == 1 && dorecurse) {
-
-      /* recurse into subdirectory */
-
-      StringNCpy_0 (path, directory, sizeof (path));
-      str = (CharPtr) vnp->data.ptrvalue;
-      FileBuildPath (path, str, NULL);
-
-      FileRecurse (path, str, suffix, dorecurse, vfp);
-    }
-  }
-
-  /* clean up file list */
-
-  ValNodeFreeData (head);
 }
 
 /* Args structure contains command-line arguments */
@@ -1244,8 +1144,8 @@ Args myargs [] = {
 Int2 Main (void)
 
 {
-  Char         app [64], sfx [32];
-  CharPtr      base, directory, logfile, outfile, ptr, str, suffix;
+  Char         app [64];
+  CharPtr      directory, infile, logfile, outfile, str, suffix;
   Boolean      batch, binary, compressed, dorecurse,
                local, lock, lookup, remote, usethreads;
   time_t       run_time, start_time, stop_time;
@@ -1297,7 +1197,7 @@ Int2 Main (void)
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   suffix = (CharPtr) myargs [x_argSuffix].strvalue;
-  base = (CharPtr) myargs [i_argInputFile].strvalue;
+  infile = (CharPtr) myargs [i_argInputFile].strvalue;
   outfile = (CharPtr) myargs [o_argOutputFile].strvalue;
   dorecurse = (Boolean) myargs [u_argRecurse].intvalue;
   remote = (Boolean ) myargs [r_argRemote].intvalue;
@@ -1350,7 +1250,7 @@ Int2 Main (void)
     }
   }
 
-  if (StringHasNoText (directory) && StringHasNoText (base)) {
+  if (StringHasNoText (directory) && StringHasNoText (infile)) {
     Message (MSG_FATAL, "Input path or input file must be specified");
     return 1;
   }
@@ -1419,17 +1319,11 @@ Int2 Main (void)
 
   if (StringDoesHaveText (directory)) {
 
-    FileRecurse (directory, NULL, suffix, dorecurse, &vfd);
+    DirExplore (directory, NULL, suffix, dorecurse, ProcessOneRecord, (Pointer) &vfd);
 
-  } else if (StringDoesHaveText (base)) {
+  } else if (StringDoesHaveText (infile)) {
 
-    ptr = StringRChr (base, '.');
-    sfx[0] = '\0';
-    if (ptr != NULL) {
-      StringNCpy_0 (sfx, ptr, sizeof (sfx));
-      *ptr = '\0';
-    }
-    ProcessOneRecord (directory, base, sfx, &vfd);
+    ProcessOneRecord (infile, (Pointer) &vfd);
   }
 
   stop_time = GetSecs ();

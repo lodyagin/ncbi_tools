@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pseed3.c,v 6.43 2005/05/02 16:03:14 coulouri Exp $";
+static char const rcsid[] = "$Id: pseed3.c,v 6.45 2005/07/28 14:57:10 coulouri Exp $";
 
-/* $Id: pseed3.c,v 6.43 2005/05/02 16:03:14 coulouri Exp $ */
+/* $Id: pseed3.c,v 6.45 2005/07/28 14:57:10 coulouri Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,15 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.43 $
+$Revision: 6.45 $
 
 $Log: pseed3.c,v $
+Revision 6.45  2005/07/28 14:57:10  coulouri
+remove dead code
+
+Revision 6.44  2005/07/22 14:24:13  coulouri
+Incremented positions printed by the -p pattern option so that the first position is 1
+
 Revision 6.43  2005/05/02 16:03:14  coulouri
 refactor code to set db_chunk_size
 
@@ -1148,11 +1154,6 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
     SeqAlignPtr nextSeqAlign; /*new one to add*/
     SeqAlignPtr lastSeqAlign = NULL; /*last one on list*/
     GapXEditBlockPtr nextEditBlock;  /*intermediate structure towards seqlign*/
-    Int4 p; /*loop index*/
-    Int4 *tempPosThreshSequences, *tempPosResultSequences; /*temporary
-                       arrays for copying over old posSearch structure*/
-    Int4 totalNumMatches; /*number of <threshold matches from previous calls
-                            + numMatches*/
     Int4 posBaseIndex; /*loop index for copying pos results arrays*/
 
     Char tmpbuf[512];
@@ -1363,7 +1364,6 @@ void LIBCALL quicksort_hits(Int4 no_of_seq, seedResultItems *seedResults)
 {
     Int4 i;
     store_ptr sp;
-    store_node sentinel;
     store_ptr *qs; /*local array for sorting*/
 
     /*Copy the list starting from seedResults->listOfMatchingSequences 
@@ -1539,7 +1539,7 @@ void LIBCALL search_pat(ReadDBFILEPtr rdpt, Char *patternFileName, Boolean is_dn
 	  }
 	  for (i = 0; i < numMatches; i+=2) {
               if (is_dna) {
-                  sprintf(buffer,"HI (%ld %ld)\n", (long) hitArray[i+1], (long) hitArray[i]);
+                  sprintf(buffer,"HI (%ld %ld)\n", (long) (1 + hitArray[i+1]), (long) (1 + hitArray[i]));
                   ValNodeCopyStr(info_vnp, 0, buffer);
               } else {
                   pat_output(seq, hitArray[i+1], hitArray[i], 
@@ -1583,7 +1583,6 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
     TNlmThread PNTR thread_array;
     VoidPtr status=NULL;
     store_ptr endOfList; /*end of list of matching seuqnecs*/
-    ReadDBFILEPtr local_rdfp; /*local copy for indexing down a list*/
     
     if (search == NULL)
         return;

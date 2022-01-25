@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -41,6 +41,9 @@
 * 01-25-94 DGG + JK    Fixed MapDocPoint bug
 *
 * $Log: document.c,v $
+* Revision 6.18  2005/07/18 15:15:18  kans
+* fixed minor xcode compiler warnings
+*
 * Revision 6.17  2004/08/06 18:48:28  kans
 * subtle bug in DisplayFancy was missing one call to GetChar
 *
@@ -1278,7 +1281,9 @@ static Int2 PixelsBetween (DocDataPtr ddatptr, RectPtr r, Int4 firstLine,
 *****************************************************************************/
 
 static Boolean is_old_win = FALSE;
+#ifdef OS_MSWIN
 static Boolean old_win_set = FALSE;
+#endif
 
 static Int2 DrawTableItem (DoC d, DocDataPtr ddatptr, ItemPtr itemPtr, RectPtr r,
                           Int2 item, Int2 frst, DocShadeProc grayProc,

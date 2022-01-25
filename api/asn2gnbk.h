@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.63 $
+* $Revision: 6.64 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -115,6 +115,8 @@ typedef unsigned long FlgType;
 #define PRODUCE_OLD_GBSEQ      16384
 
 #define DDBJ_VARIANT_FORMAT    32768
+
+#define SPECIAL_GAP_DISPLAY    65536
 
 /* locking behavior for system performance */
 

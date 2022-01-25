@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastkar.c,v 6.105 2005/04/27 17:20:45 papadopo Exp $";
+static char const rcsid[] = "$Id: blastkar.c,v 6.108 2005/08/09 14:14:46 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -49,8 +49,17 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.105 $
+ * $Revision: 6.108 $
  * $Log: blastkar.c,v $
+ * Revision 6.108  2005/08/09 14:14:46  dondosha
+ * From A. Shaffer: added comments to clarify usage of BlastKarlinEtoP and BlastKarlinPtoE
+ *
+ * Revision 6.107  2005/07/28 14:57:09  coulouri
+ * remove dead code
+ *
+ * Revision 6.106  2005/07/27 17:48:57  coulouri
+ * remove hardcoded paths
+ *
  * Revision 6.105  2005/04/27 17:20:45  papadopo
  * copy X scores to U scores when building score matrix
  *
@@ -1597,15 +1606,12 @@ BlastScoreBlkMatFill(BLAST_ScoreBlkPtr sbp, CharPtr matrix)
                 fp = FileOpen(string, "r");
         }
  
-#ifdef OS_UNIX
         /* Get the matrix locations from the environment for UNIX. */
         if (fp == NULL) {
             
             matrix_dir = getenv("BLASTMAT");
             if (matrix_dir != NULL) {
                 sprintf(string, "%s%s%s%s%s", matrix_dir, DIRDELIMSTR,alphabet_type, DIRDELIMSTR, matrix); 
-            } else {
-                sprintf(string, "%s%s%s%s%s", BLASTMAT_DIR, DIRDELIMSTR, alphabet_type, DIRDELIMSTR, matrix); 
             }
 
             if(FileLength(string) > 0)
@@ -1615,15 +1621,13 @@ BlastScoreBlkMatFill(BLAST_ScoreBlkPtr sbp, CharPtr matrix)
             if (fp == NULL) {
                 if (matrix_dir != NULL) {
                     sprintf(string, "%s%s%s", matrix_dir, DIRDELIMSTR, matrix); 
-                } else {
-                    sprintf(string, "%s%s%s", BLASTMAT_DIR, DIRDELIMSTR, matrix); 
                 }
 
                 if(FileLength(string) > 0)
                     fp = FileOpen(string, "r");
             }
         }
-#endif
+
         if (fp == NULL) {
             ErrPostEx(SEV_WARNING, 0, 0, "Unable to open %s", matrix);
             return 4;
@@ -3034,7 +3038,6 @@ BlastKarlinkGapBlkFill(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, I
 {
 	Boolean found_matrix=FALSE, found_values=FALSE;
 	array_of_8 *values;
-	Char buffer[256];
 	Int2 status=0;
 	Int4 index, max_number_values=0;
 	MatrixInfoPtr matrix_info;
@@ -3132,7 +3135,6 @@ PrintAllowedValuesMessage(const Char *matrix_name, Int4 gap_open, Int4 gap_exten
 	array_of_8 *values;
 	Boolean found_matrix=FALSE;
 	CharPtr buffer, ptr;
-	Int2 status=0;
 	Int4 index, max_number_values=0;
 	MatrixInfoPtr matrix_info;
 	ValNodePtr vnp, head;
@@ -3186,7 +3188,6 @@ BlastKarlinReportAllowedValues(const Char *matrix_name, ValNodePtr PNTR error_re
 	array_of_8 *values;
 	Boolean found_matrix=FALSE;
 	Char buffer[256];
-	Int2 status=0;
 	Int4 index, max_number_values=0;
 	MatrixInfoPtr matrix_info;
 	ValNodePtr vnp, head;
@@ -3971,6 +3972,10 @@ BlastKarlinStoE_simple(BLAST_Score S,
 
 /*
 BlastKarlinPtoE -- convert a P-value to an Expect value
+When using BlastKarlinPtoE in the context of a database search,
+the returned E-value should be multiplied by the effective
+length of the database and divided by the effective lnegth of
+the subject.
 */
 Nlm_FloatHi LIBCALL
 BlastKarlinPtoE(Nlm_FloatHi p)
@@ -3988,6 +3993,10 @@ BlastKarlinPtoE(Nlm_FloatHi p)
 
 /*
 BlastKarlinEtoP -- convert an Expect value to a P-value
+When using BlastKarlinEtoP in the context of a database search,
+the input paramter  E-value should be divided by the effective
+length of the database and multiplied by the effective lnegth of
+the subject, before BlastKarlinEtoP is called.
 */
 Nlm_FloatHi LIBCALL
 BlastKarlinEtoP(Nlm_FloatHi x)

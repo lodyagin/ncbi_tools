@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.165 $
+* $Revision: 6.166 $
 *
 * File Description: 
 *
@@ -4870,7 +4870,7 @@ extern Int2 LIBCALLBACK SeqEditFunc (Pointer data)
 #else
   top = 33;
 #endif
-  f = CreateSeqEditorWindow (33, top, str, bsp);
+  f = CreateSeqEditorWindow (33, top, str, BioseqLockById (sip));
   if (f != NULL)
   {
      Show (f);

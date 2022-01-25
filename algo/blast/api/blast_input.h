@@ -1,4 +1,4 @@
-/* $Id: blast_input.h,v 1.16 2005/04/06 23:27:53 dondosha Exp $
+/* $Id: blast_input.h,v 1.17 2005/08/08 15:51:41 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -65,13 +65,16 @@ extern "C" {
  *   incremented by number of queries read in  [in|out]
  * @param num_queries Number of sequences read [out]
  * @param believe_query parse FASTA seqid if TRUE [in]
+ * @param genetic_code Genetic code to use for thie query's translation, if 
+ *                     it is nucleotide [in]
  * @return number of letters read, negative number on error.
  */
 Int4
 BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand, 
                      Int4 max_total_length, Int4 from, Int4 to, 
                      SeqLoc** lcase_mask, SeqLocPtr* query_slp, Int2Ptr ctr,
-                     Int4* num_queries, Boolean believe_query);
+                     Int4* num_queries, Boolean believe_query,
+                     Int4 genetic_code);
 
 /* @} */
 
@@ -83,6 +86,9 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
 * ===========================================================================
 *
 * $Log: blast_input.h,v $
+* Revision 1.17  2005/08/08 15:51:41  dondosha
+* Added genetic code argument to BLAST_GetQuerySeqLoc, to save in the created Bioseqs
+*
 * Revision 1.16  2005/04/06 23:27:53  dondosha
 * Doxygen fixes
 *

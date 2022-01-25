@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.85 $
+* $Revision: 6.86 $
 *
 * File Description: 
 *
@@ -2235,7 +2235,7 @@ static void ExportFeatureTable (BioseqViewPtr bvp, CharPtr filename, CharPtr dfa
 static CharPtr asnconfirmmsg =
 "'Export' saves only the targeted portion of the record.\n\
 Use 'Save' to save the entire record to a file, so that\n\
-it can be read back in.  Proceed with export?";
+it can be submitted to the database.  Proceed with export?";
 
 static void ExportAsnAfterConfirming (BioseqViewPtr bvp, CharPtr filename, CharPtr dfault)
 

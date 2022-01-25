@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.34 $
+* $Revision: 6.35 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -137,6 +137,7 @@ typedef struct seq_block {
   ASN2GB_BASE_BLOCK
   Int4     start;
   Int4     stop;
+  Int4     extend;
   CharPtr  bases;
 } SeqBlock, PNTR SeqBlockPtr;
 

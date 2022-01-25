@@ -1,4 +1,4 @@
-/* $Id: blast_hits.c,v 1.167 2005/05/26 14:30:27 dondosha Exp $
+/* $Id: blast_hits.c,v 1.169 2005/08/15 16:11:20 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_hits.c,v 1.167 2005/05/26 14:30:27 dondosha Exp $";
+    "$Id: blast_hits.c,v 1.169 2005/08/15 16:11:20 dondosha Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -2071,8 +2071,7 @@ Blast_HSPListReevaluateWithAmbiguities(EBlastProgramType program,
    Boolean gapped;
    Boolean purge, delete_hsp;
    Int2 status = 0;
-   const Boolean kTranslateSubject = (program == eBlastTypeTblastn ||
-                                      program == eBlastTypeTblastx); 
+   const Boolean kTranslateSubject = Blast_SubjectIsTranslated(program);
    Boolean partial_translation;
    Uint1* translation_buffer = NULL;
    Int4* frame_offsets = NULL;
@@ -2439,6 +2438,21 @@ void Blast_HSPListAdjustOffsets(BlastHSPList* hsp_list, Int4 offset)
       hsp->subject.end += offset;
       hsp->subject.gapped_start += offset;
    }
+}
+
+void Blast_HSPListAdjustOddBlastnScores(BlastHSPList* hsp_list)
+{
+    int index;
+    
+    if (!hsp_list || hsp_list->hspcnt == 0)
+        return;
+    
+    for (index = 0; index < hsp_list->hspcnt; ++index) {
+        hsp_list->hsp_array[index]->score -= 
+            (hsp_list->hsp_array[index]->score & 1);
+    }
+    /* Sort the HSPs again, since the order may have to be different now. */
+    Blast_HSPListSortByScore(hsp_list);
 }
 
 /** Callback for sorting hsp lists by their best evalue/score;

@@ -1,5 +1,5 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.162 2005/06/02 20:45:05 dondosha Exp $";
-/* $Id: megablast.c,v 6.162 2005/06/02 20:45:05 dondosha Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.170 2005/08/22 19:22:56 madden Exp $";
+/* $Id: megablast.c,v 6.170 2005/08/22 19:22:56 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,27 @@ static char const rcsid[] = "$Id: megablast.c,v 6.162 2005/06/02 20:45:05 dondos
 *                                                                         *
 ************************************************************************** 
  * $Log: megablast.c,v $
+ * Revision 6.170  2005/08/22 19:22:56  madden
+ * Check return value of Blast_DatabaseSearch, call ErrPostEx if non-zero
+ *
+ * Revision 6.169  2005/08/18 14:19:24  madden
+ * Set cutoff_score for new engine if specified on command-line
+ *
+ * Revision 6.168  2005/08/15 18:50:35  madden
+ * Remove unused variable
+ *
+ * Revision 6.167  2005/08/09 21:36:54  dondosha
+ * Added extra argument in calls to BLAST_GetQuerySeqLoc
+ *
+ * Revision 6.166  2005/08/05 22:28:44  dondosha
+ * Pass number of CPUs option to the engine
+ *
+ * Revision 6.165  2005/06/09 17:10:03  dondosha
+ * Validate options before proceeding with search
+ *
+ * Revision 6.164  2005/06/08 20:23:24  dondosha
+ * Previous change wrong - rolled back
+ *
  * Revision 6.162  2005/06/02 20:45:05  dondosha
  * 1. Print footer only once after the loop over sets of queries;
  * 2. Format XML output in a valid XML;
@@ -1757,16 +1778,12 @@ GetLambdaFast(const BlastScoringOptions* scoring_options)
 #if MB_ALLOW_NEW
 /** Fills all the options structures with user defined values. Uses the 
  * myargs global structure obtained from GetArgs.
- * @param lookup_options Lookup table options [in]
- * @param query_setup_options Query options [in]
- * @param word_options Initial word processing options [in]
- * @param ext_options Extension options [in]
- * @param hit_options Hit saving options [out]
- * @param score_options Scoring options [out]
- * @param eff_len_options Effective length options [out]
+ * @param options Wrapper for all search options [in] [out]
+ * @param sum_returns Returns structure for passing back error 
+ *                    messages [in] [out]
  */
 static Int2 
-BLAST_FillOptions(SBlastOptions* options)
+BLAST_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
 {
    LookupTableOptions* lookup_options = options->lookup_options;
    QuerySetUpOptions* query_setup_options = options->query_options; 
@@ -1777,12 +1794,15 @@ BLAST_FillOptions(SBlastOptions* options)
    Boolean ag_blast = FALSE, variable_wordsize = FALSE, mb_lookup = TRUE;
    Boolean greedy=TRUE; /* greedy alignment should be done. */
    double lambda=0;
-   const Uint1 program_number = eBlastTypeBlastn; 
+   const EBlastProgramType kProgram = eBlastTypeBlastn; 
+   Int2 status = 0;
 
    if (myargs[ARG_DYNAMIC].intvalue != 0) 
        greedy = FALSE; 
 
-   BLAST_FillScoringOptions(score_options, program_number, 
+   options->num_cpus = myargs[ARG_THREADS].intvalue;
+
+   BLAST_FillScoringOptions(score_options, kProgram, 
                 greedy, myargs[ARG_MISMATCH].intvalue, myargs[ARG_MATCH].intvalue,
                 NULL, myargs[ARG_GAPOPEN].intvalue, myargs[ARG_GAPEXT].intvalue);
 
@@ -1804,7 +1824,7 @@ BLAST_FillOptions(SBlastOptions* options)
          variable_wordsize = FALSE;
    }
 
-   BLAST_FillLookupTableOptions(lookup_options, program_number, mb_lookup,
+   BLAST_FillLookupTableOptions(lookup_options, kProgram, mb_lookup,
       0, myargs[ARG_WORDSIZE].intvalue, variable_wordsize);
    /* Fill the rest of the lookup table options */
    lookup_options->mb_template_length = 
@@ -1815,14 +1835,14 @@ BLAST_FillOptions(SBlastOptions* options)
    if (myargs[ARG_EVERYBASE].intvalue)
       lookup_options->full_byte_scan = FALSE;
    
-   BLAST_FillQuerySetUpOptions(query_setup_options, program_number, 
+   BLAST_FillQuerySetUpOptions(query_setup_options, kProgram, 
       myargs[ARG_FILTER].strvalue, myargs[ARG_STRAND].intvalue);
 
-   BLAST_FillInitialWordOptions(word_options, program_number, 
+   BLAST_FillInitialWordOptions(word_options, kProgram, 
       greedy, myargs[ARG_WINDOW].intvalue,
       lambda*myargs[ARG_XDROP_UNGAPPED].intvalue/NCBIMATH_LN2);
 
-   BLAST_FillExtensionOptions(ext_options, program_number, (greedy ? 1 : 0), 
+   BLAST_FillExtensionOptions(ext_options, kProgram, (greedy ? 1 : 0), 
       lambda*myargs[ARG_XDROP].intvalue/NCBIMATH_LN2, 
       lambda*myargs[ARG_XDROP_FINAL].intvalue/NCBIMATH_LN2);
 
@@ -1832,9 +1852,10 @@ BLAST_FillOptions(SBlastOptions* options)
       myargs[ARG_EVALUE].floatvalue, 
       MAX(myargs[ARG_DESCRIPTIONS].intvalue, 
           myargs[ARG_ALIGNMENTS].intvalue),
-      score_options->gapped_calculation,
-      0);
- 
+      score_options->gapped_calculation, 0);
+
+   if (myargs[ARG_MINSCORE].intvalue)
+        hit_options->cutoff_score = myargs[ARG_MINSCORE].intvalue;
    
    word_options->ungapped_extension = TRUE;
    /* For discontiguous megablast we need to use a less drastic method of elimination redundant hits (at least to
@@ -1853,8 +1874,12 @@ BLAST_FillOptions(SBlastOptions* options)
       eff_len_options->searchsp_eff = (Int8) myargs[ARG_SEARCHSP].floatvalue; 
    }
 */
+   /* Validate the options. */
+   status = BLAST_ValidateOptions(kProgram, ext_options, score_options, 
+                                  lookup_options, word_options, hit_options, 
+                                  &sum_returns->error);
 
-   return 0;
+   return status;
 }
 
 static Int2 Main_new(void)
@@ -1872,7 +1897,6 @@ static Int2 Main_new(void)
    Int4 num_queries_total=0;  /* total number of queries read. */
    Boolean tabular_output = FALSE;
    BlastTabularFormatData* tf_data = NULL;
-   int num_threads;
    char* dbname = myargs[ARG_DB].strvalue;
    BlastFormattingInfo* format_info = NULL;
    Blast_SummaryReturn* sum_returns = NULL;
@@ -1885,15 +1909,17 @@ static Int2 Main_new(void)
    sum_returns = Blast_SummaryReturnNew();
    status = SBlastOptionsNew(program_name, &options, sum_returns);
 
+   if (!status)
+       status = BLAST_FillOptions(options, sum_returns);
+
    if (status) {
+       options = SBlastOptionsFree(options);
        if (sum_returns->error) {
            Blast_SummaryReturnsPostError(sum_returns);
            sum_returns = Blast_SummaryReturnFree(sum_returns);
        }
        return -1;
    }
-
-   BLAST_FillOptions(options);
 
    if (myargs[ARG_FORMAT].intvalue >= eAlignViewPairwise &&
        myargs[ARG_FORMAT].intvalue < eAlignViewMax)
@@ -1953,8 +1979,6 @@ static Int2 Main_new(void)
 
    Megablast_GetLoc(myargs[ARG_QUERYLOC].strvalue, &start, &end);
 
-   num_threads = myargs[ARG_THREADS].intvalue;
-
    /* Get the query (queries), loop if necessary. */
    while (1) {
        SeqAlign* seqalign = NULL;
@@ -1967,11 +1991,11 @@ static Int2 Main_new(void)
       if ((Boolean)myargs[ARG_LCASE].intvalue) {
          letters_read = BLAST_GetQuerySeqLoc(infp, query_is_na, 
                    myargs[ARG_STRAND].intvalue, myargs[ARG_MAXQUERY].intvalue, start, end,
-                   &lcase_mask, &query_slp, &ctr, &num_queries, believe_query);
+                   &lcase_mask, &query_slp, &ctr, &num_queries, believe_query, 0);
       } else {
          letters_read = BLAST_GetQuerySeqLoc(infp, query_is_na,
                    myargs[ARG_STRAND].intvalue, myargs[ARG_MAXQUERY].intvalue, start, end, 
-                   NULL, &query_slp, &ctr, &num_queries, believe_query);
+                   NULL, &query_slp, &ctr, &num_queries, believe_query, 0);
       }
 
       if (letters_read == 0)
@@ -2006,10 +2030,13 @@ static Int2 Main_new(void)
           lcase_mask = ValNodeLink(&lcase_mask, repeat_mask);
       
        /* The main search is here. */
-      status = 
-          Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, tf_data,
+      if((status = Blast_DatabaseSearch(query_slp, dbname, lcase_mask, options, tf_data,
                                &seqalign, &filter_loc, &mask_at_hash, 
-                               sum_returns);
+                               sum_returns)) != 0)
+      {
+	   ErrPostEx(SEV_FATAL, 1, 0, "Non-zero return from Blast_DatabaseSearch\n");
+           return status;
+      }
 
       /* Deallocate the data structure used for tabular formatting. */
       BlastTabularFormatDataFree(tf_data);

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_input.c,v 1.22 2005/05/17 14:00:44 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_input.c,v 1.23 2005/08/08 15:51:41 dondosha Exp $";
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,8 @@ Int4
 BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand, 
                      Int4 max_total_length, Int4 start, Int4 end, 
                      SeqLoc** lcase_mask, SeqLocPtr* query_slp, 
-                     Int2Ptr ctr, Int4* num_queries, Boolean believe_query)
+                     Int2Ptr ctr, Int4* num_queries, Boolean believe_query,
+                     Int4 genetic_code)
 {
    Int4 total_length=0; /* total number of letters read this call, also final 
                            return value. */
@@ -124,6 +125,16 @@ BLAST_GetQuerySeqLoc(FILE *infp, Boolean query_is_na, Uint1 strand,
          sequence. */
       if (from > to) 
          continue;
+
+      /* Fill the query genetic code option. */
+      if (query_is_na && genetic_code > 0) {
+          BioSourcePtr source;
+          source = BioSourceNew();
+          source->org = OrgRefNew();
+          source->org->orgname = OrgNameNew();
+          source->org->orgname->gcode = genetic_code;
+          ValNodeAddPointer(&(query_bsp->descr), Seq_descr_source, source);
+      }
 
       if ((strand == Seq_strand_plus) || (strand == Seq_strand_minus) ||
           (from > 0) || (to < query_bsp->length - 1))

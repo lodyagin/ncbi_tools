@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/*  $Id: ncbi_service.h,v 6.37 2005/05/04 16:13:57 lavr Exp $
+/*  $Id: ncbi_service.h,v 6.39 2005/07/06 18:54:44 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -87,10 +87,14 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenSimple
 #define SERV_LOCALHOST  ((unsigned int)(~0UL))
 #define SERV_ANYHOST    0           /* default, may be used as just 0 in code*/
 
-/* Can be combined in types to get even dead services (not off ones!) */
-#define fSERV_Promiscuous 0x80000000
-/* Do reverse DNS translation of the resulting info */
-#define fSERV_ReverseDns  0x40000000
+
+/* Special "type" bit values that may be combined with server types */
+typedef enum {
+    /* Allows to get even dead services (not off ones!) */
+    fSERV_Promiscuous = 0x80000000,
+    /* Do reverse DNS translation of the resulting info */
+    fSERV_ReverseDns  = 0x40000000
+} ESERV_SpecialType;
 
 
 extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenEx
@@ -102,8 +106,13 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenEx
  size_t              n_skip         /* number of servers in preceding array  */
  );
 
-#define SERV_Open(service, types, preferred_host, net_info) \
-        SERV_OpenEx(service, types, preferred_host, net_info, 0, 0)
+
+extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_Open
+(const char*         service,
+ TSERV_Type          types,
+ unsigned int        preferred_host,
+ const SConnNetInfo* net_info
+);
 
 
 /* Get the next server meta-address, optionally accompanied by host
@@ -129,7 +138,10 @@ extern NCBI_XCONNECT_EXPORT const SSERV_Info* SERV_GetNextInfoEx
  HOST_INFO*          host_info      /* ptr to store host info at [may be 0]  */
  );
 
-#define SERV_GetNextInfo(iter)  SERV_GetNextInfoEx(iter, 0)
+
+extern NCBI_XCONNECT_EXPORT const SSERV_Info* SERV_GetNextInfo
+(SERV_ITER           iter
+ );
 
 
 /* This is a 'fast track' routine equivalent to creation of an iterator
@@ -151,8 +163,12 @@ extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoEx
  );
 
 
-#define SERV_GetInfo(service, types, preferred_host, net_info) \
-    SERV_GetInfoEx(service, types, preferred_host, net_info, 0, 0, 0)
+extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfo
+(const char*         service,
+ TSERV_Type          types,
+ unsigned int        preferred_host,
+ const SConnNetInfo* net_info
+ );
 
 
 /* Penalize server returned last from SERV_GetNextInfo[Ex]().
@@ -191,6 +207,12 @@ extern NCBI_XCONNECT_EXPORT void SERV_Close
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.h,v $
+ * Revision 6.39  2005/07/06 18:54:44  lavr
+ * +enum ESERV_SpecialType to hold special server type bits (instead of macros)
+ *
+ * Revision 6.38  2005/07/06 18:27:58  lavr
+ * Eliminate macro calls
+ *
  * Revision 6.37  2005/05/04 16:13:57  lavr
  * DISP_SetMessageHook() moved to <connect/ncbi_service_misc.h>
  *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.68 $
+* $Revision: 6.69 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.69  2005/07/18 15:15:18  kans
+* fixed minor xcode compiler warnings
+*
 * Revision 6.68  2005/01/24 15:02:40  kans
 * remove unnecessary and uninitialized StringMove (tmp...) in GetArgs_ST
 *
@@ -1278,6 +1281,7 @@ extern Nlm_Boolean Nlm_IsWindowDying (Nlm_WindoW w)
   return rsult;
 }
 
+/*
 static void Nlm_SetScreenMode (Nlm_WindoW w, Nlm_ScreenMode screenMode)
 
 {
@@ -1289,6 +1293,7 @@ static void Nlm_SetScreenMode (Nlm_WindoW w, Nlm_ScreenMode screenMode)
     Nlm_SetWindowData (w, &wdata);
   }
 }
+*/
 
 static Nlm_ScreenMode Nlm_GetScreenMode (Nlm_WindoW w)
 
@@ -3797,6 +3802,7 @@ extern Nlm_WindoW Nlm_ActiveWindow (void)
 }
 
 #ifdef WIN_MAC
+/*
 static Nlm_WindoW Nlm_PrevVisWindow (Nlm_WindoW w)
 
 {
@@ -3825,6 +3831,7 @@ static Nlm_WindoW Nlm_PrevVisWindow (Nlm_WindoW w)
     return (Nlm_FindWindowRec ((Nlm_WindowTool) q));
   }
 }
+*/
 #endif
 
 
@@ -7934,7 +7941,8 @@ static Nlm_Boolean GetArgs_ST(const char* progname,
     "Data Out: "
   };
 
-  static const char* s_ValueStrings[] = {
+#ifdef WIN_MOTIF
+static const char* s_ValueStrings[] = {
     "",
     "T/F",
     "Integer",
@@ -7945,6 +7953,7 @@ static Nlm_Boolean GetArgs_ST(const char* progname,
     "Input-Data",
     "Output-Data"
   };
+#endif
 
   Nlm_Int2       i, j;
   Nlm_ArgPtr     curarg;

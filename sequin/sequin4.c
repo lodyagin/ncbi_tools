@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.300 $
+* $Revision: 6.311 $
 *
 * File Description: 
 *
@@ -78,6 +78,9 @@
 #include <sqnutils.h>
 #include <seqpanel.h>
 
+static Int2 LIBCALLBACK CreateSegSet (Pointer data);
+
+#define REGISTER_CREATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Create Segmented Set", "CreateSegSet", 0,0,0,0,NULL,CreateSegSet, PROC_PRIORITY_DEFAULT, "Indexer")
 #define REGISTER_UPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Update Segmented Set","UpdateSegSet",0,0,0,0,NULL,UpdateSegSet,PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_NEWUPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"New Update Segmented Set","NewUpdateSegSet",0,0,0,0,NULL,NewUpdateSegSet,PROC_PRIORITY_DEFAULT, "Indexer")
@@ -207,6 +210,10 @@ static Int2 LIBCALLBACK SeparateMrnaFromNrProc (Pointer data);
 extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
 
 #define REGISTER_TPAASSEMBLYUSER_DESC_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Assembly User Desc","TPA Assembly",OBJ_SEQDESC,Seq_descr_user,OBJ_SEQDESC,Seq_descr_user,NULL,AssemblyUserGenFunc,PROC_PRIORITY_DEFAULT)
+
+#if defined(OS_UNIX) || defined(OS_MSWIN) 
+#define REGISTER_CORRECTRNASTRAND ObjMgrProcLoadEx (OMPROC_FILTER, "Correct RNA Strand","CorrectRNAStrand",0,0,0,0,NULL,CorrectRNAStrandedness,PROC_PRIORITY_DEFAULT, "Analysis")
+#endif
 
 typedef struct {
   CharPtr  oldStr;
@@ -342,6 +349,82 @@ static void MoveSegSetMolInfo (BioseqPtr segseq, BioseqSetPtr parts, BioseqSetPt
   }
   for (tmp = parts->seq_set; tmp != NULL; tmp = tmp->next) {
     SeqEntryExplore (tmp, NULL, RemoveMolInfoDescriptors);
+  }
+}
+
+typedef struct descriptorextraction
+{
+  Int2 descriptor_choice;
+  SeqDescrPtr sdp_list;
+} DescriptorExtractionData, PNTR DescriptorExtractionPtr;
+
+static void ExtractSegSetDescriptorsBioseqSetCallback (BioseqSetPtr bssp, Pointer userdata)
+{
+  DescriptorExtractionPtr dep;
+  ValNodePtr              extracted_list;
+  
+  dep = (DescriptorExtractionPtr) userdata;
+  if (bssp == NULL || dep == NULL || bssp->descr == NULL)
+  {
+    return;
+  }
+  
+  extracted_list = ValNodeExtractList (&(bssp->descr), dep->descriptor_choice);
+  ValNodeLink (&dep->sdp_list, extracted_list);
+}
+
+static void ExtractSegSetDescriptorsBioseqCallback (BioseqPtr bsp, Pointer userdata)
+{
+  DescriptorExtractionPtr dep;
+  ValNodePtr              extracted_list;
+  
+  dep = (DescriptorExtractionPtr) userdata;
+  if (bsp == NULL || dep == NULL || bsp->descr == NULL)
+  {
+    return;
+  }
+  
+  extracted_list = ValNodeExtractList (&(bsp->descr), dep->descriptor_choice);
+  ValNodeLink (&dep->sdp_list, extracted_list);
+}
+
+static void 
+MoveSegSetDescriptorsUp
+(BioseqPtr    segseq, 
+ BioseqSetPtr parts, 
+ BioseqSetPtr segset,
+ Int2         descriptor_choice)
+
+{
+  SeqEntryPtr  sep;
+  DescriptorExtractionData ded;
+  BioseqSetPtr bssp;
+  BioseqPtr    bsp;
+
+  if (segseq == NULL || parts == NULL || parts->seq_set == NULL || segset == NULL) return;
+  sep = GetBestTopParentForData (segseq->idx.entityID, segseq);
+  if (sep == NULL)
+  {
+    sep = SeqMgrGetSeqEntryForData (segset);
+  }
+  
+  if (sep == NULL || sep->data.ptrvalue == NULL) return;
+  
+  ded.descriptor_choice = descriptor_choice;
+  ded.sdp_list = NULL;
+  
+  VisitSetsInSep (sep, &ded, ExtractSegSetDescriptorsBioseqSetCallback);
+  VisitBioseqsInSep (sep, &ded, ExtractSegSetDescriptorsBioseqCallback);
+  
+  if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    ValNodeLink (&(bssp->descr), ded.sdp_list);
+  }
+  else if (IS_Bioseq (sep))
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    ValNodeLink (&(bsp->descr), ded.sdp_list);
   }
 }
 
@@ -489,8 +572,8 @@ extern Int2 DoOneSegFixup (SeqEntryPtr sep, Boolean ask)
   if (sep == NULL) return 0;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 ||
-                         (IsPopPhyEtcSet (bssp->_class)))) {
+    if (bssp != NULL && (bssp->_class == BioseqseqSet_class_genbank 
+                         || IsPopPhyEtcSet (bssp->_class))) {
       choice = 0;
       for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
         if (choice == 0) {
@@ -528,6 +611,9 @@ extern Int2 DoOneSegFixup (SeqEntryPtr sep, Boolean ask)
     if (uss.segseq != NULL && uss.parts != NULL && uss.segset != NULL) {
       DoUpdateSegSet (uss.segseq, uss.parts, ask, FALSE);
       MoveSegSetMolInfo (uss.segseq, uss.parts, uss.segset);
+      MoveSegSetDescriptorsUp (uss.segseq, uss.parts, uss.segset, Seq_descr_pub);
+      MoveSegSetDescriptorsUp (uss.segseq, uss.parts, uss.segset, Seq_descr_update_date);
+      MoveSegSetDescriptorsUp (uss.segseq, uss.parts, uss.segset, Seq_descr_source);      
     }
     return count;
   }
@@ -538,6 +624,9 @@ extern Int2 DoOneSegFixup (SeqEntryPtr sep, Boolean ask)
   if (uss.segseq != NULL && uss.parts != NULL && uss.segset != NULL) {
     DoUpdateSegSet (uss.segseq, uss.parts, ask, FALSE);
     MoveSegSetMolInfo (uss.segseq, uss.parts, uss.segset);
+    MoveSegSetDescriptorsUp (uss.segseq, uss.parts, uss.segset, Seq_descr_pub);
+    MoveSegSetDescriptorsUp (uss.segseq, uss.parts, uss.segset, Seq_descr_update_date);
+    MoveSegSetDescriptorsUp (uss.segseq, uss.parts, uss.segset, Seq_descr_source);    
     return 1;
   }
   return 0;
@@ -619,6 +708,9 @@ static void UpdateOneSegSet (BioseqSetPtr seg_bssp, Boolean intersperse_nulls)
   }
   DoUpdateSegSet (seg, parts, FALSE, intersperse_nulls);
   MoveSegSetMolInfo (seg, parts, seg_bssp);  
+  MoveSegSetDescriptorsUp (seg, parts, seg_bssp, Seq_descr_pub);
+  MoveSegSetDescriptorsUp (seg, parts, seg_bssp, Seq_descr_update_date);
+  MoveSegSetDescriptorsUp (seg, parts, seg_bssp, Seq_descr_source);  
 }
 
 static void ConvertOneSetToSegSet (SeqEntryPtr sep, Boolean intersperse_nulls)
@@ -881,7 +973,7 @@ static void NewSegFixup (SeqEntryPtr sep, Boolean intersperse_nulls)
   }
   
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
-  if (bssp == NULL || bssp->_class == BioseqseqSet_class_nuc_prot)
+  if (bssp == NULL)
   {
     return;
   }
@@ -959,21 +1051,19 @@ static void CancelButton (ButtoN b)
   }
 }
 
-
-
 static Int2 LIBCALLBACK NewUpdateSegSet (Pointer data)
 
 {
-  OMProcControlPtr  ompcp;
-  SeqEntryPtr       sep;
-  ErrSev            sev;
-  DoneCancelData    dcd;
-  WindoW            w;
-  GrouP             h, g, c;
-  ButtoN            intersperse_nulls_btn;
-  ButtoN            fix_locus_btn;
-  ButtoN            tax_fix_cleanup_btn;
-  ButtoN            b;
+  OMProcControlPtr   ompcp;
+  SeqEntryPtr        sep;
+  ErrSev             sev;
+  DoneCancelData     dcd;
+  WindoW             w;
+  GrouP              h, g, c;
+  ButtoN             intersperse_nulls_btn;
+  ButtoN             fix_locus_btn;
+  ButtoN             tax_fix_cleanup_btn;
+  ButtoN             b;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
@@ -4753,6 +4843,186 @@ extern SeqFeatPtr SeqFeatCopy (SeqFeatPtr sfp)
   return sfpnew;
 }
 
+static void 
+SetExplodedProtein 
+(BioseqPtr    orig_prot, 
+ BioseqSetPtr nucprot_bssp,
+ BioseqPtr    nucbsp,
+ SeqFeatPtr   sfp,
+ CharPtr      prot_id_str,
+ Int4         cum_offset)
+{
+  SeqIdPtr    prot_sip;
+  BioseqPtr   new_prot;
+  SeqEntryPtr prot_sep, sep_last;
+  Int4        frame_shift, prot_start, prot_stop;
+  Int4        loc_len, adjusted_len = 0, prot_len;
+  CdRegionPtr crp;
+  ValNodePtr  vnp;
+  MolInfoPtr  mip;
+  Boolean     partial5, partial3;
+  
+  if (orig_prot == NULL || nucprot_bssp == NULL
+      || sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION
+      || StringHasNoText (prot_id_str))
+  {
+    return;
+  }
+  
+  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  if (crp == NULL)
+  {
+    return;
+  }
+  
+  prot_sip = MakeUniqueSeqID (prot_id_str);
+  frame_shift = cum_offset % 3;
+  if (frame_shift == 0 
+      || (crp->frame == 3 && frame_shift == 1)
+      || (crp->frame == 2 && frame_shift == 2))
+  {
+    prot_start = cum_offset / 3;
+  }
+  else
+  {
+    prot_start = cum_offset / 3 + 1;
+  }
+  loc_len = SeqLocLen (sfp->location);
+  if (crp->frame == 1 || crp->frame == 0)
+  {
+    adjusted_len = loc_len - frame_shift;
+  }
+  else if (crp->frame == 2)
+  {
+    adjusted_len = loc_len - frame_shift - 1;
+  }
+  else if (crp->frame == 3)
+  {
+    adjusted_len = loc_len - frame_shift - 2;
+  }
+  prot_len = adjusted_len / 3;
+  if (adjusted_len % 3 == 2)
+  {
+    prot_len ++;
+  }
+  prot_stop = prot_start + prot_len - 1;
+  if (prot_stop > orig_prot->length - 1)
+  {
+    prot_stop = orig_prot->length - 1;
+  }
+  new_prot = BioseqCopyEx (prot_sip, orig_prot, 
+                           prot_start, 
+                           prot_stop,
+                           Seq_strand_plus, TRUE);
+  /* add to nuc-prot set */
+  prot_sep = SeqEntryNew ();
+  prot_sep->choice = 1;
+  prot_sep->data.ptrvalue = new_prot;
+  sep_last = nucprot_bssp->seq_set;
+  while (sep_last != NULL && sep_last->next != NULL)
+  {
+    sep_last = sep_last->next;
+  }
+  if (sep_last == NULL)
+  {
+    nucprot_bssp->seq_set = prot_sep;
+  }
+  else
+  {
+    sep_last->next = prot_sep;
+  }
+  
+  SeqMgrAddToBioseqIndex (new_prot);
+  
+  /* set partials */
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+  if (cum_offset > 0)
+  {
+    partial5 = TRUE;
+  }
+  if (prot_stop < orig_prot->length - 1)
+  {
+    partial3 = TRUE;
+  }
+  SetSeqLocPartial (sfp->location, partial5, partial3);
+  sfp->partial = partial5 || partial3;
+  
+  /* add MolInfo descriptor */
+  vnp = SeqEntryGetSeqDescr (prot_sep, Seq_descr_molinfo, NULL);
+  if (vnp == NULL) {
+    vnp = CreateNewDescriptor (prot_sep, Seq_descr_molinfo);
+  }
+  if (vnp != NULL) 
+  {
+    mip = (MolInfoPtr) vnp->data.ptrvalue;
+    if (mip == NULL)
+    {
+      mip = MolInfoNew ();
+      vnp->data.ptrvalue = (Pointer) mip;
+    }
+    if (mip != NULL) {
+      mip->biomol = 8;
+      mip->tech = 13;
+      if (partial5 && partial3) {
+        mip->completeness = 5;
+      } else if (partial5) {
+        mip->completeness = 3;
+      } else if (partial3) {
+        mip->completeness = 4;
+      } else {
+        mip->completeness = 0;
+      }
+    }
+  }
+    
+  /* make feature product point to new Bioseq */
+  sfp->product = ValNodeNew (NULL);
+  sfp->product->choice = SEQLOC_WHOLE;
+  sfp->product->data.ptrvalue = prot_sip;
+    
+  /* adjust frame */
+  if (frame_shift != 0)
+  {
+    switch (crp->frame)
+    {
+      case 0:
+      case 1:
+        if (frame_shift == 1)
+        {
+          crp->frame = 3;
+        }
+        else if (frame_shift == 2)
+        {
+          crp->frame = 2;
+        }
+        break;
+      case 2:
+        if (frame_shift == 1)
+        {
+          crp->frame = 1;
+        }
+        else if (frame_shift == 2)
+        {
+          crp->frame = 3;
+        }
+        break;
+      case 3:
+        if (frame_shift == 1)
+        {
+          crp->frame = 2;
+        }
+        else if (frame_shift == 2)
+        {
+          crp->frame = 1;
+        }
+        break;
+    }
+  }
+  
+  /* retranslate coding region */
+  SeqEdTranslateOneCDS (sfp, nucbsp, nucbsp->idx.entityID);
+}
+
 static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
 
 {
@@ -4762,6 +5032,17 @@ static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
   GBQualPtr      gbq;
   Int2           count;
   Char           str [16];
+  BioseqPtr      orig_prot = NULL, nucbsp;
+  Int4           cum_offset = 0;
+  Char           prot_id_str [128];
+  Char           prot_id_str_prefix [255];
+  SeqEntryPtr    nucprot_sep = NULL;
+  BioseqSetPtr   nucprot_bssp = NULL;
+  ObjMgrDataPtr  omdptop;
+  ObjMgrData     omdata;
+  Uint2          parenttype;
+  Pointer        parentptr;
+  Int4           feat_num = 1;
 
   if (sfp == NULL || sfp->location == NULL) return FALSE;
 
@@ -4777,6 +5058,43 @@ static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
       ifp->loc = MemFree (ifp->loc);
     }
   }
+
+  /* if coding region, get copy of original protein, to use when
+   * retranslating coding regions 
+   */
+  if (sfp->data.choice == SEQFEAT_CDREGION && sfp->product != NULL)
+  {
+    orig_prot = BioseqFindFromSeqLoc (sfp->product);
+    if (orig_prot != NULL)
+    {
+      nucbsp = BioseqFindFromSeqLoc (sfp->location);
+      if (nucbsp != NULL)
+      {
+        nucprot_sep = GetBestTopParentForData (nucbsp->idx.entityID, nucbsp);
+        if (nucprot_sep != NULL && IS_Bioseq_set (nucprot_sep))
+        {
+          nucprot_bssp = (BioseqSetPtr) nucprot_sep->data.ptrvalue;
+          if (nucprot_bssp != NULL 
+              && nucprot_bssp->_class == BioseqseqSet_class_nuc_prot)
+          {
+            sfp->product = NULL;
+            SeqIdWrite (SeqIdFindBest (orig_prot->id, SEQID_LOCAL), prot_id_str, 
+                        PRINTID_REPORT, sizeof (prot_id_str) - 1);
+          }
+        }
+      }
+      if (nucprot_bssp == NULL)
+      {
+        orig_prot = NULL;
+      }
+      else
+      {          
+        SaveSeqEntryObjMgrData (nucprot_sep, &omdptop, &omdata);
+        GetSeqEntryParent (nucprot_sep, &parentptr, &parenttype);
+      }
+    }
+  }
+
 
 /* orig sfp is copied then orig sfp data is replaced */
   sfplast = sfp->next;
@@ -4803,6 +5121,14 @@ static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
   }
 
   sfp->location = SeqLocCopyOne (slp);
+  if (sfp->data.choice == SEQFEAT_CDREGION && orig_prot != NULL)
+  {
+    sprintf (prot_id_str_prefix, "%s%d", prot_id_str, feat_num);
+    SetExplodedProtein (orig_prot, nucprot_bssp, nucbsp, sfp, prot_id_str_prefix, cum_offset);    
+    /* adjust cum_offset */
+    cum_offset += SeqLocLen (sfp->location);
+    feat_num++;
+  }  
   sfpold = sfp;
   slp = SeqLocFindNext (slphead, slp);
 
@@ -4819,6 +5145,16 @@ static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
       sfp->location = SeqLocFree (sfp->location);
       sfp->location = SeqLocCopyOne (slp);
       sfp->partial = CheckSeqLocForPartial (sfp->location, NULL, NULL);
+      
+      if (sfp->data.choice == SEQFEAT_CDREGION && orig_prot != NULL)
+      {
+        sprintf (prot_id_str_prefix, "%s%d", prot_id_str, feat_num);
+        SetExplodedProtein (orig_prot, nucprot_bssp, nucbsp, sfp, prot_id_str_prefix, cum_offset);    
+        /* adjust cum_offset */
+        cum_offset += SeqLocLen (sfp->location);
+        feat_num++;
+      }
+      
       sfpold->next = sfp;
       sfpold = sfp;
     }
@@ -4827,6 +5163,17 @@ static Boolean ExplodeGroup (SeqEntryPtr sep, SeqFeatPtr sfp)
   sfpold->next = sfplast;
   sfpnew = SeqFeatFree (sfpnew);
   slphead = SeqLocFree (slphead);
+  
+  if (orig_prot != NULL)
+  {
+    /* mark orig_prot for deletion */
+    orig_prot->idx.deleteme = TRUE;
+    
+    /* relink nucprot set parent */
+    SeqMgrLinkSeqEntry (nucprot_sep, parenttype, parentptr);
+    RestoreSeqEntryObjMgrData (nucprot_sep, omdptop, &omdata);    
+  }
+
   return TRUE;
 }
 
@@ -4909,6 +5256,9 @@ static Int2 LIBCALLBACK GroupExplodeFunc (Pointer data)
 
   if (isDirty)
     {
+      /* remove any protein sequences that were marked for deletion */
+      DeleteMarkedObjects (ompcp->input_entityID, 0, NULL);
+
       ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
       ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID,
 		     ompcp->input_itemID, ompcp->input_itemtype);
@@ -4950,6 +5300,8 @@ extern void GroupExplodeToolBtn (ButtoN b)
 
   if (isDirty)
   {
+    /* remove any protein sequences that were marked for deletion */
+    DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
     ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
     ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID,
 		     bfp->input_itemID, bfp->input_itemtype);
@@ -9218,6 +9570,12 @@ extern void SetupSequinFilters (void)
   REGISTER_BIOSEQ_REVCOMP_WITHFEAT;
   REGISTER_BIOSEQ_REVCOMP_NOTFEAT;
 
+#if defined(OS_UNIX) || defined(OS_MSWIN) 
+  if (indexerVersion && GetAppParam ("SEQUIN", "RNACORRECT", "RNASTRAND", NULL, str, sizeof (str))) {
+    REGISTER_CORRECTRNASTRAND;
+  }
+#endif
+  
   REGISTER_ALUFEAT;
   REGISTER_BIOSEQ_ORF;
   REGISTER_MRNA_FROM_CDS;
@@ -9250,6 +9608,7 @@ extern void SetupSequinFilters (void)
     REGISTER_ADJUSTMULTISEGSEQ;
     REGISTER_UPDATESEGSET;
     REGISTER_NEWUPDATESEGSET;
+    REGISTER_CREATESEGSET;    
   }
 
   if (indexerVersion) {
@@ -9277,6 +9636,7 @@ extern void SetupSequinFilters (void)
   REGISTER_GROUP_KYTE;
   REGISTER_GROUP_MATRIX;
   REGISTER_GROUP_MOLWT;
+  
 }
 
 extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn)
@@ -13169,37 +13529,25 @@ typedef void (LIBCALLBACK *PrintItemToBuffer) (CharPtr cp, Pointer userdata);
 
 typedef struct doublelist
 {
-  WindoW             w;
-  DoC                list1_ctrl;
-  DoC                list2_ctrl;
-  ButtoN             to_button;
-  ButtoN             from_button;
-  ButtoN             accept_button;
-  Boolean            change;
-  Boolean            done;
-  Boolean            accepted;  
-  ValNodePtr         list1;
-  ValNodePtr         list2;
-  BoolPtr            list1_clicked;
-  BoolPtr            list2_clicked;
-  Int4               num_total;
-  GetItemTextLength  getlenproc;
-  PrintItemToBuffer  printitemproc;
-  Boolean            none_in_1_ok;
-  Boolean            none_in_2_ok;
+  DIALOG_MESSAGE_BLOCK
+  DoC                  list1_ctrl;
+  DoC                  list2_ctrl;
+  ButtoN               to_button;
+  ButtoN               from_button;
+  ButtoN               to_all_button;
+  ButtoN               from_all_button;
+  ValNodePtr           list1;
+  ValNodePtr           list2;
+  BoolPtr              list1_clicked;
+  BoolPtr              list2_clicked;
+  Int4                 num_total;
+  GetItemTextLength    getlenproc;
+  PrintItemToBuffer    printitemproc;
+  ColData              col;
+  ParData              par;
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;  
 } DoubleListData, PNTR DoubleListPtr;
-
-static ColData doubleListCol [] = {
-  {0, 0, 80, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
-  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
-  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
-  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
-  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
-  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
-  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, FALSE},
-  {0, 0,  0, 0, NULL, 'l', FALSE, FALSE, FALSE, FALSE, TRUE}};
-
-static ParData doubleListPar = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
 
 static CharPtr AllLinePrtProc (DoC d, Int2 item, Pointer ptr)
 
@@ -13317,34 +13665,54 @@ static Boolean HighlightList2 (DoC d, Int2 item, Int2 row, Int2 col)
   }
 }
 
-static void PopulateDoubleListPanels (DoubleListPtr dlp)
+static void RedrawDoubleListDialog (DoubleListPtr dlp)
 {
   CharPtr new_text;
   Int4    idx;
   RecT    r;
+  BaR     sb;
+  Int4    orig_pos, barmax;
   
   if (dlp == NULL) return;
+
+  sb = GetSlateVScrollBar ((SlatE) dlp->list1_ctrl);
+  orig_pos = GetBarValue (sb);
 
 	Reset(dlp->list1_ctrl);
   SetDocAutoAdjust (dlp->list1_ctrl, FALSE);
   new_text = GetDoubleListTextList (dlp->list1, dlp);
   AppendItem (dlp->list1_ctrl, AllLinePrtProc, new_text, FALSE, ValNodeLen (dlp->list1),
-                &doubleListPar, doubleListCol, programFont);
+                &(dlp->par), &(dlp->col), programFont);
   SetDocAutoAdjust (dlp->list1_ctrl, TRUE);
   SetDocProcs (dlp->list1_ctrl, ClickList1, NULL, ReleaseDoubleListItem, NULL);
   SetDocShade (dlp->list1_ctrl, NULL, NULL, HighlightList1, NULL);
+  AdjustDocScroll (dlp->list1_ctrl);
+  
+  barmax = GetBarMax (sb);
+  if (barmax < orig_pos)
+  {
+    orig_pos = barmax;
+  }
+  SetBarValue (sb, orig_pos);
 
+  sb = GetSlateVScrollBar ((SlatE) dlp->list2_ctrl);
+  orig_pos = GetBarValue (sb);
 	Reset(dlp->list2_ctrl);
   SetDocAutoAdjust (dlp->list2_ctrl, FALSE);
   new_text = GetDoubleListTextList (dlp->list2, dlp);
   AppendItem (dlp->list2_ctrl, AllLinePrtProc, new_text, FALSE, ValNodeLen (dlp->list2),
-                &doubleListPar, doubleListCol, programFont);
+                &(dlp->par), &(dlp->col), programFont);
   SetDocAutoAdjust (dlp->list2_ctrl, TRUE);
   SetDocProcs (dlp->list2_ctrl, ClickList2, NULL, ReleaseDoubleListItem, NULL);
   SetDocShade (dlp->list2_ctrl, NULL, NULL, HighlightList2, NULL);
   
-  AdjustDocScroll (dlp->list1_ctrl);
   AdjustDocScroll (dlp->list2_ctrl);
+  barmax = GetBarMax (sb);
+  if (barmax < orig_pos)
+  {
+    orig_pos = barmax;
+  }
+  SetBarValue (sb, orig_pos);
   
   ObjectRect (dlp->list1_ctrl, &r);
   InsetRect (&r, -1, -1);
@@ -13359,21 +13727,7 @@ static void PopulateDoubleListPanels (DoubleListPtr dlp)
   {
     dlp->list1_clicked [idx] = FALSE;
     dlp->list2_clicked [idx] = FALSE;
-  }
-  
-  if (! dlp->none_in_1_ok && dlp->list1 == NULL)
-  {
-    Disable (dlp->accept_button);
-  }
-  else if (! dlp->none_in_2_ok && dlp->list2 == NULL)
-  {
-    Disable (dlp->accept_button);
-  }
-  else
-  {
-    Enable (dlp->accept_button);
-  }
-  
+  }  
 }
 
 static void MoveToList2 (ButtoN b)
@@ -13416,7 +13770,11 @@ static void MoveToList2 (ButtoN b)
     }
   }
   /* redraw contents of docpanels */
-  PopulateDoubleListPanels (dlp);        
+  RedrawDoubleListDialog (dlp);  
+  if (dlp->change_notify != NULL)
+  {
+    (dlp->change_notify) (dlp->change_userdata);
+  }     
 }
 
 static void MoveToList1 (ButtoN b)
@@ -13459,76 +13817,306 @@ static void MoveToList1 (ButtoN b)
     }
   }
   /* redraw contents of docpanels */
-  PopulateDoubleListPanels (dlp);        
-
+  RedrawDoubleListDialog (dlp);   
+       
+  if (dlp->change_notify != NULL)
+  {
+    (dlp->change_notify) (dlp->change_userdata);
+  }
 }
 
-static void AcceptDoubleList (ButtoN b)
+static void MoveAllToList2 (ButtoN b)
 {
-  DoubleListPtr dlp;
+  DoubleListPtr  dlp;
 
   dlp = (DoubleListPtr) GetObjectExtra (b);
-  if (dlp == NULL) return;
-
-  dlp->accepted = TRUE;
-  dlp->done = TRUE;
+  if (dlp == NULL)
+  {
+    return;
+  }
   
+  ValNodeLink (&(dlp->list2), dlp->list1);
+  dlp->list1 = NULL;
+  
+  /* redraw contents of docpanels */
+  RedrawDoubleListDialog (dlp);  
+  if (dlp->change_notify != NULL)
+  {
+    (dlp->change_notify) (dlp->change_userdata);
+  }     
 }
 
-static void CancelDoubleList (ButtoN b)
+static void MoveAllToList1 (ButtoN b)
 {
-  DoubleListPtr dlp;
+  DoubleListPtr  dlp;
 
   dlp = (DoubleListPtr) GetObjectExtra (b);
-  if (dlp == NULL) return;
-
-  dlp->accepted = FALSE;
-  dlp->done = TRUE;
+  if (dlp == NULL)
+  {
+    return;
+  }
+  
+  ValNodeLink (&(dlp->list1), dlp->list2);
+  dlp->list2 = NULL;
+  
+  /* redraw contents of docpanels */
+  RedrawDoubleListDialog (dlp);  
+  if (dlp->change_notify != NULL)
+  {
+    (dlp->change_notify) (dlp->change_userdata);
+  }     
 }
 
-static void DrawDoubleListWindow (DoubleListPtr dlp, CharPtr list1_name, CharPtr list2_name)
+static void ListPairToDoubleListDialog (DialoG d, Pointer data)
 {
-  GrouP           h, g, k, c;
-  ButtoN          b;
-  Int2            height = LineHeight ();
-    
+  DoubleListPtr dlp;
+  ValNodePtr    list_pair;
   
-  if (dlp == NULL) return;
   
-  dlp->w = ModalWindow (-50, -33, -10, -10, NULL);
-  doubleListCol [0].pixWidth = screenRect.right - screenRect.left;
+  dlp = (DoubleListPtr) GetObjectExtra (d);
+  if (dlp == NULL)
+  {
+    return;
+  }
+	Reset(dlp->list1_ctrl);
+	Reset(dlp->list2_ctrl);
+	dlp->list1 = NULL;
+	dlp->list2 = NULL;
+  
+  list_pair = (ValNodePtr) data;
+  if (list_pair != NULL)
+  {
+    dlp->list1 = list_pair->data.ptrvalue;
+    if (list_pair->next != NULL)
+    {
+      dlp->list2 = list_pair->next->data.ptrvalue;
+    }
+  }
+  
+  /* set up clicked lists */
+  dlp->list1_clicked = MemFree (dlp->list1_clicked);
+  dlp->list2_clicked = MemFree (dlp->list2_clicked);
+  dlp->num_total = ValNodeLen (dlp->list1) + ValNodeLen (dlp->list2);
+  dlp->list1_clicked = (BoolPtr) MemNew (dlp->num_total * sizeof (Boolean));
+  dlp->list2_clicked = (BoolPtr) MemNew (dlp->num_total * sizeof (Boolean));
 
-  h = HiddenGroup (dlp->w, -1, 0, NULL);
-  SetGroupSpacing (h, 10, 10);
   
-  g = HiddenGroup (h, 3, 0, NULL);
+  
+  RedrawDoubleListDialog (dlp);
+  if (dlp->change_notify != NULL)
+  {
+    (dlp->change_notify) (dlp->change_userdata);
+  }
+}
+
+static Pointer DoubleListDialogToListPair (DialoG d)
+{
+  DoubleListPtr dlp;
+  ValNodePtr    list_pair = NULL;
+  
+  dlp = (DoubleListPtr) GetObjectExtra (d);
+  if (dlp == NULL)
+  {
+    return;
+  }
+  
+  ValNodeAddPointer (&list_pair, 0, dlp->list1);
+  ValNodeAddPointer (&list_pair, 0, dlp->list2);
+  return list_pair;
+}
+
+static DialoG 
+DoubleListDialog 
+(GrouP              parent, 
+ CharPtr            list1_title,
+ CharPtr            list2_title,
+ GetItemTextLength  getlenproc,
+ PrintItemToBuffer  printitemproc,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  DoubleListPtr dlp;
+  GrouP         p, k;
+  RecT          r;
+  Int2          height = LineHeight ();
+  
+  dlp = (DoubleListPtr) MemNew (sizeof (DoubleListData));
+  if (dlp == NULL)
+  {
+    return NULL;
+  }
+  
+  dlp->getlenproc = getlenproc;
+  dlp->printitemproc = printitemproc;
+  dlp->change_notify = change_notify;
+  dlp->change_userdata = change_userdata;
+  
+  p = HiddenGroup (parent, 3, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  SetObjectExtra (p, dlp, StdCleanupExtraProc);
+  
+  dlp->dialog = (DialoG) p;
+  dlp->todialog = ListPairToDoubleListDialog;
+  dlp->fromdialog = DoubleListDialogToListPair;
+  
   /* top row - labels */
-  StaticPrompt (g, list1_name, 0, dialogTextHeight, programFont, 'c');
-  StaticPrompt (g, "", 0, dialogTextHeight, programFont, 'c');
-  StaticPrompt (g, list2_name, 0, dialogTextHeight, programFont, 'c');
+  StaticPrompt (p, list1_title, 0, dialogTextHeight, programFont, 'c');
+  StaticPrompt (p, "", 0, dialogTextHeight, programFont, 'c');
+  StaticPrompt (p, list2_title, 0, dialogTextHeight, programFont, 'c');
   /* panel 1 */
-  dlp->list1_ctrl = DocumentPanel (g, stdCharWidth * 25, height * 6);
+  dlp->list1_ctrl = DocumentPanel (p, stdCharWidth * 25, height * 7);
   SetObjectExtra (dlp->list1_ctrl, dlp, NULL);
   /* movement buttons */
-  k = HiddenGroup (g, 0, 2, NULL);
+  k = HiddenGroup (p, 0, 4, NULL);
   dlp->to_button = PushButton (k, "->", MoveToList2);
   SetObjectExtra (dlp->to_button, dlp, NULL);
+  dlp->to_all_button = PushButton (k, "All->", MoveAllToList2);
+  SetObjectExtra (dlp->to_all_button, dlp, NULL);
+  
   dlp->from_button = PushButton (k, "<-", MoveToList1);
   SetObjectExtra (dlp->from_button, dlp, NULL);
+  dlp->from_all_button = PushButton (k, "<-All", MoveAllToList1);
+  SetObjectExtra (dlp->from_all_button, dlp, NULL);
   /* panel 2 */
-  dlp->list2_ctrl = DocumentPanel (g, stdCharWidth * 25, height * 6);
+  dlp->list2_ctrl = DocumentPanel (p, stdCharWidth * 25, height * 7);
   SetObjectExtra (dlp->list2_ctrl, dlp, NULL);
+
+  ObjectRect (dlp->list1_ctrl, &r);  
+  dlp->col.pixWidth  = r.right - r.left;
+  dlp->col.pixInset  = 0;
+  dlp->col.charWidth = 80;
+  dlp->col.charInset = 0;
+  dlp->col.font      = NULL;
+  dlp->col.just      = 'l';
+  dlp->col.wrap      = FALSE;
+  dlp->col.bar       = FALSE;
+  dlp->col.underline = FALSE;
+  dlp->col.left = FALSE;
+  dlp->col.last = TRUE;
+
+  dlp->par.openSpace    = FALSE;
+  dlp->par.keepWithNext = FALSE;
+  dlp->par.keepTogether = FALSE;
+  dlp->par.newPage      = FALSE;
+  dlp->par.tabStops     = FALSE;
+  dlp->par.minLines     = 0;
+  dlp->par.minHeight    = 0;
+
+  return (DialoG) p;
+}
+
+typedef struct adjustlistpair
+{
+  DialoG                list_pair_dlg;
+  ButtoN                accept_btn;  
+  Boolean               none_in_1_ok;
+  Boolean               none_in_2_ok;
+} AdjustListPairData, PNTR AdjustListPairPtr;
+
+static void EnableAdjustListPairAccept (Pointer data)
+{
+  AdjustListPairPtr alpp;
+  ValNodePtr        list_pair;
   
+  alpp = (AdjustListPairPtr) data;
+  if (alpp == NULL)
+  {
+    return;
+  }
+  if (alpp->none_in_1_ok && alpp->none_in_2_ok)
+  {
+    Enable (alpp->accept_btn);
+    return;
+  }
+  
+  list_pair = DialogToPointer (alpp->list_pair_dlg);
+  if (list_pair == NULL
+      || (!alpp->none_in_1_ok && list_pair->data.ptrvalue == NULL)
+      || (!alpp->none_in_2_ok 
+           && (list_pair->next == NULL 
+               || list_pair->next->data.ptrvalue == NULL)))
+  {
+    Disable (alpp->accept_btn);
+  }
+  else
+  {
+    Enable (alpp->accept_btn);
+  }
+  list_pair = ValNodeFree (list_pair);
+}
+
+static Boolean 
+AdjustListPair 
+(ValNodePtr PNTR list1,
+ ValNodePtr PNTR list2,
+ CharPtr            list1_title,
+ CharPtr            list2_title,
+ GetItemTextLength  getlenproc,
+ PrintItemToBuffer  printitemproc,
+ Boolean            none_in_1_ok,
+ Boolean            none_in_2_ok)
+{
+  WindoW                w;
+  GrouP                 h, c;
+  ButtoN                b;
+  ModalAcceptCancelData acd;
+  AdjustListPairData    alpd;
+  ValNodePtr            list_pair = NULL;
+  Boolean               rval = FALSE;
+  
+  if (list1 == NULL || list2 == NULL) return;
+  
+  w = ModalWindow (-50, -33, -10, -10, NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  alpd.none_in_1_ok = none_in_1_ok;
+  alpd.none_in_2_ok = none_in_2_ok;
+  
+  alpd.list_pair_dlg = DoubleListDialog (h, list1_title, list2_title,
+                                    getlenproc, printitemproc,
+                                    EnableAdjustListPairAccept,
+                                    &alpd);
+    
   c = HiddenGroup (h, 4, 0, NULL);
-  dlp->accept_button = PushButton (c, "Accept", AcceptDoubleList);
-  SetObjectExtra (dlp->accept_button, dlp, NULL);
-  b = PushButton (c, "Cancel", CancelDoubleList);
-  SetObjectExtra (b, dlp, NULL);
+  alpd.accept_btn = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (alpd.accept_btn, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+    
+  AlignObjects (ALIGN_CENTER, (HANDLE) alpd.list_pair_dlg, (HANDLE) c, NULL);  
   
-  PopulateDoubleListPanels (dlp);
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
   
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  ValNodeAddPointer (&list_pair, 0, *list1);
+  ValNodeAddPointer (&list_pair, 0, *list2);
+  PointerToDialog (alpd.list_pair_dlg, list_pair);
+  list_pair = ValNodeFree (list_pair);
   
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+  
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (acd.accepted)
+  { 
+    list_pair = DialogToPointer (alpd.list_pair_dlg);
+    if (list_pair != NULL && list_pair->next != NULL)
+    {
+      *list1 = list_pair->data.ptrvalue;
+      *list2 = list_pair->next->data.ptrvalue;
+      rval = TRUE;
+    }
+    list_pair = ValNodeFree (list_pair);
+  }
+  Remove (w);
+  return rval;
 }
 
 static Int4 LIBCALLBACK GetAuthorPrintLen (Pointer userdata)
@@ -13598,9 +14186,9 @@ static void LIBCALLBACK PrintAuthor (CharPtr cp, Pointer userdata)
 
 static Boolean ChangeAuthorOrder (EditPubFormPtr epfp)
 {
-  DoubleListData dld;
-  ValNodePtr     tmp_list = NULL, vnp;
-  AuthorPtr      ap;
+  ValNodePtr     list1 = NULL, list2 = NULL, tmp_list = NULL, vnp;
+  AuthorPtr      ap; 
+  Boolean        rval;
   
   if (epfp == NULL || epfp->edit_type != PUB_EDIT_TYPE_MERGE_AUTHOR_LISTS)
   {
@@ -13620,55 +14208,33 @@ static Boolean ChangeAuthorOrder (EditPubFormPtr epfp)
                     (AsnWriteFunc) AuthorAsnWrite);
     if (ap != NULL)
     {
-      ValNodeAddPointer (&(tmp_list), vnp->choice, ap);
+      ValNodeAddPointer (&(list1), vnp->choice, ap);
     }
   }
   
-  dld.list1 = tmp_list;
-  dld.list2 = NULL;
-  dld.num_total = ValNodeLen (dld.list1);
-  dld.list1_clicked = (BoolPtr) MemNew (dld.num_total * sizeof (Boolean));
-  dld.list2_clicked = (BoolPtr) MemNew (dld.num_total * sizeof (Boolean));
-  dld.done = FALSE;
-  dld.getlenproc = GetAuthorPrintLen;
-  dld.printitemproc = PrintAuthor;
-  dld.none_in_1_ok = TRUE;
-  dld.none_in_2_ok = FALSE;
-  
-  DrawDoubleListWindow (&dld, "Available Authors", "Final List");
-
-  RealizeWindow (dld.w);
-  Show (dld.w);
-  Update ();
-  
-  while (!dld.done)
+  rval = AdjustListPair (&list1, &list2, "Available Authors", "Final List",
+                      GetAuthorPrintLen, PrintAuthor, TRUE, FALSE);
+  if (rval)
   {
-    ProcessExternalEvent ();
-    Update ();
-  }
-  ProcessAnEvent ();
-  if (dld.accepted)
-  { 
     /* now change author order */ 
     tmp_list = epfp->names_list;
-    epfp->names_list = dld.list2;
-    dld.list2 = tmp_list;
+    epfp->names_list = list2;
+    list2 = tmp_list;
   }
   
   /* free lists */
-  for (vnp = dld.list1; vnp != NULL; vnp = vnp->next)
+  for (vnp = list1; vnp != NULL; vnp = vnp->next)
   {
     vnp->data.ptrvalue = AuthorFree (vnp->data.ptrvalue);
   }
-  dld.list1 = ValNodeFree (dld.list1);
-  for (vnp = dld.list2; vnp != NULL; vnp = vnp->next)
+  list1 = ValNodeFree (list1);
+  for (vnp = list2; vnp != NULL; vnp = vnp->next)
   {
     vnp->data.ptrvalue = AuthorFree (vnp->data.ptrvalue);
   }
-  dld.list2 = ValNodeFree (dld.list2);
+  list2 = ValNodeFree (list2);
   
-  Remove (dld.w);
-  return dld.accepted;
+  return rval;
 }
 
 static void UpdateFeatureCitations (SeqFeatPtr sfp, Pointer userdata)
@@ -14197,4 +14763,346 @@ extern void RemovePubConsortiums (IteM i)
   
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+#define MAX_ID_LEN 41
+
+static Int4 LIBCALLBACK GetSeqIdPrintLen (Pointer userdata)
+{
+  return MAX_ID_LEN + 2;
+}
+
+static void LIBCALLBACK PrintSeqId (CharPtr cp, Pointer userdata)
+{
+  BioseqPtr bsp;
+    
+  bsp = (BioseqPtr) userdata;
+  if (bsp == NULL) return;
+  
+  SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), cp, PRINTID_REPORT, MAX_ID_LEN);
+  StringCat (cp, "\n");
+}
+
+static void AddNucleotideToList (BioseqPtr seg_bsp, SeqEntryPtr PNTR nuc_list)
+{
+  SeqEntryPtr  seg_sep, set_sep, prev_sep = NULL;
+  BioseqSetPtr parent_bssp;
+  
+  
+  if (seg_bsp == NULL || nuc_list == NULL)
+  {
+    return;
+  }
+  
+  seg_sep = SeqMgrGetSeqEntryForData (seg_bsp);
+  if (seg_bsp->idx.parenttype == OBJ_BIOSEQSET && seg_bsp->idx.parentptr != NULL)
+  {
+    parent_bssp = (BioseqSetPtr) seg_bsp->idx.parentptr;
+    set_sep = parent_bssp->seq_set;
+    prev_sep = NULL;
+    while (set_sep != seg_sep)
+    {
+      prev_sep = set_sep;
+      set_sep = set_sep->next;
+    }
+    if (set_sep == seg_sep)
+    {
+      if (prev_sep == NULL)
+      {
+        parent_bssp->seq_set = set_sep->next;
+      }
+      else
+      {
+        prev_sep->next = set_sep->next;
+      }
+      set_sep->next = NULL;
+      ValNodeLink (nuc_list, set_sep);
+    }
+  }
+}
+
+static void AddNucProtSetToList (BioseqSetPtr bssp, SeqEntryPtr PNTR set_list)
+{
+  SeqEntryPtr  seg_sep, set_sep, prev_sep = NULL;
+  BioseqSetPtr parent_bssp;
+  
+  
+  if (bssp == NULL || set_list == NULL)
+  {
+    return;
+  }
+  
+  seg_sep = SeqMgrGetSeqEntryForData (bssp);
+  if (bssp->idx.parenttype == OBJ_BIOSEQSET && bssp->idx.parentptr != NULL)
+  {
+    parent_bssp = (BioseqSetPtr) bssp->idx.parentptr;
+    set_sep = parent_bssp->seq_set;
+    prev_sep = NULL;
+    while (set_sep != seg_sep)
+    {
+      prev_sep = set_sep;
+      set_sep = set_sep->next;
+    }
+    if (set_sep == seg_sep)
+    {
+      if (prev_sep == NULL)
+      {
+        parent_bssp->seq_set = set_sep->next;
+      }
+      else
+      {
+        prev_sep->next = set_sep->next;
+      }
+      set_sep->next = NULL;
+      ValNodeLink (set_list, set_sep);
+    }
+  }
+}
+
+static void AddNucOrNucProtSetToList (BioseqPtr seg_bsp, SeqEntryPtr PNTR set_list)
+{
+  SeqEntryPtr  top_sep;
+  BioseqSetPtr bssp;
+  Boolean      moved_set = FALSE;
+  
+  if (seg_bsp == NULL || set_list == NULL)
+  {
+    return;
+  }
+  
+  top_sep = GetBestTopParentForData (seg_bsp->idx.entityID, seg_bsp);
+  if (top_sep != NULL && top_sep->choice == 2 && top_sep->data.ptrvalue != NULL)
+  {
+    bssp = (BioseqSetPtr) top_sep->data.ptrvalue;
+    if (bssp->_class == BioseqseqSet_class_nuc_prot)
+    {
+      AddNucProtSetToList (bssp, set_list);
+      moved_set = TRUE;
+    }
+  }
+  if (!moved_set)
+  {
+    AddNucleotideToList (seg_bsp, set_list);
+  }
+}
+
+static Boolean IsBioseqMasterOrSegment (BioseqPtr bsp)
+{
+  BioseqSetPtr bssp;
+  
+  if (bsp == NULL 
+      || bsp->idx.parenttype != OBJ_BIOSEQSET
+      || bsp->idx.parentptr == NULL)
+  {
+    return FALSE;
+  }
+  
+  bssp = (BioseqSetPtr) bsp->idx.parentptr;
+  if (bssp->_class == BioseqseqSet_class_segset
+      || bssp->_class == BioseqseqSet_class_parts)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+static void RemoveMasterAndSegmentSequences (ValNodePtr PNTR bioseq_list)
+{
+  ValNodePtr prev_vnp = NULL, next_vnp, this_vnp;
+  BioseqPtr  bsp;
+  
+  if (bioseq_list == NULL)
+  {
+    return;
+  }
+  
+  this_vnp = *bioseq_list;
+  while (this_vnp != NULL)
+  {
+    next_vnp = this_vnp->next;
+    bsp = (BioseqPtr) this_vnp->data.ptrvalue;    
+    if (IsBioseqMasterOrSegment (bsp))
+    {
+      if (prev_vnp == NULL)
+      {
+        *bioseq_list = this_vnp->next;
+      }
+      else
+      {
+        prev_vnp->next = this_vnp->next;
+      }
+      this_vnp->next = NULL;
+      ValNodeFree (this_vnp);
+    }
+    else
+    {
+      prev_vnp = this_vnp;
+    }
+    
+    this_vnp = next_vnp;
+  }
+  
+}
+
+/* This function allows the user to exclude sequences from the list of nucleotide sequences
+ * to be used in the new segset.
+ * It is similar to NewUpdateSegSet, except that it uses the selected sequences to create
+ * a new set to be converted to the segset, instead of converting the selected set directly.
+ */
+static Int2 LIBCALLBACK CreateSegSet (Pointer data)
+
+{
+  OMProcControlPtr      ompcp;
+  SeqEntryPtr           sep;
+  ErrSev                sev;
+  WindoW                w;
+  GrouP                 h, g, c;
+  ButtoN                intersperse_nulls_btn;
+  ButtoN                fix_locus_btn;
+  ButtoN                tax_fix_cleanup_btn;
+  ButtoN                b;
+  AdjustListPairData    alpd;
+  ValNodePtr            bioseq_list = NULL;
+  Int4                  seq_num = 0;
+  ValNodePtr            list_pair = NULL;
+  BioseqSetPtr          target_set = NULL;
+  ModalAcceptCancelData acd;
+  BioseqSetPtr          new_segset;
+  SeqEntryPtr           new_segset_sep, dest_sep;
+  ValNodePtr            seg_vnp;
+  BioseqPtr             seg_bsp;
+  SeqEntryPtr           prot_list = NULL;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQSET :
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
+  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  
+  /* TODO: We will want to choose as our target set the set above this one if
+   * this set is a nuc-prot set.
+   */
+  target_set = (BioseqSetPtr)ompcp->input_data;
+  if (target_set == NULL) return OM_MSG_RET_ERROR;
+  dest_sep = SeqMgrGetSeqEntryForData (target_set);
+  if (dest_sep == NULL) return OM_MSG_RET_ERROR;
+
+  w = MovableModalWindow (-50, -33, -10, -10, "SegSet Creation Options", NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  alpd.list_pair_dlg = DoubleListDialog (h, "Sequences for SegSet", "Sequences to Exclude",
+                                    GetSeqIdPrintLen, PrintSeqId,
+                                    EnableAdjustListPairAccept,
+                                    &alpd);
+  alpd.none_in_1_ok = FALSE;
+  alpd.none_in_2_ok = TRUE;
+  
+  g = HiddenGroup (h, 0, 4, NULL);
+  intersperse_nulls_btn = CheckBox (g, "Intersperse NULLS", NULL);
+  SetStatus (intersperse_nulls_btn, TRUE);
+  fix_locus_btn = CheckBox (g, "Force Locus Fixup", NULL);
+  SetStatus (fix_locus_btn, TRUE);
+  tax_fix_cleanup_btn = CheckBox (g, "Do Tax_Fix/Cleanup", NULL);
+  SetStatus (tax_fix_cleanup_btn, TRUE);
+  
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  c = HiddenGroup (h, 4, 0, NULL);
+  alpd.accept_btn = DefaultButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (alpd.accept_btn, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+
+  ListBioseqsInSeqEntry (sep, TRUE, &seq_num, &bioseq_list);
+  RemoveMasterAndSegmentSequences (&bioseq_list);
+  ValNodeAddPointer (&list_pair, 0, bioseq_list);
+  ValNodeAddPointer (&list_pair, 0, NULL);
+  PointerToDialog (alpd.list_pair_dlg, list_pair);
+  list_pair = ValNodeFree (list_pair);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) alpd.list_pair_dlg, 
+                              (HANDLE) g, 
+                              (HANDLE) c, 
+                              NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+  
+  while (!acd.cancelled && ! acd.accepted)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  Hide (w);
+  if (acd.cancelled)
+  {
+    Remove (w);
+  	return OM_MSG_RET_DONE;
+  }
+  
+  list_pair = DialogToPointer (alpd.list_pair_dlg);
+  if (list_pair == NULL)
+  {
+    return OM_MSG_RET_DONE;
+  }
+  
+  new_segset = BioseqSetNew ();
+  new_segset->_class = BioseqseqSet_class_pop_set;
+  new_segset_sep = SeqEntryNew ();
+  new_segset_sep->choice = 2;
+  new_segset_sep->data.ptrvalue = new_segset;
+  
+  for (seg_vnp = list_pair->data.ptrvalue; seg_vnp != NULL; seg_vnp = seg_vnp->next)
+  {
+    seg_bsp = (BioseqPtr) seg_vnp->data.ptrvalue;
+    if (seg_bsp == NULL)
+    {
+      continue;
+    }
+
+    AddNucOrNucProtSetToList (seg_bsp, &(new_segset->seq_set));
+    
+  }
+    
+  AddSeqEntryToSeqEntry (dest_sep, new_segset_sep, TRUE);
+  
+  NewSegFixup (new_segset_sep, GetStatus (intersperse_nulls_btn));
+  
+  AddSeqEntryToSeqEntry (new_segset_sep, prot_list, TRUE);
+
+  DeleteMarkedObjects (ompcp->input_entityID, 0, NULL);
+  
+  if (GetStatus (fix_locus_btn))
+  {
+    sev = ErrSetMessageLevel (SEV_FATAL);
+    DoFixupLocus (new_segset_sep);
+    DoFixupSegSet (new_segset_sep);
+    ErrSetMessageLevel (sev);
+  }
+  
+  if (GetStatus (tax_fix_cleanup_btn))
+  {
+    ForceCleanupEntityID (ompcp->input_entityID);    
+  }
+  
+
+  Remove (w);
+  
+  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+  Update ();
+  return OM_MSG_RET_DONE;
 }

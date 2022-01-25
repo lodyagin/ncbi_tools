@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastclust.c,v 6.45 2004/08/02 20:08:49 dondosha Exp $";
+static char const rcsid[] = "$Id: blastclust.c,v 6.48 2005/08/19 20:12:32 dondosha Exp $";
 
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.45 $  $Date: 2004/08/02 20:08:49 $
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.48 $  $Date: 2005/08/19 20:12:32 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,15 @@ static char const rcsid[] = "$Id: blastclust.c,v 6.45 2004/08/02 20:08:49 dondos
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.48  2005/08/19 20:12:32  dondosha
+* Added extensive doxygen-style comments
+*
+* Revision 6.47  2005/07/28 16:16:46  coulouri
+* remove dead code
+*
+* Revision 6.46  2005/07/27 15:52:02  coulouri
+* remove unused queue_callback
+*
 * Revision 6.45  2004/08/02 20:08:49  dondosha
 * Write and read header integers separately instead of as a structure; changed first number from 1 byte to 4, to prevent padding with garbage
 *
@@ -189,54 +198,66 @@ static char const rcsid[] = "$Id: blastclust.c,v 6.45 2004/08/02 20:08:49 dondos
 
 #define DEBUG 0
 
-/* Used by the callback function. */
+/** File to write cluster output. */
 FILE *global_fp=NULL;
+/** Array of indices pointing to root sequences of each cluster. */
 static Int4Ptr root;
+/** Mutex for modifying the cluster root array. */
 static TNlmMutex root_mutex;
 
-static int LIBCALLBACK
-tick_callback(Int4 sequence_number, Int4 number_of_positive_hits)
-{
-   return 0;
-}
-
+/** HSP information, used internally. */
 typedef struct blastclust_hsp_info
 {
-   Int4 id;
-   Int4 score;
+   Int4 id;    /**< Subject ordinal number. */
+   Int4 score; /**< HSP score */
    Int4 index;
 } BlastClustHspInfo, PNTR BlastClustHspInfoPtr;
 
+/** User parameters for clustering. */
 typedef struct cluster_parameters
 {
-   Boolean bidirectional;
-   FloatHi length_threshold;
-   FloatHi score_threshold;
-   FILE *logfp;
+   Boolean bidirectional;    /**< Is bydirectional coverage required? */
+   FloatHi length_threshold; /**< Length coverage threshold. */
+   FloatHi score_threshold;  /**< Score coverage threshold. */
+   FILE *logfp;              /**< File to write hit data to. */
 } ClusterParameters, PNTR ClusterParametersPtr;
 
+/** Globally accessible parameters structure. */
 static ClusterParametersPtr global_parameters;
 
+/** Basic structure written to the hit file. */
 typedef struct cluster_log_info
 {
-   Int4 id1, id2;
-   Int4 hsp_length1, hsp_length2;
-   FloatHi bit_score, perc_identity;
+   Int4 id1; /**< Index of the first sequence for this HSP. */
+   Int4 id2; /**< Index of the second sequence for this HSP. */
+   Int4 hsp_length1; /**< Length of this HSP in first sequence. */ 
+   Int4 hsp_length2; /**< Length of this HSP in second sequence. */ 
+   FloatHi bit_score;/**< This HSP's bit score. */
+   FloatHi perc_identity; /**< This HSP's percent identity. */
 } ClusterLogInfo, PNTR ClusterLogInfoPtr;
 
+/** Input sequence information. */
 typedef struct blast_cluster_element
 {
-   Int4 gi;
-   CharPtr id;
-   Int4 len;
+   Int4 gi;   /**< Gi or other numeric identifier. */
+   CharPtr id;/**< String identifier. */
+   Int4 len;  /**< Sequence length. */
 } BlastClusterElement, PNTR BlastClusterElementPtr;
 
+/** Information about all input sequences. */
 typedef struct blast_cluster
 {
-   Int4 size;
-   BlastClusterElementPtr PNTR elements;
+   Int4 size; /** Number of sequences. */
+   BlastClusterElementPtr PNTR elements; /** Array of pointers to input sequence
+                                             information structures. */
 } BlastCluster, PNTR BlastClusterPtr;
 
+/** Comparison function for sorting input sequences in the clusters.
+ * Sequences are sorted as follows, with decreasing priorities
+ * 1. Decreasing order of length
+ * 2. Increasing order of numeric identifiers
+ * 3. Lexicographic order of string identifiers.
+ */
 static int LIBCALLBACK
 compare_cluster_elements(VoidPtr v1, VoidPtr v2)
 {
@@ -260,6 +281,9 @@ compare_cluster_elements(VoidPtr v1, VoidPtr v2)
    return 0;
 }
 
+/** Comparison function for sorting clusters by size. Sequences within clusters
+ * are sorted in a specific order @sa compare_cluster_elements. 
+ */ 
 static int LIBCALLBACK
 compare_clusters(VoidPtr v1, VoidPtr v2)
 {
@@ -276,6 +300,11 @@ compare_clusters(VoidPtr v1, VoidPtr v2)
       return compare_cluster_elements(c1->elements, c2->elements);
 }
 
+/** Comparison function for sorting HSP information structures. Sorting is 
+ * performed according to the following rules with decreasing priority:
+ * 1. In increasing order of sequence index;
+ * 2. In decreasing order of scores.
+ */
 static int LIBCALLBACK
 hsp_info_id_score_compare(VoidPtr v1, VoidPtr v2)
 {
@@ -293,10 +322,24 @@ hsp_info_id_score_compare(VoidPtr v1, VoidPtr v2)
       return 1;
 }
 
+/** Starting size for a cluster, which can be dynamically reallocated when
+ * necessary. 
+ */
 #define ORIGINAL_CLUSTER_SIZE 10
-static int BlastClusterNeighbours(Int4 num_queries, Int4Ptr seq_len, 
-				  CharPtr PNTR id_list, Int4Ptr gi_list,
-				  Boolean PNTR used_id_index)
+
+/** Creates the clusters, based on the root array, and prints them to the
+ * cluster output file. 
+ * @param num_queries Number of sequences being clustered. [in]
+ * @param seq_len Array of sequence lengths [in]
+ * @param id_list Array of sequence string identifiers [in]
+ * @param gi_list array of sequence numeric identifiers [in]
+ * @param used_id_index Array of flags indicating whether id with a given index
+ *                      has already been processed. [in]
+ */
+static int 
+BlastClusterNeighbours(Int4 num_queries, Int4Ptr seq_len, 
+                       CharPtr PNTR id_list, Int4Ptr gi_list,
+                       Boolean PNTR used_id_index)
 {
    BlastClusterPtr PNTR cluster;
    Int4 num_clusters, available_size, index, i;
@@ -310,58 +353,65 @@ static int BlastClusterNeighbours(Int4 num_queries, Int4Ptr seq_len,
       return 0;
 
     for (index=1; index<num_queries; index++) {
-       i = index;
-       while (root[i] != i)
-	  i = root[i];
-       root[index] = i;
+        i = index;
+        while (root[i] != i)
+            i = root[i];
+        root[index] = i;
     }
 
     cluster = (BlastClusterPtr PNTR) 
        MemNew(num_queries*sizeof(BlastClusterPtr));
     num_clusters = 0;
 
-    for (index=0; index<num_queries; index++) {
-       if (used_id_index != NULL && !used_id_index[index])
-	  continue;
-       if (root[index]==index) {
-	  cluster[num_clusters] = 
-	     (BlastClusterPtr) MemNew(sizeof(BlastCluster)); 
-	  cluster[num_clusters]->size = 1;
-	  cluster[num_clusters]->elements = 
-	     (BlastClusterElementPtr PNTR) 
-	     Malloc(ORIGINAL_CLUSTER_SIZE*sizeof(BlastClusterElementPtr));
-	  cluster[num_clusters]->elements[0] = 
-	     (BlastClusterElementPtr) MemNew(sizeof(BlastClusterElement));
-
-	  if (numeric_id_type)
-	     cluster[num_clusters]->elements[0]->gi = gi_list[index];
-	  else
-	     cluster[num_clusters]->elements[0]->id = id_list[index];
-	  cluster[num_clusters]->elements[0]->len = seq_len[index];
-	  available_size = ORIGINAL_CLUSTER_SIZE;
-
-	  for (i=index+1; i<num_queries; i++) {
-	     if (root[i]==index) {
-		if (cluster[num_clusters]->size >= available_size) {
-		      available_size *= 2;
-		      cluster[num_clusters]->elements = 
-			 (BlastClusterElementPtr PNTR) 
-			 Realloc(cluster[num_clusters]->elements, 
-				 available_size*sizeof(BlastClusterElementPtr));
-		} 
-		cluster[num_clusters]->elements[cluster[num_clusters]->size] = 
-		   (BlastClusterElementPtr) MemNew(sizeof(BlastClusterElement));
-		if (numeric_id_type)
-		   cluster[num_clusters]->elements[cluster[num_clusters]->size]->gi = gi_list[i];
-		else
-		   cluster[num_clusters]->elements[cluster[num_clusters]->size]->id = id_list[i];
-
-		cluster[num_clusters]->elements[cluster[num_clusters]->size]->len = seq_len[i];
-		cluster[num_clusters]->size++;
-	     }
-	  }
-	  num_clusters++;
-       }
+    /* Loop over input sequence indices. */
+    for (index = 0; index < num_queries; index++) {
+        /* If this sequence hasn't been processed yet, skip it. */
+        if (used_id_index != NULL && !used_id_index[index])
+            continue;
+        /* If this sequence is the root of its corresponding cluster, 
+           start a new cluster. */
+        if (root[index] == index) {
+            cluster[num_clusters] = 
+                (BlastClusterPtr) MemNew(sizeof(BlastCluster)); 
+            cluster[num_clusters]->size = 1;
+            cluster[num_clusters]->elements = 
+                (BlastClusterElementPtr PNTR) 
+                Malloc(ORIGINAL_CLUSTER_SIZE*sizeof(BlastClusterElementPtr));
+            cluster[num_clusters]->elements[0] = 
+                (BlastClusterElementPtr) MemNew(sizeof(BlastClusterElement));
+            
+            if (numeric_id_type)
+                cluster[num_clusters]->elements[0]->gi = gi_list[index];
+            else
+                cluster[num_clusters]->elements[0]->id = id_list[index];
+            cluster[num_clusters]->elements[0]->len = seq_len[index];
+            available_size = ORIGINAL_CLUSTER_SIZE;
+            
+            /* Find other sequences belonging to this cluster and add them. */
+            for (i = index+1; i < num_queries; i++) {
+                if (root[i] == index) {
+                    Int4 size = cluster[num_clusters]->size;
+                    /* Reallocate the elements array if necessary. */
+                    if (size >= available_size) {
+                        available_size *= 2;
+                        cluster[num_clusters]->elements = 
+                            (BlastClusterElementPtr PNTR) 
+                            Realloc(cluster[num_clusters]->elements, 
+                                    available_size*sizeof(BlastClusterElementPtr));
+                    } 
+                    cluster[num_clusters]->elements[size] = 
+                        (BlastClusterElementPtr) MemNew(sizeof(BlastClusterElement));
+                    if (numeric_id_type)
+                        cluster[num_clusters]->elements[size]->gi = gi_list[i];
+                    else
+                        cluster[num_clusters]->elements[size]->id = id_list[i];
+                    
+                    cluster[num_clusters]->elements[size]->len = seq_len[i];
+                    ++cluster[num_clusters]->size;
+                }
+            }
+            num_clusters++;
+        }
     }
 
     /* Sort each cluster in decreasing order of sequence lengths */
@@ -372,26 +422,39 @@ static int BlastClusterNeighbours(Int4 num_queries, Int4Ptr seq_len,
     HeapSort(cluster, num_clusters, sizeof(BlastClusterPtr), compare_clusters);
     /* Print out all clusters */
     for (index=0; index<num_clusters; index++) {
-       for (i=0; i<cluster[index]->size; i++) {
-	  if (numeric_id_type)
-	     fprintf(global_fp, "%ld ", cluster[index]->elements[i]->gi); 
-	  else 
-	     fprintf(global_fp, "%s ", cluster[index]->elements[i]->id);
-	  MemFree(cluster[index]->elements[i]);
-       }
-       fprintf(global_fp, "\n");
-       MemFree(cluster[index]->elements);
-       MemFree(cluster[index]);
+        for (i=0; i<cluster[index]->size; i++) {
+            if (numeric_id_type)
+                fprintf(global_fp, "%ld ", cluster[index]->elements[i]->gi); 
+            else 
+                fprintf(global_fp, "%s ", cluster[index]->elements[i]->id);
+            MemFree(cluster[index]->elements[i]);
+        }
+        fprintf(global_fp, "\n");
+        MemFree(cluster[index]->elements);
+        MemFree(cluster[index]);
     }
     MemFree(cluster);
     return 1;
 }
 
-/* The following function reclusters saved hits and returns the ordinal id of
-   the last query found in the hits file, plus 1 */
-   
 #define INFO_LIST_SIZE 1000
 #define FILE_BUFFER_SIZE 4096
+
+/* Reclusters saved hits and returns the ordinal id of the last query found in
+ * the hits file, plus 1.
+ * @param infofp File to read hit information from [in]
+ * @param outfp File to write clusters to [in]
+ * @param gilp Pointer to an array  of gis (numeric ids) found in the hits 
+ *             file [out]
+ * @param idlp Pointer to an array of string sequence ids found in the hits 
+ *             file [out]
+ * @param seqlp Pointer to an array of lengths of sequences found in the hits
+ *              file [out]
+ * @param idfp File to read a list of ids that need to be reclustered 
+ *             (optional) [in]
+ * @return Index of the last query found in the hits file ( == ordinal id + 1)
+ */
+   
 static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
 			      CharPtr PNTR PNTR idlp, Int4Ptr PNTR seqlp,
 			      FILE *idfp)
@@ -400,41 +463,42 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
    Int4 num_queries, num_hits, i, root1, root2, total_id_len;
    Int4Ptr gi_list = NULL, seq_len = NULL;
    CharPtr PNTR id_list = NULL;
-   CharPtr ptr, id_string;
+   CharPtr ptr, id_string = NULL;
    FloatHi length_coverage, score_coverage; 
    Uint4 header_size, numeric_id_type;
    Int4 last_seq = -1;
    CharPtr id = NULL;
    Boolean PNTR used_id_index = NULL;
 
+   /* Read header data from the hits file. */
    FileRead(&numeric_id_type, sizeof(Int4), 1, infofp);
    FileRead(&header_size, sizeof(Int4), 1, infofp);
 
    if (numeric_id_type) {
-      num_queries = header_size;
-      gi_list = (Int4Ptr) MemNew(num_queries*sizeof(Int4));
-      FileRead(gi_list, sizeof(Int4), num_queries, infofp);
+       num_queries = header_size;
+       gi_list = (Int4Ptr) MemNew(num_queries*sizeof(Int4));
+       FileRead(gi_list, sizeof(Int4), num_queries, infofp);
    } else {
-      total_id_len = header_size;
-      num_queries = 0;
-      id_string = (CharPtr) MemNew(total_id_len+1);
-      FileRead(id_string, sizeof(Char), total_id_len, infofp);
-      ptr = id_string;
-      /* Count the ID's and change delimiter from space to null character */
-      for (i=0; i<total_id_len; i++) {
-	 if (*ptr==' ') {
-	    num_queries++;
-	    *ptr = '\0';
-	 }
-	 ptr++;
-      }
-      id_list = (CharPtr PNTR) MemNew(num_queries*sizeof(CharPtr));
-      for (i=0; i<num_queries; i++) {
-	 /* No need for allocation of new memory */
-	 id_list[i] = id_string;
-	 id_string += StringLen(id_string) + 1;
-      }
-      id_string = id_list[0];
+       total_id_len = header_size;
+       num_queries = 0;
+       id_string = (CharPtr) MemNew(total_id_len+1);
+       FileRead(id_string, sizeof(Char), total_id_len, infofp);
+       ptr = id_string;
+       /* Count the ID's and change delimiter from space to null character */
+       for (i=0; i<total_id_len; i++) {
+           if (*ptr==' ') {
+               num_queries++;
+               *ptr = '\0';
+           }
+           ptr++;
+       }
+       id_list = (CharPtr PNTR) MemNew(num_queries*sizeof(CharPtr));
+       for (i=0; i<num_queries; i++) {
+           /* No need for allocation of new memory */
+           id_list[i] = id_string;
+           id_string += StringLen(id_string) + 1;
+       }
+       id_string = id_list[0];
    }
 
    seq_len = (Int4Ptr) Malloc(num_queries*sizeof(Int4));
@@ -442,11 +506,14 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
 
    info = (ClusterLogInfoPtr) MemNew(INFO_LIST_SIZE*sizeof(ClusterLogInfo));
 
+   /* Initialize the root array, putting each sequence in its own 
+      one-element cluster. */
    root = (Int4Ptr) Malloc(num_queries*sizeof(Int4));
    for (i=0; i<num_queries; i++)
       root[i] = i;
 
-   /* Test for list of ids to use for reclustering */
+   /* Test for list of ids to use for reclustering, and fill the array of
+      ids used in this reclustering. */
    if (idfp) {
       CharPtr used_id_string;
       CharPtr delimiter_list = " \t\n,;";
@@ -455,69 +522,78 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
       used_id_string = (CharPtr) MemNew(FILE_BUFFER_SIZE+1);
       used_id_index = (Boolean PNTR) MemNew(num_queries*sizeof(Boolean));
       while((length = 
-	     FileRead(used_id_string, sizeof(Char), FILE_BUFFER_SIZE, idfp))) {
-	 ptr = used_id_string;
-	 while ((id = StringTokMT(ptr, delimiter_list, &ptr)) 
-		!= NULL) {
-	    if (ptr==NULL && length==FILE_BUFFER_SIZE) {
-	       fseek(idfp, -StrLen(id), SEEK_CUR);
-	       break;
-	    }
-	    for (i=0; i<num_queries; i++) {
-	       if ((gi_list && atoi(id) == gi_list[i]) ||
-                   (!gi_list && !StrCmp(id_list[i], id)))
-		  break;
-	    }
-	    if (i < num_queries)
-	       used_id_index[i] = TRUE;
-	 }
+             FileRead(used_id_string, sizeof(Char), FILE_BUFFER_SIZE, idfp))) {
+          ptr = used_id_string;
+          while ((id = StringTokMT(ptr, delimiter_list, &ptr)) 
+                 != NULL) {
+              if (ptr==NULL && length==FILE_BUFFER_SIZE) {
+                  fseek(idfp, -StrLen(id), SEEK_CUR);
+                  break;
+              }
+              for (i=0; i<num_queries; i++) {
+                  if ((gi_list && atoi(id) == gi_list[i]) ||
+                      (!gi_list && !StrCmp(id_list[i], id)))
+                      break;
+              }
+              if (i < num_queries)
+                  used_id_index[i] = TRUE;
+          }
       }
    }
 
+   /* Read the HSP data. */
    while ((num_hits = FileRead(info, sizeof(ClusterLogInfo), INFO_LIST_SIZE,
-			       infofp)) > 0) {
+                               infofp)) > 0) {
       for (i=0; i<num_hits; i++) {
-	 if (used_id_index && 
-	     (!used_id_index[info[i].id1] || !used_id_index[info[i].id2]))
-	    continue;
-	 if (global_parameters->bidirectional)
-	    length_coverage = MIN(((FloatHi)info[i].hsp_length1) / 
-				  seq_len[info[i].id1], 
-				  ((FloatHi)info[i].hsp_length2) / 
-				  seq_len[info[i].id2]);
-	 else
-	    length_coverage = MAX(((FloatHi)info[i].hsp_length1) / 
-				  seq_len[info[i].id1], 
-				  ((FloatHi)info[i].hsp_length2) / 
-				  seq_len[info[i].id2]);
+          /* If one of the sequences involved in this HSP is not of interest,
+             skip this HSP. */
+          if (used_id_index && 
+              (!used_id_index[info[i].id1] || !used_id_index[info[i].id2]))
+              continue;
 
-         if (global_parameters->score_threshold < 3.0)
-            score_coverage = info[i].bit_score / 
-               (MAX(info[i].hsp_length1, info[i].hsp_length2));
-         else 
-            score_coverage = info[i].perc_identity;
-
-	 if (length_coverage >= global_parameters->length_threshold && 
-	     score_coverage >= global_parameters->score_threshold) {
-	    root1 = info[i].id1;
-	    while (root[root1] != root1)
-	       root1 = root[root1];
-	    root2 = info[i].id2;
-	    while (root[root2] != root2)
-	       root2 = root[root2];
-	    
-	    if (root1 < root2)
-	       root[root2] = root1;
-	    else if (root1 > root2)
-	       root[root1] = root2;
-	 }
+          /* Calculate the coverage numbers. */
+          if (global_parameters->bidirectional)
+              length_coverage = MIN(((FloatHi)info[i].hsp_length1) / 
+                                    seq_len[info[i].id1], 
+                                    ((FloatHi)info[i].hsp_length2) / 
+                                    seq_len[info[i].id2]);
+          else
+              length_coverage = MAX(((FloatHi)info[i].hsp_length1) / 
+                                    seq_len[info[i].id1], 
+                                    ((FloatHi)info[i].hsp_length2) / 
+                                    seq_len[info[i].id2]);
+          
+          if (global_parameters->score_threshold < 3.0)
+              score_coverage = info[i].bit_score / 
+                  (MAX(info[i].hsp_length1, info[i].hsp_length2));
+          else 
+              score_coverage = info[i].perc_identity;
+          
+          /* If coverage satisfies the input requirements, update the cluster
+             root information. */
+          if (length_coverage >= global_parameters->length_threshold && 
+              score_coverage >= global_parameters->score_threshold) {
+              root1 = info[i].id1;
+              while (root[root1] != root1)
+                  root1 = root[root1];
+              root2 = info[i].id2;
+              while (root[root2] != root2)
+                  root2 = root[root2];
+              
+              if (root1 < root2)
+                  root[root2] = root1;
+              else if (root1 > root2)
+                  root[root1] = root2;
+          }
       } /* End loop on hits from a chunk */
       last_seq = info[num_hits-1].id1;
    } /* End loop on chunks of hits */
- 
+   
+   /* Create the cluster structures and print out. */
    if (outfp != NULL) {
       global_fp = outfp;
-      BlastClusterNeighbours(num_queries, seq_len, id_list, gi_list, used_id_index);
+      BlastClusterNeighbours(num_queries, seq_len, id_list, gi_list, 
+                             used_id_index);
    }
    *gilp = gi_list;
    *idlp = id_list;
@@ -527,6 +603,11 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
    return last_seq + 1;
 }
 
+/** Calculates percent identity given a gapped alignment block.
+ * @param HSP gapped alignment structure, returned from a gapped alignment 
+ *        routine. [in]
+ * @return percent of identical matches in this alignment.
+ */ 
 static FloatHi 
 GapAlignPercentIdentity(GapAlignBlkPtr gabp)
 {
@@ -561,10 +642,12 @@ GapAlignPercentIdentity(GapAlignBlkPtr gabp)
    return perc_identity;
 }
    
-
-/* The following function prints only those hits which correspond to 
-   an almost identical match of two sequences */
+/** Line length for configuration file with advanced options. */
 #define BUFFER_SIZE 80
+
+/** Callback for printing out HSP data into the hits file.
+ * @param ptr BlastSearchBlkPtr, containing current list of HSPs. [in]
+ */
 static int LIBCALLBACK
 PrintNeighbors(VoidPtr ptr)
 {
@@ -573,8 +656,6 @@ PrintNeighbors(VoidPtr ptr)
     Int4 index;
     BlastSearchBlkPtr search;
     Int4 id1, id2, root1, root2, hspcnt;
-    Int4 high_score=0;
-    Nlm_FloatHi current_evalue=DBL_MAX;
     Int4 subject_length;
     Uint1Ptr subject, query;
     ClusterLogInfoPtr loginfo = NULL;
@@ -608,11 +689,13 @@ PrintNeighbors(VoidPtr ptr)
        id1 = -1;
     id2 = search->subject_id;
 
+    /* For blastp, save only HSPs with first sequence index smaller than 
+       second. */
     if (id1 < id2) { 
 #define BUF_CHUNK_SIZE 1024
         Int4 query_length, q_length, s_length;
         FloatHi length_coverage, bit_score, score_coverage, perc_identity; 
-	BLAST_KarlinBlkPtr kbp;
+        BLAST_KarlinBlkPtr kbp;
         GapAlignBlkPtr gap_align = search->gap_align;
         Int2 context;
         Int4 max_score = 0;
@@ -624,6 +707,10 @@ PrintNeighbors(VoidPtr ptr)
 
         query_count = 1;
 
+        /* For blastn, the current hit list contains HSPs from multiple "query"
+           sequences. Create an array of HSP information structures, and find
+           highest scoring HSP for every pair of sequences present in the 
+           current list. */
         if (search->prog_number == blast_type_blastn) {
            hsp_info_array = (BlastClustHspInfoPtr PNTR) 
               Malloc(hspcnt*sizeof(BlastClustHspInfoPtr));
@@ -653,6 +740,7 @@ PrintNeighbors(VoidPtr ptr)
            
            hsp = current_hitlist->hsp_array[hsp_info_array[0]->index];
         } else {
+            /* For blastp, just find the highest-scoring HSP. */
            for (index=0; index<hspcnt; index++) {
               if (current_hitlist->hsp_array[index]->score > max_score) {
                  hsp = current_hitlist->hsp_array[index];
@@ -661,104 +749,112 @@ PrintNeighbors(VoidPtr ptr)
            }
         }
 
-	if (global_parameters->logfp)
-	   loginfo = (ClusterLogInfoPtr)
-              MemNew(query_count*sizeof(ClusterLogInfo));
+        if (global_parameters->logfp)
+            loginfo = (ClusterLogInfoPtr)
+                MemNew(query_count*sizeof(ClusterLogInfo));
         
         index = 0;
         while (hsp) {
-           /* Test if this hsp corresponds to an almost identical hit */
-           if (search->prog_number == blast_type_blastn) {
-              context = hsp->context;
-              id1 = hsp_info_array[index]->id;
-              query_length = 
-                 search->query_context_offsets[context+1] -
-                 search->query_context_offsets[context] - 1;
-           }
-           q_length = hsp->query.length;
-           s_length = hsp->subject.length;
-           
-           if (global_parameters->bidirectional)
-              length_coverage = MIN(((FloatHi)q_length) / query_length, 
-                                    ((FloatHi)s_length) / subject_length);
-           else
-              length_coverage = MAX(((FloatHi)q_length) / query_length, 
-                                    ((FloatHi)s_length) / subject_length);
-           
-           if (search->prog_number == blast_type_blastp)
-              kbp = search->sbp->kbp_gap[search->first_context];
-           else
-              kbp = search->sbp->kbp[context];
-           bit_score = ((hsp->score*kbp->Lambda) -
-                        kbp->logK)/NCBIMATH_LN2;
-           
-           if (search->prog_number == blast_type_blastp) {
-              gap_align->query_frame = ContextToFrame(search,
-                                                      hsp->context);
-              gap_align->subject_frame = hsp->subject.frame;
-              gap_align->q_start = hsp->query.gapped_start;
-              gap_align->s_start = hsp->subject.gapped_start;
-              PerformGappedAlignmentWithTraceback(gap_align);
-              perc_identity = GapAlignPercentIdentity(gap_align);
-              gap_align->state_struct = 
-                 GapXDropStateDestroy(gap_align->state_struct);
-              gap_align->edit_block = 
-                 GapXEditBlockDelete(gap_align->edit_block);
-           } else {
-              Int4Ptr length, start;
-              Uint1Ptr strands;
-              Int4 align_length = 0, numseg, i;
-              GapXEditScriptPtr esp;
-              query = search->context[context].query->sequence;
-              esp = hsp->gap_info->esp;
-              for (numseg=0; esp; esp = esp->next, numseg++);
-              GXECollectDataForSeqalign(hsp->gap_info, 
-                                        hsp->gap_info->esp, numseg,
-                                        &start, &length, &strands, 
-                                        &hsp->query.offset, 
-                                        &hsp->subject.offset);
-              perc_identity = 0;
-              for (i=0; i<numseg; i++) {
-                 align_length += length[i];
-                 if (start[2*i] != -1 && start[2*i+1] != -1)
-                    perc_identity += MegaBlastGetNumIdentical(query, subject, start[2*i], start[2*i+1], length[i], FALSE);
-              }
-              perc_identity = perc_identity / align_length * 100;
-              start = MemFree(start);
-              length = MemFree(length);
-              strands = MemFree(strands);
-           }
-           if (global_parameters->score_threshold < 3.0)
-              score_coverage = bit_score / (MAX(q_length, s_length));
-           else
-              score_coverage = perc_identity;
-           
-           if (global_parameters->logfp) {
-              loginfo[index].id1 = id1;
-              loginfo[index].id2 = id2;
-              loginfo[index].hsp_length1 = q_length;
-              loginfo[index].hsp_length2 = s_length;
-              loginfo[index].bit_score = bit_score;
-              loginfo[index].perc_identity = perc_identity;
-           }
-           
-           if (length_coverage >= global_parameters->length_threshold && 
-               score_coverage >= global_parameters->score_threshold) {
-              root1 = id1;
-              
-              NlmMutexLockEx(&root_mutex);
-              while (root[root1] != root1)
-                 root1 = root[root1];
-              root2 = id2;
-              while (root[root2] != root2)
-                 root2 = root[root2];
-              
-              if (root1 < root2)
-                 root[root2] = root1;
-              else if (root1 > root2)
-                 root[root1] = root2;
-              NlmMutexUnlock(root_mutex);
-           }
+            /* Calculate the coverage values for this HSP. */
+            if (search->prog_number == blast_type_blastn) {
+                context = hsp->context;
+                id1 = hsp_info_array[index]->id;
+                query_length = 
+                    search->query_context_offsets[context+1] -
+                    search->query_context_offsets[context] - 1;
+            }
+            q_length = hsp->query.length;
+            s_length = hsp->subject.length;
+            
+            if (global_parameters->bidirectional)
+                length_coverage = MIN(((FloatHi)q_length) / query_length, 
+                                      ((FloatHi)s_length) / subject_length);
+            else
+                length_coverage = MAX(((FloatHi)q_length) / query_length, 
+                                      ((FloatHi)s_length) / subject_length);
+            
+            if (search->prog_number == blast_type_blastp)
+                kbp = search->sbp->kbp_gap[search->first_context];
+            else
+                kbp = search->sbp->kbp[context];
+            bit_score = ((hsp->score*kbp->Lambda) -
+                         kbp->logK)/NCBIMATH_LN2;
+            
+            /* Calculate percent identity, performing traceback search, if
+               necessary. */
+            if (search->prog_number == blast_type_blastp) {
+                gap_align->query_frame = ContextToFrame(search,
+                                                        hsp->context);
+                gap_align->subject_frame = hsp->subject.frame;
+                gap_align->q_start = hsp->query.gapped_start;
+                gap_align->s_start = hsp->subject.gapped_start;
+                PerformGappedAlignmentWithTraceback(gap_align);
+                perc_identity = GapAlignPercentIdentity(gap_align);
+                gap_align->state_struct = 
+                    GapXDropStateDestroy(gap_align->state_struct);
+                gap_align->edit_block = 
+                    GapXEditBlockDelete(gap_align->edit_block);
+            } else {
+                Int4Ptr length, start;
+                Uint1Ptr strands;
+                Int4 align_length = 0, numseg, i;
+                GapXEditScriptPtr esp;
+                query = search->context[context].query->sequence;
+                esp = hsp->gap_info->esp;
+                for (numseg=0; esp; esp = esp->next, numseg++);
+                GXECollectDataForSeqalign(hsp->gap_info, 
+                                          hsp->gap_info->esp, numseg,
+                                          &start, &length, &strands, 
+                                          &hsp->query.offset, 
+                                          &hsp->subject.offset);
+                perc_identity = 0;
+                for (i=0; i<numseg; i++) {
+                    align_length += length[i];
+                    if (start[2*i] != -1 && start[2*i+1] != -1)
+                        perc_identity += 
+                            MegaBlastGetNumIdentical(query, subject, start[2*i],
+                                                     start[2*i+1], length[i], 
+                                                     FALSE);
+                }
+                perc_identity = perc_identity / align_length * 100;
+                start = MemFree(start);
+                length = MemFree(length);
+                strands = MemFree(strands);
+            }
+            if (global_parameters->score_threshold < 3.0)
+                score_coverage = bit_score / (MAX(q_length, s_length));
+            else
+                score_coverage = perc_identity;
+            
+            /* If hits are being saved, save this HSP's information. */
+            if (global_parameters->logfp) {
+                loginfo[index].id1 = id1;
+                loginfo[index].id2 = id2;
+                loginfo[index].hsp_length1 = q_length;
+                loginfo[index].hsp_length2 = s_length;
+                loginfo[index].bit_score = bit_score;
+                loginfo[index].perc_identity = perc_identity;
+            }
+            
+            /* If this HSP satisfies the coverage criteria, update the 
+               cluster roots. */
+            if (length_coverage >= global_parameters->length_threshold && 
+                score_coverage >= global_parameters->score_threshold) {
+                root1 = id1;
+                
+                NlmMutexLockEx(&root_mutex);
+                while (root[root1] != root1)
+                    root1 = root[root1];
+                root2 = id2;
+                while (root[root2] != root2)
+                    root2 = root[root2];
+                
+                if (root1 < root2)
+                    root[root2] = root1;
+                else if (root1 > root2)
+                    root[root1] = root2;
+                NlmMutexUnlock(root_mutex);
+            }
 
            /* For blastn, get to the highest scoring hsp for the next 
               "query" */
@@ -784,12 +880,12 @@ PrintNeighbors(VoidPtr ptr)
            }
         }
 
-	if (global_parameters->logfp && loginfo) {
-	   FileWrite(loginfo, sizeof(ClusterLogInfo), query_count, 
-		     global_parameters->logfp);
-           loginfo = MemFree(loginfo);
-	   fflush(global_parameters->logfp);
-	}
+        if (global_parameters->logfp && loginfo) {
+            FileWrite(loginfo, sizeof(ClusterLogInfo), query_count, 
+                      global_parameters->logfp);
+            loginfo = MemFree(loginfo);
+            fflush(global_parameters->logfp);
+        }
     } else {
        /* This can't happen in normal situation. If it does, the most likely
           reason is presense of non-unique identifiers in the input file */
@@ -800,9 +896,6 @@ PrintNeighbors(VoidPtr ptr)
        
     return 0;
 }
-
-
-#define VERSION_NO	5
 
 #ifdef NUMARG
 #undef NUMARG
@@ -845,10 +938,11 @@ static Args myargs [] = {
  
 };
 
-#define MAX_DB_SIZE 100000
-#define MAX_GI_LENGTH 9
+/** Print progress messages after how many processed sequences? */
 #define PROGRESS_INTERVAL 1000
+/** Maximal number of sequences to concatenate for a blastn search. */
 #define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
+/** Maximal total length of concatenated sequences in a blastn search. */
 #define MAX_TOTAL_LENGTH 5000000
 
 Int2 Main (void)
@@ -857,7 +951,7 @@ Int2 Main (void)
     BlastSearchBlkPtr search;
     Boolean db_is_na, query_is_na;
     Int4 qsize, dbsize, first_seq;
-    ReadDBFILEPtr rdfp, rdfp_var;
+    ReadDBFILEPtr rdfp;
     Uint1 align_type;
     SeqIdPtr sip;
     BioseqPtr query_bsp = NULL, PNTR query_bsp_array;
@@ -883,6 +977,7 @@ Int2 Main (void)
 
     StringCpy(buf, "blastclust ");
     StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
+
     if (! GetArgs (buf, NUMARG, myargs))
        return (1);
     
@@ -1003,7 +1098,8 @@ Int2 Main (void)
     
     if (options == NULL)
 	return 3;
-    
+
+    /* Set the default search options. */
     options->use_real_db_size = TRUE;
     options->sort_gi_list = FALSE;
     
@@ -1039,6 +1135,8 @@ Int2 Main (void)
                     myargs[14].strvalue);
        }
 
+       /* Read advanced options from a configuration file, one line at a
+          time. */
        while (fgets(opt_line, BUFFER_SIZE, config_file) != 0) {
           if (*opt_line == '#')
              continue;
@@ -1072,6 +1170,8 @@ Int2 Main (void)
 
     root = (Int4Ptr) Malloc(num_queries*sizeof(Int4));
 
+    /* If this is a continuation of a previous search that has not been 
+       completed, read the previous search information and start from there. */
     if (is_prot && finish_incomplete) {
        first_seq = ReclusterFromFile(global_parameters->logfp, NULL, &gi_list,
 				    &id_list, &seq_len, NULL);
@@ -1079,16 +1179,19 @@ Int2 Main (void)
        Uint4 header_size = 0;
        Uint4 header_numeric_id_type = 0;
        first_seq = 0;
+       /* Put each sequence in its own one-element cluster. */
        for (index=0; index<num_queries; index++)
-	  root[index] = index;
+           root[index] = index;
        
        gi_list = (Int4Ptr) MemNew(num_queries*sizeof(Int4));
        id_list = (CharPtr PNTR) MemNew(num_queries*sizeof(CharPtr));
        seq_len = (Int4Ptr) MemNew(num_queries*sizeof(Int4));
        
+       /* Get the query identificators, decide if they are string or 
+          numeric. */
        for (index=0; index<num_queries; index++) {
-	  readdb_get_descriptor(rdfp, index, &sip, &title);
-	  seq_len[index] = readdb_get_sequence_length(rdfp, index);
+           readdb_get_descriptor(rdfp, index, &sip, &title);
+           seq_len[index] = readdb_get_sequence_length(rdfp, index);
 	  
           if (sip->choice != SEQID_GENERAL ||
               StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
@@ -1112,54 +1215,57 @@ Int2 Main (void)
        }
 
        if (numeric_id_type) {
-	  id_list = MemFree(id_list);
-	  header_size = num_queries;
-          header_numeric_id_type = 1;
+           id_list = MemFree(id_list);
+           header_size = num_queries;
+           header_numeric_id_type = 1;
        } else {
-	  total_id_len = 0;
-	  /* Check if some ids were gis and convert them to strings */
-	  for (i=0; i<num_queries; i++) {
-	     if (gi_list[i] > 0) {
-		id_list[i] = (CharPtr) MemNew(10);
-		sprintf(id_list[i], "%ld", gi_list[i]);
-	     }
-	     total_id_len += StringLen(id_list[i]) + 1;
-	  }
-	  gi_list = MemFree(gi_list);
-	  id_string = (CharPtr) MemNew(total_id_len+1);
-	  for (i=0; i<num_queries; i++) {
-	     StringCat(id_string, id_list[i]);
-	     StringCat(id_string, " ");
-	  }
-	  header_size = total_id_len;
+           total_id_len = 0;
+           /* Check if some ids were gis and convert them to strings */
+           for (i=0; i<num_queries; i++) {
+               if (gi_list[i] > 0) {
+                   id_list[i] = (CharPtr) MemNew(10);
+                   sprintf(id_list[i], "%ld", gi_list[i]);
+               }
+               total_id_len += StringLen(id_list[i]) + 1;
+           }
+           gi_list = MemFree(gi_list);
+           id_string = (CharPtr) MemNew(total_id_len+1);
+           for (i=0; i<num_queries; i++) {
+               StringCat(id_string, id_list[i]);
+               StringCat(id_string, " ");
+           }
+           header_size = total_id_len;
        }
        
+       /* Write the sequence identifiers and lengths into the hits file
+          header. */
        FileWrite(&header_numeric_id_type, sizeof(Uint4), 1, 
                  global_parameters->logfp);
        FileWrite(&header_size, sizeof(Uint4), 1, global_parameters->logfp);
 
        if (numeric_id_type) 
-	  FileWrite(gi_list, sizeof(Int4), num_queries, 
-		    global_parameters->logfp);
+           FileWrite(gi_list, sizeof(Int4), num_queries, 
+                     global_parameters->logfp);
        else {
-	  FileWrite(id_string, sizeof(Char), total_id_len, 
-		    global_parameters->logfp);
-	  MemFree(id_string);
+           FileWrite(id_string, sizeof(Char), total_id_len, 
+                     global_parameters->logfp);
+           MemFree(id_string);
        }
        
        FileWrite(seq_len, sizeof(Int4), num_queries, global_parameters->logfp);
        fflush(global_parameters->logfp);
     }
 
+    /* Print the first progress message, if necessary. */
     if (print_progress) {
-       DayTimeStr(timestr, TRUE, TRUE);
-       if (finish_incomplete)
-	  fprintf(progressfp, 
-		  "%s Finish clustering of %ld queries, starting from query %ld\n", 
-		  timestr, num_queries, first_seq);
-       else
-	  fprintf(progressfp, "%s Start clustering of %ld queries\n", 
-		  timestr, num_queries);
+        DayTimeStr(timestr, TRUE, TRUE);
+        if (finish_incomplete)
+            fprintf(progressfp, 
+               "%s Finish clustering of %ld queries, starting from query %ld\n", 
+                    timestr, num_queries, first_seq);
+        else
+            fprintf(progressfp, "%s Start clustering of %ld queries\n", 
+                    timestr, num_queries);
     }
 
     if (!is_prot) {
@@ -1168,6 +1274,8 @@ Int2 Main (void)
        query_bsp_array = (BioseqPtr PNTR) 
           Malloc((MIN(num_queries, MAX_NUM_QUERIES)+1)*sizeof(BioseqPtr));
        num_left = num_queries;
+       /* For blastn, concatenate as many queries as possible and run the 
+          search engine. */
        while (num_left>0) {
           num_bsps = MIN(num_left, MAX_NUM_QUERIES);
           total_query_length = 0;
@@ -1189,12 +1297,15 @@ Int2 Main (void)
           ObjMgrFreeCache(0);
        }
        MemFree(query_bsp_array);
-    } else { 
+    } else {
+        /* Loop over all sequences, searching each time only against 
+           sequences with larger indices. */
        for (index=first_seq; index<num_queries; index++) {
           query_bsp = readdb_get_bioseq(rdfp, index);
-          /* Set up the search */
+          /* Set the starting database sequence for the search. */
           options->first_db_seq = index + 1;
           
+          /* Set up search. */
           search = BLASTSetUpSearchWithReadDbInternal(NULL, query_bsp,
                       blast_program, seq_len[index], blast_database, 
                       options, NULL, NULL, NULL, 0, rdfp);
@@ -1202,9 +1313,6 @@ Int2 Main (void)
              search->handle_results = PrintNeighbors;
              
              /* Run BLAST. */
-             search->queue_callback = NULL;
-             search->thr_info->tick_callback = NULL;
-             
              do_the_blast_run(search);
           } else if (search) {
              BlastErrorPrint(search->error_return);
@@ -1219,8 +1327,9 @@ Int2 Main (void)
           }
        } /* End of loop on queries */
     }
-    /*ReadDBBioseqFetchDisable();*/
     rdfp = readdb_destruct(rdfp);
+
+    /* Create the clusters and print them out. */
     BlastClusterNeighbours(num_queries, seq_len, id_list, gi_list, NULL);
 
     MemFree(seq_len);
@@ -1240,6 +1349,7 @@ Int2 Main (void)
     if (global_parameters->logfp)
        FileClose(global_parameters->logfp);
 
+    /* Remove the temporary BLAST database files. */
     if (!db_formatted && StringLen(blast_database) > 0) {
        Char p_or_n = (is_prot) ? 'p' : 'n';
        sprintf(db_file, "%s.%chr", blast_database, p_or_n);

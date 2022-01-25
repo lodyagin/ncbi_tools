@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.59 2005/05/06 14:26:44 camacho Exp $
+/* $Id: blast_def.h,v 1.61 2005/06/27 17:58:05 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,38 +34,14 @@
 #ifndef __BLAST_DEF__
 #define __BLAST_DEF__
 
-#include <algo/blast/core/ncbi_std.h>
+#include <algo/blast/core/blast_program.h>
 #include <algo/blast/core/blast_export.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/******************** Preprocessor definitions ******************************/
-
-/** Program type: defines the engine's notion of the different
- * applications of the BLAST algorithm */
-typedef enum {
-    eBlastTypeBlastn,
-    eBlastTypeBlastp,
-    eBlastTypeBlastx,
-    eBlastTypeTblastn,
-    eBlastTypeTblastx,
-    eBlastTypePsiBlast,
-    eBlastTypeRpsBlast,
-    eBlastTypeRpsTblastn,
-    eBlastTypePhiBlastn,
-    eBlastTypePhiBlastp,
-    eBlastTypeUndefined
-} EBlastProgramType;
-
-/** Returns true if program is PHI-BLAST (i.e.: involves a pattern) */
-#define Blast_ProgramIsPhiBlast(p) \
-(p == eBlastTypePhiBlastn || p == eBlastTypePhiBlastp)
-
-/** Returns true if program is RPS-BLAST (i.e.: involves a PSSM as subject) */
-#define Blast_ProgramIsRpsBlast(p) \
-(p == eBlastTypeRpsBlast || p == eBlastTypeRpsTblastn)
+/****************************** Constants *********************************/
 
 extern const int kDustLevel;  /**< Level parameter used by dust. */
 extern const int kDustWindow; /**< Window parameter used by dust. */
@@ -79,6 +55,8 @@ extern const double kSegHicut;   /**< Hicut parameter for SEG. */
  * Value defined in blast_options.c
  */
 extern const int kUngappedHSPNumMax; 
+
+/******************** Preprocessor definitions ******************************/
 
 /** Codons are always of length 3 */
 #ifndef CODON_LENGTH

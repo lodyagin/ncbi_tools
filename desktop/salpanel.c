@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.66 $
+* $Revision: 6.73 $
 *
 * File Description: 
 *
@@ -4952,11 +4952,54 @@ extern void SortEnumFieldAssocPtrArray (EnumFieldAssocPtr alist, CompareFunc com
   ValNodeFreeData (head);
 }
 
+static void AddTextToComment (ButtoN b, CharPtr text)
+{
+  BatchApplyFeatureDetailsDlgPtr dlg;
+  CharPtr                        orig_comment;
+  CharPtr                        new_comment;
+  
+  dlg = (BatchApplyFeatureDetailsDlgPtr) GetObjectExtra (b);
+  if (dlg == NULL || StringHasNoText (text))
+  {
+    return;
+  }
+  
+  orig_comment = SaveStringFromText (dlg->featcomment);
+  if (StringHasNoText (orig_comment))
+  {
+    SetTitle (dlg->featcomment, text);
+  }
+  else
+  {
+    new_comment = (CharPtr) MemNew ((StringLen (orig_comment) + StringLen (text) + 3) * sizeof (Char));
+    if (new_comment != NULL)
+    {
+      StringCpy (new_comment, orig_comment);
+      StringCat (new_comment, "; ");
+      StringCat (new_comment, text);
+      SetTitle (dlg->featcomment, new_comment);
+      new_comment = MemFree (new_comment);
+    }
+  } 
+  orig_comment = MemFree (orig_comment);
+}
+
+static void Add18SITS28SToComment (ButtoN b)
+{
+  AddTextToComment (b, "contains 18S ribosomal RNA, internal transcribed spacer 1, 5.8S ribosomal RNA, internal transcribed spacer 2, and 28S ribosomal RNA");
+}
+
+static void Add16SIGS23SToComment (ButtoN b)
+{
+  AddTextToComment (b, "contains 16S ribosomal RNA, 16S-23S ribosomal RNA intergenic spacer, and 23S ribosomal RNA");
+}
+
 extern DialoG 
 BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype)
 {
   BatchApplyFeatureDetailsDlgPtr dlg;
-  GrouP                          p, r = NULL, text_group = NULL;
+  GrouP                          p, r = NULL, text_group = NULL, comment_btns_grp = NULL;
+  ButtoN                         comment_btn;
   Nlm_EnumFieldAssocPtr          ap;
   Int4                           j;
   
@@ -5040,9 +5083,19 @@ BatchApplyFeatureDetailsDialog (GrouP parent, Int4 feattype)
     }
     StaticPrompt (text_group, "Comment", 0, 4 * Nlm_stdLineHeight, programFont, 'l');
     dlg->featcomment = ScrollText (text_group, 20, 4, programFont, TRUE, NULL);
+    
   }
   
-  AlignObjects (ALIGN_CENTER, (HANDLE) text_group, (HANDLE) r, NULL);
+  if (dlg->feattype == ADD_RRNA && GetAppProperty ("InternalNcbiSequin") != NULL)
+  {
+    comment_btns_grp = HiddenGroup (p, 2, 0, NULL);
+    comment_btn = PushButton (comment_btns_grp, "Add '18S-ITS-5.8S-ITS-28S' to comment", Add18SITS28SToComment);
+    SetObjectExtra (comment_btn, dlg, NULL);
+    comment_btn = PushButton (comment_btns_grp, "Add '16S-IGS-23S' to comment", Add16SIGS23SToComment);
+    SetObjectExtra (comment_btn, dlg, NULL);
+  }
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) text_group, (HANDLE) r, (HANDLE) comment_btns_grp, NULL);
   
   return (DialoG) p;
 }
@@ -5402,7 +5455,7 @@ AddProductForCDS
   bsp->seq_data = bs;
   bsp->length = BSLen (bs);
   bs = NULL;
-  old = SeqEntrySetScope (sep);
+  old = SeqEntrySetScope (NULL);
   bsp->id = MakeNewProteinSeqId (sfp->location, NULL);
   SeqMgrAddToBioseqIndex (bsp);
   SeqEntrySetScope (old);
@@ -5687,10 +5740,118 @@ typedef struct applyalignmentfeature
   DialoG      location_dlg;
   DialoG      feature_details;
   SeqEntryPtr sep;
+  SeqAlignPtr salp;
   Int4        feattype;
   Uint2       entityID;
 } ApplyAlignmentFeatureDlgData, PNTR ApplyAlignmentFeatureDlgPtr;
 
+static Boolean 
+OkToContinueWithFeatureApply 
+(SeqLocPtr   seqloc_list,
+ SeqAlignPtr salp)
+{
+  Int4       num_missing = 0, seq_num, start_num;
+  SeqLocPtr  slp;
+  SeqIdPtr   sip;
+  Int4Ptr    found_list;
+  Boolean    found_this;
+  Int4       msg_len = 0;
+  CharPtr    msg_txt = NULL;
+  CharPtr    msg_start = "The following sequence(s) are all gaps at this position: ";
+  CharPtr    msg_end = ". Do you want to continue?";
+  ValNodePtr id_list = NULL, id_vnp;
+  Char       id_txt [255];
+  Boolean    rval = TRUE;
+  BioseqPtr  bsp;
+  
+  if (salp == NULL || seqloc_list == NULL)
+  {
+    return FALSE;
+  }
+  
+  found_list = (Int4Ptr) MemNew (salp->dim * sizeof (Int4));
+  if (found_list == NULL)
+  {
+    return FALSE;
+  }
+  
+  for (seq_num = 1; seq_num <= salp->dim; seq_num++)
+  {
+    found_list [seq_num - 1] = 0;
+  }
+  
+  for (slp = seqloc_list, start_num = 1; slp != NULL; slp = slp->next, start_num++)
+  {
+    if (slp->choice == SEQLOC_NULL)
+    {
+      continue;
+    }
+    found_this = FALSE;
+    if (start_num <= salp->dim)
+    {
+      sip = AlnMgr2GetNthSeqIdPtr (salp, start_num);
+      if (SeqIdComp (sip, SeqLocId (slp)) == SIC_YES)
+      {
+        found_list [start_num - 1] = 1;
+        found_this = TRUE;
+      }
+    }
+    
+    for (seq_num = 1; seq_num <= salp->dim && ! found_this; seq_num++)
+    {
+      sip = AlnMgr2GetNthSeqIdPtr (salp, seq_num);
+      if (SeqIdComp (sip, SeqLocId (slp)) == SIC_YES)
+      {
+        found_list [seq_num - 1] = 1;
+        found_this = TRUE;
+      }
+    }
+  }
+  
+  for (seq_num = 1; seq_num <= salp->dim; seq_num++)
+  {
+    if (found_list [seq_num - 1] == 0)
+    {
+      sip = AlnMgr2GetNthSeqIdPtr (salp, seq_num);
+      bsp = BioseqFind (sip);
+      if (bsp != NULL && bsp->id != NULL)
+      {
+        sip = SeqIdFindBest (bsp->id, 0);
+      }
+      SeqIdWrite (sip, id_txt, PRINTID_REPORT, sizeof (id_txt));
+      msg_len += StringLen (id_txt) + 3;
+      ValNodeAddPointer (&id_list, 0, StringSave (id_txt));
+    }
+  }
+  
+  if (msg_len > 0)
+  {
+    msg_len += StringLen (msg_start) + StringLen (msg_end);
+    msg_txt = (CharPtr) MemNew (msg_len * sizeof (Char));
+    if (msg_txt != NULL)
+    {
+      StringCpy (msg_txt, msg_start);
+      for (id_vnp = id_list; id_vnp != NULL; id_vnp = id_vnp->next)
+      {
+        StringCat (msg_txt, id_vnp->data.ptrvalue);
+        if (id_vnp->next != NULL)
+        {
+          StringCat (msg_txt, ", ");
+        }
+      }
+      StringCat (msg_txt, msg_end);
+      if (ANS_NO == Message (MSG_YN, msg_txt))
+      {
+        rval = FALSE;
+      }
+      msg_txt = MemFree (msg_txt);
+    }
+  }
+  id_list = ValNodeFreeData (id_list);
+  found_list = MemFree (found_list);
+  
+  return rval;
+}
 
 static void DoApplyFeatureToAlignment (ButtoN b)
 {
@@ -5705,6 +5866,7 @@ static void DoApplyFeatureToAlignment (ButtoN b)
   BioseqPtr                   bsp;
   SeqFeatPtr                  sfp, gene_sfp;
   GBQualPtr                   gbqual_list = NULL;
+  Boolean                     found_null = FALSE;
   
   aafdp = (ApplyAlignmentFeatureDlgPtr) GetObjectExtra (b);
   if (aafdp == NULL)
@@ -5714,6 +5876,21 @@ static void DoApplyFeatureToAlignment (ButtoN b)
   
   feature_details_data = (BatchApplyFeatureDetailsPtr) DialogToPointer (aafdp->feature_details);
   seqloc_list = (SeqLocPtr) DialogToPointer (aafdp->location_dlg);
+
+  if (! OkToContinueWithFeatureApply (seqloc_list, aafdp->salp))
+  {
+    /* Free data and loclist */
+    feature_details_data = BatchApplyFeatureDetailsFree (feature_details_data);
+    slp_this = seqloc_list;
+    while (slp_this != NULL)
+    {
+      slp_next = slp_this->next;
+      slp_this->next = NULL;
+      slp_this = SeqLocFree (slp_this);
+      slp_this = slp_next;
+    }
+    return;
+  }
   
   if (feature_details_data == NULL || seqloc_list == NULL)
   {
@@ -5809,6 +5986,8 @@ static void DoApplyFeatureToAlignment (ButtoN b)
         }
         else
         {
+          CheckSeqLocForPartial (slp_this, &partial5, &partial3);
+        
           if (sfp == NULL)
           {
             gene_slp = slp_this;
@@ -5816,10 +5995,13 @@ static void DoApplyFeatureToAlignment (ButtoN b)
           else
           {
             gene_slp = SeqLocMerge (bsp, slp_this, NULL, TRUE, FALSE, FALSE);
+            SetSeqLocPartial (gene_slp, partial5, partial3);
           }
           gene_sfp = ApplyGene (feature_details_data->geneName,
                                 feature_details_data,
                                 gene_sep, sfp, gene_slp);
+          gene_sfp->partial = partial5 || partial3;
+                                
           if (sfp == NULL)
           {
             sfp = gene_sfp;
@@ -5876,6 +6058,7 @@ extern void ApplyFeatureToAlignment (Uint2 entityID, SeqAlignPtr salp, SeqLocPtr
   }
   aafdp->entityID = entityID;
   aafdp->feattype = feattype;
+  aafdp->salp = salp;
     
   w = FixedWindow (-50, -33, -10, -10, "Apply Features to Alignment", StdCloseWindowProc); 
   SetObjectExtra (w, aafdp, StdCleanupExtraProc); 
@@ -5890,7 +6073,8 @@ extern void ApplyFeatureToAlignment (Uint2 entityID, SeqAlignPtr salp, SeqLocPtr
                                                         4, 2, aafdp->sep,
                                                         nucsOK, protsOK,
                                                         TRUE, TRUE, TRUE, NULL, NULL,
-                                                        TRUE, FALSE, NULL, NULL);
+                                                        TRUE, FALSE, NULL, NULL,
+                                                        TRUE);
   PointerToDialog (aafdp->location_dlg, slp);                                                      
   
   aafdp->feature_details = BatchApplyFeatureDetailsDialog (h, feattype);

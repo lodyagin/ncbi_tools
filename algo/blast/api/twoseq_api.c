@@ -1,4 +1,4 @@
-/* $Id: twoseq_api.c,v 1.47 2005/06/02 20:39:38 dondosha Exp $
+/* $Id: twoseq_api.c,v 1.48 2005/06/06 15:40:17 papadopo Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -174,7 +174,7 @@ s_TwoSeqBasicFillOptions(const BLAST_SummaryOptions* basic_options,
 
     if (do_discontig) {
         lookup_options->mb_template_length = 21; 
-        lookup_options->mb_template_type = MB_WORD_OPTIMAL;
+        lookup_options->mb_template_type = eMBWordOptimal;
     }
     else {
         lookup_options->mb_template_length = 0; 

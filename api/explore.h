@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.50 $
+* $Revision: 6.53 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -377,7 +377,7 @@ NLM_EXTERN Int4 LIBCALL SeqMgrExploreFeatures (
 
 /*****************************************************************************
 *
-*   SeqMgrGetFeatureByLabel returns the a feature with the desired label
+*   SeqMgrGetFeatureByLabel returns a feature with the desired label
 *   If desired, place a SeqMgrFeatContext data structure on the stack, and pass
 *     in &context as the last parameter
 *   SeqMgrGetNextFeatureByLabel works like SeqMgrGetNextFeature, except that
@@ -403,14 +403,33 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeatureByLabel (
 
 /*****************************************************************************
 *
+*   SeqMgrGetGeneByLocusTag returns a gene feature with the desired locus_tag
+*   If desired, place a SeqMgrFeatContext data structure on the stack, and pass
+*     in &context as the last parameter
 *   SeqMgrGetNextGeneByLocusTag works like SeqMgrGetNextFeatureByLabel, except
 *     that it returns only genes ordered by locus_tag
+*   SeqMgrGetFeatureByFeatID returns a feature based on SeqFeatXref.id or
+*     feature ID string
 *
 *****************************************************************************/
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetGeneByLocusTag (
+  BioseqPtr bsp,
+  CharPtr locusTag,
+  SeqMgrFeatContext PNTR context
+);
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextGeneByLocusTag (
   BioseqPtr bsp,
   SeqFeatPtr curr,
+  SeqMgrFeatContext PNTR context
+);
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByFeatID (
+  Uint2 entityID,
+  BioseqPtr bsp,
+  CharPtr featid,
+  SeqFeatXrefPtr xref,
   SeqMgrFeatContext PNTR context
 );
 

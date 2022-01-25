@@ -63,24 +63,23 @@ be obtained by executing formatdb without options, as in:
 
 The formatdb options are summarized below:
 
-formatdb 2.2.5 arguments:
+formatdb 2.2.11   arguments:
 
-    -t  Title for database file [String]  
-        Optional
-    -i  Input file(s) for formatting (this parameter must be set)
-        [File In]
-    -l  Logfile name: [File Out]  
-        Optional
-            default = formatdb.log
-    -p  Type of file
-        T - protein
-        F - nucleotide [T/F]  Optional
-        default = T
+  -t  Title for database file [String]  Optional
 
-    -o  Parse options
-        T - True: Parse SeqId and create indexes.
-        F - False: Do not parse SeqId. Do not create indexes.
-        [T/F]  Optional default = F
+  -i  Input file(s) for formatting (this parameter must be set) [File In]
+
+  -l  Logfile name: [File Out]  Optional default = formatdb.log
+
+  -p  Type of file
+         T - protein   
+         F - nucleotide [T/F]  Optional
+    default = T
+
+  -o  Parse options
+         T - True: Parse SeqId and create indexes.
+         F - False: Do not parse SeqId. Do not create indexes.
+ [T/F]  Optional default = F
 
     If the "-o" option is TRUE (and the source database is in FASTA
     format), then the database identifiers in the FASTA definition
@@ -88,32 +87,28 @@ formatdb 2.2.5 arguments:
     Please see section "F Note on creating custom databases"
     below.
 
-    -a  Input file is database in ASN.1 format (otherwise FASTA is expected)
-        T - True,
-        F - False.
-        [T/F]  Optional default = F
+  -a  Input file is database in ASN.1 format (otherwise FASTA is expected)
+         T - True, 
+         F - False.
+ [T/F]  Optional default = F
 
-    -b  ASN.1 database in binary mode
-        T - binary,
-        F - text mode.
-        [T/F]  Optional default = F
+  -b  ASN.1 database in binary mode
+         T - binary, 
+         F - text mode.
+ [T/F]  Optional default = F
 
     A source ASN.1 database may be represented in two formats -
     ascii text and binary. The "-b" option, if TRUE, specifies that
     input ASN.1 database is in binary format. The option is ignored
     in case of FASTA input database.
 
-
-    -e  Input is a Seq-entry [T/F]  
-        Optional
-        default = F
+  -e  Input is a Seq-entry [T/F]  Optional default = F
 
     A source ASN.1 database (either text ascii or binary) may
     contain a Bioseq-set or just one Bioseq. In the latter case the
     "-e" switch should be set to TRUE.
 
-    -n  Base name for BLAST files [String]  
-        Optional
+  -n  Base name for BLAST files [String]  Optional
 
     This options allows one to produce BLAST databases with a
     different name than that of the original FASTA file.  For
@@ -128,9 +123,9 @@ formatdb 2.2.5 arguments:
     not required other than by formatdb.  This can help in a
     situation where disk-space is tight.
 
-    -v  Database volume size in millions of letters [Integer] Optional
-        default = 0
-        range from 0 to &lt;NULL&gt;
+  -v  Database volume size in millions of letters [Integer]  Optional
+    default = 0
+    range from 0 to &lt;NULL&gt;
 
     This option breaks up large FASTA files into 'volumes' (each
     with a maximum  size of 2 billion letters).  As part of the
@@ -138,9 +133,8 @@ formatdb 2.2.5 arguments:
     database file, called an  alias file, with the  extension 'nal'
     or 'pal'.
 
-    -s  Create indexes limited only to accessions - sparse [T/F]  
-        Optional
-        default = F
+  -s  Create indexes limited only to accessions - sparse [T/F]  Optional
+    default = F
 
     This option limits the indices for the string identifiers (used
     by formatdb)  to accessions (i.e., no locus names).  This is
@@ -150,7 +144,10 @@ formatdb 2.2.5 arguments:
     It is strongly  recommended for EST's, STS's, GSS's, and
     HTGS's.
 
-    -L  Create an alias file with this name
+  -V  Verbose: check for non-unique string ids in the database [T/F]  Optional
+    default = F
+
+  -L  Create an alias file with this name
         use the gifile arg (below) if set to calculate db size
         use the BLAST db specified with -i (above) [File Out]  Optional
 
@@ -159,20 +156,33 @@ formatdb 2.2.5 arguments:
     given by the -F argument.  See the section "Note on creating an alias file 
     for a GI list" for more information.
 
-    -F  Gifile (file containing list of gi's) [File In]  Optional
+  -F  Gifile (file containing list of gi's) [File In]  Optional
 
     This option can be used to specify the GI list for the alias file
     construction (-L option above) or to produce a binary GI list if
     the -B option (below) is set.
 
-    -B  Binary Gifile produced from the Gifile specified above [File Out]  Optional
-
+  -B  Binary Gifile produced from the Gifile specified above [File Out]  Optional
     This option specifies the name of a binary GI list file.  This option should
     be used with the -F option.  A text GI list may be specified with the -F
     option and the -B option will produce that GI list in binary format.  The
     binary file is smaller and BLAST does not need to convert it, so it can
     be read faster.  
 
+  -T  Taxid file to set the taxonomy ids in ASN.1 deflines [File In]  Optional
+
+    This file specifies a text file containing Seq-id string/numeric taxonomy
+    id pairs, separated by a single white space character (or tab), one per 
+    line. Gi numbers can also be used in place of Seq-id strings. Examples:
+
+    % cat seqid-taxid.txt
+    lcl|hmm271 4                                                               
+    lcl|hmm273 6                                                               
+    lcl|hmm276 9                                                               
+    % cat gi-taxid.txt
+    129295 9031                                                         
+    129296 9031
+    68738 9031 
 
 Configuration File
 ------------------

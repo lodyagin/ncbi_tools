@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONFIG__H
 #define CONNECT___NCBI_CONFIG__H
 
-/*  $Id: ncbi_config.h,v 6.8 2004/10/19 19:33:51 lavr Exp $
+/*  $Id: ncbi_config.h,v 6.10 2005/07/02 18:14:25 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,16 +43,20 @@
 
 #if defined(OS_UNIX)
 #  define NCBI_OS_UNIX 1
-#  ifdef OS_UNIX_IRIX
-#    define NCBI_OS_IRIX
-#  endif
-#  ifdef OS_UNIX_SOL
-#    define NCBI_OS_SOLARIS
-#  endif
-#  ifdef OS_UNIX_BEOS
-#    define NCBI_OS_BEOS
-#  endif
-#  ifdef OS_UNIX_DARWIN
+#  if defined(OS_UNIX_LINUX)
+#    define NCBI_OS_LINUX 1
+#    ifdef PROC_X86_64
+#      define NCBI_PLATFORM_BITS 64
+#    else
+#      define NCBI_PLATFORM_BITS 32
+#    endif
+#  elif defined(OS_UNIX_IRIX)
+#    define NCBI_OS_IRIX 1
+#  elif defined(OS_UNIX_SOL)
+#    define NCBI_OS_SOLARIS 1
+#  elif defined(OS_UNIX_BEOS)
+#    define NCBI_OS_BEOS 1
+#  elif defined(OS_UNIX_DARWIN)
 #    define NCBI_OS_DARWIN 1
 #    ifdef COMP_METRO
 #      define NCBI_COMPILER_METROWERKS 1

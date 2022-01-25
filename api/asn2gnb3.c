@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.34 $
+* $Revision: 1.40 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1429,7 +1429,7 @@ NLM_EXTERN void AddCommentBlock (
   BarCodeData        bcd;
   BioSourcePtr       biop;
   BioseqPtr          bsp;
-  Char               buf [128];
+  Char               buf [1024];
   CommentBlockPtr    cbp;
   Char               ch;
   Boolean            didGenome = FALSE;
@@ -1889,7 +1889,7 @@ NLM_EXTERN void AddCommentBlock (
       if (awp->mode == SEQUIN_MODE || awp->mode == DUMP_MODE) {
         buf [0] = '\0';
         if (! StringHasNoText (localID->str)) {
-          if (StringLen (localID->str) < 100) {
+          if (StringLen (localID->str) < 1000) {
             sprintf (buf, "LocalID: %s", localID->str);
           } else {
             sprintf (buf, "LocalID string too large");
@@ -3396,6 +3396,59 @@ static void CleanupPackedSeqInt (SeqLocPtr location)
     MemFree (slp);
 }
 
+static void CheckForSourceFusion (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr     bsp;
+  SeqIdPtr      sip;
+  BoolPtr       sourceFuse;
+  TextSeqIdPtr  tsip;
+
+  if (sep == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    sourceFuse = (BoolPtr) mydata;
+    if (sourceFuse == NULL) return;
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      switch (sip->choice) {
+        case SEQID_GIBBSQ :
+        case SEQID_GIBBMT :
+          *sourceFuse = TRUE;
+          break;
+        case SEQID_EMBL :
+        case SEQID_PIR :
+        case SEQID_SWISSPROT :
+        case SEQID_PATENT :
+        case SEQID_DDBJ :
+        case SEQID_PRF :
+        case SEQID_PDB :
+        case SEQID_TPE:
+        case SEQID_TPD:
+        case SEQID_GPIPE:
+          *sourceFuse = TRUE;
+          break;
+        case SEQID_GENBANK :
+        case SEQID_TPG:
+          tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+          if (tsip != NULL) {
+            if (StringLen (tsip->accession) == 6) {
+              *sourceFuse = TRUE;
+            }
+          }
+          break;
+        case SEQID_NOT_SET :
+        case SEQID_LOCAL :
+        case SEQID_OTHER :
+        case SEQID_GENERAL :
+          break;
+        default :
+          break;
+      }
+    }
+  }
+}
+
 
 NLM_EXTERN void AddSourceFeatBlock (
   Asn2gbWorkPtr awp
@@ -3419,8 +3472,10 @@ NLM_EXTERN void AddSourceFeatBlock (
   IntSrcBlockPtr     descrIsp;
   ValNodePtr         next;
   ValNodePtr         PNTR prev;
+  SeqEntryPtr        sep;
   SeqInt             sint;
   SeqLocPtr          slp;
+  Boolean            sourceFuse = FALSE;
   CharPtr            str;
   BioseqPtr          target;
   ValNode            vn;
@@ -3581,6 +3636,10 @@ NLM_EXTERN void AddSourceFeatBlock (
 
   head = SortValNode (head, SortSourcesByHash);
 
+  /* does not fuse equivalent source features for local, general, refseq, and 2+6 genbank ids */
+  sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
+  SeqEntryExplore (sep, (Pointer) &sourceFuse, CheckForSourceFusion);
+
   /* unique sources, excise duplicates from list */
 
   prev = &(head);
@@ -3616,7 +3675,7 @@ NLM_EXTERN void AddSourceFeatBlock (
     if (awp->mode == DUMP_MODE) {
       excise = FALSE;
     }
-    if (excise) {
+    if (excise && sourceFuse) {
       *prev = vnp->next;
       vnp->next = NULL;
 
@@ -4458,11 +4517,11 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
     if (okay == FALSE) return TRUE;
   }
 
-  /* if RELEASE_MODE, suppress features with location on segmented Bioseq */
+  /* if RELEASE_MODE, suppress features with location on near segmented Bioseq */
 
   if (ajp->flags.suppressSegLoc) {
     bsp = awp->parent;
-    if (bsp != NULL && bsp->repr == Seq_repr_seg) {
+    if (bsp != NULL && bsp->repr == Seq_repr_seg && SegHasParts (bsp)) {
       slp = SeqLocFindNext (sfp->location, NULL);
       while (slp != NULL) {
         sip = SeqLocId (slp);
@@ -4499,6 +4558,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   ifp->firstfeat = awp->firstfeat;
   awp->firstfeat = FALSE;
   awp->featseen = TRUE;
+  awp->featjustseen = TRUE;
 
 
   if (awp->afp != NULL) {
@@ -4587,22 +4647,71 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   return TRUE;
 }
 
+/*
+static Boolean TestGetAccnVerFromServer (Int4 gi, CharPtr buf)
+
+{
+  Char      accn [64];
+  SeqIdPtr  sip;
+
+  if (buf == NULL) return FALSE;
+  *buf = '\0';
+  sip = GetSeqIdForGI (gi);
+  if (sip == NULL) return FALSE;
+  SeqIdWrite (sip, accn, PRINTID_TEXTID_ACC_VER, sizeof (accn) - 1);
+  SeqIdFree (sip);
+  if (StringLen (accn) < 40) {
+    StringCpy (buf, accn);
+  }
+  return TRUE;
+}
+*/
+
+static WgsAccnPtr GetWgsNode (
+  Asn2gbWorkPtr awp,
+  CharPtr accn
+)
+
+{
+  ValNodePtr  vnp;
+  WgsAccnPtr  wap = NULL;
+
+  if (awp == NULL || StringHasNoText (accn)) return NULL;
+
+  for (vnp = awp->wgsaccnlist; vnp != NULL; vnp = vnp->next) {
+    wap = (WgsAccnPtr) vnp->data.ptrvalue;
+    if (wap == NULL) continue;
+    if (StringCmp (accn, wap->accn) == 0) return wap;
+  }
+  wap = (WgsAccnPtr) MemNew (sizeof (WgsAccn));
+  if (wap == NULL) return NULL;
+  StringCpy (wap->accn, accn);
+  ValNodeAddPointer (&(awp->wgsaccnlist), 0, (Pointer) wap);
+  return wap;
+}
+
 static Boolean LIBCALLBACK GetFeatsOnSeg (
   SeqLocPtr slp,
   SeqMgrSegmentContextPtr context
 )
 
 {
+  Char             accn [41];
+  Uint4            accntype;
   IntAsn2gbJobPtr  ajp;
   Asn2gbWorkPtr    awp;
   BioseqPtr        bsp;
+  time_t           currTime;
   Uint2            entityID;
   Int4             from;
+  Int4             gi;
   Int4             left;
   SeqLocPtr        loc;
+  CharPtr          ptr;
   Int4             right;
   SeqIdPtr         sip;
   Int4             to;
+  WgsAccnPtr       wap = NULL;
 
   if (slp == NULL || context == NULL) return FALSE;
   awp = (Asn2gbWorkPtr) context->userdata;
@@ -4635,6 +4744,35 @@ static Boolean LIBCALLBACK GetFeatsOnSeg (
   }
   if (sip == NULL) return TRUE;
 
+  /* if Web Entrez WGS */
+
+  if (awp->farFeatTimeLimit) {
+    if (sip->choice == SEQID_GI) {
+      gi = sip->data.intvalue;
+      if (GetAccnVerFromServer (gi, accn)) {
+        ptr = StringChr (accn, '.');
+        if (ptr != NULL) {
+          *ptr = '\0';
+        }
+        accntype = WHICH_db_accession (accn);
+        if (ACCN_IS_WGS (accntype)) {
+          accn [4] = '\0';
+          wap = GetWgsNode (awp, accn);
+          if (wap != NULL) {
+            (wap->count)++;
+            if (wap->count > 50) {
+              if (! wap->hasfeats) return TRUE;
+            }
+          }
+        }
+      }
+    }
+    if (! awp->featseen) {
+      currTime = GetSecs ();
+      if (currTime - awp->farFeatStartTime > 25) return FALSE;
+    }
+  }
+
   /* may want to remote fetch genome component if not already in memory */
 
   bsp = BioseqLockById (sip);
@@ -4662,10 +4800,16 @@ static Boolean LIBCALLBACK GetFeatsOnSeg (
   awp->lastleft = 0;
   awp->lastright = 0;
 
+  awp->featjustseen = FALSE;
+
   if (context->strand == Seq_strand_minus) {
     SeqMgrExploreFeaturesRev (bsp, (Pointer) awp, GetFeatsOnBioseq, /* awp->slp */ slp, NULL, NULL);
   } else {
     SeqMgrExploreFeatures (bsp, (Pointer) awp, GetFeatsOnBioseq, /* awp->slp */ slp, NULL, NULL);
+  }
+
+  if (awp->featjustseen && wap != NULL) {
+    wap->hasfeats = TRUE;
   }
 
   /* restore original from and to */
@@ -4751,14 +4895,40 @@ NLM_EXTERN void AddFeatureBlock (
     }
   }
 
+  awp->farFeatTimeLimit = FALSE;
+  if (bsp->repr == Seq_repr_seg || bsp->repr == Seq_repr_delta) {
+    if (awp->mode == ENTREZ_MODE) {
+      awp->farFeatTimeLimit = TRUE;
+    }
+    /*
+    if (GetWWW (ajp) && awp->mode == ENTREZ_MODE) {
+      sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+      if (sdp != NULL && sdp->choice == Seq_descr_molinfo && sdp->data.ptrvalue != NULL) {
+        mip = (MolInfoPtr) sdp->data.ptrvalue;
+        if (mip->tech == MI_TECH_wgs || mip->tech == MI_TECH_composite_wgs_htgs) {
+          awp->farFeatTimeLimit = TRUE;
+        }
+      }
+    }
+    */
+  }
+
   if (! awp->onlyNearFeats) {
     if (awp->farFeatsSuppress) {
 
       if (bsp->repr == Seq_repr_seg || bsp->repr == Seq_repr_delta) {
 
+        /* get start time for 25 second timeout in Web Entrez far WGS records */
+
+        if (awp->farFeatTimeLimit) {
+          awp->farFeatStartTime = GetSecs ();
+        }
+
         /* if farFeatsSuppress first collect features on remote segments in MASTER_STYLE */
 
         SeqMgrExploreSegments (bsp, (Pointer) awp, GetFeatsOnSeg);
+
+        awp->wgsaccnlist = ValNodeFreeData (awp->wgsaccnlist);
       }
     }
   }
@@ -4850,9 +5020,17 @@ NLM_EXTERN void AddFeatureBlock (
 
     if (bsp->repr == Seq_repr_seg || bsp->repr == Seq_repr_delta) {
 
+      /* get start time for 25 second timeout in Web Entrez far WGS records */
+
+      if (awp->farFeatTimeLimit) {
+        awp->farFeatStartTime = GetSecs ();
+      }
+
       /* if not farFeatsSuppress now collect features on remote segments in MASTER_STYLE */
 
       SeqMgrExploreSegments (bsp, (Pointer) awp, GetFeatsOnSeg);
+
+      awp->wgsaccnlist = ValNodeFreeData (awp->wgsaccnlist);
     }
   }
 }

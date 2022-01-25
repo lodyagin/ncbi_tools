@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.65 $
+* $Revision: 6.66 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.66  2005/07/18 15:15:18  kans
+* fixed minor xcode compiler warnings
+*
 * Revision 6.65  2005/04/29 15:12:05  kans
 * removed unused variable in WIN version of Nlm_GetOutputFileName
 *
@@ -497,9 +500,9 @@ static PMPrintContext  thePrintingPort = kPMNoReference;
 # else
 static THPrint   prHdl = NULL;
 static TPPrPort  prPort = NULL;
-# endif
 static Nlm_Int2  prerr;
 static Nlm_Char  fileTypes [32] = {0};
+# endif
 #endif
 
 #ifdef WIN_MSWIN
@@ -1037,8 +1040,6 @@ static MsgAnswer LIBCALLBACK Nlm_VibMessageHook (MsgKey key, ErrSev severity,
                                                s_CloseFatalModalWindow_W);
       Nlm_TexT   modalText = Nlm_ScrollText(modalWindow, 64, 16,
                                             Nlm_systemFont, TRUE, NULL);
-      Nlm_ButtoN modalButton = Nlm_DefaultButton(modalWindow, "Close",
-                                                 s_CloseFatalModalWindow_B);
       Nlm_SetObjectExtra(modalWindow, modalText, NULL);
       Nlm_SetTextEditable(modalText, FALSE);
       Nlm_SetTitle(modalText, x_text);      
@@ -3666,7 +3667,7 @@ extern void Nlm_EndPicture (Nlm_WindoW w)
 
   ClosePicture ();
 #if TARGET_API_MAC_CARBON
-  { OSStatus status = ClearCurrentScrap(); }
+  ClearCurrentScrap();
 #else
   ZeroScrap ();
 #endif
@@ -3768,7 +3769,7 @@ extern void Nlm_StringToClipboard (Nlm_CharPtr str)
   OSErr err;
 
 # if TARGET_API_MAC_CARBON
-  { OSStatus status = ClearCurrentScrap(); }
+  ClearCurrentScrap();
 # else
   ZeroScrap ();
 # endif
@@ -3907,7 +3908,7 @@ extern Nlm_CharPtr Nlm_ClipboardToString (void)
   Handle hdl;
 
 # if TARGET_API_MAC_CARBON
-  { OSErr err = TEFromScrap(); }
+  TEFromScrap();
 # endif
   hdl = TEScrapHandle();
   len = TEGetScrapLength();
@@ -4532,6 +4533,7 @@ extern Nlm_Boolean Nlm_EndPage (void)
 #endif
 
 #ifdef WIN_MAC
+# if !TARGET_API_MAC_CARBON
 static OSType Nlm_GetOSType (Nlm_CharPtr str, OSType dfault)
 
 {
@@ -4543,6 +4545,7 @@ static OSType Nlm_GetOSType (Nlm_CharPtr str, OSType dfault)
   }
   return rsult;
 }
+#endif
 
 /*
  2001-03-22:  Joshua Juran
@@ -4778,7 +4781,6 @@ static pascal Boolean MyNavTextFilterProc (AEDesc* theItem, void* info,
                                            NavFilterModes filterMode)
 
 {
-    OSErr theErr = noErr;
     Boolean display = true;
     NavFileOrFolderInfo* theInfo = (NavFileOrFolderInfo*)info;
     OSType fdType;

@@ -29,6 +29,9 @@
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.13  2005/06/10 20:37:26  kans
+* hydrogenosome uses mitochondrial genetic code
+*
 * Revision 6.12  2003/03/24 19:44:13  kans
 * showfastagap_fromalign does not put space between > and Seq-id
 *
@@ -574,7 +577,7 @@ static Boolean CC_OrgScanGatherFunc (GatherContextPtr gcp)
  
   if (orp == NULL && biop != NULL) {
     orp = biop->org;
-    osp->mito = (Boolean) (biop->genome == 4 || biop->genome == 5);
+    osp->mito = (Boolean) (biop->genome == 4 || biop->genome == 5 || biop->genome == 20);
   }
   if (orp != NULL) {
     StringNCpy_0 (osp->taxname, orp->taxname, sizeof (osp->taxname));

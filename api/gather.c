@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.43 $
+* $Revision: 6.47 $
 *
 * File Description: 
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.47  2005/07/15 19:01:36  kans
+* minor fixes for Xcode warnings
+*
+* Revision 6.46  2005/07/11 16:02:36  kans
+* BioseqseqSet_class_empty_set prevents automatic freeing of fake empty bioseq set
+*
+* Revision 6.45  2005/06/23 18:55:45  kans
+* when deleting bioseqset, if seq_set is null, free bioseqset as well
+*
+* Revision 6.44  2005/06/21 17:31:00  kans
+* FastFindFeatDefType used by AssignIDs for features, checks if sfp->idx.subtype is already set
+*
 * Revision 6.43  2004/11/24 19:05:34  kans
 * AttachDataProc supports OBJ_ANNOTDESC inserting in OBJ_ANNOTDESC list
 *
@@ -688,13 +700,12 @@ NLM_EXTERN SeqLocPtr SeqLocReMap (SeqIdPtr newid, SeqLocPtr seq_loc, SeqLocPtr h
 	GatherRange range;
 	Uint1 the_strand;
 
-	SeqLocPtr newhead = NULL, last=NULL, tmp, slp, prev, next, thead;
+	SeqLocPtr newhead = NULL, tmp, slp, prev, next, thead;
 	SeqIntPtr sip, sip2;
 	SeqPntPtr spp, spp2;
 	PackSeqPntPtr pspp, pspp2;
 	SeqBondPtr sbp, sbp2;
 	Int4 numpnt, i, tpos, intcnt, othercnt;
-	Pointer ptr = NULL;
 	Boolean dropped_first, dropped_last, was_equiv = FALSE;
 	IntFuzzPtr ifp, ifp1, ifp2;
 	ValNode vn;
@@ -2291,7 +2302,6 @@ static void load_trunc_info(SeqLocPtr slp, GatherRangePtr grp)
 static Boolean is_end_gaps_for_master(DenseSegPtr dsp, Int2 m_order, Int2 k_seg, Int2 j_seg, Boolean left)
 {
 	Int2 i, k;
-	Boolean is_gap = FALSE;
 	Boolean increase;
 
 	/*get the first non-gap segment*/
@@ -3319,7 +3329,7 @@ static Boolean NEAR GatherBioseqFunc (InternalGCCPtr gccp, BioseqPtr bsp,
 	Int2 LocateItem = 0, segctr, first_seg, last_seg;
 	Pointer LocateData = NULL;
 	ValNode vn;
-	SeqLocPtr head, slp, target=NULL, tslp, segloc;
+	SeqLocPtr head, slp, tslp, segloc;
 	SeqLocPtr targets[2];
 	Int4 offset, toffset, seglen, tlen;
 	GatherRangePtr rdp;
@@ -4216,7 +4226,6 @@ static Boolean WholeLocOnBioseq (BioseqPtr bsp, SeqLocPtr slp)
 
 static Boolean NEAR IGCCBuild (InternalGCCPtr ip, ObjMgrDataPtr omdp, Pointer userdata, GatherItemProc userfunc, GatherScopePtr scope)
 {
-	Boolean in_scope = TRUE;
 	SeqIdPtr sip;
 	BioseqPtr bsp = NULL;
 	ValNode fake;
@@ -4619,7 +4628,6 @@ NLM_EXTERN Boolean LIBCALL GatherEntity (Uint2 entityID, Pointer userdata, Gathe
 	InternalGCC igcc;
 	Boolean in_scope;
 	ObjMgrDataPtr omdp;
-	Boolean reloaded_from_cache = FALSE;
 	ObjMgrPtr omp;
 
 	if ((! entityID) || (userfunc == NULL)) return FALSE;
@@ -5982,7 +5990,6 @@ NLM_EXTERN Int2 GatherProcLaunch (Uint2 proctype, Boolean sel, Uint2 entityID, U
 	ObjMgrProcPtr ompp=NULL;
 	ObjMgrTypePtr omtp;
 	Boolean retval, do_general_proc = FALSE;
-	Uint2 subtype = 0;
 	Int2 procval = OM_MSG_RET_NOPROC;
 
 	MemSet((Pointer)(&ompc), 0, sizeof(OMProcControl));
@@ -6321,6 +6328,13 @@ static Boolean VisitPubSet (InternalACCPtr iap, ValNodePtr vnp, Pointer parent, 
   return TRUE;
 }
 
+static Uint1 FastFindFeatDefType (SeqFeatPtr sfp)
+
+{
+  if (sfp != NULL && sfp->idx.subtype != 0) return sfp->idx.subtype;
+  return FindFeatDefType (sfp);
+}
+
 static Boolean VisitSeqFeat (InternalACCPtr iap, SeqFeatPtr sfp, Uint1 itemtype, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
 
 {
@@ -6336,7 +6350,7 @@ static Boolean VisitSeqFeat (InternalACCPtr iap, SeqFeatPtr sfp, Uint1 itemtype,
     (iap->itemIDs [itemtype])++;
 
     if (iap->assignIDs) {
-      AssignIDs (iap, &(sfp->idx), itemtype, FindFeatDefType (sfp), parent, parenttype, prevlink);
+      AssignIDs (iap, &(sfp->idx), itemtype, FastFindFeatDefType (sfp), parent, parenttype, prevlink);
     }
 
     if (iap->callback != NULL) {
@@ -7263,6 +7277,10 @@ static void DeleteMarkedSeqEntry (SeqEntryPtr sep, Pointer PNTR prevlink)
           DeleteMarkedSeqDescr (bssp->descr, (Pointer PNTR) &(bssp->descr));
           DeleteMarkedSeqAnnot (bssp->annot, (Pointer PNTR) &(bssp->annot));
           DeleteMarkedSeqEntry (bssp->seq_set, (Pointer PNTR) &(bssp->seq_set));
+          if (bssp->seq_set == NULL && bssp->_class != BioseqseqSet_class_empty_set) {
+            bssp->idx.deleteme = 1;
+            unlink = TRUE;
+          }
         }
       }
     }

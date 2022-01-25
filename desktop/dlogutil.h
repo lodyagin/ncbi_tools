@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.38 $
+* $Revision: 6.45 $
 *
 * File Description: 
 *
@@ -85,7 +85,7 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
 #define FEATURE_FORM_BLOCK          \
   DESCRIPTOR_FORM_BLOCK             \
   DialoG          commonRadio;      \
-  GrouP           commonSubGrp [5]; \
+  GrouP           commonSubGrp [8]; \
   Int2            commonPage;       \
   ButtoN          partial;          \
   ButtoN          exception;        \
@@ -112,6 +112,8 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   DialoG          dbxrefs;          \
   DialoG          gbquals;          \
   DialoG          usrobjext;        \
+  TexT            featid;           \
+  TexT            fidxref;          \
   UserObjectPtr   goTermUserObj;
 
 typedef struct descform {
@@ -137,7 +139,9 @@ extern void StdInitFeatFormProc (ForM f);
 extern void StdFeatFormCleanupProc (GraphiC g, VoidPtr data);
 extern void StdFeatFormAcceptButtonProc (ButtoN b);
 
+/*
 extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
+*/
 
 extern OMUserDataPtr ItemAlreadyHasEditor (Uint2 entityID, Uint2 itemID, Uint2 itemtype, Uint2 procid);
 extern Int2 LIBCALLBACK StdVibrantEditorMsgFunc (OMMsgStructPtr ommsp);
@@ -200,7 +204,8 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
                                               IntEdPartialProc proc, 
                                               Boolean use_aln, Boolean show_seqid,
                                               TaglistCallback tlp_callback, 
-                                              Pointer callback_data);
+                                              Pointer callback_data,
+                                              Boolean allow_nulls_in_list);
 
 extern void DisplayErrorMessages (CharPtr title, ValNodePtr err_list);
 
@@ -339,11 +344,13 @@ extern DialoG FeatCitEditDialog (GrouP parent, Uint2 entityID);
 typedef struct modalacceptcancel
 {
   Boolean accepted;
-  Boolean cancelled;  
+  Boolean cancelled; 
+  Boolean third_option; 
 } ModalAcceptCancelData, PNTR ModalAcceptCancelPtr;
 
 extern void ModalAcceptButton (ButtoN b);
 extern void ModalCancelButton (ButtoN b);
+extern void ModalThirdOptionButton (ButtoN b);
 
 typedef void (*TableDisplayDblClick) PROTO((PoinT, CharPtr, CharPtr, Pointer));
 typedef Boolean (*TableDisplayLeftInRed) PROTO ((Int4, ValNodePtr, Pointer));
@@ -356,6 +363,7 @@ extern DialoG TableDisplayDialog (GrouP parent, Int4 width, Int4 height,
 extern ValNodePtr FreeTableDisplayRowList (ValNodePtr row_list);
 extern void PrintTableDisplayRowListToFile (ValNodePtr row_list, FILE *fp);
 extern ValNodePtr CopyTableDisplayRowList (ValNodePtr row_list);
+extern CharPtr GetRowListCellText (ValNodePtr row_list, Int4 row, Int4 column);
 
 typedef  void  (*Nlm_ChangeNotifyProc) PROTO ((Pointer));
 
@@ -374,6 +382,16 @@ extern DialoG SelectionDialog
  CharPtr                  err_msg,
  ValNodePtr               choice_list,
  Int2                     list_height);
+
+extern DialoG SelectionDialogEx 
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ CharPtr                  err_msg,
+ ValNodePtr               choice_list,
+ Int2                     list_height,
+ Boolean                  force_list);
 
 /* This function should free just the data associated with the ValNode */
 typedef void (*FreeValNodeProc) PROTO ((ValNodePtr));
@@ -395,6 +413,7 @@ extern DialoG ValNodeSelectionDialogEx
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata,
  Boolean                  allow_multi,
+ Boolean                  force_list, 
  RemapValNodeProc         remap_vn_proc);
 extern DialoG ValNodeSelectionDialog
 (GrouP h,

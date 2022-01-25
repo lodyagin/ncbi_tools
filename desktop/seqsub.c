@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.28 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
@@ -49,6 +49,7 @@
 #include <asn2gnbp.h>
 #include <document.h>
 #include <explore.h>
+#include <subutil.h>
 
 static ENUM_ALIST(name_suffix_alist)
   {" ",    0},
@@ -876,6 +877,9 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
       } else if (GetAppProperty ("InternalNcbiSequin") != NULL) {
         citsubTabs [4] = "Date";
       }
+    }
+    else if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+      citsubTabs [4] = "Date";
     }
     cpp->tbs = CreateFolderTabs (m, citsubTabs, 0, 0, 0,
                             PROGRAM_FOLDER_TAB,
@@ -2071,7 +2075,7 @@ static Boolean ReadSubmitBlockDialog (DialoG d, CharPtr filename)
   dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
   if (dlg == NULL)
   {
-    return;
+    return FALSE;
   }
   
   switch (dlg->currentPage) {
@@ -2150,7 +2154,7 @@ static Boolean WriteSubmitBlockDialog (DialoG d, CharPtr filename)
   dlg = (SubmitBlockDialogPtr) GetObjectExtra (d);
   if (dlg == NULL)
   {
-    return;
+    return FALSE;
   }
   
   switch (dlg->currentPage) {
@@ -3167,6 +3171,65 @@ static CharPtr  submitTemplateFormTabs [] = {
   "Submit-Block", "Organism", "Molecule", "Comment", "References", NULL
 };
 
+static void FixBioSourceLineage (BioSourcePtr biop)
+{
+  OrgModPtr mod, lastmod = NULL;
+  CharPtr   new_str;
+  
+  if (biop == NULL || biop->org == NULL || biop->org->orgname == NULL
+      || StringHasNoText (biop->org->orgname->lineage))
+  {
+    return;
+  }
+  
+  mod = biop->org->orgname->mod;
+  while (mod != NULL && mod->subtype != ORGMOD_old_lineage)
+  {
+    lastmod = mod;
+    mod = mod->next;
+  }
+  
+  if (mod == NULL)
+  {
+    mod = OrgModNew ();
+    if (mod != NULL)
+    {
+      mod->subtype = ORGMOD_old_lineage;
+      mod->subname = StringSave (biop->org->orgname->lineage);
+      if (lastmod == NULL)
+      {
+        biop->org->orgname->mod = mod;
+      }
+      else
+      {
+        lastmod->next = mod;
+      }
+    }
+    else if (StringCmp (mod->subname, biop->org->orgname->lineage) == 0)
+    {
+      /* do nothing, old_lineage already has copy */
+    }
+    else if (StringHasNoText (mod->subname))
+    {
+      mod->subname = MemFree (mod->subname);
+      mod->subname = StringSave (biop->org->orgname->lineage);
+    }
+    else
+    {
+      new_str = (CharPtr) MemNew ((StringLen (mod->subname) 
+                                   + StringLen (biop->org->orgname->lineage)
+                                   + 3)
+                                  * sizeof (Char));
+      if (new_str != NULL)
+      {
+        sprintf (new_str, "%s; %s", mod->subname, biop->org->orgname->lineage);
+        mod->subname = MemFree (mod->subname);
+        mod->subname = new_str;
+      }
+    }
+  }
+}
+
 static Pointer SeqSubmitFromTemplateEditor (ForM f)
 {
   SubmitTemplateEditorPtr dlg;
@@ -3214,6 +3277,7 @@ static Pointer SeqSubmitFromTemplateEditor (ForM f)
   biop = DialogToPointer (dlg->src_dlg);
   if (biop != NULL)
   {
+    FixBioSourceLineage (biop);
     sdp = CreateNewDescriptor (sep, Seq_descr_source);
     sdp->data.ptrvalue = biop;
   }
@@ -3356,6 +3420,8 @@ static void TemplatePreviewClick
     case LOCUS_BLOCK:
       SetValue (dlg->tbs, TEMPLATE_MOLINFO_PAGE);
       break;
+    default:
+      break;
   }
 }
 
@@ -3387,14 +3453,14 @@ static Boolean OkToQuitSBTEditor (SubmitTemplateEditorPtr dlg)
   }
 }
 
-static SeqDescrPtr ExtractPubCommentMolinfoDescriptors (SeqDescrPtr PNTR sdp_list)
+static SeqDescrPtr ExtractPubCommentMolinfoOrgDescriptors (SeqDescrPtr PNTR sdp_list)
 {
   SeqDescrPtr sdp, sdp_prev = NULL, sdp_next;
   SeqDescrPtr pubs_and_comments = NULL;
   
   if (sdp_list == NULL)
   {
-    return;
+    return NULL;
   }
   
   sdp = *sdp_list;
@@ -3403,7 +3469,8 @@ static SeqDescrPtr ExtractPubCommentMolinfoDescriptors (SeqDescrPtr PNTR sdp_lis
     sdp_next = sdp->next;
     if (sdp->choice == Seq_descr_pub 
         || sdp->choice == Seq_descr_comment
-        || sdp->choice == Seq_descr_molinfo)
+        || sdp->choice == Seq_descr_molinfo
+        || sdp->choice == Seq_descr_source)
     {
       if (sdp_prev == NULL)
       {
@@ -3484,17 +3551,17 @@ static Boolean ExportSeqSubmitForm (ForM f, CharPtr filename)
     if (IS_Bioseq (sep) && sep->data.ptrvalue != NULL)
     {
       bsp = (BioseqPtr) sep->data.ptrvalue;
-      comment_pub_list = ExtractPubCommentMolinfoDescriptors (&(bsp->descr));
+      comment_pub_list = ExtractPubCommentMolinfoOrgDescriptors (&(bsp->descr));
     }
     else if (IS_Bioseq_set (sep) && sep->data.ptrvalue != NULL)
     {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
-      comment_pub_list = ExtractPubCommentMolinfoDescriptors (&(bssp->descr));
+      comment_pub_list = ExtractPubCommentMolinfoOrgDescriptors (&(bssp->descr));
     }
   }
   
   aip = AsnIoNew(ASNIO_TEXT_OUT, fp, NULL, NULL, NULL);
-  SeqSubmitAsnWrite(ssp, aip, NULL);
+  SubmitBlockAsnWrite (ssp->sub, aip, NULL);
   
 	AsnIoFlush(aip);
   AsnIoReset(aip);
@@ -3519,6 +3586,8 @@ static Boolean ExportSeqSubmitForm (ForM f, CharPtr filename)
 
   dlg->last_loaded_filename = MemFree (dlg->last_loaded_filename);
   dlg->last_loaded_filename = StringSave (path);    
+
+  return TRUE;
 }
 
 static void ExportSubmissionTemplate (IteM i)
@@ -3803,6 +3872,19 @@ static Boolean ImportSeqSubmitForm (ForM f, CharPtr filename)
         }
         sdp_comment = NULL;
       }
+      else if (sdp_comment->choice == Seq_descr_source)
+      {
+        if (biop != NULL)
+        {
+          Message (MSG_ERROR, "Found more than one biosource!  Bad file!");
+          bad_data_found = TRUE;
+        }
+        else
+        {
+          biop = sdp_comment->data.ptrvalue;
+          sdp_comment->data.ptrvalue = NULL;
+        }
+      }
       else if (sdp_comment->choice != Seq_descr_comment)
       {
         Message (MSG_ERROR, "Found descriptor other than comment or pub!  Bad file!");
@@ -3985,26 +4067,6 @@ static Int2 LIBCALLBACK SeqSubFormMsgFunc (OMMsgStructPtr ommsp)
           DrawTemplatePreview (dlg);
           break;
 
-#if 0
-      case OM_MSG_DESELECT:
-          ResizeSeqEdView (sefp);
-          Select (sefp->bfp->bvd.seqView);
-          inval_panel (sefp->bfp->bvd.seqView, -1, -1);	
-          break;
-
-      case OM_MSG_SELECT: 
-          ResizeSeqEdView (sefp);
-          Select (sefp->bfp->bvd.seqView);
-          inval_panel (sefp->bfp->bvd.seqView, -1, -1);	
-          break;
-      case OM_MSG_HIDE:
-          break;
-      case OM_MSG_SHOW:
-          break;
-      case OM_MSG_FLUSH:
-          SeqEdCancel (sefp);	
-          break;
-#endif
       default:
           break;
   }
@@ -4029,7 +4091,7 @@ CreateSubmitTemplateEditorForm
   dlg = (SubmitTemplateEditorPtr) MemNew (sizeof (SubmitTemplateEditorData));
   if (dlg == NULL)
   {
-    return;
+    return NULL;
   }
   
   w = FixedWindow (left, top, -10, -10, "Submission Template Editor", CloseSBTWindowProc);

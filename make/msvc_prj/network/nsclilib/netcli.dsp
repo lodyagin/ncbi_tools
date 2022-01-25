@@ -65,23 +65,11 @@ SOURCE=..\..\..\..\network\nsclilib\ni_debug.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\..\..\..\network\nsclilib\ni_disp.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\network\nsclilib\ni_encrs.c
-# End Source File
-# Begin Source File
-
 SOURCE=..\..\..\..\network\nsclilib\ni_error.c
 # End Source File
 # Begin Source File
 
 SOURCE=..\..\..\..\network\nsclilib\ni_lib_.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\network\nsclilib\ni_msg.c
 # End Source File
 # Begin Source File
 
@@ -98,10 +86,6 @@ SOURCE=..\..\..\..\network\nsclilib\ni_error.h
 # Begin Source File
 
 SOURCE=..\..\..\..\network\nsclilib\ni_lib_.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\..\network\nsclilib\ni_msg.h
 # End Source File
 # End Group
 # End Target

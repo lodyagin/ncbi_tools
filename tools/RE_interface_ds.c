@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: RE_interface_ds.c,v 1.1 2005/05/16 16:11:41 papadopo Exp $";
+static char const rcsid[] = "$Id: RE_interface_ds.c,v 1.2 2005/07/14 20:20:15 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -37,6 +37,13 @@ Contents: Sets up the optimization problem for conditional
 ******************************************************************************/
 /*
  * $Log: RE_interface_ds.c,v $
+ * Revision 1.2  2005/07/14 20:20:15  coulouri
+ *    - In assign_frequencies, do not divide by sum if sum is zero.
+ *    - In assign_frequencies, only divide by sum once when normalizing.
+ *    - Changed printf format %lf to %f to suppress compiler warnings; these
+ *      formats are equivalent for printf, but ANSI (ISO 90) C does not
+ *      support %lf.
+ *
  * Revision 1.1  2005/05/16 16:11:41  papadopo
  * Initial revision
  *
@@ -236,14 +243,15 @@ assign_frequencies(Int4 length,
         input_probs[i] = probArray[i];
         sum += input_probs[i];
     }
-    for(i = 0; i < Alphsize; i++) {
-        input_probs[i] /= sum;
+    if(sum > 0) {
+        for(i = 0; i < Alphsize; i++) {
+            input_probs[i] /= sum;
+        }
     }
     weight = 1.0 * pseudocounts / (length + pseudocounts);
     for(i = 0; i < Alphsize; i++) {
         one_seq_freq[i] =
-            (1.0 - weight) * (input_probs[i] / sum) +
-            weight * background_probs[i];
+            (1.0 - weight) * input_probs[i] + weight * background_probs[i];
     }
 }
 
@@ -372,11 +380,11 @@ RE_interface(char *matrixName,
         fprintf(stderr, "bad probabilities from sequence 1, length %d\n",
                 length1);
         for(i = 0; i < Alphsize; i++)
-            fprintf(stderr, "%15.12lf\n", probArray1[i]);
+            fprintf(stderr, "%15.12f\n", probArray1[i]);
         fprintf(stderr, "bad probabilities from sequence 2, length %d\n",
                 length2);
         for(i = 0; i < Alphsize; i++)
-            fprintf(stderr, "%15.12lf\n", probArray2[i]);
+            fprintf(stderr, "%15.12f\n", probArray2[i]);
         fflush(stderr);
         return (-1);
     }
@@ -393,7 +401,7 @@ RE_interface(char *matrixName,
     if(NRrecord->flag == RE_NO_CONSTRAINT) {
         /* Compute the unconstrained relative entropy */
         Nlm_FloatHi re_free = compute_lambda(NRrecord, 1, &lambdaComputed);
-        printf("RE_uncons  = %6.4lf\n\n", re_free);
+        printf("RE_uncons  = %6.4f\n\n", re_free);
     }
 
     return (lambdaComputed);

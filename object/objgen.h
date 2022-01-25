@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:  Object manager interface for module NCBI-General
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objgen.h,v $
+* Revision 6.13  2005/07/08 18:18:31  kans
+* added scratch pointer to EXTRA_OBJMGR_FIELDS
+*
 * Revision 6.12  2005/05/18 17:30:16  bollin
 * added NameStdMatch and PersonIdMatch functions
 *
@@ -122,7 +125,8 @@ extern "C" {
   Uint2             parenttype; \
   Uint4             itemID;     \
   Pointer           parentptr;  \
-  Pointer PNTR      prevlink;
+  Pointer PNTR      prevlink;   \
+  Pointer           scratch;
 
 /* structure containing gather/objmgr fields to add as a block to other structures */
 

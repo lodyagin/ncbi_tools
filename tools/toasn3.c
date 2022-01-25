@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.87 2005/03/31 14:30:25 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.88 2005/06/10 20:37:47 kans Exp $";
 
 /*****************************************************************************
 *
@@ -2847,7 +2847,9 @@ Int2 BioSourceToGeneticCode (BioSourcePtr biop)
     if (orp != NULL) {
       onp = orp->orgname;
       if (onp != NULL) {
-        if (biop->genome == 4 || biop->genome == 5) {
+        if (biop->genome == GENOME_kinetoplast ||
+            biop->genome == GENOME_mitochondrion ||
+            biop->genome == GENOME_hydrogenosome) {
           return onp->mgcode;
         } else if (biop->genome == GENOME_chloroplast ||
                    biop->genome == GENOME_chromoplast ||

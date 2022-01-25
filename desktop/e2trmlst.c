@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.38 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
@@ -7319,70 +7319,83 @@ static Boolean Query_TranslateAndAddBoolTerm (
       else
         fieldName = tmpTerm->field;
 
-      fieldId = FieldGetIDFromName (currDb, fieldName);
-
-      /*-----------------------------------*/
-      /* Replace -1 with actual term count */
-      /*  Note -- this also creates the    */
-      /*    desired 'flashing' effect in   */
-      /*    the termlist window.           */
-      /*-----------------------------------*/
-
-      tmpTerm->term_count = Query_GetTranslatedTermCount (pFormInfo, dbName, fieldName, tmpTerm->term);
-
-      /*-------------------------------*/
-      /* Add the term to the term list */
-      /*-------------------------------*/
-
-      if (NULL != sdp)
-        prev = sdp;
-      sdp = CreateTerm (f, currDb, fieldId, tmpTerm->term, state,
-                        tmpTerm->term_count, allowDuplicates);
-      if (NULL == sdp) {
-        valNodeTermList = valNodeTermList->next;
-        sdp = prev;
-        continue;
+      fieldId = -1;
+      if (StringDoesHaveText (fieldName)) {
+        fieldId = FieldGetIDFromName (currDb, fieldName);
       }
 
-      /*-------------------------------*/
-      /* Make all the translated terms */
-      /* an or'd group of terms.       */
-      /*-------------------------------*/
+      if (fieldId != -1) {
 
-      switch (nextGroup) {
-        case GROUP_SINGLE:
-          sdp->group = GROUP_SINGLE;
-          break;
-        case GROUP_FIRST:
-          sdp->group = GROUP_FIRST;
-          nextGroup = GROUP_MIDDLE;
-          break;
-        case GROUP_MIDDLE:
-          sdp->group = GROUP_MIDDLE;
-          break;
-        case GROUP_LAST:
-          sdp->group = GROUP_LAST;
-          break;
-      }
+        /*-----------------------------------*/
+        /* Replace -1 with actual term count */
+        /*  Note -- this also creates the    */
+        /*    desired 'flashing' effect in   */
+        /*    the termlist window.           */
+        /*-----------------------------------*/
 
-      if (firstTerm == TRUE) {
-        prev = sdp->prev;
-        if (prev != NULL) {
-          sdp->above = ENTREZ_OP_AND;
-          prev->below = ENTREZ_OP_AND;
+        tmpTerm->term_count = Query_GetTranslatedTermCount (pFormInfo, dbName, fieldName, tmpTerm->term);
+
+        /*-------------------------------*/
+        /* Add the term to the term list */
+        /*-------------------------------*/
+
+        if (NULL != sdp)
+          prev = sdp;
+        sdp = CreateTerm (f, currDb, fieldId, tmpTerm->term, state,
+                          tmpTerm->term_count, allowDuplicates);
+        if (NULL == sdp) {
+          valNodeTermList = valNodeTermList->next;
+          sdp = prev;
+          continue;
         }
-        firstTerm = FALSE;
+
+        /*-------------------------------*/
+        /* Make all the translated terms */
+        /* an or'd group of terms.       */
+        /*-------------------------------*/
+
+        switch (nextGroup) {
+          case GROUP_SINGLE:
+            sdp->group = GROUP_SINGLE;
+            break;
+          case GROUP_FIRST:
+            sdp->group = GROUP_FIRST;
+            nextGroup = GROUP_MIDDLE;
+            break;
+          case GROUP_MIDDLE:
+            sdp->group = GROUP_MIDDLE;
+            break;
+          case GROUP_LAST:
+            sdp->group = GROUP_LAST;
+            break;
+        }
+
+        if (firstTerm == TRUE) {
+          prev = sdp->prev;
+          if (prev != NULL) {
+            sdp->above = ENTREZ_OP_AND;
+            prev->below = ENTREZ_OP_AND;
+          }
+          firstTerm = FALSE;
+        } else {
+          prev = sdp->prev;
+          sdp->above = nextOperator;
+          prev->below = nextOperator;
+        }
+
+        /*--------------------------------------*/
+        /* Display the term in the chosen panel */
+        /*--------------------------------------*/
+
+        DisplayTerm (pFormInfo, tmpTerm->term, fieldName, tmpTerm->term_count);
+
       } else {
-        prev = sdp->prev;
-        sdp->above = nextOperator;
-        prev->below = nextOperator;
+        if (StringDoesHaveText (tmpTerm->field)) {
+          Message (MSG_POSTERR, "Bad field name %s ignored in expanded query", tmpTerm->field);
+        } else {
+          Message (MSG_POSTERR, "Empty field name ignored in expanded query");
+        }
       }
-
-      /*--------------------------------------*/
-      /* Display the term in the chosen panel */
-      /*--------------------------------------*/
-
-      DisplayTerm (pFormInfo, tmpTerm->term, fieldName, tmpTerm->term_count);
     }
     valNodeTermList = valNodeTermList->next;
   }

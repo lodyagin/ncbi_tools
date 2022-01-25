@@ -213,6 +213,12 @@
 #define ERR_SEQ_FEAT_MultipleEquivPublications  5,96
 #define ERR_SEQ_FEAT_BadFullLengthFeature  5,97
 #define ERR_SEQ_FEAT_RedundantFields  5,98
+#define ERR_SEQ_FEAT_CDSwithNoMRNAOverlap  5,99
+#define ERR_SEQ_FEAT_FeatureProductInconsistency  5,100
+#define ERR_SEQ_FEAT_ImproperBondLocation  5,101
+#define ERR_SEQ_FEAT_GeneXrefWithoutGene  5,102
+#define ERR_SEQ_FEAT_SeqFeatXrefProblem  5,103
+#define ERR_SEQ_FEAT_ProductFetchFailure  5,104
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

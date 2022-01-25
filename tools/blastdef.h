@@ -30,8 +30,11 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.163 $ 
+/* $Revision: 6.164 $ 
 * $Log: blastdef.h,v $
+* Revision 6.164  2005/07/27 15:51:54  coulouri
+* remove unused queue_callback
+*
 * Revision 6.163  2005/05/16 17:43:29  papadopo
 * From Alejandro Schaffer: Added support for compositional score
 * matrix adjustment
@@ -2066,8 +2069,6 @@ a field is allocated, then it's bit is non-zero.
         prelim_gap_attempts,	/* No. of HSP's we attempted to gap. */
         real_gap_number_of_hsps, /* How many HSP's were gapped in BlastGetGappedScore. */
         semid;                  /* Here will be stored ID of load-ballance semaphore */
-    /* Callback for the queueing system. */
-    int (LIBCALLBACK *queue_callback)PROTO((int semid, int num, int num_cpu));
     GreedyAlignMemPtr abmp; /* Memory for megablast greedy extension */
     Int4 PNTR query_context_offsets; /* offsets for all queries and strands in a 
                                         concatenated sequence */

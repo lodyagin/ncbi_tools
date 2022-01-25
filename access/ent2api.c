@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.74 $
+* $Revision: 1.79 $
 *
 * File Description: 
 *
@@ -1079,9 +1079,13 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
     }
 
     if (e2db->doc_count < 1) {
-      sprintf (buf, "Database %s has no documents", db);
-      ValNodeCopyStr (head, 0, buf);
-      rsult = FALSE;
+      if (StringICmp (db, "Nucleotide") == 0) {
+        /* now a virtual database consolidating NucCore, NucEst, NucGss */
+      } else {
+        sprintf (buf, "Database %s has no documents", db);
+        ValNodeCopyStr (head, 0, buf);
+        rsult = FALSE;
+      }
     }
     if (e2db->field_count < 1 || e2db->fields == NULL) {
       sprintf (buf, "Database %s has no fields", db);
@@ -1137,10 +1141,14 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
         rsult = FALSE;
       } else if (StringCmp (fld, "ORGN") == 0) {
         if (e2fip->term_count == 0) {
-          sprintf (buf, "Database %s field %s term count is 0", db, fld);
-          ValNodeCopyStr (head, 0, buf);
-          rsult = FALSE;
-        }
+          if (StringICmp (db, "Nucleotide") == 0) {
+            /* now a virtual database consolidating NucCore, NucEst, NucGss */
+          } else {
+            sprintf (buf, "Database %s field %s term count is 0", db, fld);
+            ValNodeCopyStr (head, 0, buf);
+            rsult = FALSE;
+           }
+       }
       }
       if (StringLen (fld) > 4) {
         sprintf (buf, "Database %s field %s name is > 4 characters long", db, fld);
@@ -1325,6 +1333,8 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "Disease") == 0 && StringICmp (str, "Disease-Stage") == 0) {
             } else if (StringICmp (last, "ActiveAid") == 0 && StringICmp (str, "ActiveAidCount") == 0) {
             } else if (StringICmp (last, "InactiveAid") == 0 && StringICmp (str, "InactiveAidCount") == 0) {
+            } else if (StringICmp (last, "Phenotype") == 0 && StringICmp (str, "Phenotype Ontology ID") == 0) {
+            } else if (StringICmp (last, "Title") == 0 && StringICmp (str, "Title Abbreviation") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);

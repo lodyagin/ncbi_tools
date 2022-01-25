@@ -1,4 +1,4 @@
-/* $Id: blast_returns.c,v 1.23 2005/06/02 21:30:04 dondosha Exp $
+/* $Id: blast_returns.c,v 1.24 2005/06/09 17:05:18 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * Manipulating data returned from BLAST other than Seq-aligns
  */
 
-static char const rcsid[] = "$Id: blast_returns.c,v 1.23 2005/06/02 21:30:04 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_returns.c,v 1.24 2005/06/09 17:05:18 dondosha Exp $";
 
 #include <algo/blast/api/blast_returns.h>
 #include <algo/blast/api/blast_seq.h>
@@ -82,7 +82,7 @@ Blast_GetParametersBuffer(EBlastProgramType program_number,
    BlastDiagnostics* diagnostics = NULL;
    
 
-   if (sum_returns == NULL)
+   if (!sum_returns || !sum_returns->search_params || !sum_returns->db_stats)
      return NULL;
 
    search_params = sum_returns->search_params;
@@ -116,6 +116,7 @@ Blast_GetParametersBuffer(EBlastProgramType program_number,
    
    sprintf(buffer, "Number of Sequences: %ld", (long) db_stats->dbnum);
    add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+
    if (ungapped_stats) {
       sprintf(buffer, "Number of Hits to DB: %s", 
               Nlm_Int8tostr(ungapped_stats->lookup_hits, 1));
@@ -170,29 +171,32 @@ Blast_GetParametersBuffer(EBlastProgramType program_number,
 
    /* Query length makes sense only for single query sequence. */
    if (db_stats->qlen > 0) {
-      sprintf(buffer, "Length of query: %ld", (long)db_stats->qlen);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+       sprintf(buffer, "Length of query: %ld", (long)db_stats->qlen);
+       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
-
-   sprintf(buffer, "Length of database: %s", Nlm_Int8tostr (db_stats->dblength, 1));
+   
+   sprintf(buffer, "Length of database: %s", 
+           Nlm_Int8tostr (db_stats->dblength, 1));
    add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    
    if (db_stats->qlen > 0) {
-      sprintf(buffer, "Length adjustment: %ld", (long) db_stats->hsp_length);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-
-      /** FIXME: Should this be different for RPS BLAST? */
-      sprintf(buffer, "Effective length of query: %ld", (long)db_stats->eff_qlen);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      
-      sprintf(buffer, "Effective length of database: %s", 
-              Nlm_Int8tostr (db_stats->eff_dblength , 1));
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      sprintf(buffer, "Effective search space: %8.0f", 
-              (double) db_stats->eff_searchsp);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
-      sprintf(buffer, "Effective search space used: %8.0f", (double) db_stats->eff_searchsp_used);
-      add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+       sprintf(buffer, "Length adjustment: %ld", (long) db_stats->hsp_length);
+       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+       
+       /** FIXME: Should this be different for RPS BLAST? */
+       sprintf(buffer, "Effective length of query: %ld", 
+               (long) db_stats->eff_qlen);
+       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+       
+       sprintf(buffer, "Effective length of database: %s", 
+               Nlm_Int8tostr (db_stats->eff_dblength , 1));
+       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+       sprintf(buffer, "Effective search space: %8.0f", 
+               (double) db_stats->eff_searchsp);
+       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
+       sprintf(buffer, "Effective search space used: %8.0f", 
+               (double) db_stats->eff_searchsp_used);
+       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
    if (search_params->threshold) {
        sprintf(buffer, "Neighboring words threshold: %ld", 
@@ -557,7 +561,12 @@ Int2 Blast_SummaryReturnFill(EBlastProgramType program_number,
 static Blast_SearchParams* 
 s_SearchParamsDup(const Blast_SearchParams* params)
 {
-    Blast_SearchParams* new_params = (Blast_SearchParams*)
+    Blast_SearchParams* new_params;
+
+    if (!params)
+        return NULL;
+
+    new_params = (Blast_SearchParams*)
         BlastMemDup(params, sizeof(Blast_SearchParams));
     if (params->filter_string)
         new_params->filter_string = strdup(params->filter_string);

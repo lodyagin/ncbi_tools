@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastool.c,v 6.280 2005/02/15 21:10:47 dondosha Exp $";
+static char const rcsid[] = "$Id: blastool.c,v 6.282 2005/07/25 19:01:00 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,14 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.280 $
+* $Revision: 6.282 $
 * $Log: blastool.c,v $
+* Revision 6.282  2005/07/25 19:01:00  coulouri
+* correction to previous commit
+*
+* Revision 6.281  2005/07/13 16:18:49  coulouri
+* correct logic error when dealing with oid 0. fixes rt#15077917.
+*
 * Revision 6.280  2005/02/15 21:10:47  dondosha
 * Set X-dropoff for the traceback in MegaBlastPrintAlignInfo to final X-dropoff parameter
 *
@@ -2504,6 +2510,18 @@ BlastCreateVirtualOIDList(BlastGiListPtr bglp, ReadDBFILEPtr rdfp_chain,
     Uint4 lcl_mask = 0;
     register Int4 i;
 
+	{
+	Boolean there_are_oidlists = FALSE;
+	for(rdfp=rdfp_chain;rdfp;rdfp=rdfp->next) {
+		if (rdfp->oidlist) {
+			there_are_oidlists = TRUE;
+			break;
+		}
+	}
+	if ( (bglp == NULL) && (there_are_oidlists == FALSE) )
+		return NULL;
+	}
+
     /* initialize the start and oid fields of gilist, as well as maxoid */
     if (bglp) {
         gilist = bglp->gi_list;
@@ -2524,11 +2542,6 @@ BlastCreateVirtualOIDList(BlastGiListPtr bglp, ReadDBFILEPtr rdfp_chain,
             if (rdfp->oidlist)
                 maxoid = MAX(maxoid, rdfp->oidlist->total+rdfp->start-1);
         }
-    }
-
-    if (maxoid == 0) /* no bglp or oidlists ? don't restrict the search */ {
-        bglp = BlastGiListDestruct(bglp, TRUE);
-        return NULL;
     }
 
     /* Allocate the virtual oidlist */
@@ -5424,7 +5437,6 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
    Boolean numeric_sip_type = FALSE;
    FILE *fp = (FILE *) search->output;
    CharPtr query_seq_buffer, subject_seq_buffer;
-   Uint1Ptr query_ptr, subject_ptr;
    Boolean print_sequences;
 
    if (search->current_hitlist == NULL || search->current_hitlist->hspcnt <= 0) {
@@ -5823,7 +5835,7 @@ void PrintTabularOutputHeader(CharPtr blast_database, BioseqPtr query_bsp,
 
 Boolean FastaCheckDna(CharPtr seq)
 {
-    Int2 len = 100;
+    Uint2 len = 100;
     CharPtr ptr = NULL;
 
     if (*seq == '>') {

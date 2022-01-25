@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: formatdb.c,v 6.94 2004/08/25 14:47:21 camacho Exp $";
+static char const rcsid[] = "$Id: formatdb.c,v 6.96 2005/07/28 14:52:22 coulouri Exp $";
 
 /*****************************************************************************
 
@@ -32,11 +32,19 @@ static char const rcsid[] = "$Id: formatdb.c,v 6.94 2004/08/25 14:47:21 camacho 
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.94 $
+   $Revision: 6.96 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.96  2005/07/28 14:52:22  coulouri
+   remove dead code
+
+   Revision 6.95  2005/06/08 19:25:53  camacho
+   New feature to allow formatdb to add taxonomy ids to BLAST databases
+   generated from FASTA input
+   BugzID: 6
+
    Revision 6.94  2004/08/25 14:47:21  camacho
    Refactorings to allow formatdb process multiple deflines
 
@@ -436,6 +444,8 @@ Args dump_args[] = {
      NULL, NULL,NULL,TRUE,'F',ARG_FILE_IN, 0.0,0,NULL},
     {"Binary Gifile produced from the Gifile specified above",
      NULL, NULL,NULL,TRUE,'B',ARG_FILE_OUT, 0.0,0,NULL},
+    {"Taxid file to set the taxonomy ids in ASN.1 deflines",
+     NULL, NULL,NULL,TRUE,'T',ARG_FILE_IN, 0.0,0,NULL},
 #if 0
      /* disabled for this release of the NCBI C toolkit */
     {"Clean up options for new blast database generation\n"
@@ -463,23 +473,9 @@ enum {
     alias_fn_arg,
     gifile_arg,
     bin_gifile_arg,
+    seqid_taxid_file_arg,
     cleanup_arg
 };
-
-static Int4 GetGiFromSeqId(SeqIdPtr sip)
-{
-    SeqIdPtr sip_tmp;
-    Int4 gi;
-    
-    gi = -1;
-    for(sip_tmp = sip; sip_tmp != NULL; sip_tmp = sip_tmp->next) {
-        if(sip_tmp->choice == SEQID_GI) {
-            gi = sip_tmp->data.intvalue;
-            break;
-        }
-    }
-    return gi;
-}
 
 /* Fasta file delimiters */
 #define DELIM " "
@@ -517,24 +513,6 @@ Boolean FDBCheckFastaInputs(CharPtr fasta_files, Int4 is_prot, Int8
     return TRUE;
 }
 
-Boolean FDBUpdateTaxIdInBdp(BlastDefLinePtr bdp_in)
-{
-
-#ifdef TAX_CS_LOOKUP     
-    
-    BlastDefLinePtr bdp;
-    Int4 gi;
-    
-    for(bdp = bdp_in; bdp != NULL; bdp = bdp->next) {        
-        if((gi = GetGiFromSeqId(bdp->seqid)) != NULL) {
-            bdp->taxid = tax1_getTaxId4GI(gi);
-        }
-    }
-    
-#endif
-    return TRUE;
-}
-
 void SeqEntryGetLength(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
     Int8* length = (Int8*) data;
@@ -558,7 +536,7 @@ Int2 Main(void)
     BioseqPtr bsp = NULL;
     BlastDefLinePtr bdp = NULL;
     Int2 id_ctr=1;
-    Int4 count = 0, sequence_count=0;
+    Int4 sequence_count=0;
     Int4 input_ctr = 0, num_inputfiles = 0;
     Int8 total_length, *lengths = NULL;
     CharPtr error_msg=NULL;
@@ -569,6 +547,8 @@ Int2 Main(void)
     Int4Ptr last_oid = NULL;
     CharPtr *inputs = NULL;
     Char tmpbuf1[PATH_MAX], tmpbuf2[PATH_MAX];
+    FDBTaxidDeflineTable* taxid_tbl = NULL;
+    CharPtr seqid_taxid_file = NULL;
     
     /* get arguments */
     StringCpy(buf, "formatdb ");
@@ -806,6 +786,16 @@ Int2 Main(void)
     }
 #endif
 
+    /* Process the optional seqid/taxid pair input file */
+    seqid_taxid_file = dump_args[seqid_taxid_file_arg].strvalue;
+    taxid_tbl = FDBTaxidDeflineTableNew(seqid_taxid_file);
+    if ( !taxid_tbl && !StringHasNoText(seqid_taxid_file) ) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Failed to read taxonomy data from %s",
+                  seqid_taxid_file);
+        FDBOptionsFree(options);
+        return 1;
+    }
+
     /* Loop on input files */
     while (options->db_file) {
        total_length = 0; 
@@ -842,7 +832,7 @@ Int2 Main(void)
                  error_msg = MemFree(error_msg);
              }
              
-             bdp = FDBGetDefAsnFromBioseq(bsp);
+             bdp = FDBGetDefAsnFromBioseq(bsp, taxid_tbl);
              FDBAddBioseq(fdbp, bsp, bdp);             
              bdp = BlastDefLineSetFree(bdp);
              SeqEntryFree(sep);
@@ -1032,6 +1022,8 @@ Int2 Main(void)
         RDTaxLookupClose(options->tax_lookup);
     }
 #endif    
+
+    taxid_tbl = FDBTaxidDeflineTableFree(taxid_tbl);
 
 #ifdef SET_ASN1_DEFLINE_BITS
     if (options->version >= FORMATDB_VER) {

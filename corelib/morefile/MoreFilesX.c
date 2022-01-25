@@ -2141,51 +2141,6 @@ BadParameter:
 
 #pragma mark ----- Shared Environment Routines -----
 
-/*****************************************************************************/
-
-OSErr
-FSLockRange(
-	SInt16 refNum,
-	SInt32 rangeLength,
-	SInt32 rangeStart)
-{
-	OSErr			result;
-	ParamBlockRec	pb;
-
-	pb.ioParam.ioRefNum = refNum;
-	pb.ioParam.ioReqCount = rangeLength;
-	pb.ioParam.ioPosMode = fsFromStart;
-	pb.ioParam.ioPosOffset = rangeStart;
-	result = PBLockRangeSync(&pb);
-	require_noerr(result, PBLockRangeSync);
-	
-PBLockRangeSync:
-
-	return ( result );
-}
-
-/*****************************************************************************/
-
-OSErr
-FSUnlockRange(
-	SInt16 refNum,
-	SInt32 rangeLength,
-	SInt32 rangeStart)
-{
-	OSErr			result;
-	ParamBlockRec	pb;
-
-	pb.ioParam.ioRefNum = refNum;
-	pb.ioParam.ioReqCount = rangeLength;
-	pb.ioParam.ioPosMode = fsFromStart;
-	pb.ioParam.ioPosOffset = rangeStart;
-	result = PBUnlockRangeSync(&pb);
-	require_noerr(result, PBUnlockRangeSync);
-	
-PBUnlockRangeSync:
-
-	return ( result );
-}
 
 /*****************************************************************************/
 

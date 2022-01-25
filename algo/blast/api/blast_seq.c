@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_seq.c,v 1.68 2005/05/26 14:28:18 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.70 2005/07/27 12:38:18 madden Exp $";
 /*
 * ===========================================================================
 *
@@ -45,12 +45,13 @@ static char const rcsid[] = "$Id: blast_seq.c,v 1.68 2005/05/26 14:28:18 dondosh
 
 /** Converts a SeqLocPtr to a BlastSeqLoc, used for formatting.
  * @param mask_slp SeqLocPtr to be converted [in]
+ * @param head_loc BlastSeqLoc returned from last call [in]
  * @return pointer to BlastSeqLoc
  */
 static BlastSeqLoc* 
-s_BlastSeqLocFromSeqLoc(SeqLocPtr mask_slp)
+s_BlastSeqLocFromSeqLoc(SeqLocPtr mask_slp, BlastSeqLoc* head_loc)
 {
-   BlastSeqLoc* last_loc = NULL,* head_loc = NULL;
+   BlastSeqLoc* last_loc = head_loc;
 
    if (mask_slp == NULL)
       return NULL;
@@ -76,32 +77,33 @@ BlastMaskLocFromSeqLoc(SeqLoc* mask_locs, SeqLoc* query_locs)
     BlastMaskLoc* blast_mask;
     Int4 tmp_index=0;
     SeqLocPtr current_query_loc;
-    SeqLocPtr mask_var;
 
     if (!mask_locs)
         return NULL;
 
     blast_mask = BlastMaskLocNew(kNumSeqs);
 
-    for (mask_var = mask_locs, current_query_loc = query_locs; 
-         mask_var && current_query_loc; 
+    for (current_query_loc = query_locs; current_query_loc; 
          current_query_loc = current_query_loc->next) {
-        SeqLocPtr current_mask = (SeqLocPtr) mask_var->data.ptrvalue;
-        /* If mask is empty, advance to the next link in the mask chain.
-           If mask Seq-id does not match sequence Seq-id, stay with this mask
-           for the next link in the sequence Seq-loc chain. */
-        if (!current_mask) {
-            mask_var = mask_var->next;
-        } else if (SeqIdMatch(SeqLocId(current_mask),
-                              SeqLocId(current_query_loc))) {
-            blast_mask->seqloc_array[tmp_index] = 
-                s_BlastSeqLocFromSeqLoc(current_mask);
-            BlastSeqLoc_RestrictToInterval(&blast_mask->seqloc_array[tmp_index], 
-                                           SeqLocStart(current_query_loc), 
-                                           SeqLocStop(current_query_loc));
-            mask_var = mask_var->next;
+        SeqLocPtr mask_var;
+        for (mask_var = mask_locs; mask_var; mask_var = mask_var->next)
+        {
+           SeqLocPtr current_mask = (SeqLocPtr) mask_var->data.ptrvalue;
+           /* If mask is empty, advance to the next link in the mask chain.
+              If mask Seq-id does not match sequence Seq-id, stay with this mask
+              for the next link in the sequence Seq-loc chain. */
+           if (current_mask && 
+                           SeqIdMatch(SeqLocId(current_mask), SeqLocId(current_query_loc))) {
+               blast_mask->seqloc_array[tmp_index] = 
+                     s_BlastSeqLocFromSeqLoc(current_mask, blast_mask->seqloc_array[tmp_index]);
+           }
         }
-        /* Advance the index in BlastMaskLoc in any case. */
+         
+        if (blast_mask->seqloc_array[tmp_index])
+        {
+              BlastSeqLoc_RestrictToInterval(&blast_mask->seqloc_array[tmp_index], 
+                             SeqLocStart(current_query_loc), SeqLocStop(current_query_loc));
+        }
         tmp_index++;
     }
     
@@ -120,7 +122,7 @@ Blast_ValNodeMaskListFree(SeqLoc* mask_loc)
 
 SeqLocPtr BlastMaskLocToSeqLoc(EBlastProgramType program_number, 
                                const BlastMaskLoc* mask_loc, 
-                               const SeqLoc* seq_loc)
+                               SeqLoc* query_loc)
 {
    SeqLocPtr mask_head = NULL, last_mask = NULL;
    Int4 index;
@@ -133,21 +135,22 @@ SeqLocPtr BlastMaskLocToSeqLoc(EBlastProgramType program_number,
    if (mask_loc == NULL || mask_loc->seqloc_array == NULL)
       return NULL;
 
-   for (index=0, slp = (SeqLoc*)seq_loc; slp; ++index, slp = slp->next)
+   for (index=0, slp = query_loc; slp; ++index, slp = slp->next)
    {
       Int4 frame_index = index*k_num_frames;
       Int4 tmp_index;
+      Int4 slp_from = SeqLocStart(slp);
+      SeqIdPtr seqid = SeqLocId(slp);
       for (tmp_index=frame_index; tmp_index<(frame_index+k_num_frames); tmp_index++)
       {
          BlastSeqLoc* loc = NULL;
-         SeqIdPtr seqid = SeqLocId(slp);
          SeqLocPtr mask_slp_head = NULL, mask_slp_last = NULL;
          for (loc = mask_loc->seqloc_array[tmp_index]; loc; loc = loc->next)
          {
             SSeqRange* di = loc->ssr;
             SeqIntPtr si = SeqIntNew();
-            si->from = di->left;
-            si->to = di->right;
+            si->from = di->left + slp_from;
+            si->to = di->right + slp_from;
             si->id = SeqIdDup(seqid);
             if (!mask_slp_last)
                mask_slp_last = 
@@ -582,13 +585,11 @@ Int2 BLAST_SetUpQuery(EBlastProgramType program_number,
    Int2 status;
    Uint1 num_frames;
    EBlastEncoding encoding;
-   BlastMaskLoc* lcase_mask = NULL;
 
    if (query_slp == NULL || query_options == NULL ||
        query_info == NULL || query_blk == NULL)
       return -1;
 
-   lcase_mask = BlastMaskLocFromSeqLoc(masking_locs, query_slp);
 
    if ((status = s_QueryInfoSetUp(query_slp, program_number, query_info)))
       return status;
@@ -618,7 +619,8 @@ Int2 BLAST_SetUpQuery(EBlastProgramType program_number,
                                     0, query_blk, TRUE)))
       return status;
 
-   if (lcase_mask) {
+   if (masking_locs) {
+       BlastMaskLoc* lcase_mask = BlastMaskLocFromSeqLoc(masking_locs, query_slp);
        if (program_number == eBlastTypeBlastx || 
            program_number == eBlastTypeTblastx ||
            program_number == eBlastTypeRpsTblastn)

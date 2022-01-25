@@ -3,6 +3,15 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.21  2005/06/15 13:47:21  kans
+* corrected optional qualifier numbers, added Validate_ParFlat_GBFeat function
+*
+* Revision 6.20  2005/06/14 16:06:44  kans
+* initial support for ribosomal_slippage, trans_splicing qualifiers derived from /exception
+*
+* Revision 6.19  2005/06/10 17:25:26  kans
+* added space for new qualifiers experimental, inference, rpt_unit_seq, rpt_unit_range
+*
 * Revision 6.18  2004/08/17 15:50:52  kans
 * added GBQUAL_old_locus_tag and GBQUAL_compare
 *
@@ -194,8 +203,14 @@
 #define GBQUAL_operon            86
 #define GBQUAL_old_locus_tag     87
 #define GBQUAL_compare           88
+#define GBQUAL_experimental      89
+#define GBQUAL_inference         90
+#define GBQUAL_rpt_unit_seq      91
+#define GBQUAL_rpt_unit_range    92
+#define GBQUAL_ribosomal_slippage 93
+#define GBQUAL_trans_splicing    94
 
-#define ParFlat_TOTAL_GBQUAL     89
+#define ParFlat_TOTAL_GBQUAL     95
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2
@@ -253,6 +268,8 @@ NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names PROTO((void));
 
 NLM_EXTERN SematicFeatPtr x_ParFlat_GBFeat PROTO((void));
 #define ParFlat_GBFeat x_ParFlat_GBFeat()
+
+NLM_EXTERN ValNodePtr Validate_ParFlat_GBFeat (void);
 
 extern CharPtr     ParFlat_IntOrString [ParFlat_TOTAL_IntOr];
 extern CharPtr     ParFlat_LRBString   [ParFlat_TOTAL_LRB];

@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: lookup.c,v 6.58 2004/11/15 22:28:41 kans Exp $";
+static char const rcsid[] = "$Id: lookup.c,v 6.59 2005/07/28 14:57:10 coulouri Exp $";
 
 /*
 * ===========================================================================
@@ -53,7 +53,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.58 $
+* $Revision: 6.59 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -69,6 +69,9 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.59  2005/07/28 14:57:10  coulouri
+* remove dead code
+*
 * Revision 6.58  2004/11/15 22:28:41  kans
 * in MegaBlastBuildLookupTable, changed total_len (et al.) to Int8 and total_num (et al.) to Int4, from unsigned, which conflicted with pointer arguments to readdb_get_totals_ex
 *
@@ -304,7 +307,6 @@ Detailed Contents:
 
 #include <ncbi.h>
 #include <blast.h> /* this already includes lookup.h */
-/*#include <zlib.h> /* For the CRC32 hashing function */
 
 /* mod_lt[] is a modified lookup table.  -cfj
  * It contains the same info that is accessible via lookup->position, but in a form that reduces the
@@ -902,19 +904,6 @@ MegaBlastWordFinderDeallocate(BLAST_WordFinderPtr wfp)
    return wfp;
 }
 
-#if 0
-/* Given a 4-byte integer index, compute a 'size'-bit hash value */
-Int4 MB_GetHashValue(Int4 index, Int4 size) 
-{
-   Int4 value;
-   VoidPtr buffer = (VoidPtr) &(index);
-   
-   value = crc32(0, buffer, 4);
-   value = value>>(32-size);
-   return value;
-}
-#endif
-
 Boolean
 MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
 {
@@ -933,8 +922,6 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    Boolean discontiguous_word = FALSE;
    Int2 word_length, extra_length, word_weight;
    Int4 last_offset;
-   Int4 length, size, hash_shift, hash_mask, crc;
-   Uint1Ptr hash_buf;
    Int4 bit0, no_bit0;
    Int2 template_length;
    MegaBlastParameterBlkPtr mb_params = search->pbp->mb_params;
@@ -959,15 +946,7 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
 
    mb_lt->max_positions = mb_params->max_positions; 
 
-#ifdef USE_HASH_TABLE
-   /* Make hash table size the smallest power of 2 greater than query length */
-   for (length=query_length,size=1; length>0; length=length>>1,size++);
-   mb_lt->hashsize = 1<<size;
-   hash_shift = (32 - size)/2;
-   hash_mask = mb_lt->hashsize - 1;
-#else
    mb_lt->hashsize = (1<<(8*mb_lt->width));
-#endif
 
    if (mb_params->disc_word) {
       discontiguous_word = TRUE;
@@ -1092,12 +1071,6 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                         break;
                      }
 
-#ifdef USE_HASH_TABLE                     
-                     hash_buf = (Uint1Ptr)&ecode1;
-                     CRC32(crc, hash_buf);
-                     ecode1 = (crc>>hash_shift) & hash_mask;
-#endif
-
                      if (use_two_templates) {
                         switch (template_type) {
                         case TEMPL_11_18:
@@ -1120,11 +1093,6 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                            ecode2 = 0; break;
                         }
                            
-#ifdef USE_HASH_TABLE                     
-                        hash_buf = (Uint1Ptr)&ecode2;
-                        CRC32(crc, hash_buf);
-                        ecode2 = (crc>>hash_shift) & hash_mask;
-#endif
                         if (mb_lt->hashtable[ecode1] == 0 || 
                             mb_lt->hashtable2[ecode2] == 0)
                            lookup->num_unique_pos_added++;
@@ -1175,11 +1143,6 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                      break;
                   }
                      
-#ifdef USE_HASH_TABLE
-                  hash_buf = (Uint1Ptr)&ecode1;
-                  CRC32(crc, hash_buf);
-                  ecode1 = (crc>>hash_shift) & hash_mask;
-#endif
                   if (use_two_templates) {
                      switch (template_type) {
                      case TEMPL_11_16:
@@ -1191,11 +1154,6 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
                      default:
                         ecode2 = 0; break;
                      }
-#ifdef USE_HASH_TABLE                     
-                     hash_buf = (Uint1Ptr)&ecode2;
-                     CRC32(crc, hash_buf);
-                     ecode2 = (crc>>hash_shift) & hash_mask;
-#endif
                      if (mb_lt->hashtable[ecode1] == 0 || 
                          mb_lt->hashtable2[ecode2] == 0)
                         lookup->num_unique_pos_added++;
@@ -1296,15 +1254,10 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
       mb_lt->num_stacks = num_stacks;
    } 
 
-#ifdef USE_HASH_TABLE
-   /* If hash table is used instead of index table, no need for extra reduction
-      of pv_array size */
-   pv_shift = 0;
-#else
    /* For 12-mer based lookup table need to make presense bit array much 
       smaller, so it stays in cache, even though this allows for collisions */
    pv_shift = (mb_lt->width < 3) ? 0 : 5;
-#endif
+
    pv_array_bts = PV_ARRAY_BTS + pv_shift;
 
    if (lookup->num_unique_pos_added < 

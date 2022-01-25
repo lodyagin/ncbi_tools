@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.h,v 1.10 2005/03/31 16:16:54 dondosha Exp $
+/* $Id: lookup_wrap.h,v 1.11 2005/07/29 15:21:08 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -61,7 +61,7 @@ typedef struct LookupTableWrap {
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
-        LookupTableWrap** lookup_wrap_ptr, BlastRPSInfo *rps_info);
+        LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info);
 
 /** Deallocate memory for the lookup table */
 LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup);

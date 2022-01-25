@@ -31,6 +31,9 @@
 *
 *
 * $Log: taxext.h,v $
+* Revision 1.5  2005/08/08 18:03:27  soussov
+* adds extern C
+*
 * Revision 1.4  2001/09/28 15:53:15  soussov
 * tax1e_maxTaxId() added
 *
@@ -52,6 +55,10 @@
 #include <ncbi.h>
 #include <taxinc.h>
 #include <treemgr.h>
+
+#ifdef __cplusplus
+extern "C" { /* } */
+#endif
 
 /*-------------------------------------
 Get pointer to partial taxonomy tree
@@ -117,5 +124,9 @@ Int4 tax1e_needUpdate(OrgRefPtr inp_orgRef);
   get max taxid
 */
 Int4 tax1e_maxTaxId();
+
+#ifdef __cplusplus
+/* { */ }
+#endif
 
 #endif

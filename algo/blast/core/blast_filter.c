@@ -1,4 +1,4 @@
-/* $Id: blast_filter.c,v 1.65 2005/05/16 12:44:04 madden Exp $
+/* $Id: blast_filter.c,v 1.73 2005/07/19 13:43:30 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_filter.c,v 1.65 2005/05/16 12:44:04 madden Exp $";
+    "$Id: blast_filter.c,v 1.73 2005/07/19 13:43:30 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h>
@@ -108,7 +108,7 @@ s_LoadOptionsToBuffer(const char *instructions, char* buffer)
 
 /** Parses repeat filtering options string.
  * @param repeat_options Input character string [in]
- * @dbname Database name for repeats filtering [out]
+ * @param dbname Database name for repeats filtering [out]
  */
 static Int2  
 s_ParseRepeatOptions(const char* repeat_options, char** dbname)
@@ -303,7 +303,7 @@ BlastFilteringOptionsFromString(EBlastProgramType program_number, const char* in
                                      segOptions = SSegOptionsFree(segOptions);
                                      sprintf(error_buffer, "Error parsing filter string: %s", buffer);
                                      if (blast_message)
-                                       Blast_MessageWrite(blast_message, BLAST_SEV_ERROR, 2, 1,
+                                       Blast_MessageWrite(blast_message, eBlastSevError, 2, 1,
                                             error_buffer);
                                      sfree(buffer);
                                      return status;
@@ -326,7 +326,7 @@ BlastFilteringOptionsFromString(EBlastProgramType program_number, const char* in
                                      dustOptions = SDustOptionsFree(dustOptions);
                                      sprintf(error_buffer, "Error parsing filter string: %s", buffer);
                                      if (blast_message)
-                                       Blast_MessageWrite(blast_message, BLAST_SEV_ERROR, 2, 1,
+                                       Blast_MessageWrite(blast_message, eBlastSevError, 2, 1,
                                             error_buffer);
                                      sfree(buffer);
                                      return status;
@@ -349,7 +349,7 @@ BlastFilteringOptionsFromString(EBlastProgramType program_number, const char* in
                                   repeatOptions = SRepeatFilterOptionsFree(repeatOptions);
                                   sprintf(error_buffer, "Error parsing filter string: %s", buffer);
                                   if (blast_message)
-                                     Blast_MessageWrite(blast_message, BLAST_SEV_ERROR, 2, 1,
+                                     Blast_MessageWrite(blast_message, eBlastSevError, 2, 1,
                                             error_buffer);
                                    sfree(buffer);
                                    return status;
@@ -548,7 +548,6 @@ Int2 BlastMaskLocDNAToProtein(BlastMaskLoc* mask_loc,
             BlastSeqLoc* seqloc_var;
             Int2 frame = BLAST_ContextToFrame(eBlastTypeBlastx, context);
 
-            prot_head = NULL;
             for (seqloc_var = dna_seqloc; seqloc_var; 
                  seqloc_var = seqloc_var->next) {
                 Int4 from, to;
@@ -694,7 +693,7 @@ CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out,
    Int4 start, stop;	/* USed to merge overlapping SeqLoc's. */
    SSeqRange* ssr = NULL;
    BlastSeqLoc* loc_head=NULL,* last_loc=NULL,* loc_var=NULL;
-   BlastSeqLoc* new_loc = NULL,* new_loc_last = NULL;
+   BlastSeqLoc* new_loc = NULL;
    
    if (!mask_loc) {
       *mask_loc_out = NULL;
@@ -727,10 +726,7 @@ CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out,
       if (ssr && ((stop + link_value) > ssr->left)) {
          stop = MAX(stop, ssr->right);
       } else {
-         if (!new_loc)
-            new_loc_last = BlastSeqLocNew(&new_loc, start, stop);
-         else
-            new_loc_last = BlastSeqLocNew(&new_loc_last, start, stop);
+         BlastSeqLocNew(&new_loc, start, stop);
          if (loc_var->next) {
              start = ssr->left;
              stop = ssr->right;
@@ -750,8 +746,8 @@ CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out,
 
 Int2 
 BLAST_ComplementMaskLocations(EBlastProgramType program_number, 
-   BlastQueryInfo* query_info, 
-   BlastMaskLoc* mask_loc, BlastSeqLoc* *complement_mask) 
+   const BlastQueryInfo* query_info, 
+   const BlastMaskLoc* mask_loc, BlastSeqLoc* *complement_mask) 
 {
    Int4 context;
    BlastSeqLoc* loc,* last_loc = NULL,* start_loc = NULL;
@@ -878,7 +874,7 @@ BlastSetUp_Filter(EBlastProgramType program_number, Uint1* sequence, Int4 length
 {
 	Int2 seqloc_num=0;
 	Int2 status=0;		/* return value. */
-        BlastSeqLoc* dust_loc = NULL,* seg_loc = NULL;
+        BlastSeqLoc* seg_loc = NULL;
 
         ASSERT(filter_options);
         ASSERT(seqloc_retval);
@@ -908,20 +904,11 @@ BlastSetUp_Filter(EBlastProgramType program_number, Uint1* sequence, Int4 length
 		sparamsp = NULL;
 		seqloc_num++;
 	}
-	else if (filter_options->dustOptions)
-	{
-              SDustOptions* dust_options = filter_options->dustOptions;
-              SeqBufferDust(sequence, length, offset, dust_options->level, 
-                       dust_options->window, dust_options->linker, &dust_loc);
-			seqloc_num++;
-	}
 
 	if (seqloc_num)
 	{ 
 	      BlastSeqLoc* seqloc_list=NULL;  /* Holds all SeqLoc's for
                                                       return. */
-              if (dust_loc)
-                 seqloc_list = dust_loc;
               if (seg_loc)
                  seqloc_list = seg_loc;
 
@@ -931,38 +918,27 @@ BlastSetUp_Filter(EBlastProgramType program_number, Uint1* sequence, Int4 length
 	return status;
 }
 
-/** Converts the reverse strand mask locations to forward strand coordinates.
- * @param filter_out Mask locations in forward strand coordinates [out]
- * @param filter_in Mask locations in reverse strand coordinates [in]
- * @param query_length Length of the sequence [in]
- */
-static Int2
-s_GetReversedLocation(BlastSeqLoc** filter_out, BlastSeqLoc* filter_in, Int4 query_length)
+BlastSeqLoc*
+BlastSeqLocReverse(const BlastSeqLoc* filter_in, Int4 query_length)
 {
-   BlastSeqLoc* mask_loc = NULL;
-   BlastSeqLoc* last_filter_per_context = NULL;
+   BlastSeqLoc* filter_out = NULL;   /* Return variable. */
 
-   ASSERT(filter_out);
-
-   *filter_out = NULL;
-
-   for (mask_loc=filter_in; mask_loc; mask_loc = mask_loc->next) {
+   while (filter_in)
+   {
         Int4 start, stop;
-        SSeqRange* loc = mask_loc->ssr;
+        SSeqRange* loc = filter_in->ssr;
         
         start = query_length - 1 - loc->right;
         stop = query_length - 1 - loc->left;
-        if (last_filter_per_context == NULL)
-              last_filter_per_context = BlastSeqLocNew(filter_out, start, stop);
-        else
-              last_filter_per_context = BlastSeqLocNew(&last_filter_per_context, start, stop);
+        BlastSeqLocNew(&filter_out, start, stop);
+        filter_in = filter_in->next;
    }
 
-   return 0;
+   return filter_out;
 }
 
 static Int2
-s_GetFilteringLocationsForOneContext(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info, Int2 context, EBlastProgramType program_number, const SBlastFilterOptions* filter_options, BlastSeqLoc* *filter_out, Blast_Message* *blast_message)
+s_GetFilteringLocationsForOneContext(BLAST_SequenceBlk* query_blk, const BlastQueryInfo* query_info, Int4 context, EBlastProgramType program_number, const SBlastFilterOptions* filter_options, BlastSeqLoc* *filter_out, Blast_Message* *blast_message)
 {
         Int2 status = 0;
         Int4 query_length = 0;      /* Length of query described by SeqLocPtr. */
@@ -973,7 +949,7 @@ s_GetFilteringLocationsForOneContext(BLAST_SequenceBlk* query_blk, BlastQueryInf
         Uint1 *buffer;              /* holds sequence for plus strand or protein. */
 
         const Boolean kIsNucl = (program_number == eBlastTypeBlastn);
-        Int2 index = BlastGetMaskLocIndexFromContext(kIsNucl, context);
+        Int4 index = BlastGetMaskLocIndexFromContext(kIsNucl, context);
         
         context_offset = query_info->contexts[context].query_offset;
         buffer = &query_blk->sequence[context_offset];
@@ -987,8 +963,7 @@ s_GetFilteringLocationsForOneContext(BLAST_SequenceBlk* query_blk, BlastQueryInf
 
         if (BlastIsReverseStrand(kIsNucl, context) == TRUE)
         {  /* Reverse this as it's on minus strand. */
-              BlastSeqLoc *filter_slp_rev = NULL;     /* reversed SeqLocPtr (used only if minus strand) */
-              s_GetReversedLocation(&filter_slp_rev, filter_slp, query_length);
+              BlastSeqLoc *filter_slp_rev = BlastSeqLocReverse(filter_slp, query_length);
               filter_slp = BlastSeqLocFree(filter_slp);
               filter_slp = filter_slp_rev;
         }
@@ -1030,11 +1005,11 @@ s_GetFilteringLocationsForOneContext(BLAST_SequenceBlk* query_blk, BlastQueryInf
 
 
 Int2
-BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info, EBlastProgramType program_number, const SBlastFilterOptions* filter_options, BlastMaskLoc** filter_maskloc, Blast_Message * *blast_message)
+BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk, const BlastQueryInfo* query_info, EBlastProgramType program_number, const SBlastFilterOptions* filter_options, BlastMaskLoc** filter_maskloc, Blast_Message * *blast_message)
 {
 
     Int2 status = 0;
-    Int2 context = 0; /* loop variable. */
+    Int4 context = 0; /* loop variable. */
     const Boolean kIsNucl = (program_number == eBlastTypeBlastn);
     Boolean no_forward_strand = (query_info->first_context > 0);  /* filtering needed on reverse strand. */
 
@@ -1063,7 +1038,7 @@ BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* q
             Int4 filter_index = BlastGetMaskLocIndexFromContext(kIsNucl, context);
             if ((status=s_GetFilteringLocationsForOneContext(query_blk, query_info, context, program_number, filter_options, &filter_per_context, blast_message)))
             {
-               Blast_MessageWrite(blast_message, BLAST_SEV_ERROR, 2, 1, 
+               Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
                   "Failure at filtering");
                return status;
             }
@@ -1081,7 +1056,7 @@ BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* q
 
 Int2
 Blast_MaskTheResidues(Uint1 * buffer, Int4 length, Boolean is_na,
-                           BlastSeqLoc* mask_loc, Boolean reverse, Int4 offset)
+                      const BlastSeqLoc* mask_loc, Boolean reverse, Int4 offset)
 {
     SSeqRange *loc = NULL;
     Int2 status = 0;
@@ -1109,7 +1084,7 @@ Blast_MaskTheResidues(Uint1 * buffer, Int4 length, Boolean is_na,
 }
 
 Int2 
-BlastSetUp_MaskQuery(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info, BlastMaskLoc *filter_maskloc, EBlastProgramType program_number)
+BlastSetUp_MaskQuery(BLAST_SequenceBlk* query_blk, const BlastQueryInfo* query_info, const BlastMaskLoc *filter_maskloc, EBlastProgramType program_number)
 {
     const Boolean kIsNucl = (program_number == eBlastTypeBlastn);
     Int4 context; /* loop variable. */

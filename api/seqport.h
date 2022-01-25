@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.50 $
+* $Revision: 6.51 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.51  2005/08/24 15:14:31  kans
+* modified MolWtForLoc to use StreamCache, added MolWtForBsp and MolWtForStr
+*
 * Revision 6.50  2005/06/01 20:27:06  kans
 * added MapNa4ByteToIUPACplusGapString
 *
@@ -948,10 +951,14 @@ NLM_EXTERN void ConvertNsToGaps (
 *
 *  Returns a protein molecular weight for a SeqLoc
 *    If it cannot calculate the value it returns -1.0
-*    If sequence contains X,B,U,*,orZ it fails
+*    If sequence contains X, J, or O it fails
 *
 ***************************************************************/
 NLM_EXTERN FloatHi MolWtForLoc (SeqLocPtr slp);
+
+NLM_EXTERN FloatHi MolWtForBsp (BioseqPtr bsp);
+
+NLM_EXTERN FloatHi MolWtForStr (CharPtr str);
 
 
 #ifdef __cplusplus

@@ -1,4 +1,4 @@
-/* $Id: blast_parameters.c,v 1.9 2005/05/06 14:27:26 camacho Exp $
+/* $Id: blast_parameters.c,v 1.10 2005/06/08 17:27:53 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_parameters.c,v 1.9 2005/05/06 14:27:26 camacho Exp $";
+    "$Id: blast_parameters.c,v 1.10 2005/06/08 17:27:53 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_parameters.h>
@@ -746,10 +746,7 @@ CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info,
     Blast_KarlinBlk* kbp;
     Int4 expected_length, window_size, query_length;
     Int8 search_sp;
-	Int4 concat_qlen;
-    Boolean translated_subject = (program == eBlastTypeTblastn || 
-                                  program == eBlastTypeRpsTblastn || 
-                                  program == eBlastTypeTblastx);
+    Int4 concat_qlen;
 
     if (!link_hsp_params)
         return;
@@ -768,7 +765,7 @@ CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info,
     
     query_length = concat_qlen / (query_info->last_context + 1);
     
-    if (translated_subject) {
+    if (Blast_SubjectIsTranslated(program) || program == eBlastTypeRpsTblastn) {
         /* Lengths in subsequent calculations should be on the protein scale */
         subject_length /= CODON_LENGTH;
         db_length /= CODON_LENGTH;
@@ -827,6 +824,9 @@ CalculateLinkHSPCutoffs(EBlastProgramType program, BlastQueryInfo* query_info,
  * ===========================================================================
  *
  * $Log: blast_parameters.c,v $
+ * Revision 1.10  2005/06/08 17:27:53  madden
+ * Use functions from blast_program.c
+ *
  * Revision 1.9  2005/05/06 14:27:26  camacho
  * + Blast_ProgramIs{Phi,Rps}Blast
  *

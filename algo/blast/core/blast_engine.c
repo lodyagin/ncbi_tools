@@ -1,4 +1,4 @@
-/* $Id: blast_engine.c,v 1.193 2005/05/10 16:07:51 camacho Exp $
+/* $Id: blast_engine.c,v 1.198 2005/08/15 16:11:20 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -57,7 +57,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_engine.c,v 1.193 2005/05/10 16:07:51 camacho Exp $";
+    "$Id: blast_engine.c,v 1.198 2005/08/15 16:11:20 dondosha Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_engine.h>
@@ -72,6 +72,11 @@ static char const rcsid[] =
 #include "blast_gapalign_priv.h"
 #include <algo/blast/core/phi_gapalign.h>
 #include <algo/blast/core/phi_lookup.h>
+
+NCBI_XBLAST_EXPORT const int   kBlastMajorVersion = 2;
+NCBI_XBLAST_EXPORT const int   kBlastMinorVersion = 2;
+NCBI_XBLAST_EXPORT const int   kBlastPatchVersion = 12;
+NCBI_XBLAST_EXPORT const char* kBlastReleaseDate = "Aug-07-2005";
 
 /** Structure to be passed to s_BlastSearchEngineCore, containing pointers 
     to various preallocated structures and arrays. */
@@ -248,9 +253,7 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
       (ext_params->options->ePrelimGapExt == eGreedyWithTracebackExt);
 
    const Boolean kTranslatedSubject = 
-       (program_number == eBlastTypeTblastn ||
-        program_number == eBlastTypeTblastx ||
-        program_number == eBlastTypeRpsTblastn);
+        (Blast_SubjectIsTranslated(program_number) || program_number == eBlastTypeRpsTblastn);
    const Boolean kNucleotide = (program_number == eBlastTypeBlastn ||
                                 program_number == eBlastTypePhiBlastn);
 
@@ -379,6 +382,13 @@ s_BlastSearchEngineCore(EBlastProgramType program_number, BLAST_SequenceBlk* que
 
             /* Removes redundant HSPs. */
              Blast_HSPListPurgeHSPsWithCommonEndpoints(program_number, hsp_list);
+
+             /* For nucleotide search, if match score is = 2, the odd scores
+                are rounded down to the nearest even number. */
+             if (program_number == eBlastTypeBlastn && 
+                 score_params->options->reward == 2) {
+                 Blast_HSPListAdjustOddBlastnScores(hsp_list);
+             }
 
              Blast_HSPListSortByScore(hsp_list);
 
@@ -513,7 +523,7 @@ s_FillReturnCutoffsInfo(BlastRawCutoffs* return_cutoffs,
  */
 static Int2 
 s_BlastSetUpAuxStructures(const BlastSeqSrc* seq_src,
-   LookupTableWrap* lookup_wrap,	
+   LookupTableWrap* lookup_wrap,    
    const BlastInitialWordParameters* word_params,
    const BlastExtensionOptions* ext_options,
    const BlastHitSavingOptions* hit_options,

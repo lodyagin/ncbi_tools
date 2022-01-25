@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.h,v 1.22 2005/03/28 21:22:50 dondosha Exp $
+/* $Id: blast_lookup.h,v 1.25 2005/07/27 19:11:33 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -87,8 +87,9 @@ typedef struct LookupBackboneCell {
                                             cell is HITS_ON_BACKBONE or less,
                                             the hits are all stored directly in
                                             the cell */
-    } payload;
-
+    } payload;  /**< UNION that specifies either entries stored right on the backbone
+                    if fewer than HITS_ON_BACKBONE are present or a pointer to 
+                    where the hits are stored (off-backbone). */
 } LookupBackboneCell;
     
 /** The basic lookup table structure for blastn
@@ -323,7 +324,6 @@ typedef struct BlastRPSLookupTable {
     Int4 ** rps_pssm;   /**< Pointer to memory-mapped RPS Blast profile file */
     Int4 * rps_seq_offsets; /**< array of start offsets for each RPS DB seq. */
     Int4 num_profiles; /**< Number of profiles in RPS database. */
-    BlastRPSAuxInfo* rps_aux_info; /**< RPS Blast auxiliary information */
     Int4 * overflow;    /**< the overflow array for the compacted 
                              lookup table */
     Int4  overflow_size;/**< Number of elements in the overflow array */

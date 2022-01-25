@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/05/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       miscellaneous library for network Entrez
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: netlib.c,v $
+* Revision 6.2  2005/07/25 18:06:48  lavr
+* Remove deprecated ni_ API references
+*
 * Revision 6.1  1998/08/24 21:00:51  kans
 * fixed -v -fd warnings
 *
@@ -543,6 +546,7 @@ NLM_EXTERN void GetClientInfo (CharPtr buf)
         StrCat(buf, "\n  Entrez service currently connected to ");
         StrCat(buf, lastEntrezServ->hostname);
         StrCat(buf, " server\n");
+	/*
         if (NI_EncrAvailable())
         {
             if (lastEntrezServ->encryption != NULL)
@@ -552,6 +556,7 @@ NLM_EXTERN void GetClientInfo (CharPtr buf)
                 StrCat (buf, "  Encryption available, but not in use\n");
             }
         }
+        */
         statsPtr = &buf[StringLen(buf)];
         DumpNetStats(SUBSYS_CLI_ENTREZ, appendStats);
     }

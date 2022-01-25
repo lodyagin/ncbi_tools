@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: seedtop.c,v 6.9 2004/04/01 13:43:06 lavr Exp $";
+static char const rcsid[] = "$Id: seedtop.c,v 6.11 2005/07/28 14:52:22 coulouri Exp $";
 
-/* $Id: seedtop.c,v 6.9 2004/04/01 13:43:06 lavr Exp $ */
+/* $Id: seedtop.c,v 6.11 2005/07/28 14:52:22 coulouri Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,15 @@ Maintainer: Alejandro Schaffer
  
 Contents: main routine for pseed3, stand-alone counterpart to PHI-BLAST.
  
-$Revision: 6.9 $
+$Revision: 6.11 $
 
 $Log: seedtop.c,v $
+Revision 6.11  2005/07/28 14:52:22  coulouri
+remove dead code
+
+Revision 6.10  2005/07/22 14:23:57  coulouri
+Removed two unused command line arguments
+
 Revision 6.9  2004/04/01 13:43:06  lavr
 Spell "occurred", "occurrence", and "occurring"
 
@@ -74,7 +80,7 @@ extern "C" {
 #endif
 
 
-#define NUMARG 21
+#define NUMARG 19
 
 static Args myargs [NUMARG] = {
   { "Database", 
@@ -107,10 +113,6 @@ static Args myargs [NUMARG] = {
 	NULL, NULL, NULL, TRUE, 'O', ARG_FILE_OUT, 0.0, 0, NULL},
   { "Matrix", 
 	"BLOSUM62", NULL, NULL, FALSE, 'M', ARG_STRING, 0.0, 0, NULL},
-  { "Number of one-line descriptions (V)",
-        "500", NULL, NULL, FALSE, 'v', ARG_INT, 0.0, 0, NULL},
-  { "Number of alignments to show (B)",
-        "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL}, 
   { "Program Name", 
 	"patmatchp", NULL, NULL, FALSE, 'p', ARG_STRING, 0.0, 0, NULL},
   { "Cost for a match",
@@ -134,7 +136,6 @@ Int2 Main(void)
 	Uint1Ptr unfilter_query =NULL;  /*needed if seg  will filter query*/
         SeqLocPtr seg_slp; /*pointer to structure for seg filtering*/
 	Uint1Ptr seqFromDb; /*newly read sequence from database*/
-        Uint1Ptr reverseSeqFromDb = NULL; /*reverse of seqFromDb*/
         Int4 lenSeqFromDb;  /* length of seqFromDb */
         Char  *pattern; /*string description of a pettern*/
         Char *pname; /*name of pattern*/
@@ -178,7 +179,7 @@ Int2 Main(void)
         seedSearch = (seedSearchItems *) ckalloc(sizeof(seedSearchItems));
         seedResults = (seedResultItems *) ckalloc(sizeof(seedResultItems));
         patternSearch = (patternSearchItems *) ckalloc(sizeof(patternSearchItems));
-        if (! GetArgs ("pseed3", NUMARG, myargs))
+        if (! GetArgs ("seedtop", NUMARG, myargs))
         {
                 return (1);
         }
@@ -211,7 +212,7 @@ Int2 Main(void)
 	    }
 	}
 	is_dna = FALSE;
-        program_flag = convertProgramToFlag(myargs[17].strvalue, &is_dna);
+        program_flag = convertProgramToFlag(myargs[15].strvalue, &is_dna);
 
 	gap_align = GapAlignBlkNew(1, 1);
 	gap_align->gap_open = myargs[4].intvalue;
@@ -247,9 +248,9 @@ Int2 Main(void)
 	      for (i = 0; i < DNA_ALPHABET_SIZE; i++) 
 		for (j = 0; j < DNA_ALPHABET_SIZE; j++) 
 		  if (i==j)  /*characters match */
-		    gap_align->matrix[i][j] =  myargs[18].intvalue;
+		    gap_align->matrix[i][j] =  myargs[16].intvalue;
 		  else       /* characters mismatch*/
-		    gap_align->matrix[i][j] =  myargs[19].intvalue;
+		    gap_align->matrix[i][j] =  myargs[17].intvalue;
 	    }
 	  }
 

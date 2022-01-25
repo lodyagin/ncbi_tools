@@ -1,4 +1,4 @@
-/* $Id: blast_driver.c,v 1.96 2005/06/02 20:59:38 dondosha Exp $
+/* $Id: blast_driver.c,v 1.100 2005/08/11 21:14:43 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Main function for running BLAST
 
 ******************************************************************************
- * $Revision: 1.96 $
+ * $Revision: 1.100 $
  * */
 
-static char const rcsid[] = "$Id: blast_driver.c,v 1.96 2005/06/02 20:59:38 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_driver.c,v 1.100 2005/08/11 21:14:43 dondosha Exp $";
 
 #include <ncbi.h>
 #include <sqnutils.h>
@@ -372,7 +372,7 @@ s_ParseIntervalLocationArgument(char* arg, Int4* from_ptr, Int4* to_ptr)
    *from_ptr = from;
    *to_ptr = to;
 
-   if (from > to)
+   if (to > 0 && from > to)
       return -1;
    else
       return 0;
@@ -462,7 +462,8 @@ Int2 Nlm_Main(void)
 
       letters_read = 
          BLAST_GetQuerySeqLoc(infp2, db_is_na, 0, 0, s_from, s_to, NULL, 
-                              &subject_slp, &ctr, NULL, FALSE);
+                              &subject_slp, &ctr, NULL, FALSE,
+                              myargs[ARG_DBGENCODE].intvalue);
 
       if (letters_read <= 0)
       {
@@ -530,12 +531,14 @@ Int2 Nlm_Main(void)
            letters_read = 
                BLAST_GetQuerySeqLoc(infp, query_is_na, 
                    (Uint1)myargs[ARG_STRAND].intvalue, 10000, q_from, q_to, &lcase_mask,
-                   &query_slp, &ctr, &num_queries, believe_defline);
+                   &query_slp, &ctr, &num_queries, believe_defline,
+                   myargs[ARG_GENCODE].intvalue);
        } else {
            letters_read = 
                BLAST_GetQuerySeqLoc(infp, query_is_na,
                    (Uint1)myargs[ARG_STRAND].intvalue, 0, q_from, q_to, NULL, 
-                   &query_slp, &ctr, &num_queries, believe_defline);
+                   &query_slp, &ctr, &num_queries, believe_defline,
+                   myargs[ARG_GENCODE].intvalue);
        }
 
        /* If there is no sequence data left in the input file, break out of 

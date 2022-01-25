@@ -53,17 +53,17 @@ struct in_addr;
 
 /* External Sockets API calls */
 int socket(int family, int type, int protocol);
-int bind(int sockFD, const struct sockaddr *myAddr, int addrLength);
+int bind(int sockFD, const struct sockaddr *myAddr, socklen_t addrLength);
 int fcntl(int sockFD, int command, int flags);
 int close(int sockFD);
 int shutdown(int sockFD, int howTo);
-int connect(int sockFD, struct sockaddr *servAddr, int addrLength);
+int connect(int sockFD, struct sockaddr *servAddr, socklen_t addrLength);
 int listen(int sockFD, int backLog);
-int accept(int sockFD, struct sockaddr *peer, int *addrlen);
+int accept(int sockFD, struct sockaddr *peer, socklen_t *addrlen);
 int select(int maxFDsExamined, fd_set *readFDs, fd_set *writeFDs, fd_set *exceptFDs,
                   struct timeval *timeOut);
-int getpeername(int sockFD, struct sockaddr *peerAddr, int *addrLength);
-int getsockname(int sockFD, struct sockaddr *localAddr, int *addrLength);
+int getpeername(int sockFD, struct sockaddr *peerAddr, socklen_t *addrLength);
+int getsockname(int sockFD, struct sockaddr *localAddr, socklen_t *addrLength);
 int read(int sockFD, void *buffer, UInt32 numBytes);
 int write(int sockFD, void *buffer, UInt32 numBytes);
 int readv(int sockFD, struct iovec *iov, UInt32 iovCount);
@@ -74,7 +74,7 @@ int recvfrom(int sockFD, void *buffer, UInt32 numBytes, int flags, struct sockad
                     socklen_t *addrLength);
 int sendto(int sockFD, void *buffer, UInt32 numBytes, int flags, struct sockaddr *toAddr, 
                   socklen_t addrLength);
-int setsockopt(long sockFD, long level, long optname, char *optval, long optlen);
+int setsockopt(long sockFD, long level, long optname, char *optval, socklen_t optlen);
 int	inet_aton(const char *str, struct in_addr *addr);
 
 /* not implemented (yet)...

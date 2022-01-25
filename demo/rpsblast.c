@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.70 2005/06/02 20:43:38 dondosha Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.74 2005/08/09 21:36:54 dondosha Exp $";
 
-/* $Id: rpsblast.c,v 6.70 2005/06/02 20:43:38 dondosha Exp $
+/* $Id: rpsblast.c,v 6.74 2005/08/09 21:36:54 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,21 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.70 2005/06/02 20:43:38 dondosha
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.70 $
+* $Revision: 6.74 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.74  2005/08/09 21:36:54  dondosha
+* Added extra argument in calls to BLAST_GetQuerySeqLoc
+*
+* Revision 6.73  2005/06/09 17:32:29  dondosha
+* Added options validation at the end of s_FillOptions
+*
+* Revision 6.72  2005/06/08 20:24:48  dondosha
+* Previous change wrong - rolled back
+*
 * Revision 6.70  2005/06/02 20:43:38  dondosha
 * 1. Added loop over concatenated query sets;
 * 2. Removed unused variables and other clean-up;
@@ -400,10 +409,10 @@ static Args myargs[] = {
    in blast_driver.c; unneeded setup is removed */
 
 static Int2 
-s_FillOptions(SBlastOptions* options)
+s_FillOptions(SBlastOptions* options, Blast_SummaryReturn* sum_returns)
 {
    Int2 status;
-   EBlastProgramType program_number = options->program;
+   const EBlastProgramType kProgram = options->program;
    LookupTableOptions* lookup_options = options->lookup_options;
    QuerySetUpOptions* query_setup_options = options->query_options; 
    BlastInitialWordOptions* word_options = options->word_options;
@@ -413,27 +422,27 @@ s_FillOptions(SBlastOptions* options)
    BlastEffectiveLengthsOptions* eff_len_options = options->eff_len_options;
    BlastDatabaseOptions* db_options = options->db_options;
 
-   BLAST_FillLookupTableOptions(lookup_options, program_number, 
+   BLAST_FillLookupTableOptions(lookup_options, kProgram, 
                                 FALSE, /* megablast */
                                 0,     /* default threshold */
                                 0,     /* default wordsize */
                                 FALSE);/* no variable wordsize */
 
-   BLAST_FillQuerySetUpOptions(query_setup_options, program_number, 
+   BLAST_FillQuerySetUpOptions(query_setup_options, kProgram, 
                               myargs[OPT_FILTER].strvalue, 0);
 
-   BLAST_FillInitialWordOptions(word_options, program_number, FALSE,
+   BLAST_FillInitialWordOptions(word_options, kProgram, FALSE,
                                 0, myargs[OPT_XDROP_UNGAPPED].intvalue);
 
    /* set one-hit extensions if desired */
    if (myargs[OPT_UNGAPPED_HITS].intvalue == 1)
        word_options->window_size = 0;
 
-   BLAST_FillExtensionOptions(ext_options, program_number, FALSE, 
+   BLAST_FillExtensionOptions(ext_options, kProgram, FALSE, 
                               myargs[OPT_XDROP_GAPPED].intvalue, 
                               myargs[OPT_XDROP_GAPPED_FINAL].intvalue);
 
-   BLAST_FillScoringOptions(score_options, program_number, FALSE,
+   BLAST_FillScoringOptions(score_options, kProgram, FALSE,
                 0, 0,  /* nucleotide match/mismatch scores */
                 NULL, 0, 0); /* Matrix, gap opening and gap extension penalties
                                 will be set from the RPS database, so there is
@@ -452,14 +461,19 @@ s_FillOptions(SBlastOptions* options)
       eff_len_options->searchsp_eff = (Int8) myargs[OPT_SEARCHSP].floatvalue; 
    }
 
-   if (db_options && program_number == eBlastTypeRpsTblastn) {
+   if (db_options && kProgram == eBlastTypeRpsTblastn) {
       if ((status = BLAST_GeneticCodeFind(db_options->genetic_code, 
                        &db_options->gen_code_string))) {
          return status;
       }
    }
 
-   return 0;
+   /* Validate the options. */
+   status = BLAST_ValidateOptions(kProgram, ext_options, score_options, 
+                                  lookup_options, word_options, hit_options, 
+                                  &sum_returns->error);
+
+   return status;
 }
 
 static Int2
@@ -527,7 +541,11 @@ Int2 Main_New(void)
 
    status = SBlastOptionsNew(blast_program, &options, sum_returns);
 
+   if (!status)
+       s_FillOptions(options, sum_returns);
+
    if (status) {
+       options = SBlastOptionsFree(options);
        if (sum_returns->error) {
            Blast_SummaryReturnsPostError(sum_returns);
            sum_returns = Blast_SummaryReturnFree(sum_returns);
@@ -539,7 +557,6 @@ Int2 Main_New(void)
 
    dbname = myargs[OPT_DB].strvalue;
 
-   s_FillOptions(options);
    program_number = options->program;
 
    /* Get the query */
@@ -583,13 +600,13 @@ Int2 Main_New(void)
                BLAST_GetQuerySeqLoc(infp, query_is_na, 0, kMaxConcatLength, 
                                     query_from, query_to, &lcase_mask,
                                     &query_slp, &ctr, &num_queries, 
-                                    myargs[OPT_BELIEVE_QUERY].intvalue);
+                                    myargs[OPT_BELIEVE_QUERY].intvalue, 0);
        } else {
            letters_read = 
                BLAST_GetQuerySeqLoc(infp, query_is_na, 0, kMaxConcatLength,
                                     query_from, query_to, NULL, 
                                     &query_slp, &ctr, &num_queries, 
-                                    myargs[OPT_BELIEVE_QUERY].intvalue);
+                                    myargs[OPT_BELIEVE_QUERY].intvalue, 0);
        }
        
        if (letters_read <= 0)

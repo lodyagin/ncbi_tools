@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.45 $
+* $Revision: 6.48 $
 *
 * File Description:
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.48  2005/08/18 14:41:30  kans
+* include toasn3.h for ExtendGeneFeatIfOnMRNA prototype
+*
+* Revision 6.47  2005/07/11 16:35:48  bollin
+* when creating temporary empty sets as containers for descriptors, set
+* the _class member to BioseqseqSet_class_empty_set to prevent the BioseqSet
+* from being removed by the DeleteMarkedSeqEntry function in api/gather.c
+*
+* Revision 6.46  2005/07/05 14:23:15  bollin
+* "Lookup Relaxed" button should only be available for internal Sequin,
+* per Linda Yankie's request.
+*
 * Revision 6.45  2005/06/03 13:24:36  bollin
 * unregister dialogs for ObjMgr messages when the form is being removed
 *
@@ -403,6 +415,7 @@
 #include <gather.h>
 #include <utilpub.h>
 #include <explore.h>
+#include <toasn3.h>
 
 #define FIRST_PAGE      0
 
@@ -2534,8 +2547,11 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
           b = PushButton (c, "Lookup By pmid", LookupByPmidProc);
           SetObjectExtra (b, ppp, NULL);
           /* Disable (b); */
-          b = PushButton (c, "Lookup Relaxed", LookupRelaxedProc);
-          SetObjectExtra (b, ppp, NULL);
+          if (GetAppProperty ("InternalNcbiSequin") != NULL)
+          {
+            b = PushButton (c, "Lookup Relaxed", LookupRelaxedProc);
+            SetObjectExtra (b, ppp, NULL);
+          }
         }
 
         AlignObjects (ALIGN_RIGHT, (HANDLE) ppp->pages, (HANDLE) ppp->year,
@@ -6019,6 +6035,7 @@ extern DialoG PublicationListDialog (GrouP parent)
   
   dlg->sep = SeqEntryNew ();
   dlg->bssp = BioseqSetNew ();
+  dlg->bssp->_class = BioseqseqSet_class_empty_set;
   dlg->sep->choice = 2;
   dlg->sep->data.ptrvalue = dlg->bssp;
   

@@ -1,7 +1,7 @@
 
-static char const rcsid[] = "$Id: blast.c,v 6.439 2005/05/19 11:11:59 coulouri Exp $";
+static char const rcsid[] = "$Id: blast.c,v 6.441 2005/07/28 14:57:09 coulouri Exp $";
 
-/* $Id: blast.c,v 6.439 2005/05/19 11:11:59 coulouri Exp $
+/* $Id: blast.c,v 6.441 2005/07/28 14:57:09 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,9 +50,15 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.439 $
+ * $Revision: 6.441 $
  *
  * $Log: blast.c,v $
+ * Revision 6.441  2005/07/28 14:57:09  coulouri
+ * remove dead code
+ *
+ * Revision 6.440  2005/07/27 15:51:54  coulouri
+ * remove unused queue_callback
+ *
  * Revision 6.439  2005/05/19 11:11:59  coulouri
  * Changes from morgulis to address rt ticket 15091715:
  * null hsp_array in blastall tblastn query concatenation causes segfault
@@ -2837,106 +2843,6 @@ being checked for. */
 	}
 }
 
-
-#if 0
-/* TODO: The following function is not used in that file */
-
-/*
-	Check that the HSP's pass through the region of the
-	query that is required, if this is requried.
-*/
-
-static Int2 LIBCALL
-CheckForRequiredRegion (BlastSearchBlkPtr search, Boolean strict)
-
-{
-	BLAST_HitListPtr hitlist;
-	BLAST_HSPPtr hsp;
-	BLAST_HSPPtr PNTR hsp_array, PNTR hsp_array_new;
-	Int4 hsp_cnt=0, hspcnt_max;
-	Int4 index, index1;
-
-	if (search == NULL)
-		return 1;
-
-	if (search->whole_query == TRUE)
-		return 0;
-
-	hsp_array = NULL;
-	hitlist = search->current_hitlist;
-	hitlist->hspcnt_max = hitlist->hspcnt;
-	hspcnt_max = hitlist->hspcnt_max;
-	if (hitlist)
-	{
-		hsp_array = hitlist->hsp_array;
-		for (index=0; index<hitlist->hspcnt; index++)
-		{
-			hsp = hsp_array[index];
-			if (strict)
-			{
-				if (hsp->query.offset > search->required_start ||
-					hsp->query.end < search->required_end)
-				{
-					hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
-				}
-				else
-				{
-					hsp_cnt++;
-				}
-			}
-			else
-			{
-				if ((search->required_start > hsp->query.offset && 
-					search->required_start < hsp->query.end) ||
-						(search->required_end > hsp->query.offset && 
-							search->required_end < hsp->query.end))
-				{
-					hsp_cnt++;
-				}
-				else
-				{
-					hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
-				}
-					
-					
-			}
-
-		}
-
-		if (hitlist->hspcnt > 0)
-		{
-			hitlist->hspcnt = hsp_cnt;
-		}
-		else
-		{
-			BlastHitListPurge(hitlist);
-		}
-	}
-
-/* Save HSP's again, discarding those that have been NULLed out. */
-	hsp_array_new = MemNew((hitlist->hspmax)*sizeof(BLAST_HSPPtr));
-	index1 = 0;
-	for (index=0; index<hspcnt_max; index++)
-	{
-		if (hsp_array[index] != NULL)
-		{
-			hsp_array_new[index1] = hsp_array[index];
-			index1++;
-		}
-	}
-
-	hsp_array = MemFree(hsp_array);
-
-	hitlist->hspcnt = index1;	
-	hitlist->hspcnt_max = index1;	
-	hitlist->hsp_array = hsp_array_new;
-
-	search->current_hitlist = hitlist;
-	return 0;
-}
-
-#endif
-
 /*
 	This function reevaluates the HSP's from a blast run, checking that
 	ambiguity characters, ignored until now, don't change the score or
@@ -3304,18 +3210,6 @@ Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop,
     return done;
 }
 
-static void do_on_exit_func(VoidPtr ptr)
-{
-    BlastSearchBlkPtr search;
-    search = (BlastSearchBlkPtr) ptr;
-    
-    if(ptr != NULL && search->queue_callback != NULL) {
-        search->queue_callback(search->semid, 3, 1);
-    }
-    
-    return;
-}
-
 static VoidPtr
 do_gapped_blast_search(VoidPtr ptr)
 
@@ -3332,10 +3226,6 @@ do_gapped_blast_search(VoidPtr ptr)
 	id_list = MemNew((search->thr_info->db_chunk_size+33)*sizeof(Int4));
     }
     
-    if (NlmThreadsAvailable() && search->pbp->process_num > 1)
-        NlmThreadAddOnExit(do_on_exit_func, ptr);
-
-
     while (BlastGetDbChunk(search->rdfp, &start, &stop, id_list, 
                            &id_list_length, search->thr_info) != TRUE)
     {
@@ -3428,9 +3318,6 @@ do_gapped_blast_search(VoidPtr ptr)
     if (id_list)
         id_list = MemFree(id_list);
 
-    if (NlmThreadsAvailable() && search->pbp->process_num > 1)
-        NlmThreadRemoveOnExit(do_on_exit_func, ptr);
-
     return (VoidPtr) search;
 } 
 
@@ -3451,9 +3338,6 @@ do_blast_search(VoidPtr ptr)
                          *sizeof(Int4));
     }
 
-    if (NlmThreadsAvailable() && search->pbp->process_num > 1)
-        NlmThreadAddOnExit(do_on_exit_func, ptr);
-    
     while (BlastGetDbChunk(search->rdfp, &start, &stop, id_list,
 			   &id_list_length, search->thr_info) != TRUE) {
         if (search->thr_info->realdb_done && id_list) {
@@ -3557,9 +3441,6 @@ do_blast_search(VoidPtr ptr)
     if (id_list)
         id_list = MemFree(id_list);
 
-    if (NlmThreadsAvailable() && search->pbp->process_num > 1)
-        NlmThreadRemoveOnExit(do_on_exit_func, ptr);
-    
     return (VoidPtr) search;
 } 
 
@@ -3647,25 +3528,6 @@ do_the_blast_run(BlastSearchBlkPtr search)
         for (index=0; index<search->pbp->process_num; index++) {
             NlmThreadJoin(thread_array[index], &status);
         }
-
-#ifdef OS_UNIX
-        if(search->pbp->process_num > 1 && 
-           search->semid > 0 &&
-           search->queue_callback) {
-            /* despite the fact, that this function may
-               return error - it will not be fatal for a
-               given blast search */
-            /*
-              BQ_IncSemaphore(search->semid, 3, 
-              search->pbp->process_num -1);
-            */
-
-            /* search->queue_callback(search->semid, 3, 
-               search->pbp->process_num -1); */
-            
-            search->queue_callback(search->semid, 3, -1);
-        }
-#endif
 
         for (index=1; index<search->pbp->process_num; index++) {
 #ifdef BLAST_COLLECT_STATS

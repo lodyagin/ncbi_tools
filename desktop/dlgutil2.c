@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.69 $
+* $Revision: 6.79 $
 *
 * File Description: 
 *
@@ -981,11 +981,11 @@ static void ChangeSubGroup (VoidPtr data, Int2 newval, Int2 oldval)
 
   ffp = (FeatureFormPtr) data;
   if (ffp != NULL) {
-    if (ffp->commonPage >= 0 && ffp->commonPage <= 4) {
+    if (ffp->commonPage >= 0 && ffp->commonPage <= 5) {
       SafeHide (ffp->commonSubGrp [ffp->commonPage]);
     }
     ffp->commonPage = newval;
-    if (ffp->commonPage >= 0 && ffp->commonPage <= 4) {
+    if (ffp->commonPage >= 0 && ffp->commonPage <= 5) {
       SafeShow (ffp->commonSubGrp [ffp->commonPage]);
     }
   }
@@ -1014,7 +1014,9 @@ static Boolean ShouldBeAGBQual (SeqFeatPtr sfp, Int2 qual, Boolean allowProductG
       qual == GBQUAL_note ||
       qual == GBQUAL_partial ||
       qual == GBQUAL_product ||
-      qual == GBQUAL_pseudo) {
+      qual == GBQUAL_pseudo ||
+      qual == GBQUAL_experimental ||
+      qual == GBQUAL_inference) {
     return FALSE;
   }
   if (qual == GBQUAL_map && (sfp == NULL || sfp->idx.subtype != FEATDEF_repeat_region)) return FALSE;
@@ -1398,11 +1400,11 @@ static void GeneXrefWarn (GrouP g)
 }
 
 static CharPtr  commonRadioFormTabs [] = {
-  "General", "Comment", "Citations", "Cross-Refs", NULL, NULL
+  "General", "Comment", "Citations", "Cross-Refs", "Identifiers", NULL, NULL
 };
 
 static CharPtr  commonNoCitFormTabs [] = {
-  "General", "Comment", "Cross-Refs", NULL, NULL
+  "General", "Comment", "Cross-Refs", "Identifiers", NULL, NULL
 };
 
 extern void Nlm_LaunchGeneFeatEd (ButtoN b);
@@ -1451,8 +1453,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     ffp->commonPage = 0;
     if (cdsQuals) {
     } else if (hasQuals) {
-      commonRadioFormTabs [4] = "Qualifiers";
-      commonNoCitFormTabs [3] = "Qualifiers";
+      commonRadioFormTabs [5] = "Qualifiers";
+      commonNoCitFormTabs [4] = "Qualifiers";
     }
     if (hasCitationTab) {
       ffp->commonRadio = CreateFolderTabs (m, commonRadioFormTabs, ffp->commonPage,
@@ -1463,8 +1465,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
                                            0, 0, PROGRAM_FOLDER_TAB,
                                            ChangeSubGroup, (Pointer) ffp);
     }
-    commonRadioFormTabs [4] = NULL;
-    commonNoCitFormTabs [3] = NULL;
+    commonRadioFormTabs [5] = NULL;
+    commonNoCitFormTabs [4] = NULL;
     p = HiddenGroup (m, 0, 0, NULL);
 
     c = HiddenGroup (p, -1, 0, NULL);
@@ -1552,7 +1554,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     ffp->geneAllele = NULL;
     ffp->geneDesc = NULL;
     ffp->locusTag = NULL;
-    for (page = 0; page < 5; page++) {
+    for (page = 0; page < 8; page++) {
       ffp->commonSubGrp [page] = NULL;
     }
     page = 0;
@@ -1656,6 +1658,18 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
 
     c = HiddenGroup (p, -1, 0, NULL);
     SetGroupSpacing (c, 10, 10);
+    t = HiddenGroup (c, 2, 0, NULL);
+    SetGroupSpacing (t, 10, 30);
+    StaticPrompt (t, "Feature ID for this feature", 0, dialogTextHeight, programFont, 'l');
+    ffp->featid = DialogText (t, "", 8, NULL);
+    StaticPrompt (t, "ID Xref to associated feature", 0, dialogTextHeight, programFont, 'l');
+    ffp->fidxref = DialogText (t, "", 8, NULL);
+    ffp->commonSubGrp [page] = c;
+    Hide (ffp->commonSubGrp [page]);
+    page++;
+
+    c = HiddenGroup (p, -1, 0, NULL);
+    SetGroupSpacing (c, 10, 10);
     x = NULL;
     /* z = NULL; */
     if (hasQuals && ffp->gbquals == NULL) {
@@ -1676,7 +1690,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     AlignObjects (ALIGN_CENTER, (HANDLE) ffp->commonRadio, (HANDLE) ffp->commonSubGrp [0],
                   (HANDLE) ffp->commonSubGrp [1], (HANDLE) ffp->commonSubGrp [2],
                   (HANDLE) ffp->commonSubGrp [3], (HANDLE) ffp->commonSubGrp [4],
-                  (HANDLE) ffp->gbquals, NULL);
+                  (HANDLE) ffp->commonSubGrp [5], (HANDLE) ffp->gbquals, NULL);
   }
   return c;
 }
@@ -2959,6 +2973,17 @@ extern void ModalCancelButton (ButtoN b)
   }
 }
 
+extern void ModalThirdOptionButton (ButtoN b)
+{
+  ModalAcceptCancelPtr acp;
+  
+  acp = (ModalAcceptCancelPtr) GetObjectExtra (b);
+  if (acp != NULL)
+  {
+    acp->third_option = TRUE;
+  }
+}
+
 typedef struct tabledisplay 
 {
   DIALOG_MESSAGE_BLOCK
@@ -3431,31 +3456,31 @@ static PoinT GetTableDisplayCell (TableDisplayPtr dlg, PoinT pt)
   return cell_coord;
 }
 
-static CharPtr TableDisplayGetTextForCell (TableDisplayPtr dlg, PoinT pt)
+extern CharPtr GetRowListCellText (ValNodePtr row_list, Int4 row, Int4 column)
 {
   ValNodePtr row_vnp, col_vnp;
   Int4       row_num, col_num;
   
-  if (dlg == NULL || dlg->row_list == NULL || pt.x < 0 || pt.y < 0)
+  if (row_list == NULL || row < 0 || column < 0)
   {
     return NULL;
   }
   
-  for (row_vnp = dlg->row_list, row_num = 0;
-       row_vnp != NULL && row_num < pt.y;
+  for (row_vnp = row_list, row_num = 0;
+       row_vnp != NULL && row_num < row;
        row_vnp = row_vnp->next, row_num++)
   {
   }
-  if (row_num != pt.y || row_vnp == NULL)
+  if (row_num != row || row_vnp == NULL)
   {
     return NULL;
   }
   for (col_vnp = row_vnp->data.ptrvalue, col_num = 0;
-       col_vnp != NULL && col_num < pt.x;
+       col_vnp != NULL && col_num < column;
        col_vnp = col_vnp->next, col_num++)
   {
   }
-  if (col_num != pt.x || col_vnp == NULL)
+  if (col_num != column || col_vnp == NULL)
   {
     return NULL;
   }
@@ -3463,6 +3488,16 @@ static CharPtr TableDisplayGetTextForCell (TableDisplayPtr dlg, PoinT pt)
   {
     return StringSave (col_vnp->data.ptrvalue);
   }  
+}
+
+static CharPtr TableDisplayGetTextForCell (TableDisplayPtr dlg, PoinT pt)
+{
+  if (dlg == NULL || dlg->row_list == NULL || pt.x < 0 || pt.y < 0)
+  {
+    return NULL;
+  }
+  
+  return GetRowListCellText (dlg->row_list, pt.y, pt.x);
 }
 
 static void TableDisplayOnClick (PaneL p, PoinT pt)
@@ -3549,47 +3584,367 @@ extern DialoG TableDisplayDialog (GrouP parent, Int4 width, Int4 height,
   return (DialoG) p;  
 }
 
+typedef struct multiselectdialog
+{
+  DIALOG_MESSAGE_BLOCK
+  DoC                  doc;
+  ValNodePtr           selected_list;
+  ParData              listPar;
+  ColData              listCol;
+  Int4                 num_choices;
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_userdata;    
+} MultiSelectDialogData, PNTR MultiSelectDialogPtr;
+
+static void DataToMultiSelectionDialog (DialoG d, Pointer userdata)
+{
+  MultiSelectDialogPtr dlg;
+  ValNodePtr           vnp;
+  Boolean              all_selected = FALSE;
+  
+  dlg = (MultiSelectDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  
+  dlg->selected_list = ValNodeFree (dlg->selected_list);
+  for (vnp = (ValNodePtr) userdata; vnp != NULL && ! all_selected; vnp = vnp->next)
+  {
+    if (vnp->data.intvalue == 1)
+    {
+      all_selected = TRUE;
+    }
+    else
+    {
+      ValNodeAddInt (&(dlg->selected_list), vnp->data.intvalue, vnp->data.intvalue);
+    }
+  }
+  if (all_selected)
+  {
+    dlg->selected_list = ValNodeFree (dlg->selected_list);
+    ValNodeAddInt (&(dlg->selected_list), 1, 1);
+  }
+  InvalDocRows (dlg->doc, 0, 0, 0);
+}
+
+static Pointer MultiSelectionDialogToData (DialoG d)
+{
+  MultiSelectDialogPtr dlg;
+  ValNodePtr           output_list = NULL, vnp;
+ 
+  dlg = (MultiSelectDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+  
+  for (vnp = dlg->selected_list; vnp != NULL; vnp = vnp->next)
+  {
+    ValNodeAddInt (&output_list, vnp->choice, vnp->choice);
+  }
+  return output_list;
+}
+
+static void 
+AddChoiceToSelection 
+(Int2                 choice_num,
+ Boolean              remove_other_choices,
+ MultiSelectDialogPtr dlg)
+{
+  ValNodePtr already_sel, vnp;
+  
+  if (dlg == NULL || dlg->doc == NULL || choice_num < 1)
+  {
+    return;
+  }
+  
+  if (choice_num == 1)
+  {
+    remove_other_choices = TRUE;
+  }
+  else 
+  {
+    /* if we have added a choice other than "All", remove the "All"
+     * selection if it was present.
+     */
+    ValNodeFree (ValNodeExtractList (&(dlg->selected_list), 1));
+    InvalDocRows (dlg->doc, 1, 1, 1);
+  }
+  
+  already_sel = ValNodeExtractList (&(dlg->selected_list), choice_num);
+  if (already_sel == NULL)
+  {
+    if (remove_other_choices)
+    {
+      /* delete old selections */
+      for (vnp = dlg->selected_list; vnp != NULL; vnp = vnp->next)
+      {
+        InvalDocRows (dlg->doc, vnp->choice, 1, 1);
+      }
+      dlg->selected_list = ValNodeFree (dlg->selected_list);      
+      ValNodeAddInt (&dlg->selected_list, choice_num, choice_num);
+      InvalDocRows (dlg->doc, choice_num, 1, 1);
+    }
+    else
+    {
+      /* add new selection */
+      ValNodeAddInt (&(dlg->selected_list), choice_num, choice_num);
+      InvalDocRows (dlg->doc, choice_num, 1, 1);
+    }
+  }
+  else
+  {
+    already_sel = ValNodeFree (already_sel);
+    InvalDocRows (dlg->doc, choice_num, 1, 1); 
+  }
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+static void SelectChoice (DoC d, PoinT pt)
+{
+  Int2      item, row;
+  Boolean   remove_other_choices;
+  ValNodePtr already_sel = NULL;
+  MultiSelectDialogPtr dlg;
+  
+  remove_other_choices = ! ctrlKey;
+  
+  dlg = (MultiSelectDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  
+  MapDocPoint (d, pt, &item, &row, NULL, NULL);
+  AddChoiceToSelection (item, remove_other_choices, dlg);
+}
+
+static Boolean ChoiceHighlight (DoC doc, Int2 item, Int2 row, Int2 col)
+{
+  MultiSelectDialogPtr dlg;
+  ValNodePtr           vnp;
+  
+  dlg = (MultiSelectDialogPtr) GetObjectExtra (doc);
+  if (dlg == NULL) return FALSE;
+  
+  for (vnp = dlg->selected_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->choice == item)
+    {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static void ChoiceOnKey (SlatE s, Char ch)
+{
+  MultiSelectDialogPtr dlg;
+  CharPtr              str;
+  Int2                 start_pos;
+  Boolean              found = FALSE;
+  ValNodePtr           vnp;
+  
+  dlg = (MultiSelectDialogPtr) GetObjectExtra (s);
+  if (dlg == NULL) return;
+
+  if ( (int) ch == 0 ) return;
+  
+  if (isalpha (ch))
+  {
+    /* find the position of the last choice we added */
+    for (vnp = dlg->selected_list; vnp != NULL && vnp->next != NULL; vnp = vnp->next)
+    {}
+    
+    if (vnp == NULL)
+    {
+      GetOffset (dlg->doc, NULL, &start_pos);
+      /* start pos is one less than document row */
+      start_pos ++;
+      /* want to start at row after top row */
+      start_pos ++;
+    }
+    else
+    {
+      /* want to start at row after currently selected row */
+      start_pos = vnp->choice + 1;
+    }
+    
+    while (!found && start_pos <= dlg->num_choices)
+    {
+      str = GetDocText (dlg->doc, start_pos, 1, 1);
+      if (tolower (str [0]) == tolower (ch))
+      {
+        SetOffset (dlg->doc, 0, start_pos - 1);
+        AddChoiceToSelection (start_pos, TRUE, dlg);
+        found = TRUE;
+      }
+      str = MemFree (str);
+      start_pos ++;
+    }
+    if (!found)
+    {
+      /* start searching at the top of the list */
+      start_pos = 1;
+      while (!found && start_pos <= dlg->num_choices)
+      {
+        str = GetDocText (dlg->doc, start_pos, 1, 1);
+        if (tolower (str [0]) == tolower (ch))
+        {
+          SetOffset (dlg->doc, 0, start_pos - 1);
+          AddChoiceToSelection (start_pos, TRUE, dlg);
+          found = TRUE;
+        }
+        str = MemFree (str);
+        start_pos ++;
+      }
+    }
+  }
+  else if (ch == NLM_DOWN)
+  {
+    /* down key */
+    if (dlg->selected_list == NULL)
+    {
+      GetOffset (dlg->doc, NULL, &start_pos);
+      start_pos ++;
+    }
+    else
+    {
+      start_pos = dlg->selected_list->choice;
+    }
+    start_pos ++;
+    
+    if (start_pos <= dlg->num_choices)
+    {
+      SetOffset (dlg->doc, 0, start_pos - 1);
+      AddChoiceToSelection (start_pos, TRUE, dlg); 
+      InvalDocRows (dlg->doc, 0, 0, 0);
+    }
+  }
+  else if (ch == NLM_UP)
+  {
+    /* up key */
+    if (dlg->selected_list == NULL)
+    {
+      GetOffset (dlg->doc, NULL, &start_pos);
+      start_pos ++;
+    }
+    else
+    {
+      start_pos = dlg->selected_list->choice;
+    }
+    start_pos --;
+    if (start_pos > 0)
+    {
+      SetOffset (dlg->doc, 0, start_pos - 1);
+      AddChoiceToSelection (start_pos, TRUE, dlg); 
+      InvalDocRows (dlg->doc, 0, 0, 0);
+    }
+  }
+}
+
+static DialoG 
+MultiSelectDialog 
+(GrouP      parent,
+ ValNodePtr choice_list,
+ Int4       list_height,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  MultiSelectDialogPtr dlg;
+  GrouP                p;
+  Int4                 height;
+  Int4                 width;
+  RecT                 r;
+  ValNodePtr           vnp;
+  
+  if (choice_list == NULL)
+  {
+    return NULL;
+  }
+  dlg = (MultiSelectDialogPtr) MemNew (sizeof (MultiSelectDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = HiddenGroup (parent, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = DataToMultiSelectionDialog;
+  dlg->fromdialog = MultiSelectionDialogToData;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = NULL;  
+  
+  dlg->selected_list = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  
+  SelectFont (systemFont);
+  width = 0;
+  for (vnp = choice_list; vnp != NULL; vnp = vnp->next)
+  {
+    width = MAX (width, StringWidth (vnp->data.ptrvalue));
+  }
+  
+  dlg->num_choices = ValNodeLen (choice_list) + 1;
+  
+  height = LineHeight ();
+  dlg->doc = DocumentPanel (p, width, height * list_height);
+  SetObjectExtra (dlg->doc, dlg, NULL);
+  
+  dlg->listPar.openSpace = FALSE;
+  dlg->listPar.keepWithNext = FALSE;
+  dlg->listPar.keepTogether = FALSE;
+  dlg->listPar.newPage = FALSE;
+  dlg->listPar.tabStops = FALSE;
+  dlg->listPar.minLines = 0;
+  dlg->listPar.minHeight = 0;
+
+  ObjectRect (dlg->doc, &r);
+  InsetRect (&r, 4, 4);
+  dlg->listCol.pixWidth = r.right - r.left;
+  dlg->listCol.pixInset = 0;
+  dlg->listCol.charWidth = 160;
+  dlg->listCol.charInset = 0;
+  dlg->listCol.font = systemFont;
+  dlg->listCol.just = 'l';
+  dlg->listCol.wrap = FALSE;
+  dlg->listCol.bar = FALSE;
+  dlg->listCol.underline = FALSE;
+  dlg->listCol.left = FALSE;
+  dlg->listCol.last = TRUE;  
+  
+	AppendText (dlg->doc, "All", &(dlg->listPar), &(dlg->listCol), programFont);
+  for (vnp = choice_list; vnp != NULL; vnp = vnp->next)
+  {
+	  AppendText (dlg->doc, vnp->data.ptrvalue, &(dlg->listPar), &(dlg->listCol), programFont);
+  }
+  SetDocAutoAdjust (dlg->doc, FALSE);
+  SetDocProcs (dlg->doc, SelectChoice, NULL, NULL, NULL);
+  SetDocShade (dlg->doc, NULL, NULL, ChoiceHighlight, NULL);
+  SetSlateChar ((SlatE) dlg->doc, ChoiceOnKey);
+  InvalDocument (dlg->doc);
+
+  return (DialoG) p;
+}
+
 typedef struct selectiondialog
 {
   DIALOG_MESSAGE_BLOCK
+  DialoG     multi_select_dlg;
   LisT       list_ctrl;
   PopuP      popup_ctrl;
-  ValNodePtr selected_list; 
-  Boolean    allow_multi; 
   Int4       num_choices;
   CharPtr    err_msg;
   Nlm_ChangeNotifyProc     change_notify;
   Pointer                  change_userdata;
 } SelectionDialogData, PNTR SelectionDialogPtr;
 
-static void CleanupSelectionDialogForm (GraphiC g, VoidPtr data)
-
-{
-  SelectionDialogPtr dlg;
-
-  dlg = (SelectionDialogPtr) data;
-  if (dlg != NULL) {
-    dlg->selected_list = ValNodeFree (dlg->selected_list);
-  }
-  StdCleanupExtraProc (g, data);
-}
-
 static void ResetSelectionDialog (SelectionDialogPtr dlg)
-{
-  Int4       i;
-  
+{  
   if (dlg != NULL)
   {
-    if (dlg->allow_multi)
+    if (dlg->multi_select_dlg != NULL)
     {
-      /* set ALL choice to FALSE */
-      SetItemStatus (dlg->list_ctrl, 1, FALSE);
-      
-      for (i = 2; i <= dlg->num_choices; i++)
-      {
-        SetItemStatus (dlg->list_ctrl, i, FALSE);
-      }
-      dlg->selected_list = ValNodeFree (dlg->selected_list);
+      PointerToDialog (dlg->multi_select_dlg, NULL);
     }
     else if (dlg->list_ctrl != NULL)
     {
@@ -3602,110 +3957,16 @@ static void ResetSelectionDialog (SelectionDialogPtr dlg)
   } 
 }
 
-static Int4 GetNewSelection (SelectionDialogPtr dlg)
-{
-  ValNodePtr vnp;
-  Int4       i;
-  
-  if (dlg == NULL)
-  {
-    return 0;
-  }
-  
-  if (dlg->allow_multi)
-  {
-    for (i = 1; i <= dlg->num_choices; i++)
-    {
-      if (GetItemStatus (dlg->list_ctrl, i))
-      {
-        for (vnp = dlg->selected_list; vnp != NULL && vnp->data.intvalue < i; vnp = vnp->next)
-        {}
-        if (vnp == NULL || vnp->data.intvalue > i)
-        {
-          /* this was not on the previous list, so it is the new choice */
-          return i;
-        }
-      }
-    }
-    /* nothing new was selected */
-    return 0;
-  }
-  
-  else if (dlg->list_ctrl != NULL)
-  {
-    return GetValue (dlg->list_ctrl);
-  }
-  else if (dlg->popup_ctrl != NULL)
-  {
-    return GetValue (dlg->popup_ctrl);
-  }
-  else
-  {
-    return 0;
-  }
-}
-
-static ValNodePtr GetCurrentSelections (SelectionDialogPtr dlg)
-{
-  ValNodePtr sel_list = NULL;
-  Int4       i;
-  
-  if (dlg == NULL)
-  {
-    return NULL;
-  }
-  
-  if (dlg->list_ctrl != NULL)
-  {
-    for (i = 1; i <= dlg->num_choices; i++)
-    {
-      if (GetItemStatus (dlg->list_ctrl, i))
-      {
-        ValNodeAddInt (&sel_list, 0, i);
-      }
-    }
-  }
-  else if (dlg->popup_ctrl != NULL)
-  {
-    i = GetValue (dlg->popup_ctrl);
-    if (i != 0)
-    {
-      ValNodeAddInt (&sel_list, 0, i);
-    }
-  }
-  return sel_list;
-}
-
 static void SelectionDialogChanged (LisT l)
 {
   SelectionDialogPtr dlg;
-  Int4               new_sel;
-  Int4               i;
 
   dlg = (SelectionDialogPtr) GetObjectExtra (l);
   if (dlg == NULL)
   {
     return;
   }
-  
-  if (dlg->allow_multi)
-  {
-    new_sel = GetNewSelection (dlg);
-    if (new_sel == 1)
-    {
-      for (i = 2; i <= dlg->num_choices; i++)
-      {
-        SetItemStatus (dlg->list_ctrl, i, FALSE);
-      }        
-    }
-    else
-    {
-      SetItemStatus (dlg->list_ctrl, 1, FALSE);
-    }
-    dlg->selected_list = GetCurrentSelections (dlg);
-  }
-  
-  
+    
   if (dlg->change_notify != NULL)
   {
     (dlg->change_notify)(dlg->change_userdata);
@@ -3731,7 +3992,7 @@ static void SelectionDialogPopupChanged (PopuP p)
 static void SelectionListToSelectionDialog (DialoG d, Pointer userdata)
 {
   SelectionDialogPtr dlg;
-  ValNodePtr         selected_list, vnp_list;
+  ValNodePtr         selected_list;
   Boolean            show_all = FALSE;
 
   dlg = (SelectionDialogPtr) GetObjectExtra (d);
@@ -3742,42 +4003,39 @@ static void SelectionListToSelectionDialog (DialoG d, Pointer userdata)
   
   ResetSelectionDialog (dlg);  
   selected_list = (ValNodePtr) userdata;
-  for (vnp_list = selected_list; vnp_list != NULL && ! show_all; vnp_list = vnp_list->next)
+  if (dlg->multi_select_dlg != NULL)
   {
-    if (vnp_list->data.intvalue < 1)
+    PointerToDialog (dlg->multi_select_dlg, selected_list);
+  }
+  else if (dlg->list_ctrl != NULL)
+  {
+    if (selected_list == NULL)
     {
-      continue;
+      SetValue (dlg->list_ctrl, 0);
     }
-    if (dlg->allow_multi)
+    else
     {
-      if (vnp_list->data.intvalue == 1)
-      {
-        show_all = TRUE;
-      }
-      else
-      {
-        SetItemStatus (dlg->list_ctrl, vnp_list->data.intvalue, TRUE);
-      } 
-    }
-    else if (dlg->list_ctrl != NULL)
-    {
-      SetValue (dlg->list_ctrl, vnp_list->data.intvalue);
-      return;
-    }
-    else if (dlg->popup_ctrl != NULL)
-    {
-      SetValue (dlg->popup_ctrl, vnp_list->data.intvalue);
-      return;
+      SetValue (dlg->list_ctrl, selected_list->data.intvalue);
     }
   }
-  dlg->selected_list = GetCurrentSelections (dlg);
+  else if (dlg->popup_ctrl)
+  {
+    if (selected_list == NULL)
+    {
+      SetValue (dlg->popup_ctrl, 0);
+    }
+    else
+    {
+      SetValue (dlg->popup_ctrl, selected_list->data.intvalue);
+    }
+  }
 }
 
 
 static Pointer SelectionDialogToSelectionList (DialoG d)
 {
   SelectionDialogPtr dlg;
-  ValNodePtr         sel_list = NULL;
+  ValNodePtr         sel_list = NULL, vnp;
   Boolean            all_selected = FALSE;
   Int4               i = 0;
 
@@ -3787,14 +4045,23 @@ static Pointer SelectionDialogToSelectionList (DialoG d)
     return NULL;
   }
   
-  if (dlg->allow_multi)
+  if (dlg->multi_select_dlg != NULL)
   {
-    all_selected = GetItemStatus (dlg->list_ctrl, 1);
-    for (i = 2; i <= dlg->num_choices; i++)
+    sel_list = (ValNodePtr) DialogToPointer (dlg->multi_select_dlg);
+    if (sel_list != NULL && sel_list->choice == 1)
     {
-      if (all_selected || GetItemStatus (dlg->list_ctrl, i))
+      sel_list = ValNodeFree (sel_list);
+      for (i = 2; i <= dlg->num_choices; i++)
       {
         ValNodeAddInt (&sel_list, 0, i - 1);
+      }
+    }
+    else
+    {
+      for (vnp = sel_list; vnp != NULL; vnp = vnp->next)
+      {
+        vnp->choice = 0;
+        vnp->data.intvalue = vnp->data.intvalue - 1;
       }
     }
   }
@@ -3820,6 +4087,7 @@ static void SelectionDialogMessage (DialoG d, Int2 mssg)
 
 {
   SelectionDialogPtr dlg;
+  ValNode            vn;
 
   dlg = (SelectionDialogPtr) GetObjectExtra (d);
   if (dlg != NULL) {
@@ -3829,7 +4097,11 @@ static void SelectionDialogMessage (DialoG d, Int2 mssg)
         ResetSelectionDialog (dlg);
         break;
       case VIB_MSG_ENTER :
-        if (dlg->list_ctrl != NULL)
+        if (dlg->multi_select_dlg != NULL)
+        {
+          Select (dlg->multi_select_dlg);
+        }
+        else if (dlg->list_ctrl != NULL)
         {
           Select (dlg->list_ctrl);
         }
@@ -3839,7 +4111,14 @@ static void SelectionDialogMessage (DialoG d, Int2 mssg)
         }
         break;
       case NUM_VIB_MSG + 1:
-        if (dlg->list_ctrl != NULL)
+        if (dlg->multi_select_dlg != NULL)
+        {
+          vn.next = NULL;
+          vn.choice = 1;
+          vn.data.intvalue = 1;
+          PointerToDialog (dlg->multi_select_dlg, &vn);
+        }
+        else if (dlg->list_ctrl != NULL)
         {
           SetItemStatus (dlg->list_ctrl, 1, TRUE);
         }
@@ -3859,17 +4138,18 @@ static ValNodePtr TestSelectionDialog (DialoG d)
 
 {
   SelectionDialogPtr dlg;
-  ValNodePtr         head = NULL;
-  Int4               sel_num;
+  ValNodePtr         head = NULL, vnp;
   Boolean            any_selected = FALSE;
 
   dlg = (SelectionDialogPtr) GetObjectExtra (d);
   if (dlg != NULL) {
-    if (dlg->allow_multi)
+    if (dlg->multi_select_dlg != NULL)
     {
-      for (sel_num = 1; sel_num <= dlg->num_choices && !any_selected; sel_num++)
+      vnp = DialogToPointer (dlg->multi_select_dlg);
+      if (vnp != NULL)
       {
-        any_selected = GetItemStatus (dlg->list_ctrl, sel_num);
+        any_selected = TRUE;
+        vnp = ValNodeFree (vnp);
       }
     }
     else if (dlg->list_ctrl != NULL)
@@ -3899,14 +4179,15 @@ static ValNodePtr TestSelectionDialog (DialoG d)
 /* All is automatically included as a choice if allow_multi is true. */
 /* The ValNodeList returned is a list of integers indicating the position of the item
  * in the list - 1 is the first item, 2 is the second item, etc. */
-extern DialoG SelectionDialog 
+extern DialoG SelectionDialogEx 
 (GrouP h,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata,
  Boolean                  allow_multi,
  CharPtr                  err_msg,
  ValNodePtr               choice_list,
- Int2                     list_height)
+ Int2                     list_height,
+ Boolean                  force_list)
 
 {
   SelectionDialogPtr  dlg;
@@ -3926,7 +4207,7 @@ extern DialoG SelectionDialog
   }
   
   p = HiddenGroup (h, 0, 2, NULL);
-  SetObjectExtra (p, dlg, CleanupSelectionDialogForm);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
 
   dlg->dialog = (DialoG) p;
   dlg->todialog = SelectionListToSelectionDialog;
@@ -3935,54 +4216,51 @@ extern DialoG SelectionDialog
   dlg->testdialog = TestSelectionDialog;
   dlg->change_notify = change_notify;
   dlg->change_userdata = change_userdata;
-  dlg->allow_multi = allow_multi;
   dlg->err_msg = err_msg;
-  dlg->selected_list = NULL;
   
   num_choices = ValNodeLen (choice_list);
   
   if (allow_multi)
   {
-    dlg->list_ctrl = MultiList (p, 8, list_height, SelectionDialogChanged);
-    SetObjectExtra (dlg->list_ctrl, dlg, NULL);
+    dlg->multi_select_dlg = MultiSelectDialog (p, choice_list, list_height,
+                                               change_notify, change_userdata);
+    dlg->num_choices = num_choices + 1;                                               
   }
   else
   {
-    if (num_choices < 20)
+    if (num_choices < 20 && ! force_list)
     {
       dlg->popup_ctrl = PopupList (p, TRUE, SelectionDialogPopupChanged);
       SetObjectExtra (dlg->popup_ctrl, dlg, NULL);
+      for (vnp = choice_list; vnp != NULL; vnp = vnp->next) {
+        PopupItem (dlg->popup_ctrl, vnp->data.ptrvalue);
+      }
     }
     else
     {
       dlg->list_ctrl = SingleList (p, 8, list_height, SelectionDialogChanged);
       SetObjectExtra (dlg->list_ctrl, dlg, NULL);
+      for (vnp = choice_list; vnp != NULL; vnp = vnp->next) {
+        ListItem (dlg->list_ctrl, vnp->data.ptrvalue);
+      }      
     }
+    dlg->num_choices = num_choices;
   }
   
-  /* populate list choices */
-  dlg->num_choices = 0;
-  if (dlg->allow_multi)
-  {
-    ListItem (dlg->list_ctrl, "All");
-    dlg->num_choices ++;
-  }
-  
-  if (dlg->list_ctrl != NULL)
-  {
-    for (vnp = choice_list; vnp != NULL; vnp = vnp->next) {
-      ListItem (dlg->list_ctrl, vnp->data.ptrvalue);
-      dlg->num_choices ++;
-    }
-  }
-  else if (dlg->popup_ctrl != NULL)
-  {
-    for (vnp = choice_list; vnp != NULL; vnp = vnp->next) {
-      PopupItem (dlg->popup_ctrl, vnp->data.ptrvalue);
-      dlg->num_choices ++;
-    }
-  }
   return (DialoG) p;
+}
+
+extern DialoG SelectionDialog 
+(GrouP h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Boolean                  allow_multi,
+ CharPtr                  err_msg,
+ ValNodePtr               choice_list,
+ Int2                     list_height)
+{
+  return SelectionDialogEx (h, change_notify, change_userdata, allow_multi,
+                          err_msg, choice_list, list_height, FALSE);
 }
 
 typedef struct valnodeselection
@@ -4160,6 +4438,7 @@ extern DialoG ValNodeSelectionDialogEx
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata,
  Boolean                  allow_multi,
+ Boolean                  force_list,
  RemapValNodeProc         remap_vn_proc)
 {
   ValNodeSelectionPtr  dlg;
@@ -4198,8 +4477,9 @@ extern DialoG ValNodeSelectionDialogEx
     ValNodeAddPointer (&choice_name_list, 0, (name_proc) (vnp));
   }
 
-  dlg->list_dlg = SelectionDialog (p, change_notify, change_userdata,
-                                   allow_multi, err_name, choice_name_list, list_height);
+  dlg->list_dlg = SelectionDialogEx (p, change_notify, change_userdata,
+                                   allow_multi, err_name, choice_name_list, 
+                                   list_height, force_list);
   ValNodeFreeData (choice_name_list);  
   
   return (DialoG) p;
@@ -4222,7 +4502,7 @@ extern DialoG ValNodeSelectionDialog
                                    name_proc, free_vn_proc,
                                    copy_vn_proc, match_vn_proc, err_name,
                                    change_notify, change_userdata,
-                                   allow_multi, NULL);
+                                   allow_multi, FALSE, NULL);
 }
 
 extern DialoG EnumAssocSelectionDialog 

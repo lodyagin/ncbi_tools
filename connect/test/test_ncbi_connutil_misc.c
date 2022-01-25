@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_connutil_misc.c,v 6.19 2005/05/02 16:12:16 lavr Exp $
+/*  $Id: test_ncbi_connutil_misc.c,v 6.21 2005/08/18 19:00:48 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -171,7 +171,7 @@ static void TEST_BASE64_Encoding(void)
     for (i = 0; i < 100; i++) {
         len = rand() % 250;
         memset(buf1, '\0', sizeof(buf1));
-        memset(buf2, '=',  sizeof(buf2));
+        memset(buf2, '\0', sizeof(buf2));
         memset(buf3, '\0', sizeof(buf3));
         for (j = 0; j < len; j++) {
             buf1[j] = rand() & 0xFF;
@@ -179,12 +179,20 @@ static void TEST_BASE64_Encoding(void)
 
         j = rand() % 100;
         BASE64_Encode(buf1, len, &read, buf2, sizeof(buf2), &written, &j);
+        if (len != read)
+            fprintf(stderr, "len = %d, read = %d\n", (int)len, (int)read);
         assert(len == read);
         assert (written < sizeof(buf2));
         assert(buf2[written] == '\0');
 
-        buf2[written] = '=';
-        BASE64_Decode(buf2, written, &read, buf3, sizeof(buf3), &written);
+        if (rand() & 1) {
+            buf2[written] = '=';
+        }
+        j = written;
+        BASE64_Decode(buf2, j, &read, buf3, sizeof(buf3), &written);
+        if (j != read)
+            fprintf(stderr, "j = %d, read = %d\n", (int)j, (int)read);
+        assert(j == read);
         assert(len == written);
         assert(memcmp(buf1, buf3, len) == 0);
     }
@@ -337,7 +345,7 @@ static void TEST_ConnNetInfo(void)
 
 int main(void)
 {
-    g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDENT;
+    g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
     srand(g_NCBI_ConnectRandomSeed);
 
     CORE_SetLOGFILE(stderr, 0/*false*/);
@@ -355,6 +363,12 @@ int main(void)
 /*
  * ---------------------------------------------------------------------------
  * $Log: test_ncbi_connutil_misc.c,v $
+ * Revision 6.21  2005/08/18 19:00:48  lavr
+ * More thorough BASE64_{En|De}code() tests
+ *
+ * Revision 6.20  2005/07/11 18:24:28  lavr
+ * Spell ADDEND
+ *
  * Revision 6.19  2005/05/02 16:12:16  lavr
  * Use global random seed
  *

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.11 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -48,6 +48,7 @@
 #include <dlogutil.h>
 #include <asn2gnbk.h>
 #include <explore.h>
+#include <asn2gnbp.h>
 
 /*****************************************************************************
 *
@@ -70,13 +71,55 @@ Boolean LIBCALL VSMFileInit(void)
                            
 	ObjMgrProcLoad(OMPROC_OPEN, "Read Text ASN1 File","ASN.1 text file", 0,0,0,0,NULL,
                            VSMGenericTextAsnOpen, PROC_PRIORITY_DEFAULT);
-                        
-                        /*** SAVE ***/   
+   
+                         /*** SAVE ***/   
 	ObjMgrProcLoad(OMPROC_SAVE, "Export Protein Feature Table","Protein Feature Table", 0,0,0,0,NULL,
                            VSMExportProteinFeatureTable, PROC_PRIORITY_DEFAULT);
 
-	ObjMgrProcLoad(OMPROC_SAVE, "Export Nucleotide Feature Table Without Sources","Nucleotide Feature Table Without Sources", 0,0,0,0,NULL,
-                           VSMExportNucFeatureTableWithoutSources, PROC_PRIORITY_DEFAULT);
+  ObjMgrProcLoadEx (OMPROC_SAVE,  
+                    "Export Nucleotide Feature Table, Selected Features Only, Suppress Protein IDs",
+                    "Selected Features Only, Suppress Protein IDs",
+                    0,0,0,0,NULL,
+                    VSMExportNucFeatureTableSelectedFeaturesSuppressProteinIDs, 
+                    PROC_PRIORITY_DEFAULT, "Nucleotide Feature Table");
+
+  ObjMgrProcLoadEx (OMPROC_SAVE,  
+                    "Export Nucleotide Feature Table, Selected Features Only",
+                    "Selected Features Only",
+                    0,0,0,0,NULL,
+                    VSMExportNucFeatureTableSelectedFeatures, 
+                    PROC_PRIORITY_DEFAULT, "Nucleotide Feature Table");                   
+
+	ObjMgrProcLoadEx(OMPROC_SAVE, 
+	                 "Export Nucleotide Feature Table Without Sources, Suppress Protein IDs", 
+	                 "Without Sources, Suppress Protein IDs",
+	                 0,0,0,0,NULL,
+                   VSMExportNucFeatureTableWithoutSourcesSuppressProteinIDs, 
+                   PROC_PRIORITY_DEFAULT, "Nucleotide Feature Table");
+
+	ObjMgrProcLoadEx(OMPROC_SAVE, 
+	                 "Export Nucleotide Feature Table Without Sources", 
+	                 "Without Sources",
+	                 0,0,0,0,NULL,
+                   VSMExportNucFeatureTableWithoutSources, 
+                   PROC_PRIORITY_DEFAULT, "Nucleotide Feature Table");
+
+  ObjMgrProcLoadEx(OMPROC_SAVE, 
+                   "Export Nucleotide Feature Table, Suppress Protein IDs",
+                   "Suppress Protein IDs",
+	                 0,0,0,0,NULL,
+                   VSMExportNucFeatureTableSuppressProteinIDs,
+                   PROC_PRIORITY_DEFAULT, "Nucleotide Feature Table");
+
+  ObjMgrProcLoadEx(OMPROC_SAVE, 
+                   "Export Nucleotide Feature Table",
+                   "Do Not Suppress Protein IDs",
+	                 0,0,0,0,NULL,
+                   VSMExportNucFeatureTable,
+                   PROC_PRIORITY_DEFAULT, "Nucleotide Feature Table");
+
+	ObjMgrProcLoad(OMPROC_SAVE, "Export Nucleotide Feature Table, Suppress Protein IDs","Nucleotide Feature Table, Suppress Protein IDs", 0,0,0,0,NULL,
+                           VSMExportNucFeatureTableSuppressProteinIDs, PROC_PRIORITY_DEFAULT);
 
 	ObjMgrProcLoad(OMPROC_SAVE, "Export Nucleotide Feature Table","Nucleotide Feature Table", 0,0,0,0,NULL,
                            VSMExportNucFeatureTable, PROC_PRIORITY_DEFAULT);
@@ -568,13 +611,96 @@ typedef struct featuretableexport
   Boolean show_nucs;
   Boolean show_prots;
   Boolean hide_sources;
+  Boolean export_only_selected;
+  Boolean suppress_protein_ids;
 } FeatureTableData, PNTR FeatureTablePtr;
+
+static void ExciseProteinIDLine (CharPtr line)
+{
+  CharPtr protein_id_line_start = NULL, protein_id_line_end;
+  
+  if (StringHasNoText (line))
+  {
+    return;
+  }
+  
+  protein_id_line_start = StringStr (line, "\n\t\t\tprotein_id\t");
+  if (protein_id_line_start == NULL)
+  {
+    return;
+  }
+  protein_id_line_end = StringChr (protein_id_line_start + 1, '\n');
+  if (protein_id_line_end == NULL)
+  {
+    return;
+  }
+  
+  while (*protein_id_line_end != 0)
+  {
+    *protein_id_line_start = *protein_id_line_end;
+    protein_id_line_start ++;
+    protein_id_line_end ++;
+  }
+  *protein_id_line_start = 0;
+}
+
+static Boolean IsBaseBlockFeatureSelected (BaseBlockPtr bbp)
+{
+  SelStructPtr     ssp = NULL;
+  Boolean          rval = FALSE;
+  
+  if (bbp == NULL 
+      || (bbp->blocktype != FEATURE_BLOCK && bbp->blocktype != SOURCEFEAT_BLOCK))
+  {
+    return FALSE;
+  }
+  ssp = ObjMgrGetSelected ();
+  while (ssp != NULL)
+  {
+	  if (ssp->entityID == bbp->entityID
+	      && ssp->itemtype == bbp->itemtype
+		    && ssp->itemID == bbp->itemID)
+	  {
+	    rval = TRUE;
+	  }
+    
+    ssp = ssp->next;    
+  }
+  return rval;
+}
+
+static Boolean BioseqHasSelectedFeatures (Asn2gbJobPtr ajp, Boolean hide_sources)
+{
+  Int4            index;
+  BaseBlockPtr    bbp;
+
+  if (ajp == NULL)
+  {
+    return FALSE;
+  }
+
+  for (index = 0; index < ajp->numParagraphs; index++) 
+  {
+    bbp = ajp->paragraphArray [index];
+    if ((bbp->blocktype == FEATURE_BLOCK 
+          || (bbp->blocktype == SOURCEFEAT_BLOCK && ! hide_sources))
+        && IsBaseBlockFeatureSelected (bbp))
+    {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
 
 static void VSMExportFeatureTableBioseqCallback (BioseqPtr bsp, Pointer userdata)
 
 {
   FeatureTablePtr ftp;
   CstType         custom_flags = 0;
+  Asn2gbJobPtr    ajp;
+  BaseBlockPtr    bbp;
+  Int4            index;
+  CharPtr         string;
   
   if (bsp == NULL || userdata == NULL) return;
   
@@ -592,7 +718,51 @@ static void VSMExportFeatureTableBioseqCallback (BioseqPtr bsp, Pointer userdata
   {
     custom_flags |= HIDE_SOURCE_FEATS;
   }
-  BioseqToGnbk (bsp, NULL, FTABLE_FMT, DUMP_MODE, NORMAL_STYLE, 0, 0, custom_flags, NULL, ftp->fp);    
+  ajp = asn2gnbk_setup (bsp, NULL, NULL, FTABLE_FMT, DUMP_MODE, NORMAL_STYLE,
+                           0, 0, custom_flags, NULL);
+                           
+  if (ftp->export_only_selected 
+      && ! BioseqHasSelectedFeatures (ajp, ftp->hide_sources))
+  {
+    /* nothing to export */
+  }                    
+  else if (ajp != NULL) 
+  {
+    for (index = 0; index < ajp->numParagraphs; index++) 
+    {
+      bbp = ajp->paragraphArray [index];
+      if (bbp->blocktype == FEATURE_BLOCK)
+      {
+        if (!ftp->export_only_selected || IsBaseBlockFeatureSelected (bbp))
+        {
+          string = asn2gnbk_format (ajp, (Int4) index);
+          if (ftp->suppress_protein_ids)
+          {
+            ExciseProteinIDLine (string);
+          }
+          fprintf (ftp->fp, string);
+          MemFree (string);
+        }
+      }
+      else if (bbp->blocktype == SOURCEFEAT_BLOCK)
+      {
+        if (!ftp->hide_sources 
+            && (!ftp->export_only_selected || IsBaseBlockFeatureSelected (bbp)))
+        {
+          string = asn2gnbk_format (ajp, (Int4) index);
+          fprintf (ftp->fp, string);
+          MemFree (string);
+        }
+      }
+      else
+      {
+        string = asn2gnbk_format (ajp, (Int4) index);
+        fprintf (ftp->fp, string);
+        MemFree (string);
+      }
+    }
+  }
+  asn2gnbk_cleanup (ajp);
 }
 
 static Int2 
@@ -600,7 +770,9 @@ VSMExportFeatureTable
 (OMProcControlPtr ompcp, 
  Boolean show_nucs, 
  Boolean show_prots,
- Boolean hide_sources)
+ Boolean hide_sources,
+ Boolean suppress_protein_ids,
+ Boolean export_only_selected)
 
 {
 	Char filename[255];
@@ -613,6 +785,7 @@ VSMExportFeatureTable
 		case OBJ_SEQENTRY:
 		case OBJ_BIOSEQ:
 		case OBJ_BIOSEQSET:
+	  case OBJ_SEQFEAT:
 			break;
 		default:
 			ErrPostEx(SEV_ERROR, 0,0,"ToFasta: Can only write Seq-entry, Bioseq, or Bioseq-set");
@@ -622,9 +795,17 @@ VSMExportFeatureTable
 	ftd.show_nucs = show_nucs;
 	ftd.show_prots = show_prots;
 	ftd.hide_sources = hide_sources;
+	ftd.suppress_protein_ids = suppress_protein_ids;
+	ftd.export_only_selected = export_only_selected;
 	
-  if (ompcp->input_choicetype == OBJ_SEQENTRY)
+  if (ompcp->input_itemtype == OBJ_SEQFEAT)
+  {
+    sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  }
+  else if (ompcp->input_choicetype == OBJ_SEQENTRY)
+  {
 		sep = (SeqEntryPtr)(ompcp->input_choice);
+  }
 	else
 	{
 		vn.next = NULL;
@@ -659,17 +840,37 @@ VSMExportFeatureTable
 
 Int2 LIBCALLBACK VSMExportNucFeatureTable ( Pointer data )
 {
-  return VSMExportFeatureTable ((OMProcControlPtr)data, TRUE, FALSE, FALSE);
+  return VSMExportFeatureTable ((OMProcControlPtr)data, TRUE, FALSE, FALSE, FALSE, FALSE);
+}
+
+Int2 LIBCALLBACK VSMExportNucFeatureTableSuppressProteinIDs ( Pointer data )
+{
+  return VSMExportFeatureTable ((OMProcControlPtr)data, TRUE, FALSE, FALSE, TRUE, FALSE);
 }
 
 Int2 LIBCALLBACK VSMExportNucFeatureTableWithoutSources ( Pointer data )
 {
-  return VSMExportFeatureTable ((OMProcControlPtr)data, TRUE, FALSE, TRUE);
+  return VSMExportFeatureTable ((OMProcControlPtr)data, TRUE, FALSE, TRUE, FALSE, FALSE);
+}
+
+Int2 LIBCALLBACK VSMExportNucFeatureTableWithoutSourcesSuppressProteinIDs ( Pointer data )
+{
+  return VSMExportFeatureTable ((OMProcControlPtr)data, TRUE, FALSE, TRUE, TRUE, FALSE);
+}
+
+Int2 LIBCALLBACK VSMExportNucFeatureTableSelectedFeatures ( Pointer data )
+{
+  return VSMExportFeatureTable ((OMProcControlPtr)data, TRUE, FALSE, FALSE, FALSE, TRUE);
+}
+
+Int2 LIBCALLBACK VSMExportNucFeatureTableSelectedFeaturesSuppressProteinIDs ( Pointer data )
+{
+  return VSMExportFeatureTable ((OMProcControlPtr)data, TRUE, FALSE, FALSE, TRUE, TRUE);
 }
 
 Int2 LIBCALLBACK VSMExportProteinFeatureTable (Pointer data)
 {
-  return VSMExportFeatureTable ((OMProcControlPtr)data, FALSE, TRUE, FALSE);
+  return VSMExportFeatureTable ((OMProcControlPtr)data, FALSE, TRUE, FALSE, FALSE, FALSE);
 }
 
 typedef struct selectedsave

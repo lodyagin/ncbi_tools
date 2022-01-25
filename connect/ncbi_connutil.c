@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.74 2005/05/13 21:12:23 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.77 2005/08/18 19:00:13 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -244,7 +244,7 @@ extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
     if (info->http_proxy_adjusted  ||  !*info->http_proxy_host)
         return 0/*false*/;
 
-    if (strlen(info->host) + strlen(info->path) + 16 > sizeof(info->path)) {
+    if (strlen(info->host) + 16 + strlen(info->path) >= sizeof(info->path)) {
         CORE_LOG(eLOG_Error,
                  "[ConnNetInfo_AdjustForHttpProxy]  Adjusted path too long");
         assert(0);
@@ -252,11 +252,11 @@ extern int/*bool*/ ConnNetInfo_AdjustForHttpProxy(SConnNetInfo* info)
     }
 
     {{
-        char x_path[sizeof(info->path)];
+        char x_path[sizeof(info->host) + 16 + sizeof(info->path)];
         sprintf(x_path, "http://%s:%hu%s%s", info->host, info->port,
                 *info->path == '/' ? "" : "/", info->path);
         assert(strlen(x_path) < sizeof(x_path));
-        strcpy(info->path, x_path);
+        strncpy0(info->path, x_path, sizeof(info->path) - 1);
     }}
 
     assert(sizeof(info->host) >= sizeof(info->http_proxy_host));
@@ -302,8 +302,10 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
             if (sscanf(a, ":%hu%n", &port, &n) < 1 || a + n != s)
                 return 0/*failure*/;
             info->port = port;
-        } else
+        } else {
             a = s;
+            info->port = DEF_CONN_PORT;
+        }
         if ((size_t)(a - h) < sizeof(info->host)) {
             memcpy(info->host, h, (size_t)(a - h));
             info->host[(size_t)(a - h)] = '\0';
@@ -1369,7 +1371,8 @@ extern int/*bool*/ BASE64_Decode
         return 0/*false*/;
     }
     for (;;) {
-        unsigned char c = i < src_size ? src[i++] : '=';
+        int/*bool*/  ok = i < src_size ? 1/*true*/ : 0/*false*/;
+        unsigned char c = ok ? src[i++] : '=';
         if (c == '=') {
             c  = 64; /*end*/
         } else if (c >= 'A'  &&  c <= 'Z') {
@@ -1390,7 +1393,10 @@ extern int/*bool*/ BASE64_Decode
         if (!(++k & 3)  ||  c == 64) {
             if (c == 64) {
                 if (k < 2) {
-                    --i;
+                    if (ok) {
+                        /* pushback leading '=' */
+                        --i;
+                    }
                     break;
                 }
                 switch (k) {
@@ -1404,12 +1410,19 @@ extern int/*bool*/ BASE64_Decode
                     temp >>= 8;
                     break;
                 default:
+                    assert(0);
                     break;
                 }
-                for (l = k; l < 4; l++) {
-                    if (i < src_size  &&  src[i] == '=') {
-                        i++;
-                    }
+                l = 4 - k;
+                while (l > 0) {
+                    /* eat up '='-padding */
+                    if (i >= src_size)
+                        break;
+                    if (src[i] == '=')
+                        l--;
+                    else if (src[i] != '\r'  &&  src[i] != '\n')
+                        break;
+                    i++;
                 }
             } else {
                 k = 0;
@@ -1435,7 +1448,7 @@ extern int/*bool*/ BASE64_Decode
     }
     *src_read    = i;
     *dst_written = j;
-    return i ? 1/*true*/ : 0/*false*/;
+    return i  &&  j ? 1/*true*/ : 0/*false*/;
 }
 
 
@@ -1689,6 +1702,15 @@ extern size_t HostPortToString(unsigned int   host,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.77  2005/08/18 19:00:13  lavr
+ * Fix finishing-up bug in BASE64_Decode()
+ *
+ * Revision 6.76  2005/06/08 20:42:41  lavr
+ * Buffer size better adjustment in ConnNetInfo_AdjustForProxy()
+ *
+ * Revision 6.75  2005/06/08 16:59:38  lavr
+ * ConnNetInfo_ParseURL(): Use default port for absolute URL
+ *
  * Revision 6.74  2005/05/13 21:12:23  lavr
  * BASE64_Encode(): fix a critical encoding bug (stray ending char)
  *

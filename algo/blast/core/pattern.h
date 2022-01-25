@@ -1,4 +1,4 @@
-/* $Id: pattern.h,v 1.6 2005/04/27 19:50:08 dondosha Exp $
+/* $Id: pattern.h,v 1.7 2005/07/18 19:38:33 bealer Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -175,8 +175,9 @@ typedef struct SPHIPatternSearchBlk {
  * @param patternSearch Pattern information [in]
  * @return Twice the number of hits (length of hitArray filled in)
 */
-Int4 FindPatternHits(Int4 *hitArray, const Uint1* seq, Int4 len, 
-                     Boolean is_dna, SPHIPatternSearchBlk * patternSearch);
+Int4 FindPatternHits(Int4 * hitArray, const Uint1 * seq, Int4 len,
+                     Boolean is_dna,
+                     const SPHIPatternSearchBlk * patternSearch);
 
 /** Allocates the pattern occurrences structure. */
 SPHIQueryInfo* SPHIQueryInfoNew(void);
@@ -205,9 +206,11 @@ SPHIQueryInfoCopy(SPHIQueryInfo* pat_info);
  * @param pattern_info Structure containing pattern occurrences. Must be 
  *                     allocated before this call. [out]
  */
-Int4 PHIGetPatternOccurrences(SPHIPatternSearchBlk* pattern_blk,
-                              BLAST_SequenceBlk* query, BlastSeqLoc* location, 
-                              Boolean is_dna, SPHIQueryInfo* pattern_info);
+Int4 PHIGetPatternOccurrences(const SPHIPatternSearchBlk * pattern_blk,
+                              const BLAST_SequenceBlk    * query,
+                              const BlastSeqLoc          * location, 
+                              Boolean                      is_dna,
+                              SPHIQueryInfo              * pattern_info);
 
 
 #ifdef __cplusplus

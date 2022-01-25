@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: makemat.c,v 6.16 2004/12/20 15:22:30 camacho Exp $";
+static char const rcsid[] = "$Id: makemat.c,v 6.17 2005/07/28 14:52:22 coulouri Exp $";
 
 /*
 * ===========================================================================
@@ -244,7 +244,6 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
     BLAST_ScoreBlkPtr sbp;
     BioseqPtr query_bsp;  /*structure to hold query information*/
     SeqEntryPtr sep;      /*structure to hold query retrieval result*/
-    Int4 index; /*loop index for array_size*/
     Int4 *lengthArray; /*array of sequence lengths*/
     Nlm_FloatHi *KArray;  /*array of K values, one per sequence*/
     Int4 maxLength; /*maximum length of a sequence*/

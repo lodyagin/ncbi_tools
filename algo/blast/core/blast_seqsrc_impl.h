@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc_impl.h,v 1.4 2005/05/26 15:45:10 dondosha Exp $
+/*  $Id: blast_seqsrc_impl.h,v 1.5 2005/07/06 14:30:29 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -308,7 +308,7 @@ DECLARE_BLAST_SEQ_SRC_MEMBER_FUNCTIONS(char*, InitErrorStr);
  *  blast_seqsrc.h), no exceptions should be thrown in C++ implementations.
  *  When not obvious, please see the required signature's documentation for
  *  determining what to implement.
- *  .
+ *   
  *  For ease of maintenance, please follow the following conventions:
  *  - Client implementations' initialization function should be called 
  *    \c XBlastSeqSrcInit, where \c X is the name of the implementation

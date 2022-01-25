@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.57 $
+* $Revision: 6.58 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.58  2005/08/18 21:02:34  kans
+* defined SMFidItemPtr structure and added featsByFeatID and numfids fields, in preparation for indexing by feature ID
+*
 * Revision 6.57  2005/04/01 20:57:48  kans
 * SIDPreCacheFunc and LookupFarSeqIDs take new argument for SP block and other places for gi numbers to hide
 *
@@ -928,66 +931,73 @@ typedef struct smdescitem {
   Uint1        seqdesctype; /* seqdesc subtype */
 } SMDescItem, PNTR SMDescItemPtr;
 
+typedef struct smfiditem {
+  SMFeatItemPtr  feat;
+  CharPtr        fid;       /* string with numeric or alpha local feature ID */
+} SMFidItem, PNTR SMFidItemPtr;
+
 typedef struct bioseqextra {
   BioseqPtr           bsp;
   ObjMgrDataPtr       omdp;
-  SeqFeatPtr          protFeat;       /* protein feature on whole protein bioseq gives name */
-  SeqFeatPtr          cdsOrRnaFeat;   /* cds or rna whose product points to this bioseq */
-  ValNodePtr          prodlisthead;   /* all features whose product points to this bioseq */
+  SeqFeatPtr          protFeat;        /* protein feature on whole protein bioseq gives name */
+  SeqFeatPtr          cdsOrRnaFeat;    /* cds or rna whose product points to this bioseq */
+  ValNodePtr          prodlisthead;    /* all features whose product points to this bioseq */
 
-  SMFeatBlockPtr      featlisthead;   /* linked list of SMFeatItem chunks, arrays point to elements */
-  SMFeatBlockPtr      featlisttail;   /* current block in linked list of SMFeatItem chunks */
+  SMFeatBlockPtr      featlisthead;    /* linked list of SMFeatItem chunks, arrays point to elements */
+  SMFeatBlockPtr      featlisttail;    /* current block in linked list of SMFeatItem chunks */
 
-  ValNodePtr          desclisthead;   /* linked list of ValNodes pointing to SMDescItem structures */
+  ValNodePtr          desclisthead;    /* linked list of ValNodes pointing to SMDescItem structures */
 
-  SMDescItemPtr PNTR  descrsByID;     /* array of all descriptors on bioseq in original itemID order */
-  SMDescItemPtr PNTR  descrsBySdp;    /* array of all features on bioseq sorted by SeqDescrPtr */
-  SMDescItemPtr PNTR  descrsByIndex;  /* array of all features on bioseq sorted by order of presentation */
+  SMDescItemPtr PNTR  descrsByID;      /* array of all descriptors on bioseq in original itemID order */
+  SMDescItemPtr PNTR  descrsBySdp;     /* array of all features on bioseq sorted by SeqDescrPtr */
+  SMDescItemPtr PNTR  descrsByIndex;   /* array of all features on bioseq sorted by order of presentation */
 
-  AnnotDescPtr PNTR   annotDescByID;  /* array of all AnnotDesc (on entity) in original itemID order */
+  AnnotDescPtr PNTR   annotDescByID;   /* array of all AnnotDesc (on entity) in original itemID order */
 
-  SeqAlignPtr PNTR    alignsByID;     /* array of all alignments (on entity) in original itemID order */
+  SeqAlignPtr PNTR    alignsByID;      /* array of all alignments (on entity) in original itemID order */
 
-  SMFeatItemPtr PNTR  featsByID;      /* array of all features on bioseq in original itemID order */
-  SMFeatItemPtr PNTR  featsBySfp;     /* array of all features on bioseq sorted by SeqFeatPtr */
-  SMFeatItemPtr PNTR  featsByPos;     /* array of all features on bioseq sorted by location */
-  SMFeatItemPtr PNTR  featsByRev;     /* array of all features on bioseq sorted by reverse location */
-  SMFeatItemPtr PNTR  featsByLabel;   /* array of all features on bioseq sorted by label */
+  SMFeatItemPtr PNTR  featsByID;       /* array of all features on bioseq in original itemID order */
+  SMFeatItemPtr PNTR  featsBySfp;      /* array of all features on bioseq sorted by SeqFeatPtr */
+  SMFeatItemPtr PNTR  featsByPos;      /* array of all features on bioseq sorted by location */
+  SMFeatItemPtr PNTR  featsByRev;      /* array of all features on bioseq sorted by reverse location */
+  SMFeatItemPtr PNTR  featsByLabel;    /* array of all features on bioseq sorted by label */
 
-  SMFeatItemPtr PNTR  genesByPos;     /* subset of featsByPos array containing only gene features */
-  SMFeatItemPtr PNTR  mRNAsByPos;     /* subset of featsByPos array containing only mRNA features */
-  SMFeatItemPtr PNTR  CDSsByPos;      /* subset of featsByPos array containing only CDS features */
-  SMFeatItemPtr PNTR  pubsByPos;      /* subset of featsByPos array containing only publication features */
-  SMFeatItemPtr PNTR  orgsByPos;      /* subset of featsByPos array containing only biosource features */
-  SMFeatItemPtr PNTR  operonsByPos;   /* subset of featsByPos array containing only operon features */
+  SMFeatItemPtr PNTR  genesByPos;      /* subset of featsByPos array containing only gene features */
+  SMFeatItemPtr PNTR  mRNAsByPos;      /* subset of featsByPos array containing only mRNA features */
+  SMFeatItemPtr PNTR  CDSsByPos;       /* subset of featsByPos array containing only CDS features */
+  SMFeatItemPtr PNTR  pubsByPos;       /* subset of featsByPos array containing only publication features */
+  SMFeatItemPtr PNTR  orgsByPos;       /* subset of featsByPos array containing only biosource features */
+  SMFeatItemPtr PNTR  operonsByPos;    /* subset of featsByPos array containing only operon features */
+  SMFeatItemPtr PNTR  genesByLocusTag; /* array of gene features sorted by locus_tag */
 
-  SMFeatItemPtr PNTR  genesByLocusTag;  /* array of gene features sorted by locus_tag */
+  SMFidItemPtr PNTR   featsByFeatID;   /* array of features sorted by feature ID string */
 
-  BioseqPtr           parentBioseq;   /* segmented parent of this raw part all packaged together */
-  SMSeqIdxPtr         segparthead;    /* linked list to speed mapping from parts to segmented bioseq */
+  BioseqPtr           parentBioseq;    /* segmented parent of this raw part all packaged together */
+  SMSeqIdxPtr         segparthead;     /* linked list to speed mapping from parts to segmented bioseq */
 
-  SMSeqIdxPtr PNTR    partsByLoc;     /* array of parts on segmented bioseq sorted by location */
-  SMSeqIdxPtr PNTR    partsBySeqId;   /* array of parts on segmented bioseq sorted by reverse uppercase seqID */
+  SMSeqIdxPtr PNTR    partsByLoc;      /* array of parts on segmented bioseq sorted by location */
+  SMSeqIdxPtr PNTR    partsBySeqId;    /* array of parts on segmented bioseq sorted by reverse uppercase seqID */
 
-  Int4                numdescs;       /* number of elements in descrsByID, descrsBySdp, and descrsByIndex arrays */
-  Int4                numannotdesc;   /* number of elements in annotDescByID array */
-  Int4                numaligns;      /* number of elements in alignsByID array */
-  Int4                numfeats;       /* number of elements in featsByID, featsBySfp and featsByPos arrays */
-  Int4                numgenes;       /* number of elements in genesByPos array */
-  Int4                nummRNAs;       /* number of elements in mRNAsByPos array */
-  Int4                numCDSs;        /* number of elements in CDSsByPos array */
-  Int4                numpubs;        /* number of elements in pubsByPos array */
-  Int4                numorgs;        /* number of elements in orgsByPos array */
-  Int4                numoperons;     /* number of elements in operonsByPos array */
+  Int4                numdescs;        /* number of elements in descrsByID, descrsBySdp, and descrsByIndex arrays */
+  Int4                numannotdesc;    /* number of elements in annotDescByID array */
+  Int4                numaligns;       /* number of elements in alignsByID array */
+  Int4                numfeats;        /* number of elements in featsByID, featsBySfp and featsByPos arrays */
+  Int4                numgenes;        /* number of elements in genesByPos array */
+  Int4                nummRNAs;        /* number of elements in mRNAsByPos array */
+  Int4                numCDSs;         /* number of elements in CDSsByPos array */
+  Int4                numpubs;         /* number of elements in pubsByPos array */
+  Int4                numorgs;         /* number of elements in orgsByPos array */
+  Int4                numoperons;      /* number of elements in operonsByPos array */
+  Int4                numfids;         /* number of elements in featsByFeatID array */
 
-  Int4                numsegs;        /* number of segments in partslist array */
+  Int4                numsegs;         /* number of segments in partslist array */
 
-  Int4                min;            /* used for finding best protein feature */
-  Uint4               bspItemID;      /* for bioseq explore functions */
-  Uint4               bspIndex;       /* for bioseq explore functions */
-  Int2                blocksize;      /* size of SMFeatBlock.data array to avoid wasting space */
-                                      /* additional fields to map between genome record and parts,
-                                         genomic DNA and mRNA, and mRNA and protein */
+  Int4                min;             /* used for finding best protein feature */
+  Uint4               bspItemID;       /* for bioseq explore functions */
+  Uint4               bspIndex;        /* for bioseq explore functions */
+  Int2                blocksize;       /* size of SMFeatBlock.data array to avoid wasting space */
+                                       /* additional fields to map between genome record and parts,
+                                          genomic DNA and mRNA, and mRNA and protein */
 } BioseqExtra, PNTR BioseqExtraPtr;
 
 /* the following functions are not frequently called by applications */

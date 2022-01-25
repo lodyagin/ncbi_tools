@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket.c,v 6.176 2005/05/23 20:35:30 lavr Exp $
+/*  $Id: ncbi_socket.c,v 6.180 2005/07/25 15:03:45 rsmith Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -256,15 +256,15 @@ typedef int TSOCK_Handle;
 
 
 #ifdef sun
-#undef sun
+#  undef sun
 #endif
 
 
-#ifdef HAVE_SOCKLEN_T
-typedef socklen_t SOCK_socklen_t;
+#if defined(HAVE_SOCKLEN_T)  ||  defined (_SOCKLEN_T)
+typedef socklen_t  SOCK_socklen_t;
 #else
-typedef int       SOCK_socklen_t;
-#endif /*HAVE_SOCKLEN_T*/
+typedef int	       SOCK_socklen_t;
+#endif
 
 
 /* Type of connecting socket (except listening)
@@ -3956,13 +3956,6 @@ extern EIO_Status DSOCK_RecvMsg(SOCK            sock,
         int                x_errno;
         int                x_read;
         struct sockaddr_in addr;
-#if defined(HAVE_SOCKLEN_T)
-        typedef socklen_t  SOCK_socklen_t;
-#elif defined(NCBI_OS_MAC)
-        typedef UInt32     SOCK_socklen_t;
-#else
-        typedef int        SOCK_socklen_t;
-#endif /*HAVE_SOCKLEN_T*/
         SOCK_socklen_t     addrlen = (SOCK_socklen_t) sizeof(addr);
 #ifdef HAVE_SIN_LEN
         addr.sin_len = addrlen;
@@ -4449,9 +4442,28 @@ extern char* SOCK_gethostbyaddr(unsigned int host,
 }
 
 
+unsigned int SOCK_GetLoopbackAddress(void)
+{
+    return htonl(INADDR_LOOPBACK);
+}
+
+
 /*
  * ===========================================================================
  * $Log: ncbi_socket.c,v $
+ * Revision 6.180  2005/07/25 15:03:45  rsmith
+ * take out special SOCK_socklen_t case for MAC_OS since changes to mitsock make it unnecessary.
+ *
+ * Revision 6.179  2005/07/22 21:31:39  vakatov
+ * Narrow down the previous commit to MAC.
+ * Also remove somewhat puzzling #ifdef _SYS_SOCKET_H_.
+ *
+ * Revision 6.178  2005/07/22 15:04:06  rsmith
+ * Somewhat rationalize the use of socklen_t arguments.
+ *
+ * Revision 6.177  2005/07/19 19:55:29  lavr
+ * +SOCK_GetLoopbackAddress()
+ *
  * Revision 6.176  2005/05/23 20:35:30  lavr
  * SOCK_ReadLine():  Remove wrong assert()
  *

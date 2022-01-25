@@ -102,6 +102,10 @@ SOURCE=..\..\..\..\..\algo\blast\api\repeats_filter.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\..\algo\blast\api\dust_filter.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\..\algo\blast\api\seqsrc_multiseq.c
 # End Source File
 # Begin Source File
@@ -163,6 +167,10 @@ SOURCE=..\..\..\..\..\algo\blast\api\hspstream_queue.h
 # Begin Source File
 
 SOURCE=..\..\..\..\..\algo\blast\api\repeats_filter.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\..\algo\blast\api\dust_filter.h
 # End Source File
 # Begin Source File
 

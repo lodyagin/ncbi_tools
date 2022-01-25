@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/12/05
 *
-* $Revision: 1.3 $
+* $Revision: 1.6 $
 *
 * File Description:
 *
@@ -48,8 +48,9 @@
 #include <explore.h>
 #include <subutil.h>
 #include <toasn3.h>
+#include <pmfapi.h>
 
-#define NPS2GPSAPP_VER "1.2"
+#define NPS2GPSAPP_VER "1.4"
 
 CharPtr NPS2GPSAPPLICATION = NPS2GPSAPP_VER;
 
@@ -57,6 +58,7 @@ typedef struct n2gdata {
   CharPtr  results;
   CharPtr  outfile;
   Boolean  failure;
+  Boolean  lock;
 } N2GData, PNTR N2GPtr;
 
 typedef struct npsseqs {
@@ -336,35 +338,6 @@ static void LclAddMrnaTitles (
   SeqDescrAddPointer (&(bsp->descr), Seq_descr_title, (Pointer) str);
 }
 
-static Boolean LIBCALLBACK DummyACMProc (
-  SeqFeatPtr sfp,
-  SeqMgrFeatContextPtr context
-)
-
-{
-  return TRUE;
-}
-
-static Boolean AmbiguousCdsMrna (BioseqPtr bsp)
-
-{
-  Int2               count;
-  SeqMgrFeatContext  fcontext;
-  SeqFeatPtr         sfp;
-
-  if (bsp == NULL) return TRUE;
-
-  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
-  while (sfp != NULL) {
-    count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_mRNA, NULL, 0,
-                                             CHECK_INTERVALS, NULL, DummyACMProc);
-    if (count > 1) return TRUE;
-    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
-  }
-
-  return FALSE;
-}
-
 static SeqIdPtr MakeIdFromLocusTag (SeqFeatPtr mrna)
 
 {
@@ -523,6 +496,7 @@ static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
   Boolean            goOn;
   LoopData           ld;
   SeqFeatPtr         sfp;
+  CharPtr            str;
 
   /* loop through CDS features, finding single unused mRNA partner */
 
@@ -542,6 +516,12 @@ static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
           sfp->id.choice = 1;
           ld.mrna->id.choice = 1;
           goOn = TRUE;
+        } else {
+          str = fcontext.label;
+          if (StringHasNoText (str)) {
+            str = "?";
+          }
+          Message (MSG_POSTERR, " CDS '%s' has %d overlapping mRNA", str, (int) ld.count);
         }
       }
       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
@@ -556,6 +536,11 @@ static void LoopThroughCDSs (BioseqPtr bsp, Int2Ptr ctrp, N2GPtr ngp)
       if (ngp != NULL) {
         ngp->failure = TRUE;
       }
+      str = fcontext.label;
+      if (StringHasNoText (str)) {
+        str = "?";
+      }
+      Message (MSG_POSTERR, "Failed to match CDS '%s' to mRNA", str);
     }
     sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
   }
@@ -596,18 +581,6 @@ static void NPStoGPS (Uint2 entityID, CharPtr filename, N2GPtr ngp)
     }
     return;
   }
-
-  /*
-  if (AmbiguousCdsMrna (bsp)) {
-    Message (MSG_POSTERR,
-             "Unable to proceed because of unresolved CDS-mRNA ambiguity in %s",
-             filename);
-    if (ngp != NULL) {
-      ngp->failure = TRUE;
-    }
-    return;
-  }
-  */
 
   GetSeqEntryParent (top, &parentptr, &parenttype);
 
@@ -808,6 +781,9 @@ static void ProcessOneRecord (
 
     if (sep != NULL) {
       bsplist = NULL;
+      if (ngp->lock) {
+        bsplist = LockFarComponents (sep);
+      }
     
       str = StringRChr (filename, DIRDELIMCHR);
       if (str != NULL) {
@@ -882,6 +858,8 @@ static void ProcessOneRecord (
           }
         }
       }
+
+      bsplist = UnlockFarComponents (bsplist);
     }
 
   } else {
@@ -900,6 +878,8 @@ static void ProcessOneRecord (
 #define o_argOutputFile  3
 #define f_argFilter      4
 #define x_argSuffix      5
+#define R_argRemote      6
+#define L_argLockFar     7
 
 
 Args myargs [] = {
@@ -915,6 +895,10 @@ Args myargs [] = {
     TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
   {"File Selection Suffix", ".ent", NULL, NULL,
     TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
+  {"Remote Fetching from ID", "F", NULL, NULL,
+    TRUE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Lock Components in Advance", "F", NULL, NULL,
+    TRUE, 'L', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -924,6 +908,7 @@ Int2 Main (void)
   CharPtr  directory, filter, infile, outfile, results, suffix;
   N2GData  ngd;
   N2GPtr   ngp;
+  Boolean  remote;
 
   /* standard setup */
 
@@ -964,6 +949,7 @@ Int2 Main (void)
   MemSet ((Pointer) &ngd, 0, sizeof (N2GData));
   ngp = &ngd;
   ngd.failure = FALSE;
+  ngd.lock = (Boolean) myargs [L_argLockFar].intvalue;
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   results = (CharPtr) myargs [r_argOutputPath].strvalue;
@@ -975,19 +961,33 @@ Int2 Main (void)
   filter = (CharPtr) myargs [f_argFilter].strvalue;
   suffix = (CharPtr) myargs [x_argSuffix].strvalue;
 
+  remote = (Boolean) myargs [R_argRemote].intvalue;
+
+  /* register fetch function */
+
+  if (remote) {
+    PubSeqFetchEnable ();
+  }
+
   /* process input file */
 
   if (StringDoesHaveText (directory)) {
 
     ngd.results = results;
 
-    DirExplore (directory, filter, suffix, ProcessOneRecord, (Pointer) &ngd);
+    DirExplore (directory, filter, suffix, TRUE, ProcessOneRecord, (Pointer) &ngd);
 
   } else if (StringDoesHaveText (infile) && StringDoesHaveText (outfile)) {
 
     ngd.outfile = outfile;
 
     ProcessOneRecord (infile, (Pointer) &ngd);
+  }
+
+  /* close fetch function */
+
+  if (remote) {
+    PubSeqFetchDisable ();
   }
 
   if (ngd.failure) return 1;

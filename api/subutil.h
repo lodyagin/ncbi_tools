@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.49 $
+* $Revision: 6.50 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,9 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.50  2005/06/10 14:06:16  kans
+* added GENOME_hydrogenosome define
+*
 * Revision 6.49  2005/03/30 21:13:49  bollin
 * added function AddIntToSeqLoc
 *
@@ -836,6 +839,7 @@ NLM_EXTERN Boolean AddGenBankBlockToEntry (
 #define GENOME_leucoplast 17
 #define GENOME_proplastid 18
 #define GENOME_endogenous_virus 19
+#define GENOME_hydrogenosome 20
 
 /********************************************
 *  Genome describes the type of genome from which the DNA or gene for

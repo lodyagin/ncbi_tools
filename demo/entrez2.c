@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -61,7 +61,7 @@
 
 #include <entrez2.h>
 
-#define ENTREZ_APP_VERSION "9.30"
+#define ENTREZ_APP_VERSION "9.35"
 
 #define MAX_QUERY_FORMS 256
 
@@ -223,7 +223,7 @@ static void SetupAppProperties (void)
   seqviewprocs.startInScrollText = FALSE;
 
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &mapPageData);
-  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &sumPageData);
+  /* AddBioseqPageToList (&(seqviewprocs.pageSpecs), &sumPageData); */
   /* AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gphPageData); */
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asn2gphGphPageData);
   /* AddBioseqPageToList (&(seqviewprocs.pageSpecs), &alnPageData); */

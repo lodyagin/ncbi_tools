@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.77 $
+* $Revision: 6.78 $
 *
 * File Description: 
 *
@@ -3633,6 +3633,195 @@ extern Int2 LIBCALLBACK CdRgnGenFunc (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+typedef struct geneuserpage {
+  DIALOG_MESSAGE_BLOCK
+  TexT          symbol;
+  TexT          name;
+  TexT          source;
+  GrouP         status;
+} GeneUserData, PNTR GeneUserPtr;
+
+static void UserObjectPtrToGene (DialoG d, Pointer data)
+
+{
+  GeneUserPtr    gup;
+  ObjectIdPtr    oip;
+  CharPtr        str;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  gup = (GeneUserPtr) GetObjectExtra (d);
+  uop = (UserObjectPtr) data;
+  if (gup != NULL) {
+    if (uop != NULL && uop->type != NULL && StringICmp (uop->type->str, "OfficialNomenclature") == 0) {
+      for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+        oip = ufp->label;
+        if (oip == NULL || oip->str == NULL) continue;
+        if (StringICmp (oip->str, "Symbol") == 0) {
+          if (ufp->choice == 1) {
+            str = (CharPtr) ufp->data.ptrvalue;
+            if (str != NULL) {
+              SetTitle (gup->symbol, str);
+            }
+          }
+        } else if (StringICmp (oip->str, "Name") == 0) {
+          if (ufp->choice == 1) {
+            str = (CharPtr) ufp->data.ptrvalue;
+            if (str != NULL) {
+              SetTitle (gup->name, str);
+            }
+          }
+        } else if (StringICmp (oip->str, "DataSource") == 0) {
+          if (ufp->choice == 1) {
+            str = (CharPtr) ufp->data.ptrvalue;
+            if (str != NULL) {
+              SetTitle (gup->source, str);
+            }
+          }
+        } else if (StringICmp (oip->str, "Status") == 0) {
+          if (ufp->choice == 1) {
+            str = (CharPtr) ufp->data.ptrvalue;
+            if (str != NULL) {
+              if (StringICmp (str, "Official") == 0) {
+                SetValue (gup->status, 1);
+              } else if (StringICmp (str, "Interim") == 0) {
+                SetValue (gup->status, 2);
+              }
+            }
+          }
+        }
+      }
+      ufp = uop->data;
+      if (ufp != NULL && ufp->choice == 1) {
+        oip = ufp->label;
+        if (oip != NULL && oip->str != NULL && StringICmp (oip->str, "Symbol") == 0) {
+          str = (CharPtr) ufp->data.ptrvalue;
+          if (str != NULL) {
+            SetTitle (gup->symbol, str);
+          }
+        }
+      }
+    }
+  }
+}
+
+static UserObjectPtr CreateGeneUserObject (
+  GeneUserPtr gup
+)
+
+{
+  UserFieldPtr   last = NULL;
+  ObjectIdPtr    oip;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+  Int2           val;
+
+  if (gup == NULL) return NULL;
+  if (TextHasNoText (gup->symbol)) return NULL;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("OfficialNomenclature");
+  uop->type = oip;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("Symbol");
+  ufp->label = oip;
+  ufp->choice = 1; /* visible string */
+  ufp->data.ptrvalue = (Pointer) SaveStringFromText (gup->symbol);
+
+  uop->data = ufp;
+  last = ufp;
+
+  if (! TextHasNoText (gup->name)) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("Name");
+    ufp->label = oip;
+    ufp->choice = 1; /* visible string */
+    ufp->data.ptrvalue = (Pointer) SaveStringFromText (gup->name);
+    last->next = ufp;
+    last = ufp;
+  }
+
+  if (! TextHasNoText (gup->source)) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("DataSource");
+    ufp->label = oip;
+    ufp->choice = 1; /* visible string */
+    ufp->data.ptrvalue = (Pointer) SaveStringFromText (gup->source);
+    last->next = ufp;
+    last = ufp;
+  }
+
+  val = GetValue (gup->status);
+  if (val == 1 || val == 2) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("Status");
+    ufp->label = oip;
+    ufp->choice = 1; /* visible string */
+    if (val == 1) {
+      ufp->data.ptrvalue = (Pointer) StringSave ("Official");
+    } else if (val == 2) {
+      ufp->data.ptrvalue = (Pointer) StringSave ("Interim");
+    }
+    last->next = ufp;
+    last = ufp;
+  }
+
+  return uop;
+}
+
+static Pointer GeneToUserObjectPtr (DialoG d)
+
+{
+  GeneUserPtr    gup;
+  UserObjectPtr  uop;
+
+  uop = NULL;
+  gup = (GeneUserPtr) GetObjectExtra (d);
+  if (gup != NULL) {
+    uop = CreateGeneUserObject (gup);
+  }
+  return (Pointer) uop;
+}
+
+static DialoG CreateGeneUserObjectDialog (GrouP h)
+
+{
+  GrouP        g;
+  GeneUserPtr  gup;
+  GrouP        p;
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  gup = (GeneUserPtr) MemNew (sizeof (GeneUserData));
+  if (gup != NULL) {
+    SetObjectExtra (p, gup, StdCleanupExtraProc);
+    gup->dialog = (DialoG) p;
+    gup->todialog = UserObjectPtrToGene;
+    gup->fromdialog = GeneToUserObjectPtr;
+    gup->testdialog = NULL;
+    g = HiddenGroup (p, 2, 0, NULL);
+    StaticPrompt (g, "Symbol", 0, 0, programFont, 'l');
+    gup->symbol = DialogText (g, "", 15, NULL);
+    StaticPrompt (g, "Name", 0, 0, programFont, 'l');
+    gup->name = DialogText (g, "", 15, NULL);
+    StaticPrompt (g, "Data Source", 0, 0, programFont, 'l');
+    gup->source = DialogText (g, "", 15, NULL);
+    StaticPrompt (g, "Status", 0, 0, programFont, 'l');
+    gup->status = HiddenGroup (g, 3, 0, NULL);
+    RadioButton (gup->status, "Official");
+    RadioButton (gup->status, "Interim");
+  }
+
+  return (DialoG) p;
+}
+
 typedef struct genepage {
   DIALOG_MESSAGE_BLOCK
   TexT          locus;
@@ -3643,7 +3832,7 @@ typedef struct genepage {
   ButtoN        pseudo;
   DialoG        db;
   DialoG        syn;
-  GrouP         geneGrp [3];
+  GrouP         geneGrp [4];
 } GenePage, PNTR GenePagePtr;
 
 typedef struct geneform {
@@ -3710,11 +3899,11 @@ static Pointer GenePageToGeneRefPtr (DialoG d)
 }
 
 static CharPtr geneTabs [] = {
-  "General", "Synonyms", NULL
+  "General", "Synonyms", "Nomenclature", NULL
 };
 
 static CharPtr geneTabsXref [] = {
-  "General", "Synonyms", "Cross-Refs", NULL
+  "General", "Synonyms", "Nomenclature", "Cross-Refs", NULL
 };
 
 static void ChangeGeneSubPage (VoidPtr data, Int2 newval, Int2 oldval)
@@ -3724,17 +3913,17 @@ static void ChangeGeneSubPage (VoidPtr data, Int2 newval, Int2 oldval)
 
   gpp = (GenePagePtr) data;
   if (gpp != NULL) {
-    if (oldval >= 0 && oldval <= 2) {
+    if (oldval >= 0 && oldval <= 3) {
       SafeHide (gpp->geneGrp [oldval]);
     }
-    if (newval >= 0 && newval <= 2) {
+    if (newval >= 0 && newval <= 3) {
       SafeShow (gpp->geneGrp [newval]);
     }
     Update ();
   }
 }
 
-static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp)
+static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp, GeneFormPtr gfp)
 
 {
   GrouP        f;
@@ -3809,8 +3998,12 @@ static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp)
     Hide (gpp->geneGrp [1]);
 
     gpp->geneGrp [2] = HiddenGroup (k, -1, 0, NULL);
+    gfp->usrobjext = CreateGeneUserObjectDialog (gpp->geneGrp [2]);
+    Hide (gpp->geneGrp [2]);
+
+    gpp->geneGrp [3] = HiddenGroup (k, -1, 0, NULL);
     if (showXrefs) {
-      q = HiddenGroup (gpp->geneGrp [2], -1, 0, NULL);
+      q = HiddenGroup (gpp->geneGrp [3], -1, 0, NULL);
       if (GetAppProperty ("ReadOnlyDbTags") == NULL) {
         just = 'c';
       } else {
@@ -3822,11 +4015,11 @@ static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp)
       StaticPrompt (t, "Object ID", 8 * stdCharWidth, 0, programFont, just);
       gpp->db = CreateDbtagDialog (q, 3, -1, 7, 8);
     }
-    Hide (gpp->geneGrp [2]);
+    Hide (gpp->geneGrp [3]);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) tbs,
                   (HANDLE) gpp->geneGrp [0], (HANDLE) gpp->geneGrp [1],
-                  (HANDLE) gpp->geneGrp [2], NULL);
+                  (HANDLE) gpp->geneGrp [2], (HANDLE) gpp->geneGrp [3], NULL);
   }
 
   return (DialoG) p;
@@ -4047,7 +4240,7 @@ extern ForM CreateGeneForm (Int2 left, Int2 top, CharPtr title,
     if (sfp != NULL && sfp->data.choice == SEQFEAT_GENE) {
       grp = sfp->data.value.ptrvalue;
     }
-    gfp->data = CreateGeneDialog (s, NULL, grp);
+    gfp->data = CreateGeneDialog (s, NULL, grp, gfp);
     gfp->pages [GENE_PAGE] = s;
     Hide (gfp->pages [GENE_PAGE]);
 

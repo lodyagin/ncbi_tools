@@ -807,6 +807,29 @@ $^ RedundantFields, 98
 A comment or other field contains information that is redundant with the primary
 field on a feature.
 
+$^ CDSwithNoMRNAOverlap, 99
+The CDS feature has more than one overlapping mRNA with the proper intervals and
+no other identification assigning it to a different coding region.
+
+$^ FeatureProductInconsistency, 100
+The CDS feature has more than one overlapping mRNA with the proper intervals and
+no other identification assigning it to a different coding region.
+
+$^ ImproperBondLocation, 101
+Only bond features should have locations of type bond. Most other features should
+use interval or point locations.
+
+$^ GeneXrefWithoutGene, 102
+This feature has a gene xref, but there is no equivalent gene feature anywhere
+on the record.
+
+$^ SeqFeatXrefProblem, 103
+This feature has a seqfeat xref, but it has nothing in the id or data field.
+
+$^ ProductFetchFailure, 104
+Unable to fetch the Bioseq product of this feature.  Remote fetching was requested,
+so this is likely due to a failure in a network sequence retrieval service.
+
 $$ SEQ_ALIGN, 6
 
 $^   SeqIdProblem, 1

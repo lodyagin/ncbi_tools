@@ -1,4 +1,4 @@
-/* $Id: wblast2.c,v 1.22 2005/05/16 14:36:59 coulouri Exp $
+/* $Id: wblast2.c,v 1.25 2005/08/19 15:53:50 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -27,12 +27,21 @@
 *
 * Initial Creation Date: 10/23/2000
 *
-* $Revision: 1.22 $
+* $Revision: 1.25 $
 *
 * File Description:
 *        BLAST 2 Sequences CGI program
 *
 * $Log: wblast2.c,v $
+* Revision 1.25  2005/08/19 15:53:50  coulouri
+* correct grammar
+*
+* Revision 1.24  2005/07/29 22:19:30  dondosha
+* If no Entrez client case, treat all sequences as FASTA
+*
+* Revision 1.23  2005/07/28 16:37:49  coulouri
+* remove dead code
+*
 * Revision 1.22  2005/05/16 14:36:59  coulouri
 * delayed declarations are not allowed in c
 *
@@ -233,7 +242,7 @@
 
 #include <blastpat.h>
 #ifndef BL2SEQ_STANDALONE
-#include <qblastnet.h>
+#include <Liburlapi/qblastnet.h>
 #endif
 
 #ifndef USE_OLD_BLAST
@@ -421,15 +430,6 @@ static SeqAnnotPtr tie_next_annot(SeqAnnotPtr head, SeqAnnotPtr next)
    }
    v->next = next;
    return head;
-}
-
-static void AbortPage(CharPtr mess)
-{
-   printf("<TITLE>ERROR</TITLE>\n");
-   printf("<h2>\n");
-   printf("<img src='images/confused.gif' align=middle>\n");
-   printf("%s</h2>\n", mess);
-   exit(1);
 }
 
 #ifndef BL2SEQ_STANDALONE/* No logging for the standalone WWW Server version */
@@ -777,7 +777,7 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
            printf("</textarea>\n");
         }
         printf("<BR>\n");
-        printf("or download from file <INPUT type=file name=\"seqfile1\">");
+        printf("or upload FASTA file <INPUT type=file name=\"seqfile1\">");
         printf("<HR>\n");
 #ifdef NCBI_ENTREZ_CLIENT
         printf("<font color=ff0000>Sequence 2</font><BR>\n  Enter accession, GI or sequence in FASTA format \n");
@@ -796,7 +796,7 @@ static void	Blast2SeqMainPage(CharPtr warning, CharPtr seq1, CharPtr seq2, CharP
            printf("</textarea>\n");
         }
         printf("<BR>\n");
-        printf("or download from file <INPUT type=file name=\"seqfile2\">");
+        printf("or upload FASTA file <INPUT type=file name=\"seqfile2\">");
         printf("<BR>\n");
 
         printf("<INPUT TYPE=\"submit\" VALUE=\"Align\">\n");
@@ -888,189 +888,6 @@ static CharPtr NumToGun(int n)
     str[0] = NumToGun1(n/62);
     str[1] = NumToGun1(n%62);
     return str;
-}
-
-static int get_int(CharPtr val)
-{
-	CharPtr ch=NULL;
-	
-	if (val != NULL) {
-		ch = val + 1;
-		while (isspace(*ch)) {
-			ch++;
-		}
-		if (*ch == '\0') {
-			return 0;
-		}
-		return (atoi(ch));
-	}
-	return 0;
-}
-static FloatHi get_double(CharPtr val)
-{
-	CharPtr ch=NULL;
-	
-	if (val != NULL) {
-		ch = val + 1;
-		while (isspace(*ch)) {
-			ch++;
-		}
-		if (*ch == '\0') {
-			return 0;
-		}
-		return (atof(ch));
-	}
-	return 0;
-}
-
-static CharPtr get_char(CharPtr val)
-{
-	CharPtr ch=NULL;
-	
-	if (val != NULL) {
-		ch = val + 1;
-		while (isspace(*ch)) {
-			ch++;
-		}
-		if (*ch == '\0') {
-			ch = NULL;
-		}
-	}
-	return ch;
-}
-
-static Boolean sum_for_DenseDiag(DenseDiagPtr ddp, AlignSumPtr asp)
-/* special for blast 2 sequences */
-{
-	SeqInt msi, tsi;
-	SeqLoc sl;
-	Int2 i;
-	Int4 x1, x2, y1, y2;
-	Uint1 m_res, t_res;
-	SeqPortPtr m_spp, t_spp;
-
-	if(ddp == NULL || asp == NULL)
-		return FALSE;
-	x1 = ddp->starts [0];
-	y1 = ddp->starts [1];
-	x2 = x1 + ddp->len - 1;
-	y2 = y1 + ddp->len - 1;
-	msi.id = ddp->id;
-	msi.from = x1;
-	msi.to = x2;
-	if(ddp->strands != NULL)
-		msi.strand = (ddp->strands == NULL) ? 0 : ddp->strands[0];
-	sl.choice = SEQLOC_INT;
-	sl.data.ptrvalue = &msi;
-	m_spp = SeqPortNewByLoc(&sl, 
-		(asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
-	
-	tsi.id = ddp->id;
-	tsi.from = y1;
-	tsi.to = y2;
-	if(ddp->strands != NULL)
-		tsi.strand = (ddp->strands == NULL) ? 0 : ddp->strands[1];
-	sl.choice = SEQLOC_INT;
-	sl.data.ptrvalue = &tsi;
-
-	t_spp = SeqPortNewByLoc(&sl, 
-		(asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
-
-	for(i = 0; i < ddp->len; ++i) {
-		m_res = SeqPortGetResidue(m_spp);
-		if (!IS_residue(m_res)) {
-			continue;
-		}
-		t_res = SeqPortGetResidue(t_spp);
-		if (!IS_residue(t_res)) {
-			continue;
-		}
-		if(m_res == t_res) {
-			++(asp->identical);
-		} else if(asp->matrix != NULL && asp->is_aa) {
-			if(asp->matrix[m_res][t_res] > 0)
-				++(asp->positive);
-		}
-	}
-
-        if (!asp->is_aa && ddp->strands) {
-           asp->m_strand = ddp->strands[0];
-           asp->t_strand = ddp->strands[1];
-        }
-	asp->totlen = ddp->len;
-
-	SeqPortFree(m_spp);
-	SeqPortFree(t_spp);
-	return TRUE;
-}
-
-static Boolean sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
-{
-/* special for blast 2 sequences */
-	SeqInt msi, tsi;
-	SeqLoc sl;
-	Int2 i;
-	Int4 j, x1, x2, y1, y2;
-	Uint1 m_res, t_res;
-	SeqPortPtr m_spp, t_spp;
-
-	if(dsp == NULL || asp == NULL)
-		return FALSE;
-	for(i = 0; i < dsp->numseg; ++i) {
-		x1 = dsp->starts[2*i];
-		y1 = dsp->starts[2*i+1];
-		x2 = x1 + dsp->lens[i] -1;
-		y2 = y1 + dsp->lens[i] -1;
-		msi.id = dsp->ids;
-		msi.from = x1;
-		msi.to = x2;
-		msi.strand = (dsp->strands == NULL) ? 0 : dsp->strands[2*i];
-                if (x1 != -1) {
-                   sl.choice = SEQLOC_INT;
-                   sl.data.ptrvalue = &msi;
-                   m_spp = SeqPortNewByLoc(&sl, (asp->is_aa) ? Seq_code_ncbieaa
-                                           : Seq_code_iupacna);
-                } else 
-                   m_spp = NULL;
-		tsi.id = dsp->ids->next;
-		tsi.from = y1;
-		tsi.to = y2;
-		tsi.strand = (dsp->strands == NULL) ? 0 :
-                   dsp->strands[2*i+1];
-                if (y1 != -1) {
-                   sl.choice = SEQLOC_INT;
-                   sl.data.ptrvalue = &tsi;
-                   t_spp = SeqPortNewByLoc(&sl, (asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
-                } else 
-                   t_spp = NULL;
-		if (x1 == -1 || y1 == -1) {
-			asp->gaps += dsp->lens[i];
-		} else {
-			for(j = 0; j < dsp->lens[i]; ++j) {
-				m_res = SeqPortGetResidue(m_spp);
-				if (!IS_residue(m_res)) {
-					continue;
-				}
-				t_res = SeqPortGetResidue(t_spp);
-				if (!IS_residue(m_res)) {
-					continue;
-				}
-				if(m_res == t_res) {
-					++(asp->identical);
-				} else if(asp->matrix != NULL && asp->is_aa) {
-					if(asp->matrix[m_res][t_res] >0)
-						++(asp->positive);
-				}
-			}
-		}
-		asp->totlen += dsp->lens[i];
-                SeqPortFree(m_spp);
-                SeqPortFree(t_spp);
-	}
-        asp->m_strand = msi.strand;
-        asp->t_strand = tsi.strand;
-        
-	return TRUE;
 }
 
 /** Frees the part of the byte store list that has not been used for replacement
@@ -1550,52 +1367,6 @@ static void DrawRectAlign(PrymPtr PNTR rect, Int2 k, Int2 color, Int2 height, In
 	}
 }
 
-static void PrintRectAlign(PrymPtr PNTR rect, Int2 k, Int2 color, Int2 height, Int2 index)
-{
-	Int2 l;
-	
-	for (l=0; l < k; l++) {
-		if (rect[l]->len <= 0) {
-			continue;
-		}
-		if (rect[l]->len-1 == 0) {
-			rect[l]->len++;
-		}
-		if (rect[l]->color == -1) {
-			printf("images/0.gif");
-			printf(" width=%d>", rect[l]->len);
-		} else if (rect[l]->color == 3) {
-			if (rect[l+1]->color == rect[l]->color) {
-				printf("images/3.gif");
-				printf(" width=%d", rect[l]->len);
-			} else {
-				printf("images/3.gif");
-				printf(" width=%d>", rect[l]->len-1);
-			}
-		} else if (rect[l]->color == 0) {
-			if (rect[l+1] &&  rect[l+1]->color != -1) {
-				printf(" width=%d>", rect[l]->len-1);
-			} else {
-				printf(" width=%d>", rect[l]->len);
-			}
-		} else if (rect[l]->len > 0) {
-			if (rect[l+1]->color == rect[l]->color) {
-				if (index != -1) {
-					printf(" RECT:width=%d></a>", rect[l]->len);
-				} else {
-					printf(" RECT:width=%d>", rect[l]->len);
-				}
-			} else {
-				if (index != -1) {
-					printf(" RECT width=%d></a>", rect[l]->len-1);
-				} else {
-					printf("RECT width=%d>", rect[l]->len-1);
-				}
-			}
-		}
-	}
-}
-
 #define LOCAL_BUFLEN 255
 static BioseqPtr 
 
@@ -2017,6 +1788,13 @@ static int get_sequence_type(char *querystr)
     /* If query starts with '>', then it is a FASTA with defline */
     if (*querystr == '>')
         return FASTA_WITH_DEFLINE;
+
+    /* If Entrez client is unavailable, accessions or gis cannot be entered,
+       so always treat sequence input as FASTA. */
+#ifndef NCBI_ENTREZ_CLIENT        
+    return BARE_FASTA;
+#endif
+
     for (remainder = querystr; !IS_NEWLINE(*remainder); remainder++) ;
 
     length = remainder - querystr;
@@ -2067,7 +1845,7 @@ static int get_sequence_type(char *querystr)
 //6. Returns pointer to the entered sequence(raw or accession)
 static char * GetAndFormatEnteredSequence(WWWBlastInfoPtr theInfo,int seqNbr,int *seq_type) 
 {
-    CharPtr seq=NULL, c, chptr, sbuf;
+    CharPtr seq=NULL, c, chptr = NULL, sbuf;
     static Char seqEntryName[5],seqFileEntryName[9],blastReqEntryName[4];
 
     
@@ -2170,7 +1948,7 @@ Int2 Main(void)
     FloatHi	expect;
     Boolean is_prot=FALSE, is_aa1=FALSE, is_aa2=FALSE, is_na1=TRUE, is_na2=TRUE;
     CharPtr seq_1=NULL, seq_2=NULL, chptr;
-    CharPtr sq_1=NULL, sq_2=NULL, sbuf, progname;
+    CharPtr sq_1=NULL, sq_2=NULL, progname;
 
     CharPtr accessionOrGi_1=NULL,accessionOrGi_2=NULL;
     CharPtr seq1EntryData, seq2EntryData;
@@ -2183,7 +1961,7 @@ Int2 Main(void)
     BLAST_MatrixPtr blast_matrix = NULL;
     SeqPortPtr spp;
     Uint1 code1, code2;
-    ValNodePtr vnp, error_return=NULL;
+    ValNodePtr error_return=NULL;
     FloatHi       scalex, scaley;
     DenseDiagPtr ddp;
     DenseSegPtr  dsp;
@@ -2197,7 +1975,6 @@ Int2 Main(void)
     Uint1        align_type;
     ValNodePtr	   other_returns, mask = NULL, mask_head = NULL;
     CharPtr		   buffer = NULL;
-    BLAST_KarlinBlkPtr ka_params=NULL, ka_gap_params=NULL;
     TxDfDbInfoPtr      dbinfo = NULL;
     BlastTimeKeeper    time_keeper;
     int seq_1_type = UNDEFINED_SEQ_TYPE, seq_2_type = UNDEFINED_SEQ_TYPE;
@@ -2869,13 +2646,11 @@ Int2 Main(void)
         k = CreateRectAlign(sap, rect, rectY, scalex, scaley,
                             len1, len2, color, from, ffrom, to, tto);
         DrawRectAlign(rect, k, color, 9, index);
-        /*	PrintRectAlign(rect, k, color, 9, index);*/
         printf("<BR>\n");
         DrawRectAlign(rectY, k, color, 9, index);
         
         MemFree(rect);
         MemFree(rectY);
-        /*	PrintRectAlign(rectY, k, color, 9, index);*/
         printf("<BR><BR>\n"); 
         index++;
     }
@@ -3057,10 +2832,10 @@ Int2 Main(void)
     
     color = 1;
     index = 0;
-    printf("<font color=#FF0000>NOTE:</font>The statistics (bitscore and expect value) is calculated based on the size of nr database<BR><BR>\n");
+    printf("<font color=#FF0000>NOTE:</font>Bitscore and expect value are calculated based on the size of the nr database.<BR><BR>\n");
     
     if (align_type == blast_type_blastn)
-       printf("<font color=#FF0000>NOTE:</font>If protein translation is reversed, please repeat the search with reverse strand of the query sequence<BR><BR>\n");
+       printf("<font color=#FF0000>NOTE:</font>If protein translation is reversed, please repeat the search with reverse strand of the query sequence.<BR><BR>\n");
 
     for (sat=hsat; sat != NULL; sat=satnext) {
         satnext=sat->next;

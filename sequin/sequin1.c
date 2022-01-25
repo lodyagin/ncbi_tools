@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.510 $
+* $Revision: 6.514 $
 *
 * File Description: 
 *
@@ -126,7 +126,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "5.51"
+#define SEQ_APP_VER "5.53"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -3842,6 +3842,37 @@ static Int4 LIBCALL CountSeqEntryAligns (Uint2 entityID, SeqEntryPtr sep)
   return rsult;
 }
 
+static BioseqSetPtr GetAlignmentSetForBioseq (BioseqPtr bsp, Uint2 entityID)
+{
+  BioseqSetPtr bssp = NULL;
+  SeqEntryPtr  sep, sep_top;
+  Uint2        parenttype;
+  Pointer      parentptr;
+  
+  if (bsp == NULL)
+  {
+    return;
+  }
+  
+  sep_top = GetTopSeqEntryForEntityID (entityID);
+  
+  sep = GetBestTopParentForData (entityID, bsp); 
+  GetSeqEntryParent (sep, &parentptr, &parenttype);
+  if (parenttype == OBJ_BIOSEQSET)
+  {
+    bssp = (BioseqSetPtr) parentptr;
+  }
+  else if (sep != NULL && IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  }
+  else if (sep_top != NULL && IS_Bioseq_set (sep_top))
+  {
+    bssp = (BioseqSetPtr) sep_top->data.ptrvalue;
+  }
+  return bssp;
+}
+
 static void EnableEditAlignItem (BaseFormPtr bfp)
 
 {
@@ -3912,7 +3943,7 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
   }
   bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
   if (num > 0 && bsp != NULL && sep != NULL && IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    bssp = GetAlignmentSetForBioseq (bsp, bfp->input_entityID);
     if (bssp != NULL) {
       if (IsPopPhyEtcSet (bssp->_class)) {
         Enable (editfeatprop);
@@ -5981,8 +6012,10 @@ static void BioseqViewFormMenus (WindoW w)
     SeparatorItem (m);
     CommandItem (m, "Net Configure...", NetConfigureProc);
     if (useEntrez) {
+      /*
       SeparatorItem (m);
       CommandItem (m, "Entrez2 Query...", Entrez2QueryProc);
+      */
 /*
 #ifndef WIN16
       if (BiostrucAvail ()) {
@@ -7563,7 +7596,7 @@ extern void SetupBioseqPageList (void)
 
   seqviewprocs.pageSpecs = BioseqPageListFree (seqviewprocs.pageSpecs);
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &mapPageData);
-  AddBioseqPageToList (&(seqviewprocs.pageSpecs), &sumPageData);
+  /* AddBioseqPageToList (&(seqviewprocs.pageSpecs), &sumPageData); */
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &asn2gphGphPageData);
   if (useOldGraphicView) {
     AddBioseqPageToList (&(seqviewprocs.pageSpecs), &gphPageData);
@@ -8729,8 +8762,10 @@ static void SetupMacMenus (void)
   SeparatorItem (m);
   CommandItem (m, "Net Configure...", NetConfigureProc);
   if (useEntrez) {
+    /*
     SeparatorItem (m);
     CommandItem (m, "Entrez2 Query...", Entrez2QueryProc);
+    */
 /*
 #ifndef WIN16
     if (BiostrucAvail ()) {
@@ -8898,6 +8933,8 @@ static void PutItTogether (ButtoN b)
   MsgAnswer    ans;
   BaseFormPtr  bfp;
   ValNodePtr   head;
+  SeqEntryPtr  prot_list = NULL, nuc_list = NULL;
+  SequencesFormPtr sqfp;
 
   bfp = (BaseFormPtr) GetObjectExtra (b);
   if (bfp != NULL) {
@@ -8913,10 +8950,6 @@ static void PutItTogether (ButtoN b)
       Message (MSG_OK, "%s", multcomponent);
       return;
     }
-    if (! SequencesFormHasProteins (bfp->form)) {
-      ans = Message (MSG_OKC, "You have not entered proteins.  Is this correct?");
-      if (ans == ANS_CANCEL) return;
-    }
 
     if (TRUE == HasZeroLengthSequence (bfp->form)) {
       Message (MSG_POSTERR, "One or more of the submitted sequences are "
@@ -8925,6 +8958,27 @@ static void PutItTogether (ButtoN b)
 	       "definition line, or may have other formatting problems. "
 	       "Please check your FASTA file.");
       return;
+    }
+    
+    /* check for proteins, create nucleotide-protein association */
+    prot_list = GetSequencesFormProteinList (bfp->form);
+    if (prot_list == NULL && ! SequencesFormHasProteins (bfp->form)) {
+      ans = Message (MSG_OKC, "You have not entered proteins.  Is this correct?");
+      if (ans == ANS_CANCEL) return;
+    }
+    else
+    {
+      nuc_list = GetSequencesFormNucleotideList (bfp->form);
+      sqfp = (SequencesFormPtr) GetObjectExtra (bfp->form);
+      if (sqfp != NULL) 
+      {     
+        sqfp->nuc_prot_assoc_list = FreeAssociationList (sqfp->nuc_prot_assoc_list);
+        sqfp->nuc_prot_assoc_list = AssignProteinsForSequenceSet (nuc_list, prot_list);
+        if (sqfp->nuc_prot_assoc_list == NULL)
+        {
+          return;
+        }
+      }
     }
 
     Hide (bfp->form);

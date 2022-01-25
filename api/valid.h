@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.h,v $
+* Revision 6.20  2005/06/08 15:26:06  kans
+* added is_htg_in_sep and is_refseq_in_sep flags to vsp to avoid repetitive checks
+*
 * Revision 6.19  2004/12/23 20:50:51  kans
 * added context field to new callback
 *
@@ -225,11 +228,14 @@ typedef struct validstruct {
 	Boolean seqSubmitParent;       /* flag from tbl2asn to suppress no pub message */
 	Boolean justShowAccession;     /* extremely terse output with accession and error type */
 	Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
-	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
 								   /* this section used for finer error reporting callback */
 	ValidErrorFunc errfunc;
 	Pointer userdata;
 	Boolean convertGiToAccn;
+								   /* this section used for internal flags */
+	TextFsaPtr sourceQualTags;     /* for detecting structured qual tags in notes */
+	Boolean is_htg_in_sep;         /* record has technique of htgs 0 through htgs 3 */
+	Boolean is_refseq_in_sep;      /* record has seqid of type other (refseq) */
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));

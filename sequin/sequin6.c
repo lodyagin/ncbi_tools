@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.218 $
+* $Revision: 6.226 $
 *
 * File Description: 
 *
@@ -54,6 +54,7 @@
 #include <gbftdef.h>
 #include <edutil.h>
 #include <salpanel.h>
+#include <seqpanel.h>
 
 #define NUMBER_OF_SUFFIXES    7
 
@@ -6018,7 +6019,7 @@ static void AdjustSeqLocForApply (SeqFeatPtr sfp, ApplyFormPtr afp)
   {
   	tmp = from;
   	from = to;
-  	to = from;
+  	to = tmp;
   }
   if (from < 1)
   {
@@ -6058,6 +6059,31 @@ static void AdjustSeqLocForApply (SeqFeatPtr sfp, ApplyFormPtr afp)
   	sfp->partial = TRUE;
   }
   
+}
+
+static void SetApplyFeatureLocation (SeqFeatPtr sfp, ApplyFormPtr afp)
+{
+  if (sfp == NULL || afp == NULL)
+  {
+    return;
+  }
+  
+  if (GetValue (afp->strand_group) == 2) 
+  {
+    /* reverse strand direction - strand direction is plus by default */
+    setSeqFeatStrand (sfp, Seq_strand_minus);
+  }
+
+  SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+
+  if (afp->use_whole_interval != NULL
+      && GetValue (afp->use_whole_interval) != 1)
+  {
+    /* adjust location to match coordinates from user */
+    AdjustSeqLocForApply (sfp, afp);
+  }      
+    
+  sfp->partial = (afp->noLeft || afp->noRight);
 }
 
 static void AddGeneXrefToFeat (SeqFeatPtr sfp, CharPtr str)
@@ -6107,23 +6133,9 @@ static SeqFeatPtr ApplyGene (CharPtr str, ApplyFormPtr afp, SeqEntryPtr gene_sep
     misc_feat = CreateNewFeature (gene_sep, NULL, SEQFEAT_COMMENT, NULL);
     if (NULL == misc_feat)
     return NULL;
-
-    SetSeqLocPartial (misc_feat->location, afp->noLeft, afp->noRight);
-
-    if (afp->use_whole_interval != NULL
-        && GetValue (afp->use_whole_interval) != 1)
-    {
-      /* adjust location to match coordinates from user */
-      AdjustSeqLocForApply (misc_feat, afp);
-    }      
     
-    if (GetValue (afp->strand_group) == 2) 
-    {
-      /* reverse strand direction - strand direction is plus by default */
-      setSeqFeatStrand (misc_feat, Seq_strand_minus);
-    }
+    SetApplyFeatureLocation (misc_feat, afp);
 
-    misc_feat->partial = (afp->noLeft || afp->noRight);
     overlap_loc = misc_feat->location;
   }
   
@@ -6178,21 +6190,8 @@ static SeqFeatPtr ApplyGene (CharPtr str, ApplyFormPtr afp, SeqEntryPtr gene_sep
     return NULL;
 
   gene_sfp->data.value.ptrvalue = (Pointer) grp;
-  SetSeqLocPartial (gene_sfp->location, afp->noLeft, afp->noRight);
-
-  if (afp->use_whole_interval != NULL
-      && GetValue (afp->use_whole_interval) != 1)
-  {
-    /* adjust location to match coordinates from user */
-    AdjustSeqLocForApply (gene_sfp, afp);
-  }      
-    
-  if (GetValue (afp->strand_group) == 2) {
-    /* reverse strand direction - strand direction is plus by default */
-    setSeqFeatStrand (gene_sfp, Seq_strand_minus);
-  }
-
-  gene_sfp->partial = (afp->noLeft || afp->noRight);
+  
+  SetApplyFeatureLocation (gene_sfp, afp);
 
   if (added_xrefs && sfp != NULL)
   {
@@ -6283,18 +6282,44 @@ static SeqLocPtr RemoveGapsFromSegmentedLocation (SeqLocPtr slp, BioseqPtr bsp)
   return slp;
 }
 
-extern SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
+static Boolean GapInLocation (Int4 seq_offset, Int4 length, SeqLocPtr loc)
+{
+  SeqLocPtr slp;
+  Int4      start, stop;
+  Boolean   gap_in_location = FALSE;
+  
+  slp = SeqLocFindNext (loc, NULL);
+  
+  while (slp != NULL && ! gap_in_location)
+  {
+    start = SeqLocStart (slp);
+    stop = SeqLocStop (slp);
+    
+    if ((seq_offset <= start && start < seq_offset + length)
+        || (seq_offset <= stop && stop < seq_offset + length)
+        || (start <= seq_offset && seq_offset <= stop)
+        || (start < seq_offset + length && seq_offset + length < stop))
+    {
+      gap_in_location = TRUE;
+    }
+    
+    slp = SeqLocFindNext (loc, slp);
+  }
+  return gap_in_location;
+}
+
+
+static SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
 {
   DeltaSeqPtr dsp;
   Int4        seq_offset = 0;
   SeqLitPtr   slip;
-  SeqLocPtr   far_loc, loc_slp, piece_loc, slp_new;
-  SeqLocPtr   loc_list = NULL, last_loc = NULL;
+  SeqLocPtr   far_loc;
+  SeqLocPtr   loc_list = NULL, prev_loc = NULL;
   SeqIdPtr    sip;
-  Uint1       strand;
-  Int4        start_pos, end_pos, piece_len;
-  Boolean     add_piece, partial5, partial3;
-  
+  Boolean     changed, partial5, partial3;
+  SeqLocPtr   before = NULL, after = NULL;
+
   if (slp == NULL || bsp == NULL 
       || bsp->repr != Seq_repr_delta
       || bsp->seq_ext_type != 4
@@ -6311,92 +6336,62 @@ extern SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp)
   
   CheckSeqLocForPartial (slp, &partial5, &partial3);
   
-  loc_slp = SeqLocFindNext (slp, NULL);
-  while (loc_slp != NULL)
+  seq_offset = 0;
+  before = SeqLocCopy (slp);
+  loc_list = before;
+  
+  for (dsp = (DeltaSeqPtr) bsp->seq_ext;
+       dsp != NULL;
+       dsp = dsp->next)
   {
-    strand = SeqLocStrand (slp);
-    start_pos = SeqLocStart (loc_slp);
-    end_pos = SeqLocStop (loc_slp);
-    
-    seq_offset = 0;
-    dsp = (DeltaSeqPtr) bsp->seq_ext;
-    while (dsp != NULL)
+    if (dsp->data.ptrvalue == NULL)
     {
-      piece_len = 0;
-      add_piece = FALSE;
-      if (dsp->data.ptrvalue == NULL)
+      /* bad delta seq - skip */
+      continue;
+    }
+    else if (dsp->choice == 1)
+    {
+      far_loc = (SeqLocPtr) dsp->data.ptrvalue;
+      seq_offset += SeqLocLen (far_loc);
+    }
+    else if (dsp->choice == 2)
+    {
+      slip = (SeqLitPtr) (dsp->data.ptrvalue);  
+      if (slip->seq_data == NULL
+          && slip->fuzz != NULL 
+          && GapInLocation (seq_offset, slip->length, before))
       {
-        /* bad delta seq - skip */
-      }
-      else if (dsp->choice == 1)
-      {
-        far_loc = (SeqLocPtr) dsp->data.ptrvalue;
-        piece_len = SeqLocLen (far_loc);
-        add_piece = TRUE;
-      }
-      else if (dsp->choice == 2)
-      {
-        slip = (SeqLitPtr) (dsp->data.ptrvalue);  
-        piece_len = slip->length;
-        if (slip->seq_data != NULL)
+        after = SeqLocCopy (before);
+        after = SeqLocDeleteEx (after, SeqLocId (after),
+                          0, seq_offset + slip->length - 1,
+                          FALSE, &changed, &partial5, &partial3);
+        before = SeqLocDeleteEx (before, SeqLocId (before), 
+                          seq_offset, bsp->length,
+                          FALSE, &changed, &partial5, &partial3);
+        if (before == NULL)
         {
-          add_piece = TRUE;
-        }
-      }
-      if (seq_offset >= end_pos
-          || seq_offset + piece_len < start_pos)
-      {
-        add_piece = FALSE;
-      }
-      if (add_piece)
-      {
-        piece_loc = SeqLocIntNew (MAX (seq_offset, start_pos),
-                                  MIN (end_pos, seq_offset + piece_len - 1), 
-                                  strand, sip);
-        if (piece_loc != NULL)
-        {
-          if (last_loc == NULL)
+          if (prev_loc == NULL)
           {
-            loc_list = piece_loc;
+            loc_list = after;
           }
           else
           {
-            last_loc->next = piece_loc;
+            prev_loc->next = after;
           }
-          last_loc = piece_loc;
         }
+        else
+        {
+          before->next = after;
+          prev_loc = before;
+        }        
+        before = after;
       }
-      seq_offset += piece_len;
-      dsp = dsp->next; 
-    }
-    loc_slp = SeqLocFindNext (slp, loc_slp);
-  }
-  
-  if (loc_list == NULL)
-  {
-    /* failed to convert - do not change */
-  }
-  else if (loc_list->next == NULL)
-  {
-    /* only found one piece */
-    slp = SeqLocFree (slp);
-    slp = loc_list;
-    SetSeqLocPartial (slp, partial5, partial3);
-  }
-  else
-  {
-    /* make mixed location */
-    slp_new = ValNodeNew (NULL);
-    if (slp_new != NULL)
-    {
-      slp_new->choice = SEQLOC_MIX;
-      slp_new->data.ptrvalue = loc_list;
-      slp = SeqLocFree (slp);
-      slp = slp_new;
-      SetSeqLocPartial (slp, partial5, partial3);
+      seq_offset += slip->length;
     }
   }
-  return slp;
+
+  slp = SeqLocFree (slp);
+  return loc_list;  
 }
 
 static SeqLocPtr RemoveGapsFromLocation (SeqLocPtr slp)
@@ -6436,18 +6431,262 @@ static SeqLocPtr RemoveGapsFromLocation (SeqLocPtr slp)
   }
 }
 
+static void AdjustFrame (SeqFeatPtr sfp, BioseqPtr oldprot)
+{
+  ByteStorePtr bs;
+  CdRegionPtr  crp;
+  CharPtr      oldprot_str, newprot_str;
+  Uint1        orig_frame, best_frame = 0;
+  Int4         best_len = 0;
+  
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION
+      || sfp->data.value.ptrvalue == NULL
+      || oldprot == NULL)
+  {
+    return;
+  }
+  
+  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  
+  oldprot_str = GetSequenceByBsp (oldprot);
+  
+  orig_frame = crp->frame;
+  for (crp->frame = 1; crp->frame <= 3 && best_frame == 0; crp->frame++)
+  {
+    newprot_str = NULL;
+    bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+    if (bs != NULL) 
+    {
+      newprot_str = BSMerge (bs, NULL);
+      bs = BSFree (bs);
+    }
+    
+    if (StringHasNoText (newprot_str))
+    {
+      newprot_str = MemFree (newprot_str);
+      continue;
+    }
+    if (StringSearch (oldprot_str, newprot_str) != NULL
+        || StringSearch (oldprot_str, newprot_str + 1) != NULL)
+    {
+      best_frame = crp->frame;
+    }
+    else
+    {
+      newprot_str [StringLen (newprot_str) - 1] = 0;
+      if (StringSearch (oldprot_str, newprot_str) != NULL
+          || StringSearch (oldprot_str, newprot_str + 1) != NULL)
+      {
+        best_frame = crp->frame;
+      }
+    }
+    newprot_str = MemFree (newprot_str);
+  }
+  oldprot_str = MemFree (oldprot_str);
+  if (best_frame > 0)
+  {
+    crp->frame = best_frame;
+  }
+  else
+  {
+    crp->frame = orig_frame;
+  }
+
+}
+
+static BioseqPtr 
+AddProteinSequenceCopy 
+(BioseqPtr  protbsp, 
+ BioseqPtr  featbsp,
+ SeqFeatPtr new_sfp,
+ Uint2      entityID)
+{
+  Char        str [128];
+  SeqIdPtr    new_id;
+  BioseqPtr   new_protbsp;
+  SeqEntryPtr prot_sep, parent_sep;
+
+  if (protbsp == NULL || featbsp == NULL || new_sfp == NULL)
+  {
+    return NULL;
+  }
+  
+  parent_sep = GetBestTopParentForData (entityID, featbsp);
+  if (parent_sep == NULL 
+      || !IS_Bioseq_set (parent_sep) 
+      || parent_sep->data.ptrvalue == NULL)
+  {
+    return NULL;
+  }
+  
+  SeqIdWrite (protbsp->id, str, PRINTID_REPORT, sizeof (str) - 1);    
+  new_id = MakeUniqueSeqID (str);                                            
+  new_protbsp = BioseqCopyEx (new_id, protbsp, 0, protbsp->length - 1,
+                                      Seq_strand_plus, TRUE);
+  ValNodeLink (&(new_protbsp->descr),
+               AsnIoMemCopy ((Pointer) protbsp->descr,
+                             (AsnReadFunc) SeqDescrAsnRead,
+                             (AsnWriteFunc) SeqDescrAsnWrite));
+                                      
+  prot_sep = SeqEntryNew ();
+  if (prot_sep != NULL)
+  {
+    prot_sep->choice = 1;
+    prot_sep->data.ptrvalue = new_protbsp;
+    SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) new_protbsp, prot_sep);
+    AddSeqEntryToSeqEntry (parent_sep, prot_sep, TRUE);
+  }
+  
+  SeqMgrAddToBioseqIndex (new_protbsp);           
+  new_sfp->product = SeqLocWholeNew (new_protbsp); 
+  SeqMgrIndexFeatures (entityID, NULL);
+  return new_protbsp;
+}
+
+static void SetProductSequencePartials (BioseqPtr protbsp, Boolean partial5, Boolean partial3)
+{
+  SeqFeatPtr  prot_sfp;
+  SeqMgrFeatContext context;
+  SeqMgrDescContext dcontext;
+  SeqDescrPtr       sdp;
+  MolInfoPtr        mip;
+
+  if (protbsp == NULL)
+  {
+    return;
+  }
+        
+  /* set partials on product */
+  prot_sfp = SeqMgrGetNextFeature (protbsp, NULL, 
+                                          SEQFEAT_PROT, FEATDEF_PROT, &context);
+  if (prot_sfp != NULL)
+  {
+    SetSeqLocPartial (prot_sfp->location, partial5, partial3);
+    prot_sfp->partial = partial5 || partial3;
+  }
+        
+  sdp = SeqMgrGetNextDescriptor (protbsp, NULL, Seq_descr_molinfo, &dcontext);
+  if (sdp != NULL)
+  {
+    mip = (MolInfoPtr) sdp->data.ptrvalue;
+    if (partial5 && partial3) {
+      mip->completeness = 5;
+    } else if (partial5) {
+      mip->completeness = 3;
+    } else if (partial3) {
+      mip->completeness = 4;
+    } else if (prot_sfp != NULL && prot_sfp->partial) {
+      mip->completeness = 2;
+    } else {
+      mip->completeness = 0;
+    }
+  }  
+}
+
 extern void AdjustCDSLocationsForGapsCallback (SeqFeatPtr sfp, Pointer userdata)
 {
-  if (sfp != NULL && sfp->data.choice == SEQFEAT_CDREGION)
+  BioseqPtr   gapped_bioseq, sfp_bsp, protbsp = NULL, new_protbsp;
+  SeqFeatPtr  new_sfp;
+  CdRegionPtr crp;
+  Boolean     partial5, partial3;
+  Uint2       entityID;
+  
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION)
   {
-    sfp->location = RemoveGapsFromLocation (sfp->location);
+    return;
+  }
+
+  gapped_bioseq = (BioseqPtr) userdata;
+  sfp_bsp = BioseqFind (SeqLocId (sfp->location));
+  if (gapped_bioseq == NULL)
+  {
+    gapped_bioseq = sfp_bsp;
+  }
+  
+  if (sfp_bsp != gapped_bioseq)
+  {
+    gapped_bioseq = NULL;
+  }
+  
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+  sfp->location = RemoveGapsFromLocation (sfp->location);
+
+  if (gapped_bioseq != NULL && gapped_bioseq->repr == Seq_repr_delta)
+  {
+    entityID = gapped_bioseq->idx.entityID;
+   
+    while (sfp->location->next != NULL)
+    {
+      new_sfp = CreateNewFeatureOnBioseq (gapped_bioseq, SEQFEAT_CDREGION, NULL);
+		  if (new_sfp != NULL)
+		  {
+		    /* create copy of coding region data */
+		    crp = (CdRegionPtr) AsnIoMemCopy ((CdRegionPtr) sfp->data.value.ptrvalue,
+		                                       (AsnReadFunc) CdRegionAsnRead,
+		                                       (AsnWriteFunc) CdRegionAsnWrite);
+        new_sfp->data.value.ptrvalue = crp;
+        new_sfp->location = sfp->location->next;
+
+        protbsp = BioseqFindFromSeqLoc (sfp->product);        
+        if (protbsp != NULL)
+        {
+          new_protbsp = AddProteinSequenceCopy (protbsp, gapped_bioseq, new_sfp, entityID);                                                  
+        }
+        
+        /* still to do:
+         * adjust frame to match prior protein
+         */
+      
+        sfp->location->next = NULL;
+        
+        /* fix partials */
+        SetSeqLocPartial (sfp->location, partial5, TRUE);
+        sfp->partial = TRUE;
+        
+        /* adjust frame */
+        AdjustFrame (sfp, protbsp);
+
+        /* retranslate coding region */
+        SeqEdTranslateOneCDS (sfp, gapped_bioseq, entityID);
+        
+        /* set partials on product */
+        if (protbsp == NULL)
+        {
+          protbsp = BioseqFindFromSeqLoc (sfp->product);
+        }
+        SetProductSequencePartials (protbsp, partial5, partial3);
+
+        partial5 = TRUE;
+        sfp = new_sfp;
+        protbsp = new_protbsp;
+		  }
+		  else
+		  {
+		    return; /* bail */
+		  }
+    }
+    /* fix partials for last feature */
+    SetSeqLocPartial (sfp->location, partial5, partial3);
+    sfp->partial = partial5 || partial3;
+    
+    /* adjust frame */
+    AdjustFrame (sfp, protbsp);
+
+    /* retranslate coding region */
+    SeqEdTranslateOneCDS (sfp, gapped_bioseq, entityID);
+    /* set partials on product */
+    if (protbsp == NULL)
+    {
+      protbsp = BioseqFindFromSeqLoc (sfp->product);
+    }
+    SetProductSequencePartials (protbsp, partial5, partial3);
   }
 }
 
 extern void AdjustCDSLocationsForGaps (IteM i)
 {
   BaseFormPtr bfp;
-  SeqEntryPtr sep;
+  SeqEntryPtr sep, oldscope;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -6457,10 +6696,12 @@ extern void AdjustCDSLocationsForGaps (IteM i)
   if (bfp == NULL) return;
 
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  oldscope = SeqEntrySetScope (sep);
   VisitFeaturesInSep (sep, NULL, AdjustCDSLocationsForGapsCallback);
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  SeqEntrySetScope (oldscope);
 }
 
 /*---------------------------------------------------------------------*/
@@ -6532,27 +6773,12 @@ static void Apply_AddCDS (Uint2        entityID,
   
   sfp->data.value.ptrvalue = (Pointer) crp;
 
-  /* Fill in the fields of the new CDS feature */
-
-  SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
-  if (GetValue (afp->strand_group) == 2) {
-    /* reverse strand direction - strand direction is plus by default */
-    setSeqFeatStrand (sfp, Seq_strand_minus);
-  }
-  sfp->partial = (afp->noLeft || afp->noRight);
-  if (! StringHasNoText (afp->feature_details_data->featcomment)) {
-    sfp->comment = StringSave (afp->feature_details_data->featcomment);
-  }
-  
-  if (afp->use_whole_interval != NULL
-      && GetValue (afp->use_whole_interval) != 1)
-  {
-    /* adjust location to match coordinates from user */
-    AdjustSeqLocForApply (sfp, afp);
-  }  
+  /* adjust the location of the new feature */
+  SetApplyFeatureLocation (sfp, afp);
   
   sfp->location = RemoveGapsFromLocation (sfp->location);
 
+  /* Fill in the fields of the new CDS feature */
   if (afp->feature_details_data->reading_frame < 1 
       || afp->feature_details_data->reading_frame > 3)
   {
@@ -6938,19 +7164,8 @@ static void RealApplyBioFeatToAll (Uint2        entityID,
       sfp = CreateNewFeature (nsep, NULL, SEQFEAT_RNA, NULL);
       if (sfp != NULL) {
         sfp->data.value.ptrvalue = (Pointer) rrp;
-        if (afp->use_whole_interval != NULL
-            && GetValue (afp->use_whole_interval) != 1)
-        {
-          /* adjust location to match coordinates from user */
-          AdjustSeqLocForApply (sfp, afp);
-        }  
+        SetApplyFeatureLocation (sfp, afp);      
 
-        SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
-        if (GetValue (afp->strand_group) == 2) {
-          /* reverse strand direction - strand direction is plus by default */
-          setSeqFeatStrand (sfp, Seq_strand_minus);
-        }
-        sfp->partial = (afp->noLeft || afp->noRight);
         if (! StringHasNoText (afp->feature_details_data->featcomment)) {
           sfp->comment = StringSave (afp->feature_details_data->featcomment);
         }
@@ -6983,19 +7198,7 @@ static void RealApplyBioFeatToAll (Uint2        entityID,
         sfp = CreateNewFeature (nsep, NULL, SEQFEAT_IMP, NULL);
         if (sfp != NULL) {
           sfp->data.value.ptrvalue = (Pointer) ifp;
-          if (afp->use_whole_interval != NULL
-              && GetValue (afp->use_whole_interval) != 1)
-          {
-            /* adjust location to match coordinates from user */
-            AdjustSeqLocForApply (sfp, afp);
-          }  
-
-          SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
-          if (GetValue (afp->strand_group) == 2) {
-            /* reverse strand direction - strand direction is plus by default */
-            setSeqFeatStrand (sfp, Seq_strand_minus);
-          }
-          sfp->partial = (afp->noLeft || afp->noRight);
+          SetApplyFeatureLocation (sfp, afp);
           if (! StringHasNoText (afp->feature_details_data->featcomment)) 
           {
             sfp->comment = StringSave (afp->feature_details_data->featcomment);
@@ -9976,6 +10179,7 @@ static AddModListItem mods_list[] = {
 { FALSE, SUBSRC_haplotype, "Haplotype", NULL },
 { TRUE, ORGMOD_isolate, "Isolate", NULL },
 { TRUE, ORGMOD_pathovar, "Pathovar", "pv."},
+{ TRUE, ORGMOD_serotype, "Serotype", NULL },
 { TRUE, ORGMOD_serovar, "Serovar", "serovar" },
 { TRUE, ORGMOD_specimen_voucher, "Specimen voucher", NULL },
 { TRUE, ORGMOD_strain, "Strain", NULL },
@@ -10250,7 +10454,7 @@ extern void AddModToOrg (IteM i)
   amfp->only_sp = CheckBox (h, "Only append to sp. organisms", NULL);
   amfp->only_cf = CheckBox (h, "Only append to cf. organisms", NULL);
   amfp->only_aff = CheckBox (h, "Only append to aff. organisms", NULL);
-  amfp->use_abbreviation = CheckBox (h, "Use abbreviation (pv. or subsp. or var.)", NULL);
+  amfp->use_abbreviation = CheckBox (h, "Use abbreviation (for example, pv., subsp., etc.)", NULL);
   SetStatus (amfp->use_abbreviation, TRUE);
   Disable (amfp->use_abbreviation);
   

@@ -1,4 +1,4 @@
-/* $Id: blast_util.h,v 1.65 2005/05/10 16:07:35 camacho Exp $
+/* $Id: blast_util.h,v 1.68 2005/08/09 19:25:30 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -55,7 +55,7 @@ extern "C" {
 
 /** Deallocate memory only for the sequence in the sequence block */
 NCBI_XBLAST_EXPORT
-Int2 BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk);
+void BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk);
    
 /** Deallocate memory for a sequence block */
 NCBI_XBLAST_EXPORT
@@ -241,9 +241,19 @@ Int2 Blast_GetOneQueryStructs(BlastQueryInfo** one_query_info_ptr,
                               BLAST_SequenceBlk* query, Int4 query_index);
 
 
+/** Convert a sequence in ncbi4na or blastna encoding into a packed sequence
+ * in ncbi2na encoding. Needed for 2 sequences BLASTn comparison.
+ * @param buffer original sequence data (one base per byte) [in]
+ * @param length length of the sequence data above [in]
+ * @param encoding source encoding of the sequence data above [in]
+ * @param packed_seq output buffer containing compressed sequence. Its length
+ * will be (length/COMPRESSION_RATIO + 1), caller is responsible for
+ * deallocating it [out]
+ * @return 0 in case of success, -1 in case of memory allocation failure
+ */
 NCBI_XBLAST_EXPORT
-Int2 BLAST_PackDNA(Uint1* buffer, Int4 length, EBlastEncoding encoding, 
-                   Uint1** packed_seq);
+Int2 BLAST_PackDNA(const Uint1* buffer, Int4 length, 
+                   EBlastEncoding encoding, Uint1** packed_seq);
 
 /** Initialize the mixed-frame sequence for out-of-frame gapped extension.
  * @param query_blk Sequence block containing the concatenated frames of the 
@@ -253,7 +263,7 @@ Int2 BLAST_PackDNA(Uint1* buffer, Int4 length, EBlastEncoding encoding,
  */
 NCBI_XBLAST_EXPORT
 Int2 BLAST_InitDNAPSequence(BLAST_SequenceBlk* query_blk, 
-                       BlastQueryInfo* query_info);
+                            const BlastQueryInfo* query_info);
 
 /** Translate nucleotide into 6 frames. All frames are put into a 
  * translation buffer, with sentinel NULLB bytes in between.

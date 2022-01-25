@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.48 $
+* $Revision: 6.49 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.49  2005/07/15 19:01:37  kans
+* minor fixes for Xcode warnings
+*
 * Revision 6.48  2005/05/02 14:20:02  bollin
 * when inserting gaps, adjust coding region locations to not include gaps.
 * when removing gaps, if a feature location has intervals that stop and start
@@ -5501,6 +5504,7 @@ static Int2 LIBCALL SeqEdSeqFeatDelete (SeqFeatPtr sfp, BioseqPtr target, Int4 f
 		return 0;
 }
 
+/*
 static Boolean SeqEdDeleteFromDeltaSeq (DeltaSeqPtr dsp, Int4 from, Int4 to)
 {
   ByteStorePtr    bs_new;
@@ -5539,6 +5543,7 @@ static Boolean SeqEdDeleteFromDeltaSeq (DeltaSeqPtr dsp, Int4 from, Int4 to)
   
   return TRUE;
 }
+*/
 
 static void DeleteFromSeqLit (SeqLitPtr slip, Int4 from, Int4 to)
 {
@@ -6161,6 +6166,8 @@ NLM_EXTERN Boolean SeqEdDeleteFromBsp (SeqEdJournalPtr sejp, BoolPtr pfeats_dele
 /* this function will indicate whether the interval on the Bioseq specified contains
  * any gaps of unknown length.
  */
+
+/*
 static Boolean DoesIntervalContainUnknownGap (BioseqPtr bsp, Int4 from, Int4 to)
 {
   DeltaSeqPtr from_dsp, to_dsp, this_dsp;
@@ -6184,7 +6191,7 @@ static Boolean DoesIntervalContainUnknownGap (BioseqPtr bsp, Int4 from, Int4 to)
   
   return unknown_gap;
 }
-
+*
 
 /* This section of code deals with editing the sequence by inserting and removing characters.
  * Functions are needed to change the indices for the affected features so that they will

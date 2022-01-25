@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.96 2005/06/03 16:22:49 lavr Exp $
+/* $Id: blast_util.c,v 1.100 2005/08/17 16:21:31 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.96 2005/06/03 16:22:49 lavr Exp $";
+    "$Id: blast_util.c,v 1.100 2005/08/17 16:21:31 dondosha Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -113,10 +113,10 @@ Int2 BlastSeqBlkSetCompressedSequence(BLAST_SequenceBlk* seq_blk,
     return 0;
 }
 
-Int2 BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk)
+void BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk)
 {
    if (!seq_blk)
-       return 1;
+       return;
 
    if (seq_blk->sequence_allocated) {
        sfree(seq_blk->sequence);
@@ -131,7 +131,7 @@ Int2 BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk)
        seq_blk->oof_sequence_allocated = FALSE;
    }
 
-   return 0;
+   return;
 }
 
 BLAST_SequenceBlk* BlastSequenceBlkFree(BLAST_SequenceBlk* seq_blk)
@@ -730,16 +730,17 @@ BlastQueryInfo* BlastQueryInfoDup(BlastQueryInfo* query_info)
    return retval;
 }
 
-/** Convert a sequence in ncbi4na or blastna encoding into a packed sequence
- * in ncbi2na encoding. Needed for 2 sequences BLASTn comparison.
- */
-Int2 BLAST_PackDNA(Uint1* buffer, Int4 length, EBlastEncoding encoding, 
+Int2 BLAST_PackDNA(const Uint1* buffer, Int4 length, EBlastEncoding encoding, 
                           Uint1** packed_seq)
 {
    Int4 new_length = length/COMPRESSION_RATIO + 1;
    Uint1* new_buffer = (Uint1*) malloc(new_length);
    Int4 index, new_index;
    Uint1 shift;     /* bit shift to pack bases */
+
+   if ( !new_buffer ) {
+       return -1;
+   }
 
    for (index=0, new_index=0; new_index < new_length-1; 
         ++new_index, index += COMPRESSION_RATIO) {
@@ -782,9 +783,9 @@ Int2 BLAST_PackDNA(Uint1* buffer, Int4 length, EBlastEncoding encoding,
 }
 
 Int2 BLAST_InitDNAPSequence(BLAST_SequenceBlk* query_blk, 
-                            BlastQueryInfo* query_info)
+                            const BlastQueryInfo* query_info)
 {
-   Uint1* buffer,* seq,* tmp_seq;
+   Uint1* buffer,* seq = NULL,* tmp_seq;
    Int4 total_length, index, offset, i, context;
    Int4 length[CODON_LENGTH];
    

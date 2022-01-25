@@ -1,5 +1,5 @@
 /*
- * $Id: alnread.c,v 1.22 2005/06/03 17:03:57 lavr Exp $
+ * $Id: alnread.c,v 1.24 2005/06/20 14:59:17 bollin Exp $
  *
  * ===========================================================================
  *
@@ -2068,7 +2068,7 @@ static int s_StringICmp (char * str1, char *str2)
     cp1 = str1;
     cp2 = str2;
     while (*cp1 != 0  &&  *cp2 != 0) {
-        diff = toupper ((int) *cp1) - toupper ((int) *cp2);
+        diff = toupper ((unsigned char) *cp1) - toupper ((unsigned char) *cp2);
         if (diff != 0) {
             return diff;
         }
@@ -2695,6 +2695,11 @@ static TCommentLocPtr s_CreateOrderedOrgCommentList (TCommentLocPtr org_clp)
     clp_list = s_FindComment (org_clp->start); /* this is the org= */
     prev_clp = NULL;
     ordered_start = s_FindComment (clp_list->end);
+    if (s_IsOrganismComment (ordered_start))
+    {
+      s_CommentLocFree (ordered_start);
+      ordered_start = NULL;
+    }
     if (ordered_start == NULL) {
         return clp_list;
     }
@@ -5853,6 +5858,13 @@ ReadAlignmentFile
 /*
  * ===========================================================================
  * $Log: alnread.c,v $
+ * Revision 1.24  2005/06/20 14:59:17  bollin
+ * when creating an ordered organism name, stop when the next organism comment
+ * is found
+ *
+ * Revision 1.23  2005/06/06 15:31:34  lavr
+ * Explicit (unsigned char) casts in ctype routines
+ *
  * Revision 1.22  2005/06/03 17:03:57  lavr
  * Explicit (unsigned char) casts in ctype routines
  *

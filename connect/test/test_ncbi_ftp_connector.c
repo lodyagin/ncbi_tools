@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_ftp_connector.c,v 1.8 2005/05/20 12:56:35 lavr Exp $
+/*  $Id: test_ncbi_ftp_connector.c,v 1.11 2005/07/22 16:09:15 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
     EIO_Status  status;
     CONN        conn;
 
-    g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDENT;
+    g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
     srand(g_NCBI_ConnectRandomSeed);
 
     /* Log and data-log streams */
@@ -91,11 +91,11 @@ int main(int argc, char* argv[])
     } else {
         *buf = 0;
     }
-    CORE_LOGF(eLOG_Note, ("Connecting to ftp://%s%s@%s%s%s%s%s",
-                          TEST_HOST, buf,
+    CORE_LOGF(eLOG_Note, ("Connecting to ftp://%s%s%s@%s%s%s%s",
                           TEST_USER ? TEST_USER                : "",
                           TEST_PASS ? ":"                      : "",
                           TEST_PASS ? TEST_PASS                : "",
+                          TEST_HOST, buf,
                           !TEST_PATH || *TEST_PATH == '/' ? "" : "/",
                           TEST_PATH ? TEST_PATH                : ""));
     /* Run the tests */
@@ -105,6 +105,10 @@ int main(int argc, char* argv[])
 
     if (CONN_Create(connector, &conn) != eIO_Success)
         CORE_LOG(eLOG_Fatal, "Cannot create FTP download connection");
+
+    assert(CONN_SetTimeout(conn, eIO_Open,      &timeout) == eIO_Success);
+    assert(CONN_SetTimeout(conn, eIO_ReadWrite, &timeout) == eIO_Success);
+    assert(CONN_SetTimeout(conn, eIO_Close,     &timeout) == eIO_Success);
 
     if (CONN_Read(conn, buf, sizeof(buf), &n, eIO_ReadPlain) != eIO_Closed)
         CORE_LOG(eLOG_Fatal, "Test failed in empty READ");
@@ -218,6 +222,15 @@ int main(int argc, char* argv[])
 /*
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_ftp_connector.c,v $
+ * Revision 1.11  2005/07/22 16:09:15  lavr
+ * Implement data xfer timeout
+ *
+ * Revision 1.10  2005/07/21 17:38:58  lavr
+ * Proper URL printout when connecting
+ *
+ * Revision 1.9  2005/07/11 18:24:41  lavr
+ * Spell ADDEND
+ *
  * Revision 1.8  2005/05/20 12:56:35  lavr
  * Added test for multiple commands and '[\r]\n'-terminated input
  *

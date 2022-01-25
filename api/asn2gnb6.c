@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.46 $
+* $Revision: 1.54 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -160,10 +160,13 @@ static SourceType source_desc_note_order [] = {
   SCQUAL_collection_date,
   SCQUAL_collected_by,
   SCQUAL_identified_by,
+  /*
   SCQUAL_fwd_primer_seq,
   SCQUAL_rev_primer_seq,
   SCQUAL_fwd_primer_name,
   SCQUAL_rev_primer_name,
+  */
+  SCQUAL_PCR_primers,
 
   SCQUAL_genotype,
   SCQUAL_plastid_name,
@@ -210,10 +213,13 @@ static SourceType source_feat_note_order [] = {
   SCQUAL_collection_date,
   SCQUAL_collected_by,
   SCQUAL_identified_by,
+  /*
   SCQUAL_fwd_primer_seq,
   SCQUAL_rev_primer_seq,
   SCQUAL_fwd_primer_name,
   SCQUAL_rev_primer_name,
+  */
+  SCQUAL_PCR_primers,
 
   SCQUAL_genotype,
   SCQUAL_plastid_name,
@@ -295,6 +301,7 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "organelle",            Qual_class_organelle },
   { "orgmod_note",          Qual_class_orgmod    },
   { "pathovar",             Qual_class_orgmod    },
+  { "PCR_primers",          Qual_class_pcr       },
   { "plasmid",              Qual_class_subsource },
   { "plastid",              Qual_class_subsource },
   { "pop_variant",          Qual_class_subsource },
@@ -480,7 +487,8 @@ static CharPtr organellePrefix [] = {
   "Apicoplast ",
   "Leucoplast ",
   "Proplastid ",
-  NULL
+  NULL,
+  "Hydrogenosome "
 };
 
 static CharPtr newOrganellePrefix [] = {
@@ -503,7 +511,8 @@ static CharPtr newOrganellePrefix [] = {
   "apicoplast ",
   "leucoplast ",
   "proplastid ",
-  NULL
+  NULL,
+  "hydrogenosome "
 };
 
 NLM_EXTERN CharPtr FormatSourceBlock (
@@ -575,7 +584,7 @@ NLM_EXTERN CharPtr FormatSourceBlock (
 
   if (biop != NULL) {
     genome = biop->genome;
-    if (genome <= 19) {
+    if (genome <= 20) {
       if (ajp->newSourceOrg && (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT)) {
         organelle = newOrganellePrefix [genome];
       } else {
@@ -799,7 +808,7 @@ NLM_EXTERN CharPtr FormatOrganismBlock (
   }
   if (biop != NULL) {
     genome = biop->genome;
-    if (genome <= 19) {
+    if (genome <= 20) {
       organelle = organellePrefix [genome];
     }
     orp = biop->org;
@@ -2170,7 +2179,8 @@ static CharPtr organelleQual [] = {
   "/organelle=\"plastid:apicoplast\"",
   "/organelle=\"plastid:leucoplast\"",
   "/organelle=\"plastid:proplastid\"",
-  NULL
+  NULL,
+  "/organelle=\"hydrogenosome\"",
 };
 
 NLM_EXTERN Boolean StringIsJustQuotes (
@@ -2413,6 +2423,72 @@ NLM_EXTERN CharPtr GetMolTypeQual (
   return NULL;
 }
 
+static CharPtr GetPCRPrimersString (
+  QualValPtr qvp
+)
+
+{
+  CharPtr       fwd_name = NULL, fwd_seq = NULL,
+                rev_name = NULL, rev_seq = NULL,
+                prefix = NULL, str;
+  size_t        len;
+  SubSourcePtr  ssp;
+
+  if (qvp == NULL) return NULL;
+
+  ssp = qvp [SCQUAL_fwd_primer_name].ssp;
+  if (ssp != NULL) {
+    fwd_name = ssp->name;
+  }
+  ssp = qvp [SCQUAL_fwd_primer_seq].ssp;
+  if (ssp != NULL) {
+    fwd_seq = ssp->name;
+  }
+  ssp = qvp [SCQUAL_rev_primer_name].ssp;
+  if (ssp != NULL) {
+    rev_name = ssp->name;
+  }
+  ssp = qvp [SCQUAL_rev_primer_seq].ssp;
+  if (ssp != NULL) {
+    rev_seq = ssp->name;
+  }
+
+  len = StringLen (fwd_name) + StringLen (fwd_seq) +
+        StringLen (rev_name) + StringLen (rev_seq) + 80;
+  str = (CharPtr) MemNew (sizeof (Char) * len);
+  if (str == NULL) return NULL;
+
+  if (StringDoesHaveText (fwd_name)) {
+    StringCat (str, prefix);
+    StringCat (str, "fwd_name: ");
+    StringCat (str, fwd_name);
+    prefix = ", ";
+  }
+
+  if (StringDoesHaveText (fwd_seq)) {
+    StringCat (str, prefix);
+    StringCat (str, "fwd_seq: ");
+    StringCat (str, fwd_seq);
+    prefix = ", ";
+  }
+
+  if (StringDoesHaveText (rev_name)) {
+    StringCat (str, prefix);
+    StringCat (str, "rev_name: ");
+    StringCat (str, rev_name);
+    prefix = ", ";
+  }
+
+  if (StringDoesHaveText (rev_seq)) {
+    StringCat (str, prefix);
+    StringCat (str, "rev_seq: ");
+    StringCat (str, rev_seq);
+    prefix = ", ";
+  }
+
+  return str;
+}
+
 NLM_EXTERN CharPtr FormatSourceFeatBlock (
   Asn2gbFormatPtr afp,
   BaseBlockPtr bbp
@@ -2636,6 +2712,13 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
     qvp [SCQUAL_seqfeat_note].str = sfp->comment;
   }
 
+  if (qvp [SCQUAL_fwd_primer_name].ssp != NULL ||
+      qvp [SCQUAL_fwd_primer_seq].ssp != NULL ||
+      qvp [SCQUAL_rev_primer_name].ssp != NULL ||
+      qvp [SCQUAL_rev_primer_seq].ssp != NULL) {
+    qvp [SCQUAL_PCR_primers].ble = TRUE;
+  }
+
   /* now print qualifiers from table */
 
   qualtbl = source_qual_order;
@@ -2673,9 +2756,11 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
 
       case Qual_class_organelle :
         j = (Int2) qvp [idx].num;
-        if (organelleQual [j] != NULL) {
-          FFAddTextToString(ffstring, NULL, organelleQual[j], "\n",
-                            FALSE, FALSE, TILDE_IGNORE);
+        if (j < sizeof (organelleQual) / sizeof (CharPtr)) {
+          if (organelleQual [j] != NULL) {
+            FFAddTextToString(ffstring, NULL, organelleQual[j], "\n",
+                              FALSE, FALSE, TILDE_IGNORE);
+          }
         }
         break;
 
@@ -2828,6 +2913,24 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                 }
                 break;
 
+              case Qual_class_pcr :
+                if (qvp [jdx].ble) {
+                  lastssptype = 0;
+                  str = GetPCRPrimersString (qvp);
+                  if (StringIsJustQuotes (str)) {
+                    FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [jdx].name, "=\"\"\n",
+                                      FALSE, TRUE, TILDE_IGNORE);
+
+                  } else if (! StringHasNoText (str)) {
+                    FFAddTextToString(ffstring, "/", asn2gnbk_source_quals [jdx].name, "=",
+                                      FALSE, TRUE, TILDE_IGNORE);
+                    FFAddTextToString(ffstring, "\"", str, "\"\n",
+                                      FALSE, TRUE, TILDE_TO_SPACES);
+                  }
+                  MemFree (str);
+                }
+                break;
+
               default :
                 break;
             }
@@ -2928,6 +3031,20 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                  }
                 }
                 ssp = ssp->next;
+              }
+              break;
+
+            case Qual_class_pcr :
+              if (! ajp->flags.srcQualsToNote) break;
+              if (qvp [jdx].ble) {
+                lastssptype = 0;
+                str = GetPCRPrimersString (qvp);
+                if (StringDoesHaveText (str)) {
+                  sprintf (buf, "%s%s: ", prefix, asn2gnbk_source_quals [jdx].name);
+                  add_period = s_RemovePeriodFromEnd (str);
+                  FFAddString_NoRedund (unique, buf, str, NULL);
+                }
+                MemFree (str);
               }
               break;
 
@@ -3343,38 +3460,6 @@ static void PrintGenome (
   }
 }
 
-static Boolean SegHasParts (
-  BioseqPtr bsp
-)
-
-{
-  BioseqSetPtr  bssp;
-  SeqEntryPtr   sep;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_seg) return FALSE;
-  sep = bsp->seqentry;
-  if (sep == NULL) return FALSE;
-  sep = sep->next;
-  if (sep == NULL || (! IS_Bioseq_set (sep))) return FALSE;
-  bssp = (BioseqSetPtr) sep->data.ptrvalue;
-  if (bssp != NULL && bssp->_class == BioseqseqSet_class_parts) return TRUE;
-  return FALSE;
-}
-
-static Boolean DeltaLitOnly (
-  BioseqPtr bsp
-)
-
-{
-  ValNodePtr  vnp;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
-  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 1) return FALSE;
-  }
-  return TRUE;
-}
-
 NLM_EXTERN CharPtr FormatContigBlock (
   Asn2gbFormatPtr afp,
   BaseBlockPtr bbp
@@ -3522,6 +3607,201 @@ static void LIBCALLBACK SaveGBSeqSequence (
   *tmpp = tmp;
 }
 
+static Boolean InGapBlock (
+  IntAsn2gbJobPtr ajp
+)
+
+{
+  return (Boolean) (ajp->seqGapCurrLen > 0);
+}
+
+static Boolean LineIsAllGaps (
+  CharPtr ptr
+)
+
+{
+  Char  ch;
+  Int2  j;
+
+  for (ch = *ptr, j = 0; ch != '\0' && j < 60; ptr++, ch = *ptr, j++) {
+    if (ch != '-') return FALSE;
+  }
+  if (j == 60) return TRUE;
+  return FALSE;
+}
+
+static Int2 GapAtStart (
+  CharPtr ptr
+)
+
+{
+  Char  ch;
+  Int2  j;
+
+  for (ch = *ptr, j = 0; ch != '\0' && j < 60; ptr++, ch = *ptr, j++) {
+    if (ch != '-') return j;
+  }
+  return 0;
+}
+
+static void FixGapAtStart (
+  CharPtr ptr,
+  Char pad
+)
+
+{
+  Char  ch;
+  Int2  j;
+
+  for (ch = *ptr, j = 0; ch == '-' && j < 60; ptr++, ch = *ptr, j++) {
+    *ptr = pad;
+  }
+}
+
+static Int2 GapAtEnd (
+  CharPtr ptr
+)
+
+{
+  Char  ch;
+  Int2  j;
+  Int2  k;
+
+  for (ch = *ptr, j = 0, k = 0; ch != '\0' && j < 60; ptr++, ch = *ptr, j++) {
+    if (ch == '-') {
+      k++;
+    } else {
+      k = 0;
+    }
+  }
+  return k;
+}
+
+static void FixGapAtEnd (
+  CharPtr ptr,
+  Char pad
+)
+
+{
+  Char  ch;
+  Int2  j;
+
+  j = StringLen (ptr) - GapAtEnd (ptr);
+  ptr += j;
+  for (ch = *ptr; ch == '-' && j < 60; ptr++, ch = *ptr, j++) {
+    *ptr = pad;
+  }
+}
+
+static void FixRemainingGaps (
+  CharPtr ptr,
+  Char pad
+)
+
+{
+  Char  ch;
+  Int2  j;
+
+  for (ch = *ptr, j = 0; ch != '\0' && j < 60; ptr++, ch = *ptr, j++) {
+    if (ch == '-') {
+      *ptr = pad;
+    }
+  }
+}
+
+static void ExpandSeqLine (
+  CharPtr buf
+)
+
+{
+  Char     ch;
+  Int2     blk, count, lin;
+  CharPtr  ptr;
+  Char     seq [80];
+
+  StringCpy (seq, buf);
+
+  count = 0;
+  blk = 0;
+  lin = 0;
+
+  ptr = seq;
+  ch = *ptr;
+
+  while (ch != '\0') {
+    buf [count] = ch;
+    count++;
+    ptr++;
+    ch = *ptr;
+
+    blk++;
+    lin++;
+    if (blk >= 10 && lin < 60) {
+
+      buf [count] = ' ';
+      count++;
+      blk = 0;
+
+    }
+  }
+
+  buf [count] = '\0';
+}
+
+static Int2 ProcessGapSpecialFormat (
+  IntAsn2gbJobPtr ajp,
+  StringItemPtr ffstring,
+  CharPtr buf,
+  CharPtr nextchars,
+  Boolean is_na
+)
+
+{
+  Char  gapbuf [80];
+  Char  pad;
+  Int2  startgapgap = 0, endgap = 0;
+
+  if (is_na) {
+    pad = 'n';
+  } else {
+    pad = 'x';
+  }
+
+  if (LineIsAllGaps (buf)) {
+    ajp->seqGapCurrLen += StringLen (buf);
+    *buf = '\0';
+    return 0;
+  }
+
+  startgapgap = GapAtStart (buf);
+  if (InGapBlock (ajp)) {
+    ajp->seqGapCurrLen += startgapgap;
+    if (is_na) {
+      sprintf (gapbuf, "          [gap %ld bp]", (long) ajp->seqGapCurrLen);
+    } else {
+      sprintf (gapbuf, "          [gap %ld aa]", (long) ajp->seqGapCurrLen);
+    }
+    FFAddOneString (ffstring, gapbuf, FALSE, FALSE, TILDE_TO_SPACES);
+    FFAddOneChar (ffstring, '\n', FALSE);
+    ajp->seqGapCurrLen = 0;
+    FixGapAtStart (buf, ' ');
+  } else if (startgapgap > 0) {
+    FixGapAtStart (buf, pad);
+  }
+
+  endgap = GapAtEnd (buf);
+  if (LineIsAllGaps (nextchars)) {
+    FixGapAtEnd (buf, ' ');
+    ajp->seqGapCurrLen += endgap;
+  } else if (endgap > 0) {
+    FixGapAtEnd (buf, pad);
+  }
+
+  FixRemainingGaps (buf, pad);
+
+  return startgapgap;
+}
+
 NLM_EXTERN CharPtr FormatSequenceBlock (
   Asn2gbFormatPtr afp,
   BaseBlockPtr bbp
@@ -3536,15 +3816,19 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   Char              buf [80];
   Char              ch;
   Int2              count;
+  Int4              extend;
+  StreamFlgType     flags = STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL;
   GBSeqPtr          gbseq;
   IntAsn2gbSectPtr  iasp;
   Int2              lin;
   SeqLocPtr         loc;
   CharPtr           ptr;
+  Int4              remaining;
   SeqBlockPtr       sbp;
   SeqLoc            sl;
   SeqLocPtr         slp;
   Int4              start;
+  Int2              startgapgap;
   Int4              stop;
   CharPtr           str = NULL;
   CharPtr           tmp;
@@ -3601,11 +3885,17 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   /* replace SeqPort with improved SeqPortStream */
 
   if (sbp->bases == NULL) {
+    if (ajp->specialGapFormat) {
+      flags = EXPAND_GAPS_TO_DASHES | STREAM_CORRECT_INVAL;
+    }
+
     start = sbp->start;
     stop = sbp->stop;
+    extend = sbp->extend;
+
     if (stop > start) {
 
-      str = MemNew (sizeof (Char) * (stop - start + 3));
+      str = MemNew (sizeof (Char) * (extend - start + 3));
       if (str != NULL) {
         if (ajp->ajp.slp != NULL) {
           slp = ajp->ajp.slp;
@@ -3628,9 +3918,9 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
             sl.data.ptrvalue = (Pointer) slp->data.ptrvalue;
             sl.next = NULL;
           }
-          SeqPortStreamInt (&bsq, start, stop - 1, Seq_strand_plus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) str, NULL);
+          SeqPortStreamInt (&bsq, start, extend - 1, Seq_strand_plus, flags, (Pointer) str, NULL);
         } else {
-          SeqPortStreamInt (bsp, start, stop - 1, Seq_strand_plus, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) str, NULL);
+          SeqPortStreamInt (bsp, start, extend - 1, Seq_strand_plus, flags, (Pointer) str, NULL);
         }
         sbp->bases = str;
       }
@@ -3645,6 +3935,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
 
   start = sbp->start;
   stop = sbp->stop;
+  remaining = stop - start;
 
   count = 0;
   blk = 0;
@@ -3653,9 +3944,10 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   ptr = sbp->bases;
   ch = *ptr;
 
-  while (ch != '\0') {
+  while (ch != '\0' && remaining > 0) {
     buf [count] = (Char) (TO_LOWER (ch));
     count++;
+    remaining--;
     ptr++;
     ch = *ptr;
 
@@ -3664,24 +3956,31 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
     if (lin >= 60) {
 
       buf [count] = '\0';
-      PrintSeqLine (ffstring, afp->format, buf, start, start + lin);
+      startgapgap = 0;
+      if (ajp->specialGapFormat) {
+        startgapgap = ProcessGapSpecialFormat (ajp, ffstring, buf, ptr, ISA_na (bsp->mol));
+      }
+      if (StringDoesHaveText (buf)) {
+        ExpandSeqLine (buf);
+        PrintSeqLine (ffstring, afp->format, buf, start + startgapgap, start + lin);
+      }
       count = 0;
       blk = 0;
       lin = 0;
       start += 60;
-
-    } else if (blk >= 10) {
-
-      buf [count] = ' ';
-      count++;
-      blk = 0;
-
     }
   }
 
   buf [count] = '\0';
   if (count > 0) {
-    PrintSeqLine (ffstring, afp->format, buf, start, start + lin);
+    startgapgap = 0;
+    if (ajp->specialGapFormat) {
+      startgapgap = ProcessGapSpecialFormat (ajp, ffstring, buf, ptr, ISA_na (bsp->mol));
+    }
+    if (StringDoesHaveText (buf)) {
+      ExpandSeqLine (buf);
+      PrintSeqLine (ffstring, afp->format, buf, start + startgapgap, start + lin);
+    }
   }
 
   str = FFToCharPtr(ffstring);

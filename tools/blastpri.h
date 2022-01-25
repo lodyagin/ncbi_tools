@@ -32,8 +32,11 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.116 $ 
+/* $Revision: 6.117 $ 
 * $Log: blastpri.h,v $
+* Revision 6.117  2005/07/28 14:57:09  coulouri
+* remove dead code
+*
 * Revision 6.116  2005/05/16 17:44:24  papadopo
 * From Alejandro Schaffer: Change in prototype for RedoAlignmentCore to
 * support more than two options for adjustParameters
@@ -856,11 +859,6 @@ Int2 BlastNtFindWords PROTO((BlastSearchBlkPtr search, Int4 start, Int4 len, Int
 BlastAllWordPtr BlastPopulateAllWordArrays PROTO((Int4 wordsize, Int4 alphabet_size));
 
 Uint1Ptr BlastGetSequenceFromBioseq PROTO((BioseqPtr bsp, Int4Ptr length));
-
-#if 0 /* deprecated */
-BlastSeqIdListPtr BlastSeqIdListNew PROTO((void));
-BlastSeqIdListPtr BlastSeqIdListDestruct PROTO((BlastSeqIdListPtr seqid_list));
-#endif
 
 /* Retrieve the virtual oidlist from rdfp_chain */
 OIDListPtr LIBCALL BlastGetVirtualOIDList PROTO((ReadDBFILEPtr rdfp_chain));

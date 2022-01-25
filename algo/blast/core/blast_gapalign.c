@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.c,v 1.158 2005/05/10 19:40:40 papadopo Exp $
+/* $Id: blast_gapalign.c,v 1.159 2005/08/22 17:57:09 madden Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_gapalign.c,v 1.158 2005/05/10 19:40:40 papadopo Exp $";
+    "$Id: blast_gapalign.c,v 1.159 2005/08/22 17:57:09 madden Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -2340,6 +2340,10 @@ Int2 BLAST_MbGetGappedScore(EBlastProgramType program_number,
             Blast_HSPListSaveHSP(hsp_list, new_hsp);
             BlastIntervalTreeAddHSP(new_hsp, tree, query_info, 
                                     eQueryAndSubject);
+         }
+         else
+         {
+            gap_align->edit_script = GapEditScriptDelete(gap_align->edit_script);
          }
       }
    }

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_UTIL__H
 #define CONNECT___NCBI_UTIL__H
 
-/*  $Id: ncbi_util.h,v 6.21 2004/01/27 17:05:59 ucko Exp $
+/*  $Id: ncbi_util.h,v 6.22 2005/07/11 18:09:14 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -237,6 +237,9 @@ extern NCBI_XCONNECT_EXPORT REG  CORE_GetREG(void);
  */
 extern NCBI_XCONNECT_EXPORT const char* CORE_GetPlatform(void);
 
+extern NCBI_XCONNECT_EXPORT int/*bool*/ UTIL_MatchesMask(const char* name,
+                                                         const char* mask);
+
 
 #ifdef __cplusplus
 }  /* extern "C" */
@@ -249,6 +252,9 @@ extern NCBI_XCONNECT_EXPORT const char* CORE_GetPlatform(void);
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_util.h,v $
+ * Revision 6.22  2005/07/11 18:09:14  lavr
+ * +UTIL_MatchesMask()
+ *
  * Revision 6.21  2004/01/27 17:05:59  ucko
  * #undef LOG_DATA if necessary before #defining it with arguments to
  * avoid trouble on AIX.

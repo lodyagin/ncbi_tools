@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/24/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Converts fielded text into final report in a file
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: tofile.c,v $
+* Revision 6.4  2005/06/24 16:48:16  kans
+* SkipPastNewLine and SendTextToFile use Uint2 because buffer is 64000
+*
 * Revision 6.3  2004/12/16 18:14:50  kans
 * increased buffer to 64000 to deal with pmid 15330847 huge abstract
 *
@@ -98,7 +101,7 @@ static Int2 GetNextBlock PROTO((CharPtr title, Int2 maxwid));
 static void RecordCell PROTO((TablePtr tptr, Uint2 start, Int2 len, Int2 row, Int2 col));
 static void SetTableFormat PROTO((ColPtr colFmt));
 static void FormatTable PROTO((TablePtr tptr));
-static Int2 SkipPastNewLine PROTO((CharPtr text, Int2 cnt));
+static Uint2 SkipPastNewLine PROTO((CharPtr text, Uint2 cnt));
 static TablePtr TableSegment PROTO((CharPtr text, Int2 len, ParPtr parFmt, ColPtr colFmt));
 static Boolean SaveTableToFile PROTO((Pointer dat, FILE *f));
 static void FreeTable PROTO((TablePtr tptr));
@@ -487,7 +490,7 @@ static void FreeTable (TablePtr tptr)
   }
 }
 
-static Int2 SkipPastNewLine (CharPtr text, Int2 cnt)
+static Uint2 SkipPastNewLine (CharPtr text, Uint2 cnt)
 
 {
   Char  ch;
@@ -507,8 +510,8 @@ static Int2 SkipPastNewLine (CharPtr text, Int2 cnt)
 NLM_EXTERN Boolean SendTextToFile (FILE *f, CharPtr text, ParPtr parFmt, ColPtr colFmt)
 
 {
-  Int2      cnt;
-  Int2      cntr;
+  Uint2     cnt;
+  Uint2     cntr;
   Boolean   rsult;
   Int2      start;
   TablePtr  tptr;

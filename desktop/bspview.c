@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.129 $
+* $Revision: 6.130 $
 *
 * File Description: 
 *
@@ -1219,6 +1219,7 @@ static Int4 GetUidFromBsp (BioseqPtr bsp)
   return 0;
 }
 
+/*
 static void CheckForCookedBioseqs (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -1235,6 +1236,7 @@ static void CheckForCookedBioseqs (SeqEntryPtr sep, Pointer mydata, Int4 index, 
     *bp = FALSE;
   }
 }
+*/
 
 static void BioseqPtrToBioseqForm (ForM f, Pointer data)
 

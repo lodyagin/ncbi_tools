@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service_connector.c,v 6.61 2004/07/01 16:28:44 lavr Exp $
+/*  $Id: ncbi_service_connector.c,v 6.63 2005/08/12 19:21:52 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,6 @@
 #include "ncbi_comm.h"
 #include "ncbi_priv.h"
 #include "ncbi_servicep.h"
-#include <connect/ncbi_http_connector.h>
 #include <connect/ncbi_service_connector.h>
 #include <connect/ncbi_socket_connector.h>
 #include <ctype.h>
@@ -337,7 +336,7 @@ static int/*bool*/ s_AdjustNetInfo(SConnNetInfo* net_info,
     }
 
     {{
-        char* iter_header = SERV_PrintEx(uuu->iter, uuu->net_info);
+        char* iter_header = SERV_Print(uuu->iter, uuu->net_info);
         switch (info->type) {
         case fSERV_Ncbid:
             user_header = "Connection-Mode: STATELESS\r\n"; /*default*/
@@ -519,7 +518,7 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
 
     if (user_header) {
         /* We create HTTP connector here */
-        char* iter_header = SERV_PrintEx(uuu->iter, uuu->net_info);
+        char* iter_header = SERV_Print(uuu->iter, uuu->net_info);
         size_t n;
         if (iter_header /*NB: <CR><LF>-terminated*/) {
             if ((n = strlen(user_header)) > 0) {
@@ -563,7 +562,9 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
             uuu->port = 0;
             uuu->ticket = 0;
             net_info->max_try = 1;
-            conn = HTTP_CreateConnectorEx(net_info, fHCC_SureFlush/*flags*/,
+            conn = HTTP_CreateConnectorEx(net_info,
+                                          (uuu->params.flags & fHCC_Flushable)
+                                          | fHCC_SureFlush/*flags*/,
                                           s_ParseHeader, 0/*adj.info*/,
                                           uuu/*adj.data*/, 0/*cleanup.data*/);
             /* Wait for connection info back (error-transparent by DISPD.CGI)*/
@@ -602,7 +603,9 @@ static CONNECTOR s_Open(SServiceConnector* uuu,
                                           ? eSCC_DebugPrintout : 0);
         }
         net_info->max_try = uuu->net_info->max_try;
-        return HTTP_CreateConnectorEx(net_info, fHCC_AutoReconnect,
+        return HTTP_CreateConnectorEx(net_info,
+                                      (uuu->params.flags & fHCC_Flushable)
+                                      | fHCC_AutoReconnect/*flags*/,
                                       s_ParseHeader, s_AdjustNetInfo,
                                       uuu/*adj.data*/, 0/*cleanup.data*/);
     }
@@ -847,6 +850,12 @@ extern CONNECTOR SERVICE_CreateConnectorEx
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service_connector.c,v $
+ * Revision 6.63  2005/08/12 19:21:52  lavr
+ * Take fHCC_Flushable from connector's extra params in case of HTTP
+ *
+ * Revision 6.62  2005/07/11 18:15:30  lavr
+ * SERV_PrintEx() -> SERV_Print()
+ *
  * Revision 6.61  2004/07/01 16:28:44  lavr
  * Generate "Referer:" for resolved HTTP service hits
  *

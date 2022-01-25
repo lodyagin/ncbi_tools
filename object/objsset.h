@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager interface for module NCBI-Seqset
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objsset.h,v $
+* Revision 6.8  2005/07/11 16:02:02  kans
+* added define for BioseqseqSet_class_empty_set - for temporary internal use to prevent automatic freeing by DeleteMarkedObjects
+*
 * Revision 6.7  2002/09/30 13:39:34  kans
 * added wgs_set define
 *
@@ -187,6 +190,10 @@ NLM_EXTERN Int2 LIBCALL BioseqSetLabel PROTO((BioseqSetPtr bssp, CharPtr buffer,
 #define BioseqseqSet_class_eco_set 16
 #define BioseqseqSet_class_gen_prod_set 17
 #define BioseqseqSet_class_wgs_set 18
+
+/* for temporary internal use to prevent automatic freeing */
+#define BioseqseqSet_class_empty_set 254
+
 #define BioseqseqSet_class_other 255
 
 /*****************************************************************************

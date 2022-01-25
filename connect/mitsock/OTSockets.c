@@ -36,7 +36,7 @@
  * $
  */
 
-/* $Header: /src/NCBI/vault.ncbi/distrib/connect/mitsock/OTSockets.c,v 1.5 2001/11/21 22:51:40 juran Exp $ */
+/* $Header: /src/NCBI/vault.ncbi/distrib/connect/mitsock/OTSockets.c,v 1.6 2005/07/22 15:02:04 rsmith Exp $ */
 
 /* 
  *
@@ -180,7 +180,7 @@ abort:
 /*
  * bind() - bind a local name and port to a socket
  */
-int bind(int sockFD, const struct sockaddr *myAddr, int addrLength)
+int bind(int sockFD, const struct sockaddr *myAddr, socklen_t addrLength)
 {
   OSStatus          theError;
   TBind             reqAddr, retAddr;
@@ -359,7 +359,7 @@ int setsockopt(
 	long level,
 	long optname,
 	char *optval,
-	long optlen)
+	socklen_t optlen)
 {
 #pragma unused(optval)
 #pragma unused(optlen)
@@ -515,7 +515,7 @@ abort:
 /* 
  * connect() - initiate a connection on a socket
  */
-int connect(int sockFD, struct sockaddr *servAddr, int addrLength)
+int connect(int sockFD, struct sockaddr *servAddr, socklen_t addrLength)
 {
   TCall          sndCall;
   InetAddress    inetAddr;
@@ -653,7 +653,7 @@ abort:
 /*
  * accept() - accept a connection on a socket
  */
-int accept(int sockFD, struct sockaddr *peer, int *addrlen)
+int accept(int sockFD, struct sockaddr *peer, socklen_t *addrlen)
 {
 	OSStatus theError = noErr;
 	OTResult       sockState;
@@ -791,7 +791,7 @@ abort:
 /*
  * getpeername() - get the name of the peer connected to a socket
  */
-int getpeername(int sockFD, struct sockaddr *peerAddr, int *addrLength)
+int getpeername(int sockFD, struct sockaddr *peerAddr, socklen_t *addrLength)
 {
   OSStatus    theError = noErr;
   TBind       peer;
@@ -877,7 +877,7 @@ abort:
 /*
  * getsockname() - get the current name of a socket
  */
-int getsockname(int sockFD, struct sockaddr *localAddr, int *addrLength)
+int getsockname(int sockFD, struct sockaddr *localAddr, socklen_t *addrLength)
 {
   OSStatus           theError = noErr;
   TBind              local;

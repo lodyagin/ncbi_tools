@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICEP__H
 #define CONNECT___NCBI_SERVICEP__H
 
-/*  $Id: ncbi_servicep.h,v 6.31 2005/05/04 16:14:57 lavr Exp $
+/*  $Id: ncbi_servicep.h,v 6.33 2005/07/11 18:49:11 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -54,28 +54,28 @@ typedef struct {
 } SSERV_VTable;
 
 
+
 /* Iterator structure
  */
 struct SSERV_IterTag {
-    const char*  service;        /* requested service name, private storage */
-    const char*  current;        /* current service name, private storage   */
-    TSERV_Type   types;          /* requested server type(s)                */
-    unsigned int preferred_host; /* preferred host to select, network b.o.  */
-    double       preference;     /* range [0..100] %%                       */
-    SSERV_Info** skip;           /* servers to skip                         */
-    size_t       n_skip;         /* number of servers in the array          */
-    size_t       n_max_skip;     /* number of allocated slots in the array  */
-    SSERV_Info*  last;           /* last server info taken out              */
+    const char*       name;  /* requested service name, private storage   */
+    TSERV_Type        type;  /* requested server type(s)                  */
+    unsigned int      host;  /* preferred host to select, network b.o.    */
+    double            pref;  /* range [0..100] %%                         */
+    size_t          n_skip;  /* actual number of servers in the array     */
+    size_t          a_skip;  /* number of allocated slots in the array    */
+    SSERV_Info**      skip;  /* servers to skip (followed by names [opt]) */
+    const SSERV_Info* last;  /* last server info taken out                */
 
-    const SSERV_VTable* op;      /* table of virtual functions              */
+    const SSERV_VTable* op;  /* table of virtual functions                */
 
-    void*        data;           /* private data field                      */
-    int/*bool*/  external;       /* whether this is an external request     */
-    unsigned int origin;         /* IP of the origin                        */
-    const char*  arg;            /* argument to match; original pointer     */
-    size_t       arglen;         /* == 0 for NULL pointer above             */
-    const char*  val;            /* value to match; original pointer        */
-    size_t       vallen;         /* == 0 for NULL pointer above             */
+    void*             data;  /* private data field                        */
+    unsigned        mask:1;  /* whether name is to be treated as mask     */
+    unsigned    external:1;  /* whether this is an external request       */
+    const char*        arg;  /* argument to match; original pointer       */
+    size_t          arglen;  /* == 0 for NULL pointer above               */
+    const char*        val;  /* value to match; original pointer          */
+    size_t          vallen;  /* == 0 for NULL pointer above               */
 };
 
 
@@ -104,7 +104,6 @@ extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoP
  double              preference,    /* [0=min..100=max] preference in %%     */
  int/*bool*/         external,      /* whether mapping is not local to NCBI  */
  SConnNetInfo*       net_info,      /* for connection to dispatcher, m.b. 0  */
- unsigned int        origin,        /* origin IP                             */
  const char*         arg,           /* environment variable name to search   */
  const char*         val            /* environment variable value to match   */
  );
@@ -117,7 +116,6 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenP
  double              preference,
  int/*bool*/         external,
  SConnNetInfo*       net_info,
- unsigned int        origin,
  const char*         arg,
  const char*         val
  );
@@ -125,7 +123,7 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenP
 
 /* Return service name the iterator is currently working on.
  */
-extern NCBI_XCONNECT_EXPORT const char* SERV_GetCurrentName(SERV_ITER iter);
+extern NCBI_XCONNECT_EXPORT const char* SERV_CurrentName(SERV_ITER iter);
 
 
 /* Private interface: update mapper information from the given text
@@ -142,12 +140,10 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_Update
  * contained in the iterator; to be used in mapping requests to DISPD.
  * Return value must be 'free'd.
  */
-extern NCBI_XCONNECT_EXPORT char* SERV_PrintEx
+extern NCBI_XCONNECT_EXPORT char* SERV_Print
 (SERV_ITER           iter,
  const SConnNetInfo* referrer
  );
-
-#define SERV_Print(iter) SERV_PrintEx(iter, 0)
 
 
 /* Get name of underlying service mapper.
@@ -183,6 +179,12 @@ extern NCBI_XCONNECT_EXPORT double SERV_Preference
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_servicep.h,v $
+ * Revision 6.33  2005/07/11 18:49:11  lavr
+ * Hashed preference generation algorithm retired (proven to fail often)
+ *
+ * Revision 6.32  2005/07/11 18:15:10  lavr
+ * Revised to allow wildcard searches thru service iterator
+ *
  * Revision 6.31  2005/05/04 16:14:57  lavr
  * -SERV_GetConfig()
  *
@@ -203,9 +205,6 @@ extern NCBI_XCONNECT_EXPORT double SERV_Preference
  *
  * Revision 6.25  2004/08/19 15:48:04  lavr
  * SERV_ITER::type renamed into SERV_ITER::types to reflect its bitmask nature
- *
- * Revision 6.24  2004/07/01 16:27:55  lavr
- * +SERV_PrintEx()
  *
  * Revision 6.23  2003/06/26 15:19:56  lavr
  * Additional parameter "external" for SERV_{Open|GetInfo}P()

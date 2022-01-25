@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.200 $
+* $Revision: 6.219 $
 *
 * File Description: 
 *
@@ -403,10 +403,12 @@ extern ForM CreateStartupForm (Int2 left, Int2 top, CharPtr title,
     m = PulldownMenu (w, "Misc");
     CommandItem (m, "Net Configure...", NetConfigureProc);
     if (useEntrez) {
+      /*
       SeparatorItem (m);
       CommandItem (m, "Entrez Query...", EntrezQueryProc);
       SeparatorItem (m);
       CommandItem (m, "Entrez2 Query...", Entrez2QueryProc);
+      */
       if (extraServices) {
         SeparatorItem (m);
         CommandItem (m, "Process FASTA Nucleotide Updates", ParseInNucUpdates);
@@ -620,6 +622,7 @@ static Boolean ExportTemplateMenu (ForM f, CharPtr filename)
   if (ANS_NO == Message (MSG_YN, "Do you want to add an organism name and comment before saving the template?"))
   {
     bssp = BioseqSetNew ();
+    bssp->_class = BioseqseqSet_class_empty_set;
     sep = SeqEntryNew ();
     sep->choice = 2;
     sep->data.ptrvalue = bssp;
@@ -675,6 +678,7 @@ static Boolean ExportTemplateMenu (ForM f, CharPtr filename)
       sep = SeqEntryNew ();
       sep->choice = 2;
       sep->data.ptrvalue = bssp;
+      bssp->_class = BioseqseqSet_class_empty_set;
     
       org_name = DialogToPointer (org_dlg);
       if (!StringHasNoText (org_name))
@@ -999,22 +1003,10 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
                                     CharPtr best, size_t maxsize, CharPtr PNTR ttl)
 
 {
-  Char        activity [256];
   CharPtr     allele = NULL;
-  BioseqPtr   bsp;
-  Char        ec [32];
-  GeneRefPtr  grp = NULL;
-  SeqLocPtr   gslp;
-  Boolean     hasNulls;
   BioseqPtr   nbsp;
   BioseqPtr   pbsp;
   ProtRefPtr  prp;
-  CharPtr     ptr;
-  SeqFeatPtr  sfp;
-  SeqIdPtr    sip;
-  Char        str [256];
-  Char        str2 [256];
-  Char        geneSynStr[256];
 
   if (nsep != NULL && psep != NULL && slp != NULL && crp != NULL && title != NULL) {
     if (best != NULL) {
@@ -1025,242 +1017,23 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
       pbsp = (BioseqPtr) psep->data.ptrvalue;
       if (nbsp != NULL && pbsp != NULL) {
 
-	/*---------------------------------*/
-	/* Parse the gene and gene-related */
-	/* fields from the title.          */
-	/*---------------------------------*/
+        AddGeneFeatureFromTitle (nsep, title, slp);
+      
+        prp = AddProteinFeatureFromDefline (psep, title);
 
-        ptr = StringISearch (title, "[gene=");
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 6, sizeof (str));
-          ptr = StringChr (str, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            ptr = StringChr (str, ';');
-            if (ptr != NULL) {
-              *ptr = '\0';
-              ptr++;
-              allele = StringChr (ptr, ';');
-              if (allele != NULL) {
-                *allele = '\0';
-                allele++;
-              }
-            }
-            StringNCpy_0 (best, str, maxsize);
-            if (StringHasNoText (best)) {
-              StringNCpy_0 (best, ptr, maxsize);
-            }
-	    
-	    /*--------------------------------------*/
-	    /* Create a Gene Reference pointer with */
-	    /* the gene, gene description, allele,  */
-	    /* and gene_syn information.            */
-	    /*--------------------------------------*/
-
-            grp = CreateNewGeneRef (str, allele, ptr, FALSE);
+        if (prp != NULL && best != NULL)
+        {
+          if (prp->name != NULL && !StringHasNoText (prp->name->data.ptrvalue))
+          {
+	          StringNCpy_0 (best, prp->name->data.ptrvalue, maxsize);
+          }
+          else if (!StringHasNoText (prp->desc))
+          {
+	          StringNCpy_0 (best, prp->desc, maxsize);
           }
         }
 
-	    /*-----------------------------------------*/
-	    /* Parse the gene_syn field from the title */
-	    /*-----------------------------------------*/
-
-        ptr = StringISearch (title, "[gene_syn=");
-        if (ptr != NULL) {
-          StringNCpy_0 (geneSynStr, ptr + 10, sizeof (str));
-          ptr = StringChr (geneSynStr, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-          }
-
-          if (grp == NULL) {
-            grp = GeneRefNew ();
-          }
-          ValNodeCopyStr(&(grp->syn),0,geneSynStr);
-        }
-
-        if (grp != NULL) {
-          if (ExtendGene (grp, nsep, slp)) {
-            grp = GeneRefFree (grp);
-          } else {
-            sfp = CreateNewFeature (nsep, NULL, SEQFEAT_GENE, NULL);
-            if (sfp != NULL) {
-              sfp->data.value.ptrvalue = (Pointer) grp;
-              sfp->location = SeqLocFree (sfp->location);
-              sfp->location = AsnIoMemCopy ((Pointer) slp,
-                                            (AsnReadFunc) SeqLocAsnRead,
-                                            (AsnWriteFunc) SeqLocAsnWrite);
-              sip = SeqLocId (sfp->location);
-              if (sip != NULL) {
-                bsp = BioseqFind (sip);
-              } else {
-                bsp = nbsp;
-              }
-              if (bsp != NULL) {
-                gslp = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
-                if (gslp != NULL) {
-                  sfp->location = SeqLocFree (sfp->location);
-                  sfp->location = gslp;
-                  if (bsp->repr == Seq_repr_seg) {
-                    gslp = SegLocToPartsEx (bsp, sfp->location, TRUE);
-                    sfp->location = SeqLocFree (sfp->location);
-                    sfp->location = gslp;
-                    hasNulls = LocationHasNullsBetween (sfp->location);
-                    sfp->partial = (sfp->partial || hasNulls);
-                  }
-                  FreeAllFuzz (gslp);
-                }
-              }
-            }
-          }
-        }
-
-	/*-----------------------------------------*/
-	/* Parse the function field from the title */
-	/*-----------------------------------------*/
-
-        activity [0] = '\0';
-        ec [0] = '\0';
-        ptr = StringISearch (title, "[function=");
-        if (ptr != NULL) {
-          StringNCpy_0 (activity, ptr + 10, sizeof (str));
-          ptr = StringChr (activity, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-          }
-        }
-
-	/*------------------------------------------*/
-	/* Parse the EC_number field from the title */
-	/*------------------------------------------*/
-
-        ptr = StringISearch (title, "[EC_number=");
-        if (ptr != NULL) {
-          StringNCpy_0 (ec, ptr + 11, sizeof (str));
-          ptr = StringChr (ec, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-          }
-        }
-
-	/*---------------------------------*/
-	/* Parse the protein and prot_desc */
-	/* fields from the title.          */
-	/*---------------------------------*/
-
-        ptr = StringISearch (title, "[prot=");
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 6, sizeof (str));
-          ptr = StringChr (str, ']');
-        } else {
-          ptr = StringISearch (title, "[protein=");
-          if (ptr != NULL) {
-            StringNCpy_0 (str, ptr + 9, sizeof (str));
-            ptr = StringChr (str, ']');
-          }
-        }
-
-	/*---------------------------------*/
-	/* If we found a protein value ... */
-	/*---------------------------------*/
-
-        if (ptr != NULL)
-	  {
-	    /*------------------------------------*/
-	    /* ... trim off extraneous characters */
-	    /*------------------------------------*/
-
-	    *ptr = '\0';
-
-	    /*----------------------------------------------*/
-	    /* ... search for a protein description, either */
-	    /*     in the prot field (seperated by a ';')   */
-	    /*     or in its own 'prot_desc' field.         */
-	    /*----------------------------------------------*/
-
-	    ptr = StringChr (str, ';');
-	    if (ptr != NULL)
-	      {
-		*ptr = '\0';
-		ptr++;
-	      }
-	    else
-	      {
-		ptr = StringISearch (title, "[prot_desc=");
-		if (ptr != NULL)
-		  {
-		    StringNCpy_0 (str2, ptr + 11, sizeof (str2));
-		    ptr = StringChr (str2, ']');
-		    if (ptr != NULL)
-		      {
-			*ptr = '\0';
-			ptr = str2;
-		      }
-		  }
-	      }
-
-	    /*-----------*/
-	    /*  ... ???  */
-	    /*-----------*/
-
-	    StringNCpy_0 (best, str, maxsize);
-	    if (StringHasNoText (best))
-	      StringNCpy_0 (best, ptr, maxsize);
-
-	    /*--------------------------------*/
-	    /* ... add the prot and prot_desc */
-	    /*     to the Seq Features.       */
-	    /*--------------------------------*/
-
-	    prp = CreateNewProtRef (str, ptr, ec, activity);
-	    if (prp != NULL)
-	      {
-		sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
-		if (sfp != NULL)
-		  sfp->data.value.ptrvalue = (Pointer) prp;
-	      }
-	  }
-
-	/*---------------------*/
-	/* Parse the ORF field */
-	/*---------------------*/
-
-        ptr = StringISearch (title, "[orf]");
-        if (ptr != NULL) {
-          crp->orf = TRUE;
-        }
-
-	/*-------------------------*/
-	/* Parse the comment field */
-	/*-------------------------*/
-
-        ptr = StringISearch (title, "[comment=");
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 9, sizeof (str));
-          ptr = StringChr (str, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            if (ttl != NULL) {
-              *ttl = StringSave (str);
-            }
-          }
-        }
-
-	/*----------------------*/
-	/* Parse the note field */
-	/*----------------------*/
-
-        ptr = StringISearch (title, "[note=");
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 6, sizeof (str));
-          ptr = StringChr (str, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            if (ttl != NULL && *ttl == NULL) {
-              *ttl = StringSave (str);
-            }
-          }
-        }
+        AddCodingRegionFieldsFromProteinTitle (crp, title, ttl);
       }
     }
   }
@@ -1340,7 +1113,7 @@ static SeqLocPtr AskForInterval (SeqEntryPtr sep, BioseqPtr nuc, BioseqPtr prot)
 }
 
 extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
-                                        Int2 code, Boolean makeMRNA, BioseqPtr forceTarget)
+                                        Int2 code, Boolean makeMRNA, SeqLocPtr use_this)
 
 {
   SeqFeatPtr   cds;
@@ -1351,7 +1124,6 @@ extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
   BioseqPtr    pbsp;
   SeqFeatPtr   rna;
   RnaRefPtr    rrp;
-  SeqEntryPtr  sep;
   SeqLocPtr    slp;
   CharPtr      ttl;
   ValNodePtr   vnp;
@@ -1369,7 +1141,7 @@ extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
   cds = NULL;
   WatchCursor ();
   Update ();
-  if (forceTarget == NULL) {
+  if (use_this == NULL) {
     slp = PredictCodingRegion (nbsp, pbsp, code);
     if (slp == NULL) {
       ArrowCursor ();
@@ -1377,8 +1149,7 @@ extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
       slp = AskForInterval (nsep, nbsp, pbsp);
     }
   } else {
-    sep = SeqMgrGetSeqEntryForData (forceTarget);
-    slp = CreateWholeInterval (sep);
+    slp = use_this;
   }
   if (slp == NULL) return FALSE;
 
@@ -1391,14 +1162,6 @@ extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
       if (vnp != NULL && vnp->data.ptrvalue != NULL) {
         vnpstr = (CharPtr) vnp->data.ptrvalue;
         CreateGeneAndProtFeats (nsep, psep, slp, crp, vnpstr, mRnaName, sizeof (mRnaName), &ttl);
-        ExciseString (vnpstr, "[gene=", "]");
-        ExciseString (vnpstr, "[prot=", "]");
-        ExciseString (vnpstr, "[protein=", "]");
-        ExciseString (vnpstr, "[function=", "]");
-        ExciseString (vnpstr, "[EC_number=", "]");
-        ExciseString (vnpstr, "[orf", "]");
-        ExciseString (vnpstr, "[comment", "]");
-        ExciseString (vnpstr, "[note", "]");
         TrimSpacesAroundString (vnpstr);
         if (StringHasNoText (vnpstr)) {
           ValNodeExtract (&(pbsp->descr), Seq_descr_title);
@@ -7535,3 +7298,833 @@ extern void ConvertInnerCDSsToProteinFeatures (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   Update ();  
 }
+
+typedef struct objstringdata 
+{
+  StringConstraintPtr scp;
+  Boolean found;	
+} ObjStringData, PNTR ObjStringPtr;
+
+static void LIBCALLBACK AsnWriteStringConstraintCallBack (AsnExpOptStructPtr pAEOS)
+
+{
+  CharPtr        pchSource;
+  ObjStringPtr   osp;
+
+  osp = (ObjStringPtr) pAEOS->data;
+  if (ISA_STRINGTYPE (AsnFindBaseIsa (pAEOS->atp))) 
+  {
+	  pchSource = (CharPtr) pAEOS->dvp->ptrvalue;
+    if (DoesStringMatchConstraint (pchSource, osp->scp))
+    {
+      osp->found = TRUE;
+    }
+  }
+}
+
+static Boolean DoesBioseqMatchStringConstraint (BioseqPtr bsp, StringConstraintPtr scp)
+
+{
+  ObjMgrPtr         omp;
+  ObjMgrTypePtr     omtp;
+  AsnExpOptPtr      aeop;
+  AsnIoPtr          aip;
+  ObjStringData     osd;
+
+  omp = ObjMgrGet ();
+  if (omp == NULL) return FALSE;
+  omtp = ObjMgrTypeFind (omp, OBJ_BIOSEQ, NULL, NULL);
+  if (omtp == NULL) return FALSE;
+  
+  aip = AsnIoNullOpen ();
+  aeop = AsnExpOptNew (aip, NULL, NULL, AsnWriteStringConstraintCallBack);
+  if (aeop != NULL) {
+    aeop->user_data = (Pointer) &osd;
+  }
+  osd.scp = scp;
+
+  osd.found = FALSE;
+  (omtp->asnwrite) (bsp, aip, NULL);
+  AsnIoClose (aip);   
+  
+  if (scp != NULL && scp->not_present)
+  {
+    osd.found = ! osd.found;
+  }
+  
+  return osd.found;
+}
+
+typedef struct stringconstraintform 
+{
+  FORM_MESSAGE_BLOCK
+  DialoG string_src_dlg;
+  DialoG string_constraint_dlg;
+  
+  ParseFieldPtr pfp;
+  FilterSetPtr  fsp;
+} StringConstraintFormData, PNTR StringConstraintFormPtr;
+
+
+
+static void ApplyGDSKeywordCallback (BioseqPtr bsp, Pointer userdata)
+{
+  SeqEntryPtr             sep;
+  ValNodePtr              vnp;
+  StringConstraintFormPtr scfp;
+  GBBlockPtr              gbp;
+  GetSamplePtr            gsp;
+  Boolean                 ok_to_add = TRUE;
+  
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  if (sep == NULL)
+  {
+    return;
+  }
+  
+  scfp = (StringConstraintFormPtr) userdata;
+  
+  if (scfp != NULL)
+  {
+    gsp = GetSampleForSeqEntry (sep, bsp->idx.entityID, scfp->pfp, scfp->fsp);
+    if (gsp == NULL || gsp->num_found == 0)
+    {
+      ok_to_add = FALSE;
+    }
+    gsp = GetSampleFree (gsp);
+  }
+  
+  if (!ok_to_add)
+  {
+    return;
+  }
+      
+	vnp = GetDescrOnSeqEntry (sep, Seq_descr_genbank);
+	if (vnp == NULL) {
+		vnp = NewDescrOnSeqEntry (sep, Seq_descr_genbank);
+		if (vnp != NULL) {
+			vnp->data.ptrvalue = (Pointer) GBBlockNew ();
+		}
+	}
+	if (vnp == NULL) return;
+	gbp = (GBBlockPtr) vnp->data.ptrvalue;
+	if (gbp == NULL)
+	{
+	  gbp = GBBlockNew ();
+	  vnp->data.ptrvalue = gbp;
+	}
+	if (gbp == NULL) return;
+  	
+	for (vnp = gbp->keywords; vnp; vnp = vnp->next) {
+		if (StringCmp((CharPtr)vnp->data.ptrvalue, "GDS") == 0) {
+			return;
+		}
+	}
+	ValNodeAddPointer (&(gbp->keywords), 0, StringSave ("GDS"));
+}
+
+extern void ApplyGDSKeyword (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  
+  VisitBioseqsInSep (sep, NULL, ApplyGDSKeywordCallback);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();   
+}
+
+static void DoApplyGDSKeywords (ButtoN b)
+{
+  StringConstraintFormPtr scfp;
+  SeqEntryPtr             sep;
+  
+  scfp = (StringConstraintFormPtr) GetObjectExtra (b);
+  if (scfp == NULL)
+  {
+    return;
+  }
+  
+  scfp->pfp = (ParseFieldPtr) DialogToPointer (scfp->string_src_dlg);
+  scfp->fsp = FilterSetNew ();
+  scfp->fsp->scp = (StringConstraintPtr) DialogToPointer (scfp->string_constraint_dlg);
+  
+  sep = GetTopSeqEntryForEntityID (scfp->input_entityID);
+  if (sep == NULL) return;
+  
+  VisitBioseqsInSep (sep, scfp, ApplyGDSKeywordCallback);
+
+  scfp->fsp = FilterSetFree (scfp->fsp);
+  scfp->pfp = ParseFieldFree (scfp->pfp);
+
+  ObjMgrSetDirtyFlag (scfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, scfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();   
+  Remove (scfp->form);  
+}
+
+extern void ApplyGDSKeywordWithStringConstraint (IteM i)
+{
+  BaseFormPtr             bfp;
+  StringConstraintFormPtr scfp;
+  WindoW                  w;
+  PrompT                  ppt;
+  GrouP                   h, c;
+  ButtoN                  b;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  scfp = (StringConstraintFormPtr) MemNew (sizeof (StringConstraintFormData));
+  if (scfp == NULL) return;
+  
+  w = FixedWindow (-50, -33, -10, -10, "Apply GDS Keywords", StdCloseWindowProc);
+  SetObjectExtra (w, scfp, StdCleanupExtraProc);
+  scfp->form = (ForM) w;
+  scfp->input_entityID = bfp->input_entityID;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  ppt = StaticPrompt (h, "Where", 0, 0, programFont, 'l');
+  scfp->string_src_dlg = ParseFieldDestDialog (h, NULL, NULL);
+
+  scfp->string_constraint_dlg = StringConstraintDialog (h, NULL, FALSE);
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton (c, "Accept", DoApplyGDSKeywords);
+  SetObjectExtra (b, scfp, NULL);
+  b = PushButton (c, "Cancel", StdCancelButtonProc);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt,
+                              (HANDLE) scfp->string_src_dlg,
+                              (HANDLE) scfp->string_constraint_dlg,
+                              (HANDLE) c,
+                              NULL);
+  RealizeWindow (w);
+  Show (w);
+  Select (w);
+  Update ();
+}
+
+#if defined(OS_UNIX) || defined(OS_MSWIN)
+
+static CharPtr RNAstrandcmd = NULL;
+
+typedef struct rnastrand 
+{
+  FORM_MESSAGE_BLOCK
+  
+  ParData rnaParFmt;
+  ColData rnaColFmt[3];  
+  
+  DoC        doc;
+  ButtoN     rev_feats;
+  SeqEntryPtr sep;
+  ValNodePtr sequence_list;
+  Int4       num_sequences;
+  BoolPtr    selected;
+  Int2       lineheight;  
+} RNAStrandData, PNTR RNAStrandPtr;
+
+static void GetAccessionList (BioseqPtr bsp, Pointer userdata)
+{
+  ValNodePtr PNTR sequence_list;
+  SeqIdPtr        sip;
+  
+  if (bsp == NULL || userdata == NULL) return;
+  
+  sequence_list = (ValNodePtr PNTR) userdata;
+  
+  for (sip = bsp->id; sip != NULL; sip = sip->next)
+  {
+    if (sip->choice == SEQID_GENBANK)
+    {
+      ValNodeAddPointer (sequence_list, 0, sip);
+      return;
+    }
+  }
+}
+
+typedef enum 
+{
+  RNAstrand_PLUS = 1,
+  RNAstrand_MINUS,
+  RNAstrand_NO_HITS,
+  RNAstrand_UNEXPECTED,
+  RNAstrand_PARSE_ERROR,
+  RNAstrand_IN_PROGRESS
+} ERNAstrand_return_val;
+
+static CharPtr RNAstrand_strings[] = 
+{ "Plus", "Minus", "No Hits", "Unexpected", "Parse Error", "In Progress" };
+
+static ValNodePtr GetListForRNAStrandCorrection (SeqEntryPtr sep)
+{
+  CharPtr                 cmmd;
+  CharPtr                 args, cp, cp2;
+  FILE*                   fp;
+  Char                    path [PATH_MAX];
+  Char                    tmp_id [256];
+  Char                    file_line [256];
+  ValNodePtr              sequence_list = NULL, vnp;
+  Int4                    num_sequences = 0; 
+  Int4                    cmd_len = 0;
+#ifdef OS_UNIX
+  CharPtr                 cmd_format = "%s -a \'%s\' > %s";
+#endif
+#ifdef OS_MSWIN
+  CharPtr                 cmd_format = "%s -a \"%s\" > %s";
+#endif
+  Boolean                 found_id;
+  Int4                    k;
+
+  if (sep == NULL) return NULL;
+
+  if (RNAstrandcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "RNACORRECT", "RNASTRAND", NULL, file_line, sizeof (file_line))) {
+    	RNAstrandcmd = StringSaveNoNull (file_line);
+    }
+  }
+  if (RNAstrandcmd == NULL)
+  {
+    Message (MSG_ERROR, "RNASTRAND not set in config file!");
+    return NULL;
+  }
+  
+  
+  VisitBioseqsInSep (sep, &sequence_list, GetAccessionList);
+
+  if (sequence_list == NULL)
+  {
+    Message (MSG_ERROR, "No sequences with accession numbers found!\n");
+    return NULL;
+  }
+  
+  TmpNam (path);
+  
+  /* calculate length of string needed for command */
+  for (vnp = sequence_list; vnp != NULL; vnp = vnp->next)
+  {
+    SeqIdWrite (vnp->data.ptrvalue, tmp_id, PRINTID_TEXTID_ACC_ONLY, sizeof (tmp_id) - 1);
+    cmd_len += StringLen (tmp_id) + 2;
+    /* also count the number of sequences we are checking */
+    num_sequences ++;
+  }
+  
+  args = (CharPtr) MemNew (cmd_len * sizeof (Char));
+  if (args == NULL)
+  {
+    sequence_list = ValNodeFree (sequence_list);
+    return NULL;
+  }
+  
+  cp = args;
+  for (vnp = sequence_list; vnp != NULL; vnp = vnp->next)
+  {
+    SeqIdWrite (vnp->data.ptrvalue, cp, PRINTID_TEXTID_ACC_ONLY, cmd_len - (cp - args) - 1);
+    cp += StringLen (cp);
+    if (vnp->next != NULL)
+    {
+#ifdef OS_UNIX
+      StringCat (cp, ",");
+      cp ++;
+#else
+      StringCat (cp, ", ");
+      cp += 2;
+#endif
+    }
+  }
+  
+  cmd_len += 3 + StringLen (cmd_format) + StringLen (RNAstrandcmd) + StringLen (path);
+  cmmd = (CharPtr) MemNew (cmd_len * sizeof (Char));
+  if (cmmd == NULL)
+  {
+    args = MemFree (args);
+    ValNodeFree (sequence_list);
+    return NULL;
+  }
+  
+  sprintf (cmmd, cmd_format, RNAstrandcmd, args, path);
+  system (cmmd);
+  
+  args = MemFree (args);
+  cmmd = MemFree (cmmd);
+  
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return NULL;
+  }
+  
+
+  while (fgets (file_line, sizeof (file_line) - 1, fp) != NULL)
+  {
+    /* find SeqId that matches file line */
+    cp = StringChr (file_line, '\t');
+    if (cp == NULL)
+    {
+      continue;
+    }
+    *cp = 0;
+    cp++;
+    cp2 = StringChr (cp, '\n');
+    if (cp2 != NULL)
+    {
+      *cp2 = 0;
+    }
+    found_id = FALSE;
+    for (vnp = sequence_list; vnp != NULL && !found_id; vnp = vnp->next)
+    {
+      SeqIdWrite (vnp->data.ptrvalue, tmp_id, PRINTID_TEXTID_ACC_ONLY, sizeof (tmp_id) - 1);
+      if (StringCmp (tmp_id, file_line) == 0)
+      {
+        for (k = 1; k <= RNAstrand_IN_PROGRESS; k++)
+        {
+          if (StringCmp (cp, RNAstrand_strings [k - 1]) == 0)
+          {
+            vnp->choice = k;
+          }
+        }
+      }
+    }
+  }
+  
+  FileClose (fp);
+  FileRemove (path);
+  return sequence_list;  
+}
+
+static void DoOneReverse (ValNodePtr vnp, Boolean rev_feats)
+{
+  BioseqPtr    bsp;
+
+  if (vnp == NULL)
+  {
+    return;
+  }
+  
+  /* reverse sequence */
+  bsp = BioseqFind (vnp->data.ptrvalue);
+  BioseqRevComp (bsp);
+  if (rev_feats)
+  {
+    ReverseBioseqFeatureStrands (bsp);
+  }
+}
+
+static void DoRNACorrection (ButtoN b)
+{
+  RNAStrandPtr strand_info;
+  Int4         strand_num = 0;
+  ValNodePtr   vnp;
+  Boolean      rev_feats;
+
+  strand_info = (RNAStrandPtr) GetObjectExtra (b);
+  if (strand_info == NULL)
+  {
+    return;
+  }
+  
+  rev_feats = GetStatus (strand_info->rev_feats);
+  
+  for (vnp = strand_info->sequence_list, strand_num = 0;
+       vnp != NULL; 
+       vnp = vnp->next, strand_num++)
+  {
+    if (strand_info->selected [strand_num])
+    {
+      /* reverse sequence */
+      DoOneReverse (vnp, rev_feats);
+    }
+  }
+    
+  ObjMgrSetDirtyFlag (strand_info->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, strand_info->input_entityID, 0, 0);
+  Remove (strand_info->form);
+  Update ();
+}
+
+static void CleanupRNAStrandFormProc (GraphiC g, Pointer data)
+{
+  RNAStrandPtr strand_info;
+  
+  if (data != NULL)  
+  {
+    strand_info = (RNAStrandPtr) data;
+    strand_info->sequence_list = ValNodeFree (strand_info->sequence_list);
+    strand_info->selected = MemFree (strand_info->selected);
+    strand_info = MemFree (strand_info);
+  }
+}
+
+static Int4 GetSeqNumFromListPos (Int4 list_pos, ValNodePtr sequence_list)
+{
+  Int4       seq_num, list_offset;
+  ValNodePtr vnp;
+  
+  if (sequence_list == NULL)
+  {
+    return 0;
+  }
+  
+  /* is it part of the minus strands, which are listed first? */
+  list_offset = -1;
+  vnp = sequence_list;
+  seq_num = -1;
+  while (vnp != NULL && list_offset != list_pos)
+  {
+    if (vnp->choice == RNAstrand_MINUS)
+    {
+      list_offset ++;
+    }
+    seq_num++;
+    vnp = vnp->next;
+  }
+  
+  if (list_offset == list_pos)
+  {
+    return seq_num;
+  }
+  
+  /* is it part of the error strands, which are listed after the minus
+   * but before the plus?
+   */
+   
+  vnp = sequence_list;
+  seq_num = -1;
+  while (vnp != NULL && list_offset != list_pos)
+  {
+    if (vnp->choice != RNAstrand_MINUS && vnp->choice != RNAstrand_PLUS)
+    {
+      list_offset ++;
+    }
+    seq_num++;
+    vnp = vnp->next;
+  }
+  
+  if (list_offset == list_pos)
+  {
+    return seq_num;
+  }
+  
+  /* is it part of the plus strands, which are listed last? */
+  vnp = sequence_list;
+  seq_num = -1;
+  while (vnp != NULL && list_offset != list_pos)
+  {
+    if (vnp->choice == RNAstrand_PLUS)
+    {
+      list_offset ++;
+    }
+    seq_num++;
+    vnp = vnp->next;
+  }
+  return seq_num;
+}
+
+static void ReleaseRNAStrand (DoC d, PoinT pt)
+
+{
+  Int2            col;
+  RNAStrandPtr    strand_info;
+  Int2            item;
+  RecT            rct;
+  Int2            row;
+  Int4            seq_num;
+
+  strand_info = (RNAStrandPtr) GetObjectExtra (d);
+  if (strand_info != NULL && strand_info->selected != NULL) {
+    MapDocPoint (d, pt, &item, &row, &col, &rct);
+    rct.left += 1;
+    rct.right = rct.left + strand_info->lineheight;
+    rct.bottom = rct.top + (rct.right - rct.left);
+    if (row == 1 && col == 3 && PtInRect (pt, &rct))
+    {
+      seq_num = GetSeqNumFromListPos (item - 1, strand_info->sequence_list);
+      if (seq_num > -1 && seq_num < strand_info->num_sequences)
+      {
+        if (strand_info->selected [seq_num]) {
+          strand_info->selected [seq_num] = FALSE;
+        } else {
+          strand_info->selected [seq_num] = TRUE;
+        }
+        InsetRect (&rct, -1, -1);
+        InvalRect (&rct);
+        Update ();
+      }
+    }
+  }
+}
+
+static void DrawRNAStrand (DoC d, RectPtr r, Int2 item, Int2 firstLine)
+
+{
+  RNAStrandPtr strand_info;
+  RecT         rct;
+  RecT         doc_rect;
+  Int4         seq_num;
+
+  strand_info = (RNAStrandPtr) GetObjectExtra (d);
+  
+  if (strand_info == NULL || r == NULL 
+      || item < 1 || item > strand_info->num_sequences 
+      || firstLine != 0)
+  {
+    return;
+  }
+  
+  rct = *r;
+  rct.right --;
+  rct.left = rct.right - strand_info->lineheight;
+  rct.bottom = rct.top + (rct.right - rct.left);
+  
+  /* make sure we don't draw a box where we aren't drawing text */
+  ObjectRect (strand_info->doc, &doc_rect);
+  InsetRect (&doc_rect, 4, 4);
+  if (rct.bottom > doc_rect.bottom)
+  {
+    return;
+  }
+  
+  FrameRect (&rct);
+  
+  seq_num = GetSeqNumFromListPos (item - 1, strand_info->sequence_list);
+  if (seq_num > -1 && seq_num < strand_info->num_sequences) {
+    if (strand_info->selected != NULL && strand_info->selected [seq_num]) {
+      MoveTo (rct.left, rct.top);
+      LineTo (rct.right - 1, rct.bottom - 1);
+      MoveTo (rct.left, rct.bottom - 1);
+      LineTo (rct.right - 1, rct.top);
+    }
+  }
+}
+
+static void RefreshRNAStrandDialog (ButtoN b)
+{
+  RNAStrandPtr strand_info;
+  Int4         strand_num;
+  Char                    doc_line [500];
+  ValNodePtr   new_seq_list, vnp;
+  
+  strand_info = (RNAStrandPtr) GetObjectExtra (b);
+  if (strand_info == NULL)
+  {
+    return;
+  }
+  
+  new_seq_list = GetListForRNAStrandCorrection (strand_info->sep);
+  
+  if (new_seq_list == NULL)
+  {
+    Message (MSG_ERROR, "Unable to refresh sequence list.");
+    return;
+  }
+  strand_info->sequence_list = ValNodeFree (strand_info->sequence_list);
+  strand_info->sequence_list = new_seq_list;
+    
+  Reset (strand_info->doc);
+  /* print out minus strands */
+  for (vnp = strand_info->sequence_list, strand_num = 0;
+       vnp != NULL;
+       vnp = vnp->next, strand_num++)
+  {
+    if (vnp->choice != RNAstrand_MINUS)
+    {
+      /* skip */
+      continue;
+    }
+    SeqIdWrite (vnp->data.ptrvalue, doc_line, PRINTID_TEXTID_ACC_ONLY, 255);
+    StringCat (doc_line, "\tMINUS\t\n");
+    AppendText (strand_info->doc, doc_line, &(strand_info->rnaParFmt), strand_info->rnaColFmt, programFont);
+    strand_info->selected [strand_num] = TRUE;
+  }
+  
+  /* print out error strand */
+  for (vnp = strand_info->sequence_list;
+       vnp != NULL;
+       vnp = vnp->next)
+  {
+    if (vnp->choice == RNAstrand_PLUS || vnp->choice == RNAstrand_MINUS)
+    {
+      /* skip */
+      continue;
+    }
+    SeqIdWrite (vnp->data.ptrvalue, doc_line, PRINTID_TEXTID_ACC_ONLY, 255);
+    StringCat (doc_line, "\t");
+    if (vnp->choice == 0)
+    {
+      StringCat (doc_line, "Unknown error");
+    }
+    else
+    {
+      StringCat (doc_line, RNAstrand_strings [vnp->choice - 1]);
+    }
+    StringCat (doc_line, "\t\n");
+    AppendText (strand_info->doc, doc_line, &(strand_info->rnaParFmt), strand_info->rnaColFmt, programFont);
+  }
+  
+  /* print out plus strands */
+  for (vnp = strand_info->sequence_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->choice != RNAstrand_PLUS)
+    {
+      /* skip */
+      continue;
+    }
+    SeqIdWrite (vnp->data.ptrvalue, doc_line, PRINTID_TEXTID_ACC_ONLY, 255);
+    StringCat (doc_line, "\tPLUS\t\n");
+    AppendText (strand_info->doc, doc_line, &(strand_info->rnaParFmt), strand_info->rnaColFmt, programFont);
+  }
+
+  UpdateDocument (strand_info->doc, 0, 0);
+  
+}
+
+extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
+
+{
+  OMProcControlPtr        ompcp;
+  SeqEntryPtr             sep;
+  ValNodePtr              sequence_list = NULL;
+  Int4                    num_sequences = 0; 
+  RNAStrandPtr            strand_info;
+  WindoW                  w;
+  GrouP                   h, c;
+  ButtoN                  b;
+  RecT                    r;
+  ButtoN                  refresh_btn;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL)
+  {
+    Message (MSG_ERROR, "You must select something!");
+    return OM_MSG_RET_ERROR;
+  }
+
+  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  if (sep == NULL) return;
+
+  sequence_list = GetListForRNAStrandCorrection (sep);
+  
+  if (sequence_list == NULL)
+  {
+    return OM_MSG_RET_ERROR;
+  }
+  
+  strand_info = (RNAStrandPtr) MemNew (sizeof (RNAStrandData));
+  if (strand_info == NULL)
+  {
+    return OM_MSG_RET_ERROR;
+  }
+  
+  strand_info->input_entityID = ompcp->input_entityID;
+  strand_info->sep = sep;
+  strand_info->sequence_list = sequence_list;
+  strand_info->num_sequences = ValNodeLen (sequence_list);
+  strand_info->selected = (BoolPtr) MemNew (strand_info->num_sequences * sizeof (Boolean));
+
+  /* initialize document paragraph format */
+  strand_info->rnaParFmt.openSpace = FALSE;
+  strand_info->rnaParFmt.keepWithNext = FALSE;
+  strand_info->rnaParFmt.keepTogether = FALSE;
+  strand_info->rnaParFmt.newPage = FALSE;
+  strand_info->rnaParFmt.tabStops = FALSE;
+  strand_info->rnaParFmt.minLines = 0;
+  strand_info->rnaParFmt.minHeight = 0;
+  
+  /* initialize document column format */
+  strand_info->rnaColFmt[0].pixWidth = 0;
+  strand_info->rnaColFmt[0].pixInset = 0;
+  strand_info->rnaColFmt[0].charWidth = 80;
+  strand_info->rnaColFmt[0].charInset = 0;
+  strand_info->rnaColFmt[0].font = NULL;
+  strand_info->rnaColFmt[0].just = 'l';
+  strand_info->rnaColFmt[0].wrap = TRUE;
+  strand_info->rnaColFmt[0].bar = FALSE;
+  strand_info->rnaColFmt[0].underline = FALSE;
+  strand_info->rnaColFmt[0].left = FALSE;
+  strand_info->rnaColFmt[0].last = FALSE;
+  strand_info->rnaColFmt[1].pixWidth = 0;
+  strand_info->rnaColFmt[1].pixInset = 0;
+  strand_info->rnaColFmt[1].charWidth = 80;
+  strand_info->rnaColFmt[1].charInset = 0;
+  strand_info->rnaColFmt[1].font = NULL;
+  strand_info->rnaColFmt[1].just = 'l';
+  strand_info->rnaColFmt[1].wrap = TRUE;
+  strand_info->rnaColFmt[1].bar = FALSE;
+  strand_info->rnaColFmt[1].underline = FALSE;
+  strand_info->rnaColFmt[1].left = FALSE;
+  strand_info->rnaColFmt[1].last = FALSE;
+  strand_info->rnaColFmt[2].pixWidth = 0;
+  strand_info->rnaColFmt[2].pixInset = 0;
+  strand_info->rnaColFmt[2].charWidth = 80;
+  strand_info->rnaColFmt[2].charInset = 0;
+  strand_info->rnaColFmt[2].font = NULL;
+  strand_info->rnaColFmt[2].just = 'l';
+  strand_info->rnaColFmt[2].wrap = TRUE;
+  strand_info->rnaColFmt[2].bar = FALSE;
+  strand_info->rnaColFmt[2].underline = FALSE;
+  strand_info->rnaColFmt[2].left = FALSE;
+  strand_info->rnaColFmt[2].last = TRUE;
+    
+  w = FixedWindow (50, 33, -10, -10, "Correct RNA Strandedness", NULL);
+  SetObjectExtra (w, strand_info, CleanupRNAStrandFormProc);
+  strand_info->form = (ForM) w;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  strand_info->doc = DocumentPanel (h, stdCharWidth * 27, stdLineHeight * 8);
+  SetObjectExtra (strand_info->doc, strand_info, NULL);
+  SetDocAutoAdjust (strand_info->doc, TRUE);
+  SetDocProcs (strand_info->doc, NULL, NULL, ReleaseRNAStrand, NULL); 
+  SetDocShade (strand_info->doc, DrawRNAStrand, NULL, NULL, NULL);
+
+  SelectFont (programFont);
+  strand_info->lineheight = LineHeight ();
+  
+  ObjectRect (strand_info->doc, &r);
+  InsetRect (&r, 4, 4);
+  strand_info->rnaColFmt[0].pixWidth = (r.right - r.left - strand_info->lineheight) / 2;
+  strand_info->rnaColFmt[1].pixWidth = (r.right - r.left - strand_info->lineheight) / 2;
+  strand_info->rnaColFmt[2].pixWidth = strand_info->lineheight;
+
+  refresh_btn = PushButton (h, "Refresh Strand Results", RefreshRNAStrandDialog);
+  SetObjectExtra (refresh_btn, strand_info, NULL);
+  strand_info->rev_feats = CheckBox (h, "Also reverse features", NULL);
+  SetStatus (strand_info->rev_feats, FALSE);
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton (c, "Autocorrect Minus Strands", DoRNACorrection);
+  SetObjectExtra (b, strand_info, NULL);
+  b = PushButton (c, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) strand_info->doc,
+                              (HANDLE) refresh_btn,
+                              (HANDLE) strand_info->rev_feats,
+                              (HANDLE) c,
+                              NULL);  
+  RefreshRNAStrandDialog (refresh_btn);
+  Show (w);
+  return OM_MSG_RET_OK;
+}
+
+#endif
+

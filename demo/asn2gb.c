@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.72 $
+* $Revision: 6.78 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -50,7 +50,7 @@
 #include <explore.h>
 #include <asn2gnbp.h>
 
-#define ASN2GB_APP_VER "2.2"
+#define ASN2GB_APP_VER "2.7"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -176,6 +176,7 @@ static Int2 HandleSingleRecord (
   Uint2         entityID;
   FILE          *fp;
   FILE          *ofp = NULL;
+  ObjMgrPtr     omp;
   SeqEntryPtr   sep;
   SeqFeatPtr    sfp;
   SeqInt        sint;
@@ -339,6 +340,12 @@ static Int2 HandleSingleRecord (
   } else {
     Message (MSG_POSTERR, "Datatype %d not recognized", (int) datatype);
   }
+
+  omp = ObjMgrGet ();
+  ObjMgrReapOne (omp);
+  ObjMgrFreeCache (0);
+  FreeSeqIdGiCache ();
+
   ObjMgrFree (datatype, dataptr);
 
   return 0;
@@ -671,6 +678,7 @@ static Int2 HandleMultipleRecords (
   LckType locks,
   CstType custom,
   XtraPtr extra,
+  Int2 type,
   Int2 batch,
   Boolean binary,
   Boolean compressed,
@@ -681,34 +689,41 @@ static Int2 HandleMultipleRecords (
 )
 
 {
-  AsnIoPtr      aip;
-  AsnModulePtr  amp;
-  AsnTypePtr    atp, atp_bss, atp_desc, atp_se;
-  BioseqPtr     bsp;
-  BioseqSetPtr  bssp;
-  Char          buf [41];
-  Char          cmmd [256];
-  SeqDescrPtr   descr = NULL;
-  FILE          *fp;
-  SeqEntryPtr   fsep;
-  Boolean       hasgi;
-  Boolean       hasRefSeq;
-  Char          longest [41];
-  Int4          numrecords = 0;
-  FILE          *ofp = NULL;
-  ObjMgrPtr     omp;
-  Boolean       outOfOrder;
-  Char          path1 [PATH_MAX];
-  Char          path2 [PATH_MAX];
-  Char          path3 [PATH_MAX];
-  SeqEntryPtr   sep;
-  time_t        starttime, stoptime, worsttime;
-  FILE          *tfp;
-  Boolean       useGbdjoin;
+  AsnIoPtr        aip;
+  AsnModulePtr    amp;
+  AsnTypePtr      atp, atp_bss, atp_desc, atp_sbp, atp_se, atp_ssp;
+  Boolean         atp_se_seen = FALSE;
+  BioseqPtr       bsp;
+  BioseqSetPtr    bssp;
+  Char            buf [41];
+  Char            cmmd [256];
+  CitSubPtr       csp = NULL;
+  SeqDescrPtr     descr = NULL;
+  FILE            *fp;
+  SeqEntryPtr     fsep;
+  Boolean         hasgi;
+  Boolean         hasRefSeq;
+  Char            longest [41];
+  Int4            numrecords = 0;
+  FILE            *ofp = NULL;
+  ObjMgrPtr       omp;
+  Boolean         outOfOrder;
+  ObjValNode      ovn;
+  Char            path1 [PATH_MAX];
+  Char            path2 [PATH_MAX];
+  Char            path3 [PATH_MAX];
+  Pubdesc         pd;
+  SubmitBlockPtr  sbp = NULL;
+  SeqEntryPtr     sep;
+  time_t          starttime, stoptime, worsttime;
+  SeqDescrPtr     subcit = NULL;
+  FILE            *tfp;
+  Boolean         useGbdjoin;
+  ValNode         vn;
 #ifdef OS_UNIX
-  CharPtr       gzcatprog;
-  int           ret;
-  Boolean       usedPopen = FALSE;
+  CharPtr         gzcatprog;
+  int             ret;
+  Boolean         usedPopen = FALSE;
 #endif
 
   if (StringHasNoText (inputFile)) return 1;
@@ -723,6 +738,18 @@ static Int2 HandleMultipleRecords (
   amp = AsnAllModPtr ();
   if (amp == NULL) {
     Message (MSG_POSTERR, "Unable to load AsnAllModPtr");
+    return 1;
+  }
+
+  atp_ssp = AsnFind ("Seq-submit");
+  if (atp_ssp == NULL) {
+    Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-submit");
+    return 1;
+  }
+
+  atp_sbp = AsnFind ("Seq-submit.sub");
+  if (atp_sbp == NULL) {
+    Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-submit.sub");
     return 1;
   }
 
@@ -812,13 +839,21 @@ static Int2 HandleMultipleRecords (
   fprintf (tfp, "\n");
   FileClose (tfp);
 
-  atp = atp_bss;
+  if (type == 4) {
+    atp = atp_bss;
+  } else if (type == 5) {
+    atp = atp_ssp;
+  } else {
+    Message (MSG_ERROR, "Batch processing type not set properly");
+    return 1;
+  }
 
   longest [0] = '\0';
   worsttime = 0;
 
   while ((atp = AsnReadId (aip, amp, atp)) != NULL) {
     if (atp == atp_se) {
+      atp_se_seen = TRUE;
       sep = SeqEntryAsnRead (aip, atp);
 
       /* propagate descriptors from the top-level set */
@@ -834,6 +869,24 @@ static Int2 HandleMultipleRecords (
           bssp = (BioseqSetPtr) sep->data.ptrvalue;
           ValNodeLink (&(bssp->descr),
                        AsnIoMemCopy ((Pointer) descr,
+                                     (AsnReadFunc) SeqDescrAsnRead,
+                                     (AsnWriteFunc) SeqDescrAsnWrite));
+        }
+      }
+
+      /* propagate submission citation as descriptor onto each Seq-entry */
+
+      if (subcit != NULL && sep != NULL && sep->data.ptrvalue != NULL) {
+        if (sep->choice == 1) {
+          bsp = (BioseqPtr) sep->data.ptrvalue;
+          ValNodeLink (&(bsp->descr),
+                       AsnIoMemCopy ((Pointer) subcit,
+                                     (AsnReadFunc) SeqDescrAsnRead,
+                                     (AsnWriteFunc) SeqDescrAsnWrite));
+        } else if (sep->choice == 2) {
+          bssp = (BioseqSetPtr) sep->data.ptrvalue;
+          ValNodeLink (&(bssp->descr),
+                       AsnIoMemCopy ((Pointer) subcit,
                                      (AsnReadFunc) SeqDescrAsnRead,
                                      (AsnWriteFunc) SeqDescrAsnWrite));
         }
@@ -914,8 +967,28 @@ static Int2 HandleMultipleRecords (
       omp = ObjMgrGet ();
       ObjMgrReapOne (omp);
       ObjMgrFreeCache (0);
-    } else if (atp == atp_desc) {
+      FreeSeqIdGiCache ();
+    } else if (atp == atp_desc && (! atp_se_seen)) {
       descr = SeqDescrAsnRead (aip, atp);
+    } else if (atp == atp_sbp) {
+      sbp = SubmitBlockAsnRead (aip, atp);
+      if (sbp != NULL) {
+        csp = sbp->cit;
+        if (csp != NULL) {
+          MemSet ((Pointer) &ovn, 0, sizeof (ObjValNode));
+          MemSet ((Pointer) &pd, 0, sizeof (Pubdesc));
+          MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+          vn.choice = PUB_Sub;
+          vn.data.ptrvalue = (Pointer) csp;
+          vn.next = NULL;
+          pd.pub = &vn;
+          ovn.vn.choice = Seq_descr_pub;
+          ovn.vn.data.ptrvalue = (Pointer) &pd;
+          ovn.vn.next = NULL;
+          ovn.vn.extended = 1;
+          subcit = (SeqDescrPtr) &ovn;
+        }
+      }
     } else {
       AsnReadVal (aip, atp, NULL);
     }
@@ -928,6 +1001,7 @@ static Int2 HandleMultipleRecords (
   AsnIoFree (aip, FALSE);
 
   SeqDescrFree (descr);
+  SubmitBlockFree (sbp);
 
 #ifdef OS_UNIX
   if (usedPopen) {
@@ -1013,12 +1087,14 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
 {
   Boolean      alldigits;
+  BioseqPtr    bsp;
   Char         ch;
   CharPtr      ptr;
   SeqEntryPtr  sep = NULL;
   SeqIdPtr     sip;
   Int4         uid = 0;
   long int     val;
+  ValNode      vn;
 
   if (StringHasNoText (accn)) return NULL;
 
@@ -1049,6 +1125,15 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
   if (uid > 0) {
     sep = PubSeqSynchronousQuery (uid, 0, -1);
+    if (sep != NULL) {
+      MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+      vn.choice = SEQID_GI;
+      vn.data.intvalue = uid;
+      bsp = BioseqFind (&vn);
+      if (bsp != NULL) {
+        sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
+      }
+    }
   }
 
   return sep;
@@ -1324,8 +1409,11 @@ Int2 Main (
   } else if (StringICmp (str, "m") == 0) {
     type = 5;
   } else if (StringICmp (str, "t") == 0) {
-    type = 1;
     batch = 1;
+    type = 4;
+  } else if (StringICmp (str, "u") == 0) {
+    batch = 1;
+    type = 5;
   } else {
     type = 1;
   }
@@ -1441,7 +1529,7 @@ Int2 Main (
     rsult = HandleMultipleRecords (myargs [i_argInputFile].strvalue,
                                    myargs [o_argOutputFile].strvalue,
                                    format, altformat, mode, style, flags, locks,
-                                   custom, extra, batch, binary, compressed,
+                                   custom, extra, type, batch, binary, compressed,
                                    propOK, gbdjoin, accn, logfp);
   } else {
 
@@ -1467,6 +1555,7 @@ Int2 Main (
 
   if (myargs [r_argRemote].intvalue) {
     LocalSeqFetchDisable ();
+    PubMedFetchDisable ();
 #ifdef INTERNAL_NCBI_ASN2GB
     PUBSEQBioseqFetchDisable ();
 #else

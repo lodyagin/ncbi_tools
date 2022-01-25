@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.47 $
+* $Revision: 6.48 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.48  2005/08/03 18:28:36  kans
+* ValidateAccnDotVer returns -5 for missing version and -6 for bad version (not just digits)
+*
 * Revision 6.47  2005/01/26 23:38:46  kans
 * added ValidateAccnDotVer, check /compare in flatfile generator and validator
 *
@@ -698,7 +701,8 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf);
 *       -2: Accession did not contain legal number of digits after letters
 *       -3: the original Accession number to be validated was NULL
 *   	-4: the original Accession number is too long (>16)
-*   	-5: missing or bad version number (required by ValidateAccnDotVer)
+*   	-5: missing version number (required by ValidateAccnDotVer)
+*   	-6: Bad version number (required by ValidateAccnDotVer)
 *
 *****************************************************************************/
 

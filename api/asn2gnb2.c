@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.39 $
+* $Revision: 1.45 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -64,38 +64,6 @@
 #endif
 
 /* ********************************************************************** */
-
-static Boolean DeltaLitOnly (
-  BioseqPtr bsp
-)
-
-{
-  ValNodePtr  vnp;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
-  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 1) return FALSE;
-  }
-  return TRUE;
-}
-
-static Boolean SegHasParts (
-  BioseqPtr bsp
-)
-
-{
-  BioseqSetPtr  bssp;
-  SeqEntryPtr   sep;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_seg) return FALSE;
-  sep = bsp->seqentry;
-  if (sep == NULL) return FALSE;
-  sep = sep->next;
-  if (sep == NULL || (! IS_Bioseq_set (sep))) return FALSE;
-  bssp = (BioseqSetPtr) sep->data.ptrvalue;
-  if (bssp != NULL && bssp->_class == BioseqseqSet_class_parts) return TRUE;
-  return FALSE;
-}
 
 /* add functions allocate specific blocks, populate with paragraph print info */
 
@@ -413,7 +381,6 @@ NLM_EXTERN void AddLocusBlock (
   CharPtr            ebmol;
   EMBLBlockPtr       ebp;
   SeqMgrFeatContext  fcontext;
-  Boolean            first = TRUE;
   GBBlockPtr         gbp;
   Char               gene [32];
   Boolean            genome_view;
@@ -803,10 +770,16 @@ NLM_EXTERN void AddLocusBlock (
       break;
   }
 
-  if (origin == ORG_MUT || origin == ORG_ARTIFICIAL || origin == ORG_SYNTHETIC || is_transgenic) {
+  if (origin == ORG_MUT ||
+      origin == ORG_ARTIFICIAL ||
+      origin == ORG_SYNTHETIC ||
+      is_transgenic) {
     StringCpy (div, "SYN");
   } else if (is_env_sample) {
-    if (tech == MI_TECH_unknown || tech == MI_TECH_standard || tech == MI_TECH_other) {
+    if (tech == MI_TECH_unknown ||
+        tech == MI_TECH_standard ||
+        tech == MI_TECH_other ||
+        tech == MI_TECH_htgs_3) {
       StringCpy (div, "ENV");
     }
   }
@@ -1072,7 +1045,7 @@ NLM_EXTERN void AddLocusBlock (
 
       sprintf(gi_buf, "%ld", (long) gi);
       FFAddOneString(ffstring, "<a href=", FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString(ffstring, link_feat, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, link_featc, FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
       if ( is_aa ) {
@@ -1251,7 +1224,7 @@ static Boolean IsProjectAccn(CharPtr acc)
     }
     digits[0] = '\0';
 
-    for (ptr = acc, letters = 0; ptr != '\0'  &&  IS_ALPHA(*ptr); ++ptr, ++letters);
+    for (ptr = acc, letters = 0; ptr != '\0'  &&  IS_ALPHA(*ptr); ++ptr, ++letters) continue;
     if (letters != 4  ||  StringLen(ptr) < 2) {
         return FALSE;
     }
@@ -1809,6 +1782,7 @@ NLM_EXTERN void AddVersionBlock (
 
 /* only displaying PID in GenPept format */
 
+/*
 static void AddPidBlock (Asn2gbWorkPtr awp)
 
 {
@@ -1852,6 +1826,7 @@ static void AddPidBlock (Asn2gbWorkPtr awp)
   bbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, NULL);
   FFRecycleString(ajp, ffstring);
 }
+*/
 
 static Uint1 dbsource_fasta_order [NUM_SEQID] = {
   33, /* 0 = not set */
@@ -4343,6 +4318,59 @@ static Boolean LIBCALLBACK GetRefsOnSeg (
   return TRUE;
 }
 
+static void CheckForPubFusion (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr     bsp;
+  SeqIdPtr      sip;
+  BoolPtr       pubFuse;
+  TextSeqIdPtr  tsip;
+
+  if (sep == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    pubFuse = (BoolPtr) mydata;
+    if (pubFuse == NULL) return;
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      switch (sip->choice) {
+        case SEQID_GIBBSQ :
+        case SEQID_GIBBMT :
+          *pubFuse = TRUE;
+          break;
+        case SEQID_EMBL :
+        case SEQID_PIR :
+        case SEQID_SWISSPROT :
+        case SEQID_PATENT :
+        case SEQID_DDBJ :
+        case SEQID_PRF :
+        case SEQID_PDB :
+        case SEQID_TPE:
+        case SEQID_TPD:
+        case SEQID_GPIPE:
+          *pubFuse = TRUE;
+          break;
+        case SEQID_GENBANK :
+        case SEQID_TPG:
+          tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+          if (tsip != NULL) {
+            if (StringLen (tsip->accession) == 6) {
+              *pubFuse = TRUE;
+            }
+          }
+          break;
+        case SEQID_NOT_SET :
+        case SEQID_LOCAL :
+        case SEQID_OTHER :
+        case SEQID_GENERAL :
+          break;
+        default :
+          break;
+      }
+    }
+  }
+}
+
 NLM_EXTERN Boolean AddReferenceBlock (
   Asn2gbWorkPtr awp,
   Boolean isRefSeq
@@ -4372,10 +4400,12 @@ NLM_EXTERN Boolean AddReferenceBlock (
   ValNodePtr         next;
   Int2               numReferences;
   ValNodePtr         PNTR prev;
+  Boolean            pubFuse = FALSE;
   RefBlockPtr        rbp;
   RefBlockPtr        PNTR referenceArray;
   BioseqPtr          refs;
   SubmitBlockPtr     sbp;
+  SeqEntryPtr        sep;
   SeqIdPtr           sip;
   SeqLocPtr          slp;
   BioseqPtr          target;
@@ -4493,6 +4523,10 @@ NLM_EXTERN Boolean AddReferenceBlock (
     }
   }
 
+  /* does not fuse equivalent publication features for local, general, refseq, and 2+6 genbank ids */
+  sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
+  SeqEntryExplore (sep, (Pointer) &pubFuse, CheckForPubFusion);
+
   /* unique references, excise duplicates from list */
 
   prev = &(head);
@@ -4558,7 +4592,7 @@ NLM_EXTERN Boolean AddReferenceBlock (
     if (awp->mode == DUMP_MODE) {
       excise = FALSE;
     }
-    if (excise) {
+    if (excise && pubFuse) {
       *prev = vnp->next;
       vnp->next = NULL;
 
@@ -5010,6 +5044,7 @@ NLM_EXTERN void AddSequenceBlock (
 {
   IntAsn2gbJobPtr  ajp;
   BioseqPtr        bsp;
+  Int4             extend;
   Int4             len;
   SeqBlockPtr      sbp;
   Int4             start;
@@ -5061,9 +5096,14 @@ NLM_EXTERN void AddSequenceBlock (
     if (stop >= len) {
       stop = len;
     }
+    extend = start + BASES_PER_BLOCK + 60;
+    if (extend >= len) {
+      extend = len;
+    }
 
     sbp->start = start;
     sbp->stop = stop;
+    sbp->extend = extend;
 
     if (awp->afp != NULL) {
       DoImmediateFormat (awp->afp, (BaseBlockPtr) sbp);

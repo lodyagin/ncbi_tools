@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.55 $
+* $Revision: 6.60 $
 *
 * File Description: 
 *
@@ -62,12 +62,340 @@
 #include <alignmgr2.h>
 #include <actutils.h>
 
+/* functions for associating CDS and parent mRNA using featureIDs */
+
+NLM_EXTERN void ClearFeatIDs (
+  SeqFeatPtr sfp
+)
+
+{
+  if (sfp == NULL) return;
+  SeqFeatIdFree (&sfp->id);
+  sfp->id.choice = 0;
+}
+
+NLM_EXTERN void ClearFeatIDXrefs (
+  SeqFeatPtr sfp
+)
+
+{
+  SeqFeatXrefPtr  xref, next, PNTR prevlink;
+
+  if (sfp == NULL) return;
+
+  prevlink = (SeqFeatXrefPtr PNTR) &(sfp->xref);
+  xref = sfp->xref;
+  while (xref != NULL) {
+    next = xref->next;
+
+    if (xref->id.choice != 0) {
+      SeqFeatIdFree (&xref->id);
+      xref->id.choice = 0;
+    }
+    if (xref->id.choice == 0 && xref->data.choice == 0) {
+      *prevlink = xref->next;
+      xref->next = NULL;
+      MemFree (xref);
+    } else {
+      prevlink = (SeqFeatXrefPtr PNTR) &(xref->next);
+    }
+
+    xref = next;
+  }
+}
+
+static void SfpClearFeatIDs (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  if (sfp == NULL) return;
+  ClearFeatIDs (sfp);
+  ClearFeatIDXrefs (sfp);
+}
+
+NLM_EXTERN void ClearCDSmRNAfeatureIDs (
+  SeqEntryPtr sep
+)
+
+{
+  VisitFeaturesInSep (sep, NULL, SfpClearFeatIDs);
+}
+
+typedef struct fiddata {
+  Int4  highestID;
+} FidData, PNTR FidDataPtr;
+
+static void FindHighestFeatureID (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  FidDataPtr      fip;
+  ObjectIdPtr     oip;
+  SeqFeatXrefPtr  xref;
+
+  if (sfp == NULL) return;
+  if (sfp->idx.subtype != FEATDEF_CDS && sfp->idx.subtype != FEATDEF_mRNA) return;
+  fip = (FidDataPtr) userdata;
+  if (fip == NULL) return;
+
+  if (sfp->id.choice == 3) {
+    oip = (ObjectIdPtr) sfp->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (oip->str == NULL) {
+        if (oip->id >= fip->highestID) {
+          fip->highestID = oip->id + 1;
+        }
+      }
+    }
+  }
+
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->id.choice != 3) continue;
+    oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (oip->str == NULL) {
+        if (oip->id >= fip->highestID) {
+          fip->highestID = oip->id + 1;
+        }
+      }
+    }
+  }
+}
+
+static void SfpAssignCDSmRNAfeatureIDs (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  FidDataPtr   fip;
+  ObjectIdPtr  oip;
+
+  if (sfp == NULL) return;
+  if (sfp->idx.subtype != FEATDEF_CDS && sfp->idx.subtype != FEATDEF_mRNA) return;
+  fip = (FidDataPtr) userdata;
+  if (fip == NULL) return;
+
+  if (sfp->id.choice == 3) return;
+  oip = ObjectIdNew ();
+  if (oip == NULL) return;
+  oip->id = fip->highestID;
+
+  sfp->id.value.ptrvalue = (Pointer) oip;
+  sfp->id.choice = 3;
+
+  (fip->highestID)++;
+}
+
+NLM_EXTERN void AssignCDSmRNAfeatureIDs (
+  SeqEntryPtr sep
+)
+
+{
+  FidData  fd;
+
+  MemSet ((Pointer) &fd, 0, sizeof (FidData));
+  fd.highestID = 1;
+  VisitFeaturesInSep (sep, (Pointer) &fd, FindHighestFeatureID);
+  VisitFeaturesInSep (sep, (Pointer) &fd, SfpAssignCDSmRNAfeatureIDs);
+}
+
+typedef struct vcmdata {
+  Boolean     accounted_for;
+  SeqFeatPtr  cds;
+  SeqFeatPtr  mrna;
+  SeqFeatPtr  partner;
+} VcmData, PNTR VcmDataPtr;
+
+typedef struct loopdata {
+  Int2        count;
+  SeqFeatPtr  cds;
+  SeqFeatPtr  mrna;
+} LoopData, PNTR LoopDataPtr;
+
+static Boolean LIBCALLBACK GetSingleMrnaProc (
+  SeqFeatPtr mrna,
+  SeqMgrFeatContextPtr context
+)
+
+{
+  LoopDataPtr  ldp;
+  VcmDataPtr   vdp;
+
+  ldp = (LoopDataPtr) context->userdata;
+
+  vdp = (VcmDataPtr) mrna->idx.scratch;
+  if (vdp != NULL && vdp->accounted_for) return TRUE;
+
+  (ldp->count)++;
+  ldp->mrna = mrna;
+
+  return TRUE;
+}
+
+static void BspLinkCDSmRNAbyOverlap (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  Int2               count;
+  SeqMgrFeatContext  fcontext;
+  Boolean            goOn;
+  Int4               id;
+  LoopData           ld;
+  ObjectIdPtr        oip;
+  SeqFeatPtr         partner, sfp;
+  VcmDataPtr         vdp;
+  SeqFeatXrefPtr     xref;
+
+  if (bsp == NULL || ISA_aa (bsp->mol)) return;
+
+  /* add scratch structure to CDS and mRNA features */
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+  while (sfp != NULL) {
+    sfp->idx.scratch = (Pointer) MemNew (sizeof (VcmData));
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
+  }
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_mRNA, &fcontext);
+  while (sfp != NULL) {
+    sfp->idx.scratch = (Pointer) MemNew (sizeof (VcmData));
+    sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_mRNA, &fcontext);
+  }
+
+  /* loop through CDS features, finding single unused mRNA partner */
+
+  goOn = TRUE;
+  while (goOn) {
+    goOn = FALSE;
+    sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+    while (sfp != NULL) {
+      vdp = (VcmDataPtr) sfp->idx.scratch;
+      if (vdp != NULL && (! vdp->accounted_for)) {
+        ld.count = 0;
+        ld.cds = sfp;
+        ld.mrna = NULL;
+        if (sfp->excpt &&
+            (StringISearch (sfp->except_text, "ribosomal slippage") != NULL ||
+             StringISearch (sfp->except_text, "trans-splicing") != NULL)) {
+          count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_mRNA, NULL, 0,
+                                                   LOCATION_SUBSET, (Pointer) &ld,
+                                                   GetSingleMrnaProc);
+        } else {
+          count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_mRNA, NULL, 0,
+                                                   CHECK_INTERVALS, (Pointer) &ld,
+                                                   GetSingleMrnaProc);
+        }
+        if (ld.count == 1 && ld.mrna != NULL) {
+          vdp->accounted_for = TRUE;
+          vdp->cds = ld.cds;
+          vdp->mrna = ld.mrna;
+          vdp->partner = ld.mrna;
+          vdp = (VcmDataPtr) ld.mrna->idx.scratch;
+          if (vdp != NULL) {
+            vdp->accounted_for = TRUE;
+            vdp->cds = ld.cds;
+            vdp->mrna = ld.mrna;
+            vdp->partner = ld.cds;
+            goOn = TRUE;
+          }
+        }
+      }
+      sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
+    }
+  }
+
+  /* assign xrefs between CDS and mRNA features */
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+  while (sfp != NULL) {
+    vdp = (VcmDataPtr) sfp->idx.scratch;
+    if (vdp != NULL && vdp->accounted_for) {
+      partner = vdp->partner;
+      if (partner != NULL && partner->id.choice == 3) {
+        oip = (ObjectIdPtr) partner->id.value.ptrvalue;
+        if (oip != NULL && oip->str == NULL) {
+          id = oip->id;
+          if (id > 0) {
+            for (xref = sfp->xref; xref != NULL && xref->id.choice != 3; xref = xref->next) continue;
+            if (xref != NULL) {
+              oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+              if (oip != NULL) {
+                if (oip->str != NULL) {
+                  oip->str = MemFree (oip->str);
+                }
+                oip->id = id;
+              }
+            } else {
+              xref = SeqFeatXrefNew ();
+              if (xref != NULL) {
+                oip = ObjectIdNew ();
+                if (oip != NULL) {
+                  oip->id = id;
+                  xref->id.choice = 3;
+                  xref->id.value.ptrvalue = (Pointer) oip;
+                  xref->next = sfp->xref;
+                  sfp->xref = xref;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext);
+  }
+
+  /* free scratch structure in CDS and mRNA features */
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+  while (sfp != NULL) {
+    if (sfp->idx.scratch != NULL) {
+      sfp->idx.scratch = MemFree (sfp->idx.scratch);
+    }
+    sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext);
+  }
+}
+
+NLM_EXTERN void LinkCDSmRNAbyOverlap (
+  SeqEntryPtr sep
+)
+
+{
+  AssignCDSmRNAfeatureIDs (sep);
+  VisitBioseqsInSep (sep, NULL, BspLinkCDSmRNAbyOverlap);
+}
+
+static void BspLinkCDSmRNAbyProduct (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+}
+
+NLM_EXTERN void LinkCDSmRNAbyProduct (
+  SeqEntryPtr sep
+)
+
+{
+  AssignCDSmRNAfeatureIDs (sep);
+  VisitBioseqsInSep (sep, NULL, BspLinkCDSmRNAbyProduct);
+}
+
 /* general file recursion function */
 
 NLM_EXTERN Int4 DirExplore (
   CharPtr directory,
   CharPtr filter,
   CharPtr suffix,
+  Boolean recurse,
   DirExpProc proc,
   Pointer userdata
 )
@@ -121,7 +449,7 @@ NLM_EXTERN Int4 DirExplore (
           }
         }
       }
-    } else if (vnp->choice == 1) {
+    } else if (vnp->choice == 1 && recurse) {
 
       /* recurse into subdirectory */
 
@@ -129,7 +457,7 @@ NLM_EXTERN Int4 DirExplore (
       str = (CharPtr) vnp->data.ptrvalue;
       FileBuildPath (path, str, NULL);
 
-      count += DirExplore (path, filter, suffix, proc, userdata);
+      count += DirExplore (path, filter, suffix, recurse, proc, userdata);
     }
   }
 
@@ -936,13 +1264,17 @@ static void LookForMarkedGeneXrefs (SeqFeatPtr sfp, Pointer userdata)
 NLM_EXTERN void CautiousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge)
 
 {
+  /*
   Boolean      correct = FALSE;
+  */
   Uint2        entityID;
   Boolean      hasMarkedGenes;
   ErrSev       lsev;
   ErrSev       msev;
   SeqEntryPtr  oldscope;
+  /*
   Boolean      strip = TRUE;
+  */
   Boolean      taxserver;
 
   if (sep == NULL) return;
@@ -1768,6 +2100,7 @@ static void MoveSegmentFeaturesToMaster (SeqFeatPtr sfp, Pointer userdata)
   MoveSegmentLocToMaster (sfp->location, segdeltptr);
 }
 
+#if 0
 static void AdjustAlignmentOffsetsForDeltaConversion (SeqAlignPtr salp, Int4Ptr offsets, BoolPtr is_gap, Int4 num_sets)
 {
   DenseSegPtr dsp;
@@ -1796,6 +2129,7 @@ static void AdjustAlignmentOffsetsForDeltaConversion (SeqAlignPtr salp, Int4Ptr 
     }
   }      
 }
+#endif
 
 static SeqAnnotPtr CombineAnnots (SeqAnnotPtr target, SeqAnnotPtr insert, Int4 offset)
 {
@@ -2484,8 +2818,8 @@ static void AddDefLinesToAlignmentSequences
     }
   }
 }
-    
 
+#if 0
 static SeqEntryPtr 
 MakeDeltaSetFromAlignment 
 (SeqEntryPtr sep_list,
@@ -2608,6 +2942,7 @@ MakeDeltaSetFromAlignment
   }
   return delta_list;
 }
+#endif
 
 static void RenameSegSet (SeqEntryPtr sep)
 {
@@ -2798,6 +3133,7 @@ static SeqEntryPtr SequenceStringToSeqEntry (CharPtr str, SeqIdPtr sip, Uint1 mo
   return sep;
 }
 
+#if 0
 static SeqEntryPtr MakeDeltaSeqsFromAlignmentSequences (TAlignmentFilePtr afp, Uint1 moltype, CharPtr PNTR seq_str)
 {
   Int4            num_sets, next_start, k, index;
@@ -2876,6 +3212,7 @@ static SeqEntryPtr MakeDeltaSeqsFromAlignmentSequences (TAlignmentFilePtr afp, U
     
   return sep_list;
 }
+#endif
 
 static SeqIdPtr GetFarPointerID (CharPtr id_str)
 {

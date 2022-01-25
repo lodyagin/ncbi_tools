@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.246 $
+* $Revision: 6.251 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,21 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.251  2005/08/23 21:31:44  kans
+* fixed SeqMgrGetFeatureByFeatID string comparison test, added xref parameter
+*
+* Revision 6.250  2005/08/23 19:27:41  kans
+* added SeqMgrGetFeatureByFeatID and support for featsByFeatID index
+*
+* Revision 6.249  2005/08/10 19:06:16  kans
+* added SeqMgrGetGeneByLocusTag
+*
+* Revision 6.248  2005/08/04 17:45:03  kans
+* ProcessFeatureProducts goes up parent chain to find BioseqseqSet_class_gen_prod_set, does not use FindGPS callback
+*
+* Revision 6.247  2005/07/15 19:01:37  kans
+* minor fixes for Xcode warnings
+*
 * Revision 6.246  2005/05/05 20:33:27  kans
 * record operon twice if spanning origin
 *
@@ -1919,7 +1934,9 @@ static Boolean seqidgiindexed = FALSE;
 static ValNodePtr seqidgilatest = NULL;
 static Int2 seqidunidxcount = 0;
 
+/*
 static TNlmRWlock sid_RWlock = NULL;
+*/
 
 NLM_EXTERN void RecordInSeqIdGiCache (Int4 gi, SeqIdPtr sip)
 
@@ -4459,8 +4476,10 @@ static Boolean SeqMgrClearBioseqExtraData (ObjMgrDataPtr omdp)
   SMSeqIdxPtr     currp;
   Int2            i;
   SMFeatItemPtr   itemf;
+  Int4            j;
   SMFeatBlockPtr  nextf;
   SMSeqIdxPtr     nextp;
+  SMFidItemPtr    sfip;
 
   if (omdp == NULL) return FALSE;
   bspextra = (BioseqExtraPtr) omdp->extradata;
@@ -4540,6 +4559,15 @@ static Boolean SeqMgrClearBioseqExtraData (ObjMgrDataPtr omdp)
 
   bspextra->prodlisthead = ValNodeFree (bspextra->prodlisthead);
 
+  if (bspextra->featsByFeatID != NULL) {
+    for (j = 0; j < bspextra->numfids; j++) {
+      sfip = bspextra->featsByFeatID [j];
+      if (sfip == NULL) continue;
+      MemFree (sfip->fid);
+    }
+    bspextra->featsByFeatID = MemFree (bspextra->featsByFeatID);
+  }
+
   /* clean interval list once implemented */
 
   bspextra->featlisthead = NULL;
@@ -4554,6 +4582,7 @@ static Boolean SeqMgrClearBioseqExtraData (ObjMgrDataPtr omdp)
   bspextra->numpubs = 0;
   bspextra->numorgs = 0;
   bspextra->numoperons = 0;
+  bspextra->numfids = 0;
   bspextra->numsegs = 0;
 
   bspextra->min = INT4_MAX;
@@ -5796,6 +5825,7 @@ static SeqIdPtr SeqIdWithinBioseq (BioseqPtr bsp, SeqLocPtr slp)
   return NULL;
 }
 
+/*
 static void FindGPS (BioseqSetPtr bssp, Pointer userdata)
 
 {
@@ -5805,26 +5835,31 @@ static void FindGPS (BioseqSetPtr bssp, Pointer userdata)
   is_gpsP = (BoolPtr) userdata;
   *is_gpsP = TRUE;
 }
+*/
 
 static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint2 itemID, GatherObjectPtr gop)
 
 {
-  BioseqPtr       bsp;
-  BioseqExtraPtr  bspextra;
-  Char            buf [81];
-  CharPtr         ctmp;
-  Int4            diff;
-  CharPtr         loclbl;
-  Int4            min;
-  ObjMgrDataPtr   omdp;
-  CharPtr         prodlbl;
-  ProtRefPtr      prp;
-  SeqFeatPtr      prt;
-  CharPtr         ptmp;
-  SeqAnnotPtr     sap;
-  SeqIdPtr        sip;
-  SeqLocPtr       slp;
-  ValNode         vn;
+  BioseqPtr         bsp;
+  BioseqExtraPtr    bspextra;
+  BioseqSetPtr      bssp;
+  Char              buf [81];
+  CharPtr           ctmp;
+  Int4              diff;
+  GatherContext     gc;
+  GatherContextPtr  gcp;
+  Boolean           is_gps;
+  CharPtr           loclbl;
+  Int4              min;
+  ObjMgrDataPtr     omdp;
+  CharPtr           prodlbl;
+  ProtRefPtr        prp;
+  SeqFeatPtr        prt;
+  CharPtr           ptmp;
+  SeqAnnotPtr       sap;
+  SeqIdPtr          sip;
+  SeqLocPtr         slp;
+  ValNode           vn;
 
   if (sfp == NULL || sfp->product == NULL) return;
   if (sfp->data.choice != SEQFEAT_CDREGION &&
@@ -5859,6 +5894,7 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint2 itemID, GatherObjectPt
     if (prodlbl == NULL) {
       prodlbl = "?";
     }
+    /*
     {
       GatherContext     gc;
       GatherContextPtr  gcp;
@@ -5876,6 +5912,31 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint2 itemID, GatherObjectPt
                      "SeqMgr indexing cds or rna progenitor already set - Feature: %s - Location [%s] - Product [%s]",
                      buf, loclbl, prodlbl);
       }
+    }
+    */
+    is_gps = FALSE;
+    if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+      bssp = (BioseqSetPtr) bsp->idx.parentptr;
+      while (bssp != NULL) {
+        if (bssp->_class == BioseqseqSet_class_gen_prod_set) {
+          is_gps = TRUE;
+        }
+        if (bssp->idx.parenttype == OBJ_BIOSEQSET) {
+          bssp = (BioseqSetPtr) bssp->idx.parentptr;
+        } else {
+          bssp = NULL;
+        }
+      }
+    }
+    if (! is_gps) {
+      MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
+      gcp = &gc;
+      gc.entityID = gop->entityID;
+      gc.itemID = gop->itemID;
+      gc.thistype = gop->itemtype;
+      ErrPostItem (SEV_WARNING, 0, 0,
+                   "SeqMgr indexing cds or rna progenitor already set - Feature: %s - Location [%s] - Product [%s]",
+                   buf, loclbl, prodlbl);
     }
     MemFree (ctmp);
     MemFree (ptmp);
@@ -7133,6 +7194,32 @@ static int LIBCALLBACK SortFeatItemListByRev (VoidPtr vp1, VoidPtr vp2)
   return 0;
 }
 
+static int LIBCALLBACK SortFidListByFeatID (VoidPtr vp1, VoidPtr vp2)
+
+{
+  int                compare;
+  SMFidItemPtr PNTR  spp1 = vp1;
+  SMFidItemPtr PNTR  spp2 = vp2;
+  SMFidItemPtr       sp1;
+  SMFidItemPtr       sp2;
+
+  if (spp1 == NULL || spp2 == NULL) return 0;
+  sp1 = *((SMFidItemPtr PNTR) spp1);
+  sp2 = *((SMFidItemPtr PNTR) spp2);
+  if (sp1 == NULL || sp2 == NULL) return 0;
+
+  /* sort by feature itemID label value */
+
+  compare = StringICmp (sp1->fid, sp2->fid);
+  if (compare > 0) {
+    return 1;
+  } else if (compare < 0) {
+    return -1;
+  }
+
+  return 0;
+}
+
 /*****************************************************************************
 *
 *   IndexSegmentedParts callback builds index to speed up mapping
@@ -7193,7 +7280,6 @@ static void IndexSegmentedParts (SeqEntryPtr sep, BioseqPtr PNTR lastsegbsp)
   BioseqSetPtr      bssp;
   Int2              i;
   Int2              numsegs = 0;
-  Int4              cumulative = 0;
   ObjMgrDataPtr     omdp;
   SMSeqIdxPtr PNTR  partsByLoc;
   SMSeqIdxPtr PNTR  partsBySeqId;
@@ -8018,6 +8104,70 @@ static void IndexAnnotDescsOnBioseqs (
   }
 }
 
+static void IndexFeatIDsOnEntity (
+  BioseqExtraPtr bspextra
+)
+
+{
+  Char                buf [32];
+  SMFidItemPtr PNTR   featsByFeatID;
+  SMFeatItemPtr PNTR  featsByID;
+  ValNodePtr          head = NULL, last = NULL;
+  SMFeatItemPtr       item;
+  Int4                j;
+  Int4                len;
+  ObjectIdPtr         oip;
+  SMFidItemPtr        sfip;
+  SeqFeatPtr          sfp;
+  ValNodePtr          vnp;
+
+  if (bspextra == NULL || bspextra->numfeats < 1 || bspextra->featsByID == NULL) return;
+
+  featsByID = bspextra->featsByID;
+  for (j = 0; j < bspextra->numfeats; j++) {
+    item = featsByID [j];
+    if (item == NULL) continue;
+    sfp = item->sfp;
+    if (sfp == NULL) continue;
+    if (sfp->id.choice != 3) continue;
+    oip = (ObjectIdPtr) sfp->id.value.ptrvalue;
+    if (oip == NULL) continue;
+    sfip = (SMFidItemPtr) MemNew (sizeof (SMFidItem));
+    if (sfip == NULL) continue;
+    if (StringDoesHaveText (oip->str)) {
+      sfip->fid = StringSave (oip->str);
+    } else {
+      sprintf (buf, "%ld", (long) oip->id);
+      sfip->fid = StringSave (buf);
+    }
+    sfip->feat = item;
+    vnp = ValNodeAddPointer (&last, 0, (Pointer) sfip);
+    if (head == NULL) {
+      head = vnp;
+    }
+    last = vnp;
+  }
+
+  len = ValNodeLen (head);
+  if (len < 1) return;
+  featsByFeatID = (SMFidItemPtr PNTR) MemNew (sizeof (SMFidItemPtr) * (len + 1));
+  if (featsByFeatID != NULL) {
+    for (vnp = head, j = 0; vnp != NULL; vnp = vnp->next, j++) {
+      sfip = (SMFidItemPtr) vnp->data.ptrvalue;
+      if (sfip == NULL) continue;
+      featsByFeatID [j] = sfip;
+    }
+
+    /* sort all features on entity-wide list by itemID */
+
+    HeapSort ((VoidPtr) featsByFeatID, (size_t) len, sizeof (SMFidItemPtr), SortFidListByFeatID);
+
+    bspextra->featsByFeatID = featsByFeatID;
+    bspextra->numfids = len;
+  }
+  ValNodeFree (head);
+}
+
 /*****************************************************************************
 *
 *   SeqMgrReindexBioseqExtraData refreshes internal indices for rapid retrieval
@@ -8237,6 +8387,14 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesExEx (
           }
         }
       }
+    }
+
+    /* add feature ID indexto top of entity */
+
+    CreateBioseqExtraBlock (omdp, NULL);
+    bspextra = (BioseqExtraPtr) omdp->extradata;
+    if (bspextra != NULL) {
+      IndexFeatIDsOnEntity (bspextra);
     }
   }
 
@@ -9014,15 +9172,32 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingOperon (SeqLocPtr slp, SeqMgrF
 
 /*****************************************************************************
 *
-*   SeqMgrGetFeatureByLabel returns the a feature with the desired label
+*   SeqMgrGetFeatureByLabel returns a feature with the desired label
 *   If desired, place a SeqMgrFeatContext data structure on the stack, and pass
 *     in &context as the last parameter
 *
 *****************************************************************************/
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabel (BioseqPtr bsp, CharPtr label,
-                                                       Uint1 seqFeatChoice, Uint1 featDefChoice,
-                                                       SeqMgrFeatContext PNTR context)
+static CharPtr GetLabelOrLocusTag (SMFeatItemPtr feat, Boolean byLocusTag)
+
+{
+  GeneRefPtr  grp;
+  SeqFeatPtr  sfp;
+
+  if (feat == NULL) return NULL;
+  if (byLocusTag) {
+    sfp = feat->sfp;
+    if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE) return NULL;
+    grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+    if (grp == NULL) return NULL;
+    return grp->locus_tag;
+  }
+  return feat->label;
+}
+
+static SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabelEx (BioseqPtr bsp, CharPtr label,
+                                                     Uint1 seqFeatChoice, Uint1 featDefChoice,
+                                                     Boolean byLocusTag, SeqMgrFeatContext PNTR context)
 
 {
   SMFeatItemPtr PNTR  array;
@@ -9034,8 +9209,8 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabel (BioseqPtr bsp, CharPtr la
   Int4                num;
   ObjMgrDataPtr       omdp;
   Int4                R;
-  SeqFeatPtr          sfp;
   Uint1               seqfeattype;
+  SeqFeatPtr          sfp;
 
   if (context != NULL) {
     MemSet ((Pointer) context, 0, sizeof (SeqMgrFeatContext));
@@ -9048,8 +9223,13 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabel (BioseqPtr bsp, CharPtr la
 
   bspextra = (BioseqExtraPtr) omdp->extradata;
   if (bspextra == NULL) return NULL;
-  array = bspextra->featsByLabel;
-  num = bspextra->numfeats;
+  if (byLocusTag) {
+    array = bspextra->genesByLocusTag;
+    num = bspextra->numgenes;
+  } else {
+    array = bspextra->featsByLabel;
+    num = bspextra->numfeats;
+  }
   if (array == NULL || num < 1) return NULL;
 
   entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
@@ -9061,7 +9241,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabel (BioseqPtr bsp, CharPtr la
   while (L < R) {
     mid = (L + R) / 2;
     feat = array [mid];
-    if (feat != NULL && StringICmp (feat->label, label) < 0) {
+    if (feat != NULL && StringICmp (GetLabelOrLocusTag (feat, byLocusTag), label) < 0) {
       L = mid + 1;
     } else {
       R = mid;
@@ -9072,7 +9252,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabel (BioseqPtr bsp, CharPtr la
 
   /* linear scan to find desired label on desired feature type */
 
-  while (R < num && feat != NULL && StringICmp (feat->label, label) == 0) {
+  while (R < num && feat != NULL && StringICmp (GetLabelOrLocusTag (feat, byLocusTag), label) == 0) {
     sfp = feat->sfp;
     if (sfp != NULL) {
       seqfeattype = sfp->data.choice;
@@ -9085,7 +9265,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabel (BioseqPtr bsp, CharPtr la
           context->sfp = sfp;
           context->sap = feat->sap;
           context->bsp = feat->bsp;
-          context->label = feat->label;
+          context->label = GetLabelOrLocusTag (feat, byLocusTag);
           context->left = feat->left;
           context->right = feat->right;
           context->dnaStop = feat->dnaStop;
@@ -9107,6 +9287,126 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabel (BioseqPtr bsp, CharPtr la
 
     R++;
     feat = array [R];
+  }
+
+  return NULL;
+}
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByLabel (BioseqPtr bsp, CharPtr label,
+                                                       Uint1 seqFeatChoice, Uint1 featDefChoice,
+                                                       SeqMgrFeatContext PNTR context)
+
+{
+  return SeqMgrGetFeatureByLabelEx (bsp, label, seqFeatChoice, featDefChoice, FALSE, context);
+}
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetGeneByLocusTag (BioseqPtr bsp, CharPtr locusTag,
+                                                       SeqMgrFeatContext PNTR context)
+
+{
+  return SeqMgrGetFeatureByLabelEx (bsp, locusTag, SEQFEAT_GENE, 0, TRUE, context);
+}
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureByFeatID (
+  Uint2 entityID,
+  BioseqPtr bsp,
+  CharPtr featid,
+  SeqFeatXrefPtr xref,
+  SeqMgrFeatContext PNTR context
+)
+
+{
+  SMFidItemPtr PNTR  array;
+  BioseqExtraPtr     bspextra;
+  Char               buf [32];
+  SMFeatItemPtr      feat;
+  SMFidItemPtr       item;
+  Int4               L;
+  Int4               mid;
+  Int4               num;
+  ObjectIdPtr        oip;
+  ObjMgrDataPtr      omdp;
+  Int4               R;
+  SeqFeatPtr         sfp;
+
+  if (context != NULL) {
+    MemSet ((Pointer) context, 0, sizeof (SeqMgrFeatContext));
+  }
+
+  if (entityID > 0) {
+    omdp = ObjMgrGetData (entityID);
+    if (omdp == NULL) return NULL;
+  } else {
+    if (bsp == NULL) return NULL;
+    omdp = SeqMgrGetOmdpForBioseq (bsp);
+    if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return NULL;
+  }
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return NULL;
+
+  /* first try array sorted by itemID value */
+
+  array = bspextra->featsByFeatID;
+  num = bspextra->numfids;
+  if (array == NULL || num < 1) return NULL;
+
+  if (StringHasNoText (featid) && xref != NULL && xref->id.choice == 3) {
+    oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (StringDoesHaveText (oip->str)) {
+        featid = oip->str;
+      } else {
+        sprintf (buf, "%ld", (long) oip->id);
+        featid = buf;
+      }
+    }
+  }
+  if (StringHasNoText (featid)) return NULL;
+
+  L = 0;
+  R = num - 1;
+  while (L < R) {
+    mid = (L + R) / 2;
+    item = array [mid];
+    if (item != NULL && StringICmp (item->fid, featid) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  item = array [R];
+  if (StringICmp (item->fid, featid) == 0) {
+    feat = item->feat;
+    if (feat == NULL) return NULL;
+    sfp = feat->sfp;
+    if (sfp != NULL) {
+      if (! feat->ignore) {
+        if (context != NULL) {
+          context->entityID = entityID;
+          context->itemID = feat->itemID;
+          context->sfp = sfp;
+          context->sap = feat->sap;
+          context->bsp = feat->bsp;
+          context->label = feat->label;
+          context->left = feat->left;
+          context->right = feat->right;
+          context->dnaStop = feat->dnaStop;
+          context->partialL = feat->partialL;
+          context->partialR = feat->partialR;
+          context->farloc = feat->farloc;
+          context->strand = feat->strand;
+          context->seqfeattype = sfp->data.choice;;
+          context->featdeftype = feat->subtype;
+          context->numivals = feat->numivals;
+          context->ivals = feat->ivals;
+          context->userdata = NULL;
+          context->omdp = (Pointer) omdp;
+          context->index = R + 1;
+        }
+        return sfp;
+      }
+    }
   }
 
   return NULL;

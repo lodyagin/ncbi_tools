@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.29 $
+* $Revision: 1.41 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -93,6 +93,7 @@ typedef struct asn2gbflags {
   Boolean             hideEmptySource;
   Boolean             goQualsToNote;
   Boolean             geneSynsToNote;
+  Boolean             refSeqQualsToNote;
   Boolean             selenocysteineToNote;
   Boolean             extraProductsToNote;
   Boolean             forGbRelease;
@@ -147,6 +148,8 @@ typedef struct int_asn2gb_job {
   AsnTypePtr      atp;
   StringItemPtr   pool;
   Boolean         www;
+  Boolean         specialGapFormat;
+  Int4            seqGapCurrLen;
 } IntAsn2gbJob, PNTR IntAsn2gbJobPtr;
 
 /* array for assigning biosource and feature data fields to qualifiers */
@@ -181,6 +184,14 @@ typedef struct asn2gbformat {
   AsnIoPtr         aip;
   AsnTypePtr       atp;
 } Asn2gbFormat, PNTR Asn2gbFormatPtr;
+
+/* structure for bypassing unannotated WGS components in Web Entrez */
+
+typedef struct wgsaccn {
+  Char     accn [6];
+  Int2     count;
+  Boolean  hasfeats;
+} WgsAccn, PNTR WgsAccnPtr;
 
 /* structure for storing working parameters while building asn2gb_job structure */
 
@@ -276,6 +287,11 @@ typedef struct asn2gbwork {
 
   Boolean          firstfeat;
   Boolean          featseen;
+  Boolean          featjustseen;
+  ValNodePtr       wgsaccnlist;
+
+  Boolean          farFeatTimeLimit;
+  time_t           farFeatStartTime;
 
   SeqSubmitPtr     ssp;
   Boolean          hup;
@@ -405,7 +421,11 @@ typedef enum {
   Qual_class_model_ev,
   Qual_class_gene_syn,
   Qual_class_locus_tag,
-  Qual_class_go
+  Qual_class_go,
+  Qual_class_nomenclature,
+  Qual_class_pcr,
+  Qual_class_mol_wt_cds,
+  Qual_class_mol_wt_prt
 }  QualType;
 
 /* source 'feature' */
@@ -471,6 +491,7 @@ typedef enum {
   SCQUAL_organelle,
   SCQUAL_orgmod_note,
   SCQUAL_pathovar,
+  SCQUAL_PCR_primers,
   SCQUAL_plasmid_name,
   SCQUAL_plastid_name,
   SCQUAL_pop_variant,
@@ -534,6 +555,7 @@ typedef enum {
   FTQUAL_evidence,
   FTQUAL_exception,
   FTQUAL_exception_note,
+  FTQUAL_experimental,
   FTQUAL_extra_products,
   FTQUAL_figure,
   FTQUAL_frequency,
@@ -551,6 +573,7 @@ typedef enum {
   FTQUAL_go_process,
   FTQUAL_heterogen,
   FTQUAL_illegal_qual,
+  FTQUAL_inference,
   FTQUAL_insertion_seq,
   FTQUAL_label,
   FTQUAL_locus_tag,
@@ -558,6 +581,9 @@ typedef enum {
   FTQUAL_maploc,
   FTQUAL_mod_base,
   FTQUAL_modelev,
+  FTQUAL_mol_wt_cds,
+  FTQUAL_mol_wt_prt,
+  FTQUAL_nomenclature,
   FTQUAL_note,
   FTQUAL_number,
   FTQUAL_old_locus_tag,
@@ -584,24 +610,29 @@ typedef enum {
   FTQUAL_region,
   FTQUAL_region_name,
   FTQUAL_replace,
+  FTQUAL_ribosomal_slippage,
   FTQUAL_rpt_family,
   FTQUAL_rpt_type,
   FTQUAL_rpt_unit,
+  FTQUAL_rpt_unit_range,
+  FTQUAL_rpt_unit_seq,
   FTQUAL_rrna_its,
   FTQUAL_sec_str_type,
   FTQUAL_selenocysteine,
   FTQUAL_selenocysteine_note,
+  FTQUAL_seqannot_note,
   FTQUAL_seqfeat_note,
   FTQUAL_site,
   FTQUAL_site_type,
   FTQUAL_standard_name,
   FTQUAL_transcription,
   FTQUAL_transcript_id,
-  FTQUAL_transcript_id_note, /* !!! remove October 15, 2003 !!! */
+  FTQUAL_transcript_id_note,
   FTQUAL_transl_except,
   FTQUAL_transl_table,
   FTQUAL_translation,
   FTQUAL_transposon,
+  FTQUAL_trans_splicing,
   FTQUAL_trna_aa,
   FTQUAL_trna_codons,
   FTQUAL_usedin,
@@ -612,6 +643,7 @@ typedef enum {
 #define MAX_WWWBUF 328
 
 NLM_EXTERN Char link_feat [MAX_WWWBUF];
+NLM_EXTERN Char link_featc [MAX_WWWBUF];
 NLM_EXTERN Char link_seq [MAX_WWWBUF];
 NLM_EXTERN Char link_wgs [MAX_WWWBUF];
 NLM_EXTERN Char link_omim [MAX_WWWBUF];
@@ -620,6 +652,7 @@ NLM_EXTERN Char nt_link [MAX_WWWBUF];
 NLM_EXTERN Char doc_link [MAX_WWWBUF];
 NLM_EXTERN Char ev_link [MAX_WWWBUF];
 NLM_EXTERN Char ec_link [MAX_WWWBUF];
+NLM_EXTERN Char ec_ambig [MAX_WWWBUF];
 NLM_EXTERN Char link_tax [MAX_WWWBUF];
 NLM_EXTERN Char link_muid [MAX_WWWBUF];
 NLM_EXTERN Char link_code [MAX_WWWBUF];
@@ -1057,6 +1090,14 @@ NLM_EXTERN void DoImmediateRemoteFeatureFormat (
 NLM_EXTERN void DoImmediateFormat (
   Asn2gbFormatPtr afp,
   BaseBlockPtr bbp
+);
+
+NLM_EXTERN Boolean DeltaLitOnly (
+  BioseqPtr bsp
+);
+
+NLM_EXTERN Boolean SegHasParts (
+  BioseqPtr bsp
 );
 
 

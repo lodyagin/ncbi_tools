@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.66 $
+* $Revision: 6.72 $
 *
 * File Description: 
 *
@@ -59,8 +59,8 @@ ENUM_ALIST(orgmod_subtype_alist)
   {"Breed",            31},
   {"Chemovar",         12},
   {"Common",           18},
-  {"Dosage",           20},
   {"Cultivar",         10},
+  {"Dosage",           20},
   {"Ecotype",          27},
   {"Forma",            25},
   {"Forma-specialis",  26},
@@ -153,6 +153,7 @@ static ENUM_ALIST(biosource_genome_alist)
   {"Leucoplast",          17},
   {"Proplastid",          18},
   {"Endogenous-virus",    19},
+  {"Hydrogenosome",       20},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
@@ -178,10 +179,11 @@ ENUM_ALIST(biosource_genome_simple_alist)
   {"Leucoplast",          17},
   {"Proplastid",          18},
   {"Endogenous-virus",    19},
+  {"Hydrogenosome",       20},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  biosource_origin_alist [];
-extern ENUM_ALIST(biosource_origin_alist)
+ENUM_ALIST(biosource_origin_alist)
   {" ",               0},
   {"Natural",         1},
   {"Natural Mutant",  2},
@@ -1167,6 +1169,9 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
     PointerToDialog (gbp->db, NULL);
     PointerToDialog (gbp->syn, NULL);
     PointerToDialog (gbp->mod, NULL);
+    PointerToDialog (gbp->orgmod, NULL);
+    PointerToDialog (gbp->subsource, NULL); 
+    
     if (biop != NULL) {
       SetEnumPopup (gbp->genome, gbp->genomeAlist, (UIEnum) biop->genome);
       SetEnumPopup (gbp->origin, biosource_origin_alist, (UIEnum) biop->origin);
@@ -2012,7 +2017,6 @@ GetModifierTextFix (ModTextFixPtr tfp, Uint1 subtype, CharPtr txt)
   FixModifierTextFormData fd;
   CharPtr prompt_fmt = "You have text (%s) in %s modifier field.";
   CharPtr prompt_str = NULL;
-  CharPtr btn_str = NULL;
   
   if (tfp == NULL) return;
   switch (subtype)
@@ -3215,13 +3219,13 @@ static void DoTaxLookup (ButtoN b)
   SeqDescrPtr     sdp;
   BioSourcePtr    biop;
   Uint2           entityID;
-  
+ 
   dlg = (BioSourceDlgPtr) GetObjectExtra (b);
   if (dlg == NULL)
   {
     return;
   }
-  
+
   sep = SeqEntryNew ();
   if (sep == NULL)
   {
@@ -3238,6 +3242,8 @@ static void DoTaxLookup (ButtoN b)
     sep = SeqEntryFree (sep);
     return;
   }
+  
+  bssp->_class = BioseqseqSet_class_empty_set;
   
   sep->choice = 2;
   sep->data.ptrvalue = bssp;
@@ -3296,7 +3302,7 @@ extern DialoG BioSourceDialog (GrouP parent)
   
   bepp = (BioSourceEditProcsPtr) GetAppProperty ("BioSourcEditForm");
   
-  if (bepp != NULL) {
+  if (bepp != NULL && bepp->lookupTaxonomy != NULL) {
     dlg->lookupTaxonomy = bepp->lookupTaxonomy;
     b = PushButton (p, "Look up Taxonomy", DoTaxLookup);
     SetObjectExtra (b, dlg, NULL);

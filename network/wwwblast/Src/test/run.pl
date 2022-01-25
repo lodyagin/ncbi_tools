@@ -22,8 +22,9 @@ my $time = &GetTimeCmd();
 
 my $oldbin = "/net/blast012/export/home/web/public/htdocs/BLAST/bl2seq/$app";
 #my $oldbin = "../wblast2.REAL.old";
+
 chomp(my $basedir = `pwd`);
-my $newbin = "$basedir/../$app";
+my $newbin = "$basedir/$app";
 
 my $out = "out";
 
@@ -33,7 +34,7 @@ if (not -e "$out") {
 
 my %Tests;
 
-if ($app eq "wblast2.REAL") {
+if ($app eq "wblast2.REAL" or $app eq "wblast2_cs.REAL") {
    $Tests{'blastp'} = "\"ONE=129295&TWO=XP_222492.2&FILTER=1&PROGRAM=blastp\"";
 
    $Tests{'blastn'} = "\"ONE=555&TWO=101&FILTER=1&PROGRAM=blastn\"";
@@ -57,12 +58,14 @@ if ($app eq "wblast2.REAL") {
 # short-subject-blastn finds one hit.
    $Tests{'short-subject-discmb'} = "\"PROGRAM=blastn&ONE=AE003820&SSEQ=aggacctcatcagcctcaaa&WORD=11&EXPECT=10000&MEGABLAST=yes\"";
    $Tests{'short-subject-blastn'} = "\"PROGRAM=blastn&ONE=AE003820&SSEQ=aggacctcatcagcctcaaa&WORD=11&EXPECT=10000\"";
+   $Tests{'bare-fasta'} = "\"PROGRAM=blastn&SEQ=agcctggtaggctgcagtccatggggtcacacagagtcggacatgactgagcgacttcac&SSEQ=agcctggtaggctgcaatccatggggtcgctagagtcggacacgactgagcgacttcac&PROGRAM=blastn&FILTER=1\"";
 } else {
   if ($app eq "blast_cs.REAL") {
 
 
   }
 }
+
 foreach $test (keys %Tests) {
     print "\nTest ", $test, "";
     print "\n----------------\n";

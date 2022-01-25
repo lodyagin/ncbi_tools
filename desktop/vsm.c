@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
@@ -308,48 +308,33 @@ static void NEAR VSMWinRefreshData (VSMWinPtr vsmwp, Uint2 entityID,
 	return;
 }
 
-static void VSeqMgrOpenProc (ChoicE c)
+static void VSeqMgrOpenMenuProc (IteM i)
 {
-	Int2 value;
-	Uint2 procid;
-	VSeqMgrPtr vsmp;
 	Int2 retval;
 	ObjMgrProcPtr ompp;
 	OMProcControl ompc;
 
-	MemSet(&ompc, 0, sizeof(OMProcControl));
-	vsmp = VSeqMgrGet();	
-	value = GetValue(c);
-	SetValue(c, 0);
-	procid = vsmp->procmenu[OMPROC_OPEN][value];
+	ompp = (ObjMgrProcPtr) GetObjectExtra(i);
+	if (ompp == NULL || ompp->func == NULL)
+		return;
 	
-	if (procid)
-	{
-		ompp = ObjMgrProcFind(vsmp->omp, procid, NULL, 0);
-		if (ompp != NULL)
-		{
-			ompc.proc = ompp;
-			retval = (*(ompp->func)) (&ompc);
-		
-			if (retval == OM_MSG_RET_ERROR)
-				ErrShow();
-		}
-	}
+	MemSet(&ompc, 0, sizeof(OMProcControl));
+	ompc.proc = ompp;
+	retval = (*(ompp->func)) (&ompc);
+	if (retval == OM_MSG_RET_ERROR)
+		ErrShow();
 	return;
 }
 
-static void VSeqMgrSaveProc (ChoicE c)
+static void VSeqMgrSaveMenuProc (IteM i)
 {
-	Int2 value;
-	Uint2 procid;
-	VSeqMgrPtr vsmp;
 	Int2 retval;
 	ObjMgrProcPtr ompp;
 	OMProcControl ompc;
-	
-	vsmp = VSeqMgrGet();	
-	value = GetValue(c);
-	SetValue(c, 0);
+
+	ompp = (ObjMgrProcPtr) GetObjectExtra(i);
+	if (ompp == NULL || ompp->func == NULL)
+		return;
 	
 	MemSet(&ompc, 0, sizeof(OMProcControl));
 	ompc.do_not_reload_from_cache = TRUE;
@@ -359,22 +344,13 @@ static void VSeqMgrSaveProc (ChoicE c)
 		Message (MSG_ERROR, "Nothing selected");
 		return;
 	}
-
-	procid = vsmp->procmenu[OMPROC_SAVE][value];
-	if (procid)
-	{
-		ompp = ObjMgrProcFind(vsmp->omp, procid, NULL, 0);
-		if (ompp != NULL)
-		{
-			ompc.proc = ompp;
-			retval = (*(ompp->func)) (&ompc);
-		
-			if (retval == OM_MSG_RET_ERROR)
-				ErrShow();
-		}
-	}
+	ompc.proc = ompp;
+	retval = (*(ompp->func)) (&ompc);
+	if (retval == OM_MSG_RET_ERROR)
+		ErrShow();
 	return;
 }
+
 
 /*
 static Boolean ObjMgrProcMatch (ObjMgrProcPtr ompp, OMProcControlPtr ompcp, Boolean showerror)
@@ -452,64 +428,10 @@ static void ShowVSMProc (IteM i)
 	return;
 }
 
-/*****************************************************************************
-*
-*   VSMAddToMenu(MenU m, Int2 menutype)
-*      Adds a VSM style submenu to Menu
-*      All included procs must have already been registered with the
-*        objmgr.
-*
-*****************************************************************************/
-Boolean LIBCALL VSMAddToMenu (MenU m, Int2 menutype)
-{
-	MenU s;
-	ChoicE c;
-	ObjMgrProcPtr ompp;
-	ObjMgrPtr omp;
-	VSeqMgrPtr vsmp;
-	Int2 ctr, proctype;
-	static Int2 proctypes [3] = {
-		0,
-		OMPROC_OPEN,
-		OMPROC_SAVE};
-	static CharPtr menuname [3] = {
-		"NCBI DeskTop",
-		"Open",
-		"Save As"};
-	ChsActnProc ap;
-
-	if (m == NULL) return FALSE;
-	switch (menutype)
-	{
-		case VSM_DESKTOP:
-			CommandItem(m, menuname[menutype], ShowVSMProc);
-			return TRUE;
-		case VSM_OPEN_MENU:
-			ap = VSeqMgrOpenProc;
-			break;
-		case VSM_SAVE_MENU:
-			ap = VSeqMgrSaveProc;
-			break;
-		default:
-			return FALSE;
-	}
-
-	proctype = proctypes[menutype];
-	vsmp = VSeqMgrGet();
-	omp = vsmp->omp;
-
-	s = SubMenu (m, menuname[menutype]);
-	c = ChoiceGroup(s, ap);
-	ompp = NULL;
-	ctr = 0;
-	while ((ompp = ObjMgrProcFindNext(omp, proctype, 0,0, ompp)) != NULL)
-	{
-		ChoiceItem(c, ompp->proclabel);
-		ctr++;
-		vsmp->procmenu[proctype][ctr] = ompp->procid;
-	}
-	return TRUE;
-}
+typedef struct sbstruc {
+  CharPtr    name;
+  MenU       menu;
+} Sbstruc, PNTR SbstrucPtr;
 
 static void VSeqMgrStdMenuProc (IteM i)
 {
@@ -551,6 +473,95 @@ static void VSeqMgrStdMenuProc (IteM i)
 
 /*****************************************************************************
 *
+*   VSMAddToMenu(MenU m, Int2 menutype)
+*      Adds a VSM style submenu to Menu
+*      All included procs must have already been registered with the
+*        objmgr.
+*
+*****************************************************************************/
+Boolean LIBCALL VSMAddToMenu (MenU m, Int2 menutype)
+{
+	MenU s, x;
+	ObjMgrProcPtr ompp;
+	ObjMgrPtr omp;
+	VSeqMgrPtr vsmp;
+	Int2 ctr, proctype;
+	static Int2 proctypes [3] = {
+		0,
+		OMPROC_OPEN,
+		OMPROC_SAVE};
+	static CharPtr menuname [3] = {
+		"NCBI DeskTop",
+		"Open",
+		"Save As"};
+	ValNodePtr submenulist = NULL, vnp;
+	SbstrucPtr sbp;
+	IteM i;
+
+	if (m == NULL) return FALSE;
+	
+	if (menutype == VSM_DESKTOP)
+	{
+    CommandItem(m, menuname[menutype], ShowVSMProc);
+    return TRUE;
+	}
+	else if (menutype != VSM_OPEN_MENU && menutype != VSM_SAVE_MENU)
+	{
+	  return FALSE;
+	}
+	
+	proctype = proctypes[menutype];
+	vsmp = VSeqMgrGet();
+	omp = vsmp->omp;
+
+	s = SubMenu (m, menuname[menutype]);
+	ompp = NULL;
+	ctr = 0;
+	while ((ompp = ObjMgrProcFindNext(omp, proctype, 0,0, ompp)) != NULL)
+	{
+		x = NULL;
+		if (! StringHasNoText (ompp->submenu)) {
+      vnp = submenulist;
+		  while (vnp != NULL && x == NULL) {
+				sbp = (SbstrucPtr) vnp->data.ptrvalue;
+				if (sbp != NULL) {
+					if (StringICmp (ompp->submenu, sbp->name) == 0) {
+						x = sbp->menu;
+					}
+				}
+				vnp = vnp->next;
+			}
+			if (x == NULL) {
+				sbp = (SbstrucPtr) MemNew (sizeof (Sbstruc));
+				if (sbp != NULL) {
+					sbp->name = ompp->submenu;
+					sbp->menu = SubMenu (s, sbp->name);
+					x = sbp->menu;
+					ValNodeAddPointer (&submenulist, 0, (VoidPtr) sbp);
+				}
+			}
+		}
+		if (x == NULL) {
+			x = s;
+		}
+    
+    if (menutype == VSM_OPEN_MENU)
+    {
+      i = CommandItem(x, ompp->proclabel, VSeqMgrOpenMenuProc);
+    }
+    else if (menutype == VSM_SAVE_MENU)
+    {
+		  i = CommandItem(x, ompp->proclabel, VSeqMgrSaveMenuProc);
+    }
+		SetObjectExtra(i, (VoidPtr)ompp, NULL);
+		ctr++;
+		vsmp->procmenu[proctype][ctr] = ompp->procid;
+	}
+	return TRUE;
+}
+
+/*****************************************************************************
+*
 *   VSMAddMenu(WindoW w, Int2 menutype)
 *      Adds a VSM style menu to Window
 *      All included procs must have already been registered with the
@@ -558,11 +569,6 @@ static void VSeqMgrStdMenuProc (IteM i)
 *      If no procs of this type are registered, does not add to window
 *
 *****************************************************************************/
-typedef struct sbstruc {
-  CharPtr    name;
-  MenU       menu;
-} Sbstruc, PNTR SbstrucPtr;
-
 Boolean LIBCALL VSMAddMenu (WindoW w, Int2 menutype)
 {
 	MenU m, sub, sub2, x;

@@ -1,4 +1,4 @@
-/* $Id: blast_seq.h,v 1.25 2005/04/06 23:27:53 dondosha Exp $
+/* $Id: blast_seq.h,v 1.26 2005/07/27 12:34:46 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -52,13 +52,13 @@ extern "C" {
  * BLAST results.
  * @param program_number identifies blastn, blastp, etc. [in]
  * @param mask_loc internal mask structure [in]
- * @param slp SeqLoc of query [in]
+ * @param query_loc SeqLoc of query [in]
  * @return Pointer to SeqLoc
  */
 SeqLocPtr 
 BlastMaskLocToSeqLoc(EBlastProgramType program_number, 
                      const BlastMaskLoc* mask_loc, 
-                     const SeqLoc* slp);
+                     SeqLoc* query_loc);
 /** Convert a list of mask locations in a form of SeqLoc into a BlastMaskLoc
  * structure. In case of multiple queries, it is not required to create a mask 
  * SeqLoc for every query.

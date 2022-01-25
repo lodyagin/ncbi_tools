@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: posit2.c,v 6.10 2004/06/22 14:16:56 camacho Exp $";
+static char const rcsid[] = "$Id: posit2.c,v 6.11 2005/07/28 14:57:10 coulouri Exp $";
 
-/* $Id: posit2.c,v 6.10 2004/06/22 14:16:56 camacho Exp $
+/* $Id: posit2.c,v 6.11 2005/07/28 14:57:10 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,12 +34,15 @@ Author: Alejandro Schaffer
 
 Contents: utilities for makematrices.
 
-$Revision: 6.10 $
+$Revision: 6.11 $
 
 *****************************************************************************/
 
 /*
  * $Log: posit2.c,v $
+ * Revision 6.11  2005/07/28 14:57:10  coulouri
+ * remove dead code
+ *
  * Revision 6.10  2004/06/22 14:16:56  camacho
  * Changed invocation of posFreqsToMatrix to conform with new signature
  *
@@ -313,51 +316,6 @@ Boolean LIBCALL impalaScaling(posSearchItems *posSearch, compactSearchItems * co
 #define  getCkptNlm_FloatHi(d, ckptFile)  (getCkptNumber(&(d),sizeof(Nlm_FloatHi),ckptFile))
 #define  getCkptInt4(i, ckptFile)         (getCkptNumber(&(i),sizeof(Int4),ckptFile))
 #define  getCkptChar(c, ckptFile)         (getCkptNumber(&(c),sizeof(Char),ckptFile))
-
-
-/*Code to get a vector of type Nlm_FloatHi*/
-
-static void    getCkptNlmFloat_HiVector (Nlm_FloatHi * theVector, Int4 length, FILE * ckptFile)
-{
-    int  vectorRef ;
-    
-    for(vectorRef = 0; vectorRef < length; vectorRef++)
-        getCkptNlm_FloatHi(theVector[vectorRef],ckptFile) ;
-}
-
-static void    getFreqVector (Nlm_FloatHi * theVector, Int4 length, FILE * ckptFile)
-{
-    int  vectorRef ;
-    
-    Int4 charOrder[EFFECTIVE_ALPHABET]; /*standard order of letters according to S. Altschul*/
-    
-    
-    charOrder[0] =  1;  /*A*/
-    charOrder[1] =  16; /*R*/
-    charOrder[2] =  13; /*N*/  
-    charOrder[3] =  4;  /*D*/ 
-    charOrder[4] =  3;  /*C*/
-    charOrder[5] =  15; /*Q*/
-    charOrder[6] =  5; /*E*/ 
-    charOrder[7] =  7;  /*G*/
-    charOrder[8] =  8;  /*H*/
-    charOrder[9] =  9;  /*I*/
-    charOrder[10] = 11; /*L*/
-    charOrder[11] = 10; /*K*/
-    charOrder[12] = 12; /*M*/  
-    charOrder[13] =  6; /*F*/
-    charOrder[14] = 14; /*P*/
-    charOrder[15] = 17; /*S*/
-    charOrder[16] = 18; /*T*/
-    charOrder[17] = 20; /*W*/
-    charOrder[18] = 22; /*Y*/
-    charOrder[19] = 19; /*V*/
-    
-    for(vectorRef = 0; vectorRef < length; vectorRef++)
-        theVector[vectorRef] = 0;
-    for(vectorRef = 0; vectorRef < EFFECTIVE_ALPHABET; vectorRef++)
-        getCkptNlm_FloatHi(theVector[charOrder[vectorRef]],ckptFile) ;
-}
 
 /*Read a checkpoint from the end of a previous PSI-BLAST round, get
   query length, query, and position-specific target frequencies.

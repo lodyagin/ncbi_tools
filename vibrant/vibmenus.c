@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.20  2005/07/18 15:15:18  kans
+* fixed minor xcode compiler warnings
+*
 * Revision 6.19  2004/04/01 13:43:09  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -534,6 +537,7 @@ static void Nlm_GetChoiceData (Nlm_ChoicE c, Nlm_ChoiceData * cdata)
   }
 }
 
+#ifndef WIN_MAC
 static void Nlm_LoadMenuBarData (Nlm_MenuBaR mb, Nlm_MenuTool hdl)
 
 {
@@ -548,6 +552,7 @@ static void Nlm_LoadMenuBarData (Nlm_MenuBaR mb, Nlm_MenuTool hdl)
     recentMenuBar = NULL;
   }
 }
+#endif
 
 #ifdef WIN_MAC
 static void Nlm_SetMenuBarData (Nlm_MenuBaR mb, Nlm_MenuBarData * mbdata)
@@ -610,7 +615,7 @@ static Nlm_Int2 Nlm_GetMenuTag (Nlm_MenU m)
 }
 #endif
 
-
+#ifndef WIN_MAC
 static Nlm_PopupTool Nlm_GetMenuPopup (Nlm_MenU m)
 {
   Nlm_MenuData  mdata;
@@ -618,7 +623,7 @@ static Nlm_PopupTool Nlm_GetMenuPopup (Nlm_MenU m)
   Nlm_GetMenuData (m, &mdata);
   return mdata.popup;
 }
-
+#endif
 
 static void Nlm_SetSubMenu (Nlm_IteM i, Nlm_MenU sub)
 {
@@ -700,6 +705,7 @@ static Nlm_Boolean Nlm_IsItAPopupList (Nlm_ChoicE c)
   return cdata.isAPopupList;
 }
 
+#ifdef WIN_MOTIF
 static void Nlm_SetPopupValue (Nlm_ChoicE c, Nlm_Int2 pval)
 
 {
@@ -709,7 +715,9 @@ static void Nlm_SetPopupValue (Nlm_ChoicE c, Nlm_Int2 pval)
   cdata.popupValue = pval;
   Nlm_SetChoiceData (c, &cdata);
 }
+#endif
 
+#ifdef WIN_MOTIF
 static Nlm_Int2 Nlm_GetPopupValue (Nlm_ChoicE c)
 
 {
@@ -718,7 +726,9 @@ static Nlm_Int2 Nlm_GetPopupValue (Nlm_ChoicE c)
   Nlm_GetChoiceData (c, &cdata);
   return cdata.popupValue;
 }
+#endif
 
+#ifdef WIN_MOTIF
 static void Nlm_SetChoiceHandles (Nlm_ChoicE c, Nlm_ItemTool PNTR hdls)
 
 {
@@ -728,6 +738,7 @@ static void Nlm_SetChoiceHandles (Nlm_ChoicE c, Nlm_ItemTool PNTR hdls)
   cdata.handles = hdls;
   Nlm_SetChoiceData (c, &cdata);
 }
+#endif
 
 static Nlm_ItemTool PNTR Nlm_GetChoiceHandles (Nlm_ChoicE c)
 
@@ -738,6 +749,7 @@ static Nlm_ItemTool PNTR Nlm_GetChoiceHandles (Nlm_ChoicE c)
   return cdata.handles;
 }
 
+#ifndef WIN_MAC
 static Nlm_MenuTool Nlm_GetMenuBarHandle (Nlm_MenuBaR mb)
 
 {
@@ -746,6 +758,7 @@ static Nlm_MenuTool Nlm_GetMenuBarHandle (Nlm_MenuBaR mb)
   Nlm_GetMenuBarData (mb, &mbdata);
   return mbdata.handle;
 }
+#endif
 
 
 #ifdef WIN_MSWIN

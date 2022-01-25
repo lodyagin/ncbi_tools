@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
@@ -40,6 +40,14 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.20  2005/07/11 14:11:50  bollin
+* when saving text from a TexT control for the TagList dialog, do not trim off
+* trailing space - if there is a callback for the text control this causes
+* unexpected behavior.
+*
+* Revision 6.19  2005/06/29 13:55:14  bollin
+* added flag for left scroll bar to CreateTagListDialogExEx
+*
 * Revision 6.18  2005/05/12 15:25:34  bollin
 * added callbacks to the TagListDialog, so that when a value is changed, the
 * callback for the column in which the value is changed will be called.
@@ -1668,6 +1676,8 @@ static void CheckExtendTag (TagListPtr tlp)
         (tlp->max)++;
         CorrectBarMax (tlp->bar, tlp->max);
         CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+        CorrectBarMax (tlp->left_bar, tlp->max);
+        CorrectBarPage (tlp->left_bar, tlp->rows - 1, tlp->rows - 1);
         vnp = ValNodeNew (tlp->vnp);
         if (tlp->vnp == NULL) {
           tlp->vnp = vnp;
@@ -1684,6 +1694,16 @@ static void ScrollTagProc (BaR b, GraphiC g, Int2 _new, Int2 _old)
 
   tlp = (TagListPtr) GetObjectExtra (b);
   if (tlp != NULL) {
+    /* synchronize left and right scroll bars */
+    if (b == tlp->bar && tlp->left_bar != NULL)
+    {
+      CorrectBarValue (tlp->left_bar, GetBarValue (tlp->bar));
+    }
+    else if (b == tlp->left_bar && tlp->bar != NULL)
+    {
+      CorrectBarValue (tlp->bar, GetBarValue (tlp->left_bar));      
+    }
+    
     SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
     Update ();
     CheckExtendTag (tlp);
@@ -1766,6 +1786,30 @@ static void ListTagProc (LisT l)
   }
 }
 
+static CharPtr JustSaveStringFromText (TexT t)
+
+{
+  size_t   len;
+  CharPtr  str;
+
+  len = TextLength (t);
+  if (len > 0) {
+    str = (CharPtr) MemNew(len + 1);
+    if (str != NULL) {
+      GetTitle (t, str, len + 1);
+      /* TrimSpacesAroundString (str); */
+      if (str[0] == 0) {
+        str = (CharPtr) MemFree(str);
+      }
+      return str;
+    } else {
+      return NULL;
+    }
+  } else {
+    return NULL;
+  }
+}
+
 static void TextTagProc (TexT t)
 
 {
@@ -1785,7 +1829,7 @@ static void TextTagProc (TexT t)
         if (t == GetTagListControl (tlp, i, j) && tlp->types [j] == TAGLIST_TEXT) {
           vnp = GetNthValNode (tlp, i + val);
           if (vnp != NULL) {
-            str = SaveStringFromText (t);
+            str = JustSaveStringFromText (t);
             ptr = ReplaceColumn ((CharPtr)vnp->data.ptrvalue, str, j);
             vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
             vnp->data.ptrvalue = ptr;
@@ -1979,6 +2023,11 @@ static void ResetTagList (DialoG d)
     }
     Reset (tlp->bar);
     CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+    if (tlp->left_bar != NULL)
+    {
+      Reset (tlp->left_bar);
+      CorrectBarPage (tlp->left_bar, tlp->rows - 1, tlp->rows - 1);
+    }
     tlp->max = 0;
     tlp->vnp = ValNodeFreeData (tlp->vnp);
   }
@@ -2031,7 +2080,8 @@ extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
                                        Uint2Ptr textWidths, Nlm_EnumFieldAssocPtr PNTR alists,
                                        Boolean useBar, Boolean noExtend,
                                        Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc,
-                                       TaglistCallback PNTR callbacks, Pointer callback_data)
+                                       TaglistCallback PNTR callbacks, Pointer callback_data,
+                                       Boolean useLeftBar)
 
 {
   EnumFieldAssocPtr  al;
@@ -2075,7 +2125,18 @@ extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
     tlp->callbacks = callbacks;
     tlp->callback_data = callback_data;
 
-    s = HiddenGroup (p, 2, 0, NULL);
+    s = HiddenGroup (p, 3, 0, NULL);
+    
+    if (useLeftBar)
+    {
+      tlp->left_bar = ScrollBar (s, 0, rows, ScrollTagProc);
+      SetObjectExtra (tlp->left_bar, tlp, NULL);
+      CorrectBarPage (tlp->left_bar, tlp->rows - 1, tlp->rows - 1);
+    }
+    else
+    {
+      tlp->left_bar = NULL;
+    }
 
     col = (Int2) cols;
     g = HiddenGroup (s, -col, 0, NULL);
@@ -2147,9 +2208,21 @@ extern DialoG CreateTagListDialogExEx (GrouP h, Uint2 rows, Uint2 cols,
       SetObjectExtra (tlp->bar, tlp, NULL);
       CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
     }
+    else
+    {
+      tlp->bar = NULL;
+    }
     tlp->max = 0;
     tlp->vnp = NULL;
-    AlignObjects (ALIGN_LOWER, (HANDLE) g, (HANDLE) tlp->bar, NULL);
+    
+    if (tlp->bar == NULL)
+    {
+      AlignObjects (ALIGN_LOWER, (HANDLE) g, (HANDLE) tlp->left_bar, NULL);      
+    }
+    else
+    {
+      AlignObjects (ALIGN_LOWER, (HANDLE) g, (HANDLE) tlp->bar, (HANDLE) tlp->left_bar, NULL);
+    }
   }
 
   return (DialoG) p;
@@ -2162,7 +2235,7 @@ extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
                                      ToDialogFunc tofunc, FromDialogFunc fromfunc)
 {
   return CreateTagListDialogExEx (h, rows, cols, spacing, types, textWidths, alists,
-                                  useBar, noExtend, tofunc, fromfunc, NULL, NULL);
+                                  useBar, noExtend, tofunc, fromfunc, NULL, NULL, FALSE);
 }
 
 

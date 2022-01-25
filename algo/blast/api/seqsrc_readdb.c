@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.c,v 1.50 2005/05/10 16:07:59 camacho Exp $
+/*  $Id: seqsrc_readdb.c,v 1.51 2005/08/05 22:29:10 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * Implementation of the BlastSeqSrc interface using readdb
  */
 
-static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.50 2005/05/10 16:07:59 camacho Exp $";
+static char const rcsid[] = "$Id: seqsrc_readdb.c,v 1.51 2005/08/05 22:29:10 dondosha Exp $";
 
 #include <algo/blast/api/seqsrc_readdb.h>
 #include <algo/blast/core/blast_seqsrc_impl.h>
@@ -187,7 +187,6 @@ s_ReaddbReleaseSequence(void* readdb_handle, void* args)
 {
     BlastSeqSrcGetSeqArg* readdb_args = (BlastSeqSrcGetSeqArg*) args;
     ASSERT(readdb_args);
-    ASSERT(readdb_args->seq);
     BlastSequenceBlkClean(readdb_args->seq);
 }
 

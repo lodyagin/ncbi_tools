@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.214 $
+* $Revision: 6.234 $
 *
 * File Description: 
 *
@@ -1610,7 +1610,7 @@ static CharPtr sqntag_biosrc_genome_list [] = {
   "mitochondrion", "plastid", "macronuclear", "extrachromosomal",
   "plasmid", "transposon", "insertion sequence", "cyanelle",
   "proviral", "virion", "nucleomorph", "apicoplast", "leucoplast",
-  "proplastid", "endogenous-virus", NULL
+  "proplastid", "endogenous-virus", "hydrogenosome", NULL
 };
 
 static CharPtr sqntag_biosrc_origin_list [] = {
@@ -1622,7 +1622,7 @@ static CharPtr sqntag_biosrc_orgmod_list [] = {
   "?", "?", "strain", "substrain", "type", "subtype", "variety",
   "serotype", "serogroup", "serovar", "cultivar", "pathovar", "chemovar",
   "biovar", "biotype", "group", "subgroup", "isolate", "common name",
-  "acronym", "dosage", "natural host", "sub-species", "specimen-voucher",
+  "acronym", "dosage", "specific-host", "sub-species", "specimen-voucher",
   "authority", "forma", "forma-specialis", "ecotype", "synonym",
   "anamorph", "teleomorph", "breed", NULL
 };
@@ -1631,8 +1631,8 @@ static CharPtr sqntag_biosrc_subsource_list [] = {
   "?", "chromosome", "map", "clone", "subclone", "haplotype",
   "genotype", "sex", "cell-line", "cell-type", "tissue-type",
   "clone-lib", "dev-stage", "frequency", "germline", "rearranged",
-  "lab-host", "pop-variant", "tissue-lib", "plasmid-name", "transposon-name",
-  "ins-seq-name", "plastid-name", "country", "segment", "endogenous-virus-name",
+  "lab-host", "pop-variant", "tissue-lib", "plasmid-name", "",
+  "", "plastid-name", "country", "segment", "endogenous-virus-name",
   "transgenic", "environmental-sample", "isolation-source",
   "lat-lon", "collection-date", "collected-by", "identified-by",
   "fwd-primer-seq", "rev-primer-seq", "fwd-primer-name", "rev-primer-name",
@@ -1646,13 +1646,17 @@ NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
 )
 
 {
+  DbtagPtr      db;
   Int2          i;
+  ObjectIdPtr   oip;
   OrgModPtr     omp;
   OrgNamePtr    onp;
   OrgRefPtr     orp;
+  CharPtr       ptr;
   SubSourcePtr  ssp;
   CharPtr       str;
   int           val;
+  ValNodePtr    vnp;
 
   if ((stp == NULL || stp->num_tags == 0) && StringHasNoText (organism)) return biop;
 
@@ -1765,6 +1769,35 @@ NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
     }
   }
 
+  str = SqnTagFind (stp, "db_xref");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "db-xref");
+  }
+  if (str == NULL) {
+    str = SqnTagFind (stp, "dbxref");
+  }
+  if (str != NULL) {
+    vnp = ValNodeNew (NULL);
+    db = DbtagNew ();
+    vnp->data.ptrvalue = db;
+    ptr = StringChr (str, ':');
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr++;
+      db->db = StringSave (str);
+      oip = ObjectIdNew ();
+      oip->str = StringSave (ptr);
+      db->tag = oip;
+    } else {
+      db->db = StringSave ("?");
+      oip = ObjectIdNew ();
+      oip->str = StringSave (str);
+      db->tag = oip;
+    }
+    vnp->next = orp->db;
+    orp->db = vnp;
+  }
+
   str = SqnTagFind (stp, "division");
   if (str == NULL) {
     str = SqnTagFind (stp, "div");
@@ -1791,6 +1824,9 @@ NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
   }
 
   str = SqnTagFind (stp, "note");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "notes");
+  }
   if (str != NULL) {
     ssp = SubSourceNew ();
     if (ssp != NULL) {
@@ -1815,6 +1851,22 @@ static CharPtr molinfo_tech_list [] = {
   "seq-pept-homol", "concept-trans-a", "htgs 1", "htgs 2", "htgs 3",
   "fli cDNA", "htgs 0", "htc", "wgs", "barcode", "composite-wgs-htgs", NULL
 };
+
+NLM_EXTERN void ReadTechFromString (CharPtr str, MolInfoPtr mip)
+{
+  Int4 i;
+  
+  if (mip == NULL || str == NULL)
+  {
+    return;
+  }
+  
+  for (i = 0; molinfo_tech_list [i] != NULL; i++) {
+    if (StringsAreEquivalent (str, molinfo_tech_list [i])) {
+      mip->tech = (Uint1) i;
+    }
+  }
+}
 
 NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
   SqnTagPtr stp,
@@ -1848,13 +1900,7 @@ NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
   }
 
   str = SqnTagFind (stp, "tech");
-  if (str != NULL) {
-    for (i = 0; molinfo_tech_list [i] != NULL; i++) {
-      if (StringsAreEquivalent (str, molinfo_tech_list [i])) {
-        mip->tech = (Uint1) i;
-      }
-    }
-  }
+  ReadTechFromString (str, mip);
 
   str = SqnTagFind (stp, "completeness");
   if (str != NULL) {
@@ -2128,6 +2174,37 @@ NLM_EXTERN GBBlockPtr ParseTitleIntoGenBank (
     MemFree (tmp);
   }
 
+  str = SqnTagFind (stp, "keyword");
+  if (str == NULL) {
+    str = SqnTagFind (stp, "keywords");
+  }
+  if (str != NULL) {
+    tmp = StringSave (str);
+    last = tmp;
+    ptr = last;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == ',' || ch == ';') {
+        *ptr = '\0';
+        if (! StringHasNoText (last)) {
+          TrimSpacesAroundString (last);
+          ValNodeCopyStr (&(gbp->keywords), 0, last);
+        }
+        ptr++;
+        last = ptr;
+        ch = *ptr;
+      } else {
+        ptr++;
+        ch = *ptr;
+      }
+    }
+    if (! StringHasNoText (last)) {
+      TrimSpacesAroundString (last);
+      ValNodeCopyStr (&(gbp->keywords), 0, last);
+    }
+    MemFree (tmp);
+  }
+
   return gbp;
 }
 
@@ -2363,61 +2440,7 @@ static Boolean HasNoText (CharPtr str)
   return TRUE;
 }
 
-static CharPtr ReadALine (CharPtr str, size_t size, FILE *fp)
-
-{
-  Char     ch;
-  CharPtr  ptr;
-  CharPtr  rsult;
-
-  if (str == NULL || size < 1 || fp == NULL) return NULL;
-  *str = '\0';
-  rsult = FileGets (str, size, fp);
-  if (rsult != NULL) {
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0' && ch != '\n' && ch != '\r') {
-      ptr++;
-      ch = *ptr;
-    }
-    *ptr = '\0';
-  }
-  return rsult;
-}
-
-static CharPtr ReadALineOfScores (CharPtr str, size_t size, FILE *fp, BoolPtr nonewline)
-
-{
-  Char     ch;
-  CharPtr  ptr;
-  CharPtr  rsult;
-
-  if (nonewline != NULL) {
-    *nonewline = FALSE;
-  }
-  if (str == NULL || size < 1 || fp == NULL) return NULL;
-  *str = '\0';
-  rsult = FileGets (str, size, fp);
-  if (rsult != NULL) {
-    ptr = str;
-    ch = *ptr;
-    while (ch != '\0' && ch != '\n' && ch != '\r') {
-      ptr++;
-      ch = *ptr;
-    }
-    *ptr = '\0';
-    if (nonewline != NULL) {
-      if (ch != '\n' && ch != '\r') {
-        *nonewline = TRUE;
-      } else {
-        *nonewline = FALSE;
-      }
-    }
-  }
-  return rsult;
-}
-
-static SeqEntryPtr ReadPhrapDNA (FILE *fp, CharPtr id)
+static SeqEntryPtr ReadPhrapDNA (FileCachePtr fcp, CharPtr id)
 
 {
   ByteStorePtr  bs = NULL;
@@ -2425,12 +2448,13 @@ static SeqEntryPtr ReadPhrapDNA (FILE *fp, CharPtr id)
   Char          buf [256];
   Char          ch;
   Boolean       goOn = TRUE;
+  Boolean       nonewline;
   CharPtr       p;
   CharPtr       q;
   SeqEntryPtr   sep = NULL;
   CharPtr       str;
 
-  if (fp == NULL || HasNoText (id)) return NULL;
+  if (fcp == NULL || HasNoText (id)) return NULL;
   sep = SeqEntryNew ();
   if (sep == NULL) return NULL;
   bsp = BioseqNew ();
@@ -2451,7 +2475,7 @@ static SeqEntryPtr ReadPhrapDNA (FILE *fp, CharPtr id)
 
   goOn = TRUE;
   while (goOn) {
-    str = ReadALine (buf, sizeof (buf), fp);
+    str = FileCacheReadLine (fcp, buf, sizeof (buf), &nonewline);
     if (HasNoText (str)) {
       goOn = FALSE;
     } else {
@@ -2484,7 +2508,7 @@ static SeqEntryPtr ReadPhrapDNA (FILE *fp, CharPtr id)
   return sep;
 }
 
-NLM_EXTERN SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp)
+NLM_EXTERN SeqGraphPtr ReadPhrapQualityFC (FileCachePtr fcp, BioseqPtr bsp)
 
 {
   ByteStorePtr  bs = NULL;
@@ -2506,7 +2530,7 @@ NLM_EXTERN SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp)
   CharPtr       str;
   int           val;
 
-  if (fp == NULL || bsp == NULL) return NULL;
+  if (fcp == NULL || bsp == NULL) return NULL;
   sgp = SeqGraphNew ();
   if (sgp == NULL) return NULL;
   bs = BSNew (1000);
@@ -2519,14 +2543,14 @@ NLM_EXTERN SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp)
     StringCpy (buf, prefix);
     prefix [0] = '\0';
     prefixlen = StringLen (buf);
-    pos = ftell (fp);
-    ReadALineOfScores (buf + prefixlen, sizeof (buf) - prefixlen, fp, &nonewline);
+    pos = FileCacheTell (fcp);
+    FileCacheReadLine (fcp, buf + prefixlen, sizeof (buf) - prefixlen, &nonewline);
     /* above function returned prefix characters past buf start */
     str = buf;
     if (HasNoText (str) || str [0] == '>') {
       goOn = FALSE;
       if (str [0] == '>') {
-        fseek (fp, pos, SEEK_SET);
+        FileCacheSeek (fcp, pos);
       }
     } else {
       i = 0;
@@ -2599,18 +2623,36 @@ NLM_EXTERN SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp)
   return sgp;
 }
 
-static Boolean PhrapSequenceHasClipping (FILE *fp)
+NLM_EXTERN SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp)
+
+{
+  FileCache    fc;
+  Int4         pos;
+  SeqGraphPtr  sgp;
+
+  if (fp == NULL || bsp == NULL) return NULL;
+  FileCacheSetup (&fc, fp);
+  sgp = ReadPhrapQualityFC (&fc, bsp);
+  pos = FileCacheTell (&fc);
+  FileCacheSetup (&fc, fp);
+  FileCacheSeek (&fc, pos);
+  fseek (fp, pos, SEEK_SET);
+  return sgp;
+}
+
+static Boolean PhrapSequenceHasClipping (FileCachePtr fcp)
 
 {
   Char     buf [256];
   Boolean  goOn = TRUE;
+  Boolean  nonewline;
   Boolean  rsult = FALSE;
   CharPtr  str;
 
-  if (fp == NULL) return FALSE;
+  if (fcp == NULL) return FALSE;
   goOn = TRUE;
   while (goOn) {
-    str = ReadALine (buf, sizeof (buf), fp);
+    str = FileCacheReadLine (fcp, buf, sizeof (buf), &nonewline);
     if (HasNoText (str)) {
       goOn = FALSE;
     } else {
@@ -2650,7 +2692,7 @@ static SeqAnnotPtr NewGraphSeqAnnot (CharPtr name, SeqGraphPtr sgp)
   if (sap == NULL) return NULL;
 
   if (! HasNoText (name)) {
-    ValNodeAddPointer (&(sap->desc), Annot_descr_name, StringSave (name));
+    SeqDescrAddPointer (&(sap->desc), Annot_descr_name, StringSave (name));
   }
   sap->type = 3;
   sap->data = (Pointer) sgp;
@@ -2668,12 +2710,15 @@ NLM_EXTERN SeqEntryPtr ReadPhrapFile (FILE *fp)
 {
   BioseqPtr    bsp;
   Char         buf [256];
+  FileCache    fc;
   Boolean      goOn = TRUE;
   SeqEntryPtr  head = NULL;
   Int2         i;
   SeqEntryPtr  lastsep;
   SeqGraphPtr  lastsgp;
+  Boolean      nonewline;
   CharPtr      p;
+  Int4         pos;
   CharPtr      q;
   SeqAnnotPtr  sap;
   SeqEntryPtr  sep = NULL;
@@ -2682,9 +2727,12 @@ NLM_EXTERN SeqEntryPtr ReadPhrapFile (FILE *fp)
   Int2         tag;
 
   if (fp == NULL) return NULL;
+
+  FileCacheSetup (&fc, fp);
+
   goOn = TRUE;
   while (goOn) {
-    str = ReadALine (buf, sizeof (buf), fp);
+    str = FileCacheReadLine (&fc, buf, sizeof (buf), &nonewline);
     if (str == NULL) {
       goOn = FALSE;
     } else if (! HasNoText (str)) {
@@ -2710,7 +2758,7 @@ NLM_EXTERN SeqEntryPtr ReadPhrapFile (FILE *fp)
           case 1 :
           case 2 :
             if (p != NULL) {
-              sep = ReadPhrapDNA (fp, p);
+              sep = ReadPhrapDNA (&fc, p);
               ValNodeLink (&head, sep);
             }
             /* for new format, sep points to current sequence */
@@ -2726,7 +2774,7 @@ NLM_EXTERN SeqEntryPtr ReadPhrapFile (FILE *fp)
           case 4 :
             if (sep != NULL) {
               bsp = (BioseqPtr) sep->data.ptrvalue;
-              sgp = ReadPhrapQuality (fp, bsp);
+              sgp = ReadPhrapQualityFC (&fc, bsp);
               if (sgp != NULL) {
                 for (sap = bsp->annot; sap != NULL; sap = sap->next) {
                   if (sap->type == 3) {
@@ -2753,7 +2801,7 @@ NLM_EXTERN SeqEntryPtr ReadPhrapFile (FILE *fp)
           case 5 :
             /* unlinkes and removes sep if Clipping line present */
             if (p != NULL) {
-              if (PhrapSequenceHasClipping (fp)) {
+              if (PhrapSequenceHasClipping (&fc)) {
                 sep = head;
                 lastsep = NULL;
                 while (sep != NULL && StringCmp (p, BioseqGetLocalIdStr ((BioseqPtr) sep->data.ptrvalue)) != 0) {
@@ -2780,6 +2828,12 @@ NLM_EXTERN SeqEntryPtr ReadPhrapFile (FILE *fp)
       }
     }
   }
+
+  pos = FileCacheTell (&fc);
+  FileCacheSetup (&fc, fp);
+  FileCacheSeek (&fc, pos);
+  fseek (fp, pos, SEEK_SET);
+
   return head;
 }
 
@@ -3499,14 +3553,14 @@ static Boolean PreCheckSeqForProteinType (FileCachePtr fcp, Boolean PNTR non_pro
   return isProt;
 }
 
-static void ReportFlatFileDNABadChars (Int4Ptr bad_chars)
+static Int4 ReportFlatFileDNABadChars (Int4Ptr bad_chars, CharPtr origline)
 {
   Int4    num_bad_chars = 0;
   Int4    i;
   CharPtr msg = NULL;
   CharPtr msg_format = "%d different illegal characters were found:";
   CharPtr msg_format_single = "One illegal character (%c) was found %d times.";
-  CharPtr msg_format_one = "%c (%d),";
+  CharPtr msg_format_one = "'%c' (%d),";
   CharPtr msg_ptr;
   
   for (i = 0; i < 255; i++)
@@ -3517,7 +3571,7 @@ static void ReportFlatFileDNABadChars (Int4Ptr bad_chars)
   	}
   }
   
-  if (num_bad_chars == 0) return;
+  if (num_bad_chars == 0) return 0;
   
   if (num_bad_chars == 1)
   {
@@ -3553,10 +3607,37 @@ static void ReportFlatFileDNABadChars (Int4Ptr bad_chars)
   	  *msg_ptr = 0;
   	}
   }
-  Message (MSG_ERROR, msg);
+  Message (MSG_ERROR, "%s", msg);
   if (bad_chars ['?'] > 0)
   {
   	Message (MSG_ERROR, "Warning - question marks have been converted to 'N's.");
+  }
+
+  StringCpy (origline + 60, "...");
+  origline [63] = '\0';
+  Message (MSG_ERROR, "Offending line started at: %s", origline);
+  return num_bad_chars;
+}
+
+static Boolean IsNonSeqChar (Char ch, Boolean is_prot)
+{
+  if (! isalpha (ch))
+  {
+    return TRUE;
+  }
+  
+  ch = TO_LOWER (ch);
+  if (StringChr ("atgcbdhkmnrsuvwy", ch) != NULL)
+  {
+    return FALSE;
+  }
+  else if (is_prot && StringChr ("efilpqz", ch) != NULL)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
   }
 }
 
@@ -3566,23 +3647,32 @@ the sequence in advance, checking for protein-specific letters. If it encounters
 printing character, it completes the read but returns NULL. */
 
 static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean forceNuc,
-                                     Boolean forceProt, Boolean fastaAsSimpleSeq)
+                                     Boolean forceProt, Boolean fastaAsSimpleSeq,
+                                     Boolean strictCheck, BoolPtr perr)
 
 {
   Char           ch;
   ByteStorePtr   bs = NULL;
   Boolean        isProt = FALSE;
   Char           line [1023];
+  Boolean        noErrors = TRUE;
+  Char           origline [1023];
   CharPtr        p;
   CharPtr        q;
   Int4           pos;
   CharPtr        str;
   Int4           bad_char [256];
   Boolean        non_prot_char [256];
+  Int4           num_bad = 0;
 
   if (fcp == NULL) return NULL;
   bs = BSNew (1000);
   if (bs == NULL) return NULL;
+  
+  if (perr != NULL)
+  {
+    *perr = FALSE;
+  }
 
   if (forceNuc) {
     isProt = FALSE;
@@ -3612,6 +3702,8 @@ static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean 
 
   MemSet (bad_char, 0, sizeof (bad_char));
 
+  origline [0] = '\0';
+
   pos = FileCacheTell (fcp);
   str = FileCacheGetString (fcp, line, sizeof (line));
   while (str != NULL) {
@@ -3625,13 +3717,24 @@ static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean 
           StringNCmp (line, "ID ", 3) == 0 ||
           StringStr (line, "::=") != NULL) {
         FileCacheSeek (fcp, pos);
-        ReportFlatFileDNABadChars (bad_char);
+        num_bad = ReportFlatFileDNABadChars (bad_char, origline);
+        if (perr != NULL && num_bad > 0)
+        {
+          *perr = TRUE;
+        }
         return bs;
       } else if (StringNCmp (line, "//", 2) == 0) {
-        ReportFlatFileDNABadChars (bad_char);
+        num_bad = ReportFlatFileDNABadChars (bad_char, origline);
+        if (perr != NULL && num_bad > 0)
+        {
+          *perr = TRUE;
+        }
         return bs;
       }
 
+      if (noErrors) {
+        StringNCpy_0 (origline, line, sizeof (origline));
+      }
       p = line;
       q = line;
       ch = *p;
@@ -3647,35 +3750,50 @@ static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean 
           }
           else if (IS_DIGIT (ch))
           {
-          	/* skip */
+          	/* only report for strictCheck */
+          	if (strictCheck)
+          	{
+          	  bad_char [(int) ch] ++;
+          	  noErrors = FALSE;
+          	}
           }
           else if (ch == '?')
           {
-          	bad_char [ch] ++;
+          	bad_char [(int) ch] ++;
           	*q = 'N';
           	q++;
+          	noErrors = FALSE;
           }
           else
           {
-          	bad_char [ch] ++;
+          	bad_char [(int) ch] ++;
+          	noErrors = FALSE;
           }
         } else {
-          if (! fastaAsSimpleSeq) {
-            ch = TO_UPPER (ch);
+          if (IsNonSeqChar (ch, isProt))
+          {
+            bad_char [(int) ch] ++;
+            noErrors = FALSE;
           }
-          if (! isProt) {
-            if (ch == 'U') {
-              ch = 'T';
-            } else if (ch == 'u') {
-              ch = 't';
-            } else if (ch == 'X') {
-              ch = 'N';
-            } else if (ch == 'x') {
-              ch = 'n';
+          else
+          {
+            if (! fastaAsSimpleSeq) {
+              ch = TO_UPPER (ch);
             }
+            if (! isProt) {
+              if (ch == 'U') {
+                ch = 'T';
+              } else if (ch == 'u') {
+                ch = 't';
+              } else if (ch == 'X') {
+                ch = 'N';
+              } else if (ch == 'x') {
+                ch = 'n';
+              }
+            }
+            *q = ch;
+            q++;
           }
-          *q = ch;
-          q++;
         }
         p++;
         ch = *p;
@@ -3694,7 +3812,11 @@ static ByteStorePtr ReadFlatFileDNA (FileCachePtr fcp, BoolPtr protPtr, Boolean 
   if (bs != NULL && BSLen (bs) < 1) {
     bs = BSFree (bs);
   }
-  ReportFlatFileDNABadChars (bad_char);
+  num_bad = ReportFlatFileDNABadChars (bad_char, origline);
+  if (perr != NULL && num_bad > 0)
+  {
+    *perr = TRUE;
+  }
 
   return bs;
 }
@@ -4264,6 +4386,7 @@ static void StripHyphens (CharPtr str)
   }
 }
 
+/*
 static Uint1 ParseCodon (CharPtr str)
 
 {
@@ -4279,6 +4402,7 @@ static Uint1 ParseCodon (CharPtr str)
   codon [3] = 0;
   return IndexForCodon (codon, Seq_code_iupacna);
 }
+*/
 
 extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val, Int4 offset);
 extern Boolean ParseAnticodon (SeqFeatPtr sfp, CharPtr val, Int4 offset);
@@ -4301,8 +4425,8 @@ static CharPtr subSourceList [] = {
   "", "Chromosome", "Map", "Clone", "Subclone", "Haplotype",
   "Genotype", "Sex", "Cell-line", "Cell-type", "Tissue-type",
   "Clone-lib", "Dev-stage", "Frequency", "Germline", "Rearranged",
-  "Lab-host", "Pop-variant", "Tissue-lib", "Plasmid-name", "Transposon-name",
-  "Ins-seq-name", "Plastid-name", "Country", "Segment", "Endogenous-virus-name",
+  "Lab-host", "Pop-variant", "Tissue-lib", "Plasmid-name", "",
+  "", "Plastid-name", "Country", "Segment", "Endogenous-virus-name",
   "Transgenic", "Environmental-sample", "Isolation-source",
   "lat-lon", "collection-date", "collected-by", "identified-by",
   "fwd-primer-seq", "rev-primer-seq", "fwd-primer-name", "rev-primer-name",
@@ -5381,6 +5505,7 @@ static SeqAnnotPtr ReadFeatureTable (FileCachePtr fcp, CharPtr seqid, CharPtr an
 {
   Boolean        allowWhitesp  = TRUE;
   BioSourcePtr   biop;
+  Char           buf [128];
   CdRegionPtr    crp;
   AnnotDescrPtr  desc;
   CharPtr        feat;
@@ -5611,6 +5736,15 @@ static SeqAnnotPtr ReadFeatureTable (FileCachePtr fcp, CharPtr seqid, CharPtr an
               }
               if (idx == -1) {
                 ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_UnknownImpFeatKey, "Unknown feature %s", feat);
+                if (ifp != NULL) {
+                  ifp->key = MemFree (ifp->key);
+                  ifp->key = StringSave ("misc_feature");
+                  StringCpy (buf, "UNKNOWN FEATURE KEY ");
+                  if (StringLen (feat) < 100) {
+                    StringCat (buf, feat);
+                  }
+                  AddQualifierToFeatureEx (sfp, "note", buf, offset);
+                }
               }
             }
 
@@ -5795,7 +5929,7 @@ static SeqAnnotPtr ReadVecScreenTable (FileCachePtr fcp, CharPtr seqid, CharPtr 
               if (sap != NULL) {
                 sap->type = 1;
                 if (! HasNoText (annotname)) {
-                  desc = ValNodeNew (NULL);
+                  desc = AnnotDescrNew (NULL);
                   if (desc != NULL) {
                     desc->choice = Annot_descr_name;
                     desc->data.ptrvalue = StringSave ("VecScreen");
@@ -5960,7 +6094,7 @@ static SeqAnnotPtr ReadRestrictionSiteTable (FileCachePtr fcp, CharPtr seqid, Ch
             if (sap != NULL) {
               sap->type = 1;
               if (! HasNoText (annotname)) {
-                desc = ValNodeNew (NULL);
+                desc = AnnotDescrNew (NULL);
                 if (desc != NULL) {
                   desc->choice = Annot_descr_name;
                   desc->data.ptrvalue = StringSave (annotname);
@@ -6226,7 +6360,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   SeqAnnotPtr    sap = NULL;
   SeqEntryPtr    sep;
   SeqFeatPtr     sfp;
-  Char           seqid [128];
+  Char           seqid [2048];
   SimpleSeqPtr   ssp = NULL;
   CharPtr        str;
   CharPtr        tag;
@@ -6732,10 +6866,12 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
                   title = StringSaveNoNull (tmp);
                 }
               }
-              bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
+              bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq,
+                                    FALSE, NULL);
             }
           } else {
-            bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
+            bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq,
+                                  FALSE, NULL);
           }
           if (bs == NULL && title != NULL) {
             title = MemFree (title);
@@ -6760,7 +6896,8 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
         mayBePlainFasta = FALSE;
         mayBeAccessionList = FALSE;
         if (! HasNoText (seqid)) {
-          bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq);
+          bs = ReadFlatFileDNA (&fc, protPtr, forceNuc, forceProt, fastaAsSimpleSeq,
+                                FALSE, NULL);
         }
 
       } else if (line [0] == '[' || line [0] == ']') {
@@ -6901,7 +7038,8 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
     FileCacheSeek (&fc, begin);
     fseek (fp, begin, SEEK_SET);
     if (fastaAsSimpleSeq) {
-      bs = ReadFlatFileDNA (&fc, FALSE, (Boolean) (! isProt), (Boolean) (isProt), fastaAsSimpleSeq);
+      bs = ReadFlatFileDNA (&fc, NULL, (Boolean) (! isProt), (Boolean) (isProt), 
+                            fastaAsSimpleSeq, FALSE, NULL);
       if (bs != NULL) {
         ssp = ByteStoreToSimpleSeq (bs, NULL, NULL);
         if (ssp != NULL) {
@@ -6922,6 +7060,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
       }
     }
 
+    /*
     sep = FastaToSeqEntryEx (fp, (Boolean) (! isProt), NULL, FALSE);
     if (sep != NULL && IS_Bioseq (sep)) {
       bsp = (BioseqPtr) sep->data.ptrvalue;
@@ -6935,7 +7074,54 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
       }
       return (Pointer) bsp;
     }
+    */
 
+    bs = ReadFlatFileDNA (&fc, NULL, (Boolean) (! isProt), (Boolean) (isProt),
+                          FALSE, FALSE, NULL);
+    if (bs != NULL) {
+
+      sep = SeqEntryNew ();
+      if (sep != NULL) {
+        bsp = BioseqNew ();
+        if (bsp != NULL) {
+          sep->choice = 1;
+          sep->data.ptrvalue = (Pointer) bsp;
+          SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+
+          if (isProt) {
+            bsp->mol = Seq_mol_aa;
+            bsp->seq_data_type = Seq_code_ncbieaa;
+          } else {
+            bsp->mol = Seq_mol_na;
+            bsp->seq_data_type = Seq_code_iupacna;
+          }
+
+          bsp->repr = Seq_repr_raw;
+          bsp->length = 0;
+          bsp->id = MakeUniqueSeqID (NULL);
+          SeqMgrAddToBioseqIndex (bsp);
+
+          bsp->seq_data = bs;
+          bsp->length = BSLen (bs);
+
+          BioseqPack (bsp);
+
+          if (datatypeptr != NULL) {
+            *datatypeptr = OBJ_BIOSEQ;
+          }
+          if (entityIDptr != NULL) {
+            *entityIDptr = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
+          }
+        }
+      }
+
+      pos = FileCacheTell (&fc);
+      FileCacheSetup (&fc, fp);
+      FileCacheSeek (&fc, pos);
+      fseek (fp, pos, SEEK_SET);
+
+      return (Pointer) bsp;
+    }
   }
 
   if (mayBeAccessionList) {
@@ -6989,7 +7175,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
 /* ReadDeltaFasta reads a FASTA file, combining raw sequence and >?unk100 lines into
 a delta Bioseq.  The file pointer stops at the next FASTA with a real SeqID. */
 
-static ValNodePtr ReadDeltaLits (FileCachePtr fcp)
+static ValNodePtr ReadDeltaLits (FileCachePtr fcp, BoolPtr perr)
 
 {
   ByteStorePtr  bs = NULL;
@@ -6998,9 +7184,9 @@ static ValNodePtr ReadDeltaLits (FileCachePtr fcp)
   ValNodePtr    head = NULL;
   long          len;
   Char          line [1023];
-  CharPtr       p, q, str, tmp;
-  size_t        slen;
+  CharPtr       str, tmp;
   Int4          pos;
+  Boolean       error_flag = FALSE;
 
   if (fcp == NULL) return NULL;
 
@@ -7012,7 +7198,7 @@ static ValNodePtr ReadDeltaLits (FileCachePtr fcp)
     if (StringDoesHaveText (line)) {
       TrimSpacesAroundString (line);
 
-      if (line [0] == '>' && line [1] != '?') {
+      if ((line [0] == '>' && line [1] != '?') || line [0] == '[') {
         if (bs != NULL) {
           ValNodeAddPointer (&head, 1, (Pointer) bs);
         }
@@ -7045,34 +7231,12 @@ static ValNodePtr ReadDeltaLits (FileCachePtr fcp)
         }
 
       } else {
-
-        p = line;
-        q = line;
-        ch = *p;
-        while (ch != '\0') {
-          ch = TO_UPPER (ch);
-          if (IS_ALPHA (ch)) {
-            if (ch == 'U') {
-              ch = 'T';
-            } else if (ch == 'X') {
-              ch = 'N';
-            }
-            *q = ch;
-            q++;
-          }
-          p++;
-          ch = *p;
-        }
-        *q = '\0';
-
-        slen = StringLen (line);
-        if (slen > 0) {
-          if (bs == NULL) {
-            bs = BSNew (1000);
-          }
-          if (bs != NULL) {
-            BSWrite (bs, (VoidPtr) line, (Int4) slen);
-          }
+        FileCacheSeek (fcp, pos);
+        error_flag = FALSE;
+        bs = ReadFlatFileDNA (fcp, NULL, TRUE, FALSE, TRUE, TRUE, &error_flag);
+        if (perr != NULL)
+        {
+          *perr |= error_flag;
         }
       }
     }
@@ -7089,7 +7253,7 @@ static ValNodePtr ReadDeltaLits (FileCachePtr fcp)
 }
 
 
-static BioseqPtr ReadDeltaSet (FileCachePtr fcp)
+static BioseqPtr ReadDeltaSet (FileCachePtr fcp, BoolPtr perrors)
 
 {
   ByteStorePtr  bs;
@@ -7101,7 +7265,7 @@ static BioseqPtr ReadDeltaSet (FileCachePtr fcp)
 
   if (fcp == NULL) return NULL;
 
-  head = ReadDeltaLits (fcp);
+  head = ReadDeltaLits (fcp, perrors);
   if (head == NULL) return NULL;
 
   if (head->next == NULL && head->choice == 1) {
@@ -7174,9 +7338,10 @@ NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr)
   Int4         begin, pos;
   BioseqPtr    bsp = NULL;
   FileCache    fc;
-  Char         line [4096], seqid [128];
+  Char         line [4096], seqid [2048];
   CharPtr      msg = NULL, str, title = NULL, tmp;
   SeqEntryPtr  sep;
+  Boolean      errors = FALSE;
 
   if (fp == NULL) return NULL;
 
@@ -7258,7 +7423,7 @@ NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr)
             title = StringSaveNoNull (tmp);
           }
 
-          bsp = ReadDeltaSet (&fc);
+          bsp = ReadDeltaSet (&fc, &errors);
 
           if (bsp != NULL) {
         
@@ -7303,6 +7468,69 @@ NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr)
 
   return NULL;
 }
+
+NLM_EXTERN BioseqPtr ReadDeltaFastaWithEmptyDefline (FILE *fp, Uint2Ptr entityIDptr)
+
+{
+  Int4         begin, pos;
+  BioseqPtr    bsp = NULL;
+  FileCache    fc;
+  Char         line [4096], seqid [2048];
+  SeqEntryPtr  sep;
+  CharPtr      str;
+  Boolean      errors = FALSE;
+
+  if (fp == NULL) return NULL;
+
+  if (entityIDptr != NULL) *entityIDptr = 0;
+
+  seqid [0] = '\0';
+
+  FileCacheSetup (&fc, fp);
+
+  pos = FileCacheTell (&fc);
+  begin = pos;
+  str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
+  if (str != NULL && StringDoesHaveText (line))
+  {
+    TrimSpacesAroundString (line);
+    if (line [0] == '>' && line [1] == 0)
+    {
+      bsp = ReadDeltaSet (&fc, &errors);
+
+      if (bsp != NULL) {
+      
+        sep = SeqEntryNew ();
+        if (sep != NULL) {
+          sep->choice = 1;
+          sep->data.ptrvalue = (Pointer) bsp;
+          SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+        }
+
+        bsp->id = MakeUniqueSeqID ("delta_");
+        SeqMgrAddToBioseqIndex (bsp);
+
+        if (entityIDptr != NULL) {
+          *entityIDptr = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
+        }
+
+        pos = FileCacheTell (&fc);
+        FileCacheSetup (&fc, fp);
+        FileCacheSeek (&fc, pos);
+        fseek (fp, pos, SEEK_SET);
+
+        return bsp;
+      }
+    }
+  }
+
+  FileCacheSetup (&fc, fp);
+  FileCacheSeek (&fc, begin);
+  fseek (fp, begin, SEEK_SET);
+
+  return NULL;
+}
+
 
 /* general purpose text finite state machine */
 /* based on Practical Algorithms for Programmers by Binstock and Rex */
@@ -8392,7 +8620,7 @@ NLM_EXTERN SeqAnnotPtr PhrapGraphForContig (
           if (sap == NULL) {
             sap = SeqAnnotNew ();
             if (sap != NULL) {
-              ValNodeAddPointer (&(sap->desc), Annot_descr_name, StringSave ("Graphs"));
+              SeqDescrAddPointer (&(sap->desc), Annot_descr_name, StringSave ("Graphs"));
               sap->type = 3;
               sap->data = (Pointer) sgp;
             }
@@ -8441,7 +8669,7 @@ NLM_EXTERN SeqAnnotPtr PhrapGraphForContig (
       if (sap == NULL) {
         sap = SeqAnnotNew ();
         if (sap != NULL) {
-          ValNodeAddPointer (&(sap->desc), Annot_descr_name, StringSave ("Graphs"));
+          SeqDescrAddPointer (&(sap->desc), Annot_descr_name, StringSave ("Graphs"));
           sap->type = 3;
           sap->data = (Pointer) sgp;
         }

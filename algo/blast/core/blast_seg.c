@@ -1,4 +1,4 @@
-/* $Id: blast_seg.c,v 1.35 2005/04/04 19:50:04 madden Exp $
+/* $Id: blast_seg.c,v 1.36 2005/06/06 14:55:50 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE                          
@@ -36,7 +36,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_seg.c,v 1.35 2005/04/04 19:50:04 madden Exp $";
+    "$Id: blast_seg.c,v 1.36 2005/06/06 14:55:50 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_seg.h>
@@ -2163,25 +2163,20 @@ s_MergeSegs(SSequence* seq, SSeg* segs)
 static Int2 
 s_SegsToBlastSeqLoc(SSeg* segs, Int4 offset, BlastSeqLoc** seg_locs)
 {
-   BlastSeqLoc* last_slp = NULL;
-
    for ( ; segs; segs = segs->next) {
       Int4 left = segs->begin + offset;
       Int4 right = segs->end + offset;
 
-      if (!last_slp) {
-         last_slp = BlastSeqLocNew(seg_locs, left, right);
-      } else {
-         last_slp = BlastSeqLocNew(&last_slp, left, right);
-      }
       /* Check that allocation succeeded. */
-      if (!last_slp)
+      if (BlastSeqLocNew(seg_locs, left, right) == NULL)
           break;
    }
    /* If not all segs have been processed, it means that memory allocation 
       failed, hence return error status. */
-   if (segs)
+   if (segs) {
+       *seg_locs = BlastSeqLocFree(*seg_locs);
        return -1;
+   }
 
    return 0;
 }

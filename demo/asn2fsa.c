@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.29 $
+* $Revision: 1.32 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASN2FSA_APP_VER "1.4"
+#define ASN2FSA_APP_VER "1.5"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
@@ -692,9 +692,11 @@ static void ProcessSingleRecord (
   }
 
   ObjMgrFree (datatype, dataptr);
+
   omp = ObjMgrGet ();
   ObjMgrReapOne (omp);
   ObjMgrFreeCache (0);
+  FreeSeqIdGiCache ();
 }
 
 static void ProcessMultipleRecord (
@@ -875,6 +877,7 @@ static void ProcessMultipleRecord (
       omp = ObjMgrGet ();
       ObjMgrReapOne (omp);
       ObjMgrFreeCache (0);
+      FreeSeqIdGiCache ();
     } else {
       AsnReadVal (aip, atp, NULL);
     }
@@ -1022,12 +1025,14 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
 {
   Boolean      alldigits;
+  BioseqPtr    bsp;
   Char         ch;
   CharPtr      ptr;
   SeqEntryPtr  sep = NULL;
   SeqIdPtr     sip;
   Int4         uid = 0;
   long int     val;
+  ValNode      vn;
 
   if (StringHasNoText (accn)) return NULL;
 
@@ -1058,6 +1063,15 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
   if (uid > 0) {
     sep = PubSeqSynchronousQuery (uid, 0, -1);
+    if (sep != NULL) {
+      MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+      vn.choice = SEQID_GI;
+      vn.data.intvalue = uid;
+      bsp = BioseqFind (&vn);
+      if (bsp != NULL) {
+        sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
+      }
+    }
   }
 
   return sep;

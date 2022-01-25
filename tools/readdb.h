@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.157 $
+* $Revision: 6.162 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,25 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.162  2005/07/28 14:57:10  coulouri
+* remove dead code
+*
+* Revision 6.161  2005/07/27 21:30:02  camacho
+* 1) Replaces is_REFSEQ_* functions by a single function (is_REFSEQ), to be
+* used by genmask and ID1 group's BLAST database dumper.
+* 2) Removed out-of-date is_WGS* functions.
+*
+* Revision 6.160  2005/07/27 17:48:57  coulouri
+* remove hardcoded paths
+*
+* Revision 6.159  2005/06/22 13:55:22  coulouri
+* add support for dumping accessions
+*
+* Revision 6.158  2005/06/08 19:25:36  camacho
+* New feature to allow formatdb to add taxonomy ids to BLAST databases
+* generated from FASTA input
+* BugzID: 6
+*
 * Revision 6.157  2005/02/22 14:15:48  camacho
 * Pass bioseq data type by reference to FDBAddBioseq
 *
@@ -728,13 +747,6 @@ extern "C" {
 #define READDB_UNPACK_BASE_4(x) ((x) & 0x03)
 #define READDB_UNPACK_BASE_N(x, N) (((x)>>(2*(N))) & 0x03)
 
-/* Default location of the databases. */
-#ifdef OS_UNIX    
-#define BLASTDB_DIR "/usr/ncbi/db/blast"
-#else
-#define BLASTDB_DIR ""
-#endif    
-
 /* Compress 4 bytes to one. */
 #define READDB_COMPRESSION_RATIO 4
 
@@ -887,10 +899,6 @@ Int4ListIntersect PROTO((Int4ListPtr *list1, Int4ListPtr *list2));
 	Common index structures
  */
 
-/*
-#define INDEXFN		"/net/cruncher/usr/ncbi/db/disk.blast/blast2/comindex/mmfile.idx"
-#define RECORDFN	"/net/cruncher/usr/ncbi/db/disk.blast/blast2/comindex/mmfile.rec"
-*/
 #define COMMONINDEX_FN	"comindex.mm"
 #define DB_CONFIG_FN	"dblist.txt"
 
@@ -1494,6 +1502,40 @@ Int4 LIBCALL
 readdb_pig2oid PROTO((ReadDBFILEPtr rdfp, Int4 pig, Int4Ptr start));
 
 /************************************************/
+/*** TaxidDeflineTable interface ***/
+
+/* forward declaration of main structure */
+typedef struct FDBTaxidDeflineTable FDBTaxidDeflineTable;
+typedef struct FDBTaxidDeflineTable* FDBTaxidDeflineTablePtr;
+
+/** Allocate a TaxidDefline table structure from a file 
+ * It attempts to read a list of gi/taxid pairs first, then a list of seqid
+ * strings/taxid pairs.
+ */
+FDBTaxidDeflineTablePtr LIBCALL
+FDBTaxidDeflineTableNew PROTO((const Char* filename));
+
+/** Deallocate a TaxidDefline table structure */
+FDBTaxidDeflineTablePtr LIBCALL
+FDBTaxidDeflineTableFree PROTO((FDBTaxidDeflineTablePtr taxid_tbl));
+
+extern const Int4 kTaxidDeflineSearch_NotFound;
+
+/** Searches the gi provided as argument in the taxid_tbl argument. If not 
+ * found it returns kTaxidDeflineSearch_NotFound, otherwise it returns the 
+ * taxonomy id */
+Int4 LIBCALL
+FDBTaxidDeflineTableSearchGi PROTO((const FDBTaxidDeflineTablePtr taxid_tbl,
+                                    Int4 gi));
+
+/** Searches the seqid provided as argument in the taxid_tbl argument. If not 
+ * found it returns kTaxidDeflineSearch_NotFound, otherwise it returns the 
+ * taxonomy id */
+Int4 LIBCALL
+FDBTaxidDeflineTableSearchSeqid PROTO((const FDBTaxidDeflineTablePtr taxid_tbl,
+                                       const Char* seqid));
+
+/************************************************/
 
 typedef struct _FDB_options {
     Int4  version;   /* Version of the database created by formatdb program
@@ -1632,7 +1674,8 @@ ValNodePtr FDBLoadMembershipsTable(void);
 ValNodePtr FDBDestroyMembershipsTable(ValNodePtr tbl);
 
 /* Constructs BlastDefLine structures from Bioseq */
-BlastDefLinePtr FDBGetDefAsnFromBioseq(BioseqPtr bsp);
+BlastDefLinePtr FDBGetDefAsnFromBioseq(BioseqPtr bsp,
+                                       const FDBTaxidDeflineTablePtr gttp);
 
 FormatDBPtr	FormatDBInit(FDB_optionsPtr options);
 
@@ -1748,27 +1791,8 @@ Boolean is_EST_OTHERS(VoidPtr di_record);
 Boolean is_SWISSPROT(VoidPtr di_record);
 Boolean is_MONTH(VoidPtr di_record);
 Boolean is_PDB(VoidPtr di_record);
-Boolean is_REFSEQ_GENOMIC(VoidPtr di_record);
-Boolean is_REFSEQ_RNA(VoidPtr di_record);
-Boolean is_REFSEQ_PROTEIN(VoidPtr di_record);
+Boolean is_REFSEQ(VoidPtr di_record);
 Boolean is_CONTIG(VoidPtr di_record);
-Boolean is_WGS_ANOPHELES(VoidPtr di_record);
-Boolean is_WGS_RICE(VoidPtr di_record);
-Boolean is_WGS_MOUSE(VoidPtr di_record);
-Boolean is_WGS_ANTHRAX(VoidPtr di_record);
-
-#if 0
-/* The common index is deprecated  - camacho 09/02/2002 */
-typedef	struct updateindex_struct {
-    FILE	*cifile;/* CommonIndex file */
-    Int2	shift;	/* database shift in mask */
-    FILE	*fout;	/* output stream */
-} UpdateIndexStruct, *UpdateIndexStructPtr;
-
-
-Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
-		FILE *fout, CharPtr difile, Int4 gi_threshold);
-#endif
 
 /************************************************************************/
 /*        Fastacmd API                                           */
@@ -1801,6 +1825,7 @@ typedef enum EBlastDbDumpType {
                            fastacmd */
     eFasta,             /* dump contents of database as FASTA */
     eGi,                /* List of gis in the database */
+    eAccession,         /* List of accessions in the database */
     eDumpTypeMax        /* not really a dump type, needed for error checking */
 } EBlastDbDumpType;
 
@@ -1819,6 +1844,17 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
  */
 Int2 DumpBlastDB(const ReadDBFILEPtr rdfp, FILE *fp, Int4 line_length, 
 		         Boolean use_ctrlAs, EBlastDbDumpType dump_type);
+
+/**
+ * @param rdfp Blast database handle [in]
+ * @param fp output FILE pointer [in]
+ * @param linelen number of characters to print per line [in]
+ * @param use_ctrlAs use Ctrl-A to separate non-redundant deflines? [in]
+ * @param dump_type type of information to dump [in]
+ * @param i ordinal id of sequence to dump [in]
+ */
+Int2 DumpOneSequence(const ReadDBFILEPtr rdfp, FILE *fp, Int4 line_length, 
+                     Boolean use_ctrlAs, EBlastDbDumpType dump_type, Int4 i);
 
 Int4 LIBCALL readdb_MakeGiFileBinary PROTO((CharPtr input_file, CharPtr
 					    output_file));

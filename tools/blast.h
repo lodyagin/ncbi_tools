@@ -32,8 +32,28 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.72 $ 
+/* $Revision: 6.73 $ 
 * $Log: blast.h,v $
+* Revision 6.73  2005/08/02 14:40:29  coulouri
+* From Mike Gertz:
+* - Fixes to comments
+* - Added enum constant eGapChar; renamed eStarChar to eStopChar.
+* - Change the integer type of some variables to suppress warnings about
+*   assigning a wider type to a narrower type.
+* - Made the routines BLbasicSmithWatermanScoreOnly and BLSmithWatermanFindStart
+*   static.
+* - Renamed s_ScatterFreqRatios -> s_ScatterScores; renamed parameters.
+* - In NewAlignmentUsingXdrop, use the translate2 field from gap_align
+*   to set the same field in the edit block.
+* - Changed the Kappa_WindowInfo datatype to hold a list of HSPs in the
+*   window; added logic in several places, notably WindowsFromHSPs, to
+*   generate and maintain these lists.
+* - Refactored Kappa_AdjustSearch.  Use a more sophisticated rule,
+*   implemented in the new Kappa_GetSubjectComposition routine, to
+*   determine the subject sequence composition for tblastn.
+* - Removed unused parameters from several routines.
+* - In RedoAlignmentCore, delete NRrecord to avoid a memory leak.
+*
 * Revision 6.72  2005/01/24 21:17:36  camacho
 * 1. Changed implementation of RPSBlastResultHspScoreCmp to have the same
 *    tie-breakers as score_compare_hsps
@@ -695,10 +715,6 @@ void PrintTabularOutputHeader PROTO((CharPtr blast_database, BioseqPtr query_bsp
                                      FILE *outfp));
 
 /* ------ Functions related to Smith-Waterman algorithm ------ */
-
-Nlm_FloatHi BLbasicSmithWatermanScoreOnly PROTO((Uint1 * matchSeq, Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 *matchSeqEnd, Int4 *queryEnd, Int4 *score, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi effSearchSpace, Boolean positionSpecific));
-
-Int4 BLSmithWatermanFindStart PROTO((Uint1 * matchSeq, Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 matchSeqEnd, Int4 queryEnd, Int4 score, Int4 *matchSeqStart, Int4 *queryStart, Boolean positionSpecific));
 
 Boolean
 CheckStartForGappedAlignment PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp, Uint1Ptr query, Uint1Ptr subject, Int4Ptr PNTR matrix));

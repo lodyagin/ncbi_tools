@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bl2seq.c,v 6.77 2005/06/02 20:45:32 dondosha Exp $";
+static char const rcsid[] = "$Id: bl2seq.c,v 6.78 2005/06/08 20:32:48 dondosha Exp $";
 
 /**************************************************************************
 *                                                                         *
@@ -27,6 +27,9 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.77 2005/06/02 20:45:32 dondosha E
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.78  2005/06/08 20:32:48  dondosha
+* Fixed masking locations memory leak and added comment
+*
 * Revision 6.77  2005/06/02 20:45:32  dondosha
 * Use BlastFormattingInfo structure for formatting
 *
@@ -934,10 +937,11 @@ Int2 Main_new(void)
                                         (Boolean) myargs[ARG_USEMEGABLAST].intvalue,
                                         TRUE, believe_query);
 
-        if (mask_at_hash) {
-            /* Masking locations in SeqLoc form are no longer needed */
+        /* If masking was at hash only, free the masking locations,
+         * to prevent them from being used for formatting.
+         */
+        if (mask_at_hash)
             filter_loc = Blast_ValNodeMaskListFree(filter_loc);
-        }
 
         /* Format the results */
         status = 
@@ -945,6 +949,9 @@ Int2 Main_new(void)
                                 extra_returns);
         
         status = Blast_PrintOutputFooter(format_info, extra_returns);
+
+        /* Free masking locations if they haven't been freed already. */
+        filter_loc = Blast_ValNodeMaskListFree(filter_loc);
 
         format_info = BlastFormattingInfoFree(format_info);
         extra_returns = Blast_SummaryReturnFree(extra_returns);

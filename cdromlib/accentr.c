@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: accentr.c,v 6.9 2001/09/04 23:28:55 juran Exp $
+ * RCS $Id: accentr.c,v 6.10 2005/06/06 18:45:47 kans Exp $
  *
  * Author:  Ostell
  *
@@ -48,6 +48,9 @@
  *                      modification comments.
  *
  * $Log: accentr.c,v $
+ * Revision 6.10  2005/06/06 18:45:47  kans
+ * post warning message if obsolete EntrezInit function is called
+ *
  * Revision 6.9  2001/09/04 23:28:55  juran
  * Always assume network access in Mac OS.
  *
@@ -289,7 +292,7 @@
  * ==========================================================================
  */
 
-#define REVISION_STR "$Revision: 6.9 $"
+#define REVISION_STR "$Revision: 6.10 $"
 
 #include <accentr.h>
 #include <seqmgr.h>
@@ -428,6 +431,8 @@ NLM_EXTERN Boolean LIBCALL EntrezInit (CharPtr appl_id, Boolean no_warnings, Boo
     queueduids = NULL;
     queuedsums = NULL;
     numqueued = 0;
+
+Message (MSG_POSTERR, "The Entrez1 service is obsolete and unsupported.  Please switch to using EntrezSynchronousQuery in the future.");
 
     if (is_network != NULL)
     {

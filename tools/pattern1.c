@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pattern1.c,v 6.19 2004/11/22 17:12:52 madden Exp $";
+static char const rcsid[] = "$Id: pattern1.c,v 6.21 2005/07/28 14:57:10 coulouri Exp $";
 
-/* $Id: pattern1.c,v 6.19 2004/11/22 17:12:52 madden Exp $
+/* $Id: pattern1.c,v 6.21 2005/07/28 14:57:10 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,9 +33,15 @@ Original Author: Zheng Zhang
  
 Contents: central pattern matching routines for PHI-BLAST and pseed3
 
-$Revision: 6.19 $ 
+$Revision: 6.21 $ 
 
 $Log: pattern1.c,v $
+Revision 6.21  2005/07/28 14:57:10  coulouri
+remove dead code
+
+Revision 6.20  2005/07/22 14:24:22  coulouri
+Incremented positions printed by the -p patternp option so that the first position is 1
+
 Revision 6.19  2004/11/22 17:12:52  madden
 From Alejandro Schaffer:
 Changed use of startSeqMatch in procedure pat_output to accurately report word boundaries for matches of a multiword pattern in the output hit file.
@@ -500,7 +506,6 @@ static Int4 find_hitsS_DNA(Int4Ptr hitArray, Uint1Ptr seq, Char pos, Int4 len,
   Int4 i; /*index on seq*/
   Int4 end; /*count of number of 4-mer iterations needed*/
   Int4 remain; /*0,1,2,3 DNA letters left over*/
-  Uint1 suffixRemnant; /*part of seq that is beyond last 4-mer in a byte*/
   Int4 j; /*index on suffixRemnant*/
   Int4 twiceNumHits = 0; /*twice the number of hits*/
 
@@ -1610,7 +1615,7 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
 	}
 	position = begin;
 	for (wordIndex = 0; wordIndex < patternSearch->numWords; wordIndex++) {
-	  sprintf(buffer, "(%ld %ld)", (long) position, (long) position+numPlacesInWord[wordIndex]-1);
+	  sprintf(buffer, "(%ld %ld)", (long) (1 + position), (long) (1 + position+numPlacesInWord[wordIndex]-1));
           ValNodeCopyStr(info_vnp, 0, buffer);
 	  position += numPlacesInWord[wordIndex]+spacingArray[wordIndex+1];
 	} 
@@ -1623,9 +1628,9 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
 	i++;
       } else {
 	if (0 == nextMatchStart) 
-          sprintf(buffer, "(%ld %ld) ", (long) (begin+nextMatchStart), (long) (begin+i-1 - startSeqMatch));
+          sprintf(buffer, "(%ld %ld) ", (long) (1 + begin+nextMatchStart), (long) (1+begin+i-1 - startSeqMatch));
 	else
-          sprintf(buffer, "(%ld %ld) ", (long) (begin+nextMatchStart - startSeqMatch), (long) (begin+i-1 - startSeqMatch));
+          sprintf(buffer, "(%ld %ld) ", (long) (1 +begin+nextMatchStart - startSeqMatch), (long) (1+begin+i-1 - startSeqMatch));
           ValNodeCopyStr(info_vnp, 0, buffer);
           
           for (; patternSearch->inputPatternMasked[i] == allone && i <= endSeqMatch; i++) ;
@@ -1633,7 +1638,7 @@ void LIBCALL pat_output(Uint1 *seq, Int4 begin, Int4 end, patternSearchItems *pa
       }
     }
     if (nextMatchStart != i) {  /*last match*/
-        sprintf(buffer, "(%ld %ld)\n", (long) (begin+nextMatchStart-startSeqMatch), (long) (begin+i-1 - startSeqMatch));
+        sprintf(buffer, "(%ld %ld)\n", (long) (1+begin+nextMatchStart-startSeqMatch), (long) (1+begin+i-1 - startSeqMatch));
         ValNodeCopyStr(info_vnp, 0, buffer);
     } else { 
         ValNodeCopyStr(info_vnp, 0, "\n");

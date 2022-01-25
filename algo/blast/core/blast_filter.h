@@ -1,4 +1,4 @@
-/* $Id: blast_filter.h,v 1.28 2005/03/02 13:52:59 madden Exp $
+/* $Id: blast_filter.h,v 1.32 2005/07/13 16:47:34 bealer Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -65,11 +65,12 @@ extern const Uint1 kProtMask;
 #define REPEAT_MASK_LINK_VALUE 5
 
 /** Create and initialize a new sequence interval.
- * @param head existing BlastSeqLoc to add onto, if *head
+ * @param head existing BlastSeqLoc to append onto, if *head
  *   is NULL then it will be set to new BlastSeqLoc, may be NULL [in|out]
  * @param from Start of the interval [in]
  * @param to End of the interval [in]
- * @return Pointer to the allocated BlastSeqLoc structure.
+ * @return Pointer to the allocated BlastSeqLoc structure (i.e.: tail of the
+ * list).
  */
 NCBI_XBLAST_EXPORT
 BlastSeqLoc* BlastSeqLocNew(BlastSeqLoc** head, Int4 from, Int4 to);
@@ -80,6 +81,14 @@ BlastSeqLoc* BlastSeqLocNew(BlastSeqLoc** head, Int4 from, Int4 to);
  */
 NCBI_XBLAST_EXPORT
 BlastSeqLoc* BlastSeqLocFree(BlastSeqLoc* loc);
+
+/** Converts reverse strand coordinates to forward strand.
+ * @param filter_in BlastSeqLoc to be reversed [in]
+ * @param query_length length of query [in]
+ * @return reversed BlastSeqLoc
+ */
+NCBI_XBLAST_EXPORT
+BlastSeqLoc* BlastSeqLocReverse(const BlastSeqLoc* filter_in, Int4 query_length);
 
 /** Deallocate memory for a BlastMaskLoc structure
  * as well as the BlastSeqLoc's pointed to.
@@ -144,7 +153,7 @@ CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out,
 NCBI_XBLAST_EXPORT
 Int2 
 BLAST_ComplementMaskLocations(EBlastProgramType program_number, 
-   BlastQueryInfo* query_info, BlastMaskLoc* mask_loc, 
+   const BlastQueryInfo* query_info, const BlastMaskLoc* mask_loc, 
    BlastSeqLoc* *complement_mask);
 
 /** Runs filtering functions, according to the filtering options, returns
@@ -179,7 +188,7 @@ BlastSetUp_Filter(EBlastProgramType program_number,
 */
 NCBI_XBLAST_EXPORT
 Int2
-BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info,
+BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk, const BlastQueryInfo* query_info,
     EBlastProgramType program_number, const SBlastFilterOptions* filter_options, 
     BlastMaskLoc** filter_out, Blast_Message* *blast_message);
 
@@ -197,7 +206,7 @@ BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* q
 NCBI_XBLAST_EXPORT
 Int2
 Blast_MaskTheResidues(Uint1 * buffer, Int4 length, Boolean is_na, 
-    BlastSeqLoc* mask_loc, Boolean reverse, Int4 offset);
+    const BlastSeqLoc* mask_loc, Boolean reverse, Int4 offset);
 
 /** Masks the sequence given a BlastMaskLoc
  * @param query_blk sequence to be filtered [in]
@@ -207,8 +216,8 @@ Blast_MaskTheResidues(Uint1 * buffer, Int4 length, Boolean is_na,
 */
 NCBI_XBLAST_EXPORT
 Int2
-BlastSetUp_MaskQuery(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info,
-    BlastMaskLoc *filter_maskloc, EBlastProgramType program_number);
+BlastSetUp_MaskQuery(BLAST_SequenceBlk* query_blk, const BlastQueryInfo* query_info,
+    const BlastMaskLoc *filter_maskloc, EBlastProgramType program_number);
 
 /** Produces SBlastFilterOptions from a string that has been traditionally supported
  * in blast.

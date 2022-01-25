@@ -1,4 +1,4 @@
-/*  $Id: blast_setup.h,v 1.51 2005/04/27 19:49:01 dondosha Exp $
+/*  $Id: blast_setup.h,v 1.54 2005/08/15 16:10:21 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -67,7 +67,7 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
         const BlastScoringOptions* scoring_options,
         const BlastHitSavingOptions* hit_options,
         BLAST_SequenceBlk* query_blk,
-        BlastQueryInfo* query_info, 
+        const BlastQueryInfo* query_info, 
         double scale_factor,
         BlastSeqLoc* *lookup_segments,
         BlastMaskInformation* maskInfo,
@@ -80,12 +80,15 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
  * @param scoring_options Scoring_options [in]
  * @param program Used to set fields on sbp [in]
  * @param query_info Query information containing context information [in]
- *
-*/
+ * @param error_return Pointer to structure for returning errors. [in][out]
+ * @return Status.
+ */
 NCBI_XBLAST_EXPORT
 Int2 Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
-    const BlastScoringOptions * scoring_options,
-    EBlastProgramType program, BlastQueryInfo * query_info);
+                                 const BlastScoringOptions * scoring_options,
+                                 EBlastProgramType program, 
+                                 const BlastQueryInfo * query_info,
+                                 Blast_Message** error_return);
 
 /** Function to calculate effective query length and db length as well as
  * effective search space. 
@@ -183,7 +186,7 @@ Int2 Blast_ScoreBlkMatrixInit(EBlastProgramType program_number,
  */
 NCBI_XBLAST_EXPORT
 Int2 BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk, 
-    BlastQueryInfo* query_info, 
+    const BlastQueryInfo* query_info, 
     const BlastScoringOptions* scoring_options, 
     EBlastProgramType program_number, 
     BlastScoreBlk* *sbpp, 
@@ -213,10 +216,11 @@ BlastSeqLoc_RestrictToInterval(BlastSeqLoc* *mask, Int4 from, Int4 to);
  * @return Status, 0 on success, -1 on error.
  */
 Int2 
-Blast_SetPHIPatternInfo(EBlastProgramType program, 
-                        SPHIPatternSearchBlk* pattern_blk, 
-                        BLAST_SequenceBlk* query, BlastSeqLoc* lookup_segments,
-                        BlastQueryInfo* query_info);
+Blast_SetPHIPatternInfo(EBlastProgramType            program,
+                        const SPHIPatternSearchBlk * pattern_blk,
+                        const BLAST_SequenceBlk    * query,
+                        const BlastSeqLoc          * lookup_segments,
+                        BlastQueryInfo             * query_info);
 
 /** Calculates pattern space, which is used instead of search space in PHI BLAST
  * e-value calculations. Pattern space is equal to the product of the number of 
@@ -238,6 +242,15 @@ PHIPatternSpaceCalc(BlastQueryInfo* query_info,
 /*
  *
 * $Log: blast_setup.h,v $
+* Revision 1.54  2005/08/15 16:10:21  dondosha
+* Added error return argument to Blast_ScoreBlkKbpGappedCalc
+*
+* Revision 1.53  2005/07/18 19:38:33  bealer
+* - Apply const in several more places.
+*
+* Revision 1.52  2005/07/12 22:57:03  bealer
+* - Change "BlastQueryInfo*" to "const BlastQueryInfo*" in several places.
+*
 * Revision 1.51  2005/04/27 19:49:01  dondosha
 * Added Blast_SetPHIPatternInfo function for PHI BLAST query pattern occurrences calculation, and
 * PHIPatternSpaceCalc for calculation of pattern space after all database occurrences are found.

@@ -1311,52 +1311,6 @@ FSExchangeObjectsCompat(
 
 /*****************************************************************************/
 
-#pragma mark FSLockRange
-
-OSErr
-FSLockRange(
-	SInt16 refNum,
-	SInt32 rangeLength,
-	SInt32 rangeStart);
-
-/*
-	The LockRange function locks (denies access to) a portion of a file
-	that was opened with shared read/write permission.
-
-	refNum				--> The file reference number of an open file.
-	rangeLength			--> The number of bytes in the range.
-	rangeStart			--> The starting byte in the range to lock.
-
-	__________
-
-	Also see:	UnlockRange
-*/
-
-/*****************************************************************************/
-
-#pragma mark FSUnlockRange
-
-OSErr
-FSUnlockRange(
-	SInt16 refNum,
-	SInt32 rangeLength,
-	SInt32 rangeStart);
-
-/*
-	The UnlockRange function unlocks (allows access to) a previously locked
-	portion of a file that was opened with shared read/write permission.
-
-	refNum				--> The file reference number of an open file.
-	rangeLength			--> The number of bytes in the range.
-	rangeStart			--> The starting byte in the range to unlock.
-
-	__________
-
-	Also see:	LockRange
-*/
-
-/*****************************************************************************/
-
 #pragma mark FSGetDirAccess
 
 OSErr

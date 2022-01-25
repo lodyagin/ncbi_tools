@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: re_newton.c,v 1.1 2005/05/16 16:11:41 papadopo Exp $";
+static char const rcsid[] = "$Id: re_newton.c,v 1.3 2005/07/25 12:48:39 camacho Exp $";
 
 /* ===========================================================================
 *
@@ -37,6 +37,13 @@ Contents: Mid-level functions that directly solve the optimization
 ******************************************************************************/
 /*
  * $Log: re_newton.c,v $
+ * Revision 1.3  2005/07/25 12:48:39  camacho
+ * Updated reference for compositional adjustment
+ *
+ * Revision 1.2  2005/07/14 20:19:58  coulouri
+ *    - In OptimizeTargetFrequencies, change the convergence tests to robustly
+ *      handle NaN (floating point not a number)
+ *
  * Revision 1.1  2005/05/16 16:11:41  papadopo
  * Initial revision
  *
@@ -104,7 +111,7 @@ Contents: Mid-level functions that directly solve the optimization
  * Stephen F. Altschul, John C. Wootton, E. Michael Gertz, Richa
  * Agarwala, Aleksandr Morgulis, Alejandro Schaffer and Yi-Kuo Yu
  * (2005) Protein Database Searches Using Compositionally Adjusted
- * Substitution Matrices.  Submitted to FEBS Journal.
+ * Substitution Matrices.  FEBS Journal, in press.
  */
 
 /**
@@ -764,6 +771,8 @@ OptimizeTargetFrequencies(Nlm_FloatHiPtr x,
     Nlm_FloatHiPtr z;           /* dual variables (Lagrange multipliers) */
     Nlm_FloatHiPtr resids_x;    /* dual residuals (gradient of Lagrangian) */
     Nlm_FloatHiPtr resids_z;    /* primal (constraint) residuals */
+    Nlm_FloatHi rnorm;          /* norm of the residuals for the
+                                   current iterate */
     Nlm_FloatHiPtr old_scores;  /* a scoring matrix, with lambda = 1,
                                    generated from q, row_sums and
                                    col_sums */
@@ -792,8 +801,6 @@ OptimizeTargetFrequencies(Nlm_FloatHiPtr x,
                        converge in zero iterations if the initial x is 
                        optimal. */
     while(its <= maxits) {
-        Nlm_FloatHi rnorm;      /* norm of the residuals for this iterate */
-
         /* Compute the residuals */
         EvaluateReFunctions(values, grads, alphsize, x, q, old_scores,
                             constrain_rel_entropy);
@@ -801,8 +808,9 @@ OptimizeTargetFrequencies(Nlm_FloatHiPtr x,
                            grads, row_sums, col_sums, x, z,
                            constrain_rel_entropy, relative_entropy);
 
-        /* and check convergence */
-        if(rnorm < tol) {
+        /* and check convergence; the test correctly handles the case
+           in which rnorm is NaN (not a number). */
+        if(!(rnorm > tol)) {
             /* We converged at the current iterate */
             break;
         } else {
@@ -830,7 +838,7 @@ OptimizeTargetFrequencies(Nlm_FloatHiPtr x,
     }
 
     converged = 0;
-    if( its <= maxits ) {
+    if( its <= maxits && rnorm <= tol ) {
         /* Newton's iteration converged */
         if( !constrain_rel_entropy || z[m - 1] < 1 ) {
             /* and the final iterate is a minimizer */

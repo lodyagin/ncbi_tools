@@ -1,4 +1,4 @@
-/*  $Id: blast_stat.h,v 1.67 2005/04/27 19:49:17 dondosha Exp $
+/*  $Id: blast_stat.h,v 1.70 2005/08/15 16:10:41 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -208,7 +208,7 @@ Int2 BLAST_ScoreSetAmbigRes (BlastScoreBlk* sbp, char ambiguous_res);
 Int2
 Blast_ScoreBlkKbpUngappedCalc(EBlastProgramType program, 
                               BlastScoreBlk* sbp, Uint1* query, 
-                              BlastQueryInfo* query_info);
+                              const BlastQueryInfo* query_info);
 
 /** This function fills in the BlastScoreBlk structure.  
  * Tasks are:
@@ -252,6 +252,25 @@ Blast_KarlinBlk* Blast_KarlinBlkFree(Blast_KarlinBlk* kbp);
 Int2 Blast_KarlinBlkGappedCalc (Blast_KarlinBlk* kbp, Int4 gap_open, 
         Int4 gap_extend, Int4 decline_align, const char* matrix_name, 
         Blast_Message** error_return);
+
+/** Retrieves Karlin-Altschul parameters from precomputed tables, given the
+ * substitution and gap scores. Gap cost values greater than any of those 
+ * listed in the tables ("greater" meaning that both values are greater than or
+ * equal, and at least one is strictly greater), are treated as infinite, and 
+ * parameters values are copied from the ungapped Karlin block.
+ * @param kbp Allocated Karlin block to fill [in] [out]
+ * @param gap_open Gap openening (existence) cost [in]
+ * @param gap_extend Gap extension cost [in]
+ * @param reward Match reward score [in]
+ * @param penalty Mismatch penalty score [in]
+ * @param kbp_ungap Karlin block with ungapped Karlin-Altschul parameters [in]
+ * @param error_return Pointer to error message. [in] [out]
+ */
+Int2
+Blast_KarlinBlkNuclGappedCalc(Blast_KarlinBlk* kbp, Int4 gap_open, 
+                              Int4 gap_extend, Int4 reward, Int4 penalty,
+                              Blast_KarlinBlk* kbp_ungap,
+                              Blast_Message** error_return);
 
 
 /** Calculates the Karlin-Altschul parameters assuming standard residue
@@ -407,10 +426,30 @@ double BLAST_LargeGapSumE (Int2 num,  double xsum,
  * @param gapped TRUE if a gapped search [in]
  * @param gap_open existence cost of a gap [in]
  * @param gap_extend extension cost of a gap [in]
+ * @param kbp_ungapped Karlin block with ungapped values of the parameters [in]
 */
 void BLAST_GetAlphaBeta (const char* matrixName, double *alpha,
-                    double *beta, Boolean gapped, Int4 gap_open, Int4 gap_extend);
+                         double *beta, Boolean gapped, Int4 gap_open, 
+                         Int4 gap_extend, const Blast_KarlinBlk* kbp_ungapped);
 
+/** Extract the alpha and beta settings for these substitution and gap scores. 
+ * If substitution or gap costs are not found in the tables, assume an ungapped
+ * search. Then alpha is computed using the formula Alpha = Lambda/H, and beta
+ * is equal to 0 except for some special cases.
+ * @param reward Match reward score [in]
+ * @param penalty Mismatch penalty score [in]
+ * @param gap_open Gap opening (existence) cost [in]
+ * @param gap_extend Gap extension cost [in]
+ * @param kbp Karlin block containing already computed Lambda, K and H 
+ *            parameters.
+ * @param gapped_calculation Is this a gapped search? [in]
+ * @param alpha Alpha parameter for this scoring system [out]
+ * @param beta Beta parameter for this scoring system [out]
+ */
+Int2 Blast_GetNuclAlphaBeta(Int4 reward, Int4 penalty, Int4 gap_open, 
+                            Int4 gap_extend, Blast_KarlinBlk* kbp,
+                            Boolean gapped_calculation,
+                            double *alpha, double *beta);
 
 /** Rescale the PSSM, using composition-based statistics, for use
  *  with RPS BLAST. This function produces a PSSM for a single RPS DB

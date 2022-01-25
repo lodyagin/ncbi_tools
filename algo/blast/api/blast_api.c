@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.14 2005/06/02 16:24:53 dondosha Exp $
+/* $Id: blast_api.c,v 1.18 2005/08/22 19:24:02 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -51,6 +51,7 @@
 #include <algo/blast/api/seqsrc_readdb.h>
 #include <algo/blast/api/seqsrc_multiseq.h>
 #include <algo/blast/api/blast_seqalign.h>
+#include <algo/blast/api/dust_filter.h>
 
 /** @addtogroup CToolkitAlgoBlast
  *
@@ -376,7 +377,6 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                              rps_info, pattern_blk, results)) != 0) {
                 Blast_MessageWrite(&extra_returns->error, 3, 0, 0,  
                                    "Traceback engine failed\n");
-                return status;
             }
         }
     } else {
@@ -390,7 +390,6 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                      db_options, hsp_stream, diagnostics)) != 0) {
                 Blast_MessageWrite(&extra_returns->error, 3, 1, 0,  
                                    "Preliminary search engine failed\n");
-                return status;
             }
         } else { /* Single thread, non-tabular */
             if ((status=Blast_RunFullSearch(kProgram, query, query_info, 
@@ -400,7 +399,6 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                             rps_info, diagnostics, results)) != 0) {
                 Blast_MessageWrite(&extra_returns->error, 3, 1, 0,  
                                    "Blast_RunFullSearch failed\n");
-                return status;
             }
         }
     }
@@ -420,7 +418,7 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                             eff_len_options, options->query_options, query_info, 
                             seq_src, &diagnostics, extra_returns);
 
-    return 0;
+    return status;
 }
 
 Int2 
@@ -465,6 +463,17 @@ Blast_RunSearch(SeqLoc* query_seqloc,
                                lookup_options, options->word_options, hit_options, 
                                &extra_returns->error)) != 0) {
         return status;
+    }
+
+    if (options->program == eBlastTypeBlastn)
+    {
+         SeqLoc* dust_mask = NULL; /* Dust mask locations */
+
+         Blast_FindDustSeqLoc(query_seqloc, options, &dust_mask);
+
+         /* Combine dust mask with lower case mask */
+         if (dust_mask)
+            masking_locs = ValNodeLink(&masking_locs, dust_mask);
     }
 
     if (kRpsBlast) {

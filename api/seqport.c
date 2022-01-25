@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.140 $
+* $Revision: 6.144 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.144  2005/08/24 15:14:31  kans
+* modified MolWtForLoc to use StreamCache, added MolWtForBsp and MolWtForStr
+*
+* Revision 6.143  2005/07/15 19:01:37  kans
+* minor fixes for Xcode warnings
+*
+* Revision 6.142  2005/07/13 14:24:51  kans
+* changed reality checks in SeqPortStreamWork to allow stop value of -1 to map to bsp->length - 1
+*
+* Revision 6.141  2005/07/12 20:50:30  kans
+* SeqPortStreamWork reality checks - bail if start or stop out of range, to prevent GetSequenceByFeature buffer from being overflowed
+*
 * Revision 6.140  2005/06/01 20:27:06  kans
 * added MapNa4ByteToIUPACplusGapString
 *
@@ -3376,12 +3388,15 @@ static Int4 SeqPortStreamWork (
 
   /* start and stop position reality checks */
 
-  if (start < 0 || start >= bsp->length) {
-  	start = 0;
+  if (start < 0) {
+    start = 0;
   }
-  if (stop < 0 || stop >= bsp->length) {
-  	stop = bsp->length - 1;
+  if (stop < 0) {
+    stop = bsp->length - 1;
   }
+
+  if (start >= bsp->length || stop >= bsp->length) return 0;
+
   if (start > stop) return 0;
 
   /* call appropriate stream function */
@@ -7846,7 +7861,6 @@ NLM_EXTERN void ConvertNsToGaps (
   SeqLitPtr   slp;
   Boolean     use_unknown = FALSE;
   Boolean     unknown_greater_than_or_equal = FALSE;
-  Boolean     use_known = FALSE;
   Boolean     known_greater_than_or_equal = FALSE;
   Int4Ptr     gap_sizes;
   Int4        unknown_gap_size = 0;
@@ -8008,26 +8022,27 @@ NLM_EXTERN void ConvertNsToGaps (
 
 /* Protein Molecular Weight Section */
 
-
-/* Values are in ncbistdaa code order:
+/* Values are A through Z order:
    B is really D or N, but they are close so is treated as D
    Z is really E or Q, but they are close so is treated as E
    X is hard to guess, so the calculation fails on X
+   J and O are unassigned, so fails on those
+   - and * are skipped
 
-  -  A  B  C  D  E  F  G  H  I  K  L  M  N  P  Q  R  S  T  V  W  X  Y  Z  U  * 
+  A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S  T  U  V  W  X  Y  Z
 */
 Uint1 C_atoms[26] =
-{ 0, 3, 4, 3, 4, 5, 9, 2, 6, 6, 6, 6, 5, 4, 5, 5, 6, 3, 4, 5,11, 0, 9, 5, 3, 0};
+{ 3, 4, 3, 4, 5, 9, 2, 6, 6, 0, 6, 6, 5, 4, 0, 5, 5, 6, 3, 4, 3, 5,11, 0, 9, 5};
 Uint1 H_atoms[26] =
-{ 0, 5, 5, 5, 5, 7, 9, 3, 7,11,12,11, 9, 6, 7, 8,12, 5, 7, 9,10, 0, 9, 7, 5, 0};
+{ 5, 5, 5, 5, 7, 9, 3, 7,11, 0,12,11, 9, 6, 0, 7, 8,12, 5, 7, 5, 9,10, 0, 9, 7};
 Uint1 N_atoms[26] =
-{ 0, 1, 1, 1, 1, 1, 1, 1, 3, 1, 2, 1, 1, 2, 1, 2, 4, 1, 1, 1, 2, 0, 1, 1, 1, 0};
+{ 1, 1, 1, 1, 1, 1, 1, 3, 1, 0, 2, 1, 1, 2, 0, 1, 2, 4, 1, 1, 1, 1, 2, 0, 1, 1};
 Uint1 O_atoms[26] =
-{ 0, 1, 3, 1, 3, 3, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2, 2, 1, 1, 0, 2, 3, 1, 0};
+{ 1, 3, 1, 3, 3, 1, 1, 1, 1, 0, 1, 1, 1, 2, 0, 1, 2, 1, 2, 2, 1, 1, 1, 0, 2, 3};
 Uint1 S_atoms[26] =
-{ 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+{ 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 Uint1 Se_atoms[26] =
-{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0};
+{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0};
 
 /**************************************************************
 *
@@ -8038,8 +8053,9 @@ Uint1 Se_atoms[26] =
 ***************************************************************/
 NLM_EXTERN FloatHi MolWtForLoc (SeqLocPtr slp)
 {
-	SeqPortPtr spp;
-	Int2 residue;
+    StreamCache sc;
+    Int2 res;
+	int residue;
 	Int4	Ccnt,
 		Hcnt,
 		Ncnt,
@@ -8048,9 +8064,8 @@ NLM_EXTERN FloatHi MolWtForLoc (SeqLocPtr slp)
 		Secnt;
 	FloatHi retval = -1.0;
 
-	spp = SeqPortNewByLoc(slp, Seq_code_ncbistdaa);
-	if (spp == NULL)
-		return retval;
+    if (slp == NULL) return retval;
+    StreamCacheSetup (NULL, slp, 0, &sc);
 
 	Ccnt = 0;  /* initialize counters */
 	Hcnt = 2;  /* always start with water */
@@ -8059,27 +8074,135 @@ NLM_EXTERN FloatHi MolWtForLoc (SeqLocPtr slp)
 	Scnt = 0;
 	Secnt = 0;
 
-	while ((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF)
+	while ((res = StreamCacheGetResidue (&sc)) != '\0')
 	{
-		if (IS_residue(residue))
-		{
-			if (H_atoms[residue] == 0)  /* unsupported AA */
-				goto erret;         /* bail out */
+	    if (IS_LOWER (res)) {
+	        res = TO_UPPER (res);
+	    }
+	    if (IS_UPPER (res)) {
+	        residue = res - 'A';
+			if (H_atoms[residue] == 0) { /* unsupported AA */
+		        return retval;    /* bail out */
+			}
 			Ccnt += C_atoms[residue];
 			Hcnt += H_atoms[residue];
 			Ncnt += N_atoms[residue];
 			Ocnt += O_atoms[residue];
 			Scnt += S_atoms[residue];
 			Secnt += Se_atoms[residue];
+		} else if (res != '-' && res != '*') {
+		    return retval;    /* bail out */
 		}
-		else             /* segmented */
-			goto erret;    /* bail out */
 	}
 
 	retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
 		 (14.0067 * Ncnt) + (15.9994 * Ocnt) +
 		 (32.064 * Scnt) + (78.96 * Secnt);
 
-erret:  SeqPortFree(spp);
 	return retval;
 }
+
+NLM_EXTERN FloatHi MolWtForBsp (BioseqPtr bsp)
+{
+    StreamCache sc;
+    Int2 res;
+	int residue;
+	Int4	Ccnt,
+		Hcnt,
+		Ncnt,
+		Ocnt,
+		Scnt,
+		Secnt;
+	FloatHi retval = -1.0;
+
+    if (bsp == NULL) return retval;
+    if (! ISA_aa (bsp->mol)) return retval;
+    StreamCacheSetup (bsp, NULL, 0, &sc);
+
+	Ccnt = 0;  /* initialize counters */
+	Hcnt = 2;  /* always start with water */
+	Ocnt = 1;  /* H20 */
+	Ncnt = 0;
+	Scnt = 0;
+	Secnt = 0;
+
+	while ((res = StreamCacheGetResidue (&sc)) != '\0')
+	{
+	    if (IS_LOWER (res)) {
+	        res = TO_UPPER (res);
+	    }
+	    if (IS_UPPER (res)) {
+	        residue = res - 'A';
+			if (H_atoms[residue] == 0) { /* unsupported AA */
+		        return retval;    /* bail out */
+			}
+			Ccnt += C_atoms[residue];
+			Hcnt += H_atoms[residue];
+			Ncnt += N_atoms[residue];
+			Ocnt += O_atoms[residue];
+			Scnt += S_atoms[residue];
+			Secnt += Se_atoms[residue];
+		} else if (res != '-' && res != '*') {
+		    return retval;    /* bail out */
+		}
+	}
+
+	retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
+		 (14.0067 * Ncnt) + (15.9994 * Ocnt) +
+		 (32.064 * Scnt) + (78.96 * Secnt);
+
+	return retval;
+}
+
+NLM_EXTERN FloatHi MolWtForStr (CharPtr str)
+{
+    Char res;
+	int residue;
+	Int4	Ccnt,
+		Hcnt,
+		Ncnt,
+		Ocnt,
+		Scnt,
+		Secnt;
+	FloatHi retval = -1.0;
+
+    if (str == NULL) return retval;
+
+	Ccnt = 0;  /* initialize counters */
+	Hcnt = 2;  /* always start with water */
+	Ocnt = 1;  /* H20 */
+	Ncnt = 0;
+	Scnt = 0;
+	Secnt = 0;
+
+	res = *str;
+	while (res != '\0')
+	{
+	    if (IS_LOWER (res)) {
+	        res = TO_UPPER (res);
+	    }
+	    if (IS_UPPER (res)) {
+	        residue = res - 'A';
+			if (H_atoms[residue] == 0) { /* unsupported AA */
+		        return retval;    /* bail out */
+			}
+			Ccnt += C_atoms[residue];
+			Hcnt += H_atoms[residue];
+			Ncnt += N_atoms[residue];
+			Ocnt += O_atoms[residue];
+			Scnt += S_atoms[residue];
+			Secnt += Se_atoms[residue];
+		} else if (res != '-' && res != '*') {
+		    return retval;    /* bail out */
+		}
+	    str++;
+	    res = *str;
+	}
+
+	retval = (12.01115 * Ccnt) + (1.0079 * Hcnt) +
+		 (14.0067 * Ncnt) + (15.9994 * Ocnt) +
+		 (32.064 * Scnt) + (78.96 * Secnt);
+
+	return retval;
+}
+

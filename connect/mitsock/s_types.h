@@ -8,6 +8,9 @@
 *
 * RCS Modification History:
 * $Log: s_types.h,v $
+* Revision 1.2  2005/07/22 15:02:04  rsmith
+* treat socklen_t arguments consistently.
+*
 * Revision 1.1  2001/04/03 20:35:37  juran
 * Phil Churchill's MIT-derived OT sockets library.  No changes prior to initial check-in.
 *
@@ -85,6 +88,7 @@ typedef	long	segsz_t;
 typedef	short	pid_t;
 /* size of address structures */
 typedef UInt32 socklen_t;
+#define HAVE_SOCKLEN_T 1
 
 //typedef	u_short	nlink_t;
 //typedef	u_short	mode_t;

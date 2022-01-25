@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: fastacmd.c,v 6.35 2005/05/05 15:54:06 dondosha Exp $";
+static char const rcsid[] = "$Id: fastacmd.c,v 6.36 2005/06/22 13:55:22 coulouri Exp $";
 
-/* $Id: fastacmd.c,v 6.35 2005/05/05 15:54:06 dondosha Exp $
+/* $Id: fastacmd.c,v 6.36 2005/06/22 13:55:22 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: fastacmd.c,v 6.35 2005/05/05 15:54:06 dondosha
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.36  2005/06/22 13:55:22  coulouri
+* add support for dumping accessions
+*
 * Revision 6.35  2005/05/05 15:54:06  dondosha
 * Enhanced comment for the -s option and fixed typo in -i option description
 *
@@ -195,8 +198,9 @@ static Args myargs [] = {
       "F", NULL, NULL, TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Dump the entire database as (default is not to dump anything):\n"
       "      1 FASTA\n"
-      "      2 Gi list\n",                                      /* 9 */
-      "0", "0", "2", TRUE, 'D', ARG_INT, 0.0, 0, NULL},
+      "      2 Gi list\n"
+      "      3 Accession.version list\n",                       /* 9 */
+      "0", "0", "3", TRUE, 'D', ARG_INT, 0.0, 0, NULL},
     { "Range of sequence to extract (Format: start,stop)\n"
       "      0 in 'start' refers to the beginning of the sequence\n"
       "      0 in 'stop' refers to the end of the sequence",

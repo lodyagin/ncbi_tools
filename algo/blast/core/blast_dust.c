@@ -1,4 +1,4 @@
-/* $Id: blast_dust.c,v 1.32 2005/03/17 13:42:31 madden Exp $
+/* $Id: blast_dust.c,v 1.35 2005/07/21 13:52:38 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,7 +37,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_dust.c,v 1.32 2005/03/17 13:42:31 madden Exp $";
+    "$Id: blast_dust.c,v 1.35 2005/07/21 13:52:38 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_dust.h>
@@ -54,12 +54,18 @@ const int kDustLinker = 1;
 
 /* local, file scope, structures and variables */
 
-typedef struct DREGION { /* endpoints */
+/** endpoints
+ * @todo expand documentation
+ */
+typedef struct DREGION { 
 	struct	DREGION*	next;
 	Int4	from, to;
 } DREGION;
 
-typedef struct DCURLOC { /* localcurrents */
+/** localcurrents 
+ * @todo expand documentation
+ */
+typedef struct DCURLOC { 
 	Int4	cursum, curstart, curend;
 	Int2	curlength;
 } DCURLOC;
@@ -249,7 +255,7 @@ static Boolean wo1 (Int4 len, Uint1* seq, Int4 iwo, DCURLOC* cloc)
 
 		    if (sum >= SUM_THRESHOLD[loop])
 		    {
-			if (cloc->cursum*loop < sum*cloc->curlength)
+			if ((Uint4)cloc->cursum*loop < sum*cloc->curlength)
 			{
 				cloc->cursum = sum;
 				cloc->curlength = loop;
@@ -333,16 +339,34 @@ GetDustLocations (BlastSeqLoc** loc, DREGION* reg, Int4 nreg)
 
    /* point to dusted locations */
    if (nreg > 0) {
-      BlastSeqLoc* last_loc = NULL;
       Int4 i;
       for (i = 0; reg && i < nreg; i++) {
-         if (!last_loc)
-            last_loc = BlastSeqLocNew (loc, reg->from, reg->to);
-         else 
-            last_loc = BlastSeqLocNew (&last_loc, reg->from, reg->to);
+         BlastSeqLocNew(loc, reg->from, reg->to);
          reg = reg->next;
       }
    }
+#if 0
+   /* N.B.: 
+    * additional error checking added below results in unit test failures!
+    */
+
+   /* point to dusted locations */
+   if (nreg > 0) {
+      Int4 i;
+      for (i = 0; reg && i < nreg; i++) {
+         if (BlastSeqLocNew(loc, reg->from, reg->to) == NULL) {
+             break;
+         }
+         reg = reg->next;
+      }
+      /* either BlastSeqLocNew failed or nreg didn't match the number of
+       * elements in reg, so return error */
+      if (reg) {
+          *loc = BlastSeqLocFree(*loc);
+          return -1;
+      }
+   }
+#endif
    return 0;
 }
 

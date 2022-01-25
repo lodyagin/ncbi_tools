@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.295 $
+* $Revision: 6.298 $
 *
 * File Description: 
 *
@@ -493,11 +493,12 @@ static void FixReadingFrame (
   crp->frame = start;
 }
 
-static void RecomputeSuggestedIntervalsForCDS (
-  RecompDataPtr rdp,
-  SeqFeatPtr    sfp
-)
-
+extern void RecomputeSuggestedIntervalsForCDS 
+(Uint2          entityID,
+ BioseqPtr PNTR batchbsp,
+ Int4Ptr        count,
+ MonitorPtr     mon,
+ SeqFeatPtr     sfp)
 {
   Int2           code;
   CdRegionPtr    crp;
@@ -510,18 +511,18 @@ static void RecomputeSuggestedIntervalsForCDS (
   Boolean        partial3, partial5;
   Int4           start;
 
-  if (rdp == NULL) return;
   if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return;
   crp = (CdRegionPtr) sfp->data.value.ptrvalue;
   if (crp == NULL) return;
 
   code = GeneticCodeFromCrp (crp);
 
-  nucbsp = GetBioseqGivenSeqLoc (sfp->location, rdp->entityID);
-  if (nucbsp != NULL && rdp->batchbsp != NULL && nucbsp != rdp->batchbsp) {
+  nucbsp = GetBioseqGivenSeqLoc (sfp->location, entityID);
+  if (nucbsp != NULL && batchbsp != NULL && *batchbsp != NULL 
+      && nucbsp != *batchbsp) {
     ClearBatchSuggestNucleotide ();
-    rdp->batchbsp = nucbsp;
-    SetBatchSuggestNucleotide (rdp->batchbsp, code);
+    *batchbsp = nucbsp;
+    SetBatchSuggestNucleotide (*batchbsp, code);
 /*    Message (MSG_POSTERR, "Recompute Suggest is reverting to slower processing"); */
   }
   sip = SeqLocId (sfp->product);
@@ -534,11 +535,15 @@ static void RecomputeSuggestedIntervalsForCDS (
       tmp [0] = '\0';
       sip = SeqIdFindWorst (protbsp->id);
       SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-      (rdp->count)++;
-      sprintf (str, "Processing sequence %d [%s]", (int) rdp->count, tmp);
-      if (rdp->mon != NULL) {
-        MonitorStrValue (rdp->mon, str);
-        Update ();
+      if (count != NULL)
+      {
+        (*count) ++;
+        if (mon != NULL)
+        {
+          sprintf (str, "Processing sequence %d [%s]", *count, tmp);
+          MonitorStrValue (mon, str);
+          Update ();
+        }
       }
       slp = PredictCodingRegion (nucbsp, protbsp, code);
       if (slp == NULL) return;
@@ -592,7 +597,9 @@ static void RecomputeIntervalsForOneCDS (SeqFeatPtr sfp, RecompDataPtr rdp)
                                          (AsnReadFunc) SeqLocAsnRead,
                                          (AsnWriteFunc) SeqLocAsnWrite);
   }
-  RecomputeSuggestedIntervalsForCDS (rdp, sfp);
+  RecomputeSuggestedIntervalsForCDS (rdp->entityID, &(rdp->batchbsp),
+                                     &(rdp->count), rdp->mon, sfp);
+
   if (gene_to_update != NULL)
   {
     UpdateGeneLocation (gene_to_update, orig_loc,
@@ -3390,6 +3397,17 @@ static SeqLocPtr FuseTwoLocations (Uint2 entityID, SeqLocPtr slp1, SeqLocPtr slp
                                           (AsnWriteFunc) SeqLocAsnWrite);
     if (slp1_copy != NULL && slp2_copy != NULL)
     {
+      /* if the second location is already a mix, don't create a nested
+       * mixed location.
+       */
+      if (slp2_copy->choice == SEQLOC_MIX)
+      {
+        slp_list = (SeqLocPtr) slp2_copy->data.ptrvalue;
+        slp2_copy->data.ptrvalue = NULL;
+        slp2_copy = SeqLocFree (slp2_copy);
+        slp2_copy = slp_list;
+      }
+    
       if (slp1_copy->choice == SEQLOC_MIX)
       {
         slp_list = slp1_copy->data.ptrvalue;
@@ -3397,6 +3415,8 @@ static SeqLocPtr FuseTwoLocations (Uint2 entityID, SeqLocPtr slp1, SeqLocPtr slp
         {
           slp_list = slp_list->next;
         }
+        
+        
         if (slp_list == NULL)
         {
           slp1_copy->data.ptrvalue = slp2_copy;
@@ -7026,14 +7046,31 @@ extern Int2 LIBCALLBACK MakeSequinNucleotideTitles (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+static Boolean StringHasEqualSignOrBrackets (CharPtr str)
+
+{
+  Char  ch;
+
+  if (StringHasNoText (str)) return FALSE;
+  ch = *str;
+  while (ch != '\0') {
+    if (ch == '=' || ch == '[' || ch == ']') return TRUE;
+    str++;
+    ch = *str;
+  }
+  return FALSE;
+}
+
 static void MakeProteinTitlesInSequinStyle (Uint2 entityID, SeqEntryPtr sep)
 
 {
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
   DefFeatsPtr   dfp;
+  Char          quot [4];
   GeneRefPtr    grp;
   GatherScope   gs;
+  Boolean       has_equal_or_brackets;
   ValNodePtr    head;
   SeqEntryPtr   nsep;
   ProtRefPtr    prp;
@@ -7072,6 +7109,9 @@ static void MakeProteinTitlesInSequinStyle (Uint2 entityID, SeqEntryPtr sep)
   GatherEntity (entityID, (Pointer) (&head), GetCDStRNArRNAGatherFunc, &gs);
   /* head = SortValNode (head, SortCDStRNArRNAByLocation); */
   if (head == NULL) return;
+
+  quot [0] = '"';
+  quot [1] = '\0';
 
   vnp = head;
   while (vnp != NULL) {
@@ -7113,14 +7153,28 @@ static void MakeProteinTitlesInSequinStyle (Uint2 entityID, SeqEntryPtr sep)
                   StringCat (str, " ");
                 }
                 StringCat (str, "[protein=");
+                has_equal_or_brackets = StringHasEqualSignOrBrackets (text);
+                if (has_equal_or_brackets) {
+                  StringCat (str, quot);
+                }
                 StringCat (str, text);
+                if (has_equal_or_brackets) {
+                  StringCat (str, quot);
+                }
                 StringCat (str, "]");
               }
             }
             StringNCpy_0 (text, (CharPtr) prp->desc, sizeof (text));
             if (! StringHasNoText (text)) {
               StringCat (str, "[prot_desc=");
+              has_equal_or_brackets = StringHasEqualSignOrBrackets (text);
+              if (has_equal_or_brackets) {
+                StringCat (str, quot);
+              }
               StringCat (str, text);
+              if (has_equal_or_brackets) {
+                StringCat (str, quot);
+              }
               StringCat (str, "]");
             }
           }

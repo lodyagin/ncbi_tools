@@ -1,0 +1,2296 @@
+<html>
+
+<head>
+<meta http-equiv=Content-Type content="text/html; charset=windows-1252">
+<meta name=Generator content="Microsoft Word 11 (filtered)">
+<title>Program Options for the Pattern Matching Program Seedtop</title>
+<style>
+<!--
+ /* Font Definitions */
+ @font-face
+	{font-family:Wingdings;
+	panose-1:5 0 0 0 0 0 0 0 0 0;}
+@font-face
+	{font-family:Tahoma;
+	panose-1:2 11 6 4 3 5 4 4 2 4;}
+ /* Style Definitions */
+ p.MsoNormal, li.MsoNormal, div.MsoNormal
+	{margin:0in;
+	margin-bottom:.0001pt;
+	font-size:12.0pt;
+	font-family:"Times New Roman";}
+a:link, span.MsoHyperlink
+	{color:blue;
+	text-decoration:underline;}
+a:visited, span.MsoHyperlinkFollowed
+	{color:purple;
+	text-decoration:underline;}
+pre
+	{margin:0in;
+	margin-bottom:.0001pt;
+	font-size:10.0pt;
+	font-family:"Courier New";}
+p.MsoAcetate, li.MsoAcetate, div.MsoAcetate
+	{margin:0in;
+	margin-bottom:.0001pt;
+	font-size:8.0pt;
+	font-family:Tahoma;}
+ins
+	{text-decoration:none;}
+span.msoIns
+	{text-decoration:underline;}
+span.msoDel
+	{text-decoration:line-through;
+	color:red;}
+@page Section1
+	{size:8.5in 11.0in;
+	margin:.9in 1.25in .9in 1.25in;}
+div.Section1
+	{page:Section1;}
+ /* List Definitions */
+ ol
+	{margin-bottom:0in;}
+ul
+	{margin-bottom:0in;}
+-->
+</style>
+
+</head>
+
+<body lang=EN-US link=blue vlink=purple>
+
+<div class=Section1>
+
+<p class=MsoNormal align=center style='text-align:center'><b>Program Options
+for the Pattern Matching Program seedtop</b></p>
+
+<p class=MsoNormal align=center style='text-align:center'>&nbsp;</p>
+
+<p class=MsoNormal align=center style='text-align:center'>Tao Tao, Ph.D.</p>
+
+<p class=MsoNormal align=center style='text-align:center'>NCBI User Service</p>
+
+<p class=MsoNormal align=center style='text-align:center'>July22, 2005</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><b><i>1. Introduction</i></b></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><i>seedtop</i> is one of the programs found in the NCBI
+standalone blast package. It is a little-known program, whose main function is
+to search for patterns in an input sequence or database. </p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><i>seedtop</i> has four modes of usage, which are referred
+to as “subprograms”: two for pattern searches from a input query or database
+only and two for pattern initiated sequence alignment. The following table
+lists these subprograms, their functions, and required inputs. </p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=586 colspan=3 valign=top style='width:6.1in;border:none;border-bottom:
+  double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal align=center style='text-align:center'><b>Table 1.1
+  Functions of  individual subprograms from  seedtop</b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=125 style='width:1.3in;border-top:none;border-left:none;border-bottom:
+  double windowtext 1.5pt;border-right:solid windowtext 1.0pt;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal align=center style='text-align:center'><b><i>Program Call <sup>1</sup></i></b></p>
+  </td>
+  <td width=288 style='width:3.0in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal align=center style='text-align:center'><b><i>Functions</i></b></p>
+  </td>
+  <td width=173 style='width:1.8in;border-top:none;border-left:solid windowtext 1.0pt;
+  border-bottom:double windowtext 1.5pt;border-right:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal align=center style='text-align:center'><b><i>Required Inputs</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=125 style='width:1.3in;border-top:none;border-left:none;border-bottom:
+  solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal><b><i>-p patmatch</i></b></p>
+  </td>
+  <td width=288 style='width:3.0in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Search for patterns in an input sequence</p>
+  </td>
+  <td width=173 style='width:1.8in;border-top:none;border-left:solid windowtext 1.0pt;
+  border-bottom:solid windowtext 1.0pt;border-right:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>Pattern (-k) and sequence (-i)</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=125 style='width:1.3in;border-top:none;border-left:none;border-bottom:
+  solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal><b><i>-p pattern</i></b></p>
+  </td>
+  <td width=288 style='width:3.0in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Search for patterns in an input database</p>
+  </td>
+  <td width=173 style='width:1.8in;border-top:none;border-left:solid windowtext 1.0pt;
+  border-bottom:solid windowtext 1.0pt;border-right:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>Same as above</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=125 style='width:1.3in;border-top:none;border-left:none;border-bottom:
+  solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal><b><i>-p patseed</i></b></p>
+  </td>
+  <td width=288 style='width:3.0in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Search for patterns in the query and align the query
+  against a database</p>
+  </td>
+  <td width=173 style='width:1.8in;border-top:none;border-left:solid windowtext 1.0pt;
+  border-bottom:solid windowtext 1.0pt;border-right:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>Pattern (-k), input  sequence (-i), and target database (-d)</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=125 style='width:1.3in;border-top:none;border-left:none;border-bottom:
+  double windowtext 1.5pt;border-right:solid windowtext 1.0pt;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal><b><i>-p seed</i></b></p>
+  </td>
+  <td width=288 style='width:3.0in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Search for specific pattern in the query and align the
+  query against a database</p>
+  </td>
+  <td width=173 style='width:1.8in;border-top:none;border-left:solid windowtext 1.0pt;
+  border-bottom:double windowtext 1.5pt;border-right:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>Same as above <sup>2</sup></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=586 colspan=3 style='width:6.1in;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal><span style='font-size:9.0pt'>Note:</span></p>
+  <p class=MsoNormal><sup><span style='font-size:9.0pt'>1.</span></sup><span
+  style='font-size:9.0pt'> The program strings listed are for nucleotide
+  searches. For protein searches, add lowercase p to the program name.</span></p>
+  <p class=MsoNormal><sup><span style='font-size:9.0pt'>2.</span></sup><span
+  style='font-size:9.0pt'> The pattern file needs to have an extra HI initialed
+  line to specify the position in the input sequence at which the pattern
+  occurrence of interest starts.</span></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><b><i>2. Setup</i></b></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>Installation of the standalone blast archive is fairly easy.
+Once the archive is placed in a desired directory and extracted, the whole
+package will be installed in a newly created subdirectory called blast-2.2.11 (assuming
+2.2.11 release here). All the programs, including <i>seedtop</i>, will be in
+the blast-2.2.11/bin/ subdirectory (blast-2.2.11\bin\ for PC).</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>Appropriate setup requires the creation of .ncbirc configuration
+file, which blast programs (including <i>seedtop</i>) read upon startup to
+locate the appropriate files needed.</p>
+
+<p class=MsoNormal>In this .ncbirc, we can specify the location of the DATA
+directory and the BLASTDB directory using the following lines:</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>[NCBI]</p>
+
+<p class=MsoNormal>DATA=/path/data</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>[BLAST]</p>
+
+<p class=MsoNormal>BLASTDB=/path/db</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>The [NCBI] section is used by most of the NCBI programs to
+locate the data directory and retrieve specific files needed (MATRIX file for example).
+The [BLAST] section specifies the path to the directory where databases are stored.
+</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>The db directory does not come with the NCBI setup, so one
+needs to create it after installation. If we place the directory anywhere, we
+need to change the path correspondingly. For simplicity, we suggest that it be
+created under the blast-2.2.11 at the same level as data directory. </p>
+
+<p class=MsoNormal> </p>
+
+<p class=MsoNormal><b><i>3. Program Options </i></b></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>Once the standalone BLAST package is setup, we can “cd” to
+the directory and issue the “seedtp –” command to display the program options
+for this program.  Here we list each option in a table and describe it
+functions, argument value, and example usage. </p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.1</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-d</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the target database to search</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>nr</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Takes database formatted by formatdb, use name without
+  extension </p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To search against est_human, use: <b><i>-d est_human</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>This is not a mandatory option, search for patterns in a
+  single input sequence does not require this option.</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.2</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-i</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the input query file </p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>stdin</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[File In], file name with extension</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To take my_pept.txt as input query, use: <b><i>-i
+  my_pept.txt</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To using stdin input, either pipe or redirect the input:</p>
+  <p class=MsoNormal><i>seedtop -k pat -p patmatchp &lt;input_file</i></p>
+  <p class=MsoNormal><i>more input_file| seedtop -k pat -p patmatchp</i></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.3</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-k</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the input pattern (Hit File)</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>hit_file</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Complete file name with extension </p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>If the pattern file is named my_pat.txt, use: <b><i>-k
+  my_pat.txt</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>See section 4.1 below for details. </p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.4</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-o</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the output file name</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>stdout</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>file name with or without extension</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To save result in <i>my_output</i>, use: <b><i>-o
+  my_output</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Redirection or piping can be used instead.</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.5</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-G  </i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the cost to open a gap </p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>11</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[Integer]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To change this to 12, use: <b><i>-G 12</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>The choice of <b><i>-M</i></b> option determines the
+  available input value for this option as well as that for <b><i>-E</i></b>
+  option. Only a selected set is supported. Detailed list is in the blastall
+  document.</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=586 colspan=2 valign=top style='width:6.1in;border:none;border-bottom:
+  double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.6</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-E</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the cost to extend a gap</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>1</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[Integer]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To change this to 2, use: <b><i>-E 2</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>See Table 3.5 for more information</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.6</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-D</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the cost to decline alignment</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>99999</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[Integer]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>N/A</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Functions similar to the -L option in <i>blastpgp</i>. If
+  enabled, it would implement Dr. Altschul’s 3-parameter gap model for scoring.</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.7</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-X</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies X dropoff value for gapped alignment (in bits)</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[Integer]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>15</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To increase this dropoff value to 20, use: <b><i>-X 20</i></b>
+  </p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Increasing this value may enable one to see a longer
+  alignment</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=586 colspan=2 valign=top style='width:6.1in;border:none;border-bottom:
+  double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.8</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-S</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies cutoff cost</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[Integer]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>30</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>N/A</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.85pt;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=447 style='width:335.35pt;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Currently it is overridden in pseed3.c. It could allow the
+  user to control the score threshold applied to the part of the alignment that
+  does not include the pattern in deciding which alignment(s) to report. </p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.9</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-C</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Score only or not</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>1</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[Integer]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>N/A</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>This is relevant only to searches with -p seed(p) or -p
+  patseed(p).</p>
+  <p class=MsoNormal><span style='color:red'>NOT implemented yet. </span></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.10</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-I</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Whether to Show GI's in deflines</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>F</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[T/F]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To display GI in the deflines, use: <b><i>-I T</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Relevant only to searches with -p seed(p) or -p patseed(p)</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.11</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-e</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the expectation value (E) cutoff</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>10.0</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[Real]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To set this to 0.001, use: <b><i>-e 0.001</i></b> or <b><i>-e
+  1e-3</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Relevant only to searches with -p seed(p) or -p patseed(p)</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>     </p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.12</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-J</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Whether to believe the query defline or not</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>F</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[T/F]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To set this to true, use: <b><i>-J T</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To save SeqAlign object requires <b><i>-J T</i></b> </p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.13</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-O</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the output file for SeqAlign object </p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Optional</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[File Out]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>N/A</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Relevant only to searches with -p seed(p) or -p patseed(p).</p>
+  <p class=MsoNormal><span style='color:red'>NOT implement yet.</span></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=586 colspan=2 valign=top style='width:6.1in;border:none;border-bottom:
+  double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.14</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=447 style='width:335.4pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-M</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=447 style='width:335.4pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies which matrix file to use</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=447 style='width:335.4pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>BLOSUM62</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=447 style='width:335.4pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[String]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=447 style='width:335.4pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To set matrix to PAM30, use: <b><i>-M PAM30</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=138 style='width:103.8pt;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=447 style='width:335.4pt;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Relevant to seedp/patseedp searches, only a limited set is
+  supported</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.15</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-p</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies which subprogram to run</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>patmatchp</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[String]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To find protein patterns in a database, use: <b><i>-p
+  patternp</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Four choices for nucleotide searches are:</p>
+  <p class=MsoNormal><i>patmatch</i>, <i>pattern</i>, <i>seed</i>, and <i>patseed</i></p>
+  <p class=MsoNormal>Four for protein searches are:</p>
+  <p class=MsoNormal><i>patmatchp</i>, <i>patternp</i>, <i>seedp</i>, and <i>patseedp</i></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.16</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-r</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the reward for a match</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>10</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[Integer]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To increase the reward to 20, use: <b><i>-r 20</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Relevant only to searches with -p seed(p) or -p patseed  </p>
+  <p class=MsoNormal>For nucleotide searches only.</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.17</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-q</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Specifies the cost for a mismatch</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-10</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[Integer]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To increase the penalty to -15, use: <b><i>-q -15</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>For nucleotide search with seed/patseed only.</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=586
+ style='width:6.1in;border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 colspan=2 valign=top style='width:6.15in;border:none;
+  border-bottom:double windowtext 1.5pt;padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal>Table 3.18</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Option</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal><b><i>-F</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Function</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Whether to filter query sequence with SEG</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Default</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>F</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Input format</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>[T/F]</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Example</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>To activate filter, use: <b><i>-F T</i></b></p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=139 style='width:1.45in;border-top:none;border-left:none;
+  border-bottom:double windowtext 1.5pt;border-right:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Note</p>
+  </td>
+  <td width=451 style='width:4.7in;border:none;border-bottom:double windowtext 1.5pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Relevant to seedp/patseedp searches only.</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><b><i>4. Execution and Practical Usage</i></b></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>The most useful functionalities of seedtop are patmatchp and
+patternp. Since patseedp does not generate the actual alignment and its
+function is already incorporated in blastpgp, we will not cover it here. The
+functionality for searching with nucleotide entries are similar to protein
+searches, we will only provide a couple simple examples.</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><u>4.1 Pattern specification</u></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>The pattern input file is unique for <i>seedtop</i>. Each
+pattern is specified by two lines, ID initialed for identification and PA
+initialed for pattern. The pattern specification uses the ProSite syntax.
+Multiple patterns can be used, each separated by a single line with /.</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+ style='border-collapse:collapse;border:none'>
+ <tr>
+  <td width=583 valign=top style='width:437.4pt;border:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal><u><span style='font-size:10.0pt;font-family:"Courier New"'>Single
+  pattern specification:</span></u></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>ID
+  Cyclic nucleotide-binding domain signature 2. <br>
+  PA [LIVMF]-G-E-x-[GAS]-[LIVM]-x(5,11)-R-[STAQ]-A-x-[LIVMA]-x-[STACV].</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><u><span style='font-size:10.0pt;font-family:"Courier New"'>Multiple
+  pattern specification:</span></u></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>ID
+  Cyclic nucleotide-binding domain signature 2. </span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>PA
+  [LIVMF]-G-E-x-[GAS]-[LIVM]-x(5,11)-R-[STAQ]-A-x-[LIVMA]-x-[STACV].</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>/</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>ID
+  Cyclic nucleotide-binding domain signature 1</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>PA
+  [LIVM]-[VIC]-x-{H}-G-[DENQTA]-x-[GAC]-{L}-x-[LIVMFY](4)-x(2)-G</span></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>Pattern lines should be less than 100 letters long. Longer
+patterns can be broken up into two or more PA lines. Multiple individual
+patterns should be separated by a line containing a single backslash (/). Other
+general pattern rules can be summarized as the following:</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+ style='border-collapse:collapse;border:none'>
+ <tr style='height:.2in'>
+  <td width=64 style='width:48.15pt;border:solid windowtext 1.0pt;border-left:
+  none;padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Symbol</p>
+  </td>
+  <td width=519 style='width:389.25pt;border-top:solid windowtext 1.0pt;
+  border-left:none;border-bottom:solid windowtext 1.0pt;border-right:none;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>Meaning</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=64 style='width:48.15pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>[]</p>
+  </td>
+  <td width=519 style='width:389.25pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>mark a single position, match to anyone in the bracket is
+  acceptable</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=64 style='width:48.15pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>(x,y)</p>
+  </td>
+  <td width=519 style='width:389.25pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>mark a range for the residue(s) before it, matches within
+  the range are acceptable</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=64 style='width:48.15pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>(x,)</p>
+  </td>
+  <td width=519 style='width:389.25pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>represent range with no upper limit for the residue(s)
+  before it</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=64 style='width:48.15pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>(x)</p>
+  </td>
+  <td width=519 style='width:389.25pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>represent exact number of matches for the residue(s)
+  before it</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=64 style='width:48.15pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>{}</p>
+  </td>
+  <td width=519 style='width:389.25pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>mark a single residue, none in the braces should be
+  present in this position</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=64 style='width:48.15pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>-</p>
+  </td>
+  <td width=519 style='width:389.25pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>separate the individual positions in the pattern</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=64 style='width:48.15pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>.</p>
+  </td>
+  <td width=519 style='width:389.25pt;border:none;padding:0in 5.4pt 0in 5.4pt;
+  height:.2in'>
+  <p class=MsoNormal>at the end marks the end of a pattern</p>
+  </td>
+ </tr>
+ <tr style='height:.2in'>
+  <td width=64 style='width:48.15pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>&gt;&nbsp;</p>
+  </td>
+  <td width=519 style='width:389.25pt;border:none;border-bottom:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt;height:.2in'>
+  <p class=MsoNormal>symbol at the end marks an incomplete pattern (optional)</p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><u>4.2 patmatchp</u></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>This function matches patterns found in an input pattern
+file and identifies the pattern occurrences in an input protein sequence. The
+sample command line below (given along with its output) takes an input pattern
+named <i>pattern.txt</i>, searches against the input <i>query.aa</i> target
+sequence, and saves the output in a file named <i>query.out</i>. </p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+ style='border-collapse:collapse;border:none'>
+ <tr>
+  <td width=583 valign=top style='width:437.4pt;border:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>seedtop
+  -k pattern.txt -i query.aa -p patmatchp –o query.out</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>Name 
+  Cyclic nucleotide-binding domain signature 2.</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>Pattern
+  [LIVMF]-G-E-x-[GAS]-[LIVM]-x(5,11)-R-[STAQ]-A-x-[LIVMA]-x-[STACV].</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'> At
+  position 521 of query sequence</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>Name 
+  Cyclic nucleotide-binding domain signature 1</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>Pattern
+  [LIVM]-[VIC]-x-{H}-G-[DENQTA]-x-[GAC]-{L}-x-[LIVMFY](4)-x(2)-G</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'> At
+  position 483 of query sequence</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>The result only lists the pattern starting positions in the
+query sequence.</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><u>4.3 patternp</u></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>This function matches patterns in an input pattern file
+against an input database and reports back the database entries containing one
+or more of the input patterns as well as the pattern locations. The sample command
+line below (given with its partial output) takes an input pattern named <i>pattern.txt</i>,
+searches against the input <i>refseq_protein</i> database, the identified
+entries with pattern matches are saved in the output file <i>db.out</i>. </p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<div align=center>
+
+<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+ style='border-collapse:collapse;border:none'>
+ <tr>
+  <td width=583 valign=top style='width:437.4pt;border:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>seedtop
+  -k pattern.txt -d refseq_protein -p patternp –o db.out</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>seqno=892602   
+  gi|33859524|ref|NP_034048.1|</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>ID 
+  Cyclic nucleotide-binding domain signature 1</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>PA 
+  [LIVM]-[VIC]-x-{H}-G-[DENQTA]-x-[GAC]-{L}-x-[LIVMFY](4)-x(2)-G</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>HI
+  (449 450) (452 454) (456 457) (459 462) (465 465)</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>seqno=892873   
+  gi|51470807|ref|XP_290552.4|</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>ID 
+  Cyclic nucleotide-binding domain signature 1</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>PA 
+  [LIVM]-[VIC]-x-{H}-G-[DENQTA]-x-[GAC]-{L}-x-[LIVMFY](4)-x(2)-G</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>HI
+  (374 375) (377 379) (381 382) (384 387) (390 390)</span></p>
+  <p class=MsoNormal><span style='font-size:9.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>Each hit is described in the following lines:</p>
+
+<p class=MsoNormal style='margin-left:.5in;text-indent:-.25in'>-<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</span>seqno: seqid for the database sequence with pattern matches</p>
+
+<p class=MsoNormal style='margin-left:.5in;text-indent:-.25in'>-<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</span>ID: Pattern ID, reiterated pattern input</p>
+
+<p class=MsoNormal style='margin-left:.5in;text-indent:-.25in'>-<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</span>PA: Pattern, reiterated pattern input</p>
+
+<p class=MsoNormal style='margin-left:.5in;text-indent:-.25in'>-<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</span>HI: Hit position on the db sequence, regions broken up by X</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><u>4.4 patseedp</u></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>This function takes three inputs, an input pattern, a query
+protein sequence with the pattern, and a protein sequence database. It
+identifies the pattern in the query and aligns the query against the database
+entries that contains the same pattern.  It reports the pattern position in the
+query, the total number of pattern occurrences in the database, and the actual
+database entries with pattern and alignment to the input query. Specifically,
+it reports the seqid of the database entry, its alignment (with the query) E-value,
+scores, and pattern position. </p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+ style='border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 valign=top style='width:6.15in;border:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>seedtop
+  -k pattern.txt -d refseq_protein -p patseedp -o pat_db.out -i query_aa.txt</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'> 1
+  occurrence(s) of pattern in query</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>Name 
+  Cyclic nucleotide-binding domain signature 2.</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>Pattern
+  [LIVMF]-G-E-x-[GAS]-[LIVM]-x(5,11)-R-[STAQ]-A-x-[LIVMA]-x-[STACV].</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'> At
+  position 488 of query sequence</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>effective
+  database length=3.1e+008</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'> pattern
+  probability=3.4e-008</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>lengthXprobability=1.0e+001</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>Number
+  of occurrences of pattern in the database is 265</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>892602 
+  gi|33859524|ref|NP_034048.1|</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>0
+  Total Score 3279 Outside Pattern Score 3162 Match start in db seq 488</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>      
+  Extent in query seq 1 631 Extent in db seq 1 631</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>1
+  occurrence(s) of pattern in query</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>Name 
+  Cyclic nucleotide-binding domain signature 1</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>Pattern
+  [LIVM]-[VIC]-x-{H}-G-[DENQTA]-x-[GAC]-{L}-x-[LIVMFY](4)-x(2)-G</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'> At
+  position 450 of query sequence</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>effective
+  database length=3.1e+008</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'> pattern
+  probability=7.0e-008</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>lengthXprobability=2.2e+001</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>Number
+  of occurrences of pattern in the database is 247</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>892602 
+  gi|33859524|ref|NP_034048.1|</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>0
+  Total Score 3279 Outside Pattern Score 3188 Match start in db seq 450</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>      
+  Extent in query seq 1 631 Extent in db seq 1 631</span></p>
+  <p class=MsoNormal>&nbsp;</p>
+  </td>
+ </tr>
+</table>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>The input pattern.txt file contains two patterns, so the
+result contains two sections, one for each pattern. Only one database match is
+shown.</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><u>4.5. seedp</u></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>This function is similar to <i>patseedp</i>. The only
+difference is that the pattern file should specify the pattern position in the
+input query sequence. The output from the <i>patternp</i> can be used for this
+purpose. This specifies which pattern is to be used during the search. </p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>An actual command line and pattern file is listed below.
+Output is omitted since it is essential the same as that from <i>patseedp </i>given
+above.</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+ style='border-collapse:collapse;border:none'>
+ <tr>
+  <td width=590 valign=top style='width:6.15in;border:solid windowtext 1.0pt;
+  padding:0in 5.4pt 0in 5.4pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>seedtop
+  -p seedp -k pattern2a.txt -d refseq_protein -i q_aa.txt  -o seed.out</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>&nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>ID 
+  Cyclic nucleotide-binding domain signature 1</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>PA 
+  [LIVM]-[VIC]-x-{H}-G-[DENQTA]-x-[GAC]-{L}-x-[LIVMFY](4)-x(2)-G</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'>HI
+  (450 451) (453 455) (457 458) (460 463) (466 466)</span></p>
+  <p class=MsoNormal>&nbsp;</p>
+  </td>
+ </tr>
+</table>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>The <i>seedp</i> functionality has been incorporated into
+standalone <i>blastpgp</i>, on the BLAST web server, it is called
+Pattern-Hit-Initiated BLAST or PHI-BLAST. The differences are that <i>blastpgp</i>
+does not report the total number of pattern occurrences in the database, but it
+does generate actual sequence alignments. The implementation in <i>blastpgp</i>
+provides more functionality in that the results of the (first) round of
+PHI-BLAST search can be used seamlessly as the start of a PSI-BLAST iterated
+search.</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal><u>4.6. For nucleotide searches</u></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>Search for nucleotide patterns using <i>seedtop</i> is very
+similar to what described above for proteins queries. The function names for
+nucleotide have no terminating p.</p>
+
+<p class=MsoNormal> </p>
+
+<p class=MsoNormal><b><i>5. Tech Support</i></b></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+<p class=MsoNormal>For additional questions and comments, please write to:</p>
+
+<p class=MsoNormal>            <a href="mailto:blast-help@ncbi.nlm.nih.gov">blast-help@ncbi.nlm.nih.gov</a></p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+</div>
+
+</body>
+
+</html>

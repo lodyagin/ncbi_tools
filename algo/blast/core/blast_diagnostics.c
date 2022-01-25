@@ -1,4 +1,4 @@
-/* $Id: blast_diagnostics.c,v 1.6 2005/05/26 15:24:05 dondosha Exp $
+/* $Id: blast_diagnostics.c,v 1.7 2005/06/09 17:06:14 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_diagnostics.c,v 1.6 2005/05/26 15:24:05 dondosha Exp $";
+    "$Id: blast_diagnostics.c,v 1.7 2005/06/09 17:06:14 dondosha Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_diagnostics.h>
@@ -94,6 +94,9 @@ void Blast_UngappedStatsUpdate(BlastUngappedStats* ungapped_stats,
 void 
 Blast_DiagnosticsUpdate(BlastDiagnostics* global, BlastDiagnostics* local)
 {
+    if (!local)
+        return;
+
    if (global->mt_lock) 
       MT_LOCK_Do(global->mt_lock, eMT_Lock);
 

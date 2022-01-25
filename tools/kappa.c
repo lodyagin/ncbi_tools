@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: kappa.c,v 6.60 2005/05/18 21:27:33 papadopo Exp $";
+static char const rcsid[] = "$Id: kappa.c,v 6.67 2005/08/05 12:04:53 coulouri Exp $";
 
-/* $Id: kappa.c,v 6.60 2005/05/18 21:27:33 papadopo Exp $ 
+/* $Id: kappa.c,v 6.67 2005/08/05 12:04:53 coulouri Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,9 +34,94 @@ Authors: Alejandro Schaffer, Mike Gertz
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.60 $
+ $Revision: 6.67 $
 
  $Log: kappa.c,v $
+ Revision 6.67  2005/08/05 12:04:53  coulouri
+ From Mike Gertz:
+ - Move setting gap_align->translate2 to Kappa_RecordInitialSearch;
+   for tblastn and some option settings it would not otherwise get set.
+ - Remove a now redundant setting of gap_align->translate2 in the
+   HitToGapAlign routine.
+ - Fixes to comments.
+
+ Revision 6.66  2005/08/02 14:40:29  coulouri
+ From Mike Gertz:
+ - Fixes to comments
+ - Added enum constant eGapChar; renamed eStarChar to eStopChar.
+ - Change the integer type of some variables to suppress warnings about
+   assigning a wider type to a narrower type.
+ - Made the routines BLbasicSmithWatermanScoreOnly and BLSmithWatermanFindStart
+   static.
+ - Renamed s_ScatterFreqRatios -> s_ScatterScores; renamed parameters.
+ - In NewAlignmentUsingXdrop, use the translate2 field from gap_align
+   to set the same field in the edit block.
+ - Changed the Kappa_WindowInfo datatype to hold a list of HSPs in the
+   window; added logic in several places, notably WindowsFromHSPs, to
+   generate and maintain these lists.
+ - Refactored Kappa_AdjustSearch.  Use a more sophisticated rule,
+   implemented in the new Kappa_GetSubjectComposition routine, to
+   determine the subject sequence composition for tblastn.
+ - Removed unused parameters from several routines.
+ - In RedoAlignmentCore, delete NRrecord to avoid a memory leak.
+
+ Revision 6.65  2005/07/28 14:34:06  coulouri
+ From Mike Gertz:
+ - Made minor fixes to whitespace and formatting.
+ - Fixed the comment to SWheap to accurately reflect recent changes in
+   the way SWheapRecordCompare is used.
+ - Changed some #define'd constants to enums or "static const"
+   variables.  Renamed these constants appropriately.
+ - Made the array alphaConvert and the routine scalePosMatrix static.
+ - Made sure that gap_align->translate2 is set for tblastn.
+ - Fixed a bug Kappa_SequenceGetTranslatedWindow: the wrong formula had
+   been used to compute num_nucleotides.
+
+ Revision 6.64  2005/07/26 13:07:20  coulouri
+ - Changed #include "NRdefs.h" to #include <NRdefs.h> to be consistent
+   with toolbox conventions.
+
+ - Removed the unused kScoreMatrixRange constant
+
+ - Extended comments for some routines.  Fixed spelling and other
+   errors in comments.
+
+ - Fixed white space and formatting in several locations.
+
+ - Renamed functions:
+   o permuteLetterProbs -> s_GatherLetterProbs
+   o permuteFreqRatios  -> s_ScatterFreqRatios
+   o adjustBXZ -> Kappa_AdjustBXZ
+   o roundScoreMatrix -> s_RoundScoreMatrix
+
+ - Eliminated the use of a temporary variable in REscaleInitialScores.
+
+ - In sScatterFreqRatios, replaced the NRrecord parameter by a pointer
+   to the frequency ratio matrix contained in the record.
+
+ Revision 6.63  2005/07/14 20:19:45  coulouri
+    - In Kappa_SequenceGetWindow, change all selenocysteine (U)
+      residues in the subject sequence to X.
+    - In scaleMatrix, do not compute the log of frequency ratios that are
+      zero, set the matrix element to BLAST_SCORE_MIN instead.
+    - Removed the startMatrix parameter to scaleMatrix, as it is no
+      longer used.
+
+ Revision 6.61  2005/06/08 19:31:31  papadopo
+ From Michael Gertz:
+ 1. The use of the score for comparing collections of alignments
+    was removed in March 2004; revert to the previous rule
+ 2. Added a new field "bestScore" to the SWheapRecord structure
+ 3. Various additional changes to support the use of score as a
+    key in a SWheapRecord
+ 4. The comparison function is now used to determine whether new HSPs
+    may be added to the heap.  Previously, the evalue only was used
+ 5. Removed a complex test that sometimes terminated computation of
+    Smith-Waterman alignments for a given subject sequence. It is more
+    consistent with all other modes of operation to omit this test
+ 6. Removed the "capacity" parameter to SWheapInitialize and used the
+    heapThreshold parameter to set the capacity for the heap
+
  Revision 6.60  2005/05/18 21:27:33  papadopo
  make fillResidueProbability unconditional in Kappa_AdjustSearch
 
@@ -291,9 +376,7 @@ Contents: Utilities for doing Smith-Waterman alignments and adjusting
 #include <fcntl.h>
 #include <profiles.h>
 #include <Mode_condition.h>
-
-#include "NRdefs.h"
-/*#include "Mode_condition.h"*/
+#include <NRdefs.h>
 
 extern Nlm_FloatHi LIBCALL
 impalaKarlinLambdaNR PROTO((BLAST_ScoreFreqPtr sfp,
@@ -302,22 +385,45 @@ impalaKarlinLambdaNR PROTO((BLAST_ScoreFreqPtr sfp,
 
 /** by what factor might initially reported E-value exceed true Evalue */
 #define EVALUE_STRETCH 5
-/** number of real aminoacids (i.e.: does not include U, X, B, etc) */
+
+/** number of real amino acids (i.e.: does not include U, X, B, etc) */
 #define PRO_TRUE_ALPHABET_SIZE 20
-/** range of scores in a matrix */
-#define kScoreMatrixScoreRange 10000
 
 /** For translated subject sequences, the number of amino acids to
     include before and after the existing aligned segment when
     generating a composition-based scoring system. */
-#define KAPPA_WINDOW_BORDER 200
+static const Int4 kWindowBorder = 200;
 
 /**positions of true characters in protein alphabet*/
 static Int4 trueCharPositions[PRO_TRUE_ALPHABET_SIZE] =
   {1,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,22};
 
-/**conversion from 26 letter order to 20 letter order*/
-Int4 alphaConvert[PROTEIN_ALPHABET] = {(-1),0,(-1),4,3,6,13,7,8,9,11,10,12,2,14,5,1,15,16,19,17,(-1),18,(-1),(-1),(-1)};
+/**
+ * conversion from 26 letter NCBIstdaa alphabet to 20 letter order
+ * for true amino acids: ARNDCQEGHILKMFPSTWYV.  This order is
+ * alphabetical in the standard three-letter abbreviation of each
+ * amino acid */
+static Int4 alphaConvert[PROTEIN_ALPHABET] =
+  {(-1), 0, (-1),  4, 3, 6, 13, 7, 8, 9, 11, 10, 12, 2, 14, 5, 1, 15,
+   16, 19, 17, (-1), 18, (-1), (-1), (-1)};
+
+/* Some characters in the 26 letter NCBIstdaa alphabet, including
+   ambiguity characters, selenocysteine and the stop character. */
+enum { eGapChar = 0, eBchar = 2, eDchar = 4, eEchar = 5, eNchar = 13,
+       eQchar = 15, eXchar = 21, eZchar = 23, eSelenocysteine = 24,
+       eStopChar = 25};
+
+/** relative entropy of BLOSUM62 */
+static const Nlm_FloatHi kFixedReBlosum62 = 0.44;
+
+/** pseudocounts for relative-entropy-based score matrix adjustment */
+static const Int4 kReMatrixAdjustmentPseudocounts = 20;
+
+/**
+ * Desired margin between an end of region used for computing a
+ * composition, and the nearest StopChar; the desired margin may
+ * not be attained. */
+static const Int4 kCompositionMargin = 20;
 
 /**
  * Create a score set from the data in an HSP.
@@ -336,7 +442,7 @@ GetScoreSetFromBlastHsp(
   Nlm_FloatHi scoreDivisor)
 {
   ScorePtr      score_set = NULL;       /* the new score set */
-  Int4          score;          /* the score, scaled using scaleDivisor */
+  Int4          score;          /* the score, scaled using scoreDivisor */
   Nlm_FloatHi   bit_score;      /* the integer-valued score, in bits */
   Nlm_FloatHi   evalue;         /* the e-value, with numbers too close to zero
                                    set to zero */
@@ -373,7 +479,7 @@ GetScoreSetFromBlastHsp(
   }
 
   MakeBlastScore(&score_set, "comp_adjustment_method",0.0,
-		 hsp->comp_adjustment_method);
+                 hsp->comp_adjustment_method);
   return score_set;
 }
 
@@ -400,20 +506,17 @@ SeqAlignsFromHitlist(
   SeqIdPtr query_id,
   Nlm_FloatHi lambda,
   Nlm_FloatHi logK,
-  Nlm_FloatHi scoreDivisor,
-  Nlm_FloatHi * bestEvalue)
+  Nlm_FloatHi scoreDivisor)
 {
   SeqAlignPtr aligns = NULL;  /* list of SeqAligns to be returned */
   Int4        hsp_index;
 
-  *bestEvalue = INT4_MAX;
   for( hsp_index = hitlist->hspcnt - 1; hsp_index >= 0; hsp_index-- ) {
     /* iterate in reverse order over all HSPs in the hitlist */
     BLAST_HSPPtr hsp;           /* HSP for this iteration */
     SeqAlignPtr seqAlign;       /* the new SeqAlign */
 
     hsp      = hitlist->hsp_array[hsp_index];
-    if( hsp->evalue < *bestEvalue ) *bestEvalue = hsp->evalue;
 
     seqAlign = GapXEditBlockToSeqAlign(hsp->gap_info, subject_id, query_id);
     seqAlign->score = GetScoreSetFromBlastHsp(hsp, lambda, logK, scoreDivisor);
@@ -509,7 +612,7 @@ typedef struct Kappa_DistinctAlignment {
   Int4 matchStart;       /**< the start of the alignment in the subject */
   Int4 matchEnd;         /**< one past the end of the alignment in the
                               subject */
-  Int4 frame;            /**< the subject frame */
+  Int2 frame;            /**< the subject frame */
   GapXEditBlockPtr editBlock;   /**< the alignment info for a gapped
                                      alignment */
   struct Kappa_DistinctAlignment * next;  /**< the next alignment in the
@@ -560,11 +663,11 @@ static BLAST_HitListPtr
 HitlistFromDistinctAlignments(
   BlastSearchBlkPtr search,
   Kappa_DistinctAlignment ** alignments,
-  Int2 whichMode)
+  Int4 whichMode)
 {
   /* The context of the query is always zero in current
    * implementations of RedoAlignmentCore. */
-  const Int4 context = 0;
+  const Int2 context = 0;
 
   BLAST_HitListPtr hitlist;             /* the new hitlist */
   Kappa_DistinctAlignment * align;      /* represents the current
@@ -600,13 +703,13 @@ HitlistFromDistinctAlignments(
     hsp->evalue         = 0.0;  /* E-values are computed after the full
                                    hitlist has been created. */
     hsp->gap_info       = align->editBlock;
-    if (KEEP_OLD_MATRIX == whichMode)
+    if( KEEP_OLD_MATRIX == whichMode ) {
       hsp->comp_adjustment_method = COMP_BASED_STATISTICS;
-    else {
+    } else {
       if (SMITH_WATERMAN_ONLY == whichMode)
-	hsp->comp_adjustment_method = NO_COMP_ADJUSTMENT;
-      else 
-	hsp->comp_adjustment_method = COMP_MATRIX_ADJUSTMENT;
+        hsp->comp_adjustment_method = NO_COMP_ADJUSTMENT;
+      else
+        hsp->comp_adjustment_method = COMP_MATRIX_ADJUSTMENT;
     }
     /* Break the aliasing between align->editBlock and hsp->gap_info. */
     align->editBlock = NULL;
@@ -775,6 +878,9 @@ isAlreadyContained(
 typedef struct SWheapRecord {
   Nlm_FloatHi   bestEvalue;     /**< best (smallest) evalue of all alignments
                                      in the record */
+  Int4          bestScore;      /**< best (largest) score; used to break
+                                     ties between records with the same
+                                     e-value */
   Int4          subject_index;  /**< index of the subject sequence in
                                      the database */
   SeqAlignPtr   theseAlignments;  /**< a list of alignments */
@@ -786,31 +892,41 @@ static Boolean
 SWheapRecordCompare(SWheapRecord * place1,
                     SWheapRecord * place2)
 {
-  return ((place1->bestEvalue    >  place2->bestEvalue) ||
-          (place1->bestEvalue    == place2->bestEvalue &&
-           place1->subject_index >  place2->subject_index));
+    int result;
+    if(0 == (result = BLAST_CMP(place1->bestEvalue, place2->bestEvalue)) &&
+       0 == (result = BLAST_CMP(place2->bestScore, place1->bestScore))) {
+        result = BLAST_CMP(place1->subject_index, place2->subject_index);
+    }
+    return result > 0;
 }
 
 
 /** swap two records in the heap*/
 static void
-SWheapRecordSwap(SWheapRecord * heapArray,
-                 Int4 i,
-                 Int4 j)
+SWheapRecordSwap(SWheapRecord * record1,
+                 SWheapRecord * record2)
 {
-  /* bestEvalue, theseAlignments and subject_index are temporary
+  /* bestEvalue, bestScore, theseAlignments and subject_index are temporary
    * variables used to perform the swap. */
-  Nlm_FloatHi bestEvalue       = heapArray[i].bestEvalue;
-  SeqAlignPtr theseAlignments  = heapArray[i].theseAlignments;
-  Int4        subject_index    = heapArray[i].subject_index;
+  Nlm_FloatHi bestEvalue;
+  Int4 bestScore, subject_index;
+  SeqAlignPtr theseAlignments;
 
-  heapArray[i].bestEvalue      = heapArray[j].bestEvalue;
-  heapArray[i].theseAlignments = heapArray[j].theseAlignments;
-  heapArray[i].subject_index   = heapArray[j].subject_index;
+  bestEvalue           = record1->bestEvalue;
+  record1->bestEvalue  = record2->bestEvalue;
+  record2->bestEvalue  = bestEvalue;
 
-  heapArray[j].bestEvalue      = bestEvalue;
-  heapArray[j].theseAlignments = theseAlignments;
-  heapArray[j].subject_index   = subject_index;
+  bestScore            = record1->bestScore;
+  record1->bestScore   = record2->bestScore;
+  record2->bestScore   = bestScore;
+
+  subject_index             = record1->subject_index;
+  record1->subject_index    = record2->subject_index;
+  record2->subject_index    = subject_index;
+
+  theseAlignments           = record1->theseAlignments;
+  record1->theseAlignments  = record2->theseAlignments;
+  record2->theseAlignments  = theseAlignments;
 }
 
 
@@ -837,6 +953,7 @@ SWheapIsValid(SWheapRecord * heapArray,
   }
   return TRUE;
 }
+
 
 /** convenience debugging macro for this module */
 #ifdef KAPPA_INTENSE_DEBUG
@@ -874,7 +991,7 @@ SWheapifyDown(SWheapRecord * heapArray,
        (SWheapRecordCompare(&(heapArray[right]), &(heapArray[largest]))))
       largest  = right;
     if(largest != i) {
-      SWheapRecordSwap(heapArray, i, largest);
+      SWheapRecordSwap(&heapArray[i], &heapArray[largest]);
       /* push largest up the heap */
       i       = largest;       /* check next level down */
     } else
@@ -893,15 +1010,13 @@ SWheapifyDown(SWheapRecord * heapArray,
  * @param n              size of heapArray
  */
 static void
-SWheapifyUp(SWheapRecord * heapArray,
-            Int4 i,
-            Int4 n)
+SWheapifyUp(SWheapRecord * heapArray, Int4 i)
 {
   Int4 parent = i / 2;          /* index to the node that is the
                                    parent of node i */
   while(parent >= 1 &&
         SWheapRecordCompare(&(heapArray[i]), &(heapArray[parent]))){
-    SWheapRecordSwap(heapArray, i, parent);
+    SWheapRecordSwap(&heapArray[i], &heapArray[parent]);
 
     i       = parent;
     parent /= 2;
@@ -911,26 +1026,27 @@ SWheapifyUp(SWheapRecord * heapArray,
 
 /**
  * A SWheap represents a collection of alignments between one query
- * sequence and several matching subject sequences.  
+ * sequence and several matching subject sequences.
  *
  * Each matching sequence is allocated one record in a SWheap.  The
  * eValue of a query-subject pair is the best (smallest positive)
  * evalue of all alignments between the two sequences.
- * 
- * A match will be inserted in the the SWheap if:
+ *
+ * The comparison function for matches is SWheapRecordCompare.  A
+ * match will be inserted in the the SWheap if:
  * - there are fewer that SWheap::heapThreshold elements in the SWheap;
  * - the eValue of the match is <= SWheap::ecutoff; or
- * - the eValue of the match is less than the largest (worst) eValue
- *   already in the SWheap.
+ * - the match is less than (as determined by SWheapRecordCompare) the
+ *   largest (worst) match already in the SWheap.
  *
  * If there are >= SWheap::heapThreshold matches already in the SWheap
- * when a new match is to be inserted, then the match with the largest
- * (worst) eValue is removed, unless the largest eValue <=
- * SWheap::ecutoff.  Matches with eValue <= SWheap::ecutoff are never
- * removed by the insertion routine.  As a consequence, the SWheap can
- * hold an arbitrarily large number of matches, although it is
- * atypical for the number of matches to be greater than
- * SWheap::heapThreshold.
+ * when a new match is to be inserted, then the largest match (as
+ * determined by SWheapRecordCompare) is removed, unless the eValue of
+ * the largest match <= SWheap::ecutoff.  Matches with eValue <=
+ * SWheap::ecutoff are never removed by the insertion routine.  As a
+ * consequence, the SWheap can hold an arbitrarily large number of
+ * matches, although it is atypical for the number of matches to be
+ * greater than SWheap::heapThreshold.
  *
  * Once all matches have been collected, the SWheapToFlatList routine
  * may be invoked to return a list of all alignments. (see below).
@@ -946,7 +1062,8 @@ typedef struct SWheap {
   Int4 n;                       /**< The current number of elements */
   Int4 capacity;                /**< The maximum number of elements
                                      that may be inserted before the
-                                     SWheap must be resized */
+                                     SWheap must be resized, this
+                                     number must be >= heapThreshold */
   Int4 heapThreshold;           /**< see above */
   Nlm_FloatHi ecutoff;          /**< matches with evalue below ecutoff may
                                      always be inserted in the SWheap */
@@ -994,17 +1111,39 @@ ConvertToHeap(SWheap * self)
 /** @sa SWHEAP_RESIZE_FACTOR */
 #define SWHEAP_MIN_RESIZE 100
 
-/** Return true if self would insert a match that had the given eValue
- *  @param self         a SWheap
- *  @param eValue       the evalue to be tested.
+/** Return true if self may insert a match that had the given eValue,
+ * score and subject_index.
+ * 
+ *  @param self           a SWheap
+ *  @param eValue         the evalue to be tested.
+ *  @param score          the score to be tested
+ *  @param subject_index  the subject_index to be tested.
  */
 static Boolean
 SWheapWouldInsert(SWheap * self,
-                  Nlm_FloatHi eValue)
+                  Nlm_FloatHi eValue, 
+                  Int4 score, 
+                  Int4 subject_index)
 {
-  return self->n < self->heapThreshold ||
-    eValue <= self->ecutoff ||
-    eValue < self->worstEvalue;
+  if(self->n < self->heapThreshold ||
+      eValue <= self->ecutoff ||
+      eValue <  self->worstEvalue) {
+    return TRUE;
+  } else {
+    /* self is either currently a heap, or must be converted to one;
+     * use SWheapRecordCompare to compare against the worst element in
+     * the heap */
+    SWheapRecord heapRecord; /* temporary record to compare against */
+
+    if(self->heapArray == NULL) ConvertToHeap(self);
+    
+    heapRecord.bestEvalue       = eValue;
+    heapRecord.bestScore        = score;
+    heapRecord.subject_index    = subject_index;
+    heapRecord.theseAlignments  = NULL;
+    
+    return SWheapRecordCompare(&self->heapArray[1], &heapRecord);
+  }
 }
 
 
@@ -1016,6 +1155,7 @@ SWheapWouldInsert(SWheap * self,
  * @param self              the heap
  * @param alignments        a list of alignments
  * @param eValue            the best evalue among the alignments
+ * @param score             the best score among the alignments
  * @param subject_index     the index of the subject sequence in the database
  */
 static void
@@ -1023,6 +1163,7 @@ SWheapInsert(
   SWheap * self,
   SeqAlignPtr alignments,
   Nlm_FloatHi eValue,
+  Int4 score,
   Int4 subject_index)
 {
   if(self->array && self->n >= self->heapThreshold) {
@@ -1033,6 +1174,7 @@ SWheapInsert(
     SWheapRecord *heapRecord;   /* destination for the new alignments */
     heapRecord                  = &self->array[++self->n];
     heapRecord->bestEvalue      = eValue;
+    heapRecord->bestScore       = score;
     heapRecord->theseAlignments = alignments;
     heapRecord->subject_index   = subject_index;
     if( self->worstEvalue < eValue ) {
@@ -1058,31 +1200,32 @@ SWheapInsert(
       /* end if the heap must be resized */
       heapRecord    = &self->heapArray[++self->n];
       heapRecord->bestEvalue      = eValue;
+      heapRecord->bestScore       = score;
       heapRecord->theseAlignments = alignments;
       heapRecord->subject_index   = subject_index;
 
-      SWheapifyUp(self->heapArray, self->n, self->n);
+      SWheapifyUp(self->heapArray, self->n);
     } else {
       /* Some set of alignments must be discarded; discardedAlignments
        * will hold a pointer to these alignments. */
       SeqAlignPtr discardedAlignments = NULL;
+      SWheapRecord heapRecord;   /* Candidate record for insertion */
 
-      if(eValue >= self->worstEvalue) {
-        /* The new alignments must be discarded. */
-        discardedAlignments = alignments;
+      heapRecord.bestEvalue      = eValue;
+      heapRecord.bestScore       = score;
+      heapRecord.theseAlignments = alignments;
+      heapRecord.subject_index   = subject_index;
+
+      if(SWheapRecordCompare(&self->heapArray[1], &heapRecord)) {
+        /* The new record should be inserted, and the largest
+         * element currently in the heap may be discarded */
+        discardedAlignments = self->heapArray[1].theseAlignments;
+        MemCpy(&self->heapArray[1], &heapRecord, sizeof(SWheapRecord));
       } else {
-        /* The largest element in the heap must be discarded. */
-        SWheapRecord *heapRecord;     /* destination for the new alignments */
-        discardedAlignments         = self->heapArray[1].theseAlignments;
-
-        heapRecord                  = &self->heapArray[1];
-        heapRecord->bestEvalue      = eValue;
-        heapRecord->theseAlignments = alignments;
-        heapRecord->subject_index   = subject_index;
-
-        SWheapifyDown(self->heapArray, 1, self->n);
+        discardedAlignments         = heapRecord.theseAlignments;
       }
-      /* end else the largest element in the heap must be discarded */
+      SWheapifyDown(self->heapArray, 1, self->n);
+
       while(discardedAlignments != NULL) {
         /* There are discarded alignments that have not been freed. */
         SeqAlignPtr thisAlignment;     /* the head of the list of
@@ -1120,7 +1263,6 @@ SWheapWillAcceptOnlyBelowCutoff(SWheap * self)
  * directly to fields in the SWheap */
 static void
 SWheapInitialize(SWheap * self,
-                 Int4 capacity,
                  Int4 heapThreshold,
                  Nlm_FloatHi ecutoff)
 {
@@ -1128,12 +1270,11 @@ SWheapInitialize(SWheap * self,
   self->heapThreshold = heapThreshold;
   self->ecutoff       = ecutoff;
   self->heapArray     = NULL;
-  self->capacity      = 0;
+  self->capacity      = heapThreshold;
   self->worstEvalue   = 0;
   /* Begin life as a list */
   self->array =
-    (SWheapRecord *) MemNew((capacity + 1) * sizeof(SWheapRecord));
-  self->capacity      = capacity;
+    (SWheapRecord *) MemNew((self->capacity + 1) * sizeof(SWheapRecord));
 }
 
 
@@ -1146,11 +1287,11 @@ SWheapInitialize(SWheap * self,
 static void
 SWheapRelease(SWheap * self)
 {
-  if(self->heapArray) free(self->heapArray);
-  if(self->array) free(self->array);
+  if(self->heapArray) MemFree(self->heapArray);
+  if(self->array) MemFree(self->array);
 
   self->n = self->capacity = self->heapThreshold = 0;
-  self->heapArray = NULL;
+  self->heapArray = NULL;  self->array = NULL;
 }
 
 
@@ -1172,12 +1313,12 @@ SWheapPop(SWheap * self)
     last  = &self->heapArray[self->n];
 
     results = first->theseAlignments;
+    if( --self->n > 0 ) {
+      /* The heap is still not empty */
+      MemCpy(first, last, sizeof(SWheapRecord));
 
-    first->theseAlignments = last->theseAlignments;
-    first->bestEvalue      = last->bestEvalue;
-    first->subject_index   = last->subject_index;
-
-    SWheapifyDown(self->heapArray, 1, --self->n);
+      SWheapifyDown(self->heapArray, 1, self->n);
+    }
   }
 
   KAPPA_ASSERT(SWheapIsValid(self->heapArray, 1, self->n));
@@ -1239,7 +1380,7 @@ SWheapToFlatList(SWheap * self)
  *                          specific or not [in]
  * @return                  the expect value of the alignment
  */
-Nlm_FloatHi
+static Nlm_FloatHi
 BLbasicSmithWatermanScoreOnly(Uint1 * matchSeq,
    Int4 matchSeqLength, Uint1 *query, Int4 queryLength,
    BLAST_Score **matrix,
@@ -1347,9 +1488,9 @@ BLbasicSmithWatermanScoreOnly(Uint1 * matchSeq,
  * @param positionSpecific  determines whether matrix is position specific
  *                          or not
  */
-Int4
+static Int4
 BLSmithWatermanFindStart(Uint1 * matchSeq,
-   Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix,
+   Int4 matchSeqLength, Uint1 *query, BLAST_Score **matrix,
    Int4 gapOpen, Int4 gapExtend,  Int4 matchSeqEnd, Int4 queryEnd, Int4 score,
    Int4 *matchSeqStart, Int4 *queryStart, Boolean positionSpecific)
 {
@@ -1583,7 +1724,7 @@ BLspecialSmithWatermanScoreOnly(Uint1 * matchSeq,
  * @return the score found
  */
 static Int4 BLspecialSmithWatermanFindStart(Uint1 * matchSeq, 
-   Int4 matchSeqLength, Uint1 *query, Int4 queryLength, BLAST_Score **matrix, 
+   Int4 matchSeqLength, Uint1 *query, BLAST_Score **matrix,
    Int4 gapOpen, Int4 gapExtend,  Int4 matchSeqEnd, Int4 queryEnd, Int4 score,
    Int4 *matchSeqStart, Int4 *queryStart, Int4 *numForbidden, 
    Int4 ** forbiddenRanges, Boolean positionSpecific)
@@ -1866,7 +2007,7 @@ SmithWatermanFindStart(Kappa_SequenceData * subject,
   if( forbiddenRanges->isEmpty ) {
     return
       BLSmithWatermanFindStart(subject->data, subject->length,
-                               query  ->data, query  ->length,
+                               query  ->data,
                                matrix, gapOpen, gapExtend,
                                matchSeqEnd,   queryEnd,   score,
                                matchSeqStart, queryStart,
@@ -1874,7 +2015,7 @@ SmithWatermanFindStart(Kappa_SequenceData * subject,
   } else {
     return
       BLspecialSmithWatermanFindStart(subject->data, subject->length,
-                                      query  ->data, query  ->length,
+                                      query  ->data,
                                       matrix, gapOpen, gapExtend,
                                       matchSeqEnd,   queryEnd,   score,
                                       matchSeqStart, queryStart,
@@ -2068,9 +2209,11 @@ static BLAST_ScoreFreqPtr posfillSfp(BLAST_Score **matrix, Int4 matrixLength, Nl
 /**
  * Given a sequence of 'length' amino acid residues, compute the
  * probability of each residue and put that in the array resProb
- * return the adjusted length of the sequence not counting X's
+ * return the adjusted length of the sequence not counting Xs.
  */
-static Int4 fillResidueProbability(Uint1Ptr sequence, Int4 length, Nlm_FloatHi * resProb)
+static Int4
+fillResidueProbability(Uint1Ptr sequence, Int4 length,
+                       Nlm_FloatHi * resProb)
 {
   Int4 frequency[PROTEIN_ALPHABET]; /*frequency of each letter*/
   Int4 i; /*index*/
@@ -2138,9 +2281,9 @@ static Nlm_FloatHi **getStartFreqRatios(BlastSearchBlkPtr search,
      }
    } else {
      for (i = 0; i < PROTEIN_ALPHABET; i++) {
-         for (j = 0; j < PROTEIN_ALPHABET; j++) {
-             returnRatios[i][j] = stdFreqRatios->data[i][j];
-         }
+       for (j = 0; j < PROTEIN_ALPHABET; j++) {
+         returnRatios[i][j] = stdFreqRatios->data[i][j];
+       }
      }
    }
    stdFreqRatios = PSIMatrixFrequencyRatiosFree(stdFreqRatios);
@@ -2158,7 +2301,7 @@ static Nlm_FloatHi **getStartFreqRatios(BlastSearchBlkPtr search,
        for(j = 0; j < PROTEIN_ALPHABET; j++) {
          if ((standardProb[query[i]] > posEpsilon) &&
              (standardProb[j] > posEpsilon) &&
-             (j != StarChar) && (j != Xchar) &&
+             (j != eStopChar) && (j != Xchar) &&
              (startNumerator[i][j] > posEpsilon))
          {
            returnRatios[i][j] = startNumerator[i][j]/standardProb[j];
@@ -2172,141 +2315,172 @@ static Nlm_FloatHi **getStartFreqRatios(BlastSearchBlkPtr search,
 }
 
 
-/*convert from 26-letter alphabet in inputLetterProbs to 20 letter
- *alphabet in outputLetterProbs*/
-static void  permuteLetterProbs(Nlm_FloatHi * outputLetterProbs, 
-				Nlm_FloatHi * inputLetterProbs)
+/**
+ * Convert letter probabilities from a 26-letter NCBIstdaa alphabet to
+ * a 20 letter ARND... amino acid alphabet. (@see alphaConvert)
+ *
+ * @param inputLetterProbs    the 26-letter probabilities [in]
+ * @param outputLetterProbs   the 20-letter probabilities [out]
+ */
+static void
+s_GatherLetterProbs(Nlm_FloatHi * outputLetterProbs,
+                    Nlm_FloatHi * inputLetterProbs)
 {
-   Int4 c; /*index over characters*/
+  Int4 c; /*index over characters*/
 
-   for (c = 0; c < PROTEIN_ALPHABET; c++) {
-     if ((-1) != alphaConvert[c]) {
-       outputLetterProbs[alphaConvert[c]] = inputLetterProbs[c];
-     }
-   }
-}
-/*convert frequency ratios from 20-letter indexing in NRrecord->score final
-  to 26-letter indexing in freq ratios*/
-static void  permuteFreqRatios(Nlm_FloatHi ** freqRatios, NRitems * NRrecord)
-{
-   Int4 p, c; /*indices over positions and characters*/
-
-   for (p = 0; p < PROTEIN_ALPHABET; p++) {
-     for (c = 0; c < PROTEIN_ALPHABET; c++) {
-	 if (((-1) != alphaConvert[p]) && ((-1) != alphaConvert[c])) {
-	   freqRatios[p][c] = NRrecord->score_final[alphaConvert[p]][alphaConvert[c]];
-       }
-     }
-   }
-}
-	  
-/*scale matrix in floating point*/
-
-static void  REscaleInitialScores(BLAST_Score ** startMatrix, 
-              Nlm_FloatHi **REscoreMatrix, Nlm_FloatHi LambdaRatio)
-{
-   Int4 p, c; /*indices over positions and characters*/
-   Nlm_FloatHi temp; /*intermediate term in computation*/
-
-   for (p = 0; p < PROTEIN_ALPHABET; p++) {
-     for (c = 0; c < PROTEIN_ALPHABET; c++) {
-       if (startMatrix[p][c] == BLAST_SCORE_MIN)
-	 REscoreMatrix[p][c] = startMatrix[p][c];
-       else {
-	 if (((-1) != alphaConvert[p]) && ((-1) != alphaConvert[c])) {
-	   temp = REscoreMatrix[p][c];
-	   temp = temp * LambdaRatio; 
-           REscoreMatrix[p][c] = temp;
-	 }
-       }
-     }
-   }
+  for (c = 0; c < PROTEIN_ALPHABET; c++) {
+    if ((-1) != alphaConvert[c]) {
+      outputLetterProbs[alphaConvert[c]] = inputLetterProbs[c];
+    }
+  }
 }
 
-/*characters involved in ambiguous amino acide notation*/
-#define Bchar 2
-#define Dchar 4
-#define Nchar 13
-#define Echar 5
-#define Qchar 15
-#define Zchar 23
 
-#define FIXED_RE_BLOSUM62 0.44  /*relative entropy of BLOSUM62*/
-#define FIXED_PSEUDOCOUNTS 20 /*pseudocounts for relative-entropy-based
-                               *score matrix adjustment */
-
-/**determine the scores for ambiguous B and Z and don't care X by averaging*/
-static void  adjustBXZ(Nlm_FloatHi **floatScoreMatrix, NRitems *NRrecord)
+/**
+ * Scatter and scale a matrix of scores for a 20 letter ARND...  amino
+ * acid alphabet into a matrix for a 26 letter NCBIstdaa alphabet
+ * (@see alphaConvert), leaving scores for any character not present
+ * in the smaller alphabet untouched.
+ *
+ * @param dMatrixTrueAA   frequency ratios for the 20 letter alphabet [in]
+ * @param scale           multiply the elements in dMatrixTrueAA by
+ *                        scale when applying the scatter.
+ * @param dMatrix         frequency ratios for the 26 letter alphabet [out]
+ */
+static void
+s_ScatterScores(Nlm_FloatHi ** dMatrix,
+                Nlm_FloatHi scale,
+                Nlm_FloatHi ** dMatrixTrueAA)
 {
+  Int4 p, c; /*indices over positions and characters*/
 
+  for (p = 0; p < PROTEIN_ALPHABET; p++) {
+    for (c = 0; c < PROTEIN_ALPHABET; c++) {
+      if (((-1) != alphaConvert[p]) && ((-1) != alphaConvert[c])) {
+        dMatrix[p][c] =
+            scale * dMatrixTrueAA[alphaConvert[p]][alphaConvert[c]];
+      }
+    }
+  }
+}
+
+
+/**
+ * Multiply all elements in score matrix that correspond to true
+ * amino acids by LambdaRatio.
+ *
+ * @param startMatrix    I don't think we need this
+ * @param REscoreMatrix  the matrix to be scaled
+ * @param LambdaRatio    the scale factor
+ */
+static void
+REscaleInitialScores(BLAST_Score ** startMatrix,
+                     Nlm_FloatHi **REscoreMatrix, Nlm_FloatHi LambdaRatio)
+{
+  Int4 p, c; /*indices over positions and characters*/
+
+  for (p = 0; p < PROTEIN_ALPHABET; p++) {
+    for (c = 0; c < PROTEIN_ALPHABET; c++) {
+      if (startMatrix[p][c] == BLAST_SCORE_MIN) {
+        REscoreMatrix[p][c] = startMatrix[p][c];
+      } else {
+        if (((-1) != alphaConvert[p]) && ((-1) != alphaConvert[c])) {
+          REscoreMatrix[p][c] *= LambdaRatio;
+        }
+      }
+    }
+  }
+}
+
+
+/**
+ * Use averaging to determine the scores for ambiguous residues B and
+ * Z and "don't care" residue X.
+ */
+static void
+Kappa_AdjustBXZ(Nlm_FloatHi **floatScoreMatrix, NRitems *NRrecord)
+{
   Int4 i,j; /*loop indices*/
   Nlm_FloatHi sum; /*sum of scores within a row or column*/
   Nlm_FloatHi overallSum; /*total sum of scores in the matrix*/
 
   for(i = 0; i < PROTEIN_ALPHABET; i++) {
     if ((-1) != alphaConvert[i]) {
-      sum = floatScoreMatrix[i][Dchar] + floatScoreMatrix[i][Nchar];
-      floatScoreMatrix[i][Bchar] = sum/2;
-      sum = floatScoreMatrix[Dchar][i] + floatScoreMatrix[Nchar][i];
-      floatScoreMatrix[Bchar][i] = sum/2;
+      sum = floatScoreMatrix[i][eDchar] + floatScoreMatrix[i][eNchar];
+      floatScoreMatrix[i][eBchar] = sum/2;
+      sum = floatScoreMatrix[eDchar][i] + floatScoreMatrix[eNchar][i];
+      floatScoreMatrix[eBchar][i] = sum/2;
     }
   }
-  sum = floatScoreMatrix[Bchar][Bchar] + floatScoreMatrix[Nchar][Nchar];
-  floatScoreMatrix[Bchar][Bchar] = sum/2;
+  sum = floatScoreMatrix[eBchar][eBchar] + floatScoreMatrix[eNchar][eNchar];
+  floatScoreMatrix[eBchar][eBchar] = sum/2;
 
   for(i = 0; i < PROTEIN_ALPHABET; i++) {
     if ((-1) != alphaConvert[i]) {
-      sum = floatScoreMatrix[i][Echar] + floatScoreMatrix[i][Qchar];
-      floatScoreMatrix[i][Zchar] = sum/2;
-      sum = floatScoreMatrix[Echar][i] + floatScoreMatrix[Qchar][i];
-      floatScoreMatrix[Zchar][i] = sum/2;
+      sum = floatScoreMatrix[i][eEchar] + floatScoreMatrix[i][eQchar];
+      floatScoreMatrix[i][eZchar] = sum/2;
+      sum = floatScoreMatrix[eEchar][i] + floatScoreMatrix[eQchar][i];
+      floatScoreMatrix[eZchar][i] = sum/2;
     }
   }
-  sum = floatScoreMatrix[Echar][Echar] + floatScoreMatrix[Qchar][Qchar];
-  floatScoreMatrix[Zchar][Zchar] = sum/2;
+  sum = floatScoreMatrix[eEchar][eEchar] + floatScoreMatrix[eQchar][eQchar];
+  floatScoreMatrix[eZchar][eZchar] = sum/2;
 
   overallSum = 0.0;
   for(i = 0; i < PROTEIN_ALPHABET; i++) {
     if ((-1) != alphaConvert[i]) {
       sum = 0.0;
       for(j = 0; j < PROTEIN_ALPHABET; j++) {
-	if ((-1) != alphaConvert[j]) {
-	  sum += floatScoreMatrix[i][j] * NRrecord->first_seq_freq_wpseudo[alphaConvert[i]];
-          overallSum += floatScoreMatrix[i][j] * NRrecord->first_seq_freq_wpseudo[alphaConvert[i]]
-	    * NRrecord->second_seq_freq_wpseudo[alphaConvert[j]];
-	}
+          if ((-1) != alphaConvert[j]) {
+            sum += floatScoreMatrix[i][j]
+              * NRrecord->first_seq_freq_wpseudo[alphaConvert[i]];
+            overallSum += floatScoreMatrix[i][j]
+              * NRrecord->first_seq_freq_wpseudo[alphaConvert[i]]
+              * NRrecord->second_seq_freq_wpseudo[alphaConvert[j]];
+          }
       }
-      floatScoreMatrix[i][Xchar] = sum;
+      floatScoreMatrix[i][eXchar] = sum;
     }
   }
-  floatScoreMatrix[Xchar][Xchar] = overallSum;
+  floatScoreMatrix[eXchar][eXchar] = overallSum;
   for(i = 0; i < PROTEIN_ALPHABET; i++) {
     if ((-1) != alphaConvert[i]) {
       sum = 0.0;
       for(j = 0; j < PROTEIN_ALPHABET; j++) {
-	if ((-1) != alphaConvert[j]) {
-	  sum += floatScoreMatrix[j][i] * NRrecord->second_seq_freq_wpseudo[alphaConvert[i]];;
-   	}
+        if ((-1) != alphaConvert[j]) {
+          sum += floatScoreMatrix[j][i]
+            * NRrecord->second_seq_freq_wpseudo[alphaConvert[i]];;
+        }
       }
-      floatScoreMatrix[Xchar][i] = sum;
+      floatScoreMatrix[eXchar][i] = sum;
     }
   }
 }
 
-/**round the floating point scores in floatScoreMatrix and put them into matrix*/
-static void  roundScoreMatrix(BLAST_Score **matrix, 
-			      Nlm_FloatHi **floatScoreMatrix, 
-			      Int4 numPositions)
-{
-   Int4 p, c; /*indices over positions and characters*/
 
-   for (p = 0; p < numPositions; p++) {
-     for (c = 0; c < PROTEIN_ALPHABET; c++) {
-       if (matrix[p][c] != BLAST_SCORE_MIN)
-	 matrix[p][c] = Nlm_Nint(floatScoreMatrix[p][c]);
-     }
-   }
+/**
+ * Round a matrix of floating point scores.
+ * @param matrix             the matrix of integer valued scores [out]
+ * @param floadScoreMatrix   the matrix of floating point valued
+ *                           scores [in]
+ * @param numPositions       the number of rows of the matrices.
+ */
+static void
+s_RoundScoreMatrix(BLAST_Score **matrix,
+                   Nlm_FloatHi **floatScoreMatrix,
+                   Int4 numPositions)
+{
+  Int4 p, c; /*indices over positions and characters*/
+
+  for (p = 0; p < numPositions; p++) {
+    for (c = 0; c < PROTEIN_ALPHABET; c++) {
+      if (matrix[p][c] != BLAST_SCORE_MIN) {
+        matrix[p][c] = Nlm_Nint(floatScoreMatrix[p][c]);
+      }
+    }
+  }
 }
+
 
 /**
  * take every entry of startFreqRatios that is not corresponding to a
@@ -2316,13 +2490,12 @@ static void  roundScoreMatrix(BLAST_Score **matrix,
  * matrix have dimensions numPositions X PROTEIN_ALPHABET
  *
  * @param matrix preallocated matrix to be filled in [out]
- * @param startMatrix matrix to be scaled up [in]
  * @param startFreqRatios frequency ratios of starting matrix [in]
  * @param numPositions length of query [in]
  * @param Lambda A Karlin-Altschul parameter. [in]
  * @param LambdaRatio ratio of correct Lambda to it's original value [in]
  */
-static void scaleMatrix(BLAST_Score **matrix, BLAST_Score **startMatrix,
+static void scaleMatrix(BLAST_Score **matrix,
             Nlm_FloatHi **startFreqRatios, Int4 numPositions,
             Nlm_FloatHi Lambda, Nlm_FloatHi LambdaRatio)
 {
@@ -2331,9 +2504,9 @@ static void scaleMatrix(BLAST_Score **matrix, BLAST_Score **startMatrix,
 
    for (p = 0; p < numPositions; p++) {
      for (c = 0; c < PROTEIN_ALPHABET; c++) {
-       if (matrix[p][c] == BLAST_SCORE_MIN)
-         matrix[p][c] = startMatrix[p][c];
-       else {
+       if (0.0 == startFreqRatios[p][c]) {
+         matrix[p][c] = BLAST_SCORE_MIN;
+       } else {
          temp = log(startFreqRatios[p][c]);
          temp = temp/Lambda;
          temp = temp * LambdaRatio;
@@ -2346,7 +2519,7 @@ static void scaleMatrix(BLAST_Score **matrix, BLAST_Score **startMatrix,
 
 /** SCALING_FACTOR is a multiplicative factor used to get more bits of
  * precision in the integer matrix scores. It cannot be arbitrarily
- * large because we do not want total alignment scores to exceedto
+ * large because we do not want total alignment scores to exceed
  * -(BLAST_SCORE_MIN) */
 #define SCALING_FACTOR 32
 
@@ -2397,12 +2570,15 @@ computeScaledStandardMatrix(
  *                          irrelevant
  * @param sbp               stores various parameters of the search
  */
-void scalePosMatrix(BLAST_Score **fillPosMatrix, BLAST_Score **nonposMatrix, Char *matrixName, Nlm_FloatHi **posFreqs, Uint1 *query, Int4 queryLength, BLAST_ScoreBlkPtr sbp)
+static void
+scalePosMatrix(BLAST_Score **fillPosMatrix, BLAST_Score **nonposMatrix,
+               Char *matrixName, Nlm_FloatHi **posFreqs, Uint1 *query,
+               Int4 queryLength, BLAST_ScoreBlkPtr sbp)
 {
 
      posSearchItems *posSearch; /*used to pass data into scaling routines*/
      compactSearchItems *compactSearch; /*used to pass data into scaling routines*/
-     Int4 i; /*loop index*/   
+     Int4 i; /*loop index*/
      BLAST_ResFreqPtr stdrfp; /* gets standard frequencies in prob field */
      Int4 a; /*index over characters*/
 
@@ -2457,10 +2633,97 @@ typedef struct Kappa_WindowInfo
 {
   Int4 begin;  /**< the starting index of the range */
   Int4 end;    /**< one beyond the last item in the range */
-  Int4 frame;  /**< the translation frame of this window */
+  Int2 frame;  /**< the translation frame of this window */
   Int4 hspcnt; /**< the number of HSPs aligned to a subset of the data
                     in this window's range. */
+  BLASTResultHsp ** hsp_array;  /**< Array of pointers to HSPs
+                                     associated with this window; the
+                                     window does not own the original HSPs */
+  Int4 lhsp_array;              /**< Allocated size of hsp_array */
 } Kappa_WindowInfo;
+
+
+/**
+ * Create and initialize a new Kappa_WindowInfo
+ *
+ * Parameters to this function correspond directly to fields of
+ * Kappa_WindowInfo.
+ */
+static Kappa_WindowInfo *
+Kappa_WindowInfoNew(Int4 begin, Int4 end, Int2 frame,
+                    BLASTResultHsp * hsp_array, Int4 hspcnt)
+{
+  Int4 i;                       /* iteration index */
+  Kappa_WindowInfo * window;    /* new window to be returned */
+
+  window  = (Kappa_WindowInfo *) Nlm_MemNew(sizeof(Kappa_WindowInfo));
+
+  window->begin       = begin;
+  window->end         = end;
+  window->frame       = frame;
+  window->hspcnt      = hspcnt;
+  window->lhsp_array  = hspcnt;
+  window->hsp_array   =
+    (BLASTResultHsp **) Nlm_Calloc(hspcnt, sizeof(BLASTResultHsp *));
+
+  for(i = 0; i < hspcnt; i++ ) {
+    window->hsp_array[i] = &hsp_array[i];
+  }
+  return window;
+}
+
+
+/**
+ * Free an instance of Kappa_WindowInfo
+ *
+ * @param *window   on entry the window to be freed; on exit NULL
+ */
+static void
+Kappa_WindowInfoFree(Kappa_WindowInfo ** window)
+{
+  Nlm_Free((*window)->hsp_array);
+  Nlm_Free(*window);
+
+  *window = NULL;
+}
+
+
+/**
+ * Join two instance of Kappa_WindowInfo into a single info
+ * @param win1      on entry, one of the two windows to be joined; on exit
+ *                  the combined window
+ * @param *pwin2    on entry, the other window to be joined, on exit NULL
+ */
+static void
+Kappa_WindowInfoJoin(Kappa_WindowInfo * win1, Kappa_WindowInfo ** pwin2)
+{
+  Int4 i;                       /* iteration index */
+  Int4 new_hspcnt;              /* number of HSPs in the combined window */
+  Kappa_WindowInfo * win2;      /* the value of the parameter *pwin2 */
+  win2  = *pwin2;
+
+  KAPPA_ASSERT(win1->frame == win2->frame);
+
+  win1->begin = MIN(win1->begin, win2->begin);
+  win1->end   = MAX(win1->end,   win2->end);
+
+  new_hspcnt = win1->hspcnt + win2->hspcnt;
+  if(win1->lhsp_array < new_hspcnt) {
+    /* Resize win1 to hold additional HSPs */
+    while(win1->lhsp_array < new_hspcnt) {
+      win1->lhsp_array *= 2;
+    }
+    win1->hsp_array = (BLASTResultHsp **)
+        Nlm_MemMore(win1-> hsp_array,
+                    win1->lhsp_array * sizeof(BLASTResultHsp*));
+  }
+  for( i = 0; i < win2->hspcnt; i++ ) {
+    win1->hsp_array[win1->hspcnt + i] = win2->hsp_array[i];
+  }
+  win1->hspcnt = new_hspcnt;
+
+  Kappa_WindowInfoFree(pwin2);
+}
 
 
 /**
@@ -2496,6 +2759,21 @@ location_compare_windows(void * vp1, void *vp2)
 
 
 /**
+ * Invoke the standard score comparison function for BLASTResultHsp
+ * objects; the standard function regrettably has one too few levels
+ * of indirection.
+ */
+static int LIBCALLBACK
+Kappa_BLASTResultHspPtrScoreCmp(VoidPtr v1, VoidPtr v2)
+{
+  BLASTResultHsp ** h1 = (BLASTResultHsp **) v1;
+  BLASTResultHsp ** h2 = (BLASTResultHsp **) v2;
+
+  return BLASTResultHspScoreCmp(*h1, *h2);
+}
+
+
+/**
  * Reads a array of HSPs and creates a new array of pointers to
  * Kappa_WindowInfo so that each element in the array of HSPs is
  * contained in exactly one window
@@ -2521,10 +2799,9 @@ WindowsFromHSPs(
   Int4 sequence_length,
   Kappa_WindowInfo ***pwindows,
   Int4 * nWindows,
-  Int4 * lWindows,
   Int4 * window_of_hsp)
 {
-  Int4 k, ell;
+  Int4 k, ell;           /* iteration indices */
   Kappa_WindowIndexPair * window_and_index;  /* an array of windows
                                               * paired with the index
                                               * of the HSP that
@@ -2533,39 +2810,23 @@ WindowsFromHSPs(
   Int4 start_cluster;    /* start of a cluster of windows to be joined */
   Int4 length_joined;    /* the current length of the list of joined windows */
 
-  windows = *pwindows;
-  /* Make the window list have exactly hspcnt windows. */
-  if( *lWindows < hspcnt ) {
-    *lWindows = 2 * hspcnt;
-    windows = *pwindows =
-      MemMore(*pwindows, *lWindows *  sizeof(Kappa_WindowInfo*));
-  }
-  for( k = *nWindows; k < hspcnt; k++ ) {
-    windows[k] = MemNew(sizeof(Kappa_WindowInfo));
-  }
-  for( k = hspcnt; k < *nWindows; k++ ) {
-    MemFree(windows[k]);
-  }
+  windows = *pwindows = Nlm_MemNew(hspcnt * sizeof(Kappa_WindowInfo*));
+  window_and_index    = Nlm_MemNew(hspcnt * sizeof(Kappa_WindowIndexPair));
   *nWindows = hspcnt;
 
-  window_and_index = MemNew(hspcnt * sizeof(Kappa_WindowIndexPair));
-
   for( k = 0; k < hspcnt; k++ ) { /* for all HSPs */
-    /* length of the translation of the nucleotide sequence in this frame */
-    Int4 translated_length;
+    Int2 frame;             /* translation frame */
+    Int4 translated_length; /* length of the translation of the entire
+                               nucleotide sequence in this frame */
+    Int4 begin, end;        /* interval in amino acid coordinates of
+                               the translated window */
+    frame = hsp_array[k].subject_frame;
+    translated_length = (sequence_length - ABS(frame) + 1)/3;
 
-    windows[k]->frame = hsp_array[k].subject_frame;
-
-    if( windows[k]->frame > 0 ) {
-      translated_length = (sequence_length - windows[k]->frame + 1)/3;
-    } else {
-      translated_length = (sequence_length + windows[k]->frame - 1)/3;
-    }
-    windows[k]->begin = MAX(0, hsp_array[k].subject_offset - border);
-    windows[k]->end   = MIN(translated_length,
-                            hsp_array[k].subject_offset +
-                            hsp_array[k].subject_length + border);
-    windows[k]->hspcnt = 1;
+    begin = MAX(0, hsp_array[k].subject_offset - border);
+    end   = MIN(translated_length, hsp_array[k].subject_offset +
+                                   hsp_array[k].subject_length + border);
+    windows[k] = Kappa_WindowInfoNew(begin, end, frame, &hsp_array[k], 1);
 
     window_and_index[k].index  = k;
     window_and_index[k].window = windows[k];
@@ -2590,12 +2851,7 @@ WindowsFromHSPs(
        window->end >= nextWindow->begin) {
       /* Join the current window with the next window.  Do not add the
          current window to the output list. */
-      nextWindow->begin = MIN(window->begin, nextWindow->begin);
-      nextWindow->end   = MAX(window->end,   nextWindow->end  );
-
-      MemFree(window);
-      window_and_index[k].window = NULL;  /* Set the now dangling
-                                             pointer to NULL */
+      Kappa_WindowInfoJoin(nextWindow, &window_and_index[k].window);
     } else {
       /* Don't join the current window with the next window.  Add the
          current window to the output list instead */
@@ -2608,6 +2864,13 @@ WindowsFromHSPs(
     } /* end else don't join the current window with the next window */
   } /* end for all windows in the original list */
   *nWindows = length_joined;
+  for( k = 0; k < length_joined; k++ ) {  /* for each window */
+    /* sort the list of HSPs by score */
+    if( windows[k]->hspcnt > 1 ) {
+      HeapSort(windows[k]->hsp_array, windows[k]->hspcnt,
+               sizeof(BLASTResultHsp*), Kappa_BLASTResultHspPtrScoreCmp);
+    }
+  }
   for( k = length_joined; k < hspcnt; k++ ) {
     windows[k] = NULL;
   }
@@ -2655,7 +2918,6 @@ Kappa_SWFindFinalEndsUsingXdrop(
   Int4 matchEnd,
   GapAlignBlkPtr gap_align,
   Int4 score,
-  Nlm_FloatHi localScalingFactor,
   Int4 * queryAlignmentExtent,
   Int4 * matchAlignmentExtent,
   Int4 ** reverseAlignScript,
@@ -2784,7 +3046,7 @@ Kappa_MatchingSequenceRelease(Kappa_MatchingSequence * self)
  * Obtain a string of translated data
  *
  * @param self          the sequence from which to obtain the data [in]
- * @param window        the range and tranlation frame to get [in]
+ * @param window        the range and translation frame to get [in]
  * @param seqData       the resulting data [out]
  */
 static void
@@ -2798,7 +3060,8 @@ Kappa_SequenceGetTranslatedWindow(Kappa_MatchingSequence * self,
   Int4 num_nucleotides;         /* number of nucleotides to translate */
 
   nucleotide_start   = 3 * window->begin;
-  num_nucleotides    = 3 * (window->end - window->begin);
+  num_nucleotides    =
+    3 * (window->end - window->begin) + ABS(window->frame) - 1;
   { /* scope of nucleotide_data */
     Uint1Ptr nucleotide_data = MemNew((num_nucleotides + 1) * sizeof(Uint1));
     { /* scope of spp */
@@ -2830,7 +3093,7 @@ Kappa_SequenceGetTranslatedWindow(Kappa_MatchingSequence * self,
   } /* end scope of nucleotide_data */
 
 #ifndef KAPPA_NO_SEG_SEQUENCE_TBLASTN
-  { /* scope of variables used for seg filtering */
+  { /* scope of variables used for SEG filtering */
     BioseqPtr bsp_temp; /* a Bioseq for the translated sequence */
     ObjectIdPtr oip;    /* a unique ObjectId for the translated sequence */
     SeqLocPtr seg_slp;  /* a SeqLoc for SEG filtering */
@@ -2853,7 +3116,7 @@ Kappa_SequenceGetTranslatedWindow(Kappa_MatchingSequence * self,
     SeqMgrDeleteFromBioseqIndex(bsp_temp);
     bsp_temp->id = SeqIdSetFree(bsp_temp->id);
     bsp_temp     = BioseqFree(bsp_temp);
-  } /* end scope of variables used for seg filtering */
+  } /* end scope of variables used for SEG filtering */
 #endif
 }
 
@@ -2881,12 +3144,26 @@ Kappa_SequenceGetWindow(
       Uint1Ptr origData;        /* data obtained from readdb_get_sequence;
                                  * this data cannot be modified, so we copy
                                  * it. */
+      Int4       idx;
       seqData->length    = readdb_get_sequence(self->rdfp, self->index,
                                                (Uint1Ptr PNTR) & origData );
       seqData->buffer    = MemNew((seqData->length + 2) * sizeof(Uint1));
       seqData->buffer[0] = '\0';
       seqData->data      = &seqData->buffer[1];
-      MemCpy( seqData->data, origData, seqData->length + 1 );
+      for( idx = 0; idx < seqData->length; idx++ ) {
+        /* Copy the sequence data, replacing occurrences of amino acid
+         * number 24 (Selenocysteine) with number 21 (Undetermined or
+         * atypical). */
+        if(origData[idx] != eSelenocysteine) {
+            seqData->data[idx] = origData[idx];
+        } else {
+          seqData->data[idx] = eXchar;
+          fprintf(stderr, "Selenocysteine (U) at position %ld"
+                  " replaced by X\n",
+                  (long) idx + 1);
+        }
+      }
+      seqData->data[seqData->length] = '\0';
     } else { /* self->rdfp is NULL */
       SeqPortPtr spp = NULL;      /* a SeqPort used to read the
                                      sequence data */
@@ -2908,8 +3185,8 @@ Kappa_SequenceGetWindow(
           /* Replace occurrences of amino acid number 24
              (Selenocysteine) with number 21 (Undetermined or
              atypical). */
-          if(residue == 24) {
-            residue = 21;
+          if(residue == eSelenocysteine) {
+            residue = eXchar;
             fprintf(stderr, "Selenocysteine (U) at position %ld"
                     " replaced by X\n",
                     (long) idx + 1);
@@ -3002,9 +3279,6 @@ HitToGapAlign(
  * @param score         the score of this alignment
  * @param window        the subject window of this alignment
  * @param gap_align     alignment info for gapped alignments
- * @param localScalingFactor    the factor by which the scoring system has
- *                              been scaled in order to obtain greater
- *                              precision
  * @param prog_number   the type of alignment being performed
  * @param queryLength   length of the full query sequence
  * @param subjectLength length of the full subject sequence
@@ -3021,8 +3295,6 @@ NewAlignmentUsingXdrop(
   Int4 score,
   Kappa_WindowInfo * window,
   GapAlignBlkPtr gap_align,
-  Nlm_FloatHi localScalingFactor,
-  Int4 prog_number,
   Int4 queryLength,
   Int4 subjectLength,
   Kappa_DistinctAlignment * next)
@@ -3038,7 +3310,7 @@ NewAlignmentUsingXdrop(
 
   Kappa_SWFindFinalEndsUsingXdrop(query,   queryStart, queryEnd,
                                   subject, matchStart, matchEnd,
-                                  gap_align, score, localScalingFactor,
+                                  gap_align, score,
                                   &queryExtent, &matchExtent,
                                   &reverseAlignScript, &newScore);
   obj = MemNew(sizeof(Kappa_DistinctAlignment));
@@ -3054,7 +3326,7 @@ NewAlignmentUsingXdrop(
   obj->editBlock->discontinuous    = gap_align->discontinuous;
   obj->editBlock->original_length1 = queryLength;
   obj->editBlock->original_length2 = subjectLength;
-  obj->editBlock->translate2       = prog_number == blast_type_tblastn;
+  obj->editBlock->translate2       = gap_align->translate2;
   obj->editBlock->frame2           = window->frame;
 
 
@@ -3125,14 +3397,12 @@ typedef struct Kappa_SearchParameters {
   Int4          mRows;          /**< the number of rows in a scoring matrix. */
   Int4          nCols;          /**< the number of columns in a scoring
                                      matrix */
-
   Nlm_FloatHi   scaledUngappedLambda;   /**< The value of Karlin-Altschul
                                              parameter lambda, rescaled
                                              to allow scores to have
                                              greater precision */
   BLAST_Score **origMatrix;     /**< The original matrix values */
   BLAST_Score **startMatrix;    /**< Rescaled values of the original matrix */
-                         
   Nlm_FloatHi **startFreqRatios;        /**< frequency ratios to start
                                              investigating each pair */
   Nlm_FloatHi  *scoreArray;     /**< array of score probabilities */
@@ -3140,9 +3410,10 @@ typedef struct Kappa_SearchParameters {
                                      in a matching sequence */
   Nlm_FloatHi  *queryProb;      /**< array of probabilities for each residue
                                      in the query */
-  Nlm_FloatHi **REscoreMatrix; /**<floating point score matrix when doing RE adjustment*/
-  Int4       adjustParameters;       /**< Use composition-based statistics
-                                             if > 0. */
+  Nlm_FloatHi **REscoreMatrix;  /**< floating point score matrix when doing
+                                     RE adjustment*/
+  Int4       adjustParameters;  /**< Use composition-based statistics
+                                     if > 0. */
   GapAlignBlkPtr gap_align;
 
   BLAST_ScoreFreqPtr return_sfp;        /**< score frequency pointers to
@@ -3154,10 +3425,10 @@ typedef struct Kappa_SearchParameters {
                                               Karlin-Altschul block for all
                                               contexts (@todo is this really
                                               needed?) */
-  Int4          RE_rule;       /**<which rule to use for relative entropy 
-				 adjustment*/
-  Int4          RE_pseudocounts; /**<pseudocounts for matrix adjustment*/
-  Int4          queryNumTrueAA; /**<number of non X's in the query*/
+  Int4          RE_rule;         /**< which rule to use for relative entropy
+                                      adjustment*/
+  Int4          RE_pseudocounts; /**< pseudocounts for matrix adjustment*/
+  Int4          queryNumTrueAA;  /**< number of non X's in the query*/
 } Kappa_SearchParameters;
 
 
@@ -3180,7 +3451,7 @@ Kappa_SearchParametersFree(Kappa_SearchParameters ** searchParams)
     freeScaledMatrix(sp->origMatrix, sp->mRows);
   if(sp->startFreqRatios)
     freeStartFreqs(sp->startFreqRatios, sp->mRows);
-  if(sp->REscoreMatrix) 
+  if(sp->REscoreMatrix)
     freeStartFreqs(sp->REscoreMatrix, sp->mRows);
 
   if(sp->return_sfp) MemFree(sp->return_sfp);
@@ -3268,6 +3539,7 @@ Kappa_RecordInitialSearch(Kappa_SearchParameters * searchParams,
   search->gap_align->gap_open      = search->pbp->gap_open;
   search->gap_align->gap_extend    = search->pbp->gap_extend;
   search->gap_align->decline_align = search->pbp->decline_align;
+  search->gap_align->translate2 = search->prog_number == blast_type_tblastn;
 
   if(searchParams->adjustParameters) {
     Int4 i, j;
@@ -3287,7 +3559,8 @@ Kappa_RecordInitialSearch(Kappa_SearchParameters * searchParams,
     } else {
       kbp    = search->sbp->kbp_gap_std[0];
       matrix = search->sbp->matrix;
-      searchParams->queryNumTrueAA = fillResidueProbability(query, queryLength, searchParams->queryProb);
+      searchParams->queryNumTrueAA =
+        fillResidueProbability(query, queryLength, searchParams->queryProb);
     }
     searchParams->gapOpen    = search->pbp->gap_open;
     searchParams->gapExtend  = search->pbp->gap_extend;
@@ -3310,7 +3583,7 @@ Kappa_RecordInitialSearch(Kappa_SearchParameters * searchParams,
     searchParams->RE_pseudocounts = 0;
     if (!(search->positionBased)) {
       searchParams->RE_rule = (searchParams->adjustParameters-1);
-      searchParams->RE_pseudocounts = FIXED_PSEUDOCOUNTS;
+      searchParams->RE_pseudocounts = kReMatrixAdjustmentPseudocounts;
     }
   }
 }
@@ -3398,6 +3671,136 @@ Kappa_RescaleSearch(Kappa_SearchParameters * sp,
  * is too small, or to fail entirely returning -1*/
 #define LambdaRatioLowerBound 0.5
 
+
+/**
+ * Compute the amino acid composition of the subject region.
+ *
+ * @param resProb             on output, the computed composition [out]
+ * @param *subjectNumTrueAA   number of amino acids in the subject,
+ *                            excluding Xs [out]
+ * @param program_number      number that identifies the type of search [in]
+ * @param window              the window containing the subject region [in]
+ * @param subject_data        the amino acid sequence data for window [in]
+ * @param hsp_subject_start   index of the first residue in the subject
+ *                            region expressed as an offset into the subject
+ *                            sequence, *not* an offset into the window. [in]
+ * @param hsp_subject_end     the index one past the end of the subject
+ *                            region [in]
+ */
+static void
+Kappa_GetSubjectComposition(Nlm_FloatHi * resProb,
+                            Int4 * subjectNumTrueAA,
+                            Int4 program_number,
+                            Kappa_WindowInfo * window,
+                            Uint1 subject_data[],
+                            Int4 hsp_subject_start,
+                            Int4 hsp_subject_end)
+{
+  Int4 left, right;      /* [left, right) is the interval of the window
+                            data to use when computing  composition. The
+                            endpoints are offsets into the window. */
+
+  if(program_number != blast_type_tblastn) {
+    /* This is not a tblastn search; use the whole subject when
+     * computing the composition */
+    left  = 0;
+    right = window->end - window->begin;
+  } else {
+    /* This is a tblastn search; use only the part of the subject. */
+    /* Set left to the start of the subject interval of the HSP */
+    Int4 i;                /* iteration index */
+
+    left  = hsp_subject_start - window->begin;
+    /* Search leftward for a StopChar */
+    for( i = left; i > 0; i-- ) {
+      if(subject_data[i - 1] == eStopChar) {
+        /* We have found a StopChar. Unless the StopChar is too close to
+         * the start of the subject region of the HSP, */
+        if( i + kCompositionMargin < left ) {
+          /* reset the left endpoint. */
+          left = i + kCompositionMargin;
+        }
+        break;
+      }
+    }
+    if( i == 0 ) {
+        /* No stop codon was found to the left. */
+        left = 0;
+    }
+    /* Set right the end of the subject interval of the * HSP */
+    right = hsp_subject_end - window->begin;
+    /* Search rightward for a StopChar */
+    for( i = right; i < window->end - window->begin; i++ ) {
+      if( subject_data[i] == eStopChar ) {
+        /* We have found a StopChar. Unless the StopChar is too close to
+         * the end of the subject region of the HSP, */
+        if( i - kCompositionMargin > right ) {
+          /* reset the right endpoint */
+          right = i - kCompositionMargin;
+        }
+        break;
+      }
+    } /* end search rightward for a StopChar */
+    if( i == window->end - window->begin ) {
+      /* No stop codon was found to the right. */
+      right = window->end - window->begin;
+    }
+  } /* end else this is a tblastn search */
+  *subjectNumTrueAA = fillResidueProbability(&subject_data[left],
+                                             right - left, resProb);
+}
+
+
+/**
+ * Use composition-based statistics to adjust the scoring matrix.
+ *
+ * @param matrix          a scoring matrix to be adjusted [out]
+ * @param *LambdaRatio    the ratio of the corrected lambda to the
+ *                        original lambda [out]
+ * @param sp              a record of the initial search parameters [in|out]
+ * @param queryLength     length of the query.
+ * @param positionBased   is this a position-based search?
+ */
+static void
+Kappa_CompositionBasedStats(BLAST_Score ** matrix,
+                            Nlm_FloatHi * LambdaRatio,
+                            Kappa_SearchParameters * sp,
+                            Int4 queryLength,
+                            Int4 positionBased)
+{
+  Nlm_FloatHi correctUngappedLambda; /* new value of ungapped lambda */
+  BLAST_ScoreFreqPtr this_sfp;       /* pointer to statically allocated
+                                        score frequencies */
+  if( positionBased ) {
+    this_sfp =
+      posfillSfp(sp->startMatrix, queryLength, sp->resProb,
+                 sp->scoreArray, sp->return_sfp, scoreRange);
+  } else {
+    this_sfp =
+      notposfillSfp(sp->startMatrix, sp->resProb, sp->queryProb,
+                    sp->scoreArray, sp->return_sfp, scoreRange);
+  }
+  correctUngappedLambda =
+    impalaKarlinLambdaNR(this_sfp, sp->scaledUngappedLambda);
+
+  /* impalaKarlinLambdaNR will return -1 in the case where the
+   * expected score is >=0; however, because of the MAX statement 3
+   * lines below, LambdaRatio should always be > 0; the succeeding
+   * test is retained as a vestige, in case one wishes to remove the
+   * MAX statement and allow LambdaRatio to take on the error value
+   * -1 */
+
+  *LambdaRatio = correctUngappedLambda / sp->scaledUngappedLambda;
+  *LambdaRatio = MIN(1, *LambdaRatio);
+  *LambdaRatio = MAX(*LambdaRatio, LambdaRatioLowerBound);
+
+  if(*LambdaRatio > 0) {
+    scaleMatrix(matrix, sp->startFreqRatios, sp->mRows,
+                sp->scaledUngappedLambda, *LambdaRatio);
+  }
+}
+
+
 /**
  * Adjust the search parameters
  *
@@ -3416,96 +3819,79 @@ Kappa_AdjustSearch(
   Kappa_SearchParameters * sp,
   BlastSearchBlkPtr search,
   Kappa_SequenceData * subject,
+  Kappa_WindowInfo * window,
+  BLASTResultHspPtr resultHsp,
   BLAST_Score ** matrix,
-  Char * matrixName,    
-  NRitems *NRrecord,    
-  Int4 *numTimesFlag,   
-  Int2 *whichMode
+  Char * matrixName,
+  NRitems *NRrecord,
+  Int4 *whichMode
 )
 {
   Nlm_FloatHi LambdaRatio;      /* the ratio of the corrected lambda to the
                                  * original lambda */
-  Int4 subjectNumTrueAA; /*Length of match ignoring X's*/
-  /*next two arrays are letter probabilities of query and match in
-   *20 letter alphabet permutation*/
-  Nlm_FloatHi permutedQueryProbs[PRO_TRUE_ALPHABET_SIZE]; 
-  Nlm_FloatHi permutedMatchProbs[PRO_TRUE_ALPHABET_SIZE];
-
   if(!sp->adjustParameters) {
     LambdaRatio = 1.0;
   } else {
     /* do adjust the parameters */
-    BLAST_ScoreFreqPtr this_sfp; 
-    Nlm_FloatHi correctUngappedLambda;  /* new value of ungapped lambda */
+    Int4 queryLength;             /* length of the query */
+    Int4 subjectNumTrueAA;        /* length of match ignoring X's */
 
-    Int4 queryLength;           /* the length of the query */
     queryLength =  search->context[0].query->length;
-    subjectNumTrueAA = fillResidueProbability(subject->data, subject->length, sp->resProb);
-    if ((!search->positionBased) && (sp->RE_rule != 0)) {
-      NRrecord->flag = KEEP_OLD_MATRIX;
-      permuteLetterProbs(&(permutedQueryProbs[0]), sp->queryProb);
-      permuteLetterProbs(&(permutedMatchProbs[0]), sp->resProb);
-      /*call Yi-Kuo's code to choose mode for matrix adjustment*/
-	NRrecord->flag = chooseMode(search->context[0].query->length,
-                             subject->length, 
-			    &(permutedQueryProbs[0]),
-			    &(permutedMatchProbs[0]),
-			     matrixName, 
-			     sp->RE_rule-1);
-	numTimesFlag[NRrecord->flag]++;
-	*whichMode = NRrecord->flag;
-    }
-    /* compute and plug in new matrix here */
-    if ((search->positionBased) || (!(sp->RE_rule)) || 
-	(KEEP_OLD_MATRIX == NRrecord->flag)) {
+    Kappa_GetSubjectComposition(sp->resProb, &subjectNumTrueAA,
+                                search->prog_number, window, subject->data,
+                                resultHsp->subject_offset,
+                                resultHsp->subject_offset +
+                                resultHsp->subject_length);
+    if( search->positionBased || sp->RE_rule == 0 ) {
+      /* Use old-style composition-based statistics unconditionally. */
+      *whichMode =  KEEP_OLD_MATRIX;
+      Kappa_CompositionBasedStats(matrix, &LambdaRatio, sp, queryLength,
+                                  search->positionBased);
+    } else {
+      /* else call Yi-Kuo's code to choose mode for matrix adjustment. */
 
-      if(search->positionBased) {
-	this_sfp =
-	  posfillSfp(sp->startMatrix, queryLength, sp->resProb, sp->scoreArray,
-		     sp->return_sfp, scoreRange);
+      /* The next two arrays are letter probabilities of query and
+       * match in 20 letter ARND... alphabet. */
+      Nlm_FloatHi permutedQueryProbs[PRO_TRUE_ALPHABET_SIZE];
+      Nlm_FloatHi permutedMatchProbs[PRO_TRUE_ALPHABET_SIZE];
+
+      s_GatherLetterProbs(&(permutedQueryProbs[0]), sp->queryProb);
+      s_GatherLetterProbs(&(permutedMatchProbs[0]), sp->resProb);
+
+      *whichMode =
+        chooseMode(queryLength, subject->length,
+                   &(permutedQueryProbs[0]), &(permutedMatchProbs[0]),
+                   matrixName, sp->RE_rule-1);
+      /* compute and plug in new matrix here */
+      if( KEEP_OLD_MATRIX == *whichMode ) {
+        /* Yi-Kuo's code chose to use composition-based stats */
+        Kappa_CompositionBasedStats(matrix, &LambdaRatio, sp, queryLength,
+                                    search->positionBased);
       } else {
-	this_sfp =
-	  notposfillSfp(sp->startMatrix, sp->resProb, sp->queryProb,
-			sp->scoreArray, sp->return_sfp, scoreRange);
-      }
-      correctUngappedLambda =
-	impalaKarlinLambdaNR(this_sfp, sp->scaledUngappedLambda);
+        /* else use compositionally adjusted scoring matrices */
+        Nlm_FloatHi correctUngappedLambda; /* new value of ungapped lambda */
 
-      /* impalaKarlinLambdaNR will return -1 in the case where the
-       * expected score is >=0; however, because of the MAX statement 3
-       * lines below, LambdaRatio should always be > 0; the succeeding
-       * test is retained as a vestige, in case one wishes to remove the
-       * MAX statement and allow LambdaRatio to take on the error value
-       * -1 */
-
-      LambdaRatio = correctUngappedLambda / sp->scaledUngappedLambda;
-      LambdaRatio = MIN(1, LambdaRatio);
-      LambdaRatio = MAX(LambdaRatio, LambdaRatioLowerBound);
-      
-      if(LambdaRatio > 0) 
-	scaleMatrix(matrix, sp->startMatrix, sp->startFreqRatios, sp->mRows,
-		    sp->scaledUngappedLambda, LambdaRatio);
-    } /* end if (KEEP_OLD_MATRIX == NRrecord->flag) */
-    else {
-      correctUngappedLambda = RE_interface(matrixName, 
-					   sp->queryNumTrueAA,
-					   subjectNumTrueAA,
-					   &(permutedQueryProbs[0]), 
-					   &(permutedMatchProbs[0]),
-                       sp->RE_pseudocounts, FIXED_RE_BLOSUM62, NRrecord);
-      /*adjust lambda and compute Lambda ratio*/
-      LambdaRatio = correctUngappedLambda / sp->scaledUngappedLambda;
-      if (LambdaRatio > 0) {
-	permuteFreqRatios(sp->REscoreMatrix,NRrecord);
-	/*scale matrix in floating point*/
-	REscaleInitialScores(sp->startMatrix, sp->REscoreMatrix, LambdaRatio);
-	adjustBXZ(sp->REscoreMatrix, NRrecord);
-	roundScoreMatrix(matrix, sp->REscoreMatrix, PROTEIN_ALPHABET);
-      }
-    }
+        NRrecord->flag = *whichMode;
+        correctUngappedLambda =
+          RE_interface(matrixName, sp->queryNumTrueAA, subjectNumTrueAA,
+                       &(permutedQueryProbs[0]), &(permutedMatchProbs[0]),
+                       sp->RE_pseudocounts, kFixedReBlosum62, NRrecord);
+        /*adjust lambda and compute Lambda ratio*/
+        LambdaRatio = correctUngappedLambda / sp->scaledUngappedLambda;
+        if (LambdaRatio > 0) {
+            s_ScatterScores(sp->REscoreMatrix, 1.0, NRrecord->score_final);
+            /*scale matrix in floating point*/
+            REscaleInitialScores(sp->startMatrix, sp->REscoreMatrix,
+                                 LambdaRatio);
+            Kappa_AdjustBXZ(sp->REscoreMatrix, NRrecord);
+        s_RoundScoreMatrix(matrix, sp->REscoreMatrix, PROTEIN_ALPHABET);
+        }
+      } /* end else use compositionally adjusted scoring matrices */
+    } /* end else call Yi-Kuo's code to choose mode for matrix adjustment. */
   } /* end else do adjust the parameters */
   return LambdaRatio > 0 ? 0 : 1;
 }
+
 
 /**
  * Restore the parameters that were adjusted to their original values
@@ -3625,17 +4011,13 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
   SWheap  significantMatches;  /* a collection of alignments of the
                                 * query sequence with sequences from
                                 * the database */
-  NRitems *NRrecord = NULL;    /*stores all field needed for 
-                                *multidimensional Newton's method*/
-  Int4 numTimesFlag[NUM_RE_OPTIONS]; /*number of times flag has each value*/
-  Int2 whichMode = KEEP_OLD_MATRIX;              /*which RE mode is in use for 
-				*current pair*/
+  NRitems *NRrecord = NULL;    /* stores all fields needed for computing
+                                * a compositionally adjusted score matrix
+                                * using Newton's method */
+  Int4 numTimesFlag[NUM_RE_OPTIONS]; /* number of times flag has each value */
+  Int4 whichMode = KEEP_OLD_MATRIX;  /* which RE mode is in use for
+                                      * current pair*/
   Int4 i;                       /*loop index*/
-  Kappa_WindowInfo ** windows; /* windows containing HSPs for
-                                * a single query-subject pair */
-  Int4 nWindows;               /* number of windows in the array
-                                * "windows" */
-  Int4 lWindows;               /* allocated size of "windows" */
   Int4 window_index;           /* window index for use in loops */
   BLAST_HSPPtr temp_hsp;       /* an HSP that may be used as a
                                 * temporary object, for example if one
@@ -3644,14 +4026,8 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
                                 * routine. */
   temp_hsp  = MemNew(sizeof(BLAST_HSP));
 
-  /* Initialize the window list to have a single window -- the most
-     common case */
-  lWindows   = 1;   nWindows = 1;
-  windows    = MemNew(lWindows * sizeof(Kappa_WindowInfo *));
-  windows[0] = MemNew(sizeof(Kappa_WindowInfo));
-
   SWheapInitialize(&significantMatches, options->hitlist_size,
-                   options->hitlist_size, options->ethresh);
+                   options->ethresh);
 
   /**** Validate parameters *************/
   if(0 == strcmp(options->matrix, "BLOSUM62_20") && !adjustParameters) {
@@ -3692,12 +4068,12 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
   Kappa_RecordInitialSearch(searchParams, search);
   localScalingFactor = Kappa_RescaleSearch(searchParams, search, options);
 
-  if ((searchParams->RE_rule) && (!search->positionBased)) {
-      NRrecord = allocate_NR_memory();
-      initializeNRprobabilities(NRrecord,options->matrix);
-      searchParams->REscoreMatrix = allocateStartFreqs(PROTEIN_ALPHABET);
-      for(i = 0; i < NUM_RE_OPTIONS; i++)
-	numTimesFlag[i] = 0;
+  if( (searchParams->RE_rule) && (!search->positionBased) ) {
+    NRrecord = allocate_NR_memory();
+    initializeNRprobabilities(NRrecord,options->matrix);
+    searchParams->REscoreMatrix = allocateStartFreqs(PROTEIN_ALPHABET);
+    for(i = 0; i < NUM_RE_OPTIONS; i++)
+      numTimesFlag[i] = 0;
   }
   do_link_hsps = search->prog_number == blast_type_tblastn;
   if(do_link_hsps) {
@@ -3719,6 +4095,10 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
                                          * subject sequence */
     Kappa_DistinctAlignment * alignments;   /* list of alignments for this
                                              * query-subject pair */
+    Kappa_WindowInfo ** windows;        /* windows containing HSPs for
+                                         * a single query-subject pair */
+    Int4 nWindows;                      /* number of windows in the array
+                                         * "windows" */
     alignments = NULL;
 
     thisMatch = search->result_struct->results[match_index];
@@ -3748,14 +4128,15 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
     if(search->prog_number == blast_type_tblastn) {
       /* Find the multiple translation windows used by tblastn queries. */
       WindowsFromHSPs(thisMatch->hsp_array, thisMatch->hspcnt,
-                      KAPPA_WINDOW_BORDER, matchingSeq.length,
-                      &windows, &nWindows, &lWindows, window_of_hsp);
+                      kWindowBorder, matchingSeq.length,
+                      &windows, &nWindows, window_of_hsp);
     } else { /* the program is not tblastn, i.e. it is blastp */
       /* Initialize the single window used by blastp queries. */
-      windows[0]->frame  = 0;
-      windows[0]->hspcnt = thisMatch->hspcnt;
-      windows[0]->begin  = 0;
-      windows[0]->end    = matchingSeq.length;
+      windows    = (Kappa_WindowInfo **) Nlm_MemNew(sizeof(Kappa_WindowInfo*));
+      nWindows   = 1;
+      windows[0] = Kappa_WindowInfoNew(0, matchingSeq.length, 0,
+                                       thisMatch->hsp_array,
+                                       thisMatch->hspcnt);
     } /* else the program is blastp */
     if(SmithWaterman) {
       /* We are performing a Smith-Waterman alignment */
@@ -3766,10 +4147,12 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
         window = windows[window_index];
         Kappa_SequenceGetWindow( &matchingSeq, window, &subject );
 
+        /* For Smith-Waterman alignments, adjust the search using the
+         * composition of the highest scoring alignment in window */
         if(0 ==
-           Kappa_AdjustSearch(searchParams, search, &subject, matrix,
-                             options->matrix, NRrecord, &(numTimesFlag[0]), 
-			      &whichMode)) {
+           Kappa_AdjustSearch(searchParams, search, &subject,
+                              window, window->hsp_array[0], matrix,
+                              options->matrix, NRrecord, &whichMode)) {
           /* Kappa_AdjustSearch ran without error; compute the new
              alignments. */
           BLAST_Score aSwScore;             /* score computed by the
@@ -3777,6 +4160,9 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
           Boolean alignment_is_significant; /* True if the score/evalue of
                                              * the Smith-Waterman alignment
                                              * is significant. */
+          if( whichMode > 0 ) {
+            numTimesFlag[whichMode]++;
+          }
           Kappa_ForbiddenRangesClear(&forbidden);
           do {
             Nlm_FloatHi newSwEvalue;    /* evalue as computed by the
@@ -3792,10 +4178,19 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
                                      search->searchsp_eff,
                                      search->positionBased,
                                      &forbidden);
-            alignment_is_significant =
-              ( do_link_hsps && aSwScore >= cutoff_s) ||
-              (!do_link_hsps && newSwEvalue < search->pbp->cutoff_e &&
-               SWheapWouldInsert(&significantMatches, newSwEvalue));
+            if( do_link_hsps ) {
+              alignment_is_significant = aSwScore >= cutoff_s;
+            } else {
+              alignment_is_significant = newSwEvalue < search->pbp->cutoff_e;
+              if( alignments == NULL ) {
+                /* this is the most significant alignment; if it will not
+                 * be accepted, no alignments from this match will */
+                alignment_is_significant =
+                  alignment_is_significant &&
+                    SWheapWouldInsert(&significantMatches, newSwEvalue,
+                                      aSwScore, thisMatch->subject_id);
+              }
+            }
 
             if(alignment_is_significant) {
               Int4 matchStart, queryStart;  /* the start of the
@@ -3817,9 +4212,8 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
                 NewAlignmentUsingXdrop(&query,   queryStart, queryEnd,
                                        &subject, matchStart, matchEnd,
                                        aSwScore, window, search->gap_align,
-                                       localScalingFactor,
-                                       search->prog_number, query.length,
-                                       matchingSeq.length, alignments);
+                                       query.length, matchingSeq.length,
+                                       alignments);
 
               Kappa_ForbiddenRangesPush(&forbidden,
                                         queryStart,
@@ -3860,11 +4254,15 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
             Kappa_SequenceGetWindow(&matchingSeq, window, &subject);
 
             adjust_search_failed =
-	      Kappa_AdjustSearch(searchParams, search, &subject, matrix, 
-				 options->matrix, NRrecord, 
-				 &(numTimesFlag[0]), &whichMode);
+              Kappa_AdjustSearch(searchParams, search, &subject,
+                                 window, &thisMatch->hsp_array[hsp_index],
+                                 matrix, options->matrix, NRrecord,
+                                 &whichMode);
           }  /* end if the current window doesn't contain this HSP */
           if(!adjust_search_failed) {
+            if( whichMode > 0 ) {
+              numTimesFlag[whichMode]++;
+            }
             CopyResultHspToHSP(&thisMatch->hsp_array[hsp_index], temp_hsp);
             HitToGapAlign(search->gap_align, search, temp_hsp, window,
                           &query, &subject);
@@ -3889,6 +4287,7 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
       BLAST_HitListPtr hitlist; /* a hitlist containing the newly-computed
                                  * alignments */
       Nlm_FloatHi bestEvalue; /* best evalue among alignments in the hitlist */
+      Int4 bestScore;         /* best score among alignments in the hitlist */
       Int4 hsp_index;
 
       HitlistFromDistinctAlignments(search, &alignments, whichMode);
@@ -3914,43 +4313,48 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
       } else {
         BlastGetNonSumStatsEvalue(search);
       }
+      BlastReapHitlistByEvalue(search);
       /* Find the evalue of the best alignment in the list -- the list
        * is typically sorted by score and not by evalue, so a search is
        * necessary. */
       bestEvalue = DBL_MAX;
+      bestScore  = 0;
       for( hsp_index = 0; hsp_index < hitlist->hspcnt; hsp_index++ ) {
         if( hitlist->hsp_array[hsp_index]->evalue < bestEvalue ) {
           bestEvalue = hitlist->hsp_array[hsp_index]->evalue;
         }
+        if( hitlist->hsp_array[hsp_index]->score > bestScore ) {
+          bestScore = hitlist->hsp_array[hsp_index]->score;
+        }
       }
       if(bestEvalue <= search->pbp->cutoff_e &&
-         SWheapWouldInsert(&significantMatches, bestEvalue)) {
+         SWheapWouldInsert(&significantMatches, bestEvalue,
+                           bestScore, thisMatch->subject_id )) {
         /* If the best alignment is significant, then create and save
          * a list of SeqAligns. */
         SeqAlignPtr aligns;     /* SeqAligns for this query-subject pair */
 
-        BlastReapHitlistByEvalue(search);
 
         aligns =
           SeqAlignsFromHitlist(hitlist, matchingSeq.bsp_db->id,
                                search->query_id, kbp->Lambda, kbp->logK,
-                               localScalingFactor, &bestEvalue );
-        SWheapInsert(&significantMatches, aligns, bestEvalue,
+                               localScalingFactor);
+        SWheapInsert(&significantMatches, aligns, bestEvalue, bestScore,
                      thisMatch->subject_id );
 
       } /* end if the best alignment is significant */
     } /* end if any alignments were found */
 
     Kappa_MatchingSequenceRelease(&matchingSeq);
+    for( window_index = 0; window_index < nWindows; window_index++ ) {
+      Kappa_WindowInfoFree(&windows[window_index]);
+    }
+    MemFree(windows);
   }
   /* end for all matching sequences */
   results = SWheapToFlatList( &significantMatches );
 
   /* Clean up */
-  for( window_index = 0; window_index < nWindows; window_index++ ) {
-    MemFree(windows[window_index]);
-  }
-  MemFree(windows);
   MemFree(temp_hsp);
 
   if (search->current_hitlist) {
@@ -3963,12 +4367,14 @@ RedoAlignmentCore(BlastSearchBlkPtr search,
 
   Kappa_RestoreSearch(searchParams, search, options, matrix, SmithWaterman);
   Kappa_SearchParametersFree(&searchParams);
-  /*Diagnostic for use in testing, now commented out*/
-  /* if (NULL != NRrecord) {
+  if (NULL != NRrecord) {
     free_NR_memory(NRrecord);
+  }
+  /*Diagnostic for use in testing, now commented out*/
+  /*
     for(i = 0; i < NUM_RE_OPTIONS; i++) {
       printf("Number of times flag was %d was %d\n",i, numTimesFlag[i]);
     }
-  } */
+  */
   return (results);
 }

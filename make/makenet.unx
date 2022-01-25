@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.200 2005/06/01 14:01:54 kans Exp $
+#	$Id: makenet.unx,v 6.207 2005/07/26 15:43:29 lavr Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -25,15 +25,6 @@
 #   The build for RedHat Linux 2.XX with X11R6 requires:
 #     CC="gcc -ansi"
 #     VIBLIBS="-L/usr/X11R6/lib -lXm -lXpm -lXmu -lXp -lXt -lX11 -lXext"
-#
-#   To build network services tools which support data encryption, add:
-#      NCBI_ENCR=E
-#   and see the discussion in network/encrypt/README for how to obtain
-#   the RSAREF source files.
-#
-#   To build clients which use the SOCKS proxy architecture, add:
-#      NCBI_SOCKS=S
-#   and manually set SOCKS_CCOPTS correctly for your architecture
 #
 #   To Make the network server and dispatcher tools, add 'servers' as an
 #   object to be made, e.g.:
@@ -86,7 +77,6 @@ ASNDIR = asnstat
 
 BLIB5 = libncbiacc.a
 BLIB6 = libnetcli.a
-#BLIB6_= libnetcli_.a
 BLIB7 = libnetentr.a
 BLIB8 = libncbiNacc.a
 BLIB9 = libncbiCacc.a
@@ -94,9 +84,6 @@ BLIB11 = libncbimla.a
 BLIB12 = libncbitax.a
 BLIB13 = libncbiid0.a
 #BLIB14 = libncbibls0.a
-BLIB15 = libnetcliE.a
-BLIB16 = libnetcliS.a
-BLIB17 = libnetcliES.a
 BLIB19 = libncbispel.a
 BLIB23 = libncbitool.a
 BLIB24 = libncbisugg.a
@@ -170,7 +157,6 @@ LIB4 = -lvibrant
 LIB400 = -lvibrantOGL
 LIB5 = -lncbiacc
 LIB6 = -lnetcli
-#LIB6_= -lnetcli_
 LIB7 = -lnetentr
 LIB8 = -lncbiNacc
 LIB9 = -lncbiCacc
@@ -180,9 +166,6 @@ LIB11 = -lncbimla
 LIB12 = -lncbitax
 LIB13 = -lncbiid0
 #LIB14 = -lncbibls0
-LIB15 = -lnetcliE
-LIB16 = -lnetcliS
-LIB17 = -lnetcliES
 LIB19 = -lncbispel
 # LIB20 is for the NCBI desktop utilities
 LIB20 = -lncbidesk
@@ -209,55 +192,13 @@ LIB46 = -lncbiid2
 LIB60 = -lblast
 LIB61 = -lblastapi
 
-##
-## encryption of network services
-##
-ENCRSRCDIR = ../network/encrypt/ripem/rsaref/source
-## uncomment the following line for encryption, or set NCBI_ENCR=E externally
-# NCBI_ENCR = E
-
-##
-## use of the SOCKS proxy software with network services
-##
-## uncomment the following line for SOCKS, or set NCBI_SOCKS=S externally
-# NCBI_SOCKS = S
-SOCKSDIR = ../network/socks/socks.cstc.4.2
-SOCKSSRCDIR = $(SOCKSDIR)/lib
-SOCKSINCDIR = $(SOCKSDIR)/include
-##
-## If using SOCKS, set correct SOCKS compile options below or externally;
-## the following are for Solaris.  If in doubt, look at the Makefile which
-## appears in the SOCKS source tree
-##
-SOCKS_CCOPTS = -DSOLARIS -DUSE_DIRENT -DCOMPAT -Dindex=strchr -Drindex=strrchr
-SOCKS_CCOPTS = $(NCBI_SOCKS_CCOPTS)
-##
-## the following is for IRIX
-##
-# SOCKS_CCOPTS = -cckr -DCOMPAT
-##
-## uncomment the following for SunOS 4.1.x
-##
-# SOCKS_GETPASS=getpass.o
-
 BNETCLILIB   = libnetcli.a
 NETCLILIB    = $(LIB6)
 BENTREZLIBS  = $(BLIB8) $(BLIB7) $(BNETCLILIB) $(BLIB3)
 ENTREZLIBS   = $(LIB8) $(LIB7) $(NETCLILIB) $(LIB3)
 
-#BNETCLILIB_  = libnetcli_$(NCBI_ENCR)$(NCBI_SOCKS).a
-#NETCLILIB_   = $(LIB6_)$(NCBI_ENCR)$(NCBI_SOCKS)
-#BENTREZLIBS_ = $(BLIB8) $(BLIB7) $(BNETCLILIB_) $(BLIB3)
-#ENTREZLIBS_  = $(LIB8) $(LIB7) $(NETCLILIB_) $(LIB3)
-
-##
-## servers/dispatcher/ncbid never use SOCKS
-##
-BSRVNETCLILIB  = libnetcli$(NCBI_ENCR).a
-SRVNETCLILIB   = $(LIB6)$(NCBI_ENCR)
-
-#BSRVNETCLILIB_ = libnetcli_$(NCBI_ENCR).a
-#SRVNETCLILIB_  = $(LIB6_)$(NCBI_ENCR)
+BSRVNETCLILIB  = libnetcli.a
+SRVNETCLILIB   = $(LIB6)
 
 ###
 NCBI_INCDIR = ../include
@@ -283,8 +224,7 @@ VIB_POST_LINK = :
 
 ## sources for libraries
 
-SRC6  = ni_lib_.c ni_service.c ni_debug.c \
-        ni_disp.c ni_msg.c ni_error.c ni_encrs.c
+SRC6  = ni_lib_.c ni_service.c ni_debug.c ni_error.c
 
 SRC7 =	netentr.c netlib.c objneten.c
 
@@ -297,19 +237,6 @@ SRC11 = objmla.c medarch.c medutil.c
 SRC12 = objtaxon.c taxarch.c taxondt.c
 
 SRC13 = id0gen.c id0arch.c
-
-SRCRSAREF = desc.c digit.c digitas.c md2c.c md5c.c nn.c prime.c r_encode.c \
-	    r_enhanc.c r_keygen.c r_random.c r_stdlib.c rsa.c
-
-SRCSOCKS = Rconnect.c SendGetDst.c check_cconf.c check_user.c \
-	   percent_x.c porttoserv.c saddrtoname.c shell_cmd.c
-
-SRC15 = ni_lib.c ni_msg.c ni_error.c ni_encr.c $(SRCRSAREF)
-
-SRC16 = ni_lib.c ni_msg.c ni_error.c ni_encrs.c $(SRCSOCKS)
-
-SRC17 = ni_lib.c ni_msg.c ni_error.c ni_encr.c $(SRCSOCKS) \
-	$(SRCRSAREF)
 
 SRC19 = objspell.c spellapi.c
 
@@ -343,13 +270,11 @@ SRC44 = idload_lib.c
 
 SRC46 = id2.c id2sgen.c
 
-#NET_LIBS_SRC = $(SRC6) $(SRC6_) $(SRC7) $(SRC8) $(SRC9)
 NET_LIBS_SRC = $(SRC6) $(SRC7) $(SRC8) $(SRC9)
 
 # objects for libraries
 
-OBJ6  = ni_lib_.o ni_debug.o ni_service.o \
-        ni_disp.o ni_msg.o ni_error.o ni_encrs.o
+OBJ6  = ni_lib_.o ni_debug.o ni_service.o ni_error.o
 
 OBJ7 =	netentr.o netlib.o objneten.o
 
@@ -362,24 +287,6 @@ OBJ11 = objmla.o medarch.o medutil.o
 OBJ12 = objtaxon.o taxarch.o taxondt.o
 
 OBJ13 = id0gen.o id0arch.o
-
-OBJRSAREF = desc.o digit.o digitas.o md2c.o md5c.o nn.o prime.o r_encode.o \
-	    r_enhanc.o r_keygen.o r_random.o r_stdlib.o rsa.o
-
-OBJSOCKS = Rconnect.o SendGetDst.o check_cconf.o check_user.o \
-	   percent_x.o porttoserv.o saddrtoname.o shell_cmd.o $(SOCKS_GETPASS)
-
-OBJ15BASE = ni_lib.o ni_msg.o ni_error.o ni_encr.o
-
-OBJ15 = $(OBJ15BASE) $(OBJRSAREF)
-
-OBJ16BASE = Sni_lib.o ni_msg.o ni_error.o ni_encrs.o
-
-OBJ16 = $(OBJ16BASE) $(OBJSOCKS)
-
-OBJ17BASE = Sni_lib.o ni_msg.o ni_error.o ni_encr.o
-
-OBJ17 = $(OBJ17BASE) $(OBJSOCKS) $(OBJRSAREF)
 
 OBJ19 = objspell.o spellapi.o
 
@@ -427,6 +334,8 @@ EXESEQUIN =	sequin
 
 EXEPSEQUIN =	Psequin
 
+EXESBTEDIT =    sbtedit
+
 SRCDDV = ddvmain.c
 
 SRCUDV = udvmain.c
@@ -444,6 +353,7 @@ EXEUTILVIB = ccpv dustv epiv sigmev twopv cnsrtv cnsgnv searchv
 SRCSEQUIN = sequin1.c sequin2.c sequin3.c sequin4.c sequin5.c sequin6.c \
 	sequin7.c sequin8.c sequin9.c sequin10.c sequinx.c
 
+SRCSBTEDIT = sbtedit.c
 
 CLI_SRC = $(SRCDDV) $(SRCUDV)
 
@@ -452,7 +362,7 @@ CLIENTS =
 
 SERV_SRC = $(SRCENTSRV)
 
-SERVERS = $(EXESUGGSRV) $(EXEQUERY) $(EXESEQUIN) $(EXEPSEQUIN) $(EXENQUERY)
+SERVERS = $(EXESUGGSRV) $(EXEQUERY) $(EXESEQUIN) $(EXEPSEQUIN) $(EXESBTEDIT) $(EXENQUERY)
 
 ## All things to make
 ##
@@ -462,11 +372,9 @@ ln-if-absent:	../make/ln-if-absent
 	rm -f ln-if-absent
 	ln -s ../make/ln-if-absent .
 
-#nocopy : sources $(BLIB6) $(BLIB6_) $(NCBI_ENCR) $(NCBI_SOCKS) /
-nocopy : sources $(BLIB6) $(NCBI_ENCR) $(NCBI_SOCKS) \
-   $(NCBI_ENCR)$(NCBI_SOCKS) $(BLIB7) \
-   $(BLIB8) $(BLIB9) $(DLIB31) $(DLIB33) $(NCBI_SHLIBS) $(CLIENTS) $(VIB) \
-	  $(DLIB42) $(DLIB43) $(DLIB44)
+nocopy : sources $(BLIB6) $(BLIB7) $(BLIB8) $(BLIB9) \
+   $(DLIB31) $(DLIB33) $(NCBI_SHLIBS) $(CLIENTS) $(VIB) \
+   $(DLIB42) $(DLIB43) $(DLIB44)
 
 sources : $(NET_LIBS_SRC) $(CLI_SRC)
 
@@ -476,22 +384,10 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn asn2all gene2xml asnval asnval_psf flint gbseqget insdseqget trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch3 Nentrcmd seqget idfetch test_ncbi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn asn2all gene2xml asnval asnval_psf flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
 
 .WAIT:
 	echo Waiting...go
-
-## encryption
-##
-E : $(BLIB15)
-
-## SOCKS
-##
-S : $(BLIB16)
-
-## encryption + SOCKS
-##
-ES : $(BLIB17)
 
 
 others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB25) $(BLIB27) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44) $(BLIB46)
@@ -580,7 +476,6 @@ copy :
 	-$(SRCCOPY) ../tools/taxblast.h ../include
 	-$(SRCCOPY) ../tools/taxblast.c .
 	-$(SRCCOPY) $(ENCRSRCDIR)/*.c .
-	-$(SRCCOPY) $(SOCKSSRCDIR)/*.c .
 	-$(SRCCOPY) ../internal/misc/*.c .
 	-$(SRCCOPY) ../internal/misc/*.h ../include
 	-$(SRCCOPY) ../internal/ssparse/*.c .
@@ -633,6 +528,7 @@ copy :
 	$(SRCCOPY) ../demo/insdseqget.c .
 	$(SRCCOPY) ../demo/nps2gps.c .
 	$(SRCCOPY) ../demo/testent2.c .
+	$(SRCCOPY) ../demo/trna2sap.c .
 	$(SRCCOPY) ../demo/trna2tbl.c .
 	$(SRCCOPY) ../demo/entrez2.c .
 	$(SRCCOPY) ../demo/condense.c .
@@ -666,12 +562,6 @@ Caccentr.o : accentr.c
 	$(SRCCOPY) accentr.c Caccentr.c
 	$(CC) $(CFLAGS) -D_NET_AND_CD_ Caccentr.c
 
-## Special rule for ni_lib.c with SOCKS support
-##
-Sni_lib.o : ni_lib.c
-	$(SRCCOPY) ni_lib.c Sni_lib.c
-	$(CC) $(CFLAGS) -I$(SOCKSINCDIR) -DNETP_SOCKS Sni_lib.c
-
 ## Special rules for automatically generated object loaders
 ##
 objmla.o: objmla.c
@@ -685,11 +575,6 @@ id0gen.o: id0gen.c
 
 id1gen.o: id1gen.c
 	$(CC) $(CFLAGS) id1gen.c
-
-## Special rule for ni_encr.c
-##
-ni_encr.o : ni_encr.c
-	$(CC) $(CFLAGS) -I$(ENCRSRCDIR) -DPROTOTYPES ni_encr.c
 
 ## Special rule for ni_lib_.c (with allowed WWW stateless mode)
 ##
@@ -827,12 +712,6 @@ $(BLIB6) : $(OBJ6)
 	$(LIBCOPY) $(BLIB6) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(BLIB6)
 
-#$(BLIB6_) : $(OBJ6_)
-#	- rm -f $(BLIB6_)
-#	$(AR) cru $(BLIB6_) $(OBJ6_)
-#	$(LIBCOPY) $(BLIB6_) $(NCBI_LIBDIR)
-#	$(RAN) $(NCBI_LIBDIR)/$(BLIB6_)
-
 $(BLIB7) : $(OBJ7)
 	- rm -f $(BLIB7)
 	$(AR) cru $(BLIB7) $(OBJ7)
@@ -868,36 +747,6 @@ $(BLIB13) : $(OBJ13)
 	$(AR) cru $(BLIB13) $(OBJ13)
 	$(LIBCOPY) $(BLIB13) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(BLIB13)
-
-$(BLIB15) : $(OBJ15BASE) $(SRCRSAREF)
-	@echo "Warning: If you have not already done so, you may need to modify"
-	@echo "$(ENCRSRCDIR)/global.h for this compilation environment"
-	$(CC) $(CFLAGS) -I$(ENCRSRCDIR) -DPROTOTYPES $(SRCRSAREF)
-	- rm -f $(BLIB15)
-	$(AR) cru $(BLIB15) $(OBJ15)
-	$(LIBCOPY) $(BLIB15) $(NCBI_LIBDIR)
-	$(RAN) $(NCBI_LIBDIR)/$(BLIB15)
-
-$(BLIB16) : $(OBJ16BASE) $(SRCSOCKS)
-	@echo "Warning: If you have not already done so, you may need to modify"
-	@echo "$(SOCKSINCDIR)/socks.h for your operational environment"
-	$(CC) $(CFLAGS) $(SOCKS_CCOPTS) -I$(SOCKSINCDIR) $(SRCSOCKS)
-	- rm -f $(BLIB16)
-	$(AR) cru $(BLIB16) $(OBJ16)
-	$(LIBCOPY) $(BLIB16) $(NCBI_LIBDIR)
-	$(RAN) $(NCBI_LIBDIR)/$(BLIB16)
-
-$(BLIB17) : $(OBJ17BASE) $(SRCRSAREF)
-	@echo "Warning: If you have not already done so, you may need to modify"
-	@echo "$(ENCRSRCDIR)/global.h for this compilation environment"
-	$(CC) $(CFLAGS) -I$(ENCRSRCDIR) -DPROTOTYPES $(SRCRSAREF)
-	@echo "Warning: If you have not already done so, you may need to modify"
-	@echo "$(SOCKSINCDIR)/socks.h for your operational environment"
-	$(CC) $(CFLAGS) $(SOCKS_CCOPTS) -I$(SOCKSINCDIR) $(SRCSOCKS)
-	- rm -f $(BLIB17)
-	$(AR) cru $(BLIB17) $(OBJ17)
-	$(LIBCOPY) $(BLIB17) $(NCBI_LIBDIR)
-	$(RAN) $(NCBI_LIBDIR)/$(BLIB17)
 
 $(BLIB19) : $(OBJ19)
 	- rm -f $(BLIB19)
@@ -1157,6 +1006,10 @@ insdseqget :	insdseqget.c
 nps2gps :	nps2gps.c
 	$(CC) -g -o nps2gps $(LDFLAGS) nps2gps.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
 
+# trna2sap program (trna2sap)
+trna2sap :	trna2sap.c
+	$(CC) -g -o trna2sap $(LDFLAGS) trna2sap.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
 # trna2tbl program (trna2tbl)
 trna2tbl :	trna2tbl.c
 	$(CC) -g -o trna2tbl $(LDFLAGS) trna2tbl.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
@@ -1375,6 +1228,16 @@ Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) $(BLIB45) $(
 	$(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIB11) \
 	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) Psequin
+
+# 'sbtedit' Submission Template Editor
+sbtedit : $(SRCSBTEDIT) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) $(BLIB45) $(BLIB30) $(BLIB20) \
+	$(BLIB22) $(BLIB40) $(BLIB41) $(BLIB36) \
+	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
+	$(BLIB2) $(BLIB1) $(ULIB31)
+	$(CC) -o sbtedit -I. $(LDFLAGS) -UINTERNAL_NCBI_SEQUIN $(SRCSBTEDIT) \
+	$(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIB11) \
+	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(VIB_POST_LINK) sbtedit
 
 salogif.o:	salogif.c
 	$(CC) $(CFLAGS) salogif.c

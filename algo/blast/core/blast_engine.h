@@ -1,4 +1,4 @@
-/* $Id: blast_engine.h,v 1.49 2005/03/28 21:22:50 dondosha Exp $
+/* $Id: blast_engine.h,v 1.51 2005/06/28 12:29:24 ivanov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -45,6 +45,17 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+NCBI_XBLAST_EXPORT 
+extern const int kBlastMajorVersion; /**< Major version */
+NCBI_XBLAST_EXPORT 
+extern const int kBlastMinorVersion; /**< Minor version */
+NCBI_XBLAST_EXPORT 
+extern const int kBlastPatchVersion; /**< Patch version */
+/** Date of the most recent BLAST release (kept for historical reasons) */
+NCBI_XBLAST_EXPORT 
+extern const char* kBlastReleaseDate;
+
 
 /** The high level function performing the BLAST search against a BLAST 
  * database after all the setup has been done.

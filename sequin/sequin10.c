@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.269 $
+* $Revision: 1.287 $
 *
 * File Description: 
 *
@@ -419,7 +419,7 @@ typedef enum {
   DEFLINE_POS_Group,
   DEFLINE_POS_Haplotype,
   DEFLINE_POS_Identified_by,
-  DEFLINE_POS_Ins_seq_name,
+  DEFLINE_POS_Insertion_seq_name,
   DEFLINE_POS_Isolate,
   DEFLINE_POS_Isolation_source,
   DEFLINE_POS_Lab_host,
@@ -476,7 +476,7 @@ static Boolean IsNonTextModifierIndex (Int4 mod_index)
   }
 }
 
-extern ValNodePtr GetSourceQualDescList (Boolean get_subsrc, Boolean get_orgmod)
+extern ValNodePtr GetSourceQualDescList (Boolean get_subsrc, Boolean get_orgmod, Boolean get_discontinued)
 {
   Int4              index;
   ValNodePtr        source_qual_list = NULL;
@@ -484,6 +484,14 @@ extern ValNodePtr GetSourceQualDescList (Boolean get_subsrc, Boolean get_orgmod)
   
   for (index = 0; index < NumDefLineModifiers; index++)
   {
+    if (!get_discontinued && 
+        (index == DEFLINE_POS_Insertion_seq_name
+         || index == DEFLINE_POS_Transposon_name
+         || index == DEFLINE_POS_Old_lineage
+         || index == DEFLINE_POS_Old_name))
+    {
+      continue;    
+    }
     if ((get_orgmod && DefLineModifiers [index].isOrgMod)
         || (get_subsrc && ! DefLineModifiers [index].isOrgMod))
     {
@@ -1808,6 +1816,8 @@ static void AddHIVModifierIndices (
   }
 }
 
+static Boolean UseOrgModifier (OrgModPtr mod, CharPtr taxName);
+
 /* This function looks for an OrgMod note that contains the phrase
  * "type strain of".  This function is used to determine whether
  * strain is a required modifier for the defline for this source.
@@ -1817,6 +1827,22 @@ static Boolean HasTypeStrainComment (BioSourcePtr biop)
   OrgModPtr mod;
   
   if (biop == NULL || biop->org == NULL || biop->org->orgname == NULL)
+  {
+    return FALSE;
+  }
+  
+  mod = biop->org->orgname->mod;
+  while (mod != NULL && mod->subtype != ORGMOD_strain)
+  {
+    mod = mod->next;
+  }
+  
+  if (mod == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (!UseOrgModifier (mod, biop->org->taxname))
   {
     return FALSE;
   }
@@ -2674,6 +2700,12 @@ static Boolean LIBCALLBACK IssnRNA (
   return TRUE;
 }
 
+static Boolean LIBCALLBACK IsPrecursorRNA (SeqFeatPtr sfp)
+{
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_preRNA) return FALSE;
+  return TRUE;
+}
+
 static Boolean LIBCALLBACK IsInsertionSequence (
   SeqFeatPtr sfp
 )
@@ -2862,6 +2894,16 @@ static Boolean LIBCALLBACK IsIntergenicSpacer (
   return TRUE;
 }
 
+/* This function produces the default definition line label for a misc_feature 
+ * that has the word "intergenic spacer" in the comment.  If the comment starts
+ * with the word "contains", "contains" is ignored.  If "intergenic spacer"
+ * appears first in the comment (or first after the word "contains", the text
+ * after the words "intergenic spacer" but before the first semicolon (if any)
+ * appear after the words "intergenic spacer" in the definition line.  If there
+ * are words after "contains" or at the beginning of the comment before the words
+ * "intergenic spacer", this text will appear in the definition line before the words
+ * "intergenic spacer".
+ */
 static void LIBCALLBACK GetIntergenicSpacerFeatureLabel (
   ValNodePtr      featlist,
   BioseqPtr       bsp,
@@ -2917,6 +2959,326 @@ static void LIBCALLBACK GetIntergenicSpacerFeatureLabel (
     flp->description [datalen] = 0;
     TrimSpacesAroundString (flp->description);
   }
+}
+
+/* These structures are used for parsing tRNA and intergenic spacer information
+ * from misc_feature comments. 
+ */
+typedef struct trnadef
+{
+  Char product_name [9];
+  Char gene_name [5];
+} tRNADefData, PNTR tRNADefPtr;
+
+typedef struct intergenicspacerdef
+{
+  Char first_gene [5];
+  Char second_gene [5];
+} IntergenicSpacerDefData, PNTR IntergenicSpacerDefPtr;
+
+static Boolean IsUpperCaseChar (Char ch)
+{
+  if (StringChr("ABCDEFGHIJKLMNOPQRSTUVWXYZ",ch) != NULL)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+static Boolean IsLowerCaseChar (Char ch)
+{
+  if (StringChr("abcdefghijklmnopqrstuvwxyz",ch) != NULL)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+static tRNADefPtr ParsetRNAFromNoteForDefLine (CharPtr PNTR defline)
+{
+  tRNADefPtr tdp;
+  CharPtr    cp, gene_start;
+  
+  if (defline == NULL || *defline == NULL)
+  {
+    return NULL;
+  }
+  
+  /* tRNA name must start with "tRNA-" and be followed by one uppercase letter and
+   * two lowercase letters.
+   */
+  cp = *defline;
+  if (StringNCmp (cp, "tRNA-", 5) != 0
+      || ! IsUpperCaseChar (*(cp + 5))
+      || ! IsLowerCaseChar (*(cp + 6))
+      || ! IsLowerCaseChar (*(cp + 7)))
+  {
+    return NULL;
+  }
+  
+  gene_start = cp + 8;
+  /* gene name is required */
+  if (*gene_start == 0 || *gene_start == ',')
+  {
+    return NULL;
+  }
+  /* skip over spaces */
+  while (isspace (*gene_start))
+  {
+    gene_start ++;
+  }
+  
+  /* gene name must be in parentheses, start with letters "trn",
+   * and end with one uppercase letter.
+   */
+  if (StringNCmp (gene_start, "(trn", 4) != 0
+      || ! IsUpperCaseChar (*(gene_start + 4))
+      || * (gene_start + 5) != ')')
+  {
+    return NULL;
+  }
+
+  tdp = (tRNADefPtr) MemNew (sizeof (tRNADefData));
+  if (tdp == NULL)
+  {
+    return NULL;
+  }
+  StringNCpy (tdp->product_name, cp, 8);
+  tdp->product_name [8] = 0;
+  StringNCpy (tdp->gene_name, gene_start + 1, 4);
+  tdp->gene_name [4] = 0;
+  *defline = gene_start + 6;
+  return tdp;
+}
+
+static IntergenicSpacerDefPtr ParseIntergenicSpacerFromNoteForDef (CharPtr PNTR defline)
+{
+  IntergenicSpacerDefPtr idp;
+  CharPtr                cp;
+  
+  if (defline == NULL || *defline == NULL)
+  {
+    return NULL;
+  }
+  
+  /* description must start with "trn" and be followed by one uppercase letter, followed
+   * by a dash, followed by "trn", followed by one uppercase letter, followed by whitespace,
+   * followed by the phrase "intergenic spacer".
+   */
+  cp = *defline;
+  if (StringNCmp (cp, "trn", 3) != 0
+      || ! IsUpperCaseChar (*(cp + 3))
+      || *(cp + 4) != '-'
+      || StringNCmp (cp + 5, "trn", 3) != 0
+      || ! IsUpperCaseChar (*(cp + 8))
+      || *(cp + 9) != ' '
+      || StringNCmp (cp + 10 + StringSpn (cp + 10, " "), "intergenic spacer", 17) != 0)
+  {
+    return NULL;
+  }
+  
+  idp = (IntergenicSpacerDefPtr) MemNew (sizeof (IntergenicSpacerDefData));
+  if (idp == NULL)
+  {
+    return NULL;
+  }
+  
+  StringNCpy (idp->first_gene, cp, 4);
+  idp->first_gene [4] = 0;
+  StringNCpy (idp->second_gene, cp + 5, 4);
+  idp->second_gene [4] = 0;
+  *defline = cp + 27;
+  return idp;
+}
+
+/* This creates a feature clause from a tRNADef structure. */
+static FeatureClausePtr 
+FeatureClauseFromParsedtRNA 
+(tRNADefPtr tdp,
+ SeqFeatPtr misc_feat,
+ Boolean    is_partial,
+ BioseqPtr  bsp,
+ Boolean    suppress_locus_tag)
+{
+  FeatureClausePtr fcp;
+  
+  if (tdp == NULL)
+  {
+    return NULL;
+  }
+  
+  fcp = NewFeatureClause ( misc_feat, bsp, suppress_locus_tag);
+  if (fcp != NULL)
+  {
+    fcp->feature_label_data.is_typeword_first = FALSE;
+    fcp->feature_label_data.typeword = StringSave ("gene");
+    fcp->feature_label_data.description = (CharPtr) MemNew (16 * sizeof (Char));
+    if (fcp->feature_label_data.description != NULL)
+    {
+      sprintf (fcp->feature_label_data.description, "%s (%s)",
+               tdp->product_name, tdp->gene_name);
+    }
+    if (is_partial)
+    {
+      fcp->interval = StringSave ("partial sequence");
+    }
+    else
+    {
+      fcp->interval = StringSave ("complete sequence");
+    }
+  }
+  return fcp;
+}
+
+/* This function produces a feature clause list that should replace the original
+ * single clause for a misc_feat that contains a note with one or more tRNAs and
+ * an intergenic spacer.
+ */
+static ValNodePtr 
+ParsetRNAIntergenicSpacerElements 
+(SeqFeatPtr misc_feat,
+BioseqPtr   bsp,
+Boolean     suppress_locus_tag)
+{
+  FeatureClausePtr fcp;
+  ValNodePtr head, vnp;
+  Boolean partial5, partial3;
+  CharPtr                cp;
+  IntergenicSpacerDefPtr spacer = NULL;
+  tRNADefPtr             trna1 = NULL, trna2 = NULL;
+  Boolean                parse_list = TRUE;
+  
+
+  if (misc_feat == NULL 
+      || StringHasNoText (misc_feat->comment)) 
+  {
+    return NULL;
+  }
+  
+  /* for list, must start with the word "contains" */
+  if (StringNICmp (misc_feat->comment, "contains ", 9) == 0)
+  {
+    cp = misc_feat->comment + 9;
+  }
+  else
+  {
+    return NULL;
+  }
+  
+  while (isspace (*cp))
+  {
+    cp ++;
+  }
+  
+  trna1 = ParsetRNAFromNoteForDefLine (&cp);
+  if (trna1 != NULL)
+  {
+    if (*cp == ',')
+    {
+      *cp++;
+    }
+    if (StringNCmp (cp, " and", 4) == 0)
+    {
+      cp += 4;
+    }
+    while (isspace (*cp))
+    {
+      cp++;
+    }
+  }
+ 
+  spacer = ParseIntergenicSpacerFromNoteForDef (&cp);
+  if (spacer != NULL)
+  {
+    if (*cp == ',')
+    {
+      *cp++;
+    }
+    if (StringNCmp (cp, " and", 4) == 0)
+    {
+      cp += 4;
+    }
+    while (isspace (*cp))
+    {
+      cp++;
+    }
+  }
+  
+  trna2 = ParsetRNAFromNoteForDefLine (&cp);
+  
+  while (isspace (*cp))
+  {
+    cp++;
+  }
+  
+  head = NULL;
+  CheckSeqLocForPartial (misc_feat->location, &partial5, &partial3);
+
+  if ((*cp != 0 && *cp != ';') /* this must be the complete note or be separated from 
+                                * the rest of the note by a semicolon
+                                */
+      || ! parse_list /* didn't start with "contains" */
+      || spacer == NULL /* no spacer */
+      /* don't parse if genes don't match up */
+      || (trna1 != NULL && StringCmp (trna1->gene_name, spacer->first_gene) != 0)
+      || (trna2 != NULL && StringCmp (trna2->gene_name, spacer->second_gene) != 0))
+  {
+    /* do nothing - special parse conditions not met */
+    trna1 = MemFree (trna1);
+    trna2 = MemFree (trna2);
+    spacer = MemFree (spacer);
+    return NULL;
+  }
+  
+  /* add clause for tRNA before spacer (if any) */
+  fcp = FeatureClauseFromParsedtRNA (trna1, misc_feat, partial5, bsp, suppress_locus_tag);
+  if (fcp != NULL)
+  {   
+    vnp = ValNodeNew (head);
+    if (head == NULL) head = vnp;
+    if (vnp == NULL) return NULL;
+    vnp->data.ptrvalue = fcp;
+    vnp->choice = DEFLINE_CLAUSEPLUS;
+  }
+  
+  /* spacer was already checked, so we know it is not NULL */
+  fcp = NewFeatureClause ( misc_feat, bsp, suppress_locus_tag);
+  if (fcp != NULL)
+  {
+    fcp->feature_label_data.is_typeword_first = FALSE;
+    fcp->feature_label_data.typeword = StringSave ("intergenic spacer");
+    fcp->feature_label_data.description = (CharPtr) MemNew (10 * sizeof (Char));
+    if (fcp->feature_label_data.description != NULL)
+    {
+      sprintf (fcp->feature_label_data.description, "%s-%s",
+               spacer->first_gene, spacer->second_gene);
+    }
+    if ((trna1 == NULL && partial5) || (trna2 == NULL && partial3))
+    {
+      fcp->interval = StringSave ("partial sequence");
+    }
+    else
+    {
+      fcp->interval = StringSave ("complete sequence");
+    }
+      
+    vnp = ValNodeNew (head);
+    if (head == NULL) head = vnp;
+    if (vnp == NULL) return NULL;
+    vnp->data.ptrvalue = fcp;
+    vnp->choice = DEFLINE_CLAUSEPLUS;
+  }
+
+  /* add clause for tRNA after spacer (if any) */
+  fcp = FeatureClauseFromParsedtRNA (trna2, misc_feat, partial3, bsp, suppress_locus_tag);
+  if (fcp != NULL)
+  {   
+    vnp = ValNodeNew (head);
+    if (head == NULL) head = vnp;
+    if (vnp == NULL) return NULL;
+    vnp->data.ptrvalue = fcp;
+    vnp->choice = DEFLINE_CLAUSEPLUS;
+  }
+  
+  return head;
 }
 
 static Boolean LIBCALLBACK IsSatelliteSequence (
@@ -3136,6 +3498,7 @@ static Boolean LIBCALLBACK IsNoncodingProductFeat (
   if ( sfp == NULL
     || sfp->idx.subtype != FEATDEF_misc_feature
     || sfp->comment == NULL
+    || StringStr (sfp->comment, "intergenic") != NULL
     || (find_noncoding_feature_keyword (sfp->comment) == NULL
       && (StringStr (sfp->comment, "nonfunctional ") == NULL
         || StringStr (sfp->comment, " due to ") == NULL)))
@@ -3243,6 +3606,7 @@ static Boolean IsRecognizedFeature (
     || IsMiscRNA (sfp)
     || IssnoRNA (sfp)
     || IssnRNA (sfp)
+    || IsPrecursorRNA (sfp)
     || Is3UTR (sfp)
     || Is5UTR (sfp)
     || IsInsertionSequence (sfp)
@@ -3488,6 +3852,23 @@ typedef struct matchruledata {
   matchFunction *match_rules;
 } MatchRuleData, PNTR MatchRulePtr;
 
+static void InitRuleForTopLevelClauses (MatchRulePtr mrp)
+{
+  if (mrp == NULL)
+  {
+    return;
+  }
+  mrp->num_match_rules = 5;
+  mrp->match_rules = MemNew (mrp->num_match_rules
+                                    * sizeof (matchFunction));
+  if (mrp->match_rules == NULL) return;
+  mrp->match_rules[0] = IsTransposon;
+  mrp->match_rules[1] = IsInsertionSequence;
+  mrp->match_rules[2] = IsEndogenousVirusSourceFeature;
+  mrp->match_rules[3] = IsOperon;
+  mrp->match_rules[4] = IsGeneCluster;
+}
+
 /* NumGroupingRules is the number of features for which there is a list of
  * features to group under.
  * When grouping features, each feature in the list is examined sequentially.
@@ -3496,7 +3877,7 @@ typedef struct matchruledata {
  * beneath.  This preserves the biological order that was generated by the
  * original listing of features by sequence indexing.
  */
-#define  NumGroupingRules 11
+#define  NumGroupingRules 14
 static MatchRulePtr InitializeGroupingRules()
 {
   MatchRulePtr grouping_rules;
@@ -3557,15 +3938,7 @@ static MatchRulePtr InitializeGroupingRules()
   grouping_rules[3].match_rules[5] = IsGeneCluster;
   
   grouping_rules[4].is_item = IsInsertionSequence;
-  grouping_rules[4].num_match_rules = 5;
-  grouping_rules[4].match_rules = MemNew (grouping_rules[4].num_match_rules
-                                    * sizeof (matchFunction));
-  if (grouping_rules[4].match_rules == NULL) return NULL;
-  grouping_rules[4].match_rules[0] = IsTransposon;
-  grouping_rules[4].match_rules[1] = IsInsertionSequence;
-  grouping_rules[4].match_rules[2] = IsEndogenousVirusSourceFeature;
-  grouping_rules[4].match_rules[3] = IsOperon;
-  grouping_rules[4].match_rules[4] = IsGeneCluster;
+  InitRuleForTopLevelClauses (grouping_rules + 4);
  
   grouping_rules[5].is_item = Is3UTR;
   grouping_rules[5].num_match_rules = 6;
@@ -3604,38 +3977,23 @@ static MatchRulePtr InitializeGroupingRules()
   grouping_rules[7].match_rules[5] = IsGeneCluster;
  
   grouping_rules[8].is_item = IsGene;
-  grouping_rules[8].num_match_rules = 5;
-  grouping_rules[8].match_rules = MemNew (grouping_rules[8].num_match_rules
-                                    * sizeof (matchFunction));
-  if (grouping_rules[8].match_rules == NULL) return NULL;
-  grouping_rules[8].match_rules[0] = IsTransposon;
-  grouping_rules[8].match_rules[1] = IsInsertionSequence;
-  grouping_rules[8].match_rules[2] = IsEndogenousVirusSourceFeature;
-  grouping_rules[8].match_rules[3] = IsOperon;
-  grouping_rules[8].match_rules[4] = IsGeneCluster;
+  InitRuleForTopLevelClauses (grouping_rules + 8);
+  
+  grouping_rules[9].is_item = IsIntergenicSpacer;
+  InitRuleForTopLevelClauses (grouping_rules + 9);
 
-  grouping_rules[9].is_item = IsTransposon;
-  grouping_rules[9].num_match_rules = 5;
-  grouping_rules[9].match_rules = MemNew (grouping_rules[9].num_match_rules
-                                    * sizeof (matchFunction));
-  if (grouping_rules[9].match_rules == NULL) return NULL;
-  grouping_rules[9].match_rules[0] = IsTransposon;
-  grouping_rules[9].match_rules[1] = IsInsertionSequence;
-  grouping_rules[9].match_rules[2] = IsEndogenousVirusSourceFeature;
-  grouping_rules[9].match_rules[3] = IsOperon;
-  grouping_rules[9].match_rules[4] = IsGeneCluster;
+  grouping_rules[10].is_item = IsTransposon;
+  InitRuleForTopLevelClauses (grouping_rules + 10);
  
-  grouping_rules[10].is_item = IsNoncodingProductFeat;
-  grouping_rules[10].num_match_rules = 5;
-  grouping_rules[10].match_rules = MemNew (grouping_rules[10].num_match_rules
-                                    * sizeof (matchFunction));
-  if (grouping_rules[10].match_rules == NULL) return NULL;
-  grouping_rules[10].match_rules[0] = IsTransposon;
-  grouping_rules[10].match_rules[1] = IsInsertionSequence;
-  grouping_rules[10].match_rules[2] = IsEndogenousVirusSourceFeature;
-  grouping_rules[10].match_rules[3] = IsOperon;
-  grouping_rules[10].match_rules[4] = IsGeneCluster;
+  grouping_rules[11].is_item = IsNoncodingProductFeat;
+  InitRuleForTopLevelClauses (grouping_rules + 11);
  
+  grouping_rules[12].is_item = IsOperon;
+  InitRuleForTopLevelClauses (grouping_rules + 12);
+ 
+  grouping_rules[13].is_item = IsGeneCluster;
+  InitRuleForTopLevelClauses (grouping_rules + 13);
+
   return grouping_rules; 
 }
 
@@ -3656,26 +4014,63 @@ static void FreeGroupingRules(
   MemFree (grouping_rules);
 }
 
+static Boolean IsmRNASequence (BioseqPtr bsp)
+{
+  SeqDescrPtr sdp;
+  MolInfoPtr  mip;
+  
+  if (bsp == NULL || bsp->mol != Seq_mol_rna || bsp->descr == NULL)
+  {
+    return FALSE;
+  }
+  sdp = bsp->descr;
+  while (sdp != NULL && sdp->choice != Seq_descr_molinfo)
+  {
+    sdp = sdp->next;
+  }
+  if (sdp == NULL || sdp->data.ptrvalue == NULL)
+  {
+    return FALSE;
+  }
+  mip = (MolInfoPtr) sdp->data.ptrvalue;
+  
+  if (mip->biomol == 3)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+typedef struct matchcandidate 
+{
+  ValNodePtr matched_clause;
+  SeqLocPtr  slp;
+} MatchCandidateData, PNTR MatchCandidatePtr;
+
 /* This function searches the search_list for features that satisfy the
  * match function and satisfy locational requirements relative to the
  * clause.
- * If such a feature is found, the clause is added to the end of the list
- * of clauses for that feature's parent clause.
+ * If more than one clause meets the match requirements, the smallest one
+ * is chosen.
  */
-static Boolean GroupClauseByMatch (
-  FeatureClausePtr clause,
-  ValNodePtr       search_list,
-  FeatureClausePtr search_parent,
-  matchFunction    match,
-  BioseqPtr        bsp
-)
+static void FindBestMatchCandidate 
+(FeatureClausePtr  clause,
+ ValNodePtr        search_list,
+ FeatureClausePtr  search_parent,
+ matchFunction     match,
+ Boolean           gene_cluster_opp_strand,
+ BioseqPtr         bsp,
+ MatchCandidatePtr current_candidate)
 {
-  ValNodePtr       search_clause, newfeat;
+  ValNodePtr       search_clause;
   SeqFeatPtr       addsfp, clause_sfp;
   FeatureClausePtr searchfcp;
   SeqLocPtr        slp;
 
-  if (clause == NULL || clause->slp == NULL) return FALSE;
+  if (clause == NULL || clause->slp == NULL || current_candidate == NULL) return;
   
   clause_sfp = (SeqFeatPtr) (clause->featlist->data.ptrvalue);
 
@@ -3689,6 +4084,9 @@ static Boolean GroupClauseByMatch (
       && search_clause->data.ptrvalue != NULL)
     {
       addsfp = search_clause->data.ptrvalue;
+      /* slp is the location of the feature we are trying to
+       * group this feature with
+       */ 
       if (search_parent != NULL)
       {
         slp = search_parent->slp;
@@ -3702,6 +4100,8 @@ static Boolean GroupClauseByMatch (
         /* Transposons, insertion sequences, and endogenous virii
          * take subfeatures regardless of whether the subfeature is
          * on the same strand.
+         * Gene Clusters can optionally take subfeatures on either
+         * strand (gene_cluster_opp_strand is flag).
          * Promoters will match up to features that are adjacent.
          * All other feature matches must be that the feature to
          * go into the clause must fit inside the location of the
@@ -3709,18 +4109,25 @@ static Boolean GroupClauseByMatch (
          */
         if (((match == IsTransposon
              || match == IsInsertionSequence
-             || match == IsEndogenousVirusSourceFeature)
+             || match == IsEndogenousVirusSourceFeature
+             || (match == IsGeneCluster && gene_cluster_opp_strand))
             && SeqLocAinB (clause->slp, slp) > -1)
           || IsLocAInBonSameStrand (clause->slp, slp)
           || ( IsPromoter (clause_sfp)
             && IsAAdjacentToB (clause->slp, search_parent->slp, bsp,
-                               ADJACENT_TYPE_UPSTREAM, TRUE)))
+                               ADJACENT_TYPE_UPSTREAM, TRUE))
+          || IsmRNASequence (bsp))
         {
-          newfeat = ValNodeNew (search_clause);
-          if (newfeat == NULL) return FALSE;
-          newfeat->choice = DEFLINE_CLAUSEPLUS;
-          newfeat->data.ptrvalue = clause;
-          return TRUE;
+          /* if we don't already have a candidate, or if this
+           * candidate's location is inside the current candidate,
+           * take this candidate.
+           */
+          if (current_candidate->matched_clause == NULL
+              || SeqLocAinB (slp, current_candidate->slp) > 0)
+          {
+            current_candidate->matched_clause = search_clause;
+            current_candidate->slp = slp;
+          }
         }
       }
     }
@@ -3728,41 +4135,54 @@ static Boolean GroupClauseByMatch (
       && search_clause->data.ptrvalue != NULL)
     {
       searchfcp = search_clause->data.ptrvalue;
-      if (GroupClauseByMatch (clause, searchfcp->featlist, searchfcp,
-                              match, bsp))
-      {
-        return TRUE;
-      }
+      FindBestMatchCandidate (clause, searchfcp->featlist, searchfcp,
+                              match, gene_cluster_opp_strand, bsp,
+                              current_candidate);
     }
   }
-  return FALSE;
 }
 
+
 /* This function iterates through the matches in the specified grouping rule.
+ * If more than one match is found, the clause with the smallest location is
+ * used.
+ * If a match is found, the clause is added to the list of clauses for that
+ * feature's parent clause.
  */
 static Boolean GroupClauseByRule (
   FeatureClausePtr clause,
   ValNodePtr       search_list,
   MatchRulePtr     grouping_rule,
+  Boolean          gene_cluster_opp_strand,
   BioseqPtr        bsp
 )
 {
-  Int4       rule_index;
+  Int4               rule_index;
+  MatchCandidateData mcd;  
+  Boolean            rval = FALSE;
+  ValNodePtr         newfeat;
+  
+  mcd.slp = NULL;
+  mcd.matched_clause = NULL;
 
   for (rule_index = 0;
        rule_index < grouping_rule->num_match_rules;
        rule_index ++)
   {
-    if ( GroupClauseByMatch (clause,
-                            search_list,
-                            NULL,
+  
+    FindBestMatchCandidate (clause, search_list, NULL, 
                             grouping_rule->match_rules[rule_index],
-                            bsp))
-    {
-      return TRUE;
-    }
+                            gene_cluster_opp_strand, bsp, &mcd);
   }
-  return FALSE;
+  if (mcd.matched_clause != NULL)
+  {
+    newfeat = ValNodeNew (mcd.matched_clause);
+    if (newfeat == NULL) return FALSE;
+    newfeat->choice = DEFLINE_CLAUSEPLUS;
+    newfeat->data.ptrvalue = clause;
+    rval = TRUE;
+  }
+  return rval;
 }
 
 
@@ -3833,6 +4253,7 @@ static void Move3UTRToEndOfSubFeatList (ValNodePtr clause_list)
  */
 static void GroupAllClauses (
   ValNodePtr PNTR clause_list,
+  Boolean         gene_cluster_opp_strand,
   BioseqPtr       bsp
 )
 {
@@ -3859,11 +4280,14 @@ static void GroupAllClauses (
              rule_index < NumGroupingRules 
                && ! grouping_rules[rule_index].is_item (main_feat);
              rule_index++)
-        {}
+        {
+        }
         if (rule_index < NumGroupingRules)
         {
           if ( GroupClauseByRule (clause, *clause_list,
-                                  grouping_rules + rule_index, bsp))
+                                  grouping_rules + rule_index, 
+                                  gene_cluster_opp_strand,
+                                  bsp))
           {
             vnp->data.ptrvalue = NULL;
           }
@@ -4196,6 +4620,7 @@ static Boolean AddGeneToClauses
                         || IsMiscRNA (sfp)
                         || IssnRNA (sfp)
                         || IssnoRNA (sfp)
+                        || IsPrecursorRNA (sfp)
                         || IsNoncodingProductFeat (sfp)))
     {
       if (fcp->grp == NULL)
@@ -4475,6 +4900,10 @@ static CharPtr GetFeatureTypeWord (
   else if ( IsrRNA (sfp) || IssnoRNA (sfp) || IssnRNA (sfp))
   {
     return NULL;
+  }
+  else if (IsPrecursorRNA (sfp))
+  {
+    return StringSave ("precursor RNA");
   }
   else if (biomol == MOLECULE_TYPE_MRNA)
   {
@@ -5871,6 +6300,47 @@ static void ReplaceRNAClauses (
   DeleteFeatureClauses (clause_list);
 }
 
+/* Some misc_feat clauses have a comment that lists one or more tRNAs and
+ * an intergenic spacer.  This function creates a clause for each element 
+ * in the comment and inserts the list of new clauses into the feature list
+ * at the point where the single previous clause was.
+ */
+static void ReplaceIntergenicSpacerClauses (
+  ValNodePtr PNTR clause_list,
+  BioseqPtr       bsp,
+  Boolean         suppress_locus_tag)
+{
+  FeatureClausePtr fcp;
+  SeqFeatPtr main_feat;
+  ValNodePtr clause, replacement_clauses, nextclause, vnp;
+
+  if (clause_list == NULL || *clause_list == NULL) return;
+  clause = *clause_list;
+  while (clause != NULL)
+  {
+    nextclause = clause->next;
+    fcp = (clause->data.ptrvalue);
+    if (fcp == NULL
+      || fcp->featlist == NULL
+      || fcp->featlist->choice != DEFLINE_FEATLIST)
+    {
+      return;
+    }
+    main_feat = (SeqFeatPtr) fcp->featlist->data.ptrvalue;
+  
+    if (IsIntergenicSpacer (main_feat) 
+        && (replacement_clauses = ParsetRNAIntergenicSpacerElements ( main_feat, bsp, suppress_locus_tag)) != NULL)
+    {
+      for (vnp = replacement_clauses; vnp->next != NULL; vnp = vnp->next) {}
+      vnp->next = clause->next;
+      clause->next = replacement_clauses;
+      fcp->delete_me = TRUE;
+    }
+    clause = nextclause;
+  }
+  DeleteFeatureClauses (clause_list);
+}
+
 /* If we are applying a different rule for misc_feats, we need to recalculate
  * their descriptions.
  */
@@ -6282,7 +6752,9 @@ static CharPtr organelleByGenome [] = {
   "apicoplast",
   "leucoplast",
   "proplastid",
-  NULL
+  "",
+  "hydrogenosome",
+  NULL,
 };
 
 static CharPtr organelleByPopup [] = {
@@ -6350,6 +6822,7 @@ AddProductEnding
     case GENOME_cyanelle :
     case GENOME_leucoplast :
     case GENOME_proplastid :
+    case GENOME_hydrogenosome :
       sprintf (orgnelle, "; %s", organelleByGenome [biop->genome]);
       StringCat (str, orgnelle);
       break;
@@ -6797,24 +7270,19 @@ static void ListClauses (
     clause_len = StringLen (thisclause->feature_label_data.description) + 1;
 
     /* we need to place a comma between the description and the type word 
-     * when the description ends with "precursor" and the type word
-     * is "gene" or "mRNA"
+     * when the description ends with "precursor" or when the type word
+     * starts with "precursor"
      */
     if ( thisclause->feature_label_data.description != NULL
       && ! thisclause->feature_label_data.is_typeword_first
       && print_typeword
-      && ( StringCmp (thisclause->feature_label_data.typeword,
-                      "gene") == 0
-        || StringCmp (thisclause->feature_label_data.typeword,
-                      "pseudogene")==0
-        || StringCmp (thisclause->feature_label_data.typeword,
-                      "mRNA")==0
-        || StringCmp (thisclause->feature_label_data.typeword,
-                      "pseudogene mRNA")==0)
-      && clause_len > StringLen ("precursor")
-      && StringCmp ( thisclause->feature_label_data.description
+      && ! StringHasNoText (thisclause->feature_label_data.typeword)
+      && ((StringNCmp (thisclause->feature_label_data.typeword, "precursor", 9) == 0
+            && thisclause->feature_label_data.description [StringLen (thisclause->feature_label_data.description) - 1] != ')')
+          || (clause_len > StringLen ("precursor")
+              && StringCmp ( thisclause->feature_label_data.description
                      + clause_len - StringLen ("precursor") - 1,
-                     "precursor") == 0)
+                     "precursor") == 0)))
     {
       print_comma_between_description_and_typeword = TRUE;
       clause_len += 1;
@@ -7008,7 +7476,7 @@ static Boolean LIBCALLBACK ShouldRemoveExon (
     CheckSeqLocForPartial (main_feat->location, &partial5, &partial3);
     if (partial5 || partial3) return FALSE;
   }
-  else if (IsmRNA (main_feat))
+  else if (IsmRNA (main_feat) || parent_fcp->has_mrna)
   {
     return FALSE;
   }
@@ -7539,7 +8007,7 @@ static void DeleteOperonAndGeneClusterSubfeatures (
     }
     else
     {
-      DeleteSubfeatures ( &(clause_fcp->featlist), FALSE);
+      DeleteOperonAndGeneClusterSubfeatures ( &(clause_fcp->featlist), FALSE);
     }
   }
   if (delete_now) 
@@ -8352,8 +8820,9 @@ typedef struct segmentdeflinefeatureclausedata {
   ValNodePtr parent_feature_list;
   Uint1      molecule_type;
   DeflineFeatureRequestList PNTR feature_requests;
-  Int2 product_flag;
+  Int2            product_flag;
   Boolean         alternate_splice_flag;
+  Boolean         gene_cluster_opp_strand;
   ValNodePtr PNTR list;
 } SegmentDefLineFeatureClauseData, PNTR SegmentDefLineFeatureClausePtr;
 
@@ -8447,14 +8916,15 @@ static ValNodePtr GrabTraversingGenes
 
 
 static CharPtr BuildFeatureClauses (
-  BioseqPtr bsp,
-  Uint1      molecule_type,
+  BioseqPtr   bsp,
+  Uint1       molecule_type,
   SeqEntryPtr sep,
   ValNodePtr  PNTR feature_list,
   Boolean     isSegment,
   ValNodePtr  PNTR seg_feature_list,
-  Int2 product_flag,
+  Int2        product_flag,
   Boolean     alternate_splice_flag,
+  Boolean     gene_cluster_opp_strand,
   DeflineFeatureRequestList PNTR feature_requests
 );
 
@@ -8542,7 +9012,8 @@ static Boolean LIBCALLBACK GetFeatureClauseForSeg (
                             TRUE,
                             &segment_feature_list,
                             sdlp->product_flag,
-							sdlp->alternate_splice_flag,
+							              sdlp->alternate_splice_flag,
+							              sdlp->gene_cluster_opp_strand,
                             sdlp->feature_requests);
   vnp = ValNodeNew (*(sdlp->list));
   if (vnp == NULL) return TRUE;
@@ -8610,14 +9081,15 @@ static void ShowFeatureList (ValNodePtr feature_list, FILE *fp, CharPtr title)
 }
 
 static CharPtr BuildFeatureClauses (
-  BioseqPtr bsp,
-  Uint1      molecule_type,
+  BioseqPtr   bsp,
+  Uint1       molecule_type,
   SeqEntryPtr sep,
   ValNodePtr  PNTR feature_list,
   Boolean     isSegment,
   ValNodePtr  PNTR seg_feature_list,
-  Int2 product_flag,
+  Int2        product_flag,
   Boolean     alternate_splice_flag,
+  Boolean     gene_cluster_opp_strand,
   DeflineFeatureRequestList PNTR feature_requests
 )
 {
@@ -8651,7 +9123,7 @@ static CharPtr BuildFeatureClauses (
     }
 
     /* now group clauses */
-    GroupAllClauses ( feature_list, bsp );
+    GroupAllClauses ( feature_list, gene_cluster_opp_strand, bsp );
 
     ExpandAltSplicedExons (*feature_list, bsp, feature_requests->suppress_locus_tags);
 
@@ -8700,6 +9172,13 @@ static CharPtr BuildFeatureClauses (
     LabelClauses (*feature_list, molecule_type, bsp, 
                   feature_requests->suppress_locus_tags);
 
+    /* parse lists of tRNA and intergenic spacer clauses in misc_feat notes */
+    /* need to do this after LabelClauses, since LabelClauses labels intergenic
+     * spacers with more relaxed restrictions.  The labels from LabelClauses
+     * for intergenic spacers are the default values.
+     */
+    ReplaceIntergenicSpacerClauses (feature_list, bsp, feature_requests->suppress_locus_tags);
+
     ConsolidateClauses (feature_list, bsp, molecule_type, TRUE,
                         feature_requests->suppress_locus_tags);
 
@@ -8743,6 +9222,7 @@ static CharPtr BuildFeatureClauses (
         case GENOME_cyanelle :
         case GENOME_leucoplast :
         case GENOME_proplastid :
+        case GENOME_hydrogenosome :
           sprintf (ending_str, "%s", organelleByGenome [biop->genome]);
           break;
       }
@@ -8798,6 +9278,7 @@ static void BuildDefLineFeatClauseList (
   DeflineFeatureRequestList PNTR feature_requests,
   Int2 product_flag,
   Boolean alternate_splice_flag,
+  Boolean gene_cluster_opp_strand,
   ValNodePtr PNTR list
 )
 {
@@ -8822,7 +9303,8 @@ static void BuildDefLineFeatClauseList (
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
       {
         BuildDefLineFeatClauseList (sep, entityID, feature_requests,
-                                    product_flag, alternate_splice_flag, list);
+                                    product_flag, alternate_splice_flag,
+                                    gene_cluster_opp_strand, list);
       }
       return;
     }
@@ -8848,7 +9330,8 @@ static void BuildDefLineFeatClauseList (
 
       sdld.feature_requests =  feature_requests;
       sdld.product_flag = product_flag;
-	  sdld.alternate_splice_flag = alternate_splice_flag;
+      sdld.alternate_splice_flag = alternate_splice_flag;
+      sdld.gene_cluster_opp_strand = gene_cluster_opp_strand;
       sdld.list = list;
       SeqMgrExploreSegments (bsp, (Pointer) &sdld, GetFeatureClauseForSeg);
       deflist = (DefLineFeatClausePtr) MemNew (sizeof (DefLineFeatClauseData));
@@ -8863,7 +9346,8 @@ static void BuildDefLineFeatClauseList (
                             FALSE,
                             NULL,
                             product_flag,
-							alternate_splice_flag,
+                            alternate_splice_flag,
+                            gene_cluster_opp_strand,
                             feature_requests);
       vnp = ValNodeNew (*list);
       if (vnp == NULL) return;
@@ -8900,7 +9384,8 @@ static void BuildDefLineFeatClauseList (
                                              FALSE,
                                              NULL,
                                              product_flag,
-											 alternate_splice_flag,
+                                             alternate_splice_flag,
+                                             gene_cluster_opp_strand,
                                              feature_requests);
   vnp = ValNodeNew (*list);
   if (vnp == NULL) return;
@@ -8962,6 +9447,7 @@ typedef struct deflineformdata {
   PopuP     misc_feat_parse_rule;
   ButtoN    alternate_splice_flag;
   ButtoN    suppress_locus_tags;
+  ButtoN    gene_cluster_opp_strand;
 } DefLineFormData, PNTR DefLineFormPtr;
 
 static void DefLineFormMessageProc (ForM f, Int2 mssg)
@@ -9090,6 +9576,7 @@ static void DoAutoDefLine (ButtoN b)
   Int4 i;
   ValNodePtr defline_clauses = NULL;
   Boolean alternate_splice_flag;
+  Boolean gene_cluster_opp_strand;
 
   dlfp = GetObjectExtra (b);
   if (b == NULL) return;
@@ -9184,6 +9671,7 @@ static void DoAutoDefLine (ButtoN b)
 
   product_flag = GetValue (dlfp->organelle_popup) - 1;
   alternate_splice_flag = GetStatus (dlfp->alternate_splice_flag);
+  gene_cluster_opp_strand = GetStatus (dlfp->gene_cluster_opp_strand);
  
   if (dlfp->target_bsp != NULL && GetStatus (dlfp->modify_only_target))
   {
@@ -9202,6 +9690,7 @@ static void DoAutoDefLine (ButtoN b)
   BuildDefLineFeatClauseList (sep, dlfp->input_entityID,
                               &dlfp->feature_requests,
                               product_flag, alternate_splice_flag,
+                              gene_cluster_opp_strand,
                               &defline_clauses);
 
   BuildDefinitionLinesFromFeatureClauseLists (defline_clauses, dlfp->modList,
@@ -9531,6 +10020,10 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
   dlfp->remove_subfeatures = CheckBox (dlfp->featureOptsGrp, 
             "Suppress transposon and insertion sequence subfeatures", NULL);
   SetStatus (dlfp->remove_subfeatures, FALSE);
+  
+  dlfp->gene_cluster_opp_strand = CheckBox (dlfp->featureOptsGrp,
+             "Suppress gene cluster/locus subfeatures on both strands", NULL);
+  SetStatus (dlfp->gene_cluster_opp_strand, FALSE);
 
   dlfp->suppress_locus_tags = CheckBox (dlfp->featureOptsGrp, 
             "Suppress locus tags", NULL);
@@ -9564,6 +10057,7 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
                  (HANDLE) dlfp->alternate_splice_flag,
                  (HANDLE) dlfp->suppress_alt_splice_phrase,
                  (HANDLE) dlfp->remove_subfeatures,
+                 (HANDLE) dlfp->gene_cluster_opp_strand,
                  (HANDLE) dlfp->suppress_locus_tags,
                  (HANDLE) g,
                  (HANDLE) r,
@@ -9753,7 +10247,8 @@ extern void AutoDefBaseFormCommon (
     odmp.use_modifiers = use_modifiers;
     ClearProteinTitlesInNucProts (bfp->input_entityID, NULL);
     BuildDefLineFeatClauseList (sep, bfp->input_entityID, &feature_requests,
-                                DEFAULT_ORGANELLE_CLAUSE, FALSE, &defline_clauses);
+                                DEFAULT_ORGANELLE_CLAUSE, FALSE, FALSE,
+                                &defline_clauses);
     if ( AreFeatureClausesUnique (defline_clauses))
     {
       m = CreateComboFromModList (modList);
@@ -9911,7 +10406,7 @@ typedef struct orgmodlineformdata {
   CharPtr value_string;
   GrouP   action_choice;
   PopuP   match_choice;
-  LisT    apply_choice;
+  DialoG  apply_choice_dlg;
   GrouP   container;
 } OrgModLineFormData, PNTR OrgModLineFormPtr;
 
@@ -9938,15 +10433,16 @@ typedef struct orgmodloadformdata {
   GetSamplePtr      gsp;
   ExistingTextPtr   etp;
 } OrgModLoadFormData, PNTR OrgModLoadFormPtr;
- 
-static void SetFormModsAcceptButton (Handle a)
+
+static void SetFormModsAccept (Pointer userdata)
 {
   OrgModLoadFormPtr form_data;
   Boolean           have_apply;
   Boolean           have_action;
   Int4              column_index, apply_choice;
+  ValNodePtr        vnp;
 
-  form_data = GetObjectExtra (a);
+  form_data = (OrgModLoadFormPtr) userdata;
   if (form_data == NULL) return;
  
   have_apply = FALSE;
@@ -9957,7 +10453,14 @@ static void SetFormModsAcceptButton (Handle a)
   {
     if ( GetValue (form_data->line_forms [ column_index].action_choice) == 2)
     {
-      apply_choice = GetValue (form_data->line_forms[column_index].apply_choice);
+      apply_choice = 0;
+      vnp = DialogToPointer (form_data->line_forms[column_index].apply_choice_dlg);
+      if (vnp != NULL)
+      {
+        apply_choice = vnp->choice + 1;
+      }
+      vnp = ValNodeFreeData (vnp);
+
       if ( apply_choice > 0 && apply_choice <= NumDefLineModifiers + 1)
       {
         have_apply = TRUE;
@@ -9995,6 +10498,10 @@ static void SetFormModsAcceptButton (Handle a)
   }
 }
 
+static void SetFormModsAcceptButton (Handle a)
+{
+  SetFormModsAccept (GetObjectExtra (a));
+}
 
 extern CharPtr GetModifierPopupPositionName (Int2 val)
 {
@@ -10017,15 +10524,6 @@ extern Int4 GetNumDeflineModifiers (void)
   return NumDefLineModifiers;
 }
 
-extern CharPtr GetSelectedModifierPopupName (PopuP p)
-{
-  Int2                     val;
-  
-  val = GetValue (p);
-  return GetModifierPopupPositionName (val);
-}
-
-
 
 
 static void BuildOrgModLineForm (
@@ -10038,6 +10536,7 @@ static void BuildOrgModLineForm (
 {
   GrouP g;
   Int4  index;
+  ValNodePtr qual_selection_list = NULL;
 
   omlfp->column_number = column_number;
   omlfp->value_string = value_string;
@@ -10064,14 +10563,29 @@ static void BuildOrgModLineForm (
   SetValue (omlfp->match_choice, 6);
 
   /* list of organism modifiers */
-  omlfp->apply_choice = SingleList (g, 5, 8,
-                                    (LstActnProc) SetFormModsAcceptButton);
-  SetObjectExtra (omlfp->apply_choice, parent_form, NULL);
   for (index = 0; index < NumDefLineModifiers; index++)
   {
-    ListItem (omlfp->apply_choice, DefLineModifiers[index].name);
+    if (index == DEFLINE_POS_Old_lineage || index == DEFLINE_POS_Old_name
+        || index == DEFLINE_POS_Insertion_seq_name
+        || index == DEFLINE_POS_Transposon_name)
+    {
+      continue;
+    }
+    ValNodeAddPointer (&qual_selection_list, index, StringSave (DefLineModifiers[index].name));
+    
   }
-  ListItem (omlfp->apply_choice, "Tax Name");
+  
+  ValNodeAddPointer (&qual_selection_list, NumDefLineModifiers, StringSave ("Tax Name"));
+  
+    /* note - the ValNodeSelectionDialog will free the qual_selection_list when done */                                            
+  omlfp->apply_choice_dlg = ValNodeSelectionDialog (g, qual_selection_list, 8, 
+                                                    ValNodeStringName,
+                                                    ValNodeSimpleDataFree, 
+                                                    ValNodeStringCopy,
+                                                    ValNodeChoiceMatch,
+                                                    "qual choice", 
+                                                    SetFormModsAccept, parent_form,
+                                                    FALSE);
 
   SetValue (omlfp->action_choice, 1);
 }
@@ -10112,6 +10626,7 @@ static CharPtr genome_names[] =
   "leucoplast",
   "proplastid",
   "endogenous_virus",
+  "hydrogenosome"
 };
 
 static Uint1 GetGenomeValFromString (CharPtr value_string)
@@ -10246,6 +10761,7 @@ static void ApplyQualsToOrg (
   Int4       column_index;
   ValNodePtr part;
   Int4       apply_choice;
+  ValNodePtr vnp;
 
   if (biop == NULL || parts == NULL || form_data == NULL) return;
 
@@ -10254,7 +10770,13 @@ static void ApplyQualsToOrg (
        column_index < form_data->num_line_forms && part != NULL;
        column_index ++)
   {
-    apply_choice = GetValue (form_data->line_forms[column_index].apply_choice);
+    apply_choice = 0;
+    vnp = DialogToPointer (form_data->line_forms[column_index].apply_choice_dlg);
+    if (vnp != NULL)
+    {
+      apply_choice = vnp->choice + 1;
+    }
+    vnp = ValNodeFreeData (vnp);
     if (GetValue (form_data->line_forms[column_index].action_choice) == 2
       && apply_choice > 0)
     {
@@ -10262,9 +10784,8 @@ static void ApplyQualsToOrg (
       {
         if (apply_choice < NumDefLineModifiers + 1)
         {
-          AddOneQualToOrg (biop, part->data.ptrvalue,
-              GetValue (form_data->line_forms[column_index].apply_choice) - 1,
-              form_data->etp);
+          AddOneQualToOrg (biop, part->data.ptrvalue, apply_choice - 1,
+                           form_data->etp);
         }
         else if (apply_choice == NumDefLineModifiers + 1)
         {  
@@ -10619,6 +11140,7 @@ static void FindQualsOnOrg
   Int4       column_index;
   ValNodePtr part;
   Int4       apply_choice;
+  ValNodePtr vnp;
 
   if (biop == NULL || parts == NULL 
       || form_data == NULL || form_data->gsp == NULL) return;
@@ -10628,7 +11150,12 @@ static void FindQualsOnOrg
        column_index < form_data->num_line_forms && part != NULL;
        column_index ++)
   {
-    apply_choice = GetValue (form_data->line_forms[column_index].apply_choice);
+    apply_choice = 0;
+    vnp = DialogToPointer (form_data->line_forms[column_index].apply_choice_dlg);
+    if (vnp != NULL)
+    {
+      apply_choice = vnp->choice + 1;
+    }
     if (GetValue (form_data->line_forms[column_index].action_choice) == 2
       && apply_choice > 0)
     {
@@ -10636,9 +11163,7 @@ static void FindQualsOnOrg
       {
         if (apply_choice < NumDefLineModifiers + 1)
         {
-          FindOneQualOnOrg (biop, 
-                            GetValue (form_data->line_forms[column_index].apply_choice) - 1,
-                            form_data->gsp);
+          FindOneQualOnOrg (biop, apply_choice - 1, form_data->gsp);
         }
         else if (apply_choice == NumDefLineModifiers + 1)
         {  
@@ -11000,297 +11525,21 @@ extern void LoadOrganismModifierTable (IteM i)
   Update ();
 }
 
-static CharPtr FindModifierIndexInTitle (Int4 modifier_index, CharPtr title_text)
-{
-  Char    look_for[128];
-  Char    look_for2[128];
-  CharPtr mod_found = NULL;
-  
-  if (modifier_index > NumDefLineModifiers + 2 || modifier_index < 0)
-  {
-    return NULL;
-  }
-  if (modifier_index < NumDefLineModifiers)
-  {
-    if (modifier_index == DEFLINE_POS_Specimen_voucher)
-	  {
-      sprintf (look_for, "[specimen-voucher=");
-	  } 
-	  else
-	  {
-      sprintf (look_for, "[%s=", DefLineModifiers [modifier_index].name);
-	  }
-    look_for2[0] = 0;
-  }
-  else if (modifier_index == NumDefLineModifiers)
-  {
-    sprintf (look_for, "[Organism=");
-    sprintf (look_for2, "[Org=");
-  }
-  else if (modifier_index == NumDefLineModifiers + 1)
-  {
-    sprintf (look_for, "[location=");
-  }
-  else if (modifier_index == NumDefLineModifiers + 2)
-  {
-    sprintf (look_for, "[lineage=");
-  }
-  
-  /* if title text is not NULL, need to make sure old value is not present */
-  mod_found = StringISearch (title_text, look_for);
-  if (mod_found == NULL && modifier_index == NumDefLineModifiers)
-  {
-    mod_found = StringISearch (title_text, look_for2);
-  }
-  return mod_found;
-}
-
-static CharPtr AddOneModToTitle 
-(CharPtr title_text,
- CharPtr value_string,
- Int4    modifier_index,
- Boolean erase_where_blank)
-{
-  Char    look_for[128];
-  Char    look_for2[128];
-  CharPtr mod_found = NULL;
-  CharPtr end_mod;
-  Int4    new_len;
-  CharPtr new_title;
- 
-  if (modifier_index > NumDefLineModifiers + 2 || modifier_index < 0)
-  {
-    return StringSave (title_text);
-  }
-  if (!erase_where_blank && StringHasNoText (value_string))
-  {
-    return StringSave (title_text);
-  }
-  if (modifier_index < NumDefLineModifiers)
-  {
-    if (modifier_index == DEFLINE_POS_Specimen_voucher)
-	  {
-      sprintf (look_for, "[specimen-voucher=");
-	  } 
-	  else
-	  {
-      sprintf (look_for, "[%s=", DefLineModifiers [modifier_index].name);
-	  }
-    look_for2[0] = 0;
-  }
-  else if (modifier_index == NumDefLineModifiers)
-  {
-    sprintf (look_for, "[Organism=");
-    sprintf (look_for2, "[Org=");
-  }
-  else if (modifier_index == NumDefLineModifiers + 1)
-  {
-    sprintf (look_for, "[location=");
-  }
-  else if (modifier_index == NumDefLineModifiers + 2)
-  {
-    sprintf (look_for, "[lineage=");
-  }
-  
-  /* if title text is not NULL, need to make sure old value is not present */
-  mod_found = StringISearch (title_text, look_for);
-  if (mod_found == NULL && modifier_index == NumDefLineModifiers)
-  {
-    mod_found = StringISearch (title_text, look_for2);
-  }
-  if (mod_found)
-  {
-    end_mod = StringChr (mod_found, ']');
-    if (end_mod != NULL)
-    {
-      StringCpy (mod_found, end_mod + 1);
-    }
-  }
-  
-  new_len = StringLen (title_text) + StringLen (look_for) + StringLen (value_string) + 3;
-  new_title = (CharPtr) MemNew (sizeof (Char) * new_len);
-  if (new_title != NULL)
-  {
-    new_title [0] = 0;
-    if (!StringHasNoText (title_text))
-    {
-      StringCpy (new_title, title_text);
-      StringCat (new_title, " ");
-    }
-    StringCat (new_title, look_for);
-    if (! IsNonTextModifierIndex (modifier_index) && !StringHasNoText (value_string))
-    {
-      StringCat (new_title, value_string);
-    }
-    StringCat (new_title, "]");
-  }
-  return new_title;
-}
-
 typedef struct orgmodlinedata 
 {
   Int4    column_number;
   Int4    apply_choice;  
 } OrgModLineData, PNTR OrgModLinePtr;
 
-static void 
-AddModsToTitle 
-(BioseqPtr         bsp,
- ValNodePtr        parts,
- Int4              num_columns,
- OrgModLinePtr     line_data,
- Boolean           erase_where_blank)
-{
-  Int4        column_index;
-  ValNodePtr  part;
-  CharPtr     title_text = NULL;
-  SeqDescrPtr sdp;
-  
-  if (bsp == NULL || parts == NULL || line_data == NULL) return;
-  sdp = bsp->descr;
-  while (sdp != NULL && sdp->choice != Seq_descr_title)
-  {
-    sdp = sdp->next;
-  }
-  if (sdp == NULL)
-  {
-    sdp = ValNodeNew (bsp->descr);
-    if (bsp->descr == NULL)
-    {
-      bsp->descr = sdp;
-    }
-    sdp->choice = Seq_descr_title;
-    sdp->data.ptrvalue = NULL;
-  }
-
-  title_text = sdp->data.ptrvalue;
-  /* skip over first column, it has ID */
-  for (column_index = 1, part = parts->next;
-       column_index < num_columns && part != NULL;
-       column_index ++, part = part->next)
-  {
-    title_text = AddOneModToTitle (title_text, part->data.ptrvalue,
-                                   line_data[column_index].apply_choice - 1,
-                                   erase_where_blank);
-	  sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
-	  sdp->data.ptrvalue = title_text;
-  }
-  if (erase_where_blank)
-  {
-    while (column_index < num_columns)
-    {
-      title_text = AddOneModToTitle (title_text, NULL,
-                                     line_data[column_index].apply_choice - 1,
-                                     erase_where_blank);
-	    sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
-	    sdp->data.ptrvalue = title_text;
-	    column_index ++;
-    }
-  }
-}
-
-static Boolean BioseqHasStringID (BioseqPtr bsp, CharPtr id)
-{
-  Boolean  found_id = FALSE;
-  SeqIdPtr sip, tmp_sip;
-  Char     acc_str [256];
-  Int4     match_len, match_len2;
-  
-  if (bsp == NULL || id == NULL)
-  {
-    return FALSE;
-  }
-
-  for (sip = bsp->id; sip != NULL && !found_id; sip = sip->next)
-  {
-    tmp_sip = sip->next;
-    sip->next = NULL;
-    
-    SeqIdWrite (sip, acc_str, PRINTID_REPORT, sizeof (acc_str));
-    if (StringCmp (id, acc_str) == 0)
-    {
-      found_id = TRUE;
-    }
-    else if (StringNCmp (acc_str, "TMSMART:", 8) == 0
-        && StringCmp (id, acc_str + 8) == 0)
-    {
-      found_id = TRUE;
-    } else if (IDIsInTextList (id, acc_str, TRUE)) {
-     found_id = TRUE;
-    } else {
-      match_len = StringCSpn (acc_str, ".");
-      match_len2 = StringCSpn (id, ".");
-      if (match_len == match_len2
-          && match_len > 0 && StringNCmp (id, acc_str, match_len) == 0)
-      {
-        found_id = TRUE;
-      }
-    }
-    sip->next = tmp_sip;
-  }
-  return found_id;
-}
-
-static Boolean 
-AddModsToOneSep 
-(SeqEntryPtr   sep,
- ValNodePtr    line_list, 
- OrgModLinePtr column_info,
- Int4          num_columns,
- Boolean       erase_where_blank)
-{
-  BioseqPtr         bsp;
-  ValNodePtr        line, part;
-  TableLinePtr      tlp;
-  Boolean           rval = FALSE;
-  
-  if (line_list == NULL || column_info == NULL || sep == NULL) return rval;
-  
-  if (IS_Bioseq (sep))
-  {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-  }
-  else
-  {
-    sep = FindNucSeqEntry (sep);
-    if (sep != NULL && IS_Bioseq (sep))
-    {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-    }
-  }
-  if (bsp == NULL) return rval;
-
-  /* the first column contains the ID */
-  for (line = line_list; line != NULL; line = line->next)
-  {    
-    tlp = line->data.ptrvalue;
-    if (tlp == NULL) 
-    {
-      continue;
-    }
-    part = tlp->parts;
-    if (part == NULL || StringHasNoText (part->data.ptrvalue))
-    {
-      continue;
-    }
-    if (BioseqHasStringID (bsp, (CharPtr) part->data.ptrvalue))
-    {
-      AddModsToTitle (bsp, tlp->parts, num_columns, column_info, erase_where_blank);
-      rval = TRUE;
-    }
-  }
-  return rval;
-}
-
-static Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num)
+extern Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num)
 {
   ModalAcceptCancelData acd;
   WindoW                w;
   Char                  title[128];
-  PopuP                 p;
   GrouP                 g, k, c;
   ButtoN                b;
-  Int4                  index;
+  DialoG                modifier_name_choice;
+  ValNodePtr            mod_name_choice_list = NULL, default_vnp, choice_vnp;
   
   if (orig_name == NULL)
   {
@@ -11311,15 +11560,22 @@ static Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num)
     StaticPrompt (k, *orig_name, 0, popupMenuHeight, programFont, 'l');
   }
   
-  p = PopupList (g, TRUE, NULL);
-  PopupItem (p, "Ignore Column");
-  for (index = 0; index < NumDefLineModifiers; index++)
-  {
-    PopupItem (p, DefLineModifiers[index].name);
-  }
-  PopupItem (p, "organism");
-  PopupItem (p, "location");
-  SetValue (p, 1);
+  ValNodeAddPointer (&mod_name_choice_list, 1, StringSave ("Ignore Column"));
+  mod_name_choice_list->next = GetSourceQualDescList (TRUE, TRUE, FALSE);
+  ValNodeAddPointer (&mod_name_choice_list, 2, StringSave ("Organism"));
+  ValNodeAddPointer (&mod_name_choice_list, 3, StringSave ("Location"));
+  
+  modifier_name_choice = ValNodeSelectionDialog (g, mod_name_choice_list, 6, SourceQualValNodeName,
+                                ValNodeSimpleDataFree, SourceQualValNodeDataCopy,
+                                SourceQualValNodeMatch, "feature list", 
+                                NULL, NULL, FALSE);
+  default_vnp = ValNodeNew (NULL);
+  default_vnp->choice = 1;
+  default_vnp->data.ptrvalue = StringSave ("Ignore Column");
+  default_vnp->next = NULL;
+  PointerToDialog (modifier_name_choice, default_vnp);
+  default_vnp = ValNodeFreeData (default_vnp);
+
   c = HiddenGroup (g, 2, 0, NULL);
   b = PushButton (c, "Accept", ModalAcceptButton);
   SetObjectExtra (b, &acd, NULL);
@@ -11327,11 +11583,11 @@ static Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num)
   SetObjectExtra (b, &acd, NULL);
   if (k == NULL)
   {
-    AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) c, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) modifier_name_choice, (HANDLE) c, NULL);
   }
   else
   {
-    AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) p, (HANDLE) c, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) modifier_name_choice, (HANDLE) c, NULL);
   }
   Show (w);
   Select (w);
@@ -11343,7 +11599,8 @@ static Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num)
     Update ();
   }
   ProcessAnEvent ();
-  index = GetValue (p);
+  choice_vnp = (ValNodePtr) DialogToPointer (modifier_name_choice);
+  
   Remove (w);
   if (acd.cancelled)
   {
@@ -11352,62 +11609,12 @@ static Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num)
   else
   {
     *orig_name = MemFree (*orig_name);
-    if (index == NumDefLineModifiers + 2)
+    if (choice_vnp != NULL && choice_vnp->choice != 1)
     {
-      *orig_name = StringSave ("organism");
-    }
-    else if (index == NumDefLineModifiers + 3)
-    {
-      *orig_name = StringSave ("location");
-    }
-    else if (index > 1 && index < NumDefLineModifiers + 2)
-    {
-      *orig_name = StringSave (DefLineModifiers[index - 2].name);
+      *orig_name = SourceQualValNodeName (choice_vnp);
     }
     return TRUE;
   }
-}
-
-static CharPtr FixCommonModifierNameProblems (CharPtr orig_name)
-{
-  CharPtr cp;
-
-  if (StringHasNoText (orig_name))
-  {
-    return orig_name;
-  }
-  
-  TrimSpacesAroundString (orig_name);
-
-  cp = StringChr (orig_name, ' ');
-  while (cp != NULL)
-  {
-    *cp = '-';
-    cp = StringChr (cp, ' ');
-  }
-  
-  if (StringICmp (orig_name, "Lat-long") == 0
-      || StringICmp (orig_name, "Latitude-Longitude") == 0)
-  {
-    sprintf (orig_name, "lat-lon");
-  }
-  else if (StringICmp (orig_name, "org") == 0)
-  {
-    orig_name = StringSave ("organism");
-  }
-  else if (StringICmp (orig_name, "specimen-voucher") == 0)
-  {
-    orig_name = StringSave ("specimen voucher");
-  }
-  else if (StringICmp (orig_name, "environmental_sample") == 0)
-  {
-    orig_name = StringSave ("environmental-sample");
-  }
-  else if (StringICmp (orig_name, "note") == 0)
-  {
-    orig_name = StringSave ("Note-Subsrc");
-  }
-  return orig_name;
 }
 
 static ValNodePtr CreateHeaderLine (void)
@@ -11504,868 +11711,7 @@ static ValNodePtr FreeTableData (ValNodePtr lines)
   return ValNodeFree (lines);
 }
 
-static Boolean ChoiceAlreadyInList (Uint1 choice, ValNodePtr list)
-{
-  while (list != NULL)
-  {
-    if (list->choice == choice)
-    {
-      return TRUE;
-    }
-    list = list->next;
-  }
-  return FALSE;
-}
-
-static Boolean StringAlreadyInList (ValNodePtr list, CharPtr str)
-{
-  while (list != NULL)
-  {
-    if (StringICmp (list->data.ptrvalue, str) == 0)
-    {
-      return TRUE;
-    }
-    list = list->next;
-  }
-  return FALSE;
-}
-
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
-
-static Boolean 
-TableContainsBadValues 
-(ValNodePtr    data_lines,
- OrgModLinePtr column_info)
-{
-  ValNodePtr        data_line, column_vnp;
-  Int4              col_num;
-  TableLinePtr      tlp;
-  EnumFieldAssocPtr eap;
-  Boolean           found;
-  ValNodePtr        bad_loc_list = NULL, bad_nontext_list = NULL;
-  CharPtr           loc_err_msg = NULL, nontext_err_msg = NULL;
-  ValNodePtr        good_loc_list = NULL;
-  CharPtr           good_msg = NULL;
-  Boolean           rval = FALSE;
-  Int4              col_mod_index;
-  
-  if (column_info == NULL)
-  {
-    return FALSE;
-  }
-  
-  for (data_line = data_lines; data_line != NULL; data_line = data_line->next)
-  {
-    tlp = (TableLinePtr) data_line->data.ptrvalue;
-    if (tlp == NULL)
-    {
-      continue;
-    }
-    for (column_vnp = tlp->parts, col_num = 0;
-         column_vnp != NULL; 
-         column_vnp = column_vnp->next, col_num++)
-    {
-      col_mod_index = column_info[col_num].apply_choice - 1;
-      if (col_mod_index < 0)
-      {
-        continue;
-      }
-      else if (col_mod_index == NumDefLineModifiers + 1)
-      {
-        /* location */
-        found = FALSE;
-        if (StringHasNoText (column_vnp->data.ptrvalue))
-        {
-          found = TRUE;
-        }
-        for (eap = biosource_genome_simple_alist;
-             eap != NULL && eap->name != NULL && !found;
-             eap++)
-        {
-          if (StringICmp (eap->name, column_vnp->data.ptrvalue) == 0)
-          {
-            found = TRUE;
-          }
-        }
-        if (!found)
-        {
-          if (!StringAlreadyInList (bad_loc_list, tlp->parts->data.ptrvalue))
-          {
-            ValNodeAddPointer (&bad_loc_list, 0, tlp->parts->data.ptrvalue);
-          }
-        }
-      }
-      else if (col_mod_index < NumDefLineModifiers 
-               && IsNonTextModifier (DefLineModifiers[col_mod_index].name))
-      {
-        if (StringICmp (column_vnp->data.ptrvalue, "false") == 0)
-        {
-          column_vnp->data.ptrvalue = MemFree (column_vnp->data.ptrvalue);
-        }
-        else if (StringICmp (column_vnp->data.ptrvalue, "true") != 0)
-        {
-          if (!ChoiceAlreadyInList (col_mod_index, bad_nontext_list))
-          {
-            ValNodeAddPointer (&bad_nontext_list, col_mod_index, 
-                               DefLineModifiers[col_mod_index].name);
-          }
-        }
-      }
-    }
-  }
-  if (bad_loc_list != NULL)
-  {
-    loc_err_msg = CreateListMessage (NULL, NULL, bad_loc_list);
-    for (eap = biosource_genome_simple_alist;
-         eap != NULL && eap->name != NULL && !found;
-         eap++)
-    {
-      if (!StringHasNoText (eap->name))
-      {
-        ValNodeAddPointer (&good_loc_list, 0, eap->name);
-      }
-    }
-    good_msg = CreateListMessage ("Valid location value", "Please edit your file.", good_loc_list);
-    good_loc_list = ValNodeFree (good_loc_list);
-    
-    if (bad_loc_list->next == NULL)
-    {
-      Message (MSG_ERROR, "%s contains an invalid location value.  %s", loc_err_msg, good_msg);
-    }
-    else
-    {
-      Message (MSG_ERROR, "%s contain invalid location values. %s", loc_err_msg, good_msg);
-    }
-    rval = TRUE;
-  }
-  
-  if (!rval && bad_nontext_list != NULL)
-  {
-    nontext_err_msg = CreateListMessage ("Column", NULL, bad_nontext_list);
-    if (bad_nontext_list->next == NULL)
-    {
-      if (ANS_CANCEL == Message (MSG_OKC, "%s contains a value other than TRUE or FALSE.  "
-                                 "This modifier does not allow other text.  Click OK to "
-                                 "discard this text and mark the values as TRUE.  If you "
-                                 "wish to preserve this text under another modifier, click "
-                                 "Cancel and change the column header in your file.",
-                                 nontext_err_msg))
-      {
-        rval = TRUE;
-      }
-    }
-    else
-    {
-      if (ANS_CANCEL == Message (MSG_OKC, "%s contain values other than TRUE or FALSE.  "
-                                 "These modifiers do not allow other text.  Click OK to "
-                                 "discard this text and mark the values as TRUE.  If you "
-                                 "wish to preserve this text under another modifier, click "
-                                 "Cancel and change the column header in your file.",
-                                 nontext_err_msg))
-      {
-        rval = TRUE;
-      }
-    }
-  }
-  
-  bad_loc_list = ValNodeFree (bad_loc_list);
-  bad_nontext_list = ValNodeFree (bad_nontext_list);
-  loc_err_msg = MemFree (loc_err_msg);
-  good_msg = MemFree (good_msg);
-  nontext_err_msg = MemFree (nontext_err_msg);
-  return rval;
-}
-
-
-static Int4 
-PrepareTableDataForImport 
-(ValNodePtr    PNTR pheader_line, 
- OrgModLinePtr PNTR pcolumn_info)
-{
-  ValNodePtr    header_line, vnp;
-  Int4          index, col_num;
-  TableLinePtr      tlp;
-  Int4          max_columns;
-  CharPtr       new_val;
-  Boolean       found;
-  OrgModLinePtr column_info;
-  
-  if (pheader_line == NULL || pcolumn_info == NULL)
-  {
-    return -1;
-  }
-
-  *pheader_line = NULL;
-  *pcolumn_info = NULL;
-  
-  header_line = ReadTableData ();
-  if (header_line == NULL || header_line->data.ptrvalue == NULL) return -1;
-  
-  tlp = header_line->data.ptrvalue;
-  if (tlp == NULL || tlp->parts == NULL)
-  {
-    Message (MSG_ERROR, "Error reading table");
-    header_line = FreeTableData (header_line);
-    return -1;
-  }
-  if (tlp->parts->next == NULL)
-  {
-    Message (MSG_ERROR, "Table contains only one column!  You must supply at least local_id column and one column of modifiers.");
-    header_line = FreeTableData (header_line);
-    return -1;
-  }
-  
-  if (StringICmp (tlp->parts->data.ptrvalue, "local_id") != 0
-      && StringICmp (tlp->parts->data.ptrvalue, "local id") != 0
-      && StringICmp (tlp->parts->data.ptrvalue, "seq_id") != 0
-      && StringICmp (tlp->parts->data.ptrvalue, "seq id") != 0
-      && StringICmp (tlp->parts->data.ptrvalue, "sequence_id") != 0
-      && StringICmp (tlp->parts->data.ptrvalue, "sequence id") != 0
-      )
-  {
-    Message (MSG_ERROR, "Table file is missing header line!  Make sure first column header is seq_id");
-    header_line = FreeTableData (header_line);
-    return -1;      
-  }
-  else
-  {  
-    max_columns = 1;
-    for (vnp = tlp->parts->next; vnp != NULL; vnp = vnp->next)
-    {
-      /* make sure text matches source qualifier name */
-	    new_val = FixCommonModifierNameProblems (vnp->data.ptrvalue);
-	    if (new_val != vnp->data.ptrvalue)
-      {
-        vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
-		    vnp->data.ptrvalue = new_val;
-	    }
-      
-      found = FALSE;
-      if (StringICmp (vnp->data.ptrvalue, "organism") == 0)
-      {
-        found = TRUE;
-      }
-      else if (StringICmp (vnp->data.ptrvalue, "location") == 0)
-      {
-        found = TRUE;
-      }
-      else if (StringICmp (vnp->data.ptrvalue, "lineage") == 0)
-      {
-        found = TRUE;
-      }
-     
-      for (index = 0; index < NumDefLineModifiers && !found; index++)
-      {
-        if (StringICmp (DefLineModifiers[index].name, vnp->data.ptrvalue) == 0)
-        {
-          found = TRUE;
-        }
-      }
-      if (!found)
-      {
-        if (!ReplaceImportModifierName ((CharPtr PNTR)(&(vnp->data.ptrvalue)), max_columns))
-        {
-          header_line = FreeTableData (header_line);
-          return -1;
-        }
-      }
-      max_columns ++;
-    }
-  }
-  
-  column_info = (OrgModLinePtr)MemNew (max_columns * sizeof (OrgModLineData));
-  if (column_info == NULL) return -1;
-
-  /* first column is local ID */
-  column_info [0].column_number = 0;
-  column_info [0].apply_choice = 0;
-
-  /* remaining columns are organism modifiers */
-  for (vnp = tlp->parts->next, col_num = 1; vnp != NULL; vnp = vnp->next, col_num ++)
-  {
-    /* make sure text matches source qualifier name */
-    found = FALSE;
-    if (StringICmp (vnp->data.ptrvalue, "organism") == 0)
-    {
-      found = TRUE;
-      column_info [col_num].column_number = col_num;
-      column_info [col_num].apply_choice = NumDefLineModifiers + 1;
-    }
-    else if (StringICmp (vnp->data.ptrvalue, "location") == 0)
-    {
-      found = TRUE;
-      column_info [col_num].column_number = col_num;
-      column_info [col_num].apply_choice = NumDefLineModifiers + 2;
-    }
-    else if (StringICmp (vnp->data.ptrvalue, "lineage") == 0)
-    {
-      found = TRUE;
-      column_info [col_num].column_number = col_num;
-      column_info [col_num].apply_choice = NumDefLineModifiers + 3;
-    }
-
-    for (index = 0; index < NumDefLineModifiers && !found; index++)
-    {
-      if (StringICmp (DefLineModifiers[index].name, vnp->data.ptrvalue) == 0)
-      {
-        found = TRUE;
-        column_info [col_num].column_number = col_num;
-        column_info [col_num].apply_choice = index + 1;
-      }
-    }
-    if (!found)
-    {
-      column_info [col_num].column_number = col_num;
-      column_info [col_num].apply_choice = 0;
-    }
-  }
-  
-  if (TableContainsBadValues (header_line->next, column_info))
-  {
-    header_line = FreeTableData (header_line);
-    return -1;      
-  }
-
-  *pheader_line = header_line;  
-  *pcolumn_info = column_info;
-  
-  return max_columns;
-}
-
-static BioseqPtr GetBioseqForSeqListSep (SeqEntryPtr sep)
-{
-  SeqEntryPtr nuc_sep;
-  BioseqPtr   bsp;
-  
-  if (sep == NULL)
-  {
-    return NULL;
-  }
-  if (IS_Bioseq (sep))
-  {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-  }
-  else if (IS_Bioseq_set (sep))
-  {
-    nuc_sep = FindNucSeqEntry (sep);
-    if (nuc_sep != NULL && IS_Bioseq (nuc_sep))
-    {
-      bsp = (BioseqPtr) nuc_sep->data.ptrvalue;
-    }
-  }
-  return bsp;
-}
-
-static Boolean 
-TableHasBadIDs 
-(ValNodePtr   table_lines,
- SeqEntryPtr  seq_list,
- CharPtr PNTR id_list,
- Int4         num_ids)
-{
-  ValNodePtr   data_line, other_line;
-  TableLinePtr tlp, other_tlp;
-  SeqEntryPtr  sep;
-  Boolean      found, found_too_many;
-  ValNodePtr   not_found = NULL;
-  ValNodePtr   found_more_than_once = NULL;
-  BioseqPtr    bsp;
-  CharPtr      too_many_msg = NULL, not_found_msg = NULL;
-  Boolean      rval = FALSE;
-  Int4         msg_len = 0;
-  CharPtr      too_many_fmt = " found more than once\n";
-  CharPtr      not_found_fmt = " not found\n";
-  CharPtr      err_msg = NULL;
-  Int4         i;
-  
-  if (table_lines == NULL)
-  {
-    return FALSE;
-  }
-  
-  if (seq_list == NULL && id_list == NULL)
-  {
-    return TRUE;
-  }
-  
-  for (data_line = table_lines->next; data_line != NULL; data_line = data_line->next)
-  {
-    tlp = data_line->data.ptrvalue;
-    if (tlp->parts != NULL)
-    {
-      found = FALSE;
-      found_too_many = FALSE;
-      if (seq_list == NULL)
-      {
-        for (i = 0; i < num_ids; i++)
-        {
-          if (StringICmp (id_list [i], tlp->parts->data.ptrvalue) == 0)
-          {
-            found = TRUE;
-          }
-        }
-      }
-      else
-      {
-        for (sep = seq_list; sep != NULL; sep = sep->next)
-        {
-          bsp = GetBioseqForSeqListSep (sep);
-          if (BioseqHasStringID (bsp, tlp->parts->data.ptrvalue))
-          {
-            found = TRUE;
-          }
-        }
-      }
-      if (found)
-      {
-        for (other_line = data_line->next; 
-             other_line != NULL && ! found_too_many;
-             other_line = other_line->next)
-        {
-          other_tlp = other_line->data.ptrvalue;
-          if (other_tlp != NULL && other_tlp->parts != NULL)
-          {
-            if (StringICmp (other_tlp->parts->data.ptrvalue, tlp->parts->data.ptrvalue) == 0)
-            {
-              found_too_many = TRUE;
-            }
-          }
-        }
-      }
-      
-      if (found_too_many
-          && ! StringAlreadyInList (found_more_than_once, tlp->parts->data.ptrvalue))
-      {
-        ValNodeAddPointer (&found_more_than_once, 0, StringSave (tlp->parts->data.ptrvalue));
-      }
-      else if (!found)
-      {
-        ValNodeAddPointer (&not_found, 0, StringSave (tlp->parts->data.ptrvalue));
-      }
-    }
-  }
-  
-  if (found_more_than_once != NULL || not_found != NULL)
-  {
-    if (found_more_than_once != NULL)
-    {
-      too_many_msg = CreateListMessage ("Sequence ID", NULL, found_more_than_once);
-      rval = TRUE;
-      msg_len += StringLen (too_many_msg) + StringLen (too_many_fmt) + 5;
-    }
-    if (not_found != NULL)
-    {
-      not_found_msg = CreateListMessage ("Sequence ID", NULL, not_found);
-      msg_len += StringLen (not_found_msg) + StringLen (not_found_fmt) + 5;
-    }
-    
-    err_msg = (CharPtr) MemNew ((msg_len + 1) * sizeof (Char));
-    if (err_msg != NULL)
-    {
-      if (too_many_msg != NULL)
-      {
-        StringCat (err_msg, too_many_msg);
-        if (found_more_than_once->next != NULL)
-        {
-          StringCat (err_msg, " were");
-        }
-        else
-        {
-          StringCat (err_msg, " was");
-        }
-        StringCat (err_msg, too_many_fmt);
-      }
-      if (not_found_msg != NULL)
-      {
-        StringCat (err_msg, not_found_msg);
-        if (not_found->next != NULL)
-        {
-          StringCat (err_msg, " were");
-        }
-        else
-        {
-          StringCat (err_msg, " was");
-        }
-        StringCat (err_msg, not_found_fmt);
-      }
-      if (!rval)
-      {
-        if (ANS_NO == Message (MSG_YN, "%sContinue anyway?", err_msg))
-        {
-          rval = TRUE;
-        }
-      }
-      else
-      {
-        Message (MSG_ERROR, "%sPlease correct your file.", err_msg);
-      }
-    }
-    too_many_msg = MemFree (too_many_msg);
-    not_found_msg = MemFree (not_found_msg);
-    err_msg = MemFree (err_msg);
-  }
-  return rval;
-}
-
-static CharPtr 
-GetRelevantTitle 
-(CharPtr      id,
- SeqEntryPtr  seq_list, 
- CharPtr PNTR id_list,
- CharPtr PNTR defline_list,
- Int4         num_ids)
-{
-  Int4         i;
-  BioseqPtr    bsp;
-  SeqDescrPtr  sdp;
-  SeqEntryPtr  sep;
-  
-  if (StringHasNoText (id)
-      || (seq_list == NULL && (id_list == NULL || defline_list == NULL)))
-  {
-    return NULL;
-  }
-  
-  if (seq_list == NULL)
-  {
-    for (i = 0; i < num_ids; i++)
-    {
-      if (StringICmp (id_list [i], id) == 0)
-      {
-        return defline_list [i];
-      }
-    }
-  }
-  else
-  {
-    for (sep = seq_list; sep != NULL; sep = sep->next)
-    {
-      bsp = GetBioseqForSeqListSep (sep);
-      if (BioseqHasStringID (bsp, id))
-      {
-        sdp = SeqEntryGetSeqDescr (sep, Seq_descr_title, NULL);
-        if (sdp != NULL)
-        {
-          return sdp->data.ptrvalue;
-        }
-      }
-    }
-  }
-  return NULL;
-}
-
-static Boolean CheckForOverwrite 
-(ValNodePtr    table_lines,
- OrgModLinePtr column_info,
- Int4          num_columns,
- SeqEntryPtr   seq_list,
- CharPtr PNTR  id_list,
- CharPtr PNTR  defline_list,
- Int4          num_ids,
- BoolPtr       erase_where_blank)
-{
-  ValNodePtr   data_line, column_vnp;  
-  TableLinePtr tlp;
-  CharPtr      title;
-  Int4         col_num;
-  Int4         col_mod_index;
-  ValNodePtr   bad_column_list = NULL;
-  Boolean      rval = FALSE;
-  CharPtr      err_msg = NULL;
-  ValNodePtr   blanks = NULL;
-  MsgAnswer    ans;
-  
-  if (table_lines == FALSE 
-      || (seq_list == NULL && (id_list == NULL || defline_list == NULL))
-      || column_info == NULL || erase_where_blank == NULL)
-  {
-    return FALSE;
-  }
-  
-  *erase_where_blank = FALSE;
-    
-  for (data_line = table_lines->next;
-       data_line != NULL;
-       data_line = data_line->next)
-  {
-    /* first find sequence to apply to */
-    tlp = data_line->data.ptrvalue;
-    if (tlp->parts != NULL)
-    {
-      title = GetRelevantTitle (tlp->parts->data.ptrvalue,
-                                seq_list,
-                                id_list,
-                                defline_list,
-                                num_ids);
-      if (title != NULL)
-      {
-        for (column_vnp = tlp->parts->next, col_num = 1;
-             column_vnp != NULL;
-             column_vnp = column_vnp->next, col_num++)
-        {
-          col_mod_index = column_info[col_num].apply_choice - 1;
-          if (col_mod_index < 0)
-          {
-            continue;
-          }
-          if (FindModifierIndexInTitle (col_mod_index, title))
-          {
-            if (StringHasNoText (column_vnp->data.ptrvalue))
-            {
-              if (ChoiceAlreadyInList (col_mod_index, blanks))
-              {
-                continue;
-              }
-              if (col_mod_index < NumDefLineModifiers)
-              {
-                ValNodeAddPointer (&blanks,
-                                   col_mod_index,
-                                   DefLineModifiers [col_mod_index].name);
-              }
-              else if (col_mod_index == NumDefLineModifiers)
-              {
-                ValNodeAddPointer (&blanks,
-                                   col_mod_index,
-                                   "Organism");
-              }
-              else if (col_mod_index == NumDefLineModifiers + 1)
-              {
-                ValNodeAddPointer (&blanks,
-                                   col_mod_index,
-                                   "Location");
-              }
-              else if (col_mod_index == NumDefLineModifiers + 2)
-              {
-                ValNodeAddPointer (&blanks,
-                                   col_mod_index,
-                                   "Lineage");
-              }
-            }
-            else if (!ChoiceAlreadyInList (col_mod_index, bad_column_list))
-            {
-              if (col_mod_index < NumDefLineModifiers)
-              {
-                ValNodeAddPointer (&bad_column_list,
-                                   col_mod_index,
-                                   DefLineModifiers [col_mod_index].name);
-              }
-              else if (col_mod_index == NumDefLineModifiers)
-              {
-                ValNodeAddPointer (&bad_column_list,
-                                   col_mod_index,
-                                   "Organism");
-              }
-              else if (col_mod_index == NumDefLineModifiers + 1)
-              {
-                ValNodeAddPointer (&bad_column_list,
-                                   col_mod_index,
-                                   "Location");
-              }
-              else if (col_mod_index == NumDefLineModifiers + 2)
-              {
-                ValNodeAddPointer (&bad_column_list,
-                                   col_mod_index,
-                                   "Lineage");
-              }
-            }
-          }
-        }
-        while (col_num < num_columns)
-        {
-          col_mod_index = column_info[col_num].apply_choice - 1;
-          if (col_mod_index < 0)
-          {
-            col_num++;
-            continue;
-          }
-          if (FindModifierIndexInTitle (col_mod_index, title))
-          {
-            if (ChoiceAlreadyInList (col_mod_index, blanks))
-            {
-              col_num++;
-              continue;
-            }
-            if (col_mod_index < NumDefLineModifiers)
-            {
-              ValNodeAddPointer (&blanks,
-                                 col_mod_index,
-                                 DefLineModifiers [col_mod_index].name);
-            }
-            else if (col_mod_index == NumDefLineModifiers)
-            {
-              ValNodeAddPointer (&blanks,
-                                 col_mod_index,
-                                 "Organism");
-            }
-            else if (col_mod_index == NumDefLineModifiers + 1)
-            {
-              ValNodeAddPointer (&blanks,
-                                 col_mod_index,
-                                 "Location");
-            }
-            else if (col_mod_index == NumDefLineModifiers + 2)
-            {
-              ValNodeAddPointer (&blanks,
-                                 col_mod_index,
-                                 "Lineage");
-            }
-          }
-          col_num++;
-        }
-      }
-    }
-  }
-  if (bad_column_list != NULL)
-  {
-    err_msg = CreateListMessage ("Record already contains values for column",
-                                 " also found in the import table.\n"
-                                 "Do you wish to overwrite these values?",
-                                 bad_column_list);
-    if (ANS_NO == Message (MSG_YN, err_msg))
-    {
-      rval = TRUE;
-    }
-    err_msg = MemFree (err_msg);
-    ValNodeFree (bad_column_list);
-  }
-  
-  if (blanks != NULL && !rval)
-  {
-    err_msg = CreateListMessage ("Your import table contains blanks in column",
-                                 " where data already exists in the sequences.\n"
-                                 "Do you wish to erase these values in the sequences?\n"
-                                 "If you say no, the old values will remain.",
-                                 blanks);
-    ans = Message (MSG_YNC, err_msg);
-    err_msg = MemFree (err_msg);
-    if (ans == ANS_CANCEL)
-    {
-      rval = TRUE;
-    }
-    else if (ans == ANS_YES)
-    {
-      *erase_where_blank = TRUE;
-    }
-  }
-  blanks = ValNodeFree (blanks);
-  
-  return rval;
-}
-
-extern Boolean ImportOrganismModifiersForSubmit (SeqEntryPtr seq_list)
-{
-  ValNodePtr         header_line;
-  OrgModLinePtr      column_info;
-  Int4               max_columns;
-  Boolean            rval = FALSE;
-  SeqEntryPtr        sep;
-  Boolean            erase_where_blank = FALSE;
-  
-  if (seq_list == NULL) return FALSE;
-  
-  max_columns = PrepareTableDataForImport (&header_line, &column_info);
-  if (max_columns < 1)
-  {
-    return FALSE;
-  }
-  
-  if (TableHasBadIDs (header_line, seq_list, NULL, 0))
-  {
-    header_line = FreeTableData (header_line);
-    return FALSE;
-  }
-  if (CheckForOverwrite (header_line, column_info, max_columns, seq_list,
-                         NULL, NULL, 0, 
-                         &erase_where_blank))
-  {
-    header_line = FreeTableData (header_line);
-    return FALSE;
-  }
-  
-  for (sep = seq_list; sep != NULL; sep = sep->next)
-  {
-    rval |= AddModsToOneSep (sep, header_line, column_info, max_columns, erase_where_blank);
-  }
-
-  header_line = FreeTableData (header_line);
-  column_info = MemFree (column_info);
-  return rval;
-}
-
-extern Boolean 
-ImportOrganismModifiersForSourceAssistant
-(Int4 num_sequences,
- CharPtr PNTR id_list,
- CharPtr PNTR defline_list)
-{
-  ValNodePtr    header_line, line, part;
-  Int4          index, col_num;
-  TableLinePtr  tlp;
-  Int4          max_columns;
-  CharPtr       id;
-  Boolean       found_id;
-  OrgModLinePtr column_info;
-  Boolean       erase_where_blank = FALSE;
-  
-  if (num_sequences < 1 || id_list == NULL || defline_list == NULL)
-  {
-    return FALSE;
-  }
-  
-  max_columns = PrepareTableDataForImport (&header_line, &column_info);
-  if (max_columns < 1)
-  {
-    return FALSE;
-  }
-
-  if (TableHasBadIDs (header_line, NULL, id_list, num_sequences))
-  {
-    header_line = FreeTableData (header_line);
-    return FALSE;
-  }
-  if (CheckForOverwrite (header_line, column_info, max_columns, NULL, 
-                         id_list, defline_list, num_sequences,
-                         &erase_where_blank))
-  {
-    header_line = FreeTableData (header_line);
-    return FALSE;
-  }
-
-  for (line = header_line->next; line != NULL; line = line->next)
-  {    
-    tlp = line->data.ptrvalue;
-    if (tlp == NULL) 
-    {
-      continue;
-    }
-    part = tlp->parts;
-    if (part == NULL || StringHasNoText (part->data.ptrvalue))
-    {
-      continue;
-    }
-    id = (CharPtr) part->data.ptrvalue;
-    found_id = FALSE;
-    for (index = 0; index < num_sequences; index++)
-    {
-      if (StringCmp (id_list[index], id) == 0)
-      {
-        for (col_num = 1, part = part->next;
-             col_num < max_columns && part != NULL;
-             col_num ++, part = part->next)
-        {
-          defline_list [index] = AddOneModToTitle (defline_list [index],
-                                       part->data.ptrvalue, 
-                                       column_info[col_num].apply_choice - 1,
-                                       erase_where_blank);
-        }
-      }
-    }
-  }
-  
-  header_line = FreeTableData (header_line);
-  column_info = MemFree (column_info);
-  return TRUE;
-}
 
 
 typedef struct exportorgtable

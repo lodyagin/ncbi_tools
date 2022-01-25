@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: xmlblast.c,v 6.37 2005/05/16 18:16:40 dondosha Exp $";
+static char const rcsid[] = "$Id: xmlblast.c,v 6.39 2005/07/28 14:57:10 coulouri Exp $";
 
-/* $Id: xmlblast.c,v 6.37 2005/05/16 18:16:40 dondosha Exp $ */
+/* $Id: xmlblast.c,v 6.39 2005/07/28 14:57:10 coulouri Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -32,12 +32,18 @@ static char const rcsid[] = "$Id: xmlblast.c,v 6.37 2005/05/16 18:16:40 dondosha
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.37 $
+* $Revision: 6.39 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.39  2005/07/28 14:57:10  coulouri
+* remove dead code
+*
+* Revision 6.38  2005/07/05 14:55:07  madden
+* Add call to AsnSetXMLmodulePrefix
+*
 * Revision 6.37  2005/05/16 18:16:40  dondosha
 * Removed calls to ObjMgrFreeCache - it should be called on a higher level
 *
@@ -246,18 +252,14 @@ Boolean BXMLGetSeqLineForDenseSeg(DenseSegPtr dsp, HspPtr hsp, Int4 length,
 {
 
     SeqInt msi, tsi;
-    SeqIntPtr sint;
     SeqLoc sl;
-    Int2 i, k;
+    Int2 i;
     Int2 dim;
     Int2 m_order, t_order;	/*order of the master and the target sequence*/
     Int4 index, abs_index;
     Int4 j, val, t_val;
-    Uint1 m_res, t_res, stdaa_res;
-    SeqIdPtr sip;
+    Uint1 m_res, t_res;
     SeqPortPtr m_spp, t_spp;
-    SeqMapTablePtr smtp;
-    
     
     if(dsp == NULL || hsp == NULL)
         return FALSE;
@@ -554,7 +556,6 @@ Boolean BXMLGetSeqLines(SeqAlignPtr align, HspPtr hsp, Int4 length,
     StdSegPtr ssp;
     Uint2 order = 0;
     SeqAlignPtr sap;
-    ScorePtr    sp;
 
     if(align == NULL)
         return FALSE;
@@ -782,7 +783,6 @@ HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped,
     SeqIdPtr subject_sip, new_sip;
     BioseqPtr bsp;
     Char buffer[526];
-    HspPtr hsp;
     Int4 hit_count, hsp_count, chain;
     Boolean is_aa;
     
@@ -897,9 +897,6 @@ IterationPtr BXMLBuildOneQueryIteration(SeqAlignPtr seqalign,
                                    BioseqPtr query, ValNodePtr mask_loc)
 {
     IterationPtr iterp;
-    BLAST_KarlinBlkPtr ka_params_gap=NULL;
-    BLAST_KarlinBlkPtr ka_params_ungap=NULL;
-    ValNodePtr vnp;
     Char buffer[1024];
     
     iterp = IterationNew();
@@ -1245,6 +1242,8 @@ PSIXmlPtr PSIXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
         return NULL;
     }
     
+    AsnSetXMLmodulePrefix("http://www.ncbi.nlm.nih.gov/dtd/");
+
     amp = AsnAllModPtr();
 
     MACRO_atp_find(BLASTOUTPUT,BlastOutput);
@@ -1420,7 +1419,7 @@ static HspPtr GetHspFromSeqAlign(SeqAlignPtr align, Boolean ungapped,
                           Int4Ptr hspcnt_ptr)
 {
     HspPtr hsp, head_hsp = NULL, last_hsp = NULL;
-    ScorePtr score, sp;
+    ScorePtr score;
     DenseDiagPtr ddp;
     DenseSegPtr dsp;
     StdSegPtr ssp;
@@ -1599,7 +1598,7 @@ HitPtr SeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped)
    SeqIdPtr subject_id, sip;
    Char buffer[526];
    HspPtr hspp;
-   Int4 hsp_count, chain;
+   Int4 hsp_count;
    
    hitp_head = NULL;
    

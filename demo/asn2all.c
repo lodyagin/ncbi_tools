@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.18 $
+* $Revision: 1.23 $
 *
 * File Description:
 *
@@ -53,7 +53,7 @@
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "1.0"
+#define ASN2ALL_APP_VER "1.3"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
 
@@ -630,6 +630,7 @@ static void ProcessSingleRecord (
   Pointer       dataptr = NULL;
   Uint2         datatype, entityID = 0;
   FILE          *fp;
+  ObjMgrPtr     omp;
   SeqEntryPtr   sep;
 
   if (afp == NULL) return;
@@ -733,6 +734,11 @@ static void ProcessSingleRecord (
   }
 
   ObjMgrFree (datatype, dataptr);
+
+  omp = ObjMgrGet ();
+  ObjMgrReapOne (omp);
+  ObjMgrFreeCache (0);
+  FreeSeqIdGiCache ();
 }
 
 static void ProcessMultipleRecord (
@@ -870,6 +876,7 @@ static void ProcessMultipleRecord (
         omp = ObjMgrGet ();
         ObjMgrReapOne (omp);
         ObjMgrFreeCache (0);
+        FreeSeqIdGiCache ();
 
       } else {
 
@@ -917,12 +924,14 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
 {
   Boolean      alldigits;
+  BioseqPtr    bsp;
   Char         ch;
   CharPtr      ptr;
   SeqEntryPtr  sep = NULL;
   SeqIdPtr     sip;
   Int4         uid = 0;
   long int     val;
+  ValNode      vn;
 
   if (StringHasNoText (accn)) return NULL;
 
@@ -953,6 +962,15 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 
   if (uid > 0) {
     sep = PubSeqSynchronousQuery (uid, 0, -1);
+    if (sep != NULL) {
+      MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+      vn.choice = SEQID_GI;
+      vn.data.intvalue = uid;
+      bsp = BioseqFind (&vn);
+      if (bsp != NULL) {
+        sep = SeqMgrGetSeqEntryForData ((Pointer) bsp);
+      }
+    }
   }
 
   return sep;
@@ -1364,6 +1382,7 @@ Int2 Main (void)
 
   if (remote) {
     PubSeqFetchEnable ();
+    PubMedFetchEnable ();
   }
 
   if (local) {
@@ -1429,7 +1448,7 @@ Int2 Main (void)
 
   } else if (StringDoesHaveText (directory)) {
 
-    DirExplore (directory, NULL, suffix, ProcessOneRecord, (Pointer) &afd);
+    DirExplore (directory, NULL, suffix, TRUE, ProcessOneRecord, (Pointer) &afd);
 
   } else {
 
@@ -1498,6 +1517,7 @@ Int2 Main (void)
   }
 
   if (remote) {
+    PubMedFetchDisable ();
     PubSeqFetchDisable ();
   }
 

@@ -53,8 +53,8 @@ on SimpleProjectData(projName, features)
 	set myFeatures to features
 	return {name:projName, features:myFeatures, rsrcs:{"ncbilogo.r", "Info.plc"}, settings:Â
 		{prefixFile:"", ppcProject:{}}, projLibs:Â
-		{"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbimmdb", "ncbiblast", "ncbiblastapi", "ncbitool"}, Â
-		fileData:{{projPath:"demo:", fileList:{projName & ".c"}}}}
+		{"ncbi", "ncbiconn", "ncbiobj", "vibrant", "ncbimmdb", "ncbiblast", "ncbiblastapi", "ncbitool"}, fileData:{{projPath:"demo:", fileList:{projName & ".c"}}}} Â
+		
 	
 end SimpleProjectData
 
@@ -737,6 +737,36 @@ on UpdateTarget(proj, targetIndex)
 			set targetAPI to "Win32"
 		end if
 		
+		if targetName contains "Debug" then
+			set targetDebug to true
+			set targetProfile to false
+		else if targetName contains "Profile" then
+			set targetDebug to false
+			set targetProfile to true
+		else -- if targeName contains "Final" then
+			set targetDebug to false
+			set targetProfile to false
+		end if
+		
+		set fileNameSuffix to ""
+		
+		if targetAPI is "Carbon" then
+			set fileNameSuffix to "_C"
+		else if targetAPI is "Mach-O" then
+			set fileNameSuffix to "_M"
+		else if targetAPI is "Win32" then
+			set fileNameSuffix to "_W"
+		end if
+		
+		-- Debug or not.
+		if targetDebug then
+			set fileNameSuffix to fileNameSuffix & "_D"
+		else if targetProfile then
+			set fileNameSuffix to fileNameSuffix & "_P"
+		else
+			set fileNameSuffix to fileNameSuffix & "_O" -- for Optimized.
+		end if
+		
 		-- Grab the fields of our project record and store them in local variables.
 		set projName to proj's name
 		
@@ -789,6 +819,29 @@ on UpdateTarget(proj, targetIndex)
 			--Remove Files fileNotList
 		end tell
 	end repeat
+	set projLibs to proj's projLibs
+	-- Update libraries
+	set filesToAdd to {}
+	if projFeatures contains "sockets" and targetAPI is "Carbon" then
+		if projLibs does not contain "mitsock" then
+			copy "mitsock" to beginning of projLibs
+		end if
+	end if
+	repeat with i in projLibs
+		set i to gLibsDir & i & fileNameSuffix & ".lib"
+		set found to targetFileList contains i
+		if (not found) and (exists file (i) of application "Finder") then
+			copy (i) to end of filesToAdd
+		end if
+	end repeat
+	
+	tell application "CodeWarrior IDE"
+		if ((count of filesToAdd) is not 0) then
+			Add Files filesToAdd
+			-- set targetFileList to my GetTargetFiles(targetIndex)
+		end if
+		
+	end tell
 	
 end UpdateTarget
 
@@ -815,6 +868,9 @@ end CreateFolder
 on GetStationeryName(proj)
 	set stationeryDir to gProjectsDir & pStationeryName & ":"
 	set stationeryName to pStationeryName & pProjectFileExt
+	try
+		tell application "Finder" to delete folder stationeryDir
+	end try
 	
 	CreateFolder(stationeryDir)
 	tell application "Finder"

@@ -1,5 +1,5 @@
 #
-# $Id: linux_ecc.ncbi.mk,v 1.3 2003/09/23 20:30:36 beloslyu Exp $
+# $Id: linux_ecc.ncbi.mk,v 1.4 2005/08/15 15:58:14 coulouri Exp $
 #
 # Linux/IA64 running on SGI Altix 3000
 # Supplied to NCBI by Haruna Cofer <haruna@sgi.com> on 01/07/2003
@@ -12,12 +12,10 @@ NCBI_MAKE_SHELL = /bin/sh
 #it appears the flags above do not working anymore with newer libc,
 #the new flags should work. Dima. 08/23/01
 NCBI_AR=ar
-NCBI_CC = ecc
+NCBI_CC = icc
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = -O2 -ip -tpp2 -ftz
-NCBI_OPTFLAG = -O2 -ip -tpp2 -ftz
-#untested, try on your own risk on Linux/Intel
-#NCBI_OPTFLAG = -O3 -march=pentiumpro -funroll-loops
+NCBI_LDFLAGS1 = -O2 -ftz -i-static
+NCBI_OPTFLAG = -O2 -ftz -i-static
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin
 NCBI_BIN_COPY = /home/coremake/ncbi/bin
 NCBI_INCDIR = /home/coremake/ncbi/include

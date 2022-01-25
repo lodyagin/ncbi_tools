@@ -28,11 +28,11 @@
 * Author:  Karl Sirotkin, Tom Madden, Tatiana Tatusov, Jonathan Kans,
 *          Mati Shomrat
 *
-* $Id: asn2gnb1.c,v 1.67 2005/05/05 15:08:35 kans Exp $
+* $Id: asn2gnb1.c,v 1.73 2005/08/10 22:09:42 shomrat Exp $
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.67 $
+* $Revision: 1.73 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1069,6 +1069,7 @@ NLM_EXTERN void FFLineWrap (
   Int4          line_pos = 0;
   Int4          i, line_prefix_len = 0;
   StringItemPtr iter;
+  Boolean       cont = FALSE;
 
   FFSavePosition(dest, &line_start, &line_pos);
 
@@ -1084,15 +1085,30 @@ NLM_EXTERN void FFLineWrap (
       
       FFSavePosition(dest, &line_start, &line_pos);
 
+      // for EMBL 'XX' lines
+      if (eb_line_prefix != NULL) {
+        cont = FALSE;
+        if (break_pos > 1) {
+          if (break_sip->buf[break_pos-1] == 'X' && break_sip->buf[break_pos-2] == 'X') {
+            if ((break_pos == 2) || (break_sip->buf[break_pos-3] == '\n')) {
+              ++break_pos;
+              cont = TRUE;
+            }
+          }
+        } else if (break_pos == 1) {
+          if (break_sip->buf[0] == 'X' && iter->buf[iter->pos-1] == 'X') {
+            if ((iter->pos > 1)  &&  iter->buf[iter->pos-2] == '\n') {
+              ++break_pos;
+              cont = TRUE;
+            }
+          }
+        }
+      }
+
       i = break_pos;
       iter = break_sip;
 
-      if ( iter->buf[i-1] == 'X' && iter->buf[i-2] == 'X') {
-        if ( (i == 2) || ((i > 2) && (iter->buf[i-3] == '\n')) ) {
-          ++i;
-          continue;
-        } 
-      }
+      if (cont) continue;
 
       if ( IS_WHITESP(iter->buf[i]) ) {
         i++;
@@ -1394,8 +1410,8 @@ NLM_EXTERN Int4 FFStringSearch (
       MemFree (good_suffix);
       return shift;
     } else {
-        shift += MAX( (Int4)good_suffix[j],
-              (Int4)(j - last_occurrence[FFCharAt(text,shift + j)]));
+        shift += MAX( (Int4)good_suffix[(int) j],
+              (Int4)(j - last_occurrence[(int) FFCharAt(text,shift + j)]));
     }
   }
   MemFree (good_suffix);
@@ -1629,82 +1645,7 @@ static Asn2gbSectPtr Asn2gbAddSection (
   return asp;
 }
 
-static void LIBCALLBACK SaveGBSeqSequence (
-  CharPtr sequence,
-  Pointer userdata
-)
-
-{
-  CharPtr       tmp;
-  CharPtr PNTR  tmpp;
-
-  tmpp = (CharPtr PNTR) userdata;
-  tmp = *tmpp;
-
-  tmp = StringMove (tmp, sequence);
-
-  *tmpp = tmp;
-}
-
-static CharPtr CompressNonBases (CharPtr str)
-
-{
-  Char     ch;
-  CharPtr  dst;
-  CharPtr  ptr;
-
-  if (str == NULL || str [0] == '\0') return NULL;
-
-  dst = str;
-  ptr = str;
-  ch = *ptr;
-  while (ch != '\0') {
-    if (IS_ALPHA (ch)) {
-      *dst = ch;
-      dst++;
-    }
-    ptr++;
-    ch = *ptr;
-  }
-  *dst = '\0';
-
-  return str;
-}
-
-static CharPtr DoSeqPortStream (
-  BioseqPtr bsp
-)
-
-{
-  Char     ch;
-  CharPtr  str;
-  CharPtr  tmp;
-
-  if (bsp == NULL) return NULL;
-
-  str = MemNew (sizeof (Char) * (bsp->length + 10));
-  if (str == NULL) return NULL;
-
-  tmp = str;
-  SeqPortStream (bsp, STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL, (Pointer) &tmp, SaveGBSeqSequence);
-
-  tmp = str;
-  if (tmp == NULL) return NULL;
-  ch = *tmp;
-  while (ch != '\0') {
-    if (ch == '\n' || ch == '\r' || ch == '\t') {
-      *tmp = ' ';
-    }
-    tmp++;
-    ch = *tmp;
-  }
-  TrimSpacesAroundString (str);
-  CompressNonBases (str);
-
-  return str;
-}
-
-static Boolean DeltaLitOnly (
+NLM_EXTERN Boolean DeltaLitOnly (
   BioseqPtr bsp
 )
 
@@ -1718,7 +1659,7 @@ static Boolean DeltaLitOnly (
   return TRUE;
 }
 
-static Boolean SegHasParts (
+NLM_EXTERN Boolean SegHasParts (
   BioseqPtr bsp
 )
 
@@ -1824,6 +1765,8 @@ NLM_EXTERN void DoOneSection (
 
   awp->firstfeat = TRUE;
   awp->featseen = FALSE;
+  awp->featjustseen = FALSE;
+  awp->wgsaccnlist = NULL;
 
   /* initialize empty blockList for this section */
 
@@ -2498,7 +2441,7 @@ static Boolean IsSepRefseq (
 }
 
 typedef struct modeflags {
-  Boolean  flags [26];
+  Boolean  flags [27];
 } ModeFlags, PNTR ModeFlagsPtr;
 
 static ModeFlags flagTable [] = {
@@ -2509,7 +2452,7 @@ static ModeFlags flagTable [] = {
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
-   TRUE},
+   TRUE,  TRUE},
 
   /* ENTREZ_MODE */
   {FALSE, TRUE,  TRUE,  TRUE,  TRUE,
@@ -2517,15 +2460,15 @@ static ModeFlags flagTable [] = {
    TRUE,  TRUE,  FALSE, TRUE,  TRUE,
    TRUE,  TRUE,  FALSE, FALSE, TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
-   FALSE},
+   TRUE, FALSE},
 
   /* SEQUIN_MODE */
   {FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, TRUE,  FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
-   FALSE, FALSE, FALSE, FALSE, TRUE,
-   FALSE},
+   FALSE, FALSE, FALSE, FALSE, FALSE,
+   TRUE,  FALSE},
 
   /* DUMP_MODE */
   {FALSE, FALSE, FALSE, FALSE, FALSE,
@@ -2533,7 +2476,7 @@ static ModeFlags flagTable [] = {
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
-   FALSE}
+   FALSE, FALSE}
 };
 
 static void SetFlagsFromMode (
@@ -2580,9 +2523,10 @@ static void SetFlagsFromMode (
   ajp->flags.hideEmptySource = *(bp++);
   ajp->flags.goQualsToNote = *(bp++);
   ajp->flags.geneSynsToNote = *(bp++);
+  ajp->flags.refSeqQualsToNote = *(bp++);
   ajp->flags.selenocysteineToNote = *(bp++);
-  ajp->flags.extraProductsToNote = *(bp++);
 
+  ajp->flags.extraProductsToNote = *(bp++);
   ajp->flags.forGbRelease = *(bp++);
 
   /* unapproved qualifiers suppressed for flatfile, okay for GBSeq XML */
@@ -2602,6 +2546,7 @@ static void SetFlagsFromMode (
     if (IsSepRefseq (sep)) {
 
       ajp->flags.srcQualsToNote = FALSE;
+      ajp->flags.refSeqQualsToNote = FALSE;
 
       /* selenocysteine always a separate qualifier for RefSeq */
 
@@ -3179,6 +3124,13 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   ajp->showPeptide = (Boolean) ((flags & SHOW_PEPTIDE) != 0);
 
   ajp->produceInsdSeq = (Boolean) ((flags & PRODUCE_OLD_GBSEQ) == 0);
+
+  if (stream && (format == GENBANK_FMT || format == GENPEPT_FMT)) {
+    ajp->specialGapFormat = (Boolean) ((flags & SPECIAL_GAP_DISPLAY) != 0);
+  } else {
+    ajp->specialGapFormat = FALSE;
+  }
+  ajp->seqGapCurrLen = 0;
 
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
     ajp->newSourceOrg = TRUE;

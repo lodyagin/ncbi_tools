@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.460 2005/05/02 16:03:14 coulouri Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.462 2005/07/28 14:57:09 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,18 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.460 $
+$Revision: 6.462 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.462  2005/07/28 14:57:09  coulouri
+* remove dead code
+*
+* Revision 6.461  2005/07/27 15:51:54  coulouri
+* remove unused queue_callback
+*
 * Revision 6.460  2005/05/02 16:03:14  coulouri
 * refactor code to set db_chunk_size
 *
@@ -3661,32 +3667,6 @@ BlastTwoSequencesByLocWithCallback(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr
 
 	seqalign = BlastTwoSequencesCore(search, subject_slp, subject_seq, subject_length, reverse);
 
-#if 0
-    /* This is turned off for right now */
-    if (options->tweak_parameters || options->smith_waterman) {
-        Boolean free_subject_info = FALSE;
-
-        if (search->subject_info == NULL) {
-            search->subject_info = BLASTSubjectInfoNew(
-                    SeqIdSetDup(SeqLocId(subject_slp)), NULL, subject_length);
-            free_subject_info = TRUE;
-        }
-
-        /* Use composition-based statistics */
-        seqalign = RedoAlignmentCore(search, options, 
-                search->result_struct->hitlist_count,
-                options->tweak_parameters, options->smith_waterman);
-        for (index = 0; index<search->result_struct->hitlist_count; index++)
-            BLASTResultFreeHsp(search->result_struct->results[index]);
-        for (index = 0; index<search->result_struct->hitlist_count; index++)
-            SeqAlignSetFree(search->result_struct->results[index]->seqalign);
-
-        if (free_subject_info)
-            search->subject_info =
-                BLASTSubjectInfoDestruct(search->subject_info);
-    }
-#endif
-
 	if (complement)
 	{
 		seqalign = SeqAlignListReverseStrand(seqalign);
@@ -5861,7 +5841,6 @@ BlastSearchBlkDuplicate (BlastSearchBlkPtr search)
             new_search->query_dnap = BlastMakeCopyQueryDNAP(search->query_dnap);
 
         new_search->thr_info = search->thr_info;
-        new_search->queue_callback = search->queue_callback;
         new_search->semid = search->semid;
         
 #ifdef BLAST_COLLECT_STATS
@@ -9228,18 +9207,6 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                    /*hsp->pvalue = BlastKarlinEtoP(hsp->evalue);*/
 		    if (hsp->evalue > search->pbp->cutoff_e) /* put in for comp. based stats. */
 			keep = FALSE;
-#if 0 /* Not needed any more: percent identity computed for all programs in 
-         the same way now, just below */
-                    if (search->pbp->mb_params &&
-                        search->pbp->mb_params->use_dyn_prog) {
-                       search->subject->sequence_start = gap_align->subject - 1;
-                       if (MegaBlastGetHspPercentIdentity(search, hsp) < 
-                           search->pbp->mb_params->perc_identity) {
-                          keep = FALSE;
-                       }
-                       search->subject->sequence_start = NULL;
-                    }
-#endif
                 }
 
                 if (keep) {
@@ -10370,79 +10337,6 @@ HspArrayPurge (BLAST_HSPPtr PNTR hsp_array, Int4 hspcnt, Boolean clear_num)
 }
 
 
-#if 0
-/* TODO: function is not used in this file */
-/*
-	Compares two HSP's looking for overlap in both the
-	query and the subject sequence.  
-
-	if hsp1 should be deleted, then -1 is returned,
-	if hsp2 should be deleted, then +1 is returned,
-	if neither should be deleted, then 0 is returned.
-*/
-
-static Int2 
-CheckHspOverlap (BLAST_HSPPtr PNTR hsp_array, BLAST_HSPPtr hsp2, Int4 hspcnt, Boolean PNTR hsp_deleted)
-
-{
-	BLAST_HSPPtr hsp1;
-	BLAST_SegPtr query, subject;
-	Int4 index;
-
-	if (hsp_array == NULL || hsp2 == NULL)
-		return 0;
-
-
-	*hsp_deleted = FALSE;
-	query = &(hsp2->query);
-	subject = &(hsp2->subject);
-
-	for (index=0; index<hspcnt; index++)
-	{
-		hsp1 = hsp_array[index];
-		if (hsp1 == NULL)
-			continue;
-
-		if (SIGN(hsp1->query.frame) != SIGN(query->frame))
-			continue;
-
-		if (SIGN(hsp1->subject.frame) != SIGN(subject->frame))
-			continue;
-
-		if (hsp1->query.offset > query->offset && 
-			hsp1->query.end > query->end) 
-			continue;
-
-		if (hsp1->query.offset < query->offset && 
-			hsp1->query.end < query->end) 
-			continue;
-
-		if (hsp1->subject.offset > subject->offset && 
-			hsp1->subject.end > subject->end) 
-			continue;
-
-		if (hsp1->subject.offset < subject->offset && 
-			hsp1->subject.end < subject->end) 
-			continue;
-
-		if (hsp1->score > hsp2->score)
-		{
-			if (*hsp_deleted == FALSE)
-			{
-				return 1;
-			}
-		}
-		else
-		{
-			hsp_array[index] = BLAST_HSPFree(hsp_array[index]);
-			*hsp_deleted = TRUE;
-		}
-	}
-
-	return 0;
-}
-#endif
-
 static void OOF_TranslateHspToDNAP(BLAST_HSPPtr hspp, Int4 length)
 {
     Int4 from, to, frame;
@@ -10472,7 +10366,7 @@ BlastSaveCurrentHsp(BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, 
 {
 	BLAST_HitListPtr current_hitlist;
 	BLAST_HSPPtr PNTR hsp_array, new_hsp;
-	Int4 hspcnt, hspmax, index, high_index, low_index;
+	Int4 hspcnt, hspmax, high_index, low_index;
 
 	current_hitlist = search->current_hitlist;
 	hsp_array = current_hitlist->hsp_array;

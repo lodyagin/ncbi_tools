@@ -29,13 +29,31 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.176 $
+* $Revision: 6.182 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.182  2005/08/09 20:04:17  kans
+* added NW_ with 6 or 9 digits to WHICH_db_accession
+*
+* Revision 6.181  2005/07/28 18:33:31  kans
+* in WHICH_db_accession, DT is NCBI EST and DU is NCBI GSS
+*
+* Revision 6.180  2005/07/18 14:49:53  kans
+* fixed minor xcode compiler warnings
+*
+* Revision 6.179  2005/07/06 14:31:19  kans
+* DS is ncbi segmented set header (WGS CON scaffolds) in WHICH_db_accession
+*
+* Revision 6.178  2005/06/17 19:25:58  coulouri
+* correct pdb accession output
+*
+* Revision 6.177  2005/06/15 17:22:39  kans
+* added CT as embl genome to WHICH_db_accession
+*
 * Revision 6.176  2005/05/18 20:33:45  bollin
 * changed BSConvertSeq to handle transitions from nucleotide to protein and
 * protein to nucleotide
@@ -1836,7 +1854,7 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA_4na (ByteStorePtr from, Uint4Ptr lbytes)
 {
     Int4      bs_length;
     Uint1Ptr  buffer;
-    Int4      position = 0, pos =0 , rem =0 , num_bytes;
+    Int4      num_bytes;
     
     if(from == NULL)
         return NULL;
@@ -2200,7 +2218,6 @@ NLM_EXTERN ByteStorePtr BSCompressDNAOld(ByteStorePtr from, Int4 len,
 {
   ByteStorePtr to;
   Int4 total_len = len;
-  Int4 tlen = BSC_BUFF_CHUNK;
   Int4 storelen = len/4 + 1, in_index = 0, out_index = 0;
   Uint1Ptr out_buff, in_buff;
   Uint1 bc_from, rshift_from, lshift_from, mask_from;
@@ -3798,7 +3815,7 @@ Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
             /* Assume versions are no longer than MAX_VERSION_LENGTH digits */
             id_len = StringLen(textsip->accession) + MAX_VERSION_LENGTH + 1;
             *id = (CharPtr) MemNew(id_len+1);
-            sprintf(*id, "%s.%ld", textsip->accession, textsip->version);
+            sprintf(*id, "%s.%ld", textsip->accession, (long) textsip->version);
          } else {
             id_len = StringLen(textsip->accession);
             *id = (CharPtr) MemNew(id_len+1);
@@ -3830,7 +3847,7 @@ Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
       pdbsip = (PDBSeqIdPtr) sip->data.ptrvalue;
       id_len = StringLen(pdbsip->mol);
       *id = (CharPtr) MemNew(id_len+4);
-      sprintf(*id, "%s%d", pdbsip->mol, pdbsip->chain);
+      sprintf(*id, "%s", pdbsip->mol);
       break;
    default: break;
    }
@@ -7559,22 +7576,21 @@ static Boolean gatherMolTypeCheck(GatherContextPtr gcp)
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqEntryContainsSeqIdOfMolType(SeqEntryPtr sep, SeqIdPtr sip, Boolean isProtein)
 {
-    Boolean retval = FALSE;
 	SeqIdChecker sic;
 	GatherScope gs;
 	Int2 i;
 
-            MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-            gs.get_feats_location = FALSE;
-            for (i = 0; i < OBJ_MAX; i++)
-                gs.ignore[i] = TRUE;
-            gs.ignore[OBJ_BIOSEQ] = FALSE;
-	    sic.sip = sip;
-	    sic.isProtein = isProtein;
-	    sic.retval = FALSE;
-            GatherSeqEntry(sep, &sic, gatherMolTypeCheck, &gs);
+	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
+	gs.get_feats_location = FALSE;
+	for (i = 0; i < OBJ_MAX; i++)
+        gs.ignore[i] = TRUE;
+	gs.ignore[OBJ_BIOSEQ] = FALSE;
+	sic.sip = sip;
+	sic.isProtein = isProtein;
+	sic.retval = FALSE;
+	GatherSeqEntry(sep, &sic, gatherMolTypeCheck, &gs);
 
-	    return sic.retval;
+	return sic.retval;
 }
 
 static Boolean GIMolTypeCheck(GatherContextPtr gcp)
@@ -9062,7 +9078,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"CV") == 0) || 
 	      (StringICmp(temp,"CX") == 0) || 
 	      (StringICmp(temp,"DN") == 0) || 
-	      (StringICmp(temp,"DR") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"DR") == 0) || 
+	      (StringICmp(temp,"DT") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -9078,8 +9095,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"CY") == 0)) {      /* NCBI genome project data */
               retcode = ACCN_NCBI_GENOME;
           } else if ((StringICmp(temp,"AH") == 0) ||
-                     (StringICmp(temp,"CH") == 0) ||      /* NCBI segmented set header Bioseq */
-                     (StringICmp(temp,"CM") == 0)) {
+                     (StringICmp(temp,"CH") == 0) ||
+                     (StringICmp(temp,"CM") == 0) ||
+                     (StringICmp(temp,"DS") == 0)) {      /* NCBI segmented set header Bioseq */
               retcode = ACCN_NCBI_SEGSET | ACCN_AMBIGOUS_MOL; /* A few segmented
                                                                  proteins are AH */
           } else if ((StringICmp(temp,"AS") == 0)) {      /* NCBI "other" */
@@ -9095,7 +9113,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"CG") == 0) ||
                      (StringICmp(temp,"CL") == 0) ||
                      (StringICmp(temp,"CW") == 0) ||
-                     (StringICmp(temp,"CZ") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"CZ") == 0) ||
+                     (StringICmp(temp,"DU") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
@@ -9115,7 +9134,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_EMBL_DIRSUB;
           } else if ((StringICmp(temp,"AL") == 0) ||
                      (StringICmp(temp,"BX") == 0)||
-                     (StringICmp(temp,"CR") == 0)) {      /* EMBL genome project data */
+                     (StringICmp(temp,"CR") == 0)||
+                     (StringICmp(temp,"CT") == 0)) {      /* EMBL genome project data */
               retcode = ACCN_EMBL_GENOME;
           } else if ((StringICmp(temp,"AN") == 0)) {      /* EMBL CON division */
               retcode = ACCN_EMBL_CON;
@@ -9185,6 +9205,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
       } else if ((StringICmp(temp,"NM") == 0)) { 
           retcode = ACCN_REFSEQ_mRNA;
       } else if ((StringICmp(temp,"NT") == 0)) { 
+          retcode = ACCN_REFSEQ_CONTIG;
+      } else if ((StringICmp(temp,"NW") == 0)) { 
           retcode = ACCN_REFSEQ_CONTIG;
       } else if ((StringICmp(temp,"NC") == 0)) { 
           retcode = ACCN_REFSEQ_CHROMOSOME;
@@ -9260,6 +9282,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           retcode = ACCN_REFSEQ_PROT;
         } else if ((StringICmp(temp,"NM") == 0)) { 
           retcode = ACCN_REFSEQ_mRNA;
+        } else if ((StringICmp(temp,"NW") == 0)) { 
+          retcode = ACCN_REFSEQ_CONTIG;
         } else if (IS_ALPHA(*temp) && IS_ALPHA(*(temp+1))) {
           retcode =ACCN_REFSEQ | ACCN_AMBIGOUS_MOL;
         } else

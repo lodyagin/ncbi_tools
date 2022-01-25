@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_PRIV__H
 #define CONNECT___NCBI_PRIV__H
 
-/*  $Id: ncbi_priv.h,v 6.13 2005/05/03 11:50:19 ivanov Exp $
+/*  $Id: ncbi_priv.h,v 6.14 2005/07/11 18:14:14 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -58,8 +58,8 @@ extern "C" {
  */
 
 extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectRandomSeed;
-extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectSrandAddent();
-#define NCBI_CONNECT_SRAND_ADDENT g_NCBI_ConnectSrandAddent()
+extern NCBI_XCONNECT_EXPORT int g_NCBI_ConnectSrandAddend();
+#define NCBI_CONNECT_SRAND_ADDEND g_NCBI_ConnectSrandAddend()
 
 
 /******************************************************************************
@@ -196,6 +196,9 @@ extern NCBI_XCONNECT_EXPORT char* g_CORE_RegistryGET
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_priv.h,v $
+ * Revision 6.14  2005/07/11 18:14:14  lavr
+ * Fix ADDEND spelling
+ *
  * Revision 6.13  2005/05/03 11:50:19  ivanov
  * Added MS Win specific for NCBI_CONNECT_SRAND_ADDENT, removing dependency
  * from socket library.

@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.61 $
+* $Revision: 6.62 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: objmgr.c,v $
+* Revision 6.62  2005/07/18 14:49:53  kans
+* fixed minor xcode compiler warnings
+*
 * Revision 6.61  2005/04/13 21:22:17  kans
 * ObjMgrRecycleEntityID and ObjMgrRemoveEntityIDFromRecycle cast to Uint4 for calculations, just like ObjMgrNextAvailEntityID already did
 *
@@ -390,11 +393,11 @@ static Boolean NEAR ObjMgrSelectFunc PROTO((ObjMgrPtr omp, Uint2 entityID, Uint2
 									Uint1 regiontype, Pointer region));
 static Boolean NEAR ObjMgrDeSelectFunc PROTO((ObjMgrPtr omp, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
 									Uint1 regiontype, Pointer region));
-static Boolean NEAR ObjMgrDeSelectStrucFunc PROTO((ObjMgrPtr omp, SelStructPtr ssp));
+/* static Boolean NEAR ObjMgrDeSelectStrucFunc PROTO((ObjMgrPtr omp, SelStructPtr ssp)); */
 static Boolean NEAR ObjMgrDeSelectAllFunc PROTO((ObjMgrPtr omp));
 static Boolean NEAR ObjMgrRegionMatch PROTO((Uint1 regiontype1, Pointer region1,
 						Uint1 regiontype2, Pointer region2));
-static Pointer NEAR ObjMgrRegionCopy PROTO((ObjMgrPtr omp, Uint1 regiontype, Pointer region));
+/* static Pointer NEAR ObjMgrRegionCopy PROTO((ObjMgrPtr omp, Uint1 regiontype, Pointer region)); */
 static Pointer NEAR ObjMgrRegionFree PROTO((ObjMgrPtr omp, Uint1 regiontype, Pointer region));
 static Pointer NEAR ObjMgrMemCopyFunc PROTO((ObjMgrPtr omp, Uint2 type, Pointer ptr, Boolean unlock));
 static Pointer NEAR ObjMgrFreeFunc PROTO((ObjMgrPtr omp, Uint2 type, Pointer ptr, Boolean unlock));
@@ -578,7 +581,7 @@ static Boolean  assignedIDsInited = FALSE;
 
 static Uint4    assignedIDsBitIdx [32];
 
-static Uint2 ObjMgrInitAssignedIDArray (void)
+static void ObjMgrInitAssignedIDArray (void)
 
 {
   Uint4  bit;
@@ -3412,7 +3415,7 @@ erret:
 
 NLM_EXTERN Int2 LIBCALL ObjMgrProcOpen (ObjMgrPtr omp, Uint2 outputtype)
 {
-	ObjMgrProcPtr ompp=NULL, currp=NULL;
+	ObjMgrProcPtr currp=NULL;
 	Int2 retval;
 	Boolean did_one = FALSE;
 	OMProcControl ompc;
@@ -3965,6 +3968,7 @@ static Boolean NEAR ObjMgrRegionMatch (Uint1 regiontype1, Pointer region1,
 	return FALSE;	
 }
 
+/*
 static Pointer NEAR ObjMgrRegionCopy (ObjMgrPtr omp, Uint1 regiontype, Pointer region)
 {
 	Pointer newregion = NULL;
@@ -3982,6 +3986,7 @@ static Pointer NEAR ObjMgrRegionCopy (ObjMgrPtr omp, Uint1 regiontype, Pointer r
 	}
 	return newregion;
 }
+*/
 
 static Pointer NEAR ObjMgrRegionFree (ObjMgrPtr omp, Uint1 regiontype, Pointer region)
 {

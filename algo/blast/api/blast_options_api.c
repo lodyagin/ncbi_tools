@@ -1,4 +1,4 @@
-/* $Id: blast_options_api.c,v 1.8 2005/03/09 13:37:53 camacho Exp $
+/* $Id: blast_options_api.c,v 1.9 2005/08/08 15:48:22 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -203,9 +203,14 @@ Int2 SBlastOptionsSetDbGeneticCode(SBlastOptions* options, Int4 gc)
     if (!options || !options->db_options)
         return -1;
 
-    options->db_options->genetic_code = gc;
-
-    status = BLAST_GeneticCodeFind(gc, &options->db_options->gen_code_string);
+    /* If previously set genetic code is the same as the new one, there is no
+       need to do anything. */
+    if (options->db_options->genetic_code != gc) {
+        options->db_options->genetic_code = gc;
+        /* Free old genetic code string. */
+        sfree(options->db_options->gen_code_string);
+        status = BLAST_GeneticCodeFind(gc, &options->db_options->gen_code_string);
+    }
 
     return status;
     

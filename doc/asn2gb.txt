@@ -238,6 +238,7 @@ the transition period by adding the following flag.
 Still others are expected to be rarely used, or are for testing new features.
 
 #define DDBJ_VARIANT_FORMAT    32768
+#define SPECIAL_GAP_DISPLAY    65536
 
 
 LOCKS are bits for controlling program performance, and are also ORed

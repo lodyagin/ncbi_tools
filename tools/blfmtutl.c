@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blfmtutl.c,v 1.8 2005/06/05 02:54:41 coulouri Exp $";
+static char const rcsid[] = "$Id: blfmtutl.c,v 1.10 2005/08/05 12:10:48 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -36,6 +36,12 @@ Contents: Utilities for BLAST formatting
 /*
 * $Revision: 
 * $Log: blfmtutl.c,v $
+* Revision 1.10  2005/08/05 12:10:48  coulouri
+* bump version
+*
+* Revision 1.9  2005/07/25 12:48:39  camacho
+* Updated reference for compositional adjustment
+*
 * Revision 1.8  2005/06/05 02:54:41  coulouri
 * bump date
 *
@@ -74,8 +80,8 @@ Contents: Utilities for BLAST formatting
 
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.11"
-#define BLAST_RELEASE_DATE "Jun-05-2005"
+#define BLAST_ENGINE_VERSION "2.2.12"
+#define BLAST_RELEASE_DATE "Aug-07-2005"
 
 #define BUFFER_LENGTH 255
 
@@ -548,7 +554,7 @@ CAdjustmentGetReference(Boolean html)
 	else
 	  add_string_to_bufferEx("Alejandro A. Schaffer, and Yi-Kuo Yu \"Protein database searches using ", &ret_buffer, &ret_buffer_length, TRUE);
 
-	add_string_to_bufferEx("compositionally adjusted substitution matrices\", submitted.", &ret_buffer, &ret_buffer_length, TRUE);	
+	add_string_to_bufferEx("compositionally adjusted substitution matrices\", FEBS J., in press.", &ret_buffer, &ret_buffer_length, TRUE);	
 	return ret_buffer;
 }
 

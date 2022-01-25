@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: profiles.c,v 6.37 2004/06/30 12:33:30 madden Exp $";
+static char const rcsid[] = "$Id: profiles.c,v 6.38 2005/07/28 14:52:22 coulouri Exp $";
 
-/* $Id: profiles.c,v 6.37 2004/06/30 12:33:30 madden Exp $
+/* $Id: profiles.c,v 6.38 2005/07/28 14:52:22 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -36,9 +36,12 @@ Contents: main routines for impala program to search a database of
   PSI-BLAST-generated position-specific score matrices
 
 =======
- $Revision: 6.37 $
+ $Revision: 6.38 $
 
  $Log: profiles.c,v $
+ Revision 6.38  2005/07/28 14:52:22  coulouri
+ remove dead code
+
  Revision 6.37  2004/06/30 12:33:30  madden
  Add include for blfmtutl.h
 
@@ -193,8 +196,6 @@ static Uint1 *  readSequence(FILE * sequenceFile, Int4 * sequenceLength, SeqIdPt
   SeqEntryPtr sep;      /*structure to hold query retrieval result*/
   Int4  queryLength;  /*length of query sequence*/
   Int4 c; /*index over query sequence*/
-  SeqLocPtr   private_slp=NULL; /*used to get a sequence id*/
-  SeqIdPtr local_sequence_id; /*represents sequence id used to display alignments*/
   ObjectIdPtr obidp; /*object id pointer used to store new identifier for
                        a string*/
 
@@ -252,45 +253,16 @@ static Uint1 *  readSequence(FILE * sequenceFile, Int4 * sequenceLength, SeqIdPt
    return(query);     
 }
 
-/*free the memory associated with the position-specific score matrices*/
-static void  freeMatrix(BLAST_Score **posMatrix, Int4 dbSequenceLength)
-{
-  Int4 i; /*row index*/
-
-  for (i = 0; i < dbSequenceLength; i++)
-    MemFree(posMatrix[i]);
-  MemFree(posMatrix);
-}
-
-/*allocate memory for the position-specific score matrices
-  enough memory is allocated to hold the largest matrix
-  the memory is reused for each different matrix*/
-static BLAST_Score ** allocateMatrix(Int4 maxSequenceLength, Int4 alphabetSize)
-{
-  Int4 i; /*row index for matrix*/
-  BLAST_Score **returnMatrix; /*matrix to be returned*/
-
-  returnMatrix = (BLAST_Score **) MemNew(maxSequenceLength * sizeof(BLAST_Score *));
-  for(i = 0; i < maxSequenceLength; i++) 
-    returnMatrix[i] = (BLAST_Score *) MemNew(alphabetSize * sizeof(BLAST_Score));
-
-  return(returnMatrix);
-}
-
 /* read in parameters of a position-specific score matrix from thisMatrixFile
    the number of positions is dbSequenceLength
    kbp keeps the Karlin-Altschul parameters */
 static void readkbp(FILE * thisMatrixFile, Int4 dbSequenceLength, 
               BLAST_KarlinBlkPtr kbp, Char *sequenceFileName)
 {
-  Char c; /*index over alphabet*/
-  Int4 i; /*row index for matrix*/
   Int4 lengthInFile; /*length of query*/
-  Char junkChar; /*used to read in useless characters*/
   Nlm_FloatHi junkLambda, junkK, junklogK, junkH; /*used to read in useless
 						    Karlin blocks*/
   Char *sequence;  /*sequence to read in*/
-  Char rowScores[MAXLINELEN]; /*one row of scores to be read in*/
 
   fscanf(thisMatrixFile, "%d", &lengthInFile);
   if (dbSequenceLength != lengthInFile) {
@@ -1027,11 +999,11 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
    Int4 score; /*score of optimal local alignment*/
    Int4 *alignScript, *reverseAlignScript; 
         /*edit script that describes pairwise alignment*/
-   Int4 *ASptr, *revASptr, temp; /*pointers/indices to the 2 alignment scripts*/
+   Int4 *ASptr, *revASptr; /*pointers/indices to the 2 alignment scripts*/
    GapAlignBlkPtr gap_align; /*keeps track of gapped alignment parameters*/
    Int4 XdropAlignScore; /*alignment score obtained using
 			   X-dropoff method rather than Smith-Waterman*/
-   Nlm_FloatHi L, adjustedDbLength, minGappedK; /*variables for e-value caluclation*/
+   Nlm_FloatHi L, minGappedK; /*variables for e-value caluclation*/
    Int4 tickInterval, lastTick; /*for deciding when to print a progress tick*/
    SeqIdPtr subject_id;
    Int4 startPos; /*position in overall big matrix*/
@@ -1453,19 +1425,12 @@ Int2  Main(void)
    Uint1 groupOrder[FEATDEF_ANY]; /*dummy argument for alignment display*/
    Uint4 align_options, print_options; /*store as masks options for displaying
 					 alignments and headers */
-   TxDfDbInfoPtr dbinfo=NULL; /*placeholder for information about the database*/
-   ValNodePtr  mask_loc; /*placeholder for masking information*/
-   ValNodePtr other_returns; /*holds list of miscellaneous return values
-                               to be printed*/
-   ValNodePtr vnp; /*loop index to iterate over other_returns*/
    SeqLocPtr   private_slp=NULL; /*used to get a sequence id*/
    SeqLocPtr   filter_slp=NULL; /*used for filtering*/
    SeqPortPtr  spp=NULL; /*used for filtering*/
    SeqIdPtr local_sequence_id; /*represents sequence id used to display alignments*/
    Boolean mask_at_hash=FALSE; /*used to decide where filtering happens*/
    proDemographicsItems proDemographics; /*computes stats for each run*/
-   Int4 maxLength; /*maximum length of a sequnce*/
-   Int4 totalLength; /*maximum length of a sequnce*/
    Char auxiliaryFileName[MAX_NAME_LENGTH]; /*name of auxiliary file*/
    Char mmapFileName[MAX_NAME_LENGTH]; /*name of memory mapped matrices*/
    Char seqFileName[MAX_NAME_LENGTH]; /*name of file with sequence names*/

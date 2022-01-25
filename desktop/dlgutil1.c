@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.66 $
+* $Revision: 6.73 $
 *
 * File Description: 
 *
@@ -53,6 +53,7 @@
 #include <explore.h>
 #include <sqnutils.h>
 #include <alignmgr2.h>
+#include <toasn3.h>
 
 #define NUMBER_OF_SUFFIXES    8
 
@@ -767,6 +768,157 @@ static void SaveGoTermsInSfp (UserObjectPtr uop, Pointer userdata)
   }
 }
 
+static void FeatIDtoText (TexT t, ChoicePtr cp)
+
+{
+  Char         buf [32];
+  ObjectIdPtr  oip;
+
+  if (t == NULL) return;
+  if (cp == NULL) {
+    SetTitle (t, "");
+    return;
+  }
+
+  if (cp->choice == 3) {
+    oip = (ObjectIdPtr) cp->value.ptrvalue;
+    if (oip != NULL) {
+      if (StringDoesHaveText (oip->str)) {
+        SetTitle (t, oip->str);
+        return;
+      } else {
+        sprintf (buf, "%ld", (long) oip->id);
+        SetTitle (t, buf);
+        return;
+      }
+    }
+  }
+
+  SetTitle (t, "");
+}
+
+static void TextToFeatID (TexT t, ChoicePtr cp)
+
+{
+  Boolean      all_digits = TRUE;
+  Char         buf [128];
+  Char         ch;
+  ObjectIdPtr  oip;
+  CharPtr      str;
+  long int     val;
+
+  if (t == NULL || cp == NULL) return;
+
+  GetTitle (t, buf, sizeof (buf) - 1);
+  if (StringHasNoText (buf)) {
+    SeqFeatIdFree (cp);
+    cp->choice = 0;
+    return;
+  }
+
+  oip = ObjectIdNew ();
+  if (oip == NULL) return;
+
+  str = buf;
+  ch = *str;
+  while (ch != '\0') {
+    if (! IS_DIGIT (ch)) {
+      all_digits = FALSE;
+    }
+    str++;
+    ch = *str;
+  }
+
+  if (all_digits && sscanf (buf, "%ld", &val) == 1) {
+    oip->id = (Int4) val;
+  } else {
+    oip->str = StringSave (buf);
+  }
+  SeqFeatIdFree (cp);
+  cp->choice = 3;
+  cp->value.ptrvalue = (Pointer) oip;
+}
+
+static void FeatXreftoText (TexT t, SeqFeatPtr sfp)
+
+{
+  Char            buf [32];
+  ObjectIdPtr     oip;
+  SeqFeatXrefPtr  xref;
+
+  if (t == NULL) return;
+  if (sfp == NULL) {
+    SetTitle (t, "");
+    return;
+  }
+
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->id.choice != 3) continue;
+    oip = (ObjectIdPtr) xref->id.value.ptrvalue;
+    if (oip != NULL) {
+      if (StringDoesHaveText (oip->str)) {
+        SetTitle (t, oip->str);
+        return;
+      } else {
+        sprintf (buf, "%ld", (long) oip->id);
+        SetTitle (t, buf);
+        return;
+      }
+    }
+  }
+
+  SetTitle (t, "");
+}
+
+static void TextToFeatXref (TexT t, SeqFeatPtr sfp)
+
+{
+  Boolean         all_digits = TRUE;
+  Char            buf [128];
+  Char            ch;
+  ObjectIdPtr     oip;
+  CharPtr         str;
+  long int        val;
+  SeqFeatXrefPtr  xref;
+
+  if (t == NULL || sfp == NULL) return;
+
+  GetTitle (t, buf, sizeof (buf) - 1);
+  if (StringHasNoText (buf)) {
+    ClearFeatIDXrefs (sfp);
+    return;
+  }
+
+  ClearFeatIDXrefs (sfp);
+
+  oip = ObjectIdNew ();
+  if (oip == NULL) return;
+
+  str = buf;
+  ch = *str;
+  while (ch != '\0') {
+    if (! IS_DIGIT (ch)) {
+      all_digits = FALSE;
+    }
+    str++;
+    ch = *str;
+  }
+
+  if (all_digits && sscanf (buf, "%ld", &val) == 1) {
+    oip->id = (Int4) val;
+  } else {
+    oip->str = StringSave (buf);
+  }
+
+  xref = SeqFeatXrefNew ();
+  if (xref != NULL) {
+    xref->id.choice = 3;
+    xref->id.value.ptrvalue = (Pointer) oip;
+    xref->next = sfp->xref;
+    sfp->xref = xref;
+  }
+}
+
 extern void SeqFeatPtrToFieldPage (DialoG d, SeqFeatPtr sfp);
 
 extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
@@ -905,6 +1057,8 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SeqFeatPtrToFieldPage (ffp->gbquals, sfp);
       PointerToDialog (ffp->usrobjext, sfp->ext);
       VisitUserObjectsInUop (sfp->ext, (Pointer) ffp, SaveGoTermsInSfp);
+      FeatIDtoText (ffp->featid, &(sfp->id));
+      FeatXreftoText (ffp->fidxref, sfp);
     } else {
       SetTitle (ffp->comment, "");
       SetValue (ffp->evidence, 1);
@@ -923,6 +1077,8 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       PointerToDialog (ffp->gbquals, NULL);
       PointerToDialog (ffp->usrobjext, NULL);
       ffp->goTermUserObj = NULL;
+      FeatIDtoText (ffp->featid, NULL);
+      FeatXreftoText (ffp->fidxref, NULL);
     }
   }
 }
@@ -963,6 +1119,9 @@ static Boolean ReplaceFeatureExtras (GatherContextPtr gcp)
       }
       if (ffp->goTermUserObj != NULL) {
         sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
+      }
+      if (ffp->featid != NULL) {
+        TextToFeatID (ffp->featid, &(sfp->id));
       }
       /*
       if (sfp->cit == NULL) {
@@ -1345,8 +1504,14 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         if (ffp->goTermUserObj != NULL) {
           sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
         }
+        if (ffp->featid != NULL) {
+          TextToFeatID (ffp->featid, &(sfp->id));
+        }
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
+        }
+        if (ffp->fidxref != NULL) {
+          TextToFeatXref (ffp->fidxref, sfp);
         }
         AddProtRefXref (sfp, ffp->protXrefName);
         if (! ObjMgrRegister (OBJ_SEQFEAT, (Pointer) sfp)) {
@@ -1361,8 +1526,14 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         if (ffp->goTermUserObj != NULL) {
           sfp->ext = CombineUserObjects (sfp->ext, ffp->goTermUserObj);
         }
+        if (ffp->featid != NULL) {
+          TextToFeatID (ffp->featid, &(sfp->id));
+        }
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
+        }
+        if (ffp->fidxref != NULL) {
+          TextToFeatXref (ffp->fidxref, sfp);
         }
         AddProtRefXref (sfp, ffp->protXrefName);
         ompc.output_itemtype = OBJ_SEQFEAT;
@@ -1404,6 +1575,9 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
                     (Pointer) &rd, ReplaceFeatureExtras);
         if (HasExceptionGBQual (sfp)) {
           sfp->excpt = TRUE;
+        }
+        if (ffp->fidxref != NULL) {
+          TextToFeatXref (ffp->fidxref, sfp);
         }
         if (IsPseudo (sfp))
         {
@@ -2898,6 +3072,13 @@ typedef struct intervalpage {
   EnumFieldAssoc     PNTR aln_alist;
   Int2               aln_count;
   Int4               PNTR aln_lengths;
+  Boolean            allow_nulls_in_list; /* some sequences may be all gap
+                                           * in the specified interval -
+                                           * if this value is FALSE, return
+                                           * a NULL for the entire list,
+                                           * otherwise allow NULLs to appear
+                                           * in the list.
+                                           */
   
 } IntervalPage, PNTR IntervalPagePtr;
 
@@ -4610,15 +4791,36 @@ ReadAlignedSeqLocList
         seqid = AlnMgr2GetNthSeqIdPtr (salp, aln_row);
         okay = ((bsp = BioseqFind (seqid)) != NULL)
                  && AdjustStrandForAlignment (&aln_strand, salp, aln_row)
-                 && (aln_len = SeqAlignLength (salp)) > 0
-                 && AdjustFromForGap (&aln_from, salp, aln_len, aln_row)
-                 && AdjustToForGap (&aln_to, salp, aln_row)
-             && AddLocToList (seqid, aln_strand, aln_from, aln_to,
+                 && (aln_len = SeqAlignLength (salp)) > 0;
+        if (okay)
+        {
+          if (ipp->allow_nulls_in_list)
+          {
+            if (! AdjustFromForGap (&aln_from, salp, aln_len, aln_row)
+                || ! AdjustToForGap (&aln_to, salp, aln_row)
+                || ! AddLocToList (seqid, aln_strand, aln_from, aln_to,
+                                   (nullsBetween  && notFirst),
+                                   fuzz_from, fuzz_to,
+                                   fuzz_before, fuzz_after,
+                                   partial5, partial3,
+                                   &(loc_list [loc_num])))
+            {
+              loc_list [loc_num] = ValNodeNew (NULL);
+              loc_list [loc_num]->choice = SEQLOC_NULL;
+            }
+          }
+          else
+          {
+            okay = AdjustFromForGap (&aln_from, salp, aln_len, aln_row)
+                   && AdjustToForGap (&aln_to, salp, aln_row)
+                   && AddLocToList (seqid, aln_strand, aln_from, aln_to,
                               (nullsBetween  && notFirst),
                               fuzz_from, fuzz_to,
                               fuzz_before, fuzz_after,
                               partial5, partial3,
-                              &(loc_list [loc_num]));                              
+                              &(loc_list [loc_num]));
+          }
+        }
       }
     }
       
@@ -4926,7 +5128,8 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
                                               IntEdPartialProc proc, 
                                               Boolean use_aln, Boolean show_seqid,
                                               TaglistCallback tlp_callback, 
-                                              Pointer callback_data)
+                                              Pointer callback_data,
+                                              Boolean allow_nulls_in_list)
 
 {
   BioseqPtr        bsp;
@@ -4966,6 +5169,8 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
 
     ipp->ffp = ffp;
     ipp->proc = proc;
+     
+    ipp->allow_nulls_in_list = allow_nulls_in_list;
 
     if (title != NULL && title [0] != '\0') {
       s = NormalGroup (p, 0, -2, title, systemFont, NULL);
@@ -5243,7 +5448,7 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
     ipp->ivals = CreateTagListDialogExEx (f, rows, num_cols, spacing,
                                         interval_types, interval_widths, ipp->alists,
                                         useBar, FALSE, NULL, NULL,
-                                        ipp->callbacks, callback_data);
+                                        ipp->callbacks, callback_data, FALSE);
 
     /* put back static interval_types values that may have been changed */
     interval_types [2] = TAGLIST_POPUP;
@@ -5251,12 +5456,6 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
     interval_types [4] = TAGLIST_POPUP;
     ipp->nullsBetween = CheckBox (m, "'order' (intersperse intervals with gaps)", ChangedPartialProc);
     SetObjectExtra (ipp->nullsBetween, ipp, NULL);
-    if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-      allowGaps = TRUE;
-    }
-    if (! allowGaps) {
-      Hide (ipp->nullsBetween);
-    }
 
     AlignObjects (ALIGN_CENTER, (HANDLE) ipp->ivals,
                   (HANDLE) q, (HANDLE) ipp->nullsBetween, NULL);
@@ -5363,7 +5562,7 @@ static Pointer IntervalChoiceEditorToSeqLoc (DialoG d)
   dlg = (IntervalChoicePtr) GetObjectExtra (d);
   if (dlg == NULL)
   {
-    return;
+    return NULL;
   }
   if (GetValue (dlg->seq_or_aln) == 1)
   {
@@ -5548,7 +5747,7 @@ static DialoG CreateIntervalEditorDialogAlnChoice (GrouP h, CharPtr title, Uint2
     return CreateIntervalEditorDialogExEx (h, title, rows, spacing, sep,
                                          nucsOK, protsOK, useBar, showPartials,
                                          allowGaps, ffp, proc, FALSE, TRUE,
-                                         NULL, NULL);
+                                         NULL, NULL, FALSE);
   }
   else
   {
@@ -5572,12 +5771,12 @@ static DialoG CreateIntervalEditorDialogAlnChoice (GrouP h, CharPtr title, Uint2
     dlg->seq_dlg = CreateIntervalEditorDialogExEx (g, title, rows, spacing, sep,
                                          nucsOK, protsOK, useBar, showPartials,
                                          allowGaps, ffp, proc, FALSE, TRUE,
-                                         IntervalChoiceCallback, dlg);
+                                         IntervalChoiceCallback, dlg, FALSE);
                                          
     dlg->aln_dlg = CreateIntervalEditorDialogExEx (g, title, rows, spacing, sep,
                                          nucsOK, protsOK, useBar, showPartials,
                                          allowGaps, ffp, proc, TRUE, TRUE,
-                                         IntervalChoiceCallback, dlg);
+                                         IntervalChoiceCallback, dlg, FALSE);
     AlignObjects (ALIGN_CENTER, (HANDLE)dlg->seq_dlg, (HANDLE) dlg->aln_dlg, NULL);                                         
     dlg->seq_or_aln = HiddenGroup (p, 2, 0, ChangeIntervalChoice);
     SetObjectExtra (dlg->seq_or_aln, dlg, NULL);

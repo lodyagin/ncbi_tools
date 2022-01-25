@@ -1,4 +1,4 @@
-/*  $Id: ncbi_priv.c,v 6.7 2005/05/03 13:56:40 lavr Exp $
+/*  $Id: ncbi_priv.c,v 6.8 2005/07/11 18:14:14 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -49,7 +49,7 @@ LOG     g_CORE_Log               = 0;
 REG     g_CORE_Registry          = 0;
 
 
-extern int g_NCBI_ConnectSrandAddent(void)
+extern int g_NCBI_ConnectSrandAddend(void)
 {
 #if defined(NCBI_OS_UNIX)
     return (int) getpid(); 
@@ -94,6 +94,9 @@ extern char* g_CORE_RegistryGET
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_priv.c,v $
+ * Revision 6.8  2005/07/11 18:14:14  lavr
+ * Fix ADDEND spelling
+ *
  * Revision 6.7  2005/05/03 13:56:40  lavr
  * +<connect/ncbi_socket.h> for non-UNIX, non-Windows platforms
  *

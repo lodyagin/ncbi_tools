@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/02/92
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *       entrez index access library for Network Entrez
@@ -51,6 +51,9 @@
 *
 * RCS Modification History:
 * $Log: netentr.c,v $
+* Revision 6.8  2005/07/25 18:06:48  lavr
+* Remove deprecated ni_ API references
+*
 * Revision 6.7  1999/05/28 15:39:31  kans
 * missing # on else and endif
 *
@@ -260,7 +263,7 @@ extern EntrezInfoPtr LIBCALL EntrezInfoAsnRead PROTO((AsnIoPtr aip, AsnTypePtr a
 EntrezInfoPtr NetEntrezGetInfo PROTO((void));
 static void RemoveNonPrintingCharacters(CharPtr str);
 
-extern void MsgSetReadTimeout PROTO((MHandPtr mh, int t));
+/*extern void MsgSetReadTimeout PROTO((MHandPtr mh, int t));*/
 
 
 static void NEAR FindAsnType (AsnTypePtr PNTR atp, AsnModulePtr amp, CharPtr str)
@@ -752,9 +755,9 @@ NLM_EXTERN ByteStorePtr CDECL NetEntTLEvalX (ValNodePtr elst)
         ErrGetOpts(&erract, NULL);
         ErrSetOpts(ERR_CONTINUE, 0);
         ErrFetch(&err);
-        MsgSetReadTimeout(Entrez_ni, 1200);
+        /*MsgSetReadTimeout(Entrez_ni, 1200);*/
         retval = s_NetEntTLEvalX(elst);
-        MsgSetReadTimeout(Entrez_ni, 60);
+        /*MsgSetReadTimeout(Entrez_ni, 60);*/
         ErrSetOpts(erract, 0);
         if (! ErrFetch(&err))
             return retval; /* success */
@@ -789,10 +792,10 @@ static Int4 NEAR s_NetEntTLEvalCount (ValNodePtr elst)
     AsnEndStruct(Entrez_asnout, ENTREZ_REQUEST_eval_count);
     AsnIoReset(Entrez_asnout);
 
-    MsgSetReadTimeout(Entrez_ni, 1200);
+    /*MsgSetReadTimeout(Entrez_ni, 1200);*.
     if ((atp = NetEntReadAsn()) == NULL)
         return 0;
-    MsgSetReadTimeout(Entrez_ni, 60);
+    /*MsgSetReadTimeout(Entrez_ni, 60);*/
 
     if (atp == ENTREZ_BACK_eval_count)
     {
@@ -2675,10 +2678,10 @@ NetEntBlastBioseq(BioseqPtr bsp, DocType db, CharPtr program, CharPtr database, 
       ErrGetOpts(&erract, NULL);
       ErrSetOpts(ERR_CONTINUE, 0);
       ErrFetch(&err);
-      MsgSetReadTimeout(Entrez_ni, 1200);
+      /*MsgSetReadTimeout(Entrez_ni, 1200);*/
       noMoreTries = FALSE;
       lsp = s_NetEntBlastBioseq(bsp, db, program, database, options, usemonitor, &noMoreTries);
-      MsgSetReadTimeout(Entrez_ni, 60);
+      /*MsgSetReadTimeout(Entrez_ni, 60);*/
       ErrSetOpts(erract, 0);
       if (noMoreTries || ! ErrFetch(&err))
         return lsp;
@@ -2738,7 +2741,7 @@ NLM_EXTERN Int4 LIBCALL NetEntClusterAnalysis(DocUidPtr uids, Int4 numuids, DocF
     Int4 retval;
     short erract;
     ErrDesc err;
-    extern void MsgSetReadTimeout PROTO((MHandPtr mh, int t));
+    /*extern void MsgSetReadTimeout PROTO((MHandPtr mh, int t));*/
 
     for (i = 0; i < ENT_SERV_RETRIES; i++)
     {
@@ -2751,9 +2754,9 @@ NLM_EXTERN Int4 LIBCALL NetEntClusterAnalysis(DocUidPtr uids, Int4 numuids, DocF
         ErrGetOpts(&erract, NULL);
         ErrSetOpts(ERR_CONTINUE, 0);
         ErrFetch(&err);
-        MsgSetReadTimeout(Entrez_ni, 1200);
+        /*MsgSetReadTimeout(Entrez_ni, 1200);*/
         retval = s_NetEntClusterAnalysis(uids, numuids, fld, minCluster, maxCluster, maxTerms, terms, termTotals);
-        MsgSetReadTimeout(Entrez_ni, 60);
+        /*MsgSetReadTimeout(Entrez_ni, 60);*/
         ErrSetOpts(erract, 0);
         if (! ErrFetch(&err))
         {

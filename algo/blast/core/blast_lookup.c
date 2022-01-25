@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.c,v 1.41 2005/06/02 16:18:40 camacho Exp $
+/* $Id: blast_lookup.c,v 1.43 2005/08/02 21:20:26 coulouri Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,7 +43,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_lookup.c,v 1.41 2005/06/02 16:18:40 camacho Exp $";
+    "$Id: blast_lookup.c,v 1.43 2005/08/02 21:20:26 coulouri Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 /** Structure containing information needed for adding neighboring words. 
@@ -134,7 +134,6 @@ Int4 RPSLookupTableNew(const BlastRPSInfo *info,
    if (lookup_header->magic_number != RPS_MAGIC_NUM)
       return -1;
 
-   lookup->rps_aux_info = (BlastRPSAuxInfo *)(&info->aux_info);
    lookup->wordsize = BLAST_WORDSIZE_PROT;
    lookup->alphabet_size = BLASTAA_SIZE;
    lookup->charsize = ilog2(lookup->alphabet_size) + 1;
@@ -329,8 +328,11 @@ Int4 _BlastAaLookupFinalize(BlastLookupTable* lookup)
  lookup->longest_chain = longest_chain;
 
  /* allocate the overflow array */
- lookup->overflow = (Int4*) calloc( overflow_cells_needed, sizeof(Int4) );
- ASSERT(lookup->overflow != NULL);
+ if (overflow_cells_needed > 0)
+   {
+   lookup->overflow = (Int4*) calloc( overflow_cells_needed, sizeof(Int4) );
+   ASSERT(lookup->overflow != NULL);
+   }
 
 /* for each position in the lookup table backbone, */
 for(i=0;i<lookup->backbone_size;i++)

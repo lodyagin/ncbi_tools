@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.29  2005/07/18 15:15:18  kans
+* fixed minor xcode compiler warnings
+*
 * Revision 6.28  2004/07/19 13:36:43  bollin
 * replaced obsolete XmFontListCreate function to get rid of run-time warnings
 *
@@ -463,7 +466,7 @@ static void Nlm_SetChanged (Nlm_TexT t, Nlm_Boolean chd)
 }
 #endif
 
-
+#ifdef WIN_MOTIF
 static Nlm_Boolean Nlm_IsHiddenText (Nlm_TexT t)
 
 {
@@ -472,6 +475,7 @@ static Nlm_Boolean Nlm_IsHiddenText (Nlm_TexT t)
   Nlm_GetTextData (t, &tdata);
   return tdata.hidden;
 }
+#endif
 
 #ifndef WIN_MOTIF
 static Nlm_Boolean Nlm_IsHiddenOrSpecialText (Nlm_TexT t)
@@ -2059,7 +2063,7 @@ static void Clipboard_TEPaste(TEHandle inTE)
     /* #if TARGET_API_MAC_CARBON */
 	/* ScrapRef scrap; */
 	/* OSStatus status = GetCurrentScrap(&scrap); */
-	OSErr err = TEFromScrap();
+	TEFromScrap();
 	TEPaste(inTE);
 }
 

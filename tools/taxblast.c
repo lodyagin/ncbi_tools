@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: taxblast.c,v 6.23 2004/09/08 11:40:09 bollin Exp $";
+static char const rcsid[] = "$Id: taxblast.c,v 6.24 2005/07/28 14:57:10 coulouri Exp $";
 
-/* $Id: taxblast.c,v 6.23 2004/09/08 11:40:09 bollin Exp $
+/* $Id: taxblast.c,v 6.24 2005/07/28 14:57:10 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: taxblast.c,v 6.23 2004/09/08 11:40:09 bollin E
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.24  2005/07/28 14:57:10  coulouri
+* remove dead code
+*
 * Revision 6.23  2004/09/08 11:40:09  bollin
 * removed network/taxon1 dependencies
 *
@@ -247,8 +250,6 @@ static OrgObjPtr OrgObjNew (void)
 
 static void CnamesFree (CnamesPtr cnames)
 {
-    ValNodePtr vnp, vnp_next;
-    
     ValNodeFreeData(cnames->names);
 
     MemFree(cnames);
@@ -484,8 +485,6 @@ static HitObjPtr GetAlignData (SeqAlignPtr sap)
 {
     Int4 count = 0;
     ScorePtr score;
-    DenseSegPtr seg;
-    SeqIdPtr ids;
     Int4 numhits, tax_id;
     Int4Ptr gis, taxoffs, scores;
     FloatHiPtr e_values, bit_scores;
@@ -756,8 +755,6 @@ static TreePtr GetTreeData(OrgObjPtr orgobj)
     TreeCursorPtr cursor;
     NodeObjPtr nodeobj;
     Int4 i, taxid, numorgs, numhits;
-    Uint2 data_size;
-    CharPtr name;
     BnamePtr bname;
     
     if (orgobj == NULL) 
@@ -913,7 +910,6 @@ static LinObjPtr GetLinData (TreePtr tree, Int4 focus)
     LinObjPtr linobj, linobjlast;
     TreeCursorPtr cursor, focus_cursor;
     NodeObjPtr parent_nodeobj, nodeobj;
-    CharPtr name, focus_name;   /* for debugging */
     Int4 taxid;
     
     focus_cursor = tree_openCursor (tree, NULL, NULL);
@@ -1161,8 +1157,6 @@ Boolean TXBGetDefLine(ReadDBFILEPtr rdfp, Int4 seqno,
 }
 static void TXBRecursiveWalk(TreeCursorPtr cursor)
 {
-    Int2 s;
-    TXC_TreeNodePtr node;
     NodeObjPtr nodeobj;
 
     if(tree_child(cursor)) {
@@ -1213,14 +1207,13 @@ static void TXBHtmlReportInternal (FILE *outfile, HitObjPtr hitobj,
     Int2Ptr size_names, size_hits, size_bnames;
     Int2 max_names, max_hits, max_bnames;
     SeqIdPtr seqid;
-    BioseqPtr bsp;
     ValNodePtr org, hitlist, valnode;
-    CharPtr name, cname, blastname, title;
+    CharPtr cname, blastname, title;
     CharPtr ptr, ptr_start, eval_buff_ptr;
     Boolean found_next_one;
     BnamePtr bname;
     Char padchar;
-    Char buffer[BUFFLEN], tx_defline[256], eval_buff[16];
+    Char buffer[BUFFLEN], eval_buff[16];
     TreeCursorPtr cursor;
     NodeObjPtr nodeobj;
     ReadDBFILEPtr rdfp;
@@ -1672,7 +1665,6 @@ typedef struct TAXData {
 
 Boolean GetSuperKingdom(TreeCursorPtr cursor, Int4 tax_id, CharPtr s_king)
 {
-    TreeNodeId nid= tree_getId(cursor);
     TXC_TreeNodePtr tnp;
     CharPtr super_name;
     Uint2 s;
@@ -1725,7 +1717,7 @@ Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id)
     TreePtr tax_tree;
     TreeCursorPtr cursor;
     TAXDataPtr tdp;
-    TaxNamePtr res_names, tnp;
+    TaxNamePtr res_names;
     Int4 count, i;
 
     if(tax_lookup == NULL)

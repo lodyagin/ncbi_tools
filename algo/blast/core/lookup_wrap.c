@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.c,v 1.15 2005/06/02 16:18:40 camacho Exp $
+/* $Id: lookup_wrap.c,v 1.16 2005/07/29 15:21:15 camacho Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,7 +37,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: lookup_wrap.c,v 1.15 2005/06/02 16:18:40 camacho Exp $";
+    "$Id: lookup_wrap.c,v 1.16 2005/07/29 15:21:15 camacho Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_wrap.h>
@@ -49,7 +49,7 @@ static char const rcsid[] =
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
-        LookupTableWrap** lookup_wrap_ptr, BlastRPSInfo *rps_info)
+        LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info)
 {
    LookupTableWrap* lookup_wrap;
 

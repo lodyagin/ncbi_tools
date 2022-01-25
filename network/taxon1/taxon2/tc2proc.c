@@ -1,5 +1,5 @@
 /*----------------*/
-/* $Id: tc2proc.c,v 1.36 2005/04/04 21:32:13 soussov Exp $           */
+/* $Id: tc2proc.c,v 1.38 2005/07/25 18:07:44 lavr Exp $           */
 /*----------------*/
 
 #include <stdlib.h>
@@ -1201,7 +1201,7 @@ static OrgNamePtr bldOrgName(TreeCursorPtr cursor, int* is_species_out,
             if(tnp != NULL) {
                 rank= tnp->flags & 0xFF;
                 if(rank != 0) {
-                    is_species= (rank >= SpeciesRank) ? 1 : 0;
+                    is_species= (rank > SpeciesRank) ? 1 : 0;
                     break;
                 }
             }
@@ -1842,7 +1842,7 @@ Taxon1DataPtr tax1_lookup(OrgRefPtr inp_orgRef, int merge)
 
     tax_id= txc_findByOrg(inp_orgRef, &hitName);
 
-    //tax_id= tax1_getTaxIdByOrgRef(inp_orgRef);
+    /*tax_id= tax1_getTaxIdByOrgRef(inp_orgRef);*/
     if(tax_id <= 0) return NULL;
     db_orgRef= s_tax1_getOrgRef(tax_id, &is_species, NULL, NULL);
     if(db_orgRef == NULL) return NULL;

@@ -32,8 +32,11 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.39 $ 
+/* $Revision: 6.40 $ 
 * $Log: blastkar.h,v $
+* Revision 6.40  2005/07/27 17:48:57  coulouri
+* remove hardcoded paths
+*
 * Revision 6.39  2004/09/28 16:04:19  papadopo
 * From Michael Gertz:
 * 1. Pass the effective database size into BlastSmallGapSumE,
@@ -317,10 +320,6 @@ of K, so high accuracy is generally unwarranted.
 #define BLAST_KARLIN_K_ITER_MAX 100
 #define BLAST_SUMP_EPSILON_DEFAULT 0.002 /* accuracy for SumP calculations */
 
-/* 
-	Where are the BLAST matrices located?
-*/
-#define BLASTMAT_DIR "/usr/ncbi/blast/matrix"
 /*
 	Maps the ncbi4na alphabet to blastna, an alphabet that blastn uses
 	as the first four characters have the same representation as in

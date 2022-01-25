@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salign.c,v 6.7 2003/12/29 21:45:37 coulouri Exp $";
+static char const rcsid[] = "$Id: salign.c,v 6.8 2005/07/21 13:53:26 bollin Exp $";
 
 /*   salign.c
 * ===========================================================================
@@ -1783,7 +1783,10 @@ NLM_EXTERN SeqLocPtr AlignmRNA2genomic (BioseqPtr bsp1, BioseqPtr bsp2)
   if (salpblast!=NULL)
   {
      salp = AlignmRNA2genomicToSeqAlign (slp1, slp2, salpblast, msp);
-     SeqAlignSetFree (salpblast);
+     if (salp != salpblast)
+     {
+       SeqAlignSetFree (salpblast);
+     }
      slp = SeqLocMixFromSeqAlign (salp, NULL);
   }
   return slp;

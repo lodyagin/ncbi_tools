@@ -31,6 +31,9 @@
 *
 *
 * $Log: txcommon.h,v $
+* Revision 1.6  2005/08/08 18:03:27  soussov
+* adds extern C
+*
 * Revision 1.5  2001/09/18 16:55:38  soussov
 * switching to the new ASN
 *
@@ -59,6 +62,10 @@
 #define TXCOMMON_H_DONE
 
 #include <ncbi.h>
+
+#ifdef __cplusplus
+extern "C" { /* } */
+#endif
 
 #define TAX_DIV_TXT 0
 #define TAX_DIV_CDE 1
@@ -232,5 +239,9 @@ Boolean tax_dumpGCs(void (*dmpFunc)(VoidPtr, Int2, CharPtr), VoidPtr usrData);
 
 Boolean tax_matchName(CharPtr orgName, CharPtr str, Int4 mode);
 Int4 tax_getTaxId4GI(Int4 gi);
+
+#ifdef __cplusplus
+/* { */ }
+#endif
 
 #endif

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1262,7 +1262,11 @@ NLM_EXTERN Boolean LIBCALL SeqFeatXrefAsnWrite (SeqFeatXrefPtr sfxp, AsnIoPtr ai
             goto erret;
     }
 
-	if (! SeqFeatDataAsnWrite(&sfxp->data, aip, SEQFEATXREF_data)) goto erret;
+    if (sfxp->data.choice)            /* data present */
+    {
+        if (! SeqFeatDataAsnWrite(&sfxp->data, aip, SEQFEATXREF_data))
+            goto erret;
+    }
 
     if (! AsnCloseStruct(aip, atp, (Pointer)sfxp))
         goto erret;
@@ -1317,10 +1321,13 @@ NLM_EXTERN SeqFeatXrefPtr LIBCALL SeqFeatXrefAsnRead (AsnIoPtr aip, AsnTypePtr o
 	    atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;
     }
 
-	if (! SeqFeatDataAsnRead(aip, atp, &sfxp->data))
-		goto erret;
+    if (atp == SEQFEATXREF_data)
+    {
+        if (! SeqFeatDataAsnRead(aip, atp, &sfxp->data))
+            goto erret;
+	    atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;
+    }
 
-    atp = AsnReadId(aip, amp, atp); if (atp == NULL) goto erret;
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end struct */
 ret:
 	AsnUnlinkType(orig);       /* unlink local tree */

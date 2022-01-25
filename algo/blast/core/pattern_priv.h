@@ -1,4 +1,4 @@
-/* $Id: pattern_priv.h,v 1.2 2005/05/03 20:33:46 dondosha Exp $
+/* $Id: pattern_priv.h,v 1.3 2005/07/18 19:38:33 bealer Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -52,7 +52,7 @@ extern "C" {
  */
 Int4 
 _PHIBlastFindHitsShort(Int4 *hitArray, const Uint1* seq, Int4 len1, 
-                       SPHIPatternSearchBlk *pattern_blk);
+                       const SPHIPatternSearchBlk *pattern_blk);
 
 /** Shift each word in the array left by 1 bit and add bit b.
  * If the new values is bigger than an overflow threshold, then subtract the

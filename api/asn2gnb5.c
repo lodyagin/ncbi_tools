@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.36 $
+* $Revision: 1.40 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -68,6 +68,9 @@
 NLM_EXTERN Char link_feat [MAX_WWWBUF];
 #define DEF_LINK_FEAT  "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
 
+NLM_EXTERN Char link_featc [MAX_WWWBUF];
+#define DEF_LINK_FEATC  "http://www.ncbi.nlm.nih.gov/entrez/viewer.cgi?"
+
 NLM_EXTERN Char link_seq [MAX_WWWBUF];
 #define DEF_LINK_SEQ  "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
 
@@ -91,6 +94,9 @@ NLM_EXTERN Char ev_link [MAX_WWWBUF];
 
 NLM_EXTERN Char ec_link [MAX_WWWBUF];
 #define DEF_LINK_EC "http://www.expasy.org/cgi-bin/nicezyme.pl?"
+
+NLM_EXTERN Char ec_ambig [MAX_WWWBUF];
+#define DEF_LINK_ECAMBIG "http://www.chem.qmw.ac.uk/iubmb/enzyme/"
 
 NLM_EXTERN Char link_tax [MAX_WWWBUF];
 #define DEF_LINK_TAX "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"
@@ -279,6 +285,7 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   ajp->www = TRUE;
 
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FEAT", DEF_LINK_FEAT, link_feat, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FEATC", DEF_LINK_FEATC, link_featc, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_WGS", DEF_LINK_WGS, link_wgs, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_OMIM", DEF_LINK_OMIM, link_omim, MAX_WWWBUF);
@@ -287,18 +294,12 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_DOC", DEF_LINK_DOC, doc_link, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_EV", DEF_LINK_EV, ev_link, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_EC", DEF_LINK_EC, ec_link, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ECAMBIG", DEF_LINK_ECAMBIG, ec_ambig, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FF", DEF_LINK_FF, link_ff, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_MUID", DEF_LINK_MUID, link_muid, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FF", DEF_LINK_FF, link_ff, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_MUID", DEF_LINK_MUID, link_muid, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ACE", DEF_LINK_ACE, link_ace, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_TAX", DEF_LINK_TAX, link_tax, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_CODE", DEF_LINK_CODE, link_code, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FLY", DEF_LINK_FLY, link_fly, MAX_WWWBUF);
@@ -470,13 +471,36 @@ static void FF_www_db_xref_dbSTS(
   CharPtr identifier
 )
 {
+  Char     ch;
+  Boolean  is_numeric = TRUE;
+  CharPtr  str;
+
   while (*identifier == ' ')
     identifier++;
 
-  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=", link_dbSTS, "val=gnl|dbsst|", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, identifier, ">", identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+  if (*identifier == '\0') return;
+
+  str = identifier;
+  ch = *str;
+  while (ch != '\0') {
+    if (! IS_DIGIT (ch)) {
+      is_numeric = FALSE;
+    }
+    str++;
+    ch = *str;
+  }
+
+  if (is_numeric) {
+    FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=", link_dbSTS, "val=gnl|dbsts|", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, identifier, ">", identifier, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+  } else if (ValidateAccn (identifier) == 0) {
+    FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, "<a href=", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString(ffstring, identifier, ">", identifier, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+  }
 }
 
 static void FF_www_db_xref_niaEST(

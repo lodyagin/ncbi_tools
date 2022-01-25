@@ -31,6 +31,9 @@
 *
 *
 * $Log: txclient.h,v $
+* Revision 1.8  2005/08/08 18:03:27  soussov
+* adds extern C
+*
 * Revision 1.7  2003/03/05 21:32:00  soussov
 * new lookup procedure
 *
@@ -69,6 +72,10 @@
 #include <treemgr.h>
 #ifdef TAXSERVICE
 #include <objfeat.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" { /* } */
 #endif
 
 typedef struct t_TXC_Name {
@@ -179,5 +186,8 @@ _subspecPtr tax_SSget(Int4 tax_id, _subspecPtr ssrec);
 tax_OrgModPtr tax_SSgetLegal(Int4 tax_id);
 Int4 tax_SSgetNodes(Uint1 stype, CharPtr sname, Uint1 mode, Int4Ptr* ids);
 
+#ifdef __cplusplus
+/* { */ }
+#endif
 
 #endif

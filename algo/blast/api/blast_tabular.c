@@ -1,4 +1,4 @@
-/* $Id: blast_tabular.c,v 1.28 2005/05/10 16:07:59 camacho Exp $
+/* $Id: blast_tabular.c,v 1.29 2005/08/05 22:29:50 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,7 +28,7 @@
  * On-the-fly tabular formatting of BLAST results
  */
 
-static char const rcsid[] = "$Id: blast_tabular.c,v 1.28 2005/05/10 16:07:59 camacho Exp $";
+static char const rcsid[] = "$Id: blast_tabular.c,v 1.29 2005/08/05 22:29:50 dondosha Exp $";
 
 #include <algo/blast/api/blast_tabular.h>
 #include <algo/blast/core/blast_util.h>
@@ -278,6 +278,7 @@ void* Blast_TabularFormatThread(void* data)
    char* descr;
    Int4 num_queries;
    Int4* query_lengths;
+   Boolean sequence_in_use = FALSE;
  
    tf_data = (BlastTabularFormatData*) data;
    if (!tf_data || !tf_data->query_slp || !tf_data->hsp_stream ||
@@ -331,6 +332,7 @@ void* Blast_TabularFormatThread(void* data)
          if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0)
              continue;
          
+         sequence_in_use = TRUE;
          if (one_seq_update_params) {
             Int2 status;
             /* This is not a database search, so effective search spaces
@@ -343,6 +345,7 @@ void* Blast_TabularFormatThread(void* data)
                              eff_len_params)) != 0) {
                hsp_list = Blast_HSPListFree(hsp_list);
                BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
+               sequence_in_use = FALSE;
                continue;
             }
          }
@@ -352,8 +355,10 @@ void* Blast_TabularFormatThread(void* data)
             ext_params->options, hit_params, gen_code_string);
          /* Return subject sequence unless it is needed for the sequence
             printout */
-         if (tf_data->format_options != eBlastTabularAddSequences)
+         if (tf_data->format_options != eBlastTabularAddSequences) {
             BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
+            sequence_in_use = FALSE;
+         }
          /* Recalculate the bit scores, since they might have changed. */
          Blast_HSPListGetBitScores(hsp_list, 
             score_params->options->gapped_calculation, gap_align->sbp);
@@ -390,13 +395,14 @@ void* Blast_TabularFormatThread(void* data)
          subject_buffer = strtok(descr, " \t\n\r");
 
       /* Retrieve the subject sequence if it is needed and this has not 
-	 already been done. */ 
+         already been done. */ 
       if (tf_data->format_options == eBlastTabularAddSequences && 
           !tf_data->perform_traceback) {
           seq_arg.oid = hsp_list->oid;
           seq_arg.encoding = eBlastEncodingNucleotide;
           if (BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg) < 0)
               continue;
+          sequence_in_use = TRUE;
       }
 
       subject_length = BlastSeqSrcGetSeqLen(seq_src, (void*)&hsp_list->oid);
@@ -465,8 +471,10 @@ void* Blast_TabularFormatThread(void* data)
          sfree(query_buffer);
       }
 
-      /* Return the subject sequence */
-      BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
+      /* Return the subject sequence, if it hasn't yet been done. */
+      if (sequence_in_use)
+          BlastSeqSrcReleaseSequence(seq_src, (void*)&seq_arg);
+
       fflush(tf_data->outfp);
       sfree(subject_buffer);
       hsp_list = Blast_HSPListFree(hsp_list);

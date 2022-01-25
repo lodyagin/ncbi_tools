@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: posit.c,v 6.72 2004/10/12 15:06:57 papadopo Exp $";
+static char const rcsid[] = "$Id: posit.c,v 6.75 2005/08/05 12:05:13 coulouri Exp $";
 
-/* $Id: posit.c,v 6.72 2004/10/12 15:06:57 papadopo Exp $
+/* $Id: posit.c,v 6.75 2005/08/05 12:05:13 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,23 @@ static char const rcsid[] = "$Id: posit.c,v 6.72 2004/10/12 15:06:57 papadopo Ex
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.72 $ 
+  $Revision: 6.75 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.75  2005/08/05 12:05:13  coulouri
+ * From Mike Gertz:
+ * - Changed the freq ratio of a (*,-) or (-,*) match for all matrices to
+ *   be zero.  The effect of this change is that these substitutions get
+ *   assigned a score of BLAST_SCORE_MIN when composition-based statistics
+ *   is used in any mode.
+ *
+ * Revision 6.74  2005/07/28 14:57:10  coulouri
+ * remove dead code
+ *
+ * Revision 6.73  2005/06/08 12:26:29  camacho
+ * Change posReadPosFreqsScoremat to accept other encodings of Bioseq data in ASN.1 PSSM
+ *
  * Revision 6.72  2004/10/12 15:06:57  papadopo
  * 1. Modify residue frequency IO to comply with new scoremat spec
  * 2. Remove check that residue frequencies read from scoremat are <= 1.0
@@ -2059,18 +2072,6 @@ static void  putCkptNumber(void * numberPtr, Int4 numberSize, FILE * ckptFile )
   FileWrite(numberPtr,numberSize,1,ckptFile) ;
 }
 
-#if 0
-/* TODO: the function is not used in this file */
-static void    putCkptNlmFloat_HiVector (Nlm_FloatHi * theVector, Int4 length, FILE * ckptFile)
-{
-  int  vectorRef;
- 
-  for(vectorRef = 0; vectorRef < length; vectorRef++)
-    putCkptNlm_FloatHi(theVector[vectorRef],ckptFile) ;
-}
-#endif
-
-
 /*Code to put a vector of frequencies; put only the interesting
   entries*/
 static void  putFreqVector(Nlm_FloatHi * theVector, Int4 length, FILE * ckptFile)
@@ -2122,20 +2123,6 @@ void  LIBCALL getCkptNumber(void * numberPtr, Int4 numberSize, FILE * ckptFile )
 {
   FileRead(numberPtr,numberSize,1,ckptFile) ;
 }
-
-
-#if 0
-/* TODO: the function is not used in this file */
-/*Code to get a vector of type Nlm_FloatHi*/
-
-static void    getCkptNlmFloat_HiVector (Nlm_FloatHi * theVector, Int4 length, FILE * ckptFile)
-{
-  int  vectorRef ;
- 
-  for(vectorRef = 0; vectorRef < length; vectorRef++)
-    getCkptNlm_FloatHi(theVector[vectorRef],ckptFile) ;
-}
-#endif
 
 static void    getFreqVector (Nlm_FloatHi * theVector, Int4 length, FILE * ckptFile)
 {
@@ -2225,7 +2212,6 @@ Boolean LIBCALL posTakeScoremat(posSearchItems *posSearch,
   PssmPtr pssm = NULL;
   Int4 i, j;
   Boolean status = FALSE;
-  Bioseq *bsp;
 
   scoremat = PssmWithParametersNew();
   if (scoremat == NULL) {
@@ -2387,14 +2373,32 @@ Boolean LIBCALL posReadPosFreqsScoremat(posSearchItems * posSearch, compactSearc
     PssmWithParametersFree(scoremat);
     return FALSE;
   }
-  if (!bsp->seq_data || !ISA_aa(bsp->mol) || 
-      bsp->seq_data_type != Seq_code_ncbieaa) {
+  if (!bsp->seq_data || !ISA_aa(bsp->mol)) {
     ErrPostEx(SEV_WARNING, 0, 0, 
-              "Sequence within checkpoint file has the wrong format\n");
+          "Sequence within checkpoint file has no data or is not protein\n");
     PssmWithParametersFree(scoremat);
     return FALSE;
   }
   BSSeek(bsp->seq_data, 0, SEEK_SET);
+
+  /* Convert sequence data into Seq_code_ncbistdaa */
+  if (bsp->seq_data_type != Seq_code_ncbistdaa) {
+
+      ByteStore* new_byte_store = BSConvertSeq(bsp->seq_data,
+                                               Seq_code_ncbistdaa,
+                                               bsp->seq_data_type,
+                                               bsp->length);
+
+      if ( !new_byte_store ) {
+          ErrPostEx(SEV_FATAL, 1, 0, "Failed to convert Bioseq in ASN.1 PSSM "
+                    "to Seq_code_ncbistdaa");
+      }
+
+      bsp->seq_data = new_byte_store;
+      bsp->seq_data_type = Seq_code_ncbistdaa;
+      BSSeek(bsp->seq_data, 0, SEEK_SET);
+
+  }
 
   /* verify the input query is the same as the sequence
      within the checkpoint file */
@@ -2406,7 +2410,6 @@ Boolean LIBCALL posReadPosFreqsScoremat(posSearchItems * posSearch, compactSearc
       PssmWithParametersFree(scoremat);
       return FALSE;
     }
-    c = ResToInt((Char)c);
     if (c != compactSearch->query[i]) {
       if (compactSearch->query[i] == Xchar) {
         ErrPostEx(SEV_WARNING, 0, 0, 
@@ -3062,7 +3065,7 @@ static Nlm_FloatHi BLOSUM80_FREQUENCIES[PROTEIN_ALPHABET] = {
 static Nlm_FloatHi BLOSUM62_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-   0.000, 0.000, 0.000, 0.000, 0.000, 0.250},
+   0.000, 0.000, 0.000, 0.000, 0.000, 0.000},
   {0.000, 3.903, 0.565, 0.868, 0.545, 0.741, 0.465, 1.057, 0.569, 0.632,
    0.775, 0.602, 0.723, 0.588, 0.754, 0.757, 0.613, 1.472, 0.984, 0.936,
    0.416, 0.750, 0.543, 0.747, 0.000, 0.250},
@@ -3135,7 +3138,7 @@ static Nlm_FloatHi BLOSUM62_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.250},
-  {0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250,
+  {0.000, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250,
    0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250, 0.250,
    0.250, 0.250, 0.250, 0.250, 0.250, 1.333},
 };
@@ -3143,7 +3146,7 @@ static Nlm_FloatHi BLOSUM62_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
 static Nlm_FloatHi PAM30_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-   0.000, 0.000, 0.000, 0.000, 0.000, 0.003},
+   0.000, 0.000, 0.000, 0.000, 0.000, 0.000},
   {0.000, 7.789, 0.302, 0.108, 0.317, 0.453, 0.057, 0.576, 0.083, 0.199,
    0.095, 0.115, 0.189, 0.285, 0.593, 0.235, 0.091, 0.875, 0.827, 0.477,
    0.010, 0.750, 0.070, 0.358, 0.000, 0.003},
@@ -3216,7 +3219,7 @@ static Nlm_FloatHi PAM30_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.003},
-  {0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003,
+  {0.000, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003,
    0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003, 0.003,
    0.003, 0.003, 0.003, 0.003, 0.003, 1.333},
 };
@@ -3224,7 +3227,7 @@ static Nlm_FloatHi PAM30_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
 static Nlm_FloatHi PAM70_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-   0.000, 0.000, 0.000, 0.000, 0.000, 0.002},
+   0.000, 0.000, 0.000, 0.000, 0.000, 0.000},
   {0.000, 4.900, 0.605, 0.242, 0.619, 0.771, 0.135, 1.015, 0.221, 0.434,
    0.249, 0.250, 0.376, 0.589, 1.030, 0.466, 0.227, 1.350, 1.327, 0.809,
    0.043, 0.750, 0.154, 0.638, 0.000, 0.002},
@@ -3297,7 +3300,7 @@ static Nlm_FloatHi PAM70_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.002},
-  {0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002,
+  {0.000, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002,
    0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002, 0.002,
    0.002, 0.002, 0.002, 0.002, 0.002, 1.333},
 };
@@ -3305,7 +3308,7 @@ static Nlm_FloatHi PAM70_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
 static Nlm_FloatHi BLOSUM45_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-   0.000, 0.000, 0.000, 0.000, 0.000, 0.290},
+   0.000, 0.000, 0.000, 0.000, 0.000, 0.000},
   {0.000, 2.950, 0.735, 0.800, 0.689, 0.825, 0.587, 1.080, 0.654, 0.747,
    0.786, 0.712, 0.821, 0.789, 0.709, 0.867, 0.700, 1.300, 1.001, 1.010,
    0.565, 0.750, 0.639, 0.841, 0.000, 0.290},
@@ -3378,7 +3381,7 @@ static Nlm_FloatHi BLOSUM45_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.290},
-  {0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290,
+  {0.000, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290,
    0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290,
    0.290, 0.290, 0.290, 0.290, 0.290, 1.333},
 };
@@ -3386,7 +3389,7 @@ static Nlm_FloatHi BLOSUM45_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
 static Nlm_FloatHi BLOSUM80_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-   0.000, 0.000, 0.000, 0.000, 0.000, 0.140},
+   0.000, 0.000, 0.000, 0.000, 0.000, 0.000},
   {0.000, 4.773, 0.477, 0.732, 0.451, 0.703, 0.397, 0.957, 0.514, 0.543,
    0.723, 0.505, 0.625, 0.510, 0.771, 0.696, 0.555, 1.535, 0.980, 0.866,
    0.309, 0.750, 0.436, 0.700, 0.000, 0.140},
@@ -3459,7 +3462,7 @@ static Nlm_FloatHi BLOSUM80_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.140},
-  {0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140,
+  {0.000, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140,
    0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140, 0.140,
    0.140, 0.140, 0.140, 0.140, 0.140, 1.333},
 };
@@ -3467,7 +3470,7 @@ static Nlm_FloatHi BLOSUM80_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
 static Nlm_FloatHi BLOSUM50_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-   0.000, 0.000, 0.000, 0.000, 0.000, 0.290},
+   0.000, 0.000, 0.000, 0.000, 0.000, 0.000},
   {0.000, 3.273, 0.687, 0.888, 0.660, 0.797, 0.546, 1.101, 0.641, 0.715,
    0.748, 0.657, 0.854, 0.720, 0.715, 0.820, 0.668, 1.364, 0.967, 0.982,
    0.464, 0.750, 0.596, 0.806, 0.000, 0.290},
@@ -3540,7 +3543,7 @@ static Nlm_FloatHi BLOSUM50_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.290},
-  {0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290,
+  {0.000, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290,
    0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290, 0.290,
    0.290, 0.290, 0.290, 0.290, 0.290, 1.333},
 };
@@ -3548,7 +3551,7 @@ static Nlm_FloatHi BLOSUM50_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
 static Nlm_FloatHi BLOSUM90_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-   0.000, 0.000, 0.000, 0.000, 0.000, 0.120},
+   0.000, 0.000, 0.000, 0.000, 0.000, 0.000},
   {0.000, 4.773, 0.477, 0.732, 0.451, 0.703, 0.397, 0.957, 0.514, 0.543,
    0.723, 0.505, 0.625, 0.510, 0.771, 0.696, 0.555, 1.535, 0.980, 0.866,
    0.309, 0.707, 0.436, 0.700, 0.000, 0.120},
@@ -3621,7 +3624,7 @@ static Nlm_FloatHi BLOSUM90_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.120},
-  {0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120,
+  {0.000, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120,
    0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120, 0.120,
    0.120, 0.120, 0.120, 0.120, 0.120, 1.333},
 };
@@ -3629,7 +3632,7 @@ static Nlm_FloatHi BLOSUM90_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
 static Nlm_FloatHi PAM250_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
-   0.000, 0.000, 0.000, 0.000, 0.000, 0.170},
+   0.000, 0.000, 0.000, 0.000, 0.000, 0.000},
   {0.000, 1.516, 1.056, 0.627, 1.070, 1.075, 0.446, 1.339, 0.732, 0.889,
    0.766, 0.646, 0.770, 1.040, 1.294, 0.903, 0.701, 1.290, 1.317, 1.045,
    0.264, 0.750, 0.450, 1.000, 0.000, 0.170},
@@ -3702,7 +3705,7 @@ static Nlm_FloatHi PAM250_FREQRATIOS[PROTEIN_ALPHABET][PROTEIN_ALPHABET] = {
   {0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
    0.000, 0.000, 0.000, 0.000, 0.000, 0.170},
-  {0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170,
+  {0.000, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170,
    0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170, 0.170,
    0.170, 0.170, 0.170, 0.170, 0.170, 1.333},
 };

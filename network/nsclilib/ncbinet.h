@@ -1,4 +1,4 @@
-/* $Id: ncbinet.h,v 6.6 2001/04/05 04:02:21 juran Exp $      
+/* $Id: ncbinet.h,v 6.7 2005/07/25 18:06:48 lavr Exp $      
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbinet.h,v $
+* Revision 6.7  2005/07/25 18:06:48  lavr
+* Remove deprecated ni_ API references
+*
 * Revision 6.6  2001/04/05 04:02:21  juran
 * Removed MacTCP-enabling preprocessor hacks.
 *
@@ -78,7 +81,6 @@
 #include "ni_types.h"   /* include <ncbi.h> */
 #include "ni_defin.h"
 #include "ni_error.h"
-#include "ni_encr.h"
 #include <ni_lib_.h>
 
 #ifdef NETP_INET_MACTCP

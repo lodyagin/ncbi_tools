@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.144 $
+* $Revision: 6.147 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.147  2005/07/15 19:01:37  kans
+* minor fixes for Xcode warnings
+*
+* Revision 6.146  2005/07/13 20:58:27  kans
+* FindNMDefLine looks for isoform in refseq record, changes to transcript variant for mrna title
+*
+* Revision 6.145  2005/06/15 20:26:13  dondosha
+* In FastaReadSequenceChunk, check for lines starting with comment characters # or !
+*
 * Revision 6.144  2005/06/01 18:03:27  camacho
 * Augmented FASTA_BUFFER_LEN by a factor of 4
 *
@@ -2075,12 +2084,22 @@ static Int4 FastaReadSequenceChunk
     if(type == FASTA_FILE_IO) {
 	fd = (FILE *) input;
 
-    /* Skip empty lines. */
+    /* Skip empty lines and lines starting with a comment symbol. */
     while (1) {
         ch = NLM_GETC(fd);
+
+        /* Ignore lines starting with a comment symbol. */
+        if (ch == '!' || ch == '#') { 
+            do {
+                ch = NLM_GETC(fd);
+            } while (ch != '\n' && ch != '\r' && ch != '\0' && ch != EOF);
+        }
+
         /* If end of file reached, return 0. */
         if (ch == EOF)
             return 0;
+
+        /* If line not empty, break out of this loop. */
         if (ch != '\n' && ch != '\r')
             break;
     }
@@ -2821,7 +2840,7 @@ static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean printi
 	{
 		SeqIdWrite(bsp->id, buf, PRINTID_FASTA_SHORT, buflen);
 		length = StringLen(buf);
-		sprintf(buf+length, ":%ld-%ld", (SeqLocStart(seqloc)+1), (SeqLocStop(seqloc)+1));
+		sprintf(buf+length, ":%ld-%ld", (long) (SeqLocStart(seqloc)+1), (long) (SeqLocStop(seqloc)+1));
 	}
 	return TRUE;
 }
@@ -3310,14 +3329,17 @@ static CharPtr FindNMDefLine (BioseqPtr bsp)
 
 {
   BioSourcePtr  biop;
-  Char          buf [512];
-  CharPtr       cds;
+  Char          buf [512], buf2 [600];
+  CharPtr       cds = NULL;
   Uint2         entityID;
   CharPtr       gene;
+  Boolean       is_refseq = FALSE;
   size_t        len;
   NMDef         nd;
   OrgRefPtr     orp;
+  CharPtr       ptr;
   SeqEntryPtr   sep;
+  SeqIdPtr      sip;
   CharPtr       str;
   ValNodePtr    vnp;
 
@@ -3337,7 +3359,27 @@ static CharPtr FindNMDefLine (BioseqPtr bsp)
   FeatDefLabel (nd.gene, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
   gene = StringSaveNoNull (buf);
   FeatDefLabel (nd.cds, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
-  cds = StringSaveNoNull (buf);
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER) {
+      is_refseq = TRUE;
+    }
+  }
+  if (is_refseq) {
+    ptr = StringStr (buf, "isoform ");
+    if (ptr != NULL) {
+      *ptr = '\0';
+      ptr += 8;
+      StringCpy (buf2, buf);
+      StringCat (buf2, "transcript variant ");
+      StringCat (buf2, ptr);
+      cds = StringSaveNoNull (buf2);
+    } else {
+      cds = StringSaveNoNull (buf);
+    }
+  } else {
+    cds = StringSaveNoNull (buf);
+  }
 
   len = StringLen (orp->taxname) + StringLen (cds) +
         StringLen (gene) + StringLen ("  (), mRNA") + 10;

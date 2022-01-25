@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core_c.c,v 6.13 2005/05/03 11:59:00 ivanov Exp $
+/*  $Id: ncbi_core_c.c,v 6.15 2005/07/26 20:00:33 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -217,13 +217,20 @@ extern MT_LOCK MT_LOCK_c2c(TNlmRWlock lock, int/*bool*/ pass_ownership)
 }
 
 
+/* TO BE REMOVED */
+extern int g_NCBI_ConnectSrandAddent()
+{
+    return g_NCBI_ConnectSrandAddend();
+}
+
+
 /***********************************************************************
  *                                 Init                                *
  ***********************************************************************/
 
 extern void CONNECT_Init(const char* conf_file)
 {
-    g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDENT;
+    g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
     srand(g_NCBI_ConnectRandomSeed);
 
     CORE_SetLOCK(MT_LOCK_c2c(0, 1/*true*/));
@@ -235,6 +242,12 @@ extern void CONNECT_Init(const char* conf_file)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core_c.c,v $
+ * Revision 6.15  2005/07/26 20:00:33  lavr
+ * Retroactively provide s_NCBI_ConnectSrandAddent() temporarily
+ *
+ * Revision 6.14  2005/07/11 18:51:34  lavr
+ * Spell ADDEND
+ *
  * Revision 6.13  2005/05/03 11:59:00  ivanov
  * Removing #include <connect/ncbi_priv.h>
  *

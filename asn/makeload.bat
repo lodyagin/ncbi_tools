@@ -21,7 +21,6 @@ asntool -m ..\network\medarch\client\mla.asn -l asnmla.h
 asntool -m ..\network\taxonomy\client\taxon.asn -l asntaxon.h
 asntool -m ..\network\id0arch\client\id0.asn -l asnid0.h
 asntool -m ..\network\spell\client\spell.asn -l spell.h
-asntool -m ..\network\nsclilib\ni_msg.asn -l ni_asn.h
 asntool -m ..\asn\objprt.asn -l asnprt.h
 asntool -m ..\biostruc\mmdb1.asn -l mmdb1.h -w100
 asntool -m ..\biostruc\mmdb2.asn -l mmdb2.h -w100

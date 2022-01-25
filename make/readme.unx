@@ -855,21 +855,12 @@ Waiting...go
 cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" ni_lib_.c
 cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" ni_service.c
 cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" ni_debug.c
-cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" ni_disp.c
-cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" ni_msg.c
 cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" ni_error.c
-cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" ni_encrs.c
 rm -f libnetcli.a
-ar cru libnetcli.a ni_lib_.o ni_service.o ni_debug.o ni_disp.o ni_msg.o ni_error.o ni_encrs.o
+ar cru libnetcli.a ni_lib_.o ni_service.o ni_debug.o ni_error.o
 cp -p libnetcli.a ../lib
 ls -l ../lib/libnetcli.a
 -rw-r--r--   1 coremake ncbi      297544 Jan 31 14:19 ../lib/libnetcli.a
-cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" ni_lib.c
-rm -f libnetcli_.a
-ar cru libnetcli_.a ni_lib.o ni_msg.o ni_error.o ni_encrs.o
-cp -p libnetcli_.a ../lib
-ls -l ../lib/libnetcli_.a
--rw-r--r--   1 coremake ncbi      228166 Jan 31 14:19 ../lib/libnetcli_.a
 cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" netentr.c
 cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" netlib.c
 cc -fast -c  -I../include -DWIN_MOTIF -DNETENTREZVERSION="\"2.02c2ASN1SPEC6  \"" objneten.c
@@ -984,5 +975,5 @@ Good luck!
 
 
 =======================================================================	
- $Id: readme.unx,v 6.21 2004/11/18 16:08:02 lavr Exp $
+ $Id: readme.unx,v 6.23 2005/07/26 14:40:11 lavr Exp $
 =======================================================================	

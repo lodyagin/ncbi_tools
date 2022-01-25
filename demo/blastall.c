@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.151 2005/05/05 14:41:32 coulouri Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.154 2005/08/17 12:42:31 madden Exp $";
 
-/* $Id: blastall.c,v 6.151 2005/05/05 14:41:32 coulouri Exp $
+/* $Id: blastall.c,v 6.154 2005/08/17 12:42:31 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,15 @@ static char const rcsid[] = "$Id: blastall.c,v 6.151 2005/05/05 14:41:32 coulour
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.154  2005/08/17 12:42:31  madden
+ * Set TXALIGN_SHOW_NO_OF_SEGS for tblastx
+ *
+ * Revision 6.153  2005/08/08 15:47:41  dondosha
+ * Added call to TransTableFreeAll, fixing a memory leak
+ *
+ * Revision 6.152  2005/06/15 21:37:23  dondosha
+ * Do not trigger on-the-fly output with -m8 option for megablast
+ *
  * Revision 6.151  2005/05/05 14:41:32  coulouri
  * plug object manager entity id leak - rt ticket 15084082
  *
@@ -1048,11 +1057,7 @@ Int2 Main (void)
         options->is_rps_blast = TRUE;
 #endif
     
-    if (align_view == 8 && options->is_megablast_search) {
-       options->output = (VoidPtr) outfp;
-       handle_results = MegaBlastPrintAlignInfo;
-    } else 
-       handle_results = NULL;
+    handle_results = NULL;
 
     BLASTOptionSetGapParams(options, myargs[ARG_MATRIX].strvalue, 0, 0); 
     options->expect_value  = (Nlm_FloatHi) myargs[ARG_EVALUE].floatvalue;
@@ -1151,7 +1156,7 @@ Int2 Main (void)
         align_options += TXALIGN_SHOW_GI;
         print_options += TXALIGN_SHOW_GI;
     }
-    if (myargs[ARG_GAPPED].intvalue == 0)
+    if (myargs[ARG_GAPPED].intvalue == 0 || StringICmp("tblastx", blast_program) == 0)
         print_options += TXALIGN_SHOW_NO_OF_SEGS;
     
     if (align_view) {
@@ -1959,6 +1964,8 @@ Int2 Main (void)
 #ifndef BLAST_CS_API
         /* This is freed earlier in client-server case */
         options->query_lcase_mask = SeqLocSetFree(options->query_lcase_mask);
+        /* Free the database translation tables, if applicable. */
+        TransTableFreeAll();
         ReadDBBioseqFetchDisable();
 #endif
         if (html)

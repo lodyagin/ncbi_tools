@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
@@ -46,6 +46,9 @@
 *
 * RCS Modification History:
 * $Log: ni_lib.h,v $
+* Revision 6.1  2005/07/25 18:06:48  lavr
+* Remove deprecated ni_ API references
+*
 * Revision 6.0  1997/08/25 18:38:49  madden
 * Revision changed to 6.0
 *
@@ -65,8 +68,6 @@
 
 #include "ncbinet.h"
 #include "ni_net.h"
-
-#include "ni_msg.h"
 
 /* DEFINES */
 

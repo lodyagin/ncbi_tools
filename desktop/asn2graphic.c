@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.125 $
+* $Revision: 6.127 $
 *
 * File Description:
 *
@@ -48,7 +48,7 @@
 /* type used to accumulate align score weights, should be small to save space, but large enough we do not overflow. */
 typedef Int2 AccumValue_t;
 typedef AccumValue_t PNTR AccumValuePtr_t;
-#define ACCUMVALUE_MAX  INT4_MAX
+#define ACCUMVALUE_MAX  INT2_MAX
 
 /*
   Given a sequence alignment, look at its score
@@ -128,7 +128,7 @@ typedef struct seq_align_sort_info {
 } SeqAlignSortInfo, PNTR SeqAlignSortInfoPtr;
 
 typedef struct AlignmentFilterState {
- /* SeqAlignPtr      SAPhead, SAPcurrent; /* obsolete */
+ /* SeqAlignPtr      SAPhead, SAPcurrent; */ /* obsolete */
   SeqAlignSortInfoPtr alignSorted;  /* array of SeqAlignPtrs & Info about them, sorted */
   Int4             alignSortedLen;  /* len of alignSorted */
   Int4             alignIndex;      /* index of current alignment in alignSorted */
@@ -2677,7 +2677,13 @@ static CharPtr GetSeqAnnotName(SeqAnnotPtr sap)
   if (sap != NULL && sap->desc != NULL)
   {
     AnnotDescrPtr  descPtr;
-    /* look for a 'name' record */
+    /* look for a 'title' record */
+    for (descPtr = sap->desc; descPtr != NULL; descPtr = descPtr->next)
+    {
+      if (Annot_descr_title == descPtr->choice) /* title choice */
+        return descPtr->data.ptrvalue;
+    }
+    /* then try for a 'name' record */
     for (descPtr = sap->desc; descPtr != NULL; descPtr = descPtr->next)
     {
       if (Annot_descr_name == descPtr->choice) /* name choice */
@@ -2993,7 +2999,6 @@ static RelevantFeatureItemPtr GetNextRFIPinAlignmentFilter (
     RelevantFeatureItemPtr  finalRFIP;  /* Our return value. */
     ViewerContextPtr        vContext;
     FilterItemPtr           currentFIP;
-    Boolean                 stdSeg = FALSE;
     AppearanceItemPtr       AIP;
     Char                    labelbuf[150];
     Uint1                   strand;
@@ -4177,6 +4182,8 @@ Boolean DrawNamedAnnotBox(FilterProcessStatePtr FPSP)
       AddTextLabel (vContext->sanLevelSeg, 0, FPSP->ceiling, 
                     annotName, FP->AnnotLabelFont, 1, LOWER_RIGHT, 0);
       break;
+    default:
+      break;
     }
     FPSP->annotLabelDrawn = TRUE;
   }
@@ -4620,7 +4627,6 @@ static Int4 DrawBioseqSegments (
 
 {
   ValNodePtr   listHead = NULL, vnpSegment = NULL;
-  ValNodePtr   firstRow = NULL;
   Int4         segmentCount;
   Uint2         rowHeight, row = 0; /* row is either 0 or 1 */
   AppearanceItem segmentAI;
@@ -5332,7 +5338,7 @@ static void FindCutoffScore(SeqAlignPtr sap, Int4 alignCnt, AlignmentFilterState
   SeqAlignPtr sapIter;
   Int4Ptr     allScores;
   Int4        i;
-  /* Int4        cutoffScore;  /* not normalized */
+  /* Int4        cutoffScore; */  /* not normalized */
   
   /* make array to hold all the scores. */
   allScores = MemNew(alignCnt * sizeof(Int4));
@@ -5858,7 +5864,6 @@ static Uint2 SmearAlignments (
 
   Boolean                  smearedAlignsPlus = FALSE, smearedAlignsMinus = FALSE;
   AccumulatorOp            sumOrMax = NLM_SUM_WEIGHT;
-  Uint1                    scoreType = NLM_SCORE_COUNT;
   Boolean                  separateStrands;
   const Uint1              minDensity = 1;  /* minimum density we will display. */
   SegmenT                  seg;

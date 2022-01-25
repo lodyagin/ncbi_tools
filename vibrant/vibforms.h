@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibforms.h,v $
+* Revision 6.13  2005/06/29 13:55:14  bollin
+* added flag for left scroll bar to CreateTagListDialogExEx
+*
 * Revision 6.12  2005/05/12 15:25:34  bollin
 * added callbacks to the TagListDialog, so that when a value is changed, the
 * callback for the column in which the value is changed will be called.
@@ -486,6 +489,7 @@ typedef struct Nlm_taglist {
   Nlm_Handle             control [MAX_TAGLIST_ROWS * MAX_TAGLIST_COLS];
   Nlm_EnumFieldAssocPtr  PNTR alists;
   Nlm_BaR                bar;
+  Nlm_BaR                left_bar;
   Nlm_Int2               max;
   Nlm_Boolean            noExtend;
   ValNodePtr             vnp;
@@ -504,7 +508,8 @@ extern Nlm_DialoG CreateTagListDialogExEx (Nlm_GrouP h, Nlm_Uint2 rows, Nlm_Uint
                                        Nlm_Uint2Ptr textWidths, Nlm_EnumFieldAssocPtr PNTR alists,
                                        Nlm_Boolean useBar, Nlm_Boolean noExtend,
                                        Nlm_ToDialogFunc tofunc, Nlm_FromDialogFunc fromfunc,
-                                       TaglistCallback PNTR callbacks, Pointer callback_data);
+                                       TaglistCallback PNTR callbacks, Pointer callback_data,
+                                       Boolean useLeftBar);
 
 extern Nlm_CharPtr Nlm_ExtractTagListColumn (Nlm_CharPtr source, Nlm_Int2 col);
 extern Nlm_CharPtr ReplaceTagListColumn (CharPtr source, CharPtr new_value, Int2 col);

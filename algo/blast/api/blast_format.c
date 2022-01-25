@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.88 2005/06/02 20:41:52 dondosha Exp $
+/* $Id: blast_format.c,v 1.95 2005/08/08 15:50:20 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,7 @@
  * Formatting of BLAST results (SeqAlign)
  */
 
-static char const rcsid[] = "$Id: blast_format.c,v 1.88 2005/06/02 20:41:52 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.95 2005/08/08 15:50:20 dondosha Exp $";
 
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_seq.h>
@@ -61,9 +61,15 @@ extern void MBXmlClose(MBXml* xmlp, ValNode* other_returns,
  * @{
  */
 
-Int2 BlastFormattingOptionsNew(EBlastProgramType program_number, 
-                               EAlignView align_view, 
-                               BlastFormattingOptions** format_options_ptr)
+/** Allocate and initialize the formatting options structure.
+ * @param program Number of the BLAST program [in]
+ * @param align_view What kind of formatted output to show? [in]
+ * @param format_options_ptr The initialized structure [out]
+ */
+static Int2
+s_BlastFormattingOptionsNew(EBlastProgramType program_number, 
+                            EAlignView align_view, 
+                            BlastFormattingOptions** format_options_ptr)
 {
    BlastFormattingOptions* format_options; 
 
@@ -157,9 +163,6 @@ s_CreateBlastOutputHead(const char* program, const char* database,
 {
     BlastOutput* boutp;
     Char buffer[1024];
-    SeqPort* spp;
-    Boolean is_aa = FALSE;
-    Int4 i;
     char* program_to_use = NULL;
     
     if((boutp = BlastOutputNew()) == NULL)
@@ -189,16 +192,10 @@ s_CreateBlastOutputHead(const char* program, const char* database,
        boutp->query_len = SeqLocLen(query_loc);
 
        if(flags & BXML_INCLUDE_QUERY) {
-          boutp->query_seq = MemNew(boutp->query_len+1);
-          is_aa = (strcmp(program_to_use, "blastp") || 
-                   strcmp(program_to_use, "tblastn"));
-          spp = SeqPortNewByLoc(query_loc, 
-                   (Uint1)((is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna));
-          
-          for (i = 0; i < boutp->query_len; i++) {
-             boutp->query_seq[i] = SeqPortGetResidue(spp);
-          }
-          spp = SeqPortFree(spp);
+           boutp->query_seq = (char *) calloc(boutp->query_len+1, 1);
+           SeqPortStreamLoc(query_loc, 
+                            STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                            boutp->query_seq, NULL);
        } else {
           boutp->query_seq = NULL;    /* Do we need sequence here??? */
        }
@@ -282,6 +279,7 @@ s_MBXmlInit(AsnIo* aip, char* program, char* database,
     else if (strcmp(program, "rpstblastn") == 0)
        program = "blastx";
 
+    AsnSetXMLmodulePrefix("http://www.ncbi.nlm.nih.gov/dtd/");
     xmlp = (MBXml*) MemNew(sizeof(MBXml));
     
     xmlp->aip = aip;
@@ -396,10 +394,10 @@ s_XMLBuildStatistics(Blast_SummaryReturn* sum_returns, Boolean ungapped)
 
    stat = StatisticsNew();
 
-   stat->eff_space = db_stats->eff_searchsp;
+   stat->eff_space = (double) db_stats->eff_searchsp;
    stat->hsp_len = db_stats->hsp_length;
    stat->db_num= db_stats->dbnum;
-   stat->db_len = db_stats->dblength;
+   stat->db_len = (Int4) db_stats->dblength;
 
    if(ungapped) {
       if(sum_returns->ka_params != NULL) {
@@ -480,8 +478,8 @@ Int2 BlastFormattingInfoNew(EAlignView align_view,
     info = *info_ptr = 
         (BlastFormattingInfo*) calloc(1, sizeof(BlastFormattingInfo));
 
-    BlastFormattingOptionsNew(search_options->program, align_view, 
-                              &info->format_options);
+    s_BlastFormattingOptionsNew(search_options->program, align_view, 
+                                &info->format_options);
     info->search_options = search_options;
     info->program_name = strdup(program_name);
     if (db_name)
@@ -519,6 +517,7 @@ Int2 BlastFormattingInfoNewBasic(EAlignView align_view,
 {
     Blast_SummaryReturn* extra_returns = Blast_SummaryReturnNew();
     char* program_name = NULL;
+    Int2 status = 0;
 
     Blast_SearchOptionsFromSummaryOptions(basic_options, query_seqloc,
                                           extra_returns, advanced_options,
@@ -526,9 +525,11 @@ Int2 BlastFormattingInfoNewBasic(EAlignView align_view,
 
     Blast_SummaryReturnFree(extra_returns);
 
-    return BlastFormattingInfoNew(align_view, *advanced_options, program_name, 
-                                  NULL, outfile_name, info_ptr);
+    status =
+        BlastFormattingInfoNew(align_view, *advanced_options, program_name, 
+                               NULL, outfile_name, info_ptr);
     sfree(program_name);
+    return status;
 }
 
 void 
@@ -619,6 +620,27 @@ s_GetOldAlignType(EBlastProgramType prog, Boolean* db_is_na)
     return align_type;
 }
 
+
+/** Prints out the description of a query sequence, along
+ *  with notification that the query has no hits
+ * @param slp The query Seq-loc
+ * @param format_options Options for formatting
+ * @param outfp File to which the output will be directed
+ */
+static void 
+s_AcknowledgeEmptyResults(SeqLoc *slp,
+                          BlastFormattingOptions* format_options,
+                          FILE *outfp)
+{
+    Bioseq *bsp = BioseqLockById(SeqLocId(slp));
+    init_buff_ex(70);
+    AcknowledgeBlastQuery(bsp, 70, outfp, 
+               format_options->believe_query, format_options->html);
+    free_buff();
+    BioseqUnlock(bsp);
+    fprintf(outfp, " ***** No hits found ******\n\n\n");
+}
+
 Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries, 
         SeqLoc* query_slp, SeqLoc* mask_loc_head, 
         BlastFormattingInfo* format_info,
@@ -644,20 +666,25 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
    FILE *outfp = NULL;
    BlastFormattingOptions* format_options;
    EAlignView align_view;
+   Boolean ungapped;
 
    ASSERT(format_info && format_info->format_options && 
           format_info->search_options && query_slp);
 
-
    format_options = format_info->format_options;
    align_view = format_options->align_view;
+   ungapped = 
+       !format_info->search_options->score_options->gapped_calculation;
 
    if (align_view == eAlignViewXml) {
+       const Int4 kXmlFlag = 0; /* Change to BXML_INCLUDE_QUERY if inclusion
+                                   of query sequence is desired in the XML
+                                   output header. */
        xmlp = format_info->xmlp;
        if (!xmlp) {
            xmlp = format_info->xmlp = 
                s_MBXmlInit(format_info->aip, format_info->program_name, 
-                           format_info->db_name, query_slp, 0, 
+                           format_info->db_name, query_slp, kXmlFlag, 
                            sum_returns->search_params);
        }
    } else if (align_view == eAlignViewAsnText || 
@@ -669,26 +696,20 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
    align_type = 
        s_GetOldAlignType(format_info->search_options->program, &db_is_na);
 
-   if (format_info->db_name)
+   if (format_info->db_name) {
+       /* Enable fetching from the BLAST database. */
       ReadDBBioseqFetchEnable ("blast", format_info->db_name, db_is_na, TRUE);
+      /* If database is translated, set the genetic code for tranlation. */
+      if (Blast_SubjectIsTranslated(format_info->search_options->program)) {
+          ReadDBBioseqSetDbGeneticCode(format_info->search_options->
+                                       db_options->genetic_code);
+      }
+   }
 
    query_index = 0;
    slp = query_slp;
    mask_loc = mask_loc_head;
 
-   if (!seqalign && align_view < eAlignViewXml) {
-      /* Acknowledge all queries and report the "no hits found" message. */
-      for ( ; slp; slp = slp->next) {
-         bsp = BioseqLockById(SeqLocId(slp));
-         init_buff_ex(70);
-         AcknowledgeBlastQuery(bsp, 70, outfp, 
-            format_options->believe_query, format_options->html);
-         free_buff();
-         BioseqUnlock(bsp);
-         fprintf(outfp, " ***** No hits found ******\n\n\n");
-      }
-   }
-      
    while (seqalign) {
       /* Find which query the current SeqAlign is for */
       query_id = TxGetQueryIdFromSeqAlign(seqalign);
@@ -697,15 +718,8 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
          if (SeqIdComp(query_id, SeqLocId(slp)) == SIC_YES) {
             break;
          } else if (align_view < eAlignViewXml) {
-            /* This query has no results; acknowledge the query and report a "no
-               results" message. */
-            bsp = BioseqLockById(SeqLocId(slp));
-            init_buff_ex(70);
-            AcknowledgeBlastQuery(bsp, 70, outfp, 
-               format_options->believe_query, format_options->html);
-            free_buff();
-            BioseqUnlock(bsp);
-            fprintf(outfp, " ***** No hits found ******\n\n\n");
+            /* This query has no results */
+            s_AcknowledgeEmptyResults(slp, format_options, outfp);
          }
       }
       /* The following should never happen! We mustn't have a SeqAlign left
@@ -772,7 +786,7 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
          
          BlastPrintTabulatedResults(seqalign, bsp, NULL, 
             format_options->number_of_alignments, format_info->program_name, 
-            format_options->ungapped, format_options->believe_query, 0, 0, 
+            ungapped, format_options->believe_query, 0, 0, 
             outfp, (Boolean)(align_view == eAlignViewTabularWithComments));
       } else if(align_view == eAlignViewXml) {
          Iteration* iterp;
@@ -783,7 +797,7 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
             queries. */
          iterp = 
              s_XMLBuildOneQueryIteration(seqalign, sum_returns, FALSE, 
-                                         format_options->ungapped, 
+                                         ungapped, 
                                          query_index+format_info->num_formatted,
                                          NULL, bsp, mask_loc);
          IterationAsnWrite(iterp, xmlp->aip, xmlp->atp);
@@ -851,8 +865,19 @@ Int2 BLAST_FormatResults(SeqAlign* head, Int4 num_queries,
 
    } /* End loop on seqaligns for different queries */
 
-   if (format_info->db_name)
-      ReadDBBioseqFetchDisable();
+   /* if the list of seqaligns has run out but the list
+      of queries has not, acknowledge leftover queries */
+   if (align_view < eAlignViewXml) {
+      for (; slp; slp = slp->next) {
+         s_AcknowledgeEmptyResults(slp, format_options, outfp);
+      }
+   }
+
+   if (format_info->db_name) {
+       /* Free the database translation tables, if applicable. */
+       TransTableFreeAll();
+       ReadDBBioseqFetchDisable();
+   }
 
    /* Update the count of the formatted queries. */
    format_info->num_formatted += num_queries;
@@ -914,8 +939,8 @@ s_PHIBlastFormatPatternInfo(Blast_SummaryReturn* sum_returns, FILE* outfp)
         fprintf(outfp, " pattern probability=%.1e\nlengthXprobability=%.1e\n", 
                 pattern_info->probability, lenXprob);
         fprintf(outfp, 
-                "\nNumber of occurrences of pattern in the database is %lld\n",
-                db_patterns);
+                "\nNumber of occurrences of pattern in the database is %s\n",
+                Nlm_Int8tostr(db_patterns, 0));
         fprintf(outfp, "WARNING: There may be more matching sequences with "
                 "e-values below the threshold of %f\n", 
                 sum_returns->search_params->expect);
@@ -1021,7 +1046,7 @@ Int2 Blast_PrintOutputFooter(const BlastFormattingInfo* format_info,
    BlastFormattingOptions* format_options;
    EBlastProgramType program;
 
-   if (!format_info || !format_info->outfp)
+   if (!format_info || !format_info->outfp || !sum_returns)
       return -1;
 
    outfp = format_info->outfp;

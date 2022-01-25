@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.300 $
+* $Revision: 6.325 $
 *
 * File Description: 
 *
@@ -219,6 +219,8 @@ extern SeqEntryPtr ImportOneGappedSequence (FILE *fp);
 
 extern Boolean HasZeroLengthSequence (ForM newForm);
 extern Boolean SequencesFormHasProteins (ForM f);
+extern SeqEntryPtr GetSequencesFormProteinList (ForM f);
+extern SeqEntryPtr GetSequencesFormNucleotideList (ForM f);
 extern Boolean SequencesFormHasTooManyNucleotides (ForM f);
 
 extern void AppendOrReplaceString (
@@ -424,13 +426,13 @@ extern void ConvertToLocalProcAll (IteM i);
 
 extern void PromoteToBestIDProc (IteM i);
 extern void PromoteToWorstIDProc (IteM i);
+extern void ChangeGenBankNameToLocal (IteM i);
 extern void RemoveGBIDsFromBioseqs (IteM i);
 extern void RemoveGBIDsFromProteins (IteM i);
 extern void RemoveGIsFromBioseqs (IteM i);
 extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn);
 extern CharPtr JustSaveStringFromText (TexT t);
 
-extern SeqLocPtr RemoveGapsFromDeltaLocation (SeqLocPtr slp, BioseqPtr bsp);
 extern void CommonApplyToAllProc (BaseFormPtr bfp, Int2 type);
 extern void ApplyTitle (IteM i);
 extern void ApplyCDS (IteM i);
@@ -444,12 +446,6 @@ extern void LoadHistoryAccessionNumbersFromFile (IteM i);
 extern void LoadOrganismModifierTable (IteM i);
 extern void ExportOrganismTable (IteM i);
 extern void LoadFeatureQualifierTable (IteM i);
-extern Boolean ImportOrganismModifiersForSubmit (SeqEntryPtr seq_list);
-extern Boolean ImportOrganismModifiersForSourceAssistant
-(Int4 num_sequences,
- CharPtr PNTR id_list,
- CharPtr PNTR defline_list);
-extern CharPtr GetSelectedModifierPopupName (PopuP p);
 extern CharPtr GetModifierPopupPositionName (Int2 val);
 extern Int4 GetNumDeflineModifiers (void);
 
@@ -551,7 +547,8 @@ extern void MakeSearchStringFromAlist (CharPtr str, CharPtr name);
 extern void AddToSubSource (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype);
 extern void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype);
 extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
-                                        Int2 code, Boolean makeMRNA, BioseqPtr forceTarget);
+                                        Int2 code, Boolean makeMRNA, 
+                                        SeqLocPtr use_this);
 
 extern CharPtr repackageMsg;
 extern BioseqPtr  updateTargetBspKludge;
@@ -659,13 +656,6 @@ typedef struct sequencesform {
   BtnActnProc     goToNext;
   BtnActnProc     goToPrev;
 
-  SeqEntryPtr     topSeqForConfirm;
-  SeqEntryPtr     currConfirmSeq;
-  FormActnFunc    putItAllTogether;
-  Int2            currConfirmCount;
-  
-  ButtoN          use_id_from_fasta_defline;
-      
   /* These are added to add modifiers on the source tab */  
   ButtoN          import_mod_btn;
   ButtoN          source_assist_btn;
@@ -675,12 +665,17 @@ typedef struct sequencesform {
   ButtoN          specify_mgcode_btn;
   ButtoN          clear_mods_btn;
   DoC             org_doc;
+  PrompT          ident_org_ppt;
   ButtoN          ident_org_btn;
   DialoG          summary_dlg;
   
   /* These allow the user to specify topology and molecule */
   ButtoN          topology_btn;
   ButtoN          molecule_btn;
+  
+  /* This list pairs the proteins and nucleotides. */
+  /* It must be freed using FreeAssociationList. */
+  ValNodePtr      nuc_prot_assoc_list;
 
 } SequencesForm, PNTR SequencesFormPtr;
 
@@ -798,7 +793,7 @@ extern CharPtr SourceQualValNodeName (ValNodePtr vnp);
 extern ValNodePtr SourceQualValNodeDataCopy (ValNodePtr vnp);
 extern Boolean SourceQualValNodeMatch (ValNodePtr vnp1, ValNodePtr vnp2);
 
-extern ValNodePtr GetSourceQualDescList (Boolean get_subsrc, Boolean get_orgmod);
+extern ValNodePtr GetSourceQualDescList (Boolean get_subsrc, Boolean get_orgmod, Boolean get_discontinued);
 extern Boolean IsNonTextModifier (CharPtr mod_name);
 
 extern void FeatureRemove (IteM i);
@@ -903,8 +898,9 @@ typedef struct locationconstraint
 } LocationConstraintData, PNTR LocationConstraintPtr;
 
 #define STRING_CONSTRAINT_CONTAINS 1
-#define STRING_CONSTRAINT_STARTS   2
-#define STRING_CONSTRAINT_ENDS     3
+#define STRING_CONSTRAINT_EQUALS   2
+#define STRING_CONSTRAINT_STARTS   3
+#define STRING_CONSTRAINT_ENDS     4
 
 typedef struct stringconstraint
 {
@@ -939,6 +935,7 @@ typedef struct filterset
 } FilterSetData, PNTR FilterSetPtr;
 
 extern void FilterSetClearText (FilterSetPtr fsp);
+extern FilterSetPtr FilterSetNew (void);
 extern FilterSetPtr FilterSetFree (FilterSetPtr fsp);
 
 extern Boolean DoesStringMatchConstraint (CharPtr pchSource, StringConstraintPtr scp);
@@ -1195,6 +1192,16 @@ FilterGroup
  Boolean has_location_constraint,
  Boolean has_cds_gene_prot_constraint,
  CharPtr string_constraint_label);
+ 
+typedef struct parsefield
+{
+  Int4        parse_field_type;
+  ValNodePtr  feature_field;
+  ValNodePtr  feature_subtype;
+} ParseFieldData, PNTR ParseFieldPtr;
+
+extern ParseFieldPtr ParseFieldFree (ParseFieldPtr pfp);
+ 
 extern DialoG ParseFieldDestDialog 
 (GrouP                    h, 
  Nlm_ChangeNotifyProc     change_notify,
@@ -1205,6 +1212,12 @@ extern DialoG ParseFieldSourceDialog
  Pointer                  change_userdata);
 
 extern DialoG SampleDialog (GrouP h);
+
+extern ValNodePtr FreeAssociationList (ValNodePtr assoc_list);
+extern ValNodePtr 
+AssignProteinsForSequenceSet 
+(SeqEntryPtr nuc_list,
+ SeqEntryPtr prot_list);
 
 extern CharPtr 
 CreateListMessage 
@@ -1235,6 +1248,52 @@ extern GetSamplePtr GetSampleFree (GetSamplePtr gsp);
 
 extern ExistingTextPtr GetExistingTextHandlerInfo (GetSamplePtr gsp, Boolean non_text);
 
+extern GetSamplePtr
+GetSampleForSeqEntry
+(SeqEntryPtr   sep,
+ Uint2         entityID, 
+ ParseFieldPtr dst_field_data,
+ FilterSetPtr  fsp);
+
+
+extern void ApplyGDSKeyword (IteM i);
+extern void ApplyGDSKeywordWithStringConstraint (IteM i);
+#if defined(OS_UNIX) || defined(OS_MSWIN)
+extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data);
+#endif
+
+extern void AddGeneFeatureFromTitle (SeqEntryPtr nucsep, CharPtr ttl,  SeqLocPtr slp);
+extern ProtRefPtr AddProteinFeatureFromDefline (SeqEntryPtr psep, CharPtr title);
+extern void AddCodingRegionFieldsFromProteinTitle (CdRegionPtr crp, CharPtr title, CharPtr PNTR pcomment);
+extern Boolean ReplaceImportModifierName (CharPtr PNTR orig_name, Int4 col_num);
+
+extern SeqEntryPtr 
+ImportSequencesFromFile
+(FILE           *fp, 
+ SeqEntryPtr     sep_list,
+ Boolean         is_na, 
+ Boolean         parse_id,
+ ValNodePtr PNTR err_msg_list);
+
+extern void TestUpdateSequenceIndexer (IteM i);
+extern void TestUpdateSequenceSubmitter (IteM i);
+extern void TestUpdateSequenceSetIndexer (IteM i);
+extern void TestUpdateSequenceSetSubmitter (IteM i);
+extern void TestUpdateSequenceViaDownload (IteM i);
+
+extern void 
+ListBioseqsInSeqEntry 
+(SeqEntryPtr     sep, 
+ Boolean         is_na,
+ Int4Ptr         seq_num, 
+ ValNodePtr PNTR bioseq_list);
+
+extern void RecomputeSuggestedIntervalsForCDS 
+(Uint2          entityID,
+ BioseqPtr PNTR batchbsp,
+ Int4Ptr        count,
+ MonitorPtr     mon,
+ SeqFeatPtr     sfp);
 
 #ifdef __cplusplus
 }

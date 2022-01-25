@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.110 2005/05/13 03:41:52 beloslyu Exp $
+# $Id: makedis.csh,v 1.111 2005/06/09 15:11:47 bollin Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -366,7 +366,7 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
-		VIB=\"Psequin Nentrez udv ddv blastcl3 \
+		VIB=\"Psequin sbtedit Nentrez udv ddv blastcl3 \
 		idfetch bl2seq asn2gb tbl2asn entrez2 gbseqget \
 		$WWWBLAST $OGL_TARGETS\") 
 else if ( "$HAVE_MAC" == 1 ) then
@@ -389,7 +389,7 @@ else if ( "$HAVE_MAC" == 1 ) then
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB_POST_LINK=\"/Developer/Tools/Rez -t APPL ../link/macmet/Carbon.r -o\" \
-		VIB=\"Psequin udv ddv blastcl3 \
+		VIB=\"Psequin sbtedit udv ddv blastcl3 \
 		idfetch bl2seq asn2gb tbl2asn entrez2 gbseqget $WWWBLAST \") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
@@ -491,7 +491,7 @@ else
    echo "The version number of each individual application" >> ../VERSION
    echo "may be found in the appropriate documentation files in ./ncbi/doc/" >> ../VERSION
    echo "uname -a ouput is: `uname -a`" >> ../VERSION
-   foreach i ( Nentrez Psequin asn2ff asn2xml asn2gb asn2idx asndhuff asntool bl2seq \
+   foreach i ( Nentrez Psequin sbtedit asn2ff asn2xml asn2gb asn2idx asndhuff asntool bl2seq \
 	blastall blastcl3 blastclust blastpgp cdscan checksub \
 	copymat ddv demo_regexp demo_regexp_grep dosimple entrcmd entrez \
 	errhdr fa2htgs fastacmd findspl fmerge formatdb formatrpsdb getfeat \

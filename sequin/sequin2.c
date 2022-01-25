@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.402 $
+* $Revision: 6.532 $
 *
 * File Description: 
 *
@@ -74,14 +74,757 @@
 extern EnumFieldAssoc  orgmod_subtype_alist [];
 extern EnumFieldAssoc  subsource_subtype_alist [];
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
+extern EnumFieldAssoc  biosource_origin_alist [];
+
+static ENUM_ALIST(biomol_nucX_alist)
+  {"Genomic DNA",            253},
+  {"Genomic RNA",            254},
+  {"Precursor RNA",            2},
+  {"mRNA [cDNA]",              3},
+  {"Ribosomal RNA",            4},
+  {"Transfer RNA",             5},
+  {"Small nuclear RNA",        6},
+  {"Small cytoplasmic RNA",    7},
+  {"Other-Genetic",            9},
+  {"cRNA",                    11},
+  {"Small nucleolar RNA",     12},
+END_ENUM_ALIST
+
+static ENUM_ALIST(biomol_nucGen_alist)
+  {"Genomic DNA",            253},
+  {"Genomic RNA",            254},
+END_ENUM_ALIST
+
+static ENUM_ALIST(topology_nuc_alist)
+{"Linear",          TOPOLOGY_LINEAR},
+{"Circular",        TOPOLOGY_CIRCULAR},
+END_ENUM_ALIST
+
+static ENUM_ALIST(molecule_alist)
+{"DNA",             Seq_mol_dna },
+{"RNA",             Seq_mol_rna },
+END_ENUM_ALIST
 
 #define PRINTED_INT_MAX_LEN 15
 
 #define CREATE_FASTA_REQUIRED 0
 #define CREATE_FASTA_WARNING  1
 
-const char *short_org = "[org=";
-const char *long_org = "[Organism=";
+/* This structure holds a list of IDs and titles for a set of sequences.
+ * It can be used to represent the new list of sequences being imported,
+ * the existing list of sequences being imported, suggested changes for
+ * a list of sequences, etc.
+ */
+typedef struct idandtitleedit 
+{
+  CharPtr PNTR id_list;
+  CharPtr PNTR title_list;
+  BoolPtr      is_seg;
+  Int4         num_sequences;
+} IDAndTitleEditData, PNTR IDAndTitleEditPtr;
+
+/* These functions are for creating, copying, and freeing lists
+ * of titles and IDs.
+ */
+static IDAndTitleEditPtr IDAndTitleEditNew (void)
+{
+  IDAndTitleEditPtr iatep;
+  
+  iatep = (IDAndTitleEditPtr) MemNew (sizeof (IDAndTitleEditData));
+  if (iatep != NULL)
+  {
+    iatep->id_list = NULL;
+    iatep->title_list = NULL;
+    iatep->is_seg = NULL;
+    iatep->num_sequences = 0;
+  }
+  return iatep;
+}
+
+static void IDAndTitleEditInit (IDAndTitleEditPtr iatep, Int4 new_num_sequences)
+{
+  Int4 seq_num;
+  if (iatep == NULL)
+  {
+    return;
+  }
+  
+  /* free old lists, if any */
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    iatep->id_list [seq_num] = MemFree (iatep->id_list [seq_num]);
+    iatep->title_list [seq_num] = MemFree (iatep->title_list [seq_num]);
+  }
+  iatep->id_list = MemFree (iatep->id_list);
+  iatep->title_list = MemFree (iatep->title_list);
+  iatep->is_seg = MemFree (iatep->is_seg);
+  
+  /* now create blanks for num_sequences entries */
+  iatep->num_sequences = MAX (0, new_num_sequences);
+  if (iatep->num_sequences > 0)
+  {
+    iatep->id_list = (CharPtr PNTR) MemNew (iatep->num_sequences * sizeof (CharPtr));
+    iatep->title_list = (CharPtr PNTR) MemNew (iatep->num_sequences * sizeof (CharPtr));
+    iatep->is_seg = (BoolPtr) MemNew (iatep->num_sequences * sizeof (Boolean));
+    for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+    {
+      iatep->id_list [seq_num] = NULL;
+      iatep->title_list  [seq_num] = NULL;
+      iatep->is_seg [seq_num] = FALSE;
+    }
+  } 
+}
+
+static IDAndTitleEditPtr IDAndTitleEditCopy (IDAndTitleEditPtr iatep_orig)
+{
+  IDAndTitleEditPtr iatep_copy;
+  Int4              seq_num;
+  
+  if (iatep_orig == NULL)
+  {
+    return NULL;
+  }
+  
+  iatep_copy = IDAndTitleEditNew ();
+  if (iatep_copy == NULL)
+  {
+    return NULL;
+  }
+  
+  IDAndTitleEditInit (iatep_copy, iatep_orig->num_sequences);
+  for (seq_num = 0; seq_num < iatep_copy->num_sequences; seq_num++)
+  {
+    iatep_copy->id_list [seq_num] = StringSave (iatep_orig->id_list [seq_num]);
+    iatep_copy->title_list [seq_num] = StringSave (iatep_orig->title_list [seq_num]);
+    if (iatep_orig->is_seg != NULL)
+    {
+      iatep_copy->is_seg [seq_num] = iatep_orig->is_seg [seq_num];
+    }
+  }
+  
+  return iatep_copy;
+}
+
+static IDAndTitleEditPtr IDAndTitleEditFree (IDAndTitleEditPtr iatep)
+{
+  Int4 i;
+  
+  if (iatep != NULL)
+  {
+    for (i = 0; i < iatep->num_sequences; i++)
+    {
+      iatep->id_list [i] = MemFree (iatep->id_list [i]);
+      iatep->title_list [i] = MemFree (iatep->title_list [i]);
+    }
+    iatep->id_list = MemFree (iatep->id_list);
+    iatep->title_list = MemFree (iatep->title_list);
+    iatep->is_seg = MemFree (iatep->is_seg);
+    iatep = MemFree (iatep);
+  }
+  return iatep;
+}
+
+/* These functions are for applying lists of titles and IDs
+ * to a SeqEntry list.
+ */
+static Int4 CountSequencesAndSegments (SeqEntryPtr list)
+{
+  Int4         num_seqs = 0;
+  BioseqSetPtr bssp;
+  
+  while (list != NULL)
+  {
+    if (list->data.ptrvalue != NULL)
+    {
+      if (IS_Bioseq (list))
+      {
+        num_seqs ++;
+      }
+      else if (IS_Bioseq_set (list))
+      {
+        bssp = (BioseqSetPtr) list->data.ptrvalue;
+        num_seqs += CountSequencesAndSegments (bssp->seq_set);
+      }
+    }
+    list = list->next;
+  }
+  return num_seqs;
+}
+
+static BioseqPtr FindNthSequenceInSet (SeqEntryPtr seq_list, Int4 nth, BoolPtr is_seg)
+{
+  Int4         pos = 0;
+  BioseqPtr    bsp = NULL;
+  BioseqSetPtr bssp;
+  SeqEntryPtr  sep;
+  
+  while (seq_list != NULL && bsp == NULL)
+  {
+    if (seq_list->data.ptrvalue != NULL)
+    {
+      if (IS_Bioseq (seq_list))
+      {
+        if (nth == pos)
+        {
+          bsp = seq_list->data.ptrvalue;
+        }
+        else
+        {
+          pos ++;
+        }
+      }
+      else if (IS_Bioseq_set (seq_list))
+      {
+        bssp = (BioseqSetPtr) seq_list->data.ptrvalue;
+        if (bssp->_class == BioseqseqSet_class_parts && is_seg != NULL)
+        {
+          *is_seg = TRUE;
+        }
+        sep = bssp->seq_set;
+        while (sep != NULL && bsp == NULL)
+        {
+          bsp = FindNthSequenceInSet (sep, nth - pos, is_seg);
+          if (bsp == NULL)
+          {
+            if (IS_Bioseq_set (sep))
+            {
+              bssp = (BioseqSetPtr) sep->data.ptrvalue;
+              pos += CountSequencesAndSegments (bssp->seq_set);
+            }
+            else if (IS_Bioseq (sep))
+            {
+              pos ++;
+            }
+          }
+          sep = sep->next;
+        }
+        if (bsp == NULL && is_seg != NULL)
+        {
+          *is_seg = FALSE;
+        }
+      }      
+    }
+    seq_list = seq_list->next;
+  }
+  return bsp;
+}
+
+static IDAndTitleEditPtr SeqEntryListToIDAndTitleEdit (SeqEntryPtr list)
+{
+  IDAndTitleEditPtr iatep;
+  Int4              num_sequences, i;
+  BioseqPtr         bsp;
+  Char              id_str [128];  
+  SeqDescrPtr       sdp;
+  
+  num_sequences = CountSequencesAndSegments (list);
+  if (num_sequences == 0)
+  {
+    return NULL;
+  }
+  
+  iatep = IDAndTitleEditNew ();
+  if (iatep == NULL)
+  {
+    return NULL;
+  }
+
+  IDAndTitleEditInit (iatep, num_sequences);
+
+  for (i = 0; i < num_sequences; i++)
+  {
+    bsp = FindNthSequenceInSet (list, i, &(iatep->is_seg [i]));
+    if (bsp != NULL)
+    {
+      if (bsp->id != NULL)
+      {
+        SeqIdWrite (bsp->id, id_str, PRINTID_REPORT, sizeof (id_str) - 1);  
+        iatep->id_list [i] = StringSave (id_str);  
+      }
+      sdp = bsp->descr;
+      while (sdp != NULL && sdp->choice != Seq_descr_title)
+      {
+        sdp = sdp->next;
+      }
+      if (sdp != NULL && !StringHasNoText (sdp->data.ptrvalue))
+      {
+        iatep->title_list [i] = StringSave (sdp->data.ptrvalue);
+      }
+    }
+  }
+  return iatep;
+}
+
+static void ReplaceIDAndTitleForBioseq (BioseqPtr bsp, SeqIdPtr new_sip, CharPtr title)
+{
+  SeqDescrPtr sdp;
+  SeqEntryPtr sep;
+  
+  if (bsp == NULL)
+  {
+    return;
+  }
+  
+  /* replace ID */
+  
+  if (new_sip != NULL)
+  {
+    if (bsp->id != NULL)
+    {
+      new_sip->next = bsp->id->next;
+      bsp->id->next = NULL;
+      bsp->id = SeqIdFree (bsp->id);
+    }
+    bsp->id = new_sip;
+    SeqMgrReplaceInBioseqIndex(bsp);
+  }
+  else
+  {
+    bsp->id = SeqIdFree (bsp->id);
+  }
+    
+  /* replace title */
+  if (title == NULL)
+  {
+    title = StringSave ("");
+  }
+  sdp = bsp->descr;
+  while (sdp != NULL && sdp->choice != Seq_descr_title)
+  {
+    sdp = sdp->next;
+  }
+  if (sdp == NULL)
+  {
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    sdp = CreateNewDescriptor (sep, Seq_descr_title);
+    sdp->data.ptrvalue = title;
+  }
+  else
+  {
+    sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
+    sdp->data.ptrvalue = title;
+  }  
+}
+
+static void ResetSegSetIDLists (SeqEntryPtr list)
+{
+  BioseqSetPtr bssp, parts;
+  BioseqPtr    seg_bsp;
+  SeqEntryPtr  sep;
+  SeqLocPtr    loc, next_loc, last_loc;
+  
+  if (list == NULL)
+  {
+    return;
+  }
+  
+  if (list->data.ptrvalue != NULL)
+  {
+    if (IS_Bioseq_set (list))
+    {
+      bssp = (BioseqSetPtr) list->data.ptrvalue;
+      if (bssp->_class == BioseqseqSet_class_segset)
+      {
+        sep = bssp->seq_set;
+        seg_bsp = NULL;
+        parts = NULL;
+        while (sep != NULL && (seg_bsp == NULL || parts == NULL))
+        {
+          if (IS_Bioseq (sep))
+          {
+            seg_bsp = sep->data.ptrvalue;
+          }
+          else if (IS_Bioseq_set (sep))
+          {
+            parts = sep->data.ptrvalue;
+            if (parts != NULL && parts->_class != BioseqseqSet_class_parts)
+            {
+              parts = NULL;
+            }
+          }
+          sep = sep->next;
+        }
+        if (seg_bsp != NULL)
+        {
+          /* remove old location */
+          loc = (SeqLocPtr) seg_bsp->seq_ext;
+          while (loc != NULL)
+          {
+            next_loc = loc->next;
+            loc->next = NULL;
+            loc = SeqLocFree (loc);
+            loc = next_loc;
+          }
+          seg_bsp->seq_ext = NULL;
+          /* put in new locations */
+          sep = parts->seq_set;
+          last_loc = NULL;
+          while (sep != NULL)
+          {
+            if (IS_Bioseq (sep) && sep->data.ptrvalue != NULL)
+            {
+              loc = SeqLocWholeNew (sep->data.ptrvalue);
+              if (loc != NULL)
+              {
+                if (last_loc == NULL)
+                {
+                  seg_bsp->seq_ext = loc;
+                }
+                else
+                {
+                  last_loc->next = loc;
+                }
+                last_loc = loc;
+              }
+            }
+            sep = sep->next;
+          }
+        }
+      }
+      else
+      {
+        ResetSegSetIDLists (bssp->seq_set);
+      }
+    }
+  }
+  ResetSegSetIDLists (list->next);
+}
+
+
+static Boolean ApplyIDAndTitleEditToSeqEntryList (SeqEntryPtr list, IDAndTitleEditPtr iatep)
+{
+  Int4      i;
+  SeqIdPtr  new_sip;
+  BioseqPtr bsp;
+  
+  if (list == NULL || iatep == NULL)
+  {
+    return FALSE;
+  }
+  
+  if (CountSequencesAndSegments (list) != iatep->num_sequences)
+  {
+    return FALSE;
+  }
+  
+  for (i = 0; i < iatep->num_sequences; i++)
+  {
+    bsp = FindNthSequenceInSet (list, i, NULL);
+    if (bsp != NULL)
+    {
+      new_sip = MakeSeqID (iatep->id_list [i]);
+      ReplaceIDAndTitleForBioseq (bsp, new_sip, StringSave (iatep->title_list [i]));
+    }
+  }
+  ResetSegSetIDLists (list);
+  return TRUE;
+}
+
+/* this section of code is used to read and parse the taxlist.txt 
+ * and lineages.txt files */
+static ValNodePtr orglist = NULL;
+
+typedef struct orginfo 
+{
+  CharPtr taxname;
+  CharPtr common;
+  Int4    ngcode;
+  Int4    mgcode;
+  CharPtr div;
+  Int4    taxnum;
+  CharPtr lineage;
+} OrgInfoData, PNTR OrgInfoPtr;
+
+static FILE *OpenSequinDataFile (CharPtr filename)
+{
+  Char              str [PATH_MAX];
+  CharPtr           ptr;
+  FILE              *f = NULL;
+
+  if (StringHasNoText (filename))
+  {
+    return NULL;
+  }
+
+  ProgramPath (str, sizeof (str));
+  ptr = StringRChr (str, DIRDELIMCHR);
+  if (ptr == NULL)
+  {
+    return NULL;
+  }
+  
+  *ptr = '\0';
+  FileBuildPath (str, NULL, filename);
+  f = FileOpen (str, "r");
+  if (f == NULL) {
+    if (GetAppParam ("NCBI", "NCBI", "DATA", "", str, sizeof (str))) {
+      FileBuildPath (str, NULL, filename);
+      f = FileOpen (str, "r");
+    }
+  }
+  return f;
+}
+
+static OrgInfoPtr FindByTaxNum (Int4 taxnum)
+{
+  ValNodePtr vnp;
+  OrgInfoPtr oip;
+  
+  for (vnp = orglist; vnp != NULL; vnp = vnp->next)
+  {
+    oip = (OrgInfoPtr) vnp->data.ptrvalue;
+    if (oip != NULL && oip->taxnum == taxnum)
+    {
+      return oip;
+    }
+  }
+  return NULL;
+}
+
+static OrgInfoPtr FindByTaxName (CharPtr taxname)
+{
+  ValNodePtr vnp;
+  OrgInfoPtr oip;
+  
+  if (StringHasNoText (taxname))
+  {
+    return NULL;
+  }
+  
+  for (vnp = orglist; vnp != NULL; vnp = vnp->next)
+  {
+    oip = (OrgInfoPtr) vnp->data.ptrvalue;
+    if (oip != NULL && StringICmp (oip->taxname, taxname) == 0)
+    {
+      return oip;
+    }
+  }
+  return NULL;
+}
+
+static void AddLineagesToOrganismList (void)
+{
+  ReadBufferData    rbd;
+  CharPtr           line;
+  CharPtr           ptr;
+  FILE              *f;
+  OrgInfoPtr        oip;
+  Int4              taxnum;
+
+  /* can only add lineages to existing list */
+  if (orglist == NULL) return;
+
+  /* now read in lineages */
+  f = OpenSequinDataFile ("lineages.txt");
+
+  if (f != NULL) 
+  {
+    rbd.fp = f;
+    rbd.current_data = NULL;
+    line = AbstractReadFunction (&rbd);
+    line = AbstractReadFunction (&rbd);
+    while (line != NULL)
+    {
+      ptr = StringChr (line, '\t');
+      if (ptr != NULL) 
+      {
+        *ptr = '\0';
+        if (StrToLong (line, &taxnum)) 
+        {
+          oip = FindByTaxNum (taxnum);
+          if (oip != NULL)
+          {
+            oip->lineage = StringSave (ptr + 1);
+          }
+        }
+      }
+    	line = AbstractReadFunction (&rbd);
+    }
+    FileClose (f);
+  }
+}
+
+static CharPtr GetNextToken (CharPtr PNTR pstart)
+{
+  CharPtr pend;
+  CharPtr newval = NULL;
+  
+  if (pstart == NULL || *pstart == NULL)
+  {
+    return NULL;
+  }
+  
+  pend = StringChr (*pstart, '\t');
+  if (pend != NULL)
+  {
+    *pend = 0;
+  }
+  newval = StringSave (*pstart);
+  if (pend == NULL)
+  {
+    *pstart = NULL;
+  }
+  else
+  {
+    *pstart = pend + 1;
+  }
+  return newval;
+}
+
+static void LoadOrganismList (void)
+{
+  ReadBufferData    rbd;
+  CharPtr           line;
+  CharPtr           p_start, numval;
+  FILE              *f;
+  OrgInfoPtr        oip;
+
+  if (orglist != NULL) return;
+  
+  f = OpenSequinDataFile ("taxlist.txt");
+
+  if (f != NULL) {
+    rbd.fp = f;
+    rbd.current_data = NULL;
+    line = AbstractReadFunction (&rbd);
+    line = AbstractReadFunction (&rbd);
+    while (line != NULL)
+    {
+      oip = (OrgInfoPtr) MemNew (sizeof (OrgInfoData));
+      if (oip != NULL)
+      {
+        p_start = line;
+        /* read in tax name */
+        oip->taxname = GetNextToken (&p_start);
+        
+        /* read in common name */
+        oip->common = GetNextToken (&p_start);
+         
+        /* read in nuclear genetic code */
+        numval = GetNextToken (&p_start);
+        if (numval != NULL)
+        {
+          StrToLong (numval, &(oip->ngcode));
+          numval = MemFree (numval);
+        }
+        /* read in mitochondrial genetic code */
+        numval = GetNextToken (&p_start);
+        if (numval != NULL)
+        {
+          StrToLong (numval, &(oip->mgcode));
+          numval = MemFree (numval);
+        }
+        
+        /* read in div */
+        oip->div = GetNextToken (&p_start);
+        
+        /* read in taxnum */
+        numval = GetNextToken (&p_start);
+        if (numval != NULL)
+        {
+          StrToLong (numval, &(oip->taxnum));
+          numval = MemFree (numval);
+        }
+                
+        ValNodeAddPointer (&orglist, 0, oip);
+      }
+      line = MemFree (line);
+    	line = AbstractReadFunction (&rbd);
+    }
+    FileClose (f);
+  }
+  AddLineagesToOrganismList ();
+}
+
+/* This section of code is used for determining genetic codes based on
+ * FASTA-defline values.
+ */
+#define USE_NUCLEAR_GENETIC_CODE       1
+#define USE_MITOCHONDRIAL_GENETIC_CODE 2
+#define USE_OTHER_GENETIC_CODE         3
+
+static Int4 UseGeneticCodeForLocation (CharPtr location)
+{
+  if (StringHasNoText (location))
+  {
+    return USE_NUCLEAR_GENETIC_CODE;
+  }
+  else if (StringICmp (location, "Mitochondrion") == 0
+           || StringICmp (location, "Kinetoplast") == 0
+           || StringICmp (location, "Hydrogenosome") == 0)
+  {
+    return USE_MITOCHONDRIAL_GENETIC_CODE;
+  }
+  else if (StringICmp (location, "Chloroplast") == 0
+           || StringICmp (location, "Chromoplast") == 0
+           || StringICmp (location, "plastid") == 0
+           || StringICmp (location, "cyanelle") == 0
+           || StringICmp (location, "apicoplast") == 0
+           || StringICmp (location, "leucoplast") == 0
+           || StringICmp (location, "proplastid") == 0)
+  {
+    return USE_OTHER_GENETIC_CODE;
+  }
+  else
+  {
+    return USE_NUCLEAR_GENETIC_CODE;
+  }
+}
+
+
+static Int4 GetGeneticCodeForTaxNameAndLocation (CharPtr taxname, CharPtr location)
+{
+  ValNodePtr vnp;
+  OrgInfoPtr oip;
+  Boolean    found = FALSE;
+  Int4       use_code;
+  
+  use_code = UseGeneticCodeForLocation (location);
+  if (use_code == USE_OTHER_GENETIC_CODE)
+  {
+    return 11;
+  }
+  else if (StringHasNoText (taxname))
+  {
+    return -1;
+  }
+  
+  for (vnp = orglist; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->data.ptrvalue == NULL)
+    {
+      continue;
+    }
+    oip = (OrgInfoPtr) vnp->data.ptrvalue;
+    if (StringICmp (oip->taxname, taxname) == 0)
+    {
+      if (use_code == USE_NUCLEAR_GENETIC_CODE)
+      {
+        return oip->ngcode;
+      }
+      else
+      {
+        return oip->mgcode;
+      }
+    }
+  }
+  
+  return -1;
+}
+
+static CharPtr GeneticCodeStringFromIntAndList (Int4 num, ValNodePtr list)
+{
+  while (list != NULL)
+  {
+    if (list->choice == num)
+    {
+      return list->data.ptrvalue;
+    }
+    list = list->next;
+  }
+  return NULL;
+}
+
 
 /* these functions deal with commonly asked questions about package types - 
  * which ones are sets, which ones are single sequences, which ones have
@@ -130,17 +873,6 @@ static void FindFirstTitle (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 in
   *ttlptr = SeqEntryGetTitle (sep);
 }
 
-static void FindFirstSeqDescrTitle (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
-
-{
-  ValNodePtr PNTR  vnpptr;
-
-  if (mydata == NULL) return;
-  vnpptr = (ValNodePtr PNTR) mydata;
-  if (*vnpptr != NULL) return;
-  *vnpptr = SeqEntryGetSeqDescr (sep, Seq_descr_title, NULL);
-}
-
 static void FindFirstSeqEntryTitle (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -174,70 +906,831 @@ extern void MakeSearchStringFromAlist (CharPtr str, CharPtr name)
   }
 }
 
-static Boolean LookForSearchString (CharPtr title, CharPtr str, CharPtr tmp, size_t maxsize)
-
+/* This section of code is used for parsing well-formatted definition lines.
+ */
+typedef struct modifieralias 
 {
-  CharPtr  ptr;
+  CharPtr alias;
+  CharPtr modifier;
+} ModifierAlias, PNTR ModifierAliasPtr;
 
-  ptr = StringISearch (title, str);
-  if (ptr != NULL) {
-    StringNCpy_0 (tmp, ptr + StringLen (str), maxsize);
-     ptr = StringChr (tmp, ']');
-     if (ptr != NULL) {
-       *ptr = '\0';
-     }
-    return TRUE;
+static ModifierAlias alias_list [] =
+{
+  { "org", "organism" },
+  { "mol-type", "moltype" },
+  { "mol_type", "moltype" },
+  { "note", "note-orgmod" },
+  { "comment", "note-orgmod" },
+  { "subsource", "note-subsrc" },
+  { "technique", "tech" },
+  { "specimen voucher", "specimen-voucher" },
+  { "Lat-long", "lat-lon" },
+  { "Latitude-Longitude", "lat-lon" },
+  { "environmental_sample", "environmental-sample" },
+  { "prot", "protein" },
+  { "prot_desc", "protein_desc" }
+};
+
+static Int4 num_aliases = sizeof (alias_list) / sizeof (ModifierAlias);
+
+static CharPtr GetCanonicalName (CharPtr mod_name)
+{
+  Int4 j;
+  if (StringHasNoText (mod_name))
+  {
+    return mod_name;
+  }
+  for (j = 0; j < num_aliases; j++)
+  {
+    if (StringICmp (alias_list [j].alias, mod_name) == 0)
+    {
+      return alias_list [j].modifier;
+    }
+  }
+  return mod_name;
+}
+
+static CharPtr protein_modifier_names [] = 
+{
+  "gene",
+  "gene_syn",
+  "protein",
+  "protein_desc",
+  "note",
+  "comment",
+  "orf",
+  "cDNA",
+  "mRNA",
+  "function",
+  "EC_number"
+};
+
+static Int4 num_protein_modifier_names = sizeof (protein_modifier_names) / sizeof (CharPtr);
+
+typedef enum {
+    eModifierType_SourceQual = 0,
+    eModifierType_Organism,
+    eModifierType_Location,
+    eModifierType_Lineage,
+    eModifierType_GeneticCode,
+    eModifierType_GeneticCodeComment,
+    eModifierType_NucGeneticCode,
+    eModifierType_MitoGeneticCode,
+    eModifierType_MolType,
+    eModifierType_Molecule,
+    eModifierType_Origin,
+    eModifierType_Topology,
+    eModifierType_CommonName,
+    eModifierType_Technique,
+    eModifierType_Protein
+} EModifierType;
+
+typedef struct modifierinfo 
+{
+  CharPtr       name;
+  Uint1         subtype;
+  CharPtr       value;
+  EModifierType modtype;
+} ModifierInfoData, PNTR ModifierInfoPtr;
+
+static ModifierInfoPtr ModifierInfoNew (void)
+{
+  ModifierInfoPtr mip;
+  mip = (ModifierInfoPtr) MemNew (sizeof (ModifierInfoData));
+  if (mip == NULL) return NULL;
+  mip->name = NULL;
+  mip->value = NULL;
+  mip->modtype = eModifierType_SourceQual;
+  return mip;
+}
+
+static ModifierInfoPtr ModifierInfoFree (ModifierInfoPtr mip)
+{
+  if (mip == NULL) return NULL;
+  mip->name = MemFree (mip->name);
+  mip->value = MemFree (mip->value);
+  mip = MemFree (mip);
+  return mip;
+}
+
+static ValNodePtr ModifierInfoListFree (ValNodePtr list)
+{
+  if (list == NULL) return NULL;
+  ModifierInfoListFree (list->next);
+  list->next = NULL;
+  list->data.ptrvalue = ModifierInfoFree (list->data.ptrvalue);
+  ValNodeFree (list);
+  return NULL;
+}
+
+static EModifierType GetModifierType (CharPtr mod_name)
+{
+  Int4 i;
+  CharPtr canonical_name;
+  
+  canonical_name = GetCanonicalName (mod_name);
+  
+  if (StringHasNoText (canonical_name))
+  {
+    return eModifierType_SourceQual;
+  }
+  else if (StringICmp (canonical_name, "organism") == 0
+           || StringICmp (canonical_name, "org") == 0)
+  {
+	  return eModifierType_Organism;
+  }
+  else if (StringICmp (canonical_name, "location") == 0)
+  {
+    return eModifierType_Location;
+  }
+  else if (StringICmp (canonical_name, "lineage") == 0)
+  {
+    return eModifierType_Lineage;
+  }
+  else if (StringICmp (canonical_name, "gcode") == 0)
+  {
+    return eModifierType_NucGeneticCode;
+  }
+  else if (StringICmp (canonical_name, "mgcode") == 0)
+  {
+    return eModifierType_MitoGeneticCode;
+  }
+  else if (StringICmp (canonical_name, "genetic_code") == 0)
+  {
+    return eModifierType_GeneticCode;
+  }
+  else if (StringICmp (canonical_name, "gencode_comment") == 0)
+  {
+    return eModifierType_GeneticCodeComment;
+  }
+  else if (StringICmp (canonical_name, "moltype") == 0)
+  {
+    return eModifierType_MolType;
+  }
+  else if (StringICmp (canonical_name, "molecule") == 0)
+  {
+    return eModifierType_Molecule;
+  }
+  else if (StringICmp (canonical_name, "origin") == 0)
+  {
+    return eModifierType_Origin;
+  }
+  else if (StringICmp (canonical_name, "topology") == 0)
+  {
+    return eModifierType_Topology;
+  }
+  else if (StringICmp (canonical_name, "common name") == 0)
+  {
+    return eModifierType_CommonName;
+  }
+  else if (StringICmp (canonical_name, "tech") == 0)
+  {
+    return eModifierType_Technique;
+  }
+  else
+  {
+    for (i = 0; i < num_protein_modifier_names; i++)
+    {
+      if (StringICmp (canonical_name, protein_modifier_names[i]) == 0)
+      {
+        return eModifierType_Protein;
+      }
+    }
+    return eModifierType_SourceQual;   
+  }
+}
+
+static Boolean AllowMultipleValues (CharPtr mod_name)
+{
+  EModifierType mod_type;
+  Boolean       rval = FALSE;
+  
+  mod_type = GetModifierType (mod_name);
+  switch (mod_type)
+  {
+    case eModifierType_SourceQual:
+      if (! IsNonTextModifier (mod_name))
+      {
+        rval = TRUE;
+      }
+      break;
+    case eModifierType_CommonName:
+      rval = TRUE;
+      break;
+    case eModifierType_Organism:
+      rval = TRUE;
+      break;
+  }
+  return rval;
+}
+
+typedef enum 
+{
+  BRACKET_ERR_NO_ERR = 0,
+  BRACKET_ERR_MISMATCHED_BRACKETS,
+  BRACKET_ERR_MISSING_EQUALS,
+  BRACKET_ERR_MULT_EQUALS,
+  BRACKET_ERR_NO_MOD_NAME,
+  BRACKET_ERR_MISMATCHED_QUOTES
+} bracketing_err_num;
+
+static Char ExpectToken (CharPtr cp)
+{
+  CharPtr valstart;
+  
+  if (cp == NULL)
+  {
+    return 0;
+  }
+  else if (*cp == '[')
+  {
+    valstart = cp + 1 + StringSpn (cp + 1, " \t");
+    if (StringLen (valstart) > 3 
+        && (StringNICmp (valstart, "dna", 3) == 0 
+            || StringNICmp (valstart, "rna", 3) == 0
+            || StringNICmp (valstart, "orf", 3) == 0)
+        && *(valstart + 3 + StringSpn (valstart + 3, " \t")) == ']')
+    {
+      return ']';    
+    }
+    else
+    {
+      return '=';
+    }
+  }
+  else if (*cp == '=')
+  {
+    return ']';
+  }
+  else if (*cp == ']')
+  {
+    return '[';
+  }
+  else
+  {
+    return 0;
+  }
+}
+
+/* When we are looking for double-quotation marks to use for delimiting
+ * sections of a title that should not be parsed or values that may contain
+ * brackets, equals signs, or other reserved characters, skip over
+ * quotation marks that are preceded by the escape character (backslash).
+ * This allows quotation marks to be included in a quoted string.
+ */
+static CharPtr NextUnescapedQuote (CharPtr str)
+{
+  CharPtr cp;
+  
+  if (StringHasNoText (str))
+  {
+    return NULL;
+  }
+  cp = StringChr (str, '"');
+  if (cp != NULL && cp != str)
+  {
+    while (cp != NULL && *(cp - 1) == '\\')
+    {
+      cp = StringChr (cp + 1, '"');
+    }
+  }
+  return cp;  
+}
+
+/* This function steps backward from str_end until it has located 
+ * an unescaped double-quotation mark or it has reached the 
+ * start of the string (str_start).
+ */
+static CharPtr FindPreviousUnescapedQuote (CharPtr str_start, CharPtr str_end)
+{
+  CharPtr cp;
+  if (str_start == NULL || str_end == NULL || str_end < str_start)
+  {
+    return NULL;
+  }
+  
+  cp = str_end;
+  while (cp > str_start && (*cp != '"' || *(cp - 1) == '\\'))
+  {
+    cp--;
+  }
+  if (*cp != '"')
+  {
+    cp = NULL;
+  }
+  return cp;
+}
+
+
+/* This function finds the next bracketing token ([, =, or ]) in
+ * the string that is not enclosed by unescaped quotation marks.
+ */
+static CharPtr NextBracketToken (CharPtr str)
+{
+  CharPtr next_quote;
+  CharPtr cp;
+  
+  if (StringHasNoText (str))
+  {
+    return NULL;
+  }
+  
+  cp = str;
+  while (*cp != 0)
+  {
+    switch (*cp)
+    {
+      case '"':
+        if (cp == str || (*(cp - 1) != '\\'))
+        {
+          next_quote = NextUnescapedQuote (cp + 1);
+          if (next_quote == NULL)
+          {
+            return cp;
+          }
+          else
+          {
+            cp = next_quote + 1;;
+          }
+        }
+        else
+        {
+          cp++;
+        }
+        break;
+      case '[':
+      case ']':
+      case '=':
+        return cp;
+      default:
+        cp++;
+    }
+  }
+    
+  return NULL;
+}
+
+static Int4 DetectBadBracketing (CharPtr str)
+{
+  CharPtr cp;
+  Char    expected_token;
+  CharPtr last_token = NULL, namestart;
+  
+  if (StringHasNoText (str))
+  {
+    return BRACKET_ERR_NO_ERR;
+  }
+  
+  expected_token = '[';
+  cp = NextBracketToken (str);
+  while (cp != NULL)
+  {
+    switch (*cp)
+    {
+      case '"':
+        return BRACKET_ERR_MISMATCHED_QUOTES;
+        break;
+      case '[':
+      case ']':
+      case '=':
+        if (expected_token == *cp)
+        {
+          if (expected_token == '=' && last_token != NULL)
+          {
+            namestart = last_token + 1 + StringSpn (last_token + 1, " \t");
+            if (namestart == cp)
+            {
+              return BRACKET_ERR_NO_MOD_NAME;
+            }
+          }
+          expected_token = ExpectToken (cp);
+          last_token = cp;
+        }
+        else if (expected_token == '=')
+        {
+          if (cp - last_token - 1 == StringSpn (last_token + 1, " \t"))
+          {
+            return BRACKET_ERR_MISMATCHED_BRACKETS;
+          }
+          else
+          {
+            return BRACKET_ERR_MISSING_EQUALS;
+          }
+        }
+        else if (*cp == '=')
+        {
+          if (expected_token == ']')
+          {
+            return BRACKET_ERR_MULT_EQUALS;
+          }
+          else
+          {
+            return BRACKET_ERR_MISMATCHED_BRACKETS;
+          }
+        }
+        else
+        {
+          return BRACKET_ERR_MISMATCHED_BRACKETS;
+        }
+        break;
+    }
+    cp = NextBracketToken (cp + 1);
+  }
+  
+  if (cp == NULL && expected_token != '[')
+  {
+    return BRACKET_ERR_MISMATCHED_BRACKETS;
+  }
+  
+  return BRACKET_ERR_NO_ERR;
+}
+
+static ModifierInfoPtr 
+ParseOneBracketedModifier 
+(CharPtr      str, 
+ CharPtr PNTR bracket_start,
+ CharPtr PNTR bracket_stop)
+{
+  CharPtr         start, stop, eq_loc;
+  ModifierInfoPtr mip;
+  Int4            value_len, name_len;
+  CharPtr         canonical_name;
+  
+  start = NextBracketToken (str);
+  while (start != NULL && *start != '[')
+  {
+    start = NextBracketToken (start + 1);
+  }
+  if (start == NULL) return NULL;
+  eq_loc = NextBracketToken (start + 1);
+  if (eq_loc == NULL) return NULL;
+  if (*eq_loc == ']')
+  {
+    stop = eq_loc;
+  }
+  else if (*eq_loc == '=')
+  {
+    stop = NextBracketToken (eq_loc + 1);
+  }
+  else
+  {
+    return NULL;
+  }
+  
+  if (stop == NULL || *stop != ']') return NULL;
+      
+  mip = ModifierInfoNew();
+  if (mip == NULL) return NULL;
+  
+  /* copy in modifier name */
+  name_len = eq_loc - start + 1;
+  mip->name = (CharPtr) MemNew (name_len * sizeof (Char));
+  if (mip->name == NULL)
+  {
+    mip = ModifierInfoFree (mip);
+    return NULL;
+  }
+  StringNCpy (mip->name, start + 1, name_len - 2);
+  mip->name [name_len - 1] = 0;
+  TrimSpacesAroundString (mip->name);
+  canonical_name = GetCanonicalName (mip->name);
+  if (canonical_name != mip->name)
+  {
+    mip->name = MemFree (mip->name);
+    mip->name = StringSave (canonical_name);
+  }
+  if (StringICmp (mip->name, "note") == 0)
+  {
+    mip->name = MemFree (mip->name);
+    mip->name = StringSave ("Note-SubSrc");
+  }
+
+  /* [orf], [rna], and [dna] don't have values */  
+  if (stop > eq_loc)
+  {
+    value_len = stop - eq_loc + 1;
+    mip->value = (CharPtr) MemNew (value_len * sizeof (Char));
+    if (mip->value == NULL)
+    {
+      mip = ModifierInfoFree (mip);
+      return NULL;
+    }
+  
+    StringNCpy (mip->value, eq_loc + 1, value_len - 2);
+    mip->value [value_len - 1] = 0;
+    TrimSpacesAroundString (mip->value);
+  }
+  
+  mip->modtype = GetModifierType (mip->name);
+  if (mip->modtype == eModifierType_SourceQual)
+  {
+    mip->subtype = FindTypeForModNameText (mip->name);
+  }
+  else
+  {
+    mip->subtype = 0;
+  }
+  
+  if (bracket_start != NULL)
+  {
+    *bracket_start = start;
+  }
+  
+  if (bracket_stop != NULL)
+  {
+    *bracket_stop = stop;
+  }
+  
+  return mip;
+}
+
+static ValNodePtr ParseAllBracketedModifiers (CharPtr str)
+{
+  CharPtr         stop, cp;
+  ValNodePtr      list = NULL;
+  ModifierInfoPtr mip;
+  
+  cp = str;
+  mip = ParseOneBracketedModifier (cp, NULL, &stop);
+  while (mip != NULL && stop != NULL)
+  {
+    ValNodeAddPointer (&list, 0, mip);
+    cp = stop + 1;
+    mip = ParseOneBracketedModifier (cp, NULL, &stop);  
+  }
+  return list;
+}
+
+static Boolean IsValueInEnumAssoc (CharPtr value, EnumFieldAssocPtr eap)
+{
+  while (eap != NULL && eap->name != NULL) 
+  {
+    if (StringICmp (eap->name, value) == 0)
+    {
+      return TRUE;
+    }
+    eap++;
   }
   return FALSE;
 }
 
-static CharPtr FindValuePairInDefLine (CharPtr mod_name, CharPtr def_line)
+static Int4 GeneticCodeFromStringAndList (CharPtr str, ValNodePtr list)
 {
-  CharPtr mod_name_loc, bracket_loc, eq_loc;
+  while (list != NULL)
+  {
+    if (StringICmp (str, list->data.ptrvalue) == 0)
+    {
+      return list->choice;
+    }
+    list = list->next;
+  }
+  return 0;
+}
+
+static Int4 GeneticCodeFromString (CharPtr str)
+{
+  ValNodePtr gencodelist;
+  Int4       gcode = 0;
+  
+  if (StringHasNoText (str))
+  {
+    gcode = 0;
+  }
+  else if (isdigit (str[0]))
+  {
+    gcode = atoi (str);
+  }
+  else
+  {
+    gencodelist = GetGeneticCodeValNodeList ();
+    gcode = GeneticCodeFromStringAndList (str, gencodelist);
+    gencodelist = ValNodeFreeData (gencodelist);
+  }
+  return gcode;
+}
+
+static Int4 MolTypeFromString (CharPtr str)
+{
+  EnumFieldAssocPtr  eap;
+
+  if (StringICmp (str, "dna") == 0)
+  {
+    return 253;
+  }
+  else if (StringICmp (str, "rna") == 0)
+  {
+    return 254;
+  }
+  else if (StringICmp (str, "genomic") == 0)
+  {
+    return 253;
+  }
+  for (eap = biomol_nucGen_alist; eap != NULL && eap->name != NULL; eap++)
+  {
+    if (StringICmp (eap->name, str) == 0)
+    {
+      return eap->value;
+    }
+  }
+  for (eap = biomol_nucX_alist; eap != NULL && eap->name != NULL; eap++)
+  {
+    if (StringICmp (eap->name, str) == 0)
+    {
+      return eap->value;
+    }
+    else if (eap->name [0] == 'm'
+             && StringICmp (eap->name, "mRNA [cDNA]") == 0
+             && StringICmp (str, "mRNA") == 0)
+    {
+      return eap->value;
+    }
+  }
+  return 0;
+}
+
+
+/* This function looks at a parsed modifier structure to determine whether the
+ * value is acceptable for this modifier type.
+ */
+static Boolean ModifierHasInvalidValue (ModifierInfoPtr mip)
+{
+  Boolean rval = FALSE;
+  
+  if (mip != NULL
+      && ((mip->modtype == eModifierType_Location
+  	          && !IsValueInEnumAssoc (mip->value, biosource_genome_simple_alist))
+  	    || (mip->modtype == eModifierType_Origin
+  	          && !IsValueInEnumAssoc (mip->value, biosource_origin_alist))      
+  	    || (mip->modtype == eModifierType_Topology
+  	          && !IsValueInEnumAssoc (mip->value, topology_nuc_alist))
+  	    || (mip->modtype == eModifierType_Molecule
+  	          && !IsValueInEnumAssoc (mip->value, molecule_alist))
+  	    || ((mip->modtype == eModifierType_GeneticCode
+  	              || mip->modtype == eModifierType_NucGeneticCode
+  	              || mip->modtype == eModifierType_MitoGeneticCode)
+  	             && GeneticCodeFromString (mip->value) == 0)
+  	    || (mip->modtype == eModifierType_MolType
+  	             && MolTypeFromString (mip->value) == 0)
+  	    || (mip->modtype == eModifierType_SourceQual
+  	             && IsNonTextModifier (mip->name)
+  	             && !StringHasNoText (mip->value))))
+  {
+    rval = TRUE;
+  }
+
+  return rval;
+}
+
+/* This section contains functions for finding, changing, and removing 
+ * bracketed value pairs in definition lines.
+ * These functions include:
+ *
+ * FindValuePairInDefLine - returns pointer to position in title where 
+ *                          the first bracketed pair with the specified 
+ *                          modifier name (or one of its aliases) occurs.
+ *                          Useful for non-text modifiers, which do not
+ *                          have values.
+ *
+ * FindValueFromPairInDefline - returns value from the first bracketed
+ *                              pair in the title with the specified
+ *                              modifier name (or one of its aliases).
+ *
+ * RemoveValueFromDefline - removes the first bracketed pair in the title
+ *                          with the specified modifier name (or one of its aliases)
+ *
+ * ReplaceValueInThisValuePair - replaces the value in the specified value pair.
+ *                               if new value is empty, pair is removed.
+ *
+ * ReplaceValueInOneDefLine - finds the first bracketed pair in the title
+ *                            with the specified modifier name (or one of its aliases).
+ *                            If a pair is found, the value in that pair is replaced
+ *                            with the new value; otherwise a new pair is added to
+ *                            the title.  
+ *
+ * ReplaceOneModifierValue - finds all bracketed pairs in a title with the specified
+ *                           modifier name or one of its aliases and the specified value
+ *                           and replaces that value with the new value (or removes the
+ *                           pair, if the new value is empty.
+ *
+ * RemoveAllDuplicatePairsFromOneTitle - removes all bracketed pairs that are duplicates
+ *                                       in name and value of another pair already in
+ *                                       the title.
+ *
+ * RemoveMeaninglessEmptyPairsFromOneTitle - removes bracketed pairs without values
+ *                                           that are not non-text modifiers
+ */
+
+static CharPtr FindValuePairInDefLine (CharPtr mod_name, CharPtr def_line, CharPtr PNTR valstop)
+{
+  CharPtr         cp, start, stop;
+  ModifierInfoPtr mip;
+  CharPtr         canonical_name;
   
   if (mod_name == NULL || def_line == NULL)
   {
     return NULL;
   }
   
-  mod_name_loc = StringISearch (def_line, mod_name);
-  while (mod_name_loc != NULL)
+  cp = NextBracketToken (def_line);
+  if (cp == NULL)
   {
-    if (mod_name_loc == def_line)
-    {
-      /* no bracket - skip to next occurence */
-    }
-    else
-    {
-      bracket_loc = mod_name_loc - 1;
-      while (bracket_loc != def_line && isspace (*bracket_loc))
-      {
-        bracket_loc--;
-      }
-      if (*bracket_loc == '[')
-      {
-        eq_loc = mod_name_loc + StringLen (mod_name);
-        while (*eq_loc != 0 && *eq_loc != '=')
-        {
-          eq_loc++;
-        }
-        if (*eq_loc == '=')
-        {
-          return bracket_loc;
-        }
-        else
-        {
-          /* no equals sign - skip to next occurrence */
-        }
-      }
-      else
-      {
-        /* no bracket - skip to next occurrence */
-      }
-    }
-    mod_name_loc = StringISearch (mod_name_loc + 1, mod_name);
+    return NULL;
   }
-  return NULL;
+  
+  canonical_name = GetCanonicalName (mod_name);
+  
+  mip = ParseOneBracketedModifier (cp, &start, &stop);
+  while (mip != NULL && start != NULL && stop != NULL 
+         && StringICmp (mip->name, canonical_name) != 0)
+  {
+    cp = NextBracketToken (stop + 1);
+    mip = ModifierInfoFree (mip);
+    mip = ParseOneBracketedModifier (cp, &start, &stop);
+  }
+  
+  if (mip != NULL && StringICmp (mip->name, canonical_name) == 0)
+  {
+    mip = ModifierInfoFree (mip);
+    if (valstop != NULL)
+    {
+      *valstop = stop;
+    }
+    return start;
+  }
+  else
+  {
+    mip = ModifierInfoFree (mip);
+    return NULL;
+  }
+}
+
+static CharPtr FindNthValuePairInDefLine (CharPtr title, CharPtr val_name, Int4 val_num, CharPtr PNTR p_val_end)
+{
+  CharPtr val_loc, val_end = NULL;
+  Int4    title_val_num;
+  
+  if (StringHasNoText (val_name))
+  {
+    return NULL;
+  }
+  
+  val_loc = FindValuePairInDefLine (val_name, title, &val_end);
+  title_val_num = 0;
+  while (val_loc != NULL && val_end != NULL && title_val_num != val_num)
+  {
+    val_loc = FindValuePairInDefLine (val_name, val_end + 1, &val_end);
+    title_val_num++;
+  }
+  if (p_val_end != NULL)
+  {
+    *p_val_end = val_end;
+  }
+  return val_loc;
+}
+
+static CharPtr FindValueFromPairInDefline (CharPtr mod_name, CharPtr def_line)
+{
+  CharPtr bracket_start, eq_loc, bracket_end;
+  CharPtr new_val = NULL;
+  Int4 new_val_len;
+  Boolean alias_found = FALSE;
+  
+  bracket_start = FindValuePairInDefLine (mod_name, def_line, &bracket_end);
+  if (bracket_start == NULL || bracket_end == NULL)
+  {
+    return NULL;
+  }
+  
+  eq_loc = NextBracketToken (bracket_start + 1);
+  if (eq_loc == NULL || *eq_loc != '=')
+  {
+    return NULL;
+  }
+    
+  new_val_len = bracket_end - eq_loc;
+  new_val = (CharPtr) MemNew (new_val_len * sizeof (Char));
+  if (new_val != NULL)
+  {
+    StringNCpy (new_val, eq_loc + 1, new_val_len - 1);
+    new_val [new_val_len - 1] = 0;
+  }
+  TrimSpacesAroundString (new_val);
+  return new_val;
+}
+
+static CharPtr FindValueFromPairInDeflineBeforeCharPtr (CharPtr mod_name, CharPtr def_line, CharPtr cp)
+{
+  CharPtr bracket_start, bracket_end;
+  
+  bracket_start = FindValuePairInDefLine (mod_name, def_line, &bracket_end);
+  if (bracket_start == NULL || (cp != NULL && bracket_start > cp))
+  {
+    return NULL;
+  }
+  else
+  {
+    return FindValueFromPairInDefline (mod_name, bracket_start);
+  }
 }
 
 static void RemoveValuePairFromDefline (CharPtr pair_start, CharPtr pair_end, CharPtr defline)
@@ -266,82 +1759,161 @@ static void RemoveValuePairFromDefline (CharPtr pair_start, CharPtr pair_end, Ch
   *dst = 0;
 }
 
-static CharPtr 
-ReplaceValueInOneDefLine 
+static void RemoveValueFromDefline (CharPtr mod_name, CharPtr def_line)
+{
+  CharPtr bracket_start, bracket_end;
+  
+  bracket_start = FindValuePairInDefLine (mod_name, def_line, &bracket_end);
+  if (bracket_start == NULL || bracket_end == NULL)
+  {
+    return;
+  }
+  
+  RemoveValuePairFromDefline (bracket_start, bracket_end + 1, def_line);
+}
+
+static CharPtr AddQuotesToValueWithBrackets (CharPtr orig_value)
+{
+  CharPtr first_bracket, first_quote;
+  CharPtr cp, new_value = NULL, tmp_value;
+  Char    bracket_buf [2];
+  Int4    offset;
+  
+  if (orig_value == NULL)
+  {
+    return NULL;
+  }
+  else if (StringHasNoText (orig_value))
+  {
+    return StringSave (orig_value);
+  }
+  
+  new_value = StringSave (orig_value);
+  
+  first_bracket = StringChr (new_value, '[');
+  if (first_bracket == NULL)
+  {
+    first_bracket = StringChr (new_value, ']');
+  }
+  
+  first_quote = NextUnescapedQuote (new_value);
+  
+  if (first_bracket == NULL && first_quote == NULL)
+  {
+    return new_value;
+  }
+  else if (first_bracket != NULL && first_quote == NULL)
+  {
+    tmp_value = (CharPtr) MemNew ((StringLen (new_value) + 3) * sizeof (Char));
+    if (tmp_value == NULL)
+    {
+      new_value = MemFree (new_value);
+      return NULL;
+    }
+    StringCat (tmp_value, "\"");
+    StringCat (tmp_value, new_value);
+    StringCat (tmp_value, "\"");
+    new_value = MemFree (new_value);
+    new_value = tmp_value;
+    return new_value;
+  }
+  
+  cp = orig_value;
+  
+  bracket_buf [0] = 0;
+  bracket_buf [1] = 0;
+  
+  while (*cp != 0)
+  {
+    if (*cp == '"' && (cp == orig_value || *(cp - 1) != '\\'))
+    {
+      cp = NextUnescapedQuote (cp + 1);
+      if (cp == NULL)
+      {
+        tmp_value = (CharPtr) MemNew ((StringLen (new_value) + 3) * sizeof (Char));
+        if (tmp_value == NULL)
+        {
+          new_value = MemFree (new_value);
+          return NULL;
+        }
+        StringCpy (tmp_value, new_value);
+        if (new_value [StringLen (new_value) - 1] == '\\')
+        {
+          StringCat (tmp_value, " ");
+        }
+        StringCat (tmp_value, "\"");
+        return tmp_value;
+      }
+      else
+      {
+        cp++;
+      }
+    }
+    else if (*cp == '[' || *cp == ']')
+    {
+      tmp_value = (CharPtr) MemNew ((StringLen (new_value) + 3) * sizeof (Char));
+      if (tmp_value == NULL)
+      {
+        new_value = MemFree (new_value);
+        return new_value;
+      }
+      offset = cp - new_value;
+      StringNCpy (tmp_value, new_value, offset);
+      StringCat (tmp_value, "\"");
+      bracket_buf [0] = *cp;
+      StringCat (tmp_value, bracket_buf);
+      StringCat (tmp_value, "\"");
+      StringCat (tmp_value, cp + 1);
+      new_value = MemFree (new_value);
+      new_value = tmp_value;
+      cp = new_value + offset + 3;      
+    }
+    else
+    {
+      cp++;
+    }
+  }
+  
+  return new_value;
+}
+
+static CharPtr
+ReplaceValueInThisValuePair 
 (CharPtr orig_defline,
- CharPtr value_name, 
+ CharPtr value_loc, 
+ CharPtr value_name,
+ CharPtr end_loc, 
  CharPtr new_value)
 {
   CharPtr new_title;
-  Boolean is_org = FALSE;
   Int4    new_title_len = 0;
   Boolean is_nontext;
-  CharPtr value_loc = NULL, end_loc = NULL;
   CharPtr tmp_name;
-  
-  if (StringHasNoText (value_name))
+  CharPtr fixed_value;
+
+  if (StringHasNoText (orig_defline) || value_loc == NULL || end_loc == NULL
+      || *value_loc != '[' || *end_loc != ']')
   {
     return orig_defline;
   }
+
+  fixed_value = AddQuotesToValueWithBrackets (new_value);
   
-  if (StringICmp (value_name, "organism") == 0)
+  if (StringHasNoText (fixed_value))
   {
-    value_loc = FindValuePairInDefLine ("organism", orig_defline);
-    if (value_loc == NULL)
-    {
-      value_loc = FindValuePairInDefLine ("org", orig_defline);
-    }
-    is_org = TRUE;
+    RemoveValuePairFromDefline (value_loc, end_loc, orig_defline);
   }
   else
   {
-    value_loc = FindValuePairInDefLine (value_name, orig_defline);
-  }
-  
-  if (value_loc != NULL)
-  {
-    end_loc = StringChr (value_loc, ']');
-    if (end_loc == NULL)
-    {
-      /* no end bracket */
-      value_loc = NULL;
-    }
-    else
-    {
-      end_loc++;
-    }
-  }
-  
-  if (StringHasNoText (new_value))
-  {
-    if (value_loc == NULL)
-    {
-      /* old line had no value, no new value provided, no change */
-    }
-    else
-    {
-      RemoveValuePairFromDefline (value_loc, end_loc, orig_defline);
-    }
-  }
-  else
-  {
-    /* keep part before pair, after pair, insert new value in position */
+    /* keep part before pair and after pair, insert new value in position */
     new_title_len = StringLen (orig_defline)
                                + StringLen (value_name)
-                               + StringLen (new_value)
+                               + StringLen (fixed_value)
                                + 5;
     new_title = MemNew (new_title_len * sizeof (Char));
     if (new_title != NULL)
     {
-      if (value_loc == NULL)
-      {
-        if (!StringHasNoText (orig_defline))
-        {
-          StringCpy (new_title, orig_defline);
-          StringCat (new_title, " ");
-        }
-      }
-      else if (value_loc > orig_defline)
+      if (value_loc > orig_defline)
       {
         StringNCpy (new_title, orig_defline, value_loc - orig_defline);
       }
@@ -354,12 +1926,19 @@ ReplaceValueInOneDefLine
       StringCat (new_title, "=");
       if (!is_nontext)
       {
-        StringCat (new_title, new_value);
+        StringCat (new_title, fixed_value);
       }
       StringCat (new_title, "]");
       if (end_loc != NULL && *end_loc != 0)
       {
-        StringCat (new_title, end_loc);
+        if (*end_loc == ']')
+        {
+          StringCat (new_title, end_loc + 1);
+        }
+        else
+        {
+          StringCat (new_title, end_loc);
+        }
       }
       orig_defline = MemFree (orig_defline);
       orig_defline = new_title;
@@ -367,7 +1946,414 @@ ReplaceValueInOneDefLine
   }  
   TrimSpacesAroundString (orig_defline);
   
+  fixed_value = MemFree (fixed_value);
+  
   return orig_defline;
+}
+
+static CharPtr InsertStringAtOffset (CharPtr old_string, CharPtr new_string, Int4 offset)
+{
+  Int4    new_len;
+  CharPtr new_str = NULL;
+  
+  if (old_string == NULL)
+  {
+    new_str = StringSave (new_string);
+  }
+  else if (new_string == NULL)
+  {
+    new_str =  StringSave (old_string);
+  }
+  else
+  {
+    new_len = StringLen (old_string) + StringLen (new_string) + 1;
+    new_str = (CharPtr) MemNew (new_len * sizeof (Char));
+    if (new_str != NULL)
+    {
+      StringNCpy (new_str, old_string, offset);
+      StringCat (new_str, new_string);
+      if (offset < StringLen (old_string))
+      {
+        StringCat (new_str, old_string + offset);
+      }
+    }
+  }
+  return new_str;
+}
+
+static CharPtr 
+InsertValuePairAtOffset 
+(CharPtr orig_defline, 
+ CharPtr value_name, 
+ CharPtr value_str,
+ Int4    offset)
+{
+  CharPtr pair_string, fixed_value;
+  
+  if (StringHasNoText (value_name) || offset < 0)
+  {
+    return orig_defline;
+  }
+  
+  fixed_value = AddQuotesToValueWithBrackets (value_str);
+  
+  pair_string = (CharPtr) MemNew ((StringLen (value_name) + StringLen (fixed_value) + 6) * sizeof (Char));
+  if (pair_string != NULL)
+  {
+    if (IsNonTextModifier (value_name))
+    {
+      sprintf (pair_string, "[%s=]", value_name);
+    }
+    else
+    {
+      sprintf (pair_string, "[%s=%s]", value_name, fixed_value);
+    }
+    orig_defline = InsertStringAtOffset (orig_defline, pair_string, offset);
+    pair_string = MemFree (pair_string);
+  }
+  fixed_value = MemFree (fixed_value);
+  return orig_defline;
+}
+
+
+static CharPtr
+ReplaceValueInOneDefLineForOrganism
+(CharPtr orig_defline,
+ CharPtr value_name, 
+ CharPtr new_value,
+ CharPtr organism)
+{ 
+  Int4    new_title_len = 0;
+  CharPtr value_loc = NULL, end_loc = NULL;
+  CharPtr fixed_value;
+  CharPtr next_org_loc = NULL, org_stop = NULL, first_org_stop = NULL;
+  CharPtr first_organism;
+  
+  if (StringHasNoText (value_name))
+  {
+    return orig_defline;
+  }
+  
+  /* if we want to add a value to a specific organism, we need to make sure
+   * that we insert or replace a value after that organism name but before
+   * the next organism name.
+   */
+   
+  if (organism != NULL)
+  {
+    if (organism < orig_defline || organism - orig_defline > StringLen (orig_defline))
+    {
+      organism = NULL;
+    }
+  }
+  
+  if (organism != NULL)
+  {
+    if (organism != FindValuePairInDefLine ("organism", organism, &org_stop))
+    {
+      return orig_defline;
+    }
+  }
+  
+  first_organism = FindValuePairInDefLine ("organism", orig_defline, &first_org_stop);
+
+  
+  if (organism == NULL)
+  {
+    organism = first_organism;
+    org_stop = first_org_stop;
+  }
+  
+  if (org_stop != NULL)
+  {
+    next_org_loc = FindValuePairInDefLine ("organism", org_stop + 1, NULL);
+  }
+  
+  fixed_value = AddQuotesToValueWithBrackets (new_value);
+  
+  /* if this is the first organism, or if we have no organism, start looking for
+   * a value to replace at the beginning of the line.
+   */
+  if (organism == NULL || organism == first_organism)
+  {
+    value_loc = FindValuePairInDefLine (value_name, orig_defline, &end_loc);
+  }
+  else
+  {     
+    value_loc = FindValuePairInDefLine (value_name, organism, &end_loc);
+  }
+  
+  if (next_org_loc != NULL && value_loc > next_org_loc)
+  {
+    value_loc = NULL;
+  }
+  
+  if (StringHasNoText (fixed_value))
+  {
+    if (value_loc == NULL)
+    {
+      /* old line had no value, no new value provided, no change */
+    }
+    else
+    {
+      RemoveValuePairFromDefline (value_loc, end_loc, orig_defline);
+    }
+  }
+  else
+  {
+    if (value_loc == NULL)
+    {
+      /* add new value just before next organism */
+      if (next_org_loc == NULL)
+      {
+        orig_defline = InsertValuePairAtOffset (orig_defline, value_name, new_value,
+                                                StringLen (orig_defline));
+      }
+      else
+      {
+        orig_defline = InsertValuePairAtOffset (orig_defline, value_name, new_value,
+                                                next_org_loc - orig_defline);
+      }
+    }
+    else
+    {
+      /* replace this value */
+      orig_defline = ReplaceValueInThisValuePair (orig_defline, value_loc, value_name,
+                                                  end_loc, new_value);
+    }
+  }  
+  TrimSpacesAroundString (orig_defline);
+  
+  fixed_value = MemFree (fixed_value);
+  
+  return orig_defline;
+}
+
+static CharPtr 
+ReplaceValueInOneDefLine 
+(CharPtr orig_defline,
+ CharPtr value_name, 
+ CharPtr new_value)
+{
+  CharPtr value_loc = NULL, end_loc = NULL;
+  
+  if (StringHasNoText (value_name))
+  {
+    return orig_defline;
+  }
+  
+  value_loc = FindValuePairInDefLine (value_name, orig_defline, &end_loc);
+
+  if (value_loc == NULL)
+  {
+    if (StringHasNoText (new_value))
+    {
+      /* old line had no value, no new value provided, no change */    
+      return orig_defline;
+    }
+    else
+    {
+      /* make sure value is added for first organism */
+      orig_defline = ReplaceValueInOneDefLineForOrganism (orig_defline, value_name,
+                                                          new_value, NULL);        
+    }
+  }
+  else
+  {
+    orig_defline = ReplaceValueInThisValuePair (orig_defline, value_loc, value_name, end_loc, new_value);
+  }  
+  
+  return orig_defline;
+}
+
+static CharPtr 
+ReplaceOneModifierValue 
+(CharPtr title,
+ CharPtr orig_name, 
+ CharPtr orig_value,
+ CharPtr repl_value,
+ Boolean is_nontext,
+ Boolean copy_to_note)
+{
+  CharPtr bracket_loc, eq_loc, end_bracket_loc, new_title;
+  Int4    new_title_len;
+  CharPtr orig_note, new_note;
+  Boolean any_replaced = FALSE;
+  
+  if (StringHasNoText (title)
+      || StringHasNoText (orig_name))
+  {
+    return title;
+  }
+  
+  bracket_loc = FindValuePairInDefLine (orig_name, title, &end_bracket_loc);
+  while (bracket_loc != NULL && end_bracket_loc != NULL)
+  {  
+    eq_loc = NextBracketToken (bracket_loc + 1);
+    if (eq_loc == NULL || *eq_loc != '=')
+    {
+      return title;
+    }
+    if ((StringNCmp (orig_value, eq_loc + 1, StringLen (orig_value)) == 0
+        && StringLen (orig_value) == end_bracket_loc - eq_loc - 1)
+        || (StringHasNoText (orig_value) 
+            && StringSpn (eq_loc + 1, " \t") == end_bracket_loc - eq_loc - 1))
+    {
+      new_title_len = StringLen (title) + StringLen (repl_value) - StringLen (orig_value) + 1;
+      new_title = (CharPtr) MemNew (new_title_len * sizeof (Char));
+      if (new_title == NULL)
+      {
+        return title;
+      }
+      if (is_nontext)
+      {
+        if (StringHasNoText (repl_value))
+        {
+          StringNCpy (new_title, title, bracket_loc - title);
+          StringCat (new_title, end_bracket_loc + 1 + StringSpn (end_bracket_loc, " "));
+        }
+        else
+        {
+          StringNCpy (new_title, title, eq_loc - title + 1);
+          StringCat (new_title, end_bracket_loc);
+        }
+      }
+      else if (StringHasNoText (repl_value))
+      {
+        /* remove pair completely */
+        StringNCpy (new_title, title, bracket_loc - title);
+        StringCat (new_title, end_bracket_loc + 1);
+      }
+      else
+      {
+        StringNCpy (new_title, title, eq_loc - title + 1);
+        StringCat (new_title, repl_value);
+        StringCat (new_title, end_bracket_loc);        
+      }
+
+      title = MemFree (title);
+      title = new_title;
+      any_replaced = TRUE;
+      bracket_loc = FindValuePairInDefLine (orig_name, title, &end_bracket_loc);
+    }
+    else
+    {
+      bracket_loc = FindValuePairInDefLine (orig_name, end_bracket_loc, &end_bracket_loc);
+    }
+  }
+  
+  if (any_replaced && copy_to_note && !StringHasNoText (repl_value) && !StringHasNoText (orig_value))
+  {
+    orig_note = FindValueFromPairInDefline ("note", title);
+    if (StringHasNoText (orig_note))
+    {
+      new_note = (CharPtr) MemNew ((StringLen (orig_name) 
+                                    + StringLen (orig_value) + 8) * sizeof (Char));
+      if (new_note != NULL)
+      {
+        sprintf (new_note, "%s was %s", orig_name, orig_value);
+      }
+    }
+    else
+    {
+      new_note = (CharPtr) MemNew ((StringLen (orig_note)
+                                    + StringLen (orig_name) 
+                                    + StringLen (orig_value) + 8) * sizeof (Char));
+      if (new_note != NULL)
+      {
+        sprintf (new_note, "%s; %s was %s", orig_note, orig_name, orig_value);
+      }
+    }
+
+    if (new_note != NULL)
+    {
+      title = ReplaceValueInOneDefLine (title, "note", new_note); 
+    }
+    
+    orig_note = MemFree (orig_note);
+    new_note = MemFree (new_note);
+  }
+  
+  return title;
+}
+
+static CharPtr RemoveAllDuplicatePairsFromOneTitle (CharPtr title)
+{
+  CharPtr         start_bracket, end_bracket, tmp_title, new_title;
+  ModifierInfoPtr mip;
+  Int4            offset;
+
+  mip = ParseOneBracketedModifier (title, &start_bracket, &end_bracket);
+  while (mip != NULL && start_bracket != NULL && end_bracket != NULL)
+  {
+    offset = end_bracket - title + 1;
+    tmp_title = StringSave (title + offset);
+    tmp_title = ReplaceOneModifierValue (tmp_title, mip->name, mip->value, NULL,
+                                     IsNonTextModifier (mip->name), FALSE);
+    new_title = (CharPtr) MemNew ((StringLen (tmp_title) + offset + 1)* sizeof (Char));
+    if (new_title != NULL)
+    {
+      StringNCpy (new_title, title, offset);
+      StringCat (new_title, tmp_title);
+    }
+    tmp_title = MemFree (tmp_title);
+    title = MemFree (title);
+    title = new_title;
+    mip = ModifierInfoFree (mip);
+    mip = ParseOneBracketedModifier (title + offset, &start_bracket, &end_bracket);
+  }
+  mip = ModifierInfoFree (mip);
+  return title;
+}
+
+static void ShiftString (CharPtr str, Int4 shift_size)
+{
+  CharPtr src, dst;
+  
+  if (str == NULL)
+  {
+    return;
+  }
+  
+  if (shift_size > StringLen (str))
+  {
+    *str = 0;
+  }
+  else
+  {
+    src = str + shift_size;
+    dst = str;
+    while (*src != 0)
+    {
+      *dst = *src;
+      dst++;
+      src++;
+    }
+    *dst = 0;
+  }  
+}
+
+static void RemoveMeaninglessEmptyPairsFromOneTitle (CharPtr title)
+{
+  CharPtr         start_bracket, end_bracket;
+  ModifierInfoPtr mip;
+
+  mip = ParseOneBracketedModifier (title, &start_bracket, &end_bracket);
+  while (mip != NULL && start_bracket != NULL && end_bracket != NULL)
+  {
+    if (StringHasNoText (mip->value) && ! IsNonTextModifier (mip->name))
+    {
+      ShiftString (start_bracket, end_bracket - start_bracket + 1);
+      mip = ModifierInfoFree (mip);
+      mip = ParseOneBracketedModifier (start_bracket, &start_bracket, &end_bracket);
+    }
+    else
+    {
+      mip = ModifierInfoFree (mip);
+      mip = ParseOneBracketedModifier (end_bracket + 1, &start_bracket, &end_bracket);
+    }
+  }
+  mip = ModifierInfoFree (mip);
 }
 
 static void ApplyOneModToSeqEntry (SeqEntryPtr sep, CharPtr mod_name, CharPtr mod_value)
@@ -420,6 +2406,772 @@ static void ApplyOneModToSeqEntry (SeqEntryPtr sep, CharPtr mod_name, CharPtr mo
   
 }
 
+static ModifierInfoPtr MakeModifierInfoFromNameAndValue (CharPtr value_name, CharPtr value_string)
+{
+  ModifierInfoPtr mip;
+  CharPtr tmp_pair;
+  CharPtr fixed_value;
+
+  fixed_value = AddQuotesToValueWithBrackets (value_string);  
+  tmp_pair = (CharPtr) MemNew ((StringLen (value_name) + StringLen (fixed_value) + 4));
+  if (tmp_pair == NULL)
+  {
+    return NULL;
+  }
+  sprintf (tmp_pair, "[%s=%s]", value_name == NULL ? "" : value_name,
+                             fixed_value == NULL ? "" : fixed_value);
+  mip = ParseOneBracketedModifier (tmp_pair, NULL, NULL);
+  tmp_pair = MemFree (tmp_pair);
+  fixed_value = MemFree (fixed_value);
+  return mip;
+}
+
+/* This section is used to import tables of modifiers. */
+static CharPtr 
+ApplyImportModToTitle 
+(CharPtr title, 
+ CharPtr value_name, 
+ CharPtr value_string,
+ Boolean erase_where_blank,
+ Boolean parse_multiple)
+{
+  ModifierInfoPtr mip;
+  CharPtr next_semi, val_start, title_loc, title_end;
+  CharPtr insert_point;
+  Int4    insert_offset, title_val_num;
+  Char    val_save_ch;
+
+  if (StringHasNoText (value_name))
+  {
+    return title;
+  }
+  
+  if (!erase_where_blank && StringHasNoText (value_string))
+  {
+    return title;
+  }
+  
+  mip = MakeModifierInfoFromNameAndValue (value_name, value_string);
+
+  if (mip == NULL 
+      || (mip->modtype == eModifierType_SourceQual
+        	&& mip->subtype == 255
+  	      && StringICmp (mip->name, "note-subsrc") != 0 
+  	      && StringICmp (mip->name, "note-orgmod") != 0))
+  {
+    mip = ModifierInfoFree (mip);
+    return title;
+  }
+  
+  if (erase_where_blank && StringHasNoText (value_string))
+  {
+    RemoveValueFromDefline (value_name, title);
+  }
+  else if (parse_multiple
+           && value_string [0] == '(' 
+           && value_string [StringLen (value_string) - 1] == ')'
+           && (next_semi = StringChr (value_string, ';')) != NULL)
+  {
+    val_start = value_string + 1;
+    title_val_num = 0;
+    while (next_semi != NULL)
+    {
+      /* temporarily truncate at end of value */
+      val_save_ch = *next_semi;
+      *next_semi = 0;
+      
+      title_loc = FindNthValuePairInDefLine (title, value_name, title_val_num, &title_end);
+      if (StringHasNoText (val_start))
+      {
+        if (title_loc != NULL)
+        {
+          RemoveValuePairFromDefline (title_loc, title_end, title);
+        }
+        else
+        {
+          /* if text is empty and there is no value pair, nothing to do */
+        }
+        /* note - we do not increment title_val_num here because either we've
+         * removed a value or there are no values left.
+         */
+      }
+      else
+      {
+        if (title_loc == NULL)
+        {
+          /* need to insert a new value - if organism name, put at end of title,
+           * otherwise insert before second organism name if any
+           */
+          if (StringICmp (value_name, "organism") == 0)
+          {
+            insert_offset = StringLen (title);
+          }
+          else
+          {
+            insert_point = FindNthValuePairInDefLine (title, "organism", 1, NULL);
+            if (insert_point == NULL) 
+            {
+              insert_offset = StringLen (title);
+            }
+            else
+            {
+              insert_offset = insert_point - title;
+            }
+          }
+          title = InsertValuePairAtOffset (title, value_name, val_start, insert_offset);
+        }
+        else
+        {
+          /* replace values in order */
+          title = ReplaceValueInThisValuePair (title, title_loc, value_name, 
+                                               title_end, val_start);
+        }
+        
+        title_val_num++;
+      }
+      
+      /* replace character */
+      *next_semi = val_save_ch;
+      /* advance to next value in list */
+      val_start = next_semi + 1;      
+      if (*next_semi == ';')
+      {
+        next_semi = StringChr (next_semi + 1, ';');
+        if (next_semi == NULL)
+        {
+          next_semi = value_string + StringLen (value_string) - 1;
+        }
+      }
+      else
+      {
+        next_semi = NULL;
+      }
+    }
+  }
+  else if (StringCmp (value_name, "organism") == 0)
+  {
+    title = ReplaceValueInOneDefLine (title, value_name, value_string);
+  }
+  else
+  {
+    title = ReplaceValueInOneDefLineForOrganism (title, value_name, value_string, NULL);
+  }
+ 
+  mip = ModifierInfoFree (mip);
+  return title;
+}
+
+static ValNodePtr ReadOneColumnList (CharPtr line)
+{
+  CharPtr p_start, p_end;
+  Int4    plen;
+  Boolean found_end;
+  ValNodePtr col_list = NULL;
+
+  if (StringHasNoText (line)) return NULL;
+  p_start = line;
+  found_end = FALSE;
+  while (*p_start != 0 && !found_end)
+  {
+    plen = StringCSpn (p_start, "\t\n");
+    if (plen == 0)
+    {
+      if (col_list != NULL)
+      {
+        ValNodeAddStr (&col_list, 0, StringSave (""));
+      }
+      p_start++;
+      if (*p_start == 0) {
+        if (col_list != NULL)
+        {
+          ValNodeAddStr (&col_list, 0, StringSave (""));
+        }
+      }
+      continue;
+    }
+    if (plen == StringLen (p_start))
+    {
+      found_end = TRUE;
+    }
+    else
+    {
+      p_end = p_start + plen;
+      *p_end = 0;
+    }
+    TrimSpacesAroundString (p_start);
+    ValNodeAddStr (&col_list, 0, StringSave (p_start));
+    if (!found_end)
+    {
+      p_start = p_end + 1;
+    }
+  }
+  return col_list;  
+}
+
+static ValNodePtr ReadRowListFromFile (void)
+{
+  Char          path [PATH_MAX];
+  size_t        len = 8192;
+  Int4          max_columns, num_cols;
+  ValNodePtr    header_line;
+  ValNodePtr    line_list, column_list;
+  ValNodePtr    vnp;
+  ReadBufferData rbd;
+  CharPtr        line;
+
+  path [0] = '\0';
+  if (! GetInputFileName (path, sizeof (path), NULL, "TEXT")) return NULL;
+  
+  rbd.fp = FileOpen (path, "r");
+  if (rbd.fp == NULL) return NULL;
+  rbd.current_data = NULL;
+
+  line_list = NULL;
+  max_columns = 0;
+  header_line = NULL;
+  line = AbstractReadFunction (&rbd);
+  while (line != NULL) 
+  {
+    column_list = ReadOneColumnList (line);
+    if (column_list != NULL)
+    {
+      vnp = ValNodeAddPointer (&line_list, 0, column_list);
+      num_cols = ValNodeLen (column_list);
+      if (num_cols > max_columns)
+      {
+        max_columns = num_cols;
+        header_line = vnp;
+      }
+    }
+    line = MemFree (line);
+    line = AbstractReadFunction (&rbd);
+  }
+  FileClose (rbd.fp);
+  /* throw out all lines before header line */
+  if (header_line != line_list)
+  {
+    vnp = line_list;
+    while (vnp != NULL && vnp->next != header_line)
+    {
+      vnp = vnp->next;
+    }
+    vnp->next = NULL;
+    ValNodeFreeData (line_list);
+    line_list = NULL;
+  }
+  return header_line;
+}
+
+/* This function will find the sequence number in the IDAndTitleEdit
+ * to use for each row and put that value in the choice for the row.
+ */
+static Boolean 
+ValidateModifierTableSequenceIDs 
+(ValNodePtr        header_line,
+ IDAndTitleEditPtr iatep)
+{
+  ValNodePtr   not_found = NULL;
+  ValNodePtr   found_more_than_once = NULL;
+  CharPtr      too_many_msg = NULL, not_found_msg = NULL;
+  Boolean      rval = TRUE;
+  Int4         msg_len = 0;
+  CharPtr      too_many_fmt = " found more than once\n";
+  CharPtr      not_found_fmt = " not found\n";
+  CharPtr      err_msg = NULL;
+  ValNodePtr   row_vnp, col_vnp, prev_row;
+  Int4         i, seq_num, other_instances;
+  
+  if (header_line == NULL || header_line->next == NULL || iatep == NULL)
+  {
+    return FALSE;
+  }
+  
+  for (row_vnp = header_line->next; row_vnp != NULL; row_vnp = row_vnp->next)
+  {
+    col_vnp = row_vnp->data.ptrvalue;
+    if (col_vnp == NULL || col_vnp->data.ptrvalue == NULL)
+    {
+      continue;
+    }
+    
+    /* find correct sequence number */
+    seq_num = -1;
+    for (i = 0; i < iatep->num_sequences && seq_num < 0; i++)
+    {
+      if (StringCmp (iatep->id_list [i], col_vnp->data.ptrvalue) == 0)
+      {
+        seq_num = i;
+      }
+    }
+    
+    row_vnp->choice = seq_num;
+
+    if (seq_num < 0)
+    {
+      ValNodeAddPointer (&not_found, 0, StringSave (col_vnp->data.ptrvalue));
+    }
+    else 
+    {
+      /* count the number of times this seq_num has already appeared in the list.*/
+      other_instances = 0;
+      for (prev_row = header_line->next; prev_row != row_vnp; prev_row = prev_row->next)
+      {
+        if (prev_row->choice == seq_num)
+        {
+          other_instances++;
+        }
+      }
+      /* if the value was found exactly once, add this to the list of duplicates.
+       * if the value was found more than once, it will already have been reported.
+       */
+      if (other_instances == 1)
+      {
+        ValNodeAddPointer (&found_more_than_once, 0, StringSave (col_vnp->data.ptrvalue));
+      }
+    }
+  }
+  
+  if (found_more_than_once != NULL || not_found != NULL)
+  {
+    if (found_more_than_once != NULL)
+    {
+      too_many_msg = CreateListMessage ("Sequence ID", NULL, found_more_than_once);
+      rval = FALSE;
+      msg_len += StringLen (too_many_msg) + StringLen (too_many_fmt) + 5;
+    }
+    if (not_found != NULL)
+    {
+      not_found_msg = CreateListMessage ("Sequence ID", NULL, not_found);
+      msg_len += StringLen (not_found_msg) + StringLen (not_found_fmt) + 5;
+    }
+    
+    err_msg = (CharPtr) MemNew ((msg_len + 1) * sizeof (Char));
+    if (err_msg != NULL)
+    {
+      if (too_many_msg != NULL)
+      {
+        StringCat (err_msg, too_many_msg);
+        if (found_more_than_once->next != NULL)
+        {
+          StringCat (err_msg, " were");
+        }
+        else
+        {
+          StringCat (err_msg, " was");
+        }
+        StringCat (err_msg, too_many_fmt);
+      }
+      if (not_found_msg != NULL)
+      {
+        StringCat (err_msg, not_found_msg);
+        if (not_found->next != NULL)
+        {
+          StringCat (err_msg, " were");
+        }
+        else
+        {
+          StringCat (err_msg, " was");
+        }
+        StringCat (err_msg, not_found_fmt);
+      }
+      if (rval)
+      {
+        if (ANS_NO == Message (MSG_YN, "%sContinue anyway?", err_msg))
+        {
+          rval = FALSE;
+        }
+      }
+      else
+      {
+        Message (MSG_ERROR, "%sPlease correct your file.", err_msg);
+      }
+    }
+    too_many_msg = MemFree (too_many_msg);
+    not_found_msg = MemFree (not_found_msg);
+    err_msg = MemFree (err_msg);
+  }
+  return rval;
+}
+
+/* This checks the column names and puts the modifier type in the choice for each column */
+static Boolean ValidateImportModifierColumnNames (ValNodePtr header_line)
+{
+  ValNodePtr      header_vnp;
+  Boolean         rval = TRUE;
+  ModifierInfoPtr mip;
+  CharPtr         orig_name;
+  Int4            col_num;
+  
+  if (header_line == NULL)
+  {
+    return FALSE;
+  }
+  
+  header_vnp = header_line->data.ptrvalue;
+  if (header_vnp == NULL || header_vnp->next == NULL)
+  {
+    return FALSE;
+  }
+  
+  /* check ID column */
+  if (StringICmp (header_vnp->data.ptrvalue, "local_id") != 0
+      && StringICmp (header_vnp->data.ptrvalue, "local id") != 0
+      && StringICmp (header_vnp->data.ptrvalue, "seq_id") != 0
+      && StringICmp (header_vnp->data.ptrvalue, "seq id") != 0
+      && StringICmp (header_vnp->data.ptrvalue, "sequence_id") != 0
+      && StringICmp (header_vnp->data.ptrvalue, "sequence id") != 0
+      )
+  {
+    Message (MSG_ERROR, "Table file is missing header line!  Make sure first column header is seq_id");
+    return FALSE;      
+  }
+  header_vnp = header_vnp->next;
+  col_num = 1;
+  while (header_vnp != NULL && rval)
+  {
+    mip = MakeModifierInfoFromNameAndValue (header_vnp->data.ptrvalue, NULL);
+    if (mip == NULL 
+      || (mip->modtype == eModifierType_SourceQual
+        	&& mip->subtype == 255
+  	      && StringICmp (mip->name, "note-subsrc") != 0 
+  	      && StringICmp (mip->name, "note-orgmod") != 0))
+    {
+      orig_name = (CharPtr) header_vnp->data.ptrvalue;
+      rval = ReplaceImportModifierName (&orig_name, col_num);
+      header_vnp->data.ptrvalue = orig_name;
+    }
+    else
+    {
+      header_vnp->data.ptrvalue = MemFree (header_vnp->data.ptrvalue);
+      header_vnp->data.ptrvalue = StringSave (mip->name);
+      header_vnp->choice = mip->modtype;
+    }
+    mip = ModifierInfoFree (mip);
+    header_vnp = header_vnp->next;
+    col_num++;
+  }
+  return rval;
+}
+
+static Boolean StringAlreadyInList (ValNodePtr list, CharPtr str)
+{
+  while (list != NULL)
+  {
+    if (StringICmp (list->data.ptrvalue, str) == 0)
+    {
+      return TRUE;
+    }
+    list = list->next;
+  }
+  return FALSE;
+}
+
+static Boolean ValidateTableValues (ValNodePtr header_line)
+{
+  ValNodePtr      header_vnp, row_vnp, col_vnp;
+  Boolean         rval = TRUE;
+  ModifierInfoPtr mip;
+  Int4            col_num;
+  ValNodePtr      bad_value_columns = NULL;
+  ValNodePtr      bad_nontext_columns = NULL;
+  CharPtr         err_msg;
+  
+  if (header_line == NULL || header_line->next == NULL 
+      || header_line->data.ptrvalue == NULL)
+  {
+    return FALSE;
+  }
+    
+  for (row_vnp = header_line->next; row_vnp != NULL; row_vnp = row_vnp->next)
+  {
+    /* skip rows with bad sequence IDs */
+    if (row_vnp->choice < 0 || row_vnp->data.ptrvalue == NULL)
+    {
+      continue;
+    }
+    
+    header_vnp = header_line->data.ptrvalue;
+    col_vnp = row_vnp->data.ptrvalue;
+    /* skip ID column */
+    header_vnp = header_vnp->next;
+    col_vnp = col_vnp->next;
+    for (col_num = 1; 
+         header_vnp != NULL && col_vnp != NULL; 
+         header_vnp = header_vnp->next, col_vnp = col_vnp->next, col_num++)
+    {
+      mip = MakeModifierInfoFromNameAndValue (header_vnp->data.ptrvalue, 
+                                              col_vnp->data.ptrvalue);
+      if (mip->modtype == eModifierType_SourceQual
+  	             && IsNonTextModifier (mip->name))
+      {
+        if (StringICmp (mip->value, "TRUE") != 0
+            && StringICmp (mip->value, "FALSE") != 0)
+        {
+          if (!StringAlreadyInList (bad_nontext_columns, header_vnp->data.ptrvalue))
+          {
+            ValNodeAddPointer (&bad_nontext_columns, col_num, StringSave (header_vnp->data.ptrvalue));
+          }
+        }
+      }
+      else if (ModifierHasInvalidValue (mip))
+      {
+        if (!StringAlreadyInList (bad_value_columns, header_vnp->data.ptrvalue))
+        {
+          ValNodeAddPointer (&bad_value_columns, col_num, StringSave (header_vnp->data.ptrvalue));
+        }
+      }
+      mip = ModifierInfoFree (mip);
+    }
+  }
+  
+  if (bad_value_columns != NULL)
+  {
+    err_msg = CreateListMessage ("Your file contains invalid values for column",
+                                 ". Please edit your file to list valid values.",
+                                 bad_value_columns);
+    Message (MSG_ERROR, err_msg);                                 
+    rval = FALSE;
+  }
+  if (bad_nontext_columns != NULL && rval)
+  {
+    err_msg = CreateListMessage ("Your file contains values other than TRUE or FALSE for column",
+                                 ". These modifiers do not allow other text.  Click OK to "
+                                 "discard this text and mark the values as TRUE.  If you "
+                                 "wish to preserve this text under another modifier, click "
+                                 "Cancel and change the column header in your file.",
+                                 bad_nontext_columns);
+    if (ANS_CANCEL == Message (MSG_OKC, err_msg))
+    {
+      rval = FALSE;
+    }
+  }
+  
+  bad_value_columns = ValNodeFreeData (bad_value_columns);
+  bad_nontext_columns = ValNodeFreeData (bad_nontext_columns);
+  return rval;
+}
+
+static Boolean 
+CheckModifiersForOverwrite 
+(ValNodePtr        header_line,
+ IDAndTitleEditPtr iatep,
+ BoolPtr           erase_where_blank,
+ BoolPtr           parse_multiple)
+{
+  ValNodePtr row_vnp, header_vnp, col_vnp;
+  CharPtr    title_val, data_val;
+  ValNodePtr blank_column_list = NULL;
+  ValNodePtr replace_column_list = NULL;
+  ValNodePtr parse_multi_list = NULL;
+  Int4       col_num;
+  Boolean    rval = TRUE;
+  CharPtr    err_msg;
+  MsgAnswer  ans;
+  
+  if (header_line == NULL || header_line->next == NULL || iatep == NULL
+      || erase_where_blank == NULL || parse_multiple == NULL)
+  {
+    return FALSE;
+  }
+  
+  *erase_where_blank = FALSE;
+  *parse_multiple = FALSE;
+  
+  for (row_vnp = header_line->next; row_vnp != NULL; row_vnp = row_vnp->next)
+  {
+    if (row_vnp->choice < 0 || row_vnp->data.ptrvalue == NULL)
+    {
+      continue;
+    }
+    header_vnp = header_line->data.ptrvalue;
+    col_vnp = row_vnp->data.ptrvalue;
+    
+    /* skip ID column */
+    header_vnp = header_vnp->next;
+    col_vnp = col_vnp->next;
+    
+    col_num = 1;
+    while (header_vnp != NULL && col_vnp != NULL)
+    {
+      /* if column name is blank, skip */
+      if (header_vnp->data.ptrvalue != NULL)
+      {
+        title_val = FindValueFromPairInDefline (header_vnp->data.ptrvalue,
+                                                iatep->title_list [row_vnp->choice]);
+        data_val = col_vnp->data.ptrvalue;
+        if (!StringHasNoText (title_val))
+        {
+          if (StringHasNoText (data_val))
+          {
+            /* add to list of possible erasures */
+            if (!StringAlreadyInList (blank_column_list, header_vnp->data.ptrvalue))
+            {
+              ValNodeAddPointer (&blank_column_list, col_num, StringSave (header_vnp->data.ptrvalue));
+            }
+          }
+          else if (StringCmp (data_val, title_val) != 0)
+          {
+            /* add to list of possible replacements */
+            if (!StringAlreadyInList (replace_column_list, header_vnp->data.ptrvalue))
+            {
+              ValNodeAddPointer (&replace_column_list, col_num, StringSave (header_vnp->data.ptrvalue));
+            }
+          }
+        }
+        title_val = MemFree (title_val);
+        /* check for multival parsing */
+        if (data_val != NULL 
+            && data_val [0] == '(' && data_val [StringLen (data_val) - 1] == ')'
+            && StringChr (data_val, ';') != NULL
+            && !StringAlreadyInList (parse_multi_list, header_vnp->data.ptrvalue))
+        {
+          ValNodeAddPointer (&parse_multi_list, col_num, StringSave (header_vnp->data.ptrvalue));
+        }
+      }
+      header_vnp = header_vnp->next;
+      col_vnp = col_vnp->next;
+      col_num++;
+    }
+  }
+    
+  if (replace_column_list != NULL)
+  {
+    err_msg = CreateListMessage ("Record already contains values for column",
+                                 " also found in the import table.\n"
+                                 "Do you wish to overwrite these values?",
+                                 replace_column_list);
+    if (ANS_NO == Message (MSG_YN, err_msg))
+    {
+      rval = FALSE;
+    }
+    err_msg = MemFree (err_msg);
+  }
+  
+  if (blank_column_list != NULL && rval)
+  {
+    err_msg = CreateListMessage ("Your import table contains blanks in column",
+                                 " where data already exists in the sequences.\n"
+                                 "Do you wish to erase these values in the sequences?\n"
+                                 "If you say no, the old values will remain.",
+                                 blank_column_list);
+    ans = Message (MSG_YNC, err_msg);
+    err_msg = MemFree (err_msg);
+    if (ans == ANS_CANCEL)
+    {
+      rval = FALSE;
+    }
+    else if (ans == ANS_YES)
+    {
+      *erase_where_blank = TRUE;
+    }
+  }
+
+#if 0  
+  /* ability to parse multiple entry format removed (for now) */
+  if (parse_multi_list != NULL && rval)
+  {
+    err_msg = CreateListMessage ("Your import table contains values in column",
+                                 " where the values are in form '(value1;value2)'.\n"
+                                 "Do you wish to parse these values into multiple modifiers?\n"
+                                 "If you say no, the values will be applied to a single modifier.",
+                                 parse_multi_list);
+    ans = Message (MSG_YNC, err_msg);
+    err_msg = MemFree (err_msg);
+    if (ans == ANS_CANCEL)
+    {
+      rval = FALSE;
+    }
+    else if (ans == ANS_YES)
+    {
+      *parse_multiple = TRUE;
+    }
+  }
+#endif  
+  
+  blank_column_list = ValNodeFree (blank_column_list);  
+  replace_column_list = ValNodeFreeData (replace_column_list);
+  parse_multi_list = ValNodeFreeData (parse_multi_list);
+  
+  return rval;
+}
+
+static Boolean ImportModifiersToIDAndTitleEdit (IDAndTitleEditPtr iatep)
+{
+  ValNodePtr   header_line, row_vnp, col_vnp, header_vnp;
+  Boolean      erase_where_blank = FALSE, parse_multi = FALSE;
+  
+  if (iatep == NULL)
+  {
+    return FALSE;
+  }
+  
+  header_line = ReadRowListFromFile ();
+  if (header_line == NULL || header_line->next == NULL)
+  {
+    header_line = FreeTableDisplayRowList (header_line);
+    return FALSE;
+  }
+  
+  header_vnp = header_line->data.ptrvalue;
+  if (header_vnp == NULL || header_vnp->next == NULL)
+  {
+    header_line = FreeTableDisplayRowList (header_line);
+    return FALSE;
+  }
+  
+  if (!ValidateModifierTableSequenceIDs (header_line, iatep))
+  {
+    header_line = FreeTableDisplayRowList (header_line);
+    return FALSE;
+  }
+  
+  /* first, validate all column names and values */
+  if (!ValidateImportModifierColumnNames (header_line))
+  {
+    header_line = FreeTableDisplayRowList (header_line);
+    return FALSE;
+  }
+  
+  if (!ValidateTableValues (header_line))
+  {
+    header_line = FreeTableDisplayRowList (header_line);
+    return FALSE;
+  }
+  
+  if (!CheckModifiersForOverwrite (header_line, iatep, &erase_where_blank, &parse_multi))
+  {
+    header_line = FreeTableDisplayRowList (header_line);
+    return FALSE;
+  }
+  
+  /* now apply */
+  for (row_vnp = header_line->next; row_vnp != NULL; row_vnp = row_vnp->next)
+  {
+    if (row_vnp->data.ptrvalue == NULL || row_vnp->choice < 0)
+    {
+      continue;
+    }
+    header_vnp = header_line->data.ptrvalue;
+    col_vnp = row_vnp->data.ptrvalue;
+    
+    /* skip the ID column */
+    header_vnp = header_vnp->next;
+    col_vnp = col_vnp->next;
+    
+    for (;
+         header_vnp != NULL && col_vnp != NULL;
+         header_vnp = header_vnp->next, col_vnp = col_vnp->next)
+    {
+      iatep->title_list [row_vnp->choice] = ApplyImportModToTitle (iatep->title_list [row_vnp->choice],
+                                                                   header_vnp->data.ptrvalue,
+                                                                   col_vnp->data.ptrvalue,
+                                                                   erase_where_blank,
+                                                                   parse_multi);
+    }
+  }
+  return TRUE;
+}
+
 typedef struct fastapage {
   DIALOG_MESSAGE_BLOCK
   Char         path [PATH_MAX];
@@ -462,9 +3214,7 @@ static void ResetFastaPage (FastaPagePtr fpp)
 static CharPtr GetModValueFromSeqEntry (SeqEntryPtr sep, CharPtr mod_name)
 {
   CharPtr ttl = NULL;
-  Char    lookfor [255];
   CharPtr value = NULL;
-  Int4    value_len = 0;
   
   if (sep == NULL || StringHasNoText (mod_name))
   {
@@ -477,35 +3227,8 @@ static CharPtr GetModValueFromSeqEntry (SeqEntryPtr sep, CharPtr mod_name)
     return NULL;
   }
   
-  value_len = StringLen (ttl) + 1;
-  value = (CharPtr) MemNew (value_len * sizeof (Char));
+  value =  FindValueFromPairInDefline (mod_name, ttl);
   
-  if (value == NULL)
-  {
-    return NULL;
-  }
-  
-  MakeSearchStringFromAlist (lookfor, mod_name);
-
-  if (!LookForSearchString (ttl, lookfor, value, value_len - 1))
-  {
-    if (StringICmp (mod_name, "organism") == 0)
-    {
-      MakeSearchStringFromAlist (lookfor, "org");
-      if (!LookForSearchString (ttl, lookfor, value, value_len - 1))
-      {
-        value = MemFree (value);
-      }
-    }
-    else if (StringICmp (mod_name, "org") == 0)
-    {
-      MakeSearchStringFromAlist (lookfor, "organism");
-      if (!LookForSearchString (ttl, lookfor, value, value_len - 1))
-      {
-        value = MemFree (value);
-      }
-    }
-  }
   return value;  
 }
 
@@ -516,6 +3239,20 @@ static void AddReportLine (CharPtr str, CharPtr name, CharPtr tmp)
   StringCat (str, ": ");
   StringCat (str, tmp);
   StringCat (str, "\n");
+}
+
+static void LookupAndAddReportLine (CharPtr str, CharPtr report_name, 
+                                    CharPtr title, CharPtr mod_name, CharPtr not_found_msg)
+{
+  CharPtr valstr;
+  
+  valstr = FindValueFromPairInDefline (mod_name, title);
+  if (!StringHasNoText (valstr)) {
+    AddReportLine (str, report_name, valstr);
+  } else if (!StringHasNoText (not_found_msg)) {
+    StringCat (str, not_found_msg);
+  }
+  valstr = MemFree (valstr);
 }
 
 static CharPtr singlewarn = "\
@@ -564,7 +3301,6 @@ static void FormatFastaDoc (FastaPagePtr fpp)
   Boolean            hasErrors;
   CharPtr            label;
   Int4               len;
-  Char               lookfor [256];
   CharPtr            measure;
   SeqEntryPtr        nsep;
   Int2               num;
@@ -578,6 +3314,7 @@ static void FormatFastaDoc (FastaPagePtr fpp)
   CharPtr            tmp;
   ValNodePtr         vnp;
   Int4               num_seg;
+  CharPtr            valstr;
 
   if (fpp != NULL) {
     str = MemNew (sizeof (char) * FastaFormatBufLen);
@@ -678,90 +3415,50 @@ static void FormatFastaDoc (FastaPagePtr fpp)
       SeqEntryExplore (nsep, (Pointer) (&ttl), FindFirstTitle);
       title = StringSaveNoNull (ttl);
       if (title != NULL && (! fpp->is_na)) {
-        if (LookForSearchString (title, "[gene=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Gene", tmp);
-        } else {
-          StringCat (str, "No gene name detected\n");
-        }
-        if (LookForSearchString (title, "[prot=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Protein", tmp);
-        } else if (LookForSearchString (title, "[protein=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Protein", tmp);
-        } else {
-          StringCat (str, "No protein name detected\n");
-        }
-        if (LookForSearchString (title, "[gene_syn=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Gene Syn", tmp);
-        } 
-        if ((LookForSearchString (title, "[protein_desc=", tmp, FastaFormatBufLen - 1)) ||
-	    (LookForSearchString (title, "[prot_desc=", tmp, FastaFormatBufLen - 1))) {
-          AddReportLine (str, "Protein Desc", tmp);
-        } 
+        LookupAndAddReportLine (str, "Gene", title, "gene", "No gene name detected\n"); 
+        LookupAndAddReportLine (str, "Protein", title, "protein", "No protein name detected\n"); 
+        LookupAndAddReportLine (str, "Gene Syn", title, "gene_syn", NULL); 
+        LookupAndAddReportLine (str, "Protein Desc", title, "protein_desc", NULL); 
         ptr = StringISearch (title, "[orf]");
         if (ptr != NULL) {
         StringCat (str, "ORF indicated\n");
         }
-        if (LookForSearchString (title, "[comment=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Comment", tmp);
-        }
+        LookupAndAddReportLine (str, "Comment", title, "comment", NULL); 
       }
       if (title != NULL && fpp->is_na && (! fpp->is_mrna)) {
-        if (LookForSearchString (title, "[org=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Organism", tmp);
-        }
-        if (LookForSearchString (title, "[organism=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Organism", tmp);
-        }
-        if (LookForSearchString (title, "[lineage=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Lineage", tmp);
-        }
+        LookupAndAddReportLine (str, "Organism", title, "organism", NULL); 
+        LookupAndAddReportLine (str, "Lineage", title, "lineage", NULL); 
         for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
-          MakeSearchStringFromAlist (lookfor, ap->name);
-          if (LookForSearchString (title, lookfor, tmp, FastaFormatBufLen - 1)) {
-            AddReportLine (str, ap->name, tmp);
-          }
+          LookupAndAddReportLine (str, ap->name, title, ap->name, NULL); 
         }
         for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
-          MakeSearchStringFromAlist (lookfor, ap->name);
-          if (LookForSearchString (title, lookfor, tmp, FastaFormatBufLen - 1)) {
-            AddReportLine (str, ap->name, tmp);
-          }
+          LookupAndAddReportLine (str, ap->name, title, ap->name, NULL); 
         }
-        if (LookForSearchString (title, "[note=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Note", tmp);
-        }
-        if (LookForSearchString (title, "[comment=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Comment", tmp);
-        }
-        if (LookForSearchString (title, "[subsource=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Note", tmp);
-        }
-        if (LookForSearchString (title, "[molecule=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Molecule", tmp);
-        }
-        if (LookForSearchString (title, "[moltype=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "MolType", tmp);
-        }
-        if (LookForSearchString (title, "[location=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Location", tmp);
-        }
+        LookupAndAddReportLine (str, "Note", title, "note", NULL); 
+        LookupAndAddReportLine (str, "Note", title, "subsource", NULL); 
+        LookupAndAddReportLine (str, "Molecule", title, "molecule", NULL); 
+        LookupAndAddReportLine (str, "MolType", title, "moltype", NULL); 
+        LookupAndAddReportLine (str, "Location", title, "location", NULL); 
+        LookupAndAddReportLine (str, "Topology", title, "topology", NULL); 
+        LookupAndAddReportLine (str, "Genetic Code", title, "genetic_code", NULL);
       }
       if (title != NULL && fpp->is_na && fpp->is_mrna) {
-        if (LookForSearchString (title, "[gene=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Gene", tmp);
+        LookupAndAddReportLine (str, "Gene", title, "gene", "No gene name detected\n"); 
+        valstr = FindValueFromPairInDefline ("mrna", title);
+        if (!StringHasNoText (valstr)) {
+          AddReportLine (str, "mRNA", valstr);
+          valstr = MemFree (valstr);
         } else {
-          StringCat (str, "No gene name detected\n");
+          valstr = MemFree (valstr);
+          valstr = FindValueFromPairInDefline ("cdna", title);
+          if (!StringHasNoText (valstr)) {
+            AddReportLine (str, "cDNA", valstr);
+          } else {
+            StringCat (str, "No mRNA name detected\n");
+          }
+          valstr = MemFree (valstr);
         }
-        if (LookForSearchString (title, "[mrna=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "mRNA", tmp);
-        } else if (LookForSearchString (title, "[cdna=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "cDNA", tmp);
-        } else {
-          StringCat (str, "No mRNA name detected\n");
-        }
-        if (LookForSearchString (title, "[comment=", tmp, FastaFormatBufLen - 1)) {
-          AddReportLine (str, "Comment", tmp);
-        }
+        LookupAndAddReportLine (str, "Comment", title, "comment", NULL); 
       }
       MemFree (title);
       ttl = NULL;
@@ -769,42 +3466,34 @@ static void FormatFastaDoc (FastaPagePtr fpp)
       title = StringSaveNoNull (ttl);
       if (title != NULL) {
         if (! fpp->is_na) {
-          ExciseString (title, "[gene=", "]");
-          ExciseString (title, "[gene_syn=", "]");
-          ExciseString (title, "[prot=", "]");
-          ExciseString (title, "[protein=", "]");
-          ExciseString (title, "[prot_desc=", "]");
-          ExciseString (title, "[protein_desc=", "]");
+          RemoveValueFromDefline ("gene", title);
+          RemoveValueFromDefline ("gene_syn", title);
+          RemoveValueFromDefline ("protein", title);
+          RemoveValueFromDefline ("protein_desc", title);
+          RemoveValueFromDefline ("comment", title);
           ExciseString (title, "[orf", "]");
-          ExciseString (title, "[comment", "]");
         } else if (fpp->is_mrna) {
-          ExciseString (title, "[gene=", "]");
-          ExciseString (title, "[mrna=", "]");
-          ExciseString (title, "[cdna=", "]");
-          ExciseString (title, "[comment=", "]");
+          RemoveValueFromDefline ("gene", title);
+          RemoveValueFromDefline ("mrna", title);
+          RemoveValueFromDefline ("cdna", title);
+          RemoveValueFromDefline ("comment", title);
         } else {
-          ExciseString (title, "[org=", "]");
-          ExciseString (title, "[organism=", "]");
-          ExciseString (title, "[lineage=", "]");
+          RemoveValueFromDefline ("organism", title);
+          RemoveValueFromDefline ("lineage", title);
           for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
-            MakeSearchStringFromAlist (lookfor, ap->name);
-            ExciseString (title, lookfor, "]");
+            RemoveValueFromDefline (ap->name, title);
           }
           for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
-            MakeSearchStringFromAlist (lookfor, ap->name);
-            ExciseString (title, lookfor, "]");
+            RemoveValueFromDefline (ap->name, title);
           }
-          ExciseString (title, "[note=", "]");
-          ExciseString (title, "[comment=", "]");
-          ExciseString (title, "[subsource=", "]");
-          /*
-          ExciseString (title, "[clone=", "]");
-          ExciseString (title, "[strain=", "]");
-          ExciseString (title, "[isolate=", "]");
-          */
-          ExciseString (title, "[molecule=", "]");
-          ExciseString (title, "[moltype=", "]");
-          ExciseString (title, "[location=", "]");
+          RemoveValueFromDefline ("note", title);
+          RemoveValueFromDefline ("comment", title);
+          RemoveValueFromDefline ("subsource", title);
+          RemoveValueFromDefline ("molecule", title);
+          RemoveValueFromDefline ("moltype", title);
+          RemoveValueFromDefline ("location", title);
+          RemoveValueFromDefline ("topology", title);
+          RemoveValueFromDefline ("genetic_code", title);
         }
         TrimSpacesAroundString (title);
         if (! StringHasNoText (title)) {
@@ -936,9 +3625,9 @@ static SeqEntryPtr SegsetFromSeqEntryList (SeqEntryPtr list)
       }
       if (set_sdp != NULL && StringHasNoText (set_sdp->data.ptrvalue))
       {
+        /* make a copy, rather than removing the segment title */
         set_sdp->data.ptrvalue = MemFree (set_sdp->data.ptrvalue);
-        set_sdp->data.ptrvalue = sdp->data.ptrvalue;
-        sdp->data.ptrvalue = StringSave ("");
+        set_sdp->data.ptrvalue = StringSave (sdp->data.ptrvalue);
       }
     }
   }  
@@ -961,6 +3650,12 @@ static SeqEntryPtr ReadOneSegSet (FILE *fp, Boolean parse_id, ValNodePtr PNTR er
     return NULL;
   }
   
+  /* note - we pass in FALSE for parse_id in SequinFastaToSeqEntryEx
+   * because we do not want to use Sequin's auto-generated sequence IDs.
+   * We then parse the sequence ID from the title ourselves using
+   * ReplaceFakeIDWithIDFromTitle if parse_id is TRUE, or leave the ID
+   * as blank to force the user to select a real ID later.
+   */
   nextsep = SequinFastaToSeqEntryEx (fp, TRUE, &errormsg, FALSE, &lastchar);
   while (nextsep != NULL ||
          (lastchar != (Char) EOF && lastchar != NULLB && lastchar != (Char) 255
@@ -1001,36 +3696,247 @@ static SeqEntryPtr ReadOneSegSet (FILE *fp, Boolean parse_id, ValNodePtr PNTR er
   return nextsep;
 }
 
-static void AddDefaultMoleculeTypeAndLocation (SeqEntryPtr seq_list, Int2 seqPackage)
+static void AddDefaultMoleculeTypeToIDAndTitleEdit (IDAndTitleEditPtr iatep)
 {
-  SeqEntryPtr sep;
-  CharPtr     old_value;
+  Int4    seq_num;
+  CharPtr old_value;
   
-  for (sep = seq_list; sep != NULL; sep = sep->next)
+  if (iatep == NULL)
   {
-    old_value = GetModValueFromSeqEntry (sep, "moltype");
-    if (StringHasNoText (old_value))
+    return;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
     {
-      ApplyOneModToSeqEntry (sep, "moltype", "dna");
+      continue;
+    }
+    old_value = FindValueFromPairInDefline("moltype", 
+                                           iatep->title_list [seq_num]);
+    if (StringHasNoText (old_value) || StringICmp (old_value, "dna") == 0)
+    {
+      iatep->title_list [seq_num] = ReplaceValueInOneDefLine(iatep->title_list [seq_num],
+                                                             "moltype",
+                                                             "Genomic DNA");
     }
     old_value = MemFree (old_value);
-    old_value = GetModValueFromSeqEntry (sep, "location");
-    if (StringHasNoText (old_value))
-    {
-      ApplyOneModToSeqEntry (sep, "location", "genomic");
-    }
-    old_value = MemFree (old_value);
-    
-    old_value = GetModValueFromSeqEntry (sep, "topology");
-    if (StringHasNoText (old_value))
-    {
-      ApplyOneModToSeqEntry (sep, "topology", "Linear");
-    }
-    old_value = MemFree (old_value);
-  }  
+  }
 }
 
-static SeqEntryPtr 
+static void AddDefaultLocationToIDAndTitleEdit (IDAndTitleEditPtr iatep)
+{
+  Int4    seq_num;
+  CharPtr old_value, first_organism, next_org_loc = NULL, org_stop;
+  
+  if (iatep == NULL)
+  {
+    return;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    first_organism = FindValuePairInDefLine ("organism", iatep->title_list [seq_num], &org_stop);
+    if (first_organism != NULL)
+    {
+      next_org_loc = FindValuePairInDefLine ("organism", org_stop + 1, NULL);
+    }
+    else
+    {
+      next_org_loc = NULL;
+    }
+    old_value = FindValueFromPairInDeflineBeforeCharPtr ("location", 
+                                                         iatep->title_list [seq_num],
+                                                         next_org_loc);
+    if (StringHasNoText (old_value))
+    {
+      iatep->title_list [seq_num] = ReplaceValueInOneDefLineForOrganism (iatep->title_list [seq_num],
+                                                                         "location",
+                                                                         "genomic",
+                                                                         first_organism);
+    }
+    old_value = MemFree (old_value);
+  }
+}
+
+static void AddDefaultTopologyToIDAndTitleEdit (IDAndTitleEditPtr iatep)
+{
+  Int4    seq_num;
+  CharPtr old_value;
+  
+  if (iatep == NULL)
+  {
+    return;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    old_value = FindValueFromPairInDefline ("topology", 
+                                            iatep->title_list [seq_num]);
+    if (StringHasNoText (old_value))
+    {
+      iatep->title_list [seq_num] = ReplaceValueInOneDefLine(iatep->title_list [seq_num],
+                                                             "topology",
+                                                             "Linear");
+    }
+    old_value = MemFree (old_value);
+  }
+}
+
+static void AddDefaultGeneticCodesToIDAndTitleEdit (IDAndTitleEditPtr iatep)
+{
+  CharPtr     taxname, location, gcode_name;
+  Int4        gcode;
+  ValNodePtr  gencodelist;
+  Int4        seq_num;
+  CharPtr     first_organism, next_org_loc = NULL, org_stop;
+
+  if (iatep == NULL)
+  {
+    return;
+  }
+  
+  gencodelist = GetGeneticCodeValNodeList ();
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    first_organism = FindValuePairInDefLine ("organism", iatep->title_list [seq_num], &org_stop);
+    if (first_organism != NULL)
+    {
+      next_org_loc = FindValuePairInDefLine ("organism", org_stop + 1, NULL);
+    }
+    else
+    {
+      next_org_loc = NULL;
+    }
+    
+    taxname = FindValueFromPairInDefline ("organism", first_organism);
+    location = FindValueFromPairInDeflineBeforeCharPtr ("location", 
+                                                        iatep->title_list [seq_num],
+                                                        next_org_loc);
+    if (StringHasNoText (location))
+    {
+      location = StringSave ("genomic");
+    }
+    
+    gcode = GetGeneticCodeForTaxNameAndLocation (taxname, location);
+    taxname = MemFree (taxname);
+    location = MemFree (location);
+    
+    if (gcode < 0)
+    {
+      gcode_name = FindValueFromPairInDeflineBeforeCharPtr ("genetic_code",
+                                                            iatep->title_list [seq_num],
+                                                            next_org_loc);
+      if (StringHasNoText (gcode_name))
+      {
+        gcode_name = MemFree (gcode_name);
+        gcode_name = GeneticCodeStringFromIntAndList (1, gencodelist);
+        iatep->title_list [seq_num] = ReplaceValueInOneDefLineForOrganism (iatep->title_list [seq_num],
+                                                                         "genetic_code",
+                                                                         gcode_name,
+                                                                         first_organism);
+      }
+      else
+      {
+        gcode_name = MemFree (gcode_name);
+      }
+    }
+    else
+    {
+      gcode_name = GeneticCodeStringFromIntAndList (gcode, gencodelist);
+      iatep->title_list [seq_num] = ReplaceValueInOneDefLineForOrganism (iatep->title_list [seq_num],
+                                                                         "genetic_code",
+                                                                         gcode_name,
+                                                                         first_organism);
+    }
+  }
+  ValNodeFreeData (gencodelist);
+}
+
+static void AddDefaultModifierValues (SeqEntryPtr seq_list)
+{
+  IDAndTitleEditPtr iatep;
+  
+  iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+  AddDefaultMoleculeTypeToIDAndTitleEdit (iatep);
+  AddDefaultLocationToIDAndTitleEdit (iatep);
+  AddDefaultTopologyToIDAndTitleEdit (iatep);
+  AddDefaultGeneticCodesToIDAndTitleEdit (iatep);
+  ApplyIDAndTitleEditToSeqEntryList (seq_list, iatep);
+  iatep = IDAndTitleEditFree (iatep);
+}
+
+static Boolean HasGapID (SeqEntryPtr sep)
+{
+  BioseqPtr bsp;
+  Char      id_str [128];
+  Int4      j;
+  
+  if (sep == NULL || ! IS_Bioseq (sep) || (bsp = sep->data.ptrvalue) == NULL)
+  {
+    return FALSE;
+  }
+  
+  SeqIdWrite (bsp->id, id_str, PRINTID_REPORT, sizeof (id_str));
+  
+  if (id_str [0] != '?')
+  {
+    return FALSE;
+  }
+  if (StringICmp (id_str + 1, "unk100") == 0)
+  {
+    return TRUE;
+  }
+  else 
+  {
+    /* make sure there are only numbers after the question mark */
+    j = 1;
+    while (isdigit (id_str [j]))
+    {
+      j++;
+    }
+    if (id_str [j] == 0)
+    {
+      return TRUE;
+    }
+    else
+    {
+      return FALSE;
+    }
+  }
+}
+
+static Boolean HasNoSeqID (SeqEntryPtr sep)
+{
+  BioseqPtr bsp;
+
+  if (sep == NULL || ! IS_Bioseq (sep) || (bsp = sep->data.ptrvalue) == NULL)
+  {
+    return FALSE;
+  }
+  if (bsp->id == NULL)
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
+extern SeqEntryPtr 
 ImportSequencesFromFile
 (FILE           *fp, 
  SeqEntryPtr     sep_list,
@@ -1050,11 +3956,17 @@ ImportSequencesFromFile
   SeqEntryPtr   seg_list = NULL, seg_list_last = NULL;
   ErrSev        oldsev;
   Boolean       read_from_delta;
+  SeqEntryPtr   oldscope;
+  Int4          pos, last_no_id_start = -1;
   
   count = 0;
   
   new_sep_list = NULL;
   last = NULL;
+  
+  oldscope = SeqEntrySetScope (NULL);
+  
+  pos = ftell (fp);
   
   bsp = NULL;
   if (is_na)
@@ -1063,6 +3975,14 @@ ImportSequencesFromFile
     bsp = ReadDeltaFasta (fp, NULL);
     ErrSetMessageLevel (oldsev);
   }
+  
+  /* note - we pass in FALSE for parse_id in SequinFastaToSeqEntryEx
+   * because we do not want to use Sequin's auto-generated sequence IDs.
+   * We then parse the sequence ID from the title ourselves using
+   * ReplaceFakeIDWithIDFromTitle if parse_id is TRUE, or leave the ID
+   * as blank to force the user to select a real ID later.
+   */
+  
   if (bsp == NULL)
   {
     nextsep = SequinFastaToSeqEntryEx (fp, is_na, &errormsg, FALSE, &lastchar);
@@ -1095,6 +4015,35 @@ ImportSequencesFromFile
         }
         SeqEntryPack (nextsep);
       }
+      
+      if (last_no_id_start > -1)
+      {
+        if (HasGapID (nextsep))
+        {
+          nextsep = SeqEntryFree (nextsep);
+          bsp = last->data.ptrvalue;
+          SeqMgrDeleteFromBioseqIndex (bsp);
+          bsp = BioseqFree (bsp);
+          fseek (fp, last_no_id_start, SEEK_SET);
+          bsp = ReadDeltaFastaWithEmptyDefline (fp, NULL);
+          last->data.ptrvalue = bsp;
+          bsp->id = SeqIdFree (bsp->id);
+          last_no_id_start = -1;
+        }
+        else if (HasNoSeqID (nextsep))
+        {
+          last_no_id_start = pos;
+        }
+        else
+        {
+          last_no_id_start = -1;
+        }
+      }
+      else if (HasNoSeqID (nextsep))
+      {
+        last_no_id_start = pos;
+      }
+      
       ValNodeAddPointer (err_msg_list, 0, errormsg);
       errormsg = NULL;
     }
@@ -1115,6 +4064,8 @@ ImportSequencesFromFile
         last = nextsep;
       }
     } 
+    
+    pos = ftell (fp);
     bsp = NULL;
     if (is_na)
     {
@@ -1149,95 +4100,12 @@ ImportSequencesFromFile
     last->next = new_sep_list;
   }
 
+  SeqEntrySetScope (oldscope);
 
   return sep_list;
 }
 
-static Boolean CollectIDsAndTitles (SeqEntryPtr new_list, SeqEntryPtr current_list);
-
-static void ResetSegSetIDLists (SeqEntryPtr list)
-{
-  BioseqSetPtr bssp, parts;
-  BioseqPtr    seg_bsp;
-  SeqEntryPtr  sep;
-  SeqLocPtr    loc, next_loc, last_loc;
-  
-  if (list == NULL)
-  {
-    return;
-  }
-  
-  if (list->data.ptrvalue != NULL)
-  {
-    if (IS_Bioseq_set (list))
-    {
-      bssp = (BioseqSetPtr) list->data.ptrvalue;
-      if (bssp->_class == BioseqseqSet_class_segset)
-      {
-        sep = bssp->seq_set;
-        seg_bsp = NULL;
-        parts = NULL;
-        while (sep != NULL && (seg_bsp == NULL || parts == NULL))
-        {
-          if (IS_Bioseq (sep))
-          {
-            seg_bsp = sep->data.ptrvalue;
-          }
-          else if (IS_Bioseq_set (sep))
-          {
-            parts = sep->data.ptrvalue;
-            if (parts != NULL && parts->_class != BioseqseqSet_class_parts)
-            {
-              parts = NULL;
-            }
-          }
-          sep = sep->next;
-        }
-        if (seg_bsp != NULL)
-        {
-          /* remove old location */
-          loc = (SeqLocPtr) seg_bsp->seq_ext;
-          while (loc != NULL)
-          {
-            next_loc = loc->next;
-            loc->next = NULL;
-            loc = SeqLocFree (loc);
-            loc = next_loc;
-          }
-          seg_bsp->seq_ext = NULL;
-          /* put in new locations */
-          sep = parts->seq_set;
-          last_loc = NULL;
-          while (sep != NULL)
-          {
-            if (IS_Bioseq (sep) && sep->data.ptrvalue != NULL)
-            {
-              loc = SeqLocWholeNew (sep->data.ptrvalue);
-              if (loc != NULL)
-              {
-                if (last_loc == NULL)
-                {
-                  seg_bsp->seq_ext = loc;
-                }
-                else
-                {
-                  last_loc->next = loc;
-                }
-                last_loc = loc;
-              }
-            }
-            sep = sep->next;
-          }
-        }
-      }
-      else
-      {
-        ResetSegSetIDLists (bssp->seq_set);
-      }
-    }
-  }
-  ResetSegSetIDLists (list->next);
-}
+static Boolean CollectIDsAndTitles (SeqEntryPtr new_list, SeqEntryPtr current_list, Boolean is_nuc);
 
 static SeqEntryPtr RemoveZeroLengthSequences (SeqEntryPtr list, Int4Ptr pnum_seqs, Int4Ptr pnum_zero)
 {
@@ -1629,12 +4497,12 @@ static Boolean ImportFastaDialog (DialoG d, CharPtr filename)
           }
           fpp->path [0] = 0;
         }
-        else if (CollectIDsAndTitles (new_sep_list, fpp->list))
+        else if (CollectIDsAndTitles (new_sep_list, fpp->list, (fpp->is_na && ! fpp->is_mrna)))
         {
-          /* add default molecule type and location */
-          if (fpp->seqPackagePtr != NULL)
+          if (fpp->is_na)
           {
-            AddDefaultMoleculeTypeAndLocation (new_sep_list, *(fpp->seqPackagePtr));
+            /* add default molecule type, topology, location, and genetic codes */
+            AddDefaultModifierValues (new_sep_list);
           }
         
           /* if successful, link old and new lists */
@@ -1688,6 +4556,307 @@ static Boolean ImportFastaDialog (DialoG d, CharPtr filename)
     }
   }
   return FALSE;
+}
+
+#define EXPORT_PAGE_WIDTH 80
+
+static void ExportSeqIdAndTitle (SeqIdPtr sip, CharPtr title, FILE *fp)
+{
+  Char id_str[128];
+
+  if (fp == NULL)
+  {
+    return;
+  }
+  
+  id_str [0] = 0;
+  if (sip != NULL)
+  {
+    SeqIdWrite (sip, id_str, PRINTID_REPORT, sizeof (id_str));
+  }
+  
+  if (StringCSpn (id_str, " \t") == StringLen (id_str))
+  {
+    fprintf (fp, ">%s %s\n", id_str, title == NULL ? "" : title);
+  }
+  else
+  {
+    fprintf (fp, ">'%s' %s\n", id_str, title == NULL ? "" : title);
+  }
+}
+
+static void ExportSeqPort (Int4 from, Int4 to, SeqPortPtr spp, FILE *fp)
+{
+  Char        buffer [EXPORT_PAGE_WIDTH + 1];
+  Int4        seq_offset, txt_out;
+
+  if (spp == NULL || fp == NULL || from < 0 || to <= from)
+  {
+    return;
+  }
+  
+  seq_offset = from;
+  while (seq_offset < to)
+  {
+    txt_out = ReadBufferFromSep (spp, buffer, seq_offset, 
+                                 MIN (seq_offset + EXPORT_PAGE_WIDTH, to), 0);
+    if (txt_out == 0) break;
+    seq_offset += txt_out;
+    fprintf(fp, "%s\n", buffer);
+  }
+  
+}
+
+static void ExportOneRawSequence (BioseqPtr bsp, CharPtr title_master, FILE *fp)
+{
+  SeqDescrPtr sdp;
+  Char        buffer [EXPORT_PAGE_WIDTH + 1];
+  SeqPortPtr  spp;
+  CharPtr     title = NULL;
+  CharPtr     combined_title = NULL;
+  Boolean     free_combined = FALSE;
+  
+  if (bsp == NULL || fp == NULL || bsp->repr != Seq_repr_raw)
+  {
+    return;
+  }  
+  
+  sdp = bsp->descr;
+  while (sdp != NULL && sdp->choice != Seq_descr_title)
+  {
+    sdp = sdp->next;
+  }
+  if (sdp != NULL)
+  {
+    title = sdp->data.ptrvalue;
+  }
+  
+  if (StringHasNoText (title_master))
+  {
+    combined_title = title;
+  }
+  else if (StringHasNoText (title))
+  {
+    combined_title = title_master;
+  }
+  else
+  {
+    combined_title = (CharPtr) MemNew ((StringLen (title_master) + StringLen (title) + 2) * sizeof (Char));
+    if (combined_title != NULL)
+    {
+      StringCpy (combined_title, title_master);
+      StringCat (combined_title, " ");
+      StringCat (combined_title, title);
+      free_combined = TRUE;
+    }
+  }
+  
+  ExportSeqIdAndTitle (bsp->id, combined_title, fp);
+  if (free_combined)
+  {
+    combined_title = MemFree (combined_title);
+  }
+
+  buffer [EXPORT_PAGE_WIDTH] = 0;
+  
+  spp = SeqPortNew (bsp, 0, bsp->length-1, Seq_strand_plus, Seq_code_iupacna);
+  
+  ExportSeqPort (0, bsp->length, spp, fp);
+
+  SeqPortFree (spp);
+  fprintf (fp, "\n");  
+}
+
+static void ExportOneSegmentedBioseq (BioseqPtr bsp, FILE *fp)
+{
+  SeqLocPtr   slp;
+  BioseqPtr   bsp_seg;
+  SeqDescrPtr sdp;
+  CharPtr     title = NULL;
+  
+  if (bsp == NULL || fp == NULL || bsp->repr != Seq_repr_seg)
+  {
+    return;
+  }
+  
+  fprintf (fp, "[\n");
+  
+  sdp = bsp->descr;
+  while (sdp != NULL && sdp->choice != Seq_descr_title)
+  {
+    sdp = sdp->next;
+  }
+  if (sdp != NULL)
+  {
+    title = sdp->data.ptrvalue;
+  }
+
+  slp = (SeqLocPtr) bsp->seq_ext;
+  while (slp != NULL)
+  {
+    bsp_seg = BioseqFind (SeqLocId (slp));
+    ExportOneRawSequence (bsp_seg, title, fp);
+    title = NULL;
+    slp = slp->next;
+  }
+  fprintf (fp, "]\n\n");
+}
+
+static Boolean ExportOneDeltaBioseq (BioseqPtr bsp, FILE *fp)
+{
+  SeqDescrPtr sdp;
+  CharPtr     title = NULL;
+  DeltaSeqPtr dsp;
+  SeqLitPtr   slip;
+  SeqPortPtr  spp;
+  Char        buffer [EXPORT_PAGE_WIDTH + 1];
+  Int4        seq_offset;
+  
+  if (bsp == NULL || fp == NULL || bsp->repr != Seq_repr_delta
+      || bsp->seq_ext_type != 4 || bsp->seq_ext == NULL)
+  {
+    return FALSE;
+  }
+
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  while (dsp != NULL)
+  {
+    if (dsp->data.ptrvalue == NULL || dsp->choice != 2)
+    {
+      Message (MSG_ERROR, "Can't export badly formed delta sequence!");
+      return FALSE;
+    }
+    dsp = dsp->next;
+  }
+  
+  sdp = bsp->descr;
+  while (sdp != NULL && sdp->choice != Seq_descr_title)
+  {
+    sdp = sdp->next;
+  }
+  if (sdp != NULL)
+  {
+    title = sdp->data.ptrvalue;
+  }
+
+  ExportSeqIdAndTitle (bsp->id, title, fp);
+  
+  buffer [EXPORT_PAGE_WIDTH] = 0;
+  
+  spp = SeqPortNew (bsp, 0, bsp->length-1, Seq_strand_plus, Seq_code_iupacna);
+  
+  seq_offset = 0;
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  while (dsp != NULL)
+  {
+		slip = (SeqLitPtr) (dsp->data.ptrvalue);
+		if (slip->seq_data != NULL)
+		{
+      ExportSeqPort (seq_offset, seq_offset + slip->length, spp, fp);
+		}
+    else if (slip->fuzz != NULL && slip->fuzz->choice == 4)
+    {
+      fprintf (fp, ">?unk100\n");
+    }
+    else
+    {
+      fprintf (fp, ">?%d\n", slip->length);
+    }
+    seq_offset += slip->length;
+    dsp = dsp->next;
+  }
+  fprintf (fp, "\n");
+  return TRUE;
+}
+
+static void ExportFASTASeqEntryList (SeqEntryPtr sep, FILE *fp)
+{
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  
+  if (sep == NULL || sep->data.ptrvalue == NULL || fp == NULL)
+  {
+    return;
+  }
+  
+  if (IS_Bioseq (sep))
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (ISA_na (bsp->mol))
+    {
+      if (bsp->repr == Seq_repr_raw)
+      {
+        if (SeqMgrGetParentOfPart (bsp, NULL) == NULL)
+        {
+          ExportOneRawSequence (bsp, NULL, fp);
+        }
+      }
+      else if (bsp->repr == Seq_repr_seg)
+      {
+        ExportOneSegmentedBioseq (bsp, fp);
+      }
+      else if (bsp->repr == Seq_repr_delta)
+      {
+        ExportOneDeltaBioseq (bsp, fp);    
+      }
+    }
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    /* we don't export the parts set because we export them
+     * when we do the master segment 
+     */
+    if (bssp->_class != BioseqseqSet_class_parts)
+    {
+      ExportFASTASeqEntryList (bssp->seq_set, fp);
+    }
+  }
+  ExportFASTASeqEntryList (sep->next, fp);
+}
+
+static Boolean ExportNucleotideFASTADialog (DialoG d, CharPtr filename)
+{
+  CharPtr       extension;
+  FILE          *f;
+  FastaPagePtr  fpp;
+  Char          path [PATH_MAX];
+  Boolean       rval = FALSE;
+
+  fpp = (FastaPagePtr) GetObjectExtra (d);
+  if (fpp == NULL) {
+    return FALSE;
+  }
+  
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+
+  extension = NULL;
+  if (fpp->is_mrna) {
+    extension = GetAppProperty ("FastaNucExtension");
+  } else if (fpp->is_na) {
+    extension = GetAppProperty ("FastaNucExtension");
+  } else {
+    extension = GetAppProperty ("FastaProtExtension");
+  }
+  if (path [0] != '\0' || GetOutputFileName (path, sizeof (path), extension)) {
+    f = FileOpen (path, "w");
+    if (f == NULL)
+    {
+      Message (MSG_ERROR, "Unable to open %s", path);
+    }
+    else
+    {
+      WatchCursor ();
+      ExportFASTASeqEntryList (fpp->list, f);    
+      FileClose (f);
+      
+      ArrowCursor ();
+      Update ();
+      rval = TRUE;
+    }
+  }
+  return rval;
 }
 
 static void CleanupFastaDialog (GraphiC g, VoidPtr data)
@@ -1762,6 +4931,14 @@ extern DialoG CreateFastaDialog (GrouP h, CharPtr title,
     fpp->todialog = NULL;
     fpp->fromdialog = NULL;
     fpp->importdialog = ImportFastaDialog;
+    if (is_na)
+    {
+      fpp->exportdialog = ExportNucleotideFASTADialog;
+    }
+    else
+    {
+      fpp->exportdialog = NULL;
+    }
 
     fpp->seqPackagePtr = seqPackagePtr;
     if (title != NULL && title [0] != '\0') {
@@ -1818,7 +4995,6 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
   BioseqSetPtr       bssp;
   CharPtr            label;
   Int4               len;
-  Char               lookfor [128];
   CharPtr            measure;
   SeqEntryPtr        nsep;
   Int2               num;
@@ -1829,6 +5005,7 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
   CharPtr            title;
   CharPtr            ttl;
   CharPtr            tmp;
+  CharPtr            valstr;
   ValNodePtr         vnp;
 
   if (ppp != NULL) {
@@ -1910,69 +5087,94 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
           SeqEntryExplore (nsep, (Pointer) (&ttl), FindFirstTitle);
           title = StringSaveNoNull (ttl);
           if (title != NULL) {
-            if (LookForSearchString (title, "[org=", tmp, PhylipFormatBufLen - 1)) {
-              AddReportLine (str, "Organism", tmp);
+            valstr = FindValueFromPairInDefline ("organism", title);
+            if (!StringHasNoText (valstr)) {
+              AddReportLine (str, "Organism", valstr);
             }
-            if (LookForSearchString (title, "[organism=", tmp, PhylipFormatBufLen - 1)) {
-              AddReportLine (str, "Organism", tmp);
+            valstr = MemFree (valstr);
+            RemoveValueFromDefline ("organism", title);
+            
+            valstr = FindValueFromPairInDefline ("lineage", title);
+            if (!StringHasNoText (valstr)) {
+              AddReportLine (str, "Lineage", valstr);
             }
-            if (LookForSearchString (title, "[lineage=", tmp, PhylipFormatBufLen - 1)) {
-              AddReportLine (str, "Lineage", tmp);
-            }
+            valstr = MemFree (valstr);
+            RemoveValueFromDefline ("lineage", title);
+
             for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
-              MakeSearchStringFromAlist (lookfor, ap->name);
-              if (LookForSearchString (title, lookfor, tmp, PhylipFormatBufLen - 1)) {
-                AddReportLine (str, ap->name, tmp);
+              if (IsNonTextModifier (ap->name))
+              {
+                if (FindValuePairInDefLine (ap->name, title, NULL) != NULL)
+                {
+                  AddReportLine (str, ap->name, "TRUE");
+                  RemoveValueFromDefline (ap->name, title);
+                }
+              }
+              else
+              {
+                valstr = FindValueFromPairInDefline (ap->name, title);
+                if (!StringHasNoText (valstr)) {
+                  AddReportLine (str, ap->name, title);  
+                }
+                valstr = MemFree (valstr);
+                RemoveValueFromDefline (ap->name, title);
               }
             }
             for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
-              MakeSearchStringFromAlist (lookfor, ap->name);
-              if (LookForSearchString (title, lookfor, tmp, PhylipFormatBufLen - 1)) {
-                AddReportLine (str, ap->name, tmp);
+              if (IsNonTextModifier (ap->name))
+              {
+                if (FindValuePairInDefLine (ap->name, title, NULL) != NULL)
+                {
+                  AddReportLine (str, ap->name, "TRUE");
+                  RemoveValueFromDefline (ap->name, title);
+                }
+              }
+              else
+              {
+                valstr = FindValueFromPairInDefline (ap->name, title);
+                if (!StringHasNoText (valstr)) {
+                  AddReportLine (str, ap->name, title);  
+                }
+                valstr = MemFree (valstr);
+                RemoveValueFromDefline (ap->name, title);
               }
             }
-            if (LookForSearchString (title, "[note=", tmp, PhylipFormatBufLen - 1)) {
-              AddReportLine (str, "Note", tmp);
+            
+            valstr = FindValueFromPairInDefline ("note-orgmod", title);
+            if (!StringHasNoText (valstr)) {
+              AddReportLine (str, "Note", valstr);
             }
-            if (LookForSearchString (title, "[subsource=", tmp, PhylipFormatBufLen - 1)) {
-              AddReportLine (str, "Note", tmp);
+            valstr = MemFree (valstr);
+            RemoveValueFromDefline ("note-orgmod", title);
+            
+            valstr = FindValueFromPairInDefline ("note-subsrc", title);
+            if (!StringHasNoText (valstr)) {
+              AddReportLine (str, "Note", valstr);
             }
-            if (LookForSearchString (title, "[molecule=", tmp, FastaFormatBufLen - 1)) {
-              AddReportLine (str, "Molecule", tmp);
+            valstr = MemFree (valstr);
+            RemoveValueFromDefline ("note-subsrc", title);
+            
+            valstr = FindValueFromPairInDefline ("molecule", title);
+            if (!StringHasNoText (valstr)) {
+              AddReportLine (str, "Molecule", valstr);
             }
-            if (LookForSearchString (title, "[moltype=", tmp, FastaFormatBufLen - 1)) {
-              AddReportLine (str, "MolType", tmp);
+            valstr = MemFree (valstr);
+            RemoveValueFromDefline ("molecule", title);
+            
+            valstr = FindValueFromPairInDefline ("moltype", title);
+            if (!StringHasNoText (valstr)) {
+              AddReportLine (str, "MolType", valstr);
             }
-            if (LookForSearchString (title, "[location=", tmp, FastaFormatBufLen - 1)) {
-              AddReportLine (str, "Location", tmp);
+            valstr = MemFree (valstr);
+            RemoveValueFromDefline ("moltype", title);
+            
+            valstr = FindValueFromPairInDefline ("location", title);
+            if (!StringHasNoText (valstr)) {
+              AddReportLine (str, "Location", valstr);
             }
-          }
-          MemFree (title);
-          ttl = NULL;
-          SeqEntryExplore (nsep, (Pointer) (&ttl), FindFirstTitle);
-          title = StringSaveNoNull (ttl);
-          if (title != NULL) {
-            ExciseString (title, "[org=", "]");
-            ExciseString (title, "[organism=", "]");
-            ExciseString (title, "[lineage=", "]");
-            for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
-              MakeSearchStringFromAlist (lookfor, ap->name);
-              ExciseString (title, lookfor, "]");
-            }
-            for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
-              MakeSearchStringFromAlist (lookfor, ap->name);
-              ExciseString (title, lookfor, "]");
-            }
-            ExciseString (title, "[note=", "]");
-            ExciseString (title, "[subsource=", "]");
-            /*
-            ExciseString (title, "[clone=", "]");
-            ExciseString (title, "[strain=", "]");
-            ExciseString (title, "[isolate=", "]");
-            */
-            ExciseString (title, "[molecule=", "]");
-            ExciseString (title, "[moltype=", "]");
-            ExciseString (title, "[location=", "]");
+            valstr = MemFree (valstr);
+            RemoveValueFromDefline ("location", valstr);
+
             TrimSpacesAroundString (title);
             if (! StringHasNoText (title)) {
               StringCat (str, "Title: ");
@@ -2014,54 +5216,48 @@ static CharPtr noOrgInTitleWarning =
 "It is critical to annotate the data file with organism and source information. " \
 "Please quit Sequin and read the Sequin Quick Guide section on preparing the data files before proceeding.";
 
-static CharPtr noSrcInTitleWarning =
-"sequences have source information in titles. " \
-"It is critical to annotate the data file with organism and source information. " \
-"Please quit Sequin and read the Sequin Quick Guide section on preparing the data files before proceeding.";
-
 static void CountTitlesWithoutOrganisms (SeqEntryPtr sep)
 {
-  BioseqSetPtr bssp;
-  SeqEntryPtr  tmp;
-  Int2         seqtitles = 0;
-  Int2         seqtotals = 0;
-  CharPtr      ttl;
-  Char         str [256];
-
-  /* count titles without organisms */
-  if (sep != NULL && IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || (IsPopPhyEtcSet (bssp->_class)))) {
-      for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
-        ttl = NULL;
-        SeqEntryExplore (tmp, (Pointer) (&ttl), FindFirstTitle);
-        if (ttl != NULL) {
-          if (bssp->_class == BioseqseqSet_class_phy_set) {
-            if (StringISearch (ttl, "[org=") != NULL || StringISearch (ttl, "[organism=") != NULL) {
-              seqtitles++;
-            }
-          } else if (StringISearch (ttl, "[") != NULL) {
-            seqtitles++;
-          }
-        }
-        seqtotals++;
-      }
-      if (seqtotals != seqtitles) {
-        sprintf (str, "None");
-        if (seqtitles > 0) {
-          sprintf (str, "Only %d", (int) seqtitles);
-        }
-        ArrowCursor ();
-        Update ();
-        Beep ();
-        if (bssp->_class == BioseqseqSet_class_phy_set) {
-          Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noOrgInTitleWarning);
-        } else {
-          Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noSrcInTitleWarning);
-        }
-      }
-    }
+  Char              str [256];
+  IDAndTitleEditPtr iatep;
+  Int4              seq_num;
+  CharPtr           org_name;
+  Int4              num_sequences = 0, num_with_orgs = 0;
+  
+  iatep = SeqEntryListToIDAndTitleEdit (sep);
+  if (iatep == NULL)
+  {
+    return;
   }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    num_sequences ++;
+    org_name = FindValueFromPairInDefline ("organism", iatep->title_list [seq_num]);
+    if (!StringHasNoText (org_name))
+    {
+      num_with_orgs ++;
+    }
+    org_name = MemFree (org_name);
+  }
+  iatep = IDAndTitleEditFree (iatep);
+  if (num_sequences != num_with_orgs)
+  {
+    if (num_with_orgs == 0)
+    {
+      sprintf (str, "None");
+    }
+    else
+    {
+      sprintf (str, "%d", num_sequences - num_with_orgs);
+    }
+    Message (MSG_OK, "%s of %d %s", str, (int) num_sequences, noOrgInTitleWarning);
+  }
+  
 }
 
 static CharPtr  phylipNucMsg = "\
@@ -2255,30 +5451,6 @@ static DialoG CreatePhylipDialog (GrouP h, CharPtr title, CharPtr text,
 #define PROTEIN_PAGE      3
 #define ANNOTATE_PAGE     4
 
-static ENUM_ALIST(biomol_nucX_alist)
-  {"Genomic DNA",            253},
-  {"Genomic RNA",            254},
-  {"Precursor RNA",            2},
-  {"mRNA [cDNA]",              3},
-  {"Ribosomal RNA",            4},
-  {"Transfer RNA",             5},
-  {"Small nuclear RNA",        6},
-  {"Small cytoplasmic RNA",    7},
-  {"Other-Genetic",            9},
-  {"cRNA",                    11},
-  {"Small nucleolar RNA",     12},
-END_ENUM_ALIST
-
-static ENUM_ALIST(biomol_nucGen_alist)
-  {"Genomic DNA",            253},
-  {"Genomic RNA",            254},
-END_ENUM_ALIST
-
-static ENUM_ALIST(topology_nuc_alist)
-{"Linear",          TOPOLOGY_LINEAR},
-{"Circular",        TOPOLOGY_CIRCULAR},
-END_ENUM_ALIST
-
 /*---------------------------------------------------------------------*/
 /*                                                                     */
 /* HasZeroLengthSequence () -- Checks to see if any of a submission's  */
@@ -2339,6 +5511,72 @@ extern Boolean SequencesFormHasProteins (ForM f)
   return FALSE;
 }
 
+extern SeqEntryPtr GetSequencesFormProteinList (ForM f)
+
+{
+  FastaPagePtr      fpp;
+  SequencesFormPtr  sqfp;
+
+  sqfp = (SequencesFormPtr) GetObjectExtra (f);
+  if (sqfp != NULL) {
+    fpp = GetObjectExtra (sqfp->protseq);
+    if (fpp != NULL) {
+      return fpp->list;
+    }
+  }
+  return NULL;
+}
+
+static SeqEntryPtr GetSeqEntryFromSequencesForm (SequencesFormPtr sqfp)
+{
+  SeqEntryPtr list = NULL;
+  FastaPagePtr       fpp;
+  PhylipPagePtr      ppp;
+  SeqEntryPtr        sep;
+  BioseqSetPtr       bssp;
+  
+  if (sqfp == NULL) return NULL;
+
+  if (sqfp->seqPackage == SEQ_PKG_SEGMENTED) 
+  {
+    fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
+    if (fpp != NULL) 
+    {
+      list = fpp->list;
+    }
+  }
+  else if (sqfp->seqFormat == SEQ_FMT_FASTA) {
+    fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
+    if (fpp != NULL) 
+    {
+      list = fpp->list;
+    }
+  } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
+    ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
+    if (ppp != NULL) {
+      sep = ppp->sep;
+      if (sep != NULL && IS_Bioseq_set (sep)) {
+        bssp = (BioseqSetPtr) sep->data.ptrvalue;
+        if (bssp != NULL) {
+          list = bssp->seq_set;
+        }
+      }
+    }
+  }
+  return list;
+}
+
+extern SeqEntryPtr GetSequencesFormNucleotideList (ForM f)
+{
+  SequencesFormPtr  sqfp;
+
+  sqfp = (SequencesFormPtr) GetObjectExtra (f);
+  if (sqfp != NULL) {
+    return GetSeqEntryFromSequencesForm (sqfp);
+  }
+  return NULL;
+}
+
 extern Boolean SequencesFormHasTooManyNucleotides (ForM f)
 
 {
@@ -2364,248 +5602,11 @@ extern DialoG CreateTagListDialogEx (GrouP h, Uint2 rows, Uint2 cols,
                                      Boolean useBar, Boolean noExtend,
                                      ToDialogFunc tofunc, FromDialogFunc fromfunc);
 
-static CharPtr other_modifier_names [] = 
-{
-  "cDNA",
-  "comment",
-  "gene",
-  "gene_syn",
-  "molecule",
-  "moltype",
-  "mRNA",
-  "note",
-  "orf",
-  "origin",
-  "prot_desc",
-  "protein_desc",
-  "subsource"
-};
-
-static Int4 num_other_modifier_names = sizeof (other_modifier_names) / sizeof (CharPtr);
-
-typedef enum {
-    eModifierType_SourceQual = 0,
-    eModifierType_Organism,
-    eModifierType_Location,
-    eModifierType_Lineage,
-    eModifierType_GeneticCode,
-    eModifierType_GeneticCodeComment,
-    eModifierType_NucGeneticCode,
-    eModifierType_MitoGeneticCode,
-    eModifierType_MolType,
-    eModifierType_Topology,
-    eModifierType_Other
-} EModifierType;
-
-typedef struct modifierinfo 
-{
-  CharPtr       name;
-  Uint1         subtype;
-  CharPtr       value;
-  EModifierType modtype;
-} ModifierInfoData, PNTR ModifierInfoPtr;
-
-static ModifierInfoPtr ModifierInfoNew (void)
-{
-  ModifierInfoPtr mip;
-  mip = (ModifierInfoPtr) MemNew (sizeof (ModifierInfoData));
-  if (mip == NULL) return NULL;
-  mip->name = NULL;
-  mip->value = NULL;
-  mip->modtype = eModifierType_SourceQual;
-  return mip;
-}
-
-static ModifierInfoPtr ModifierInfoFree (ModifierInfoPtr mip)
-{
-  if (mip == NULL) return NULL;
-  mip->name = MemFree (mip->name);
-  mip->value = MemFree (mip->value);
-  mip = MemFree (mip);
-  return mip;
-}
-
-static ValNodePtr ModifierInfoListFree (ValNodePtr list)
-{
-  if (list == NULL) return NULL;
-  ModifierInfoListFree (list->next);
-  list->next = NULL;
-  list->data.ptrvalue = ModifierInfoFree (list->data.ptrvalue);
-  ValNodeFree (list);
-  return NULL;
-}
-
-static EModifierType GetModifierType (CharPtr mod_name)
-{
-  Int4 i;
-  
-  if (StringHasNoText (mod_name))
-  {
-    return eModifierType_SourceQual;
-  }
-  else if (StringICmp (mod_name, "organism") == 0
-           || StringICmp (mod_name, "org") == 0)
-  {
-	  return eModifierType_Organism;
-  }
-  else if (StringICmp (mod_name, "location") == 0)
-  {
-    return eModifierType_Location;
-  }
-  else if (StringICmp (mod_name, "lineage") == 0)
-  {
-    return eModifierType_Lineage;
-  }
-  else if (StringICmp (mod_name, "gcode") == 0)
-  {
-    return eModifierType_NucGeneticCode;
-  }
-  else if (StringICmp (mod_name, "mgcode") == 0)
-  {
-    return eModifierType_MitoGeneticCode;
-  }
-  else if (StringICmp (mod_name, "genetic_code") == 0)
-  {
-    return eModifierType_GeneticCode;
-  }
-  else if (StringICmp (mod_name, "genetic_code_comment") == 0)
-  {
-    return eModifierType_GeneticCodeComment;
-  }
-  else if (StringICmp (mod_name, "moltype") == 0)
-  {
-    return eModifierType_MolType;
-  }
-  else if (StringICmp (mod_name, "topology") == 0)
-  {
-    return eModifierType_Topology;
-  }
-  else
-  {
-    for (i = 0; i < num_other_modifier_names; i++)
-    {
-      if (StringICmp (mod_name, other_modifier_names[i]) == 0)
-      {
-        return eModifierType_Other;
-      }
-    }
-    return eModifierType_SourceQual;   
-  }
-}
-
-static ModifierInfoPtr ParseOneBracketedModifier (CharPtr str)
-{
-  CharPtr         start, stop, eq_loc;
-  ModifierInfoPtr mip;
-  Int4            value_len, name_len;
-  
-  start = StringChr (str, '[');
-  stop = StringChr (str, ']');
-  if (start == NULL)
-  {
-    eq_loc = NULL;
-  }
-  else
-  {
-    eq_loc = StringChr (start + 1, '=');
-  }
-  
-  if (start == NULL || stop == NULL || eq_loc == NULL) return NULL;
-  
-  mip = ModifierInfoNew();
-  if (mip == NULL) return NULL;
-  name_len = eq_loc - start + 1;
-  value_len = stop - eq_loc + 1;
-  mip->value = (CharPtr) MemNew (value_len * sizeof (Char));
-  mip->name = (CharPtr) MemNew (name_len * sizeof (Char));
-  if (mip->value == NULL || mip->name == NULL)
-  {
-  	ModifierInfoFree (mip);
-  	return NULL;
-  }
-  StringNCpy (mip->value, eq_loc + 1, value_len - 2);
-  mip->value [value_len - 1] = 0;
-  StringNCpy (mip->name, start + 1, name_len - 2);
-  mip->name [name_len - 1] = 0;
-  
-  if (StringICmp (mip->name, "note") == 0)
-  {
-    mip->name = MemFree (mip->name);
-    mip->name = StringSave ("Note-SubSrc");
-  }
-  
-  mip->modtype = GetModifierType (mip->name);
-  if (mip->modtype == eModifierType_SourceQual)
-  {
-    mip->subtype = FindTypeForModNameText (mip->name);
-  }
-  else
-  {
-    mip->subtype = 0;
-  }
-  return mip;
-}
-
-static ValNodePtr ParseAllBracketedModifiers (CharPtr str)
-{
-  CharPtr         stop, cp;
-  ValNodePtr      list = NULL;
-  ValNodePtr      vnp;
-  ModifierInfoPtr mip;
-  
-  cp = str;
-  stop = StringChr (cp, ']');
-  while (stop != NULL)
-  {
-  	mip = ParseOneBracketedModifier (cp);
-  	if (mip == NULL)
-  	{
-  	  stop = NULL;
-  	}
-  	else
-  	{
-  	  vnp = ValNodeAdd (&list);
-  	  if (vnp != NULL)
-  	  {
-  	  	vnp->data.ptrvalue = mip;
-  	  }
-  	  cp = stop + 1;
-  	  stop = StringChr (cp, ']');
-  	}
-  }
-  return list;
-}
-
-static CharPtr GetUnbracketedText (CharPtr str)
-{
-  CharPtr unbr_text, src, dst;
-  
-  if (StringHasNoText (str))
-  {
-  	return NULL;
-  }
-  unbr_text = StringSave (str);
-  dst = StringChr (unbr_text, '[');
-  src = StringChr (unbr_text, ']');
-  while (dst != NULL && src != NULL && *src != 0)
-  {
-    src++;
-    while (*src != '[' && *src != 0)
-    {
-      *dst = *src;
-      dst++;
-      src++;
-    }
-  	src = StringChr (src, ']');
-  }
-  if (dst != NULL)
-  {
-    *dst = 0;    
-  }
-  return unbr_text;
-}
-
-static ValNodePtr BuildModifierTypeList (ValNodePtr type_list, CharPtr new_title)
+static ValNodePtr 
+BuildModifierTypeList 
+(ValNodePtr type_list,
+ CharPtr    new_title, 
+ Boolean    allow_prot)
 {
   ValNodePtr      modifier_info_list;
   ValNodePtr      info_vnp, type_vnp;
@@ -2615,8 +5616,12 @@ static ValNodePtr BuildModifierTypeList (ValNodePtr type_list, CharPtr new_title
   for (info_vnp = modifier_info_list; info_vnp != NULL; info_vnp = info_vnp->next)
   {
     mip = (ModifierInfoPtr)info_vnp->data.ptrvalue;
-    if (mip == NULL) continue;
-    if (mip->modtype == eModifierType_Organism) continue;
+    if (mip == NULL 
+        || mip->modtype == eModifierType_Protein
+        || mip->modtype == eModifierType_Organism)
+    {
+      continue;
+    }
     if (mip->modtype == eModifierType_SourceQual)
     {
   	  for (type_vnp = type_list;
@@ -2682,560 +5687,14 @@ EnumFieldAssocPtr locationmodedit_alists [] = {
   NULL, biosource_genome_simple_alist
 };
 
-typedef struct fixprotform {
-  FORM_MESSAGE_BLOCK
-  TexT               geneDesc;
-  TexT               geneSymbol;
-  ButtoN             orf;
-  TexT               protDesc;
-  TexT               protName;
-  TexT               seqID;
-  TexT               comment;
-  TexT               title;
-
-  SequencesFormPtr   sqfp;
-  SeqEntryPtr        esep;
-  SeqEntryPtr        nsep;
-  SeqEntryPtr        psep;
-  BioseqPtr          pbsp;
-} FixProtForm, PNTR FixProtFormPtr;
-
-static void LetUserFixProteinInfo (SequencesFormPtr sqfp);
-
-static void AcceptThisFixup (ButtoN b)
-
-{
-  FixProtFormPtr    fpfp;
-  Boolean           needsOpener;
-  SeqEntryPtr       old;
-  BioseqPtr         pbsp;
-  SeqEntryPtr       psep;
-  CharPtr           ptr;
-  SeqLocPtr         slp;
-  SequencesFormPtr  sqfp;
-  Char              str [256];
-  CharPtr           title;
-  Char              tmp [256];
-  ValNodePtr        vnp;
-
-  fpfp = (FixProtFormPtr) GetObjectExtra (b);
-  if (fpfp == NULL) return;
-  if (fpfp->sqfp != NULL) {
-    Hide (fpfp->form);
-    Update ();
-    sqfp = fpfp->sqfp;
-    psep = fpfp->psep;
-    pbsp = fpfp->pbsp;
-    GetTitle (fpfp->seqID, str, sizeof (str));
-    if (! StringHasNoText (str)) {
-      pbsp->id = SeqIdFree (pbsp->id);
-      pbsp->id = MakeSeqID (str);
-      SeqMgrReplaceInBioseqIndex (pbsp);
-    } else {
-      pbsp->id = SeqIdFree (pbsp->id);
-      slp = CreateWholeInterval (fpfp->nsep);
-      old = SeqEntrySetScope (fpfp->esep);
-      pbsp->id = MakeNewProteinSeqId (slp, NULL);
-      SeqMgrReplaceInBioseqIndex (pbsp);
-      SeqEntrySetScope (old);
-      SeqLocFree (slp);
-    }
-    title = MemNew (1000 * sizeof (Char));
-    if (title != NULL) {
-        
-      tmp [0] = '\0';
-      needsOpener = TRUE;
-
-      ptr = SaveStringFromText (fpfp->title);
-      StringCat (title, ptr);
-      MemFree (ptr);
-
-      GetTitle (fpfp->geneSymbol, str, sizeof (str));
-      TrimSpacesAroundString (str);
-      if (! StringHasNoText (str)) {
-        if (needsOpener) {
-          StringCat (title, "[gene=");
-          needsOpener = FALSE;
-        }
-        StringCat (title, str);
-      }
-      GetTitle (fpfp->geneDesc, str, sizeof (str));
-      TrimSpacesAroundString (str);
-      if (! StringHasNoText (str)) {
-        if (needsOpener) {
-          StringCat (title, "[gene=");
-          needsOpener = FALSE;
-        } else {
-          StringCat (title, ";");
-        }
-        StringCat (title, str);
-      }
-      if (! needsOpener) {
-        StringCat (title, "] ");
-      }
-
-      needsOpener = TRUE;
-      GetTitle (fpfp->protName, str, sizeof (str));
-      TrimSpacesAroundString (str);
-      if (! StringHasNoText (str)) {
-        if (needsOpener) {
-          StringCat (title, "[prot=");
-          needsOpener = FALSE;
-        }
-        StringCat (title, str);
-      }
-      GetTitle (fpfp->protDesc, str, sizeof (str));
-      TrimSpacesAroundString (str);
-      if (! StringHasNoText (str)) {
-        if (needsOpener) {
-          StringCat (title, "[prot=");
-          needsOpener = FALSE;
-        } else {
-          StringCat (title, ";");
-        }
-        StringCat (title, str);
-      }
-      if (! needsOpener) {
-        StringCat (title, "] ");
-      }
-
-      needsOpener = TRUE;
-      GetTitle (fpfp->comment, str, sizeof (str));
-      TrimSpacesAroundString (str);
-      if (! StringHasNoText (str)) {
-        if (needsOpener) {
-          StringCat (title, "[comment=");
-          needsOpener = FALSE;
-        }
-        StringCat (title, str);
-      }
-      if (! needsOpener) {
-        StringCat (title, "] ");
-      }
-
-      if (GetStatus (fpfp->orf)) {
-        StringCat (title, "[orf] ");
-      }
-
-      if (pbsp->descr != NULL) {
-        vnp = ValNodeExtract (&(pbsp->descr), Seq_descr_title);
-        vnp = ValNodeFreeData (vnp);
-      }
-
-      vnp = CreateNewDescriptor (psep, Seq_descr_title);
-      if (vnp != NULL) {
-        vnp->data.ptrvalue = StringSave (title);
-      }
-    }
-    MemFree (title);
-
-    Remove (fpfp->form);
-    Update ();
-    if (sqfp->currConfirmSeq != NULL) {
-      sqfp->currConfirmSeq = sqfp->currConfirmSeq->next;
-    }
-    LetUserFixProteinInfo (sqfp);
-  }
-}
-
-static void FixProtMessage (ForM f, Int2 mssg)
-
-{
-  FixProtFormPtr  fpfp;
-
-  fpfp = (FixProtFormPtr) GetObjectExtra (f);
-  if (fpfp != NULL) {
-    switch (mssg) {
-      case VIB_MSG_QUIT :
-        break;
-      case VIB_MSG_CLOSE :
-        break;
-      case VIB_MSG_CUT :
-        StdCutTextProc (NULL);
-        break;
-      case VIB_MSG_COPY :
-        StdCopyTextProc (NULL);
-        break;
-      case VIB_MSG_PASTE :
-        StdPasteTextProc (NULL);
-        break;
-      case VIB_MSG_DELETE :
-        StdDeleteTextProc (NULL);
-        break;
-      default :
-        if (fpfp->appmessage != NULL) {
-          fpfp->appmessage (f, mssg);
-        }
-        break;
-    }
-  }
-}
-
-static void FixUpProtActivate (WindoW w)
-
-{
-  IteM            closeItm;
-  IteM            exportItm;
-  FixProtFormPtr  fpfp;
-  IteM            importItm;
-
-  fpfp = (FixProtFormPtr) GetObjectExtra (w);
-  if (fpfp != NULL) {
-    if (fpfp->activate != NULL) {
-      fpfp->activate (w);
-    }
-    importItm = FindFormMenuItem ((BaseFormPtr) fpfp, VIB_MSG_IMPORT);
-    exportItm = FindFormMenuItem ((BaseFormPtr) fpfp, VIB_MSG_EXPORT);
-    closeItm = FindFormMenuItem ((BaseFormPtr) fpfp, VIB_MSG_CLOSE);
-    SafeDisable (importItm);
-    SafeDisable (exportItm);
-    SafeDisable (closeItm);
-  }
-}
-
-static Boolean HasMinimalInformation (BioseqPtr pbsp)
-
-{
-  CharPtr     ptr;
-  SeqIdPtr    sip;
-  Char        str [128];
-  CharPtr     title;
-  ValNodePtr  vnp;
-
-  if (pbsp == NULL) return FALSE;
-  sip = SeqIdFindWorst (pbsp->id);
-  SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
-  if (StringHasNoText (str)) return FALSE;
-  if (pbsp->descr == NULL) return FALSE;
-  vnp = ValNodeFindNext (pbsp->descr, NULL, Seq_descr_title);
-  if (vnp == NULL || vnp->data.ptrvalue == NULL) return FALSE;
-  title = (CharPtr) vnp->data.ptrvalue;
-  ptr = StringISearch (title, "[gene=");
-  if (ptr == NULL) {
-    ptr = StringISearch (title, "[gene_syn=");
-  }
-  if (ptr == NULL) return FALSE;
-  StringNCpy_0 (str, ptr + 6, sizeof (str));
-  ptr = StringChr (str, ']');
-  if (ptr == NULL) return FALSE;
-  *ptr = '\0';
-  ptr = StringChr (str, ';');
-  if (ptr != NULL) {
-    *ptr = '\0';
-    ptr++;
-  }
-  if (StringHasNoText (str)) return FALSE;
-  ptr = StringISearch (title, "[prot=");
-  if (ptr != NULL) {
-    StringNCpy_0 (str, ptr + 6, sizeof (str));
-    ptr = StringChr (str, ']');
-  } else {
-    ptr = StringISearch (title, "[protein=");
-    if (ptr != NULL) {
-      StringNCpy_0 (str, ptr + 9, sizeof (str));
-      ptr = StringChr (str, ']');
-    }
-  }
-  if (ptr == NULL) return FALSE;
-  *ptr = '\0';
-  ptr = StringChr (str, ';');
-  if (ptr != NULL) {
-    *ptr = '\0';
-    ptr++;
-  }
-  if (StringHasNoText (str)) return FALSE;
-  return TRUE;
-}
-
-static void LetUserFixProteinInfo (SequencesFormPtr sqfp)
-
-{
-  ButtoN             acceptBtn;
-  GrouP              c;
-  SeqEntryPtr        esep;
-  FixProtFormPtr     fpfp;
-  GrouP              g;
-  GrouP              k;
-  Int2               len;
-  SeqEntryPtr        nsep;
-  BioseqPtr          pbsp;
-  SeqEntryPtr        psep;
-  CharPtr            ptr;
-  Boolean            quickmode;
-  StdEditorProcsPtr  sepp;
-  SeqIdPtr           sip;
-  Char               str [256];
-  CharPtr            title;
-  ValNodePtr         vnp;
-  WindoW             w;
-
-  if (sqfp == NULL) return;
-
-  quickmode = TRUE;
-  if (GetAppParam ("SEQUIN", "PREFERENCES", "QUICKMODE", NULL, str, sizeof (str))) {
-    if (StringICmp (str, "FALSE") == 0) {
-      quickmode = FALSE;
-    }
-  }
-
-  while (quickmode) {
-    psep = sqfp->currConfirmSeq;
-    if (psep == NULL) {
-      if (sqfp->putItAllTogether != NULL) {
-        sqfp->putItAllTogether (sqfp->form);
-        return;
-      }
-    }
-    pbsp = (BioseqPtr) psep->data.ptrvalue;
-    if (pbsp != NULL) {
-      if (HasMinimalInformation (pbsp)) {
-        (sqfp->currConfirmCount)++;
-        sqfp->currConfirmSeq = psep->next;
-      } else {
-        quickmode = FALSE;
-      }
-    } else {
-      quickmode = FALSE;
-    }
-  }
-
-  psep = sqfp->currConfirmSeq;
-  if (psep == NULL) {
-    if (sqfp->putItAllTogether != NULL) {
-      sqfp->putItAllTogether (sqfp->form);
-      return;
-    }
-  }
-
-  esep = sqfp->topSeqForConfirm;
-  if (esep == NULL || psep == NULL) return;
-  nsep = FindNucSeqEntry (esep);
-  if (nsep == NULL) return;
-  pbsp = (BioseqPtr) psep->data.ptrvalue;
-  if (pbsp == NULL) return;
-
-  (sqfp->currConfirmCount)++;
-
-  w = NULL;
-  fpfp = (FixProtFormPtr) MemNew (sizeof (FixProtForm));
-  if (fpfp != NULL) {
-
-    fpfp->sqfp = sqfp;
-    fpfp->esep = esep;
-    fpfp->nsep = nsep;
-    fpfp->psep = psep;
-    fpfp->pbsp = pbsp;
-
-    sprintf (str, "Product %d, length %ld amino acids",
-             (int) sqfp->currConfirmCount, (long) pbsp->length);
-    w = FixedWindow (-50, -33, -10, -10, str, NULL);
-    SetObjectExtra (w, fpfp, StdCleanupFormProc);
-    fpfp->form = (ForM) w;
-    fpfp->formmessage = FixProtMessage;
-
-#ifndef WIN_MAC
-    CreateStdEditorFormMenus (w);
-#endif
-
-    fpfp->activate = NULL;
-    sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
-    if (sepp != NULL) {
-      fpfp->activate = sepp->activateForm;
-      fpfp->appmessage = sepp->handleMessages;
-    }
-    SetActivate (w, FixUpProtActivate);
-
-    SelectFont (programFont);
-    len = StringWidth ("Protein Name") + 2;
-    SelectFont (systemFont);
-
-    g = HiddenGroup (w, 1, 0, NULL);
-
-    k = HiddenGroup (g, 2, 0, NULL);
-    StaticPrompt (k, "Sequence ID", len, dialogTextHeight, programFont, 'l');
-    fpfp->seqID = DialogText (k, "", 20, NULL);
-    StaticPrompt (k, "Title", len, dialogTextHeight, programFont, 'l');
-    fpfp->title = DialogText (k, "", 20, NULL);
-
-    k = HiddenGroup (g, 2, 0, NULL);
-    StaticPrompt (k, "Gene Symbol", len, dialogTextHeight, programFont, 'l');
-    fpfp->geneSymbol = DialogText (k, "", 20, NULL);
-    StaticPrompt (k, "Description", len, dialogTextHeight, programFont, 'l');
-    fpfp->geneDesc = DialogText (k, "", 20, NULL);
-
-    k = HiddenGroup (g, 2, 0, NULL);
-    StaticPrompt (k, "Protein Name", len, dialogTextHeight, programFont, 'l');
-    fpfp->protName = DialogText (k, "", 20, NULL);
-    StaticPrompt (k, "Description", len, dialogTextHeight, programFont, 'l');
-    fpfp->protDesc = DialogText (k, "", 20, NULL);
-
-    k = HiddenGroup (g, 2, 0, NULL);
-    StaticPrompt (k, "Comment", len, 3 * Nlm_stdLineHeight, programFont, 'l');
-    fpfp->comment = ScrollText (k, 20, 3, programFont, TRUE, NULL);
-
-    AlignObjects (ALIGN_RIGHT, (HANDLE) fpfp->seqID, (HANDLE) fpfp->title,
-                  (HANDLE) fpfp->geneSymbol, (HANDLE) fpfp->geneDesc,
-                  (HANDLE) fpfp->protName, (HANDLE) fpfp->protDesc,
-                  (HANDLE) fpfp->comment, NULL);
-
-    fpfp->orf = NULL;
-    if (pbsp->descr != NULL) {
-      vnp = ValNodeFindNext (pbsp->descr, NULL, Seq_descr_title);
-      if (vnp != NULL && vnp->data.ptrvalue != NULL) {
-        title = (CharPtr) vnp->data.ptrvalue;
-        if (StringISearch (title, "[orf]") != NULL) {
-          fpfp->orf = CheckBox (w, "Open Reading Frame", NULL);
-        }
-      }
-    }
-
-    c = HiddenGroup (w, 2, 0, NULL);
-    acceptBtn = DefaultButton (c, "OK", AcceptThisFixup);
-    SetObjectExtra (acceptBtn, fpfp, NULL);
-
-    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, (HANDLE) fpfp->orf, NULL);
-
-    RealizeWindow (w);
-
-    str [0] = '\0';
-    sip = SeqIdFindWorst (pbsp->id);
-    if (sip != NULL) {
-      if (sip->choice == SEQID_LOCAL) {
-        SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
-      } else {
-        SeqIdWrite (sip, str, PRINTID_FASTA_SHORT, sizeof (str));
-      }
-    }
-    SetTitle (fpfp->seqID, str);
-    if (pbsp->descr != NULL) {
-      vnp = ValNodeFindNext (pbsp->descr, NULL, Seq_descr_title);
-      if (vnp != NULL && vnp->data.ptrvalue != NULL) {
-        title = (CharPtr) vnp->data.ptrvalue;
-        ptr = StringISearch (title, "[gene=");
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 6, sizeof (str));
-          ptr = StringChr (str, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            ptr = StringChr (str, ';');
-            if (ptr != NULL) {
-              *ptr = '\0';
-              ptr++;
-            }
-            SetTitle (fpfp->geneSymbol, str);
-            SetTitle (fpfp->geneDesc, ptr);
-          }
-        }
-        ptr = StringISearch (title, "[prot=");
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 6, sizeof (str));
-          ptr = StringChr (str, ']');
-        } else {
-          ptr = StringISearch (title, "[protein=");
-          if (ptr != NULL) {
-            StringNCpy_0 (str, ptr + 9, sizeof (str));
-            ptr = StringChr (str, ']');
-          }
-        }
-        if (ptr != NULL) {
-          *ptr = '\0';
-          ptr = StringChr (str, ';');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            ptr++;
-          }
-          SetTitle (fpfp->protName, str);
-          SetTitle (fpfp->protDesc, ptr);
-        }
-        ptr = StringISearch (title, "[comment=");
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 9, sizeof (str));
-          ptr = StringChr (str, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            SetTitle (fpfp->comment, str);
-          }
-        }
-        ptr = StringISearch (title, "[orf]");
-        if (ptr != NULL) {
-          SetStatus (fpfp->orf, TRUE);
-        } else {
-          Hide (fpfp->orf);
-        }
-        ExciseString (title, "[gene=", "]");
-        ExciseString (title, "[prot=", "]");
-        ExciseString (title, "[protein=", "]");
-        ExciseString (title, "[orf", "]");
-        ExciseString (title, "[comment", "]");
-        TrimSpacesAroundString (title);
-        SetTitle (fpfp->title, title);
-      }
-    }
-
-    Select (fpfp->seqID);
-    Show (w);
-    Select (w);
-    Update ();
-  }
-}
-
 extern void ConfirmSequencesFormParsing (ForM f, FormActnFunc putItAllTogether)
 
 {
-  BioseqSetPtr      bssp;
-  FastaPagePtr      fpp;
-  PhylipPagePtr     ppp;
-  SeqEntryPtr       sep;
   SequencesFormPtr  sqfp;
 
   sqfp = (SequencesFormPtr) GetObjectExtra (f);
-  if (sqfp != NULL) {
-    
-    sqfp->putItAllTogether = putItAllTogether;
-    sqfp->topSeqForConfirm = NULL;
-    sqfp->currConfirmSeq = NULL;
-    if (PackageTypeIsSingle (sqfp->seqPackage)
-        || sqfp->seqPackage == SEQ_PKG_GENOMICCDNA)
-    {
-      fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
-      if (fpp != NULL) {
-        sqfp->topSeqForConfirm = fpp->list;
-      }
-      sqfp->currConfirmSeq = NULL;
-      fpp = (FastaPagePtr) GetObjectExtra (sqfp->protseq);
-      if (fpp != NULL) {
-        sqfp->currConfirmSeq = fpp->list;
-      }
-      sqfp->currConfirmCount = 0;
-      LetUserFixProteinInfo (sqfp);
-    } else {
-      if (sqfp->seqFormat == SEQ_FMT_FASTA) {
-        fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
-        if (fpp != NULL) {
-          sqfp->currConfirmSeq = fpp->list;
-        }
-      } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
-        ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
-        if (ppp != NULL) {
-          sep = ppp->sep;
-          if (sep != NULL && IS_Bioseq_set (sep)) {
-            bssp = (BioseqSetPtr) sep->data.ptrvalue;
-            if (bssp != NULL) {
-              sqfp->currConfirmSeq = bssp->seq_set;
-            }
-          }
-        }
-      }
-      sqfp->topSeqForConfirm = sqfp->currConfirmSeq;
-      sqfp->currConfirmSeq = NULL;
-      fpp = (FastaPagePtr) GetObjectExtra (sqfp->protseq);
-      if (fpp != NULL) {
-        sqfp->currConfirmSeq = fpp->list;
-      }
-      sqfp->currConfirmCount = 0;
-      LetUserFixProteinInfo (sqfp);
-
-    }
+  if (sqfp != NULL && putItAllTogether != NULL) {
+    putItAllTogether (sqfp->form);
   }
 }
 
@@ -3331,89 +5790,6 @@ extern void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 
 
 #define PROC_NUC_STR_SIZE 4096
 
-static Int4 GeneticCodeFromStringAndList (CharPtr str, ValNodePtr list)
-{
-  while (list != NULL)
-  {
-    if (StringICmp (str, list->data.ptrvalue) == 0)
-    {
-      return list->choice;
-    }
-    list = list->next;
-  }
-  return 0;
-}
-
-static Int4 GeneticCodeFromString (CharPtr str)
-{
-  ValNodePtr gencodelist;
-  Int4       gcode = 0;
-  
-  if (StringHasNoText (str))
-  {
-    gcode = 0;
-  }
-  else if (isdigit (str[0]))
-  {
-    gcode = atoi (str);
-  }
-  else
-  {
-    gencodelist = GetGeneticCodeValNodeList ();
-    gcode = GeneticCodeFromStringAndList (str, gencodelist);
-    gencodelist = ValNodeFreeData (gencodelist);
-  }
-  return gcode;
-}
-
-static CharPtr GeneticCodeStringFromIntAndList (Int4 num, ValNodePtr list)
-{
-  while (list != NULL)
-  {
-    if (list->choice == num)
-    {
-      return list->data.ptrvalue;
-    }
-    list = list->next;
-  }
-  return NULL;
-}
-
-static Int4 MolTypeFromString (CharPtr str)
-{
-  EnumFieldAssocPtr  eap;
-
-  if (StringICmp (str, "dna") == 0)
-  {
-    return 253;
-  }
-  else if (StringICmp (str, "rna") == 0)
-  {
-    return 254;
-  }
-  for (eap = biomol_nucGen_alist; eap != NULL && eap->name != NULL; eap++)
-  {
-    if (StringICmp (eap->name, str) == 0)
-    {
-      return eap->value;
-    }
-  }
-  for (eap = biomol_nucX_alist; eap != NULL && eap->name != NULL; eap++)
-  {
-    if (StringICmp (eap->name, str) == 0)
-    {
-      return eap->value;
-    }
-    else if (eap->name [0] == 'm'
-             && StringICmp (eap->name, "mRNA [cDNA]") == 0
-             && StringICmp (str, "mRNA") == 0)
-    {
-      return eap->value;
-    }
-  }
-  return 0;
-}
-
 static Int4 TopologyFromString (CharPtr str)
 {
   EnumFieldAssocPtr  eap;
@@ -3428,14 +5804,62 @@ static Int4 TopologyFromString (CharPtr str)
   return 1; 
 }
 
-static void SetGeneticCodeForBioSource (BioSourcePtr biop, Int4 gcode, Boolean is_nuc)
+static BioSourcePtr AddOrgRef (BioSourcePtr biop)
+{
+  if (biop == NULL)
+  {
+    biop = BioSourceNew ();
+  }
+  if (biop == NULL)
+  {
+    return NULL;
+  }
+  if (biop->org == NULL)
+  {
+    biop->org = OrgRefNew ();
+  }
+  if (biop->org == NULL)
+  {
+    biop = BioSourceFree (biop);
+    return NULL;
+  }
+  return biop;
+}
+
+static BioSourcePtr AddOrgName (BioSourcePtr biop)
+{
+  biop = AddOrgRef (biop);
+  if (biop == NULL || biop->org == NULL)
+  {
+    biop = BioSourceFree (biop);
+    return NULL; 
+  }
+  if (biop->org->orgname == NULL)
+  {
+    biop->org->orgname = OrgNameNew ();
+    if (biop->org->orgname == NULL)
+    {
+      biop = BioSourceFree (biop);
+      return NULL;
+    }
+  }
+  return biop;
+}
+
+static BioSourcePtr SetGeneticCodeForBioSource (BioSourcePtr biop, Int4 gcode, Boolean is_nuc)
 {
   OrgRefPtr  orp;
   OrgNamePtr onp;
 
-  if (biop == NULL || gcode < 0)
+  if (gcode < 0)
   {
-    return;
+    return biop;
+  }
+
+  biop = AddOrgName (biop);
+  if (biop == NULL)
+  {
+    return biop;
   }
   
   orp = biop->org;
@@ -3461,148 +5885,107 @@ static void SetGeneticCodeForBioSource (BioSourcePtr biop, Int4 gcode, Boolean i
       }
     }
   }
+  return biop;
 }
 
-static void 
+static BioSourcePtr
 SetGeneticCodeFromTitle 
 (BioSourcePtr biop,
- CharPtr title, 
- CharPtr look_for, 
- Boolean is_nuc)
+ CharPtr      title, 
+ CharPtr      mod_name, 
+ Boolean      is_nuc)
 {
-  CharPtr    ptr;
-  CharPtr    val;
+  CharPtr    gcode_str;
   Int4       gcode;
+  CharPtr    next_org_loc;
   
-  if (biop == NULL || StringHasNoText (title))
+  if (StringHasNoText (title))
   {
-    return;
+    return biop;
   }
   
-  ptr = StringISearch (title, look_for);
-  if (ptr != NULL)
+  next_org_loc = FindValuePairInDefLine ("organism", title, NULL);
+  gcode_str = FindValueFromPairInDeflineBeforeCharPtr (mod_name, title, next_org_loc);
+  if (!StringHasNoText (gcode_str))
   {
-    ptr += StringLen (look_for);
+    gcode = GeneticCodeFromString (gcode_str);  
+    biop = SetGeneticCodeForBioSource (biop, gcode, is_nuc);     
   }
-  if (ptr != NULL) {
-    val = StringSave (ptr);
-    if (val != NULL) 
-    {
-      ptr = StringChr (val, ']');
-      if (ptr != NULL) {
-        *ptr = '\0';
-      
-        gcode = GeneticCodeFromString (val);
-      
-        SetGeneticCodeForBioSource (biop, gcode, is_nuc);     
-      }
-      MemFree (val);
-    }
+  if (gcode_str != NULL)
+  {
+    RemoveValueFromDefline (mod_name, title);
   }
+  gcode_str = MemFree (gcode_str);
+  return biop;
 }
 
-#define USE_NUCLEAR_GENETIC_CODE       1
-#define USE_MITOCHONDRIAL_GENETIC_CODE 2
-#define USE_OTHER_GENETIC_CODE         3
-
-static Int4 UseGeneticCodeForLocation (CharPtr location)
+static BioSourcePtr 
+SetAllGeneticCodesFromTitle 
+(BioSourcePtr biop,
+ CharPtr      title)
 {
-  if (StringHasNoText (location))
-  {
-    return USE_NUCLEAR_GENETIC_CODE;
-  }
-  else if (StringICmp (location, "Mitochondrion") == 0
-           || StringICmp (location, "Kinetoplast") == 0)
-  {
-    return USE_MITOCHONDRIAL_GENETIC_CODE;
-  }
-  else if (StringICmp (location, "Chloroplast") == 0
-           || StringICmp (location, "Chromoplast") == 0
-           || StringICmp (location, "plastid") == 0
-           || StringICmp (location, "cyanelle") == 0
-           || StringICmp (location, "apicoplast") == 0
-           || StringICmp (location, "leucoplast") == 0
-           || StringICmp (location, "proplastid") == 0)
-  {
-    return USE_OTHER_GENETIC_CODE;
-  }
-  else
-  {
-    return USE_NUCLEAR_GENETIC_CODE;
-  }
-}
-
-static void SetAllGeneticCodesFromTitle (BioSourcePtr biop, CharPtr title)
-{
-  CharPtr ptr1, ptr2;
   Int4    code_to_use;
+  CharPtr location;
+  CharPtr next_org_loc;
   
-  if (biop == NULL || StringHasNoText (title))
+  if (StringHasNoText (title))
   {
-    return;
+    return biop;
   }
   
-  ptr1 = StringISearch (title, "[location=");
-  if (ptr1 != NULL) 
-  {
-    ptr1 += 10;
-    ptr2 = StringChr (ptr1, ']');
-    if (ptr2 != NULL)
+  next_org_loc = FindValuePairInDefLine ("organism", title, NULL);
+  location = FindValueFromPairInDeflineBeforeCharPtr ("location", title, next_org_loc);
+  if (!StringHasNoText (location)) 
+  {      
+    code_to_use = UseGeneticCodeForLocation (location);
+    if (code_to_use == USE_OTHER_GENETIC_CODE)
     {
-      *ptr2 = 0;
-      
-      code_to_use = UseGeneticCodeForLocation (ptr1);
-      if (code_to_use == USE_OTHER_GENETIC_CODE)
-      {
-        SetGeneticCodeForBioSource (biop, 11, TRUE);     
-      }
-      else if (code_to_use == USE_NUCLEAR_GENETIC_CODE)
-      {
-        SetGeneticCodeFromTitle (biop, title, "[genetic_code=", TRUE);
-      }
-      else if (code_to_use == USE_MITOCHONDRIAL_GENETIC_CODE)
-      {
-        SetGeneticCodeFromTitle (biop, title, "[genetic_code=", FALSE);
-      }
-      *ptr2 = ']';
+      biop = SetGeneticCodeForBioSource (biop, 11, TRUE);     
+    }
+    else if (code_to_use == USE_NUCLEAR_GENETIC_CODE)
+    {
+      biop = SetGeneticCodeFromTitle (biop, title, "genetic_code", TRUE);
+    }
+    else if (code_to_use == USE_MITOCHONDRIAL_GENETIC_CODE)
+    {
+      biop = SetGeneticCodeFromTitle (biop, title, "genetic_code", FALSE);
     }
   }
+  location = MemFree (location);
   
-  SetGeneticCodeFromTitle (biop, title, "[gcode=", TRUE);
-  SetGeneticCodeFromTitle (biop, title, "[mgcode=", FALSE);
-  ExciseString (title, "[genetic_code=", "]");
-  ExciseString (title, "[gcode=", "]");
-  ExciseString (title, "[mgcode=", "]");
+  biop = SetGeneticCodeFromTitle (biop, title, "gcode", TRUE);
+  biop = SetGeneticCodeFromTitle (biop, title, "mgcode", FALSE);
+
+  return biop;
 }
 
 static void 
 SetMoleculeAndMolTypeFromTitle 
-(SeqEntryPtr sep,
- BioseqPtr   bsp, 
+(BioseqPtr   bsp, 
  CharPtr     title,
  Int2        seqPackage)
 {
+  SeqEntryPtr sep;
   ValNodePtr vnp;
   MolInfoPtr mip = NULL;
   Uint1      biomol;
   Int4       molecule;
+  CharPtr    valstr;
   CharPtr    ptr;
-  CharPtr    str = NULL;
-  Int4       str_size;
+  SeqLocPtr  slp;
+  BioseqPtr  bsp_seg;
   
-  if (sep == NULL || bsp == NULL)
+  if (bsp == NULL)
   {
     return;
   }
-
-  /* prepare string buffer for values */
-  str_size = StringLen (title);
-  str = (CharPtr) MemNew ((str_size + 1) * sizeof (Char));
-  if (str == NULL)
+  
+  sep = SeqMgrGetSeqEntryForData (bsp); 
+  if (sep == NULL)
   {
     return;
-  }      
-  
+  }
+    
   vnp = SeqEntryGetSeqDescr (sep, Seq_descr_molinfo, NULL);
   if (vnp == NULL)
   {
@@ -3625,56 +6008,53 @@ SetMoleculeAndMolTypeFromTitle
   }
   
   /* get moltype from defline */
-  ptr = StringISearch (title, "[moltype=");
-  if (ptr != NULL) {
-    StringNCpy_0 (str, ptr + 9, str_size);
-    ptr = StringChr (str, ']');
-    if (ptr != NULL) {
-      *ptr = '\0';
-      biomol = MolTypeFromString (str);
-      if (biomol == 1)
-      {
-        molecule = Seq_mol_na;
-      }
-      else if (biomol >= 2 && biomol <= 7)
-      {
-        molecule = Seq_mol_rna;
-      }
-      else if (biomol == 9)
-      {
-        molecule = Seq_mol_dna;
-      }
-      else if (biomol == 253)
-      {
-        molecule = Seq_mol_dna;
-        biomol = 1;
-      }
-      else if (biomol == 254)
-      {
-        molecule = Seq_mol_rna;
-        biomol = 1;
-      }
-      else if (biomol == 255)
-      {
-        molecule = Seq_mol_other;
-      }
+  valstr = FindValueFromPairInDefline ("moltype", title);
+  if (!StringHasNoText (valstr))
+  {
+    biomol = MolTypeFromString (valstr);
+    if (biomol == 1)
+    {
+      molecule = Seq_mol_na;
+    }
+    else if (biomol >= 2 && biomol <= 7)
+    {
+      molecule = Seq_mol_rna;
+    }
+    else if (biomol == 9)
+    {
+      molecule = Seq_mol_dna;
+    }
+    else if (biomol == 253)
+    {
+      molecule = Seq_mol_dna;
+      biomol = 1;
+    }
+    else if (biomol == 254)
+    {
+      molecule = Seq_mol_rna;
+      biomol = 1;
+    }
+    else if (biomol == 255)
+    {
+      molecule = Seq_mol_other;
     }
   }
+  valstr = MemFree (valstr);
+  
+  RemoveValueFromDefline ("moltype", title);
 
-  /* get molecule from defline */      
-  ptr = StringISearch (title, "[molecule=");
-  if (ptr != NULL) {
-    StringNCpy_0 (str, ptr + 10, str_size);
-    ptr = StringChr (str, ']');
-    if (ptr != NULL) {
-      *ptr = '\0';
-      if (StringICmp (str, "dna") == 0) {
-        molecule = Seq_mol_dna;
-      } else if (StringICmp (str, "rna") == 0) {
-        molecule = Seq_mol_rna;
-      }
+  /* get molecule from defline */ 
+  valstr = FindValueFromPairInDefline ("molecule", title);
+  if (!StringHasNoText (valstr))
+  {
+    if (StringICmp (valstr, "dna") == 0) {
+      molecule = Seq_mol_dna;
+    } else if (StringICmp (valstr, "rna") == 0) {
+      molecule = Seq_mol_rna;
     }
   }
+  valstr = MemFree (valstr);
+  RemoveValueFromDefline ("molecule", title);
   
   ptr = StringISearch (title, "[dna]");
   if (ptr != NULL)
@@ -3699,11 +6079,40 @@ SetMoleculeAndMolTypeFromTitle
      
   mip->biomol = biomol;
   bsp->mol = molecule;  
+
+  valstr = FindValueFromPairInDefline ("tech", title);
+  if (!StringHasNoText (valstr))
+  {
+    ReadTechFromString (valstr, mip);
+  }
+  valstr = MemFree (valstr);
+  RemoveValueFromDefline ("tech", title);
   
-  ExciseString (title, "[moltype", "]");
-  ExciseString (title, "[molecule", "]");
-  
-  str = MemFree (str);
+  if (bsp->repr == Seq_repr_seg)
+  {
+    slp = (SeqLocPtr) bsp->seq_ext;
+    while (slp != NULL)
+    {
+      bsp_seg = BioseqFind (SeqLocId (slp));
+      sep = SeqMgrGetSeqEntryForData (bsp_seg);
+      if (bsp_seg != NULL)
+      {
+        bsp_seg->mol = bsp->mol;
+      }
+      vnp = SeqEntryGetSeqDescr (sep, Seq_descr_molinfo, NULL);
+      if (vnp == NULL)
+      {
+        vnp = CreateNewDescriptor (sep, Seq_descr_molinfo);
+      }
+      if (vnp != NULL)
+      {
+        vnp->data.ptrvalue = MolInfoFree (vnp->data.ptrvalue);
+        vnp->data.ptrvalue = (MolInfoPtr) AsnIoMemCopy (mip, (AsnReadFunc) MolInfoAsnRead,
+                                                            (AsnWriteFunc) MolInfoAsnWrite);
+      }
+      slp = slp->next;
+    }
+  }
 }
 
 static void AddGeneticCodeComment (BioseqPtr bsp, CharPtr comment)
@@ -3790,28 +6199,356 @@ static void AddGeneticCodeComment (BioseqPtr bsp, CharPtr comment)
   ufp->data.ptrvalue = new_comment;
 }
 
+static BioSourcePtr AddOrgModValue (BioSourcePtr biop, Uint1 subtype, CharPtr subname)
+{
+  OrgModPtr    mod;
+  
+  if (subname == NULL)
+  {
+    return biop;
+  }
+
+  biop = AddOrgName (biop);
+  if (biop != NULL)
+  {
+    mod = OrgModNew ();
+    if (mod != NULL)
+    {
+      mod->subtype = subtype;
+      mod->subname = subname;
+      subname = NULL;
+      mod->next = biop->org->orgname->mod;
+      biop->org->orgname->mod = mod;
+    }
+  }
+  subname = MemFree (subname);
+  return biop;
+}
+
+static BioSourcePtr AddSubSourceValue (BioSourcePtr biop, Uint1 subtype, CharPtr subname)
+{
+  SubSourcePtr ssp;
+  
+  if (subname == NULL)
+  {
+    return biop;
+  }
+
+  if (biop == NULL)
+  {
+    biop = BioSourceNew ();
+  }
+  if (biop != NULL)
+  {
+    ssp = SubSourceNew ();
+    if (ssp != NULL)
+    {
+      ssp->subtype = subtype;
+      ssp->name = subname;
+      subname = NULL;
+      ssp->next = biop->subtype;
+      biop->subtype = ssp;
+    }
+  }
+  subname = MemFree (subname);
+  return biop;
+}
+
+static BioSourcePtr 
+ExtractFromTitleToBioSourceOrgMod 
+(CharPtr      title,
+ BioSourcePtr biop, 
+ CharPtr      mod_name,
+ Int4         subtype)
+{
+  CharPtr valstr;
+  CharPtr next_org_loc;
+  
+  next_org_loc = FindValuePairInDefLine ("organism", title, NULL);
+  while ((valstr = FindValueFromPairInDeflineBeforeCharPtr (mod_name, title, next_org_loc)) != NULL)
+  {
+    biop = AddOrgModValue (biop, subtype, valstr);
+    RemoveValueFromDefline (mod_name, title);
+    next_org_loc = FindValuePairInDefLine ("organism", title, NULL);
+  }  
+  return biop;
+}
+
+static BioSourcePtr 
+ExtractFromTitleToBioSourceSubSource 
+(CharPtr      title,
+ BioSourcePtr biop, 
+ CharPtr      mod_name,
+ Int4         subtype)
+{
+  CharPtr valstr;
+  CharPtr next_org_loc;
+  
+  next_org_loc = FindValuePairInDefLine ("organism", title, NULL);
+  while ((valstr = FindValueFromPairInDeflineBeforeCharPtr (mod_name, title, next_org_loc)) != NULL)
+  {
+    biop = AddSubSourceValue (biop, subtype, valstr);
+    RemoveValueFromDefline (mod_name, title);
+    next_org_loc = FindValuePairInDefLine ("organism", title, NULL);
+  }  
+  return biop;
+}
+
+/* this function collects all of the common names prior to the next organism name
+ * and assembles a semicolon-delimited list.
+ */
+static BioSourcePtr 
+ExtractFromTitleToBioSourceCommonName 
+(CharPtr      title,
+ BioSourcePtr biop)
+{
+  CharPtr valstr, new_val;
+  Int4    new_len;
+  CharPtr next_org_loc;
+  
+  next_org_loc = FindValuePairInDefLine ("organism", title, NULL);  
+  while ((valstr = FindValueFromPairInDeflineBeforeCharPtr ("common name", title, next_org_loc)) != NULL)
+  {
+    if (!StringHasNoText (valstr))
+    {
+      biop = AddOrgRef (biop);
+      if (StringHasNoText (biop->org->common))
+      {
+        biop->org->common = MemFree (biop->org->common);
+        biop->org->common = valstr;
+        valstr = NULL;
+      }
+      else
+      {
+        new_len = StringLen (biop->org->common) + StringLen (valstr) + 3;
+        new_val = (CharPtr) MemNew (new_len * sizeof (Char));
+        if (new_val != NULL)
+        {
+          sprintf (new_val, "%s; %s", biop->org->common, valstr);
+          biop->org->common = MemFree (biop->org->common);
+          biop->org->common = new_val;
+        }
+      }
+    }
+    valstr = MemFree (valstr);
+    RemoveValueFromDefline ("common name", title);
+    next_org_loc = FindValuePairInDefLine ("organism", title, NULL);
+  }  
+  return biop;
+}
+
+/* When the user specifies multiple organisms on the definition line, modifiers after the
+ * second organism go with the second organism, after the third organism go with the third
+ * organism, etc.
+ */
+static BioSourcePtr BioSourceFromDefline (CharPtr defline)
+{
+  CharPtr      taxname = NULL;
+  OrgInfoPtr   oip = NULL;
+  Boolean      set_value = FALSE;
+  BioSourcePtr biop = NULL;
+  CharPtr      valstr;
+  EnumFieldAssocPtr  ap;
+  CharPtr            next_org_loc;
+  
+  if (StringHasNoText (defline))
+  {
+    return NULL;
+  }
+  
+  taxname = FindValueFromPairInDefline ("organism", defline);
+  RemoveValueFromDefline ("organism", defline);
+  if (StringHasNoText (taxname))
+  {
+    taxname = MemFree (taxname);
+    return NULL;
+  }
+  else
+  {
+    biop = AddOrgRef (biop);
+    if (biop == NULL)
+    {
+      return biop;
+    }
+    biop->org->taxname = taxname;
+    LoadOrganismList ();
+    oip = FindByTaxName (taxname);
+  }
+  
+  /* add division */
+  if (oip != NULL && !StringHasNoText (oip->div))
+  {
+    biop = AddOrgName (biop);
+    if (biop == NULL)
+    {
+      return biop;
+    }    
+    biop->org->orgname->div = StringSave (oip->div);
+  }
+  
+  /* add common name (s) - if there are multiple entries, separate with semicolon */
+  biop = ExtractFromTitleToBioSourceCommonName (defline, biop);
+  /* if common name was not supplied in defline, use common name from organism list */
+  if (biop->org == NULL || StringHasNoText (biop->org->common))
+  {
+    if (oip != NULL && !StringHasNoText (oip->common))
+    {
+      biop = AddOrgRef (biop);
+      if (biop == NULL)
+      {
+        return biop;
+      }
+      biop->org->common = StringSave (oip->common);
+    }
+  }
+  
+  /* add lineage */
+  if (oip != NULL && !StringHasNoText (oip->lineage))
+  {
+    biop = AddOrgName (biop);
+    if (biop == NULL)
+    {
+      return biop;
+    }
+    biop->org->orgname->lineage = StringSave (oip->lineage);
+  }
+  
+  /* add origin */
+  next_org_loc = FindValuePairInDefLine ("organism", defline, NULL);
+  valstr = FindValueFromPairInDeflineBeforeCharPtr ("origin", defline, next_org_loc);
+  if (!StringHasNoText (valstr))
+  {
+    for (ap = biosource_origin_alist; ap->name != NULL; ap++) {
+      if (StringICmp (valstr, ap->name) == 0) {
+        if (biop == NULL)
+        {
+          biop = BioSourceNew ();
+        }
+        if (biop == NULL)
+        {
+          return biop;
+        }
+        biop->origin = (Uint1) ap->value;
+      }
+    }
+  }
+  if (valstr != NULL)
+  {
+    RemoveValueFromDefline ("origin", defline);
+    next_org_loc = FindValuePairInDefLine ("organism", defline, NULL);
+  }
+  valstr = MemFree (valstr);
+  
+  valstr = FindValueFromPairInDeflineBeforeCharPtr ("lineage", defline, next_org_loc);
+  if (!StringHasNoText (valstr))
+  {
+    biop = AddOrgName (biop);
+  }
+  if (!StringHasNoText (valstr) && StringCmp (valstr, biop->org->orgname->lineage) != 0)
+  {
+    biop = AddOrgModValue (biop, ORGMOD_old_lineage, valstr);
+    valstr = NULL;
+  }
+  if (valstr != NULL)
+  {
+    RemoveValueFromDefline ("lineage", defline);
+  }
+  valstr = MemFree (valstr);
+  
+  biop = SetAllGeneticCodesFromTitle (biop, defline);
+  next_org_loc = FindValuePairInDefLine ("organism", defline, NULL);
+        
+  for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
+    biop = ExtractFromTitleToBioSourceOrgMod (defline, biop, ap->name, ap->value);
+  }
+  for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
+    biop = ExtractFromTitleToBioSourceSubSource (defline, biop, ap->name, ap->value);
+  }
+  
+  biop = ExtractFromTitleToBioSourceOrgMod (defline, biop, "note-orgmod", 255);
+  biop = ExtractFromTitleToBioSourceSubSource (defline, biop, "note-subsrc", 255);
+  biop = ExtractFromTitleToBioSourceOrgMod (defline, biop, "note", 255);
+  biop = ExtractFromTitleToBioSourceOrgMod (defline, biop, "comment", 255);
+  biop = ExtractFromTitleToBioSourceSubSource (defline, biop, "subsource", 255);
+
+
+  next_org_loc = FindValuePairInDefLine ("organism", defline, NULL);
+
+  /* set location */
+  valstr = FindValueFromPairInDeflineBeforeCharPtr ("location", defline, next_org_loc);
+  if (StringHasNoText (valstr))
+  {
+    if (biop == NULL)
+    {
+      biop = BioSourceNew ();
+    }
+    if (biop == NULL)
+    {
+      return biop;
+    }
+    biop->genome = 1;
+  }
+  else if (StringICmp (valstr, "Mitochondrial") == 0)
+  {
+    if (biop == NULL)
+    {
+      biop = BioSourceNew ();
+    }
+    if (biop == NULL)
+    {
+      return biop;
+    }
+    biop->genome = 5;
+  }
+  else
+  {
+    for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
+      if (StringICmp (valstr, ap->name) == 0) {
+        if (biop == NULL)
+        {
+          biop = BioSourceNew ();
+        }
+        if (biop == NULL)
+        {
+          return biop;
+        }
+        biop->genome = (Uint1) ap->value;
+      }
+    }
+  }
+  if (valstr != NULL)
+  {
+    RemoveValueFromDefline ("location", defline);
+  }
+  valstr = MemFree (valstr);
+ 
+  TrimSpacesAroundString (defline);
+  
+  return biop;
+  
+}
+
+static void RemoveTaxRef (OrgRefPtr orp);
+
 extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage,
                                           SeqEntryPtr nsep, SeqEntryPtr top);
 extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, 
                                           SeqEntryPtr nsep, SeqEntryPtr top)
 
 {
-  EnumFieldAssocPtr  ap;
-  BioSourcePtr       biop;
+  BioSourcePtr       biop = NULL;
   BioseqSetPtr       bssp;
-  CharPtr            lin;
-  OrgNamePtr         masteronp = NULL;
-  OrgRefPtr          masterorp = NULL;
   BioseqPtr          nbsp;
   Boolean            needbiop;
-  OrgNamePtr         onp;
-  OrgRefPtr          orp;
-  CharPtr            ptr;
   SeqEntryPtr        sep;
   CharPtr            str;
+  CharPtr            valstr;
   CharPtr            title;
   ValNodePtr         vnp;
   Int4               topology;
+#if 0
+  SeqFeatPtr         sfp;
+#endif  
 
   if (nsep == NULL || top == NULL) return FALSE;
   nbsp = (BioseqPtr) nsep->data.ptrvalue;
@@ -3822,12 +6559,13 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage,
   sep = NULL;
  
   SeqEntryExplore (top, (Pointer) &sep, FindFirstSeqEntryTitle);
+  sep = FindNucSeqEntry (sep);
   if (sep != NULL) {
     vnp = SeqEntryGetSeqDescr (sep, Seq_descr_title, NULL);
     if (vnp != NULL && vnp->data.ptrvalue != NULL) {
       title = (CharPtr) vnp->data.ptrvalue;
       
-      SetMoleculeAndMolTypeFromTitle (nsep, nbsp, title, seqPackage);
+      SetMoleculeAndMolTypeFromTitle (nbsp, title, seqPackage);
 
       if (nbsp->topology == 0)
       {
@@ -3839,26 +6577,25 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage,
       }
   
       /* get topology from defline */
-      ptr = StringISearch (title, "[topology=");
-      if (ptr != NULL) {
-        StringNCpy_0 (str, ptr + 10, PROC_NUC_STR_SIZE);
-        ptr = StringChr (str, ']');
-        if (ptr != NULL) {
-          *ptr = '\0';
-          topology = TopologyFromString (str);
+      valstr = FindValueFromPairInDefline ("topology", title);
+      if (valstr != NULL)
+      {
+        if (!StringHasNoText (valstr))
+        {
+          topology = TopologyFromString (valstr);
         }
+        RemoveValueFromDefline ("topology", title);
+        valstr = MemFree (valstr);
       }
       nbsp->topology = topology;
       
       /* add bankit comment for genetic code */
-      ptr = StringISearch (title, "[genetic_code_comment=");
-      if (ptr != NULL) {
-        StringNCpy_0 (str, ptr + 22, PROC_NUC_STR_SIZE);
-        ptr = StringChr (str, ']');
-        if (ptr != NULL) {
-          *ptr = '\0';
-          AddGeneticCodeComment (nbsp, str);
-        }
+      valstr = FindValueFromPairInDefline ("gencode_comment", title);
+      if (valstr != NULL)
+      {
+        AddGeneticCodeComment (nbsp, valstr);
+        RemoveValueFromDefline ("topology", title);
+        valstr = MemFree (valstr);
       }
 
       needbiop = FALSE;
@@ -3873,152 +6610,37 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage,
           }
         }
       }
-      if ((! needbiop) && StringISearch (title, "[") != NULL) {
-        for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
-          MakeSearchStringFromAlist (str, ap->name);
-          if (StringISearch (title, str) != NULL) {
-            needbiop = TRUE;
-          }
-        }
-        for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
-          MakeSearchStringFromAlist (str, ap->name);
-          if (StringISearch (title, str) != NULL) {
-            needbiop = TRUE;
-          }
-        }
-        if (StringISearch (title, "[note=") != NULL) {
-          needbiop = TRUE;
-        }
-        if (StringISearch (title, "[comment=") != NULL) {
-          needbiop = TRUE;
-        }
-        if (StringISearch (title, "[subsource=") != NULL) {
-          needbiop = TRUE;
-        }
-        /*
-        if (StringISearch (title, "[strain=") != NULL ||
-            StringISearch (title, "[isolate=") != NULL ||
-            StringISearch (title, "[clone=") != NULL) {
-          needbiop = TRUE;
-        }
-        */
-      }
-      biop = NULL;
-      ptr = StringISearch (title, "[org=");
-      if (ptr != NULL) {
-        StringNCpy_0 (str, ptr + 5, PROC_NUC_STR_SIZE);
-      } else {
-        ptr = StringISearch (title, "[organism=");
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 10, PROC_NUC_STR_SIZE);
-        }
-      }
-      if (ptr != NULL) {
-        ptr = StringChr (str, ']');
-        if (ptr != NULL) {
-          *ptr = '\0';
-          biop = BioSourceNew ();
-          if (biop != NULL) {
-            orp = OrgRefNew ();
-            biop->org = orp;
-            if (orp != NULL) {
-              TrimSpacesAroundString (str);
-              SetTaxNameAndRemoveTaxRef (orp, StringSave (str));
-            }
-          }
-        }
-      }
-      if (biop != NULL) {
-        ptr = StringISearch (title, "[lineage=");
-        if (ptr != NULL) {
-          lin = StringSave (ptr + 9);
-          if (lin != NULL) {
-            ptr = StringChr (lin, ']');
-            if (ptr != NULL) {
-              *ptr = '\0';
-              orp = biop->org;
-              if (orp != NULL) {
-                onp = orp->orgname;
-                if (onp == NULL) {
-                  onp = OrgNameNew ();
-                  orp->orgname = onp;
-                }
-                if (onp != NULL) {
-                  onp->lineage = MemFree (onp->lineage);
-                  onp->lineage = StringSave (lin);
-                }
-              }
-            }
-            MemFree (lin);
-          }
-        }
-        
-        SetAllGeneticCodesFromTitle (biop, title);
-        
-        if (seqPackage == SEQ_PKG_PHYLOGENETIC) {
-          orp = biop->org;
-          if (orp != NULL) {
-            onp = orp->orgname;
-            if (onp == NULL) {
-              onp = OrgNameNew ();
-              orp->orgname = onp;
-            }
-          }
-        }
-        vnp = CreateNewDescriptor (top, Seq_descr_source);
-        if (vnp != NULL) {
-          vnp->data.ptrvalue = (Pointer) biop;
-        }
-        for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
-          MakeSearchStringFromAlist (str, ap->name);
-          AddToOrgMod (biop, title, str, (Int2) ap->value);
-          ExciseString (title, str, "]");
-        }
-        for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
-          MakeSearchStringFromAlist (str, ap->name);
-          AddToSubSource (biop, title, str, (Int2) ap->value);
-          ExciseString (title, str, "]");
-        }
-        AddToOrgMod (biop, title, "[note=", 255);
-        ExciseString (title, "[note=", "]");
-        AddToOrgMod (biop, title, "[comment=", 255);
-        ExciseString (title, "[comment=", "]");
-        AddToSubSource (biop, title, "[subsource=", 255);
-        ExciseString (title, "[subsource=", "]");
-
-        ptr = StringISearch (title, "[location=");
-        if (ptr == NULL)
-        {
-          /* if location is not specified, make it genomic */
-          biop->genome = 1;
-        }
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 10, PROC_NUC_STR_SIZE);
-          ptr = StringChr (str, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            if (StringICmp (str, "Mitochondrial") == 0) { /* alternative spelling */
-              biop->genome = 5;
-            }
-            for (ap = biosource_genome_simple_alist; ap->name != NULL; ap++) {
-              if (StringICmp (str, ap->name) == 0) {
-                biop->genome = (Uint1) ap->value;
-              }
-            }
-          }
-        }
-        
-      }
       
-      ExciseString (title, "[org=", "]");
-      ExciseString (title, "[organism=", "]");
-      ExciseString (title, "[lineage=", "]");
-      ExciseString (title, "[molecule=", "]");
-      ExciseString (title, "[moltype=", "]");
-      ExciseString (title, "[location=", "]");
-      ExciseString (title, "[topology=", "]");
-      ExciseString (title, "[genetic_code_comment=", "]");
-      TrimSpacesAroundString (title);
+      vnp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
+      if (vnp == NULL)
+      {
+        biop = BioSourceFromDefline (title);
+        if (biop == NULL && needbiop)
+        {
+          biop = BioSourceNew ();
+        }
+
+        if (biop != NULL)
+        {
+          vnp = CreateNewDescriptor (top, Seq_descr_source);
+          if (vnp != NULL) {
+            vnp->data.ptrvalue = (Pointer) biop;
+          }
+        }
+#if 0        
+        biop = BioSourceFromDefline (title);
+        while (biop != NULL)
+        {
+          sfp = CreateNewFeature (sep, NULL, SEQFEAT_BIOSRC, NULL);
+          if (sfp != NULL)
+          {
+            sfp->data.value.ptrvalue = biop;
+          }
+          biop = BioSourceFromDefline (title);
+        }
+#endif        
+      }
+
       if (StringHasNoText (title) || sep != top) {
         vnp = NULL;
         if (IS_Bioseq (sep)) {
@@ -4177,7 +6799,6 @@ static void PutMolInfoOnSeqEntry (SequencesFormPtr sqfp, SeqEntryPtr sep)
   Boolean      partial3;
   ValNodePtr   vnp;
 
-  return;
   if (sqfp != NULL && sep != NULL) {
     if (IS_Bioseq_set (sep))
     {
@@ -4338,24 +6959,291 @@ static void OnlyOneComponentWarning (SequencesFormPtr sqfp)
   }
 }
 
+/*---------------------------------*/
+/* Parse the gene and gene-related */
+/* fields from the title.          */
+/*---------------------------------*/
+extern void 
+AddGeneFeatureFromTitle 
+(SeqEntryPtr nucsep,
+ CharPtr ttl, 
+ SeqLocPtr slp)
+{
+  CharPtr    gene = NULL;
+  CharPtr    gene_desc = NULL;
+  CharPtr    allele = NULL;
+  CharPtr    gene_syn = NULL;
+  GeneRefPtr grp = NULL;
+  SeqFeatPtr sfp;
+  SeqIdPtr   sip;
+  BioseqPtr  nbsp, bsp;
+  SeqLocPtr  gslp;
+  Boolean    hasNulls;
+  
+  if (nucsep == NULL || !IS_Bioseq (nucsep) 
+      || (nbsp = (BioseqPtr) nucsep->data.ptrvalue) == NULL
+      || StringHasNoText (ttl) || slp == NULL)
+  {
+    return;
+  }
+  
+  gene = FindValueFromPairInDefline ("gene", ttl);
+  if (!StringHasNoText (gene))
+  {
+    gene_desc = StringChr (gene, ';');
+    if (gene_desc != NULL) {
+      *gene_desc = '\0';
+      gene_desc++;
+      allele = StringChr (gene_desc, ';');
+      if (allele != NULL) {
+        *allele = '\0';
+        allele++;
+      }
+    }
+    grp = CreateNewGeneRef (gene, allele, gene_desc, FALSE);
+  }
+  gene = MemFree (gene);
+  
+  /*-----------------------------------------*/
+  /* Parse the gene_syn field from the title */
+  /*-----------------------------------------*/
+  
+  gene_syn = FindValueFromPairInDefline ("gene_syn", ttl);
+  if (!StringHasNoText (gene_syn))
+  {
+    if (grp == NULL) {
+      grp = GeneRefNew ();
+    }
+    ValNodeCopyStr(&(grp->syn),0,gene_syn);
+  }
+  gene_syn = MemFree (gene_syn);
+
+  /* Create the gene feature */
+  if (grp != NULL) {
+    if (ExtendGene (grp, nucsep, slp)) {
+      grp = GeneRefFree (grp);
+    } else {
+      sfp = CreateNewFeature (nucsep, NULL, SEQFEAT_GENE, NULL);
+      if (sfp != NULL) {
+        sfp->data.value.ptrvalue = (Pointer) grp;
+        sfp->location = SeqLocFree (sfp->location);
+        sfp->location = AsnIoMemCopy ((Pointer) slp,
+                                      (AsnReadFunc) SeqLocAsnRead,
+                                      (AsnWriteFunc) SeqLocAsnWrite);
+        sip = SeqLocId (sfp->location);
+        if (sip != NULL) {
+          bsp = BioseqFind (sip);
+        } else {
+          bsp = nbsp;
+        }
+        if (bsp != NULL) {
+          gslp = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
+          if (gslp != NULL) {
+            sfp->location = SeqLocFree (sfp->location);
+            sfp->location = gslp;
+            if (bsp->repr == Seq_repr_seg) {
+              gslp = SegLocToPartsEx (bsp, sfp->location, TRUE);
+              sfp->location = SeqLocFree (sfp->location);
+              sfp->location = gslp;
+              hasNulls = LocationHasNullsBetween (sfp->location);
+              sfp->partial = (sfp->partial || hasNulls);
+            }
+            FreeAllFuzz (gslp);
+          }
+        }
+      }
+    }
+    RemoveValueFromDefline ("gene", ttl);
+    RemoveValueFromDefline ("gene_syn", ttl);
+  }
+}
+
+extern ProtRefPtr AddProteinFeatureFromDefline (SeqEntryPtr psep, CharPtr title)
+{
+  CharPtr    activity = NULL;
+  CharPtr    ec = NULL;
+  CharPtr    prot_name = NULL;
+  CharPtr    prot_desc = NULL;
+  CharPtr    other_prot_desc = NULL, tmp_desc;
+  ProtRefPtr prp;
+  SeqFeatPtr sfp;
+  
+  if (psep == NULL)
+  {
+    return NULL;
+  }
+  
+	/*-----------------------------------------*/
+	/* Parse the function field from the title */
+	/*-----------------------------------------*/
+
+  activity = FindValueFromPairInDefline ("function", title);
+
+	/*------------------------------------------*/
+	/* Parse the EC_number field from the title */
+	/*------------------------------------------*/
+
+  ec = FindValueFromPairInDefline ("EC_number", title);
+
+	/*---------------------------------*/
+	/* Parse the protein and prot_desc */
+	/* fields from the title.          */
+	/*---------------------------------*/
+
+  prot_name = FindValueFromPairInDefline ("protein", title);
+
+	/*---------------------------------*/
+	/* If we found a protein value ... */
+	/*---------------------------------*/
+  if (!StringHasNoText (prot_name))
+  {
+	  /*----------------------------------------------*/
+	  /* ... search for a protein description, either */
+	  /*     in the prot field (seperated by a ';')   */
+	  /*     or in its own 'prot_desc' field.         */
+	  /*----------------------------------------------*/
+
+    prot_desc = StringChr (prot_name, ';');
+	  if (prot_desc != NULL)
+	  {
+		  *prot_desc = '\0';
+		  prot_desc++;
+		  /* ignore this description if empty */
+		  if (StringHasNoText (prot_desc))
+		  {
+		    prot_desc = NULL;
+		  }
+		  else
+		  {
+		    prot_desc = StringSave (prot_desc);
+		  }
+	  }
+  }
+	other_prot_desc = FindValueFromPairInDefline ("prot_desc", title);
+	if (StringHasNoText (other_prot_desc))
+	{
+	  other_prot_desc = MemFree (other_prot_desc);
+	}
+	else
+	{
+   if (prot_desc == NULL)
+	  {
+	    prot_desc = other_prot_desc;
+	    other_prot_desc = NULL;
+	  }
+	  else 
+	  {
+      tmp_desc = (CharPtr) MemNew ((StringLen (prot_desc) + StringLen (other_prot_desc) + 3)
+	                               * sizeof (Char));
+	    if (tmp_desc != NULL)
+	    {
+	      StringCpy (tmp_desc, prot_desc);
+	      StringCat (tmp_desc, ";");
+  	    StringCat (tmp_desc, other_prot_desc);
+	      prot_desc = MemFree (prot_desc);
+	      other_prot_desc = MemFree (other_prot_desc);
+	      prot_desc = tmp_desc;
+	    }
+	  }
+	}
+	
+	/*--------------------------------*/
+	/* ... add the prot and prot_desc */
+	/*     to the Seq Features.       */
+	/*--------------------------------*/
+
+	prp = CreateNewProtRef (prot_name, prot_desc, ec, activity);
+	if (prp != NULL)
+	{
+		sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
+		if (sfp != NULL)
+		{
+		  sfp->data.value.ptrvalue = (Pointer) prp;
+		  RemoveValueFromDefline ("protein", title);
+		  RemoveValueFromDefline ("prot_desc", title);
+		  RemoveValueFromDefline ("function", title);
+		  RemoveValueFromDefline ("EC_number", title);
+		}
+	}
+  return prp;
+}
+
+extern void 
+AddCodingRegionFieldsFromProteinTitle 
+(CdRegionPtr  crp,
+ CharPtr      title, 
+ CharPtr PNTR pcomment)
+{
+  CharPtr comment, comment_loc, total_comment = NULL, tmp_comment;
+  
+  if (crp == NULL || StringHasNoText (title))
+  {
+    return;
+  }
+  
+	/*---------------------*/
+	/* Parse the ORF field */
+	/*---------------------*/
+  if (FindValuePairInDefLine ("orf", title, NULL) != NULL)
+  {
+    crp->orf = TRUE;
+    RemoveValueFromDefline ("orf", title);
+  }
+
+  if (pcomment == NULL)
+  {
+    return;
+  }
+
+	/*-------------------------------*/
+	/* Parse the comment/note fields */
+	/*-------------------------------*/
+  comment_loc = FindValuePairInDefLine ("comment", title, NULL);
+  while (comment_loc != NULL)
+  {
+    comment = FindValueFromPairInDefline ("comment", comment_loc);
+    if (!StringHasNoText (comment))
+    {
+      if (total_comment == NULL)
+      {
+        total_comment = comment;
+        comment = NULL;
+      }
+      else
+      {
+        tmp_comment = (CharPtr) MemNew ((StringLen (total_comment) + StringLen (comment) + 3) * sizeof (Char));
+        if (tmp_comment != NULL)
+        {
+          StringCpy (tmp_comment, total_comment);
+          StringCat (tmp_comment, ";");
+          StringCat (tmp_comment, comment);
+          total_comment = MemFree (total_comment);
+          total_comment = tmp_comment;
+        }
+      }
+    }
+    comment = MemFree (comment);
+    RemoveValueFromDefline ("comment", title);
+    comment_loc = FindValuePairInDefLine ("comment", title, NULL);
+  }
+  
+  *pcomment = total_comment;
+}
+
 static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boolean partial5, Boolean partial3)
 
 {
-  CharPtr     allele = NULL;
+  CharPtr     mrna = NULL;
+  CharPtr     comment = NULL;
   BioseqPtr   bsp;
-  GeneRefPtr  grp;
-  SeqLocPtr   gslp;
-  Boolean     hasNulls;
   MolInfoPtr  mip;
   BioseqPtr   mrnabsp;
   BioseqPtr   nucbsp;
   SeqLocPtr   oldslp;
-  CharPtr     ptr;
   RnaRefPtr   rrp;
   SeqFeatPtr  sfp;
   SeqIdPtr    sip;
   SeqLocPtr   slp;
-  Char        str [128];
   CharPtr     ttl;
   ValNodePtr  vnp;
 
@@ -4379,92 +7267,31 @@ static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boole
       }
     }
     StripLocusFromSeqLoc (slp);
-    str [0] = '\0';
     ttl = NULL;
     vnp = ValNodeFindNext (mrnabsp->descr, NULL, Seq_descr_title);
     if (vnp != NULL) {
       ttl = (CharPtr) vnp->data.ptrvalue;
     }
     if (ttl != NULL) {
-      ptr = StringISearch (ttl, "[gene=");
-      if (ptr != NULL) {
-        StringNCpy_0 (str, ptr + 6, sizeof (str));
-        ptr = StringChr (str, ']');
-        if (ptr != NULL) {
-          *ptr = '\0';
-          ptr = StringChr (str, ';');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            ptr++;
-            allele = StringChr (ptr, ';');
-            if (allele != NULL) {
-              *allele = '\0';
-              allele++;
-            }
-          }
-          grp = CreateNewGeneRef (str, allele, ptr, FALSE);
-          if (grp != NULL) {
-            if (ExtendGene (grp, nucsep, slp)) {
-              grp = GeneRefFree (grp);
-            } else {
-              sfp = CreateNewFeature (nucsep, NULL, SEQFEAT_GENE, NULL);
-              if (sfp != NULL) {
-                sfp->data.value.ptrvalue = (Pointer) grp;
-                sfp->location = SeqLocFree (sfp->location);
-                sfp->location = AsnIoMemCopy ((Pointer) slp,
-                                              (AsnReadFunc) SeqLocAsnRead,
-                                              (AsnWriteFunc) SeqLocAsnWrite);
-                sip = SeqLocId (sfp->location);
-                if (sip != NULL) {
-                  bsp = BioseqFind (sip);
-                } else {
-                  bsp = nucbsp;
-                }
-                if (bsp != NULL) {
-                  gslp = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
-                  if (gslp != NULL) {
-                    sfp->location = SeqLocFree (sfp->location);
-                    sfp->location = gslp;
-                    if (bsp->repr == Seq_repr_seg) {
-                      gslp = SegLocToPartsEx (bsp, sfp->location, TRUE);
-                      sfp->location = SeqLocFree (sfp->location);
-                      sfp->location = gslp;
-                      hasNulls = LocationHasNullsBetween (sfp->location);
-                      sfp->partial = (sfp->partial || hasNulls);
-                    }
-                    FreeAllFuzz (gslp);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      str [0] = '\0';
-      ptr = StringISearch (ttl, "[mrna=");
-      if (ptr != NULL) {
-        StringNCpy_0 (str, ptr + 6, sizeof (str));
-        ptr = StringChr (str, ']');
-        if (ptr != NULL) {
-          *ptr = '\0';
-        }
-      } else {
-        ptr = StringISearch (ttl, "[cdna=");
-        if (ptr != NULL) {
-          StringNCpy_0 (str, ptr + 6, sizeof (str));
-          ptr = StringChr (str, ']');
-          if (ptr != NULL) {
-            *ptr = '\0';
-          }
-        }
+      AddGeneFeatureFromTitle (nucsep, ttl, slp);
+    
+      /* get mRNA name */
+      mrna = FindValueFromPairInDefline ("mrna", ttl);
+      RemoveValueFromDefline ("mrna", ttl);
+      if (StringHasNoText (mrna))
+      {
+        mrna = MemFree (mrna);
+        mrna = FindValueFromPairInDefline ("cdna", ttl);
+        RemoveValueFromDefline ("cdna", ttl);
       }
     }
     rrp = RnaRefNew ();
     if (rrp != NULL) {
       rrp->type = 2;
-      if (! StringHasNoText (str)) {
+      if (! StringHasNoText (mrna)) {
         rrp->ext.choice = 1;
-        rrp->ext.value.ptrvalue = StringSave (str);
+        rrp->ext.value.ptrvalue = mrna;
+        mrna = NULL;
       }
       sfp = CreateNewFeature (nucsep, NULL, SEQFEAT_RNA, NULL);
       if (sfp != NULL) {
@@ -4477,26 +7304,20 @@ static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boole
         SetSeqLocPartial (sfp->location, partial5, partial3);
         sfp->partial = (sfp->partial || partial5 || partial3);
         if (ttl != NULL) {
-          ptr = StringISearch (ttl, "[comment=");
-          if (ptr != NULL) {
-            StringNCpy_0 (str, ptr + 9, sizeof (str));
-            ptr = StringChr (str, ']');
-            if (ptr != NULL) {
-              *ptr = '\0';
-            }
-            if (! StringHasNoText (str)) {
-              sfp->comment = StringSave (str);
-            }
+          comment = FindValueFromPairInDefline ("comment", ttl);
+          if (!StringHasNoText (comment)) {
+            sfp->comment = comment;
           }
+          else
+          {
+            comment = MemFree (comment);
+          }
+          RemoveValueFromDefline ("comment", ttl);
         }
       }
     }
+    mrna = MemFree (mrna);
     SeqLocFree (slp);
-    ExciseString (ttl, "[mrna", "]");
-    ExciseString (ttl, "[cdna", "]");
-    ExciseString (ttl, "[gene", "]");
-    ExciseString (ttl, "[comment", "]");
-    TrimSpacesAroundString (ttl);
     if (StringHasNoText (ttl)) {
       ValNodeExtract (&(mrnabsp->descr), Seq_descr_title);
     }
@@ -4519,11 +7340,48 @@ static void AutomaticMrnaProcess (SeqEntryPtr nucsep, SeqEntryPtr mrnasep, Boole
   }
 }
 
-static void ExciseStringFromBioseq (SeqEntryPtr sep, CharPtr from, CharPtr to)
-
+static CharPtr LookForValueInBioseq (SeqEntryPtr sep, Uint1 mol, CharPtr valname)
 {
   BioseqPtr   bsp;
   CharPtr     title;
+  ValNodePtr  vnp;
+
+  if (sep == NULL || StringHasNoText (valname)) return FALSE;
+  if (! IS_Bioseq (sep)) return FALSE;
+  bsp = (BioseqPtr) sep->data.ptrvalue;
+  if (bsp == NULL || bsp->mol != mol || bsp->descr == NULL) return FALSE;
+  vnp = ValNodeFindNext (bsp->descr, NULL, Seq_descr_title);
+  if (vnp == NULL || vnp->data.ptrvalue == NULL) return FALSE;
+  title = (CharPtr) vnp->data.ptrvalue;
+  return FindValueFromPairInDefline (valname, title);
+}
+
+static void FindBioseqWithValue (SeqEntryPtr sep, Uint1 mol, CharPtr valname, CharPtr value, SeqEntryPtr PNTR rsult)
+{
+  BioseqPtr     bsp = NULL;
+  BioseqSetPtr  bssp = NULL;
+  CharPtr       match_value;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL || rsult == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    match_value = LookForValueInBioseq (sep, mol, valname);
+    if (StringICmp (match_value, value))
+    {
+      *rsult = sep;
+    }
+    match_value = MemFree (match_value);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+      FindBioseqWithValue (sep, mol, valname, value, rsult);
+    }
+  }
+}
+
+static void RemoveValueFromBioseq (SeqEntryPtr sep, CharPtr valname)
+{
+  BioseqPtr   bsp;
   ValNodePtr  vnp;
 
   if (sep == NULL) return;
@@ -4532,77 +7390,27 @@ static void ExciseStringFromBioseq (SeqEntryPtr sep, CharPtr from, CharPtr to)
   if (bsp == NULL || bsp->descr == NULL) return;
   vnp = SeqEntryGetSeqDescr (sep, Seq_descr_title, NULL);
   if (vnp == NULL) return;
-  title = (CharPtr) vnp->data.ptrvalue;
-  if (title == NULL) return;
-  ExciseString (title, from, to);
-  TrimSpacesAroundString (title);
-  if (StringHasNoText (title)) {
+  RemoveValueFromDefline (valname, vnp->data.ptrvalue);
+  if (StringHasNoText (vnp->data.ptrvalue)) {
     ValNodeExtract (&(bsp->descr), Seq_descr_title);
-  }
-}
-
-static Boolean LookForStringInBioseq (SeqEntryPtr sep, Uint1 mol, CharPtr str, CharPtr tmp, size_t maxsize)
-
-{
-  BioseqPtr   bsp;
-  CharPtr     title;
-  ValNodePtr  vnp;
-
-  if (sep == NULL || tmp == NULL) return FALSE;
-  if (! IS_Bioseq (sep)) return FALSE;
-  bsp = (BioseqPtr) sep->data.ptrvalue;
-  if (bsp == NULL || bsp->mol != mol || bsp->descr == NULL) return FALSE;
-  vnp = ValNodeFindNext (bsp->descr, NULL, Seq_descr_title);
-  if (vnp == NULL || vnp->data.ptrvalue == NULL) return FALSE;
-  title = (CharPtr) vnp->data.ptrvalue;
-  return LookForSearchString (title, str, tmp, maxsize);
-}
-
-static void FindBioseqWithString (SeqEntryPtr sep, Uint1 mol, CharPtr tag, CharPtr str, SeqEntryPtr PNTR rsult)
-
-{
-  BioseqPtr     bsp = NULL;
-  BioseqSetPtr  bssp = NULL;
-  Char          tmp [256];
-
-  if (sep == NULL || sep->data.ptrvalue == NULL || rsult == NULL) return;
-  if (IS_Bioseq (sep)) {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    if (LookForStringInBioseq (sep, mol, tag, tmp, sizeof (tmp) - 1)) {
-      if (StringICmp (str, tmp) == 0) {
-        *rsult = sep;
-        return;
-      }
-    }
-  } else if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-      FindBioseqWithString (sep, mol, tag, str, rsult);
-    }
-  }
+  }  
 }
 
 static SeqEntryPtr FindRnaByRefOnRna (SeqEntryPtr sep, SeqEntryPtr psep)
 
 {
   SeqEntryPtr  msep;
-  Char         tmp [256];
+  CharPtr      prot_name;
 
   msep = NULL;
   if (sep == NULL || psep == NULL) return NULL;
-  if (LookForStringInBioseq (psep, Seq_mol_aa, "[prot=", tmp, sizeof (tmp) - 1)) {
-    FindBioseqWithString (sep, Seq_mol_rna, "[prot=", tmp, &msep);
-    if (msep != NULL) {
-      ExciseStringFromBioseq (msep, "[prot=", "]");
-      return msep;
-    }
-  } else if (LookForStringInBioseq (psep, Seq_mol_aa, "[protein=", tmp, sizeof (tmp) - 1)) {
-    FindBioseqWithString (sep, Seq_mol_rna, "[protein=", tmp, &msep);
-    if (msep != NULL) {
-      ExciseStringFromBioseq (msep, "[protein=", "]");
-      return msep;
-    }
+  prot_name = LookForValueInBioseq (psep, Seq_mol_aa, "prot");
+  if (!StringHasNoText (prot_name))
+  {
+    FindBioseqWithValue (sep, Seq_mol_rna, "prot", prot_name, &msep);
+    RemoveValueFromBioseq (msep, "prot");
   }
+  prot_name = MemFree (prot_name);
   return msep;
 }
 
@@ -4655,17 +7463,17 @@ static SeqEntryPtr FindRnaByRefOnProtein (SeqEntryPtr sep, SeqEntryPtr psep)
 
 {
   SeqEntryPtr  msep;
-  Char         tmp [256];
+  CharPtr      mrna_name;
 
   msep = NULL;
   if (sep == NULL || psep == NULL) return NULL;
-  if (LookForStringInBioseq (psep, Seq_mol_aa, "[mrna=", tmp, sizeof (tmp) - 1)) {
-    FindRnaByName (sep, tmp, &msep);
-    if (msep != NULL) {
-      ExciseStringFromBioseq (psep, "[mrna=", "]");
-      return msep;
-    }
+  mrna_name = LookForValueInBioseq (psep, Seq_mol_aa, "mrna");
+  if (!StringHasNoText (mrna_name))
+  {
+    FindRnaByName (sep, mrna_name, &msep);
+    RemoveValueFromBioseq (msep, "mrna");
   }
+  mrna_name = MemFree (mrna_name);
   return msep;
 }
 
@@ -4761,6 +7569,7 @@ static void AssignOneProtein
 (SeqEntryPtr      prot_sep, 
  SequencesFormPtr sqfp,
  SeqEntryPtr      assign_sep,
+ SeqLocPtr        use_this,
  BioseqPtr        nucbsp,
  Int2             code)
 {
@@ -4829,9 +7638,9 @@ static void AssignOneProtein
       msep = assign_sep;
     }
     AddSeqEntryToSeqEntry (msep, prot_sep, TRUE);
-    AutomaticProteinProcess (msep, prot_sep, code, sqfp->makeMRNA, NULL);
+    AutomaticProteinProcess (msep, prot_sep, code, sqfp->makeMRNA, use_this);
   } else {
-    AutomaticProteinProcess (assign_sep, prot_sep, code, sqfp->makeMRNA, NULL);
+    AutomaticProteinProcess (assign_sep, prot_sep, code, sqfp->makeMRNA, use_this);
   }  
 }
 
@@ -4869,401 +7678,991 @@ static SeqEntryPtr FindSeqEntryWithTranscriptID (SeqEntryPtr sep, CharPtr transc
   return found_sep; 
 }
 
-static SeqEntryPtr FindSeqEntryWithID (SeqEntryPtr sep_list, SeqIdPtr sip)
+/* This section of code is used for matching up proteins to coding region locations
+ * on the nucleotide sequences.
+ */
+
+/* A ValNode list will be used to hold the list of pairings between protein and nucleotide
+ * sequences.  There will be one ValNode per protein sequence.  The choice for the ValNode
+ * indicates the position of the nucleotide sequence in the set plus one - a zero indicates
+ * that there is no nucleotide for this protein.  The data.ptrvalue will be used to hold the
+ * location of the coding region on the nucleotide.
+ */
+
+/* This function frees the AssociationList. */ 
+extern ValNodePtr FreeAssociationList (ValNodePtr assoc_list)
 {
-  BioseqPtr    bsp;
-  BioseqSetPtr bssp;
-  SeqEntryPtr  return_sep = NULL, sep;
-  
-  
-  if (sep_list == NULL || sep_list->data.ptrvalue == NULL) 
+  if (assoc_list == NULL)
   {
     return NULL;
   }
-  else if (IS_Bioseq (sep_list))
-  {
-    bsp = sep_list->data.ptrvalue;
-    if (SeqIdIn (sip, bsp->id))
-    {
-      return_sep = sep_list;
-    }
-  }
-  else if (IS_Bioseq_set (sep_list))
-  {
-    bssp = sep_list->data.ptrvalue;
-    for (sep = bssp->seq_set; sep != NULL && return_sep == NULL; sep = sep->next)
-    {
-      return_sep = FindSeqEntryWithID (sep, sip);
-    }
-  }
-  return return_sep;
+  assoc_list->next = FreeAssociationList (assoc_list->next);
+  assoc_list->data.ptrvalue = SeqLocFree (assoc_list->data.ptrvalue);
+  assoc_list = ValNodeFree (assoc_list);
+  return assoc_list;
 }
 
-static void GetNucList (SeqEntryPtr sep, ValNodePtr PNTR sip_list)
+/* This function copies the AssociationList */
+static ValNodePtr CopyAssociationList (ValNodePtr orig_assoc_list)
 {
-  BioseqPtr    bsp;
-  BioseqSetPtr bssp;
+  ValNodePtr copy_assoc_list = NULL;
   
-  if (sep == NULL || sep->data.ptrvalue == NULL)
+  if (orig_assoc_list == NULL)
+  {
+    return NULL;
+  }
+  copy_assoc_list = ValNodeNew (NULL);
+  if (copy_assoc_list != NULL)
+  {
+    copy_assoc_list->choice = orig_assoc_list->choice;
+    copy_assoc_list->data.ptrvalue = SeqLocCopy (orig_assoc_list->data.ptrvalue);
+    copy_assoc_list->next = CopyAssociationList (orig_assoc_list->next);
+  }
+  
+  return copy_assoc_list;
+}
+
+
+/* This function determines whether all proteins have been assigned to 
+ * nucleotide sequences. 
+ */
+static Boolean AllLocationsProvided (ValNodePtr vnp)
+{
+  if (vnp == NULL)
+  {
+    return FALSE;
+  }
+  while (vnp != NULL)
+  {
+    if (vnp->choice == 0)
+    {
+      return FALSE;
+    }
+    vnp = vnp->next;
+  }
+  return TRUE;
+}
+
+/* Given a nucleotide-protein pair, this function calculates a coding region location
+ * using Suggest Intervals.  If no location is found, a location that includes the
+ * entire sequence is returned instead.
+ */
+static SeqLocPtr DefaultPairInterval (BioseqPtr nbsp, BioseqPtr pbsp, Int2 code)
+{
+  SeqLocPtr slp;
+  ErrSev    oldsev;
+  
+  if (nbsp == NULL || pbsp == NULL)
+  {
+    return NULL;
+  }
+    
+  /* need to suppress errors */  
+  oldsev = ErrSetMessageLevel (SEV_MAX);
+
+  /* try to get location using SuggestIntervals */
+  SetBatchSuggestNucleotide (nbsp, code);
+  slp = PredictCodingRegion (nbsp, pbsp, code);
+  ClearBatchSuggestNucleotide ();  
+  
+  ErrSetMessageLevel (oldsev);
+  
+  /* if no location, use entire sequence */
+  if (slp == NULL)
+  {
+    slp = SeqLocIntNew (0, nbsp->length - 1, Seq_strand_plus, nbsp->id); 
+  }
+  
+  return slp;
+}
+
+/* This function takes a ValNode list where each ValNode represents
+ * a protein in prot_list (in order).  The choice for each ValNode
+ * represents the position of the chosen nucleotide in the nuc_list
+ * (position includes segments in segmented sets, which is why 
+ * FindNthSequenceInSet is used) plus one - zero indicates that there
+ * is no nucleotide sequence for this protein.
+ * The data.ptrvalue for the ValNode is to be populated with a
+ * coding region SeqLoc, or NULL if there is no nucleotide for the protein.
+ */
+static void 
+PickCodingRegionLocationsForProteinNucleotidePairs 
+(ValNodePtr  assoc_list,
+ SeqEntryPtr nuc_list,
+ SeqEntryPtr prot_list,
+ Int2        code)
+{
+  ValNodePtr vnp_assoc;
+  Int4       data_row;
+  BioseqPtr  nbsp, pbsp;
+  SeqLocPtr  slp;
+  
+  if (assoc_list == NULL || nuc_list == NULL || prot_list == NULL)
   {
     return;
   }
-  if (IS_Bioseq (sep))
+
+  vnp_assoc = assoc_list;
+  for (data_row = 0, vnp_assoc = assoc_list;
+       vnp_assoc != NULL; 
+       data_row++, vnp_assoc = vnp_assoc->next)
   {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    if (!ISA_na (bsp->mol))
+    if (vnp_assoc->choice > 0)
     {
-      return;
+      nbsp = FindNthSequenceInSet (nuc_list, vnp_assoc->choice - 1, NULL);
+      pbsp = FindNthSequenceInSet (prot_list, data_row, NULL);
+      slp = DefaultPairInterval (nbsp, pbsp, code);
     }
     else
     {
-      ValNodeAddPointer (sip_list, 0, bsp->id);
+      slp = NULL;
+    }
+    vnp_assoc->data.ptrvalue = SeqLocFree (vnp_assoc->data.ptrvalue);
+    vnp_assoc->data.ptrvalue = slp;
+  }
+}
+
+/* This function takes a ValNode list of coding region SeqLocs,
+ * the list of nucleotide sequences, and the list of protein sequences
+ * and creates the nuc-prot sets.
+ */
+static void 
+AssignProteinsToSelectedNucleotides 
+(ValNodePtr       assoc_list,
+ SeqEntryPtr      nuc_list,
+ SeqEntryPtr      prot_list,
+ SequencesFormPtr sqfp, 
+ Int2             code)
+{
+  SeqEntryPtr prot_sep, nsep, prot_next;
+  ValNodePtr  vnp_assoc;
+  BioseqPtr   nbsp;
+  BioseqPtr PNTR bsp_array;
+  Int4           prot_num;
+
+  if (assoc_list == NULL || nuc_list == NULL || prot_list == NULL
+      || sqfp == NULL)
+  {
+    return;
+  }
+
+  /* need to collect bioseqs before we start adding, otherwise the position in
+   * the set changes */
+  
+  bsp_array = (BioseqPtr PNTR) MemNew (ValNodeLen (prot_list) * sizeof (BioseqPtr));
+  if (bsp_array == NULL)
+  {
+    return;
+  }
+  
+  for (prot_num = 0, vnp_assoc = assoc_list;
+       vnp_assoc != NULL;
+       prot_num++, vnp_assoc = vnp_assoc->next)
+  {
+    if (vnp_assoc->data.ptrvalue == NULL)
+    {
+      bsp_array [prot_num] = NULL;
+    }
+    else
+    {
+      bsp_array [prot_num] = FindNthSequenceInSet (nuc_list, vnp_assoc->choice - 1, NULL);
     }
   }
-  else if (IS_Bioseq_set (sep))
+  
+  for (prot_sep = prot_list, vnp_assoc = assoc_list, prot_num = 0;
+       prot_sep != NULL && vnp_assoc != NULL;
+       prot_sep = prot_next, vnp_assoc = vnp_assoc->next, prot_num++)
   {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    prot_next = prot_sep->next;
+    prot_sep->next = NULL;
     
-    for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+    if (vnp_assoc->data.ptrvalue == NULL)
     {
-      GetNucList (sep, sip_list);
+      /* discard protein */
+      if (IS_Bioseq (prot_sep))
+      {
+        SeqMgrDeleteFromBioseqIndex (prot_sep->data.ptrvalue);
+      }
+      prot_sep = SeqEntryFree (prot_sep);
+    }
+    else
+    {
+      nbsp = bsp_array [prot_num];
+      nsep = SeqMgrGetSeqEntryForData (nbsp);
+      if (nbsp != NULL && nbsp->repr == Seq_repr_seg)
+      {
+        nsep = GetBestTopParentForData (ObjMgrGetEntityIDForPointer (nbsp), nbsp); 
+      }
+
+      AssignOneProtein (prot_sep, sqfp, nsep, vnp_assoc->data.ptrvalue, nbsp, code);
+
+      vnp_assoc->data.ptrvalue = NULL; /*SeqLoc was freed in AssignOneProtein */
     }
   }
+  
+  bsp_array = MemFree (bsp_array);
 }
 
-typedef struct nucforprot
+/* This function creates a new protein ID based on the nucleotide ID that will be
+ * unique within the record - nucleotide and protein sequence IDs are checked
+ * for matches.
+ */
+static CharPtr 
+BuildProteinIDUniqueInIDAndTitleEdit 
+(CharPtr nuc_id,
+ IDAndTitleEditPtr iatep_nuc,
+ IDAndTitleEditPtr iatep_prot)
 {
-  Boolean done;
-  PopuP   nuc_list;
-} NucForProtData, PNTR NucForProtPtr;
-
-static void AcceptNucForProt (ButtoN b)
-{
-  NucForProtPtr nfpp;
+  CharPtr new_id, cp;
+  Int4    offset, seq_num;
+  Boolean unique_found = FALSE;
   
-  nfpp = (NucForProtPtr) GetObjectExtra (b);
-  if (nfpp == NULL) return;
-  nfpp->done = TRUE;
-}
-
-static void ChooseMapType (GrouP g)
-{
-  NucForProtPtr nfpp;
-
-  nfpp = (NucForProtPtr) GetObjectExtra (g);
-  if (nfpp == NULL) return;
-  
-  if (GetValue (g) == 1)
+  if (iatep_nuc == NULL || iatep_prot == NULL || StringHasNoText (nuc_id))
   {
-    Enable (nfpp->nuc_list);
+    return NULL;
+  }
+  
+  new_id = (CharPtr) MemNew ((StringLen (nuc_id) + 20) * sizeof (Char));
+  if (new_id != NULL)
+  {
+    StringCpy (new_id, nuc_id);
+    StringCat (new_id, "_");
+    cp = new_id + StringLen (new_id);
+    for (offset = 1; offset < INT4_MAX && ! unique_found; offset ++)
+    {
+      sprintf (cp, "%d", offset);
+      unique_found = TRUE;
+      for (seq_num = 0; seq_num < iatep_nuc->num_sequences && unique_found; seq_num++)
+      {
+        if (StringCmp (iatep_nuc->id_list [seq_num], new_id) == 0)
+        {
+          unique_found = FALSE;
+        }
+      }
+      for (seq_num = 0; seq_num < iatep_prot->num_sequences && unique_found; seq_num++)
+      {
+        if (StringCmp (iatep_prot->id_list [seq_num], new_id) == 0)
+        {
+          unique_found = FALSE;
+        }
+      }
+    }
+  }
+  if (unique_found)
+  {
+    return new_id;
   }
   else
   {
-    Disable (nfpp->nuc_list);
+    new_id = MemFree (new_id);
+    return StringSave ("too_many");
   }
 }
 
-static SeqEntryPtr 
-PromptForNucForProt 
-(ValNodePtr sip_list,
- BioseqPtr pbsp,
- Int4 prot_pos, 
- Int4 num_prots,
- BoolPtr use_position,
- SeqEntryPtr top_sep)
+/* if the user gave the protein sequences the same IDs as the nucleotide sequences,
+ * we need to create new sequence IDs for the proteins so that they will be unique.
+ * We should also make sure that sequence IDs that don't match nucleotide sequence
+ * IDs are unique.
+ */
+static void ReplaceDuplicateProteinIDs (SeqEntryPtr nuc_list, SeqEntryPtr prot_list)
 {
-  WindoW         w;
-  NucForProtData nfpd;
-  GrouP          h, map_choice = NULL;
-  PrompT         p = NULL;
-  ButtoN         b;
+  Int4              nuc_seq_num, prot_seq_num, prot_seq_num_check;
+  IDAndTitleEditPtr iatep_nuc, iatep_prot;
+  Boolean           found_nuc_match;
+  
+  if (nuc_list == NULL || prot_list == NULL)
+  {
+    return;
+  }
+  
+  iatep_nuc = SeqEntryListToIDAndTitleEdit (nuc_list);
+  iatep_prot = SeqEntryListToIDAndTitleEdit (prot_list);
+  if (iatep_nuc != NULL && iatep_prot != NULL)
+  {
+    for (prot_seq_num = 0; prot_seq_num < iatep_prot->num_sequences; prot_seq_num++)
+    {
+      /* This part replaces any protein sequence IDs that match a nucleotide ID with
+       * the nucleotide ID plus an underscore plus a number that makes the ID
+       * unique.
+       */
+      found_nuc_match = FALSE;
+      for (nuc_seq_num = 0;
+           nuc_seq_num < iatep_nuc->num_sequences && ! found_nuc_match; 
+           nuc_seq_num++)
+      {
+        if (StringCmp (iatep_prot->id_list [prot_seq_num],
+                       iatep_nuc->id_list [nuc_seq_num]) == 0)
+        {
+          iatep_prot->id_list [prot_seq_num] = MemFree (iatep_prot->id_list [prot_seq_num]);
+          iatep_prot->id_list [prot_seq_num] = BuildProteinIDUniqueInIDAndTitleEdit (iatep_nuc->id_list [nuc_seq_num],
+                                                                                     iatep_nuc,
+                                                                                     iatep_prot);
+          found_nuc_match = TRUE;
+        }
+      }
+      /* This part replaces a protein sequence ID that matches a previous protein
+       * sequence ID with the original protein sequence ID plus an underscore plus
+       * a number that makes the ID unique.
+       */
+      if (!found_nuc_match)
+      {
+        for (prot_seq_num_check = prot_seq_num + 1; 
+             prot_seq_num_check < iatep_prot->num_sequences;
+             prot_seq_num_check ++)
+        {
+          if (StringCmp (iatep_prot->id_list [prot_seq_num],
+                         iatep_prot->id_list [prot_seq_num_check]) == 0)
+          {
+            iatep_prot->id_list [prot_seq_num_check] = MemFree (iatep_prot->id_list [prot_seq_num_check]);
+            iatep_prot->id_list [prot_seq_num_check] = BuildProteinIDUniqueInIDAndTitleEdit (iatep_prot->id_list [prot_seq_num],
+                                                                                             iatep_nuc,
+                                                                                             iatep_prot);
+          }
+        }
+      }
+    }
+  }
+  ApplyIDAndTitleEditToSeqEntryList (prot_list, iatep_prot);
+  iatep_prot = IDAndTitleEditFree (iatep_prot);
+  iatep_nuc = IDAndTitleEditFree (iatep_nuc);
+}
+
+static Uint2 nucprotedit_types [] = {
+  TAGLIST_PROMPT, TAGLIST_POPUP, TAGLIST_TEXT, TAGLIST_TEXT
+};
+
+static Uint2 nucprotedit_widths [] = {
+  10, 10, 15, 15
+};
+
+typedef struct nucprotedit
+{
+  SeqEntryPtr nuc_list;
+  SeqEntryPtr prot_list;
+  DialoG      dlg;
+  ButtoN      accept_btn;
+  ValNodePtr  assoc_list;
+  TexT        all_gene_txt;
+  TexT        all_prot_txt;
+} NucProtEditData, PNTR NucProtEditPtr;
+
+static void PopulateNucProtEdit (NucProtEditPtr npep)
+{
+  IDAndTitleEditPtr     iatep_nuc, iatep_prot;
+  ValNodePtr            row_list = NULL, vnp_assoc;
+  TagListPtr            tlp;
+  CharPtr               data_string, gene_locus, prot_name;
+  Int4                  data_len;
+  Int4                  prot_num;
+  Int4                  old_scroll_pos;
+  
+  if (npep == NULL)
+  {
+    return;
+  }
+  
+  tlp = (TagListPtr) GetObjectExtra (npep->dlg);
+  if (tlp == NULL)
+  {
+    return;
+  }
+  
+  /* need to get bar value and reset after populating */
+  if (tlp->bar != NULL)  
+  {
+    old_scroll_pos = GetBarValue (tlp->bar);
+  }
+  
+  iatep_nuc = SeqEntryListToIDAndTitleEdit (npep->nuc_list);
+  iatep_prot = SeqEntryListToIDAndTitleEdit (npep->prot_list);
+  if (iatep_nuc != NULL && iatep_prot != NULL)
+  {
+    vnp_assoc = npep->assoc_list;
+    for (prot_num = 0; prot_num < iatep_prot->num_sequences; prot_num++)
+    {
+      /* first column is protein ID */
+      /* second column is choice for nucleotide ID */
+      /* third column is gene locus tag */
+      /* fourth column is protein name */
+      /* fifth column indicates presence of suggested interval */
+      gene_locus = FindValueFromPairInDefline ("gene", iatep_prot->title_list [prot_num]);
+      prot_name = FindValueFromPairInDefline ("protein", iatep_prot->title_list [prot_num]);
+      
+      data_len = StringLen (iatep_prot->id_list [prot_num])
+                  + 20
+                  + StringLen (gene_locus)
+                  + StringLen (prot_name);
+      data_string = (CharPtr) MemNew (data_len * sizeof (Char));                  
+      if (data_string != NULL)
+      {
+        sprintf (data_string, "%s\t%d\t%s\t%s\n",
+                               iatep_prot->id_list [prot_num],
+                               vnp_assoc == NULL ? 0 : vnp_assoc->choice,
+                               gene_locus == NULL ? "" : gene_locus,
+                               prot_name == NULL ? "" : prot_name);
+        ValNodeAddPointer (&row_list, 0, data_string);                               
+      }
+      gene_locus = MemFree (gene_locus);
+      prot_name = MemFree (prot_name);
+      if (vnp_assoc != NULL)
+      {
+        vnp_assoc = vnp_assoc->next;
+      }
+    }
+    SendMessageToDialog (npep->dlg, VIB_MSG_RESET);
+    tlp->vnp = row_list;
+
+    if (iatep_prot->num_sequences > tlp->rows)
+    {
+      tlp->max = MAX ((Int2) 0, (Int2) (iatep_prot->num_sequences - tlp->rows));  
+      CorrectBarMax (tlp->bar, tlp->max);
+      CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1); 
+      Enable (tlp->bar);
+      SetBarValue (tlp->bar, old_scroll_pos);
+    }
+    else
+    {
+      Hide (tlp->bar);
+    }
+    SendMessageToDialog (npep->dlg, VIB_MSG_REDRAW);    
+  }
+  
+  iatep_nuc = IDAndTitleEditFree (iatep_nuc);
+  iatep_prot = IDAndTitleEditFree (iatep_prot);
+}
+
+static CharPtr 
+GetTagListValueEx (TagListPtr tlp, Int4 seq_num, Int4 col_num);
+
+static void ApplyGeneNameToAllSequences (ButtoN b)
+{
+  NucProtEditPtr npep;
+  CharPtr        all_gene_name, new_val;
+  TagListPtr     tlp;
+  Int4           seq_num;
   ValNodePtr     vnp;
-  SeqIdPtr       sip = NULL;
-  Char           tmp [128];
-  Char           prompt_text[200];
-  Int4           sel, count;
-  SeqEntryPtr    nsep;
-
-  if (sip_list == NULL || pbsp == NULL || use_position == NULL) return NULL;
-
-  if (*use_position)
+  
+  npep = (NucProtEditPtr) GetObjectExtra (b);
+  if (npep == NULL)
   {
-    sel = prot_pos + 1;
+    return;
+  }
+  
+  tlp = (TagListPtr) GetObjectExtra (npep->dlg);
+  if (tlp == NULL)
+  {
+    return;
+  }
+  all_gene_name = SaveStringFromText (npep->all_gene_txt);
+  if (ANS_YES == Message (MSG_YN, "Are you sure you want to set all of the gene locus values to %s?",
+                          all_gene_name))
+  {
+    for (vnp = tlp->vnp, seq_num = 0;
+         vnp != NULL;
+         vnp = vnp->next, seq_num++)
+    {
+      new_val = ReplaceTagListColumn (vnp->data.ptrvalue, all_gene_name, 2);
+      vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+      vnp->data.ptrvalue = new_val;
+    }
+    SendMessageToDialog (npep->dlg, VIB_MSG_REDRAW);
+  }
+  all_gene_name = MemFree (all_gene_name);
+}
+
+static void ApplyProteinNameToAllSequences (ButtoN b)
+{
+  NucProtEditPtr npep;
+  CharPtr        all_prot_name, new_val;
+  TagListPtr     tlp;
+  Int4           seq_num;
+  ValNodePtr     vnp;
+  
+  npep = (NucProtEditPtr) GetObjectExtra (b);
+  if (npep == NULL)
+  {
+    return;
+  }
+  
+  tlp = (TagListPtr) GetObjectExtra (npep->dlg);
+  if (tlp == NULL)
+  {
+    return;
+  }
+  all_prot_name = SaveStringFromText (npep->all_prot_txt);
+  if (ANS_YES == Message (MSG_YN, "Are you sure you want to set all of the protein names to %s?",
+                          all_prot_name))
+  {
+    for (vnp = tlp->vnp, seq_num = 0;
+         vnp != NULL;
+         vnp = vnp->next, seq_num++)
+    {
+      new_val = ReplaceTagListColumn (vnp->data.ptrvalue, all_prot_name, 3);
+      vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+      vnp->data.ptrvalue = new_val;
+    }
+    SendMessageToDialog (npep->dlg, VIB_MSG_REDRAW);   
+  }
+  all_prot_name = MemFree (all_prot_name);
+}
+
+static void ApplyNucProtEditGeneAndProt (NucProtEditPtr npep)
+{
+  TagListPtr tlp;
+  Int4       seq_num;
+  CharPtr    gene, prot;
+  IDAndTitleEditPtr iatep;
+  ValNodePtr        vnp;
+  
+  if (npep == NULL)
+  {
+    return;
+  }
+  
+  tlp = (TagListPtr) GetObjectExtra (npep->dlg);
+  if (tlp == NULL)
+  {
+    return;
+  }
+  
+  iatep = SeqEntryListToIDAndTitleEdit (npep->prot_list);
+  if (iatep == NULL)
+  {
+    return;
+  }
+  
+  for (seq_num = 0, vnp = tlp->vnp; 
+       seq_num < iatep->num_sequences && vnp != NULL; 
+       seq_num++, vnp = vnp->next)
+  {
+    gene = GetTagListValueEx (tlp, seq_num, 2);
+    iatep->title_list [seq_num] = ReplaceValueInOneDefLine (iatep->title_list [seq_num],
+                                                            "gene",
+                                                            gene);
+    gene = MemFree (gene);
+    prot = GetTagListValueEx (tlp, seq_num, 3);
+    iatep->title_list [seq_num] = ReplaceValueInOneDefLine (iatep->title_list [seq_num],
+                                                            "protein",
+                                                            prot);
+  }
+  ApplyIDAndTitleEditToSeqEntryList (npep->prot_list, iatep);
+  iatep = IDAndTitleEditFree (iatep);
+}
+
+/* This function collects the pairings of nucleotides and proteins from
+ * the NucProtEdit dialog.
+ * The ValNode list stored in npep->assoc_list has one ValNode for each
+ * protein in npep->prot_list.  The choice for each ValNode is the position
+ * of the nucleotide in npep->nuc_list plus one - zero indicates that there
+ * is no nucleotide for this protein sequence.
+ */
+static void CollectSequenceAssociationsFromNucProtEdit (NucProtEditPtr npep)
+{
+  TagListPtr tlp;
+  CharPtr    str;
+  Int4       num_data_rows, assoc_num, data_row;
+  ValNodePtr assoc_list = NULL;
+  if (npep == NULL)
+  {
+    return;
+  }
+  tlp = (TagListPtr) GetObjectExtra (npep->dlg);
+  if (tlp == NULL)
+  {
+    return;
+  }
+  
+  num_data_rows = ValNodeLen (tlp->vnp);
+  for (data_row = 0; data_row < num_data_rows; data_row++)
+  {
+    str  = GetTagListValueEx (tlp, data_row, 1);
+    if (!StringHasNoText (str))
+    {
+      assoc_num = atoi (str);
+    }
+    else
+    {
+      assoc_num = 0;
+    }
+    str = MemFree (str);
+        
+    ValNodeAddPointer (&assoc_list, assoc_num, NULL);
+  }
+  
+  npep->assoc_list = FreeAssociationList (npep->assoc_list);
+  npep->assoc_list = assoc_list;    
+}
+
+/* This function produces a dialog that allows the user to edit the gene and protein names
+ * and to select the locations for the coding regions for each protein sequence.
+ */
+static ValNodePtr 
+CollectNucleotideProteinAssociations 
+(SeqEntryPtr nuc_list,
+ SeqEntryPtr prot_list,
+ ValNodePtr  default_assoc_list)
+{
+  WindoW                w;
+  GrouP                 h, title_grp, all_gene_grp, all_prot_grp, k, c;
+  PrompT                p_prot, p_nuc, p_locus, p_name;
+  ButtoN                b;
+  Int4                  num_prots;
+  Int4                  rows_shown = 0;
+  TagListPtr            tlp;
+  ModalAcceptCancelData acd;
+  NucProtEditData       nped;
+  IDAndTitleEditPtr     iatep_nuc;
+  EnumFieldAssocPtr     nuc_alist;
+  EnumFieldAssocPtr     nucprotedit_alists [] = { NULL, NULL, NULL, NULL, NULL};
+  Int4                  nuc_num;
+  
+  if (nuc_list == NULL || prot_list == NULL)
+  {
+    return;
+  }
+  
+  nped.nuc_list = nuc_list;
+  nped.prot_list = prot_list;
+  nped.assoc_list = CopyAssociationList (default_assoc_list);
+  
+  num_prots = ValNodeLen (prot_list);
+  rows_shown = MIN (num_prots, 5);
+  
+  /* set up ALIST for nucleotide list.
+   * cannot free IDAndTitleEdit until done with ALIST.
+   */
+  iatep_nuc = SeqEntryListToIDAndTitleEdit (nped.nuc_list);
+  nuc_alist = (EnumFieldAssocPtr) MemNew ((iatep_nuc->num_sequences + 2) * sizeof (EnumFieldAssoc));
+  nuc_alist [0].name = "";
+  nuc_alist [0].value = 0;
+  for (nuc_num = 0; nuc_num < iatep_nuc->num_sequences; nuc_num++)
+  {
+    nuc_alist [nuc_num + 1].name = iatep_nuc->id_list [nuc_num];
+    nuc_alist [nuc_num + 1].value = nuc_num + 1;
+  }
+  nuc_alist [nuc_num + 1].name = NULL;
+  nucprotedit_alists [1] = nuc_alist;
+  
+  w = MovableModalWindow (-20, -13, -10, -10, "Map Proteins to Nucleotides", NULL);
+  
+  h = HiddenGroup(w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  k = HiddenGroup (h, 2, 0, NULL);
+  /* text and button for setting all gene locus values */
+  all_gene_grp = HiddenGroup (k, -1, 0, NULL);  
+  b = PushButton (all_gene_grp, "Set All Gene Locus Values to Value Below", ApplyGeneNameToAllSequences);
+  SetObjectExtra (b, &nped, NULL);
+  nped.all_gene_txt = DialogText (all_gene_grp, "", 15, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) nped.all_gene_txt, (HANDLE) b, NULL);
+
+  /* text and button for setting all protein names */
+  all_prot_grp = HiddenGroup (k, -1, 0, NULL);  
+  b = PushButton (all_prot_grp, "Set All Protein Names to Value Below", ApplyProteinNameToAllSequences);
+  SetObjectExtra (b, &nped, NULL);
+  nped.all_prot_txt = DialogText (all_prot_grp, "", 15, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) nped.all_prot_txt, (HANDLE) b, NULL);  
+  
+  title_grp = HiddenGroup (h, 5, 0, NULL);
+  SetGroupSpacing (title_grp, 10, 10);
+     
+  p_prot = StaticPrompt (title_grp, "Prot ID", 0, 0, programFont, 'l');    
+  p_nuc = StaticPrompt (title_grp, "Nuc ID", 0, 0, programFont, 'l');    
+  p_locus = StaticPrompt (title_grp, "Gene Locus", 0, 0, programFont, 'l');    
+  p_name = StaticPrompt (title_grp, "Protein Name", 0, 0, programFont, 'l');    
+ 
+  nped.dlg = CreateTagListDialogEx (h, rows_shown, 4, 2,
+                                           nucprotedit_types, nucprotedit_widths,
+                                           nucprotedit_alists, TRUE, TRUE, 
+                                           NULL, NULL);
+
+  
+  tlp = (TagListPtr) GetObjectExtra (nped.dlg);  
+  if (tlp == NULL) return;
+  
+  if (num_prots > rows_shown)
+  {
+    tlp->max = MAX ((Int2) 0, (Int2) (num_prots - tlp->rows));  
+    CorrectBarMax (tlp->bar, tlp->max);
+    CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1); 
+    Enable (tlp->bar);
   }
   else
   {
-    w = ModalWindow(-20, -13, -10, -10, NULL);
-    h = HiddenGroup (w, -1, 0, NULL);
-  
-    sip = SeqIdFindWorst (pbsp->id);
-    SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-  
-    if (num_prots == ValNodeLen (sip_list))
-    {
-      map_choice = HiddenGroup (h, 0, 2, ChooseMapType);
-      SetObjectExtra (map_choice, &nfpd, NULL);
-      RadioButton (map_choice, "Match sequence 1 to protein 1, sequence 2 to protein 2, etc.");
-      sprintf (prompt_text, "Please specify the nucleotide sequence for protein %s (#%d)",
-             tmp, prot_pos + 1);
-      RadioButton (map_choice, prompt_text);
-      SetValue (map_choice, 2);
-    }
-    else
-    {
-      sprintf (prompt_text, "Please specify the nucleotide sequence for protein %s (#%d)",
-               tmp, prot_pos + 1);
+    Hide (tlp->bar);
+  }
 
-      p = StaticPrompt (h, prompt_text, 0, popupMenuHeight, programFont, 'l');
-    }
-    nfpd.nuc_list = PopupList (h, TRUE, NULL);
-    for (vnp = sip_list; vnp != NULL; vnp = vnp->next)
-    {
-      sip = (SeqIdPtr) vnp->data.ptrvalue;
-      SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-      PopupItem (nfpd.nuc_list, tmp);
-    }
-    SetValue (nfpd.nuc_list, 1);
+  c = HiddenGroup (h, 2, 0, NULL);
+  nped.accept_btn = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (nped.accept_btn, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
   
-    b = PushButton(h, "OK", AcceptNucForProt);
-    SetObjectExtra (b, &nfpd, NULL);
-    if (map_choice == NULL)
-    {
-      AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) nfpd.nuc_list, (HANDLE) b, NULL);
-    }
-    else
-    {
-      AlignObjects (ALIGN_CENTER, (HANDLE) map_choice, (HANDLE) nfpd.nuc_list, (HANDLE) b, NULL);
-    }
-    Show(w); 
-    Select (w);
-    nfpd.done = FALSE;
-    while (!nfpd.done)
+  AlignObjects (ALIGN_CENTER, (HANDLE) nped.dlg, (HANDLE) c, (HANDLE) NULL);
+
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [0], (HANDLE) p_prot, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [1], (HANDLE) p_nuc, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [2], (HANDLE) p_locus, 
+                               (HANDLE) all_gene_grp, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) p_name, 
+                               (HANDLE) all_prot_grp, NULL);
+  
+  PopulateNucProtEdit (&nped);
+
+  Show (w);
+  Select (w);
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    while (!acd.accepted && ! acd.cancelled)
     {
       ProcessExternalEvent ();
       Update ();
     }
     ProcessAnEvent ();
-    if (map_choice == NULL || GetValue (map_choice) == 2)
+    if (acd.accepted)
     {
-      sel = GetValue (nfpd.nuc_list);    
-    }
-    else
-    {
-      sel = prot_pos + 1;
-      *use_position = TRUE;
-    }    
-    Remove (w);
-  }
-  for (vnp = sip_list, count = 1; vnp != NULL && count < sel; vnp = vnp->next, count++)
-  {
-  }
-  if (vnp != NULL)
-  {
-    sip = (SeqIdPtr)vnp->data.ptrvalue;
-  }
-  
-  nsep = FindSeqEntryWithID (top_sep, sip);
-  return nsep;
-}
-
-static SeqEntryPtr FindNucForProtBySeqIDInTitle (SeqEntryPtr prot_sep, SeqEntryPtr nuc_list)
-{
-  CharPtr     title = NULL, cp, id_text = NULL;
-  ObjectIdPtr oip = NULL;
-  SeqIdPtr    sip;
-  SeqEntryPtr nsep = NULL;
-
-  SeqEntryExplore (prot_sep, (Pointer) (&title), FindFirstTitle);
-  if (title != NULL) 
-  {
-    cp = StringChr (title, '[');
-    if (cp == NULL)
-    {
-      id_text = StringSave (title);
-    }
-    else if (cp != title)
-    {
-      id_text = StringSave (title);
-      id_text [cp - title] = 0;
-    }
-    if (id_text != NULL)
-    {
-      oip = ObjectIdNew ();
-      if (oip != NULL)
+      CollectSequenceAssociationsFromNucProtEdit (&nped);
+      if (!AllLocationsProvided (nped.assoc_list))
       {
-        oip->str = id_text;
-        id_text = NULL;
-        sip = ValNodeNew(NULL);
-        if (sip != NULL)
+        if (ANS_NO == Message (MSG_YN, "You have not provided coding region locations for all of your proteins - these proteins will be discarded.  Are you sure you want to continue?"))
         {
-          sip->choice = SEQID_LOCAL;
-          sip->data.ptrvalue = oip;
-          oip = NULL;
-          nsep = FindSeqEntryWithID (nuc_list, sip);
-          sip = SeqIdFree (sip);
+          acd.accepted = FALSE;
         }
-        oip = ObjectIdFree (oip);
       }
-      id_text = MemFree (id_text);
     }
   }
-  return nsep;
-}
-
-static void AssignOneProteinForSequenceSet 
-(SeqEntryPtr      prot_sep,
- SeqEntryPtr      nuc_list,
- Int2             code,
- Int4             prot_list_position,
- Int4             num_prots,
- BoolPtr          use_position,
- SequencesFormPtr sqfp)
-{
-  SeqEntryPtr nsep = NULL;
-  BioseqPtr   nbsp = NULL, pbsp;
-  ValNodePtr  sip_list = NULL;
-  SeqIdPtr    sip;
+    
+  Remove (w);
   
-  if (prot_sep == NULL || nuc_list == NULL || ! IS_Bioseq (prot_sep))
+  if (acd.accepted)
   {
-    return;
-  }
-  
-  pbsp = prot_sep->data.ptrvalue;
-
-  GetNucList (nuc_list, &sip_list);
-  if (sip_list == NULL)
-  {
-    return;
-  }
-  if (sip_list->next == NULL)
-  {
-    sip = (SeqIdPtr) sip_list->data.ptrvalue;
-    nsep = FindSeqEntryWithID (nuc_list, sip);
+    /* apply any gene protein data the user may have entered to the titles */
+    ApplyNucProtEditGeneAndProt (&nped);    
   }
   else
   {
-    if ((nsep = FindNucForProtBySeqIDInTitle (prot_sep, nuc_list)) != NULL)
+    nped.assoc_list = FreeAssociationList (nped.assoc_list);
+  }
+  
+  nuc_alist = MemFree (nuc_alist);
+  iatep_nuc = IDAndTitleEditFree (iatep_nuc);
+  
+  Update ();
+  return nped.assoc_list;
+}
+
+/* This function tries to build an association list by matching nucleotide sequence IDs 
+ * to protein sequence IDs.
+ */
+static ValNodePtr 
+BuildAssociationListByMatch
+(SeqEntryPtr       nuc_list,
+ SeqEntryPtr       prot_list)
+{
+  IDAndTitleEditPtr iatep_nuc, iatep_prot;
+  Int4       nuc_seq_num, prot_seq_num, found_num;
+  ValNodePtr assoc_list = NULL;
+  
+  if (nuc_list == NULL || prot_list == NULL)
+  {
+    return NULL;
+  }
+  
+  iatep_nuc = SeqEntryListToIDAndTitleEdit (nuc_list);
+  iatep_prot = SeqEntryListToIDAndTitleEdit (prot_list);
+  if (iatep_nuc == NULL || iatep_prot == NULL)
+  {
+    iatep_nuc = IDAndTitleEditFree (iatep_nuc);
+    iatep_prot = IDAndTitleEditFree (iatep_prot);
+    return NULL;
+  }
+  
+  for (prot_seq_num = 0; prot_seq_num < iatep_prot->num_sequences; prot_seq_num++)
+  {
+    found_num = 0;
+    if (iatep_nuc->num_sequences == 1)
     {
-      /* found it, done */
+      found_num = 1;
+    }
+    for (nuc_seq_num = 0;
+         nuc_seq_num < iatep_nuc->num_sequences && found_num == 0;
+         nuc_seq_num++)
+    {
+      if (StringCmp (iatep_nuc->id_list[nuc_seq_num], iatep_prot->id_list [prot_seq_num]) == 0)
+      {
+        found_num = nuc_seq_num + 1;
+      }
+    }
+    ValNodeAddPointer (&assoc_list, found_num, NULL);
+  }
+  iatep_nuc = IDAndTitleEditFree (iatep_nuc);
+  iatep_prot = IDAndTitleEditFree (iatep_prot);
+  return assoc_list;
+}
+
+/* This function builds an association list by matching nucleotide sequences 
+ * to protein sequences by position.
+ */
+static ValNodePtr 
+BuildAssociationListByPosition
+(SeqEntryPtr       nuc_list,
+ SeqEntryPtr       prot_list)
+{
+  IDAndTitleEditPtr iatep_nuc, iatep_prot;
+  Int4       nuc_seq_num, prot_seq_num;
+  ValNodePtr assoc_list = NULL;
+  Int4       num_masters = 0, num_segs = 0;
+  
+  if (nuc_list == NULL || prot_list == NULL)
+  {
+    return NULL;
+  }
+  
+  iatep_nuc = SeqEntryListToIDAndTitleEdit (nuc_list);
+  iatep_prot = SeqEntryListToIDAndTitleEdit (prot_list);
+  if (iatep_nuc == NULL || iatep_prot == NULL)
+  {
+    iatep_nuc = IDAndTitleEditFree (iatep_nuc);
+    iatep_prot = IDAndTitleEditFree (iatep_prot);
+    return NULL;
+  }
+  
+  for (nuc_seq_num = 0; nuc_seq_num < iatep_nuc->num_sequences; nuc_seq_num++)
+  {
+    if (iatep_nuc->is_seg != NULL && iatep_nuc->is_seg [nuc_seq_num])
+    {
+      num_segs ++;
     }
     else
     {
-      nsep = PromptForNucForProt (sip_list, pbsp, prot_list_position, num_prots,
-                                  use_position, nuc_list);
-    } 
-  }
-    
-  if (nsep == NULL || ! IS_Bioseq (nsep))
-  {
-    Message (MSG_ERROR, "Unable to find nucleotide for protein %d", prot_list_position + 1);
-    return;
+      num_masters ++;
+    }
   }
   
-  nbsp = (BioseqPtr) nsep->data.ptrvalue;
-  if (nbsp != NULL) {
-    SetBatchSuggestNucleotide (nbsp, code);
+  if (num_segs == iatep_prot->num_sequences && iatep_nuc->is_seg != NULL)
+  {
+    /* assign proteins to segments */
+    nuc_seq_num = 0;
+    for (prot_seq_num = 0; prot_seq_num < iatep_prot->num_sequences; prot_seq_num++)
+    {
+      while (! iatep_nuc->is_seg [nuc_seq_num] && nuc_seq_num < iatep_nuc->num_sequences)
+      {
+        nuc_seq_num++;
+      }
+      if (nuc_seq_num < iatep_nuc->num_sequences)
+      {
+        ValNodeAddPointer (&assoc_list, nuc_seq_num + 1, NULL);
+        nuc_seq_num++;
+      }
+      else
+      {
+        ValNodeAddPointer (&assoc_list, 0, NULL);
+      }
+    }
   }
-  AssignOneProtein (prot_sep, sqfp, nsep, nbsp, code);
-    
-  if (nbsp != NULL) {
-    ClearBatchSuggestNucleotide ();
+  else if (num_masters == iatep_prot->num_sequences)
+  {
+    /* assign proteins to master sequences */
+    nuc_seq_num = 0;
+    for (prot_seq_num = 0; prot_seq_num < iatep_prot->num_sequences; prot_seq_num++)
+    {
+      if (iatep_nuc->is_seg != NULL)
+      {
+        while (iatep_nuc->is_seg [nuc_seq_num] && nuc_seq_num < iatep_nuc->num_sequences)
+        {
+          nuc_seq_num++;
+        }
+      }
+      if (nuc_seq_num < iatep_nuc->num_sequences)
+      {
+        ValNodeAddPointer (&assoc_list, nuc_seq_num + 1, NULL);
+        nuc_seq_num ++;
+      }
+      else
+      {
+        ValNodeAddPointer (&assoc_list, 0, NULL);
+      }
+    }
   }
+  else if (num_masters == 1)
+  {
+    /* assign all proteins to one sequence */
+    for (prot_seq_num = 0; prot_seq_num < iatep_prot->num_sequences; prot_seq_num++)
+    {
+      ValNodeAddPointer (&assoc_list, 1, NULL);
+    }
+  }
+  else
+  {
+    /* can't get a match.  Null will be returned. */
+  }
+  
+  iatep_nuc = IDAndTitleEditFree (iatep_nuc);
+  iatep_prot = IDAndTitleEditFree (iatep_prot);
+  return assoc_list;
 }
 
-static void AssignProteinsForSequenceSet
+/* This function will attempt to make a default assignation of nucleotides to proteins.
+ * If it is unable to produce a default mapping, it will prompt the user for the mapping.
+ * It will then build the nuc-prot sets and discard any proteins for which no nucleotide
+ * was assigned.
+ */
+ 
+extern ValNodePtr 
+AssignProteinsForSequenceSet 
+(SeqEntryPtr nuc_list,
+ SeqEntryPtr prot_list)
+{
+  ValNodePtr            assoc_list, tmp_list;
+  
+  if (nuc_list == NULL || prot_list == NULL)
+  {
+    return NULL;
+  }
+  
+  assoc_list = BuildAssociationListByMatch (nuc_list, prot_list);
+  
+  if (! AllLocationsProvided (assoc_list))
+  {
+    tmp_list = BuildAssociationListByPosition (nuc_list, prot_list);
+    if (tmp_list != NULL)
+    {
+      assoc_list = FreeAssociationList (assoc_list);
+      assoc_list = tmp_list;
+    }
+  }
+  
+  if (!AllLocationsProvided (assoc_list))
+  {
+    tmp_list = CollectNucleotideProteinAssociations (nuc_list, prot_list, assoc_list);
+    assoc_list = FreeAssociationList (assoc_list);
+    assoc_list = tmp_list;
+  }
+  return assoc_list;
+}
+
+static void BuildNucProtSets 
 (SeqEntryPtr      nuc_list,
  SeqEntryPtr      prot_list,
  SequencesFormPtr sqfp,
  Int2             code)
 {
-  Int2        count = 0;
-  Char        str [128];
-  Char        tmp [128];
-  MonitorPtr  mon;
-  BioseqPtr   bsp;
-  SeqIdPtr    sip;
-  SeqEntryPtr prot_sep, prot_next;
-  Int4        list_position = 0;
-  Int4        num_prots;
-  Boolean     use_position = FALSE;
-  
-  num_prots = ValNodeLen (prot_list);
-  mon = MonitorStrNewEx ("Predicting Coding Region", 20, FALSE);
-  for (prot_sep = prot_list; prot_sep != NULL; prot_sep = prot_next, list_position++)
+  if (nuc_list == NULL || prot_list == NULL ||  sqfp == NULL )
   {
-    prot_next = prot_sep->next;
-    prot_sep->next = NULL;    
-    count++;
-    if (mon != NULL) {
-      str [0] = '\0';
-      tmp [0] = '\0';
-      bsp = (BioseqPtr) prot_list->data.ptrvalue;
-      if (bsp != NULL) {
-        sip = SeqIdFindWorst (bsp->id);
-        SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-      }
-      sprintf (str, "Processing sequence %d [%s]", (int) count, tmp);
-      MonitorStrValue (mon, str);
-      Update ();
-    }
-    AssignOneProteinForSequenceSet (prot_sep, nuc_list, code, list_position, 
-                                    num_prots, &use_position, sqfp);  
+    return;
   }
-  mon = MonitorFree (mon);
-  Update ();
-}
-
-static void AssignProteinsForSingleSequence 
-(SeqEntryPtr      sep,
- SeqEntryPtr      prot_list,
- SequencesFormPtr sqfp,
- Int2             code)
-{
-  BioseqPtr   nucbsp = NULL;
-  SeqEntryPtr nucsep;
-  SeqEntryPtr prot_next;
-  Int2        count = 0;
-  Char        str [128];
-  Char        tmp [128];
-  MonitorPtr  mon;
-  BioseqPtr   bsp;
-  SeqIdPtr    sip;
-  
-  nucsep = FindNucSeqEntry (sep);
-  if (nucsep != NULL && IS_Bioseq (nucsep)) {
-    nucbsp = (BioseqPtr) nucsep->data.ptrvalue;
-  }
-  if (nucbsp != NULL) {
-    SetBatchSuggestNucleotide (nucbsp, code);
-  }
-  mon = MonitorStrNewEx ("Predicting Coding Region", 20, FALSE);
-  count = 0;
-  while (prot_list != NULL) {
-    prot_next = prot_list->next;
-    prot_list->next = NULL;
-    count++;
-    if (mon != NULL) {
-      str [0] = '\0';
-      tmp [0] = '\0';
-      bsp = (BioseqPtr) prot_list->data.ptrvalue;
-      if (bsp != NULL) {
-        sip = SeqIdFindWorst (bsp->id);
-        SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-      }
-      sprintf (str, "Processing sequence %d [%s]", (int) count, tmp);
-      MonitorStrValue (mon, str);
-      Update ();
-    }
-    AssignOneProtein (prot_list, sqfp, sep, nucbsp, code);
-
-    prot_list = prot_next;
-  }
-  if (nucbsp != NULL) {
-    ClearBatchSuggestNucleotide ();
-  }
-  mon = MonitorFree (mon);
-  Update ();
+  PickCodingRegionLocationsForProteinNucleotidePairs (sqfp->nuc_prot_assoc_list,
+                                                      nuc_list,
+                                                      prot_list,
+                                                      code);
+  ReplaceDuplicateProteinIDs (nuc_list, prot_list);
+  AssignProteinsToSelectedNucleotides (sqfp->nuc_prot_assoc_list,
+                                       nuc_list,
+                                       prot_list,
+                                       sqfp, code);
+  sqfp->nuc_prot_assoc_list = FreeAssociationList (sqfp->nuc_prot_assoc_list);
 }
 
 static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
@@ -5309,10 +8708,10 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
     if (fpp != NULL) {
       ResolveCollidingIDs (&head, fpp->list);
     }
-    fpp = (FastaPagePtr) GetObjectExtra (sqfp->protseq);
-    if (fpp != NULL) {
-      ResolveCollidingIDs (&head, fpp->list);
-    }
+    /* NOTE - we do not resolve colliding IDs for proteins here.
+     * Duplicate protein IDs are resolved when they are assigned
+     * to nucleotide sequences.
+     */
     fpp = (FastaPagePtr) GetObjectExtra (sqfp->mrnaseq);
     if (fpp != NULL) {
       ResolveCollidingIDs (&head, fpp->list);
@@ -5467,15 +8866,7 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
       fpp->list = NULL;
     }
     if (list != NULL) {
-      if (PackageTypeIsSingle (sqfp->seqPackage)
-          || sqfp->seqPackage == SEQ_PKG_GENOMICCDNA)
-      {
-        AssignProteinsForSingleSequence (sep, list, sqfp, code);
-      }
-      else
-      {
-        AssignProteinsForSequenceSet (sep, list, sqfp, code);
-      }
+      BuildNucProtSets (sep, list, sqfp, code);
     }
     if (biop != NULL) {
       vnp = CreateNewDescriptor (sep, Seq_descr_source);
@@ -5566,87 +8957,6 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
   }
   FuseNucProtBiosources (sep);
   return (Pointer) sep;
-}
-
-static ValNodePtr FastaTestSequencesForm (ForM f)
-
-{
-  BioseqPtr         bsp;
-  FastaPagePtr      fpp;
-  ValNodePtr        head;
-  ObjectIdPtr       oip;
-  CharPtr           ptr;
-  SeqEntryPtr       sep;
-  SeqIdPtr          sip;
-  SequencesFormPtr  sqfp;
-  Char              str [128];
-  CharPtr           title;
-
-  head = NULL;
-
-  sqfp = (SequencesFormPtr) GetObjectExtra (f);
-  if (sqfp != NULL) {
-
-    fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
-    if (fpp != NULL) {
-      if (fpp->list == NULL) {
-        head = AddStringToValNodeChain (head, "nucleotide sequence", 1);
-      } else if (head != NULL) {
-        sep = fpp->list;
-        if (sep != NULL) {
-          title = NULL;
-          SeqEntryExplore (sep, (Pointer) (&title), FindFirstTitle);
-          if (title != NULL) {
-            ptr = StringISearch (title, "[org=");
-            if (ptr != NULL) {
-              StringNCpy_0 (str, ptr + 5, sizeof (str));
-              ptr = StringChr (str, ']');
-              if (ptr != NULL) {
-                *ptr = '\0';
-                head = ValNodeFreeData (head);
-              }
-            } else {
-              ptr = StringISearch (title, "[organism=");
-              if (ptr != NULL) {
-                StringNCpy_0 (str, ptr + 10, sizeof (str));
-                ptr = StringChr (str, ']');
-                if (ptr != NULL) {
-                  *ptr = '\0';
-                  head = ValNodeFreeData (head);
-                }
-              }
-            }
-          }
-        }
-      }
-      sep = fpp->list;
-      if (sep != NULL && sqfp->seqPackage == SEQ_PKG_SINGLE && IS_Bioseq (sep)) {
-        bsp = (BioseqPtr) sep->data.ptrvalue;
-        if (bsp != NULL) {
-          sip = bsp->id;
-          if (sip != NULL && sip->choice == SEQID_LOCAL) {
-            oip = (ObjectIdPtr) sip->data.ptrvalue;
-            if (oip != NULL && oip->str != NULL) {
-              if (StringICmp (oip->str, "nuc_1") == 0) {
-                GetTitle (sqfp->singleSeqID, str, sizeof (str));
-                if (! StringHasNoText (str)) {
-                  oip->str = MemFree (oip->str);
-                  oip->str = StringSaveNoNull (str);
-                  SeqMgrReplaceInBioseqIndex (bsp);
-                }
-                if (StringICmp (oip->str, "nuc_1") == 0) {
-                  head = AddStringToValNodeChain (head, "unique identifier for your nucleotide sequence", 1);
-                  SafeShow (sqfp->singleIdGrp);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-  }
-  return head;
 }
 
 static void LaunchSequinQuickGuide (void)
@@ -5862,65 +9172,9 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
   return (Pointer) sep;
 }
 
-static ValNodePtr PhylipTestSequencesForm (ForM f)
-
-{
-  ValNodePtr        head;
-  PhylipPagePtr     ppp;
-  CharPtr           ptr;
-  SeqEntryPtr       sep;
-  SequencesFormPtr  sqfp;
-  Char              str [128];
-  CharPtr           title;
-
-  head = NULL;
-
-  sqfp = (SequencesFormPtr) GetObjectExtra (f);
-  if (sqfp != NULL) {
-
-    ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
-    if (ppp != NULL) {
-      if (ppp->sep == NULL) {
-        head = AddStringToValNodeChain (head, "nucleotide sequence", 1);
-      } else if (head != NULL) {
-        sep = ppp->sep;
-        if (sep != NULL) {
-          title = NULL;
-          SeqEntryExplore (sep, (Pointer) (&title), FindFirstTitle);
-          if (title != NULL) {
-            ptr = StringISearch (title, "[org=");
-            if (ptr != NULL) {
-              StringNCpy_0 (str, ptr + 5, sizeof (str));
-              ptr = StringChr (str, ']');
-              if (ptr != NULL) {
-                *ptr = '\0';
-                head = ValNodeFreeData (head);
-              }
-            } else {
-              ptr = StringISearch (title, "[organism=");
-              if (ptr != NULL) {
-                StringNCpy_0 (str, ptr + 10, sizeof (str));
-                ptr = StringChr (str, ']');
-                if (ptr != NULL) {
-                  *ptr = '\0';
-                  head = ValNodeFreeData (head);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-  }
-  return head;
-}
-
 static void SeqEntryPtrToSourceTab (SequencesFormPtr sqfp);
 static SeqEntryPtr GetSeqEntryFromSequencesForm (SequencesFormPtr sqfp);
-static void FixDefinitionLines (SeqEntryPtr sep, BoolPtr cancelled, ValNodePtr PNTR fixes);
-static ValNodePtr FreeStringPairList (ValNodePtr list);
-static void ReplaceOrgWithOrganismInDefinitionLines (SeqEntryPtr sep);
+static void ReplaceAllAliases (SeqEntryPtr sep);
 static void ReplaceMolNamesWithMolBracketsInDefinitionLines (SeqEntryPtr sep);
 static Boolean CheckSequencesForOrganisms (SequencesFormPtr sqfp);
 static void SequencesFormDeleteProc (Pointer formDataPtr);
@@ -5928,25 +9182,23 @@ static void SequencesFormDeleteProc (Pointer formDataPtr);
 static void SetDefaultMolTypesAndTopologies (SeqEntryPtr seq_list)
 {
   SeqEntryPtr sep, nsep;
-  CharPtr     ttl = NULL;
-  Char        tmp[128];
+  CharPtr     str;
   
   for (sep = seq_list; sep != NULL; sep = sep->next)
   {
     nsep = FindNucSeqEntry (sep);
-    ttl = NULL;
-    SeqEntryExplore (nsep, (Pointer) (&ttl), FindFirstTitle);
-
-    if (!LookForSearchString (ttl, "[moltype=", tmp, sizeof (tmp) - 1)) 
+    str = GetModValueFromSeqEntry (nsep, "moltype");
+    if (StringHasNoText (str))
     {
       ApplyOneModToSeqEntry (nsep, "moltype", "Genomic DNA");
     }
-    ttl = NULL;
-    SeqEntryExplore (nsep, (Pointer) (&ttl), FindFirstTitle);
-    if (!LookForSearchString (ttl, "[topology=", tmp, sizeof (tmp) - 1)) 
+    str = MemFree (str);
+    str = GetModValueFromSeqEntry (nsep, "topology");
+    if (StringHasNoText (str))
     {
       ApplyOneModToSeqEntry (nsep, "topology", "Linear");
     }
+    str = MemFree (str);
   }
 }
 
@@ -5955,8 +9207,8 @@ static void NucleotideImportFinish (SequencesFormPtr sqfp)
   FastaPagePtr  fpp = NULL;
   PhylipPagePtr ppp = NULL;
   SeqEntryPtr   sep = NULL;
-  ValNodePtr    fixes = NULL;
   Boolean       cancelled = FALSE;
+  BioseqSetPtr  bssp;
   
   if (sqfp == NULL) return;
   
@@ -5978,16 +9230,29 @@ static void NucleotideImportFinish (SequencesFormPtr sqfp)
     ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
     if (ppp != NULL) {
       sep = ppp->sep;
+      if (sep != NULL && IS_Bioseq_set (sep) && sep->data.ptrvalue != NULL)
+      {
+        bssp = (BioseqSetPtr) sep->data.ptrvalue;
+        sep = bssp->seq_set;
+      }
     }
   }
-  
-  ReplaceOrgWithOrganismInDefinitionLines (sep);
+
+  if (sep == NULL)
+  {
+    Disable (sqfp->molecule_btn);
+    Disable (sqfp->topology_btn);
+  }
+  else
+  {
+    Enable (sqfp->molecule_btn);
+    Enable (sqfp->topology_btn);
+  }
+
+  ReplaceAllAliases (sep);
   ReplaceMolNamesWithMolBracketsInDefinitionLines (sep);
   
-  FixDefinitionLines (sep, &cancelled, &fixes);
-  fixes = FreeStringPairList (fixes);
-  
-  SetDefaultMolTypesAndTopologies (sep);
+  AddDefaultModifierValues (sep);
   
   if (fpp != NULL)
   {
@@ -6013,23 +9278,6 @@ static CharPtr GetFirstModValueFromSeqEntryTitles (SeqEntryPtr sep, CharPtr mod_
     sep = sep->next;
   }
   return value;
-}
-
-static CharPtr GetOrganismNameFromSeqEntry (SeqEntryPtr sep)
-{
-  return GetFirstModValueFromSeqEntryTitles (sep, "organism");
-}
-
-static CharPtr GetFirstOrgNameFromSeqEntryTitles (SeqEntryPtr sep)
-{
-  CharPtr org_name = NULL;
-  
-  while (sep != NULL && org_name == NULL)
-  {
-    org_name = GetOrganismNameFromSeqEntry (sep);
-    sep = sep->next;
-  }
-  return org_name;
 }
 
 static CharPtr GetTaxNameFromBiop (BioSourcePtr biop) 
@@ -6070,8 +9318,8 @@ CheckOneSequenceForOrganisms
   CharPtr org_name_from_title;
   Boolean rval = FALSE;
   
-  org_name_from_title = GetOrganismNameFromSeqEntry (sep);
- 	if (org_name_from_title == NULL && no_org_list != NULL)
+  org_name_from_title = GetModValueFromSeqEntry (sep, "organism");
+ 	if (StringHasNoText (org_name_from_title) && no_org_list != NULL)
  	{
  	  rval = FALSE;
  	  ValNodeAddPointer (no_org_list, 0, GetSeqIdFromSeqEntryPtr (sep));
@@ -6105,7 +9353,7 @@ CheckSegmentedSetForConflictOrganisms
   
   /* first segment should have organism name */
   rval = CheckOneSequenceForOrganisms (sep_list, no_org_list);
-  first_org_name = GetFirstOrgNameFromSeqEntryTitles (sep_list);
+  first_org_name = GetModValueFromSeqEntry (sep_list, "organism");
   
   bsp = (BioseqPtr) sep_list->data.ptrvalue;
   if (bsp->repr == Seq_repr_seg)
@@ -6126,7 +9374,7 @@ CheckSegmentedSetForConflictOrganisms
   
   for (sep = sep_list->next; sep != NULL; sep = sep->next)
   {
-    other_org_name = GetFirstOrgNameFromSeqEntryTitles (sep);
+    other_org_name = GetModValueFromSeqEntry (sep_list, "organism");
     if (other_org_name != NULL 
         && StringICmp (other_org_name, first_org_name) != 0
         && IS_Bioseq (sep)
@@ -6151,18 +9399,14 @@ CheckSegmentedSetForConflictOrganisms
 }
 
 static void 
-ReportMissingAndInconsistentOrganismNames 
-(ValNodePtr no_org_list,
- ValNodePtr conflict_org_list,
- CharPtr    org_name_from_biop)
+ReportMissingOrganismNames 
+(ValNodePtr no_org_list)
 {
   Char         path [PATH_MAX];
   FILE         *fp;
   ValNodePtr   vnp;
-  SeqIdPtr     sip;
-  Char         tmp [128];
 
-  if (no_org_list == NULL && conflict_org_list == NULL)
+  if (no_org_list == NULL)
   {
     return;
   }
@@ -6176,22 +9420,8 @@ ReportMissingAndInconsistentOrganismNames
     fprintf (fp, "The following sequences have no organism names.  You must supply one for each sequence listed.\n");
     for (vnp = no_org_list; vnp != NULL; vnp = vnp->next)
     {
-      sip = vnp->data.ptrvalue;
-      sip = SeqIdFindWorst (sip);
-      SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-      fprintf (fp, "%s\n", tmp);
+      fprintf (fp, "%s\n", vnp->data.ptrvalue);
     }
-  }
-  if (conflict_org_list != NULL && !StringHasNoText (org_name_from_biop))
-  {
-    fprintf (fp, "The following sequences should all have the same organism name (%s).\n", org_name_from_biop);
-    for (vnp = conflict_org_list; vnp != NULL; vnp = vnp->next)
-    {
-      sip = vnp->data.ptrvalue;
-      sip = SeqIdFindWorst (sip);
-      SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-      fprintf (fp, "%s\n", tmp);
-    }    
   }
 
   FileClose (fp);
@@ -6202,61 +9432,61 @@ ReportMissingAndInconsistentOrganismNames
 
 static Boolean CheckSequencesForOrganisms (SequencesFormPtr sqfp)
 {
-  SeqEntryPtr  sep_list, sep;
-  BioSourcePtr biop = NULL;
-  ValNodePtr   no_org_list = NULL;
-  ValNodePtr   conflict_org_list = NULL;
-  CharPtr      conflict_org_name = NULL;
-  Boolean      rval = FALSE;
+  SeqEntryPtr       sep_list;
+  ValNodePtr        no_org_list = NULL;
+  Boolean           rval = TRUE;
+  IDAndTitleEditPtr iatep;
+  Int4              seq_num;
+  CharPtr           org_name_from_title;
   
   if (sqfp == NULL) return FALSE;
   sep_list = GetSeqEntryFromSequencesForm (sqfp);
   if (sep_list == NULL) return FALSE;
   
-  /* different organism checks for different types of sets */
-  switch (sqfp->seqPackage)
+  iatep = SeqEntryListToIDAndTitleEdit (sep_list);
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
   {
-  	case SEQ_PKG_SINGLE:
-    case SEQ_PKG_GAPPED:
-    case SEQ_PKG_GENOMICCDNA:
-      rval = CheckOneSequenceForOrganisms (sep_list, &no_org_list);
-      break;
-  	case SEQ_PKG_SEGMENTED:
-      /* only complain if first segment does not have organism name, later segments don't need one */
-      rval = CheckSegmentedSetForConflictOrganisms (sep_list, &no_org_list, 
-                                                    &conflict_org_list, &conflict_org_name);
-  	  break;
-  	case SEQ_PKG_POPULATION:
-      rval = TRUE;
-      for (sep = sep_list; sep != NULL; sep = sep->next)
-      {
-        rval &= CheckOneSequenceForOrganisms (sep, &no_org_list);
-      }
-  	  break;
-  	case SEQ_PKG_PHYLOGENETIC:
-      rval = TRUE;
-      for (sep = sep_list; sep != NULL; sep = sep->next)
-      {
-        rval &= CheckOneSequenceForOrganisms (sep, &no_org_list);
-      }
-  	  break;
-  	case SEQ_PKG_MUTATION:
-  	case SEQ_PKG_ENVIRONMENT:
-    case SEQ_PKG_GENBANK:
-      rval = TRUE;
-      for (sep = sep_list; sep != NULL; sep = sep->next)
-      {
-        rval &= CheckOneSequenceForOrganisms (sep, &no_org_list);
-      }
-  	  break;
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    org_name_from_title = FindValueFromPairInDefline ("organism", iatep->title_list [seq_num]);
+    if (StringHasNoText (org_name_from_title))
+ 	  {
+ 	    rval = FALSE;
+ 	    ValNodeAddPointer (&no_org_list, 0, StringSave (iatep->id_list [seq_num]));
+ 	  }
+    org_name_from_title = MemFree (org_name_from_title);
   }
   
-  ReportMissingAndInconsistentOrganismNames (no_org_list,
-                                             conflict_org_list, 
-                                             conflict_org_name);
-  no_org_list = ValNodeFree (no_org_list);
-  conflict_org_list = ValNodeFree (conflict_org_list);
-  conflict_org_name = MemFree (conflict_org_name);
+  ReportMissingOrganismNames (no_org_list);
+  no_org_list = ValNodeFreeData (no_org_list);
+  iatep = IDAndTitleEditFree (iatep);
+  return rval;
+}
+
+static Boolean ExportSequencesForm (ForM f, CharPtr filename)
+
+{
+  SequencesFormPtr  sqfp;
+  Boolean           rval = FALSE;
+
+  sqfp = (SequencesFormPtr) GetObjectExtra (f);
+  if (sqfp != NULL) {
+    switch (sqfp->tagFromPage [sqfp->currentPage]) {
+      case NUCLEOTIDE_PAGE :
+        rval = ExportDialog (sqfp->dnaseq, "");
+        break;
+      case MRNA_PAGE :
+        break;
+      case PROTEIN_PAGE :
+        break;
+      case ORGANISM_PAGE:
+        break;
+      default :
+        break;
+    }
+  }
   return rval;
 }
 
@@ -6265,6 +9495,8 @@ static Boolean ImportSequencesForm (ForM f, CharPtr filename)
 {
   SequencesFormPtr  sqfp;
   Boolean           rval = FALSE;
+  SeqEntryPtr       seq_list;
+  IDAndTitleEditPtr iatep;
 
   sqfp = (SequencesFormPtr) GetObjectExtra (f);
   if (sqfp != NULL) {
@@ -6283,11 +9515,15 @@ static Boolean ImportSequencesForm (ForM f, CharPtr filename)
         rval = ImportDialog (sqfp->protseq, "");
         break;
       case ORGANISM_PAGE:
-        rval = ImportOrganismModifiersForSubmit (GetSeqEntryFromSequencesForm (sqfp));
+        seq_list = GetSeqEntryFromSequencesForm (sqfp);
+        iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+        rval = ImportModifiersToIDAndTitleEdit (iatep);
         if (rval)
         {
-          SeqEntryPtrToSourceTab (sqfp);
+          ApplyIDAndTitleEditToSeqEntryList (seq_list, iatep);
+          SeqEntryPtrToSourceTab (sqfp);    
         }
+        iatep = IDAndTitleEditFree (iatep);
         break;
       default :
         break;
@@ -6324,12 +9560,16 @@ static void SetOrgNucProtImportExportItems (SequencesFormPtr sqfp)
         SafeDisable (exportItm);
         break;
       case NUCLEOTIDE_PAGE :
+        SafeSetTitle (exportItm, "Export...");
+        SafeDisable (exportItm);
         switch (sqfp->seqFormat) {
           case SEQ_FMT_FASTA :
             if (sqfp->seqPackage == SEQ_PKG_GENOMICCDNA) {
               SafeSetTitle (importItm, "Import Genomic FASTA...");
             } else {
               SafeSetTitle (importItm, "Import Nucleotide FASTA...");
+              SafeSetTitle (exportItm, "Export Nucleotide FASTA...");
+              SafeEnable (exportItm);
             }
             break;
           case SEQ_FMT_ALIGNMENT :
@@ -6339,9 +9579,7 @@ static void SetOrgNucProtImportExportItems (SequencesFormPtr sqfp)
             SafeSetTitle (importItm, "Import Nucleotide FASTA...");
             break;
         }
-        SafeSetTitle (exportItm, "Export...");
         SafeEnable (importItm);
-        SafeDisable (exportItm);
         break;
       case MRNA_PAGE :
         SafeSetTitle (importItm, "Import Transcript FASTA...");
@@ -6431,7 +9669,7 @@ static void ChangeSequencesPage (VoidPtr data, Int2 newval, Int2 oldval)
   }
 }
 
-static Boolean SequenceAssistantValidate (SeqEntryPtr seq_list, Int2 seqPackage);
+static Boolean SequenceAssistantValidate (SeqEntryPtr seq_list);
 static Boolean FinalSequenceValidation (SequencesFormPtr  sqfp)
 {
   FastaPagePtr fpp;
@@ -6451,7 +9689,7 @@ static Boolean FinalSequenceValidation (SequencesFormPtr  sqfp)
     return FALSE;
   }
   
-  return SequenceAssistantValidate (fpp->list, sqfp->seqPackage);
+  return SequenceAssistantValidate (fpp->list);
 }
 
 static void NextSequencesFormBtn (ButtoN b)
@@ -6529,6 +9767,8 @@ static void SequencesFormDeleteProc (Pointer formDataPtr)
             SetTitle (fpp->import_btn, "Import Nucleotide FASTA");
             Enable (fpp->import_btn);
             Disable (fpp->clear_btn);
+            Disable (sqfp->molecule_btn);
+            Disable (sqfp->topology_btn);
           }
         } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
           ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
@@ -6631,6 +9871,9 @@ static void SequencesFormMessage (ForM f, Int2 mssg)
     switch (mssg) {
       case VIB_MSG_IMPORT :
         ImportSequencesForm (f, NULL);
+        break;
+      case VIB_MSG_EXPORT :
+        ExportSequencesForm (f, NULL);
         break;
       case VIB_MSG_CUT :
         StdCutTextProc (NULL);
@@ -6754,9 +9997,9 @@ static void ChangeMrnaFlag (ButtoN b)
   if (sqfp != NULL) {
     sqfp->makeMRNA = GetStatus (b);
     if (sqfp->makeMRNA) {
-      WriteSequinAppParam ("PREFERENCES", "CREATEMRNA", "TRUE");
+      SetAppParam ("SEQUINCUSTOM", "PREFERENCES", "CREATEMRNA", "TRUE");
     } else {
-      WriteSequinAppParam ("PREFERENCES", "CREATEMRNA", "FALSE");
+      SetAppParam ("SEQUINCUSTOM", "PREFERENCES", "CREATEMRNA", "FALSE");
     }
   }
 }
@@ -7204,606 +10447,318 @@ static CharPtr ReformatLocalId (CharPtr local_id)
   return new_local_id;
 }
 
-
-const CharPtr bracket_mismatch_msg = "You have mismatched brackets in the definition line %s.";
-const CharPtr missing_equals_msg = "Your bracketed pairs must be in the form [qualifier=value].  "
-  	                    "You are missing an equals sign in the definition line %s.";
-  	                    
-const CharPtr mult_equals_msg = "You have more than one equals sign inside a bracketed pair in the definition line %s.  "
-                        "Each pair must be in its own set of brackets.";  	                 
-
-const CharPtr line_num_fmt = "at line %d";
-const CharPtr id_str_fmt = "for sequence %s";
-
-static CharPtr MakeBracketingErrorMessage (CharPtr msg_format, Int4 line_num, CharPtr id_str)
+static CharPtr FindPreviousWhitespace (CharPtr str_start, CharPtr str_end)
 {
-  CharPtr identifier, str;
-  
-  if (msg_format == NULL) 
+  CharPtr cp;
+  if (str_start == NULL || str_end == NULL || str_end < str_start)
   {
     return NULL;
   }
-  if (id_str != NULL)
+
+  cp = str_end;
+  while (cp > str_start && !isspace (*cp))
   {
-    identifier = (CharPtr) MemNew ((StringLen (id_str_fmt) + StringLen (id_str)) * sizeof (Char));
-    if (identifier != NULL)
-    {
-      sprintf (identifier, id_str_fmt, id_str);
-    }
+    cp--;
   }
-  else
-  {
-    identifier = (CharPtr) MemNew ((StringLen (line_num_fmt) + PRINTED_INT_MAX_LEN) * sizeof (Char));
-    if (identifier != NULL)
-    {
-      sprintf (identifier, line_num_fmt, line_num);
-    }
-  }
-  if (identifier == NULL)
-  {
-    return NULL;
-  }
-  
-  str = (CharPtr) MemNew (sizeof (Char) * (StringLen (msg_format) + StringLen (identifier)));
-  if (str != NULL)
-  {
-    sprintf (str, msg_format, identifier);
-  }
-  return str;
+  return cp;
 }
 
-static void ParseMultipleEqualsSigns 
-(ValNodePtr PNTR pieces,
- CharPtr start,
- CharPtr stop,
- CharPtr eq_loc)
+static CharPtr GetModNameStartFromEqLoc (CharPtr eq_loc, CharPtr prev_eq_loc)
 {
-  CharPtr next_eq_loc, new_start;
-  CharPtr cp;
-  Int4    txt_len;
-  CharPtr txt;
+  CharPtr cp, prev_quote;
+  Char    match_quote;
   
-  if (pieces == NULL || start == NULL || stop == NULL || eq_loc == NULL)
+  if (StringHasNoText (eq_loc) || StringHasNoText (prev_eq_loc) || eq_loc < prev_eq_loc)
   {
-    return;
+    return NULL;
   }
   
-  new_start = start;
-  next_eq_loc = StringChr (eq_loc + 1, '=');
-  while (next_eq_loc != NULL && next_eq_loc < stop)
+  cp = eq_loc - 1;
+  /* skip over spaces between equals sign and modifier name */
+  while (cp > prev_eq_loc && isspace (*cp))
   {
-    /* backtrack to end of first non-alphabet character before next_eq_loc,
-     * insert ][ to separate the pairs */
-    cp = next_eq_loc - 1;
-    /* backtrack past space */
-    while (cp != eq_loc && isspace ((Int4)(*cp)))
-    {
-      cp--;
-    }
+    cp--;
+  }
+  if (cp != prev_eq_loc)
+  {
     /* now backtrack over name */
-    while (cp != eq_loc && !(isspace ((Int4)(*cp))))
+    if (*cp == '"' && *(cp - 1) != '\\')
     {
-      cp--;
-    }
-    if (cp == eq_loc)
-    {
-      /* remove second equals sign */
-      *next_eq_loc = ' ';
+      match_quote = *cp;
+      /* take everything to previous matching quote */
+      cp = FindPreviousUnescapedQuote (prev_eq_loc, cp - 1);
+      if (cp == NULL)
+      {
+        cp = prev_eq_loc;
+      }
+      if (isspace (*cp))
+      {
+        cp++;
+      }
     }
     else
     {
-      /* insert ] */
-      txt_len = cp + 2 - new_start;
-      if (new_start != start)
-      {
-        txt_len ++;
-      }
+      /* take everything up to the first space or quote character */
       
-      txt = (CharPtr) MemNew (txt_len * sizeof (Char));
-      if (txt != NULL)
+      prev_quote = FindPreviousUnescapedQuote (prev_eq_loc, cp);
+      cp = FindPreviousWhitespace (prev_eq_loc, cp);
+      if (prev_quote != NULL && prev_quote > cp)
       {
-        txt [0] = 0;
-        if (new_start != start)
-        {
-          StringCat (txt, "[");
-          txt_len --;
-        }
-        StringNCat (txt, new_start, txt_len - 2);
-        StringCat (txt, "]");
-        ValNodeAddPointer (pieces, 0, txt);
+        cp = prev_quote + 1;
       }
-      new_start = cp + 1;
+
+      if (isspace (*cp) || *cp == '"')
+      {
+        cp++;
+      }
     }
-    eq_loc = next_eq_loc;
-    next_eq_loc = StringChr (eq_loc + 1, '=');
   }
-  
-  /* the current eq_loc is the last one */
-  txt_len = stop - new_start + 2;
-  if (new_start != start)
-  {
-    txt_len ++;
-  }
-  txt = (CharPtr) MemNew (txt_len * sizeof (Char));
-  if (txt != NULL)
-  {
-    txt [0] = 0;
-    if (new_start != start)
-    {
-      StringCat (txt, "[");
-      txt_len --;
-    }
-    StringNCat (txt, new_start, txt_len - 1);
-    ValNodeAddPointer (pieces, 0, txt);
-  }
+  return cp;  
 }
 
-static CharPtr AssembleDefLinePieces (ValNodePtr pieces)
+static CharPtr fake_modifier_name = "modifier_name";
+static Int4    len_fake_modifier_name = 13;
+
+static CharPtr InsertMissingModifierNames (CharPtr str)
 {
-  ValNodePtr vnp;
-  Int4       str_len = 0;
-  CharPtr    str = NULL;
-  CharPtr    first_char_in_piece;
-  CharPtr    last_char_in_piece;
+  CharPtr start_bracket, next_start_bracket, end_bracket, eq_loc;
+  CharPtr new_str, tmp_new;
+  Int4    offset;
   
-  if (pieces == NULL) return NULL;
-  
-  for (vnp = pieces; vnp != NULL; vnp = vnp->next)
+  if (str == NULL) return NULL;
+
+  new_str = StringSave (str);
+  start_bracket = StringChr (new_str, '[');
+  while (start_bracket != NULL)
   {
-    str_len += StringLen (vnp->data.ptrvalue) + 1;
-  }
-  str_len ++;
-  str = (CharPtr) MemNew (sizeof (Char) * str_len);
-  if (str != NULL)
-  {
-    str [0] = 0;
-    for (vnp = pieces; vnp != NULL; vnp = vnp->next)
+    next_start_bracket = StringChr (start_bracket + 1, '[');
+    eq_loc = StringChr (start_bracket, '=');
+    end_bracket = StringChr (start_bracket, ']');
+    
+    if (eq_loc == NULL || end_bracket == NULL 
+        || eq_loc > end_bracket
+        || (next_start_bracket != NULL && end_bracket > next_start_bracket))
     {
-      if (StringHasNoText (vnp->data.ptrvalue))
-      {
-        continue;
-      }
-      if (vnp != pieces)
-      {
-        StringCat (str, " ");
-      }
-      first_char_in_piece = (CharPtr) vnp->data.ptrvalue;
-      while (*first_char_in_piece == ' ' 
-           || *first_char_in_piece == '\t')
-      {
-        first_char_in_piece ++;
-      }
-      StringCat (str, first_char_in_piece);
-      /* trim out trailing spaces in piece */
-      last_char_in_piece = str + StringLen(str) - 1;
-      while (*last_char_in_piece == ' '
-          || *last_char_in_piece == '\t')
-      {
-        *last_char_in_piece = 0;
-        last_char_in_piece --;        
-      }
+      /* can't fix this pair, move along */    
     }
+    else if (StringSpn (start_bracket + 1, " \t") == eq_loc - start_bracket - 1)
+    {
+      offset = start_bracket - new_str;
+      tmp_new = InsertStringAtOffset (new_str, fake_modifier_name, offset + 1);
+      if (tmp_new != NULL)
+      {
+        new_str = MemFree (new_str);
+        new_str = tmp_new;
+      }
+      start_bracket = new_str + offset;
+      next_start_bracket = StringChr (start_bracket + 1, '[');
+    }
+    start_bracket = next_start_bracket;
   }
-  return str;
+  return new_str;
 }
 
-/* later, add handling for equals signs without brackets? */
 static CharPtr SuggestCorrectBracketing (CharPtr str)
 {
-  CharPtr    start, stop, next_start, next_stop, eq_loc;
-  ValNodePtr pieces = NULL;
-  CharPtr    cp = str;
-  Boolean    done = FALSE;
-  Int4       len;
-  CharPtr    txt;
-
-  if (str == NULL) return NULL;
-  
-  while (!done && *cp != 0)
-  {  	
-    start = StringChr (cp, '[');
-    stop = StringChr (cp, ']');
-    eq_loc = StringChr (cp, '=');
-    if (start == NULL)
-    {
-      next_start = NULL;
-    }
-    else
-    {
-      next_start = StringChr (start + 1, '[');    	
-    }
-
-    if (start == NULL && stop == NULL) 
-    {
-      /* no brackets at all */
-      len = StringLen (cp) + 1;
-      if (len > 1)
-      {
-        txt = (CharPtr) MemNew (len * sizeof (Char));
-        if (txt != NULL)
-        {
-      	  StringNCpy (txt, cp, len - 1);
-      	  txt [len - 1] = 0;
-          ValNodeAddPointer (&pieces, 0, txt);
-        }
-      }
-      done = TRUE;
-    }
-    else if (start != NULL && stop != NULL && eq_loc != NULL
-             && start < eq_loc && eq_loc < stop 
-             && (next_start == NULL || next_start > stop))
-    {
-      if (start != cp)
-      {
-        /* copy text between bracketed pairs */
-        len = start - cp;
-        txt = (CharPtr) MemNew (len * sizeof (Char));
-        if (txt != NULL)
-        {
-          StringNCpy (txt, cp, len - 1);
-          txt [len - 1] = 0;
-          ValNodeAddPointer (&pieces, 0, txt);
-        }
-      }
-      ParseMultipleEqualsSigns (&pieces, start, stop, eq_loc);
-      cp = stop + 1;
-    }
-    else if (start == NULL || (stop != NULL && start > stop))
-    {
-  	  eq_loc = StringChr (cp, '=');
-  	  if (eq_loc == NULL || eq_loc == cp || eq_loc > stop)
-  	  {
-  	    /* if there is no equals sign, remove the offending bracket */
-  		len = stop - cp + 1;
-  		txt = (CharPtr) MemNew (len * sizeof (Char));
-  		if (txt != NULL)
-  		{
-  		  StringNCpy (txt, cp, len - 1);
-  		  txt [len - 1] = 0;
-  		  ValNodeAddPointer (&pieces, 0, txt);
-  		}
-  		cp = stop + 1;
-  	  }
-  	  else 
-  	  {
-  	  	/* find the first non-alphabet character before the equals sign and put in a bracket */
-  	  	start = eq_loc - 1;
-  	  	/* skip over whitespace before equals sign */
-  	  	while (cp != start && isspace ((Int4)(*start)))
-  	  	{
-  	  	  start --;
-  	  	}
-  	  	/* back up past qualifier name */
-  	  	while (cp != start && isalpha ((Int4)(*start)))
-  	  	{
-  	  	  start --;
-  	  	}
-  	  	if (!isalpha ((Int4)(*start)))
-  	  	{
-  	  	  start++;
-  	  	}
-  	  	/* now insert left bracket */
-  	  	len = (stop - cp) + 3;
-  	  	txt = (CharPtr) MemNew (len * sizeof (Char));
-  		  if (txt != NULL)
-  		  {
-  		    if (start > cp)
-  		    {
-  		      StringNCpy (txt, cp, start - cp);
-  		    }
-  		    StringCat (txt, "[");
-  		    StringNCat (txt, start, stop - start + 1);
-  		    txt [len - 1] = 0;
-  		    ValNodeAddPointer (&pieces, 0, txt);
-        }
-  		  cp = stop + 1;
-  	  }
-    }
-    else if (stop != NULL && eq_loc != NULL && eq_loc > stop)
-    {
-      next_stop = StringChr (stop + 1, ']');
-      if (next_stop != NULL && next_stop < next_start && eq_loc < next_stop)
-      {
-      	/* remove the intermediate stop */
-      	len = next_stop - cp;
-      	txt = (CharPtr) MemNew (len * sizeof (Char));
-  		if (txt != NULL)
-  		{
-  		  StringNCpy (txt, cp, stop - cp);
-  		  StringNCat (txt, stop + 1, next_stop - stop);
-  		  ValNodeAddPointer (&pieces, 0, txt);
-  		}
-  		cp = next_stop + 1;
-      }
-      else
-      {
-      	/* remove both the start and stop */
-      	len = stop - cp - 1;
-      	txt = (CharPtr) MemNew (len * sizeof (Char));
-        if (txt != NULL)
-        {
-          if (start > cp)
-          {
-          	StringNCpy (txt, cp, start - cp);
-          }
-          StringNCat (txt, start + 1, stop - start - 1);
-  		    ValNodeAddPointer (&pieces, 0, txt);
-    		}
-   		  cp = stop + 1;
-      }
-    }
-    else if (eq_loc == NULL && start != NULL && stop != NULL)
-    {
-      /* we have brackets around text with no equals sign */
-      /* remove the brackets */
-      len = stop - start;
-      txt = (CharPtr) MemNew (len * sizeof (Char));
-      if (txt != NULL)
-      {
-        StringNCpy (txt, start + 1, len - 1);
-        txt [len - 1] = 0;
-        ValNodeAddPointer (&pieces, 0, txt);
-      }
-      cp = stop + 1;
-    }
-    else
-    {
-      /* we have a start without a stop */
-      eq_loc = StringChr (start, '=');
-      next_start = StringChr (start + 1, '[');
-      if (eq_loc == NULL || (next_start != NULL && eq_loc > next_start))
-      {
-      	/* if we have no equals sign, remove the offending bracket */
-      	if (next_start == NULL)
-      	{
-      	  /* if there are no more starts, copy the rest of the string and finish */
-      	  len = StringLen (cp);
-      	  done = TRUE;
-      	}
-      	else
-      	{
-      	  /* copy up to the next start */
-      	  len = next_start - cp;      		
-      	}
-      	if (len > 1)
-      	{
-      	  txt = (CharPtr) MemNew (len * sizeof (Char));
-          if (txt != NULL)
-  		    {
-  		      if (cp < start)
-  		      {
- 		          StringNCpy (txt, cp, start - cp);
- 		          if (next_start - start > 1)
- 		          {
- 		      	    StringNCat (txt, start + 1, next_start - start - 1);
- 		          }
-  		      }
-  		      else
-  		      {
-  		        StringNCpy (txt, start + 1, len);  		    	
-  		      }
-  		      ValNodeAddPointer (&pieces, 0, txt);
-      	  }
-      	}
-      	cp += len;
-      }
-      else
-      {
-      	/* put everything before the next start inside the bracket */
-      	if (next_start == NULL)
-      	{
-      	  len = StringLen (cp) + 2;
-      	  done = TRUE;
-      	}
-      	else
-      	{
-      	  len = next_start - cp + 2;
-      	}
-      	txt = (CharPtr) MemNew (len * sizeof (Char));
-        if (txt != NULL)
-  		  {
-  		    StringNCpy (txt, cp, len - 2);
-  		    StringCat (txt, "]");
-  		    ValNodeAddPointer (&pieces, 0, txt);
-      	}
-      	cp += len - 2;
-      }
-    }
-  }
-  
-  txt = AssembleDefLinePieces (pieces);
-  ValNodeFreeData (pieces);
-  return txt;
-}
-
-static CharPtr DetectBadBracketing (CharPtr str)
-{
-  CharPtr start, stop, next_start, next_stop, eq_loc, next_eq_loc;
-  
+  CharPtr cp, next_token;
+  CharPtr new_str, tmp_new;
+  Int4    offset, name_len, token_offset;
+  CharPtr step_back, step_forward, next_next_token, next_next_next_token;
+  Char    insert_buf [2];
   
   if (str == NULL) return NULL;
   
-  start = StringChr (str, '[');
-  stop = StringChr (str, ']');
-  if (start == NULL && stop == NULL) return NULL;
-  if ((start != NULL && stop == NULL)
-   || (start == NULL && stop != NULL)
-   || (start > stop))
+  new_str = StringSave (str);
+  cp = new_str;
+  next_token = NextBracketToken (cp);
+  
+  while (*cp != 0 && next_token != NULL)
   {
-  	return bracket_mismatch_msg;
-  }
-  eq_loc = StringChr (start + 1, '=');
-  if (eq_loc == NULL || eq_loc > stop)
-  {
-    return missing_equals_msg;
-  }
-  next_eq_loc = StringChr (eq_loc + 1, '=');
-  if (next_eq_loc != NULL && next_eq_loc < stop)
-  {
-    return mult_equals_msg;
-  }
-  while (start != NULL && stop != NULL)
-  {
-    next_start = StringChr (start + 1, '[');
-    next_stop = StringChr (stop + 1, ']');
-    if (next_start == NULL && next_stop == NULL) return FALSE;
-
-    if ((next_start != NULL && next_stop == NULL)
-     || (next_start == NULL && next_stop != NULL)
-     || (next_start > next_stop)
-     || (next_start < stop))
+    if (*next_token == '"')
     {
-  	  return bracket_mismatch_msg;
+      insert_buf [0] = *next_token;
+      insert_buf [1] = 0;
+      tmp_new = InsertStringAtOffset (new_str, insert_buf, StringLen (new_str));
+      new_str = MemFree (new_str);
+      new_str = tmp_new;
+      return new_str;
     }
-    eq_loc = StringChr (next_start + 1, '=');
-    if (eq_loc == NULL || eq_loc > next_stop)
+    next_next_token = NextBracketToken (next_token + 1);
+    if (next_next_token == NULL)
     {
-      return missing_equals_msg;
+      next_next_next_token = NULL;
     }
-    next_eq_loc = StringChr (eq_loc + 1, '=');
-    if (next_eq_loc != NULL && next_eq_loc < next_stop)
+    else
     {
-      return mult_equals_msg;
+      next_next_next_token = NextBracketToken (next_next_token + 1);
     }
     
-    start = next_start;
-    stop = next_stop;    
-  }
-  return NULL;
-}
-
-typedef struct fixbadlineform 
-{
-  WindoW  w;
-  DoC     prompt_doc;
-  TexT    new_line;	
-  CharPtr new_text;
-  Int4    line_num;
-  Boolean done;
-  Boolean cancelled;
-  CharPtr orig_txt;
-  CharPtr id_str;
-} FixBadLineFormData, PNTR FixBadLineFormPtr;
-
-static void SetBadLineFormPrompt (FixBadLineFormPtr fp, CharPtr msg)
-{
-  CharPtr str;
-  if (fp == NULL || msg == NULL) return;
-  
-  str = MakeBracketingErrorMessage (msg, fp->line_num, fp->id_str);
-  Reset (fp->prompt_doc);
-  AppendText (fp->prompt_doc, str, NULL, NULL, programFont);
-  MemFree (str);
-}
-
-static void FixBadLineOk (ButtoN b)
-{
-  FixBadLineFormPtr fp;
-  CharPtr           msg;
-  
-  fp = (FixBadLineFormPtr) GetObjectExtra (b);
-  if (fp == NULL) return;
-  fp->new_text = MemFree (fp->new_text);
-  fp->new_text = SaveStringFromText (fp->new_line);
-  msg = DetectBadBracketing (fp->new_text);
-  if (msg != NULL)
-  {
-    if (ANS_NO == Message (MSG_YN, "You have not corrected all of the "
-              "bracketing errors - are you sure you want to continue?"))
+    /* skip over correctly formatted bits */
+    if (*next_token == '['
+        && next_next_token != NULL
+        && *next_next_token == '='
+        && next_next_next_token != NULL
+        && *next_next_next_token == ']')
     {
-  	  SetBadLineFormPrompt (fp, msg);
-  	  return;
+      cp = next_next_next_token + 1;
     }
+    /* remove repeated tokens ([[, ]], or ==) in first pair*/
+    else if (next_next_token != NULL 
+             && *next_token == *next_next_token
+             && next_next_token - next_token - 1== StringSpn (next_token + 1, " \t"))
+    {
+      ShiftString (next_token, next_next_token - next_token);
+    }
+    /* remove repeated tokens ([[, ]], or ==) in first pair*/
+    else if (next_next_token != NULL 
+             && next_next_next_token != NULL
+             && *next_next_token == *next_next_next_token
+             && next_next_next_token - next_next_token - 1== StringSpn (next_next_token + 1, " \t"))
+    {
+      ShiftString (next_next_token, next_next_next_token - next_next_token);
+    }
+    /* no start - either remove end token or insert start */
+    else 
+    {
+      switch (*next_token)
+      {
+        case '=' :
+          /* insert start before equals token */
+          if (next_token == cp)
+          {
+            offset = cp - new_str;
+          }
+          else
+          {
+            step_back = GetModNameStartFromEqLoc (next_token, cp);
+            offset = step_back - new_str;
+          }
+          tmp_new = InsertStringAtOffset (new_str, "[", offset);
+          if (tmp_new != NULL)
+          {
+            new_str = MemFree (new_str);
+            new_str = tmp_new;
+          }
+          cp = tmp_new + offset;
+          break;
+        case ']' :
+          /* remove lonely end bracket */
+          ShiftString (next_token, 1);
+          cp = next_token;
+          break;
+        case '[' :
+          next_next_token = NextBracketToken (next_token + 1);
+          if (next_next_token == NULL
+              || *next_next_token == '[')
+          {
+            /* remove unwanted beginning bracket */
+            ShiftString (next_token, 1);
+            cp = next_token;
+          }
+          else if (*next_next_token == '=')
+          {
+            /* find the best place to put a closing bracket */
+            next_next_next_token = NextBracketToken (next_next_token + 1);
+            if (next_next_next_token == NULL)
+            {
+              offset = StringLen (new_str);
+            }
+            else
+            {
+              token_offset = next_next_token - new_str + 1;
+              offset = next_next_next_token - new_str;
+              while (offset > token_offset && isspace (new_str[offset - 1]))
+              {
+                offset--;
+              }
+              if (*next_next_next_token == '=')
+              {
+                step_back = GetModNameStartFromEqLoc (next_next_next_token, next_next_token);
+                while (step_back > next_next_token + 1
+                       && isspace (*(step_back - 1)))
+                {
+                  step_back --;
+                }
+                offset = step_back - new_str;
+              }
+            }
+            tmp_new = InsertStringAtOffset (new_str, "]", offset);
+            if (tmp_new != NULL)
+            {
+              new_str = MemFree (new_str);
+              new_str = tmp_new;
+            }
+            cp = tmp_new + offset + 1;            
+          }
+          else if (*next_next_token == ']')
+          {
+            /* see if we can insert an equals sign */
+            /* skip over empty space after '[', if any */
+            step_forward = next_token + 1 + StringSpn (next_token + 1, " \t");
+            if (step_forward == next_next_token)
+            {
+              /* eliminate the empty bracket pair */
+              ShiftString (next_token, next_next_token - next_token + 1);
+              cp = next_token;
+            }
+            else
+            {
+              /* get length of first text token */
+              name_len = StringCSpn (step_forward, " \t");
+              if (next_next_token - step_forward < name_len)
+              {
+                name_len = next_next_token - step_forward;
+              }
+              if (step_forward + name_len < next_next_token && isspace (*(step_forward + name_len)))
+              {
+                *(step_forward + name_len) = '=';
+                cp = next_next_token + 1;
+              }
+              else if (StringNICmp (step_forward, "DNA", name_len) == 0
+                       || StringNICmp (step_forward, "RNA", name_len) == 0
+                       || StringNICmp (step_forward, "orf", name_len) == 0)
+              {
+                cp = next_next_token + 1;
+              }
+              else
+              {
+                if ((next_token > new_str && isspace (*(next_token - 1)))
+                    || isspace (*(next_token + 1))) 
+                {
+                  ShiftString (next_token, 1);
+                  next_next_token --;
+                }
+                else
+                {
+                  *next_token = ' ';
+                }
+                if (isspace (*(next_next_token - 1)) || isspace (*(next_next_token + 1)))
+                {
+                  ShiftString (next_next_token, 1);
+                }
+                else
+                {
+                  *next_next_token = ' ';
+                }
+                cp = next_next_token;
+              }
+            }
+          }
+          break;
+      }
+    }
+    
+    next_token = NextBracketToken (cp);
   }
-  Remove (fp->w);
-  fp->cancelled = FALSE;
-  fp->done = TRUE;
-}
-
-static void FixBadLineCancel (ButtoN b)
-{
-  FixBadLineFormPtr fp;
   
-  fp = (FixBadLineFormPtr) GetObjectExtra (b);
-  if (fp == NULL) return;
-  fp->new_text = MemFree (fp->new_text);
-  fp->cancelled = TRUE;
-  
-  Remove (fp->w);
-  fp->done = TRUE;
-}
-
-static void SuggestBracketFix (ButtoN b)
-{
-  FixBadLineFormPtr fp;
-  
-  fp = (FixBadLineFormPtr) GetObjectExtra (b);
-  if (fp == NULL) return;
-  fp->new_text = MemFree (fp->new_text);
-  fp->new_text = SaveStringFromText (fp->new_line);
-  SetTitle (fp->new_line, SuggestCorrectBracketing(fp->new_text));
-  return;
-}
-
-static void ResetBracketFixText (ButtoN b)
-{
-  FixBadLineFormPtr fp;
-  
-  fp = (FixBadLineFormPtr) GetObjectExtra (b);
-  if (fp == NULL) return;
-  SetTitle (fp->new_line, fp->orig_txt);
-  return;
-}
-
-
-static CharPtr FixBadBracketing (CharPtr bad_line, CharPtr msg, Int4 line_num, CharPtr id_str, BoolPtr cancelled)
-{
-  GrouP  g, c, d;
-  ButtoN b;
-  FixBadLineFormData fd;
-  Int4               len;
-  
-  fd.w = MovableModalWindow(-20, -13, -10, -10, "Correct Bad Bracketing", NULL);
-  g = HiddenGroup(fd.w, -1, 0, NULL);
-  len = StringLen (bad_line) + 5;
-  fd.orig_txt = bad_line;
-  fd.line_num = line_num;
-  fd.id_str = id_str;
-  fd.new_text = NULL;
-  fd.prompt_doc = DocumentPanel (g, stdCharWidth * 30, stdLineHeight * 3);
-  SetBadLineFormPrompt (&fd, msg);
-  fd.new_line = DialogText (g, bad_line, 30, NULL);
-  d = HiddenGroup (g, 2, 0, NULL);
-  b = PushButton (d, "Suggest Correction", SuggestBracketFix);
-  SetObjectExtra (b, &fd, NULL);
-  b = PushButton (d, "Reset to original text", ResetBracketFixText);
-  SetObjectExtra (b, &fd, NULL);
-  c = HiddenGroup (g, 4, 0, NULL);
-  b = PushButton(c, "OK", FixBadLineOk);
-  SetObjectExtra (b, &fd, NULL);
-  b = PushButton(c, "Cancel", FixBadLineCancel);
-  SetObjectExtra (b, &fd, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) fd.prompt_doc, (HANDLE) fd.new_line, 
-                  (HANDLE) d, (HANDLE) c, NULL);
-  
-  Show(fd.w); 
-  Select (fd.w);
-  fd.done = FALSE;
-  while (!fd.done)
+  tmp_new = InsertMissingModifierNames (new_str);
+  if (tmp_new != NULL)
   {
-    ProcessExternalEvent ();
-    Update ();
+    new_str = MemFree (new_str);
+    new_str = tmp_new;
   }
-  ProcessAnEvent ();
-  if (fd.cancelled)
-  {
-  	if (cancelled != NULL)
-  	{
-      *cancelled = TRUE;
-  	}
-  	return NULL;
-  }
-  return fd.new_text;
+  
+  return new_str;
 }
 
 static void SequenceIdHelp (IteM i)
@@ -7915,49 +10870,6 @@ SetModifierList
 }
 
 
-static SeqEntryPtr GetSeqEntryFromSequencesForm (SequencesFormPtr sqfp)
-{
-  SeqEntryPtr list = NULL;
-  FastaPagePtr       fpp;
-  PhylipPagePtr      ppp;
-  SeqEntryPtr        sep;
-  BioseqSetPtr       bssp;
-  
-  if (sqfp == NULL) return NULL;
-
-  if (sqfp->seqPackage == SEQ_PKG_SEGMENTED) 
-  {
-    fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
-    if (fpp != NULL) 
-    {
-      list = fpp->list;
-    }
-    if (list != NULL && IS_Bioseq_set (list))
-    {
-      list = FindNucSeqEntry (list);
-    }
-  }
-  else if (sqfp->seqFormat == SEQ_FMT_FASTA) {
-    fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
-    if (fpp != NULL) 
-    {
-      list = fpp->list;
-    }
-  } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
-    ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
-    if (ppp != NULL) {
-      sep = ppp->sep;
-      if (sep != NULL && IS_Bioseq_set (sep)) {
-        bssp = (BioseqSetPtr) sep->data.ptrvalue;
-        if (bssp != NULL) {
-          list = bssp->seq_set;
-        }
-      }
-    }
-  }
-  return list;
-}
-
 
 extern Boolean IsNonTextModifier (CharPtr mod_name)
 {
@@ -8028,6 +10940,19 @@ TagListStringFromDefLineValue
       taglist_str = StringSave (text);
     }
   }
+  else if (mod_type == eModifierType_Origin)
+  {
+    if (StringHasNoText (defline_val))
+    {
+      taglist_str = StringSave ("1");
+    }
+    else
+    {
+      sprintf (text, "%d", GetValForEnumName (biosource_origin_alist,
+                                              defline_val));
+      taglist_str = StringSave (text);
+    }
+  }  
   else if (mod_type == eModifierType_NucGeneticCode
            || mod_type == eModifierType_MitoGeneticCode)
   {
@@ -8050,6 +10975,24 @@ TagListStringFromDefLineValue
     else
     {
       sprintf (text, "%d", MolTypeFromString (defline_val));
+      taglist_str = StringSave (text);
+    }
+  }
+  else if (mod_type == eModifierType_Molecule)
+  {
+    if (StringICmp (defline_val, "dna") == 0)
+    {
+      sprintf (text, "%d", Seq_mol_dna);
+      taglist_str = StringSave (text);
+    }
+    else if (StringICmp (defline_val, "rna") == 0)
+    {
+      sprintf (text, "%d", Seq_mol_rna);
+      taglist_str = StringSave (text);
+    }
+    else
+    {
+      sprintf (text, "%d", Seq_mol_dna);
       taglist_str = StringSave (text);
     }
   }
@@ -8082,29 +11025,21 @@ TagListStringFromDefLineValue
 static void AddSeqIDAndValueToTagList 
 (CharPtr id,
  CharPtr title,
- CharPtr lookfor, 
  CharPtr mod_name,
- Int2    seqPackage,
- ValNodePtr PNTR   head,
- ValNodePtr PNTR   found_modifiers)
+ ValNodePtr PNTR   head)
 {
-  Char        text [128];
+  Char        text [2];
   CharPtr     str;
   Int4        len;
   Int4        mod_type;
   Boolean     is_nontext;
-  CharPtr     taglist_str = NULL;
+  CharPtr     val_str, taglist_str = NULL;
 
   if (head == NULL)
   {
     return;
   }
 
-  if (found_modifiers != NULL)
-  {
-    *found_modifiers = BuildModifierTypeList (*found_modifiers, title);
-  }
-  
   is_nontext = IsNonTextModifier (mod_name);
   mod_type = GetModifierType (mod_name);
 
@@ -8112,7 +11047,7 @@ static void AddSeqIDAndValueToTagList
 
   if (is_nontext)
   {
-    if (LookForSearchString (title, lookfor, text, sizeof (text) - 1))
+    if (FindValuePairInDefLine (mod_name, title, NULL))
     {
       sprintf (text, "2");
     }
@@ -8120,26 +11055,15 @@ static void AddSeqIDAndValueToTagList
     {
       text [0] = '\0';
     }
-  }
-  else if (mod_type == eModifierType_Organism)
-  {
-    if (! LookForSearchString (title, (CharPtr) short_org, text, sizeof (text) - 1)) 
-    {
-      if (! LookForSearchString (title, (CharPtr) long_org, text, sizeof (text) - 1))
-      {
-        StringCpy (text, " ");
-      }
-    }
+    val_str = StringSave (text);
   }
   else
   {
-    if (!LookForSearchString (title, lookfor, text, sizeof (text) - 1))
-    {
-      StringCpy (text, " ");
-    }
+    val_str = FindValueFromPairInDefline (mod_name, title); 
   }
   
-  taglist_str = TagListStringFromDefLineValue (text, is_nontext, mod_type);
+  taglist_str = TagListStringFromDefLineValue (val_str, is_nontext, mod_type);
+  val_str = MemFree (val_str);
   len = StringLen (id) + StringLen (taglist_str);
   str = MemNew (len + 4);
   if (str != NULL) {
@@ -8154,111 +11078,138 @@ static void AddSeqIDAndValueToTagList
   
 }
 
-static void AddSeqIDAndValueFromSeqEntryToTagList 
-(SeqEntryPtr     sep,
- CharPtr         lookfor, 
- CharPtr         mod_name,
- Int2            seqPackage,
- ValNodePtr PNTR head,
- ValNodePtr PNTR found_modifiers)
+static CharPtr GetValueFromTitle (CharPtr mod_name, CharPtr title)
 {
-  BioseqPtr   bsp;
-  SeqDescrPtr sdp;
-  Char        id_txt [128];
-  
-  if (sep == NULL)
-  {
-    return;
-  }
-  if (IS_Bioseq (sep))
-  {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-  }
-  else if (IS_Bioseq_set (sep))
-  {
-    sep = FindNucSeqEntry (sep);
-    if (sep != NULL && IS_Bioseq (sep))
-    {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-    }
-  }
-  
-  if (bsp == NULL)
-  {
-    return;
-  }
-  
-  SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT, sizeof (id_txt));
-  
-  for (sdp = bsp->descr; sdp != NULL && sdp->choice != Seq_descr_title; sdp = sdp->next)
-  {
-  }
-
-  if (sdp == NULL)
-  {
-    AddSeqIDAndValueToTagList (id_txt, NULL, lookfor, mod_name, seqPackage, 
-                               head, found_modifiers);
-  }
-  else
-  {
-    AddSeqIDAndValueToTagList (id_txt, sdp->data.ptrvalue, lookfor, mod_name, 
-                               seqPackage, head, found_modifiers);
-  }  
-}
-
-
-static CharPtr GetValueFromTitle (CharPtr mod_name, CharPtr ttl)
-{
-  Char        text [128];
-  Char        lookfor [128];
   Int4        mod_type;
   Boolean     is_nontext;
+  CharPtr     valstr;
   
-  if (StringHasNoText (mod_name) || StringHasNoText (ttl))
+  if (StringHasNoText (mod_name) || StringHasNoText (title))
   {
     return NULL;
   }
   mod_type = GetModifierType (mod_name);
   is_nontext = IsNonTextModifier (mod_name);
   
-  text [0] = '\0';
   if (mod_type == eModifierType_Organism)
   {
-    if (! LookForSearchString (ttl, (CharPtr) short_org, text, sizeof (text) - 1)) 
+    valstr = FindValueFromPairInDefline ("organism", title);
+    if (StringHasNoText (valstr))
     {
-      if (! LookForSearchString (ttl, (CharPtr) long_org, text, sizeof (text) - 1))
-      {
-        StringCpy (text, " ");
-      }
+      valstr = MemFree (valstr);
+      valstr = StringSave (" ");
     }
   }
   else if (mod_type == eModifierType_Location)
   {
-    if (! LookForSearchString (ttl, "[location=", text, sizeof (text) - 1)) 
+    valstr = NULL;
+    if (FindValuePairInDefLine ("location", title, NULL) != NULL)
     {
-      StringCpy (text, "genomic");
+      valstr = FindValueFromPairInDefline ("location", title);
+    }
+    else
+    {
+      valstr = StringSave ("genomic");
     }
   }
   else if (IsNonTextModifier (mod_name))
   {
-    MakeSearchStringFromAlist (lookfor, mod_name);
-    if (LookForSearchString (ttl, lookfor, text, sizeof (text) - 1)) 
+    if (FindValuePairInDefLine (mod_name, title, NULL) != NULL)
     {
-      StringCpy (text, "TRUE");
+      valstr = StringSave ("TRUE");
     }
     else
     {
-      StringCpy (text, "FALSE");
+      valstr = StringSave ("FALSE");
     }
   }
   else
   {
-    MakeSearchStringFromAlist (lookfor, mod_name);
-    if (! LookForSearchString (ttl, lookfor, text, sizeof (text) - 1)) {
-      StringCpy (text, " ");
+    valstr = FindValueFromPairInDefline (mod_name, title);
+    if (StringHasNoText (valstr))
+    {
+      valstr = MemFree (valstr);
+      valstr = StringSave (" ");
     }
   }      
-  return StringSave (text);  
+  return valstr;  
+}
+
+/* This function returns a string suitable for display in a table
+ * using the values from the specified modifier name found in the
+ * specified table.
+ * non-text modifiers are displayed as either TRUE or FALSE,
+ * multiple values are listed in parentheses with semicolons between them.
+ */
+static CharPtr GetDisplayValue (CharPtr mod_name, CharPtr title, BoolPtr multi_found)
+{
+  CharPtr begin_bracket, end_bracket;
+  CharPtr mod_value = NULL, tmp_value;
+  Int4    mod_value_len = 0;
+  ValNodePtr val_list = NULL, vnp;
+  Boolean allow_multi;
+  
+  allow_multi = AllowMultipleValues (mod_name);
+  if (allow_multi)
+  {
+    begin_bracket = FindValuePairInDefLine (mod_name, title, &end_bracket);
+    while (begin_bracket != NULL)
+    {
+      tmp_value = GetValueFromTitle (mod_name, begin_bracket);
+      if (!StringHasNoText (tmp_value))
+      {
+        mod_value_len += StringLen (tmp_value) + 1;
+        ValNodeAddPointer (&val_list, 0, tmp_value);
+      }
+      else
+      {
+        tmp_value = MemFree (tmp_value);
+      }
+      begin_bracket = FindValuePairInDefLine (mod_name, end_bracket + 1, &end_bracket);
+    }
+    if (val_list == NULL)
+    {
+      mod_value = StringSave (" ");
+    }
+    else
+    {
+      if (val_list->next == NULL)
+      {
+        mod_value = val_list->data.ptrvalue;
+        val_list->data.ptrvalue = NULL;
+      }
+      else
+      {
+        mod_value = (CharPtr) MemNew ((mod_value_len + 3) * sizeof (Char));
+        if (mod_value != NULL)
+        {
+          mod_value [0] = '(';
+          for (vnp = val_list; vnp != NULL; vnp = vnp->next)
+          {
+            StringCat (mod_value, vnp->data.ptrvalue);
+            if (vnp->next == NULL)
+            {
+              StringCat (mod_value, ")");
+            }
+            else
+            {
+              StringCat (mod_value, ";");
+            }
+          }
+          if (multi_found != NULL)
+          {
+            *multi_found = TRUE;
+          }
+        }
+      }
+      val_list = ValNodeFree (val_list);
+    }
+  }
+  else
+  {
+    mod_value = GetValueFromTitle (mod_name, title);
+  }
+  return mod_value;
 }
 
 static Boolean IntValueInValNodeList (Int4 ival, ValNodePtr vnp)
@@ -8289,9 +11240,10 @@ DoColumnlistsHaveIdenticalSourceInformation
   while (col1 != NULL && col2 != NULL && header != NULL && are_identical)
   { 
     mod_type = GetModifierType (header->data.ptrvalue);
-    if (mod_type != eModifierType_Other
+    if (mod_type != eModifierType_Protein
         && mod_type != eModifierType_MolType
         && mod_type != eModifierType_Topology
+        && mod_type != eModifierType_Molecule
         && StringCmp ((CharPtr) col1->data.ptrvalue, (CharPtr) col2->data.ptrvalue) != 0)
     {
       are_identical = FALSE;
@@ -8325,8 +11277,9 @@ static Boolean HasAnySourceInformation (ValNodePtr header_list, ValNodePtr colum
     if (!StringHasNoText (column_list->data.ptrvalue))
     {
       mod_type = GetModifierType (header_list->data.ptrvalue);
-      if (mod_type != eModifierType_Other
+      if (mod_type != eModifierType_Protein
           && mod_type != eModifierType_MolType
+          && mod_type != eModifierType_Molecule
           && mod_type != eModifierType_Topology)
       {
         has_any = TRUE;
@@ -8371,8 +11324,13 @@ static Boolean OrganismMatchesAnotherRow (Int4 row, ValNodePtr row_list, Pointer
   {
     return FALSE;
   }
-
   if (column_list == NULL || column_list->next == NULL)
+  {
+    return FALSE;
+  }
+  
+  /* don't check when organism name is missing */
+  if (StringHasNoText (column_list->next->data.ptrvalue))
   {
     return FALSE;
   }
@@ -8406,6 +11364,34 @@ static Boolean OrganismMatchesAnotherRow (Int4 row, ValNodePtr row_list, Pointer
   return FALSE;
 }
 
+/* Sequence ID is always stored in the first column, organism name
+ * is always stored in the second column.
+ */
+static Boolean AnySequencesHaveMissingOrganisms (ValNodePtr row_list)
+{
+  Boolean have_missing = FALSE;
+  ValNodePtr col_list;
+  
+  if (row_list == NULL || row_list->next == NULL)
+  {
+    return FALSE;
+  }
+  row_list = row_list->next;
+  
+  while (row_list != NULL && ! have_missing)
+  {
+    col_list = row_list->data.ptrvalue;
+    if (col_list == NULL
+        || col_list->next == NULL
+        || StringHasNoText (col_list->next->data.ptrvalue))
+    {
+      have_missing = TRUE;
+    }
+    row_list = row_list->next;
+  }
+  return have_missing;
+}
+
 static Boolean AnySequencesHaveIdenticalOrganisms (ValNodePtr row_list)
 {
   Int4 i, num_rows;
@@ -8422,6 +11408,51 @@ static Boolean AnySequencesHaveIdenticalOrganisms (ValNodePtr row_list)
     have_match = OrganismMatchesAnotherRow (i, row_list, NULL);
   }
   return have_match;
+}
+
+/* Sequence ID is always stored in the first column, organism name
+ * is always stored in the second column.
+ */
+static void ReportMissingOrganisms (ValNodePtr row_list, DoC doc)
+{
+  ValNodePtr checked_list = NULL;
+  Int4       row_num;
+  ValNodePtr row_vnp;
+  ValNodePtr column_list;
+  ValNodePtr missing_list = NULL;
+  CharPtr    err_msg;
+  
+  if (row_list == NULL || doc == NULL) return;
+      
+      
+  for (row_vnp = row_list->next, row_num = 0;
+       row_vnp != NULL; 
+       row_vnp = row_vnp->next, row_num++)
+  {    
+    column_list = (ValNodePtr) row_vnp->data.ptrvalue;
+    if (column_list == NULL)
+    {
+      continue;
+    }
+    if (column_list->next == NULL || StringHasNoText (column_list->next->data.ptrvalue))
+    {
+      /* organism is missing */
+      ValNodeAddPointer (&missing_list, row_num, column_list->data.ptrvalue);          
+    }
+  }
+  
+  if (missing_list != NULL)
+  {
+    err_msg = CreateListMessage ("Sequence", 
+                                 missing_list->next == NULL ? 
+                                           " has no organism name."
+                                           : " have no organism names.",
+                                 missing_list);
+    AppendText (doc, err_msg, &faParFmt, &faColFmt, programFont);
+    err_msg = MemFree (err_msg);                                 
+    missing_list = ValNodeFree (missing_list);
+    AppendText (doc, "\n", &faParFmt, &faColFmt, programFont);
+  }
 }
 
 static void ReportIdenticalOrganisms (ValNodePtr row_list, DoC doc)
@@ -8466,6 +11497,13 @@ static void ReportIdenticalOrganisms (ValNodePtr row_list, DoC doc)
     {
       continue;
     }
+    
+    if (StringHasNoText (column_list->next->data.ptrvalue))
+    {
+      /* skip - no organism name, will have already been reported */
+      continue;
+    }
+    
     this_match_list = NULL;
     for (check_row_vnp = row_vnp->next, check_row_num = row_num + 1;
          check_row_vnp != NULL;
@@ -8708,41 +11746,49 @@ static void SummarizeModifiers (ValNodePtr row_list, DialoG summary_dlg)
   
 }
 
-static ValNodePtr GetListOfCurrentModifiers (SeqEntryPtr seq_list)
+static ValNodePtr GetListOfCurrentSourceModifiers (IDAndTitleEditPtr iatep)
 {
   ValNodePtr  found_modifiers = NULL;
-  SeqEntryPtr sep, nsep;
-  CharPtr     ttl;
-  
-  /* get list of modifiers */    
+  Int4        seq_num;
+
+  /* we always list organism, and list it first, whether it's present or not */  
   ValNodeAddPointer (&found_modifiers, 0, StringSave ("Organism"));
-  for (sep = seq_list; sep != NULL; sep = sep->next)
+  if (iatep != NULL)
   {
-    ttl = NULL;
-    nsep = FindNucSeqEntry (sep);
-    SeqEntryExplore (nsep, (Pointer) (&ttl), FindFirstTitle);
-    found_modifiers = BuildModifierTypeList (found_modifiers, ttl);
+    /* get list of modifiers from titles */    
+    for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+    {
+      /* only add modifiers from master sequences */
+      if (iatep->is_seg == NULL || !iatep->is_seg [seq_num])
+      {
+        found_modifiers = BuildModifierTypeList (found_modifiers, 
+                                                 iatep->title_list [seq_num],
+                                                 FALSE);
+      }
+    }
   }
   return found_modifiers;
 }
 
+static CharPtr multival_explanation = "Note: When there is more than one "
+           "modifier of the same type for a single sequence, the value list will "
+           "be presented in tables separated by semicolons and enclosed in parentheses.";
+
 static void SeqEntryPtrToOrgDoc (SequencesFormPtr sqfp)
 {
-  SeqEntryPtr  seq_list, sep, nsep;
+  SeqEntryPtr  seq_list;
   ValNodePtr   found_modifiers = NULL, vnp;
-  CharPtr      ttl;
   CharPtr      mod_name;
   CharPtr      org_name;
-  BioseqPtr    bsp;
-  SeqIdPtr     sip;
   Int4         seq_num;
-  Char         tmp [128];
   ValNodePtr   column_list = NULL;
   ValNodePtr   row_list = NULL, row_vnp;
   ValNodePtr   header_vnp, header_list;
   Int4         column_width;
   CharPtr      mod_value;
-  RecT         r;
+  RecT              r;
+  IDAndTitleEditPtr iatep;
+  Boolean           multi_found = FALSE, have_missing, have_match;
   
   if (sqfp == NULL) return;
   Reset (sqfp->org_doc);
@@ -8757,14 +11803,17 @@ static void SeqEntryPtrToOrgDoc (SequencesFormPtr sqfp)
                 "You must create sequences before you can add source information.",
                 &faParFmt, &faColFmt, programFont);
     Show (sqfp->org_doc);
+    Hide (sqfp->ident_org_ppt);
     Hide (sqfp->ident_org_btn);
     Hide (sqfp->summary_dlg);
   }
   else
   {
     Show (sqfp->summary_dlg);
-    /* get list of modifiers */    
-    found_modifiers = GetListOfCurrentModifiers (seq_list);
+    /* get list of modifiers */
+    iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+
+    found_modifiers = GetListOfCurrentSourceModifiers (iatep);
     
     /* create header line for table */
     /* store max column width in choice */
@@ -8780,34 +11829,25 @@ static void SeqEntryPtrToOrgDoc (SequencesFormPtr sqfp)
     header_list = column_list;
     
     /* create data lines for table */
-    for (sep = seq_list, seq_num = 0; sep != NULL; sep = sep->next, seq_num++)
+    for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
     {
+      /* only add rows for master sequences */
+      if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+      {
+        continue;
+      }
+
+      /* add modifiers from this title */
       column_list = NULL;
       header_vnp = header_list;
-      nsep = FindNucSeqEntry (sep);
       
-      /* add Sequence ID */
-      bsp = FindNucBioseq (sep);
-      if (bsp != NULL)
-      {
-        sip = SeqIdFindWorst (bsp->id);
-        SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-      }
-      else
-      {
-        sprintf (tmp, "%d", seq_num);
-      }
-      column_width = MAX (StringLen (tmp), header_vnp->choice);
+      column_width = MAX (StringLen (iatep->id_list [seq_num]), header_vnp->choice);
       header_vnp->choice = column_width;
-      ValNodeAddPointer (&column_list, 0, StringSave (tmp));
-      
-      /* get title */
-      ttl = NULL;
-      SeqEntryExplore (nsep, (Pointer) (&ttl), FindFirstTitle);
+      ValNodeAddPointer (&column_list, 0, StringSave (iatep->id_list [seq_num]));
       
       /* add organism name */
       header_vnp = header_vnp->next;
-      org_name = GetValueFromTitle ("organism", ttl);
+      org_name = GetDisplayValue ("organism", iatep->title_list [seq_num], &multi_found);
       column_width = MAX (StringLen (org_name), header_vnp->choice);
       header_vnp->choice = column_width;
       ValNodeAddPointer (&column_list, 0, org_name);
@@ -8817,24 +11857,37 @@ static void SeqEntryPtrToOrgDoc (SequencesFormPtr sqfp)
       {
         header_vnp = header_vnp->next;
         mod_name = (CharPtr) vnp->data.ptrvalue;
-        mod_value = GetValueFromTitle (mod_name, ttl);
+        mod_value = GetDisplayValue (mod_name, iatep->title_list [seq_num], &multi_found);
         column_width = MAX (StringLen (mod_value), header_vnp->choice);
         header_vnp->choice = column_width;
         ValNodeAddPointer (&column_list, 0, mod_value);
       }
       ValNodeAddPointer (&row_list, 0, column_list);
     }
-    if (AnySequencesHaveIdenticalOrganisms (row_list))
+    have_missing = AnySequencesHaveMissingOrganisms (row_list);
+    have_match = AnySequencesHaveIdenticalOrganisms (row_list);
+    if (have_match || have_missing)
     {
+      if (have_match)
+      {
+        Show (sqfp->ident_org_ppt);
+      }
       Show (sqfp->ident_org_btn);
       Show (sqfp->org_doc);
     }
     else
     {
+      Hide (sqfp->ident_org_ppt);
       Hide (sqfp->ident_org_btn);
       Hide (sqfp->org_doc);
     }
+    ReportMissingOrganisms (row_list, sqfp->org_doc);
     ReportIdenticalOrganisms (row_list, sqfp->org_doc);
+    if (multi_found)
+    {
+      AppendText (sqfp->org_doc, multival_explanation, NULL, NULL, programFont);
+      Show (sqfp->org_doc);
+    }
 
     SummarizeModifiers (row_list, sqfp->summary_dlg);
 
@@ -8847,6 +11900,7 @@ static void SeqEntryPtrToOrgDoc (SequencesFormPtr sqfp)
     row_list = ValNodeFree (row_list);
 
     ValNodeFreeData (found_modifiers);
+    iatep = IDAndTitleEditFree (iatep);
   }
   /* update document */
   InvalDocRows (sqfp->org_doc, 0, 0, 0);
@@ -8858,415 +11912,101 @@ static void SeqEntryPtrToSourceTab (SequencesFormPtr sqfp)
   SeqEntryPtrToOrgDoc (sqfp);
 }
 
-typedef struct stringpair
+static ValNodePtr GetFastaModifierList (Boolean allow_nuc, Boolean allow_prot)
 {
-  CharPtr       findstr;
-  CharPtr       replstr;
-  Int4          replint;
-  EModifierType modtype;
-} StringPairData, PNTR StringPairPtr;
-
-static ValNodePtr FreeStringPairList (ValNodePtr list)
-{
-  StringPairPtr spp;
-  
-  if (list == NULL) return NULL;
-  list->next = FreeStringPairList (list->next);
-  spp = (StringPairPtr) list->data.ptrvalue;
-  if (spp != NULL)
-  {
-  	MemFree (spp->findstr);
-  	MemFree (spp->replstr);
-  	MemFree (spp);
-  	list->data.ptrvalue = NULL;
-  }
-  list = ValNodeFree (list);
-  return list;
-}
-
-static ValNodePtr GetFastaModifierList (void)
-{
-  ValNodePtr mod_choices = NULL, last_mod_choice;
+  ValNodePtr mod_choices = NULL;
   Int4       i;
 
-  ValNodeAddPointer (&mod_choices, eModifierType_Organism, StringSave ("Organism"));
-  ValNodeAddPointer (&mod_choices, eModifierType_Location, StringSave ("Location"));
-  last_mod_choice = ValNodeNew (mod_choices);
-  last_mod_choice->choice = eModifierType_Lineage;
-  last_mod_choice->data.ptrvalue = StringSave ("Lineage");
-
-  last_mod_choice = ValNodeNew (mod_choices);
-  last_mod_choice->choice = eModifierType_NucGeneticCode;
-  last_mod_choice->data.ptrvalue = StringSave ("gcode");
-  
-  last_mod_choice = ValNodeNew (mod_choices);
-  last_mod_choice->choice = eModifierType_MitoGeneticCode;
-  last_mod_choice->data.ptrvalue = StringSave ("mgcode");
-  
-  last_mod_choice->next = GetSourceQualDescList (TRUE, TRUE);
-  for (i = 0; i < num_other_modifier_names; i++)
+  if (allow_nuc)
   {
-    ValNodeAddPointer (&mod_choices, eModifierType_Other, StringSave (other_modifier_names[i]));
+    ValNodeAddPointer (&mod_choices, eModifierType_Organism, StringSave ("Organism"));
+  
+    ValNodeLink (&mod_choices, GetSourceQualDescList (TRUE, TRUE, FALSE));
+    ValNodeAddPointer (&mod_choices, eModifierType_CommonName, StringSave ("Common Name"));
+    ValNodeAddPointer (&mod_choices, eModifierType_Location, StringSave ("Location"));
+    ValNodeAddPointer (&mod_choices, eModifierType_Origin, StringSave ("Origin"));
+    ValNodeAddPointer (&mod_choices, eModifierType_Lineage, StringSave ("Lineage"));
+    ValNodeAddPointer (&mod_choices, eModifierType_NucGeneticCode, StringSave ("gcode"));
+    ValNodeAddPointer (&mod_choices, eModifierType_MitoGeneticCode, StringSave ("mgcode"));
+    ValNodeAddPointer (&mod_choices, eModifierType_Molecule, StringSave ("moltype"));  
+    ValNodeAddPointer (&mod_choices, eModifierType_Molecule, StringSave ("molecule"));
+    ValNodeAddPointer (&mod_choices, eModifierType_Technique, StringSave ("tech"));
+  }
+  
+  if (allow_prot)
+  {
+    for (i = 0; i < num_protein_modifier_names; i++)
+    {
+      ValNodeAddPointer (&mod_choices, eModifierType_Protein, StringSave (protein_modifier_names[i]));
+    }
   }
 
   return mod_choices;  
 }
 
-static StringPairPtr 
-GetModifierFix (ModifierInfoPtr mip, BoolPtr cancelled, BoolPtr add_to_fixes)
+static CharPtr ReplaceOneModifierName (CharPtr title, CharPtr orig_name, CharPtr repl_name)
 {
-  WindoW                w;
-  GrouP  g, c;
-  ButtoN b;
-  ModalAcceptCancelData acd;
-  CharPtr               str = NULL;
-  CharPtr               prompt_fmt = "%s is not a valid qualifier type.  "
-                                  "Please choose a valid qualifier type:";
-  WindoW                ppt;
-  DialoG                rename_choice;
-  ValNodePtr            vnp_new;
-  StringPairPtr         spp = NULL;
-  CharPtr               old_name;
-  ValNodePtr            mod_choices = NULL;
-  Boolean               done;
-  ButtoN                add_to_fixes_btn;
+  CharPtr bracket_loc, eq_loc, new_title;
+  Int4    new_title_len, search_offset;
   
-  mod_choices = GetFastaModifierList ();
-  
-  w = MovableModalWindow(-20, -13, -10, -10, "Unrecognized Qualifier", NULL);
-  g = HiddenGroup(w, -1, 0, NULL);
-  str = MemNew ((StringLen (mip->name) + StringLen (prompt_fmt) + PRINTED_INT_MAX_LEN) * sizeof (Char));
-  sprintf (str, prompt_fmt, mip->name);
-  ppt = MultiLinePrompt (g, str, 27 * stdCharWidth, programFont);
-  str = MemFree (str);
-  rename_choice = ValNodeSelectionDialog (g, mod_choices, 6,
-                                          SourceQualValNodeName,
-                                          ValNodeSimpleDataFree,
-                                          SourceQualValNodeDataCopy,
-                                          SourceQualValNodeMatch,
-                                          "modifier",
-                                          NULL, NULL, FALSE);
-  add_to_fixes_btn = CheckBox (g, "Replace all instances", NULL);
-  c = HiddenGroup (g, 4, 0, NULL);
-  b = PushButton(c, "OK", ModalAcceptButton);
-  SetObjectExtra (b, &acd, NULL);
-  b = PushButton(c, "Cancel", ModalCancelButton);
-  SetObjectExtra (b, &acd, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) ppt,
-                              (HANDLE) rename_choice,
-                              (HANDLE) add_to_fixes_btn,
-                              (HANDLE) c,
-                              NULL);
-  
-  Show(w); 
-  Select (w);
-  done = FALSE;
-  while (!done)
-  {
-    acd.accepted = FALSE;
-    acd.cancelled = FALSE;
-    while (!acd.accepted && ! acd.cancelled)
-    {
-      ProcessExternalEvent ();
-      Update ();
-    }
-    ProcessAnEvent ();
-    if (acd.cancelled)
-    {
-      done = TRUE;
-      *cancelled = TRUE;
-    }
-    else if (acd.accepted)
-    {
-      vnp_new = DialogToPointer (rename_choice);
-      if (vnp_new != NULL)
-      {
-  	    old_name = mip->name;
-  	    mip->name = SourceQualValNodeName (vnp_new);
-  	    if (mip->name != NULL)
-  	    {
-  	      mip->name [0] = TO_LOWER (mip->name [0]);
-  	    }
-  	    mip->modtype = GetModifierType (mip->name);
-  	    if (mip->modtype == eModifierType_SourceQual)
-  	    {
-  	      mip->subtype = vnp_new->choice;
-  	    }
-  	    else
-  	    {
-  	      mip->subtype = 0;
-  	    }
-        if (add_to_fixes != NULL)
-        {
-          *add_to_fixes = GetStatus (add_to_fixes_btn);
-        }
-        if (GetStatus (add_to_fixes_btn))
-        {
-          spp = (StringPairPtr) MemNew (sizeof(StringPairData));
-  	      if (spp != NULL)
-  	      {
-  	        spp->findstr = old_name;
-  	        spp->replstr = StringSave (vnp_new->data.ptrvalue);
-  	        spp->modtype = mip->modtype;
-  	        spp->replint = mip->subtype;
-  	      }
-  	      else 
-  	      {
-  	        MemFree (old_name);
-  	      }
-  	      ValNodeFreeData (vnp_new);
-        }
-        else
-        {
-        	MemFree (old_name);
-        }
-        done = TRUE;
-      }
-    }
-  }
-  Remove (w);
-  
-  return spp;
-}
-
-static ValNodePtr FixUnrecognizedModifier 
-(ModifierInfoPtr mip, ValNodePtr fixes, BoolPtr cancelled)
-{
-  ValNodePtr    vnp;
-  StringPairPtr spp;
-  Boolean       found = FALSE;
-  Boolean       add_to_fixes = FALSE;
-  
-  if (mip == NULL) return fixes;
-  
-  /* try to find mip->name in list of automatic fixes */
-  for (vnp = fixes; vnp != NULL && !found; vnp = vnp->next)
-  {
-  	spp = (StringPairPtr) vnp->data.ptrvalue;
-  	if (spp != NULL && StringCmp (spp->findstr, mip->name) == 0)
-  	{
-  	  found = TRUE;
-  	  mip->name = MemFree (mip->name);
-  	  mip->name = StringSave (spp->replstr);
-  	  mip->modtype = spp->modtype;
-  	  mip->subtype = spp->replint;
-  	}
-  }
-  if (!found)
-  {
-  	/* get new fix and add to list*/
-    spp = GetModifierFix (mip, cancelled, &add_to_fixes);
-    if (add_to_fixes && spp != NULL)
-    {
-      vnp = ValNodeNew (fixes);
-      if (fixes == NULL)
-      {
-      	fixes = vnp;
-      }
-      if (vnp != NULL)
-      {
-      	vnp->data.ptrvalue = spp;
-      }
-    }
-  }
-  return fixes;
-}
-
-static void 
-FixUnrecognizedModifersInOneDefinitionLine
-(SeqDescrPtr     sdp,
- BoolPtr         cancelled,
- ValNodePtr PNTR fixes)
-{
-  ValNodePtr      mod_list, vnp;
-  CharPtr         title, new_title;
-  ModifierInfoPtr mip;
-  Int4            title_len = 0;
-  Boolean         changed = FALSE;
-  
-  if (sdp == NULL || sdp->choice != Seq_descr_title
-      || StringHasNoText (sdp->data.ptrvalue)
-      || cancelled == NULL || fixes == NULL)
-  {
-    return;
-  }
-  
-  mod_list = ParseAllBracketedModifiers (sdp->data.ptrvalue);
-  title = GetUnbracketedText (sdp->data.ptrvalue);
-  title_len = StringLen (title) + 1;
-  
-  for (vnp = mod_list; vnp != NULL && !*cancelled; vnp = vnp->next)
-  {
-    mip = (ModifierInfoPtr)vnp->data.ptrvalue;
-    if (mip == NULL) continue;
-    
-    if (mip->modtype == eModifierType_SourceQual)
-    {
-      if (mip->subtype == 255)
-      {
-        /* fix qualifier name */
-        *fixes =  FixUnrecognizedModifier (mip, *fixes, cancelled);
-        changed = TRUE;
-      }
-    }
-    title_len += 4 + StringLen (mip->name) + StringLen (mip->value);
-  }
-  
-  if (!*cancelled && changed)
-  {
-    new_title = (CharPtr) MemNew (title_len * sizeof (Char));
-    if (new_title != NULL)
-    {
-      for (vnp = mod_list; vnp != NULL; vnp = vnp->next)
-      {
-        mip = (ModifierInfoPtr)vnp->data.ptrvalue;
-        if (mip == NULL) continue;
-        StringCat (new_title, "[");
-        StringCat (new_title, mip->name);
-        StringCat (new_title, "=");
-        StringCat (new_title, mip->value);
-        StringCat (new_title, "] ");
-      }
-      StringCat (new_title, title);
-      sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
-      sdp->data.ptrvalue = new_title;
-    }
-  }  
-
-  mod_list = ModifierInfoListFree (mod_list);
-}
-
-static void 
-FixBracketingInOneDefinitionLine 
-(SeqDescrPtr sdp,
- BoolPtr     cancelled, 
- CharPtr     id_str)
-{
-  CharPtr title, new_title;
-  CharPtr msg;
-  
-  if (sdp == NULL || sdp->choice != Seq_descr_title)
-  {
-    return;
-  }
-  
-  title = (CharPtr) sdp->data.ptrvalue;
-  
-  msg = DetectBadBracketing (title);
-  if (msg != NULL)
-  {
-  	new_title = FixBadBracketing (title, msg, 0, id_str, cancelled);
-  	if (*cancelled)
-  	{
-  	  MemFree (new_title);
-  	  return;
-  	}
-  	MemFree (sdp->data.ptrvalue);
-  	sdp->data.ptrvalue = new_title;
-  }
-}
-
-static void FixDefinitionLines (SeqEntryPtr sep, BoolPtr cancelled, ValNodePtr PNTR fixes)
-{
-  BioseqSetPtr bssp;
-  BioseqPtr    bsp;
-  SeqIdPtr     sip;
-  Char         tmp [128];
-  SeqDescrPtr  sdp;
-  Boolean      local_cancelled = FALSE;
-
-  if (sep == NULL) return;
-  
-  if (cancelled == NULL)
-  {
-    cancelled = &local_cancelled;
-  }
-  else if (*cancelled)
-  {
-    return;
-  }
-  
-  if (IS_Bioseq_set (sep))
-  {
-    sdp = SeqEntryGetSeqDescr(sep, Seq_descr_title, NULL);
-    FixBracketingInOneDefinitionLine (sdp, cancelled, (CharPtr) "Bioseq Set Title");
-    FixUnrecognizedModifersInOneDefinitionLine (sdp, cancelled, fixes);
-
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL)
-    {
-      FixDefinitionLines (bssp->seq_set, cancelled, fixes);
-    }
-  }
-  else
-  {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-    if (bsp != NULL)
-    {
-      sip = SeqIdFindWorst (bsp->id);
-      SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-      sdp = SeqEntryGetSeqDescr(sep, Seq_descr_title, NULL);
-      FixBracketingInOneDefinitionLine (sdp, cancelled, (CharPtr) tmp);
-      FixUnrecognizedModifersInOneDefinitionLine (sdp, cancelled, fixes);
-    }
-  }
-  
-  FixDefinitionLines (sep->next, cancelled, fixes);
-}
-
-static CharPtr ReplaceOrgWithOrganismInOneDefinitionLine (CharPtr title)
-{
-  Char         lookfor [128];
-  Char         text [128];
-  CharPtr      new_title = NULL;
-  
-  if (StringHasNoText (title)) 
+  if (StringHasNoText (title)
+      || StringHasNoText (orig_name)
+      || StringHasNoText (repl_name)
+      || StringICmp (orig_name, repl_name) == 0)
   {
     return title;
   }
-    
-  MakeSearchStringFromAlist (lookfor, "Org");
-
-  if (LookForSearchString (title, lookfor, text, sizeof (text) - 1)) 
-  {
-    ExciseString (title, "[org=", "]");
-    TrimSpacesAroundString (title);
-    new_title = (CharPtr) MemNew (StringLen (title) + StringLen (long_org) + StringLen (text) + 3);
-    if (new_title != NULL)
+  
+  bracket_loc = FindValuePairInDefLine (orig_name, title, NULL);
+  while (bracket_loc != NULL)
+  {  
+    eq_loc = NextBracketToken (bracket_loc + 1);
+    if (eq_loc == NULL || *eq_loc != '=')
     {
-      new_title [0] = 0;
-      StringCat (new_title, title);
-      StringCat (new_title, " ");
-      StringCat (new_title, long_org);
-      StringCat (new_title, text);
-      StringCat (new_title, "]");
-      title = MemFree (title);
-      title = new_title;
+      return title;
     }
+    new_title_len = StringLen (title) + StringLen (repl_name) + 1;
+    new_title = (CharPtr) MemNew (new_title_len * sizeof (Char));
+    if (new_title == NULL)
+    {
+      return title;
+    }
+    StringNCpy (new_title, title, bracket_loc - title + 1);
+    StringCat (new_title, repl_name);
+    search_offset = StringLen (new_title) + 1;
+    StringCat (new_title, eq_loc);
+    title = MemFree (title);
+    title = new_title;
+    bracket_loc = FindValuePairInDefLine (orig_name, title + search_offset, NULL);
   }
   return title;
 }
 
-
-static void ReplaceOrgWithOrganismInDefinitionLines (SeqEntryPtr sep)
+static void 
+ReplaceAliasInAllDefinitionLines 
+(SeqEntryPtr sep, 
+ CharPtr alias, 
+ CharPtr real_val)
 {
   BioseqSetPtr bssp;
   SeqDescrPtr  sdp;
 
-  if (sep == NULL) return;
+  if (sep == NULL || StringHasNoText (alias) || StringHasNoText (real_val)) return;
     
   if (IS_Bioseq_set (sep))
   {
     sdp = SeqEntryGetSeqDescr(sep, Seq_descr_title, NULL);
     if (sdp != NULL)
     {
-      sdp->data.ptrvalue = ReplaceOrgWithOrganismInOneDefinitionLine (sdp->data.ptrvalue);
+      sdp->data.ptrvalue = ReplaceOneModifierName (sdp->data.ptrvalue, 
+                                                   alias, real_val);
+                                                            
     }
 
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL)
     {
-      ReplaceOrgWithOrganismInDefinitionLines (bssp->seq_set);
+      ReplaceAliasInAllDefinitionLines (bssp->seq_set, alias, real_val);
     }
   }
   else
@@ -9274,11 +12014,21 @@ static void ReplaceOrgWithOrganismInDefinitionLines (SeqEntryPtr sep)
     sdp = SeqEntryGetSeqDescr(sep, Seq_descr_title, NULL);
     if (sdp != NULL)
     {
-      sdp->data.ptrvalue = ReplaceOrgWithOrganismInOneDefinitionLine (sdp->data.ptrvalue);
+      sdp->data.ptrvalue = ReplaceOneModifierName (sdp->data.ptrvalue,
+                                                   alias, real_val);
     }
   }
+  ReplaceAliasInAllDefinitionLines (sep->next, alias, real_val);
+}
+
+static void ReplaceAllAliases (SeqEntryPtr sep)
+{
+  Int4 j;
   
-  ReplaceOrgWithOrganismInDefinitionLines (sep->next);  
+  for (j = 0; j < num_aliases; j++)
+  {
+    ReplaceAliasInAllDefinitionLines (sep, alias_list[j].alias, alias_list[j].modifier);
+  }
 }
 
 static CharPtr ReplaceMolNameWithMolBracketsInOneDefinitionLine (CharPtr title)
@@ -9344,17 +12094,23 @@ static void ReplaceMolNamesWithMolBracketsInDefinitionLines (SeqEntryPtr sep)
 
 static void ImportModifiersButtonProc (ButtoN b)
 {
-  SequencesFormPtr sqfp;
-  Boolean          rval;
+  SequencesFormPtr  sqfp;
+  Boolean           rval;
+  IDAndTitleEditPtr iatep;
+  SeqEntryPtr       seq_list;
   
   sqfp = (SequencesFormPtr) GetObjectExtra (b);
   if (sqfp == NULL) return;
   
-  rval = ImportOrganismModifiersForSubmit (GetSeqEntryFromSequencesForm (sqfp));
+  seq_list = GetSeqEntryFromSequencesForm (sqfp);
+  iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+  rval = ImportModifiersToIDAndTitleEdit (iatep);
   if (rval)
   {
-    SeqEntryPtrToSourceTab (sqfp);
+    ApplyIDAndTitleEditToSeqEntryList (seq_list, iatep);
+    SeqEntryPtrToSourceTab (sqfp);    
   }
+  iatep = IDAndTitleEditFree (iatep);
 }
 
 
@@ -9364,15 +12120,63 @@ typedef struct sourceassistant
   CharPtr PNTR    id_list;
   Int4            num_deflines;
   Int2            seqPackage;
-  PopuP           modType;
+  DialoG          mod_type_dlg;
   DoC             mod_doc;
   DialoG          orgmod_dlg;
   Boolean         done;
   Boolean         cancelled;
 } SourceAssistantData, PNTR SourceAssistantPtr;
 
+/* These functions are used for converting between a SourceAssistant structure and
+ * and IDAndTitleEdit structure.
+ */
+static IDAndTitleEditPtr SourceAssistantToIDAndTitleEdit (SourceAssistantPtr sap)
+{
+  IDAndTitleEditPtr iatep;
+  Int4              j;
+  
+  if (sap == NULL || sap->num_deflines < 1)
+  {
+    return NULL;
+  }
+  
+  iatep = IDAndTitleEditNew ();
+  if (iatep != NULL)
+  {
+    iatep->num_sequences = sap->num_deflines;
+    iatep->id_list = (CharPtr PNTR) MemNew (iatep->num_sequences * sizeof (CharPtr));
+    iatep->title_list = (CharPtr PNTR) MemNew (iatep->num_sequences * sizeof (CharPtr));
+    for (j = 0; j < sap->num_deflines; j++)
+    {
+      iatep->id_list [j] = StringSave (sap->id_list [j]);
+      iatep->title_list [j] = StringSave (sap->defline_list [j]);
+    }
+  }
+  return iatep;
+}
 
-static ValNodePtr PrepareSourceAssistantTableData (SourceAssistantPtr sap)
+static void ApplyIDAndTitleEditToSourceAssistant (SourceAssistantPtr sap, IDAndTitleEditPtr iatep)
+{
+  Int4 seq_num;
+  
+  if (sap == NULL || iatep == NULL || sap->num_deflines != iatep->num_sequences)
+  {
+    return;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    /* copy sequence IDs */
+    sap->id_list [seq_num] = MemFree (sap->id_list [seq_num]);
+    sap->id_list [seq_num] = StringSave (iatep->id_list [seq_num]);
+    
+    /* copy titles */
+    sap->defline_list [seq_num] = MemFree (sap->defline_list [seq_num]);
+    sap->defline_list [seq_num] = StringSave (iatep->title_list [seq_num]);
+  }
+}
+
+static ValNodePtr PrepareSourceAssistantTableData (SourceAssistantPtr sap, BoolPtr multi_found)
 {
   Int4               i;
   ValNodePtr         found_modifiers = NULL;
@@ -9393,7 +12197,9 @@ static ValNodePtr PrepareSourceAssistantTableData (SourceAssistantPtr sap)
   ValNodeAddPointer (&found_modifiers, 0, StringSave ("location")); 
   for (i = 0; i < sap->num_deflines; i++)
   {
-    found_modifiers = BuildModifierTypeList (found_modifiers, sap->defline_list[i]);
+    found_modifiers = BuildModifierTypeList (found_modifiers,
+                                             sap->defline_list[i],
+                                             FALSE);
   }
     
   /* create header line for table */
@@ -9423,7 +12229,7 @@ static ValNodePtr PrepareSourceAssistantTableData (SourceAssistantPtr sap)
       
     /* add organism name */
     header_vnp = header_vnp->next;
-    org_name = GetValueFromTitle ("organism", sap->defline_list[i]);
+    org_name = GetDisplayValue ("organism", sap->defline_list[i], multi_found);
     column_width = MAX (StringLen (org_name), header_vnp->choice);
     column_width = MIN (column_width, max_column_width);
     header_vnp->choice = column_width;
@@ -9434,7 +12240,7 @@ static ValNodePtr PrepareSourceAssistantTableData (SourceAssistantPtr sap)
     {
       header_vnp = header_vnp->next;
       mod_name = (CharPtr) vnp->data.ptrvalue;
-      mod_value = GetValueFromTitle (mod_name, sap->defline_list[i]);
+      mod_value = GetDisplayValue (mod_name, sap->defline_list[i], multi_found);
       if (StringICmp (mod_name, "location") == 0 && StringHasNoText (mod_value))
       {
         /* display default value for location */
@@ -9454,83 +12260,6 @@ static ValNodePtr PrepareSourceAssistantTableData (SourceAssistantPtr sap)
 
 
 /* code for scientific name selection controls */
-static ValNodePtr orglist = NULL;
-
-typedef struct orginfo 
-{
-  CharPtr taxname;
-  Int4    ngcode;
-  Int4    mgcode;
-} OrgInfoData, PNTR OrgInfoPtr;
-
-static void LoadOrganismList (void)
-{
-  Char              str [PATH_MAX];
-  ReadBufferData    rbd;
-  CharPtr           line;
-  CharPtr           ptr, ptr2, ptr3;
-  FILE              *f;
-  OrgInfoPtr        oip;
-
-  if (orglist != NULL) return;
-  ProgramPath (str, sizeof (str));
-  ptr = StringRChr (str, DIRDELIMCHR);
-  if (ptr != NULL) {
-    *ptr = '\0';
-    FileBuildPath (str, NULL, "taxlist.txt");
-    f = FileOpen (str, "r");
-    if (f == NULL) {
-      if (GetAppParam ("NCBI", "NCBI", "DATA", "", str, sizeof (str))) {
-        FileBuildPath (str, NULL, "taxlist.txt");
-        f = FileOpen (str, "r");
-      }
-    }
-    if (f != NULL) {
-      rbd.fp = f;
-      rbd.current_data = NULL;
-      line = AbstractReadFunction (&rbd);
-      line = AbstractReadFunction (&rbd);
-      while (line != NULL)
-      {
-        oip = (OrgInfoPtr) MemNew (sizeof (OrgInfoData));
-        if (oip != NULL)
-        {
-          oip->taxname = line;
-          
-          ptr = StringChr (line, '\t');
-          /* skip over common name */
-          if (ptr != NULL)
-          {
-            *ptr = 0;
-            ptr = StringChr (ptr + 1, '\t');
-          }
-          if (ptr != NULL)
-          {
-            *ptr = 0;
-            ptr++;
-            ptr2 = StringChr (ptr, '\t');
-            if (ptr2 != NULL)
-            {
-              *ptr2 = 0;
-              ptr2++;
-              ptr3 = StringChr (ptr2, '\t');
-              if (ptr3 != NULL)
-              {
-                *ptr3 = 0;
-              }
-              oip->mgcode = atoi (ptr2);
-            }
-            oip->ngcode = atoi (ptr);
-          }
-          ValNodeAddPointer (&orglist, 0, oip);
-        }
-      	line = AbstractReadFunction (&rbd);
-      }
-      FileClose (f);
-    }
-  }
-}
-
 
 typedef struct organismselectiondialog
 {
@@ -9675,6 +12404,8 @@ static void SetOrganismText (TexT t)
   	MemFree (old_val);
   }
 
+  pos = -1;
+  match = FALSE;
   GetOrgPosForText (dlg->tax_name_val, &pos, &match);
   SetOffset (dlg->org_list, 0, pos - 1);
   if (pos != dlg->org_row)
@@ -9810,6 +12541,7 @@ extern DialoG OrganismSelectionDialog (GrouP parent, CharPtr org_name)
   
   dlg->tax_name_txt = DialogText (grp, "", 20, SetOrganismText);
   SetObjectExtra (dlg->tax_name_txt, dlg, NULL);
+  dlg->org_row = -1;
   if (org_name != NULL)
   {
   	SetTitle (dlg->tax_name_txt, org_name);
@@ -9840,7 +12572,7 @@ extern DialoG OrganismSelectionDialog (GrouP parent, CharPtr org_name)
   SetSlateChar ((SlatE) dlg->org_list, OrgNameOnKey);
   
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->tax_name_txt, (HANDLE) dlg->org_list, NULL);
-  
+  InvalDocument (dlg->org_list);
   return (DialoG) grp;
 }
 
@@ -9881,46 +12613,6 @@ static void CleanupMultiOrganismSelectionDialog (GraphiC g, VoidPtr data)
   }
 
   StdCleanupExtraProc (g, data);
-}
-
-static Int4 GetGeneticCodeForTaxNameAndLocation (CharPtr taxname, CharPtr location)
-{
-  ValNodePtr vnp;
-  OrgInfoPtr oip;
-  Boolean    found = FALSE;
-  Int4       use_code;
-  
-  use_code = UseGeneticCodeForLocation (location);
-  if (use_code == USE_OTHER_GENETIC_CODE)
-  {
-    return 11;
-  }
-  else if (StringHasNoText (taxname))
-  {
-    return -1;
-  }
-  
-  for (vnp = orglist; vnp != NULL; vnp = vnp->next)
-  {
-    if (vnp->data.ptrvalue == NULL)
-    {
-      continue;
-    }
-    oip = (OrgInfoPtr) vnp->data.ptrvalue;
-    if (StringICmp (oip->taxname, taxname) == 0)
-    {
-      if (use_code == USE_NUCLEAR_GENETIC_CODE)
-      {
-        return oip->ngcode;
-      }
-      else
-      {
-        return oip->mgcode;
-      }
-    }
-  }
-  
-  return -1;
 }
 
 static CharPtr GetTableDisplayCellValue (ValNodePtr row_list, Int4 row_num, Int4 col_num)
@@ -10351,6 +13043,7 @@ static void AddGcodeCommentBtn (ButtoN b)
 {
   MultiOrgCopyBtnPtr bp;
   Int4               scroll_pos;
+  CharPtr            orig_val = NULL;
 
   bp = (MultiOrgCopyBtnPtr) GetObjectExtra (b);
   if (bp == NULL || bp->dlg == NULL)
@@ -10362,7 +13055,8 @@ static void AddGcodeCommentBtn (ButtoN b)
   /* first, collect current values from dialog*/
   CollectPositionValues (bp->dlg, scroll_pos);
 
-  ApplyOrgModColumnOrCell ("genetic_code_comment", NULL, bp->pos, NULL, NULL,
+  orig_val = GetTableDisplayCellValue (bp->dlg->row_list, bp->pos, 4);
+  ApplyOrgModColumnOrCell ("gencode_comment", orig_val, bp->pos, NULL, NULL,
                            bp->dlg->row_list, 4, 0);
   /* now repopulate */
   DisplayPosition (bp->dlg, scroll_pos);
@@ -10605,7 +13299,7 @@ static void SourceAssistantExport (ButtoN b)
     return;
   }
   
-  row_list = PrepareSourceAssistantTableData (sap);
+  row_list = PrepareSourceAssistantTableData (sap, NULL);
 
   PrintTableDisplayRowListToFile (row_list, fp);
   row_list = FreeTableDisplayRowList (row_list);
@@ -10640,49 +13334,23 @@ static void SourceAssistantCancel (ButtoN b)
 
 static CharPtr GetFirstDeflineValue (SourceAssistantPtr sap, CharPtr mod_name)
 {
-  Char         text [128];
-  Char         lookfor [128];
-  Char         lookfor2 [128];
-  Boolean      is_org = FALSE;
-  Boolean      found_val = FALSE;
   Int4         i;
+  CharPtr      valstr = NULL;
 
   if (sap == NULL)
   {
     return NULL;
   }
   
-  if (StringICmp (mod_name, "org" ) == 0 || StringICmp (mod_name, "organism") == 0)
+  for (i = 0; i < sap->num_deflines && valstr == NULL; i++)
   {
-    MakeSearchStringFromAlist (lookfor, "Org");
-    MakeSearchStringFromAlist (lookfor2, "Organism");
-    is_org = TRUE;
-  }
-  else
-  {
-    MakeSearchStringFromAlist (lookfor, mod_name);
-  }
-
-  for (i = 0; i < sap->num_deflines && !found_val; i++)
-  {
-    text [0] = '\0';
-    if (LookForSearchString (sap->defline_list[i], lookfor, text, sizeof (text) - 1)) 
+    valstr = FindValueFromPairInDefline (mod_name, sap->defline_list [i]);
+    if (StringHasNoText (valstr))
     {
-      found_val = TRUE;
-    }
-    else if (is_org && LookForSearchString (sap->defline_list[i], lookfor2, text, sizeof (text) - 1))
-    {
-      found_val = TRUE;
+      valstr = MemFree (valstr);
     }
   }
-  if (found_val)
-  {
-    return StringSave (text);
-  }
-  else
-  {
-    return NULL;
-  }
+  return valstr;
 }
 
 static CharPtr 
@@ -10760,33 +13428,18 @@ static void SetTagListColumnValue (TagListPtr tlp, Int4 column, CharPtr new_valu
   }
 }
 
-
-static void 
-ReplaceValueInDefLines 
-(SourceAssistantPtr sap,
- CharPtr            value_name, 
- CharPtr            new_value, 
- Int4               seq_num)
-{
-  
-  if (sap == NULL || seq_num < 0 || seq_num >= sap->num_deflines) return;
-
-  sap->defline_list[seq_num] = ReplaceValueInOneDefLine (sap->defline_list[seq_num],
-                                                         value_name, new_value);
-}
-
 static void UpdateOrgModDlg (SourceAssistantPtr sap)
 {
   Int4               j;
-  Char               old_value [128];
   Boolean            found_organism = FALSE;
+  Boolean            multi_found = FALSE;
   ValNodePtr         row_list, header_list = NULL;
 
   if (sap == NULL)
   {
     return;
   }
-  row_list = PrepareSourceAssistantTableData (sap);
+  row_list = PrepareSourceAssistantTableData (sap, &multi_found);
   PointerToDialog (sap->orgmod_dlg, row_list);
   
   if (row_list == NULL)
@@ -10797,19 +13450,9 @@ static void UpdateOrgModDlg (SourceAssistantPtr sap)
   
   for (j = 0; j < sap->num_deflines && !found_organism; j++)
   {
-    if (! found_organism)
+    if (FindValuePairInDefLine ("organism", sap->defline_list[j], NULL) != NULL)
     {
-      found_organism = LookForSearchString (sap->defline_list[j],
-                                            "organism=",
-                                            old_value, 
-                                            sizeof (old_value) - 1);
-      if (! found_organism)
-      {
-        found_organism = LookForSearchString (sap->defline_list[j],
-                                              "org=",
-                                              old_value, 
-                                              sizeof (old_value) - 1);
-      }
+      found_organism = TRUE;
     }
   }
   header_list = row_list->data.ptrvalue;
@@ -10820,6 +13463,11 @@ static void UpdateOrgModDlg (SourceAssistantPtr sap)
   }
   SetModifierList (sap->mod_doc, header_list);
   FreeTableDisplayRowList (row_list);
+  
+  if (multi_found)
+  {
+    AppendText (sap->mod_doc, multival_explanation, NULL, NULL, programFont); 
+  }
 }
 
 static EnumFieldAssocPtr BuildGeneticCodeEnum (void)
@@ -10895,7 +13543,7 @@ static GrouP MakeGeneticCodeCommentInstructionGroup (GrouP parent)
                 0, 0, programFont, 'l');
   StaticPrompt (instr_grp, "you cannot edit the genetic code directly.  You may provide an alternate genetic code",
                 0, 0, programFont, 'l');
-  StaticPrompt (instr_grp, "and the evidence to support it here if you wish.",
+  StaticPrompt (instr_grp, "and the evidence to support it here and it will be reviewed by the GenBank staff.",
                 0, 0, programFont, 'l');
   
   return instr_grp;
@@ -11018,6 +13666,13 @@ static void SingleModValToDialog (DialoG d, Pointer userdata)
     vn.next = NULL;
     PointerToDialog (dlg->strvalue_dlg, &vn);
   }
+  else if (dlg->mod_type == eModifierType_Origin)
+  {
+    vn.choice = GetValForEnumName (biosource_origin_alist, suggested_value);
+    vn.data.ptrvalue = suggested_value;
+    vn.next = NULL;
+    PointerToDialog (dlg->strvalue_dlg, &vn);
+  }
   else if (dlg->mod_type == eModifierType_Organism)
   {
     PointerToDialog (dlg->org_dlg, suggested_value);
@@ -11062,6 +13717,21 @@ static void SingleModValToDialog (DialoG d, Pointer userdata)
     vn.data.ptrvalue = suggested_value;
     PointerToDialog (dlg->strvalue_dlg, &vn);
   }
+  else if (dlg->mod_type == eModifierType_Molecule)
+  {
+    if (StringICmp (suggested_value, "dna") == 0)
+    {
+      vn.choice = Seq_mol_dna;
+    }
+    else if (StringICmp (suggested_value, "rna") == 0)
+    {
+      vn.choice = Seq_mol_rna;
+    }
+    else
+    {
+      vn.choice = Seq_mol_dna;
+    }
+  }
   else if (dlg->mod_type == eModifierType_Topology)
   {
     if (StringHasNoText (suggested_value))
@@ -11103,7 +13773,7 @@ static Pointer DialogToSingleModVal (DialoG d)
   
   if (dlg == NULL)
   {
-    return;
+    return NULL;
   }
   
   /* prepare value */
@@ -11115,15 +13785,18 @@ static Pointer DialogToSingleModVal (DialoG d)
     }
   }
   else if (dlg->mod_type == eModifierType_Location
+           || dlg->mod_type == eModifierType_Origin
            || dlg->mod_type == eModifierType_NucGeneticCode
            || dlg->mod_type == eModifierType_MitoGeneticCode
            || dlg->mod_type == eModifierType_GeneticCode
            || dlg->mod_type == eModifierType_MolType
+           || dlg->mod_type == eModifierType_Molecule
            || dlg->mod_type == eModifierType_Topology)
   {
     value_vnp = DialogToPointer (dlg->strvalue_dlg);
     new_value = value_vnp->data.ptrvalue;
-    if (dlg->mod_type == eModifierType_Location)
+    if (dlg->mod_type == eModifierType_Location
+        || dlg->mod_type == eModifierType_Origin)
     {
       StringToLower (new_value);
     }
@@ -11188,6 +13861,11 @@ static DialoG SingleModValDialog (GrouP parent, Boolean is_nontext, Int2 mod_typ
     dlg->strvalue_dlg = EnumAssocSelectionDialog (grp, biosource_genome_simple_alist,
                                              "location", FALSE, NULL, NULL);
   }
+  else if (dlg->mod_type == eModifierType_Origin)
+  {
+    dlg->strvalue_dlg = EnumAssocSelectionDialog (grp, biosource_origin_alist,
+                                                  "origin", FALSE, NULL, NULL);
+  }
   else if (dlg->mod_type == eModifierType_Organism)
   {
     dlg->org_dlg = OrganismSelectionDialog (grp, "");
@@ -11217,6 +13895,11 @@ static DialoG SingleModValDialog (GrouP parent, Boolean is_nontext, Int2 mod_typ
       dlg->strvalue_dlg = EnumAssocSelectionDialog (grp, biomol_nucX_alist,
                                                "moltype", FALSE, NULL, NULL);
     }
+  }
+  else if (dlg->mod_type == eModifierType_Molecule)
+  {
+    dlg->strvalue_dlg = EnumAssocSelectionDialog (grp, molecule_alist, 
+                                                  "molecule", FALSE, NULL, NULL);
   }
   else if (dlg->mod_type == eModifierType_Topology)
   {
@@ -11264,6 +13947,13 @@ GetValueFromTagList
     new_value = MemFree (new_value);
     new_value = StringSave (tmp_value);
   }
+  else if (mod_type == eModifierType_Origin)
+  {
+    tmp_value = GetEnumName (atoi (new_value), biosource_origin_alist);
+    StringToLower (tmp_value);
+    new_value = MemFree (new_value);
+    new_value = StringSave (tmp_value);
+  }
   else if (mod_type == eModifierType_NucGeneticCode
            || mod_type == eModifierType_MitoGeneticCode)
   {
@@ -11288,6 +13978,12 @@ GetValueFromTagList
     new_value = MemFree (new_value);
     new_value = StringSave (tmp_value);        
   }
+  else if (mod_type == eModifierType_Molecule)
+  {
+    tmp_value = GetEnumName (atoi (new_value), molecule_alist);
+    new_value = MemFree (new_value);
+    new_value = StringSave (tmp_value);        
+  }
   else if (mod_type == eModifierType_Topology)
   {
     tmp_value = GetEnumName (atoi (new_value), topology_nuc_alist);
@@ -11302,9 +13998,9 @@ static void AddSeqIDAndValueToRowList
  CharPtr         title,
  ValNodePtr PNTR row_list)
 {
-  Char        text [128];
   CharPtr     str = NULL;
   ValNodePtr  column_list = NULL;
+  CharPtr     org_loc, org_end = NULL, next_org = NULL;
 
   if (row_list == NULL)
   {
@@ -11315,120 +14011,235 @@ static void AddSeqIDAndValueToRowList
   ValNodeAddPointer (&column_list, 0, StringSave (id));
 
   /* get organism */
-  str = NULL;
-  if (LookForSearchString (title, (CharPtr) short_org, text, sizeof (text) - 1)) 
-  {
-    str = StringSave (text);
-  } 
-  else if (LookForSearchString (title, (CharPtr) long_org, text, sizeof (text) - 1))
-  {
-    str = StringSave (text);
-  }
-  
+  org_loc = FindValuePairInDefLine ("organism", title, &org_end);
+  str = FindValueFromPairInDefline ("organism", title);
   ValNodeAddPointer (&column_list, 0, str);
   
-  /* get location */
-  str = NULL;
-  if (LookForSearchString (title, "[location=", text, sizeof (text) - 1))
+  if (org_end != NULL)
   {
-    str = StringSave (text);
+    next_org = FindValuePairInDefLine ("organism", org_end + 1, &org_end);
   }
-  else
+  
+  /* get location */
+  str = FindValueFromPairInDeflineBeforeCharPtr ("location", title, next_org);
+  if (StringHasNoText (str))
   {
+    str = MemFree (str);
     str = StringSave ("genomic");
   }
   ValNodeAddPointer (&column_list, 0, str);
   
   /* get genetic code */
-  str = NULL;
-  if (LookForSearchString (title, "[genetic_code=", text, sizeof (text) - 1))
+  str = FindValueFromPairInDeflineBeforeCharPtr ("genetic_code", title, next_org);
+  if (StringHasNoText (str))
   {
-    str = StringSave (text);
-  }
-  else
-  {
+    str = MemFree (str);
     str = StringSave ("Standard");
   }
   ValNodeAddPointer (&column_list, 0, str);
   
   /* get genetic code comment */
-  str = NULL;
-  if (LookForSearchString (title, "[genetic_code_comment=", text, sizeof (text) - 1))
-  {
-    str = StringSave (text);
-  }
-  else
-  {
-    str = NULL;
-  }
+  str = FindValueFromPairInDeflineBeforeCharPtr ("gencode_comment", title, next_org);
   ValNodeAddPointer (&column_list, 0, str);
   
   ValNodeAddPointer (row_list, 0, column_list); 
+  
+  while (next_org != NULL)
+  {
+    column_list = NULL;
+    /* put blank ID in first location */
+    ValNodeAddPointer (&column_list, 0, StringSave (""));
+    
+    /* get organism */
+    org_loc = FindValuePairInDefLine ("organism", next_org, &org_end);
+    str = FindValueFromPairInDefline ("organism", next_org);
+    ValNodeAddPointer (&column_list, 0, str);
+  
+    next_org = FindValuePairInDefLine ("organism", org_end + 1, &org_end);
+  
+    /* get location */
+    str = FindValueFromPairInDeflineBeforeCharPtr ("location", org_loc, next_org);
+    if (StringHasNoText (str))
+    {
+      str = MemFree (str);
+      str = StringSave ("genomic");
+    }
+    ValNodeAddPointer (&column_list, 0, str);
+  
+    /* get genetic code */
+    str = FindValueFromPairInDeflineBeforeCharPtr ("genetic_code", org_loc, next_org);
+    if (StringHasNoText (str))
+    {
+      str = MemFree (str);
+      str = StringSave ("Standard");
+    }
+    ValNodeAddPointer (&column_list, 0, str);
+  
+    /* get genetic code comment */
+    str = FindValueFromPairInDeflineBeforeCharPtr ("gencode_comment", org_loc, next_org);
+    ValNodeAddPointer (&column_list, 0, str);
+  
+    ValNodeAddPointer (row_list, 0, column_list); 
+  }
 }
 
-static void AddSeqIDAndValueFromSeqEntryToRowList 
-(SeqEntryPtr     sep,
- ValNodePtr PNTR row_list)
+static CharPtr FindNthOrgPair (CharPtr title, Int4 org_num, CharPtr PNTR p_org_end)
 {
-  BioseqPtr   bsp = NULL;
-  SeqDescrPtr sdp;
-  Char        id_txt [128];
+  return FindNthValuePairInDefLine (title, "organism", org_num, p_org_end);
+}
+
+static void ApplyRowListToIDAndTitleEdit (ValNodePtr row_list, IDAndTitleEditPtr iatep)
+{
+  ValNodePtr row_vnp, col_vnp;
+  CharPtr    last_id = NULL, id_txt;
+  Int4       j, seq_num;
+  Int4       org_num = 0;
+  CharPtr    org_loc, org_end, next_org;
   
-  if (sep == NULL)
+  if (row_list == NULL || iatep == NULL)
   {
     return;
   }
-  if (IS_Bioseq (sep))
+  
+  for (row_vnp = row_list;
+       row_vnp != NULL; 
+       row_vnp = row_vnp->next)
   {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-  }
-  else if (IS_Bioseq_set (sep))
-  {
-    sep = FindNucSeqEntry (sep);
-    if (sep != NULL && IS_Bioseq (sep))
+    col_vnp = row_vnp->data.ptrvalue;
+    seq_num = -1;
+    /* read sequence ID */
+    if (col_vnp != NULL)
     {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
+      id_txt = col_vnp->data.ptrvalue;
+      if (StringHasNoText (id_txt))
+      {
+        id_txt = last_id;
+        org_num++;
+      }
+      else
+      {
+        last_id = id_txt;
+        org_num = 0;
+      }
+      for (j = 0; j < iatep->num_sequences && seq_num == -1; j++)
+      {
+        if (StringCmp (iatep->id_list [j], id_txt) == 0)
+        {
+          seq_num = j;
+        }
+      }
+      col_vnp = col_vnp->next;
+    }
+    
+    if (seq_num < 0 || seq_num > iatep->num_sequences)
+    {
+      continue;
+    }
+    
+    /* find organism name # org_num, find next_org and make sure
+     * all values are added before it.
+     */
+    org_loc = FindNthOrgPair (iatep->title_list [seq_num], org_num, &org_end);
+    
+    if (org_end == NULL)
+    {
+      next_org = NULL;
+    }
+    else
+    {
+      next_org = FindValuePairInDefLine ("organism", org_end + 1, NULL);
+    }
+    
+    /* add tax name */
+    if (col_vnp != NULL)
+    {
+      if (org_loc == NULL)
+      {
+        iatep->title_list [seq_num] = ReplaceValueInOneDefLine (iatep->title_list [seq_num],
+                                                                "organism",
+                                                                col_vnp->data.ptrvalue);
+      }
+      else
+      {
+        iatep->title_list [seq_num] = ReplaceValueInThisValuePair (iatep->title_list [seq_num],
+                                                                   org_loc, "organism", 
+                                                                   org_end, 
+                                                                   col_vnp->data.ptrvalue);
+
+      }
+      col_vnp = col_vnp->next;
+    }
+       
+    /* add location */
+    if (col_vnp != NULL)
+    {
+      org_loc = FindNthOrgPair (iatep->title_list [seq_num], org_num, &org_end);
+      iatep->title_list [seq_num] = ReplaceValueInOneDefLineForOrganism (iatep->title_list [seq_num],
+                                                                         "location",
+                                                                         col_vnp->data.ptrvalue,
+                                                                         org_loc);
+      col_vnp = col_vnp->next;
+    }
+        
+    /* add genetic code */
+    if (col_vnp != NULL)
+    {
+      org_loc = FindNthOrgPair (iatep->title_list [seq_num], org_num, &org_end);
+      iatep->title_list [seq_num] = ReplaceValueInOneDefLineForOrganism (iatep->title_list [seq_num],
+                                                                         "genetic_code",
+                                                                         col_vnp->data.ptrvalue,
+                                                                         org_loc);
+      col_vnp = col_vnp->next;
+    }
+    /* add genetic code comment */
+    if (col_vnp != NULL)
+    {
+      org_loc = FindNthOrgPair (iatep->title_list [seq_num], org_num, &org_end);
+      iatep->title_list [seq_num] = ReplaceValueInOneDefLineForOrganism (iatep->title_list [seq_num],
+                                                                         "gencode_comment",
+                                                                         col_vnp->data.ptrvalue,
+                                                                         org_loc);
+      col_vnp = col_vnp->next;
     }
   }
-  
-  if (bsp == NULL)
-  {
-    return;
-  }
-  
-  SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT, sizeof (id_txt));
-  
-  for (sdp = bsp->descr; sdp != NULL && sdp->choice != Seq_descr_title; sdp = sdp->next)
-  {
-  }
-
-  if (sdp == NULL)
-  {
-    AddSeqIDAndValueToRowList (id_txt, NULL, row_list);
-  }
-  else
-  {
-    AddSeqIDAndValueToRowList (id_txt, sdp->data.ptrvalue, row_list);
-  }  
 }
 
+
+/* This function allows the user to edit the organisms, locations, and genetic codes for
+ * all of the sequences in the set.
+ */
 static void EditOrganismColumn (SourceAssistantPtr sap, SeqEntryPtr seq_list)
 {
-  WindoW     w;
-  GrouP      h, instr_grp, c;
-  DialoG     dlg;
-  ValNodePtr row_list, row_vnp, col_vnp;
+  WindoW                 w;
+  GrouP                  h, instr_grp, c;
+  DialoG                 dlg;
+  ValNodePtr             row_list;
   ModalAcceptCancelData  acd;
   ButtoN                 b;
-  SeqEntryPtr            sep;
   Int4                   j;
+  IDAndTitleEditPtr      iatep;
   
   if (sap == NULL && seq_list == NULL)
   {
     return;
   }
   
-  if ((sap != NULL && sap->num_deflines > 1) || (seq_list != NULL && seq_list->next != NULL))
+  if (sap == NULL)
+  {
+    iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+  }
+  else
+  {
+    iatep = SourceAssistantToIDAndTitleEdit (sap);
+  }
+  
+  if (iatep == NULL || iatep->num_sequences < 1)
+  {
+    iatep = IDAndTitleEditFree (iatep);
+    return;
+  }
+  
+  if (iatep->num_sequences == 1)
   {
     w = MovableModalWindow (-20, -13, -10, -10, "Organism Editor", NULL);
   }
@@ -11444,21 +14255,17 @@ static void EditOrganismColumn (SourceAssistantPtr sap, SeqEntryPtr seq_list)
   instr_grp = MakeSourceInstructionGroup (h);
   
   row_list = NULL;
-  if (sap == NULL)
+  
+  for (j = 0; j < iatep->num_sequences; j++)
   {
-    for (sep = seq_list; sep != NULL; sep = sep->next)
+    if (iatep->is_seg != NULL && iatep->is_seg [j])
     {
-      AddSeqIDAndValueFromSeqEntryToRowList (sep, &row_list);
+      continue;
     }
-  }
-  else
-  {
-    for (j = 0; j < sap->num_deflines; j++)
-    {
-      AddSeqIDAndValueToRowList (sap->id_list[j], sap->defline_list[j],
+    AddSeqIDAndValueToRowList (iatep->id_list[j], iatep->title_list[j],
                                  &row_list);
-    }
   }
+  
   PointerToDialog (dlg, row_list);
   row_list = FreeTableDisplayRowList (row_list);
   
@@ -11489,93 +14296,20 @@ static void EditOrganismColumn (SourceAssistantPtr sap, SeqEntryPtr seq_list)
   else
   {
     row_list = DialogToPointer (dlg);
+    ApplyRowListToIDAndTitleEdit (row_list, iatep);
     if (sap == NULL)
     {
-      for (sep = seq_list, j = 0, row_vnp = row_list;
-           sep != NULL, row_vnp != NULL; 
-           sep = sep->next, j++, row_vnp = row_vnp->next)
-      {
-        col_vnp = row_vnp->data.ptrvalue;
-        /* skip sequence ID */
-        if (col_vnp != NULL)
-        {
-          col_vnp = col_vnp->next;
-        }
-        /* add tax name */
-        if (col_vnp != NULL)
-        {
-          ApplyOneModToSeqEntry (sep, "organism", col_vnp->data.ptrvalue);
-          col_vnp = col_vnp->next;
-        }
-        
-        /* add location */
-        if (col_vnp != NULL)
-        {
-          ApplyOneModToSeqEntry (sep, "location", col_vnp->data.ptrvalue);
-          col_vnp = col_vnp->next;
-        }
-        
-        /* add genetic code */
-        if (col_vnp != NULL)
-        {
-          ApplyOneModToSeqEntry (sep, "genetic_code", col_vnp->data.ptrvalue);
-          col_vnp = col_vnp->next;
-        }
-        
-        /* add genetic code comment */
-        if (col_vnp != NULL)
-        {
-          ApplyOneModToSeqEntry (sep, "genetic_code_comment", col_vnp->data.ptrvalue);
-          col_vnp = col_vnp->next;
-        }
-        
-      }
+      ApplyIDAndTitleEditToSeqEntryList (seq_list, iatep);
     }
     else
     {
-      for (j = 0, row_vnp = row_list;
-           j < sap->num_deflines, row_vnp != NULL; 
-           j++, row_vnp = row_vnp->next)
-      {
-        col_vnp = row_vnp->data.ptrvalue;
-        /* skip sequence ID */
-        if (col_vnp != NULL)
-        {
-          col_vnp = col_vnp->next;
-        }
-        /* add tax name */
-        if (col_vnp != NULL)
-        {
-          ReplaceValueInDefLines (sap, "organism", col_vnp->data.ptrvalue, j);
-          col_vnp = col_vnp->next;
-        }
-        
-        /* add location */
-        if (col_vnp != NULL)
-        {
-          ReplaceValueInDefLines (sap, "location", col_vnp->data.ptrvalue, j);
-          col_vnp = col_vnp->next;
-        }
-        
-        /* add genetic code */
-        if (col_vnp != NULL)
-        {
-          ReplaceValueInDefLines (sap, "genetic_code", col_vnp->data.ptrvalue, j);
-          col_vnp = col_vnp->next;
-        }
-        /* add genetic code comment */
-        if (col_vnp != NULL)
-        {
-          ReplaceValueInDefLines (sap, "genetic_code_comment", col_vnp->data.ptrvalue, j);
-          col_vnp = col_vnp->next;
-        }
-      }
+      ApplyIDAndTitleEditToSourceAssistant (sap, iatep);
     }
     row_list = FreeTableDisplayRowList (row_list);
     UpdateOrgModDlg (sap);  
     Remove (w);
   }
-
+  iatep = IDAndTitleEditFree (iatep);
 }
 
 typedef struct setcolumnvaluesdata
@@ -11598,7 +14332,7 @@ static void SetAllColumnValues (SetColumnValuesPtr scvp, CharPtr new_value)
   }
   
   taglist_str = TagListStringFromDefLineValue (new_value, scvp->is_nontext, scvp->mod_type);
-  SetTagListColumnValue (scvp->tlp, 1, taglist_str);
+  SetTagListColumnValue (scvp->tlp, scvp->tlp->cols - 1, taglist_str);
   taglist_str = MemFree (taglist_str);
 
   SendMessageToDialog (scvp->tlp->dialog, VIB_MSG_REDRAW);
@@ -11650,6 +14384,623 @@ static void EditOrgModApplyAll (ButtoN b)
   new_value = MemFree (new_value);
 }
 
+
+
+/* The following functions are used for editing values for all of the sequences in 
+ * a record for a specified modifier name.
+ * Some modifiers can have multiple values, so for these we list the original value
+ * that will be replaced by the new value.
+ */
+/* when id_str has no text, this creates one column,
+ * otherwise it creates two columns, sequence ID and new value.
+ * if there are multiple values, the sequence ID is only listed in the first row.
+ */
+static void 
+AddRowsForModifierValuesForDefline 
+(CharPtr         mod_name, 
+ Boolean         is_nontext, 
+ Int2            mod_type,
+ CharPtr         id_str,
+ CharPtr         defline,
+ ValNodePtr PNTR list)
+{
+  Boolean added_any = FALSE;
+  CharPtr valstr;
+  CharPtr bracket_start, bracket_end;
+  Int4    len;
+  CharPtr taglist_str, tag_str;
+  Boolean is_first = TRUE;
+  
+  if (list == NULL || StringHasNoText (mod_name))
+  {
+    return;
+  }
+  
+  bracket_start = FindValuePairInDefLine (mod_name, defline, &bracket_end);
+  while (bracket_start != NULL)
+  {
+    valstr = FindValueFromPairInDefline (mod_name, bracket_start);
+    if (!StringHasNoText (valstr))
+    {
+      taglist_str = TagListStringFromDefLineValue (valstr, is_nontext, mod_type);
+
+      len = StringLen (id_str) + StringLen (taglist_str) + 4;
+      tag_str = (CharPtr) MemNew (len * sizeof (Char));
+      if (tag_str != NULL)
+      {
+        if (StringHasNoText (id_str))
+        {
+          sprintf (tag_str, "%s\n", taglist_str);
+        }
+        else
+        {
+          if (is_first)
+          {
+            sprintf (tag_str, "%s\t%s\n", id_str, taglist_str);
+            is_first = FALSE;
+          }
+          else
+          {
+            sprintf (tag_str, "\t%s\n", taglist_str);
+          }
+        }
+        ValNodeAddPointer (list, 0, tag_str);
+        added_any = TRUE;
+      }
+      taglist_str = MemFree (taglist_str);
+    }
+    valstr = MemFree (valstr);
+    bracket_start = FindValuePairInDefLine (mod_name, bracket_end + 1, &bracket_end);
+  }
+  
+  if (!added_any)
+  {
+    len = StringLen (id_str) + 4;
+    tag_str = (CharPtr) MemNew (len * sizeof (Char));
+    if (tag_str != NULL)
+    {
+      if (StringHasNoText (id_str))
+      {
+        sprintf (tag_str, "\n");
+      }
+      else
+      {
+        sprintf (tag_str, "%s\t\n", id_str);
+      }
+      ValNodeAddPointer (list, 0, tag_str);
+    }
+  }  
+}
+
+static ValNodePtr 
+IDAndTitleEditToModifierColumnTagList 
+(IDAndTitleEditPtr iatep,
+ CharPtr           mod_name,
+ Boolean           is_nontext,
+ Int2              mod_type,
+ Boolean           allow_multi)
+{
+  ValNodePtr list = NULL;
+  Int4       seq_num;
+  
+  if (iatep == NULL)
+  {
+    return NULL;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    if (allow_multi)
+    {
+      AddRowsForModifierValuesForDefline (mod_name, is_nontext, mod_type, 
+                                          iatep->id_list [seq_num],
+                                          iatep->title_list [seq_num],
+                                          &list);
+    }
+    else
+    {
+      AddSeqIDAndValueToTagList (iatep->id_list [seq_num], 
+                                 iatep->title_list [seq_num],
+                                 mod_name, &list);
+    }
+  }
+  return list;  
+}
+
+static CharPtr 
+GetValueFromTagListString 
+(CharPtr           new_value, 
+ Boolean           is_nontext, 
+ Int4              mod_type,
+ Int2              seqPackage,
+ EnumFieldAssocPtr gencode_alist)
+{
+  CharPtr tmp_value;
+  
+  if (is_nontext)
+  {
+    if (StringCmp (new_value, "1") != 0)
+    {
+      new_value = MemFree (new_value);
+    }
+  }
+  else if (mod_type == eModifierType_Location)
+  {
+    tmp_value = GetEnumName (atoi(new_value), biosource_genome_simple_alist);
+    StringToLower (tmp_value);
+    new_value = MemFree (new_value);
+    new_value = StringSave (tmp_value);
+  }
+  else if (mod_type == eModifierType_Origin)
+  {
+    tmp_value = GetEnumName (atoi (new_value), biosource_origin_alist);
+    StringToLower (tmp_value);
+    new_value = MemFree (new_value);
+    new_value = StringSave (tmp_value);
+  }
+  else if (mod_type == eModifierType_NucGeneticCode
+           || mod_type == eModifierType_MitoGeneticCode)
+  {
+    tmp_value = GetEnumName (atoi(new_value), gencode_alist);
+    new_value = MemFree (new_value);
+    new_value = StringSave (tmp_value);
+  }
+  else if (mod_type == eModifierType_MolType)
+  {
+    if (seqPackage == SEQ_PKG_GENOMICCDNA)
+    {
+      tmp_value = GetEnumName (atoi (new_value), biomol_nucGen_alist);
+    }
+    else
+    {
+      tmp_value = GetEnumName (atoi (new_value), biomol_nucX_alist);
+      if (StringICmp (tmp_value, "mRNA [cDNA]") == 0)
+      {
+        tmp_value = StringSave ("mRNA");
+      }            
+    }
+    new_value = MemFree (new_value);
+    new_value = StringSave (tmp_value);        
+  }
+  else if (mod_type == eModifierType_Molecule)
+  {
+    tmp_value = GetEnumName (atoi (new_value), molecule_alist);
+    new_value = MemFree (new_value);
+    new_value = StringSave (tmp_value);        
+  }
+  else if (mod_type == eModifierType_Topology)
+  {
+    tmp_value = GetEnumName (atoi (new_value), topology_nuc_alist);
+    new_value = MemFree (new_value);
+    new_value = StringSave (tmp_value);        
+  }
+  return new_value;
+}
+
+static void RemoveAllValuePairs (CharPtr value_name, CharPtr title)
+{
+  CharPtr value_loc;
+  CharPtr end_loc;
+  
+  if (StringHasNoText (value_name) || StringHasNoText (title))
+  {
+    return;
+  }
+  
+  value_loc = FindValuePairInDefLine (value_name, title, &end_loc);
+  while (value_loc != NULL)
+  {
+    RemoveValuePairFromDefline (value_loc, end_loc, value_loc);
+    value_loc = FindValuePairInDefLine (value_name, value_loc, &end_loc);
+  }
+}
+
+static CharPtr 
+ApplyValueListToTitle 
+(CharPtr orig_title, 
+ CharPtr value_name, 
+ ValNodePtr value_list)
+{
+  Int4    new_title_len = 0, val_num;
+  CharPtr value_loc, end_loc = NULL;
+  ValNodePtr vnp;
+  
+  if (StringHasNoText (value_name))
+  {
+    return orig_title;
+  }
+  
+  /* if our value list is NULL, remove all values and done. */
+  if (value_list == NULL)
+  {
+    RemoveAllValuePairs (value_name, orig_title);
+    return orig_title;
+  }
+  
+  /* if there are no values in the title, make sure the new value is added
+   * to the first organism.
+   * otherwise, replace values where they are in the title.
+   */
+  value_loc = FindValuePairInDefLine (value_name, orig_title, &end_loc);
+  if (value_loc == NULL)
+  {
+    orig_title = ReplaceValueInOneDefLineForOrganism (orig_title, value_name, 
+                                                      value_list->data.ptrvalue,
+                                                      NULL);
+  }
+  else
+  {
+    vnp = value_list;
+    val_num = 0;
+    while (value_loc != NULL && vnp != NULL)
+    {
+      orig_title = ReplaceValueInThisValuePair (orig_title, value_loc, value_name,
+                                                end_loc, vnp->data.ptrvalue);
+      /* if the value was empty, it will have been removed */                                                
+      if (!StringHasNoText (vnp->data.ptrvalue))
+      {
+        val_num++;
+      }
+      vnp = vnp->next;
+      value_loc = FindNthValuePairInDefLine (orig_title, value_name, val_num, &end_loc);                                                        
+    }
+  }
+  
+  return orig_title;
+}
+
+static Int4 GetRowForIDText (CharPtr id_txt, IDAndTitleEditPtr iatep)
+{
+  Int4 seq_num, row_num = -1;
+  
+  if (StringHasNoText (id_txt) || iatep == NULL)
+  {
+    return -1;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences && row_num == -1; seq_num++)
+  {
+    if (StringCmp (id_txt, iatep->id_list [seq_num]) == 0)
+    {
+      row_num = seq_num;
+    }
+  }
+  return row_num;
+}
+
+static int LIBCALLBACK SortByChoice (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  if (vnp1->choice > vnp2->choice) {
+    return 1;
+  } else if (vnp1->choice < vnp2->choice) {
+    return -1;
+  }
+  return 0;
+}
+
+static void 
+ApplyModifierColumnTagListToIDAndTitleEdit 
+(CharPtr           mod_name,
+ Boolean           is_nontext,
+ Int4              mod_type,
+ Int2              seqPackage,
+ EnumFieldAssocPtr gencode_alist,
+ ValNodePtr        list,
+ Int4              num_columns,
+ IDAndTitleEditPtr iatep,
+ Int4              seq_num)
+{
+  ValNodePtr vnp, value_list = NULL, row_list;
+  CharPtr    id_txt, new_value, last_id = NULL;
+  Int4       row_num;
+  
+  if (list == NULL || iatep == NULL)
+  {
+    return;
+  }
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next)
+  {
+    if (seq_num < 0)
+    {
+      id_txt = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 0);
+      if (StringHasNoText (id_txt))
+      {
+        id_txt = MemFree (id_txt);
+        id_txt = StringSave (last_id);
+      }
+      else
+      {
+        last_id = MemFree (last_id);
+        last_id = StringSave (id_txt);
+      }
+      
+      /* find sequence that corresponds to this id */
+      row_num = GetRowForIDText (id_txt, iatep);
+      id_txt = MemFree (id_txt);
+    }
+    else
+    {
+      row_num = seq_num;
+    }
+    if (row_num >= iatep->num_sequences || row_num < 0)
+    {
+      continue;
+    }
+    
+    /* extract new value from column */    
+    new_value = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, num_columns - 1);
+    /* translate from list value (may be number from popup) to real value */
+    new_value = GetValueFromTagListString (new_value, is_nontext, mod_type, 
+                                           seqPackage, gencode_alist);
+    
+    /* add to list */
+    /* add NULL if value is blank */
+    if (StringHasNoText (new_value))
+    {
+      new_value = MemFree (new_value);
+    }
+    ValNodeAddPointer (&value_list, row_num, new_value);
+  }
+
+  if (seq_num < 0)
+  {
+    for (row_num = 0; row_num < iatep->num_sequences; row_num++)
+    {
+      row_list = ValNodeExtractList (&value_list, row_num);
+      iatep->title_list [row_num] = ApplyValueListToTitle (iatep->title_list [row_num],
+                                                         mod_name, row_list);
+      row_list = ValNodeFreeData (row_list);                                                         
+    }
+  }
+  else
+  {
+    iatep->title_list [seq_num] = ApplyValueListToTitle (iatep->title_list [seq_num],
+                                                         mod_name, value_list);
+
+  }
+  value_list = ValNodeFreeData (value_list);
+
+  if (seq_num < 0)
+  {
+    for (row_num = 0; row_num < iatep->num_sequences; row_num++)
+    {
+      iatep->title_list [row_num] = RemoveAllDuplicatePairsFromOneTitle (iatep->title_list [row_num]);
+    }
+  }
+  else
+  {
+    iatep->title_list [seq_num] = RemoveAllDuplicatePairsFromOneTitle (iatep->title_list [seq_num]);
+  }
+}
+
+static Int4 GetTaglistType (Boolean is_nontext, Int4 mod_type)
+{
+  if (is_nontext
+      || mod_type == eModifierType_Location
+      || mod_type == eModifierType_Origin
+      || mod_type == eModifierType_NucGeneticCode
+      || mod_type == eModifierType_MitoGeneticCode
+      || mod_type == eModifierType_MolType
+      || mod_type == eModifierType_Molecule
+      || mod_type == eModifierType_Topology)
+  {
+    return TAGLIST_POPUP;
+  }
+  else
+  {
+    return TAGLIST_TEXT;
+  }
+}
+
+static EnumFieldAssocPtr GetTaglistAlist (Boolean is_nontext, Int4 mod_type, Int2 seqPackage)
+{
+  if (is_nontext)
+  {
+    return nontextmodedit_alist;
+  }
+  else if (mod_type == eModifierType_Location)
+  {
+    return  biosource_genome_simple_alist;
+  }
+  else if (mod_type == eModifierType_Origin)
+  {
+    return  biosource_origin_alist;
+  }
+  else if (mod_type == eModifierType_NucGeneticCode
+           || mod_type == eModifierType_MitoGeneticCode)
+  {
+    return BuildGeneticCodeEnum ();
+  }
+  else if (mod_type == eModifierType_MolType)
+  {
+    if (seqPackage == SEQ_PKG_GENOMICCDNA)
+    {
+      return biomol_nucGen_alist;
+    }
+    else
+    {
+      return biomol_nucX_alist;
+    }
+  }
+  else if (mod_type == eModifierType_Molecule)
+  {
+    return  molecule_alist;    
+  }
+  else if (mod_type == eModifierType_Topology)
+  {
+    return  topology_nuc_alist;    
+  }
+  else
+  {
+    return NULL;
+  }    
+}
+
+static Uint2 taglist_types [] = 
+{ TAGLIST_PROMPT, TAGLIST_PROMPT};
+
+static Uint2 taglist_textWidths [] =
+{ 10, 20};
+static EnumFieldAssocPtr taglist_alists [] =
+{ NULL, NULL};
+
+static Int4 GetMaxTagListValueWidth (ValNodePtr taglist_list, Int4 col_num)
+{
+  ValNodePtr vnp;
+  Int4       max_len = 0;
+  CharPtr    tmp_value;
+  
+  for (vnp = taglist_list; vnp != NULL; vnp = vnp->next)
+  {
+    tmp_value = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, col_num);
+    max_len = MAX (max_len, StringLen (tmp_value));
+    tmp_value = MemFree (tmp_value);
+  }
+  return max_len;
+}
+
+static DialoG 
+CreateValueListDialog 
+(GrouP             parent_grp,
+ CharPtr           mod_name, 
+ Int2              seqPackage,
+ IDAndTitleEditPtr iatep,
+ Int4              seq_num)
+{
+  GrouP                  k, g;
+  PrompT                 ppt1 = NULL, ppt2;
+  Int4                   num_columns, j;
+  ValNodePtr             row_list = NULL;
+  Boolean                allow_multi;
+  Boolean                is_nontext;
+  Int4                   mod_type;
+  Int4                   rows_shown;
+  DialoG                 dlg = NULL;
+  TagListPtr             tlp;
+  Int4                   first_colwidth, val_width;
+  
+  if (iatep == NULL || seq_num >= iatep->num_sequences)
+  {
+    return NULL;
+  }
+  
+  is_nontext = IsNonTextModifier (mod_name);
+  mod_type = GetModifierType (mod_name);
+
+  /* set up row list and number of columns */
+  if (seq_num < 0)
+  {
+    allow_multi = AllowMultipleValues (mod_name);
+    row_list = IDAndTitleEditToModifierColumnTagList (iatep, mod_name, 
+                                                      is_nontext, mod_type, 
+                                                      allow_multi);
+                                                    
+    num_columns = 2;
+  }
+  else
+  {
+    allow_multi = TRUE;
+    num_columns = 1;
+    AddRowsForModifierValuesForDefline (mod_name, is_nontext, mod_type, 
+                                        NULL,
+                                        iatep->title_list [seq_num],
+                                        &row_list);    
+  }
+  
+  k = HiddenGroup (parent_grp, 1, 0, NULL);
+  g = HiddenGroup (k, 2, 0, NULL);
+  
+  if (seq_num < 0)
+  {
+    ppt1 = StaticPrompt (g, "SeqID", 0, 0, programFont, 'l');
+  }
+  if (mod_type == eModifierType_MolType)
+  {
+    ppt2 = StaticPrompt (g, "molecule type", 0, 0, programFont, 'l');
+  }
+  else
+  {
+    ppt2 = StaticPrompt (g, mod_name, 0, 0, programFont, 'l');
+  }
+  
+  rows_shown = ValNodeLen (row_list);
+  rows_shown = MIN (rows_shown, 5);
+  
+  /* calculate appropriate column widths */
+  if (seq_num < 0)
+  {
+    first_colwidth = 5;
+    for (j = 0; j < iatep->num_sequences; j++)
+    {
+      first_colwidth = MAX (first_colwidth, StringLen (iatep->id_list [j]));
+    }
+    
+    if (mod_type == eModifierType_MolType)
+    {
+      val_width = StringLen ("molecule type");
+    }
+    else
+    {
+      val_width = StringLen (mod_name);
+    }
+    val_width = MAX (val_width, GetMaxTagListValueWidth (row_list, num_columns - 1));
+  }
+  else
+  {
+    val_width = MAX (14, GetMaxTagListValueWidth (row_list, num_columns - 1));
+    first_colwidth = val_width;
+  }
+  
+  taglist_textWidths [0] = first_colwidth;
+  taglist_textWidths [1] = val_width;
+  
+  taglist_types [0] = TAGLIST_PROMPT; /* sequence ID */
+  taglist_types [1] = TAGLIST_PROMPT; 
+  
+  taglist_alists [0] = NULL;
+  taglist_alists [1] = NULL;
+  
+  taglist_types [num_columns - 1] = GetTaglistType (is_nontext, mod_type);
+  taglist_alists [num_columns - 1] = GetTaglistAlist (is_nontext, mod_type, seqPackage);
+  
+  dlg = CreateTagListDialogEx (k, rows_shown, num_columns, 2,
+                               taglist_types, taglist_textWidths,
+                               taglist_alists, TRUE, TRUE, NULL, NULL);
+  
+  
+  tlp = (TagListPtr) GetObjectExtra (dlg);  
+  if (tlp == NULL) return NULL;
+
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+  tlp->vnp = row_list;
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+  tlp->max = MAX ((Int2) 0, (Int2) (ValNodeLen (row_list) - tlp->rows));
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+  if (tlp->max > 0) {
+    SafeShow (tlp->bar);
+  } else {
+    SafeHide (tlp->bar);
+  }
+  SendMessageToDialog (tlp->dialog, VIB_MSG_ENTER);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control[0], (HANDLE) ppt1, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control[num_columns - 1], (HANDLE) ppt2, NULL);
+  return dlg;
+}
+
 static void 
 EditOrgModColumn 
 (CharPtr            mod_name,
@@ -11658,27 +15009,23 @@ EditOrgModColumn
  Int2               seqPackage)
 {
   WindoW                 w;
-  GrouP                  h, k, g, c;
+  GrouP                  h, k, c;
   DialoG                 dlg;
   TagListPtr             tlp;
-  Int4                   j;
-  ValNodePtr             head = NULL;
-  Char                   lookfor [128];
   ModalAcceptCancelData  acd;
   ButtoN                 b;
-  ValNodePtr             found_modifiers = NULL, vnp;
   Boolean                is_nontext;
   CharPtr                new_value = NULL;
-  Int4                   rows_shown;
-  SeqEntryPtr            sep;
   Int4                   mod_type;
-  EnumFieldAssocPtr      gencode_alist = NULL;
-  EnumFieldAssocPtr      edit_alists [2];
   GrouP                  instr_grp = NULL;
   SetColumnValuesData    scvd;
   ButtoN                 clear_btn;
   CharPtr                mod_label;
   ButtoN                 apply_all_btn;
+  ValNodePtr             row_list = NULL;
+  Int4                   num_columns;
+  IDAndTitleEditPtr      iatep;
+  Boolean                allow_multi;
   
   if (StringHasNoText (mod_name) || (sap == NULL && seq_list == NULL))
   {
@@ -11687,7 +15034,7 @@ EditOrgModColumn
   
   if (StringICmp (mod_name, "moltype") == 0)
   {
-    mod_label = StringSave ("molecule");
+    mod_label = StringSave ("molecule type");
   }
   else
   {
@@ -11705,9 +15052,26 @@ EditOrgModColumn
     return;
   }
   
+  allow_multi = AllowMultipleValues (mod_name);
+  if (sap == NULL)
+  {
+    iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+  }
+  else
+  {
+    iatep = SourceAssistantToIDAndTitleEdit (sap);
+  }
+  
+  row_list = IDAndTitleEditToModifierColumnTagList (iatep, mod_name, 
+                                                    is_nontext, mod_type, 
+                                                    allow_multi);
+                                                    
+  num_columns = 2;
+  
   w = MovableModalWindow (-20, -13, -10, -10, mod_label, NULL);
   h = HiddenGroup(w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
+  mod_label = MemFree (mod_label);
 
   instr_grp = MakeInstructionGroup (h, is_nontext, mod_type);  
   
@@ -11717,133 +15081,12 @@ EditOrgModColumn
   scvd.mod_type = mod_type;
   apply_all_btn = PushButton (h, "Apply above value to all sequences", EditOrgModApplyAll);
   SetObjectExtra (apply_all_btn, &scvd, NULL);
-  
-  k = HiddenGroup (h, 1, 0, NULL);
-  g = HiddenGroup (k, 2, 0, NULL);
-  StaticPrompt (g, "SeqID", 7 * stdCharWidth, 0, programFont, 'l');
-  StaticPrompt (g, mod_label, 18 * stdCharWidth, 0, programFont, 'l');
-  
-  mod_label = MemFree (mod_label);
-  
-  if (sap == NULL)
-  {
-    rows_shown = 0;
-    sep = seq_list;
-    while (sep != NULL)
-    {
-      rows_shown++;
-      sep = sep->next;
-    }   
-  }
-  else
-  {
-    rows_shown = sap->num_deflines;
-  }
-  rows_shown = MIN (rows_shown, 5);
-  
-  if (is_nontext)
-  {
-    dlg = CreateTagListDialogEx (k, rows_shown, 2, 2,
-                                 nontextmodedittypes, modedit_widths,
-                                 nontextmodedit_alists, TRUE, TRUE, NULL, NULL);
-  }
-  else if (mod_type == eModifierType_Location)
-  {
-    dlg = CreateTagListDialogEx (k, rows_shown, 2, 2,
-                                 locationmodedittypes, modedit_widths,
-                                 locationmodedit_alists, TRUE, TRUE, NULL, NULL);
-  }
-  else if (mod_type == eModifierType_NucGeneticCode
-           || mod_type == eModifierType_MitoGeneticCode)
-  {
-    gencode_alist = BuildGeneticCodeEnum ();
-    edit_alists [0] = NULL;
-    edit_alists [1] = gencode_alist;
-    dlg = CreateTagListDialogEx (k, rows_shown, 2, 2,
-                                 locationmodedittypes, modedit_widths,
-                                 edit_alists, TRUE, TRUE, NULL, NULL);
-  }
-  else if (mod_type == eModifierType_MolType)
-  {
-    edit_alists [0] = NULL;
-    if (seqPackage == SEQ_PKG_GENOMICCDNA)
-    {
-      edit_alists [1] = biomol_nucGen_alist;
-    }
-    else
-    {
-      edit_alists [1] = biomol_nucX_alist;
-    }
-    dlg = CreateTagListDialogEx (k, rows_shown, 2, 2,
-                                 locationmodedittypes, modedit_widths,
-                                 edit_alists, TRUE, TRUE, NULL, NULL);
-  }
-  else if (mod_type == eModifierType_Topology)
-  {
-    edit_alists [0] = NULL;
-    edit_alists [1] = topology_nuc_alist;
-    dlg = CreateTagListDialogEx (k, rows_shown, 2, 2,
-                                 locationmodedittypes, modedit_widths,
-                                 edit_alists, TRUE, TRUE, NULL, NULL);
-  }
-  else if (mod_type == eModifierType_Organism)
-  {
-    MultiOrganismSelectionDialog (k);
-    
-    
-    dlg = CreateTagListDialogEx (k, rows_shown, 2, 2,
-                                 modedit_types, modedit_widths,
-                                 NULL, TRUE, TRUE, NULL, NULL);
-  }
-  else
-  {
-    dlg = CreateTagListDialogEx (k, rows_shown, 2, 2,
-                                 modedit_types, modedit_widths,
-                                 NULL, TRUE, TRUE, NULL, NULL);
 
-  }
+  k = HiddenGroup (h, -1, 0, NULL);
+
+  dlg = CreateValueListDialog (k, mod_name, seqPackage, iatep, -1);
   
-  tlp = (TagListPtr) GetObjectExtra (dlg);  
-  if (tlp == NULL) return;
-
-  MakeSearchStringFromAlist (lookfor, mod_name);
-
-  head = NULL;
-  if (sap == NULL)
-  {
-    for (sep = seq_list; sep != NULL; sep = sep->next)
-    {
-      AddSeqIDAndValueFromSeqEntryToTagList (sep, lookfor, mod_name, seqPackage,
-                                             &head, &found_modifiers);
-    }
-  }
-  else
-  {
-    for (j = 0; j < sap->num_deflines; j++)
-    {
-      AddSeqIDAndValueToTagList (sap->id_list[j], sap->defline_list[j],
-                                 lookfor, mod_name, seqPackage, 
-                                 &head, &found_modifiers);
-    }
-  }
-  found_modifiers = ValNodeFreeData (found_modifiers);
-
-  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
-  tlp->vnp = head;
-  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
-  for (j = 0, vnp = tlp->vnp; vnp != NULL; j++, vnp = vnp->next) {
-  }
-  tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows));
-  CorrectBarMax (tlp->bar, tlp->max);
-  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
-  if (tlp->max > 0) {
-    SafeShow (tlp->bar);
-  } else {
-    SafeHide (tlp->bar);
-  }
-  SendMessageToDialog (tlp->dialog, VIB_MSG_ENTER);
-  
-  scvd.tlp = tlp;
+  scvd.tlp = (TagListPtr) GetObjectExtra (dlg);
   
   if (mod_type == eModifierType_MolType)
   {
@@ -11852,6 +15095,10 @@ EditOrgModColumn
   else if (mod_type == eModifierType_Topology)
   {
     clear_btn = PushButton (h, "Reset All to Linear", ClearColumnValues);
+  }
+  else if (mod_type == eModifierType_Molecule)
+  {
+    clear_btn = PushButton (h, "Reset All to DNA", ClearColumnValues);
   }
   else
   {
@@ -11872,7 +15119,7 @@ EditOrgModColumn
                               (HANDLE) c, 
                               (HANDLE) instr_grp,
                               NULL);
-
+                              
   Show (w);
   Select (w);
   acd.accepted = FALSE;
@@ -11883,101 +15130,198 @@ EditOrgModColumn
     Update ();
   }
   ProcessAnEvent ();
-  if (acd.cancelled)
-  {
-    Remove (w);
-    return;
-  }
-  else
+  if (! acd.cancelled)
   {
     tlp = GetObjectExtra (dlg);
+    
+    ApplyModifierColumnTagListToIDAndTitleEdit (mod_name, is_nontext,
+                                                mod_type, seqPackage,
+                                                taglist_alists [num_columns - 1], 
+                                                tlp->vnp,
+                                                num_columns, iatep, -1);
     if (sap == NULL)
     {
-      for (sep = seq_list, j = 0; sep != NULL; sep = sep->next, j++)
-      {
-        new_value = GetValueFromTagList (tlp, j, is_nontext, mod_type,
-                                         seqPackage, gencode_alist);
-        ApplyOneModToSeqEntry (sep, mod_name, new_value);
-        new_value = MemFree (new_value);
-      }
+      ApplyIDAndTitleEditToSeqEntryList (seq_list, iatep);
     }
     else
     {
-      for (j = 0; j < sap->num_deflines; j++)
-      {
-        new_value = GetValueFromTagList (tlp, j, is_nontext, mod_type,
-                                         seqPackage, gencode_alist);
-        ReplaceValueInDefLines (sap, mod_name, new_value, j);
-        new_value = MemFree (new_value);
-     }
+      ApplyIDAndTitleEditToSourceAssistant (sap, iatep);
     }
+    
     UpdateOrgModDlg (sap);  
-    Remove (w);
   }
-  gencode_alist = FreeGeneticCodeEnum (gencode_alist);
+  Remove (w);
+
+  if (mod_type == eModifierType_NucGeneticCode
+      || mod_type == eModifierType_MitoGeneticCode)
+  {
+    taglist_alists [num_columns - 1] = FreeGeneticCodeEnum (taglist_alists [num_columns - 1]);
+  }
+  iatep = IDAndTitleEditFree (iatep);
 }
 
-static void UpdateGeneticCodesForSourceAssistant (SourceAssistantPtr sap)
+static void 
+EditModsForOneSequence 
+(CharPtr            mod_name,
+ SourceAssistantPtr sap, 
+ SeqEntryPtr        seq_list,
+ Int2               seqPackage,
+ Int4               seq_num)
 {
-  Int4       j;
-  Char       taxname [256];
-  Char       location [256];
-  CharPtr    gcode_name;
-  Int4       gcode;
-  ValNodePtr gencodelist;
+  WindoW                 w;
+  GrouP                  h, k, c;
+  DialoG                 dlg = NULL;
+  TagListPtr             tlp;
+  ModalAcceptCancelData  acd;
+  ButtoN                 b;
+  Boolean                is_nontext;
+  CharPtr                new_value = NULL;
+  Int4                   mod_type;
+  GrouP                  instr_grp = NULL;
+  CharPtr                mod_label;
+  ValNodePtr             row_list = NULL;
+  Int4                   num_columns = 1;
+  IDAndTitleEditPtr      iatep;
+  Boolean                allow_multi;
+  DialoG                 all_val_dlg = NULL;
   
-  if (sap == NULL)
+  if (StringHasNoText (mod_name) || (sap == NULL && seq_list == NULL))
   {
     return;
   }
-
-  gencodelist = GetGeneticCodeValNodeList ();
   
-  for (j = 0; j < sap->num_deflines; j++)
+  if (StringICmp (mod_name, "moltype") == 0)
   {
-    if (!LookForSearchString (sap->defline_list[j],
-                             "[organism=",
-                            taxname, 
-                            sizeof (taxname) - 1))
-    {
-      taxname [0] = 0;
-    }
-    if (!LookForSearchString (sap->defline_list[j],
-                              "[location=",
-                              location,
-                              sizeof (location) - 1)
-        || StringHasNoText (location))
-    {
-      sprintf (location, "genomic");
-    }
-    gcode = GetGeneticCodeForTaxNameAndLocation (taxname, location);
-    if (gcode > 0)
-    {
-      gcode_name = GeneticCodeStringFromIntAndList (gcode, gencodelist);
-      ReplaceValueInDefLines (sap, "genetic_code", gcode_name, j);
-    }
+    mod_label = StringSave ("molecule type");
   }
-  gencodelist = ValNodeFreeData (gencodelist);
+  else
+  {
+    mod_label = StringSave (mod_name);
+  }
+
+  is_nontext = IsNonTextModifier (mod_name);
+  mod_type = GetModifierType (mod_name);
+  
+  allow_multi = AllowMultipleValues (mod_name);
+  if (sap == NULL)
+  {
+    iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+  }
+  else
+  {
+    iatep = SourceAssistantToIDAndTitleEdit (sap);
+  }
+  
+  /* make sure sequence number is in range */
+  if (seq_num > iatep->num_sequences || seq_num < 0)
+  {
+    iatep = IDAndTitleEditFree (iatep);
+    return;
+  }
+  
+  w = MovableModalWindow (-20, -13, -10, -10, mod_label, NULL);
+  h = HiddenGroup(w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  instr_grp = MakeInstructionGroup (h, is_nontext, mod_type);  
+
+  k = HiddenGroup (h, -1, 0, NULL);
+  
+  if (allow_multi)
+  {
+    dlg = CreateValueListDialog (k, mod_name, seqPackage, iatep, seq_num);
+  }
+  else
+  {
+    all_val_dlg = SingleModValDialog (h, is_nontext, mod_type, seqPackage);
+    /* set initial value */
+    new_value = FindValueFromPairInDefline (mod_name, iatep->title_list [seq_num]);
+    PointerToDialog (all_val_dlg, new_value);
+    new_value = MemFree (new_value);
+  }
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  b = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) k, 
+                              (HANDLE) c, 
+                              (HANDLE) instr_grp,
+                              NULL);
+                              
+  Show (w);
+  Select (w);
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (! acd.cancelled)
+  {
+    if (allow_multi)
+    {
+      tlp = GetObjectExtra (dlg);
+    
+      ApplyModifierColumnTagListToIDAndTitleEdit (mod_name, is_nontext,
+                                                  mod_type, seqPackage,
+                                                  taglist_alists [num_columns - 1], 
+                                                  tlp->vnp,
+                                                  num_columns, iatep, seq_num);
+    }
+    else
+    {
+      new_value = DialogToPointer (all_val_dlg);
+      iatep->title_list [seq_num] = ReplaceValueInOneDefLine (iatep->title_list [seq_num],
+                                                              mod_name, new_value);
+      new_value = MemFree (new_value);
+    }
+    if (sap == NULL)
+    {
+      ApplyIDAndTitleEditToSeqEntryList (seq_list, iatep);
+    }
+    else
+    {
+      ApplyIDAndTitleEditToSourceAssistant (sap, iatep);
+    }
+    
+    UpdateOrgModDlg (sap);  
+  }
+  Remove (w);
+
+  if (mod_type == eModifierType_NucGeneticCode
+      || mod_type == eModifierType_MitoGeneticCode)
+  {
+    taglist_alists [num_columns - 1] = FreeGeneticCodeEnum (taglist_alists [num_columns - 1]);
+  }
+  iatep = IDAndTitleEditFree (iatep);
 }
 
-static void UpdateGeneticCodesForSeqEntryList (SeqEntryPtr seq_list)
+static void UpdateGeneticCodesForIDAndTitleEdit (IDAndTitleEditPtr iatep)
 {
-  SeqEntryPtr sep;
+  Int4 seq_num;
   CharPtr     taxname, location, gcode_name;
   Int4        gcode;
   ValNodePtr  gencodelist;
   
-  if (seq_list == NULL)
+  if (iatep == NULL)
   {
     return;
   }
-  
   gencodelist = GetGeneticCodeValNodeList ();
 
-  for (sep = seq_list; sep != NULL; sep = sep->next)
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
   {
-    taxname = GetModValueFromSeqEntry (sep, "organism");
-    location = GetModValueFromSeqEntry (sep, "location");
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    taxname = FindValueFromPairInDefline ("organism", iatep->title_list [seq_num]);
+    location = FindValueFromPairInDefline ("location", iatep->title_list [seq_num]);
     if (StringHasNoText (location))
     {
       location = MemFree (location);
@@ -11989,10 +15333,10 @@ static void UpdateGeneticCodesForSeqEntryList (SeqEntryPtr seq_list)
     if (gcode > 0)
     {
       gcode_name = GeneticCodeStringFromIntAndList (gcode, gencodelist);
-      ApplyOneModToSeqEntry (sep, "genetic_code", gcode_name);
+      iatep->title_list [seq_num] = ReplaceValueInOneDefLine (iatep->title_list [seq_num], "genetic_code", gcode_name);
     }
   }
-  gencodelist = ValNodeFreeData (gencodelist);
+  gencodelist = ValNodeFreeData (gencodelist);  
 }
 
 static Boolean 
@@ -12170,6 +15514,84 @@ ContinueWithAutopopulatedGeneticCodes
   return rval;
 }
 
+static Boolean 
+IDAndTitleEditHasAllDefaultValues 
+(Int2              mod_type, 
+ CharPtr           mod_name,
+ IDAndTitleEditPtr iatep)
+{
+  Boolean               orig_all_default = TRUE;
+  Int4                  seq_num;
+  CharPtr               mod_value;
+  
+  if (mod_type != eModifierType_MolType
+      && mod_type != eModifierType_Topology
+      && mod_type != eModifierType_Location)
+  {
+    return FALSE;
+  }
+  if (iatep == NULL)
+  {
+    return FALSE;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences && orig_all_default; seq_num++)
+  {
+    if (iatep->is_seg && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    mod_value = FindValueFromPairInDefline (mod_name, iatep->title_list [seq_num]);
+    if ((mod_type == eModifierType_MolType && StringICmp (mod_value, "Genomic DNA") != 0)
+        || (mod_type == eModifierType_Topology && StringICmp (mod_value, "Linear") != 0)
+        || (mod_type == eModifierType_Location && StringICmp (mod_value, "Genomic") != 0))
+    {
+      orig_all_default = FALSE;
+    }
+    mod_value = MemFree (mod_value);
+  }
+  return orig_all_default;
+}
+
+static Boolean 
+RowListHasAllDefaultValues 
+(Int2              mod_type, 
+ CharPtr           mod_name,
+ ValNodePtr        row_list,
+ Int4              row_list_column)
+{
+  Boolean               orig_all_default = TRUE;
+  Int4                  seq_num;
+  CharPtr               mod_value;
+  Int4                  num_rows;
+  
+  
+  if (mod_type != eModifierType_MolType
+      && mod_type != eModifierType_Topology
+      && mod_type != eModifierType_Location)
+  {
+    return FALSE;
+  }
+  if (row_list == NULL)
+  {
+    return FALSE;
+  }
+  
+  num_rows = ValNodeLen (row_list);
+
+  for (seq_num = 0; seq_num < num_rows && orig_all_default; seq_num++)
+  {
+    mod_value = GetRowListCellText (row_list, seq_num, row_list_column);
+    if ((mod_type == eModifierType_MolType && StringICmp (mod_value, "Genomic DNA") != 0)
+        || (mod_type == eModifierType_Topology && StringICmp (mod_value, "Linear") != 0)
+        || (mod_type == eModifierType_Location && StringICmp (mod_value, "Genomic") != 0))
+    {
+      orig_all_default = FALSE;
+    }
+    mod_value = MemFree (mod_value);
+  }
+  return orig_all_default;
+}
 
 static void 
 ApplyOrgModColumnOrCell 
@@ -12196,9 +15618,7 @@ ApplyOrgModColumnOrCell
   CharPtr               all_seq_fmt = "%s (all sequences)";
   CharPtr               one_seq_fmt = "%s (Seq_ID %s)";
   Int4                  num_sequences = 0;
-  SeqEntryPtr           sep, nuc_sep;
   Char                  id_txt[128];
-  BioseqPtr             bsp = NULL;
   Int2                  mod_type;
   ValNodePtr            gencodelist = NULL;
   ValNodePtr            row_vnp = NULL, col_vnp;
@@ -12206,6 +15626,10 @@ ApplyOrgModColumnOrCell
   CharPtr               mod_label;
   Boolean               done;
   DialoG                val_dlg;
+  PrompT                apply_to_all_prompt = NULL;
+  Boolean               orig_all_default = FALSE;
+  IDAndTitleEditPtr     iatep = NULL;
+  Int4                  seq_num;
   
   if (StringHasNoText (mod_name) || row < -1)
   {
@@ -12215,54 +15639,57 @@ ApplyOrgModColumnOrCell
   {
     return;
   }
-  
-  if (seq_list != NULL)
+
+  if (sap != NULL)
   {
-    for (sep = seq_list; sep != NULL; sep = sep->next)
-    {
-      if (num_sequences == row)
-      {
-        if (IS_Bioseq (sep))
-        {
-          bsp = (BioseqPtr) sep->data.ptrvalue;
-        }
-        else if (IS_Bioseq_set (sep))
-        {
-          nuc_sep = FindNucSeqEntry (sep);
-          if (nuc_sep != NULL && IS_Bioseq (nuc_sep))
-          {
-            bsp = (BioseqPtr) nuc_sep->data.ptrvalue;
-          }
-        }
+    iatep = SourceAssistantToIDAndTitleEdit (sap);
+  }
+  else if (seq_list != NULL)
+  {
+    iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+  }
   
-        if (bsp == NULL)
-        {
-          return;
-        }
+  if (iatep != NULL)
+  {
+    num_sequences = 0;
+    for (j = 0; j < iatep->num_sequences; j++)
+    {
+      if (iatep->is_seg != NULL && iatep->is_seg [j])
+      {
+        continue;
       }
       num_sequences++;
     }
   }
-  else if (sap != NULL)
-  {
-    num_sequences = sap->num_deflines;
-  }
-  else if (row_list != NULL)
+  else
   {
     num_sequences = ValNodeLen (row_list);
   }
-  
+    
   if (row >= num_sequences)
   {
     return;
   }
- 
+  
   is_nontext = IsNonTextModifier (mod_name);
   mod_type = GetModifierType (mod_name);
- 
-  if (StringICmp (mod_name, "moltype") == 0)
+  
+  if (row < 0)
   {
-    mod_label = StringSave ("molecule");
+    if (iatep != NULL)
+    {
+      orig_all_default = IDAndTitleEditHasAllDefaultValues (mod_type, mod_name, iatep);
+    }
+    else
+    {
+      orig_all_default = RowListHasAllDefaultValues (mod_type, mod_name, row_list, row_list_column);
+    }
+  }
+
+  /* get label to use in window */
+  if (mod_type == eModifierType_MolType)
+  {
+    mod_label = StringSave ("molecule type");
   }
   else
   {
@@ -12276,17 +15703,9 @@ ApplyOrgModColumnOrCell
   }
   else
   {
-    if (seq_list != NULL)
+    if (iatep != NULL)
     {
-      if (bsp == NULL)
-      {
-        return;
-      }
-      SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT, sizeof (id_txt));
-    }
-    else if (sap != NULL)
-    {
-      StringNCpy (id_txt, sap->id_list[row], sizeof (id_txt) - 1);
+      StringNCpy (id_txt, iatep->id_list [row], sizeof (id_txt) - 1);
       id_txt[sizeof(id_txt) - 1] = 0;
     }
     else if (row_list != NULL)
@@ -12327,6 +15746,12 @@ ApplyOrgModColumnOrCell
   h = HiddenGroup(w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
   
+  if (row == -1)
+  {
+    apply_to_all_prompt = StaticPrompt (h, "This will apply to all sequences in the record.",
+                                        0, 0, programFont, 'l');
+  }
+  
   instr_grp = MakeInstructionGroup (h, is_nontext, mod_type);
   
   val_dlg = SingleModValDialog (h, is_nontext, mod_type, seqPackage);
@@ -12340,11 +15765,18 @@ ApplyOrgModColumnOrCell
 
   if (instr_grp == NULL)
   {
-    AlignObjects (ALIGN_CENTER, (HANDLE) val_dlg, (HANDLE) c, (HANDLE) NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) val_dlg,
+                                (HANDLE) c, 
+                                (HANDLE) apply_to_all_prompt, 
+                                NULL);
   }
   else
   {
-    AlignObjects (ALIGN_CENTER, (HANDLE) val_dlg, (HANDLE) instr_grp, (HANDLE) c, (HANDLE) NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) val_dlg,
+                                (HANDLE) instr_grp, 
+                                (HANDLE) c, 
+                                (HANDLE) apply_to_all_prompt,
+                                NULL);
   }
 
   mod_label = MemFree (mod_label);
@@ -12367,7 +15799,9 @@ ApplyOrgModColumnOrCell
     {
       done = TRUE;
     }
-    else if (row < 0 && ANS_NO == Message (MSG_YN, "Are you sure you want to apply this value to all of your sequences?"))
+    else if (row < 0 
+             && ! orig_all_default
+             && ANS_NO == Message (MSG_YN, "Are you sure you want to apply this value to all of your sequences?"))
     {
       /* do nothing - they'll be able to cancel from the dialog if they want to */
     }
@@ -12375,40 +15809,39 @@ ApplyOrgModColumnOrCell
     {
       /* prepare value */
       new_value = DialogToPointer (val_dlg);
-    
-      /* apply value to either seq_list, sap, or row_list */
-      if (seq_list != NULL)
+      
+      /* apply values */
+      if (iatep != NULL)
       {
-        for (sep = seq_list, j = 0;
-             sep != NULL;
-             sep = sep->next, j++)
+        for (j = 0, seq_num = 0; j < iatep->num_sequences; j++)
         {
-          if (j == row || row == -1)
+          /* don't apply modifiers to segments */
+          if (iatep->is_seg != NULL && iatep->is_seg [j])
           {
-            ApplyOneModToSeqEntry (sep, mod_name, new_value);
+            continue;
           }
+          
+          if (seq_num == row || row == -1)
+          {
+            iatep->title_list [j] = ReplaceValueInOneDefLine (iatep->title_list [j],
+                                                              mod_name,
+                                                              new_value);
+          }
+          seq_num++;
         }
         if (mod_type == eModifierType_Organism 
             || mod_type == eModifierType_Location
             || mod_type == eModifierType_GeneticCode)
         {
-          UpdateGeneticCodesForSeqEntryList (seq_list);
+          UpdateGeneticCodesForIDAndTitleEdit (iatep);
         }
-      }
-      else if (sap != NULL)
-      {
-        for (j = 0; j < sap->num_deflines; j++)
+        if (seq_list != NULL)
         {
-          if (j == row || row == -1)
-          {
-            ReplaceValueInDefLines (sap, mod_name, new_value, j);
-          }
+          ApplyIDAndTitleEditToSeqEntryList (seq_list, iatep);
         }
-        if (mod_type == eModifierType_Organism 
-            || mod_type == eModifierType_Location
-            || mod_type == eModifierType_GeneticCode)
+        else if (sap != NULL)
         {
-          UpdateGeneticCodesForSourceAssistant (sap);
+          ApplyIDAndTitleEditToSourceAssistant (sap, iatep);
         }
       }
       else if (row_list != NULL)
@@ -12437,6 +15870,7 @@ ApplyOrgModColumnOrCell
     } 
   }
   Remove (w);
+  iatep = IDAndTitleEditFree (iatep);
 }
 
 static void 
@@ -12447,6 +15881,8 @@ ApplyOrgModColumn
 {
   Int4    mod_type;
   Boolean is_nontext;
+  IDAndTitleEditPtr iatep;
+  Boolean           all_default;
   
   mod_type = GetModifierType (mod_name);
   is_nontext = IsNonTextModifier (mod_name);
@@ -12461,7 +15897,12 @@ ApplyOrgModColumn
   else if (!StringHasNoText (suggested_value)  && ! IsNonTextModifier (mod_name)
       && sap->num_deflines > 1)
   {
-    if (ANS_YES != Message (MSG_YN, "Warning!  Some sequences already contain "
+    iatep = SourceAssistantToIDAndTitleEdit (sap);
+    all_default = IDAndTitleEditHasAllDefaultValues (mod_type, mod_name, iatep);
+    iatep = IDAndTitleEditFree (iatep);
+  
+    if (!all_default 
+        && ANS_YES != Message (MSG_YN, "Warning!  Some sequences already contain "
                             "a value for %s.  Are you sure you want to "
                             "overwrite these values?", mod_name))
     {
@@ -12474,26 +15915,31 @@ ApplyOrgModColumn
 static void ApplyEditOrgModColumnBtn (ButtoN b, Boolean apply)
 {
   SourceAssistantPtr sap;
-  Int2               val;
-  CharPtr            mod_name;
+  CharPtr            mod_name = NULL;
   CharPtr            suggested_value;
+  ValNodePtr         vnp;
+  SourceQualDescPtr  sqdp;
 
   sap = (SourceAssistantPtr) GetObjectExtra (b);
   if (sap == NULL) return;
-  val = GetValue (sap->modType);
-  if (val > 0) {
-    if (val == 1)
+  vnp = DialogToPointer (sap->mod_type_dlg);
+  if (vnp != NULL)
+  {
+    if (vnp->choice == eModifierType_Organism)
     {
       mod_name = "organism";
     }
-    else if (val == 2)
+    else if (vnp->choice == eModifierType_Location)
     {
       mod_name = "location";
     }
-    else
+    else if (vnp->choice == 0 && vnp->data.ptrvalue != NULL)
     {
-      mod_name = GetModifierPopupPositionName (val - 1);
+      sqdp = (SourceQualDescPtr) vnp->data.ptrvalue;
+      mod_name = sqdp->name;
     }
+  }
+  if (!StringHasNoText (mod_name)) {
     if (apply)
     {
       if (IsNonTextModifier (mod_name))
@@ -12512,6 +15958,7 @@ static void ApplyEditOrgModColumnBtn (ButtoN b, Boolean apply)
       EditOrgModColumn (mod_name, sap, NULL, sap->seqPackage);
     }
   }
+  vnp = ValNodeFreeData (vnp);
 }
 
 static void ApplyOrgModColBtn (ButtoN b)
@@ -12527,16 +15974,21 @@ static void EditOrgModColBtn (ButtoN b)
 static void SourceAssistantImportModsBtn (ButtoN b)
 {
   SourceAssistantPtr sap;
+  IDAndTitleEditPtr  iatep;
+  Boolean            rval;
 
   sap = (SourceAssistantPtr) GetObjectExtra (b);
   if (sap == NULL) return;
 
-  if (ImportOrganismModifiersForSourceAssistant (sap->num_deflines, 
-                                                 sap->id_list, 
-                                                 sap->defline_list))
+  iatep = SourceAssistantToIDAndTitleEdit (sap);
+  rval = ImportModifiersToIDAndTitleEdit (iatep);
+  if (rval)
   {
+    ApplyIDAndTitleEditToSourceAssistant (sap, iatep);
     UpdateOrgModDlg (sap);
   }
+  iatep = IDAndTitleEditFree (iatep);
+
 }
 
 static void SourceAssistantClearAllModifiers (ButtoN b)
@@ -12557,7 +16009,9 @@ static void SourceAssistantClearAllModifiers (ButtoN b)
 
   for (j = 0; j < sap->num_deflines; j++)
   {
-    found_modifiers = BuildModifierTypeList (found_modifiers, sap->defline_list[j]);
+    found_modifiers = BuildModifierTypeList (found_modifiers, 
+                                             sap->defline_list[j],
+                                             FALSE);
   }
   
   for (j = 0; j < sap->num_deflines; j++)
@@ -12567,13 +16021,13 @@ static void SourceAssistantClearAllModifiers (ButtoN b)
       if (StringICmp (vnp->data.ptrvalue, "genetic_code") == 0
           || StringICmp (vnp->data.ptrvalue, "organism") == 0
           || StringICmp (vnp->data.ptrvalue, "location") == 0
-          || StringICmp (vnp->data.ptrvalue, "genetic_code_comment") == 0
+          || StringICmp (vnp->data.ptrvalue, "gencode_comment") == 0
           || StringICmp (vnp->data.ptrvalue, "moltype") == 0
           || StringICmp (vnp->data.ptrvalue, "topology") == 0)
       {
         continue;
       }
-      ReplaceValueInDefLines (sap, vnp->data.ptrvalue, NULL, j);
+      RemoveValueFromDefline (vnp->data.ptrvalue, sap->defline_list [j]);
     }
   }
   
@@ -12610,98 +16064,164 @@ static void OrgModDblClick (PoinT cell_coord, CharPtr header_text, CharPtr cell_
   else if (mod_type != eModifierType_GeneticCode 
            || ContinueWithAutopopulatedGeneticCodes (NULL, sap, NULL, cell_coord.y - 1))
   {
-    ApplyOrgModColumnOrCell (header_text, cell_text, cell_coord.y - 1, sap, NULL, NULL, 0, sap->seqPackage);
+    EditModsForOneSequence (header_text, sap, NULL, sap->seqPackage, cell_coord.y - 1);
   }
 }
+
+static void SeqEntryListToSourceAssistant (SeqEntryPtr seq_list, SourceAssistantPtr sap)
+{
+  IDAndTitleEditPtr iatep;
+  Int4              seq_num, sap_num;
+  
+  if (sap == NULL)
+  {
+    return;
+  }
+  sap->num_deflines = 0;
+  
+  iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+  if (iatep == NULL || iatep->num_sequences < 1)
+  {
+    iatep = IDAndTitleEditFree (iatep);
+    return;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    else
+    {
+      sap->num_deflines ++;
+    }
+  }
+  
+  if (sap->num_deflines < 1)
+  {
+    iatep = IDAndTitleEditFree (iatep);
+    return;
+  }
+  
+  sap->defline_list = (CharPtr PNTR) MemNew (sizeof (CharPtr) * sap->num_deflines);
+  sap->id_list = (CharPtr PNTR) MemNew (sizeof (CharPtr) * sap->num_deflines);
+  if (sap->defline_list == NULL || sap->id_list == NULL)
+  {
+    sap->defline_list = MemFree (sap->defline_list);
+    sap->id_list = MemFree (sap->id_list);
+    return;
+  }
+  
+  sap_num = 0;
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    sap->id_list [sap_num] = StringSave (iatep->id_list [seq_num]);
+    sap->defline_list [sap_num] = StringSave (iatep->title_list [seq_num]);
+    sap_num++;
+  }
+  iatep = IDAndTitleEditFree (iatep);
+}
+
+static void ApplySourceAssistantToSeqEntryList (SourceAssistantPtr sap, SeqEntryPtr seq_list)
+{
+  IDAndTitleEditPtr iatep;
+  Int4              seq_num, sap_num;
+  
+  if (sap == NULL || seq_list == NULL)
+  {
+    return;
+  }
+  
+  iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+  if (iatep == NULL || iatep->num_sequences < 1)
+  {
+    return;
+  }
+  
+  sap_num = 0;
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    if (iatep->is_seg != NULL && iatep->is_seg [seq_num])
+    {
+      continue;
+    }
+    iatep->title_list [seq_num] = MemFree (iatep->title_list [seq_num]);
+    iatep->title_list [seq_num] = StringSave (sap->defline_list [sap_num]);
+    sap_num++;
+  }
+  ApplyIDAndTitleEditToSeqEntryList (seq_list, iatep);
+  iatep = IDAndTitleEditFree (iatep);
+}
+
+static Boolean ShowRedSeqID (Int4 row, ValNodePtr row_list, Pointer userdata)
+{
+  ValNodePtr row_vnp, col_vnp;
+  Int4       row_num;
+  
+  if (OrganismMatchesAnotherRow (row, row_list, userdata))
+  {
+    return TRUE;
+  }
+  
+  /* find the row we're interested in */
+  for (row_vnp = row_list->next, row_num = 1;
+       row_vnp != NULL && row_num != row; 
+       row_vnp = row_vnp->next, row_num++)
+  {
+  }
+  if (row_vnp == NULL || row_vnp->data.ptrvalue == NULL)
+  {
+    return TRUE;
+  }
+  
+  /* the second column contains the organism names */
+  col_vnp = row_vnp->data.ptrvalue;
+  if (col_vnp == NULL 
+      || col_vnp->next == NULL 
+      || StringHasNoText (col_vnp->next->data.ptrvalue))
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+
 
 static void SourceAssistant (ButtoN b)
 {
   SequencesFormPtr    sqfp;
-  SeqEntryPtr         seq_list, cntr_sep, nsep;
+  SeqEntryPtr         seq_list;
   SourceAssistantData sad;
-  CharPtr             ttl;
-  BioseqPtr           bsp;
-  SeqIdPtr            sip;
-  Char                tmp [128];
   WindoW              w;
   GrouP               h, k, g, g2, mod_btn_grp, c;
-  ValNodePtr          ttlvnp;
-  Int4                i, max_i;
+  Int4                i;
   FastaPagePtr        fpp;
   Int4                doc_width = stdCharWidth * 40;
   ButtoN              export_btn;
   PrompT              ppt1, ppt2;
+  ValNodePtr          modifier_choice_list = NULL, qual_list = NULL;
   
   sqfp = (SequencesFormPtr) GetObjectExtra (b);
   if (sqfp == NULL) return;
   
   seq_list = GetSeqEntryFromSequencesForm (sqfp);
-  sad.num_deflines = 0;
-  sad.seqPackage = sqfp->seqPackage;
-    
-  if (sad.seqPackage == SEQ_PKG_SEGMENTED) 
+  
+  SeqEntryListToSourceAssistant (seq_list, &sad);
+  if (sad.num_deflines < 1)
   {
-    sad.num_deflines = 1;    
-  }
-  else
-  {
-    sad.num_deflines = ValNodeLen (seq_list);
-  }
-
-  if (sad.num_deflines == 0) return;
-  sad.defline_list = (CharPtr PNTR) MemNew (sizeof (CharPtr) * sad.num_deflines);
-  sad.id_list = (CharPtr PNTR) MemNew (sizeof (CharPtr) * sad.num_deflines);
-  if (sad.defline_list == NULL || sad.id_list == NULL)
-  {
-    sad.defline_list = MemFree (sad.defline_list);
-    sad.id_list = MemFree (sad.id_list);
     return;
   }
   
-  if (sad.seqPackage == SEQ_PKG_SEGMENTED) 
-  {
-    i = 0;
-    ttl = NULL;
-    SeqEntryExplore (seq_list, (Pointer) (&ttl), FindFirstTitle);
-    sad.defline_list[i] = StringSaveNoNull (ttl);
-     
-    bsp = FindNucBioseq (seq_list);
-    if (bsp != NULL)
-    {
-      sip = SeqIdFindWorst (bsp->id);
-      SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-    }
-    else
-    {
-      sprintf (tmp, "%d", i);
-    }
-    sad.id_list [i] = StringSave (tmp);
-  }
-  else
-  {
-    for (cntr_sep = seq_list, i = 0;
-         cntr_sep != NULL && i < sad.num_deflines;
-         cntr_sep = cntr_sep->next, i++)
-    {
-      ttl = NULL;
-      nsep = FindNucSeqEntry (cntr_sep);
-      SeqEntryExplore (nsep, (Pointer) (&ttl), FindFirstTitle);
-      sad.defline_list[i] = StringSaveNoNull (ttl);
-      
-      bsp = FindNucBioseq (nsep);
-      if (bsp != NULL)
-      {
-        sip = SeqIdFindWorst (bsp->id);
-        SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-      }
-      else
-      {
-        sprintf (tmp, "%d", i);
-      }
-      sad.id_list [i] = StringSave (tmp);
-    }  
-  }
-  
+  sad.seqPackage = sqfp->seqPackage;
+    
   sad.done = FALSE;
   sad.cancelled = FALSE;
   modedit_widths [0] = 7;
@@ -12719,18 +16239,28 @@ static void SourceAssistant (ButtoN b)
   g = NormalGroup (h, -1, 0, "", programFont, NULL);
   g2 = HiddenGroup (g, 2, 0, NULL);
   StaticPrompt (g2, "Select Modifier", 0, popupMenuHeight, programFont, 'l');
-  sad.modType = PopupList (g2, TRUE, NULL);
-  max_i = GetNumDeflineModifiers ();
-      
-  PopupItem (sad.modType, "Organism");
-  PopupItem (sad.modType, "Location");
-  for (i = 0; i < max_i; i++)
-  {
-    PopupItem (sad.modType, GetModifierPopupPositionName (i + 2));
-  }
-  SetObjectExtra (sad.modType, &sad, NULL);
-  SetValue (sad.modType, 1);
   
+  ValNodeAddPointer (&modifier_choice_list, eModifierType_Organism, StringSave ("Organism"));
+  ValNodeAddPointer (&modifier_choice_list, eModifierType_Location, StringSave ("Location"));
+  qual_list = GetSourceQualDescList (TRUE, TRUE, FALSE);
+  ValNodeLink (&modifier_choice_list, qual_list);
+
+  /* note - ValNodeSelectionDialog cleans up modifier_choice_list */
+  sad.mod_type_dlg = ValNodeSelectionDialog (g2, modifier_choice_list, 6,
+                                             SourceQualValNodeName,
+                                             ValNodeSimpleDataFree,
+                                             SourceQualValNodeDataCopy,
+                                             SourceQualValNodeMatch,
+                                             "modifier",
+                                             NULL, NULL, FALSE);
+  modifier_choice_list = NULL;
+  qual_list = NULL;
+  
+  /* set default value for mod_type_dlg */
+  ValNodeAddPointer (&qual_list, eModifierType_Organism, StringSave ("Organism"));
+  PointerToDialog (sad.mod_type_dlg, qual_list);
+  qual_list = ValNodeFreeData (qual_list);
+    
   mod_btn_grp = HiddenGroup (g, 2, 0, NULL);
   b = PushButton (mod_btn_grp, "Apply One Value to All", ApplyOrgModColBtn);
   SetObjectExtra (b, &sad, NULL);
@@ -12739,16 +16269,17 @@ static void SourceAssistant (ButtoN b)
   
   AlignObjects (ALIGN_CENTER, (HANDLE) g2, (HANDLE) mod_btn_grp, NULL);
     
-  sad.mod_doc = DocumentPanel (h, doc_width, stdLineHeight * 3);
+  sad.mod_doc = DocumentPanel (h, doc_width, stdLineHeight * 4);
   SetDocAutoAdjust (sad.mod_doc, TRUE);
+
+  ppt1 = StaticPrompt (h, "Sequence IDs in red have missing organism names", 0, 0, programFont, 'l');
+  ppt2 = StaticPrompt (h, "or have source information that matches at least one other sequence.", 0, 0, programFont, 'l');
 
   sad.orgmod_dlg = TableDisplayDialog (h, doc_width, stdLineHeight * 16, 1, 1,
                                        OrgModDblClick, &sad,
-                                       OrganismMatchesAnotherRow, NULL);
+                                       ShowRedSeqID, NULL);
   UpdateOrgModDlg (&sad);  
 
-  ppt1 = StaticPrompt (h, "Sequence IDs in red have source information", 0, 0, programFont, 'l');
-  ppt2 = StaticPrompt (h, "that matches at least one other sequence.", 0, 0, programFont, 'l');
   export_btn = PushButton (h, "Export Source Modifier Table", SourceAssistantExport);
   SetObjectExtra (export_btn, &sad, NULL);
   
@@ -12779,24 +16310,7 @@ static void SourceAssistant (ButtoN b)
   ProcessAnEvent ();
   if (!sad.cancelled)
   {
-    
-    /* copy new deflines to sequence list */
-    for (cntr_sep = seq_list, i = 0;
-         cntr_sep != NULL && i < sad.num_deflines;
-         cntr_sep = cntr_sep->next, i++)
-    {
-      ttlvnp = NULL;
-      nsep = FindNucSeqEntry (cntr_sep);
-      SeqEntryExplore (nsep, (Pointer) (&ttlvnp), FindFirstSeqDescrTitle);
-      if (ttlvnp == NULL) {
-        ttlvnp = CreateNewDescriptor (nsep, Seq_descr_title);
-      }
-      if (ttlvnp != NULL) {
-        ttlvnp->data.ptrvalue = MemFree (ttlvnp->data.ptrvalue);
-        ttlvnp->data.ptrvalue = sad.defline_list[i];
-        sad.defline_list[i] = NULL;
-      }
-    }
+    ApplySourceAssistantToSeqEntryList (&sad, seq_list);
     SeqEntryPtrToSourceTab (sqfp);
     fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
     if (fpp != NULL) 
@@ -12826,6 +16340,8 @@ static void ApplyOneValueToAllSequencesDialog (ButtoN b, CharPtr mod_name)
   FastaPagePtr         fpp;
   Int4                 mod_type;
   Boolean              is_nontext;
+  IDAndTitleEditPtr    iatep;
+  Boolean              all_default;
   
   sqfp = (SequencesFormPtr) GetObjectExtra (b);
   if (sqfp == NULL)
@@ -12854,7 +16370,12 @@ static void ApplyOneValueToAllSequencesDialog (ButtoN b, CharPtr mod_name)
   else if (!StringHasNoText (value)  && ! is_nontext
       && seq_list->next != NULL)
   {
-    if (ANS_YES != Message (MSG_YN, "Warning!  Some sequences already contain "
+    iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+    all_default = IDAndTitleEditHasAllDefaultValues (mod_type, mod_name, iatep);
+    iatep = IDAndTitleEditFree (iatep);
+  
+    if (!all_default
+        && ANS_YES != Message (MSG_YN, "Warning!  Some sequences already contain "
                             "a value for %s.  Are you sure you want to "
                             "overwrite these values?", mod_name))
     {
@@ -12960,7 +16481,7 @@ static void SpecifyModValueButton (ButtoN b, CharPtr mod_name)
   
   if (StringICmp (mod_name, "moltype") == 0)
   {
-    mod_label = StringSave ("molecule");
+    mod_label = StringSave ("molecule type");
   }
   else
   {
@@ -13065,13 +16586,15 @@ static void ClearAllSequenceModifiers (ButtoN b)
     ttl = NULL;
     nsep = FindNucSeqEntry (sep);
     SeqEntryExplore (nsep, (Pointer) (&ttl), FindFirstTitle);
-    found_modifiers = BuildModifierTypeList (found_modifiers, ttl);
+    found_modifiers = BuildModifierTypeList (found_modifiers, ttl, FALSE);
     for (mod_vnp = found_modifiers; mod_vnp != NULL; mod_vnp = mod_vnp->next)
     {
       mod_type = GetModifierType (mod_vnp->data.ptrvalue);
-      if (mod_type != eModifierType_Other
+      if (mod_type != eModifierType_Protein
           && mod_type != eModifierType_Location
+          && mod_type != eModifierType_Origin
           && mod_type != eModifierType_MolType
+          && mod_type != eModifierType_Molecule
           && mod_type != eModifierType_Topology
           && mod_type != eModifierType_GeneticCode
           && mod_type != eModifierType_GeneticCodeComment
@@ -13091,65 +16614,14 @@ static void ClearAllSequenceModifiers (ButtoN b)
   }
 }
 
-static void SummaryDocOnClick (DoC d, PoinT pt)
-{
-  SequencesFormPtr sqfp;
-  SeqEntryPtr      seq_list;
-  Int2             pos_item, pos_row, pos_col;
-  Int2             start_item = 0;
-  Int2             end_item = -1;
-  Int4             mod_num;
-  CharPtr          ttl = NULL;
-  ValNodePtr       found_modifiers = NULL, vnp;
-  FastaPagePtr     fpp;
-  Boolean          dbl_click;
-  
-  dbl_click = dblClick;
-  if (!dbl_click)
-  {
-    return;
-  }
-  
-  sqfp = (SequencesFormPtr) GetObjectExtra (d);
-  if (sqfp == NULL) return;
-  
-  seq_list = GetSeqEntryFromSequencesForm (sqfp);
-  if (seq_list == NULL)
-  {
-    return;
-  }
-  
-  MapDocPoint (d, pt, &(pos_item), &(pos_row), &(pos_col), NULL);
-
-  /* get list of modifiers */    
-  found_modifiers = GetListOfCurrentModifiers (seq_list);
-  
-  for (vnp = found_modifiers, mod_num = 1;
-       vnp != NULL && mod_num < pos_item;
-       vnp = vnp->next, mod_num++)
-  {
-  }
-  if (vnp != NULL)
-  {
-    EditOrgModColumn (vnp->data.ptrvalue, NULL, seq_list, sqfp->seqPackage);
-    SeqEntryPtrToSourceTab (sqfp);  
-    fpp = (FastaPagePtr) GetObjectExtra (sqfp->dnaseq);
-    if (fpp != NULL) 
-    {
-      Reset (fpp->doc);
-      FormatFastaDoc (fpp);
-    }
-  }
-  ValNodeFreeData (found_modifiers);
-}
-
 static void SummaryDblClick (PoinT cell_coord, CharPtr header_text, CharPtr cell_text, Pointer userdata)
 {
-  ValNodePtr       found_modifiers = NULL, vnp;
-  SequencesFormPtr sqfp;
-  SeqEntryPtr      seq_list;
-  Int4             mod_num;
-  FastaPagePtr     fpp;
+  ValNodePtr        found_modifiers = NULL, vnp;
+  SequencesFormPtr  sqfp;
+  SeqEntryPtr       seq_list;
+  Int4              mod_num;
+  FastaPagePtr      fpp;
+  IDAndTitleEditPtr iatep;
   
   if (cell_coord.y < 1 || userdata == NULL)
   {
@@ -13164,8 +16636,10 @@ static void SummaryDblClick (PoinT cell_coord, CharPtr header_text, CharPtr cell
     return;
   }  
   
+  iatep = SeqEntryListToIDAndTitleEdit (seq_list);
+  
   /* get list of modifiers */ 
-  found_modifiers = GetListOfCurrentModifiers (seq_list);
+  found_modifiers = GetListOfCurrentSourceModifiers (iatep);
    
   for (vnp = found_modifiers, mod_num = 1;
        vnp != NULL && mod_num < cell_coord.y;
@@ -13184,6 +16658,7 @@ static void SummaryDblClick (PoinT cell_coord, CharPtr header_text, CharPtr cell
     }
   }
   ValNodeFreeData (found_modifiers);
+  iatep = IDAndTitleEditFree (iatep);
 }
 
 static GrouP CreateSourceTab (GrouP h, SequencesFormPtr sqfp)
@@ -13203,9 +16678,10 @@ static GrouP CreateSourceTab (GrouP h, SequencesFormPtr sqfp)
   mod_grp = HiddenGroup (h, -1, 0, NULL);
   SetGroupSpacing (mod_grp, 10, 20);
 
-  sqfp->org_doc = DocumentPanel (mod_grp, stdCharWidth * 27, stdLineHeight * 2);
+  sqfp->org_doc = DocumentPanel (mod_grp, stdCharWidth * 27, stdLineHeight * 3);
   SetDocAutoAdjust (sqfp->org_doc, TRUE);
-  sqfp->ident_org_btn = PushButton (mod_grp, "Some Sequences Have Identical Organisms!", SourceAssistant);
+  sqfp->ident_org_ppt = StaticPrompt (mod_grp, "Some sequences have identical source information!", 0, 0, programFont, 'c');
+  sqfp->ident_org_btn = PushButton (mod_grp, "Modify Source Information", SourceAssistant);
   SetObjectExtra (sqfp->ident_org_btn, sqfp, NULL);
   Disable (sqfp->source_assist_btn);
   
@@ -13241,6 +16717,7 @@ static GrouP CreateSourceTab (GrouP h, SequencesFormPtr sqfp)
 
   SeqEntryPtrToSourceTab (sqfp);
   AlignObjects (ALIGN_CENTER, (HANDLE) sqfp->org_doc,
+                              (HANDLE) sqfp->ident_org_ppt,
                               (HANDLE) sqfp->ident_org_btn,
                               (HANDLE) sqfp->summary_dlg,
                               (HANDLE) sqfp->specify_orgs_btn,
@@ -13357,12 +16834,13 @@ static ValNodePtr PrepareSequenceAssistantTableData (SequenceAssistantPtr sap)
   SeqIdPtr           sip;
   Char               tmp[128];
   CharPtr            ttl = NULL;
+  CharPtr            valstr;
   
   if (sap == NULL)
   {
     return NULL;
   }
-  SetDefaultMolTypesAndTopologies (sap->seq_list);
+  AddDefaultModifierValues (sap->seq_list);
       
   /* create header line for table */
   /* store max column width in choice */
@@ -13370,7 +16848,7 @@ static ValNodePtr PrepareSequenceAssistantTableData (SequenceAssistantPtr sap)
   ValNodeAddPointer (&column_list, 6, StringSave ("Length"));
   ValNodeAddPointer (&column_list, 8, StringSave ("Molecule"));
   ValNodeAddPointer (&column_list, 8, StringSave ("Topology"));
-  ValNodeAddPointer (&column_list, 11, StringSave ("Description"));
+  ValNodeAddPointer (&column_list, 11, StringSave ("Title"));
     
   ValNodeAddPointer (&row_list, 0, column_list);
   header_list = column_list;
@@ -13419,27 +16897,31 @@ static ValNodePtr PrepareSequenceAssistantTableData (SequenceAssistantPtr sap)
 
     /* add molecule */
     header_vnp = header_vnp->next;
-    if (!LookForSearchString (ttl, "[moltype=", tmp, sizeof (tmp) - 1)) 
+    valstr = FindValueFromPairInDefline ("moltype", ttl);
+    if (StringHasNoText (valstr))
     {
-      sprintf (tmp, "Genomic DNA");
+      valstr = MemFree (valstr);
+      valstr = StringSave ("Genomic DNA");
     }
     column_width = MAX (StringLen (tmp), header_vnp->choice);
     column_width = MIN (column_width, max_column_width);
     header_vnp->choice = column_width;
-    ValNodeAddPointer (&column_list, 0, StringSave (tmp));
+    ValNodeAddPointer (&column_list, 0, valstr);
 
     /* add topology */
     header_vnp = header_vnp->next;
-    if (!LookForSearchString (ttl, "[topology=", tmp, sizeof (tmp) - 1)) 
+    valstr = FindValueFromPairInDefline ("topology", ttl);
+    if (StringHasNoText (valstr))
     {
-      sprintf (tmp, "Linear");
+      valstr = MemFree (valstr);
+      valstr = StringSave ("Linear");
     }
     column_width = MAX (StringLen (tmp), header_vnp->choice);
     column_width = MIN (column_width, max_column_width);
     header_vnp->choice = column_width;
-    ValNodeAddPointer (&column_list, 0, StringSave (tmp));
+    ValNodeAddPointer (&column_list, 0, valstr);
 
-    /* add description */  
+    /* add title */  
     header_vnp = header_vnp->next;
     column_width = MAX (StringLen (ttl), header_vnp->choice);
     column_width = MIN (column_width, max_column_width);
@@ -13554,9 +17036,75 @@ static void ImportSequenceAssistantEditData (SequenceAssistantPtr sap, CharPtr s
   FileRemove (path);
 }
 
-static Boolean 
-IsDuplicateID (SeqEntryPtr seq_list, BioseqPtr edit_bsp, SeqIdPtr sip);
+static SeqEntryPtr CopySeqEntryList (SeqEntryPtr seq_list)
+{
+  SeqEntryPtr new_seq_list, new_seq, last_seq;
+  ErrSev      oldsev;
+  
+  if (seq_list == NULL)
+  {
+    return NULL;
+  }
+  
+  oldsev = ErrSetMessageLevel (SEV_MAX);
+  
+  new_seq = AsnIoMemCopy ((Pointer) seq_list,
+                          (AsnReadFunc) SeqEntryAsnRead,
+                          (AsnWriteFunc) SeqEntryAsnWrite);
+  new_seq_list = new_seq;
+  last_seq = new_seq;
+  
+  seq_list = seq_list->next;
+  
+  while (last_seq != NULL && seq_list != NULL)
+  {   
+    new_seq = AsnIoMemCopy ((Pointer) seq_list,
+                            (AsnReadFunc) SeqEntryAsnRead,
+                            (AsnWriteFunc) SeqEntryAsnWrite);
+    last_seq->next = new_seq;
+    last_seq = last_seq->next;
+    seq_list = seq_list->next;
+  }
+  
+  ErrSetMessageLevel (oldsev);
+                          
+  return new_seq_list;
+}
 
+
+/* This section of code is used for correcting errors in the sequence IDs and
+ * titles.
+ */
+
+/* This structure contains the data used for editing and updating the new
+ * and existing sequence lists.
+ */
+typedef struct seqidedit 
+{
+  WindoW            w;
+  IDAndTitleEditPtr iatep_new;
+  IDAndTitleEditPtr iatep_current;
+  DialoG            new_dlg;
+  DialoG            current_dlg;
+  ButtoN            show_all_btn;
+  DoC               auto_correct_doc;
+  DialoG            bracket_dlg;
+  PaneL             badvalue_pnl;
+  PaneL             unrec_mod_pnl;
+  ButtoN            auto_correct_btn;
+  Boolean           auto_correct_ids;
+  Boolean           auto_correct_bracketing;
+  Boolean           auto_correct_modnames;
+  ButtoN            accept_btn;
+  ButtoN            refresh_err_btn;
+  
+  Boolean           seqid_edit_phase;
+  Boolean           is_nuc;
+} SeqIdEditData, PNTR SeqIdEditPtr;
+ 
+/* This section of code is used for detecting errors in lists of sequence IDs
+ * and titles.
+ */
 static Uint2 idedit_types [] = {
   TAGLIST_PROMPT, TAGLIST_PROMPT, TAGLIST_TEXT, TAGLIST_TEXT
 };
@@ -13565,170 +17113,1225 @@ static Uint2 idedit_widths [] = {
   6, 5, 10, 40,
 };
 
-static Int4 CountSequencesAndSegments (SeqEntryPtr list)
+static Boolean HasMissingIDs (IDAndTitleEditPtr iatep)
 {
-  Int4         num_seqs = 0;
-  BioseqSetPtr bssp;
+  Int4 i;
   
-  while (list != NULL)
+  if (iatep == NULL)
   {
-    if (list->data.ptrvalue != NULL)
-    {
-      if (IS_Bioseq (list))
-      {
-        num_seqs ++;
-      }
-      else if (IS_Bioseq_set (list))
-      {
-        bssp = (BioseqSetPtr) list->data.ptrvalue;
-        num_seqs += CountSequencesAndSegments (bssp->seq_set);
-      }
-    }
-    list = list->next;
+    return FALSE;
   }
-  return num_seqs;
+  for (i = 0; i < iatep->num_sequences; i++)
+  {
+    if (StringHasNoText (iatep->id_list [i]))
+    {
+      return TRUE;
+    }
+  }
+  return FALSE;
 }
 
-static BioseqPtr FindNthSequenceInSet (SeqEntryPtr seq_list, Int4 nth)
+static Boolean IsDuplicateEditID (IDAndTitleEditPtr iatep_new, Int4 new_pos, IDAndTitleEditPtr iatep_current)
 {
-  Int4         pos = 0;
-  BioseqPtr    bsp = NULL;
-  BioseqSetPtr bssp;
-  SeqEntryPtr  sep;
+  Int4 j;
   
-  while (seq_list != NULL && bsp == NULL)
+  if (iatep_new == NULL || iatep_new->num_sequences == 0
+      || new_pos < 0 || new_pos >= iatep_new->num_sequences)
   {
-    if (seq_list->data.ptrvalue != NULL)
-    {
-      if (IS_Bioseq (seq_list))
-      {
-        if (nth == pos)
-        {
-          bsp = seq_list->data.ptrvalue;
-        }
-        else
-        {
-          pos ++;
-        }
-      }
-      else if (IS_Bioseq_set (seq_list))
-      {
-        bssp = (BioseqSetPtr) seq_list->data.ptrvalue;
-        sep = bssp->seq_set;
-        while (sep != NULL && bsp == NULL)
-        {
-          bsp = FindNthSequenceInSet (sep, nth - pos);
-          if (bsp == NULL)
-          {
-            if (IS_Bioseq_set (sep))
-            {
-              bssp = (BioseqSetPtr) sep->data.ptrvalue;
-              pos += CountSequencesAndSegments (bssp->seq_set);
-            }
-            else if (IS_Bioseq (sep))
-            {
-              pos ++;
-            }
-          }
-          sep = sep->next;
-        }
-      }      
-    }
-    seq_list = seq_list->next;
+    return FALSE;
   }
-  return bsp;
+  
+  for (j = 0; j < iatep_new->num_sequences; j++)
+  {
+    if (j == new_pos)
+    {
+      continue;
+    }
+    if (StringCmp (iatep_new->id_list [new_pos], iatep_new->id_list [j]) == 0)
+    {
+      return TRUE;
+    }
+  }
+  if (iatep_current != NULL)
+  {
+    for (j = 0; j < iatep_current->num_sequences; j++)
+    {
+      if (StringCmp (iatep_new->id_list [new_pos], iatep_current->id_list [j]) == 0)
+      {
+        return TRUE;
+      }
+    }
+  }
+  return FALSE;
 }
 
+static Boolean EditHasDuplicateIDs (IDAndTitleEditPtr iatep_new, IDAndTitleEditPtr iatep_current)
+{
+  Int4 i, j;
+  
+  if (iatep_new == NULL || iatep_new->num_sequences == 0)
+  {
+    return FALSE;
+  }
+  
+  for (i = 0; i < iatep_new->num_sequences; i++)
+  {
+    for (j = i + 1; j < iatep_new->num_sequences; j++)
+    {
+      if (StringCmp (iatep_new->id_list [i], iatep_new->id_list [j]) == 0)
+      {
+        return TRUE;
+      }
+    }
+    if (iatep_current != NULL)
+    {
+      for (j = 0; j < iatep_current->num_sequences; j++)
+      {
+        if (StringCmp (iatep_new->id_list [i], iatep_current->id_list [j]) == 0)
+        {
+          return TRUE;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
+/* This function creates a list of suggested IDs and titles 
+ * based on errors in the IDs of the original lists.
+ * The errors that can be auto-corrected are:
+ *     * spaces in the sequence IDs
+ *     * brackets in the sequence IDs 
+ */
+static IDAndTitleEditPtr SuggestCorrectionForLocalIDs (IDAndTitleEditPtr iatep_new, IDAndTitleEditPtr iatep_current)
+{
+  Boolean      has_spaces = FALSE;
+  CharPtr      add_str, cp;
+  Int4         len, add_str_len;
+  Int4         seq_num;
+  ValNodePtr   extended_ids = NULL;
+  IDAndTitleEditPtr iatep_corrected = NULL;
+  CharPtr           new_title_start;
+  
+  if (iatep_new == NULL || iatep_new->num_sequences < 1)
+  {
+    return NULL;
+  }
+  
+  iatep_corrected = IDAndTitleEditCopy (iatep_new);
+
+  for (seq_num = 0; seq_num < iatep_corrected->num_sequences; seq_num++)
+  {
+    if (!StringHasNoText (iatep_new->id_list [seq_num])
+        && IsDuplicateEditID (iatep_new, seq_num, iatep_current)
+        && !StringHasNoText (iatep_new->title_list [seq_num])
+        && iatep_new->title_list [seq_num][0] != '[')
+    {
+      len = StringCSpn (iatep_corrected->title_list [seq_num], " \t[]");
+      if (len > 0)
+      {
+        add_str_len = len + StringLen (iatep_corrected->id_list [seq_num]);
+        add_str = (CharPtr) MemNew ((add_str_len + 1) * sizeof (Char));
+        if (add_str != NULL)
+        {
+          StringCpy (add_str, iatep_corrected->id_list [seq_num]);
+          StringNCat (add_str, iatep_corrected->title_list [seq_num], len);
+          add_str [add_str_len] = 0;
+          iatep_corrected->id_list [seq_num] = MemFree (iatep_corrected->id_list [seq_num]);
+          iatep_corrected->id_list [seq_num] = add_str;
+          
+          new_title_start = iatep_corrected->title_list [seq_num] + len;
+          new_title_start += StringSpn (new_title_start, " \t");
+          new_title_start = StringSave (new_title_start);
+          iatep_corrected->title_list [seq_num] = MemFree (iatep_corrected->title_list [seq_num]);
+          iatep_corrected->title_list [seq_num] = new_title_start;
+        }
+      }
+    }
+    
+    /* suggest correction for brackets in sequence IDs */
+    if ((cp = StringChr (iatep_corrected->id_list [seq_num], '[')) != NULL)
+    {
+      len = StringLen (cp);
+      if (StringNCmp (cp, iatep_corrected->title_list [seq_num], len) != 0)
+      {
+        add_str_len = len + StringLen (iatep_corrected->title_list [seq_num]);
+        add_str = (CharPtr) MemNew ((add_str_len + 2) * sizeof (Char));
+        if (add_str != NULL)
+        {
+          StringCpy (add_str, cp);
+          StringCat (add_str, " ");
+          StringCat (add_str, iatep_corrected->title_list [seq_num]);
+          iatep_corrected->title_list [seq_num] = MemFree (iatep_corrected->title_list [seq_num]);
+          iatep_corrected->title_list [seq_num] = add_str;
+          *cp = 0;
+        }
+      }
+      *cp = 0;
+    }
+  }
+  return iatep_corrected;  
+}
+
+/* This function creates a list of suggested titles based on bracketing errors
+ * in the original list.
+ */
+static IDAndTitleEditPtr SuggestCorrectionForTitleBracketing (IDAndTitleEditPtr iatep_orig)
+{
+  IDAndTitleEditPtr iatep_corrected;
+  Int4              seq_num, msg_num;
+  
+  if (iatep_orig == NULL || iatep_orig->num_sequences < 1)
+  {
+    return NULL;
+  }
+  
+  iatep_corrected = IDAndTitleEditCopy (iatep_orig);
+
+  for (seq_num = 0; seq_num < iatep_corrected->num_sequences; seq_num++)
+  {
+    msg_num = DetectBadBracketing (iatep_corrected->title_list[seq_num]);
+    if (msg_num != 0)
+    {
+      iatep_corrected->title_list[seq_num] = MemFree (iatep_corrected->title_list[seq_num]);
+      iatep_corrected->title_list[seq_num] = SuggestCorrectBracketing(iatep_orig->title_list[seq_num]);
+    }
+  }
+  return iatep_corrected;
+}
+
+/* This function indicates whether there are bracketing errors in the supplied list
+ * of sequence IDs and titles. 
+ */
+static Boolean EditNeedsBracketingFixes (IDAndTitleEditPtr iatep_orig)
+{
+  Int4    seq_num;
+  Boolean needs_fix = FALSE;
+
+  if (iatep_orig == NULL || iatep_orig->num_sequences < 1)
+  {
+    return FALSE;
+  }
+  
+  for (seq_num = 0; seq_num < iatep_orig->num_sequences && ! needs_fix; seq_num++)
+  {
+    if (DetectBadBracketing (iatep_orig->title_list[seq_num]) != 0)
+    {
+      needs_fix = TRUE;
+    }
+  }
+  return needs_fix;
+}
+
+/* These functions are used to find and list unrecognized modifier names in
+ * definition lines.
+ */
+
+static Boolean IsUnrecognizedModifierName (ModifierInfoPtr mip, Boolean is_nuc)
+{
+  if (mip == NULL
+      || (mip->modtype == eModifierType_SourceQual
+  	      && mip->subtype == 255
+  	      && StringICmp (mip->name, "note-subsrc") != 0 
+  	      && StringICmp (mip->name, "note-orgmod") != 0)
+  	  || (!is_nuc && mip->modtype != eModifierType_Protein
+  	      && StringICmp (mip->name, "note-orgmod") != 0))
+  {
+    return TRUE;
+  }
+  else
+  {
+    return FALSE;
+  }
+}
+ 
+/* This function searches a single definition line for unrecognized modifiers
+ * and adds them to the list if they are not already on the list.
+ */
 static void 
-SetSeqListInTagListDialog 
-(DialoG d, 
- SeqEntryPtr new_list, 
- SeqEntryPtr current_list, 
- Boolean show_all)
+AddUnrecognizedModifiersForOneDefinitionLine 
+(CharPtr         defline,
+ ValNodePtr PNTR unrecognized_list,
+ Boolean         is_nuc)
 {
-  TagListPtr            tlp;
-  Int4                  num_sequences = 0, total_sequences, seq_num;
-  ValNodePtr            taglist_data = NULL;
-  Boolean               is_dup;
-  BioseqPtr             bsp;
-  Char                  id_str [128];  
-  CharPtr               title_txt;
-  SeqDescrPtr           sdp;
-  CharPtr               str;
-  Int4                  len;
-  Int4                  row_to_hide, row_to_show;
-
-  tlp = (TagListPtr) GetObjectExtra (d);
+  ValNodePtr      modifier_info_list;
+  ValNodePtr      info_vnp, type_vnp;
+  ModifierInfoPtr mip;
   
-  if (tlp == NULL || new_list == NULL)
+  if (StringHasNoText (defline) || unrecognized_list == NULL)
   {
     return;
   }
   
-  /* collect current IDs and titles */
-  total_sequences = CountSequencesAndSegments (new_list);
-  for (seq_num = 0; seq_num < total_sequences; seq_num++)
+  modifier_info_list = ParseAllBracketedModifiers (defline);
+  for (info_vnp = modifier_info_list; info_vnp != NULL; info_vnp = info_vnp->next)
   {
-    bsp = FindNthSequenceInSet (new_list, seq_num);
-    if (bsp == NULL)
+    mip = (ModifierInfoPtr)info_vnp->data.ptrvalue;
+    if (mip == NULL || !IsUnrecognizedModifierName (mip, is_nuc))
     {
+      mip = ModifierInfoFree (mip);
+      continue;
+    }
+    for (type_vnp = *unrecognized_list;
+         type_vnp != NULL && StringICmp (mip->name, type_vnp->data.ptrvalue) != 0;
+         type_vnp = type_vnp->next)
+    {
+    }
+    if (type_vnp == NULL)
+    {
+      ValNodeAddPointer (unrecognized_list, 0, StringSave (mip->name));
+    }
+  }
+}
+
+/* This function searches all of the titles in the supplied list of sequence IDs and titles
+ * for unrecognized modifier names and adds them to the unrecognized_list if they are
+ * not already in the list.
+ */
+static void 
+AddUnrecognizedModifiers 
+(IDAndTitleEditPtr iatep,
+ ValNodePtr PNTR   unrecognized_list,
+ Boolean           is_nuc)
+{
+  Int4            seq_num;
+  
+  if (iatep == NULL || unrecognized_list == NULL)
+  {
+    return;
+  }
+
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    AddUnrecognizedModifiersForOneDefinitionLine (iatep->title_list [seq_num],
+                                                  unrecognized_list,
+                                                  is_nuc);
+  }  
+}
+
+static void AdjustDuplicates (IDAndTitleEditPtr iatep);
+
+/* This function searches all of the titles in the new and existing sets of sequences
+ * for unrecognized modifier names and generates a list of unique unrecognized modifier names.
+ */
+static ValNodePtr 
+ListUnrecognizedModifiers 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ Boolean           is_nuc)
+{
+  ValNodePtr      unrecognized_list = NULL;
+
+/*  
+  AdjustDuplicates (iatep_new);
+  AdjustDuplicates (iatep_current);
+ */
+   
+  AddUnrecognizedModifiers (iatep_new, &unrecognized_list, is_nuc);
+  AddUnrecognizedModifiers (iatep_current, &unrecognized_list, is_nuc);
+  
+  return unrecognized_list;
+}
+
+/* This section of code will look for inappropriate values in definition line pairs */
+typedef struct badvalue
+{
+  CharPtr seq_id;
+  CharPtr mod_name;
+  CharPtr value;
+} BadValueData, PNTR BadValuePtr;
+
+static BadValuePtr BadValueFree (BadValuePtr bvp)
+{
+  if (bvp != NULL)
+  {
+    bvp->seq_id = MemFree (bvp->seq_id);
+    bvp->mod_name = MemFree (bvp->mod_name);
+    bvp->value = MemFree (bvp->value);
+    bvp = MemFree (bvp);
+  }
+  return bvp;
+}
+
+static ValNodePtr BadValueListFree (ValNodePtr list)
+{
+  if (list != NULL)
+  {
+    list->next = BadValueListFree (list->next);
+    list->data.ptrvalue = BadValueFree (list->data.ptrvalue);
+    list = ValNodeFree (list);
+  }
+  return list;
+}
+
+static BadValuePtr BadValueNew (CharPtr seq_id, CharPtr mod_name, CharPtr value)
+{
+  BadValuePtr bvp;
+  
+  bvp = (BadValuePtr) MemNew (sizeof (BadValueData));
+  if (bvp != NULL)
+  {
+    bvp->seq_id = StringSave (seq_id);
+    bvp->mod_name = StringSave (mod_name);
+    if (StringHasNoText (value))
+    {
+      bvp->value = NULL;
+    }
+    else
+    {
+      bvp->value = StringSave (value);
+    }
+  }
+  return bvp;
+}
+
+static Int4 GetMaxBadValueIDLength (ValNodePtr vnp)
+{
+  Int4        max_length = 0;
+  BadValuePtr bvp;
+  
+  while (vnp != NULL)
+  {
+    bvp = (BadValuePtr) vnp->data.ptrvalue;
+    if (bvp != NULL)
+    {
+      max_length = MAX( max_length, StringLen (bvp->seq_id));
+    }
+    vnp = vnp->next;
+  }
+  return max_length;
+}
+
+static Int4 GetMaxBadValueModNameLength (ValNodePtr vnp)
+{
+  Int4        max_length = 0;
+  BadValuePtr bvp;
+  
+  while (vnp != NULL)
+  {
+    bvp = (BadValuePtr) vnp->data.ptrvalue;
+    if (bvp != NULL)
+    {
+      max_length = MAX( max_length, StringLen (bvp->mod_name));
+    }
+    vnp = vnp->next;
+  }
+  return max_length;
+}
+
+static Int4 GetMaxBadValueValueLength (ValNodePtr vnp)
+{
+  Int4        max_length = 0;
+  BadValuePtr bvp;
+  
+  while (vnp != NULL)
+  {
+    bvp = (BadValuePtr) vnp->data.ptrvalue;
+    if (bvp != NULL)
+    {
+      max_length = MAX( max_length, StringLen (bvp->value));
+    }
+    vnp = vnp->next;
+  }
+  return max_length;
+}
+
+/* The FixModName structure and the functions SetFixModNameAccept
+ * and FixOneModifierName are used to present a dialog that allows
+ * a user to replace a modifier name, either for one sequence or
+ * for all sequences.
+ * SetFixModNameAccept is used to prevent the user from clicking on
+ * Accept before choosing a new modifier name.
+ */
+typedef struct fixmodname
+{
+  DialoG  name_list;
+  ButtoN  accept_btn;
+} FixModNameData, PNTR FixModNamePtr;
+
+static void SetFixModNameAccept (Pointer userdata)
+{
+  FixModNamePtr fmp;
+  ValNodePtr    vnp;
+  Boolean      ok_to_accept = TRUE;
+
+  fmp = (FixModNamePtr) userdata;
+  if (fmp == NULL)
+  {
+    return;
+  }
+  
+  vnp = DialogToPointer (fmp->name_list);
+  if (vnp == NULL)
+  {
+    ok_to_accept = FALSE;
+  }
+  vnp = ValNodeFreeData (vnp);
+  
+  if (ok_to_accept)
+  {
+    Enable (fmp->accept_btn);
+  }
+  else
+  {
+    Disable (fmp->accept_btn);
+  }
+  
+}
+
+static CharPtr 
+ReplaceOneModifierValue 
+(CharPtr title,
+ CharPtr orig_name, 
+ CharPtr orig_value,
+ CharPtr repl_value,
+ Boolean is_nontext,
+ Boolean copy_to_note);
+static void 
+UpdateIdAndTitleEditDialog 
+(DialoG            d,
+ IDAndTitleEditPtr iatep_new, 
+ IDAndTitleEditPtr iatep_current, 
+ Boolean           seqid_edit_phase,
+ Boolean           show_all,
+ Boolean           is_nuc);
+static void ShowErrorInstructions (Pointer userdata);
+static void ScrollTagListToSeqId (DialoG d, CharPtr seq_id);
+
+
+static Boolean 
+FixOneModifierName 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ CharPtr           seq_id,
+ CharPtr           orig_mod_name,
+ Boolean           is_nuc)
+{
+  ValNodePtr vnp;
+  WindoW     w;
+  ValNodePtr mod_choices;
+  GrouP      h, action_type, c;
+  PrompT       p;
+  FixModNamePtr fmp;
+  ModalAcceptCancelData acd;
+  Boolean               rval = FALSE;
+  ButtoN                b;
+  CharPtr               prompt_txt;
+  CharPtr               prompt_fmt = "Please choose a valid modifier name to replace %s:";
+  CharPtr               radio_txt;
+  CharPtr               radio_fmt = "For sequence '%s' only";
+  CharPtr               repl_name;
+  Int4                  action_type_val, seq_num;
+  
+  
+  if ((iatep_new == NULL && iatep_current == NULL)
+      || StringHasNoText (orig_mod_name))
+  {
+    return FALSE;
+  }
+  
+  fmp = (FixModNamePtr) MemNew (sizeof (FixModNameData));
+  if (fmp == NULL)
+  {
+    return FALSE;
+  }
+  
+  w = MovableModalWindow (-20, -13, -10, -10, "Replace Modifier Name", NULL);
+  h = HiddenGroup(w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  SetObjectExtra (w, fmp, StdCleanupExtraProc);
+  
+  prompt_txt = (CharPtr) MemNew ((StringLen (prompt_fmt) + StringLen (orig_mod_name)) * sizeof (Char));
+  if (prompt_txt != NULL)
+  {
+    sprintf (prompt_txt, prompt_fmt, orig_mod_name);
+  }
+  p = StaticPrompt (h, prompt_txt,
+                    0, 0, programFont, 'l');
+  prompt_txt = MemFree (prompt_txt);
+
+  mod_choices = GetFastaModifierList (is_nuc, !is_nuc);
+  fmp->name_list = ValNodeSelectionDialog (h, mod_choices, 6,
+                                          SourceQualValNodeName,
+                                          ValNodeSimpleDataFree,
+                                          SourceQualValNodeDataCopy,
+                                          SourceQualValNodeMatch,
+                                          "modifier",
+                                          SetFixModNameAccept, fmp, FALSE);
+
+  if (StringHasNoText (seq_id) 
+      || (iatep_new == NULL && iatep_current->num_sequences == 1)
+      || (iatep_current == NULL && iatep_new->num_sequences == 1))
+  {
+    action_type = NULL;
+  }
+  else
+  {
+    action_type = HiddenGroup (h, 0, 2, NULL);
+    SetGroupSpacing (action_type, 10, 10);
+    RadioButton (action_type, "For all sequences");
+    radio_txt = (CharPtr) MemNew ((StringLen (radio_fmt) + StringLen (seq_id)) * sizeof (Char));
+    if (radio_txt != NULL)
+    {
+      sprintf (radio_txt, radio_fmt, seq_id);
+    }
+    RadioButton (action_type, radio_txt);
+    radio_txt = MemFree (radio_txt);
+    SetValue (action_type, 1);
+  }
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  fmp->accept_btn = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (fmp->accept_btn, &acd, NULL);
+  Disable (fmp->accept_btn);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) p,
+                              (HANDLE) fmp->name_list,
+                              (HANDLE) c, 
+                              (HANDLE) action_type, 
+                              NULL);
+
+  Show (w);
+  Select (w);
+  
+  acd.cancelled = FALSE;
+  acd.accepted = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (acd.cancelled)
+  {
+    rval = FALSE;
+  }
+  else
+  {
+    vnp = DialogToPointer (fmp->name_list);
+    repl_name = SourceQualValNodeName (vnp);
+    if (action_type == NULL)
+    {
+      action_type_val = 1;
+    }
+    else
+    {
+      action_type_val = GetValue (action_type);
+    }
+    
+    for (seq_num = 0; iatep_new != NULL && seq_num < iatep_new->num_sequences; seq_num++)
+    {
+      if (action_type_val == 1 /* replace value for all sequences */
+          || StringCmp (iatep_new->id_list [seq_num], seq_id) == 0)
+      {
+        iatep_new->title_list [seq_num] = ReplaceOneModifierName (iatep_new->title_list [seq_num],
+                                                                  orig_mod_name, 
+                                                                  repl_name);
+      }
+    }
+    for (seq_num = 0; iatep_current != NULL && seq_num < iatep_current->num_sequences; seq_num++)
+    {
+      if (action_type_val == 1 /* replace value for all sequences */
+          || StringCmp (iatep_current->id_list [seq_num], seq_id) == 0)
+      {
+        iatep_current->title_list [seq_num] = ReplaceOneModifierName (iatep_current->title_list [seq_num],
+                                                                      orig_mod_name, 
+                                                                      repl_name);
+      }
+    }
+    repl_name = MemFree (repl_name);
+    vnp = ValNodeFreeData (vnp);
+    
+    rval = TRUE;
+  }
+    
+  Remove (w);
+  
+  return rval;    
+}
+
+/* This function presents a dialog that allows a user to replace a value for a
+ * modifier, either in a single sequence or for every sequence.
+ * The user also has the option to copy the original value into a note.
+ */
+static Boolean 
+FixOneModifierValue 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ CharPtr           seq_id,
+ CharPtr           orig_mod_name,
+ CharPtr           orig_mod_value,
+ Int4              mod_type)
+{
+  WindoW     w;
+  GrouP      h, action_type, c, instr_grp;
+  PrompT       p;
+  ModalAcceptCancelData acd;
+  Boolean               rval = FALSE;
+  ButtoN                b, accept_btn;
+  CharPtr               prompt_txt;
+  CharPtr               prompt_fmt = "Please choose a valid value for %s to replace %s where %s=%s:";
+  CharPtr               radio_txt;
+  CharPtr               radio_fmt = "For sequence '%s' only";
+  Int4                  action_type_val, seq_num;
+  ButtoN                copy_to_note_btn;
+  DialoG                new_value_dlg;
+  Boolean               is_nontext = FALSE;
+  CharPtr               new_value;
+  Boolean               copy_to_note;
+  
+  if ((iatep_new == NULL && iatep_current == NULL)
+      || StringHasNoText (orig_mod_name)
+      || StringHasNoText (seq_id))
+  {
+    return FALSE;
+  }
+    
+  w = MovableModalWindow (-20, -13, -10, -10, "Replace Modifier Value", NULL);
+  h = HiddenGroup(w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  prompt_txt = (CharPtr) MemNew ((StringLen (prompt_fmt) 
+                                  + 2 * StringLen (orig_mod_name) 
+                                  + 2 * StringLen (orig_mod_value)) * sizeof (Char));
+  if (prompt_txt != NULL)
+  {
+    sprintf (prompt_txt, prompt_fmt, orig_mod_name, 
+                                     orig_mod_value == NULL ? "" : orig_mod_value,
+                                     orig_mod_name, 
+                                     orig_mod_value == NULL ? "" : orig_mod_value);
+  }
+  p = StaticPrompt (h, prompt_txt,
+                    0, 0, programFont, 'l');
+  prompt_txt = MemFree (prompt_txt);
+  
+  if (mod_type == eModifierType_SourceQual)
+  {
+    is_nontext = IsNonTextModifier (orig_mod_name);
+  }
+  
+  instr_grp = MakeInstructionGroup (h, is_nontext, mod_type);  
+  
+  new_value_dlg = SingleModValDialog (h, is_nontext, mod_type, 0);
+
+  action_type = HiddenGroup (h, 0, 2, NULL);
+  SetGroupSpacing (action_type, 10, 10);
+  RadioButton (action_type, "For all sequences");
+  radio_txt = (CharPtr) MemNew ((StringLen (radio_fmt) + StringLen (seq_id)) * sizeof (Char));
+  if (radio_txt != NULL)
+  {
+    sprintf (radio_txt, radio_fmt, seq_id);
+  }
+  RadioButton (action_type, radio_txt);
+  radio_txt = MemFree (radio_txt);
+  SetValue (action_type, 1);
+  
+  copy_to_note_btn = CheckBox (h, "Copy original value to note", NULL);
+  SetStatus (copy_to_note_btn, TRUE);
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  accept_btn = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (accept_btn, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) p,
+                              (HANDLE) new_value_dlg,
+                              (HANDLE) action_type, 
+                              (HANDLE) copy_to_note_btn,
+                              (HANDLE) c, 
+                              (HANDLE) instr_grp,
+                              NULL);
+
+  Show (w);
+  Select (w);
+  
+  acd.cancelled = FALSE;
+  acd.accepted = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (acd.cancelled)
+  {
+    rval = FALSE;
+  }
+  else
+  {
+    new_value = DialogToPointer (new_value_dlg);
+    action_type_val = GetValue (action_type);
+    copy_to_note = GetStatus (copy_to_note_btn);
+    
+    for (seq_num = 0; iatep_new != NULL && seq_num < iatep_new->num_sequences; seq_num++)
+    {
+      if (action_type_val == 1 /* replace value for all sequences */
+          || StringCmp (iatep_new->id_list [seq_num], seq_id) == 0)
+      {
+        iatep_new->title_list [seq_num] = ReplaceOneModifierValue (iatep_new->title_list [seq_num],
+                                                                   orig_mod_name,
+                                                                   orig_mod_value,
+                                                                   new_value,
+                                                                   is_nontext,
+                                                                   copy_to_note); 
+      }
+    }
+    for (seq_num = 0; iatep_current != NULL && seq_num < iatep_current->num_sequences; seq_num++)
+    {
+      if (action_type_val == 1 /* replace value for all sequences */
+          || StringCmp (iatep_current->id_list [seq_num], seq_id) == 0)
+      {
+        iatep_current->title_list [seq_num] = ReplaceOneModifierValue (iatep_current->title_list [seq_num],
+                                                                       orig_mod_name, 
+                                                                       orig_mod_value,
+                                                                       new_value,
+                                                                       is_nontext,
+                                                                       copy_to_note); 
+      }
+    }
+    new_value = MemFree (new_value);
+    
+    rval = TRUE;
+  }
+    
+  Remove (w);
+  
+  return rval;    
+}
+
+static void FindBadLocationInTitle (CharPtr seq_id, CharPtr title, ValNodePtr PNTR badlist)
+{
+  CharPtr value;
+  
+  if (StringHasNoText (seq_id) || StringHasNoText (title) || badlist == NULL
+      || FindValuePairInDefLine ("location", title, NULL) == NULL)
+  {
+    return;
+  }
+  
+  value = FindValueFromPairInDefline ("location", title);
+  if (StringHasNoText (value))
+  {
+    ValNodeAddPointer (badlist, eModifierType_Location, BadValueNew (seq_id, "location", NULL));
+  }
+  else if (!IsValueInEnumAssoc (value, biosource_genome_simple_alist))
+  {
+    ValNodeAddPointer (badlist, eModifierType_Location, BadValueNew (seq_id, "location", value));
+  }
+  value = MemFree (value);
+}
+
+static void FindBadOriginInTitle (CharPtr seq_id, CharPtr title, ValNodePtr PNTR badlist)
+{
+  CharPtr value;
+  
+  if (StringHasNoText (seq_id) || StringHasNoText (title) || badlist == NULL
+      || FindValuePairInDefLine ("origin", title, NULL) == NULL)
+  {
+    return;
+  }
+  
+  value = FindValueFromPairInDefline ("origin", title);
+  if (StringHasNoText (value))
+  {
+    ValNodeAddPointer (badlist, eModifierType_Origin, BadValueNew (seq_id, "origin", NULL));
+  }
+  else if (!IsValueInEnumAssoc (value, biosource_origin_alist))
+  {
+    ValNodeAddPointer (badlist, eModifierType_Origin, BadValueNew (seq_id, "origin", value));
+  }
+  value = MemFree (value);
+}
+
+static void FindBadTopologyInTitle (CharPtr seq_id, CharPtr title, ValNodePtr PNTR badlist)
+{
+  CharPtr value;
+  
+  if (StringHasNoText (seq_id) || StringHasNoText (title) || badlist == NULL
+      || FindValuePairInDefLine ("topology", title, NULL) == NULL)
+  {
+    return;
+  }
+  
+  value = FindValueFromPairInDefline ("topology", title);
+  if (StringHasNoText (value))
+  {
+    ValNodeAddPointer (badlist, eModifierType_Topology, BadValueNew (seq_id, "topology", NULL));
+  }
+  else if (!IsValueInEnumAssoc (value, topology_nuc_alist))
+  {
+    ValNodeAddPointer (badlist, eModifierType_Topology, BadValueNew (seq_id, "topology", value));
+  }
+  value = MemFree (value);
+}
+
+static void FindBadMolTypeInTitle (CharPtr seq_id, CharPtr title, ValNodePtr PNTR badlist)
+{
+  CharPtr value;
+  Int4    moltype;
+  
+  if (StringHasNoText (seq_id) || StringHasNoText (title) || badlist == NULL
+      || FindValuePairInDefLine ("moltype", title, NULL) == NULL)
+  {
+    return;
+  }
+
+  value = FindValueFromPairInDefline ("moltype", title);
+  moltype = MolTypeFromString (value);
+  if (moltype == 0)
+  {
+    ValNodeAddPointer (badlist, eModifierType_MolType, BadValueNew (seq_id, "moltype", value));
+  }
+  value = MemFree (value);  
+}
+
+static void FindBadMoleculeInTitle (CharPtr seq_id, CharPtr title, ValNodePtr PNTR badlist)
+{
+  CharPtr value;
+  
+  if (StringHasNoText (seq_id) || StringHasNoText (title) || badlist == NULL
+      || FindValuePairInDefLine ("molecule", title, NULL) == NULL)
+  {
+    return;
+  }
+
+  value = FindValueFromPairInDefline ("molecule", title);
+  if (StringICmp (value, "dna") != 0 && StringICmp (value, "rna") != 0)
+  {
+    ValNodeAddPointer (badlist, eModifierType_Molecule, BadValueNew (seq_id, "molecule", value));
+  }
+  value = MemFree (value);    
+}
+
+static void 
+FindBadGeneticCodeInTitle 
+(CharPtr seq_id,
+ CharPtr title, 
+ CharPtr mod_name, 
+ ValNodePtr PNTR badlist)
+{
+  CharPtr value;
+  Int4    gcode;
+  
+  if (StringHasNoText (seq_id) || StringHasNoText (title) 
+      || StringHasNoText (mod_name)
+      || badlist == NULL
+      || FindValuePairInDefLine (mod_name, title, NULL) == NULL)
+  {
+    return;
+  }
+
+  value = FindValueFromPairInDefline (mod_name, title);
+  gcode = GeneticCodeFromString (value);
+  if (gcode == 0)
+  {
+    ValNodeAddPointer (badlist, GetModifierType (mod_name), BadValueNew (seq_id, mod_name, value));
+  }
+  value = MemFree (value);
+}
+
+static void FindBadNonTextValueInTitle (CharPtr seq_id, CharPtr title, CharPtr mod_name, ValNodePtr PNTR badlist)
+{
+  CharPtr value;
+  
+  if (StringHasNoText (seq_id) || StringHasNoText (title) 
+      || StringHasNoText (mod_name)
+      || badlist == NULL
+      || FindValuePairInDefLine (mod_name, title, NULL) == NULL)
+  {
+    return;
+  }
+
+  value = FindValueFromPairInDefline (mod_name, title);
+  if (!StringHasNoText (value))
+  {
+    ValNodeAddPointer (badlist, eModifierType_SourceQual, BadValueNew (seq_id, mod_name, value));
+  }
+  value = MemFree (value);
+}
+
+static void FindBadValuesInTitle (CharPtr seq_id, CharPtr title, ValNodePtr PNTR badlist)
+{  
+  if (StringHasNoText (seq_id) || StringHasNoText (title) || badlist == NULL)
+  {
+    return;
+  }
+  
+  FindBadLocationInTitle (seq_id, title, badlist);
+  FindBadOriginInTitle (seq_id, title, badlist);
+  FindBadGeneticCodeInTitle (seq_id, title, "gcode", badlist);
+  FindBadGeneticCodeInTitle (seq_id, title, "mgcode", badlist);
+  FindBadGeneticCodeInTitle (seq_id, title, "genetic_code", badlist);
+  FindBadMolTypeInTitle (seq_id, title, badlist);
+  FindBadMoleculeInTitle (seq_id, title, badlist);
+  FindBadTopologyInTitle (seq_id, title, badlist);
+  
+  /* check nontext modifiers */
+  FindBadNonTextValueInTitle (seq_id, title, "transgenic", badlist);
+  FindBadNonTextValueInTitle (seq_id, title, "germline", badlist);
+  FindBadNonTextValueInTitle (seq_id, title, "environmental-sample", badlist);
+  FindBadNonTextValueInTitle (seq_id, title, "rearranged", badlist);
+}
+
+static void FindBadValuesInIDsAndTitles (IDAndTitleEditPtr iatep, ValNodePtr PNTR bad_list)
+{
+  Int4 seq_num;
+  
+  if (iatep == NULL)
+  {
+    return;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    FindBadValuesInTitle (iatep->id_list [seq_num], iatep->title_list [seq_num], bad_list);
+  }
+}
+
+static CharPtr 
+GetIDAndTitleErrorMessage 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current, 
+ Int4              seq_num,
+ Boolean           has_dups,
+ Boolean           has_missing,
+ Boolean           seqid_edit_phase,
+ Boolean           has_bracket,
+ Boolean           has_unrec_mods,
+ Boolean           is_nuc)
+{
+  ValNodePtr unrec_mod_list = NULL, bad_value_list;  
+  Boolean    is_dup, has_id_bracket = FALSE;
+  Int4       msg_num = 0;
+  CharPtr    err_msg = "";
+  BadValuePtr bvp;
+
+  /* get appropriate error message */
+  unrec_mod_list = NULL;
+  bad_value_list = NULL;
+    
+  /* determine whether this is a duplicate */
+  if (is_nuc)
+  {
+    is_dup = IsDuplicateEditID (iatep_new, seq_num, iatep_current);
+  }
+  else
+  {
+    is_dup = FALSE;
+  }
+  
+  /* look for bracket in ID */
+  if (StringChr (iatep_new->id_list [seq_num], '['))
+  {
+    has_id_bracket = TRUE;   
+  }
+  
+  if (has_dups || has_missing || has_id_bracket)
+  {
+    if (StringHasNoText (iatep_new->id_list [seq_num]))
+    {
+      err_msg = "Missing ID";
+    }
+    else if (is_dup)
+    {
+      err_msg = "Duplicate ID";
+    }
+    else if (has_id_bracket)
+    {
+      err_msg = "Bracket in ID";
+    }
+  }
+  else if (seqid_edit_phase)
+  {
+    err_msg = "";
+  }
+  else if (has_bracket)
+  {
+    msg_num = DetectBadBracketing (iatep_new->title_list [seq_num]);
+    /* we have bracketing problems */
+    switch (msg_num)
+    {
+      case BRACKET_ERR_MISMATCHED_BRACKETS:
+        err_msg = "Mismatched []";
+        break;
+      case BRACKET_ERR_MISSING_EQUALS:
+        err_msg = "Missing '='";
+        break;
+      case BRACKET_ERR_MULT_EQUALS:
+        err_msg = "Too many '='";
+        break;
+      case BRACKET_ERR_NO_MOD_NAME:
+        err_msg = "Missing name";
+        break;
+      case BRACKET_ERR_MISMATCHED_QUOTES:
+        err_msg = "Mismatched \" or '";
+        break;
+    }
+  }
+  else if (has_unrec_mods)
+  {
+    AddUnrecognizedModifiersForOneDefinitionLine (iatep_new->title_list [seq_num],
+                                                  &unrec_mod_list,
+                                                  is_nuc);
+    if (unrec_mod_list != NULL)
+    {
+      err_msg = unrec_mod_list->data.ptrvalue;
+    }
+  }
+  else
+  {
+    FindBadValuesInTitle (iatep_new->id_list [seq_num], iatep_new->title_list [seq_num], &bad_value_list);
+    if (bad_value_list != NULL && (bvp = bad_value_list->data.ptrvalue) != NULL)
+    {
+      err_msg = bvp->mod_name;
+    }
+  }
+  
+  err_msg = StringSave (err_msg);
+  ValNodeFreeData (unrec_mod_list);
+  BadValueListFree (bad_value_list);
+  return err_msg;
+}
+
+static CharPtr GetTagListErrValueForSeqNum (TagListPtr tlp, Int4 seq_num)
+{
+  Char       seq_str [15];
+  ValNodePtr vnp;
+  Int4       row_num;
+  CharPtr    pos_str;
+  
+  if (tlp == NULL)
+  {
+    return NULL;
+  }
+  
+  sprintf (seq_str, "%d", seq_num + 1);
+  for (vnp = tlp->vnp, row_num = 0; vnp != NULL; vnp = vnp->next, row_num++)
+  {
+    pos_str = GetTagListValueEx (tlp, row_num, 1);
+    if (StringCmp (pos_str, seq_str) == 0)
+    {
+      pos_str = MemFree (pos_str);
+      return GetTagListValueEx (tlp, row_num, 0);
+    }
+    pos_str = MemFree (pos_str);
+  }
+  return NULL;
+}
+
+/* This function displays information from a list of sequence IDs and titles
+ * in a TagList dialog.
+ * The TagList dialog has four columns: Error, Position, Sequence ID, and Title.
+ */
+static void 
+UpdateIdAndTitleEditDialog 
+(DialoG            d,
+ IDAndTitleEditPtr iatep_new, 
+ IDAndTitleEditPtr iatep_current,
+ Boolean           seqid_edit_phase, 
+ Boolean           show_all,
+ Boolean           is_nuc)
+{
+  TagListPtr tlp;
+  Int4       seq_num, len;
+  CharPtr    str;
+  CharPtr    str_format = "%s\t%d\t%s\t%s\n";
+  Int4       num_shown;
+  CharPtr    err_msg, old_err_msg;
+  ValNodePtr taglist_data = NULL;
+  Int4       row_to_show, row_to_hide;
+  Boolean    has_dups, has_missing, has_bracket, has_unrec_mods = FALSE;
+  ValNodePtr unrec_mods = NULL;
+  
+  tlp = (TagListPtr) GetObjectExtra (d);
+  
+  if (tlp == NULL || iatep_new == NULL || iatep_new->num_sequences == 0)
+  {
+    return;
+  }
+  
+  has_dups = EditHasDuplicateIDs (iatep_new, iatep_current);
+  has_missing = HasMissingIDs (iatep_new) || HasMissingIDs (iatep_current);
+  has_bracket = EditNeedsBracketingFixes (iatep_new) 
+                || EditNeedsBracketingFixes (iatep_current);
+
+  if (!has_bracket)
+  {
+    unrec_mods = ListUnrecognizedModifiers (iatep_new, iatep_current, is_nuc);
+  }
+  if (unrec_mods != NULL)
+  {
+    has_unrec_mods = TRUE;
+    unrec_mods = ValNodeFreeData (unrec_mods);
+  }
+  
+  num_shown = 0;
+  for (seq_num = 0; seq_num < iatep_new->num_sequences; seq_num++)
+  {
+    err_msg = GetIDAndTitleErrorMessage (iatep_new, iatep_current, 
+                                         seq_num, has_dups,
+                                         has_missing, seqid_edit_phase,
+                                         has_bracket,
+                                         has_unrec_mods, is_nuc);
+    if (seqid_edit_phase && StringHasNoText (err_msg))
+    {
+      old_err_msg = GetTagListErrValueForSeqNum (tlp, seq_num);
+      if (StringCmp (old_err_msg, "Duplicate ID") == 0
+          || StringCmp (old_err_msg, "Missing ID") == 0
+          || StringCmp (old_err_msg, "Fixed") == 0)
+      {
+        err_msg = MemFree (err_msg);
+        err_msg = StringSave ("Fixed");
+      }
+      old_err_msg = MemFree (old_err_msg);
+    }
+                                         
+    if (StringHasNoText (err_msg) && !show_all)
+    {
+      err_msg = MemFree (err_msg);
       continue;
     }
 
-    /* determine whether this is a duplicate */
-    is_dup = IsDuplicateID (current_list, NULL, bsp->id)
-                            || IsDuplicateID (new_list, bsp, bsp->id);
-    if (!is_dup && ! show_all)
-    {
-      continue;
-    }
-    /* collect ID */
-    SeqIdWrite (bsp->id, id_str, PRINTID_REPORT, sizeof (id_str) - 1);    
-    /* collect title */
-    title_txt = NULL;
-    sdp = bsp->descr;
-    while (sdp != NULL && sdp->choice != Seq_descr_title)
-    {
-      sdp = sdp->next;
-    }
-    if (sdp != NULL)
-    {
-      title_txt = sdp->data.ptrvalue;
-    }
-    /* determine whether this is a duplicate */
-    is_dup = IsDuplicateID (current_list, NULL, bsp->id)
-                            || IsDuplicateID (new_list, bsp, bsp->id);
-                              
-    len = StringLen (id_str) + StringLen (title_txt);
-    str = MemNew (len + 18);
+    len = StringLen (str_format) + StringLen (err_msg) + 20
+                     + StringLen (iatep_new->id_list [seq_num]) 
+                     + StringLen (iatep_new->title_list [seq_num]);
+    str = MemNew (len * sizeof (Char));
     if (str != NULL) 
     {
-      sprintf (str, "%s\t%d\t%s\t%s\n", 
-               is_dup ? "Duplicate ID" : "",
+      sprintf (str, str_format, 
+               err_msg,
                seq_num + 1,
-               id_str,
-               title_txt == NULL ? "" : title_txt);
+               StringHasNoText (iatep_new->id_list [seq_num]) ? "" : iatep_new->id_list [seq_num],
+               StringHasNoText (iatep_new->title_list [seq_num]) ? "" : iatep_new->title_list [seq_num]);               
       ValNodeAddPointer (&taglist_data, 0, StringSave (str));
     }
-    num_sequences ++;    
+    err_msg = MemFree (err_msg);
+    num_shown ++;    
   }
   
   SendMessageToDialog (tlp->dialog, VIB_MSG_RESET); 
   tlp->vnp = taglist_data;
   SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
-  tlp->max = MAX ((Int2) 0, (Int2) (num_sequences - tlp->rows));
+  tlp->max = MAX ((Int2) 0, (Int2) (num_shown - tlp->rows));
   CorrectBarMax (tlp->bar, tlp->max);
   CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
-  for (row_to_show = 0; row_to_show < MIN (num_sequences, tlp->rows); row_to_show ++)
+  CorrectBarMax (tlp->left_bar, tlp->max);
+  CorrectBarPage (tlp->left_bar, tlp->rows - 1, tlp->rows - 1);
+  for (row_to_show = 0; row_to_show < MIN (num_shown, tlp->rows); row_to_show ++)
   {
     SafeShow (tlp->control [row_to_show * MAX_TAGLIST_COLS + 2]);
     SafeShow (tlp->control [row_to_show * MAX_TAGLIST_COLS + 3]);
   }
   if (tlp->max > 0) {
     SafeShow (tlp->bar);
+    SafeShow (tlp->left_bar);
   } else {
     SafeHide (tlp->bar);
-    for (row_to_hide = num_sequences; row_to_hide < tlp->rows; row_to_hide ++)
+    SafeHide (tlp->left_bar);
+    for (row_to_hide = num_shown; row_to_hide < tlp->rows; row_to_hide ++)
     {
       SafeHide (tlp->control [row_to_hide * MAX_TAGLIST_COLS + 2]);
       SafeHide (tlp->control [row_to_hide * MAX_TAGLIST_COLS + 3]);
@@ -13736,556 +18339,2753 @@ SetSeqListInTagListDialog
   }
 }
 
-static void CollectIdAndTitleFromDialog (TagListPtr tlp, SeqEntryPtr sep)
+/* This function copies the contents of a TagList dialog into a list
+ * of Sequence IDs and titles.  The first two columns of the TagList
+ * dialog, Error and Position, are ignored.
+ */
+static void UpdateIdAndTitleData (DialoG d, IDAndTitleEditPtr iatep)
 {
-  BioseqPtr    bsp;
   CharPtr      str;
-  SeqDescrPtr  sdp;
-  SeqIdPtr     new_sip;
   Int4         num_rows, row_num, seq_pos;
+  TagListPtr   tlp;
   
-  if (tlp == NULL || sep == NULL)
+  tlp = (TagListPtr) GetObjectExtra (d);
+  if (tlp == NULL || iatep == NULL)
   {
     return;
   }
-
+  
   num_rows = ValNodeLen (tlp->vnp);
   for (row_num = 0; row_num < num_rows; row_num++)
   {
     /* get position for this sequence */
     str = GetTagListValueEx (tlp, row_num, 1);
     seq_pos = atoi (str);
-    if (seq_pos < 1)
+    str = MemFree (str);
+    if (seq_pos < 1 || seq_pos > iatep->num_sequences)
     {
       continue;
     }
     seq_pos --;
-    bsp = FindNthSequenceInSet (sep, seq_pos);
-    if (bsp == NULL)
-    {
-      continue;
-    }
+    
     /* collect ID */
-    str = GetTagListValueEx (tlp, row_num, 2);
-    new_sip = MakeSeqID (str);
-    str = MemFree (str);
-    if (new_sip != NULL)
-    {
-      if (bsp->id != NULL)
-      {
-        new_sip->next = bsp->id->next;
-        bsp->id->next = NULL;
-        bsp->id = SeqIdFree (bsp->id);
-      }
-      bsp->id = new_sip;
-      SeqMgrReplaceInBioseqIndex(bsp);
-    }
-    else
-    {
-      bsp->id = SeqIdFree (bsp->id);
-    }
+    iatep->id_list [seq_pos] = MemFree (iatep->id_list [seq_pos]);
+    iatep->id_list [seq_pos] = GetTagListValueEx (tlp, row_num, 2);
     
     /* collect title */
-    str = GetTagListValueEx (tlp, row_num, 3);
-    sdp = bsp->descr;
-    while (sdp != NULL && sdp->choice != Seq_descr_title)
-    {
-      sdp = sdp->next;
-    }
-    if (sdp == NULL)
-    {
-      sdp = CreateNewDescriptor (sep, Seq_descr_title);
-      sdp->data.ptrvalue = str;
-    }
-    else
-    {
-      sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
-      sdp->data.ptrvalue = str;
-    }
-  }
-  
+    iatep->title_list [seq_pos] = MemFree (iatep->title_list [seq_pos]);
+    iatep->title_list [seq_pos] = GetTagListValueEx (tlp, row_num, 3);
+  }    
 }
 
-
-static Boolean FixDefinitionLinesInAddSequence (SeqEntryPtr sep_list)
+static void SetIDAndTitleEditDialogErrorColumn
+(DialoG            d,
+ IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ Boolean           seqid_edit_phase,
+ Boolean           is_nuc)
 {
-  Boolean     defline_fix_cancel;
-  SeqEntryPtr sep;
-  BioseqPtr   bsp;
-  SeqDescrPtr sdp;
-  CharPtr     old_txt;
-  Char        id_txt [128];
+  TagListPtr tlp;
+  ValNodePtr vnp;
+  Int4       seq_num, seq_pos;
+  Int4       row_num;
+  CharPtr    err_msg, old_err_msg;
+  Boolean    has_dups, has_missing, has_bracket, has_unrec_mods = FALSE;
+  CharPtr    str;
+  ValNodePtr unrec_mods = NULL;
   
-  if (sep_list == NULL)
-  {
-    return FALSE;
-  }
+  tlp = (TagListPtr) GetObjectExtra (d);
   
-  /* get user to fix definition lines here */
-  defline_fix_cancel = FALSE;
-  for (sep = sep_list; sep != NULL && !defline_fix_cancel; sep = sep->next)
-  {
-    if (IS_Bioseq (sep) && sep->data.ptrvalue != NULL)
-    {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-      sdp = bsp->descr;
-      while (sdp != NULL && sdp->choice != Seq_descr_title)
-      {
-        sdp = sdp->next;
-      }
-      if (sdp != NULL && !StringHasNoText (sdp->data.ptrvalue))
-      {
-        SeqIdWrite (bsp->id, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);    
-        old_txt = StringSave (sdp->data.ptrvalue);
-        FixBracketingInOneDefinitionLine (sdp, &defline_fix_cancel, id_txt);
-        FixUnrecognizedModifersInOneDefinitionLine (sdp, &defline_fix_cancel, NULL);
-        if (defline_fix_cancel)
-        {
-          sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
-          sdp->data.ptrvalue = old_txt;
-        }
-        else
-        {
-          old_txt = MemFree (old_txt);
-        }
-      }
-    }
-  }
-  if (defline_fix_cancel)
-  {
-    return FALSE;
-  }
-  else
-  {
-    return TRUE;
-  }
-}
-
-static Boolean HasBlankIDs (SeqEntryPtr list)
-{
-  Boolean      has_blank = FALSE;
-  BioseqPtr    bsp;
-  BioseqSetPtr bssp;
-  SeqEntryPtr  sep;
-  
-  if (list == NULL)
-  {
-    return FALSE;
-  }
-  /* check for unique IDs or missing IDs */
-  for (sep = list; sep != NULL && ! has_blank; sep = sep->next)
-  {
-    if (sep->data.ptrvalue == NULL)
-    {
-      /* do nothing */
-    }
-    else if (IS_Bioseq (sep))
-    {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-      if (bsp->id == NULL)
-      {
-        has_blank = TRUE;
-      }
-    }
-    else if (IS_Bioseq_set (sep))
-    {
-      bssp = (BioseqSetPtr) sep->data.ptrvalue;
-      has_blank |= HasBlankIDs (bssp->seq_set);
-    }
-  }
-  return has_blank;
-}
-
-static Boolean HasDuplicateIDs (SeqEntryPtr list, SeqEntryPtr current_list)
-{
-  Boolean      has_dup = FALSE;
-  BioseqPtr    bsp;
-  Int4         this_num, num_this_list;
-  
-  if (list == NULL)
-  {
-    return FALSE;
-  }
-  
-  /* check for unique IDs or missing IDs */
-  
-  num_this_list = CountSequencesAndSegments (list);
-  for (this_num = 0; this_num < num_this_list && ! has_dup; this_num++)
-  {
-    bsp = FindNthSequenceInSet (list, this_num);
-    if (bsp != NULL)
-    {
-      has_dup |= IsDuplicateID (current_list, NULL, bsp->id)
-                       || IsDuplicateID (list, bsp, bsp->id);
-    }
-  }
-  return has_dup;
-}
-
-static Boolean IDsNeedFix (SeqEntryPtr list, SeqEntryPtr current_list)
-{
-  Boolean      need_fix = FALSE;
-  BioseqPtr    bsp;
-  Int4         this_num, num_this_list;
-  
-  if (list == NULL)
-  {
-    return FALSE;
-  }
-  
-  /* check for unique IDs or missing IDs */
-  
-  num_this_list = CountSequencesAndSegments (list);
-  for (this_num = 0; this_num < num_this_list && ! need_fix; this_num++)
-  {
-    bsp = FindNthSequenceInSet (list, this_num);
-    need_fix |= (bsp->id == NULL)
-               || IsDuplicateID (current_list, NULL, bsp->id)
-               || IsDuplicateID (list, bsp, bsp->id);
-  }
-  return need_fix;
-}
-
-static void 
-FindExtraTextForLocalIDs 
-(SeqEntryPtr list, 
- ValNodePtr PNTR extended_ids,
- ValNodePtr PNTR sep_for_ids)
-{
-  Boolean      has_spaces = FALSE;
-  SeqEntryPtr  sep;
-  BioseqPtr    bsp;
-  BioseqSetPtr bssp;
-  SeqDescrPtr  sdp;
-  CharPtr      title, add_str;
-  Int4         len, add_str_len;
-  ObjectIdPtr  oip;
-  SeqIdPtr     new_sip;
-  
-  if (list == NULL || extended_ids == NULL || sep_for_ids == NULL)
+  if (tlp == NULL || iatep_new == NULL || iatep_new->num_sequences == 0)
   {
     return;
   }
-  /* check for unique IDs or missing IDs */
-  for (sep = list; sep != NULL; sep = sep->next)
+  
+  has_dups = EditHasDuplicateIDs (iatep_new, iatep_current);
+  has_missing = HasMissingIDs (iatep_new) || HasMissingIDs (iatep_current);
+  has_bracket = EditNeedsBracketingFixes (iatep_new) 
+                || EditNeedsBracketingFixes (iatep_current);
+  
+  if (!has_bracket)
   {
-    if (sep->data.ptrvalue == NULL)
+    unrec_mods = ListUnrecognizedModifiers (iatep_new, iatep_current, is_nuc);
+  }
+  if (unrec_mods != NULL)
+  {
+    has_unrec_mods = TRUE;
+    unrec_mods = ValNodeFreeData (unrec_mods);
+  }
+  
+  for (row_num = 0, vnp = tlp->vnp; vnp != NULL; row_num++, vnp = vnp->next)
+  {
+    /* get position for this sequence */
+    str = GetTagListValueEx (tlp, row_num, 1);
+    if (str == NULL)
     {
-      /* do nothing */
+      continue;
     }
-    else if (IS_Bioseq (sep))
+    seq_pos = atoi (str);
+    str = MemFree (str);
+    if (seq_pos < 1 || seq_pos > iatep_new->num_sequences)
     {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-      sdp = bsp->descr;
-      while (sdp != NULL 
-             && (sdp->choice != Seq_descr_title 
-                 || StringHasNoText (sdp->data.ptrvalue)))
-      {
-        sdp = sdp->next;
-      }
-      title = NULL;
-      if (sdp != NULL)
-      {
-        title = sdp->data.ptrvalue;
-      }
-      if (bsp->id != NULL
-          && IsDuplicateID (list, bsp, bsp->id)
-          && bsp->id->choice == SEQID_LOCAL
-          && (oip = bsp->id->data.ptrvalue) != NULL
-          && ! StringHasNoText (oip->str)
-          && title != NULL
-          && title [0] != '[')
-      {
-        len = StringCSpn (title, " \t[]");
-        if (len > 0)
-        {
-          add_str_len = len + StringLen (oip->str);
-          add_str = (CharPtr) MemNew ((add_str_len + 1) * sizeof (Char));
-          if (add_str != NULL)
-          {
-            StringCpy (add_str, oip->str);
-            StringNCat (add_str, title, len);
-            add_str [add_str_len] = 0;
-            new_sip = MakeSeqID (add_str);
-            ValNodeAddPointer (extended_ids, 0, new_sip);
-            ValNodeAddPointer (sep_for_ids, 0, sep);
-            add_str = MemFree (add_str);
-          }
-        }
-      }
+      continue;
     }
-    else if (IS_Bioseq_set (sep))
+    seq_num = seq_pos - 1;
+
+    /* get appropriate error message */
+    err_msg = GetIDAndTitleErrorMessage (iatep_new, iatep_current, 
+                                         seq_num, has_dups,
+                                         has_missing, seqid_edit_phase,
+                                         has_bracket,
+                                         has_unrec_mods,
+                                         is_nuc);
+                                         
+    if (seqid_edit_phase && StringHasNoText (err_msg))
     {
-      bssp = (BioseqSetPtr) sep->data.ptrvalue;
-      FindExtraTextForLocalIDs (bssp->seq_set, extended_ids, sep_for_ids);
-    }
+      old_err_msg = GetTagListValueEx (tlp, row_num, 0);
+      if (StringCmp (old_err_msg, "Duplicate ID") == 0
+          || StringCmp (old_err_msg, "Missing ID") == 0
+          || StringCmp (old_err_msg, "Fixed") == 0)
+      {
+        err_msg = MemFree (err_msg);
+        err_msg = StringSave ("Fixed");
+      }
+      old_err_msg = MemFree (old_err_msg);
+    }                                                                                  
+    
+    SetTagListValue (tlp, row_num, 0, err_msg);
+
+    err_msg = MemFree (err_msg);    
+  }
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+}
+
+static void ClearIDAndTitleEditDialogErrorColumn (DialoG d)
+{
+  TagListPtr tlp;
+  ValNodePtr vnp;
+  Int4       row_num;
+  
+  tlp = (TagListPtr) GetObjectExtra (d);
+  
+  if (tlp == NULL)
+  {
+    return;
+  }
+  
+  for (row_num = 0, vnp = tlp->vnp; vnp != NULL; row_num++, vnp = vnp->next)
+  {    
+    SetTagListValue (tlp, row_num, 0, "");
   }
 }
+
+
+static void 
+UpdateIDAndTitleEditDialogErrorColumns
+(DialoG            d_new,
+ DialoG            d_current,
+ IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ Boolean           seqid_edit_phase,
+ Boolean           is_nuc)
+{
+  if (d_new == NULL)
+  {
+    iatep_new = NULL;
+  }
+  else
+  {
+    iatep_new = IDAndTitleEditCopy (iatep_new);
+    UpdateIdAndTitleData (d_new, iatep_new);
+  }
+  
+  if (d_current == NULL)
+  {
+    iatep_current = NULL;
+  }
+  else
+  {
+    iatep_current = IDAndTitleEditCopy (iatep_current);
+    UpdateIdAndTitleData (d_current, iatep_current);
+  }
+  
+  SetIDAndTitleEditDialogErrorColumn (d_new, iatep_new, iatep_current, 
+                                      seqid_edit_phase, is_nuc);
+  SetIDAndTitleEditDialogErrorColumn (d_current, iatep_current, iatep_new,
+                                      seqid_edit_phase, is_nuc);
+  iatep_new = IDAndTitleEditFree (iatep_new);
+  iatep_current = IDAndTitleEditFree (iatep_current);
+}
+
+
+typedef struct unrecmods
+{
+  DialoG PNTR unrec_dlg;
+  ValNodePtr unrecognized_list;
+  Int4        num_unrecognized;  
+  ButtoN      accept_btn;
+} UnrecModsData, PNTR UnrecModsPtr;
+
+static void CleanupUnrecMods (GraphiC g, VoidPtr data)
+
+{
+  UnrecModsPtr ump;
+
+  ump = (UnrecModsPtr) data;
+  if (ump != NULL)
+  {
+    ump->unrecognized_list = ValNodeFreeData (ump->unrecognized_list);
+  }
+  MemFree (ump);
+}
+
+static void SetUnrecAccept (Pointer userdata)
+{
+  UnrecModsPtr ump;
+  ValNodePtr   vnp;
+  Int4       repl_num;
+  Boolean      ok_to_accept = TRUE;
+
+  ump = (UnrecModsPtr) userdata;
+  if (ump == NULL)
+  {
+    return;
+  }
+  
+  for (repl_num = 0; repl_num < ump->num_unrecognized && ok_to_accept && repl_num < 3; repl_num++)
+  {
+    vnp = DialogToPointer (ump->unrec_dlg [repl_num]);
+    if (vnp == NULL)
+    {
+      ok_to_accept = FALSE;
+    }
+    vnp = ValNodeFreeData (vnp);
+  }
+  if (ok_to_accept)
+  {
+    Enable (ump->accept_btn);
+  }
+  else
+  {
+    Disable (ump->accept_btn);
+  }
+  
+}
+
+static void ReplaceThreeUnrecognizedModifiers (IDAndTitleEditPtr iatep, UnrecModsPtr ump)
+{
+  ValNodePtr vnp, repl_vnp;
+  Int4       repl_num, seq_num;
+  CharPtr    repl_name;
+
+  if (iatep == NULL || ump == NULL)
+  {
+    return;
+  }
+  
+  for (repl_num = 0, vnp = ump->unrecognized_list;
+       repl_num < ump->num_unrecognized && vnp != NULL && repl_num < 3;
+       repl_num++, vnp = vnp->next)
+  {
+    if (StringHasNoText (vnp->data.ptrvalue))
+    {
+      continue;
+    }
+    repl_vnp = DialogToPointer (ump->unrec_dlg [repl_num]);
+    if (repl_vnp == NULL)
+    {
+      continue;
+    }
+    repl_name = SourceQualValNodeName (repl_vnp);
+    for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+    {
+      iatep->title_list [seq_num] = ReplaceOneModifierName (iatep->title_list [seq_num],
+                                                            vnp->data.ptrvalue, 
+                                                            repl_name);
+    }
+    repl_name = MemFree (repl_name);
+    repl_vnp = ValNodeFreeData (repl_vnp);
+  }  
+}
+
+static Boolean 
+FixThreeUnrecognizedModifiers 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ ValNodePtr        unrecognized_list)
+{
+  ValNodePtr vnp;
+  Int4       repl_num;
+  WindoW     w;
+  ValNodePtr mod_choices;
+  GrouP      h, g, k, c;
+  PrompT       p;
+  UnrecModsPtr ump;
+  ModalAcceptCancelData acd;
+  Boolean               rval = FALSE;
+  ButtoN                b;
+  
+  if (unrecognized_list == NULL || (iatep_new == NULL && iatep_current == NULL))
+  {
+    return FALSE;
+  }
+  
+  ump = (UnrecModsPtr) MemNew (sizeof (UnrecModsData));
+  if (ump == NULL)
+  {
+    return FALSE;
+  }
+  
+  ump->unrecognized_list = unrecognized_list;
+  ump->num_unrecognized = ValNodeLen(ump->unrecognized_list);
+
+  ump->unrec_dlg = (DialoG PNTR) MemNew (sizeof (DialoG) * ump->num_unrecognized);
+
+  w = MovableModalWindow (-20, -13, -10, -10, "Choose Valid Modifiers", NULL);
+  h = HiddenGroup(w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  SetObjectExtra (w, ump, CleanupUnrecMods);
+  
+  p = StaticPrompt (h, "Please choose a valid modifier name to replace these invalid names.",
+                    0, 0, programFont, 'l');
+
+  g = HiddenGroup (h, 3, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  for (repl_num = 0, vnp = ump->unrecognized_list;
+       repl_num < ump->num_unrecognized && repl_num < 3 && vnp != NULL;
+       repl_num++, vnp = vnp->next)
+  {
+    k = HiddenGroup (g, 2, 0, NULL);
+    SetGroupSpacing (k, 2, 2);
+    mod_choices = GetFastaModifierList (TRUE, TRUE);
+    StaticPrompt (k, vnp->data.ptrvalue, 0, 0, programFont, 'l');
+    ump->unrec_dlg [repl_num] = ValNodeSelectionDialog (k, mod_choices, 6,
+                                          SourceQualValNodeName,
+                                          ValNodeSimpleDataFree,
+                                          SourceQualValNodeDataCopy,
+                                          SourceQualValNodeMatch,
+                                          "modifier",
+                                          SetUnrecAccept, ump, FALSE);
+
+  }
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  ump->accept_btn = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (ump->accept_btn, &acd, NULL);
+  Disable (ump->accept_btn);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) p,
+                              (HANDLE) g, 
+                              (HANDLE) c, 
+                              NULL);
+
+  Show (w);
+  Select (w);
+  
+  acd.cancelled = FALSE;
+  acd.accepted = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (acd.cancelled)
+  {
+    rval = FALSE;
+  }
+  else
+  {
+    ReplaceThreeUnrecognizedModifiers (iatep_new, ump);
+    ReplaceThreeUnrecognizedModifiers (iatep_current, ump);
+    
+    rval = TRUE;
+  }
+    
+  Remove (w);
+  
+  return rval;    
+}
+
+static Boolean 
+FixAllUnrecognizedModifiers 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ SeqIdEditPtr siep)
+{
+  ValNodePtr unrecognized_list;
+  Boolean    rval = TRUE;
+  Boolean    show_all;
+  
+  if (siep == NULL)
+  {
+    return FALSE;
+  }
+  show_all = GetStatus (siep->show_all_btn);
+  
+  unrecognized_list = ListUnrecognizedModifiers (iatep_new, iatep_current, siep->is_nuc);
+  while (unrecognized_list != NULL && rval)
+  {
+    rval = FixThreeUnrecognizedModifiers (iatep_new, iatep_current, unrecognized_list);
+    unrecognized_list = ListUnrecognizedModifiers (iatep_new, iatep_current, siep->is_nuc);
+    UpdateIdAndTitleEditDialog (siep->new_dlg, siep->iatep_new, siep->iatep_current, 
+                                siep->seqid_edit_phase, show_all, siep->is_nuc);
+    UpdateIdAndTitleEditDialog (siep->current_dlg, siep->iatep_current, siep->iatep_new, 
+                                siep->seqid_edit_phase, show_all, siep->is_nuc);
+    ShowErrorInstructions (siep);
+  }  
+  return rval;
+}
+
 
 static ParData     idParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
 static ColData     idColFmt[] = 
   {
     {0, 0, 40, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, 40, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
     {0, 0, 40, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, TRUE}
   };
 
-static void AddIDStatement (ValNodePtr id_vnp, ValNodePtr seq_vnp, DoC doc)
+static ParData     extendedIDParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
+static ColData     extendedIDColFmt[] = 
+  {
+    {0, 0, 40, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, 40, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, 40, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, FALSE},
+    {0, 0, 40, 0, NULL, 'l', TRUE, FALSE, FALSE, FALSE, TRUE}
+  };
+
+static Boolean AnyBracketsInIDs (IDAndTitleEditPtr iatep)
 {
-  CharPtr doc_txt;
-  CharPtr doc_txt_fmt = "%s\t%s %s\n";
-  ObjectIdPtr oip_old, oip_new;
-  SeqEntryPtr sep;
-  BioseqPtr   bsp;
-  SeqDescrPtr sdp;
-  SeqIdPtr    sip;
-  Int4        len;
+  Int4 seq_num;
+  Boolean rval = FALSE;
   
-  if (id_vnp == NULL || id_vnp->data.ptrvalue == NULL
-      || seq_vnp == NULL || seq_vnp->data.ptrvalue == NULL)
+  if (iatep == NULL)
   {
-    return;
+    return FALSE;
+  }
+  for (seq_num = 0; seq_num < iatep->num_sequences && !rval; seq_num++)
+  {
+    if (StringChr (iatep->id_list [seq_num], '['))
+    {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+static Boolean AnyIDCorrectionsToList 
+(IDAndTitleEditPtr iatep,
+ IDAndTitleEditPtr iatep_current,
+ BoolPtr           space_corr,
+ BoolPtr           bracket_corr)
+{
+  IDAndTitleEditPtr suggested;
+  Boolean           any_to_show = FALSE;
+  Int4              seq_num;
+
+  if (iatep == NULL || space_corr == NULL || bracket_corr == NULL)
+  {
+    return FALSE;
+  }
+
+  suggested = SuggestCorrectionForLocalIDs (iatep, iatep_current);
+  if (suggested == NULL || iatep->num_sequences != suggested->num_sequences)
+  {
+    suggested = IDAndTitleEditFree (suggested);
+    return FALSE;
   }
   
-  sip = (SeqIdPtr) id_vnp->data.ptrvalue;
-  if (sip->choice != SEQID_LOCAL || sip->data.ptrvalue == NULL)
+  for (seq_num = 0;
+       seq_num < iatep->num_sequences && (!any_to_show || !*space_corr || !*bracket_corr);
+       seq_num++)
   {
-    return;
+    if (! StringHasNoText (suggested->id_list [seq_num])
+        && ! StringHasNoText (iatep->title_list [seq_num])
+        && StringCmp (iatep->id_list [seq_num], suggested->id_list [seq_num]) != 0)
+    {
+      any_to_show = TRUE;
+      if (StringChr (iatep->id_list [seq_num], '[') != NULL)
+      {
+        *bracket_corr = TRUE;
+      }
+      else
+      {
+        *space_corr = TRUE;
+      }
+    }
   }
-  oip_new = (ObjectIdPtr) sip->data.ptrvalue;
-  if (StringHasNoText (oip_new->str))
+  suggested = IDAndTitleEditFree (suggested);
+  
+  return any_to_show;  
+}
+
+static Boolean ListIDCorrections
+(IDAndTitleEditPtr iatep,
+ IDAndTitleEditPtr iatep_current,
+ CharPtr           str,
+ DoC               doc)
+{
+  IDAndTitleEditPtr suggested;
+  CharPtr           doc_txt;
+  CharPtr           doc_txt_fmt = "%s%d\t%s\t%s\t%s\n";
+  Int4              len;
+  Boolean           any_to_show = FALSE;
+  Int4              seq_num;
+  
+  
+  if (iatep == NULL || doc == NULL)
   {
-    return;
+    return FALSE;
+  }
+
+  suggested = SuggestCorrectionForLocalIDs (iatep, iatep_current);
+  if (suggested == NULL || iatep->num_sequences != suggested->num_sequences)
+  {
+    suggested = IDAndTitleEditFree (suggested);
+    return FALSE;
   }
   
-  sep = (SeqEntryPtr) seq_vnp->data.ptrvalue;
-  if (!IS_Bioseq (sep))
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
   {
-    return;
+    if (StringHasNoText (suggested->id_list [seq_num])
+        || StringHasNoText (iatep->title_list [seq_num])
+        || StringCmp (iatep->id_list [seq_num], suggested->id_list [seq_num]) == 0)
+    {
+      continue;
+    }
+   
+    len = StringLen (doc_txt_fmt) 
+                     + StringLen (suggested->id_list [seq_num]) 
+                     + StringLen (str)
+                     + 15
+                     + StringLen (iatep->title_list [seq_num]);
+    doc_txt = (CharPtr) MemNew (len * sizeof (Char));
+    if (doc_txt != NULL)
+    {
+      sprintf (doc_txt, doc_txt_fmt, 
+               str == NULL ? "" : str, 
+               seq_num + 1,
+               suggested->id_list [seq_num], 
+               iatep->id_list [seq_num] == NULL ? "" : iatep->id_list [seq_num],
+               iatep->title_list [seq_num]);
+      AppendText (doc, doc_txt, &extendedIDParFmt, extendedIDColFmt, programFont);
+      doc_txt = MemFree (doc_txt);
+      any_to_show = TRUE;
+    }
   }
   
-  bsp = (BioseqPtr) sep->data.ptrvalue;
+  suggested = IDAndTitleEditFree (suggested);
   
-  if (bsp->id == NULL || bsp->id->choice != SEQID_LOCAL || bsp->id->data.ptrvalue == NULL)
+  return any_to_show;
+}
+
+static Boolean 
+ShowExtendedIDCorrections 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current, 
+ DoC               doc)
+{
+  Boolean     any_to_show = FALSE, space_corr = FALSE, bracket_corr = FALSE;
+  RecT        r;
+  
+  if (doc == NULL || iatep_new == NULL)
   {
-    return;
+    return FALSE;
   }
   
-  oip_old = bsp->id->data.ptrvalue;
-  if (StringHasNoText (oip_old->str))
+  if (! AnyIDCorrectionsToList (iatep_new, iatep_current, &space_corr, &bracket_corr)
+      && ! AnyIDCorrectionsToList (iatep_current, iatep_new, &space_corr, &bracket_corr))
   {
-    return;
+    return FALSE;
   }
+
+  ObjectRect (doc, &r);
+  InsetRect (&r, 4, 4);
+  extendedIDColFmt[0].pixWidth = (r.right - r.left) / 10;
+  extendedIDColFmt[1].pixWidth = (r.right - r.left) / 4;
+  extendedIDColFmt[2].pixWidth = (r.right - r.left) / 4;
+  extendedIDColFmt[3].pixWidth = (r.right - r.left) 
+                                  - extendedIDColFmt[0].pixWidth
+                                  - extendedIDColFmt[1].pixWidth
+                                  - extendedIDColFmt[2].pixWidth;
   
-  len = StringLen (oip_old->str);
-  if (StringNCmp (oip_old->str, oip_new->str, len) != 0)
+  if (space_corr)
   {
-    return;
+    AppendText (doc, "Your sequence IDs are not unique.  Did you try to put spaces in your sequence IDs?  This is not allowed.\n", NULL, NULL, programFont);
   }
+  if (AnyBracketsInIDs (iatep_new) || AnyBracketsInIDs (iatep_current))
+  {
+    AppendText (doc, "Did you forget to put spaces between your sequence IDs and your titles?  This is not allowed.\n", NULL, NULL, programFont);
+  }
+    
+  AppendText (doc, "\nPosition\tSuggested ID\tOriginal ID\tOriginal Title\n", &extendedIDParFmt, extendedIDColFmt, programFont);
+
+  if (iatep_current == NULL)
+  {
+    any_to_show = ListIDCorrections (iatep_new, iatep_current, "", doc);
+  }
+  else
+  {
+    any_to_show = ListIDCorrections (iatep_new, iatep_current, "new:", doc);
+    any_to_show |= ListIDCorrections (iatep_current, iatep_new, "existing:", doc);    
+  }
+    
+  return any_to_show;
+}
+
+/* This section of code is used to display bracketing errors in an AutonomousPanel.
+ * The panel has a frozen title row and a frozen column with sequence IDs in it.
+ * The panel scrolling affects only the sequence titles.
+ * There are two rows for each sequence.  The top row displays the original title;
+ * the bottom row displays the suggested bracketing corrections.  The differences
+ * between the original and suggested titles will be colored in red.
+ * Both rows in a pair will have the same background color which alternates between gray
+ * and white for each pair.
+ * Clicking on a sequence will scroll to the next difference for that pair.
+ */
+typedef struct diffdlg
+{
+  DIALOG_MESSAGE_BLOCK
+  PaneL             pnl;
+  IDAndTitleEditPtr new_original;
+  IDAndTitleEditPtr new_suggested;
+  IDAndTitleEditPtr existing_original;
+  IDAndTitleEditPtr existing_suggested;
+  FonT              display_font;
+  Int4              char_width;
+  Int4              descent;
+  Int4              num_header_rows;
+  Int4              max_title_length;
+  Int4              max_id_length;
+  Int4              table_inset;
   
-  sdp = bsp->descr;
-  while (sdp != NULL 
-         && (sdp->choice != Seq_descr_title 
-             || StringHasNoText (sdp->data.ptrvalue)))
-  {
-    sdp = sdp->next;
-  }
-  if (sdp == NULL)
-  {
-    return;
-  }
+} DiffDlgData, PNTR DiffDlgPtr;
+
+static void DrawDiffDlgExplanation (Int4 x, Int4 y, Int4 descent, Int4 win_width)
+{
+  RecT rct;
   
-  len = StringLen (doc_txt_fmt) 
-        + StringLen (oip_new->str) 
-        + StringLen (oip_old->str)
-        + StringLen (sdp->data.ptrvalue);
-  doc_txt = (CharPtr) MemNew (len * sizeof (Char));
-  if (doc_txt != NULL)
+  /* draw explanation rows */
+  LoadRect (&rct, x, y + descent,
+            x + win_width, 
+            y - stdLineHeight + descent);
+  EraseRect (&rct);
+
+  PaintStringEx ("Some of your titles have bracketing errors.", x, y);
+  y += stdLineHeight;
+  LoadRect (&rct, x, y + descent,
+            x + win_width, 
+            y - stdLineHeight + descent);
+  EraseRect (&rct);
+
+  PaintStringEx ("Double-click on 'original' to scroll to the next error for that pair.", x, y);  
+}
+
+static void DrawDiffDlgTitle (Int4 x, Int4 y, Int4 char_width, Int4 descent, Int4 max_id_length, Int4 win_width)
+{
+  RecT rct;
+  
+  /* draw title row */
+  DkGray ();
+  InvertColors ();
+  White ();
+  LoadRect (&rct, x, y + descent,
+            x + win_width, 
+            y - stdLineHeight + descent);
+  EraseRect (&rct);
+
+  PaintStringEx ("Sequence ID", x, y);
+  x += (max_id_length + 1) * char_width;
+  x += 10 * char_width;
+  PaintStringEx ("Title", x, y);
+  InvertColors ();
+  Black ();
+}
+
+static void 
+PaintColorizedString 
+(Int4       x,
+ Int4       y,
+ Int4       char_width,
+ CharPtr    paintstring, 
+ Int4       string_offset,
+ Boolean    shade,
+ ValNodePtr diff_list,
+ Int4       diff_choice)
+{
+  CharPtr    cp;
+  Char       buf [2];
+  ValNodePtr diff_vnp;
+  
+  if (shade)
   {
-    sprintf (doc_txt, doc_txt_fmt, oip_new->str, oip_old->str, sdp->data.ptrvalue);
-    AppendText (doc, doc_txt, &idParFmt, idColFmt, programFont);
-    doc_txt = MemFree (doc_txt);
+    White ();
+  }
+  else
+  {
+    Black ();
+  }
+  if (paintstring == NULL || StringLen (paintstring) <= string_offset)
+  {
+    PaintStringEx (" ", x, y);
+  }
+  else
+  {
+    cp = paintstring + string_offset;
+    diff_vnp = diff_list;
+    buf [1] = 0;
+    
+    while (*cp != 0)
+    {
+      while (diff_vnp != NULL && (diff_vnp->choice != diff_choice || diff_vnp->data.intvalue < string_offset))
+      {
+        diff_vnp = diff_vnp->next;
+      }
+      if (diff_vnp != NULL && diff_vnp->choice == diff_choice && string_offset == diff_vnp->data.intvalue)
+      {
+        Red ();
+      }
+    
+      buf [0] = *cp;
+      PaintStringEx (buf, x, y);
+      x += char_width;
+      string_offset++;
+      cp++;
+    
+      if (shade)
+      {
+        White ();
+      }
+      else
+      {
+        Black ();
+      }
+    }
+  }  
+}
+
+static void 
+DrawDiffDlgRow 
+(Int4 x, 
+ Int4 y, 
+ Int4 char_width, 
+ Int4 descent, 
+ Int4 max_id_length, 
+ Int4 win_width,
+ CharPtr id_str,
+ CharPtr title_str,
+ Int4       offset,
+ ValNodePtr diff_list,
+ Int4       choice_num,
+ Boolean    shade)
+{
+  RecT rct;
+  PoinT      pt1, pt2;
+
+  if (shade)
+  {
+    Gray ();
+    InvertColors ();
+    White ();
+  }
+  LoadRect (&rct, x, y + descent,
+            x + win_width, 
+            y - stdLineHeight + descent);
+  EraseRect (&rct);
+
+  if (id_str != NULL)
+  {
+    PaintStringEx (id_str, x, y);
+  }
+  x += (max_id_length + 1) * char_width;
+  if (choice_num == 1)
+  {
+    PaintStringEx (" original", x, y);
+  }
+  else
+  {
+    PaintStringEx ("suggested", x, y);
+  }
+  x += 9 * char_width;
+  pt1.x = x + 2;
+  pt2.x = x + 2;
+  pt1.y = y + descent;
+  pt2.y = y - stdLineHeight + descent;
+  Black ();
+  DrawLine (pt1, pt2);
+
+  x += char_width;
+  
+  PaintColorizedString (x, y, char_width, title_str, offset, shade, diff_list,
+                        choice_num);
+  
+  if (shade)
+  {
+    InvertColors ();
+    Black ();  
   }
 }
 
-
-static void FixOneSequenceIDWithSpaces (ValNodePtr id_vnp, ValNodePtr seq_vnp)
+/* This function produces a ValNode list of integers.
+ * The choice value (1 or 2) indicates whether the difference is in string 1
+ * or string 2; the integer value indicates the offset in that string of the
+ * difference.
+ * Space characters are ignored when computing differences.
+ * The output from this function is used for displaying the differences between
+ * the original definition line and a suggested bracketing correction.
+ */
+static ValNodePtr GetTextDifferences (CharPtr str1, CharPtr str2)
 {
-  ObjectIdPtr oip_old, oip_new;
-  SeqEntryPtr sep;
-  BioseqPtr   bsp;
-  SeqDescrPtr sdp;
-  SeqIdPtr    sip;
-  Int4        len_old, len_new, def_offset;
-  CharPtr     defline, new_defline;
-
-  if (id_vnp == NULL || id_vnp->data.ptrvalue == NULL
-      || seq_vnp == NULL || seq_vnp->data.ptrvalue == NULL)
-  {
-    return;
-  }
+  ValNodePtr diff_list = NULL;
+  CharPtr    cp1, cp2, diff_end1, diff_end2;
+  Int4       offset1, offset2, j;
   
-  sip = (SeqIdPtr) id_vnp->data.ptrvalue;
-  if (sip->choice != SEQID_LOCAL || sip->data.ptrvalue == NULL)
+  if (str1 == NULL && str2 == NULL)
   {
-    return;
+    return NULL;
   }
-  oip_new = (ObjectIdPtr) sip->data.ptrvalue;
-  if (StringHasNoText (oip_new->str))
-  {
-    return;
-  }
+  cp1 = str1;
+  cp2 = str2;
   
-  sep = (SeqEntryPtr) seq_vnp->data.ptrvalue;
-  if (!IS_Bioseq (sep))
-  {
-    return;
-  }
-  bsp = (BioseqPtr) sep->data.ptrvalue;
+  offset1 = 0;
+  offset2 = 0;
   
-  if (bsp->id == NULL || bsp->id->choice != SEQID_LOCAL || bsp->id->data.ptrvalue == NULL)
+  while (cp1 != NULL || cp2 != NULL)
   {
-    return;
-  }
-  
-  oip_old = bsp->id->data.ptrvalue;
-  if (StringHasNoText (oip_old->str))
-  {
-    return;
-  }
-  
-  len_old = StringLen (oip_old->str);
-  if (StringNCmp (oip_old->str, oip_new->str, len_old) != 0)
-  {
-    return;
-  }
-  
-  sdp = bsp->descr;
-  while (sdp != NULL 
-         && (sdp->choice != Seq_descr_title 
-             || StringHasNoText (sdp->data.ptrvalue)))
-  {
-    sdp = sdp->next;
-  }
-  if (sdp == NULL)
-  {
-    return;
-  }
-  
-  defline = (CharPtr) sdp->data.ptrvalue;
-  
-  len_new = StringLen (oip_new->str);
-  def_offset = len_new - len_old - 1;
-  if (def_offset > 0 && StringNCmp (oip_new->str + len_old + 1, defline, def_offset) == 0)
-  {
-    if (*(defline + def_offset) == 0)
+    /* skip over spaces in cp1 */
+    while (cp1 != NULL && *cp1 != 0 && isspace (*cp1))
     {
-      new_defline = StringSave ("");
+      cp1 ++;
+      offset1 ++;
+    }
+    if (cp1 != NULL && *cp1 == 0)
+    {
+      cp1 = NULL;
+    }
+    /* skip over spaces in cp2 */
+    while (cp2 != NULL && *cp2 != 0 && isspace (*cp2))
+    {
+      cp2 ++;
+      offset2 ++;
+    }
+    if (cp2 != NULL && *cp2 == 0)
+    {
+      cp2 = NULL;
+    }
+    
+    if (cp1 == NULL && cp2 == NULL)
+    {
+      /* both NULL, do nothing */
+    }
+    else if (cp1 == NULL)
+    {
+      ValNodeAddInt (&diff_list, 2, offset2);
+    }
+    else if (cp2 == NULL)
+    {
+      ValNodeAddInt (&diff_list, 1, offset1);
     }
     else
     {
-      new_defline = StringSave (defline + def_offset + StringSpn (defline + def_offset, " \t"));
+      if (*cp1 != *cp2)
+      {
+        if ((diff_end1 = StringSearch (cp1, cp2)) != NULL)
+        {
+          while (diff_end1 != cp1)
+          {
+            if (!isspace (*cp1))
+            {
+              ValNodeAddInt (&diff_list, 1, offset1);
+            }
+            offset1++;
+            cp1++;
+          }
+        }
+        else if ((diff_end2 = StringSearch (cp2, cp1))!= NULL)
+        {
+          while (diff_end2 != cp2)
+          {
+            if (!isspace (*cp2))
+            {
+              ValNodeAddInt (&diff_list, 2, offset2);
+            }
+            offset2++;
+            cp2++;
+          }
+        }
+        else if (*(cp1 + 1) == *cp2)
+        {
+          if (!isspace (*cp1))
+          {
+            ValNodeAddInt (&diff_list, 1, offset1);
+          }
+          offset1++;
+          cp1++;
+        }
+        else if (*(cp2 + 1) == *cp1)
+        {
+          if (!isspace (*cp2))
+          {
+            ValNodeAddInt (&diff_list, 2, offset2);
+          }
+          offset2++;
+          cp2++;
+        }
+        else if (StringLen (cp1) > len_fake_modifier_name
+                 && StringNCmp (cp1, fake_modifier_name, len_fake_modifier_name) == 0
+                 && *(cp1 + len_fake_modifier_name) == *cp2)
+        {
+          /* show all of fake modifier name in red */
+          for (j = 0; j < len_fake_modifier_name; j++)
+          {
+            ValNodeAddInt (&diff_list, 1, offset1);
+            cp1++;
+            offset1++;
+          }
+        }
+        else if (StringLen (cp2) > len_fake_modifier_name
+                 && StringNCmp (cp2, fake_modifier_name, len_fake_modifier_name) == 0
+                 && *(cp2 + len_fake_modifier_name) == *cp1)
+        {
+          /* show all of fake modifier name in red */
+          for (j = 0; j < len_fake_modifier_name; j++)
+          {
+            ValNodeAddInt (&diff_list, 2, offset2);
+            cp2++;
+            offset2++;
+          }
+        }        
+        else
+        {
+          diff_end1 = StringChr (cp1, *cp2);
+          diff_end2 = StringChr (cp2, *cp1);
+          if (diff_end1 == NULL || diff_end2 == NULL)
+          {
+            ValNodeAddInt (&diff_list, 1, offset1);
+            ValNodeAddInt (&diff_list, 2, offset2);
+          }
+          else if (diff_end1 - cp1 < diff_end2 - cp2)
+          {
+            while (diff_end1 != cp1)
+            {
+              if (!isspace (*cp1))
+              {
+                ValNodeAddInt (&diff_list, 1, offset1);
+              }
+              offset1++;
+              cp1++;
+            }
+          }
+          else
+          {
+            while (diff_end2 != cp2)
+            {
+              if (!isspace (*cp2))
+              {
+                ValNodeAddInt (&diff_list, 2, offset2);
+              }
+              offset2++;
+              cp2++;
+            }
+          }
+        }
+      }
     }
-    sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
-    sdp->data.ptrvalue = new_defline;
+    
+    if (cp1 != NULL)
+    {
+      cp1++;
+      offset1++;
+    }
+    
+    if (cp2 != NULL)
+    {
+      cp2++;
+      offset2++;
+    }
   }
-  
-  sip->next = bsp->id->next;
-  bsp->id->next = NULL;
-  /* put old ID in list to be freed later */
-  id_vnp->data.ptrvalue = bsp->id;
-  /* put new ID on Bioseq */
-  bsp->id = sip;
+  return diff_list;
 }
 
-static void FixSpacesInLocalIDs (SeqEntryPtr list)
+static Int4 
+CountTitleCorrectionRows 
+(IDAndTitleEditPtr original, IDAndTitleEditPtr suggested)
 {
-  ValNodePtr            extended_ids = NULL, sep_for_ids = NULL;
-  WindoW                w;
-  GrouP                 h, c;
-  ButtoN                b;
-  DoC                   doc;
-  ModalAcceptCancelData acd;
-  ValNodePtr            id_vnp, seq_vnp;
-  RecT                  r;
+  Int4 num_rows = 0, seq_num;
   
-  if (list == NULL)
+  if (original == NULL || suggested == NULL 
+      || original->num_sequences != suggested->num_sequences)
+  {
+    return 0;
+  }
+  
+  for (seq_num = 0; seq_num < original->num_sequences; seq_num++)
+  {
+    if (StringCmp (original->title_list [seq_num], suggested->title_list [seq_num]) != 0)
+    {
+      num_rows += 2;
+    }
+  }
+  return num_rows;
+}
+
+static Int4 
+DrawDiffPair 
+(Int4              x,
+ Int4              y,
+ Int4              last_y,
+ DiffDlgPtr        dlg,
+ IDAndTitleEditPtr original,
+ IDAndTitleEditPtr suggested,
+ Int4              row_length,
+ Int4Ptr           start_row,
+ Int4              start_col,
+ BoolPtr           shade)
+{
+  ValNodePtr diff_list;
+  Int4       row, seq_num, visible_row;
+  
+  if (dlg == NULL || start_row == NULL || shade == NULL
+      || y > last_y
+      || original == NULL || suggested == NULL 
+      || original->num_sequences != suggested->num_sequences)
+  {
+    return y;
+  }
+  
+  SelectFont (dlg->display_font);  
+  
+  /* draw difference rows */
+  diff_list = NULL;
+  visible_row = 0;
+  for (row = 0; 
+       row < original->num_sequences * 2 && y <= last_y;
+       row++)
+  {
+    seq_num = row / 2;
+    
+    if (row % 2 == 0)
+    {
+      /* draw original */
+      if (StringCmp (original->title_list [seq_num], suggested->title_list [seq_num]) != 0)
+      {
+        diff_list = ValNodeFree (diff_list);
+        diff_list = GetTextDifferences (original->title_list [seq_num],
+                                    suggested->title_list [seq_num]);
+        if (visible_row == *start_row)
+        {
+          DrawDiffDlgRow (x, y, dlg->char_width, dlg->descent, dlg->max_id_length, row_length,
+                          original->id_list [seq_num],
+                          original->title_list [seq_num],
+                          start_col, diff_list, 1, *shade);
+          y += stdLineHeight;
+          (*start_row) ++;
+        }
+        visible_row++;
+      }
+    }
+    else
+    {
+      /* draw suggested */
+      if (StringCmp (original->title_list [seq_num], suggested->title_list [seq_num]) != 0)
+      {
+        if (diff_list == NULL)
+        {
+          /* only calculate if it was NULL, otherwise use same as previous diff_list */
+          diff_list = GetTextDifferences (original->title_list [seq_num],
+                                          suggested->title_list [seq_num]);
+        }
+        if (visible_row == *start_row)
+        {
+          DrawDiffDlgRow (x, y, dlg->char_width, dlg->descent, dlg->max_id_length, row_length,
+                          suggested->id_list [seq_num],
+                          suggested->title_list [seq_num],
+                          start_col, diff_list, 2, *shade);
+          y += stdLineHeight;
+          (*start_row) ++;
+        }
+        visible_row++;
+        /* toggle the shading */
+        *shade = !(*shade);
+      }
+    }
+  }
+  diff_list = ValNodeFree (diff_list);
+  return y;
+}
+
+static void OnDrawDiffDlg (PaneL p)
+{
+  DiffDlgPtr dlg;
+  BaR          sb_vert, sb_horiz;
+  Int4         start_row, start_col;
+  RecT         r;
+  Int4         x, y, row_length, last_y;
+  Int4         num_new_rows, num_existing_rows, num_rows, visible_rows;
+  Int4         new_vmax, new_hmax, old_vmax, old_hmax;
+  Boolean      shade = TRUE;
+
+  dlg = (DiffDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  num_new_rows = CountTitleCorrectionRows (dlg->new_original, dlg->new_suggested);
+  num_existing_rows = CountTitleCorrectionRows (dlg->existing_original, dlg->existing_suggested);
+  num_rows = num_new_rows + num_existing_rows;
+  
+  if (!EditNeedsBracketingFixes (dlg->new_original) && ! EditNeedsBracketingFixes (dlg->existing_original))
+  {
+    return;
+  }
+  
+  SelectFont (dlg->display_font);
+  
+  sb_vert  = GetSlateVScrollBar ((SlatE) p);
+  Enable (sb_vert);
+  sb_horiz = GetSlateHScrollBar ((SlatE) p);
+  Enable (sb_horiz);
+  
+  start_row = GetBarValue (sb_vert);
+  start_col = GetBarValue (sb_horiz);
+  
+  ObjectRect (p, &r);
+  InsetRect (&r, dlg->table_inset, dlg->table_inset);
+  x = r.left + 1;
+  y = r.top + stdLineHeight;
+  SelectFont (programFont); 
+  
+  row_length = r.right - r.left - 2;
+  
+  visible_rows = (r.bottom - r.top - 2 * dlg->table_inset) / stdLineHeight - dlg->num_header_rows;
+  new_vmax = num_rows - visible_rows;
+  new_hmax = dlg->max_title_length - 1;
+  if (new_vmax < 0)
+  {
+    new_vmax = 0;
+  }
+  if (new_hmax < 0)
+  {
+    new_hmax = 0;
+  }
+  old_vmax = GetBarMax (sb_vert);
+  old_hmax = GetBarMax (sb_horiz);
+  
+  if (old_vmax != new_vmax)
+  {
+    CorrectBarMax (sb_vert, new_vmax);
+    if (start_row > new_vmax)
+    {
+      start_row = new_vmax;
+    }
+    CorrectBarValue (sb_vert, start_row);
+    CorrectBarPage (sb_vert, 1, 1);
+  }
+  
+  if (old_hmax != new_hmax)
+  {
+    CorrectBarMax (sb_horiz, new_hmax);
+    if (start_col > new_hmax)
+    {
+      start_col = new_hmax;
+    }
+    CorrectBarValue (sb_horiz, start_col);
+    CorrectBarPage (sb_horiz, 1, 1);
+  }
+  
+  last_y = r.bottom - 2 * dlg->table_inset;
+
+  /* draw explanatory text */
+  DrawDiffDlgExplanation (x, y, dlg->descent, row_length);
+  y+= 2 * stdLineHeight;
+  
+  /* draw title row */
+  DrawDiffDlgTitle (x, y, dlg->char_width, dlg->descent, dlg->max_id_length, row_length);
+  y+= stdLineHeight;
+  
+  y = DrawDiffPair (x, y, last_y, dlg, dlg->new_original, dlg->new_suggested,
+                    row_length, &start_row, start_col, &shade);
+  
+  start_row -= num_new_rows;
+
+  y = DrawDiffPair (x, y, last_y, dlg, dlg->existing_original, dlg->existing_suggested,
+                    row_length, &start_row, start_col, &shade);
+  
+}
+
+static void OnVScrollDiffDlg (BaR sb, SlatE s, Int4 newval, Int4 oldval)
+{
+  RecT r;
+  
+  ObjectRect (s, &r);
+  InvalRect (&r);
+}
+
+static void OnHScrollDiffDlg (BaR sb, SlatE s, Int4 newval, Int4 oldval)
+{
+  RecT r;
+  
+  ObjectRect (s, &r);
+  InvalRect (&r);
+}
+
+static PoinT GetDiffDlgCoord (DiffDlgPtr dlg, PoinT pt)
+{
+  BaR sb_horiz;
+  BaR sb_vert;
+  Int4 start_row, start_col;
+  RecT r;
+  PoinT cell_coord;
+  Int4  x, y;
+  
+  cell_coord.x = -1;
+  cell_coord.y = -1;
+  
+  if (dlg == NULL)
+  {
+    return cell_coord;
+  }
+  
+  sb_vert  = GetSlateVScrollBar ((SlatE) dlg->pnl);
+  sb_horiz = GetSlateHScrollBar ((SlatE) dlg->pnl);
+  
+  start_row = GetBarValue (sb_vert);
+  start_col = GetBarValue (sb_horiz);
+  
+  ObjectRect (dlg->pnl, &r);
+  InsetRect (&r, dlg->table_inset, dlg->table_inset);
+  x = pt.x - r.left;
+  y = pt.y - r.top;
+  
+  cell_coord.y = y / stdLineHeight;
+  
+  if (cell_coord.y >= dlg->num_header_rows)
+  {
+    cell_coord.y += GetBarValue (sb_vert);
+  }
+  
+  cell_coord.x = x / dlg->char_width;
+  if (cell_coord.x >= dlg->max_id_length + 10)
+  {
+    cell_coord.x += GetBarValue (sb_horiz);
+  }
+
+  return cell_coord;
+}
+
+static void 
+ScrollForDiffInRow 
+(Int4              row, 
+ IDAndTitleEditPtr new_original, 
+ IDAndTitleEditPtr new_suggested,
+ IDAndTitleEditPtr existing_original,
+ IDAndTitleEditPtr existing_suggested,
+ BaR               sb_horiz)
+{
+  Int4 seq_num, displayed_row;
+  ValNodePtr diff_list = NULL, vnp;
+  Boolean    found_row = FALSE;
+  Int4       scroll_val = 0;
+  
+  if (sb_horiz == NULL
+      || (new_original == NULL && existing_original == NULL)
+      || (new_original == NULL && new_suggested != NULL) 
+      || (new_original != NULL && new_suggested == NULL) 
+      || (new_original != NULL && new_original->num_sequences != new_suggested->num_sequences)
+      || (existing_original == NULL && existing_suggested != NULL) 
+      || (existing_original != NULL && existing_suggested == NULL) 
+      || (existing_original != NULL && existing_original->num_sequences != existing_suggested->num_sequences))
+  {
+    return;
+  }
+  
+  displayed_row = 0;
+  
+  if (new_original != NULL)
+  {
+    for (seq_num = 0;
+         seq_num < new_original->num_sequences && ! found_row; 
+         seq_num++)
+    {
+      if (StringCmp (new_original->title_list [seq_num],
+                     new_suggested->title_list [seq_num]) != 0)
+      {
+        if (displayed_row == row)
+        {
+          found_row = TRUE;
+          diff_list = GetTextDifferences (new_original->title_list [seq_num],
+                                          new_suggested->title_list [seq_num]);
+        }
+        else
+        {
+          displayed_row += 2;
+        }
+      }
+    }
+  }
+
+  if (existing_original != NULL)
+  {
+    for (seq_num = 0;
+         seq_num < existing_original->num_sequences && ! found_row; 
+         seq_num++)
+    {
+      if (StringCmp (existing_original->title_list [seq_num],
+                     existing_suggested->title_list [seq_num]) != 0)
+      {
+        if (row == displayed_row || row == displayed_row + 1 )
+        {
+          found_row = TRUE;
+          diff_list = GetTextDifferences (existing_original->title_list [seq_num],
+                                          existing_suggested->title_list [seq_num]);
+        }
+        else
+        {
+          displayed_row += 2;
+        }
+      }
+    }
+  }
+  
+  if (diff_list == NULL)
+  {
+    scroll_val = 0;
+  }
+  else
+  {
+    scroll_val = GetBarValue (sb_horiz);
+    vnp = diff_list;
+    while (vnp != NULL && vnp->data.intvalue <= scroll_val)
+    {
+      vnp = vnp->next;
+    }
+    if (vnp != NULL)
+    {
+      scroll_val = vnp->data.intvalue;
+    }
+    else
+    {
+      scroll_val = diff_list->data.intvalue;
+    }
+  }
+  SetBarValue (sb_horiz, scroll_val);
+  diff_list = ValNodeFree (diff_list);
+}
+
+static void OnClickDiffDlg (PaneL p, PoinT pt)
+{
+  DiffDlgPtr dlg;
+  Boolean    dbl_click;
+  PoinT      cell_coord;
+
+  dlg = (DiffDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  dbl_click = dblClick;
+  if (dbl_click)
+  {
+    cell_coord = GetDiffDlgCoord (dlg, pt);
+    if (cell_coord.y >= dlg->num_header_rows)
+    {
+      cell_coord.y -= dlg->num_header_rows;
+      ScrollForDiffInRow (cell_coord.y, dlg->new_original, dlg->new_suggested,
+                          dlg->existing_original, dlg->existing_suggested,
+                          GetSlateHScrollBar ((SlatE) dlg->pnl)); 
+    }
+  }
+}
+
+typedef struct diffset
+{
+  IDAndTitleEditPtr new_original;
+  IDAndTitleEditPtr new_suggested;
+  IDAndTitleEditPtr existing_original;
+  IDAndTitleEditPtr existing_suggested;
+} DiffSetData, PNTR DiffSetPtr;
+
+static void SetToDiffDlg (DialoG d, Pointer userdata)
+{
+  DiffDlgPtr  dlg;
+  DiffSetPtr  dsp;
+  Int4        seq_num;
+  RecT        r;
+  
+  dlg = (DiffDlgPtr) GetObjectExtra (d);
+  dsp = (DiffSetPtr) userdata;
+  if (dlg == NULL || dsp == NULL 
+      || (dsp->new_original == NULL && dsp->existing_original == NULL)
+      || (dsp->new_original == NULL && dsp->new_suggested != NULL)
+      || (dsp->new_original != NULL && dsp->new_suggested == NULL)
+      || (dsp->new_original != NULL && dsp->new_original->num_sequences != dsp->new_suggested->num_sequences)
+      || (dsp->existing_original == NULL && dsp->existing_suggested != NULL)
+      || (dsp->existing_original != NULL && dsp->existing_suggested == NULL)
+      || (dsp->existing_original != NULL && dsp->existing_original->num_sequences != dsp->existing_suggested->num_sequences))
+  {
+    return;
+  }
+  
+  dlg->new_original = IDAndTitleEditCopy (dsp->new_original);
+  dlg->new_suggested = IDAndTitleEditCopy (dsp->new_suggested);
+  dlg->existing_original = IDAndTitleEditCopy (dsp->existing_original);
+  dlg->existing_suggested = IDAndTitleEditCopy (dsp->existing_suggested);
+  
+  dlg->max_id_length = 0;
+  dlg->max_title_length = 0;
+  
+  /* get max lengths from new set */
+  if (dsp->new_original != NULL)
+  {
+    for (seq_num = 0; seq_num < dsp->new_original->num_sequences; seq_num++)
+    {
+      /* we want the maximum length only for those rows we'll actually display */
+      if (StringCmp (dsp->new_original->title_list [seq_num],
+                     dsp->new_suggested->title_list [seq_num]) == 0)
+      {
+        continue;
+      }
+      /* max ID length */
+      dlg->max_id_length = MAX (dlg->max_id_length, StringLen (dsp->new_original->id_list [seq_num]));
+      dlg->max_id_length = MAX (dlg->max_id_length, StringLen (dsp->new_suggested->id_list [seq_num]));
+    
+      /* max title length */
+      dlg->max_title_length = MAX (dlg->max_title_length, StringLen (dsp->new_original->title_list [seq_num]));
+      dlg->max_title_length = MAX (dlg->max_title_length, StringLen (dsp->new_suggested->title_list [seq_num]));
+    }
+  }
+  /* get max lengths from existing set */
+  if (dsp->existing_original != NULL)
+  {
+    for (seq_num = 0; seq_num < dsp->existing_original->num_sequences; seq_num++)
+    {
+      /* we want the maximum length only for those rows we'll actually display */
+      if (StringCmp (dsp->existing_original->title_list [seq_num],
+                     dsp->existing_suggested->title_list [seq_num]) == 0)
+      {
+        continue;
+      }
+      /* max ID length */
+      dlg->max_id_length = MAX (dlg->max_id_length, StringLen (dsp->existing_original->id_list [seq_num]));
+      dlg->max_id_length = MAX (dlg->max_id_length, StringLen (dsp->existing_suggested->id_list [seq_num]));
+    
+      /* max title length */
+      dlg->max_title_length = MAX (dlg->max_title_length, StringLen (dsp->existing_original->title_list [seq_num]));
+      dlg->max_title_length = MAX (dlg->max_title_length, StringLen (dsp->existing_suggested->title_list [seq_num]));
+    }
+  }
+  ObjectRect (dlg->pnl, &r);
+  InvalRect (&r);   
+}
+
+static void CleanupDifferenceDialog (GraphiC g, Pointer data)
+{
+  DiffDlgPtr dlg;
+  
+  dlg = (DiffDlgPtr) data;
+  if (dlg != NULL)
+  {
+    dlg->new_original = IDAndTitleEditFree (dlg->new_original);
+    dlg->new_suggested = IDAndTitleEditFree (dlg->new_suggested);
+    dlg->existing_original = IDAndTitleEditFree (dlg->existing_original);
+    dlg->existing_suggested = IDAndTitleEditFree (dlg->existing_suggested);
+    dlg = MemFree (dlg);
+  }
+}
+
+static DialoG 
+ShowDifferenceDialog 
+(GrouP parent, 
+ Int4  width,
+ Int4  height)
+{
+  DiffDlgPtr dlg;
+  GrouP        p;
+  
+  dlg = (DiffDlgPtr) MemNew (sizeof (DiffDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+  p = HiddenGroup (parent, 1, 0, NULL);
+  SetObjectExtra (p, dlg, CleanupDifferenceDialog);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SetToDiffDlg;
+  dlg->fromdialog = NULL;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = NULL;
+
+  dlg->new_original = NULL;
+  dlg->new_suggested = NULL;  
+  dlg->existing_original = NULL;
+  dlg->existing_suggested = NULL;  
+
+#ifdef WIN_MAC
+  dlg->display_font = ParseFont ("Monaco, 9");
+#endif
+#ifdef WIN_MSWIN
+  dlg->display_font = ParseFont ("Courier, 9");
+#endif
+#ifdef WIN_MOTIF
+  dlg->display_font = ParseFont ("fixed, 12");
+#endif
+  SelectFont (dlg->display_font);
+  dlg->char_width  = CharWidth ('0');
+  dlg->descent = Descent ();
+  dlg->table_inset = 4;
+  
+  dlg->max_title_length = 0;
+  
+  dlg->num_header_rows = 3;
+  
+  dlg->pnl = AutonomousPanel4 (p, width, height, OnDrawDiffDlg,
+                               OnVScrollDiffDlg, OnHScrollDiffDlg,
+                               sizeof (DiffDlgData), NULL, NULL); 
+  SetObjectExtra (dlg->pnl, dlg, NULL);
+  SetPanelClick(dlg->pnl, OnClickDiffDlg, NULL, NULL, NULL);
+  
+  return (DialoG) p;    
+}
+
+static Boolean 
+ShowBracketingCorrections 
+(IDAndTitleEditPtr iatep_new, 
+ IDAndTitleEditPtr iatep_existing,
+ DialoG dlg)
+{
+  IDAndTitleEditPtr  suggested_new, suggested_existing;
+  Boolean            any_to_show = FALSE;
+  DiffSetData        dsd;
+  Int4               num_to_show;
+  
+  if (dlg == NULL)
+  {
+    return FALSE;
+  }
+
+  suggested_new = SuggestCorrectionForTitleBracketing (iatep_new);
+  suggested_existing = SuggestCorrectionForTitleBracketing (iatep_existing);
+  
+  num_to_show = CountTitleCorrectionRows (iatep_new, suggested_new)
+                + CountTitleCorrectionRows (iatep_existing, suggested_existing);
+                
+  if (num_to_show > 0)
+  {
+    dsd.new_original = iatep_new;
+    dsd.new_suggested = suggested_new;
+    dsd.existing_original = iatep_existing;
+    dsd.existing_suggested = suggested_existing;
+    PointerToDialog (dlg, &dsd);
+    any_to_show = TRUE;
+  }
+  suggested_new = IDAndTitleEditFree (suggested_new);
+  suggested_new = IDAndTitleEditFree (suggested_new);
+  
+  return any_to_show;
+}
+
+typedef Int4 (*DrawExplanationFunc) PROTO ((Int4, Int4, Int4, Int4, Int4));
+
+typedef ValNodePtr (*ColorizeStringFunc) PROTO ((CharPtr, Pointer, Boolean));
+
+typedef void (*UpdateColorizedPanelParentProc) PROTO ((Pointer));
+
+typedef void (*ScrollParentProc) PROTO ((Int4, Pointer));
+
+typedef struct colorizeddeflinedlg
+{
+  PaneL                          pnl;
+  IDAndTitleEditPtr              iatep_new;
+  IDAndTitleEditPtr              iatep_current;
+  Boolean                        is_nuc;
+  FonT                           display_font;
+  Int4                           char_width;
+  Int4                           descent;
+  Int4                           max_title_length;
+  Int4                           max_id_length;
+  Int4                           table_inset;
+  Int4                           num_header_rows;
+  DrawExplanationFunc            draw_explanation; 
+  Boolean                        edit_values; 
+  ColorizeStringFunc             colorize_title;
+  Pointer                        colorize_data;
+  UpdateColorizedPanelParentProc update_parent;
+  Pointer                        update_parent_data;
+  ScrollParentProc               scroll_parent;
+  Pointer                        scroll_parent_data;
+} ColorizedDeflineDlgData, PNTR ColorizedDeflineDlgPtr;
+
+static Int4 CountRowsWithColor 
+(IDAndTitleEditPtr  iatep, 
+ Int4Ptr            max_id_length,
+ Int4Ptr            max_title_length,
+ ColorizeStringFunc colorize_title,
+ Pointer            colorize_data,
+ Boolean            is_nuc)
+{
+  ValNodePtr diff_list;
+  Int4       seq_num, num_rows_with_color = 0;
+  
+  if (iatep == NULL || colorize_title == NULL)
+  {
+    return 0;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    diff_list = colorize_title (iatep->title_list [seq_num], colorize_data, is_nuc);
+    if (diff_list != NULL)
+    {
+      num_rows_with_color ++;
+      diff_list = ValNodeFree (diff_list);
+      if (max_id_length != NULL)
+      {
+        *max_id_length = MAX (*max_id_length, StringLen (iatep->id_list [seq_num]));
+      }
+      if (max_title_length != NULL)
+      {
+        *max_title_length = MAX (*max_title_length, StringLen (iatep->title_list [seq_num]));
+      }
+    }
+  }
+  return num_rows_with_color;
+}
+
+static void DrawDeflineDlgTitle (Int4 x, Int4 y, Int4 char_width, Int4 descent, Int4 max_id_length, Int4 win_width)
+{
+  RecT rct;
+  
+  /* draw title row */
+  DkGray ();
+  InvertColors ();
+  White ();
+  LoadRect (&rct, x, y + descent,
+            x + win_width, 
+            y - stdLineHeight + descent);
+  EraseRect (&rct);
+
+  PaintStringEx ("Sequence ID", x, y);
+  x += (max_id_length + 2) * char_width;
+  PaintStringEx ("Title", x, y);
+  InvertColors ();
+  Black ();
+}
+
+static void 
+DrawDeflineDlgRow 
+(Int4 x, 
+ Int4 y, 
+ Int4 char_width, 
+ Int4 descent, 
+ Int4 max_id_length, 
+ Int4 win_width,
+ CharPtr id_str,
+ CharPtr title_str,
+ Int4       offset,
+ ValNodePtr diff_list,
+ Int4       choice_num)
+{
+  RecT rct;
+  PoinT      pt1, pt2;
+
+  LoadRect (&rct, x, y + descent,
+            x + win_width, 
+            y - stdLineHeight + descent);
+  EraseRect (&rct);
+
+  if (id_str != NULL)
+  {
+    PaintStringEx (id_str, x, y);
+  }
+  x += (max_id_length + 1) * char_width;
+  pt1.x = x + 2;
+  pt2.x = x + 2;
+  pt1.y = y + descent;
+  pt2.y = y - stdLineHeight + descent;
+  Black ();
+  DrawLine (pt1, pt2);
+
+  x += char_width;
+  
+  PaintColorizedString (x, y, char_width, title_str, offset, FALSE, diff_list, 
+                        choice_num);
+}
+
+static void 
+DrawColorizedDeflinesInSet 
+(Int4                x,
+ Int4Ptr             y,
+ Int4                last_y,
+ Int4                char_width,
+ Int4                descent,
+ Int4                max_id_length,
+ Int4                row_length,
+ Int4Ptr             start_row,
+ Int4                start_col,
+ IDAndTitleEditPtr   iatep,
+ ColorizeStringFunc  colorize_title,
+ Pointer             colorize_data,
+ Boolean             is_nuc)
+{
+  Int4       row, visible_row;
+  ValNodePtr diff_list;
+  
+  if (iatep == NULL || y == NULL || start_row == NULL || colorize_title == NULL)
+  {
+    return;
+  }
+  
+  visible_row = 0;
+  for (row = 0; 
+       row < iatep->num_sequences && *y <= last_y;
+       row++)
+  {
+    diff_list = NULL;
+    diff_list = colorize_title (iatep->title_list [row], colorize_data, is_nuc);
+    if (diff_list != NULL)
+    {
+      if (visible_row == *start_row)
+      {
+        DrawDeflineDlgRow (x, *y, char_width, descent, max_id_length, row_length,
+                          iatep->id_list [row],
+                          iatep->title_list [row],
+                          start_col, diff_list, 1);
+        (*y) += stdLineHeight;
+        (*start_row) ++;
+      }
+      visible_row++;
+      diff_list = ValNodeFree (diff_list);
+    }
+  }
+  
+} 
+
+static void OnDrawColorizedDeflineDlg (PaneL p)
+{
+  ColorizedDeflineDlgPtr dlg;
+  BaR                    sb_vert, sb_horiz;
+  Int4                   start_row, start_col;
+  RecT                   r;
+  Int4                   x, y, row_length, last_y;
+  Int4                   num_new_rows, num_existing_rows, num_rows;
+  Int4                   visible_rows;
+  Int4                   new_vmax, new_hmax, old_vmax, old_hmax;
+
+  dlg = (ColorizedDeflineDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  
+  num_rows = 0;
+  dlg->max_id_length = 10;
+  dlg->max_title_length = 5;
+  num_new_rows = CountRowsWithColor (dlg->iatep_new, 
+                                     &(dlg->max_id_length), &(dlg->max_title_length),
+                                     dlg->colorize_title, dlg->colorize_data, dlg->is_nuc);
+  num_existing_rows = CountRowsWithColor (dlg->iatep_current, 
+                                          &(dlg->max_id_length), &(dlg->max_title_length),
+                                          dlg->colorize_title, dlg->colorize_data, dlg->is_nuc);
+  num_rows = num_new_rows + num_existing_rows;
+  
+  SelectFont (dlg->display_font);
+  
+  sb_vert  = GetSlateVScrollBar ((SlatE) p);
+  Enable (sb_vert);
+  sb_horiz = GetSlateHScrollBar ((SlatE) p);
+  Enable (sb_horiz);
+  
+  start_row = GetBarValue (sb_vert);
+  start_col = GetBarValue (sb_horiz);
+  
+  ObjectRect (p, &r);
+  InsetRect (&r, dlg->table_inset, dlg->table_inset);
+  x = r.left + 1;
+  y = r.top + stdLineHeight;
+  SelectFont (programFont); 
+  
+  row_length = r.right - r.left - 2;
+  
+  dlg->num_header_rows = 0;
+  /* draw explanatory text */
+  if (dlg->draw_explanation != NULL)
+  {
+    dlg->num_header_rows = (dlg->draw_explanation) (x, y, 
+                                                    dlg->char_width, 
+                                                    dlg->descent, 
+                                                    row_length);
+    y += stdLineHeight * dlg->num_header_rows;
+  }
+  
+  /* draw title row */
+  DrawDeflineDlgTitle (x, y, dlg->char_width, dlg->descent, dlg->max_id_length, row_length);
+  y+= stdLineHeight;
+  dlg->num_header_rows ++;  
+  
+  visible_rows = (r.bottom - r.top - 2 * dlg->table_inset) / stdLineHeight - dlg->num_header_rows;
+  new_vmax = num_rows - visible_rows;
+  new_hmax = dlg->max_title_length - 1;
+  if (new_vmax < 0)
+  {
+    new_vmax = 0;
+  }
+  if (new_hmax < 0)
+  {
+    new_hmax = 0;
+  }
+  old_vmax = GetBarMax (sb_vert);
+  old_hmax = GetBarMax (sb_horiz);
+  
+  if (old_vmax != new_vmax)
+  {
+    CorrectBarMax (sb_vert, new_vmax);
+    if (start_row > new_vmax)
+    {
+      start_row = new_vmax;
+    }
+    CorrectBarValue (sb_vert, start_row);
+    CorrectBarPage (sb_vert, 1, 1);
+  }
+  
+  if (old_hmax != new_hmax)
+  {
+    CorrectBarMax (sb_horiz, new_hmax);
+    if (start_col > new_hmax)
+    {
+      start_col = new_hmax;
+    }
+    CorrectBarValue (sb_horiz, start_col);
+    CorrectBarPage (sb_horiz, 1, 1);
+  }
+  
+  last_y = r.bottom - 2 * dlg->table_inset;
+
+  DrawColorizedDeflinesInSet (x, &y, last_y, dlg->char_width, dlg->descent,
+                              dlg->max_id_length, row_length, &start_row, start_col,
+                              dlg->iatep_new, 
+                              dlg->colorize_title, dlg->colorize_data,
+                              dlg->is_nuc);
+
+  start_row -= num_new_rows;
+
+  DrawColorizedDeflinesInSet (x, &y, last_y, dlg->char_width, dlg->descent,
+                              dlg->max_id_length, row_length, &start_row, start_col,
+                              dlg->iatep_current, 
+                              dlg->colorize_title, dlg->colorize_data,
+                              dlg->is_nuc);
+}
+
+static PoinT GetColorizedDeflineCoord (ColorizedDeflineDlgPtr dlg, PoinT pt)
+{
+  BaR sb_horiz;
+  BaR sb_vert;
+  Int4 start_row, start_col;
+  RecT r;
+  PoinT cell_coord;
+  Int4  x, y, apparent_x, apparent_y, vis_row, new_rows = 0;
+  ValNodePtr diff_list;
+  
+  cell_coord.x = -1;
+  cell_coord.y = -1;
+  
+  if (dlg == NULL)
+  {
+    return cell_coord;
+  }
+  
+  sb_vert  = GetSlateVScrollBar ((SlatE) dlg->pnl);
+  sb_horiz = GetSlateHScrollBar ((SlatE) dlg->pnl);
+  
+  start_row = GetBarValue (sb_vert);
+  start_col = GetBarValue (sb_horiz);
+  
+  ObjectRect (dlg->pnl, &r);
+  InsetRect (&r, dlg->table_inset, dlg->table_inset);
+  x = pt.x - r.left;
+  y = pt.y - r.top;
+  
+  apparent_y = y / stdLineHeight;
+  
+  if (apparent_y < dlg->num_header_rows)
+  {
+    cell_coord.y = -1;
+  }
+  else
+  {
+    apparent_y = apparent_y - dlg->num_header_rows + start_row;
+    cell_coord.y = 0;
+    vis_row = -1;
+    while (vis_row < apparent_y && dlg->iatep_new != NULL && cell_coord.y < dlg->iatep_new->num_sequences)
+    {
+      diff_list = NULL;
+      diff_list = dlg->colorize_title (dlg->iatep_new->title_list [cell_coord.y], 
+                                       dlg->colorize_data,
+                                       dlg->is_nuc);
+      if (diff_list != NULL)
+      {
+        vis_row++;
+        new_rows ++;
+        if (vis_row < apparent_y)
+        {
+          cell_coord.y ++;
+        }
+      }
+      else
+      {
+        cell_coord.y ++;
+      }
+      diff_list = ValNodeFree (diff_list);
+    }
+    while (vis_row < apparent_y && dlg->iatep_current != NULL 
+           && cell_coord.y - new_rows < dlg->iatep_current->num_sequences)
+    {
+      diff_list = NULL;
+      diff_list = dlg->colorize_title (dlg->iatep_current->title_list [cell_coord.y - new_rows],
+                                       dlg->colorize_data,
+                                       dlg->is_nuc);
+      if (diff_list != NULL)
+      {
+        vis_row++;
+        if (vis_row < apparent_y)
+        {
+          cell_coord.y ++;
+        }
+      }
+      else
+      {
+        cell_coord.y ++;
+      }
+      diff_list = ValNodeFree (diff_list);
+    }
+  }
+  
+  apparent_x = x / dlg->char_width;
+  if (apparent_x <= dlg->max_id_length + 1)
+  {
+    cell_coord.x = -1;
+  }
+  else 
+  {
+    cell_coord.x = apparent_x - dlg->max_id_length - 2 + start_col;
+  }
+
+  return cell_coord;
+}
+
+static BadValuePtr GetModValuePairForCoord (ColorizedDeflineDlgPtr dlg, PoinT coord, BoolPtr is_value)
+{
+  Int4                   current_num;
+  CharPtr                seq_id = NULL, title = NULL, mod_name = NULL, mod_value = NULL;
+  CharPtr                cp, eq_loc, start_bracket, end_bracket;
+  BadValuePtr            bvp = NULL;
+  ModifierInfoPtr        mip;
+
+  if (dlg == NULL || coord.x < 0 || coord.y < 0)
+  {
+    return NULL;
+  }
+  
+  if (dlg->iatep_new != NULL && coord.y < dlg->iatep_new->num_sequences)
+  {
+    seq_id = dlg->iatep_new->id_list [coord.y];
+    title = dlg->iatep_new->title_list [coord.y];
+  }
+  else if (dlg->iatep_current != NULL)
+  {
+    current_num = coord.y;
+    if (dlg->iatep_new != NULL)
+    {
+      current_num -= dlg->iatep_new->num_sequences;
+    }
+    if (current_num < dlg->iatep_current->num_sequences)
+    {
+      seq_id = dlg->iatep_current->id_list [current_num];
+      title = dlg->iatep_current->id_list [current_num];
+    }
+  }
+  if (seq_id == NULL || title == NULL || StringLen (title) < coord.x)
+  {
+    return NULL;
+  }
+  
+  cp = title + coord.x;
+  
+  mip = ParseOneBracketedModifier (title, &start_bracket, &end_bracket);
+  while (mip != NULL && start_bracket != NULL && end_bracket != NULL
+         && cp > end_bracket)
+  {
+    mip = ModifierInfoFree (mip);
+    mip = ParseOneBracketedModifier (end_bracket + 1, &start_bracket, &end_bracket);
+  }
+  mip = ModifierInfoFree (mip);
+  
+  mod_name = NULL;
+  mod_value = NULL;
+  
+  if (start_bracket <= cp && end_bracket >= cp)
+  {
+    eq_loc = NextBracketToken (start_bracket + 1);
+    if (eq_loc != NULL && *eq_loc == '=')
+    {
+      mod_name = (CharPtr) MemNew ((eq_loc - start_bracket) * sizeof (Char));
+      if (mod_name != NULL)
+      {
+        StringNCpy (mod_name, start_bracket + 1, eq_loc - start_bracket - 1);
+        mod_name [eq_loc - start_bracket - 1] = 0;
+        TrimSpacesAroundString (mod_name);
+      }
+      
+      mod_value = (CharPtr) MemNew (end_bracket - eq_loc);
+      if (mod_value != NULL)
+      {
+        StringNCpy (mod_value, eq_loc + 1, end_bracket - eq_loc - 1);
+        mod_value [end_bracket - eq_loc - 1] = 0;
+        TrimSpacesAroundString (mod_value);
+      }
+    }
+  }
+  
+  if (mod_name == NULL || mod_value == NULL)
+  {
+    mod_name = MemFree (mod_name);
+    mod_value = MemFree (mod_value);
+    return NULL;
+  }
+  
+  bvp = BadValueNew (seq_id, mod_name, mod_value);
+  mod_name = MemFree (mod_name);
+  mod_value = MemFree (mod_value);
+  
+  if (is_value != NULL)
+  {
+    if (title + coord.x < eq_loc)
+    {
+      *is_value = FALSE;
+    }
+    else if (title + coord.x >= eq_loc)
+    {
+      *is_value = TRUE;
+    }
+  }
+  return bvp;
+}
+
+static void ScrollToColor (ColorizedDeflineDlgPtr dlg, PoinT coord)
+{
+  BaR  sb_horiz;
+  Int4 current_scroll_pos, current_row = 0, new_scroll_pos = 0;
+  ValNodePtr diff_list, vnp;
+  CharPtr    title = NULL;
+  Boolean    found_in_new = FALSE;
+  
+  if (dlg == NULL || dlg->colorize_title == NULL || coord.y < 0)
+  {
+    return;
+  }
+  
+  sb_horiz = GetSlateHScrollBar ((SlatE) dlg->pnl);
+  current_scroll_pos = GetBarValue (sb_horiz);
+  
+  current_row = coord.y;
+  
+  if (dlg->iatep_new != NULL)
+  {
+    if (coord.y < dlg->iatep_new->num_sequences)
+    {
+      title = dlg->iatep_new->title_list [coord.y];
+      found_in_new = TRUE;
+    }
+    else
+    {
+      current_row = coord.y - dlg->iatep_new->num_sequences;
+    }
+  }
+  
+  if (!found_in_new && dlg->iatep_current != NULL && current_row < dlg->iatep_current->num_sequences)
+  {
+    title = dlg->iatep_current->title_list [current_row];
+  }
+  
+  if (title == NULL)
+  {
+    return;
+  }
+  
+  diff_list = (dlg->colorize_title) (title, dlg->colorize_data, dlg->is_nuc);
+  vnp = diff_list;
+  while (vnp != NULL && vnp->data.intvalue <= current_scroll_pos)
+  {
+    vnp = vnp->next;
+  }
+  while (vnp != NULL && vnp->data.intvalue == current_scroll_pos + 1)
+  {
+    vnp = vnp->next;
+    current_scroll_pos ++;
+  }
+  if (vnp != NULL)
+  {
+    new_scroll_pos = vnp->data.intvalue;
+  }
+  if (new_scroll_pos > GetBarMax (sb_horiz))
+  {
+    new_scroll_pos = GetBarMax (sb_horiz);
+  }
+  SetBarValue (sb_horiz, new_scroll_pos); 
+   
+}
+
+static void OnClickColorizedDeflinePanel (PaneL p, PoinT pt)
+{
+  ColorizedDeflineDlgPtr dlg;
+  PoinT                  cell_coord;
+  BadValuePtr            bvp;
+  Boolean                is_value = FALSE, rval = FALSE;
+
+  dlg = (ColorizedDeflineDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL || ! dblClick)
   {
     return;
   }
 
-  FindExtraTextForLocalIDs (list, &extended_ids, &sep_for_ids);
-  
-  if (extended_ids != NULL && sep_for_ids != NULL)
-  {   
-    w = MovableModalWindow (-20, -13, -10, -10, "Spaces in Sequence IDs", NULL);
-    h = HiddenGroup(w, -1, 0, NULL);
-    SetGroupSpacing (h, 10, 10);
-
-    doc = DocumentPanel (h, stdCharWidth * 27, stdLineHeight * 12);
-    SetDocAutoAdjust (doc, TRUE);
-    AppendText (doc, "Your sequence IDs are not unique.  Did you try to put spaces in your sequence IDs?  This is not allowed.\n\n", NULL, NULL, programFont);
-    
-    ObjectRect (doc, &r);
-    InsetRect (&r, 4, 4);
-    idColFmt[0].pixWidth = (r.right - r.left) / 2;
-    idColFmt[1].pixWidth = (r.right - r.left) / 2;
-
-    
-    AppendText (doc, "Corrected ID\tOriginal Description\n", &idParFmt, idColFmt, programFont);
-
-    for (id_vnp = extended_ids, seq_vnp = sep_for_ids;
-         id_vnp != NULL && seq_vnp != NULL;
-         id_vnp = id_vnp->next, seq_vnp = seq_vnp->next)
+  cell_coord = GetColorizedDeflineCoord (dlg, pt);
+  if (cell_coord.y < 0)
+  {
+    return;
+  }
+  else if (cell_coord.x < 0)
+  {
+    if (dlg->scroll_parent != NULL)
     {
-      AddIDStatement (id_vnp, seq_vnp, doc);
+      (dlg->scroll_parent) (cell_coord.y, dlg->scroll_parent_data);
     }
-    
-    c = HiddenGroup (h, 2, 0, NULL);
-    b = PushButton (c, "Make automatic corrections", ModalAcceptButton);
-    SetObjectExtra (b, &acd, NULL);
-    b = PushButton (c, "Allow manual corrections", ModalCancelButton);
-    SetObjectExtra (b, &acd, NULL);
-  
-    AlignObjects (ALIGN_CENTER, (HANDLE) doc, (HANDLE) c, (HANDLE) NULL);
-
-    Show (w);
-    Select (w);
-  
-    acd.cancelled = FALSE;
-    acd.accepted = FALSE;
-    while (!acd.accepted && ! acd.cancelled)
+    ScrollToColor (dlg, cell_coord);
+  }
+  else
+  {
+    bvp = GetModValuePairForCoord (dlg, cell_coord, &is_value);
+    if (bvp != NULL)
     {
-      ProcessExternalEvent ();
-      Update ();
-    }
-    ProcessAnEvent ();
-    if (! acd.cancelled)
-    {
-      for (id_vnp = extended_ids, seq_vnp = sep_for_ids;
-           id_vnp != NULL && seq_vnp != NULL;
-           id_vnp = id_vnp->next, seq_vnp = seq_vnp->next)
+      if (is_value)
       {
-        FixOneSequenceIDWithSpaces (id_vnp, seq_vnp);
+        if (dlg->edit_values)
+        {
+          rval = FixOneModifierValue (dlg->iatep_new,
+                                      dlg->iatep_current,
+                                      bvp->seq_id,
+                                      bvp->mod_name,
+                                      bvp->value,
+                                      GetModifierType (bvp->mod_name));
+        }
       }
-      ResetSegSetIDLists (list);
+      else
+      {
+        rval = FixOneModifierName (dlg->iatep_new,
+                                   dlg->iatep_current,
+                                   bvp->seq_id,
+                                   bvp->mod_name,
+                                   dlg->is_nuc);
+      }
     }
-    Remove (w);
+    bvp = BadValueFree (bvp);
+    if (rval && dlg->update_parent != NULL)
+    {
+      (dlg->update_parent) (dlg->update_parent_data);
+    }
   }
 }
 
-typedef struct seqidedit 
+static void 
+UpdateColorizedDeflinePanelData 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ PaneL             pnl)
 {
-  SeqEntryPtr new_list;
-  SeqEntryPtr current_list;
-  DialoG      dlg;
-  PrompT      p_instr[3];
-} SeqIdEditData, PNTR SeqIdEditPtr;
+  ColorizedDeflineDlgPtr dlg;
+  RecT                   r;
+  
+  dlg = (ColorizedDeflineDlgPtr) GetObjectExtra (pnl);
+  if (dlg == NULL)
+  {
+    return;
+  }
+  dlg->iatep_new = iatep_new;
+  dlg->iatep_current = iatep_current;
+
+  
+  ObjectRect ((SlatE) pnl, &r);
+  InvalRect (&r);
+}
+
+static PaneL 
+ColorizedDeflinePanel 
+(GrouP parent, 
+ Int4  width,
+ Int4  height,
+ IDAndTitleEditPtr   iatep_new,
+ IDAndTitleEditPtr   iatep_current,
+ Boolean             is_nuc,
+ DrawExplanationFunc draw_explanation,
+ Boolean             edit_values,
+ ColorizeStringFunc  colorize_title,
+ Pointer             colorize_data,
+ UpdateColorizedPanelParentProc update_parent,
+ Pointer                        update_parent_data,
+ ScrollParentProc               scroll_parent,
+ Pointer                        scroll_parent_data)
+{
+  ColorizedDeflineDlgPtr dlg;
+  
+  dlg = (ColorizedDeflineDlgPtr) MemNew (sizeof (ColorizedDeflineDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+  
+#ifdef WIN_MAC
+  dlg->display_font = ParseFont ("Monaco, 9");
+#endif
+#ifdef WIN_MSWIN
+  dlg->display_font = ParseFont ("Courier, 9");
+#endif
+#ifdef WIN_MOTIF
+  dlg->display_font = ParseFont ("fixed, 12");
+#endif
+  SelectFont (dlg->display_font);
+  dlg->char_width  = CharWidth ('0');
+  dlg->descent = Descent ();
+  dlg->table_inset = 4;
+  
+  dlg->max_title_length = 0;
+  dlg->max_id_length = 0;
+  
+  dlg->draw_explanation = draw_explanation;
+  dlg->edit_values = edit_values;
+  dlg->colorize_title = colorize_title;
+  dlg->colorize_data = colorize_data;
+  dlg->iatep_new = iatep_new;
+  dlg->iatep_current = iatep_current;
+  dlg->is_nuc = is_nuc;
+  dlg->update_parent = update_parent;
+  dlg->update_parent_data = update_parent_data;
+  dlg->scroll_parent = scroll_parent;
+  dlg->scroll_parent_data = scroll_parent_data;
+  
+  dlg->pnl = AutonomousPanel4 (parent, width, height, OnDrawColorizedDeflineDlg,
+                               OnVScrollDiffDlg, OnHScrollDiffDlg,
+                               sizeof (ColorizedDeflineDlgData), NULL, NULL); 
+  SetObjectExtra (dlg->pnl, dlg, NULL);
+
+  SetPanelClick(dlg->pnl, OnClickColorizedDeflinePanel, NULL, NULL, NULL); 
+  
+  return dlg->pnl;    
+}
+
+static void UpdateSeqIdEditForColorizedPanel (Pointer userdata)
+{
+  Boolean      show_all;
+  SeqIdEditPtr siep;
+  
+  siep = (SeqIdEditPtr) userdata;
+  if (siep == NULL)
+  {
+    return;
+  }
+  
+  show_all = GetStatus (siep->show_all_btn);
+  UpdateIdAndTitleEditDialog (siep->new_dlg, 
+                              siep->iatep_new, 
+                              siep->iatep_current, 
+                              siep->seqid_edit_phase,
+                              show_all,
+                              siep->is_nuc);
+  UpdateIdAndTitleEditDialog (siep->current_dlg, 
+                              siep->iatep_current, 
+                              siep->iatep_new, 
+                              siep->seqid_edit_phase,
+                              show_all,
+                              siep->is_nuc);
+  ShowErrorInstructions (siep);
+}
+
+static void ScrollSeqIdEditForColorizedPanel (Int4 seq_num, Pointer userdata)
+{
+  SeqIdEditPtr siep;
+  Int4         current_num;
+  
+  if (seq_num < 0)
+  {
+    return;
+  }
+  
+  siep = (SeqIdEditPtr) userdata;
+  if (siep == NULL)
+  {
+    return;
+  }
+  
+  if (siep->iatep_new != NULL && seq_num < siep->iatep_new->num_sequences)
+  {
+    ScrollTagListToSeqId (siep->new_dlg, siep->iatep_new->id_list [seq_num]);
+  }
+  else if (siep->iatep_current != NULL)
+  {
+    current_num = seq_num;
+    if (siep->iatep_new != NULL)
+    {
+      current_num -= siep->iatep_new->num_sequences;
+    }
+    if (current_num < siep->iatep_current->num_sequences)
+    {
+      ScrollTagListToSeqId (siep->current_dlg,
+                            siep->iatep_current->id_list [current_num]);
+    }
+  }
+}
+
+static Int4 
+DrawExplanation 
+(Int4 x,
+ Int4 y, 
+ Int4 char_width, 
+ Int4 descent, 
+ Int4 win_width,
+ CharPtr line1, 
+ CharPtr exp_part1, 
+ CharPtr exp_red, 
+ CharPtr exp_part2)
+{
+  RecT rct;
+  Int4 num_lines = 0, tmp_x;
+  CharPtr  dbl_click = "Double-click on a sequence ID to scroll to the next invalid ";
+  
+  
+  /* draw first explanation row */
+  LoadRect (&rct, x, y + descent,
+            x + win_width, 
+            y - stdLineHeight + descent);
+  EraseRect (&rct);
+
+  if (!StringHasNoText (line1))
+  {
+    LoadRect (&rct, x, y + descent,
+              x + win_width, 
+              y - stdLineHeight + descent);
+    EraseRect (&rct);
+    PaintStringEx (line1, x, y);
+    y += stdLineHeight;
+    num_lines ++;
+  }
+  
+  if (!StringHasNoText (exp_part1) || !StringHasNoText (exp_red) || !StringHasNoText (exp_part2))
+  {
+    LoadRect (&rct, x, y + descent,
+              x + win_width, 
+              y - stdLineHeight + descent);
+    EraseRect (&rct);
+
+    tmp_x = x;
+    PaintStringEx (exp_part1, tmp_x, y);
+    tmp_x += StringLen (exp_part1) * char_width;
+    
+    Red ();
+    PaintStringEx (exp_red, tmp_x, y);
+    Black ();
+    tmp_x += StringLen (exp_red) * char_width;
+  
+    PaintStringEx (exp_part2, tmp_x, y);
+    
+    y += stdLineHeight;
+    num_lines ++;
+  }
+  
+  if (!StringHasNoText (exp_red))
+  {
+    /* draw second row */
+    LoadRect (&rct, x, y + descent,
+              x + win_width, 
+              y - stdLineHeight + descent);
+    EraseRect (&rct);
+    PaintStringEx (dbl_click, x, y);
+    tmp_x = x + StringLen (dbl_click) * char_width;
+    Red ();
+    PaintStringEx (exp_red, tmp_x, y);
+    Black ();
+    tmp_x += StringLen (exp_red) * char_width;
+    PaintStringEx (".", tmp_x, y);
+    y += stdLineHeight;
+    num_lines ++;
+  }
+  
+  
+  return num_lines;
+}
+
+static Int4 
+DrawInvalidNameExplanation 
+(Int4 x,
+ Int4 y, 
+ Int4 char_width, 
+ Int4 descent, 
+ Int4 win_width)
+{
+  /* draw explanation rows */
+  return DrawExplanation (x, y, char_width, descent, win_width, 
+                          "Some of your modifiers have invalid names.",
+                          "Double-click on a ",
+                          "modifier name",
+                          " to change the name.");
+}
+
+static ValNodePtr ColorizeUnrecognizedNames (CharPtr title, Pointer userdata, Boolean is_nuc)
+{
+  Int4            offset;
+  CharPtr         stop, cp;
+  ModifierInfoPtr mip;
+  ValNodePtr      diff_list = NULL;
+    
+  if (StringHasNoText (title))
+  {
+    return NULL;
+  }
+
+  cp = StringChr (title, '[');
+  mip = ParseOneBracketedModifier (cp, NULL, &stop);
+  while (mip != NULL && stop != NULL)
+  {
+  	if (IsUnrecognizedModifierName (mip, is_nuc))
+  	{
+  	  cp++;
+      offset = cp - title;
+      while (*cp != 0 && *cp != '=')
+      {
+        if (!isspace (*cp))
+        {
+          ValNodeAddInt (&diff_list, 1, offset);
+        }
+        cp++;
+        offset++;
+      }
+  	}
+  	mip = ModifierInfoFree (mip);
+  	cp = StringChr (stop + 1, '[');
+  	mip = ParseOneBracketedModifier (cp, NULL, &stop);
+  }
+  mip = ModifierInfoFree (mip);
+  return diff_list;
+}
+
+static PaneL 
+UnrecognizedModifiersPanel 
+(GrouP                          parent,
+ Int4                           width,
+ Int4                           height,
+ IDAndTitleEditPtr              iatep_new,
+ IDAndTitleEditPtr              iatep_current,
+ Boolean                        is_nuc,
+ UpdateColorizedPanelParentProc update_parent,
+ Pointer                        update_parent_data,
+ ScrollParentProc               scroll_parent,
+ Pointer                        scroll_parent_data)
+{
+  return ColorizedDeflinePanel (parent, width, height, 
+                                iatep_new,
+                                iatep_current,
+                                is_nuc,
+                                DrawInvalidNameExplanation,
+                                FALSE,
+                                ColorizeUnrecognizedNames,
+                                NULL,
+                                update_parent,
+                                update_parent_data,
+                                scroll_parent,
+                                scroll_parent_data);
+}
+
+static Int4 
+DrawBadValuesExplanation 
+(Int4 x, 
+ Int4 y, 
+ Int4 char_width, 
+ Int4 descent, 
+ Int4 win_width)
+{
+  /* draw explanation rows */
+  return DrawExplanation (x, y, char_width, descent, win_width,
+                          "Some of your modifiers have inappropriate values.",
+                          "Double-click on a modifier name to replace the modifier name, double-click on a ",
+                          "value",
+                          " to replace the value.");
+}
+
+static ValNodePtr ColorizeInvalidValues (CharPtr title, Pointer userdata, Boolean is_nuc)
+{
+  Int4            offset;
+  CharPtr         start, stop, cp;
+  ModifierInfoPtr mip;
+  ValNodePtr      diff_list = NULL;
+    
+  if (StringHasNoText (title))
+  {
+    return NULL;
+  }
+
+  cp = StringChr (title, '[');
+  mip = ParseOneBracketedModifier (cp, &start, &stop);
+  while (mip != NULL && stop != NULL)
+  {
+  	if (ModifierHasInvalidValue (mip))
+  	{
+  	  cp = NextBracketToken (start + 1);
+      offset = cp - title;
+      while (*cp != 0 && cp != stop)
+      {
+        if (!isspace (*cp))
+        {
+          ValNodeAddInt (&diff_list, 1, offset);
+        }
+        cp++;
+        offset++;
+      }
+  	}
+  	mip = ModifierInfoFree (mip);
+  	cp = StringChr (stop + 1, '[');
+  	mip = ParseOneBracketedModifier (cp, &start, &stop);
+  }
+  mip = ModifierInfoFree (mip);
+  return diff_list;
+}
+
+static PaneL
+InvalidValuesPanel
+(GrouP                          parent,
+ Int4                           width,
+ Int4                           height,
+ IDAndTitleEditPtr              iatep_new,
+ IDAndTitleEditPtr              iatep_current,
+ Boolean                        is_nuc,
+ UpdateColorizedPanelParentProc update_parent,
+ Pointer                        update_parent_data,
+ ScrollParentProc               scroll_parent,
+ Pointer                        scroll_parent_data)
+{
+  return ColorizedDeflinePanel (parent, width, height,
+                                iatep_new,
+                                iatep_current, 
+                                is_nuc, 
+                                DrawBadValuesExplanation,
+                                TRUE,
+                                ColorizeInvalidValues,
+                                NULL,
+                                update_parent,
+                                update_parent_data,
+                                scroll_parent,
+                                scroll_parent_data);                                
+}
+  
+static CharPtr AdjustDuplicateNames (CharPtr title, CharPtr dup_name)
+{
+  CharPtr bracket_loc, eq_loc, end_bracket_loc, new_title;
+  Int4    offset, num_dups = 1;
+  Char    num_val [20];
+  
+  if (StringHasNoText (title)
+      || StringHasNoText (dup_name))
+  {
+    return title;
+  }
+  
+  /* first one - let stand */
+  bracket_loc = FindValuePairInDefLine (dup_name, title, &end_bracket_loc);
+  offset = end_bracket_loc + 1 - title;
+  
+  bracket_loc = FindValuePairInDefLine (dup_name, bracket_loc, &end_bracket_loc);
+  while (bracket_loc != NULL)
+  {  
+    eq_loc = StringChr (bracket_loc, '=');
+    if (eq_loc == NULL)
+    {
+      return title;
+    }
+    sprintf (num_val, "_dup_%d", num_dups);
+    num_dups ++;
+    new_title = InsertStringAtOffset (title, num_val, eq_loc - title);
+    if (new_title == NULL)
+    {
+      return title;
+    }
+    title = MemFree (title);
+    title = new_title;
+    bracket_loc = FindValuePairInDefLine (dup_name, title + offset, &end_bracket_loc);
+  }
+  return title;
+}
+
+static Boolean StringInValNodeList (ValNodePtr list, CharPtr search_str)
+{
+  while (list != NULL)
+  {
+    if (StringICmp (search_str, list->data.ptrvalue) == 0)
+    {
+      return TRUE;
+    }
+    list = list->next;
+  }
+  return FALSE;
+}
+
+static CharPtr AdjustDuplicatesInOneTitle (CharPtr title)
+{
+  ValNodePtr      modifier_list, vnp1, vnp2, dup_names = NULL;
+  ModifierInfoPtr mip1, mip2;
+  
+  modifier_list = ParseAllBracketedModifiers (title);
+  if (modifier_list == NULL || modifier_list->next == NULL)
+  {
+    return title;
+  }
+  
+  vnp1 = modifier_list;
+  while (vnp1 != NULL && vnp1->next != NULL)
+  {
+    mip1 = (ModifierInfoPtr) vnp1->data.ptrvalue;
+    vnp2 = vnp1->next;
+    while (vnp2 != NULL)
+    {
+      mip2 = (ModifierInfoPtr) vnp2->data.ptrvalue;
+      if (mip1 != NULL && mip2 != NULL
+          && mip1->modtype == mip2->modtype
+          && mip1->subtype == mip2->subtype
+          && StringICmp (mip1->name, mip2->name) == 0
+          && !StringInValNodeList (dup_names, mip1->name))
+      {
+        ValNodeAddPointer (&dup_names, 0, mip1->name);
+      }
+      vnp2 = vnp2->next;
+    }
+    vnp1 = vnp1->next;
+  }
+  
+  for (vnp1 = dup_names; vnp1 != NULL; vnp1 = vnp1->next)
+  {
+    title = AdjustDuplicateNames (title, vnp1->data.ptrvalue);
+  }
+  return title;
+}
+
+static void AdjustDuplicates (IDAndTitleEditPtr iatep)
+{
+  Int4 seq_num;
+  
+  if (iatep == NULL)
+  {
+    return;
+  }
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    iatep->title_list [seq_num] = AdjustDuplicatesInOneTitle (iatep->title_list [seq_num]);
+  }  
+}
+
+static Boolean 
+ShowUnrecognizedModifiers 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ Boolean           is_nuc)
+{
+  ValNodePtr   unrecognized_list;
+  
+  unrecognized_list = ListUnrecognizedModifiers (iatep_new, iatep_current, is_nuc);
+  
+  if (unrecognized_list == NULL)
+  {
+    return FALSE;
+  }
+  else
+  {
+    unrecognized_list = ValNodeFreeData (unrecognized_list);
+    return TRUE;
+  }
+}
+
+static Boolean ShowBadValues (IDAndTitleEditPtr iatep_new, IDAndTitleEditPtr iatep_current)
+{
+  ValNodePtr badlist = NULL;
+  Boolean    rval = FALSE;
+  
+  FindBadValuesInIDsAndTitles (iatep_new, &badlist);
+  FindBadValuesInIDsAndTitles (iatep_current, &badlist);
+
+  if (badlist != NULL)
+  {
+    rval = TRUE;
+  }
+
+  badlist = BadValueListFree (badlist);
+  return rval;
+}
+
+static Boolean 
+IDAndTitleEditIDsNeedFix 
+(IDAndTitleEditPtr iatep_new,
+ IDAndTitleEditPtr iatep_current,
+ Boolean           is_nuc)
+{
+  if (HasMissingIDs (iatep_new) || HasMissingIDs (iatep_current)
+      || (EditHasDuplicateIDs (iatep_new, iatep_current) && is_nuc)
+      || AnyBracketsInIDs (iatep_new) || AnyBracketsInIDs (iatep_current))
+  {
+    return TRUE;
+  }
+  else 
+  {
+    return FALSE;
+  }
+}
+
+static Boolean IDAndTitleEditTitlesNeedFix (IDAndTitleEditPtr iatep, Boolean is_nuc)
+{
+  Boolean    need_fix = FALSE;
+  ValNodePtr unrec_list = NULL;
+ 
+  if (EditNeedsBracketingFixes (iatep)
+      || (unrec_list = ListUnrecognizedModifiers (iatep, NULL, is_nuc)) != NULL
+      || ShowBadValues (iatep, NULL))
+  {
+    need_fix = TRUE;
+  }
+  unrec_list = ValNodeFreeData (unrec_list);
+  return need_fix;
+}
+
+static Boolean EditIDsNeedFix (SeqIdEditPtr siep)
+{
+  Boolean      need_fix = FALSE;
+  
+  if (siep == NULL || siep->iatep_new == NULL || siep->iatep_new->num_sequences < 1)
+  {
+    return FALSE;
+  }
+    
+  if (IDAndTitleEditIDsNeedFix (siep->iatep_new, siep->iatep_current, siep->is_nuc)
+      || IDAndTitleEditTitlesNeedFix (siep->iatep_new, siep->is_nuc)
+      || IDAndTitleEditTitlesNeedFix (siep->iatep_current, siep->is_nuc))
+  {
+    need_fix = TRUE;
+  }
+  return need_fix;
+}
 
 static void ShowErrorInstructions (Pointer userdata)
 {
-  Int4         i = 0;
-  SeqIdEditPtr siep;
-  TagListPtr   tlp;
+  SeqIdEditPtr      siep;
+  Boolean           has_missing, has_dups, has_bracket_ids;
+  Boolean           old_seqid_edit_phase;
     
   siep = (SeqIdEditPtr) userdata;
   if (siep == NULL)
@@ -14293,151 +21093,739 @@ static void ShowErrorInstructions (Pointer userdata)
     return;
   }
   
-  tlp = (TagListPtr) GetObjectExtra (siep->dlg);
-  if (tlp != NULL)
-  {
-    CollectIdAndTitleFromDialog (tlp, siep->new_list);
-  }
-
-  if (HasBlankIDs (siep->new_list))
-  {
-    SetTitle (siep->p_instr [i++], "Some of your sequences lack sequence IDs.");
-  }
+  UpdateIdAndTitleData (siep->new_dlg, siep->iatep_new);
+  UpdateIdAndTitleData (siep->current_dlg, siep->iatep_current);
   
-  if (HasDuplicateIDs (siep->new_list, siep->current_list))
-  {
-    SetTitle (siep->p_instr [i++], "Some of your sequence IDs are duplicated.");
-  }
+  has_missing = HasMissingIDs (siep->iatep_new) || HasMissingIDs (siep->iatep_current);
+  has_dups = EditHasDuplicateIDs (siep->iatep_new, siep->iatep_current);
+  has_bracket_ids = AnyBracketsInIDs (siep->iatep_new) || AnyBracketsInIDs (siep->iatep_current);
   
-  if (i == 0)
+  old_seqid_edit_phase = siep->seqid_edit_phase;
+  siep->seqid_edit_phase |= has_missing | (has_dups && siep->is_nuc) | has_bracket_ids;
+    
+  if (siep->seqid_edit_phase)
   {
-    SetTitle (siep->p_instr [i++], "Sequence ID errors have been corrected.");
+    SetTitle (siep->w, "Provide Sequence IDs For Your Sequences");
+    Show (siep->refresh_err_btn);
   }
   else
   {
-    SetTitle (siep->p_instr [i++], "Please provide unique sequence IDs for every sequence.");
-  }  
-  while (i < 3)
-  {
-    SetTitle (siep->p_instr [i++], "");
+    SetTitle (siep->w, "Provide Correctly Formatted Titles For Your Sequences");
+    Hide (siep->refresh_err_btn);
   }
+  
+  if (siep->seqid_edit_phase && !old_seqid_edit_phase)
+  {
+    UpdateIdAndTitleEditDialog (siep->new_dlg, 
+                                siep->iatep_new, siep->iatep_current,
+                                siep->seqid_edit_phase,
+                                GetStatus (siep->show_all_btn),
+                                siep->is_nuc);
+    UpdateIdAndTitleEditDialog (siep->current_dlg, 
+                                siep->iatep_current, siep->iatep_new,
+                                siep->seqid_edit_phase,
+                                GetStatus (siep->show_all_btn),
+                                siep->is_nuc);
+                                  
+  }
+
+  
+  Reset (siep->auto_correct_doc);
+  Show (siep->auto_correct_doc);
+  Hide (siep->bracket_dlg);
+  Hide (siep->badvalue_pnl);
+  Hide (siep->unrec_mod_pnl);
+  if (has_missing || (has_dups && siep->is_nuc))
+  {
+    if (has_missing)
+    {
+      AppendText (siep->auto_correct_doc, "Some of your sequences lack sequence IDs.", NULL, NULL, programFont);
+    }
+    if (has_dups && siep->is_nuc)
+    {
+      AppendText (siep->auto_correct_doc, "Some of your sequence IDs are duplicated.", NULL, NULL, programFont);
+    }
+    AppendText (siep->auto_correct_doc, "Please provide unique sequence IDs for every sequence.", NULL, NULL, programFont);
+    
+    if (ShowExtendedIDCorrections (siep->iatep_new, siep->iatep_current, siep->auto_correct_doc))
+    {
+      siep->auto_correct_ids = TRUE;
+      SetTitle (siep->auto_correct_btn, "Autocorrect Sequence IDs");
+      Show (siep->auto_correct_btn);
+    }
+    else
+    {
+      siep->auto_correct_ids = FALSE;
+      Hide (siep->auto_correct_btn);
+    }
+    siep->auto_correct_bracketing = FALSE;
+    siep->auto_correct_modnames = FALSE;
+  }
+  else if (ShowExtendedIDCorrections (siep->iatep_new, siep->iatep_current, siep->auto_correct_doc))
+  {
+    siep->auto_correct_ids = TRUE;
+    SetTitle (siep->auto_correct_btn, "Autocorrect Sequence IDs");
+    Show (siep->auto_correct_btn);
+    siep->auto_correct_bracketing = FALSE;
+    siep->auto_correct_modnames = FALSE;
+  }
+  else if (siep->seqid_edit_phase && EditIDsNeedFix (siep))
+  {
+    siep->auto_correct_ids = FALSE;
+    siep->auto_correct_bracketing = FALSE;
+    siep->auto_correct_modnames = FALSE;
+    Reset (siep->auto_correct_doc);
+    AppendText (siep->auto_correct_doc, "Sequence ID errors have been corrected.\nErrors are present within your sequence titles.\nClick 'Correct Sequence Titles' to correct sequence title errors.\n", NULL, NULL, programFont);
+    SetTitle (siep->auto_correct_btn, "Correct Sequence Titles");
+    Show (siep->auto_correct_btn);
+  }
+  else if (ShowBracketingCorrections (siep->iatep_new, siep->iatep_current, siep->bracket_dlg))
+  {
+    Show (siep->bracket_dlg);
+    Hide (siep->auto_correct_doc);
+    SetTitle (siep->auto_correct_btn, "Autocorrect Bracketing");
+    Show (siep->auto_correct_btn);
+    siep->auto_correct_ids = FALSE;
+    siep->auto_correct_bracketing = TRUE;
+    siep->auto_correct_modnames = FALSE;
+    UpdateIDAndTitleEditDialogErrorColumns (siep->new_dlg, siep->current_dlg, 
+                                            siep->iatep_new, siep->iatep_current,
+                                            siep->seqid_edit_phase, siep->is_nuc);
+
+  }
+  else if (ShowUnrecognizedModifiers (siep->iatep_new, siep->iatep_current, siep->is_nuc))
+  {
+    Hide (siep->auto_correct_doc);
+    Show (siep->unrec_mod_pnl);
+
+    Show (siep->auto_correct_btn);
+    SetTitle (siep->auto_correct_btn, "Correct Modifier Names");
+    siep->auto_correct_ids = FALSE;
+    siep->auto_correct_bracketing = FALSE;
+    siep->auto_correct_modnames = TRUE;
+    UpdateIDAndTitleEditDialogErrorColumns (siep->new_dlg, siep->current_dlg, 
+                                            siep->iatep_new, siep->iatep_current,
+                                            siep->seqid_edit_phase, siep->is_nuc);
+  }
+  else if (ShowBadValues (siep->iatep_new, siep->iatep_current))
+  {
+    Show (siep->badvalue_pnl);
+    Hide (siep->auto_correct_doc);
+    Hide (siep->auto_correct_btn);
+  }
+  else
+  {
+    AppendText (siep->auto_correct_doc, "Sequence ID and title errors have been corrected.", NULL, NULL, programFont);
+    
+    Hide (siep->auto_correct_btn);
+    siep->auto_correct_ids = FALSE;
+    siep->auto_correct_bracketing = FALSE;
+    siep->auto_correct_modnames = TRUE;
+  }
+  UpdateDocument (siep->auto_correct_doc, 0, 0);
+  UpdateIDAndTitleEditDialogErrorColumns (siep->new_dlg, siep->current_dlg, 
+                                          siep->iatep_new, siep->iatep_current,
+                                          siep->seqid_edit_phase, siep->is_nuc); 
+
+  if (IDAndTitleEditIDsNeedFix (siep->iatep_new, siep->iatep_current, siep->is_nuc))
+  {
+    Disable (siep->accept_btn);
+  }
+  else
+  {
+    Enable (siep->accept_btn);
+  }
+}
+ 
+static TaglistCallback callback_list[4] = 
+ { ShowErrorInstructions, ShowErrorInstructions, ShowErrorInstructions, ShowErrorInstructions };
+
+static GrouP CreateIDsAndTitlesDialog (GrouP parent, SeqIdEditPtr siep, Boolean is_new)
+{
+  GrouP      g, k, ppt;
+  PrompT     p_desc = NULL, p1, p2, p3, p4;
+  Int4       num_sequences;
+  TagListPtr tlp;
+  DialoG     dlg;
+  
+  if (siep == NULL)
+  {
+    return NULL;
+  }
+  
+  g = HiddenGroup (parent, -1, 0, NULL);
+
+  if (is_new)
+  {
+    if (siep->iatep_current != NULL)
+    {
+      p_desc = StaticPrompt (g, "New Sequences", 0, 0, programFont, 'l');
+    }
+  }
+  else
+  {
+    p_desc = StaticPrompt (g, "Existing Sequences", 0, 0, programFont, 'l');
+  }
+  
+  ppt = HiddenGroup (g, 4, 0, NULL);
+  p1 = StaticPrompt (ppt, "Error", 6 * stdCharWidth, 0, programFont, 'l');
+  p2 = StaticPrompt (ppt, "Position", 5 * stdCharWidth, 0, programFont, 'l');
+  p3 = StaticPrompt (ppt, "Sequence ID", 10 * stdCharWidth, 0, programFont, 'l');
+  p4 = StaticPrompt (ppt, "Title", 40 * stdCharWidth, 0, programFont, 'l');
+
+  if (is_new)
+  {
+    num_sequences = siep->iatep_new->num_sequences;
+  }
+  else
+  {
+    num_sequences = siep->iatep_current->num_sequences;
+  }
+
+
+  k = NormalGroup (g, 1, 0, "", programFont, NULL);
+  dlg = CreateTagListDialogExEx (k, MIN (num_sequences, 4), 4, 2,
+                                 idedit_types, idedit_widths,
+                                 NULL, TRUE, TRUE, NULL, NULL,
+                                 callback_list, siep, TRUE);
+
+  tlp = (TagListPtr) GetObjectExtra (dlg);  
+  if (tlp == NULL) return NULL;
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg, (HANDLE) p_desc, NULL);
+  
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [0], (HANDLE) p1, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [1], (HANDLE) p2, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [2], (HANDLE) p3, NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) p4, NULL);
+  
+  if (is_new)
+  {
+    siep->new_dlg = dlg;
+  }
+  else
+  {
+    siep->current_dlg = dlg;
+  }
+
+  return g;
+}
+
+static void ScrollTagListToSeqId (DialoG d, CharPtr seq_id)
+{
+  TagListPtr tlp;
+  ValNodePtr vnp;
+  Int4       row_num, sb_max;
+  Int4       scroll_value = -1;
+  CharPtr    id_from_tag;
+  
+  tlp = (TagListPtr) GetObjectExtra (d); 
+  
+  if (tlp == NULL || StringHasNoText (seq_id))
+  {
+    return;
+  }
+  
+  for (row_num = 0, vnp = tlp->vnp;
+       vnp != NULL && scroll_value < 0;
+       vnp = vnp->next, row_num++)
+  {
+    id_from_tag = GetTagListValueEx (tlp, row_num, 2);
+    if (StringCmp (id_from_tag, seq_id) == 0)
+    {
+      scroll_value = row_num;
+    }
+    id_from_tag = MemFree (id_from_tag);
+  }
+  
+  if (scroll_value < 0)
+  {
+    return;
+  }
+  
+  sb_max = GetBarMax (tlp->bar);
+  
+  if (scroll_value >= sb_max)
+  {
+    SetBarValue (tlp->bar, sb_max);
+  }
+  else
+  {
+    SetBarValue (tlp->bar, scroll_value);
+  }
+  SendMessageToDialog (d, VIB_MSG_REDRAW);
 }
 
 static void ShowAllSequences (ButtoN b)
 {
   SeqIdEditPtr siep;
-  Boolean      show_all;
-  TagListPtr   tlp;
+  Boolean      show_all = FALSE;
   
   siep = (SeqIdEditPtr) GetObjectExtra (b);
-  if (siep == NULL || siep->dlg == NULL || siep->new_list == NULL)
+  if (siep == NULL)
   {
     return;
   }
   
-  tlp = (TagListPtr) GetObjectExtra (siep->dlg);
-  if (tlp == NULL)
+  show_all = HasMissingIDs (siep->iatep_new) || HasMissingIDs (siep->iatep_current);
+  
+  if (show_all)
   {
-    return;
+    SetStatus (siep->show_all_btn, TRUE);
+    Disable (siep->show_all_btn);
+  }
+  else
+  {
+    Enable (siep->show_all_btn);
+  }
+  show_all |= GetStatus (siep->show_all_btn);
+  
+  if (siep->new_dlg != NULL)
+  {
+    UpdateIdAndTitleData (siep->new_dlg, siep->iatep_new);
+    UpdateIdAndTitleEditDialog (siep->new_dlg, siep->iatep_new, siep->iatep_current, 
+                                siep->seqid_edit_phase, show_all,
+                                siep->is_nuc);
+  }
+  
+  if (siep->current_dlg != NULL)
+  {
+    UpdateIdAndTitleData (siep->current_dlg, siep->iatep_current);
+    UpdateIdAndTitleEditDialog (siep->current_dlg, siep->iatep_current, siep->iatep_new,
+                                siep->seqid_edit_phase, show_all,
+                                siep->is_nuc);
   }
 
-  show_all = HasBlankIDs (siep->new_list);
-  show_all |= GetStatus (b);
-  
-  CollectIdAndTitleFromDialog (tlp, siep->new_list);
-  SetSeqListInTagListDialog (siep->dlg, siep->new_list, siep->current_list, show_all);
   ShowErrorInstructions (siep);
 }
 
-static Boolean CollectIDsAndTitles (SeqEntryPtr new_list, SeqEntryPtr current_list)
+static void AutoCorrectIDsAndTitles (ButtoN b)
+{
+  SeqIdEditPtr      siep;
+  IDAndTitleEditPtr suggested, suggested_new, suggested_current;
+  Boolean           show_all;
+  
+  siep = (SeqIdEditPtr) GetObjectExtra (b);
+  if (siep == NULL)
+  {
+    return;
+  }
+  
+  if (siep->auto_correct_ids)
+  {
+    suggested_new = SuggestCorrectionForLocalIDs (siep->iatep_new, siep->iatep_current);
+    suggested_current = SuggestCorrectionForLocalIDs (siep->iatep_current, siep->iatep_new);
+    UpdateColorizedDeflinePanelData (suggested_new, suggested_current, siep->badvalue_pnl);
+    UpdateColorizedDeflinePanelData (suggested_new, suggested_current, siep->unrec_mod_pnl);
+
+    siep->iatep_new = IDAndTitleEditFree (siep->iatep_new);
+    siep->iatep_new = suggested_new;
+    
+    if (siep->iatep_current == NULL)
+    {
+      suggested_current = IDAndTitleEditFree (siep->iatep_current);
+    }
+    else
+    {
+      siep->iatep_current = IDAndTitleEditFree (siep->iatep_current);
+      siep->iatep_current = suggested_current;
+    }
+  }
+  else if (siep->seqid_edit_phase)
+  {
+    siep->seqid_edit_phase = FALSE;
+  }
+  else if (siep->auto_correct_bracketing)
+  {
+    suggested = SuggestCorrectionForTitleBracketing (siep->iatep_new);
+    UpdateColorizedDeflinePanelData (suggested, siep->iatep_current, siep->badvalue_pnl);
+    UpdateColorizedDeflinePanelData (suggested, siep->iatep_current, siep->unrec_mod_pnl);
+
+    siep->iatep_new = IDAndTitleEditFree (siep->iatep_new);
+    siep->iatep_new = suggested;
+    if (siep->iatep_current != NULL)
+    {
+      suggested = SuggestCorrectionForTitleBracketing (siep->iatep_current);
+      UpdateColorizedDeflinePanelData (siep->iatep_new, suggested, siep->badvalue_pnl);
+      UpdateColorizedDeflinePanelData (siep->iatep_new, suggested, siep->unrec_mod_pnl);
+
+      siep->iatep_current = IDAndTitleEditFree (siep->iatep_current);
+      siep->iatep_current = suggested;      
+    }
+  }
+  else if (siep->auto_correct_modnames)
+  {
+    FixAllUnrecognizedModifiers (siep->iatep_new, siep->iatep_current, siep);
+  }
+
+  show_all = HasMissingIDs (siep->iatep_new) || HasMissingIDs (siep->iatep_current);
+  if (show_all)
+  {
+    Disable (siep->show_all_btn);
+  }
+  else
+  {
+    Enable (siep->show_all_btn);
+  }
+
+  show_all |= GetStatus (siep->show_all_btn);
+  UpdateIdAndTitleEditDialog (siep->new_dlg, siep->iatep_new, siep->iatep_current,
+                              siep->seqid_edit_phase, show_all, siep->is_nuc);
+  UpdateIdAndTitleEditDialog (siep->current_dlg, siep->iatep_current, siep->iatep_new, 
+                              siep->seqid_edit_phase, show_all, siep->is_nuc);
+
+  ShowErrorInstructions (siep);
+}
+
+static void RefreshErrorButton (ButtoN b)
+{
+  SeqIdEditPtr siep;
+  
+  siep = (SeqIdEditPtr) GetObjectExtra (b);
+  if (siep == NULL)
+  {
+    return;
+  }
+  
+  UpdateIdAndTitleData (siep->new_dlg, siep->iatep_new);
+  ClearIDAndTitleEditDialogErrorColumn (siep->new_dlg);
+  UpdateIdAndTitleData (siep->current_dlg, siep->iatep_current);
+  ClearIDAndTitleEditDialogErrorColumn (siep->current_dlg);
+  UpdateIDAndTitleEditDialogErrorColumns (siep->new_dlg, siep->current_dlg,
+                                          siep->iatep_new, siep->iatep_current,
+                                          siep->seqid_edit_phase, siep->is_nuc);
+}
+
+static void CleanupDuplicateAndEmptyPairs (IDAndTitleEditPtr iatep)
+{
+  Int4 seq_num;
+  if (iatep == NULL)
+  {
+    return;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    iatep->title_list [seq_num] = RemoveAllDuplicatePairsFromOneTitle (iatep->title_list [seq_num]);
+    RemoveMeaninglessEmptyPairsFromOneTitle (iatep->title_list [seq_num]);
+  }
+}
+
+/* This function will insert the escape character before each double-quotation mark
+ * in a string, starting at the position offset and ending at the portion of the
+ * string that corresponds to the position stop_offset in the original string - 
+ * this offset is adjusted for the additional escape characters inserted.
+ */
+static CharPtr EscapeQuotesBetweenPositions (CharPtr orig_title, Int4 start_offset, Int4 stop_offset)
+{
+  CharPtr next_quote;
+  
+  if (StringHasNoText (orig_title))
+  {
+    return orig_title;
+  }
+  
+  next_quote = NextUnescapedQuote (orig_title + start_offset);
+  while (next_quote != NULL && next_quote - orig_title < stop_offset)
+  {
+    orig_title = InsertStringAtOffset (orig_title, "\\", next_quote - orig_title);
+    stop_offset ++;
+    next_quote = NextUnescapedQuote (orig_title + start_offset);
+  }
+  return orig_title;
+  
+}
+
+/* This function will insert the escape character before each double-quotation mark in a
+ * string, starting at position offset.  This is useful when the first portion of a 
+ * title appears to be parseable, but the remainder is not.
+ */
+static CharPtr EscapeQuotesAfterOffset (CharPtr orig_title, Int4 offset)
+{
+  CharPtr next_quote;
+  
+  if (StringHasNoText (orig_title))
+  {
+    return orig_title;
+  }
+  
+  next_quote = NextUnescapedQuote (orig_title + offset);
+  while (next_quote != NULL)
+  {
+    orig_title = InsertStringAtOffset (orig_title, "\\", next_quote - orig_title);
+    next_quote = NextUnescapedQuote (orig_title + offset);
+  }
+  return orig_title;
+}
+
+/* This function inserts escape characters before each double-quotation mark in
+ * a string starting at position offset, and then puts the portion of the string
+ * starting at position offset inside a pair of double-quotes.
+ */
+static CharPtr QuoteToEndFromOffset (CharPtr orig_title, Int4 offset)
+{
+  if (StringHasNoText (orig_title))
+  {
+    return orig_title;
+  }
+  
+  orig_title = EscapeQuotesAfterOffset (orig_title, offset);
+  orig_title = InsertStringAtOffset (orig_title, "\"", offset);
+  orig_title = InsertStringAtOffset (orig_title, "\"", StringLen (orig_title));
+  return orig_title;
+}
+
+/* This function finds the first position where bracketing is incorrect
+ * and puts the remainder of the string inside quotation marks.
+ */
+static CharPtr FixUnparseableBracketing (CharPtr orig_title)
+{
+  CharPtr next_token, next_next_token, last_start = NULL;
+  Char    ch_expected;
+  
+  next_token = NextBracketToken (orig_title);
+  if (next_token == NULL)
+  {
+    return orig_title;
+  }
+  
+  if (*next_token == '[')
+  {
+    last_start = next_token;
+  }
+  else
+  {
+    orig_title = QuoteToEndFromOffset (orig_title, next_token - orig_title);
+    return orig_title;
+  }
+  
+  while (next_token != NULL)
+  {
+    ch_expected = ExpectToken (next_token);
+    next_next_token = NextBracketToken (next_token + 1);
+    if ((next_next_token == NULL && ch_expected != '[')
+         || (next_next_token != NULL && *next_next_token != ch_expected))
+    {
+      orig_title = QuoteToEndFromOffset (orig_title, last_start - orig_title);
+      return orig_title;
+    }
+    else
+    {
+      next_token = next_next_token;
+      if (next_token != NULL && *next_token == '[')
+      {
+        last_start = next_token;
+      }
+    }
+  }
+  return orig_title;  
+}
+
+/* This function finds individual bracketed name-value pairs that either have
+ * unrecognizable names or invalid values and puts them in quotation marks, so
+ * that they will not be parsed.
+ */
+static CharPtr 
+QuoteUnrecognizedModifierNamesAndValues 
+(CharPtr orig_title,
+ Boolean is_nuc)
+{
+  CharPtr         start, stop, cp;
+  ModifierInfoPtr mip;
+  Int4            stop_offset, start_offset;
+  
+  cp = orig_title;
+  mip = ParseOneBracketedModifier (cp, &start, &stop);
+  while (mip != NULL && stop != NULL && start != NULL)
+  {
+    if (IsUnrecognizedModifierName (mip, is_nuc))
+    {
+      /* note - put stop quote in first, because position of stop will change
+       * after putting in quote for start */
+      stop_offset = stop - orig_title + 1;
+      start_offset = start - orig_title;
+      if (is_nuc)
+      {
+        orig_title = InsertStringAtOffset (orig_title, "\"", stop_offset);
+      }
+      else
+      {
+        orig_title = InsertStringAtOffset (orig_title, "\"]", stop_offset);
+      }
+      orig_title = EscapeQuotesBetweenPositions (orig_title, start_offset, stop_offset);
+      if (is_nuc)
+      {
+        orig_title = InsertStringAtOffset (orig_title, "\"", start_offset);
+      }
+      else
+      {
+        orig_title = InsertStringAtOffset (orig_title, "[comment=\"", start_offset);
+      }
+      cp = orig_title + start_offset;
+    }
+    else
+    {
+      cp = stop + 1;
+    }
+    mip = ModifierInfoFree (mip);    
+    mip = ParseOneBracketedModifier (cp, &start, &stop);  
+  }
+  return orig_title;
+}
+
+/* This section will insert double-quotation marks around the sections of a title
+ * that cannot be parsed.
+ */
+static void QuoteUnparseableSections (IDAndTitleEditPtr iatep, Boolean is_nuc)
+{
+  Int4 seq_num;
+  
+  if (iatep == NULL)
+  {
+    return;
+  }
+  
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    iatep->title_list [seq_num] = FixUnparseableBracketing (iatep->title_list [seq_num]);
+    iatep->title_list [seq_num] = QuoteUnrecognizedModifierNamesAndValues (iatep->title_list [seq_num], is_nuc);
+  }  
+}
+
+/* This function checks to see if all of the sequences in new_list and current_list
+ * have non-empty, unique sequences and if any of their titles have bracketing errors,
+ * invalid modifier names, or invalid modifier values.
+ * Problems with sequence IDs must be fixed; problems with titles that are left
+ * unfixed will be cordoned off with double-quotation marks.
+ */
+static Boolean FixIDsAndTitles (SeqEntryPtr new_list, SeqEntryPtr current_list, Boolean is_nuc)
 {
   WindoW                w;
-  GrouP                 h, ppt, instr_grp, c;
+  GrouP                 h, instr_grp, k, j, c, new_grp, current_grp = NULL;
   ButtoN                b;
   Int4                  num_sequences = 0;
   BoolPtr               is_dup_list = NULL;
   Boolean               need_fix = FALSE;
-  DialoG                dlg;
-  TagListPtr            tlp;
   ModalAcceptCancelData acd;
-  PrompT                p1, p2, p3, p4;
   Boolean               show_all;
-  ButtoN                force_all_btn;
   SeqIdEditData         sied;
-  TaglistCallback callback_list[4] = 
-  { ShowErrorInstructions, ShowErrorInstructions, ShowErrorInstructions, ShowErrorInstructions };
+  Boolean               rval;
   
-  ArrowCursor ();
-  
-  /* look for spaces in local IDs */
-  FixSpacesInLocalIDs (new_list);
- 
+  sied.iatep_new = SeqEntryListToIDAndTitleEdit (new_list);
+  sied.iatep_current = SeqEntryListToIDAndTitleEdit (current_list);
+  sied.is_nuc = is_nuc;
+    
   /* check for unique IDs - don't need to present dialog if they
    * are all present and unique */
-  need_fix = IDsNeedFix (new_list, current_list);
+  need_fix = EditIDsNeedFix (&sied);
   
   /* if no fixes are needed, do not present dialog */
   if (!need_fix)
   {
+    sied.iatep_new = IDAndTitleEditFree (sied.iatep_new);
+    sied.iatep_current = IDAndTitleEditFree (sied.iatep_current);
     return TRUE;
   }
-  num_sequences = CountSequencesAndSegments (new_list);
   
-  show_all = HasBlankIDs (new_list);
+  show_all = HasMissingIDs (sied.iatep_new) || HasMissingIDs (sied.iatep_current);
+  
+  if (!show_all 
+      && (! EditHasDuplicateIDs (sied.iatep_new, sied.iatep_current) || !sied.is_nuc)
+      && !AnyBracketsInIDs (sied.iatep_new) 
+      && !AnyBracketsInIDs (sied.iatep_current))
+  {
+    sied.seqid_edit_phase = FALSE;
+  }
+  else
+  {
+    sied.seqid_edit_phase = TRUE;
+  }
+
   
   w = MovableModalWindow (-20, -13, -10, -10, "Provide Sequence IDs for your Sequences", NULL);
+  sied.w = w;
   h = HiddenGroup(w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
   instr_grp = HiddenGroup (h, -1, 0, NULL);
-  sied.p_instr [0] = StaticPrompt (instr_grp, "", 40 * stdCharWidth, 0, programFont, 'l');
-  sied.p_instr [1] = StaticPrompt (instr_grp, "", 40 * stdCharWidth, 0, programFont, 'l');
-  sied.p_instr [2] = StaticPrompt (instr_grp, "", 40 * stdCharWidth, 0, programFont, 'l');
+  k = HiddenGroup (instr_grp, 0, 0, NULL);
+  sied.auto_correct_doc = DocumentPanel (k, stdCharWidth * 63, stdLineHeight * 12);
+  SetDocAutoAdjust (sied.auto_correct_doc, TRUE);
+  SetObjectExtra (sied.auto_correct_doc, &sied, NULL);
+  sied.bracket_dlg = ShowDifferenceDialog (k, stdCharWidth * 63, stdLineHeight * 12);
+  sied.badvalue_pnl = InvalidValuesPanel (k, stdCharWidth * 63, stdLineHeight * 12, 
+                                          sied.iatep_new, sied.iatep_current, is_nuc,
+                                          UpdateSeqIdEditForColorizedPanel,
+                                          &sied,
+                                          ScrollSeqIdEditForColorizedPanel,
+                                          &sied);
+  sied.unrec_mod_pnl = UnrecognizedModifiersPanel (k, stdCharWidth * 63, stdLineHeight * 12, 
+                                                   sied.iatep_new, sied.iatep_current, is_nuc,
+                                                   UpdateSeqIdEditForColorizedPanel,
+                                                   &sied,
+                                                   ScrollSeqIdEditForColorizedPanel,
+                                                   &sied);
 
-  ppt = HiddenGroup (h, 4, 0, NULL);
-  p1 = StaticPrompt (ppt, "", 6 * stdCharWidth, 0, programFont, 'l');
-  p2 = StaticPrompt (ppt, "Position", 5 * stdCharWidth, 0, programFont, 'l');
-  p3 = StaticPrompt (ppt, "Sequence ID", 10 * stdCharWidth, 0, programFont, 'l');
-  p4 = StaticPrompt (ppt, "Description", 40 * stdCharWidth, 0, programFont, 'l');
+  AlignObjects (ALIGN_CENTER, (HANDLE) sied.auto_correct_doc, 
+                              (HANDLE) sied.bracket_dlg, 
+                              (HANDLE) sied.badvalue_pnl,
+                              (HANDLE) sied.unrec_mod_pnl,
+                              NULL);
 
-  dlg = CreateTagListDialogExEx (h, MIN (num_sequences, 8), 4, 2,
-                                 idedit_types, idedit_widths,
-                               NULL, TRUE, TRUE, NULL, NULL,
-                                 callback_list, &sied);
+  j = HiddenGroup (h, 0, 0, NULL);
+  sied.refresh_err_btn = PushButton (j, "Refresh Error Column", RefreshErrorButton);
+  SetObjectExtra (sied.refresh_err_btn, &sied, NULL);
 
+  sied.auto_correct_btn = PushButton (j, "Make automatic corrections", AutoCorrectIDsAndTitles);
+  SetObjectExtra (sied.auto_correct_btn, &sied, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) sied.auto_correct_btn, NULL);
+
+  sied.new_dlg = NULL;
+  sied.current_dlg = NULL;
   
-  tlp = (TagListPtr) GetObjectExtra (dlg);  
-  if (tlp == NULL) return;
+  new_grp = CreateIDsAndTitlesDialog (h, &sied, TRUE);
+  if (sied.iatep_current != NULL)
+  {
+    current_grp = CreateIDsAndTitlesDialog (h, &sied, FALSE);
+  }
   
-  sied.dlg = dlg;
-  sied.new_list = new_list;
-  sied.current_list = current_list;
+  UpdateIdAndTitleEditDialog (sied.new_dlg, sied.iatep_new, sied.iatep_current,
+                              sied.seqid_edit_phase, show_all, sied.is_nuc);
+  UpdateIdAndTitleEditDialog (sied.current_dlg, sied.iatep_current, sied.iatep_new,
+                              sied.seqid_edit_phase, show_all, sied.is_nuc);
 
-  SetSeqListInTagListDialog (dlg, new_list, current_list, show_all);
-  ShowErrorInstructions (&sied);
-  
-  force_all_btn = CheckBox (h, "Show all sequences in set", ShowAllSequences);
-  SetObjectExtra (force_all_btn, &sied, NULL);
+  k = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (k, 10, 10);
+  sied.show_all_btn = CheckBox (k, "Show all sequences in set", ShowAllSequences);
+  SetObjectExtra (sied.show_all_btn, &sied, NULL);
   if (show_all)
   {
-    Disable (force_all_btn);
+    Disable (sied.show_all_btn);
   }
   else
   {
-    Enable (force_all_btn);
+    Enable (sied.show_all_btn);
   }
   
+  
   c = HiddenGroup (h, 2, 0, NULL);
-  b = PushButton (c, "Accept", ModalAcceptButton);
-  SetObjectExtra (b, &acd, NULL);
+  sied.accept_btn = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (sied.accept_btn, &acd, NULL);
   b = PushButton (c, "Cancel", ModalCancelButton);
   SetObjectExtra (b, &acd, NULL);
-  
-  AlignObjects (ALIGN_CENTER, (HANDLE) instr_grp, (HANDLE) dlg, (HANDLE) force_all_btn, (HANDLE) c, NULL);
-  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [0], (HANDLE) p1, NULL);
-  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [1], (HANDLE) p2, NULL);
-  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [2], (HANDLE) p3, NULL);
-  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) p4, NULL);
+
+  ShowErrorInstructions (&sied);
+    
+  AlignObjects (ALIGN_CENTER, (HANDLE) instr_grp,
+                              (HANDLE) k, 
+                              (HANDLE) c, 
+                              (HANDLE) new_grp,
+                              (HANDLE) current_grp,
+                              NULL);
+                              
+  AlignObjects (ALIGN_LEFT, (HANDLE) sied.refresh_err_btn,
+                            (HANDLE) sied.new_dlg,
+                            NULL);                              
 
   Show (w);
   Select (w);
@@ -14454,60 +21842,523 @@ static Boolean CollectIDsAndTitles (SeqEntryPtr new_list, SeqEntryPtr current_li
     ProcessAnEvent ();
     if (! acd.cancelled)
     {
-      CollectIdAndTitleFromDialog (tlp, new_list);
-      
-      /* now check for unique IDs */
-      need_fix = IDsNeedFix (new_list, current_list);
-      if (need_fix)
+      UpdateIdAndTitleData (sied.new_dlg, sied.iatep_new);
+      UpdateIdAndTitleData (sied.current_dlg, sied.iatep_current);
+     
+      if (IDAndTitleEditTitlesNeedFix (sied.iatep_new, sied.is_nuc)
+          || IDAndTitleEditTitlesNeedFix (sied.iatep_current, sied.is_nuc))
       {
-        Message (MSG_ERROR, "Blank or Duplicate IDs are not allowed!");
-        show_all = HasBlankIDs (new_list);
-        if (show_all)
+        if (ANS_YES == Message (MSG_YN, "Your titles contain unparseable elements.  If you choose to continue, the unparseable sections will be placed in quotes and no data will be parsed from these sections.  You will have to add information about the sequence manually.  Are you sure you want to continue?"))
         {
-          Disable (force_all_btn);
+          QuoteUnparseableSections (sied.iatep_new, is_nuc);
+          QuoteUnparseableSections (sied.iatep_current, is_nuc);
+          need_fix = FALSE;
         }
-        else
-        {
-          Enable (force_all_btn);
-          show_all = GetStatus (force_all_btn);
-        }
-        SetSeqListInTagListDialog (dlg, new_list, current_list, show_all);
-        ShowErrorInstructions (&sied);
       }
-      else if (! FixDefinitionLinesInAddSequence (new_list))
+      else
       {
-        need_fix = TRUE;
+        need_fix = FALSE;
       }
-      
-      if (need_fix)
+             
+      show_all = HasMissingIDs (sied.iatep_new) || HasMissingIDs (sied.iatep_current);
+      if (show_all)
       {
-        show_all = HasBlankIDs (new_list);
-        if (show_all)
-        {
-          Disable (force_all_btn);
-        }
-        else
-        {
-          Enable (force_all_btn);
-          show_all = GetStatus (force_all_btn);
-        }
-        SetSeqListInTagListDialog (dlg, new_list, current_list, show_all);
-        ShowErrorInstructions (&sied);
+        Disable (sied.show_all_btn);
       }
+      else
+      {
+        Enable (sied.show_all_btn);
+        show_all = GetStatus (sied.show_all_btn);
+      }
+      UpdateIdAndTitleEditDialog (sied.new_dlg, sied.iatep_new, sied.iatep_current,
+                                  sied.seqid_edit_phase, show_all, sied.is_nuc);
+      UpdateIdAndTitleEditDialog (sied.current_dlg, sied.iatep_current, sied.iatep_new,
+                                  sied.seqid_edit_phase, show_all, sied.is_nuc);
+      ShowErrorInstructions (&sied);
     }
   }
-  Remove (w);
+    
   if (acd.cancelled)
   {
-    return FALSE;
+    rval = FALSE;
   }
   else
   {
-    ResetSegSetIDLists (new_list);
-    return TRUE;
+    CleanupDuplicateAndEmptyPairs (sied.iatep_new);
+    CleanupDuplicateAndEmptyPairs (sied.iatep_current);
+    ApplyIDAndTitleEditToSeqEntryList (new_list, sied.iatep_new);
+    ApplyIDAndTitleEditToSeqEntryList (current_list, sied.iatep_current);
+    rval = TRUE;
   }
+  Remove (w);
+  
+  sied.iatep_new = IDAndTitleEditFree (sied.iatep_new);
+  sied.iatep_current = IDAndTitleEditFree (sied.iatep_current);
+  
+  return rval;  
 }
 
+static Boolean CollectIDsAndTitles (SeqEntryPtr new_list, SeqEntryPtr current_list, Boolean is_nuc)
+{
+
+  ArrowCursor ();
+  
+  return FixIDsAndTitles (new_list, current_list, is_nuc);
+}
+
+/* The following section of code is used for editing titles with the Sequence Assistant.
+ * A user may edit a single title or the list of titles from the Sequence Assistant.
+ * This code provides the same bracketing, modifier name, and modifier value checks
+ * that are used when sequences are imported or created.
+ */
+ 
+typedef struct titleedit
+{
+  DialoG            bracket_dlg;
+  PaneL             unrec_mod_pnl;
+  PaneL             badvalue_pnl;
+  TexT              title_txt;
+  DialoG            multi_title;
+  IDAndTitleEditPtr iatep;
+  ButtoN            accept_btn;
+} TitleEditData, PNTR TitleEditPtr;
+
+static void ShowTitleEditErrors (TitleEditPtr tep)
+{
+  if (tep == NULL)
+  {
+    return;
+  }
+  
+  Hide (tep->bracket_dlg);
+  Hide (tep->unrec_mod_pnl);
+  Hide (tep->badvalue_pnl);
+  
+  if (ShowBracketingCorrections (tep->iatep, NULL, tep->bracket_dlg))
+  {
+    Show (tep->bracket_dlg);
+    Disable (tep->accept_btn);
+  }
+  else if (ShowUnrecognizedModifiers (tep->iatep, NULL, TRUE))
+  {
+    Show (tep->unrec_mod_pnl);
+    Disable (tep->accept_btn);
+  }
+  else if (ShowBadValues (tep->iatep, NULL))
+  {
+    Show (tep->badvalue_pnl);
+    Disable (tep->accept_btn);
+  }
+  else
+  {
+    Enable (tep->accept_btn);
+  }  
+}
+
+static void OnTitleEditChange (TexT t)
+{
+  TitleEditPtr tep;
+  
+  tep = (TitleEditPtr) GetObjectExtra (t);
+  if (tep == NULL)
+  {
+    return;
+  }
+  
+  tep->iatep->title_list [0] = MemFree (tep->iatep->title_list [0]);
+  tep->iatep->title_list [0] = SaveStringFromText (tep->title_txt);
+
+  ShowTitleEditErrors (tep);
+}
+
+static void UpdateTitleEditForColorizedPanel (Pointer userdata)
+{
+  TitleEditPtr tep;
+  
+  tep = (TitleEditPtr) userdata;
+  if (tep == NULL)
+  {
+    return;
+  }
+
+  SetTitle (tep->title_txt, tep->iatep->title_list [0]);  
+  ShowTitleEditErrors (tep);
+}
+
+static void EditOneSequenceTitle (SequenceAssistantPtr sap, Int4 seq_num)
+{
+  Int4                  seq_pos;
+  SeqEntryPtr           sep, nsep;
+  WindoW                w;
+  CharPtr               title = NULL;
+  BioseqPtr             bsp = NULL;
+  CharPtr               title_fmt = "Title for %s";
+  Char                  id_txt [128];
+  GrouP                 h, g, c, err_grp;
+  ButtoN                b;
+  ModalAcceptCancelData acd;
+  SeqDescrPtr           sdp;
+  TitleEditData         ted;
+  
+  if (sap == NULL)
+  {
+    return;
+  }
+  
+  for (seq_pos = 0, sep = sap->seq_list;
+       seq_pos != seq_num && sep != NULL;
+       seq_pos ++, sep = sep->next)
+  {
+  }
+  if (sep == NULL)
+  {
+    return;
+  }
+  
+  if (IS_Bioseq (sep)) 
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+  } 
+  else if (IS_Bioseq_set (sep)) 
+  {
+    nsep = FindNucSeqEntry (sep);
+    if (nsep != NULL && IS_Bioseq (nsep)) 
+    {
+      bsp = (BioseqPtr) nsep->data.ptrvalue;
+    }
+  }
+  if (bsp == NULL)
+  {
+    return;
+  }
+  
+  sdp = bsp->descr;
+  while (sdp != NULL && sdp->choice != Seq_descr_title)
+  {
+    sdp = sdp->next;
+  }
+  
+  ted.iatep = IDAndTitleEditNew ();
+  if (ted.iatep == NULL)
+  {
+    return;
+  }
+  
+  /* set up IDAndTitleEdit to use for single sequence */
+  ted.iatep->num_sequences = 1;
+  ted.iatep->id_list = (CharPtr PNTR) MemNew (ted.iatep->num_sequences * sizeof (CharPtr));
+  ted.iatep->title_list = (CharPtr PNTR) MemNew (ted.iatep->num_sequences * sizeof (CharPtr));
+  SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT, sizeof (id_txt));
+  ted.iatep->id_list [0] = StringSave (id_txt);
+  if (sdp != NULL && !StringHasNoText (sdp->data.ptrvalue))
+  {
+    ted.iatep->title_list [0] = StringSave (sdp->data.ptrvalue);
+  }
+  else
+  {
+    ted.iatep->title_list [0] = StringSave ("");
+  }  
+  
+  title = (CharPtr) MemNew ((StringLen (title_fmt) 
+                               + StringLen (id_txt)) * sizeof (Char));
+  sprintf (title, title_fmt, id_txt);
+  w = MovableModalWindow (-20, -13, -10, -10, title, NULL);
+  title = MemFree (title);
+  
+  h = HiddenGroup(w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  err_grp = HiddenGroup (h, 0, 0, NULL);
+  ted.bracket_dlg = ShowDifferenceDialog (err_grp, stdCharWidth * 63, stdLineHeight * 5);
+  ted.badvalue_pnl = InvalidValuesPanel (err_grp, stdCharWidth * 63, stdLineHeight * 5, 
+                                         ted.iatep, NULL, TRUE,
+                                         UpdateTitleEditForColorizedPanel,
+                                         &ted,
+                                         NULL, NULL);
+  ted.unrec_mod_pnl = UnrecognizedModifiersPanel (err_grp, stdCharWidth * 63, stdLineHeight * 5, 
+                                                  ted.iatep, NULL, TRUE,
+                                                  UpdateTitleEditForColorizedPanel,
+                                                  &ted,
+                                                  NULL, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) ted.bracket_dlg,
+                              (HANDLE) ted.badvalue_pnl,
+                              (HANDLE) ted.unrec_mod_pnl,
+                              NULL);
+  
+  g = HiddenGroup (h, 2, 0, NULL);
+  StaticPrompt (g, "Title", 0, popupMenuHeight, programFont, 'l');
+  ted.title_txt = DialogText (g, "", 40, OnTitleEditChange);
+  SetObjectExtra (ted.title_txt, &ted, NULL);
+  if (sdp != NULL && !StringHasNoText (sdp->data.ptrvalue))
+  {
+    SetTitle (ted.title_txt, sdp->data.ptrvalue);
+  }
+  
+  c = HiddenGroup (h, 2, 0, NULL);
+  ted.accept_btn = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (ted.accept_btn, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) err_grp, (HANDLE) g, (HANDLE) c, NULL);
+
+  Show(w); 
+  Select (w);
+  
+  ShowTitleEditErrors (&ted);
+  
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  
+  while (!acd.cancelled && ! acd.accepted)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  if (acd.accepted)
+  {
+    CleanupDuplicateAndEmptyPairs (ted.iatep);
+    SetTitle (ted.title_txt, ted.iatep->title_list [0]);
+    if (sdp == NULL)
+    {
+      sdp = SeqDescrNew (bsp->descr);
+      if (bsp->descr == NULL)
+      {
+        bsp->descr = sdp;
+      }
+      sdp->choice = Seq_descr_title;
+    }
+    sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
+    sdp->data.ptrvalue = SaveStringFromText (ted.title_txt);
+  }
+  
+  Remove (w);
+}
+
+#define SEQUENCE_ASSISTANT_MOLECULE_COLUMN 2
+#define SEQUENCE_ASSISTANT_TOPOLOGY_COLUMN 3
+#define SEQUENCE_ASSISTANT_TITLE_COLUMN    4
+
+static Uint2 titleedit_types [] = {
+  TAGLIST_PROMPT, TAGLIST_TEXT
+};
+
+static Uint2 titleedit_widths [] = {
+  10, 40,
+};
+
+static void IDAndTitleEditToTagData (DialoG d, Pointer userdata) 
+{
+  Int4              len;
+  CharPtr           str;
+  IDAndTitleEditPtr iatep;
+  TagListPtr        tlp;
+  Int4              seq_num;
+  ValNodePtr        list = NULL;
+  
+  tlp =(TagListPtr) GetObjectExtra (d);
+  if (tlp == NULL)
+  {
+    return;
+  }
+  
+  iatep = (IDAndTitleEditPtr) userdata;
+  if (iatep == NULL)
+  {
+    return;
+  }
+
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    len = StringLen (iatep->id_list [seq_num]) + StringLen (iatep->title_list [seq_num]) + 4;
+    str = (CharPtr) MemNew (len * sizeof (Char));
+    if (str != NULL) {
+      sprintf (str, "%s\t%s\n", iatep->id_list [seq_num], 
+                                iatep->title_list [seq_num] == NULL ? "" : iatep->title_list [seq_num]);
+    }
+    ValNodeAddPointer (&list, 0, str);
+  }
+
+  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
+  tlp->vnp = list;
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+  tlp->max = MAX ((Int2) 0, (Int2) (iatep->num_sequences - tlp->rows));
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
+  if (tlp->max > 0) {
+    SafeShow (tlp->bar);
+  } else {
+    SafeHide (tlp->bar);
+  }  
+}
+
+static Pointer TagDataToIDAndTitleEdit (DialoG d)
+{
+  IDAndTitleEditPtr iatep;
+  TagListPtr        tlp;
+  Int4              seq_num;
+  
+  tlp =(TagListPtr) GetObjectExtra (d);
+  if (tlp == NULL)
+  {
+    return NULL;
+  }
+  
+  iatep = IDAndTitleEditNew ();
+  if (iatep == NULL)
+  {
+    return NULL;
+  }
+  
+  iatep->num_sequences = ValNodeLen (tlp->vnp);
+  iatep->id_list = (CharPtr PNTR) MemNew (iatep->num_sequences * sizeof (CharPtr));
+  iatep->title_list = (CharPtr PNTR) MemNew (iatep->num_sequences * sizeof (CharPtr));
+
+  for (seq_num = 0; seq_num < iatep->num_sequences; seq_num++)
+  {
+    iatep->id_list [seq_num] = GetTagListValueEx (tlp, seq_num, 0);
+    iatep->title_list [seq_num] = GetTagListValueEx (tlp, seq_num, 1);
+  }
+  return iatep;  
+}
+
+static void UpdateMultiTitleEditForColorizedPanel (Pointer userdata)
+{
+  TitleEditPtr tep;
+  
+  tep = (TitleEditPtr) userdata;
+  if (tep == NULL)
+  {
+    return;
+  }
+  
+  PointerToDialog (tep->multi_title, tep->iatep);
+
+  ShowTitleEditErrors (tep);
+}
+
+static void ShowMultiTitleErrors (Pointer userdata)
+{
+  TitleEditPtr tep;
+  
+  tep = (TitleEditPtr) userdata;
+  
+  if (tep == NULL)
+  {
+    return;
+  }
+  
+  tep->iatep = IDAndTitleEditFree (tep->iatep);
+  tep->iatep = DialogToPointer (tep->multi_title);
+  UpdateColorizedDeflinePanelData (tep->iatep, NULL, tep->badvalue_pnl);
+  UpdateColorizedDeflinePanelData (tep->iatep, NULL, tep->unrec_mod_pnl);
+  
+  ShowTitleEditErrors (tep);
+}  
+
+static TaglistCallback title_callback_list[2] = 
+ { ShowMultiTitleErrors, ShowMultiTitleErrors };
+ 
+static void EditSequenceTitleColumns (SequenceAssistantPtr sap)
+{
+  WindoW                w;
+  GrouP                 h, err_grp, c;
+  PrompT                ppt;
+  ButtoN                b;
+  Int4                  rows_shown = 0;
+  TagListPtr            tlp;
+  ModalAcceptCancelData acd;
+  TitleEditData         ted;
+  
+  if (sap == NULL || sap->seq_list == NULL)
+  {
+    return;
+  }
+
+  ted.iatep = SeqEntryListToIDAndTitleEdit (sap->seq_list);
+  if (ted.iatep == NULL)
+  {
+    return;
+  }
+
+  rows_shown = MIN (ted.iatep->num_sequences, 5);
+  
+  w = MovableModalWindow (-20, -13, -10, -10, "Sequence Titles", NULL);
+  
+  h = HiddenGroup(w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  err_grp = HiddenGroup (h, 0, 0, NULL);
+  ted.bracket_dlg = ShowDifferenceDialog (err_grp, stdCharWidth * 63, stdLineHeight * 5);
+  ted.badvalue_pnl = InvalidValuesPanel (err_grp, stdCharWidth * 63, stdLineHeight * 5, 
+                                         ted.iatep, NULL, TRUE,
+                                         UpdateMultiTitleEditForColorizedPanel,
+                                         &ted,
+                                         NULL, NULL);
+  ted.unrec_mod_pnl = UnrecognizedModifiersPanel (err_grp, stdCharWidth * 63, stdLineHeight * 5, 
+                                                  ted.iatep, NULL, TRUE,
+                                                  UpdateMultiTitleEditForColorizedPanel,
+                                                  &ted,
+                                                  NULL, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) ted.bracket_dlg,
+                              (HANDLE) ted.badvalue_pnl,
+                              (HANDLE) ted.unrec_mod_pnl,
+                              NULL);  
+  
+  ppt = StaticPrompt (h, "Title", 18 * stdCharWidth, 0, programFont, 'l');    
+  
+  ted.multi_title = CreateTagListDialogExEx (h, rows_shown, 2, 2,
+                                           titleedit_types, titleedit_widths,
+                                           NULL, TRUE, TRUE, 
+                                           IDAndTitleEditToTagData, 
+                                           TagDataToIDAndTitleEdit,
+                                           title_callback_list, &ted, FALSE);
+
+  PointerToDialog (ted.multi_title, ted.iatep);
+  
+  tlp = (TagListPtr) GetObjectExtra (ted.multi_title);  
+  if (tlp == NULL) return;
+    
+
+  c = HiddenGroup (h, 2, 0, NULL);
+  ted.accept_btn = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (ted.accept_btn, &acd, NULL);
+  b = PushButton (c, "Cancel", ModalCancelButton);
+  SetObjectExtra (b, &acd, NULL);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) ted.multi_title, (HANDLE) c, (HANDLE) NULL);
+
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [1], (HANDLE) ppt, NULL);
+
+  ShowMultiTitleErrors (&ted);
+
+  Show (w);
+  Select (w);
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  while (!acd.accepted && ! acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+  }
+  ProcessAnEvent ();
+  Hide (w);
+  if (acd.accepted)
+  {
+    ted.iatep = IDAndTitleEditFree (ted.iatep);
+    ted.iatep = DialogToPointer (ted.multi_title);
+    ApplyIDAndTitleEditToSeqEntryList (sap->seq_list, ted.iatep);
+    UpdateSequenceAssistant (sap);
+  }
+  ted.iatep = IDAndTitleEditFree (ted.iatep);
+  Remove (w);
+}
+
+
+/* This section of code is for importing sequences from a file or creating new sequences.
+ */
+ 
 static void ReplaceFakeIDWithIDFromTitle (BioseqPtr bsp)
 {
   SeqDescrPtr sdp;
@@ -14594,7 +22445,6 @@ static SeqEntryPtr GetSequencesFromFile (CharPtr path, SeqEntryPtr current_list)
   SeqEntryPtr  new_sep_list, new_sep, test_sep;
   CharPtr      errormsg = NULL;
   Boolean      cancelled = FALSE;
-  ValNodePtr   fixes = NULL;
   Boolean      parseSeqId = FALSE;
   Int4         num_sequences = 0;
 
@@ -14616,7 +22466,7 @@ static SeqEntryPtr GetSequencesFromFile (CharPtr path, SeqEntryPtr current_list)
   {
     return NULL;
   }
-  else if (!CollectIDsAndTitles (new_sep_list, current_list))
+  else if (!CollectIDsAndTitles (new_sep_list, current_list, TRUE))
   { 
     new_sep = new_sep_list;   
     while (new_sep != NULL)
@@ -14628,10 +22478,6 @@ static SeqEntryPtr GetSequencesFromFile (CharPtr path, SeqEntryPtr current_list)
     FileClose (fp);
     return NULL;
   }
-  
-  /* fix bad bracketing and unrecognized modifiers */
-  FixDefinitionLines (new_sep_list, &cancelled, &fixes);
-  fixes = FreeStringPairList (fixes);
   
   if (cancelled)
   {
@@ -14662,7 +22508,7 @@ static SeqEntryPtr GetSequencesFromText (TexT t, SeqEntryPtr current_list)
 
   TmpNam (path);
   fp = FileOpen (path, "w");
-  if (fp == NULL) return;
+  if (fp == NULL) return NULL;
   fprintf (fp, "%s", seq_str);
   FileClose (fp);
   
@@ -14821,6 +22667,7 @@ static CharPtr GetSequenceString (SeqEntryPtr sep)
   BioseqPtr   bsp;
   SeqPortPtr  spp;
   Int2        ctr;
+  Int4        read_len;
   
   if (sep == NULL || ! IS_Bioseq (sep))
   {
@@ -14838,9 +22685,15 @@ static CharPtr GetSequenceString (SeqEntryPtr sep)
   if (seqbuf != NULL)
   {
     SeqPortSeek (spp, 0, SEEK_SET);
-    ctr = SeqPortRead (spp, (UcharPtr)seqbuf, bsp->length);
-    seqbuf[ctr] = 0;
+    read_len = 0;
+    while (read_len < bsp->length)
+    {
+      ctr = SeqPortRead (spp, (UcharPtr)(seqbuf + read_len), INT2_MAX);
+      seqbuf[ctr + read_len] = 0;
+      read_len += INT2_MAX;
+    }
   }
+  spp = SeqPortFree (spp);
   
   return seqbuf;
 }
@@ -14953,34 +22806,6 @@ IsDuplicateID (SeqEntryPtr seq_list, BioseqPtr edit_bsp, SeqIdPtr sip)
     }
   }
   return is_dup;
-}
-
-static Boolean CheckBracketingInDefLine (CharPtr PNTR defline, CharPtr id_txt)
-{
-  SeqDescr              tmp_sd;
-  Boolean               cancelled = FALSE;
-
-  if (defline == NULL || id_txt == NULL)
-  {
-    return FALSE;
-  }
-  
-  tmp_sd.next = NULL;
-  tmp_sd.choice = Seq_descr_title;
-  tmp_sd.data.ptrvalue = StringSave (*defline);
-
-  FixBracketingInOneDefinitionLine (&tmp_sd, &cancelled, id_txt);
-
-  if (cancelled)
-  {
-    tmp_sd.data.ptrvalue = MemFree (tmp_sd.data.ptrvalue);
-  }
-  else
-  {
-    *defline = MemFree (*defline);
-    *defline = tmp_sd.data.ptrvalue;
-  }
-  return !cancelled;
 }
 
 static void PasteSequenceAssistant (IteM i)
@@ -15098,14 +22923,14 @@ static void SequenceAssistantEditSequence (SequenceAssistantPtr sap, Int4 seq_nu
 {
   ModalAcceptCancelData acd;
   WindoW                w;
-  GrouP                 h, g1 = NULL, g2, sequence_grp, c;
+  GrouP                 h, g1 = NULL, g2, sequence_grp, err_grp, c;
   SeqEntryPtr           sep;
   Int4                  i;
   Char                  window_title [150];
   BioseqPtr             bsp = NULL;
   SeqIdPtr              sip;
-  Char                  tmp [128];
-  TexT                  sequence_id_txt, title_txt, sequence_txt;
+  Char                  id_txt [128];
+  TexT                  sequence_id_txt, sequence_txt;
   CharPtr               ttl = NULL;
   Char                  str [200];
   ButtoN                b;
@@ -15121,6 +22946,7 @@ static void SequenceAssistantEditSequence (SequenceAssistantPtr sap, Int4 seq_nu
   SeqDescrPtr           sdp;
   MenU                  edit_menu;
   IteM                  local_item;
+  TitleEditData         ted;
   
   if (sap == NULL)
   {
@@ -15153,8 +22979,8 @@ static void SequenceAssistantEditSequence (SequenceAssistantPtr sap, Int4 seq_nu
       return;
     }
     sip = SeqIdFindWorst (bsp->id);
-    SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp) - 1);    
-    sprintf (window_title, "Edit %s", tmp);
+    SeqIdWrite (sip, id_txt, PRINTID_REPORT, sizeof (id_txt) - 1);    
+    sprintf (window_title, "Edit %s", id_txt);
   }
   else
   {
@@ -15165,23 +22991,57 @@ static void SequenceAssistantEditSequence (SequenceAssistantPtr sap, Int4 seq_nu
   h = HiddenGroup(w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
   
-  /* users can enter descriptions and IDs for individual sequences */
+  /* set up IDAndTitleEdit to use for single sequence */
+  ted.iatep = IDAndTitleEditNew ();
+  if (ted.iatep == NULL)
+  {
+    return;
+  }
+  
+  ted.iatep->num_sequences = 1;
+  ted.iatep->id_list = (CharPtr PNTR) MemNew (ted.iatep->num_sequences * sizeof (CharPtr));
+  ted.iatep->title_list = (CharPtr PNTR) MemNew (ted.iatep->num_sequences * sizeof (CharPtr));
+  SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT, sizeof (id_txt));
+  ted.iatep->id_list [0] = StringSave (id_txt);
+  
+  ttl = NULL;
+  SeqEntryExplore (sep, (Pointer) (&ttl), FindFirstTitle);
+  if (StringHasNoText (ttl))
+  {
+    ted.iatep->title_list [0] = StringSave ("");
+  }
+  else
+  {
+    ted.iatep->title_list [0] = StringSave (ttl);
+  }
+  
+  err_grp = HiddenGroup (h, 0, 0, NULL);
+  ted.bracket_dlg = ShowDifferenceDialog (err_grp, stdCharWidth * 63, stdLineHeight * 5);
+  ted.badvalue_pnl = InvalidValuesPanel (err_grp, stdCharWidth * 63, stdLineHeight * 5, 
+                                         ted.iatep, NULL, TRUE,
+                                         UpdateTitleEditForColorizedPanel,
+                                         &ted,
+                                         NULL, NULL);
+  ted.unrec_mod_pnl = UnrecognizedModifiersPanel (err_grp, stdCharWidth * 63, stdLineHeight * 5, 
+                                                  ted.iatep, NULL, TRUE,
+                                                  UpdateTitleEditForColorizedPanel,
+                                                  &ted,
+                                                  NULL, NULL);
+  
+  /* users can enter titles and IDs for individual sequences */
   g2 = HiddenGroup (h, 2, 0, NULL);
   StaticPrompt (g2, "Sequence ID", 0, popupMenuHeight, programFont, 'l');
   sequence_id_txt = DialogText (g2, "", 20, NULL);
   if (bsp != NULL)
   {
-    SetTitle (sequence_id_txt, tmp);
+    SetTitle (sequence_id_txt, id_txt);
   }
   StaticPrompt (g2, "Sequence Title", 0, popupMenuHeight, programFont, 'l');
-  title_txt = DialogText (g2, "", 20, NULL);
-  if (sep != NULL)
+  ted.title_txt = DialogText (g2, "", 20, OnTitleEditChange);
+  SetObjectExtra (ted.title_txt, &ted, NULL);
+  if (!StringHasNoText (ttl))
   {
-    SeqEntryExplore (sep, (Pointer) (&ttl), FindFirstTitle);
-    if (!StringHasNoText (ttl))
-    {
-      SetTitle (title_txt, ttl);
-    }
+    SetTitle (ted.title_txt, ttl);
   }
   
   sequence_grp = NormalGroup (h, 1, 0, "Sequence Characters", programFont, NULL);
@@ -15201,26 +23061,20 @@ static void SequenceAssistantEditSequence (SequenceAssistantPtr sap, Int4 seq_nu
   MultiLinePrompt (sequence_grp, str, 60 * stdCharWidth, programFont);
     
   c = HiddenGroup (h, 2, 0, NULL);
-  b = PushButton(c, "Save", ModalAcceptButton);
-  SetObjectExtra (b, &acd, NULL);
+  ted.accept_btn = PushButton(c, "Save", ModalAcceptButton);
+  SetObjectExtra (ted.accept_btn, &acd, NULL);
   b = PushButton(c, "Cancel", ModalCancelButton);
   SetObjectExtra (b, &acd, NULL);
   
-  if (g1 == NULL)
-  {
-    AlignObjects (ALIGN_CENTER, (HANDLE) g2, (HANDLE) sequence_grp,
-                                (HANDLE) c, NULL);
-  }
-  else
-  {
-    AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) g2, (HANDLE) sequence_grp,
-                                (HANDLE) c, NULL);
-  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) err_grp, (HANDLE) g2, (HANDLE) sequence_grp,
+                                (HANDLE) c, (HANDLE) g1, NULL);
   
   /* Edit Menu */
   edit_menu = PulldownMenu (w, "Edit");
   local_item = CommandItem (edit_menu, "Paste", PasteSequenceAssistant);
   SetObjectExtra (local_item, sequence_txt, NULL);
+                
+  ShowTitleEditErrors (&ted);                
                               
   Show(w); 
   Select (w);
@@ -15240,7 +23094,7 @@ static void SequenceAssistantEditSequence (SequenceAssistantPtr sap, Int4 seq_nu
     {  
       id_str = SaveStringFromText (sequence_id_txt);
       id_str = ReformatLocalId (id_str);
-      title_str = SaveStringFromText (title_txt);
+      title_str = SaveStringFromText (ted.title_txt);
       seq_str = SaveStringFromText (sequence_txt);
       if (seq_num_for_error < 0)
       {
@@ -15254,10 +23108,6 @@ static void SequenceAssistantEditSequence (SequenceAssistantPtr sap, Int4 seq_nu
       else if (StringHasNoText (id_str))
       {
         Message (MSG_ERROR, "You must supply a sequence ID!");
-      }
-      else if (! CheckBracketingInDefLine (&title_str, id_str))
-      {
-        /* let user continue editing */
       }
       else
       {
@@ -15365,6 +23215,7 @@ static void SequenceAssistantEditSequence (SequenceAssistantPtr sap, Int4 seq_nu
     acd.cancelled = TRUE;
   }
   
+  ted.iatep = IDAndTitleEditFree (ted.iatep);
   Remove (w);
 }
 
@@ -15681,37 +23532,6 @@ static void ImportFastaFileButton (ButtoN b)
   UpdateSequenceAssistant (sap);
 }
 
-static SeqEntryPtr CopySeqEntryList (SeqEntryPtr seq_list)
-{
-  SeqEntryPtr new_seq_list, new_seq, last_seq;
-  
-  if (seq_list == NULL)
-  {
-    return NULL;
-  }
-  
-  new_seq = AsnIoMemCopy ((Pointer) seq_list,
-                          (AsnReadFunc) SeqEntryAsnRead,
-                          (AsnWriteFunc) SeqEntryAsnWrite);
-  new_seq_list = new_seq;
-  last_seq = new_seq;
-  
-  seq_list = seq_list->next;
-  
-  while (last_seq != NULL && seq_list != NULL)
-  {   
-    new_seq = AsnIoMemCopy ((Pointer) seq_list,
-                            (AsnReadFunc) SeqEntryAsnRead,
-                            (AsnWriteFunc) SeqEntryAsnWrite);
-    last_seq->next = new_seq;
-    last_seq = last_seq->next;
-    seq_list = seq_list->next;
-  }
-  
-                          
-  return new_seq_list;
-}
-
 static Boolean 
 SequenceAssistantValidateSegments 
 (SeqEntryPtr seq_list,
@@ -15799,93 +23619,60 @@ SequenceAssistantValidateSegments
 }
 
 static Boolean 
-SequenceAssistantValidateSegmentedSetContentAndLength 
-(SeqEntryPtr     seq_list,
- ValNodePtr PNTR err_list)
-{
-  BioseqPtr    bsp;
-  BioseqSetPtr parts;
-  
-  if (seq_list == NULL)
-  {
-    return TRUE;
-  }
-  else if (IS_Bioseq (seq_list))
-  {
-    bsp = (BioseqPtr) seq_list;
-    if (bsp->repr == Seq_repr_seg)
-    {
-      if (seq_list->next != NULL 
-          && IS_Bioseq_set (seq_list->next)
-          && seq_list->next->data.ptrvalue != NULL)
-      {
-        parts = (BioseqSetPtr) seq_list->next->data.ptrvalue;
-        return SequenceAssistantValidateSegments (parts->seq_set, err_list);
-      }
-      else
-      {
-        return SequenceAssistantValidateSegments (seq_list, err_list);
-      }
-    }
-    else
-    {
-      return SequenceAssistantValidateSegments (seq_list, err_list);
-    }
-  }
-  else
-  {
-    return TRUE;
-  }
-}
-
-static Boolean 
-SequenceAssistantValidateNotSegmentedSetContentAndLength 
-(SeqEntryPtr     seq_list,
- ValNodePtr PNTR err_list)
+SequenceAssistantValidateOneBioseqContentAndLength 
+(BioseqPtr       bsp,
+ ValNodePtr PNTR all_N_list,
+ ValNodePtr PNTR all_one_char_list,
+ ValNodePtr PNTR too_short_list)
 {
   CharPtr     seqbuf;
   Boolean     rval = TRUE;
-  SeqEntryPtr sep, nsep;
   Int2        seq_num = 0;
-  ValNodePtr  too_short_list = NULL;
-  ValNodePtr  all_one_char_list = NULL;
-  ValNodePtr  all_N_list = NULL;
   Char        id_str [128];
-  CharPtr     err_msg;
-  BioseqPtr   bsp;
   SeqIdPtr    sip;
+  SeqEntryPtr sep;
   
-  if (seq_list == NULL)
+  if (bsp == NULL || too_short_list == NULL || all_N_list == NULL || all_one_char_list == NULL)
   {
-    return TRUE;
+    return FALSE;
   }
   
-  for (sep = seq_list; sep != NULL; sep = sep->next, seq_num++)
-  {
-    nsep = FindNucSeqEntry (sep);
-    if (nsep == NULL)
-    {
-      continue;
-    }
-    seqbuf = GetSequenceString (nsep);
-    bsp = (BioseqPtr) nsep->data.ptrvalue;
-    sip = SeqIdFindWorst (bsp->id);
-    SeqIdWrite (sip, id_str, PRINTID_REPORT, sizeof (id_str));
+  sep = SeqMgrGetSeqEntryForData (bsp);
+  
+  seqbuf = GetSequenceString (sep);
+  
+  sip = SeqIdFindWorst (bsp->id);
+  SeqIdWrite (sip, id_str, PRINTID_REPORT, sizeof (id_str));
 
-    if (CountSeqChars (seqbuf) < 50)
-    {
-      ValNodeAddPointer (&too_short_list, seq_num, StringSave (id_str));
-    }
-    if (IsSequenceAllNs (seqbuf))
-    {
-      ValNodeAddPointer (&all_N_list, seq_num, StringSave (id_str));
-      rval = FALSE;
-    }
-    else if (IsSequenceAllOneCharacter(seqbuf))
-    {
-      ValNodeAddPointer (&all_one_char_list, seq_num, StringSave (id_str));
-    }
+  if (CountSeqChars (seqbuf) < 50)
+  {
+    ValNodeAddPointer (too_short_list, seq_num, StringSave (id_str));
+    rval = FALSE;
   }
+  if (IsSequenceAllNs (seqbuf))
+  {
+    ValNodeAddPointer (all_N_list, seq_num, StringSave (id_str));
+    rval = FALSE;
+  }
+  else if (IsSequenceAllOneCharacter(seqbuf))
+  {
+    ValNodeAddPointer (all_one_char_list, seq_num, StringSave (id_str));
+    rval = FALSE;
+  }
+  seqbuf = MemFree (seqbuf);
+  return rval;
+}
+
+static Boolean 
+AddBioseqErrors 
+(ValNodePtr all_N_list,
+ ValNodePtr all_one_char_list,
+ ValNodePtr too_short_list,
+ ValNodePtr PNTR err_list)
+{
+  CharPtr err_msg = NULL;
+  Boolean rval = TRUE;
+  
   if (all_N_list != NULL)
   {
     if (err_list != NULL)
@@ -15948,10 +23735,6 @@ SequenceAssistantValidateNotSegmentedSetContentAndLength
     }
     ValNodeAddPointer (err_list, CREATE_FASTA_WARNING, err_msg);
   }
-  all_N_list = ValNodeFreeData (all_N_list);
-  too_short_list = ValNodeFreeData (too_short_list);
-  all_one_char_list = ValNodeFreeData (all_one_char_list);
-  
   return rval;
 }
 
@@ -15963,33 +23746,69 @@ SequenceAssistantValidateNotSegmentedSetContentAndLength
 static Boolean 
 SequenceAssistantValidateContentAndLength 
 (SeqEntryPtr     seq_list,
- Int2            seqPackage,
+ ValNodePtr PNTR all_N_list,
+ ValNodePtr PNTR all_one_char_list,
+ ValNodePtr PNTR too_short_list,
  ValNodePtr PNTR err_list)
 {
   Boolean           rval = TRUE;
+  BioseqSetPtr      bssp;
   
   if (seq_list == NULL)
   {
     return TRUE;
   }
-
-  if (seqPackage == SEQ_PKG_SEGMENTED)
+  
+  if (IS_Bioseq_set (seq_list))
   {
-    rval = SequenceAssistantValidateSegmentedSetContentAndLength (seq_list, err_list);
+    bssp = (BioseqSetPtr) seq_list->data.ptrvalue;
+    if (bssp->_class == BioseqseqSet_class_parts)
+    {
+/*      rval = SequenceAssistantValidateSegments (bssp->seq_set, err_list); */
+    }
+    else
+    {
+      rval = SequenceAssistantValidateContentAndLength (bssp->seq_set, 
+                                                        all_N_list,
+                                                        all_one_char_list,
+                                                        too_short_list,
+                                                        err_list);
+    }
   }
-  else
+  else if (IS_Bioseq (seq_list))
   {
-    rval = SequenceAssistantValidateNotSegmentedSetContentAndLength (seq_list, err_list);
+    rval = SequenceAssistantValidateOneBioseqContentAndLength (seq_list->data.ptrvalue,
+                                                               all_N_list,
+                                                               all_one_char_list,
+                                                               too_short_list);
   }
+  rval &= SequenceAssistantValidateContentAndLength (seq_list->next, 
+                                                            all_N_list,
+                                                            all_one_char_list,
+                                                            too_short_list,
+                                                           err_list);
   return rval;
 }
 
-static Boolean SequenceAssistantValidate (SeqEntryPtr seq_list, Int2 seqPackage)
+static Boolean SequenceAssistantValidate (SeqEntryPtr seq_list)
 {
   ValNodePtr err_list = NULL;
   Boolean    rval;
+  ValNodePtr all_N_list = NULL;
+  ValNodePtr all_one_char_list = NULL;
+  ValNodePtr too_short_list = NULL;
   
-  rval = SequenceAssistantValidateContentAndLength (seq_list, seqPackage, &err_list);
+  rval = SequenceAssistantValidateContentAndLength (seq_list, 
+                                                    &all_N_list,
+                                                    &all_one_char_list,
+                                                    &too_short_list,
+                                                    &err_list);
+  
+  rval &= AddBioseqErrors (all_N_list, all_one_char_list, too_short_list, &err_list);
+
+  all_N_list = ValNodeFreeData (all_N_list);
+  too_short_list = ValNodeFreeData (too_short_list);
+  all_one_char_list = ValNodeFreeData (all_one_char_list);
 
   if (err_list != NULL)
   {
@@ -15997,424 +23816,6 @@ static Boolean SequenceAssistantValidate (SeqEntryPtr seq_list, Int2 seqPackage)
   }
   err_list = ValNodeFreeData (err_list);
   return rval;
-}
-
-static void EditOneSequenceTitle (SequenceAssistantPtr sap, Int4 seq_num)
-{
-  Int4                  seq_pos;
-  SeqEntryPtr           sep, nsep;
-  WindoW                w;
-  CharPtr               title = NULL;
-  BioseqPtr             bsp = NULL;
-  CharPtr               title_fmt = "Description for %s";
-  Char                  id_txt [128];
-  GrouP                 h, g, c;
-  ButtoN                b;
-  ModalAcceptCancelData acd;
-  TexT                  new_title_txt;
-  SeqDescrPtr           sdp;
-  CharPtr               old_txt;
-  Boolean               done = FALSE, cancelled;
-  
-  if (sap == NULL)
-  {
-    return;
-  }
-  
-  for (seq_pos = 0, sep = sap->seq_list;
-       seq_pos != seq_num && sep != NULL;
-       seq_pos ++, sep = sep->next)
-  {
-  }
-  if (sep == NULL)
-  {
-    return;
-  }
-  
-  if (IS_Bioseq (sep)) 
-  {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-  } 
-  else if (IS_Bioseq_set (sep)) 
-  {
-    nsep = FindNucSeqEntry (sep);
-    if (nsep != NULL && IS_Bioseq (nsep)) 
-    {
-      bsp = (BioseqPtr) nsep->data.ptrvalue;
-    }
-  }
-  if (bsp == NULL)
-  {
-    return;
-  }
-  
-  sdp = bsp->descr;
-  while (sdp != NULL && sdp->choice != Seq_descr_title)
-  {
-    sdp = sdp->next;
-  }
-  
-  SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT, sizeof (id_txt));
-  
-  title = (CharPtr) MemNew ((StringLen (title_fmt) 
-                               + StringLen (id_txt)) * sizeof (Char));
-  sprintf (title, title_fmt, id_txt);
-  w = MovableModalWindow (-20, -13, -10, -10, title, NULL);
-  title = MemFree (title);
-  
-  h = HiddenGroup(w, -1, 0, NULL);
-  SetGroupSpacing (h, 10, 10);
-  
-  g = HiddenGroup (h, 2, 0, NULL);
-  StaticPrompt (g, "Description", 0, popupMenuHeight, programFont, 'l');
-  new_title_txt = DialogText (g, "", 40, NULL);
-  if (sdp != NULL && !StringHasNoText (sdp->data.ptrvalue))
-  {
-    SetTitle (new_title_txt, sdp->data.ptrvalue);
-  }
-  
-  c = HiddenGroup (h, 2, 0, NULL);
-  b = PushButton (c, "Accept", ModalAcceptButton);
-  SetObjectExtra (b, &acd, NULL);
-  b = PushButton (c, "Cancel", ModalCancelButton);
-  SetObjectExtra (b, &acd, NULL);
-  
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
-
-  Show(w); 
-  Select (w);
-  
-  while (!done)
-  {
-    acd.accepted = FALSE;
-    acd.cancelled = FALSE;
-  
-    while (!acd.cancelled && ! acd.accepted)
-    {
-      ProcessExternalEvent ();
-      Update ();
-    }
-    ProcessAnEvent ();
-    if (acd.accepted)
-    {
-      if (sdp == NULL)
-      {
-        sdp = SeqDescrNew (bsp->descr);
-        if (bsp->descr == NULL)
-        {
-          bsp->descr = sdp;
-        }
-        sdp->choice = Seq_descr_title;
-      }
-      old_txt = sdp->data.ptrvalue;
-      sdp->data.ptrvalue = SaveStringFromText (new_title_txt);
-      cancelled = FALSE;
-      FixBracketingInOneDefinitionLine (sdp, &cancelled, id_txt);
-      FixUnrecognizedModifersInOneDefinitionLine (sdp, &cancelled, NULL);
-      if (cancelled)
-      {
-        sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
-        sdp->data.ptrvalue = old_txt;
-      }
-      else
-      {
-        old_txt = MemFree (old_txt);
-        done = TRUE;
-      }
-    }
-    else if (acd.cancelled)
-    {
-      done = TRUE;
-    }
-  }
-  
-  Remove (w);
-}
-
-#define SEQUENCE_ASSISTANT_MOLECULE_COLUMN 2
-#define SEQUENCE_ASSISTANT_TOPOLOGY_COLUMN 3
-#define SEQUENCE_ASSISTANT_TITLE_COLUMN    4
-
-static Uint2 titleedit_types [] = {
-  TAGLIST_PROMPT, TAGLIST_TEXT
-};
-
-static Uint2 titleedit_widths [] = {
-  10, 40,
-};
-
-static ValNodePtr 
-BuildTagDataForSeqEntry 
-(SeqEntryPtr sep,
- ValNodePtr  list)
-{
-  BioseqPtr   bsp;
-  SeqDescrPtr sdp;
-  Char        id_txt [128];
-  Int4        len;
-  CharPtr     str, title_txt;
-
-  if (sep == NULL)
-  {
-    return list;
-  }
-  if (IS_Bioseq (sep))
-  {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-  }
-  else if (IS_Bioseq_set (sep))
-  {
-    sep = FindNucSeqEntry (sep);
-    if (sep != NULL && IS_Bioseq (sep))
-    {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-    }
-  }
-  
-  if (bsp == NULL)
-  {
-    return list;
-  }
-  
-  SeqIdWrite (SeqIdFindWorst (bsp->id), id_txt, PRINTID_REPORT, sizeof (id_txt));
-  
-  for (sdp = bsp->descr; sdp != NULL && sdp->choice != Seq_descr_title; sdp = sdp->next)
-  {
-  }
-  
-  if (sdp == NULL || StringHasNoText (sdp->data.ptrvalue))
-  {
-    title_txt = "";
-  }
-  else
-  {
-    title_txt = sdp->data.ptrvalue;
-  }
-    
-  len = StringLen (id_txt) + StringLen (title_txt) + 4;
-  str = (CharPtr) MemNew (len * sizeof (Char));
-  if (str != NULL) {
-    sprintf (str, "%s\t%s\n", id_txt, title_txt);
-  }
-  
-  ValNodeAddPointer (&list, 0, str);
-  return list;
-}
-
-static Boolean 
-PrevalidateOneNewSequenceTitle 
-(SeqEntryPtr     sep,
- SeqDescrPtr     sdp,
- ValNodePtr PNTR fixes)
-{
-  BioseqPtr bsp;
-  SeqIdPtr  sip;
-  Char      tmp [128];
-  Boolean   cancelled = FALSE;
-  
-  if (sep == NULL || sdp == NULL)
-  {
-    return FALSE;
-  }
-  
-  if (IS_Bioseq (sep))
-  {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-  }
-  else if (IS_Bioseq_set (sep))
-  {
-    sep = FindNucSeqEntry (sep);
-    if (sep != NULL && IS_Bioseq (sep))
-    {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-    }
-  }
-  
-  if (bsp == NULL)
-  {
-    return FALSE;
-  }
-
-  bsp = (BioseqPtr) sep->data.ptrvalue;
-  if (bsp != NULL)
-  {
-    sip = SeqIdFindWorst (bsp->id);
-    SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
-    FixBracketingInOneDefinitionLine (sdp, &cancelled, (CharPtr) tmp);
-    FixUnrecognizedModifersInOneDefinitionLine (sdp, &cancelled, fixes);
-  }
-  return cancelled;
-}
-
-static void ReplaceOneDefinitionLine (SeqEntryPtr sep, CharPtr new_title)
-{
-  BioseqPtr   bsp;
-  SeqDescrPtr sdp;
-
-  if (sep == NULL)
-  {
-    return;
-  }
-  
-  if (IS_Bioseq (sep))
-  {
-    bsp = (BioseqPtr) sep->data.ptrvalue;
-  }
-  else if (IS_Bioseq_set (sep))
-  {
-    sep = FindNucSeqEntry (sep);
-    if (sep != NULL && IS_Bioseq (sep))
-    {
-      bsp = (BioseqPtr) sep->data.ptrvalue;
-    }
-  }
-  
-  if (bsp == NULL)
-  {
-    return;
-  }
-  
-  for (sdp = bsp->descr; sdp != NULL && sdp->choice != Seq_descr_title; sdp = sdp->next)
-  {
-  }
-  if (sdp == NULL)
-  {
-    sdp = SeqDescrNew (bsp->descr);
-    if (bsp->descr == NULL)
-    {
-      bsp->descr = sdp;
-    }
-  }
-  sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
-  sdp->data.ptrvalue = new_title;
-}
-
-static void EditSequenceTitleColumns (SequenceAssistantPtr sap)
-{
-  WindoW                w;
-  GrouP                 h, c;
-  PrompT                ppt;
-  ButtoN                b;
-  Int4                  rows_shown = 0, j;
-  SeqEntryPtr           sep;
-  DialoG                dlg;
-  TagListPtr            tlp;
-  ValNodePtr            list = NULL, vnp;
-  ModalAcceptCancelData acd;
-  Boolean               done = FALSE;
-  CharPtr               new_title;
-  ValNodePtr            new_title_list = NULL;
-  ValNodePtr            fixes = NULL;
-  Boolean               cancelled_fixes = FALSE;
-  
-  if (sap == NULL || sap->seq_list == NULL)
-  {
-    return;
-  }
-
-  /* count available rows, in order to present correct number of rows in tag dialog */
-  /* also collect data for taglist */
-  sep = sap->seq_list;
-  while (sep != NULL)
-  {
-    rows_shown++;
-    list = BuildTagDataForSeqEntry (sep, list);
-    sep = sep->next;
-  }
-  rows_shown = MIN (rows_shown, 5);
-    
-  w = MovableModalWindow (-20, -13, -10, -10, "Sequence Descriptions", NULL);
-  
-  h = HiddenGroup(w, -1, 0, NULL);
-  SetGroupSpacing (h, 10, 10);
-  
-  ppt = StaticPrompt (h, "Description", 18 * stdCharWidth, 0, programFont, 'l');    
-  
-  dlg = CreateTagListDialogEx (h, rows_shown, 2, 2,
-                               titleedit_types, titleedit_widths,
-                               NULL, TRUE, TRUE, NULL, NULL);
-
-  tlp = (TagListPtr) GetObjectExtra (dlg);  
-  if (tlp == NULL) return;
-
-  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
-  tlp->vnp = list;
-  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
-  for (j = 0, vnp = tlp->vnp; vnp != NULL; j++, vnp = vnp->next) {
-  }
-  tlp->max = MAX ((Int2) 0, (Int2) (j - tlp->rows));
-  CorrectBarMax (tlp->bar, tlp->max);
-  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1);
-  if (tlp->max > 0) {
-    SafeShow (tlp->bar);
-  } else {
-    SafeHide (tlp->bar);
-  }
-  SendMessageToDialog (tlp->dialog, VIB_MSG_ENTER);
-
-  c = HiddenGroup (h, 2, 0, NULL);
-  b = PushButton (c, "Accept", ModalAcceptButton);
-  SetObjectExtra (b, &acd, NULL);
-  b = PushButton (c, "Cancel", ModalCancelButton);
-  SetObjectExtra (b, &acd, NULL);
-  
-  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) dlg, (HANDLE) c, (HANDLE) NULL);
-
-  Show (w);
-  Select (w);
-  while (!done)
-  {
-    acd.accepted = FALSE;
-    acd.cancelled = FALSE;
-    while (!acd.accepted && ! acd.cancelled)
-    {
-      ProcessExternalEvent ();
-      Update ();
-    }
-    ProcessAnEvent ();
-    if (acd.cancelled)
-    {
-      done = TRUE;
-    }
-    else
-    {
-      tlp = GetObjectExtra (dlg);
-      cancelled_fixes = FALSE;
-      for (sep = sap->seq_list, j = 0;
-           sep != NULL && ! cancelled_fixes; 
-           sep = sep->next, j++)
-      {
-        new_title = GetTagListValue (tlp, j);
-        vnp = ValNodeNew (new_title_list);
-        if (new_title_list == NULL)
-        {
-          new_title_list = vnp;
-        }
-        vnp->choice = Seq_descr_title;
-        vnp->data.ptrvalue = new_title;
-        cancelled_fixes = PrevalidateOneNewSequenceTitle (sep, vnp, &fixes);
-      }
-      fixes = FreeStringPairList (fixes);
-      if (cancelled_fixes)
-      {
-        new_title_list = ValNodeFreeData (new_title_list);
-      }
-      else
-      {
-        for (sep = sap->seq_list, vnp = new_title_list;
-             sep != NULL && vnp != NULL;
-             sep = sep->next, vnp = vnp->next)
-        {
-          ReplaceOneDefinitionLine (sep, vnp->data.ptrvalue);
-        }
-        /* only use ValNodeFree because we use the data in the title descriptor */
-        new_title_list = ValNodeFree (new_title_list);
-        UpdateSequenceAssistant (sap);  
-        done = TRUE;
-      }
-    }
-  }
-  Remove (w);
 }
 
 static void SequenceDblClick (PoinT cell_coord, CharPtr header_text, CharPtr cell_text, Pointer userdata)
@@ -16595,7 +23996,7 @@ static void SequenceAssistant (ButtoN b)
     if (!sad.cancelled)
     {
 
-      if (SequenceAssistantValidate (sad.seq_list, sqfp->seqPackage))
+      if (SequenceAssistantValidate (sad.seq_list))
       {
         /* check for number of sequences */
         if (sad.seq_list != NULL && sad.seq_list->next != NULL
@@ -16629,8 +24030,11 @@ static void SequenceAssistant (ButtoN b)
           SafeShow (fpp->instructions);
           Update ();
           Enable (fpp->import_btn);
+          SetTitle (fpp->import_btn, "Import Nucleotide FASTA");
           Disable (fpp->clear_btn);
           ClearOrganismModifiers (sqfp);
+          Disable (sqfp->molecule_btn);
+          Disable (sqfp->topology_btn);
         }
         else
         {    
@@ -16642,7 +24046,16 @@ static void SequenceAssistant (ButtoN b)
           fpp->list = sad.seq_list;
           SafeHide (fpp->instructions);
           Update ();
-          Disable (fpp->import_btn);
+          
+          if (PackageTypeIsSingle (sqfp->seqPackage))
+          {
+            Disable (fpp->import_btn);
+          }
+          else
+          {
+            Enable (fpp->import_btn);
+            SetTitle (fpp->import_btn, "Import Additional Nucleotide FASTA");
+          }
           Enable (fpp->clear_btn);
           FormatFastaDoc (fpp);
           SafeShow (fpp->doc);
@@ -16696,22 +24109,19 @@ static GrouP CreateNucleotideTab (GrouP h, SequencesFormPtr sqfp)
   SetGroupSpacing (q, 10, 10);
   g = HiddenGroup (q, -1, 0, NULL);
   SetGroupSpacing (g, 10, 10);
-  x = HiddenGroup (g, -4, 0, NULL);
-  
-  
-  sqfp->molecule_btn = PushButton (x, "Specify Molecule", SpecifyMolecule);
-  SetObjectExtra (sqfp->molecule_btn, sqfp, NULL);
-  sqfp->topology_btn = PushButton (x, "Specify Topology", SpecifyTopology);
-  SetObjectExtra (sqfp->topology_btn, sqfp, NULL);
+
   y = HiddenGroup (g, -2, 0, NULL);
   SetGroupSpacing (y, 10, 2);
   sqfp->partial5 = CheckBox (y, "Incomplete at 5' end", NULL);
   sqfp->partial3 = CheckBox (y, "Incomplete at 3' end", NULL);
 
   if (sqfp->seqFormat == SEQ_FMT_FASTA) {
-    prs = CheckBox (g, "Fasta definition line starts with sequence ID", ChangeDnaParse);
-    sqfp->use_id_from_fasta_defline = prs;
-    SetObjectExtra (prs, sqfp, NULL);
+    if (GetAppParam ("SEQUIN", "SETTINGS", "ALLOWNOSEQID", NULL, str, sizeof (str))
+        && StringICmp (str, "TRUE") == 0)
+    {
+      prs = CheckBox (g, "Fasta definition line starts with sequence ID", ChangeDnaParse);
+      SetObjectExtra (prs, sqfp, NULL);
+    }
     parseSeqId = FALSE;
     if (GetAppParam ("SEQUIN", "PREFERENCES", "PARSENUCSEQID", NULL, str, sizeof (str))) {
       if (StringICmp (str, "TRUE") == 0) {
@@ -16786,15 +24196,25 @@ static GrouP CreateNucleotideTab (GrouP h, SequencesFormPtr sqfp)
     b = PushButton (import_btn_grp, "Import Nucleotide Alignment", ImportBtnProc);
     SetObjectExtra (b, sqfp, NULL);
   }
+  
+  x = HiddenGroup (g, -4, 0, NULL);  
+  
+  sqfp->molecule_btn = PushButton (x, "Specify Molecule", SpecifyMolecule);
+  SetObjectExtra (sqfp->molecule_btn, sqfp, NULL);
+  Disable (sqfp->molecule_btn);
+  sqfp->topology_btn = PushButton (x, "Specify Topology", SpecifyTopology);
+  SetObjectExtra (sqfp->topology_btn, sqfp, NULL);
+  Disable (sqfp->topology_btn);
+
   if (sqfp->makeAlign != NULL) {
     h1 = (Handle) sqfp->makeAlign;
     h2 = (Handle) import_btn_grp;
-    h3 = (Handle) prs;
-    h4 = (Handle) sqfp->singleIdGrp;
+    h3 = prs == NULL ? (Handle) sqfp->singleIdGrp : (Handle) prs;
+    h4 = prs == NULL ? (Handle) NULL : (Handle) sqfp->singleIdGrp;
   } else {
     h1 = import_btn_grp;
-    h2 = (Handle) prs;
-    h3 = (Handle) sqfp->singleIdGrp;
+    h2 = prs == NULL ? (Handle) sqfp->singleIdGrp : (Handle) prs;
+    h3 = prs == NULL ? (Handle) NULL : (Handle) sqfp->singleIdGrp;
     h4 = NULL;
   }
   AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) y, (HANDLE) k,
@@ -16840,7 +24260,7 @@ static GrouP CreateTranscriptsTab (GrouP h, SequencesFormPtr sqfp)
 static GrouP CreateProteinTab (GrouP h, SequencesFormPtr sqfp)
 {
   GrouP   q, g, x, y, k;
-  ButtoN  prs, mrna = NULL, b;
+  ButtoN  prs = NULL, mrna = NULL, b;
   Boolean parseSeqId;
   Char    str [32];
   
@@ -16855,15 +24275,20 @@ static GrouP CreateProteinTab (GrouP h, SequencesFormPtr sqfp)
   SetGroupSpacing (y, 10, 2);
   sqfp->partialN = CheckBox (y, "Incomplete at NH2 end", NULL);
   sqfp->partialC = CheckBox (y, "Incomplete at CO2H end", NULL);
-  prs = CheckBox (g, "Fasta definition line starts with sequence ID", ChangeProtParse);
-  SetObjectExtra (prs, sqfp, NULL);
-  parseSeqId = FALSE;
+  if (GetAppParam ("SEQUIN", "SETTINGS", "ALLOWNOSEQID", NULL, str, sizeof (str))
+      && StringICmp (str, "TRUE") == 0)
+  {
+    prs = CheckBox (g, "Fasta definition line starts with sequence ID", ChangeProtParse);
+    SetObjectExtra (prs, sqfp, NULL);
+  }
+
+  parseSeqId = TRUE;
   if (GetAppParam ("SEQUIN", "PREFERENCES", "PARSEPROTSEQID", NULL, str, sizeof (str))) {
-    if (StringICmp (str, "TRUE") == 0) {
-      parseSeqId = TRUE;
+    if (StringICmp (str, "TRUE") != 0) {
+      parseSeqId = FALSE;
     }
   }
-  SetStatus (prs, parseSeqId);
+  SafeSetStatus (prs, parseSeqId);
   sqfp->makeMRNA = FALSE;
   if (sqfp->seqPackage != SEQ_PKG_GENOMICCDNA) {
     mrna = CheckBox (g, "Create initial mRNA with CDS intervals", ChangeMrnaFlag);
@@ -16874,13 +24299,22 @@ static GrouP CreateProteinTab (GrouP h, SequencesFormPtr sqfp)
       }
     }
   }
-  SetStatus (mrna, sqfp->makeMRNA);
+  SafeSetStatus (mrna, sqfp->makeMRNA);
   k = HiddenGroup (g, 0, 2, NULL);
   sqfp->protseq = CreateFastaDialog (k, "", FALSE, FALSE, fastaProtMsg, parseSeqId, FALSE, NULL);
   b = PushButton (g, "Import Protein FASTA", ImportBtnProc);
   SetObjectExtra (b, sqfp, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) y, (HANDLE) k,
-                (HANDLE) prs, (HANDLE) b, (HANDLE) mrna, NULL);
+  if (mrna == NULL)
+  {
+    AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) y, (HANDLE) k,
+                (HANDLE) b, (HANDLE) prs, NULL);
+  }
+  else
+  {
+    AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) y, (HANDLE) k,
+                (HANDLE) b, (HANDLE) mrna, (HANDLE) prs, NULL);
+    
+  }
   return q;
 }
 
@@ -16932,6 +24366,18 @@ static GrouP CreateAnnotTab (GrouP h, SequencesFormPtr sqfp)
   return q;
 }
 
+static void CleanupSequencesForm (GraphiC g, Pointer data)
+{
+  SequencesFormPtr sqfp;
+  
+  if (data != NULL)
+  {
+    sqfp = (SequencesFormPtr) data;
+    sqfp->nuc_prot_assoc_list = FreeAssociationList (sqfp->nuc_prot_assoc_list);
+  }
+  StdCleanupFormProc (g, data);
+}
+
 extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
                                       FormatBlockPtr format,
                                       BtnActnProc goToNext,
@@ -16964,17 +24410,17 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
     }
 
     w = FixedWindow (left, top, -10, -10, title, NULL);
-    SetObjectExtra (w, sqfp, StdCleanupFormProc);
+    SetObjectExtra (w, sqfp, CleanupSequencesForm);
     sqfp->form = (ForM) w;
     sqfp->toform = NULL;
     if (sqfp->seqFormat == SEQ_FMT_FASTA) {
       sqfp->fromform = FastaSequencesFormToSeqEntryPtr;
-      sqfp->testform = FastaTestSequencesForm;
     } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
       sqfp->fromform = PhylipSequencesFormToSeqEntryPtr;
-      sqfp->testform = PhylipTestSequencesForm;
     }
+    sqfp->testform = NULL;
     sqfp->importform = ImportSequencesForm;
+    sqfp->exportform = ExportSequencesForm;
     sqfp->formmessage = SequencesFormMessage;
 
 #ifndef WIN_MAC
@@ -17321,9 +24767,9 @@ static void ParseInMoreProteinsCommon (IteM i, Boolean doSuggest)
   Char         path [PATH_MAX];
   ValNodePtr   rawBsps = NULL;
   ValNodePtr   rawvnp;
-  SeqEntryPtr  sep;
+  SeqEntryPtr  sep, target_sep;
   SeqIdPtr     sip;
-  SeqLocPtr    slp;
+  SeqLocPtr    slp, target_slp;
   Char         str [64];
   BioseqPtr    target = NULL;
   Char         tmp [128];
@@ -17498,7 +24944,16 @@ static void ParseInMoreProteinsCommon (IteM i, Boolean doSuggest)
       }
     }
     AddSeqEntryToSeqEntry (addhere, list, TRUE);
-    AutomaticProteinProcess (addhere, list, code, makeMRNA, target);
+    if (target == NULL)
+    {
+      target_slp = NULL;
+    }
+    else
+    {
+      target_sep = SeqMgrGetSeqEntryForData (target);
+      target_slp = CreateWholeInterval (sep);
+    }
+    AutomaticProteinProcess (addhere, list, code, makeMRNA, target_slp);
     list = nextsep;
   }
 
@@ -19214,27 +26669,18 @@ extern ValNodePtr BuildFeatureValNodeList (
   return head;
 }
 
-extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname)
+static void RemoveTaxRef (OrgRefPtr orp)
 {
   ValNodePtr      vnp, next;
   ValNodePtr PNTR prev;
   DbtagPtr        dbt;
   Boolean         remove_taxrefs = FALSE;
 
-  if (orp == NULL) return;
-
-  if ( taxname == NULL || orp->taxname == NULL
-    || StringCmp (taxname, orp->taxname) != 0)
+  if (orp == NULL)
   {
-    remove_taxrefs = TRUE;
+    return;
   }
-  MemFree (orp->taxname);
-  orp->taxname = taxname;
-
-  if (! remove_taxrefs) return;
-
-  orp->common = MemFree (orp->common);
-
+ 
   vnp = orp->db;
   if (vnp == NULL) return;
   prev = (ValNodePtr PNTR) &(orp->db);
@@ -19251,6 +26697,28 @@ extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname)
     }
     vnp = next;
   }
+  
+}
+
+extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname)
+{
+  Boolean         remove_taxrefs = FALSE;
+
+  if (orp == NULL) return;
+
+  if ( taxname == NULL || orp->taxname == NULL
+    || StringCmp (taxname, orp->taxname) != 0)
+  {
+    remove_taxrefs = TRUE;
+  }
+  MemFree (orp->taxname);
+  orp->taxname = taxname;
+
+  if (! remove_taxrefs) return;
+
+  orp->common = MemFree (orp->common);
+
+  RemoveTaxRef (orp);
 }
 
 static Boolean

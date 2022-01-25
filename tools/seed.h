@@ -1,4 +1,4 @@
-/* $Id: seed.h,v 6.19 2004/04/01 13:43:08 lavr Exp $
+/* $Id: seed.h,v 6.20 2005/07/28 14:57:10 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,12 @@ Author: Alejandro Schaffer
  
 Contents: header file for PHI-BLAST and pseed3.
 
-$Revision: 6.19 $
+$Revision: 6.20 $
 
 $Log: seed.h,v $
+Revision 6.20  2005/07/28 14:57:10  coulouri
+remove dead code
+
 Revision 6.19  2004/04/01 13:43:08  lavr
 Spell "occurred", "occurrence", and "occurring"
 
@@ -230,28 +233,6 @@ typedef struct alignSearchItems {
    Int4   gapExtend; /*penalty to extend a gap one position*/
    Int4   gapCost;   /*gapOpen + gapExtend*/
 } alignSearchItems;
-
-#if 0
-typedef struct threadInfoItems {
-     Int4 global_gi_current;
-     Boolean global_gi_being_used;
-     TNlmMutex db_mutex;  /*lock for access to database*/
-     TNlmMutex results_mutex; /*lock for storing results */
-     TNlmMutex callback_mutex; /*lock for issuing update ticks on the screen*/
-     SeqIdPtr global_seqid_ptr;
-     SeqIdPtr  global_seqid_list;
-     Int4 db_chunk_size;
-     Int4 db_chunk_last;
-     Int4 final_db_seq;  /*index of last sequence to process*/
-     Int4 number_seqs_done;  /*number of sequences already tested*/
-     Int4 db_incr;  /*size of a database chunk to get*/
-     BlastGiListPtr blast_gi_list;
-/*
-	Callback functions to indicate progress, or lack thereof.
-*/
-     int (LIBCALLBACK *tick_callback)PROTO((Int4 done, Int4 positives));
-} threadInfoItems; 
-#endif
 
 typedef struct seedParallelItems {
     ReadDBFILEPtr rdpt; /*pointer to database*/

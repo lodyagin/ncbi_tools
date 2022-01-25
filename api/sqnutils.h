@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.118 $
+* $Revision: 6.125 $
 *
 * File Description: 
 *
@@ -218,6 +218,19 @@ NLM_EXTERN void ResynchMRNAPartials (SeqFeatPtr sfp, Pointer userdata);
 NLM_EXTERN void ResynchCDSPartials (SeqFeatPtr sfp, Pointer userdata);
 NLM_EXTERN void ResynchPeptidePartials (SeqFeatPtr sfp, Pointer userdata);
 
+/* functions for associating CDS and parent mRNA using featureIDs */
+
+NLM_EXTERN void ClearFeatIDs (SeqFeatPtr sfp);
+NLM_EXTERN void ClearFeatIDXrefs (SeqFeatPtr sfp);
+
+NLM_EXTERN void ClearCDSmRNAfeatureIDs (SeqEntryPtr sep);
+
+NLM_EXTERN void AssignCDSmRNAfeatureIDs (SeqEntryPtr sep);
+
+NLM_EXTERN void LinkCDSmRNAbyOverlap (SeqEntryPtr sep);
+
+NLM_EXTERN void LinkCDSmRNAbyProduct (SeqEntryPtr sep);
+
 /* functions to parse [org=Drosophila melanogaster] and [gene=lacZ] from titles */
 /* for example, passing "gene" to SqnTagFind returns "lacZ" */
 
@@ -235,6 +248,8 @@ NLM_EXTERN SqnTagPtr SqnTagParse (CharPtr ttl);
 NLM_EXTERN SqnTagPtr SqnTagFree (SqnTagPtr stp);
 
 NLM_EXTERN CharPtr SqnTagFind (SqnTagPtr stp, CharPtr tag);
+
+NLM_EXTERN void ReadTechFromString (CharPtr str, MolInfoPtr mip);
 
 /* functions to extract BioSource, MolInfo, and Bioseq information from parsed titles */
 
@@ -365,6 +380,7 @@ NLM_EXTERN SeqEntryPtr ReadPhrapFile (FILE *fp);
 /* Internal function to read quality scores, made available to parse separate DNA and quality score files */
 
 NLM_EXTERN SeqGraphPtr ReadPhrapQuality (FILE *fp, BioseqPtr bsp);
+NLM_EXTERN SeqGraphPtr ReadPhrapQualityFC (FileCachePtr fcp, BioseqPtr bsp);
 
 /* SetPhrapContigOrder takes the results of ReadPhrapFile and a string indicating the order
 of contigs, and returns a SeqEntryList in the desired order, with all other contigs removed */
@@ -404,6 +420,14 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
 a delta Bioseq.  The file pointer stops at the next FASTA with a real SeqID. */
 
 NLM_EXTERN BioseqPtr ReadDeltaFasta (FILE *fp, Uint2Ptr entityIDptr);
+
+/* ReadDeltaFastaWithEmptyDefline reads just one delta sequence with an empty
+ * definition line.
+ * Calling function should make sure that fp is set to the start of the line 
+ * with the empty definition line and that there is a "gap sequence ID"
+ * present as the next definition line in the file.
+ */
+NLM_EXTERN BioseqPtr ReadDeltaFastaWithEmptyDefline (FILE *fp, Uint2Ptr entityIDptr);
 
 /* PromoteXrefs expands generef or protref feature cross-references (made by reading a
 feature table with ReadAsnFastaOrFlatFile) to stand-alone gene features or protein features
@@ -541,6 +565,7 @@ NLM_EXTERN Int4 VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElem
 typedef void (*VisitSeqIdFunc) (SeqIdPtr sip, Pointer userdata);
 NLM_EXTERN Int4 VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqIdFunc callback);
 
+NLM_EXTERN Int4 VisitSeqIdsInBioseq (BioseqPtr bsp, Pointer userdata, VisitSeqIdFunc callback);
 NLM_EXTERN Int4 VisitSeqIdsInSeqFeat (SeqFeatPtr sfp, Pointer userdata, VisitSeqIdFunc callback);
 NLM_EXTERN Int4 VisitSeqIdsInSeqAlign (SeqAlignPtr sap, Pointer userdata, VisitSeqIdFunc callback);
 NLM_EXTERN Int4 VisitSeqIdsInSeqGraph (SeqGraphPtr sgp, Pointer userdata, VisitSeqIdFunc callback);
@@ -599,6 +624,7 @@ NLM_EXTERN Int4 DirExplore (
   CharPtr directory,
   CharPtr filter,
   CharPtr suffix,
+  Boolean recurse,
   DirExpProc proc,
   Pointer userdata
 );

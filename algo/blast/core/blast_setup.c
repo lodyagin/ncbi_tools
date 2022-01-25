@@ -1,4 +1,4 @@
-/* $Id: blast_setup.c,v 1.119 2005/05/20 18:20:01 camacho Exp $
+/* $Id: blast_setup.c,v 1.123 2005/08/15 16:11:43 dondosha Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_setup.c,v 1.119 2005/05/20 18:20:01 camacho Exp $";
+    "$Id: blast_setup.c,v 1.123 2005/08/15 16:11:43 dondosha Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_setup.h>
@@ -46,51 +46,43 @@ static char const rcsid[] =
 /* See description in blast_setup.h */
 Int2
 Blast_ScoreBlkKbpGappedCalc(BlastScoreBlk * sbp,
-                        const BlastScoringOptions * scoring_options,
-                        EBlastProgramType program, BlastQueryInfo * query_info)
+                            const BlastScoringOptions * scoring_options,
+                            EBlastProgramType program, 
+                            const BlastQueryInfo * query_info,
+                            Blast_Message** error_return)
 {
     Int2 index = 0;
 
     if (sbp == NULL || scoring_options == NULL)
         return 1;
 
-    /* At this stage query sequences are nucleotide only for blastn */
+    /* Allocate and fill values for a gapped Karlin block, given the scoring
+       options, then copy it for all the query contexts. */
+    for (index = query_info->first_context;
+         index <= query_info->last_context; index++) {
+        Int2 retval = 0;
+        sbp->kbp_gap_std[index] = Blast_KarlinBlkNew();
 
-    if (program == eBlastTypeBlastn) {
-
-        /* for blastn, duplicate the ungapped Karlin 
-           structures for use in gapped alignments */
-
-        for (index = query_info->first_context;
-             index <= query_info->last_context; index++) {
-            if (sbp->kbp_std[index] != NULL) {
-                sbp->kbp_gap_std[index] = Blast_KarlinBlkNew();
-                Blast_KarlinBlkCopy(sbp->kbp_gap_std[index],
-                                    sbp->kbp_std[index]);
-            }
+        /* At this stage query sequences are nucleotide only for blastn */
+        if (program == eBlastTypeBlastn) {
+            retval = 
+                Blast_KarlinBlkNuclGappedCalc(sbp->kbp_gap_std[index],
+                    scoring_options->gap_open, scoring_options->gap_extend, 
+                    scoring_options->reward, scoring_options->penalty, 
+                    sbp->kbp_std[index], error_return);
+        } else {
+            retval = 
+                Blast_KarlinBlkGappedCalc(sbp->kbp_gap_std[index],
+                    scoring_options->gap_open, scoring_options->gap_extend,
+                    scoring_options->decline_align, sbp->name, error_return);
         }
+        if (retval)
+            return retval;
 
-    } else {
-        for (index = query_info->first_context;
-             index <= query_info->last_context; index++) {
-            Int2 retval = 0;
-            sbp->kbp_gap_std[index] = Blast_KarlinBlkNew();
-            retval = Blast_KarlinBlkGappedCalc(sbp->kbp_gap_std[index],
-                                               scoring_options->gap_open,
-                                               scoring_options->gap_extend,
-                                               scoring_options->decline_align,
-                                               sbp->name, NULL);
-            /* FIXME: retval is not expressive enough and the Blast_Message is
-             * being passed NULL, so it's not possible to pass a meaningful
-             * error code to the calling context! */
-            if (retval != 0) {
-                return retval;
-            }
-
-            /* For right now, copy the contents from kbp_gap_std to 
-             * kbp_gap_psi (as in old code - BLASTSetUpSearchInternalByLoc) */
+        /* For right now, copy the contents from kbp_gap_std to 
+         * kbp_gap_psi (as in old code - BLASTSetUpSearchInternalByLoc) */
+        if (program != eBlastTypeBlastn) {
             sbp->kbp_gap_psi[index] = Blast_KarlinBlkNew();
-            
             Blast_KarlinBlkCopy(sbp->kbp_gap_psi[index], 
                                 sbp->kbp_gap_std[index]);
         }
@@ -280,7 +272,7 @@ s_PHIScoreBlkFill(BlastScoreBlk* sbp, const BlastScoringOptions* options,
        sprintf(buffer, "Matrix %s not allowed in PHI-BLAST\n", options->matrix);
    }
    if (status) 
-       Blast_MessageWrite(blast_message, BLAST_SEV_WARNING, 2, 1, buffer);
+       Blast_MessageWrite(blast_message, eBlastSevWarning, 2, 1, buffer);
    else {
        /* Put a copy the Karlin block into the kbp_std array */
        sbp->kbp_std[0] = (Blast_KarlinBlk*) 
@@ -337,7 +329,7 @@ Blast_ScoreBlkMatrixInit(EBlastProgramType program_number,
 
 Int2 
 BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk, 
-                        BlastQueryInfo* query_info, 
+                        const BlastQueryInfo* query_info, 
                         const BlastScoringOptions* scoring_options, 
                         EBlastProgramType program_number, 
                         BlastScoreBlk* *sbpp, 
@@ -373,7 +365,7 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
     } else {
        if ((status = Blast_ScoreBlkKbpUngappedCalc(program_number, sbp, 
                         query_blk->sequence, query_info)) != 0) {
-          Blast_MessageWrite(blast_message, BLAST_SEV_ERROR, 2, 1, 
+          Blast_MessageWrite(blast_message, eBlastSevError, 2, 1, 
              "Could not calculate ungapped Karlin-Altschul parameters due "
              "to an invalid query sequence. Please verify the query "
              "sequence(s) and/or filtering options");
@@ -381,12 +373,9 @@ BlastSetup_ScoreBlkInit(BLAST_SequenceBlk* query_blk,
        }
 
        if (scoring_options->gapped_calculation) {
-          status = Blast_ScoreBlkKbpGappedCalc(sbp, scoring_options, 
-                                           program_number, query_info);
-          if (status) {
-             Blast_MessageWrite(blast_message, BLAST_SEV_ERROR, 2, 1, 
-                                "Unable to initialize scoring block");
-          }
+          status = 
+              Blast_ScoreBlkKbpGappedCalc(sbp, scoring_options, program_number,
+                                          query_info, blast_message);
        }
     }
 
@@ -398,7 +387,7 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
     const BlastScoringOptions *scoring_options,
     const BlastHitSavingOptions *hit_options,
     BLAST_SequenceBlk *query_blk,
-    BlastQueryInfo *query_info,
+    const BlastQueryInfo *query_info,
     double scale_factor,
     BlastSeqLoc **lookup_segments, 
     BlastMaskInformation* maskInfo,
@@ -428,7 +417,7 @@ Int2 BLAST_MainSetUp(EBlastProgramType program_number,
                                               query_info, 
                                               program_number, 
                                               filter_options ? filter_options : qsup_options->filtering_options, 
-                                              &filter_maskloc, 
+                                              & filter_maskloc, 
                                               blast_message);
 
 
@@ -534,13 +523,6 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
    else
       db_num_seqs = eff_len_params->real_num_seqs;
    
-   if (program_number != eBlastTypeBlastn) {
-      if (scoring_options->gapped_calculation) {
-         BLAST_GetAlphaBeta(sbp->name,&alpha,&beta,TRUE, 
-            scoring_options->gap_open, scoring_options->gap_extend);
-      }
-   }
-   
    /* N.B.: the old code used kbp_gap_std instead of the kbp_gap alias (which
     * could be kbp_gap_psi), hence we duplicate that behavior here */
    kbp_ptr = (scoring_options->gapped_calculation ? sbp->kbp_gap_std : sbp->kbp);
@@ -561,17 +543,26 @@ Int2 BLAST_CalcEffLengths (EBlastProgramType program_number,
           * blocks are allocated for each sequence (one per strand), but we
           * only need one of them.
           */
-         if (program_number != eBlastTypeBlastn &&
-             scoring_options->gapped_calculation) {
-            BLAST_ComputeLengthAdjustment(kbp->K, kbp->logK,
-                                          alpha/kbp->Lambda, beta,
-                                          query_length, db_length,
-                                          db_num_seqs, &length_adjustment);
+         if (program_number == eBlastTypeBlastn) {
+             Blast_GetNuclAlphaBeta(scoring_options->reward, 
+                                    scoring_options->penalty, 
+                                    scoring_options->gap_open, 
+                                    scoring_options->gap_extend, 
+                                    sbp->kbp_std[index], 
+                                    scoring_options->gapped_calculation,
+                                    &alpha, &beta);
          } else {
-            BLAST_ComputeLengthAdjustment(kbp->K, kbp->logK, 1/kbp->H, 0,
-                                          query_length, db_length,
-                                          db_num_seqs, &length_adjustment);
-         }        
+             BLAST_GetAlphaBeta(sbp->name, &alpha, &beta,
+                                scoring_options->gapped_calculation, 
+                                scoring_options->gap_open, 
+                                scoring_options->gap_extend, 
+                                sbp->kbp_std[index]);
+         }
+         BLAST_ComputeLengthAdjustment(kbp->K, kbp->logK,
+                                       alpha/kbp->Lambda, beta,
+                                       query_length, db_length,
+                                       db_num_seqs, &length_adjustment);
+
          if (eff_len_options->searchsp_eff)
             effective_search_space = eff_len_options->searchsp_eff;
          else
@@ -712,32 +703,33 @@ BlastSeqLoc_RestrictToInterval(BlastSeqLoc* *mask, Int4 from, Int4 to)
 }
 
 Int2 
-Blast_SetPHIPatternInfo(EBlastProgramType program, 
-                        SPHIPatternSearchBlk* pattern_blk, 
-                        BLAST_SequenceBlk* query, BlastSeqLoc* lookup_segments, 
-                        BlastQueryInfo* query_info)
+Blast_SetPHIPatternInfo(EBlastProgramType            program,
+                        const SPHIPatternSearchBlk * pattern_blk,
+                        const BLAST_SequenceBlk    * query,
+                        const BlastSeqLoc          * lookup_segments,
+                        BlastQueryInfo             * query_info)
 {
     const Boolean kIsNa = (program == eBlastTypePhiBlastn);
-
+    
     ASSERT(Blast_ProgramIsPhiBlast(program));
     ASSERT(query_info && pattern_blk);
-
+    
     query_info->pattern_info = SPHIQueryInfoNew();
     
     /* If pattern is not found in query, return failure status. */
     if (!PHIGetPatternOccurrences(pattern_blk, query, lookup_segments, kIsNa,
                                   query_info->pattern_info))
         return -1;
-
+    
     /* Save pattern probability, because it needs to be passed back to
        formatting stage, where lookup table will not be available. */
     query_info->pattern_info->probability = pattern_blk->patternProbability;
-
+    
     /* Save minimal pattern length in the length adjustment field, because 
        that is essentially its meaning. */
     query_info->contexts[0].length_adjustment = 
         pattern_blk->minPatternMatchLength;
-
+    
     return 0;
 }
 

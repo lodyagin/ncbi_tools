@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_heapmgr.c,v 6.13 2005/05/02 16:12:32 lavr Exp $
+/*  $Id: test_ncbi_heapmgr.c,v 6.14 2005/07/11 18:24:46 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -73,7 +73,7 @@ int main(void)
 
     CORE_SetLOGFILE(stderr, 0/*false*/);
     for (j = 1; j <= 3; j++) {
-        g_NCBI_ConnectRandomSeed = (int) time(0) + NCBI_CONNECT_SRAND_ADDENT;
+        g_NCBI_ConnectRandomSeed = (int) time(0) + NCBI_CONNECT_SRAND_ADDEND;
         srand(g_NCBI_ConnectRandomSeed);
         CORE_LOGF(eLOG_Note, ("Creating heap %d", j));
         if (!(heap = HEAP_Create(0, 0, 4096, s_Expand, 0)))
@@ -166,6 +166,9 @@ int main(void)
 /*
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_heapmgr.c,v $
+ * Revision 6.14  2005/07/11 18:24:46  lavr
+ * Spell ADDEND
+ *
  * Revision 6.13  2005/05/02 16:12:32  lavr
  * Use global random seed
  *

@@ -34,6 +34,12 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.107  2005/08/04 15:54:41  kans
+* local variable defined before ASSERT in s_addTweakToOtherOptions for strict C compliance (CodeWarrior Carbon complained)
+*
+* Revision 1.106  2005/08/04 15:40:33  madden
+* Add static functions s_parseOtherOptions and s_addTweakToOtherOptions to allow composition-based info to be passed
+*
 * Revision 1.105  2004/01/27 20:53:12  dondosha
 * Value of no_traceback megablast option is now Uint1 instead of Boolean
 *
@@ -728,6 +734,34 @@ BlastFini (BlastNet3Hptr bl3hptr)
     return retval;
 }
 
+void static
+s_addTweakToOtherOptions(Uint1 tweak_parameters, BlastParametersPtr parameters)
+{
+        const Int4 kBuffSize=128;
+        ASSERT(parameters);
+
+        if (tweak_parameters > 0)
+        {
+             char* other_options = NULL;
+             Int4 len = 0;
+             if (parameters->other_options && StringLen(parameters->other_options) > 0)
+             {
+                 len = 1 + StringLen(parameters->other_options);
+                 other_options = MemNew((len+kBuffSize)*sizeof(char));
+                 StrCpy(other_options, parameters->other_options);
+                 MemFree(parameters->other_options);
+             }
+             else
+             {
+                 other_options = MemNew((kBuffSize)*sizeof(char));
+             }
+             sprintf(other_options+len, "t=%ld", (long) tweak_parameters);
+             parameters->other_options = other_options;
+        }
+           
+        return;
+}
+
 NLM_EXTERN BlastParametersPtr LIBCALL
 BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
 
@@ -799,7 +833,11 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
             parameters->required_end = options->required_end;
 
         parameters->is_rps_blast = options->is_rps_blast;
+
         parameters->tweak_parameters = options->tweak_parameters;
+        if (options->tweak_parameters > 0)
+             s_addTweakToOtherOptions(options->tweak_parameters, parameters);
+
         parameters->smith_waterman = options->smith_waterman;
         parameters->is_megablast = options->is_megablast_search;
         parameters->query_lcase_mask = (ValNodePtr) options->query_lcase_mask;
@@ -1420,7 +1458,6 @@ SeedBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns,
     BlastSearchPtr search = NULL;
     BlastResponsePtr response = NULL;
     ValNodePtr node, vnp = NULL;
-    SeqAlignPtr seqalign=NULL;
     /* Uint1 err_id; */
     BlastPhialignPtr bphp = NULL;
     
@@ -1489,7 +1526,6 @@ SeedBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program,
     Boolean options_allocated = FALSE;
     CharPtr params_buffer;
     Int2 status;
-    SeqAlignPtr seqalign = NULL;
     TxDfDbInfoPtr txdbinfo;
     ValNodePtr descr, mask;
 
@@ -2659,6 +2695,33 @@ TraditionalBlastReportLocExtra(SeqLocPtr slp, BLAST_OptionsBlkPtr options, Blast
 	return TraditionalBlastReportEngine(slp, NULL, options, bl3hp, program, database, html, outfp, verbose, print_options, align_options, number_of_descriptions, number_of_alignments, number_of_hits, overview);
 }
 
+/* Fills in other options based upon "other_options" string in BlastParametersPtr. */
+
+static void
+s_parseOtherOptions(char* other_options, BLAST_OptionsBlkPtr options)
+{
+
+    char* opt_str = "t";
+    char* *values;
+    Int4 index;
+
+    ASSERT(options);    
+
+    if (other_options == NULL)
+        return;
+
+    if(!BlastParseInputString(other_options, opt_str, &values, NULL))
+            return;
+   
+    index = BlastGetLetterIndex(opt_str, 't');
+
+    if(values[index] != NULL) {
+          options->tweak_parameters = atoi(values[index]);
+    }
+
+    return;
+}
+
 
 /*
         Converst the BlastParametersPtr (used by network service) to
@@ -2766,7 +2829,10 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                     options->required_end = parameters->required_end;
                 
         	options->is_rps_blast = parameters->is_rps_blast;
-                options->tweak_parameters = parameters->tweak_parameters;
+                /* this value may be overwritten by the call to s_parseOtherOptions
+                  if different information is contained there. */
+                options->tweak_parameters = parameters->tweak_parameters; 
+                
                 options->smith_waterman = parameters->smith_waterman;
 		options->is_megablast_search = parameters->is_megablast;
                 options->query_lcase_mask = 
@@ -2785,6 +2851,9 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                     (options->gap_open > 0 || options->gap_extend > 0)) {
                    options->mb_use_dyn_prog = TRUE;
                 }
+
+                /* Parses out tweak_parameters. */
+                s_parseOtherOptions(parameters->other_options, options);
         }
 
 	if ((status = BLASTOptionValidateEx(options, program, error_return))) {

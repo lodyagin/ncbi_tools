@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: ncbisam.c,v 6.30 2003/05/30 17:25:37 coulouri Exp $";
+static char const rcsid[] = "$Id: ncbisam.c,v 6.31 2005/07/28 14:57:10 coulouri Exp $";
 
-/* $Id: ncbisam.c,v 6.30 2003/05/30 17:25:37 coulouri Exp $
+/* $Id: ncbisam.c,v 6.31 2005/07/28 14:57:10 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: ncbisam.c,v 6.30 2003/05/30 17:25:37 coulouri 
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.31  2005/07/28 14:57:10  coulouri
+* remove dead code
+*
 * Revision 6.30  2003/05/30 17:25:37  coulouri
 * add rcsid
 *
@@ -1346,18 +1349,6 @@ static ISAMErrorCode ISAMInitSearch(ISAMObjectPtr object)
     else
         data->KeySamples = (Uint4Ptr)(FileInfo + 9);
 
-#if 0
-    /* CC:This causes a file descriptor leak and it is not being used */
-    if(data->PageSize != MEMORY_ONLY_PAGE_SIZE) { 
-        /* Special case of memory-only index */
-        if (!(data->db_fd = FileOpen(data->DBFileName, "rb"))) {
-            ErrLogPrintf("Unable to open NISAM DB file %s for reading!\n",
-                         data->DBFileName);
-            return ISAMBadFileName;
-        }
-    }
-#endif
-
     data->initialized = TRUE;
     return ISAMNoError;
 }
@@ -1515,7 +1506,7 @@ ISAMErrorCode NISAMSearch(ISAMObjectPtr object,
     ISAMDataPtr data;
     Int4 Start = 0, Stop, SampleNum;
     Int4 NumElements, *KeyPage, *KeyPageStart;
-    Int4 first, last, current, index, type;
+    Int4 first, last, current, type;
     Boolean NoData;
     NISAMKeyDataPtr KeyDataPage=NULL, KeyDataSamples, KeyDataPageStart;
     Uint4Ptr KeySamples;

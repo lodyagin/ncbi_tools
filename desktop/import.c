@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.49 $
+* $Revision: 6.50 $
 *
 * File Description: 
 *
@@ -49,6 +49,7 @@
 #include <gather.h>
 #include <subutil.h>    /* TOPOLOGY_xxx definitions */
 #include <explore.h>
+#include <toasn3.h>
 
 #define IMPORT_PAGE      0
 #define ENUM_PAGE        0

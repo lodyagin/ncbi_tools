@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.338 $
+* $Revision: 6.345 $
 *
 * File Description: 
 *
@@ -214,7 +214,9 @@ static Boolean OrgScanGatherFunc (GatherContextPtr gcp)
 
   if (orp == NULL && biop != NULL) {
     orp = biop->org;
-    mito = (Boolean) (biop->genome == 4 || biop->genome == 5);
+    mito = (Boolean) (biop->genome == GENOME_kinetoplast ||
+                      biop->genome == GENOME_mitochondrion ||
+                      biop->genome == GENOME_hydrogenosome);
     doMito = TRUE;
     /* osp->mito = (Boolean) (biop->genome == 4 || biop->genome == 5); */
   }
@@ -1674,6 +1676,7 @@ static Boolean GeneExtendFunc (GatherContextPtr gcp)
   return TRUE;
 }
 
+/*
 static Boolean ExtendGene (GeneRefPtr grp, SeqEntryPtr nsep, SeqLocPtr slp)
 
 {
@@ -1710,6 +1713,7 @@ static Boolean ExtendGene (GeneRefPtr grp, SeqEntryPtr nsep, SeqLocPtr slp)
   GatherSeqEntry (nsep, (Pointer) &gel, GeneExtendFunc, &gs);
   return gel.rsult;
 }
+*/
 
 NLM_EXTERN void SetEmptyGeneticCodes (SeqAnnotPtr sap, Int2 genCode)
 
@@ -1745,6 +1749,7 @@ NLM_EXTERN void PromoteXrefsExEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID,
                                   Boolean remove_trailingX, Boolean gen_prod_set, Boolean force_local_id)
 
 {
+  Int2                 adv;
   ByteStorePtr         bs;
   BioseqSetPtr         bssp;
   Char                 ch;
@@ -1913,15 +1918,21 @@ NLM_EXTERN void PromoteXrefsExEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID,
             sprintf (lcl, "lcl|%s", id);
             sip = SeqIdParse (lcl);
           } else {
-            ptr = StringChr (id, '.');
-            if (ptr != NULL) {
-              *ptr = '\0';
-              ptr++;
-              if (sscanf (ptr, "%ld", &val) == 1) {
-                version = (Uint4) val;
+            adv = ValidateAccnDotVer (id);
+            if (adv == 0 || adv == -5) {
+              ptr = StringChr (id, '.');
+              if (ptr != NULL) {
+                *ptr = '\0';
+                ptr++;
+                if (sscanf (ptr, "%ld", &val) == 1) {
+                  version = (Uint4) val;
+                }
               }
+              sip = SeqIdFromAccession (id, version, NULL);
+            } else {
+              sprintf (lcl, "lcl|%s", id);
+              sip = SeqIdParse (lcl);
             }
-            sip = SeqIdFromAccession (id, version, NULL);
           }
         }
         if (sip != NULL || sfp->idx.subtype == FEATDEF_mRNA) {
@@ -2118,15 +2129,21 @@ NLM_EXTERN void PromoteXrefsExEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID,
                       sprintf (lcl, "lcl|%s", id);
                       sip = SeqIdParse (lcl);
                     } else {
-                      ptr = StringChr (id, '.');
-                      if (ptr != NULL) {
-                        *ptr = '\0';
-                        ptr++;
-                        if (sscanf (ptr, "%ld", &val) == 1) {
-                          version = (Uint4) val;
+                      adv = ValidateAccnDotVer (id);
+                      if (adv == 0 || adv == -5) {
+                        ptr = StringChr (id, '.');
+                        if (ptr != NULL) {
+                          *ptr = '\0';
+                          ptr++;
+                          if (sscanf (ptr, "%ld", &val) == 1) {
+                            version = (Uint4) val;
+                          }
                         }
+                        sip = SeqIdFromAccession (id, version, NULL);
+                      } else {
+                        sprintf (lcl, "lcl|%s", id);
+                        sip = SeqIdParse (lcl);
                       }
-                      sip = SeqIdFromAccession (id, version, NULL);
                     }
                   }
                   mbsp = BioseqFind (sip);
@@ -2169,15 +2186,21 @@ NLM_EXTERN void PromoteXrefsExEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID,
                     sprintf (lcl, "lcl|%s", id);
                     sip = SeqIdParse (lcl);
                   } else {
-                    ptr = StringChr (id, '.');
-                    if (ptr != NULL) {
-                      *ptr = '\0';
-                      ptr++;
-                      if (sscanf (ptr, "%ld", &val) == 1) {
-                        version = (Uint4) val;
+                    adv = ValidateAccnDotVer (id);
+                    if (adv == 0 || adv == -5) {
+                      ptr = StringChr (id, '.');
+                      if (ptr != NULL) {
+                        *ptr = '\0';
+                        ptr++;
+                        if (sscanf (ptr, "%ld", &val) == 1) {
+                          version = (Uint4) val;
+                        }
                       }
+                      sip = SeqIdFromAccession (id, version, NULL);
+                    } else {
+                      sprintf (lcl, "lcl|%s", id);
+                      sip = SeqIdParse (lcl);
                     }
-                    sip = SeqIdFromAccession (id, version, NULL);
                   }
                 }
                 if (sip != NULL) {
@@ -3156,7 +3179,6 @@ static Boolean HandledGBQualOnCDS (SeqFeatPtr sfp, GBQualPtr gbq, ValNodePtr PNT
   CdRegionPtr     crp;
   Uint1           frame;
   ValNodePtr      gcp;
-  Boolean         pos_range = FALSE;
   ValNodePtr      prev;
   SeqFeatPtr      prot;
   ProtRefPtr      prp = NULL;
@@ -3871,7 +3893,8 @@ static void CleanupFeatureGBQuals (SeqFeatPtr sfp, Boolean isEmblOrDdbj)
           }
         }
       }
-    } else if (StringICmp (gbq->qual, "note") == 0) {
+    } else if (StringICmp (gbq->qual, "note") == 0 ||
+               StringICmp (gbq->qual, "notes") == 0) {
       if (sfp->comment == NULL) {
         sfp->comment = gbq->val;
         gbq->val = NULL;
@@ -7253,6 +7276,7 @@ NLM_EXTERN void CleanUpSeqFeat (
   CharPtr       str;
   Uint1         strand;
   tRNAPtr       trp;
+  SeqFeatXrefPtr  xref, next, PNTR prevlink;
 
   if (sfp == NULL) return;
   crp = NULL;
@@ -7396,6 +7420,22 @@ NLM_EXTERN void CleanUpSeqFeat (
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
   hasNulls = LocationHasNullsBetween (sfp->location);
   sfp->partial = (sfp->partial || partial5 || partial3 || hasNulls);
+
+  prevlink = (SeqFeatXrefPtr PNTR) &(sfp->xref);
+  xref = sfp->xref;
+  while (xref != NULL) {
+    next = xref->next;
+
+    if (xref->id.choice == 0 && xref->data.choice == 0) {
+      *prevlink = xref->next;
+      xref->next = NULL;
+      MemFree (xref);
+    } else {
+      prevlink = (SeqFeatXrefPtr PNTR) &(xref->next);
+    }
+
+    xref = next;
+  }
 }
 
 static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publist)
@@ -8794,35 +8834,18 @@ NLM_EXTERN Uint2 FindFeatFromFeatDefType (Uint2 subtype)
 NLM_EXTERN SeqIdPtr MakeSeqID (CharPtr str)
 
 {
-  long int     num;
-  ObjectIdPtr  oid;
-  SeqIdPtr     sip;
-  CharPtr      tmp;
+  Char      buf [64];
+  SeqIdPtr  sip;
 
   sip = NULL;
   if (str != NULL && *str != '\0') {
     if (StringChr (str, '|') != NULL) {
       sip = SeqIdParse (str);
     } else {
-      oid = ObjectIdNew ();
-      if (oid != NULL) {
-        for (tmp = str; *tmp != '\0'; tmp++) {
-          if (! IS_DIGIT (*tmp)) {
-            oid->str = StringSave (str);
-            break;
-          }
-        }
-        if (oid->str == NULL) {
-          sscanf (str, "%ld", &num);
-          oid->id = (Int4) num;
-        }
-        sip = ValNodeNew (NULL);
-        if (sip != NULL) {
-          sip->choice = SEQID_LOCAL;
-          sip->data.ptrvalue = (Pointer) oid;
-        } else {
-          ObjectIdFree (oid);
-        }
+      if (StringLen (str) < 60) {
+        StringCpy (buf, "lcl|");
+        StringCat (buf, str);
+        sip = SeqIdParse (buf);
       }
     }
   }
@@ -9168,6 +9191,20 @@ NLM_EXTERN Int4 VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqId
         break;
     }
     slp = slp->next;
+  }
+
+  return index;
+}
+
+NLM_EXTERN Int4 VisitSeqIdsInBioseq (BioseqPtr bsp, Pointer userdata, VisitSeqIdFunc callback)
+
+{
+  Int4  index = 0;
+
+  if (bsp == NULL) return index;
+
+  if (bsp->id != NULL) {
+    index += VisitSeqIdList (bsp->id, userdata, callback);
   }
 
   return index;

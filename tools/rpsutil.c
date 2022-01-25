@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsutil.c,v 6.73 2005/01/24 21:17:36 camacho Exp $";
+static char const rcsid[] = "$Id: rpsutil.c,v 6.74 2005/07/28 14:57:10 coulouri Exp $";
 
-/* $Id: rpsutil.c,v 6.73 2005/01/24 21:17:36 camacho Exp $
+/* $Id: rpsutil.c,v 6.74 2005/07/28 14:57:10 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: rpsutil.c,v 6.73 2005/01/24 21:17:36 camacho E
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.73 $
+* $Revision: 6.74 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.74  2005/07/28 14:57:10  coulouri
+* remove dead code
+*
 * Revision 6.73  2005/01/24 21:17:36  camacho
 * 1. Changed implementation of RPSBlastResultHspScoreCmp to have the same
 *    tie-breakers as score_compare_hsps
@@ -614,43 +617,10 @@ RPSequencePtr RPSGetSequence(RPSInfoPtr rpsinfo, Int4 seqnum)
 static RPSequencePtr RPSGetBIGSequence(RPSInfoPtr rpsinfo, BioseqPtr PNTR bsp_out)
 {
     RPSequencePtr rpsp;
-#if 0
-    ValNodePtr vnp;
-    BioseqPtr bsp;
-#endif
 
     rpsp = RPSGetSequenceEx(rpsinfo, 0, TRUE);
     
     /* Creating BIG Bioseq - for testing only */
-#if 0
-    bsp = BioseqNew();
-    
-    bsp->mol = Seq_mol_aa;
-    bsp->seq_data_type = Seq_code_ncbistdaa;
-    bsp->repr = Seq_repr_raw;
-    bsp->length = rpsp->seqlen;
-    
-    bsp->seq_data = BSNew(1024);
-    BSWrite(bsp->seq_data, rpsp->sequence, bsp->length);
-    
-    /* BIG SeqId */
-    /* bsp->id = SeqIdDup(rpsp->seqid); */
-
-    bsp->id = MakeNewProteinSeqId (NULL, NULL);
-    
-    SeqIdSetFree(rpsp->seqid);
-    rpsp->seqid = SeqIdDup(bsp->id);
-
-    /* BIG Description */
-    vnp = SeqDescrNew(NULL);
-    vnp->choice = Seq_descr_title;
-    vnp->data.ptrvalue = StringSave (rpsp->description);
-    bsp->descr = vnp;    
-    
-    SeqMgrAddToBioseqIndex (bsp);
-    
-    *bsp_out = bsp;
-#endif
     return rpsp;
 }
 
@@ -810,34 +780,6 @@ static void RPSapSortFree(RPSapSortPtr ssp)
     return;
 }
 
-static Boolean RPSReturnQuery(BlastSearchBlkPtr search, BioseqPtr query_bsp,
-                              Uint1Ptr query_seq_start)
-{
-    Int4 query_length;
-  
-    if(search == NULL || query_bsp == NULL)
-        return FALSE;
-
-    SeqIdSetFree(search->query_id);
-    search->query_id = SeqIdDup(query_bsp->id);
-
-    search->query_slp = SeqLocFree(search->query_slp);
-    query_length = query_bsp->length;
-    
-    ValNodeAddPointer(&search->query_slp, SEQLOC_WHOLE, 
-                      SeqIdDup(SeqIdFindBest(query_bsp->id, SEQID_GI)));
-    
-    BlastSequenceAddSequence(search->context[0].query, NULL, query_seq_start, 
-                             query_length, query_length, 0);
-    
-    search->context[0].query_allocated = TRUE;    
-    
-    search->positionBased = FALSE; /* Now query is simple sequence back */
-    search->sbp->posMatrix = NULL;
-    
-    return TRUE;
-}
-
 static Boolean RPSubstituteQueryLookup(BlastSearchBlkPtr search, 
                                        RPSequencePtr rpseq, Boolean update_lookup)
 {
@@ -916,27 +858,6 @@ static Boolean RPSubstituteQueryLookup(BlastSearchBlkPtr search,
     return TRUE;
 }
 
-static void RPSLookupCleanUp(LookupTablePtr lookup)
-{
-    MemFree(lookup->pv_array);
-    lookup->pv_array = NULL;
-
-    MemFree(lookup->mod_lt);
-    lookup->mod_lt = NULL;
-
-    MemFree(lookup->mod_lookup_table_memory);
-    lookup->mod_lookup_table_memory = NULL;
-    
-    /* lookup_deallocate_memory(lookup); */
-    /* lookup->mem_struct       = NULL;
-       lookup->mem_struct_start = NULL; */
-
-    lookup->num_pos_added = 0;
-    lookup->num_unique_pos_added = 0;
-    lookup->mod_lookup_table_size = 0;
-
-    return;
-}
 static void RPSExchangeInt(Int4 *a, Int4 *b)
 {
     Int4 value;
@@ -1117,45 +1038,6 @@ static Nlm_FloatHi getEvalueFromSeqAlign(SeqAlignPtr thisSeqAlign)
         return(10.0);
     else
         return((Nlm_FloatHi) (thisScorePtr->value.realvalue));
-}
-
-
-static Boolean RPSUpdateResult(BlastSearchBlkPtr search, ReadDBFILEPtr rdfp)
-{
-    BLASTResultsStructPtr result_struct, result_struct_new;
-    Int4 index;
-    BLASTResultHitlistPtr new_result;
-    
-    result_struct = search->result_struct;
-
-    if(result_struct->hitlist_count == 0) /* No brain no pain */
-        return TRUE;
-    
-    result_struct_new = BLASTResultsStructNew(search->result_size, search->pbp->max_pieces, search->pbp->hsp_range_max);
-    
-    if(result_struct->hitlist_count != 1) {
-        ErrPostEx(SEV_ERROR, 0,0, "RPSUpdateResult: This function works only for hitlist_count == 1");
-        return FALSE;
-    }
-
-    /* First we have to update coordinates */
-    RPSUpdateCoordinates(rdfp, result_struct->results[0], TRUE);
-    
-    /* Now we will extract correct "results" one by one */
-    for(index = 0; index < result_struct_new->hitlist_max; index++) {
-        
-        new_result = RPSExtractNewResult(result_struct->results[0]);
-        if(new_result == NULL)
-            break;
-        
-        result_struct_new->results[index] = new_result;
-        result_struct_new->hitlist_count++;
-    }
-
-    search->result_struct = result_struct_new;
-    BLASTResultsStructDelete(result_struct);
-
-    return TRUE;
 }
 
 /*
@@ -1343,7 +1225,7 @@ int RPSCalcEValue(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
       /* scalingFactor should only be different than one (or zero) if
 	 the aux file was read and rpsinfo->karlinK was filled in. */
     }
-    /* #ifdef DEALLOC_MATRIX *
+    /* #ifdef DEALLOC_MATRIX */
     /* #0.5.2 */
     if (rpseq->copyMatrix) {
       posMatrix = search->sbp->posMatrix;
@@ -1590,62 +1472,6 @@ static SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinf
 
     return seqalign;
 }
-#if 0
-void RRRPrintStatistics(RPSequencePtr rpseq)
-{
-    ModLAEntry *mod_lt;
-    Int4 i, index, zero_count = 0;
-    FILE *fd;
-    Int4 sss[120], sss1[100];
-
-    mod_lt =  rpseq->mod_lt;
-    
-    fd = FileOpen("statistics.out", "w");
-    memset(sss, 0, sizeof(sss));
-    memset(sss1, 0, sizeof(sss1));
-
-    for(i = 0; i < RPS_ARRAY_SIZE; i++) {
-        fprintf(fd, "%d %d\n", i, mod_lt[i].num_used);
-
-        if(mod_lt[i].num_used != 0) {
-            index = mod_lt[i].num_used / 100;
-            
-            if(index == 0)
-                sss1[mod_lt[i].num_used]++;
-            
-            sss[index] ++;
-        } else {
-            zero_count++;
-        }
-    }
-
-    FileClose(fd);
-
-    fd = FileOpen("distribution.out", "w");
-
-    for(i=0; i < 120; i++) {
-
-        fprintf(fd, "%d %d\n", i, sss[i]);
-        
-    }
-
-    FileClose(fd);
-    printf("Zero count = %d\n", zero_count);
-
-    fd = FileOpen("distribution1.out", "w");
-    
-    for(i=0; i < 100; i++) {
-        
-        fprintf(fd, "%d %d\n", i, sss1[i]);
-        
-    }
-
-    FileClose(fd);
-    
-    exit(1);
-    return;
-}
-#endif
 
 /* \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ */
 #ifdef USE_REMOVED
@@ -1866,7 +1692,7 @@ SeqAlignPtr RPSBlastSearchEx (BlastSearchBlkPtr search,
 {
     Int2 status;
     Int4 index;
-    SeqAlignPtr seqalign=NULL, head = NULL, seqalign_var = NULL;
+    SeqAlignPtr seqalign=NULL;
     SeqPortPtr spp;
     Uint1Ptr subject_seq, subject_seq_start;
     Uint1 residue;
@@ -2005,7 +1831,7 @@ SeqAlignPtr RPSBlastSearchLight (BlastSearchBlkPtr search,
 				 BLASTResultsStructPtr   ready_result_struct){
     Int2 status;
     Int4 index;
-    SeqAlignPtr seqalign=NULL, head = NULL, seqalign_var = NULL;
+    SeqAlignPtr seqalign=NULL;
     SeqPortPtr spp;
     Uint1Ptr subject_seq, subject_seq_start;
     Uint1 residue;
@@ -2158,7 +1984,7 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
 {
     Int2 status;
     Int4 index;
-    SeqAlignPtr seqalign=NULL, head = NULL, seqalign_var = NULL;
+    SeqAlignPtr seqalign=NULL;
     SeqPortPtr spp;
     Uint1Ptr subject_seq, subject_seq_start;
     Uint1 residue;
@@ -2735,96 +2561,6 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
 
     return TRUE;
 }
-
-/* These functions may be never be used ... */
-static Int4Ptr PNTR RPSReadPSMatrix(CharPtr filename, Int4Ptr mat_len)
-{
-    Int4Ptr PNTR psmatrix;
-    FILE *fd;
-    Int4 i, length, num, bytes;
-    
-    if((length = FileLength(filename)) <= 0)
-        return NULL;
-    
-    num = RPS_ALPHABET_SIZE*sizeof(Uint4);
-    
-    if(length%num) {
-        ErrPostEx(SEV_ERROR, 0,0, "Invalid size of the matrix %s", filename);
-        return NULL;
-    }
-    
-    if((fd = FileOpen(filename, "r")) == NULL)
-        return NULL;
-
-    *mat_len = length/num;
-    
-    psmatrix = Nlm_Malloc((*mat_len + 1) * sizeof(Int4Ptr));
-    
-    for(i = 0 ; i < *mat_len; i++ ){
-        psmatrix[i] = MemNew(RPS_ALPHABET_SIZE * sizeof(Int4));
-        
-        if((bytes = FileRead(psmatrix[i], 1, num, fd)) != num) {
-            ErrPostEx(SEV_ERROR, 0,0, 
-                      "Failure to read matrix from %s", filename);
-            MemFree(psmatrix);
-            return NULL;
-        }
-    }
-    
-    psmatrix[*mat_len] = MemNew(RPS_ALPHABET_SIZE * sizeof(Int4));
-    for(i = 0; i < RPS_ALPHABET_SIZE; i++)
-        psmatrix[*mat_len][i] = -INT2_MAX;
-    
-    *mat_len = length/num;
-
-    return psmatrix;
-}
-static BioseqPtr RPSGetBioseqFromMatrix(Int4Ptr PNTR psmatrix, Int4 length)
-{
-    BioseqPtr bsp;
-    CharPtr buffer;
-    Int4 i, j, score, old_score, j_max;
-    ValNodePtr     vnp = NULL;
-
-    buffer = MemNew(length);
-
-    old_score = -100; j_max = 0;
-    for(i = 0; i < length; i++) {
-        for(j = 0; j < RPS_ALPHABET_SIZE; j++) {
-            score = psmatrix[i][j];
-            if(score > old_score)
-                j_max = j;
-        }
-        buffer[i] = j_max;
-    }
-
-    
-    if((bsp = BioseqNew()) == NULL) {
-        ErrPostEx(SEV_ERROR, 0,0, "Failure to allocate Bioseq");
-        MemFree(buffer);
-        return NULL;
-    }
-    
-    bsp->mol = Seq_mol_aa;
-    bsp->seq_data_type = Seq_code_ncbistdaa;
-    bsp->repr = Seq_repr_raw;
-
-    bsp->id = MakeNewProteinSeqId (NULL, NULL);
-
-    if((vnp = SeqDescrNew(NULL)) != NULL) {
-        vnp->choice = Seq_descr_title;
-        vnp->data.ptrvalue = StringSave ("This is generated sequence");
-    }
-    bsp->descr = vnp;
-    bsp->length = length;
- 
-    BSWrite(bsp->seq_data, buffer, length);
-    
-    SeqMgrAddToBioseqIndex (bsp);
-    
-    return bsp;  
-}
-/* End of functions may be never be used ... */
 
 static UserObjectPtr CreateCddUserObject (void)
 

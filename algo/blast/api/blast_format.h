@@ -1,4 +1,4 @@
-/* $Id: blast_format.h,v 1.37 2005/06/02 20:41:52 dondosha Exp $
+/* $Id: blast_format.h,v 1.39 2005/06/21 16:34:42 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -97,19 +97,9 @@ typedef struct BlastFormattingOptions {
    Boolean html;                /**< Create an HTML output? */
    Int4 number_of_descriptions; /**< Number of descriptions to show. */
    Int4 number_of_alignments;   /**< Number of alignments to show. */
-   Boolean ungapped;            /**< Should this be here????? */
    Boolean is_megablast;        /**< Is this a megablast search? Needed for
                                    determination of which reference to use. */
 } BlastFormattingOptions;
-
-/** Allocate and initialize the formatting information structure.
- * @param program Number of the BLAST program [in]
- * @param align_view What kind of formatted output to show? [in]
- * @param format_options_ptr The initialized structure [out]
-*/
-Int2 BlastFormattingOptionsNew(EBlastProgramType program,
-                               EAlignView align_view,
-                               BlastFormattingOptions** format_options_ptr); 
 
 /** Structure containing all information necessary for producing the
  * formatted BLAST output. 

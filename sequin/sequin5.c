@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.404 $
+* $Revision: 6.422 $
 *
 * File Description:
 *
@@ -1382,6 +1382,66 @@ void PromoteToWorstIDProc (IteM i)
   oldscope = SeqEntrySetScope (sep);
 
   GatherObjectsInEntity (bfp->input_entityID, 0, NULL, PromoteWorstIDsProc, NULL, NULL);
+
+  SeqEntrySetScope (oldscope);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void ChangeGBNameIDs (SeqIdPtr sip, Pointer userdata)
+
+{
+  Char          buf [80];
+  ObjectIdPtr   oip;
+  TextSeqIdPtr  tsip;
+
+  if (sip == NULL || sip->choice != SEQID_GENBANK) return;
+  tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+  if (tsip == NULL) return;
+  if (tsip->accession != NULL || StringHasNoText (tsip->name)) return;
+  StringNCpy (buf, tsip->name, sizeof (buf));
+  TrimSpacesAroundString (buf);
+  oip = ObjectIdNew ();
+  if (oip == NULL) return;
+  oip->str = StringSave (buf);
+  sip->choice = SEQID_LOCAL;
+  sip->data.ptrvalue = (Pointer) oip;
+  TextSeqIdFree (tsip);
+}
+
+static void ChangeGBNameBioseq (BioseqPtr bsp, Pointer userdata)
+
+{
+  VisitSeqIdsInBioseq (bsp, userdata, ChangeGBNameIDs);
+  SeqMgrReplaceInBioseqIndex (bsp);
+}
+
+static void ChangeGBNameFeature (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  VisitSeqIdsInSeqFeat (sfp, userdata, ChangeGBNameIDs);
+}
+
+void ChangeGenBankNameToLocal (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  oldscope, sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  oldscope = SeqEntrySetScope (sep);
+
+  VisitBioseqsInSep (sep, NULL, ChangeGBNameBioseq);
+  VisitFeaturesInSep (sep, NULL, ChangeGBNameFeature);
 
   SeqEntrySetScope (oldscope);
 
@@ -2923,14 +2983,18 @@ static GbFeatName EditQualifierList[] = {
  {"label", Class_token},
  {"map", Class_text},
  {"mod_base", Class_token}, {"note", Class_note},
- {"number", Class_number}, {"organism", Class_text},
+ {"number", Class_number}, 
+#ifdef INTERNAL_NCBI_SEQUIN
+ {"old_locus_tag", Class_text},
+#endif
+ {"organism", Class_text},
  {"partial", Class_none}, {"PCR_conditions", Class_text},
  {"phenotype", Class_text},
  {"plasmid", Class_text}, {"product", Class_text},
  {"pseudo", Class_none},
  {"rearranged", Class_none}, { "replace", Class_text},
  {"rpt_family", Class_text}, {"rpt_type", Class_rpt},
- { "rpt_unit", Class_token},
+ {"rpt_unit", Class_token}, {"rpt_unit_seq", Class_token}, {"rpt_unit_range", Class_token},
  {"sequenced_mol", Class_text},
  {"standard_name", Class_text},
  {"translation", Class_text}, {"transl_except", Class_pos_aa},
@@ -2973,7 +3037,7 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Dev-stage",             112},
   {"Dosage",                 20},
   {"Ecotype",                27},
-  {"Endogenous_virus-name", 125},
+  {"Endogenous-virus-name", 125},
   {"Environmental-sample",  127},
   {"Forma",                  25},
   {"Forma-specialis",        26},
@@ -3048,7 +3112,7 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_remove_alistX)
   {"Dev-stage",             112},
   {"Dosage",                 20},
   {"Ecotype",                27},
-  {"Endogenous_virus-name", 125},
+  {"Endogenous-virus-name", 125},
   {"Environmental-sample",  127},
   {"Forma",                  25},
   {"Forma-specialis",        26},
@@ -3122,7 +3186,7 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_fasta_alistX)
   {"Dev-stage",             112},
   {"Dosage",                 20},
   {"Ecotype",                27},
-  {"Endogenous_virus-name", 125},
+  {"Endogenous-virus-name", 125},
   {"Forma",                  25},
   {"Forma-specialis",        26},
   {"Frequency",             113},
@@ -3177,6 +3241,7 @@ static ENUM_ALIST(biosource_genome_alistX)
   {"Endogenous-virus",    19},
   {"Extrachromosomal",     8},
   {"Genomic",              1},
+  {"Hydrogenosome",       20},
   {"Insertion Sequence",  11},
   {"Kinetoplast",          4},
   {"Leucoplast",          17},
@@ -3720,6 +3785,20 @@ extern void FilterSetClearText (FilterSetPtr fsp)
   }
 }
 
+extern FilterSetPtr FilterSetNew (void)
+{
+  FilterSetPtr fsp_new;
+  fsp_new = (FilterSetPtr) MemNew (sizeof (FilterSetData));
+  if (fsp_new != NULL)
+  {
+    fsp_new->scp = NULL;
+    fsp_new->ccp = NULL;
+    fsp_new->lcp = NULL;
+    fsp_new->cgp = NULL;
+  }
+  return fsp_new;
+}
+
 extern FilterSetPtr FilterSetFree (FilterSetPtr fsp)
 {
   if (fsp != NULL)
@@ -3822,8 +3901,9 @@ static SetSamplePtr SetSampleCopy (SetSamplePtr ssp)
 #define PARSE_FIELD_PROTEIN_FIELD 7
 #define PARSE_FIELD_IMPORT_QUAL   8
 #define PARSE_FIELD_FEATURE_NOTE  9
+#define PARSE_FIELD_COMMENT_DESC  10
 
-#define MAX_PARSE_FIELD_TYPE   9
+#define MAX_PARSE_FIELD_TYPE   10
 
 #define PARSE_FIELD_FIRST_FEATURE 4
 #define PARSE_FIELD_LAST_FEATURE  9
@@ -4030,7 +4110,9 @@ extern void EnableAcceptCancelDialogAccept (DialoG d)
 
   if (acdp == NULL) return;
   
+  InvalObject (acdp->accept_btn);
   SafeEnable (acdp->accept_btn);
+  Update ();
 }
 
 extern void DisableAcceptCancelDialogAccept (DialoG d)
@@ -4041,7 +4123,9 @@ extern void DisableAcceptCancelDialogAccept (DialoG d)
 
   if (acdp == NULL) return;
   
+  InvalObject (acdp->accept_btn);
   SafeDisable (acdp->accept_btn);
+  Update ();
 }
 
 
@@ -4310,7 +4394,7 @@ FeatureSelectionDialog
                                 ValNodeStringName,
                                 ValNodeSimpleDataFree, ValNodeStringCopy,
                                 ValNodeChoiceMatch, "feature list", 
-                                change_notify, change_userdata, allow_multi,
+                                change_notify, change_userdata, allow_multi, FALSE,
                                 allow_multi ? FeatureSelectionRemap : NULL);
   return dlg;
 }
@@ -4408,7 +4492,8 @@ static DialoG SourceQualTypeSelectionDialogEx
  Boolean                  allow_multi,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata,
- Int2                     list_height)
+ Int2                     list_height,
+ Boolean                  show_discontinued)
 
 {
   DialoG     dlg;
@@ -4419,11 +4504,11 @@ static DialoG SourceQualTypeSelectionDialogEx
     qual_choice_list = ValNodeNew (NULL);
     qual_choice_list->choice = 1;
     qual_choice_list->data.ptrvalue = StringSave ("All Notes");
-    qual_choice_list->next = GetSourceQualDescList (TRUE, TRUE);
+    qual_choice_list->next = GetSourceQualDescList (TRUE, TRUE, show_discontinued);
   }
   else
   {
-    qual_choice_list = GetSourceQualDescList (TRUE, TRUE);
+    qual_choice_list = GetSourceQualDescList (TRUE, TRUE, show_discontinued);
   }
   /* note - the ValNodeSelectionDialog will free the qual_choice_list when done */                                            
   dlg = ValNodeSelectionDialog (h, qual_choice_list, list_height, SourceQualValNodeName,
@@ -4442,7 +4527,18 @@ extern DialoG SourceQualTypeSelectionDialog
  
 {
   return SourceQualTypeSelectionDialogEx (h, allow_multi, change_notify,
-                                          change_userdata, 6);
+                                          change_userdata, 6, FALSE);
+}
+
+static DialoG SourceQualTypeDiscSelectionDialog 
+(GrouP h,
+ Boolean                  allow_multi,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+ 
+{
+  return SourceQualTypeSelectionDialogEx (h, allow_multi, change_notify,
+                                          change_userdata, 6, TRUE);
 }
 
 static DialoG SourceQualTypeConstraintSelectionDialog
@@ -4453,7 +4549,7 @@ static DialoG SourceQualTypeConstraintSelectionDialog
 
 {
   return SourceQualTypeSelectionDialogEx (h, allow_multi, change_notify,
-                                          change_userdata, 4);
+                                          change_userdata, 4, TRUE);
 }
 
 static DialoG SourceStringConstraintSelectionDialog
@@ -4470,7 +4566,7 @@ static DialoG SourceStringConstraintSelectionDialog
   
   ValNodeAddPointer (&qual_choice_list, 1, StringSave ("Organism or Any Qual"));
   ValNodeAddPointer (&qual_choice_list, 1, StringSave ("Organism"));
-  qual_choice_list->next->next = GetSourceQualDescList (TRUE, TRUE);
+  qual_choice_list->next->next = GetSourceQualDescList (TRUE, TRUE, TRUE);
   ValNodeAddPointer (&qual_choice_list, 1, StringSave ("Lineage"));
 
   /* note - the ValNodeSelectionDialog will free the qual_choice_list when done */                                            
@@ -5495,7 +5591,6 @@ static void ApplyTitleDescriptorCallback (SeqDescrPtr sdp, Pointer userdata, Fil
   
 }
 
-
 static DialoG GBQualSelectionDialog 
 (GrouP                    h,
  Boolean                  allow_multi,
@@ -5517,6 +5612,108 @@ static DialoG GBQualSelectionDialog
                          choice_name_list, TALL_SELECTION_LIST);
   ValNodeFree (choice_name_list); 
   return dlg;
+}
+
+static Int4 GetDbtagStringLen (DbtagPtr db_tag)
+{
+  Int4 len;
+  
+  if (db_tag == NULL)
+  {
+    return 0;
+  }
+  
+  len = StringLen (db_tag->db) + 2;
+  if (db_tag->tag != NULL)
+  {
+    if (db_tag->tag->str != NULL)
+    {
+      len += StringLen (db_tag->tag->str);
+    }
+    else
+    {
+      len += 10;
+    }
+  }
+  return len;
+}
+
+static CharPtr GetDbtagString (DbtagPtr db_tag)
+{
+  Int4    len;
+  CharPtr str;
+  
+  if (db_tag == NULL)
+  {
+    return NULL;
+  }
+  
+  len = GetDbtagStringLen (db_tag);
+  if (len == 0)
+  {
+    return NULL;
+  }
+  
+  str = (CharPtr) MemNew (len * sizeof (Char));
+  if (str != NULL)
+  {
+    StringCpy (str, db_tag->db);
+    StringCat (str, ":");
+    if (db_tag->tag != NULL)
+    {
+      if (db_tag->tag->str != NULL)
+      {
+        StringCat (str, db_tag->tag->str);
+      }
+      else
+      {
+        sprintf (str + StringLen (str), "%d", db_tag->tag->id);
+      }
+    }
+  }
+  return str;
+}
+
+static CharPtr GetDbxrefString (SeqFeatPtr sfp)
+{
+  ValNodePtr vnp;
+  Int4       len = 0;
+  CharPtr    str = NULL, cp;
+  
+  if (sfp == NULL || sfp->dbxref == NULL)
+  {
+    return NULL;
+  }
+  
+  for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next)
+  {
+    len += GetDbtagStringLen (vnp->data.ptrvalue) + 1;
+  }
+  
+  if (len == 0)
+  {
+    return NULL;
+  }
+  
+  str = (CharPtr) MemNew ((len + 1) * sizeof (Char));
+  if (str != NULL)
+  {
+    for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next)
+    {
+      cp = GetDbtagString (vnp->data.ptrvalue);
+      if (cp != NULL)
+      {
+        StringCat (str, cp);
+        StringCat (str, ";");
+      }
+    }
+  }
+  if (StringLen (str) >1)
+  {
+    /* remove final semicolon */
+    str [StringLen (str) - 2] = 0;
+  }
+  return str;
 }
 
 static CharPtr GetGBQualString (SeqFeatPtr sfp, ValNodePtr vnp, FilterSetPtr fsp)
@@ -5567,6 +5764,10 @@ static CharPtr GetGBQualString (SeqFeatPtr sfp, ValNodePtr vnp, FilterSetPtr fsp
         str = StringSave (grp->maploc);
       }
     }
+    else if (StringICmp (EditQualifierList [field_choice - 1].name, "db_xref") == 0)
+    {
+        str = GetDbxrefString (sfp);
+    }
     else
     {
       gbqual = sfp->qual;
@@ -5584,6 +5785,192 @@ static CharPtr GetGBQualString (SeqFeatPtr sfp, ValNodePtr vnp, FilterSetPtr fsp
     vnp = vnp->next;
   }
   return str;
+}
+
+static DbtagPtr DbtagFromString (CharPtr str)
+{
+  DbtagPtr db_tag;
+  CharPtr  cp, idp;
+  Boolean  use_id = TRUE;
+  
+  if (StringHasNoText (str))
+  {
+    return NULL;
+  }
+  
+  cp = StringChr (str, ':');
+  if (cp == NULL)
+  {
+    return NULL;
+  }
+  
+  db_tag = DbtagNew ();
+  if (db_tag != NULL)
+  {
+    db_tag->db = (CharPtr) MemNew ((cp - str + 1) * sizeof (Char));
+    StringNCpy (db_tag->db, str, cp - str);
+    db_tag->db [cp - str] = 0;
+    
+    idp = cp + 1;
+    while (*idp != 0 && use_id)
+    {
+      if (!isdigit (*idp))
+      {
+        use_id = FALSE;
+      }
+      idp++;
+    }
+    db_tag->tag = ObjectIdNew ();
+    if (use_id)
+    {
+      db_tag->tag->id = atoi (cp + 1);
+      db_tag->tag->str = NULL;
+    }
+    else
+    {
+      db_tag->tag->id = 0;
+      db_tag->tag->str = StringSave (cp + 1);
+    }
+  }
+  return db_tag;
+}
+
+static void HandleApplyValueForObjectID (ObjectIdPtr oip, ApplyValuePtr avp)
+{
+  CharPtr tmp_str = NULL;
+  CharPtr cp;
+  Boolean is_num = TRUE;
+  
+  if (oip == NULL || avp == NULL)
+  {
+    return;
+  }
+  
+  if (oip->str == NULL)
+  {
+    tmp_str = (CharPtr) MemNew (10 * sizeof (Char));
+    sprintf (tmp_str, "%d", oip->id);
+    
+  }
+  else
+  {
+    tmp_str = oip->str;
+    oip->str = NULL;
+  }
+  tmp_str = HandleApplyValue (tmp_str, avp);
+  
+  for (cp = tmp_str; cp != NULL && *cp != 0 && is_num; cp++)
+  {
+    if (!isdigit (*cp))
+    {
+      is_num = FALSE;
+    }
+  }
+  if (is_num)
+  {
+    oip->id = atoi (tmp_str);
+    tmp_str = MemFree (tmp_str);
+  }
+  else
+  {
+    oip->str = tmp_str;
+  }
+}
+
+static void EditDbxref (SeqFeatPtr sfp, ApplyValuePtr avp, FilterSetPtr fsp)
+{
+  ValNodePtr vnp;
+  DbtagPtr   db_tag_new, db_tag_to_replace, db_tag;
+  CharPtr    cp;
+  
+  if (sfp == NULL || avp == NULL)
+  {
+    return;
+  }
+  
+  db_tag_new = DbtagFromString (avp->new_text);
+  db_tag_to_replace = DbtagFromString (avp->text_to_replace);
+  
+  if (db_tag_new == NULL && db_tag_to_replace == NULL)
+  {
+    for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next)
+    {
+      db_tag = (DbtagPtr) vnp->data.ptrvalue;
+      if (db_tag != NULL)
+      {
+        db_tag->db = HandleApplyValue (db_tag->db, avp);
+        HandleApplyValueForObjectID (db_tag->tag, avp);
+      }
+    }
+  }
+  else if (db_tag_new != NULL && db_tag_to_replace != NULL)
+  {
+    for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next)
+    {
+      db_tag = (DbtagPtr) vnp->data.ptrvalue;
+      if (db_tag != NULL)
+      {
+        cp = GetDbtagString (db_tag);
+        cp = HandleApplyValue (cp, avp);
+        db_tag = DbtagFree (db_tag);
+        db_tag = DbtagFromString (cp);
+        vnp->data.ptrvalue = db_tag;
+        cp = MemFree (cp);
+      }
+    }
+  }  
+}
+
+static ValNodePtr RemoveDbxrefList (ValNodePtr vnp)
+
+{
+  ValNodePtr  next;
+
+  while (vnp != NULL) {
+    next = vnp->next;
+    DbtagFree ((DbtagPtr) vnp->data.ptrvalue);
+    MemFree (vnp);
+    vnp = next;
+  }
+  return NULL;
+}
+
+static void SetDbxrefFromString (SeqFeatPtr sfp, ApplyValuePtr avp, FilterSetPtr fsp)
+{
+  DbtagPtr new_tag;
+  
+  if (sfp == NULL || avp == NULL)
+  {
+    return;
+  }
+  
+  if (StringHasNoText (avp->text_to_replace))
+  {
+    /* this is an apply */
+    if (avp->etp != NULL)
+    {
+      if (avp->etp->existing_text_choice == EXISTING_TEXT_CHOICE_LEAVE_OLD
+          && sfp->dbxref != NULL)
+      {
+        return;
+      }
+      else if (avp->etp->existing_text_choice == EXISTING_TEXT_CHOICE_REPLACE_OLD)
+      {
+        sfp->dbxref = RemoveDbxrefList (sfp->dbxref);
+      }
+    }
+    
+    new_tag = DbtagFromString (avp->new_text);
+    if (new_tag != NULL)
+    {
+      ValNodeAddPointer (&(sfp->dbxref), 0, new_tag);
+    }
+  }
+  else
+  {
+    EditDbxref (sfp, avp, fsp);
+  }
+  
 }
 
 static void SetGBQualString (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
@@ -5644,6 +6031,12 @@ static void SetGBQualString (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fsp)
       return;
     }
   }
+  else if (StringICmp (EditQualifierList [avp->field_list->data.intvalue - 1].name, "db_xref") == 0)
+  {
+    SetDbxrefFromString (sfp, avp, fsp);
+    return;
+  }
+
 
   if (!StringHasNoText (avp->text_to_replace))
   {
@@ -5728,6 +6121,10 @@ static void RemoveGBQualField (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr fs
     {
       grp->maploc = MemFree (grp->maploc);
     }
+  }
+  else if (StringICmp (EditQualifierList [avp->field_list->data.intvalue - 1].name, "db_xref") == 0)
+  {
+    sfp->dbxref = RemoveDbxrefList (sfp->dbxref);
   }
 
 
@@ -6185,16 +6582,17 @@ static DialoG FeatureFieldSelectionDialogAny
 
 static CharPtr gene_field_list [] = 
 {
-  "locus", "description", "comment", "allele", "maploc", "locus_tag", "synonym"  
+  "locus", "description", "comment", "allele", "maploc", "locus_tag", "synonym", "old_locus_tag"  
 };
 
-#define GENEFIELD_LOCUS       1
-#define GENEFIELD_DESCRIPTION 2
-#define GENEFIELD_COMMENT     3
-#define GENEFIELD_ALLELE      4
-#define GENEFIELD_MAPLOC      5
-#define GENEFIELD_LOCUS_TAG   6
-#define GENEFIELD_SYNONYM     7
+#define GENEFIELD_LOCUS         1
+#define GENEFIELD_DESCRIPTION   2
+#define GENEFIELD_COMMENT       3
+#define GENEFIELD_ALLELE        4
+#define GENEFIELD_MAPLOC        5
+#define GENEFIELD_LOCUS_TAG     6
+#define GENEFIELD_SYNONYM       7
+#define GENEFIELD_OLD_LOCUS_TAG 8
 
 static num_gene_fields = sizeof (gene_field_list) / sizeof (CharPtr);
 
@@ -6219,6 +6617,7 @@ GetGeneFieldString
   ValNodePtr vnp;
   CharPtr    str = NULL;
   GeneRefPtr grp;
+  GBQualPtr  qual;
   
   if (sfp == NULL || gene_field == NULL)
   {
@@ -6237,11 +6636,6 @@ GetGeneFieldString
   if (sfp->data.choice != SEQFEAT_GENE && grp != NULL)
   {
     vnp = NULL;
-  }
-  
-  if (grp == NULL)
-  {
-    return NULL;
   }
   
   vnp = gene_field;
@@ -6292,6 +6686,17 @@ GetGeneFieldString
           str = grp->locus_tag;
         }
         break;
+      case GENEFIELD_OLD_LOCUS_TAG:
+        qual = sfp->qual;
+        while (qual != NULL && StringICmp (qual->qual, "old_locus_tag") != 0)
+        {
+          qual = qual->next;
+        }
+        if (qual != NULL)
+        {
+          str = qual->val;
+        }
+        break;
     }
     vnp = vnp->next;
   }
@@ -6312,6 +6717,7 @@ extern void RemoveGeneFieldString (SeqFeatPtr sfp, ValNodePtr gene_field)
   Boolean    found_nonempty = FALSE;
   GeneRefPtr grp;
   ValNodePtr syn_remove;
+  GBQualPtr  qual, prevqual;
   
   if (sfp == NULL || gene_field == NULL)
   {
@@ -6410,6 +6816,35 @@ extern void RemoveGeneFieldString (SeqFeatPtr sfp, ValNodePtr gene_field)
           }
         }
         break;
+      case GENEFIELD_OLD_LOCUS_TAG:
+        prevqual = NULL;
+        qual = sfp->qual;
+        while (qual != NULL)
+        {
+          if (StringICmp (qual->qual, "old_locus_tag") == 0)
+          {
+            if (prevqual == NULL)
+            {
+              sfp->qual = qual->next;
+              qual->next = NULL;
+              qual = GBQualFree (qual);
+              qual = sfp->qual;
+            }
+            else
+            {
+              prevqual->next = qual->next;
+              qual->next = NULL;
+              qual = GBQualFree (qual);
+              qual = prevqual->next;
+            }
+          }
+          else
+          {
+            prevqual = qual;
+            qual = qual->next;
+          }
+        }
+        break;
     }
     vnp = vnp->next;
   }
@@ -6419,6 +6854,8 @@ static void SetGeneFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr f
 {
   GeneRefPtr    grp;
   ApplyValuePtr avp;
+  Boolean       found;
+  GBQualPtr     qual, qual_last;
   
   if (sfp == NULL || userdata == NULL)
   {
@@ -6472,6 +6909,38 @@ static void SetGeneFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPtr f
       break;
     case GENEFIELD_LOCUS_TAG:
       grp->locus_tag = HandleApplyValue (grp->locus_tag, avp);
+      break;
+    case GENEFIELD_OLD_LOCUS_TAG:
+      qual = sfp->qual;
+      qual_last = NULL;
+      found = FALSE;
+      while (qual != NULL && !found)
+      {
+        qual_last = qual;
+        if (StringCmp (qual->qual, "old_locus_tag") == 0)
+        {
+          qual->val = HandleApplyValue (qual->val, avp);
+          found = TRUE;
+        }
+        qual = qual->next;
+      }
+      if (!found)
+      {
+        qual = GBQualNew ();
+        if (qual != NULL)
+        {
+          qual->qual = StringSave ("old_locus_tag");
+          qual->val = StringSave (avp->new_text);
+          if (qual_last == NULL)
+          {
+            sfp->qual = qual;
+          }
+          else
+          {
+            qual_last->next = qual;
+          }
+        }
+      }    
       break;
   }
 }
@@ -6660,15 +7129,17 @@ static void RemoveCDSComment (SeqFeatPtr sfp, ValNodePtr vnp)
   sfp->comment = MemFree (sfp->comment);
 }
 
-#define PROTEINFIELD_NAME     1
-#define PROTEINFIELD_DESC     2
-#define PROTEINFIELD_EC_NUM   3
-#define PROTEINFIELD_ACTIVITY 4
-#define PROTEINFIELD_COMMENT  5
+#define PROTEINFIELD_NAME               1
+#define PROTEINFIELD_DESC               2
+#define PROTEINFIELD_EC_NUM             3
+#define PROTEINFIELD_ACTIVITY           4
+#define PROTEINFIELD_COMMENT            5
+#define PROTEINFIELD_MATPEPTIDE_NAME    6
+#define PROTEINFIELD_MATPEPTIDE_COMMENT 7
 
 static CharPtr protein_field_list [] =
 {
-  "name", "description", "E.C. number", "activity", "comment"
+  "name", "description", "E.C. number", "activity", "comment", "mat_peptide name", "mat_peptide comment"
 };
 
 static num_protein_fields = sizeof (protein_field_list) / sizeof (CharPtr);
@@ -6692,7 +7163,7 @@ extern CharPtr GetProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field, 
   ProtRefPtr prp;
   Int4       field_choice;
   
-  if (sfp == NULL || protein_field == NULL || sfp->idx.subtype != FEATDEF_PROT)
+  if (sfp == NULL || protein_field == NULL || sfp->data.choice != SEQFEAT_PROT)
   {
     return NULL;
   }
@@ -6707,34 +7178,50 @@ extern CharPtr GetProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field, 
     switch (field_choice)
     {
       case PROTEINFIELD_NAME:
-        if (prp != NULL && prp->name != NULL)
+        if (prp != NULL && prp->name != NULL && sfp->idx.subtype == FEATDEF_PROT)
         {
           val_vnp = prp->name;
           str = val_vnp->data.ptrvalue;
         }
         break;
       case PROTEINFIELD_DESC:
-        if (prp != NULL)
+        if (prp != NULL && sfp->idx.subtype == FEATDEF_PROT)
         {
           str = prp->desc;
         }
         break;
       case PROTEINFIELD_EC_NUM:
-        if (prp != NULL && prp->ec != NULL)
+        if (prp != NULL && prp->ec != NULL && sfp->idx.subtype == FEATDEF_PROT)
         {
           val_vnp = prp->ec;
           str = val_vnp->data.ptrvalue;
         }
         break;
       case PROTEINFIELD_ACTIVITY:
-        if (prp != NULL && prp->activity != NULL)
+        if (prp != NULL && prp->activity != NULL && sfp->idx.subtype == FEATDEF_PROT)
         {
           val_vnp = prp->activity;
           str = val_vnp->data.ptrvalue;
         }
         break;
       case PROTEINFIELD_COMMENT:
-        str = sfp->comment;
+        if (sfp->idx.subtype == FEATDEF_PROT)
+        {
+          str = sfp->comment;
+        }
+        break;
+      case PROTEINFIELD_MATPEPTIDE_NAME:
+        if (prp != NULL && prp->name != NULL && sfp->idx.subtype == FEATDEF_mat_peptide_aa)
+        {
+          val_vnp = prp->name;
+          str = val_vnp->data.ptrvalue;
+        }
+        break;
+      case PROTEINFIELD_MATPEPTIDE_COMMENT:
+        if (sfp->idx.subtype == FEATDEF_mat_peptide_aa)
+        {
+          str = sfp->comment;
+        }
         break;
     }
     vnp = vnp->next;
@@ -6756,7 +7243,7 @@ static void RemoveProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field)
   ProtRefPtr prp;
   Int4       field_choice;
   
-  if (sfp == NULL || protein_field == NULL || sfp->idx.subtype != FEATDEF_PROT)
+  if (sfp == NULL || protein_field == NULL)
   {
     return;
   }
@@ -6770,31 +7257,46 @@ static void RemoveProteinFieldString (SeqFeatPtr sfp, ValNodePtr protein_field)
     switch (field_choice)
     {
       case PROTEINFIELD_NAME:
-        if (prp != NULL && prp->name != NULL)
+        if (prp != NULL && prp->name != NULL && sfp->idx.subtype == FEATDEF_PROT)
         {
           prp->name = ValNodeFreeData (prp->name);
         }
         break;
       case PROTEINFIELD_DESC:
-        if (prp != NULL)
+        if (prp != NULL && sfp->idx.subtype == FEATDEF_PROT)
         {
           prp->desc = MemFree (prp->desc);
         }
         break;
       case PROTEINFIELD_EC_NUM:
-        if (prp != NULL && prp->ec != NULL)
+        if (prp != NULL && prp->ec != NULL && sfp->idx.subtype == FEATDEF_PROT)
         {
           prp->ec = ValNodeFreeData (prp->ec);
         }
         break;
       case PROTEINFIELD_ACTIVITY:
-        if (prp != NULL && prp->activity != NULL)
+        if (prp != NULL && prp->activity != NULL && sfp->idx.subtype == FEATDEF_PROT)
         {
           prp->activity = ValNodeFreeData (prp->activity);
         }
         break;
       case PROTEINFIELD_COMMENT:
-        sfp->comment = MemFree (sfp->comment);
+        if (sfp->idx.subtype == FEATDEF_PROT)
+        {
+          sfp->comment = MemFree (sfp->comment);
+        }
+        break;
+      case PROTEINFIELD_MATPEPTIDE_NAME:
+        if (prp != NULL && prp->name != NULL && sfp->idx.subtype == FEATDEF_mat_peptide_aa)
+        {
+          prp->name = ValNodeFreeData (prp->name);
+        }
+        break;
+      case PROTEINFIELD_MATPEPTIDE_COMMENT:
+        if (sfp->idx.subtype == FEATDEF_mat_peptide_aa)
+        {
+          sfp->comment = MemFree (sfp->comment);
+        }
         break;
     }
     vnp = vnp->next;
@@ -6806,7 +7308,7 @@ static void SetProteinFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPt
   ProtRefPtr    prp;
   ApplyValuePtr avp;
   
-  if (sfp == NULL || userdata == NULL || sfp->idx.subtype != FEATDEF_PROT)
+  if (sfp == NULL || userdata == NULL)
   {
     return;
   }
@@ -6815,6 +7317,27 @@ static void SetProteinFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPt
   if (avp->field_list == NULL)
   {
     return;
+  }
+
+  if (sfp->idx.subtype == FEATDEF_PROT)
+  {
+    if (avp->field_list->data.intvalue == PROTEINFIELD_MATPEPTIDE_NAME
+        || avp->field_list->data.intvalue == PROTEINFIELD_MATPEPTIDE_COMMENT)
+    {
+      return;
+    }
+  }
+  else if (sfp->idx.subtype == FEATDEF_mat_peptide_aa)
+  {
+    if (avp->field_list->data.intvalue != PROTEINFIELD_MATPEPTIDE_NAME
+        && avp->field_list->data.intvalue != PROTEINFIELD_MATPEPTIDE_COMMENT)
+    {
+      return;
+    }
+  }
+  else    
+  {
+    return; 
   }
   
   prp = (ProtRefPtr) sfp->data.value.ptrvalue;
@@ -6827,10 +7350,12 @@ static void SetProteinFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPt
     }
     sfp->data.value.ptrvalue = prp;
   }
+  
   switch (avp->field_list->data.intvalue)
   {
     case PROTEINFIELD_NAME:
-      if (prp->name == NULL)
+    case PROTEINFIELD_MATPEPTIDE_NAME:
+      if (prp->name == NULL )
       {
         prp->name = ApplyValueToValNodeStringList (prp->name, 0, avp);
       }
@@ -6863,6 +7388,7 @@ static void SetProteinFieldString (SeqFeatPtr sfp, Pointer userdata, FilterSetPt
       }
       break;
     case PROTEINFIELD_COMMENT:
+    case PROTEINFIELD_MATPEPTIDE_COMMENT:
       sfp->comment = HandleExistingText (sfp->comment, StringSave (avp->new_text), avp->etp);
       break;
   }
@@ -6899,7 +7425,15 @@ static CharPtr PNTR BuildCDSGeneFieldList (Int4Ptr num_fields)
   }
   for (i = 0; i < num_protein_fields; i++)
   {
-    sprintf (tmp, "Protein %s", protein_field_list [i]);
+    if (StringNCmp (protein_field_list [i], "mat_peptide", 11) == 0)
+    {
+      sprintf (tmp, "%s", protein_field_list [i]);
+      tmp [0] = toupper (tmp [0]);
+    }
+    else
+    {
+      sprintf (tmp, "Protein %s", protein_field_list [i]);
+    }
     field_name_list [k++] = StringSave (tmp);
   }
   return field_name_list;  
@@ -7211,9 +7745,8 @@ RNAFieldSelectionDialog
   return dlg;
 }
 
-static CharPtr rna_subtype_list [] = { "unknown", "preRna", "mRNA", "tRNA",
-                                        "rRNA", "snRNA", "scRNA", "snoRNA",
-                                        "misc_RNA" };
+static CharPtr rna_subtype_list [] = { "misc_RNA", "preRna", "mRNA", "tRNA",
+                                        "rRNA", "snRNA", "scRNA", "snoRNA"};
 static Int2    num_rna_subtypes = sizeof (rna_subtype_list) / sizeof (CharPtr); 
 
 static CharPtr GetRNASubtypeName (ValNodePtr vnp)
@@ -7244,7 +7777,6 @@ static DialoG RNASubtypeSelectionDialog
   ValNodeAddInt (&choice_list, 5, FEATDEF_snRNA);
   ValNodeAddInt (&choice_list, 6, FEATDEF_scRNA);
   ValNodeAddInt (&choice_list, 7, FEATDEF_snoRNA);
-  ValNodeAddInt (&choice_list, 8, FEATDEF_misc_RNA);
 
   dlg = ValNodeSelectionDialog (h, choice_list, TALL_SELECTION_LIST,
                                 GetRNASubtypeName, NULL, 
@@ -8269,18 +8801,26 @@ static Pointer DialogToStringConstraint (DialoG d)
         scp->not_present = TRUE;
         break;
       case 3:
-        scp->match_location = STRING_CONSTRAINT_STARTS;
+        scp->match_location = STRING_CONSTRAINT_EQUALS;
         scp->not_present = FALSE;
         break;
       case 4:
-        scp->match_location = STRING_CONSTRAINT_ENDS;
-        scp->not_present = FALSE;
+        scp->match_location = STRING_CONSTRAINT_EQUALS;
+        scp->not_present = TRUE;
         break;
       case 5:
         scp->match_location = STRING_CONSTRAINT_STARTS;
-        scp->not_present = TRUE;
+        scp->not_present = FALSE;
         break;
       case 6:
+        scp->match_location = STRING_CONSTRAINT_ENDS;
+        scp->not_present = FALSE;
+        break;
+      case 7:
+        scp->match_location = STRING_CONSTRAINT_STARTS;
+        scp->not_present = TRUE;
+        break;
+      case 8:
         scp->match_location = STRING_CONSTRAINT_ENDS;
         scp->not_present = TRUE;
         break;
@@ -8352,6 +8892,8 @@ extern DialoG StringConstraintDialog (GrouP h, CharPtr label, Boolean clear_btn)
   scdp->match_choice = PopupList (g, TRUE, NULL);
   PopupItem (scdp->match_choice, "Contains");
   PopupItem (scdp->match_choice, "Does not contain");
+  PopupItem (scdp->match_choice, "Equals");
+  PopupItem (scdp->match_choice, "Does not equal");
   PopupItem (scdp->match_choice, "Starts with");
   PopupItem (scdp->match_choice, "Ends with");
   PopupItem (scdp->match_choice, "Does not start with");
@@ -9506,6 +10048,11 @@ extern Boolean DoesStringMatchConstraint (CharPtr pchSource, StringConstraintPtr
 	  {
 	    rval = FALSE;
 	  }
+	  else if (scp->match_location == STRING_CONSTRAINT_EQUALS
+	           && (pFound != pchSource || char_after != 0))
+	  {
+	    rval = FALSE;
+	  }
 	  else if (scp->whole_word)
 	  {
 	    rval = IsWholeWordMatch (pchSource, pFound, StringLen (scp->match_text));
@@ -9564,6 +10111,41 @@ DoesObjectMatchStringConstraint
     }
   }
   return ohsp->found;
+}
+
+static Boolean DoesDbtagMatchStringConstraint (DbtagPtr db_tag, StringConstraintPtr scp)
+{
+  Boolean rval = FALSE;
+  Char    tmp_str [15];
+  
+  if (db_tag == NULL)
+  {
+    rval = FALSE;
+  }
+  else if (scp == NULL)
+  {
+    rval = TRUE;
+  }
+  else if (DoesStringMatchConstraint (db_tag->db, scp))
+  {
+    rval = TRUE;
+  }
+  else if (db_tag->tag != NULL)
+  {
+    if (DoesStringMatchConstraint (db_tag->tag->str, scp))
+    {
+      rval = TRUE;
+    }
+    else if (db_tag->tag->str == NULL)
+    {
+      sprintf (tmp_str, "%d", db_tag->tag->id);
+      if (DoesStringMatchConstraint (tmp_str, scp))
+      {
+        rval = TRUE;
+      }
+    }
+  }
+  return rval;
 }
 
 static Boolean DoesSourceHaveOneQualPresent (BioSourcePtr biop, SourceQualDescPtr sqdp)
@@ -10565,13 +11147,6 @@ extern ValNodePtr ApplyValueToValNodeStringList (ValNodePtr list, Int2 choice, A
   return list;
 }
 
-typedef struct parsefield
-{
-  Int4        parse_field_type;
-  ValNodePtr  feature_field;
-  ValNodePtr  feature_subtype;
-} ParseFieldData, PNTR ParseFieldPtr;
-
 typedef struct parsefielddialog
 {
   DIALOG_MESSAGE_BLOCK
@@ -10779,6 +11354,7 @@ static ValNodePtr TestParseFieldDialog (DialoG d)
     {
       case PARSE_FIELD_DEFLINE:
       case PARSE_FIELD_CDS_COMMENT:
+      case PARSE_FIELD_COMMENT_DESC:
         /* don't need any extra information */
         break;
       case PARSE_FIELD_BIOSRC_STRING:
@@ -10888,6 +11464,7 @@ extern DialoG ParseFieldDestDialog
   PopupItem (dlg->parse_field_type, "Protein Field");
   PopupItem (dlg->parse_field_type, "Import Feature");
   PopupItem (dlg->parse_field_type, "Feature Note");
+  PopupItem (dlg->parse_field_type, "Comment Descriptor");
   SetValue (dlg->parse_field_type, PARSE_FIELD_DEFLINE);
   SetObjectExtra (dlg->parse_field_type, dlg, NULL);
   
@@ -13232,7 +13809,9 @@ static void ConvertFeatureCallback (SeqFeatPtr sfp, Pointer userdata, FilterSetP
     FeatConvertRNAToRNA (sfp, mrfp->featdef_to);
   else if (fromFeat == SEQFEAT_PROT)
     FeatConvertProtToProt (sfp, mrfp->featdef_to);
-
+   
+  /* set the subtype to zero so that it will be reindexed */
+  sfp->idx.subtype = 0;
 }
 
 static void RemoveProteinProducts (ValNodePtr bsplist, Uint2 entityID, SeqEntryPtr sep)
@@ -13578,6 +14157,17 @@ extern void SelectFeatures (IteM i)
   Show (w);
 }
 
+extern ParseFieldPtr ParseFieldFree (ParseFieldPtr pfp)
+{
+  if (pfp != NULL)
+  {
+    pfp->feature_field = ValNodeFreeData (pfp->feature_field);
+    pfp->feature_subtype = ValNodeFreeData (pfp->feature_subtype);
+    pfp = MemFree (pfp);
+  }
+  return pfp;
+}
+
 typedef struct parseform 
 {
   FEATURE_FORM_BLOCK
@@ -13587,7 +14177,6 @@ typedef struct parseform
   DialoG  accept_cancel;
   
   ParseFieldPtr   dst_field_data;
-  ValNodePtr      source_qual_choice_list;
   GetSamplePtr    gsp;
   ExistingTextPtr etp;
 } ParseFormData, PNTR ParseFormPtr;
@@ -13599,126 +14188,206 @@ static void CleanupParseForm (GraphiC g, VoidPtr data)
   mp = (ParseFormPtr) data;
   if (mp != NULL)
   {
-    mp->source_qual_choice_list = ValNodeFreeData (mp->source_qual_choice_list);
     mp->gsp = GetSampleFree (mp->gsp);
     mp->etp = MemFree (mp->etp);
   }
   StdCleanupExtraProc (g, data);
 }
 
-static void GetParseToExistingTextCallback (ParseActionPtr pap, Pointer userdata, CharPtr found_text, Int4 found_len)
+extern GetSamplePtr
+GetSampleForSeqEntry
+(SeqEntryPtr   sep,
+ Uint2         entityID, 
+ ParseFieldPtr dst_field_data,
+ FilterSetPtr  fsp)
 {
-  ParseFormPtr      mp;
-  GetSamplePtr        gsp = NULL, gsp_sum, gsp_new;
-  ValNodePtr          requested_field = NULL, vnp;
+  GetSamplePtr gsp = NULL, gsp_sum, gsp_new;
+  ValNodePtr   requested_field = NULL, vnp;
+  SeqEntryPtr  orig_sep;
 
-  mp = (ParseFormPtr) userdata;
-  if (mp == NULL || mp->dst_field_data == NULL)
+  if (sep == NULL || dst_field_data == NULL)
   {
-    return;
+    return NULL;
   }
-
-  switch (mp->dst_field_data->parse_field_type)
+  
+  switch (dst_field_data->parse_field_type)
   {
     case PARSE_FIELD_SOURCE_QUAL :
-      gsp = CheckForExistingTextInSeqEntry (pap->biop_sep, 
-                                            mp->dst_field_data->feature_field, 
+      gsp = CheckForExistingTextInSeqEntry (sep, 
+                                            dst_field_data->feature_field, 
                                             GetSourceQualFeatureString,
                                             GetSourceQualDescrString,
                                             ValNodeSimpleDataFree,
                                             SourceQualValNodeDataCopy,
-                                            NULL,
+                                            fsp,
                                             SEQFEAT_BIOSRC, 0,
                                             Seq_descr_source);
       break;
     case PARSE_FIELD_DEFLINE:
       requested_field = ValNodeNew (NULL);
       requested_field->data.intvalue = Seq_descr_title;
-      gsp = CheckForExistingTextInSeqEntry (pap->title_sep, requested_field, 
+      gsp = CheckForExistingTextInSeqEntry (sep, requested_field, 
                                             NULL,
                                             GetStringFromStringDescriptor,
                                             NULL, IntValNodeCopy,
-                                            NULL, 0, 0, Seq_descr_title);
+                                            fsp, 0, 0, Seq_descr_title);
       requested_field = ValNodeFree (requested_field);
       break;
     case PARSE_FIELD_BIOSRC_STRING:
-      gsp = CheckForExistingTextInSeqEntry (pap->biop_sep, 
-                                            mp->dst_field_data->feature_field, 
+      gsp = CheckForExistingTextInSeqEntry (sep, 
+                                            dst_field_data->feature_field, 
                                             GetSourceFeatureString,
                                             GetSourceDescriptorString,
                                             NULL, IntValNodeCopy,
-                                            NULL,
+                                            fsp,
                                             SEQFEAT_BIOSRC, 0,
                                             Seq_descr_source);
       break;
     case PARSE_FIELD_GENE_FIELD:
-      gsp = CheckForExistingTextInSeqEntry (pap->sep, 
-                                            mp->dst_field_data->feature_field, 
+      gsp = CheckForExistingTextInSeqEntry (sep, 
+                                            dst_field_data->feature_field, 
                                             GetGeneFieldString,
                                             NULL,
                                             NULL, IntValNodeCopy,
-                                            NULL,
+                                            fsp,
                                             SEQFEAT_GENE, 0, 0);
       break;
     case PARSE_FIELD_MRNA_FIELD:
-      gsp = CheckForExistingTextInSeqEntry (pap->sep, 
-                                            mp->dst_field_data->feature_field, 
+      gsp = CheckForExistingTextInSeqEntry (sep, 
+                                            dst_field_data->feature_field, 
                                             GetmRNAFieldString,
                                             NULL,
                                             NULL, IntValNodeCopy,
-                                            NULL,
+                                            fsp,
                                             SEQFEAT_RNA, FEATDEF_mRNA, 0);
       break;
     case PARSE_FIELD_CDS_COMMENT:
-      gsp = CheckForExistingTextInSeqEntry (pap->sep, 
+      gsp = CheckForExistingTextInSeqEntry (sep, 
                                             NULL, 
                                             GetCDSComment,
                                             NULL,
                                             NULL, IntValNodeCopy,
-                                            NULL,
+                                            fsp,
                                             SEQFEAT_CDREGION, FEATDEF_CDS, 0);
       break;
+    case PARSE_FIELD_COMMENT_DESC:
+      requested_field = ValNodeNew (NULL);
+      requested_field->data.intvalue = Seq_descr_comment;
+      sep = FindNucSeqEntry (sep);
+      if (sep != NULL && IS_Bioseq (sep)) 
+      {
+        sep = GetBestTopParentForData (entityID, sep->data.ptrvalue);
+      }
+
+      gsp = CheckForExistingTextInSeqEntry (sep, requested_field, 
+                                            NULL,
+                                            GetStringFromStringDescriptor,
+                                            NULL, IntValNodeCopy,
+                                            fsp, 0, 0, Seq_descr_comment);
+      requested_field = ValNodeFree (requested_field);
+      break;
     case PARSE_FIELD_PROTEIN_FIELD:
-      gsp = CheckForExistingTextInSeqEntry (pap->sep, 
-                                            mp->dst_field_data->feature_field, 
+      sep = FindNucSeqEntry (sep);
+      if (sep != NULL && IS_Bioseq (sep))
+      {
+        sep = GetBestTopParentForData (entityID, sep->data.ptrvalue);
+      }
+      gsp = CheckForExistingTextInSeqEntry (sep, 
+                                            dst_field_data->feature_field, 
                                             GetProteinFieldString,
                                             NULL,
                                             NULL, IntValNodeCopy,
-                                            NULL,
+                                            fsp,
                                             SEQFEAT_PROT, 0, 0);
       break;
     case PARSE_FIELD_IMPORT_QUAL:
       gsp_sum = NULL;
-      for (vnp = mp->dst_field_data->feature_subtype; vnp != NULL; vnp = vnp->next)
+      orig_sep = sep;
+      for (vnp = dst_field_data->feature_subtype; vnp != NULL; vnp = vnp->next)
       {
-        gsp_new = CheckForExistingTextInSeqEntry (pap->sep, mp->dst_field_data->feature_field, 
+        /* for mat_peptide features, need to check nuc-prot set */
+        if (vnp->choice == FEATDEF_mat_peptide_aa)
+        {
+          sep = FindNucSeqEntry (sep);
+          if (sep != NULL && IS_Bioseq (sep))
+          {
+            sep = GetBestTopParentForData (entityID, sep->data.ptrvalue);
+          }
+        }
+        gsp_new = CheckForExistingTextInSeqEntry (sep, dst_field_data->feature_field, 
                                                   GetGBQualString,
                                                   NULL,
                                                   NULL, IntValNodeCopy,
-                                                  NULL, 0, vnp->choice, 0);
+                                                  fsp, 0, vnp->choice, 0);
         gsp = GetSampleAdd (gsp_new, gsp_sum);
         gsp_new = GetSampleFree (gsp_new);
         gsp_sum = GetSampleFree (gsp_sum);
         gsp_sum = gsp;
+        /* if we are also looking at features other than mat_peptides, use
+         * original SeqEntry */
+        sep = orig_sep;
       }
       break;
     case PARSE_FIELD_FEATURE_NOTE:
       gsp_sum = NULL;
-      for (vnp = mp->dst_field_data->feature_field; vnp != NULL; vnp = vnp->next)
+      orig_sep = sep;      
+      for (vnp = dst_field_data->feature_field; vnp != NULL; vnp = vnp->next)
       {
-        gsp_new = CheckForExistingTextInSeqEntry (pap->sep, vnp, 
+        /* for mat_peptide features, need to check nuc-prot set */
+        if (vnp->choice == FEATDEF_mat_peptide_aa)
+        {
+          sep = FindNucSeqEntry (sep);
+          if (sep != NULL && IS_Bioseq (sep))
+          {
+            sep = GetBestTopParentForData (entityID, sep->data.ptrvalue);
+          }
+        }
+        gsp_new = CheckForExistingTextInSeqEntry (sep, vnp, 
                                                   GetFeatureNote,
                                                   NULL,
                                                   ValNodeSimpleDataFree,
                                                   ValNodeStringCopy,
-                                                  NULL, 0, vnp->choice, 0);
+                                                  fsp, 0, vnp->choice, 0);
         gsp = GetSampleAdd (gsp_new, gsp_sum);
         gsp_new = GetSampleFree (gsp_new);
         gsp_sum = GetSampleFree (gsp_sum);
         gsp_sum = gsp;
+        /* if we are also looking at features other than mat_peptides, use
+         * original SeqEntry */
+        sep = orig_sep;
       }
       break;
   }
+  return gsp;  
+}
+
+static void GetParseToExistingTextCallback (ParseActionPtr pap, Pointer userdata, CharPtr found_text, Int4 found_len)
+{
+  ParseFormPtr mp;
+  GetSamplePtr gsp = NULL;
+  SeqEntryPtr  sep;
+
+  mp = (ParseFormPtr) userdata;
+  if (mp == NULL || mp->dst_field_data == NULL)
+  {
+    return;
+  }
+  
+  if (mp->dst_field_data->parse_field_type == PARSE_FIELD_SOURCE_QUAL
+      || mp->dst_field_data->parse_field_type == PARSE_FIELD_BIOSRC_STRING)
+  {
+    sep = pap->biop_sep;
+  }
+  else if (mp->dst_field_data->parse_field_type == PARSE_FIELD_DEFLINE)
+  {
+    sep = pap->title_sep;
+  }
+  else
+  {
+    sep = pap->sep;
+  }
+  
+  gsp = GetSampleForSeqEntry (sep, mp->input_entityID, mp->dst_field_data, NULL);
   
   if (gsp == NULL)
   {
@@ -13757,7 +14426,11 @@ ParseToFeaturesOnBioseq
     return;
   }
   
-  if (ISA_na (bsp->mol) && parse_field_type == PARSE_FIELD_PROTEIN_FIELD)
+  if (ISA_na (bsp->mol) 
+      && (parse_field_type == PARSE_FIELD_PROTEIN_FIELD
+          || (feature_subtype == FEATDEF_mat_peptide_aa
+              &&  (parse_field_type == PARSE_FIELD_IMPORT_QUAL
+                   || parse_field_type == PARSE_FIELD_FEATURE_NOTE))))
   {
     sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
     while (sfp != NULL)
@@ -13880,11 +14553,56 @@ ParseToFeatures
   }
 }
 
+static void ParseToCommentDescriptor (SeqEntryPtr sep, ApplyValuePtr avp)
+{
+  ValNode       vn;
+  SeqDescrPtr   sdp;
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  
+  if (sep == NULL || avp == NULL || sep->data.ptrvalue == NULL)
+  {
+    return;
+  }
+  
+  if (IS_Bioseq (sep))
+  {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    sdp = bsp->descr;
+  }
+  else if (IS_Bioseq_set (sep))
+  {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    sdp = bssp->descr;
+  }
+  else
+  {
+    return;
+  }
+  
+  while (sdp != NULL && sdp->choice != Seq_descr_comment)
+  {
+    sdp = sdp->next;
+  }
+  
+  if (sdp == NULL)
+  {
+    sdp = CreateNewDescriptor (sep, Seq_descr_comment);
+  }
+  
+  vn.data.intvalue = Seq_descr_comment;
+  vn.next = NULL;
+  
+  SetStringInStringDescriptor (sdp, &vn, avp);
+}
+
+
 static void ParseToDest (ParseActionPtr pap, Pointer userdata, CharPtr found_text, Int4 found_len)
 {
-  ParseFormPtr  mp;
+  ParseFormPtr    mp;
   ApplyValueData  avd;
   ValNodePtr      vnp;
+  SeqEntryPtr     sep;
 
   mp = (ParseFormPtr) userdata;
   if (mp == NULL || mp->dst_field_data == NULL)
@@ -13940,7 +14658,7 @@ static void ParseToDest (ParseActionPtr pap, Pointer userdata, CharPtr found_tex
     case PARSE_FIELD_PROTEIN_FIELD:
       avd.field_list = mp->dst_field_data->feature_field;
       ParseToFeatures (pap->sep, &avd, mp->dst_field_data->parse_field_type,
-                       FEATDEF_PROT);
+                       0);
       break;
     case PARSE_FIELD_IMPORT_QUAL :
       avd.field_list = mp->dst_field_data->feature_field;
@@ -13961,7 +14679,14 @@ static void ParseToDest (ParseActionPtr pap, Pointer userdata, CharPtr found_tex
         ParseToFeatures (pap->sep, &avd, mp->dst_field_data->parse_field_type,
                          vnp->choice);
       }
-      break;    
+      break;
+    case PARSE_FIELD_COMMENT_DESC :
+      avd.field_list = mp->dst_field_data->feature_field;
+      sep = FindNucSeqEntry (pap->sep);
+      sep = GetBestTopParentForData (mp->input_entityID, sep->data.ptrvalue);
+      ParseToCommentDescriptor (sep, &avd);
+      avd.new_text = MemFree (avd.new_text);
+      break;
   }
   avd.new_text = MemFree (avd.new_text);  
 }
@@ -14067,6 +14792,19 @@ GetDestSample
         gsp_sum = gsp;
       }
       break;
+    case PARSE_FIELD_COMMENT_DESC:
+      requested_field = ValNodeNew (NULL);
+      requested_field->data.intvalue = Seq_descr_comment;
+      sep = FindNucSeqEntry (sep);
+      sep = GetBestTopParentForData (SeqMgrGetEntityIDForSeqEntry (sep), sep->data.ptrvalue);
+      gsp = CheckForExistingTextInSeqEntry (sep, requested_field, 
+                                            NULL,
+                                            GetStringFromStringDescriptor,
+                                            NULL, IntValNodeCopy,
+                                            NULL, 0, 0, Seq_descr_comment);
+      requested_field = ValNodeFree (requested_field);
+      break;
+      
   }
   return gsp;
 }
@@ -14252,6 +14990,7 @@ ParseFlatfileToDest
   SeqAnnotPtr      sap;
   SeqEntryPtr      old_title_sep;
   SeqEntryPtr      old_biop_sep;
+  Uint2            entityID;
 
   if (sep == NULL || pap == NULL || mp == NULL || sep->data.ptrvalue == NULL)
   {
@@ -14271,6 +15010,8 @@ ParseFlatfileToDest
   old_title_sep = pap->title_sep;
   old_biop_sep = pap->biop_sep;
   pap->sep = sep;
+  
+  entityID = SeqMgrGetEntityIDForSeqEntry (sep);
   
   SetSourceAndTitle (pap, sdp, sap);
 
@@ -14292,6 +15033,11 @@ ParseFlatfileToDest
                 && mp->dst_field_data->parse_field_type <= PARSE_FIELD_LAST_FEATURE)
             {
               pap->sep = FindNucSeqEntry (sep);
+            }
+            else if (mp->dst_field_data->parse_field_type == PARSE_FIELD_COMMENT_DESC)
+            {
+              pap->sep = FindNucSeqEntry (sep);
+              pap->sep = GetBestTopParentForData (entityID, pap->sep->data.ptrvalue);
             }
 
             ParseToDest (pap, mp, found_loc, found_len);
@@ -14387,6 +15133,7 @@ static Boolean ParseTextAction (Pointer data)
       case PARSE_FIELD_PROTEIN_FIELD:
       case PARSE_FIELD_IMPORT_QUAL:
       case PARSE_FIELD_FEATURE_NOTE:
+      case PARSE_FIELD_COMMENT_DESC:
         WatchCursor ();
         Update ();
         
@@ -14507,7 +15254,6 @@ static void ParseText (Uint2 input_entityID, Int4 from_field, Int4 to_field)
   mp->form = (ForM) w;
   mp->input_entityID = input_entityID;
 
-  mp->source_qual_choice_list = GetSourceQualDescList (TRUE, TRUE);
   mp->gsp = NULL;
   mp->etp = NULL;
   
@@ -16195,6 +16941,17 @@ static void BuildCDSSetCallback (SeqFeatPtr sfp, Pointer userdata)
       {
         ValNodeAddPointer (&(cdsp->prot_list), 0, prot);
       }
+      
+      /* also add in mat_peptides from protein feature */
+      prot = SeqMgrGetNextFeature (protbsp, NULL, SEQFEAT_PROT, FEATDEF_mat_peptide_aa, &fcontext);
+      while (prot != NULL)
+      {
+        if (! AlreadyInList (cdsp->prot_list, prot))
+        {
+          ValNodeAddPointer (&(cdsp->prot_list), 0, prot);
+        }
+        prot = SeqMgrGetNextFeature (protbsp, prot, SEQFEAT_PROT, FEATDEF_mat_peptide_aa, &fcontext);
+      }
     }
   }
   else
@@ -16341,6 +17098,10 @@ static Boolean DoesCDSetMatchConstraint (CDSetPtr cdsp, ChoiceConstraintPtr ccp)
       str = GetCDSetField (cdsp, ccp->qual_choice);
       does_match = DoesStringMatchConstraint (str, ccp->string_constraint);
       MemFree (str);
+    }
+    if (ccp->string_constraint != NULL && ccp->string_constraint->not_present)
+    {
+      does_match = ! does_match;
     }
   }
   return does_match;
@@ -18664,6 +19425,58 @@ static DialoG ApplySourceQualDialog
   return (DialoG) p;
 }
 
+static DialoG ConvertSourceQualDialog
+(GrouP                    h,
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata,
+ Uint2                    entityID)
+{
+  SimpleAECRDlgPtr dlg;
+  GrouP            p, g1;
+  
+  dlg = (SimpleAECRDlgPtr) MemNew (sizeof (SimpleAECRDlgData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  SetGroupSpacing (p, 10, 10);
+  
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = SimpleAECRToDialog;
+  dlg->fromdialog = DialogToSimpleAECR;
+  dlg->dialogmessage = SimpleAECRMessage;
+  dlg->testdialog = TestSimpleAECR;
+  dlg->action_choice = AECR_CONVERT;
+  dlg->free_field_vn_proc = ValNodeSimpleDataFree;
+  dlg->free_subtype_vn_proc = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->get_autopopulate_text = NULL;
+  dlg->entityID = entityID;
+  
+  dlg->subtype_list = NULL;
+  
+  g1 = HiddenGroup (p, 2, 0, NULL);
+  StaticPrompt (g1, "From", 0, dialogTextHeight, systemFont, 'l');
+  StaticPrompt (g1, "To", 0, dialogTextHeight, systemFont, 'l');
+    
+  dlg->field_list = SourceQualTypeDiscSelectionDialog (g1, FALSE, 
+                                          change_notify, 
+                                          change_userdata);
+  dlg->field_list_to = SourceQualTypeSelectionDialog (g1, FALSE, 
+                                             change_notify, 
+                                             change_userdata);
+  dlg->leave_on_original = CheckBox (p, "Leave on original", NULL);
+  
+  dlg->edit_apply = NULL;
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->leave_on_original, NULL);
+  return (DialoG) p;
+}
+
 static DialoG SourceQualAECRDialog 
 (GrouP                    h,
  Int4                     action_choice, 
@@ -18713,6 +19526,21 @@ static DialoG SourceQualAECRDialog
                                               change_notify, 
                                               change_userdata,
                                               entityID);
+  }
+  else if (action_choice == AECR_REMOVE)
+  {
+    dlg->source_qual = SimpleAECRDialog (g1, action_choice, 
+                           change_notify, change_userdata,
+                           ValNodeSimpleDataFree, NULL,
+                           SourceQualTypeDiscSelectionDialog, NULL, NULL,
+                           "Qualifier", NULL, TRUE, entityID);    
+  }
+  else if (action_choice == AECR_CONVERT)
+  {
+    dlg->source_qual = ConvertSourceQualDialog (g1,
+                                                change_notify, 
+                                                change_userdata,
+                                                entityID);
   }
   else
   {
@@ -19051,7 +19879,7 @@ static DialoG GetSourceQualSample (GrouP h, Uint2 entityID)
   ssd.fieldstring_func = GetSourceQualFeatureString;
   ssd.descrstring_func = GetSourceQualDescrString;
   ssd.entityID = entityID;
-  ssd.field_list = GetSourceQualDescList (TRUE, TRUE);
+  ssd.field_list = GetSourceQualDescList (TRUE, TRUE, TRUE);
   ValNodeAddPointer (&(ssd.field_list), 1, StringSave ("Scientific Name"));
   ValNodeAddPointer (&(ssd.field_list), 1, StringSave ("Location"));
   
@@ -19143,7 +19971,7 @@ static CharPtr GetRNASampleFieldString (SeqFeatPtr sfp, ValNodePtr vnp, FilterSe
   {
     rna_subtype = (vnp->data.intvalue - 1) / (num_rna_sample_fields + num_gene_fields);
     rna_field_type = (vnp->data.intvalue - 1) % (num_rna_sample_fields + num_gene_fields);
-    if (rna_subtype == 8)
+    if (rna_subtype == 0)
     {
       rna_subtype = 255;
     }
