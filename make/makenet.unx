@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.231 2008/12/10 21:23:29 ucko Exp $
+#	$Id: makenet.unx,v 6.233 2009/08/05 20:06:36 ucko Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -389,7 +389,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL: copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn cspeedtest sugint Nbatch Nbatch3 Nentrcmd seqget idfetch test_nc bi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf raw2delt aceread_tst asn2all gene2xml asnval asnval_psf asndisc asndisc_psf demo_aceread_tst asnmacro asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
+.NO_PARALLEL: copy nocopy Tentrez sequin Psequin sbtedit Ssequin elecpcr asn2fast asn2asn cleanasn cspeedtest sugint Nbatch Nbatch3 Nentrcmd seqget idfetch test_nc bi_socket test_ncbi_dsock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf tbl2asn tbl2asn_psf raw2delt aceread_tst asn2all gene2xml asnval asnval_psf asndisc asndisc_psf demo_aceread_tst asnmacro asnstrip flint gbseqget insdseqget trna2sap trna2tbl testent2 entrez2 spidey dotmatrix ingenue condense bl2seq src_chk src_chk_psf
 
 .WAIT:
 	echo Waiting...go
@@ -1467,5 +1467,10 @@ bl2bag.cgi : bl2bag.c
 
 src_chk : src_chk.c 
 	$(CC) -o src_chk $(LDFLAGS) src_chk.c $(LIB2) $(LIB1) $(OTHERLIBS) 
+
+src_chk_psf : src_chk.c 
+	$(CC) -DINTERNAL_NCBI_SRC_CHK -g -o src_chk_psf $(LDFLAGS) src_chk.c \
+		$(LIB_PS) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
+		$(NCBI_SYBLIBS_CT) $(OTHERLIBS)
 
 ##

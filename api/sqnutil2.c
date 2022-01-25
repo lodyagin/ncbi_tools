@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.391 $
+* $Revision: 6.392 $
 *
 * File Description: 
 *
@@ -11965,8 +11965,9 @@ NLM_EXTERN Boolean FeatureOkForFeatureList (SeqFeatPtr sfp, ValNodePtr feature_l
 
 NLM_EXTERN SeqFeatPtr GetGeneForFeature (SeqFeatPtr sfp)
 {
+  BioseqPtr bsp;
   GeneRefPtr grp;
-  SeqFeatPtr overlap_gene;
+  SeqFeatPtr overlap_gene = NULL;
   Boolean    is_suppressed;
   SeqMgrFeatContext fcontext;
 
@@ -11975,9 +11976,15 @@ NLM_EXTERN SeqFeatPtr GetGeneForFeature (SeqFeatPtr sfp)
   if (is_suppressed) return NULL;
 
   if (grp != NULL) {
-    overlap_gene = SeqMgrGetGeneByLocusTag (BioseqFindFromSeqLoc(sfp->location), grp->locus_tag, &fcontext);
+    bsp = BioseqFindFromSeqLoc (sfp->location);
+    if (bsp == NULL) return NULL;
+    if (StringDoesHaveText (grp->locus_tag)) {
+      overlap_gene = SeqMgrGetGeneByLocusTag (bsp, grp->locus_tag, &fcontext);
+    } else if (StringDoesHaveText (grp->locus)) {
+      overlap_gene = SeqMgrGetFeatureByLabel (bsp, grp->locus, SEQFEAT_GENE, 0, &fcontext);
+    }
   } else {
-    overlap_gene = SeqMgrGetOverlappingGene(sfp->location, &fcontext);
+    overlap_gene = SeqMgrGetOverlappingGene (sfp->location, &fcontext);
   }
   return overlap_gene;
 }

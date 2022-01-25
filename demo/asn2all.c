@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.63 $
+* $Revision: 1.64 $
 *
 * File Description:
 *
@@ -53,7 +53,7 @@
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "5.1"
+#define ASN2ALL_APP_VER "5.2"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
 

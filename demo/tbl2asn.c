@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.295 $
+* $Revision: 6.297 $
 *
 * File Description:
 *
@@ -73,7 +73,7 @@ static char *date_of_compilation = __DATE__;
 #include <objmacro.h>
 #include <macroapi.h>
 
-#define TBL2ASN_APP_VER "14.2"
+#define TBL2ASN_APP_VER "14.3"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
@@ -6175,7 +6175,8 @@ static void ProcessOneRecord (
 {
   AsnTypePtr         atp_bssse;
   BioSourcePtr       biop;
-  BioseqPtr          bsp;
+  BioseqPtr          bsp, feat_bsp;
+  Boolean            already_converted_ids = FALSE;
   BioseqSetPtr       bssp = NULL;
   Char               buf [256];
   SeqMgrFeatContext  context;
@@ -6338,6 +6339,15 @@ static void ProcessOneRecord (
       if (datatype == OBJ_SEQANNOT) {
 
         sap = (SeqAnnotPtr) dataptr;
+
+        if (!StringHasNoText (tbl->center) && !already_converted_ids) {
+          feat_bsp = GetBioseqReferencedByAnnot (sap, entityID);
+          if (feat_bsp == NULL) {
+            VisitBioseqsInSep (sep, tbl->center, MakeGenomeCenterID);
+            already_converted_ids = TRUE;
+          }
+        }
+
         ProcessOneAnnot (sap, entityID, tbl);
 
       } else {
@@ -6681,7 +6691,7 @@ static void ProcessOneRecord (
       }
     }
 
-    if (StringDoesHaveText (tbl->center)) {
+    if (StringDoesHaveText (tbl->center) && !already_converted_ids) {
       VisitBioseqsInSep (sep, tbl->center, MakeGenomeCenterID);
     }
 

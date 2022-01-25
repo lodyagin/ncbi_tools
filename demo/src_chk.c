@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.10 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -56,10 +56,387 @@
 #include <asnmacro.h>
 #include <objmacro.h>
 #include <macroapi.h>
+#ifdef INTERNAL_NCBI_SRC_CHK
+#include <accpubseq.h>
+#endif
 
 #define SRC_CHK_APP_VER "1.0"
 
 CharPtr SRC_CHK_APPLICATION = SRC_CHK_APP_VER;
+
+#ifdef INTERNAL_NCBI_SRC_CHK
+static CharPtr dirsubfetchproc = "DirSubBioseqFetch";
+
+static CharPtr dirsubfetchcmd = NULL;
+
+extern Pointer ReadFromDirSub (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
+extern Pointer ReadFromDirSub (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID)
+
+{
+  Char     cmmd [256];
+  Pointer  dataptr;
+  FILE*    fp;
+  Char     path [PATH_MAX];
+
+  if (datatype != NULL) {
+    *datatype = 0;
+  }
+  if (entityID != NULL) {
+    *entityID = 0;
+  }
+  if (StringHasNoText (accn)) return NULL;
+
+  if (dirsubfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "DIRSUB", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	dirsubfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (dirsubfetchcmd == NULL) return NULL;
+
+  TmpNam (path);
+
+#ifdef OS_UNIX
+  sprintf (cmmd, "csh %s %s > %s", dirsubfetchcmd, accn, path);
+  system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", dirsubfetchcmd, accn, path);
+  system (cmmd);
+#endif
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return NULL;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, datatype, entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+  return dataptr;
+}
+
+
+static Int2 LIBCALLBACK DirSubBioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  Char              cmmd [256];
+  Pointer           dataptr;
+  Uint2             datatype;
+  Uint2             entityID;
+  FILE*             fp;
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  Char              path [PATH_MAX];
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sip;
+  TextSeqIdPtr      tsip;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  if (sip->choice != SEQID_GENBANK) return OM_MSG_RET_ERROR;
+  tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+  if (tsip == NULL || StringHasNoText (tsip->accession)) return OM_MSG_RET_ERROR;
+
+  if (dirsubfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "DIRSUB", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	dirsubfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (dirsubfetchcmd == NULL) return OM_MSG_RET_ERROR;
+
+  TmpNam (path);
+
+#ifdef OS_UNIX
+  sprintf (cmmd, "csh %s %s > %s", dirsubfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", dirsubfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return OM_MSG_RET_ERROR;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+
+  if (dataptr == NULL) return OM_MSG_RET_OK;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  bsp = BioseqFindInSeqEntry (sip, sep);
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+  return OM_MSG_RET_DONE;
+}
+
+static Boolean DirSubFetchEnable (void)
+
+{
+  ObjMgrProcLoad (OMPROC_FETCH, dirsubfetchproc, dirsubfetchproc,
+                  OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                  DirSubBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+  return TRUE;
+}
+
+static CharPtr smartfetchproc = "SmartBioseqFetch";
+
+static CharPtr smartfetchcmd = NULL;
+
+extern Pointer ReadFromSmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
+extern Pointer ReadFromSmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID)
+
+{
+  Char     cmmd [256];
+  Pointer  dataptr;
+  FILE*    fp;
+  Char     path [PATH_MAX];
+
+  if (datatype != NULL) {
+    *datatype = 0;
+  }
+  if (entityID != NULL) {
+    *entityID = 0;
+  }
+  if (StringHasNoText (accn)) return NULL;
+
+  if (smartfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "SMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	smartfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (smartfetchcmd == NULL) return NULL;
+
+  TmpNam (path);
+
+#ifdef OS_UNIX
+  sprintf (cmmd, "csh %s %s > %s", smartfetchcmd, accn, path);
+  system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", smartfetchcmd, accn, path);
+  system (cmmd);
+#endif
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return NULL;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, datatype, entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+  return dataptr;
+}
+
+
+static Int2 LIBCALLBACK SmartBioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  Char              cmmd [256];
+  Pointer           dataptr;
+  Uint2             datatype;
+  Uint2             entityID;
+  FILE*             fp;
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  Char              path [PATH_MAX];
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sip;
+  TextSeqIdPtr      tsip;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  if (sip->choice != SEQID_GENBANK) return OM_MSG_RET_ERROR;
+  tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+  if (tsip == NULL || StringHasNoText (tsip->accession)) return OM_MSG_RET_ERROR;
+
+  if (smartfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "SMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	smartfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (smartfetchcmd == NULL) return OM_MSG_RET_ERROR;
+
+  TmpNam (path);
+
+#ifdef OS_UNIX
+  sprintf (cmmd, "csh %s %s > %s", smartfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", smartfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return OM_MSG_RET_ERROR;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+
+  if (dataptr == NULL) return OM_MSG_RET_OK;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  bsp = BioseqFindInSeqEntry (sip, sep);
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+  return OM_MSG_RET_DONE;
+}
+
+static Boolean SmartFetchEnable (void)
+
+{
+  ObjMgrProcLoad (OMPROC_FETCH, smartfetchproc, smartfetchproc,
+                  OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                  SmartBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+  return TRUE;
+}
+
+static CharPtr tpasmartfetchproc = "TPASmartBioseqFetch";
+
+static CharPtr tpasmartfetchcmd = NULL;
+
+extern Pointer ReadFromTPASmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
+extern Pointer ReadFromTPASmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID)
+
+{
+  Char     cmmd [256];
+  Pointer  dataptr;
+  FILE*    fp;
+  Char     path [PATH_MAX];
+
+  if (datatype != NULL) {
+    *datatype = 0;
+  }
+  if (entityID != NULL) {
+    *entityID = 0;
+  }
+  if (StringHasNoText (accn)) return NULL;
+
+  if (tpasmartfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "TPASMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	tpasmartfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (tpasmartfetchcmd == NULL) return NULL;
+
+  TmpNam (path);
+
+#ifdef OS_UNIX
+  sprintf (cmmd, "csh %s %s > %s", tpasmartfetchcmd, accn, path);
+  system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", tpasmartfetchcmd, accn, path);
+  system (cmmd);
+#endif
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return NULL;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, datatype, entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+  return dataptr;
+}
+
+
+static Int2 LIBCALLBACK TPASmartBioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  Char              cmmd [256];
+  Pointer           dataptr;
+  Uint2             datatype;
+  Uint2             entityID;
+  FILE*             fp;
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  Char              path [PATH_MAX];
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sip;
+  TextSeqIdPtr      tsip;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  if (sip->choice != SEQID_TPG) return OM_MSG_RET_ERROR;
+  tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+  if (tsip == NULL || StringHasNoText (tsip->accession)) return OM_MSG_RET_ERROR;
+
+  if (tpasmartfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "TPASMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	tpasmartfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (tpasmartfetchcmd == NULL) return OM_MSG_RET_ERROR;
+
+  TmpNam (path);
+
+#ifdef OS_UNIX
+  sprintf (cmmd, "csh %s %s > %s", tpasmartfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+#ifdef OS_MSWIN
+  sprintf (cmmd, "%s %s -o %s", tpasmartfetchcmd, tsip->accession, path);
+  system (cmmd);
+#endif
+
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return OM_MSG_RET_ERROR;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+
+  if (dataptr == NULL) return OM_MSG_RET_OK;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  bsp = BioseqFindInSeqEntry (sip, sep);
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+  return OM_MSG_RET_DONE;
+}
+
+static Boolean TPASmartFetchEnable (void)
+
+{
+  ObjMgrProcLoad (OMPROC_FETCH, tpasmartfetchproc, tpasmartfetchproc,
+                  OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                  TPASmartBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+  return TRUE;
+}
+#endif
 
 
 static ValNodePtr CollectFieldList(BioseqPtr bsp)
@@ -335,7 +712,18 @@ Int2 Main(void)
     return 1;
   }
 
+#ifdef INTERNAL_NCBI_SRC_CHK
+    DirSubFetchEnable ();
+    SmartFetchEnable ();
+    TPASmartFetchEnable ();
+
+    if (! PUBSEQBioseqFetchEnable ("src_chk", FALSE)) {
+      Message (MSG_POSTERR, "PUBSEQBioseqFetchEnable failed");
+      return 1;
+    }
+#else
   PubSeqFetchEnable ();
+#endif
 
   /* process command line arguments */
 
@@ -394,5 +782,6 @@ Int2 Main(void)
   FileClose (fp);
   bsp_list = ValNodeFree (bsp_list);
   field_list = FieldTypeListFree (field_list);
+
   return rval;
 }

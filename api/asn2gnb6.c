@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.196 $
+* $Revision: 1.198 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -472,9 +472,11 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "GeneID",
   "GO",
   "GOA",
+  "GreengenesID",
   "GRIN",
   "H-InvDB",
   "HGNC",
+  "HMPID",
   "HOMD",
   "HSSP",
   "IMGT/GENE-DB",
@@ -547,6 +549,7 @@ NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
   "IMGT/LIGM",
   "JCM",
   "MGI",
+  "MycoBank",
   "NBRC",
   "RZPD",
   "taxon",

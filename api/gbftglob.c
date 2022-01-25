@@ -63,7 +63,8 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"metagenomic", Class_none}, { "culture_collection", Class_text},
  {"bio_material", Class_text}, { "ncRNA_class", Class_text},
  {"tag_peptide", Class_text}, { "mating_type", Class_text},
- {"satellite", Class_text}, { "gene_synonym", Class_text}
+ {"satellite", Class_text}, { "gene_synonym", Class_text},
+ { "UniProtKB_evidence", Class_text}
 };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {

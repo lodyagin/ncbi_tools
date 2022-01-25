@@ -753,8 +753,6 @@
 		3734FD650FF2AF7D004C8F4B /* ncbi_host_infop.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F9490FF2AF7C004C8F4B /* ncbi_host_infop.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD670FF2AF7D004C8F4B /* ncbi_http_connector.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F94B0FF2AF7C004C8F4B /* ncbi_http_connector.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD690FF2AF7D004C8F4B /* ncbi_lb.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F94D0FF2AF7C004C8F4B /* ncbi_lb.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		3734FD6A0FF2AF7D004C8F4B /* ncbi_lbsm.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F94E0FF2AF7C004C8F4B /* ncbi_lbsm.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		3734FD6B0FF2AF7D004C8F4B /* ncbi_lbsm_ipc.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F94F0FF2AF7C004C8F4B /* ncbi_lbsm_ipc.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD6C0FF2AF7D004C8F4B /* ncbi_lbsmd.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F9500FF2AF7C004C8F4B /* ncbi_lbsmd.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD6F0FF2AF7D004C8F4B /* ncbi_local.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F9530FF2AF7C004C8F4B /* ncbi_local.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3734FD710FF2AF7D004C8F4B /* ncbi_memory_connector.h in Headers */ = {isa = PBXBuildFile; fileRef = 3734F9550FF2AF7C004C8F4B /* ncbi_memory_connector.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -1055,8 +1053,6 @@
 		379747C30FF3C77600138501 /* ncbi_host_infop.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F9490FF2AF7C004C8F4B /* ncbi_host_infop.h */; };
 		379747C40FF3C77600138501 /* ncbi_http_connector.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F94B0FF2AF7C004C8F4B /* ncbi_http_connector.h */; };
 		379747C50FF3C77600138501 /* ncbi_lb.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F94D0FF2AF7C004C8F4B /* ncbi_lb.h */; };
-		379747C60FF3C77600138501 /* ncbi_lbsm.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F94E0FF2AF7C004C8F4B /* ncbi_lbsm.h */; };
-		379747C70FF3C77600138501 /* ncbi_lbsm_ipc.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F94F0FF2AF7C004C8F4B /* ncbi_lbsm_ipc.h */; };
 		379747C80FF3C77600138501 /* ncbi_lbsmd.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F9500FF2AF7C004C8F4B /* ncbi_lbsmd.h */; };
 		379747C90FF3C77600138501 /* ncbi_local.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F9530FF2AF7C004C8F4B /* ncbi_local.h */; };
 		379747CA0FF3C77600138501 /* ncbi_memory_connector.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734F9550FF2AF7C004C8F4B /* ncbi_memory_connector.h */; };
@@ -1199,8 +1195,6 @@
 				379747C30FF3C77600138501 /* ncbi_host_infop.h in CopyFiles */,
 				379747C40FF3C77600138501 /* ncbi_http_connector.h in CopyFiles */,
 				379747C50FF3C77600138501 /* ncbi_lb.h in CopyFiles */,
-				379747C60FF3C77600138501 /* ncbi_lbsm.h in CopyFiles */,
-				379747C70FF3C77600138501 /* ncbi_lbsm_ipc.h in CopyFiles */,
 				379747C80FF3C77600138501 /* ncbi_lbsmd.h in CopyFiles */,
 				379747C90FF3C77600138501 /* ncbi_local.h in CopyFiles */,
 				379747CA0FF3C77600138501 /* ncbi_memory_connector.h in CopyFiles */,
@@ -2112,8 +2106,6 @@
 		3734F9490FF2AF7C004C8F4B /* ncbi_host_infop.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_host_infop.h; path = ../../../connect/ncbi_host_infop.h; sourceTree = SOURCE_ROOT; };
 		3734F94B0FF2AF7C004C8F4B /* ncbi_http_connector.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_http_connector.h; path = ../../../connect/ncbi_http_connector.h; sourceTree = SOURCE_ROOT; };
 		3734F94D0FF2AF7C004C8F4B /* ncbi_lb.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_lb.h; path = ../../../connect/ncbi_lb.h; sourceTree = SOURCE_ROOT; };
-		3734F94E0FF2AF7C004C8F4B /* ncbi_lbsm.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_lbsm.h; path = ../../../connect/ncbi_lbsm.h; sourceTree = SOURCE_ROOT; };
-		3734F94F0FF2AF7C004C8F4B /* ncbi_lbsm_ipc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_lbsm_ipc.h; path = ../../../connect/ncbi_lbsm_ipc.h; sourceTree = SOURCE_ROOT; };
 		3734F9500FF2AF7C004C8F4B /* ncbi_lbsmd.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_lbsmd.h; path = ../../../connect/ncbi_lbsmd.h; sourceTree = SOURCE_ROOT; };
 		3734F9530FF2AF7C004C8F4B /* ncbi_local.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_local.h; path = ../../../connect/ncbi_local.h; sourceTree = SOURCE_ROOT; };
 		3734F9550FF2AF7C004C8F4B /* ncbi_memory_connector.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ncbi_memory_connector.h; path = ../../../connect/ncbi_memory_connector.h; sourceTree = SOURCE_ROOT; };
@@ -3663,8 +3655,6 @@
 				3734F9490FF2AF7C004C8F4B /* ncbi_host_infop.h */,
 				3734F94B0FF2AF7C004C8F4B /* ncbi_http_connector.h */,
 				3734F94D0FF2AF7C004C8F4B /* ncbi_lb.h */,
-				3734F94E0FF2AF7C004C8F4B /* ncbi_lbsm.h */,
-				3734F94F0FF2AF7C004C8F4B /* ncbi_lbsm_ipc.h */,
 				3734F9500FF2AF7C004C8F4B /* ncbi_lbsmd.h */,
 				3734F9530FF2AF7C004C8F4B /* ncbi_local.h */,
 				3734F9550FF2AF7C004C8F4B /* ncbi_memory_connector.h */,
@@ -4413,8 +4403,6 @@
 				3734FD650FF2AF7D004C8F4B /* ncbi_host_infop.h in Headers */,
 				3734FD670FF2AF7D004C8F4B /* ncbi_http_connector.h in Headers */,
 				3734FD690FF2AF7D004C8F4B /* ncbi_lb.h in Headers */,
-				3734FD6A0FF2AF7D004C8F4B /* ncbi_lbsm.h in Headers */,
-				3734FD6B0FF2AF7D004C8F4B /* ncbi_lbsm_ipc.h in Headers */,
 				3734FD6C0FF2AF7D004C8F4B /* ncbi_lbsmd.h in Headers */,
 				3734FD6F0FF2AF7D004C8F4B /* ncbi_local.h in Headers */,
 				3734FD710FF2AF7D004C8F4B /* ncbi_memory_connector.h in Headers */,

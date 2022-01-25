@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/20/95
 *
-* $Revision: 6.56 $
+* $Revision: 6.57 $
 *
 * File Description: 
 *       template for custom scans of ASN.1 release files
@@ -911,6 +911,39 @@ static void FindMuidCitations (
   }
 }
 
+static void FindWholeGraphLocs (
+  SeqGraphPtr sgp,
+  Pointer userdata
+)
+
+{
+  ChangeDataPtr  cdp;
+  SeqLocPtr      slp;
+  ThrdDataPtr    tdp;
+
+  if (sgp == NULL) return;
+  cdp = (ChangeDataPtr) userdata;
+  if (cdp == NULL) return;
+  tdp = cdp->tdp;
+  if (tdp == NULL) return;
+  if (tdp->fp == NULL) return;
+
+  slp = sgp->loc;
+  if (slp == NULL) {
+    if (tdp->verbose) {
+      TSPrintLine (tdp->fp, "GPHLOC", tdp->id, NULL, NULL, "\t");
+    } else {
+      TSPrintLine (tdp->fp, "GPHLOC", tdp->id, NULL, NULL, " ");
+    }
+  } else if (slp->choice == SEQLOC_WHOLE) {
+    if (tdp->verbose) {
+      TSPrintLine (tdp->fp, "GPHWHL", tdp->id, NULL, NULL, "\t");
+    } else {
+      TSPrintLine (tdp->fp, "GPHWHL", tdp->id, NULL, NULL, " ");
+    }
+  }
+}
+
 static void RnaProtCmntTrailingCommaFix (
   SeqFeatPtr sfp,
   Pointer userdata
@@ -1501,6 +1534,7 @@ static void DoReport (
   VisitBioSourcesInSep (sep, (Pointer) &cdbefore, LookForSemicolonedVouchers);
   VisitFeaturesInSep (sep, (Pointer) &cdbefore, FindCommaInGene);
   VisitFeaturesInSep (sep, (Pointer) &cdbefore, FindMuidCitations);
+  VisitGraphsInSep (sep, (Pointer) &cdbefore, FindWholeGraphLocs);
 
   tmp = Se2Bs (sep);
   if (! BSEqual (bs, tmp)) {

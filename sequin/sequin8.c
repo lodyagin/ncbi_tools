@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.537 $
+* $Revision: 6.540 $
 *
 * File Description: 
 *
@@ -403,7 +403,8 @@ extern void ExtendSeqLocToPosition (SeqLocPtr slp, Boolean end5, Int4 pos)
   }
 }
 
-static void ExtendOnePartialFeatureEx (SeqFeatPtr sfp, Boolean extend5, Boolean extend3)
+
+static void ExtendOnePartialFeatureExEx (SeqFeatPtr sfp, Boolean extend5, Boolean extend3, Boolean stop_at_gap)
 {
   BioseqPtr   bsp;
   Boolean     partial3, partial5;
@@ -416,7 +417,11 @@ static void ExtendOnePartialFeatureEx (SeqFeatPtr sfp, Boolean extend5, Boolean 
   CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
   if (partial5 && extend5)
   {
-    start_diff = ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+    if (stop_at_gap) {
+      start_diff = ExtendSeqLocToEndOrGap (sfp->location, bsp, TRUE);
+    } else {
+      start_diff = ExtendSeqLocToEnd (sfp->location, bsp, TRUE);
+    }
     if (start_diff > 0 && sfp->data.choice == SEQFEAT_CDREGION) {
       crp = (CdRegionPtr) sfp->data.value.ptrvalue;
       if (crp != NULL) {
@@ -429,9 +434,26 @@ static void ExtendOnePartialFeatureEx (SeqFeatPtr sfp, Boolean extend5, Boolean 
   }
   if (partial3 && extend3)
   {
-    ExtendSeqLocToEnd (sfp->location, bsp, FALSE);
+    if (stop_at_gap) {
+      ExtendSeqLocToEndOrGap (sfp->location, bsp, FALSE);
+    } else {
+      ExtendSeqLocToEnd (sfp->location, bsp, FALSE);
+    }
   }
 }
+
+
+static void ExtendOnePartialFeatureEx (SeqFeatPtr sfp, Boolean extend5, Boolean extend3)
+{
+  ExtendOnePartialFeatureExEx (sfp, extend5, extend3, FALSE);
+}
+
+
+static void ExtendOnePartialFeatureToEndOrGap (SeqFeatPtr sfp, Pointer userdata)
+{
+  ExtendOnePartialFeatureExEx (sfp, TRUE, TRUE, TRUE);
+}
+
 
 static void ExtendOnePartialFeature (SeqFeatPtr sfp, Pointer userdata)
 {
@@ -491,6 +513,7 @@ typedef struct extendpartialfeaturesform {
   DialoG feature_type;
   ButtoN extend5;
   ButtoN extend3;
+  ButtoN stop_at_gaps;
   DialoG string_constraint;
   ButtoN leave_dlg_up;
 } ExtendPartialFeaturesFormData, PNTR ExtendPartialFeaturesFormPtr;
@@ -505,7 +528,7 @@ static void DoExtendPartialFeatures (ButtoN b)
   ValNodePtr vnp;
   StringConstraintPtr scp;
   ValNodePtr object_list;
-  Boolean    extend5, extend3;
+  Boolean    extend5, extend3, stop_at_gaps;
 
   f = (ExtendPartialFeaturesFormPtr) GetObjectExtra (b);
   if (f == NULL) return;
@@ -538,9 +561,10 @@ static void DoExtendPartialFeatures (ButtoN b)
 
   extend5 = GetStatus (f->extend5);
   extend3 = GetStatus (f->extend3);
+  stop_at_gaps = GetStatus (f->stop_at_gaps);
   for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
     if (vnp->choice == OBJ_SEQFEAT && vnp->data.ptrvalue != NULL) {
-      ExtendOnePartialFeatureEx (vnp->data.ptrvalue, extend5, extend3);
+      ExtendOnePartialFeatureExEx (vnp->data.ptrvalue, extend5, extend3, stop_at_gaps);
     }
   }
   object_list = ValNodeFree (object_list);
@@ -601,6 +625,9 @@ extern void ExtendPartialFeaturesWithConstraint (IteM i)
   SetStatus (f->extend5, TRUE);
   f->extend3 = CheckBox (g, "Extend partial 3'", NULL);
   SetStatus (f->extend3, TRUE);
+
+  f->stop_at_gaps = CheckBox (h, "Stop at gaps", NULL);
+  SetStatus (f->stop_at_gaps, TRUE);
   
   p2 = StaticPrompt (h, "Optional Constraint", 0, dialogTextHeight, programFont, 'c');
   f->string_constraint = StringConstraintDialog (h, "Where feature text", FALSE, NULL, NULL);
@@ -614,6 +641,7 @@ extern void ExtendPartialFeaturesWithConstraint (IteM i)
   AlignObjects (ALIGN_CENTER, (HANDLE) p1,
                               (HANDLE) f->feature_type,
                               (HANDLE) g,
+                              (HANDLE) f->stop_at_gaps,
                               (HANDLE) p2,
                               (HANDLE) f->string_constraint,
                               (HANDLE) c,
@@ -12229,6 +12257,7 @@ static void AcceptTSAAssembly (ButtoN b)
   ValNodePtr         err_list, coverage_report, vnp, ids_list, match_errs;
   SeqAlignPtr        salp, salp_next;
   LogInfoPtr         lip;
+  SeqEntryPtr        sep;
 
   frm = (TSAAssemblyFormPtr) GetObjectExtra (b);
   if (frm == NULL) {
@@ -12269,16 +12298,18 @@ static void AcceptTSAAssembly (ButtoN b)
     ValNodeLink (&coverage_report, err_list);
     err_list = coverage_report;
 
+    lip = OpenLog ("TSA Table Problems");
     if (err_list != NULL) {
-      lip = OpenLog ("TSA Table Problems");
       for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
         fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
       }
       lip->data_in_log = TRUE;
-      CloseLog (lip);
-      lip = FreeLog (lip);
       err_list = ValNodeFreeData (err_list);
     }
+    sep = GetTopSeqEntryForEntityID (frm->input_entityID);
+    VisitBioseqsInSep (sep, lip, ReportNonTSABioseqs);
+    CloseLog (lip);
+    lip = FreeLog (lip);
   }
 
   ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);

@@ -1,4 +1,4 @@
-.TH ASN2FSA 1 2005-05-16 NCBI "NCBI Tools User's Manual"
+.TH ASN2FSA 1 2009-07-31 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asn2fsa \- convert biological sequence data from ASN.1 to FASTA
 .SH SYNOPSIS
@@ -54,7 +54,9 @@ Input ASN.1 type:
 .RS
 .PD 0
 .IP a
-any (autodetected; default)
+Automatic (default)
+.IP z
+Any
 .IP e
 Seq-entry
 .IP b
@@ -126,7 +128,7 @@ Protein output file name
 File selection substring (\fB.ent\fP by default) [String]
 .TP
 \fB\-z\fP
-Print quality score gap as -1
+Print quality score gap as \-1
 .SH AUTHOR
 The National Center for Biotechnology Information.
 .SH SEE ALSO

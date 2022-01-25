@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/27/2007
 *
-* $Revision: 1.57 $
+* $Revision: 1.59 $
 *
 * File Description: 
 * This file contains functions for automatically generating definition lines.
@@ -12319,6 +12319,7 @@ NLM_EXTERN Boolean ConvertImpToImpFunc (SeqFeatPtr sfp, Uint2 featdef_to)
   {
     ifp->key = StringSave (featname);
   }
+  sfp->idx.subtype = 0;
 
   return TRUE;
 }
@@ -12566,6 +12567,182 @@ static void InstantiateMatPeptideProductForProteinFeature (SeqFeatPtr sfp, Point
     sdp->data.ptrvalue = StringSave (defline_buf);
   }
 
+}
+
+
+NLM_EXTERN void ExtraCDSCreationActions (SeqFeatPtr cds, SeqEntryPtr parent_sep)
+{
+  ByteStorePtr       bs;
+  CharPtr            prot, ptr;
+  BioseqPtr          bsp;
+  Char               ch;
+  Int4               i;
+  SeqEntryPtr        psep, nsep;
+  MolInfoPtr         mip;
+  ValNodePtr         vnp, descr;
+  SeqFeatPtr         prot_sfp;
+  ProtRefPtr         prp;
+  Boolean            partial5, partial3;
+
+  if (cds == NULL) return;
+
+  CheckSeqLocForPartial (cds->location, &partial5, &partial3);
+
+  /* Create corresponding protein sequence data for the CDS */
+
+  bs = ProteinFromCdRegionEx (cds, TRUE, FALSE);
+  if (NULL == bs)
+    return;
+
+  prot = BSMerge (bs, NULL);
+  bs = BSFree (bs);
+  if (NULL == prot)
+    return;
+
+  ptr = prot;
+  ch = *ptr;
+  while (ch != '\0') {
+    *ptr = TO_UPPER (ch);
+    ptr++;
+    ch = *ptr;
+  }
+  i = StringLen (prot);
+  if (i > 0 && prot [i - 1] == '*') {
+    prot [i - 1] = '\0';
+  }
+  bs = BSNew (1000);
+  if (bs != NULL) {
+    ptr = prot;
+    BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
+  }
+
+  /* Create the product protein Bioseq */
+  
+  bsp = BioseqNew ();
+  if (NULL == bsp)
+    return;
+  
+  bsp->repr = Seq_repr_raw;
+  bsp->mol = Seq_mol_aa;
+  bsp->seq_data_type = Seq_code_ncbieaa;
+  bsp->seq_data = (SeqDataPtr) bs;
+  bsp->length = BSLen (bs);
+  bs = NULL;
+  bsp->id = MakeNewProteinSeqId (cds->location, NULL);
+  SeqMgrAddToBioseqIndex (bsp);
+  
+  /* Create a new SeqEntry for the Prot Bioseq */
+  
+  psep = SeqEntryNew ();
+  if (NULL == psep)
+    return;
+  
+  psep->choice = 1;
+  psep->data.ptrvalue = (Pointer) bsp;
+  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, psep);
+  
+  /* Add a descriptor to the protein Bioseq */
+  
+  mip = MolInfoNew ();
+  if (NULL == mip)
+    return;
+  
+  mip->biomol = 8;
+  mip->tech = 8;
+  if (partial5 && partial3) {
+    mip->completeness = 5;
+  } else if (partial5) {
+    mip->completeness = 3;
+  } else if (partial3) {
+    mip->completeness = 4;
+  }
+  vnp = CreateNewDescriptor (psep, Seq_descr_molinfo);
+  if (NULL == vnp)
+    return;
+  
+  vnp->data.ptrvalue = (Pointer) mip;
+  
+  /**/
+  
+  descr = ExtractBioSourceAndPubs (parent_sep);
+
+  AddSeqEntryToSeqEntry (parent_sep, psep, TRUE);
+  nsep = FindNucSeqEntry (parent_sep);
+  ReplaceBioSourceAndPubs (parent_sep, descr);
+  SetSeqFeatProduct (cds, bsp);
+  
+  prp = ProtRefNew ();
+  
+  if (prp != NULL) {
+    prot_sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
+    if (prot_sfp != NULL) {
+      prot_sfp->data.value.ptrvalue = (Pointer) prp;
+      SetSeqLocPartial (prot_sfp->location, partial5, partial3);
+      prot_sfp->partial = (partial5 || partial3);
+    }
+  }
+}
+
+
+NLM_EXTERN SeqFeatPtr GetProtFeature (BioseqPtr protbsp)
+{
+  SeqMgrFeatContext fcontext;
+  SeqAnnotPtr sap;
+  SeqFeatPtr prot_sfp;
+  ProtRefPtr prp;
+
+  if (protbsp == NULL) return NULL;
+
+  prot_sfp = SeqMgrGetNextFeature (protbsp, NULL, 0, FEATDEF_PROT, &fcontext);
+  if (prot_sfp == NULL) {
+    sap = protbsp->annot;
+    while (sap != NULL && prot_sfp == NULL) {
+      if (sap->type == 1) {
+        prot_sfp = sap->data;
+        while (prot_sfp != NULL
+               && (prot_sfp->data.choice != SEQFEAT_PROT
+                   || (prp = prot_sfp->data.value.ptrvalue) == NULL
+                   || prp->processed != 0)) {
+          prot_sfp = prot_sfp->next;
+        }
+      }
+      sap = sap->next;
+    }
+  }
+  return prot_sfp;
+}
+
+
+NLM_EXTERN Boolean ConvertMiscFeatToCodingRegion (SeqFeatPtr sfp)
+{
+  BioseqPtr bsp, prot_bsp;
+  SeqFeatPtr prot;
+  ProtRefPtr prp;
+
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_misc_feature) {
+    return FALSE;
+  }
+
+  sfp->data.value.ptrvalue = ImpFeatFree (sfp->data.value.ptrvalue);
+  sfp->data.value.ptrvalue = CdRegionNew ();
+  sfp->data.choice = SEQFEAT_CDREGION;
+  sfp->idx.subtype = 0;
+
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp != NULL) {
+    ExtraCDSCreationActions (sfp, GetBestTopParentForData (bsp->idx.entityID, bsp));
+    if (!StringHasNoText (sfp->comment)) {
+      prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+      prot = GetProtFeature (prot_bsp);
+      if (prot != NULL) {
+        prp = prot->data.value.ptrvalue;
+        ValNodeAddPointer (&prp->name, 0, sfp->comment);
+        sfp->comment = NULL;
+      }
+    }
+  }
+
+  return TRUE;
 }
 
 

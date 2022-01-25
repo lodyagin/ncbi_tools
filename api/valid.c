@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.1245 $
+* $Revision: 6.1247 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -10365,7 +10365,7 @@ NLM_EXTERN Boolean ParseStructuredVoucher (
   CharPtr  tmp;
 
   if (StringHasNoText (subname)) return FALSE;
-  if (StringLen (subname) < 5) return FALSE;
+  if (StringLen (subname) < 3) return FALSE;
   TrimSpacesAroundString (subname);
 
   ptr = StringChr (subname, ':');
@@ -13642,6 +13642,22 @@ static Boolean FeatureSequencesIdentical (SeqFeatPtr sfp, SeqFeatPtr lastsfp)
   return rsult;
 }
 
+static Boolean GeneXrefsDifferent (SeqFeatPtr sfp, SeqFeatPtr lastsfp)
+
+{
+  SeqFeatPtr  gene, lastgene;
+
+  if (sfp == NULL || lastsfp == NULL) return FALSE;
+
+  gene = GetGeneForFeature (sfp);
+  lastgene = GetGeneForFeature (lastsfp);
+  if (gene == NULL || lastgene == NULL) return FALSE;
+
+  if (gene != lastgene) return TRUE;
+
+  return FALSE;
+}
+
 static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bvsp)
 
 {
@@ -14057,6 +14073,9 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
               /* do not report if mRNAs are linked to two different CDSs */
             } else if (fcontext.sap == sap) {
               if (samelabel) {
+                if (GeneXrefsDifferent (sfp, last)) {
+                  severity = SEV_WARNING;
+                }
                 ValidErr (vsp, severity, ERR_SEQ_FEAT_FeatContentDup, "Duplicate feature");
               } else if (featdeftype != FEATDEF_PUB) {
                 if (fcontext.partialL != partialL || fcontext.partialR != partialR) {
@@ -14099,6 +14118,9 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
               }
             } else {
               if (samelabel) {
+                if (GeneXrefsDifferent (sfp, last)) {
+                  severity = SEV_WARNING;
+                }
                 ValidErr (vsp, severity, ERR_SEQ_FEAT_FeatContentDup, "Duplicate feature (packaged in different feature table)");
               } else if (featdeftype != FEATDEF_PUB) {
                 if (suppress_duplicate_messages && (featdeftype == FEATDEF_CDS || featdeftype == FEATDEF_mRNA) && HaveUniqueFeatIDXrefs (xref, sfp->xref)) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.975 $
+* $Revision: 6.978 $
 *
 * File Description: 
 *
@@ -190,6 +190,22 @@ static ValNodePtr ApplyTranscriptomeIdListWithProgress (ValNodePtr ids_list, Loc
 }
 
 
+NLM_EXTERN void ReportNonTSABioseqs (BioseqPtr bsp, Pointer userdata)
+{
+  LogInfoPtr lip;
+  Char id_str[255];
+
+  if (bsp == NULL || (lip = (LogInfoPtr) userdata) == NULL || lip->fp == NULL || ISA_aa (bsp->mol)) {
+    return;
+  }
+  if (bsp->hist == NULL || bsp->hist->assembly == NULL) {
+    SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_str, PRINTID_REPORT, sizeof (id_str) - 1);
+    fprintf (lip->fp, "%s has no TSA table\n", id_str);
+    lip->data_in_log = TRUE;
+  }
+}
+
+
 static void AddTSATableToBioseq (IteM i)
 {
   BaseFormPtr  bfp;
@@ -256,16 +272,18 @@ static void AddTSATableToBioseq (IteM i)
   ValNodeLink (&coverage_report, err_list);
   err_list = coverage_report;
 
+  lip = OpenLog ("TSA Table Problems");
   if (err_list != NULL) {
-    lip = OpenLog ("TSA Table Problems");
     for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
       fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
     }
     lip->data_in_log = TRUE;
-    CloseLog (lip);
-    lip = FreeLog (lip);
     err_list = ValNodeFreeData (err_list);
   }
+  VisitBioseqsInSep (sep, lip, ReportNonTSABioseqs);
+  CloseLog (lip);
+  lip = FreeLog (lip);
+
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
@@ -304,16 +322,18 @@ static void RefreshTSATables (IteM i)
   err_list = coverage_report;
 
 
+  lip = OpenLog ("TSA Table Problems");
   if (err_list != NULL) {
-    lip = OpenLog ("TSA Table Problems");
     for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
       fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
     }
     lip->data_in_log = TRUE;
-    CloseLog (lip);
-    lip = FreeLog (lip);
     err_list = ValNodeFreeData (err_list);
   }
+  VisitBioseqsInSep (sep, lip, ReportNonTSABioseqs);
+  CloseLog (lip);
+  lip = FreeLog (lip);
+
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
@@ -22383,7 +22403,7 @@ static void MakeSpecialEditMenu (MenU m, BaseFormPtr bfp)
 
   SeparatorItem (s);
   x = SubMenu (s, "Extend Partial Features");
-  i = CommandItem (x, "All", ExtendPartialFeatures);
+  i = CommandItem (x, "All to Ends", ExtendPartialFeatures);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "With Constraint", ExtendPartialFeaturesWithConstraint);
   SetObjectExtra (i, bfp, NULL);

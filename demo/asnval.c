@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.96 $
+* $Revision: 1.98 $
 *
 * File Description:
 *
@@ -60,7 +60,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "7.2"
+#define ASNVAL_APP_VER "7.3"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -804,7 +804,7 @@ static void DoValidation (
       }
       xml_header = GetXmlHeaderText(cutoff);
     }
-    if (!BarcodeValidateOneSeqEntry (ofp, sep, FALSE,
+    if (!BarcodeValidateOneSeqEntry (ofp, sep, TRUE,
                                      vfp->verbosity == 4,
                                      !vfp->has_errors,
                                      xml_header)) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.510 $
+* $Revision: 6.514 $
 *
 * File Description: 
 *
@@ -11669,14 +11669,19 @@ static Boolean GetOverlappingTRNAs (BioseqPtr bsp, SeqLocPtr slp, Int4 loc_right
   SeqFeatPtr sfp;
   SeqMgrFeatContext  context;
   Boolean            found_any = FALSE;
+  Uint1              slp_strand, rna_strand;
 
   if (bsp == NULL || slp == NULL || list == NULL) return FALSE;
+  slp_strand = SeqLocStrand (slp);
 
   for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_RNA, FEATDEF_tRNA, &context);
        sfp != NULL && context.left <= loc_right;
        sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_RNA, FEATDEF_tRNA, &context))
   {
-    if (SeqLocStrand (sfp->location) == SeqLocStrand (slp) && SeqLocCompare (sfp->location, slp) != SLC_NO_MATCH) {
+    rna_strand = SeqLocStrand (sfp->location);
+    if (((slp_strand == Seq_strand_minus && rna_strand == Seq_strand_minus)
+         || (slp_strand != Seq_strand_minus && rna_strand != Seq_strand_minus))
+        && SeqLocCompare (sfp->location, slp) != SLC_NO_MATCH) {
       ValNodeAddPointer (list, OBJ_SEQFEAT, sfp);
       found_any = TRUE;
     }
@@ -17601,43 +17606,138 @@ static Boolean CouldExtendRight (BioseqPtr bsp, Int4 pos)
 }
 
 
-static Boolean ExtendPartialSeqIntToEndOrGap (SeqIntPtr sint, BioseqPtr bsp)
+NLM_EXTERN Int4 
+Extend5PartialSeqIntToEndOrGap 
+(SeqIntPtr sint,
+ BioseqPtr bsp,
+ Boolean   short_only)
 {
-  Boolean   rval = FALSE;
-  Int4      distance;
+  Int4      distance = 0;
 
   if (sint == NULL || bsp == NULL) {
     return FALSE;
   }
 
-  if (sint->if_from != NULL && sint->from != 0) {
-    if (sint->from < 3) {
-      sint->from = 0;
-      rval = TRUE;
-    } else if (bsp->repr == Seq_repr_delta) {
-      /* wasn't close to the sequence end, but perhaps it is close to a gap */
+  if (sint->strand == Seq_strand_minus) {
+    if (sint->if_to != NULL && sint->to != bsp->length - 1) {
+      distance = DistanceToDownstreamGap (sint->to, bsp);
+      if (distance == 1 || distance == 2 || (distance > -1 && !short_only)) {
+        sint->to += distance;
+      } else if (!short_only || sint->to > bsp->length - 4) {
+        distance = bsp->length - 1 - sint->to;
+        sint->to = bsp->length - 1;     
+      } else {
+        distance = 0;
+      }
+    }
+  } else {
+    if (sint->if_from != NULL && sint->from != 0) {
       distance = DistanceToUpstreamGap (sint->from, bsp);
-      if (distance == 1 || distance == 2) {
+      if (distance == 1 || distance == 2 || (distance > -1 && !short_only)) {
         sint->from -= distance;
-        rval = TRUE;
+      } else if (!short_only || sint->from < 3) {
+        distance = sint->from;
+        sint->from = 0;
+      } else {
+        distance = 0;
       }
     }
   }
 
-  if (sint->if_to != NULL && sint->to != bsp->length - 1) {
-    if (sint->to > bsp->length - 4) {
-      sint->to = bsp->length - 1;
-      rval = TRUE;
-    } else if (bsp->repr == Seq_repr_delta) {
-      /* wasn't close to the sequence end, but perhaps it is close to a gap */
+  return distance;
+}
+
+
+NLM_EXTERN Int4 
+Extend3PartialSeqIntToEndOrGap 
+(SeqIntPtr sint,
+ BioseqPtr bsp,
+ Boolean   short_only)
+{
+  Int4      distance = 0;
+
+  if (sint == NULL || bsp == NULL) {
+    return FALSE;
+  }
+
+  if (sint->strand == Seq_strand_minus) {
+    if (sint->if_from != NULL && sint->from != 0) {
+      distance = DistanceToUpstreamGap (sint->from, bsp);
+      if (distance == 1 || distance == 2 || (distance > -1 && !short_only)) {
+        sint->from -= distance;
+      } else if (!short_only || sint->from < 3) {
+        distance = sint->from;
+        sint->from = 0;
+      } else {
+        distance = 0;
+      }
+    }
+  } else {
+    if (sint->if_to != NULL && sint->to != bsp->length - 1) {
       distance = DistanceToDownstreamGap (sint->to, bsp);
-      if (distance == 1 || distance == 2) {
+      if (distance == 1 || distance == 2 || (distance > -1 && !short_only)) {
         sint->to += distance;
-        rval = TRUE;
+      } else if (!short_only || sint->to > bsp->length - 4) {
+        distance = bsp->length - 1 - sint->to;
+        sint->to = bsp->length - 1;     
+      } else {
+        distance = 0;
       }
     }
   }
+  return distance;
+}
+
+
+
+static Boolean ExtendPartialSeqIntToEndOrGap (SeqIntPtr sint, BioseqPtr bsp)
+{
+  Boolean rval = FALSE;
+  if (Extend5PartialSeqIntToEndOrGap (sint, bsp, TRUE) > 0) {
+    rval = TRUE;
+  }
+  
+  if (Extend3PartialSeqIntToEndOrGap (sint, bsp, TRUE) > 0) {
+    rval = TRUE;
+  }
+
   return rval;
+}
+
+
+NLM_EXTERN Int4 ExtendSeqLocToEndOrGap (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
+{
+  Int4 diff = 0;
+  SeqLocPtr slp_index;
+
+  if (slp == NULL || bsp == NULL) return 0;
+
+  switch (slp->choice)
+  {
+    case SEQLOC_INT:
+      if (end5) {
+        diff = Extend5PartialSeqIntToEndOrGap (slp->data.ptrvalue, bsp, FALSE);
+      } else {
+        diff = Extend3PartialSeqIntToEndOrGap (slp->data.ptrvalue, bsp, FALSE);
+      }
+      break;
+    case SEQLOC_MIX:
+  	case SEQLOC_PACKED_INT:
+      if (end5) {
+        /* take the first one */
+        diff = ExtendSeqLocToEndOrGap (slp->data.ptrvalue, bsp, end5);
+      } else {
+        /* take the last one */
+        for (slp_index = slp->data.ptrvalue; slp_index != NULL && slp_index->next != NULL; slp_index = slp_index->next) {
+        }
+        if (slp_index != NULL) {
+          diff = ExtendSeqLocToEndOrGap (slp_index, bsp, end5);
+        }
+      }
+      break;
+  }
+
+  return diff;
 }
 
 
@@ -22799,6 +22899,21 @@ BarcodeValidateOneSeqEntry
             }
             BarcodeValPrintStr (ofp, NULL, "</message>\n");
           }
+        }
+      }
+      if (show_all) {
+        for (vnp = pass_fail_list; vnp != NULL; vnp = vnp->next) {
+          res = (BarcodeTestResultsPtr) vnp->data.ptrvalue;
+          SeqIdWrite (SeqIdFindBest (res->bsp->id, SEQID_GENBANK), id_buf, PRINTID_REPORT, sizeof (id_buf) - 1);
+          reason = GetBarcodeTestFailureReasons (res);
+          BarcodeValPrintStr (ofp, "  <message severity=\"INFO\" seq-id=\"%s\">", id_buf);
+          if (PassBarcodeTests(res)) {
+            BarcodeValPrintStr (ofp, NULL, "PASS");
+          } else {
+            BarcodeValPrintStr (ofp, "FAIL (%s)", reason == NULL ? "" : reason);
+          }
+          BarcodeValPrintStr (ofp, NULL, "</message>\n");
+          reason = MemFree (reason);
         }
       }
     } else {

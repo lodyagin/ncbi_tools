@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.70 $
+* $Revision: 6.71 $
 *
 * File Description:
 *
@@ -554,6 +554,9 @@ static CitBookPtr PutATProc (PubdescPagePtr ppp)
     {
       vnp->choice = 1;
       vnp->data.ptrvalue = SaveStringFromTextAndStripNewlines (ppp->xa_info);
+      if (vnp->data.ptrvalue == NULL) {
+        vnp->data.ptrvalue = StringSave ("?");
+      }
     }
     vnp = ValNodeNew (vnphead);
     if (vnp != NULL)

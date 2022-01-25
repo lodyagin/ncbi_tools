@@ -101,7 +101,7 @@ For example:
 
     Contig2     +       1       SP6     left
     Contig3     +       1
-    Contig1     -               T7      right
+    Contig1     \-               T7      right
 
 .fi
 The first column is the contig name, the second is the orientation,
@@ -180,12 +180,12 @@ Length of sequence in bp (default = 0). The length is checked against
 the actual number of bases we get. For phase 1 and 2 sequence it is
 also used to estimate gap lengths. For phase 1 and 2 records, it is
 important to use a number GREATER than the amount of provided
-nucleotide, otherwise this will generate false 'gaps'.  Here is
+nucleotide, otherwise this will generate false `gaps'.  Here is
 assumed that the putative full length of the BAC or cosmid will be
-used.  There should be at least 20 to 30 'n' in between the segments
+used.  There should be at least 20 to 30 `n' in between the segments
 (you can check for these in Sequin), as this will ensure proper
 behavior when this sequence is used with BLAST.  Otherwise
-'artifactual' unrelated segment neighbors may be brought into
+`artifactual' unrelated segment neighbors may be brought into
 proximity of each other.
 .TP
 \fB\-m\fP

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.111 $
+* $Revision: 1.112 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -718,6 +718,7 @@ typedef enum {
   FTQUAL_trna_aa,
   FTQUAL_trna_codons,
   FTQUAL_trna_codons_note,
+  FTQUAL_UniProtKB_evidence,
   FTQUAL_usedin,
   FTQUAL_xtra_prod_quals,
   ASN2GNBK_TOTAL_FEATUR

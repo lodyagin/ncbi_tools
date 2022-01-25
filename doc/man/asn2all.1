@@ -1,4 +1,4 @@
-.TH ASN2ALL 1 2007-10-19 NCBI "NCBI Tools User's Manual"
+.TH ASN2ALL 1 2009-07-31 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asn2all \- generate reports from ASN.1 biological data
 .SH SYNOPSIS
@@ -47,16 +47,16 @@ decompression.
 .PP
 In \fBasn2all\fP, the name of the file to be processed is specified by
 the \fB\-i\fP command line argument.
-Use \fB-a\ t\fP to indicate that it is a release file and \fB-b\fP to
+Use \fB\-a\ t\fP to indicate that it is a release file and \fB\-b\fP to
 indicate that it is binary ASN.1.
 A text ASN.1 file obtained from Entrez can be processed by using
-\fB-a\ a\fP instead of \fB-a\ t\ -b\fP.
+\fB\-a\ a\fP instead of \fB\-a\ t\ \-b\fP.
 .PP
 Nucleotide and protein records can be processed simultaneously.
-Use the \fB-o\fP argument to indicate the nucleotide output file, and
-the \fB-v\fP argument for the protein output file.
+Use the \fB\-o\fP argument to indicate the nucleotide output file, and
+the \fB\-v\fP argument for the protein output file.
 .PP
-The \fB-f\fP argument determines the format to be generated, and is
+The \fB\-f\fP argument determines the format to be generated, and is
 documented in more detail (along with other options) in the following
 section.
 .SH OPTIONS
@@ -79,7 +79,9 @@ Input ASN.1 type:
 .RS
 .PD 0
 .IP a
-any (autodetected; default)
+Automatic (default)
+.IP z
+Any
 .IP e
 Seq-entry
 .IP b
@@ -110,6 +112,8 @@ Output Format:
 GenBank/GenPept (default)
 .IP f
 FASTA
+.IP d
+CDS FASTA
 .IP t
 Sequin-style 5-column feature table
 .IP y
@@ -169,7 +173,7 @@ File selection suffix when working with entire directories.
 The command
 .RS
 .sp
-  asn2all -i gbpri1.aso -a t -b -f g -o gbpri1.nuc -v gbpri1.prt
+  asn2all \-i gbpri1.aso \-a t \-b \-f g \-o gbpri1.nuc \-v gbpri1.prt
 .sp
 .RE
 will generate GenBank and GenPept reports from \fBgbpri1.aso\fP.

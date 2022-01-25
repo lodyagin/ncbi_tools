@@ -1,10 +1,11 @@
-.TH ASN2GB 1 2007-10-19 NCBI "NCBI Tools User's Manual"
+.TH ASN2GB 1 2009-07-31 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asn2gb \- convert ASN.1 biological data to a GenBank-style flat format
 .SH SYNOPSIS
 .B asn2gb
 [\|\fB\-\fP\|]
 [\|\fB\-A\fP\ \fIaccession\fP\|]
+[\|\fB\-F\fP\|]
 [\|\fB\-a\fP\ \fIasn-type\fP\|]
 [\|\fB\-b\fP\|]
 [\|\fB\-c\fP\|]
@@ -40,10 +41,14 @@ Print usage message
 \fB\-A\fP\ \fIaccession\fP
 Accession to fetch
 .TP
+\fB\-F\fP
+Fetch remote annotations
+.TP
 \fB\-a\fP\ \fIasn-type\fP
 ASN.1 Type:
 .RS
 .PD 0
+.IP "[Single record]"
 .IP a
 Any (autodetected; default)
 .IP e
@@ -54,6 +59,9 @@ Bioseq
 bioseq-Set
 .IP m
 seq-subMit
+.IP q
+Catenated
+.IP "[Release file; components individually processed and freed]"
 .IP t
 baTch bioseq-set
 .IP u
@@ -195,10 +203,14 @@ Report
 .IP 2
 Sequin/Release
 .IP 3
-asn2gb/asn2flat
+asn2gb SSEC/nocleanup
 .IP 4
 asn2flat BSEC/nocleanup
 .IP 5
+asn2gb/asn2flat
+.IP 6
+asn2gb NEW dbxref/OLD dbxref
+.IP 7
 oldasn2gb/newasn2gb
 .PD
 .RE

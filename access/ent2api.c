@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.113 $
+* $Revision: 1.114 $
 *
 * File Description: 
 *
@@ -1079,7 +1079,8 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
           StringICmp (db, "nuccore") != 0 &&
           StringICmp (db, "nucgss") != 0 &&
           StringICmp (db, "nucest") != 0 &&
-          StringICmp (db, "toolkit") != 0) {
+          StringICmp (db, "toolkit") != 0 &&
+          StringICmp (db, "blastdbinfo") != 0) {
         sprintf (buf, "Database %s has no links", db);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
@@ -1350,6 +1351,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrEx (
             } else if (StringICmp (last, "Comment") == 0 && StringICmp (str, "Comments") == 0) {
             } else if (StringICmp (last, "SID") == 0 && StringICmp (str, "SidExternalID") == 0) {
             } else if (StringICmp (last, "Platform") == 0 && StringICmp (str, "Platform Reporter Type") == 0) {
+            } else if (StringICmp (last, "Database") == 0 && StringICmp (str, "Database Name") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);

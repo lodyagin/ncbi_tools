@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.174 $
+* $Revision: 6.177 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -4104,6 +4104,7 @@ NLM_EXTERN SeqLocPtr LIBCALL productLoc_to_locationLoc(SeqFeatPtr sfp, SeqLocPtr
 	SeqBondPtr sbp;
 	ValNode vn;
 	Boolean is_cdregion = FALSE;
+  Boolean partial5, partial3;
 
 	if ((sfp == NULL) || (productLoc == NULL)) return head;
 	if (sfp->data.choice == 3) is_cdregion = TRUE;
@@ -4114,14 +4115,12 @@ NLM_EXTERN SeqLocPtr LIBCALL productLoc_to_locationLoc(SeqFeatPtr sfp, SeqLocPtr
 	if (productLoc->choice == SEQLOC_BOND)   /* fake this one in */
 	{
 		sbp = (SeqBondPtr)(productLoc->data.ptrvalue);
-		tmp = productInterval_to_locationIntervals(sfp, sbp->a->point, 
-sbp->a->point);
+		tmp = productInterval_to_locationIntervals(sfp, sbp->a->point, sbp->a->point, FALSE);
 		if (sbp->b == NULL)  /* one point in bond */
 			return tmp;
 
 		SeqLocAdd(&head, tmp, TRUE, FALSE);
-		tmp = productInterval_to_locationIntervals(sfp, sbp->b->point, 
-sbp->b->point);
+		tmp = productInterval_to_locationIntervals(sfp, sbp->b->point, sbp->b->point, FALSE);
 		if (tmp == NULL)
 			return head;
 
@@ -4135,6 +4134,7 @@ sbp->b->point);
 		goto ret;
 	}
 
+  CheckSeqLocForPartial (productLoc, &partial5, &partial3);
 	slp = NULL;
 	while ((slp = SeqLocFindNext(productLoc, slp)) != NULL)
 	{
@@ -4142,7 +4142,7 @@ sbp->b->point);
 		product_stop = SeqLocStop(slp);
 		if ((product_start >= 0) && (product_stop >= 0))
 		{
-		   tmp = productInterval_to_locationIntervals(sfp, product_start, product_stop);
+		   tmp = productInterval_to_locationIntervals(sfp, product_start, product_stop, partial5);
 		   if(tmp != NULL)
 			load_fuzz_to_DNA(tmp, slp, TRUE);
 		   while (tmp != NULL)
@@ -4189,6 +4189,7 @@ NLM_EXTERN SeqLocPtr LIBCALL aaFeatLoc_to_dnaFeatLoc(SeqFeatPtr sfp,
 	CdRegionPtr crp;
 	SeqIntPtr sp1, sp2;
 	BioseqPtr bsp;
+  Boolean   aa_partialn, aa_partialc;
 
 	dnaLoc = aaLoc_to_dnaLoc(sfp, aa_loc);
 	if (dnaLoc == NULL) return dnaLoc;
@@ -4196,10 +4197,12 @@ NLM_EXTERN SeqLocPtr LIBCALL aaFeatLoc_to_dnaFeatLoc(SeqFeatPtr sfp,
 	if (! sfp->partial)  /* no partial checks needed */
 		return dnaLoc;
 
+
+  CheckSeqLocForPartial (aa_loc, &aa_partialn, &aa_partialc);
 	crp = (CdRegionPtr)(sfp->data.value.ptrvalue);
 
 	aaPos = SeqLocStart(aa_loc);
-	if ((! aaPos) && (crp->frame > 1))   /* using first amino acid */
+	if ((! aaPos) && (crp->frame > 1) && aa_partialn)   /* using first amino acid */
 	{
 		tmp1 = SeqLocFindNext(sfp->location, NULL);
 		tmp2 = SeqLocFindNext(dnaLoc, NULL);
@@ -4221,7 +4224,7 @@ NLM_EXTERN SeqLocPtr LIBCALL aaFeatLoc_to_dnaFeatLoc(SeqFeatPtr sfp,
 	}
 
 	dnaPartial = SeqLocPartialCheck(sfp->location);
-	if (dnaPartial & SLP_STOP)   /* missing 3' end of cdregion */
+	if ((dnaPartial & SLP_STOP) && aa_partialc)   /* missing 3' end of cdregion */
 	{
 		sip = SeqLocId(aa_loc);
 		bsp = BioseqFindCore(sip);
@@ -4262,19 +4265,162 @@ NLM_EXTERN SeqLocPtr LIBCALL aaFeatLoc_to_dnaFeatLoc(SeqFeatPtr sfp,
 	return dnaLoc;
 }
 
-/******************************************************************
-*
-*	productInterval_to_locationIntervals(sfp, product_start, product_stop)
-*	map the amino acid sequence to a chain of Seq-locs in the 
-*	DNA sequence through a CdRegion feature
-*
-******************************************************************/
-NLM_EXTERN SeqLocPtr LIBCALL productInterval_to_locationIntervals(SeqFeatPtr sfp, Int4 product_start, Int4 
-product_stop)
+
+static SeqLocPtr 
+NucLocFromProtInterval 
+(SeqFeatPtr cds, 
+ Int4 prot_start, 
+ Int4 prot_stop, 
+ Boolean n_partial)
 {
-  Int4 frame_offset, start_offset;	/*for determine the reading frame*/
-  SeqLocPtr slp = NULL;
   CdRegionPtr crp;
+  Int4        nt_before = 0, aa_before = 0, nt_this, prev_nt = 0, part_codon;
+  SeqLocPtr   result = NULL;
+  SeqLocPtr   slp = NULL; /* used for iterating through locations in the coding region */
+  SeqLocPtr   loc; /* used for creating interval on NT sequence */
+  Boolean     first_loc = TRUE;
+  Int4        cds_int_start, cds_int_stop, cds_int_len;
+  Int4        frame_start = 0;
+  Int4        aa_int_start, aa_int_stop, aa_len, this_aa, aa_needed, aa_unneeded, aa_accumulated = 0;
+  Int4        aa_from_this_interval;
+  Uint1       strand;
+
+  if (cds == NULL || cds->data.choice != SEQFEAT_CDREGION || prot_start < 0 || prot_stop < prot_start) {
+    return NULL;
+  }
+
+  crp = (CdRegionPtr) cds->data.value.ptrvalue;
+  if (crp == NULL) {
+    return NULL;
+  }
+  if (crp->frame > 1) {
+    frame_start = crp->frame - 1;
+  }
+
+  aa_len = prot_stop - prot_start + 1;
+
+  while((slp = SeqLocFindNext(cds->location, slp)) != NULL) {
+    cds_int_len = SeqLocLen (slp);
+    cds_int_start = SeqLocStart (slp);
+    cds_int_stop = SeqLocStop (slp);
+    strand = SeqLocStrand (slp);
+
+    if (first_loc) {
+      if (strand == Seq_strand_minus) {
+        cds_int_stop -= frame_start;
+      } else {
+        cds_int_start += frame_start;
+      }
+      cds_int_len -= frame_start;
+    }
+
+    /* calculate the number of NT that "count" for this interval -
+      * don't include the NT in a partial codon at the beginning of
+      * of the feature, but do include NT from a partial codon at
+      * the end of the previous interval.
+      */
+    nt_this = cds_int_len + prev_nt;
+    part_codon = nt_this % 3;
+    nt_this -= part_codon;
+    
+    /* calculate how many AA are covered by this interval */
+    this_aa = nt_this / 3;
+
+    if (aa_before + this_aa >= prot_start) {
+
+      /* figure out whether to take all of this interval, or just part of it */
+      aa_from_this_interval = this_aa;
+
+      /* 5' end (left for plus strand, right for minus) */
+      if (aa_before < prot_start) {
+        /* skip some at the beginning */
+        aa_unneeded = prot_start - aa_before;
+        aa_from_this_interval -= aa_unneeded;
+
+        if (strand == Seq_strand_minus) {
+          aa_int_stop = cds_int_stop + prev_nt - (3 * aa_unneeded);
+        } else {
+          aa_int_start = cds_int_start - prev_nt + (3 * aa_unneeded);
+        }          
+      } else {
+        /* start at the beginning */
+        if (strand == Seq_strand_minus) {
+          aa_int_stop = cds_int_stop;
+          if (first_loc) {
+            if (n_partial) {
+              /* put frame shift back in, if first loc and n-partial */
+              aa_int_stop += frame_start;
+            } else if (aa_before == prot_start) {
+              /* starts in this interval, but after "remainder" of previous codon */
+              aa_int_stop -= prev_nt;
+            }
+          }
+        } else {
+          aa_int_start = cds_int_start;
+          if (first_loc) {
+            if (n_partial) {
+              /* put frame shift back in, if first loc and n-partial */
+              aa_int_start -= frame_start;
+            } else if (aa_before == prot_start) {
+              /* starts in this interval, but after "remainder" of previous codon */
+              aa_int_start += prev_nt;
+            }
+          }
+        }
+      }
+      
+      /* 3' end (right for plus strand, left for minus) */
+      if (aa_accumulated + aa_from_this_interval < aa_len) {
+        if (strand == Seq_strand_minus) {
+          aa_int_start = cds_int_start;
+        } else {
+          aa_int_stop = cds_int_stop;
+        }
+      } else {
+        /* just take the part that we need */
+        aa_needed = aa_len - aa_accumulated;
+        aa_unneeded = aa_from_this_interval - aa_needed;
+
+        if (strand == Seq_strand_minus) {
+          aa_int_start = cds_int_start + part_codon + (3 * aa_unneeded);
+        } else {
+          aa_int_stop = cds_int_stop - part_codon - (3 * aa_unneeded);
+        }
+        aa_from_this_interval -= aa_unneeded;
+      }
+
+      /* note - if aa_int_start > aa_int_stop, that means we eliminated
+       * both ends of the interval.
+       */
+      if (aa_int_start <= aa_int_stop) {
+        /* aa_accumulated now includes the number of complete codons that have
+        * been accounted for (not counting a partial codon at the end of this
+        * interval, if any
+        */
+        aa_accumulated += aa_from_this_interval;
+
+        /* add interval to result */
+		    loc = SeqLocIntNew(aa_int_start, aa_int_stop, strand, SeqLocId(slp));
+		    SeqLocAdd(&result, loc, TRUE, FALSE);
+      }
+    }
+
+    first_loc = FALSE;
+    aa_before += this_aa;
+    prev_nt = part_codon;
+
+    if (aa_before > prot_stop) {
+      break;
+    }
+  }
+
+  return result;  
+}
+
+
+static SeqLocPtr NaLocFromNaInterval (SeqFeatPtr sfp, Int4 product_start, Int4 product_stop)
+{
+  SeqLocPtr slp = NULL;
   SeqLocPtr location_loc, loc;			/*for the sfp.location location*/
 
   Boolean is_end;			/**is the end for process reached?**/
@@ -4283,70 +4429,26 @@ product_stop)
   Int4 cur_pos;			/**current sfp.product sequence position in process**/
   Int4 product_len;		/**length of the sfp.product **/
 
-  Boolean is_new;		/**Is cur_pos at the begin of new exon?**/
-  Int4 end_partial;		/*the end of aa is a partial codon*/
   Int4 d_start, d_stop;		/*the start and the stop of the sfp.location sequence*/
   Int4 offset;			/*offset from the start of the current exon*/
   Int4 aa_len;
   Uint1 strand;
   Int4 p_end_pos;	/*the end of the product sequence in the current loc*/
-  Int4 first_partial;	/*first codon is a partial*/
-  Boolean is_cdregion = FALSE;
-
-
-
-  if(sfp->data.choice ==3)  /* cdregion must take into account 3 base/aa */
-  {
-    is_cdregion = TRUE;
-
-    crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-    if(!crp)
-    {
-      return NULL;
-    }
-
-    if(crp->frame>0)
-    {
-      frame_offset = crp->frame-1;
-    }
-    else
-    {
-      frame_offset = 0;
-    }
-    start_offset = frame_offset;
-  }
-  else
-  {
-    start_offset = 0;
-    frame_offset = 0;
-  }
 
   cur_pos= product_start;
   product_len = 0;
   is_end = FALSE;
   p_start = 0;
-  first_partial = 0;
-  end_partial = 0;
   slp = NULL;
   location_loc= NULL;
   while(!is_end && ((slp = SeqLocFindNext(sfp->location, slp))!=NULL))
   {
 	  product_len += SeqLocLen(slp);
-	  if (is_cdregion)
-	  {
-		  end_partial = ((product_len - start_offset)%3);
-		  p_stop = (product_len - start_offset)/3 -1;
-		  if(end_partial != 0)
-			  ++p_stop;
-	  }
-	  else
-	  {
-		  p_stop = product_len - start_offset - 1;
-	  }
+    p_stop = product_len - 1;
 
 	  p_end_pos = p_stop;
 
-	  if(p_stop > product_stop || (p_stop == product_stop && end_partial == 0))
+	  if(p_stop >= product_stop)
 	  {
 	    p_stop = product_stop;		/**check if the end is reached**/
 	    is_end = TRUE;
@@ -4354,21 +4456,7 @@ product_stop)
 
 	  if(p_stop >= cur_pos)	/*get the exon*/
 	  {
-		  is_new = (p_start == cur_pos);	/*start a new exon?*/
-      if(is_new)	/**special case of the first partial**/
-      {
-		    offset = 0;
-      }
-		  else if (is_cdregion)
-		  {
-		    if(frame_offset && p_start >0)
-			  ++p_start;
-		    offset = 3*(cur_pos - p_start) + frame_offset;
-		  }
-		  else
-      {
-		    offset = cur_pos - p_start;
-      }
+	    offset = cur_pos - p_start;
 
 		  strand = SeqLocStrand(slp);
 		  if(strand == Seq_strand_minus)
@@ -4377,47 +4465,20 @@ product_stop)
 		    d_start = SeqLocStart(slp) + offset;
 
 		  d_stop = d_start;
-		  /*first codon*/
-		  if(is_cdregion && is_new && product_len == SeqLocLen(slp))
-		  {
-			  if(strand == Seq_strand_minus)
-				  d_stop -= frame_offset;
-			  else
-				  d_stop += frame_offset;
-		  }
-		  aa_len = MIN(p_stop, product_stop) - cur_pos +1;
-		  if(end_partial != 0 && (p_end_pos >= product_start && p_end_pos <= product_stop))
-      {
-			  --aa_len;
-      }
-		  if(first_partial > 0)
-      {
-			  --aa_len;
-      }
-		  if(strand == Seq_strand_minus)
+
+      aa_len = MIN(p_stop, product_stop) - cur_pos +1;
+
+      if(strand == Seq_strand_minus)
 		  {
 			  if(aa_len >= 0)
 			  {
-				  if (is_cdregion)
-					  d_stop -= (3*aa_len - 1);
-				  else
-					  d_stop -= (aa_len - 1);
+				  d_stop -= (aa_len - 1);
 			  }
 			  else
         {
 				  ++d_stop;
         }
-
-			  if(first_partial >0)
-				  d_stop -= first_partial;
-  				
-			  first_partial = 0;
-			  if (end_partial > 0 && (p_end_pos >= product_start && p_end_pos <= product_stop)) 
-        {
-				  d_stop -= end_partial;
-				  first_partial = 3 - end_partial;
-			  }
-  			
+  				  			
 			  d_stop = MAX(d_stop, SeqLocStart(slp));
 			  loc = SeqLocIntNew(d_stop, d_start, strand, SeqLocId(slp));
 		  }
@@ -4425,53 +4486,46 @@ product_stop)
 		  {
 			  if(aa_len >= 0)
 			  {
-				  if (is_cdregion)
-					  d_stop += (3*aa_len - 1);
-				  else
-					  d_stop += (aa_len - 1);
+				  d_stop += (aa_len - 1);
 			  }
 			  else
 				  --d_stop;
   				
-			  if(first_partial > 0)
-				  d_stop += first_partial;
-			  first_partial = 0;
-			  if (end_partial> 0 && (p_end_pos >= product_start && p_end_pos <= product_stop)) 
-        {
-				  d_stop += end_partial;
-				  first_partial = 3 - end_partial;
-			  }
 			  d_stop = MIN(d_stop, SeqLocStop(slp));
 			  loc = SeqLocIntNew(d_start, d_stop, strand, SeqLocId(slp));
 		  }
 		  SeqLocAdd(&location_loc, loc, TRUE, FALSE);
 
-		  if(end_partial != 0)
-			  cur_pos = p_stop;
-		  else
-			  cur_pos = p_stop+1;
-	}
+		  cur_pos = p_stop+1;
+    }
 
+    p_start = p_stop +1;
 
-	if(end_partial != 0)
-	{
-	    p_start = p_stop;
-	}
-	else
-	{
-	    p_start = p_stop +1;
-	}
-	
-	if (is_cdregion)
-	{
-		frame_offset = (product_len - start_offset)%3;
-		if(frame_offset >0)
-		  frame_offset = 3-frame_offset;
-	}
+  }/**end of while(slp && !is_end) **/
 
-   }/**end of while(slp && !is_end) **/
+  return location_loc;
+}
 
-   return location_loc;
+/******************************************************************
+*
+*	productInterval_to_locationIntervals(sfp, product_start, product_stop)
+*	map the amino acid sequence to a chain of Seq-locs in the 
+*	DNA sequence through a CdRegion feature
+*
+******************************************************************/
+NLM_EXTERN SeqLocPtr LIBCALL 
+productInterval_to_locationIntervals
+(SeqFeatPtr sfp,
+ Int4 product_start,
+ Int4 product_stop, 
+ Boolean aa_partialn)
+{
+
+  if (sfp->data.choice == SEQFEAT_CDREGION) {
+    return NucLocFromProtInterval (sfp, product_start, product_stop, aa_partialn);
+  } else {
+    return NaLocFromNaInterval (sfp, product_start, product_stop);
+  }
 
 }
 
@@ -4557,7 +4611,7 @@ merge, Int4Ptr frame, Boolean allowTerminator)
           a_left += 3;
         }
       }
-      if (a_right > (bsp->length) * 3 - 1) {
+      if (a_right > (bsp->length) * 3 - 1 && !allowTerminator) {
         CheckSeqLocForPartial (slp, &partial5, &partial3);
         strand = SeqLocStrand (slp);
         if ((partial5 && strand != Seq_strand_minus) || (partial3 && strand == Seq_strand_minus)) {
@@ -4570,7 +4624,7 @@ merge, Int4Ptr frame, Boolean allowTerminator)
 			aa_from = a_left / 3;
 			aa_to = a_right / 3;
 
-			if (aa_to > end_pos)
+			if (aa_to > end_pos && !allowTerminator)
 				aa_to = end_pos;
 
 			if (merge)

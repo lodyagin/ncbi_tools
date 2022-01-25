@@ -21,11 +21,11 @@ fastacmd \- retrieve FASTA sequences from a BLAST database
 [\|\fB\-t\fP\|]
 .SH DESCRIPTION
 \fBfastacmd\fP retrieves FASTA formatted sequences from a
-\fBblast\fP(1) database formatted using the '\fB\-o\fP' option.  An
+\fBblast\fP(1) database formatted using the `\fB\-o\fP' option.  An
 example \fBfastacmd\fP call would be
 .PP
 .ce
-fastacmd -d nr -s p38398
+fastacmd \-d nr \-s p38398
 .SH OPTIONS
 A summary of options is included below.
 .TP
@@ -92,7 +92,7 @@ Type of file:
 .RS
 .PD 0
 .IP G
-guess (default) - look for protein, then nucleotide
+guess (default): look for protein, then nucleotide
 .IP T
 protein
 .IP F
@@ -103,7 +103,7 @@ nucleotide
 \fB\-s\fP\ \fIstr\fP
 Comma-delimited search string(s).
 GIs, accessions, loci, or fullSeq-id strings may be used,
-\fIe.g.\fP, \fB555\fP, \fBAC147927\fP, \fB'gnl|dbname|tag'\fP
+\fIe.g.\fP, \fB555\fP, \fBAC147927\fP, \fB\(aqgnl|dbname|tag\(aq\fP
 .TP
 \fB\-t\fP
 Definition line should contain target GI only

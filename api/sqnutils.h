@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.377 $
+* $Revision: 6.379 $
 *
 * File Description: 
 *
@@ -1746,7 +1746,9 @@ NLM_EXTERN Boolean ConvertImpToImpFunc (SeqFeatPtr sfp, Uint2 featdef_to);
 NLM_EXTERN Boolean ConvertRegionToRNAFunc (SeqFeatPtr sfp, Uint2 featdef_to);
 NLM_EXTERN Boolean ConvertGeneToMiscFeatFunc (SeqFeatPtr sfp, Uint2 featdef_to);
 NLM_EXTERN Boolean ConvertProtToProtFunc (SeqFeatPtr sfp, Uint2 featdef_to);
-
+NLM_EXTERN Boolean ConvertMiscFeatToCodingRegion (SeqFeatPtr sfp);
+NLM_EXTERN void ExtraCDSCreationActions (SeqFeatPtr cds, SeqEntryPtr parent_sep);
+NLM_EXTERN SeqFeatPtr GetProtFeature (BioseqPtr protbsp);
 
 NLM_EXTERN void InstantiateMatPeptideProducts (SeqEntryPtr sep);
 
@@ -1815,6 +1817,11 @@ NLM_EXTERN Boolean AutoConvertCDSToMiscFeat (SeqFeatPtr cds, Boolean remove_orig
 
 NLM_EXTERN AuthListPtr PNTR GetAuthListForPub (PubPtr the_pub);
 NLM_EXTERN void RemoveConsortiumFromPub (PubPtr pub);
+
+NLM_EXTERN Int4 Extend5PartialSeqIntToEndOrGap (SeqIntPtr sint, BioseqPtr bsp, Boolean short_only);
+NLM_EXTERN Int4 Extend3PartialSeqIntToEndOrGap (SeqIntPtr sint, BioseqPtr bsp, Boolean short_only);
+NLM_EXTERN Int4 ExtendSeqLocToEndOrGap (SeqLocPtr slp, BioseqPtr bsp, Boolean end5);
+
 
 #ifdef __cplusplus
 }

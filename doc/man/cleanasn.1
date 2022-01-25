@@ -1,22 +1,30 @@
-.TH CLEANASN 1 2007-10-19 NCBI "NCBI Tools User's Manual"
+.TH CLEANASN 1 2009-07-31 NCBI "NCBI Tools User's Manual"
 .SH NAME
 cleanasn \- clean up irregularities in NCBI ASN.1 objects
 .SH SYNOPSIS
 .B cleanasn
 [\|\fB\-\fP\|]
+[\|\fB\-D\fP\ \fIstr\fP\|]
 [\|\fB\-F\fP\ \fIstr\fP\|]
 [\|\fB\-K\fP\ \fIstr\fP\|]
+[\|\fB\-L\fP\ \fIfilename\fP\|]
+[\|\fB\-M\fP\ \fIfilename\fP\|]
 [\|\fB\-N\fP\ \fIstr\fP\|]
+[\|\fB\-P\fP\|]
+[\|\fB\-Q\fP\ \fIstr\fP\|]
 [\|\fB\-R\fP\|]
 [\|\fB\-T\fP\|]
+[\|\fB\-U\fP\ \fIstr\fP\|]
+[\|\fB\-X\fP\ \fIstr\fP\|]
 [\|\fB\-a\fP\ \fIstr\fP\|]
 [\|\fB\-b\fP\|]
 [\|\fB\-c\fP\|]
 [\|\fB\-f\fP\ \fIstr\fP\|]
 [\|\fB\-i\fP\ \fIfilename\fP\|]
-[\|\fB\-l\fP\ \fIfilename\fP\|]
+[\|\fB\-m\fP\ \fIstr\fP\|]
 [\|\fB\-o\fP\ \fIfilename\fP\|]
 [\|\fB\-p\fP\ \fIpath\fP\|]
+[\|\fB\-q\fP\ \fIpath\fP\|]
 [\|\fB\-r\fP\ \fIpath\fP\|]
 [\|\fB\-x\fP\ \fIext\fP\|]
 .SH DESCRIPTION
@@ -27,6 +35,15 @@ A summary of options is included below.
 .TP
 \fB\-\fP
 Print usage message
+.TP
+\fB\-D\fP\ \fIstr\fP
+Clean up descriptors, per the flags in str:
+.RS
+.PD 0
+.IP t
+Remove Title
+.PD
+.RE
 .TP
 \fB\-F\fP\ \fIstr\fP
 Clean up features, per the flags in str:
@@ -47,10 +64,24 @@ Perform a general cleanup, per the flags in str:
 .PD 0
 .IP b
 BasicSeqEntryCleanup
+.IP p
+C++ BasicCleanup (via an external utility)
 .IP s
 SeriousSeqEntryCleanup
+.IP g
+GpipeSeqEntryCleanup
+.IP n
+Normalize Descriptor Order
+.IP u
+Remove NcbiCleanup User Objects
 .PD
 .RE
+.TP
+\fB\-L\fP\ \fIfilename\fP
+Log file
+.TP
+\fB\-M\fP\ \fIfilename\fP
+Macro file
 .TP
 \fB\-N\fP\ \fIstr\fP
 Clean up links, per the flags in str:
@@ -67,11 +98,49 @@ ClearFeatureIDs
 .PD
 .RE
 .TP
+\fB\-P\fP
+Publication Lookup
+.TP
+\fB\-Q\fP\ \fIstr\fP
+Report:
+.RS
+.PD 0
+.IP r
+ASN.1 BSEC/SSEC Report
+.IP g
+GenBank SSEC Diff
+.IP m
+Modernization
+.PD
+.RE
+.TP
 \fB\-R\fP
 Remote fetching from ID (NCBI sequence databases)
 .TP
 \fB\-T\fP
 Taxonomy Lookup
+.TP
+\fB\-U\fP\ \fIstr\fP
+Modernize, per the flags in str:
+.RS
+.PD 0
+.IP g
+Genes
+.IP r
+RNA
+.IP p
+PCR Primers
+.PD
+.RE
+.TP
+\fB\-X\fP\ \fIstr\fP
+Miscellaneous options, per str:
+.RS
+.PD 0
+.IP d
+Automatic definition line
+.PD
+.RE
 .TP
 \fB\-a\fP\ \fIstr\fP
 ASN.1 type
@@ -104,14 +173,29 @@ Substring filter
 \fB\-i\fP\ \fIfilename\fP
 Single input file (defaults to stdin)
 .TP
-\fB\-l\fP\ \fIfilename\fP
-Log file
+\fB\-m\fP\ \fIstr\fP
+Flatfile mode:
+.RS
+.PD 0
+.IP r
+Release
+.IP e
+Entrez
+.IP s
+Sequin
+.IP d
+Dump
+.PD
+.RE
 .TP
 \fB\-o\fP\ \fIfilename\fP
 Single output file (defaults to stdout)
 .TP
 \fB\-p\fP\ \fIpath\fP
 Process all matching files in \fIpath\fP
+.TP
+\fB\-q\fP\ \fIpath\fP
+Ffdiff executable (default is /netopt/genbank/subtool/bin/ffdiff)
 .TP
 \fB\-r\fP\ \fIpath\fP
 Path for results

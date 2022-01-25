@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/8/2007
 *
-* $Revision: 1.201 $
+* $Revision: 1.202 $
 *
 * File Description: 
 *
@@ -6416,35 +6416,6 @@ static CharPtr GetAnticodonLocString (SeqFeatPtr sfp)
 
 
 
-static SeqFeatPtr GetProtFeature (BioseqPtr protbsp)
-{
-  SeqMgrFeatContext fcontext;
-  SeqAnnotPtr sap;
-  SeqFeatPtr prot_sfp;
-  ProtRefPtr prp;
-
-  if (protbsp == NULL) return NULL;
-
-  prot_sfp = SeqMgrGetNextFeature (protbsp, NULL, 0, FEATDEF_PROT, &fcontext);
-  if (prot_sfp == NULL) {
-    sap = protbsp->annot;
-    while (sap != NULL && prot_sfp == NULL) {
-      if (sap->type == 1) {
-        prot_sfp = sap->data;
-        while (prot_sfp != NULL
-               && (prot_sfp->data.choice != SEQFEAT_PROT
-                   || (prp = prot_sfp->data.value.ptrvalue) == NULL
-                   || prp->processed != 0)) {
-          prot_sfp = prot_sfp->next;
-        }
-      }
-      sap = sap->next;
-    }
-  }
-  return prot_sfp;
-}
-
-
 static ProtRefPtr GetProtRefForFeature (SeqFeatPtr sfp)
 {
   BioseqPtr  protbsp;
@@ -8344,9 +8315,8 @@ NLM_EXTERN Uint2 GetEntityIdFromObject (Uint1 choice, Pointer data)
   ObjValNodePtr ovp;
   SeqFeatPtr   sfp;
   BioseqPtr    bsp;
-  SeqMgrDescContext context;
 
-  if (data == NULL) return NULL;
+  if (data == NULL) return 0;
 
   switch (choice)
   {
@@ -12144,7 +12114,6 @@ NLM_EXTERN Boolean SetFieldValueForObjectEx (Uint1 choice, Pointer data, FieldTy
   ObjValNodePtr   ovp;
   GBBlockPtr      gb;
   Boolean         was_empty;
-  ValNodePtr      molinfo_field;
 
   if (data == NULL || field == NULL || field->data.ptrvalue == NULL) return FALSE;
 
@@ -17982,120 +17951,6 @@ static void CreateDataForFeature (SeqFeatPtr sfp, Int4 feature_type)
 }
 
 
-static void ExtraCDSCreationActions (SeqFeatPtr cds, SeqEntryPtr parent_sep)
-{
-  ByteStorePtr       bs;
-  CharPtr            prot, ptr;
-  BioseqPtr          bsp;
-  Char               ch;
-  Int4               i;
-  SeqEntryPtr        psep, nsep;
-  MolInfoPtr         mip;
-  ValNodePtr         vnp, descr;
-  SeqFeatPtr         prot_sfp;
-  ProtRefPtr         prp;
-  Boolean            partial5, partial3;
-
-  if (cds == NULL) return;
-
-  CheckSeqLocForPartial (cds->location, &partial5, &partial3);
-
-  /* Create corresponding protein sequence data for the CDS */
-
-  bs = ProteinFromCdRegionEx (cds, TRUE, FALSE);
-  if (NULL == bs)
-    return;
-
-  prot = BSMerge (bs, NULL);
-  bs = BSFree (bs);
-  if (NULL == prot)
-    return;
-
-  ptr = prot;
-  ch = *ptr;
-  while (ch != '\0') {
-    *ptr = TO_UPPER (ch);
-    ptr++;
-    ch = *ptr;
-  }
-  i = StringLen (prot);
-  if (i > 0 && prot [i - 1] == '*') {
-    prot [i - 1] = '\0';
-  }
-  bs = BSNew (1000);
-  if (bs != NULL) {
-    ptr = prot;
-    BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
-  }
-
-  /* Create the product protein Bioseq */
-  
-  bsp = BioseqNew ();
-  if (NULL == bsp)
-    return;
-  
-  bsp->repr = Seq_repr_raw;
-  bsp->mol = Seq_mol_aa;
-  bsp->seq_data_type = Seq_code_ncbieaa;
-  bsp->seq_data = (SeqDataPtr) bs;
-  bsp->length = BSLen (bs);
-  bs = NULL;
-  bsp->id = MakeNewProteinSeqId (cds->location, NULL);
-  SeqMgrAddToBioseqIndex (bsp);
-  
-  /* Create a new SeqEntry for the Prot Bioseq */
-  
-  psep = SeqEntryNew ();
-  if (NULL == psep)
-    return;
-  
-  psep->choice = 1;
-  psep->data.ptrvalue = (Pointer) bsp;
-  SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, psep);
-  
-  /* Add a descriptor to the protein Bioseq */
-  
-  mip = MolInfoNew ();
-  if (NULL == mip)
-    return;
-  
-  mip->biomol = 8;
-  mip->tech = 8;
-  if (partial5 && partial3) {
-    mip->completeness = 5;
-  } else if (partial5) {
-    mip->completeness = 3;
-  } else if (partial3) {
-    mip->completeness = 4;
-  }
-  vnp = CreateNewDescriptor (psep, Seq_descr_molinfo);
-  if (NULL == vnp)
-    return;
-  
-  vnp->data.ptrvalue = (Pointer) mip;
-  
-  /**/
-  
-  descr = ExtractBioSourceAndPubs (parent_sep);
-
-  AddSeqEntryToSeqEntry (parent_sep, psep, TRUE);
-  nsep = FindNucSeqEntry (parent_sep);
-  ReplaceBioSourceAndPubs (parent_sep, descr);
-  SetSeqFeatProduct (cds, bsp);
-  
-  prp = ProtRefNew ();
-  
-  if (prp != NULL) {
-    prot_sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
-    if (prot_sfp != NULL) {
-      prot_sfp->data.value.ptrvalue = (Pointer) prp;
-      SetSeqLocPartial (prot_sfp->location, partial5, partial3);
-      prot_sfp->partial = (partial5 || partial3);
-    }
-  }
-}
-
-
 static SeqLocPtr LocationFromApplyFeatureAction (BioseqPtr bsp, ApplyFeatureActionPtr action)
 {
   LocationIntervalPtr l;
@@ -18989,6 +18844,12 @@ static Boolean ConvertRNAToRNA (SeqFeatPtr sfp, Int4 featdef_to, ConvertFeatureD
 }
 
 
+static Boolean MiscFeatToCodingRegionConvertFunc (SeqFeatPtr sfp, Int4 featdef_to, ConvertFeatureDstOptionsPtr dst_options)
+{
+  return ConvertMiscFeatToCodingRegion (sfp);
+}
+
+
 typedef struct convertfeattable {
   Uint2 seqfeat_from;
   Uint2 featdef_from;
@@ -19035,6 +18896,9 @@ static ConvertFeatTableData conversion_functions[] = {
   { SEQFEAT_IMP,      FEATDEF_ANY,                SEQFEAT_RNA,    FEATDEF_ANY,
     ConvertImpToRNAFunc,
     "Creates an RNA feature of the specified subtype.  Import feature key is discarded." },
+  { SEQFEAT_IMP,      FEATDEF_misc_feature,       SEQFEAT_CDREGION, FEATDEF_CDS,
+    MiscFeatToCodingRegionConvertFunc,
+    "Use misc_feature comment for coding region product name." },
   { SEQFEAT_REGION,   FEATDEF_REGION,             SEQFEAT_IMP,    FEATDEF_ANY,
     ConvertRegionToImp,
     "Creates a misc_feature with the region name saved as a /note qualifier." },

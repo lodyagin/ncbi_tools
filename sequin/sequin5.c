@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.673 $
+* $Revision: 6.675 $
 *
 * File Description:
 *
@@ -2630,6 +2630,13 @@ static Boolean ConvertCDSToMatPeptide (SeqFeatPtr sfp, Uint2 featdef_to, Pointer
 {
   return AutoConvertCDSToMiscFeat (sfp, extradata == NULL ? TRUE : !(*((BoolPtr) extradata)));
 }
+
+
+static Boolean ConvertMiscFeatureToCDSFunction (SeqFeatPtr sfp, Uint2 featdef_to, Pointer extradata)
+{
+  return ConvertMiscFeatToCodingRegion (sfp);
+}
+
 
 extern EnumFieldAssoc  enum_bond_alist [];
 extern EnumFieldAssoc  enum_site_alist [];
@@ -17049,6 +17056,7 @@ static Boolean ConvertImpToImp (SeqFeatPtr, Uint2 featdef_to, Pointer extradata)
 static Boolean ConvertRNAToRNA (SeqFeatPtr, Uint2 featdef_to, Pointer extradata);
 static Boolean ConvertProtToProt (SeqFeatPtr, Uint2 featdef_to, Pointer extradata);
 static Boolean ConvertCDSToMatPeptide (SeqFeatPtr sfp, Uint2 featdef_to, Pointer extradata);
+static Boolean ConvertMiscFeatureToCDSFunction (SeqFeatPtr sfp, Uint2 featdef_to, Pointer extradata);
 
 static ConvertFeatureProcsData ConvertFeaturesTable[] = {
   { SEQFEAT_CDREGION, FEATDEF_CDS,                SEQFEAT_RNA,    FEATDEF_ANY,
@@ -17084,6 +17092,9 @@ static ConvertFeatureProcsData ConvertFeaturesTable[] = {
        "If protein feature has name, this will be saved as /product qualifier on new feature.\nIf protein feature does not have name but does have description, this will be saved as /product qualifier on new feature.\n"
        "EC_number values from the protein feature will be saved as /EC_number qualifiers on the new feature.\nActivity values will be saved as /function qualifiers on the new feature.\n"
        "Db_xref values from the protein feature will be saved as /db_xref qualifers on the new feature." },
+  { SEQFEAT_IMP,      FEATDEF_misc_feature,                SEQFEAT_CDREGION,    FEATDEF_CDS,
+       NULL, NULL, NULL, ConvertMiscFeatureToCDSFunction, NULL,
+       "Use misc_feature comment for coding region product name." },
   { SEQFEAT_IMP,      FEATDEF_ANY,                SEQFEAT_RNA,    FEATDEF_misc_RNA,
        NULL, NULL, NULL, ConvertImpToSpecialRNA, NULL,
        "Creates a misc_RNA.  Import feature key is discarded." },
@@ -18546,6 +18557,7 @@ static Boolean FeatureRemoveOrConvertAction (Pointer userdata)
   OrigFeatPtr           ofp;
   SeqFeatPtr            sfp;
   Boolean               rval = TRUE;
+  SeqEntryPtr           create_sep;
   
   if (userdata == NULL) return FALSE;
   
@@ -18637,7 +18649,12 @@ static Boolean FeatureRemoveOrConvertAction (Pointer userdata)
       {
         continue;
       }
-      sfp = CreateNewFeature (ofp->sep, NULL, ofp->sfp->data.choice, ofp->sfp);
+      if (IS_Bioseq_set (ofp->sep)) {
+        create_sep = FindNucSeqEntry (ofp->sep);
+      } else {
+        create_sep = ofp->sep;
+      }
+      sfp = CreateNewFeature (create_sep, NULL, ofp->sfp->data.choice, ofp->sfp);
     }
   }
   mrfp->feat_list = ValNodeFreeData (mrfp->feat_list);
@@ -29436,35 +29453,6 @@ static void GetCombinedCDSLocationCallback (SeqFeatPtr sfp, Pointer userdata)
     }
     ccp->strand = strand;
   }
-}
-
-
-static SeqFeatPtr GetProtFeature (BioseqPtr protbsp)
-{
-  SeqMgrFeatContext fcontext;
-  SeqAnnotPtr sap;
-  SeqFeatPtr prot_sfp;
-  ProtRefPtr prp;
-
-  if (protbsp == NULL) return NULL;
-
-  prot_sfp = SeqMgrGetNextFeature (protbsp, NULL, 0, FEATDEF_PROT, &fcontext);
-  if (prot_sfp == NULL) {
-    sap = protbsp->annot;
-    while (sap != NULL && prot_sfp == NULL) {
-      if (sap->type == 1) {
-        prot_sfp = sap->data;
-        while (prot_sfp != NULL
-               && (prot_sfp->data.choice != SEQFEAT_PROT
-                   || (prp = prot_sfp->data.value.ptrvalue) == NULL
-                   || prp->processed != 0)) {
-          prot_sfp = prot_sfp->next;
-        }
-      }
-      sap = sap->next;
-    }
-  }
-  return prot_sfp;
 }
 
 

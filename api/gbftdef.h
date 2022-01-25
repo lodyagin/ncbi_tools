@@ -116,8 +116,9 @@
 #define GBQUAL_mating_type      106
 #define GBQUAL_satellite        107
 #define GBQUAL_gene_synonym     108
+#define GBQUAL_UniProtKB_evidence 109
 
-#define ParFlat_TOTAL_GBQUAL    109
+#define ParFlat_TOTAL_GBQUAL    110
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2

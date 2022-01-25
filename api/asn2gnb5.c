@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.154 $
+* $Revision: 1.155 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -154,9 +154,11 @@ static UrlData Nlm_url_base [] = {
   {"GeneID",                "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene&cmd=Retrieve&dopt=full_report&list_uids="},
   {"GO",                    "http://amigo.geneontology.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query=GO:"},
   {"GOA",                   "http://www.ebi.ac.uk/ego/GProtein?ac="},
+  {"GreengenesID",          "http://greengenes.lbl.gov/cgi-bin/show_one_record_v2.pl?prokMSA_id="},
   {"GRIN",                  "http://www.ars-grin.gov/cgi-bin/npgs/acc/display.pl?"},
   {"H-InvDB",               "http://www.h-invitational.jp"},
   {"HGNC",                  "http://www.genenames.org/data/hgnc_data.php?hgnc_id="},
+  {"HMPID",                 "http://www.hmpdacc-resources.org/cgi-bin/hmp_catalog/main.cgi?section=HmpSummary&page=displayHmpProject&hmp_id="},
   {"HOMD",                  "http://www.homd.org/"},
   {"HPRD",                  "http://www.hprd.org/protein/"},
   {"HSSP",                  "http://srs.ebi.ac.uk/srsbin/cgi-bin/wgetz?-newId+-e+hssp-ID:"},

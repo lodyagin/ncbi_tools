@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.359 $
+* $Revision: 6.360 $
 *
 * File Description: 
 *
@@ -12720,13 +12720,28 @@ static void BarcodeReportPolymorphism (ButtoN b)
 }
 
 
+static void ApplyBarcodeDbxrefsBtn (ButtoN b)
+{
+  BarcodeToolPtr         drfp;
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+
+  VisitBioseqsInSep (GetTopSeqEntryForEntityID (drfp->input_entityID), NULL, ApplyBarcodeDbxrefsToBioseq);
+
+  ObjMgrSetDirtyFlag (drfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, drfp->input_entityID, 0, 0);
+  Update();
+}
+
+
 extern void BarcodeTestTool (IteM i)
 {
   BaseFormPtr              bfp;
   BarcodeToolPtr         drfp;
   SeqEntryPtr              sep;
   GrouP                    h;
-  GrouP                    c, c3;
+  GrouP                    c, c3, c4, c5;
   ButtoN                   b;
   WindoW                   w;
   OMUserDataPtr            omudp;
@@ -12782,37 +12797,43 @@ extern void BarcodeTestTool (IteM i)
   drfp->pass_fail_summary = StaticPrompt (h, "0 Pass, 0 Fail", 20 * stdCharWidth, dialogTextHeight, programFont, 'l');
   RefreshBarcodeList(drfp);
 
-  c3 = HiddenGroup (h, 10, 0, NULL);
+  c4 = HiddenGroup (h, 5, 0, NULL);
+  SetGroupSpacing (c4, 10, 10);
+
+  b = PushButton (c4, "Compliance Report", BarcodeTestComplianceReport);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c4, "Failure Report", BarcodeReportButton);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c4, "Comprehensive Report", BarcodeComprehensiveReportButton);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c4, "Report Polymorphism", BarcodeReportPolymorphism);
+  SetObjectExtra (b, drfp, NULL);
+
+  c5 = HiddenGroup (h, 5, 0, NULL);
+  SetGroupSpacing (c5, 10, 10);
+  b = PushButton (c5, "Apply Dbxrefs", ApplyBarcodeDbxrefsBtn);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c5, "Replace Tags", BarcodeTestImportTagTable);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c5, "Add New Tags", BarcodeTestApplyTagTable);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c5, "Make Tag Table", BarcodeTestMakeTagTable);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c5, "Refresh List", BarcodeRefreshButton);
+  SetObjectExtra (b, drfp, NULL);
+
+  c3 = HiddenGroup (h, 4, 0, NULL);
   SetGroupSpacing (c3, 10, 10);
-  b = PushButton (c3, "Compliance Report", BarcodeTestComplianceReport);
+  b = PushButton (c3, "Remove BARCODE Keyword from Selected", RemoveSelectedKeywordsBtn); 
   SetObjectExtra (b, drfp, NULL);
-  b = PushButton (c3, "Failure Report", BarcodeReportButton);
+  b = PushButton (c3, "Add BARCODE Keyword to BARCODE Tech", AddBarcodeKeywordBtn);
   SetObjectExtra (b, drfp, NULL);
-  b = PushButton (c3, "Comprehensive Report", BarcodeComprehensiveReportButton);
-  SetObjectExtra (b, drfp, NULL);
-
-  b = PushButton (c3, "Report Polymorphism", BarcodeReportPolymorphism);
+  b = PushButton (c3, "Remove BARCODE Tech from Selected", RemoveSelectedTechBtn);
   SetObjectExtra (b, drfp, NULL);
 
-  b = PushButton (c3, "Replace Tags", BarcodeTestImportTagTable);
-  SetObjectExtra (b, drfp, NULL);
-  b = PushButton (c3, "Add New Tags", BarcodeTestApplyTagTable);
-  SetObjectExtra (b, drfp, NULL);
-  b = PushButton (c3, "Make Tag Table", BarcodeTestMakeTagTable);
-  SetObjectExtra (b, drfp, NULL);
-
-  b = PushButton (c3, "Refresh List", BarcodeRefreshButton);
-  SetObjectExtra (b, drfp, NULL);
-  b = PushButton (c3, "Remove BARCODE Keyword from Selected Sequences", RemoveSelectedKeywordsBtn); 
-  SetObjectExtra (b, drfp, NULL);
-  b = PushButton (c3, "Add BARCODE Keyword to BARCODE Tech Sequences", AddBarcodeKeywordBtn);
-  SetObjectExtra (b, drfp, NULL);
-
-  c = HiddenGroup (h, 5, 0, NULL);
+  c = HiddenGroup (h, 4, 0, NULL);
   SetGroupSpacing (c, 10, 10);
     
-  b = PushButton (c, "Remove BARCODE Tech from Selected Sequences", RemoveSelectedTechBtn);
-  SetObjectExtra (b, drfp, NULL);
   drfp->undo = PushButton (c, "Undo", BarcodeUndoButton);
   SetObjectExtra (drfp->undo, drfp, NULL);
 
@@ -12825,7 +12846,7 @@ extern void BarcodeTestTool (IteM i)
 
   PushButton (c, "Dismiss", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) drfp->pass_fail_summary, (HANDLE) c3, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) drfp->pass_fail_summary, (HANDLE) c4, (HANDLE) c5, (HANDLE) c3, (HANDLE) c, NULL);
 
   RealizeWindow (w);
   

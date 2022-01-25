@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.199 $
+* $Revision: 1.201 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -183,6 +183,7 @@ static FtQualType feat_qual_order [] = {
   FTQUAL_label,
   FTQUAL_cds_product,
   FTQUAL_extra_products,
+  FTQUAL_UniProtKB_evidence,
   FTQUAL_protein_id,
   FTQUAL_transcript_id,
   FTQUAL_db_xref, 
@@ -376,6 +377,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR]  =  {
   { "trna_aa",            Qual_class_ignore         },
   { "codon_recognized",   Qual_class_trna_codons    },
   { "trna_codons",        Qual_class_trna_codons    },
+  { "UniProtKB_evidence", Qual_class_quote          },
   { "usedin",             Qual_class_usedin         },
   { "xtra_products",      Qual_class_xtraprds       }
 };
@@ -386,49 +388,50 @@ typedef struct qualfeatur {
   FtQualType  featurclass;
 } QualFeatur, PNTR QualFeaturPtr;
 
-#define NUM_GB_QUALS 40
+#define NUM_GB_QUALS 41
 
 static QualFeatur qualToFeature [NUM_GB_QUALS] = {
-  { "allele",           FTQUAL_allele           },
-  { "bound_moiety",     FTQUAL_bound_moiety     },
-  { "clone",            FTQUAL_clone            },
-  { "codon",            FTQUAL_codon            },
-  { "compare",          FTQUAL_compare          },
-  { "cons_splice",      FTQUAL_cons_splice      },
-  { "cyt_map",          FTQUAL_gene_cyt_map     },
-  { "direction",        FTQUAL_direction        },
-  { "EC_number",        FTQUAL_EC_number        },
-  { "estimated_length", FTQUAL_estimated_length },
-  { "experiment",       FTQUAL_experiment       },
-  { "frequency",        FTQUAL_frequency        },
-  { "function",         FTQUAL_function         },
-  { "gen_map",          FTQUAL_gene_gen_map     },
-  { "inference",        FTQUAL_inference        },
-  { "insertion_seq",    FTQUAL_insertion_seq    },
-  { "label",            FTQUAL_label            },
-  { "map",              FTQUAL_map              },
-  { "mobile_element",   FTQUAL_mobile_element   },
-  { "mod_base",         FTQUAL_mod_base         },
-  { "ncRNA_class",      FTQUAL_ncRNA_class      },
-  { "number",           FTQUAL_number           },
-  { "old_locus_tag",    FTQUAL_old_locus_tag    },
-  { "operon",           FTQUAL_operon           },
-  { "organism",         FTQUAL_organism         },
-  { "PCR_conditions",   FTQUAL_PCR_conditions   },
-  { "phenotype",        FTQUAL_phenotype        },
-  { "product",          FTQUAL_product_quals    },
-  { "rad_map",          FTQUAL_gene_rad_map     },
-  { "replace",          FTQUAL_replace          },
-  { "rpt_family",       FTQUAL_rpt_family       },
-  { "rpt_type",         FTQUAL_rpt_type         },
-  { "rpt_unit",         FTQUAL_rpt_unit         },
-  { "rpt_unit_range",   FTQUAL_rpt_unit_range   },
-  { "rpt_unit_seq",     FTQUAL_rpt_unit_seq     },
-  { "satellite",        FTQUAL_satellite        },
-  { "standard_name",    FTQUAL_standard_name    },
-  { "tag_peptide",      FTQUAL_tag_peptide      },
-  { "transposon",       FTQUAL_transposon       },
-  { "usedin",           FTQUAL_usedin           }
+  { "allele",             FTQUAL_allele             },
+  { "bound_moiety",       FTQUAL_bound_moiety       },
+  { "clone",              FTQUAL_clone              },
+  { "codon",              FTQUAL_codon              },
+  { "compare",            FTQUAL_compare            },
+  { "cons_splice",        FTQUAL_cons_splice        },
+  { "cyt_map",            FTQUAL_gene_cyt_map       },
+  { "direction",          FTQUAL_direction          },
+  { "EC_number",          FTQUAL_EC_number          },
+  { "estimated_length",   FTQUAL_estimated_length   },
+  { "experiment",         FTQUAL_experiment         },
+  { "frequency",          FTQUAL_frequency          },
+  { "function",           FTQUAL_function           },
+  { "gen_map",            FTQUAL_gene_gen_map       },
+  { "inference",          FTQUAL_inference          },
+  { "insertion_seq",      FTQUAL_insertion_seq      },
+  { "label",              FTQUAL_label              },
+  { "map",                FTQUAL_map                },
+  { "mobile_element",     FTQUAL_mobile_element     },
+  { "mod_base",           FTQUAL_mod_base           },
+  { "ncRNA_class",        FTQUAL_ncRNA_class        },
+  { "number",             FTQUAL_number             },
+  { "old_locus_tag",      FTQUAL_old_locus_tag      },
+  { "operon",             FTQUAL_operon             },
+  { "organism",           FTQUAL_organism           },
+  { "PCR_conditions",     FTQUAL_PCR_conditions     },
+  { "phenotype",          FTQUAL_phenotype          },
+  { "product",            FTQUAL_product_quals      },
+  { "rad_map",            FTQUAL_gene_rad_map       },
+  { "replace",            FTQUAL_replace            },
+  { "rpt_family",         FTQUAL_rpt_family         },
+  { "rpt_type",           FTQUAL_rpt_type           },
+  { "rpt_unit",           FTQUAL_rpt_unit           },
+  { "rpt_unit_range",     FTQUAL_rpt_unit_range     },
+  { "rpt_unit_seq",       FTQUAL_rpt_unit_seq       },
+  { "satellite",          FTQUAL_satellite          },
+  { "standard_name",      FTQUAL_standard_name      },
+  { "tag_peptide",        FTQUAL_tag_peptide        },
+  { "transposon",         FTQUAL_transposon         },
+  { "UniProtKB_evidence", FTQUAL_UniProtKB_evidence },
+  { "usedin",             FTQUAL_usedin             }
 };
 
 static Int2 GbqualToFeaturIndex (
@@ -927,6 +930,7 @@ static ValQual legalGbqualList [] = {
   { FEATDEF_CDS , FTQUAL_standard_name },
 
   { FEATDEF_PROT , FTQUAL_product },
+  { FEATDEF_PROT , FTQUAL_UniProtKB_evidence },
 
   { FEATDEF_preRNA , FTQUAL_allele },
   { FEATDEF_preRNA , FTQUAL_function },
@@ -3481,6 +3485,7 @@ static void FormatFeatureBlockQuals (
             tmp = StringSave (gbq->val);
             str = tmp;
             len = StringLen (str);
+#if 0
             if (len > 1 && *str == '(' && str [len - 1] == ')' /* &&
                 StringChr (str + 1, '(') == NULL /* && StringChr (str, ',') != NULL */) {
               str++;
@@ -3511,6 +3516,7 @@ static void FormatFeatureBlockQuals (
                 str = ptr;
               }
             } else {
+#endif
               if ((! ajp->flags.checkQualSyntax) || (ValidateRptUnit (str))) {
                 TrimSpacesAroundString (str);
                 if (idx == FTQUAL_rpt_unit_range) {
@@ -3526,7 +3532,9 @@ static void FormatFeatureBlockQuals (
                   FFAddOneChar(ffstring, '\n', FALSE);
                 }
               }
+#if 0
             }
+#endif
             MemFree (tmp);
           }
           gbq = gbq->next;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.532 $
+* $Revision: 6.534 $
 *
 * File Description: 
 *
@@ -4203,6 +4203,10 @@ static Boolean HandledGBQualOnProt (SeqFeatPtr sfp, GBQualPtr gbq)
     return FALSE;
   }
 
+  if (StringICmp (gbq->qual, "UniProtKB_evidence") == 0) {
+    return FALSE;
+  }
+
   return TRUE; /* all other gbquals not appropriate on protein features */
 }
 
@@ -4506,10 +4510,13 @@ static void CleanupConsSplice (GBQualPtr gbq)
   gbq->val = str;
 }
 
-static void ExpandParenGroup (GBQualPtr headgbq)
+static Boolean ExpandParenGroup (GBQualPtr headgbq)
 
 {
+  Char       ch;
   GBQualPtr  lastgbq;
+  size_t     len;
+  Int2       nesting;
   GBQualPtr  newgbq;
   GBQualPtr  nextqual;
   CharPtr    ptr;
@@ -4518,8 +4525,34 @@ static void ExpandParenGroup (GBQualPtr headgbq)
 
   nextqual = headgbq->next;
   lastgbq = headgbq;
-  tmp = StringSave (headgbq->val);
-  str = tmp + 1;
+  ptr = headgbq->val;
+  tmp = StringSave (ptr + 1);
+  len = StringLen (tmp);
+  if (len > 0 && tmp [len - 1] == ')') {
+    tmp [len - 1] = '\0';
+  }
+  str = tmp;
+  nesting = 0;
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch == '(') {
+      nesting++;
+    } else if (ch == ')') {
+      nesting--;
+      if (nesting < 0) {
+        MemFree (tmp);
+        return FALSE;
+      }
+    } else if (ch == ',') {
+      if (nesting < 0) {
+        MemFree (tmp);
+        return FALSE;
+      }
+    }
+    ptr++;
+    ch = *ptr;
+  }
   while (! StringHasNoText (str)) {
     ptr = StringChr (str, ',');
     if (ptr == NULL) {
@@ -4541,6 +4574,7 @@ static void ExpandParenGroup (GBQualPtr headgbq)
     str = ptr;
   }
   MemFree (tmp);
+  return TRUE;
 }
 
 static Boolean IsBaseRange (CharPtr str)
@@ -4598,10 +4632,13 @@ static void ModernizeFeatureGBQuals (SeqFeatPtr sfp)
         str [len - 1] = ')';
       }
       if (len > 1 && *str == '(' && str [len - 1] == ')' /* && StringChr (str + 1, '(') == NULL */) {
-        ExpandParenGroup (gbq);
-        nextqual = gbq->next;
-        /* individual parsed out (xxx,xxx) qualifiers will be processed next, now get rid of original */
-        unlink = TRUE;
+        if (ExpandParenGroup (gbq)) {
+          nextqual = gbq->next;
+          /* individual parsed out (xxx,xxx) qualifiers will be processed next, now get rid of original */
+          unlink = TRUE;
+        } else {
+          unlink = FALSE;
+        }
       } else {
         unlink = FALSE;
       }
@@ -4620,10 +4657,13 @@ static void ModernizeFeatureGBQuals (SeqFeatPtr sfp)
         str [len - 1] = ')';
       }
       if (len > 1 && *str == '(' && str [len - 1] == ')' && StringChr (str + 1, '(') == NULL) {
-        ExpandParenGroup (gbq);
-        nextqual = gbq->next;
-        /* individual parsed out (xxx,xxx) qualifiers will be processed next, now get rid of original */
-        unlink = TRUE;
+        if (ExpandParenGroup (gbq)) {
+          nextqual = gbq->next;
+          /* individual parsed out (xxx,xxx) qualifiers will be processed next, now get rid of original */
+          unlink = TRUE;
+        } else {
+          unlink = FALSE;
+        }
       } else {
         unlink = FALSE;
       }

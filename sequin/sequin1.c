@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.705 $
+* $Revision: 6.709 $
 *
 * File Description: 
 *
@@ -131,7 +131,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "9.50"
+#define SEQ_APP_VER "9.55"
 
 CharPtr SEQUIN_APPLICATION = SEQ_APP_VER;
 CharPtr SEQUIN_SERVICES = NULL;
@@ -280,7 +280,7 @@ static Boolean  dirsubMode = FALSE;
 static MenU     newDescMenu = NULL;
 static MenU     newFeatMenu = NULL;
 static MenU     advTableMenu = NULL;
-static MenU     sucMenu = NULL;
+static IteM     sucItem = NULL;
 static MenU     newPubMenu = NULL;
 static MenU     batchApplyMenu = NULL;
 static MenU     batchEditMenu = NULL;
@@ -687,51 +687,161 @@ extern Boolean WriteTheEntityID (Uint2 entityID, CharPtr path, Boolean binary)
   return rsult;
 }
 
+static ValNodePtr ExtractGivenSeqDescrUserObject (ValNodePtr PNTR headptr, CharPtr str, CharPtr cls)
+
+{
+  Boolean        extract_it;
+  ValNodePtr     last = NULL, vnp;
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  if (headptr == NULL) return NULL;
+  vnp = *headptr;
+
+  while (vnp != NULL) {
+    extract_it = FALSE;
+    if (vnp->choice == Seq_descr_user) {
+      uop = (UserObjectPtr) vnp->data.ptrvalue;
+      if (uop != NULL) {
+        if (StringDoesHaveText (cls)) {
+          if (StringICmp (uop->_class, cls) == 0) {
+            extract_it = TRUE;
+          }
+        }
+        if (StringDoesHaveText (str)) {
+          oip = uop->type;
+          if (oip != NULL) {
+            if (StringICmp (oip->str, str) == 0) {
+              extract_it = TRUE;
+            }
+          }
+        }
+      }
+    }
+    if (extract_it) {
+      if (last == NULL) {
+        *headptr = vnp->next;
+      } else {
+        last->next = vnp->next;
+      }
+      vnp->next = NULL;
+      return vnp;
+    } else {
+      last = vnp;
+      vnp = vnp->next;
+    }
+  }
+
+  return NULL;
+}
+
+typedef struct propgenbankdata {
+  Boolean  ask;
+  Boolean  asked;
+  Boolean  bail;
+  Boolean  changed;
+} PropGenbankData, PNTR PropGenBankPtr;
+
+static void DoPropagateFromGenBankBioseqSet (
+  BioseqSetPtr seqset,
+  Pointer userdata
+)
+
+{
+  BioseqPtr       bsp;
+  BioseqSetPtr    bssp;
+  PropGenBankPtr  pgp;
+  SeqEntryPtr     seqentry;
+  ValNodePtr      smartuserobj;
+  ValNodePtr      sourcedescr;
+  UserObjectPtr   uop;
+
+  if (seqset == NULL) return;
+  if (seqset->_class != BioseqseqSet_class_genbank) return;
+  pgp = (PropGenBankPtr) userdata;
+  if (pgp == NULL) return;
+
+  seqentry = seqset->seq_set;
+  sourcedescr = seqset->descr;
+  if (sourcedescr == NULL) return;
+
+  /* if only descriptor is tracking user object, skip */
+  if (sourcedescr->next == NULL && sourcedescr->choice == Seq_descr_user) {
+    uop = (UserObjectPtr) sourcedescr->data.ptrvalue;
+    if (uop != NULL && StringICmp (uop->_class, "SMART_V1.0") == 0) return;
+  }
+
+  /* optionally ask if propagation is desired */
+  if (pgp->ask) {
+    if (! pgp->asked) {
+      if (Message (MSG_YN, "Propagate descriptors from top-level set?") == ANS_NO) {
+        pgp->bail = TRUE;
+      }
+      pgp->asked = TRUE;
+    }
+  }
+  if (pgp->bail) return;
+
+  /* disconnect descriptors from parent bssp */
+  seqset->descr = NULL;
+
+  /* extract tracking user object */
+  smartuserobj = ExtractGivenSeqDescrUserObject (&sourcedescr, NULL, "SMART_V1.0");
+
+  while (seqentry != NULL) {
+    if (seqentry->data.ptrvalue != NULL) {
+      if (seqentry->choice == 1) {
+        bsp = (BioseqPtr) seqentry->data.ptrvalue;
+        ValNodeLink (&(bsp->descr),
+                     AsnIoMemCopy ((Pointer) sourcedescr,
+                                   (AsnReadFunc) SeqDescrAsnRead,
+                                   (AsnWriteFunc) SeqDescrAsnWrite));
+      } else if (seqentry->choice == 2) {
+        bssp = (BioseqSetPtr) seqentry->data.ptrvalue;
+        ValNodeLink (&(bssp->descr),
+                     AsnIoMemCopy ((Pointer) sourcedescr,
+                                   (AsnReadFunc) SeqDescrAsnRead,
+                                   (AsnWriteFunc) SeqDescrAsnWrite));
+      }
+      pgp->changed = TRUE;
+    }
+    seqentry = seqentry->next;
+  }
+
+  /* free extracted original descriptors now that copies are propagated */
+  SeqDescrFree (sourcedescr);
+
+  /* restore tracking user object */
+  if (smartuserobj != NULL) {
+    ValNodeLink (&(seqset->descr), smartuserobj);
+  }
+
+  /* recurse */
+  VisitSetsInSet (seqset, userdata, DoPropagateFromGenBankBioseqSet);
+}
+
 extern Boolean PropagateFromGenBankBioseqSet (SeqEntryPtr sep, Boolean ask)
 
 {
-  BioseqPtr     bsp;
-  BioseqSetPtr  bssp;
-  Uint1         _class;
-  SeqEntryPtr   seqentry;
-  ValNodePtr    sourcedescr;
+  BioseqSetPtr     bssp;
+  PropGenbankData  pdp;
 
-  if (sep != NULL) {
-    if (sep->choice == 2 && sep->data.ptrvalue != NULL) {
-      bssp = (BioseqSetPtr) sep->data.ptrvalue;
-      _class = bssp->_class;
-      sourcedescr = bssp->descr;
-      if (sourcedescr == NULL) return FALSE;
-      if (_class == 7) {
-        if (ask) {
-          if (Message (MSG_YN, "Propagate descriptors from top-level set?") == ANS_NO) return FALSE;
-        }
-        seqentry = bssp->seq_set;
-        while (seqentry != NULL) {
-          if (seqentry->data.ptrvalue != NULL) {
-            if (seqentry->choice == 1) {
-              bsp = (BioseqPtr) seqentry->data.ptrvalue;
-              ValNodeLink (&(bsp->descr),
-                           AsnIoMemCopy ((Pointer) sourcedescr,
-                                         (AsnReadFunc) SeqDescrAsnRead,
-                                         (AsnWriteFunc) SeqDescrAsnWrite));
-            } else if (seqentry->choice == 2) {
-              bssp = (BioseqSetPtr) seqentry->data.ptrvalue;
-              ValNodeLink (&(bssp->descr),
-                           AsnIoMemCopy ((Pointer) sourcedescr,
-                                         (AsnReadFunc) SeqDescrAsnRead,
-                                         (AsnWriteFunc) SeqDescrAsnWrite));
-            }
-          }
-          seqentry = seqentry->next;
-        }
-        bssp = (BioseqSetPtr) sep->data.ptrvalue;
-        bssp->descr = SeqDescrFree (bssp->descr);
-        return TRUE;
-      }
-    }
-  }
-  return FALSE;
+  if (sep == NULL) return FALSE;
+  if (! IS_Bioseq_set (sep)) return FALSE;
+
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp == NULL) return FALSE;
+  if (bssp->_class != BioseqseqSet_class_genbank) return FALSE;
+
+  MemSet ((Pointer) &pdp, 0, sizeof (PropGenbankData));
+  pdp.ask = ask;
+  pdp.asked = FALSE;
+  pdp.bail = FALSE;
+  pdp.changed = FALSE;
+
+  DoPropagateFromGenBankBioseqSet (bssp, (Pointer) &pdp);
+
+  return pdp.changed;
 }
 
 static void ForcePropagate (IteM i)
@@ -5105,7 +5215,7 @@ static void BioseqViewFormActivated (WindoW w)
                    (HANDLE) newDescMenu,
                    (HANDLE) newFeatMenu,
                    (HANDLE) advTableMenu,
-                   (HANDLE) sucMenu,
+                   (HANDLE) sucItem,
                    (HANDLE) newPubMenu,
                    (HANDLE) batchApplyMenu,
                    (HANDLE) batchEditMenu,
@@ -5386,7 +5496,7 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) newDescMenu,
                    (HANDLE) newFeatMenu,
                    (HANDLE) advTableMenu,
-                   (HANDLE) sucMenu,
+                   (HANDLE) sucItem,
                    (HANDLE) newPubMenu,
                    (HANDLE) batchApplyMenu,
                    (HANDLE) batchEditMenu,
@@ -9437,6 +9547,10 @@ static void SetupMacMenus (void)
   /*
   submitItem = CommandItem (m, "Submit to NCBI", SubmitToNCBI);
   */
+  /*
+  SeparatorItem (m);
+  CommandItem (m, "Propagate Top Descriptors", ForcePropagate);
+  */
   SeparatorItem (m);
   printItem = FormCommandItem (m, "Print", NULL, VIB_MSG_PRINT);
   SeparatorItem (m);
@@ -9679,7 +9793,7 @@ static void SetupMacMenus (void)
   CommandItem (newFeatMenu, "Generate Definition Line", AutoDef);
   advTableMenu = SubMenu (newFeatMenu, "Advanced Table Readers");
   CommandItem (advTableMenu, "Load Structured Comments from Table", SubmitterCreateStructuredComments);
-  sucMenu = CommandItem (newFeatMenu, "Sort Unique Count By Group", SUCSubmitterProc);
+  sucItem = CommandItem (newFeatMenu, "Sort Unique Count By Group", SUCSubmitterProc);
 }
 #endif
 

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.111 $
+* $Revision: 1.113 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -308,12 +308,6 @@ static void AddWGSMasterCommentString (
   if (StringHasNoText (taxname)) {
     taxname = "?";
   }
-  if (StringHasNoText (first)) {
-    first = "?";
-  }
-  if (StringHasNoText (last)) {
-    last = "?";
-  }
   ver [0] = '\0';
   acclen = StringLen (wgsname);
   if (acclen == 12) {
@@ -330,15 +324,30 @@ static void AddWGSMasterCommentString (
   sprintf (buf, "The %s whole genome shotgun (WGS) project has the project accession %s.", taxname, wgsaccn);
   FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
 
-  sprintf (buf, "  This version of the project (%s) has the accession number %s,", ver, wgsname);
+  sprintf (buf, "  This version of the project (%s) has the accession number %s", ver, wgsname);
   FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
 
-  if (StringCmp (first, last) != 0) {
-    sprintf (buf, " and consists of sequences %s-%s.", first, last);
+  if (first == NULL && last == NULL) {
+    sprintf (buf, ".");
     FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
   } else {
-    sprintf (buf, " and consists of sequence %s.", first);
-    FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+    if (first != NULL && last == NULL) {
+      last = first;
+    } else if (first == NULL && last != NULL) {
+      first = last;
+    }
+    if (StringDoesHaveText (first) && StringDoesHaveText (last)) {
+      if (StringCmp (first, last) != 0) {
+        sprintf (buf, ", and consists of sequences %s-%s.", first, last);
+        FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+      } else {
+        sprintf (buf, ", and consists of sequence %s.", first);
+        FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+      }
+    } else {
+      sprintf (buf, ".");
+      FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+    }
   }
 }
 
@@ -1295,21 +1304,27 @@ static CharPtr GetStrForTpaOrRefSeqHist (
 
 {
   Boolean      accn;
-  Char         buf [64];
+  Char         buf [100];
   DbtagPtr     dbt;
   Int4         gi;
   ValNodePtr   head = NULL;
   SeqHistPtr   hist;
   SeqIdPtr     id;
+  Int2         j;
+  int          k;
+  Int2         max;
   Boolean      minus1;
   Boolean      minus2;
+  Int4         oldstop = -1;
+  Uint1        residue;
   SeqAlignPtr  salp;
   SeqAlignPtr  salptmp;
+  StreamCache  sc;
   SeqIdPtr     sip;
   Int4         start;
   Int4         stop;
   CharPtr      str;
-  Char         tmp [80];
+  Char         tmp [120];
 
   if (bsp == NULL) return NULL;
   hist = bsp->hist;
@@ -1344,6 +1359,65 @@ static CharPtr GetStrForTpaOrRefSeqHist (
               ValNodeCopyStr (&head, 0, "TPA_SPAN            PRIMARY_IDENTIFIER PRIMARY_SPAN        COMP");
             }
           }
+          if (isRefSeq && oldstop > -1 && oldstop < start) {
+            sprintf (tmp, "~%ld-%ld                                        ",
+                     (long) (oldstop + 1), (long) (start));
+            tmp [21] = '\0';
+            StringCpy (buf, "                                        ");
+            k = 0;
+            if (StreamCacheSetup (bsp, NULL, 0, &sc)) {
+              if (start - oldstop < 15) {
+                StreamCacheSetPosition (&sc, oldstop);
+                buf [k] = '"';
+                k++;
+                max = start - oldstop;
+                for (j = 0; j < max; j++) {
+                  residue = StreamCacheGetResidue (&sc);
+                  buf [k] = (Char) residue;
+                  k++;
+                }
+                buf [k] = '"';
+                k++;
+              } else {
+                StreamCacheSetPosition (&sc, oldstop);
+                buf [k] = '"';
+                k++;
+                for (j = 0; j < 4; j++) {
+                  residue = StreamCacheGetResidue (&sc);
+                  buf [k] = (Char) residue;
+                  k++;
+                }
+                buf [k] = '.';
+                k++;
+                buf [k] = '.';
+                k++;
+                buf [k] = '.';
+                k++;
+                StreamCacheSetPosition (&sc, start - 4);
+                for (j = 0; j < 4; j++) {
+                  residue = StreamCacheGetResidue (&sc);
+                  buf [k] = (Char) residue;
+                  k++;
+                }
+                buf [k] = '"';
+                k++;
+              }
+            } else {
+              /*
+              StringCpy (buf, "inserted base(s)");
+              */
+            }
+            buf [k] = '\0';
+            StringCat (buf, "                                        ");
+            buf [18] = '\0';
+            StringCat (tmp, buf);
+            sprintf (buf, " %ld-%ld                                        ",
+                     (long) 1, (long) (start - oldstop));
+            buf [21] = '\0';
+            StringCat (tmp, buf);
+            ValNodeCopyStr (&head, 0, tmp);
+          }
+          oldstop = stop + 1;
           if (id != NULL) {
             SeqIdWrite (id, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf) - 1);
             if (id->choice == SEQID_GENERAL) {

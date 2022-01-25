@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.576 $
+* $Revision: 6.579 $
 *
 * File Description: 
 *
@@ -1827,6 +1827,8 @@ ReplaceComplexLocation
  Int4        fin);
 
 NLM_EXTERN void CleanupCDD (IteM i);
+
+NLM_EXTERN void ReportNonTSABioseqs (BioseqPtr bsp, Pointer userdata);
 
 #ifdef OS_MSWIN
 NLM_EXTERN Int4 RunSilent(const char *cmdline);

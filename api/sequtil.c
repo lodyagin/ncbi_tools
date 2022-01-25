@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.284 $
+* $Revision: 6.285 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -9257,7 +9257,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           (StringICmp(temp,"GE") == 0) || 
           (StringICmp(temp,"GH") == 0) || 
           (StringICmp(temp,"GO") == 0) || 
-          (StringICmp(temp,"GR") == 0) ) {                /* NCBI EST */
+          (StringICmp(temp,"GR") == 0) || 
+          (StringICmp(temp,"GT") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0) ||
                      (StringICmp(temp,"GF") == 0)) {      /* NCBI STS */
@@ -9291,10 +9292,6 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"GL") == 0)) {      /* NCBI segmented set header Bioseq */
               retcode = ACCN_NCBI_SEGSET;
           } else if ((StringICmp(temp,"AS") == 0) ||
-                     (StringICmp(temp,"GO") == 0) ||
-                     (StringICmp(temp,"GP") == 0) ||
-                     (StringICmp(temp,"GQ") == 0) ||
-                     (StringICmp(temp,"GT") == 0) ||
                      (StringICmp(temp,"GU") == 0) ||
                      (StringICmp(temp,"GV") == 0) ||
                      (StringICmp(temp,"GW") == 0) ||
